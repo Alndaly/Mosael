@@ -44,14 +44,23 @@ def _layout(value: Any) -> dict[str, Any]:
 _OPTIONAL_REFERENCES = ("parent_id", "model_id")
 
 
+#: 关键帧上哪几格归谁用(scene_types.Keyframe):相机看 target / fov,物体看 rotation。严格模式要求每一格都在,
+#: 用不上的那几格是填充值 —— 留着的话,人物关键帧的 target 会被当成「看向」校验(和位置重合就拒)。
+_CAMERA_ONLY_KEYS = ("target", "fov")
+_OBJECT_ONLY_KEYS = ("rotation",)
+
+
 def _canonical(layout: dict[str, Any]) -> dict[str, Any]:
-    """**只做规范化,不做猜测**:关键帧按时间排好序(LLM 常按叙述顺序写);严格模式下写成空字符串的
-    可选引用(父级、模型 id)当作没有。别的一概不改 —— 坐标错了就让校验说出来,替它修一个"看起来合理"的值,
-    构图就悄悄变成了另一个镜头。"""
+    """**只做规范化,不做猜测**:关键帧按时间排好序(LLM 常按叙述顺序写),摘掉这种物体用不上的关键帧字段;
+    严格模式下写成空字符串的可选引用(父级、模型 id)当作没有。别的一概不改 —— 坐标错了就让校验说出来,替它修一个
+    "看起来合理"的值,构图就悄悄变成了另一个镜头。"""
     objects = []
     for obj in layout.get("objects") or []:
         if isinstance(obj, dict) and isinstance(obj.get("track"), list):
-            obj = {**obj, "track": sorted(obj["track"], key=lambda frame: float(frame.get("time") or 0))}
+            unused = _OBJECT_ONLY_KEYS if obj.get("kind") == "camera" else _CAMERA_ONLY_KEYS
+            frames = [{key: value for key, value in frame.items() if key not in unused} if isinstance(frame, dict) else frame
+                      for frame in obj["track"]]
+            obj = {**obj, "track": sorted(frames, key=lambda frame: float(frame.get("time") or 0) if isinstance(frame, dict) else 0)}
         if isinstance(obj, dict):
             obj = {key: value for key, value in obj.items()
                    if not (key in _OPTIONAL_REFERENCES and isinstance(value, str) and not value.strip())}
@@ -156,15 +165,15 @@ SHOT_ASPECTS = ("16:9", "9:16", "1:1")
 
 @register("scene_from_text")
 def scene_from_text(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
-    """照一段剧本 / 分镜 / 描述搭一个 3D 白模场景:每一镜一个布景台、摆好人偶和道具、放好相机和运镜。
+    """照一段剧本 / 描述搭**一个** 3D 白模场景:一个布景、人物按文字动起来(关键帧)、几台相机从不同机位拍这段动作。
 
-    **不自己实现两样东西**:写布景的是 LLM 节点(`llm`,结构化输出),规矩和整片模板的「设计 3D 白模布景与机位」
-    是同一份(templates.blockout_rules);建场景的是 `scene_create`。这里只把它们串起来 —— 画板上便签、文档格
-    有了这一项能力,剧本连进来就能搭白模,接着在 3D 场景格上渲首尾帧或运镜视频。
+    **不自己实现两样东西**:写布景的是 LLM 节点(`llm`,结构化输出),相机 / 运镜 / 打光的规矩和整片模板同一份
+    (templates.single_set_rules 里引的 `_camera_rules`);建场景的是 `scene_create`。和整片模板不同的是布景:
+    那边是分镜,每镜一个布景台;这里是一个地方里的一段事,只搭一个(见 single_set_rules 的说明)。
     """
     from app.domain.workflows.executors.ai import llm
     from app.domain.workflows.field_options import split_chat_model
-    from app.domain.workflows.templates import _set_design_schema, blockout_rules
+    from app.domain.workflows.templates import _set_design_schema, single_set_rules
 
     text = str(config.get("text") or "").strip()
     if not text:
@@ -179,11 +188,11 @@ def scene_from_text(db: Session, scope: RunScope, config: dict[str, Any]) -> dic
         aspect = "16:9"
     props = scene_props(db, scope, {"model_ids": ""})
     system = (
-        "你是导演兼布景师、摄影助理。先把下面这段文字拆成不超过 "
-        f"{shots} 个镜头(每镜 {clip} 秒;文字本身就是分镜的,照它的镜头来),定下出镜的人物(身高、每人一个不同的"
-        "白模颜色)和场景(大致的长宽高),再给每个镜头搭一个 3D 白模布景台并放好相机。输出就是 3D 场景的数据格式,"
-        "会被直接建成场景、渲出参考帧交给图像和视频模型 —— 它决定每一镜的构图。\n\n"
-        + blockout_rules(clip, source="这段文字(没写明的尺寸、身高、光线按常识定)")
+        "你是导演兼布景师、摄影助理。照下面这段文字搭**一个** 3D 白模场景:定下这个地方(大致的长宽高)和出场的人物"
+        f"(身高、每人一个不同的白模颜色),把文字里的动作写成人物 {clip} 秒的关键帧,再用不超过 {shots} 台相机从不同"
+        "机位拍这段动作(文字本身写了镜头的,照它的镜头来)。输出就是 3D 场景的数据格式,会被直接建成场景、渲出参考帧"
+        "交给图像和视频模型 —— 它决定每一镜的构图。\n\n"
+        + single_set_rules(clip, source="这段文字(没写明的尺寸、身高、光线按常识定)")
         + "只输出符合 JSON Schema 的对象。"
     )
     profile_id, model = split_chat_model(str(config.get("model") or ""))

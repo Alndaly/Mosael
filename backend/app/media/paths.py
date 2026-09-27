@@ -44,6 +44,11 @@ def scene_model_dir(workspace_id: str) -> Path:
     return settings.media_dir / "scene-models" / workspace_id
 
 
+def scene_preview_dir(workspace_id: str) -> Path:
+    """画板上 3D 场景格的预览图缓存(按场景修订号,见 domain/scenes.scene_overview_image)。"""
+    return settings.media_dir / "scene-previews" / workspace_id
+
+
 def scene_model_key(workspace_id: str, filename: str) -> str:
     return str(Path("media") / "scene-models" / workspace_id / filename)
 

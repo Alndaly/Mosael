@@ -19,7 +19,7 @@ from app.core.i18n import LocalizedError, tr
 from app.db.models import Project, Scene3D, Scene3DRevision, Scene3DModel
 from app.db.model_base import now
 from app.domain.scene_types import SceneContent
-from app.media.paths import resolve_key, scene_model_dir, scene_model_key
+from app.media.paths import resolve_key, scene_model_dir, scene_model_key, scene_preview_dir
 from typing import TYPE_CHECKING, BinaryIO
 
 if TYPE_CHECKING:  # 渲染器带着 numpy,按这个文件一贯的做法留到函数里再导
@@ -390,6 +390,39 @@ def delete_scene(db: Session, workspace_id: str, scene_id: str) -> None:
         raise SceneDomainError("sceneErr_usedByBoards", names=tr("punct_listSep").join(using[:5]))
     db.delete(scene)
     db.commit()
+    _drop_previews(workspace_id, scene_id)
+
+
+def _drop_previews(workspace_id: str, scene_id: str) -> None:
+    for stale in scene_preview_dir(workspace_id).glob(f"{scene_id}-*.jpg"):
+        stale.unlink(missing_ok=True)
+
+
+def scene_overview_image(db: Session, scene: Scene3D) -> Path:
+    """画板上 3D 场景格里画的那张:**整个场景**的全景白模(自由视角 overview,不是某个镜头的机位),文件路径。
+
+    格子上要的是「这个场景长什么样」—— 此前那里是一句「选一个镜头,渲出首尾帧或运镜视频」,刚搭好的场景看不到
+    任何东西。和出片参考同一个渲染器(scene_render),所以格子上看到的就是交给模型的白模。**按修订号缓存**:
+    场景没改就不重渲;改了,旧修订那一张随手删掉(一个场景只留当前这一张)。
+    """
+    from app.domain.scene_render import SceneRenderError, render_view
+
+    directory = scene_preview_dir(scene.workspace_id)
+    path = directory / f"{scene.id}-{scene.revision}.jpg"
+    if path.is_file():
+        return path
+    content = SceneContent.model_validate(scene.content)
+    try:
+        frame = render_view(content, "overview", models=model_library(db, scene, content))
+    except SceneRenderError as exc:
+        raise SceneDomainError(str(exc)) from exc
+    directory.mkdir(parents=True, exist_ok=True)
+    _drop_previews(scene.workspace_id, scene.id)
+    #: 先写到旁边再换名:两次请求同时渲同一修订时,谁也读不到写了一半的文件。
+    partial = directory / f".{scene.id}-{scene.revision}-{uuid4().hex}.part"
+    frame.image.save(partial, "JPEG", quality=85)
+    partial.replace(path)
+    return path
 
 
 def delete_model(db: Session, workspace_id: str, model_id: str) -> None:
@@ -412,11 +445,11 @@ def delete_model(db: Session, workspace_id: str, model_id: str) -> None:
 
 
 def delete_workspace_model_files(workspace_id: str) -> None:
-    """删工作区时把它的模型文件一起删。**行是 CASCADE 走的,文件没人管** —— 和字体、LUT
+    """删工作区时把它的模型文件(和场景预览图缓存)一起删。**行是 CASCADE 走的,文件没人管** —— 和字体、LUT
     同一套(`delete_font_files`),由删除那条路显式调用。"""
-    directory = scene_model_dir(workspace_id)
-    if directory.is_dir():
-        shutil.rmtree(directory, ignore_errors=True)
+    for directory in (scene_model_dir(workspace_id), scene_preview_dir(workspace_id)):
+        if directory.is_dir():
+            shutil.rmtree(directory, ignore_errors=True)
 
 
 def apply_scene_operations(db: Session, scene: Scene3D, base_revision: int, objects: list[dict], remove_ids: list[str], shots: list[dict] | None, name: str | None) -> Scene3D:

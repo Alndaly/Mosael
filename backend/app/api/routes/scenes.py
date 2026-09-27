@@ -11,7 +11,7 @@ from app.db.models import Scene3D, Scene3DModel, Scene3DRevision
 from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm
 from app.domain.scenes import (apply_scene_operations, create_scene, delete_model, get_scene,
                                 import_model, list_models, model_file, render_shot_references,
-                                save_scene, scene_preview, view_scene)
+                                save_scene, scene_overview_image, scene_preview, view_scene)
 #: 路由函数也叫 delete_scene(接口名),所以领域那个换个名字进来 —— 同名的两个东西
 #: 放在一个文件里,读的人得每次判断是哪一个。
 from app.domain.scenes import delete_scene as remove_scene
@@ -44,6 +44,15 @@ def read(scene_id: str, workspace_id: str, db: DbSession, user: CurrentUser):
 def edit(scene_id: str, body: SceneUpdate, db: DbSession, user: CurrentUser):
     ensure_workspace_perm(db, user, body.workspace_id, "edit")
     return save_scene(db, get_scene(db, body.workspace_id, scene_id), body.base_revision, body.name, body.content)
+
+
+@router.get("/scenes/{scene_id}/preview")
+def preview_image(scene_id: str, workspace_id: str, db: DbSession, user: CurrentUser) -> FileResponse:
+    """画板 3D 场景格上的全景白模(JPEG)。`<img>` 带不了请求头,凭据走 `?token=`;调用方在地址里带上修订号,
+    场景一改地址就变,浏览器缓存不会给出旧图。"""
+    ensure_workspace_access(db, user, workspace_id)
+    path = scene_overview_image(db, get_scene(db, workspace_id, scene_id))
+    return FileResponse(path, media_type="image/jpeg", headers={"Cache-Control": "private, max-age=86400"})
 
 
 @router.get("/scenes/{scene_id}/revisions")

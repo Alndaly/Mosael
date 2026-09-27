@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import React from "react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -313,6 +313,24 @@ describe("选中之后挂什么", () => {
     select("j1");
     expect(toolbarButton("boardAskAiWrite")).toBeUndefined();
     expect(document.querySelector('[data-board-composer="write"]')).toBeNull();
+  });
+
+  it("3D 场景格的「编辑场景」在操作条上,不跟着面板走 —— 切到「按文字搭」也还在(用户截图:切过去就找不到了)", () => {
+    for (const producer of ["scene_render", "node:scene_from_text"] as const) {
+      mount(
+        { items: [{ id: "sc", kind: "scene", x: 0, y: 0, width: 320, height: 220, scene_id: "scene-1", text: "草原", form: { producer } }],
+          edges: [], markers: [] },
+        { onRun: vi.fn(async () => undefined) },
+      );
+      select("sc");
+      const open = document.querySelector<HTMLAnchorElement>("[data-board-scene-open]");
+      expect(open?.getAttribute("href"), producer).toBe("#/scenes?scene=scene-1");
+      cleanup();
+    }
+    mount({ items: [{ id: "empty", kind: "scene", x: 0, y: 0, width: 320, height: 220, form: { producer: "node:scene_from_text" } }],
+            edges: [], markers: [] }, { onRun: vi.fn(async () => undefined) });
+    select("empty");
+    expect(document.querySelector("[data-board-scene-open]"), "还没有场景就没有可编辑的").toBeNull();
   });
 
   it("空的图片槽选中就挂生成面板(那一格就是要生成的)", () => {

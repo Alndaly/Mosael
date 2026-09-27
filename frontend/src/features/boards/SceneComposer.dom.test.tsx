@@ -77,7 +77,9 @@ function stubShots(shots: Record<string, Array<{ value: string; label: string }>
     const source = url.searchParams.get("source");
     const parent = url.searchParams.get("parent") ?? "";
     asked.push(`${source}:${parent}`);
-    const body = source === "scene_shots" ? (shots[parent] ?? []) : [];
+    //: 读场景本身(格子上的全景白模要它的修订号)。
+    const scene = /^\/api\/scenes\/([^/]+)$/.exec(url.pathname);
+    const body = scene ? { id: scene[1], revision: 3, name: "客厅" } : source === "scene_shots" ? (shots[parent] ?? []) : [];
     return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
   }) as never;
   return asked;
@@ -192,12 +194,28 @@ describe("3D 场景格的面板", () => {
 describe("3D 场景格", () => {
   const node = (item: BoardItem) =>
     mount(React.createElement(SceneNode, {
-      id: item.id, data: { item, onText: () => {}, onAspect: () => {}, onStop: () => {} }, selected: false,
+      id: item.id, data: { item, workspaceId: "w1", onText: () => {}, onAspect: () => {}, onStop: () => {} }, selected: false,
     } as unknown as React.ComponentProps<typeof SceneNode>));
 
-  it("还没导出缩略图:说这一格能做什么,不是叫人去导出", () => {
-    node(scene("sc", { form: { producer: "scene_render" } }));
-    expect(document.querySelector("[data-board-scene-hint]")?.textContent).toBe("boardScenePreviewEmpty");
+  it("有场景:画整个场景的全景白模,地址带着修订号(用户截图:此前是一句「选一个镜头…」,新搭的场景看不见)", async () => {
+    stubShots({});
+    node(scene("sc", { form: { producer: "scene_render" }, asset_id: "old-thumb" }));
+    const image = await waitFor(() => {
+      const found = document.querySelector<HTMLImageElement>("[data-scene-overview] img");
+      expect(found).not.toBeNull();
+      return found!;
+    });
+    const url = new URL(image.src);
+    expect(url.pathname).toBe("/api/scenes/sc/preview");
+    expect([url.searchParams.get("workspace_id"), url.searchParams.get("revision")]).toEqual(["w1", "3"]);
+    expect(document.querySelector("[data-board-scene-hint]")).toBeNull();
+    fireEvent.error(image);
+    expect(document.querySelector("[data-board-scene-hint]")?.textContent).toBe("boardScenePreviewMissing");
+  });
+
+  it("还没有场景:说这一格能做什么", () => {
+    node({ id: "s1", kind: "scene", x: 0, y: 0, form: { producer: "node:scene_from_text" } });
+    expect(document.querySelector("[data-board-scene-hint]")?.textContent).toBe("boardSceneBuildEmpty");
   });
 
   it("在跑:和别的格子同一个运行外壳(扫光、停止)", () => {

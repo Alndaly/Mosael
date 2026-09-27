@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "Topic to finished video",
   "description": "Turn a topic into a creative brief, script and visual bible; characters and locations already in the asset library are reused with their references, and only new ones get a turnaround sheet or concept art — saved to the library — auto-build a 3D blockout with each shot's camera position and move, then generate each shot from a first frame (and a last frame where needed) painted on the blockout — or straight from the turnarounds and the blockout camera move — and assemble, caption and export the video.",
-  "graph_hash": "d1590df1fd9f4e855a1aabb017b75bfd9c72eb85c2a1281b4d3bba18389a6f94",
+  "graph_hash": "7de64b8fccb26831e949beaacbdb75e72b372c3992835dfc142921ae872f9b2e",
   "graph": {
     "meta": {
       "template_id": "full_video_generation",
@@ -976,13 +976,22 @@
                             "type": "number",
                             "minimum": 10,
                             "maximum": 120
+                          },
+                          "rotation": {
+                            "type": "array",
+                            "items": {
+                              "type": "number"
+                            },
+                            "minItems": 3,
+                            "maxItems": 3
                           }
                         },
                         "required": [
                           "time",
                           "position",
                           "target",
-                          "fov"
+                          "fov",
+                          "rotation"
                         ],
                         "additionalProperties": false
                       }

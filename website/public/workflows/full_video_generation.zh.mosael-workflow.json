@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "从主题到完整视频",
   "description": "输入一个主题，生成创意主旨、脚本和视觉圣经；角色和场景先到资产库里认，已有的直接用它的参考图，新出现的才画三视图 / 设定图并存成资产，按分镜自动搭 3D 白模并摆好每一镜的机位与运镜；再逐镜按白模画首帧（需要时加尾帧）或直接用三视图与白模运镜视频做参考生成视频，按顺序组装、配上口播字幕并导出。",
-  "graph_hash": "733ac47b03c17295b40ee684f4f416a29871ff7b7bb44d2b3e8d2573fc552d4e",
+  "graph_hash": "1741c50dc5a61a39538a6cc4aa8d88142cbaaa9d26367863aec24bf61592d5c5",
   "graph": {
     "meta": {
       "template_id": "full_video_generation",
@@ -976,13 +976,22 @@
                             "type": "number",
                             "minimum": 10,
                             "maximum": 120
+                          },
+                          "rotation": {
+                            "type": "array",
+                            "items": {
+                              "type": "number"
+                            },
+                            "minItems": 3,
+                            "maxItems": 3
                           }
                         },
                         "required": [
                           "time",
                           "position",
                           "target",
-                          "fov"
+                          "fov",
+                          "rotation"
                         ],
                         "additionalProperties": false
                       }

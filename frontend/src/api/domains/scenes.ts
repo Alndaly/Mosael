@@ -48,6 +48,13 @@ export const listScenes = (ws: string) =>
   api<SceneSummary[]>(`/api/scenes?${query(ws)}`);
 export const getScene = (ws: string, id: string) =>
   api<Scene>(`/api/scenes/${id}?${query(ws)}`);
+/** 画板 3D 场景格上的全景白模(后端渲)。`<img>` 带不了请求头,凭据走查询参数;带上修订号,场景一改地址就变。 */
+export function scenePreviewUrl(ws: string, id: string, revision: number): string {
+  const token = getAuthToken();
+  const query = new URLSearchParams({ workspace_id: ws, revision: String(revision), ...(token ? { token } : {}) });
+  return `${API_BASE}/api/scenes/${encodeURIComponent(id)}/preview?${query}`;
+}
+
 export const createScene = (ws: string, name: string, content: SceneContent) =>
   api<Scene>("/api/scenes", {
     method: "POST",

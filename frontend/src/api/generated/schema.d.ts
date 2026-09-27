@@ -3241,6 +3241,27 @@ export interface paths {
         patch: operations["edit_api_scenes__scene_id__patch"];
         trace?: never;
     };
+    "/api/scenes/{scene_id}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Preview Image
+         * @description 画板 3D 场景格上的全景白模(JPEG)。`<img>` 带不了请求头,凭据走 `?token=`;调用方在地址里带上修订号,
+         *     场景一改地址就变,浏览器缓存不会给出旧图。
+         */
+        get: operations["preview_image_api_scenes__scene_id__preview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/scenes/{scene_id}/revisions": {
         parameters: {
             query?: never;
@@ -19741,6 +19762,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SceneOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_image_api_scenes__scene_id__preview_get: {
+        parameters: {
+            query: {
+                workspace_id: string;
+            };
+            header?: never;
+            path: {
+                scene_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */

@@ -18,6 +18,7 @@ import { useI18n } from "@/app/preferences";
 import type { MessageKey } from "@/app/messages";
 import { cn } from "@/lib/utils";
 import { itemError, itemIsRunning, itemJobId, itemRunStatus, runningAbility, type BoardItemRunStatus } from "@/features/boards/boardItemState";
+import { SceneOverview } from "@/features/boards/SceneOverview";
 import { BoardNodeLabel } from "@/features/boards/BoardNodeLabel";
 
 /**
@@ -879,16 +880,16 @@ function DocumentNode({ data, selected }: NodeProps) {
  * 挑渲什么,首尾帧 / 运镜视频新建在右边(SceneComposer)。此前旁边还要另放一格「渲染白模参考」工具格。
  * 吃 3D 场景的插件工具也是这一格的能力,跑的时候和渲白模同一个运行态外壳。
  *
- * 格子里是场景的缩略图;还没导出过缩略图时说这一格能做什么。在跑、跑挂了和别的格子同一个外壳
+ * 格子里是整个场景的全景白模(SceneOverview,后端按修订号渲);还没有场景时说这一格能做什么。在跑、跑挂了和别的格子同一个外壳
  * (PendingSlot:扫光 + 进度 + 停止、失败写原因);跑完回到缩略图,产出在右边。「编辑场景」在面板上。
  */
 export function SceneNode({ data, selected }: NodeProps) {
   const nodeData = data as unknown as BoardNodeData;
-  const { item, commentMode, onStop } = nodeData;
+  const { item, commentMode, onStop, workspaceId } = nodeData;
   const t = useI18n();
   const state = useRunState(item);
   const status = itemRunStatus(item);
-  const fallback = <div data-board-scene-hint="" className="flex h-full flex-col items-center justify-center gap-2 bg-secondary/40 px-5 text-center text-muted-foreground"><Box size={32} strokeWidth={1.2} /><span className="text-ui-xs">{t(!item.scene_id ? "boardSceneBuildEmpty" : item.asset_id ? "boardScenePreviewMissing" : "boardScenePreviewEmpty")}</span></div>;
+  const fallback = <div data-board-scene-hint="" className="flex h-full flex-col items-center justify-center gap-2 bg-secondary/40 px-5 text-center text-muted-foreground"><Box size={32} strokeWidth={1.2} /><span className="text-ui-xs">{t(!item.scene_id ? "boardSceneBuildEmpty" : "boardScenePreviewMissing")}</span></div>;
   const pending = status === "queued" || status === "running" || status === "failed";
   //: `group`:接点在悬停时显形(group-hover)—— 少了它,3D 场景格的接点只有选中了才看得见。
   return <div data-board-run-status={state["data-board-run-status"]} className={cn("group relative flex h-full w-full flex-col overflow-visible border border-border bg-panel shadow-sm", CELL_RADIUS, state.className)}>
@@ -903,7 +904,7 @@ export function SceneNode({ data, selected }: NodeProps) {
     ) : (
       <>
         <div className={cn("min-h-0 flex-1 overflow-hidden", CELL_INNER_TOP_RADIUS)}>
-          {item.asset_id ? <AssetInlinePreview key={item.asset_id} assetId={item.asset_id} name={item.text || ""} kind="image" plain previewOnClick={false} lazy={false} imageFallback={fallback} className="h-full w-full object-contain" /> : fallback}
+          {item.scene_id && workspaceId ? <SceneOverview key={item.scene_id} workspaceId={workspaceId} sceneId={item.scene_id} fallback={fallback} /> : fallback}
         </div>
         <footer className="flex shrink-0 items-center gap-2 border-t border-border px-3 py-2">
           <Box size={15} className="shrink-0 text-muted-foreground" />

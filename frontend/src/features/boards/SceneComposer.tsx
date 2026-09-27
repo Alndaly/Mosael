@@ -3,9 +3,9 @@ import { Box, ExternalLink, Loader2 } from "lucide-react";
 
 import type { BoardItem, BoardProducerInfo, BoardRunForms } from "@/api/client";
 import { useI18n } from "@/app/preferences";
-import { AssetInlinePreview } from "@/components/app/asset-preview";
 import { OptionPicker } from "@/components/ui/option-picker";
 import { BAR_PICKER, BoardComposerShell } from "@/features/boards/BoardComposerShell";
+import { SceneOverview } from "@/features/boards/SceneOverview";
 import { useSubmitting } from "@/features/boards/useSubmitting";
 import { NodeConfigForm, useNodeFieldOptions, type ConfigSpec } from "@/features/nodeForms/NodeConfigForm";
 import { cn } from "@/lib/utils";
@@ -156,18 +156,8 @@ export function SceneComposer({
     >
       <div data-scene-composer-scene="" className="flex min-w-0 items-center gap-2.5 px-1 py-1">
         <div className="grid h-10 w-16 shrink-0 place-items-center overflow-hidden rounded-md border border-border bg-secondary/40 text-muted-foreground">
-          {item.asset_id ? (
-            <AssetInlinePreview
-              key={item.asset_id}
-              assetId={item.asset_id}
-              name={item.text || ""}
-              kind="image"
-              plain
-              previewOnClick={false}
-              lazy={false}
-              imageFallback={<Box size={16} strokeWidth={1.4} />}
-              className="h-full w-full object-cover"
-            />
+          {item.scene_id ? (
+            <SceneOverview key={item.scene_id} workspaceId={workspaceId} sceneId={item.scene_id} fallback={<Box size={16} strokeWidth={1.4} />} />
           ) : (
             <Box size={16} strokeWidth={1.4} />
           )}

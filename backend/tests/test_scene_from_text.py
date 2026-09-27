@@ -39,15 +39,21 @@ def _scope():
     return SimpleNamespace(workspace_id=ws, id="board:b1", name="画板")
 
 
-def test_照剧本搭出带镜头的场景_规矩和整片模板同一份(written) -> None:
-    from app.domain.workflows.templates import blockout_rules
+def test_照文字搭一个场景_不是每镜一个布景台_相机规矩和整片模板同一份(written) -> None:
+    """用户截图:「一个女孩在雪山脚下的草原上跑步」搭成了三套一样的草原和山、女孩不动 —— 那是整片模板分镜的搭法
+    (每镜一个布景台)。这里是一个地方里的一段事:一个布景,动作是人物的关键帧,几台相机拍同一段。"""
+    from app.domain.workflows.templates import _camera_rules, blockout_rules, single_set_rules
 
     scope = _scope()
     with SessionLocal() as db:
         out = scene_from_text(db, scope, {"text": "# 天台告白\n第一镜:小美推门走上天台……", "max_shots": 3, "aspect": "9:16"})
     assert out["shot_count"] == 1 and out["name"] == "天台告白", "没起名就取文字的第一行"
-    assert blockout_rules(5, source="这段文字(没写明的尺寸、身高、光线按常识定)") in written["system"]
-    assert "不超过 3 个镜头" in written["system"] and written["json_schema_name"] == "blockout_scene"
+    source = "这段文字(没写明的尺寸、身高、光线按常识定)"
+    assert single_set_rules(5, source=source) in written["system"]
+    assert blockout_rules(5, source=source) not in written["system"] and "bay-<n>" not in written["system"]
+    assert _camera_rules(5, source=source) in blockout_rules(5, source=source), "相机、运镜、打光的规矩两处同一份"
+    assert "只搭一个布景" in written["system"] and "动作写在人物的 track 上" in written["system"]
+    assert "不超过 3 台相机" in written["system"] and written["json_schema_name"] == "blockout_scene"
     assert "第一镜:小美推门走上天台" in written["prompt"] and "画幅:9:16" in written["prompt"]
     assert "可用的 3D 道具" in written["prompt"], "道具清单也交给它 —— 能用真道具就不用方块拼"
     with SessionLocal() as db:
@@ -62,7 +68,7 @@ def test_没有文字_镜头数夹在范围里(written) -> None:
             scene_from_text(db, scope, {"text": "  "})
         assert caught.value.key == "wfErr_sceneTextMissing"
         scene_from_text(db, scope, {"text": "一段话", "max_shots": 99})
-    assert "不超过 12 个镜头" in written["system"]
+    assert "不超过 12 台相机" in written["system"]
 
 
 def test_画板上是_3D_场景格的一种填法_剧本从连进来的文档便签接_搭好的场景落进这一格() -> None:
@@ -110,3 +116,26 @@ def test_布景的空引用当作没有_不是非法_id(written) -> None:
     with SessionLocal() as db:
         out = scene_from_text(db, scope, {"text": "一个女孩在雪山脚下的草原上跑步"})
     assert out["shot_count"] == 1
+
+
+def test_跑动的人物_关键帧带朝向_严格模式的填充格按种类摘掉(written) -> None:
+    """严格模式要求关键帧每一格都在:人物的 target / fov、相机的 rotation 是填充值。人物的 target 留着的话,
+    会被当成「看向」校验 —— 和位置重合就整份拒掉。"""
+    from tests.test_scene_workflow_nodes import LAYOUT as BASE
+
+    run = [{"time": 5, "position": [15, 0, -1], "rotation": [0, 90, 0], "target": [15, 0, -1], "fov": 45},
+           {"time": 0, "position": [0, 0, -1], "rotation": [0, 90, 0], "target": [0, 0, -1], "fov": 45}]
+    objects = [{**one, "track": run} if one["kind"] == "figure"
+               else {**one, "track": [{**frame, "rotation": [0, 0, 0]} for frame in one.get("track", [])]}
+               for one in BASE["objects"]]
+    written["reply"] = {**BASE, "objects": objects}
+
+    scope = _scope()
+    with SessionLocal() as db:
+        out = scene_from_text(db, scope, {"text": "一个女孩在雪山脚下的草原上跑步"})
+        content = db.get(Scene3D, out["scene_id"]).content
+    by_id = {one["id"]: one for one in content["objects"]}
+    hero = by_id["hero"]["track"]
+    assert [frame["time"] for frame in hero] == [0, 5] and hero[1]["position"] == [15, 0, -1]
+    assert hero[0]["rotation"] == [0, 90, 0] and hero[0].get("target") is None
+    assert all(frame.get("rotation") is None and frame["target"] for frame in by_id["cam-1"]["track"])

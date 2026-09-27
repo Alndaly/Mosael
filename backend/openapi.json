@@ -9257,6 +9257,56 @@
         }
       }
     },
+    "/api/scenes/{scene_id}/preview": {
+      "get": {
+        "tags": [
+          "3D scenes"
+        ],
+        "summary": "Preview Image",
+        "description": "画板 3D 场景格上的全景白模(JPEG)。`<img>` 带不了请求头,凭据走 `?token=`;调用方在地址里带上修订号,\n场景一改地址就变,浏览器缓存不会给出旧图。",
+        "operationId": "preview_image_api_scenes__scene_id__preview_get",
+        "parameters": [
+          {
+            "name": "scene_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Scene Id"
+            }
+          },
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/scenes/{scene_id}/revisions": {
       "get": {
         "tags": [

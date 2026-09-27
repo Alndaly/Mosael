@@ -29,7 +29,7 @@ import {
   type Node,
   type ReactFlowInstance,
 } from "@xyflow/react";
-import { BookOpen, ChevronDown, Copy, FileUp, Group, Loader2, Maximize2, MessageSquare, MoreHorizontal, PencilLine, Plus, Replace, Scissors, Sparkles, Trash2, type LucideIcon } from "lucide-react";
+import { BookOpen, ChevronDown, Copy, ExternalLink, FileUp, Group, Loader2, Maximize2, MessageSquare, MoreHorizontal, PencilLine, Plus, Replace, Scissors, Sparkles, Trash2, type LucideIcon } from "lucide-react";
 
 import { assetFileUrl, assetPreviewUrl, entityKeys, getEntity, type CollaborationComment, type WorkspaceMember } from "@/api/client";
 import { useI18n } from "@/app/preferences";
@@ -1942,6 +1942,20 @@ function ItemToolbar({
           </ToolbarCluster>
         )}
 
+        {/* 去编辑器改这个场景。**入口挂在格子上,不挂在面板里** —— 面板随挑的那一种填法换(渲白模 / 按文字搭),
+            此前它只在「渲白模参考」的面板头上,切到「按文字搭」就找不到了(用户截图)。 */}
+        {single && item?.kind === "scene" && item.scene_id && (
+          <Hint label={t("boardSceneOpen")}>
+            <a
+              aria-label={t("boardSceneOpen")}
+              data-board-scene-open=""
+              href={`#/scenes?scene=${encodeURIComponent(item.scene_id)}`}
+              className="grid h-7 w-7 cursor-pointer place-items-center rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground"
+            >
+              <ExternalLink size={13} />
+            </a>
+          </Hint>
+        )}
         {/* 改名只对一格有意义 —— 多选时一起改成同一个名字,等于让它们重新分不清。 */}
         {single && item && onRename && (
           <Hint label={t("rename")}>
