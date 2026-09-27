@@ -457,12 +457,12 @@ function AbilityRunStrip({ data }: { data: BoardNodeData }) {
  *
  * 进度只写任务自己报了的(`job.progress` 在 0 和 1 之间)—— 不去猜一个数。生成、工具、念都是这一个样子。
  */
-function Generating({ item, text, onStop }: { item: BoardItem; text?: string; onStop?: (id: string) => void }) {
+function Generating({ item, text, onStop, radius = CELL_INNER_RADIUS }: { item: BoardItem; text?: string; onStop?: (id: string) => void; radius?: string }) {
   const t = useI18n();
   const progress = useJobProgress(itemJobId(item), itemIsRunning(item));
   return (
-    <div role="status" aria-busy="true" className={cn("relative h-full w-full overflow-hidden", CELL_INNER_RADIUS)}>
-      <Skeleton surface className={cn("absolute inset-0 h-full w-full", CELL_INNER_RADIUS)} />
+    <div role="status" aria-busy="true" className={cn("relative h-full w-full overflow-hidden", radius)}>
+      <Skeleton surface className={cn("absolute inset-0 h-full w-full", radius)} />
       {progress > 0 && (
         <div className="absolute inset-x-0 top-0 h-0.5 bg-primary/15">
           <div className="h-full bg-primary transition-[width]" style={{ width: `${Math.round(progress * 100)}%` }} />
@@ -503,10 +503,10 @@ function WritingCover({ item, onStop, ...rest }: { item: BoardItem; onStop?: (id
   );
 }
 
-function Queued({ item, text, onStop }: { item: BoardItem; text?: string; onStop?: (id: string) => void }) {
+function Queued({ item, text, onStop, radius = CELL_INNER_RADIUS }: { item: BoardItem; text?: string; onStop?: (id: string) => void; radius?: string }) {
   const t = useI18n();
   return (
-    <div className={cn("relative grid h-full w-full place-items-center overflow-hidden bg-[color-mix(in_srgb,var(--primary)_6%,transparent)] px-3", CELL_INNER_RADIUS)}>
+    <div className={cn("relative grid h-full w-full place-items-center overflow-hidden bg-[color-mix(in_srgb,var(--primary)_6%,transparent)] px-3", radius)}>
       <div className="grid w-full min-w-0 max-w-full justify-items-center gap-1.5 text-center">
         <Clock3 size={16} className="text-primary" />
         <span className="text-ui-2xs font-medium text-primary">{t("boardNodeQueued")}</span>
@@ -535,10 +535,10 @@ function Queued({ item, text, onStop }: { item: BoardItem; text?: string; onStop
  * **说的是「生成失败」/「运行失败」,不是「没能发起生成」** —— 任务明明发起了、跑到一半才挂;
  * 「没能发起」是提交那一刻被拒时的那句提示(BoardsView.RUN_FAILED),两件事。
  */
-function Failed({ item, reason }: { item: BoardItem; reason: string }) {
+function Failed({ item, reason, radius = CELL_INNER_RADIUS }: { item: BoardItem; reason: string; radius?: string }) {
   const t = useI18n();
   return (
-    <div role="alert" className={cn("grid h-full w-full place-items-center overflow-hidden bg-[color-mix(in_srgb,var(--destructive)_7%,transparent)] px-3", CELL_INNER_RADIUS)}>
+    <div role="alert" className={cn("grid h-full w-full place-items-center overflow-hidden bg-[color-mix(in_srgb,var(--destructive)_7%,transparent)] px-3", radius)}>
       <div className="grid w-full min-w-0 max-w-full justify-items-center gap-1 text-center">
         <AlertTriangle size={15} className="text-destructive" />
         <span className="text-ui-2xs font-semibold text-destructive">{t(runCopy(item).failed)}</span>
@@ -550,10 +550,10 @@ function Failed({ item, reason }: { item: BoardItem; reason: string }) {
   );
 }
 
-function Cancelled() {
+function Cancelled({ radius = CELL_INNER_RADIUS }: { radius?: string }) {
   const t = useI18n();
   return (
-    <div className={cn("grid h-full w-full place-items-center overflow-hidden bg-secondary/35 px-3", CELL_INNER_RADIUS)}>
+    <div className={cn("grid h-full w-full place-items-center overflow-hidden bg-secondary/35 px-3", radius)}>
       <div className="grid justify-items-center gap-1 text-center text-muted-foreground">
         <Ban size={15} />
         <span className="text-ui-2xs font-semibold">{t("boardNodeCancelled")}</span>
@@ -568,16 +568,19 @@ function Cancelled() {
  *
  * 此前三个媒体节点各写一份 `job_id ? 转圈 : 空槽`,工具格又自己写了一套在跑 / 跑挂了 ——
  * 状态从三种变成四种时,得记得每处都改;漏掉一处不会报错,只会是那一类节点永远转圈。
+ *
+ * `radius`:这块贴着哪几个角。默认四角都贴外壳;3D 场景格底下还有一条场景名,这块只占上半截,
+ * 下边两个角得是直的 —— 四角都圆的话,下面两角缩回去、和底栏之间露出两块空(用户截图:「底部两脚没有撑开」)。
  */
-function PendingSlot({ item, icon, onStop }: { item: BoardItem; icon: React.ReactNode; onStop?: (id: string) => void }) {
+function PendingSlot({ item, icon, onStop, radius }: { item: BoardItem; icon: React.ReactNode; onStop?: (id: string) => void; radius?: string }) {
   const status = itemRunStatus(item);
   const text = item.form?.prompt ?? item.text;
   const stop = onStop && itemIsRunning(item) ? onStop : undefined;
-  if (status === "queued") return <Queued item={item} text={text} onStop={stop} />;
-  if (status === "running") return <Generating item={item} text={text} onStop={stop} />;
+  if (status === "queued") return <Queued item={item} text={text} onStop={stop} radius={radius} />;
+  if (status === "running") return <Generating item={item} text={text} onStop={stop} radius={radius} />;
   const error = itemError(item);
-  if (status === "failed") return <Failed item={item} reason={error || "—"} />;
-  if (status === "cancelled") return <Cancelled />;
+  if (status === "failed") return <Failed item={item} reason={error || "—"} radius={radius} />;
+  if (status === "cancelled") return <Cancelled radius={radius} />;
   return <EmptySlot icon={icon} />;
 }
 
@@ -893,7 +896,7 @@ export function SceneNode({ data, selected }: NodeProps) {
     <NodeResizer minWidth={240} minHeight={180} isVisible={selected} lineClassName="!border-transparent" handleClassName="!h-2 !w-2 !rounded-full !border-border-strong !bg-panel" />
     <NodeLabel data={nodeData} /><Ports visible={selected} disabled={commentMode} />
     <div className={cn("min-h-0 flex-1 overflow-hidden", CELL_INNER_TOP_RADIUS)}>
-      {pending ? <PendingSlot item={item} icon={<Box size={20} />} onStop={commentMode ? undefined : onStop} />
+      {pending ? <PendingSlot item={item} icon={<Box size={20} />} onStop={commentMode ? undefined : onStop} radius={CELL_INNER_TOP_RADIUS} />
         : item.asset_id ? <AssetInlinePreview key={item.asset_id} assetId={item.asset_id} name={item.text || ""} kind="image" plain previewOnClick={false} lazy={false} imageFallback={fallback} className="h-full w-full object-contain" /> : fallback}
     </div>
     <footer className="flex shrink-0 items-center gap-2 border-t border-border px-3 py-2">

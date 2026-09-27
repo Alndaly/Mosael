@@ -206,4 +206,18 @@ describe("3D 场景格", () => {
     expect(screen.getByRole("status").getAttribute("aria-busy")).toBe("true");
     expect(document.querySelector("[data-board-stop]")).not.toBeNull();
   });
+
+  it("在跑、跑挂了的那一块只圆上两角:下面贴着场景名那条底栏,四角都圆会在底部两角露出空(用户截图)", () => {
+    const blocks = [
+      { run: { status: "running", job_id: "j1" }, pick: () => screen.getByRole("status") },
+      { run: { status: "failed", job_id: "j1", error: "坏了" }, pick: () => screen.getByRole("alert") },
+    ] as const;
+    for (const { run, pick } of blocks) {
+      const { unmount } = node(scene("sc", { form: { producer: "scene_render" }, run }));
+      const block = pick();
+      expect(block.className).toContain("rounded-t-");
+      expect(block.className).not.toMatch(/(^|\s)rounded-\[/);
+      unmount();
+    }
+  });
 });
