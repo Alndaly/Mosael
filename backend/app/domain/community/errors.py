@@ -61,6 +61,21 @@ class Rejected(CommunityError):
         self.http_status = 404 if status == 404 else 409 if status in (403, 409) else 422
 
 
+class NoCommunityHere(CommunityError):
+    """地址上有网站,但不是社区服务:出错时回的不是社区的错误信封(`{"error": {...}}`)。
+
+    最常见的是部署设置里的社区地址填了一个还没部署社区的站点 —— 那里的 404 是一张网页,不是「这一条不存在」。
+    和 Rejected 分开说,用户才知道该去改地址,而不是以为那一条被删了。
+    """
+
+    http_status = 502
+
+    def __init__(self, origin: str, status: int) -> None:
+        super().__init__("communityErr_noCommunityHere", origin=origin, status=status)
+        self.origin = origin
+        self.status = status
+
+
 class TooLarge(CommunityError):
     """快照超出限额(格子数、单个文件、总大小)。在上传之前就拦下,说清是哪一条。"""
 

@@ -21,7 +21,6 @@ import { errorText } from "@/api/errorMessage";
 import { useI18n } from "@/app/preferences";
 import { ConfirmDialog, RenameDialog } from "@/components/app/modals";
 import { EmptyState } from "@/components/layout/EmptyState";
-import { CARD_GRID } from "@/components/layout/StudioPage";
 import { Button } from "@/components/ui/button";
 import { DraftInput, DraftTextarea } from "@/components/ui/draft-text";
 import { OptionPicker } from "@/components/ui/option-picker";
@@ -35,6 +34,8 @@ import { entityDisplayName, entityKindIcon, useCatalogLabels } from "@/features/
 
 const FIELD = "w-full rounded-md border border-border bg-field px-3 py-2 text-ui-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring";
 const NONE = "__none__";
+//: 变体卡片和参考图同一档大小:它们在左栏里并排,用资产列表页那套大卡片会一张占去半屏。
+const VARIANT_GRID = "grid grid-cols-[repeat(auto-fill,minmax(160px,1fr))] gap-4";
 
 /**
  * 一个资产的详情:参考图墙在左,描述、提示词描述、种类的专有字段在右;下面是变体和「在哪里用过」。
@@ -164,65 +165,72 @@ export function EntityDetail({
         </div>
       )}
 
-      <div className="grid min-w-0 gap-8 xl:grid-cols-[minmax(0,1fr)_360px]">
-        <ReferenceWall entity={data} workspaceId={workspaceId} />
-        <aside className="grid min-w-0 content-start gap-5" aria-label={t("entityFields")}>
-          <Field label={t("entityDescription")} hint={t("entityDescriptionHint")}>
-            <DraftTextarea
-              aria-label={t("entityDescription")}
-              className={cn(FIELD, "min-h-20 resize-y")}
-              value={data.description}
-              commit="blur"
-              onValueChange={(description) => patch.mutate({ description })}
-            />
-          </Field>
-          <Field label={t("entityPrompt")} hint={data.parent_id ? t("entityVariantPromptHint") : t("entityPromptHint")}>
-            <DraftTextarea
-              aria-label={t("entityPrompt")}
-              className={cn(FIELD, "min-h-28 resize-y")}
-              value={data.prompt}
-              commit="blur"
-              onValueChange={(prompt) => patch.mutate({ prompt })}
-            />
-          </Field>
-          <Field label={t("entityTags")} hint={t("entityTagsHint")}>
-            <DraftInput
-              aria-label={t("entityTags")}
-              className={FIELD}
-              value={data.tags.join(", ")}
-              commit="blur"
-              onValueChange={(text) => patch.mutate({ tags: text.split(/[,，]/).map((one) => one.trim()).filter(Boolean) })}
-            />
-          </Field>
+      {/* 左栏是这个资产的「内容」:参考图墙、变体、在哪里用过,从上往下排满;右栏是一块吸顶的设定面板,
+          字段再多也只在面板里滚,不再把左栏撑成一大片空白(左右两栏此前按同一行拉齐)。 */}
+      <div className="grid min-w-0 gap-8 xl:grid-cols-[minmax(0,1fr)_380px] xl:items-start" data-entity-layout="">
+        <div className="grid min-w-0 content-start gap-10">
+          <ReferenceWall entity={data} workspaceId={workspaceId} />
+        {!data.parent_id && (
+          <section className="grid gap-3" aria-label={t("entityVariants")}>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="grid gap-0.5">
+                <h3 className="m-0 text-ui-md font-semibold">{t("entityVariants")}</h3>
+                <p className="m-0 text-ui-xs text-muted-foreground">{t("entityVariantsHint")}</p>
+              </div>
+              <Button variant="outline" onClick={() => setVariantOpen(true)}>
+                <Plus />
+                {t("entityVariantNew")}
+              </Button>
+            </div>
+            {variantCount === 0 ? (
+              <p className="m-0 text-ui-sm text-muted-foreground">{t("entityVariantsEmpty")}</p>
+            ) : (
+              <div className={VARIANT_GRID}>
+                {data.variants.map((one) => (
+                  <EntityCard key={one.id} entity={one} onOpen={() => onOpen(one.id)} />
+                ))}
+              </div>
+            )}
+          </section>
+        )}
+          <UsageSection workspaceId={workspaceId} entityId={data.id} />
+        </div>
+        <aside
+          className="grid min-w-0 content-start divide-y divide-divider rounded-xl border border-border bg-panel xl:sticky xl:top-6 xl:max-h-[calc(100dvh-7rem)] xl:overflow-y-auto"
+          aria-label={t("entityFields")}
+        >
+          <PanelGroup title={t("entityGroupProfile")}>
+            <Field label={t("entityDescription")} hint={t("entityDescriptionHint")}>
+              <DraftTextarea
+                aria-label={t("entityDescription")}
+                className={cn(FIELD, "min-h-20 resize-y")}
+                value={data.description}
+                commit="blur"
+                onValueChange={(description) => patch.mutate({ description })}
+              />
+            </Field>
+            <Field label={t("entityPrompt")} hint={data.parent_id ? t("entityVariantPromptHint") : t("entityPromptHint")}>
+              <DraftTextarea
+                aria-label={t("entityPrompt")}
+                className={cn(FIELD, "min-h-28 resize-y")}
+                value={data.prompt}
+                commit="blur"
+                onValueChange={(prompt) => patch.mutate({ prompt })}
+              />
+            </Field>
+            <Field label={t("entityTags")} hint={t("entityTagsHint")}>
+              <DraftInput
+                aria-label={t("entityTags")}
+                className={FIELD}
+                value={data.tags.join(", ")}
+                commit="blur"
+                onValueChange={(text) => patch.mutate({ tags: text.split(/[,，]/).map((one) => one.trim()).filter(Boolean) })}
+              />
+            </Field>
+          </PanelGroup>
           <KindFields entity={data} workspaceId={workspaceId} onPatch={(body) => patch.mutate(body)} />
         </aside>
       </div>
-
-      {!data.parent_id && (
-        <section className="grid gap-3" aria-label={t("entityVariants")}>
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="grid gap-0.5">
-              <h3 className="m-0 text-ui-md font-semibold">{t("entityVariants")}</h3>
-              <p className="m-0 text-ui-xs text-muted-foreground">{t("entityVariantsHint")}</p>
-            </div>
-            <Button variant="outline" onClick={() => setVariantOpen(true)}>
-              <Plus />
-              {t("entityVariantNew")}
-            </Button>
-          </div>
-          {variantCount === 0 ? (
-            <p className="m-0 text-ui-sm text-muted-foreground">{t("entityVariantsEmpty")}</p>
-          ) : (
-            <div className={CARD_GRID}>
-              {data.variants.map((one) => (
-                <EntityCard key={one.id} entity={one} onOpen={() => onOpen(one.id)} />
-              ))}
-            </div>
-          )}
-        </section>
-      )}
-
-      <UsageSection workspaceId={workspaceId} entityId={data.id} />
 
       <ConfirmDialog
         open={deleting}
@@ -247,6 +255,16 @@ export function EntityDetail({
         onSubmit={(name) => variant.mutate(name)}
       />
     </div>
+  );
+}
+
+/** 设定面板里的一组:一行小标题,下面是这一组的字段。组与组之间的分隔线由面板画。 */
+function PanelGroup({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="grid min-w-0 gap-4 px-5 py-5" aria-label={title} data-panel-group="">
+      <h3 className="m-0 text-ui-xs font-semibold tracking-[0.04em] text-muted-foreground">{title}</h3>
+      {children}
+    </section>
   );
 }
 
@@ -281,30 +299,34 @@ function KindFields({
   if (entity.kind === "character") {
     return (
       <>
-        <VoiceField workspaceId={workspaceId} value={String(attributes.voice_id ?? "")} onChange={(voice_id) => save({ voice_id })} />
-        <Field label={t("entityBlockoutColor")} hint={t("entityBlockoutColorHint")}>
-          <div className="flex items-center gap-2">
-            <input
-              type="color"
-              aria-label={t("entityBlockoutColor")}
-              className="h-8 w-12 cursor-pointer rounded-md border border-border bg-field p-1"
-              value={String(attributes.blockout_color ?? "#9aa0a6")}
-              onChange={(event) => save({ blockout_color: event.target.value })}
-            />
-            {Boolean(attributes.blockout_color) && (
-              <Button variant="ghost" size="sm" onClick={() => save({ blockout_color: "" })}>
-                {t("entityClear")}
-              </Button>
-            )}
-          </div>
-        </Field>
-        <ConsentField entity={entity} onSave={save} />
+        <PanelGroup title={t("entityGroupCharacter")}>
+          <VoiceField workspaceId={workspaceId} value={String(attributes.voice_id ?? "")} onChange={(voice_id) => save({ voice_id })} />
+          <Field label={t("entityBlockoutColor")} hint={t("entityBlockoutColorHint")}>
+            <div className="flex items-center gap-2">
+              <input
+                type="color"
+                aria-label={t("entityBlockoutColor")}
+                className="h-8 w-12 cursor-pointer rounded-md border border-border bg-field p-1"
+                value={String(attributes.blockout_color ?? "#9aa0a6")}
+                onChange={(event) => save({ blockout_color: event.target.value })}
+              />
+              {Boolean(attributes.blockout_color) && (
+                <Button variant="ghost" size="sm" onClick={() => save({ blockout_color: "" })}>
+                  {t("entityClear")}
+                </Button>
+              )}
+            </div>
+          </Field>
+        </PanelGroup>
+        <PanelGroup title={t("entityPersonTitle")}>
+          <ConsentField entity={entity} onSave={save} />
+        </PanelGroup>
       </>
     );
   }
   if (entity.kind === "location") {
     return (
-      <>
+      <PanelGroup title={t("entityGroupLocation")}>
         <SceneField workspaceId={workspaceId} value={String(attributes.scene_id ?? "")} onChange={(scene_id) => save({ scene_id })} />
         <Field label={t("entityTimeOfDay")} hint={t("entityTimeOfDayHint")}>
           <DraftInput
@@ -315,10 +337,14 @@ function KindFields({
             onValueChange={(time_of_day) => save({ time_of_day })}
           />
         </Field>
-      </>
+      </PanelGroup>
     );
   }
-  return <ModelField workspaceId={workspaceId} value={String(attributes.model_asset_id ?? "")} onChange={(model_asset_id) => save({ model_asset_id })} />;
+  return (
+    <PanelGroup title={t("entityGroupProp")}>
+      <ModelField workspaceId={workspaceId} value={String(attributes.model_asset_id ?? "")} onChange={(model_asset_id) => save({ model_asset_id })} />
+    </PanelGroup>
+  );
 }
 
 function VoiceField({ workspaceId, value, onChange }: { workspaceId: string; value: string; onChange: (next: string) => void }) {
@@ -381,7 +407,8 @@ function ConsentField({ entity, onSave }: { entity: Entity; onSave: (changes: Re
   const options = labels.consent.filter((one) => (real ? one.kind !== "fictional" : one.kind === "fictional"));
   return (
     <fieldset className="m-0 grid gap-2 border-0 p-0" data-consent="">
-      <legend className="mb-1.5 text-ui-sm font-medium">{t("entityPersonTitle")}</legend>
+      {/* 组标题已经写着「真人还是虚构」,图例只留给读屏。 */}
+      <legend className="sr-only">{t("entityPersonTitle")}</legend>
       <div role="radiogroup" aria-label={t("entityPersonTitle")} className="flex gap-1">
         {[
           { value: false, label: t("entityFictional") },

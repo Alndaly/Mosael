@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ImageIcon, Send, X } from "lucide-react";
+import { ImageIcon, ImagePlus, Send, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { assetKeys } from "@/api/queryKeys";
@@ -18,6 +18,7 @@ import { DIALOG_FIELD, ModalShell } from "@/components/app/modals";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
 import { COMMUNITY_STATUS_KEY } from "@/features/community/communityShared";
 import { PublishedResult, parseTags } from "@/features/community/publishShared";
 
@@ -112,24 +113,7 @@ export function PublishWorkflowDialog({
             <span>{t("communityFieldTags")}</span>
             <Input value={tags} placeholder={t("communityFieldTagsPlaceholder")} onChange={(event) => setTags(event.currentTarget.value)} />
           </label>
-          <div className="grid gap-2">
-            <span className="text-ui-sm font-medium text-foreground">{t("communityFieldCover")}</span>
-            {cover ? (
-              <span className="flex min-w-0 items-center gap-3">
-                <span className="shrink-0">
-                  <img src={assetThumbnailUrl(cover.id)} alt="" className="h-14 w-20 rounded-md object-cover" />
-                </span>
-                <span className="min-w-0 flex-1 truncate text-ui-sm">{cover.name}</span>
-                <Button variant="ghost" size="icon-sm" aria-label={t("communityCoverRemove")} title={t("communityCoverRemove")} onClick={() => setCover(null)}>
-                  <X />
-                </Button>
-              </span>
-            ) : (
-              <Button variant="outline" className="w-fit" onClick={() => setPicking(true)}>
-                <ImageIcon /> {t("communityCoverPick")}
-              </Button>
-            )}
-          </div>
+          <CoverField cover={cover} onPick={() => setPicking(true)} onClear={() => setCover(null)} />
         </div>
       )}
       <CoverPicker
@@ -142,6 +126,61 @@ export function PublishWorkflowDialog({
         }}
       />
     </ModalShell>
+  );
+}
+
+/**
+ * 封面:一格方形预览 + 一句「它出现在哪」。社区上工作流的封面画在卡片和详情页的头像位,都是方形裁切 ——
+ * 预览照同样裁,挑的时候就看得出头像位上是什么样。空着时整格是一个「挑一张」的按钮。
+ */
+function CoverField({ cover, onPick, onClear }: { cover: Asset | null; onPick: () => void; onClear: () => void }) {
+  const t = useI18n();
+  return (
+    <div className="grid gap-2" data-cover-field="">
+      <span className="text-ui-sm font-medium text-foreground">{t("communityFieldCover")}</span>
+      <div className="flex min-w-0 items-center gap-4">
+        <button
+          type="button"
+          onClick={onPick}
+          aria-label={cover ? t("communityCoverChange") : t("communityCoverPick")}
+          title={cover ? t("communityCoverChange") : t("communityCoverPick")}
+          className={cn(
+            "group relative grid size-24 shrink-0 cursor-pointer place-items-center overflow-hidden rounded-lg p-0 transition-colors",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            cover
+              ? "border border-border bg-secondary"
+              : "border border-dashed border-field-border bg-field text-muted-foreground hover:border-primary hover:text-foreground",
+          )}
+        >
+          {cover ? (
+            <>
+              <img src={assetThumbnailUrl(cover.id)} alt="" className="absolute inset-0 size-full object-cover" />
+              <span className="absolute inset-0 grid place-items-center bg-black/45 text-white opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
+                <ImagePlus size={18} />
+              </span>
+            </>
+          ) : (
+            <ImagePlus size={20} strokeWidth={1.6} />
+          )}
+        </button>
+        <div className="grid min-w-0 flex-1 content-center gap-2">
+          <span className="truncate text-ui-sm text-foreground">{cover ? cover.name || cover.original_filename : t("communityCoverEmpty")}</span>
+          <span className="text-ui-xs leading-relaxed text-muted-foreground">{t("communityCoverHint")}</span>
+          <span className="flex flex-wrap gap-2">
+            <Button variant="outline" size="xs" onClick={onPick}>
+              <ImageIcon />
+              {cover ? t("communityCoverChange") : t("communityCoverPick")}
+            </Button>
+            {cover && (
+              <Button variant="ghost" size="xs" className="text-muted-foreground hover:text-destructive" onClick={onClear}>
+                <X />
+                {t("communityCoverRemove")}
+              </Button>
+            )}
+          </span>
+        </div>
+      </div>
+    </div>
   );
 }
 

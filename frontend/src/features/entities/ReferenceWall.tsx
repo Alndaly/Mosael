@@ -161,7 +161,9 @@ export function ReferenceWall({ entity, workspaceId }: { entity: Entity; workspa
 
   return (
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
-      <section className="grid min-w-0 gap-3" aria-label={t("entityReferences")} data-reference-wall="">
+      {/* content-start:它和右边那一栏字段并排,行高跟着那一栏(字段一多就很高);不收在顶上,多出来的高度会摊进
+          标题和墙之间,标题被推到半中间、空墙拉成一大片。 */}
+      <section className="grid min-w-0 content-start gap-3" aria-label={t("entityReferences")} data-reference-wall="">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="grid gap-0.5">
             <h3 className="m-0 text-ui-md font-semibold">{t("entityReferences")}</h3>
@@ -177,7 +179,7 @@ export function ReferenceWall({ entity, workspaceId }: { entity: Entity; workspa
             {t("entityFromLibrary")}
           </Button>
         </div>
-        <div className={cn("grid min-w-0 gap-4", libraryOpen && "xl:grid-cols-[minmax(0,1fr)_280px]")}>
+        <div className={cn("grid min-w-0 content-start gap-4", libraryOpen && "2xl:grid-cols-[minmax(0,1fr)_280px]")}>
           <Wall active={drop.active || upload.isPending} handlers={drop.handlers}>
             {(drop.active || upload.isPending) && (
               <div className="pointer-events-none absolute inset-0 z-10 grid place-items-center rounded-lg bg-[color-mix(in_oklab,var(--primary)_10%,var(--background))]">

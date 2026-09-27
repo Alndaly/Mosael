@@ -36,7 +36,15 @@ from app.core.i18n import get_current_locale
 from app.db.models import CommunityAccount, now
 from app.domain import deployment
 from app.domain.community import transport
-from app.domain.community.errors import CommunityError, NotConfigured, NotConnected, Rejected, SignedOut, Unreachable
+from app.domain.community.errors import (
+    CommunityError,
+    NoCommunityHere,
+    NotConfigured,
+    NotConnected,
+    Rejected,
+    SignedOut,
+    Unreachable,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -287,6 +295,10 @@ def read_json(response: httpx.Response) -> dict[str, Any]:
         raise Unreachable(f"HTTP {response.status_code}")
     if response.status_code >= 400:
         code, message = transport.error_of(response)
+        if not code:
+            # 社区服务的每一种出错都带错误信封(包括不存在的路由、请求体校验失败);没有,说明那里不是社区。
+            url = response.request.url
+            raise NoCommunityHere(f"{url.scheme}://{url.netloc.decode()}", response.status_code)
         raise Rejected(response.status_code, code, message)
     if response.status_code == 204 or not response.content:
         return {}

@@ -111,6 +111,8 @@ class FakeCommunity:
         self.assets: dict[str, dict[str, Any]] = {}
         #: 下载这些哈希时回别的内容(模拟被换过的文件)。
         self.tampered: set[str] = set()
+        #: 为真时这台「社区」只是个普通网站:什么都回一张 404 网页(部署设置里填了一个没部署社区的站点)。
+        self.just_a_website = False
         self._slugs = itertools.count(1)
 
     @property
@@ -179,6 +181,8 @@ class FakeCommunity:
                 return self._get_blob(url.path.rsplit("/", 1)[-1])
             return self._put_blob(request, url.path.rsplit("/", 1)[-1])
         assert f"{url.scheme}://{url.netloc}" == ORIGIN, url
+        if self.just_a_website:
+            return httpx.Response(404, text="<html><body>Not Found</body></html>", headers={"content-type": "text/html"})
         assert url.path.startswith(PREFIX), url.path
         path = url.path[len(PREFIX):]
         with self.lock:

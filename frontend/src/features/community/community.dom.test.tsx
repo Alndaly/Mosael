@@ -180,6 +180,42 @@ describe("发布到社区", () => {
     expect((screen.getByRole("textbox", { name: "boardShareLink" }) as HTMLInputElement).value).toBe(`${ORIGIN}/zh/workflows/wf1`);
   });
 
+  it("工作流的封面:方形预览,点格子或按钮都能挑,能换能移除,发的是挑中的那张", async () => {
+    mocks.listAssets.mockResolvedValue([
+      { id: "img-1", kind: "image", name: "海报", original_filename: "poster.png" },
+      { id: "img-2", kind: "image", name: "截图", original_filename: "shot.png" },
+    ] as never);
+    mocks.publishWorkflow.mockResolvedValue({ slug: "wf1", url: "u", version: "1", status: "published" });
+    wrap(<PublishWorkflowDialog open onOpenChange={vi.fn()} workflow={WORKFLOW} />);
+    const field = document.querySelector("[data-cover-field]") as HTMLElement;
+    expect(field.textContent).toContain("communityCoverEmpty");
+    expect(field.querySelector("img")).toBeNull();
+
+    const tile = screen.getAllByRole("button", { name: "communityCoverPick" })[0];
+    fireEvent.click(tile);
+    fireEvent.click(await screen.findByText("海报"));
+    await waitFor(() => expect(field.querySelector("img")?.getAttribute("src")).toBe("thumb://img-1"));
+    expect(field.textContent).toContain("海报");
+
+    fireEvent.click(screen.getAllByRole("button", { name: /communityCoverChange/ })[0]);
+    fireEvent.click(await screen.findByText("截图"));
+    await waitFor(() => expect(field.querySelector("img")?.getAttribute("src")).toBe("thumb://img-2"));
+
+    fireEvent.click(screen.getByRole("button", { name: /^communityPublish$/ }));
+    await waitFor(() => expect(mocks.publishWorkflow.mock.calls.at(-1)?.[1].cover_asset_id).toBe("img-2"));
+  });
+
+  it("工作流的封面:移除之后回到空格子", async () => {
+    mocks.listAssets.mockResolvedValue([{ id: "img-1", kind: "image", name: "海报", original_filename: "poster.png" }] as never);
+    wrap(<PublishWorkflowDialog open onOpenChange={vi.fn()} workflow={WORKFLOW} />);
+    fireEvent.click(screen.getAllByRole("button", { name: "communityCoverPick" })[0]);
+    fireEvent.click(await screen.findByText("海报"));
+    fireEvent.click(await screen.findByRole("button", { name: /communityCoverRemove/ }));
+    const field = document.querySelector("[data-cover-field]") as HTMLElement;
+    expect(field.querySelector("img")).toBeNull();
+    expect(field.textContent).toContain("communityCoverEmpty");
+  });
+
   it("工作流:发过的再发,说的是「发布新版本」", () => {
     wrap(<PublishWorkflowDialog open onOpenChange={vi.fn()} workflow={{ ...WORKFLOW, community_slug: "wf1" }} />);
     expect(screen.getByText("communityPublishWorkflowAgain")).toBeTruthy();

@@ -43,7 +43,7 @@ const AlertDialogContent = React.forwardRef<
       <AlertDialogPrimitive.Content
         ref={ref}
         className={cn(
-          "[.is-desktop_&]:[-webkit-app-region:no-drag] fixed left-[50%] top-[50%] z-50 grid min-w-0 w-[calc(100vw-2rem)] max-w-[min(32rem,calc(100vw-2rem))] max-h-[calc(100dvh-2rem)] overflow-y-auto translate-x-[-50%] translate-y-[-50%] gap-6 p-6",
+          "[.is-desktop_&]:[-webkit-app-region:no-drag] fixed left-[50%] top-[50%] z-50 grid min-w-0 w-[min(32rem,calc(100vw-2rem))] max-w-[calc(100vw-2rem)] max-h-[calc(100dvh-2rem)] overflow-y-auto translate-x-[-50%] translate-y-[-50%] gap-6 p-6",
           MODAL_SURFACE, FLOATING_MOTION,
           className
         )}

@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowDownToLine, Check, ExternalLink, Globe, Hourglass, Link2, Search, Send, Share2, ShieldAlert, Sparkles, User } from "lucide-react";
+import { ArrowDownToLine, Check, CloudOff, ExternalLink, Globe, Hourglass, Link2, RefreshCw, Search, Send, Share2, ShieldAlert, Sparkles, User } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -30,6 +30,9 @@ import { cn } from "@/lib/utils";
 import { COMMUNITY_STATUS_KEY, fill, openInBrowser } from "@/features/community/communityShared";
 import { PublishedResult, parseTags } from "@/features/community/publishShared";
 import { entityKindIcon, useCatalogLabels } from "@/features/entities/entityMeta";
+
+/** 「从社区导入」里一格一个资产:弹窗加宽之后一行五六个,封面按 4:5 竖着画。 */
+const TILE_GRID = "grid grid-cols-[repeat(auto-fill,minmax(168px,1fr))] gap-4";
 
 /** 本机声明过的授权:真人人物只有「本人」「已获授权」能分享(「待你确认」是导入来的,还不算)。 */
 function sharableConsent(entity: Entity): boolean {
@@ -353,7 +356,7 @@ export function ImportFromCommunityDialog({
       open={open}
       onOpenChange={(next) => !run.isPending && onOpenChange(next)}
       title={t("entitiesImport")}
-      className="w-[min(720px,calc(100vw-32px))] h-[min(640px,calc(100dvh-32px))]"
+      className="w-[min(1040px,calc(100vw-48px))] h-[min(800px,calc(100dvh-48px))]"
       header={
         <div className="grid gap-3">
           <form
@@ -415,22 +418,24 @@ export function ImportFromCommunityDialog({
       }
     >
       {list.isPending ? (
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-3" aria-busy="true">
-          {Array.from({ length: 6 }, (_, index) => (
+        <div className={TILE_GRID} aria-busy="true">
+          {Array.from({ length: 10 }, (_, index) => (
             <Skeleton key={index} className="aspect-[4/5] w-full rounded-lg" />
           ))}
         </div>
       ) : list.isError ? (
-        <div role="alert" className="grid justify-items-center gap-2 py-10 text-center text-ui-sm text-muted-foreground">
-          {list.error.message}
-          <Button variant="ghost" size="sm" onClick={() => void list.refetch()}>
+        <div role="alert" className="mx-auto grid max-w-md justify-items-center gap-3 py-16 text-center">
+          <CloudOff size={28} strokeWidth={1.4} className="text-muted-foreground" />
+          <p className="m-0 text-ui-sm leading-relaxed text-muted-foreground">{list.error.message}</p>
+          <Button variant="outline" size="sm" onClick={() => void list.refetch()}>
+            <RefreshCw />
             {t("retry")}
           </Button>
         </div>
       ) : list.data.items.length === 0 ? (
-        <p className="m-0 py-10 text-center text-ui-sm text-muted-foreground">{keyword ? t("studioNoMatches") : t("entitiesImportEmpty")}</p>
+        <p className="m-0 py-16 text-center text-ui-sm text-muted-foreground">{keyword ? t("studioNoMatches") : t("entitiesImportEmpty")}</p>
       ) : (
-        <ul className="m-0 grid list-none grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-3 p-0" data-community-assets="">
+        <ul className={cn("m-0 list-none p-0", TILE_GRID)} data-community-assets="">
           {list.data.items.map((item) => (
             <li key={item.slug} className="grid">
               <CommunityAssetTile

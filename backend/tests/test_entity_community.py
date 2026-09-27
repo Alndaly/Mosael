@@ -269,3 +269,14 @@ def test_链接不对_条目不存在(monkeypatch) -> None:
     elsewhere = client.post("/api/entities/import-community", json={"workspace_id": ws, "link": "https://evil.test/assets/nobody"})
     assert elsewhere.status_code == 404
     assert client.post("/api/entities/import-community", json={"workspace_id": ws, "link": "nobody-here"}).status_code == 404
+
+
+def test_社区地址上不是社区服务_说清楚去改地址而不是说条目不存在(monkeypatch) -> None:
+    fake, client, ws = _setup(monkeypatch, connected=False)
+    fake.just_a_website = True
+    browsed = client.get("/api/community/assets", headers={"Accept-Language": "zh"})
+    assert browsed.status_code == 502, browsed.text
+    detail = browsed.json()["detail"]
+    assert ORIGIN in detail and "部署设置" in detail, detail
+    imported = client.post("/api/entities/import-community", json={"workspace_id": ws, "link": "someone"})
+    assert imported.status_code == 502, "不是「这一条不存在」(404)"

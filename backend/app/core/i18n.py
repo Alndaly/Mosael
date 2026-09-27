@@ -4224,6 +4224,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Your community account was signed out. Please reconnect.",
     },
     "communityErr_unreachable": {"zh": "连不上社区服务:{detail}", "en": "Couldn't reach the community service: {detail}"},
+    "communityErr_noCommunityHere": {
+        "zh": "{origin} 上没有社区服务(HTTP {status})。请管理员在「管理 → 部署设置」里核对社区地址",
+        "en": "There's no community service at {origin} (HTTP {status}). Ask an admin to check the community address in Admin → Deployment.",
+    },
     "communityErr_rejected": {
         "zh": "社区服务拒绝了这次请求(HTTP {status}):{message}",
         "en": "The community service rejected the request (HTTP {status}): {message}",
