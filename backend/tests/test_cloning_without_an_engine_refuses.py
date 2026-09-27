@@ -48,7 +48,7 @@ def _a_voice(client) -> tuple[str, str]:
     workspace_id = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
     voice = client.post(
         "/api/voices/upload",
-        data={"workspace_id": workspace_id, "name": "小明", "reference_text": "你好世界"},
+        data={"workspace_id": workspace_id, "name": "小明", "reference_text": "你好世界", "consent_kind": "self"},
         files={"file": ("ref.wav", _tiny_wav(), "audio/wav")},
     ).json()
     return workspace_id, voice["id"]

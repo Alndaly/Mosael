@@ -154,6 +154,8 @@ class OutputSettings:
     # 编码参数(导出对话框可调):CRF 越小画质越高;preset 是 x264 速度档。
     crf: int = 20
     encode_preset: str = "veryfast"
+    #: 写进成片文件的元数据(key, value),比如数字人成片的 AIGC 隐式标识(ADR 0028 §5)。
+    metadata: tuple[tuple[str, str], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -372,6 +374,8 @@ def build_render_plan(
     duck_base_audio: bool = False,
     crf: int = 20,
     encode_preset: str = "veryfast",
+    ai_label: str = "",
+    metadata: tuple[tuple[str, str], ...] = (),
 ) -> RenderPlan:
     """
     clips: [{id, asset_id, timeline_start, src_in, src_out, has_audio}] from the base video track.
@@ -380,6 +384,7 @@ def build_render_plan(
     audio_clips: clips from audio tracks ({..., gain, muted}).
     assets: {asset_id: {file_key}}.
     Overlaps on the base track are rejected; gaps become black/silent segments.
+    ai_label: 显式标识的那几个字(空 = 不加);见 _ai_label_items。metadata: 写进文件的元数据。
     """
     ordered = sorted(clips, key=lambda c: float(c["timeline_start"]))
     segments: list[Segment] = []
@@ -516,6 +521,8 @@ def build_render_plan(
     # 字幕还在往后走,画面却没了,导出比预览短一大截、内容对不上(用户报的「预览与导出完全不同」)。
     if cursor < duration - GAP_EPSILON:
         segments.append(Segment(kind="gap", duration=round(duration - cursor, 6)))
+    if ai_label and duration > 0:
+        text_items.extend(_ai_label_items(ai_label, duration))
 
     plan = RenderPlan(
         sequence_id=sequence_id,
@@ -524,7 +531,8 @@ def build_render_plan(
         video_segments=tuple(segments),
         output=OutputSettings(
             width=width, height=height, fps=fps, fill_mode=fill_mode if fill_mode in ("cover", "contain", "blur") else "cover",
-            crf=max(0, min(51, int(crf))), encode_preset=encode_preset if encode_preset in X264_PRESETS else "veryfast"
+            crf=max(0, min(51, int(crf))), encode_preset=encode_preset if encode_preset in X264_PRESETS else "veryfast",
+            metadata=tuple(metadata),
         ),
         overlays=tuple(overlays),
         audio_overlays=tuple(audio_overlays),
@@ -539,6 +547,26 @@ def build_render_plan(
         ),
     )
     return plan.with_hash()
+
+
+#: 片头那一块显式标识停多久(秒)。《人工智能生成合成内容标识办法》要求视频在**起始画面**和播放区域周边加提示。
+AI_LABEL_OPENING_SECONDS = 3.0
+
+
+def _ai_label_items(text: str, duration: float) -> list[TextOverlayItem]:
+    """数字人成片的显式标识(ADR 0028 §5):片头正中一块大字,整片右上角一行小字。和花字同一条烧录路,
+    成片里有,预览里没有(预览不是要发布的东西)。描边加阴影:压在任何画面上都读得出。"""
+    opening = TextOverlayItem(
+        start=0.0, duration=round(min(AI_LABEL_OPENING_SECONDS, duration), 6), text=text,
+        style=TextStyleSpec(font_size=72.0, stroke_color="#000000", stroke_width=3.0, shadow=2.0),
+        transform=Transform(),
+    )
+    corner = TextOverlayItem(
+        start=0.0, duration=round(duration, 6), text=text,
+        style=TextStyleSpec(font_size=28.0, stroke_color="#000000", stroke_width=2.0, shadow=1.0, align="right"),
+        transform=Transform(x=0.82, y=-0.88, opacity=0.9),
+    )
+    return [opening, corner]
 
 
 def _clip_timing(clip: dict) -> tuple[float, float]:

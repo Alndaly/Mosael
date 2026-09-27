@@ -3670,6 +3670,15 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "No speech was recognised — the reference audio may be too quiet or have no voice in it. Try a different clip.",
     },
     "voiceErr_nameEmpty": {"zh": "音色名称不能为空", "en": "Give the voice a name."},
+    "voiceErr_consentKind": {
+        "zh": "要选一项授权声明:这把嗓子是谁的({kinds})",
+        "en": "Pick a consent declaration for whose voice this is ({kinds}).",
+    },
+    "exportAiLabelText": {"zh": "AI 生成", "en": "AI-generated"},
+    "wfErr_voiceConsentMissing": {
+        "zh": "音色「{name}」还没声明是谁的嗓子:在配音库里补上授权声明,才能用于数字人",
+        "en": "The voice \"{name}\" has no declaration of whose voice it is. Add one in the voice library before using it for digital humans.",
+    },
     "voiceErr_textEmpty": {"zh": "合成文本不能为空", "en": "Enter some text to synthesise."},
     "voiceErr_voiceNotFound": {"zh": "音色不存在", "en": "This voice doesn't exist."},
     "voiceErr_workspaceRequired": {"zh": "需要指定工作区", "en": "A workspace is required."},

@@ -45,7 +45,7 @@ def _a_voice(client) -> str:
     workspace_id = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
     return client.post(
         "/api/voices/upload",
-        data={"workspace_id": workspace_id, "name": "小明", "reference_text": "你好"},
+        data={"workspace_id": workspace_id, "name": "小明", "reference_text": "你好", "consent_kind": "self"},
         files={"file": ("ref.wav", _tiny_wav(), "audio/wav")},
     ).json()["id"]
 

@@ -7642,6 +7642,8 @@ export interface components {
              * @default
              */
             reference_text: string;
+            /** Consent Kind */
+            consent_kind: string;
             /** File */
             file: string;
         };
@@ -8614,6 +8616,11 @@ export interface components {
              * @enum {string}
              */
             quality: "high" | "standard" | "compact";
+            /**
+             * Ai Label
+             * @default true
+             */
+            ai_label: boolean;
         };
         /** FeishuBindCodeOut */
         FeishuBindCodeOut: {
@@ -12755,6 +12762,8 @@ export interface components {
              * @default
              */
             name: string;
+            /** Consent Kind */
+            consent_kind: string;
         };
         /** VoiceOut */
         VoiceOut: {
@@ -12779,6 +12788,13 @@ export interface components {
              * @default true
              */
             has_reference: boolean;
+            /**
+             * Consent Kind
+             * @default undeclared
+             */
+            consent_kind: string;
+            /** Consent At */
+            consent_at?: string | null;
             /**
              * Created At
              * Format: date-time
@@ -12809,6 +12825,8 @@ export interface components {
             name?: string | null;
             /** Reference Text */
             reference_text?: string | null;
+            /** Consent Kind */
+            consent_kind?: string | null;
         };
         /** WorkflowAiEditRequest */
         WorkflowAiEditRequest: {

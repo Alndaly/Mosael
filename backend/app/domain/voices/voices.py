@@ -20,6 +20,7 @@ from app.ai.runtime.tts_language import clone_supports, detect_script, edge_voic
 from app.core.db import SessionLocal
 from app.domain.jobs import TTS_SLOTS, blame, run_job_guarded, say
 from app.db.models import Asset, Job, Voice
+from app.db.model_base import now
 from app.domain.assets.importer import register_file_asset
 from app.domain.jobs import create_job, dispatch_job, emit_job_event
 from app.media.paths import resolve_key, voice_dir, voice_key
@@ -205,8 +206,30 @@ def _transcode_reference(source: Path, target: Path) -> None:
         raise VoiceError("voiceErr_referenceTranscodeFailed", detail=_ffmpeg_reason(result.stderr))
 
 
-def create_from_upload(db: Session, *, workspace_id: str, source: Path, name: str, reference_text: str) -> Voice:
+#: 还没声明这把嗓子是谁的(升级前建的音色)。见 Voice.consent_kind。
+UNDECLARED = "undeclared"
+
+
+def _declared(kind: str) -> str:
+    """建音色、补声明时收的那一项:只能是 entities.catalog.CONSENT_KINDS 里的一种,不收「未声明」。"""
+    from app.domain.entities.catalog import CONSENT_KINDS
+
+    cleaned = (kind or "").strip()
+    if cleaned not in CONSENT_KINDS:
+        raise VoiceError("voiceErr_consentKind", kinds=" / ".join(CONSENT_KINDS))
+    return cleaned
+
+
+def usable_for_digital_human(voice: Voice) -> bool:
+    """这把嗓子能不能用于数字人(ADR 0028 §5):声明过是谁的就行(本人、已获同意、虚构都算)。"""
+    return voice.consent_kind != UNDECLARED
+
+
+def create_from_upload(db: Session, *, workspace_id: str, source: Path, name: str, reference_text: str,
+                       consent_kind: str, actor_id: str | None) -> Voice:
     from app.db.models import new_id
+
+    consent_kind = _declared(consent_kind)
 
     # 时长从**转码之前**的原文件量:转码会截到 15 秒上限,量转码后的等于用我们自己的裁剪
     # 结果去判用户给了多长。
@@ -224,6 +247,9 @@ def create_from_upload(db: Session, *, workspace_id: str, source: Path, name: st
         reference_text=reference_text.strip(),
         reference_key=voice_key(workspace_id, voice_id, "reference.wav"),
         source="upload",
+        consent_kind=consent_kind,
+        consent_by=actor_id,
+        consent_at=now(),
     )
     db.add(voice)
     db.commit()
@@ -231,11 +257,14 @@ def create_from_upload(db: Session, *, workspace_id: str, source: Path, name: st
     return voice
 
 
-def create_from_speaker(db: Session, *, workspace_id: str, asset_id: str, speaker: str | None, name: str) -> Voice:
+def create_from_speaker(db: Session, *, workspace_id: str, asset_id: str, speaker: str | None, name: str,
+                        consent_kind: str, actor_id: str | None) -> Voice:
     """Clone a voice from a transcribed asset: pull up to ~8s of the given
     speaker's own audio (their transcript segments) as the reference clip, and
     their transcript text as the reference text."""
     from app.db.models import Transcript, new_id
+
+    consent_kind = _declared(consent_kind)
 
     asset = db.get(Asset, asset_id)
     if asset is None or asset.workspace_id != workspace_id:
@@ -284,6 +313,9 @@ def create_from_speaker(db: Session, *, workspace_id: str, asset_id: str, speake
         source="speaker",
         source_asset_id=asset_id,
         source_speaker=speaker,
+        consent_kind=consent_kind,
+        consent_by=actor_id,
+        consent_at=now(),
     )
     db.add(voice)
     db.commit()
@@ -326,7 +358,8 @@ def recognize_reference_text(db: Session, voice: Voice) -> Voice:
     return voice
 
 
-def update_voice(db: Session, voice: Voice, *, name: str | None, reference_text: str | None) -> Voice:
+def update_voice(db: Session, voice: Voice, *, name: str | None, reference_text: str | None,
+                 consent_kind: str | None = None, actor_id: str | None = None) -> Voice:
     """补填/更正音色的说明性字段。
 
     为什么必须有这个:参考文本刚变成 Fish Speech 的必填项(它不带 ASR,空文本会让输出
@@ -340,6 +373,11 @@ def update_voice(db: Session, voice: Voice, *, name: str | None, reference_text:
         voice.name = cleaned
     if reference_text is not None:
         voice.reference_text = reference_text.strip()
+    if consent_kind is not None:
+        #: 补声明 / 改声明:谁、何时由这里记,不收客户端给的。
+        voice.consent_kind = _declared(consent_kind)
+        voice.consent_by = actor_id
+        voice.consent_at = now()
     db.commit()
     db.refresh(voice)
     return voice

@@ -2,7 +2,7 @@ import "./editor.css";
 import { assetKeys } from "@/api/queryKeys";
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bot, Download, FolderPlus, Loader2, Plus, Redo2, Scissors, Sparkles, Type, Undo2 } from "lucide-react";
+import { Bot, FolderPlus, Plus, Redo2, Scissors, Sparkles, Type, Undo2 } from "lucide-react";
 
 import { toast } from "sonner";
 import { useRecorder } from "@/features/media/recordingContext";
@@ -22,8 +22,6 @@ import {
   deleteClip,
   deleteClipsBatch,
   rippleDeleteClipsBatch,
-  exportSequence,
-  type ExportParams,
   insertClip,
   insertTextClip,
   moveClip,
@@ -48,7 +46,6 @@ import {
   trimClip,
   undoSequence,
   type Asset,
-  type Job,
   type Project,
   type Sequence,
   type Workspace,
@@ -57,8 +54,6 @@ import { Kbd } from "@/components/ui/kbd";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ModalShell } from "@/components/app/modals";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { CanvasAgentChat, type CanvasAgentMode } from "@/features/agent/CanvasAgentChat";
 import { clipEnd } from "@/domain/timeline/geometry";
@@ -72,6 +67,7 @@ import { ConfirmDialog } from "@/components/app/modals";
 import { DenoiseDialog } from "@/features/media/DenoiseDialog";
 import { useImportMediaFiles } from "@/features/media/useImportMediaFiles";
 import { FontFaces } from "@/features/editor/FontFaces";
+import { ExportControl } from "@/features/editor/ExportControl";
 import { Inspector } from "./Inspector";
 import { MediaPool } from "./MediaPool";
 import { Monitor } from "./Monitor";
@@ -1159,131 +1155,3 @@ function LeftTabs({
   );
 }
 
-const EXPORT_PARAMS_KEY = "mosael.export.params";
-
-/**
- * 导出按钮 + 进行中的进度。**做完了不在这里说**(ADR-0018):导出完成 / 失败由任务中心统一
- * 弹提示、发系统通知、刷新素材 —— 这里再挂一个「✓ 导出完成」就是同一件事说两遍,而且它会
- * 一直钉在按钮旁边,直到换页。
- */
-function ExportControl({ sequence }: { sequence: Sequence }) {
-  const t = useI18n();
-  const qc = useQueryClient();
-  const sequenceId = sequence.id;
-  const [jobId, setJobId] = React.useState<string | null>(null);
-  const [configOpen, setConfigOpen] = React.useState(false);
-  // 参数记住上次选择:批量出片时不必每次重选。
-  const [params, setParams] = React.useState<ExportParams>(() => {
-    try {
-      const saved = JSON.parse(localStorage.getItem(EXPORT_PARAMS_KEY) ?? "{}") as Partial<ExportParams>;
-      return {
-        resolution: ["original", "1080p", "720p", "480p"].includes(saved.resolution ?? "") ? saved.resolution! : "original",
-        fps: typeof saved.fps === "number" ? saved.fps : null,
-        quality: ["high", "standard", "compact"].includes(saved.quality ?? "") ? saved.quality! : "standard",
-      };
-    } catch {
-      return { resolution: "original", fps: null, quality: "standard" };
-    }
-  });
-  const updateParams = (patch: Partial<ExportParams>) => {
-    setParams((current) => {
-      const next = { ...current, ...patch };
-      localStorage.setItem(EXPORT_PARAMS_KEY, JSON.stringify(next));
-      return next;
-    });
-  };
-  const startExport = useMutation({
-    mutationFn: (body: ExportParams) => exportSequence(sequenceId, body),
-    // 导出任务建好了再关配置框 —— 此前先关再发请求,按下去到任务出现之间什么反馈都没有。
-    onSuccess: (job) => {
-      setJobId(job.id);
-      setConfigOpen(false);
-      // 让任务中心马上看见这条任务,而不是等它下一轮轮询。
-      void qc.invalidateQueries({ queryKey: ["jobs"] });
-    },
-  });
-  const job = useQuery({
-    queryKey: ["job", jobId],
-    enabled: Boolean(jobId),
-    queryFn: () => api<Job>(`/api/jobs/${jobId}`),
-    refetchInterval: (query) => {
-      const status = query.state.data?.status;
-      return status === "succeeded" || status === "failed" ? false : 700;
-    },
-    refetchOnWindowFocus: true,
-  });
-
-  const status = jobId ? (job.data?.status ?? "queued") : null;
-
-  const busy = startExport.isPending || status === "queued" || status === "running";
-
-  return (
-    <span className="inline-flex items-center gap-1.5">
-      {status === "running" && (
-        <span className="inline-flex items-center gap-1.5 text-ui-xs text-muted-foreground" title={job.data?.message ?? undefined}>
-          {job.data?.message && <span className="max-w-[190px] truncate">{job.data.message}</span>}
-          <span className="timecode tabular-nums">{Math.round((job.data?.progress ?? 0) * 100)}%</span>
-        </span>
-      )}
-      <Button size="sm" disabled={busy} onClick={() => setConfigOpen(true)}>
-        {busy ? <Loader2 size={13} className="animate-mosael-spin" /> : <Download size={13} />}
-        {busy ? t("exporting") : t("exportVideo")}
-      </Button>
-      <ModalShell
-        open={configOpen}
-        onOpenChange={setConfigOpen}
-        title={t("exportConfigTitle")}
-        className="w-[380px]"
-        footer={
-          <>
-            <span className="mr-auto text-ui-xs text-muted-foreground">{t("exportConfigHint")}</span>
-            <Button size="sm" loading={startExport.isPending} onClick={() => startExport.mutate(params)}>
-              <Download size={13} /> {t("exportStart")}
-            </Button>
-          </>
-        }
-      >
-        <div className="grid w-full gap-3.5">
-          <div className="grid gap-1.5">
-            <span className="text-xs font-medium text-muted-foreground">{t("exportResolution")}</span>
-            <Select value={params.resolution} onValueChange={(v) => updateParams({ resolution: v as ExportParams["resolution"] })}>
-              <SelectTrigger size="sm"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="original">{t("exportResolutionOriginal")}({sequence.width}×{sequence.height})</SelectItem>
-                <SelectItem value="1080p">1080p</SelectItem>
-                <SelectItem value="720p">720p</SelectItem>
-                <SelectItem value="480p">480p</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="grid gap-1.5">
-            <span className="text-xs font-medium text-muted-foreground">{t("exportFps")}</span>
-            <Select
-              value={params.fps == null ? "follow" : String(params.fps)}
-              onValueChange={(v) => updateParams({ fps: v === "follow" ? null : Number(v) })}
-            >
-              <SelectTrigger size="sm"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="follow">{t("exportFpsFollow")}({sequence.fps}fps)</SelectItem>
-                {[24, 25, 30, 50, 60].map((rate) => (
-                  <SelectItem key={rate} value={String(rate)}>{rate} fps</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="grid gap-1.5">
-            <span className="text-xs font-medium text-muted-foreground">{t("exportQuality")}</span>
-            <Select value={params.quality} onValueChange={(v) => updateParams({ quality: v as ExportParams["quality"] })}>
-              <SelectTrigger size="sm"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="high">{t("exportQualityHigh")}</SelectItem>
-                <SelectItem value="standard">{t("exportQualityStandard")}</SelectItem>
-                <SelectItem value="compact">{t("exportQualityCompact")}</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-      </ModalShell>
-    </span>
-  );
-}

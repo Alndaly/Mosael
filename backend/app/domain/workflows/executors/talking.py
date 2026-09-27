@@ -61,6 +61,20 @@ def _pick_model(db: Session, choice: str, mode: str) -> dict[str, Any]:
     return picked
 
 
+def _require_voice_consent(db: Session, engine: str, voice: str) -> None:
+    """克隆音色要有授权声明才能用于数字人(ADR 0028 §5)。引擎自带的嗓子(Edge、各家云端)不是谁的克隆,不问。
+    在花钱之前问 —— 配完音才拒,那段配音就白付了。"""
+    from app.db.models import Voice
+    from app.domain.voices.engine_catalog import CLONE_ENGINE
+    from app.domain.voices.voices import usable_for_digital_human
+
+    if (engine or CLONE_ENGINE) != CLONE_ENGINE or not voice:
+        return
+    row = db.get(Voice, voice)
+    if row is not None and not usable_for_digital_human(row):
+        raise WorkflowDomainError("wfErr_voiceConsentMissing", params={"name": row.name})
+
+
 def _speak(db: Session, scope: RunScope, text: str, engine: str, voice: str) -> str:
     """稿子配成一段音频(和「配音」节点同一个执行器)。"""
     from app.domain.workflows.executors.subjobs import synthesize_speech
@@ -69,6 +83,7 @@ def _speak(db: Session, scope: RunScope, text: str, engine: str, voice: str) -> 
         raise WorkflowDomainError("wfErr_talkingNeedsText")
     if not voice:
         raise WorkflowDomainError("wfErr_talkingNeedsVoice")
+    _require_voice_consent(db, engine, voice)
     return synthesize_speech(db, scope, {"text": text, "engine": engine, "voice": voice})["asset_id"]
 
 
@@ -144,6 +159,7 @@ def check_entity_speak(db: Session, workspace_id: str, config: dict[str, Any], a
     voice = _text(attributes.get("voice_id"))
     if not voice:
         raise WorkflowDomainError("wfErr_entitySpeakNoVoice", params={"name": entity.name})
+    _require_voice_consent(db, _text(attributes.get("voice_engine")), voice)
     if not _text(config.get("text")):
         raise WorkflowDomainError("wfErr_talkingNeedsText")
     options = talking_models(db, SPEECH_TO_VIDEO, actor_id)

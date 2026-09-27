@@ -25,6 +25,12 @@ class Voice(Base):
     source: Mapped[str] = mapped_column(String(32), nullable=False, default="upload")  # upload | speaker
     source_asset_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     source_speaker: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    #: 授权声明(ADR 0028 §5):这把嗓子是谁的 —— self / authorized / fictional(entities.catalog.CONSENT_KINDS),
+    #: 升级前建的音色是 `undeclared`。**没有声明的不能用于数字人**(让它说话、对口型),建新音色时必须选一项。
+    #: 谁、何时声明的由服务端记。
+    consent_kind: Mapped[str] = mapped_column(String(16), nullable=False, default="undeclared")
+    consent_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    consent_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
 

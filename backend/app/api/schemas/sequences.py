@@ -133,6 +133,8 @@ class ExportRequest(ApiModel):
     resolution: Literal["original", "1080p", "720p", "480p"] = "original"
     fps: float | None = Field(default=None, ge=1, le=120)
     quality: Literal["high", "standard", "compact"] = "standard"
+    #: 成片里有数字人片段时,片头和画面一角加「AI 生成」(ADR 0028 §5)。**默认开、允许关**;关了照样写 AIGC 隐式标识。
+    ai_label: bool = True
 
 
 class CutClipRangeRequest(ApiModel):

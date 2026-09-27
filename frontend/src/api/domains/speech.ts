@@ -40,18 +40,21 @@ export function uploadVoice(args: {
   workspaceId: string;
   name: string;
   referenceText: string;
+  /** 这把嗓子是谁的:self / authorized / fictional(必选,见后端 voices 的授权声明)。 */
+  consentKind: string;
   file: File;
 }): Promise<Voice> {
   const form = new FormData();
   form.append("workspace_id", args.workspaceId);
   form.append("name", args.name);
   form.append("reference_text", args.referenceText);
+  form.append("consent_kind", args.consentKind);
   form.append("file", args.file);
   return api<Voice>("/api/voices/upload", { method: "POST", body: form });
 }
 
 /** Reference audio is immutable: changing it creates a different voice identity. */
-export function updateVoice(id: string, body: { name?: string; reference_text?: string }): Promise<Voice> {
+export function updateVoice(id: string, body: { name?: string; reference_text?: string; consent_kind?: string }): Promise<Voice> {
   return api<Voice>(`/api/voices/${id}`, { method: "PATCH", body: JSON.stringify(body) });
 }
 
@@ -67,6 +70,7 @@ export function voiceFromSpeaker(body: {
   asset_id: string;
   speaker?: string | null;
   name?: string;
+  consent_kind: string;
 }): Promise<Voice> {
   return api<Voice>("/api/voices/from-speaker", { method: "POST", body: JSON.stringify(body) });
 }

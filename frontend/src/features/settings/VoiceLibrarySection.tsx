@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, Mic, Pause, Pencil, Play, Plus, Trash2, Wand2, X } from "lucide-react";
+import { Check, Mic, Pause, Pencil, Play, Plus, ShieldAlert, Trash2, Wand2, X } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -19,6 +19,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useSamplePlayer } from "@/lib/useSamplePlayer";
 import { UploadVoiceDialog } from "@/features/voice/VoiceCreationDialogs";
+import { VoiceConsentPicker, VoiceConsentStatus } from "@/features/voice/VoiceConsent";
 import { SettingsBlock, SettingsEmpty, SettingsGroup } from "@/components/settings/settings-layout";
 
 /**
@@ -153,6 +154,12 @@ function VoiceRow({
     },
     onError: (error: Error) => toast.error(error.message),
   });
+  //: 授权声明单独存,点了就存 —— 它不是名字那样要「改完再存」的草稿,选的就是一次声明(谁、何时由服务端记)。
+  const declare = useMutation({
+    mutationFn: (consent_kind: string) => updateVoice(voice.id, { consent_kind }),
+    onSuccess: () => onChanged(),
+    onError: (error: Error) => toast.error(error.message),
+  });
   const recognize = useMutation({
     mutationFn: () => recognizeReference(voice.id),
     onSuccess: () => {
@@ -192,6 +199,13 @@ function VoiceRow({
               placeholder={t("voiceReferenceTextOptional")}
               onChange={(event) => setText(event.target.value)}
             />
+            <VoiceConsentPicker
+              name={`voice-consent-${voice.id}`}
+              value={voice.consent_kind}
+              disabled={declare.isPending}
+              onChange={(kind) => declare.mutate(kind)}
+            />
+            <VoiceConsentStatus kind={voice.consent_kind} declaredAt={voice.consent_at} />
             <div className="flex items-center justify-between gap-2">
               {/* 让本机的转写引擎听一遍参考音频把文本填上 —— 比让用户打一遍自己说过的话强。 */}
               <Button size="sm" variant="ghost" loading={recognize.isPending} onClick={() => recognize.mutate()}>
@@ -209,10 +223,23 @@ function VoiceRow({
           </div>
         ) : (
           // 第二行是这条音色的"说明":来源 + 参考文本。首行只留名字,读起来才有主次。
-          <p className="m-0 truncate text-ui-2xs leading-[1.5] text-muted-foreground" title={voice.reference_text}>
-            <span className="text-muted-foreground/70">{origin}</span>
-            {voice.reference_text ? ` · ${voice.reference_text}` : ""}
-          </p>
+          <>
+            <p className="m-0 truncate text-ui-2xs leading-[1.5] text-muted-foreground" title={voice.reference_text}>
+              <span className="text-muted-foreground/70">{origin}</span>
+              {voice.reference_text ? ` · ${voice.reference_text}` : ""}
+            </p>
+            {/* 升级前建的音色没有声明:用于数字人之前要补上(点编辑在那里选)。已声明的不多占一行。 */}
+            {voice.consent_kind === "undeclared" && (
+              <button
+                type="button"
+                data-voice-consent-missing=""
+                className="flex cursor-pointer items-center gap-1 border-0 bg-transparent p-0 text-left text-ui-2xs text-warning hover:underline"
+                onClick={onToggleEdit}
+              >
+                <ShieldAlert size={11} /> {t("voiceConsentMissing")}
+              </button>
+            )}
+          </>
         )}
       </div>
       {/* **常驻显示,不藏在 hover 后面。** 藏起来省的是一点视觉噪声,代价是"这一行能干什么"

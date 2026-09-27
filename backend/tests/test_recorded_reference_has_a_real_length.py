@@ -63,7 +63,7 @@ def test_the_clone_dialog_accepts_a_long_enough_recording() -> None:
 
     resp = client.post(
         "/api/voices/upload",
-        data={"workspace_id": workspace_id, "name": "录的", "reference_text": ""},
+        data={"workspace_id": workspace_id, "name": "录的", "reference_text": "", "consent_kind": "self"},
         files={"file": ("recording-1790270272478.webm", _recording(7), "audio/webm")},
     )
 
@@ -77,7 +77,7 @@ def test_a_short_recording_is_refused_with_its_real_length() -> None:
 
     resp = client.post(
         "/api/voices/upload",
-        data={"workspace_id": workspace_id, "name": "太短", "reference_text": ""},
+        data={"workspace_id": workspace_id, "name": "太短", "reference_text": "", "consent_kind": "self"},
         files={"file": ("recording-1790270272478.webm", _recording(2), "audio/webm")},
     )
 

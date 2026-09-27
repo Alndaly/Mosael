@@ -71,6 +71,12 @@ Accepted — 2026-09-28。维护者拍板了[数字人方案](../design/digital-
 
 ## 分步落地
 
+- 第 4 步已做(2026-09-28):克隆音色的授权声明(`voices.consent_kind` / `consent_by` / `consent_at`,迁移
+  `migrate-voices-declare-consent` 把已有的写成 `undeclared`;建音色时必选,配音库里补;数字人三个节点在配音之前
+  拦 `executors/talking._require_voice_consent`)。导出:成片里有数字人片段(生成记录带驱动音频,`render.digital_human_assets`)
+  时片头 3 秒正中、整片右上角烧「AI 生成」(导出框里默认开、允许关、不记住关,关时当场写明后果),MP4 元数据总写 `AIGC`
+  (《标识办法》第五条的字段)和一句 comment。
+
 - 第 3 步已做(2026-09-28):`entity_speak`(人物资产格的能力、资产详情页「让它说话」、工作流节点;门槛在
   `executors/talking.check_entity_speak`,详情页起任务之前先过它)、`image_speak`(图片格)、`video_lipsync`(视频格,
   音频字段 `board_host: false`:只从上游接,不让这一项挂到音频格上)。后两个没有资产上的声明可查,面板上有一格必选的

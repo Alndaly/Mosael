@@ -58,7 +58,7 @@ def test_speed_rides_along_to_the_worker(monkeypatch) -> None:
     workspace_id = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
     voice = client.post(
         "/api/voices/upload",
-        data={"workspace_id": workspace_id, "name": "我的", "reference_text": "今天是个好天气"},
+        data={"workspace_id": workspace_id, "name": "我的", "reference_text": "今天是个好天气", "consent_kind": "self"},
         files={"file": ("ref.wav", buf.getvalue(), "audio/wav")},
     ).json()
 

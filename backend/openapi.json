@@ -21874,6 +21874,10 @@
             "title": "Reference Text",
             "default": ""
           },
+          "consent_kind": {
+            "type": "string",
+            "title": "Consent Kind"
+          },
           "file": {
             "type": "string",
             "contentMediaType": "application/octet-stream",
@@ -21884,6 +21888,7 @@
         "required": [
           "workspace_id",
           "name",
+          "consent_kind",
           "file"
         ],
         "title": "Body_upload_voice_api_voices_upload_post"
@@ -24181,6 +24186,11 @@
             ],
             "title": "Quality",
             "default": "standard"
+          },
+          "ai_label": {
+            "type": "boolean",
+            "title": "Ai Label",
+            "default": true
           }
         },
         "type": "object",
@@ -33174,11 +33184,16 @@
             "type": "string",
             "title": "Name",
             "default": ""
+          },
+          "consent_kind": {
+            "type": "string",
+            "title": "Consent Kind"
           }
         },
         "type": "object",
         "required": [
-          "asset_id"
+          "asset_id",
+          "consent_kind"
         ],
         "title": "VoiceFromSpeakerRequest"
       },
@@ -33217,6 +33232,23 @@
             "type": "boolean",
             "title": "Has Reference",
             "default": true
+          },
+          "consent_kind": {
+            "type": "string",
+            "title": "Consent Kind",
+            "default": "undeclared"
+          },
+          "consent_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Consent At"
           },
           "created_at": {
             "type": "string",
@@ -33290,6 +33322,17 @@
               }
             ],
             "title": "Reference Text"
+          },
+          "consent_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Consent Kind"
           }
         },
         "type": "object",

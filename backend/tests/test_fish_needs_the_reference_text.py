@@ -41,7 +41,7 @@ def _voice_without_text(client) -> str:
     workspace_id = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
     return client.post(
         "/api/voices/upload",
-        data={"workspace_id": workspace_id, "name": "我的", "reference_text": ""},
+        data={"workspace_id": workspace_id, "name": "我的", "reference_text": "", "consent_kind": "self"},
         files={"file": ("ref.wav", _wav(), "audio/wav")},
     ).json()["id"]
 

@@ -26,7 +26,7 @@ const SRC = path.resolve(__dirname, "..");
 
 /** `<文件:行>` → 为什么不需要 loading。 */
 const EXEMPT: Record<string, string> = {
-  "features/editor/EditorView.tsx:startExport":
+  "features/editor/ExportControl.tsx:startExport":
     "点完立刻关掉导出配置弹层,并在任务中心出现一条任务 —— 弹层消失就是那个反馈。",
   "features/editor/TranscriptPanel.tsx:startAsr":
     "自己算了 asrRunning(isPending || 有在跑的 job),按钮内已经换成转圈 + 文案。",

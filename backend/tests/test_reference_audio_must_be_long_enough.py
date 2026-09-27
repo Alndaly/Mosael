@@ -42,7 +42,7 @@ def test_a_two_second_clip_is_refused() -> None:
 
     resp = client.post(
         "/api/voices/upload",
-        data={"workspace_id": workspace_id, "name": "太短", "reference_text": "今天是个好天气"},
+        data={"workspace_id": workspace_id, "name": "太短", "reference_text": "今天是个好天气", "consent_kind": "self"},
         files={"file": ("ref.wav", _wav(2.6), "audio/wav")},
     )
 
@@ -65,7 +65,7 @@ def test_a_long_enough_clip_goes_through() -> None:
 
     resp = client.post(
         "/api/voices/upload",
-        data={"workspace_id": workspace_id, "name": "够长", "reference_text": "今天是个好天气"},
+        data={"workspace_id": workspace_id, "name": "够长", "reference_text": "今天是个好天气", "consent_kind": "self"},
         files={"file": ("ref.wav", _wav(8), "audio/wav")},
     )
 
@@ -81,7 +81,7 @@ def test_it_is_refused_before_the_voice_row_exists() -> None:
     workspace_id = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
     client.post(
         "/api/voices/upload",
-        data={"workspace_id": workspace_id, "name": "太短", "reference_text": "x"},
+        data={"workspace_id": workspace_id, "name": "太短", "reference_text": "x", "consent_kind": "self"},
         files={"file": ("ref.wav", _wav(2.0), "audio/wav")},
     )
 
@@ -112,7 +112,7 @@ def test_synthesis_refuses_an_existing_short_voice(monkeypatch) -> None:
     monkeypatch.setattr(voices, "check_reference_duration", lambda seconds: None)
     voice = client.post(
         "/api/voices/upload",
-        data={"workspace_id": workspace_id, "name": "历史遗留", "reference_text": "x"},
+        data={"workspace_id": workspace_id, "name": "历史遗留", "reference_text": "x", "consent_kind": "self"},
         files={"file": ("ref.wav", _wav(2.6), "audio/wav")},
     ).json()
     monkeypatch.undo()

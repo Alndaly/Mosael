@@ -44,6 +44,8 @@ def _voice_out(voice) -> dict:
         "source": voice.source,
         "source_speaker": voice.source_speaker,
         "has_reference": bool(voice.reference_key),
+        "consent_kind": voice.consent_kind,
+        "consent_at": voice.consent_at,
         "created_at": voice.created_at,
     }
 
@@ -61,6 +63,8 @@ def upload_voice(
     workspace_id: str = Form(...),
     name: str = Form(...),
     reference_text: str = Form(""),
+    #: 这把嗓子是谁的(必选,ADR 0028 §5):本人 / 已取得本人同意 / 虚构。
+    consent_kind: str = Form(...),
     file: UploadFile = File(...),
 ) -> dict:
     ensure_workspace_perm(db, user, workspace_id, "ai")
@@ -69,7 +73,8 @@ def upload_voice(
         tmp_path = Path(tmp.name)
     try:
         voice = voices.create_from_upload(
-            db, workspace_id=workspace_id, source=tmp_path, name=name, reference_text=reference_text
+            db, workspace_id=workspace_id, source=tmp_path, name=name, reference_text=reference_text,
+            consent_kind=consent_kind, actor_id=user.id,
         )
     except voices.VoiceError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -88,7 +93,8 @@ def voice_from_speaker(body: VoiceFromSpeakerRequest, db: DbSession, user: Curre
     ensure_workspace_perm(db, user, asset.workspace_id, "ai")
     try:
         voice = voices.create_from_speaker(
-            db, workspace_id=asset.workspace_id, asset_id=body.asset_id, speaker=body.speaker, name=body.name
+            db, workspace_id=asset.workspace_id, asset_id=body.asset_id, speaker=body.speaker, name=body.name,
+            consent_kind=body.consent_kind, actor_id=user.id,
         )
     except voices.VoiceError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -96,13 +102,14 @@ def voice_from_speaker(body: VoiceFromSpeakerRequest, db: DbSession, user: Curre
 
 
 @router.patch("/voices/{voice_id}", response_model=VoiceOut)
-def update_voice(voice_id: str, body: VoiceUpdate, db: DbSession, user: CurrentUser) -> Voice:
+def update_voice(voice_id: str, body: VoiceUpdate, db: DbSession, user: CurrentUser) -> dict:
     voice = voices.get_voice(db, voice_id)
     if voice is None:
         raise HTTPException(status_code=404, detail=tr("routeErr_voiceNotFound"))
     ensure_workspace_perm(db, user, voice.workspace_id, "ai")
     try:
-        return voices.update_voice(db, voice, name=body.name, reference_text=body.reference_text)
+        return _voice_out(voices.update_voice(db, voice, name=body.name, reference_text=body.reference_text,
+                                              consent_kind=body.consent_kind, actor_id=user.id))
     except voices.VoiceError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 

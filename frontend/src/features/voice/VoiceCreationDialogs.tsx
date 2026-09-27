@@ -24,6 +24,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { formatBytes } from "@/lib/bytes";
 import { cn } from "@/lib/utils";
 import { useReferenceAudioRecorder } from "./useReferenceAudioRecorder";
+import { VoiceConsentPicker } from "@/features/voice/VoiceConsent";
 
 type VoiceCreationDialogProps = {
   open: boolean;
@@ -52,6 +53,8 @@ export function UploadVoiceDialog({
   const t = useI18n();
   const [name, setName] = React.useState("");
   const [refText, setRefText] = React.useState("");
+  //: 这把嗓子是谁的(必选,见 VoiceConsent)。不给默认值 —— 替他选一项等于替他声明。
+  const [consent, setConsent] = React.useState("");
   const [file, setFile] = React.useState<File | null>(null);
   const [dragOver, setDragOver] = React.useState(false);
   const fileRef = React.useRef<HTMLInputElement | null>(null);
@@ -66,7 +69,7 @@ export function UploadVoiceDialog({
   });
 
   const upload = useMutation({
-    mutationFn: () => uploadVoice({ workspaceId: workspace.id, name, referenceText: refText, file: file as File }),
+    mutationFn: () => uploadVoice({ workspaceId: workspace.id, name, referenceText: refText, consentKind: consent, file: file as File }),
     onSuccess: (voice) => {
       referenceRecorder.cancel();
       onCreated(voice);
@@ -80,6 +83,7 @@ export function UploadVoiceDialog({
     if (!open) return;
     setName("");
     setRefText("");
+    setConsent("");
     setFile(null);
     setDragOver(false);
     referenceRecorder.cancel();
@@ -92,7 +96,7 @@ export function UploadVoiceDialog({
     referenceRecorder.cancel();
     onClose();
   };
-  const blocked = !file ? t("voiceNeedRefAudioHere") : !name.trim() ? t("voiceNeedName") : undefined;
+  const blocked = !file ? t("voiceNeedRefAudioHere") : !name.trim() ? t("voiceNeedName") : !consent ? t("voiceNeedConsent") : undefined;
 
   return (
     <ModalShell
@@ -134,6 +138,10 @@ export function UploadVoiceDialog({
           <span>{t("voiceReferenceTextOptional")}</span>
           <Textarea rows={3} value={refText} onChange={(event) => setRefText(event.target.value)} />
         </label>
+        <div className={DIALOG_FIELD}>
+          <span>{t("voiceConsentTitle")}</span>
+          <VoiceConsentPicker name={`${formId}-consent`} value={consent} onChange={setConsent} />
+        </div>
         <input
           ref={fileRef}
           type="file"
@@ -226,6 +234,7 @@ export function VoiceFromSpeakerDialog({
   const [assetId, setAssetId] = React.useState("");
   const [speaker, setSpeaker] = React.useState("");
   const [name, setName] = React.useState("");
+  const [consent, setConsent] = React.useState("");
   const formId = React.useId();
   const assets = useQuery({
     queryKey: assetKeys.list(workspace.id, project.id),
@@ -244,7 +253,7 @@ export function VoiceFromSpeakerDialog({
     [transcript.data],
   );
   const create = useMutation({
-    mutationFn: () => voiceFromSpeaker({ asset_id: assetId, speaker: speaker || null, name }),
+    mutationFn: () => voiceFromSpeaker({ asset_id: assetId, speaker: speaker || null, name, consent_kind: consent }),
     onSuccess: (voice) => {
       onCreated(voice);
       onClose();
@@ -258,6 +267,7 @@ export function VoiceFromSpeakerDialog({
     setAssetId("");
     setSpeaker("");
     setName("");
+    setConsent("");
     create.reset();
   }, [open]);
 
@@ -280,7 +290,7 @@ export function VoiceFromSpeakerDialog({
             size="sm"
             type="submit"
             form={formId}
-            disabled={!assetId || !speaker}
+            disabled={!assetId || !speaker || !consent}
             loading={create.isPending}
           >
             {t("voiceDoClone")}
@@ -293,7 +303,7 @@ export function VoiceFromSpeakerDialog({
         className="grid gap-4"
         onSubmit={(event) => {
           event.preventDefault();
-          if (assetId && speaker) create.mutate();
+          if (assetId && speaker && consent) create.mutate();
         }}
       >
         <label className={DIALOG_FIELD}>
@@ -332,6 +342,10 @@ export function VoiceFromSpeakerDialog({
           <Input value={name} onChange={(event) => setName(event.target.value)} />
           <small>{t("voiceFromSpeakerHint")}</small>
         </label>
+        <div className={DIALOG_FIELD}>
+          <span>{t("voiceConsentTitle")}</span>
+          <VoiceConsentPicker name={`${formId}-consent`} value={consent} onChange={setConsent} />
+        </div>
       </form>
     </ModalShell>
   );

@@ -1616,6 +1616,26 @@ def _migrate_board_scene_cells_hold_no_image() -> None:
                 )
 
 
+def _migrate_voices_declare_consent() -> None:
+    """克隆音色加授权声明(ADR 0028 §5):`consent_kind` / `consent_by` / `consent_at`。
+
+    已有的音色一律写成 `undeclared`(「未声明」)—— 当初建的时候没问过这把嗓子是谁的,替用户补一个「本人」
+    就是替他声明。未声明的音色照常能配音,用于数字人(让它说话、对口型)之前要在配音库里补上。
+    **必须在 SCHEMA 之前**:create_all 不会给已有的表补列,而之后 ORM 上的 Voice 已经指望这几列在了。
+    """
+    inspector = inspect(engine)
+    if "voices" not in set(inspector.get_table_names()):
+        return
+    existing = {column["name"] for column in inspector.get_columns("voices")}
+    with engine.begin() as conn:
+        if "consent_kind" not in existing:
+            conn.execute(text("ALTER TABLE voices ADD COLUMN consent_kind VARCHAR(16) NOT NULL DEFAULT 'undeclared'"))
+        if "consent_by" not in existing:
+            conn.execute(text("ALTER TABLE voices ADD COLUMN consent_by VARCHAR(64)"))
+        if "consent_at" not in existing:
+            conn.execute(text("ALTER TABLE voices ADD COLUMN consent_at DATETIME"))
+
+
 def _migrate_drop_the_community_integration() -> None:
     """把桌面端接入社区时加的东西删掉 —— 社区能力整体从应用里拿掉了(2026-09-27,维护者:「先把资产库做好」)。
 
@@ -4965,6 +4985,7 @@ def migration_plan() -> MigrationPlan:
                 _migrate_plugin_generation_columns,
                 _migrate_plugin_authorization_rejected,
                 _migrate_drop_the_community_integration,
+                _migrate_voices_declare_consent,
             ),
             #: create_all 每次启动都要跑 —— 新版本加的表靠它建出来,记账跳过就再也建不了。
             *_recurring(MigrationPhase.SCHEMA, _create_current_schema),

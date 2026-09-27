@@ -1069,8 +1069,10 @@ def build_ffmpeg_command(
         "aac",
         "-b:a",
         "192k",
+        #: 写进文件的元数据(数字人成片的 AIGC 隐式标识)。自定义键要 use_metadata_tags 才进得了 MP4。
+        *[part for key, value in plan.output.metadata for part in ("-metadata", f"{key}={value}")],
         "-movflags",
-        "+faststart",
+        "+faststart+use_metadata_tags" if plan.output.metadata else "+faststart",
         str(output_path),
     ]
     return args

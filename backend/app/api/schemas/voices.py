@@ -48,6 +48,9 @@ class VoiceOut(ApiModel):
     source: str = "upload"
     source_speaker: str | None = None
     has_reference: bool = True
+    #: 授权声明(self / authorized / fictional;升级前建的是 undeclared)与声明时间。
+    consent_kind: str = "undeclared"
+    consent_at: datetime | None = None
     created_at: datetime
 
 
@@ -57,6 +60,8 @@ class VoiceUpdate(ApiModel):
 
     name: str | None = None
     reference_text: str | None = None
+    #: 补声明 / 改声明这把嗓子是谁的。谁、何时由服务端记。
+    consent_kind: str | None = None
 
 
 class SynthesizeRequest(ApiModel):
@@ -152,3 +157,5 @@ class VoiceFromSpeakerRequest(ApiModel):
     asset_id: str
     speaker: str | None = None
     name: str = ""
+    #: 这把嗓子是谁的(必选,ADR 0028 §5)。
+    consent_kind: str

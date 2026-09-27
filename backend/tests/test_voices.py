@@ -26,7 +26,7 @@ def test_voice_upload_list_synthesize_delete() -> None:
     # Upload a reference sample → creates a voice.
     resp = client.post(
         "/api/voices/upload",
-        data={"workspace_id": ws["id"], "name": "小明", "reference_text": "你好世界"},
+        data={"workspace_id": ws["id"], "name": "小明", "reference_text": "你好世界", "consent_kind": "self"},
         files={"file": ("ref.wav", _tiny_wav(), "audio/wav")},
     )
     assert resp.status_code == 200, resp.text
@@ -79,7 +79,7 @@ def test_voice_from_transcribed_speaker() -> None:
 
     voice = client.post(
         "/api/voices/from-speaker",
-        json={"asset_id": asset["id"], "speaker": "SPEAKER_00", "name": "甲"},
+        json={"asset_id": asset["id"], "speaker": "SPEAKER_00", "name": "甲", "consent_kind": "authorized"},
     ).json()
     assert voice["name"] == "甲"
     assert voice["source"] == "speaker"

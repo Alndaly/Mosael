@@ -145,7 +145,7 @@ def test_the_voices_endpoint_answers_in_the_request_language() -> None:
 
     resp = client.post(
         "/api/voices/upload",
-        data={"workspace_id": workspace_id, "name": "short", "reference_text": "hello"},
+        data={"workspace_id": workspace_id, "name": "short", "reference_text": "hello", "consent_kind": "self"},
         files={"file": ("ref.wav", _wav(2.6), "audio/wav")},
         headers={"Accept-Language": "en"},
     )

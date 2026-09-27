@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.core.config import settings
 from app.core.db import SessionLocal
+from app.core.i18n import tr
 from app.domain.jobs import RENDER_SLOTS, dispatch_job, run_job_guarded, say
 from app.db.models import Asset, Font, Job, Lut, Sequence, Track
 from app.domain.assets.importer import register_file_asset
@@ -225,6 +226,10 @@ def build_plan_for_sequence(db: Session, sequence_id: str, export_params: dict |
     width, height, fps, subtitle_style, crf, encode_preset = resolve_export_output(
         sequence.width, sequence.height, sequence.fps, _resolve_subtitle_font(db, sequence), export_params
     )
+    #: 数字人成片的标识(ADR 0028 §5):**隐式的总写**(不影响画面,没有关掉的理由),显式的按导出时的开关。
+    talking = digital_human_assets(db, {clip["asset_id"] for clip in base_clips + overlay_clips if clip["asset_id"]})
+    ai_label = tr("exportAiLabelText") if talking and (export_params or {}).get("ai_label", True) is not False else ""
+    metadata = aigc_metadata(sequence) if talking else ()
     return build_render_plan(
         sequence_id=sequence.id,
         revision=sequence.revision,
@@ -245,7 +250,40 @@ def build_plan_for_sequence(db: Session, sequence_id: str, export_params: dict |
         duck_base_audio=duck_base_audio,
         crf=crf,
         encode_preset=encode_preset,
+        ai_label=ai_label,
+        metadata=metadata,
     )
+
+
+def digital_human_assets(db: Session, asset_ids: set[str]) -> set[str]:
+    """这几份素材里哪些是**数字人**生成的:生成时有一段驱动音频(说话照片、对口型;模式见 ADR 0028 §1)。
+
+    按生成记录认,不按模型名认 —— 以后接进来的数字人模型也是「脸 + 驱动音频」这个组合。驱动音频可能在提交时
+    换成了直链(`driving_audio_url`,见 generation.operations 的临时存储那一段),两处都看。
+    """
+    from app.ai.providers.contracts.generation import DRIVING_AUDIO
+    from app.db.models import GenerationJob
+
+    if not asset_ids:
+        return set()
+    found: set[str] = set()
+    for row in db.scalars(select(GenerationJob).where(GenerationJob.result_asset_id.in_(asset_ids))):
+        request = row.request or {}
+        roles = {str((one or {}).get("role") or "") for one in request.get("source_assets") or []}
+        if DRIVING_AUDIO in roles or f"{DRIVING_AUDIO}_url" in (request.get("parameters") or {}):
+            found.add(str(row.result_asset_id))
+    return found
+
+
+def aigc_metadata(sequence: Sequence) -> tuple[tuple[str, str], ...]:
+    """数字人成片的隐式标识:写进 MP4 元数据的 AIGC 字段(《人工智能生成合成内容标识办法》第五条的字段名),
+    外加一句人读得懂的 comment。ProduceID 是这条时间线和它的修订 —— 能对回是哪一次导出。"""
+    import json
+
+    label = {"AIGC": {"Label": "1", "ContentProducer": "Mosael", "ProduceID": f"{sequence.id}:{sequence.revision}",
+                      "ReservedCode1": "", "ContentPropagator": "", "PropagateID": "", "ReservedCode2": ""}}
+    return (("AIGC", json.dumps(label["AIGC"], ensure_ascii=False, separators=(",", ":"))),
+            ("comment", "AIGC: contains AI-generated digital human content"))
 
 
 def _resolve_font(db: Session, workspace_id: str, font_id: str) -> tuple[str, str] | None:
