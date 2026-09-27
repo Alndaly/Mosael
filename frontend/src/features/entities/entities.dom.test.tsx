@@ -31,7 +31,7 @@ const api = vi.hoisted(() => ({
   getEntityCatalog: vi.fn(),
   importAsset: vi.fn(),
   listAssets: vi.fn(),
-  listVoices: vi.fn(),
+  fetchWorkflowFieldOptions: vi.fn(),
   listScenes: vi.fn(),
   listSceneModels: vi.fn(),
   getEntityCommunity: vi.fn(),
@@ -151,7 +151,11 @@ beforeEach(() => {
   for (const one of Object.values(api)) one.mockReset();
   api.getEntityCatalog.mockResolvedValue(CATALOG);
   api.listAssets.mockResolvedValue([]);
-  api.listVoices.mockResolvedValue([]);
+  api.fetchWorkflowFieldOptions.mockImplementation(async (source: string, _ws: string, parent?: string) => {
+    if (source === "speech_engines") return [{ value: "clone", label: "本地克隆" }, { value: "edge", label: "Edge" }];
+    if (source === "speech_voices") return parent === "edge" ? [{ value: "zh-CN-XiaoxiaoNeural", label: "晓晓" }] : [{ value: "v1", label: "我的声音" }];
+    return [];
+  });
   api.listScenes.mockResolvedValue([]);
   api.listSceneModels.mockResolvedValue([]);
   api.getEntityUsage.mockResolvedValue({ boards: [], generations: [], workflows: [] });
@@ -350,6 +354,39 @@ describe("真人 / 虚构与授权声明", () => {
     fireEvent.click(within(consent).getByRole("radio", { name: /这是我本人/ }));
     await waitFor(() =>
       expect(api.updateEntity).toHaveBeenCalledWith("e1", { attributes: { real_person: true, consent: { kind: "self" } } }),
+    );
+  });
+});
+
+describe("音色", () => {
+  it("先挑引擎再挑嗓子,存的是引擎 + 嗓子;速览里写着嗓子的名字", async () => {
+    window.location.hash = "#/entities?entity=e1";
+    api.listEntities.mockResolvedValue([summary()]);
+    //: 服务端的样子:第一次读到的带着音色库里那把嗓子,清掉之后再读就没有了。
+    api.getEntity
+      .mockResolvedValueOnce(entity({ attributes: { real_person: false, voice_engine: "clone", voice_id: "v1" } }))
+      .mockResolvedValue(entity({ attributes: { real_person: false } }));
+    api.updateEntity.mockResolvedValue(entity({ attributes: { real_person: false } }));
+    mount(<EntitiesView workspace={WORKSPACE} />);
+    const facts = await screen.findByText(/entityVoice · 我的声音/);
+    expect(facts).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "entitySettings" }));
+    const engine = await screen.findByRole("combobox", { name: "entityVoiceEngine" });
+    fireEvent.keyDown(engine, { key: "Enter" });
+    fireEvent.click(await screen.findByRole("option", { name: "Edge" }));
+    //: 换了引擎,原来那把嗓子(音色库里的)清掉。
+    await waitFor(() => expect(api.updateEntity).toHaveBeenCalledWith("e1", { attributes: { real_person: false } }));
+    //: 存回来(再读一遍)的是「没有音色」,引擎那一格不能被拨回默认。
+    await waitFor(() => expect(api.getEntity.mock.calls.length).toBeGreaterThan(1));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(screen.getByRole("combobox", { name: "entityVoiceEngine" }).textContent).toContain("Edge");
+    const voice = screen.getByRole("combobox", { name: "entityVoice" });
+    fireEvent.keyDown(voice, { key: "Enter" });
+    fireEvent.click(await screen.findByRole("option", { name: "晓晓" }));
+    await waitFor(() =>
+      expect(api.updateEntity).toHaveBeenLastCalledWith("e1", {
+        attributes: { real_person: false, voice_engine: "edge", voice_id: "zh-CN-XiaoxiaoNeural" },
+      }),
     );
   });
 });

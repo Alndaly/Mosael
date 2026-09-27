@@ -1460,6 +1460,31 @@ def _migrate_shared_host_folders() -> None:
         conn.execute(text("ALTER TABLE deployment_config ADD COLUMN shared_host_folders JSON NOT NULL DEFAULT '[]'"))
 
 
+def _migrate_entity_voices_name_their_engine() -> None:
+    """人物资产的音色写明是哪个配音引擎的(`attributes.voice_engine`)。
+
+    此前人物的音色只能挑音色库(本地克隆)里的一把嗓子,`voice_id` 就是音色库的 id;现在任何配音引擎的音色
+    都能挑,一把嗓子是「引擎 + 那个引擎里的 id」。老的那些都来自音色库:补上 `clone`。
+    """
+    inspector = inspect(engine)
+    if "entities" not in set(inspector.get_table_names()):
+        return
+    with engine.begin() as conn:
+        rows = conn.execute(text("SELECT id, attributes FROM entities WHERE kind = 'character'")).all()
+        for entity_id, raw in rows:
+            try:
+                attributes = json.loads(raw) if isinstance(raw, str) else raw
+            except (TypeError, ValueError):
+                continue
+            if not isinstance(attributes, dict) or not attributes.get("voice_id") or attributes.get("voice_engine"):
+                continue
+            attributes["voice_engine"] = "clone"
+            conn.execute(
+                text("UPDATE entities SET attributes = :attributes WHERE id = :id"),
+                {"attributes": json.dumps(attributes, ensure_ascii=False), "id": entity_id},
+            )
+
+
 def _migrate_drop_the_community_integration() -> None:
     """把桌面端接入社区时加的东西删掉 —— 社区能力整体从应用里拿掉了(2026-09-27,维护者:「先把资产库做好」)。
 
@@ -4897,6 +4922,7 @@ def migration_plan() -> MigrationPlan:
             #: 画板上的工具格搬到它接着的内容格上(能力)、改成空格子(生成器)或便签。判法读工具的声明 ——
             #: 要用到上面装好的随包插件的清单;排在对账之后,对账不再认识工具格。
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_board_tool_cells_become_abilities),
+            *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_entity_voices_name_their_engine),
             *_steps(
                 MigrationPhase.FILESYSTEM,
                 _migrate_shared_venvs,

@@ -33,6 +33,10 @@ ATTACH_PRIORITY: tuple[str, ...] = ("turnaround", "front", "full_body")
 #: 新挂一张参考图、没说角度时按种类给的缺省:人物和道具先当正面,场景先当设定图。
 DEFAULT_ROLE: dict[str, str] = {"character": "front", "location": "concept", "prop": "front"}
 
+#: 音色库(本地克隆)这个引擎的名字 —— 和 voices.engine_catalog.CLONE_ENGINE 是同一个值;这里不 import 它,
+#: 词表这一层不依赖配音引擎的装配。
+VOICE_LIBRARY_ENGINE = "clone"
+
 #: 真人 / 虚构的授权声明(数字人方案「合规」一节)。真人要 `self` 或 `authorized` 才能用于数字人功能。
 CONSENT_KINDS: tuple[str, ...] = ("self", "authorized", "fictional")
 
@@ -107,8 +111,11 @@ def normalize_attributes(
         raise AttributeProblem("entityErr_attributeUnknown", keys=", ".join(unknown), allowed=", ".join(allowed))
     out: dict[str, Any] = {}
     if kind == "character":
-        voice = _text(raw.get("voice_id"), "voice_id", 64)
+        # 音色是「引擎 + 那个引擎里的一把嗓子」,和配音、工作流的念稿同一种说法:本地克隆(音色库)只是其中一个引擎。
+        # 没写引擎就是音色库里的 —— 那是「一把嗓子」最常见的来处。只写了引擎、没挑嗓子,等于没选。
+        voice = _text(raw.get("voice_id"), "voice_id", 200)
         if voice:
+            out["voice_engine"] = _text(raw.get("voice_engine"), "voice_engine", 64) or VOICE_LIBRARY_ENGINE
             out["voice_id"] = voice
         color = _text(raw.get("blockout_color"), "blockout_color", 7)
         if color:
@@ -143,7 +150,7 @@ def normalize_attributes(
 
 #: 每种资产的专有字段(ADR 0027 §2)。
 ATTRIBUTE_KEYS: dict[str, tuple[str, ...]] = {
-    "character": ("voice_id", "blockout_color", "real_person", "consent"),
+    "character": ("voice_engine", "voice_id", "blockout_color", "real_person", "consent"),
     "location": ("scene_id", "time_of_day"),
     "prop": ("model_asset_id",),
 }

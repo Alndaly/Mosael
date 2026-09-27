@@ -84,6 +84,48 @@ def test_授权声明由服务端记下是谁_什么时候() -> None:
     assert undeclared["usable_for_digital_human"] is False
 
 
+def test_音色可以是任何配音引擎的_不认识的引擎当场拒() -> None:
+    from app.ai.providers.adapters.microsoft.edge_speech import EdgeSpeechAdapter
+
+    client = fresh_client()
+    ws = _workspace(client)
+    edge = _create(client, ws, attributes={"voice_engine": EdgeSpeechAdapter.engine_id, "voice_id": "zh-CN-XiaoxiaoNeural"})
+    assert edge["attributes"]["voice_engine"] == EdgeSpeechAdapter.engine_id
+    assert edge["attributes"]["voice_id"] == "zh-CN-XiaoxiaoNeural", "别的引擎的嗓子不在音色库里,照样收"
+    unknown = client.post("/api/entities", json={
+        "workspace_id": ws, "kind": "character", "name": "赵六", "attributes": {"voice_engine": "no-such-engine", "voice_id": "x"},
+    })
+    assert unknown.status_code == 422
+    podcast = client.post("/api/entities", json={
+        "workspace_id": ws, "kind": "character", "name": "钱七", "attributes": {"voice_engine": "volcano-podcast", "voice_id": "x"},
+    })
+    assert podcast.status_code == 422, "播客引擎一次出整段对话,不是一把嗓子"
+    #: 只挑了引擎、没挑嗓子 = 没选。
+    bare = _create(client, ws, name="孙八", attributes={"voice_engine": EdgeSpeechAdapter.engine_id})
+    assert "voice_engine" not in bare["attributes"]
+
+
+def test_老人物的音色补上引擎() -> None:
+    import json
+
+    from sqlalchemy import text
+
+    from app.core.db import engine
+    from app.db.migrations import _migrate_entity_voices_name_their_engine
+
+    client = fresh_client()
+    ws = _workspace(client)
+    voice_id = make_voice(ws)
+    made = _create(client, ws, attributes={"voice_id": voice_id})
+    plain = _create(client, ws, name="无声")
+    with engine.begin() as conn:
+        conn.execute(text("UPDATE entities SET attributes = :a WHERE id = :id"),
+                     {"a": json.dumps({"voice_id": voice_id, "real_person": False}), "id": made["id"]})
+    _migrate_entity_voices_name_their_engine()
+    assert client.get(f"/api/entities/{made['id']}").json()["attributes"]["voice_engine"] == "clone"
+    assert "voice_engine" not in client.get(f"/api/entities/{plain['id']}").json()["attributes"]
+
+
 def test_音色和_3D_场景要在这个工作区() -> None:
     client = fresh_client()
     ws = _workspace(client)
@@ -95,6 +137,7 @@ def test_音色和_3D_场景要在这个工作区() -> None:
     voice_id = make_voice(ws)
     ok = _create(client, ws, attributes={"voice_id": voice_id, "blockout_color": "#FF8800"})
     assert ok["attributes"]["voice_id"] == voice_id
+    assert ok["attributes"]["voice_engine"] == "clone", "没写引擎就是音色库里的"
     assert ok["attributes"]["blockout_color"] == "#ff8800"
     scene = client.post("/api/entities", json={"workspace_id": ws, "kind": "location", "name": "片场",
                                                "attributes": {"scene_id": "nope", "time_of_day": "黄昏"}})

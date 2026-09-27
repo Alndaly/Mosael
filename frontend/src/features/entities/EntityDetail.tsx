@@ -13,7 +13,7 @@ import {
   assetThumbnailUrl,
   listSceneModels,
   listScenes,
-  listVoices,
+  fetchWorkflowFieldOptions,
   updateEntity,
   type Entity,
   type EntityPatch,
@@ -315,8 +315,8 @@ function Facts({ entity, workspaceId }: { entity: Entity; workspaceId: string })
   const t = useI18n();
   const attributes = entity.attributes as Record<string, unknown>;
   const voiceId = String(attributes.voice_id ?? "");
-  const voices = useQuery({ queryKey: ["voices", workspaceId], queryFn: () => listVoices(workspaceId), enabled: Boolean(voiceId) });
-  const voice = voices.data?.find((one) => one.id === voiceId)?.name;
+  const { voices } = useVoiceOptions(workspaceId, voiceId ? String(attributes.voice_engine ?? VOICE_LIBRARY_ENGINE) : "");
+  const voice = voiceId ? (voices.data?.find((one) => one.value === voiceId)?.label ?? voiceId) : "";
   const items: React.ReactNode[] = [
     t("entityRefCount").replace("{n}", String(entity.references.length)),
     ...(entity.parent_id ? [] : [t("entityVariantCount").replace("{n}", String(entity.variants.length))]),
@@ -380,7 +380,12 @@ function KindFields({
     return (
       <>
         <PanelGroup title={t("entityGroupCharacter")}>
-          <VoiceField workspaceId={workspaceId} value={String(attributes.voice_id ?? "")} onChange={(voice_id) => save({ voice_id })} />
+          <VoiceField
+            workspaceId={workspaceId}
+            engine={String(attributes.voice_engine ?? "")}
+            voice={String(attributes.voice_id ?? "")}
+            onChange={(next) => save(next)}
+          />
           <Field label={t("entityBlockoutColor")} hint={t("entityBlockoutColorHint")}>
             <ColorField
               label={t("entityBlockoutColor")}
@@ -452,17 +457,71 @@ function ColorField({ label, value, onChange }: { label: string; value: string; 
   );
 }
 
-function VoiceField({ workspaceId, value, onChange }: { workspaceId: string; value: string; onChange: (next: string) => void }) {
+/** 本地克隆(音色库)这个引擎的名字,和后端 entities.catalog.VOICE_LIBRARY_ENGINE 同一个值。 */
+const VOICE_LIBRARY_ENGINE = "clone";
+
+/** 引擎清单、某个引擎的音色清单:和工作流「念稿」节点问的是同一个接口,列出来的一样。 */
+function useVoiceOptions(workspaceId: string, engine: string) {
+  const engines = useQuery({
+    queryKey: ["entity-voice-engines", workspaceId],
+    queryFn: () => fetchWorkflowFieldOptions("speech_engines", workspaceId),
+    staleTime: 60_000,
+  });
+  const voices = useQuery({
+    queryKey: ["entity-voices", workspaceId, engine],
+    queryFn: () => fetchWorkflowFieldOptions("speech_voices", workspaceId, engine),
+    enabled: Boolean(engine),
+    staleTime: 60_000,
+  });
+  return { engines, voices };
+}
+
+/**
+ * 音色 = 引擎 + 那个引擎里的一把嗓子:本地克隆(音色库)、Edge、各家云端,哪个就绪哪个列出来。
+ * 一行两个下拉,换了引擎就清掉嗓子(另一个引擎里没有这个 id)。
+ */
+function VoiceField({
+  workspaceId,
+  engine,
+  voice,
+  onChange,
+}: {
+  workspaceId: string;
+  engine: string;
+  voice: string;
+  onChange: (next: { voice_engine: string; voice_id: string }) => void;
+}) {
   const t = useI18n();
-  const voices = useQuery({ queryKey: ["voices", workspaceId], queryFn: () => listVoices(workspaceId) });
+  const [picked, setPicked] = React.useState(engine || VOICE_LIBRARY_ENGINE);
+  //: 只跟着「存着的那个」走:换引擎会先清掉嗓子(存回来的引擎是空的),那一刻不能把刚挑的引擎又拨回默认。
+  React.useEffect(() => {
+    if (engine) setPicked(engine);
+  }, [engine]);
+  const { engines, voices } = useVoiceOptions(workspaceId, picked);
+  const engineOptions = engines.data ?? [];
+  //: 存着的引擎现在没就绪(缺了 Key)也照样显示它,不把人已经选好的东西悄悄换掉。
+  const withCurrent = engineOptions.some((one) => one.value === picked)
+    ? engineOptions
+    : [...engineOptions, { value: picked, label: picked }];
   return (
     <Field label={t("entityVoice")} hint={t("entityVoiceHint")}>
-      <OptionPicker
-        ariaLabel={t("entityVoice")}
-        value={value || NONE}
-        onChange={(next) => onChange(next === NONE ? "" : next)}
-        options={[{ value: NONE, label: t("entityNone") }, ...(voices.data ?? []).map((voice) => ({ value: voice.id, label: voice.name }))]}
-      />
+      <div className="grid min-w-0 grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-2">
+        <OptionPicker
+          ariaLabel={t("entityVoiceEngine")}
+          value={picked}
+          onChange={(next) => {
+            setPicked(next);
+            if (voice) onChange({ voice_engine: "", voice_id: "" });
+          }}
+          options={withCurrent}
+        />
+        <OptionPicker
+          ariaLabel={t("entityVoice")}
+          value={voice && picked === (engine || VOICE_LIBRARY_ENGINE) ? voice : NONE}
+          onChange={(next) => onChange(next === NONE ? { voice_engine: "", voice_id: "" } : { voice_engine: picked, voice_id: next })}
+          options={[{ value: NONE, label: t("entityNone") }, ...(voices.data ?? [])]}
+        />
+      </div>
     </Field>
   );
 }

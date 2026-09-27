@@ -4256,6 +4256,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "虚构人物的声明只能是「虚构人物」;是真人的话先标成真人",
         "en": "A fictional character can only be declared fictional. If it's a real person, mark it as one first.",
     },
+    "entityErr_voiceEngineUnknown": {
+        "zh": "不认识的配音引擎:{engine}",
+        "en": "Unknown voice engine: {engine}",
+    },
     "entityErr_attributeTargetGone": {
         "zh": "{field} 指的东西不在这个工作区里",
         "en": "What {field} points at isn't in this workspace.",
