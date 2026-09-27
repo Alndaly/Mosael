@@ -3382,6 +3382,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/entities/import-community": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import From Community
+         * @description 贴一个社区链接(或在列表里点一条),把那条资产连参考图和变体一起拿进这个工作区。
+         */
+        post: operations["import_from_community_api_entities_import_community_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/entities/{entity_id}": {
         parameters: {
             query?: never;
@@ -5111,6 +5131,50 @@ export interface paths {
          * @description 把一个装着的插件打包发到社区。先进审核队列(回来的状态是 `pending`)。
          */
         post: operations["publish_plugin_api_plugins__package_id__community_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/community/assets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Browse Community Assets
+         * @description 「从社区导入」弹窗里的列表。读的是社区上公开的东西,不需要连账号。
+         */
+        get: operations["browse_community_assets_api_community_assets_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/entities/{entity_id}/community": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Entity Community
+         * @description 资产详情里「社区」那一格:发出去的是哪一条、从哪一条导入的、那一条有没有新版本,以及这个人连没连社区。
+         */
+        get: operations["entity_community_api_entities__entity_id__community_get"];
+        put?: never;
+        /**
+         * Publish Entity
+         * @description 把一个资产(连同变体)分享到社区:第一次是新条目,之后是这一条的新版本。真人人物先审核。
+         */
+        post: operations["publish_entity_api_entities__entity_id__community_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -8150,6 +8214,59 @@ export interface components {
             version: number;
         };
         /**
+         * CommunityAssetOut
+         * @description 「从社区导入」弹窗里的一行。
+         */
+        CommunityAssetOut: {
+            /** Slug */
+            slug: string;
+            /** Title */
+            title: string;
+            /**
+             * Summary
+             * @default
+             */
+            summary: string;
+            /** Asset Kind */
+            asset_kind: string;
+            /**
+             * Real Person
+             * @default false
+             */
+            real_person: boolean;
+            /** Cover Url */
+            cover_url?: string | null;
+            /**
+             * Reference Count
+             * @default 0
+             */
+            reference_count: number;
+            /**
+             * Variant Count
+             * @default 0
+             */
+            variant_count: number;
+            /**
+             * Downloads
+             * @default 0
+             */
+            downloads: number;
+            /** Version */
+            version?: string | null;
+            /**
+             * Author Name
+             * @default
+             */
+            author_name: string;
+        };
+        /** CommunityAssetPageOut */
+        CommunityAssetPageOut: {
+            /** Items */
+            items: components["schemas"]["CommunityAssetOut"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+        };
+        /**
          * CommunityDeviceOut
          * @description 一次正在等的设备授权:界面显示 `user_code`,用系统浏览器打开 `verification_uri`。
          */
@@ -8526,6 +8643,47 @@ export interface components {
                 [key: string]: string[];
             };
         };
+        /**
+         * EntityCommunityOut
+         * @description 资产详情里「社区」那一格。`latest_version`:导入的那一条在社区上现在是第几版(连不上时为空)。
+         */
+        EntityCommunityOut: {
+            published?: components["schemas"]["EntityCommunityPublishedOut"] | null;
+            source?: components["schemas"]["EntityCommunitySourceOut"] | null;
+            /** Latest Version */
+            latest_version?: string | null;
+            status: components["schemas"]["CommunityStatusOut"];
+        };
+        /**
+         * EntityCommunityPublishedOut
+         * @description 这个资产发到社区的那一条。`status`:虚构的 `approved`(发布即上架),真人的 `pending`(审核中)。
+         */
+        EntityCommunityPublishedOut: {
+            /** Slug */
+            slug: string;
+            /** Url */
+            url: string;
+            /** Version */
+            version: string;
+            /** Status */
+            status: string;
+            /** Origin */
+            origin: string;
+        };
+        /**
+         * EntityCommunitySourceOut
+         * @description 这个资产是从社区的哪一条导入的。
+         */
+        EntityCommunitySourceOut: {
+            /** Slug */
+            slug: string;
+            /** Version */
+            version: string;
+            /** Origin */
+            origin: string;
+            /** Url */
+            url: string;
+        };
         /** EntityConsentKindOut */
         EntityConsentKindOut: {
             /** Kind */
@@ -8561,6 +8719,13 @@ export interface components {
             tags?: string[];
             /** Parent Id */
             parent_id?: string | null;
+        };
+        /** EntityImportIn */
+        EntityImportIn: {
+            /** Workspace Id */
+            workspace_id: string;
+            /** Link */
+            link: string;
         };
         /** EntityKindOut */
         EntityKindOut: {
@@ -8630,6 +8795,28 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+        };
+        /** EntityPublishIn */
+        EntityPublishIn: {
+            /** Workspace Id */
+            workspace_id: string;
+            /**
+             * Consent Confirmed
+             * @default false
+             */
+            consent_confirmed: boolean;
+            /**
+             * Title
+             * @default
+             */
+            title: string;
+            /**
+             * Summary
+             * @default
+             */
+            summary: string;
+            /** Tags */
+            tags?: string[] | null;
         };
         /** EntityReferenceAdd */
         EntityReferenceAdd: {
@@ -20360,6 +20547,39 @@ export interface operations {
             };
         };
     };
+    import_from_community_api_entities_import_community_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EntityImportIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntityOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     read_entity_api_entities__entity_id__get: {
         parameters: {
             query?: never;
@@ -24346,6 +24566,105 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CommunityPublishOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    browse_community_assets_api_community_assets_get: {
+        parameters: {
+            query?: {
+                q?: string;
+                asset_kind?: string;
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommunityAssetPageOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    entity_community_api_entities__entity_id__community_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entity_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntityCommunityOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    publish_entity_api_entities__entity_id__community_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entity_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EntityPublishIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntityCommunityPublishedOut"];
                 };
             };
             /** @description Validation Error */

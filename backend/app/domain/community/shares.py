@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import logging
 import time
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -108,12 +108,12 @@ def _body(job_id: str, board_id: str, user_id: str) -> None:
         made = snapshots.build(db, board)
         _progress(db, job, 0.2)
 
-        missing = _missing_files(client, made)
+        missing = missing_files(client, made.files)
         by_hash = {one.sha256: one for one in made.files}
         for index, (digest, target) in enumerate(missing):
             if _cancelled(db, job):
                 return
-            _upload(client, by_hash[digest], target)
+            upload_file(client, by_hash[digest], target)
             _progress(db, job, 0.2 + 0.7 * (index + 1) / max(1, len(missing)))
         if _cancelled(db, job):
             return
@@ -140,16 +140,19 @@ def _body(job_id: str, board_id: str, user_id: str) -> None:
                     len(missing), len(made.files))
 
 
-def _missing_files(client: CommunityClient, made: snapshots.Snapshot) -> list[tuple[str, dict[str, Any]]]:
-    """第一步:问服务端缺哪几个。回 `[(sha256, {"url": …, "headers": {…}})]`,只含缺的。"""
-    if not made.files:
+def missing_files(client: CommunityClient, files: Sequence[snapshots.SnapshotFile]) -> list[tuple[str, dict[str, Any]]]:
+    """第一步:问服务端缺哪几个。回 `[(sha256, {"url": …, "headers": {…}})]`,只含缺的。
+
+    画板快照和资产分享包(community/assets.py)传文件走的都是这一套。
+    """
+    if not files:
         return []
     answer = client.call(
         "POST",
         "/shares/uploads",
-        json={"files": [{"sha256": one.sha256, "size": one.size, "content_type": one.content_type} for one in made.files]},
+        json={"files": [{"sha256": one.sha256, "size": one.size, "content_type": one.content_type} for one in files]},
     )
-    known = {one.sha256 for one in made.files}
+    known = {one.sha256 for one in files}
     wanted: list[tuple[str, dict[str, Any]]] = []
     for entry in answer.get("uploads") or []:
         if not isinstance(entry, dict) or entry.get("sha256") not in known or not entry.get("url"):
@@ -166,7 +169,7 @@ def _chunks(path: Path) -> Iterator[bytes]:
             yield block
 
 
-def _upload(client: CommunityClient, file: snapshots.SnapshotFile, target: dict[str, Any]) -> None:
+def upload_file(client: CommunityClient, file: snapshots.SnapshotFile, target: dict[str, Any]) -> None:
     """第二步:把一个文件 PUT 上去(流式)。连不上 / 对方 5xx 就重试;对方明确拒绝(4xx)不重试。"""
     url = target["url"]
     headers = {"Content-Type": file.content_type, "Content-Length": str(file.size), **target["headers"]}

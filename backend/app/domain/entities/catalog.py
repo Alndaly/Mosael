@@ -35,6 +35,9 @@ DEFAULT_ROLE: dict[str, str] = {"character": "front", "location": "concept", "pr
 
 #: 真人 / 虚构的授权声明(数字人方案「合规」一节)。真人要 `self` 或 `authorized` 才能用于数字人功能。
 CONSENT_KINDS: tuple[str, ...] = ("self", "authorized", "fictional")
+#: 从社区导入的真人人物:别人声明过授权,**这台机器上还没有人确认过**(ADR 0027 §4)。只由导入写入 ——
+#: 表单里选不到它;本机用户改成本人 / 已获授权就解开,在那之前不能用于数字人。
+CONSENT_PENDING = "pending"
 
 #: 一个资产最多挂几张参考图。参考图墙是一面墙,不是一个素材库;再多就该拆成变体。
 MAX_REFERENCES = 60
@@ -78,6 +81,11 @@ def _consent(value: Any, stored: Any, actor_id: str | None) -> dict[str, str] | 
     kind = value.get("kind") if isinstance(value, dict) else value
     if kind in (None, ""):
         return None
+    if kind == CONSENT_PENDING:
+        # 只能「原样留着」:重存一次表单不该把它弄丢,也不能自己选它。
+        if isinstance(stored, dict) and stored.get("kind") == CONSENT_PENDING:
+            return {key: str(value) for key, value in stored.items()}
+        raise AttributeProblem("entityErr_consentPendingIsImportOnly")
     if kind not in CONSENT_KINDS:
         raise AttributeProblem("entityErr_consentKind", kinds=" / ".join(CONSENT_KINDS))
     if isinstance(stored, dict) and stored.get("kind") == kind and stored.get("declared_at"):

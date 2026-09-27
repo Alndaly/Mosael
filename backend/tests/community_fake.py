@@ -107,6 +107,10 @@ class FakeCommunity:
         self.workflows: dict[str, dict[str, Any]] = {}
         self.plugins: list[dict[str, Any]] = []
         self.index: list[dict[str, Any]] = []
+        #: slug → {"asset_kind", "status", "versions": [{"bundle", "consent_kind"}]}
+        self.assets: dict[str, dict[str, Any]] = {}
+        #: 下载这些哈希时回别的内容(模拟被换过的文件)。
+        self.tampered: set[str] = set()
         self._slugs = itertools.count(1)
 
     @property
@@ -171,6 +175,8 @@ class FakeCommunity:
         if f"{url.scheme}://{url.netloc}" == STORAGE:
             with self.lock:
                 self.calls.append((request.method, "storage:" + url.path))
+            if request.method == "GET":
+                return self._get_blob(url.path.rsplit("/", 1)[-1])
             return self._put_blob(request, url.path.rsplit("/", 1)[-1])
         assert f"{url.scheme}://{url.netloc}" == ORIGIN, url
         assert url.path.startswith(PREFIX), url.path
@@ -186,6 +192,8 @@ class FakeCommunity:
             return self._refresh(request)
         if path == "/plugins/index.json" and method == "GET":
             return httpx.Response(200, json={"plugins": self.index})
+        if path.startswith("/assets") and method == "GET":
+            return self._public_asset(request, path)
         session = self._session_of(request)
         if session is None:
             return _error(401, "unauthorized")
@@ -208,6 +216,10 @@ class FakeCommunity:
             return self._workflow(request, None)
         if path.startswith("/workflows/") and path.endswith("/versions") and method == "POST":
             return self._workflow(request, path.split("/")[2])
+        if path == "/assets" and method == "POST":
+            return self._submit_asset(request, None)
+        if path.startswith("/assets/") and path.endswith("/versions") and method == "POST":
+            return self._submit_asset(request, path.split("/")[2])
         if path == "/plugins" and method == "POST":
             return self._plugin(request)
         return _error(404, "not_found")
@@ -366,6 +378,93 @@ class FakeCommunity:
             self.plugins.append({"fields": fields, "zip": files["file"][1], "filename": files["file"][0]})
             return httpx.Response(201, json={"slug": "demo", "url": "/zh/plugins/demo", "version": "1.0.0",
                                              "status": "pending"})
+
+    # --- 资产 -------------------------------------------------------------------
+
+    def publish_asset(self, bundle: dict[str, Any], files: dict[str, bytes], *, slug: str = "") -> str:
+        """测试里直接在社区上放一条(别人发的)资产:图先进存储,再上架。"""
+        with self.lock:
+            self.blobs.update(files)
+            slug = slug or f"as{next(self._slugs)}"
+            entry = self.assets.setdefault(slug, {"asset_kind": bundle["kind"], "status": "approved", "versions": []})
+            entry["versions"].append({"bundle": bundle, "consent_kind": None})
+            return slug
+
+    def _submit_asset(self, request: httpx.Request, slug: str | None) -> httpx.Response:
+        from mosael_formats import asset_bundle
+        from mosael_formats.i18n import FormatError
+
+        body = json.loads(request.content)
+        bundle = body["bundle"]
+        try:
+            summary = asset_bundle.validate_bundle(bundle)
+            asset_bundle.check_consent(summary, body.get("consent_kind"))
+        except FormatError as exc:
+            return _error(422, "invalid_asset_bundle", str(exc))
+        with self.lock:
+            missing = set(summary.hashes) - set(self.blobs)
+            if missing:
+                return _error(422, "unknown_blob", ",".join(sorted(missing)))
+            if slug is None:
+                slug = f"as{next(self._slugs)}"
+                self.assets[slug] = {"asset_kind": summary.kind, "status": "approved", "versions": []}
+            elif slug not in self.assets:
+                return _error(404, "not_found")
+            entry = self.assets[slug]
+            if entry["asset_kind"] != summary.kind:
+                return _error(422, "asset_kind_changed")
+            status = "pending" if summary.real_person else "approved"
+            entry["status"] = status
+            entry["versions"].append({"bundle": bundle, "consent_kind": body.get("consent_kind"), "fields": body})
+            number = len(entry["versions"])
+            submission = {"number": number, "version": str(number), "status": status}
+            if number == 1:
+                return httpx.Response(201, json={"kind": "asset", "slug": slug, "asset_kind": summary.kind,
+                                                 "submission": submission})
+            return httpx.Response(201, json=submission)
+
+    def _asset_summary(self, slug: str, entry: dict[str, Any]) -> dict[str, Any]:
+        bundle = entry["versions"][-1]["bundle"]
+        return {
+            "kind": "asset", "slug": slug, "title": bundle["name"], "summary": bundle.get("description", ""),
+            "asset_kind": entry["asset_kind"], "real_person": bool(bundle["attributes"].get("real_person")),
+            "cover_url": f"/media/{bundle['cover_sha256']}", "reference_count": len(bundle["references"]),
+            "variant_count": len(bundle.get("variants") or []), "downloads": 0,
+            "version": str(len(entry["versions"])), "author": {"handle": "bob", "display_name": "Bob"},
+        }
+
+    def _public_asset(self, request: httpx.Request, path: str) -> httpx.Response:
+        parts = [part for part in path.split("/") if part]
+        with self.lock:
+            public = {slug: entry for slug, entry in self.assets.items() if entry["status"] == "approved"}
+            if len(parts) == 1:
+                kind = request.url.params.get("asset_kind", "")
+                items = [self._asset_summary(slug, entry) for slug, entry in public.items()
+                         if not kind or entry["asset_kind"] == kind]
+                return httpx.Response(200, json={"items": items, "next_cursor": None})
+            entry = public.get(parts[1])
+            if entry is None:
+                return _error(404, "not_found")
+            if len(parts) == 2:
+                return httpx.Response(200, json=self._asset_summary(parts[1], entry))
+            if len(parts) == 3 and parts[2] == "download":
+                bundle = entry["versions"][-1]["bundle"]
+                hashes = {one["sha256"] for one in bundle["references"]}
+                for variant in bundle.get("variants") or []:
+                    hashes |= {one["sha256"] for one in variant["references"]}
+                media = {digest: {"url": f"{STORAGE}/media/{digest}"} for digest in hashes}
+                return httpx.Response(200, json={"slug": parts[1], "version": str(len(entry["versions"])),
+                                                 "bundle": bundle, "media": media})
+        return _error(404, "not_found")
+
+    def _get_blob(self, digest: str) -> httpx.Response:
+        with self.lock:
+            data = self.blobs.get(digest)
+        if data is None:
+            return httpx.Response(404)
+        if digest in self.tampered:
+            data = data + b"tampered"
+        return httpx.Response(200, content=data)
 
 
 class Clock:

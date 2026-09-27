@@ -29,6 +29,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { toPlainText } from "@/components/markdown/inlineSyntax";
 import { EntityCard } from "@/features/entities/EntityCard";
+import { EntityCommunityStrip, EntityShareButton } from "@/features/entities/EntityCommunity";
 import { ReferenceWall } from "@/features/entities/ReferenceWall";
 import { entityDisplayName, entityKindIcon, useCatalogLabels } from "@/features/entities/entityMeta";
 
@@ -141,11 +142,13 @@ export function EntityDetail({
           commit="blur"
           onValueChange={(name) => name.trim() && patch.mutate({ name })}
         />
+        {!data.parent_id && <EntityShareButton entity={data} workspaceId={workspaceId} />}
         <Button variant="outline" size="sm" className="hover:border-destructive/50 hover:text-destructive" onClick={() => setDeleting(true)}>
           <Trash2 />
           {t("delete")}
         </Button>
       </header>
+      {!data.parent_id && <EntityCommunityStrip entity={data} workspaceId={workspaceId} onOpen={onOpen} />}
 
       {data.lost_references.length > 0 && (
         <div role="alert" className="flex flex-wrap items-center gap-3 rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-ui-sm">
@@ -373,6 +376,8 @@ function ConsentField({ entity, onSave }: { entity: Entity; onSave: (changes: Re
   const attributes = entity.attributes as Record<string, unknown>;
   const real = Boolean(attributes.real_person);
   const consent = (attributes.consent ?? null) as { kind?: string; declared_at?: string } | null;
+  //: 从社区导入的真人:别人声明过授权,这台机器上还没人确认 —— 选一项就是确认。
+  const pending = consent?.kind === "pending";
   const options = labels.consent.filter((one) => (real ? one.kind !== "fictional" : one.kind === "fictional"));
   return (
     <fieldset className="m-0 grid gap-2 border-0 p-0" data-consent="">
@@ -397,6 +402,15 @@ function ConsentField({ entity, onSave }: { entity: Entity; onSave: (changes: Re
           </button>
         ))}
       </div>
+      {pending && (
+        <div role="note" className="grid gap-1 rounded-md border border-warning/40 bg-warning/10 px-3 py-2" data-consent-pending="">
+          <span className="flex items-center gap-1.5 text-ui-sm font-medium">
+            <ShieldAlert size={14} className="text-warning" />
+            {t("entityConsentPending")}
+          </span>
+          <span className="text-ui-xs leading-relaxed text-muted-foreground">{t("entityConsentPendingBody")}</span>
+        </div>
+      )}
       <div role="radiogroup" aria-label={t("entityConsentTitle")} className="grid gap-1.5">
         {options.map((one) => (
           <label
@@ -421,7 +435,7 @@ function ConsentField({ entity, onSave }: { entity: Entity; onSave: (changes: Re
       <p className={cn("m-0 flex items-center gap-1.5 text-ui-xs", entity.usable_for_digital_human ? "text-muted-foreground" : "text-warning")}>
         {entity.usable_for_digital_human ? <ShieldCheck size={13} /> : <ShieldAlert size={13} />}
         {t(entity.usable_for_digital_human ? "entityDigitalHumanOk" : "entityDigitalHumanBlocked")}
-        {consent?.declared_at ? ` · ${t("entityConsentDeclaredAt").replace("{at}", consent.declared_at.slice(0, 10))}` : ""}
+        {consent?.declared_at && !pending ? ` · ${t("entityConsentDeclaredAt").replace("{at}", consent.declared_at.slice(0, 10))}` : ""}
       </p>
     </fieldset>
   );

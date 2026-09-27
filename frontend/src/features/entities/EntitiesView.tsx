@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Search } from "lucide-react";
+import { ArrowDownToLine, Plus, Search } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -22,6 +22,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { usePersistentTab } from "@/lib/usePersistentTab";
 import { cn } from "@/lib/utils";
 import { EntityCard } from "@/features/entities/EntityCard";
+import { ImportFromCommunityDialog } from "@/features/entities/EntityCommunity";
 import { EntityDetail } from "@/features/entities/EntityDetail";
 import { entityKindIcon, useCatalogLabels } from "@/features/entities/entityMeta";
 
@@ -44,6 +45,7 @@ export function EntitiesView({ workspace }: { workspace: Workspace }) {
   const [tag, setTag] = React.useState("");
   const [openId, setOpenId] = React.useState<string | null>(entityFromHash);
   const [creating, setCreating] = React.useState(false);
+  const [importing, setImporting] = React.useState(false);
 
   React.useEffect(() => {
     const onHash = () => {
@@ -100,10 +102,16 @@ export function EntitiesView({ workspace }: { workspace: Workspace }) {
         description={t("entitiesDesc")}
         count={all.data?.length}
         actions={
-          <Button onClick={() => setCreating(true)}>
-            <Plus />
-            {t("entitiesNew").replace("{kind}", labels.kind(kind))}
-          </Button>
+          <>
+            <Button variant="outline" onClick={() => setImporting(true)}>
+              <ArrowDownToLine />
+              {t("entitiesImport")}
+            </Button>
+            <Button onClick={() => setCreating(true)}>
+              <Plus />
+              {t("entitiesNew").replace("{kind}", labels.kind(kind))}
+            </Button>
+          </>
         }
       />
       <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-3 border-b border-divider pb-3">
@@ -201,6 +209,16 @@ export function EntitiesView({ workspace }: { workspace: Workspace }) {
         pending={create.isPending}
         onCancel={() => setCreating(false)}
         onSubmit={(name) => create.mutate(name)}
+      />
+      <ImportFromCommunityDialog
+        open={importing}
+        onOpenChange={setImporting}
+        workspaceId={workspace.id}
+        initialKind={kind}
+        onImported={(entity) => {
+          setImporting(false);
+          setOpenId(entity.id);
+        }}
       />
     </div>
   );

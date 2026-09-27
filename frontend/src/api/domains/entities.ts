@@ -97,8 +97,31 @@ export const entityKeys = {
   detail: (workspaceId: string, id: string) => ["entities", workspaceId, "detail", id] as const,
   usage: (workspaceId: string, id: string) => ["entities", workspaceId, "usage", id] as const,
   ofAsset: (workspaceId: string, assetId: string) => ["entities", workspaceId, "asset", assetId] as const,
+  community: (workspaceId: string, id: string) => ["entities", workspaceId, "community", id] as const,
   catalog: () => ["entity-catalog"] as const,
 };
+
+/**
+ * 资产和社区之间(ADR 0027 §4):分享一个资产(连同变体)、看它在社区上的状态;浏览社区上的资产、贴链接导入。
+ * 导入不需要连社区账号(公开的东西谁都能拿),分享要。
+ */
+export type EntityCommunity = components["schemas"]["EntityCommunityOut"];
+export type EntityCommunityPublished = components["schemas"]["EntityCommunityPublishedOut"];
+export type EntityPublishRequest = components["schemas"]["EntityPublishIn"];
+export type CommunityAsset = Omit<components["schemas"]["CommunityAssetOut"], "asset_kind"> & { asset_kind: EntityKind };
+export type CommunityAssetPage = { items: CommunityAsset[]; next_cursor?: string | null };
+
+export const getEntityCommunity = (id: string) => api<EntityCommunity>(`/api/entities/${encodeURIComponent(id)}/community`);
+export const publishEntityToCommunity = (id: string, body: EntityPublishRequest) =>
+  api<EntityCommunityPublished>(`/api/entities/${encodeURIComponent(id)}/community`, { method: "POST", body: JSON.stringify(body) });
+export function browseCommunityAssets(filters: { q?: string; assetKind?: EntityKind | "" } = {}): Promise<CommunityAssetPage> {
+  const params = new URLSearchParams();
+  if (filters.q) params.set("q", filters.q);
+  if (filters.assetKind) params.set("asset_kind", filters.assetKind);
+  return api<CommunityAssetPage>(`/api/community/assets?${params.toString()}`);
+}
+export const importEntityFromCommunity = (body: { workspace_id: string; link: string }) =>
+  api<Entity>("/api/entities/import-community", { method: "POST", body: JSON.stringify(body) });
 
 /** 这次生成的回执(`generation.request.entities`)—— 读的时候不信任形状,认不出的项丢掉。 */
 export function entityReceipt(request: Record<string, unknown> | undefined | null): EntityAttachReceipt[] {

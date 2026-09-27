@@ -1510,6 +1510,17 @@ def _migrate_workflows_remember_community_slug() -> None:
         conn.execute(text("ALTER TABLE workflows ADD COLUMN community_slug VARCHAR(160) NOT NULL DEFAULT ''"))
 
 
+def _migrate_entities_remember_community() -> None:
+    """entities 新增 community(发布到社区 / 从社区导入之后记下的那一条,ADR 0027 §4)。老资产都没碰过社区:空对象。"""
+    inspector = inspect(engine)
+    if "entities" not in set(inspector.get_table_names()):
+        return
+    if "community" in {c["name"] for c in inspector.get_columns("entities")}:
+        return
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE entities ADD COLUMN community JSON NOT NULL DEFAULT '{}'"))
+
+
 def _backfill_workflow_revision_authors() -> None:
     """给说不出作者的工作流修订补上作者:这条工作流的创建者,找不到就是它所在工作区的 owner。
 
@@ -4831,6 +4842,7 @@ def migration_plan() -> MigrationPlan:
                 _migrate_deployment_community_url,
                 _migrate_boards_get_a_board_key,
                 _migrate_workflows_remember_community_slug,
+                _migrate_entities_remember_community,
             ),
             #: create_all 每次启动都要跑 —— 新版本加的表靠它建出来,记账跳过就再也建不了。
             *_recurring(MigrationPhase.SCHEMA, _create_current_schema),

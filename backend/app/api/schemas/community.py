@@ -95,3 +95,71 @@ class CommunityPublishOut(ApiModel):
     url: str
     version: str
     status: str
+
+
+# --- 资产(ADR 0027 §4) -------------------------------------------------------
+
+
+class EntityPublishIn(ApiModel):
+    workspace_id: str
+    #: 真人人物:这一次确认「已获得本人同意公开」。虚构的不看它。
+    consent_confirmed: bool = False
+    title: str = Field(default="", max_length=120)
+    summary: str = Field(default="", max_length=300)
+    #: 不给 = 用资产自己的标签。
+    tags: list[str] | None = Field(default=None, max_length=8)
+
+
+class EntityCommunityPublishedOut(ApiModel):
+    """这个资产发到社区的那一条。`status`:虚构的 `approved`(发布即上架),真人的 `pending`(审核中)。"""
+
+    slug: str
+    url: str
+    version: str
+    status: str
+    origin: str
+
+
+class EntityCommunitySourceOut(ApiModel):
+    """这个资产是从社区的哪一条导入的。"""
+
+    slug: str
+    version: str
+    origin: str
+    url: str
+
+
+class EntityCommunityOut(ApiModel):
+    """资产详情里「社区」那一格。`latest_version`:导入的那一条在社区上现在是第几版(连不上时为空)。"""
+
+    published: EntityCommunityPublishedOut | None = None
+    source: EntityCommunitySourceOut | None = None
+    latest_version: str | None = None
+    status: CommunityStatusOut
+
+
+class EntityImportIn(ApiModel):
+    workspace_id: str
+    #: 社区资产页的地址(`…/assets/<slug>`),或 slug 本身。
+    link: str = Field(min_length=1, max_length=500)
+
+
+class CommunityAssetOut(ApiModel):
+    """「从社区导入」弹窗里的一行。"""
+
+    slug: str
+    title: str
+    summary: str = ""
+    asset_kind: str
+    real_person: bool = False
+    cover_url: str | None = None
+    reference_count: int = 0
+    variant_count: int = 0
+    downloads: int = 0
+    version: str | None = None
+    author_name: str = ""
+
+
+class CommunityAssetPageOut(ApiModel):
+    items: list[CommunityAssetOut]
+    next_cursor: str | None = None

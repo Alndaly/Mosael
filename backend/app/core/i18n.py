@@ -4228,6 +4228,39 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "社区服务拒绝了这次请求(HTTP {status}):{message}",
         "en": "The community service rejected the request (HTTP {status}): {message}",
     },
+    "communityErr_assetNoImages": {
+        "zh": "这个资产还没有图片参考图 —— 分享包里只带图片,先挂几张再分享",
+        "en": "This asset has no image references yet — the bundle only carries images, so add some before sharing.",
+    },
+    "communityErr_assetBundle": {"zh": "资产分享包不合格式:{detail}", "en": "The asset bundle isn't valid: {detail}"},
+    "communityErr_assetTooLarge": {
+        "zh": "图片太大了(上限 {limit} MB)",
+        "en": "The images are too large (limit {limit} MB).",
+    },
+    "communityErr_assetNeedsConsent": {
+        "zh": "这是一个真人人物:先在资产里声明「这是我本人」或「已获得本人授权」,才能分享到社区",
+        "en": "This is a real person: declare “This is me” or “I have their permission” on the asset before sharing it.",
+    },
+    "communityErr_assetConfirmPublication": {
+        "zh": "分享真人人物前,请确认已获得本人同意公开",
+        "en": "Before sharing a real person, confirm they agreed to publication.",
+    },
+    "communityErr_assetVariantAlone": {
+        "zh": "变体跟着它的母体一起分享 —— 请在母体上点「分享到社区」",
+        "en": "Variants are shared together with their parent — use Share to community on the parent.",
+    },
+    "communityErr_assetBadLink": {
+        "zh": "认不出这个链接 —— 粘贴社区资产页的地址(…/assets/…)",
+        "en": "That link isn't recognised — paste the address of a community asset page (…/assets/…).",
+    },
+    "communityErr_assetDownload": {
+        "zh": "下载参考图失败(HTTP {status})",
+        "en": "Couldn't download a reference image (HTTP {status}).",
+    },
+    "communityErr_assetHashMismatch": {
+        "zh": "下载到的参考图和分享包里说的不是同一张,已停止导入",
+        "en": "A downloaded reference image doesn't match the bundle; the import was stopped.",
+    },
     "communityErr_badResponse": {
         "zh": "社区服务的回应看不懂,可能是两边的版本对不上",
         "en": "The community service sent a response Mosael can't read. The versions may not match.",
@@ -4305,6 +4338,10 @@ MESSAGES: dict[str, dict[str, str]] = {
     "entityErr_attributeNotBool": {"zh": "{field} 要是真或假", "en": "{field} must be true or false."},
     "entityErr_attributeTooLong": {"zh": "{field} 最长 {limit} 字", "en": "{field} can be at most {limit} characters."},
     "entityErr_colorFormat": {"zh": "人偶颜色要写成 #RRGGBB", "en": "The blockout color must be written as #RRGGBB."},
+    "entityErr_consentPendingIsImportOnly": {
+        "zh": "「授权待你确认」只在从社区导入真人人物时出现 —— 请选「这是我本人」或「已获得本人授权」",
+        "en": "“Awaiting your confirmation” only comes from importing a real person from the community — choose “This is me” or “I have their permission”.",
+    },
     "entityErr_consentKind": {"zh": "授权声明只能是 {kinds}", "en": "The consent declaration must be one of {kinds}."},
     "entityErr_realPersonNotFictional": {
         "zh": "真人不能声明成「虚构人物」:选「这是我本人」或「已取得本人同意」",

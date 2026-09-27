@@ -8,7 +8,8 @@ import type { Entity, EntitySummary } from "@/api/client";
 
 /**
  * 资产库(ADR 0027)的页面:页签 + 封面卡片、详情里的参考图墙(换角度、设封面、排先后、移出、从素材库挂、
- * 拖文件进来导入再挂)、专有字段(真人 / 虚构与授权声明)、「在哪里用过」,以及素材详情里的「属于哪些资产」。
+ * 拖文件进来导入再挂)、专有字段(真人 / 虚构与授权声明)、「在哪里用过」,以及素材详情里的「属于哪些资产」;
+ * 和社区之间:分享(真人要再确认一次)、状态与新版本、从社区导入、导入的真人「授权待你确认」。
  *
  * 接口一律是假的(api/client 整个换掉):判的是**界面发出去的请求**和**拿回来之后画出来的东西**。
  */
@@ -33,6 +34,11 @@ const api = vi.hoisted(() => ({
   listVoices: vi.fn(),
   listScenes: vi.fn(),
   listSceneModels: vi.fn(),
+  getEntityCommunity: vi.fn(),
+  getCommunityStatus: vi.fn(),
+  publishEntityToCommunity: vi.fn(),
+  browseCommunityAssets: vi.fn(),
+  importEntityFromCommunity: vi.fn(),
 }));
 
 vi.mock("@/api/client", () => ({
@@ -45,6 +51,7 @@ vi.mock("@/api/client", () => ({
     detail: (ws: string, id: string) => ["entities", ws, "detail", id],
     usage: (ws: string, id: string) => ["entities", ws, "usage", id],
     ofAsset: (ws: string, id: string) => ["entities", ws, "asset", id],
+    community: (ws: string, id: string) => ["entities", ws, "community", id],
     catalog: () => ["entity-catalog"],
   },
   entityReceipt: () => [],
@@ -130,6 +137,16 @@ function mount(ui: React.ReactElement) {
 
 const WORKSPACE = { id: "ws", name: "W" } as never;
 
+function communityState(over: Record<string, unknown> = {}) {
+  return {
+    published: null,
+    source: null,
+    latest_version: null,
+    status: { configured: true, origin: "https://mosael.com", connected: true, handle: "me", display_name: "我" },
+    ...over,
+  };
+}
+
 beforeEach(() => {
   for (const one of Object.values(api)) one.mockReset();
   api.getEntityCatalog.mockResolvedValue(CATALOG);
@@ -138,6 +155,8 @@ beforeEach(() => {
   api.listScenes.mockResolvedValue([]);
   api.listSceneModels.mockResolvedValue([]);
   api.getEntityUsage.mockResolvedValue({ boards: [], generations: [], workflows: [] });
+  api.getEntityCommunity.mockResolvedValue(communityState());
+  api.getCommunityStatus.mockResolvedValue(communityState().status);
   window.location.hash = "#/entities";
   //: 页签记在 localStorage 里(usePersistentTab),上一条测试点过「场景」的话这一条会从场景开始。
   window.localStorage.clear();
@@ -357,5 +376,148 @@ describe("AI 工作台的 @ 资产", () => {
       (key) => key,
     );
     expect(lines).toEqual(["entityReceiptLine —— entityNote_limit"]);
+  });
+});
+
+describe("资产和社区", () => {
+  async function openDetail(over: Partial<Entity> = {}) {
+    window.location.hash = "#/entities?entity=e1";
+    api.listEntities.mockResolvedValue([summary()]);
+    api.getEntity.mockResolvedValue(entity(over));
+    mount(<EntitiesView workspace={WORKSPACE} />);
+    await screen.findByRole("region", { name: "entityReferences" });
+  }
+
+  it("分享一个虚构人物:标题、简介、标签带上,发完给链接", async () => {
+    api.publishEntityToCommunity.mockResolvedValue({
+      slug: "zhang-san", url: "https://mosael.com/assets/zhang-san", version: "1", status: "approved", origin: "https://mosael.com",
+    });
+    await openDetail();
+    fireEvent.click(await screen.findByRole("button", { name: /entityCommunityShare/ }));
+    const dialog = await screen.findByRole("dialog");
+    const send = await within(dialog).findByRole("button", { name: /entityCommunityShare/ });
+    expect(within(dialog).queryByText("entityShareConfirm")).toBeNull();
+    fireEvent.click(send);
+    await waitFor(() =>
+      expect(api.publishEntityToCommunity).toHaveBeenCalledWith("e1", {
+        workspace_id: "ws", consent_confirmed: false, title: "张三", summary: "主角", tags: ["主角"],
+      }),
+    );
+    expect((await within(dialog).findByRole("textbox", { name: "boardShareLink" }) as HTMLInputElement).value).toBe(
+      "https://mosael.com/assets/zhang-san",
+    );
+  });
+
+  it("真人人物:没声明授权发不了;声明过的要勾「已获得本人同意公开」", async () => {
+    await openDetail({ attributes: { real_person: true }, usable_for_digital_human: false });
+    fireEvent.click(await screen.findByRole("button", { name: /entityCommunityShare/ }));
+    let dialog = await screen.findByRole("dialog");
+    expect((await within(dialog).findByRole("alert")).textContent).toContain("entityShareNeedsConsent");
+    expect((within(dialog).getByRole("button", { name: /entityCommunityShare/ }) as HTMLButtonElement).disabled).toBe(true);
+    cleanup();
+
+    api.publishEntityToCommunity.mockResolvedValue({ slug: "s", url: "u", version: "1", status: "pending", origin: "o" });
+    await openDetail({ attributes: { real_person: true, consent: { kind: "self" } } });
+    fireEvent.click(await screen.findByRole("button", { name: /entityCommunityShare/ }));
+    dialog = await screen.findByRole("dialog");
+    const send = (await within(dialog).findByRole("button", { name: /entityCommunityShare/ })) as HTMLButtonElement;
+    expect(send.disabled).toBe(true);
+    fireEvent.click(within(dialog).getByRole("checkbox"));
+    expect(send.disabled).toBe(false);
+    fireEvent.click(send);
+    await waitFor(() => expect(api.publishEntityToCommunity.mock.calls[0][1].consent_confirmed).toBe(true));
+    expect(await within(dialog).findByText("communityStatusPending")).toBeTruthy();
+  });
+
+  it("没连社区账号:说清楚,指去设置", async () => {
+    //: 资产那一格缓存里还写着「连着」也不算数:看的是共用的账号状态。
+    api.getCommunityStatus.mockResolvedValue({ configured: true, origin: "o", connected: false, handle: "", display_name: "" });
+    await openDetail();
+    fireEvent.click(await screen.findByRole("button", { name: /entityCommunityShare/ }));
+    const dialog = await screen.findByRole("dialog");
+    expect(await within(dialog).findByText("entityShareNeedsAccount")).toBeTruthy();
+    expect(within(dialog).getByRole("button", { name: /communityGoConnect/ })).toBeTruthy();
+  });
+
+  it("分享过的:按钮是发布新版本,标题下写着状态;导入来的写来源,社区上有新版本时给导入", async () => {
+    api.getEntityCommunity.mockResolvedValue(communityState({
+      published: { slug: "zs", url: "https://mosael.com/assets/zs", version: "2", status: "pending", origin: "o" },
+      source: { slug: "orig", version: "1", origin: "o", url: "https://mosael.com/assets/orig" },
+      latest_version: "3",
+    }));
+    api.importEntityFromCommunity.mockResolvedValue(entity({ id: "e9", name: "张三" }));
+    await openDetail();
+    expect(await screen.findByRole("button", { name: /entityCommunityShareAgain/ })).toBeTruthy();
+    const strip = document.querySelector("[data-entity-community]") as HTMLElement;
+    expect(strip.textContent).toContain("communityStatusPending · v2");
+    expect(strip.textContent).toContain("entityCommunityFrom");
+    const newer = strip.querySelector("[data-entity-community-newer]") as HTMLElement;
+    fireEvent.click(within(newer).getByRole("button", { name: /entityCommunityImportNew/ }));
+    await waitFor(() =>
+      expect(api.importEntityFromCommunity).toHaveBeenCalledWith({ workspace_id: "ws", link: "https://mosael.com/assets/orig" }),
+    );
+  });
+
+  it("变体不单独分享", async () => {
+    await openDetail({ parent_id: "p1", parent_name: "张三" });
+    expect(screen.queryByRole("button", { name: /entityCommunityShare/ })).toBeNull();
+  });
+
+  it("从社区导入:按种类列出来,点一个就导入并打开;也能贴链接", async () => {
+    api.listEntities.mockResolvedValue([]);
+    api.browseCommunityAssets.mockResolvedValue({
+      items: [{
+        slug: "a-cheng", title: "阿澄", summary: "", asset_kind: "character", real_person: true,
+        cover_url: "https://mosael.com/media/x.png", reference_count: 2, variant_count: 1, downloads: 3, version: "1", author_name: "Bob",
+      }],
+      next_cursor: null,
+    });
+    api.importEntityFromCommunity.mockResolvedValue(entity({ id: "e9", name: "阿澄" }));
+    api.getEntity.mockResolvedValue(entity({ id: "e9", name: "阿澄" }));
+    mount(<EntitiesView workspace={WORKSPACE} />);
+    fireEvent.click(await screen.findByRole("button", { name: /entitiesImport/ }));
+    const dialog = await screen.findByRole("dialog");
+    const tile = await within(dialog).findByText("阿澄");
+    expect(api.browseCommunityAssets).toHaveBeenCalledWith({ assetKind: "character", q: "" });
+    expect(within(dialog).getByText("entitiesImportRealPerson")).toBeTruthy();
+    fireEvent.click(within(dialog).getByRole("radio", { name: "道具" }));
+    await waitFor(() => expect(api.browseCommunityAssets).toHaveBeenLastCalledWith({ assetKind: "prop", q: "" }));
+    fireEvent.click(within(dialog).getByRole("radio", { name: "人物" }));
+    fireEvent.click((await within(dialog).findByText("阿澄")).closest("button") ?? tile);
+    await waitFor(() => expect(api.importEntityFromCommunity).toHaveBeenCalledWith({ workspace_id: "ws", link: "a-cheng" }));
+    expect(await screen.findByRole("region", { name: "entityReferences" })).toBeTruthy();
+  });
+
+  it("贴链接导入", async () => {
+    api.listEntities.mockResolvedValue([]);
+    api.browseCommunityAssets.mockResolvedValue({ items: [], next_cursor: null });
+    api.importEntityFromCommunity.mockResolvedValue(entity({ id: "e9" }));
+    api.getEntity.mockResolvedValue(entity({ id: "e9" }));
+    mount(<EntitiesView workspace={WORKSPACE} />);
+    fireEvent.click(await screen.findByRole("button", { name: /entitiesImport/ }));
+    const dialog = await screen.findByRole("dialog");
+    expect(await within(dialog).findByText("entitiesImportEmpty")).toBeTruthy();
+    const link = within(dialog).getByRole("textbox", { name: "entitiesImportLink" });
+    fireEvent.change(link, { target: { value: " https://mosael.com/zh/assets/a-cheng " } });
+    fireEvent.submit(link.closest("form")!);
+    await waitFor(() =>
+      expect(api.importEntityFromCommunity).toHaveBeenCalledWith({ workspace_id: "ws", link: "https://mosael.com/zh/assets/a-cheng" }),
+    );
+  });
+
+  it("导入的真人:授权待你确认,选一项就是确认", async () => {
+    api.updateEntity.mockResolvedValue(entity());
+    await openDetail({
+      attributes: { real_person: true, consent: { kind: "pending", declared_at: "2026-09-27T10:00:00" } },
+      usable_for_digital_human: false,
+    });
+    const note = document.querySelector("[data-consent-pending]") as HTMLElement;
+    expect(note.textContent).toContain("entityConsentPending");
+    expect(screen.getByText("entityDigitalHumanBlocked").textContent).not.toContain("entityConsentDeclaredAt");
+    const consent = screen.getByRole("radiogroup", { name: "entityConsentTitle" });
+    fireEvent.click(within(consent).getByRole("radio", { name: /已取得本人同意/ }));
+    await waitFor(() =>
+      expect(api.updateEntity).toHaveBeenCalledWith("e1", { attributes: { real_person: true, consent: { kind: "authorized" } } }),
+    );
   });
 });

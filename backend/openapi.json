@@ -9857,6 +9857,48 @@
         }
       }
     },
+    "/api/entities/import-community": {
+      "post": {
+        "tags": [
+          "entities"
+        ],
+        "summary": "Import From Community",
+        "description": "贴一个社区链接(或在列表里点一条),把那条资产连参考图和变体一起拿进这个工作区。",
+        "operationId": "import_from_community_api_entities_import_community_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EntityImportIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EntityOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/entities/{entity_id}": {
       "get": {
         "tags": [
@@ -15544,6 +15586,164 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/CommunityPublishOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/community/assets": {
+      "get": {
+        "tags": [
+          "community"
+        ],
+        "summary": "Browse Community Assets",
+        "description": "「从社区导入」弹窗里的列表。读的是社区上公开的东西,不需要连账号。",
+        "operationId": "browse_community_assets_api_community_assets_get",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Q"
+            }
+          },
+          {
+            "name": "asset_kind",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Asset Kind"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommunityAssetPageOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/entities/{entity_id}/community": {
+      "get": {
+        "tags": [
+          "community"
+        ],
+        "summary": "Entity Community",
+        "description": "资产详情里「社区」那一格:发出去的是哪一条、从哪一条导入的、那一条有没有新版本,以及这个人连没连社区。",
+        "operationId": "entity_community_api_entities__entity_id__community_get",
+        "parameters": [
+          {
+            "name": "entity_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Entity Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EntityCommunityOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "community"
+        ],
+        "summary": "Publish Entity",
+        "description": "把一个资产(连同变体)分享到社区:第一次是新条目,之后是这一条的新版本。真人人物先审核。",
+        "operationId": "publish_entity_api_entities__entity_id__community_post",
+        "parameters": [
+          {
+            "name": "entity_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Entity Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EntityPublishIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EntityCommunityPublishedOut"
                 }
               }
             }
@@ -23322,6 +23522,109 @@
         ],
         "title": "CommitOut"
       },
+      "CommunityAssetOut": {
+        "properties": {
+          "slug": {
+            "type": "string",
+            "title": "Slug"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "summary": {
+            "type": "string",
+            "title": "Summary",
+            "default": ""
+          },
+          "asset_kind": {
+            "type": "string",
+            "title": "Asset Kind"
+          },
+          "real_person": {
+            "type": "boolean",
+            "title": "Real Person",
+            "default": false
+          },
+          "cover_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cover Url"
+          },
+          "reference_count": {
+            "type": "integer",
+            "title": "Reference Count",
+            "default": 0
+          },
+          "variant_count": {
+            "type": "integer",
+            "title": "Variant Count",
+            "default": 0
+          },
+          "downloads": {
+            "type": "integer",
+            "title": "Downloads",
+            "default": 0
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          },
+          "author_name": {
+            "type": "string",
+            "title": "Author Name",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "slug",
+          "title",
+          "asset_kind"
+        ],
+        "title": "CommunityAssetOut",
+        "description": "「从社区导入」弹窗里的一行。"
+      },
+      "CommunityAssetPageOut": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/CommunityAssetOut"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "CommunityAssetPageOut"
+      },
       "CommunityDeviceOut": {
         "properties": {
           "user_code": {
@@ -24079,6 +24382,113 @@
         "title": "EntityCatalogOut",
         "description": "资产的词表,按请求方的语言翻好:几种资产、参考图的角度、授权声明的选项、生成时挑图的先后。"
       },
+      "EntityCommunityOut": {
+        "properties": {
+          "published": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EntityCommunityPublishedOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EntityCommunitySourceOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "latest_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Version"
+          },
+          "status": {
+            "$ref": "#/components/schemas/CommunityStatusOut"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "EntityCommunityOut",
+        "description": "资产详情里「社区」那一格。`latest_version`:导入的那一条在社区上现在是第几版(连不上时为空)。"
+      },
+      "EntityCommunityPublishedOut": {
+        "properties": {
+          "slug": {
+            "type": "string",
+            "title": "Slug"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url"
+          },
+          "version": {
+            "type": "string",
+            "title": "Version"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "origin": {
+            "type": "string",
+            "title": "Origin"
+          }
+        },
+        "type": "object",
+        "required": [
+          "slug",
+          "url",
+          "version",
+          "status",
+          "origin"
+        ],
+        "title": "EntityCommunityPublishedOut",
+        "description": "这个资产发到社区的那一条。`status`:虚构的 `approved`(发布即上架),真人的 `pending`(审核中)。"
+      },
+      "EntityCommunitySourceOut": {
+        "properties": {
+          "slug": {
+            "type": "string",
+            "title": "Slug"
+          },
+          "version": {
+            "type": "string",
+            "title": "Version"
+          },
+          "origin": {
+            "type": "string",
+            "title": "Origin"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "slug",
+          "version",
+          "origin",
+          "url"
+        ],
+        "title": "EntityCommunitySourceOut",
+        "description": "这个资产是从社区的哪一条导入的。"
+      },
       "EntityConsentKindOut": {
         "properties": {
           "kind": {
@@ -24160,6 +24570,26 @@
           "name"
         ],
         "title": "EntityCreate"
+      },
+      "EntityImportIn": {
+        "properties": {
+          "workspace_id": {
+            "type": "string",
+            "title": "Workspace Id"
+          },
+          "link": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Link"
+          }
+        },
+        "type": "object",
+        "required": [
+          "workspace_id",
+          "link"
+        ],
+        "title": "EntityImportIn"
       },
       "EntityKindOut": {
         "properties": {
@@ -24333,6 +24763,51 @@
           "updated_at"
         ],
         "title": "EntityOut"
+      },
+      "EntityPublishIn": {
+        "properties": {
+          "workspace_id": {
+            "type": "string",
+            "title": "Workspace Id"
+          },
+          "consent_confirmed": {
+            "type": "boolean",
+            "title": "Consent Confirmed",
+            "default": false
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 120,
+            "title": "Title",
+            "default": ""
+          },
+          "summary": {
+            "type": "string",
+            "maxLength": 300,
+            "title": "Summary",
+            "default": ""
+          },
+          "tags": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array",
+                "maxItems": 8
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tags"
+          }
+        },
+        "type": "object",
+        "required": [
+          "workspace_id"
+        ],
+        "title": "EntityPublishIn"
       },
       "EntityReferenceAdd": {
         "properties": {

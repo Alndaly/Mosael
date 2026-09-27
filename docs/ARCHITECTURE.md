@@ -146,6 +146,12 @@ TaskEvent 行只在总线创建。
   `entity_ids`,和正文里 `@` 的是同一个参数;新引入的资产格要在本工作区,已在板上的不再校验。分享快照里它带封面
   (`media`)、名字(`title`)和 `entity_kind`,官网查看页照图片画、角上标种类。能力(补全多角度、生成表情)是 ADR 0027
   的阶段 4,到时照内容格能力的做法挂在它身上。
+- **和社区之间**(`domain/community/assets`,ADR 0027 §4):分享 = `build_bundle` 把母体和变体做成 `mosael.asset/1`
+  (`mosael_formats.asset_bundle`,社区收的时候验同一份),图走画板分享那套三步上传,再 `POST /assets` 或
+  `/assets/{slug}/versions`;记在 `entities.community.published`。导入 = 公开的 `GET /assets/{slug}/download`(不带令牌),
+  每张图**先全部下载并按哈希核对**,都对上了才导入素材(`source="community"`)、建资产与变体,来源记在
+  `entities.community.source`;查新版本读公开详情。导入的真人人物授权记成 `catalog.CONSENT_PENDING`,只能由导入产生,
+  本机选「本人 / 已获授权」即确认。
 
 ### 创意画板:生成能力的第五个入口
 

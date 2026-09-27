@@ -1,4 +1,4 @@
-"""插件市场的「社区」来源(ADR 0026 §4),以及社区这一轮带来的三条迁移。"""
+"""插件市场的「社区」来源(ADR 0026 §4),以及社区这一轮带来的几条迁移(含资产记下社区来源,ADR 0027 §4)。"""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ from app.core.db import SessionLocal, engine
 from app.db.migrations import (
     _migrate_boards_get_a_board_key,
     _migrate_deployment_community_url,
+    _migrate_entities_remember_community,
     _migrate_workflows_remember_community_slug,
 )
 from app.domain import deployment
@@ -102,3 +103,17 @@ def test_老工作流补上空的_community_slug() -> None:
         assert conn.execute(text("SELECT community_slug FROM workflows")).scalars().all() == [""]
     _migrate_workflows_remember_community_slug()
     assert "community_slug" in _columns("workflows")
+
+
+def test_老资产补上空的_community() -> None:
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+    client.post("/api/entities", json={"workspace_id": ws, "kind": "prop", "name": "红伞"})
+    _drop_column("entities", "community")
+    _migrate_entities_remember_community()
+    with engine.begin() as conn:
+        assert conn.execute(text("SELECT community FROM entities")).scalars().all() == ["{}"]
+    _migrate_entities_remember_community()
+    assert "community" in _columns("entities")
+    listed = client.get("/api/entities", params={"workspace_id": ws})
+    assert listed.status_code == 200 and len(listed.json()) == 1
