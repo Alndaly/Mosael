@@ -401,10 +401,14 @@ function LibraryPanel({
         </p>
       ) : (
         //: 列数跟着宽度走,不写死 3 列:窄窗口里这一栏掉到参考图墙下面、铺满整行,写死 3 列时一张缩略图有半屏大。
-        <div className="grid max-h-[420px] grid-cols-[repeat(auto-fill,minmax(88px,1fr))] gap-2 overflow-y-auto">
-          {items.map((asset) => (
-            <LibraryItem key={asset.id} asset={asset} attached={attached.has(asset.id)} pending={pending} onAdd={() => onAdd(asset.id)} />
-          ))}
+        //: **滚动和排格子分两层。** 限高又自带滚动的那一层要是 grid,格子(aspect-square + overflow-hidden,
+        //: 自动最小高度是 0)的行会被压扁去凑那个高度 —— 缩略图挤成一条条细缝。外层只管限高滚动,里层按内容排。
+        <div className="max-h-[480px] min-w-0 overflow-y-auto overscroll-contain" data-entity-library-scroll="">
+          <div className="grid auto-rows-max grid-cols-[repeat(auto-fill,minmax(88px,1fr))] gap-2">
+            {items.map((asset) => (
+              <LibraryItem key={asset.id} asset={asset} attached={attached.has(asset.id)} pending={pending} onAdd={() => onAdd(asset.id)} />
+            ))}
+          </div>
         </div>
       )}
     </aside>
