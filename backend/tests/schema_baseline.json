@@ -92,6 +92,17 @@
     "token",
     "user_id"
   ],
+  "board_shares": [
+    "board_id",
+    "created_at",
+    "shared_by",
+    "slug",
+    "title",
+    "updated_at",
+    "url",
+    "version",
+    "visibility"
+  ],
   "boards": [
     "canvas",
     "created_at",
@@ -175,6 +186,16 @@
     "subject_type",
     "updated_at",
     "workspace_id"
+  ],
+  "community_accounts": [
+    "community_user_id",
+    "connected_at",
+    "display_name",
+    "handle",
+    "origin",
+    "refresh_token",
+    "updated_at",
+    "user_id"
   ],
   "deployment_config": [
     "id",

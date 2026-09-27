@@ -47,6 +47,7 @@ import {
   Plus,
   Redo2,
   Repeat,
+  Send,
   Square,
   Store,
   Trash2,
@@ -136,6 +137,7 @@ import { RightDockResizeHandle } from "@/components/app/RightDockResizeHandle";
 import { WorkflowRunHistory } from "@/features/workflows/WorkflowRunHistory";
 import { WorkflowRevisionHistory } from "@/features/workflows/WorkflowRevisionHistory";
 import { useWorkflowTemplates, WorkflowCommunityDialog } from "@/features/workflows/WorkflowCommunityDialog";
+import { PublishWorkflowDialog } from "@/features/community/PublishWorkflowDialog";
 import { createWorkflowGraphStore, type GraphUpdater, type SetGraphOptions } from "@/stores/workflowGraphStore";
 import { saveJsonToDisk } from "@/lib/download";
 import { ROW_HANDLE_CLASS, handleOffset, useResizableRow, useResizableSidebar } from "@/lib/useResizableSidebar";
@@ -359,6 +361,7 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
   const qc = useQueryClient();
   const [menuRenaming, setMenuRenaming] = React.useState<Workflow | null>(null);
   const [menuDeleting, setMenuDeleting] = React.useState<Workflow | null>(null);
+  const [menuPublishing, setMenuPublishing] = React.useState<Workflow | null>(null);
   const [communityOpen, setCommunityOpen] = React.useState(false);
   const [communityFocus, setCommunityFocus] = React.useState<string | null>(null);
   //: 官网「在 Mosael 中打开」:打开工作流社区、选中那个模板 —— 添加副本仍由人点。
@@ -469,6 +472,7 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
     { label: t("wfRun"), icon: <Play />, disabled: menuRun.isPending, onSelect: () => menuRun.mutate(workflow.id) },
     { label: t("rename"), icon: <Pencil />, onSelect: () => setMenuRenaming(workflow) },
     { label: t("wfExport"), icon: <Download />, disabled: menuExport.isPending, onSelect: () => menuExport.mutate(workflow) },
+    { label: t("communityPublishToCommunity"), icon: <Send />, onSelect: () => setMenuPublishing(workflow) },
     { label: t("delete"), icon: <Trash2 />, destructive: true, onSelect: () => setMenuDeleting(workflow) },
   ];
 
@@ -685,6 +689,9 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
       </div>
       {importControl}
       {communityDialog}
+      {menuPublishing && (
+        <PublishWorkflowDialog open onOpenChange={(open) => !open && setMenuPublishing(null)} workflow={menuPublishing} />
+      )}
       <RenameDialog
         open={menuRenaming !== null}
         title={t("rename")}
@@ -914,6 +921,7 @@ function WorkflowEditor({
   }, [undo, redo]);
   const [renaming, setRenaming] = React.useState(false);
   const [deleting, setDeleting] = React.useState(false);
+  const [publishing, setPublishing] = React.useState(false);
   // 导出走后端信封(格式和版本的权威在后端),落成 .mosael-workflow.json —— 和列表页
   // 右键那条是同一个函数,不另写一份:两份迟早会在文件名或格式上分叉。
   const exportFile = useMutation({
@@ -2065,6 +2073,11 @@ function WorkflowEditor({
                       onSelect: () => exportFile.mutate(),
                     },
                     {
+                      label: t("communityPublishToCommunity"),
+                      icon: <Send />,
+                      onSelect: () => setPublishing(true),
+                    },
+                    {
                       label: t("delete"),
                       icon: <Trash2 />,
                       destructive: true,
@@ -2468,6 +2481,7 @@ function WorkflowEditor({
         {agentOpen && !dockedAgent && agentPanel}
       </div>
 
+      <PublishWorkflowDialog open={publishing} onOpenChange={setPublishing} workflow={workflow} />
       <RenameDialog
         open={renaming}
         title={t("rename")}

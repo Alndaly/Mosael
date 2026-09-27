@@ -4197,6 +4197,65 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "The model uses a sparse accessor, which the graybox renderer can't read.",
     },
     "modelMeshErr_unreadable": {"zh": "模型文件读不了:{detail}", "en": "Couldn't read the model file: {detail}"},
+    # -- 社区(ADR 0026):账号、画板分享、发布到社区 --
+    "jobKind_board_share": {"zh": "画板分享", "en": "Board share"},
+    "jobMsg_boardShareQueued": {"zh": "画板分享排队中", "en": "Board share queued"},
+    "jobMsg_boardShareRunning": {"zh": "正在打包并上传画板", "en": "Packing and uploading the board"},
+    "jobMsg_boardShareDone": {"zh": "画板已分享(第 {version} 版)", "en": "Board shared (version {version})"},
+    "deployErr_communityUrlInvalid": {
+        "zh": "社区地址要填站点的根地址(http 或 https 开头、不带路径),例如 https://mosael.com",
+        "en": "Enter the community site's root address (http or https, no path), e.g. https://mosael.com",
+    },
+    "communityErr_notConfigured": {
+        "zh": "这台部署没有配置社区地址,请管理员在「部署设置」里填写",
+        "en": "No community is configured for this deployment. Ask an admin to set it in Deployment settings.",
+    },
+    "communityErr_notConnected": {
+        "zh": "还没有连接社区账号:到「设置 → 社区账号」里连接",
+        "en": "No community account is connected. Connect one in Settings → Community account.",
+    },
+    "communityErr_signedOut": {
+        "zh": "社区账号已退出,请重新连接",
+        "en": "Your community account was signed out. Please reconnect.",
+    },
+    "communityErr_unreachable": {"zh": "连不上社区服务:{detail}", "en": "Couldn't reach the community service: {detail}"},
+    "communityErr_rejected": {
+        "zh": "社区服务拒绝了这次请求(HTTP {status}):{message}",
+        "en": "The community service rejected the request (HTTP {status}): {message}",
+    },
+    "communityErr_badResponse": {
+        "zh": "社区服务的回应看不懂,可能是两边的版本对不上",
+        "en": "The community service sent a response Mosael can't read. The versions may not match.",
+    },
+    "communityErr_tooManyItems": {
+        "zh": "画板上有 {count} 格,分享最多 {limit} 格",
+        "en": "The board has {count} items; a share can hold at most {limit}.",
+    },
+    "communityErr_fileTooLarge": {
+        "zh": "「{name}」有 {size} MB,分享时单个文件最多 {limit} MB",
+        "en": "\"{name}\" is {size} MB; each shared file can be at most {limit} MB.",
+    },
+    "communityErr_totalTooLarge": {
+        "zh": "这张画板引用的文件共 {size} MB,一次分享最多 {limit} MB",
+        "en": "The files on this board add up to {size} MB; a share can hold at most {limit} MB.",
+    },
+    "communityErr_uploadFailed": {"zh": "文件上传失败(已重试):{detail}", "en": "A file failed to upload (after retries): {detail}"},
+    "communityErr_badVisibility": {"zh": "不认识的可见性:{value}", "en": "Unknown visibility: {value}"},
+    "communityErr_notShared": {"zh": "这张画板还没有分享", "en": "This board hasn't been shared yet."},
+    "communityErr_boardGone": {"zh": "画板已经不在了", "en": "The board no longer exists."},
+    "communityErr_coverNotImage": {
+        "zh": "封面要选这个工作区里的一张图片",
+        "en": "The cover must be an image from this workspace.",
+    },
+    "communityErr_coverMissing": {"zh": "封面图的文件不见了", "en": "The cover image's file is missing."},
+    "communityErr_coverTooLarge": {"zh": "封面图最大 {limit} MB", "en": "The cover image can be at most {limit} MB."},
+    "communityErr_pluginTooLarge": {"zh": "插件包太大了,发布不了", "en": "The plugin package is too large to publish."},
+    "communityErr_pluginDirMissing": {"zh": "找不到这个插件的目录", "en": "Couldn't find this plugin's folder."},
+    "communityErr_pluginBundled": {
+        "zh": "随应用发的插件不能发布到社区",
+        "en": "Plugins that ship with the app can't be published to the community.",
+    },
+    "communityErr_pluginInvalid": {"zh": "插件包没通过校验:{detail}", "en": "The plugin package failed validation: {detail}"},
 }
 
 

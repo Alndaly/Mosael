@@ -45,6 +45,7 @@ ENCRYPTED_COLUMNS: frozenset[tuple[str, str]] = frozenset(
         ("plugin_credentials", "value"),
         ("feishu_bots", "app_secret"),
         ("publish_accounts", "config"),
+        ("community_accounts", "refresh_token"),
     }
 )
 

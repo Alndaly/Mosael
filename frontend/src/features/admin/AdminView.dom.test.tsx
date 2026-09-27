@@ -28,6 +28,8 @@ const calls = {
   createInvite: vi.fn(),
 };
 vi.mock("@/api/client", () => ({
+  getCommunityUrl: () => Promise.resolve({ url: "https://mosael.com", default_url: "https://mosael.com" }),
+  setCommunityUrl: (url: string) => Promise.resolve({ url, default_url: "https://mosael.com" }),
   adminOverview: (days: number) => {
     calls.overview(days);
     return Promise.resolve({ ...overview, window_days: days });
@@ -107,7 +109,7 @@ describe("结构", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "adminTabDeployment" }));
     await screen.findByRole("switch", { name: "deployRegistrationOpen" });
-    expect(sections(container)).toEqual(["registration", "shared-folders"]);
+    expect(sections(container)).toEqual(["registration", "shared-folders", "community"]);
     // 选中的 tab 活过导航。
     expect(localStorage.getItem("mosael:tab:admin")).toBe("deployment");
   });

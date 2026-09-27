@@ -57,6 +57,8 @@ JOB_KINDS: dict[str, JobKind] = {
         # 画板上一格的能力跑一个节点(插件工具、转写、分离……):可能要几分钟,用户多半已经去干别的了。
         # 产出落成画板上的新格子,插件交出的文件还会进素材库。
         JobKind("board_run", "always", ("boards", "assets"), view="boards"),
+        # 把画板分享成链接(ADR 0026):快照 + 逐个上传文件,大板子要几分钟。做完要说 —— 链接在分享面板里。
+        JobKind("board_share", "always", ("boards",), view="boards"),
         # 导入、导出之后顺手排的;成功了没人在等,失败了才值得一说(素材预览会不流畅)。
         JobKind("proxy", "failures", ("assets",), view="media"),
     )

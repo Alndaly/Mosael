@@ -65,7 +65,10 @@ export const clearPluginInvocations = (instanceId: string) =>
 export const removePluginInvocation = (invocationId: string) =>
   api(`/api/plugins/invocations/${invocationId}`, { method: "DELETE" });
 
-export const listPluginMarket = () => api<PluginMarketListing>("/api/plugins/market");
+/** 市场的哪一份索引:`official` 是发版产物里的那份,`community` 是社区服务的(ADR 0026),两份不混在一起。 */
+export type PluginMarketSource = PluginMarketEntry["source"];
+export const listPluginMarket = (source: PluginMarketSource = "official") =>
+  api<PluginMarketListing>(`/api/plugins/market?source=${source}`);
 /**
  * `advertisedVersion`:从市场点的时候,索引给这一条写的版本(从链接装时留空)。有它,后端才认得出
  * 「从市场更新、而包里其实不比装着的新」—— 那时不装、也不报「已更新」,而是说新版本还没发布。

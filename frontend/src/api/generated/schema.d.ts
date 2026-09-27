@@ -4775,6 +4775,156 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/community/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Status */
+        get: operations["get_status_api_community_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/community/connect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Connect
+         * @description 开始连接:向社区要一个设备码。界面拿 `verification_uri` 去系统浏览器里打开,然后轮询。
+         */
+        post: operations["connect_api_community_connect_post"];
+        /** Cancel Connect */
+        delete: operations["cancel_connect_api_community_connect_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/community/connect/poll": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Poll
+         * @description 问一次「网页上点了允许没有」。按社区给的间隔节流 —— 界面轮询得再勤,真正发出去的请求也不会更多。
+         */
+        post: operations["poll_api_community_connect_poll_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/community/disconnect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Disconnect
+         * @description 断开:请社区吊销这台设备的会话(尽力而为),再删掉本机存的令牌。
+         */
+        post: operations["disconnect_api_community_disconnect_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/boards/{board_id}/share": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Board Share State
+         * @description 分享面板一打开要的:这张板分享过没有(链接、第几版),以及这个人连没连社区。
+         */
+        get: operations["board_share_state_api_boards__board_id__share_get"];
+        put?: never;
+        /**
+         * Share Board
+         * @description 生成链接 / 更新分享(同一件事:服务端按画板认出新版本,链接不变)。排成任务,进度在任务中心。
+         */
+        post: operations["share_board_api_boards__board_id__share_post"];
+        /**
+         * Withdraw Board Share
+         * @description 撤回:链接立刻失效(服务端回 410),本机忘掉这条分享。
+         */
+        delete: operations["withdraw_board_share_api_boards__board_id__share_delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Update Board Share
+         * @description 改分享的标题 / 可见性,不发新版本。
+         */
+        patch: operations["update_board_share_api_boards__board_id__share_patch"];
+        trace?: never;
+    };
+    "/api/workflows/{workflow_id}/community": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Publish Workflow
+         * @description 发布到社区:第一次是新条目,之后是这一条的新版本。
+         */
+        post: operations["publish_workflow_api_workflows__workflow_id__community_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/plugins/{package_id}/community": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Publish Plugin
+         * @description 把一个装着的插件打包发到社区。先进审核队列(回来的状态是 `pending`)。
+         */
+        post: operations["publish_plugin_api_plugins__package_id__community_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/admin/users": {
         parameters: {
             query?: never;
@@ -4861,6 +5011,30 @@ export interface paths {
          * @description 这台电脑上哪些文件夹共享给成员读(见 domain/host_files)。和开放注册同一类:部署级的决定。
          */
         put: operations["set_shared_host_folders_api_admin_shared_host_folders_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/community": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Community Url
+         * @description 这台部署连哪个社区(ADR 0026)。**登录就能读** —— 设置页的「社区账号」要据此说「社区未配置」。
+         */
+        get: operations["get_community_url_api_admin_community_get"];
+        /**
+         * Set Community Url
+         * @description 换社区地址(空 = 不连社区)。部署级的决定。换了之后,各人连着的旧账号对新地址不算数,要重新连。
+         */
+        put: operations["set_community_url_api_admin_community_put"];
         post?: never;
         delete?: never;
         options?: never;
@@ -5130,6 +5304,9 @@ export interface paths {
          *     **随应用内置的插件总在里面**,不管远端索引有没有它、拉不拉得到:它就装在这台机器上,
          *     条目由本地那份清单生成(版本也是本地的)。远端若也列了它,以本地为准 —— 内置插件的新版
          *     跟着应用发,远端的版本号不该在这里长出一个「更新」。
+         *
+         *     `source=community` 读社区服务的 `/plugins/index.json`(ADR 0026):一份**单独的**来源,不和官方索引
+         *     混在一起;内置插件不在这一栏里。装的时候走的是同一条路(预览 → 权限确认 → 安装)。
          */
         get: operations["browse_market_api_plugins_market_get"];
         put?: never;
@@ -7277,6 +7454,60 @@ export interface components {
                 [key: string]: unknown;
             };
         };
+        /** BoardShareIn */
+        BoardShareIn: {
+            /** Workspace Id */
+            workspace_id: string;
+            /**
+             * Title
+             * @default
+             */
+            title: string;
+            /**
+             * Visibility
+             * @default unlisted
+             * @enum {string}
+             */
+            visibility: "unlisted" | "public";
+        };
+        /**
+         * BoardShareOut
+         * @description 这张画板分享出去的那条链接(本机记着的)。
+         */
+        BoardShareOut: {
+            /** Slug */
+            slug: string;
+            /** Url */
+            url: string;
+            /** Version */
+            version: number;
+            /** Title */
+            title: string;
+            /** Visibility */
+            visibility: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
+         * BoardShareStateOut
+         * @description 分享面板一打开要的:这张板分享过没有,以及这个人能不能分享(连没连社区)。
+         */
+        BoardShareStateOut: {
+            share?: components["schemas"]["BoardShareOut"] | null;
+            status: components["schemas"]["CommunityStatusOut"];
+        };
+        /** BoardShareUpdate */
+        BoardShareUpdate: {
+            /** Workspace Id */
+            workspace_id: string;
+            /** Title */
+            title?: string | null;
+            /** Visibility */
+            visibility?: ("unlisted" | "public") | null;
+        };
         /** BoardUpdate */
         BoardUpdate: {
             /** Workspace Id */
@@ -7704,6 +7935,76 @@ export interface components {
         CommitOut: {
             /** Version */
             version: number;
+        };
+        /**
+         * CommunityDeviceOut
+         * @description 一次正在等的设备授权:界面显示 `user_code`,用系统浏览器打开 `verification_uri`。
+         */
+        CommunityDeviceOut: {
+            /** User Code */
+            user_code: string;
+            /** Verification Uri */
+            verification_uri: string;
+            /** Expires In */
+            expires_in: number;
+        };
+        /**
+         * CommunityPollOut
+         * @description 轮询一次设备授权。`pending` 还在等;`connected` 连上了;`expired` / `denied` 这一次作废,要重来。
+         */
+        CommunityPollOut: {
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "idle" | "pending" | "connected" | "expired" | "denied";
+            status: components["schemas"]["CommunityStatusOut"];
+        };
+        /**
+         * CommunityPublishOut
+         * @description 发布到社区的结果。`status`:工作流是 `published`(发布即上架),插件是 `pending`(审核中)。
+         */
+        CommunityPublishOut: {
+            /** Slug */
+            slug: string;
+            /** Url */
+            url: string;
+            /** Version */
+            version: string;
+            /** Status */
+            status: string;
+        };
+        /**
+         * CommunityStatusOut
+         * @description 设置页「社区账号」那一节:配没配社区、连没连、连的是谁,以及正在等的那次授权。
+         */
+        CommunityStatusOut: {
+            /** Configured */
+            configured: boolean;
+            /** Origin */
+            origin: string;
+            /** Connected */
+            connected: boolean;
+            /** Handle */
+            handle: string;
+            /** Display Name */
+            display_name: string;
+            pending?: components["schemas"]["CommunityDeviceOut"] | null;
+        };
+        /** CommunityUrlIn */
+        CommunityUrlIn: {
+            /**
+             * Url
+             * @default
+             */
+            url: string;
+        };
+        /** CommunityUrlOut */
+        CommunityUrlOut: {
+            /** Url */
+            url: string;
+            /** Default Url */
+            default_url: string;
         };
         /** ConfirmationCreate */
         ConfirmationCreate: {
@@ -9380,6 +9681,12 @@ export interface components {
              * @default false
              */
             bundled: boolean;
+            /**
+             * Source
+             * @default official
+             * @enum {string}
+             */
+            source: "official" | "community";
         };
         /**
          * PluginMarketOut
@@ -9576,6 +9883,16 @@ export interface components {
              * @default false
              */
             advanced: boolean;
+        };
+        /** PluginPublishIn */
+        PluginPublishIn: {
+            /**
+             * Summary
+             * @default
+             */
+            summary: string;
+            /** Tags */
+            tags?: string[];
         };
         /**
          * PluginToolOut
@@ -12315,6 +12632,11 @@ export interface components {
             /** Graph Hash */
             graph_hash: string;
             /**
+             * Community Slug
+             * @default
+             */
+            community_slug: string;
+            /**
              * Created At
              * Format: date-time
              */
@@ -12324,6 +12646,23 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+        };
+        /** WorkflowPublishIn */
+        WorkflowPublishIn: {
+            /**
+             * Title
+             * @default
+             */
+            title: string;
+            /**
+             * Summary
+             * @default
+             */
+            summary: string;
+            /** Tags */
+            tags?: string[];
+            /** Cover Asset Id */
+            cover_asset_id?: string | null;
         };
         /** WorkflowRevisionDetailOut */
         WorkflowRevisionDetailOut: {
@@ -22718,6 +23057,351 @@ export interface operations {
             };
         };
     };
+    get_status_api_community_status_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommunityStatusOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    connect_api_community_connect_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommunityDeviceOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_connect_api_community_connect_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    poll_api_community_connect_poll_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommunityPollOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    disconnect_api_community_disconnect_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    board_share_state_api_boards__board_id__share_get: {
+        parameters: {
+            query: {
+                workspace_id: string;
+            };
+            header?: never;
+            path: {
+                board_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BoardShareStateOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    share_board_api_boards__board_id__share_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                board_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BoardShareIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    withdraw_board_share_api_boards__board_id__share_delete: {
+        parameters: {
+            query: {
+                workspace_id: string;
+            };
+            header?: never;
+            path: {
+                board_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_board_share_api_boards__board_id__share_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                board_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BoardShareUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BoardShareOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    publish_workflow_api_workflows__workflow_id__community_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workflow_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkflowPublishIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommunityPublishOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    publish_plugin_api_plugins__package_id__community_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                package_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PluginPublishIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommunityPublishOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_users_api_admin_users_get: {
         parameters: {
             query?: never;
@@ -22860,6 +23544,68 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SharedHostFolders"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_community_url_api_admin_community_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommunityUrlOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_community_url_api_admin_community_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CommunityUrlIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommunityUrlOut"];
                 };
             };
             /** @description Validation Error */
@@ -23409,7 +24155,9 @@ export interface operations {
     };
     browse_market_api_plugins_market_get: {
         parameters: {
-            query?: never;
+            query?: {
+                source?: "official" | "community";
+            };
             header?: never;
             path?: never;
             cookie?: never;

@@ -39,6 +39,13 @@ from app.domain.workflows import (
     update_workflow,
 )
 from app.domain.workflows.engine import start_workflow_job
+from app.domain.workflows.file_export import (
+    WORKFLOW_FILE_FORMAT,
+    WORKFLOW_FILE_SUFFIX,
+    WORKFLOW_FILE_VERSION,
+    ascii_file_stem,
+    export_payload,
+)
 from app.domain.workflows.node_catalog import describe_node_types
 from app.domain.workflows.revisions import (
     WorkflowGraphConflict,
@@ -195,30 +202,16 @@ def create(body: WorkflowCreate, db: DbSession, user: CurrentUser) -> Workflow:
 
 
 # ---------------- 文件导出/导入 ----------------
-# 信封格式:{format, version, workflow_revision, graph_hash, name, description, graph},定义与校验在
-# mosael_formats.workflow_file(社区服务收工作流文件过的是同一份,ADR 0026)。graph 原样携带 —— 节点里
-# 引用的工作区资源(素材/序列/供应商档案等)跨工作区导入后可能悬空,这与「保存放行、
-# 就绪检查提示、运行时拦截」的既有分层一致,导入不做资源级校验。
-WORKFLOW_FILE_FORMAT = workflow_file.FORMAT
-WORKFLOW_FILE_VERSION = workflow_file.VERSION
-WORKFLOW_FILE_SUFFIX = workflow_file.SUFFIX
+# 信封的形状在 domain/workflows/file_export(「发布到社区」发的也是它)。
 
 
 @router.get("/workflows/{workflow_id}/export")
 def export_one(workflow_id: str, db: DbSession, user: CurrentUser) -> Response:
     workflow = _get(db, workflow_id)
     ensure_workspace_access(db, user, workflow.workspace_id)
-    payload = {
-        "format": WORKFLOW_FILE_FORMAT,
-        "version": WORKFLOW_FILE_VERSION,
-        "name": workflow.name,
-        "description": workflow.description,
-        "workflow_revision": workflow.revision,
-        "graph_hash": workflow.graph_hash,
-        "graph": workflow.graph,
-    }
+    payload = export_payload(workflow)
     # ASCII 兜底文件名 + RFC 5987 UTF-8 全名,中文工作流名两头都不乱码。
-    ascii_name = "".join(ch if ch.isascii() and ch not in '\\/:*?"<>|' else "_" for ch in workflow.name) or "workflow"
+    ascii_name = ascii_file_stem(workflow.name)
     utf8_name = quote(f"{workflow.name}{WORKFLOW_FILE_SUFFIX}")
     return Response(
         content=json.dumps(payload, ensure_ascii=False, indent=2),

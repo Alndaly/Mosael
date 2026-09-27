@@ -14412,6 +14412,451 @@
         }
       }
     },
+    "/api/community/status": {
+      "get": {
+        "tags": [
+          "community"
+        ],
+        "summary": "Get Status",
+        "operationId": "get_status_api_community_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommunityStatusOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/community/connect": {
+      "post": {
+        "tags": [
+          "community"
+        ],
+        "summary": "Connect",
+        "description": "开始连接:向社区要一个设备码。界面拿 `verification_uri` 去系统浏览器里打开,然后轮询。",
+        "operationId": "connect_api_community_connect_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommunityDeviceOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "community"
+        ],
+        "summary": "Cancel Connect",
+        "operationId": "cancel_connect_api_community_connect_delete",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/community/connect/poll": {
+      "post": {
+        "tags": [
+          "community"
+        ],
+        "summary": "Poll",
+        "description": "问一次「网页上点了允许没有」。按社区给的间隔节流 —— 界面轮询得再勤,真正发出去的请求也不会更多。",
+        "operationId": "poll_api_community_connect_poll_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommunityPollOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/community/disconnect": {
+      "post": {
+        "tags": [
+          "community"
+        ],
+        "summary": "Disconnect",
+        "description": "断开:请社区吊销这台设备的会话(尽力而为),再删掉本机存的令牌。",
+        "operationId": "disconnect_api_community_disconnect_post",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/boards/{board_id}/share": {
+      "get": {
+        "tags": [
+          "community"
+        ],
+        "summary": "Board Share State",
+        "description": "分享面板一打开要的:这张板分享过没有(链接、第几版),以及这个人连没连社区。",
+        "operationId": "board_share_state_api_boards__board_id__share_get",
+        "parameters": [
+          {
+            "name": "board_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Board Id"
+            }
+          },
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BoardShareStateOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "community"
+        ],
+        "summary": "Share Board",
+        "description": "生成链接 / 更新分享(同一件事:服务端按画板认出新版本,链接不变)。排成任务,进度在任务中心。",
+        "operationId": "share_board_api_boards__board_id__share_post",
+        "parameters": [
+          {
+            "name": "board_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Board Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BoardShareIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "community"
+        ],
+        "summary": "Update Board Share",
+        "description": "改分享的标题 / 可见性,不发新版本。",
+        "operationId": "update_board_share_api_boards__board_id__share_patch",
+        "parameters": [
+          {
+            "name": "board_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Board Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BoardShareUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BoardShareOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "community"
+        ],
+        "summary": "Withdraw Board Share",
+        "description": "撤回:链接立刻失效(服务端回 410),本机忘掉这条分享。",
+        "operationId": "withdraw_board_share_api_boards__board_id__share_delete",
+        "parameters": [
+          {
+            "name": "board_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Board Id"
+            }
+          },
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Workspace Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/workflows/{workflow_id}/community": {
+      "post": {
+        "tags": [
+          "community"
+        ],
+        "summary": "Publish Workflow",
+        "description": "发布到社区:第一次是新条目,之后是这一条的新版本。",
+        "operationId": "publish_workflow_api_workflows__workflow_id__community_post",
+        "parameters": [
+          {
+            "name": "workflow_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Workflow Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkflowPublishIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommunityPublishOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/plugins/{package_id}/community": {
+      "post": {
+        "tags": [
+          "community"
+        ],
+        "summary": "Publish Plugin",
+        "description": "把一个装着的插件打包发到社区。先进审核队列(回来的状态是 `pending`)。",
+        "operationId": "publish_plugin_api_plugins__package_id__community_post",
+        "parameters": [
+          {
+            "name": "package_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Package Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PluginPublishIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommunityPublishOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/admin/users": {
       "get": {
         "tags": [
@@ -14583,6 +15028,78 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/SharedHostFolders"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/community": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Get Community Url",
+        "description": "这台部署连哪个社区(ADR 0026)。**登录就能读** —— 设置页的「社区账号」要据此说「社区未配置」。",
+        "operationId": "get_community_url_api_admin_community_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommunityUrlOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Set Community Url",
+        "description": "换社区地址(空 = 不连社区)。部署级的决定。换了之后,各人连着的旧账号对新地址不算数,要重新连。",
+        "operationId": "set_community_url_api_admin_community_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CommunityUrlIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommunityUrlOut"
                 }
               }
             }
@@ -15378,8 +15895,24 @@
           "plugins"
         ],
         "summary": "Browse Market",
-        "description": "市场里有什么。**要管理员** —— 看到的下一步就是装,而装是往这台机器上放代码。\n\n**随应用内置的插件总在里面**,不管远端索引有没有它、拉不拉得到:它就装在这台机器上,\n条目由本地那份清单生成(版本也是本地的)。远端若也列了它,以本地为准 —— 内置插件的新版\n跟着应用发,远端的版本号不该在这里长出一个「更新」。",
+        "description": "市场里有什么。**要管理员** —— 看到的下一步就是装,而装是往这台机器上放代码。\n\n**随应用内置的插件总在里面**,不管远端索引有没有它、拉不拉得到:它就装在这台机器上,\n条目由本地那份清单生成(版本也是本地的)。远端若也列了它,以本地为准 —— 内置插件的新版\n跟着应用发,远端的版本号不该在这里长出一个「更新」。\n\n`source=community` 读社区服务的 `/plugins/index.json`(ADR 0026):一份**单独的**来源,不和官方索引\n混在一起;内置插件不在这一栏里。装的时候走的是同一条路(预览 → 权限确认 → 安装)。",
         "operationId": "browse_market_api_plugins_market_get",
+        "parameters": [
+          {
+            "name": "source",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "official",
+                "community"
+              ],
+              "type": "string",
+              "default": "official",
+              "title": "Source"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -20757,6 +21290,137 @@
         "title": "BoardRun",
         "description": "在画板上跑一个产出者(生成、写字、念出来、截一段……),产出落回 `item_id` 那一格。\n\n`form` 是这个产出者自己的表单,形状由它声明、在领域里校验(见 domain/boards/producers)——\n这里不为每个产出者各开一个请求体。"
       },
+      "BoardShareIn": {
+        "properties": {
+          "workspace_id": {
+            "type": "string",
+            "title": "Workspace Id"
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 180,
+            "title": "Title",
+            "default": ""
+          },
+          "visibility": {
+            "type": "string",
+            "enum": [
+              "unlisted",
+              "public"
+            ],
+            "title": "Visibility",
+            "default": "unlisted"
+          }
+        },
+        "type": "object",
+        "required": [
+          "workspace_id"
+        ],
+        "title": "BoardShareIn"
+      },
+      "BoardShareOut": {
+        "properties": {
+          "slug": {
+            "type": "string",
+            "title": "Slug"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "visibility": {
+            "type": "string",
+            "title": "Visibility"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "slug",
+          "url",
+          "version",
+          "title",
+          "visibility",
+          "updated_at"
+        ],
+        "title": "BoardShareOut",
+        "description": "这张画板分享出去的那条链接(本机记着的)。"
+      },
+      "BoardShareStateOut": {
+        "properties": {
+          "share": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BoardShareOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "$ref": "#/components/schemas/CommunityStatusOut"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "BoardShareStateOut",
+        "description": "分享面板一打开要的:这张板分享过没有,以及这个人能不能分享(连没连社区)。"
+      },
+      "BoardShareUpdate": {
+        "properties": {
+          "workspace_id": {
+            "type": "string",
+            "title": "Workspace Id"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 180
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "visibility": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "unlisted",
+                  "public"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Visibility"
+          }
+        },
+        "type": "object",
+        "required": [
+          "workspace_id"
+        ],
+        "title": "BoardShareUpdate"
+      },
       "BoardUpdate": {
         "properties": {
           "workspace_id": {
@@ -21908,6 +22572,158 @@
           "version"
         ],
         "title": "CommitOut"
+      },
+      "CommunityDeviceOut": {
+        "properties": {
+          "user_code": {
+            "type": "string",
+            "title": "User Code"
+          },
+          "verification_uri": {
+            "type": "string",
+            "title": "Verification Uri"
+          },
+          "expires_in": {
+            "type": "integer",
+            "title": "Expires In"
+          }
+        },
+        "type": "object",
+        "required": [
+          "user_code",
+          "verification_uri",
+          "expires_in"
+        ],
+        "title": "CommunityDeviceOut",
+        "description": "一次正在等的设备授权:界面显示 `user_code`,用系统浏览器打开 `verification_uri`。"
+      },
+      "CommunityPollOut": {
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": [
+              "idle",
+              "pending",
+              "connected",
+              "expired",
+              "denied"
+            ],
+            "title": "State"
+          },
+          "status": {
+            "$ref": "#/components/schemas/CommunityStatusOut"
+          }
+        },
+        "type": "object",
+        "required": [
+          "state",
+          "status"
+        ],
+        "title": "CommunityPollOut",
+        "description": "轮询一次设备授权。`pending` 还在等;`connected` 连上了;`expired` / `denied` 这一次作废,要重来。"
+      },
+      "CommunityPublishOut": {
+        "properties": {
+          "slug": {
+            "type": "string",
+            "title": "Slug"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url"
+          },
+          "version": {
+            "type": "string",
+            "title": "Version"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "slug",
+          "url",
+          "version",
+          "status"
+        ],
+        "title": "CommunityPublishOut",
+        "description": "发布到社区的结果。`status`:工作流是 `published`(发布即上架),插件是 `pending`(审核中)。"
+      },
+      "CommunityStatusOut": {
+        "properties": {
+          "configured": {
+            "type": "boolean",
+            "title": "Configured"
+          },
+          "origin": {
+            "type": "string",
+            "title": "Origin"
+          },
+          "connected": {
+            "type": "boolean",
+            "title": "Connected"
+          },
+          "handle": {
+            "type": "string",
+            "title": "Handle"
+          },
+          "display_name": {
+            "type": "string",
+            "title": "Display Name"
+          },
+          "pending": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CommunityDeviceOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "configured",
+          "origin",
+          "connected",
+          "handle",
+          "display_name"
+        ],
+        "title": "CommunityStatusOut",
+        "description": "设置页「社区账号」那一节:配没配社区、连没连、连的是谁,以及正在等的那次授权。"
+      },
+      "CommunityUrlIn": {
+        "properties": {
+          "url": {
+            "type": "string",
+            "maxLength": 500,
+            "title": "Url",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "title": "CommunityUrlIn"
+      },
+      "CommunityUrlOut": {
+        "properties": {
+          "url": {
+            "type": "string",
+            "title": "Url"
+          },
+          "default_url": {
+            "type": "string",
+            "title": "Default Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "url",
+          "default_url"
+        ],
+        "title": "CommunityUrlOut"
       },
       "ConfirmationCreate": {
         "properties": {
@@ -25480,6 +26296,15 @@
             "type": "boolean",
             "title": "Bundled",
             "default": false
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "official",
+              "community"
+            ],
+            "title": "Source",
+            "default": "official"
           }
         },
         "type": "object",
@@ -25828,6 +26653,26 @@
           "key"
         ],
         "title": "PluginProvidedParameterOut"
+      },
+      "PluginPublishIn": {
+        "properties": {
+          "summary": {
+            "type": "string",
+            "maxLength": 2000,
+            "title": "Summary",
+            "default": ""
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 8,
+            "title": "Tags"
+          }
+        },
+        "type": "object",
+        "title": "PluginPublishIn"
       },
       "PluginToolOut": {
         "properties": {
@@ -31808,6 +32653,11 @@
             "type": "string",
             "title": "Graph Hash"
           },
+          "community_slug": {
+            "type": "string",
+            "title": "Community Slug",
+            "default": ""
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
@@ -31832,6 +32682,43 @@
           "updated_at"
         ],
         "title": "WorkflowOut"
+      },
+      "WorkflowPublishIn": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 120,
+            "title": "Title",
+            "default": ""
+          },
+          "summary": {
+            "type": "string",
+            "maxLength": 2000,
+            "title": "Summary",
+            "default": ""
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 8,
+            "title": "Tags"
+          },
+          "cover_asset_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cover Asset Id"
+          }
+        },
+        "type": "object",
+        "title": "WorkflowPublishIn"
       },
       "WorkflowRevisionDetailOut": {
         "properties": {

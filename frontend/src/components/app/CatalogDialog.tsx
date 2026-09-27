@@ -38,6 +38,7 @@ export function CatalogDialog<T, F extends string = string>({
   query,
   onQueryChange,
   headerActions,
+  sources,
   filters,
   notice,
   items,
@@ -60,6 +61,11 @@ export function CatalogDialog<T, F extends string = string>({
   onQueryChange: (query: string) => void;
   /** 搜索框右边的按钮(插件市场的「从链接安装」)。 */
   headerActions?: React.ReactNode;
+  /**
+   * 目录有**几份来源**时(插件市场的「官方 / 社区」)在筛选上面再给一排切换。来源和筛选是两件事:
+   * 来源决定读哪份目录,筛选只在这一份里收窄 —— 挤进同一排的话,「社区」会被读成「已安装」那一类的筛选。
+   */
+  sources?: { label: string; value: string; onChange: (value: string) => void; items: CatalogFilter<string>[] };
   filters?: { label: string; value: F; onChange: (value: F) => void; items: CatalogFilter<F>[] };
   /** 网格上方的一条提示(插件市场:远端索引拉不到,下面只列出内置的)。详情页上不显示。 */
   notice?: React.ReactNode;
@@ -153,6 +159,9 @@ export function CatalogDialog<T, F extends string = string>({
               </label>
               {headerActions}
             </div>
+            {sources && (
+              <CollectionTabs label={sources.label} value={sources.value} onChange={sources.onChange} items={sources.items} />
+            )}
             {filters && (
               <CollectionTabs label={filters.label} value={filters.value} onChange={filters.onChange} items={filters.items} />
             )}

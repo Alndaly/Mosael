@@ -175,6 +175,9 @@ class PluginMarketEntry(ApiModel):
     #: 随应用一起发的(`plugins/bundled/`,见 domain/plugins/bundled)。它不从市场装、也不从市场
     #: 更新 —— 新版跟着应用来,所以界面不给装 / 更新 / 卸载,只标「内置」。
     bundled: bool = False
+    #: 这一条来自哪份索引:`official`(发版产物里的 registry.json)或 `community`(社区服务的
+    #: `/plugins/index.json`,ADR 0026)。社区的条目在界面上单独标出来 —— 它们没有经过我们的发版。
+    source: Literal["official", "community"] = "official"
 
 
 class PluginMarketOut(ApiModel):

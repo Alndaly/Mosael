@@ -40,6 +40,8 @@ class WorkflowOut(OrmModel):
     graph: dict
     revision: int
     graph_hash: str
+    #: 发布到社区之后那一条的 slug;空 = 还没发布过。「发布到社区」据此说「发新版本」还是「发布」。
+    community_slug: str = ""
     created_at: datetime
     updated_at: datetime
 

@@ -6,6 +6,8 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 from fastapi import APIRouter, HTTPException
 from sqlalchemy import select
 
@@ -89,15 +91,22 @@ def _registry_url(db: DbSession) -> str:
 
 
 @router.get("/plugins/market", response_model=PluginMarketOut)
-def browse_market(db: DbSession, user: CurrentUser) -> PluginMarketOut:
+def browse_market(
+    db: DbSession, user: CurrentUser, source: Literal["official", "community"] = "official"
+) -> PluginMarketOut:
     """市场里有什么。**要管理员** —— 看到的下一步就是装,而装是往这台机器上放代码。
 
     **随应用内置的插件总在里面**,不管远端索引有没有它、拉不拉得到:它就装在这台机器上,
     条目由本地那份清单生成(版本也是本地的)。远端若也列了它,以本地为准 —— 内置插件的新版
     跟着应用发,远端的版本号不该在这里长出一个「更新」。
+
+    `source=community` 读社区服务的 `/plugins/index.json`(ADR 0026):一份**单独的**来源,不和官方索引
+    混在一起;内置插件不在这一栏里。装的时候走的是同一条路(预览 → 权限确认 → 安装)。
     """
     ensure_deployment_admin(db, user)
     installed = {row.id: row for row in db.scalars(select(PluginPackage))}
+    if source == "community":
+        return _community_market(db, installed)
     shipped = [one for one in bundled.plugins() if one.id in installed]
     index_error = ""
     try:
@@ -113,6 +122,33 @@ def browse_market(db: DbSession, user: CurrentUser) -> PluginMarketOut:
         plugins=[_market_entry(entry, installed, holds) for entry in entries],
         index_error=index_error,
     )
+
+
+def _community_market(db: DbSession, installed: dict[str, PluginPackage]) -> PluginMarketOut:
+    from urllib.parse import urljoin
+
+    from app.domain import deployment
+    from app.domain.community import NotConfigured
+    from app.domain.community.transport import api_url
+
+    origin = deployment.community_url(db)
+    if not origin:
+        return PluginMarketOut(plugins=[], index_error=str(NotConfigured()))
+    index = api_url(origin, "/plugins/index.json")
+    try:
+        remote = market.fetch_index(index)
+    except PluginDomainError as exc:
+        return PluginMarketOut(plugins=[], index_error=str(exc))
+    holds = updates.holds(db)
+    entries = []
+    for entry in remote:
+        # 社区索引里的下载地址可以是相对的(`/api/community/v1/plugins/x/download`):按索引的地址补全。
+        download = str(entry.get("download") or "")
+        resolved = {**entry, "download": urljoin(index, download) if download else ""}
+        # 社区条目不会是「内置」:内置插件跟着应用发,不从任何索引装。
+        resolved.pop("bundled", None)
+        entries.append(_market_entry(resolved, installed, holds).model_copy(update={"source": "community"}))
+    return PluginMarketOut(plugins=entries, index_error="")
 
 
 def _market_entry(entry: dict, installed: dict[str, PluginPackage], holds: dict[str, PluginMarketHold]) -> PluginMarketEntry:

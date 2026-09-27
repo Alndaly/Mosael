@@ -53,7 +53,7 @@ vi.mock("@/app/preferences", () => ({
 import { WorkflowCommunityDialog } from "@/features/workflows/WorkflowCommunityDialog";
 
 const ADDED = {
-  id: "w1", workspace_id: "ws", name: "译配", description: "", revision: 1, graph_hash: "", created_at: "", updated_at: "",
+  id: "w1", workspace_id: "ws", name: "译配", description: "", revision: 1, graph_hash: "", community_slug: "", created_at: "", updated_at: "",
   graph: { nodes: [], edges: [], meta: { template_id: "translated_dub" } },
 };
 

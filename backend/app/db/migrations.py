@@ -1460,6 +1460,56 @@ def _migrate_shared_host_folders() -> None:
         conn.execute(text("ALTER TABLE deployment_config ADD COLUMN shared_host_folders JSON NOT NULL DEFAULT '[]'"))
 
 
+def _migrate_deployment_community_url() -> None:
+    """deployment_config 新增 community_url(社区服务的站点,ADR 0026)。
+
+    老部署补上的是**官网**这个默认值,和新装机一样 —— 「连哪个社区」此前没有答案,官网就是那个答案;
+    不想连的管理员在部署设置里清空它。
+    """
+    inspector = inspect(engine)
+    if "deployment_config" not in set(inspector.get_table_names()):
+        return
+    if "community_url" in {c["name"] for c in inspector.get_columns("deployment_config")}:
+        return
+    with engine.begin() as conn:
+        conn.execute(
+            text("ALTER TABLE deployment_config ADD COLUMN community_url VARCHAR(500) NOT NULL DEFAULT 'https://mosael.com'")
+        )
+
+
+def _migrate_boards_get_a_board_key() -> None:
+    """每张画板有一个分享用的随机 id(`boards.board_key`,ADR 0026)。
+
+    老板子**逐张**补一个各不相同的随机串:列默认值只能给所有行同一个值,而两张板共用一个 key,
+    社区服务就会把第二张当成第一张的新版本。
+    """
+    import secrets
+
+    inspector = inspect(engine)
+    if "boards" not in set(inspector.get_table_names()):
+        return
+    if "board_key" in {c["name"] for c in inspector.get_columns("boards")}:
+        return
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE boards ADD COLUMN board_key VARCHAR(64) NOT NULL DEFAULT ''"))
+        for (board_id,) in conn.execute(text("SELECT id FROM boards")).all():
+            conn.execute(
+                text("UPDATE boards SET board_key = :key WHERE id = :id"),
+                {"key": secrets.token_urlsafe(24), "id": board_id},
+            )
+
+
+def _migrate_workflows_remember_community_slug() -> None:
+    """workflows 新增 community_slug(发布到社区之后那一条的 slug,ADR 0026)。老工作流都没发布过:空串。"""
+    inspector = inspect(engine)
+    if "workflows" not in set(inspector.get_table_names()):
+        return
+    if "community_slug" in {c["name"] for c in inspector.get_columns("workflows")}:
+        return
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE workflows ADD COLUMN community_slug VARCHAR(160) NOT NULL DEFAULT ''"))
+
+
 def _backfill_workflow_revision_authors() -> None:
     """给说不出作者的工作流修订补上作者:这条工作流的创建者,找不到就是它所在工作区的 owner。
 
@@ -4778,6 +4828,9 @@ def migration_plan() -> MigrationPlan:
                 # 排在上一步之后:它可能刚把 plugin_instances 建出来。
                 _migrate_plugin_generation_columns,
                 _migrate_plugin_authorization_rejected,
+                _migrate_deployment_community_url,
+                _migrate_boards_get_a_board_key,
+                _migrate_workflows_remember_community_slug,
             ),
             #: create_all 每次启动都要跑 —— 新版本加的表靠它建出来,记账跳过就再也建不了。
             *_recurring(MigrationPhase.SCHEMA, _create_current_schema),

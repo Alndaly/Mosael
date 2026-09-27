@@ -24,6 +24,7 @@ import {
   Radio,
   Scissors,
   Send,
+  Share2,
   Sparkles,
   Split,
   Wrench,
@@ -50,6 +51,7 @@ export const JOB_KIND_ICONS: Record<string, LucideIcon> = {
   trim: Scissors,
   board_write: PenLine,
   board_run: Wrench,
+  board_share: Share2,
   proxy: Clapperboard,
 };
 

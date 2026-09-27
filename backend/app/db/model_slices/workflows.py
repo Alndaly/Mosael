@@ -22,6 +22,8 @@ class Workflow(Base):
     graph: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     revision: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
     graph_hash: Mapped[str] = mapped_column(String(64), nullable=False, default="", server_default="")
+    #: 发布到社区之后那一条的 slug(ADR 0026)。有它,下一次「发布到社区」发的是**新版本**而不是新条目。
+    community_slug: Mapped[str] = mapped_column(String(160), nullable=False, default="", server_default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
 

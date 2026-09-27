@@ -37,6 +37,7 @@
   "migrate-board-tool-cells-become-abilities": "9a9781fde35a091c",
   "migrate-board-trim-slots-record-their-source": "a2c4feb41524dfbf",
   "migrate-board-wiring-tools-become-notes": "13c0287caee11f94",
+  "migrate-boards-get-a-board-key": "121faa8442f6d0b6",
   "migrate-browser-action-leases": "db82d8419ae90156",
   "migrate-browser-boolean-options": "8656267a8529d045",
   "migrate-browser-pool": "ba842907261bd6f7",
@@ -52,6 +53,7 @@
   "migrate-confirmation-summary-i18n": "2e278d24b6eab1f7",
   "migrate-connections-get-an-owner": "8afda861625e48f2",
   "migrate-deployment-admin": "81e8028d04c2d247",
+  "migrate-deployment-community-url": "6bbd451e460514e2",
   "migrate-deployment-config": "bf223562fa845289",
   "migrate-drop-deployment-defaults": "c6cb8f8b6a4ab3e9",
   "migrate-drop-local-publish-accounts": "b97ce4a14e2492d1",
@@ -104,5 +106,6 @@
   "migrate-usage-unpriced-reason": "55adc52e51b0405d",
   "migrate-workflow-revisions": "99c186ef9d504ed9",
   "migrate-workflow-source-assets": "7fc1c9a2743e4f67",
+  "migrate-workflows-remember-community-slug": "aecf602b6e5e4a5a",
   "remove-minimax-music-models": "d441c462a4e3d933"
 }

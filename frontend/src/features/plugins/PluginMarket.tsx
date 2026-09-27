@@ -1,9 +1,9 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, BookOpen, Check, Download, ExternalLink, Link2, Package, Search, ShieldAlert, ShieldCheck, Store, Trash2, Wrench } from "lucide-react";
+import { AlertTriangle, BookOpen, Check, Download, ExternalLink, Link2, Package, Search, ShieldAlert, ShieldCheck, Store, Trash2, Users, Wrench } from "lucide-react";
 import { toast } from "sonner";
 
-import { installPlugin, listPluginMarket, previewPluginInstall, removePluginPackage } from "@/api/client";
+import { installPlugin, listPluginMarket, previewPluginInstall, removePluginPackage, type PluginMarketSource } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import {
   CatalogBadge,
@@ -116,6 +116,8 @@ export function PluginMarketDialog({
   const [urlOpen, setUrlOpen] = React.useState(false);
   const [pending, setPending] = React.useState<(PickTarget & { preview: InstallPreview }) | null>(null);
   const [removing, setRemoving] = React.useState<MarketEntry | null>(null);
+  //: 读哪一份索引:官方(发版产物)还是社区(ADR 0026)。两份**分开列**,不混成一张 —— 社区的条目没有经过我们的发版。
+  const [source, setSource] = React.useState<PluginMarketSource>("official");
 
   //: 关掉再打开是一次新的浏览:不停在上次那页详情、也不留着上次的搜索词。
   React.useEffect(() => {
@@ -126,8 +128,8 @@ export function PluginMarketDialog({
   }, [open]);
 
   const market = useQuery({
-    queryKey: ["plugin-market"],
-    queryFn: () => listPluginMarket(),
+    queryKey: ["plugin-market", source],
+    queryFn: () => listPluginMarket(source),
     retry: false,
   });
 
@@ -245,6 +247,19 @@ export function PluginMarketDialog({
           onSubmit={() => url.trim() && preview.mutate({ url: url.trim(), advertised: "" })}
         />
       }
+      sources={{
+        label: t("pluginMarketSourceLabel"),
+        value: source,
+        onChange: (next) => {
+          setSource(next as PluginMarketSource);
+          setDetailId(null);
+          setFilter("all");
+        },
+        items: [
+          { value: "official", label: t("pluginMarketSourceOfficial") },
+          { value: "community", label: t("pluginMarketSourceCommunity") },
+        ],
+      }}
       filters={
         entries.length > 0
           ? {
@@ -261,7 +276,15 @@ export function PluginMarketDialog({
       }
       //: 拉不到索引、但还有内置的可列:说清楚下面为什么只有这几个,别让人以为市场里就这些。
       notice={
-        indexError && entries.length > 0 ? (
+        source === "community" && !indexError ? (
+          <Alert role="status">
+            <Users size={14} aria-hidden />
+            <span className="grid min-w-0">
+              <AlertTitle>{t("pluginMarketCommunityNoticeTitle")}</AlertTitle>
+              <AlertDescription className="text-muted-foreground">{t("pluginMarketCommunityNotice")}</AlertDescription>
+            </span>
+          </Alert>
+        ) : indexError && entries.length > 0 ? (
           <Alert role="status">
             <AlertTriangle size={14} aria-hidden />
             <span className="grid min-w-0">
@@ -379,6 +402,16 @@ function PickButton({ entry, busy, onPick, size }: { entry: MarketEntry; busy: b
 function StanceBadge({ entry }: { entry: MarketEntry }) {
   const t = useI18n();
   const stance = stanceOf(entry);
+  //: 社区来的**先标来源**:它没经过我们的发版,装之前这一点比「装没装」更要紧。
+  const community = entry.source === "community" ? (
+    <CatalogBadge tone="muted" icon={<Users />}>{t("pluginMarketCommunityBadge")}</CatalogBadge>
+  ) : null;
+  const own = stanceBadgeOf(stance, t);
+  if (community && own) return <span className="flex flex-wrap items-center gap-1">{community}{own}</span>;
+  return community ?? own;
+}
+
+function stanceBadgeOf(stance: Stance, t: ReturnType<typeof useI18n>): React.ReactNode {
   if (stance === "bundled") return <CatalogBadge tone="primary" icon={<Package />}>{t("pluginMarketBundledBadge")}</CatalogBadge>;
   if (stance === "update") return <CatalogBadge tone="warning">{t("pluginMarketHasUpdate")}</CatalogBadge>;
   if (stance === "current") return <CatalogBadge tone="success" icon={<Check />}>{t("pluginMarketInstalledBadge")}</CatalogBadge>;
@@ -484,7 +517,7 @@ function MarketDetail({
     <CatalogDetail
       icon={monogram(entry)}
       title={entry.name || entry.id}
-      badges={stance === "install" ? undefined : <StanceBadge entry={entry} />}
+      badges={stance === "install" && entry.source !== "community" ? undefined : <StanceBadge entry={entry} />}
       meta={
         <>
           v{entry.version}
