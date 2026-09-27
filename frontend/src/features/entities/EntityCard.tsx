@@ -2,10 +2,11 @@ import React from "react";
 
 import { assetThumbnailUrl, type EntitySummary } from "@/api/client";
 import { useI18n } from "@/app/preferences";
+import { cn } from "@/lib/utils";
 import { entityKindIcon } from "@/features/entities/entityMeta";
 
 /** 一张封面卡:封面、名字、参考图和变体的张数、标签。没有封面时是种类的图标。 */
-export function EntityCard({ entity, onOpen }: { entity: EntitySummary; onOpen: () => void }) {
+export function EntityCard({ entity, onOpen, selected = false }: { entity: EntitySummary; onOpen: () => void; selected?: boolean }) {
   const t = useI18n();
   const Icon = entityKindIcon(entity.kind);
   const [broken, setBroken] = React.useState(false);
@@ -17,10 +18,16 @@ export function EntityCard({ entity, onOpen }: { entity: EntitySummary; onOpen: 
     <button
       type="button"
       data-entity-card={entity.id}
+      aria-pressed={selected || undefined}
       onClick={onOpen}
-      className="group grid cursor-pointer gap-3 rounded-lg border-0 bg-transparent p-0 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className="group grid w-full cursor-pointer gap-3 rounded-lg border-0 bg-transparent p-0 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
-      <div className="relative grid aspect-[4/5] place-items-center overflow-hidden rounded-lg border border-border bg-panel-inset text-muted-foreground transition-colors group-hover:border-border-strong">
+      <div
+        className={cn(
+          "relative grid aspect-[4/5] place-items-center overflow-hidden rounded-lg border border-border bg-panel-inset text-muted-foreground transition-colors group-hover:border-border-strong",
+          selected && "border-primary shadow-[0_0_0_1px_var(--primary)] group-hover:border-primary",
+        )}
+      >
         {entity.cover_asset_id && !broken ? (
           <img
             src={assetThumbnailUrl(entity.cover_asset_id)}

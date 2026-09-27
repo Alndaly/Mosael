@@ -8,10 +8,10 @@ import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { ConfirmDialog, RenameDialog } from "@/components/app/modals";
-import { TagsDialog } from "@/features/media/TagsDialog";
-import { ActiveTagChips, MediaTagFilter } from "@/features/media/MediaTagFilter";
+import { TagsDialog } from "@/components/app/TagsDialog";
+import { ActiveTagChips, TagFilter } from "@/components/app/TagFilter";
 import { TagChips } from "@/features/media/TagChips";
-import { TAG_MATCHES, assetTags, matchesTags, tagCounts, type TagMatch } from "@/features/media/assetTags";
+import { TAG_MATCHES, tagsOf, matchesTags, tagCounts, type TagMatch } from "@/lib/tags";
 import { useImagePreview } from "@/components/app/image-preview";
 import { Input } from "@/components/ui/input";
 import { formatTimecode } from "@/domain/timeline/geometry";
@@ -59,7 +59,7 @@ export function MediaPool({
         (kindFilter === "all" || asset.kind === kindFilter) &&
         (query === "" ||
           asset.name.toLowerCase().includes(query) ||
-          assetTags(asset).some((tag) => tag.toLowerCase().includes(query)) ||
+          tagsOf(asset).some((tag) => tag.toLowerCase().includes(query)) ||
           asset.kind.toLowerCase().includes(query)),
     );
   }, [assets, kindFilter, search, tagFilter, tagMatch]);
@@ -139,7 +139,7 @@ export function MediaPool({
             <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <Input size="sm" className="pl-8 text-ui-xs" value={search} placeholder={t("searchAssets")} onChange={(event) => setSearch(event.target.value)} aria-label={t("searchAssets")} />
           </div>
-          {allTags.length > 0 && <MediaTagFilter compact counts={tagCount} value={tagFilter} onChange={setTagFilter} match={tagMatch} onMatchChange={setTagMatch} />}
+          {allTags.length > 0 && <TagFilter compact counts={tagCount} value={tagFilter} onChange={setTagFilter} match={tagMatch} onMatchChange={setTagMatch} />}
         </div>
         <ActiveTagChips value={tagFilter} onChange={setTagFilter} match={tagMatch} />
         {/* 四等分,字放不下就省略 —— 面板最窄 180px 时一格只有三十来像素,不能让字顶出格子。 */}
@@ -251,7 +251,7 @@ function PoolItem({ asset, onAdd }: { asset: Asset; onAdd: () => void }) {
             标签先被截掉,不把行撑出面板。 */}
         <span className="flex min-w-0 items-center gap-1.5">
           <small className="timecode shrink-0">{duration != null ? formatTimecode(duration) : t(asset.kind === "image" ? "kindImage" : asset.kind === "audio" ? "kindAudio" : "kindVideo")}</small>
-          <TagChips tags={assetTags(asset)} tone="surface" className="overflow-hidden" />
+          <TagChips tags={tagsOf(asset)} tone="surface" className="overflow-hidden" />
         </span>
       </div>
       <button

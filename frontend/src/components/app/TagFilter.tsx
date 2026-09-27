@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
-import { TAG_MATCHES, type TagMatch } from "./assetTags";
+import { TAG_MATCHES, type TagMatch } from "@/lib/tags";
 
 /**
  * 按标签筛选素材 —— **可以同时勾几个**。素材库和剪辑页的素材面板共用这一个。
@@ -22,7 +22,7 @@ import { TAG_MATCHES, type TagMatch } from "./assetTags";
  * - `compact`:只有图标,勾了几个就在角上标几 —— 剪辑页素材面板窄,放不下字。勾了哪些、怎么
  *   去掉,由面板在搜索框下面摆一排 {@link ActiveTagChips} 来说。
  */
-export function MediaTagFilter({ counts, value, onChange, match, onMatchChange, compact = false }: {
+export function TagFilter({ counts, value, onChange, match, onMatchChange, compact = false }: {
   /** 标签 → 挂了几条素材;键的顺序就是列出来的顺序(见 `tagCounts`)。 */
   counts: ReadonlyMap<string, number>;
   value: string[];
@@ -83,7 +83,7 @@ export function MediaTagFilter({ counts, value, onChange, match, onMatchChange, 
 
 /**
  * 勾着的标签摆成一排,每个点一下就去掉;两个以上时写明是「同时带有」还是「带有任一」,
- * 末尾一键清空。给 `compact` 的 {@link MediaTagFilter} 配套 —— 图标上的数字只说勾了几个,
+ * 末尾一键清空。给 `compact` 的 {@link TagFilter} 配套 —— 图标上的数字只说勾了几个,
  * 这一排说勾了哪些。
  */
 export function ActiveTagChips({ value, onChange, match }: {

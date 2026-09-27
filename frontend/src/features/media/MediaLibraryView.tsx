@@ -26,11 +26,11 @@ import { EmptyState } from "@/components/layout/EmptyState";
 import { useRecorder } from "@/features/media/recordingContext";
 import { AssetPreviewModal } from "@/features/media/AssetPreviewModal";
 import { useImportMediaFiles } from "@/features/media/useImportMediaFiles";
-import { MediaTagFilter } from "./MediaTagFilter";
+import { TagFilter } from "@/components/app/TagFilter";
 import { SetAsReferenceDialog } from "@/features/entities/AssetEntities";
-import { TAG_MATCHES, assetTags, matchesTags, tagCounts, type TagMatch } from "./assetTags";
+import { TAG_MATCHES, tagsOf, matchesTags, tagCounts, type TagMatch } from "@/lib/tags";
 import { TagChips } from "./TagChips";
-import { TagsDialog } from "@/features/media/TagsDialog";
+import { TagsDialog } from "@/components/app/TagsDialog";
 import { SelectionCheck } from "@/components/app/SelectionCheck";
 import { useMultiSelect } from "@/lib/useMultiSelect";
 import { usePersistentSet, usePersistentTab } from "@/lib/usePersistentTab";
@@ -172,7 +172,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
       const targets = (assets.data ?? []).filter((asset) => selectedIds.has(asset.id));
       await Promise.all(
         targets.map((asset) => {
-          const merged = [...assetTags(asset)];
+          const merged = [...tagsOf(asset)];
           for (const tag of tags) if (!merged.includes(tag)) merged.push(tag);
           return setAssetTags(asset.id, merged);
         }),
@@ -232,7 +232,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
         matchesTags(asset, tagFilter, tagMatch) &&
         (query === "" ||
           asset.name.toLowerCase().includes(query) ||
-          assetTags(asset).some((tag) => tag.toLowerCase().includes(query))),
+          tagsOf(asset).some((tag) => tag.toLowerCase().includes(query))),
     );
     return [...matched].sort((a, b) => compareAssets(a, b, sortKey));
   }, [assets.data, kindFilter, tagFilter, tagMatch, search, sortKey]);
@@ -331,7 +331,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
                   <SelectItem value="duration">{t("sortDuration")}</SelectItem>
                 </SelectContent>
               </Select>
-              {allTags.length > 0 && <MediaTagFilter counts={tagCount} value={tagFilter} onChange={setTagFilter} match={tagMatch} onMatchChange={setTagMatch} />}
+              {allTags.length > 0 && <TagFilter counts={tagCount} value={tagFilter} onChange={setTagFilter} match={tagMatch} onMatchChange={setTagMatch} />}
             </div>
             {/* 竖线只在这一段真的排在别人右边时才画 —— 换行之后它会变成一条悬在行首的线。 */}
             <div className="flex items-center gap-2 border-divider max-lg:w-full lg:border-l lg:pl-4">
@@ -489,7 +489,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
       <TagsDialog
         open={editingTags !== null}
         title={t("editTags")}
-        initialTags={editingTags ? assetTags(editingTags) : []}
+        initialTags={editingTags ? tagsOf(editingTags) : []}
         onCancel={() => setEditingTags(null)}
         onSubmit={(tags) => editingTags && saveTags.mutate({ id: editingTags.id, tags })}
       />
@@ -570,7 +570,7 @@ function AssetTile({ asset, selected = false, list = false }: { asset: Asset; se
           </span>
         )}
         {/* 标签叠在缩略图左下角(而非信息区),这样有无标签的卡片信息区一样高、栅格不错位。 */}
-        <TagChips tags={assetTags(asset)} tone="overlay" className="absolute bottom-1.5 left-1.5 max-w-[70%] flex-wrap" />
+        <TagChips tags={tagsOf(asset)} tone="overlay" className="absolute bottom-1.5 left-1.5 max-w-[70%] flex-wrap" />
       </div>
       <div className="grid min-w-0 flex-1 gap-1.5 px-0.5">
         <strong className="truncate text-ui-md font-semibold" title={asset.name}>

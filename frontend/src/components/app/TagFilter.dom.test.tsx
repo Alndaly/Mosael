@@ -6,8 +6,8 @@
 import React from "react";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { expect, it, vi } from "vitest";
-import { ActiveTagChips, MediaTagFilter } from "./MediaTagFilter";
-import type { TagMatch } from "./assetTags";
+import { ActiveTagChips, TagFilter } from "@/components/app/TagFilter";
+import type { TagMatch } from "@/lib/tags";
 
 // 其余 key 原样返回;「去掉标签」要带上是哪个标签,给它留个占位。
 vi.mock("@/app/preferences", () => ({ useI18n: () => (key: string) => (key === "mediaRemoveTag" ? "remove {tag}" : key) }));
@@ -20,7 +20,7 @@ function Harness({ change, compact = false }: { change: (value: string[]) => voi
   const onChange = (next: string[]) => { change(next); setValue(next); };
   return (
     <>
-      <MediaTagFilter counts={COUNTS} value={value} onChange={onChange} match={match} onMatchChange={setMatch} compact={compact} />
+      <TagFilter counts={COUNTS} value={value} onChange={onChange} match={match} onMatchChange={setMatch} compact={compact} />
       {compact && <ActiveTagChips value={value} onChange={onChange} match={match} />}
       <output data-testid="match">{match}</output>
     </>
