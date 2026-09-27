@@ -124,6 +124,25 @@ def list_entities(
     return rows
 
 
+def find_by_name(db: Session, workspace_id: str, kind: str, name: str) -> Entity | None:
+    """按种类和名字找一个资产(母体;名字不分大小写、不计首尾空白)。同名的有几个时取最近改过的那个。
+
+    「认已有的资产」靠它:一部片子的剧本里写着「林小满」,资产库里有这个人物,就用它的参考图,不再重画一遍。
+    """
+    if kind not in KINDS:
+        raise EntityDomainError("entityErr_kind", kinds=" / ".join(KINDS))
+    wanted = " ".join(str(name or "").split()).lower()
+    if not wanted:
+        return None
+    stmt = (
+        select(Entity)
+        .where(Entity.workspace_id == workspace_id, Entity.kind == kind, Entity.parent_id.is_(None))
+        .where(func.lower(func.trim(Entity.name)) == wanted)
+        .order_by(Entity.updated_at.desc(), Entity.id)
+    )
+    return db.scalars(stmt).first()
+
+
 def counts_for(db: Session, entity_ids: list[str]) -> tuple[dict[str, int], dict[str, int], dict[str, str]]:
     """一批资产的参考图张数、变体个数、第一张参考图(没有封面时的封面)。列表页一次查齐,不逐个问。"""
     if not entity_ids:

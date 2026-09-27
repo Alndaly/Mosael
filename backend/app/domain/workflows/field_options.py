@@ -303,13 +303,17 @@ def _sequence_tracks(db: Session, ctx: OptionContext) -> list[Option]:
     return [{"value": row.id, "label": f"{row.name} · {kind(row.kind)}"} for row in rows]
 
 
-def _entities(db: Session, ctx: OptionContext) -> list[Option]:
-    """资产库里的人物 / 场景 / 道具(含变体),按最近改过的排。标签是「种类 · 名字」,变体带上母体的名字。"""
+def _entities(db: Session, ctx: OptionContext, kind: str = "") -> list[Option]:
+    """资产库里的人物 / 场景 / 道具(含变体),按最近改过的排。标签是「种类 · 名字」,变体带上母体的名字。
+
+    `entities.<种类>` 只列那一种:字段声明点名种类(「选一个人物」),和选 3D 场景同一种下拉(ADR 0027 §3)。
+    """
     from app.db.models import Entity
 
-    rows = list(db.scalars(
-        select(Entity).where(Entity.workspace_id == ctx.workspace_id).order_by(Entity.updated_at.desc())
-    ))
+    stmt = select(Entity).where(Entity.workspace_id == ctx.workspace_id)
+    if kind:
+        stmt = stmt.where(Entity.kind == kind)
+    rows = list(db.scalars(stmt.order_by(Entity.updated_at.desc())))
     names = {row.id: row.name for row in rows}
 
     def label(row: Entity) -> str:
@@ -319,8 +323,19 @@ def _entities(db: Session, ctx: OptionContext) -> list[Option]:
     return [{"value": row.id, "label": label(row)} for row in rows]
 
 
+def _entity_roles(db: Session, ctx: OptionContext) -> list[Option]:
+    """参考图的角度 / 用途(正面、三视图、设定图……)。名字在后端文案表里,按读的人的语言。"""
+    from app.domain.entities.catalog import ROLES
+
+    return [{"value": role, "label": t(f"entityRole_{role}", ctx.locale)} for role in ROLES]
+
+
 SOURCES: dict[str, Source] = {
     "entities": _entities,
+    "entities.character": lambda db, ctx: _entities(db, ctx, "character"),
+    "entities.location": lambda db, ctx: _entities(db, ctx, "location"),
+    "entities.prop": lambda db, ctx: _entities(db, ctx, "prop"),
+    "entity_roles": _entity_roles,
     "scenes": _scenes,
     "scene_shots": _scene_shots,
     "projects": _projects,

@@ -359,6 +359,14 @@ _FIELD_LABELS = {
     "render": "wfField_render",
     "source_group": "wfField_source_group",
     "entity_ids": "wfField_entity_ids",
+    "entity_id": "wfField_entity_id",
+    "found": "wfField_found",
+    "voice_engine": "wfField_voice_engine",
+    "voice_id": "wfField_voice_id",
+    "created": "wfField_created",
+    "added": "wfField_added",
+    "role": "wfField_role",
+    "if_exists": "wfField_if_exists",
 }
 
 
@@ -1309,6 +1317,40 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
             "limit": {"advanced": True, "type": "number", "description": "wfNode_asset_query_limit"},
         },
         "outputs": ["assets", "ids", "count"],
+    },
+    #: 资产库(ADR 0027 阶段 4):取一个人物 / 场景 / 道具交给下游,或把画好的图存回去。「从主题到完整视频」
+    #: 先按名字取(取不到 found = 0 再去画),画完存 —— 下一部片子里同一个角色是同一张脸。
+    "entity_get": {
+        "external": False,
+        "category": "wfCat_asset",
+        "label": "wfNode_entity_get",
+        "description": "wfNode_entity_get_desc",
+        "config": {
+            "entity_id": {"type": "template", "options_from": "entities", "description": "wfNode_entity_get_entity_id"},
+            "kind": {"type": "string", "options": ["character", "location", "prop"], "description": "wfNode_entity_get_kind"},
+            "name": {"type": "template", "description": "wfNode_entity_get_name"},
+            "limit": {"advanced": True, "type": "number", "description": "wfNode_entity_get_limit"},
+        },
+        "outputs": ["entity_id", "found", "name", "description", "prompt", "asset_ids", "asset_id", "voice_engine", "voice_id"],
+        "output_types": {"found": "number", "name": "text", "description": "text", "prompt": "text"},
+    },
+    "entity_save": {
+        "external": False,
+        "category": "wfCat_asset",
+        "label": "wfNode_entity_save",
+        "description": "wfNode_entity_save_desc",
+        "config": {
+            "kind": {"type": "string", "required": True, "options": ["character", "location", "prop"], "description": "wfNode_entity_save_kind"},
+            "name": {"type": "template", "required": True, "description": "wfNode_entity_save_name"},
+            "prompt": {"type": "template", "description": "wfNode_entity_save_prompt"},
+            "description": {"type": "template", "description": "wfNode_entity_save_description"},
+            "asset_ids": {"type": "template", "description": "wfNode_entity_save_asset_ids", "media": ["image", "video"]},
+            "role": {"type": "string", "options_from": "entity_roles", "description": "wfNode_entity_save_role"},
+            "tags": {"advanced": True, "type": "template", "description": "wfNode_entity_save_tags"},
+            "if_exists": {"advanced": True, "type": "string", "default": "merge", "options": ["merge", "new"], "description": "wfNode_entity_save_if_exists"},
+        },
+        "outputs": ["entity_id", "created", "added", "name"],
+        "output_types": {"created": "number", "added": "number", "name": "text"},
     },
     "asset_tag": {
         "external": False,

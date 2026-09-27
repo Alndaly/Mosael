@@ -93,6 +93,19 @@ Models that build a reusable subject first (such as Kling) get one subject per m
 images with the front view first. The subject's name is derived from the image contents, so using the same character again
 finds the same subject instead of creating a duplicate.
 
+## Assets in workflows
+
+Workflows have two asset-library nodes under "Assets & timeline":
+
+- **Get from asset library**: pick an asset, or look it up by kind + name. It outputs the prompt descriptor, references (in
+  the order generation picks them), cover and voice, ready to feed generation, plugin and other nodes. When a name lookup
+  finds nothing, **Found** is 0 — branch on it with a Condition to draw it first.
+- **Save to asset library**: save a set of drawn images (a turnaround, concept art…) as a character / location / prop. If one
+  of that kind and name exists, it's merged: only missing references are added, and the prompt descriptor and description are
+  filled only if empty — edits by people aren't overwritten. You can also choose "always create a new one".
+
+Together they "reuse what exists, save what's new": the same character in your second film has the same face.
+
 ## The asset item on boards
 
 **Add → Reference → Asset** places an **asset item** on a board: cover, name and a kind badge. Connect it into an image or

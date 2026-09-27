@@ -67,6 +67,9 @@ NODE_TO_TOOL: dict[str, str] = {
     "note_create": "create_note",
     "asset_tag": "update_asset_tags",
     "asset_update": "update_asset",
+    "entity_get": "get_entity",
+    #: 智能体是先 create_entity、再逐张 attach_entity_reference;节点一次建好并挂上 —— 同一个目标。
+    "entity_save": "create_entity",
     "project_create": "create_project",
     # 画布上的自动成片便利节点会顺手建立默认序列和轨道；智能体侧对应的用户目标仍是新建项目。
     "project_sequence_create": "create_project",

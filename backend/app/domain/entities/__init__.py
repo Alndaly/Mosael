@@ -27,6 +27,7 @@ from app.domain.entities.library import (
     entities_of_asset,
     entity_usage,
     entity_workspace,
+    find_by_name,
     forget_asset,
     get_entity,
     list_entities,
@@ -38,7 +39,7 @@ from app.domain.entities.library import (
     variants_of,
 )
 from app.domain.entities.catalog import parse_entity_ids
-from app.domain.entities.mentions import Expansion, attach_entities
+from app.domain.entities.mentions import Expansion, attach_entities, generation_profile
 
 __all__ = [
     "ATTACH_PRIORITY",
@@ -63,7 +64,9 @@ __all__ = [
     "entities_of_asset",
     "entity_usage",
     "entity_workspace",
+    "find_by_name",
     "forget_asset",
+    "generation_profile",
     "get_entity",
     "list_entities",
     "parse_entity_ids",

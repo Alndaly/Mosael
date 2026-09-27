@@ -1,4 +1,6 @@
 import {
+  UserRoundPlus,
+  UsersRound,
   AlignLeft,
   AppWindow,
   AudioLines,
@@ -106,6 +108,9 @@ const NODE_ICONS: Record<string, LucideIcon> = {
   loop_foreach: Repeat,
   loop_while: RefreshCw,
   asset_query: Filter,
+  //: 资产库的两个节点,和侧栏「资产」同一族图标。
+  entity_get: UsersRound,
+  entity_save: UserRoundPlus,
   note_search: Search,
   note_read: BookOpen,
   note_create: BookPlus,

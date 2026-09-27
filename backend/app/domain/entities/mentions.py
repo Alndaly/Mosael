@@ -88,6 +88,13 @@ def _mention(db: Session, entity: Entity) -> _Mention:
     )
 
 
+def generation_profile(db: Session, entity: Entity) -> tuple[str, str, list[str]]:
+    """生成时这个资产长什么样:(显示名, 提示词描述, 按挑图先后排好的图片参考图)。和 `@资产` 同一份规矩 ——
+    变体带着母体的描述、自己没图时用母体的图。工作流的「取资产」节点交出的就是它。"""
+    mention = _mention(db, entity)
+    return mention.name, mention.descriptor, list(mention.images)
+
+
 def resolve_mentions(db: Session, workspace_id: str, entity_ids: list[str]) -> list[Entity]:
     """点名的资产必须都在这个工作区。别处的 id 当场拒 —— 不能借一次生成读到别的工作区的参考图。"""
     if len(entity_ids) > MAX_MENTIONS:
