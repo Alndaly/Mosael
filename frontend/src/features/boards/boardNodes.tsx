@@ -462,7 +462,8 @@ function Generating({ item, text, onStop, radius = CELL_INNER_RADIUS }: { item: 
   const progress = useJobProgress(itemJobId(item), itemIsRunning(item));
   return (
     <div role="status" aria-busy="true" className={cn("relative h-full w-full overflow-hidden", radius)}>
-      <Skeleton surface className={cn("absolute inset-0 h-full w-full", radius)} />
+      {/* 角交给外面这层裁(overflow-hidden + radius):Skeleton 自带 rounded-md,只传「上两角」压不掉它的下两角。 */}
+      <Skeleton surface className="absolute inset-0 h-full w-full rounded-none" />
       {progress > 0 && (
         <div className="absolute inset-x-0 top-0 h-0.5 bg-primary/15">
           <div className="h-full bg-primary transition-[width]" style={{ width: `${Math.round(progress * 100)}%` }} />

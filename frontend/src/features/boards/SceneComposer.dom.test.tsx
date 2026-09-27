@@ -217,6 +217,9 @@ describe("3D 场景格", () => {
       const block = pick();
       expect(block.className).toContain("rounded-t-");
       expect(block.className).not.toMatch(/(^|\s)rounded-\[/);
+      //: 扫光那层自己也不能四角都圆 —— 它铺满这一块,角是外面那层裁出来的(上一版只查了外层,扫光的下两角照样圆)。
+      block.querySelectorAll<HTMLElement>('[data-slot="skeleton"]').forEach((skeleton) =>
+        expect(skeleton.className).not.toMatch(/(^|\s)rounded-(sm|md|lg|xl|\[)/));
       unmount();
     }
   });
