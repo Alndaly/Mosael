@@ -3,7 +3,7 @@ import { noteHref, type NoteReference } from "@/api/domains/notes";
 import { SaveToNote } from "@/features/notes/SaveToNote";
 import { Handle, NodeResizer, Position, useStore, type NodeProps } from "@xyflow/react";
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, BookOpen, ExternalLink, Loader2, RefreshCw, Replace, Box, Ban, Clock3, Film as FilmIcon, Group, Image as ImageIcon, Music, Plus, Square as SquareIcon, StickyNote, UsersRound, type LucideIcon } from "lucide-react";
+import { AlertTriangle, BookOpen, ExternalLink, Loader2, RefreshCw, Box, Ban, Clock3, Film as FilmIcon, Group, Image as ImageIcon, Music, Plus, Square as SquareIcon, StickyNote, UsersRound, type LucideIcon } from "lucide-react";
 
 import { entityKeys, getEntity, getJob, isNodeProducer, type BoardItem, type BuiltinProducer } from "@/api/client";
 import { EntityThumb } from "@/features/entities/EntityMention";
@@ -734,7 +734,6 @@ function DocumentNode({ data, selected }: NodeProps) {
     item,
     document,
     commentMode,
-    onPickDocument,
     onRefreshDocument,
     refreshingDocument,
   } = nodeData;
@@ -742,9 +741,19 @@ function DocumentNode({ data, selected }: NodeProps) {
   const ref = document?.reference;
   const iconButton =
     "nodrag nopan inline-flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground disabled:opacity-40";
+  //: 「让 AI 写」在写这一篇(不是跑它的一项能力,那一种挂在底边的运行态上):和空槽生成同一个样子 ——
+  //: 排队中、扫光占位 + 「生成中」+ 这次的要求 + 停止。此前文档格照旧显示「还没有内容」,看不出在写。
+  const status = itemRunStatus(item);
+  const writing = !runningAbility(item) && (status === "queued" || status === "running");
+  const writeFailed = !runningAbility(item) && status === "failed";
+  const stop = nodeData.onStop && !commentMode && writing ? nodeData.onStop : undefined;
+  const state = useRunState(item);
   return (
     //: 选中**不加彩色描边** —— 四角的缩放点已经说明「选中了」(图片、视频、便签都是这一条)。
-    <div className="group relative flex h-full w-full flex-col rounded-xl border border-border bg-panel shadow-sm">
+    <div
+      data-board-run-status={state["data-board-run-status"]}
+      className={cn("group relative flex h-full w-full flex-col rounded-xl border border-border bg-panel shadow-sm", state.className)}
+    >
       <NodeResizer
         minWidth={260}
         minHeight={200}
@@ -765,30 +774,32 @@ function DocumentNode({ data, selected }: NodeProps) {
         >
           {ref?.title || item.text || t("boardKindDocument")}
         </span>
-        {!commentMode && (
-          <button
-            className={iconButton}
-            title={t("documentReplace")}
-            aria-label={t("documentReplace")}
-            onClick={() => onPickDocument?.(item.id)}
-          >
-            <Replace size={14} />
-          </button>
-        )}
       </header>
       )}
-      {!item.note_id ? (
-        <button
-          disabled={commentMode}
-          className="nodrag nopan flex min-h-0 flex-1 flex-col items-center justify-center gap-3 p-5 text-center text-ui-xs text-muted-foreground transition-colors hover:bg-secondary/40"
-          onClick={() => onPickDocument?.(item.id)}
+      {writing ? (
+        <div className="relative min-h-0 flex-1 p-1" data-document-writing="">
+          {status === "queued" ? (
+            <Queued item={item} text={item.form?.prompt} onStop={stop} />
+          ) : (
+            <Generating item={item} text={item.form?.prompt} onStop={stop} />
+          )}
+        </div>
+      ) : !item.note_id ? (
+        //: **一块安静的空状态,不是按钮**:点格子就是选中它(和空的图片格一样);引用哪一篇、让 AI 写一篇,
+        //: 都在选中之后上方的操作条里 —— 此前整格是「选择笔记」按钮,想选中、拖动、让 AI 写都先弹出挑笔记。
+        <div
+          data-document-empty=""
+          className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 p-5 text-center text-ui-xs text-muted-foreground"
         >
           <BookOpen size={28} strokeWidth={1.3} />
-          <span className="font-medium text-foreground">
-            {t("documentPick")}
-          </span>
+          <span className="font-medium text-foreground">{t("documentEmptyTitle")}</span>
           <span>{t("documentEmptyHint")}</span>
-        </button>
+          {writeFailed && (
+            <span role="alert" className="max-w-full text-destructive [overflow-wrap:anywhere]">
+              {[t(runCopy(item).failed), itemError(item)].filter(Boolean).join(" · ")}
+            </span>
+          )}
+        </div>
       ) : document?.pending ? (
         <div
           className="m-auto p-4 text-ui-xs text-muted-foreground"

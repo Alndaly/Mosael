@@ -168,6 +168,8 @@ const SLOT_PRODUCER: Partial<Record<BoardItem["kind"], BuiltinProducer>> = {
   video: "generate",
   audio: "speak",
   scene: "scene_render",
+  //: 文档格也会「让 AI 写」:写出一篇笔记(和后端 SLOT_PRODUCERS 同一张表)。
+  document: "write",
 };
 
 /**
@@ -217,6 +219,8 @@ export interface BoardRunForms {
     source_assets?: string[];
     /** 上游便签给的材料。 */
     context?: string[];
+    /** 正文里 `@` 到的资产;连进来的资产格由服务端按连线并进去。 */
+    entity_ids?: string[];
   };
   speak: {
     text: string;

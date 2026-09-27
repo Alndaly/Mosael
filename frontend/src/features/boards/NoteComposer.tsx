@@ -17,6 +17,8 @@ import { assetFileUrl, assetPreviewUrl, assetThumbnailUrl } from "@/api/client";
 import { useImagePreview } from "@/components/app/image-preview";
 import { useI18n } from "@/app/preferences";
 import { BAR_PICKER, BoardComposerShell } from "@/features/boards/BoardComposerShell";
+import { EntityThumb, matchEntities, useMentionableEntities } from "@/features/entities/EntityMention";
+import { entityDisplayName } from "@/features/entities/entityMeta";
 
 /**
  * 便签的「写文案」面板。
@@ -27,6 +29,9 @@ import { BAR_PICKER, BoardComposerShell } from "@/features/boards/BoardComposerS
  * 起点。
  *
  * 模型列的是 **chat 能力 + automation 执行面**下的模型:API Key 走 direct,OAuth 走无工具 gateway。
+ *
+ * **文档格也用它**:写出来的是一篇笔记(空的新建,引用着的写成新一版,见后端 actions.write_on_board)。
+ * 资产(连进来的资产格、`@` 到的)和生成格同一套:描述当材料,前几张参考图给模型看。
  */
 export function NoteComposer({
   item,
@@ -34,6 +39,7 @@ export function NoteComposer({
   workspaceId,
   upstreamAssets,
   upstreamTexts,
+  upstreamEntities,
   onWrite,
   onFormChange,
 }: {
@@ -45,12 +51,15 @@ export function NoteComposer({
   upstreamAssets?: string[];
   /** 上游便签给的文字。作为**材料**发过去,和「要求」分开。 */
   upstreamTexts?: string[];
+  /** 连进这一格的资产格引用的资产。服务端按连线把它们带上(描述 + 参考图);这里摆出来、排进 `@` 菜单最前。 */
+  upstreamEntities?: string[];
   onWrite: (input: {
     prompt: string;
     providerProfileId: string;
     model: string;
     assets: string[];
     context: string[];
+    entityIds: string[];
   }) => Promise<unknown>;
   onFormChange: (form: NonNullable<BoardItem["form"]>) => void;
 }) {
@@ -58,6 +67,16 @@ export function NoteComposer({
   const { openImagePreview } = useImagePreview();
   const [prompt, setPrompt] = React.useState(item.form?.prompt ?? "");
   const [mentioned, setMentioned] = React.useState<string[]>(item.form?.mentioned_asset_ids ?? []);
+  const [mentionedEntities, setMentionedEntities] = React.useState<string[]>(item.form?.mentioned_entity_ids ?? []);
+  const mentionable = useMentionableEntities(workspaceId);
+  const entityCandidates = React.useCallback(
+    (query: string) => matchEntities(mentionable.data, query).slice(0, 6),
+    [mentionable.data],
+  );
+  //: 连进来的 + 正文里 @ 到的资产,摆在上面那一排 —— 连了一个人物进来却什么都看不到,就像连线没起作用。
+  const shownEntities = [...new Set([...(upstreamEntities ?? []), ...mentionedEntities])].flatMap(
+    (id) => mentionable.data?.find((one) => one.id === id) ?? [],
+  );
   const [promptDocument, setPromptDocument] = React.useState<PromptDocument | undefined>(
     item.form?.prompt_document as PromptDocument | undefined,
   );
@@ -106,6 +125,7 @@ export function NoteComposer({
     provider_profile_id: current?.provider_profile_id ?? item.form?.provider_profile_id,
     model: current?.model ?? item.form?.model,
     mentioned_asset_ids: mentioned,
+    mentioned_entity_ids: mentionedEntities,
   });
   const lastSavedForm = React.useRef(JSON.stringify(item.form ?? {}));
   React.useEffect(() => {
@@ -139,12 +159,15 @@ export function NoteComposer({
         model: current.model,
         assets,
         context: upstreamTexts ?? [],
+        //: 连进来的资产格服务端按连线取,这里只交正文里 @ 到的(和生成格同一条规矩)。
+        entityIds: mentionedEntities,
       }),
     );
   };
 
-  //: 有字和没字问的**不是同一件事**:一个是「写什么」,一个是「怎么改」。
-  const rewriting = Boolean((item.text ?? "").trim());
+  //: 有字和没字问的**不是同一件事**:一个是「写什么」,一个是「怎么改」。文档格的「字」是它引用的那篇笔记。
+  const document = item.kind === "document";
+  const rewriting = document ? Boolean(item.note_id) : Boolean((item.text ?? "").trim());
   const verb = t(rewriting ? "boardRewrite" : "boardWrite");
 
   return (
@@ -154,8 +177,20 @@ export function NoteComposer({
       //: 连过来的素材摆在最上面。**看得见才知道它在起作用** —— 一条线连过来之后表单上
       //: 什么都不变的话,用户不知道模型到底看没看见那张图。点一下开大图,叉叉解开引用。
       upstream={
-        referenced.length > 0
-          ? referenced.map((asset) => (
+        referenced.length > 0 || shownEntities.length > 0 ? (
+          <>
+            {shownEntities.map((entity) => (
+              <span
+                key={entity.id}
+                data-linked-entity={entity.id}
+                title={t("boardLinkedEntityHint")}
+                className="inline-flex h-8 max-w-[14rem] shrink-0 items-center gap-1.5 rounded-md bg-primary/10 pl-1 pr-2 text-ui-xs text-primary"
+              >
+                <EntityThumb entity={entity} className="h-6 w-6 rounded-sm" />
+                <span className="min-w-0 truncate">{entityDisplayName(entity)}</span>
+              </span>
+            ))}
+            {referenced.map((asset) => (
               <span key={asset.id} className="group/thumb relative shrink-0">
                 <button
                   type="button"
@@ -191,8 +226,9 @@ export function NoteComposer({
                   </button>
                 )}
               </span>
-            ))
-          : null
+            ))}
+          </>
+        ) : null
       }
       bar={
         options.length === 0 ? (
@@ -223,14 +259,25 @@ export function NoteComposer({
       <PromptEditor
         value={prompt}
         document={promptDocument}
-        onChange={(next, assets, document) => {
+        onChange={(next, assets, nextDocument, entityIds) => {
           setPrompt(next);
           setMentioned(assets);
-          setPromptDocument(document);
+          setPromptDocument(nextDocument);
+          setMentionedEntities(entityIds);
         }}
-        //: 用同一句提示语的话,用户会以为它要把整篇重写一遍。
-        placeholder={t(rewriting ? "boardRewritePlaceholder" : "boardWritePlaceholder")}
+        //: 用同一句提示语的话,用户会以为它要把整篇重写一遍。文档格说的是「一篇」。
+        placeholder={t(
+          document
+            ? rewriting
+              ? "boardRewriteDocumentPlaceholder"
+              : "boardWriteDocumentPlaceholder"
+            : rewriting
+              ? "boardRewritePlaceholder"
+              : "boardWritePlaceholder",
+        )}
         candidates={candidates}
+        entities={entityCandidates}
+        linkedEntities={upstreamEntities}
         onSubmit={send}
         emptyHint={() => t("boardNoAssetsToMention")}
       />

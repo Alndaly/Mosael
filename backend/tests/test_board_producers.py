@@ -49,7 +49,8 @@ def test_内置的产出者各自挂在该挂的格子上() -> None:
 
     #: 生成挂在哪由生成目录说了算,不在画板这边另写一份。
     assert by_id["generate"].hosts == tuple(KINDS)
-    assert by_id["write"].hosts == ("note",)
+    #: 便签写一段字,文档格写一篇笔记。
+    assert by_id["write"].hosts == ("note", "document")
     assert by_id["speak"].hosts == ("audio",)
     assert set(by_id["trim"].hosts) == {"video", "audio"}
     assert by_id["scene_render"].hosts == ("scene",)
@@ -79,8 +80,8 @@ def test_新放下的一格挂哪个产出者() -> None:
     from app.domain.boards.producer_ids import SLOT_PRODUCERS
 
     assert SLOT_PRODUCERS == {"note": "write", "image": "generate", "video": "generate", "audio": "speak",
-                              "scene": "scene_render"}
-    assert all(SLOT_PRODUCERS.get(kind) is None for kind in ("frame", "document"))
+                              "scene": "scene_render", "document": "write"}
+    assert SLOT_PRODUCERS.get("frame") is None, "分组框不产出"
 
 
 def test_空槽的缺省产出者和注册表对得上() -> None:

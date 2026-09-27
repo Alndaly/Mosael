@@ -37,6 +37,9 @@ DERIVED_BUILTINS = frozenset({SCENE_PRODUCER})
 #: 挂得了的每一种格子都在表里 —— 由 tests/test_board_producers.py 钉着。前端 api/domains/boards.ts 的 SLOT_PRODUCER 抄的是同一张。
 SLOT_PRODUCERS: dict[str, str] = {
     "note": NOTE_PRODUCER, "image": "generate", "video": "generate", "audio": "speak", "scene": SCENE_PRODUCER,
+    #: 文档格也会「让 AI 写」:写出来的是一篇笔记(空的新建一篇,引用着的写成它的新一版),
+    #: 和便签同一个写字产出者 —— 看着上游的图、资产、便签写(见 actions.write_on_board)。
+    "document": NOTE_PRODUCER,
 }
 
 

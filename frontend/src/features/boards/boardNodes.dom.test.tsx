@@ -312,3 +312,20 @@ it("滚轮只在选中的那一格里滚它自己;没选中的文档、便签旁
   expect(saveLayer!.querySelector("button")).not.toBeNull();
   expect(note.container.querySelector(".nowheel"), "便签选中了、没在编辑:没有哪一块要截住滚轮").toBeNull();
 });
+
+it("文档格在「让 AI 写」时:排队、扫光占位 + 这次的要求,不再显示「还没有内容」;写挂了在空状态下说原因", () => {
+  const writing = renderNode("document", "running", { text: undefined, form: { producer: "write", prompt: "描述这份资产" } });
+  const body = writing.container.querySelector("[data-document-writing]");
+  expect(body, "写作中换成占位").not.toBeNull();
+  expect(body!.querySelector('[role="status"][aria-busy="true"]')).not.toBeNull();
+  expect(body!.textContent).toContain("描述这份资产");
+  expect(writing.container.querySelector("[data-document-empty]")).toBeNull();
+  cleanup();
+
+  const queued = renderNode("document", "queued", { text: undefined, form: { producer: "write", prompt: "写一篇" } });
+  expect(queued.container.querySelector("[data-document-writing]")!.textContent).toContain("等待执行");
+  cleanup();
+
+  const failed = renderNode("document", "failed", { text: undefined, form: { producer: "write" } });
+  expect(failed.container.querySelector("[data-document-empty] [role=alert]")!.textContent).toContain("上游拒绝了请求");
+});

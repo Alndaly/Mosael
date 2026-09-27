@@ -1556,6 +1556,38 @@ def _migrate_blender_models_are_named_after_their_scene() -> None:
             conn.execute(text("UPDATE scene_3d_models SET name = :name WHERE id = :id"), {"name": name[:160], "id": model_id})
 
 
+def _migrate_board_documents_can_be_written() -> None:
+    """画板上的文档格也会「让 AI 写」(写出一篇笔记):每一格还没写明产出者的文档格写明 `write`。
+
+    新放下的文档格由 normalize 按 producer_ids.SLOT_PRODUCERS 补;存着的画布在这里补一次,面板照它挂 ——
+    不补的话老画板上的文档格没有这个按钮,直到哪一次保存碰巧把它补上。改到的板版本号 +1。
+    """
+    if "boards" not in set(inspect(engine).get_table_names()):
+        return
+    with engine.begin() as conn:
+        for board_id, raw, revision in conn.execute(text("SELECT id, canvas, revision FROM boards")).fetchall():
+            try:
+                canvas = json.loads(raw) if isinstance(raw, str) else raw
+            except (TypeError, ValueError):
+                continue
+            if not isinstance(canvas, dict) or not isinstance(canvas.get("items"), list):
+                continue
+            changed = False
+            for item in canvas["items"]:
+                if not isinstance(item, dict) or item.get("kind") != "document":
+                    continue
+                form = item.get("form") if isinstance(item.get("form"), dict) else {}
+                if form.get("producer"):
+                    continue
+                item["form"] = {**form, "producer": "write"}
+                changed = True
+            if changed:
+                conn.execute(
+                    text("UPDATE boards SET canvas = :canvas, revision = :revision WHERE id = :id"),
+                    {"canvas": json.dumps(canvas, ensure_ascii=False), "revision": int(revision or 0) + 1, "id": board_id},
+                )
+
+
 def _migrate_drop_the_community_integration() -> None:
     """把桌面端接入社区时加的东西删掉 —— 社区能力整体从应用里拿掉了(2026-09-27,维护者:「先把资产库做好」)。
 
@@ -4996,6 +5028,7 @@ def migration_plan() -> MigrationPlan:
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_entity_voices_name_their_engine),
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_entity_reference_roles_follow_kind),
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_blender_models_are_named_after_their_scene),
+            *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_board_documents_can_be_written),
             *_steps(
                 MigrationPhase.FILESYSTEM,
                 _migrate_shared_venvs,

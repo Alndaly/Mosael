@@ -29,6 +29,8 @@ export async function runNoteWrite({
     const written = board.canvas.items.find((one) => one.id === run.item_id);
     patch(run.item_id, {
       ...(written?.text !== undefined ? { text: written.text } : {}),
+      //: 文档格写出来的是一篇笔记(的一版):钉上它,格子照它取正文。
+      ...(written?.note_id ? { note_id: written.note_id, note_revision: written.note_revision } : {}),
       form: written?.form ?? {
         prompt: "",
         provider_profile_id: run.form.provider_profile_id,

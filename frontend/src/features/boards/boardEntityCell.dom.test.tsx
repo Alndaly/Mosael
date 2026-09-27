@@ -12,10 +12,12 @@ import type { BoardItem, EntitySummary, GenerationOption } from "@/api/client";
  * (连进来的资产格由服务端按连线并进去,见后端 boards/actions.upstream_entities)。
  */
 
-const api = vi.hoisted(() => ({ getEntity: vi.fn(), listEntities: vi.fn() }));
+const api = vi.hoisted(() => ({ getEntity: vi.fn(), listEntities: vi.fn(), listAssets: vi.fn(async () => []), listCapabilityModels: vi.fn() }));
 vi.mock("@/api/client", () => ({
   ...api,
   assetThumbnailUrl: (id: string) => `/thumb/${id}`,
+  assetPreviewUrl: (id: string) => `/preview/${id}`,
+  assetFileUrl: (id: string) => `/file/${id}`,
   getJob: vi.fn(),
   isNodeProducer: () => false,
   entityKeys: {
@@ -40,6 +42,7 @@ vi.mock("@xyflow/react", () => ({
   useStore: (selector: (state: { transform: [number, number, number] }) => unknown) => selector({ transform: [0, 0, 1] }),
 }));
 vi.mock("@/components/app/asset-preview", () => ({ AssetInlinePreview: () => <div /> }));
+vi.mock("@/components/app/image-preview", () => ({ useImagePreview: () => ({ openImagePreview: vi.fn() }) }));
 vi.mock("@/features/boards/BoardPlayer", () => ({ BoardAudio: () => <div />, BoardVideo: () => <div /> }));
 
 const editorProps = vi.hoisted(() => ({ current: null as null | Record<string, unknown> }));
@@ -55,6 +58,7 @@ vi.mock("./PromptEditor", () => ({
 
 import { BOARD_NODE_TYPES } from "./boardNodes";
 import { NodeComposer } from "./NodeComposer";
+import { NoteComposer } from "./NoteComposer";
 
 afterEach(() => {
   cleanup();
@@ -157,5 +161,51 @@ describe("生成格上的 @资产", () => {
     });
     expect(chip.textContent).toContain("竹林小径");
     expect(chip.getAttribute("title")).toBe("boardLinkedEntityHint");
+  });
+});
+
+
+describe("便签、文档格的「让 AI 写」认资产", () => {
+  const chat = [{ provider_profile_id: "p", model: "k3", display_name: "K3" }];
+
+  it("连进来的资产摆在上面那一排;正文里 @ 的资产随提交交出去", async () => {
+    const zhang = { id: "e1", kind: "character", name: "小美", parent_name: "", cover_asset_id: "c1" } as EntitySummary;
+    const street = { id: "e2", kind: "location", name: "竹林小径", parent_name: "", cover_asset_id: null } as EntitySummary;
+    api.listEntities.mockResolvedValue([zhang, street]);
+    api.listCapabilityModels.mockResolvedValue(chat);
+    const onWrite = vi.fn(async () => undefined);
+    mount(
+      <NoteComposer
+        item={{ id: "n1", kind: "note", x: 0, y: 0 } as BoardItem}
+        busy={false}
+        workspaceId="ws"
+        upstreamEntities={["e1"]}
+        onWrite={onWrite}
+        onFormChange={vi.fn()}
+      />,
+    );
+    const chip = await waitFor(() => {
+      const found = document.querySelector('[data-linked-entity="e1"]');
+      expect(found).not.toBeNull();
+      return found as HTMLElement;
+    });
+    expect(chip.textContent).toContain("小美");
+    await waitFor(() => expect(editorProps.current!.linkedEntities).toEqual(["e1"]));
+    const onChange = editorProps.current!.onChange as (text: string, assets: string[], doc: unknown, entities: string[]) => void;
+    act(() => onChange("写一段她们在竹林里的对话", [], { type: "doc", content: [] }, ["e2"]));
+    await waitFor(() => expect(document.querySelector('[data-linked-entity="e2"]')).not.toBeNull());
+    fireEvent.click(await screen.findByRole("button", { name: "boardWrite" }));
+    await waitFor(() => expect(onWrite).toHaveBeenCalledWith(expect.objectContaining({ entityIds: ["e2"] })));
+  });
+
+  it("文档格:没引用笔记是「写一篇」,引用着的是「改这篇」", async () => {
+    api.listEntities.mockResolvedValue([]);
+    api.listCapabilityModels.mockResolvedValue(chat);
+    const props = { busy: false, workspaceId: "ws", onWrite: vi.fn(async () => undefined), onFormChange: vi.fn() };
+    mount(<NoteComposer {...props} item={{ id: "d1", kind: "document", x: 0, y: 0 } as BoardItem} />);
+    await waitFor(() => expect(editorProps.current!.placeholder).toBe("boardWriteDocumentPlaceholder"));
+    cleanup();
+    mount(<NoteComposer {...props} item={{ id: "d2", kind: "document", x: 0, y: 0, note_id: "n", note_revision: 2 } as BoardItem} />);
+    await waitFor(() => expect(editorProps.current!.placeholder).toBe("boardRewriteDocumentPlaceholder"));
   });
 });

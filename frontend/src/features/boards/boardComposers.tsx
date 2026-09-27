@@ -65,15 +65,17 @@ export const BUILTIN_COMPOSERS: Record<BuiltinProducer, (host: ComposerHost) => 
       //: 上游便签的字当**材料**,不是提示词 —— 「接着这段往下写」里,那段是素材,
       //: 用户在框里打的才是指令。
       upstreamTexts={feeding.texts.map((one) => one.text)}
+      //: 连进来的资产格:人物、场景、道具 —— 描述和参考图由服务端按连线带上。
+      upstreamEntities={feeding.sources.flatMap((one) => (one.kind === "entity" && one.entity_id ? [one.entity_id] : []))}
       onFormChange={onFormChange}
-      onWrite={({ prompt, providerProfileId, model, assets, context }) => {
+      onWrite={({ prompt, providerProfileId, model, assets, context, entityIds }) => {
         setWriting(item.id);
         return run({
           producer: "write",
           item_id: item.id,
           kind: item.kind,
           ...position,
-          form: { prompt, provider_profile_id: providerProfileId, model, source_assets: assets, context },
+          form: { prompt, provider_profile_id: providerProfileId, model, source_assets: assets, context, entity_ids: entityIds },
         }).finally(() => setWriting(null));
       }}
     />

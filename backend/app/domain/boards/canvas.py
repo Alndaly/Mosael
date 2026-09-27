@@ -1091,7 +1091,8 @@ def _deliver_if_already_settled(db: Session, board: Board, item: dict[str, Any])
 
 
 #: 一次运行的产出是哪几种。和工作流的输出类型词表对得上的那一半(见 boards.tools.board_outputs)。
-OUTPUT_TYPES = ("asset", "text", "json")
+#: `note`:一篇笔记的一版(文档格上写字交回的,见 actions._write_note)。
+OUTPUT_TYPES = ("asset", "text", "json", "note")
 
 
 def outputs_of(job: Any) -> list[dict[str, Any]]:
@@ -1152,6 +1153,9 @@ def _derived_item(output: dict[str, Any], assets: dict[str, tuple[str, str]]) ->
         return {"kind": "note", "text": _clip(str(output.get("text") or "")), "form": note_form}
     if kind == "json":
         return {"kind": "note", "text": _clip(_json_text(output.get("value"))), "text_format": "json", "form": note_form}
+    if kind == "note" and output.get("note_id"):
+        return {"kind": "document", "note_id": str(output["note_id"]), "note_revision": output.get("revision"),
+                "text": str(output.get("title") or ""), "form": note_form}
     return None
 
 
@@ -1266,6 +1270,10 @@ def _canvas_with_delivered_result(
     """
     asset_ids = [str(one["asset_id"]) for one in outputs if one.get("type") == "asset"]
     text = next((str(one["text"]) for one in outputs if one.get("type") == "text"), None)
+    #: 文档格上写出来的那篇笔记(那一版):就地钉上去,标题当这一格的字。
+    note = next((one for one in outputs if one.get("type") == "note" and one.get("note_id")), None)
+    if note is not None and text is None:
+        text = str(note.get("title") or "")
     items = list(canvas.get("items") or [])
     edges = list(canvas.get("edges") or [])
     kept: list[dict[str, Any]] = []
@@ -1306,6 +1314,8 @@ def _canvas_with_delivered_result(
             filled = {**item, "run": {"status": "succeeded"}}
             if fit is not None and fit.get("type") == "asset":
                 filled["asset_id"] = str(fit["asset_id"])
+            elif fit is not None and fit.get("type") == "note":
+                filled.update(note_id=str(fit["note_id"]), note_revision=fit.get("revision"), text=str(fit.get("title") or ""))
             elif fit is not None:
                 filled["text"] = _clip(str(fit.get("text") or ""))
             kept.append(filled)
@@ -1329,6 +1339,8 @@ def _canvas_with_delivered_result(
         settled["run"] = {"status": "succeeded"}
         if text is not None:
             settled["text"] = text
+        if note is not None and settled.get("kind") == "document":
+            settled["note_id"], settled["note_revision"] = str(note["note_id"]), note.get("revision")
         if not asset_ids:
             kept.append(settled)
             continue
@@ -1365,9 +1377,11 @@ def _canvas_with_delivered_result(
 
 
 def _fits(output: dict[str, Any], kind: str, assets: dict[str, tuple[str, str]]) -> bool:
-    """这一份产出能不能**填进** `kind` 这种空格子:便签收一段字,图片 / 视频 / 音频格收同一种素材。"""
+    """这一份产出能不能**填进** `kind` 这种空格子:便签收一段字,文档格收一篇笔记,图片 / 视频 / 音频格收同一种素材。"""
     if kind == "note":
         return output.get("type") == "text"
+    if kind == "document":
+        return output.get("type") == "note" and bool(output.get("note_id"))
     found = assets.get(str(output.get("asset_id") or "")) if output.get("type") == "asset" else None
     return found is not None and found[0] == kind
 

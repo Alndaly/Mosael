@@ -171,6 +171,8 @@ class WriteForm(_Form):
     source_assets: list[str] = Field(default_factory=list)
     #: 上游便签给的材料。
     context: list[str] = Field(default_factory=list)
+    #: 正文里 `@` 到的资产(ADR 0027)。连进这一格的资产格不用写在这里 —— 服务端按连线取,和生成同一条路。
+    entity_ids: list[str] = Field(default_factory=list, max_length=8)
 
 
 class SpeakForm(_Form):
@@ -246,6 +248,7 @@ def _start_write(db: Session, request: RunRequest, form: WriteForm) -> Board:
         model=form.model,
         source_asset_ids=list(form.source_assets),
         context=list(form.context),
+        entity_ids=list(form.entity_ids),
         base_revision=request.base_revision,
     )
 
@@ -398,7 +401,8 @@ def _builtins() -> dict[str, Producer]:
                 id="write",
                 meta=_builtin_meta("write"),
                 fills_empty_slot=True,
-                hosts=("note",),
+                #: 便签写一段字;文档格写一篇笔记(见 actions.write_on_board)。
+                hosts=("note", "document"),
                 permission="ai",
                 effects="paid",
                 form=WriteForm,

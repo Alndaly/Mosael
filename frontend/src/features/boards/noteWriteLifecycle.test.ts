@@ -70,6 +70,18 @@ describe("便签 AI 写作生命周期", () => {
     });
   });
 
+  it("文档格写成一篇笔记:本地那一格钉上新的那一版,标题当它的字", async () => {
+    const patch = vi.fn<(itemId: string, next: Partial<BoardItem>) => void>();
+    const written = board({
+      id: "doc-1", kind: "document", x: 0, y: 0, text: "林小满的一天", note_id: "note-9", note_revision: 3,
+      form: { prompt: "", producer: "write" }, run: { status: "succeeded" },
+    });
+    await runNoteWrite({ run: { ...run, item_id: "doc-1", kind: "document" }, request: async () => written, patch });
+    expect(patch).toHaveBeenLastCalledWith("doc-1", expect.objectContaining({
+      text: "林小满的一天", note_id: "note-9", note_revision: 3, run: { status: "succeeded" },
+    }));
+  });
+
   it("失败时节点结束 loading，但保留表单供重试", async () => {
     const patch = vi.fn<(itemId: string, next: Partial<BoardItem>) => void>();
     const failure = new Error("模型拒绝了请求");

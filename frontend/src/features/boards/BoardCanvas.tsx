@@ -29,7 +29,7 @@ import {
   type Node,
   type ReactFlowInstance,
 } from "@xyflow/react";
-import { ChevronDown, Copy, FileUp, Group, Loader2, Maximize2, MessageSquare, MoreHorizontal, PencilLine, Plus, Replace, Scissors, Sparkles, Trash2, type LucideIcon } from "lucide-react";
+import { BookOpen, ChevronDown, Copy, FileUp, Group, Loader2, Maximize2, MessageSquare, MoreHorizontal, PencilLine, Plus, Replace, Scissors, Sparkles, Trash2, type LucideIcon } from "lucide-react";
 
 import { assetFileUrl, assetPreviewUrl, entityKeys, getEntity, type CollaborationComment, type WorkspaceMember } from "@/api/client";
 import { useI18n } from "@/app/preferences";
@@ -1554,6 +1554,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
         onCopySelected={copySelection}
         onRename={commentMode || markerMode ? undefined : setRenaming}
         onPickAsset={onPickAsset}
+        onPickDocument={commentMode || markerMode || !workspaceId ? undefined : setPickingDocument}
         onSpawn={onRun ? spawnLinked : undefined}
         producers={producers}
         panel={panel}
@@ -1680,6 +1681,7 @@ function ItemToolbar({
   onCopySelected,
   onRename,
   onPickAsset,
+  onPickDocument,
   onSpawn,
   producers,
   panel,
@@ -1694,6 +1696,8 @@ function ItemToolbar({
   /** 给这一格改名:打开它上方名字那一处的输入框(和双击名字是同一个状态)。 */
   onRename?: (itemId: string) => void;
   onPickAsset: Props["onPickAsset"];
+  /** 给文档格挑一篇笔记(引用 / 换一篇)。评论、标记模式下不给。 */
+  onPickDocument?: (itemId: string) => void;
   /** 从这一项长出下一项并连上。没给 = 这张画板不支持生成(上层没接生成能力)。 */
   onSpawn?: (
     kind: (typeof SPAWNABLE_KINDS)[number],
@@ -1837,6 +1841,16 @@ function ItemToolbar({
                   patch(item.id, { asset_id: assetId, run: { status: "idle" } }),
                 )
               }
+            />
+          )}
+          {/* 文档格引用哪一篇笔记:**操作条上的一个动作**,不是点格子的副作用 —— 点格子是选中它(拖、连线、
+              让 AI 写都从选中开始)。还没引用时叫「引用笔记」,引用着的叫「换一篇」。 */}
+          {single && item?.kind === "document" && onPickDocument && (
+            <ToolbarIcon
+              name="pick-document"
+              icon={item.note_id ? Replace : BookOpen}
+              label={t(item.note_id ? "documentReplace" : "documentPick")}
+              onClick={() => onPickDocument(item.id)}
             />
           )}
           {/* 让 AI 写:**明确的一个动作**,不是选中的副作用(见 Inner 的 panel)。能力交回的结构化数据

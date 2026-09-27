@@ -258,6 +258,34 @@ def trim_on_board(
                     form={"trim": {"asset_id": asset.id, "start": start, "end": end, "mute": mute}})
 
 
+#: 写字等模型多久。缺省的 60 秒(ai_chat.DEFAULT_TIMEOUT_SECONDS)写一段便签还行;看着几张图写一整篇文档,
+#: 推理型模型、走 OAuth 网关的常常要两三分钟 —— 60 秒一到就断,用户看到的是「Gateway 调用超过 60 秒未返回」,
+#: 而模型那边其实还在写。工作流的 LLM 节点同一个道理放宽到了 120 秒。
+WRITE_TIMEOUT_SECONDS = {"note": 120.0, "document": 240.0}
+
+#: 一次写字最多带上几个资产、每个资产挑几张参考图给模型看。图多了模型抓不住重点,也贵。
+WRITE_MAX_ENTITIES = 8
+WRITE_IMAGES_PER_ENTITY = 2
+
+
+def _entity_materials(db: Session, workspace_id: str, entity_ids: list[str]) -> tuple[list[str], list[str]]:
+    """点名的资产 → (给模型读的材料, 给模型看的图)。和生成里的 `@资产` 同一份画像(entities.generation_profile):
+    名字(变体带母体)、提示词描述、按挑图先后排的图片参考图,这里只取前几张。"""
+    from app.core.i18n import get_current_locale, t
+    from app.domain.entities import generation_profile
+    from app.domain.entities.mentions import resolve_mentions
+
+    materials: list[str] = []
+    pictures: list[str] = []
+    for entity in resolve_mentions(db, workspace_id, entity_ids[:WRITE_MAX_ENTITIES]):
+        name, descriptor, images = generation_profile(db, entity)
+        kind = t(f"entityKind_{entity.kind}", get_current_locale())
+        about = "\n".join(part for part in (entity.description.strip(), descriptor) if part)
+        materials.append(f"资产「{name}」({kind})" + (f":\n{about}" if about else ""))
+        pictures.extend(one for one in images[:WRITE_IMAGES_PER_ENTITY] if one not in pictures)
+    return materials, pictures
+
+
 def write_on_board(
     db: Session,
     *,
@@ -270,9 +298,10 @@ def write_on_board(
     model: str,
     source_asset_ids: list[str],
     context: list[str],
+    entity_ids: list[str] | None = None,
     base_revision: int | None = None,
 ) -> Board:
-    """让 AI 往一张便签里写字。模型的错误(AiChatError)在把失败落进便签之后原样抛出。
+    """让 AI 往一张便签里写字,或者在文档格上写一篇笔记。模型的错误(AiChatError)在把失败落进那一格之后原样抛出。
 
     **同步返回,但照样是一个任务。** 写字几秒就回,调用方等着结果;可「这一格在写」这件事
     得由任务总线收尾 —— 此前运行态是这里手写的两笔(开始写 running、AiChatError 时写 failed),
@@ -280,6 +309,12 @@ def write_on_board(
     只等下一次客户端自动保存碰巧把它盖掉。现在和生成/念/截同一套:建任务 → 摆占位 → 跑 →
     回执把正文(或失败原因)落回这一格。任务在调用方线程里跑完(见 jobs.run_job_inline),
     任何异常都先落成失败再抛出;进程中途没了,重启时 reconcile 收掉。
+
+    **看着什么写**:上游连过来的和正文里 `@` 到的素材(图片、视频给画面,音频给转写,见 look_at)、上游便签的字、
+    以及连进来的和 `@` 到的**资产**(ADR 0027)—— 它的描述当材料,前几张参考图给模型看。
+
+    **文档格**:写出来的是一篇笔记。空的文档格新建一篇、引用它;已经引用着一篇的,那一篇就是「现有内容」,
+    写成它的**新一版**(笔记的每一版都留着,改坏了能退回),文档格改钉到新的那一版。
 
     **也不自己实现「调 LLM」**:供应商解析、调用、计量和工作流的 LLM 节点、智能体是同三样东西。
     """
@@ -291,11 +326,23 @@ def write_on_board(
     if not prompt:
         raise BoardInputError("boardErr_writeNeedsPrompt")
 
-    #: 这张便签上已经有的字。**从画布上读,不让前端拼进提示词** —— 拼在前端意味着「现在写的是
-    #: 什么」和「要求是什么」揉成了一段。有字就是**改写**,没字才是从头写。
+    #: 这一格上已经有的字。**从画布上读,不让前端拼进提示词** —— 拼在前端意味着「现在写的是
+    #: 什么」和「要求是什么」揉成了一段。有字就是**改写**,没字才是从头写。文档格的「字」是它引用的那篇笔记。
     slot_item = _slot_item(db, workspace_id, board_id, item_id)
-    existing = str(slot_item.get("text") or "").strip()
+    kind = "document" if slot_item.get("kind") == "document" else "note"
+    note_id = str(slot_item.get("note_id") or "") if kind == "document" else ""
+    if note_id:
+        from app.domain.notes import get_note
+
+        existing = get_note(db, workspace_id, note_id).markdown.strip()
+    else:
+        existing = str(slot_item.get("text") or "").strip() if kind == "note" else ""
     _ensure_slot_ready(db, workspace_id, Slot(board_id, item_id, 0, 0, base_revision))
+    #: 连进来的资产格 + 正文里 @ 到的,和生成同一条路(upstream_entities)。在建任务之前取:点名的资产不在
+    #: 这个工作区就当场说,不起任务。
+    board = get_board(db, workspace_id, board_id)
+    named = list(dict.fromkeys([*upstream_entities(board, item_id), *(entity_ids or [])]))
+    entity_texts, entity_pictures = _entity_materials(db, workspace_id, named)
 
     token = set_receipt(receipt_to_item(board_id, item_id))
     try:
@@ -311,18 +358,29 @@ def write_on_board(
         reset_receipt(token)
     db.commit()
     _pending(
-        db, workspace_id, Slot(board_id, item_id, 0, 0), actor_id=actor_id, kind="note", producer="write", job_id=job.id,
+        db, workspace_id, Slot(board_id, item_id, 0, 0), actor_id=actor_id, kind=kind, producer="write", job_id=job.id,
         #: 表单记下**这一轮**用的要求和模型 —— 写挂了回来,面板上原样还在,改一个字就能重来。
         form={**(slot_item.get("form") or {}), "prompt": prompt,
               "provider_profile_id": provider_profile_id, "model": model},
     )
+    target_name = "这篇文档" if kind == "document" else "这张便签"
 
     def write() -> dict[str, Any]:
-        #: 上游连过来的 + 正文里 @ 到的。图片和视频给画面,音频给转写 —— 见 look_at。
-        pictures, from_assets = look_at(db, workspace_id, source_asset_ids)
-        materials = [one.strip() for one in context if one and one.strip()] + from_assets
+        #: 上游连过来的 + 正文里 @ 到的 + 资产的参考图。图片和视频给画面,音频给转写 —— 见 look_at。
+        seen = list(dict.fromkeys([*source_asset_ids, *entity_pictures]))
+        pictures, from_assets = look_at(db, workspace_id, seen)
+        materials = [one.strip() for one in context if one and one.strip()] + entity_texts + from_assets
         profile = require_connection(db, provider_profile_id or None, user_id=actor_id, error=AiChatError)
         target = target_for(db, profile, model=model, surface="automation")
+        #: 说清楚产物要直接摆出来 —— 不交代的话模型爱写「好的,这是您要的文案:」,而那句话会原样贴进去。
+        system = (
+            "你在帮用户写一篇文档,它会存成一篇笔记:可以用 Markdown 的标题、列表、表格组织内容。"
+            "直接给正文,不要开场白、不要解释、不要用代码块把整篇包起来。"
+            if kind == "document"
+            else "你在帮用户往一张创意画板的便签上写字。直接给正文,不要开场白、不要解释、不要用 Markdown 代码块包起来。"
+        )
+        if existing:
+            system += f"{target_name}上已经有内容,用户给的是**改法**:照他说的改,没提到的地方保持原样,整篇重写一遍不是他要的。"
         with billable(
             db,
             capability="chat",
@@ -338,24 +396,10 @@ def write_on_board(
             text = chat(
                 target,
                 [
-                    #: 说清楚产物要直接摆在画板上 —— 不交代的话模型爱写「好的,这是您要的文案:」,
-                    #: 而那句话会原样贴进便签里。
-                    {
-                        "role": "system",
-                        "content": (
-                            "你在帮用户往一张创意画板的便签上写字。直接给正文,不要开场白、不要解释、"
-                            "不要用 Markdown 代码块包起来。"
-                            + (
-                                "这张便签上已经有内容,用户给的是**改法**:照他说的改,没提到的地方保持原样,"
-                                "整篇重写一遍不是他要的。"
-                                if existing
-                                else ""
-                            )
-                        ),
-                    },
+                    {"role": "system", "content": system},
                     *(
-                        #: 上游便签给的材料,自成一轮。**和「要求」分开** —— 揉成一段的话,
-                        #: 模型分不清哪句是素材、哪句是指令,常见的结果是把材料原样抄一遍。
+                        #: 上游给的材料(便签的字、资产的描述、素材的转写),自成一轮。**和「要求」分开** ——
+                        #: 揉成一段的话,模型分不清哪句是素材、哪句是指令,常见的结果是把材料原样抄一遍。
                         [
                             {
                                 "role": "user",
@@ -368,7 +412,7 @@ def write_on_board(
                     *(
                         #: 现有内容单独一轮,和要求分开 —— 揉成一段的话,模型会把「改短一点」
                         #: 当成正文的一部分写进去。
-                        [{"role": "user", "content": f"这张便签现在的内容:\n{existing}"}]
+                        [{"role": "user", "content": f"{target_name}现在的内容:\n{existing}"}]
                         if existing
                         else []
                     ),
@@ -378,13 +422,43 @@ def write_on_board(
                 ],
                 temperature=0.7,
                 call=call,
-                label="画板写文案",
+                label="画板写文档" if kind == "document" else "画板写文案",
+                timeout=WRITE_TIMEOUT_SECONDS[kind],
             ).strip()
+        if kind == "document":
+            return {"outputs": [_write_note(db, workspace_id, board, note_id, text)]}
         return {"text": text}
 
     run_job_inline(db, job, write, running="jobMsg_boardWriteRunning", done="jobMsg_boardWriteDone")
     db.expire_all()
     return get_board(db, workspace_id, board_id)
+
+
+def _note_title(markdown: str) -> str:
+    """新笔记的标题:正文第一个标题;没有就是第一行,截短。"""
+    lines = [line.strip() for line in markdown.splitlines() if line.strip()]
+    heading = next((line.lstrip("#").strip() for line in lines if line.startswith("#")), "")
+    title = heading or (lines[0] if lines else "")
+    return title[:60]
+
+
+def _write_note(db: Session, workspace_id: str, board: Board, note_id: str, markdown: str) -> dict[str, Any]:
+    """文档格写出来的正文落成笔记:引用着一篇的写成它的新一版,空的新建一篇(来源记上这张画板)。
+    交回一份 `note` 产出,回执据此把文档格钉到这一版(canvas.outputs_of)。"""
+    from app.domain.note_types import NoteContent
+    from app.domain.notes import create_note, get_note, save_note, snapshot
+
+    if note_id:
+        note = get_note(db, workspace_id, note_id)
+        note = save_note(db, workspace_id, note_id, note.revision,
+                         NoteContent.model_validate({**snapshot(note), "markdown": markdown}))
+    else:
+        note = create_note(db, workspace_id, NoteContent.model_validate({
+            "title": _note_title(markdown),
+            "markdown": markdown,
+            "sources": [{"kind": "board", "id": board.id, "label": board.name, "quote": ""}],
+        }))
+    return {"type": "note", "note_id": note.id, "revision": note.revision, "title": note.title}
 
 
 def _slot_item(db: Session, workspace_id: str, board_id: str, item_id: str) -> dict[str, Any]:

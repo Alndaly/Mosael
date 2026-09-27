@@ -295,6 +295,19 @@ describe("选中之后挂什么", () => {
     expect(document.querySelector('[data-board-composer="write"]')).toBeNull();
   });
 
+  it("空文档格点一下只是选中;引用笔记在上方操作条,和「让 AI 写」挨着", () => {
+    mount({ items: [{ id: "d1", kind: "document", x: 0, y: 0, form: { producer: "write" } }], edges: [], markers: [] },
+      { onRun: vi.fn(async () => undefined) });
+    const empty = document.querySelector('[data-id="d1"] [data-document-empty]');
+    expect(empty, "空状态画出来了").not.toBeNull();
+    expect(empty!.closest("button"), "空状态不是一个按钮 —— 点它不弹挑笔记").toBeNull();
+    select("d1");
+    expect(toolbarButton("documentPick"), "操作条上有「引用笔记」").toBeTruthy();
+    expect(toolbarButton("boardAskAiWrite"), "文档格也能让 AI 写一篇").toBeTruthy();
+    act(() => toolbarButton("documentPick")!.click());
+    expect(document.querySelector('[role="dialog"]'), "点了才弹挑笔记").not.toBeNull();
+  });
+
   it("工具交回的 JSON 便签没有「让 AI 写」", () => {
     mount({ items: [writeNote("j1", { text: '{"a":1}', text_format: "json" })], edges: [], markers: [] }, { onRun: vi.fn(async () => undefined) });
     select("j1");
