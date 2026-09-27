@@ -398,7 +398,8 @@ function LibraryPanel({
           {assets.isPending ? t("pageLoading") : t("entityLibraryEmpty")}
         </p>
       ) : (
-        <div className="grid max-h-[420px] grid-cols-3 gap-2 overflow-y-auto">
+        //: 列数跟着宽度走,不写死 3 列:窄窗口里这一栏掉到参考图墙下面、铺满整行,写死 3 列时一张缩略图有半屏大。
+        <div className="grid max-h-[420px] grid-cols-[repeat(auto-fill,minmax(88px,1fr))] gap-2 overflow-y-auto">
           {items.map((asset) => (
             <LibraryItem key={asset.id} asset={asset} attached={attached.has(asset.id)} pending={pending} onAdd={() => onAdd(asset.id)} />
           ))}
