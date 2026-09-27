@@ -7,7 +7,7 @@ import { ArrowLeftRight, Plus, Sparkles } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 
 import { listAssets, type Asset, type BoardItem, type GenerationOption, type SceneReferenceForm } from "@/api/client";
-import { SceneReferencePicker, sceneReferenceUses } from "@/features/boards/SceneReferencePicker";
+import { resolvedShot, SceneReferencePicker, sceneReferenceUses, useReferencedScene } from "@/features/boards/SceneReferencePicker";
 import {
   collect,
   PromptEditor,
@@ -725,7 +725,11 @@ export function NodeComposer({
   //: 连了 3D 场景:这个模型收得下哪几种用法(一种都没有时发不出去 —— 服务端照连线一定会现渲它)。
   const sceneUses = sceneReferenceUses(current, item.kind);
   const sceneUse = sceneUses.includes(sceneReference.use) ? sceneReference.use : sceneUses[0];
-  const canSend = Boolean(current) && hasEnoughText(current, prompt) && (!upstreamScene || sceneUses.length > 0);
+  const referencedScene = useReferencedScene(workspaceId, upstreamScene);
+  //: 这次用哪个镜头(挑过的还在场景里 / 只有一个镜头)。好几个镜头却没挑、场景还没查到时发不出去 —— 服务端不猜镜头。
+  const sceneShot = resolvedShot(referencedScene, sceneReference.shot_id);
+  const sceneReady = !upstreamScene || (sceneUses.length > 0 && Boolean(referencedScene) && Boolean(sceneShot));
+  const canSend = Boolean(current) && hasEnoughText(current, prompt) && sceneReady;
 
   const send = () => {
     //: 不收提示词的模型:编辑器里残留的字(换模型之前写的)不跟着发出去。
@@ -754,7 +758,7 @@ export function NodeComposer({
         parameters,
         sourceAssets,
         entityIds: mentionedEntities,
-        ...(upstreamScene && sceneUse ? { sceneReference: { ...sceneReference, use: sceneUse } } : {}),
+        ...(upstreamScene && sceneUse ? { sceneReference: { shot_id: sceneShot, use: sceneUse } } : {}),
         form: editableForm,
       }),
     );
@@ -796,10 +800,9 @@ export function NodeComposer({
       <>
         {upstreamScene && (
           <SceneReferencePicker
-            workspaceId={workspaceId}
-            sceneId={upstreamScene}
+            scene={referencedScene}
             uses={sceneUses}
-            value={{ ...sceneReference, use: sceneUse ?? sceneReference.use }}
+            value={sceneReference}
             onChange={setSceneReference}
           />
         )}

@@ -13,11 +13,10 @@ import { sceneReferenceUses } from "./SceneReferencePicker";
 
 vi.mock("@/app/preferences", () => ({ useI18n: () => (key: string) => key }));
 vi.mock("@xyflow/react", () => ({ NodeToolbar: ({ children }: { children: React.ReactNode }) => children, Position: { Bottom: "bottom" } }));
+let shots = [{ id: "shot-1", name: "全景" }, { id: "shot-2", name: "跟拍" }];
 vi.mock("@tanstack/react-query", () => ({
   useQuery: ({ queryKey }: { queryKey: unknown[] }) =>
-    queryKey[0] === "scene"
-      ? { data: { name: "草原", revision: 2, content: { shots: [{ id: "shot-1", name: "全景" }, { id: "shot-2", name: "跟拍" }] } } }
-      : { data: [] },
+    queryKey[0] === "scene" ? { data: { name: "草原", revision: 2, content: { shots } } } : { data: [] },
 }));
 vi.mock("./PromptEditor", () => ({
   PromptEditor: () => <div data-testid="prompt-editor" />,
@@ -52,22 +51,40 @@ it("用法只列模型收得下的:首尾帧和运镜只给视频", () => {
   expect(sceneReferenceUses(null, "video")).toEqual([]);
 });
 
-it("连了场景:面板上摆出场景名,发出去的带着存着的镜头和用法", () => {
+it("连了场景:一枚芯片写着场景名、镜头、用法(不是铺满整行的下拉),发出去的带着存着的镜头和用法", () => {
   const { onSubmit } = mount("video", ["first_frame", "last_frame"], { scene_reference: { shot_id: "shot-2", use: "frames" } });
-  expect(document.querySelector("[data-scene-reference]")?.textContent).toContain("boardSceneRefLabel");
+  const chip = document.querySelector("[data-scene-reference]");
+  expect(chip?.tagName).toBe("BUTTON");
+  expect(chip?.textContent).toBe("草原· 跟拍 · boardSceneRefFrames");
   fireEvent.click(screen.getByRole("button", { name: "boardGenerate" }));
   expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ sceneReference: { shot_id: "shot-2", use: "frames" } }));
 });
 
 it("存着的用法这个模型不收:换成它收的那一种发", () => {
-  const { onSubmit } = mount("video", ["reference_image"], { scene_reference: { shot_id: "", use: "motion" } });
+  const { onSubmit } = mount("video", ["reference_image"], { scene_reference: { shot_id: "shot-1", use: "motion" } });
   fireEvent.click(screen.getByRole("button", { name: "boardGenerate" }));
-  expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ sceneReference: { shot_id: "", use: "composition" } }));
+  expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ sceneReference: { shot_id: "shot-1", use: "composition" } }));
+});
+
+it("好几个镜头却没挑(或挑的镜头场景里已经没了):芯片上说,发不出去;只有一个镜头时就是它", () => {
+  const { onSubmit } = mount("video", ["reference_image"], { scene_reference: { shot_id: "gone", use: "composition" } });
+  expect(document.querySelector("[data-scene-reference]")?.getAttribute("data-scene-reference-state")).toBe("needs-shot");
+  expect(screen.getByRole("button", { name: "boardGenerate" })).toBeDisabled();
+  expect(onSubmit).not.toHaveBeenCalled();
+});
+
+it("场景只有一个镜头:不用挑,发出去的就是它", () => {
+  shots = [{ id: "only", name: "唯一" }];
+  const { onSubmit } = mount("video", ["reference_image"]);
+  fireEvent.click(screen.getByRole("button", { name: "boardGenerate" }));
+  expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ sceneReference: { shot_id: "only", use: "composition" } }));
+  shots = [{ id: "shot-1", name: "全景" }, { id: "shot-2", name: "跟拍" }];
 });
 
 it("模型一种都不收:说清楚,发不出去", () => {
   const { onSubmit } = mount("image", []);
-  expect(document.querySelector("[data-scene-reference-unsupported]")?.textContent).toBe("boardSceneRefUnsupported");
+  expect(document.querySelector("[data-scene-reference]")?.getAttribute("data-scene-reference-state")).toBe("unsupported");
+  expect(document.querySelector("[data-scene-reference]")?.textContent).toContain("boardSceneRefUnsupported");
   const generate = screen.getByRole("button", { name: "boardGenerate" });
   expect(generate).toBeDisabled();
   fireEvent.click(generate);

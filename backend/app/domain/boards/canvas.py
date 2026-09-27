@@ -1339,8 +1339,12 @@ def _canvas_with_delivered_result(
             elif fit is not None and fit.get("type") == "note":
                 filled.update(note_id=str(fit["note_id"]), note_revision=fit.get("revision"), text=str(fit.get("title") or ""))
             elif fit is not None and fit.get("type") == "scene":
-                #: 按剧本搭出的是一个**新场景**,换进这一格;原来那个还在「3D 场景」里。
+                #: 按剧本搭出的是一个**新场景**,换进这一格;原来那个还在「3D 场景」里。渲白模上挑过的镜头是旧场景的,
+                #: 摘掉 —— 留着的话面板拿着一个新场景里没有的镜头 id(用户截图:镜头那一格只剩一个箭头)。
                 filled.update(scene_id=str(fit["scene_id"]), text=str(fit.get("name") or ""))
+                form = filled.get("form")
+                if isinstance(form, dict) and isinstance(form.get("config"), dict) and "shot_id" in form["config"]:
+                    filled["form"] = {**form, "config": {k: v for k, v in form["config"].items() if k != "shot_id"}}
             elif fit is not None:
                 filled["text"] = _clip(str(fit.get("text") or ""))
             kept.append(filled)

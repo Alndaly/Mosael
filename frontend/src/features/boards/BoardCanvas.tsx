@@ -1655,8 +1655,9 @@ const GROW: Partial<Record<BoardItem["kind"], Partial<Record<GrowKind, MessageKe
   image: { video: "boardSpawnVideoFromImage", note: "boardSpawnNote" },
   video: { video: "boardSpawnVideoFromVideo", note: "boardSpawnNote" },
   audio: { video: "boardSpawnVideoFromAudio", note: "boardSpawnNote" },
-  //: 3D 场景给的是它的预览图 —— 和一张图一样当首帧。
-  scene: { video: "boardSpawnVideoFromImage", note: "boardSpawnNote" },
+  //: 3D 场景给的是**场景**,不是一张图(ADR 0029):连进去的那一格面板上挑镜头和用法,生成时现渲。
+  //: 不往下长文案 —— 场景格没有文字可接。
+  scene: { image: "boardSpawnImageFromScene", video: "boardSpawnVideoFromScene" },
 };
 
 /**

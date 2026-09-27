@@ -390,6 +390,15 @@ describe("操作条上的「接着做」", () => {
     select("i2");
     expect(grow()).toEqual([]);
   });
+
+  it("3D 场景往下接图片和视频,说的是场景的构图和镜头,不是「这张图当首帧」(用户截图);不长文案", () => {
+    mount(
+      { items: [{ id: "sc", kind: "scene", x: 0, y: 0, width: 320, height: 220, scene_id: "scene-1" }], edges: [], markers: [] },
+      { onRun: vi.fn(async () => undefined) },
+    );
+    select("sc");
+    expect(grow().map((row) => row.textContent)).toEqual(["boardSpawnImageFromScene", "boardSpawnVideoFromScene"]);
+  });
 });
 
 describe("停止属于运行态的外壳", () => {

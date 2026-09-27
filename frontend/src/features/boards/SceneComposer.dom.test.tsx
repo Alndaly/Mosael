@@ -179,6 +179,14 @@ describe("3D 场景格的面板", () => {
     expect(sendButton()).toBeDisabled();
   });
 
+  it("存着的镜头这个场景里没有(换了场景):当没挑 —— 芯片写「镜头」,不是只剩一个箭头(用户截图)", async () => {
+    stubShots({ sc: [{ value: "shot-1", label: "开场" }, { value: "shot-2", label: "近景" }] });
+    mount(<Stateful initial={scene("sc", { form: { config: { shot_id: "old-shot" } } })} run={async () => undefined} />);
+    await waitFor(() => expect(sendButton().getAttribute("title")).toContain("boardToolMissing"));
+    expect(chip("shot_id").textContent).toBe("镜头");
+    expect(sendButton()).toBeDisabled();
+  });
+
   it("场景一个镜头都没有:镜头芯片是灰的,悬停说为什么;发送键也是灰的", async () => {
     stubShots({});
     mount(<Stateful initial={scene("sc", { form: {} })} run={async () => undefined} />);

@@ -64,10 +64,13 @@ export function SceneComposer({
 
   const shotSpec = specs[SHOT];
   const shots = shotSpec ? (fieldOptions.dynamicOptions(SHOT, shotSpec) ?? []) : [];
-  const chosenShot = String(config.shot_id ?? "");
+  const shotsLoading = shots.length === 0 && fieldOptions.whyEmpty(SHOT).kind === "pending";
+  const savedShot = String(config.shot_id ?? "");
+  //: 存着的镜头这个场景里没有(按文字重搭换了场景,旧场景的镜头 id 还在表单里)就当没挑 —— 否则挑选器拿着一个
+  //: 对不上任何选项的值,既不显示镜头名也不显示「镜头」,只剩一个箭头(用户截图)。清单还在查的时候先不判。
+  const chosenShot = shotsLoading || shots.some((one) => one.value === savedShot) ? savedShot : "";
   //: 留空 = 唯一的那一个镜头(sole_option_default):显示成当前值,不写进表单 —— 运行时同一条规矩。
   const shot = !chosenShot && shotSpec?.sole_option_default && shots.length === 1 ? shots[0].value : chosenShot;
-  const shotsLoading = shots.length === 0 && fieldOptions.whyEmpty(SHOT).kind === "pending";
   const noShots = Boolean(shotSpec) && shots.length === 0 && !shotsLoading;
 
   const renderSpec = specs[RENDER];
@@ -80,7 +83,9 @@ export function SceneComposer({
   const blocked = !producer || shotsLoading || missing.length > 0;
   const send = () => {
     if (blocked || working) return;
-    run(() => onRun({ config }));
+    //: 对不上的旧镜头 id 不跟着发出去(服务端会说找不到这个镜头);认得的、没挑的照原样。
+    const { shot_id: _stale, ...withoutShot } = config;
+    run(() => onRun({ config: savedShot && !chosenShot ? withoutShot : config }));
   };
 
   const rest = Object.entries(specs).filter(([key]) => key !== SHOT && key !== RENDER);
