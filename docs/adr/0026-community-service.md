@@ -58,7 +58,8 @@ Accepted — 2026-09-27。按阶段落地,部署由维护者按 [docs/DEPLOY_COM
 - **刷新令牌**:256 位随机串,**库里只存哈希**,属于一个会话(`sessions`:设备名、IP、UA、创建 / 最后使用时间)。
   **每用一次就换一个新的**(轮换);已经换掉的旧令牌再被拿来用 → 视为被盗,**整个会话吊销**。滑动 30 天、
   绝对上限 90 天。为了几个并发请求同时刷新时不误伤,旧令牌在被换掉后的 **20 秒宽限期**内再用,返回同一对新令牌。
-- **网页**:刷新令牌放在 `HttpOnly; Secure; SameSite=Lax; Path=/api/community/auth` 的 cookie 里,脚本拿不到;
+- **网页**:刷新令牌放在 `HttpOnly; Secure; SameSite=Lax; Path=/api/community/v1/auth` 的 cookie 里(路径必须是刷新接口的
+    前缀,否则浏览器不会带上它;最初写成 `/api/community/auth` 是错的,实现时改正),脚本拿不到;
   访问令牌只在内存里。前端一个请求封装:
   - 到期前 60 秒**主动刷新**;
   - 收到 401 时**只刷新一次**(同一时刻只有一个刷新在飞,其余请求等它),成功后重放原请求一次,失败就回到登录;
@@ -133,7 +134,7 @@ Accepted — 2026-09-27。按阶段落地,部署由维护者按 [docs/DEPLOY_COM
 | POST | `/auth/refresh` | 网页:cookie;应用:`{refresh_token}` → 新一对令牌 |
 | POST | `/auth/logout` | 吊销当前会话 |
 | POST | `/auth/device/code` | `{client_name}` → `{device_code, user_code, verification_uri, expires_in, interval}` |
-| POST | `/auth/device/token` | `{device_code}` → 未确认 `428 authorization_pending` / 过期 `410` / 成功令牌对 |
+| POST | `/auth/device/token` | `{device_code}` → 未确认 `428 authorization_pending` / 轮询过快 `429 slow_down`(间隔 +5 秒)/ 被拒 `403` / 重复兑换 `400` / 过期 `410` / 成功令牌对 |
 | POST | `/auth/device/approve` | 登录后:`{user_code}` → 204 |
 
 「登录」的回包:`{access_token, expires_in, user}`;网页的刷新令牌只在 `Set-Cookie` 里,应用(设备授权、
@@ -153,7 +154,7 @@ Accepted — 2026-09-27。按阶段落地,部署由维护者按 [docs/DEPLOY_COM
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
-| POST | `/shares/uploads` | `{files: [{sha256, size, content_type}]}` → 每个缺的文件一个上传地址(已有的跳过) |
+| POST | `/shares/uploads` | `{files: [{sha256, size, content_type}]}` → `{uploads: [{sha256, url, method, headers, expires_in}], skipped: [sha256…]}`;不在白名单里的类型 422 |
 | PUT | 上传地址 | 文件本体(`local` 存储时是服务自己的地址,`s3` 时是预签名 URL) |
 | POST | `/shares` | `{board_key, title, visibility, snapshot}` → `{slug, url, version}`;同一个 `board_key` 再发 = 新版本 |
 | GET | `/shares/{slug}` | 当前版本的快照(公开 / 不公开但知道链接) |
@@ -180,6 +181,11 @@ Accepted — 2026-09-27。按阶段落地,部署由维护者按 [docs/DEPLOY_COM
   "edges": [{"id": "e1", "source": "n1", "target": "i1"}]
 }
 ```
+
+**实现时补上的接口**(官网和应用都在用):`GET /auth/config`(协议版本、验证码 AppId)、
+`POST /{workflows|plugins|shares}/{slug}/report`、`GET /shares?author&cursor`(公开画板)、`GET /shares/{slug}/og.png`、
+`POST /admin/reports/{id}/dismiss`、`PUT /uploads/{sha256}`(`local` 存储的签名上传地址)。`/plugins/index.json` 缺省只含
+社区条目(`channel: "community"`),`?include=official` 才带官方的。`new`、`new-version`、`index.json` 是保留 slug。
 
 **统计**:`GET /stats/overview`、`GET /stats/timeseries?metric=…&days=…`、`GET /users/{handle}`(公开主页)。
 
