@@ -39,13 +39,22 @@ def _layout(value: Any) -> dict[str, Any]:
     return parsed
 
 
+#: 布景的结构化输出(严格模式)要求每一格都在,用不上的引用写空字符串(见 templates._set_design_schema);
+#: 场景格式里它们是「没有就不写」。空字符串在这里就是「没有」—— 不是替它猜一个值。
+_OPTIONAL_REFERENCES = ("parent_id", "model_id")
+
+
 def _canonical(layout: dict[str, Any]) -> dict[str, Any]:
-    """**只做规范化,不做猜测**:关键帧按时间排好序(LLM 常按叙述顺序写)。别的一概不改 ——
-    坐标错了就让校验说出来,替它修一个"看起来合理"的值,构图就悄悄变成了另一个镜头。"""
+    """**只做规范化,不做猜测**:关键帧按时间排好序(LLM 常按叙述顺序写);严格模式下写成空字符串的
+    可选引用(父级、模型 id)当作没有。别的一概不改 —— 坐标错了就让校验说出来,替它修一个"看起来合理"的值,
+    构图就悄悄变成了另一个镜头。"""
     objects = []
     for obj in layout.get("objects") or []:
         if isinstance(obj, dict) and isinstance(obj.get("track"), list):
             obj = {**obj, "track": sorted(obj["track"], key=lambda frame: float(frame.get("time") or 0))}
+        if isinstance(obj, dict):
+            obj = {key: value for key, value in obj.items()
+                   if not (key in _OPTIONAL_REFERENCES and isinstance(value, str) and not value.strip())}
         objects.append(obj)
     return {**layout, "objects": objects}
 
@@ -154,6 +163,7 @@ def scene_from_text(db: Session, scope: RunScope, config: dict[str, Any]) -> dic
     有了这一项能力,剧本连进来就能搭白模,接着在 3D 场景格上渲首尾帧或运镜视频。
     """
     from app.domain.workflows.executors.ai import llm
+    from app.domain.workflows.field_options import split_chat_model
     from app.domain.workflows.templates import _set_design_schema, blockout_rules
 
     text = str(config.get("text") or "").strip()
@@ -176,9 +186,10 @@ def scene_from_text(db: Session, scope: RunScope, config: dict[str, Any]) -> dic
         + blockout_rules(clip, source="这段文字(没写明的尺寸、身高、光线按常识定)")
         + "只输出符合 JSON Schema 的对象。"
     )
+    profile_id, model = split_chat_model(str(config.get("model") or ""))
     written = llm(db, scope, {
-        "profile_id": config.get("profile_id"),
-        "model": config.get("model"),
+        "profile_id": profile_id or None,
+        "model": model,
         "preset": "precise",
         "system": system,
         "prompt": f"文字:\n{text}\n\n可用的 3D 道具(kind=\"model\" 时 model_id 只能从这里选;尺寸是实测值):\n"

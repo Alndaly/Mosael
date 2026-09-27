@@ -15,7 +15,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { gotoSettings } from "@/lib/deepLink";
 import { useWatchedJob } from "@/lib/useWatchedJob";
 
-export type DrawAbility = EntityDrawRequest["ability"];
+/** 「AI 补画」管的那两种(「让它说话」是另一个入口,见 SpeakDialog)。 */
+export type DrawAbility = Exclude<EntityDrawRequest["ability"], "speak">;
 
 /**
  * 这种资产能让 AI 补画什么。**三种不是一个模板**:人物补角度、画表情;场景的角度是机位(全景 / 反打 / 俯视),
@@ -123,7 +124,7 @@ function DrawDialog({
   });
   const start = useMutation({
     mutationFn: () =>
-      drawEntity(entity.id, { ability, model: model === DEFAULT_MODEL ? "" : model, scope, expressions: expressions.trim() }),
+      drawEntity(entity.id, { ability, model: model === DEFAULT_MODEL ? "" : model, scope, expressions: expressions.trim(), text: "" }),
     onSuccess: (job) => onStarted(job.id),
   });
   const noModels = models.isSuccess && models.data.length === 0;

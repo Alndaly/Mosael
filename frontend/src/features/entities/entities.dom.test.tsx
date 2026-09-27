@@ -170,6 +170,7 @@ beforeEach(() => {
     if (source === "speech_engines") return [{ value: "clone", label: "本地克隆" }, { value: "edge", label: "Edge" }];
     if (source === "speech_voices") return parent === "edge" ? [{ value: "zh-CN-XiaoxiaoNeural", label: "晓晓" }] : [{ value: "v1", label: "我的声音" }];
     if (source === "reference_image_models") return [{ value: "p1:image:edit", label: "连接 · 能改图 · 默认" }];
+    if (source === "speech_video_models") return [{ value: "p1:video:wan2.2-s2v", label: "百炼 · 说话照片" }];
     return [];
   });
   api.listScenes.mockResolvedValue([]);
@@ -323,9 +324,26 @@ describe("参考图墙", () => {
     fireEvent.change(within(dialog).getByRole("textbox", { name: "entityDrawExpressionList" }), { target: { value: "开心, 哭" } });
     fireEvent.click(screen.getByRole("button", { name: "entityDrawStart" }));
     await waitFor(() =>
-      expect(api.drawEntity).toHaveBeenCalledWith("e1", { ability: "expressions", model: "", scope: "missing", expressions: "开心, 哭" }),
+      expect(api.drawEntity).toHaveBeenCalledWith("e1", { ability: "expressions", model: "", scope: "missing", expressions: "开心, 哭", text: "" }),
     );
     expect(await screen.findByRole("button", { name: "entityDrawRunning" })).toBeTruthy();
+  });
+
+  it("人物能「让它说话」:写一段话开始就发一个请求;场景、道具没有这个按钮;服务端说不通的原因写在弹窗里", async () => {
+    api.drawEntity.mockRejectedValueOnce(new Error("「小美」是真人,还没有声明"));
+    api.api.mockResolvedValue({ id: "job-2", status: "running" });
+    await openDetail();
+    fireEvent.click(screen.getByRole("button", { name: "entitySpeak" }));
+    const dialog = await waitFor(() => document.querySelector("[data-speak-dialog]") as HTMLElement);
+    fireEvent.change(within(dialog).getByRole("textbox", { name: "entitySpeakText" }), { target: { value: "大家好" } });
+    fireEvent.click(screen.getByRole("button", { name: "entitySpeakStart" }));
+    await waitFor(() =>
+      expect(api.drawEntity).toHaveBeenCalledWith("e1", { ability: "speak", text: "大家好", model: "", scope: "missing", expressions: "" }),
+    );
+    expect((await screen.findByRole("alert")).textContent).toContain("还没有声明");
+    cleanup();
+    await openDetail({ kind: "location" });
+    expect(screen.queryByRole("button", { name: "entitySpeak" })).toBeNull();
   });
 
   it("点一张放大看,灯箱里翻的是整面墙;点角度不放大", async () => {

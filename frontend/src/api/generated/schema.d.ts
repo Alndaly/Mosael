@@ -8317,14 +8317,14 @@ export interface components {
         };
         /**
          * EntityDrawRequest
-         * @description 资产详情页上的「补全多角度」「生成表情」(ADR 0027 阶段 4):和画板上资产格的那两项能力是同一件事。
+         * @description 资产详情页上的「补全多角度」「生成表情」(ADR 0027 阶段 4)和「让它说话」(ADR 0028):和画板上资产格的那几项能力是同一件事。
          */
         EntityDrawRequest: {
             /**
              * Ability
              * @enum {string}
              */
-            ability: "angles" | "expressions";
+            ability: "angles" | "expressions" | "speak";
             /**
              * Model
              * @default
@@ -8341,6 +8341,11 @@ export interface components {
              * @default
              */
             expressions: string;
+            /**
+             * Text
+             * @default
+             */
+            text: string;
         };
         /** EntityKindOut */
         EntityKindOut: {

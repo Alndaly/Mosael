@@ -117,15 +117,17 @@ class EntityVariantCreate(ApiModel):
 
 
 class EntityDrawRequest(ApiModel):
-    """资产详情页上的「补全多角度」「生成表情」(ADR 0027 阶段 4):和画板上资产格的那两项能力是同一件事。"""
+    """资产详情页上的「补全多角度」「生成表情」(ADR 0027 阶段 4)和「让它说话」(ADR 0028):和画板上资产格的那几项能力是同一件事。"""
 
-    ability: Literal["angles", "expressions"]
+    ability: Literal["angles", "expressions", "speak"]
     #: 用哪个图片模型(生成选项 id,见 field_options 的 reference_image_models);空着用他设的默认。
     model: str = Field(default="", max_length=512)
     #: 补全多角度:只补还没有的(missing),还是每个角度都重画(all)。
     scope: Literal["missing", "all"] = "missing"
     #: 生成表情:画哪几种,逗号分开;空着画缺省的五种。
     expressions: str = Field(default="", max_length=400)
+    #: 让它说话:要说的那段话(ADR 0028)。
+    text: str = Field(default="", max_length=4000)
 
 
 class EntityUpdate(ApiModel):

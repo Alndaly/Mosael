@@ -23465,7 +23465,8 @@
             "type": "string",
             "enum": [
               "angles",
-              "expressions"
+              "expressions",
+              "speak"
             ],
             "title": "Ability"
           },
@@ -23489,6 +23490,12 @@
             "maxLength": 400,
             "title": "Expressions",
             "default": ""
+          },
+          "text": {
+            "type": "string",
+            "maxLength": 4000,
+            "title": "Text",
+            "default": ""
           }
         },
         "type": "object",
@@ -23496,7 +23503,7 @@
           "ability"
         ],
         "title": "EntityDrawRequest",
-        "description": "资产详情页上的「补全多角度」「生成表情」(ADR 0027 阶段 4):和画板上资产格的那两项能力是同一件事。"
+        "description": "资产详情页上的「补全多角度」「生成表情」(ADR 0027 阶段 4)和「让它说话」(ADR 0028):和画板上资产格的那几项能力是同一件事。"
       },
       "EntityKindOut": {
         "properties": {

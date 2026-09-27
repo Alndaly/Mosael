@@ -345,7 +345,39 @@ def _reference_image_models(db: Session, ctx: OptionContext) -> list[Option]:
     ]
 
 
+def _talking_models(mode: str) -> Source:
+    """会说话照片 / 改口型的视频模型(描述符的 `modes` 声明了才列,ADR 0028)。留空用默认或第一个会的。"""
+
+    def list_them(db: Session, ctx: OptionContext) -> list[Option]:
+        from app.domain.workflows.executors.talking import talking_models
+
+        return [{"value": one["id"], "label": one["label"]} for one in talking_models(db, mode, ctx.user_id)]
+
+    return list_them
+
+
+def _automation_chat_models(db: Session, ctx: OptionContext) -> list[Option]:
+    """能跑自动化对话的模型,**跨连接直接列模型** —— 和画板「让 AI 写」、设置页默认模型同一份清单
+    (provider_models.models_for_capability)。值是 `<连接 id>:<模型>`,一次挑定两样:「先选连接再选模型」逼人先知道
+    模型挂在哪条连接下,而那恰恰是他不关心的事。"""
+    from app.domain import provider_models
+
+    return [
+        {"value": f"{row.provider_profile_id}:{row.model_id}", "label": row.display_name or row.model_id}
+        for row in provider_models.models_for_capability(db, "chat", ctx.user_id, surface="automation")
+    ]
+
+
+def split_chat_model(value: str) -> tuple[str, str]:
+    """`automation_chat_models` 的值 → (连接 id, 模型)。空着就是两样都空(用默认)。"""
+    profile, _, model = str(value or "").partition(":")
+    return (profile, model) if model else ("", "")
+
+
 SOURCES: dict[str, Source] = {
+    "automation_chat_models": _automation_chat_models,
+    "speech_video_models": _talking_models("speech-to-video"),
+    "lipsync_models": _talking_models("video-lipsync"),
     "entities": _entities,
     "reference_image_models": _reference_image_models,
     "entities.character": lambda db, ctx: _entities(db, ctx, "character"),

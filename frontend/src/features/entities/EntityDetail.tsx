@@ -24,6 +24,7 @@ import {
 } from "@/api/client";
 import { errorText } from "@/api/errorMessage";
 import { useImagePreview } from "@/components/app/image-preview";
+import { SpeakButton } from "@/features/entities/SpeakDialog";
 import { useI18n } from "@/app/preferences";
 import { ConfirmDialog, RenameDialog } from "@/components/app/modals";
 import { EmptyState } from "@/components/layout/EmptyState";
@@ -193,10 +194,14 @@ export function EntityDetail({
               </span>
               {data.parent_id && <span>{t("entityVariantOf").replace("{name}", data.parent_name)}</span>}
             </span>
-            <Button variant="outline" size="sm" className="shrink-0 hover:border-destructive/50 hover:text-destructive" onClick={() => setDeleting(true)}>
-              <Trash2 />
-              {t("delete")}
-            </Button>
+            <span className="flex shrink-0 items-center gap-2">
+              {/* 人物能说话(数字人,ADR 0028):它自己的嗓子 + 正面图。门槛(授权、音色、模型)由服务端查,原因写在弹窗里。 */}
+              {data.kind === "character" && <SpeakButton entity={data} workspaceId={workspaceId} />}
+              <Button variant="outline" size="sm" className="shrink-0 hover:border-destructive/50 hover:text-destructive" onClick={() => setDeleting(true)}>
+                <Trash2 />
+                {t("delete")}
+              </Button>
+            </span>
           </div>
           <DraftInput
             aria-label={t("entityName")}

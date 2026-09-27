@@ -1,4 +1,6 @@
 import {
+  MessageCircle,
+  Speech,
   ScanBox,
   Rotate3d,
   Smile,
@@ -121,6 +123,10 @@ const NODE_ICONS: Record<string, LucideIcon> = {
   //: 资产格的两项能力:转一圈看别的角度、换几种表情。
   entity_angles: Rotate3d,
   entity_expressions: Smile,
+  //: 数字人:说一段话(人物、人像)、对口型(视频)。
+  entity_speak: MessageCircle,
+  image_speak: MessageCircle,
+  video_lipsync: Speech,
   note_search: Search,
   note_read: BookOpen,
   note_create: BookPlus,

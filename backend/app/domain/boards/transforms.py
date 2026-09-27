@@ -211,7 +211,8 @@ def _host_fields(meta: dict[str, Any]) -> list[tuple[str, str]]:
     只交出文字的(翻译)吃的就是那段字;交出素材的(提示词出图)不吃内容 —— 空列表。
     """
     specs = meta.get("config") or {}
-    sinks = _sinks(meta)
+    #: 声明了 `board_host: false` 的字段只从上游接,不当宿主(对口型的音频:这一项挂在视频格上,不挂在音频格上)。
+    sinks = {key: sink for key, sink in _sinks(meta).items() if (specs.get(key) or {}).get("board_host", True)}
     fields = [(key, sink) for key, sink in sinks.items() if sink in ("asset", "scene", "entity")]
     if not fields and not _makes_media(meta):
         fields = list(sinks.items())

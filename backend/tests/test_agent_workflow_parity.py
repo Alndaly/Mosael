@@ -77,6 +77,10 @@ NODE_TO_TOOL: dict[str, str] = {
     #: 再 attach_entity_reference 按角度挂回去 —— 提示词它自己会写。
     "entity_angles": "generate_image",
     "entity_expressions": "generate_image",
+    #: 数字人:智能体是先配音(synthesize_speech)、再 generate_video 挂首帧 / 源视频 + 驱动音频 —— 同一件事的两步。
+    "entity_speak": "generate_video",
+    "image_speak": "generate_video",
+    "video_lipsync": "generate_video",
     "project_create": "create_project",
     # 画布上的自动成片便利节点会顺手建立默认序列和轨道；智能体侧对应的用户目标仍是新建项目。
     "project_sequence_create": "create_project",

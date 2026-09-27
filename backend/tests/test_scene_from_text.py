@@ -27,7 +27,7 @@ def written(monkeypatch):
 
     def fake_llm(db, scope, config):
         seen.update(config)
-        return {"text": "", "json": LAYOUT}
+        return {"text": "", "json": seen.get("reply") or LAYOUT}
 
     monkeypatch.setattr(ai_executors, "llm", fake_llm)
     return seen
@@ -96,3 +96,17 @@ def test_空的_3D_场景格存得下_写了_id_照旧校验() -> None:
     assert "scene_id" not in empty["items"][0]
     with pytest.raises(BoardDomainError):
         normalize_canvas({"items": [{"id": "set", "kind": "scene", "x": 0, "y": 0, "scene_id": "  "}], "edges": []})
+
+
+def test_布景的空引用当作没有_不是非法_id(written) -> None:
+    """严格模式的结构化输出要求每一格都在,用不上的父级、模型 id 写空字符串 —— 此前建场景时被当成非法 id 拒了
+    (用户撞上:「objects.0.parent_id: String should have at least 1 character」)。"""
+    from tests.test_scene_workflow_nodes import LAYOUT as BASE
+
+    strict = {**BASE, "objects": [{**one, "parent_id": "", "model_id": ""} for one in BASE["objects"]]}
+    written["reply"] = strict
+
+    scope = _scope()
+    with SessionLocal() as db:
+        out = scene_from_text(db, scope, {"text": "一个女孩在雪山脚下的草原上跑步"})
+    assert out["shot_count"] == 1

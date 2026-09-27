@@ -240,7 +240,7 @@ def draw_entity(entity_id: str, body: EntityDrawRequest, db: DbSession, user: Cu
     from app.domain.workflows import WorkflowDomainError
 
     entity = _entity(db, user, entity_id, perm="ai")
-    config = {"model": body.model, "scope": body.scope, "expressions": body.expressions}
+    config = {"model": body.model, "scope": body.scope, "expressions": body.expressions, "text": body.text}
     try:
         return start_drawing(db, entity, body.ability, config, actor_id=user.id)
     except WorkflowDomainError as exc:
