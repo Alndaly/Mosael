@@ -184,12 +184,13 @@ def _seed_share(ctx: Context, db: Session, owner: User, report: DevSeedReport) -
     for index, (item_id, data, title) in enumerate(images):
         blob = store_blob(ctx, db, owner, data, "image/png")
         items.append({
-            "id": item_id, "kind": "image", "x": index * 300, "y": 0, "width": 260, "height": 163, "title": title,
+            "id": item_id, "kind": "image", "x": 620, "y": index * 200, "width": 260, "height": 163, "title": title,
             "media": {"sha256": blob.sha256, "content_type": "image/png", "width": 640, "height": 400},
         })
-    items.append({"id": "n1", "kind": "note", "x": 0, "y": 220, "width": 240, "height": 140,
+    #: 上游在左、下游在右 —— 和应用里产出落在右边一个方向。上游摆在下游正下方的话,左进右出的连线会绕一个弯。
+    items.append({"id": "n1", "kind": "note", "x": 0, "y": 0, "width": 240, "height": 140,
                   "text": "这是一张示例便签:把三张参考图的配色统一成冷色调。", "color": "yellow"})
-    items.append({"id": "d1", "kind": "document", "x": 300, "y": 220, "width": 520, "height": 320, "title": "分镜说明",
+    items.append({"id": "d1", "kind": "document", "x": 0, "y": 200, "width": 520, "height": 320, "title": "分镜说明",
                   "markdown": "# 分镜说明\n\n1. 开场:远景\n2. 推近到主角\n3. 结尾:字幕淡出\n", "revision": 3})
     snapshot = {
         "schema": SCHEMA,
