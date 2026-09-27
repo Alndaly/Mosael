@@ -6,6 +6,8 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
+import { net } from "electron";
+
 import { plog } from "./log";
 
 const BASE =
@@ -51,7 +53,7 @@ function readWorkerKey(): string {
 async function req<T>(path: string, method = "GET", body?: unknown): Promise<T> {
   const headers: Record<string, string> = { "X-Mosael-Worker-Key": readWorkerKey() };
   if (body) headers["Content-Type"] = "application/json";
-  const res = await fetch(`${BASE}/api/publish${path}`, {
+  const res = await net.fetch(`${BASE}/api/publish${path}`, {
     method,
     signal: AbortSignal.timeout(10_000),
     headers,

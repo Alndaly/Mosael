@@ -6,6 +6,7 @@ const {
   dialog,
   ipcMain,
   nativeImage,
+  net,
   shell,
   systemPreferences,
 } = require("electron");
@@ -230,7 +231,7 @@ function backendCommand() {
 
 async function isHealthy() {
   try {
-    const res = await fetch(`${BACKEND_URL}/api/health`, { signal: AbortSignal.timeout(1500) });
+    const res = await net.fetch(`${BACKEND_URL}/api/health`, { signal: AbortSignal.timeout(1500) });
     if (!res.ok) return false;
     const body = await res.json();
     return body.status === "ok";
@@ -370,7 +371,7 @@ function compareVersions(a, b) {
 }
 
 async function checkForUpdates() {
-  const res = await fetch(`https://api.github.com/repos/${UPDATE_REPO}/releases/latest`, {
+  const res = await net.fetch(`https://api.github.com/repos/${UPDATE_REPO}/releases/latest`, {
     headers: { Accept: "application/vnd.github+json", "User-Agent": "mosael-updater" },
   });
   if (!res.ok) throw new Error(`GitHub ${res.status}`);
@@ -814,7 +815,7 @@ app.whenReady().then(async () => {
 
     const temporaryPath = `${picked.filePath}.${process.pid}.${Date.now()}.partial`;
     try {
-      const response = await fetch(`${BACKEND_URL}/api/settings/data/backup`, {
+      const response = await net.fetch(`${BACKEND_URL}/api/settings/data/backup`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
         signal: AbortSignal.timeout(30 * 60 * 1000),

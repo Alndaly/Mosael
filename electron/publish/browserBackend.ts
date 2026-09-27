@@ -4,6 +4,8 @@ import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
+import { net } from "electron";
+
 const BASE =
   process.env.MOSAEL_BACKEND_URL || `http://127.0.0.1:${process.env.MOSAEL_BACKEND_PORT || 8800}`;
 
@@ -24,7 +26,7 @@ function readWorkerKey(): string {
 async function req<T>(path: string, method = "GET", body?: unknown): Promise<T> {
   const headers: Record<string, string> = { "X-Mosael-Worker-Key": readWorkerKey() };
   if (body) headers["Content-Type"] = "application/json";
-  const res = await fetch(`${BASE}/api/browser${path}`, {
+  const res = await net.fetch(`${BASE}/api/browser${path}`, {
     method,
     headers,
     body: body ? JSON.stringify(body) : undefined,
