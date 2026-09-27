@@ -1,7 +1,8 @@
-"""「按文字搭 3D 场景」:剧本 / 分镜连进便签或文档格,搭出一个带机位和运镜的白模场景,落成右边一格 3D 场景格。
+"""「按剧本搭 3D 场景」:3D 场景格的一种填法 —— 把剧本 / 分镜(文档、便签)连进场景格,搭出一个带机位和运镜的
+白模场景,落进这一格。
 
 写布景的 LLM 换成假的(交回一份布景);钉住的是:规矩和整片模板同一份、交给模型的是这段文字和道具清单、
-建出来的场景带着镜头、画板上它是便签和文档格的能力、产出落成一格挂着渲白模的 3D 场景格。
+建出来的场景带着镜头、画板上它挂在 3D 场景格上(不挂文档、便签)、搭好的场景落进这一格。
 """
 
 from __future__ import annotations
@@ -64,16 +65,34 @@ def test_没有文字_镜头数夹在范围里(written) -> None:
     assert "不超过 12 个镜头" in written["system"]
 
 
-def test_画板上是便签和文档格的能力_产出落成一格挂着渲白模的_3D_场景格() -> None:
-    from app.domain.boards.canvas import _derived_item
-    from app.domain.boards.tools import board_outputs
-    from app.domain.boards.transforms import board_hosts, board_role, content_transform_gap, output_kinds
+def test_画板上是_3D_场景格的一种填法_剧本从连进来的文档便签接_搭好的场景落进这一格() -> None:
+    """交出的是一个场景,剧本是参数不是原料 —— 和提示词出图挂在图片格上同一条判法,不挂在文档、便签上。"""
+    from app.domain.boards.canvas import _canvas_with_delivered_result
+    from app.domain.boards.tools import bindable_kinds, board_outputs
+    from app.domain.boards.transforms import board_hosts, board_role, content_transform_gap, host_fields, output_kinds
 
     meta = NODE_TYPES["scene_from_text"]
     assert content_transform_gap(meta) is None
-    assert board_role(meta) == "ability" and board_hosts(meta) == ("note", "document")
+    assert board_role(meta) == "slot" and board_hosts(meta) == ("scene",) and host_fields(meta) == {}
+    assert bindable_kinds("text", meta["config"]["text"]) == ["note", "document"], "剧本从连进来的文档、便签接"
     assert output_kinds(meta) == ["scene"]
-    outputs = board_outputs(meta, {"scene_id": "sc-1", "shot_ids": ["s1"], "shot_count": 1, "name": "天台告白"})
-    assert outputs == [{"type": "scene", "scene_id": "sc-1", "name": "天台告白"}]
-    assert _derived_item(outputs[0], {}) == {"kind": "scene", "scene_id": "sc-1", "text": "天台告白",
-                                            "form": {"producer": "scene_render"}}
+    outputs = board_outputs(meta, {"scene_id": "sc-new", "shot_ids": ["s1"], "shot_count": 1, "name": "天台告白"})
+    assert outputs == [{"type": "scene", "scene_id": "sc-new", "name": "天台告白"}]
+
+    #: 已经有场景的格子按剧本重搭:新场景换进这一格,旧场景的缩略图摘掉(旧场景本身还在库里)。
+    cell = {"id": "set", "kind": "scene", "x": 0, "y": 0, "scene_id": "sc-old", "asset_id": "thumb-old",
+            "form": {"producer": "node:scene_from_text"}, "run": {"status": "running", "job_id": "j1"}}
+    canvas = _canvas_with_delivered_result({"items": [cell], "edges": []}, item_id="set", job_id="j1", outputs=outputs,
+                                           reason="", cancelled=False, succeeded=True, assets={})
+    [filled] = canvas["items"]
+    assert (filled["scene_id"], filled["text"], filled["run"]["status"]) == ("sc-new", "天台告白", "succeeded")
+    assert "asset_id" not in filled
+
+
+def test_空的_3D_场景格存得下_写了_id_照旧校验() -> None:
+    from app.domain.boards import BoardDomainError, normalize_canvas
+
+    empty = normalize_canvas({"items": [{"id": "set", "kind": "scene", "x": 0, "y": 0}], "edges": []})
+    assert "scene_id" not in empty["items"][0]
+    with pytest.raises(BoardDomainError):
+        normalize_canvas({"items": [{"id": "set", "kind": "scene", "x": 0, "y": 0, "scene_id": "  "}], "edges": []})

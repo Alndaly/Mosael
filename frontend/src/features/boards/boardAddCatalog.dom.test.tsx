@@ -36,9 +36,9 @@ describe("画板「添加」单子:只有格子,每一行都是图标、名字�
     Element.prototype.scrollIntoView ??= () => {};
   });
 
-  it("九种放法,没有工具那一组 —— 把内容变成新内容的事是格子自己的能力", () => {
+  it("十种放法,没有工具那一组 —— 把内容变成新内容的事是格子自己的能力", () => {
     const rows = openMenu();
-    expect(rows).toHaveLength(9);
+    expect(rows).toHaveLength(10);
     for (const row of rows) {
       const [label, description] = lines(row);
       expect(label, "每一行都有名字").toBeTruthy();

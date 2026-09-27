@@ -525,10 +525,13 @@ def normalize_canvas(raw: Any) -> dict[str, Any]:
                 item["note_id"], item["note_revision"] = note_id.strip(), revision
 
         if kind == "scene":
+            #: 3D 场景格可以先空着:放下一格,连一段剧本进来按剧本搭(scene_from_text 是空场景格的一种填法)。
+            #: 写了就得是一个正经的 id。
             scene_id = entry.get("scene_id")
-            if not isinstance(scene_id, str) or not scene_id.strip():
-                raise BoardDomainError("boardErr_sceneNeedsId")
-            item["scene_id"] = scene_id.strip()
+            if scene_id is not None:
+                if not isinstance(scene_id, str) or not scene_id.strip():
+                    raise BoardDomainError("boardErr_sceneNeedsId")
+                item["scene_id"] = scene_id.strip()
 
         if kind == "entity":
             entity_id = entry.get("entity_id")
@@ -1322,6 +1325,10 @@ def _canvas_with_delivered_result(
                 filled["asset_id"] = str(fit["asset_id"])
             elif fit is not None and fit.get("type") == "note":
                 filled.update(note_id=str(fit["note_id"]), note_revision=fit.get("revision"), text=str(fit.get("title") or ""))
+            elif fit is not None and fit.get("type") == "scene":
+                #: 按剧本搭出的是一个**新场景**,换进这一格;原来那个还在「3D 场景」里。缩略图是旧场景的,摘掉。
+                filled.update(scene_id=str(fit["scene_id"]), text=str(fit.get("name") or ""))
+                filled.pop("asset_id", None)
             elif fit is not None:
                 filled["text"] = _clip(str(fit.get("text") or ""))
             kept.append(filled)
@@ -1388,6 +1395,8 @@ def _fits(output: dict[str, Any], kind: str, assets: dict[str, tuple[str, str]])
         return output.get("type") == "text"
     if kind == "document":
         return output.get("type") == "note" and bool(output.get("note_id"))
+    if kind == "scene":
+        return output.get("type") == "scene" and bool(output.get("scene_id"))
     found = assets.get(str(output.get("asset_id") or "")) if output.get("type") == "asset" else None
     return found is not None and found[0] == kind
 

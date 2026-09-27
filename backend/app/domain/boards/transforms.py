@@ -141,9 +141,11 @@ def output_kinds(meta: dict[str, Any]) -> list[str]:
 
 
 def _makes_media(meta: dict[str, Any]) -> bool:
+    """它**交出一样东西**(素材,或一个 3D 场景),而不只是一段字。交出东西的,吃的文字是参数(提示词、剧本),不是原料 ——
+    它是那种空格子的一种填法(提示词出图挂在图片格上,按剧本搭场景挂在 3D 场景格上)。"""
     from app.domain.workflows import output_data_type
 
-    return any(output_data_type(name, meta) == "asset" for name in content_outputs(meta))
+    return any(output_data_type(name, meta) in ("asset", "scene") for name in content_outputs(meta))
 
 
 def _sinks(meta: dict[str, Any]) -> dict[str, str]:
@@ -237,7 +239,7 @@ def board_hosts(meta: dict[str, Any]) -> tuple[str, ...]:
         kinds = {kind for key, _sink in fields for kind in bindable_kinds(key, specs[key])}
     else:
         made = output_kinds(meta)
-        kinds = {kind for kind in made if kind in _MEDIA_KINDS}
+        kinds = {kind for kind in made if kind in (*_MEDIA_KINDS, "scene")}
         if not kinds or "asset" in made:
             kinds = set(_MEDIA_KINDS)
     return tuple(kind for kind in _HOST_ORDER if kind in kinds)

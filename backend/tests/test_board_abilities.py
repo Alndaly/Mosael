@@ -41,7 +41,8 @@ def _check(producer_id: str, meta: dict) -> None:
         for kind in hosts:
             assert host_field(meta, kind) in (meta.get("config") or {}), (producer_id, kind)
     else:
-        assert set(hosts) <= MEDIA_KINDS, f"{producer_id} 是生成器,却挂在不装素材的格子上:{hosts}"
+        #: 空格子的填法挂在它产出的那种格子上:素材格,或者 3D 场景格(按剧本搭场景)。
+        assert set(hosts) <= MEDIA_KINDS | {"scene"}, f"{producer_id} 是填法,却挂在它产不出的格子上:{hosts}"
         assert host_fields(meta) == {}
 
 

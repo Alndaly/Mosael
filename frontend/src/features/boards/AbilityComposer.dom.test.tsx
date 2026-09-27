@@ -342,5 +342,10 @@ describe("能力的运行、空格子上的生成器", () => {
     expect(slotProducers({ ...empty, kind: "image", form: { producer: "generate" } }, registry)).toEqual([]);
     expect(slotProducers({ ...empty, asset_id: "done" }, registry)).toEqual([]);
     expect(slotProducers(empty, undefined)).toEqual([]);
+
+    //: 3D 场景格在「渲白模 / 按剧本搭」之间切;它的 asset_id 是缩略图,不是产出 —— 有缩略图照样能切(重搭一个场景)。
+    const scenes = [producer("scene_render", ["scene"]), producer("node:scene_from_text", ["scene"])];
+    const set: BoardItem = { id: "set", kind: "scene", x: 0, y: 0, scene_id: "sc", asset_id: "thumb", form: { producer: "scene_render" } };
+    expect(slotProducers(set, scenes).map((one) => one.id)).toEqual(["scene_render", "node:scene_from_text"]);
   });
 });

@@ -543,8 +543,11 @@ BOARD_NODES = {
     "denoise_audio": ("video", "audio"),
     "entity_angles": ("entity",),
     "entity_expressions": ("entity",),
-    "scene_from_text": ("note", "document"),
+    #: 3D 场景格的一种填法(剧本从连进来的文档、便签接),不是能力。
+    "scene_from_text": ("scene",),
 }
+#: 上面这些里是空格子填法(`slot`)而不是内容格能力的那几个。
+SLOT_NODES = {"scene_from_text"}
 
 
 def test_画板上的内置变换从节点声明里读_是它吃的那几种格子的能力() -> None:
@@ -586,7 +589,9 @@ def test_画板上的内置变换从节点声明里读_是它吃的那几种格�
     nodes = {one for one in registry if one.startswith("node:")}
     assert nodes == {f"node:{name}" for name in BOARD_NODES}
     assert {one: registry[one].hosts for one in nodes} == {f"node:{name}": hosts for name, hosts in BOARD_NODES.items()}
-    assert all(registry[one].role == ABILITY and not registry[one].fills_empty_slot for one in nodes)
+    for one in nodes:
+        slot = one.removeprefix("node:") in SLOT_NODES
+        assert (registry[one].role, registry[one].fills_empty_slot) == (("slot", True) if slot else (ABILITY, False)), one
     #: 后果照节点声明:资产格那两项是付费生成(智能体替人点要确认卡),其余都在本机做完
     #: (对外发请求、调别的流程的那两个已经不在画板上了)。
     paid = {"node:entity_angles", "node:entity_expressions"}

@@ -240,7 +240,8 @@ export function renderAbility(
  * 就有 audio,这里不用改。
  */
 export function slotProducers(item: BoardItem, producers: BoardProducerInfo[] | undefined): BoardProducerInfo[] {
-  if (!producers || item.asset_id) return [];
+  //: 3D 场景格的 asset_id 是缩略图,不是它的产出:有缩略图照样能在「渲白模 / 按剧本搭」之间切(重搭一个场景)。
+  if (!producers || (item.asset_id && item.kind !== "scene")) return [];
   const fitting = producers.filter((one) => one.fills_empty_slot && one.hosts.includes(item.kind));
   return fitting.length > 1 ? fitting : [];
 }

@@ -1,4 +1,4 @@
-import { FolderOpen, Sparkles, Package, Wrench, type LucideIcon } from "lucide-react";
+import { Box, FolderOpen, Sparkles, Package, Wrench, type LucideIcon } from "lucide-react";
 
 import type { BoardItem, BoardProducerInfo, BoardRunForms } from "@/api/client";
 import type { MessageKey } from "@/app/messages";
@@ -78,6 +78,9 @@ export function boardAbilities(
   );
 }
 
+/** 3D 场景格「按剧本搭」的产出者(工作流节点 scene_from_text,后端 boards.transforms 判成场景格的一种填法)。 */
+export const SCENE_FROM_TEXT = "node:scene_from_text" as const;
+
 /** 操作条上直接摆几项能力;其余收进「⋯」。内置的排在前面,所以常用的那几项总在外面。 */
 export const DIRECT_ABILITIES = 4;
 
@@ -125,6 +128,8 @@ const KIND_ROWS: KindRow[] = [
   { value: "audio", kind: "audio", group: "create" },
   { value: "note", kind: "note", group: "create" },
   { value: "document", kind: "document", group: "create" },
+  //: 一格空的 3D 场景,连一段剧本进来按剧本搭(「从库里放」那一行是挑一个现成的)。
+  { value: "scene-new", kind: "scene", group: "create", text: { label: "boardKindScene", hint: "boardsNewSceneHint", icon: Box } },
   //: 一行挑三种:弹窗里按图片 / 视频 / 音频筛,挑中哪一种放哪一种格子(AssetPickerDialog 的 `media`)。
   { value: "pick-media", kind: "image", group: "library", text: { label: "boardsAddMedia", hint: "boardsAddMediaHint", icon: FolderOpen } },
   //: 资产库里的人物 / 场景 / 道具(ADR 0027):先挑再放,和 3D 场景一样。

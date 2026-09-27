@@ -886,7 +886,7 @@ export function SceneNode({ data, selected }: NodeProps) {
   const t = useI18n();
   const state = useRunState(item);
   const status = itemRunStatus(item);
-  const fallback = <div data-board-scene-hint="" className="flex h-full flex-col items-center justify-center gap-2 bg-secondary/40 px-5 text-center text-muted-foreground"><Box size={32} strokeWidth={1.2} /><span className="text-ui-xs">{t(item.asset_id ? "boardScenePreviewMissing" : "boardScenePreviewEmpty")}</span></div>;
+  const fallback = <div data-board-scene-hint="" className="flex h-full flex-col items-center justify-center gap-2 bg-secondary/40 px-5 text-center text-muted-foreground"><Box size={32} strokeWidth={1.2} /><span className="text-ui-xs">{t(!item.scene_id ? "boardSceneBuildEmpty" : item.asset_id ? "boardScenePreviewMissing" : "boardScenePreviewEmpty")}</span></div>;
   const pending = status === "queued" || status === "running" || status === "failed";
   //: `group`:接点在悬停时显形(group-hover)—— 少了它,3D 场景格的接点只有选中了才看得见。
   return <div data-board-run-status={state["data-board-run-status"]} className={cn("group relative flex h-full w-full flex-col overflow-visible border border-border bg-panel shadow-sm", CELL_RADIUS, state.className)}>

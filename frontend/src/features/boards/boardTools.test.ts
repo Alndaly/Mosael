@@ -97,6 +97,8 @@ describe("「添加」的单子(boardAddCatalog)", () => {
     //: 同样的格子不列两遍(此前「生成」和「从素材库」各有图片 / 视频 / 音频);便签、文档会让 AI 写,是新建的内容格。
     expect(rows.map((one) => [one.group, one.value])).toEqual([
       ["新建", "image"], ["新建", "video"], ["新建", "audio"], ["新建", "note"], ["新建", "document"],
+      //: 一格空的 3D 场景,连剧本进来按剧本搭;「从库里放」那一行是挑一个现成的。
+      ["新建", "scene-new"],
       ["从库里放", "pick-media"], ["从库里放", "entity"], ["从库里放", "scene"],
       ["整理", "frame"],
     ]);

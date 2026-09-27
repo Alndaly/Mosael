@@ -1082,7 +1082,9 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "outputs": ["scene_id", "shot_ids", "shot_count"],
         "output_types": {"shot_ids": "json", "shot_count": "number"},
     },
-    #: 画板上是便签、文档格的一项能力(剧本 / 分镜连进来就能搭白模),产出落成右边一格 3D 场景格。
+    #: 画板上是 **3D 场景格的一种填法**(和「渲白模」一起出现在场景格面板的切换里):剧本 / 分镜从连进来的文档、便签接,
+    #: 搭出的场景落进这一格(有场景的格子换成新搭的,旧的还在「3D 场景」里)。它交出的是一个场景,文字是参数不是原料
+    #: (boards.transforms 的判法),所以不挂在文档、便签上。
     "scene_from_text": {
         "external": False,
         "surfaces": ["workflow", "board"],
