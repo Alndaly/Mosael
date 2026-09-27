@@ -307,6 +307,39 @@ WAN_27_I2V_CAPABILITIES = {
     "min_duration_seconds": 2,
     "max_duration_seconds": 15,
     "supports_audio": True,
+    #: 驱动音频(ADR 0028):文档写音频 2–30 秒;比所选时长长的部分**自动截掉**、成片不跟着音频走 ——
+    #: 界面在所选时长短于音频时提醒「后 N 秒会被截掉」。
+    "source_duration_seconds": {"driving_audio": [2, 30]},
+    "truncates_role": "driving_audio",
+}
+
+#: 说话照片(ADR 0028):一张人像按驱动音频说话。**成片长度跟着音频走**,不收时长,也不收提示词。
+#: 文档原话:音频「文件<15M,时长<20s」;图边长 400–7000;480P(默认)/ 720P。提交前适配器先调
+#: `wan2.2-s2v-detect` 预检人像(见 adapters/alibaba/dashscope/digital_human)。
+WAN_22_S2V_CAPABILITIES = {
+    "modes": ["speech-to-video"],
+    "endpoint": "dashscope",
+    "prompt": "none",
+    "parameter_keys": ["resolution", "first_frame", "driving_audio"],
+    "resolutions": ["480P", "720P"],
+    "default_resolution": "480P",
+    "source_limits": {"first_frame": 1, "driving_audio": 1},
+    "requires_source": [["first_frame"], ["driving_audio"]],
+    "duration_follows": "driving_audio",
+    "source_duration_seconds": {"driving_audio": [1, 20]},
+}
+
+#: 改口型(ADR 0028):一段已有视频的嘴对上新的音频;可选一张参考人像指定改哪张脸。视频、音频都是 2–120 秒;
+#: 音频比视频长时适配器开 `video_extension`,用正放倒放交替把视频补齐。不收提示词。
+VIDEORETALK_CAPABILITIES = {
+    "modes": ["video-lipsync"],
+    "endpoint": "dashscope",
+    "prompt": "none",
+    "parameter_keys": ["source_video", "driving_audio", "reference_image"],
+    "source_limits": {"source_video": 1, "driving_audio": 1, "reference_image": 1},
+    "requires_source": [["source_video"], ["driving_audio"]],
+    "duration_follows": "driving_audio",
+    "source_duration_seconds": {"source_video": [2, 120], "driving_audio": [2, 120]},
 }
 
 #: 参考生视频。接口两句话把规矩说全了:
@@ -1190,6 +1223,22 @@ BUILTIN_MODELS = [
         "capabilities": WAN_27_I2V_CAPABILITIES,
     },
     {
+        # 说话照片:一张人像按一段话说话(数字人,ADR 0028)。
+        "id": "alibaba:wan2.2-s2v:video",
+        "provider": "alibaba",
+        "kind": "video",
+        "model": "wan2.2-s2v",
+        "capabilities": WAN_22_S2V_CAPABILITIES,
+    },
+    {
+        # 改口型:一段已有视频的嘴对上新的一段话(数字人,ADR 0028)。
+        "id": "alibaba:videoretalk:video",
+        "provider": "alibaba",
+        "kind": "video",
+        "model": "videoretalk",
+        "capabilities": VIDEORETALK_CAPABILITIES,
+    },
+    {
         # 参考生视频:照着参考图/参考视频里的人和风格拍,而不是从某一帧开始动。
         "id": "alibaba:wan2.7-r2v:video",
         "provider": "alibaba",
@@ -1303,6 +1352,8 @@ CAPABILITY_PROFILES: dict[str, dict[str, Any]] = {
     "wan-video": WAN_VIDEO_CAPABILITIES,
     "wan-27-t2v": WAN_27_T2V_CAPABILITIES,
     "wan-27-i2v": WAN_27_I2V_CAPABILITIES,
+    "wan-22-s2v": WAN_22_S2V_CAPABILITIES,
+    "videoretalk": VIDEORETALK_CAPABILITIES,
     "wan-27-r2v": WAN_27_R2V_CAPABILITIES,
     "kling-legacy-video": KLING_LEGACY_VIDEO_CAPABILITIES,
     "kling-v3-video": KLING_V3_VIDEO_CAPABILITIES,

@@ -244,6 +244,9 @@ def _validate_source_assets(
     回话还是一长串英文,中间夹着一个 Request id。
     """
     url_only = set((capabilities or {}).get("url_only_roles") or [])
+    #: 按素材**自身的时长**给的上下限(ADR 0028):数字人那几家收的驱动音频、源视频各有长短。拦在提交这一刻 ——
+    #: 不拦的话建出一个注定失败的任务,几秒后回一句英文「audio duration exceeds」。
+    duration_ranges = (capabilities or {}).get("source_duration_seconds") or {}
     #: 传上去之后拿到的直链,按角色收着 —— 调用方把它回填进 `<role>_url`,于是适配器那一侧
     #: 走的就是"用户粘了一条链接"那条现成的路,不必认识"这份素材其实是本地的"。
     uploaded: dict[str, str] = {}
@@ -256,6 +259,8 @@ def _validate_source_assets(
             if asset_id:
                 raise GenerationDomainError("genErr_sourceGone", label=label, id=asset_id[:12])
             raise GenerationDomainError("genErr_sourceGoneNoId", label=label)
+
+        _check_source_duration(asset, role, duration_ranges.get(role))
 
         if role in url_only and not direct_media_url((asset.media_info or {}).get("source_url")):
             # **多走一步,而不是把问题退回给用户。** 这一项只收链接,而素材是本地的 ——
@@ -277,6 +282,25 @@ def _validate_source_assets(
             uploaded[role] = url
             logger.info("%s:「%s」经「%s」换到公网直链", label, asset.name, via)
     return uploaded
+
+
+def _check_source_duration(asset: Asset, role: str, bounds: Any) -> None:
+    """素材自身的时长得落在 `bounds`(`[最短, 最长]` 秒)里。时长读 `media_info.duration`(顶层没有这个字段);
+    读不出来的放行 —— 不猜,交给供应商判。"""
+    if not isinstance(bounds, (list, tuple)) or len(bounds) != 2:
+        return
+    try:
+        seconds = float((asset.media_info or {}).get("duration") or 0)
+    except (TypeError, ValueError):
+        return
+    if seconds <= 0:
+        return
+    low, high = float(bounds[0]), float(bounds[1])
+    if seconds < low or seconds > high:
+        raise GenerationDomainError(
+            "genErr_sourceDurationRange", label=_label(role), name=asset.name, seconds=f"{seconds:.1f}".rstrip("0").rstrip("."),
+            min=f"{low:g}", max=f"{high:g}",
+        )
 
 
 def _resolve_provider_profile(

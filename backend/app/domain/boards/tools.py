@@ -283,7 +283,10 @@ def board_outputs(meta: dict[str, Any], output: dict[str, Any]) -> list[dict[str
         if _empty(value):
             continue
         data_type = output_data_type(name, meta)
-        if data_type == "asset" or (data_type == "any" and isinstance(value, str) and value in collected):
+        if data_type == "scene":
+            #: 一个 3D 场景落成一格 3D 场景格;名字跟着(节点交出了 `name` 就用它)。
+            produced.append({"type": "scene", "scene_id": str(value), "name": str(output.get("name") or "")})
+        elif data_type == "asset" or (data_type == "any" and isinstance(value, str) and value in collected):
             ids = value if isinstance(value, list) else [value]
             produced.extend({"type": "asset", "asset_id": str(one)} for one in ids if isinstance(one, str) and one)
         elif data_type in ("text", "number", "sequence"):

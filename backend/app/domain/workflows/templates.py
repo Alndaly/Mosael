@@ -1134,6 +1134,55 @@ def requirement_statuses(db: Session, *, user_id: str, workspace_id: str) -> dic
     return statuses
 
 
+def blockout_rules(clip: int, *, source: str) -> str:
+    """搭 3D 白模布景的规矩:坐标、每镜一个布景台、人偶、道具、每镜一台相机和它的运镜、镜头与打光。
+
+    整片模板的「设计 3D 白模布景与机位」和画板上的「按文字搭 3D 场景」(executors/scenes.scene_from_text)读的是
+    这同一份 —— 两处各写一份的话,改了台距算法的那一份和没改的那一份会搭出两种白模。`source` 是尺寸、身高、颜色、
+    光线从哪来(「视觉圣经」/「这段文字」),`clip` 是每镜几秒(运镜的末档时间)。
+    """
+    return f"""坐标约定：单位米，Y 朝上，地面 y=0；所有坐标都写**世界坐标**。
+
+**台距 D 由布景尺寸算出来,不是固定值。** 取{source}里最大的那个场景的 width_m 与 depth_m 中较大的
+那个,加 8 米;若不足 12 米就按 12 米。第 n 镜(shot_number = n)的布景台整体放在 x = n*D 附近,
+台内每一个物体和这一镜相机的 position / target 都要把 x 加上 n*D。
+**不要用固定的 40 米**:三四米宽的卧室按 40 米排开,台与台之间会空出三十多米,整个白模散成一串
+看不清的小点;而六十米的大场景在 40 米台距下会直接和隔壁穿模。
+
+**每个布景台先出一个组。** kind="group",id="bay-<n>",name="镜头 <n> · <这一镜的场景名>",
+position 写 [0,0,0],parent_id 写空字符串;这一台里的**每一个**物体(room、陈设、figure、相机)
+都把 parent_id 写成 "bay-<n>"。组只为收纳,它在原点,所以**不改变任何坐标** —— 上面那条"都写世界
+坐标"照旧成立。没有组的话,八个台摊平就是七十多条重名的平铺列表。
+
+每个布景台：
+- 一个 room(parameters.width/depth/height 取{source}里这个场景的尺寸，position 为 [n*40,0,0]，
+  门洞在前后墙正中；没有天花板)。室外场景用一块 plane 当地面、几块 box 当远景体块。
+- 关键陈设用 box / cylinder / table / stairs 概括(桌椅、柜子、门、树……)，尺寸按真实比例。
+- 这一镜出镜的每个角色一个 figure:parameters.height = 角色身高,width 0.4~0.5(肩宽),depth 0.22~0.28;
+  color 用{source}里这个角色的 blockout_color;position 按分镜的站位;rotation[1] 是朝向(度)。
+  id 写成 "<角色id>-<n>"。
+- **能用真道具就别用方块拼。** 下面那份「可用的 3D 道具」清单里的东西是已经建好的真实模型:
+  kind="model",model_id 写清单里那个 id,name 写道具名,position/rotation 照常摆。清单里给了
+  每件道具实测的长宽高,按它和 figure(人)的比例摆,不要再用 parameters 去"设定"它的尺寸
+  (模型自带尺寸,parameters 对它无效)。清单为空就全用基本体。
+- 物体的 target 写 [0,1,0]、fov 写 45、track 写空数组 —— 只有相机用得上它们;
+  非 model 的物体 model_id 写空字符串。
+
+每镜一台相机：kind="camera",id="cam-<n>";position 是起始机位,target 是起始看向点(一般是主体的胸口
+或眼睛高度 1.3~1.6 米),fov 是竖直视角,由焦段换算:fov = 2*atan(12/焦段毫米)(14mm≈81°,24mm≈53°,
+35mm≈38°,50mm≈27°,85mm≈16°,135mm≈10°)。机位高度按机位角度:平视 1.5~1.7 米,俯拍 2.5~4 米,
+仰拍 0.3~0.8 米。相机必须在房间内、不穿过任何物体,和主体的距离要让景别成立(特写约 0.6~1 米,
+中景 1.5~2.5 米,全景 3~5 米)。
+运镜写在相机的 track 上：static 不写 track;其余至少两档 {{time:0,...}} 和 {{time:{clip},...}}
+(position/target/fov 三项都写),推 = 沿视线靠近主体,拉 = 远离,摇 = 机位不动只转 target,
+跟 = 机位和 target 一起平移,环绕 = 绕主体转(可加中间一档),升降 = 机位上下移动。
+
+shots:每镜一条 {{id:"shot-<n>", name:"镜头 <n>", duration:{clip}, aspect:画幅, easing:"smooth",
+camera_id:"cam-<n>"}}。lighting 按{source}的光线方案给方位角(0=相机默认一侧,90=右侧,180=逆光)、
+高度角、强度(2~5)、色温和软硬;preset 写 "custom"。background 写 "#20242c",ambient 写 1.5。
+"""
+
+
 def full_video_generation_graph(
     *, chat: ModelChoice, image: ModelChoice, video: ModelChoice, voice_id: str = "", db: Session | None = None
 ) -> dict[str, Any]:
@@ -1200,46 +1249,7 @@ JSON Schema 的对象。"""
     set_system = f"""你是布景师兼摄影助理。按分镜给每个镜头搭一个 3D 白模布景台，并放好这一镜的相机。
 输出就是 3D 场景的数据格式，会被直接建成场景、渲出参考帧交给图像和视频模型 —— 它决定每一镜的构图。
 
-坐标约定：单位米，Y 朝上，地面 y=0；所有坐标都写**世界坐标**。
-
-**台距 D 由布景尺寸算出来,不是固定值。** 取视觉圣经里最大的那个场景的 width_m 与 depth_m 中较大的
-那个,加 8 米;若不足 12 米就按 12 米。第 n 镜(shot_number = n)的布景台整体放在 x = n*D 附近,
-台内每一个物体和这一镜相机的 position / target 都要把 x 加上 n*D。
-**不要用固定的 40 米**:三四米宽的卧室按 40 米排开,台与台之间会空出三十多米,整个白模散成一串
-看不清的小点;而六十米的大场景在 40 米台距下会直接和隔壁穿模。
-
-**每个布景台先出一个组。** kind="group",id="bay-<n>",name="镜头 <n> · <这一镜的场景名>",
-position 写 [0,0,0],parent_id 写空字符串;这一台里的**每一个**物体(room、陈设、figure、相机)
-都把 parent_id 写成 "bay-<n>"。组只为收纳,它在原点,所以**不改变任何坐标** —— 上面那条"都写世界
-坐标"照旧成立。没有组的话,八个台摊平就是七十多条重名的平铺列表。
-
-每个布景台：
-- 一个 room(parameters.width/depth/height 取视觉圣经里这个场景的尺寸，position 为 [n*40,0,0]，
-  门洞在前后墙正中；没有天花板)。室外场景用一块 plane 当地面、几块 box 当远景体块。
-- 关键陈设用 box / cylinder / table / stairs 概括(桌椅、柜子、门、树……)，尺寸按真实比例。
-- 这一镜出镜的每个角色一个 figure:parameters.height = 角色身高,width 0.4~0.5(肩宽),depth 0.22~0.28;
-  color 用视觉圣经里这个角色的 blockout_color;position 按分镜的站位;rotation[1] 是朝向(度)。
-  id 写成 "<角色id>-<n>"。
-- **能用真道具就别用方块拼。** 下面那份「可用的 3D 道具」清单里的东西是已经建好的真实模型:
-  kind="model",model_id 写清单里那个 id,name 写道具名,position/rotation 照常摆。清单里给了
-  每件道具实测的长宽高,按它和 figure(人)的比例摆,不要再用 parameters 去"设定"它的尺寸
-  (模型自带尺寸,parameters 对它无效)。清单为空就全用基本体。
-- 物体的 target 写 [0,1,0]、fov 写 45、track 写空数组 —— 只有相机用得上它们;
-  非 model 的物体 model_id 写空字符串。
-
-每镜一台相机：kind="camera",id="cam-<n>";position 是起始机位,target 是起始看向点(一般是主体的胸口
-或眼睛高度 1.3~1.6 米),fov 是竖直视角,由焦段换算:fov = 2*atan(12/焦段毫米)(14mm≈81°,24mm≈53°,
-35mm≈38°,50mm≈27°,85mm≈16°,135mm≈10°)。机位高度按机位角度:平视 1.5~1.7 米,俯拍 2.5~4 米,
-仰拍 0.3~0.8 米。相机必须在房间内、不穿过任何物体,和主体的距离要让景别成立(特写约 0.6~1 米,
-中景 1.5~2.5 米,全景 3~5 米)。
-运镜写在相机的 track 上：static 不写 track;其余至少两档 {{time:0,...}} 和 {{time:{clip},...}}
-(position/target/fov 三项都写),推 = 沿视线靠近主体,拉 = 远离,摇 = 机位不动只转 target,
-跟 = 机位和 target 一起平移,环绕 = 绕主体转(可加中间一档),升降 = 机位上下移动。
-
-shots:每镜一条 {{id:"shot-<n>", name:"镜头 <n>", duration:{clip}, aspect:画幅, easing:"smooth",
-camera_id:"cam-<n>"}}。lighting 按视觉圣经的光线方案给方位角(0=相机默认一侧,90=右侧,180=逆光)、
-高度角、强度(2~5)、色温和软硬;preset 写 "custom"。background 写 "#20242c",ambient 写 1.5。
-只输出符合 JSON Schema 的对象。"""
+{blockout_rules(clip, source="视觉圣经")}只输出符合 JSON Schema 的对象。"""
 
     frame_prompt_tail = (
         " Reference images: the first one is a grey 3D blockout of this exact shot — match its camera angle, lens, "

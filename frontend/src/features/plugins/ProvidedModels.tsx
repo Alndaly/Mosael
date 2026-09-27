@@ -37,6 +37,8 @@ const MODE_LABELS: Record<string, MessageKey> = {
   "reference-to-video": "genModeReferenceToVideo",
   "video-edit": "genModeVideoEdit",
   "video-extend": "genModeVideoExtend",
+  "speech-to-video": "genModeSpeechToVideo",
+  "video-lipsync": "genModeVideoLipsync",
 };
 
 const KIND_LABELS: Record<string, MessageKey> = {

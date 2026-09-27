@@ -2133,6 +2133,9 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfField_system": {"zh": "系统提示词", "en": "System prompt"},
     "wfField_tags": {"zh": "标签", "en": "Tags"},
     "wfField_tag": {"zh": "标签", "en": "Tag"},
+    "wfField_max_shots": {"zh": "最多几镜", "en": "Max shots"},
+    "wfField_shot_seconds": {"zh": "每镜秒数", "en": "Seconds per shot"},
+    "wfField_aspect": {"zh": "画幅", "en": "Aspect ratio"},
     "wfField_entities": {"zh": "资产", "en": "Assets"},
     "wfField_target_lang": {"zh": "目标语言", "en": "Target language"},
     "wfField_temperature": {"zh": "发散程度", "en": "Temperature"},
@@ -2352,6 +2355,15 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Volcengine music generation needs the account's AK and SK; complete the connection in Settings",
     },
     "providerErr_noTaskId": {"zh": "{vendor} 没有返回任务 id", "en": "{vendor} did not return a task ID"},
+    "providerErr_noUsableFace": {
+        "zh": "{vendor}:这张图里没找到一张清晰的正脸,说不了话 —— 换一张清晰、单人、正面的人像。{detail}",
+        "en": "{vendor}: no clear, frontal face was found in this image, so it can't talk — use a clear single-person front portrait. {detail}",
+    },
+    "providerErr_uploadPolicyMissing": {
+        "zh": "{vendor} 没有给出临时存储的上传凭证,本地素材传不上去",
+        "en": "{vendor} did not return an upload credential for temporary storage, so local media can't be sent",
+    },
+    "providerErr_sourceMissing": {"zh": "{vendor}:缺少素材({role})", "en": "{vendor}: missing source ({role})"},
     "providerErr_noTaskIdDetail": {"zh": "{vendor} 没有返回任务 id:{detail}", "en": "{vendor} did not return a task ID: {detail}"},
     "providerErr_noResultUrl": {
         "zh": "{vendor} 报告生成成功,但没有给出产物地址",
@@ -2897,6 +2909,20 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfNode_entity_get_kind": {"zh": "按名字找时:哪一种", "en": "For a name lookup: which kind"},
     "wfNode_entity_get_name": {"zh": "按名字找(不分大小写);常接上游的角色名", "en": "Look up by name (case-insensitive); usually a character name from upstream"},
     "wfNode_entity_get_limit": {"zh": "最多交出几张参考图,默认 8", "en": "At most this many references, 8 by default"},
+    "wfNode_scene_from_text": {"zh": "按文字搭 3D 场景", "en": "Build a 3D scene from text"},
+    "wfNode_scene_from_text_desc": {
+        "zh": "照一段剧本、分镜或描述搭一个 3D 白模场景:拆成几个镜头,每镜一个布景台,摆好人偶、道具和相机,写好运镜。和「从主题到完整视频」里搭白模的规矩是同一份。搭好的场景在「3D 场景」里,可以渲首尾帧或运镜视频。",
+        "en": "Build a 3D blockout scene from a script, storyboard or description: split it into shots, one set per shot, with stand-in figures, props, cameras and camera moves. Same rules as the blockout step in “Topic to finished video”. The scene appears under 3D scenes, ready to render first/last frames or a camera-move video.",
+    },
+    "wfNode_scene_from_text_board": {"zh": "照这段剧本或分镜搭白模,摆好每一镜的机位和运镜", "en": "Build a blockout from this script or storyboard, with a camera and move for every shot"},
+    "wfNode_scene_from_text_text": {"zh": "剧本、分镜或一段描述", "en": "A script, storyboard or description"},
+    "wfNode_scene_from_text_profile_id": {"zh": "用哪条对话连接写布景;留空用默认", "en": "Chat connection that writes the layout; empty uses the default"},
+    "wfNode_scene_from_text_model": {"zh": "对话模型;留空用这条连接的默认", "en": "Chat model; empty uses the connection's default"},
+    "wfNode_scene_from_text_max_shots": {"zh": "最多几个镜头(1–12),默认 6", "en": "At most this many shots (1–12), 6 by default"},
+    "wfNode_scene_from_text_shot_seconds": {"zh": "每镜几秒,运镜按它走,默认 5", "en": "Seconds per shot, the length of each camera move; 5 by default"},
+    "wfNode_scene_from_text_aspect": {"zh": "画幅", "en": "Aspect ratio"},
+    "wfNode_scene_from_text_name": {"zh": "场景名;留空取文字的第一行", "en": "Scene name; empty uses the text's first line"},
+    "wfErr_sceneTextMissing": {"zh": "没有文字可以搭场景 —— 连一张写着剧本的便签或文档", "en": "There's no text to build a scene from — connect a note or document with the script."},
     "wfNode_entity_list": {"zh": "列资产", "en": "List library assets"},
     "wfNode_entity_list_desc": {
         "zh": "列出资产库里的人物 / 场景 / 道具(按最近改过的排),交出清单和一段一行一个的文字 —— 常交给 LLM,让它认出故事里的人是不是库里已有的那一个。",
@@ -3165,6 +3191,9 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfOpt_kind_character": {"zh": "人物", "en": "Character"},
     "wfOpt_kind_location": {"zh": "场景", "en": "Location"},
     "wfOpt_kind_prop": {"zh": "道具", "en": "Prop"},
+    "wfOpt_aspect_16:9": {"zh": "16:9 横屏", "en": "16:9 landscape"},
+    "wfOpt_aspect_9:16": {"zh": "9:16 竖屏", "en": "9:16 portrait"},
+    "wfOpt_aspect_1:1": {"zh": "1:1 方形", "en": "1:1 square"},
     "wfOpt_scope_missing": {"zh": "只补还没有的", "en": "Only missing angles"},
     "wfOpt_scope_all": {"zh": "每个角度都重画", "en": "Redraw every angle"},
     "wfOpt_defaultModel": {"zh": "默认", "en": "default"},
@@ -3778,6 +3807,10 @@ MESSAGES: dict[str, dict[str, str]] = {
     "genErr_roleUnsupported": {
         "zh": "{provider}/{model} 不支持「{role}」这种素材;它支持的是:{supported}",
         "en": "{provider}/{model} doesn't accept “{role}” assets. It accepts: {supported}",
+    },
+    "genErr_sourceDurationRange": {
+        "zh": "{label}「{name}」{seconds} 秒,这个模型只收 {min}–{max} 秒的 —— 剪一段,或换一个模型",
+        "en": "The {label} “{name}” is {seconds}s; this model only takes {min}–{max}s. Trim it, or pick another model.",
     },
     "genErr_durationCapWithRole": {
         "zh": "{provider}/{model} 挂了{label}时,时长最多 {cap} 秒(不挂能到 {max} 秒)",

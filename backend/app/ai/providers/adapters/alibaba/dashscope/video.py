@@ -26,6 +26,7 @@ from app.ai.providers.contracts.generation import (
     metering_from_request,
     adapter_http_error,
 )
+from app.ai.providers.adapters.alibaba.dashscope.digital_human import is_talking_model, submit_talking
 from app.ai.providers.adapters.alibaba.dashscope.image import (
     DASHSCOPE_BASE,
     download_result_asset,
@@ -169,8 +170,11 @@ def extract_video_url(task_payload: dict[str, Any]) -> str | None:
         url = output.get("video_url")
         if url:
             return str(url)
-        # 少数模型把结果放进 results 数组,和 qwen-image 的形状一致。
-        for result in output.get("results") or []:
+        # 少数模型把结果放进 results:qwen-image 那种是数组;说话照片(wan2.2-s2v)是一个对象 `{video_url}`。
+        results = output.get("results")
+        if isinstance(results, dict) and results.get("video_url"):
+            return str(results["video_url"])
+        for result in results if isinstance(results, list) else []:
             if isinstance(result, dict) and result.get("video_url"):
                 return str(result["video_url"])
             if isinstance(result, dict) and result.get("url"):
@@ -191,6 +195,10 @@ class WanVideoAdapter(GenerationAdapter):
     def generate(self, request: GenerationRequest, context: GenerationAdapterContext, output_dir: Path) -> GenerationResult:
         try:
             with self._client(context) as client:
+                #: 数字人(说话照片、改口型)是另一条提交路径、另一套素材字段,提交之后的轮询下载是同一份(digital_human)。
+                if is_talking_model(request.model):
+                    task_id = submit_talking(client, request)
+                    return self._collect(client, f"/api/v1/tasks/{task_id}", request, output_dir)
                 submit = client.post(SUBMIT_PATH, json=build_submit_payload(request))
                 submit.raise_for_status()
                 task_id = ((submit.json().get("output") or {}).get("task_id")) or ""

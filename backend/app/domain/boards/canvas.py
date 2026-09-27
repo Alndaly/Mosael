@@ -30,6 +30,7 @@ from app.core.i18n import LocalizedError, tr
 from app.db.models import Board, now
 from app.domain.boards.producer_ids import (
     NOTE_PRODUCER,
+    SCENE_PRODUCER,
     ability_of,
     derives_outputs,
     is_producer_id,
@@ -1092,7 +1093,8 @@ def _deliver_if_already_settled(db: Session, board: Board, item: dict[str, Any])
 
 #: 一次运行的产出是哪几种。和工作流的输出类型词表对得上的那一半(见 boards.tools.board_outputs)。
 #: `note`:一篇笔记的一版(文档格上写字交回的,见 actions._write_note)。
-OUTPUT_TYPES = ("asset", "text", "json", "note")
+#: `scene`:一个 3D 场景(「按文字搭 3D 场景」交回的),落成一格 3D 场景格。
+OUTPUT_TYPES = ("asset", "text", "json", "note", "scene")
 
 
 def outputs_of(job: Any) -> list[dict[str, Any]]:
@@ -1153,6 +1155,10 @@ def _derived_item(output: dict[str, Any], assets: dict[str, tuple[str, str]]) ->
         return {"kind": "note", "text": _clip(str(output.get("text") or "")), "form": note_form}
     if kind == "json":
         return {"kind": "note", "text": _clip(_json_text(output.get("value"))), "text_format": "json", "form": note_form}
+    if kind == "scene" and output.get("scene_id"):
+        #: 挂上渲白模 —— 选中它就能挑镜头渲首尾帧或运镜视频。
+        return {"kind": "scene", "scene_id": str(output["scene_id"]), "text": str(output.get("name") or ""),
+                "form": {"producer": SCENE_PRODUCER}}
     if kind == "note" and output.get("note_id"):
         return {"kind": "document", "note_id": str(output["note_id"]), "note_revision": output.get("revision"),
                 "text": str(output.get("title") or ""), "form": note_form}

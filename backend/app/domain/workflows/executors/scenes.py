@@ -136,3 +136,60 @@ def scene_render(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[s
         )
     except SceneDomainError as exc:
         raise WorkflowDomainError("wfErr_sceneRenderFailed", params={"reason": str(exc)}) from exc
+
+
+#: 「按文字搭 3D 场景」最多几镜(每镜一个布景台、一台相机)、每镜几秒(运镜末档的时间)。
+MAX_TEXT_SHOTS = 12
+DEFAULT_TEXT_SHOTS = 6
+DEFAULT_SHOT_SECONDS = 5
+SHOT_ASPECTS = ("16:9", "9:16", "1:1")
+
+
+@register("scene_from_text")
+def scene_from_text(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
+    """照一段剧本 / 分镜 / 描述搭一个 3D 白模场景:每一镜一个布景台、摆好人偶和道具、放好相机和运镜。
+
+    **不自己实现两样东西**:写布景的是 LLM 节点(`llm`,结构化输出),规矩和整片模板的「设计 3D 白模布景与机位」
+    是同一份(templates.blockout_rules);建场景的是 `scene_create`。这里只把它们串起来 —— 画板上便签、文档格
+    有了这一项能力,剧本连进来就能搭白模,接着在 3D 场景格上渲首尾帧或运镜视频。
+    """
+    from app.domain.workflows.executors.ai import llm
+    from app.domain.workflows.templates import _set_design_schema, blockout_rules
+
+    text = str(config.get("text") or "").strip()
+    if not text:
+        raise WorkflowDomainError("wfErr_sceneTextMissing")
+    try:
+        shots = max(1, min(MAX_TEXT_SHOTS, int(config.get("max_shots") or DEFAULT_TEXT_SHOTS)))
+        clip = max(1, min(30, int(config.get("shot_seconds") or DEFAULT_SHOT_SECONDS)))
+    except (TypeError, ValueError):
+        shots, clip = DEFAULT_TEXT_SHOTS, DEFAULT_SHOT_SECONDS
+    aspect = str(config.get("aspect") or "16:9")
+    if aspect not in SHOT_ASPECTS:
+        aspect = "16:9"
+    props = scene_props(db, scope, {"model_ids": ""})
+    system = (
+        "你是导演兼布景师、摄影助理。先把下面这段文字拆成不超过 "
+        f"{shots} 个镜头(每镜 {clip} 秒;文字本身就是分镜的,照它的镜头来),定下出镜的人物(身高、每人一个不同的"
+        "白模颜色)和场景(大致的长宽高),再给每个镜头搭一个 3D 白模布景台并放好相机。输出就是 3D 场景的数据格式,"
+        "会被直接建成场景、渲出参考帧交给图像和视频模型 —— 它决定每一镜的构图。\n\n"
+        + blockout_rules(clip, source="这段文字(没写明的尺寸、身高、光线按常识定)")
+        + "只输出符合 JSON Schema 的对象。"
+    )
+    written = llm(db, scope, {
+        "profile_id": config.get("profile_id"),
+        "model": config.get("model"),
+        "preset": "precise",
+        "system": system,
+        "prompt": f"文字:\n{text}\n\n可用的 3D 道具(kind=\"model\" 时 model_id 只能从这里选;尺寸是实测值):\n"
+                  f"{props['catalog']}\n\n画幅:{aspect}。",
+        "response_format": "json_schema",
+        "json_schema_name": "blockout_scene",
+        "json_schema": _set_design_schema(),
+        "json_schema_strict": "true",
+        "temperature": 0.2,
+        "max_tokens": 16000,
+    })
+    name = str(config.get("name") or "").strip() or text.splitlines()[0].strip("# ")[:60] or scope.name
+    built = scene_create(db, scope, {"name": name, "layout": written.get("json") or written.get("text")})
+    return {"scene_id": built["scene_id"], "shot_ids": built["shot_ids"], "shot_count": built["shot_count"], "name": name}

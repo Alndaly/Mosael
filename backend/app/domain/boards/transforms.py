@@ -102,13 +102,14 @@ def content_outputs(meta: dict[str, Any]) -> list[str]:
     out = []
     for name in landing_outputs(meta):
         data_type = output_data_type(name, meta)
-        if data_type == "asset" or (data_type == "text" and name in named):
+        #: 3D 场景也是画板摆得下的内容:它落成一格 3D 场景格(「按文字搭 3D 场景」)。
+        if data_type in ("asset", "scene") or (data_type == "text" and name in named):
             out.append(name)
     return out
 
 
 #: 一个变换「跑一次会长出什么」的那几种格子。`asset` = 一份素材,但没说是哪一种。
-OUTPUT_KINDS: tuple[str, ...] = ("note", "image", "video", "audio", "asset")
+OUTPUT_KINDS: tuple[str, ...] = ("note", "image", "video", "audio", "scene", "asset")
 
 
 def output_kinds(meta: dict[str, Any]) -> list[str]:
@@ -130,6 +131,9 @@ def output_kinds(meta: dict[str, Any]) -> list[str]:
     for name in content_outputs(meta):
         if output_data_type(name, meta) == "text":
             kinds.append("note")
+            continue
+        if output_data_type(name, meta) == "scene":
+            kinds.append("scene")
             continue
         media = declared_media(declared.get(name))
         kinds.append(media[0] if len(media) == 1 else fallback)

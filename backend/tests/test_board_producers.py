@@ -543,6 +543,7 @@ BOARD_NODES = {
     "denoise_audio": ("video", "audio"),
     "entity_angles": ("entity",),
     "entity_expressions": ("entity",),
+    "scene_from_text": ("note", "document"),
 }
 
 

@@ -1,4 +1,5 @@
 import {
+  ScanBox,
   Rotate3d,
   Smile,
   UserRoundPlus,
@@ -92,6 +93,8 @@ const NODE_ICONS: Record<string, LucideIcon> = {
   scene_props: Shapes,
   scene_create: Box,
   scene_render: Clapperboard,
+  //: 照剧本搭白模:一段字 → 一个框起来的 3D 场景。
+  scene_from_text: ScanBox,
   browser_open: AppWindow,
   browser_navigate: Globe,
   browser_click: MousePointerClick,

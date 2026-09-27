@@ -61,6 +61,10 @@ _KNOWN_KEYS: dict[str, str] = {
     "requires_source": "str_list_list",
     "requires_companion": "str_to_str_list",
     "url_only_roles": "str_list",
+    # 数字人(ADR 0028):成片时长跟着哪份素材走、按素材自身时长的上下限、哪份素材长了会被截。
+    "duration_follows": "str",
+    "source_duration_seconds": "str_to_int_list",
+    "truncates_role": "str",
     # 音频(ADR 0022)。
     "max_lyrics_chars": "positive_int",
     "default_instrumental": "bool",
@@ -118,6 +122,9 @@ _FIELD_GROUPS: dict[str, str] = {
     "requires_source": "advanced",
     "requires_companion": "advanced",
     "url_only_roles": "advanced",
+    "duration_follows": "advanced",
+    "source_duration_seconds": "limits",
+    "truncates_role": "advanced",
     "boolean_parameters": "advanced",
     "supports_audio": "advanced",
     "supports_generate_audio": "advanced",

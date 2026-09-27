@@ -361,6 +361,9 @@ _FIELD_LABELS = {
     "entity_ids": "wfField_entity_ids",
     "entity_id": "wfField_entity_id",
     "entities": "wfField_entities",
+    "max_shots": "wfField_max_shots",
+    "shot_seconds": "wfField_shot_seconds",
+    "aspect": "wfField_aspect",
     "tag": "wfField_tag",
     "expressions": "wfField_expressions",
     "scope": "wfField_scope",
@@ -504,7 +507,8 @@ _OUTPUT_DATA_TYPES = {
     "timeline_start": "number",
     "waited": "number",
 }
-_WORKFLOW_DATA_TYPES = frozenset({"text", "asset", "sequence", "number", "json", "any"})
+#: `scene`:一个 3D 场景的 id(「按文字搭 3D 场景」交出的那个)—— 画板据此把它落成一格 3D 场景格。
+_WORKFLOW_DATA_TYPES = frozenset({"text", "asset", "sequence", "scene", "number", "json", "any"})
 
 
 def output_data_type(key: str, node_spec: dict[str, Any]) -> str:
@@ -1077,6 +1081,28 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         },
         "outputs": ["scene_id", "shot_ids", "shot_count"],
         "output_types": {"shot_ids": "json", "shot_count": "number"},
+    },
+    #: 画板上是便签、文档格的一项能力(剧本 / 分镜连进来就能搭白模),产出落成右边一格 3D 场景格。
+    "scene_from_text": {
+        "external": False,
+        "surfaces": ["workflow", "board"],
+        "board_outputs": ["scene_id"],
+        "board_group": "scene", "board_description": "wfNode_scene_from_text_board",
+        "category": "wfCat_3d",
+        "label": "wfNode_scene_from_text",
+        "description": "wfNode_scene_from_text_desc",
+        "config": {
+            "text": {"type": "template", "required": True, "description": "wfNode_scene_from_text_text"},
+            "profile_id": {"type": "string", "options_from": "chat_connections", "description": "wfNode_scene_from_text_profile_id"},
+            "model": {"type": "string", "depends_on": "profile_id", "options_from": "chat_models", "allow_custom": True,
+                      "description": "wfNode_scene_from_text_model"},
+            "max_shots": {"type": "number", "default": 6, "description": "wfNode_scene_from_text_max_shots"},
+            "shot_seconds": {"advanced": True, "type": "number", "default": 5, "description": "wfNode_scene_from_text_shot_seconds"},
+            "aspect": {"type": "string", "default": "16:9", "options": ["16:9", "9:16", "1:1"], "description": "wfNode_scene_from_text_aspect"},
+            "name": {"advanced": True, "type": "template", "description": "wfNode_scene_from_text_name"},
+        },
+        "outputs": ["scene_id", "shot_ids", "shot_count", "name"],
+        "output_types": {"scene_id": "scene", "shot_ids": "json", "shot_count": "number", "name": "text"},
     },
     #: 不单独上画板:画板上渲白模是 **3D 场景格自己会做的事**(内置产出者 `scene_render`,见
     #: boards.producers),跑的是这同一个执行器、读的是这同一份字段声明 —— 此前一格工具格引用一格场景格,

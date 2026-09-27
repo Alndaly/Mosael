@@ -383,7 +383,10 @@ def test_万相在生成目录里_视频模型不在兼容目录中() -> None:
     一个也选不到。"""
     from app.domain.generation.catalog import BUILTIN_MODELS
 
-    videos = [m for m in BUILTIN_MODELS if m["provider"] == "alibaba" and m["kind"] == "video"]
+    #: 数字人那两个(说话照片、改口型,ADR 0028)不是万相的出片模型:不按尺寸 / 清晰度出片,另有测试钉着。
+    talking = {"speech-to-video", "video-lipsync"}
+    videos = [m for m in BUILTIN_MODELS if m["provider"] == "alibaba" and m["kind"] == "video"
+              and not talking & set(m["capabilities"].get("modes") or ())]
     assert len(videos) >= 5, "万相视频模型没进目录"
     assert all(m["model"].startswith("wan") for m in videos)
     # 两代模型两份契约:2.6 及更早按百炼收的**像素对**给尺寸(不是 480p 这种档位名),
@@ -412,7 +415,8 @@ def test_原生端点的模型必须能在设置里看到() -> None:
 
     videos = builtin_models_for("alibaba", "video")
     assert len(videos) >= 5, "内置目录里没有万相视频模型"
-    assert all(m.startswith("wan") for m in videos)
+    assert all(m.startswith("wan") for m in videos if m != "videoretalk")
+    assert {"wan2.2-s2v", "videoretalk"} <= set(videos), "数字人那两个也要在设置里看得到"
 
 
 def test_能力按模型推_不套用vendor全集() -> None:

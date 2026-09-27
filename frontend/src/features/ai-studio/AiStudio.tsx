@@ -87,6 +87,7 @@ import {
 } from "@/lib/generationCapabilities";
 import { GENERATION_BOOLEAN_LABELS, GENERATION_PARAMETER_LABELS } from "@/app/generationParameterLabels";
 import { FrameSlotField, KeyframePairField } from "@/features/ai-studio/FrameSlotField";
+import { DurationFollowsNote, TruncationHint, durationFollowsRole } from "@/features/ai-studio/durationFollows";
 import {
   AUDIO_SOURCE_HINTS,
   GeneratedAudioList,
@@ -1034,6 +1035,23 @@ function GenerateWorkspace({
                       />
                     )}
                   </ParameterField>
+                )}
+                {/* 数字人(ADR 0028):成片长度跟着驱动音频走的模型不收时长,这一栏写明它跟着谁;
+                    会截掉音频后半段的模型,所选时长短于音频时提醒。 */}
+                {!isImageModel && durationFollowsRole(selectedModel) && (
+                  <ParameterField label={t("genDuration")}>
+                    <DurationFollowsNote role={durationFollowsRole(selectedModel)} />
+                  </ParameterField>
+                )}
+                {!isImageModel && supportsParameter(selectedModel, "duration_seconds") && (
+                  <TruncationHint
+                    model={selectedModel}
+                    workspaceId={workspace.id}
+                    frames={generationConfig.frames}
+                    durationSeconds={generationConfig.durationSeconds}
+                    bounds={durationRange(selectedModel) ?? {}}
+                    onUseSourceLength={(seconds) => setConfigValue("durationSeconds", String(seconds))}
+                  />
                 )}
                 {supportsInstrumental && (
                   <ParameterField label={t("genInstrumental")}>
