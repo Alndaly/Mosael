@@ -198,14 +198,14 @@ def _expired_oauth_client(name: str):
     """建一个凭据已过期的订阅档案,返回 (client, profile_id)。"""
     import time as _time
 
-    from app.api.routes.settings import provider_profiles as settings_routes
+    from app.domain import provider_auth
     from app.core.db import SessionLocal
     from tests.util import add_provider, fresh_client
 
     client = fresh_client()
     client.post("/api/workspaces", json={"name": "W"})
     # 上一条用例留下的失败冷却会让这条根本不去刷新。
-    settings_routes._refresh_failed_at.clear()
+    provider_auth._refresh_failed_at.clear()
     past = int((_time.time() - 3600) * 1000)
     with SessionLocal() as db:
         profile = add_provider(
@@ -225,7 +225,7 @@ def test_列出档案时自动刷新过期令牌(monkeypatch):
     """**过期本身不该走到用户面前**:订阅计划的 access token 只有几小时,刷新是协议里
     就有的一步。此前只有对话和查额度会触发刷新,于是隔夜打开设置页必然看到一行已过期 ——
     而它只要被用到就会自己好。这条锁住:列表接口自己先刷,刷成了就不再报过期。"""
-    from app.api.routes.settings import provider_profiles as settings_routes
+    from app.domain import provider_auth
     from app.core.db import SessionLocal
     from app.db.models import ProviderCredential
 
@@ -239,7 +239,7 @@ def test_列出档案时自动刷新过期令牌(monkeypatch):
             inner.commit()
         return True
 
-    monkeypatch.setattr(settings_routes, "refresh_oauth_credential", fake_refresh)
+    monkeypatch.setattr(provider_auth, "refresh_oauth_credential", fake_refresh)
 
     # 刷新**在后台**跑,不占着这次请求(见 tests/test_listing_connections_does_not_block:
     # 它此前会让整个设置页等一次跨网 token 交换,断网时几十秒)。所以第一次拉到的仍然是
@@ -261,7 +261,7 @@ def test_列出档案时自动刷新过期令牌(monkeypatch):
 def test_刷新失败才报过期_且不会每次都重试(monkeypatch):
     """刷不动才是用户需要知道的事(refresh token 被吊销、账号在别处登出)—— 那时前端用
     警告色说"需重新授权"。同时:失败不该让最常被拉的这个接口每次都去起一次 node 撞同一堵墙。"""
-    from app.api.routes.settings import provider_profiles as settings_routes
+    from app.domain import provider_auth
     from app.ai.sidecar.adapters import AdapterError
 
     client, profile_id, _ = _expired_oauth_client("掉线的订阅")
@@ -272,7 +272,7 @@ def test_刷新失败才报过期_且不会每次都重试(monkeypatch):
         attempts["n"] += 1
         raise AdapterError("refresh token 已失效")
 
-    monkeypatch.setattr(settings_routes, "refresh_oauth_credential", failing_refresh)
+    monkeypatch.setattr(provider_auth, "refresh_oauth_credential", failing_refresh)
     for _ in range(3):
         row = next(r for r in client.get("/api/settings/providers").json() if r["id"] == profile_id)
         assert row["oauth_linked"] is True

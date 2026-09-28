@@ -80,7 +80,9 @@ TABLE_OWNERS: dict[str, tuple[str, ...]] = {
     "BrowserSession": ("app/domain/browser/",),
     "BrowserAction": ("app/domain/browser/",),
     # 配置
-    "ProviderProfile": ("app/domain/providers.py",),
+    #: 用户自己配的连接在 provider_connections 建;插件实例对应的那条(只是生成领域指向实例的把手,
+    #: ADR 0020)在 providers.adopt_plugin_connection 建。
+    "ProviderProfile": ("app/domain/provider_connections.py", "app/domain/providers.py"),
     "ProviderDefault": ("app/domain/provider_defaults.py",),
     "ProviderModel": ("app/domain/provider_models.py",),
     #: 自定义参数组跟着连接走(FK + ondelete CASCADE),所以它没有自己的 owner_user_id ——
@@ -89,10 +91,7 @@ TABLE_OWNERS: dict[str, tuple[str, ...]] = {
         "app/domain/generation/custom_profiles.py",
         "app/api/routes/settings/generation_profiles.py",
     ),
-    "GenerationCapabilityDeclaration": (
-        "app/domain/generation/resolution.py",
-        "app/api/routes/settings/provider_models.py",
-    ),
+    "GenerationCapabilityDeclaration": ("app/domain/generation/resolution.py",),
     "ProviderPricingRule": ("app/domain/usage.py",),
     "ProviderUsageEvent": ("app/domain/usage.py",),
     "AiRuntimeConfig": ("app/domain/ai_runtime.py",),

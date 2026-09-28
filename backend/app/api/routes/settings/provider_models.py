@@ -8,13 +8,12 @@ from app.core.i18n import tr
 from app.ai.model_catalog import fetch_models
 from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import ProviderModelOut, ProviderModelUpdate
-from app.domain import model_limits, provider_models, structured_output, thinking
+from app.domain import model_limits, provider_credentials, provider_models, structured_output, thinking
 from app.domain.provider_credentials import ResolvedConnection
 from app.domain.providers import normalize_capability_ids
 
 from app.domain.permissions import require_own_profile
 
-from .provider_profiles import _resolved_or_bare
 
 router = APIRouter(tags=["settings"])
 logger = logging.getLogger(__name__)
@@ -155,7 +154,7 @@ def list_provider_models(profile_id: str, db: DbSession, user: CurrentUser) -> l
     """
     # 只读:任何登录用户都看得到这条连接下有哪些模型 —— 他要据此选自己的默认。
     profile = require_own_profile(db, user, profile_id)
-    catalog = _catalog_entries(_resolved_or_bare(db, profile, user))
+    catalog = _catalog_entries(provider_credentials.resolve_or_keyless(db, profile, user.id))
     configured = provider_models.list_models(db, profile_id)
     rows = [_model_out(db, model, catalog, profile.vendor) for model in configured]
     known = {row.id for row in rows}
@@ -215,7 +214,7 @@ def add_provider_model(
     model_id = (body.model_id or "").strip()
     if not model_id:
         raise HTTPException(status_code=422, detail=tr("routeErr_modelIdRequired"))
-    catalog = _catalog_entries(_resolved_or_bare(db, profile, user))
+    catalog = _catalog_entries(provider_credentials.resolve_or_keyless(db, profile, user.id))
     fields = body.model_dump(
         exclude_unset=True,
         exclude={"model_id", "capability_ids", "generation_capability_refs"},
@@ -271,7 +270,7 @@ def update_provider_model(
         except GenerationResolutionError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
     db.commit()
-    return _model_out(db, model, _catalog_entries(_resolved_or_bare(db, profile, user)), profile.vendor)
+    return _model_out(db, model, _catalog_entries(provider_credentials.resolve_or_keyless(db, profile, user.id)), profile.vendor)
 
 
 @router.delete("/settings/providers/{profile_id}/models/{model_id:path}", status_code=204)

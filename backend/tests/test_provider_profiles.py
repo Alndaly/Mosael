@@ -308,3 +308,26 @@ def test_create_profile_copies_credentials_server_side() -> None:
         ).status_code
         == 404
     )
+
+
+def test_连接自己的必填字段没填_回422并说出是哪一项() -> None:
+    """必填只管连接自己的字段(端点一类);密钥各人带各人的,不在建连接时强求。"""
+    client = fresh_client()
+    client.post("/api/workspaces", json={"name": "W"})
+
+    missing = client.post(
+        "/api/settings/providers",
+        json={"name": "自建网关", "vendor": "openai-compatible", "config": {"api_key": "sk-x"}},
+        headers={"Accept-Language": "zh-CN"},
+    )
+    assert missing.status_code == 422, missing.text
+    assert missing.json()["detail"].startswith("缺少必要配置")
+    assert client.get("/api/settings/providers").json() == []  # 没建出半条连接
+
+    created = client.post(
+        "/api/settings/providers",
+        json={"name": "自建网关", "vendor": "openai-compatible", "config": {"base_url": "http://127.0.0.1:9/v1", "default_model": "m1"}},
+    )
+    assert created.status_code == 200, created.text
+    cleared = client.patch(f"/api/settings/providers/{created.json()['id']}", json={"config": {"base_url": ""}})
+    assert cleared.status_code == 422, cleared.text

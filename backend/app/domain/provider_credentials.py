@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -103,8 +103,22 @@ def resolve_connection(
     )
 
 
+def resolve_or_keyless(db: Session, profile: ProviderProfile, user_id: str) -> ResolvedConnection:
+    """这条连接 + 我的钥匙;没有钥匙时给一个不带钥匙的 —— 读模型目录、探活用的。
+
+    目录取不到就是空列表,而「还没填密钥」不该让整个模型页 500。我自己那一行即使还没有密钥也要
+    用上:订阅登录会先把模型目录存进这一行,而**目录不是钥匙** —— 按"有没有密钥"把它跳过去,
+    会让刚登录完的人看到一个空的模型选择器。
+    """
+    resolved = resolve_connection(db, profile, user_id)
+    if resolved is not None:
+        return resolved
+    mine = get(db, profile.id, user_id)
+    return replace(_without_key(profile), model_catalog=mine.model_catalog if mine is not None else None)
+
+
 def _without_key(profile: ProviderProfile) -> ResolvedConnection:
-    """插件连接的解析结果:没有连接上的钥匙 —— 钥匙在插件实例上(见 resolve_connection)。"""
+    """不带钥匙的解析结果:插件连接(钥匙在插件实例上,见 resolve_connection),或我还没配钥匙。"""
     return ResolvedConnection(
         id=profile.id,
         name=profile.name,

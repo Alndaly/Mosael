@@ -36,7 +36,6 @@ BACKEND_ROOT = Path(__file__).resolve().parent.parent
 ALLOWLIST: frozenset[tuple[str, str]] = frozenset({
     ("app/api/routes/assets.py", "Asset"),
     ("app/api/routes/feishu.py", "FeishuBot"),
-    ("app/api/routes/settings/provider_profiles.py", "ProviderProfile"),
 })
 
 

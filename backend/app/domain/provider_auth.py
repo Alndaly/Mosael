@@ -13,6 +13,9 @@ token 通常是**一次性**的 —— 换出新 access token 的同时旧 refre
 租约放在进程内存里:后端是单进程 uvicorn(见 run_backend.py),sidecar 才是多进程,而它们
 都经由后端 —— 内存锁就是**这套进程拓扑下**真正的临界区。带 TTL 是因为持有者会崩(sidecar
 被杀、超时),不能让一次崩溃把某个供应商永久锁死。
+
+后半截是**设置页上的自动续期**(`refresh_expired_in_background`):列连接时顺手把过期的订阅令牌
+在后台刷一遍,刷不动的记进一张冷却表(`refresh_recently_failed`),界面据此才说「需重新授权」。
 """
 
 from __future__ import annotations
@@ -21,13 +24,18 @@ import logging
 import secrets
 import threading
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from sqlalchemy.orm import Session
 
+from app.ai.sidecar.adapters import AdapterError, refresh_oauth_credential
+from app.core.config import settings
 from app.core.i18n import LocalizedError
 from app.db.models import ProviderCredential, ProviderProfile
 from app.domain import provider_credentials
+from app.domain.provider_quota import is_expired
+from app.domain.providers import pi_provider_id
 
 #: 持有租约期间只做一次刷新 HTTP 调用,给足余量。超过即视为持有者已死。
 LEASE_TTL_SECONDS = 30.0
@@ -189,3 +197,81 @@ def commit_credential(
     db.refresh(row)
     release_lease(profile_id, user_id, lease_token)
     return row
+
+
+# ---------------- 设置页上的自动续期 ----------------
+
+#: 刷新失败后多久才再试一次。失败通常不会因为再试而变好(refresh token 被吊销、账号在别处
+#: 登出),而档案列表是设置页最常被拉的那个接口 —— 没有冷却就会变成每次进页面都起一次
+#: node 去撞同一堵墙,页面还跟着卡。
+_REFRESH_COOLDOWN_SECONDS = 300.0
+_refresh_failed_at: dict[str, float] = {}
+
+
+def refresh_recently_failed(profile_id: str) -> bool:
+    """这条连接最近一次自动刷新令牌失败了没有。
+
+    进程级内存:重启后是空的,于是重启后第一次拉列表会说「已授权」,哪怕它其实刷不动 ——
+    下一次就对了。这个方向是**有意选的**:把"还不知道"说成"已授权"只会晚一次发现,
+    而把它说成"需重新授权"是在没坏的时候喊坏,后者用户已经撞上了。
+    """
+    failed_at = _refresh_failed_at.get(profile_id)
+    return failed_at is not None and time.monotonic() - failed_at < _REFRESH_COOLDOWN_SECONDS
+
+
+def refresh_expired_in_background(
+    connections: list[tuple[ProviderProfile, ProviderCredential | None]], *, mint_token: Callable[[], str]
+) -> None:
+    """过期就去刷一次 —— **在后台**,不占着这次请求。`connections` 是连接和**我自己**那把钥匙。
+
+    **过期本身不是一个需要用户知道的状态**:订阅计划的 access token 普遍只有几小时,刷新是协议
+    里就有的一步。此前只有对话路径和查额度会触发刷新,于是"隔夜再打开设置页"必然看到一行已过期
+    —— 而它其实只要被用到就会自己好。
+
+    **但它不能挡在列表前面。** 刷新是:起一个 Node 子进程(pi sidecar)→ 向那家供应商发一次
+    网络请求 → 最长等 60 秒;而且每条过期连接串着来。断网或那家挂掉时,一件本地的纯读的事
+    (告诉我我配了哪些连接)被一件远程的可选的事拖到几十秒 —— 用户看到的是设置页一直
+    「正在连接后端…」,而日志里只有一行 fetch failed。
+
+    判据:**列连接这个问题,不需要出网就能回答。** 所以先把列表给他,刷新在后台跑,下一次拉列表时
+    状态自己就对了。刷不动才让 `refresh_recently_failed` 为真 —— 那时是真的要重新授权。
+
+    `mint_token` 给 sidecar 回调后端用的令牌:后台线程拿不到这次请求的身份,只在真有要刷的时候
+    才铸。它由调用方传进来,本模块不 import 智能体宿主 —— 那边反过来依赖连接这一族。
+    """
+    oauth = [
+        (profile, credential)
+        for profile, row in connections
+        if profile.auth_type == "oauth" and (credential := read_credential(row)) is not None
+    ]
+    for profile, credential in oauth:
+        if not is_expired(credential):
+            _refresh_failed_at.pop(profile.id, None)
+    pending = [
+        (profile.id, profile.name, profile.vendor, credential)
+        for profile, credential in oauth
+        if is_expired(credential)
+    ]
+    if pending:
+        threading.Thread(target=_refresh_in_background, args=(mint_token(), pending), daemon=True).start()
+
+
+def _refresh_in_background(token: str, pending: list[tuple[str, str, str, dict]]) -> None:
+    """后台把过期的订阅令牌刷一遍。失败只记日志 —— 它本来就是"顺手做的事"。"""
+    now = time.monotonic()
+    for profile_id, name, vendor, credential in pending:
+        if refresh_recently_failed(profile_id):
+            continue
+        try:
+            refresh_oauth_credential(
+                api_base=f"http://{settings.backend_host}:{settings.backend_port}",
+                token=token,
+                pi_provider=pi_provider_id(vendor) or "",
+                profile_id=profile_id,
+                credential=credential,
+            )
+        except AdapterError as exc:
+            logger.warning("刷新 %s 的订阅令牌失败:%s", name, exc)
+            _refresh_failed_at[profile_id] = now
+            continue
+        _refresh_failed_at.pop(profile_id, None)

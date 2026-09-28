@@ -23,7 +23,7 @@ from app.domain.providers import pi_provider_id
 
 from app.domain.permissions import require_own_profile
 
-from .provider_profiles import _profile_out
+from .provider_profiles import profile_out
 
 router = APIRouter(tags=["settings"])
 
@@ -176,5 +176,5 @@ def logout_oauth_provider(profile_id: str, db: DbSession, user: CurrentUser) -> 
         mine.model_catalog = None
     db.commit()
     db.refresh(profile)
-    return _profile_out(db, profile, user)
+    return profile_out(db, profile, user)
 

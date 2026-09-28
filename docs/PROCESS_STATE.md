@@ -96,7 +96,7 @@
   同一个 venv 会互相踩 —— 当前部署是单后端进程(见第一节),真要起第二个时这一条要一起想。
 - `app/ai/runtime/workers/tts.py:_LOADED` — 已加载的模型。
 - `app/api/routes/sequences.py:_SEQUENCE_JSON` — 序列 JSON 按 revision 缓存。每序列一条,不随流量增长。
-- `app/api/routes/settings/provider_profiles.py:_refresh_failed_at` — 刷新失败冷却。重启后是空的,于是第一次会说「已授权」哪怕它刷不动 —— **这个方向是有意选的**:说成"还不知道"只会晚一次发现,说成"需重新授权"是在没坏的时候喊坏。
+- `app/domain/provider_auth.py:_refresh_failed_at` — 刷新失败冷却。重启后是空的,于是第一次会说「已授权」哪怕它刷不动 —— **这个方向是有意选的**:说成"还不知道"只会晚一次发现,说成"需重新授权"是在没坏的时候喊坏。
 - `app/integrations/feishu/service.py:_token_cache`(租户令牌)、
   `app/integrations/feishu/service.py:_seen`(消息去重)、
   `app/integrations/feishu/service.py:_onboard_state`(引导流程)、`app/domain/poem.py:_token`。

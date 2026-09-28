@@ -729,7 +729,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "该供应商不支持 {capability} 能力",
         "en": "This provider doesn't support the {capability} capability.",
     },
-    "routeErr_missingRequiredConfig": {
+    "providerErr_missingRequiredConfig": {
         "zh": "缺少必要配置: {fields}",
         "en": "Missing required settings: {fields}",
     },

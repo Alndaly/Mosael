@@ -20,7 +20,7 @@ from __future__ import annotations
 import threading
 import time
 
-from app.api.routes.settings import provider_profiles as settings_routes
+from app.domain import provider_auth
 from tests.util import add_provider, fresh_client
 from app.core.db import SessionLocal
 
@@ -54,8 +54,8 @@ def test_a_slow_refresh_does_not_hold_up_the_list(monkeypatch) -> None:
         release.wait(10)  # 模拟 fetch 卡到超时
         return True
 
-    monkeypatch.setattr(settings_routes, "refresh_oauth_credential", slow_refresh)
-    settings_routes._refresh_failed_at.clear()
+    monkeypatch.setattr(provider_auth, "refresh_oauth_credential", slow_refresh)
+    provider_auth._refresh_failed_at.clear()
 
     client = fresh_client()
     _expired_subscription(client)
@@ -77,8 +77,8 @@ def test_the_refresh_still_happens(monkeypatch) -> None:
         calls.append(kwargs)
         return True
 
-    monkeypatch.setattr(settings_routes, "refresh_oauth_credential", record)
-    settings_routes._refresh_failed_at.clear()
+    monkeypatch.setattr(provider_auth, "refresh_oauth_credential", record)
+    provider_auth._refresh_failed_at.clear()
 
     client = fresh_client()
     _expired_subscription(client)
@@ -93,10 +93,10 @@ def test_the_refresh_still_happens(monkeypatch) -> None:
 def test_a_failing_refresh_never_reaches_the_response(monkeypatch) -> None:
     """刷不动是**那条连接**的事,不该变成整页的错误 —— 断网时每条订阅连接都会刷不动。"""
     def boom(**kwargs):
-        raise settings_routes.AdapterError("OAuth refresh failed: fetch failed")
+        raise provider_auth.AdapterError("OAuth refresh failed: fetch failed")
 
-    monkeypatch.setattr(settings_routes, "refresh_oauth_credential", boom)
-    settings_routes._refresh_failed_at.clear()
+    monkeypatch.setattr(provider_auth, "refresh_oauth_credential", boom)
+    provider_auth._refresh_failed_at.clear()
 
     client = fresh_client()
     _expired_subscription(client)
@@ -125,8 +125,8 @@ def test_an_expired_token_being_refreshed_does_not_cry_wolf(monkeypatch) -> None
 
     「过期了,正在刷」和「刷不动了,要你处理」被压成了同一个布尔值。这条钉住前者不报警。
     """
-    monkeypatch.setattr(settings_routes, "refresh_oauth_credential", lambda **kw: True)
-    settings_routes._refresh_failed_at.clear()
+    monkeypatch.setattr(provider_auth, "refresh_oauth_credential", lambda **kw: True)
+    provider_auth._refresh_failed_at.clear()
 
     client = fresh_client()
     _expired_subscription(client)
@@ -142,8 +142,8 @@ def test_a_token_that_really_cannot_be_refreshed_does_say_so(monkeypatch) -> Non
     def refuse(**kwargs):
         raise AdapterError("OAuth refresh failed for anthropic: fetch failed")
 
-    monkeypatch.setattr(settings_routes, "refresh_oauth_credential", refuse)
-    settings_routes._refresh_failed_at.clear()
+    monkeypatch.setattr(provider_auth, "refresh_oauth_credential", refuse)
+    provider_auth._refresh_failed_at.clear()
 
     client = fresh_client()
     _expired_subscription(client)
@@ -151,17 +151,17 @@ def test_a_token_that_really_cannot_be_refreshed_does_say_so(monkeypatch) -> Non
 
     # 第一次拉列表只是**触发**后台刷新,那时还没有"刷不动"这个事实 —— 所以先等它失败。
     deadline = time.time() + 5
-    while time.time() < deadline and profile_id not in settings_routes._refresh_failed_at:
+    while time.time() < deadline and profile_id not in provider_auth._refresh_failed_at:
         time.sleep(0.02)
-    assert profile_id in settings_routes._refresh_failed_at, "后台刷新压根没跑"
+    assert profile_id in provider_auth._refresh_failed_at, "后台刷新压根没跑"
 
     assert _listed(client)["oauth_expired"] is True, "刷不动了却不说,用户无从知道要重新授权"
 
 
 def test_a_healthy_subscription_is_never_flagged(monkeypatch) -> None:
     """没过期的连接,无论后台发生过什么,都不该显示需要重新授权。"""
-    monkeypatch.setattr(settings_routes, "refresh_oauth_credential", lambda **kw: True)
-    settings_routes._refresh_failed_at.clear()
+    monkeypatch.setattr(provider_auth, "refresh_oauth_credential", lambda **kw: True)
+    provider_auth._refresh_failed_at.clear()
 
     client = fresh_client()
     future = int((time.time() + 7200) * 1000)
