@@ -147,24 +147,27 @@ class Test档位:
 
 
 class Test引擎的挑法:
-    def test_auto_是内置的那个(self) -> None:
-        from app.ai.providers.registry import get_denoise_adapter
+    def test_不点名是内置的频谱降噪(self) -> None:
+        """挑法走能力表(ADR 0032):本机引擎是 `audio_denoise` 的内置提供方,没定默认用第一个允许自动的。"""
+        from app.core.db import SessionLocal
+        from app.domain.denoise import ready_adapter
 
-        assert get_denoise_adapter().engine_id == "ffmpeg"
-        assert get_denoise_adapter("auto").engine_id == "ffmpeg"
+        with SessionLocal() as db:
+            assert ready_adapter(db, None, "").engine_id == "ffmpeg"
 
-    def test_auto_不挑会去掉音乐的引擎__哪怕它排在前面(self, monkeypatch) -> None:
-        from app.ai.providers import registry
-        from app.ai.providers.adapters.local.ffmpeg_denoise import FfmpegDenoiseAdapter
-        from app.ai.providers.adapters.local.rnnoise_denoise import RnnoiseDenoiseAdapter
+    def test_不点名时不挑会去掉音乐的引擎__点名仍然拿得到(self, monkeypatch) -> None:
+        from app.ai.providers.registry import DENOISE_ADAPTERS
+        from app.core.db import SessionLocal
+        from app.domain import capabilities
+        from app.domain.audio_capabilities import DENOISE
 
-        speech = RnnoiseDenoiseAdapter()
-        builtin = FfmpegDenoiseAdapter()
-        monkeypatch.setattr(speech, "runtime_ready", lambda: True)
-        monkeypatch.setattr(registry, "DENOISE_ADAPTERS", {"rnnoise": speech, "ffmpeg": builtin})
-        assert registry.get_denoise_adapter() is builtin
-        #: 点名仍然拿得到。
-        assert registry.get_denoise_adapter("rnnoise") is speech
+        monkeypatch.setattr(DENOISE_ADAPTERS["rnnoise"], "runtime_ready", lambda: True, raising=False)
+        with SessionLocal() as db:
+            automatic = capabilities.pick(db, None, DENOISE, None)
+            assert automatic.id == "builtin:ffmpeg"
+            rnnoise = next(one for one in capabilities.providers(db, None, DENOISE) if one.id == "builtin:rnnoise")
+            assert rnnoise.extra["automatic"] is False, "会去掉音乐的语音模型不自动用"
+            assert capabilities.pick(db, None, DENOISE, "builtin:rnnoise").id == "builtin:rnnoise"
 
     def test_重复的引擎装配时就失败(self) -> None:
         from app.ai.providers.adapters.local.ffmpeg_denoise import FfmpegDenoiseAdapter
@@ -173,13 +176,13 @@ class Test引擎的挑法:
         with pytest.raises(RuntimeError, match="duplicate"):
             _index_denoise_adapters((FfmpegDenoiseAdapter(), FfmpegDenoiseAdapter()))
 
-    def test_节点上的选项就是注册表里那几个(self) -> None:
+    def test_节点上的引擎是能力表里的提供方(self) -> None:
+        """此前写死 `auto / ffmpeg / deepfilternet / rnnoise`,插件插不进来;现在从能力表现查(ADR 0032)。"""
         from app.ai.providers.contracts.denoise import STRENGTHS
-        from app.ai.providers.registry import DENOISE_ADAPTERS
         from app.domain.workflows import NODE_TYPES
 
         config = NODE_TYPES["denoise_audio"]["config"]
-        assert config["engine"]["options"] == ["auto", *DENOISE_ADAPTERS]
+        assert config["engine"]["options_from"] == "providers.audio_denoise" and "options" not in config["engine"]
         assert config["strength"]["options"] == list(STRENGTHS)
 
 
@@ -225,7 +228,7 @@ class Test排队和开卡之前就判:
         try:
             with pytest.raises(DenoiseError, match="设置"):
                 denoise.start_denoise_job(
-                    None, asset=Asset(workspace_id="w", kind="audio", name="x", file_key="k"), created_by=None, engine="deepfilternet"
+                    None, asset=Asset(workspace_id="w", kind="audio", name="x", file_key="k"), created_by=None, engine="builtin:deepfilternet"
                 )
         finally:
             dm.deepfilter_ready.cache_clear()
@@ -370,7 +373,7 @@ class Test工作流节点和确认卡:
             db.add_all([workflow, ours, theirs])
             db.commit()
 
-            out = denoise_audio_node(db, workflow, {"asset_id": ours.id, "engine": "auto", "strength": "light"})
+            out = denoise_audio_node(db, workflow, {"asset_id": ours.id, "engine": "", "strength": "light"})
             assert out["engine"] == "ffmpeg"
             assert db.get(Asset, out["asset_id"]).media_info["derived_from_asset_id"] == ours.id
 

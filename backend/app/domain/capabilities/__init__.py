@@ -21,6 +21,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -38,11 +39,19 @@ class CapabilityUnavailable(LocalizedError, RuntimeError):
 
 @dataclass(frozen=True)
 class Builtin:
-    """宿主自带的实现。`id` 以 `builtin:` 开头,和插件连接的 id 分得开。"""
+    """宿主自带的实现。`id` 以 `builtin:` 开头,和插件连接的 id 分得开。
+
+    一项能力可以有几个(ADR 0032 §1):降噪的 ffmpeg / rnnoise / deepfilternet、分离的 demucs……本地引擎就是
+    内置提供方,和插件连接并列在候选里。
+    """
 
     id: str
     #: 在设置页和结果上叫什么(i18n key)。
     name_key: str
+    #: 此刻缺什么(没装依赖、没拉权重、缺 Key):回一串给人看的说明,空 = 跑得起来。不给 = 总是跑得起来。
+    ready: Callable[[], tuple[str, ...]] | None = None
+    #: 没人定默认时能不能自动用它。会顺手去掉配乐的语音降噪模型就不能 —— 用户说「降噪」没要求把音乐拿掉。
+    automatic: bool = True
 
 
 @dataclass(frozen=True)
@@ -57,10 +66,13 @@ class Capability:
     #: 挑不出来时的四句话(i18n key)。参数:`plugin` 那一家的名字、`missing` 缺的项、`names` 几家的名字,
     #: 再加上调用方给的(`subject`,比如素材名)。
     none_key: str = "capErr_none"
+    #: 点名了一家,却不在候选里(参数 `name`:点的那个 id)。
+    unknown_key: str = "capErr_unknown"
     incomplete_key: str = "capErr_incomplete"
     ambiguous_key: str = "capErr_ambiguous"
     outdated_key: str = "capErr_outdated"
-    builtin: Builtin | None = None
+    #: 宿主自带的实现,按挑选的先后排(没人定默认时用第一个 `automatic` 且跑得起来的)。
+    builtins: tuple[Builtin, ...] = ()
     #: 没定默认、也没有内置实现时,只有一家配好就不问直接用。**数据会离开本机的能力**(文档交给云端解析)
     #: 不该这样:用哪家必须他自己定过。
     auto_single: bool = True
@@ -114,6 +126,54 @@ def _missing(db: Session, instance: Any) -> tuple[str, ...]:
     return tuple(absent)
 
 
+# ── 用在哪(ADR 0032 §4)────────────────────────────────────────────────────────
+
+
+@dataclass(frozen=True)
+class Use:
+    """一处用到某项能力的地方:插件页、设置页照这份列出「它用在哪」—— **现算,不手写**。
+
+    `kind`:`app`(宿主界面上的一个入口)/ `workflow`(工作流或画板的一个节点字段)/ `agent`(智能体的一个工具)。
+    `label` 是 `core.i18n.fragment` 的半句(带 key 的小字典),读的时候按读的人的语言展开。
+    """
+
+    capability: str
+    kind: str
+    label: Any
+
+
+#: 宿主界面入口:各自领域在组装根登记一条(`register_use`)。
+_uses: list[Use] = []
+#: 从别的注册表现算的(工作流节点、智能体工具):登记一个函数,每次问的时候扫一遍 —— 新节点、新工具声明了
+#: 就自动出现,不用再来这里补一行。
+_use_finders: list[Callable[[], list[Use]]] = []
+
+
+def register_use(use: Use) -> None:
+    if use not in _uses:
+        _uses.append(use)
+
+
+def register_use_finder(finder: Callable[[], list[Use]]) -> None:
+    if finder not in _use_finders:
+        _use_finders.append(finder)
+
+
+def uses_of(name: str) -> list[Use]:
+    """这项能力用在哪。设置页的「设成默认」是每项能力都有的,排第一;再是登记的入口,最后是现算的。"""
+    from app.core.i18n import fragment
+
+    found = [Use(name, "app", fragment("capUse_settingsDefault"))] if name in _registry else []
+    found += [one for one in _uses if one.capability == name]
+    for finder in _use_finders:
+        found += [one for one in finder() if one.capability == name]
+    return found
+
+
+#: 工作流 / 画板字段里「挑一家」的通用选项来源:`options_from: "providers.<能力>"`(ADR 0032 §3)。
+PROVIDERS_SOURCE = "providers."
+
+
 def plugin_providers(db: Session, owner_user_id: str | None, capability: Capability) -> list[Provider]:
     """这个人**自己的**、启用着的、声明了这项能力的插件连接,按名字排。装坏了的插件跳过,不拖垮整条链。"""
     from app.db.models import PluginInstance
@@ -138,16 +198,15 @@ def plugin_providers(db: Session, owner_user_id: str | None, capability: Capabil
     return sorted(found, key=lambda one: one.name)
 
 
-def _builtin(capability: Capability) -> Provider | None:
-    if capability.builtin is None:
-        return None
-    return Provider(id=capability.builtin.id, name=tr(capability.builtin.name_key), builtin=True)
+def _builtins(capability: Capability) -> list[Provider]:
+    return [Provider(id=one.id, name=tr(one.name_key), builtin=True, missing=tuple(one.ready() if one.ready else ()),
+                     extra={"automatic": one.automatic})
+            for one in capability.builtins]
 
 
 def providers(db: Session, owner_user_id: str | None, capability: Capability) -> list[Provider]:
-    """全部候选:内置的排第一,再是插件连接。"""
-    builtin = _builtin(capability)
-    return ([builtin] if builtin else []) + plugin_providers(db, owner_user_id, capability)
+    """全部候选:内置的在前(按契约给的先后),再是插件连接。"""
+    return _builtins(capability) + plugin_providers(db, owner_user_id, capability)
 
 
 def _default_id(db: Session, owner_user_id: str | None, capability: Capability) -> str | None:
@@ -157,11 +216,12 @@ def _default_id(db: Session, owner_user_id: str | None, capability: Capability) 
 
 
 def _automatic(capability: Capability, candidates: list[Provider]) -> Provider | None:
-    """**不定默认**时会用哪一家:有内置的用内置的;没有的,只有一家配好(且这项能力允许)才用它。"""
-    builtin = next((one for one in candidates if one.builtin), None)
+    """**不定默认**时会用哪一家:第一个允许自动、跑得起来的内置实现;没有的话,只有一家插件配好
+    (且这项能力允许)才用它。"""
+    builtin = next((one for one in candidates if one.builtin and one.extra.get("automatic") and not one.missing), None)
     if builtin:
         return builtin
-    ready = [one for one in candidates if not one.missing]
+    ready = [one for one in candidates if not one.builtin and not one.missing]
     return ready[0] if capability.auto_single and len(ready) == 1 else None
 
 
@@ -184,60 +244,68 @@ def choices(db: Session, owner_user_id: str, capability: Capability) -> dict[str
     }
 
 
-def choose(db: Session, owner_user_id: str | None, capability: Capability, **subject: Any) -> Provider:
-    """挑出这一次用哪一家;挑不出来时抛 `capability.error`,消息说清下一步。`subject` 进文案(比如素材名)。"""
-    sep = tr("punct_listSep")
-
-    def fail(key: str, **params: Any) -> CapabilityUnavailable:
-        return capability.error(key, **params, **subject)
-
-    candidates = plugin_providers(db, owner_user_id, capability)
-    chosen_id = _default_id(db, owner_user_id, capability)
-    chosen = next((one for one in candidates if one.id == chosen_id), None)
-    if chosen is None:
-        builtin = _builtin(capability)
-        if builtin is not None:
-            return builtin
-        if not candidates:
-            raise fail(capability.none_key)
-        ready = [one for one in candidates if not one.missing]
-        if capability.auto_single and len(ready) == 1:
-            chosen = ready[0]
-        elif not ready:
-            raise fail(capability.incomplete_key, plugin=candidates[0].name, missing=sep.join(candidates[0].missing))
-        else:
-            raise fail(capability.ambiguous_key, names=sep.join(one.name for one in ready))
+def _usable(capability: Capability, chosen: Provider, subject: dict[str, Any]) -> Provider:
+    """挑中的这一家能不能用:缺东西、插件太旧都说清楚。"""
     if chosen.missing:
-        raise fail(capability.incomplete_key, plugin=chosen.name, missing=sep.join(chosen.missing))
-    if not chosen.tool:
-        raise fail(capability.outdated_key, plugin=chosen.name)
+        raise capability.error(capability.incomplete_key, plugin=chosen.name,
+                               missing=tr("punct_listSep").join(chosen.missing), **subject)
+    if not chosen.builtin and not chosen.tool:
+        raise capability.error(capability.outdated_key, plugin=chosen.name, **subject)
     return chosen
 
 
+def choose(db: Session, owner_user_id: str | None, capability: Capability, **subject: Any) -> Provider:
+    """挑出这一次用哪一家;挑不出来时抛 `capability.error`,消息说清下一步。`subject` 进文案(比如素材名)。"""
+    sep = tr("punct_listSep")
+    candidates = providers(db, owner_user_id, capability)
+    chosen_id = _default_id(db, owner_user_id, capability)
+    chosen = next((one for one in candidates if one.id == chosen_id), None)
+    if chosen is None:
+        chosen = _automatic(capability, candidates)
+    if chosen is None:
+        if not candidates:
+            raise capability.error(capability.none_key, **subject)
+        plugins = [one for one in candidates if not one.builtin]
+        ready = [one for one in plugins if not one.missing]
+        if len(ready) > 1:
+            raise capability.error(capability.ambiguous_key, names=sep.join(one.name for one in ready), **subject)
+        #: 一家都跑不起来(或者只有一家插件,但这项能力不许自动用它):说第一家缺什么,下一步最清楚。
+        first = next((one for one in candidates if one.missing), candidates[0])
+        if not first.missing and not first.builtin:
+            raise capability.error(capability.none_key, **subject)
+        chosen = first
+    return _usable(capability, chosen, subject)
+
+
 def pick(db: Session, owner_user_id: str | None, capability: Capability, provider_id: str | None, **subject: Any) -> Provider:
-    """点名用哪一家(界面上「用 ×× 重新解析」);没点名就按默认挑(choose)。点名的得是他自己的、配好了的。"""
+    """点名用哪一家(界面上「用 ×× 重新解析」、节点里选的引擎);没点名就按默认挑(choose)。
+    点名的得是内置的,或他自己的、配好了的插件连接。"""
     if not provider_id:
         return choose(db, owner_user_id, capability, **subject)
-    builtin = _builtin(capability)
-    if builtin is not None and provider_id == builtin.id:
-        return builtin
-    found = next((one for one in plugin_providers(db, owner_user_id, capability) if one.id == provider_id), None)
+    found = next((one for one in providers(db, owner_user_id, capability) if one.id == provider_id), None)
     if found is None:
-        raise capability.error(capability.none_key, **subject)
-    if found.missing:
-        raise capability.error(capability.incomplete_key, plugin=found.name,
-                               missing=tr("punct_listSep").join(found.missing), **subject)
-    if not found.tool:
-        raise capability.error(capability.outdated_key, plugin=found.name, **subject)
-    return found
+        raise capability.error(capability.unknown_key, name=provider_id, **subject)
+    return _usable(capability, found, subject)
+
+
+def resolve_named(db: Session, owner_user_id: str | None, capability: Capability, name_or_id: str) -> Provider | None:
+    """智能体说的是提供方的名字(「MinerU 文档解析」「RNNoise」)或 id:认出来就是它(不管配没配好,由 pick 说),
+    认不出回 None。空串 = 按默认。"""
+    wanted = name_or_id.strip().lower()
+    if not wanted:
+        return None
+    candidates = providers(db, owner_user_id, capability)
+    return next((one for one in candidates if wanted in (one.id.lower(), one.name.lower())), None) or \
+        next((one for one in candidates if wanted in one.name.lower()), None)
 
 
 def set_default(db: Session, owner_user_id: str, capability: Capability, provider_id: str | None) -> None:
     """定下(或清掉)这个人在这项能力上的默认。选内置的 = 清掉(没定默认时本来就用内置的)。"""
     from app.domain.plugins import capability_defaults
 
-    builtin = capability.builtin
-    if provider_id is None or (builtin is not None and provider_id == builtin.id):
+    #: 选的是「不定时本来就会用的那一家」= 清掉:以后内置实现换了先后,跟着走。
+    automatic = _automatic(capability, _builtins(capability))
+    if provider_id is None or (automatic is not None and provider_id == automatic.id):
         capability_defaults.set_default(db, owner_user_id, capability.name, None)
         return
     capability_defaults.set_default(db, owner_user_id, capability.name, provider_id)
@@ -249,6 +317,12 @@ __all__ = [
     "CapabilityUnavailable",
     "Provider",
     "choices",
+    "resolve_named",
+    "PROVIDERS_SOURCE",
+    "Use",
+    "register_use",
+    "register_use_finder",
+    "uses_of",
     "choose",
     "get",
     "pick",

@@ -151,25 +151,9 @@ def _index_separation_adapters(adapters: Iterable[SeparationAdapter]) -> dict[st
     return indexed
 
 
-#: 人声/背景音分离(ADR-0016)。**这是能力可用性的唯一答案** —— 调用方不按引擎名写 if,
-#: 加一个引擎就是加一个 Adapter 加一行注册。
+#: 人声/背景音分离的本机引擎(ADR-0016)。挑哪一家不在这里:它们是能力表 `audio_separation` 的内置提供方,
+#: 和插件连接一起由 domain/audio_capabilities 挑(ADR 0032)。加一个本机引擎就是加一个 Adapter 加一行注册。
 SEPARATION_ADAPTERS = _index_separation_adapters((DemucsSeparationAdapter(),))
-
-
-def get_separation_adapter(engine: str = "") -> SeparationAdapter | None:
-    """点名一个引擎;不点名就给**现在跑得起来的**第一个。
-
-    「跑不跑得起来」是问出来的,不是配置出来的:本地引擎要装依赖和拉权重,云引擎要有凭据。
-    一个都没有时返回 None —— 调用方据此退回"没有这个能力"的做法,而不是先调一次再看报错
-    (那一次可能已经花了钱或者等了十分钟)。
-    """
-    #: "auto" 和空串是同一个意思 —— 节点下拉里给的是 auto(和转写节点同一个约定)。
-    if engine and engine != "auto":
-        return SEPARATION_ADAPTERS.get(engine)
-    for adapter in SEPARATION_ADAPTERS.values():
-        if adapter.runtime_ready():
-            return adapter
-    return None
 
 
 def _index_denoise_adapters(adapters: Iterable[DenoiseAdapter]) -> dict[str, DenoiseAdapter]:
@@ -181,8 +165,9 @@ def _index_denoise_adapters(adapters: Iterable[DenoiseAdapter]) -> dict[str, Den
     return indexed
 
 
-#: 降噪(ADR-0017)。顺序是界面上的排列:不动音乐的在前,语音模型按效果从好到轻。
-#: `auto` 只挑不动音乐的(见 get_denoise_adapter)。
+#: 降噪的本机引擎(ADR-0017)。顺序是界面上的排列,也是没定默认时的挑选先后:不动音乐的在前,语音模型按效果
+#: 从好到轻。它们是能力表 `audio_denoise` 的内置提供方(ADR 0032,见 domain/audio_capabilities),
+#: 会去掉音乐的不自动用。
 #: 「只留人声」**不在这里** —— 那是分离的人声那一份,不是一种降噪(ADR-0017 修订二)。
 DENOISE_ADAPTERS = _index_denoise_adapters(
     (
@@ -191,19 +176,6 @@ DENOISE_ADAPTERS = _index_denoise_adapters(
         RnnoiseDenoiseAdapter(),
     )
 )
-
-
-def get_denoise_adapter(engine: str = "") -> DenoiseAdapter | None:
-    """点名一个引擎;不点名(或 "auto")就给**现在跑得起来、且不会顺手去掉音乐**的第一个。
-
-    会去掉音乐的引擎(语音模型)只在点名时用:用户说"降噪",没有要求把配乐也拿掉。
-    """
-    if engine and engine != "auto":
-        return DENOISE_ADAPTERS.get(engine)
-    for adapter in DENOISE_ADAPTERS.values():
-        if not adapter.removes_music and adapter.runtime_ready():
-            return adapter
-    return None
 
 
 def has_capability_implementation(vendor_id: str, capability: str) -> bool:
@@ -241,8 +213,6 @@ __all__ = [
     "REMOTE_SPEECH_ADAPTERS",
     "DENOISE_ADAPTERS",
     "SEPARATION_ADAPTERS",
-    "get_denoise_adapter",
-    "get_separation_adapter",
     "build_speech_adapter",
     "connection_vendor_for_speech_engine",
     "get_generation_adapter",

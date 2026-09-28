@@ -192,8 +192,10 @@ class TestDeepFilterNet适配器:
         dm.deepfilter_ready.cache_clear()
         try:
             assert not registry.DENOISE_ADAPTERS["deepfilternet"].runtime_ready()
-            with pytest.raises(DenoiseError, match="设置"):
-                ready_adapter("deepfilternet")
+            from app.core.db import SessionLocal
+
+            with SessionLocal() as db, pytest.raises(DenoiseError, match="设置"):
+                ready_adapter(db, None, "builtin:deepfilternet")
         finally:
             dm.deepfilter_ready.cache_clear()
 
@@ -226,12 +228,16 @@ class Test引擎自己说得清自己:
         monkeypatch.setattr(dm, "deepfilter_path", lambda: tmp_path / "nothing")
         dm.deepfilter_ready.cache_clear()
         try:
-            rows = {row["engine"]: row for row in list_engines()}
+            from app.core.db import SessionLocal
+
+            with SessionLocal() as db:
+                rows = {row["engine"]: row for row in list_engines(db, None)}
         finally:
             dm.deepfilter_ready.cache_clear()
-        assert list(rows)[0] == "ffmpeg"
-        assert rows["ffmpeg"]["installable"] is False and rows["ffmpeg"]["status"] == "ready"
-        df = rows["deepfilternet"]
+        #: 行的 id 是能力表的提供方 id(ADR 0032):本机引擎是 `builtin:<引擎>`,插件连接是连接 id。
+        assert list(rows)[0] == "builtin:ffmpeg"
+        assert rows["builtin:ffmpeg"]["installable"] is False and rows["builtin:ffmpeg"]["status"] == "ready"
+        df = rows["builtin:deepfilternet"]
         assert df["installable"] is True and df["ready"] is False
         assert df["setup_hint"] == "denoiseSetup_deepfilternet"
         assert df["status"] in {"missing", "unsupported"}

@@ -18,6 +18,7 @@ from pathlib import Path
 import pytest
 from sqlalchemy import select
 
+from app.domain import audio_capabilities
 from app.ai.providers.contracts.separation import (
     BACKGROUND,
     VOCALS,
@@ -52,36 +53,39 @@ class _FakeAdapter:
         return made
 
 
+def _no_engine(*_args):
+    from app.domain.audio_capabilities import SeparationProviderUnavailable
+
+    raise SeparationProviderUnavailable("separationErr_noEngine")
+
+
 class Test能力可用性是问出来的:
-    def test_一个引擎都跑不起来时就是不可用(self, monkeypatch) -> None:
-        """**不是先调一次再看报错** —— 那一次调用可能已经等了十分钟或者花了钱。"""
-        from app.ai.providers import registry
+    def test_本机引擎是能力表的内置提供方_插件连接和它并列(self) -> None:
+        """挑哪一家不再是进程全局的注册表(ADR 0032):本机引擎登记成 `audio_separation` 的内置提供方,
+        不点名时按这个人的默认挑,没定默认用内置的。"""
+        from app.core.db import SessionLocal
+        from app.domain import capabilities
+        from app.domain.audio_capabilities import SEPARATION
 
-        monkeypatch.setattr(registry, "SEPARATION_ADAPTERS", {"fake": _FakeAdapter(ready=False)})
-        assert registry.get_separation_adapter() is None
-        #: 点名仍然拿得到 —— 拿它是为了装,不是为了立刻跑。
-        assert registry.get_separation_adapter("fake") is not None
-
-    def test_跑得起来的那个会被挑出来(self, monkeypatch) -> None:
-        from app.ai.providers import registry
-
-        ready = _FakeAdapter(ready=True)
-        monkeypatch.setattr(
-            registry, "SEPARATION_ADAPTERS", {"cold": _FakeAdapter(ready=False), "warm": ready}
-        )
-        assert registry.get_separation_adapter() is ready
+        with SessionLocal() as db:
+            picked = capabilities.pick(db, None, SEPARATION, None)
+            assert picked.builtin and picked.id == "builtin:demucs"
+            assert capabilities.pick(db, None, SEPARATION, "builtin:demucs").id == "builtin:demucs"
 
     def test_available_真的去问引擎(self, monkeypatch) -> None:
         """它是配音流程决定"拆还是静音"的那个判据。恒真的话,一台没装引擎的机器会走进
         分离那条路,然后在里面失败 —— 而那条路的全部意义就是"问得到才做"。"""
-        from app.domain import separation
+        from app.domain import audio_capabilities, separation
 
-        monkeypatch.setattr(separation, "get_separation_adapter", lambda engine="": None)
-        assert separation.available() is False
-        monkeypatch.setattr(separation, "get_separation_adapter", lambda engine="": _FakeAdapter(ready=False))
-        assert separation.available() is False
-        monkeypatch.setattr(separation, "get_separation_adapter", lambda engine="": _FakeAdapter(ready=True))
-        assert separation.available() is True
+        def none(*_args):
+            raise audio_capabilities.SeparationProviderUnavailable("separationErr_noEngine")
+
+        monkeypatch.setattr(audio_capabilities, "separation_adapter", none)
+        assert separation.available(None, None) is False
+        monkeypatch.setattr(audio_capabilities, "separation_adapter", lambda *_a: _FakeAdapter(ready=False))
+        assert separation.available(None, None) is False
+        monkeypatch.setattr(audio_capabilities, "separation_adapter", lambda *_a: _FakeAdapter(ready=True))
+        assert separation.available(None, None) is True
 
     def test_重复的引擎_id_在装配时就失败(self) -> None:
         """和生成、语音那两张表同一条:后一次导入静默覆盖前一次,是查不出来的那种错。"""
@@ -109,7 +113,7 @@ class Test分离产出新素材:
             db.commit()
             asset_id, before = asset.id, asset.file_key
 
-            monkeypatch.setattr(separation, "get_separation_adapter", lambda engine="": _FakeAdapter())
+            monkeypatch.setattr(audio_capabilities, "separation_adapter", lambda *_a: _FakeAdapter())
             monkeypatch.setattr(separation, "_source_path", lambda one: source)
 
             made = separation.separate_asset(db, asset, engine="")
@@ -138,7 +142,7 @@ class Test分离产出新素材:
             db.add(asset)
             db.commit()
             half = _FakeAdapter(stems=(VOCALS,))
-            monkeypatch.setattr(separation, "get_separation_adapter", lambda engine="": half)
+            monkeypatch.setattr(audio_capabilities, "separation_adapter", lambda *_a: half)
             monkeypatch.setattr(separation, "_source_path", lambda one: source)
             with pytest.raises(SeparationError, match="背景音"):
                 separation.separate_asset(db, asset, engine="")
@@ -147,7 +151,7 @@ class Test分离产出新素材:
         from app.db.models import Asset
         from app.domain import separation
 
-        monkeypatch.setattr(separation, "get_separation_adapter", lambda engine="": None)
+        monkeypatch.setattr(audio_capabilities, "separation_adapter", _no_engine)
         with pytest.raises(SeparationError, match="没有可用"):
             separation.separate_asset(None, Asset(workspace_id="w", kind="audio", name="x"), engine="")
 
@@ -176,7 +180,7 @@ class Test配音流程忠实执行用户选择:
 
         from app.domain import separation
 
-        monkeypatch.setattr(separation, "available", lambda engine="": False)
+        monkeypatch.setattr(separation, "available", lambda *_a, **_k: False)
         seen: list[str] = []
 
         def fake_set_state(db, sequence_id, state):
@@ -251,7 +255,7 @@ class Test配音流程忠实执行用户选择:
 
         made = type("M", (), {"background": type("A", (), {"id": ids[3]})()})()
         separated: list[str] = []
-        monkeypatch.setattr(sep, "available", lambda engine="": True)
+        monkeypatch.setattr(sep, "available", lambda *_a, **_k: True)
         monkeypatch.setattr(sep, "separate_asset", lambda db, asset, **k: separated.append(asset.id) or made)
 
         seq_id, dub_id, footage_id, background_id = ids
@@ -299,7 +303,7 @@ class Test配音流程忠实执行用户选择:
             def get(self, model, key):
                 return type("S", (), {"tracks": [track]})() if key == "s1" else type("A", (), {"id": key, "kind": "video"})()
 
-        monkeypatch.setattr(sep, "available", lambda engine="": True)
+        monkeypatch.setattr(sep, "available", lambda *_a, **_k: True)
         monkeypatch.setattr(sep, "separate_asset", separate)
         monkeypatch.setattr(ops, "detach_clip_audio", lambda *a, **k: pytest.fail("不该动时间线"))
         with pytest.raises(original_audio.OriginalAudioError, match="第二段炸了"):
@@ -312,7 +316,7 @@ class Test当作任务跑:
         from app.db.models import Asset
         from app.domain import separation
 
-        monkeypatch.setattr(separation, "available", lambda engine="": False)
+        monkeypatch.setattr(separation, "available", lambda *_a, **_k: False)
         with pytest.raises(SeparationError, match="先在设置里装"):
             separation.start_separation_job(
                 None, asset=Asset(workspace_id="w", kind="audio", name="x", file_key="k"), created_by=None
@@ -322,7 +326,7 @@ class Test当作任务跑:
         from app.db.models import Asset
         from app.domain import separation
 
-        monkeypatch.setattr(separation, "available", lambda engine="": True)
+        monkeypatch.setattr(separation, "available", lambda *_a, **_k: True)
         with pytest.raises(SeparationError, match="只有音频或视频"):
             separation.start_separation_job(
                 None, asset=Asset(workspace_id="w", kind="image", name="x", file_key="k"), created_by=None
@@ -347,7 +351,7 @@ class Test当作任务跑:
             db.commit()
             asset_id, job_id = asset.id, job.id
 
-        monkeypatch.setattr(separation, "get_separation_adapter", lambda engine="": _FakeAdapter())
+        monkeypatch.setattr(audio_capabilities, "separation_adapter", lambda *_a: _FakeAdapter())
         monkeypatch.setattr(separation, "_source_path", lambda one: source)
         separation._job_body(job_id, asset_id, "")
 
@@ -366,22 +370,10 @@ class Test当作任务跑:
 
 
 class Test节点上的引擎是选出来的:
-    def test_选项就是注册表里那几个(self) -> None:
-        """节点上的引擎曾经是一格自由文本 —— 用户得知道引擎叫什么才填得对。
-        选项从注册表读:加一个引擎,下拉里自动多一项,不用改两处。"""
-        from app.ai.providers.registry import SEPARATION_ADAPTERS
+    def test_选项是能力表里的提供方(self) -> None:
+        """节点上的引擎曾经是一格自由文本,后来是写死的 `auto / demucs`;现在从能力表现查(ADR 0032):
+        本机引擎、配好的分离插件都在下拉里,留空 = 按运行者的默认。"""
         from app.domain.workflows import NODE_TYPES
 
         spec = NODE_TYPES["separate_audio"]["config"]["engine"]
-        assert spec["options"] == ["auto", *SEPARATION_ADAPTERS]
-        assert spec["default"] == "auto"
-
-    def test_auto_就是不点名(self, monkeypatch) -> None:
-        """下拉给的是 auto(和转写节点同一个约定),它和空串必须是同一个意思 ——
-        否则选了 auto 反而去找一个叫 auto 的引擎,找不到就说"没有可用引擎"。"""
-        from app.ai.providers import registry
-
-        ready = _FakeAdapter(ready=True)
-        monkeypatch.setattr(registry, "SEPARATION_ADAPTERS", {"fake": ready})
-        assert registry.get_separation_adapter("auto") is ready
-        assert registry.get_separation_adapter("") is ready
+        assert spec["options_from"] == "providers.audio_separation" and "options" not in spec and "default" not in spec

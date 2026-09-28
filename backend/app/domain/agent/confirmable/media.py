@@ -175,6 +175,10 @@ def _validate_separate_audio(db: Session, workspace_id: str, payload: dict[str, 
         raise ConfirmationError("confirmErr_assetNotInWorkspace")
     if asset.kind not in {"audio", "video"}:
         raise ConfirmationError("confirmErr_separateNeedsAudio")
+    from app.domain.audio_capabilities import SEPARATION
+
+    named = str(payload.get("engine") or "").strip()
+    payload["engine"] = _named_provider(db, actor, SEPARATION, named).id if named and named != "auto" else ""
 
 
 def _summarize_separate_audio(db: Session, payload: dict[str, Any]) -> Summary:
@@ -207,9 +211,14 @@ def _validate_denoise_audio(db: Session, workspace_id: str, payload: dict[str, A
     if asset.kind not in DENOISABLE_KINDS:
         raise ConfirmationError("confirmErr_denoiseNeedsAudio")
     # 引擎和档位在**开卡之前**就判:批准一张注定失败的卡,只是把同一句话推迟到点完之后。
+    #: 引擎按名字或 id 认(内置引擎、配好的降噪插件都行,ADR 0032),认出来就换成提供方 id 存下。
+    from app.domain.audio_capabilities import DENOISE
+
+    named = str(payload.get("engine") or "").strip()
+    payload["engine"] = _named_provider(db, actor, DENOISE, named).id if named and named != "auto" else ""
     try:
         payload["strength"] = checked_strength(str(payload.get("strength") or ""))
-        adapter = ready_adapter(str(payload.get("engine") or ""))
+        adapter = ready_adapter(db, actor, str(payload.get("engine") or ""))
         # 卡上要说的话(用哪个、会不会去掉音乐)在这里就定下来 —— _summarize 不查注册表。
         payload["resolved_engine"] = adapter.engine_id
         payload["engine_name"] = t(adapter.label_key)
@@ -343,19 +352,21 @@ def _execute_split_image_grid(db: Session, confirmation: Any, actor: str | None)
         raise ConfirmationError(exc.key, **exc.params) from exc
     return {"asset_ids": [piece.id for piece in pieces], "source_asset_id": asset.id}
 
-def _document_parser(db: Session, actor: str | None, name_or_id: str):
-    """智能体说的是解析方式的名字(「MinerU 文档解析」「本地解析」)或 id;认不出就说清楚有哪几家。"""
+def _named_provider(db: Session, actor: str | None, capability: Any, name_or_id: str):
+    """智能体按名字点一家(ADR 0032 §3):认不出就说清楚配好了的有哪几家。"""
     from app.domain import capabilities
+
+    found = capabilities.resolve_named(db, actor, capability, name_or_id)
+    if found is None:
+        ready = [one.name for one in capabilities.providers(db, actor, capability) if not one.missing]
+        raise ConfirmationError("confirmErr_unknownProvider", name=name_or_id, choices=tr("punct_listSep").join(ready))
+    return found
+
+
+def _document_parser(db: Session, actor: str | None, name_or_id: str):
     from app.domain.documents import CAPABILITY
 
-    wanted = name_or_id.strip().lower()
-    ready = [one for one in capabilities.providers(db, actor, CAPABILITY) if not one.missing]
-    found = next((one for one in ready if wanted in (one.id.lower(), one.name.lower())), None) or \
-        next((one for one in ready if wanted and wanted in one.name.lower()), None)
-    if found is None:
-        raise ConfirmationError("confirmErr_unknownParser", parser=name_or_id,
-                                choices=tr("punct_listSep").join(one.name for one in ready))
-    return found
+    return _named_provider(db, actor, CAPABILITY, name_or_id)
 
 
 def _validate_reparse_document(db: Session, workspace_id: str, payload: dict[str, Any], actor: str | None) -> None:
@@ -426,6 +437,7 @@ confirmable_tool(ConfirmableTool(
     name="separate_audio",
     permission="render-cost",
     cost="render",
+    capability="audio_separation",
     summarize=_summarize_separate_audio,
     execute=_execute_separate_audio,
     validate=_validate_separate_audio,
@@ -436,6 +448,7 @@ confirmable_tool(ConfirmableTool(
     name="denoise_audio",
     permission="render-cost",
     cost="render",
+    capability="audio_denoise",
     summarize=_summarize_denoise_audio,
     execute=_execute_denoise_audio,
     validate=_validate_denoise_audio,
@@ -466,6 +479,7 @@ confirmable_tool(ConfirmableTool(
     name="reparse_document",
     permission="edit",
     cost="none",
+    capability="document_parse",
     summarize=_summarize_reparse_document,
     execute=_execute_reparse_document,
     validate=_validate_reparse_document,

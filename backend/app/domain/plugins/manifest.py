@@ -13,6 +13,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from mosael_formats.plugin_manifest import (
+    AUDIO_DENOISE,
+    AUDIO_SEPARATION,
     CODE_FIELD_TYPES,
     DOCUMENT_PARSE,
     FIELD_TYPES,
@@ -59,6 +61,8 @@ def manifest_of(package: "PluginPackage") -> Manifest:
 __all__ = [
     "Author",
     "CODE_FIELD_TYPES",
+    "AUDIO_DENOISE",
+    "AUDIO_SEPARATION",
     "DOCUMENT_PARSE",
     "FIELD_TYPES",
     "Field",

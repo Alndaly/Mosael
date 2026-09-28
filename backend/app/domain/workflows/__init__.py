@@ -15,7 +15,6 @@
 from __future__ import annotations
 
 from app.ai.providers.contracts.denoise import DEFAULT_STRENGTH, STRENGTHS
-from app.ai.providers.registry import DENOISE_ADAPTERS, SEPARATION_ADAPTERS
 from app.domain.export_presets import EXPORT_QUALITIES, EXPORT_RESOLUTIONS
 from app.domain.generation.catalog import BUILTIN_MODELS, SOURCE_GROUPS, SOURCE_ROLE_LABELS
 from app.domain.media_kinds import declared_media
@@ -865,7 +864,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
             "asset_id": {"type": "template", "required": True, "media": "document",
                          "description": "wfNode_document_to_markdown_asset_id"},
             #: 用哪一家的解析(本地 / MinerU 这类插件连接)。空 = 已有的最新一份,没有就本地解析一遍。
-            "parser": {"type": "string", "options_from": "document_parsers", "description": "wfNode_document_to_markdown_parser"},
+            "parser": {"type": "string", "options_from": "providers.document_parse", "description": "wfNode_document_to_markdown_parser"},
             "first": {"advanced": True, "type": "number", "label": "wfField_first_section", "description": "wfNode_document_to_markdown_first"},
             "last": {"advanced": True, "type": "number", "label": "wfField_last_section", "description": "wfNode_document_to_markdown_last"},
         },
@@ -1233,9 +1232,9 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
             # 漏改的那处表现为"装好了却选不到"。
             "engine": {
                 "type": "string",
-                "default": "auto",
+                #: 提供方(ADR 0032):内置引擎、配好的分离插件;留空 = 按运行者的默认。
                 "description": "wfNode_separate_audio_engine",
-                "options": ["auto", *SEPARATION_ADAPTERS],
+                "options_from": "providers.audio_separation",
             },
         },
         "outputs": ["vocals_asset_id", "background_asset_id", "engine"],
@@ -1262,9 +1261,9 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
             # 选项从注册表读(同分离节点)。auto = 内置的那个,它不会顺手去掉音乐。
             "engine": {
                 "type": "string",
-                "default": "auto",
+                #: 提供方(ADR 0032):内置引擎、配好的降噪插件;留空 = 按运行者的默认(不动配乐的第一个)。
                 "description": "wfNode_denoise_audio_engine",
-                "options": ["auto", *DENOISE_ADAPTERS],
+                "options_from": "providers.audio_denoise",
             },
             "strength": {
                 "type": "string",

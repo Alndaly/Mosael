@@ -898,9 +898,9 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "只有文档素材(PDF、Word、PPT、Excel……)可以解析",
         "en": "Only document assets (PDF, Word, PowerPoint, Excel…) can be parsed.",
     },
-    "confirmErr_unknownParser": {
-        "zh": "没有叫「{parser}」的解析方式;配好了的有:{choices}",
-        "en": "There is no parser called “{parser}”; the ready ones are: {choices}",
+    "confirmErr_unknownProvider": {
+        "zh": "没有叫「{name}」的实现;配好了的有:{choices}",
+        "en": "There is no provider called “{name}”; the ready ones are: {choices}",
     },
     "confirmErr_gridNeedsImage": {
         "zh": "只有图片素材可以切宫格",
@@ -1933,6 +1933,20 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "把视频转成新的 GIF({fps} fps,宽 {width} px{clip}),原视频不变",
         "en": "Convert the video into a new GIF ({fps} fps, {width} px wide{clip}); the video is unchanged",
     },
+    "capUse_assetDenoise": {"zh": "素材库的音频 / 视频:「降噪」时挑引擎", "en": "Audio / video in the media library: pick the engine when denoising"},
+    "capUse_assetSeparate": {"zh": "素材库的音频 / 视频:「分离人声」", "en": "Audio / video in the media library: separate vocals"},
+    "capability_audio_denoise": {"zh": "降噪", "en": "Noise reduction"},
+    "capability_audio_denoise_desc": {"zh": "给一段音频或视频的声音降噪。本机引擎之外,装了降噪插件的也能在这里选;没定默认时用不会去掉配乐的本机引擎。", "en": "Reduce noise in audio or a video's sound. Besides on-device engines, installed denoise plugins can be chosen here; with no default, an on-device engine that keeps music is used."},
+    "capability_audio_separation": {"zh": "分离人声", "en": "Vocal separation"},
+    "capability_audio_separation_desc": {"zh": "把一段声音拆成人声和背景音。本机引擎之外,装了分离插件的也能在这里选。", "en": "Split a sound into vocals and background. Besides the on-device engine, installed separation plugins can be chosen here."},
+    "denoiseErr_pluginFailed": {"zh": "「{plugin}」没降成:{detail}", "en": "“{plugin}” couldn't denoise it: {detail}"},
+    "denoiseErr_pluginBadOutput": {"zh": "降噪插件交回的结果找不到:{detail}", "en": "The denoise plugin's result is missing: {detail}"},
+    "separationErr_pluginFailed": {"zh": "「{plugin}」没分离成:{detail}", "en": "“{plugin}” couldn't separate it: {detail}"},
+    "separationErr_pluginBadOutput": {"zh": "分离插件交回的结果找不到:{detail}", "en": "The separation plugin's result is missing: {detail}"},
+    "capUse_settingsDefault": {"zh": "设置 → 能力提供方:设成默认", "en": "Settings → Capability providers: make it the default"},
+    "capUse_documentReparse": {"zh": "素材库的文档详情:「重新解析」时点名", "en": "Document details in the media library: pick it when re-parsing"},
+    "capUse_workflowField": {"zh": "工作流节点「{node}」的「{field}」", "en": "Workflow node “{node}”: {field}"},
+    "capUse_agentTool": {"zh": "智能体工具 {tool}", "en": "Agent tool {tool}"},
     "confirm_reparseDocument": {
         "zh": "用「{parser}」重新解析这份文档;选的不是本地解析的话,文档会上传到那一家",
         "en": "Re-parse this document with “{parser}”; unless it is the local parser, the document is uploaded to that service",
@@ -2903,7 +2917,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Split an audio or video asset into a voice stem and a background stem as two **new assets**; the original is untouched. The background is everything except the voice: music, ambience, effects. Use it in dubbing to keep the background: drop the voice, keep the rest, lay the dub on top. Requires a separation engine installed on this machine.",
     },
     "wfNode_separate_audio_asset_id": {"zh": "要分离的素材(音频或视频都行)", "en": "The asset to separate (audio or video)"},
-    "wfNode_separate_audio_engine": {"zh": "用哪个分离引擎。「自动」= 用本机现在装好的那个;引擎在「设置 → 本机引擎 → 人声分离」里装。", "en": "Which separation engine to use. Auto uses whichever is installed on this machine; install engines under Settings → On-device engines → Voice separation."},
+    "wfNode_separate_audio_engine": {"zh": "用哪一家分离:本机装好的引擎,或配好的分离插件;留空按你的默认(没定就用本机引擎)。本机引擎在「设置 → 本机引擎 → 人声分离」里装。", "en": "Which provider separates the audio: an on-device engine or a configured separation plugin; empty uses your default (the on-device engine if none). Install engines under Settings → On-device engines → Voice separation."},
     "sepEngine_demucs": {"zh": "Demucs(本机)", "en": "Demucs (local)"},
     "sepMsg_brokenRuntime": {
         # 解释器在、依赖却不全的那种(pip 装到一半断了)。不说"未安装" —— 用户明明记得装过。
@@ -2918,8 +2932,8 @@ MESSAGES: dict[str, dict[str, str]] = {
     },
     "wfNode_denoise_audio_asset_id": {"zh": "要降噪的素材(音频或视频都行)", "en": "The asset to clean up (audio or video)"},
     "wfNode_denoise_audio_engine": {
-        "zh": "用哪个降噪引擎。「自动」和「内置」是频谱降噪(不装任何东西,不动音乐,只去持续的底噪);DeepFilterNet 是效果最好的语音降噪(要先在设置里下载);RNNoise 是轻量语音降噪。后两种都会把音乐一起去掉。",
-        "en": "Which engine to use. Auto and Built-in are the spectral denoiser (nothing to install, music untouched, steady noise only); DeepFilterNet is the best speech denoiser (download it in Settings first); RNNoise is a lightweight speech denoiser. The last two remove music as well.",
+        "zh": "用哪一家降噪:本机引擎,或配好的降噪插件;留空按你的默认(没定就用不会去掉配乐的第一个本机引擎)",
+        "en": "Which provider denoises: an on-device engine or a configured denoise plugin; empty uses your default (the first on-device engine that keeps music, if none)",
     },
     "wfNode_denoise_audio_strength": {
         "zh": "下手多重:「轻」只去最明显的底噪,「中」适合大多数录音,「重」去得最干净但可能让声音发闷。",
@@ -3905,7 +3919,8 @@ MESSAGES: dict[str, dict[str, str]] = {
     },
     "asrErr_emptyResult": {"zh": "转写结果为空", "en": "The transcription came back empty."},
     # 降噪(domain/denoise.py)
-    "denoiseErr_unknownEngine": {"zh": "没有这个降噪引擎:{engine}", "en": "There's no noise-reduction engine called {engine}."},
+    "denoiseErr_unknownEngine": {"zh": "没有这个降噪引擎:{name}", "en": "There's no noise-reduction engine called {name}."},
+    "separationErr_unknownEngine": {"zh": "没有这个分离引擎:{name}", "en": "There's no vocal-separation engine called {name}."},
     "denoiseErr_noEngine": {"zh": "没有可用的降噪引擎", "en": "No noise-reduction engine is available."},
     "denoiseErr_engineNotReady": {"zh": "降噪引擎 {engine} 还没准备好", "en": "The noise-reduction engine {engine} isn't ready yet."},
     "denoiseErr_notMedia": {"zh": "只有音频或视频素材可以降噪", "en": "Only audio or video assets can be denoised."},
@@ -4331,6 +4346,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "capability_document_parse": {"zh": "文档解析", "en": "Document parsing"},
     "capability_document_parse_desc": {"zh": "把 PDF、Word、PPT、Excel 等文档转成 Markdown,给智能体读、存成笔记。本地解析不出本机;交给插件(如 MinerU 云端)时文档会上传到那一家。", "en": "Turns PDF, Word, PowerPoint, Excel and other documents into Markdown for the agent to read and to save as notes. Local parsing stays on this computer; a plugin (such as MinerU's cloud) uploads the document to that service."},
     "capErr_none": {"zh": "还没有能做这件事的连接", "en": "No connection can do this yet."},
+    "capErr_unknown": {"zh": "没有叫「{name}」的实现,或者它不是你的连接", "en": "There's no provider “{name}”, or it isn't your connection."},
     "capErr_incomplete": {"zh": "「{plugin}」还没配好:缺 {missing}", "en": "“{plugin}” isn't set up yet: missing {missing}."},
     "capErr_ambiguous": {"zh": "配好了几家({names}),请在「设置 → 能力提供方」里定用哪一家", "en": "Several are set up ({names}); choose one under Settings → Capability providers."},
     "capErr_outdated": {"zh": "「{plugin}」版本太旧,请到插件页更新", "en": "“{plugin}” is out of date; update it on the Plugins page."},

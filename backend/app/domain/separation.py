@@ -27,7 +27,6 @@ from app.ai.providers.contracts.separation import (
     SeparationError,
     SeparationRequest,
 )
-from app.ai.providers.registry import get_separation_adapter
 from app.core.db import SessionLocal
 from app.db.models import Asset, Job
 from app.domain.assets.importer import register_file_asset
@@ -61,10 +60,16 @@ class SeparatedAssets:
     engine: str
 
 
-def available(engine: str = "") -> bool:
-    """现在有没有跑得起来的分离引擎。"""
-    adapter = get_separation_adapter(engine)
-    return bool(adapter and adapter.runtime_ready())
+def available(db: Session, owner_user_id: str | None, engine: str = "") -> bool:
+    """现在有没有跑得起来的分离实现(`engine` 是提供方 id,空 = 按默认,见 audio_capabilities)。"""
+    from app.domain.audio_capabilities import separation_adapter
+    from app.domain.capabilities import CapabilityUnavailable
+
+    try:
+        adapter = separation_adapter(db, owner_user_id, engine)
+    except CapabilityUnavailable:
+        return False
+    return adapter.runtime_ready()
 
 
 def separate_asset(
@@ -73,6 +78,7 @@ def separate_asset(
     *,
     engine: str = "",
     project_id: str | None = None,
+    owner_user_id: str | None = None,
 ) -> SeparatedAssets:
     """把这份素材拆成人声 + 背景音两份新素材。
 
@@ -80,9 +86,9 @@ def separate_asset(
     (media/audio_io)—— 此前借的是转写那条,会先降成 16 kHz 单声道,拆出来的背景音再进成片时
     音质已经没了(ADR-0017 决定 6)。
     """
-    adapter = get_separation_adapter(engine)
-    if adapter is None:
-        raise SeparationDomainError("separationErr_noEngine")
+    from app.domain.audio_capabilities import separation_adapter
+
+    adapter = separation_adapter(db, owner_user_id, engine)
     if not adapter.runtime_ready():
         # 装是显式的一步:第一次要建 venv、装 torch、拉权重,那是几分钟到几十分钟的事,
         # 不该藏在"点一下分离"后面一声不响地发生。
@@ -163,7 +169,7 @@ def start_separation_job(db: Session, *, asset: Asset, created_by: str | None, e
         raise SeparationDomainError("separationErr_notMedia")
     if not asset.file_key:
         raise SeparationDomainError("separationErr_noLocalFile")
-    if not available(engine):
+    if not available(db, created_by, engine):
         #: **排队之前就问**:没有引擎时排一个注定失败的任务,只是把同一句话推迟十秒说。
         raise SeparationDomainError("separationErr_noEngineInstall")
 
@@ -200,7 +206,7 @@ def _job_body(job_id: str, asset_id: str, engine: str) -> None:
         emit_job_event(db, job.id, "job.running", {})
         db.commit()
 
-        made = separate_asset(db, asset, engine=engine)
+        made = separate_asset(db, asset, engine=engine, owner_user_id=job.created_by)
 
         result = {
             "vocals_asset_id": made.vocals.id,

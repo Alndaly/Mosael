@@ -81,10 +81,13 @@ def audio(monkeypatch, tmp_path) -> tuple[str, str]:
 def _install(monkeypatch, node: str):
     if node == "separate_audio":
         engine = _Separator()
-        monkeypatch.setattr(separation, "get_separation_adapter", lambda name="": engine)
+        #: 挑哪一家走能力表(ADR 0032);桩在那道接缝上,节点、任务、分离本身照真的跑。
+        from app.domain import audio_capabilities
+
+        monkeypatch.setattr(audio_capabilities, "separation_adapter", lambda *_a: engine)
     else:
         engine = _Denoiser()
-        monkeypatch.setattr(denoise, "ready_adapter", lambda name="": engine)
+        monkeypatch.setattr(denoise, "ready_adapter", lambda *_a: engine)
     return engine
 
 

@@ -17,8 +17,15 @@ from pathlib import Path
 
 from sqlalchemy.orm import Session
 
-from app.ai.providers.contracts.denoise import DEFAULT_STRENGTH, DenoiseAdapter, DenoiseError, DenoiseRequest, checked_strength
-from app.ai.providers.registry import DENOISE_ADAPTERS, get_denoise_adapter
+from app.ai.providers.contracts.denoise import (
+    DEFAULT_STRENGTH,
+    STRENGTHS,
+    DenoiseAdapter,
+    DenoiseError,
+    DenoiseRequest,
+    checked_strength,
+)
+from app.ai.providers.registry import DENOISE_ADAPTERS
 from app.ai.runtime import denoise_models
 from app.core.db import SessionLocal
 from app.db.models import Asset, Job
@@ -38,35 +45,42 @@ class DenoiseDomainError(DenoiseError):
     """
 
 
-def ready_adapter(engine: str = "") -> DenoiseAdapter:
-    """这次用哪个引擎;没有、或者没准备好,就抛一句说得清下一步的话。
+def ready_adapter(db: Session, owner_user_id: str | None, engine: str = "") -> DenoiseAdapter:
+    """这次用哪一家(ADR 0032):`engine` 是提供方 id(内置的 `builtin:<引擎>`、插件的连接 id),空 = 按这个人的默认,
+    没定就用第一个跑得起来、不动配乐的内置引擎。挑不出来、没准备好,抛一句说得清下一步的话。
 
     **不替用户准备**(装依赖、拉权重)—— 那是设置里显式的一步(ADR-0016 同一条)。
     """
-    adapter = get_denoise_adapter(engine)
-    if adapter is None:
-        if engine not in ("", "auto"):
-            raise DenoiseDomainError("denoiseErr_unknownEngine", engine=engine)
-        raise DenoiseDomainError("denoiseErr_noEngine")
-    if not adapter.runtime_ready():
-        # 引擎自带的安装提示本身就是文案 key,留着 key 走,出口再翻。
-        if adapter.setup_hint_key:
-            raise DenoiseDomainError(adapter.setup_hint_key)
-        raise DenoiseDomainError("denoiseErr_engineNotReady", engine=adapter.engine_id)
-    return adapter
+    from app.domain.audio_capabilities import denoise_adapter
+
+    return denoise_adapter(db, owner_user_id, engine)
 
 
-def list_engines() -> list[dict]:
-    """给界面和节点的引擎清单。`label` / `description` / `setup_hint` 是 i18n key,在出口翻译。
+def list_engines(db: Session, owner_user_id: str | None) -> list[dict]:
+    """给界面的候选:内置引擎(带安装状态)和这个人配好的降噪插件。`engine` 是提供方 id。
+    内置的 `label` / `description` / `setup_hint` 是 i18n key,在出口翻译;插件的 `label` 就是连接名。
 
-    要下载安装的引擎(见 runtime/denoise_models.INSTALLABLE)多带安装状态;其余的 `status`
-    只说能不能用。**引擎自己不知道"安装"这回事** —— 那是运行时那一层的事,在这里合起来。
+    要下载安装的引擎(见 runtime/denoise_models.INSTALLABLE)多带安装状态。**引擎自己不知道"安装"这回事** ——
+    那是运行时那一层的事,在这里合起来。
     """
+    from app.domain import capabilities
+    from app.domain.audio_capabilities import BUILTIN_PREFIX, DENOISE
+
     rows = []
-    for adapter in DENOISE_ADAPTERS.values():
+    for provider in capabilities.providers(db, owner_user_id, DENOISE):
+        if not provider.builtin:
+            ready = not provider.missing
+            rows.append({
+                "engine": provider.id, "label": provider.name, "description": "", "setup_hint": "",
+                "ready": ready, "strengths": list(STRENGTHS), "removes_music": False, "installable": False,
+                "status": "ready" if ready else "unavailable", "message": "；".join(provider.missing),
+                "message_params": {}, "size_bytes": 0,
+            })
+            continue
+        adapter = DENOISE_ADAPTERS[provider.id.removeprefix(BUILTIN_PREFIX)]
         ready = adapter.runtime_ready()
         row = {
-            "engine": adapter.engine_id,
+            "engine": provider.id,
             "label": adapter.label_key,
             "description": adapter.description_key,
             "setup_hint": "" if ready else adapter.setup_hint_key,
@@ -85,10 +99,12 @@ def list_engines() -> list[dict]:
     return rows
 
 
-def install_engine(engine: str) -> dict:
-    """开始装这个引擎。装在后台跑;返回的是那一行的新状态。"""
-    denoise_models.start_install(engine)
-    return next(row for row in list_engines() if row["engine"] == engine)
+def install_engine(db: Session, owner_user_id: str | None, engine: str) -> dict:
+    """开始装这个内置引擎(提供方 id `builtin:<引擎>`)。装在后台跑;返回的是那一行的新状态。"""
+    from app.domain.audio_capabilities import BUILTIN_PREFIX
+
+    denoise_models.start_install(engine.removeprefix(BUILTIN_PREFIX))
+    return next(row for row in list_engines(db, owner_user_id) if row["engine"] == engine)
 
 
 def denoise_asset(
@@ -98,11 +114,12 @@ def denoise_asset(
     engine: str = "",
     strength: str = DEFAULT_STRENGTH,
     project_id: str | None = None,
+    owner_user_id: str | None = None,
 ) -> tuple[Asset, str]:
-    """降噪,返回 (新素材, 实际用的引擎 id)。"""
+    """降噪,返回 (新素材, 实际用的提供方 id)。`owner_user_id`:谁在做 —— 用他的默认和他的插件连接。"""
     if asset.kind not in DENOISABLE_KINDS:
         raise DenoiseDomainError("denoiseErr_notMedia")
-    adapter = ready_adapter(engine)
+    adapter = ready_adapter(db, owner_user_id, engine)
     # 没有档位的引擎不看这个值 —— 但它照样要是一个认得出的档位。
     request_strength = checked_strength(strength)
 
@@ -172,7 +189,7 @@ def start_denoise_job(
     if not asset.file_key:
         raise DenoiseDomainError("denoiseErr_noLocalFile")
     strength = checked_strength(strength)
-    ready_adapter(engine)
+    ready_adapter(db, created_by, engine)
 
     job = create_job(
         db,
@@ -207,7 +224,7 @@ def _job_body(job_id: str, asset_id: str, engine: str, strength: str) -> None:
         emit_job_event(db, job.id, "job.running", {})
         db.commit()
 
-        made, used = denoise_asset(db, asset, engine=engine, strength=strength)
+        made, used = denoise_asset(db, asset, engine=engine, strength=strength, owner_user_id=job.created_by)
 
         result = {"asset_id": made.id, "source_asset_id": asset.id, "engine": used}
         if finish_job(db, job, status="succeeded", progress=1.0, result=result):

@@ -65,6 +65,8 @@ class ConfirmableTool:
     #: 这次调用实际属于哪一档 —— 返回更高的那一档,或 None 表示就按声明的来。
     #: 静态表说不清后果:同一个 edit_workflow,加一个文本节点和加一个 code 节点不是一回事。
     escalate: Callable[[Session, str, dict[str, Any]], str | None] | None = None
+    #: 这个工具点名用哪项宿主能力(ADR 0032 §4):插件页、设置页据此列出「智能体的 ×× 工具用它」。
+    capability: str = ""
 
     def __post_init__(self) -> None:
         if self.permission not in PERMISSIONS or self.cost not in COSTS:
@@ -115,3 +117,12 @@ def tool_specs() -> dict[str, ConfirmableTool]:
 
 def tool_families() -> tuple[str, ...]:
     return tuple(_FAMILIES)
+
+
+def capability_uses() -> list:
+    """智能体哪些工具点名用某项宿主能力(工具上的 `capability`)。现扫注册表,新工具声明了就出现。"""
+    from app.core.i18n import fragment
+    from app.domain.capabilities import Use
+
+    return [Use(tool.capability, "agent", fragment("capUse_agentTool", tool=tool.name))
+            for tool in _TOOLS.values() if tool.capability]

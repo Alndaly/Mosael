@@ -100,7 +100,7 @@ def stubs(monkeypatch):
     monkeypatch.setattr(translate_domain, "translate_many", fake_translate_many)
     monkeypatch.setattr(voices, "start_synthesis", fake_synthesis)
     monkeypatch.setattr(render, "start_export", fake_export)
-    monkeypatch.setattr(separation, "available", lambda engine="": True)
+    monkeypatch.setattr(separation, "available", lambda *_a, **_k: True)
     monkeypatch.setattr(separation, "separate_asset", fake_separate)
 
 

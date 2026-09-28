@@ -248,8 +248,8 @@ def test_transcript_cleanup_template_has_valid_refs_and_provenance() -> None:
     }
     clean = next(node for node in graph["nodes"] if node["id"] == "clean_audio")
     assert clean["type"] == "denoise_audio"
-    #: 官方模板用内置引擎:不用装、不动背景音乐。
-    assert clean["config"]["engine"] == "auto"
+    #: 官方模板不点名引擎:按运行者的默认,没定就是内置的频谱降噪(不用装、不动背景音乐,ADR 0032)。
+    assert "engine" not in clean["config"]
     on_timeline = next(edge for edge in graph["edges"]
                        if edge.get("target") == "source_on_timeline" and edge.get("target_input") == "asset_id")
     assert on_timeline["source"] == "clean_audio", "放上时间线的也该是降噪后的那份"

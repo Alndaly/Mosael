@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "Transcript-based video cleanup",
   "description": "Remove background hiss, transcribe the video with timestamps, identify pauses, fillers and repetition, then create a cut plan and a cleaned video while preserving the original.",
-  "graph_hash": "b57a60191004ece9e1e0be2cfe65fc914830f0c295ebc0c9b4835ac0347d1a8a",
+  "graph_hash": "8137c8f6f5a87be41fbe4c7432a93537ff23ee8c3f30b3bc89db2a0770376667",
   "graph": {
     "meta": {
       "template_id": "transcript_video_cleanup",
@@ -51,7 +51,6 @@
         },
         "config": {
           "asset_id": "",
-          "engine": "auto",
           "strength": "medium"
         },
         "inputs": [
@@ -67,8 +66,7 @@
           "y": 100
         },
         "config": {
-          "asset_id": "",
-          "engine": "auto"
+          "asset_id": ""
         },
         "inputs": [
           "asset_id"

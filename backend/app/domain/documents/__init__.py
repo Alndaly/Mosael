@@ -26,8 +26,17 @@ CAPABILITY = Capability(
     incomplete_key="docErr_parserIncomplete",
     ambiguous_key="docErr_parserAmbiguous",
     outdated_key="docErr_parserOutdated",
-    builtin=Builtin(id=LOCAL_PARSER, name_key="docParser_local"),
+    builtins=(Builtin(id=LOCAL_PARSER, name_key="docParser_local"),),
     auto_single=False,
 )
 
-__all__ = ["CAPABILITY", "DOCUMENT_PARSE", "LOCAL_PARSER", "DocumentParserUnavailable"]
+
+def register_uses() -> None:
+    """宿主界面上用到文档解析的入口(ADR 0032 §4)。工作流节点、智能体工具由各自注册表现扫,不在这里写。"""
+    from app.core.i18n import fragment
+    from app.domain.capabilities import Use, register_use
+
+    register_use(Use(DOCUMENT_PARSE, "app", fragment("capUse_documentReparse")))
+
+
+__all__ = ["CAPABILITY", "DOCUMENT_PARSE", "LOCAL_PARSER", "DocumentParserUnavailable", "register_uses"]

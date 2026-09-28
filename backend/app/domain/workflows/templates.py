@@ -793,14 +793,14 @@ def transcript_video_cleanup_graph(*, chat: ModelChoice) -> dict[str, Any]:
             "type": "denoise_audio",
             "name": {"zh": "去除底噪(产出新视频,原片不动)", "en": "Remove background noise (a new asset; the source is untouched)"},
             "position": {"x": 650, "y": 260},
-            "config": {"asset_id": "{{source_video.asset_id}}", "engine": "auto", "strength": "medium"},
+            "config": {"asset_id": "{{source_video.asset_id}}", "strength": "medium"},
         },
         {
             "id": "verbatim_transcript",
             "type": "transcribe_asset",
             "name": {"zh": "生成带时间码逐字稿", "en": "Transcribe with timecodes"},
             "position": {"x": 970, "y": 100},
-            "config": {"asset_id": "{{clean_audio.asset_id}}", "engine": "auto"},
+            "config": {"asset_id": "{{clean_audio.asset_id}}"},
         },
         {
             "id": "cleanup_project",
@@ -1005,7 +1005,7 @@ def translated_dub_graph(*, voice_id: str = "", lipsync: bool = False) -> dict[s
             "type": "transcribe_asset",
             "name": {"zh": "生成带时间码逐字稿", "en": "Transcribe with timecodes"},
             "position": {"x": 350, "y": 120},
-            "config": {"asset_id": "{{source_video.asset_id}}", "engine": "auto"},
+            "config": {"asset_id": "{{source_video.asset_id}}"},
         },
         {
             "id": "translate_lines",

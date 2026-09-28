@@ -1450,7 +1450,7 @@ export interface paths {
         };
         /**
          * List Denoise Engines
-         * @description 降噪引擎,以及现在能不能用、要不要装。
+         * @description 降噪的候选(内置引擎和这个人配好的降噪插件,ADR 0032),以及现在能不能用、要不要装。
          */
         get: operations["list_denoise_engines_api_denoise_engines_get"];
         put?: never;

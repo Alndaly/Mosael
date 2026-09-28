@@ -28,8 +28,12 @@ def ensure_original_audio_mode(mode: str) -> None:
     if mode == "separate":
         from app.domain.separation import available
 
-        if not available():
-            raise OriginalAudioError("dubErr_separationUnavailableForMode")
+        from app.core.db import SessionLocal
+
+        #: 配音收尾不认得是谁在做:按默认挑(内置的分离引擎),不借用谁的插件连接。
+        with SessionLocal() as db:
+            if not available(db, None):
+                raise OriginalAudioError("dubErr_separationUnavailableForMode")
 
 
 def _carries_audio(track: Track) -> bool:
@@ -113,7 +117,7 @@ def _split_voice_from_music(db: Session, sequence_id: str, dub_track_id: str, *,
     from app.domain.separation import available, separate_asset
     from app.domain.sequences.operations import DetachClipAudio, detach_clip_audio
 
-    if not available():
+    if not available(db, None):
         raise OriginalAudioError("dubErr_separationUnavailable")
     sequence = db.get(Sequence, sequence_id)
     if sequence is None:

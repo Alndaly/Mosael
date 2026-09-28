@@ -42,7 +42,8 @@ export function DenoiseEnginesSection() {
 
   return (
     <SettingsGroup title={t("denoiseEnginesTitle")} description={t("denoiseEnginesDesc")}>
-      {engines.data?.map((engine) => (
+      {/* 这一页管的是**本机引擎**的安装;接口里也有配好的降噪插件(ADR 0032,它们在「能力提供方」里),这里不列。 */}
+      {engines.data?.filter((engine) => engine.engine.startsWith("builtin:")).map((engine) => (
         <EngineRow
           key={engine.engine}
           engine={engine}

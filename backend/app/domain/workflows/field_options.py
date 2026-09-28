@@ -356,13 +356,20 @@ def _talking_models(mode: str) -> Source:
     return list_them
 
 
-def _document_parsers(db: Session, ctx: OptionContext) -> list[Option]:
-    """文档交给谁解析:本地解析,和这个人配好了的插件连接(MinerU……)。缺配置、缺凭据的不列。"""
+def _capability_providers(capability_name: str) -> Source | None:
+    """`providers.<能力>`:这项宿主能力此刻能用的提供方 —— 内置的,和这个人配好了的插件连接(ADR 0032 §3)。
+    一个通用来源,不再每项能力写一个;缺配置、缺凭据、跑不起来的不列。认不出的能力回 None。"""
     from app.domain import capabilities
-    from app.domain.documents import CAPABILITY
 
-    return [{"value": one.id, "label": one.name}
-            for one in capabilities.providers(db, ctx.user_id, CAPABILITY) if not one.missing]
+    capability = capabilities.get(capability_name)
+    if capability is None:
+        return None
+
+    def options(db: Session, ctx: OptionContext) -> list[Option]:
+        return [{"value": one.id, "label": one.name}
+                for one in capabilities.providers(db, ctx.user_id, capability) if not one.missing]
+
+    return options
 
 
 def _automation_chat_models(db: Session, ctx: OptionContext) -> list[Option]:
@@ -385,7 +392,6 @@ def split_chat_model(value: str) -> tuple[str, str]:
 
 SOURCES: dict[str, Source] = {
     "automation_chat_models": _automation_chat_models,
-    "document_parsers": _document_parsers,
     "speech_video_models": _talking_models("speech-to-video"),
     "lipsync_models": _talking_models("video-lipsync"),
     "entities": _entities,
@@ -413,8 +419,22 @@ SOURCES: dict[str, Source] = {
 }
 
 
+def known_source(source: str) -> bool:
+    """这个来源名认不认得:登记在 SOURCES 里的,或 `providers.<登记过的能力>`(ADR 0032)。"""
+    from app.domain import capabilities
+    from app.domain.capabilities import PROVIDERS_SOURCE
+
+    if source in SOURCES:
+        return True
+    return source.startswith(PROVIDERS_SOURCE) and capabilities.get(source.removeprefix(PROVIDERS_SOURCE)) is not None
+
+
 def field_options(db: Session, source: str, ctx: OptionContext) -> list[Option]:
-    handler = SOURCES.get(source)
+    from app.domain.capabilities import PROVIDERS_SOURCE
+
+    handler = SOURCES.get(source) or (
+        _capability_providers(source.removeprefix(PROVIDERS_SOURCE)) if source.startswith(PROVIDERS_SOURCE) else None
+    )
     if handler is None:
         raise FieldOptionsError("wfErr_unknownOptionSource", source=source)
     return distinct_labels(handler(db, ctx))

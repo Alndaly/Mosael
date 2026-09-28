@@ -298,8 +298,20 @@ def _wire_seams() -> None:
     from app.domain import documents
     from app.domain.generation import public_links
 
+    from app.domain import audio_capabilities
+
     capabilities.register(public_links.CAPABILITY)
     capabilities.register(documents.CAPABILITY)
+    capabilities.register(audio_capabilities.DENOISE)
+    capabilities.register(audio_capabilities.SEPARATION)
+    audio_capabilities.register_uses()
+    # 「用在哪」(ADR 0032 §4):宿主界面入口各自登记;工作流节点、智能体工具现扫各自的注册表。
+    documents.register_uses()
+    from app.domain.agent.confirmable import registry as confirmable_registry
+    from app.domain.workflows import capability_uses as workflow_capability_uses
+
+    capabilities.register_use_finder(workflow_capability_uses.capability_uses)
+    capabilities.register_use_finder(confirmable_registry.capability_uses)
     agent_receipts.install()
     plugin_connections.install()
     dynamic_tools.install()

@@ -23,12 +23,12 @@ afterEach(() => {
 
 const BASE = { installable: false, status: "ready", setup_hint: "", message: "", size_bytes: 0, strengths: [] };
 const rows = (deepfilter: Record<string, unknown>) => [
-  { ...BASE, engine: "ffmpeg", label: "内置降噪", description: "去底噪", ready: true, removes_music: false },
+  { ...BASE, engine: "builtin:ffmpeg", label: "内置降噪", description: "去底噪", ready: true, removes_music: false },
   {
-    ...BASE, engine: "deepfilternet", label: "DeepFilterNet", description: "效果最好", ready: false,
+    ...BASE, engine: "builtin:deepfilternet", label: "DeepFilterNet", description: "效果最好", ready: false,
     installable: true, status: "missing", size_bytes: 27_877_081, removes_music: true, ...deepfilter,
   },
-  { ...BASE, engine: "rnnoise", label: "RNNoise", description: "轻量;**背景音乐也会被当成噪声去掉**", ready: false, status: "unavailable", setup_hint: "ffmpeg 不带这个滤镜", removes_music: true },
+  { ...BASE, engine: "builtin:rnnoise", label: "RNNoise", description: "轻量;**背景音乐也会被当成噪声去掉**", ready: false, status: "unavailable", setup_hint: "ffmpeg 不带这个滤镜", removes_music: true },
 ];
 
 function renderSection(deepfilter: Record<string, unknown> = {}) {
@@ -60,7 +60,7 @@ describe("降噪引擎设置页", () => {
     const deepfilter = await rowOf("DeepFilterNet");
     expect(within(deepfilter).getByText(/denoiseSizeApprox/)).toBeInTheDocument();
     await user.click(within(deepfilter).getByRole("button", { name: /denoiseInstall/ }));
-    await waitFor(() => expect(posts).toEqual(["/api/denoise/engines/deepfilternet/install"].map((path) => expect.stringContaining(path))));
+    await waitFor(() => expect(posts).toEqual(["/api/denoise/engines/builtin%3Adeepfilternet/install"].map((path) => expect.stringContaining(path))));
     expect(within(await rowOf("内置降噪")).queryByRole("button")).toBeNull();
   });
 

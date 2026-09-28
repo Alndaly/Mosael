@@ -63,7 +63,11 @@ TOOLS = "tools"
 #: `document_parse`:**把一份文档解析成 Markdown**(ADR 0031)。认领它的工具由宿主在解析任务里调(收一份文件、
 #: 边跑边报进度、交回 Markdown 和图片),智能体读文档走宿主的 read_document,不直接调它 —— 和生成同一个理由。
 DOCUMENT_PARSE = "document_parse"
-HOST_ONLY_CAPABILITIES = frozenset({GENERATION, TOOLS, DOCUMENT_PARSE})
+#: `audio_denoise` / `audio_separation`:给一段音频降噪 / 拆成人声和背景音(ADR 0032 第二步)。认领的工具收一份音频文件、
+#: 交回处理好的文件,宿主负责抽音轨、放回视频、登记成新素材 —— 工作流节点、画板、智能体都能点名这一家,但经宿主调。
+AUDIO_DENOISE = "audio_denoise"
+AUDIO_SEPARATION = "audio_separation"
+HOST_ONLY_CAPABILITIES = frozenset({GENERATION, TOOLS, DOCUMENT_PARSE, AUDIO_DENOISE, AUDIO_SEPARATION})
 
 
 def text_of(value: Any, locale: str | None = None, *, author_locale: str = "") -> str:
@@ -644,6 +648,8 @@ __all__ = [
     "CODE_FIELD_TYPES",
     "FIELD_TYPES",
     "Field",
+    "AUDIO_DENOISE",
+    "AUDIO_SEPARATION",
     "DOCUMENT_PARSE",
     "GENERATION",
     "HOST_ONLY_CAPABILITIES",

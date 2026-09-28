@@ -18,7 +18,8 @@ from tests.util import fresh_client
 
 def test_声明里用到的来源都存在() -> None:
     from app.domain.workflows import NODE_TYPES
-    from app.domain.workflows.field_options import SOURCES
+    import app.main  # noqa: F401 —— 组装根:能力表登记好了,`providers.<能力>` 才认得
+    from app.domain.workflows.field_options import known_source
 
     used = {
         f"{name}.{key}": meta["options_from"]
@@ -27,7 +28,7 @@ def test_声明里用到的来源都存在() -> None:
         if isinstance(meta, dict) and meta.get("options_from")
     }
     assert used, "至少语音节点在用"
-    missing = {field: source for field, source in used.items() if source not in SOURCES}
+    missing = {field: source for field, source in used.items() if not known_source(source)}
     assert not missing, f"这些字段声明的选项来源不存在:{missing}"
 
 
@@ -143,9 +144,10 @@ class Test清单从哪来都由声明说了算:
     """
 
     def test_声明都指向真实存在的来源(self) -> None:
+        import app.main  # noqa: F401 —— 组装根:能力表登记好了,`providers.<能力>` 才认得
         from app.domain.plugins.nodes import node_meta
         from app.domain.workflows import NODE_TYPES
-        from app.domain.workflows.field_options import SOURCES
+        from app.domain.workflows.field_options import known_source
 
         declared = {
             f"{name}.{key}": meta["options_from"]
@@ -162,7 +164,7 @@ class Test清单从哪来都由声明说了算:
         })
         assert {"llm.profile_id", "llm.model", "publish.account_id", "call_workflow.workflow_id",
                 "plugin_tool.plugin_id", "plugin_tool.tool_name", "plugin.instance_id"} <= set(declared)
-        missing = {field: source for field, source in declared.items() if source not in SOURCES}
+        missing = {field: source for field, source in declared.items() if not known_source(source)}
         assert not missing, f"这些字段声明的选项来源不存在:{missing}"
 
     def test_可调用工作流把自己排掉(self) -> None:

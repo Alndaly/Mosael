@@ -97,7 +97,7 @@ def test_denoise_and_separation_errors_stay_catchable_as_the_contract_errors() -
     from app.domain.separation import start_separation_job
 
     with pytest.raises(DenoiseError) as denoised:
-        ready_adapter("no-such-engine")
+        ready_adapter(None, None, "no-such-engine")
     assert _en(denoised.value) == "There's no noise-reduction engine called no-such-engine."
 
     with pytest.raises(SeparationError) as separated:

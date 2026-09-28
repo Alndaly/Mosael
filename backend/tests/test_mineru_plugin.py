@@ -259,7 +259,7 @@ def test_宿主_点名插件解析_按页切段_表格转成_Markdown_插图搬�
 
     #: 工作流「文档转 Markdown」能点名用哪一家:选项里有它;点名插件就用插件那一份,点名本地就用本地那一份。
     options = client.get("/api/workflows/field-options",
-                         params={"workspace_id": ws, "source": "document_parsers"}).json()
+                         params={"workspace_id": ws, "source": "providers.document_parse"}).json()
     assert {"builtin:local", plugin["id"]} <= {one["value"] for one in options}
     from app.domain.workflows.executors import get_executor
     from tests.test_document_reading import _scope
@@ -282,7 +282,7 @@ def test_宿主_点名插件解析_按页切段_表格转成_Markdown_插图搬�
         owner = db.query(User).first().id
         with pytest.raises(ConfirmationError) as unknown:
             spec.validate(db, ws, {"asset_id": made["id"], "parser": "不存在的"}, owner)
-        assert unknown.value.key == "confirmErr_unknownParser" and "假解析" in str(unknown.value)
+        assert unknown.value.key == "confirmErr_unknownProvider" and "假解析" in str(unknown.value)
         spec.validate(db, ws, {"asset_id": made["id"], "parser": "假解析"}, owner)
         started = spec.execute(db, SimpleNamespace(payload={"asset_id": made["id"], "parser": "假解析"}, workspace_id=ws), owner)
     assert started["parser"] == "假解析" and settled(started["extraction_id"])["status"] == "succeeded"
