@@ -27,11 +27,8 @@ from app.ai.providers.contracts.generation import (
     adapter_http_error,
 )
 from app.ai.providers.adapters.alibaba.dashscope.digital_human import is_talking_model, submit_talking
-from app.ai.providers.adapters.alibaba.dashscope.image import (
-    DASHSCOPE_BASE,
-    download_result_asset,
-    resolve_dashscope_base,
-)
+from app.ai.media_transfer import download_to_path
+from app.ai.providers.adapters.alibaba.dashscope import connection
 
 """阿里云百炼(DashScope)的通义万相视频生成。
 
@@ -194,7 +191,7 @@ class WanVideoAdapter(GenerationAdapter):
 
     def generate(self, request: GenerationRequest, context: GenerationAdapterContext, output_dir: Path) -> GenerationResult:
         try:
-            with self._client(context) as client:
+            with connection.async_task_client(context, timeout=60) as client:
                 #: 数字人(说话照片、改口型)是另一条提交路径、另一套素材字段,提交之后的轮询下载是同一份(digital_human)。
                 if is_talking_model(request.model):
                     task_id = submit_talking(client, request)
@@ -210,23 +207,17 @@ class WanVideoAdapter(GenerationAdapter):
 
     def resume(self, poll_path: str, request: GenerationRequest, context: GenerationAdapterContext, output_dir: Path) -> GenerationResult:
         try:
-            with self._client(context) as client:
+            with connection.async_task_client(context, timeout=60) as client:
                 return self._collect(client, poll_path, request, output_dir)
         except httpx.HTTPError as exc:
             raise adapter_http_error("DashScope", exc, context.api_key) from exc
-
-    def _client(self, context: GenerationAdapterContext) -> RetryingClient:
-        if not context.api_key:
-            raise GenerationAdapterError("providerErr_apiKeyMissing", vendor="DashScope")
-        headers = {"Authorization": f"Bearer {context.api_key}", "X-DashScope-Async": "enable"}
-        return RetryingClient(base_url=resolve_dashscope_base(context), timeout=60, headers=headers)
 
     def _collect(self, client: RetryingClient, poll_path: str, request: GenerationRequest, output_dir: Path) -> GenerationResult:
         """提交之后的那一半。`generate` 和 `resume` 共用。"""
         url, poll_payload = poll_until_ready(client, poll_path, extract_video_url)
         target = output_dir / "generated.mp4"
-        download_result_asset(url, target)
+        download_to_path(url, target, timeout=120)
         return GenerationResult(output_paths=[target], usage=metering_from_request(request), raw_usage=poll_payload)
 
 
-__all__ = ["WanVideoAdapter", "build_submit_payload", "extract_video_url", "SUBMIT_PATH", "DASHSCOPE_BASE"]
+__all__ = ["WanVideoAdapter", "build_submit_payload", "extract_video_url", "SUBMIT_PATH"]

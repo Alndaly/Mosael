@@ -6,6 +6,7 @@ from pathlib import Path
 
 import httpx
 
+from app.ai.providers.adapters.alibaba.dashscope import connection
 from app.core.http_retry import RetryingClient
 
 from app.ai.providers.contracts.speech import SPEECH_REQUEST_TIMEOUT_SECONDS, SpeechSynthesisRequest, SpeechSynthesisError
@@ -98,7 +99,7 @@ class BailianSpeechAdapter:
             raise SpeechSynthesisError("providerErr_bailianTtsKeyMissing")
         self._key = api_key
         self._model = model or "qwen-tts"
-        self._base = resolve_dashscope_native_base(base_url)
+        self._base = connection.native_base(base_url)  # 语音走原生 API,不是对话那个 compatible-mode
         self._default_voice = voice
 
     def _request_for(self, request: SpeechSynthesisRequest) -> tuple[dict, str]:
@@ -144,29 +145,6 @@ class BailianSpeechAdapter:
         except httpx.HTTPError as exc:
             raise SpeechSynthesisError("providerErr_bailianTtsFailed", detail=str(exc)) from exc
         out_path.write_bytes(audio.content)
-
-
-#: 百炼原生 API 的根。语音走的是它,不是对话那个 compatible-mode。
-DASHSCOPE_NATIVE_BASE = "https://dashscope.aliyuncs.com"
-
-
-def resolve_dashscope_native_base(base_url: str) -> str:
-    """把档案里的 base_url 归一到**原生** API 根。
-
-    同一个百炼档案的 base_url 往往填的是对话用的
-    `https://dashscope.aliyuncs.com/compatible-mode/v1` —— 那是 OpenAI 兼容端点。语音走的是
-    原生路径 `/api/v1/services/aigc/...`,直接往后拼会得到
-    `…/compatible-mode/v1/api/v1/services/…`,一个必然 404 的地址。
-
-    同一个坑图像那边已经踩过并解决(见同目录 ``image.resolve_qwen_edit_base``),
-    这里用同一条判据:认得出 compatible-mode 就剥掉它,自定义代理原样放行。
-    """
-    base = (base_url or "").strip().rstrip("/")
-    if not base:
-        return DASHSCOPE_NATIVE_BASE
-    if base.endswith("/compatible-mode/v1"):
-        return base.removesuffix("/compatible-mode/v1")
-    return base
 
 
 def is_cosyvoice(model: str) -> bool:

@@ -23,7 +23,7 @@ from typing import Any
 
 import httpx
 
-from app.ai.providers.adapters.alibaba.dashscope.speech import resolve_dashscope_native_base
+from app.ai.providers.adapters.alibaba.dashscope import connection
 from app.ai.audio_files import download_audio
 from app.ai.providers.contracts.generation import (
     REFERENCE_AUDIO,
@@ -137,7 +137,7 @@ class DashScopeAudioAdapter(GenerationAdapter):
         path = path_for(request.model)
         payload = build_payload(request)
         headers = {"Authorization": f"Bearer {context.api_key}", "Content-Type": "application/json"}
-        base_url = resolve_dashscope_native_base(context.base_url)
+        base_url = connection.native_base(context.base_url)
         try:
             with RetryingClient(base_url=base_url, headers=headers, timeout=REQUEST_TIMEOUT_SECONDS, max_retries=0) as client:
                 response = client.post(path, json=payload)

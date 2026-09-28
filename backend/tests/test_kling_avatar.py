@@ -13,7 +13,7 @@ from typing import Any
 
 import pytest
 
-from app.ai.providers.adapters.kuaishou.kling import avatar, video
+from app.ai.providers.adapters.kuaishou.kling import avatar, connection, video
 from app.ai.providers.contracts.generation import (
     DRIVING_AUDIO,
     FIRST_FRAME,
@@ -110,7 +110,7 @@ class _FakeKling:
 
 @pytest.fixture
 def fake(monkeypatch):
-    monkeypatch.setattr(video, "RetryingClient", _FakeKling)
+    monkeypatch.setattr(connection, "RetryingClient", _FakeKling)
     downloaded: list[str] = []
     monkeypatch.setattr(video, "download_to_path", lambda url, target: downloaded.append(url) or str(target))
     return downloaded

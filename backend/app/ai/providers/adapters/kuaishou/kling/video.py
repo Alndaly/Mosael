@@ -1,17 +1,12 @@
 from __future__ import annotations
 
-import base64
-import hashlib
-import hmac
-import json
-import time
 from pathlib import Path
 from typing import Any
 
 import httpx
 
 from app.core.http_retry import RetryingClient
-from app.ai.providers.adapters.kuaishou.kling import avatar
+from app.ai.providers.adapters.kuaishou.kling import avatar, connection
 from app.ai.providers.adapters.kuaishou.kling.elements import build_element_contents, ensure_element
 
 from app.ai.providers.contracts.generation import (
@@ -34,12 +29,9 @@ from app.ai.media_transfer import download_to_path
 """
 Kling video adapter:
 text2video / image2video task creation → task polling → download video URL.
-Official Kling accounts use AccessKey + SecretKey JWT auth. Some compatible
-gateways accept a plain Bearer token; both paths are supported by the resolved
-provider profile without branching in the runner.
+Connection and auth (AccessKey + SecretKey JWT, or a plain Bearer key) live in connection.py.
 """
 
-KLING_BASE = "https://api.klingai.com"
 DEFAULT_MODEL_ID = "kling-v3"
 
 #: **可灵有两代接口,形状完全不同。**
@@ -221,7 +213,7 @@ class KlingVideoAdapter(GenerationAdapter):
         model = resolve_model(request, context)
         v3 = uses_contents_array(model)
         try:
-            with self._client(context) as client:
+            with connection.client(context) as client:
                 if avatar.is_avatar(model):
                     #: 数字人(说话照片):一次提交,查询在同一条路径下。
                     task_id = _task_id(client.post(avatar.AVATAR_PATH, json=avatar.build_avatar_payload(request)))
@@ -267,17 +259,10 @@ class KlingVideoAdapter(GenerationAdapter):
 
     def resume(self, poll_path: str, request: GenerationRequest, context: GenerationAdapterContext, output_dir: Path) -> GenerationResult:
         try:
-            with self._client(context) as client:
+            with connection.client(context) as client:
                 return self._collect(client, poll_path, request, context, output_dir)
         except httpx.HTTPError as exc:
             raise adapter_http_error("Kling", exc, context.api_key) from exc
-
-    def _client(self, context: GenerationAdapterContext) -> RetryingClient:
-        if not context.api_key:
-            raise GenerationAdapterError("providerErr_klingKeyMissing")
-        #: 鉴权头每次现签(JWT 带过期时间)—— 取回时隔了一次重启,旧的那张早过期了。
-        headers = {"Authorization": auth_header(context), "Content-Type": "application/json"}
-        return RetryingClient(base_url=(context.base_url or KLING_BASE).rstrip("/"), timeout=60, headers=headers, follow_redirects=True)
 
     def _collect(
         self, client: RetryingClient, poll_path: str, request: GenerationRequest,
@@ -307,30 +292,3 @@ def _task_id(response: httpx.Response) -> str:
     if not task_id:
         raise GenerationAdapterError("providerErr_noTaskId", vendor="Kling")
     return task_id
-
-
-def auth_header(context: GenerationAdapterContext) -> str:
-    secret_key = str(context.options.get("secret_key") or "")
-    if not secret_key:
-        return f"Bearer {context.api_key}"
-    now = int(time.time())
-    token = _jwt_hs256(
-        {"iss": context.api_key, "exp": now + 1800, "nbf": now - 5},
-        secret_key,
-    )
-    return f"Bearer {token}"
-
-
-def _jwt_hs256(payload: dict[str, Any], secret: str) -> str:
-    header = {"alg": "HS256", "typ": "JWT"}
-    signing_input = ".".join([_b64url_json(header), _b64url_json(payload)])
-    signature = hmac.new(secret.encode("utf-8"), signing_input.encode("ascii"), hashlib.sha256).digest()
-    return f"{signing_input}.{_b64url(signature)}"
-
-
-def _b64url_json(value: dict[str, Any]) -> str:
-    return _b64url(json.dumps(value, separators=(",", ":"), ensure_ascii=False).encode("utf-8"))
-
-
-def _b64url(value: bytes) -> str:
-    return base64.urlsafe_b64encode(value).decode("ascii").rstrip("=")

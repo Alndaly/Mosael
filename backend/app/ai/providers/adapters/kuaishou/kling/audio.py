@@ -14,7 +14,7 @@
 `task_result.audios[]`(`url_mp3` / `url_wav`);视频生音效另外还交回一段配好声的视频 —— 这是音频
 生成,我们取音轨(wav 优先:剪辑时是无损的那一份)。
 
-鉴权沿用视频那边的写法(auth_header):有 Secret Key 就签 JWT,没有就把 Key 当 Bearer 直接用 ——
+连接与鉴权和视频共用(connection.py):有 Secret Key 就签 JWT,没有就把 Key 当 Bearer 直接用 ——
 文档现在推荐的正是后者(控制台生成的 API Key)。
 """
 
@@ -26,7 +26,7 @@ from typing import Any
 import httpx
 
 from app.ai.audio_files import download_audio
-from app.ai.providers.adapters.kuaishou.kling.video import KLING_BASE, auth_header
+from app.ai.providers.adapters.kuaishou.kling import connection
 from app.ai.providers.contracts.generation import (
     SOURCE_VIDEO,
     GenerationAdapter,
@@ -133,7 +133,7 @@ class KlingAudioAdapter(GenerationAdapter):
         path = path_for(request.model)
         payload = build_payload(request)
         try:
-            with self._client(context) as client:
+            with connection.client(context) as client:
                 submit = client.post(path, json=payload)
                 submit.raise_for_status()
                 body = submit.json()
@@ -147,16 +147,10 @@ class KlingAudioAdapter(GenerationAdapter):
 
     def resume(self, poll_path: str, request: GenerationRequest, context: GenerationAdapterContext, output_dir: Path) -> GenerationResult:
         try:
-            with self._client(context) as client:
+            with connection.client(context) as client:
                 return self._collect(client, poll_path, request, output_dir)
         except httpx.HTTPError as exc:
             raise _http_error(exc, context) from exc
-
-    def _client(self, context: GenerationAdapterContext) -> RetryingClient:
-        if not context.api_key:
-            raise GenerationAdapterError("providerErr_klingKeyMissing")
-        headers = {"Authorization": auth_header(context), "Content-Type": "application/json"}
-        return RetryingClient(base_url=(context.base_url or KLING_BASE).rstrip("/"), timeout=60, headers=headers, follow_redirects=True)
 
     def _collect(self, client: RetryingClient, poll_path: str, request: GenerationRequest, output_dir: Path) -> GenerationResult:
         audio, terminal = poll_until_ready(client, poll_path, extract_audio, vendor=VENDOR_LABEL)

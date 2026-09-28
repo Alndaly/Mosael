@@ -206,7 +206,8 @@ def test_suno_用户取消就停下(monkeypatch: pytest.MonkeyPatch, tmp_path: P
 
 # ── 可灵 · 文生音效 / 视频生音效 ─────────────────────────────────────────────────────────────
 
-KLING = "app.ai.providers.adapters.kuaishou.kling.audio"
+#: 可灵的连接(客户端、鉴权)在 connection 里,视频和音效共用 —— 桩打在那里。
+KLING = "app.ai.providers.adapters.kuaishou.kling.connection"
 
 
 def test_可灵文生音效_请求体与轮询(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, downloads: list[str]) -> None:

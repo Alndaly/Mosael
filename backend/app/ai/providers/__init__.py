@@ -5,12 +5,10 @@
 """
 
 from app.ai.providers.adapters.alibaba.dashscope.speech import (
-    DASHSCOPE_NATIVE_BASE,
     BailianSpeechAdapter,
     CosyVoiceSpeechAdapter,
     extract_bailian_audio_url,
     is_cosyvoice,
-    resolve_dashscope_native_base,
 )
 from app.ai.providers.adapters.microsoft.edge_speech import EDGE_BUILTIN_VOICES, EdgeSpeechAdapter
 from app.ai.providers.adapters.openai.speech import OpenAISpeechAdapter
@@ -71,7 +69,6 @@ from app.ai.providers.registry import (
 
 __all__ = [
     "direct_media_url",
-    "DASHSCOPE_NATIVE_BASE",
     "DRIVING_AUDIO",
     "EDGE_BUILTIN_VOICES",
     "FIRST_CLIP",
@@ -118,7 +115,6 @@ __all__ = [
     "has_capability_implementation",
     "is_cosyvoice",
     "register_generation_adapter_source",
-    "resolve_dashscope_native_base",
     "roles_supplied_via_url",
     "synthesize_many",
     "synthesize_volcano_podcast",

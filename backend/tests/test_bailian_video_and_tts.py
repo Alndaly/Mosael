@@ -139,14 +139,14 @@ def test_档案填的是对话端点时_语音要归一到原生根() -> None:
     """真机踩到的:百炼档案的 base_url 往往填的是对话用的 compatible-mode 端点。
 
     直接往后拼会得到 `…/compatible-mode/v1/api/v1/services/…` —— 一个必然 404 的地址。
-    图像那边早就解决过同一个坑(dashscope.image.resolve_qwen_edit_base),语音沿用同一条判据。
+    图像、语音、音频从同一处取根地址(dashscope.connection.native_base)。
     """
-    from app.ai.providers import DASHSCOPE_NATIVE_BASE, resolve_dashscope_native_base
+    from app.ai.providers.adapters.alibaba.dashscope.connection import DASHSCOPE_BASE, native_base
 
-    assert resolve_dashscope_native_base("https://dashscope.aliyuncs.com/compatible-mode/v1") == DASHSCOPE_NATIVE_BASE
-    assert resolve_dashscope_native_base("") == DASHSCOPE_NATIVE_BASE
+    assert native_base("https://dashscope.aliyuncs.com/compatible-mode/v1") == DASHSCOPE_BASE
+    assert native_base("") == DASHSCOPE_BASE
     # 自定义代理原样放行 —— 剥后缀是为了认出那一种已知形状,不是去猜别人的地址。
-    assert resolve_dashscope_native_base("https://my-proxy.internal/dashscope") == "https://my-proxy.internal/dashscope"
+    assert native_base("https://my-proxy.internal/dashscope") == "https://my-proxy.internal/dashscope"
 
 
 def test_构造签名要收voice() -> None:

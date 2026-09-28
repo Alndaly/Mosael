@@ -257,7 +257,7 @@ class Test可灵按资产建主体:
                 return FakeResponse()
 
         monkeypatch.setattr(kling_video, "ensure_element", fake_ensure)
-        monkeypatch.setattr(kling_video.KlingVideoAdapter, "_client", lambda self, context: FakeClient())
+        monkeypatch.setattr(kling_video.connection, "client", lambda context: FakeClient())
         monkeypatch.setattr(kling_video.KlingVideoAdapter, "_collect", lambda self, *args, **kwargs: "collected")
 
         context = GenerationAdapterContext(None, "kuaishou", "k", configured_model_id="kling-v3-omni")

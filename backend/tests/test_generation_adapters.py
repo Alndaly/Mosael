@@ -23,15 +23,14 @@ from app.ai.providers.adapters.openai.image import (
     build_submit_payload as openai_payload,
     extract_image_bytes,
 )
+from app.ai.providers.adapters.alibaba.dashscope.connection import DASHSCOPE_BASE, task_api_base
 from app.ai.providers.adapters.alibaba.dashscope.image import (
-    DASHSCOPE_BASE,
     EDIT_PATH,
     QwenImageAdapter,
     build_edit_payload as qwen_edit_payload,
     build_submit_payload as qwen_payload,
-    download_result_asset,
+    download_results,
     extract_result_urls,
-    resolve_dashscope_base,
     resolve_qwen_edit_base,
 )
 from app.ai.providers.adapters.bytedance.ark.video import (
@@ -458,7 +457,7 @@ def test_qwen_image_uses_native_dashscope_endpoint_even_when_chat_base_url_is_co
         api_key="sk-test",
         base_url="https://llm-example.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
     )
-    assert resolve_dashscope_base(context) == DASHSCOPE_BASE
+    assert task_api_base(context) == DASHSCOPE_BASE
     assert resolve_qwen_edit_base(context) == "https://llm-example.cn-beijing.maas.aliyuncs.com"
 
     custom = GenerationAdapterContext(
@@ -467,7 +466,7 @@ def test_qwen_image_uses_native_dashscope_endpoint_even_when_chat_base_url_is_co
         api_key="sk-test",
         options={"dashscope_base_url": "https://dashscope.example.com/"},
     )
-    assert resolve_dashscope_base(custom) == "https://dashscope.example.com"
+    assert task_api_base(custom) == "https://dashscope.example.com"
 
 
 def test_qwen_poll_parsing() -> None:
@@ -510,10 +509,9 @@ def test_qwen_download_result_url_does_not_reuse_dashscope_headers(tmp_path, mon
         target.write_bytes(b"png-bytes")
 
     monkeypatch.setattr("app.ai.providers.adapters.alibaba.dashscope.image.download_to_path", fake_download)
-    target = tmp_path / "generated.png"
     signed_url = "https://dashscope-oss.example.com/out.png?Signature=abc"
 
-    download_result_asset(signed_url, target)
+    [target] = download_results([signed_url], tmp_path)
 
     assert captured["url"] == signed_url
     assert "trusted_headers" not in captured["kwargs"]

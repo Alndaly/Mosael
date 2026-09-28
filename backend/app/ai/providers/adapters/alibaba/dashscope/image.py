@@ -20,13 +20,13 @@ from app.ai.providers.contracts.generation import (
     adapter_http_error,
 )
 from app.ai.media_transfer import download_to_path
+from app.ai.providers.adapters.alibaba.dashscope import connection
 
 """
 Alibaba DashScope qwen-image adapter (async task API):
 submit → poll /api/v1/tasks/{id} → download result URL.
 """
 
-DASHSCOPE_BASE = "https://dashscope.aliyuncs.com"
 SUBMIT_PATH = "/api/v1/services/aigc/text2image/image-synthesis"
 EDIT_PATH = "/api/v1/services/aigc/multimodal-generation/generation"
 
@@ -85,27 +85,11 @@ def resolve_edit_model(request: GenerationRequest, context: GenerationAdapterCon
     return model
 
 
-def resolve_dashscope_base(context: GenerationAdapterContext) -> str:
-    """Qwen image uses DashScope's native async task API, not Bailian compatible-mode.
-
-    A single Alibaba profile may still use an OpenAI-compatible base_url for chat models.
-    Treat image generation as a separate capability endpoint; it can be overridden explicitly
-    via extra.dashscope_base_url, otherwise it must use DashScope native.
-    """
-    configured = str(context.options.get("dashscope_base_url") or context.options.get("generation_base_url") or "").strip()
-    return (configured or DASHSCOPE_BASE).rstrip("/")
-
-
 def resolve_qwen_edit_base(context: GenerationAdapterContext) -> str:
+    """参考图编辑是同步接口,和对话走同一个网关没问题 —— 所以它跟随连接的 base_url(剥掉
+    compatible-mode),而不是像异步任务那样只认原生根。"""
     configured = str(context.options.get("qwen_edit_base_url") or context.options.get("generation_base_url") or "").strip()
-    if configured:
-        return configured.rstrip("/")
-    base_url = (context.base_url or "").rstrip("/")
-    if base_url.endswith("/compatible-mode/v1"):
-        return base_url.removesuffix("/compatible-mode/v1")
-    if base_url and base_url != DASHSCOPE_BASE:
-        return base_url
-    return DASHSCOPE_BASE
+    return configured.rstrip("/") if configured else connection.native_base(context.base_url)
 
 
 def extract_result_urls(task_payload: dict[str, Any]) -> list[str] | None:
@@ -134,17 +118,12 @@ def extract_result_urls(task_payload: dict[str, Any]) -> list[str] | None:
     return None
 
 
-def download_result_asset(url: str, target: Path) -> None:
-    # Compatibility wrapper used by Wan and older callers. The shared transfer seam keeps
-    # credentials off pre-signed OSS URLs and writes through a temporary file.
-    download_to_path(url, target, timeout=120)
-
-
-def _download_all(urls: list[str], output_dir: Path) -> list[Path]:
-    """挨个下回来。**文件名带序号** —— 同名的话第二张会把第一张覆盖掉,而两次下载都"成功"。"""
+def download_results(urls: list[str], output_dir: Path) -> list[Path]:
+    """挨个下回来。**文件名带序号** —— 同名的话第二张会把第一张覆盖掉,而两次下载都"成功"。
+    产物是预签名的 OSS 地址:不带百炼的鉴权头(见 media_transfer)。"""
     targets = [output_dir / f"generated-{index + 1}.png" for index in range(len(urls))]
     for url, target in zip(urls, targets):
-        download_result_asset(url, target)
+        download_to_path(url, target, timeout=120)
     return targets
 
 
@@ -169,10 +148,10 @@ class QwenImageAdapter(GenerationAdapter):
                     urls = extract_result_urls(submit.json())
                     if not urls:
                         raise GenerationAdapterError("providerErr_noResultUrl", vendor="DashScope")
-                    targets = _download_all(urls, output_dir)
+                    targets = download_results(urls, output_dir)
                     return GenerationResult(output_paths=targets, usage=metering_from_request(request), raw_usage=submit.json())
 
-            with self._async_client(context) as client:
+            with connection.async_task_client(context, timeout=30) as client:
                 submit = client.post(SUBMIT_PATH, json=build_submit_payload(request))
                 submit.raise_for_status()
                 task_id = ((submit.json().get("output") or {}).get("task_id")) or ""
@@ -184,17 +163,13 @@ class QwenImageAdapter(GenerationAdapter):
 
     def resume(self, poll_path: str, request: GenerationRequest, context: GenerationAdapterContext, output_dir: Path) -> GenerationResult:
         try:
-            with self._async_client(context) as client:
+            with connection.async_task_client(context, timeout=30) as client:
                 return self._collect(client, poll_path, request, output_dir)
         except httpx.HTTPError as exc:
             raise adapter_http_error("DashScope", exc, context.api_key) from exc
 
-    def _async_client(self, context: GenerationAdapterContext) -> RetryingClient:
-        headers = {"Authorization": f"Bearer {context.api_key}", "X-DashScope-Async": "enable"}
-        return RetryingClient(base_url=resolve_dashscope_base(context), timeout=30, headers=headers)
-
     def _collect(self, client: RetryingClient, poll_path: str, request: GenerationRequest, output_dir: Path) -> GenerationResult:
         """提交之后的那一半。`generate` 和 `resume` 共用。"""
         urls, poll_payload = poll_until_ready(client, poll_path, extract_result_urls)
-        targets = _download_all(urls, output_dir)
+        targets = download_results(urls, output_dir)
         return GenerationResult(output_paths=targets, usage=metering_from_request(request), raw_usage=poll_payload)
