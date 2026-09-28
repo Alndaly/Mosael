@@ -29,14 +29,11 @@ export function SessionSettingsMenu({
   context,
   onCompact,
   compacting,
-  showAnalysis = true,
 }: {
   session: AgentSession | null;
   context?: ContextInfo | null;
   onCompact?: () => void;
   compacting?: boolean;
-  /** 工作流助手不做素材分析,那一项在它那儿是死的。 */
-  showAnalysis?: boolean;
 }) {
   const t = useI18n();
   const [open, setOpen] = React.useState(false);
@@ -82,12 +79,13 @@ export function SessionSettingsMenu({
           <span className="text-ui-xs font-medium text-muted-foreground">{t("agentThinkingLevel")}</span>
           <ThinkingLevelPicker session={session} />
         </div>
-        {showAnalysis && (
-          <div className="grid gap-1.5">
-            <span className="text-ui-xs font-medium text-muted-foreground">{t("analysisModeLabel")}</span>
-            <AnalysisModePicker session={session} />
-          </div>
-        )}
+        {/* 分析方式是**会话**的属性,后端对每个入口都照它注入(domain/agent/prompt.py)。
+            此前画布助手这里把它藏了(「工作流助手不做素材分析」),可同一个面板也挂在剪辑、画板、
+            3D 场景上,同一个会话在工作台设了「逐帧」,到这里看不见却照样生效。 */}
+        <div className="grid gap-1.5">
+          <span className="text-ui-xs font-medium text-muted-foreground">{t("analysisModeLabel")}</span>
+          <AnalysisModePicker session={session} />
+        </div>
         {/* 水位与「立即整理」放在一起:它们是同一件事的两半 —— 看还剩多少、据此决定要不要整理。
             拆开放会让读数变成一个没有下文的数字,而按钮变成一个不知道该不该按的操作。
             输入框那一行因此不再重复显示它。 */}

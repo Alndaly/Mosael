@@ -64,7 +64,7 @@ import { TraceStatsBar, TraceView } from "@/features/agent/trace/TraceView";
 import { buildTurns } from "@/features/agent/trace/traceModel";
 import { useMediaMatch } from "@/lib/useMediaMatch";
 import { SIDEBAR_HANDLE_CLASS, handleOffset, useSidePanels } from "@/lib/useResizableSidebar";
-import { InspectorSubagentList, SubagentBreadcrumb, SubagentButton, SubagentSessionView, type SubagentRun } from "@/features/agent/SubagentPanel";
+import { InspectorSubagentList, SubagentBreadcrumb, SubagentButton, SubagentSessionView, collectSubagentRuns, type SubagentRun } from "@/features/agent/SubagentPanel";
 import { usePersistentTab } from "@/lib/usePersistentTab";
 import { cn } from "@/lib/utils";
 
@@ -112,7 +112,7 @@ export function ChatWorkspace({
   });
   // 连流 → 攒状态 → 收尾失效:**只有一份**,和画布助手共用(见 useAgentTurnStream)。
   // 此前两个面板各写一遍,而收尾那一步已经分岔 —— 隔壁每答完一句都会闪一下。
-  const { streamText, streamTimeline, attach: attachStream } = useAgentTurnStream();
+  const { streamText, streamTimeline, attach: attachStream, reset: resetStream } = useAgentTurnStream();
   //「对话」读答案,「轨迹」读执行。记住选择:排查问题的人往往连着看好几个会话的轨迹。
   const [view, setView] = usePersistentTab<"chat" | "trace">("agent-view", "chat", ["chat", "trace"]);
 
@@ -230,6 +230,8 @@ export function ChatWorkspace({
     onSuccess: ({ targetId }, _content, _ctx) => {
       setDraft(emptyDocument);
       noteAttach.clear();
+      // 附件在发出去之后才清 —— 此前 mutate 一调就清,发送失败时附件跟着丢了(画布助手一直是这样)。
+      attach.clear();
       void qc.invalidateQueries({ queryKey: ["agent-queue", targetId] });
       void qc.invalidateQueries({ queryKey: ["agent-messages", targetId] });
       void qc.invalidateQueries({ queryKey: ["agent-sessions", workspace.id] });
@@ -260,7 +262,6 @@ export function ChatWorkspace({
       references: collectReferences(draft),
       document: draft,
     });
-    attach.clear();
   };
 
   // 回执消息里,答案已经被 `ask_user` 的工具结果记下的那些不再画 —— 同一次选择此前会紧挨着
@@ -276,8 +277,11 @@ export function ChatWorkspace({
   //: 子代理跑到一半时就该在列表里(转着圈),不是等它跑完才出现。
   //: 正在查看的子代理(DSH 形态:进它自己的会话视图,面包屑返回)。换会话就退出 ——
   //: 面包屑上写的是**当前**会话的名字,挂着上一个会话的子代理只会指鹿为马。
-  const [viewingSubagent, setViewingSubagent] = React.useState<SubagentRun | null>(null);
-  React.useEffect(() => setViewingSubagent(null), [activeSession?.id]);
+  //: 只记**是哪一次调用**,不记点开那一刻的快照 —— 快照会把一个还在跑的子代理永远冻在「正在调查…」,
+  //: 跑完了也不变。每次渲染按 id 从时间线里重新取,状态和存档跟着回填走。
+  const [viewingSubagentId, setViewingSubagentId] = React.useState<string | null>(null);
+  React.useEffect(() => setViewingSubagentId(null), [activeSession?.id]);
+  const openSubagent = (run: SubagentRun) => setViewingSubagentId(run.call.id);
 
   const subagentSourceTimeline = React.useMemo(
     () => [
@@ -287,6 +291,10 @@ export function ChatWorkspace({
       ...(running ? streamTimeline : []),
     ],
     [visibleMessages, running, streamTimeline],
+  );
+  const viewingSubagent = React.useMemo(
+    () => (viewingSubagentId ? collectSubagentRuns(subagentSourceTimeline).find((run) => run.call.id === viewingSubagentId) ?? null : null),
+    [viewingSubagentId, subagentSourceTimeline],
   );
 
   //: 会话统计用的轮次结构。和轨迹视图同一个构建函数 —— 两处各写一套的话,
@@ -327,6 +335,16 @@ export function ChatWorkspace({
     }
     return byMessage;
   }, [usageEvents.data]);
+
+  //: 等你拍板的卡(确认 / 选择)不跟着视图走。对话视图里它们在消息流末尾;看轨迹、看子代理时
+  //: 消息流不在屏上,它们就停在输入框上方 —— 此前两张卡只写在对话分支里,一切到轨迹就卸载:
+  //: 确认卡掉回右上角的全局中心(少了「本会话始终允许」),选择卡哪儿都看不到,智能体干等到超时。
+  const pendingCards = activeSession ? (
+    <div className={cn(COMPOSER_COLUMN, "grid max-h-[40vh] min-w-0 gap-2 overflow-y-auto overflow-x-hidden empty:hidden")}>
+      <InlineConfirmations workspaceId={workspace.id} allowKey={activeSession.id} />
+      <InlineQuestions sessionId={activeSession.id} />
+    </div>
+  ) : null;
 
   const narrow = useMediaMatch("(max-width: 1180px)");
   const single = useMediaMatch("(max-width: 820px)");
@@ -392,6 +410,8 @@ export function ChatWorkspace({
           loaded={sessions.isSuccess}
           activeSessionId={activeSession?.id ?? null}
           onSelect={(id) => {
+            // 旧会话的流不许串进新视图 —— 与画布助手的 switchSession 同一步。
+            if (id !== activeSession?.id) resetStream();
             setSessionId(id);
             window.localStorage.setItem(sessionKey, id);
           }}
@@ -416,7 +436,7 @@ export function ChatWorkspace({
             <SubagentBreadcrumb
               sessionTitle={activeSession?.title || t("chatSessionsTitle")}
               run={viewingSubagent}
-              onBack={() => setViewingSubagent(null)}
+              onBack={() => setViewingSubagentId(null)}
             />
           ) : (
           <>
@@ -441,11 +461,11 @@ export function ChatWorkspace({
           </div>
           </>
           )}
-          {view === "chat" && <Button variant={environmentOpen ? "secondary" : "ghost"} size="icon-sm" aria-label={t("studioChatEnvironment")} title={t("studioChatEnvironment")} aria-pressed={environmentOpen} aria-expanded={environmentOpen} aria-controls={environmentOpen ? environmentId : undefined} onClick={() => setEnvironmentOpen(!environmentOpen)}><PanelRight /></Button>}
+          {view === "chat" && <Button variant={environmentOpen ? "secondary" : "ghost"} size="icon-sm" aria-label={t("agentInspectorTitle")} title={t("agentInspectorTitle")} aria-pressed={environmentOpen} aria-expanded={environmentOpen} aria-controls={environmentOpen ? environmentId : undefined} onClick={() => setEnvironmentOpen(!environmentOpen)}><PanelRight /></Button>}
           {/* 「N 个子代理」:这个会话派出过的子智能体入口(DSH 同款位置)。没派过就不渲染。 */}
           {!viewingSubagent && (
             <span className="shrink-0 empty:hidden">
-              <SubagentButton timeline={subagentSourceTimeline} onOpen={setViewingSubagent} />
+              <SubagentButton timeline={subagentSourceTimeline} onOpen={openSubagent} />
             </span>
           )}
         </div>
@@ -454,14 +474,20 @@ export function ChatWorkspace({
             查看子代理时整个主区换成它的会话视图(无输入框:它的进程已结束,不可继续 ——
             装一个发不出去的输入框比没有更糟)。 */}
         {viewingSubagent ? (
-          <SubagentSessionView run={viewingSubagent} workspaceId={workspace.id} />
+          <>
+            <SubagentSessionView run={viewingSubagent} workspaceId={workspace.id} />
+            {pendingCards}
+          </>
         ) : (
           <>
             {view === "trace" ? (
               <TraceView
+                key={activeSession?.id ?? "none"}
                 messages={visibleMessages}
                 streamTimeline={running ? streamTimeline : []}
                 usageEvents={usageEvents.data ?? []}
+                loading={sessionLoading && !running}
+                runningLabel={running ? t("usageRunning").replace("{t}", formatElapsedSeconds(elapsedSeconds)) : null}
               />
             ) : (
             /* 横向和纵向一起锁:flex 子项默认 min-width:auto,一段长代码块或长 URL 会把这一列
@@ -508,12 +534,13 @@ export function ChatWorkspace({
                   </div>
                 </div>
               )}
-              {sessionId && <InlineConfirmations workspaceId={workspace.id} allowKey={sessionId} />}
-              {sessionId && <InlineQuestions sessionId={sessionId} />}
+              {activeSession && <InlineConfirmations workspaceId={workspace.id} allowKey={activeSession.id} />}
+              {activeSession && <InlineQuestions sessionId={activeSession.id} />}
             </div>
             <JumpToLatest stick={stick} label={t("chatJumpToLatest")} newLabel={t("chatNewBelow")} />
             </div>
             )}
+            {view === "trace" && pendingCards}
             {/* Pending strip, above the composer: these have not been sent yet, so they do not
                 belong in the transcript. Each one can be steered into the running turn or
                 dropped — the Codex arrangement. */}
@@ -636,7 +663,7 @@ export function ChatWorkspace({
         manifest={manifest.data ?? null}
         tools={tools.data ?? []}
         subagentTimeline={subagentSourceTimeline}
-        onOpenSubagent={setViewingSubagent}
+        onOpenSubagent={openSubagent}
       /></div>}
     </div>
   );
@@ -689,7 +716,7 @@ function ChatInspector({
   const failedCount = messages.filter((message) => message.error).length;
   const status = session?.status ?? (running ? "running" : "idle");
   const statusLabel = running
-    ? `${t("agentStatusRunning")} · ${elapsedSeconds}s`
+    ? `${t("agentStatusRunning")} · ${formatElapsedSeconds(elapsedSeconds)}`
     : status === "idle"
       ? t("agentStatusIdle")
       : status;

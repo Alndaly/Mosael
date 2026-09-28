@@ -37,6 +37,7 @@ import type { components } from "@/api/generated/schema";
 import { UserMessageContent, attachmentToken } from "@/features/agent/userMessage";
 import { MessageUsageFooter, type AgentUsageEvent } from "@/features/agent/messageUsage";
 import { useI18n } from "@/app/preferences";
+import { LoadingState } from "@/components/layout/LoadingState";
 import { Button } from "@/components/ui/button";
 import type { JSONContent } from "@tiptap/react";
 
@@ -193,6 +194,7 @@ export function CanvasAgentChat({
     refetchInterval: 1500,
     refetchOnWindowFocus: true,
   });
+  const sessionLoading = sessions.isPending || (Boolean(sessionId) && messages.isPending);
   const live = useQuery({
     queryKey: ["agent-session", sessionId],
     enabled: Boolean(sessionId),
@@ -288,7 +290,11 @@ export function CanvasAgentChat({
   const steerQueued = useMutation({
     mutationFn: (messageId: string) =>
       steerQueuedMessage(sessionId, messageId),
-    onSuccess: refreshQueue,
+    onSuccess: (result) => {
+      // 和工作台同一句:这一轮先结束了,消息留在队里自己跑 —— 不说的话,人以为已经插进了这一轮。
+      if (!result.steered) toast.message(t("chatSteerTooLate"));
+      refreshQueue();
+    },
   });
   const showStop = running && !draftText.trim() && attach.isEmpty && !noteAttach.hasNotes;
   const stopTurn = useMutation({
@@ -441,11 +447,13 @@ export function CanvasAgentChat({
           // 才让子项允许被压缩,overflow-x-hidden 兜住越界的那一点。
           // (代码块自己有 overflow-x-auto,但那只在父容器被约束时才生效。)
           "grid min-h-0 min-w-0 grid-cols-[minmax(0,1fr)] content-start gap-2 overflow-y-auto overflow-x-hidden p-2.5",
-          (messages.data ?? []).length === 0 && !running && "content-center justify-items-center",
+          (sessionLoading || (messages.data ?? []).length === 0) && !running && "content-center justify-items-center",
         )}
         ref={stick.ref}
       >
-        {(messages.data ?? []).length === 0 && !running && (
+        {/* 「还没读到」不能说成「是空的」—— 和工作台同一条规矩:读取中闪出的空态提示在说这条会话是空的。 */}
+        {sessionLoading && !running && <LoadingState label={t("chatLoadingSession")} />}
+        {!sessionLoading && (messages.data ?? []).length === 0 && !running && (
           <div className="grid justify-items-center gap-1.5 p-2.5 text-center text-xs text-muted-foreground [&_svg]:text-primary [&_svg]:opacity-70">
             <Bot size={16} />
             <span>{emptyHint}</span>
@@ -591,13 +599,12 @@ export function CanvasAgentChat({
                 由设置里的开关决定浮不浮。说话输入留着:那个是"把话填进这个框",本来就属于这里。 */}
             <ModelPicker workspaceId={workspaceId} session={activeSession} />
             {/* 与 AI Studio 用同一个组件:此前两边各写各的工具行,同一个功能的位置、顺序、
-                有无都不一致。工作流助手不做素材分析,那一项在这里是死的,关掉。 */}
+                有无都不一致。 */}
             <SessionSettingsMenu
               session={sessionDetail.data ?? null}
               context={context}
               compacting={compact.isPending}
               onCompact={running ? undefined : () => compact.mutate()}
-              showAnalysis={false}
             />
           </div>
           {showStop ? (
