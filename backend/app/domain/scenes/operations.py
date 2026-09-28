@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import json
 import shutil
-import struct
 from pathlib import Path
 from uuid import uuid4
 
@@ -19,6 +18,7 @@ from app.core.i18n import LocalizedError, tr
 from app.db.models import Project, Scene3D, Scene3DRevision, Scene3DModel
 from app.db.model_base import now
 from app.ai.providers.contracts.generation import FIRST_FRAME, LAST_FRAME, REFERENCE_IMAGE, REFERENCE_VIDEO
+from app.domain.scenes import glb
 from app.domain.scenes.types import SceneContent
 from app.media.paths import resolve_key, scene_model_dir, scene_model_key, scene_preview_dir
 from dataclasses import dataclass, field
@@ -226,23 +226,15 @@ def validate_model_file(path: Path) -> str:
     size = path.stat().st_size
     try:
         with path.open("rb") as stream:
-            head = stream.read(20)
-            if head[:4] == b"glTF":
-                _, version, length, chunk_size, chunk_type = struct.unpack("<4sIIII", head)
-                _refuse_too_large(size, "glb")
-                if version != 2 or length != size or chunk_type != 0x4E4F534A or chunk_size > size - 20:
-                    raise SceneDomainError("sceneErr_badGlb")
-                doc = json.loads(stream.read(chunk_size))
-                fmt = "glb"
-            else:
-                _refuse_too_large(size, "gltf")
-                stream.seek(0)
-                doc = json.loads(stream.read())
-                fmt = "gltf"
+            fmt = "glb" if glb.peek_is_glb(stream) else "gltf"
+            _refuse_too_large(size, fmt)
+            doc = glb.read_document(stream, size) if fmt == "glb" else json.loads(stream.read())
         _validate_document(doc)
     except SceneDomainError:
         raise
-    except (ValueError, TypeError, AttributeError, struct.error, RecursionError, OSError) as exc:
+    except glb.GlbError as exc:
+        raise SceneDomainError("sceneErr_badGlb") from exc
+    except (ValueError, TypeError, AttributeError, RecursionError, OSError) as exc:
         raise SceneDomainError("sceneErr_unreadableModel", detail=str(exc)) from exc
     return fmt
 
@@ -256,14 +248,6 @@ def _model_slot(workspace_id: str) -> Path:
     return directory
 
 
-def _peek_format(source: BinaryIO) -> str:
-    """看头 4 个字节判格式,再把位置放回去。两种格式的上限不同,所以要先知道是哪种。"""
-    where = source.tell()
-    magic = source.read(4)
-    source.seek(where)
-    return "glb" if magic == b"glTF" else "gltf"
-
-
 def import_model(db: Session, workspace_id: str, name: str, source: BinaryIO,
                  *, declared_size: int | None = None) -> Scene3DModel:
     """把一份模型收进这个**工作区**。**从流分块搬到磁盘,任何时候都不整份进内存。**
@@ -274,7 +258,7 @@ def import_model(db: Session, workspace_id: str, name: str, source: BinaryIO,
     `.part` 这个中间名是有用的:校验没过或落行失败时删掉它,目录里不会留下一个**看起来像
     成品**的文件 —— 那种残骸最难认,它和真模型只差在能不能解析。
     """
-    fmt = _peek_format(source)
+    fmt = "glb" if glb.peek_is_glb(source) else "gltf"
     if declared_size is not None:
         _refuse_too_large(declared_size, fmt)
 

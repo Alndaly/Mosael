@@ -4652,6 +4652,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Only glTF 2.0 is supported; this file is version {version}.",
     },
     "modelMeshErr_glbNoJson": {"zh": "GLB 里没有 JSON 块。", "en": "The GLB file has no JSON chunk."},
+    "modelMeshErr_badGlb": {
+        "zh": "GLB 的文件结构不对(文件头声明的长度和文件对不上)—— 从 Blender 重新导出一份。",
+        "en": "The GLB file is malformed (its header doesn't match the file). Export it again from Blender.",
+    },
     "modelMeshErr_draco": {
         "zh": "模型用了 Draco 压缩网格,白模渲染器解不开 —— 导出 GLB 时关掉压缩即可。",
         "en": "The model uses Draco mesh compression, which the graybox renderer can't decode. Export the GLB with compression turned off.",

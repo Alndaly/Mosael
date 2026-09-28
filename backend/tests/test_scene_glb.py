@@ -8,12 +8,15 @@
 
 from __future__ import annotations
 
+import io
 import json
 import struct
 from pathlib import Path
 
 import numpy as np
+import pytest
 
+from app.domain.scenes import glb
 from app.domain.scenes.render import find_shot
 from app.domain.scenes.render.gltf import EXTRA_ID, EXTRA_MODEL, scene_document, write_glb
 from app.domain.scenes.types import SceneContent
@@ -122,3 +125,41 @@ def test_顶点是三角形摊平的_法线跟着面走() -> None:
     view = document["bufferViews"][normals["bufferView"]]
     values = np.frombuffer(blob[view["byteOffset"]:view["byteOffset"] + view["byteLength"]], dtype=np.float32)
     assert np.allclose(np.linalg.norm(values.reshape(-1, 3), axis=1), 1), "法线要是单位向量"
+
+
+# ---------------- GLB 容器格式只有一份(domain/scenes/glb)----------------
+# 导入校验(只读头和 JSON 块)与渲染读取(整份读)此前各写一遍,对「头里声明的长度」口径不同。
+
+
+def _glb_bytes(tmp_path, document: dict, blob: bytes = b"") -> bytes:
+    path = tmp_path / "x.glb"
+    glb.write(path, document, blob)
+    return path.read_bytes()
+
+
+def test_写出去的_GLB_两种读法都读得回来(tmp_path) -> None:
+    document = {"asset": {"version": "2.0"}, "nodes": [{"name": "方块"}]}
+    raw = _glb_bytes(tmp_path, document, b"\x01\x02\x03")
+    assert glb.is_glb(raw) and len(raw) % 4 == 0
+    read_back, blob = glb.read(raw)
+    assert read_back == document and blob.rstrip(b"\x00") == b"\x01\x02\x03"
+    assert glb.read_document(io.BytesIO(raw), len(raw)) == document
+    assert glb.read(_glb_bytes(tmp_path, document))[1] is None  # 空的二进制块不写
+
+
+def test_坏的_GLB_两种读法给同样的判断(tmp_path) -> None:
+    raw = _glb_bytes(tmp_path, {"asset": {"version": "2.0"}}, b"\x00" * 8)
+    cases = {
+        "layout": raw + b"\x00\x00\x00\x00",  # 头里声明的总长和文件对不上
+        "version": raw[:4] + struct.pack("<I", 1) + raw[8:],
+    }
+    for reason, broken in cases.items():
+        with pytest.raises(glb.GlbError) as whole:
+            glb.read(broken)
+        with pytest.raises(glb.GlbError) as head_only:
+            glb.read_document(io.BytesIO(broken), len(broken))
+        assert whole.value.reason == head_only.value.reason == reason
+    only_bin = struct.pack("<4sII", b"glTF", 2, 12 + 8 + 4) + struct.pack("<II", 4, glb.BIN_CHUNK) + b"\x00" * 4
+    with pytest.raises(glb.GlbError) as no_json:
+        glb.read(only_bin)
+    assert no_json.value.reason == "no_json"

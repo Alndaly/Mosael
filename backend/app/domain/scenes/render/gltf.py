@@ -14,13 +14,12 @@
 
 from __future__ import annotations
 
-import json
-import struct
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 
+from app.domain.scenes import glb
 from app.domain.scenes.render.meshes import meshes_for
 from app.domain.scenes.render.raster import hex_to_linear
 from app.domain.scenes.types import SceneContent, SceneObject, SceneShot
@@ -156,17 +155,7 @@ def scene_document(content: SceneContent, shot: SceneShot, time: float = 0.0) ->
 def write_glb(content: SceneContent, shot: SceneShot, target: Path, time: float = 0.0) -> dict[str, Any]:
     """把场景写成一个自包含的 GLB。返回写了哪些物体、以及哪些导入模型要另外交给 Blender。"""
     document, blob = scene_document(content, shot, time)
-    payload = json.dumps(document, ensure_ascii=False, separators=(",", ":")).encode()
-    payload += b" " * (-len(payload) % 4)
-    blob += b"\x00" * (-len(blob) % 4)
-    target.parent.mkdir(parents=True, exist_ok=True)
-    with target.open("wb") as out:
-        out.write(struct.pack("<4sII", b"glTF", 2, 12 + 8 + len(payload) + (8 + len(blob) if blob else 0)))
-        out.write(struct.pack("<II", len(payload), 0x4E4F534A))
-        out.write(payload)
-        if blob:
-            out.write(struct.pack("<II", len(blob), 0x004E4942))
-            out.write(blob)
+    glb.write(target, document, blob)
     return {
         "objects": len(document["nodes"]),
         "models": [{"object_id": node["extras"][EXTRA_ID], "model_id": node["extras"][EXTRA_MODEL]}

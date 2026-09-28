@@ -39,6 +39,7 @@ from pathlib import Path
 import numpy as np
 
 from app.core.i18n import LocalizedError
+from app.domain.scenes import glb
 from app.domain.scenes.render.meshes import Mesh
 
 #: 单份模型的面数上限。见模块开头那段:这是渲染时间的闸,不是格式限制。
@@ -51,8 +52,6 @@ _COUNTS = {"SCALAR": 1, "VEC2": 2, "VEC3": 3, "VEC4": 4, "MAT2": 4, "MAT3": 9, "
 #: 只画三角形。线、点、条带/扇形在白模里没有意义(没有面就没有体积),跳过不算错。
 _TRIANGLES = 4
 
-_JSON_CHUNK = 0x4E4F534A
-_BIN_CHUNK = 0x004E4942
 
 
 class UnsupportedModel(LocalizedError, ValueError):
@@ -119,27 +118,15 @@ def read_model(path: Path) -> list[Mesh]:
 
 
 def _open(path: Path) -> tuple[dict, bytes | None]:
-    """→ (glTF 文档, GLB 的二进制块或 None)。"""
+    """→ (glTF 文档, GLB 的二进制块或 None)。内嵌 glTF 是一整份 JSON。"""
     raw = path.read_bytes()
-    if raw[:4] != b"glTF":
+    if not glb.is_glb(raw):
         return json.loads(raw.decode("utf-8")), None
-    _, version, _ = struct.unpack_from("<4sII", raw, 0)
-    if version != 2:
-        raise UnsupportedModel("modelMeshErr_gltfVersion", version=version)
-    document: dict | None = None
-    blob: bytes | None = None
-    offset = 12
-    while offset + 8 <= len(raw):
-        length, kind = struct.unpack_from("<II", raw, offset)
-        body = raw[offset + 8:offset + 8 + length]
-        if kind == _JSON_CHUNK:
-            document = json.loads(body.decode("utf-8"))
-        elif kind == _BIN_CHUNK:
-            blob = body
-        offset += 8 + length
-    if document is None:
-        raise UnsupportedModel("modelMeshErr_glbNoJson")
-    return document, blob
+    try:
+        return glb.read(raw)
+    except glb.GlbError as exc:
+        key = {"version": "modelMeshErr_gltfVersion", "no_json": "modelMeshErr_glbNoJson"}.get(exc.reason, "modelMeshErr_badGlb")
+        raise UnsupportedModel(key, **exc.params) from exc
 
 
 def _refuse_compressed(document: dict) -> None:
