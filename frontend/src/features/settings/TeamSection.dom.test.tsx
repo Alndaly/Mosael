@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 /**
  * 设置 → 团队与成员里的「重命名 / 删除工作区」和切换器用同一份门槛(workspaceMenuState)、
- * 同一份删除收尾(workspaceList.useDeleteWorkspace)。此前这里自己判权限、不查还剩几个、
+ * 同一份删除收尾(lib/workspaces 的 useDeleteWorkspace)。此前这里自己判权限、不查还剩几个、
  * 删完只让列表失效 —— 切换器灰掉的删除,在这里照样点得下去。
  */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -10,6 +10,7 @@ import React from "react";
 import { beforeEach, expect, it, vi } from "vitest";
 
 import type { Workspace } from "@/api/client";
+import { workspaceKeys } from "@/api/queryKeys";
 
 vi.mock("@/app/preferences", () => ({
   useI18n: () => (key: string) => key,
@@ -22,7 +23,7 @@ const h = vi.hoisted(() => ({
   deleteWorkspace: vi.fn(),
 }));
 vi.mock("@/api/client", () => ({
-  api: async (url: string) => (url === "/api/workspaces" ? h.server : []),
+  listWorkspaces: async () => h.server,
   listMembers: async () => ({ my_role: h.role, members: [] }),
   listActivity: async () => [],
   deleteWorkspace: (id: string) => h.deleteWorkspace(id),
@@ -83,6 +84,6 @@ it("删掉当前工作区:列表缓存里立刻拿掉它(WorkspaceGate 据此落
   fireEvent.click(await screen.findByRole("button", { name: "confirm" }));
   await waitFor(() => expect(h.deleteWorkspace).toHaveBeenCalledWith("w1"));
   await waitFor(() =>
-    expect(client.getQueryData<Workspace[]>(["workspaces"])?.map((one) => one.id)).toEqual(["w2"]),
+    expect(client.getQueryData<Workspace[]>(workspaceKeys.all())?.map((one) => one.id)).toEqual(["w2"]),
   );
 });

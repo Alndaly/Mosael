@@ -93,9 +93,9 @@
 - 服务端实体留在 React Query 里;Zustand 只放草稿和瞬时 UI 状态。
 - **缓存键的失效用最短前缀。** React Query 按前缀匹配,所以同一份数据用几种形状的键并存时,
   刷不刷得到全看谁比谁长:剪辑页按 `["assets", 工作区, 项目]` 失效,首页按 `["assets", 工作区]`
-  取数 —— 三段匹配不到两段,导入的素材在首页不出现。素材这一族已收进 `api/queryKeys.ts`
-  (`list()` 取数、`all()` 失效),棘轮 `api/queryKeys.test.ts`。别的键族还是内联字面量,
-  新写的尽量跟着这个形状走。
+  取数 —— 三段匹配不到两段,导入的素材在首页不出现。素材、工作区列表、音色库这几族已收进
+  `api/queryKeys.ts`(`list()` 取数、`all()` 失效;只有一种形状的族只有 `all()`),棘轮
+  `api/queryKeys.test.ts` 不许再内联手写它们。别的键族还是内联字面量,新写的尽量跟着这个形状走。
 - 不用 `alert` / `confirm` / `prompt` 这些原生弹窗。
 - 所有用户可见文案走 i18n(`src/app/messages.ts`),中英两份都要有。
 - 时间线的几何计算住在 `domain/timeline/geometry.ts`,是有测试的纯函数;组件里不内联几何。

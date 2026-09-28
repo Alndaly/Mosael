@@ -6,7 +6,7 @@ import { useQueryClient } from "@tanstack/react-query";
 
 import { setApiLocale } from "@/api/client";
 
-type Theme = "light" | "dark" | "system";
+export type Theme = "light" | "dark" | "system";
 type Locale = "zh-CN" | "en-US";
 
 const STORAGE_KEY = "mosael.preferences";

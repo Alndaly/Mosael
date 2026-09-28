@@ -1,5 +1,4 @@
 import React from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Boxes,
   Check,
@@ -7,19 +6,16 @@ import {
   FolderPlus,
   Languages,
   LogOut,
-  MonitorCog,
-  Moon,
   Pencil,
   PanelLeftClose,
   PanelLeftOpen,
   Search,
   Settings,
-  Sun,
   Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { createWorkspace, renameWorkspace, userAvatarUrl, type Workspace } from "@/api/client";
+import { userAvatarUrl, type Workspace } from "@/api/client";
 import { useAuth, useIsDeploymentAdmin } from "@/app/auth";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { Input } from "@/components/ui/input";
@@ -34,12 +30,12 @@ import {
   workspaceMenuState,
   workspaceRenameBlockedReason,
 } from "@/components/layout/workspaceMenu";
-import { useDeleteWorkspace } from "@/components/layout/workspaceList";
-import { THEME_LABEL_KEYS, nextTheme } from "@/components/layout/themeCycle";
+import { THEME_ICONS, THEME_LABEL_KEYS, nextTheme } from "@/components/layout/themeCycle";
 import { ConfirmDialog, RenameDialog } from "@/components/app/modals";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { navItemsAt, navLabelKey, type NavItem, type StudioView } from "@/components/layout/navLabels";
 import { cn } from "@/lib/utils";
+import { useCreateWorkspace, useDeleteWorkspace, useRenameWorkspace } from "@/lib/workspaces";
 import { PageTrailProvider, type PageTrail } from "@/components/layout/pageTrail";
 import { WINDOW_CHROME_HEIGHT, WINDOW_CHROME_INSET } from "@/lib/windowChrome";
 
@@ -98,6 +94,7 @@ export function AppShell({
 }) {
   const t = useI18n();
   const { theme, setTheme, locale, setLocale } = usePreferences();
+  const ThemeIcon = THEME_ICONS[theme];
   const isDeploymentAdmin = useIsDeploymentAdmin();
   const [narrow, setNarrow] = React.useState(() => window.matchMedia("(max-width: 1199px)").matches);
   const [collapsed, setCollapsed] = React.useState<boolean | null>(() => {
@@ -253,7 +250,7 @@ export function AppShell({
                 onClick={() => setTheme(nextTheme(theme))}
                 aria-label={t("settingsTheme")}
               >
-                {theme === "light" ? <Sun size={15} /> : theme === "dark" ? <Moon size={15} /> : <MonitorCog size={15} />}
+                <ThemeIcon size={15} />
               </Button>
             </TooltipTrigger>
             <TooltipContent>
@@ -385,7 +382,6 @@ function WorkspaceSwitcher({
   onSelectWorkspace?: (id: string) => void;
 }) {
   const t = useI18n();
-  const qc = useQueryClient();
   const [open, setOpen] = React.useState(false);
   const [search, setSearch] = React.useState("");
   const [creating, setCreating] = React.useState(false);
@@ -394,33 +390,13 @@ function WorkspaceSwitcher({
   const [renaming, setRenaming] = React.useState<Workspace | null>(null);
   const [removing, setRemoving] = React.useState<Workspace | null>(null);
 
-  const renameMut = useMutation({
-    mutationFn: ({ id, name }: { id: string; name: string }) => renameWorkspace(id, name),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["workspaces"] });
-      toast.success(t("saved"));
-    },
-    onError: (error: Error) => toast.error(error.message),
-    onSettled: () => setRenaming(null),
-  });
-
-  const removeMut = useDeleteWorkspace({
-    currentWorkspaceId: workspaceId,
-    onSelectWorkspace,
-    onSettled: () => setRemoving(null),
-  });
-
-  const createMut = useMutation({
-    mutationFn: createWorkspace,
-    onSuccess: (created) => {
-      // 先把新工作区塞进缓存再选中:否则选中时列表里还没有它,
-      // WorkspaceGate 的兜底(找不到 → 退回 list[0])会把选择弹回去。
-      qc.setQueryData<Workspace[]>(["workspaces"], (old) => (old ? [created, ...old] : [created]));
-      void qc.invalidateQueries({ queryKey: ["workspaces"] });
+  const renameMut = useRenameWorkspace({ onSettled: () => setRenaming(null) });
+  const removeMut = useDeleteWorkspace({ onSettled: () => setRemoving(null) });
+  const createMut = useCreateWorkspace({
+    onCreated: (created) => {
       toast.success(t("workspaceCreated").replace("{name}", created.name));
       onSelectWorkspace?.(created.id);
     },
-    onError: (error: Error) => toast.error(error.message),
     onSettled: () => setCreating(false),
   });
 

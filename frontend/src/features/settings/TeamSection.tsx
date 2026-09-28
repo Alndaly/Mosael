@@ -17,12 +17,12 @@ import {
   listActivity,
   listMembers,
   removeMember,
-  renameWorkspace,
   setMemberRole,
   type Workspace,
   type WorkspaceMember,
   type ActivityEvent,
 } from "@/api/client";
+import { workspaceKeys } from "@/api/queryKeys";
 import { useAuth } from "@/app/auth";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { Badge } from "@/components/ui/badge";
@@ -32,13 +32,10 @@ import { Form, FormControl, FormField, FormItem, FormLabel } from "@/components/
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SettingsBlock, SettingsBlockTitle, SettingsGroup, SettingsList, SettingsListBlock, SettingsListItem } from "@/components/settings/settings-layout";
-import { workspaceDeleteBlockedReason, workspaceMenuState } from "@/components/layout/workspaceMenu";
-import { WORKSPACES_QUERY, useDeleteWorkspace } from "@/components/layout/workspaceList";
+import { atLeast, workspaceDeleteBlockedReason, workspaceMenuState } from "@/components/layout/workspaceMenu";
 import { relativeTime } from "@/lib/time";
+import { useDeleteWorkspace, useRenameWorkspace, useWorkspaces } from "@/lib/workspaces";
 
-/** Per-permission icon for the member-permissions popover (scannability). */
-const ROLE_RANK: Record<string, number> = { viewer: 0, editor: 1, admin: 2, owner: 3 };
-const atLeast = (role: string, min: string) => (ROLE_RANK[role] ?? -1) >= ROLE_RANK[min];
 const ASSIGNABLE = ["admin", "editor", "viewer"] as const;
 const ACTIVITY_LABELS: Record<string, string> = {
   "board.created": "activity_board_created",
@@ -80,7 +77,7 @@ export function TeamSection({ workspace }: { workspace: Workspace }) {
   const isOwner = myRole === "owner";
   //: 改名 / 删除工作区的门槛和切换器同一份(workspaceMenuState):包括「只剩一个不许删」。
   //: 权限不够的直接不摆;只剩一个的摆出来但灰掉,并说原因 —— 他有权限,只是现在不能删。
-  const workspaces = useQuery(WORKSPACES_QUERY);
+  const workspaces = useWorkspaces();
   const gate = workspaceMenuState(myRole, workspaces.data?.length ?? 0);
   const deleteReason = workspaceDeleteBlockedReason(gate);
   const roleLabel = (role: string) => t(`role_${role}` as never) as string;
@@ -94,21 +91,13 @@ export function TeamSection({ workspace }: { workspace: Workspace }) {
     mutationFn: (userId: string) => removeMember(wid, userId),
     onSuccess: () => {
       invalidate();
-      void qc.invalidateQueries({ queryKey: ["workspaces"] });
+      void qc.invalidateQueries({ queryKey: workspaceKeys.all() });
     },
     onError: onErr,
   });
-  const renameMut = useMutation({
-    mutationFn: (name: string) => renameWorkspace(wid, name),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["workspaces"] });
-      toast.success(t("saved"));
-    },
-    onError: onErr,
-    onSettled: () => setRenameOpen(false),
-  });
-  //: 删完的收尾(删的是当前工作区就落到下一个)和切换器共用一份,见 workspaceList。
-  const deleteMut = useDeleteWorkspace({ currentWorkspaceId: wid, onSettled: () => setDeleteOpen(false) });
+  //: 改名、删除和切换器共用 lib/workspaces 那一份;删的若是当前工作区,WorkspaceGate 自己落到下一个。
+  const renameMut = useRenameWorkspace({ onSettled: () => setRenameOpen(false) });
+  const deleteMut = useDeleteWorkspace({ onSettled: () => setDeleteOpen(false) });
 
   return (
     <SettingsGroup title={t("teamTitle")} description={t("teamDesc")}>
@@ -130,7 +119,7 @@ export function TeamSection({ workspace }: { workspace: Workspace }) {
           </div>
           <div className="flex shrink-0 gap-1.5">
             {gate.renameBlockedBy !== "role" && (
-              <Button variant="outline" size="sm" disabled={gate.renameDisabled} onClick={() => setRenameOpen(true)}>
+              <Button variant="outline" size="sm" onClick={() => setRenameOpen(true)}>
                 <Pencil size={13} /> {t("rename")}
               </Button>
             )}
@@ -197,7 +186,7 @@ export function TeamSection({ workspace }: { workspace: Workspace }) {
         initialValue={workspace.name}
         onCancel={() => setRenameOpen(false)}
         pending={renameMut.isPending}
-        onSubmit={(name) => renameMut.mutate(name)}
+        onSubmit={(name) => renameMut.mutate({ id: wid, name })}
       />
       <ConfirmDialog
         open={deleteOpen}

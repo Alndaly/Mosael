@@ -1,5 +1,5 @@
 import React from "react";
-import { Check, ImageIcon, MonitorCog, Moon, RotateCcw, Sun, Upload, X } from "lucide-react";
+import { Check, ImageIcon, RotateCcw, Upload, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { BACKGROUND_PRESETS, type BackgroundKind, compressImageFile, useAppearance } from "@/app/appearance";
@@ -7,6 +7,7 @@ import { INTERFACE_FONTS, loadInterfaceFont } from "@/app/interfaceFonts";
 import { useCustomCss } from "@/app/customCss";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
+import { THEME_ICONS, THEME_LABEL_KEYS, THEMES } from "@/components/layout/themeCycle";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { SettingsBlock, SettingsGroup, SettingsRow } from "@/components/settings/settings-layout";
@@ -22,27 +23,19 @@ export function AppearanceSection() {
     <SettingsGroup title={t("settingsAppearance")} description={t("settingsAppearanceDesc")}>
       <SettingsRow label={t("settingsTheme")} description={t("settingsThemeDesc")}>
         <div className="inline-flex h-7 items-stretch overflow-hidden rounded-full border border-border bg-panel [&>button+button]:border-l [&>button+button]:border-border">
-          <button
-            type="button"
-            className={cn("inline-flex cursor-pointer items-center gap-1 rounded-none border-0 bg-transparent px-[11px] py-[3px] text-xs text-muted-foreground transition-[background,color] duration-[120ms] hover:bg-secondary hover:text-foreground", theme === "light" && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
-            onClick={() => setTheme("light")}
-          >
-            <Sun size={13} /> {t("themeLight")}
-          </button>
-          <button
-            type="button"
-            className={cn("inline-flex cursor-pointer items-center gap-1 rounded-none border-0 bg-transparent px-[11px] py-[3px] text-xs text-muted-foreground transition-[background,color] duration-[120ms] hover:bg-secondary hover:text-foreground", theme === "dark" && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
-            onClick={() => setTheme("dark")}
-          >
-            <Moon size={13} /> {t("themeDark")}
-          </button>
-          <button
-            type="button"
-            className={cn("inline-flex cursor-pointer items-center gap-1 rounded-none border-0 bg-transparent px-[11px] py-[3px] text-xs text-muted-foreground transition-[background,color] duration-[120ms] hover:bg-secondary hover:text-foreground", theme === "system" && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
-            onClick={() => setTheme("system")}
-          >
-            <MonitorCog size={13} /> {t("themeSystem")}
-          </button>
+          {THEMES.map((option) => {
+            const Icon = THEME_ICONS[option];
+            return (
+              <button
+                key={option}
+                type="button"
+                className={cn("inline-flex cursor-pointer items-center gap-1 rounded-none border-0 bg-transparent px-[11px] py-[3px] text-xs text-muted-foreground transition-[background,color] duration-[120ms] hover:bg-secondary hover:text-foreground", theme === option && "bg-accent font-medium text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
+                onClick={() => setTheme(option)}
+              >
+                <Icon size={13} /> {t(THEME_LABEL_KEYS[option])}
+              </button>
+            );
+          })}
         </div>
       </SettingsRow>
       <SettingsRow label={t("settingsLanguage")} description={t("settingsLanguageDesc")}>

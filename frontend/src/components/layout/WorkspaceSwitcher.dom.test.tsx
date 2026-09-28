@@ -9,11 +9,12 @@ import { createMutationCache } from "@/app/mutationErrors";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppShell } from "./AppShell";
 import type { Workspace } from "@/api/client";
+import { workspaceKeys } from "@/api/queryKeys";
 
 const zh = messages["zh-CN"];
 vi.mock("@/app/preferences", () => ({
   useI18n: () => (key: keyof typeof zh) => zh[key],
-  usePreferences: () => ({ locale: "zh-CN" }),
+  usePreferences: () => ({ locale: "zh-CN", theme: "light", setTheme: vi.fn() }),
 }));
 vi.mock("@/app/auth", () => ({
   useAuth: () => ({ user: { id: "u1", username: "kinda" }, logout: vi.fn() }),
@@ -35,7 +36,7 @@ vi.mock("@/api/client", async (importOriginal) => ({
 
 /** 复刻 App.tsx 里 WorkspaceGate 的接线:列表来自 useQuery,当前工作区由 activeId 解析。 */
 function Gate({ onResolve }: { onResolve: (id: string) => void }) {
-  const workspaces = useQuery({ queryKey: ["workspaces"], queryFn: () => listed() });
+  const workspaces = useQuery({ queryKey: workspaceKeys.all(), queryFn: () => listed() });
   const [activeId, setActiveId] = React.useState<string | null>("ws-1");
   const list = workspaces.data;
   const workspace = list?.find((one) => one.id === activeId) ?? list?.[0] ?? null;
@@ -87,15 +88,15 @@ it("新建之后立刻出现在列表里,并且切了过去", async () => {
 
   await waitFor(() => expect(createWorkspace).toHaveBeenCalledWith("新工作区"));
   await waitFor(() =>
-    expect(client.getQueryData<Workspace[]>(["workspaces"])?.map((one) => one.id)).toContain("ws-new"),
+    expect(client.getQueryData<Workspace[]>(workspaceKeys.all())?.map((one) => one.id)).toContain("ws-new"),
   );
   // 解析出来的当前工作区必须变成新建的那个,而不是弹回原来的。
   await waitFor(() => expect(resolved[resolved.length - 1]).toBe("ws-new"));
 });
 
 /**
- * 删的正是当前工作区:先落到下一个,再从列表里拿掉它。收尾在 workspaceList.useDeleteWorkspace,
- * 设置 → 团队与成员里的删除按钮用的是同一份。
+ * 删的正是当前工作区:缓存里拿掉它之后,WorkspaceGate 的 `find(activeId) ?? list[0]` 落到剩下的
+ * 那个。收尾在 lib/workspaces 的 useDeleteWorkspace,设置 → 团队与成员里的删除按钮用的是同一份。
  */
 it("删掉当前工作区之后,落到剩下的那个", async () => {
   server = [
@@ -109,5 +110,5 @@ it("删掉当前工作区之后,落到剩下的那个", async () => {
 
   await waitFor(() => expect(deleteWorkspace).toHaveBeenCalledWith("ws-1"));
   await waitFor(() => expect(resolved[resolved.length - 1]).toBe("ws-2"));
-  expect(client.getQueryData<Workspace[]>(["workspaces"])?.map((one) => one.id)).not.toContain("ws-1");
+  expect(client.getQueryData<Workspace[]>(workspaceKeys.all())?.map((one) => one.id)).not.toContain("ws-1");
 });

@@ -11,6 +11,7 @@ import {
   respondInvitation,
   type AppNotification,
 } from "@/api/client";
+import { workspaceKeys } from "@/api/queryKeys";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { toast } from "sonner";
@@ -70,7 +71,7 @@ export function NotificationCenter({ workspaceId }: { workspaceId: string }) {
           : t("notifInviteDeclined"),
       );
       void qc.invalidateQueries({ queryKey: ["my-invitations"] });
-      void qc.invalidateQueries({ queryKey: ["workspaces"] });
+      void qc.invalidateQueries({ queryKey: workspaceKeys.all() });
       invalidate();
     },
   });

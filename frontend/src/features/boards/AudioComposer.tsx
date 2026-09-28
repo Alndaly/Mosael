@@ -2,8 +2,9 @@ import React from "react";
 import { AudioLines } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 
-import { listTtsEngines, listTtsVoices, listVoices, type BoardItem, type Voice } from "@/api/client";
+import { listTtsEngines, listTtsVoices, type BoardItem, type Voice } from "@/api/client";
 import { compactSpeechEngineChoices } from "@/features/voice/speechEngines";
+import { useVoiceLibrary } from "@/features/voice/useVoiceLibrary";
 import { OptionPicker } from "@/components/ui/option-picker";
 import { useSubmitting } from "@/features/boards/useSubmitting";
 import { useI18n } from "@/app/preferences";
@@ -92,11 +93,7 @@ export function AudioComposer({
   const activeEngine = engineChoices.find((one) => one.id === engine) ?? engineChoices[0] ?? null;
   const usingClone = (activeEngine?.id ?? "clone") === "clone";
 
-  const voices = useQuery({
-    queryKey: ["voices", workspaceId],
-    queryFn: () => listVoices(workspaceId),
-    enabled: usingClone,
-  });
+  const voices = useVoiceLibrary(workspaceId, { enabled: usingClone });
   //: 发音人按引擎现拉 —— 火山的目录跟着账号走,不是引擎列表的一部分(和字幕面板同源)。
   const engineVoices = useQuery({
     queryKey: ["tts-voices", activeEngine?.id ?? ""],

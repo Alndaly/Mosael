@@ -4,6 +4,7 @@ import { Check, Pause, Pencil, Play, ShieldAlert, Trash2, Wand2, X } from "lucid
 import { toast } from "sonner";
 
 import { deleteVoice, recognizeReference, updateVoice, voiceSampleUrl, type Voice } from "@/api/client";
+import { voiceKeys } from "@/api/queryKeys";
 import { useI18n } from "@/app/preferences";
 import { ConfirmDialog } from "@/components/app/modals";
 import { Button } from "@/components/ui/button";
@@ -35,7 +36,7 @@ export function VoiceList({
 }) {
   const t = useI18n();
   const qc = useQueryClient();
-  const invalidate = () => void qc.invalidateQueries({ queryKey: ["voices", workspaceId] });
+  const invalidate = () => void qc.invalidateQueries({ queryKey: voiceKeys.all(workspaceId) });
   // 试听是开关,不是单向动作 —— 见 useSamplePlayer。
   const player = useSamplePlayer(voiceSampleUrl);
   const [editing, setEditing] = React.useState<string | null>(null);
@@ -147,7 +148,6 @@ function VoiceRow({
   const dirty = name.trim() !== voice.name || text !== voice.reference_text;
   // 编辑中不响应「点一行选中」:在输入框里点一下不该顺手换掉配音用的嗓子。
   const selectable = Boolean(onSelect) && !editing;
-
   // 名字 + 说明是这一行的摘要。能选时它本身就是那颗「选中」按钮(键盘能 Tab 到、Enter / Space 能按);
   // 试听、编辑、删除和「补授权声明」是它旁边的兄弟按钮,不嵌在里面 —— 按钮里套按钮,读屏和键盘都会乱。
   const summary = (
@@ -169,6 +169,7 @@ function VoiceRow({
       </span>
     </>
   );
+
   return (
     // 按钮相对**整行**(名字 + 底下那句说明)居中,而不是贴着名字那一行 —— 所以文字自成一列、
     // 按钮是另一列,由 items-center 管这两列的竖向关系。

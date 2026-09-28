@@ -1,9 +1,10 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
 
-import { getTtsConfig, listTtsEngines, listTtsModels, listTtsVoices, listVoices } from "@/api/client";
+import { getTtsConfig, listTtsEngines, listTtsModels, listTtsVoices } from "@/api/client";
 import { pollWhileUnsettled } from "@/lib/pollWhileUnsettled";
 import { speechEngineChoices } from "@/features/voice/speechEngines";
+import { useVoiceLibrary } from "@/features/voice/useVoiceLibrary";
 
 /** 合成请求里「谁来念」那几个字段。/voices/{id}/synthesize、/tts/synthesize、字幕配音收的都是它。 */
 export type SpeechParams = {
@@ -43,7 +44,7 @@ export function useSpeechVoice(workspaceId: string) {
 
   // staleTime 不能是 Infinity:这里带着"本地引擎装了没有",而用户就是会在设置页装完再回来。
   const engines = useQuery({ queryKey: ["tts-engines"], queryFn: listTtsEngines, staleTime: 30_000 });
-  const voices = useQuery({ queryKey: ["voices", workspaceId], queryFn: () => listVoices(workspaceId) });
+  const voices = useVoiceLibrary(workspaceId);
   // 本地引擎的就绪情况是后台探出来的,第一次拿到的必然是「还没测过」—— 没测完就接着问,
   // 判据与设置页共用 pollWhileUnsettled。
   const runtimes = useQuery({

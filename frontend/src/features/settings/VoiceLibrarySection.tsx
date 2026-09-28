@@ -1,12 +1,14 @@
 import React from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { Mic, Plus } from "lucide-react";
 
-import { listVoices, type Workspace } from "@/api/client";
+import type { Workspace } from "@/api/client";
+import { voiceKeys } from "@/api/queryKeys";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { UploadVoiceDialog } from "@/features/voice/VoiceCreationDialogs";
 import { VoiceList } from "@/features/voice/VoiceList";
+import { useVoiceLibrary } from "@/features/voice/useVoiceLibrary";
 import { SettingsBlock, SettingsEmpty, SettingsGroup } from "@/components/settings/settings-layout";
 
 /**
@@ -23,11 +25,8 @@ import { SettingsBlock, SettingsEmpty, SettingsGroup } from "@/components/settin
 export function VoiceLibrarySection({ workspace }: { workspace: Workspace }) {
   const t = useI18n();
   const qc = useQueryClient();
-  const voices = useQuery({
-    queryKey: ["voices", workspace.id],
-    queryFn: () => listVoices(workspace.id),
-  });
-  const invalidate = () => void qc.invalidateQueries({ queryKey: ["voices", workspace.id] });
+  const voices = useVoiceLibrary(workspace.id);
+  const invalidate = () => void qc.invalidateQueries({ queryKey: voiceKeys.all(workspace.id) });
 
   const list = voices.data ?? [];
   const [creating, setCreating] = React.useState(false);

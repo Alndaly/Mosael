@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Mic, Upload, UsersRound } from "lucide-react";
 
 import type { Project, Voice, Workspace } from "@/api/client";
+import { voiceKeys } from "@/api/queryKeys";
 import { useI18n } from "@/app/preferences";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { Button } from "@/components/ui/button";
@@ -37,7 +38,7 @@ export function VoiceLibrary({
   const [speakerOpen, setSpeakerOpen] = React.useState(false);
 
   const created = (voice: Voice) => {
-    void qc.invalidateQueries({ queryKey: ["voices", workspace.id] });
+    void qc.invalidateQueries({ queryKey: voiceKeys.all(workspace.id) });
     onSelect(voice.id);
   };
   const createButtons = (
