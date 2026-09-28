@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from app.core.child_process import run_logged
+from app.core.config import settings
 
 """
 Waveform cache (plan §8): peak buckets computed once at import time and
@@ -25,7 +26,7 @@ def generate_waveform(source: Path, kind: str, asset_directory: Path) -> Path | 
     try:
         proc = run_logged(
             [
-                "ffmpeg", "-v", "error",
+                settings.ffmpeg, "-v", "error",
                 "-i", str(source),
                 "-map", "0:a:0",
                 "-ac", "1",

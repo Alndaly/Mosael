@@ -23,6 +23,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.ai.providers.contracts.generation import DRIVING_AUDIO, FIRST_FRAME, SOURCE_VIDEO
 from app.domain.jobs import current_actor
 from app.domain.workflows import WorkflowDomainError
@@ -277,7 +278,7 @@ def _concat_audio(db: Session, scope: RunScope, assets: list[Any], name: str) ->
         target = Path(folder) / "segment.wav"
         inputs = [part for path in sources for part in ("-i", str(path))]
         chain = "".join(f"[{index}:a]" for index in range(len(sources))) + f"concat=n={len(sources)}:v=0:a=1[out]"
-        result = run_logged(["ffmpeg", "-y", "-v", "error", *inputs, "-filter_complex", chain, "-map", "[out]",
+        result = run_logged([settings.ffmpeg, "-y", "-v", "error", *inputs, "-filter_complex", chain, "-map", "[out]",
                              "-ac", "1", "-ar", "24000", str(target)],
                             capture_output=True, text=True, timeout=300, what="口播分段拼接")
         if result.returncode != 0 or not target.exists():

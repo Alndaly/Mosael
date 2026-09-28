@@ -20,6 +20,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.ai.providers.contracts.generation import DRIVING_AUDIO, SOURCE_VIDEO
 from app.domain.workflows import WorkflowDomainError
 from app.domain.workflows.executors import RunScope, register
@@ -84,7 +85,7 @@ def _atempo(speed: float) -> str:
 def _ffmpeg(args: list[str], what: str) -> None:
     from app.core.child_process import run_logged
 
-    result = run_logged(["ffmpeg", "-y", "-v", "error", *args], capture_output=True, text=True, timeout=1800, what=what)
+    result = run_logged([settings.ffmpeg, "-y", "-v", "error", *args], capture_output=True, text=True, timeout=1800, what=what)
     if result.returncode != 0:
         raise WorkflowDomainError("wfErr_dubLipsyncMediaFailed", params={"step": what})
 

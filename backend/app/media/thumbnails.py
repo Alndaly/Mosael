@@ -6,6 +6,7 @@ from pathlib import Path
 from PIL import Image, ImageOps
 
 from app.core.child_process import run_logged
+from app.core.config import settings
 from app.media.image_preview import browser_compatible_image
 
 #: WebP 而不是 JPEG:**JPEG 没有透明通道**。带透明的 PNG(图标、抠图)转成 JPEG 时透明像素
@@ -51,7 +52,7 @@ def generate_thumbnail(source: Path, kind: str, asset_directory: Path) -> Path |
     with tempfile.TemporaryDirectory(prefix="mosael-thumb-") as tmp:
         frame = Path(tmp) / "frame.png"
         for seek in ("0.5", None):
-            args = ["ffmpeg", "-y", "-v", "error"]
+            args = [settings.ffmpeg, "-y", "-v", "error"]
             if seek is not None:
                 args += ["-ss", seek]
             args += ["-i", str(source), "-frames:v", "1", str(frame)]

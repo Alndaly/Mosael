@@ -28,6 +28,7 @@ from app.media.probe import probe_media
 from app.core.child_process import run_logged
 from app.core.i18n import LocalizedError
 from app.core.text import blame_line, strip_ansi
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -199,7 +200,7 @@ def _require_local_engine(engine: str) -> None:
 def _transcode_reference(source: Path, target: Path) -> None:
     """Normalize any uploaded audio/video to 24k mono WAV, capped at 15s."""
     result = run_logged(
-        ["ffmpeg", "-y", "-v", "error", "-i", str(source), "-vn", "-ac", "1", "-ar", "24000",
+        [settings.ffmpeg, "-y", "-v", "error", "-i", str(source), "-vn", "-ac", "1", "-ar", "24000",
          "-t", str(REFERENCE_MAX_SECONDS), str(target)],
         capture_output=True, text=True, timeout=300, what="参考音频转码")
     if result.returncode != 0 or not target.exists():
@@ -298,7 +299,7 @@ def create_from_speaker(db: Session, *, workspace_id: str, asset_id: str, speake
     # Select just this speaker's ranges in one pass and re-stamp timestamps.
     expr = "+".join(f"between(t,{seg.start_time:.3f},{seg.end_time:.3f})" for seg in picked)
     result = run_logged(
-        ["ffmpeg", "-y", "-v", "error", "-i", str(resolve_key(asset.file_key)), "-vn",
+        [settings.ffmpeg, "-y", "-v", "error", "-i", str(resolve_key(asset.file_key)), "-vn",
          "-af", f"aselect='{expr}',asetpts=N/SR/TB", "-ac", "1", "-ar", "24000", str(ref)],
         capture_output=True, text=True, timeout=300, what="说话人片段提取")
     if result.returncode != 0 or not ref.exists():

@@ -79,7 +79,7 @@ def resolve_transcription_runtime(
 
 def _extract_audio(source: Path, target: Path) -> None:
     result = run_logged(
-        ["ffmpeg", "-y", "-v", "error", "-i", str(source), "-vn",
+        [settings.ffmpeg, "-y", "-v", "error", "-i", str(source), "-vn",
          "-ac", "1", "-ar", "16000", "-f", "wav", str(target)],
         capture_output=True,
         text=True,

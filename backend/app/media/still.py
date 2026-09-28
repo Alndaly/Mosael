@@ -5,6 +5,7 @@ from pathlib import Path
 
 from app.core.i18n import LocalizedError
 from app.core.child_process import run_logged
+from app.core.config import settings
 
 """
 从一段视频里取某一时刻的**一帧**,存成一个图片文件。
@@ -27,7 +28,7 @@ def grab_frame(source: Path, at_seconds: float, target: Path) -> Path:
     try:
         run_logged(
             [
-                "ffmpeg", "-y", "-v", "error",
+                settings.ffmpeg, "-y", "-v", "error",
                 "-i", str(source),
                 #: -ss 在 -i **之后** —— 见文件顶部那段。
                 "-ss", f"{at_seconds:.3f}",

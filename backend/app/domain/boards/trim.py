@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session
 from app.core.child_process import run_logged
 from app.core.db import SessionLocal
 from app.core.i18n import LocalizedError
+from app.core.config import settings
 from app.db.models import Asset, Job
 from app.domain.assets.importer import register_file_asset
 from app.domain.jobs import create_job, dispatch_job, emit_job_event, run_job_guarded, say
@@ -101,7 +102,7 @@ def _trim_body(job_id: str, asset_id: str, start: float, end: float, mute: bool)
             target = Path(tmp) / f"trimmed{suffix}"
             #: **重新编码,不用 -c copy。** 流拷贝只能从关键帧切,用户要的 3.2 秒会变成最近
             #: 那个关键帧 —— 画面对不上,而且没有任何地方会说这件事。短素材重编码代价可以接受。
-            args = ["ffmpeg", "-y", "-v", "error", "-ss", f"{start:.3f}", "-to", f"{end:.3f}", "-i", str(source)]
+            args = [settings.ffmpeg, "-y", "-v", "error", "-ss", f"{start:.3f}", "-to", f"{end:.3f}", "-i", str(source)]
             if mute:
                 args += ["-an"]
             args += [str(target)]

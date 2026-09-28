@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from app.core.child_process import run_logged
+from app.core.config import settings
 from app.media.probe import probe_media
 
 """
@@ -38,7 +39,7 @@ def generate_filmstrip(source: Path, kind: str, asset_directory: Path) -> Path |
     #: fps 设成「整条片子取 FRAMES 帧」。tile 把它们横着拼成一张。
     #: round=up 是为了短片:算下来不足一帧时至少也取到一帧,否则 tile 会得到空图。
     args = [
-        "ffmpeg", "-y", "-v", "error", "-i", str(source),
+        settings.ffmpeg, "-y", "-v", "error", "-i", str(source),
         "-vf", f"fps={FRAMES / duration}:round=up,scale=-2:{FRAME_HEIGHT},tile={FRAMES}x1",
         "-frames:v", "1", "-q:v", "4", str(target),
     ]

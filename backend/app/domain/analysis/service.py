@@ -26,6 +26,7 @@ from app.domain.providers import find_enabled_connection, list_enabled_connectio
 from app.media.image_preview import browser_compatible_image
 from app.media.paths import resolve_key
 from app.core.child_process import run_logged
+from app.core.config import settings
 from app.media.probe import probe_media
 
 """Existing-asset visual analysis.
@@ -130,7 +131,7 @@ def extract_video_frames(path: Path, count: int | None = None) -> list[bytes]:
             frame_count = count if count is not None else adaptive_frame_count(duration)
             run_logged(
                 [
-                    "ffmpeg", "-y", "-v", "error", "-i", str(path),
+                    settings.ffmpeg, "-y", "-v", "error", "-i", str(path),
                     "-vf", f"fps={frame_count / duration}:round=up,scale={FRAME_WIDTH}:-2",
                     "-frames:v", str(frame_count), "-q:v", "5", str(pattern),
                 ],
