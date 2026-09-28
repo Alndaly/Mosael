@@ -3054,7 +3054,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Generation Sessions */
+        /**
+         * List Generation Sessions
+         * @description 这个人在这个工作区里看得见的生成会话。`kind` 可以给几个:AI 工作台「生成」页要图像和视频,
+         *     「音频」页要音频 —— 在这里筛而不是在界面上筛,因为列表有条数上限,界面筛的话一页的会话能把
+         *     另一页的挤出去。
+         */
         get: operations["list_generation_sessions_api_generation_sessions_get"];
         put?: never;
         /** Create Generation Session */
@@ -9255,6 +9260,8 @@ export interface components {
              * @default []
              */
             result_asset_ids: string[];
+            /** Error */
+            error?: string | null;
             /**
              * Created At
              * Format: date-time
@@ -9328,8 +9335,11 @@ export interface components {
             provider_profile_id?: string | null;
             /** Model */
             model?: string | null;
-            /** Kind */
-            kind?: string | null;
+            /**
+             * Kind
+             * @default image
+             */
+            kind: string;
         };
         /** GenerationSessionOut */
         GenerationSessionOut: {
@@ -19740,6 +19750,7 @@ export interface operations {
         parameters: {
             query: {
                 workspace_id: string;
+                kind?: string[];
             };
             header?: never;
             path?: never;

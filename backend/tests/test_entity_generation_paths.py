@@ -15,6 +15,7 @@ import pytest
 from app.core.db import SessionLocal
 from app.db.models import Entity, EntityReference, ProviderProfile
 from app.domain import provider_models
+from app.domain.generation.operations import prompt_for_provider
 from tests.util import board_revision, fresh_client, run_on_board, seed_assets
 
 
@@ -70,7 +71,10 @@ def test_AI_工作台_点名资产_请求里记下拼好的提示词和挂上的
     })
     assert res.status_code == 200, res.text
     request = res.json()["generation"]["request"]
-    assert request["prompt"] == "张三走过老街\n\n张三: 黑色短发,红围巾"
+    # 记录上是他写的那句;描述是补给模型的一段,交给供应商时才接上(生成记录的用户气泡只画他说的话)。
+    assert request["prompt"] == "张三走过老街"
+    assert request["prompt_notes"] == ["张三: 黑色短发,红围巾"]
+    assert prompt_for_provider(request) == "张三走过老街\n\n张三: 黑色短发,红围巾"
     assert request["source_assets"] == [
         {"asset_id": "sheet", "role": "reference_image"}, {"asset_id": "front", "role": "reference_image"},
     ]

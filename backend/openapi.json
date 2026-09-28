@@ -8555,6 +8555,7 @@
           "generation"
         ],
         "summary": "List Generation Sessions",
+        "description": "这个人在这个工作区里看得见的生成会话。`kind` 可以给几个:AI 工作台「生成」页要图像和视频,\n「音频」页要音频 —— 在这里筛而不是在界面上筛,因为列表有条数上限,界面筛的话一页的会话能把\n另一页的挤出去。",
         "operationId": "list_generation_sessions_api_generation_sessions_get",
         "parameters": [
           {
@@ -8564,6 +8565,18 @@
             "schema": {
               "type": "string",
               "title": "Workspace Id"
+            }
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "title": "Kind"
             }
           }
         ],
@@ -25809,6 +25822,17 @@
             "title": "Result Asset Ids",
             "default": []
           },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
@@ -25953,16 +25977,10 @@
             "title": "Model"
           },
           "kind": {
-            "anyOf": [
-              {
-                "type": "string",
-                "pattern": "^(image|video|audio)$"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Kind"
+            "type": "string",
+            "pattern": "^(image|video|audio)$",
+            "title": "Kind",
+            "default": "image"
           }
         },
         "type": "object",

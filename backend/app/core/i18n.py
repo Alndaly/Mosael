@@ -1544,6 +1544,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "这个浏览器档案属于别人。共享给你只是可以用它 —— 改名、停用、改代理、清除登录数据和删除只有主人能做",
         "en": "This browser profile belongs to someone else. Sharing it lets you use it — only its owner can rename, disable, change the proxy, clear its sign-in data or delete it.",
     },
+    "shareErr_notManageable_generationSession": {
+        "zh": "这条生成会话是同事共享给你看的。改名、删除、收进分组、换模型和在里面继续生成只有主人能做",
+        "en": "This generation session was shared with you to view. Only its owner can rename, delete, group, change its model or keep generating in it.",
+    },
     "shareErr_unknownKind": {
         "zh": "未知的资源类型:{kind}",
         "en": "Unknown resource type: {kind}",
@@ -3971,6 +3975,12 @@ MESSAGES: dict[str, dict[str, str]] = {
     "genRole_first_clip": {"zh": "待续写的片段", "en": "clip to extend"},
     "genRole_driving_audio": {"zh": "驱动音频", "en": "driving audio"},
     "genRole_mask": {"zh": "蒙版", "en": "mask"},
+    # 接在提示词后面告诉模型「谁是第几份」(见 generation.operations.source_legend)。这是说给模型听的,
+    # 冒号后面不留空,和画板此前在前端拼的那一句一字不差。
+    "genPromptSourceLegend": {
+        "zh": "本次提供的素材:{legend}",
+        "en": "Materials provided with this request:{legend}",
+    },
     "genErr_orSep": {"zh": "或", "en": " or "},
     "genErr_andSep": {"zh": " 和 ", "en": " and "},
     "genErr_none": {"zh": "无", "en": "none"},

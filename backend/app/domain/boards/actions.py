@@ -182,6 +182,8 @@ def generate_on_board(
             source_assets=parse_source_assets(source_assets, kind=kind),
             entity_ids=mentioned,
             scene_reference=reference,
+            #: 画板上的正文会按名字 `@` 素材,而模型收到的素材没有名字 —— 让漏斗在提示词后面补一段对照。
+            name_sources=True,
         )
     finally:
         reset_receipt(token)
@@ -189,7 +191,7 @@ def generate_on_board(
         db, workspace_id, slot, actor_id=actor_id, kind=kind, producer="generate", job_id=job.id,
         form={
             **form,
-            # 只存用户写的那句提示词;运行时追加的图例不该覆盖它。
+            # 只存用户写的那句提示词;提交时接上的上游文档不该覆盖它。
             "prompt": str(form.get("prompt") or prompt),
             "provider": generation.provider,
             "provider_profile_id": generation.provider_profile_id,

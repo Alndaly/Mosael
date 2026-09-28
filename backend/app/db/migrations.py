@@ -1735,6 +1735,137 @@ def _migrate_agent_session_titles_drop_attachment_tokens() -> None:
             conn.execute(text("UPDATE agent_sessions SET title = :title WHERE id = :id"), {"title": title, "id": session_id})
 
 
+def _migrate_generation_jobs_keep_their_failure() -> None:
+    """generation_jobs 补失败原因三列(`error` / `error_key` / `error_params`,和 jobs 同形)。
+
+    此前失败原因只在任务上,而任务会被任务中心的「清空已结束」删掉(生成记录的 job_id 随之置空)—— 清过一次,
+    AI 工作台的失败卡就只剩一句「生成失败」。加列必须在 SCHEMA 之前:之后 ORM 上的 GenerationJob 已经指望它们在了。
+    已有记录的回填在 AFTER_SCHEMA 的 backfill-generation-failures:它要读 jobs.error_key,那一列在很老的库上
+    是 AFTER_SCHEMA 才补上的。
+    """
+    inspector = inspect(engine)
+    if "generation_jobs" not in set(inspector.get_table_names()):
+        return
+    columns = {c["name"] for c in inspector.get_columns("generation_jobs")}
+    with engine.begin() as conn:
+        if "error" not in columns:
+            conn.execute(text("ALTER TABLE generation_jobs ADD COLUMN error TEXT"))
+        if "error_key" not in columns:
+            conn.execute(text("ALTER TABLE generation_jobs ADD COLUMN error_key VARCHAR(80) NOT NULL DEFAULT ''"))
+        if "error_params" not in columns:
+            conn.execute(text("ALTER TABLE generation_jobs ADD COLUMN error_params JSON NOT NULL DEFAULT '{}'"))
+
+
+def _backfill_generation_failures() -> None:
+    """已经失败、任务还在的生成记录,把任务上的失败原因抄过来(key、参数、原话一起)。
+
+    任务已经被清掉的那些找不回原因了 —— 它们照旧显示「生成失败」。有产出的不动(那是成功的),已经有原因的不动。
+    """
+    tables = set(inspect(engine).get_table_names())
+    if not {"generation_jobs", "jobs"} <= tables:
+        return
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "UPDATE generation_jobs SET "
+                "error = (SELECT jobs.error FROM jobs WHERE jobs.id = generation_jobs.job_id), "
+                "error_key = (SELECT jobs.error_key FROM jobs WHERE jobs.id = generation_jobs.job_id), "
+                "error_params = (SELECT jobs.error_params FROM jobs WHERE jobs.id = generation_jobs.job_id) "
+                "WHERE result_asset_id IS NULL AND error IS NULL "
+                "AND job_id IN (SELECT id FROM jobs WHERE status = 'failed')"
+            )
+        )
+
+
+def _migrate_generation_sessions_know_their_kind() -> None:
+    """每条生成会话都记下种类:AI 工作台按它分页 —— 图像 / 视频在「生成」页,音乐 / 音效在「音频」页。
+
+    此前 kind 只在用户在选择器里点过模型时才写,从画板、工作流、智能体、定时任务开出来的会话一律是空的;而音频模型
+    此前和图像、视频挤在同一个选择器里,一条会话可以先出图、后出歌。规则:会话记着的就是它**最后一次生成**用的那个
+    (连接、模型、种类)—— 只在会话没记种类、或记着的和最后一次生成不在同一页时改写(一页之内换过模型的不动,
+    那是用户的选择);从没生成过又没记种类的归「生成」页。先出图后出歌的会话整条跟着最后那一次走,历史一条不少。
+    """
+    if "generation_sessions" not in set(inspect(engine).get_table_names()):
+        return
+    with engine.begin() as conn:
+        sessions = conn.execute(text("SELECT id, kind FROM generation_sessions")).all()
+        for session_id, kind in sessions:
+            latest = conn.execute(
+                text(
+                    "SELECT kind, model, provider_profile_id FROM generation_jobs WHERE session_id = :id "
+                    "ORDER BY created_at DESC, id DESC LIMIT 1"
+                ),
+                {"id": session_id},
+            ).first()
+            if latest is None:
+                if not kind:
+                    conn.execute(text("UPDATE generation_sessions SET kind = 'image' WHERE id = :id"), {"id": session_id})
+                continue
+            if kind and (kind == "audio") == (latest[0] == "audio"):
+                continue
+            conn.execute(
+                text(
+                    "UPDATE generation_sessions SET kind = :kind, model = :model, provider_profile_id = :profile "
+                    "WHERE id = :id"
+                ),
+                {"kind": latest[0], "model": latest[1], "profile": latest[2], "id": session_id},
+            )
+
+
+def _migrate_generation_prompts_drop_the_source_legend() -> None:
+    """生成记录里的提示词拆开:用户写的留在 `prompt`,画板替他补的「本次提供的素材:…」挪进 `prompt_notes`。
+
+    画板此前在前端把这段对照拼进提示词再提交,于是记录里存的是拼过的字,AI 工作台的用户气泡原样画出来。现在这段由
+    生成漏斗补(generation.operations.source_legend),记在 `prompt_notes` 里,交给供应商时再接上 —— 模型收到的
+    和原来一字不差。切分依据是前端那条文案的中英原文(`boardPromptLegend`,自加进来就没改过),连同它前面那个空行;
+    它后面的(上游文档、3D 参考的说明、资产描述)原样跟着挪过去。任务上那份请求副本和任务标题一起改。
+    """
+    markers = ("\n\n本次提供的素材:", "\n\nMaterials provided with this request:")
+
+    def split(request: dict[str, Any]) -> dict[str, Any] | None:
+        prompt = request.get("prompt")
+        if not isinstance(prompt, str):
+            return None
+        found = [index for index in (prompt.find(marker) for marker in markers) if index >= 0]
+        if not found:
+            return None
+        cut = min(found)
+        notes = [one for one in request.get("prompt_notes") or [] if isinstance(one, str)]
+        return {**request, "prompt": prompt[:cut], "prompt_notes": [prompt[cut + 2:], *notes]}
+
+    def _json_object(raw: Any) -> dict[str, Any]:
+        """JSON 列读出来的一个对象;空的、坏的、不是对象的当它什么都没有(没有提示词可拆)。"""
+        try:
+            value = json.loads(raw) if isinstance(raw, str) else raw
+        except ValueError:
+            return {}
+        return dict(value) if isinstance(value, dict) else {}
+
+    tables = set(inspect(engine).get_table_names())
+    if "generation_jobs" not in tables:
+        return
+    with engine.begin() as conn:
+        for generation_id, raw in conn.execute(text("SELECT id, request FROM generation_jobs")).all():
+            changed = split(_json_object(raw))
+            if changed is not None:
+                conn.execute(
+                    text("UPDATE generation_jobs SET request = :request WHERE id = :id"),
+                    {"request": json.dumps(changed, ensure_ascii=False), "id": generation_id},
+                )
+        if "jobs" not in tables:
+            return
+        for job_id, raw in conn.execute(text("SELECT id, payload FROM jobs WHERE kind = 'ai_generation'")).all():
+            payload = _json_object(raw)
+            request = payload.get("request")
+            changed = split(request) if isinstance(request, dict) else None
+            if changed is not None:
+                payload = {**payload, "request": changed, "subject": changed["prompt"][:80]}
+                conn.execute(
+                    text("UPDATE jobs SET payload = :payload WHERE id = :id"),
+                    {"payload": json.dumps(payload, ensure_ascii=False), "id": job_id},
+                )
+
+
 def _migrate_asset_extractions_remember_page_images() -> None:
     """文档的解析结果记下按页的页面图(`asset_extractions.page_images`,ADR 0031:「原版」那一栏照它排)。
 
@@ -5239,6 +5370,8 @@ def migration_plan() -> MigrationPlan:
                 _migrate_voices_declare_consent,
                 _migrate_boards_remember_their_project,
                 _migrate_asset_extractions_remember_page_images,
+                # 加列必须在 SCHEMA 之前:之后 ORM 上的 GenerationJob 已经指望失败原因那三列在了。
+                _migrate_generation_jobs_keep_their_failure,
             ),
             #: create_all 每次启动都要跑 —— 新版本加的表靠它建出来,记账跳过就再也建不了。
             *_recurring(MigrationPhase.SCHEMA, _create_current_schema),
@@ -5335,6 +5468,14 @@ def migration_plan() -> MigrationPlan:
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_board_scene_render_drops_project),
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_board_sequence_cells_name_their_producer),
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_agent_session_titles_drop_attachment_tokens),
+            #: 生成记录自己存失败原因、会话按种类分页、提示词里拆出画板补的素材对照。回填要读 jobs.error_key ——
+            #: 它在很老的库上由上面的 migrate-job-message-i18n 补上,所以排在它后面。
+            *_steps(
+                MigrationPhase.AFTER_SCHEMA,
+                _backfill_generation_failures,
+                _migrate_generation_sessions_know_their_kind,
+                _migrate_generation_prompts_drop_the_source_legend,
+            ),
             *_steps(
                 MigrationPhase.FILESYSTEM,
                 _migrate_shared_venvs,

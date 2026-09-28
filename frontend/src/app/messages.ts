@@ -2657,6 +2657,7 @@ export const messages = {
     aiTabAudio: "音频",
     audioModeSpeech: "语音",
     audioModePodcast: "播客",
+    audioModeMusic: "音乐与音效",
     audioGenerating: "生成中,完成后出现在素材库",
     audioCloneNeedsVoice: "本地克隆要先有音色 —— 在设置的「配音与音色」里上传或录一段参考音频。",
     audioManageVoices: "管理音色",
@@ -2669,6 +2670,7 @@ export const messages = {
     chatNewSession: "新对话",
     generationNewSession: "新生成",
     generationNoSessions: "还没有生成会话",
+    generationSessionReadOnly: "这条会话是同事共享给你看的,只能查看。想接着生成,新建一条自己的会话。",
     generationSearchSessions: "搜索生成会话…",
     generationSearchNoMatch: "没有匹配的生成会话",
     generationDeleteGroupBody: "只删掉这个分组,里面的生成会话会退回「未分组」,不会被删除。",
@@ -2861,8 +2863,6 @@ export const messages = {
     asrModelRetry: "重试",
     saved: "已保存",
     aiRuntimeTitle: "AI 运行时",
-    /* 「网络」一页 = 出站代理 + 失败重试。两者回答的是同一个问题:**所有 AI 调用怎么出去**。
-       此前重试独占一整页(只有一个字段),代理挂在「本地后端」下面。 */
     /* 「配音与音色」= 内置配音引擎 + 声音克隆 + 音色库。此前前一个在「AI 音频」里、后两个在
        「语音与服务」组里 —— 同一件事拆在两个组,内置引擎卡片上还挂着一个跳去克隆页的链接。 */
     settingsDubbingTitle: "配音与音色",
@@ -3154,6 +3154,7 @@ export const messages = {
     pricingZoneBeijing: "北京时间",
     pricingPrefillTimed: "其中 {n} 条带分时段价格(如高峰 / 空闲价)。",
     homeChartUsageConfigurePricing: "去设置价格规则",
+    /* 给不是部署管理员的人:价格规则只有管理员写得了,管理页他也打不开 —— 不给按钮,说清找谁。 */
     homeChartUsagePricingByAdmin: "价格规则由部署管理员在「管理 → 成本规则」里维护。",
     providerDefaultsUnset: "未设置",
     providerDefaultsUnsetHint: "用到时按能力挑,不预先指定",
@@ -3340,7 +3341,6 @@ export const messages = {
     assetLinkAuto: "自动:只配好了「{name}」,就用它",
     assetLinkAsk: "未选择 —— 配好了几家,生成时会先请你选",
     assetLinkMissing: "「{name}」还没配好(缺 {fields}),配好后才能选。",
-    boardPromptLegend: "本次提供的素材:",
     boardPickAll: "全部",
     boardPickLinked: "已连接",
     boardPickLinkedGroup: "已连接的节点",
@@ -6304,6 +6304,7 @@ export const messages = {
     aiTabAudio: "Audio",
     audioModeSpeech: "Speech",
     audioModePodcast: "Podcast",
+    audioModeMusic: "Music & sound",
     audioGenerating: "Generating — it will appear in the media library",
     audioCloneNeedsVoice: "Local cloning needs a voice first — upload or record a reference clip under Settings → Dubbing & voices.",
     audioManageVoices: "Manage voices",
@@ -6316,6 +6317,7 @@ export const messages = {
     chatNewSession: "New chat",
     generationNewSession: "New generation",
     generationNoSessions: "No generation sessions yet",
+    generationSessionReadOnly: "A teammate shared this session with you to view. To keep generating, start a session of your own.",
     generationSearchSessions: "Search generation sessions…",
     generationSearchNoMatch: "No matching generation session",
     generationDeleteGroupBody: "Deletes only the group — the generation sessions inside move back to Ungrouped and are kept.",
@@ -6980,7 +6982,6 @@ export const messages = {
     assetLinkAuto: "Automatic: only “{name}” is set up, so it is used",
     assetLinkAsk: "Not chosen — several are set up, you will be asked when generating",
     assetLinkMissing: "“{name}” is not set up yet (missing {fields}); set it up to choose it.",
-    boardPromptLegend: "Materials provided with this request:",
     boardPickAll: "All",
     boardPickLinked: "Linked",
     boardPickLinkedGroup: "Linked nodes",

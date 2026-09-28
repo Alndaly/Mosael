@@ -981,12 +981,42 @@ def prune_task_events(db: Session, *, now: datetime | None = None) -> int:
 
 
 def clear_finished_jobs(db: Session, workspace_id: str) -> int:
-    """Remove terminal jobs (their events cascade). Returns jobs deleted."""
-    jobs = db.scalars(
-        select(Job).where(Job.workspace_id == workspace_id, Job.status.in_(TERMINAL_STATUSES))
-    ).all()
+    """任务中心的「清空已结束」:删掉面板上列着的那些已结束任务,**连同它们收纳的子任务**。返回删了几个。
+
+    面板只列顶层任务(子任务收在父任务的详情里,见 routes/jobs 的 `top_level`),所以清的单位是**一棵树**:
+    顶层任务结束了、而且它底下每一个子任务也都结束了,整棵一起删。此前是「这个工作区里所有已结束的行」,
+    于是一个**还在跑**的工作流底下已经做完的子任务也被删掉 —— 面板上根本没列它们,父任务的详情里它们却
+    凭空少了几步;而配音这类父任务要回头读子任务的失败原因(voices.subtitle_dub),读到的是一个已经不存在的行。
+    反过来,顶层任务结束了、它派生的子任务还在跑(渲染登记产出时顺手排的代理),整棵留着 —— 删了父任务,
+    还在跑的那个就成了面板上永远看不见的孤儿。
+
+    父任务早就不在了的行(旧版本的清空留下的孤儿)当作顶层:面板看不见它们,它们也不再属于任何还在的东西。
+    """
+    jobs = list(db.scalars(select(Job).where(Job.workspace_id == workspace_id)))
+    present = {job.id for job in jobs}
+    children: dict[str, list[Job]] = {}
     for job in jobs:
-        db.execute(delete(TaskEvent).where(TaskEvent.job_id == job.id))
-        db.delete(job)
+        if job.parent_job_id:
+            children.setdefault(job.parent_job_id, []).append(job)
+
+    def tree(root: Job) -> list[Job]:
+        nodes, frontier = [root], [root]
+        while frontier:
+            kids = children.get(frontier.pop().id, [])
+            nodes.extend(kids)
+            frontier.extend(kids)
+        return nodes
+
+    removed = 0
+    for root in jobs:
+        if root.parent_job_id in present:
+            continue
+        nodes = tree(root)
+        if any(node.status not in TERMINAL_STATUSES for node in nodes):
+            continue
+        for node in nodes:
+            db.execute(delete(TaskEvent).where(TaskEvent.job_id == node.id))
+            db.delete(node)
+        removed += len(nodes)
     db.commit()
-    return len(jobs)
+    return removed

@@ -32,7 +32,16 @@ from app.core.db import SessionLocal
 from app.core.i18n import LocalizedError, tr
 from app.db.models import Asset, GeneratedAsset, GenerationJob, Job
 from app.domain import provider_models
-from app.domain.jobs import blame, dispatch_job, emit_job_event, finish_job, register_resumer, say
+from app.domain.generation.operations import prompt_for_provider
+from app.domain.jobs import (
+    blame,
+    dispatch_job,
+    emit_job_event,
+    finish_job,
+    register_resumer,
+    register_settle_listener,
+    say,
+)
 from app.domain.assets.importer import register_file_asset
 from app.media.paths import resolve_key
 from app.domain.usage import billable
@@ -161,7 +170,7 @@ def _run_generation(generation_id: str, *, resume_from: str = "") -> None:
             request = GenerationRequest(
                 kind=generation.kind,
                 model=generation.model,
-                prompt=str(generation.request.get("prompt", "")),
+                prompt=prompt_for_provider(generation.request),
                 negative_prompt=str(generation.request.get("negative_prompt", "")),
                 parameters=dict(generation.request.get("parameters") or {}),
                 sources=_sources_for_generation(db, generation),
@@ -448,6 +457,26 @@ def _asset_name(prompt: str, model: str) -> str:
     return f"{summary} · {model}"
 
 
+def record_failure(db, job: Job) -> None:
+    """生成任务失败了:把失败原因抄到**生成记录自己**身上(`error` / `error_key` / `error_params`,和任务同形)。
+
+    任务是会被清掉的(任务中心的「清空已结束」,见 jobs.clear_finished_jobs),生成记录不会 —— 它是创作历史,
+    `job_id` 在任务删掉时置空。此前失败原因只在任务上,清一次之后 AI 工作台的失败卡只剩一句泛泛的「生成失败」。
+
+    挂在任务**落终态**那一刻(jobs.register_settle_listener),而不是写在 `_fail` 里:让任务失败的不止执行体
+    自己 —— 用户取消(cancel_job)、重启时接不回来(reconcile_orphaned_jobs)、外部 worker 租约过期,这几条都不经过
+    `_fail`,而它们都经过这一道。存的是 key 加参数,读的时候按读的人的语言翻(GenerationJobOut),和任务同一条规矩。
+    """
+    if job.kind != "ai_generation" or job.status != "failed":
+        return
+    for generation in db.scalars(select(GenerationJob).where(GenerationJob.job_id == job.id)):
+        generation.error = job.error
+        generation.error_key = job.error_key or ""
+        generation.error_params = dict(job.error_params or {})
+    db.commit()
+
+
 #: 重启后这一类任务**接着取**,而不是判失败。登记在总线上(见 jobs.register_resumer),
 #: 总线不认识"生成"这件事,只认识"这一类有办法接着干"。
 register_resumer("ai_generation", can_resume=can_resume, resume=resume_generation)
+register_settle_listener("generation_failure", record_failure)

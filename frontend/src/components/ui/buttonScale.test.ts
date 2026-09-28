@@ -43,7 +43,7 @@ const SRC = join(import.meta.dirname, "..", "..");
  */
 const GRANDFATHERED = new Set<string>([
   "features/agent/SubagentPanel.tsx: h-6 w-6",
-  "features/ai-studio/AiStudio.tsx: h-6",
+  "features/ai-studio/GenerateWorkspace.tsx: h-6",
   "features/ai-studio/FrameSlotField.tsx: h-5 w-5",
   "features/ai-studio/FrameSlotField.tsx: h-6 w-6",
   "features/agent/trace/TraceView.tsx: h-6 w-6",

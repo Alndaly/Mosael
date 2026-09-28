@@ -42,10 +42,10 @@ def _entity(ws: str, name: str, prompt: str, refs: list[tuple[str, str]], *, par
         return entity.id
 
 
-def _expand(ws: str, ids: list[str], capabilities: dict[str, Any] | None, *, prompt: str = "站在老街口",
+def _expand(ws: str, ids: list[str], capabilities: dict[str, Any] | None, *,
             sources: list[dict[str, str]] | None = None, kind: str = "image", parameters: dict | None = None):
     with SessionLocal() as db:
-        return attach_entities(db, ws, ids, prompt=prompt, source_assets=list(sources or []),
+        return attach_entities(db, ws, ids, source_assets=list(sources or []),
                                parameters=dict(parameters or {}), kind=kind, capabilities=capabilities)
 
 
@@ -66,20 +66,21 @@ def ws() -> str:
     return workspace
 
 
-def test_提示词描述拼在提示词后面(ws) -> None:
+def test_提示词描述是单独的一段_不改用户写的那句(ws) -> None:
+    """描述是给模型的补充:生成漏斗把它记进请求的 prompt_notes,交给供应商时才接在提示词后面。"""
     zhang = _entity(ws, "张三", "黑色短发,红围巾", [("a-front", "front")])
     expansion = _expand(ws, [zhang], OPENAI_IMAGE_CAPABILITIES)
-    assert expansion.prompt == "站在老街口\n\n张三: 黑色短发,红围巾"
-    # 没写提示词描述的资产不拼空行。
+    assert expansion.note == "张三: 黑色短发,红围巾"
+    # 没写提示词描述的资产不出空行。
     blank = _entity(ws, "路人", "", [])
-    assert _expand(ws, [blank], OPENAI_IMAGE_CAPABILITIES).prompt == "站在老街口"
+    assert _expand(ws, [blank], OPENAI_IMAGE_CAPABILITIES).note == ""
 
 
 def test_变体继承母体的提示词描述_名字带上母体(ws) -> None:
     zhang = _entity(ws, "张三", "黑色短发", [("a-front", "front")])
     winter = _entity(ws, "冬装", "羽绒服", [], parent=zhang)
     expansion = _expand(ws, [winter], OPENAI_IMAGE_CAPABILITIES)
-    assert expansion.prompt.endswith("张三 · 冬装: 黑色短发，羽绒服")
+    assert expansion.note == "张三 · 冬装: 黑色短发，羽绒服"
     # 变体自己一张参考图都没有:用母体的,至少脸是张三的。
     assert _attached(expansion) == ["a-front"]
     assert expansion.receipt[0]["name"] == "张三 · 冬装"
@@ -130,7 +131,7 @@ def test_模型不收参考图_一张不挂_提示词照拼(ws) -> None:
     zhang = _entity(ws, "张三", "黑色短发", [("a-front", "front")])
     expansion = _expand(ws, [zhang], QWEN_TEXT_IMAGE_CAPABILITIES)
     assert _attached(expansion) == []
-    assert expansion.prompt.endswith("张三: 黑色短发")
+    assert expansion.note == "张三: 黑色短发"
     assert expansion.receipt[0]["notes"] == ["no_reference_role"]
 
 
@@ -139,7 +140,7 @@ def test_描述符查不到_不猜(ws) -> None:
     expansion = _expand(ws, [zhang], None)
     assert _attached(expansion) == []
     assert expansion.receipt[0]["notes"] == ["unknown_limits"]
-    assert expansion.prompt.endswith("张三: 黑色短发")
+    assert expansion.note == "张三: 黑色短发"
 
 
 def test_和已挂的首帧互斥_不挂(ws) -> None:
@@ -157,8 +158,8 @@ def test_和已挂的首帧互斥_不挂(ws) -> None:
 
 def test_不收提示词的模型_不拼描述_照实说(ws) -> None:
     zhang = _entity(ws, "张三", "黑色短发", [("a-front", "front")])
-    expansion = _expand(ws, [zhang], {**OPENAI_IMAGE_CAPABILITIES, "prompt": "none"}, prompt="")
-    assert expansion.prompt == ""
+    expansion = _expand(ws, [zhang], {**OPENAI_IMAGE_CAPABILITIES, "prompt": "none"})
+    assert expansion.note == ""
     assert "prompt_skipped" in expansion.receipt[0]["notes"]
 
 

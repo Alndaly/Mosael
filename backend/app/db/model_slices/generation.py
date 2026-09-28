@@ -67,6 +67,11 @@ class GenerationJob(Base):
     kind: Mapped[str] = mapped_column(String(24), nullable=False)
     request: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     result_asset_id: Mapped[str | None] = mapped_column(ForeignKey("assets.id", ondelete="SET NULL"), nullable=True)
+    #: 失败原因,和 Job 的那三列同形(`blame` 的产物:原话 + 文案 key + 参数,读的时候按读的人的语言翻)。
+    #: 任务落「失败」时由 generation.runner.record_failure 抄过来 —— 任务会被「清空已结束」删掉,记录不会。
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    error_key: Mapped[str] = mapped_column(String(80), nullable=False, default="")
+    error_params: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
 

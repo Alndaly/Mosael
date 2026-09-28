@@ -275,6 +275,8 @@ class NotManageableError(SharingError):
 _NOT_MANAGEABLE_KEYS: dict[str, str] = {
     "publish_account": "shareErr_notManageable_publishAccount",
     "browser_profile": "shareErr_notManageable_browserProfile",
+    #: 生成会话共享出去是给人**看**的(见 generation/sessions)。
+    "generation_session": "shareErr_notManageable_generationSession",
 }
 
 
@@ -285,6 +287,8 @@ def ensure_manageable(db: Session, kind: str, resource: Any, *, actor: str | Non
     但不能把它改名、停掉、换代理、删掉,也不能替主人重新登录成另一个号。工作区 admin 也不行:他管的是工作区
     里的内容,不是别人的登录态(和 routes/shares 同一条)。此前这几条路由只查工作区角色,同事猜到 id 就能
     删别人的私有账号。`actor` 必填;None 与没有主人的行一律拒绝。
+
+    生成会话也走这一道(见 generation/sessions):共享给同事是给他**看**,改名、删除、换模型、在里面接着生成只有主人。
     """
     if resource is None or not actor or resource.owner_user_id != actor:
         raise NotManageableError(_NOT_MANAGEABLE_KEYS.get(kind, "shareErr_notManageable"))

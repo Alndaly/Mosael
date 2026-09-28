@@ -1,7 +1,7 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { DndContext, DragOverlay, PointerSensor, pointerWithin, useDraggable, useDroppable, useSensor, useSensors, type DragEndEvent, type DragStartEvent } from "@dnd-kit/core";
-import { ChevronRight, FolderInput, FolderPlus, ListChecks, MessageSquarePlus, Pencil, Plus, Search, SearchX, Trash2, X } from "lucide-react";
+import { ChevronRight, Eye, FolderInput, FolderPlus, ListChecks, MessageSquarePlus, Pencil, Plus, Search, SearchX, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -65,6 +65,11 @@ interface SessionKindSpec {
   deleteGroupBody: MessageKey;
   /** 批量删。措辞里带数量和「会一并删掉什么」—— 两种会话删掉的东西不一样。 */
   deleteManyBody: MessageKey;
+  /**
+   * 同事共享来的会话**只能看**时,那一行说什么(不给改名、删除、收纳、拖动;批量选不中它)。空着 = 共享来的照样能管。
+   * 生成会话是这样(后端 generation/sessions 的写闸:只有主人能写);对话还没有这条规矩。
+   */
+  sharedIsViewOnly?: MessageKey;
 }
 
 const SESSION_KINDS: Record<SessionGroupKind, SessionKindSpec> = {
@@ -95,6 +100,7 @@ const SESSION_KINDS: Record<SessionGroupKind, SessionKindSpec> = {
     deleteBody: "deleteGenerationSessionBody",
     deleteGroupBody: "generationDeleteGroupBody",
     deleteManyBody: "generationDeleteSessionsBody",
+    sharedIsViewOnly: "generationSessionReadOnly",
   },
 };
 
@@ -160,8 +166,14 @@ export function SessionList({
     void qc.invalidateQueries({ queryKey: ["session-groups", kind, workspaceId] });
   };
 
+  //: 这个人能管的那几条。共享来只能看的不进多选:批量删一定会被拒,摆出来只是让他白点一次。
+  const manageable = React.useCallback(
+    (session: ListedSession) => !spec.sharedIsViewOnly || session.is_mine,
+    [spec.sharedIsViewOnly],
+  );
+  const manageableSessions = React.useMemo(() => sessions.filter(manageable), [sessions, manageable]);
   const { selectMode, setSelectMode, selectedIds, toggle, selectAll, allSelected, exit } = useMultiSelect(
-    sessions,
+    manageableSessions,
     (session) => session.id,
   );
 
@@ -239,6 +251,7 @@ export function SessionList({
     () => (keyword ? sessions.filter((session) => session.title.toLowerCase().includes(keyword)) : sessions),
     [sessions, keyword],
   );
+  const visibleManageable = React.useMemo(() => visible.filter(manageable), [visible, manageable]);
   // 分组内 / 未分组两摞。会话本身的顺序(后端按 updated_at 倒序)在每一摞里保持不变。
   const byGroup = React.useMemo(() => {
     const map = new Map<string, ListedSession[]>();
@@ -281,8 +294,9 @@ export function SessionList({
     if (containerOf(activeId) === to) return;
 
     const groupId = to === UNGROUPED ? null : to;
-    // 先把界面摆好再落库:等一个来回的话,松手那一刻会看到它弹回原位。
-    qc.setQueryData<ListedSession[]>([spec.sessionsQueryKey, workspaceId], (old) =>
+    // 先把界面摆好再落库:等一个来回的话,松手那一刻会看到它弹回原位。按前缀改 —— 生成会话的列表键
+    // 后面还跟着是哪一页(见 GenerateWorkspace),精确的键对不上。
+    qc.setQueriesData<ListedSession[]>({ queryKey: [spec.sessionsQueryKey, workspaceId] }, (old) =>
       old?.map((session) => (session.id === activeId ? { ...session, group_id: groupId } : session)),
     );
     moveSession.mutate({ id: activeId, groupId });
@@ -293,13 +307,17 @@ export function SessionList({
       key={session.id}
       kind={kind}
       session={session}
+      viewOnly={manageable(session) ? undefined : spec.sharedIsViewOnly}
       groups={groupList}
       active={!selectMode && activeSessionId === session.id}
       selectMode={selectMode}
       checked={selectedIds.has(session.id)}
       dragging={draggingId === session.id}
       workspaceId={workspaceId}
-      onOpen={() => (selectMode ? toggle(session.id) : onSelect(session.id))}
+      onOpen={() => {
+        if (!selectMode) onSelect(session.id);
+        else if (manageable(session)) toggle(session.id);
+      }}
       onRename={() => setRenamingSession(session)}
       onDelete={() => setDeletingSession(session)}
       onMove={(groupId) => moveSession.mutate({ id: session.id, groupId })}
@@ -318,9 +336,9 @@ export function SessionList({
               <Button
                 variant="ghost"
                 size="icon-xs"
-                title={allSelected(visible) ? t("mediaDeselectAll") : t("mediaSelectAll")}
-                aria-label={allSelected(visible) ? t("mediaDeselectAll") : t("mediaSelectAll")}
-                onClick={() => selectAll(visible)}
+                title={allSelected(visibleManageable) ? t("mediaDeselectAll") : t("mediaSelectAll")}
+                aria-label={allSelected(visibleManageable) ? t("mediaDeselectAll") : t("mediaSelectAll")}
+                onClick={() => selectAll(visibleManageable)}
               >
                 <ListChecks size={14} />
               </Button>
@@ -358,7 +376,7 @@ export function SessionList({
                 size="icon-xs"
                 title={t("mediaSelectMode")}
                 aria-label={t("mediaSelectMode")}
-                disabled={sessions.length === 0}
+                disabled={manageableSessions.length === 0}
                 onClick={() => setSelectMode(true)}
               >
                 <ListChecks size={14} />
@@ -555,9 +573,10 @@ function GroupSection({ groupId, children }: { groupId: string; children: React.
   );
 }
 
-/** 会话行。可拖(排序 / 换组),可右键,选择模式下点它是勾选而不是打开。 */
+/** 会话行。可拖(排序 / 换组),可右键,选择模式下点它是勾选而不是打开。只能看的那种三样都没有,只能打开。 */
 function SessionRow({
   session,
+  viewOnly,
   groups,
   active,
   selectMode,
@@ -572,6 +591,8 @@ function SessionRow({
   kind,
 }: {
   session: ListedSession;
+  /** 同事共享来、只能看的会话:这一行怎么说它。 */
+  viewOnly?: MessageKey;
   groups: SessionGroup[];
   kind: SessionGroupKind;
   active: boolean;
@@ -586,35 +607,44 @@ function SessionRow({
   onNewGroup: () => void;
 }) {
   const t = useI18n();
-  // 选择模式下不许拖:那时的点击是"勾选",两种手势叠在一起谁都做不好。
-  const { attributes, listeners, setNodeRef } = useDraggable({ id: session.id, disabled: selectMode });
+  // 选择模式下不许拖:那时的点击是"勾选",两种手势叠在一起谁都做不好。只能看的也不许拖(拖动是换分组)。
+  const { attributes, listeners, setNodeRef } = useDraggable({ id: session.id, disabled: selectMode || Boolean(viewOnly) });
+  const row = (
+    <button
+      ref={setNodeRef}
+      type="button"
+      title={viewOnly ? t(viewOnly) : undefined}
+      className={cn(
+        "grid w-full cursor-pointer grid-cols-[minmax(0,1fr)] items-center gap-px rounded-md border-0 bg-transparent px-3 py-3 text-left transition-colors duration-100 hover:bg-muted",
+        selectMode && "grid-cols-[auto_minmax(0,1fr)] gap-1.5",
+        // 选中态:一条**圆角短竖条**贴在左边 + 一层很淡的底色。此前是
+        // `shadow-[inset_2px_0_0]` —— 直角、贯穿整行高、颜色还是实心 primary,
+        // 在一堆圆角行里显得很硬。圆角竖条是本仓库已有的做法(剪辑页字幕条同款)。
+        active &&
+          "relative bg-[color-mix(in_srgb,var(--primary)_9%,transparent)] before:absolute before:inset-y-1.5 before:left-0.5 before:w-0.5 before:rounded-full before:bg-primary before:content-[''] hover:bg-[color-mix(in_srgb,var(--primary)_12%,transparent)]",
+        // 拖起来的那一条留个淡影占位,别让列表塌下去。
+        dragging && "opacity-40",
+      )}
+      onClick={onOpen}
+      {...attributes}
+      {...listeners}
+    >
+      {/* 列表行用**前导勾选框**,不是卡片那种右上角浮标(components/app/SelectionCheck):
+          那个是为卡片定的位置与尺寸,压在一行 28px 高的标题上会把字盖掉。 */}
+      {selectMode && (
+        <Checkbox checked={checked} disabled={Boolean(viewOnly)} className="pointer-events-none" tabIndex={-1} />
+      )}
+      <span className="flex min-w-0 items-center gap-1.5">
+        <span className="truncate text-ui-sm">{session.title}</span>
+        {viewOnly && <Eye size={12} className="shrink-0 text-muted-foreground" aria-hidden />}
+      </span>
+    </button>
+  );
+  //: 只能看的没有右键菜单:改名、收纳、删除都是主人的事,共享与否也是(SessionShareMenuItem 本来就藏)。
+  if (viewOnly) return row;
   return (
     <ContextMenu>
-      <ContextMenuTrigger asChild>
-        <button
-          ref={setNodeRef}
-          type="button"
-          className={cn(
-            "grid w-full cursor-pointer grid-cols-[minmax(0,1fr)] items-center gap-px rounded-md border-0 bg-transparent px-3 py-3 text-left transition-colors duration-100 hover:bg-muted",
-            selectMode && "grid-cols-[auto_minmax(0,1fr)] gap-1.5",
-            // 选中态:一条**圆角短竖条**贴在左边 + 一层很淡的底色。此前是
-            // `shadow-[inset_2px_0_0]` —— 直角、贯穿整行高、颜色还是实心 primary,
-            // 在一堆圆角行里显得很硬。圆角竖条是本仓库已有的做法(剪辑页字幕条同款)。
-            active &&
-              "relative bg-[color-mix(in_srgb,var(--primary)_9%,transparent)] before:absolute before:inset-y-1.5 before:left-0.5 before:w-0.5 before:rounded-full before:bg-primary before:content-[''] hover:bg-[color-mix(in_srgb,var(--primary)_12%,transparent)]",
-            // 拖起来的那一条留个淡影占位,别让列表塌下去。
-            dragging && "opacity-40",
-          )}
-          onClick={onOpen}
-          {...attributes}
-          {...listeners}
-        >
-          {/* 列表行用**前导勾选框**,不是卡片那种右上角浮标(components/app/SelectionCheck):
-              那个是为卡片定的位置与尺寸,压在一行 28px 高的标题上会把字盖掉。 */}
-          {selectMode && <Checkbox checked={checked} className="pointer-events-none" tabIndex={-1} />}
-          <span className="truncate text-ui-sm">{session.title}</span>
-        </button>
-      </ContextMenuTrigger>
+      <ContextMenuTrigger asChild>{row}</ContextMenuTrigger>
       <ContextMenuContent>
         <ContextMenuItem onSelect={onRename}>
           <Pencil /> {t("rename")}

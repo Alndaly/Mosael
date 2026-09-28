@@ -60,4 +60,5 @@ def test_生成带上_entity_ids_批准之后结果里有回执(monkeypatch) -> 
     # qwen-image 是文生图:描述符里没有参考图这个角色 —— 一张不挂,并且说得出为什么。
     assert receipt["attached"] == [] and receipt["notes"] == ["no_reference_role"]
     job = client.get(f"/api/jobs/{approved['result']['job_id']}").json()
-    assert job["payload"]["request"]["prompt"].endswith("张三: 黑色短发")
+    assert job["payload"]["request"]["prompt"] == "张三在雨里"
+    assert job["payload"]["request"]["prompt_notes"] == ["张三: 黑色短发"]
