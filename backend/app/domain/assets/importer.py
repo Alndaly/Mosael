@@ -209,5 +209,12 @@ def _import_stream(
     db.refresh(asset)
     # 代理转码只是 ffmpeg,不碰任何凭据、不花额度 —— 没有主体是如实的,不是漏填。
     start_proxy_job(db, asset, created_by=None)  # 720p preview proxy for the compositor (no-op unless video)
+    if kind == "document":
+        #: 文档一进来就用**本地解析**解一遍(ADR 0031):不出本机、不花钱,智能体马上就能读。交给云端(MinerU)
+        #: 必须是人点名的 —— 在素材详情里「用 ×× 重新解析」,这里不看他的默认。
+        from app.domain.documents import LOCAL_PARSER
+        from app.domain.documents.extraction import start_parse
+
+        start_parse(db, asset, owner_user_id=None, provider_id=LOCAL_PARSER)
     return asset
 

@@ -17,14 +17,19 @@ import { toast } from "sonner";
  * 分流规则(两边共用):
  * - **图片 / 视频 / 音频** → 导入素材库,气泡里渲染成缩略图,智能体用 analyze_asset 看。
  *   和飞书发来的图片落在同一个地方 —— 一个应用里只该有一条"媒体从外面进来"的路。
- * - **文本文件** → 内联成围栏上下文。脚本、字幕、配置就该被读进去,而不是变成一个素材 id。
- * - 其余(压缩包、PDF…)拒绝并说明,不静默丢掉。
+ * - **PDF / Word / PPT / Excel / EPUB**(ADR 0031)→ 也进素材库(导入时自动解析),作为附件发过去:短的全文、
+ *   长的目录由后端放进上下文,智能体用 read_document 按段读、analyze_document_pages 看版式。
+ * - **文本文件**(含 Markdown、CSV)→ 内联成围栏上下文。脚本、字幕、配置就该被读进去,而不是变成一个素材 id。
+ * - 其余(压缩包、安装包…)拒绝并说明,不静默丢掉。
  */
 
 /** 内联文本的大小上限。再大应拆分或放到外部文件里按需读取,不能塞满一轮对话上下文。 */
 const MAX_TEXT_BYTES = 200 * 1024;
 
 const MEDIA_TYPE = /^(image|video|audio)\//;
+
+/** 读不成文字的文档:进素材库、解析之后给智能体读(纯文本类的 md / txt / csv 照旧内联)。 */
+const BINARY_DOCUMENT = /\.(pdf|docx?|pptx?|xlsx?|epub)$/i;
 
 /** 粘贴板里当成文本文件读的类型。text/plain 不在其中 —— 那是普通粘贴,交给输入框自己。 */
 const TEXTUAL_FILE = /^(text\/|application\/(json|xml|x-yaml|yaml|javascript|typescript))/;
@@ -64,7 +69,7 @@ export function useComposerAttachments(workspaceId: string): ComposerAttachments
       if (!list.length) return;
       const added: TextAttachment[] = [];
       for (const file of list) {
-        if (MEDIA_TYPE.test(file.type)) {
+        if (MEDIA_TYPE.test(file.type) || BINARY_DOCUMENT.test(file.name)) {
           setUploading(true);
           try {
             const asset = await importAsset({ workspaceId, file });
@@ -124,11 +129,11 @@ export function useComposerAttachments(workspaceId: string): ComposerAttachments
       ...media.map((asset, index) => ({
         id: asset.id,
         label: asset.name,
-        // 音频没有画面,给个音符;图和视频都有缩略图(视频那张是封面帧)。
-        thumbnail: asset.kind === "audio" ? undefined : assetThumbnailUrl(asset.id),
-        icon: <Music size={11} />,
+        // 音频没有画面,给个音符;文档给个文件图标(封面要等解析完);图和视频都有缩略图(视频那张是封面帧)。
+        thumbnail: asset.kind === "audio" || asset.kind === "document" ? undefined : assetThumbnailUrl(asset.id),
+        icon: asset.kind === "document" ? <FileText size={11} /> : <Music size={11} />,
         onOpen:
-          asset.kind === "audio"
+          asset.kind === "audio" || asset.kind === "document"
             ? undefined
             : () =>
                 openImagePreview({

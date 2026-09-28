@@ -93,6 +93,8 @@ ARGS: dict[str, dict[str, Any]] = {
     "get_confirmation": {"confirmation_id": "no-such-confirmation"},
     "inspect_sequence": {"sequence_id": "no-such-sequence"},
     "analyze_asset": {"asset_id": "no-such-asset", "question": "这是什么"},
+    "read_document": {"asset_id": "no-such-asset", "first": 1, "last": 2},
+    "analyze_document_pages": {"asset_id": "no-such-asset", "pages": [1], "question": "版式怎样"},
     "transcribe_asset": {"asset_id": "no-such-asset"},
     "get_transcript": {"asset_id": "no-such-asset"},
     "update_asset": {"asset_id": "no-such-asset", "name": "改个名"},

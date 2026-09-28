@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Check, Copy, FileText, Maximize2 } from "lucide-react";
+import { Check, Copy, Maximize2 } from "lucide-react";
 
 import { assetFileUrl, assetPreviewUrl, type Asset } from "@/api/client";
 import { useI18n } from "@/app/preferences";
@@ -11,6 +11,8 @@ import { formatTimecode } from "@/domain/timeline/geometry";
 import { AssetEntitiesList } from "@/features/entities/AssetEntities";
 import { cn } from "@/lib/utils";
 import { assetKindKey } from "@/lib/assetKinds";
+import { DocumentReader } from "@/features/media/DocumentReader";
+import { documentFacts } from "@/lib/assetKinds";
 
 /** 后端时间是无时区的 UTC ISO 串;补 Z 再按本地时区显示到分钟。 */
 function formatDateTime(iso: string): string {
@@ -79,7 +81,7 @@ export function AssetPreviewModal({ asset, onClose }: { asset: Asset | null; onC
 
   return (
     <Dialog open onOpenChange={handleOpenChange}>
-      <DialogContent className={cn("w-[min(1040px,calc(100vw-32px))] max-w-[calc(100vw-32px)] grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)] gap-0 overflow-hidden p-0", asset.kind === "audio" ? "h-[min(480px,86dvh)] md:w-[min(880px,calc(100vw-32px))]" : "h-[min(720px,86dvh)]")}>
+      <DialogContent className={cn("w-[min(1040px,calc(100vw-32px))] max-w-[calc(100vw-32px)] grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)] gap-0 overflow-hidden p-0", asset.kind === "audio" ? "h-[min(480px,86dvh)] md:w-[min(880px,calc(100vw-32px))]" : asset.kind === "document" ? "h-[min(900px,90dvh)] md:w-[min(1480px,calc(100vw-32px))]" : "h-[min(720px,86dvh)]")}>
         <header className="grid min-w-0 gap-2 border-b border-divider px-5 py-4 pr-14">
           <DialogTitle className="min-w-0 max-h-24 overflow-y-auto whitespace-normal text-ui-lg leading-snug [overflow-wrap:anywhere]">{asset.name}</DialogTitle>
           <div className="flex flex-wrap gap-1.5">
@@ -92,16 +94,7 @@ export function AssetPreviewModal({ asset, onClose }: { asset: Asset | null; onC
             {(asset.kind === "video" || asset.kind === "audio") && (
               <MediaPreviewPlayer key={asset.id} kind={asset.kind} src={src} assetId={asset.id} />
             )}
-            {asset.kind === "document" && (
-              //: 文档(ADR 0031):解析之后这里读全文;还没解析时如实说是什么文件。
-              <div data-asset-document="" className="grid h-full place-items-center p-6 text-center text-muted-foreground">
-                <span className="grid justify-items-center gap-2">
-                  <FileText size={36} strokeWidth={1.3} />
-                  <span className="text-ui-sm text-foreground">{String((asset.media_info as { format?: string }).format ?? "").toUpperCase()}</span>
-                  <span className="max-w-[28rem] text-ui-xs leading-relaxed">{t("assetDocumentNotParsed")}</span>
-                </span>
-              </div>
-            )}
+            {asset.kind === "document" && <DocumentReader assetId={asset.id} />}
             {asset.kind === "image" && (
               <button
                 type="button"
@@ -147,6 +140,11 @@ export function AssetPreviewModal({ asset, onClose }: { asset: Asset | null; onC
               {asset.kind === "video" && fps > 0 && (
                 <InfoRow label={t("assetFps")}>
                   <span className="font-mono tabular-nums">{Math.round(fps)}fps</span>
+                </InfoRow>
+              )}
+              {asset.kind === "document" && (
+                <InfoRow label={t("assetFormat")}>
+                  <span className="font-mono tabular-nums">{documentFacts(asset)}</span>
                 </InfoRow>
               )}
               {asset.original_filename && asset.original_filename !== asset.name && (

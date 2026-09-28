@@ -6,13 +6,14 @@ import { Popover, PopoverContent, PopoverTrigger, PopoverClose } from "@/compone
 import React from "react";
 import { useOpenRequest, useSectionEntry } from "@/lib/deepLink";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, CircleDot, Columns2, Download, FileAudio, FileImage, FileText, FileVideo, FolderOpen, ImagePlus, Layers, Link2, ListChecks, AudioWaveform, Loader2, Pencil, Scissors, Tag, Trash2, Upload, X } from "lucide-react";
+import { Check, CircleDot, Columns2, Download, FileAudio, FileImage, FileText, FileVideo, FolderOpen, ImagePlus, Layers, NotebookPen, Link2, ListChecks, AudioWaveform, Loader2, Pencil, Scissors, Tag, Trash2, Upload, X } from "lucide-react";
 
 import { api, assetThumbnailUrl, convertVideoToGif, deleteAsset, separateAssetAudio, renameAsset, setAssetTags, type Asset, type Workspace } from "@/api/client";
 import { UrlImportDialog } from "@/features/media/UrlImportDialog";
 import { saveAssetToDisk } from "@/lib/download";
 import { isImportableFile, useFileDrop } from "@/lib/useFileDrop";
-import { assetKindKey, IMPORT_ACCEPT, isMediaAsset } from "@/lib/assetKinds";
+import { assetKindKey, documentFacts, IMPORT_ACCEPT, isMediaAsset } from "@/lib/assetKinds";
+import { useSaveDocumentAsNote } from "@/features/media/useSaveDocumentAsNote";
 import { toast } from "sonner";
 import { useI18n } from "@/app/preferences";
 import { AssetCompareView } from "@/features/media/AssetCompareView";
@@ -121,6 +122,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
 
   // 工作区级导入:不挂 project_id,该工作区下所有项目都能用。按钮多选和拖进来是同一条路。
   const importFiles = useImportMediaFiles({ workspaceId: workspace.id });
+  const saveAsNote = useSaveDocumentAsNote();
   const convertGif = useMutation({
     mutationFn: (assetId: string) => convertVideoToGif(assetId),
     onSuccess: () => toast.success(t("assetConvertGifQueued")),
@@ -429,6 +431,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
                       <PopoverClose asChild><Button variant="ghost" className="justify-start" onClick={() => setRenaming(asset)}><Pencil />{t("rename")}</Button></PopoverClose>
                       <PopoverClose asChild><Button variant="ghost" className="justify-start" onClick={() => setEditingTags(asset)}><Tag />{t("editTags")}</Button></PopoverClose>
                       {isMediaAsset(asset) && asset.kind !== "audio" && <PopoverClose asChild><Button variant="ghost" className="justify-start" onClick={() => setReferencing(asset)}><Layers />{t("assetSetAsReference")}</Button></PopoverClose>}
+                      {asset.kind === "document" && <PopoverClose asChild><Button variant="ghost" className="justify-start" loading={saveAsNote.isPending} onClick={() => saveAsNote.mutate(asset.id)}><NotebookPen />{t("docSaveAsNote")}</Button></PopoverClose>}
                       {asset.kind === "video" && <PopoverClose asChild><Button variant="ghost" className="justify-start" loading={convertGif.isPending} onClick={() => convertGif.mutate(asset.id)}><ImagePlus />{t("assetConvertGif")}</Button></PopoverClose>}
                       {hasSound(asset) && <PopoverClose asChild><Button variant="ghost" className="justify-start" loading={separateAudio.isPending} onClick={() => separateAudio.mutate(asset.id)}><Scissors />{t("separateAudio")}</Button></PopoverClose>}
                       {hasSound(asset) && <PopoverClose asChild><Button variant="ghost" className="justify-start" onClick={() => setDenoising(asset.id)}><AudioWaveform />{t("denoiseAction")}</Button></PopoverClose>}
@@ -450,6 +453,11 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
                 {isMediaAsset(asset) && asset.kind !== "audio" && (
                   <ContextMenuItem onSelect={() => setReferencing(asset)}>
                     <Layers /> {t("assetSetAsReference")}
+                  </ContextMenuItem>
+                )}
+                {asset.kind === "document" && (
+                  <ContextMenuItem disabled={saveAsNote.isPending} onSelect={() => saveAsNote.mutate(asset.id)}>
+                    <NotebookPen /> {t("docSaveAsNote")}
                   </ContextMenuItem>
                 )}
                 {asset.kind === "video" && (
@@ -630,13 +638,6 @@ function MediaLibrarySkeleton({ list }: { list: boolean }) {
       )}
     </div>
   );
-}
-
-/** 文档那一行:格式、页数(解析过才有)、大小。 */
-function documentFacts(asset: Asset): string {
-  const info = asset.media_info as { format?: string; pages?: number; size_bytes?: number };
-  const size = info.size_bytes ? (info.size_bytes >= 1024 * 1024 ? `${(info.size_bytes / 1024 / 1024).toFixed(1)}MB` : `${Math.max(1, Math.round(info.size_bytes / 1024))}KB`) : "";
-  return [String(info.format ?? "").toUpperCase(), info.pages ? `${info.pages}p` : "", size].filter(Boolean).join(" · ") || "—";
 }
 
 function kindIcon(kind: string) {

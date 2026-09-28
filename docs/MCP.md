@@ -7,11 +7,12 @@ summaries — never raw internal schemas.
 
 <!-- BEGIN generated: tools -->
 
-共 **96** 个工具,其中 **26** 个走确认卡、**1** 个停下来等用户作答。
+共 **98** 个工具,其中 **26** 个走确认卡、**1** 个停下来等用户作答。
 
 | 工具 | 门控 | 说明 |
 | --- | --- | --- |
 | `analyze_asset` | 直接执行 | Analyze an EXISTING image/video media asset with a multimodal model. |
+| `analyze_document_pages` | 直接执行 | Look at pages of a DOCUMENT asset with a vision model — layout, charts, tables, screenshots, slide design. |
 | `append_note` | 直接执行 | Append requested writing or research to a note without replacing existing content. |
 | `ask_user` | 等作答 | Ask the user to choose between options you cannot decide for them. |
 | `attach_entity_reference` | 直接执行 | Attach an existing image (or video) asset to an asset-library entry as a reference image |
@@ -88,6 +89,7 @@ summaries — never raw internal schemas.
 | `notify_workspace` | 直接执行 | Runs directly: push an in-app notification to the workspace members. |
 | `open_view` | 直接执行 | Take the user to a page in Mosael — optionally to one specific record. |
 | `publish_asset` | 确认卡 | Confirmation required: publish an asset to a platform with a logged-in account. |
+| `read_document` | 直接执行 | Read-only: read an imported DOCUMENT asset (PDF, Word, PowerPoint, Excel, CSV, Markdown, text, web page, EPUB). |
 | `read_note` | 直接执行 | Read a note with its source references and immutable revision. Cite citation_url after |
 | `remember` | 直接执行 | Runs directly: save a durable fact or convention to cross-session memory. |
 | `render_scene_references` | 直接执行 | Render blockout references of one shot of a 3D scene and save them as assets: |

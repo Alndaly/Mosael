@@ -73,6 +73,23 @@
     "max_retries",
     "updated_at"
   ],
+  "asset_extractions": [
+    "asset_id",
+    "chars",
+    "created_at",
+    "error",
+    "finished_at",
+    "id",
+    "job_id",
+    "notes",
+    "outline",
+    "parser",
+    "parser_name",
+    "sections",
+    "status",
+    "unit",
+    "workspace_id"
+  ],
   "assets": [
     "created_at",
     "file_key",

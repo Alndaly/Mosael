@@ -38,6 +38,14 @@ dependencies = [
   "numpy>=2.1",
   # 插件清单 / 插件包 / 工作流文件的格式与校验,和社区服务共用这一份(ADR 0026)。
   "mosael-formats",
+  # 文档的本地解析(ADR 0031,domain/documents/local):PDF 抽文字、渲页面图用 pdfium(Apache-2.0,自带二进制,
+  # 不依赖系统库);docx → HTML → Markdown 用 mammoth + markdownify;pptx、xlsx 用 python-pptx、openpyxl。
+  # 不用微软那个通用转换库:它新版本依赖 magika → onnxruntime,为认文件类型多带一个几十 MB 的推理运行时。
+  "pypdfium2>=4.30",
+  "mammoth>=1.9",
+  "markdownify>=0.14",
+  "python-pptx>=1.0",
+  "openpyxl>=3.1",
 ]
 
 [dependency-groups]

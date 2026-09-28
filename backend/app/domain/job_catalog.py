@@ -51,6 +51,8 @@ JOB_KINDS: dict[str, JobKind] = {
         JobKind("video_to_gif", "always", ("assets",), view="media"),
         JobKind("denoise_audio", "always", ("assets",), view="media"),
         JobKind("separate_audio", "always", ("assets",), view="media"),
+        # 文档解析(ADR 0031):导入时自动跑本地解析,是没人主动要的维护活 —— 只有失败才说;结果在素材详情里看。
+        JobKind("document_parse", "failures", ("assets",), view="media"),
         JobKind("trim", "always", ("assets", "boards"), view="boards"),
         # 画板上写字:几秒就回,用户就盯着那张便签 —— 结果落在便签上,失败在便签上和提示里都说了。
         JobKind("board_write", "never", ("boards",), view="boards"),

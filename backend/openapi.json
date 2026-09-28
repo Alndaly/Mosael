@@ -3826,6 +3826,414 @@
         }
       }
     },
+    "/api/assets/{asset_id}/extractions": {
+      "get": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "List Extractions",
+        "description": "这份文档的每一次解析,新的在前。",
+        "operationId": "list_extractions_api_assets__asset_id__extractions_get",
+        "parameters": [
+          {
+            "name": "asset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Asset Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AssetExtractionOut"
+                  },
+                  "title": "Response List Extractions Api Assets  Asset Id  Extractions Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Parse Document",
+        "description": "(重新)解析一次。`provider_id` 点名用哪一家;不点名按「设置 → 能力提供方 → 文档解析」的默认。",
+        "operationId": "parse_document_api_assets__asset_id__extractions_post",
+        "parameters": [
+          {
+            "name": "asset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Asset Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DocumentParseRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssetExtractionOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/assets/{asset_id}/extractions/{extraction_id}/sections": {
+      "get": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Get Extraction Sections",
+        "description": "第 first–last 段的正文(不给 last 就到最后一段)。读的人按段取 —— 几百页的文档不必一次拿全。",
+        "operationId": "get_extraction_sections_api_assets__asset_id__extractions__extraction_id__sections_get",
+        "parameters": [
+          {
+            "name": "asset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Asset Id"
+            }
+          },
+          {
+            "name": "extraction_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Extraction Id"
+            }
+          },
+          {
+            "name": "first",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "First"
+            }
+          },
+          {
+            "name": "last",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Last"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExtractionSectionsOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/assets/{asset_id}/document": {
+      "get": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Read Document",
+        "description": "给智能体读:目录 + 第 first–last 段的正文(有字数上限,超了 `next` 说从哪段接着读)。还在解析会等一小会儿。",
+        "operationId": "read_document_api_assets__asset_id__document_get",
+        "parameters": [
+          {
+            "name": "asset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Asset Id"
+            }
+          },
+          {
+            "name": "first",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "First"
+            }
+          },
+          {
+            "name": "last",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Last"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Read Document Api Assets  Asset Id  Document Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/assets/{asset_id}/document/analyze": {
+      "post": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Analyze Document",
+        "description": "那几页的页面图 + 文字交给视觉模型(看版式、图表、截图)。",
+        "operationId": "analyze_document_api_assets__asset_id__document_analyze_post",
+        "parameters": [
+          {
+            "name": "asset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Asset Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DocumentPagesRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Analyze Document Api Assets  Asset Id  Document Analyze Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/assets/{asset_id}/note": {
+      "post": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Save Document As Note",
+        "description": "把最新成功的那份解析存成一篇笔记(插图这时才进素材库)。",
+        "operationId": "save_document_as_note_api_assets__asset_id__note_post",
+        "parameters": [
+          {
+            "name": "asset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Asset Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentNoteOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/assets/{asset_id}/extractions/{extraction_id}/files/{path}": {
+      "get": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Get Extraction File",
+        "description": "页面图(pages/…)和插图(images/…)。只认这两个目录下的文件 —— 路径是从 Markdown 里来的,不能让它走出解析目录。",
+        "operationId": "get_extraction_file_api_assets__asset_id__extractions__extraction_id__files__path__get",
+        "parameters": [
+          {
+            "name": "asset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Asset Id"
+            }
+          },
+          {
+            "name": "extraction_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Extraction Id"
+            }
+          },
+          {
+            "name": "path",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Path"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/voices": {
       "get": {
         "tags": [
@@ -21124,6 +21532,111 @@
         "title": "AssetEntityOut",
         "description": "一份素材是哪个资产的参考图(素材详情里的「属于哪些资产」)。"
       },
+      "AssetExtractionOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "asset_id": {
+            "type": "string",
+            "title": "Asset Id"
+          },
+          "parser": {
+            "type": "string",
+            "title": "Parser"
+          },
+          "parser_name": {
+            "type": "string",
+            "title": "Parser Name",
+            "default": ""
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "error": {
+            "type": "string",
+            "title": "Error",
+            "default": ""
+          },
+          "job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Id"
+          },
+          "unit": {
+            "type": "string",
+            "title": "Unit",
+            "default": "page"
+          },
+          "sections": {
+            "type": "integer",
+            "title": "Sections",
+            "default": 0
+          },
+          "chars": {
+            "type": "integer",
+            "title": "Chars",
+            "default": 0
+          },
+          "outline": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Outline"
+          },
+          "page_images": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Page Images"
+          },
+          "notes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Notes"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "asset_id",
+          "parser",
+          "status",
+          "created_at"
+        ],
+        "title": "AssetExtractionOut",
+        "description": "文档的一次解析(ADR 0031 §2)。正文按段读:outline 里每段的标题、页面图和在全文里的起止。"
+      },
       "AssetFrameRequest": {
         "properties": {
           "at": {
@@ -23484,6 +23997,76 @@
         ],
         "title": "DeploymentAdminUpdate"
       },
+      "DocumentNoteOut": {
+        "properties": {
+          "note_id": {
+            "type": "string",
+            "title": "Note Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          }
+        },
+        "type": "object",
+        "required": [
+          "note_id",
+          "title"
+        ],
+        "title": "DocumentNoteOut"
+      },
+      "DocumentPagesRequest": {
+        "properties": {
+          "pages": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "minItems": 1,
+            "title": "Pages"
+          },
+          "question": {
+            "type": "string",
+            "maxLength": 4000,
+            "title": "Question",
+            "default": ""
+          },
+          "profile_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profile Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "pages"
+        ],
+        "title": "DocumentPagesRequest"
+      },
+      "DocumentParseRequest": {
+        "properties": {
+          "provider_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider Id"
+          }
+        },
+        "type": "object",
+        "title": "DocumentParseRequest"
+      },
       "EngineSynthesizeRequest": {
         "properties": {
           "workspace_id": {
@@ -24389,6 +24972,65 @@
         "type": "object",
         "title": "ExportRequest",
         "description": "导出参数;整个 body 可省略(老调用方/工作流节点按默认档导出)。"
+      },
+      "ExtractionSectionOut": {
+        "properties": {
+          "index": {
+            "type": "integer",
+            "title": "Index"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title",
+            "default": ""
+          },
+          "image": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image"
+          },
+          "markdown": {
+            "type": "string",
+            "title": "Markdown",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "index"
+        ],
+        "title": "ExtractionSectionOut"
+      },
+      "ExtractionSectionsOut": {
+        "properties": {
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "unit": {
+            "type": "string",
+            "title": "Unit"
+          },
+          "sections": {
+            "items": {
+              "$ref": "#/components/schemas/ExtractionSectionOut"
+            },
+            "type": "array",
+            "title": "Sections"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total",
+          "unit"
+        ],
+        "title": "ExtractionSectionsOut"
       },
       "FeishuBindCodeOut": {
         "properties": {

@@ -9,15 +9,12 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { api } from "@/api/client";
-import type { components } from "@/api/generated/schema";
+import { listCapabilityChoices, setCapabilityDefault, type CapabilityChoices as Choices } from "@/api/domains/capabilities";
 import type { MessageKey } from "@/app/messages";
 import { useI18n } from "@/app/preferences";
 import { toPlainText } from "@/components/markdown/inlineSyntax";
 import { OptionPicker } from "@/components/ui/option-picker";
 import { SettingsGroup, SettingsRow } from "@/components/settings/settings-layout";
-
-type Choices = components["schemas"]["CapabilityChoicesOut"];
 
 const UNSET = "__unset__";
 const KEY = ["capability-providers"] as const;
@@ -26,7 +23,7 @@ const KEY = ["capability-providers"] as const;
 const NONE_HINT: Record<string, MessageKey> = { public_url: "assetLinkNone" };
 
 export function CapabilityProvidersSection() {
-  const state = useQuery({ queryKey: KEY, queryFn: () => api<Choices[]>("/api/settings/capabilities") });
+  const state = useQuery({ queryKey: KEY, queryFn: listCapabilityChoices });
   return <>{(state.data ?? []).map((choices) => <CapabilityGroup key={choices.capability} choices={choices} />)}</>;
 }
 
@@ -34,8 +31,7 @@ function CapabilityGroup({ choices }: { choices: Choices }) {
   const t = useI18n();
   const qc = useQueryClient();
   const save = useMutation({
-    mutationFn: (providerId: string | null) =>
-      api<Choices>(`/api/settings/capabilities/${choices.capability}`, { method: "PUT", body: JSON.stringify({ provider_id: providerId }) }),
+    mutationFn: (providerId: string | null) => setCapabilityDefault(choices.capability, providerId),
     onSuccess: (next) => qc.setQueryData<Choices[]>(KEY, (list) => (list ?? []).map((one) => (one.capability === next.capability ? next : one))),
   });
 

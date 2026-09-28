@@ -14,6 +14,8 @@ vi.mock("@/api/client", () => ({
 
 //: 「属于哪些资产」那一行自己取数(资产库,ADR 0027),和这里要测的预览层次无关。
 vi.mock("@/features/entities/AssetEntities", () => ({ AssetEntitiesList: () => null }));
+//: 文档的阅读器自己取数(解析结果),有它自己的测试。
+vi.mock("@/features/media/DocumentReader", () => ({ DocumentReader: () => <div data-document-reader="" /> }));
 
 vi.mock("@/app/preferences", () => ({
   useI18n: () => (key: string) => key,
@@ -64,14 +66,12 @@ describe("AssetPreviewModal", () => {
     });
   });
 
-  it("文档(ADR 0031)不当图片画:说是什么格式、解析之后能做什么;没有「属于哪些资产」", () => {
+  it("文档(ADR 0031)不当图片画,放解析出的阅读器;没有「属于哪些资产」", () => {
     const doc = { ...imageAsset, id: "doc", name: "方案.pptx", original_filename: "方案.pptx", kind: "document",
                   media_info: { format: "pptx", size_bytes: 2048 } };
     render(<AssetPreviewModal asset={doc as never} onClose={vi.fn()} />);
     expect(screen.queryByRole("img")).toBeNull();
-    const body = document.querySelector("[data-asset-document]");
-    expect(body?.textContent).toContain("PPTX");
-    expect(body?.textContent).toContain("assetDocumentNotParsed");
+    expect(document.querySelector("[data-document-reader]")).not.toBeNull();
     expect(screen.queryByText("assetEntitiesTitle")).toBeNull();
     expect(screen.getByText("kindDocument")).toBeTruthy();
   });

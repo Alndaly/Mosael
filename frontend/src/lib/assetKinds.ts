@@ -38,3 +38,12 @@ export function isMediaAsset(asset: { kind: string }): boolean {
 export function assetKindKey(kind: string): MessageKey {
   return kind === "image" ? "kindImage" : kind === "audio" ? "kindAudio" : kind === "document" ? "kindDocument" : "kindVideo";
 }
+
+/** 文档那一行:格式、页数(解析过才有)、大小 —— 素材库的卡片和详情用同一句。 */
+export function documentFacts(asset: { media_info: Record<string, unknown> }): string {
+  const info = asset.media_info as { format?: string; pages?: number; size_bytes?: number };
+  const size = info.size_bytes
+    ? info.size_bytes >= 1024 * 1024 ? `${(info.size_bytes / 1024 / 1024).toFixed(1)}MB` : `${Math.max(1, Math.round(info.size_bytes / 1024))}KB`
+    : "";
+  return [String(info.format ?? "").toUpperCase(), info.pages ? `${info.pages}p` : "", size].filter(Boolean).join(" · ") || "—";
+}

@@ -14,7 +14,7 @@ const listed = [
     options: [{ id: "builtin:local", name: "本地解析", builtin: true, missing: [] }, { id: "m1", name: "MinerU 云端", builtin: false, missing: [] }] },
   { capability: "public_url", label: "素材外链", description: "换直链", current: null, automatic: null, options: [] },
 ];
-vi.mock("@/api/client", () => ({ api: vi.fn(async () => listed) }));
+vi.mock("@/api/domains/capabilities", () => ({ listCapabilityChoices: vi.fn(async () => listed), setCapabilityDefault: vi.fn() }));
 vi.mock("@/app/preferences", () => ({ useI18n: () => (key: string) => key }));
 
 import { CapabilityProvidersSection } from "./CapabilityProvidersSection";

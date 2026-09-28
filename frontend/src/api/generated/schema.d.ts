@@ -1483,6 +1483,130 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/assets/{asset_id}/extractions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Extractions
+         * @description 这份文档的每一次解析,新的在前。
+         */
+        get: operations["list_extractions_api_assets__asset_id__extractions_get"];
+        put?: never;
+        /**
+         * Parse Document
+         * @description (重新)解析一次。`provider_id` 点名用哪一家;不点名按「设置 → 能力提供方 → 文档解析」的默认。
+         */
+        post: operations["parse_document_api_assets__asset_id__extractions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/assets/{asset_id}/extractions/{extraction_id}/sections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Extraction Sections
+         * @description 第 first–last 段的正文(不给 last 就到最后一段)。读的人按段取 —— 几百页的文档不必一次拿全。
+         */
+        get: operations["get_extraction_sections_api_assets__asset_id__extractions__extraction_id__sections_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/assets/{asset_id}/document": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Document
+         * @description 给智能体读:目录 + 第 first–last 段的正文(有字数上限,超了 `next` 说从哪段接着读)。还在解析会等一小会儿。
+         */
+        get: operations["read_document_api_assets__asset_id__document_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/assets/{asset_id}/document/analyze": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Analyze Document
+         * @description 那几页的页面图 + 文字交给视觉模型(看版式、图表、截图)。
+         */
+        post: operations["analyze_document_api_assets__asset_id__document_analyze_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/assets/{asset_id}/note": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Save Document As Note
+         * @description 把最新成功的那份解析存成一篇笔记(插图这时才进素材库)。
+         */
+        post: operations["save_document_as_note_api_assets__asset_id__note_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/assets/{asset_id}/extractions/{extraction_id}/files/{path}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Extraction File
+         * @description 页面图(pages/…)和插图(images/…)。只认这两个目录下的文件 —— 路径是从 Markdown 里来的,不能让它走出解析目录。
+         */
+        get: operations["get_extraction_file_api_assets__asset_id__extractions__extraction_id__files__path__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/voices": {
         parameters: {
             query?: never;
@@ -7302,6 +7426,62 @@ export interface components {
             role: string;
         };
         /**
+         * AssetExtractionOut
+         * @description 文档的一次解析(ADR 0031 §2)。正文按段读:outline 里每段的标题、页面图和在全文里的起止。
+         */
+        AssetExtractionOut: {
+            /** Id */
+            id: string;
+            /** Asset Id */
+            asset_id: string;
+            /** Parser */
+            parser: string;
+            /**
+             * Parser Name
+             * @default
+             */
+            parser_name: string;
+            /** Status */
+            status: string;
+            /**
+             * Error
+             * @default
+             */
+            error: string;
+            /** Job Id */
+            job_id?: string | null;
+            /**
+             * Unit
+             * @default page
+             */
+            unit: string;
+            /**
+             * Sections
+             * @default 0
+             */
+            sections: number;
+            /**
+             * Chars
+             * @default 0
+             */
+            chars: number;
+            /** Outline */
+            outline?: {
+                [key: string]: unknown;
+            }[];
+            /** Page Images */
+            page_images?: string[];
+            /** Notes */
+            notes?: string[];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Finished At */
+            finished_at?: string | null;
+        };
+        /**
          * AssetFrameRequest
          * @description 从一段视频里取某一时刻的一帧,存成一份新素材。
          */
@@ -8341,6 +8521,30 @@ export interface components {
             /** Granted */
             granted: boolean;
         };
+        /** DocumentNoteOut */
+        DocumentNoteOut: {
+            /** Note Id */
+            note_id: string;
+            /** Title */
+            title: string;
+        };
+        /** DocumentPagesRequest */
+        DocumentPagesRequest: {
+            /** Pages */
+            pages: number[];
+            /**
+             * Question
+             * @default
+             */
+            question: string;
+            /** Profile Id */
+            profile_id?: string | null;
+        };
+        /** DocumentParseRequest */
+        DocumentParseRequest: {
+            /** Provider Id */
+            provider_id?: string | null;
+        };
         /**
          * EngineSynthesizeRequest
          * @description Synthesis through a remote engine, which speaks in a stock voice and so has no Voice row.
@@ -8720,6 +8924,32 @@ export interface components {
              * @default true
              */
             ai_label: boolean;
+        };
+        /** ExtractionSectionOut */
+        ExtractionSectionOut: {
+            /** Index */
+            index: number;
+            /**
+             * Title
+             * @default
+             */
+            title: string;
+            /** Image */
+            image?: string | null;
+            /**
+             * Markdown
+             * @default
+             */
+            markdown: string;
+        };
+        /** ExtractionSectionsOut */
+        ExtractionSectionsOut: {
+            /** Total */
+            total: number;
+            /** Unit */
+            unit: string;
+            /** Sections */
+            sections?: components["schemas"]["ExtractionSectionOut"][];
         };
         /** FeishuBindCodeOut */
         FeishuBindCodeOut: {
@@ -16243,6 +16473,244 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DenoiseEngineOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_extractions_api_assets__asset_id__extractions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                asset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetExtractionOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    parse_document_api_assets__asset_id__extractions_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                asset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DocumentParseRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetExtractionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_extraction_sections_api_assets__asset_id__extractions__extraction_id__sections_get: {
+        parameters: {
+            query?: {
+                first?: number;
+                last?: number | null;
+            };
+            header?: never;
+            path: {
+                asset_id: string;
+                extraction_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExtractionSectionsOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_document_api_assets__asset_id__document_get: {
+        parameters: {
+            query?: {
+                first?: number;
+                last?: number | null;
+            };
+            header?: never;
+            path: {
+                asset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    analyze_document_api_assets__asset_id__document_analyze_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                asset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DocumentPagesRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    save_document_as_note_api_assets__asset_id__note_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                asset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentNoteOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_extraction_file_api_assets__asset_id__extractions__extraction_id__files__path__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                asset_id: string;
+                extraction_id: string;
+                path: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */

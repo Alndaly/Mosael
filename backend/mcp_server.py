@@ -205,6 +205,9 @@ CONFIRMATION_TOOLS = frozenset(
 READ_ONLY_TOOLS = frozenset(
     {
         "analyze_asset",
+        #: 文档(ADR 0031):读解析出的正文、看页面图 —— 都不改任何东西。
+        "analyze_document_pages",
+        "read_document",
         "ask_user",
         "browser_pool_list",
         "browser_read",
@@ -1151,6 +1154,38 @@ def analyze_asset(asset_id: str, question: str = "", mode: str = "auto") -> dict
     Pass "native" only when the user explicitly asks for native/whole-video analysis.
     """
     return _post(f"/api/assets/{asset_id}/analyze", {"question": question, "mode": mode})
+
+
+@mcp.tool()
+def read_document(asset_id: str, first: int = 1, last: int = 0) -> dict[str, Any]:
+    """Read-only: read an imported DOCUMENT asset (PDF, Word, PowerPoint, Excel, CSV, Markdown, text, web page, EPUB).
+
+    Documents are parsed into Markdown when imported. Returns the outline (every page / slide
+    / sheet / section with its title), then the text of sections first..last (1-based; last=0
+    means to the end), up to a size budget — when the budget runs out, `next` is the section to
+    continue from. Read long documents in ranges instead of all at once. `unit` says what a
+    section is (page, slide, sheet, section); `notes` are warnings such as "probably a scanned
+    PDF". Waits briefly if the document is still being parsed. For layout, charts or pictures
+    on a page, use analyze_document_pages. Do NOT use for knowledge-base notes (read_note) or
+    for image/video/audio assets (analyze_asset).
+    """
+    params: dict[str, Any] = {"first": max(1, first)}
+    if last:
+        params["last"] = last
+    return _get(f"/api/assets/{asset_id}/document", params)
+
+
+@mcp.tool()
+def analyze_document_pages(asset_id: str, pages: list[int], question: str = "") -> dict[str, Any]:
+    """Look at pages of a DOCUMENT asset with a vision model — layout, charts, tables, screenshots, slide design.
+
+    pages are 1-based page numbers of the document's page images (at most 6 per call); the
+    model gets those page images together with the text extracted from them. PDFs always have
+    page images; Word / PowerPoint have them only when LibreOffice is installed on this
+    computer (read_document's `page_images` says how many there are). Use read_document for
+    the text itself.
+    """
+    return _post(f"/api/assets/{asset_id}/document/analyze", {"pages": pages, "question": question})
 
 
 @mcp.tool()

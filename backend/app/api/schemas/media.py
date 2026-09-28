@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any
+
 from pydantic import Field, computed_field
 from app.api.schemas.base import ApiModel, OrmModel
 
@@ -186,3 +188,57 @@ class SequenceFrameRequest(ApiModel):
     """把时间线在某一时刻的合成画面存成一份新素材。"""
 
     at: float = 0
+
+
+class AssetExtractionOut(OrmModel):
+    """文档的一次解析(ADR 0031 §2)。正文按段读:outline 里每段的标题、页面图和在全文里的起止。"""
+
+    id: str
+    asset_id: str
+    #: `builtin:local` 或插件连接的 id;parser_name 是给人看的名字。
+    parser: str
+    parser_name: str = ""
+    status: str
+    error: str = ""
+    job_id: str | None = None
+    unit: str = "page"
+    sections: int = 0
+    chars: int = 0
+    outline: list[dict[str, Any]] = Field(default_factory=list)
+    #: 按页的页面图(相对解析目录,经 files/ 取)—— 「原版」那一栏。
+    page_images: list[str] = Field(default_factory=list)
+    #: 给人看的提醒(i18n key,前端翻)。
+    notes: list[str] = Field(default_factory=list)
+    created_at: datetime
+    finished_at: datetime | None = None
+
+
+class DocumentParseRequest(ApiModel):
+    #: 用哪一家解析;不填按这个人在「能力提供方」里的默认(没定就是本地解析)。
+    provider_id: str | None = None
+
+
+class ExtractionSectionOut(ApiModel):
+    index: int
+    title: str = ""
+    #: 这一段的页面图(相对解析目录,经 files/ 取);没有是 None。
+    image: str | None = None
+    markdown: str = ""
+
+
+class ExtractionSectionsOut(ApiModel):
+    total: int
+    unit: str
+    sections: list[ExtractionSectionOut] = Field(default_factory=list)
+
+
+class DocumentNoteOut(ApiModel):
+    note_id: str
+    title: str
+
+
+class DocumentPagesRequest(ApiModel):
+    #: 看哪几页(按「原版」那一栏数,1 起),一次最多 6 页。
+    pages: list[int] = Field(min_length=1, max_length=20)
+    question: str = Field(default="", max_length=4000)
+    profile_id: str | None = None

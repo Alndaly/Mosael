@@ -7,6 +7,8 @@
  */
 export * from "@/api/transport";
 export * from "@/api/domains/assets";
+export * from "@/api/domains/documents";
+export * from "@/api/domains/capabilities";
 export * from "@/api/domains/boards";
 export * from "@/api/domains/collaboration";
 export * from "@/api/domains/browser";

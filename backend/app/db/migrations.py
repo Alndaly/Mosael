@@ -1658,6 +1658,30 @@ def _migrate_board_sequence_cells_name_their_producer() -> None:
                 )
 
 
+def _migrate_asset_extractions_remember_page_images() -> None:
+    """文档的解析结果记下按页的页面图(`asset_extractions.page_images`,ADR 0031:「原版」那一栏照它排)。
+
+    先前的解析把页面图只挂在各段上(outline),Word 那种段和页对不上的就没处放。已有的行从 outline 里把页面图
+    抄过来。**必须在 SCHEMA 之前**:create_all 不会给已有的表补列。
+    """
+    inspector = inspect(engine)
+    if "asset_extractions" not in set(inspector.get_table_names()):
+        return
+    if "page_images" in {column["name"] for column in inspector.get_columns("asset_extractions")}:
+        return
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE asset_extractions ADD COLUMN page_images JSON NOT NULL DEFAULT '[]'"))
+        for row_id, raw in conn.execute(text("SELECT id, outline FROM asset_extractions")).fetchall():
+            try:
+                outline = json.loads(raw) if isinstance(raw, str) else (raw or [])
+            except (TypeError, ValueError):
+                continue
+            images = [str(one["image"]) for one in outline if isinstance(one, dict) and one.get("image")]
+            if images:
+                conn.execute(text("UPDATE asset_extractions SET page_images = :images WHERE id = :id"),
+                             {"images": json.dumps(images), "id": row_id})
+
+
 def _migrate_voices_declare_consent() -> None:
     """克隆音色加授权声明(ADR 0028 §5):`consent_kind` / `consent_by` / `consent_at`。
 
@@ -5086,6 +5110,7 @@ def migration_plan() -> MigrationPlan:
                 _migrate_drop_the_community_integration,
                 _migrate_voices_declare_consent,
                 _migrate_boards_remember_their_project,
+                _migrate_asset_extractions_remember_page_images,
             ),
             #: create_all 每次启动都要跑 —— 新版本加的表靠它建出来,记账跳过就再也建不了。
             *_recurring(MigrationPhase.SCHEMA, _create_current_schema),

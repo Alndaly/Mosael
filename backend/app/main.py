@@ -21,6 +21,7 @@ from app.api.routes.agent_browser import router as agent_browser_router
 from app.api.routes.browser_profiles import router as browser_profiles_router
 from app.api.routes.asr import router as asr_router
 from app.api.routes.denoise import router as denoise_router
+from app.api.routes.documents import router as documents_router
 from app.api.routes.separation import router as separation_router
 from app.api.routes.assets import router as assets_router
 from app.api.routes.entities import router as entities_router
@@ -397,6 +398,7 @@ def create_app() -> FastAPI:
     app.include_router(asr_router, prefix="/api", dependencies=protected)
     app.include_router(separation_router, prefix="/api", dependencies=protected)
     app.include_router(denoise_router, prefix="/api", dependencies=protected)
+    app.include_router(documents_router, prefix="/api", dependencies=protected)
     app.include_router(voices_router, prefix="/api", dependencies=protected)
     app.include_router(translate_router, prefix="/api", dependencies=protected)
     app.include_router(websearch_router, prefix="/api", dependencies=protected)

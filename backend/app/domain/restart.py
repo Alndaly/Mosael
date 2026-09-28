@@ -49,6 +49,7 @@ def registered() -> dict[str, Callable[[Session], int]]:
     它真正要回答的问题。导入延迟到这里,是因为这些模块反过来会用到领域层的东西。
     """
     from app.domain.browser import reconcile_browser_state
+    from app.domain.documents.extraction import reconcile_orphaned_extractions
     from app.domain.jobs import reconcile_orphaned_jobs
     from app.domain.plugins.tools import reconcile_orphaned_invocations
 
@@ -58,6 +59,7 @@ def registered() -> dict[str, Callable[[Session], int]]:
         # 浏览器那条要收的不止一张表(还有执行器视图),签名也不吃 Session ——
         # 包一层,让这份登记上的每一项长得一样。
         "browser_actions": lambda _db: reconcile_browser_state(),
+        "asset_extractions": reconcile_orphaned_extractions,
     }
 
 

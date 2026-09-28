@@ -1,0 +1,100 @@
+"""智能体读文档(ADR 0031 §4):挂进对话的文档短的整篇进上下文、长的给目录;read_document 按段读、有预算;
+analyze_document_pages 把那几页的页面图和文字交给视觉模型。"""
+
+from __future__ import annotations
+
+import time
+
+import pytest
+
+from app.core.db import SessionLocal
+from app.domain.documents import office, reading
+from tests.document_samples import pdf_bytes, pptx_bytes
+from tests.util import fresh_client
+
+
+@pytest.fixture(autouse=True)
+def no_libreoffice(monkeypatch):
+    monkeypatch.setattr(office, "find_soffice", lambda: None)
+
+
+def _import(client, ws: str, name: str, data: bytes) -> str:
+    made = client.post("/api/assets/import", data={"workspace_id": ws}, files={"file": (name, data, "application/octet-stream")}).json()
+    deadline = time.monotonic() + 30
+    while time.monotonic() < deadline:
+        listed = client.get(f"/api/assets/{made['id']}/extractions").json()
+        if listed and listed[0]["status"] in ("succeeded", "failed"):
+            return made["id"]
+        time.sleep(0.1)
+    raise AssertionError("解析一直没结束")
+
+
+def _markdown(sections: int, words: int) -> bytes:
+    return "\n\n".join(f"# 第{i}章\n" + "字" * words for i in range(1, sections + 1)).encode()
+
+
+def test_按段读_预算用完说从哪段接着读(monkeypatch) -> None:
+    monkeypatch.setattr(reading, "READ_BUDGET_CHARS", 250)
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+    asset = _import(client, ws, "长文.md", _markdown(4, 100))
+    first = client.get(f"/api/assets/{asset}/document").json()
+    assert first["total"] == 4 and first["unit"] == "section"
+    assert [one["title"] for one in first["outline"]] == ["第1章", "第2章", "第3章", "第4章"]
+    assert [one["index"] for one in first["sections"]] == [1, 2] and first["next"] == 3
+    rest = client.get(f"/api/assets/{asset}/document", params={"first": 3}).json()
+    assert [one["index"] for one in rest["sections"]] == [3, 4] and rest["next"] is None
+
+
+def test_挂进对话的文档_短的整篇_长的给目录(monkeypatch) -> None:
+    from app.domain.agent.prompt import user_prompt
+
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+    short = _import(client, ws, "短.md", "# 要点\n今天发布。".encode())
+    long = _import(client, ws, "长.md", _markdown(3, 100))
+    monkeypatch.setattr(reading, "INLINE_CHARS", 200)
+    message = (f"看看这两份 [附件 asset_id={short} 名称=短.md 类型=document] "
+               f"[附件 asset_id={long} 名称=长.md 类型=document]")
+    with SessionLocal() as db:
+        prompt = user_prompt(message, {}, db=db, workspace_id=ws)
+    assert "今天发布。" in prompt, "短的整篇放进来"
+    assert "共 3 章" in prompt and "1. 第1章" in prompt and "read_document" in prompt
+    assert "字" * 100 not in prompt, "长的只放目录"
+    assert prompt.endswith(message), "用户那句话原样在最后"
+
+
+def test_看页面_页面图和文字一起交给视觉模型(monkeypatch) -> None:
+    from app.domain.analysis import service
+
+    seen: list[list[dict]] = []
+    monkeypatch.setattr(service, "select_analysis_connection", lambda db, profile_id, user_id: object())
+    monkeypatch.setattr(service, "call_vision_model", lambda db, profile, messages, call: seen.append(messages) or "第二页是预算表")
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+    asset = _import(client, ws, "brief.pdf", pdf_bytes(["Cover page here", "Budget table here"]))
+    answer = client.post(f"/api/assets/{asset}/document/analyze", json={"pages": [2, 2, 9], "question": "第二页有什么"})
+    assert answer.status_code == 200, answer.text
+    assert answer.json() == {"asset_id": asset, "pages": [2], "answer": "第二页是预算表"}
+    content = seen[0][0]["content"]
+    assert "Budget table here" in content[0]["text"] and "第二页有什么" in content[0]["text"]
+    assert [one["type"] for one in content[1:]] == ["image_url"]
+    assert client.post(f"/api/assets/{asset}/document/analyze", json={"pages": [9]}).status_code == 409
+
+
+def test_没有页面图的文档说清楚要装_LibreOffice() -> None:
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+    asset = _import(client, ws, "deck.pptx", pptx_bytes([("A", ["a"], "")]))
+    refused = client.post(f"/api/assets/{asset}/document/analyze", json={"pages": [1]})
+    assert refused.status_code == 409 and "LibreOffice" in refused.json()["detail"]
+
+
+def test_不是文档_或者别的工作区的_不给读() -> None:
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+    assert client.get("/api/assets/nope/document").status_code == 404
+    other = client.post("/api/workspaces", json={"name": "别处"}).json()["id"]
+    asset = _import(client, other, "a.md", b"# x")
+    with SessionLocal() as db, pytest.raises(reading.DocumentReadError):
+        reading.read(db, ws, asset)

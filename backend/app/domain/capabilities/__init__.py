@@ -211,6 +211,24 @@ def choose(db: Session, owner_user_id: str | None, capability: Capability, **sub
     return chosen
 
 
+def pick(db: Session, owner_user_id: str | None, capability: Capability, provider_id: str | None, **subject: Any) -> Provider:
+    """点名用哪一家(界面上「用 ×× 重新解析」);没点名就按默认挑(choose)。点名的得是他自己的、配好了的。"""
+    if not provider_id:
+        return choose(db, owner_user_id, capability, **subject)
+    builtin = _builtin(capability)
+    if builtin is not None and provider_id == builtin.id:
+        return builtin
+    found = next((one for one in plugin_providers(db, owner_user_id, capability) if one.id == provider_id), None)
+    if found is None:
+        raise capability.error(capability.none_key, **subject)
+    if found.missing:
+        raise capability.error(capability.incomplete_key, plugin=found.name,
+                               missing=tr("punct_listSep").join(found.missing), **subject)
+    if not found.tool:
+        raise capability.error(capability.outdated_key, plugin=found.name, **subject)
+    return found
+
+
 def set_default(db: Session, owner_user_id: str, capability: Capability, provider_id: str | None) -> None:
     """定下(或清掉)这个人在这项能力上的默认。选内置的 = 清掉(没定默认时本来就用内置的)。"""
     from app.domain.plugins import capability_defaults
@@ -230,6 +248,7 @@ __all__ = [
     "choices",
     "choose",
     "get",
+    "pick",
     "plugin_providers",
     "providers",
     "register",

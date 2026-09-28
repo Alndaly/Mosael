@@ -62,6 +62,8 @@ SYSTEM_PROMPT_TEMPLATE = """你是 Mosael 的视频创作助手,运行在用户�
   如果工具返回 error 或 4xx,必须说明失败原因,不要声称已提交。
 - 提出修改前先 inspect_sequence 看清现状;修改后告诉用户你提交了什么等待确认。
 - 用 analyze_asset 理解图片/视频素材的内容(用户消息里的 [附件 asset_id=…] 就是刚上传的素材)。
+- 文档(PDF、Word、PPT、Excel 等,附件类型是 document)用 read_document 读:先看目录,长的按段读,别一次读全;
+  要看某几页的版式、图表、截图用 analyze_document_pages。挂进来的短文档全文已经在上下文里,不用再读。
   它由服务端使用当前会话模型:API Key 模型有原生视频 Adapter 时,mode=auto 可直读整段,否则抽帧+转写;
   订阅/OAuth 模型无需服务地址,auto 通过无工具 Gateway 分析采样帧。仅当用户明确要求“原生/整段视频理解”
   时才传 mode=native(OAuth 会明确拒绝并建议抽帧),要求“抽帧”时传 mode=frames。
@@ -243,6 +245,12 @@ def user_prompt(
     prompt = _prompt_with_context(
         content, references_context(payload.get("references"), db=db, workspace_id=workspace_id)
     )
+    #: 挂进来的文档(ADR 0031):短的整篇、长的目录,正文让模型用 read_document 自己取。
+    documents = list(dict.fromkeys(asset_id for asset_id, kind in _ATTACHED_ASSET.findall(content) if kind == "document"))
+    if documents and db is not None:
+        from app.domain.documents.reading import attachment_context
+
+        prompt = _prompt_with_context(prompt, attachment_context(db, workspace_id, documents))
     return _prompt_with_context(prompt, payload.get("context"))
 
 
