@@ -1636,6 +1636,36 @@ def _migrate_voices_declare_consent() -> None:
             conn.execute(text("ALTER TABLE voices ADD COLUMN consent_at DATETIME"))
 
 
+def _migrate_board_scene_render_drops_project() -> None:
+    """画板 3D 场景格的渲白模不再有「项目」(归档进哪个项目):摘掉存着的 `form.config.project_id`。
+
+    渲出来的首尾帧、运镜视频本来就落成右边的几格,归档没有意义,面板上也不再给这一项(boards.producers 的
+    SCENE_RENDER_FIELDS)。留着的话它是一份没人读、也改不了的值。改到的板版本号 +1。
+    """
+    if "boards" not in set(inspect(engine).get_table_names()):
+        return
+    with engine.begin() as conn:
+        for board_id, raw, revision in conn.execute(text("SELECT id, canvas, revision FROM boards")).fetchall():
+            try:
+                canvas = json.loads(raw) if isinstance(raw, str) else raw
+            except (TypeError, ValueError):
+                continue
+            if not isinstance(canvas, dict) or not isinstance(canvas.get("items"), list):
+                continue
+            changed = False
+            for item in canvas["items"]:
+                form = item.get("form") if isinstance(item, dict) and item.get("kind") == "scene" else None
+                config = form.get("config") if isinstance(form, dict) else None
+                if isinstance(config, dict) and "project_id" in config:
+                    del config["project_id"]
+                    changed = True
+            if changed:
+                conn.execute(
+                    text("UPDATE boards SET canvas = :canvas, revision = :revision WHERE id = :id"),
+                    {"canvas": json.dumps(canvas, ensure_ascii=False), "revision": int(revision or 0) + 1, "id": board_id},
+                )
+
+
 def _migrate_drop_the_community_integration() -> None:
     """把桌面端接入社区时加的东西删掉 —— 社区能力整体从应用里拿掉了(2026-09-27,维护者:「先把资产库做好」)。
 
@@ -5079,6 +5109,7 @@ def migration_plan() -> MigrationPlan:
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_blender_models_are_named_after_their_scene),
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_board_documents_can_be_written),
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_board_scene_cells_hold_no_image),
+            *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_board_scene_render_drops_project),
             *_steps(
                 MigrationPhase.FILESYSTEM,
                 _migrate_shared_venvs,

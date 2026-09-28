@@ -62,14 +62,13 @@ def test_渲白模是挂在场景格上的内置产出者_工具格撤下画板(
     entry = next(one for one in listed if one["id"] == "scene_render")
     assert entry["hosts"] == ["scene"] and entry["runs_from_draft"] is True and entry["effects"] == "none"
     #: 字段就是节点声明的那几个(不抄一份),少了场景 —— 场景由那一格给。
-    assert list(entry["config"]) == ["shot_id", "render", "project_id"]
+    assert list(entry["config"]) == ["shot_id", "render"], "画板上不归档进项目:渲出来的本来就落成右边的几格"
     shot = entry["config"]["shot_id"]
     assert shot["options_from"] == "scene_shots" and shot["sole_option_default"] is True
     assert shot["depends_on"] == "scene_id" and shot["board_sources"] == []
     assert entry["config"]["render"]["options"] == list(REFERENCE_RENDERS)
     assert entry["config"]["render"]["option_labels"]["both"] == "静帧和运镜视频"
     assert "allow_custom" not in entry["config"]["render"], "画板上没有 {{…}},渲什么只在三种里挑"
-    assert entry["config"]["project_id"]["advanced"] is True
     assert entry["output_kinds"] == ["image", "image", "video"]
     assert entry["board_description"] == "选一个镜头,渲出首尾帧或运镜视频"
     assert entry["board_group"] == "", "不进「添加 → 工具」"
@@ -329,3 +328,23 @@ def test_迁移_工具格的设置搬到场景格上_没有场景格的改成便
 
     _migrate_board_tool_cells_become_abilities()
     normalize_canvas(_canvas(board_id)[0])
+
+
+def test_迁移_场景格表单里的项目摘掉_别的设置留着() -> None:
+    from app.db.migrations import _migrate_board_scene_render_drops_project, migration_plan
+
+    assert "migrate-board-scene-render-drops-project" in {step.name for step in migration_plan().steps}
+    client = fresh_client()
+    ws = _workspace(client)
+    with SessionLocal() as db:
+        board = Board(workspace_id=ws, name="旧板", revision=4, canvas={"items": [
+            {"id": "s", "kind": "scene", "x": 0, "y": 0, "scene_id": "sc",
+             "form": {"producer": "scene_render", "config": {"shot_id": "shot-1", "render": "video", "project_id": "p1"}}},
+        ], "edges": []})
+        db.add(board)
+        db.commit()
+        board_id = board.id
+    _migrate_board_scene_render_drops_project()
+    _migrate_board_scene_render_drops_project()
+    canvas, revision = _canvas(board_id)
+    assert canvas["items"][0]["form"]["config"] == {"shot_id": "shot-1", "render": "video"} and revision == 5

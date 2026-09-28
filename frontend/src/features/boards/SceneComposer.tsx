@@ -1,5 +1,5 @@
 import React from "react";
-import { Box, ExternalLink, Loader2 } from "lucide-react";
+import { Box, Loader2 } from "lucide-react";
 
 import type { BoardItem, BoardProducerInfo, BoardRunForms } from "@/api/client";
 import { useI18n } from "@/app/preferences";
@@ -83,9 +83,10 @@ export function SceneComposer({
   const blocked = !producer || shotsLoading || missing.length > 0;
   const send = () => {
     if (blocked || working) return;
-    //: 对不上的旧镜头 id 不跟着发出去(服务端会说找不到这个镜头);认得的、没挑的照原样。
-    const { shot_id: _stale, ...withoutShot } = config;
-    run(() => onRun({ config: savedShot && !chosenShot ? withoutShot : config }));
+    //: 只发渲白模自己的那几项:这一格的 config 和「按文字搭」共用一份(切换填法时表单不清),把那边的字段一起发过去
+    //: 会被服务端拒(渲白模的表单不收不认识的键)。对不上的旧镜头 id 也不发(服务端会说找不到这个镜头)。
+    const own = Object.fromEntries(Object.entries(config).filter(([key]) => key in specs && (key !== SHOT || chosenShot)));
+    run(() => onRun({ config: own }));
   };
 
   const rest = Object.entries(specs).filter(([key]) => key !== SHOT && key !== RENDER);
@@ -167,16 +168,10 @@ export function SceneComposer({
             <Box size={16} strokeWidth={1.4} />
           )}
         </div>
+        {/* 「编辑场景」在格子上方的操作条上(换到「按文字搭」也在),这里不再放一份。 */}
         <span data-scene-name="" className="min-w-0 flex-1 truncate text-ui-sm text-foreground" title={item.text}>
           {item.text || t("boardKindScene")}
         </span>
-        <a
-          data-scene-open=""
-          className="nodrag nopan inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-ui-xs text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-          href={`#/scenes?scene=${encodeURIComponent(item.scene_id ?? "")}`}
-        >
-          <ExternalLink size={12} /> {t("boardSceneOpen")}
-        </a>
       </div>
       {producer === undefined ? (
         <div role="status" className="flex items-center gap-2 px-1 text-ui-xs text-muted-foreground">

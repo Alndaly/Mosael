@@ -66,7 +66,6 @@ const RENDER = {
                board_sources: [] },
     render: { type: "string", label: "渲染内容", default: "stills", options: ["stills", "video", "both"],
               option_labels: { stills: "首尾静帧", video: "运镜视频", both: "静帧和运镜视频" }, board_sources: [] },
-    project_id: { type: "text", label: "项目", advanced: true, options_from: "projects", board_sources: [] },
   },
 } as unknown as BoardProducerInfo;
 
@@ -146,9 +145,10 @@ describe("3D 场景格的面板", () => {
     expect(chip("render").textContent).toContain("首尾静帧");
     const body = document.querySelector<HTMLElement>('[data-board-composer="scene"] [data-board-composer-body]')!;
     expect(body.querySelector("[data-scene-name]")?.textContent).toBe("客厅");
-    expect(body.querySelector<HTMLAnchorElement>("[data-scene-open]")?.getAttribute("href")).toBe("#/scenes?scene=sc");
-    //: 归档进哪个项目不常用:进「参数」。
-    expect(screen.getByRole("button", { name: "boardGenerationSettings" })).toBeTruthy();
+    //: 「编辑场景」在格子的操作条上,面板里不再放一份(用户截图)。
+    expect(body.querySelector("[data-scene-open]")).toBeNull();
+    //: 画板上不归档进项目,面板上也就没有「参数」了。
+    expect(screen.queryByRole("button", { name: "boardGenerationSettings" })).toBeNull();
     expect(sendButton()).not.toBeDisabled();
   });
 
@@ -169,6 +169,16 @@ describe("3D 场景格的面板", () => {
     expect(run.mock.calls[0][0]).toEqual({
       producer: "scene_render", item_id: "s1", kind: "scene", x: 10, y: 20, form: { config: { render: "both" } },
     });
+  });
+
+  it("只发渲白模自己的字段:和「按文字搭」共用的那份 config 里的别的键不跟着发(发了服务端会拒)", async () => {
+    stubShots({ sc: [{ value: "shot-1", label: "开场" }] });
+    const run = vi.fn(async (_request: BoardRunRequest) => undefined);
+    mount(<Stateful initial={scene("sc", { form: { config: { render: "video", text: "一段剧本", max_shots: 3 } } })} run={run} />);
+    await waitFor(() => expect(chip("shot_id").textContent).toContain("开场"));
+    fireEvent.click(sendButton());
+    await waitFor(() => expect(run).toHaveBeenCalledTimes(1));
+    expect(run.mock.calls[0][0].form).toEqual({ config: { render: "video" } });
   });
 
   it("好几个镜头却没挑:发送键是灰的,悬停说还差镜头", async () => {

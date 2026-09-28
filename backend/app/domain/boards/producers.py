@@ -204,8 +204,10 @@ class TrimForm(_Form):
 
 
 #: 渲白模在场景格上收的那几个字段 —— **就是工作流节点 `scene_render` 声明的那几个**(字段说明、选项来源、
-#: 「只有一个镜头就用它」都读那一份,见 _scene_render_meta),少了 `scene_id`:场景由宿主那一格给。
-SCENE_RENDER_FIELDS = ("shot_id", "render", "project_id")
+#: 「只有一个镜头就用它」都读那一份,见 _scene_render_meta),少了 `scene_id`:场景由宿主那一格给;也少了
+#: `project_id`(归档进哪个项目):画板上渲出来的首尾帧、运镜视频本来就落成右边的几格,再归一次档没有意义,
+#: 只让面板多一个没人知道干什么的「参数」(用户问「这个项目的属性配置有什么用」)。工作流节点上照旧有。
+SCENE_RENDER_FIELDS = ("shot_id", "render")
 
 
 class SceneRenderConfig(_Form):
@@ -217,8 +219,6 @@ class SceneRenderConfig(_Form):
     shot_id: str = Field(default="", max_length=128)
     #: 取值和节点的选项是同一张表(scenes.REFERENCE_RENDERS),棘轮钉着。
     render: Literal["stills", "video", "both"] = "stills"
-    #: 渲出来的素材归档进哪个项目;留空不归档。
-    project_id: str = Field(default="", max_length=64)
 
 
 class SceneRenderForm(_Form):
