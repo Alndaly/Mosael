@@ -61,7 +61,7 @@ describe("多选", () => {
   it("**退出选择模式会清空已选** —— 漏掉这条,下次进来上一批还勾着,而批量删除照着那批执行", () => {
     const { result } = renderHook(() => useMultiSelect(items("a", "b"), (item) => item.id));
 
-    act(() => result.current.setSelectMode(true));
+    act(() => result.current.enter());
     act(() => result.current.toggle("a"));
     act(() => result.current.exit());
 
@@ -80,12 +80,32 @@ describe("多选", () => {
     expect(result.current.selectedIds.has("b")).toBe(false);
   });
 
+  it("shift 连选:从上一次点的那项到这项,整段设成这一次的目标状态", () => {
+    const { result } = renderHook(() => useMultiSelect(items("a", "b", "c", "d"), (item) => item.id));
+
+    act(() => result.current.toggle("a"));
+    act(() => result.current.toggle("c", { shiftKey: true }));
+    expect([...result.current.selectedIds].sort()).toEqual(["a", "b", "c"]);
+
+    // 反向再连一段取消:段里已选的一起取消,而不是各自取反。
+    act(() => result.current.toggle("b", { shiftKey: true }));
+    expect([...result.current.selectedIds]).toEqual(["a"]);
+  });
+
+  it("不传可见集时,全选作用于整张列表", () => {
+    const { result } = renderHook(() => useMultiSelect(items("a", "b"), (item) => item.id));
+
+    act(() => result.current.selectAll());
+    expect(result.current.allSelected()).toBe(true);
+    expect(result.current.count).toBe(2);
+  });
+
   it("右键菜单的对象:点的那项在选区里就是整个选区,不在就只是它自己(和时间线同一条)", () => {
     const { result } = renderHook(() => useMultiSelect(items("a", "b", "c"), (item) => item.id));
 
     //: 不在选择模式时,右键永远只作用于被点的那一项。
     expect(result.current.menuTargets("a")).toEqual(["a"]);
-    act(() => result.current.setSelectMode(true));
+    act(() => result.current.enter());
     act(() => result.current.toggle("a"));
     act(() => result.current.toggle("b"));
     expect(result.current.menuTargets("b").sort()).toEqual(["a", "b"]);

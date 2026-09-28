@@ -99,7 +99,7 @@ export function EntitiesView({ workspace }: { workspace: Workspace }) {
     [ofKind, tagFilter, tagMatch, sortKey],
   );
   const collection = useEntityCollection(workspace.id, visible, { onOpen: setOpenId });
-  const { selectMode, setSelectMode, exit: exitSelectMode } = collection.selection;
+  const { selectMode, enter: enterSelectMode, exit: exitSelectMode } = collection.selection;
   const refresh = () => void qc.invalidateQueries({ queryKey: entityKeys.all(workspace.id) });
   const fail = (error: unknown) => toast.error(errorText(error));
 
@@ -200,7 +200,7 @@ export function EntitiesView({ workspace }: { workspace: Workspace }) {
             )}
           </div>
           <div className="flex items-center gap-2 border-divider max-lg:w-full lg:border-l lg:pl-4">
-            <Button variant="outline" className="ml-auto" aria-pressed={selectMode} onClick={() => (selectMode ? exitSelectMode() : setSelectMode(true))}>
+            <Button variant="outline" className="ml-auto" aria-pressed={selectMode} onClick={() => (selectMode ? exitSelectMode() : enterSelectMode())}>
               {selectMode ? <X /> : <Check />}
               {selectMode ? t("cancel") : t("mediaSelectMode")}
             </Button>

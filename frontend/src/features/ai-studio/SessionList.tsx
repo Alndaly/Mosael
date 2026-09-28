@@ -172,7 +172,7 @@ export function SessionList({
     [spec.sharedIsViewOnly],
   );
   const manageableSessions = React.useMemo(() => sessions.filter(manageable), [sessions, manageable]);
-  const { selectMode, setSelectMode, selectedIds, toggle, selectAll, allSelected, exit } = useMultiSelect(
+  const { selectMode, enter: enterSelectMode, selectedIds, toggle, selectAll, allSelected, exit } = useMultiSelect(
     manageableSessions,
     (session) => session.id,
   );
@@ -377,7 +377,7 @@ export function SessionList({
                 title={t("mediaSelectMode")}
                 aria-label={t("mediaSelectMode")}
                 disabled={manageableSessions.length === 0}
-                onClick={() => setSelectMode(true)}
+                onClick={() => enterSelectMode()}
               >
                 <ListChecks size={14} />
               </Button>

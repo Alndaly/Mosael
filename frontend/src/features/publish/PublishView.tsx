@@ -130,7 +130,7 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
   );
   const now = useNow(60_000);
   // 多选与素材页同一份状态机(见 lib/useMultiSelect)。
-  const { selectMode, setSelectMode, selectedIds, toggle, selectAll, allSelected, clear, exit } =
+  const { selectMode, enter: enterSelectMode, selectedIds, toggle, selectAll, allSelected, clear, exit } =
     useMultiSelect(filteredTasks, (task) => task.id);
   const [batchDeleting, setBatchDeleting] = React.useState(false);
 
@@ -207,7 +207,7 @@ export function PublishView({ workspace }: { workspace: Workspace }) {
           </>
         ) : (
           <>
-            <Button variant="outline" size="default" onClick={() => setSelectMode(true)}>
+            <Button variant="outline" size="default" onClick={() => enterSelectMode()}>
               <Check size={13} /> {t("mediaSelectMode")}
             </Button>
             <Button onClick={() => setCreating(true)}>

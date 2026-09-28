@@ -7,7 +7,8 @@ import { api, type Workspace } from "@/api/client";
 import type { components } from "@/api/generated/schema";
 import { errorText } from "@/api/errorMessage";
 import { usePreferences, useI18n } from "@/app/preferences";
-import { BulkActionBar, BulkCheckbox, BulkSelectTrigger, useBulkSelection } from "@/components/app/bulkSelection";
+import { BulkActionBar, BulkCheckbox, BulkSelectTrigger } from "@/components/app/bulkSelection";
+import { useMultiSelect } from "@/lib/useMultiSelect";
 import { ConfirmDialog, DIALOG_FIELD, ModalShell } from "@/components/app/modals";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -88,7 +89,7 @@ export function AgentMemorySection({ workspace }: { workspace: Workspace }) {
   });
 
   const rows = memories.data ?? [];
-  const bulk = useBulkSelection(rows, (row) => row.id);
+  const bulk = useMultiSelect(rows, (row) => row.id);
   const removeMany = useMutation({
     mutationFn: async (ids: string[]) => {
       // 后端没有批量删接口,逐条发、一次性回报 —— 和计价规则同一个做法,失败的几条单独说出来。
@@ -119,7 +120,7 @@ export function AgentMemorySection({ workspace }: { workspace: Workspace }) {
       contentClassName={memories.data && rows.length === 0 ? "min-h-0" : undefined}
       actions={
         <div className="flex items-center gap-1.5">
-          <BulkSelectTrigger active={bulk.active} onEnter={bulk.enter} disabled={rows.length === 0} />
+          <BulkSelectTrigger active={bulk.selectMode} onEnter={bulk.enter} disabled={rows.length === 0} />
           <Button variant="outline" size="sm" onClick={openAdd}>
             <Plus size={13} /> {t("agentMemoryAdd")}
           </Button>
@@ -154,7 +155,7 @@ export function AgentMemorySection({ workspace }: { workspace: Workspace }) {
         confirmLabel={t("delete")}
         pending={removeMany.isPending}
         onCancel={() => setBulkDeleting(false)}
-        onConfirm={() => removeMany.mutate(bulk.selectedIds)}
+        onConfirm={() => removeMany.mutate([...bulk.selectedIds])}
       />
 
       {memories.isError ? (
@@ -184,12 +185,12 @@ export function AgentMemorySection({ workspace }: { workspace: Workspace }) {
       ) : rows.length > 0 ? (
         <SettingsListBlock
           toolbar={
-            bulk.active ? (
+            bulk.selectMode ? (
               <BulkActionBar
-                active={bulk.active}
+                active={bulk.selectMode}
                 count={bulk.count}
-                allSelected={bulk.allSelected}
-                onToggleAll={bulk.toggleAll}
+                allSelected={bulk.allSelected()}
+                onToggleAll={() => bulk.selectAll()}
                 onExit={bulk.exit}
               >
                 <Button variant="outline" size="sm" loading={removeMany.isPending} onClick={() => setBulkDeleting(true)}>
@@ -211,7 +212,7 @@ export function AgentMemorySection({ workspace }: { workspace: Workspace }) {
             <MemoryRow
               key={row.id}
               memory={row}
-              selecting={bulk.active}
+              selecting={bulk.selectMode}
               selected={bulk.isSelected(row.id)}
               onToggleSelected={(event) => bulk.toggle(row.id, event)}
               onEdit={() => setEditor({ open: true, memory: row })}

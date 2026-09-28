@@ -25,7 +25,8 @@ import { invalidateProviderDependents } from "@/features/settings/providerCaches
 import { SettingsBlock, SettingsGroup, SettingsListBlock, SettingsListItem } from "@/components/settings/settings-layout";
 import { cn } from "@/lib/utils";
 import { gotoRecord, OPEN_PLUGIN_IN_MARKET } from "@/lib/deepLink";
-import { BulkActionBar, BulkCheckbox, BulkSelectTrigger, useBulkSelection } from "@/components/app/bulkSelection";
+import { BulkActionBar, BulkCheckbox, BulkSelectTrigger } from "@/components/app/bulkSelection";
+import { useMultiSelect } from "@/lib/useMultiSelect";
 
 type ProviderProfile = components["schemas"]["ProviderProfileOut"];
 type VendorPreset = components["schemas"]["VendorPresetOut"];
@@ -273,7 +274,7 @@ export function ProviderProfilesSection({
 
   /* 批量:同一批临时试的端点、或换供应商后要整体停掉的一组,逐个点开关会点很久。
      **删除仍然要过确认**——删连接会连带它的模型行和指向它的能力默认,不是可以顺手做的事。 */
-  const bulk = useBulkSelection(visibleProfiles, (profile) => profile.id);
+  const bulk = useMultiSelect(visibleProfiles, (profile) => profile.id);
   const [bulkDeleting, setBulkDeleting] = React.useState(false);
   const bulkPatch = useMutation({
     mutationFn: async ({ ids, enabled }: { ids: string[]; enabled: boolean }) => {
@@ -327,7 +328,7 @@ export function ProviderProfilesSection({
       description={description ?? t("providerAccountsDesc")}
       actions={
         <div className="flex items-center gap-1.5">
-          <BulkSelectTrigger active={bulk.active} onEnter={bulk.enter} disabled={visibleProfiles.length === 0} />
+          <BulkSelectTrigger active={bulk.selectMode} onEnter={bulk.enter} disabled={visibleProfiles.length === 0} />
           <Button variant="outline" size="sm" onClick={openCreate}>
             <Plus size={13} /> {t("providerAdd")}
           </Button>
@@ -459,17 +460,17 @@ export function ProviderProfilesSection({
         body={t("bulkDeleteConfirmBody").replace("{n}", String(bulk.count))}
         onCancel={() => setBulkDeleting(false)}
         pending={bulkRemove.isPending}
-        onConfirm={() => bulkRemove.mutate(bulk.selectedIds)}
+        onConfirm={() => bulkRemove.mutate([...bulk.selectedIds])}
       />
 
       {profiles.isSuccess && visibleProfiles.length > 0 ? (
         <SettingsListBlock
-          toolbar={bulk.active ? (
-            <BulkActionBar active={bulk.active} count={bulk.count} allSelected={bulk.allSelected} onToggleAll={bulk.toggleAll} onExit={bulk.exit}>
-              <Button variant="outline" size="sm" disabled={bulkBusy} loading={bulkPatch.isPending} onClick={() => bulkPatch.mutate({ ids: bulk.selectedIds, enabled: true })}>
+          toolbar={bulk.selectMode ? (
+            <BulkActionBar active={bulk.selectMode} count={bulk.count} allSelected={bulk.allSelected()} onToggleAll={() => bulk.selectAll()} onExit={bulk.exit}>
+              <Button variant="outline" size="sm" disabled={bulkBusy} loading={bulkPatch.isPending} onClick={() => bulkPatch.mutate({ ids: [...bulk.selectedIds], enabled: true })}>
                 {t("bulkEnable")}
               </Button>
-              <Button variant="outline" size="sm" disabled={bulkBusy} loading={bulkPatch.isPending} onClick={() => bulkPatch.mutate({ ids: bulk.selectedIds, enabled: false })}>
+              <Button variant="outline" size="sm" disabled={bulkBusy} loading={bulkPatch.isPending} onClick={() => bulkPatch.mutate({ ids: [...bulk.selectedIds], enabled: false })}>
                 {t("bulkDisable")}
               </Button>
               <Button variant="outline" size="sm" disabled={bulkBusy} onClick={() => setBulkDeleting(true)}>
@@ -485,13 +486,13 @@ export function ProviderProfilesSection({
                   /* 右端只有**一列**。此前「已停用」徽标自己占一列,而它只在停用时渲染 ——
                      启用的行少一个子元素,末列空着,gap 却照算,于是那些行的图标比停用的行
                      往左错开一格。条件出现的东西不能自己占一条网格轨道。 */
-                  bulk.active ? "grid-cols-[auto_28px_minmax(0,1fr)_auto]" : "grid-cols-[28px_minmax(0,1fr)_auto]",
+                  bulk.selectMode ? "grid-cols-[auto_28px_minmax(0,1fr)_auto]" : "grid-cols-[28px_minmax(0,1fr)_auto]",
                   !profile.enabled && "opacity-55",
                   bulk.isSelected(profile.id) && "rounded-md bg-[color-mix(in_srgb,var(--primary)_7%,transparent)] opacity-100",
                 )}
                 key={profile.id}
               >
-              {bulk.active && (
+              {bulk.selectMode && (
                 <BulkCheckbox
                   checked={bulk.isSelected(profile.id)}
                   onToggle={(event) => bulk.toggle(profile.id, event)}

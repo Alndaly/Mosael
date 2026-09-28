@@ -104,7 +104,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
     window.history.replaceState(null, "", window.location.hash.split("?")[0] || "#/media");
   }, [assets.data]);
   // 多选的状态机是共用的(见 lib/useMultiSelect)—— 素材、发布记录、工作流三处同一份。
-  const { selectMode, setSelectMode, selectedIds, toggle: toggleSelected, selectAll, allSelected, clear: clearSelection, exit: exitSelectMode } =
+  const { selectMode, enter: enterSelectMode, selectedIds, toggle: toggleSelected, selectAll, allSelected, clear: clearSelection, exit: exitSelectMode } =
     useMultiSelect(assets.data ?? [], (asset) => asset.id);
   /** 选中项里能参与对比的:图片和视频各是一套对比,**不混** —— 图片比的是同一处细节(联动缩放),
    *  视频比的是同一时刻(联动播放)。混选时两套都不成立,按钮禁用并说明。 */
@@ -347,7 +347,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
                 <Button variant="outline" className={cn("px-3", display === "grid" && "border-primary/40 bg-accent text-primary")} aria-label={t("studioGridView")} aria-pressed={display === "grid"} onClick={() => setDisplay("grid")}><LayoutGrid /></Button>
                 <Button variant="outline" className={cn("px-3", display === "list" && "border-primary/40 bg-accent text-primary")} aria-label={t("studioListView")} aria-pressed={display === "list"} onClick={() => setDisplay("list")}><List /></Button>
               </div>
-              <Button variant="outline" className="ml-auto" aria-pressed={selectMode} onClick={() => selectMode ? exitSelectMode() : setSelectMode(true)}>
+              <Button variant="outline" className="ml-auto" aria-pressed={selectMode} onClick={() => selectMode ? exitSelectMode() : enterSelectMode()}>
                 {selectMode ? <X /> : <Check />}{selectMode ? t("cancel") : t("mediaSelectMode")}
               </Button>
             </div>

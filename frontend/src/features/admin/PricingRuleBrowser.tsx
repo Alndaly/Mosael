@@ -3,7 +3,8 @@ import { Clock, Info, LayoutGrid, List, Pencil, Search, Trash2 } from "lucide-re
 
 import type { components } from "@/api/generated/schema";
 import { useI18n } from "@/app/preferences";
-import { BulkCheckbox, type useBulkSelection } from "@/components/app/bulkSelection";
+import { BulkCheckbox } from "@/components/app/bulkSelection";
+import type { useMultiSelect } from "@/lib/useMultiSelect";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { OptionPicker } from "@/components/ui/option-picker";
@@ -277,7 +278,7 @@ export function PricingRuleGroups({
 }: {
   groups: RuleGroup[];
   display: "grid" | "list";
-  bulk: ReturnType<typeof useBulkSelection<RuleGroup>>;
+  bulk: ReturnType<typeof useMultiSelect<RuleGroup>>;
   labels: Labels;
   onEdit: (rule: PricingRule) => void;
   onDelete: (rule: PricingRule) => void;
@@ -305,11 +306,11 @@ export function PricingRuleGroups({
               key={group.key}
               className={cn(
                 "grid items-center gap-x-4 gap-y-2 px-1 py-2.5",
-                bulk.active ? "grid-cols-[auto_minmax(10rem,15rem)_minmax(0,1fr)_auto]" : "grid-cols-[minmax(10rem,15rem)_minmax(0,1fr)_auto]",
+                bulk.selectMode ? "grid-cols-[auto_minmax(10rem,15rem)_minmax(0,1fr)_auto]" : "grid-cols-[minmax(10rem,15rem)_minmax(0,1fr)_auto]",
                 bulk.isSelected(group.key) && "rounded-md bg-[color-mix(in_srgb,var(--primary)_7%,transparent)]",
               )}
             >
-              {bulk.active && <BulkCheckbox checked={bulk.isSelected(group.key)} onToggle={(event) => bulk.toggle(group.key, event)} label={t("bulkSelectRow")} />}
+              {bulk.selectMode && <BulkCheckbox checked={bulk.isSelected(group.key)} onToggle={(event) => bulk.toggle(group.key, event)} label={t("bulkSelectRow")} />}
               <div className="grid min-w-0 gap-0.5">
                 <strong className="truncate text-ui-sm font-semibold" title={title(group)}>{title(group)}</strong>
                 <small className="truncate text-ui-xs text-muted-foreground">{subtitle(group)}</small>
@@ -358,7 +359,7 @@ export function PricingRuleGroups({
         >
           <header className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2">
             <div className="flex min-w-0 items-start gap-2">
-              {bulk.active && <BulkCheckbox checked={bulk.isSelected(group.key)} onToggle={(event) => bulk.toggle(group.key, event)} label={t("bulkSelectRow")} />}
+              {bulk.selectMode && <BulkCheckbox checked={bulk.isSelected(group.key)} onToggle={(event) => bulk.toggle(group.key, event)} label={t("bulkSelectRow")} />}
               <div className="grid min-w-0 gap-0.5">
                 <strong className="truncate text-ui-md font-semibold" title={title(group)}>{title(group)}</strong>
                 <small className="truncate text-ui-xs text-muted-foreground">{subtitle(group)}</small>

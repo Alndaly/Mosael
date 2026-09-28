@@ -486,7 +486,7 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
   const enteringRoot = useSectionEntry("workflows", () => setSelectedId(null)) !== null;
   const selected = enteringRoot ? null : (workflows.data ?? []).find((w) => w.id === selectedId) ?? null;
   // 多选与素材页同一份状态机(见 lib/useMultiSelect)。
-  const { selectMode, setSelectMode, selectedIds, toggle, selectAll, allSelected, clear, exit, menuTargets } =
+  const { selectMode, enter: enterSelectMode, selectedIds, toggle, selectAll, allSelected, clear, exit, menuTargets } =
     useMultiSelect(workflows.data ?? [], (workflow) => workflow.id);
   const [batchDeleting, setBatchDeleting] = React.useState(false);
   /** 右键菜单:右键的那张在选区里(且不止它一张)就作用于整个选区,只给能对一批做的动作 —— 和工具条上
@@ -650,7 +650,7 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
             </>
           ) : (
             <>
-              <Button variant="outline" onClick={() => setSelectMode(true)}>
+              <Button variant="outline" onClick={() => enterSelectMode()}>
                 <Check size={13} /> {t("mediaSelectMode")}
               </Button>
               <Button variant="outline" loading={importFile.isPending} onClick={() => importInputRef.current?.click()}>

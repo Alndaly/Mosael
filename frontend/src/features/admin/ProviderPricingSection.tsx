@@ -9,7 +9,8 @@ import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ConfirmDialog, DIALOG_FIELD, ModalShell } from "@/components/app/modals";
-import { BulkActionBar, BulkSelectTrigger, useBulkSelection } from "@/components/app/bulkSelection";
+import { BulkActionBar, BulkSelectTrigger } from "@/components/app/bulkSelection";
+import { useMultiSelect } from "@/lib/useMultiSelect";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { OptionPicker } from "@/components/ui/option-picker";
 import { Textarea } from "@/components/ui/textarea";
@@ -309,7 +310,7 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
   const allGroups = React.useMemo(() => groupRules(ruleList, BILLING_UNITS), [ruleList]);
   const groupProfileName = (group: RuleGroup) => profileLabel(group.profileId, group.provider);
   const groups = filterGroups(allGroups, filters, groupProfileName);
-  const bulk = useBulkSelection(groups, (group) => group.key);
+  const bulk = useMultiSelect(groups, (group) => group.key);
   const selectedRuleIds = () => groups.filter((group) => bulk.isSelected(group.key)).flatMap((group) => group.rules.map((rule) => rule.id));
   const [deletingGroup, setDeletingGroup] = React.useState<RuleGroup | null>(null);
   const [bulkDeleting, setBulkDeleting] = React.useState(false);
@@ -396,7 +397,7 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
       }
       actions={
         <div className="flex items-center gap-1.5">
-          <BulkSelectTrigger active={bulk.active} onEnter={bulk.enter} disabled={ruleList.length === 0} />
+          <BulkSelectTrigger active={bulk.selectMode} onEnter={bulk.enter} disabled={ruleList.length === 0} />
           <Button
             variant="outline"
             size="sm"
@@ -650,8 +651,8 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
         <SettingsEmpty icon={<ReceiptText size={20} />} title={t("pricingRulesEmpty")} />
       ) : (
         <div className="grid min-w-0 gap-4">
-          {bulk.active && (
-            <BulkActionBar active={bulk.active} count={bulk.count} allSelected={bulk.allSelected} onToggleAll={bulk.toggleAll} onExit={bulk.exit}>
+          {bulk.selectMode && (
+            <BulkActionBar active={bulk.selectMode} count={bulk.count} allSelected={bulk.allSelected()} onToggleAll={() => bulk.selectAll()} onExit={bulk.exit}>
               <Button variant="outline" size="sm" loading={removeMany.isPending} onClick={() => setBulkDeleting(true)}>
                 <Trash2 size={12} /> {t("bulkDelete")}
               </Button>

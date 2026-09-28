@@ -8,7 +8,8 @@ import { useI18n } from "@/app/preferences";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Combobox } from "@/components/app/combobox";
-import { BulkActionBar, BulkCheckbox, useBulkSelection } from "@/components/app/bulkSelection";
+import { BulkActionBar, BulkCheckbox } from "@/components/app/bulkSelection";
+import { useMultiSelect } from "@/lib/useMultiSelect";
 import { ModalShell } from "@/components/app/modals";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -142,7 +143,7 @@ export function ProviderModelList({
 
   /* 一个端点常常一次加进来十几个模型,之后"只留对话的、其余停用"是常见动作。
      逐个点开关的话,这件事要点十几次,中间还会点错行。 */
-  const bulk = useBulkSelection(configured, (row) => row.id);
+  const bulk = useMultiSelect(configured, (row) => row.id);
   const patchMany = useMutation({
     mutationFn: async ({ ids, body }: { ids: string[]; body: Record<string, unknown> }) => {
       await Promise.allSettled(
@@ -210,14 +211,14 @@ export function ProviderModelList({
         </SettingsList>
       )}
 
-      <BulkActionBar active={bulk.active} count={bulk.count} allSelected={bulk.allSelected} onToggleAll={bulk.toggleAll} onExit={bulk.exit}>
-        <Button variant="outline" size="sm" disabled={busy} loading={patchMany.isPending} onClick={() => patchMany.mutate({ ids: bulk.selectedIds, body: { enabled: true } })}>
+      <BulkActionBar active={bulk.selectMode} count={bulk.count} allSelected={bulk.allSelected()} onToggleAll={() => bulk.selectAll()} onExit={bulk.exit}>
+        <Button variant="outline" size="sm" disabled={busy} loading={patchMany.isPending} onClick={() => patchMany.mutate({ ids: [...bulk.selectedIds], body: { enabled: true } })}>
           {t("bulkEnable")}
         </Button>
-        <Button variant="outline" size="sm" disabled={busy} loading={patchMany.isPending} onClick={() => patchMany.mutate({ ids: bulk.selectedIds, body: { enabled: false } })}>
+        <Button variant="outline" size="sm" disabled={busy} loading={patchMany.isPending} onClick={() => patchMany.mutate({ ids: [...bulk.selectedIds], body: { enabled: false } })}>
           {t("bulkDisable")}
         </Button>
-        <Button variant="outline" size="sm" disabled={busy} loading={removeMany.isPending} onClick={() => removeMany.mutate(bulk.selectedIds)}>
+        <Button variant="outline" size="sm" disabled={busy} loading={removeMany.isPending} onClick={() => removeMany.mutate([...bulk.selectedIds])}>
           <Trash2 size={12} /> {t("bulkDelete")}
         </Button>
       </BulkActionBar>
@@ -234,12 +235,12 @@ export function ProviderModelList({
           <SettingsListItem
             className={cn(
               "grid items-center gap-2",
-              bulk.active ? "grid-cols-[auto_minmax(0,1fr)_auto]" : "grid-cols-[minmax(0,1fr)_auto]",
+              bulk.selectMode ? "grid-cols-[auto_minmax(0,1fr)_auto]" : "grid-cols-[minmax(0,1fr)_auto]",
               bulk.isSelected(row.id) && "rounded-md bg-[color-mix(in_srgb,var(--primary)_7%,transparent)]",
             )}
             key={row.id}
           >
-          {bulk.active && (
+          {bulk.selectMode && (
             <BulkCheckbox
               checked={bulk.isSelected(row.id)}
               onToggle={(event) => bulk.toggle(row.id, event)}

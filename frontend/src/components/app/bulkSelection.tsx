@@ -1,4 +1,4 @@
-import React from "react";
+import type React from "react";
 import { ListChecks, X } from "lucide-react";
 
 import { useI18n } from "@/app/preferences";
@@ -7,103 +7,12 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 
 /**
- * 列表的批量选择。
+ * 列表批量选择的**界面那一半**:行首勾选框、操作条、「选择」入口。状态机在 lib/useMultiSelect。
  *
  * **为什么要有**:设置里那些列表(成本规则、模型、供应商)只能一行一行删。按目录预填一次能生成
  * 几十条价格规则,发现填错了就得点几十次垃圾桶,每次还各弹一次确认——用户的动作是"把这一批去掉",
  * 而界面只提供"去掉这一个"。
- *
- * **shift 连选是刚需而不是锦上添花**:批量操作的对象几乎总是**连续**的一段(同一个供应商的一串
- * 规则、目录预填出来的一批)。没有连选,"批量"只是把 N 次删除换成 N 次勾选,省不下什么。
- *
- * 选中集只认 id,不持有行对象——列表刷新后行是新的对象,持有它们会让选中状态在每次 refetch
- * 后失效。同理:id 不在当前列表里的会被丢掉(删完之后不该还留着幽灵选中)。
  */
-export function useBulkSelection<T>(items: T[], getId: (item: T) => string) {
-  // **选择是一种模式,要显式进入**。勾选框常驻的话,列表在"只是看看"的时候也顶着一列空框,
-  // 而浏览才是这些列表 99% 的用途 —— 批量删是偶尔为之的事。所以默认不显示,由标题行的
-  // 「选择」入口打开;退出选择即关闭并清空。
-  const [active, setActive] = React.useState(false);
-  const [selected, setSelected] = React.useState<ReadonlySet<string>>(() => new Set());
-  const lastIndex = React.useRef<number | null>(null);
-
-  // getId 几乎总是就地写的箭头函数,放进依赖会让 ids 每次渲染都重算,进而让下面每个
-  // useCallback 都换身份。用 ref 接住它,只跟着 items 变。
-  const getIdRef = React.useRef(getId);
-  getIdRef.current = getId;
-  const ids = React.useMemo(() => items.map((item) => getIdRef.current(item)), [items]);
-  const idsKey = ids.join("\u0000");
-
-  // 列表变了就把已不存在的 id 摘掉。删除之后若不清,计数会一直显示"已选 3 项"而列表里只剩 1 行。
-  React.useEffect(() => {
-    setSelected((prev) => {
-      if (prev.size === 0) return prev;
-      const live = new Set(idsKey ? idsKey.split("\u0000") : []);
-      const next = new Set([...prev].filter((id) => live.has(id)));
-      return next.size === prev.size ? prev : next;
-    });
-  }, [idsKey]);
-
-  const toggle = React.useCallback(
-    (id: string, event?: { shiftKey?: boolean }) => {
-      const index = ids.indexOf(id);
-      setSelected((prev) => {
-        const next = new Set(prev);
-        // shift + 点击:从上一次点的那行到这行,整段设成**这一次的目标状态**(而不是各自取反)——
-        // 取反会把段中已选的又反选掉,和所有文件管理器的行为都不一样。
-        if (event?.shiftKey && lastIndex.current !== null && index >= 0) {
-          const [from, to] = [lastIndex.current, index].sort((a, b) => a - b);
-          const turnOn = !prev.has(id);
-          for (let i = from; i <= to; i += 1) {
-            if (turnOn) next.add(ids[i]);
-            else next.delete(ids[i]);
-          }
-        } else if (next.has(id)) {
-          next.delete(id);
-        } else {
-          next.add(id);
-        }
-        return next;
-      });
-      if (index >= 0) lastIndex.current = index;
-    },
-    [ids],
-  );
-
-  const clear = React.useCallback(() => {
-    setSelected(new Set());
-    lastIndex.current = null;
-  }, []);
-
-  const enter = React.useCallback(() => setActive(true), []);
-  const exit = React.useCallback(() => {
-    setActive(false);
-    setSelected(new Set());
-    lastIndex.current = null;
-  }, []);
-
-  const allSelected = ids.length > 0 && ids.every((id) => selected.has(id));
-  const toggleAll = React.useCallback(() => {
-    setSelected(allSelected ? new Set() : new Set(ids));
-    lastIndex.current = null;
-  }, [allSelected, ids]);
-
-  return {
-    /** 是否处于选择模式。列表据此决定要不要画勾选框。 */
-    active,
-    enter,
-    exit,
-    selected,
-    selectedIds: React.useMemo(() => ids.filter((id) => selected.has(id)), [ids, selected]),
-    count: selected.size,
-    isSelected: (id: string) => selected.has(id),
-    toggle,
-    toggleAll,
-    allSelected,
-    someSelected: selected.size > 0 && !allSelected,
-    clear,
-  };
-}
 
 /** 行首的勾选框。点它不该触发行本身的点击(编辑、展开),所以就地拦掉。 */
 export function BulkCheckbox({
@@ -172,7 +81,7 @@ export function BulkActionBar({
         <Checkbox
           checked={allSelected ? true : count > 0 ? "indeterminate" : false}
           aria-label={allSelected ? t("bulkDeselectAll") : t("bulkSelectAll")}
-          onCheckedChange={onToggleAll}
+          onCheckedChange={() => onToggleAll()}
         />
       </span>
       <span className="text-ui-sm font-medium text-foreground">

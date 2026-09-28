@@ -143,7 +143,7 @@ export function HomeView({
 
   // 多选与素材、工作流、发布同一份状态机(见 lib/useMultiSelect):退出即清空、全选只作用于
   // 当前看得见的那些(搜索之后)、被删掉的自动剔除。
-  const { selectMode, setSelectMode, selectedIds, toggle, selectAll, allSelected, clear, exit, menuTargets } =
+  const { selectMode, enter: enterSelectMode, selectedIds, toggle, selectAll, allSelected, clear, exit, menuTargets } =
     useMultiSelect(visible, (project) => project.id);
   const [batchDeleting, setBatchDeleting] = React.useState(false);
   const batchRemove = useMutation({
@@ -231,7 +231,7 @@ export function HomeView({
               </Button>
             </>
           ) : (
-            <Button variant="outline" onClick={() => setSelectMode(true)}>
+            <Button variant="outline" onClick={() => enterSelectMode()}>
               <Check size={13} /> {t("mediaSelectMode")}
             </Button>
           ))}

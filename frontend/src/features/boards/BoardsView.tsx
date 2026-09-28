@@ -166,7 +166,7 @@ export function BoardsView({ workspace }: { workspace: Workspace }) {
   });
 
   // 多选与首页、素材、工作流同一份状态机(见 lib/useMultiSelect):退出即清空、被删掉的自动剔除。
-  const { selectMode, setSelectMode, selectedIds, toggle, selectAll, allSelected, exit } = useMultiSelect(list, boardIdOf);
+  const { selectMode, enter: enterSelectMode, selectedIds, toggle, selectAll, allSelected, exit } = useMultiSelect(list, boardIdOf);
   const [batchDeleting, setBatchDeleting] = React.useState(false);
   const batchRemove = useMutation({
     mutationFn: async (ids: string[]) => {
@@ -256,7 +256,7 @@ export function BoardsView({ workspace }: { workspace: Workspace }) {
             </>
           ) : (
             <>
-              <Button variant="outline" disabled={list.length === 0} onClick={() => setSelectMode(true)}>
+              <Button variant="outline" disabled={list.length === 0} onClick={() => enterSelectMode()}>
                 <Check size={13} /> {t("mediaSelectMode")}
               </Button>
               <Button loading={create.isPending} onClick={() => create.mutate()}>
@@ -288,7 +288,7 @@ export function BoardsView({ workspace }: { workspace: Workspace }) {
                 selected={selectedIds.has(board.id)}
                 onOpen={() => setOpenId(board.id)}
                 onToggle={() => {
-                  setSelectMode(true);
+                  enterSelectMode();
                   toggle(board.id);
                 }}
                 onRename={() => setMenuRenaming(board)}
