@@ -27,14 +27,12 @@ const clip = {
   id: "clip-1", asset_id: "asset-1", asset_kind: "video", timeline_start: 0, src_in: 0, src_out: 5, speed: 1,
   gain: 1, muted: false, effects: {}, transform: {},
 } as never;
-const sequence = { id: "seq-1", name: "Sequence", revision: 1, width: 1920, height: 1080, fps: 30 } as never;
 const assets = [{ id: "asset-1", name: "Video", kind: "video" }] as never;
 
 function renderInspector() {
   const { container } = render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
       <Inspector
-        sequence={sequence}
         workspaceId="w1"
         selectedClip={clip}
         assets={assets}
@@ -84,7 +82,6 @@ describe("检查器按素材类型出区块", () => {
     render(
       <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
         <Inspector
-          sequence={sequence}
           workspaceId="w1"
           selectedClip={{ ...(clip as object), asset_kind: kind, ...extra } as never}
           assets={[{ id: "asset-1", name: "A", kind }] as never}

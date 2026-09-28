@@ -179,11 +179,10 @@ export function splitClipAtPointsBatch(
   });
 }
 
-export function setTrackState(
-  sequenceId: string,
-  trackId: string,
-  body: { muted?: boolean; locked?: boolean; solo?: boolean; duck?: boolean },
-): Promise<Sequence> {
+/** 轨道头上的几个开关。静音只管声音,隐藏只管字幕显示(只有字幕轨收 hidden、字幕轨不收 muted)。 */
+export type TrackStatePatch = { muted?: boolean; hidden?: boolean; locked?: boolean; solo?: boolean; duck?: boolean };
+
+export function setTrackState(sequenceId: string, trackId: string, body: TrackStatePatch): Promise<Sequence> {
   return api<Sequence>(`/api/sequences/${sequenceId}/tracks/${trackId}`, {
     method: "PATCH",
     body: JSON.stringify(body),

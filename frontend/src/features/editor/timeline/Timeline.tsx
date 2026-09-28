@@ -1,8 +1,8 @@
 import React from "react";
 import { useQueries } from "@tanstack/react-query";
-import { AudioLines, BetweenHorizontalStart, Camera, ChevronDown, ChevronUp, CircleHelp, Copy, Film, Lock, LockOpen, Magnet, Minus, MousePointer2, Plus, Replace, Scissors, Slice, Trash2, Type, Volume2, VolumeX, Waves, X } from "lucide-react";
+import { AudioLines, BetweenHorizontalStart, Camera, ChevronDown, ChevronUp, CircleHelp, Copy, Eye, EyeOff, Film, Lock, LockOpen, Magnet, Minus, MousePointer2, Plus, Replace, Scissors, Slice, Trash2, Type, Volume2, VolumeX, Waves, X } from "lucide-react";
 
-import { fetchWaveform, type Asset, type Clip, type Sequence, type Track, type WaveformData } from "@/api/client";
+import { fetchWaveform, type Asset, type Clip, type Sequence, type Track, type TrackStatePatch, type WaveformData } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { KbdGroup } from "@/components/ui/kbd";
@@ -77,8 +77,6 @@ export function Timeline({
   grabbingFrame = false,
   onDuplicateClip,
   onDetachAudio,
-  onSeparateAudio,
-  onDenoise,
   onSetTrackState,
   toolbarExtra,
 }: {
@@ -106,10 +104,7 @@ export function Timeline({
   grabbingFrame?: boolean;
   onDuplicateClip?: (clipId: string) => void;
   onDetachAudio?: (clipId: string) => void;
-  onSeparateAudio?: (clipId: string) => void;
-  /** 给这个片段引用的素材降噪(产出新素材,片段本身不变)。 */
-  onDenoise?: (assetId: string) => void;
-  onSetTrackState?: (trackId: string, body: { muted?: boolean; locked?: boolean; solo?: boolean; duck?: boolean }) => void;
+  onSetTrackState?: (trackId: string, body: TrackStatePatch) => void;
   toolbarExtra?: React.ReactNode;
 }) {
   const t = useI18n();
@@ -873,18 +868,27 @@ export function Timeline({
               <div className="flex items-center gap-0.5">
               {onSetTrackState && (
                 <span className="inline-flex gap-0.5">
-                  <TrackToggle
-                    active={Boolean(track.muted)}
-                    activeClassName="text-destructive enabled:hover:text-destructive"
-                    label={track.muted ? t("trackUnmute") : t("trackMute")}
-                    onToggle={() => onSetTrackState(track.id, { muted: !track.muted })}
-                  >
-                    {track.muted ? <VolumeX size={11} /> : <Volume2 size={11} />}
-                  </TrackToggle>
-                  {/* 独奏 / 闪避只管声音。字幕轨没有声音:在它上面按独奏,「有轨在独奏」成立而它
-                      自己不出声,结果是整片静音 —— 所以字幕轨头上不摆这两个。 */}
-                  {track.kind !== "subtitle" && (
+                  {/* 静音 / 独奏 / 闪避只管声音。字幕轨没有声音(在它上面按独奏,「有轨在独奏」成立
+                      而它自己不出声,结果是整片静音),它头上只有「隐藏」:预览和成片里都不画这条字幕。 */}
+                  {track.kind === "subtitle" ? (
+                    <TrackToggle
+                      active={Boolean(track.hidden)}
+                      activeClassName="text-destructive enabled:hover:text-destructive"
+                      label={track.hidden ? t("trackShow") : t("trackHide")}
+                      onToggle={() => onSetTrackState(track.id, { hidden: !track.hidden })}
+                    >
+                      {track.hidden ? <EyeOff size={11} /> : <Eye size={11} />}
+                    </TrackToggle>
+                  ) : (
                     <>
+                      <TrackToggle
+                        active={Boolean(track.muted)}
+                        activeClassName="text-destructive enabled:hover:text-destructive"
+                        label={track.muted ? t("trackUnmute") : t("trackMute")}
+                        onToggle={() => onSetTrackState(track.id, { muted: !track.muted })}
+                      >
+                        {track.muted ? <VolumeX size={11} /> : <Volume2 size={11} />}
+                      </TrackToggle>
                       <TrackToggle
                         active={Boolean(track.solo)}
                         activeClassName="bg-warning/15 text-warning enabled:hover:text-warning"
@@ -1075,23 +1079,12 @@ export function Timeline({
                       onRippleDelete={onRippleDeleteClips ? () => onRippleDeleteClips(menuTargets(clip.id)) : undefined}
                       onSplit={onSplitClip ? () => onSplitClip(clip.id) : undefined}
                       onDuplicate={onDuplicateClip && clip.asset_id ? () => onDuplicateClip(clip.id) : undefined}
-                      // 下面三项按**素材类型**给,不按轨道:视频轨上完全可以放图片(AI 生成的
-                      // 静图就是这么落上去的),而图片没有声音。
+                      // 按**素材类型**给,不按轨道:视频轨上完全可以放图片(AI 生成的静图就是这么
+                      // 落上去的),而图片没有声音。「人声分离」「降噪」处理的是整份素材、产出进
+                      // 素材库,所以在素材池 / 素材库的菜单里,不在片段菜单里。
                       onDetachAudio={
                         onDetachAudio && track.kind === "video" && clip.asset_id && clip.asset_kind === "video"
                           ? () => onDetachAudio(clip.id)
-                          : undefined
-                      }
-                      // 视频和音频都给:声音在哪都能拆,而译配那条流程恰恰把原片整段
-                      // 放在视频轨上(音频轨是空的)。
-                      onSeparateAudio={
-                        onSeparateAudio && clip.asset_id && kindHasSound(clip.asset_kind)
-                          ? () => onSeparateAudio(clip.id)
-                          : undefined
-                      }
-                      onDenoise={
-                        onDenoise && clip.asset_id && kindHasSound(clip.asset_kind)
-                          ? () => onDenoise(clip.asset_id as string)
                           : undefined
                       }
                     />

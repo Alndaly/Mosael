@@ -29,7 +29,7 @@ from app.media.render_executor import (
     execute_render,
 )
 from app.media.render_plan import RenderPlan, RenderPlanError, build_render_plan
-from app.media.scene import assign_base_and_overlays, is_visual_clip
+from app.media.scene import assign_base_and_overlays, is_visual_clip, text_layers
 
 
 logger = logging.getLogger(__name__)
@@ -117,14 +117,7 @@ def build_plan_for_sequence(db: Session, sequence_id: str, export_params: dict |
             "transform": clip.transform,
         }
 
-    video_tracks = sorted(
-        (track for track in sequence.tracks if track.kind == "video"), key=lambda track: track.position
-    )
     audio_tracks = [track for track in sequence.tracks if track.kind == "audio" and not track.muted]
-    subtitle_tracks = [track for track in sequence.tracks if track.kind == "subtitle" and not track.muted]
-
-    def text_clips(track: Track) -> list:
-        return [clip for clip in track.clips if not clip.asset_id and clip.text_override]
 
     # 画面的 base/overlay 归属由 app/media/scene.py 决定——它是**契约实现**,前端
     # sceneModel.ts 是它的对侧,两者由 contracts/scene-cases.json 钉死(见 test_scene_parity.py)。
@@ -136,9 +129,10 @@ def build_plan_for_sequence(db: Session, sequence_id: str, export_params: dict |
             "kind": track.kind,
             "position": track.position,
             "muted": track.muted,
+            "hidden": track.hidden,
             "clips": [
                 {"id": c.id, "asset_id": c.asset_id, "timeline_start": c.timeline_start,
-                 "src_in": c.src_in, "src_out": c.src_out, "speed": c.speed}
+                 "src_in": c.src_in, "src_out": c.src_out, "speed": c.speed, "text_override": c.text_override}
                 for c in track.clips
             ],
         }
@@ -166,10 +160,12 @@ def build_plan_for_sequence(db: Session, sequence_id: str, export_params: dict |
     # **静音轨的画面保留**:轨道头静音是喇叭图标,只关音频;把画面一并去掉会让「给画中画轨静音」
     # 变成「这层画面从成片里消失」,而预览里它还好好地显示着。音频侧的排除在下面 audible。
     overlay_clips = [clip_dict(clip) for track in overlay_tracks for clip in media_clips(track)]
-    # 花字:未静音 video 轨上的文本片段(无 asset、有 text_override),按各自 transform 定位烧录。
-    text_overlays = [
-        clip_dict(clip) for track in video_tracks if not track.muted for clip in text_clips(track)
-    ]
+    # 字幕与花字画哪些,同样由契约实现决定(scene.text_layers ⇄ 前端 textLayers,
+    # contracts/text-layer-cases.json):隐藏只管字幕,静音只管声音 —— 静音视频轨上的花字照旧烧录。
+    clip_by_id = {clip.id: clip for track in sequence.tracks for clip in track.clips}
+    shown_text = text_layers(track_views)
+    # 花字按各自 transform 定位烧录。
+    text_overlays = [clip_dict(clip_by_id[view["id"]]) for view in shown_text.titles]
     # 花字若选了上传字体,把 font_id 解析成真实字族名(给 ASS \fn)+ workspace 字体根(fontsdir),
     # 使成片与预览用同一字体;内置字体栈无 font_id、走系统 fontconfig,不受影响。
     for clip in text_overlays:
@@ -197,7 +193,7 @@ def build_plan_for_sequence(db: Session, sequence_id: str, export_params: dict |
         for clip in media_clips(track)
         if carries_sound(clip)
     ]
-    subtitle_clips = [clip_dict(clip) for track in subtitle_tracks for clip in track.clips]
+    subtitle_clips = [clip_dict(clip_by_id[view["id"]]) for view in shown_text.subtitles]
 
     solo_active = any(track.solo for track in sequence.tracks)
     base_video_soloed = bool(base_track and base_track.solo)

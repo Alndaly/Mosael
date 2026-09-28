@@ -35,7 +35,6 @@ import {
   splitClipAtPointsBatch,
   setClipEffects,
   detachClipAudio,
-  separateAssetAudio,
   setClipGain,
   setClipSpeed,
   setClipTransform,
@@ -48,6 +47,7 @@ import {
   type Asset,
   type Project,
   type Sequence,
+  type TrackStatePatch,
   type Workspace,
 } from "@/api/client";
 import { Kbd } from "@/components/ui/kbd";
@@ -64,11 +64,11 @@ import { HANDLE_COLUMN, HANDLE_ROW, handleOffset, useResizableSidebar } from "@/
 
 import { selectedClipId as selectedClipIdOf, useEditorStore } from "@/stores/editorStore";
 import { ConfirmDialog } from "@/components/app/modals";
-import { DenoiseDialog } from "@/features/media/DenoiseDialog";
 import { useImportMediaFiles } from "@/features/media/useImportMediaFiles";
 import { FontFaces } from "@/features/editor/FontFaces";
 import { ExportControl } from "@/features/editor/ExportControl";
 import { Inspector } from "./Inspector";
+import { SequenceSettings, type FillMode } from "./SequenceSettings";
 import { MediaPool } from "./MediaPool";
 import { Monitor } from "./Monitor";
 import { SubtitlePanel } from "./SubtitlePanel";
@@ -468,19 +468,6 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
     },
     onError: (error) => toast.error(String((error as Error).message)),
   });
-  /* 拆成人声 + 背景音。**排任务,不等结果** —— 一段长素材在本机跑十几分钟,而这里只是右键菜单
-     里的一下;完成后两份素材自己出现在素材库里(任务面板有进度和失败原因)。 */
-  const separateAudioMutation = useMutation({
-    mutationFn: (clipId: string) => {
-      const clip = (sequence?.tracks ?? []).flatMap((track) => track.clips ?? []).find((one) => one.id === clipId);
-      if (!clip?.asset_id) throw new Error(t("separateAudioNoAsset"));
-      return separateAssetAudio(clip.asset_id);
-    },
-    onSuccess: () => toast.success(t("separateAudioQueued")),
-    onError: (error) => toast.error(String((error as Error).message)),
-  });
-  // 降噪选档位和方式要一个对话框(和素材库同一个),所以这里只记"给哪份素材"。
-  const [denoisingAsset, setDenoisingAsset] = React.useState<string | null>(null);
   const setEffectsMutation = useMutation({
     mutationFn: ({ clipId, effects }: { clipId: string; effects: Record<string, unknown> }) =>
       setClipEffects(sequence!.id, clipId, effects),
@@ -495,9 +482,10 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
     onError: refreshSequences,
   });
   const reframeMutation = useMutation({
-    mutationFn: ({ width, height, fillMode }: { width: number; height: number; fillMode: string }) =>
+    mutationFn: ({ width, height, fillMode }: { width: number; height: number; fillMode: FillMode }) =>
       setSequenceReframe(sequence!.id, { width, height, fill_mode: fillMode }),
-    onSuccess: refreshSequences,
+    onSuccess: (updated) => applySequence(updated),
+    onError: (error: Error) => toast.error(error.message),
   });
   const cutRangeMutation = useMutation({
     mutationFn: ({ clipId, srcStart, srcEnd }: { clipId: string; srcStart: number; srcEnd: number }) =>
@@ -542,13 +530,8 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
     onError: () => void refreshSequences(),
   });
   const trackStateMutation = useMutation({
-    mutationFn: ({
-      trackId,
-      body,
-    }: {
-      trackId: string;
-      body: { muted?: boolean; locked?: boolean; solo?: boolean; duck?: boolean };
-    }) => setTrackState(sequence!.id, trackId, body),
+    mutationFn: ({ trackId, body }: { trackId: string; body: TrackStatePatch }) =>
+      setTrackState(sequence!.id, trackId, body),
     // Write the returned sequence straight into the cache. An invalidate/refetch leaves a window
     // where the rail still shows the pre-change track, and a click landing in that window targets
     // a track the server has already changed or removed — which then fails as "Track not found".
@@ -912,7 +895,6 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
       {/* Uploaded fonts must be registered before the monitor or the style panel can paint
           text in them. */}
       <FontFaces fonts={fonts.data ?? []} />
-      <DenoiseDialog assetId={denoisingAsset} onClose={() => setDenoisingAsset(null)} />
       <ConfirmDialog
         open={trackPendingRemoval !== null}
         title={t("removeTrackConfirmTitle")}
@@ -1024,7 +1006,6 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
         (() => {
           const inspector = (
             <Inspector
-              sequence={sequence}
               workspaceId={workspace.id}
               selectedClip={selectedClip}
               assets={assets.data ?? []}
@@ -1032,7 +1013,6 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
               onDeleteClip={(clipId) => deleteClipMutation.mutate(clipId)}
               onSetEffects={(clipId, effects) => setEffectsMutation.mutate({ clipId, effects })}
               onSetTransform={(clipId, transform) => setTransformMutation.mutate({ clipId, transform })}
-              onReframe={(width, height, fillMode) => reframeMutation.mutate({ width, height, fillMode })}
               onSetSpeed={(clipId, speed) => setSpeedMutation.mutate({ clipId, speed })}
               onSetGain={(clipId, gain, muted) => setGainMutation.mutate({ clipId, gain, muted })}
               onSetText={(clipId, text) => setTextMutation.mutate({ clipId, text })}
@@ -1097,10 +1077,14 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
           onSplitClipAt={(clipId, srcTime) => splitMutation.mutate({ clipId, srcTime })}
           onDuplicateClip={(clipId) => duplicateClip(clipId)}
           onDetachAudio={(clipId) => detachAudioMutation.mutate(clipId)}
-          onSeparateAudio={(clipId) => separateAudioMutation.mutate(clipId)}
-          onDenoise={setDenoisingAsset}
           onSetTrackState={(trackId, body) => trackStateMutation.mutate({ trackId, body })}
-
+          toolbarExtra={
+            <SequenceSettings
+              sequence={sequence}
+              pending={reframeMutation.isPending}
+              onReframe={(width, height, fillMode) => reframeMutation.mutate({ width, height, fillMode })}
+            />
+          }
         />
       </section>
     </div>

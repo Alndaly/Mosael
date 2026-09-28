@@ -117,3 +117,34 @@ def audible_tracks(tracks: list[dict[str, Any]]) -> list[dict[str, Any]]:
     与画面分开是刻意的:静音只关音频,画面照旧(见 assign_base_and_overlays)。
     """
     return [t for t in tracks if not bool(t.get("muted"))]
+
+
+@dataclass(frozen=True)
+class TextLayers:
+    """画面上的文字层:字幕和花字。它们不进 scene_layers_at(那里只有素材画面),单独一层画在最上面。"""
+
+    #: 没隐藏的字幕轨上的全部片段。
+    subtitles: list[dict[str, Any]]
+    #: video 轨上的花字(没有素材、有文字的片段)。**不看静音** —— 静音只管声音。
+    titles: list[dict[str, Any]]
+
+
+def is_text_clip(clip: dict[str, Any]) -> bool:
+    """文本片段:没有素材、有文字。放在 video 轨上就是花字。"""
+    return not clip.get("asset_id") and bool(clip.get("text_override"))
+
+
+def text_layers(tracks: list[dict[str, Any]]) -> TextLayers:
+    """要画出来的字幕与花字。前端 textLayers 的等价实现,由 contracts/text-layer-cases.json 钉死。
+
+    轨道上两个开关各管一件事:`hidden` 只管字幕显示,`muted` 只管声音。此前字幕轨借 muted 表示
+    「不显示」,视频轨的 muted 又顺带把花字藏掉 —— 给一条画中画轨关声音,字从成片里没了。
+    """
+    subtitles = [
+        clip
+        for track in tracks
+        if str(track.get("kind")) == "subtitle" and not bool(track.get("hidden"))
+        for clip in track.get("clips") or []
+    ]
+    titles = [clip for track in video_tracks_sorted(tracks) for clip in track.get("clips") or [] if is_text_clip(clip)]
+    return TextLayers(subtitles=subtitles, titles=titles)

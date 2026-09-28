@@ -32489,6 +32489,17 @@
             ],
             "title": "Muted"
           },
+          "hidden": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hidden"
+          },
           "locked": {
             "anyOf": [
               {
@@ -32993,6 +33004,11 @@
           "muted": {
             "type": "boolean",
             "title": "Muted"
+          },
+          "hidden": {
+            "type": "boolean",
+            "title": "Hidden",
+            "default": false
           },
           "solo": {
             "type": "boolean",

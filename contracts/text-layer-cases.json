@@ -1,0 +1,107 @@
+{
+  "contract": "text-layers",
+  "version": 1,
+  "readme": "contracts/README.md",
+  "description": "预览与导出必须一致的文字层语义:哪些片段作为字幕画出来、哪些作为花字画出来。轨道的「静音」只管声音,「隐藏」只管字幕显示。后端 backend/tests/test_text_layer_parity.py 与前端 textLayers.parity.test.ts 跑同一份语料。比较的是集合,不含叠放顺序。",
+  "cases": [
+    {
+      "name": "subtitle-track-shows-its-clips",
+      "why": "最基本形态:没隐藏的字幕轨上每一段都是字幕。",
+      "tracks": [
+        {
+          "id": "s1",
+          "kind": "subtitle",
+          "position": 2,
+          "muted": false,
+          "hidden": false,
+          "clips": [
+            { "id": "sub1", "asset_id": null, "text_override": "你好" },
+            { "id": "sub2", "asset_id": null, "text_override": "再见" }
+          ]
+        }
+      ],
+      "expected": { "subtitles": ["sub1", "sub2"], "titles": [] }
+    },
+    {
+      "name": "hidden-subtitle-track-draws-nothing",
+      "why": "字幕轨头上的眼睛:隐藏的字幕轨在预览和成片里都不画,另一条没隐藏的照旧。",
+      "tracks": [
+        {
+          "id": "s1",
+          "kind": "subtitle",
+          "position": 2,
+          "muted": false,
+          "hidden": true,
+          "clips": [{ "id": "hiddenSub", "asset_id": null, "text_override": "原文" }]
+        },
+        {
+          "id": "s2",
+          "kind": "subtitle",
+          "position": 3,
+          "muted": false,
+          "hidden": false,
+          "clips": [{ "id": "shownSub", "asset_id": null, "text_override": "译文" }]
+        }
+      ],
+      "expected": { "subtitles": ["shownSub"], "titles": [] }
+    },
+    {
+      "name": "muted-video-track-keeps-its-titles",
+      "why": "视频轨头上是喇叭,静音只管声音。此前两侧都把静音视频轨上的花字一起藏掉 —— 给一条轨关声音,字从成片里消失了。",
+      "tracks": [
+        {
+          "id": "v1",
+          "kind": "video",
+          "position": 0,
+          "muted": true,
+          "hidden": false,
+          "clips": [{ "id": "title1", "asset_id": null, "text_override": "标题" }]
+        }
+      ],
+      "expected": { "subtitles": [], "titles": ["title1"] }
+    },
+    {
+      "name": "only-text-clips-on-video-tracks-are-titles",
+      "why": "花字 = video 轨上没有素材、有文字的片段。带素材的片段是画面层(见场景契约),空文字不画,音频轨上不会有花字。",
+      "tracks": [
+        {
+          "id": "v1",
+          "kind": "video",
+          "position": 0,
+          "muted": false,
+          "hidden": false,
+          "clips": [
+            { "id": "media", "asset_id": "a", "text_override": null },
+            { "id": "title", "asset_id": null, "text_override": "标题" },
+            { "id": "blank", "asset_id": null, "text_override": "" },
+            { "id": "noText", "asset_id": null, "text_override": null }
+          ]
+        },
+        {
+          "id": "a1",
+          "kind": "audio",
+          "position": 1,
+          "muted": false,
+          "hidden": false,
+          "clips": [{ "id": "strayText", "asset_id": null, "text_override": "不是花字" }]
+        }
+      ],
+      "expected": { "subtitles": [], "titles": ["title"] }
+    },
+    {
+      "name": "subtitle-mute-flag-does-not-hide",
+      "why": "字幕轨不收静音(它没有声音);即使数据里留着 muted,显示与否也只看 hidden。",
+      "tracks": [
+        {
+          "id": "s1",
+          "kind": "subtitle",
+          "position": 1,
+          "muted": true,
+          "hidden": false,
+          "clips": [{ "id": "sub", "asset_id": null, "text_override": "字幕" }]
+        }
+      ],
+      "expected": { "subtitles": ["sub"], "titles": [] }
+    }
+  ]
+}

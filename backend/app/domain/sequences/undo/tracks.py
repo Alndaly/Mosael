@@ -44,6 +44,7 @@ class RemoveTrack:
                 name=payload["name"],
                 position=payload["position"],
                 muted=payload.get("muted", False),
+                hidden=payload["hidden"],
                 solo=payload.get("solo", False),
                 locked=payload.get("locked", False),
                 duck=payload.get("duck", False),
@@ -84,13 +85,13 @@ class SetTrackState:
         track = db.get(Track, payload["track_id"])
         if track is not None:
             prev = payload["previous"]
-            track.muted, track.locked = prev["muted"], prev["locked"]
+            track.muted, track.hidden, track.locked = prev["muted"], prev["hidden"], prev["locked"]
             track.solo, track.duck = prev.get("solo", False), prev.get("duck", False)
 
     def forward(db: Session, sequence: Sequence, payload: dict[str, Any]) -> None:
         track = db.get(Track, payload["track_id"])
         if track is not None:
-            track.muted, track.locked = payload["muted"], payload["locked"]
+            track.muted, track.hidden, track.locked = payload["muted"], payload["hidden"], payload["locked"]
             track.solo, track.duck = payload.get("solo", False), payload.get("duck", False)
 
 

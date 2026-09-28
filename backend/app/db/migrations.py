@@ -464,6 +464,55 @@ def _migrate_subtitle_tracks_carry_no_sound() -> None:
         conn.execute(text("UPDATE tracks SET solo = 0, duck = 0 WHERE kind = 'subtitle' AND (solo = 1 OR duck = 1)"))
 
 
+def _migrate_subtitle_tracks_hide_instead_of_mute() -> None:
+    """轨道补 `hidden` 列,字幕轨上的「静音」搬成「隐藏」。
+
+    此前轨道只有一个 `muted`,两个意思:字幕轨借它表示「不显示这条字幕」,视频轨上它除了关声音还顺带
+    把花字藏掉 —— 而轨道头上画的是喇叭。现在 `muted` 只管声音,`hidden` 只管字幕显示,字幕轨不再收
+    `muted`(set_track_state 拒绝),所以已有的字幕轨静音在这里改记成隐藏,用户看到的效果不变。
+
+    操作日志里记下的轨道状态一起改写(`set_track_state` 的前后两份、`remove_track` 的那一份):不改的话,
+    撤销一次老的「字幕轨静音」写回的是一个已经不起作用的字段,而撤销以为自己做完了。改写后每份状态都
+    带着 `hidden`,撤销直接读它。
+    """
+    inspector = inspect(engine)
+    tables = set(inspector.get_table_names())
+    if "tracks" not in tables:
+        return
+    columns = {c["name"] for c in inspector.get_columns("tracks")}
+    with engine.begin() as conn:
+        if "hidden" not in columns:
+            conn.execute(text("ALTER TABLE tracks ADD COLUMN hidden BOOLEAN NOT NULL DEFAULT 0"))
+        conn.execute(text("UPDATE tracks SET hidden = 1, muted = 0 WHERE kind = 'subtitle' AND muted = 1"))
+        if "sequence_operations" not in tables:
+            return
+        rows = conn.execute(
+            text("SELECT id, kind, payload FROM sequence_operations WHERE kind IN ('set_track_state', 'remove_track')")
+        ).all()
+        payloads = {row[0]: (row[1], json.loads(row[2]) if isinstance(row[2], str) else dict(row[2] or {})) for row in rows}
+        # 被删掉的轨不在 tracks 表里了,它是不是字幕轨只有 remove_track 那份记录知道。
+        subtitle_ids = {row[0] for row in conn.execute(text("SELECT id FROM tracks WHERE kind = 'subtitle'"))}
+        subtitle_ids |= {
+            payload.get("track_id") for kind, payload in payloads.values()
+            if kind == "remove_track" and payload.get("kind") == "subtitle"
+        }
+        for op_id, (kind, payload) in payloads.items():
+            if "hidden" in payload:
+                continue  # 已经是新形状(重跑,或本版本写下的)
+            subtitle = payload.get("track_id") in subtitle_ids
+            states = [payload]
+            if kind == "set_track_state" and isinstance(payload.get("previous"), dict):
+                states.append(payload["previous"])
+            for state in states:
+                state["hidden"] = bool(state.get("muted")) if subtitle else False
+                if subtitle:
+                    state["muted"] = False
+            conn.execute(
+                text("UPDATE sequence_operations SET payload = :payload WHERE id = :id"),
+                {"payload": json.dumps(payload, ensure_ascii=False), "id": op_id},
+            )
+
+
 def _migrate_generation_capability_profiles() -> None:
     """建生成参数模板与逐模型、逐 kind 的声明表。
 
@@ -5125,6 +5174,8 @@ def migration_plan() -> MigrationPlan:
                 _migrate_job_worker_leases,
                 _migrate_browser_pool,
                 _migrate_clip_offline_asset,
+                # 加列必须在 SCHEMA 之前:之后 ORM 上的 Track 已经指望 hidden 存在了。
+                _migrate_subtitle_tracks_hide_instead_of_mute,
                 _migrate_model_structured_output,
                 _migrate_browser_profile_start_url,
                 _migrate_usage_unpriced_reason,

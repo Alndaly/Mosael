@@ -1,7 +1,7 @@
 import React from "react";
 import { assetKeys } from "@/api/queryKeys";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { CircleDot, Download, FileAudio, FileImage, FileVideo, ImagePlus, ListPlus, Pencil, Plus, Search, Tag, Trash2 } from "lucide-react";
+import { AudioWaveform, CircleDot, Download, FileAudio, FileImage, FileVideo, ImagePlus, ListPlus, Loader2, Pencil, Plus, Scissors, Search, Tag, Trash2 } from "lucide-react";
 
 import { assetPreviewUrl, assetThumbnailUrl, deleteAsset, renameAsset, setAssetTags, type Asset } from "@/api/client";
 import { useI18n } from "@/app/preferences";
@@ -19,7 +19,8 @@ import { cn } from "@/lib/utils";
 import { saveAssetToDisk } from "@/lib/download";
 import { usePersistentSet, usePersistentTab } from "@/lib/usePersistentTab";
 import { useDraggable } from "@dnd-kit/core";
-import { assetKindKey, isMediaAsset } from "@/lib/assetKinds";
+import { assetKindKey, isMediaAsset, kindHasSound } from "@/lib/assetKinds";
+import { useAssetAudioActions } from "@/features/media/useAssetAudioActions";
 
 const KIND_FILTERS = ["all", "video", "audio", "image"] as const;
 type KindFilter = (typeof KIND_FILTERS)[number];
@@ -45,6 +46,8 @@ export function MediaPool({
   const [editingTags, setEditingTags] = React.useState<Asset | null>(null);
   const [deleting, setDeleting] = React.useState<Asset | null>(null);
   const [deleteError, setDeleteError] = React.useState<string | null>(null);
+  // 人声分离 / 降噪处理的是整份素材、产出进素材库 —— 和素材库那边是同一个实现。
+  const audioActions = useAssetAudioActions();
   // 类型、标签筛选和素材库一个规矩:记住,切走再回来还在。键和素材库分开 —— 这里看的是
   // 当前工程的素材,那边是整个工作区的,两处各筛各的。
   const [kindFilter, setKindFilter] = usePersistentTab<KindFilter>("editor-pool-kind", "all", KIND_FILTERS);
@@ -173,6 +176,16 @@ export function MediaPool({
               <ContextMenuItem onSelect={() => setEditingTags(asset)}>
                 <Tag /> {t("editTags")}
               </ContextMenuItem>
+              {kindHasSound(asset.kind) && (
+                <ContextMenuItem onSelect={() => audioActions.denoise(asset.id)}>
+                  <AudioWaveform /> {t("denoiseAction")}
+                </ContextMenuItem>
+              )}
+              {kindHasSound(asset.kind) && (
+                <ContextMenuItem disabled={audioActions.separate.isPending} onSelect={() => audioActions.separate.mutate(asset.id)}>
+                  {audioActions.separate.isPending ? <Loader2 className="animate-spin" /> : <Scissors />} {t("separateAudio")}
+                </ContextMenuItem>
+              )}
               <ContextMenuSeparator />
               <ContextMenuItem className="text-destructive focus:text-destructive" onSelect={() => setDeleting(asset)}>
                 <Trash2 /> {t("delete")}
@@ -184,6 +197,7 @@ export function MediaPool({
         {assets.length > 0 && visibleAssets.length === 0 && <div className="empty-inline m-auto grid max-w-60 place-items-center px-3 py-5 text-center text-ui-sm leading-[1.6] text-muted-foreground">{t("mediaNoMatchingAssets")}</div>}
       </div>
 
+      {audioActions.denoiseDialog}
       <RenameDialog
         open={renaming !== null}
         title={t("renameAsset")}

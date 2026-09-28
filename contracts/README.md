@@ -31,6 +31,21 @@
 
 两个 bug 都不是谁写错了代码,是**两份实现各自自洽而互不相识**。
 
+### `text-layer-cases.json` —— 文字层契约
+
+「哪些片段作为字幕画出来、哪些作为花字画出来。」轨道上两个开关各管一件事:**隐藏**只管字幕显示,
+**静音**只管声音。
+
+| 实现 | 位置 | 测试 |
+| --- | --- | --- |
+| 预览 | `frontend/src/features/editor/playback/textLayers.ts` | `textLayers.parity.test.ts` |
+| 导出 | `backend/app/media/scene.py` 的 `text_layers` | `backend/tests/test_text_layer_parity.py` |
+
+**建立契约之前**:轨道只有一个 `muted`,字幕轨借它表示「不显示字幕」,视频轨上它又顺带把花字藏掉 ——
+预览和导出各写了一遍这条筛选,两边碰巧一致,但都和轨道头上那个喇叭图标的意思相反:给一条轨关声音,
+字从成片里消失了。现在字幕轨用 `hidden`(眼睛图标),`muted` 只管声音;场景契约管的是素材画面层,
+这份管的是画在它们上面的文字。
+
 ### `subtitle-cases.json` —— 字幕契约
 
 「同一份 `subtitle_style` 在同一画幅下,字幕框解析出来的几何与用色是什么、这个框放在画面的哪个像素上。」

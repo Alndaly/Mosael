@@ -72,13 +72,14 @@ def test_redo_removes_it_again_instead_of_getting_stuck() -> None:
 
 def test_track_state_survives_the_round_trip() -> None:
     client, seq, track_id = _setup()
-    client.patch(f"/api/sequences/{seq}/tracks/{track_id}", json={"muted": True, "locked": True})
+    # 字幕轨不显示用的是 hidden(它没有声音,不收 muted)。
+    client.patch(f"/api/sequences/{seq}/tracks/{track_id}", json={"hidden": True, "locked": True})
 
     client.delete(f"/api/sequences/{seq}/tracks/{track_id}", params={"with_clips": True})
     client.post(f"/api/sequences/{seq}/undo")
 
     restored = _track(client, seq, track_id)
-    assert restored["muted"] is True and restored["locked"] is True
+    assert restored["hidden"] is True and restored["locked"] is True
 
 
 def test_an_empty_track_still_needs_no_confirmation() -> None:

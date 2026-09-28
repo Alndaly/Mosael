@@ -4463,8 +4463,12 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "The clip this step refers to no longer exists, so it can't be undone.",
     },
     "seqErr_subtitleTrackHasNoSound": {
-        "zh": "字幕轨没有声音,不能独奏或闪避",
-        "en": "A subtitle track has no sound, so it can't be soloed or ducked.",
+        "zh": "字幕轨没有声音,不能静音、独奏或闪避;不想显示字幕请用隐藏",
+        "en": "A subtitle track has no sound, so it can't be muted, soloed or ducked. Hide it to stop showing the subtitles.",
+    },
+    "seqErr_onlySubtitleTracksHide": {
+        "zh": "只有字幕轨可以隐藏",
+        "en": "Only subtitle tracks can be hidden.",
     },
     "seqErr_detachAudioVideoOnly": {"zh": "只能从视频片段分离音频", "en": "Audio can only be detached from a video clip."},
     "seqErr_clipNoAudioSource": {"zh": "该片段没有音频源", "en": "This clip has no audio source."},

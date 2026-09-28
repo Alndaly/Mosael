@@ -12280,6 +12280,8 @@ export interface components {
         SetTrackStateRequest: {
             /** Muted */
             muted?: boolean | null;
+            /** Hidden */
+            hidden?: boolean | null;
             /** Locked */
             locked?: boolean | null;
             /** Solo */
@@ -12543,6 +12545,11 @@ export interface components {
             locked: boolean;
             /** Muted */
             muted: boolean;
+            /**
+             * Hidden
+             * @default false
+             */
+            hidden: boolean;
             /**
              * Solo
              * @default false

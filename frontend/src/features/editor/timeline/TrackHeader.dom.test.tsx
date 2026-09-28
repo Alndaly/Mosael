@@ -1,10 +1,10 @@
 /** @vitest-environment jsdom */
 /**
- * 轨道头上的独奏(S)/ 闪避(D)。
+ * 轨道头上的开关。
  *
- * 用户问「S 和 D 是干什么的,点了没反应」。这里钉三件事:它们说得出自己是什么(可读的名字 +
- * 悬停说明)、按下去的状态看得见(aria-pressed),以及字幕轨头上**没有**这两个 —— 字幕轨没有
- * 声音,独奏它反而让整片静音。
+ * 用户问「S 和 D 是干什么的,点了没反应」。这里钉几件事:它们说得出自己是什么(可读的名字 +
+ * 悬停说明)、按下去的状态看得见(aria-pressed),以及字幕轨头上**没有**声音开关 —— 字幕轨没有
+ * 声音,独奏它反而让整片静音;它头上的是「隐藏」(眼睛),不是借喇叭表示「不显示」。
  */
 import { DndContext } from "@dnd-kit/core";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -23,7 +23,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { Timeline } from "@/features/editor/timeline/Timeline";
 
 function track(id: string, kind: Track["kind"], state: Partial<Track> = {}): Track {
-  return { id, kind, name: id, position: 0, muted: false, locked: false, solo: false, duck: false, clips: [], ...state } as Track;
+  return { id, kind, name: id, position: 0, muted: false, hidden: false, locked: false, solo: false, duck: false, clips: [], ...state } as Track;
 }
 
 function renderTimeline(tracks: Track[], onSetTrackState = vi.fn()) {
@@ -87,12 +87,32 @@ describe("轨道头的独奏 / 闪避", () => {
     expect((await screen.findAllByText("trackDuckHint")).length).toBeGreaterThan(0);
   });
 
-  it("字幕轨没有声音,头上没有 S 和 D;静音(隐藏)和锁定还在", () => {
+  it("字幕轨没有声音,头上没有静音、S 和 D;隐藏和锁定还在", () => {
     renderTimeline([track("S1", "subtitle")]);
     const row = within(header("S1"));
-    expect(row.queryByRole("button", { name: "trackSolo" })).toBeNull();
-    expect(row.queryByRole("button", { name: "trackDuck" })).toBeNull();
-    expect(row.getByRole("button", { name: "trackMute" })).toBeInTheDocument();
+    for (const name of ["trackMute", "trackSolo", "trackDuck"]) {
+      expect(row.queryByRole("button", { name })).toBeNull();
+    }
+    expect(row.getByRole("button", { name: "trackHide" })).toBeInTheDocument();
     expect(row.getByRole("button", { name: "trackLock" })).toBeInTheDocument();
+  });
+
+  it("字幕轨的隐藏写的是 hidden,不是 muted;再点一次是显示", async () => {
+    const onSet = renderTimeline([track("S1", "subtitle"), track("S2", "subtitle", { hidden: true })]);
+    await userEvent.click(within(header("S1")).getByRole("button", { name: "trackHide" }));
+    expect(onSet).toHaveBeenCalledWith("S1", { hidden: true });
+    const show = within(header("S2")).getByRole("button", { name: "trackShow" });
+    expect(show).toHaveAttribute("aria-pressed", "true");
+    await userEvent.click(show);
+    expect(onSet).toHaveBeenCalledWith("S2", { hidden: false });
+  });
+
+  it("视频轨和音频轨的喇叭写的是 muted,没有隐藏", async () => {
+    const onSet = renderTimeline([track("V1", "video"), track("A1", "audio")]);
+    for (const name of ["V1", "A1"]) {
+      expect(within(header(name)).queryByRole("button", { name: "trackHide" })).toBeNull();
+    }
+    await userEvent.click(within(header("V1")).getByRole("button", { name: "trackMute" }));
+    expect(onSet).toHaveBeenCalledWith("V1", { muted: true });
   });
 });

@@ -7,6 +7,9 @@
 
 现在画面归属由 app/media/scene.py 决定(前端 sceneModel.ts 是对侧,contracts/scene-cases.json
 钉死两者),这里守的是它在真实计划构建里的落地:overlay 还在、它的音频没了。
+
+花字同理:静音视频轨上的花字照旧烧录(scene.text_layers,contracts/text-layer-cases.json);
+字幕不显示用的是字幕轨的「隐藏」,不是静音。
 """
 
 from __future__ import annotations
@@ -128,3 +131,53 @@ def test_empty_bottom_track_does_not_become_base() -> None:
     # 有画面的那条轨被提为 base(走 segments),而不是降级成 overlay。
     assert len(plan.video_segments) == 1
     assert plan.overlays == ()
+
+
+def _seq_with_text(*, video_muted: bool, subtitle_hidden: bool) -> str:
+    """一条带花字的 video 轨 + 一条字幕轨;返回 sequence id。"""
+    with SessionLocal() as db:
+        ws = Workspace(name="W")
+        db.add(ws)
+        db.flush()
+        pr = Project(workspace_id=ws.id, name="P")
+        db.add(pr)
+        db.flush()
+        asset = Asset(workspace_id=ws.id, project_id=pr.id, name="v.mp4", kind="video", file_key="v.mp4")
+        db.add(asset)
+        db.flush()
+        seq = Sequence(workspace_id=ws.id, project_id=pr.id, name="S")
+        video = Track(sequence=seq, kind="video", name="V1", position=0, muted=video_muted)
+        subtitle = Track(sequence=seq, kind="subtitle", name="S1", position=1, hidden=subtitle_hidden)
+        db.add_all([seq, video, subtitle])
+        db.flush()
+        db.add_all([
+            Clip(workspace_id=ws.id, sequence_id=seq.id, track_id=video.id, asset_id=asset.id,
+                 timeline_start=0, src_in=0, src_out=5),
+            Clip(workspace_id=ws.id, sequence_id=seq.id, track_id=video.id, asset_id=None,
+                 timeline_start=1, src_in=0, src_out=2, text_override="标题"),
+            Clip(workspace_id=ws.id, sequence_id=seq.id, track_id=subtitle.id, asset_id=None,
+                 timeline_start=0, src_in=0, src_out=2, text_override="字幕"),
+        ])
+        db.commit()
+        return seq.id
+
+
+def test_muted_video_track_keeps_its_titles() -> None:
+    """静音只管声音:这条轨上的花字照旧烧进成片(此前两侧都把它一起藏掉了)。"""
+    fresh_client()
+    seq_id = _seq_with_text(video_muted=True, subtitle_hidden=False)
+    with SessionLocal() as db:
+        plan = build_plan_for_sequence(db, seq_id)
+    assert [item.text for item in plan.text_overlays] == ["标题"]
+    assert plan.mute_base_audio is True
+
+
+def test_hidden_subtitle_track_is_not_burned() -> None:
+    fresh_client()
+    shown = _seq_with_text(video_muted=False, subtitle_hidden=False)
+    hidden = _seq_with_text(video_muted=False, subtitle_hidden=True)
+    with SessionLocal() as db:
+        assert [item.text for item in build_plan_for_sequence(db, shown).subtitles] == ["字幕"]
+        assert build_plan_for_sequence(db, hidden).subtitles == ()
+        # 隐藏的是字幕,不是花字。
+        assert [item.text for item in build_plan_for_sequence(db, hidden).text_overlays] == ["标题"]
