@@ -71,3 +71,27 @@ def test_第三方登录取到的票和_me_是同一个形状并且报得出是�
     assert ticket["user"]["oauth_providers"] == ["google"]
     me = client.get("/api/auth/me", headers={"Authorization": f"Bearer {ticket['token']}"}).json()
     assert me == ticket["user"]
+
+
+def test_closed_registration_also_closes_oauth_signup() -> None:
+    """部署关了自助注册,第三方登录也不能凭空建号;已经绑过的身份照常登录。
+
+    此前第三方登录自己建号、不看注册闸门:只要配了 Google / Apple,关掉自助注册形同虚设 ——
+    正是 ADR 0008 §0 那条提权链的第一环。
+    """
+    import pytest
+
+    from app.domain import deployment, members
+
+    fresh_client()
+    with SessionLocal() as db:
+        owner = _find_or_create_user(db, provider="google", subject="owner", email="owner@example.com", display_name="")
+        deployment.set_open_registration(db, False)
+        db.commit()
+
+        with pytest.raises(members.SignupClosed):
+            _find_or_create_user(db, provider="google", subject="stranger", email="x@example.com", display_name="")
+        db.rollback()
+
+        again = _find_or_create_user(db, provider="google", subject="owner", email="owner@example.com", display_name="")
+        assert again.id == owner.id

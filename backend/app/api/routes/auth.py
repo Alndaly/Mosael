@@ -24,8 +24,8 @@ from app.api.schemas import (
 from app.core.config import settings
 from app.domain.permissions import ensure_deployment_admin
 from app.core.security import find_session, hash_password, mint_login_session, new_session_token, verify_password
-from app.domain import deployment
-from app.db.models import OAuthIdentity, RegistrationInvite, User, Workspace, WorkspaceMember, now
+from app.domain import deployment, members
+from app.db.models import OAuthIdentity, RegistrationInvite, User, now
 
 router = APIRouter(tags=["auth"])
 
@@ -58,46 +58,23 @@ def register(body: RegisterCredentials, db: DbSession) -> AuthOut:
 
     空库时照常放行:那时没有任何人可以给第一个账号发邀请。之后只能由已有成员邀请
     (见 workspaces 的 invitations 路由),想保持开放的部署显式打开 MOSAEL_OPEN_REGISTRATION。
+    闸门、首个账号的引导都在 domain/members.create_account —— 第三方登录建号走的是同一个。
     """
-    invite = _usable_invite(db, body.invite_code)
-    if not deployment.open_registration(db) and invite is None and db.scalar(select(User).limit(1)) is not None:
-        raise HTTPException(
-            status_code=403,
-            detail=tr("routeErr_signupClosed"),
+    try:
+        user = members.create_account(
+            db,
+            username=body.username,
+            display_name=body.display_name,
+            password=body.password,
+            invite_code=body.invite_code,
         )
-    username = _normalize_username(body.username)
-    existing = db.scalar(select(User).where(User.username == username))
-    if existing is not None:
-        raise HTTPException(status_code=409, detail="Username already exists")
-    # 库里第一个账号引导这个部署 —— 那时没有任何人可以授予他,而没有部署管理员的部署是块砖头。
-    # 与 _adopt_orphan_workspaces(第一个账号继承登录前建的工作区)同一条理由。
-    bootstrapping = db.scalar(select(User).limit(1)) is None
-    user = User(
-        username=username,
-        display_name=_clean_display_name(body.display_name, username),
-        signature="",
-        password_hash=hash_password(body.password),
-        is_deployment_admin=bootstrapping,
-    )
-    db.add(user)
-    db.flush()
-    _adopt_orphan_workspaces(db, user)
-    if invite is not None:
-        invite.used_by = user.id  # 一次性:同一个码不能再换第二个账号
+    except members.SignupClosed as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except members.UsernameTaken as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     token = _create_session(db, user)
     db.commit()
     return AuthOut(token=token, user=current_user_out(db, user))
-
-
-def _usable_invite(db: DbSession, code: str) -> RegistrationInvite | None:
-    """还能用的注册邀请码:存在、没用过、没过期。看不懂的码一律当作没有。"""
-    code = (code or "").strip()
-    if not code:
-        return None
-    invite = db.get(RegistrationInvite, code)
-    if invite is None or invite.used_by or invite.expires_at <= now():
-        return None
-    return invite
 
 
 @router.post("/auth/invites")
@@ -178,7 +155,7 @@ def set_deployment_admin(user_id: str, body: DeploymentAdminUpdate, db: DbSessio
 
 @router.post("/auth/login", response_model=AuthOut)
 def login(body: AuthCredentials, db: DbSession) -> AuthOut:
-    user = db.scalar(select(User).where(User.username == _normalize_username(body.username)))
+    user = db.scalar(select(User).where(User.username == members.normalize_username(body.username)))
     if user is None or not verify_password(body.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Invalid username or password")
     token = _create_session(db, user)
@@ -193,13 +170,13 @@ def me(db: DbSession, user: CurrentUser) -> UserOut:
 
 @router.patch("/auth/me", response_model=UserOut)
 def update_me(body: UserProfileUpdate, db: DbSession, user: CurrentUser) -> UserOut:
-    username = _normalize_username(body.username)
+    username = members.normalize_username(body.username)
     if username != user.username:
         existing = db.scalar(select(User).where(User.username == username, User.id != user.id))
         if existing is not None:
-            raise HTTPException(status_code=409, detail="Username already exists")
+            raise HTTPException(status_code=409, detail=tr("memberErr_usernameTaken"))
     user.username = username
-    user.display_name = _clean_display_name(body.display_name, username)
+    user.display_name = body.display_name.strip() or username
     user.signature = body.signature.strip()
     db.commit()
     db.refresh(user)
@@ -288,20 +265,3 @@ def bootstrap(db: DbSession) -> BootstrapOut:
 def _create_session(db: DbSession, user: User) -> str:
     # commit=False:注册时用户行和会话行要么一起进库,要么都不进(调用方紧接着 commit)。
     return mint_login_session(db, user.id, commit=False)
-
-
-def _normalize_username(value: str) -> str:
-    return value.strip().lower()
-
-
-def _clean_display_name(value: str, username: str) -> str:
-    return value.strip() or username
-
-
-def _adopt_orphan_workspaces(db: DbSession, user: User) -> None:
-    """Local upgrade path: the first account inherits pre-auth workspaces."""
-    members_exist = db.scalar(select(WorkspaceMember).limit(1))
-    if members_exist is not None:
-        return
-    for workspace in db.scalars(select(Workspace)):
-        db.add(WorkspaceMember(workspace_id=workspace.id, user_id=user.id, role="owner"))

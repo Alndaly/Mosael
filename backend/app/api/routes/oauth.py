@@ -29,15 +29,15 @@ import httpx
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.i18n import LocalizedError, tr
 from app.api.deps import DbSession
 from app.api.routes.auth import current_user_out
 from app.core.config import settings
-from app.core.security import hash_password, mint_login_session
+from app.core.security import mint_login_session
 from app.db.models import OAuthIdentity, User
+from app.domain import members
 
 router = APIRouter(tags=["oauth"])
 
@@ -242,20 +242,8 @@ def _find_or_create_user(db: Session, *, provider: str, subject: str, email: str
         db.delete(identity)  # 悬空身份(账号已删)→ 当作首次登录重建
         db.flush()
     base = (email.split("@")[0] if email else f"{provider}用户").strip().lower() or provider
-    username = base
-    suffix = 1
-    while db.scalar(select(User).where(User.username == username)) is not None:
-        suffix += 1
-        username = f"{base}{suffix}"
-    # 第三方账号没有本地口令:填一个不可用的随机散列,密码登录路径天然走不通。
-    user = User(
-        username=username,
-        display_name=(display_name or base).strip() or username,
-        signature="",
-        password_hash=hash_password(secrets.token_hex(24)),
-    )
-    db.add(user)
-    db.flush()
+    # 首次进来就是建一个新账号 —— 和本地注册同一个入口、同一道注册闸门;没有本地口令(password=None)。
+    user = members.create_account(db, username=members.free_username(db, base), display_name=display_name or base, password=None)
     db.add(OAuthIdentity(provider=provider, subject=subject, user_id=user.id, email=email))
     return user
 

@@ -1148,6 +1148,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "这是最后一个部署管理员 —— 先把管理员给别人,再删这个账号。",
         "en": "This is the last deployment administrator — make someone else an administrator before deleting this account.",
     },
+    "memberErr_usernameTaken": {
+        "zh": "这个用户名已经有人用了。",
+        "en": "That username is already taken.",
+    },
     "memberErr_sharedWorkspaces": {
         "zh": "这些工作区里还有别人,不能跟着账号一起删:{names}。先转让或把他移出去。",
         "en": "Other people are still in these workspaces, so they can't be deleted with the account: {names}. Transfer them or remove those people first.",

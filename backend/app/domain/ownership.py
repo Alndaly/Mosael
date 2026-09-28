@@ -15,11 +15,11 @@ from __future__ import annotations
 TABLE_OWNERS: dict[str, tuple[str, ...]] = {
     # 团队/账号
     "Workspace": ("app/domain/members.py",),
-    "User": ("app/api/routes/auth.py", "app/domain/members.py"),
+    "User": ("app/domain/members.py",),
     "AuthSession": ("app/api/routes/auth.py", "app/core/"),
     #: 进这个**部署**的邀请码(与 WorkspaceInvitation 进工作区是两件事,见 ADR 0008)。
     "RegistrationInvite": ("app/api/routes/auth.py",),
-    "WorkspaceMember": ("app/domain/members.py", "app/api/routes/auth.py"),
+    "WorkspaceMember": ("app/domain/members.py",),
     "WorkspaceInvitation": ("app/domain/members.py",),
     "OAuthIdentity": ("app/api/routes/oauth.py",),
     # 创作核心

@@ -46,6 +46,7 @@ export interface paths {
          *
          *     空库时照常放行:那时没有任何人可以给第一个账号发邀请。之后只能由已有成员邀请
          *     (见 workspaces 的 invitations 路由),想保持开放的部署显式打开 MOSAEL_OPEN_REGISTRATION。
+         *     闸门、首个账号的引导都在 domain/members.create_account —— 第三方登录建号走的是同一个。
          */
         post: operations["register_api_auth_register_post"];
         delete?: never;

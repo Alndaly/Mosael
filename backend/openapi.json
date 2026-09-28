@@ -49,7 +49,7 @@
           "auth"
         ],
         "summary": "Register",
-        "description": "注册。**引导之后转邀请制** —— 见 ADR 0008 §0。\n\n这是个多租户产品:一个后端可以服务多个人,而开放注册让「任何能连到这个端口的人」直接成为\n里面的一个租户。那正是下面这条(跑出来过的)链的第一环:\n\n    注册 → 自己建一个工作区(在里面是 owner)→ 满足当时那道自助的实例管理员判据\n         → 改实例配置 / 存 code 节点 → 在服务端执行任意 Python\n\n空库时照常放行:那时没有任何人可以给第一个账号发邀请。之后只能由已有成员邀请\n(见 workspaces 的 invitations 路由),想保持开放的部署显式打开 MOSAEL_OPEN_REGISTRATION。",
+        "description": "注册。**引导之后转邀请制** —— 见 ADR 0008 §0。\n\n这是个多租户产品:一个后端可以服务多个人,而开放注册让「任何能连到这个端口的人」直接成为\n里面的一个租户。那正是下面这条(跑出来过的)链的第一环:\n\n    注册 → 自己建一个工作区(在里面是 owner)→ 满足当时那道自助的实例管理员判据\n         → 改实例配置 / 存 code 节点 → 在服务端执行任意 Python\n\n空库时照常放行:那时没有任何人可以给第一个账号发邀请。之后只能由已有成员邀请\n(见 workspaces 的 invitations 路由),想保持开放的部署显式打开 MOSAEL_OPEN_REGISTRATION。\n闸门、首个账号的引导都在 domain/members.create_account —— 第三方登录建号走的是同一个。",
         "operationId": "register_api_auth_register_post",
         "requestBody": {
           "content": {
