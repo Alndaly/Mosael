@@ -9,7 +9,7 @@ const run: NoteWriteRun = {
   kind: "note",
   x: 0,
   y: 0,
-  form: { prompt: "描述这张图片", provider_profile_id: "profile-1", model: "k3", source_assets: ["asset-1"], context: [] },
+  form: { prompt: "描述这张图片", provider_profile_id: "profile-1", model: "k3", source_assets: ["asset-1"] },
 };
 
 function board(item: BoardItem): Board {

@@ -178,10 +178,9 @@ class WriteForm(_Form):
     prompt: str
     provider_profile_id: str = ""
     model: str = ""
-    #: 让模型看着写的素材(上游连过来的 + 正文里 @ 到的)。
+    #: 让模型看着写的素材(上游连过来的 + 正文里 @ 到的)。连进来的便签和文档不在这里 —— 服务端按连线取它们的字
+    #: (见 actions.upstream_texts),`prompt` 只是用户写的那句。
     source_assets: list[str] = Field(default_factory=list)
-    #: 上游便签给的材料。
-    context: list[str] = Field(default_factory=list)
     #: 正文里 `@` 到的资产(ADR 0027)。连进这一格的资产格不用写在这里 —— 服务端按连线取,和生成同一条路。
     entity_ids: list[str] = Field(default_factory=list, max_length=8)
 
@@ -281,7 +280,6 @@ def _start_write(db: Session, request: RunRequest, form: WriteForm) -> Board:
         provider_profile_id=form.provider_profile_id,
         model=form.model,
         source_asset_ids=list(form.source_assets),
-        context=list(form.context),
         entity_ids=list(form.entity_ids),
         base_revision=request.base_revision,
     )

@@ -241,7 +241,7 @@ describe("画板详情页与服务端的同步", () => {
     await act(async () => {
       await props().onRun({
         producer: "write", item_id: "n1", kind: "note", x: 0, y: 0,
-        form: { prompt: "短一点", provider_profile_id: "p", model: "m", source_assets: [], context: [] },
+        form: { prompt: "短一点", provider_profile_id: "p", model: "m", source_assets: [] },
       });
     });
 

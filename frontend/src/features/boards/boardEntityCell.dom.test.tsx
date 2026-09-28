@@ -61,6 +61,8 @@ import { ApiError } from "@/api/transport";
 import { BOARD_NODE_TYPES } from "./boardNodes";
 import { NodeComposer } from "./NodeComposer";
 import { NoteComposer } from "./NoteComposer";
+import { renderComposer, type ComposerHost } from "./boardComposers";
+import { NO_UPSTREAM } from "./boardUpstream";
 
 afterEach(() => {
   cleanup();
@@ -223,6 +225,43 @@ describe("便签、文档格的「让 AI 写」认资产", () => {
     await waitFor(() => expect(document.querySelector('[data-linked-entity="e2"]')).not.toBeNull());
     fireEvent.click(await screen.findByRole("button", { name: "boardWrite" }));
     await waitFor(() => expect(onWrite).toHaveBeenCalledWith(expect.objectContaining({ entityIds: ["e2"] })));
+  });
+
+  it("连进来的便签、文档的字不随提交交出去:表单里只有用户那句,上游由服务端按连线取", async () => {
+    api.listEntities.mockResolvedValue([]);
+    api.listCapabilityModels.mockResolvedValue(chat);
+    const run = vi.fn(async () => undefined);
+    const note = { id: "n1", kind: "note", x: 0, y: 0, form: { producer: "write" } } as BoardItem;
+    const host: ComposerHost = {
+      item: note,
+      position: { x: 10, y: 20 },
+      workspaceId: "ws",
+      feeding: {
+        ...NO_UPSTREAM,
+        texts: [{ itemId: "up", text: "上游便签的字" }, { itemId: "doc", text: "上游文档的正文" }],
+      },
+      documents: new Map(),
+      models: [],
+      writing: false,
+      setWriting: vi.fn(),
+      onFormChange: vi.fn(),
+      onPickAsset: vi.fn(),
+      run,
+    };
+    mount(<>{renderComposer("write", host)}</>);
+    await waitFor(() => expect(editorProps.current).not.toBeNull());
+    const onChange = editorProps.current!.onChange as (text: string, assets: string[], doc: unknown, entities: string[]) => void;
+    act(() => onChange("接着往下写", [], { type: "doc", content: [] }, []));
+    fireEvent.click(await screen.findByRole("button", { name: "boardWrite" }));
+    await waitFor(() => expect(run).toHaveBeenCalledTimes(1));
+    expect(run).toHaveBeenCalledWith({
+      producer: "write",
+      item_id: "n1",
+      kind: "note",
+      x: 10,
+      y: 20,
+      form: { prompt: "接着往下写", provider_profile_id: "p", model: "k3", source_assets: [], entity_ids: [] },
+    });
   });
 
   it("文档格:没引用笔记是「写一篇」,引用着的是「改这篇」", async () => {

@@ -32,13 +32,15 @@ import { entityDisplayName } from "@/features/entities/entityMeta";
  *
  * **文档格也用它**:写出来的是一篇笔记(空的新建,引用着的写成新一版,见后端 actions.write_on_board)。
  * 资产(连进来的资产格、`@` 到的)和生成格同一套:描述当材料,前几张参考图给模型看。
+ *
+ * **连进来的便签和文档不经这里**:它们的字由服务端按连线取(后端 boards/actions.upstream_texts),这里只交
+ * 用户写的那句 —— 给模型什么由服务端说了算,和生成格读文档同一条路。
  */
 export function NoteComposer({
   item,
   busy,
   workspaceId,
   upstreamAssets,
-  upstreamTexts,
   upstreamEntities,
   onWrite,
   onFormChange,
@@ -49,8 +51,6 @@ export function NoteComposer({
   workspaceId: string;
   /** 上游连过来的素材。**让模型看着写** —— 图片和视频给画面,音频给转写(见后端 _look_at)。 */
   upstreamAssets?: string[];
-  /** 上游便签给的文字。作为**材料**发过去,和「要求」分开。 */
-  upstreamTexts?: string[];
   /** 连进这一格的资产格引用的资产。服务端按连线把它们带上(描述 + 参考图);这里摆出来、排进 `@` 菜单最前。 */
   upstreamEntities?: string[];
   onWrite: (input: {
@@ -58,7 +58,6 @@ export function NoteComposer({
     providerProfileId: string;
     model: string;
     assets: string[];
-    context: string[];
     entityIds: string[];
   }) => Promise<unknown>;
   onFormChange: (form: NonNullable<BoardItem["form"]>) => void;
@@ -158,7 +157,6 @@ export function NoteComposer({
         providerProfileId: current.provider_profile_id,
         model: current.model,
         assets,
-        context: upstreamTexts ?? [],
         //: 连进来的资产格服务端按连线取,这里只交正文里 @ 到的(和生成格同一条规矩)。
         entityIds: mentionedEntities,
       }),

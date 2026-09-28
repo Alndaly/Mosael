@@ -28,7 +28,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.db.models import Board
-from app.domain.boards.actions import BoardInputError, document_cell
+from app.domain.boards.actions import BoardInputError, document_cell, upstream_cells
 from app.domain.boards.canvas import get_board, receipt_to_item
 from app.domain.jobs import create_job, dispatch_job, reset_receipt, set_receipt
 
@@ -191,13 +191,12 @@ def resolve_bindings(
 ) -> dict[str, Any]:
     """把绑定换成值,返回这一轮交给执行器的配置(不改表单上存的那份)。
 
-    **按连线的先后**取,不按绑定里写的顺序:画布上「谁先连进来」是用户看得见、改得动的顺序。
+    **按连线的先后**取(actions.upstream_cells,和生成、写字同一份),不按绑定里写的顺序:画布上「谁先连进来」
+    是用户看得见、改得动的顺序。
     多张便签接进同一个文字字段,正文之间空一行拼起来;素材字段收一份的取第一份。
     字段不在节点声明里(节点升级后删掉了)就不管它;上游那一格给不出值(还没生成出来)就当没接。
     """
-    canvas = board.canvas or {}
-    by_id = {str(one.get("id")): one for one in canvas.get("items") or []}
-    order = [str(edge.get("source")) for edge in canvas.get("edges") or [] if edge.get("target") == item_id]
+    upstream = upstream_cells(board, item_id)
     resolved = dict(config)
     for field, refs in bindings.items():
         spec = specs.get(field)
@@ -208,9 +207,9 @@ def resolve_bindings(
         kinds = bindable_kinds(field, spec)
         values = [
             value
-            for source_id in order
-            if source_id in wanted and source_id in by_id
-            for value in [_value_of(db, board.workspace_id, by_id[source_id], sink, kinds)]
+            for cell in upstream
+            if str(cell.get("id")) in wanted
+            for value in [_value_of(db, board.workspace_id, cell, sink, kinds)]
             if value is not None
         ]
         if not values:

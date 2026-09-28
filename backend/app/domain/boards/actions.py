@@ -98,23 +98,34 @@ def _pending(db: Session, workspace_id: str, slot: Slot, *, actor_id: str, kind:
     )
 
 
+def upstream_cells(board: Board, item_id: str) -> list[dict[str, Any]]:
+    """连进这一格的各格,按连线的先后;同一格连了两根线也只算一次。
+
+    画板上「按连线取上游」都从这里走 —— 生成、写字、一项能力的绑定读的是同一份先后。「谁先连进来」是用户
+    看得见、改得动的顺序,各处自己再遍历一遍连线的话,迟早有一处的先后、去重和别处不一样。
+    """
+    canvas = board.canvas or {}
+    items = {str(one.get("id")): one for one in canvas.get("items") or [] if isinstance(one, dict)}
+    out: dict[str, dict[str, Any]] = {}
+    for edge in canvas.get("edges") or []:
+        if not isinstance(edge, dict) or edge.get("target") != item_id:
+            continue
+        source_id = str(edge.get("source"))
+        if source_id in items and source_id not in out:
+            out[source_id] = items[source_id]
+    return list(out.values())
+
+
 def upstream_entities(board: Board, item_id: str) -> list[str]:
     """连进这一格的资产格引用的资产(ADR 0027),按连线的先后。
 
     **连进来就等于 `@` 了它**:生成时和正文里 `@` 的资产走同一条路(domain/entities/mentions)——
     拼进它的提示词描述、按模型收得下的张数挂它的参考图。还没挑资产的资产格(没有 entity_id)跳过。
     """
-    canvas = board.canvas or {}
-    items = {str(one.get("id")): one for one in canvas.get("items") or [] if isinstance(one, dict)}
-    out: list[str] = []
-    for edge in canvas.get("edges") or []:
-        if not isinstance(edge, dict) or edge.get("target") != item_id:
-            continue
-        source = items.get(str(edge.get("source")))
-        entity_id = str((source or {}).get("entity_id") or "") if (source or {}).get("kind") == "entity" else ""
-        if entity_id and entity_id not in out:
-            out.append(entity_id)
-    return out
+    return list(dict.fromkeys(
+        str(cell["entity_id"]) for cell in upstream_cells(board, item_id)
+        if cell.get("kind") == "entity" and cell.get("entity_id")
+    ))
 
 
 def upstream_scene(board: Board, item_id: str) -> str | None:
@@ -122,15 +133,8 @@ def upstream_scene(board: Board, item_id: str) -> str | None:
 
     **连进来的是场景,不是一张图**:生成时现渲它的一个镜头当参考(见 generation.create_generation_job)。
     """
-    canvas = board.canvas or {}
-    items = {str(one.get("id")): one for one in canvas.get("items") or [] if isinstance(one, dict)}
-    for edge in canvas.get("edges") or []:
-        if not isinstance(edge, dict) or edge.get("target") != item_id:
-            continue
-        source = items.get(str(edge.get("source"))) or {}
-        if source.get("kind") == "scene" and source.get("scene_id"):
-            return str(source["scene_id"])
-    return None
+    return next((str(cell["scene_id"]) for cell in upstream_cells(board, item_id)
+                 if cell.get("kind") == "scene" and cell.get("scene_id")), None)
 
 
 def document_cell(db: Session, workspace_id: str, item: dict[str, Any]) -> ReferenceDocument | None:
@@ -158,37 +162,50 @@ def document_cell(db: Session, workspace_id: str, item: dict[str, Any]) -> Refer
     return None
 
 
+def _upstream_document(db: Session, workspace_id: str, cell: dict[str, Any]) -> ReferenceDocument:
+    """连进来的一格文档格给的那一篇;**读不到就拒绝**(BoardInputError)。
+
+    一篇连着却读不到的文档悄悄跳过,产出少一块素材,用户无从知道 —— 面板上同样拦着(documentBlocked)。
+    """
+    from app.domain.notes import NoteDomainError
+
+    try:
+        document = document_cell(db, workspace_id, cell)
+    except NoteDomainError as exc:
+        raise BoardInputError.relay(exc) from exc
+    if document is None:
+        raise BoardInputError("boardErr_upstreamDocumentUnreadable", name=str(cell.get("text") or cell.get("id")))
+    return document
+
+
 def upstream_documents(db: Session, workspace_id: str, board: Board, item_id: str) -> list[ReferenceDocument]:
     """连进这一格的文档格给的文档,按连线的先后 —— 生成时整篇交给模型当素材(见 generation.documents_note)。
 
     **由服务端按连线取,不由前端拼进提示词**:拼在前端的话,生成记录上存的就是拼过的字,AI 工作台的用户气泡
-    把文档正文当成他说的话画出来;给模型什么也成了前端说了算。
-
-    **读不到就不生成**(BoardInputError / notes 的错误):一篇连着却读不到的文档悄悄跳过,出来的东西少一块素材,
-    用户无从知道 —— 面板上同样拦着(documentBlocked)。
+    把文档正文当成他说的话画出来;给模型什么也成了前端说了算。读不到就不生成(_upstream_document)。
     """
-    from app.domain.notes import NoteDomainError
+    return [_upstream_document(db, workspace_id, cell)
+            for cell in upstream_cells(board, item_id) if cell.get("kind") == "document"]
 
-    canvas = board.canvas or {}
-    items = {str(one.get("id")): one for one in canvas.get("items") or [] if isinstance(one, dict)}
-    out: list[ReferenceDocument] = []
-    seen: set[str] = set()
-    for edge in canvas.get("edges") or []:
-        if not isinstance(edge, dict) or edge.get("target") != item_id:
+
+def upstream_texts(db: Session, workspace_id: str, board: Board, item_id: str) -> list[str]:
+    """连进这一格的便签的字、文档格的正文,按连线的先后,去掉首尾空白、空的不要 —— 写字时当「上游给的材料」。
+
+    **由服务端按连线取**,理由和生成的 upstream_documents 一样:给模型什么不该由前端说了算。文档的读法也是
+    同一份(钉住的那一版、解析出的全文,读不到就不写)。只给正文不给标题:便签本来就没有标题,两种材料摆在一起
+    是同一个样子。
+    """
+    texts: list[str] = []
+    for cell in upstream_cells(board, item_id):
+        if cell.get("kind") == "note":
+            text = str(cell.get("text") or "")
+        elif cell.get("kind") == "document":
+            text = _upstream_document(db, workspace_id, cell).markdown
+        else:
             continue
-        source_id = str(edge.get("source"))
-        source = items.get(source_id)
-        if source is None or source.get("kind") != "document" or source_id in seen:
-            continue
-        seen.add(source_id)
-        try:
-            document = document_cell(db, workspace_id, source)
-        except NoteDomainError as exc:
-            raise BoardInputError.relay(exc) from exc
-        if document is None:
-            raise BoardInputError("boardErr_upstreamDocumentUnreadable", name=str(source.get("text") or source_id))
-        out.append(document)
-    return out
+        if text.strip():
+            texts.append(text.strip())
+    return texts
 
 
 def generate_on_board(
@@ -382,7 +399,6 @@ def write_on_board(
     provider_profile_id: str,
     model: str,
     source_asset_ids: list[str],
-    context: list[str],
     entity_ids: list[str] | None = None,
     base_revision: int | None = None,
 ) -> Board:
@@ -395,8 +411,9 @@ def write_on_board(
     回执把正文(或失败原因)落回这一格。任务在调用方线程里跑完(见 jobs.run_job_inline),
     任何异常都先落成失败再抛出;进程中途没了,重启时 reconcile 收掉。
 
-    **看着什么写**:上游连过来的和正文里 `@` 到的素材(图片、视频给画面,音频给转写,见 look_at)、上游便签的字、
-    以及连进来的和 `@` 到的**资产**(ADR 0027)—— 它的描述当材料,前几张参考图给模型看。
+    **看着什么写**:上游连过来的和正文里 `@` 到的素材(图片、视频给画面,音频给转写,见 look_at)、连进来的便签的字和
+    文档的正文(upstream_texts,服务端按连线取,和生成读文档同一份)、以及连进来的和 `@` 到的**资产**(ADR 0027)——
+    它的描述当材料,前几张参考图给模型看。`prompt` 只是用户写的那句。
 
     **文档格**:写出来的是一篇笔记。空的文档格新建一篇、引用它;已经引用着一篇的,那一篇就是「现有内容」,
     写成它的**新一版**(笔记的每一版都留着,改坏了能退回),文档格改钉到新的那一版。
@@ -423,11 +440,12 @@ def write_on_board(
     else:
         existing = str(slot_item.get("text") or "").strip() if kind == "note" else ""
     _ensure_slot_ready(db, workspace_id, Slot(board_id, item_id, 0, 0, base_revision))
-    #: 连进来的资产格 + 正文里 @ 到的,和生成同一条路(upstream_entities)。在建任务之前取:点名的资产不在
-    #: 这个工作区就当场说,不起任务。
+    #: 连进来的资产格 + 正文里 @ 到的,和生成同一条路(upstream_entities);连进来的便签和文档给的字(upstream_texts)。
+    #: 都在建任务之前取:点名的资产不在这个工作区、连着的文档读不到,就当场说,不起任务。
     board = get_board(db, workspace_id, board_id)
     named = list(dict.fromkeys([*upstream_entities(board, item_id), *(entity_ids or [])]))
     entity_texts, entity_pictures = _entity_materials(db, workspace_id, named)
+    upstream = upstream_texts(db, workspace_id, board, item_id)
 
     token = set_receipt(receipt_to_item(board_id, item_id))
     try:
@@ -454,7 +472,7 @@ def write_on_board(
         #: 上游连过来的 + 正文里 @ 到的 + 资产的参考图。图片和视频给画面,音频给转写 —— 见 look_at。
         seen = list(dict.fromkeys([*source_asset_ids, *entity_pictures]))
         pictures, from_assets = look_at(db, workspace_id, seen)
-        materials = [one.strip() for one in context if one and one.strip()] + entity_texts + from_assets
+        materials = upstream + entity_texts + from_assets
         profile = require_connection(db, provider_profile_id or None, user_id=actor_id, error=AiChatError)
         target = target_for(db, profile, model=model, surface="automation")
         #: 说清楚产物要直接摆出来 —— 不交代的话模型爱写「好的,这是您要的文案:」,而那句话会原样贴进去。

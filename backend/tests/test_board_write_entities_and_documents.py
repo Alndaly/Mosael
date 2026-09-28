@@ -3,6 +3,8 @@
 - 便签:连进来的资产格、正文里 `@` 到的资产,描述当材料交给模型,前几张参考图给模型看 —— 和生成里的 `@资产`
   同一份画像。此前写字只认素材和便签的字,连一个人物进来什么都不带。
 - 文档格:写出来的是一篇笔记。空的新建一篇并引用它;引用着一篇的写成它的新一版,文档格钉到新的那一版。
+- 连进来的便签和文档:它们的字由服务端按连线取(actions.upstream_texts),表单里只有用户那句。此前是前端把正文
+  拼成 `context` 交上来,给模型什么由前端说了算,和生成读文档是两套。
 """
 
 from __future__ import annotations
@@ -11,6 +13,7 @@ from typing import Any
 from unittest.mock import patch as mock_patch
 
 from app.core.db import SessionLocal
+from tests.test_board_generation_documents import _parsed_document
 from tests.test_boards import _workspace, _writable_profile
 from tests.util import fresh_client, run_on_board, seed_assets
 
@@ -78,6 +81,65 @@ def test_便签认得连进来的资产和_at_到的资产_描述当材料_参�
     assert seen.looked_at == ["a1", "a2", "b1"], "每个资产挑前两张参考图给模型看"
     note = done.json()["canvas"]["items"][1]
     assert (note["text"], note["run"]["status"]) == ("林小满,班长……", "succeeded")
+
+
+def test_连进来的便签和文档按连线先后当材料_文档给钉住的那一版() -> None:
+    client = fresh_client()
+    ws = _workspace(client)
+    _writable_profile(client)
+    note = client.post("/api/notes", json={"workspace_id": ws, "title": "企划", "markdown": "第一版正文\n"}).json()
+    edited = client.patch(f"/api/notes/{note['id']}", json={
+        "workspace_id": ws, "base_revision": note["revision"], "title": "企划", "markdown": "第二版正文",
+    })
+    assert edited.status_code == 200, edited.text
+    brief = _parsed_document(client, ws, "brief.md", "# 简报\n今天发布。")
+    board_id = _board(client, ws, [
+        {"id": "plan", "kind": "document", "x": 0, "y": 0, "note_id": note["id"], "note_revision": note["revision"]},
+        {"id": "brief", "kind": "document", "x": 0, "y": 200, "asset_id": brief},
+        {"id": "memo", "kind": "note", "x": 0, "y": 400, "text": "  便签上的字  "},
+        {"id": "blank", "kind": "note", "x": 0, "y": 600, "text": "   "},
+        {"id": "n1", "kind": "note", "x": 400, "y": 0, "text": ""},
+    ], [
+        {"id": "e1", "source": "brief", "target": "n1"},
+        {"id": "e2", "source": "memo", "target": "n1"},
+        {"id": "e3", "source": "blank", "target": "n1"},
+        {"id": "e4", "source": "plan", "target": "n1"},
+        {"id": "e5", "source": "memo", "target": "n1"},
+    ])
+
+    seen = Seen("写好了")
+    done = _write(client, board_id, ws, "n1", "note", seen, prompt="接着往下写")
+    assert done.status_code == 200, done.text
+    material = str(seen.messages[1]["content"])
+    head, _, rest = material.partition("\n\n")
+    assert head == "上游给的材料:"
+    parts = rest.split("\n\n---\n\n")
+    assert len(parts) == 3, "空便签不算一份,同一格连两根线只取一次"
+    assert "今天发布。" in parts[0], "按连线的先后"
+    assert parts[1:] == ["便签上的字", "第一版正文"], "去掉首尾空白;文档给钉住的那一版,不是最新版"
+    assert seen.messages[-1]["content"] == "接着往下写", "要求只是用户写的那句"
+
+
+def test_连着却读不到的文档_不写() -> None:
+    from app.db.models import Job
+
+    client = fresh_client()
+    ws = _workspace(client)
+    _writable_profile(client)
+    board_id = _board(client, ws, [
+        {"id": "empty", "kind": "document", "x": 0, "y": 0, "text": "空文档"},
+        {"id": "n1", "kind": "note", "x": 400, "y": 0, "text": ""},
+    ], [{"id": "e1", "source": "empty", "target": "n1"}])
+
+    seen = Seen("不该写出来")
+    done = _write(client, board_id, ws, "n1", "note", seen)
+    assert done.status_code == 400, done.text
+    assert "空文档" in done.json()["detail"]
+    assert seen.messages == [], "没问模型"
+    with SessionLocal() as db:
+        assert db.query(Job).filter(Job.workspace_id == ws, Job.kind == "board_write").count() == 0, "没起任务"
+    cell = client.get(f"/api/boards/{board_id}", params={"workspace_id": ws}).json()["canvas"]["items"][1]
+    assert "run" not in cell, "这一格没被摆成「正在写」"
 
 
 def test_空文档格写出一篇新笔记_文档格引用它() -> None:

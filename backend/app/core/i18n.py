@@ -3771,7 +3771,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "boardErr_noOutput": {"zh": "任务结束了,但没有交回任何产出", "en": "The task finished without producing anything."},
     "boardErr_itemBusy": {"zh": "这一格还在生成,等它结束(或在任务中心取消)再来", "en": "This item is still generating. Wait for it to finish, or cancel it in the task center, then try again."},
     "boardErr_writeNeedsPrompt": {"zh": "先写点要求,再让它写", "en": "Write what you want first, then ask it to write."},
-    "boardErr_upstreamDocumentUnreadable": {"zh": "连进来的文档「{name}」还读不到(还没挑文档,或还在解析、解析没成):等它好了再生成,或断开这根线", "en": "The connected document “{name}” can't be read yet (none picked, or it's still being parsed or parsing failed). Wait until it's ready, or disconnect it, then generate."},
+    "boardErr_upstreamDocumentUnreadable": {"zh": "连进来的文档「{name}」还读不到(还没挑文档,或还在解析、解析没成):等它好了再试,或断开这根线", "en": "The connected document “{name}” can't be read yet (none picked, or it's still being parsed or parsing failed). Wait until it's ready, or disconnect it, then try again."},
     "boardErr_unknownProducer": {"zh": "画板上没有「{producer}」这种产出方式(可用:{producers})", "en": "Boards have no producer called \"{producer}\" (available: {producers})."},
     "boardErr_producerFormInvalid": {"zh": "「{producer}」的表单里 {field} 不合法:{detail}", "en": "The \"{producer}\" form has an invalid {field}: {detail}"},
     "boardErr_producerCannotHost": {"zh": "「{producer}」不能挂在{kind}这种格子上", "en": "The \"{producer}\" producer can't sit on a {kind} item."},

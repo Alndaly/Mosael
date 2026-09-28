@@ -234,10 +234,8 @@ export interface BoardRunForms {
     prompt: string;
     provider_profile_id?: string;
     model?: string;
-    /** 让模型看着写的素材(上游连过来的 + 正文里 @ 到的)。 */
+    /** 让模型看着写的素材(上游连过来的 + 正文里 @ 到的)。连进来的便签、文档的字由服务端按连线取,不在这里。 */
     source_assets?: string[];
-    /** 上游便签给的材料。 */
-    context?: string[];
     /** 正文里 `@` 到的资产;连进来的资产格由服务端按连线并进去。 */
     entity_ids?: string[];
   };

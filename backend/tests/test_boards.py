@@ -1294,7 +1294,8 @@ def test_够不着的素材一律跳过() -> None:
 
 
 def test_上游便签给的材料和要求分开发() -> None:
-    """揉成一段的话,模型分不清哪句是素材、哪句是指令 —— 常见的结果是把材料原样抄一遍。"""
+    """揉成一段的话,模型分不清哪句是素材、哪句是指令 —— 常见的结果是把材料原样抄一遍。
+    上游的字由服务端按连线取(actions.upstream_texts),表单里只有用户那句。"""
     from unittest.mock import patch as mock_patch
 
     from app.core.db import SessionLocal
@@ -1303,10 +1304,15 @@ def test_上游便签给的材料和要求分开发() -> None:
 
     client = fresh_client()
     ws = _workspace(client)
-    board_id = client.post(
-        "/api/boards",
-        json={"workspace_id": ws, "name": "B", "canvas": {"items": [{"id": "n1", "kind": "note", "x": 0, "y": 0}], "edges": []}},
-    ).json()["id"]
+    canvas = {
+        "items": [
+            {"id": "up1", "kind": "note", "x": 0, "y": 0, "text": "第一段素材"},
+            {"id": "up2", "kind": "note", "x": 0, "y": 200, "text": "第二段素材"},
+            {"id": "n1", "kind": "note", "x": 400, "y": 0},
+        ],
+        "edges": [{"id": "e1", "source": "up1", "target": "n1"}, {"id": "e2", "source": "up2", "target": "n1"}],
+    }
+    board_id = client.post("/api/boards", json={"workspace_id": ws, "name": "B", "canvas": canvas}).json()["id"]
     profile_id = client.post(
         "/api/settings/providers",
         json={"vendor": "openai", "name": "演示", "api_key": "sk-test", "base_url": "http://127.0.0.1:1"},
@@ -1319,7 +1325,7 @@ def test_上游便签给的材料和要求分开发() -> None:
     seen: dict = {}
     with mock_patch("app.domain.ai_chat.chat", side_effect=lambda t, m, **k: seen.setdefault("m", m) and "" or "好"):
         answer = run_on_board(client, board_id, ws, producer="write", item_id="n1", kind="note",
-                              form={"prompt": "缩成一句", "context": ["第一段素材", "第二段素材"]})
+                              form={"prompt": "缩成一句"})
     assert answer.status_code == 200, answer.text
     messages = seen["m"]
     material = next((one for one in messages if "第一段素材" in str(one["content"])), None)
