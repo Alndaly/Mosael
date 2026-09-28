@@ -1,5 +1,6 @@
 import React from "react";
-import { noteHref, type NoteReference } from "@/api/domains/notes";
+import type { NoteReference } from "@/api/domains/notes";
+import { noteHref } from "@/lib/deepLink";
 import { Handle, NodeResizer, Position, useStore, type NodeProps } from "@xyflow/react";
 import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, BookOpen, Clapperboard, ExternalLink, FileText, Loader2, RefreshCw, Box, Ban, Clock3, Film as FilmIcon, Group, Image as ImageIcon, Music, Plus, Square as SquareIcon, StickyNote, UsersRound, type LucideIcon } from "lucide-react";

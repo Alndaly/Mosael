@@ -99,6 +99,19 @@ export function gotoJob(jobId: string): void {
   window.dispatchEvent(new CustomEvent("mosael:open-tasks", { detail: jobId }));
 }
 
+/**
+ * 一篇笔记的地址,可以钉在某个修订上。笔记页从地址里读要打开哪篇(`#/notes?note=…`),所以它既是
+ * 链接的 href,也是「现在开着哪篇」的状态 —— 刷新、返回都认它。
+ */
+export function noteHref(noteId: string, revision?: number | null): string {
+  return `#/notes?note=${encodeURIComponent(noteId)}${revision ? `&revision=${revision}` : ""}`;
+}
+
+/** 打开一篇笔记。 */
+export function openNote(noteId: string): void {
+  window.location.hash = noteHref(noteId);
+}
+
 /** 跳到设置的某个分区(如未配置模型 → 直达「模型服务」)。SettingsView 监听 mosael:open-settings。 */
 export function gotoSettings(section: string): void {
   gotoRecord("/settings", "mosael:open-settings", section);

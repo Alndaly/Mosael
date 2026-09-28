@@ -30,8 +30,6 @@ export const saveNote = (note: Note) => api<Note>(`/api/notes/${note.id}`, { met
 // (见 backend/app/domain/notes.append_note);带上手里这份常常是旧的修订号,只会把
 // 一次正常的追加判成冲突。
 export const appendNote = (note: Note, markdown: string, sources: NoteSource[]) => api<Note>(`/api/notes/${note.id}/append`, { method: "POST", body: JSON.stringify({ workspace_id: note.workspace_id, markdown, sources }) });
-export const noteHref = (id: string, revision?: number | null) => `#/notes?note=${encodeURIComponent(id)}${revision ? `&revision=${revision}` : ""}`;
-export function openNote(id: string) { window.location.hash = noteHref(id); }
 
 export type NoteReference = components["schemas"]["NoteReferenceOut"];
 export const getNoteReference = (workspaceId: string, id: string, revision?: number) =>

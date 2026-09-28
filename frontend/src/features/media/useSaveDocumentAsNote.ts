@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { saveDocumentAsNote } from "@/api/domains/documents";
-import { openNote } from "@/api/domains/notes";
+import { openNote } from "@/lib/deepLink";
 import { assetKeys } from "@/api/queryKeys";
 import { errorText } from "@/api/errorMessage";
 import { useI18n } from "@/app/preferences";

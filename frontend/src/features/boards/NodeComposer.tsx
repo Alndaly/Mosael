@@ -1,5 +1,6 @@
 import { assetKeys } from "@/api/queryKeys";
-import { noteHref, type NoteReference } from "@/api/domains/notes";
+import type { NoteReference } from "@/api/domains/notes";
+import { noteHref } from "@/lib/deepLink";
 import { documentPrompt } from "./boardDocumentSources";
 import React from "react";
 

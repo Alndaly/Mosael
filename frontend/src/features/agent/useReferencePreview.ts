@@ -5,7 +5,7 @@ import { api } from "@/api/transport";
 import { useI18n } from "@/app/preferences";
 import { useImagePreview } from "@/components/app/image-preview";
 import { useAssetPreviewModal } from "@/features/media/AssetPreviewModalById";
-import { gotoRecord } from "@/lib/deepLink";
+import { gotoRecord, noteHref } from "@/lib/deepLink";
 import type { AgentReference, ReferenceKind } from "@/features/agent/references";
 
 /**
@@ -22,7 +22,7 @@ import type { AgentReference, ReferenceKind } from "@/features/agent/references"
  */
 const ROUTES: Record<ReferenceKind, { probe: (id: string) => string; href?: (id: string) => string; event?: string }> = {
   asset: { probe: (id) => `/api/assets/${id}` },
-  note: { probe: (id) => `/api/notes/${id}`, href: (id) => `#/notes?note=${encodeURIComponent(id)}` },
+  note: { probe: (id) => `/api/notes/${id}`, href: (id) => noteHref(id) },
   board: {
     probe: (id) => `/api/boards/${id}`,
     href: (id) => `#/boards?board=${encodeURIComponent(id)}`,

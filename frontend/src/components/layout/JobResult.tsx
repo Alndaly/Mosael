@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { FileText, Film, Music } from "lucide-react";
 
 import { assetFileUrl, assetPreviewUrl, assetThumbnailUrl, listAssets, type Asset, type Job } from "@/api/client";
-import { noteHref } from "@/api/domains/notes";
+import { noteHref } from "@/lib/deepLink";
 import { assetKeys } from "@/api/queryKeys";
 import { useI18n } from "@/app/preferences";
 import { useImagePreview, type ImagePreviewItem } from "@/components/app/image-preview";
