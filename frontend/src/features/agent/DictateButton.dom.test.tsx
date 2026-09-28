@@ -14,7 +14,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 // "Cannot access before initialization"(仓库里 composerAttachments 那条是同一个写法)。
 const toastError = vi.fn();
 vi.mock("sonner", () => ({ toast: { error: (...args: unknown[]) => toastError(...args) } }));
-vi.mock("@/api/client", () => ({ API_BASE: "", getAuthToken: () => "tok" }));
 vi.mock("@/app/preferences", () => ({ useI18n: () => (key: string) => key }));
 
 import { DictateButton } from "@/features/agent/DictateButton";
@@ -49,6 +48,10 @@ beforeEach(() => {
   vi.stubGlobal("MediaRecorder", FakeRecorder as unknown as typeof MediaRecorder);
 });
 
+//: 真的 Response:请求走的是 api/transport,报错怎么转成人话也在那条路上,一起测到。
+const reply = (status: number, body: unknown) =>
+  vi.fn().mockResolvedValue(new Response(JSON.stringify(body), { status })) as unknown as typeof fetch;
+
 async function speak(fetchImpl: typeof fetch, onText = vi.fn()) {
   vi.stubGlobal("fetch", fetchImpl);
   const track = grantMic();
@@ -62,7 +65,7 @@ async function speak(fetchImpl: typeof fetch, onText = vi.fn()) {
 describe("说话输入", () => {
   it("把识别到的文字交给调用方", async () => {
     const { onText } = await speak(
-      vi.fn().mockResolvedValue({ ok: true, json: async () => ({ text: "把这句话填进去" }) }) as unknown as typeof fetch,
+      reply(200, { text: "把这句话填进去" }),
     );
     await waitFor(() => expect(onText).toHaveBeenCalledWith("把这句话填进去"));
   });
@@ -70,17 +73,14 @@ describe("说话输入", () => {
   it("后端说明失败原因时原样转给用户", async () => {
     // 「缺的是运行环境」这种话是他唯一能据以行动的信息,换成"识别失败"等于把它扔了。
     await speak(
-      vi.fn().mockResolvedValue({
-        ok: false,
-        json: async () => ({ detail: "缺的是运行环境,不是模型" }),
-      }) as unknown as typeof fetch,
+      reply(422, { detail: "缺的是运行环境,不是模型" }),
     );
     await waitFor(() => expect(toastError).toHaveBeenCalledWith("缺的是运行环境,不是模型"));
   });
 
   it("一个字都没识别出来也要说话", async () => {
     const { onText } = await speak(
-      vi.fn().mockResolvedValue({ ok: true, json: async () => ({ text: "   " }) }) as unknown as typeof fetch,
+      reply(200, { text: "   " }),
     );
     await waitFor(() => expect(toastError).toHaveBeenCalled());
     expect(onText).not.toHaveBeenCalled();
@@ -88,7 +88,7 @@ describe("说话输入", () => {
 
   it("录完把音轨关掉 —— 否则系统的录音指示灯一直亮着", async () => {
     const { track } = await speak(
-      vi.fn().mockResolvedValue({ ok: true, json: async () => ({ text: "好" }) }) as unknown as typeof fetch,
+      reply(200, { text: "好" }),
     );
     await waitFor(() => expect(track.stop).toHaveBeenCalled());
   });

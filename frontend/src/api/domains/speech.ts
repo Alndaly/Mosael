@@ -235,3 +235,10 @@ export function getAgentVoice(): Promise<AgentVoice> {
 export function setAgentVoice(body: components["schemas"]["AgentVoiceUpdate"]): Promise<AgentVoice> {
   return api<AgentVoice>("/api/settings/agent-voice", { method: "PUT", body: JSON.stringify(body) });
 }
+
+/** 听写:一小段录音换成文字(免提对话、输入框的麦克风键)。 */
+export function dictate(clip: Blob): Promise<{ text?: string }> {
+  const body = new FormData();
+  body.append("clip", clip, "clip.webm");
+  return api<{ text?: string }>("/api/asr/dictate", { method: "POST", body });
+}

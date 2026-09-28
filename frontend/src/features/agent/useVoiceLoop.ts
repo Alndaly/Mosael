@@ -17,7 +17,7 @@
 import React from "react";
 import { toast } from "sonner";
 
-import { API_BASE, getAuthToken } from "@/api/client";
+import { ApiError, dictate } from "@/api/client";
 import { reportSpeechFailure, synthesizeSpeech } from "@/features/agent/agentSpeech";
 import { useI18n } from "@/app/preferences";
 import { playBlob, stopPlayback } from "@/lib/audioPlayback";
@@ -116,23 +116,16 @@ export function useVoiceLoop({
     async (clip: Blob) => {
       setState("thinking");
       try {
-        const body = new FormData();
-        body.append("clip", clip, "clip.webm");
-        const token = getAuthToken();
-        const response = await fetch(`${API_BASE}/api/asr/dictate`, {
-          method: "POST",
-          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-          body,
-        });
-        const payload = (await response.json().catch(() => null)) as { text?: string; detail?: string } | null;
-        if (!response.ok) {
+        let text: string;
+        try {
+          text = ((await dictate(clip)).text ?? "").trim();
+        } catch (error) {
           // **失败要出声(至少要看得见)。** 语音模式下用户多半没盯着屏幕,一次静默的失败
-          // 会被理解成"它没听见",于是他再说一遍 —— 然后再失败一次。
-          toast.error(payload?.detail || t("agentVoiceNotHeard"));
+          // 会被理解成"它没听见",于是他再说一遍 —— 然后再失败一次。后端说了原因就照说。
+          toast.error(error instanceof ApiError ? error.message : t("agentVoiceSendFailed"));
           setState("listening");
           return;
         }
-        const text = (payload?.text ?? "").trim();
         setHeard(text);
         if (!text) {
           setState("listening");

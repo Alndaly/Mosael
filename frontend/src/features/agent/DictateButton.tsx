@@ -19,7 +19,7 @@ import React from "react";
 import { Loader2, Mic, Square } from "lucide-react";
 import { toast } from "sonner";
 
-import { API_BASE, getAuthToken } from "@/api/client";
+import { ApiError, dictate } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -69,29 +69,16 @@ export function DictateButton({ onText, disabled }: { onText: (text: string) => 
       }
       setState("transcribing");
       try {
-        const body = new FormData();
-        body.append("clip", clip, "clip.webm");
-        const token = getAuthToken();
-        const response = await fetch(`${API_BASE}/api/asr/dictate`, {
-          method: "POST",
-          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-          body,
-        });
-        const payload = (await response.json().catch(() => null)) as { text?: string; detail?: string } | null;
-        if (!response.ok) {
-          // 后端把"缺运行环境""说太长了"这类原因写在 detail 里,原样转给用户 ——
-          // 换成一句"识别失败"等于把他唯一能据以行动的信息扔掉。
-          toast.error(payload?.detail || t("dictateFailed"));
-          return;
-        }
-        const text = (payload?.text ?? "").trim();
+        const text = ((await dictate(clip)).text ?? "").trim();
         if (!text) {
           toast.error(t("dictateHeardNothing"));
           return;
         }
         onText(text);
-      } catch {
-        toast.error(t("dictateFailed"));
+      } catch (error) {
+        // 后端把"缺运行环境""说太长了"这类原因写在 detail 里,原样转给用户 ——
+        // 换成一句"识别失败"等于把他唯一能据以行动的信息扔掉。
+        toast.error(error instanceof ApiError ? error.message : t("dictateFailed"));
       } finally {
         setState("idle");
       }
