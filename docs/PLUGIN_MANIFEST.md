@@ -962,6 +962,7 @@ Amazon S3 / S3 兼容服务是**一个插件的五个选项**(枚举配置 `STOR
 | `document_parse` | 本地解析 | 用本地解析 —— 文档是原件,交给云端必须是用户自己定过的 | 是 |
 | `audio_denoise` | ffmpeg 频谱降噪、DeepFilterNet、RNNoise | 第一个不会去掉配乐、跑得起来的本机引擎 | 是 |
 | `audio_separation` | Demucs | 本机引擎 | 是 |
+| `transcription` | FunASR、WhisperX | 第一个装好了运行环境的本机引擎 —— 声音交给云端必须是用户自己定过的 | 是 |
 | `generation` | —— | 每个连接都是一家供应商(见下一节) | 是 |
 | `tools` | —— | 每个连接报自己的工具 | 是 |
 
@@ -987,6 +988,16 @@ Amazon S3 / S3 兼容服务是**一个插件的五个选项**(枚举配置 `STOR
   (没有档位这回事的可以不理它);
 - 出:降噪 `{"audio": "<输出目录里的相对路径>"}`;分离 `{"vocals": "…", "background": "…"}`(两份都要给,少一份整次判失败);
 - 进度、取消:同上。交出去的路径必须落在输出目录里。
+
+#### `transcription` —— 把一段语音转成逐字稿
+
+抽音轨、落成可编辑的逐字稿、投影回时间线、听写时拼成一句话都是宿主的事,插件只听一段音频。认领的工具写 `"stream": true`:
+
+- 入:`{"file": <一份 16k 单声道 wav 副本的本地路径>, "filename": <原素材名>, "language": <语言代码,空 = 你自己判>}`;
+- 出:`{"language": "zh", "segments": [{"start": 0.0, "end": 1.2, "text": "……", "speaker": "A",
+  "words": [{"start": 0.0, "end": 0.3, "word": "……"}]}]}` —— `start` / `end` 是秒,`speaker`、`words` 可以不给
+  (给了剪辑页才有说话人筛选和逐词高亮);`segments` 不是列表、某段缺 `start` / `end` / `text`,整次判失败;
+- 进度、取消:同上。
 
 ## 替宿主做生成
 

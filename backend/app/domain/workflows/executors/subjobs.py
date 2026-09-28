@@ -61,7 +61,7 @@ def transcribe_asset(db: Session, scope: RunScope, config: dict[str, Any]) -> di
         db,
         asset_id,
         created_by=current_actor(db),
-        engine=str(config.get("engine") or "auto"),
+        engine=str(config.get("engine") or ""),
     )
     wait_for_job(child.id, release=db)
     transcript = db.scalars(

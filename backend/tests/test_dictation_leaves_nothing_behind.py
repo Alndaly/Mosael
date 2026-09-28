@@ -94,11 +94,11 @@ def test_分段被拼成一句话不补空格(tmp_path: Path, monkeypatch) -> No
     中文里用空格拼段是错的,而分段边界本来就落在停顿处 —— 直接接起来就是他说的那句。
     """
     monkeypatch.setattr(transcription, "probe_media", lambda _path: {"duration": 3.0})
-    monkeypatch.setattr(transcription, "resolve_transcription_runtime", lambda *a, **k: ("python", "funasr"))
+    monkeypatch.setattr(transcription.asr_models, "resolve_engine_python", lambda _engine: "python")
     monkeypatch.setattr(transcription, "_extract_audio", lambda _src, _dst: None)
     monkeypatch.setattr(
         transcription,
         "transcribe_with_engine",
         lambda *a, **k: {"segments": [{"text": "把这句话"}, {"text": "填进输入框"}]},
     )
-    assert transcription.transcribe_clip(tmp_path / "x.webm") == "把这句话填进输入框"
+    assert transcription.transcribe_clip(tmp_path / "x.webm", owner_user_id=None) == "把这句话填进输入框"

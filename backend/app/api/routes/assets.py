@@ -372,10 +372,9 @@ def transcribe_asset(
     language: str = "",
     engine: str = "",
 ):
-    """`language` 空 = 由已选 ASR 引擎自动检测；`engine` 空或 auto = 跟随设置页。
+    """`language` 空 = 由引擎自动检测;`engine` 是转写提供方 id(`builtin:funasr`、插件连接 id),空 = 按这个人的默认。
 
-    语言只传给识别模型，不暗中切换引擎；显式指定 funasr / whisperx 时只影响本次任务。
-    FunASR 使用多语种 SenseVoice 权重。运行时选择见 `transcription.resolve_transcription_runtime`。
+    语言只传给识别模型,不暗中切换引擎。挑法见 `transcription.transcriber`(ADR 0032)。
     """
     asset = require_asset(db, user, asset_id)
     ensure_workspace_perm(db, user, asset.workspace_id, "ai")

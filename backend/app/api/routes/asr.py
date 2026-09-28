@@ -68,7 +68,7 @@ async def dictate(
         if size == 0:
             raise HTTPException(status_code=422, detail=tr("routeErr_noAudio"))
         try:
-            return {"text": transcription.transcribe_clip(raw, language=language, engine=engine)}
+            return {"text": transcription.transcribe_clip(raw, owner_user_id=user.id, language=language, engine=engine)}
         except transcription.DictationTooLong as exc:
             raise HTTPException(status_code=413, detail=str(exc)) from exc
         except transcription.ASRError as exc:

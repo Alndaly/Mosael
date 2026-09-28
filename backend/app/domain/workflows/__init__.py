@@ -648,11 +648,11 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "config": {
             "asset_id": {"type": "template", "required": True, "media": ["audio", "video"],
                          "description": "wfNode_transcribe_asset_asset_id"},
+            #: 转写提供方(ADR 0032):本机引擎和插件连接并列,空 = 按运行者的默认。
             "engine": {
                 "type": "string",
-                "default": "auto",
                 "description": "wfNode_transcribe_asset_engine",
-                "options": ["auto", "funasr", "whisperx"],
+                "options_from": "providers.transcription",
             },
         },
         "outputs": ["text", "timed_text", "segments", "language", "transcript_id", "duration"],

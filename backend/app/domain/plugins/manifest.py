@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING
 from mosael_formats.plugin_manifest import (
     AUDIO_DENOISE,
     AUDIO_SEPARATION,
+    TRANSCRIPTION,
     CODE_FIELD_TYPES,
     DOCUMENT_PARSE,
     FIELD_TYPES,
@@ -63,6 +64,7 @@ __all__ = [
     "CODE_FIELD_TYPES",
     "AUDIO_DENOISE",
     "AUDIO_SEPARATION",
+    "TRANSCRIPTION",
     "DOCUMENT_PARSE",
     "FIELD_TYPES",
     "Field",

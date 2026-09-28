@@ -107,6 +107,8 @@ class Settings(BaseSettings):
     # interpreter so this backend stays light; empty asr_python autodetects
     # (env → this interpreter).
     asr_python: str = ""
+    #: 只在把旧的共用 venv 归给某个引擎时参考(asr_models 的一次性搬迁)。转写**用哪一家**不看它 ——
+    #: 那是「设置 → 能力提供方 → 转写」里每个人自己定的(ADR 0032)。
     asr_provider: str = "auto"  # "auto" | "funasr" | "whisperx"
     asr_whisper_model: str = "small"
 

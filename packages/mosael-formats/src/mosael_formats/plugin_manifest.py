@@ -67,7 +67,10 @@ DOCUMENT_PARSE = "document_parse"
 #: 交回处理好的文件,宿主负责抽音轨、放回视频、登记成新素材 —— 工作流节点、画板、智能体都能点名这一家,但经宿主调。
 AUDIO_DENOISE = "audio_denoise"
 AUDIO_SEPARATION = "audio_separation"
-HOST_ONLY_CAPABILITIES = frozenset({GENERATION, TOOLS, DOCUMENT_PARSE, AUDIO_DENOISE, AUDIO_SEPARATION})
+#: `transcription`:把一段语音转成带时间的逐字稿(ADR 0032 第三步)。认领的工具收一份 16k 单声道 wav,交回分段
+#: (起止时间、文字,可带说话人和词级时间);宿主负责抽音轨、落成逐字稿、听写时拼成一句话。
+TRANSCRIPTION = "transcription"
+HOST_ONLY_CAPABILITIES = frozenset({GENERATION, TOOLS, DOCUMENT_PARSE, AUDIO_DENOISE, AUDIO_SEPARATION, TRANSCRIPTION})
 
 
 def text_of(value: Any, locale: str | None = None, *, author_locale: str = "") -> str:
@@ -654,6 +657,7 @@ __all__ = [
     "GENERATION",
     "HOST_ONLY_CAPABILITIES",
     "KEY_RE",
+    "TRANSCRIPTION",
     "MANIFEST_FILENAME",
     "Manifest",
     "ManifestError",

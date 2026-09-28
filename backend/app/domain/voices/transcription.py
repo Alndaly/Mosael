@@ -1,7 +1,19 @@
 """素材转写领域流程。
 
-本 Module 负责抽取音轨、选择已安装的 ASR 引擎、调用隔离 worker，并把词级结果装配成 Transcript。
-模型加载与依赖探测属于 ``ai.runtime``；这里不重复实现运行时判断。
+本 Module 负责抽取音轨、挑出这一次用哪一家转写、调用它,并把词级结果装配成 Transcript。
+模型加载与依赖探测属于 ``ai.runtime``;这里不重复实现运行时判断。
+
+转写是一项**宿主能力**(ADR 0032 第三步):本机的 FunASR / WhisperX 是内置提供方(`builtin:funasr` /
+`builtin:whisperx`),认领 `transcription` 的插件连接和它们并列。挑哪一家走能力表那一份挑法(`capabilities.pick`):
+素材库、剪辑页、工作流节点、听写点名的是提供方 id;不点名按这个人的默认,没定默认用第一个装好了运行环境的本机引擎。
+此前引擎只能在部署配置 `asr_provider` 和节点里写死的 `auto / funasr / whisperx` 之间挑,插件插不进来。
+
+**插件协议**(只经宿主调):
+
+- 入:`{"file": <暂存目录里一份 16k 单声道 wav>, "filename": <原素材名>, "language": <语言代码,空 = 自己判>}`;
+- 出:`{"language": "zh", "segments": [{"start": 秒, "end": 秒, "text": "…", "speaker": 可选,
+  "words": 可选 [{"start", "end", "word"}]}]}`;
+- 进度、取消和别的流式工具同一套。
 """
 from __future__ import annotations
 
@@ -15,7 +27,7 @@ from sqlalchemy.orm import Session
 
 from app.ai.runtime import asr_daemon, asr_models
 from app.core.config import settings
-from app.core.i18n import LocalizedError
+from app.core.i18n import LocalizedError, tr
 from app.core.text import blame_line
 from app.core.db import SessionLocal
 from app.domain.jobs import ASR_SLOTS, blame, finish_job, run_job_guarded, say
@@ -25,6 +37,9 @@ from app.domain.transcripts.operations import SegmentIn, TokenIn, attach_transcr
 from app.media.paths import resolve_key
 from app.media.probe import probe_has_audio, probe_media
 from app.core.child_process import run_logged
+from app.domain import capabilities
+from app.domain.capabilities import Builtin, Capability, CapabilityUnavailable, Provider
+from app.domain.plugins.manifest import TRANSCRIPTION
 
 logger = logging.getLogger(__name__)
 
@@ -35,46 +50,119 @@ class ASRError(LocalizedError, RuntimeError):
     """转写的领域错误。带文案 key(`asrErr_*`),按读的人的语言翻(见 core/i18n)。"""
 
 
-def resolve_transcription_runtime(
-    language: str = "",
-    *,
-    engine: str = "",
-) -> tuple[str, str]:  # noqa: ARG001 — 语言不选引擎,见下
-    """(解释器路径, 引擎)。探测与缓存都在 asr_models —— **这件事只有一份实现**。
+BUILTIN_PREFIX = "builtin:"
+#: 本机引擎,按不定默认时的先后排:FunASR(SenseVoice,多语种)在前。
+LOCAL_ENGINES = {"funasr": "asrEngine_funasr", "whisperx": "asrEngine_whisperx"}
 
-    此前这里自己又探测了一遍,和 asr_models 那份各带一份缓存。两份实现意味着两个答案:托管 venv
-    加进了那一份、漏了这一份,于是模型页显示「已安装」而一点转写就报"没有运行环境"。
+
+class TranscriptionProviderUnavailable(CapabilityUnavailable, ASRError):
+    """挑不出能用的转写实现。仍是 ASRError —— 转写的调用方照样接得住。"""
+
+
+def _runtime_ready(engine: str):
+    """本机引擎缺的是**运行环境**(装了它的 Python),不是模型 —— 权重首次转写时自己下。探测只有一份实现,
+    在 asr_models(此前这里自己又探了一遍,两份缓存两个答案:模型页说「已安装」,一转写就报没有运行环境)。
+    **不会自己去装**几 GB 的依赖:缺了就说清楚去哪装。"""
+
+    def missing() -> tuple[str, ...]:
+        return () if asr_models.resolve_engine_python(engine) else (tr("asrHint_runtimeMissing", engine=engine),)
+
+    return missing
+
+
+CAPABILITY = Capability(
+    name=TRANSCRIPTION,
+    label_key="capability_transcription",
+    description_key="capability_transcription_desc",
+    error=TranscriptionProviderUnavailable,
+    none_key="asrErr_noRuntime",
+    unknown_key="asrErr_unsupportedEngine",
+    incomplete_key="asrErr_providerNotReady",
+    builtins=tuple(Builtin(id=f"{BUILTIN_PREFIX}{engine}", name_key=label_key, ready=_runtime_ready(engine))
+                   for engine, label_key in LOCAL_ENGINES.items()),
+    #: 声音交给插件(多半是云端)必须是他自己定过的,不替他挑。
+    auto_single=False,
+)
+
+
+class LocalTranscriber:
+    """本机引擎:常驻 worker 里跑 FunASR / WhisperX。
 
     ## 语言不决定**引擎**,只决定**模型**
 
     FunASR 不是中文引擎 —— 它的 SenseVoice 系列按官方说明支持 50+ 种语言。是我们此前只装了一套
     中文预设(paraformer-zh),于是"英文素材转出一堆错字"看起来像 FunASR 的毛病,其实是拿错了模型。
-
-    所以这里只管"哪个引擎装好了",语言留给 transcribe_with_engine 去挑模型(见那里的 funasr_model)。
-    曾经在这里写过「非中文一律走 WhisperX」—— 那是把"我们装的是中文预设"错记成了"FunASR 只能中文",
-    等于把一个包装选择固化成了引擎的属性。
+    所以挑引擎不看语言,语言交给 transcribe_with_engine 传给模型。
     """
-    from app.ai.runtime.asr_models import resolve_engine_python
 
-    requested = engine.strip().lower()
-    if requested not in ("", "auto", "funasr", "whisperx"):
-        raise ASRError("asrErr_unsupportedEngine", engine=engine)
-    # 单次任务的显式选择优先；auto/留空才跟随设置页。这样工作流是可复现的，同时旧节点
-    # 仍保持原来的全局偏好语义。
-    preferred = (
-        requested
-        if requested not in ("", "auto")
-        else settings.asr_provider.strip().lower()
-    )
-    engines = ["funasr", "whisperx"] if preferred in ("", "auto") else [preferred]
-    for engine in engines:
-        python_executable = resolve_engine_python(engine)
-        if python_executable:
-            return python_executable, engine
-    if requested not in ("", "auto"):
-        raise ASRError("asrErr_engineRuntimeMissing", engine=requested)
-    # 纯文本,不要 markdown —— 这句话会原样显示在界面上,星号只会以星号的样子出现。
-    raise ASRError("asrErr_noRuntime")
+    builtin = True
+
+    def __init__(self, engine: str) -> None:
+        self.engine_id = engine
+        self.name = tr(LOCAL_ENGINES[engine])
+
+    def transcribe(self, wav: Path, language: str = "") -> dict:
+        python_executable = asr_models.resolve_engine_python(self.engine_id)
+        if not python_executable:
+            raise ASRError("asrErr_engineRuntimeMissing", engine=self.engine_id)
+        return transcribe_with_engine(wav, python_executable, self.engine_id, language)
+
+
+class PluginTranscriber:
+    """认领 `transcription` 的插件连接。协议见模块说明;交回的分段在这里验过,形状不对当场说。"""
+
+    builtin = False
+
+    def __init__(self, provider: Provider) -> None:
+        self.engine_id = provider.id
+        self.name = provider.name
+        self._provider = provider
+
+    def transcribe(self, wav: Path, language: str = "") -> dict:
+        from app.domain.plugins.errors import PluginDomainError
+        from app.domain.plugins.runtime import PluginRuntimeError
+        from app.domain.plugins.tools import invoke_host, quiet_hooks, stage_input
+
+        heard: dict[str, Any] = {}
+
+        def prepare(scratch: Path) -> dict[str, Any]:
+            return {"file": str(stage_input(scratch, wav)), "filename": wav.name, "language": language}
+
+        def collect(output: dict[str, Any], _scratch: Path) -> dict[str, Any]:
+            segments = output.get("segments")
+            try:
+                if not isinstance(segments, list):
+                    raise TypeError("segments")
+                parse_transcript_segments(segments)
+            except (KeyError, TypeError, ValueError) as exc:
+                raise ASRError("asrErr_pluginBadOutput", plugin=self.name, detail=str(exc)[:200]) from exc
+            heard.update(language=str(output.get("language") or language or ""), segments=segments)
+            return {"language": heard["language"], "segments": len(segments)}
+
+        try:
+            with SessionLocal() as db:
+                invoke_host(db, self._provider.id, TRANSCRIPTION, {}, prepare=prepare, collect=collect,
+                            hooks=quiet_hooks())
+        except (PluginDomainError, PluginRuntimeError) as exc:
+            raise ASRError("asrErr_pluginFailed", plugin=self.name, detail=str(exc)[:500]) from exc
+        return heard
+
+
+def transcriber(db: Session, owner_user_id: str | None, provider_id: str | None) -> LocalTranscriber | PluginTranscriber:
+    """这一次用哪一家转写:点名的,或按这个人的默认挑。挑不出来抛一句说清下一步的话。"""
+    provider = capabilities.pick(db, owner_user_id, CAPABILITY, provider_id or None)
+    if provider.builtin:
+        return LocalTranscriber(provider.id.removeprefix(BUILTIN_PREFIX))
+    return PluginTranscriber(provider)
+
+
+def register_uses() -> None:
+    """宿主界面上用到转写的入口(ADR 0032 §4)。工作流节点由注册表现扫。"""
+    from app.core.i18n import fragment
+    from app.domain.capabilities import Use, register_use
+
+    register_use(Use(TRANSCRIPTION, "app", fragment("capUse_assetTranscribe")))
+    register_use(Use(TRANSCRIPTION, "app", fragment("capUse_dictation")))
 
 
 def _extract_audio(source: Path, target: Path) -> None:
@@ -99,26 +187,27 @@ class DictationTooLong(ASRError):
     """说得太长了。单独一个类型,因为它该变成 4xx 而不是 5xx —— 是输入的问题。"""
 
 
-def transcribe_clip(source: Path, *, language: str = "", engine: str = "") -> str:
+def transcribe_clip(source: Path, *, owner_user_id: str | None, language: str = "", engine: str = "") -> str:
     """把一小段录音转成一句话。**不入库、不建任务。**
 
     和「转写素材」是两件事,不该走同一条路:后者的产出是一份要留存、要能编辑、要投影回
     时间线的逐字稿,所以它建 job、产出素材、记进任务中心。听写要的只是"用户刚才说了什么",
     说完就用完了 —— 走那条路的话,输入框里每说一句,素材库就多一个 wav 和一条转写记录。
 
-    识别本身仍然是同一份实现(transcribe_with_engine + 常驻 worker),只是**产物的归属不同**。
+    识别本身仍然是同一份实现(同一份挑法、同一个 transcriber),只是**产物的归属不同**。
     """
     duration = float(probe_media(source).get("duration") or 0.0)
     if duration > DICTATION_MAX_SECONDS:
         raise DictationTooLong(
             "asrErr_dictationTooLong", seconds=f"{duration:.0f}", limit=f"{DICTATION_MAX_SECONDS:.0f}"
         )
-    python_executable, engine_id = resolve_transcription_runtime(language, engine=engine)
+    with SessionLocal() as db:
+        chosen = transcriber(db, owner_user_id, engine)
     with tempfile.TemporaryDirectory(prefix="mosael-dictate-") as tmp:
         # 引擎要 16k 单声道 wav;浏览器给的是 webm/opus 之类,统一在这儿转。
         wav = Path(tmp) / "clip.wav"
         _extract_audio(source, wav)
-        result = transcribe_with_engine(wav, python_executable, engine_id, language)
+        result = chosen.transcribe(wav, language)
     # 分段是给逐字稿用的结构;听写要的是一句话。**中间不补空格** —— 中文里那是错的,
     # 而引擎给的分段边界本来就落在停顿处,拼起来就是他说的那句。
     return "".join(str(one.get("text") or "").strip() for one in (result.get("segments") or [])).strip()
@@ -251,6 +340,10 @@ def start_transcription(
     source = resolve_key(asset.file_key)
     if source.exists() and not probe_has_audio(source):
         raise ASRError("asrErr_noAudioTrack", name=asset.name)
+    #: 点名的那一家在建任务之前就认一遍:点了一个不存在的引擎,不该排进队列再失败。配没配好(运行环境、凭据)
+    #: 留给任务去说 —— 那是任务的结果,记在任务上。
+    if engine and not any(one.id == engine for one in capabilities.providers(db, created_by, CAPABILITY)):
+        raise TranscriptionProviderUnavailable(CAPABILITY.unknown_key, name=engine)
     job = create_job(
         db,
         workspace_id=asset.workspace_id,
@@ -258,7 +351,8 @@ def start_transcription(
         payload={
             "asset_id": asset_id,
             "language": (language or "").strip(),
-            "engine": (engine or "auto").strip().lower(),
+            #: 提供方 id(`builtin:funasr`、插件连接 id);空 = 运行时按这个人的默认挑。
+            "provider": (engine or "").strip(),
             "subject": asset.name,
         },
         created_by=created_by,
@@ -281,14 +375,14 @@ def _run_transcription_body(job_id: str, asset_id: str) -> None:
             return
         try:
             language = str((job.payload or {}).get("language") or "")
-            requested_engine = str((job.payload or {}).get("engine") or "")
-            python_executable, engine_id = resolve_transcription_runtime(language, engine=requested_engine)
+            chosen = transcriber(db, job.created_by, str((job.payload or {}).get("provider") or ""))
+            engine_id = chosen.engine_id
             # 状态经 finish_job 写:排队时就被取消的不被写回 running,转完时不盖掉中途的取消
             # (工作流取消会级联到这里,而手里这份 Job 是开始时读的)。
             if not finish_job(db, job, status="running", progress=0.1):
                 db.commit()
                 return
-            say(job, "jobMsg_asrRunning", provider=engine_id)
+            say(job, "jobMsg_asrRunning", provider=chosen.name)
             emit_job_event(db, job.id, "job.running", {"provider": engine_id})
             db.commit()
             logger.info("transcription job %s: engine=%s asset=%s", job_id, engine_id, asset_id)
@@ -302,9 +396,9 @@ def _run_transcription_body(job_id: str, asset_id: str) -> None:
                 db.commit()
                 # First transcribe on a machine downloads ~2GB of models inside the
                 # library — surface that as job progress instead of a frozen 25%.
-                stop = _mirror_model_download_progress(job_id, engine_id)
+                stop = _mirror_model_download_progress(job_id, engine_id) if chosen.builtin else threading.Event()
                 try:
-                    output = transcribe_with_engine(wav, python_executable, engine_id, language)
+                    output = chosen.transcribe(wav, language)
                 finally:
                     stop.set()
 
@@ -336,4 +430,16 @@ def _run_transcription_body(job_id: str, asset_id: str) -> None:
             logger.warning("transcription job %s failed: %s", job_id, exc)
 
 
-__all__ = ["ASRError", "start_transcription", "resolve_transcription_runtime", "parse_transcript_segments", "transcribe_with_engine"]
+__all__ = [
+    "ASRError",
+    "BUILTIN_PREFIX",
+    "CAPABILITY",
+    "LocalTranscriber",
+    "PluginTranscriber",
+    "TranscriptionProviderUnavailable",
+    "parse_transcript_segments",
+    "register_uses",
+    "start_transcription",
+    "transcribe_with_engine",
+    "transcriber",
+]

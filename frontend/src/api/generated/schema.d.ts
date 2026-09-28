@@ -1120,10 +1120,9 @@ export interface paths {
         put?: never;
         /**
          * Transcribe Asset
-         * @description `language` 空 = 由已选 ASR 引擎自动检测；`engine` 空或 auto = 跟随设置页。
+         * @description `language` 空 = 由引擎自动检测;`engine` 是转写提供方 id(`builtin:funasr`、插件连接 id),空 = 按这个人的默认。
          *
-         *     语言只传给识别模型，不暗中切换引擎；显式指定 funasr / whisperx 时只影响本次任务。
-         *     FunASR 使用多语种 SenseVoice 权重。运行时选择见 `transcription.resolve_transcription_runtime`。
+         *     语言只传给识别模型,不暗中切换引擎。挑法见 `transcription.transcriber`(ADR 0032)。
          */
         post: operations["transcribe_asset_api_assets__asset_id__transcribe_post"];
         delete?: never;
@@ -1709,7 +1708,7 @@ export interface paths {
         put?: never;
         /**
          * Recognize Reference
-         * @description 用本机的转写引擎听一遍参考音频,把参考文本填上。
+         * @description 转写一遍参考音频(按这个人的转写默认),把参考文本填上。
          */
         post: operations["recognize_reference_api_voices__voice_id__recognize_reference_post"];
         delete?: never;

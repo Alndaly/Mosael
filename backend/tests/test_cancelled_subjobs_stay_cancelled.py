@@ -73,12 +73,12 @@ def test_转写途中被取消(media, monkeypatch) -> None:
     ws, asset_id, source = media
     job_id = _job(ws, "transcribe")
 
-    def transcribe(wav, python, engine, language):
+    def transcribe(wav, python, engine, language=""):
         _cancel(job_id)
         return {"language": "zh", "segments": [{"start": 0.0, "end": 1.0, "text": "你好"}]}
 
     monkeypatch.setattr(transcription, "resolve_key", lambda key: source)
-    monkeypatch.setattr(transcription, "resolve_transcription_runtime", lambda language, engine="": ("python", "fake"))
+    monkeypatch.setattr(transcription.asr_models, "resolve_engine_python", lambda _engine: "python")
     monkeypatch.setattr(transcription, "_extract_audio", lambda src, target: target.write_bytes(b"RIFF"))
     monkeypatch.setattr(transcription, "_mirror_model_download_progress", lambda job, engine: threading.Event())
     monkeypatch.setattr(transcription, "transcribe_with_engine", transcribe)

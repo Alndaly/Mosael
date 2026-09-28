@@ -13,16 +13,33 @@ FunASR 的 SenseVoice 按官方说明「支持超过 50 种语言,识别效果�
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from app.ai.runtime import asr_models
+from app.core.db import SessionLocal
 from app.domain.voices import transcription
+from tests.util import fresh_client
 
 
 @pytest.fixture(autouse=True)
 def _both_engines_available(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(asr_models, "resolve_engine_python", lambda engine: f"/fake/{engine}")
-    monkeypatch.setattr(transcription.settings, "asr_provider", "auto")
+
+
+def _heard(monkeypatch: pytest.MonkeyPatch, language: str, provider: str = "") -> tuple[str, str]:
+    """挑出来的那一家转写这段音频时,交给 worker 的(引擎, 语言)。"""
+    seen: dict[str, str] = {}
+
+    def fake(_wav, _python, engine_id, lang=""):
+        seen.update(engine=engine_id, language=lang)
+        return {"language": lang, "segments": []}
+
+    monkeypatch.setattr(transcription, "transcribe_with_engine", fake)
+    with SessionLocal() as db:
+        transcription.transcriber(db, None, provider).transcribe(Path("x.wav"), language)
+    return seen["engine"], seen["language"]
 
 
 def test_there_is_exactly_one_funasr_entry() -> None:
@@ -36,9 +53,10 @@ def test_the_funasr_model_is_multilingual() -> None:
 
 
 @pytest.mark.parametrize("language", ["", "zh", "en", "ja", "auto"])
-def test_language_changes_neither_engine_nor_model(language: str) -> None:
+def test_language_changes_neither_engine_nor_model(monkeypatch: pytest.MonkeyPatch, language: str) -> None:
     """**语言不再分流**:识别模型本来就支持 50+ 语种,把语言传给它即可,不必换模型、更不必换引擎。"""
-    assert transcription.resolve_transcription_runtime(language)[1] == "funasr"
+    fresh_client()
+    assert _heard(monkeypatch, language) == ("funasr", language)
     assert transcription.FUNASR_MODEL == "iic/SenseVoiceSmall"
 
 
@@ -51,28 +69,33 @@ def test_speaker_diarisation_survives_the_switch() -> None:
     assert any("vad" in name for name in names), names
 
 
-def test_an_explicit_setting_still_wins(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(transcription.settings, "asr_provider", "whisperx")
-    assert transcription.resolve_transcription_runtime("zh")[1] == "whisperx"
+def test_a_named_engine_wins_over_the_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    """工作流节点选的是这一次任务的执行方式,不应该被默认悄悄改回去。"""
+    fresh_client()
+    assert _heard(monkeypatch, "zh", "builtin:whisperx")[0] == "whisperx"
 
 
-def test_a_per_job_engine_choice_wins_over_the_global_setting(monkeypatch: pytest.MonkeyPatch) -> None:
-    """工作流节点选的是这一次任务的执行方式，不应该被全局偏好悄悄改回去。"""
-    monkeypatch.setattr(transcription.settings, "asr_provider", "whisperx")
-    assert transcription.resolve_transcription_runtime("zh", engine="funasr")[1] == "funasr"
+def test_without_a_runtime_the_next_engine_is_used(monkeypatch: pytest.MonkeyPatch) -> None:
+    """没定默认时用第一个**装好了运行环境**的本机引擎 —— 只装了 WhisperX 的机器照样能转。"""
+    fresh_client()
+    monkeypatch.setattr(asr_models, "resolve_engine_python", lambda engine: "/fake/w" if engine == "whisperx" else None)
+    assert _heard(monkeypatch, "")[0] == "whisperx"
 
 
-def test_an_unknown_per_job_engine_is_rejected() -> None:
-    with pytest.raises(transcription.ASRError, match="ASR"):
-        transcription.resolve_transcription_runtime(engine="not-an-engine")
+def test_an_unknown_engine_is_rejected() -> None:
+    fresh_client()
+    with SessionLocal() as db, pytest.raises(transcription.ASRError) as raised:
+        transcription.transcriber(db, None, "not-an-engine")
+    assert raised.value.key == "asrErr_unsupportedEngine"
 
 
-def test_the_workflow_node_exposes_every_supported_engine() -> None:
+def test_the_workflow_node_lists_transcription_providers() -> None:
+    """节点的引擎格是能力表的提供方(ADR 0032):本机引擎和插件并列,不再写死 auto / funasr / whisperx。"""
     from app.domain.workflows import NODE_TYPES
 
     engine = NODE_TYPES["transcribe_asset"]["config"]["engine"]
-    assert engine["default"] == "auto"
-    assert engine["options"] == ["auto", "funasr", "whisperx"]
+    assert engine["options_from"] == "providers.transcription"
+    assert "default" not in engine and "options" not in engine
 
 
 def test_warmup_and_transcribe_build_the_same_pipeline() -> None:

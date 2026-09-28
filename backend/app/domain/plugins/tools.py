@@ -388,6 +388,33 @@ def host_tool(db: Session, instance: PluginInstance, capability: str) -> dict[st
     return tool
 
 
+def stage_input(scratch: Path, source: Path) -> Path:
+    """把宿主的一份文件拷进暂存目录交给插件(`invoke_host` 的 `prepare` 里用)。**给副本不给原件**(和 `format: "asset"`
+    同一个规矩):插件改坏了、删掉了都伤不到素材库里那一份。"""
+    import shutil
+
+    inbox = scratch / "_input"
+    inbox.mkdir(parents=True, exist_ok=True)
+    copy = inbox / f"source{source.suffix.lower()}"
+    shutil.copyfile(source, copy)
+    return copy
+
+
+def staged_output(scratch: Path, relative: Any) -> Path | None:
+    """插件交回的相对路径 → 暂存目录里那份文件(`collect` 里用)。落在暂存目录外面、或者不存在 → None ——
+    不能借它读走别处的文件;调用方用自己领域的错误说「插件交回的东西不对」。"""
+    if not relative:
+        return None
+    target = (scratch / str(relative)).resolve()
+    return target if target.is_relative_to(scratch.resolve()) and target.is_file() else None
+
+
+def quiet_hooks() -> StreamHooks:
+    """走流式协议(取消文件、进度行)但宿主不看进度的那种调用:降噪、分离、转写这类一段音频进、一段结果出。"""
+    return StreamHooks(on_progress=lambda _fraction, _message: None, on_task=lambda _receipt: None,
+                       is_cancelled=lambda: False)
+
+
 def invoke_host(
     db: Session,
     instance_id: str,
@@ -519,7 +546,8 @@ def _recorded(payload: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
-__all__ = ["all_tools", "exposed", "find", "host_tool", "invoke", "invoke_host", "refresh_tools"]
+__all__ = ["all_tools", "exposed", "find", "host_tool", "invoke", "invoke_host", "quiet_hooks", "refresh_tools", "stage_input",
+           "staged_output"]
 
 
 @contextmanager

@@ -40,10 +40,10 @@ def _a_voice(client) -> str:
 
 
 def test_it_fills_in_what_the_reference_says(monkeypatch) -> None:
-    monkeypatch.setattr(transcription, "resolve_transcription_runtime", lambda: ("/usr/bin/python3", "funasr"))
+    monkeypatch.setattr(transcription.asr_models, "resolve_engine_python", lambda _engine: "/usr/bin/python3")
     monkeypatch.setattr(
         transcription, "transcribe_with_engine",
-        lambda wav, python, provider: {"segments": [{"start": 0, "end": 3, "text": "今天是个"},
+        lambda *_args: {"segments": [{"start": 0, "end": 3, "text": "今天是个"},
                                                     {"start": 3, "end": 7, "text": "好天气"}]},
     )
     client = fresh_client()
@@ -57,10 +57,8 @@ def test_it_fills_in_what_the_reference_says(monkeypatch) -> None:
 
 def test_it_says_so_when_transcription_is_not_installed(monkeypatch) -> None:
     """转不了就明说 —— 别留个空文本让合成出去丢人。"""
-    def no_runtime():
-        raise transcription.ASRError("缺的是运行环境,不是模型")
-
-    monkeypatch.setattr(transcription, "resolve_transcription_runtime", no_runtime)
+    #: 哪个本机引擎都没有运行环境、也没有转写插件:挑的那一刻就说缺什么。
+    monkeypatch.setattr(transcription.asr_models, "resolve_engine_python", lambda _engine: None)
     client = fresh_client()
     voice_id = _a_voice(client)
 
@@ -72,8 +70,8 @@ def test_it_says_so_when_transcription_is_not_installed(monkeypatch) -> None:
 
 def test_an_empty_result_is_not_written(monkeypatch) -> None:
     """识别出一片空白时别把空文本写回去 —— 那和没识别一样,却看起来像成功了。"""
-    monkeypatch.setattr(transcription, "resolve_transcription_runtime", lambda: ("/usr/bin/python3", "funasr"))
-    monkeypatch.setattr(transcription, "transcribe_with_engine", lambda wav, python, provider: {"segments": []})
+    monkeypatch.setattr(transcription.asr_models, "resolve_engine_python", lambda _engine: "/usr/bin/python3")
+    monkeypatch.setattr(transcription, "transcribe_with_engine", lambda *_args: {"segments": []})
     client = fresh_client()
     voice_id = _a_voice(client)
 
@@ -103,8 +101,8 @@ def test_the_recognised_text_actually_unblocks_fish(monkeypatch) -> None:
     from app.ai.runtime import tts_models
     from app.core.db import SessionLocal
 
-    monkeypatch.setattr(transcription, "resolve_transcription_runtime", lambda: ("/usr/bin/python3", "funasr"))
-    monkeypatch.setattr(transcription, "transcribe_with_engine", lambda wav, python, provider: {"segments": [{"text": "今天是个好天气"}]})
+    monkeypatch.setattr(transcription.asr_models, "resolve_engine_python", lambda _engine: "/usr/bin/python3")
+    monkeypatch.setattr(transcription, "transcribe_with_engine", lambda *_args: {"segments": [{"text": "今天是个好天气"}]})
     monkeypatch.setattr(tts_models, "resolve_engine_python", lambda engine_id: "/usr/bin/python3")
     monkeypatch.setattr(tts_models, "is_installed", lambda engine_id: True)
 

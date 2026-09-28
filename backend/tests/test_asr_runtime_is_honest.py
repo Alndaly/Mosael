@@ -22,7 +22,16 @@
 from __future__ import annotations
 
 from app.ai.runtime import asr_models
+from app.core.db import SessionLocal
 from app.domain.voices import transcription
+from tests.util import fresh_client
+
+
+def _choose_without_runtime() -> None:
+    """没有任何引擎的运行环境时挑一家转写 —— 该当场报错。"""
+    fresh_client()
+    with SessionLocal() as db:
+        transcription.transcriber(db, None, None)
 
 
 def test_the_status_says_whether_it_can_actually_run(monkeypatch) -> None:
@@ -71,7 +80,7 @@ def test_the_error_says_the_models_are_fine(monkeypatch) -> None:
     asr_models.clear_runtime_probes()
 
     try:
-        transcription.resolve_transcription_runtime()
+        _choose_without_runtime()
     except transcription.ASRError as exc:
         message = str(exc)
     else:
@@ -235,7 +244,7 @@ def test_the_two_probes_share_one_list() -> None:
     import inspect
 
     # 探测只有一份实现:service 不再自己探,它调 asr_models 那一个。
-    assert "subprocess" not in inspect.getsource(transcription.resolve_transcription_runtime), "service 又自己探测了一遍"
+    assert "subprocess" not in inspect.getsource(transcription), "service 又自己探测了一遍"
     assert "candidate_pythons(engine)" in inspect.getsource(asr_models._resolve_python)
 
 
@@ -245,7 +254,7 @@ def test_the_error_is_plain_text(monkeypatch) -> None:
     asr_models.clear_runtime_probes()
 
     try:
-        transcription.resolve_transcription_runtime()
+        _choose_without_runtime()
     except transcription.ASRError as exc:
         assert "**" not in str(exc), f"报错里有没被渲染的 markdown:{exc}"
     else:
@@ -273,4 +282,4 @@ def test_transcribe_does_not_silently_install_gigabytes() -> None:
     """转写不该在用户没点头时装几 GB 依赖 —— 它只探测,缺了就说清楚去哪装。"""
     import inspect
 
-    assert "ensure_engine_runtime" not in inspect.getsource(transcription.resolve_transcription_runtime)
+    assert "ensure_engine_runtime" not in inspect.getsource(transcription)

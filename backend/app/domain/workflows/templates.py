@@ -1184,6 +1184,8 @@ def requirement_statuses(db: Session, *, user_id: str, workspace_id: str) -> dic
     这里说缺,那一格就是空的。两处各写一份判据的话,迟早一处说齐、一处留空。
     """
     from app.ai.runtime import asr_models, separation_models
+    from app.domain import audio_capabilities
+    from app.domain.voices import transcription
     from app.domain.workflows.executors.talking import SPEECH_TO_VIDEO, VIDEO_LIPSYNC, talking_models
 
     has_chat = bool(_pick(db, user_id, "chat", lambda _db, choice: bool(choice.model)).model)
@@ -1192,12 +1194,22 @@ def requirement_statuses(db: Session, *, user_id: str, workspace_id: str) -> dic
         REFERENCE_IMAGE_MODEL: "met" if _reference_image_model(db, user_id).model else "missing",
         REFERENCE_VIDEO_MODEL: "met" if _shot_video_model(db, user_id).model else "missing",
         CLONED_VOICE: "met" if _first_voice_id(db, workspace_id) else "missing",
-        TRANSCRIPTION_ENGINE: _engines_status(asr_models.runtime_status, ["funasr", "whisperx"]),
-        SEPARATION_ENGINE: _engines_status(separation_models.runtime_status, list(separation_models.ENGINES)),
+        TRANSCRIPTION_ENGINE: _plugin_or(db, user_id, transcription.CAPABILITY)
+        or _engines_status(asr_models.runtime_status, list(transcription.LOCAL_ENGINES)),
+        SEPARATION_ENGINE: _plugin_or(db, user_id, audio_capabilities.SEPARATION)
+        or _engines_status(separation_models.runtime_status, list(separation_models.ENGINES)),
         SPEECH_VIDEO_MODEL: "met" if talking_models(db, SPEECH_TO_VIDEO, user_id) else "missing",
         LIPSYNC_VIDEO_MODEL: "met" if talking_models(db, VIDEO_LIPSYNC, user_id) else "missing",
     }
     return statuses
+
+
+def _plugin_or(db: Session, user_id: str, capability: Any) -> CheckStatus | None:
+    """这项能力有一家配好了的插件连接就算齐了(ADR 0032:插件和本机引擎并列);没有回 None,再去看本机引擎。"""
+    from app.domain import capabilities
+
+    ready = any(not one.missing for one in capabilities.plugin_providers(db, user_id, capability))
+    return "met" if ready else None
 
 
 #: 两种搭法共用的几段规矩:坐标约定、真道具、相机与运镜 / 镜头 / 打光。**一份文字两处读** —— 改了焦段换算的那一份

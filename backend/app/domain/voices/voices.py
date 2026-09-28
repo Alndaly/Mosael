@@ -334,7 +334,7 @@ def get_voice(db: Session, voice_id: str) -> Voice | None:
     return db.get(Voice, voice_id)
 
 
-def recognize_reference_text(db: Session, voice: Voice) -> Voice:
+def recognize_reference_text(db: Session, voice: Voice, *, actor_id: str | None) -> Voice:
     """让应用自己听一遍参考音频,把参考文本填上。
 
     Fish Speech 要求参考文本,而用户手里是一段自己录的音频 —— 让他打一遍自己说过的话,
@@ -348,8 +348,8 @@ def recognize_reference_text(db: Session, voice: Voice) -> Voice:
     reference = reference_path(voice)
     if not reference.is_file():
         raise VoiceError("voiceErr_referenceGoneForRecognition")
-    python_executable, engine_id = transcription.resolve_transcription_runtime()
-    output = transcription.transcribe_with_engine(reference, python_executable, engine_id)
+    #: 用点这个按钮的人的转写默认(他定了哪家就用哪家,没定用装好的本机引擎)。
+    output = transcription.transcriber(db, actor_id, None).transcribe(reference)
     text = "".join(str(segment.get("text") or "") for segment in (output.get("segments") or [])).strip()
     if not text:
         raise VoiceError("voiceErr_nothingHeard")

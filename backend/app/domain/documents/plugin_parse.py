@@ -32,8 +32,10 @@ _TABLE = re.compile(r"<table\b.*?</table>", re.S | re.I)
 
 def _inside(root: Path, relative: str) -> Path:
     """插件交回的路径必须落在暂存目录里 —— 不能借它读走别处的文件。"""
-    target = (root / relative).resolve()
-    if not target.is_relative_to(root.resolve()) or not target.is_file():
+    from app.domain.plugins.tools import staged_output
+
+    target = staged_output(root, relative)
+    if target is None:
         raise DocumentParseError("docErr_pluginBadOutput", detail=relative[:200])
     return target
 
@@ -69,18 +71,13 @@ def _cancelled(job_id: str | None) -> bool:
 def parse_with_plugin(db: Session, extraction: AssetExtraction, asset: Asset, source: Path, target: Path, progress) -> Parsed:
     from app.domain.plugins.errors import PluginDomainError
     from app.domain.plugins.runtime import PluginRuntimeError, StreamHooks
-    from app.domain.plugins.tools import invoke_host
+    from app.domain.plugins.tools import invoke_host, stage_input
 
     filename = asset.original_filename or source.name
     parsed: dict[str, Parsed] = {}
 
     def prepare(scratch: Path) -> dict[str, Any]:
-        #: 给副本不给原件(和 `format: "asset"` 同一个规矩):插件改坏了、删掉了都伤不到素材库里那一份。
-        inbox = scratch / "_input"
-        inbox.mkdir(parents=True, exist_ok=True)
-        copy = inbox / f"source{source.suffix.lower()}"
-        shutil.copyfile(source, copy)
-        return {"file": str(copy), "filename": filename}
+        return {"file": str(stage_input(scratch, source)), "filename": filename}
 
     def collect(output: dict[str, Any], scratch: Path) -> dict[str, Any]:
         """暂存目录被删之前:正文读出来切段,插图搬进解析目录。"""

@@ -77,12 +77,15 @@ def test_dub_error_carries_the_original_audio_key_instead_of_frozen_text() -> No
 
 
 def test_asr_errors_are_localized_and_dictation_stays_a_subclass() -> None:
-    from app.domain.voices.transcription import ASRError, DictationTooLong, resolve_transcription_runtime
+    from app.core.db import SessionLocal
+    from app.domain.voices.transcription import ASRError, DictationTooLong, transcriber
+    from tests.util import fresh_client
 
-    with pytest.raises(ASRError) as caught:
-        resolve_transcription_runtime(engine="nonsense")
+    fresh_client()
+    with SessionLocal() as db, pytest.raises(ASRError) as caught:
+        transcriber(db, None, "nonsense")
 
-    assert _en(caught.value) == "Unsupported ASR engine: nonsense"
+    assert _en(caught.value) == "No such transcription provider: nonsense"
     # 路由据此把听写超长变成 4xx;以前 `except RuntimeError` 的地方照样接得住。
     assert issubclass(DictationTooLong, ASRError) and issubclass(ASRError, RuntimeError)
     assert _en(DictationTooLong("asrErr_dictationTooLong", seconds="300", limit="120")) == (

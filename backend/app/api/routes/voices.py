@@ -116,13 +116,13 @@ def update_voice(voice_id: str, body: VoiceUpdate, db: DbSession, user: CurrentU
 
 @router.post("/voices/{voice_id}/recognize-reference", response_model=VoiceOut)
 def recognize_reference(voice_id: str, db: DbSession, user: CurrentUser) -> Voice:
-    """用本机的转写引擎听一遍参考音频,把参考文本填上。"""
+    """转写一遍参考音频(按这个人的转写默认),把参考文本填上。"""
     voice = voices.get_voice(db, voice_id)
     if voice is None:
         raise HTTPException(status_code=404, detail=tr("routeErr_voiceNotFound"))
     ensure_workspace_perm(db, user, voice.workspace_id, "ai")
     try:
-        return voices.recognize_reference_text(db, voice)
+        return voices.recognize_reference_text(db, voice, actor_id=user.id)
     except (voices.VoiceError, ASRError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 

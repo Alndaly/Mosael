@@ -80,28 +80,13 @@ SEPARATION = Capability(
 )
 
 
-def _stream_hooks():
-    from app.domain.plugins.runtime import StreamHooks
-
-    return StreamHooks(on_progress=lambda _fraction, _message: None, on_task=lambda _receipt: None,
-                       is_cancelled=lambda: False)
-
-
-def _copy_in(scratch: Path, audio: Path) -> Path:
-    """给副本不给原件:插件改坏了、删掉了都伤不到宿主的那一份。"""
-    inbox = scratch / "_input"
-    inbox.mkdir(parents=True, exist_ok=True)
-    copy = inbox / f"source{audio.suffix.lower() or '.wav'}"
-    shutil.copyfile(audio, copy)
-    return copy
-
-
 def _inside(scratch: Path, relative: Any, error: type[Exception], key: str) -> Path:
-    """插件交回的路径必须落在暂存目录里 —— 不能借它读走别处的文件。"""
-    target = (scratch / str(relative or "")).resolve()
-    if not relative or not target.is_relative_to(scratch.resolve()) or not target.is_file():
+    from app.domain.plugins.tools import staged_output
+
+    found = staged_output(scratch, relative)
+    if found is None:
         raise error(key, detail=str(relative)[:200])
-    return target
+    return found
 
 
 class PluginDenoiseAdapter:
@@ -124,10 +109,10 @@ class PluginDenoiseAdapter:
         from app.core.db import SessionLocal
         from app.domain.plugins.errors import PluginDomainError
         from app.domain.plugins.runtime import PluginRuntimeError
-        from app.domain.plugins.tools import invoke_host
+        from app.domain.plugins.tools import invoke_host, quiet_hooks, stage_input
 
         def prepare(scratch: Path) -> dict[str, Any]:
-            return {"file": str(_copy_in(scratch, request.audio_path)), "filename": request.audio_path.name,
+            return {"file": str(stage_input(scratch, request.audio_path)), "filename": request.audio_path.name,
                     "strength": request.strength}
 
         def collect(output: dict[str, Any], scratch: Path) -> dict[str, Any]:
@@ -138,7 +123,7 @@ class PluginDenoiseAdapter:
 
         try:
             with SessionLocal() as db:
-                invoke_host(db, self._provider.id, AUDIO_DENOISE, {}, prepare=prepare, collect=collect, hooks=_stream_hooks())
+                invoke_host(db, self._provider.id, AUDIO_DENOISE, {}, prepare=prepare, collect=collect, hooks=quiet_hooks())
         except (PluginDomainError, PluginRuntimeError) as exc:
             raise DenoiseError("denoiseErr_pluginFailed", plugin=self._provider.name, detail=str(exc)[:500]) from exc
         return out_path
@@ -162,12 +147,12 @@ class PluginSeparationAdapter:
         from app.core.db import SessionLocal
         from app.domain.plugins.errors import PluginDomainError
         from app.domain.plugins.runtime import PluginRuntimeError
-        from app.domain.plugins.tools import invoke_host
+        from app.domain.plugins.tools import invoke_host, quiet_hooks, stage_input
 
         made: dict[str, Path] = {}
 
         def prepare(scratch: Path) -> dict[str, Any]:
-            return {"file": str(_copy_in(scratch, request.audio_path)), "filename": request.audio_path.name}
+            return {"file": str(stage_input(scratch, request.audio_path)), "filename": request.audio_path.name}
 
         def collect(output: dict[str, Any], scratch: Path) -> dict[str, Any]:
             out_dir.mkdir(parents=True, exist_ok=True)
@@ -181,7 +166,7 @@ class PluginSeparationAdapter:
         try:
             with SessionLocal() as db:
                 invoke_host(db, self._provider.id, AUDIO_SEPARATION, {}, prepare=prepare, collect=collect,
-                            hooks=_stream_hooks())
+                            hooks=quiet_hooks())
         except (PluginDomainError, PluginRuntimeError) as exc:
             raise SeparationError("separationErr_pluginFailed", plugin=self._provider.name, detail=str(exc)[:500]) from exc
         return made

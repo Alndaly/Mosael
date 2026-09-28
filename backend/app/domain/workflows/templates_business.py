@@ -151,7 +151,7 @@ def highlight_shorts_graph(*, chat: Any) -> dict[str, Any]:
             "type": "transcribe_asset",
             "name": {"zh": "生成带时间码逐字稿", "en": "Transcribe with timecodes"},
             "position": {"x": 650, "y": 260},
-            "config": {"asset_id": "{{source_video.asset_id}}", "engine": "auto"},
+            "config": {"asset_id": "{{source_video.asset_id}}"},
         },
         {
             "id": "highlights",

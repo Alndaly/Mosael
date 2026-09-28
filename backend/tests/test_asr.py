@@ -72,11 +72,11 @@ def test_transcribe_endpoint_creates_job(monkeypatch) -> None:
               "file_key": "media/s.mp4", "media_info": {"duration": 10}},
     ).json()
 
-    res = client.post(f"/api/assets/{asset['id']}/transcribe?engine=whisperx")
+    res = client.post(f"/api/assets/{asset['id']}/transcribe?engine=builtin:whisperx")
     assert res.status_code == 200
     job = res.json()
     assert job["kind"] == "transcribe" and job["status"] == "queued"
-    assert job["payload"]["engine"] == "whisperx"
+    assert job["payload"]["provider"] == "builtin:whisperx"
     assert started == [asset["id"]]
 
     image = client.post(

@@ -26,7 +26,7 @@ def test_a_request_that_creates_a_job_says_so(monkeypatch) -> None:  # type: ign
     # 建素材不是建任务 —— 不该让任务中心白刷一次。
     assert NEW_JOBS_HEADER not in created.headers
 
-    res = client.post(f"/api/assets/{created.json()['id']}/transcribe?engine=whisperx")
+    res = client.post(f"/api/assets/{created.json()['id']}/transcribe?engine=builtin:whisperx")
     assert res.status_code == 200
     assert res.headers[NEW_JOBS_HEADER] == "1"
     # 下一个请求重新开始计:上一次的记录不会串过来。
@@ -44,7 +44,7 @@ def test_the_frontend_origin_can_read_the_header(monkeypatch) -> None:  # type: 
               "file_key": "media/s.mp4", "media_info": {"duration": 10}},
     ).json()
     res = client.post(
-        f"/api/assets/{asset['id']}/transcribe?engine=whisperx",
+        f"/api/assets/{asset['id']}/transcribe?engine=builtin:whisperx",
         headers={"Origin": "http://127.0.0.1:5173"},
     )
     exposed = res.headers.get("access-control-expose-headers", "").lower()
