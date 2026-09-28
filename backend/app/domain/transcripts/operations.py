@@ -15,7 +15,13 @@ Attaching replaces any prior transcript for the asset.
 
 
 class TranscriptDomainError(ValueError):
-    pass
+    """转写说不行。`status` 由子类给,边界照着翻。"""
+
+    status = 422
+
+
+class TranscriptAssetNotFound(TranscriptDomainError):
+    status = 404
 
 
 @dataclass(frozen=True)
@@ -44,7 +50,7 @@ def attach_transcript(
 ) -> Transcript:
     asset = db.get(Asset, asset_id)
     if asset is None:
-        raise TranscriptDomainError("Asset not found")
+        raise TranscriptAssetNotFound("Asset not found")
     for segment in segments:
         if segment.end_time <= segment.start_time:
             raise TranscriptDomainError("Segment end_time must be greater than start_time")

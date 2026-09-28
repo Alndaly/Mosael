@@ -11,4 +11,13 @@ from app.core.i18n import LocalizedError
 
 
 class SequenceDomainError(LocalizedError, ValueError):
-    """时间线说不行。带文案 key(`seqErr_*`),按请求方的语言翻;认不出的 key 原样显示。"""
+    """时间线说不行。带文案 key(`seqErr_*`),按请求方的语言翻;认不出的 key 原样显示。
+    `status` 由子类给,边界照着翻 —— 不从翻译过的句子里猜(中文请求里没有 "not found")。"""
+
+    status = 422
+
+
+class SequenceNotFound(SequenceDomainError):
+    """这条时间线不存在。"""
+
+    status = 404

@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.domain.media_kinds import MEDIA_KINDS
 from app.db.models import Asset, Clip, Sequence, SequenceOperation, SequenceRevision, Track
-from app.domain.sequences.errors import SequenceDomainError
+from app.domain.sequences.errors import SequenceDomainError, SequenceNotFound
 from app.media.render_plan import TRANSFORM_BOUNDS, TRANSFORM_DEFAULTS
 
 
@@ -159,9 +159,9 @@ def insert_clip(db: Session, sequence_id: str, op: InsertClip) -> Clip:
     track = db.get(Track, op.track_id)
     asset = db.get(Asset, op.asset_id)
     if track is None or track.sequence_id != sequence_id:
-        raise SequenceDomainError("Track not found")
+        raise SequenceNotFound("Track not found")
     if asset is None or asset.workspace_id != sequence.workspace_id:
-        raise SequenceDomainError("Asset not found")
+        raise SequenceNotFound("Asset not found")
     if asset.kind not in MEDIA_KINDS:
         #: 文档(ADR 0031)没有画面和声音可放 —— 渲染时会炸在 ffmpeg 里,在这里就说清楚。
         raise SequenceDomainError("seqErr_assetNotMedia", name=asset.name)
@@ -224,7 +224,7 @@ def move_clip(db: Session, sequence_id: str, op: MoveClip) -> Sequence:
         target = db.get(Track, target_track_id)
         source = db.get(Track, clip.track_id)
         if target is None or target.sequence_id != sequence_id:
-            raise SequenceDomainError("Target track not found")
+            raise SequenceNotFound("Target track not found")
         if source is not None and target.kind != source.kind:
             raise SequenceDomainError("Target track kind does not match clip track kind")
         clip.track_id = target.id
@@ -280,7 +280,7 @@ def move_clips_batch(db: Session, sequence_id: str, op: MoveClipsBatch) -> Seque
             target = db.get(Track, target_track_id)
             source = db.get(Track, clip.track_id)
             if target is None or target.sequence_id != sequence_id:
-                raise SequenceDomainError("Target track not found")
+                raise SequenceNotFound("Target track not found")
             if source is not None and target.kind != source.kind:
                 raise SequenceDomainError("Target track kind does not match clip track kind")
         planned.append((clip, float(move.timeline_start), target_track_id))
@@ -545,7 +545,7 @@ def move_track(db: Session, sequence_id: str, op: MoveTrack) -> Sequence:
     sequence = _require_sequence(db, sequence_id)
     track = db.get(Track, op.track_id)
     if track is None or track.sequence_id != sequence_id:
-        raise SequenceDomainError("Track not found")
+        raise SequenceNotFound("Track not found")
     ordered = sorted(sequence.tracks, key=lambda item: item.position)
     index = next(i for i, item in enumerate(ordered) if item.id == track.id)
     swap = index - 1 if op.direction == "up" else index + 1
@@ -570,7 +570,7 @@ def remove_track(db: Session, sequence_id: str, op: RemoveTrack) -> Sequence:
     sequence = _require_sequence(db, sequence_id)
     track = db.get(Track, op.track_id)
     if track is None or track.sequence_id != sequence_id:
-        raise SequenceDomainError("Track not found")
+        raise SequenceNotFound("Track not found")
     if track.clips and not op.with_clips:
         raise SequenceDomainError("Track must be empty before it can be removed")
     # Record the clips as well as the track: without them undo would hand back an empty track
@@ -631,7 +631,7 @@ def generate_subtitles(db: Session, sequence_id: str, op: GenerateSubtitles) -> 
     sequence = _require_sequence(db, sequence_id)
     track = db.get(Track, op.track_id)
     if track is None or track.sequence_id != sequence_id:
-        raise SequenceDomainError("Track not found")
+        raise SequenceNotFound("Track not found")
     if track.kind != "subtitle":
         raise SequenceDomainError("Subtitles need a subtitle track")
     created: list[dict[str, Any]] = []
@@ -678,7 +678,7 @@ def insert_text_clip(db: Session, sequence_id: str, op: InsertTextClip) -> Seque
     sequence = _require_sequence(db, sequence_id)
     track = db.get(Track, op.track_id)
     if track is None or track.sequence_id != sequence_id:
-        raise SequenceDomainError("Track not found")
+        raise SequenceNotFound("Track not found")
     # 字幕轨 = 序列级统一样式的底部字幕;video 轨 = 花字(每条自带样式、transform 定位)。
     if track.kind not in ("subtitle", "video"):
         raise SequenceDomainError("Text clips can only be placed on subtitle or video tracks")
@@ -865,7 +865,7 @@ def detach_clip_audio(db: Session, sequence_id: str, op: DetachClipAudio) -> Seq
     if replacing:
         audio_asset = db.get(Asset, audio_asset_id)
         if audio_asset is None or audio_asset.workspace_id != sequence.workspace_id or audio_asset.kind not in ("audio", "video"):
-            raise SequenceDomainError("Asset not found")
+            raise SequenceNotFound("Asset not found")
     duration = timeline_span(clip)
     start, end = clip.timeline_start, clip.timeline_start + duration
 
@@ -1190,7 +1190,7 @@ def set_track_state(db: Session, sequence_id: str, op: SetTrackState) -> Sequenc
     sequence = _require_sequence(db, sequence_id)
     track = db.get(Track, op.track_id)
     if track is None or track.sequence_id != sequence_id:
-        raise SequenceDomainError("Track not found")
+        raise SequenceNotFound("Track not found")
     # 静音 / 独奏 / 闪避是**声音**的开关,字幕轨没有声音。独奏一条字幕轨的结果是反的:「有轨在
     # 独奏」成立,别的轨一律闭嘴 —— 预览和成片里所有声音都没了。字幕轨不显示用的是 hidden。
     if track.kind == "subtitle" and (op.muted or op.solo or op.duck):
@@ -1711,14 +1711,14 @@ def timeline_span(clip: Clip) -> float:
 def _require_sequence(db: Session, sequence_id: str) -> Sequence:
     sequence = db.get(Sequence, sequence_id)
     if sequence is None:
-        raise SequenceDomainError("Sequence not found")
+        raise SequenceNotFound("Sequence not found")
     return sequence
 
 
 def _require_clip(db: Session, sequence_id: str, clip_id: str) -> Clip:
     clip = db.get(Clip, clip_id)
     if clip is None or clip.sequence_id != sequence_id:
-        raise SequenceDomainError("Clip not found")
+        raise SequenceNotFound("Clip not found")
     return clip
 
 

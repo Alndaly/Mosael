@@ -360,9 +360,7 @@ def put_transcript(asset_id: str, body: TranscriptAttachRequest, db: DbSession, 
             ],
         )
     except TranscriptDomainError as exc:
-        message = str(exc)
-        status = 404 if "not found" in message.lower() else 422
-        raise HTTPException(status_code=status, detail=message) from exc
+        raise HTTPException(status_code=exc.status, detail=str(exc)) from exc
     return get_transcript_for_asset(db, asset_id) or transcript
 
 

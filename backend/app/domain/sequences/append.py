@@ -12,7 +12,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.db.models import Asset, Clip, Sequence, Track
-from app.domain.sequences.errors import SequenceDomainError
+from app.domain.sequences.errors import SequenceDomainError, SequenceNotFound
 
 #: 图片在时间线上的定格时长(秒)。图片没有 duration,不给就是一段长度为 0 的空片段。
 STILL_SECONDS = 5.0
@@ -53,7 +53,7 @@ def append_asset(db: Session, sequence_id: str, asset_id: str, *, actor_id: str 
     sequence = db.get(Sequence, sequence_id)
     asset = db.get(Asset, asset_id)
     if sequence is None:
-        raise SequenceDomainError("seqErr_sequenceNotFound")
+        raise SequenceNotFound("seqErr_sequenceNotFound")
     if asset is None or asset.workspace_id != sequence.workspace_id:
         raise SequenceDomainError("seqErr_assetNotInWorkspace")
     track = track_for_asset(sequence, asset.kind)

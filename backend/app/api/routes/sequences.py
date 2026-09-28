@@ -579,10 +579,7 @@ def _apply(operation) -> None:
     try:
         operation()
     except SequenceDomainError as exc:
-        message = str(exc)
-        if "not found" in message.lower():
-            raise HTTPException(status_code=404, detail=message) from exc
-        raise HTTPException(status_code=422, detail=message) from exc
+        raise HTTPException(status_code=exc.status, detail=str(exc)) from exc
 
 
 # sequence_id -> (revision, serialised JSON). One entry per sequence, so it cannot grow with
