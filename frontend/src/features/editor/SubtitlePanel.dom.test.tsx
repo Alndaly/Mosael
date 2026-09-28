@@ -26,7 +26,7 @@ vi.stubGlobal("ResizeObserver", class {
 });
 
 import { SubtitlePanel } from "@/features/editor/SubtitlePanel";
-import { useEditorStore } from "@/stores/editorStore";
+import { useEditorStore } from "@/features/editor/editorStore";
 
 function sequenceWith(texts: string[]) {
   return {

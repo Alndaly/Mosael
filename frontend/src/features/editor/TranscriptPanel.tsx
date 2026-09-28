@@ -26,7 +26,7 @@ import {
   type SegmentLike,
 } from "@/domain/timeline/transcriptProjection";
 import { PILL } from "@/features/editor/pill";
-import { useEditorStore } from "@/stores/editorStore";
+import { useEditorStore } from "@/features/editor/editorStore";
 import { cn } from "@/lib/utils";
 
 type TranscriptOut = components["schemas"]["TranscriptOut"];

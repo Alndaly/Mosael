@@ -14,7 +14,7 @@ import { VoiceField } from "@/features/voice/SpeechVoiceFields";
 import type { SpeechVoice } from "@/features/voice/useSpeechVoice";
 import { useWatchedJob } from "@/lib/useWatchedJob";
 import { formatBytes } from "@/lib/bytes";
-import { useEditorStore } from "@/stores/editorStore";
+import { useEditorStore } from "@/features/editor/editorStore";
 
 type Line = "all" | "first" | "last";
 

@@ -9,7 +9,7 @@ import { paintScene, type ScenePaintLayer } from "@/features/editor/playback/sce
 import { evictions } from "@/features/editor/playback/sourcePool";
 import { readTransform, type Transform } from "@/features/editor/TransformOverlay";
 import { clipProgress, sampleTransform } from "@/features/editor/keyframes";
-import { useEditorStore } from "@/stores/editorStore";
+import { useEditorStore } from "@/features/editor/editorStore";
 
 export interface CompositorLayer {
   clip: Clip;

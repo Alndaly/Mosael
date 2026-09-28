@@ -3,7 +3,7 @@ import React from "react";
 import { assetFileUrl } from "@/api/client";
 import { audioGainAt, type AudioSourceSpec } from "./audioMix";
 export type { AudioSourceSpec } from "./audioMix";
-import { useEditorStore } from "@/stores/editorStore";
+import { useEditorStore } from "@/features/editor/editorStore";
 
 /**
  * S3 of the compositor: all preview audio through one WebAudio graph, and the AudioContext

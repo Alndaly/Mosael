@@ -134,7 +134,7 @@ import { RightDockResizeHandle } from "@/components/app/RightDockResizeHandle";
 import { WorkflowRunHistory } from "@/features/workflows/WorkflowRunHistory";
 import { WorkflowRevisionHistory } from "@/features/workflows/WorkflowRevisionHistory";
 import { useWorkflowTemplates, WorkflowCommunityDialog } from "@/features/workflows/WorkflowCommunityDialog";
-import { createWorkflowGraphStore, type GraphUpdater, type SetGraphOptions } from "@/stores/workflowGraphStore";
+import { createWorkflowGraphStore, type GraphUpdater, type SetGraphOptions } from "@/features/workflows/workflowGraphStore";
 import { saveJsonToDisk } from "@/lib/download";
 import { ROW_HANDLE_CLASS, handleOffset, useResizableRow, useResizableSidebar } from "@/lib/useResizableSidebar";
 import { isMediaFile, useFileDrop } from "@/lib/useFileDrop";
@@ -2778,7 +2778,7 @@ export function NodeInspector({
   /**
    * **打字是连发,不是离散编辑。** 每敲一个字符记一条历史的话,Cmd+Z 一次只退回一个字母。
    * 所以文字输入类控件把改动标成「这个节点这个字段的一串」,在历史里塌成一条(存的是这串开始前
-   * 的图,见 stores/workflowGraphStore);换下拉、拨开关不标,一步一条 —— 它们本来就是离散的。
+   * 的图,见 workflowGraphStore);换下拉、拨开关不标,一步一条 —— 它们本来就是离散的。
    * 串按字段分:在 A 里打完字紧接着改 B,是两步。
    */
   const typingRun = (field: string): SetGraphOptions => ({ coalesce: `${node.id}.${field}` });

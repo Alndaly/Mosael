@@ -22,7 +22,7 @@ import {
   trackEdgeTimes,
 } from "@/domain/timeline/geometry";
 import { downsamplePeaks, slicePeaks } from "@/domain/timeline/waveform";
-import { MIN_PX_PER_SECOND, useEditorStore } from "@/stores/editorStore";
+import { MIN_PX_PER_SECOND, useEditorStore } from "@/features/editor/editorStore";
 import { TimelineClip } from "./TimelineClip";
 import { kindHasSound } from "@/lib/assetKinds";
 import { cn } from "@/lib/utils";

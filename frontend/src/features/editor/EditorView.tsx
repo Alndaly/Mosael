@@ -62,7 +62,7 @@ import { type LeftTab, useEditorPanels } from "@/features/editor/useEditorPanels
 import { usePersistentTab } from "@/lib/usePersistentTab";
 import { HANDLE_COLUMN, HANDLE_ROW, handleOffset, useResizableSidebar } from "@/lib/useResizableSidebar";
 
-import { selectedClipId as selectedClipIdOf, useEditorStore } from "@/stores/editorStore";
+import { selectedClipId as selectedClipIdOf, useEditorStore } from "@/features/editor/editorStore";
 import { ConfirmDialog } from "@/components/app/modals";
 import { useImportMediaFiles } from "@/features/media/useImportMediaFiles";
 import { FontFaces } from "@/features/editor/FontFaces";

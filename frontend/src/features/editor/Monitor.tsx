@@ -18,7 +18,7 @@ import { readSubtitleStyle, subtitleCss } from "@/features/editor/subtitleStyle"
 import { readTextStyle, textStyleCss } from "@/features/editor/textStyle";
 import { applyTransformCommit, clipProgress, sampleTransform } from "@/features/editor/keyframes";
 import { TransformOverlay, readTransform, type Transform } from "@/features/editor/TransformOverlay";
-import { useEditorStore } from "@/stores/editorStore";
+import { useEditorStore } from "@/features/editor/editorStore";
 import { isImeKeystroke } from "@/lib/shortcuts";
 
 /**

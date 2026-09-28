@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import type { WorkflowGraph } from "@/api/client";
-import { COALESCE_MS, createWorkflowGraphStore } from "@/stores/workflowGraphStore";
+import { COALESCE_MS, createWorkflowGraphStore } from "@/features/workflows/workflowGraphStore";
 
 /**
  * 撤销历史的粒度。三条各自对着一个具体的坏结果:

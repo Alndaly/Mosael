@@ -3,7 +3,7 @@ import React from "react";
 import { act, render, cleanup } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { WebAudioMixer, type AudioSourceSpec } from "./WebAudioMixer";
-import { useEditorStore } from "@/stores/editorStore";
+import { useEditorStore } from "@/features/editor/editorStore";
 
 const gains: { gain: { value: number }; connect: ReturnType<typeof vi.fn> }[] = [];
 class FakeAudioContext {

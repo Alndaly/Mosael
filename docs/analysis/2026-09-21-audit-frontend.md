@@ -535,7 +535,7 @@ workflows → agent, collaboration, markers, notes
 - `frontend/src/api/client.ts`、`frontend/src/api/transport.ts`、`frontend/src/api/queryKeys.ts`
 - `frontend/src/api/domains/editor.ts`(`ExportParams`:295)、`speech.ts`(`F5Model`:133)、`generation.ts`(`ComfyWorkflow`:22)、`notes.ts`(`noteReferenceQuery`:33)
 - `frontend/src/api/generated/schema.d.ts`(`linked_clip_id`:7381)
-- `frontend/src/stores/editorStore.ts`(选中态两份:50-51、107-115)
+- `frontend/src/features/editor/editorStore.ts`(选中态两份:50-51、107-115)
 - `frontend/src/design/tokens.css`、`unlayeredGlobals.test.ts`、`vendorStyles.test.ts`、`apiSeam.test.ts`、`agentTypeScale.test.ts`、`layering.test.ts`
 - `frontend/src/lib/typeScale.test.ts`、`frontend/src/lib/windowChrome.ts`
 - `frontend/src/app/main.tsx`、`App.tsx`(`PUBLISH_BAR_HEIGHT`:113)、`pageChunks.test.ts`
@@ -549,7 +549,7 @@ workflows → agent, collaboration, markers, notes
 **前端 · 两块画布**
 - `frontend/src/features/boards/BoardCanvas.tsx`(`MARKER_PREFIX`:100、`toMarkerNodes`:102、`boardItems`:172)
 - `frontend/src/features/workflows/workflowCanvasModel.ts`(`MARKER_PREFIX`:55、`toMarkerFlowNodes`:56)
-- `frontend/src/features/boards/canvasHistory.ts` 与 `frontend/src/stores/workflowGraphStore.ts`(两套撤销)
+- `frontend/src/features/boards/canvasHistory.ts` 与 `frontend/src/features/workflows/workflowGraphStore.ts`(两套撤销)
 - `frontend/src/features/markers/markers.ts`
 
 **前端 · 智能体两个入口**

@@ -623,7 +623,7 @@ MCP·stdio 在环境变量,MCP·http 在 `Accept-Language` —— 清单里的�
 
 ### 分层:底下那几层不认识功能模块
 
-`components/`(通用件与外壳)、`lib/`、`api/`、`stores/` 是给所有功能用的,**不 import `features/…`**
+`components/`(通用件与外壳)、`lib/`、`api/`、`domain/` 是给所有功能用的,**不 import `features/…`**
 (由 `design/layering.test.ts` 守着);唯一的组合根是 `app/`。反过来是允许的,功能模块之间也允许
 互相用(画板用素材预览、剪辑台用配音面板)。
 

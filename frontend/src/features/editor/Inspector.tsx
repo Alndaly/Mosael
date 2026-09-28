@@ -13,7 +13,7 @@ import { clipProgress, hasActiveKeyframes, propTimes, sampleProp, togglePropKeyf
 import { readTextStyle, TEXT_PRESETS, type TextStyle } from "@/features/editor/textStyle";
 import { SUBTITLE_FONTS } from "@/features/editor/subtitleStyle";
 import { uploadedFontStack } from "@/features/editor/FontFaces";
-import { useEditorStore } from "@/stores/editorStore";
+import { useEditorStore } from "@/features/editor/editorStore";
 import { CurveEditor } from "@/features/editor/CurveEditor";
 import type { ColorCurves } from "@/features/editor/colorCurves";
 import { COLOR_PRESETS, matchColorPreset, presetColorPayload } from "@/features/editor/colorPresets";

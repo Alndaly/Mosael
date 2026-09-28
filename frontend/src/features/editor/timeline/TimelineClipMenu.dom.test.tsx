@@ -23,7 +23,7 @@ vi.mock("@/app/preferences", () => ({
 import type { Asset, Sequence } from "@/api/client";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Timeline } from "@/features/editor/timeline/Timeline";
-import { useEditorStore } from "@/stores/editorStore";
+import { useEditorStore } from "@/features/editor/editorStore";
 
 const clip = (id: string, kind: string, start: number, extra: Record<string, unknown> = {}) => ({
   id, track_id: "", asset_id: `asset-${id}`, asset_kind: kind, timeline_start: start, src_in: 0, src_out: 2, speed: 1,

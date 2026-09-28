@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { selectedClipId, useEditorStore } from "@/stores/editorStore";
+import { selectedClipId, useEditorStore } from "@/features/editor/editorStore";
 
 /**
  * 「当前那一个选中的片段」是**派生值**,不是第二份状态。
