@@ -32,6 +32,7 @@ describe("逐字稿面板的进行中状态", () => {
 
   it("跑完自己重取逐字稿 —— 否则仍要用户刷新", () => {
     expect(source).toMatch(/wasRunning\.current && !now/);
-    expect(source).toContain('queryKey: ["transcript", assetId]');
+    //: 键从 api/queryKeys.transcriptKeys 取(取数与失效同一个形状)。
+    expect(source).toContain("queryKey: transcriptKeys.of(assetId)");
   });
 });

@@ -5,7 +5,8 @@ import React from "react";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AudioLines, Captions, Loader2, MessageSquareText, Mic, Scissors, Sparkles, Split, SplitSquareVertical, Trash2, UserRound, X } from "lucide-react";
 
-import { API_BASE, api, getAuthToken, getJob, listAsrModels, transcribeAsset, type Job, type Sequence } from "@/api/client";
+import { api, getAssetTranscript, getJob, listAsrModels, transcribeAsset, type Job, type Sequence } from "@/api/client";
+import { transcriptKeys } from "@/api/queryKeys";
 import { asrEngineMissing, pendingTranscribeIds } from "@/features/editor/transcribeQueue";
 import { Button } from "@/components/ui/button";
 import { ConfigNotice } from "@/components/layout/ConfigNotice";
@@ -13,7 +14,6 @@ import { kindHasSound } from "@/lib/assetKinds";
 import { pollWhileUnsettled } from "@/lib/pollWhileUnsettled";
 import { tokenTimelineRange } from "@/domain/timeline/karaoke";
 import { speakerChipStyle, speakerLabel, speakerShort, speakersAreMeaningful } from "@/features/editor/transcriptSpeakers";
-import type { components } from "@/api/generated/schema";
 import { useI18n } from "@/app/preferences";
 import { formatTimecode } from "@/lib/time";
 import {
@@ -29,7 +29,6 @@ import { PILL } from "@/features/editor/pill";
 import { useEditorStore } from "@/features/editor/editorStore";
 import { cn } from "@/lib/utils";
 
-type TranscriptOut = components["schemas"]["TranscriptOut"];
 
 export interface CutRange {
   srcStart: number;
@@ -104,16 +103,8 @@ export function TranscriptPanel({
 
   const transcriptQueries = useQueries({
     queries: assetIds.map((assetId) => ({
-      queryKey: ["transcript", assetId],
-      queryFn: async (): Promise<TranscriptOut | null> => {
-        const token = getAuthToken();
-        const res = await fetch(`${API_BASE}/api/assets/${assetId}/transcript`, {
-          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-        });
-        if (res.status === 404) return null;
-        if (!res.ok) throw new Error(await res.text());
-        return (await res.json()) as TranscriptOut;
-      },
+      queryKey: transcriptKeys.of(assetId),
+      queryFn: () => getAssetTranscript(assetId),
       staleTime: 30_000,
     })),
   });
@@ -263,7 +254,7 @@ export function TranscriptPanel({
   React.useEffect(() => {
     const now = Boolean(runningJob);
     if (wasRunning.current && !now) {
-      assetIds.forEach((assetId) => void qc.invalidateQueries({ queryKey: ["transcript", assetId] }));
+      assetIds.forEach((assetId) => void qc.invalidateQueries({ queryKey: transcriptKeys.of(assetId) }));
     }
     wasRunning.current = now;
   }, [runningJob, assetIds, qc]);
@@ -282,7 +273,7 @@ export function TranscriptPanel({
     if (asrJob.data?.status === "succeeded") {
       setAsrJobId(null);
       setQueue((prev) => prev.slice(1));
-      void qc.invalidateQueries({ queryKey: ["transcript"] });
+      void qc.invalidateQueries({ queryKey: transcriptKeys.all() });
     } else if (asrJob.data?.status === "failed") {
       setAsrJobId(null);
       setFailures((prev) => [...prev, asrJob.data?.error ?? t("transcribeFailed")]);

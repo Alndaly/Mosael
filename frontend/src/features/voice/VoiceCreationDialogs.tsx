@@ -1,16 +1,15 @@
 import React from "react";
-import { assetKeys } from "@/api/queryKeys";
+import { assetKeys, transcriptKeys } from "@/api/queryKeys";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { AudioLines, Mic, Square, Upload, X } from "lucide-react";
 import { toast } from "sonner";
 
 import {
-  api,
+  getAssetTranscript,
   listAssets,
   uploadVoice,
   voiceFromSpeaker,
   type Project,
-  type Transcript,
   type Voice,
   type Workspace,
 } from "@/api/client";
@@ -243,8 +242,8 @@ export function VoiceFromSpeakerDialog({
   });
   const clipAssets = (assets.data ?? []).filter((asset) => asset.kind === "video" || asset.kind === "audio");
   const transcript = useQuery({
-    queryKey: ["transcript", assetId],
-    queryFn: () => api<Transcript>(`/api/assets/${assetId}/transcript`),
+    queryKey: transcriptKeys.of(assetId),
+    queryFn: () => getAssetTranscript(assetId),
     enabled: open && Boolean(assetId),
     retry: false,
   });

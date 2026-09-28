@@ -1,6 +1,7 @@
 import type { components } from "@/api/generated/schema";
 import type { Job } from "@/api/domains/jobs";
-import { API_BASE, api, getAuthToken } from "@/api/transport";
+import type { Transcript } from "@/api/domains/speech";
+import { API_BASE, ApiError, api, getAuthToken } from "@/api/transport";
 
 export type Asset = components["schemas"]["AssetOut"];
 
@@ -169,4 +170,14 @@ export async function importAsset(params: {
   if (params.name) form.set("name", params.name);
   form.set("file", params.file);
   return api<Asset>("/api/assets/import", { method: "POST", body: form });
+}
+
+/** 这段素材的转写;**还没转写过回 null**(后端答 404),别的失败照常抛。 */
+export async function getAssetTranscript(assetId: string): Promise<Transcript | null> {
+  try {
+    return await api<Transcript>(`/api/assets/${assetId}/transcript`);
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 404) return null;
+    throw error;
+  }
 }

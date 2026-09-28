@@ -1,5 +1,5 @@
 import "./editor.css";
-import { assetKeys } from "@/api/queryKeys";
+import { assetKeys, transcriptKeys } from "@/api/queryKeys";
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bot, FolderPlus, Plus, Redo2, Scissors, Sparkles, Type, Undo2 } from "lucide-react";
@@ -8,11 +8,9 @@ import { toast } from "sonner";
 import { useRecorder } from "@/features/media/recordingContext";
 
 import {
-  API_BASE,
   addTrack,
   api,
   generateSubtitles,
-  getAuthToken,
   setSubtitleStyle,
   listFonts,
   uploadFont,
@@ -41,6 +39,7 @@ import {
   setSequenceReframe,
   setClipText,
   setClipTexts,
+  getAssetTranscript,
   translateTexts,
   trimClip,
   undoSequence,
@@ -386,14 +385,9 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
         ...tracks.filter((tk) => tk.kind === "audio").flatMap((tk) => tk.clips ?? []),
       ];
       const assetIds = [...new Set(clips.map((c) => c.asset_id).filter((id): id is string => Boolean(id)))];
-      const token = getAuthToken();
+      //: 和逐字稿面板同一个键、同一种取法:面板已经取过的直接用缓存。
       const fetched = await Promise.all(
-        assetIds.map(async (id) => {
-          const res = await fetch(`${API_BASE}/api/assets/${id}/transcript`, {
-            headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-          });
-          return res.ok ? await res.json() : null;
-        }),
+        assetIds.map((id) => qc.fetchQuery({ queryKey: transcriptKeys.of(id), queryFn: () => getAssetTranscript(id) })),
       );
       const segmentsByAsset = new Map<string, SegmentLike[]>();
       fetched.forEach((transcript, index) => {

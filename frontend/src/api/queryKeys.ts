@@ -84,3 +84,13 @@ export const confirmationKeys = {
       : (["confirmations", workspaceId, "pending"] as const)),
   approved: (workspaceId: string, sessionId: string) => ["confirmations", workspaceId, "approved", sessionId] as const,
 };
+
+/**
+ * 素材的转写。逐字稿面板、字幕生成、按说话人建音色读的是同一份,所以取法也只有一种
+ * (`api/domains/assets.getAssetTranscript`:没转写过是 null,不是错误)。此前同一个键下挂着
+ * 两种取法 —— 一处 404 存 null、一处 404 抛错 —— 两个组件同时挂着时缓存里是哪一种看谁先发请求。
+ */
+export const transcriptKeys = {
+  all: () => ["transcript"] as const,
+  of: (assetId: string) => ["transcript", assetId] as const,
+};
