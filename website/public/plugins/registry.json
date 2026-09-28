@@ -315,7 +315,7 @@
         "zh": "MinerU 文档解析",
         "en": "MinerU document parsing"
       },
-      "version": "1.1.0",
+      "version": "1.1.1",
       "description": {
         "zh": "把 PDF、Word、PPT、Excel 和图片交给 MinerU(mineru.net)解析成 Markdown:版面分析、OCR、表格和公式识别,扫描件和复杂排版比本地解析强。在「设置 → 能力提供方 → 文档解析」里选它,或在文档详情里「用 MinerU 解析」。文档会上传到 MinerU。",
         "en": "Parse PDF, Word, PowerPoint, Excel and images into Markdown with MinerU (mineru.net): layout analysis, OCR, tables and formulas — much better than local parsing on scans and complex layouts. Choose it under Settings → Capability providers → Document parsing, or use “Parse with MinerU” on a document. Documents are uploaded to MinerU."

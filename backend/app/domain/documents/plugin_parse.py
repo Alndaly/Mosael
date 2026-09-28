@@ -57,9 +57,13 @@ def sections_from_markdown(markdown: str) -> tuple[str, list[Section]]:
 def _cancelled(job_id: str | None) -> bool:
     if not job_id:
         return False
+    from app.domain.jobs import was_cancelled
+
+    #: 取消的任务在库里是 failed + jobErr_cancelled,不是 cancelled(见 jobs.was_cancelled)—— 此前这里
+    #: 比的是 cancelled,于是插件那边从来没收到过「停下」。
     with SessionLocal() as db:
         job = db.get(Job, job_id)
-        return job is not None and job.status == "cancelled"
+        return job is not None and was_cancelled(job)
 
 
 def parse_with_plugin(db: Session, extraction: AssetExtraction, asset: Asset, source: Path, target: Path, progress) -> Parsed:

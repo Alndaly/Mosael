@@ -53,6 +53,8 @@ def _ready(db: Session, asset: Asset, *, wait: bool) -> AssetExtraction:
         if not running or time.monotonic() >= deadline:
             if running:
                 raise DocumentReadError("docErr_stillParsing", name=asset.name)
+            if latest is not None and latest.status == "cancelled":
+                raise DocumentReadError("docErr_parseStoppedForRead", name=asset.name)
             if latest is not None:
                 raise DocumentReadError("docErr_parseFailedForRead", name=asset.name, error=latest.error[:300])
             raise DocumentReadError("docErr_notParsedYet", name=asset.name)
@@ -116,7 +118,8 @@ def attachment_context(db: Session, workspace_id: str, asset_ids: list[str]) -> 
         header = f"【文档 {asset.name}(asset_id={asset.id})】"
         if done is None:
             latest = latest_extraction(db, asset.id, succeeded=False)
-            state = "还在解析" if latest is None or latest.status in ("queued", "running") else f"解析失败:{latest.error[:200]}"
+            state = ("还在解析" if latest is None or latest.status in ("queued", "running")
+                     else "解析被停下了,还没有可读的正文" if latest.status == "cancelled" else f"解析失败:{latest.error[:200]}")
             blocks.append(f"{header}{state}。用 read_document(asset_id) 读它(会等解析完)。")
             continue
         unit = {"page": "页", "slide": "张幻灯片", "sheet": "张表", "section": "章"}.get(done.unit, "段")

@@ -6,7 +6,7 @@
     "en": "MinerU document parsing"
   },
   "default_locale": "zh",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "author": {
     "name": "Mosael",
     "url": "https://mosael.com"
@@ -147,7 +147,8 @@
         "help": {
           "zh": "只在「网络」选了「走指定代理」时用。HTTP 代理,例如 http://127.0.0.1:7890(不支持 SOCKS)。",
           "en": "Used only when Network is “Use a proxy”. An HTTP proxy such as http://127.0.0.1:7890 (SOCKS isn't supported)."
-        }
+        },
+        "required": false
       }
     ],
     "credentials": [

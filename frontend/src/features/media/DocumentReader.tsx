@@ -9,10 +9,11 @@
  */
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, FileText, Loader2, NotebookPen, RefreshCw } from "lucide-react";
+import { AlertTriangle, FileText, Loader2, NotebookPen, RefreshCw, Square } from "lucide-react";
 import { toast } from "sonner";
 
 import { listCapabilityChoices } from "@/api/domains/capabilities";
+import { cancelJob } from "@/api/domains/jobs";
 import { extractionFileUrl, extractionSections, listExtractions, parseDocument, type AssetExtraction } from "@/api/domains/documents";
 import { errorText } from "@/api/errorMessage";
 import type { MessageKey } from "@/app/messages";
@@ -66,12 +67,30 @@ export function DocumentReader({ assetId }: { assetId: string }) {
     onError: (error) => toast.error(errorText(error)),
   });
   const saveNote = useSaveDocumentAsNote();
+  //: 一份几百页的 PDF 能解析好几分钟:开始了就得能停(此前只能等它跑完)。停的是那一次解析任务。
+  const stop = useMutation({
+    mutationFn: (jobId: string) => cancelJob(jobId),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: extractionsKey(assetId) }),
+    onError: (error) => toast.error(errorText(error)),
+  });
+  const stopped = latest?.status === "cancelled" && !done ? latest : undefined;
 
   return (
     <div data-document-reader="" className="grid h-full min-h-0 grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)]">
       <header className="flex min-w-0 flex-wrap items-center gap-2 border-b border-divider px-4 py-2 text-ui-xs text-muted-foreground">
         {busy ? (
-          <span className="inline-flex items-center gap-1.5 text-primary"><Loader2 size={12} className="animate-spin" />{t("docParsing").replace("{parser}", latest.parser_name)}</span>
+          <span className="inline-flex items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 text-primary"><Loader2 size={12} className="animate-spin" />{t("docParsing").replace("{parser}", latest.parser_name)}</span>
+            {latest.job_id ? (
+              <Button size="xs" variant="ghost" data-document-stop="" className="gap-1 px-2 text-ui-xs" loading={stop.isPending}
+                      onClick={() => stop.mutate(latest.job_id!)}>
+                <Square size={10} className="fill-current" />
+                {t("docStopParse")}
+              </Button>
+            ) : null}
+          </span>
+        ) : stopped ? (
+          <span data-document-stopped="">{t("docParseStopped").replace("{parser}", stopped.parser_name)}</span>
         ) : done ? (
           <span data-document-parsed-by="">
             {t("docParsedBy").replace("{parser}", done.parser_name).replace("{count}", String(done.sections)).replace("{unit}", t(UNIT_LABEL[done.unit] ?? "docUnitSection"))}
@@ -90,7 +109,7 @@ export function DocumentReader({ assetId }: { assetId: string }) {
       ) : (
         <div className="min-h-0 overflow-y-auto px-5 py-4">
           {latest?.status === "failed" && !busy && <Failed extraction={latest} />}
-          {!busy && !latest && (
+          {!busy && (!latest || stopped) && (
             <div className="grid h-full place-items-center text-center text-muted-foreground">
               <span className="grid justify-items-center gap-2">
                 <FileText size={32} strokeWidth={1.3} />

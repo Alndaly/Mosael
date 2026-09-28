@@ -25,7 +25,7 @@ from app.db.models import Asset, AssetExtraction, Job, now
 from app.domain import capabilities
 from app.domain.documents import CAPABILITY, DocumentParserUnavailable
 from app.domain.documents.local import DocumentParseError, Parsed, attach_page_images, parse_local
-from app.domain.jobs import create_job, dispatch_job, emit_job_event, finish_job, run_job_guarded, say
+from app.domain.jobs import create_job, dispatch_job, emit_job_event, finish_job, run_job_guarded, say, was_cancelled
 from app.media.paths import asset_dir, resolve_key
 from app.media.thumbnails import thumbnail_path, write_thumbnail
 
@@ -82,6 +82,17 @@ def start_parse(
     return extraction
 
 
+class ParseStopped(Exception):
+    """解析任务被人停下了。不是失败,也不带原因。"""
+
+
+def _job_cancelled(db: Session, job_id: str) -> bool:
+    """插件那条路停下时抛的是插件自己的错(它看到了取消文件),按任务状态认。"""
+    db.expire_all()
+    job = db.get(Job, job_id)
+    return job is not None and was_cancelled(job)
+
+
 def _body(job_id: str, extraction_id: str, builtin: bool) -> None:
     with SessionLocal() as db:
         job = db.get(Job, job_id)
@@ -102,11 +113,14 @@ def _body(job_id: str, extraction_id: str, builtin: bool) -> None:
         target.mkdir(parents=True, exist_ok=True)
 
         def progress(fraction: float, message: str) -> None:
+            """报进度;任务已经被停下(任务中心、阅读器上的「停止」)就在这一页之后收手 —— 此前照样读完几百页。"""
             with SessionLocal() as progress_db:
                 current = progress_db.get(Job, job_id)
                 if current is not None and finish_job(progress_db, current, status="running", progress=round(max(0.02, min(fraction, 0.98)), 3)):
                     say(current, message)
                     progress_db.commit()
+                elif current is not None and was_cancelled(current):
+                    raise ParseStopped()
 
         try:
             source = resolve_key(asset.file_key)
@@ -121,10 +135,16 @@ def _body(job_id: str, extraction_id: str, builtin: bool) -> None:
             _write(db, extraction, asset, parsed, target)
         except Exception as exc:
             db.rollback()
+            stopped = isinstance(exc, ParseStopped) or _job_cancelled(db, job_id)
             failed = db.get(AssetExtraction, extraction_id)
             if failed is not None:
-                failed.status, failed.error, failed.finished_at = "failed", str(exc)[:2000], now()
+                failed.status, failed.finished_at = ("cancelled" if stopped else "failed"), now()
+                failed.error = "" if stopped else str(exc)[:2000]
                 db.commit()
+            #: 停下的不是失败:任务那一侧已经是「已取消」(cancel_job 写的),这里不再抛出一条失败盖上去。
+            if stopped:
+                shutil.rmtree(target, ignore_errors=True)
+                return
             raise
         result = {"asset_id": asset.id, "extraction_id": extraction.id, "sections": extraction.sections}
         if finish_job(db, job, status="succeeded", progress=1.0, result=result):

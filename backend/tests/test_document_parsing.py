@@ -6,6 +6,7 @@ import time
 from pathlib import Path
 
 import pytest
+from sqlalchemy import select
 
 from app.domain.documents import local, office
 from tests.document_samples import docx_bytes, epub_bytes, pdf_bytes, pptx_bytes, write, xlsx_bytes
@@ -213,3 +214,61 @@ def test_迁移_早先建的解析表补上页面图列_从各段抄过来() -> 
     with engine.connect() as conn:
         assert _json.loads(conn.execute(text("SELECT page_images FROM asset_extractions WHERE id = 'x'")).scalar()) == ["pages/001.png"]
     fresh_client()  # 把表按当前模型重建回来,别的测试照常
+
+
+def test_几份_PDF_同时解析不把进程打挂(tmp_path) -> None:
+    """pdfium 不是线程安全的:两个解析任务在两个线程里同时渲页面图,整个进程 abort(Fatal Python error)。
+    每一次碰 pdfium 都在同一把锁里(local._PDFIUM)。这条测试没有那把锁时会直接把 pytest 进程打死。"""
+    import threading
+
+    sources = [write(tmp_path, f"doc{n}.pdf", pdf_bytes([f"Page {i} of {n}" for i in range(12)])) for n in range(4)]
+    results: dict[int, object] = {}
+
+    def parse(n: int) -> None:
+        try:
+            results[n] = local.parse_local(sources[n], tmp_path / f"out{n}")
+        except Exception as exc:  # noqa: BLE001 —— 收起来断言,不让线程吞掉
+            results[n] = exc
+
+    threads = [threading.Thread(target=parse, args=(n,)) for n in range(4)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=60)
+    assert all(not isinstance(one, Exception) for one in results.values()), results
+    assert [len(results[n].sections) for n in range(4)] == [12, 12, 12, 12]
+
+
+def test_解析中停下_记成已停止_任务不被改成失败(monkeypatch) -> None:
+    """一份几百页的 PDF 开始解析就只能等它跑完(用户截图)。停下后解析那一行是 cancelled、没有原因;
+    任务仍是「已取消」,读文档的地方说「被停下了」而不是「还在解析」。"""
+    from app.core.db import SessionLocal
+    from app.db.models import Job
+    from app.domain.documents import extraction
+    from app.domain.jobs import cancel_job
+
+    def slow_parse(source, target, on_progress=None):
+        with SessionLocal() as db:
+            job = db.scalars(select(Job).where(Job.kind == "document_parse").order_by(Job.created_at.desc())).first()
+            cancel_job(db, job)
+        on_progress(0.3, "docProgress_readPages")
+        raise AssertionError("停下之后不该再往下读")
+
+    monkeypatch.setattr(extraction, "parse_local", slow_parse)
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+    made = client.post("/api/assets/import", data={"workspace_id": ws},
+                       files={"file": ("long.pdf", pdf_bytes(["One"]), "application/pdf")}).json()
+    deadline = time.monotonic() + 20
+    while time.monotonic() < deadline:
+        listed = client.get(f"/api/assets/{made['id']}/extractions").json()
+        if listed and listed[0]["status"] not in ("queued", "running"):
+            break
+        time.sleep(0.1)
+    assert listed[0]["status"] == "cancelled" and listed[0]["error"] == "", listed[0]["error"]
+    from app.domain.jobs import was_cancelled
+
+    with SessionLocal() as db:
+        assert was_cancelled(db.get(Job, listed[0]["job_id"])), "任务仍是「被取消」,没被解析那一侧改成一条失败"
+    text = client.get(f"/api/assets/{made['id']}/document/text", params={"workspace_id": ws})
+    assert text.status_code == 200 and text.json()["status"] == "failed", "停下的不能一直显示「解析中」"

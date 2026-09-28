@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 import React from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
 
 /**
@@ -16,6 +16,8 @@ const docs = vi.hoisted(() => ({
   extractionFileUrl: (asset: string, extraction: string, path: string) => `/f/${asset}/${extraction}/${path}?token=t`,
 }));
 vi.mock("@/api/domains/documents", () => docs);
+const cancelJob = vi.hoisted(() => vi.fn(async () => ({})));
+vi.mock("@/api/domains/jobs", () => ({ cancelJob }));
 vi.mock("@/api/domains/capabilities", () => ({ listCapabilityChoices: vi.fn(async () => [{ capability: "document_parse", options: [
   { id: "builtin:local", name: "本地解析", builtin: true, missing: [] }] }]) }));
 vi.mock("@/features/media/useSaveDocumentAsNote", () => ({ useSaveDocumentAsNote: () => ({ mutate: vi.fn(), isPending: false }) }));
@@ -65,4 +67,20 @@ it("解析失败说原因", async () => {
 
 it("只改 Markdown 里相对解析目录的地址,外链不动", () => {
   expect(withFileUrls("![](images/a.png) ![](https://x.com/b.png)", "a", "x")).toBe("![](/f/a/x/images/a.png?token=t) ![](https://x.com/b.png)");
+});
+
+it("解析中能停:停的是那一次解析任务;停下之后说已停止,可以重新解析", async () => {
+  //: 一份上百 MB 的 PDF 开始解析就只能等它跑完(用户截图)。
+  docs.listExtractions.mockResolvedValue([{ ...done, id: "x2", status: "running", job_id: "job-9", sections: 0 }]);
+  const { unmount } = mount();
+  await waitFor(() => expect(document.querySelector("[data-document-stop]")).not.toBeNull());
+  fireEvent.click(document.querySelector<HTMLButtonElement>("[data-document-stop]")!);
+  await waitFor(() => expect(cancelJob).toHaveBeenCalledWith("job-9"));
+  unmount();
+
+  docs.listExtractions.mockResolvedValue([{ ...done, id: "x2", status: "cancelled", job_id: "job-9", sections: 0 }]);
+  mount();
+  await waitFor(() => expect(document.querySelector("[data-document-stopped]")?.textContent).toContain("docParseStopped"));
+  expect(document.querySelector("[data-document-stop]")).toBeNull();
+  expect(screen.queryByRole("alert")).toBeNull();
 });

@@ -167,6 +167,15 @@ def test_上传被拒_提示区域和代理设置(tmp_path, monkeypatch) -> None
     assert "403" in str(caught.value) and "AccessDenied" in str(caught.value) and "中国大陆" in str(caught.value)
 
 
+def test_代理地址是选填_直连和跟随系统时不算缺配置() -> None:
+    """配置项缺省是必填;代理地址只在「走指定代理」时用,写成必填的话选了直连也被判「缺少配置: 代理地址」(用户截图)。"""
+    from app.domain.plugins.manifest import parse
+
+    manifest = parse(json.loads((PLUGIN / "mosael.plugin.json").read_text(encoding="utf-8")), PLUGIN)
+    required = {field.key: field.required for field in manifest.config}
+    assert required["MINERU_PROXY"] is False and required["MINERU_NETWORK"] is True
+
+
 def test_清单_只给宿主调_认领文档解析() -> None:
     from app.domain.plugins.manifest import parse
 

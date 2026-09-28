@@ -15,6 +15,7 @@ import csv
 import io
 import logging
 import re
+import threading
 import zipfile
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -132,50 +133,65 @@ def attach_page_images(source: Path, out_dir: Path, parsed: Parsed, on_progress:
 
 # ── PDF ─────────────────────────────────────────────────────────────────────────
 
+#: **pdfium 不是线程安全的**(它有全局状态):两个解析任务在两个线程里同时开 PDF、渲页面图,整个进程直接
+#: abort(`Fatal Python error: Aborted`,栈在 pypdfium2 的 get_page 里)—— 同时导入两份 PDF 就能把后端打挂。
+#: 每一次碰 pdfium 都在这把锁里;按页锁、不整份锁:两份文档照样交替着往前走,页与页之间也能停下来。
+_PDFIUM = threading.Lock()
+
 
 def _render_pdf_pages(pdf_path: Path, out_dir: Path, on_progress: Progress) -> list[str]:
     import pypdfium2 as pdfium
 
     pages_dir = out_dir / "pages"
     pages_dir.mkdir(parents=True, exist_ok=True)
-    document = pdfium.PdfDocument(str(pdf_path))
+    with _PDFIUM:
+        document = pdfium.PdfDocument(str(pdf_path))
+        count = min(len(document), MAX_PAGE_IMAGES)
     try:
         rendered: list[str] = []
-        count = min(len(document), MAX_PAGE_IMAGES)
         for index in range(count):
-            page = document[index]
-            width, height = page.get_size()
-            scale = PAGE_IMAGE_LONG_EDGE / max(width, height, 1)
-            image = page.render(scale=scale).to_pil()
+            with _PDFIUM:
+                page = document[index]
+                width, height = page.get_size()
+                scale = PAGE_IMAGE_LONG_EDGE / max(width, height, 1)
+                image = page.render(scale=scale).to_pil()
+                page.close()
             name = f"pages/{index + 1:03d}.png"
             image.save(out_dir / name, optimize=True)
             rendered.append(name)
             on_progress(0.5 + 0.5 * (index + 1) / max(count, 1), "docProgress_renderPages")
         return rendered
     finally:
-        document.close()
+        with _PDFIUM:
+            document.close()
 
 
 def _parse_pdf(source: Path, out_dir: Path, on_progress: Progress) -> Parsed:
     import pypdfium2 as pdfium
 
     try:
-        document = pdfium.PdfDocument(str(source))
+        with _PDFIUM:
+            document = pdfium.PdfDocument(str(source))
+            total = len(document)
     except pdfium.PdfiumError as exc:
         #: 加了打开密码的 PDF 也走到这里。
         raise DocumentParseError("docErr_unreadable", detail=str(exc)[:200]) from exc
     try:
         sections: list[Section] = []
-        total = len(document)
         for index in range(total):
-            page = document[index]
-            text = page.get_textpage().get_text_range().replace("\r\n", "\n").replace("\r", "\n")
+            with _PDFIUM:
+                page = document[index]
+                textpage = page.get_textpage()
+                text = textpage.get_text_range().replace("\r\n", "\n").replace("\r", "\n")
+                textpage.close()
+                page.close()
             text = re.sub(r"[ \t]+\n", "\n", text).strip()
             title = next((line.strip() for line in text.splitlines() if line.strip()), "")
             sections.append(Section(index=index + 1, title=title[:80], markdown=text))
             on_progress(0.5 * (index + 1) / max(total, 1), "docProgress_readPages")
     finally:
-        document.close()
+        with _PDFIUM:
+            document.close()
     images = _render_pdf_pages(source, out_dir, on_progress)
     for section, image in zip(sections, images):
         section.image = image

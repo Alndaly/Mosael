@@ -85,7 +85,8 @@ def document_full_text(asset_id: str, db: DbSession, user: CurrentUser) -> dict:
     asset = _document(db, user, asset_id)
     text = document_text(db, asset.workspace_id, asset.id)
     latest = latest_extraction(db, asset.id, succeeded=False)
-    status = "ready" if text is not None else "failed" if latest is not None and latest.status == "failed" else "parsing"
+    #: 停下的(cancelled)和失败一样是「这一版没有正文」,不能一直显示「解析中」。
+    status = "ready" if text is not None else "failed" if latest is not None and latest.status in ("failed", "cancelled") else "parsing"
     return {"asset_id": asset.id, "title": asset.name.rsplit(".", 1)[0], "markdown": text or "", "status": status,
             "error": latest.error if status == "failed" and latest is not None else ""}
 
