@@ -111,6 +111,8 @@ async function request(path: string, init?: RequestInit): Promise<Response> {
   try {
     response = await fetch(`${API_BASE}${path}`, { ...init, headers });
   } catch (cause) {
+    // 调用方自己掐断的请求(切会话、卸载、React Query 取消)不是「连不上」。
+    if (init?.signal?.aborted) throw cause;
     throw new ApiOfflineError(apiLocale.unreachable(API_BASE), { cause });
   }
   if (response.status === 401 && !path.startsWith("/api/auth/")) {
@@ -140,4 +142,11 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
 /** 回的是一段二进制(试听的音频)而不是 JSON 的接口。报错、掉线、401 和 `api` 同一套处理。 */
 export async function apiBlob(path: string, init?: RequestInit): Promise<Blob> {
   return (await request(path, init)).blob();
+}
+
+/** 回的是一条持续推送的流(SSE)而不是一次性的响应体。报错、掉线、401 和 `api` 同一套处理。 */
+export async function apiStream(path: string, init?: RequestInit): Promise<ReadableStream<Uint8Array>> {
+  const response = await request(path, init);
+  if (!response.body) throw new ApiError("Empty stream", response.status, "");
+  return response.body;
 }

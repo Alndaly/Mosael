@@ -1,7 +1,7 @@
 import React from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
-import { API_BASE, getAuthToken } from "@/api/client";
+import { streamAgentTurn } from "@/api/domains/sessions";
 import type { components } from "@/api/generated/schema";
 import { readSseData } from "@/lib/sse";
 import type { AgentTimelineItem } from "@/features/agent/ToolCalls";
@@ -82,13 +82,7 @@ export function useAgentTurnStream(viewedSessionId: string | null): AgentTurnStr
       setStreamText("");
       setStreamTimeline([]);
       try {
-        const token = getAuthToken();
-        const response = await fetch(`${API_BASE}/api/agent/sessions/${targetSessionId}/stream`, {
-          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-          signal: controller.signal,
-        });
-        if (!response.ok || !response.body) return;
-        for await (const data of readSseData(response.body)) {
+        for await (const data of readSseData(await streamAgentTurn(targetSessionId, controller.signal))) {
           let payload: StreamEvent;
           try {
             payload = JSON.parse(data) as StreamEvent;
@@ -100,6 +94,9 @@ export function useAgentTurnStream(viewedSessionId: string | null): AgentTurnStr
           setStreamTimeline((payload.timeline ?? []) as AgentTimelineItem[]);
           if (payload.done) break;
         }
+      } catch {
+        // 流断了、被掐了、根本没连上,都不是要报给人看的错:调用方是 `void attach(...)`,而回合的
+        // 真实状态由 agent-session 的轮询兜底 —— 没被掐的话,下面照样失效一遍把正式消息取回来。
       } finally {
         if (abortRef.current === controller) abortRef.current = null;
         // 被中止的流是被替换或卸载了 —— 接手的那个现在拥有状态,这里再去失效就是给一个

@@ -15,8 +15,6 @@ import { beforeEach, expect, it, vi } from "vitest";
  * 以及**收尾在两条失效都 settle 之后才清流态**。
  */
 
-vi.mock("@/api/client", () => ({ API_BASE: "http://backend.test", getAuthToken: () => "t" }));
-
 const chunks: string[] = [];
 let closeStream: (() => void) | null = null;
 vi.mock("@/lib/sse", () => ({

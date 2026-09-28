@@ -1,5 +1,5 @@
 import type { components } from "@/api/generated/schema";
-import { api } from "@/api/transport";
+import { api, apiStream } from "@/api/transport";
 
 export type SessionGroup = components["schemas"]["SessionGroupOut"];
 export type SessionGroupKind = "agent" | "generation";
@@ -68,6 +68,9 @@ export const listAgentMessages = (sessionId: string) =>
   api<AgentMessage[]>(`/api/agent/sessions/${sessionId}/messages`);
 export const sendAgentMessage = (sessionId: string, body: Record<string, unknown>) =>
   api<AgentMessage>(`/api/agent/sessions/${sessionId}/messages`, { method: "POST", body: JSON.stringify(body) });
+/** 正在进行的这一回合的增量(SSE)。每条 data 是一份 `AgentStreamEvent`,见 features/agent/useAgentTurnStream。 */
+export const streamAgentTurn = (sessionId: string, signal: AbortSignal) =>
+  apiStream(`/api/agent/sessions/${sessionId}/stream`, { signal });
 export const stopAgentSession = (sessionId: string) =>
   api(`/api/agent/sessions/${sessionId}/stop`, { method: "POST" });
 export const compactAgentSession = <T>(sessionId: string) =>
