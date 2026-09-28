@@ -139,24 +139,6 @@ def _model_out(db, model, catalog: dict[str, dict], vendor: str = "") -> Provide
     )
 
 
-def _generation_capabilities_known(vendor: str, model) -> bool:
-    """这一行的生成参数是认出来的,还是落到了兜底。
-
-    **不是生成模型就不算数**:能力清单里没有 image/video 的行(纯对话模型)恒为 True,
-    否则设置页会对着一排 gpt-4 挂出"参数还没认出来",而那句话对它们毫无意义。
-    """
-    from app.domain.generation import capabilities_are_known
-    from app.domain.generation.catalog import GENERATION_KINDS
-
-    kinds = [k for k in GENERATION_KINDS if k in provider_models.effective_capabilities(model)]
-    if not kinds:
-        return True
-    return all(
-        capabilities_are_known(vendor, model.model_id, kind, ref=model.generation_capability_ref)
-        for kind in kinds
-    )
-
-
 @router.get("/settings/providers/{profile_id}/models", response_model=list[ProviderModelOut])
 def list_provider_models(profile_id: str, db: DbSession, user: CurrentUser) -> list[ProviderModelOut]:
     """这条连接下的模型:**已配置的行 + 实时目录 + 内置目录**。

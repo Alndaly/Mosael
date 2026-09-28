@@ -162,7 +162,7 @@ def test_roundtrip_is_new_scene_and_transfers_are_owner_scoped(monkeypatch, tmp_
         def invalid(*args):
             result=fake_execute(*args);Path(args[3]['output_path']).write_bytes(b'bad');return result
         monkeypatch.setattr(bridge,'execute',invalid)
-        # 坏的 GLB 由**场景域**判(validate_model),不是 Blender 域 —— 从前两边都抛
+        # 坏的 GLB 由**场景域**判(validate_model_file),不是 Blender 域 —— 从前两边都抛
         # HTTPException,这条断言分不出来。两者边界上都翻成 422,HTTP 行为不变。
         with pytest.raises(SceneDomainError):bridge.receive(db,user,scene,sent['id'])
         assert len(list(db.scalars(select(Scene3D))))==before

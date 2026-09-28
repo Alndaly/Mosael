@@ -247,26 +247,6 @@ def validate_model_file(path: Path) -> str:
     return fmt
 
 
-def validate_model(data: bytes, *, size: int | None = None) -> str:
-    """内存里那一份的版本。**只给已经握着字节的调用方** —— 新代码走 `validate_model_file`。"""
-    fmt = "glb" if data[:4] == b"glTF" else "gltf"
-    _refuse_too_large(size if size is not None else len(data), fmt)
-    try:
-        if fmt == "glb":
-            _, version, length, chunk_size, chunk_type = struct.unpack("<4sIIII", data[:20])
-            if version != 2 or length != len(data) or chunk_type != 0x4E4F534A or chunk_size > len(data)-20:
-                raise SceneDomainError("sceneErr_badGlb")
-            doc = json.loads(data[20:20+chunk_size])
-        else:
-            doc = json.loads(data)
-        _validate_document(doc)
-    except SceneDomainError:
-        raise
-    except (ValueError, TypeError, AttributeError, struct.error, RecursionError) as exc:
-        raise SceneDomainError("sceneErr_unreadableModel", detail=str(exc)) from exc
-    return fmt
-
-
 CHUNK = 1024 * 1024
 
 

@@ -620,10 +620,6 @@ def _sequence_response(sequence: Sequence) -> Response:
     return Response(_sequence_json(sequence), media_type="application/json")
 
 
-def _sequences_response(sequences: list[Sequence]) -> Response:
-    return Response(f"[{','.join(_sequence_json(item) for item in sequences)}]", media_type="application/json")
-
-
 def _get_sequence(db, sequence_id: str) -> Sequence:
     stmt = (
         select(Sequence)

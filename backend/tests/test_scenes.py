@@ -253,30 +253,33 @@ def test_glb_is_validated_from_its_head_so_it_can_be_much_larger(tmp_path):
         validate_model_file(_glb(MODEL_LIMIT_BYTES + 1, tmp_path))
 
 
-def test_refusing_a_too_large_model_never_contradicts_itself():
+def test_refusing_a_too_large_model_never_contradicts_itself(tmp_path):
     """超限的话要能直接照着做,而且不能自相矛盾。
 
     钉的是一个真出过的错:调用方只读「上限 + 1」个字节,于是拿 `len(data)` 当文件大小报出来,
     500 MB 会变成「模型 100.0 MB,超出上限 100 MB」—— 读起来像 bug,还把用户往"再减一点点
-    就行"骗。真实大小由调用方传;传不了就干脆不报大小。
+    就行"骗。大小取文件的真实大小。
     """
-    from app.domain.scenes import (EMBEDDED_GLTF_LIMIT_BYTES, MODEL_LIMIT_BYTES,
-                                   SceneTooLarge, validate_model)
+    from app.domain.scenes import EMBEDDED_GLTF_LIMIT_BYTES, MODEL_LIMIT_BYTES, SceneTooLarge, validate_model_file
 
-    def refuse(data: bytes, **kwargs) -> str:
+    def refuse(head: bytes, size: int) -> str:
+        path = tmp_path / "model"
+        with path.open("wb") as stream:
+            stream.write(head)
+            stream.truncate(size)  # 稀疏文件:不真写几百 MB
         with pytest.raises(SceneTooLarge) as excinfo:
-            validate_model(data, **kwargs)
+            validate_model_file(path)
         return str(excinfo.value)
 
     limit = MODEL_LIMIT_BYTES // 1024 // 1024
-    known = refuse(b"glTF" + b"\0" * 32, size=MODEL_LIMIT_BYTES * 3)
+    known = refuse(b"glTF" + b"\0" * 32, MODEL_LIMIT_BYTES * 3)
     assert f"{limit} MB" in known and f"{MODEL_LIMIT_BYTES * 3 / 1024 / 1024:.1f} MB" in known
 
     # 恰好超一点:四舍五入等于上限,就不报大小 —— 否则又是那句自相矛盾的话。
-    assert f"{limit}.0 MB" not in refuse(b"glTF" + b"\0" * 32, size=MODEL_LIMIT_BYTES + 1)
+    assert f"{limit}.0 MB" not in refuse(b"glTF" + b"\0" * 32, MODEL_LIMIT_BYTES + 1)
 
     # 内嵌 glTF 走另一档,而且要说清楚"改导出 GLB 就能大得多"。
-    embedded = refuse(b"{}" + b"\0" * 32, size=EMBEDDED_GLTF_LIMIT_BYTES + 1024 * 1024)
+    embedded = refuse(b"{}" + b"\0" * 32, EMBEDDED_GLTF_LIMIT_BYTES + 1024 * 1024)
     assert f"{EMBEDDED_GLTF_LIMIT_BYTES // 1024 // 1024} MB" in embedded
     assert "GLB" in embedded and str(limit) in embedded
 

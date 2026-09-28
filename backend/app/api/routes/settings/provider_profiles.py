@@ -165,27 +165,6 @@ def _masked_extra(profile: ProviderProfile, credential: ProviderCredential | Non
     return out
 
 
-def merge_profile_extra(profile: ProviderProfile, incoming: dict[str, str]) -> dict[str, str]:
-    """Fold a form submission into the stored extras.
-
-    A blank value means different things depending on whether the user could see the field:
-    a secret is never sent back to the browser, so a blank one means "unchanged" — clearing it
-    on every save would silently destroy a working credential. A visible identifier that comes
-    back blank was blanked on purpose, so it clears.
-    """
-    merged = dict(profile.extra or {})
-    secret_keys = {
-        spec.key for spec in _field_specs(profile.vendor) if spec.storage == "extra" and spec.secret
-    }
-    for key, value in incoming.items():
-        text_value = (value or "").strip()
-        if text_value:
-            merged[key] = text_value
-        elif key not in secret_keys:
-            merged.pop(key, None)
-    return merged
-
-
 def _config_from_body(body: ProviderProfileCreate | ProviderProfileUpdate) -> dict[str, str]:
     return dict(body.config or {})
 
