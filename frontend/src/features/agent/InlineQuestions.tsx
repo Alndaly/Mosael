@@ -2,15 +2,14 @@ import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, HelpCircle } from "lucide-react";
 
-import { api } from "@/api/client";
-import type { components } from "@/api/generated/schema";
+import { answerAgentQuestion, dismissAgentQuestion, listAgentQuestions, type AgentQuestion } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
-type Question = components["schemas"]["AgentQuestionOut"];
+type Question = AgentQuestion;
 
 /**
  * 聊天流里的**选择卡**:智能体在岔路口把选项摊开,用户点一下。
@@ -25,7 +24,7 @@ export function InlineQuestions({ sessionId }: { sessionId: string }) {
   const qc = useQueryClient();
   const pending = useQuery({
     queryKey: ["agent-questions", sessionId],
-    queryFn: () => api<Question[]>(`/api/agent/questions?session_id=${sessionId}`),
+    queryFn: () => listAgentQuestions(sessionId),
     // 模型问完之后卡片要尽快出现 —— 它此刻正阻塞着等答案。
     refetchInterval: 2000,
   });
@@ -55,11 +54,11 @@ function QuestionCard({ row, onDone }: { row: Question; onDone: () => void }) {
 
   const answer = useMutation({
     mutationFn: (answers: Record<string, string[]>) =>
-      api(`/api/agent/questions/${row.id}/answer`, { method: "POST", body: JSON.stringify({ answers }) }),
+      answerAgentQuestion(row.id, answers),
     onSuccess: onDone,
   });
   const skip = useMutation({
-    mutationFn: () => api(`/api/agent/questions/${row.id}/dismiss`, { method: "POST" }),
+    mutationFn: () => dismissAgentQuestion(row.id),
     onSuccess: onDone,
   });
 

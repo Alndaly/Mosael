@@ -1,18 +1,22 @@
 import React from "react";
-import { assetKeys } from "@/api/queryKeys";
+import { confirmationKeys } from "@/api/queryKeys";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, CheckCheck, ShieldAlert, X } from "lucide-react";
 
-import { api } from "@/api/client";
-import type { components } from "@/api/generated/schema";
+import {
+  approveConfirmation,
+  getAgentSession,
+  listConfirmations,
+  rejectConfirmation,
+  updateAgentSession,
+} from "@/api/client";
+import { invalidateAfterDecision } from "@/features/agent/confirmationCaches";
 import { useI18n } from "@/app/preferences";
 import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
 import { Button } from "@/components/ui/button";
 import { registerInlineConfirmSurface } from "@/features/agent/confirmSurface";
 import { PermissionBadge } from "@/features/agent/PermissionBadge";
 
-type Confirmation = components["schemas"]["ConfirmationOut"];
-type AgentSession = components["schemas"]["AgentSessionOut"];
 
 /**
  * 聊天流里的确认卡(Claude Code / Codex 式):智能体提出的写操作在对话里就地决策,
@@ -54,11 +58,8 @@ export function InlineConfirmations({ workspaceId, allowKey }: { workspaceId: st
   // **只取本会话的卡**。此前拉的是整个工作区的 pending —— 于是同工作区其它对话、工作流节点、
   // MCP/飞书外部智能体的确认卡都会挤进当前对话,用户以为授的是「这次对话」,实际授的是别人的。
   const pending = useQuery({
-    queryKey: ["confirmations", workspaceId, "pending", allowKey],
-    queryFn: () =>
-      api<Confirmation[]>(
-        `/api/confirmations?workspace_id=${workspaceId}&status=pending&session_id=${encodeURIComponent(allowKey)}`,
-      ),
+    queryKey: confirmationKeys.pending(workspaceId, allowKey),
+    queryFn: () => listConfirmations({ workspaceId, status: "pending", sessionId: allowKey }),
     refetchInterval: 1500,
     refetchOnWindowFocus: true,
   });
@@ -77,26 +78,14 @@ export function InlineConfirmations({ workspaceId, allowKey }: { workspaceId: st
     mutationFn: async ({ id, tool, choice }: { id: string; tool: string; choice: Choice }) => {
       if (choice === "session") {
         // 先写白名单再批准:反过来的话,同一工具的下一张卡可能赶在白名单落库前就被判成手动。
-        const session = await api<AgentSession>(`/api/agent/sessions/${allowKey}`);
+        const session = await getAgentSession(allowKey);
         const next = Array.from(new Set([...(session.auto_allow_tools ?? []), tool]));
-        await api(`/api/agent/sessions/${allowKey}`, {
-          method: "PATCH",
-          body: JSON.stringify({ auto_allow_tools: next }),
-        });
+        await updateAgentSession(allowKey, { auto_allow_tools: next });
         void qc.invalidateQueries({ queryKey: ["agent-session", allowKey] });
       }
-      return api<Confirmation>(`/api/confirmations/${id}/${choice === "reject" ? "reject" : "approve"}`, {
-        method: "POST",
-      });
+      return choice === "reject" ? rejectConfirmation(id) : approveConfirmation(id);
     },
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["confirmations", workspaceId, "pending"] });
-      void qc.invalidateQueries({ queryKey: ["confirmations", workspaceId, "unowned"] });
-      void qc.invalidateQueries({ queryKey: ["sequences"] });
-      void qc.invalidateQueries({ queryKey: assetKeys.everywhere() });
-      void qc.invalidateQueries({ queryKey: ["workflows"] });
-      void qc.invalidateQueries({ queryKey: ["generation-jobs"] });
-    },
+    onSuccess: () => invalidateAfterDecision(qc, workspaceId),
   });
 
   // 此刻在飞的是哪一张卡的哪一档。没有就是 null。

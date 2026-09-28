@@ -43,7 +43,8 @@ const api = vi.fn(async (path: string, _init?: unknown) => {
   return { id: "c1", status: "approved" };
 });
 
-vi.mock("@/api/client", () => ({ api: (path: string, init?: unknown) => api(path, init) }));
+vi.mock("@/api/transport", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/api/transport")>()), api: (path: string, init?: unknown) => api(path, init) }));
 
 import { InlineConfirmations } from "@/features/agent/InlineConfirmations";
 

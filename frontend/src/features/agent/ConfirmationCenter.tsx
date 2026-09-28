@@ -1,18 +1,17 @@
 import { FLOATING_SURFACE } from "@/components/ui/floating";
-import { assetKeys } from "@/api/queryKeys";
+import { confirmationKeys } from "@/api/queryKeys";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, ShieldAlert, X } from "lucide-react";
 
-import { api } from "@/api/client";
-import type { components } from "@/api/generated/schema";
+import { approveConfirmation, listConfirmations, rejectConfirmation } from "@/api/client";
+import { invalidateAfterDecision } from "@/features/agent/confirmationCaches";
 import { useI18n } from "@/app/preferences";
 import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
 import { Button } from "@/components/ui/button";
 import { useInlineConfirmSessions } from "@/features/agent/confirmSurface";
 import { PermissionBadge } from "@/features/agent/PermissionBadge";
 
-type Confirmation = components["schemas"]["ConfirmationOut"];
 
 /**
  * Global confirmation cards (plan §16.2): external agents propose mutations,
@@ -22,21 +21,16 @@ export function ConfirmationCenter({ workspaceId }: { workspaceId: string }) {
   const t = useI18n();
   const qc = useQueryClient();
   const pending = useQuery({
-    queryKey: ["confirmations", workspaceId, "pending"],
-    queryFn: () => api<Confirmation[]>(`/api/confirmations?workspace_id=${workspaceId}&status=pending`),
+    queryKey: confirmationKeys.pending(workspaceId),
+    queryFn: () => listConfirmations({ workspaceId, status: "pending" }),
     refetchInterval: 2500,
     refetchOnWindowFocus: true,
   });
 
   const settle = useMutation({
     mutationFn: ({ id, action }: { id: string; action: "approve" | "reject" }) =>
-      api<Confirmation>(`/api/confirmations/${id}/${action}`, { method: "POST" }),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["confirmations", workspaceId, "pending"] });
-      void qc.invalidateQueries({ queryKey: ["sequences"] });
-      void qc.invalidateQueries({ queryKey: assetKeys.everywhere() });
-      void qc.invalidateQueries({ queryKey: ["generation-jobs"] });
-    },
+      action === "approve" ? approveConfirmation(id) : rejectConfirmation(id),
+    onSuccess: () => invalidateAfterDecision(qc, workspaceId),
   });
 
   // 按**归属**分工,而不是「有内联面就整体让位」:

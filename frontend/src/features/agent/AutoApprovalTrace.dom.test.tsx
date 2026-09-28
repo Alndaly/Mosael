@@ -15,7 +15,8 @@ import { beforeEach, expect, it, vi } from "vitest";
  */
 
 const listed = vi.fn();
-vi.mock("@/api/client", () => ({ api: (path: string) => listed(path) }));
+vi.mock("@/api/transport", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/api/transport")>()), api: (path: string) => listed(path) }));
 vi.mock("@/app/preferences", () => ({
   useI18n: () => (key: string) => key,
   usePreferences: () => ({ locale: "zh-CN" }),

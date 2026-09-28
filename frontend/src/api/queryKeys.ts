@@ -70,3 +70,17 @@ export const providerKeys = {
   generationProfiles: (profileId: string, kind: string) => ["generation-profiles", profileId, kind] as const,
   pricingRules: (workspaceId: string) => ["provider-pricing-rules", workspaceId] as const,
 };
+
+/**
+ * 确认卡(见 `api/domains/confirmations`)。取数按状态、按会话细分;批准 / 拒绝之后失效用
+ * `.all(ws)` —— 待批的那几份和「自动放行留痕」那一栏都在它下面。
+ */
+export const confirmationKeys = {
+  all: (workspaceId: string) => ["confirmations", workspaceId] as const,
+  /** 带会话 id 是那次对话的卡;不带是整个工作区的(全局确认中心兜底用)。 */
+  pending: (workspaceId: string, sessionId?: string) =>
+    (sessionId
+      ? (["confirmations", workspaceId, "pending", sessionId] as const)
+      : (["confirmations", workspaceId, "pending"] as const)),
+  approved: (workspaceId: string, sessionId: string) => ["confirmations", workspaceId, "approved", sessionId] as const,
+};

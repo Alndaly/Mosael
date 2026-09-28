@@ -73,6 +73,15 @@ export const stopAgentSession = (sessionId: string) =>
 export const compactAgentSession = <T>(sessionId: string) =>
   api<T>(`/api/agent/sessions/${sessionId}/compact`, { method: "POST" });
 
+/** 智能体在对话里问人的那几张卡(选择题 / 自由文本),答了或跳过它才往下走。 */
+export type AgentQuestion = components["schemas"]["AgentQuestionOut"];
+export const listAgentQuestions = (sessionId: string) =>
+  api<AgentQuestion[]>(`/api/agent/questions?session_id=${encodeURIComponent(sessionId)}`);
+export const answerAgentQuestion = (questionId: string, answers: Record<string, string[]>) =>
+  api(`/api/agent/questions/${questionId}/answer`, { method: "POST", body: JSON.stringify({ answers }) });
+export const dismissAgentQuestion = (questionId: string) =>
+  api(`/api/agent/questions/${questionId}/dismiss`, { method: "POST" });
+
 export const listAgentQueue = (sessionId: string) =>
   api<AgentMessage[]>(`/api/agent/sessions/${sessionId}/queue`);
 export const dropQueuedMessage = (sessionId: string, messageId: string) =>

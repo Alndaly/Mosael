@@ -2,14 +2,13 @@ import React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ShieldAlert, ShieldCheck, Sparkles } from "lucide-react";
 
-import { api } from "@/api/client";
-import type { components } from "@/api/generated/schema";
+import { listConfirmations, type Confirmation } from "@/api/client";
+import { confirmationKeys } from "@/api/queryKeys";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
 import { toPlainText } from "@/components/markdown/inlineSyntax";
 import { relativeTime } from "@/lib/time";
 
-type Confirmation = components["schemas"]["ConfirmationOut"];
 
 /**
  * 这次对话里,**哪些操作是被自动放行的、被哪一档放的**。
@@ -45,11 +44,8 @@ export function AutoApprovalTrace({ workspaceId, sessionId }: { workspaceId: str
   const { locale } = usePreferences();
 
   const approved = useQuery({
-    queryKey: ["confirmations", workspaceId, "approved", sessionId],
-    queryFn: () =>
-      api<Confirmation[]>(
-        `/api/confirmations?workspace_id=${workspaceId}&status=approved&session_id=${encodeURIComponent(sessionId)}&limit=20`,
-      ),
+    queryKey: confirmationKeys.approved(workspaceId, sessionId),
+    queryFn: () => listConfirmations({ workspaceId, status: "approved", sessionId, limit: 20 }),
     // 这一栏只在设置弹层打开时看得到,不需要轮询 —— 打开时取一次即可。
     staleTime: 5_000,
   });
