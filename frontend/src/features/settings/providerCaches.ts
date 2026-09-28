@@ -1,6 +1,6 @@
 import type { QueryClient } from "@tanstack/react-query";
 
-import { providerKeys } from "@/api/queryKeys";
+import { generationKeys, providerKeys } from "@/api/queryKeys";
 
 /**
  * **跟着供应商连接走的那些缓存**:建、改、删、启停连接,授权 / 退出登录,增删启停模型之后都要失效。
@@ -17,7 +17,7 @@ export const PROVIDER_DEPENDENT_KEYS = [
   providerKeys.models(),
   providerKeys.defaults(),
   providerKeys.capabilityModels(),
-  ["generation-options"],
+  generationKeys.options(),
 ] as const;
 
 export function invalidateProviderDependents(qc: QueryClient): Promise<void> {

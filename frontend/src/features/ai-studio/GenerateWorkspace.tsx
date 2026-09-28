@@ -1,7 +1,7 @@
 import { assetKeys } from "@/api/queryKeys";
 import React from "react";
 import { StudioIndex } from "@/components/layout/StudioIndex";
-import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Check,
   Cpu,
@@ -59,6 +59,7 @@ import {
   ParameterField,
   ParameterSection,
 } from "@/components/generation/parameterPanel";
+import { useGenerationOptions } from "@/lib/generationOptions";
 import { elapsedSecondsBetween, formatElapsedSeconds, useNow } from "@/lib/time";
 import { MessageFooter, MessageTime } from "@/features/agent/messageUsage";
 import { formatCosts } from "@/lib/money";
@@ -263,19 +264,6 @@ function generationOptionValue(providerProfileId: string, kind: string, model: s
   return [providerProfileId, kind, model].join(ENGINE_SEP);
 }
 
-/** 几种生成的选项并成一张下拉用的清单。放在组件外:`combine` 是稳定的函数时,结果只在数据变了才换引用。 */
-function combineOptionQueries(results: Array<{ data?: GenerationOption[]; isPending: boolean }>) {
-  return {
-    options: results.flatMap((result) =>
-      (result.data ?? []).map((option): GenerationEngineOption => ({
-        ...option,
-        value: generationOptionValue(option.provider_profile_id, option.kind, option.model),
-      })),
-    ),
-    pending: results.some((result) => result.isPending),
-  };
-}
-
 function findGenerationOption(
   options: GenerationEngineOption[],
   providerProfileId: string,
@@ -339,13 +327,7 @@ export function GenerateWorkspace({
       ),
   });
   //: 这一页的几种生成各拉一份选项(音频和图像、视频是同一条管线,ADR 0022;只是不在同一页)。
-  const generationOptions = useQueries({
-    queries: kinds.map((kind) => ({
-      queryKey: ["generation-options", kind],
-      queryFn: () => api<GenerationOption[]>(`/api/generation/options?kind=${kind}`),
-    })),
-    combine: combineOptionQueries,
-  });
+  const generationOptions = useGenerationOptions(kinds);
   const jobs = useQuery({
     queryKey: ["jobs", workspace.id, "ai_generation"],
     queryFn: () => api<Job[]>(`/api/jobs?workspace_id=${workspace.id}&kind=ai_generation`),
@@ -383,7 +365,15 @@ export function GenerateWorkspace({
     refetchOnWindowFocus: true,
   });
 
-  const modelOptions = generationOptions.options;
+  //: 下拉用的那一串:每个选项带上它在下拉里的值(连接 · 种类 · 模型)。
+  const modelOptions = React.useMemo(
+    () =>
+      generationOptions.options.map((option): GenerationEngineOption => ({
+        ...option,
+        value: generationOptionValue(option.provider_profile_id, option.kind, option.model),
+      })),
+    [generationOptions.options],
+  );
   const optionByValue = React.useMemo(
     () => new Map(modelOptions.map((option) => [option.value, option])),
     [modelOptions],

@@ -185,13 +185,8 @@ import {
   worstSeverity,
 } from "@/features/workflows/analyze";
 import { chatProfileIds, generationVendors } from "@/features/workflows/bindingReadiness";
-import {
-  analyzeWorkflowNow,
-  fetchAllGenerationOptions,
-  GENERATION_OPTIONS_KEY,
-  generationModelOf,
-  useWorkflowAnalysis,
-} from "@/features/workflows/readiness";
+import { analyzeWorkflowNow, generationModelOf, useWorkflowAnalysis } from "@/features/workflows/readiness";
+import { useGenerationOptions } from "@/lib/generationOptions";
 import { RunOutputs, outputSummary } from "@/features/workflows/RunOutputs";
 import { collapseToSubgraph } from "@/features/workflows/collapse";
 import { pasteNodes, type NodeClip } from "@/features/workflows/clipboard";
@@ -2683,14 +2678,8 @@ export function NodeInspector({
   });
   //: 插件的包与工具、发布账号、可调用工作流、对话连接与模型此前各拉一份清单、各写一段过滤,
   //: 现在都由后端按 `options_from` 给(见 domain/workflows/field_options)。
-  const generationModels = useQuery({
-    queryKey: GENERATION_OPTIONS_KEY,
-    // 要完整类型:参数区靠 capabilities 决定渲染什么。以前这里只取了四个字段,
-    // 于是「模型支持哪些参数」这份信息在工作流侧根本拿不到。
-    // 现在每种能力各取一次再合并 —— 和 AI 工作台看到的是同一份(后端联接好的)。
-    queryFn: fetchAllGenerationOptions,
-    enabled: node.type === "ai_generate",
-  });
+  // 要完整类型:参数区靠 capabilities 决定渲染什么。每种能力各取一次再合并 —— 和 AI 工作台读的是同一份缓存。
+  const generationModels = useGenerationOptions(GENERATION_KINDS, { enabled: node.type === "ai_generate" });
   const providerDefaults = useQuery({
     queryKey: providerKeys.defaults(),
     queryFn: listProviderDefaults,
@@ -2716,7 +2705,7 @@ export function NodeInspector({
     if (node.type === "ai_generate") {
       const chosenProvider = config.provider as string | undefined;
       const chosenModel = config.model as string | undefined;
-      const models = generationModels.data ?? [];
+      const models = generationModels.options;
       const matchedModel = models.find(
         (model) =>
           model.provider === chosenProvider &&
@@ -2727,10 +2716,10 @@ export function NodeInspector({
       const capability = String(config.kind || matchedModel?.kind || "image");
       const capabilityLabel = t(GENERATION_KIND_LABELS[capability as GenerationKind] ?? "capImage");
       const section = `providers:${capability}`;
-      if (chosenProvider && generationModels.isSuccess && !generationVendors(models).has(chosenProvider)) {
+      if (chosenProvider && generationModels.loaded && !generationVendors(models).has(chosenProvider)) {
         return { message: t("wfIssueGenUnconfigured"), section, error: true };
       }
-      if (chosenProvider && chosenModel && generationModels.isSuccess && !matchedModel) {
+      if (chosenProvider && chosenModel && generationModels.loaded && !matchedModel) {
         return { message: t("wfGenModelMissing"), section, error: true };
       }
       //: 默认供应商只在节点**没选**模型时才用得上(后端 generation/operations.create_generation_job:
@@ -2853,16 +2842,16 @@ export function NodeInspector({
   // ── AI 生成节点:所选模型 + 它声明支持的参数 ────────────────────────────────
   /** 是否展开「手动指定 provider/model/类型」。目录里有的模型不需要看见这三项。 */
   const [genCustom, setGenCustom] = React.useState(false);
-  const genModel = node.type === "ai_generate" ? generationModelOf(generationModels.data ?? [], config) : null;
+  const genModel = node.type === "ai_generate" ? generationModelOf(generationModels.options, config) : null;
   //: 还没选过模型的生成节点**预选这个人设的默认**(节点定了种类就只认那一种的默认)。没设默认就空着,
   //: 选择器说「选择要用的生成模型」—— 不拿清单第一项顶上(见 pickGenerationOption)。只填一次:之后
   //: 用户清掉、换掉都是他的事。
   const genDefault =
     node.type === "ai_generate" && !config.provider && !config.model
       ? config.kind
-        ? pickGenerationOption(generationModels.data ?? [], { kind: String(config.kind) })
-        : pickGenerationOption(generationModels.data ?? [], { kind: "image" }) ??
-          pickGenerationOption(generationModels.data ?? [])
+        ? pickGenerationOption(generationModels.options, { kind: String(config.kind) })
+        : pickGenerationOption(generationModels.options, { kind: "image" }) ??
+          pickGenerationOption(generationModels.options)
       : null;
   const preselectedFor = React.useRef<string | null>(null);
   React.useEffect(() => {
@@ -3277,7 +3266,7 @@ export function NodeInspector({
               </span>
               <Combobox
                 value={genModel?.id ?? ""}
-                options={(generationModels.data ?? []).map((model) => ({
+                options={(generationModels.options).map((model) => ({
                   value: model.id,
                   label: `${model.model} · ${t(GENERATION_KIND_LABELS[model.kind as GenerationKind] ?? "capImage")}`,
                 }))}
@@ -3285,7 +3274,7 @@ export function NodeInspector({
                 emptyText={t("cmdkEmpty")}
                 className="w-full"
                 onValueChange={(id) => {
-                  const model = (generationModels.data ?? []).find((item) => item.id === id);
+                  const model = (generationModels.options).find((item) => item.id === id);
                   if (!model) return;
                   // 三者一起写:分开填就会出现「图像模型 + 类型 video」这种自相矛盾的组合。
                   // 换模型时清空参数 —— 上一个模型的比例/时长在新模型上未必存在。

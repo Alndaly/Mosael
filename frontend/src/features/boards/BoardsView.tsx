@@ -11,7 +11,6 @@ import { toast } from "sonner";
 import { errorText } from "@/api/errorMessage";
 
 import {
-  api as api2,
   ApiError,
   cancelJob,
   createBoard,
@@ -31,7 +30,6 @@ import {
   listMembers,
   listBoards,
   updateBoard,
-  type GenerationOption,
   type Board,
   type BoardCanvas as Canvas,
   type BuiltinProducer,
@@ -52,6 +50,7 @@ import { ConfirmDialog, RenameDialog } from "@/components/app/modals";
 import { EmptyState, PageLoadError } from "@/components/layout/EmptyState";
 import { CanvasDetailLoading } from "@/components/layout/CanvasDetailLoading";
 import { CanvasCardSkeleton } from "@/components/layout/CanvasCardSkeleton";
+import { useGenerationOptions } from "@/lib/generationOptions";
 import { relativeTime } from "@/lib/time";
 import { usePersistentSelection, usePersistentTab } from "@/lib/usePersistentTab";
 import { cn } from "@/lib/utils";
@@ -626,19 +625,7 @@ function BoardDetail({
   const generationKinds = producers.data?.find((one) => one.id === "generate")?.hosts;
 
   // 提示词面板要让人选模型 —— 每种能力各取一次再合并,和 AI 工作台看到的是同一份。
-  const models = useQuery({
-    queryKey: ["generation-options", "board", generationKinds],
-    queryFn: async () =>
-      (
-        await Promise.all(
-          (generationKinds ?? []).map((kind) =>
-            api2<GenerationOption[]>(`/api/generation/options?kind=${encodeURIComponent(kind)}`),
-          ),
-        )
-      ).flat(),
-    enabled: Boolean(generationKinds),
-    staleTime: 60_000,
-  });
+  const models = useGenerationOptions(generationKinds ?? [], { enabled: Boolean(generationKinds) });
 
   //: 工具条「添加」的整张单子:只有格子,按动词分成生成 / 从素材库 / 引用 / 整理(见 boardTools.boardAddCatalog)。
   //: 没有「工具」一组 —— 把内容变成新内容的事是格子自己的能力,选中一格在操作条上点。每一行都是图标、名字、
@@ -1112,7 +1099,7 @@ function BoardDetail({
         onPickAsset={(kind, place, options) => setPicking({ kind, place: (asset) => place(asset.id), onBoard: options?.onBoard })}
         onRun={run}
         onGrabFrame={grabFrame}
-        models={models.data ?? []}
+        models={models.options}
         producers={producers.data}
         onStop={stop}
         showMinimap={showMinimap}

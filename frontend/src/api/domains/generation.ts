@@ -35,3 +35,8 @@ export function optimizeImagePrompt(body: {
     body: JSON.stringify(body),
   });
 }
+
+/** 这种生成能用哪些(连接 × 模型)。设置页里加了什么,这里就有什么。 */
+export function listGenerationOptions(kind: string): Promise<GenerationOption[]> {
+  return api<GenerationOption[]>(`/api/generation/options?kind=${encodeURIComponent(kind)}`);
+}

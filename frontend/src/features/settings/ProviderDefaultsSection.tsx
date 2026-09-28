@@ -9,7 +9,7 @@ import {
   type CapabilityModel,
   type ProviderDefault,
 } from "@/api/client";
-import { providerKeys } from "@/api/queryKeys";
+import { providerKeys, generationKeys } from "@/api/queryKeys";
 import { useI18n } from "@/app/preferences";
 import { OptionPicker } from "@/components/ui/option-picker";
 import { SettingsBlock, SettingsGroup, SettingsRow } from "@/components/settings/settings-layout";
@@ -65,7 +65,7 @@ function DefaultRow({
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: providerKeys.defaults() });
       // 生成选择器按 `is_default` 预选 —— 换了默认,那边要跟着换。
-      void qc.invalidateQueries({ queryKey: ["generation-options"] });
+      void qc.invalidateQueries({ queryKey: generationKeys.options() });
     },
   });
 

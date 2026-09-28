@@ -1,5 +1,7 @@
 import type { QueryClient } from "@tanstack/react-query";
 
+import { generationKeys, providerKeys } from "@/api/queryKeys";
+
 /**
  * **跟着插件连接走的那些缓存**:装、卸、建连接、改配置、启停、授权、刷新之后都要失效。
  *
@@ -18,11 +20,11 @@ export const PLUGIN_DEPENDENT_KEYS = [
   ["workflow-field-options"],
   ["board-producers"],
   // 生成:插件生成连接是一家供应商,模型行是插件目录的缓存(ADR 0020)。
-  ["generation-options"],
-  ["provider-profiles"],
-  ["provider-defaults"],
-  ["provider-models"],
-  ["capability-models"],
+  generationKeys.options(),
+  providerKeys.profiles(),
+  providerKeys.defaults(),
+  providerKeys.models(),
+  providerKeys.capabilityModels(),
 ] as const;
 
 export function invalidatePluginDependents(qc: QueryClient): void {

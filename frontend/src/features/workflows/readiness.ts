@@ -9,22 +9,13 @@
 import React from "react";
 import { useQuery, type QueryClient } from "@tanstack/react-query";
 
-import { api, listProviderProfiles, type GenerationOption, type ProviderProfile, type WorkflowGraph } from "@/api/client";
+import { listProviderProfiles, type GenerationOption, type ProviderProfile, type WorkflowGraph } from "@/api/client";
 import { providerKeys } from "@/api/queryKeys";
 import { GENERATION_KINDS, promptMode } from "@/lib/generationCapabilities";
+import { fetchGenerationOptions, useGenerationOptions } from "@/lib/generationOptions";
 import { analyzeWorkflow, type Analysis, type AnalyzeContext, type RegistryLike } from "@/features/workflows/analyze";
 import { chatProfileIds, generationVendors } from "@/features/workflows/bindingReadiness";
 import { bodyKey } from "@/features/workflows/scope";
-
-/** 每一种生成的模型清单,合成一份。检查器(参数区按 capabilities 渲染)和就绪判断(提示词要不要写)
- *  共用这一个键与取法 —— 同一份清单拉两种形状,两边迟早对不上。 */
-export const GENERATION_OPTIONS_KEY = ["generation-options", "all"] as const;
-export async function fetchAllGenerationOptions(): Promise<GenerationOption[]> {
-  const lists = await Promise.all(
-    GENERATION_KINDS.map((kind) => api<GenerationOption[]>(`/api/generation/options?kind=${kind}`)),
-  );
-  return lists.flat();
-}
 
 /** AI 生成节点的配置指的是清单里哪一个模型。连接身份随模型一起存,同一 vendor/model 可以在多条连接上。 */
 export function generationModelOf(models: GenerationOption[], config: Record<string, unknown>): GenerationOption | null {
@@ -79,9 +70,9 @@ function contextOf(
 export function useWorkflowAnalysis(graph: WorkflowGraph, registry: RegistryLike): Analysis {
   const needs = React.useMemo(() => readinessNeeds(graph, registry), [graph, registry]);
   const providers = useQuery({ queryKey: providerKeys.profiles(), queryFn: listProviderProfiles, enabled: needs.chat });
-  const models = useQuery({ queryKey: GENERATION_OPTIONS_KEY, queryFn: fetchAllGenerationOptions, enabled: needs.generation });
+  const models = useGenerationOptions(GENERATION_KINDS, { enabled: needs.generation });
   const profiles = providers.isSuccess ? providers.data : undefined;
-  const options = models.isSuccess ? models.data : undefined;
+  const options = models.loaded ? models.options : undefined;
   return React.useMemo(
     () => analyzeWorkflow(graph, registry, contextOf(needs, profiles, options)),
     [graph, registry, needs, profiles, options],
@@ -93,7 +84,7 @@ export async function analyzeWorkflowNow(qc: QueryClient, graph: WorkflowGraph, 
   const needs = readinessNeeds(graph, registry);
   const [profiles, options] = await Promise.all([
     needs.chat ? qc.fetchQuery({ queryKey: providerKeys.profiles(), queryFn: listProviderProfiles }) : undefined,
-    needs.generation ? qc.fetchQuery({ queryKey: GENERATION_OPTIONS_KEY, queryFn: fetchAllGenerationOptions }) : undefined,
+    needs.generation ? fetchGenerationOptions(qc, GENERATION_KINDS) : undefined,
   ]);
   return analyzeWorkflow(graph, registry, contextOf(needs, profiles, options));
 }

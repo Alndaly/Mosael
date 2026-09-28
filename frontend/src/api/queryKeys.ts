@@ -140,3 +140,11 @@ export const blenderKeys = {
   connections: () => ["blender-connections"] as const,
   transfers: (sceneId: string) => ["blender-transfers", sceneId] as const,
 };
+
+/**
+ * 生成选项(能用来生成的 连接 × 模型),按种类一份。AI 工作台、画板、工作流读的是同一份
+ * (见 lib/generationOptions);连接、模型、插件一变,失效 `options()` 这个前缀就全覆盖。
+ */
+export const generationKeys = {
+  options: (kind?: string) => (kind ? (["generation-options", kind] as const) : (["generation-options"] as const)),
+};
