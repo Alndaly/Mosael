@@ -44,6 +44,27 @@ def list_members(db: Session, workspace_id: str) -> list[tuple[User, WorkspaceMe
     return [(user, member) for user, member in rows]
 
 
+def create_workspace(db: Session, name: str, owner: User) -> Workspace:
+    """建一个工作区,建的人是它的 owner —— 「至少一个 owner」从第一刻起就成立。
+    flush 拿到 id,提交交给调用方。"""
+    workspace = Workspace(name=name)
+    db.add(workspace)
+    db.flush()
+    db.add(WorkspaceMember(workspace_id=workspace.id, user_id=owner.id, role="owner"))
+    return workspace
+
+
+def workspaces_of(db: Session, user_id: str) -> list[tuple[Workspace, str]]:
+    """他所在的工作区和他在里面的角色,新建的在前。"""
+    rows = db.execute(
+        select(Workspace, WorkspaceMember.role)
+        .join(WorkspaceMember, WorkspaceMember.workspace_id == Workspace.id)
+        .where(WorkspaceMember.user_id == user_id)
+        .order_by(Workspace.created_at.desc())
+    ).all()
+    return [(workspace, role) for workspace, role in rows]
+
+
 def invite_member(db: Session, workspace_id: str, inviter: User, username: str, role: str) -> tuple[User, WorkspaceInvitation]:
     """邀请制入口:按用户名邀请一个**已注册**账号,受邀人从通知里接受后才成为成员。
 

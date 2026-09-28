@@ -17,6 +17,8 @@ import httpx
 
 #: 默认重试次数(不含首次)。与 db.models.AiRuntimeConfig.max_retries 的列默认值一致。
 DEFAULT_MAX_RETRIES = 3
+#: 上限。封顶是为了一次限流不至于被拖成几分钟的静默重试。
+MAX_RETRIES_CAP = 10
 
 #: 退避基数与封顶。封顶是为了让并发的多个节点不至于把一次限流拖成半分钟的静默等待。
 _BASE_SECONDS = 0.6
@@ -48,10 +50,15 @@ def auth_headers(api_key: str | None) -> dict[str, str]:
     return {"Authorization": f"Bearer {key}"} if key else {}
 
 
+def clamp_max_retries(value: int) -> int:
+    """夹到 [0, MAX_RETRIES_CAP]:0 = 不重试。"""
+    return max(0, min(int(value), MAX_RETRIES_CAP))
+
+
 def set_max_retries(value: int) -> None:
-    """设置页写入后调用。夹到 [0, 10]:0 = 不重试。"""
+    """设置页写入后调用(经 domain/ai_runtime)。"""
     global _max_retries
-    _max_retries = max(0, min(int(value), 10))
+    _max_retries = clamp_max_retries(value)
 
 
 def current_max_retries() -> int:

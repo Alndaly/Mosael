@@ -13,9 +13,10 @@ from app.api.schemas import (
     NetworkConfigOut,
     NetworkConfigUpdate,
 )
-from app.core.http_retry import set_max_retries
-from app.db.models import AiRuntimeConfig, NetworkConfig
+from app.db.models import NetworkConfig
+from app.domain import ai_runtime
 from app.domain.network import apply_to_process, get_config as get_network
+from app.domain.voices import tts_settings
 from app.domain.permissions import ensure_deployment_admin
 
 router = APIRouter(tags=["settings"])
@@ -57,8 +58,7 @@ def update_network_config(body: NetworkConfigUpdate, db: DbSession, user: Curren
 
 @router.get("/settings/ai-runtime", response_model=AiRuntimeConfigOut)
 def get_ai_runtime(db: DbSession, user: CurrentUser) -> AiRuntimeConfigOut:
-    row = db.get(AiRuntimeConfig, "default")
-    return AiRuntimeConfigOut(max_retries=row.max_retries if row is not None else 3)
+    return AiRuntimeConfigOut(max_retries=ai_runtime.configured_max_retries(db))
 
 
 @router.put("/settings/ai-runtime", response_model=AiRuntimeConfigOut)
@@ -66,16 +66,7 @@ def set_ai_runtime(body: AiRuntimeConfigUpdate, db: DbSession, user: CurrentUser
     """AI 供应商瞬断/限流时的最大重试次数。**对所有 AI 出站调用生效** ——
     对话、生图、生视频、语音、向量化都走同一个带重试的传输层(core/http_retry)。"""
     ensure_deployment_admin(db, user)
-    row = db.get(AiRuntimeConfig, "default")
-    if row is None:
-        row = AiRuntimeConfig(id="default")
-        db.add(row)
-    row.max_retries = body.max_retries
-    db.commit()
-    # 推进进程内状态:调用点散在十几个适配器里,其中不少拿不到 db 会话。
-    # 与出站代理(domain/network.apply_to_process)同一套做法,改完即时生效、不必重启。
-    set_max_retries(row.max_retries)
-    return AiRuntimeConfigOut(max_retries=row.max_retries)
+    return AiRuntimeConfigOut(max_retries=ai_runtime.save_max_retries(db, body.max_retries))
 
 
 @router.get("/settings/install-source", response_model=InstallSourceOut)
@@ -96,12 +87,8 @@ def set_install_source(body: InstallSourceUpdate, db: DbSession, user: CurrentUs
     # 往这台机器上装东西用哪个源,是部署级的设置 —— 和装引擎本身同一条权限。
     ensure_deployment_admin(db, user)
     from app.ai.runtime import config as runtime_config
-    from app.db.models import TtsConfig
 
-    row = db.get(TtsConfig, "default")
-    if row is None:
-        row = TtsConfig(id="default")
-        db.add(row)
+    row = tts_settings.saved_row(db)
     #: 只写这一个字段 —— 克隆那几项(引擎、解释器、下载源、fish 目录)一个都不碰。
     row.pip_index = body.pip_index.strip()
     db.commit()

@@ -11,17 +11,30 @@ from __future__ import annotations
 
 import logging
 
+from sqlalchemy.orm import Session
+
 from app.ai.runtime.config import SINGLETON_ID, TtsRuntimeConfig
 from app.core.config import settings
+from app.db.models import TtsConfig
 
 logger = logging.getLogger(__name__)
+
+
+def saved_row(db: Session) -> TtsConfig:
+    """用户存的那一行,还没有就建一行(行只在这里建,归属见 ownership.py)。
+    调用方改完字段自己提交,再 `ai.runtime.config.refresh()` 让运行时重读。"""
+    row = db.get(TtsConfig, SINGLETON_ID)
+    if row is None:
+        row = TtsConfig(id=SINGLETON_ID)
+        db.add(row)
+    return row
+
 
 def load() -> TtsRuntimeConfig:
     """用户存的那一份;读不到就退回环境变量默认值。"""
     from sqlalchemy.exc import SQLAlchemyError
 
     from app.core.db import SessionLocal
-    from app.db.models import TtsConfig
 
     try:
         with SessionLocal() as db:

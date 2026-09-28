@@ -31,19 +31,13 @@ BACKEND_ROOT = Path(__file__).resolve().parent.parent
 # **一个被普遍相信的保证,和一个没有的保证,不是同一种风险 —— 前者更坏**,因为它让人不再去看。
 # 豁免写在**被检查方**(domain/ownership)而不是检查方,读这条测试的人也看不到它。
 #
-# 名单只减不增:每修掉一处就从这里删一行,测试会提醒。
+# 名单只减不增:每修掉一处就从这里删一行,测试会提醒。2026-09-28 收回 7 条(建工作区、建时间线、
+# 两张单例配置表都改调拥有方的领域函数)。
 ALLOWLIST: frozenset[tuple[str, str]] = frozenset({
     ("app/api/routes/assets.py", "Asset"),
     ("app/api/routes/feishu.py", "FeishuBot"),
     ("app/api/routes/oauth.py", "User"),
-    ("app/api/routes/projects.py", "Workspace"),
-    ("app/api/routes/projects.py", "WorkspaceMember"),
-    ("app/api/routes/sequences.py", "Sequence"),
-    ("app/api/routes/sequences.py", "Track"),
     ("app/api/routes/settings/provider_profiles.py", "ProviderProfile"),
-    ("app/api/routes/settings/system.py", "AiRuntimeConfig"),
-    ("app/api/routes/settings/system.py", "TtsConfig"),
-    ("app/api/routes/voices.py", "TtsConfig"),
 })
 
 
@@ -84,6 +78,18 @@ def test_the_ratchet_only_tightens() -> None:
         "这些 allowlist 条目已不再越界,请从 ALLOWLIST 删除以收紧棘轮:\n"
         + "\n".join(f"  {rel}: {model}" for rel, model in sorted(stale))
     )
+
+
+def test_every_owner_path_exists() -> None:
+    """登记的拥有方必须真的存在。模块搬了家而地图没跟上,那张表就只剩一个幽灵在「拥有」它 ——
+    `routes/settings.py` 拆成包之后,AiRuntimeConfig 的唯一拥有方就这样指向了虚空。"""
+    ghosts = sorted(
+        f"{model} → {owner}"
+        for model, owners in TABLE_OWNERS.items()
+        for owner in owners
+        if not (BACKEND_ROOT / owner).exists()
+    )
+    assert not ghosts, "ownership.py 登记了不存在的拥有方:\n  " + "\n  ".join(ghosts)
 
 
 def test_every_model_has_an_owner() -> None:

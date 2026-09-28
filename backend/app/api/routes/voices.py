@@ -28,7 +28,7 @@ from app.api.schemas import (
     VoiceUpdate,
 )
 from app.ai.runtime import tts_daemon, tts_models
-from app.domain.voices import voices
+from app.domain.voices import tts_settings, voices
 from app.domain.permissions import ensure_workspace_perm, ensure_deployment_admin, ensure_workspace_access
 from app.ai.runtime import config as tts_config
 
@@ -349,12 +349,7 @@ def set_tts_config(body: TtsConfigUpdate, db: DbSession, user: CurrentUser) -> d
     # python_path lands in subprocess argv, so this route is remote code execution for
     # whoever can reach it.
     ensure_deployment_admin(db, user)
-    from app.db.models import TtsConfig
-
-    row = db.get(TtsConfig, "default")
-    if row is None:
-        row = TtsConfig(id="default")
-        db.add(row)
+    row = tts_settings.saved_row(db)
     # **写和回读用的是同一份名单。** 分成两处的话,新加的字段会是"写进去了、没人验"的那个 ——
     # 而"没人验"正是下面那道校验要拦的东西。
     wanted = {

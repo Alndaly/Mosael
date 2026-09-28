@@ -10,6 +10,7 @@ from jsonschema.validators import validator_for
 from sqlalchemy.orm import Session
 
 from app.core.usage_scope import workspace_scope
+from app.domain.ai_runtime import configured_max_retries
 from app.domain.ai_chat import AiChatError, chat, response_format_tier, target_for
 from app.domain.usage import billable, once
 from app.domain.providers import require_connection
@@ -22,18 +23,7 @@ LLM_TIMEOUT_SECONDS = 120
 
 # 供应商偶发瞬断(Server disconnected / 连接或读超时 / 429 限流 / 5xx 过载)是常态,让整条工作流
 # 一次就挂太脆。重试与退避统一在 core/http_retry 的传输层做,**所有 AI 出站调用共用**;
-# 这里只保留「读设置」这一步,因为工作流执行器手上正好有 db 会话。
-DEFAULT_MAX_RETRIES = 3
-MAX_RETRIES_CAP = 10
-
-
-def configured_max_retries(db: Session) -> int:
-    """读取用户设置的「供应商瞬断最大重试次数」;缺省 3,夹在 0..10。"""
-    from app.db.models import AiRuntimeConfig
-
-    row = db.get(AiRuntimeConfig, "default")
-    value = row.max_retries if row is not None else DEFAULT_MAX_RETRIES
-    return max(0, min(int(value), MAX_RETRIES_CAP))
+# 工作流执行器手上正好有 db 会话,直接读存着的设置(domain/ai_runtime)。
 
 # 生成风格预设 → temperature(替代让用户填裸数值)。默认均衡。
 _LLM_PRESET_TEMPS = {"precise": 0.1, "balanced": 0.4, "creative": 0.9}

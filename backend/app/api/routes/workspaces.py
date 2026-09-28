@@ -10,7 +10,9 @@ from app.api.schemas import (
     MembersOut,
     RenameRequest,
     SetRoleRequest,
+    WorkspaceCreate,
     WorkspaceMemberOut,
+    WorkspaceOut,
     WorkspaceSummaryOut,
     InvitationOut,
     InvitationListOut,
@@ -24,6 +26,19 @@ from app.db.models import (
 from app.domain import dashboard, members as members_svc
 
 router = APIRouter(tags=["workspaces"])
+
+
+@router.post("/workspaces", response_model=WorkspaceOut)
+def create_workspace(body: WorkspaceCreate, db: DbSession, user: CurrentUser) -> WorkspaceOut:
+    workspace = members_svc.create_workspace(db, body.name, user)
+    db.commit()
+    return WorkspaceOut(id=workspace.id, name=workspace.name, role="owner")
+
+
+@router.get("/workspaces", response_model=list[WorkspaceOut])
+def list_workspaces(db: DbSession, user: CurrentUser) -> list[WorkspaceOut]:
+    return [WorkspaceOut(id=ws.id, name=ws.name, role=role) for ws, role in members_svc.workspaces_of(db, user.id)]
+
 
 @router.patch("/workspaces/{workspace_id}")
 def rename_workspace(workspace_id: str, body: RenameRequest, db: DbSession, user: CurrentUser) -> dict:

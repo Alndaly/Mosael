@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from app.db.models import Asset, Project
 from app.domain.jobs import current_actor
 from app.domain.notifications import notify
+from app.domain.projects import create_project
 from app.domain.sequences import create_sequence_scaffold
 from app.domain.workflows import WorkflowDomainError
 from app.domain.plugins.nodes import PLUGIN_NODE_PREFIX
@@ -243,10 +244,8 @@ def project_create(db: Session, scope: RunScope, config: dict[str, Any]) -> dict
     name = str(config.get("name") or "").strip()
     if not name:
         raise WorkflowDomainError("wfErr_projectNameEmpty")
-    project = Project(workspace_id=scope.workspace_id, name=name)
-    db.add(project)
+    project = create_project(db, scope.workspace_id, name)
     db.commit()
-    db.refresh(project)
     return {"project_id": project.id, "name": project.name}
 
 
@@ -271,7 +270,7 @@ def project_sequence_create(db: Session, scope: RunScope, config: dict[str, Any]
     if not 1 <= fps <= 240:
         raise WorkflowDomainError("wfErr_fpsRange")
 
-    project = Project(workspace_id=scope.workspace_id, name=name)
+    project = create_project(db, scope.workspace_id, name)
     scaffold = create_sequence_scaffold(
         db,
         project,

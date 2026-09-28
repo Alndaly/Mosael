@@ -4,40 +4,18 @@ from fastapi import APIRouter, HTTPException, Response
 from sqlalchemy import func, select
 
 from app.api.deps import CurrentUser, DbSession
-from app.api.schemas import ProjectCreate, ProjectOut, ProjectWithStatsOut, RenameRequest, WorkspaceCreate, WorkspaceOut
+from app.api.schemas import ProjectCreate, ProjectOut, ProjectWithStatsOut, RenameRequest
+from app.domain import projects as projects_svc
 from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm
-from app.db.models import Asset, Clip, Project, Sequence, Track, Workspace, WorkspaceMember
+from app.db.models import Asset, Clip, Project, Sequence, Track
 
 router = APIRouter(tags=["projects"])
-
-
-@router.post("/workspaces", response_model=WorkspaceOut)
-def create_workspace(body: WorkspaceCreate, db: DbSession, user: CurrentUser) -> WorkspaceOut:
-    workspace = Workspace(name=body.name)
-    db.add(workspace)
-    db.flush()
-    db.add(WorkspaceMember(workspace_id=workspace.id, user_id=user.id, role="owner"))
-    db.commit()
-    db.refresh(workspace)
-    return WorkspaceOut(id=workspace.id, name=workspace.name, role="owner")
-
-
-@router.get("/workspaces", response_model=list[WorkspaceOut])
-def list_workspaces(db: DbSession, user: CurrentUser) -> list[WorkspaceOut]:
-    rows = db.execute(
-        select(Workspace, WorkspaceMember.role)
-        .join(WorkspaceMember, WorkspaceMember.workspace_id == Workspace.id)
-        .where(WorkspaceMember.user_id == user.id)
-        .order_by(Workspace.created_at.desc())
-    ).all()
-    return [WorkspaceOut(id=ws.id, name=ws.name, role=role) for ws, role in rows]
 
 
 @router.post("/projects", response_model=ProjectOut)
 def create_project(body: ProjectCreate, db: DbSession, user: CurrentUser) -> Project:
     ensure_workspace_perm(db, user, body.workspace_id, "edit")
-    project = Project(workspace_id=body.workspace_id, name=body.name)
-    db.add(project)
+    project = projects_svc.create_project(db, body.workspace_id, body.name)
     db.commit()
     db.refresh(project)
     return project

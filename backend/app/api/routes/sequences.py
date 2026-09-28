@@ -45,6 +45,7 @@ from app.api.schemas import (
 from app.db.models import Asset, Job, Project, Sequence, Track
 from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm, require_sequence_access
 from app.domain.render import start_export
+from app.domain.sequences import create_sequence_scaffold
 from app.domain.sequences.errors import SequenceDomainError
 from app.domain.sequences.history import can_redo, can_undo, redo as redo_operation, undo as undo_operation
 from app.media.render_plan import RenderPlanError
@@ -124,11 +125,9 @@ def create_sequence(body: SequenceCreate, db: DbSession, user: CurrentUser) -> R
     project = db.get(Project, body.project_id)
     if project is None or project.workspace_id != body.workspace_id:
         raise HTTPException(status_code=404, detail="Project not found in this workspace")
-    sequence = Sequence(**body.model_dump())
-    video = Track(sequence=sequence, kind="video", name="V1", position=0)
-    audio = Track(sequence=sequence, kind="audio", name="A1", position=1)
-    db.add_all([sequence, video, audio])
-    db.flush()  # the id is assigned on flush; assigning before it left active_sequence_id None
+    sequence = create_sequence_scaffold(
+        db, project, name=body.name, width=body.width, height=body.height, fps=body.fps,
+    ).sequence
     if project.active_sequence_id is None:
         project.active_sequence_id = sequence.id
     db.commit()

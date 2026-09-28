@@ -17,7 +17,7 @@ from app.core.db import SessionLocal
 from app.db.models import AiRuntimeConfig
 from app.domain.ai_chat import AiChatError, ChatTarget, chat
 from app.core import http_retry
-from app.domain.workflows.executors import ai
+from app.domain import ai_runtime
 from tests.util import fresh_client
 
 
@@ -126,15 +126,15 @@ def test_5xx_retried_then_succeeds(monkeypatch):
 def test_configured_max_retries_reads_setting_and_clamps():
     fresh_client()  # 建库建表
     with SessionLocal() as db:
-        assert ai.configured_max_retries(db) == 3  # 无行 → 缺省 3
+        assert ai_runtime.configured_max_retries(db) == 3  # 无行 → 缺省 3
         db.add(AiRuntimeConfig(id="default", max_retries=5))
         db.commit()
-        assert ai.configured_max_retries(db) == 5
+        assert ai_runtime.configured_max_retries(db) == 5
     with SessionLocal() as db:
         row = db.get(AiRuntimeConfig, "default")
         row.max_retries = 99  # 超范围
         db.commit()
-        assert ai.configured_max_retries(db) == ai.MAX_RETRIES_CAP  # 夹到上限 10
+        assert ai_runtime.configured_max_retries(db) == http_retry.MAX_RETRIES_CAP  # 夹到上限 10
 
 
 def test_settings_endpoint_roundtrip():

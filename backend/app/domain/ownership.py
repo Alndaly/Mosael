@@ -6,14 +6,15 @@
 存量越界记录在测试的 allowlist 里只减不增,新增越界直接测试失败。
 
 value 是「允许创建该模型实例」的路径前缀(相对 backend/,可多个:所有者 + 历史豁免
-之外的合法共有者)。api/routes 与 tests 不受限——路由是薄转译层,测试要造数据。
+之外的合法共有者)。测试不受限(要造数据);路由不豁免,见文末 EXEMPT_PREFIXES。
+每一条前缀都必须真的存在(棘轮会查)—— 指向幽灵的登记等于没有登记。
 """
 
 from __future__ import annotations
 
 TABLE_OWNERS: dict[str, tuple[str, ...]] = {
     # 团队/账号
-    "Workspace": ("app/api/routes/workspaces.py", "app/domain/members.py", "app/core/"),
+    "Workspace": ("app/domain/members.py",),
     "User": ("app/api/routes/auth.py", "app/domain/members.py"),
     "AuthSession": ("app/api/routes/auth.py", "app/core/"),
     #: 进这个**部署**的邀请码(与 WorkspaceInvitation 进工作区是两件事,见 ADR 0008)。
@@ -22,7 +23,7 @@ TABLE_OWNERS: dict[str, tuple[str, ...]] = {
     "WorkspaceInvitation": ("app/domain/members.py",),
     "OAuthIdentity": ("app/api/routes/oauth.py",),
     # 创作核心
-    "Project": ("app/api/routes/projects.py", "app/domain/projects/", "app/domain/workflows/executors/content.py"),
+    "Project": ("app/domain/projects/",),
     "Asset": ("app/domain/assets/",),
     #: 文档的解析结果(ADR 0031)只归文档域写。
     "AssetExtraction": ("app/domain/documents/",),
@@ -35,9 +36,9 @@ TABLE_OWNERS: dict[str, tuple[str, ...]] = {
     "SequenceOperation": ("app/domain/sequences/",),
     "SequenceRevision": ("app/domain/sequences/",),
     # 逐字稿
-    "Transcript": ("app/domain/transcripts/", "app/audio/"),
-    "TranscriptSegment": ("app/domain/transcripts/", "app/audio/"),
-    "TranscriptToken": ("app/domain/transcripts/", "app/audio/"),
+    "Transcript": ("app/domain/transcripts/",),
+    "TranscriptSegment": ("app/domain/transcripts/",),
+    "TranscriptToken": ("app/domain/transcripts/",),
     "ClipTranscriptRef": ("app/domain/transcripts/", "app/domain/sequences/"),
     # 资源库
     "Voice": ("app/domain/voices/voices.py",),
@@ -79,9 +80,9 @@ TABLE_OWNERS: dict[str, tuple[str, ...]] = {
     "BrowserSession": ("app/domain/browser/",),
     "BrowserAction": ("app/domain/browser/",),
     # 配置
-    "ProviderProfile": ("app/domain/providers.py", "app/api/routes/settings.py"),
-    "ProviderDefault": ("app/domain/provider_defaults.py", "app/api/routes/settings.py"),
-    "ProviderModel": ("app/domain/provider_models.py", "app/api/routes/settings.py"),
+    "ProviderProfile": ("app/domain/providers.py",),
+    "ProviderDefault": ("app/domain/provider_defaults.py",),
+    "ProviderModel": ("app/domain/provider_models.py",),
     #: 自定义参数组跟着连接走(FK + ondelete CASCADE),所以它没有自己的 owner_user_id ——
     #: 连接删了它一起清,不会留下指向虚空的孤儿。
     "GenerationCapabilityProfile": (
@@ -94,15 +95,15 @@ TABLE_OWNERS: dict[str, tuple[str, ...]] = {
     ),
     "ProviderPricingRule": ("app/domain/usage.py",),
     "ProviderUsageEvent": ("app/domain/usage.py",),
-    "AiRuntimeConfig": ("app/api/routes/settings.py",),
+    "AiRuntimeConfig": ("app/domain/ai_runtime.py",),
     # 单例行由 network 域按需创建(get_config),路由只负责改值。
-    "NetworkConfig": ("app/domain/network.py", "app/api/routes/settings.py"),
-    "TtsConfig": ("app/domain/tts_config.py",),
+    "NetworkConfig": ("app/domain/network.py",),
+    "TtsConfig": ("app/domain/voices/tts_settings.py",),
     # 智能体/集成
-    "AgentSession": ("app/ai/agent/", "app/domain/agent/"),
+    "AgentSession": ("app/domain/agent/",),
     # 分组对话和生成共用一张表(kind 分开),所以归属在中立的 domain/session_groups。
     "SessionGroup": ("app/domain/session_groups.py",),
-    "AgentMessage": ("app/ai/agent/", "app/domain/agent/"),
+    "AgentMessage": ("app/domain/agent/",),
     "AgentMemory": ("app/domain/agent/",),
     "AgentQuestion": ("app/domain/agent/",),
     "ToolConfirmation": ("app/domain/agent/",),

@@ -168,12 +168,9 @@ def _prepare_network() -> None:
             db.commit()
         apply_from_db(db)
         # 重试次数同理:进程级状态,启动时从库里装配一次。
-        from app.db.models import AiRuntimeConfig
-        from app.core.http_retry import set_max_retries
+        from app.domain import ai_runtime
 
-        runtime = db.get(AiRuntimeConfig, "default")
-        if runtime is not None:
-            set_max_retries(runtime.max_retries)
+        ai_runtime.apply_to_process(db)
 
 
 def _install_permission_handlers(app: FastAPI) -> None:
