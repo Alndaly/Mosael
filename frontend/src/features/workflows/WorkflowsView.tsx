@@ -181,6 +181,7 @@ import {
   bodyScope,
   extractRefs,
   isNestedScopeConfig,
+  providerReadiness,
 } from "@/features/workflows/analyze";
 import { RunOutputs, outputSummary } from "@/features/workflows/RunOutputs";
 import { collapseToSubgraph } from "@/features/workflows/collapse";
@@ -241,11 +242,6 @@ const isMarkerNode = (node: { type?: string }): boolean => node.type === "marker
 type ProviderDefault = components["schemas"]["ProviderDefaultOut"];
 type ProviderProfile = components["schemas"]["ProviderProfileOut"];
 
-/** Automation chooses direct API-key or the tool-free OAuth Gateway Adapter at runtime. */
-function supportsAutomationChat(profile: ProviderProfile): boolean {
-  if (!profile.enabled) return false;
-  return profile.auth_type === "oauth" ? profile.oauth_linked : Boolean(profile.base_url?.trim());
-}
 
 
 /**
@@ -1676,23 +1672,17 @@ function WorkflowEditor({
     queryFn: fetchAllGenerationOptions,
     enabled: hasGen,
   });
-  const analysis = React.useMemo(
-    () =>
-      analyzeWorkflow(rootGraph, registry, {
-        providerIds: new Set(
-          (providers.data ?? []).filter(supportsAutomationChat).map((p) => p.id),
-        ),
-        providersLoaded: (!hasLlm && !hasGen) || providers.isSuccess,
-        configuredGenProviders: new Set(
-          (providers.data ?? [])
-            .filter((p) => p.enabled && (p.capability_ids ?? []).some((capability) => capability === "image" || capability === "video"))
-            .map((p) => p.vendor),
-        ),
-        genProvidersLoaded: !hasGen || providers.isSuccess,
-        generationPromptMode: (config) => promptMode(generationModelOf(generationModels.data ?? [], config)),
-      }),
-    [rootGraph, registry, providers.data, providers.isSuccess, hasLlm, hasGen, generationModels.data],
-  );
+  const analysis = React.useMemo(() => {
+    //: 和检查器的提醒同一个判定(providerReadiness),两边不再各写一段。
+    const readiness = providerReadiness(providers.data ?? []);
+    return analyzeWorkflow(rootGraph, registry, {
+      providerIds: readiness.chatProfileIds,
+      providersLoaded: (!hasLlm && !hasGen) || providers.isSuccess,
+      configuredGenProviders: readiness.generationVendors,
+      genProvidersLoaded: !hasGen || providers.isSuccess,
+      generationPromptMode: (config) => promptMode(generationModelOf(generationModels.data ?? [], config)),
+    });
+  }, [rootGraph, registry, providers.data, providers.isSuccess, hasLlm, hasGen, generationModels.data]);
   /**
    * 运行 —— 工具栏的运行键和 ⌘Enter 共用这**一个**入口。
    *
@@ -1700,18 +1690,25 @@ function WorkflowEditor({
    * 一样),存失败就不跑;就绪清单里有阻断问题就不跑。此前两个入口各写各的判据:运行键在
    * 「还没存完」和「有阻断问题」时是灰的,快捷键两条都没管 —— 改完立刻按 ⌘Enter,跑的是
    * 改之前的图。
+   *
+   * 运行键也只看这里的判据,不再看 dirty:自动保存撞上非 409 的错误后 dirty 一直是 true,
+   * 运行键就一直灰着、说「保存中…」,而 ⌘Enter 这条能先重存再跑。
    */
+  const [launching, setLaunching] = React.useState(false);
   const startRun = React.useCallback(async () => {
-    if (run.isPending || !analysis.runnable) return;
+    if (run.isPending || launching || !analysis.runnable) return;
     if (pendingSaveRef.current) {
+      setLaunching(true);
       try {
         await save.mutateAsync();
       } catch {
         return;
+      } finally {
+        setLaunching(false);
       }
     }
     run.mutate();
-  }, [run, save, analysis.runnable]);
+  }, [run, save, launching, analysis.runnable]);
   const checklistCount = analysis.errorCount + analysis.warnCount;
   const checklistLabel = analysis.errorCount
     ? t("wfChecklistBlocked").replace("{n}", String(analysis.errorCount))
@@ -1902,7 +1899,7 @@ function WorkflowEditor({
     <div ref={editorRef} className="relative grid min-h-0">
       <div className="pointer-events-none absolute inset-x-2 top-2 z-20 flex items-start justify-end gap-2 [&>*]:pointer-events-auto">
         {/* 「这是哪一个工作流、钻到了第几层」写在顶栏的路径里(工作流 / 批量配音 / 循环体,见
-            components/layout/pageTrail),画布上只浮着操作这一组。保存状态只放工具栏的 wf-save-status。 */}
+            components/layout/pageTrail),画布上只浮着操作这一组。保存状态没有单独的指示:失败弹 toast,运行键的 title 说「保存中」/「上次保存失败」。 */}
         <CanvasToolbar
           label={t("canvasTools")}
           data-workflow-toolbar-actions=""
@@ -2023,10 +2020,18 @@ function WorkflowEditor({
                 ) : (
                   <Button
                     size="icon-sm"
-                    disabled={dirty || !analysis.runnable}
-                    loading={run.isPending}
+                    disabled={!analysis.runnable}
+                    loading={run.isPending || launching}
                     aria-label={t("wfRun")}
-                    title={dirty ? t("wfSaving") : !analysis.runnable ? t("wfRunBlocked") : t("wfRun")}
+                    title={
+                      !analysis.runnable
+                        ? t("wfRunBlocked")
+                        : save.isPending
+                          ? t("wfSaving")
+                          : dirty && save.isError
+                            ? t("wfRunRetriesSave")
+                            : t("wfRun")
+                    }
                     onClick={() => void startRun()}
                   >
                     <Play size={14} />
@@ -2655,12 +2660,13 @@ export function NodeInspector({
   );
   const fieldOptions = useNodeFieldOptions({ specs: allSpecs, config, workspaceId, nodeType: node.type, workflowId, boundValues });
   // 绑定校验:节点依赖的模型/服务没配好(空列表)或引用已失效(指向不存在的项)→ 顶部给提醒 + 配置入口。
+  //: 判据和就绪清单同一份(providerReadiness):清单报错的节点,这里也得说得出为什么。
+  const readiness = providerReadiness(providers.data ?? []);
   const bindingNotice = ((): { message: string; section: string; error?: boolean } | null => {
     if (node.type === "llm") {
-      const list = providers.data ?? [];
-      if (providers.isSuccess && list.length === 0) return { message: t("wfNoProviders"), section: "providers" };
+      if (providers.isSuccess && readiness.chatProfileIds.size === 0) return { message: t("wfNoProviders"), section: "providers" };
       const pid = config.profile_id;
-      if (pid && providers.isSuccess && !list.some((p) => p.id === pid))
+      if (typeof pid === "string" && pid && providers.isSuccess && !readiness.chatProfileIds.has(pid))
         return { message: t("wfProviderMissing"), section: "providers", error: true };
     }
     if (node.type === "ai_generate") {
@@ -2677,9 +2683,15 @@ export function NodeInspector({
       const capability = String(config.kind || matchedModel?.kind || "image");
       const capabilityLabel = t(GENERATION_KIND_LABELS[capability as GenerationKind] ?? "capImage");
       const section = `providers:${capability}`;
+      if (chosenProvider && providers.isSuccess && !readiness.generationVendors.has(chosenProvider)) {
+        return { message: t("wfIssueGenUnconfigured"), section, error: true };
+      }
       if (chosenProvider && chosenModel && generationModels.isSuccess && !matchedModel) {
         return { message: t("wfGenModelMissing"), section, error: true };
       }
+      //: 默认供应商只在节点**没选**模型时才用得上(后端 generation/operations.create_generation_job:
+      //: provider 或 model 为空才取默认)。选好了还提示「还没有默认」,说的是一件与这个节点无关的事。
+      if (chosenProvider && chosenModel) return null;
       const defaultForCapability = (providerDefaults.data ?? []).find((item) => item.capability === capability);
       const defaultProfile = defaultForCapability?.provider_profile_id
         ? (providers.data ?? []).find((profile) => profile.id === defaultForCapability.provider_profile_id)
@@ -2957,7 +2969,10 @@ export function NodeInspector({
   // 「高级」自成一档,而不是正文底下一个折叠块:折叠块把「有没有更多可调的」藏在一次点击后面,
   // 而条上摆着就一眼看得见。**有才出** —— 没有高级项的节点条上不会多这一档。
   if (advancedSpecs.length > 0) areas.push("advanced");
-  if (meta && meta.outputs.length > 0) areas.push("outputs");
+  //: 输出名按声明展开,和变量插入器(upstreamVariables)同一种取法:开始节点声明的是 `*params`
+  //: (「params 里的每个键」),原样列出来就是一个引用不到任何东西的 `{{start.*params}}`。
+  const outputNames = meta ? declaredFieldNames(meta.outputs, config) : [];
+  if (outputNames.length > 0) areas.push("outputs");
   if (step) areas.push("run");
   const [pickedArea, setPickedArea] = React.useState<string | null>(null);
   // 派生而不是同步:换节点时 areas 变了,上一个节点选中的那块可能根本不存在 —— 直接回落到
@@ -3583,11 +3598,11 @@ export function NodeInspector({
             更多可调的」藏在一次点击后面,而条上摆着一眼就看得见。 */}
         {area === "config" && renderFields(basicSpecs)}
         {area === "advanced" && renderFields(advancedSpecs)}
-        {area === "outputs" && meta && (
+        {area === "outputs" && (
           <div className="grid gap-[5px] pt-0.5 [&>span]:text-ui-xs [&>span]:font-semibold [&>span]:uppercase [&>span]:tracking-[0.05em] [&>span]:text-muted-foreground">
             <span>{t("wfOutputs")}</span>
             <div className="flex flex-wrap gap-1">
-              {meta.outputs.map((output) => {
+              {outputNames.map((output) => {
                 const ref = `{{${node.id}.${output}}}`;
                 return (
                   <button

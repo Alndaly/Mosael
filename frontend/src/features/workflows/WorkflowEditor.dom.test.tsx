@@ -353,6 +353,35 @@ describe("⌘Enter 运行", () => {
     expect(order).toEqual(["save", "run"]);
   });
 
+  //: 自动保存撞上非 409 的错误后 dirty 一直是 true。运行键此前按 dirty 灰着、说「保存中…」,
+  //: 永远点不动;现在和 ⌘Enter 同一个判据:点了先重存再跑。
+  it("自动保存失败后运行键不灰、不说「保存中」;点它先重存再跑", async () => {
+    const order: string[] = [];
+    apiMocks.updateWorkflow.mockImplementationOnce(async () => {
+      order.push("save-failed");
+      throw new Error("boom");
+    });
+    apiMocks.updateWorkflow.mockImplementation(async (_id: string, body: { graph: WorkflowGraph }) => {
+      order.push("save");
+      return workflowWith(body.graph);
+    });
+    apiMocks.runWorkflow.mockImplementation(async () => {
+      order.push("run");
+      return { id: "job-1", status: "queued" };
+    });
+    await renderEditor(CHAIN);
+    await waitFor(() => nodeEl("llm-1"));
+    fireEvent.click(nodeEl("llm-1"));
+    fireEvent.change(await screen.findByLabelText("wfNodeName"), { target: { value: "改过" } });
+    await waitFor(() => expect(order).toEqual(["save-failed"]), { timeout: 3000 });
+    const runButton = screen.getByRole("button", { name: "wfRun" });
+    await waitFor(() => expect(runButton.getAttribute("title")).toBe("wfRunRetriesSave"));
+    expect(runButton).not.toHaveProperty("disabled", true);
+    fireEvent.click(runButton);
+    await waitFor(() => expect(order).toContain("run"));
+    expect(order).toEqual(["save-failed", "save", "run"]);
+  });
+
   it("有阻断问题时不跑(和运行键同一个判据)", async () => {
     const broken = structuredClone(CHAIN);
     broken.nodes[2].config = { template: "" };

@@ -2,7 +2,7 @@ import type { WorkflowGraph } from "@/api/client";
 
 import { isWorkflowFieldActive } from "@/features/nodeForms/fieldActivation";
 import { fieldDataType, normalizeDataType, type DataType } from "@/features/nodeForms/fieldTypes";
-import type { PromptMode } from "@/lib/generationCapabilities";
+import { GENERATION_KINDS, type PromptMode } from "@/lib/generationCapabilities";
 
 /**
  * 工作流"就绪度"分析:纯函数,单一事实来源,同时喂给画布告警角标、
@@ -70,11 +70,51 @@ export function typesCompatible(source: DataType, target: DataType): boolean {
   return source === target;
 }
 
+/** 就绪判定要看的那几项连接字段(`/api/settings/providers` 的一行)。 */
+export interface ProviderProfileLike {
+  id: string;
+  vendor: string;
+  enabled: boolean;
+  auth_type: string;
+  oauth_linked: boolean;
+  base_url: string;
+  capability_ids?: string[];
+}
+
+/** 自动化(LLM 节点)能不能用这条连接:运行时走直连 API key,或不带工具的 OAuth 网关适配器。 */
+export function supportsAutomationChat(profile: ProviderProfileLike): boolean {
+  if (!profile.enabled) return false;
+  return profile.auth_type === "oauth" ? profile.oauth_linked : Boolean(profile.base_url?.trim());
+}
+
+/**
+ * 连接清单 → 「LLM 节点能用哪些连接」「哪些生成服务商配好了」。
+ *
+ * 就绪清单(AnalyzeContext)和节点检查器的提醒**都从这里取**。此前两边各写一段:清单只认
+ * supportsAutomationChat 的连接、检查器认全部,于是同一个节点清单里报错、检查器里一声不吭;
+ * 生成服务商只收 image/video,音频生成节点永远被判成「没配」。生成的种类走 GENERATION_KINDS,
+ * 加一种介质不用回来改这里。
+ */
+export function providerReadiness(profiles: readonly ProviderProfileLike[]): {
+  chatProfileIds: Set<string>;
+  generationVendors: Set<string>;
+} {
+  const kinds: ReadonlySet<string> = new Set(GENERATION_KINDS);
+  return {
+    chatProfileIds: new Set(profiles.filter(supportsAutomationChat).map((profile) => profile.id)),
+    generationVendors: new Set(
+      profiles
+        .filter((profile) => profile.enabled && (profile.capability_ids ?? []).some((capability) => kinds.has(capability)))
+        .map((profile) => profile.vendor),
+    ),
+  };
+}
+
 export interface AnalyzeContext {
-  /** 已存在的供应商配置 id。 */
+  /** LLM 节点能用的连接 id(见 providerReadiness)。 */
   providerIds: Set<string>;
   providersLoaded: boolean;
-  /** 已配置且启用 image/video 能力的生成供应商名。 */
+  /** 已启用、带任一生成能力的服务商名(见 providerReadiness)。 */
   configuredGenProviders: Set<string>;
   genProvidersLoaded: boolean;
   /**

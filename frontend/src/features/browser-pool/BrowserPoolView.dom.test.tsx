@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 import React from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { expect, it, vi } from "vitest";
 
 /**
@@ -20,11 +20,12 @@ const base = {
   last_checked_at: null, last_error: null, shared: true,
 };
 let profiles: Array<Record<string, unknown>> = [];
+const recheckPublishAccount = vi.fn();
 vi.mock("@/api/client", () => ({
   listBrowserProfiles: () => Promise.resolve(profiles),
   listPublishPlatforms: () => Promise.resolve([{ platform: "bilibili", label: "Bilibili" }]),
   createBrowserProfile: vi.fn(), deleteBrowserProfile: vi.fn(), deletePublishAccount: vi.fn(),
-  patchPublishAccount: vi.fn(), recheckPublishAccount: vi.fn(), recordBrowserProfileOpened: vi.fn(),
+  patchPublishAccount: vi.fn(), recheckPublishAccount: (id: string) => recheckPublishAccount(id), recordBrowserProfileOpened: vi.fn(),
   setResourceShared: vi.fn(), updateBrowserProfile: vi.fn(),
 }));
 
@@ -56,4 +57,20 @@ it("我自己的账号:菜单、复检、重新登录、开关都在", async () 
   expect(screen.getByRole("button", { name: /studioActions/ })).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "publishRecheck" })).toBeInTheDocument();
   expect(screen.getByRole("switch", { name: "publishAccountEnabled" })).toBeEnabled();
+});
+
+//: 复检是一张卡的事。此前按钮的 loading 只看 isPending,点一张,所有卡的复检键一起转圈。
+it("复检一张卡:只有这张卡的复检键在转", async () => {
+  recheckPublishAccount.mockReturnValue(new Promise(() => undefined));
+  profiles = [
+    { ...base, id: "p3", name: "甲", bound_account_id: "a3", is_mine: true },
+    { ...base, id: "p4", name: "乙", bound_account_id: "a4", is_mine: true },
+  ];
+  show();
+  await screen.findByText("甲");
+  const [first, second] = screen.getAllByRole("button", { name: "publishRecheck" });
+  fireEvent.click(first);
+  await vi.waitFor(() => expect(first).toHaveAttribute("aria-busy", "true"));
+  expect(recheckPublishAccount).toHaveBeenCalledWith("a3");
+  expect(second).not.toHaveAttribute("aria-busy");
 });

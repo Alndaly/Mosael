@@ -143,4 +143,5 @@ const RUN_STATUS_LABELS = {
   done: "wfStepDone",
   skipped: "wfStepSkipped",
   failed: "wfStepFailed",
+  cancelled: "wfStepCancelled",
 } as const;

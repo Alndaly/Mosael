@@ -5,6 +5,7 @@ import {
   extractRefs,
   isNestedScopeConfig,
   outputType,
+  providerReadiness,
   typesCompatible,
   type AnalyzeContext,
   type RegistryLike,
@@ -346,6 +347,33 @@ describe("analyzeWorkflow", () => {
   });
 });
 
+
+describe("providerReadiness:就绪清单与检查器共用的连接判定", () => {
+  const profile = (over: Partial<Parameters<typeof providerReadiness>[0][number]>) => ({
+    id: "p", vendor: "v", enabled: true, auth_type: "api_key", oauth_linked: false, base_url: "https://x", ...over,
+  });
+
+  it("LLM 只认能跑自动化对话的连接:停用的、没地址的、没连上的 OAuth 都不算", () => {
+    const { chatProfileIds } = providerReadiness([
+      profile({ id: "ok" }),
+      profile({ id: "off", enabled: false }),
+      profile({ id: "no-url", base_url: " " }),
+      profile({ id: "oauth-unlinked", auth_type: "oauth", base_url: "" }),
+      profile({ id: "oauth-linked", auth_type: "oauth", oauth_linked: true, base_url: "" }),
+    ]);
+    expect([...chatProfileIds].sort()).toEqual(["oauth-linked", "ok"]);
+  });
+
+  it("生成服务商按全部生成种类算,音频也在内;停用的、只会对话的不算", () => {
+    const { generationVendors } = providerReadiness([
+      profile({ vendor: "suno", capability_ids: ["audio"] }),
+      profile({ vendor: "kling", capability_ids: ["video"] }),
+      profile({ vendor: "off", enabled: false, capability_ids: ["image"] }),
+      profile({ vendor: "chat-only", capability_ids: ["chat"] }),
+    ]);
+    expect([...generationVendors].sort()).toEqual(["kling", "suno"]);
+  });
+});
 
 describe("语音节点的音色", () => {
   /**

@@ -42,6 +42,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { BoundWorkflowRow as BoundWorkflowRowView, isBoundWorkflowGone } from "./boundWorkflowRow";
 import { TaskRunControls } from "./taskRunControls";
+import { nextRunText, scheduleText } from "./scheduleText";
 import { SettingsRow } from "@/components/settings/settings-layout";
 import { usePersistentSelection } from "@/lib/usePersistentTab";
 import { cn } from "@/lib/utils";
@@ -508,27 +509,16 @@ function TaskDetail({ task, workspaceId }: { task: ScheduledTask; workspaceId: s
     },
   });
 
-  // 计划一栏说人话:手动/Webhook 任务的 schedule 本来就是空的,把 `{}` 原样端给用户
-  // 只会让人以为坏了。真有结构而这里不认识的,才退回 JSON —— 那时原文就是信息。
-  const scheduleLabel =
-    task.trigger_type === "interval" && task.schedule?.seconds
-      ? t("everySeconds").replace("{s}", String(task.schedule.seconds))
-      : task.trigger_type === "manual"
-        ? t("trigger_manual")
-        : task.trigger_type === "webhook"
-          ? t("trigger_webhook")
-          : Object.keys(task.schedule ?? {}).length === 0
-            ? t("schedNone")
-            : JSON.stringify(task.schedule);
-
   // 后端时间是 UTC 无时区标记的 ISO 串;补 Z 再按本地时区、当前语言给人读。
-  const localTime = (iso: string | null | undefined) => {
-    if (!iso) return null;
+  const formatTime = (iso: string) => {
     const normalized = /Z|[+-]\d\d:?\d\d$/.test(iso) ? iso : `${iso}Z`;
     return new Date(normalized).toLocaleString(locale, {
       month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit",
     });
   };
+  const localTime = (iso: string | null | undefined) => (iso ? formatTime(iso) : null);
+  // 计划 / 下次运行按触发方式说人话,见 scheduleText。
+  const scheduleLabel = scheduleText(task, t, locale, formatTime);
 
   return (
     <div className="grid w-full min-w-0 content-start gap-6">
@@ -554,7 +544,7 @@ function TaskDetail({ task, workspaceId }: { task: ScheduledTask; workspaceId: s
           </div>
           <div className="grid min-w-0 content-start gap-1.5 [&_dd]:text-ui-sm [&_dd]:break-words">
             <dt>{t("taskNextRun")}</dt>
-            <dd className="tabular-nums">{localTime(task.next_run_at) ?? t("manualNoSchedule")}</dd>
+            <dd className="tabular-nums">{nextRunText(task, t, formatTime)}</dd>
           </div>
           <div className="grid min-w-0 content-start gap-1.5 [&_dd]:text-ui-sm [&_dd]:break-words">
             <dt>{t("taskLastRun")}</dt>

@@ -114,3 +114,37 @@ describe("带固定选项的字段", () => {
     expect(within(box("mode")).getByRole("combobox").textContent).toContain("甲");
   });
 });
+
+describe("输出变量一档", () => {
+  //: 开始节点声明的输出是 `*params`(「params 里的每个键」)。原样列出来就是 `{{start.*params}}`,
+  //: 复制过去引用不到任何东西;要和变量插入器一样按声明展开成每个键。
+  it("开始节点按 params 的键展开,不列出 {{start.*params}}", () => {
+    const start = {
+      type: "start", label: "开始", description: "", category: "",
+      config: { params: { type: "object", editor: "map" } },
+      outputs: ["*params"], output_types: {}, output_labels: {},
+    } as unknown as WorkflowNodeType;
+    const node = { id: "start", type: "start", position: { x: 0, y: 0 }, config: { params: { topic: "", lang: "zh" } } };
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <TooltipProvider>
+          <ReactFlowProvider>
+            <NodeInspector
+              node={node as never}
+              meta={start}
+              graph={{ nodes: [node], edges: [] } as never}
+              registry={new Map([["start", start]])}
+              workspaceId="w1"
+              onChange={vi.fn()}
+              onApplyGraph={vi.fn()}
+            />
+          </ReactFlowProvider>
+        </TooltipProvider>
+      </QueryClientProvider>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "wfOutputs" }));
+    expect(screen.getByText("{{start.topic}}")).toBeInTheDocument();
+    expect(screen.getByText("{{start.lang}}")).toBeInTheDocument();
+    expect(screen.queryByText("{{start.*params}}")).toBeNull();
+  });
+});
