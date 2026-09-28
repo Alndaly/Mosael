@@ -14,7 +14,7 @@
 - 交互控件一律用 JSX 上的 Tailwind 类加本地的 shadcn/ui 组件。不写全局类,也不搞共享的
   class 字符串文件 —— 那两样都会变成第二个样式系统。
 - 字号走 `text-ui-*` token(有哪几档由 `design/tokens.css` 说了算),不写死像素。写死的 `text-[11px]` 不跟屏幕走,而且各写各的;
-  这一条有棘轮守着(`lib/typeScale.test.ts`),特例列在它的 `ALLOWED` 里。
+  这一条有棘轮守着(`design/typeScale.test.ts`),特例列在它的 `ALLOWED` 里。
 - 圆角走 8px 刻度,分段控件是胶囊形,表单填充用 `--field`。不用投影。
 - 按钮高度走 `Button` 的 `size` 档,不在 className 里改高宽。四档:`xs`/`icon-xs` 28px(工具栏)、
   `sm`/`icon-sm` 32px、`default`/`icon` 36px、`lg` 40px。缺一档就往 `buttonVariants` 里加一档 ——
@@ -271,6 +271,7 @@ python3 scripts/sync-ratchet-docs.py
 | 仓库链接只能指向 **main**,而且只能指向真实存在的路径。 | `frontend/src/design/repoLinks.test.ts` |
 | 选项来自服务端的下拉,要么走 OptionPicker(过阈值自动换成可搜索的那版),要么给出理由。 | `frontend/src/design/searchableLists.test.ts` |
 | 加载占位一律走 components/ui/skeleton 的扫光,不再有各写各的 animate-pulse 灰块。 | `frontend/src/design/skeletons.test.ts` |
+| 界面字号走 token,不写死像素。 | `frontend/src/design/typeScale.test.ts` |
 | 棘轮:界面上给人看的字**走文案表**(`app/messages.ts` 的中英两份),不在组件里写死中文。 | `frontend/src/design/uiTextIsTranslated.test.ts` |
 | tokens.css 里给全局兜底的那几条规则,**必须写在 @layer 里面**。 | `frontend/src/design/unlayeredGlobals.test.ts` |
 | 第三方组件的样式表**必须进主包**,而且**必须进 vendor 层**。 | `frontend/src/design/vendorStyles.test.ts` |
@@ -292,7 +293,6 @@ python3 scripts/sync-ratchet-docs.py
 | 结构性约束:**生成模型选择器不拿清单第一项当默认** —— 落在存着的那个、用户设的默认,或者什么都不选。 | `frontend/src/lib/generationPickerDefault.test.ts` |
 | 「还没测过」不能显示成「跑不起来」。 | `frontend/src/lib/runtimeChecked.test.ts` |
 | 后端时间戳**只在 `lib/time.parseServerTime` 一处**补时区。 | `frontend/src/lib/time.test.ts` |
-| 界面字号走 token,不写死像素。 | `frontend/src/lib/typeScale.test.ts` |
 | 无边框窗顶栏给系统按钮让位的规则,**只能有一份**。 | `frontend/src/lib/windowChrome.test.ts` |
 | 自定义 CSS 的文件这一侧:文件在哪、监听盯的是什么。 | `electron/system/customCss.test.ts` |
 

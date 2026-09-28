@@ -537,7 +537,7 @@ workflows → agent, collaboration, markers, notes
 - `frontend/src/api/generated/schema.d.ts`(`linked_clip_id`:7381)
 - `frontend/src/features/editor/editorStore.ts`(选中态两份:50-51、107-115)
 - `frontend/src/design/tokens.css`、`unlayeredGlobals.test.ts`、`vendorStyles.test.ts`、`apiSeam.test.ts`、`agentTypeScale.test.ts`、`layering.test.ts`
-- `frontend/src/lib/typeScale.test.ts`、`frontend/src/lib/windowChrome.ts`
+- `frontend/src/design/typeScale.test.ts`、`frontend/src/lib/windowChrome.ts`
 - `frontend/src/app/main.tsx`、`App.tsx`(`PUBLISH_BAR_HEIGHT`:113)、`pageChunks.test.ts`
 - `frontend/src/features/featureBoundaries.test.ts`
 

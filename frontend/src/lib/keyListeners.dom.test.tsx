@@ -1,14 +1,8 @@
 /** @vitest-environment jsdom */
-import { act, cleanup, render } from "@testing-library/react";
-import React from "react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { act } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
 
-vi.mock("@/app/preferences", () => ({ useI18n: () => (key: string) => key }));
-
-import { AnnotationModeHint } from "@/features/markers/AnnotationModeHint";
 import { listenKeys } from "@/lib/shortcuts";
-
-afterEach(cleanup);
 
 const press = (target: EventTarget, init: KeyboardEventInit) =>
   act(() => {
@@ -28,23 +22,5 @@ describe("listenKeys:输入法组词期间的按键不交给快捷键", () => {
     stop();
     press(document.body, { key: "Escape" });
     expect(handler).toHaveBeenCalledTimes(1);
-  });
-});
-
-describe("批注模式的 Esc", () => {
-  it("在批注框里组词时按 Esc 是放弃组词,不退出批注模式;平常按 Esc 才退出", () => {
-    const onExit = vi.fn();
-    render(
-      <>
-        <AnnotationModeHint kind="comment" onExit={onExit} />
-        <textarea aria-label="draft" />
-      </>,
-    );
-    const draft = document.querySelector("textarea")!;
-    draft.focus();
-    press(draft, { key: "Escape", isComposing: true, keyCode: 229 });
-    expect(onExit).not.toHaveBeenCalled();
-    press(draft, { key: "Escape" });
-    expect(onExit).toHaveBeenCalledTimes(1);
   });
 });

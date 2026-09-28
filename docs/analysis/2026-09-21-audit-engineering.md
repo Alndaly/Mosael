@@ -275,7 +275,7 @@ PATH_RE = ((?:backend|frontend|electron|plugins|scripts|website)/[\w./-]+\.(?:ts
 **修法**:把 `PATH_RE` 的根前缀改成可选,匹配到没有前缀的就依次去 `backend/`、`frontend/src/`、
 `backend/app/` 下找;目录路径(以 `/` 结尾)同样查。这是一条一行的改动,能一次性抓出上面全部六处。
 
-### 1.10 `frontend/src/lib/typeScale.test.ts` —— ❌ 能被绕过,而且它的理由本身已经过期
+### 1.10 `frontend/src/design/typeScale.test.ts` —— ❌ 能被绕过,而且它的理由本身已经过期
 
 ```
 typeScale.test.ts:38   matchAll(/text-\[([0-9.]+px)\]/g)
@@ -676,7 +676,7 @@ analysis/)**必然漂移,只是漂多久的问题**。
 - `backend/tests/test_subprocess_has_one_door.py:38` — 只认 `subprocess.run`
 - `backend/tests/test_docs_do_not_point_at_ghosts.py:26` — 路径正则太窄
 - `backend/tests/test_single_point_claims_name_their_guard.py` — 点名的守卫不校验存在
-- `frontend/src/lib/typeScale.test.ts:38` + `frontend/src/design/tokens.css:43-50` — 断言对、理由假
+- `frontend/src/design/typeScale.test.ts:38` + `frontend/src/design/tokens.css:43-50` — 断言对、理由假
 - `frontend/src/design/agentTypeScale.test.ts` — "定义 + 消费点"两头钉住的样板
 - `frontend/src/design/apiSeam.test.ts:19` — 阈值式棘轮,余量 2
 
