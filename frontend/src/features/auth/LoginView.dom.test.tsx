@@ -23,7 +23,7 @@ vi.mock("@/app/preferences", () => {
   const t = (key: string) => key;
   return { useI18n: () => t, usePreferences: () => ({ locale: "zh", setLocale: () => undefined, t }) };
 });
-vi.mock("@/components/layout/ServerPicker", () => ({ ServerPicker: () => null }));
+vi.mock("@/components/app/ServerPicker", () => ({ ServerPicker: () => null }));
 vi.mock("@/api/client", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/api/client")>()),
   oauthProviders: async () => [],

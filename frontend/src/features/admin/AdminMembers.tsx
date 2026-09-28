@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { adminUsers, deleteAccount, setDeploymentAdmin, type AdminUser } from "@/api/client";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { ConfirmDialog } from "@/components/app/modals";
-import { ActionMenu } from "@/components/layout/ActionMenu";
+import { ActionMenu } from "@/components/app/ActionMenu";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";

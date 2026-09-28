@@ -4,7 +4,7 @@ import { toast } from "sonner";
 
 import { API_BASE, type Workspace } from "@/api/client";
 import { useI18n } from "@/app/preferences";
-import { ServerPicker } from "@/components/layout/ServerPicker";
+import { ServerPicker } from "@/components/app/ServerPicker";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { SettingsGroup, SettingsRow, SettingsSectionStack } from "@/components/settings/settings-layout";

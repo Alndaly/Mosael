@@ -1,5 +1,5 @@
 import { CanvasToolbar, CanvasToolbarGroup } from "@/components/app/CanvasToolbar";
-import { ActionMenu } from "@/components/layout/ActionMenu";
+import { ActionMenu } from "@/components/app/ActionMenu";
 import { CanvasInputModeSwitch } from "@/components/app/CanvasInputModeSwitch";
 import React from "react";
 import { useOpenRequest } from "@/lib/deepLink";

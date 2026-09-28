@@ -1,5 +1,5 @@
 import React from "react";
-import { ActionContextMenuItems, ActionMenu, type MenuAction } from "@/components/layout/ActionMenu";
+import { ActionContextMenuItems, ActionMenu, type MenuAction } from "@/components/app/ActionMenu";
 import { PageHeading, STUDIO_PAGE } from "@/components/layout/StudioPage";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Boxes, Eraser, ExternalLink, Globe, KeyRound, LogIn, LogOut, Pencil, Plus, RefreshCcw, SquarePen, Trash2, Users, Users2 } from "lucide-react";

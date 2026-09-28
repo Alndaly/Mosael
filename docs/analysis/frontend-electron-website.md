@@ -308,12 +308,12 @@ sequenceDiagram
 - **settings**:`settingsSections.tsx` 是唯一结构声明(导航/内容/搜索/深链都从这一份推出);供应商三层 UI——连接(vendor preset 驱动表单)/ 模型(启用、上下文长度、推理/视觉)/ 能力默认(一个下拉跨连接选模型);执行面 automation = AutopilotRules 三闸(http_request/publish/run_code × ask/judge/always);`AiRuntimeSection` 管 AI 出站重试次数 0..10。
 - **statistics / home / media / notes / collaboration / admin**:统计页仅打开时 5s 刷新;素材库含 URL 导入、降噪、对比视图;笔记 tiptap + appendMerge 追加合并(分隔符 `\n\n` 由 shared-constants 契约钉住);CollaborationSheet 对 subject 不认识,board/workflow 共用同一接口;admin 入口仅部署管理员可见但**藏起来的入口不是权限**——后端每条 /api/admin 各自把关。
 
-### 3.7 外壳组件(`components/layout/`,任务界面在 `components/jobs/`)
+### 3.7 外壳组件(`components/layout/`,任务界面在 `components/jobs/`,通用控件在 `components/app/`)
 
 - `navLabels.ts`:页面清单只有一份,StudioView 联合类型 + 分组 placement;AppShell 侧栏、面包屑、PAGE_RENDERERS 三处都从它推导,`Record<StudioView,…>` 让漏配变成编译错误。
 - `jobs/TaskCenter.tsx`:任务总线统一入口,轮询 `/api/jobs?top_level=true`(子任务收纳),refetchInterval 按活跃度自适应;监听 `mosael:open-tasks`,带 id 时按 id 现取 getJob 开详情而非在列表里找;只有任务中心播报(ADR-0018)——`jobKinds.tsx` 的名字/提示/跳转页由后端 `GET /api/jobs/kinds` 声明,前端只补图标表与「资源 → 缓存键」表。
 - `CommandPalette`:⌘K + `mosael:open-cmdk` 事件;搜素材/工作流/发布任务,命中后走同一套深链事件。
-- `ServerPicker`:本地/团队服务器切换,远程先探活 `/api/health` 4s 再给「仍要连接」兜底。
+- `app/ServerPicker`:本地/团队服务器切换,远程先探活 `/api/health` 4s 再给「仍要连接」兜底。
 
 ---
 

@@ -4,7 +4,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { CollectionTabs } from "./StudioPage";
 import { CanvasPreview } from "./CanvasPreview";
-import { ActionMenu } from "./ActionMenu";
+import { ActionMenu } from "@/components/app/ActionMenu";
 vi.mock("@/api/client", () => ({ assetThumbnailUrl: (id: string) => `/media/${id}` }));
 
 describe("studio browsing controls", () => {

@@ -20,7 +20,7 @@ import type { MessageKey } from "@/app/messages";
 import { useI18n } from "@/app/preferences";
 import { useImagePreview } from "@/components/app/image-preview";
 import { AgentMarkdown } from "@/components/markdown/Markdown";
-import { ActionMenu } from "@/components/layout/ActionMenu";
+import { ActionMenu } from "@/components/app/ActionMenu";
 import { Button } from "@/components/ui/button";
 import { useSaveDocumentAsNote } from "@/features/media/useSaveDocumentAsNote";
 import { cn } from "@/lib/utils";

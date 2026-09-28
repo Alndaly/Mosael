@@ -47,7 +47,7 @@ import { ComposerChips } from "@/features/agent/ComposerChips";
 import { PromptTemplateButton, withTemplate } from "@/components/app/PromptTemplates";
 import { EntityReceiptNote } from "@/features/entities/entityMeta";
 import { EmptyState } from "@/components/layout/EmptyState";
-import { ConfigNotice } from "@/components/layout/ConfigNotice";
+import { ConfigNotice } from "@/components/app/ConfigNotice";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { useImagePreview } from "@/components/app/image-preview";

@@ -52,7 +52,7 @@ import { searchHighlightClass, type CanvasSearchHighlight } from "@/components/a
 
 import { type BoardCanvas as Canvas, type BoardItem, type BoardProducer, type BoardProducerInfo, type BoardRunRequest, type GenerationOption } from "@/api/client";
 import { boardAbilities, boardToolIcon, DIRECT_ABILITIES, firstSentence, hostHasContent } from "@/features/boards/boardTools";
-import { ActionMenu } from "@/components/layout/ActionMenu";
+import { ActionMenu } from "@/components/app/ActionMenu";
 import { Hint, TooltipProvider } from "@/components/ui/tooltip";
 import { toPlainText } from "@/components/markdown/inlineSyntax";
 import { errorText } from "@/api/errorMessage";

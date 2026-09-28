@@ -5,7 +5,7 @@ import { Coins } from "lucide-react";
 import { adminOverview, type AdminOverview as Overview } from "@/api/client";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { EmptyState } from "@/components/layout/EmptyState";
-import { RangePicker, useStatRange } from "@/components/layout/RangePicker";
+import { RangePicker, useStatRange } from "@/components/app/RangePicker";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatCosts, microsIn } from "@/lib/money";

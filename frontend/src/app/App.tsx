@@ -49,7 +49,7 @@ import { VoiceDock } from "@/features/agent/VoiceDock";
 import { useAgentNavigation } from "@/features/agent/useAgentNavigation";
 import { PlugZap } from "lucide-react";
 
-import { ServerPicker } from "@/components/layout/ServerPicker";
+import { ServerPicker } from "@/components/app/ServerPicker";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ImagePreviewProvider } from "@/components/app/image-preview";

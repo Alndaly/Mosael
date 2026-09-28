@@ -9,7 +9,7 @@ import { api, getAssetTranscript, getJob, listAsrModels, transcribeAsset, type J
 import { transcriptKeys } from "@/api/queryKeys";
 import { asrEngineMissing, pendingTranscribeIds } from "@/features/editor/transcribeQueue";
 import { Button } from "@/components/ui/button";
-import { ConfigNotice } from "@/components/layout/ConfigNotice";
+import { ConfigNotice } from "@/components/app/ConfigNotice";
 import { kindHasSound } from "@/lib/assetKinds";
 import { pollWhileUnsettled } from "@/lib/pollWhileUnsettled";
 import { tokenTimelineRange } from "@/domain/timeline/karaoke";

@@ -17,7 +17,7 @@ import {
   ContextMenuItem,
   ContextMenuSeparator,
 } from "@/components/ui/context-menu";
-import { ActionMenu } from "@/components/layout/ActionMenu";
+import { ActionMenu } from "@/components/app/ActionMenu";
 import { ScenePreview } from "./ScenePreview";
 import { CARD_GRID } from "@/components/layout/StudioPage";
 import { SelectionCheck } from "@/components/app/SelectionCheck";

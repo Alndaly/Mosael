@@ -14,7 +14,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { ServerPicker } from "@/components/layout/ServerPicker";
+import { ServerPicker } from "@/components/app/ServerPicker";
 import { LegalDialog, type LegalDoc } from "@/features/auth/legal";
 import type { MessageKey } from "@/app/messages";
 

@@ -1,6 +1,6 @@
 import React from "react";
 import { CollectionTabs, PageHeading, STUDIO_PAGE } from "@/components/layout/StudioPage";
-import { RangePicker, useStatRange } from "@/components/layout/RangePicker";
+import { RangePicker, useStatRange } from "@/components/app/RangePicker";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Activity, Clapperboard, Clock3, Coins, Film, Layers, Megaphone, Workflow as WorkflowIcon } from "lucide-react";
 import { workspaceSummary, type Workspace } from "@/api/client";
