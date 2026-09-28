@@ -190,7 +190,7 @@ def test_扫描不认安装现场的暂存目录(tmp_path) -> None:
 class Test索引:
     def test_默认市场读最新一次发版附带的索引(self) -> None:
         """不读官网那份(main 生成):它许的版本可能还没发版,下载给不出来(见 domain/plugins/updates)。"""
-        from app.api.routes.plugins import DEFAULT_REGISTRY_URL
+        from app.domain.plugins.registry import DEFAULT_REGISTRY_URL
 
         assert DEFAULT_REGISTRY_URL == "https://github.com/Alndaly/Mosael/releases/latest/download/registry.json"
 
@@ -213,7 +213,7 @@ class Test索引:
                 return _fake_client({"plugins": []})().get(url)
 
         monkeypatch.setattr(market, "RetryingClient", FakeClient)
-        from app.api.routes.plugins import DEFAULT_REGISTRY_URL
+        from app.domain.plugins.registry import DEFAULT_REGISTRY_URL
 
         assert market.fetch_index(DEFAULT_REGISTRY_URL) == []
         assert seen["follow_redirects"] is True and seen["url"] == DEFAULT_REGISTRY_URL

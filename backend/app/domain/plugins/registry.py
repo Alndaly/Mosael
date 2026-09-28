@@ -36,9 +36,11 @@ from pathlib import Path
 from typing import Any
 
 import httpx
+from sqlalchemy.orm import Session
 from mosael_formats import plugin_archive
 
 from app.core.http_retry import RetryingClient
+from app.domain import deployment
 from app.domain.effects import plugin_tool_effects
 from app.domain.plugins.errors import PluginDomainError
 from app.domain.plugins.manifest import Manifest
@@ -52,6 +54,23 @@ MAX_UNPACKED_BYTES = plugin_archive.MAX_UNPACKED_BYTES
 
 DOWNLOAD_TIMEOUT_SECONDS = 60.0
 REGISTRY_TIMEOUT_SECONDS = 15.0
+
+#: 内置的市场索引:**最新一次正式发版附带的那一份**,和插件包是同一次发版、从同一份源码产出的
+#: (见 scripts/sync-plugin-registry.py --release 与 docs/RELEASING.md)。
+#:
+#: 不再读官网上那份(website/public/plugins/registry.json):那份由 main 生成,版本号是 main 上的,
+#: 而插件包只在打 tag 时产出 —— main 上改了版本、还没发版的那段时间里,它许的新版下载地址给不出来,
+#: 「更新」装回旧版,「有新版」永远不消失。
+#:
+#: `releases/latest/download/…` 由 GitHub 302 到附件的 CDN 地址(fetch_index 跟随跳转、单次超时、
+#: 不重试);索引里每条的下载地址钉在**生成它的那个 tag** 上,所以读索引的那一刻恰好发了新版也不会
+#: 拿到「新索引 + 旧包」。部署管理员可以换成自己那一份(见 index_url)。
+DEFAULT_REGISTRY_URL = "https://github.com/Alndaly/Mosael/releases/latest/download/registry.json"
+
+
+def index_url(db: Session) -> str:
+    """这台部署读哪一份索引:部署管理员配过的那份,没配就是内置的那份。"""
+    return deployment.plugin_registry_url(db) or DEFAULT_REGISTRY_URL
 
 
 def fetch_index(url: str) -> list[dict[str, Any]]:

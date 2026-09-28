@@ -610,7 +610,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "插件接入不存在",
         "en": "Plugin connection not found.",
     },
-    "routeErr_pluginTokenExchangeFailed": {
+    "pluginErr_oauthTokenExchangeFailed": {
         "zh": "换令牌失败:{detail}",
         "en": "Could not exchange the token: {detail}",
     },

@@ -21,6 +21,9 @@ from __future__ import annotations
 from typing import Any
 from urllib.parse import urlencode
 
+import httpx
+
+from app.core.http_retry import RetryingClient
 from app.core.i18n import LocalizedError
 from app.domain.plugins.manifest import Field, Manifest, OAuthSpec
 
@@ -121,3 +124,20 @@ def credentials_from_token(spec: OAuthSpec, response: dict[str, Any]) -> dict[st
     if not out:
         raise PluginOAuthError("pluginErr_oauthNoFields")
     return out
+
+
+def exchange_code(spec: OAuthSpec, credentials: dict[str, str], code: str) -> dict[str, str]:
+    """拿授权码去对方的令牌端点换令牌,返回要写回的那几个凭据键(见 credentials_from_token)。
+
+    走统一的重试传输层:令牌端点一样会限流,而"刚授权完就失败"最让人摸不着头脑。网络或对方
+    报错都是**结果**,不是服务端故障 —— 说清楚是哪一步、对方说了什么。
+    """
+    payload = token_request(spec, credentials, code)
+    try:
+        with RetryingClient(timeout=30) as client:
+            response = client.post(spec.token_url, data=payload)
+        response.raise_for_status()
+        body = response.json()
+    except (httpx.HTTPError, ValueError) as exc:
+        raise PluginOAuthError("pluginErr_oauthTokenExchangeFailed", detail=str(exc)[:200]) from exc
+    return credentials_from_token(spec, body)

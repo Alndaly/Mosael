@@ -38,3 +38,8 @@ def shared_host_folders(db: Session) -> list[str]:
 
 def set_shared_host_folders(db: Session, folders: list[str]) -> None:
     _row(db).shared_host_folders = list(folders)
+
+
+def plugin_registry_url(db: Session) -> str:
+    """部署管理员配的插件市场索引地址;没配是空串(用哪一份默认由 plugins.registry 决定)。"""
+    return (_row(db).plugin_registry_url or "").strip()

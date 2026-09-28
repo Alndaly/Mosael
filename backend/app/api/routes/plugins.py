@@ -16,7 +16,6 @@ from app.api.schemas import (
     PluginCapabilityUpdate,
     PluginCredentialOut,
     PluginCredentialUpdate,
-    PluginEnableRequest,
     PluginInstallPreview,
     PluginInstallRequest,
     PluginInstanceCreate,
@@ -68,26 +67,6 @@ def scan_packages(db: DbSession, user: CurrentUser) -> list[dict]:
     return _packages(db, user)
 
 
-#: 内置的市场索引:**最新一次正式发版附带的那一份**,和插件包是同一次发版、从同一份源码产出的
-#: (见 scripts/sync-plugin-registry.py --release 与 docs/RELEASING.md)。
-#:
-#: 不再读官网上那份(website/public/plugins/registry.json):那份由 main 生成,版本号是 main 上的,
-#: 而插件包只在打 tag 时产出 —— main 上改了版本、还没发版的那段时间里,它许的新版下载地址给不出来,
-#: 「更新」装回旧版,「有新版」永远不消失。
-#:
-#: `releases/latest/download/…` 由 GitHub 302 到附件的 CDN 地址(fetch_index 跟随跳转、单次超时、
-#: 不重试);索引里每条的下载地址钉在**生成它的那个 tag** 上,所以读索引的那一刻恰好发了新版也不会
-#: 拿到「新索引 + 旧包」。部署管理员可以换成自己那一份(DeploymentConfig.plugin_registry_url)。
-DEFAULT_REGISTRY_URL = "https://github.com/Alndaly/Mosael/releases/latest/download/registry.json"
-
-
-def _registry_url(db: DbSession) -> str:
-    from app.db.models import DeploymentConfig
-
-    config = db.get(DeploymentConfig, "default")
-    return (config.plugin_registry_url if config else "").strip() or DEFAULT_REGISTRY_URL
-
-
 @router.get("/plugins/market", response_model=PluginMarketOut)
 def browse_market(db: DbSession, user: CurrentUser) -> PluginMarketOut:
     """市场里有什么。**要管理员** —— 看到的下一步就是装,而装是往这台机器上放代码。
@@ -101,7 +80,7 @@ def browse_market(db: DbSession, user: CurrentUser) -> PluginMarketOut:
     shipped = [one for one in bundled.plugins() if one.id in installed]
     index_error = ""
     try:
-        remote = market.fetch_index(_registry_url(db))
+        remote = market.fetch_index(market.index_url(db))
     except PluginDomainError as exc:
         remote, index_error = [], str(exc)
     local_ids = {one.id for one in shipped}
@@ -547,10 +526,6 @@ def clear_invocations(db: DbSession, user: CurrentUser, instance_id: str | None 
     db.commit()
 
 
-# 旧的 PluginEnableRequest 仍被 schema 引用;实例的启用走 PATCH /plugins/instances/{id}。
-__all__ = ["router", "PluginEnableRequest"]
-
-
 # --- 卸载 ---------------------------------------------------------------
 #
 # **必须声明在最后。** `/plugins/{package_id}` 是个吃通配的路径,而 FastAPI 按声明顺序匹配 ——
@@ -599,23 +574,13 @@ def plugin_oauth_complete(
     **只写对方真的回了的字段**(见 credentials_from_token):刷新时常常只回 access_token,
     把缺失当空串写回去会抹掉已有的 refresh_token —— 而那一份丢了要重新走一遍授权。
     """
-    from app.core import http_retry
-
     instance = my_instance(db, instance_id, user)
     manifest = inst.manifest_for(db, instance)
     try:
         spec = plugin_oauth.spec_of(manifest)
-        stored = inst.credential_values(db, instance.id)
-        payload = plugin_oauth.token_request(spec, stored, body.code)
-        # 走统一的重试传输层:令牌端点一样会限流,而"刚授权完就失败"最让人摸不着头脑。
-        with http_retry.RetryingClient(timeout=30) as client:
-            response = client.post(spec.token_url, data=payload)
-        response.raise_for_status()
-        values = plugin_oauth.credentials_from_token(spec, response.json())
+        values = plugin_oauth.exchange_code(spec, inst.credential_values(db, instance.id), body.code)
     except plugin_oauth.PluginOAuthError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    except Exception as exc:  # noqa: BLE001 — 换令牌失败是结果,不是服务端故障
-        raise HTTPException(status_code=422, detail=tr("routeErr_pluginTokenExchangeFailed", detail=str(exc)[:200])) from exc
     inst.set_credentials(db, instance, values)
     try:
         tools_domain.refresh_tools(db, instance, notify=False)

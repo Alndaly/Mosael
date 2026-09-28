@@ -120,6 +120,6 @@ def test_发版流程生成它并和插件包一起上传() -> None:
 
 
 def test_应用默认读的就是发版附带的那份() -> None:
-    from app.api.routes.plugins import DEFAULT_REGISTRY_URL
+    from app.domain.plugins.registry import DEFAULT_REGISTRY_URL
 
     assert DEFAULT_REGISTRY_URL.endswith("/releases/latest/download/registry.json")

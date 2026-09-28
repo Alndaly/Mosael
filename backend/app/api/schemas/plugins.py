@@ -272,10 +272,6 @@ class PluginCapabilityUpdate(ApiModel):
     tools: dict[str, bool] = Field(default_factory=dict)
 
 
-class PluginEnableRequest(ApiModel):
-    enabled: bool
-
-
 class PluginPermissionGrantOut(OrmModel):
     instance_id: str
     permission: str
