@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import React from "react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
@@ -19,7 +19,9 @@ vi.mock("@/app/preferences", () => ({
   useI18n: () => (key: string) => key,
   usePreferences: () => ({ locale: "zh-CN" }),
 }));
+vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }));
 
+import { toast } from "sonner";
 import { VoicePanel } from "@/features/editor/VoicePanel";
 import { useEditorStore } from "@/stores/editorStore";
 
@@ -179,7 +181,7 @@ describe("音色库", () => {
 
     await user.click(await screen.findByRole("button", { name: "voiceEdit" }));
 
-    expect(screen.getByRole("button", { name: /voiceRecognizeReference/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "voiceRecognize" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /save/ })).toBeInTheDocument();
   });
 
@@ -187,6 +189,44 @@ describe("音色库", () => {
     renderPanel();
 
     expect(await screen.findByText("voiceNoReferenceText")).toBeInTheDocument();
+  });
+
+  // 剪辑页和设置页共用一份音色行(VoiceList):下面几条此前只有设置页有。
+  it("删音色先确认,确认了才发请求;删失败要说出来", async () => {
+    const user = userEvent.setup();
+    renderPanel();
+    const served = globalThis.fetch;
+    const deletes: string[] = [];
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "DELETE") {
+        deletes.push(String(input));
+        return new Response(JSON.stringify({ detail: "voice in use" }), { status: 409, headers: { "content-type": "application/json" } });
+      }
+      return served(input, init);
+    }) as never;
+
+    await user.click(await screen.findByRole("button", { name: "delete" }));
+    const dialog = await screen.findByRole("alertdialog", { name: "voiceDeleteTitle" });
+    expect(deletes).toEqual([]);
+
+    await user.click(within(dialog).getByRole("button", { name: "confirm" }));
+    await waitFor(() => expect(deletes).toHaveLength(1));
+    expect(deletes[0]).toContain("/api/voices/v1");
+    await waitFor(() => expect(toast.error).toHaveBeenCalled());
+  });
+
+  it("没有参考音频的音色:试听键灰掉,而不是点了没声音", async () => {
+    renderPanel({ voices: [{ ...voices[0], has_reference: false }] });
+    expect(await screen.findByRole("button", { name: "voicePlay" })).toBeDisabled();
+  });
+
+  it("没声明授权的音色一行里写明;编辑表单里能补上声明", async () => {
+    const user = userEvent.setup();
+    renderPanel({ voices: [{ ...voices[0], consent_kind: "undeclared", consent_at: null }] });
+
+    expect(await screen.findByText("voiceConsentMissing")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "voiceEdit" }));
+    expect(await screen.findByRole("radiogroup", { name: "voiceConsentTitle" })).toBeInTheDocument();
   });
 });
 

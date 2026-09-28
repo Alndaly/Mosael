@@ -1,14 +1,15 @@
 /** @vitest-environment jsdom */
 import React from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const listVoices = vi.fn();
+const deleteVoice = vi.fn();
 
 vi.mock("@/api/client", () => ({
-  deleteVoice: vi.fn(),
+  deleteVoice: (...args: unknown[]) => deleteVoice(...args),
   listVoices: (...args: unknown[]) => listVoices(...args),
   recognizeReference: vi.fn(),
   updateVoice: vi.fn(),
@@ -64,5 +65,25 @@ describe("VoiceLibrarySection", () => {
     const missing = await screen.findByText("voiceConsentMissing");
     await user.click(missing);
     expect(await screen.findByRole("radiogroup", { name: "voiceConsentTitle" })).toBeInTheDocument();
+  });
+
+  // 列表和剪辑页共用 VoiceList:删之前问一句,没有参考音频的试听键灰掉。
+  it("删音色先确认,确认了才删;没有参考音频的试听键灰掉", async () => {
+    const user = userEvent.setup();
+    deleteVoice.mockResolvedValue(undefined);
+    listVoices.mockResolvedValue([{ id: "v1", name: "老王", reference_text: "你好", source: "upload", has_reference: false,
+                                    consent_kind: "self", consent_at: "2026-09-01", created_at: "2026-09-01" }]);
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <VoiceLibrarySection workspace={{ id: "workspace-1" } as never} />
+      </QueryClientProvider>,
+    );
+    expect(await screen.findByRole("button", { name: "voicePlay" })).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "delete" }));
+    const dialog = await screen.findByRole("alertdialog", { name: "voiceDeleteTitle" });
+    expect(deleteVoice).not.toHaveBeenCalled();
+    await user.click(within(dialog).getByRole("button", { name: "confirm" }));
+    await waitFor(() => expect(deleteVoice).toHaveBeenCalledWith("v1"));
   });
 });

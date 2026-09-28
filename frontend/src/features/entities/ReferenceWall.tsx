@@ -52,6 +52,7 @@ import { Button } from "@/components/ui/button";
 import { Popover, PopoverClose, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ACTION_MENU } from "@/components/ui/floating";
 import { useFileDrop } from "@/lib/useFileDrop";
+import { importEach, importFailureText } from "@/lib/importEach";
 import { cn } from "@/lib/utils";
 import { useCatalogLabels } from "@/features/entities/entityMeta";
 import { LibraryPickerDialog } from "@/features/entities/LibraryPickerDialog";
@@ -93,6 +94,8 @@ export function ReferenceWall({ entity, workspaceId }: { entity: Entity; workspa
     void qc.invalidateQueries({ queryKey: entityKeys.all(workspaceId) });
   };
   const fail = (error: unknown) => toast.error(errorText(error));
+  //: 一批挂到一半失败时,前面几张其实已经挂上了:重新取一遍这个资产,墙上照实显示(不然要刷新页面才看得到)。
+  const refetch = () => void qc.invalidateQueries({ queryKey: entityKeys.all(workspaceId) });
 
   const [picking, setPicking] = React.useState(false);
   const fileInput = React.useRef<HTMLInputElement | null>(null);
@@ -107,7 +110,10 @@ export function ReferenceWall({ entity, workspaceId }: { entity: Entity; workspa
       setPicking(false);
       if (next) settle(next);
     },
-    onError: fail,
+    onError: (error) => {
+      refetch();
+      fail(error);
+    },
   });
   const role = useMutation({
     mutationFn: ({ assetId, next }: { assetId: string; next: string }) => setEntityReferenceRole(entity.id, assetId, next),
@@ -132,20 +138,23 @@ export function ReferenceWall({ entity, workspaceId }: { entity: Entity; workspa
       fail(error);
     },
   });
+  //: 逐个传、一个失败不拦后面的(lib/importEach,和素材库的导入同一条):进了库的素材库照样刷新、挂上的墙上照样显示,
+  //: 没进来的最后一并说。
   const upload = useMutation({
-    mutationFn: async (files: File[]) => {
-      let last: Entity | null = null;
-      for (const file of files) {
+    mutationFn: (files: File[]) =>
+      importEach(files, async (file) => {
         const asset = await importAsset({ workspaceId, file });
-        last = await addEntityReference(entity.id, { asset_id: asset.id });
-      }
-      return last;
-    },
-    onSuccess: (next) => {
+        return addEntityReference(entity.id, { asset_id: asset.id });
+      }),
+    onSuccess: ({ imported, failed }) => {
+      //: 失败的那一个可能已经进了素材库、只是没挂上 —— 素材库和这个资产都照实刷新(settle 里也会重取)。
       void qc.invalidateQueries({ queryKey: assetKeys.all(workspaceId) });
-      if (next) settle(next);
+      const last = imported[imported.length - 1];
+      if (last) settle(last);
+      else refetch();
+      const partial = importFailureText(t, imported.length, failed);
+      if (partial) toast.error(partial);
     },
-    onError: fail,
   });
   const drop = useFileDrop((files) => upload.mutate(files), referable);
 

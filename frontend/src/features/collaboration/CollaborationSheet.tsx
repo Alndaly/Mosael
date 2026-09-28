@@ -97,6 +97,20 @@ export function CollaborationSheet({
                 <Skeleton key={row} className="h-24 rounded-lg" />
               ))}
             </div>
+          ) : comments.isError ? (
+            /* 取不回来不是「还没有评论」:那一句会让人以为讨论被删了。说没能加载,给一个重试。 */
+            <div
+              role="alert"
+              data-collaboration-error
+              className="grid h-full place-content-center justify-items-center gap-2 px-8 text-center"
+            >
+              <MessageSquare size={22} className="text-muted-foreground" />
+              <p className="m-0 text-ui-sm font-medium">{t("pageLoadError")}</p>
+              <p className="m-0 text-ui-xs leading-relaxed text-muted-foreground [overflow-wrap:anywhere]">{comments.error.message}</p>
+              <Button variant="secondary" size="sm" loading={comments.isFetching} onClick={() => void comments.refetch()}>
+                {t("retry")}
+              </Button>
+            </div>
           ) : items.length === 0 ? (
             /* 空态只写一次(此前左右两栏各写了一遍,读起来像是出了两个不同的问题),
                而且**在整块空白里居中**:内容区是整条侧栏那么高,把这几行贴在顶上,

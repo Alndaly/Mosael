@@ -6,11 +6,13 @@ import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, BookOpen, Clapperboard, ExternalLink, FileText, Loader2, RefreshCw, Box, Ban, Clock3, Film as FilmIcon, Group, Image as ImageIcon, Music, Plus, Square as SquareIcon, StickyNote, UsersRound, type LucideIcon } from "lucide-react";
 
 import { entityKeys, getEntity, getJob, isNodeProducer, type BoardItem, type BuiltinProducer } from "@/api/client";
+import { isNotFound } from "@/api/transport";
 import { EntityThumb } from "@/features/entities/EntityMention";
 import { entityKindIcon, useCatalogLabels } from "@/features/entities/entityMeta";
 import { AssetInlinePreview } from "@/components/app/asset-preview";
 import { BoardAudio, BoardVideo } from "@/features/boards/BoardPlayer";
 import { DraftTextarea } from "@/components/ui/draft-text";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { NoteReader } from "@/features/notes/NoteEditor";
 import "@/features/notes/notes.css";
@@ -349,8 +351,12 @@ export function NoteNode({ data, selected }: NodeProps) {
   const json = item.text_format === "json";
   const state = useRunState(item);
   //: 一项能力在跑时停止在那一条运行态上(AbilityRun),这里只管便签自己的写字。
-  const writing = itemIsRunning(item) && !runningAbility(item);
-  const stop = nodeData.onStop && !commentMode && writing ? nodeData.onStop : undefined;
+  //: **在不在写按状态认,不按 job_id** —— 写字是同步请求,本地只打一个没有任务号的「在跑」(见 runNoteWrite);
+  //: 按 itemIsRunning 认的话这一格永远等不到占位。停止要有任务号才能取消,所以另外要求 itemIsRunning。
+  const status = itemRunStatus(item);
+  const writing = !runningAbility(item) && (status === "queued" || status === "running");
+  const writeFailed = !runningAbility(item) && status === "failed";
+  const stop = nodeData.onStop && !commentMode && writing && itemIsRunning(item) ? nodeData.onStop : undefined;
   return (
     <div
       data-board-run-status={state["data-board-run-status"]}
@@ -402,6 +408,19 @@ export function NoteNode({ data, selected }: NodeProps) {
       )}
       {/* 让 AI 写的时候整格是占位(和图片格生成一样),停止在占位里。 */}
       {writing && <WritingCover item={item} onStop={stop} data-note-writing="" />}
+      {/* 写挂了:原因写在格子里(和文档格同一句),不只是边框变红。 */}
+      {writeFailed && !editing && (
+        <div
+          role="alert"
+          data-note-write-failed=""
+          className="absolute inset-x-1 bottom-1 z-10 flex min-w-0 items-center gap-2 overflow-hidden rounded-md border border-border bg-panel/95 px-2 py-1 text-ui-2xs text-destructive shadow-sm backdrop-blur"
+        >
+          <AlertTriangle size={11} className="shrink-0" />
+          <span className="min-w-0 flex-1 line-clamp-2 [overflow-wrap:anywhere]">
+            {[t(runCopy(item).failed), itemError(item)].filter(Boolean).join(" · ")}
+          </span>
+        </div>
+      )}
       <AbilityRun data={nodeData} selected={selected} />
     </div>
   );
@@ -770,7 +789,8 @@ function DocumentNode({ data, selected }: NodeProps) {
   const status = itemRunStatus(item);
   const writing = !runningAbility(item) && (status === "queued" || status === "running");
   const writeFailed = !runningAbility(item) && status === "failed";
-  const stop = nodeData.onStop && !commentMode && writing ? nodeData.onStop : undefined;
+  //: 写字是同步请求,本地那份「在跑」没有任务号:没有任务号就没有可取消的东西,不给停止。
+  const stop = nodeData.onStop && !commentMode && writing && itemIsRunning(item) ? nodeData.onStop : undefined;
   const state = useRunState(item);
   return (
     //: 选中**不加彩色描边** —— 四角的缩放点已经说明「选中了」(图片、视频、便签都是这一条)。
@@ -940,14 +960,17 @@ export function SceneNode({ data, selected }: NodeProps) {
  *
  * 它**本身不产出东西**:连进一格生成,那一格就像在提示词里 `@` 了它(服务端按连线取,和 `@` 同一个参数,
  * 见后端 boards/actions.upstream_entities);提示词框的 `@` 菜单里它排在「连进来的」那一组。
- * 「补全多角度」「生成表情」这类能力是之后的事,到时照内容格能力的做法挂在它身上(`form.abilities`)。
- * 资产删了,这一格还在(能挪、能删),写明「资产已删除」。
+ * 「补全多角度」「生成表情」这类能力照内容格能力的做法挂在它身上(`form.abilities`):跑的时候外壳和底边那一条运行态
+ * 和图片格一样(useRunState + AbilityRun)—— 此前这一格不画运行态,点了「生成表情」看不出在跑、也停不下来。
+ * 资产删了(404),这一格还在(能挪、能删),写明「资产已删除」;别的错(断网、服务端出错)说没能加载、给一个重试
+ * —— 那不是删了,而查询是 retry:false,不会自己再试。
  */
 export function EntityNode({ data, selected }: NodeProps) {
   const nodeData = data as unknown as BoardNodeData;
   const { item, commentMode, workspaceId } = nodeData;
   const t = useI18n();
   const labels = useCatalogLabels();
+  const state = useRunState(item);
   const entity = useQuery({
     queryKey: entityKeys.detail(workspaceId ?? "", item.entity_id ?? ""),
     queryFn: () => getEntity(item.entity_id ?? ""),
@@ -955,12 +978,17 @@ export function EntityNode({ data, selected }: NodeProps) {
     retry: false,
   });
   const found = entity.data;
+  const gone = isNotFound(entity.error);
   const KindIcon = entityKindIcon(found?.kind ?? "character");
   const open = () => {
     if (item.entity_id) window.location.hash = `#/entities?entity=${encodeURIComponent(item.entity_id)}`;
   };
   return (
-    <div data-board-entity={item.entity_id ?? ""} className={cn("group relative flex h-full w-full flex-col overflow-visible border border-border bg-panel shadow-sm", CELL_RADIUS)}>
+    <div
+      data-board-entity={item.entity_id ?? ""}
+      data-board-run-status={state["data-board-run-status"]}
+      className={cn("group relative flex h-full w-full flex-col overflow-visible border border-border bg-panel shadow-sm", CELL_RADIUS, state.className)}
+    >
       <NodeResizer minWidth={160} minHeight={200} isVisible={selected && !commentMode} lineClassName="!border-transparent" handleClassName="!h-2 !w-2 !rounded-full !border-border-strong !bg-panel" />
       {/* 名字前面是这个资产自己那一种的图标(场景是定位针,道具是盒子),不是一律「人物」。 */}
       <NodeLabel data={nodeData} icon={found ? KindIcon : undefined} fallback={found?.name} />
@@ -969,7 +997,12 @@ export function EntityNode({ data, selected }: NodeProps) {
         {entity.isError ? (
           <div className="flex h-full flex-col items-center justify-center gap-2 px-4 text-center text-muted-foreground">
             <AlertTriangle size={22} strokeWidth={1.4} />
-            <span className="text-ui-xs">{t("boardEntityMissing")}</span>
+            <span className="text-ui-xs">{t(gone ? "boardEntityMissing" : "boardEntityLoadFailed")}</span>
+            {!gone && (
+              <Button type="button" size="xs" variant="outline" className="nodrag nopan" loading={entity.isFetching} onClick={() => void entity.refetch()}>
+                {t("retry")}
+              </Button>
+            )}
           </div>
         ) : found ? (
           <EntityThumb entity={{ kind: found.kind, cover_asset_id: found.display_cover_asset_id ?? null }} className="h-full w-full rounded-none" />
@@ -992,6 +1025,7 @@ export function EntityNode({ data, selected }: NodeProps) {
           </button>
         )}
       </footer>
+      <AbilityRun data={nodeData} selected={selected} />
     </div>
   );
 }

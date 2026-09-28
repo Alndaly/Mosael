@@ -83,7 +83,8 @@ export function AgentVoiceSection({ workspaceId }: { workspaceId: string }) {
     }
     if (shape === savedRef.current) return;
     savedRef.current = shape;
-    save.mutate(enabled || true);
+    // 开关原样带上:关着的时候换音色只是改配置,不能顺手把「语音对话」重新打开。
+    save.mutate(enabled);
   }, [engine, voice, speed, ready, enabled, pref.data, save]);
 
   return (
@@ -136,7 +137,8 @@ export function AgentVoiceSection({ workspaceId }: { workspaceId: string }) {
             className={SETTINGS_FIELD_WIDTH}
           />
           {/* 试听走的是**和播放按钮同一条路**,所以听到的就是它以后念给你的那个声音 ——
-              另写一条试听接口的话,试听好听、真用起来不是它,而这种不一致最难查。 */}
+              另写一条试听接口的话,试听好听、真用起来不是它,而这种不一致最难查。
+              也因此开关关着时不给试听:那条路只认已开启的配置(agent_voice.require),关着点只会回 409。 */}
           {enabled && ready && <SpeakButton text={t("agentVoiceSample")} workspaceId={workspaceId} />}
         </div>
       </SettingsRow>

@@ -370,6 +370,35 @@ def test_不可用的原因一句话说清() -> None:
     assert client.get("/api/plugins/tools").json() != []
 
 
+def test_MCP_启用时拉不到工具清单_原因记下来_改配置时重拉(monkeypatch) -> None:
+    """启用时顺手拉的那一次失败不挡启用,但原因要留在连接上 —— 否则插件页只能说「没有工具」,
+    说不出为什么。换了服务器(改配置)手里那份清单就是上一台的,要重拉。"""
+    from app.domain.plugins import tools as tools_domain
+    from app.domain.plugins.mcp_bridge import McpBridgeError
+
+    mcp = {
+        "id": "dev.mcpdemo", "name": "MCP 演示", "version": "1.0.0",
+        "runtime": {"kind": "mcp", "command": "x"},
+        "instance": {"config": [{"key": "server", "label": "服务器", "required": False}]},
+    }
+    client = install(mcp)
+    created = client.post("/api/plugins/dev.mcpdemo/instances", json={"config": {"server": "a"}}).json()
+
+    def fail(*_args, **_kwargs):
+        raise McpBridgeError("pluginErr_mcpTimeout", seconds="5")
+
+    monkeypatch.setattr(tools_domain, "discover_tools", fail)
+    enabled = client.patch(f"/api/plugins/instances/{created['id']}", json={"enabled": True}).json()
+    assert enabled["enabled"] is True and enabled["tools"] == [], "拉不到不挡启用"
+    assert enabled["capability_status"]["tools"]["error"], "拉不到的原因记在连接上"
+
+    reported = [{"name": "hello", "description": "打个招呼", "input_schema": {"type": "object", "properties": {}}}]
+    monkeypatch.setattr(tools_domain, "discover_tools", lambda *_args, **_kwargs: reported)
+    changed = client.patch(f"/api/plugins/instances/{created['id']}", json={"config": {"server": "b"}}).json()
+    assert [tool["name"] for tool in changed["tools"]] == ["hello"]
+    assert changed["capability_status"]["tools"]["error"] == "" and changed["capability_status"]["tools"]["tools"] == 1
+
+
 # --- 智能体 -------------------------------------------------------------
 
 def test_插件工具在智能体清单里是一等公民_且按连接区分() -> None:

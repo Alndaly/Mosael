@@ -29,9 +29,24 @@ export function isImportableFile(file: File): boolean {
   return isMediaFile(file) || isDocumentFile(file);
 }
 
+/**
+ * 这种素材**有声音**:视频、音频。图片和文档没有。音量、声音淡入淡出、分离人声、降噪、转写、波形都按它给。
+ *
+ * 判据看**素材类型**,不看轨道:视频轨上完全可以放图片(AI 生成的静图就是这么落上去的)。片段上读
+ * `clip.asset_kind`(脱机片段也报它原来的类型),素材上读 `asset.kind`。
+ */
+export function kindHasSound(kind: string): boolean {
+  return kind === "video" || kind === "audio";
+}
+
+/** 这种素材**有画面**:视频、图片。音频和文档没有。调色、变换、画面淡入淡出、当画面参考都按它给。 */
+export function kindIsVisual(kind: string): boolean {
+  return kind === "video" || kind === "image";
+}
+
 /** 这份素材有画面或声音(能上时间线、能当生成参考)。文档没有。 */
 export function isMediaAsset(asset: { kind: string }): boolean {
-  return asset.kind === "image" || asset.kind === "video" || asset.kind === "audio";
+  return kindHasSound(asset.kind) || kindIsVisual(asset.kind);
 }
 
 /** 种类在界面上叫什么。认不出的当视频说 —— 素材库里只有这四种。 */

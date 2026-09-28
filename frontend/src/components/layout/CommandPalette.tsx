@@ -7,10 +7,8 @@ import {
   FileImage,
   FileVideo,
   FolderPlus,
-  Moon,
   Rocket,
   SearchX,
-  Sun,
   Workflow,
 } from "lucide-react";
 
@@ -20,6 +18,7 @@ import { useI18n, usePreferences } from "@/app/preferences";
 import { Highlight } from "@/components/app/Highlight";
 import type { StudioView } from "@/components/layout/AppShell";
 import { NAV_ITEMS } from "@/components/layout/navLabels";
+import { THEME_ICONS, THEME_LABEL_KEYS, nextTheme } from "@/components/layout/themeCycle";
 import {
   CommandDialog,
   CommandGroup,
@@ -32,6 +31,15 @@ import { emitOpenEvent } from "@/lib/deepLink";
 import { listenKeys } from "@/lib/shortcuts";
 
 
+type PaletteItem = {
+  /** cmdk 的 value:不可读的稳定 id(`nav-media`、`asset-<id>`…),受控高亮认的是它。 */
+  value: string;
+  onSelect: () => void;
+  disabled?: boolean;
+  content: React.ReactNode;
+};
+type PaletteGroup = { id: string; heading: string; items: PaletteItem[]; separatorAfter?: boolean };
+
 const ASSET_ICONS: Record<string, React.ReactNode> = {
   video: <FileVideo size={14} />,
   audio: <FileAudio size={14} />,
@@ -43,11 +51,16 @@ export function CommandPalette({
   projects,
   onNavigate,
   onOpenProject,
+  onCreateProject,
+  creatingProject,
 }: {
   workspace: Workspace;
   projects: ProjectWithStats[];
   onNavigate: (view: StudioView) => void;
   onOpenProject: (projectId: string) => void;
+  /** 和顶栏项目切换器同一个动作:直接建一个并打开,不是跳回首页让人再点一次。 */
+  onCreateProject: () => void;
+  creatingProject?: boolean;
 }) {
   const t = useI18n();
   const { theme, setTheme } = usePreferences();
@@ -156,28 +169,141 @@ export function CommandPalette({
     action();
   };
 
-  // 空态是手工判的(关掉了 cmdk 内建过滤),所以**每加一类结果都要加进这两行** ——
-  // 漏掉的话「没有匹配的结果」会和结果同时显示出来(加发布记录时就这么漏过一次)。
+  const upcomingTheme = nextTheme(theme);
+  const UpcomingThemeIcon = THEME_ICONS[upcomingTheme];
+
+  // 面板里的每一组结果,**按渲染顺序**。空态、默认高亮、渲染三件事都从这一张表来:此前是三份
+  // 手抄 —— 空态判断漏过发布记录(「没有匹配的结果」和结果同时出现),默认高亮漏过工作流和
+  // 发布记录(只搜到它们时 Enter 没有目标)。
+  const groups: PaletteGroup[] = [
+    {
+      id: "actions",
+      heading: t("cmdkQuickActions"),
+      separatorAfter: true,
+      items:
+        q === ""
+          ? [
+              {
+                value: "action-new-project",
+                disabled: creatingProject,
+                onSelect: onCreateProject,
+                content: (
+                  <>
+                    <FolderPlus size={14} />
+                    {t("createProject")}
+                  </>
+                ),
+              },
+              // 和顶栏那个按钮同一个循环(themeCycle):浅 → 深 → 跟随系统。显示的是按下去会到哪一档。
+              {
+                value: "action-toggle-theme",
+                onSelect: () => setTheme(upcomingTheme),
+                content: (
+                  <>
+                    <UpcomingThemeIcon size={14} />
+                    {t("cmdkToggleTheme")}
+                    <span className="ml-auto text-ui-xs text-muted-foreground">{t(THEME_LABEL_KEYS[upcomingTheme])}</span>
+                  </>
+                ),
+              },
+            ]
+          : [],
+    },
+    {
+      id: "pages",
+      heading: t("cmdkPages"),
+      items: navMatches.map((entry) => ({
+        value: `nav-${entry.view}`,
+        onSelect: () => onNavigate(entry.view),
+        content: (
+          <>
+            <entry.icon size={14} />
+            <Highlight text={t(entry.labelKey)} query={query} />
+          </>
+        ),
+      })),
+    },
+    {
+      id: "projects",
+      heading: t("cmdkProjects"),
+      items: projectMatches.map((project) => ({
+        value: `project-${project.id}`,
+        onSelect: () => onOpenProject(project.id),
+        content: (
+          <>
+            <Clapperboard size={14} />
+            <Highlight className="min-w-0 flex-1 truncate" text={project.name} query={query} />
+            <span className="text-ui-xs text-muted-foreground">
+              {t("projectStatAssets").replace("{n}", String(project.asset_count))}
+            </span>
+          </>
+        ),
+      })),
+    },
+    {
+      id: "workflows",
+      heading: t("navWorkflows"),
+      items: workflowMatches.map((workflow) => ({
+        value: `workflow-${workflow.id}`,
+        onSelect: () => {
+          onNavigate("workflows");
+          emitOpenEvent("mosael:open-workflow", workflow.id);
+        },
+        content: (
+          <>
+            <Workflow size={14} />
+            <Highlight className="min-w-0 flex-1 truncate" text={workflow.name} query={query} />
+            <span className="text-ui-xs tabular-nums text-muted-foreground">
+              {t("wfNodeCount").replace("{n}", String(((workflow.graph as { nodes?: unknown[] }).nodes ?? []).length))}
+            </span>
+          </>
+        ),
+      })),
+    },
+    {
+      id: "publish",
+      heading: t("publishListTitle"),
+      items: publishMatches.map((task) => ({
+        value: `publish-${task.id}`,
+        onSelect: () => {
+          onNavigate("publish");
+          emitOpenEvent("mosael:open-publish-task", task.id);
+        },
+        content: (
+          <>
+            <Rocket size={14} />
+            <Highlight className="min-w-0 flex-1 truncate" text={task.title || task.asset_name} query={query} />
+            <span className="text-ui-xs text-muted-foreground">{t(`batchStatus_${task.status}` as never)}</span>
+          </>
+        ),
+      })),
+    },
+    {
+      id: "assets",
+      heading: t("cmdkAssets"),
+      items: assetMatches.map((asset) => ({
+        value: `asset-${asset.id}`,
+        onSelect: () => {
+          onNavigate("media");
+          // 素材库监听该事件后打开预览(跨页面深链的最小通道)。
+          emitOpenEvent("mosael:open-asset", asset.id);
+        },
+        content: (
+          <>
+            {ASSET_ICONS[asset.kind] ?? <FileVideo size={14} />}
+            <Highlight className="min-w-0 flex-1 truncate" text={asset.name} query={query} />
+            <span className="text-ui-xs uppercase text-muted-foreground">{asset.kind}</span>
+          </>
+        ),
+      })),
+    },
+  ].filter((group) => group.items.length > 0);
+
   const searching = assets.isFetching || workflows.isFetching || publishTasks.isFetching || input.trim() !== query;
-  const hasAnyResult =
-    navMatches.length > 0 ||
-    projectMatches.length > 0 ||
-    assetMatches.length > 0 ||
-    workflowMatches.length > 0 ||
-    publishMatches.length > 0;
 
   // 关掉内建过滤后 cmdk 不再自动高亮第一项(Enter 会没有目标)— 受控高亮:
   // 结果集头名变化(=输入变化)时重置到第一项,方向键仍经 onValueChange 自由移动。
-  const firstValue =
-    q === ""
-      ? "action-new-project"
-      : navMatches.length > 0
-        ? `nav-${navMatches[0].view}`
-        : projectMatches.length > 0
-          ? `project-${projectMatches[0].id}`
-          : assetMatches.length > 0
-            ? `asset-${assetMatches[0].id}`
-              : "";
+  const firstValue = groups[0]?.items[0]?.value ?? "";
   const [highlighted, setHighlighted] = React.useState(firstValue);
   React.useEffect(() => {
     setHighlighted(firstValue);
@@ -202,7 +328,7 @@ export function CommandPalette({
       <CommandList>
         {/* cmdk 的 <CommandEmpty> 依赖内建过滤计数,关掉过滤后永不触发 — 手工空态。
             检索请求在途时不闪空态。 */}
-        {!hasAnyResult && !searching && (
+        {groups.length === 0 && !searching && (
           <div className="grid justify-items-center gap-1 px-3 pb-[30px] pt-[26px] text-center [&>span:last-child]:max-w-80 [&>span:last-child]:text-ui-xs [&>span:last-child]:leading-normal [&>span:last-child]:text-muted-foreground [&_strong]:text-ui-sm [&_strong]:font-semibold [&_strong]:text-foreground">
             <span className="mb-1 grid h-9 w-9 place-items-center rounded-lg bg-[color-mix(in_srgb,var(--primary)_10%,transparent)] text-primary">
               <SearchX size={17} />
@@ -212,119 +338,18 @@ export function CommandPalette({
           </div>
         )}
 
-        {q === "" && (
-          <>
-            <CommandGroup heading={t("cmdkQuickActions")}>
-              <CommandItem value="action-new-project" onSelect={() => run(() => onNavigate("home"))}>
-                <FolderPlus size={14} />
-                {t("createProject")}
-              </CommandItem>
-              <CommandItem
-                value="action-toggle-theme"
-                onSelect={() => run(() => setTheme(theme === "dark" ? "light" : "dark"))}
-              >
-                {theme === "dark" ? <Sun size={14} /> : <Moon size={14} />}
-                {t("cmdkToggleTheme")}
-              </CommandItem>
+        {groups.map((group) => (
+          <React.Fragment key={group.id}>
+            <CommandGroup heading={group.heading}>
+              {group.items.map((item) => (
+                <CommandItem key={item.value} value={item.value} disabled={item.disabled} onSelect={() => run(item.onSelect)}>
+                  {item.content}
+                </CommandItem>
+              ))}
             </CommandGroup>
-            <CommandSeparator />
-          </>
-        )}
-
-        {navMatches.length > 0 && (
-          <CommandGroup heading={t("cmdkPages")}>
-            {navMatches.map((entry) => (
-              <CommandItem key={entry.view} value={`nav-${entry.view}`} onSelect={() => run(() => onNavigate(entry.view))}>
-                <entry.icon size={14} />
-                <Highlight text={t(entry.labelKey)} query={query} />
-              </CommandItem>
-            ))}
-          </CommandGroup>
-        )}
-
-        {projectMatches.length > 0 && (
-          <CommandGroup heading={t("cmdkProjects")}>
-            {projectMatches.map((project) => (
-              <CommandItem
-                key={project.id}
-                value={`project-${project.id}`}
-                onSelect={() => run(() => onOpenProject(project.id))}
-              >
-                <Clapperboard size={14} />
-                <Highlight className="min-w-0 flex-1 truncate" text={project.name} query={query} />
-                <span className="text-ui-xs text-muted-foreground">
-                  {t("projectStatAssets").replace("{n}", String(project.asset_count))}
-                </span>
-              </CommandItem>
-            ))}
-          </CommandGroup>
-        )}
-
-        {workflowMatches.length > 0 && (
-          <CommandGroup heading={t("navWorkflows")}>
-            {workflowMatches.map((workflow) => (
-              <CommandItem
-                key={workflow.id}
-                value={`workflow-${workflow.id}`}
-                onSelect={() =>
-                  run(() => {
-                    onNavigate("workflows");
-                    emitOpenEvent("mosael:open-workflow", workflow.id);
-                  })
-                }
-              >
-                <Workflow size={14} />
-                <Highlight className="min-w-0 flex-1 truncate" text={workflow.name} query={query} />
-                <span className="text-ui-xs tabular-nums text-muted-foreground">
-                  {t("wfNodeCount").replace("{n}", String(((workflow.graph as { nodes?: unknown[] }).nodes ?? []).length))}
-                </span>
-              </CommandItem>
-            ))}
-          </CommandGroup>
-        )}
-
-        {publishMatches.length > 0 && (
-          <CommandGroup heading={t("publishListTitle")}>
-            {publishMatches.map((task) => (
-              <CommandItem
-                key={task.id}
-                value={`publish-${task.id}`}
-                onSelect={() =>
-                  run(() => {
-                    onNavigate("publish");
-                    emitOpenEvent("mosael:open-publish-task", task.id);
-                  })
-                }
-              >
-                <Rocket size={14} />
-                <Highlight className="min-w-0 flex-1 truncate" text={task.title || task.asset_name} query={query} />
-                <span className="text-ui-xs text-muted-foreground">{t(`batchStatus_${task.status}` as never)}</span>
-              </CommandItem>
-            ))}
-          </CommandGroup>
-        )}
-
-        {assetMatches.length > 0 && (
-          <CommandGroup heading={t("cmdkAssets")}>
-            {assetMatches.map((asset) => (
-              <CommandItem
-                key={asset.id}
-                value={`asset-${asset.id}`}
-                onSelect={() =>
-                  run(() => {
-                    onNavigate("media");
-                    // 素材库监听该事件后打开预览(跨页面深链的最小通道)。
-                    emitOpenEvent("mosael:open-asset", asset.id);
-                  })
-                }
-              >
-                {ASSET_ICONS[asset.kind] ?? <FileVideo size={14} />}
-                <Highlight className="min-w-0 flex-1 truncate" text={asset.name} query={query} />
-                <span className="text-ui-xs uppercase text-muted-foreground">{asset.kind}</span>
-              </CommandItem>
-            ))}
-          </CommandGroup>
-        )}
+            {group.separatorAfter && <CommandSeparator />}
+          </React.Fragment>
+        ))}
       </CommandList>
     </CommandDialog>
   );

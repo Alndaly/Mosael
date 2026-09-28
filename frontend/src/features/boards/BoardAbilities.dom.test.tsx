@@ -191,6 +191,13 @@ describe("操作条上的能力", () => {
     expect(composer()?.dataset.boardComposer).toBe("generator");
   });
 
+  it("在跑的格子不给「换一份」:和生成、切换产出者同一条 —— 服务端会丢掉换上的素材,本地回滚后它悄悄消失", () => {
+    mount([{ id: "slot", kind: "audio", x: 0, y: 0, width: 280, height: 72, form: { producer: "speak" }, run: { status: "running", job_id: "j" } }]);
+    select("slot");
+    expect(bar()).not.toContain("boardReplaceAsset");
+    expect(document.querySelector('[role="radiogroup"]')).toBeNull();
+  });
+
   it("Esc 收起点开的那一块", () => {
     mount([audio]);
     select("au");

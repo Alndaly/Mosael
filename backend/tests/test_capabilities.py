@@ -92,6 +92,40 @@ def test_定的那家没配好_说清楚缺什么_怎么换回本地() -> None:
     assert "Token" in str(raised.value) and "本地解析" in str(raised.value)
 
 
+def test_权限没授予也算没配好_下拉里选不到_和真调用时同一道门() -> None:
+    """设置页和真解析问的是同一件事:没授予 network 权限的连接,真调用时 blocked_reason 会挡回来,
+    那设置页就不该让人选它。"""
+    from app.domain import capabilities, documents
+
+    client = fresh_client()
+    me = _me(client)
+    with SessionLocal() as db:
+        db.add(PluginPackage(id="dev.test.parser-net", name="解析", version="1",
+                             manifest={**PARSER, "id": "dev.test.parser-net", "permissions": ["network:mineru.net"]}))
+        db.flush()
+        instance = PluginInstance(owner_user_id=me, package_id="dev.test.parser-net", name="MinerU 云端",
+                                  enabled=True, config={})
+        db.add(instance)
+        db.flush()
+        db.add(PluginCredential(instance_id=instance.id, key="TOKEN", value="t"))
+        db.commit()
+        cloud = instance.id
+
+    option = next(one for one in _documents(client)["options"] if one["id"] == cloud)
+    assert option["missing"] == ["插件权限(到插件页授予)"]
+    client.put("/api/settings/capabilities/document_parse", json={"provider_id": cloud})
+    with SessionLocal() as db, pytest.raises(documents.DocumentParserUnavailable) as raised:
+        capabilities.choose(db, me, documents.CAPABILITY)
+    assert raised.value.key == "docErr_parserIncomplete" and "插件权限" in str(raised.value)
+
+    granted = client.patch(f"/api/plugins/instances/{cloud}/permissions", json={"grants": {"network:mineru.net": True}})
+    assert granted.status_code == 200
+    option = next(one for one in _documents(client)["options"] if one["id"] == cloud)
+    assert option["missing"] == []
+    with SessionLocal() as db:
+        assert capabilities.choose(db, me, documents.CAPABILITY).id == cloud
+
+
 def test_不能定别人的连接_也不能定没声明这项能力的() -> None:
     from tests.util import second_client
 

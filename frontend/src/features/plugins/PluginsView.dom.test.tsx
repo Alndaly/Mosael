@@ -44,6 +44,7 @@ vi.mock("@/app/preferences", () => ({
       runTool: "运行",
       pluginToolNotExposed: "这个工具没有开放",
       pluginToolMissingRequired: "还有必填参数没填",
+      pluginToolsFetchFailed: "没拿到工具清单:{error}",
     })[key] ?? key,
 }));
 
@@ -429,6 +430,55 @@ describe("只替宿主做事的插件", () => {
     wrap(<ConnectionCard pkg={pkg} instance={instance} workspaceId="w1" />);
     expect(screen.getByText("pluginHostCapabilityDesc")).toBeTruthy();
     expect(screen.queryByText("pluginExposedCount")).toBeNull();
-    expect(screen.queryByText("noTools")).toBeNull();
+    expect(screen.queryByText("pluginToolsNotFetched")).toBeNull();
+  });
+});
+
+describe("MCP 连接的工具表是空的", () => {
+  //: 启用、授权都好了、blocked_reason 为空,工具表却是空的:此前照样写「已开启 0 / 0 个工具」
+  //: 「启用并授权插件后会显示可调用工具」—— 要他去做一件已经做完的事。空的原因按连接的状态说。
+  const pkg = {
+    id: "dev.mcp.demo",
+    name: "MCP 演示",
+    version: "1.0.0",
+    kind: "mcp",
+    multiple: false,
+    permissions: [],
+    provides: [],
+    config_fields: [],
+    credential_fields: [],
+    oauth: null,
+    instances: [],
+  } as unknown as PluginPackage;
+  const instance = {
+    id: "p1",
+    package_id: pkg.id,
+    name: "MCP 演示",
+    enabled: true,
+    config: {},
+    blocked_reason: "",
+    authorization: "",
+    tools: [],
+    capability_status: {},
+  } as PluginInstance;
+
+  it("能用但还没拿到清单:让他点「刷新工具」,不说 0 / 0", () => {
+    wrap(<ConnectionCard pkg={pkg} instance={instance} workspaceId="w1" />);
+    expect(screen.getAllByText("pluginToolsNotFetched").length).toBeGreaterThan(0);
+    expect(screen.queryByText("pluginExposedCount")).toBeNull();
+    expect(screen.getByRole("button", { name: /pluginRefreshTools/ })).toBeTruthy();
+  });
+
+  it("拉过但失败:带上原因", () => {
+    const failed = { ...instance, capability_status: { tools: { error: "连接超时", tools: null, models: null, refreshed_at: null } } };
+    wrap(<ConnectionCard pkg={pkg} instance={failed as PluginInstance} workspaceId="w1" />);
+    expect(screen.getAllByText("没拿到工具清单:连接超时").length).toBeGreaterThan(0);
+    expect(screen.queryByText("pluginToolsNotFetched")).toBeNull();
+  });
+
+  it("还不能用:说为什么不能用", () => {
+    wrap(<ConnectionCard pkg={pkg} instance={{ ...instance, blocked_reason: "权限未授予" }} workspaceId="w1" />);
+    expect(screen.getAllByText("权限未授予").length).toBeGreaterThan(0);
+    expect(screen.queryByText("pluginToolsNotFetched")).toBeNull();
   });
 });

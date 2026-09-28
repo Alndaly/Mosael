@@ -22,7 +22,6 @@ from __future__ import annotations
 import logging
 import re
 from collections.abc import Callable
-from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -63,10 +62,6 @@ _listeners: list[Listener] = []
 def on_refreshed(listener: Listener) -> None:
     if listener not in _listeners:
         _listeners.append(listener)
-
-
-def _now() -> str:
-    return datetime.now(UTC).replace(microsecond=0).isoformat()
 
 
 def _clean(entry: Any, declared: set[str]) -> dict[str, Any] | None:
@@ -159,9 +154,7 @@ def refresh(db: Session, instance: PluginInstance, refresh: bool) -> None:
             raise PluginDomainError("pluginErr_toolsBadShape", name=instance.name, shape='{"tools": [...]}')
     except (PluginDomainError, PluginRuntimeError) as exc:
         db.rollback()
-        from app.domain.jobs import blame
-
-        inst.set_capability_status(db, instance, TOOLS, {**previous, **blame(exc), "attempted_at": _now()})
+        inst.record_tool_list_failure(db, instance, exc)
         logger.info("插件实例 %s 的工具清单没刷出来:%s", instance.id, exc)
         return
     declared = {str(tool.get("name")) for tool in manifest.declared_tools}
@@ -181,12 +174,9 @@ def refresh(db: Session, instance: PluginInstance, refresh: bool) -> None:
         recommended={tool["name"] for tool in found if tool.get("recommended")},
     )
     fingerprint = output.get("fingerprint")
-    inst.set_capability_status(db, instance, TOOLS, {
-        "tools": len(found),
-        "refreshed_at": _now(),
-        "fingerprint": fingerprint.strip()[:200] if isinstance(fingerprint, str) else "",
-        "error": "", "error_key": "", "error_params": {},
-    })
+    inst.record_tool_list(
+        db, instance, len(found), fingerprint=fingerprint.strip()[:200] if isinstance(fingerprint, str) else "",
+    )
     for listener in _listeners:
         try:
             listener(db, instance)

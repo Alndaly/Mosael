@@ -12,7 +12,7 @@ import { api, assetThumbnailUrl, convertVideoToGif, deleteAsset, separateAssetAu
 import { UrlImportDialog } from "@/features/media/UrlImportDialog";
 import { saveAssetToDisk } from "@/lib/download";
 import { isImportableFile, useFileDrop } from "@/lib/useFileDrop";
-import { assetKindKey, documentFacts, IMPORT_ACCEPT, isMediaAsset } from "@/lib/assetKinds";
+import { assetKindKey, documentFacts, IMPORT_ACCEPT, kindHasSound, kindIsVisual } from "@/lib/assetKinds";
 import { useSaveDocumentAsNote } from "@/features/media/useSaveDocumentAsNote";
 import { toast } from "sonner";
 import { useI18n } from "@/app/preferences";
@@ -439,11 +439,11 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
                       <PopoverClose asChild><Button variant="ghost" className="justify-start" onClick={() => saveAssetToDisk(asset)}><Download />{t("assetSaveLocal")}</Button></PopoverClose>
                       <PopoverClose asChild><Button variant="ghost" className="justify-start" onClick={() => setRenaming(asset)}><Pencil />{t("rename")}</Button></PopoverClose>
                       <PopoverClose asChild><Button variant="ghost" className="justify-start" onClick={() => setEditingTags(asset)}><Tag />{t("editTags")}</Button></PopoverClose>
-                      {isMediaAsset(asset) && asset.kind !== "audio" && <PopoverClose asChild><Button variant="ghost" className="justify-start" onClick={() => setReferencing(asset)}><Layers />{t("assetSetAsReference")}</Button></PopoverClose>}
+                      {kindIsVisual(asset.kind) && <PopoverClose asChild><Button variant="ghost" className="justify-start" onClick={() => setReferencing(asset)}><Layers />{t("assetSetAsReference")}</Button></PopoverClose>}
                       {asset.kind === "document" && <PopoverClose asChild><Button variant="ghost" className="justify-start" loading={saveAsNote.isPending} onClick={() => saveAsNote.mutate(asset.id)}><NotebookPen />{t("docSaveAsNote")}</Button></PopoverClose>}
                       {asset.kind === "video" && <PopoverClose asChild><Button variant="ghost" className="justify-start" loading={convertGif.isPending} onClick={() => convertGif.mutate(asset.id)}><ImagePlus />{t("assetConvertGif")}</Button></PopoverClose>}
-                      {hasSound(asset) && <PopoverClose asChild><Button variant="ghost" className="justify-start" loading={separateAudio.isPending} onClick={() => separateAudio.mutate(asset.id)}><Scissors />{t("separateAudio")}</Button></PopoverClose>}
-                      {hasSound(asset) && <PopoverClose asChild><Button variant="ghost" className="justify-start" onClick={() => setDenoising(asset.id)}><AudioWaveform />{t("denoiseAction")}</Button></PopoverClose>}
+                      {kindHasSound(asset.kind) && <PopoverClose asChild><Button variant="ghost" className="justify-start" loading={separateAudio.isPending} onClick={() => separateAudio.mutate(asset.id)}><Scissors />{t("separateAudio")}</Button></PopoverClose>}
+                      {kindHasSound(asset.kind) && <PopoverClose asChild><Button variant="ghost" className="justify-start" onClick={() => setDenoising(asset.id)}><AudioWaveform />{t("denoiseAction")}</Button></PopoverClose>}
                       <PopoverClose asChild><Button variant="ghost" className="justify-start text-destructive" onClick={() => setDeleting(asset)}><Trash2 />{t("delete")}</Button></PopoverClose>
                     </PopoverContent></Popover>
                   </div>}
@@ -459,7 +459,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
                 <ContextMenuItem onSelect={() => setEditingTags(asset)}>
                   <Tag /> {t("editTags")}
                 </ContextMenuItem>
-                {isMediaAsset(asset) && asset.kind !== "audio" && (
+                {kindIsVisual(asset.kind) && (
                   <ContextMenuItem onSelect={() => setReferencing(asset)}>
                     <Layers /> {t("assetSetAsReference")}
                   </ContextMenuItem>
@@ -474,12 +474,12 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
                     {convertGif.isPending ? <Loader2 className="animate-spin" /> : <ImagePlus />} {t("assetConvertGif")}
                   </ContextMenuItem>
                 )}
-                {hasSound(asset) && (
+                {kindHasSound(asset.kind) && (
                   <ContextMenuItem onSelect={() => setDenoising(asset.id)}>
                     <AudioWaveform /> {t("denoiseAction")}
                   </ContextMenuItem>
                 )}
-                {hasSound(asset) && (
+                {kindHasSound(asset.kind) && (
                   <ContextMenuItem disabled={separateAudio.isPending} onSelect={() => separateAudio.mutate(asset.id)}>
                     {separateAudio.isPending ? <Loader2 className="animate-spin" /> : <Scissors />} {t("separateAudio")}
                   </ContextMenuItem>
@@ -670,9 +670,4 @@ export function formatSeconds(total: number): string {
   const seconds = Math.floor(abs % 60);
   const tenths = Math.floor((abs * 10) % 10);
   return `${sign}${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}.${tenths}`;
-}
-
-/** 有声音可处理的素材(分离、降噪)。视频也算 —— 后端先抽音轨,处理完再放回去。 */
-function hasSound(asset: Asset): boolean {
-  return asset.kind === "audio" || asset.kind === "video";
 }

@@ -391,6 +391,8 @@ interface Props {
   commentMode?: boolean;
   markerMode?: boolean;
   markersVisible?: boolean;
+  /** 跳到一枚标记之前把标记显示出来:快捷键跳、清单里跳都走 jumpToMarker,显不显示由页面管。 */
+  onRevealMarkers?: () => void;
   commentsVisible?: boolean;
   comments?: CollaborationComment[];
   members?: WorkspaceMember[];
@@ -407,7 +409,7 @@ interface Props {
   onReady?: (api: BoardCanvasApi) => void;
 }
 
-function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onGrabFrame, models, producers, onStop, showMinimap = true, edgeShape = "default", searchHighlight = null, onDropFiles, uploading, getInsets, commentMode = false, markerMode = false, markersVisible = true, commentsVisible = true, comments = [], members = [], currentUserId, activeCommentId, onSelectComment, onCreateComment, onMoveComment, onDeleteComment, onExitCommentMode, onExitMarkerMode, onReady }: Props) {
+function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onGrabFrame, models, producers, onStop, showMinimap = true, edgeShape = "default", searchHighlight = null, onDropFiles, uploading, getInsets, commentMode = false, markerMode = false, markersVisible = true, onRevealMarkers, commentsVisible = true, comments = [], members = [], currentUserId, activeCommentId, onSelectComment, onCreateComment, onMoveComment, onDeleteComment, onExitCommentMode, onExitMarkerMode, onReady }: Props) {
   const [inputMode] = useCanvasInputMode();
   const t = useI18n();
   const rf = React.useRef<ReactFlowInstance | null>(null);
@@ -790,11 +792,14 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
     });
   }, [insetsOf]);
 
-  /** 跳到某个标记。视口居中过去,不改选中态 —— 跳转是"我要看那儿",不是"我要改那个"。 */
+  /** 跳到某个标记。视口居中过去,不改选中态 —— 跳转是"我要看那儿",不是"我要改那个"。
+   *  **先把标记显示出来**:快捷键和清单两个入口都走这里 —— 此前只有清单那一处记得显示,按快捷键跳过去
+   *  落在一块看不见旗子的地方。 */
   const jumpToMarker = React.useCallback((marker: CanvasMarker) => {
+    onRevealMarkers?.();
     // 加半枚旗子:节点坐标是左上角,照它居中的话旗子整个偏在右下。
     centerOn({ x: marker.x + 60, y: marker.y + 14 });
-  }, [centerOn]);
+  }, [centerOn, onRevealMarkers]);
 
   useMarkerShortcuts(markers, jumpToMarker, !commentMode);
 
@@ -1181,17 +1186,25 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
     },
     [onDropFiles, setNodes],
   );
-  const drop = useFileDrop((files) => importAndPlace(files, dropAt.current ?? { x: 0, y: 0 }), isImportableFile);
+  //: 评论 / 标记模式下画布只收批注,不收东西:拖文件进来和粘贴(下面)一样拦住,连「松手放在这里」的提示也不亮。
+  const annotating = commentMode || markerMode;
+  const drop = useFileDrop(
+    (files) => {
+      if (!annotating) importAndPlace(files, dropAt.current ?? { x: 0, y: 0 });
+    },
+    isImportableFile,
+    () => !annotating,
+  );
 
   /**
    * 粘贴到画布上:截图 / 复制的媒体文件先进素材库再各放一格,一段文字落成一张便签,摆在视野中心。
    *
    * **冲着画布来的才接**(isCanvasKeyTarget):在便签里、提示词框里、任何输入框或编辑器里粘贴,是往那里
-   * 贴字,不是往画布上放东西;经 Portal 弹出去的菜单、对话框也不算。评论 / 标记模式下不接。
+   * 贴字,不是往画布上放东西;经 Portal 弹出去的菜单、对话框也不算。评论 / 标记模式下不接(拖放同一条)。
    */
   React.useEffect(() => {
     const onPaste = (event: ClipboardEvent) => {
-      if (event.defaultPrevented || commentMode || markerMode) return;
+      if (event.defaultPrevented || annotating) return;
       if (!isCanvasKeyTarget(event.target, surface.current)) return;
       const content = clipboardContent(event.clipboardData);
       if (!content) return;
@@ -1210,7 +1223,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
     };
     document.addEventListener("paste", onPaste);
     return () => document.removeEventListener("paste", onPaste);
-  }, [add, importAndPlace, commentMode, markerMode]);
+  }, [add, importAndPlace, annotating]);
 
   React.useEffect(() => {
     onReady?.({
@@ -1906,7 +1919,9 @@ function ItemToolbar({
               onClick={() => onPanel(item.id, TRIM_PANEL)}
             />
           )}
-          {item && isMediaKind(item.kind) && (
+          {/* 在跑的格子不给换:产出归服务端,本地换上的素材会在保存时被丢掉、再被回滚(见 serverOwnedPatch),
+              看起来就是换上的那份悄悄消失了。和「生成」、切换产出者同一条。 */}
+          {item && isMediaKind(item.kind) && !itemIsRunning(item) && (
             <ToolbarIcon
               name="replace"
               icon={Replace}

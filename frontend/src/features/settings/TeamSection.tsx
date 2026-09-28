@@ -15,15 +15,14 @@ import { toast } from "sonner";
 import {
   inviteMember,
   listActivity,
-  deleteWorkspace,
   listMembers,
   removeMember,
-  renameWorkspace,
   setMemberRole,
   type Workspace,
   type WorkspaceMember,
   type ActivityEvent,
 } from "@/api/client";
+import { workspaceKeys } from "@/api/queryKeys";
 import { useAuth } from "@/app/auth";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { Badge } from "@/components/ui/badge";
@@ -33,11 +32,10 @@ import { Form, FormControl, FormField, FormItem, FormLabel } from "@/components/
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SettingsBlock, SettingsBlockTitle, SettingsGroup, SettingsList, SettingsListBlock, SettingsListItem } from "@/components/settings/settings-layout";
+import { atLeast, workspaceDeleteBlockedReason, workspaceMenuState } from "@/components/layout/workspaceMenu";
 import { relativeTime } from "@/lib/time";
+import { useDeleteWorkspace, useRenameWorkspace, useWorkspaces } from "@/lib/workspaces";
 
-/** Per-permission icon for the member-permissions popover (scannability). */
-const ROLE_RANK: Record<string, number> = { viewer: 0, editor: 1, admin: 2, owner: 3 };
-const atLeast = (role: string, min: string) => (ROLE_RANK[role] ?? -1) >= ROLE_RANK[min];
 const ASSIGNABLE = ["admin", "editor", "viewer"] as const;
 const ACTIVITY_LABELS: Record<string, string> = {
   "board.created": "activity_board_created",
@@ -77,6 +75,11 @@ export function TeamSection({ workspace }: { workspace: Workspace }) {
   const myRole = members.data?.my_role ?? workspace.role ?? "viewer";
   const canManage = atLeast(myRole, "admin");
   const isOwner = myRole === "owner";
+  //: 改名 / 删除工作区的门槛和切换器同一份(workspaceMenuState):包括「只剩一个不许删」。
+  //: 权限不够的直接不摆;只剩一个的摆出来但灰掉,并说原因 —— 他有权限,只是现在不能删。
+  const workspaces = useWorkspaces();
+  const gate = workspaceMenuState(myRole, workspaces.data?.length ?? 0);
+  const deleteReason = workspaceDeleteBlockedReason(gate);
   const roleLabel = (role: string) => t(`role_${role}` as never) as string;
 
   const roleMut = useMutation({
@@ -88,29 +91,13 @@ export function TeamSection({ workspace }: { workspace: Workspace }) {
     mutationFn: (userId: string) => removeMember(wid, userId),
     onSuccess: () => {
       invalidate();
-      void qc.invalidateQueries({ queryKey: ["workspaces"] });
+      void qc.invalidateQueries({ queryKey: workspaceKeys.all() });
     },
     onError: onErr,
   });
-  const renameMut = useMutation({
-    mutationFn: (name: string) => renameWorkspace(wid, name),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["workspaces"] });
-      toast.success(t("saved"));
-    },
-    onError: onErr,
-    onSettled: () => setRenameOpen(false),
-  });
-  const deleteMut = useMutation({
-    mutationFn: () => deleteWorkspace(wid),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["workspaces"] });
-      toast.success(t("workspaceDeleted"));
-    },
-    onError: onErr,
-    // 删完(成没成)再关确认框 —— 进行中它一直开着、确认键转圈。
-    onSettled: () => setDeleteOpen(false),
-  });
+  //: 改名、删除和切换器共用 lib/workspaces 那一份;删的若是当前工作区,WorkspaceGate 自己落到下一个。
+  const renameMut = useRenameWorkspace({ onSettled: () => setRenameOpen(false) });
+  const deleteMut = useDeleteWorkspace({ onSettled: () => setDeleteOpen(false) });
 
   return (
     <SettingsGroup title={t("teamTitle")} description={t("teamDesc")}>
@@ -131,13 +118,20 @@ export function TeamSection({ workspace }: { workspace: Workspace }) {
             </div>
           </div>
           <div className="flex shrink-0 gap-1.5">
-            {canManage && (
+            {gate.renameBlockedBy !== "role" && (
               <Button variant="outline" size="sm" onClick={() => setRenameOpen(true)}>
                 <Pencil size={13} /> {t("rename")}
               </Button>
             )}
-            {isOwner && (
-              <Button variant="outline" size="sm" className="text-destructive hover:text-destructive" onClick={() => setDeleteOpen(true)}>
+            {gate.deleteBlockedBy !== "role" && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-destructive hover:text-destructive"
+                disabled={gate.deleteDisabled}
+                title={deleteReason ? t(deleteReason) : undefined}
+                onClick={() => setDeleteOpen(true)}
+              >
                 <Trash2 size={13} /> {t("deleteWorkspace")}
               </Button>
             )}
@@ -192,7 +186,7 @@ export function TeamSection({ workspace }: { workspace: Workspace }) {
         initialValue={workspace.name}
         onCancel={() => setRenameOpen(false)}
         pending={renameMut.isPending}
-        onSubmit={(name) => renameMut.mutate(name)}
+        onSubmit={(name) => renameMut.mutate({ id: wid, name })}
       />
       <ConfirmDialog
         open={deleteOpen}
@@ -200,7 +194,7 @@ export function TeamSection({ workspace }: { workspace: Workspace }) {
         body={t("deleteWorkspaceConfirm").replace("{name}", workspace.name)}
         onCancel={() => setDeleteOpen(false)}
         pending={deleteMut.isPending}
-        onConfirm={() => deleteMut.mutate()}
+        onConfirm={() => deleteMut.mutate(wid)}
       />
     </SettingsGroup>
   );

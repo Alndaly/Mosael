@@ -1,5 +1,6 @@
 import { SceneRouteMemory } from "@/features/scenes/sceneRouteMemory";
 import { watchBodyPointerLock } from "@/lib/bodyPointerLock";
+import { useCreateWorkspace, useWorkspaces } from "@/lib/workspaces";
 import { PageBoundary } from "@/app/PageBoundary";
 import { JOBS_CREATED_EVENT } from "@/api/client";
 import { assetKeys } from "@/api/queryKeys";
@@ -7,7 +8,6 @@ import React from "react";
 import {
   QueryClient,
   QueryClientProvider,
-  useMutation,
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
@@ -316,32 +316,17 @@ function persistWorkspaceId(id: string) {
 
 function WorkspaceGate() {
   const t = useI18n();
-  const qc = useQueryClient();
-  const workspaces = useQuery({
-    queryKey: ["workspaces"],
-    queryFn: () => api<Workspace[]>("/api/workspaces"),
-  });
+  const workspaces = useWorkspaces();
   // The active workspace is persisted so a refresh — or a newer workspace appearing at
   // list[0] (newest first) — can't switch the user out of the workspace their jobs/projects live in.
   const [activeId, setActiveId] = React.useState<string | null>(
     readStoredWorkspaceId,
   );
-  const createWorkspace = useMutation({
-    mutationFn: () =>
-      api<Workspace>("/api/workspaces", {
-        method: "POST",
-        body: JSON.stringify({ name: t("workspaceDefault") }),
-      }),
-    onSuccess: (created) => {
-      // 先塞缓存再选中,避免下方兜底效应在列表刷新前把选择弹回 list[0]。
-      qc.setQueryData<Workspace[]>(["workspaces"], (old) =>
-        old ? [created, ...old] : [created],
-      );
-      persistWorkspaceId(created.id);
-      setActiveId(created.id);
-      qc.invalidateQueries({ queryKey: ["workspaces"] });
-    },
-  });
+  const selectWorkspace = React.useCallback((id: string) => {
+    persistWorkspaceId(id);
+    setActiveId(id);
+  }, []);
+  const createWorkspace = useCreateWorkspace({ onCreated: (created) => selectWorkspace(created.id) });
   const list = workspaces.data;
   const workspace =
     list?.find((item) => item.id === activeId) ?? list?.[0] ?? null;
@@ -353,11 +338,6 @@ function WorkspaceGate() {
       setActiveId(workspace.id);
     }
   }, [workspace, activeId]);
-
-  const selectWorkspace = React.useCallback((id: string) => {
-    persistWorkspaceId(id);
-    setActiveId(id);
-  }, []);
 
   if (workspaces.isLoading)
     return (
@@ -377,7 +357,7 @@ function WorkspaceGate() {
             <p className="text-lg leading-relaxed text-muted-foreground">{t("welcomeText")}</p>
             <Button
               loading={createWorkspace.isPending}
-              onClick={() => createWorkspace.mutate()}
+              onClick={() => createWorkspace.mutate(t("workspaceDefault"))}
             >
               <FolderPlus size={16} /> {t("createWorkspace")}
             </Button>
@@ -565,6 +545,8 @@ function Studio({
           projects={projects.data ?? []}
           onNavigate={navigate}
           onOpenProject={openProject}
+          onCreateProject={() => createProject.mutate()}
+          creatingProject={createProject.isPending}
         />
         <ConfirmationCenter workspaceId={workspace.id} />
         {/* 免提浮标挂在**应用级**,不挂在助手面板里:它存在的意义正是"手在别处、面板收起来了"

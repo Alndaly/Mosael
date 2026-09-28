@@ -1,5 +1,4 @@
 import React from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Boxes,
   Check,
@@ -7,19 +6,16 @@ import {
   FolderPlus,
   Languages,
   LogOut,
-  MonitorCog,
-  Moon,
   Pencil,
   PanelLeftClose,
   PanelLeftOpen,
   Search,
   Settings,
-  Sun,
   Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { createWorkspace, deleteWorkspace, renameWorkspace, userAvatarUrl, type Workspace } from "@/api/client";
+import { userAvatarUrl, type Workspace } from "@/api/client";
 import { useAuth, useIsDeploymentAdmin } from "@/app/auth";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { Input } from "@/components/ui/input";
@@ -29,11 +25,17 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { NotificationCenter } from "@/components/layout/NotificationCenter";
 import { TaskCenter } from "@/components/layout/TaskCenter";
-import { workspaceMenuState } from "@/components/layout/workspaceMenu";
+import {
+  workspaceDeleteBlockedReason,
+  workspaceMenuState,
+  workspaceRenameBlockedReason,
+} from "@/components/layout/workspaceMenu";
+import { THEME_ICONS, THEME_LABEL_KEYS, nextTheme } from "@/components/layout/themeCycle";
 import { ConfirmDialog, RenameDialog } from "@/components/app/modals";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { navItemsAt, navLabelKey, type NavItem, type StudioView } from "@/components/layout/navLabels";
 import { cn } from "@/lib/utils";
+import { useCreateWorkspace, useDeleteWorkspace, useRenameWorkspace } from "@/lib/workspaces";
 import { PageTrailProvider, type PageTrail } from "@/components/layout/pageTrail";
 import { WINDOW_CHROME_HEIGHT, WINDOW_CHROME_INSET } from "@/lib/windowChrome";
 
@@ -92,6 +94,7 @@ export function AppShell({
 }) {
   const t = useI18n();
   const { theme, setTheme, locale, setLocale } = usePreferences();
+  const ThemeIcon = THEME_ICONS[theme];
   const isDeploymentAdmin = useIsDeploymentAdmin();
   const [narrow, setNarrow] = React.useState(() => window.matchMedia("(max-width: 1199px)").matches);
   const [collapsed, setCollapsed] = React.useState<boolean | null>(() => {
@@ -244,14 +247,14 @@ export function AppShell({
               <Button
                 variant="ghost"
                 size="icon"
-                onClick={() => setTheme(theme === "light" ? "dark" : theme === "dark" ? "system" : "light")}
+                onClick={() => setTheme(nextTheme(theme))}
                 aria-label={t("settingsTheme")}
               >
-                {theme === "light" ? <Sun size={15} /> : theme === "dark" ? <Moon size={15} /> : <MonitorCog size={15} />}
+                <ThemeIcon size={15} />
               </Button>
             </TooltipTrigger>
             <TooltipContent>
-              {theme === "light" ? t("themeLight") : theme === "dark" ? t("themeDark") : t("themeSystem")}
+              {t(THEME_LABEL_KEYS[theme])}
             </TooltipContent>
           </Tooltip>
           <Tooltip>
@@ -379,7 +382,6 @@ function WorkspaceSwitcher({
   onSelectWorkspace?: (id: string) => void;
 }) {
   const t = useI18n();
-  const qc = useQueryClient();
   const [open, setOpen] = React.useState(false);
   const [search, setSearch] = React.useState("");
   const [creating, setCreating] = React.useState(false);
@@ -388,45 +390,13 @@ function WorkspaceSwitcher({
   const [renaming, setRenaming] = React.useState<Workspace | null>(null);
   const [removing, setRemoving] = React.useState<Workspace | null>(null);
 
-  const renameMut = useMutation({
-    mutationFn: ({ id, name }: { id: string; name: string }) => renameWorkspace(id, name),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["workspaces"] });
-      toast.success(t("saved"));
-    },
-    onError: (error: Error) => toast.error(error.message),
-    onSettled: () => setRenaming(null),
-  });
-
-  const removeMut = useMutation({
-    mutationFn: (id: string) => deleteWorkspace(id),
-    onSuccess: (_data, id) => {
-      // 删掉的正好是当前这个的话,先把选择挪到别处再让列表失效 —— 反过来的话,
-      // 中间那一瞬列表里没有当前工作区,WorkspaceGate 会先弹一次。
-      if (id === workspaceId) {
-        const next = workspaces.find((ws) => ws.id !== id);
-        if (next) onSelectWorkspace?.(next.id);
-      }
-      qc.setQueryData<Workspace[]>(["workspaces"], (old) => old?.filter((ws) => ws.id !== id));
-      void qc.invalidateQueries({ queryKey: ["workspaces"] });
-      toast.success(t("workspaceDeleted"));
-    },
-    onError: (error: Error) => toast.error(error.message),
-    // 删完(成没成)再关确认框 —— 进行中它一直开着、确认键转圈。
-    onSettled: () => setRemoving(null),
-  });
-
-  const createMut = useMutation({
-    mutationFn: createWorkspace,
-    onSuccess: (created) => {
-      // 先把新工作区塞进缓存再选中:否则选中时列表里还没有它,
-      // WorkspaceGate 的兜底(找不到 → 退回 list[0])会把选择弹回去。
-      qc.setQueryData<Workspace[]>(["workspaces"], (old) => (old ? [created, ...old] : [created]));
-      void qc.invalidateQueries({ queryKey: ["workspaces"] });
+  const renameMut = useRenameWorkspace({ onSettled: () => setRenaming(null) });
+  const removeMut = useDeleteWorkspace({ onSettled: () => setRemoving(null) });
+  const createMut = useCreateWorkspace({
+    onCreated: (created) => {
       toast.success(t("workspaceCreated").replace("{name}", created.name));
       onSelectWorkspace?.(created.id);
     },
-    onError: (error: Error) => toast.error(error.message),
     onSettled: () => setCreating(false),
   });
 
@@ -454,6 +424,9 @@ function WorkspaceSwitcher({
           <div className="max-h-72 overflow-y-auto">
           {workspaces.filter(ws => ws.name.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase())).map((ws) => {
             const gate = workspaceMenuState(ws.role, workspaces.length);
+            //: 灰掉的按钮要说为什么 —— 权限不够和「只剩这一个」是两件事,用户得知道该找谁、还是先建一个。
+            const renameReason = workspaceRenameBlockedReason(gate);
+            const deleteReason = workspaceDeleteBlockedReason(gate);
             return (
               <ContextMenu key={ws.id}>
                 <ContextMenuTrigger asChild>
@@ -463,8 +436,8 @@ function WorkspaceSwitcher({
                       <span className="truncate">{ws.name}</span>
                       {ws.id === workspaceId && <Check size={14} className="ml-auto shrink-0 text-primary" />}
                     </button>
-                    <Button variant="ghost" size="icon-xs" disabled={gate.renameDisabled} aria-label={`${t("rename")}: ${ws.name}`} title={t("rename")} onClick={() => { setOpen(false); setRenaming(ws); }}><Pencil /></Button>
-                    <Button variant="ghost" size="icon-xs" disabled={gate.deleteDisabled} aria-label={`${t("delete")}: ${ws.name}`} title={t("delete")} className="text-destructive hover:text-destructive" onClick={() => { setOpen(false); setRemoving(ws); }}><Trash2 /></Button>
+                    <Button variant="ghost" size="icon-xs" disabled={gate.renameDisabled} aria-label={`${t("rename")}: ${ws.name}`} title={renameReason ? t(renameReason) : t("rename")} onClick={() => { setOpen(false); setRenaming(ws); }}><Pencil /></Button>
+                    <Button variant="ghost" size="icon-xs" disabled={gate.deleteDisabled} aria-label={`${t("delete")}: ${ws.name}`} title={deleteReason ? t(deleteReason) : t("delete")} className="text-destructive hover:text-destructive" onClick={() => { setOpen(false); setRemoving(ws); }}><Trash2 /></Button>
                   </div>
                 </ContextMenuTrigger>
                 <ContextMenuContent>

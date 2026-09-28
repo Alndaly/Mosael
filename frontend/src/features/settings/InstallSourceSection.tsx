@@ -47,7 +47,7 @@ export function InstallSourceSection() {
 
   return (
     <SettingsGroup title={t("installSourceTitle")} description={t("installSourceDesc")}>
-      <SettingsRow label={t("voiceClonePipIndex")} description={t("voiceClonePipIndexHint")}>
+      <SettingsRow label={t("voiceClonePipIndex")} description={t("installSourcePipIndexHint")}>
         <OptionPicker
           ariaLabel={t("voiceClonePipIndex")}
           className={SETTINGS_FIELD_WIDTH}

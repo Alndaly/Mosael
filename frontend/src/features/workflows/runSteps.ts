@@ -1,4 +1,5 @@
 import type { TaskEvent } from "@/api/client";
+import type { MessageKey } from "@/app/messages";
 import type { DataType } from "@/features/nodeForms/fieldTypes";
 import { outputLabel, outputType, type RegistryLike } from "@/features/workflows/analyze";
 
@@ -16,7 +17,8 @@ export function parseIso(iso: string): number {
 export type Step = {
   nid: string;
   name: string;
-  status: "running" | "done" | "skipped" | "failed";
+  /** cancelled:总任务被取消时还在跑的那一步 —— 它没有出错,是被停下的。 */
+  status: "running" | "done" | "skipped" | "failed" | "cancelled";
   ms?: number;
   startAt?: number;
   outputs?: Record<string, unknown>;
@@ -27,7 +29,17 @@ export type Step = {
   message?: string;
 };
 
+/** 一步的状态怎么说。执行历史的步骤格和产出面板共用这一张;任务的状态是另一组(components/layout/runStatus)。 */
+export const STEP_STATUS_LABELS: Readonly<Record<Step["status"], MessageKey>> = {
+  running: "wfStepRunning",
+  done: "wfStepDone",
+  skipped: "wfStepSkipped",
+  failed: "wfStepFailed",
+  cancelled: "wfStepCancelled",
+};
+
 const TERMINAL_RUN_EVENTS = new Set(["workflow.failed", "workflow.cancelled", "job.failed", "job.cancelled"]);
+const CANCEL_RUN_EVENTS = new Set(["workflow.cancelled", "job.cancelled"]);
 
 /** 总任务已经失败或取消时，节点投影也必须收口；否则最后一个 started 会永远转圈。 */
 export function runEventIsTerminal(event: TaskEvent): boolean {
@@ -39,10 +51,14 @@ export function toSteps(events: TaskEvent[]): Step[] {
   const order: string[] = [];
   const byNode = new Map<string, Step>();
   const sorted = [...events].sort((a, b) => (a.created_at ?? "").localeCompare(b.created_at ?? ""));
-  let terminalFailureAt: number | undefined;
+  let terminalAt: number | undefined;
+  let terminal: "failed" | "cancelled" | undefined;
   for (const e of sorted) {
     if (TERMINAL_RUN_EVENTS.has(e.type)) {
-      terminalFailureAt = e.created_at ? parseIso(e.created_at) : undefined;
+      terminalAt = e.created_at ? parseIso(e.created_at) : undefined;
+      //: 取消和失败一样要收口在跑的那一步,但说法不同:此前一律标成 failed,
+      //: 用户点了停止,画布和历史里却是一片红框「失败」。有一条取消就按取消说。
+      if (terminal !== "cancelled") terminal = CANCEL_RUN_EVENTS.has(e.type) ? "cancelled" : "failed";
       continue;
     }
     const p = (e.payload ?? {}) as {
@@ -91,12 +107,12 @@ export function toSteps(events: TaskEvent[]): Step[] {
       byNode.set(nid, { nid, name: p.name ?? nid, status: "skipped" });
     }
   }
-  if (terminalFailureAt !== undefined || sorted.some((event) => TERMINAL_RUN_EVENTS.has(event.type))) {
+  if (terminal) {
     for (const step of byNode.values()) {
       if (step.status !== "running") continue;
-      step.status = "failed";
-      if (step.startAt != null && terminalFailureAt != null) {
-        step.ms = Math.max(0, terminalFailureAt - step.startAt);
+      step.status = terminal;
+      if (step.startAt != null && terminalAt != null) {
+        step.ms = Math.max(0, terminalAt - step.startAt);
       }
     }
   }

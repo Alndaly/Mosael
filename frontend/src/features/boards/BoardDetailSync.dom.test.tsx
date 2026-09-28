@@ -19,6 +19,7 @@ const apiMocks = vi.hoisted(() => ({
   cancelJob: vi.fn(),
   listComments: vi.fn(),
   listMembers: vi.fn(),
+  importAsset: vi.fn(),
   api: vi.fn(),
 }));
 const toastMocks = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
@@ -53,7 +54,13 @@ vi.mock("@/app/preferences", () => ({
 vi.mock("@/app/auth", () => ({ useAuth: () => ({ user: { id: "u1" } }) }));
 vi.mock("@/features/collaboration/CollaborationSheet", () => ({ CollaborationSheet: () => null }));
 vi.mock("@/features/scenes/ScenePickerDialog", () => ({ ScenePickerDialog: () => null }));
-vi.mock("@/features/boards/AssetPickerDialog", () => ({ AssetPickerDialog: () => null }));
+const pickerHarness = vi.hoisted(() => ({ props: null as null | Record<string, unknown> }));
+vi.mock("@/features/boards/AssetPickerDialog", () => ({
+  AssetPickerDialog: (props: Record<string, unknown>) => {
+    pickerHarness.props = props;
+    return null;
+  },
+}));
 vi.mock("@/features/boards/BoardCanvas", () => ({
   BoardCanvas: (props: Record<string, unknown>) => {
     canvasHarness.props = props;
@@ -408,5 +415,46 @@ describe("一格的能力(把它的内容变成新内容)", () => {
       await props().onRun({ producer: "node:plugin.cut.out", item_id: "i1", kind: "image", x: 0, y: 0, form: { config: {}, bindings: {} } });
     });
     expect(toastMocks.error).toHaveBeenCalledWith("boardToolFailed", { description: "你还没有能跑「去背景」的「抠图」连接" });
+  });
+
+  it("拖进来一批文件,中间一个传不上:传上的照样上画板、素材库照样刷新,最后说清几个没进来", async () => {
+    apiMocks.listBoards.mockResolvedValue([boardAt(3, { items: [], edges: [], markers: [] })]);
+    apiMocks.importAsset
+      .mockResolvedValueOnce({ id: "a1", name: "一.png", kind: "image" })
+      .mockRejectedValueOnce(new Error("格式不支持"))
+      .mockResolvedValueOnce({ id: "a3", name: "三.mp4", kind: "video" });
+    const invalidate = vi.spyOn(QueryClient.prototype, "invalidateQueries");
+    mount();
+    await vi.waitFor(() => expect(canvasHarness.props).not.toBeNull());
+    const files = ["一.png", "二.heic", "三.mp4"].map((name) => new File(["x"], name));
+    let placed: unknown;
+    await act(async () => {
+      placed = await (canvasHarness.props as { onDropFiles: (files: File[]) => Promise<unknown> }).onDropFiles(files);
+    });
+    expect(apiMocks.importAsset).toHaveBeenCalledTimes(3);
+    expect(placed).toEqual([
+      { id: "a1", name: "一.png", kind: "image" },
+      { id: "a3", name: "三.mp4", kind: "video" },
+    ]);
+    expect(toastMocks.error).toHaveBeenCalledWith("mediaImportPartial");
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ["assets", "w1"] });
+    invalidate.mockRestore();
+  });
+
+  it("「添加 → 素材」放下的一格和拖进来的写同样的字段:素材 + 它的名字", async () => {
+    Object.assign(Element.prototype, { scrollIntoView: () => {}, hasPointerCapture: () => false, releasePointerCapture: () => {} });
+    apiMocks.listBoards.mockResolvedValue([boardAt(3, { items: [], edges: [], markers: [] })]);
+    const view = mount();
+    await vi.waitFor(() => expect(canvasHarness.props).not.toBeNull());
+    act(() => {
+      fireEvent.click(view.container.ownerDocument.querySelector<HTMLElement>("[data-board-add-item]")!);
+    });
+    await vi.waitFor(() => expect(document.querySelector('[data-value="pick-media"], [role=option][data-value="pick-media"]')).not.toBeNull());
+    act(() => {
+      fireEvent.click(document.querySelector<HTMLElement>('[data-value="pick-media"]')!);
+    });
+    await vi.waitFor(() => expect(pickerHarness.props?.open).toBe(true));
+    act(() => (pickerHarness.props!.onPick as (asset: unknown) => void)({ id: "a9", name: "海报.png", kind: "image" }));
+    expect(canvasHarness.api.add).toHaveBeenCalledWith("image", { asset_id: "a9", text: "海报.png" });
   });
 });

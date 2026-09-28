@@ -49,7 +49,8 @@ it("「素材」一行:图片、视频、音频都列(别的文件不列),按种
   await waitFor(() => expect(titles()).toHaveLength(1));
   expect(screen.getByRole("button", { name: "boardKindVideo" }).getAttribute("aria-pressed")).toBe("true");
   fireEvent.click(screen.getAllByRole("option")[0]);
-  expect(onPick).toHaveBeenCalledWith("vid", "video");
+  //: 名字一起交回:「添加 → 素材」放下的一格和拖进来的一样写着素材名(boardPlacement.assetFields)。
+  expect(onPick).toHaveBeenCalledWith({ id: "vid", name: "开场", kind: "video" });
 });
 
 it("给一格换一份:只列那一类,没有筛选条", async () => {
@@ -93,7 +94,7 @@ it("画板「从库里放」连文档一起列(落成文档格);时间线的「+
   fireEvent.click(screen.getByRole("button", { name: "kindDocument" }));
   await waitFor(() => expect(titles()).toHaveLength(1));
   fireEvent.click(screen.getAllByRole("option")[0]);
-  expect(onPick).toHaveBeenCalledWith("deck", "document");
+  expect(onPick).toHaveBeenCalledWith({ id: "deck", name: "方案.pptx", kind: "document" });
   cleanup();
   mount("media");
   await waitFor(() => expect(titles()).toHaveLength(3));

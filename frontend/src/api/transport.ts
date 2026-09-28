@@ -54,6 +54,14 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * 服务端明确回了 404:那样东西**不在了**。断网(ApiOfflineError)、5xx、超时都不算 —— 把一次偶发的失败
+ * 说成「已删除」,用户会顺手把引用它的那一格也删掉。
+ */
+export function isNotFound(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 404;
+}
+
 export function setAuthToken(token: string | null): void {
   authToken = token;
   if (typeof window !== "undefined") {

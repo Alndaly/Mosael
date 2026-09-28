@@ -114,4 +114,18 @@ describe("工作流失败步骤", () => {
       },
     ]);
   });
+
+  //: 点了停止的那一次,在跑的那一步是被停下的,不是出错:画布和历史按「已取消」说,不标红。
+  it.each(["workflow.cancelled", "job.cancelled"])("总任务被取消(%s):在跑的那一步收口成已取消,不是失败", (type) => {
+    const events = [
+      { id: "e1", job_id: "j1", type: "workflow.node.started", created_at: "2026-09-19T04:00:00Z", payload: { node_id: "a", name: "上一步" } },
+      { id: "e2", job_id: "j1", type: "workflow.node.finished", created_at: "2026-09-19T04:00:05Z", payload: { node_id: "a", outputs: {} } },
+      { id: "e3", job_id: "j1", type: "workflow.node.started", created_at: "2026-09-19T04:00:05Z", payload: { node_id: "b", name: "生成" } },
+      { id: "e4", job_id: "j1", type, created_at: "2026-09-19T04:00:15Z", payload: {} },
+    ] as TaskEvent[];
+
+    const steps = toSteps(events);
+    expect(steps.map((step) => step.status)).toEqual(["done", "cancelled"]);
+    expect(steps[1].ms).toBe(10_000);
+  });
 });

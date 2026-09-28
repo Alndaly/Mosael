@@ -31,3 +31,16 @@ export const assetKeys = {
   /** 失效用:所有工作区 —— 只在不知道自己动了哪个工作区时用(智能体的确认卡就是这种)。 */
   everywhere: () => ["assets"] as const,
 };
+
+/**
+ * 工作区列表:用户级,不分工作区,只有这一种形状 —— 取数、写缓存、失效都用它。
+ * 读写它的几处(WorkspaceGate、切换器、设置页、通知中心接受邀请)都经 `lib/workspaces`。
+ */
+export const workspaceKeys = {
+  all: () => ["workspaces"] as const,
+};
+
+/** 音色库(克隆出来的那些声音):按工作区,只有这一种形状。 */
+export const voiceKeys = {
+  all: (workspaceId: string) => ["voices", workspaceId] as const,
+};

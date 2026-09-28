@@ -16,6 +16,7 @@ import { Switch } from "@/components/ui/switch";
 import { ModelSettingsDialog } from "@/features/settings/ModelSettingsDialog";
 import { SettingsList, SettingsListItem } from "@/components/settings/settings-layout";
 import { CAPABILITY_TAGS, orderedCapabilities } from "@/features/settings/capabilityTags";
+import { invalidateProviderDependents } from "@/features/settings/providerCaches";
 import { GENERATION_KINDS } from "@/lib/generationCapabilities";
 
 type ProviderModel = components["schemas"]["ProviderModelOut"];
@@ -85,12 +86,8 @@ export function ProviderModelList({
     staleTime: 300_000,
   });
   const invalidate = () => {
-    void qc.invalidateQueries({ queryKey: ["provider-models", profileId] });
-    // 能力默认的候选就是这些模型 —— 加/删/停用一个,那边的下拉必须跟着变。
-    void qc.invalidateQueries({ queryKey: ["provider-defaults"] });
-    void qc.invalidateQueries({ queryKey: ["capability-models"] });
-    // 生成选择器也是这些模型(能力标签决定它进不进生图 / 视频下拉)。
-    void qc.invalidateQueries({ queryKey: ["generation-options"] });
+    // 能力默认的候选、生成选择器都是这些模型 —— 加/删/停用一个,那边的下拉必须跟着变。
+    void invalidateProviderDependents(qc);
   };
 
   const add = useMutation({

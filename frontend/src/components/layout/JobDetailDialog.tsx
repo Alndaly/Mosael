@@ -10,6 +10,7 @@ import { JobEventList } from "@/components/layout/JobEvents";
 import { JobResult } from "@/components/layout/JobResult";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { useJobKinds } from "@/components/layout/jobKinds";
+import { runStatusText } from "@/components/layout/runStatus";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { ModalShell } from "@/components/app/modals";
@@ -119,7 +120,7 @@ export function JobDetailDialog({
               ) : (
                 <CircleAlert size={13} />
               )}
-              {t(`runStatus_${active ? "running" : current.status}` as never)}
+              {runStatusText(t, active ? "running" : current.status)}
             </span>
             <span className="min-w-0 truncate text-ui-xs text-muted-foreground">{kindOf(current.kind).label}</span>
           </div>

@@ -4,7 +4,7 @@ import { Check, ChevronRight, Copy } from "lucide-react";
 import { useI18n } from "@/app/preferences";
 import type { RegistryLike } from "@/features/workflows/analyze";
 import { OutputAssets } from "@/features/workflows/OutputAssets";
-import { assetOutputs, outputRows, type OutputRow, type Step } from "@/features/workflows/runSteps";
+import { assetOutputs, outputRows, STEP_STATUS_LABELS, type OutputRow, type Step } from "@/features/workflows/runSteps";
 import { WorkflowFailureDetails } from "@/components/app/FailureDetails";
 
 /**
@@ -117,7 +117,7 @@ export function RunOutputs({ registry, nodeType, step }: { registry: RegistryLik
       <div className="flex items-center gap-1.5 text-ui-xs font-semibold uppercase tracking-[0.05em] text-muted-foreground">
         <span>{t("wfRunOutputs")}</span>
         <span className={`ml-auto font-normal normal-case tracking-normal ${step.status === "failed" ? "text-destructive" : ""}`}>
-          {t(RUN_STATUS_LABELS[step.status])}
+          {t(STEP_STATUS_LABELS[step.status])}
           {step.ms != null && ` · ${step.ms < 1000 ? `${step.ms}ms` : `${(step.ms / 1000).toFixed(1)}s`}`}
         </span>
       </div>
@@ -137,10 +137,3 @@ export function RunOutputs({ registry, nodeType, step }: { registry: RegistryLik
     </div>
   );
 }
-
-const RUN_STATUS_LABELS = {
-  running: "wfStepRunning",
-  done: "wfStepDone",
-  skipped: "wfStepSkipped",
-  failed: "wfStepFailed",
-} as const;

@@ -435,7 +435,8 @@ export function BrowserPoolView({ workspace }: { workspace: Workspace }) {
                         <Button
                           size="icon-sm"
                           variant="ghost"
-                          loading={recheck.isPending}
+                          // 只在复检的是这张卡绑的账号时转圈 —— 此前一张在查,所有卡一起转。
+                          loading={recheck.isPending && recheck.variables === p.bound_account_id}
                           title={t("publishRecheck")}
                           aria-label={t("publishRecheck")}
                           onClick={() => recheck.mutate(p.bound_account_id!)}

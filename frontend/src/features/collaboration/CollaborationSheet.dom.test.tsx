@@ -112,4 +112,17 @@ describe("讨论侧栏", () => {
     expect(empty?.className).toContain("h-full");
     expect(empty?.className).toContain("place-content-center");
   });
+
+  it("取不回来不说「还没有评论」:说没能加载,重试再问一次", async () => {
+    listComments.mockRejectedValueOnce(new Error("服务暂时不可用"));
+    open("board");
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toContain("pageLoadError");
+    expect(alert.textContent).toContain("服务暂时不可用");
+    expect(screen.queryByText("还没有评论")).toBeNull();
+    listComments.mockClear();
+    await userEvent.click(screen.getByRole("button", { name: "retry" }));
+    expect(listComments).toHaveBeenCalledTimes(1);
+    expect(await screen.findAllByText("第一条意见")).toHaveLength(1);
+  });
 });

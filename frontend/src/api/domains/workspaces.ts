@@ -46,6 +46,10 @@ export function removeMember(workspaceId: string, userId: string): Promise<void>
   return api<void>(`/api/workspaces/${workspaceId}/members/${userId}`, { method: "DELETE" });
 }
 
+export function listWorkspaces(): Promise<Workspace[]> {
+  return api<Workspace[]>("/api/workspaces");
+}
+
 export function createWorkspace(name: string): Promise<Workspace> {
   return api<Workspace>("/api/workspaces", { method: "POST", body: JSON.stringify({ name }) });
 }

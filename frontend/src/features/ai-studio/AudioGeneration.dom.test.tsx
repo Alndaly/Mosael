@@ -130,6 +130,9 @@ describe("音频生成的控件", () => {
     expect(screen.getByRole("combobox", { name: "genInstrumental" })).toBeInTheDocument();
     // 提示词框换成音频的说法
     expect(screen.getByRole("textbox", { name: "genPromptLabel" })).toHaveAttribute("placeholder", "audioPromptPlaceholder");
+    // 空态正文也换成音频的说法,不再是「描述你想生成的画面」
+    await waitFor(() => expect(screen.getByText("audioPromptPlaceholder")).toBeInTheDocument());
+    expect(screen.queryByText("promptPlaceholder")).toBeNull();
     // 什么字都没有时不能提交
     const submit = screen.getByRole("button", { name: "generate" });
     expect(submit).toBeDisabled();

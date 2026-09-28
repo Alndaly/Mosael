@@ -7,9 +7,10 @@
  */
 import React from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { beforeEach, expect, it, vi } from "vitest";
-import type { Asset } from "@/api/client";
+import { renameAsset, type Asset } from "@/api/client";
 import { MediaPool } from "./MediaPool";
 
 vi.mock("@/app/preferences", () => ({
@@ -17,6 +18,10 @@ vi.mock("@/app/preferences", () => ({
     ({ mediaPoolCount: "{count} assets", mediaPoolCountFiltered: "{shown}/{total} assets", mediaRemoveTag: "remove {tag}" })[key] ?? key,
 }));
 vi.mock("@/components/app/image-preview", () => ({ useImagePreview: () => ({ openImagePreview: vi.fn() }) }));
+vi.mock("@/api/client", async (original) => ({
+  ...(await original<typeof import("@/api/client")>()),
+  renameAsset: vi.fn(async () => Promise.reject(new Error("name taken"))),
+}));
 
 const asset = (id: string, kind: Asset["kind"], tags: string[]) =>
   ({ id, name: id, workspace_id: "ws", project_id: "p", original_filename: id, file_key: id, kind, source: "imported", tags, media_info: {}, proxy_expected: false }) as Asset;
@@ -108,4 +113,20 @@ it("记着的标签已经没有素材带着了,就当没勾 —— 面板不会�
   expect(rowNames()).toEqual(["beach", "talk", "pier", "plain"]);
   expect(count()).toBe("4 assets");
   expect(screen.queryByRole("group", { name: "mediaActiveTags" })).not.toBeInTheDocument();
+});
+
+// 重命名失败时对话框要收起(失败原因由全局兜底报):此前停在那儿、确认键又能点,连点就是连发请求。
+it("重命名失败:对话框收起,不留一个能反复点的确认键", async () => {
+  const user = userEvent.setup();
+  renderPool();
+  fireEvent.contextMenu(document.querySelector("[data-pool-item='beach']")!, { button: 2, clientX: 10, clientY: 10 });
+  await user.click(await screen.findByRole("menuitem", { name: "rename" }));
+  const dialog = await screen.findByRole("dialog", { name: "renameAsset" });
+  const input = within(dialog).getByRole("textbox");
+  await user.clear(input);
+  await user.type(input, "sunset");
+  await user.click(within(dialog).getByRole("button", { name: "confirm" }));
+  await waitFor(() => expect(renameAsset).toHaveBeenCalledWith("beach", "sunset"));
+  await waitFor(() => expect(screen.queryByRole("dialog", { name: "renameAsset" })).toBeNull());
+  expect(renameAsset).toHaveBeenCalledTimes(1);
 });

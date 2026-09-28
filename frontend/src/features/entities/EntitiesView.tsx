@@ -89,7 +89,9 @@ export function EntitiesView({ workspace }: { workspace: Workspace }) {
     queryFn: () => listEntities(workspace.id, { q: keyword }),
     enabled: keyword.length > 0,
   });
-  const source = keyword ? found.data : all.data;
+  //: 有关键词时列表来自那一次搜索:它在路上、搜挂了要照实说,不能拿「没有匹配的内容」顶上 —— 那一句是搜完了、真的没有。
+  const listing = keyword ? found : all;
+  const source = listing.data;
   const ofKind = React.useMemo(() => (source ?? []).filter((one) => one.kind === kind), [source, kind]);
   const counts = React.useMemo(() => tagCounts(ofKind), [ofKind]);
   const visible = React.useMemo(
@@ -208,7 +210,7 @@ export function EntitiesView({ workspace }: { workspace: Workspace }) {
       </div>
 
       <div className="pt-5">
-        {all.isPending ? (
+        {listing.isPending ? (
           <div role="status" aria-busy="true" className={CARD_GRID}>
             <span className="sr-only">{t("pageLoading")}</span>
             {Array.from({ length: 6 }, (_, index) => (
@@ -218,12 +220,12 @@ export function EntitiesView({ workspace }: { workspace: Workspace }) {
               </div>
             ))}
           </div>
-        ) : all.isError ? (
+        ) : listing.isError ? (
           <EmptyState
             icon={<KindIcon />}
             title={t("pageLoadError")}
-            body={all.error.message}
-            action={<Button variant="secondary" onClick={() => void all.refetch()}>{t("retry")}</Button>}
+            body={listing.error.message}
+            action={<Button variant="secondary" loading={listing.isFetching} onClick={() => void listing.refetch()}>{t("retry")}</Button>}
           />
         ) : visible.length === 0 ? (
           <EmptyState

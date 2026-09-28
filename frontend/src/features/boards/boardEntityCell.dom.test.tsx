@@ -13,8 +13,9 @@ import type { BoardItem, EntitySummary, GenerationOption } from "@/api/client";
  */
 
 const api = vi.hoisted(() => ({ getEntity: vi.fn(), listEntities: vi.fn(), listAssets: vi.fn(async () => []), listCapabilityModels: vi.fn() }));
-vi.mock("@/api/client", () => ({
+vi.mock("@/api/client", async () => ({
   ...api,
+  ApiError: (await import("@/api/transport")).ApiError,
   assetThumbnailUrl: (id: string) => `/thumb/${id}`,
   assetPreviewUrl: (id: string) => `/preview/${id}`,
   assetFileUrl: (id: string) => `/file/${id}`,
@@ -56,6 +57,7 @@ vi.mock("./PromptEditor", () => ({
   collect: () => [],
 }));
 
+import { ApiError } from "@/api/transport";
 import { BOARD_NODE_TYPES } from "./boardNodes";
 import { NodeComposer } from "./NodeComposer";
 import { NoteComposer } from "./NoteComposer";
@@ -94,10 +96,35 @@ describe("资产格", () => {
     expect(window.location.hash).toBe("#/entities?entity=e1");
   });
 
-  it("资产删了:那一格还在,写明已删除", async () => {
-    api.getEntity.mockRejectedValue(new Error("404"));
-    renderCell({ id: "cell", kind: "entity", x: 0, y: 0, entity_id: "gone" });
+  it("资产删了(404):那一格还在,写明已删除;别的错说没能加载,不说删了", async () => {
+    api.getEntity.mockRejectedValue(new ApiError("Not Found", 404, ""));
+    const gone = renderCell({ id: "cell", kind: "entity", x: 0, y: 0, entity_id: "gone" });
     expect(await screen.findByText("boardEntityMissing")).toBeTruthy();
+    gone.unmount();
+    api.getEntity.mockRejectedValue(new ApiError("Internal Server Error", 500, ""));
+    renderCell({ id: "cell", kind: "entity", x: 0, y: 0, entity_id: "flaky" });
+    expect(await screen.findByText("boardEntityLoadFailed")).toBeTruthy();
+    expect(screen.queryByText("boardEntityMissing")).toBeNull();
+  });
+
+  it("挂在它身上的能力(生成表情)在跑:外壳是在跑的样子,底边一条运行态带停止;跑挂了选中时说原因", async () => {
+    api.getEntity.mockResolvedValue({ id: "e1", kind: "character", name: "张三", display_cover_asset_id: null });
+    const onStop = vi.fn();
+    const Node = BOARD_NODE_TYPES.entity;
+    const running: BoardItem = { id: "cell", kind: "entity", x: 0, y: 0, entity_id: "e1", run: { status: "running", job_id: "j", ability: "node:entity_expressions" } };
+    const view = mount(<Node {...({ id: "cell", selected: false, data: { item: running, workspaceId: "ws", onStop, abilityLabel: "生成表情" } } as unknown as React.ComponentProps<typeof Node>)} />);
+    const shell = view.container.querySelector<HTMLElement>("[data-board-entity]")!;
+    expect(shell.dataset.boardRunStatus).toBe("running");
+    const strip = view.container.querySelector<HTMLElement>('[data-board-ability-run="running"]');
+    expect(strip, "能力在跑有运行条").not.toBeNull();
+    expect(strip!.textContent).toContain("生成表情");
+    fireEvent.click(strip!.querySelector<HTMLElement>("[data-board-stop]")!);
+    expect(onStop).toHaveBeenCalledWith("cell");
+    view.unmount();
+
+    const failed: BoardItem = { ...running, run: { status: "failed", error: "没有能画的连接", ability: "node:entity_expressions" } };
+    const after = mount(<Node {...({ id: "cell", selected: true, data: { item: failed, workspaceId: "ws" } } as unknown as React.ComponentProps<typeof Node>)} />);
+    expect(after.container.querySelector('[data-board-ability-run="failed"]')?.textContent).toContain("没有能画的连接");
   });
 });
 

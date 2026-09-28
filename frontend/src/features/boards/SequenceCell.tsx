@@ -9,7 +9,9 @@ import { toast } from "sonner";
 import { assetFileUrl, assetThumbnailUrl } from "@/api/domains/assets";
 import { getSequence, moveClipsBatch, rippleDeleteClipsBatch, splitClip, type Clip, type Sequence } from "@/api/domains/editor";
 import { errorText } from "@/api/errorMessage";
+import { isNotFound } from "@/api/transport";
 import { useI18n } from "@/app/preferences";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { isImeKeystroke } from "@/lib/shortcuts";
 import { noteSequenceEdit, readSequenceCursor, SequenceAddContext, updateSequenceCursor, useSequenceCursor } from "@/features/boards/sequenceCursor";
@@ -208,9 +210,21 @@ export function SequenceCell({ sequenceId }: { sequenceId: string }) {
   };
 
   if (sequence.isError) {
+    //: 删掉了(404)就只说删掉了;别的失败(断网、服务端出错)是偶发的,给一个重试 —— 查询是 retry:false,不会自己再试。
+    const gone = isNotFound(sequence.error);
     return (
-      <div data-sequence-missing="" className="grid min-h-0 flex-1 place-items-center px-4 text-center text-ui-xs text-muted-foreground">
-        {t("boardSequenceMissing")}
+      <div
+        data-sequence-missing={gone ? "" : undefined}
+        data-sequence-load-failed={gone ? undefined : ""}
+        role={gone ? undefined : "alert"}
+        className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 px-4 text-center text-ui-xs text-muted-foreground"
+      >
+        {t(gone ? "boardSequenceMissing" : "boardSequenceLoadFailed")}
+        {!gone && (
+          <Button type="button" size="xs" variant="outline" className="nodrag nopan" loading={sequence.isFetching} onClick={() => void sequence.refetch()}>
+            {t("retry")}
+          </Button>
+        )}
       </div>
     );
   }

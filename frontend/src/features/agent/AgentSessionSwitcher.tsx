@@ -82,7 +82,8 @@ export function AgentSessionSwitcher<T extends AgentSessionChoice>({
         <div className="max-h-[min(280px,var(--radix-popover-content-available-height))] overflow-y-auto p-1.5">
           {visibleSessions.length === 0 ? (
             <p className="m-0 px-2.5 py-5 text-center text-ui-sm text-muted-foreground">
-              {t("chatSearchNoMatch")}
+              {/* 一条都没有和搜不到是两回事 —— 没输搜索词时说「没有匹配」是在答一个没人问的问题。 */}
+              {t(keyword ? "chatSearchNoMatch" : "chatSessionsNone")}
             </p>
           ) : (
             visibleSessions.map((session) => (

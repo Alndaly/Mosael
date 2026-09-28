@@ -53,11 +53,23 @@ describe("素材缓存的键", () => {
     expect(offenders, "失效要用 assetKeys.all():list() 更长,匹配不到按工作区取数的那些缓存").toEqual([]);
   });
 
-  it("没有人再写内联的素材键", () => {
+});
+
+// 收进 queryKeys.ts 的每一族,都不许再有人内联手写 —— 写了就又绕过了这份约定,而且照样能过
+// 编译、能过测试。工作区列表此前就是这样:键收了一半,另一半还在四个文件里各写各的。
+// 既查 `queryKey: [...]`,也查 setQueryData / getQueryData 的第一个参数。
+const INLINE = (family: string) => new RegExp(`(?:queryKey:\\s*|(?:set|get)QueryData(?:<[^>]*>)?\\()\\["${family}"`);
+
+describe.each([
+  ["assets", "assetKeys"],
+  ["workspaces", "workspaceKeys"],
+  ["voices", "voiceKeys"],
+])("没有人再写内联的 %s 键", (family, factory) => {
+  it(`改用 ${factory}`, () => {
     const offenders = sources(SRC)
       .filter((path) => !path.endsWith(join("api", "queryKeys.ts")))
-      .filter((path) => /queryKey:\s*\["assets"/.test(readFileSync(path, "utf8")))
+      .filter((path) => INLINE(family).test(readFileSync(path, "utf8")))
       .map((path) => path.slice(SRC.length + 1));
-    expect(offenders, "改用 assetKeys —— 内联写法正是当初两种形状各写各的起点").toEqual([]);
+    expect(offenders, `改用 ${factory} —— 内联写法正是当初几种形状各写各的起点`).toEqual([]);
   });
 });

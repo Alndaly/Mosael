@@ -83,10 +83,10 @@ describe("outputType", () => {
 });
 
 const fullCtx: AnalyzeContext = {
-  providerIds: new Set(["p1"]),
-  providersLoaded: true,
-  configuredGenProviders: new Set(["alibaba"]),
-  genProvidersLoaded: true,
+  chatProfileIds: new Set(["p1"]),
+  chatProfilesLoaded: true,
+  generationVendors: new Set(["alibaba"]),
+  generationModelsLoaded: true,
 };
 
 function graph(nodes: WorkflowGraph["nodes"], edges: WorkflowGraph["edges"] = []): WorkflowGraph {
@@ -287,12 +287,12 @@ describe("analyzeWorkflow", () => {
     );
     const a = analyzeWorkflow(g, registry, {
       ...fullCtx,
-      providerIds: new Set(),
+      chatProfileIds: new Set(),
     });
     expect(a.byNode.get("llm-1")?.some((i) => i.code === "no-providers" && i.severity === "warn")).toBe(true);
   });
 
-  it("errors when an ai_generate provider has no configured key", () => {
+  it("errors when an ai_generate provider has no usable generation model", () => {
     const g = graph(
       [
         { id: "start", type: "start", config: {} },
@@ -336,13 +336,30 @@ describe("analyzeWorkflow", () => {
       [{ id: "e1", source: "start", target: "llm-1" }],
     );
     const a = analyzeWorkflow(g, registry, {
-      providerIds: new Set(),
-      providersLoaded: false,
-      configuredGenProviders: new Set(),
-      genProvidersLoaded: false,
+      chatProfileIds: new Set(),
+      chatProfilesLoaded: false,
+      generationVendors: new Set(),
+      generationModelsLoaded: false,
     });
     // profile_id is set but providers not loaded yet — don't false-alarm.
     expect(a.byNode.get("llm-1")?.some((i) => i.code === "provider-missing")).toBeFalsy();
+  });
+
+  it("生成模型清单没到之前,不报生成服务商没配", () => {
+    const g = graph(
+      [
+        { id: "start", type: "start", config: {} },
+        { id: "gen", type: "ai_generate", config: { provider: "openai", prompt: "cat" } },
+      ],
+      [{ id: "e1", source: "start", target: "gen" }],
+    );
+    const codes = (ctx: AnalyzeContext) => (analyzeWorkflow(g, registry, ctx).byNode.get("gen") ?? []).map((i) => i.code);
+    expect(codes({ ...fullCtx, generationVendors: new Set(), generationModelsLoaded: false })).not.toContain(
+      "gen-provider-unconfigured",
+    );
+    expect(codes({ ...fullCtx, generationVendors: new Set(), generationModelsLoaded: true })).toContain(
+      "gen-provider-unconfigured",
+    );
   });
 });
 

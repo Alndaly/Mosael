@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import select
@@ -20,7 +21,7 @@ from app.db.model_base import now
 from app.db.models import PluginCapability, PluginCredential, PluginInstance, PluginPackage, PluginPermissionGrant
 from app.domain.plugins import host_capabilities, oauth as plugin_oauth
 from app.domain.plugins.errors import PluginDomainError
-from app.domain.plugins.manifest import Field, Manifest, manifest_of, render_name
+from app.domain.plugins.manifest import TOOLS, Field, Manifest, manifest_of, render_name
 from app.core.i18n import tr
 
 #: 掩码回显。前端把它原样发回来时表示"这项没改"。
@@ -124,12 +125,7 @@ def set_enabled(db: Session, instance: PluginInstance, enabled: bool, *, notify:
         # MCP 实例启用时顺手拉一次工具清单:没有它,实例启用了但工具表是空的,而"为什么没
         # 工具"这个问题在界面上无处可答。失败不阻止启用 —— 常见原因是凭据还没填,而填凭据
         # 的入口正是启用之后那张卡片;卡在这里会变成死结。
-        from app.domain.plugins.tools import refresh_tools
-
-        try:
-            refresh_tools(db, instance, notify=False)
-        except PluginDomainError:
-            pass
+        _pull_tools(db, instance)
     db.refresh(instance)
     if notify:
         # 启用 = 它能做的事可能变了(刚能用上),停用 = 宿主那一侧要跟着停。
@@ -196,10 +192,24 @@ def set_config(
         instance.name = render_name(manifest, instance.config)
     db.commit()
     db.refresh(instance)
+    if instance.enabled and manifest.is_mcp:
+        # 换了一台 MCP 服务器,手里那份工具清单说的就是上一台 —— 和启用时一样顺手重拉。
+        _pull_tools(db, instance)
     if notify:
         # 配置变了(换了一台服务器)= 它能做的事可能变了,重新问一遍。
         host_capabilities.notify(db, instance, refresh=True)
     return instance
+
+
+def _pull_tools(db: Session, instance: PluginInstance) -> None:
+    """顺手拉一次工具清单。**失败不抛**:原因由 refresh_tools 记进 `capability_status["tools"]`,插件页照着说;
+    缺配置、缺凭据那种由 blocked_reason 说。"""
+    from app.domain.plugins.tools import refresh_tools
+
+    try:
+        refresh_tools(db, instance, notify=False)
+    except PluginDomainError:
+        pass
 
 
 def missing_config(db: Session, instance: PluginInstance) -> list[str]:
@@ -439,6 +449,29 @@ def set_capability_status(db: Session, instance: PluginInstance, capability: str
     """
     instance.capability_status = {**(instance.capability_status or {}), capability: dict(status)}
     db.commit()
+
+
+def record_tool_list(db: Session, instance: PluginInstance, count: int, **extra: Any) -> None:
+    """工具清单刷新成功:记下几件、什么时候,清掉上一次的错。
+
+    `capability_status["tools"]` 这一格有两个写的人 —— 进程插件自报清单(dynamic_tools)、MCP 连接
+    被问出清单(tools.refresh_tools)—— 插件页只读这一种形状,所以形状只在这里定一次。
+    """
+    set_capability_status(db, instance, TOOLS, {
+        "tools": count, "refreshed_at": _stamp(), **extra, "error": "", "error_key": "", "error_params": {},
+    })
+
+
+def record_tool_list_failure(db: Session, instance: PluginInstance, exc: Exception) -> None:
+    """工具清单没刷出来:原因记下来(插件页照着说),上一次成功的记录留着 —— 清单本身也还是上一份。"""
+    from app.domain.jobs import blame
+
+    previous = dict((instance.capability_status or {}).get(TOOLS) or {})
+    set_capability_status(db, instance, TOOLS, {**previous, **blame(exc), "attempted_at": _stamp()})
+
+
+def _stamp() -> str:
+    return datetime.now(UTC).replace(microsecond=0).isoformat()
 
 
 __all__ = [

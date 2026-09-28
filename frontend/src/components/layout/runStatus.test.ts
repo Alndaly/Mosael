@@ -1,0 +1,19 @@
+import { describe, expect, it } from "vitest";
+
+import { runStatusLabelKey, runStatusText } from "./runStatus";
+
+describe("任务状态的叫法", () => {
+  it("认识的状态给对应的键", () => {
+    expect(runStatusLabelKey("queued")).toBe("runStatus_queued");
+    expect(runStatusLabelKey("cancelled")).toBe("runStatus_cancelled");
+  });
+
+  it("不认识的状态返回 null,显示时原样给状态值,不拼出一串不存在的键", () => {
+    expect(runStatusLabelKey("paused")).toBeNull();
+    // 原型链上的名字不算认识
+    expect(runStatusLabelKey("toString")).toBeNull();
+    const t = (key: string) => `«${key}»`;
+    expect(runStatusText(t, "succeeded")).toBe("«runStatus_succeeded»");
+    expect(runStatusText(t, "paused")).toBe("paused");
+  });
+});

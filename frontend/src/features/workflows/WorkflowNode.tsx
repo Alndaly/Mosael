@@ -4,6 +4,7 @@ import { Handle, Position, type NodeProps } from "@xyflow/react";
 import {
   AlertTriangle,
   AudioLines,
+  Ban,
   CheckCircle2,
   Film,
   Image as ImageIcon,
@@ -74,7 +75,7 @@ export interface WorkflowNodeData extends Record<string, unknown> {
   inputs?: string[];
   outputs?: string[];
   /** 本次运行到这一步的状态。运行结束后保留,方便回看这次跑成什么样。 */
-  run?: { status: "running" | "done" | "skipped" | "failed"; ms?: number; error?: string; message?: string } | null;
+  run?: { status: "running" | "done" | "skipped" | "failed" | "cancelled"; ms?: number; error?: string; message?: string } | null;
   /** 这一步产出的素材(节点注册表里声明为 asset 的输出),**连同它们各自的名字**。 */
   runAssets?: AssetOutput[];
   /** 非素材产出的一行摘要 —— 节点上直接看见"这步给了什么",以及那是**哪一个**产出。 */
@@ -169,6 +170,8 @@ function WorkflowNode({ data, selected }: NodeProps) {
         d.run?.status === "done" && "border-[color-mix(in_srgb,var(--success)_55%,var(--border))]",
         d.run?.status === "failed" && "border-[color-mix(in_srgb,var(--destructive)_70%,var(--border))]",
         d.run?.status === "skipped" && "opacity-55",
+        // 被停下的那一步和画板上取消的格子同一种样子(虚线、灰),不是失败的红框。
+        d.run?.status === "cancelled" && "border-dashed border-muted-foreground/60",
         selected && "border-primary shadow-[0_0_0_1px_var(--primary)] hover:border-primary",
       )}
       data-node-type={d.nodeType}
@@ -188,6 +191,8 @@ function WorkflowNode({ data, selected }: NodeProps) {
             <CheckCircle2 size={11} className="text-success" />
           ) : d.run.status === "failed" ? (
             <XCircle size={11} className="text-destructive" />
+          ) : d.run.status === "cancelled" ? (
+            <Ban size={11} className="text-muted-foreground" />
           ) : (
             <SkipForward size={11} className="text-muted-foreground" />
           )}

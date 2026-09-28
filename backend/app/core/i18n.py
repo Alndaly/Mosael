@@ -4320,6 +4320,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "capErr_incomplete": {"zh": "「{plugin}」还没配好:缺 {missing}", "en": "“{plugin}” isn't set up yet: missing {missing}."},
     "capErr_ambiguous": {"zh": "配好了几家({names}),请在「设置 → 能力提供方」里定用哪一家", "en": "Several are set up ({names}); choose one under Settings → Capability providers."},
     "capErr_outdated": {"zh": "「{plugin}」版本太旧,请到插件页更新", "en": "“{plugin}” is out of date; update it on the Plugins page."},
+    "capMissing_permissions": {"zh": "插件权限(到插件页授予)", "en": "plugin permissions (grant them on the Plugins page)"},
     "docParser_local": {"zh": "本地解析", "en": "Local parsing"},
     "docErr_interruptedByRestart": {"zh": "解析到一半应用重启了,点「重新解析」再来一次", "en": "The app restarted mid-parse; choose Parse again to retry."},
     "docErr_notParsedYet": {"zh": "「{name}」还没解析好,等解析完再存成笔记", "en": "“{name}” hasn't been parsed yet; save it as a note once parsing is done."},

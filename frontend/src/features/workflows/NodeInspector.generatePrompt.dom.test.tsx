@@ -61,11 +61,24 @@ const META = {
   output_labels: {},
 } as unknown as WorkflowNodeType;
 
-function renderInspector(capabilities: Record<string, unknown>) {
+const COMFY_PROFILE = {
+  id: "p1", vendor: "plugin:dev.mosael.comfyui", enabled: true, auth_type: "api_key", oauth_linked: false,
+  base_url: "http://127.0.0.1:8188", capability_ids: ["image"],
+};
+
+function renderInspector(
+  capabilities: Record<string, unknown>,
+  {
+    profiles = [COMFY_PROFILE],
+    config,
+    modelsListed = true,
+  }: { profiles?: unknown[]; config?: Record<string, unknown>; modelsListed?: boolean } = {},
+) {
   globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
     const url = new URL(String(input), "http://x");
     let body: unknown = [];
-    if (url.pathname.endsWith("/generation/options") && url.searchParams.get("kind") === "image") {
+    if (url.pathname.endsWith("/settings/providers")) body = profiles;
+    if (modelsListed && url.pathname.endsWith("/generation/options") && url.searchParams.get("kind") === "image") {
       body = [{
         id: "p1:image:upscale.json", provider_profile_id: "p1", profile_name: "ComfyUI", label: "ComfyUI · 放大",
         provider: "plugin:dev.mosael.comfyui", model: "upscale.json", kind: "image", capabilities,
@@ -76,7 +89,7 @@ function renderInspector(capabilities: Record<string, unknown>) {
   }) as never;
   const node = {
     id: "gen", type: "ai_generate", position: { x: 0, y: 0 },
-    config: { provider_profile_id: "p1", provider: "plugin:dev.mosael.comfyui", model: "upscale.json", kind: "image", prompt: "" },
+    config: config ?? { provider_profile_id: "p1", provider: "plugin:dev.mosael.comfyui", model: "upscale.json", kind: "image", prompt: "" },
   };
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
@@ -118,5 +131,31 @@ describe("AI 生成节点的提示词一格", () => {
   it("没说:标必填", async () => {
     renderInspector({ parameter_keys: ["seed"] });
     await waitFor(() => expect(promptField()?.querySelector("em")?.textContent).toBe("*"));
+  });
+});
+
+describe("AI 生成节点顶部的配置提醒", () => {
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 50));
+
+  //: 后端只在 provider / model 为空时才取默认(generation/operations.create_generation_job)。
+  it("节点已选好模型:不提示「还没有默认供应商与模型」", async () => {
+    renderInspector({ parameter_keys: ["seed"], prompt: "optional" });
+    await waitFor(() => expect(screen.getByText("wfGenPromptOptional")).toBeInTheDocument());
+    await settle();
+    expect(screen.queryByText("aiCapabilityNotConfigured")).toBeNull();
+    expect(screen.queryByText("wfIssueGenUnconfigured")).toBeNull();
+  });
+
+  it("节点没选模型、也没有默认:才提示去配默认", async () => {
+    renderInspector({ parameter_keys: ["seed"] }, { config: { kind: "image", prompt: "" } });
+    await waitFor(() => expect(screen.getByText("aiCapabilityNotConfigured")).toBeInTheDocument());
+  });
+
+  //: 和就绪清单同一个判定(bindingReadiness.generationVendors):清单判「服务商没配」的,这里也说。
+  //: 判据是后端给的可用生成模型(和 AI 工作台同源),不是连接开没开:连接开着而模型全停了,
+  //: 后端不列它的模型,AI 工作台说「没配置」,这里也得这么说。
+  it("连接启用但所选服务商下没有可用的生成模型:和就绪清单、AI 工作台一样报「没配」", async () => {
+    renderInspector({ parameter_keys: ["seed"] }, { modelsListed: false });
+    await waitFor(() => expect(screen.getByText("wfIssueGenUnconfigured")).toBeInTheDocument());
   });
 });

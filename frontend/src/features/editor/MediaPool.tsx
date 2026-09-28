@@ -77,19 +77,17 @@ export function MediaPool({
     audio: t("kindAudio"),
     image: t("kindImage"),
   };
+  // 两个对话框都在 onSettled 里关,不在 onSuccess 里:失败时对话框停在那儿、确认键又能点,
+  // 于是连点就是连发请求(素材库那边踩过同一下)。失败原因由全局兜底报出来。
   const rename = useMutation({
     mutationFn: ({ id, name }: { id: string; name: string }) => renameAsset(id, name),
-    onSuccess: () => {
-      setRenaming(null);
-      void qc.invalidateQueries({ queryKey: assetKeys.everywhere() });
-    },
+    onSuccess: () => void qc.invalidateQueries({ queryKey: assetKeys.everywhere() }),
+    onSettled: () => setRenaming(null),
   });
   const saveTags = useMutation({
     mutationFn: ({ id, tags }: { id: string; tags: string[] }) => setAssetTags(id, tags),
-    onSuccess: () => {
-      setEditingTags(null);
-      void qc.invalidateQueries({ queryKey: assetKeys.everywhere() });
-    },
+    onSuccess: () => void qc.invalidateQueries({ queryKey: assetKeys.everywhere() }),
+    onSettled: () => setEditingTags(null),
   });
   const remove = useMutation({
     mutationFn: (id: string) => deleteAsset(id),
@@ -199,7 +197,8 @@ export function MediaPool({
         title={t("editTags")}
         initialTags={editingTags?.tags ?? []}
         onCancel={() => setEditingTags(null)}
-        onSubmit={(tags) => editingTags && saveTags.mutate({ id: editingTags.id, tags })}
+        // 标签对话框没有 pending 态:请求还在路上时再点确认不重发。
+        onSubmit={(tags) => editingTags && !saveTags.isPending && saveTags.mutate({ id: editingTags.id, tags })}
       />
       <ConfirmDialog
         open={deleting !== null}

@@ -1,14 +1,15 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
-import { CheckCircle2, ChevronDown, ChevronRight, CircleDashed, Clock, History, Loader2, Move, PanelRight, SkipForward, X, XCircle } from "lucide-react";
+import { Ban, CheckCircle2, ChevronDown, ChevronRight, CircleDashed, Clock, History, Loader2, Move, PanelRight, SkipForward, X, XCircle } from "lucide-react";
 
 import { attestRequestOf, listJobEvents, listWorkflowRuns, type Job } from "@/api/client";
 import { AttestRevisionButton } from "@/features/workflows/AttestRevisionButton";
 import { useI18n } from "@/app/preferences";
 import type { RegistryLike } from "@/features/workflows/analyze";
 import { OutputAssets } from "@/features/workflows/OutputAssets";
-import { assetOutputs, outputRows, parseIso, toSteps } from "@/features/workflows/runSteps";
+import { assetOutputs, outputRows, parseIso, STEP_STATUS_LABELS, toSteps } from "@/features/workflows/runSteps";
 import { JobChildrenList, useJobChildren } from "@/components/layout/JobChildren";
+import { runStatusText } from "@/components/layout/runStatus";
 import { WorkflowFailureDetails } from "@/components/app/FailureDetails";
 import { DOCKABLE_PANEL_FRAME_CLASS, PANEL_HEADER_CLASS, useFloatingPanel } from "@/components/app/useFloatingPanel";
 import type { CanvasAgentMode } from "@/features/agent/CanvasAgentChat";
@@ -48,6 +49,7 @@ function runAttest(job: Job) {
 function RunIcon({ status }: { status: string }) {
   if (status === "succeeded") return <CheckCircle2 size={13} className="text-success" />;
   if (status === "failed") return <XCircle size={13} className="text-destructive" />;
+  if (status === "cancelled") return <Ban size={13} className="text-muted-foreground" />;
   if (RUNNING.has(status)) return <Loader2 size={13} className="animate-mosael-spin text-primary" />;
   return <CircleDashed size={13} />;
 }
@@ -218,7 +220,7 @@ export function WorkflowRunHistory({
             >
               <RunIcon status={run.status} />
               <span className="flex min-w-0 flex-1 flex-col gap-px">
-                <span className="truncate text-xs">{run.message || run.status}</span>
+                <span className="truncate text-xs">{run.message || runStatusText(t, run.status)}</span>
                 <span className="timecode text-ui-2xs text-muted-foreground">
                   {run.created_at ? relTime(run.created_at, now) : ""}
                   {typeof run.payload?.workflow_revision === "number" && ` · v${run.payload.workflow_revision}`}
@@ -278,6 +280,8 @@ export function WorkflowRunHistory({
                           <XCircle size={12} className="shrink-0 text-destructive" />
                         ) : s.status === "skipped" ? (
                           <SkipForward size={12} className="shrink-0" />
+                        ) : s.status === "cancelled" ? (
+                          <Ban size={12} className="shrink-0 text-muted-foreground" />
                         ) : (
                           <Loader2 size={12} className="animate-mosael-spin shrink-0 text-primary" />
                         )}
@@ -287,8 +291,10 @@ export function WorkflowRunHistory({
                             <span className="ml-1.5 text-ui-2xs text-muted-foreground">{s.message}</span>
                           )}
                         </span>
-                        {s.status === "skipped" ? (
-                          <span className="timecode inline-flex items-center gap-[3px] text-ui-2xs text-muted-foreground">{t("wfStepSkipped")}</span>
+                        {s.status === "skipped" || s.status === "cancelled" ? (
+                          <span className="timecode inline-flex items-center gap-[3px] text-ui-2xs text-muted-foreground">
+                            {t(STEP_STATUS_LABELS[s.status])}
+                          </span>
                         ) : s.status === "running" && s.startAt != null ? (
                           <span className="timecode inline-flex items-center gap-[3px] text-ui-2xs text-muted-foreground">
                             <Clock size={10} /> {Math.max(0, (now - s.startAt) / 1000).toFixed(0)}s

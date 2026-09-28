@@ -15,6 +15,8 @@ import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { EmptyState } from "@/components/layout/EmptyState";
+import { LoadingState } from "@/components/layout/LoadingState";
+import { AgentStatusRow } from "@/features/agent/AgentStatusRow";
 import type { AgentTimelineItem } from "@/features/agent/ToolCalls";
 import type { AgentUsageEvent } from "@/features/agent/messageUsage";
 import { formatElapsedSeconds } from "@/lib/time";
@@ -305,10 +307,17 @@ export function TraceView({
   messages,
   streamTimeline,
   usageEvents,
+  loading = false,
+  runningLabel = null,
 }: {
   messages: TraceMessage[];
   streamTimeline: AgentTimelineItem[];
   usageEvents: AgentUsageEvent[];
+  /** 会话消息还没读到。和对话视图同一条规矩:「还没读到」不能说成「是空的」。 */
+  loading?: boolean;
+  /** 这一轮正在跑时的耗时文案(「运行中 · 12s」);不在跑时为 null。对话视图有一行状态,轨迹这边也得有 ——
+   *  否则运行中唯一的线索只剩停止按钮。 */
+  runningLabel?: string | null;
 }) {
   const t = useI18n();
   const [mode, setMode] = React.useState<TraceTimelineMode>("sequence");
@@ -326,10 +335,21 @@ export function TraceView({
     : allEvents;
   const selected = allEvents.find((event) => event.key === selectedKey) ?? null;
 
+  if (loading) {
+    return (
+      <div className="m-auto w-full max-w-[520px] p-6">
+        <LoadingState label={t("chatLoadingSession")} />
+      </div>
+    );
+  }
   if (allEvents.length === 0) {
     return (
       <div className="m-auto w-full max-w-[520px] p-6">
-        <EmptyState icon={<ListOrdered size={20} />} title={t("traceEmptyTitle")} body={t("traceEmptyBody")} />
+        {runningLabel ? (
+          <AgentStatusRow label={t("chatThinking")} meta={runningLabel} />
+        ) : (
+          <EmptyState icon={<ListOrdered size={20} />} title={t("traceEmptyTitle")} body={t("traceEmptyBody")} />
+        )}
       </div>
     );
   }
@@ -432,6 +452,7 @@ export function TraceView({
               </React.Fragment>
             );
           })}
+          {runningLabel && <AgentStatusRow className="px-3 py-1.5" meta={runningLabel} />}
         </div>
 
       </div>
