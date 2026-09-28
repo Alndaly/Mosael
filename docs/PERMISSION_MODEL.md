@@ -138,7 +138,7 @@ Blender 代码卡谁批准都跑。单机用时这台电脑就是用户自己的
 现在**这台电脑上的文件是部署主人的私有资源**,读的那一刻查,且只在一处(`domain/host_files`):
 
 - 部署管理员(`User.is_deployment_admin`)整台机器都可以 —— 单机用时唯一的用户就是管理员,零摩擦;
-- 其他人只有两种:素材库里的文件(`host_files.asset_file`,调用方先按工作区校验素材),或落在管理员
+- 其他人只有两种:素材库里的文件(`host_files.upload_source` 先按工作区校验素材),或落在管理员
   **共享给成员的本机文件夹**(部署级设置 `DeploymentConfig.shared_host_folders`,管理控制台里改,
   `ensure_deployment_admin`)里的路径。判断前一律 realpath —— 共享文件夹里的软链接、`..` 借不了道;
 - 没权限的人拿到的是 403(`hostErr_notReadable`),**不存在也是 403**:探不出别人机器上有什么;

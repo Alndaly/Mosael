@@ -8,7 +8,7 @@
 
 - 这次的人是**部署管理员**(`User.is_deployment_admin`)—— 整台机器都可以。单机用时唯一的那个人
   就是管理员,所以本机用户零摩擦;
-- 否则只能读两种:素材库里的文件(`asset_file`,按工作区校验过的素材),或者落在管理员**明确共享
+- 否则只能读两种:素材库里的文件(`upload_source` 按工作区校验过的素材),或者落在管理员**明确共享
   给成员的本机文件夹**里的路径(部署级设置,见 `set_shared_folders`)。
 
 判断前一律 realpath:符号链接、`..`、大小写之外的一切绕路都先展开成真实位置,再做包含判断 ——
@@ -32,7 +32,7 @@ from app.core.i18n import LocalizedError
 from app.db.models import Asset, User
 from app.domain import deployment
 from app.domain.authority import Actor, Voucher, ensure
-from app.domain.permissions import PermissionDenied
+from app.domain.permissions import NotVisible, PermissionDenied
 
 
 class HostFileError(LocalizedError, ValueError):
@@ -121,13 +121,29 @@ def ensure_readable(db: Session, path: str | os.PathLike[str], *, actor: Actor) 
     return HostFile(real)
 
 
-def asset_file(asset: Asset) -> HostFile:
-    """素材库里的一份文件。**调用方负责先确认这份素材在它的工作区里** —— 素材库本身就是按工作区
-    授权的,它的文件落在数据目录下,不是任何人电脑上的私有路径。"""
+def upload_source(db: Session, *, workspace_id: str, asset_id: str, path: str, actor: Actor) -> HostFile:
+    """要交给网页上传框的那个文件:本工作区素材库里的一份素材,**或**这台电脑上的一个路径 —— 只能给一个。
+
+    两个入口都经这里:智能体的浏览器动作(`api/routes/agent_browser`)和工作流「浏览器上传」节点
+    (`workflows/executors/browser`)。此前各挑各的:智能体素材优先、工作流路径优先,同一组输入从两边
+    进来传的是**不同的文件**,而且都不报错 —— 工作流里先填路径试跑、后来把素材接到上游却忘了清路径,
+    每次运行传的都是那份旧的本地文件,运行照样显示成功。两个都给就报错,不替人挑。
+    """
+    asset_id, path = asset_id.strip(), path.strip()
+    if asset_id and path:
+        raise HostFileError("hostErr_uploadBothSources")
+    if not asset_id and not path:
+        raise HostFileError("hostErr_uploadNeedsSource")
+    if path:
+        return ensure_readable(db, path, actor=actor)
+    asset = db.get(Asset, asset_id)
+    if asset is None or asset.workspace_id != workspace_id:
+        raise NotVisible("hostErr_uploadAssetMissing")
+    if not asset.file_key:
+        raise HostFileError("hostErr_uploadAssetNoFile")
+    # 素材库按工作区授权,文件落在数据目录下,不是谁电脑上的私有路径 —— 上面查过工作区,不再判 actor。
     from app.media.paths import resolve_key
 
-    if not asset.file_key:
-        raise HostFileError("hostErr_notAFile")
     return HostFile(resolve_key(asset.file_key))
 
 

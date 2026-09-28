@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from app.db.models import Job
 from app.domain import browser, host_files, sharing
 from app.domain.jobs import current_parent_job_id
+from app.domain.permissions import NotVisible
 from app.domain.workflows import WorkflowDomainError
 from app.domain.workflows.authority import current_authority
 from app.domain.workflows.executors import RunScope, register
@@ -178,30 +179,22 @@ def browser_input(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[
 
 @register("browser_upload")
 def browser_upload(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
-    """往 <input type=file> 塞一个本地文件(发布上传视频的关键)。asset_id 或 file_path 二选一。
+    """往 <input type=file> 塞一个本地文件(发布上传视频的关键)。asset_id 或 file_path 只能给一个(见 host_files.upload_source)。
 
     两条来源都经 domain/host_files 放行:asset_id 是本工作区素材库里的文件;file_path 是这台电脑上
     的路径 —— 那是部署主人的私有资源,只有部署管理员、或路径落在管理员共享给成员的文件夹里才读得到。
     否则同事在工作流里填一个 `~/.ssh/id_rsa`,就能把主人的私钥塞进任意网页。
     """
-    from app.db.models import Asset
-
     sid = _session_in(db, scope, config)
-    path = str(config.get("file_path") or "").strip()
-    asset_id = str(config.get("asset_id") or "").strip()
     try:
-        if path:
-            file = host_files.ensure_readable(db, path, actor=current_authority(db))
-        elif asset_id:
-            asset = db.get(Asset, asset_id)
-            if asset is None or asset.workspace_id != scope.workspace_id:
-                raise WorkflowDomainError("wfErr_uploadAssetMissing")
-            if not asset.file_key:
-                raise WorkflowDomainError("wfErr_uploadAssetNoFile")
-            file = host_files.asset_file(asset)
-        else:
-            raise WorkflowDomainError("wfErr_uploadNeedsSource")
-    except (host_files.HostFileError, host_files.HostFileNotAllowed) as exc:
+        file = host_files.upload_source(
+            db,
+            workspace_id=scope.workspace_id,
+            asset_id=str(config.get("asset_id") or ""),
+            path=str(config.get("file_path") or ""),
+            actor=current_authority(db),
+        )
+    except (host_files.HostFileError, host_files.HostFileNotAllowed, NotVisible) as exc:
         raise WorkflowDomainError.from_error(exc) from exc
     timeout_ms = _int(config.get("timeout_ms"), 15_000)
     selector = str(config.get("selector") or "").strip()

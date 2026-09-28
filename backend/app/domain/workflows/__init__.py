@@ -567,6 +567,10 @@ def output_data_type(key: str, node_spec: dict[str, Any]) -> str:
 #: `"sole_option_default": True`:**留空 = 清单里只有一项时用那一项**,多于一项时运行时不猜、报出来。
 #: 是默认而不是预选:表单不替人把它写进配置(父字段常常是上游接进来的,那一刻清单还不知道),只把它
 #: 显示成当前值;真正做决定的是运行时的同一条规矩(插件连接的 resolve_instance、渲白模的镜头)。
+#:
+#: `"one_of": "<组名>"`:**同组的字段恰好填一个**(浏览器上传的素材 / 本机路径)。运行前校验在这里报
+#: 「都填了」和「都没填」;表单里一格填了,同组其余的就收起来,从源头上填不出两个;就绪检查同一条规矩
+#: (见 nodeForms/fieldActivation)。接了上游(数据边)或写了 `{{…}}` 引用都算填了。
 NODE_TYPES: dict[str, dict[str, Any]] = {
     "start": {
         "external": False,
@@ -1766,8 +1770,8 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "config": {
             "session": {"type": "string", "required": True, "description": "wfNode_browser_upload_session"},
             "selector": {"advanced": True, "type": "template", "description": "wfNode_browser_upload_selector"},
-            "asset_id": {"type": "template", "description": "wfNode_browser_upload_asset_id"},
-            "file_path": {"type": "template", "description": "wfNode_browser_upload_file_path"},
+            "asset_id": {"type": "template", "one_of": "source", "description": "wfNode_browser_upload_asset_id"},
+            "file_path": {"type": "template", "one_of": "source", "description": "wfNode_browser_upload_file_path"},
             "timeout_ms": {"advanced": True, "type": "number", "description": "wfNode_browser_upload_timeout_ms"},
         },
         "outputs": ["session"],
@@ -1844,6 +1848,25 @@ def _plugin_types(db: Session) -> dict[str, dict[str, Any]]:
     from app.domain.plugins.nodes import plugin_node_types
 
     return plugin_node_types(db)
+
+
+def _one_of_errors(
+    node_id: str, config: dict[str, Any], specs: dict[str, Any], data_bound: set[tuple[str, str]]
+) -> list[str]:
+    """声明了 `one_of` 的每一组字段恰好填一个(见 NODE_TYPES 前的说明)。"""
+    groups: dict[str, list[str]] = {}
+    for key, spec in specs.items():
+        if isinstance(spec, dict) and spec.get("one_of"):
+            groups.setdefault(str(spec["one_of"]), []).append(key)
+    errors = []
+    for keys in groups.values():
+        filled = [key for key in keys if config.get(key) not in (None, "") or (node_id, key) in data_bound]
+        names = " / ".join(keys)
+        if len(filled) > 1:
+            errors.append(f"节点 {node_id} 的 {names} 只能填一个")
+        elif not filled:
+            errors.append(f"节点 {node_id} 的 {names} 要填一个")
+    return errors
 
 
 def validate_graph(
@@ -1930,6 +1953,7 @@ def validate_graph(
                     value = node_config.get(key)
                     if value in (None, "") and (node_id, key) not in data_bound:
                         errors.append(f"节点 {node_id} 缺少必填配置 {key}")
+            errors.extend(_one_of_errors(node_id, node_config, node_specs, data_bound))
             #: **运行前的校验要下到内嵌子图里,而且是整份校验。** 体是这张图的一段,它的每一种错
             #: (缺必填、引用越出作用域、空体、体里有开始节点、环、未知类型)在这里不报,就只能等
             #: 循环真跑到时才由执行器报 —— 那时工作流已经占了一个任务位、把循环之前的步骤全跑完

@@ -31,13 +31,14 @@ from tests.util import pinned, fresh_client, make_video_asset, second_client
 SEAMS = {
     "ensure_readable": host_files.ensure_readable,
     "ensure_whole_machine": host_files.ensure_whole_machine,
+    "upload_source": host_files.upload_source,
 }
 
 #: 收用户给出的本机路径(或在本机跑代码)的入口 —— 每一个的函数体里都必须过 host_files。
 #: 新加一个这样的入口,加进这里;它会先在这里红,而不是先在别人的电脑上漏。
 ENTRY_POINTS = {
     ("app/domain/workflows/executors/browser.py", "browser_upload"),
-    ("app/api/routes/agent_browser.py", "_upload_source"),
+    ("app/api/routes/agent_browser.py", "act"),
     ("app/api/routes/assets.py", "import_local_asset"),
     ("app/domain/agent/confirmable/external.py", "_execute_run_host_code"),
     ("app/domain/agent/confirmable/blender.py", "_execute_blender_execute"),
@@ -101,7 +102,7 @@ def test_every_entry_point_goes_through_the_seam(path: str, function: str) -> No
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
         and isinstance(node.func.value, ast.Name) and node.func.value.id == "host_files"
     }
-    assert used & {"ensure_readable", "asset_file", "ensure_whole_machine"}, f"{path}:{function} 没过 host_files"
+    assert used & {"ensure_readable", "upload_source", "ensure_whole_machine"}, f"{path}:{function} 没过 host_files"
 
 
 def test_the_browser_only_uploads_a_host_file() -> None:
@@ -297,6 +298,50 @@ def test_the_agent_upload_action_goes_through_the_seam(tmp_path, monkeypatch) ->
     assert act(mate, {"selector": "input", "asset_id": asset["id"]}).status_code == 200
     assert act(owner, {"selector": "input", "path": str(secret)}).status_code == 200
     assert len(uploaded) == 2
+
+
+# ---------------- 两个入口同一条规矩:素材和本机路径只能给一个 ----------------
+# 此前智能体素材优先、工作流路径优先 —— 同一组输入从两边进来传的是不同的文件,而且都不报错。
+
+
+def test_the_upload_node_refuses_an_asset_and_a_path_together(tmp_path, monkeypatch) -> None:
+    from app.domain.workflows import WorkflowDomainError
+
+    owner, workspace, _mate = _team()
+    secret = _secret(tmp_path)
+    asset = make_video_asset(owner, workspace["id"])
+    config = {"asset_id": asset["id"], "file_path": str(secret)}
+
+    with pytest.raises(WorkflowDomainError) as both:
+        _run_upload(workspace["id"], _uid("tester"), config, monkeypatch)
+    assert both.value.key == "hostErr_uploadBothSources"
+
+    with pytest.raises(WorkflowDomainError) as neither:
+        _run_upload(workspace["id"], _uid("tester"), {}, monkeypatch)
+    assert neither.value.key == "hostErr_uploadNeedsSource"
+
+
+def test_the_agent_upload_action_refuses_an_asset_and_a_path_together(tmp_path, monkeypatch) -> None:
+    owner, workspace, _mate = _team()
+    secret = _secret(tmp_path)
+    asset = make_video_asset(owner, workspace["id"])
+    uploaded: list = []
+    monkeypatch.setattr(browser, "upload_file", lambda sid, file, **kw: uploaded.append(file) or {})
+    with SessionLocal() as db:
+        session_id = browser.open_session(db, workspace_id=workspace["id"], owner_kind="manual", actor=_uid("tester")).id
+
+    both = owner.post(
+        "/api/agent-browser/act",
+        json={
+            "workspace_id": workspace["id"],
+            "session_id": session_id,
+            "action": "upload",
+            "args": {"asset_id": asset["id"], "path": str(secret)},
+        },
+    )
+    assert both.status_code == 422, both.text
+    assert "只能填一个" in both.json()["detail"]
+    assert uploaded == []
 
 
 # ---------------- 入口:按本机路径导入素材 ----------------

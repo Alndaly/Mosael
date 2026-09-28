@@ -1510,6 +1510,23 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "这台电脑上的文件属于部署管理员,只有管理员能直接读。请改用素材库里的素材,或请管理员把所在文件夹加进「共享给成员的本机文件夹」",
         "en": "Files on this computer belong to the deployment admin, and only admins can read them directly. Use an asset from the library instead, or ask an admin to add the folder to “Folders shared with members”.",
     },
+    # 往网页上传框塞的文件(见 host_files.upload_source):素材和本机路径只能给一个。
+    "hostErr_uploadBothSources": {
+        "zh": "素材和本机路径只能填一个:请清空其中一个",
+        "en": "Fill in either an asset or a path on this computer, not both. Clear one of them.",
+    },
+    "hostErr_uploadNeedsSource": {
+        "zh": "没有要上传的文件:请选一个素材,或填一个本机路径",
+        "en": "There's nothing to upload. Choose an asset or enter a path on this computer.",
+    },
+    "hostErr_uploadAssetMissing": {
+        "zh": "要上传的素材不存在,或不在这个工作区里",
+        "en": "The asset to upload doesn't exist or isn't in this workspace.",
+    },
+    "hostErr_uploadAssetNoFile": {
+        "zh": "这份素材没有文件,传不了",
+        "en": "This asset has no file to upload.",
+    },
     "hostErr_codeNeedsAdmin": {
         "zh": "在这台电脑上直接运行代码能读写它的任何文件,只有部署管理员能批准",
         "en": "Running code directly on this computer can read and write any of its files, so only a deployment admin can approve it.",
@@ -3264,8 +3281,8 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfNode_browser_upload_desc": {"zh": "往页面的文件输入框(<input type=file>)塞一个本地文件——发布上传视频的关键一步。用 asset_id 传素材(如 {{export_1.asset_id}}),或 file_path 传本地绝对路径(二选一)。走 CDP setFileInputFiles,不弹系统对话框。", "en": "Hand a local file to a page's file input (<input type=file>) — the crucial step when publishing a video. Pass an asset with asset_id (e.g. {{export_1.asset_id}}) or a local absolute path with file_path (one or the other). It goes through CDP setFileInputFiles, so no system dialog opens."},
     "wfNode_browser_upload_session": {"zh": "来自「打开浏览器」的 session", "en": "The session from “Open browser”"},
     "wfNode_browser_upload_selector": {"zh": "文件输入框 CSS 选择器(默认 input[type=file])", "en": "CSS selector of the file input (defaults to input[type=file])"},
-    "wfNode_browser_upload_asset_id": {"zh": "要上传的素材 id(如 {{export_1.asset_id}});与 file_path 二选一", "en": "The asset to upload (e.g. {{export_1.asset_id}}); either this or file_path"},
-    "wfNode_browser_upload_file_path": {"zh": "或直接给本机绝对路径;与 asset_id 二选一。本机文件只有部署管理员能读,其他成员只能用管理员共享出来的文件夹里的", "en": "Or an absolute path on this computer; either this or asset_id. Only deployment admins can read files on this computer — other members can only use files inside folders an admin has shared"},
+    "wfNode_browser_upload_asset_id": {"zh": "要上传的素材 id(如 {{export_1.asset_id}});和 file_path 只能填一个", "en": "The asset to upload (e.g. {{export_1.asset_id}}); fill in this or file_path, not both"},
+    "wfNode_browser_upload_file_path": {"zh": "或直接给本机绝对路径;和 asset_id 只能填一个。本机文件只有部署管理员能读,其他成员只能用管理员共享出来的文件夹里的", "en": "Or an absolute path on this computer; fill in this or asset_id, not both. Only deployment admins can read files on this computer — other members can only use files inside folders an admin has shared"},
     "wfNode_browser_upload_timeout_ms": {"zh": "等文件输入框出现的超时(毫秒,默认 15000)", "en": "How long to wait for the file input to appear (milliseconds, 15000 by default)"},
     "wfNode_browser_extract": {"zh": "浏览器·提取", "en": "Browser · extract"},
     "wfNode_browser_extract_desc": {"zh": "取元素的文本或属性;可一次取全部匹配。输出 value 供下游使用。", "en": "Read an element's text or an attribute; can take every match at once. Outputs value for downstream use."},
@@ -3316,9 +3333,6 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfErr_llmNotJson": {"zh": "LLM 未返回合法 JSON", "en": "The model did not return valid JSON"},
     "wfErr_browserSessionNotInWorkspace": {"zh": "浏览器会话不存在,或不在这个工作区里", "en": "That browser session does not exist or is not in this workspace"},
     "wfErr_browserSessionMissing": {"zh": "缺少浏览器会话:先用「打开浏览器」节点,并把它的 session 输出连过来", "en": "No browser session: add an Open browser node and connect its session output"},
-    "wfErr_uploadNeedsSource": {"zh": "上传节点需要 asset_id 或 file_path", "en": "The upload node needs asset_id or file_path"},
-    "wfErr_uploadAssetMissing": {"zh": "上传素材不存在", "en": "That asset does not exist"},
-    "wfErr_uploadAssetNoFile": {"zh": "上传素材没有文件", "en": "That asset has no file"},
     "wfErr_pickPoolProfile": {"zh": "请选择浏览器池档案(session_mode=pool)", "en": "Pick a browser-pool profile (session_mode=pool)"},
     "wfErr_waitNeedsCondition": {"zh": "等待节点需要 selector / url_contains / text 之一", "en": "The wait node needs one of selector, url_contains or text"},
     "wfErr_loopItems": {"zh": "循环·遍历的 items 必须是列表(或多行文本)", "en": "For-each items must be a list (or multi-line text)"},
