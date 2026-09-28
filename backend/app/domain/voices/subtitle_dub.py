@@ -9,7 +9,7 @@
 worker 模式由那台装了引擎的机器认领。
 
 **时长匹配用的是片段自己的 speed,不是把音频重新编码**:渲染时 atempo 会按它变速(见
-media/render_executor._atempo_chain)。所以这一步无损、可撤销、事后还能在检查器里手动微调 ——
+media/tempo.atempo_filters)。所以这一步无损、可撤销、事后还能在检查器里手动微调 ——
 而重新编码一遍的话,想改回去就只剩重做。
 """
 from __future__ import annotations

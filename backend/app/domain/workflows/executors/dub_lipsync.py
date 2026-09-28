@@ -24,6 +24,7 @@ from app.core.config import settings
 from app.ai.providers.contracts.generation import DRIVING_AUDIO, SOURCE_VIDEO
 from app.domain.workflows import WorkflowDomainError
 from app.domain.workflows.executors import RunScope, register
+from app.media.tempo import atempo_filters
 from app.domain.workflows.executors.talking import VIDEO_LIPSYNC, _generate, _pick_model, _require_consent, _text
 
 #: 模型没声明时的保守上下限(百炼 videoretalk 的文档值)。
@@ -69,19 +70,6 @@ def plan_chunks(duration: float, lines: list[tuple[float, float]], low: float, h
     return chunks
 
 
-def _atempo(speed: float) -> str:
-    """变速拆成几级 atempo(每一级只收 0.5–2 倍)。"""
-    parts: list[str] = []
-    while speed > 2.0:
-        parts.append("atempo=2.0")
-        speed /= 2.0
-    while speed < 0.5:
-        parts.append("atempo=0.5")
-        speed /= 0.5
-    parts.append(f"atempo={speed:.6f}")
-    return ",".join(parts)
-
-
 def _ffmpeg(args: list[str], what: str) -> None:
     from app.core.child_process import run_logged
 
@@ -98,7 +86,7 @@ def _mix_voice(lines: list[Line], duration: float, target: Path) -> None:
         length = (line.end - line.start) * line.speed
         delay = max(0, int(round(line.start * 1000)))
         chains.append(f"[{index}:a]atrim=start={line.src_in:.3f}:duration={length:.3f},asetpts=PTS-STARTPTS,"
-                      f"{_atempo(line.speed)},volume={line.gain:.3f},adelay={delay}|{delay}[a{index}]")
+                      f"{atempo_filters(line.speed)}volume={line.gain:.3f},adelay={delay}|{delay}[a{index}]")
     mix = "".join(f"[a{index}]" for index in range(len(lines)))
     graph = ";".join(chains) + f";{mix}amix=inputs={len(lines)}:normalize=0,apad,atrim=0:{duration:.3f}[out]"
     _ffmpeg([*inputs, "-filter_complex", graph, "-map", "[out]", "-ac", "1", "-ar", "24000", str(target)], "配音混成一段")

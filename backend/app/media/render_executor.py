@@ -14,6 +14,7 @@ from app.core.child_process import ChildProcess, popen_text, run_logged
 from app.core.config import settings
 from app.core.text import blame_line
 from app.media.probe import guess_kind, probe_has_audio_many
+from app.media.tempo import atempo_filters
 from app.media.render_plan import (
     DEFAULT_APPEARANCE,
     FILTER_PRESETS,
@@ -102,22 +103,6 @@ def _progress_from_block(block: dict[str, str], total_us: float) -> RenderProgre
         remaining_media_s = max(0.0, (total_us - out_us) / 1_000_000)
         eta = remaining_media_s / speed
     return RenderProgress(fraction=fraction, speed=speed, fps=fps, eta_seconds=eta)
-
-
-def _atempo_chain(speed: float) -> str:
-    """atempo filters covering speed, chained because one instance is limited to [0.5, 2]."""
-    if speed == 1.0:
-        return ""
-    parts: list[str] = []
-    remaining = speed
-    while remaining > 2.0:
-        parts.append("atempo=2.0")
-        remaining /= 2.0
-    while remaining < 0.5:
-        parts.append("atempo=0.5")
-        remaining /= 0.5
-    parts.append(f"atempo={remaining}")
-    return ",".join(parts) + ","
 
 
 def _grade_filter(
@@ -864,7 +849,7 @@ def build_ffmpeg_command(
                     f"[bg{i}][{tlabel}]overlay=x='{ox}':y='{oy}',format=yuv420p,setsar=1[v{i}]"
                 )
             if has_audio.get(path, False) and not plan.mute_base_audio and not segment.muted:
-                tempo = _atempo_chain(segment.speed)
+                tempo = atempo_filters(segment.speed)
                 audio_fades = _fade_filters(segment.fade_in, segment.fade_out, segment.duration, audio=True)
                 # The clip's own gain (增益) mixes its audio, like a video clip's linked audio in PR/DaVinci.
                 gain = _volume_expr(segment.gain, segment.gain_keyframes, segment.duration)
@@ -1011,7 +996,7 @@ def build_ffmpeg_command(
             duck = _duck_volume(item.duck_windows)
             filters.append(
                 f"[{input_index}:a]atrim=start={tin}:end={tout},asetpts=PTS-STARTPTS,"
-                f"{_atempo_chain(item.speed)}"
+                f"{atempo_filters(item.speed)}"
                 f"{_volume_expr(item.gain, item.gain_keyframes, item.duration)}"
                 f"aresample={AUDIO_RATE},aformat=channel_layouts=stereo{audio_fades},"
                 f"adelay={delay_ms}:all=1{duck}[aov{i}]"
