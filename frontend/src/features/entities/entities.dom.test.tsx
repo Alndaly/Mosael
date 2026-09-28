@@ -593,20 +593,19 @@ describe("素材这一侧", () => {
 });
 
 describe("AI 工作台的 @ 资产", () => {
-  it("挑中的排成 chip,交出去的是资产;行和画板 @ 菜单同一种长相", async () => {
-    const { EntityMentionPicker } = await import("./EntityMention");
+  it("底栏的 @ 按钮挑资产,交出去的是资产;挑中的变成输入卡顶上的小条,能去掉", async () => {
+    const { EntityMentionButton, entityMentionChips } = await import("./EntityMention");
     api.listEntities.mockResolvedValue([summary(), summary({ id: "e2", name: "老街", kind: "location" })]);
     const onChange = vi.fn();
-    const view = mount(<EntityMentionPicker workspaceId="ws" value={[]} onChange={onChange} />);
+    mount(<EntityMentionButton workspaceId="ws" value={[]} onChange={onChange} />);
     fireEvent.click(screen.getByRole("button", { name: "entityMention" }));
     fireEvent.click(await screen.findByText("老街"));
     expect(onChange).toHaveBeenCalledWith([expect.objectContaining({ id: "e2" })]);
-    view.unmount();
 
     const removed = vi.fn();
-    mount(<EntityMentionPicker workspaceId="ws" value={[summary()]} onChange={removed} />);
-    expect(screen.getByText("@张三")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "entityMentionRemove" }));
+    const [chip] = entityMentionChips([summary()], removed);
+    expect(chip.label).toBe("@张三");
+    chip.onRemove();
     expect(removed).toHaveBeenCalledWith([]);
   });
 

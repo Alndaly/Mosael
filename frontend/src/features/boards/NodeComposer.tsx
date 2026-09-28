@@ -2,6 +2,8 @@ import { assetKeys } from "@/api/queryKeys";
 import { noteHref, type NoteReference } from "@/api/domains/notes";
 import { documentPrompt } from "./boardDocumentSources";
 import React from "react";
+
+import { PromptTemplateButton, withTemplate } from "@/components/app/PromptTemplates";
 import { ArrowLeftRight, Plus, Sparkles } from "lucide-react";
 
 import { useQuery } from "@tanstack/react-query";
@@ -980,6 +982,18 @@ export function NodeComposer({
           <span className="px-1 text-ui-2xs text-muted-foreground">{t("boardNoGenerationModel")}</span>
         ) : (
           <>
+            {/* 生图不知道怎么写:挑一个模板接在提示词后面(和 AI 工作台同一份,components/app/PromptTemplates)。 */}
+            {item.kind === "image" && (
+              <PromptTemplateButton
+                onPick={(template) => {
+                  //: 接成新的一段,**不重建文档**:重建的话提示词里 `@` 过的素材会被抹成纯文字、引用丢掉。
+                  const base = promptDocument ?? textDocument(prompt);
+                  const blocks = (base.content ?? []).filter((block) => (block.content ?? []).length > 0);
+                  setPrompt(withTemplate(prompt, template));
+                  setPromptDocument({ ...base, content: [...blocks, { type: "paragraph", content: [{ type: "text", text: template }] }] });
+                }}
+              />
+            )}
             {/* 上限而不是 flex-1:模型名短的时候这一格就该短。名字长了在上限处截断,
                 而不是把「参数」推到行尾 —— 它和模型是一组,该挨着。 */}
             <Pick

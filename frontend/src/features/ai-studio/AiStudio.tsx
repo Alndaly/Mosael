@@ -42,7 +42,9 @@ import { useI18n, usePreferences } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { EntityMentionPicker } from "@/features/entities/EntityMention";
+import { EntityMentionButton, entityMentionChips } from "@/features/entities/EntityMention";
+import { ComposerChips } from "@/features/agent/ComposerChips";
+import { PromptTemplateButton, withTemplate } from "@/components/app/PromptTemplates";
 import { EntityReceiptNote } from "@/features/entities/entityMeta";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { ConfigNotice } from "@/components/layout/ConfigNotice";
@@ -777,6 +779,9 @@ function GenerateWorkspace({
           className="mx-auto mb-3.5 mt-1.5 flex w-[min(780px,calc(100%-32px))] flex-col gap-1 rounded-lg border border-border bg-control px-2.5 pb-1.5 pl-3 pt-2.5 transition-colors duration-100 focus-within:border-ring"
           onSubmit={submit}
         >
+          {/* 这一次带上的资产排在输入卡顶上 —— 和对话页的附件同一排、同一种小条(ComposerChips)。
+              此前挑中的资产和「@ 资产」按钮自成一行,夹在正文和底栏中间(用户截图:位置很怪)。 */}
+          <ComposerChips chips={entityMentionChips(mentionedEntities, setMentionedEntities)} className="px-0.5" />
           {selectedPromptMode === "none" ? (
             // 这个模型不收提示词(放大、抠图这类按素材出结果的工作流):不摆一个写了也不生效的框,
             // 说清楚该做什么 —— 挂素材、调参数,直接生成。
@@ -809,33 +814,45 @@ function GenerateWorkspace({
               }}
             />
           )}
-          {selectedModel && selectedModel.kind !== "audio" && (
-            <EntityMentionPicker workspaceId={workspace.id} value={mentionedEntities} onChange={setMentionedEntities} />
-          )}
+          {/* 底栏和对话页同一个排法:左边一排小按钮(引用、模板、优化),然后是模型;右边发送。 */}
           <div className="flex items-center justify-between gap-1.5 pt-0.5">
-            <div className="flex items-center gap-1.5">
-              {selectedModel && (
-                <span className="inline-flex h-7 items-center gap-1 whitespace-nowrap rounded-full border border-border px-2.5 text-xs text-muted-foreground">
-                  {selectedModel.label}
-                </span>
+            <div className="flex min-w-0 items-center gap-1.5">
+              {selectedModel && selectedModel.kind !== "audio" && (
+                <EntityMentionButton workspaceId={workspace.id} value={mentionedEntities} onChange={setMentionedEntities} />
               )}
-              <GenerationModelGate hasModel={Boolean(selectedModel)} loading={generationModelsLoading} />
+              {selectedModel?.kind === "image" && selectedPromptMode !== "none" && (
+                <PromptTemplateButton onPick={(template) => setPrompt((current) => withTemplate(current, template))} />
+              )}
               {selectedModel?.kind === "image" && selectedPromptMode !== "none" && (
                 <Button
                   type="button"
                   variant="ghost"
-                  size="xs"
-                  className="gap-1 text-muted-foreground hover:text-foreground"
+                  size="icon-xs"
                   // createGeneration 是**别的**操作在跑,那是 disable;自己在跑才是 loading。
                   disabled={!prompt.trim() || !selectedAdapterAvailable || createGeneration.isPending}
                   loading={optimizePrompt.isPending}
                   onClick={() => optimizePrompt.mutate()}
+                  aria-label={t("optimizePrompt")}
                   title={t("optimizePrompt")}
                 >
-                  <Wand2 size={13} />
-                  {t("optimizePrompt")}
+                  <Wand2 size={14} />
                 </Button>
               )}
+              {/* 模型是一个能点的东西(和对话页的模型选择器同一种样子):点开右边的「模型与参数」。
+                  此前它是一枚点不动的标签,要换模型得去找右上角那个按钮。 */}
+              {selectedModel && (
+                <button
+                  type="button"
+                  onClick={() => setParametersOpen(true)}
+                  aria-label={t("generationEngineSettings")}
+                  title={t("generationEngineSettings")}
+                  className="inline-flex h-7 min-w-0 max-w-[240px] cursor-pointer items-center gap-1 rounded-md border border-field-border bg-field px-2 text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:border-primary focus-visible:outline-none"
+                >
+                  <span className="truncate">{selectedModel.label}</span>
+                  <SlidersHorizontal size={12} className="shrink-0 opacity-60" />
+                </button>
+              )}
+              <GenerationModelGate hasModel={Boolean(selectedModel)} loading={generationModelsLoading} />
             </div>
             <Button
               type="submit"

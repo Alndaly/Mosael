@@ -1,12 +1,13 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
-import { AtSign, X } from "lucide-react";
+import { AtSign } from "lucide-react";
 
 import { assetThumbnailUrl, entityKeys, listEntities, type EntitySummary } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import type { ComposerChip } from "@/lib/composerChip";
 import { cn } from "@/lib/utils";
 import { entityDisplayName, entityKindIcon, useCatalogLabels } from "@/features/entities/entityMeta";
 
@@ -65,11 +66,31 @@ export function matchEntities(entities: EntitySummary[] | undefined, query: stri
 }
 
 /**
- * AI 工作台的「@ 资产」:它的提示词框是一个普通文本框,没有画板那种 `@` 菜单,所以在框下面挑 —— 候选、每一行的
- * 长相和画板的 `@` 菜单是同一份(useMentionableEntities / EntityMentionRow)。挑中的排成一排 chip,
- * 提交时作为 `entity_ids` 交出去:提示词描述和参考图由服务端按模型收得下的张数挂上。
+ * AI 工作台的「@ 资产」:它的提示词框是一个普通文本框,没有画板那种 `@` 菜单,所以在输入卡底栏放一个 `@` 按钮挑 ——
+ * 候选、每一行的长相和画板的 `@` 菜单是同一份(useMentionableEntities / EntityMentionRow)。挑中的和对话页的附件
+ * 一样排在输入卡顶上(entityMentionChips → ComposerChips),提交时作为 `entity_ids` 交出去:提示词描述和参考图
+ * 由服务端按模型收得下的张数挂上。
+ *
+ * 此前挑中的 chip 和「@ 资产」按钮自成一行,夹在正文和底栏之间(用户截图:位置很怪)。
  */
-export function EntityMentionPicker({
+export function entityMentionChips(
+  value: EntitySummary[],
+  onChange: (next: EntitySummary[]) => void,
+): ComposerChip[] {
+  return value.map((one) => {
+    const Icon = entityKindIcon(one.kind);
+    return {
+      id: `entity-${one.id}`,
+      label: `@${entityDisplayName(one)}`,
+      thumbnail: one.cover_asset_id ? assetThumbnailUrl(one.cover_asset_id) : undefined,
+      icon: <Icon size={11} />,
+      onRemove: () => onChange(value.filter((other) => other.id !== one.id)),
+    };
+  });
+}
+
+/** 底栏里的 `@` 按钮:挑一个资产加进这一次的引用。 */
+export function EntityMentionButton({
   workspaceId,
   value,
   onChange,
@@ -86,26 +107,11 @@ export function EntityMentionPicker({
   const picked = new Set(value.map((one) => one.id));
   const candidates = matchEntities(entities.data, query).filter((one) => !picked.has(one.id)).slice(0, 12);
   return (
-    <div className="flex min-w-0 flex-wrap items-center gap-1" data-entity-mentions="">
-      {value.map((one) => (
-        <span key={one.id} className="inline-flex max-w-[200px] items-center gap-1 rounded-md bg-secondary py-0.5 pl-1 pr-0.5 text-ui-2xs text-foreground" data-entity-chip={one.id}>
-          <EntityThumb entity={one} className="h-4 w-4 rounded-[3px]" />
-          <span className="truncate">@{entityDisplayName(one)}</span>
-          <button
-            type="button"
-            className="grid size-4 cursor-pointer place-items-center rounded border-0 bg-transparent text-muted-foreground hover:text-foreground"
-            aria-label={t("entityMentionRemove").replace("{name}", entityDisplayName(one))}
-            onClick={() => onChange(value.filter((other) => other.id !== one.id))}
-          >
-            <X size={11} />
-          </button>
-        </span>
-      ))}
+    <>
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
-          <Button type="button" variant="ghost" size="xs" className="gap-1 text-muted-foreground hover:text-foreground" aria-label={t("entityMention")}>
-            <AtSign size={13} />
-            {t("entityMention")}
+          <Button type="button" variant="ghost" size="icon-xs" aria-label={t("entityMention")} title={t("entityMention")} data-entity-mention="">
+            <AtSign size={14} />
           </Button>
         </PopoverTrigger>
         <PopoverContent align="start" className="grid w-[320px] gap-1.5 p-1.5">
@@ -142,6 +148,6 @@ export function EntityMentionPicker({
           <p className="m-0 border-t border-border px-1.5 pt-1 text-ui-2xs text-muted-foreground">{t("entityMentionHint")}</p>
         </PopoverContent>
       </Popover>
-    </div>
+    </>
   );
 }
