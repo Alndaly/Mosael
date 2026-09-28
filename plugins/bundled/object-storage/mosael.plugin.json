@@ -6,7 +6,7 @@
     "en": "Object Storage"
   },
   "default_locale": "zh",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "author": {
     "name": "Mosael",
     "url": "https://mosael.com"
@@ -48,8 +48,8 @@
         "type": "enum",
         "required": true,
         "help": {
-          "zh": "连哪一家。一个连接对一个桶;要用几个桶就建几个连接,在「设置 → 素材外链」里选默认用哪一个。",
-          "en": "Which service. One connection is one bucket; create one connection per bucket and pick the default under Settings → Asset links."
+          "zh": "连哪一家。一个连接对一个桶;要用几个桶就建几个连接,在「设置 → 能力提供方 → 素材外链」里选默认用哪一个。",
+          "en": "Which service. One connection is one bucket; create one connection per bucket and pick the default under Settings → Capability providers → Asset links."
         },
         "options": [
           {

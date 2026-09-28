@@ -123,7 +123,7 @@ def test_配好了几家却没定默认_当场问而不是替他挑(world) -> No
         _upload(world)
     message = str(raised.value)
     assert "阿里云 OSS" in message and "腾讯云 COS" in message
-    assert "设置 → 素材外链" in message, "没说去哪儿定"
+    assert "设置 → 能力提供方 → 素材外链" in message, "没说去哪儿定"
     assert world["calls"] == []
 
 
@@ -229,7 +229,7 @@ def test_插件签的有效期比要的短_按它说的记_快到期就重传(wo
 
 
 def test_在设置里选素材外链用哪一家_只能选自己的() -> None:
-    """配了几家存储时用哪一家,是个人的选择 —— 和默认模型一样放在设置里,自己一页(只收链接的不止视频)。"""
+    """配了几家存储时用哪一家,是个人的选择 —— 和默认模型一样放在设置里(「能力提供方」一页,和文档解析并列)。"""
     from tests.test_plugins import install
     from tests.util import second_client
 
@@ -239,26 +239,33 @@ def test_在设置里选素材外链用哪一家_只能选自己的() -> None:
     second = _storage(me, "腾讯云 COS", manifest_id="dev.test.storage2")
     _storage(me, "没配好的", configured=False, manifest_id="dev.test.storage2")
 
-    state = client.get("/api/settings/asset-link-storage").json()
+    def links(c):
+        return next(one for one in c.get("/api/settings/capabilities").json() if one["capability"] == "public_url")
+
+    state = links(client)
     assert state["current"] is None and state["automatic"] is None, "几家都配好了,不该替他挑"
     assert {o["name"]: o["missing"] for o in state["options"]}["没配好的"] == ["桶名", "密钥"]
 
-    chosen = client.put("/api/settings/asset-link-storage", json={"instance_id": second}).json()
+    chosen = client.put("/api/settings/capabilities/public_url", json={"provider_id": second}).json()
     assert chosen["current"] == second
 
     # 别人不能把我的连接定成他的,也看不到我的存储。
     other = second_client()
-    assert other.put("/api/settings/asset-link-storage", json={"instance_id": first}).status_code == 400
-    assert other.get("/api/settings/asset-link-storage").json()["options"] == []
+    assert other.put("/api/settings/capabilities/public_url", json={"provider_id": first}).status_code == 400
+    assert links(other)["options"] == []
 
-    cleared = client.put("/api/settings/asset-link-storage", json={"instance_id": None}).json()
+    cleared = client.put("/api/settings/capabilities/public_url", json={"provider_id": None}).json()
     assert cleared["current"] is None
 
 
 def test_只配好一家时_设置里显示会自动用它(world) -> None:
     only = _storage("alice", "我的 TOS")
     _storage("alice", "没配好的", configured=False)
-    from app.domain.generation.public_links import storage_choices
+    from app.domain import capabilities
+    from app.domain.generation.public_links import CAPABILITY
+
+    def storage_choices(db, owner):
+        return capabilities.choices(db, owner, CAPABILITY)
 
     with SessionLocal() as db:
         state = storage_choices(db, "alice")

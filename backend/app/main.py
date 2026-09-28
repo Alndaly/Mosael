@@ -292,6 +292,13 @@ def _wire_seams() -> None:
     from app.domain.workflows import plugin_references
     from app.domain.boards import plugin_references as board_plugin_references
 
+    # 宿主能力的契约(ADR 0031 §5):各项能力的宿主侧把自己登记进能力表,设置页照表列出每一项。
+    from app.domain import capabilities
+    from app.domain import documents
+    from app.domain.generation import public_links
+
+    capabilities.register(public_links.CAPABILITY)
+    capabilities.register(documents.CAPABILITY)
     agent_receipts.install()
     plugin_connections.install()
     dynamic_tools.install()

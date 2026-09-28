@@ -301,20 +301,29 @@ class PluginInvocationOut(OrmModel):
 
 # --- 素材外链用哪一家存储(设置 → 视频生成) ---
 
-class AssetLinkStorageOption(ApiModel):
-    instance_id: str
+class CapabilityProviderOut(ApiModel):
+    """一项宿主能力的一个候选:内置实现(`builtin`),或这个人的一个插件连接。"""
+
+    id: str
     name: str
+    builtin: bool = False
     #: 还缺哪些必填项;空 = 配好了,选得了。
     missing: list[str] = Field(default_factory=list)
 
 
-class AssetLinkStorageOut(ApiModel):
+class CapabilityChoicesOut(ApiModel):
+    """「设置 → 能力提供方」里的一项(ADR 0031 §5)。"""
+
+    capability: str
+    label: str
+    description: str = ""
     #: 我定的那一家;没定是 None。
     current: str | None = None
-    #: 不定的话会用的那一家(只有一家配好时),和现在定没定无关;几家都配好时是 None —— 不定就会当场问。
+    #: 不定的话会用的那一家(有内置实现就是它;没有的只有一家配好时才有),和现在定没定无关。
     automatic: str | None = None
-    options: list[AssetLinkStorageOption] = Field(default_factory=list)
+    options: list[CapabilityProviderOut] = Field(default_factory=list)
 
 
-class AssetLinkStorageUpdate(ApiModel):
-    instance_id: str | None = None
+class CapabilityDefaultUpdate(ApiModel):
+    #: 定哪一家;None(或内置实现的 id)= 不定。
+    provider_id: str | None = None

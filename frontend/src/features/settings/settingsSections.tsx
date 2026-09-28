@@ -37,7 +37,7 @@ import { DenoiseEnginesSection } from "@/features/settings/DenoiseEnginesSection
 import { FeishuSection } from "@/features/settings/FeishuSection";
 import { InstallSourceSection } from "@/features/settings/InstallSourceSection";
 import { ProviderDefaultsSection } from "@/features/settings/ProviderDefaultsSection";
-import { AssetLinkStorageSection } from "@/features/settings/AssetLinkStorageSection";
+import { CapabilityProvidersSection } from "@/features/settings/CapabilityProvidersSection";
 import { ProviderPricingSection } from "@/features/settings/ProviderPricingSection";
 import { ProviderProfilesSection } from "@/features/settings/ProviderProfilesSection";
 import { SeparationEnginesSection } from "@/features/settings/SeparationEnginesSection";
@@ -240,12 +240,12 @@ export const SETTINGS_GROUPS: readonly SettingsGroup[] = [
         render: ({ workspace }) => <FeishuSection workspace={workspace} />,
       },
       {
-        // **自己一页,不挂在某一种能力下面。** 只收链接的输入不止视频(参考视频、视频编辑的源视频,
-        // 以后可能还有图片、音频),它回答的是「本地素材怎么经我的存储交给外面的服务」。
-        id: "asset-links",
-        label: "assetLinkTitle",
+        // **自己一页,不挂在某一种模型下面。** 宿主的几项能力(素材外链、文档解析……)各用哪一家,回答的是
+        // 「这件事交给哪一家做」—— 按后端的能力表列,多一项能力这里不用改(ADR 0031 §5)。
+        id: "capabilities",
+        label: "capabilityProvidersTitle",
         icon: <Link2 size={14} />,
-        render: () => <AssetLinkStorageSection />,
+        render: () => <CapabilityProvidersSection />,
       },
       {
         // 出站代理 + 失败重试:回答的是同一个问题 —— 所有 AI 调用怎么出去。

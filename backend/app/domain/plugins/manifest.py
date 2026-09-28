@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING
 
 from mosael_formats.plugin_manifest import (
     CODE_FIELD_TYPES,
+    DOCUMENT_PARSE,
     FIELD_TYPES,
     GENERATION,
     HOST_ONLY_CAPABILITIES,
@@ -58,6 +59,7 @@ def manifest_of(package: "PluginPackage") -> Manifest:
 __all__ = [
     "Author",
     "CODE_FIELD_TYPES",
+    "DOCUMENT_PARSE",
     "FIELD_TYPES",
     "Field",
     "GENERATION",

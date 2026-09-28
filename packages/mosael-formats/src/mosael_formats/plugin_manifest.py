@@ -60,7 +60,10 @@ GENERATION = "generation"
 #: `tools`:**运行时报出工具清单**(见 domain/plugins/dynamic_tools)。认领它的那个工具只回答「我这个连接此刻
 #: 有哪些工具」,本身不是给智能体调的。
 TOOLS = "tools"
-HOST_ONLY_CAPABILITIES = frozenset({GENERATION, TOOLS})
+#: `document_parse`:**把一份文档解析成 Markdown**(ADR 0031)。认领它的工具由宿主在解析任务里调(收一份文件、
+#: 边跑边报进度、交回 Markdown 和图片),智能体读文档走宿主的 read_document,不直接调它 —— 和生成同一个理由。
+DOCUMENT_PARSE = "document_parse"
+HOST_ONLY_CAPABILITIES = frozenset({GENERATION, TOOLS, DOCUMENT_PARSE})
 
 
 def text_of(value: Any, locale: str | None = None, *, author_locale: str = "") -> str:
@@ -558,7 +561,7 @@ def _check_field_keys(fields: list[Field], path: str) -> None:
 def _check_host_only(
     package_provides: set[str], declared: list[dict[str, Any]], runtime: Runtime, path: str
 ) -> None:
-    """只给宿主调的能力(今天是 `generation`)比 `public_url` 多三条硬规矩,**装的那一刻就说清楚**。
+    """只给宿主调的能力(`generation`、`tools`、`document_parse`)比 `public_url` 多三条硬规矩,**装的那一刻就说清楚**。
 
     `public_url` 那边「包上声明了、没有工具认领」是一个老版本,生成时再让用户去更新;这里不留那个口子:
     生成能力是新的,没有老版本要照顾,而一个认领不清的生成插件会在选择器里长出一排点了必然失败的模型。
@@ -641,6 +644,7 @@ __all__ = [
     "CODE_FIELD_TYPES",
     "FIELD_TYPES",
     "Field",
+    "DOCUMENT_PARSE",
     "GENERATION",
     "HOST_ONLY_CAPABILITIES",
     "KEY_RE",

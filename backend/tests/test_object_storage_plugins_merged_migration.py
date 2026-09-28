@@ -191,9 +191,9 @@ def test_老连接原地搬进对象存储_引用跟着改_老包不见了_再�
     assert (settings.plugins_dir / "text-toolkit" / "mosael.plugin.json").is_file()
 
     # 搬过来的连接在新包上真的能用:素材外链的设置里认得它,配好了
-    state = client.get("/api/settings/asset-link-storage").json()
+    state = next(one for one in client.get("/api/settings/capabilities").json() if one["capability"] == "public_url")
     assert state["current"] == ids["oss"]
-    assert {o["instance_id"]: o["missing"] for o in state["options"]}[ids["oss"]] == []
+    assert {o["id"]: o["missing"] for o in state["options"]}[ids["oss"]] == []
 
     migrate()
     with SessionLocal() as db:

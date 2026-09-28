@@ -24,8 +24,8 @@ Mosael 是本地优先的:素材在用户自己的盘上,没有公网地址。�
 - **只看发起人自己的实例。** 存储实例是个人的(桶和密钥都是他的);此前查的是整个部署里的全部
   实例,多人部署时 A 的素材会用 B 的桶和密钥传上去 —— 文件落在别人的桶里,钱也记在别人头上。
 - **只看配好的。** 桶名、密钥缺一项的不算候选。
-- **配好了一家就用它;配好了几家,用他定为默认的那家**(「设置 → 素材外链」,
-  存在 PluginCapabilityDefault)。**没定就当场问,不替他挑** —— 此前按实例名的字母序取第一个,
+- **配好了一家就用它;配好了几家,用他定为默认的那家**(「设置 → 能力提供方 → 素材外链」,
+  存在 PluginCapabilityDefault;挑法是 domain/capabilities 那一份,和文档解析共用)。**没定就当场问,不替他挑** —— 此前按实例名的字母序取第一个,
   谁被用上取决于它叫什么。
 - 上传工具由工具自己声明(清单里工具上的 `provides`),不按 `_upload` 后缀猜。
 
@@ -51,7 +51,9 @@ import logging
 from datetime import timedelta
 from typing import TYPE_CHECKING
 
-from app.core.i18n import LocalizedError, tr
+from app.core.i18n import tr
+from app.domain import capabilities
+from app.domain.capabilities import Capability, CapabilityUnavailable
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
@@ -66,103 +68,28 @@ LINK_TTL_SECONDS = 6 * 3600
 REUSE_MARGIN = timedelta(hours=1)
 
 
-class NoUploader(LocalizedError, RuntimeError):
+class NoUploader(CapabilityUnavailable):
     """没有可用的上传插件。消息是给用户看的,要说清下一步做什么。带文案 key(`genErr_*`)。"""
 
 
-def _missing(db: "Session", instance) -> list[str]:
-    """这个实例还缺哪些必填项(配置和凭据都算)。"""
-    from app.domain.plugins import instances as inst
-
-    manifest = inst.manifest_for(db, instance)
-    values = inst.credential_values(db, instance.id)
-    return inst.missing_config(db, instance) + [
-        spec.label for spec in manifest.credentials if spec.required and not values.get(spec.key)
-    ]
-
-
-def uploaders(db: "Session", owner_user_id: str | None) -> list:
-    """这个人**自己的**、启用着的、声明了 `public_url` 的插件实例 —— 按声明找,不按名字猜。"""
-    from sqlalchemy import select
-
-    from app.db.models import PluginInstance
-    from app.domain.plugins import instances as inst
-
-    if not owner_user_id:
-        return []
-    found = []
-    rows = db.scalars(select(PluginInstance).where(
-        PluginInstance.owner_user_id == owner_user_id, PluginInstance.enabled.is_(True),
-    ))
-    for instance in rows:
-        try:
-            manifest = inst.manifest_for(db, instance)
-        except Exception:  # noqa: BLE001 —— 一个装坏了的插件不该让整条生成链失败
-            logger.warning("读不出插件 %s 的清单,跳过", instance.id, exc_info=True)
-            continue
-        if PUBLIC_URL in manifest.provides:
-            found.append((instance, manifest))
-    return sorted(found, key=lambda pair: pair[0].name or "")
-
-
-def default_uploader_id(db: "Session", owner_user_id: str) -> str | None:
-    from app.domain.plugins import capability_defaults
-
-    return capability_defaults.default_of(db, owner_user_id, PUBLIC_URL)
-
-
-def storage_choices(db: "Session", owner_user_id: str) -> dict:
-    """设置页「素材外链」那一格要画的东西:我的每一家存储(配没配好、缺什么)、我定的那家,
-    以及没定时实际会用哪一家(只有一家配好时)。"""
-    candidates = uploaders(db, owner_user_id)
-    options = [
-        {"instance_id": instance.id, "name": instance.name, "missing": _missing(db, instance)}
-        for instance, _manifest in candidates
-    ]
-    ready = [option for option in options if not option["missing"]]
-    chosen = default_uploader_id(db, owner_user_id)
-    if chosen not in {option["instance_id"] for option in options}:
-        chosen = None
-    return {
-        "current": chosen,
-        #: **不选的话**会用哪一家(只有一家配好时)—— 和当前选没选无关。此前选定之后它变成 None,
-        #: 界面上「不选」那一项就跟着改口成「还没有配好的存储」,明明刚选的那家就配好了。
-        "automatic": ready[0]["instance_id"] if len(ready) == 1 else None,
-        "options": options,
-    }
+#: 素材外链这项能力的契约。挑哪一家、挑不出来时说什么都在 domain/capabilities 那一份挑法里;
+#: 这里只给文案和「只有一家配好就不问直接用」(装了对象存储就是为这个)。没有内置实现。
+CAPABILITY = Capability(
+    name=PUBLIC_URL,
+    label_key="capability_public_url",
+    description_key="capability_public_url_desc",
+    error=NoUploader,
+    none_key="genErr_noUploader",
+    incomplete_key="genErr_uploaderIncomplete",
+    ambiguous_key="genErr_uploaderAmbiguous",
+    outdated_key="genErr_uploaderOutdated",
+)
 
 
 def choose_uploader(db: "Session", owner_user_id: str | None, asset_name: str):
     """挑出这一次用哪一家存储,挑不出来时抛 `NoUploader`(消息给用户看)。"""
-    candidates = uploaders(db, owner_user_id)
-    if not candidates:
-        raise NoUploader("genErr_noUploader", asset=asset_name)
-    chosen_id = default_uploader_id(db, owner_user_id or "")
-    chosen = next((pair for pair in candidates if pair[0].id == chosen_id), None)
-    if chosen is None:
-        ready = [pair for pair in candidates if not _missing(db, pair[0])]
-        if len(ready) == 1:
-            chosen = ready[0]
-        elif not ready:
-            first = candidates[0][0]
-            raise NoUploader(
-                "genErr_uploaderIncomplete", plugin=first.name,
-                missing=tr("punct_listSep").join(_missing(db, first)), asset=asset_name,
-            )
-        else:
-            names = tr("punct_listSep").join(pair[0].name for pair in ready)
-            raise NoUploader("genErr_uploaderAmbiguous", names=names, asset=asset_name)
-    instance, manifest = chosen
-    missing = _missing(db, instance)
-    if missing:
-        raise NoUploader(
-            "genErr_uploaderIncomplete", plugin=instance.name,
-            missing=tr("punct_listSep").join(missing), asset=asset_name,
-        )
-    tool = manifest.tool_providing(PUBLIC_URL)
-    if not tool:
-        raise NoUploader("genErr_uploaderOutdated", plugin=instance.name)
-    return instance, tool
+    provider = capabilities.choose(db, owner_user_id, CAPABILITY, asset=asset_name)
+    return provider.instance, provider.tool
 
 
 def _granted_seconds(output: dict) -> int:

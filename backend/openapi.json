@@ -15120,20 +15120,24 @@
         }
       }
     },
-    "/api/settings/asset-link-storage": {
+    "/api/settings/capabilities": {
       "get": {
         "tags": [
           "settings"
         ],
-        "summary": "Get Asset Link Storage",
-        "operationId": "get_asset_link_storage_api_settings_asset_link_storage_get",
+        "summary": "List Capability Choices",
+        "operationId": "list_capability_choices_api_settings_capabilities_get",
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AssetLinkStorageOut"
+                  "items": {
+                    "$ref": "#/components/schemas/CapabilityChoicesOut"
+                  },
+                  "type": "array",
+                  "title": "Response List Capability Choices Api Settings Capabilities Get"
                 }
               }
             }
@@ -15149,22 +15153,35 @@
             }
           }
         }
-      },
+      }
+    },
+    "/api/settings/capabilities/{name}": {
       "put": {
         "tags": [
           "settings"
         ],
-        "summary": "Set Asset Link Storage",
-        "operationId": "set_asset_link_storage_api_settings_asset_link_storage_put",
+        "summary": "Set Capability Default",
+        "operationId": "set_capability_default_api_settings_capabilities__name__put",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          }
+        ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/AssetLinkStorageUpdate"
+                "$ref": "#/components/schemas/CapabilityDefaultUpdate"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
@@ -15172,7 +15189,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AssetLinkStorageOut"
+                  "$ref": "#/components/schemas/CapabilityChoicesOut"
                 }
               }
             }
@@ -21130,83 +21147,6 @@
         "title": "AssetFrameRequest",
         "description": "从一段视频里取某一时刻的一帧,存成一份新素材。"
       },
-      "AssetLinkStorageOption": {
-        "properties": {
-          "instance_id": {
-            "type": "string",
-            "title": "Instance Id"
-          },
-          "name": {
-            "type": "string",
-            "title": "Name"
-          },
-          "missing": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Missing"
-          }
-        },
-        "type": "object",
-        "required": [
-          "instance_id",
-          "name"
-        ],
-        "title": "AssetLinkStorageOption"
-      },
-      "AssetLinkStorageOut": {
-        "properties": {
-          "current": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Current"
-          },
-          "automatic": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Automatic"
-          },
-          "options": {
-            "items": {
-              "$ref": "#/components/schemas/AssetLinkStorageOption"
-            },
-            "type": "array",
-            "title": "Options"
-          }
-        },
-        "type": "object",
-        "title": "AssetLinkStorageOut"
-      },
-      "AssetLinkStorageUpdate": {
-        "properties": {
-          "instance_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Instance Id"
-          }
-        },
-        "type": "object",
-        "title": "AssetLinkStorageUpdate"
-      },
       "AssetOut": {
         "properties": {
           "id": {
@@ -22325,6 +22265,76 @@
         "title": "CanvasCommentAnchor",
         "description": "Stable flow-space location for feedback attached to a board."
       },
+      "CapabilityChoicesOut": {
+        "properties": {
+          "capability": {
+            "type": "string",
+            "title": "Capability"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description",
+            "default": ""
+          },
+          "current": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current"
+          },
+          "automatic": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Automatic"
+          },
+          "options": {
+            "items": {
+              "$ref": "#/components/schemas/CapabilityProviderOut"
+            },
+            "type": "array",
+            "title": "Options"
+          }
+        },
+        "type": "object",
+        "required": [
+          "capability",
+          "label"
+        ],
+        "title": "CapabilityChoicesOut",
+        "description": "「设置 → 能力提供方」里的一项(ADR 0031 §5)。"
+      },
+      "CapabilityDefaultUpdate": {
+        "properties": {
+          "provider_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider Id"
+          }
+        },
+        "type": "object",
+        "title": "CapabilityDefaultUpdate"
+      },
       "CapabilityModelOut": {
         "properties": {
           "provider_profile_id": {
@@ -22481,6 +22491,37 @@
         ],
         "title": "CapabilityProfileSchemaOut",
         "description": "参数组可视表单的结构描述 —— 表单唯一的事实源(见 domain/generation/custom_profiles.py)。"
+      },
+      "CapabilityProviderOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "builtin": {
+            "type": "boolean",
+            "title": "Builtin",
+            "default": false
+          },
+          "missing": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Missing"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "CapabilityProviderOut",
+        "description": "一项宿主能力的一个候选:内置实现(`builtin`),或这个人的一个插件连接。"
       },
       "ClipIdsRequest": {
         "properties": {

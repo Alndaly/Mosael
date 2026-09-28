@@ -120,6 +120,11 @@ Accepted — 2026-09-28。维护者拍板:
    **已完成**(2026-09-28):扩展名 / 类型认文档;认不出、ffprobe 也探不出画面声音的拒收(415,说清楚能导什么),
    说了是视频的照收;时间线拒放文档(`insert_clip`);迁移 `migrate-documents-are-not-videos`;缩略图和页数随第三步解析写。
 2. **能力表**:`domain/capabilities`,把 `public_url`、`generation` 搬上去;「设置 → 默认提供方」。
+   **已完成**(2026-09-28):`Capability` 契约 + `Provider` 候选(内置的也是一个候选)+ 一份挑法(`choose` / `choices` /
+   `set_default`);`public_url` 搬上去(行为和文案不变),`document_parse` 登记为第二项(内置 `builtin:local`,
+   `auto_single=False`);设置页「素材外链」换成「能力提供方」(`GET/PUT /api/settings/capabilities`);清单规则里
+   `document_parse` 是只给宿主调的能力。`generation` 的挑法本来就是「每个连接都是一家」,没有默认可选,留在原处,
+   只在清单规则和文档的能力表里和其它几项并列。
 3. **本地解析 + 派生物**:`asset_extractions`、`document_parse` 任务、markitdown + pypdfium2、页面图。
 4. **智能体读文档**:`read_document`、`view_document_pages`、附件进上下文的规则;工作流节点;画板文档格喂全文;存成笔记。
 5. **MinerU 插件**:云端 + 自建两种连接,选项、进度、结果交回;「用 MinerU 重新解析」。

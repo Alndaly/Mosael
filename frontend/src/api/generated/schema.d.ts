@@ -5037,17 +5037,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/settings/asset-link-storage": {
+    "/api/settings/capabilities": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Get Asset Link Storage */
-        get: operations["get_asset_link_storage_api_settings_asset_link_storage_get"];
-        /** Set Asset Link Storage */
-        put: operations["set_asset_link_storage_api_settings_asset_link_storage_put"];
+        /** List Capability Choices */
+        get: operations["list_capability_choices_api_settings_capabilities_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/settings/capabilities/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Set Capability Default */
+        put: operations["set_capability_default_api_settings_capabilities__name__put"];
         post?: never;
         delete?: never;
         options?: never;
@@ -7298,29 +7314,6 @@ export interface components {
             /** Project Id */
             project_id?: string | null;
         };
-        /** AssetLinkStorageOption */
-        AssetLinkStorageOption: {
-            /** Instance Id */
-            instance_id: string;
-            /** Name */
-            name: string;
-            /** Missing */
-            missing?: string[];
-        };
-        /** AssetLinkStorageOut */
-        AssetLinkStorageOut: {
-            /** Current */
-            current?: string | null;
-            /** Automatic */
-            automatic?: string | null;
-            /** Options */
-            options?: components["schemas"]["AssetLinkStorageOption"][];
-        };
-        /** AssetLinkStorageUpdate */
-        AssetLinkStorageUpdate: {
-            /** Instance Id */
-            instance_id?: string | null;
-        };
         /** AssetOut */
         AssetOut: {
             /** Id */
@@ -7812,6 +7805,32 @@ export interface components {
             node_id?: string | null;
         };
         /**
+         * CapabilityChoicesOut
+         * @description 「设置 → 能力提供方」里的一项(ADR 0031 §5)。
+         */
+        CapabilityChoicesOut: {
+            /** Capability */
+            capability: string;
+            /** Label */
+            label: string;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /** Current */
+            current?: string | null;
+            /** Automatic */
+            automatic?: string | null;
+            /** Options */
+            options?: components["schemas"]["CapabilityProviderOut"][];
+        };
+        /** CapabilityDefaultUpdate */
+        CapabilityDefaultUpdate: {
+            /** Provider Id */
+            provider_id?: string | null;
+        };
+        /**
          * CapabilityModelOut
          * @description 某能力下的一个候选模型(跨连接)。
          *
@@ -7873,6 +7892,23 @@ export interface components {
             };
             /** Fields */
             fields: components["schemas"]["CapabilityProfileFieldOut"][];
+        };
+        /**
+         * CapabilityProviderOut
+         * @description 一项宿主能力的一个候选:内置实现(`builtin`),或这个人的一个插件连接。
+         */
+        CapabilityProviderOut: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /**
+             * Builtin
+             * @default false
+             */
+            builtin: boolean;
+            /** Missing */
+            missing?: string[];
         };
         /**
          * ClipIdsRequest
@@ -23878,7 +23914,7 @@ export interface operations {
             };
         };
     };
-    get_asset_link_storage_api_settings_asset_link_storage_get: {
+    list_capability_choices_api_settings_capabilities_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -23893,7 +23929,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AssetLinkStorageOut"];
+                    "application/json": components["schemas"]["CapabilityChoicesOut"][];
                 };
             };
             /** @description Validation Error */
@@ -23907,16 +23943,18 @@ export interface operations {
             };
         };
     };
-    set_asset_link_storage_api_settings_asset_link_storage_put: {
+    set_capability_default_api_settings_capabilities__name__put: {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                name: string;
+            };
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["AssetLinkStorageUpdate"];
+                "application/json": components["schemas"]["CapabilityDefaultUpdate"];
             };
         };
         responses: {
@@ -23926,7 +23964,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AssetLinkStorageOut"];
+                    "application/json": components["schemas"]["CapabilityChoicesOut"];
                 };
             };
             /** @description Validation Error */
