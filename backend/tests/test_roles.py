@@ -1,13 +1,13 @@
 """角色阶梯的纯逻辑。
 
 此前这个文件还测「权限位默认值」「每人覆盖」「owner 忽略覆盖」—— 那套矩阵在 ADR 0008 D4 里退场了
-(理由见 app/core/roles.py 的模块说明)。**行为层面的覆盖没有变薄**:四个角色各自能做什么,现在由
+(理由见 app/domain/roles.py 的模块说明)。**行为层面的覆盖没有变薄**:四个角色各自能做什么,现在由
 tests/test_roles_are_permissions.py 端到端地钉,那比断言一张字典更接近用户会撞到的东西。
 """
 
 from __future__ import annotations
 
-from app.core.roles import ROLES, role_at_least, role_rank
+from app.domain.roles import ROLES, role_at_least, role_rank
 
 
 def test_role_ladder() -> None:

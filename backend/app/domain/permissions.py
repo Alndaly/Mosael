@@ -23,7 +23,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.i18n import LocalizedError
-from app.core.roles import role_at_least
+from app.domain.roles import role_at_least
 from app.core.usage_scope import bind_workspace
 from app.db.models import Asset, ProviderProfile, Sequence, User, WorkspaceMember
 

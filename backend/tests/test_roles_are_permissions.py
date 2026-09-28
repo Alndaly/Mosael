@@ -112,7 +112,7 @@ def test_owner_can_delete_the_workspace() -> None:
 
 def test_there_is_no_permission_matrix_left() -> None:
     """删掉而不是留着不用:一个摆在那儿没人配的矩阵,只会让人以为它在起作用。"""
-    import app.core.roles as roles
+    import app.domain.roles as roles
 
     assert not hasattr(roles, "PERMS"), "权限位常量还在"
     assert not hasattr(roles, "effective_perms"), "逐位求值还在"
