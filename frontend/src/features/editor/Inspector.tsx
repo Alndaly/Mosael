@@ -91,7 +91,13 @@ export function Inspector({
   const isTextClip = Boolean(
     selectedClip && !selectedClip.asset_id && !offlineAsset && selectedClip.text_override != null,
   );
-  const isVisualClip = asset?.kind === "video" || asset?.kind === "image";
+  // 哪些区块出现由**素材类型**决定,不由轨道决定:音频没有画面(调色、变换、画面淡入淡出),
+  // 图片没有声音(音量、声音淡入淡出)。读片段自带的 asset_kind —— 脱机片段也报它原来的类型。
+  const clipKind = selectedClip?.asset_kind ?? "";
+  const isVisualClip = clipKind === "video" || clipKind === "image";
+  const hasSound = clipKind === "video" || clipKind === "audio";
+  // 没有画面的片段(音频、字幕、花字)没有调色页;记住的页签不改,换回画面片段时还在原处。
+  const activeTab = isVisualClip ? tab : "props";
   const effects = (selectedClip?.effects ?? {}) as {
     fade_in?: number;
     fade_out?: number;
@@ -147,15 +153,10 @@ export function Inspector({
   const isIdentityTransform =
     !anyKeyframes && transform.scale === 1 && transform.x === 0 && transform.y === 0 && transform.rotation === 0 && transform.opacity === 1;
 
-  // 字幕片段没有调色;切换选中对象时回到属性页。
-  React.useEffect(() => {
-    if (isTextClip) setTab("props");
-  }, [selectedClip?.id, isTextClip]);
-
   return (
     <section className="min-h-0 editor-pane overflow-hidden bg-workspace-panel grid min-h-0 grid-rows-[auto_minmax(0,1fr)]">
       <div className="editor-pane-header flex items-center justify-between px-4 [&_h2]:m-0 [&_h2]:text-ui-sm [&_h2]:font-semibold [&_h2]:text-muted-foreground">
-        {selectedClip && !isTextClip ? (
+        {selectedClip && isVisualClip ? (
           /* 用剪辑台自己那套 tab(`.editor-mode-tab`,和左栏的素材/逐字稿/字幕/配音同一个),
              不是通用的 SEGMENTED_LIST。后者会在两个标签外面再包一层 40px 的承托底色 ——
              塞进 44px 的面板头里上下只剩 2px,而同排的图标按钮才 24px,于是这一块又高又重;
@@ -165,8 +166,8 @@ export function Inspector({
             <button
               type="button"
               role="tab"
-              aria-selected={tab === "props"}
-              className={cn("editor-mode-tab", tab === "props" && "is-active")}
+              aria-selected={activeTab === "props"}
+              className={cn("editor-mode-tab", activeTab === "props" && "is-active")}
               onClick={() => setTab("props")}
             >
               {t("inspectorProps")}
@@ -174,8 +175,8 @@ export function Inspector({
             <button
               type="button"
               role="tab"
-              aria-selected={tab === "color"}
-              className={cn("editor-mode-tab", tab === "color" && "is-active")}
+              aria-selected={activeTab === "color"}
+              className={cn("editor-mode-tab", activeTab === "color" && "is-active")}
               onClick={() => setTab("color")}
             >
               {t("colorGrade")}
@@ -210,7 +211,7 @@ export function Inspector({
         </div>
       </div>
       {selectedClip ? (
-        tab === "color" && !isTextClip ? (
+        activeTab === "color" ? (
           <ColorGradePanel
             clip={selectedClip}
             workspaceId={workspaceId}
@@ -288,7 +289,7 @@ export function Inspector({
               </InspectorSection>
             )}
             {/* A clip carries its own audio (video clips too, like PR/DaVinci): mix its level/mute. 音量可打关键帧。 */}
-            {!isTextClip && onSetGain &&
+            {hasSound && onSetGain &&
               (() => {
                 const gainKfs: GainKeyframe[] = Array.isArray((effects as { gain_keyframes?: unknown }).gain_keyframes)
                   ? ((effects as { gain_keyframes?: GainKeyframe[] }).gain_keyframes ?? [])
@@ -338,14 +339,16 @@ export function Inspector({
                   </InspectorSection>
                 );
               })()}
-            {!isTextClip && (
+            {(isVisualClip || hasSound) && (
               <InspectorSection>
-                {(
-                  [
-                    { title: t("videoFade"), inKey: "video_fade_in", outKey: "video_fade_out", inV: effects.video_fade_in, outV: effects.video_fade_out },
-                    { title: t("audioFade"), inKey: "fade_in", outKey: "fade_out", inV: effects.fade_in, outV: effects.fade_out },
-                  ] as const
-                ).map((grp) => (
+                {[
+                  ...(isVisualClip
+                    ? [{ title: t("videoFade"), inKey: "video_fade_in", outKey: "video_fade_out", inV: effects.video_fade_in, outV: effects.video_fade_out } as const]
+                    : []),
+                  ...(hasSound
+                    ? [{ title: t("audioFade"), inKey: "fade_in", outKey: "fade_out", inV: effects.fade_in, outV: effects.fade_out } as const]
+                    : []),
+                ].map((grp) => (
                   <div key={grp.title} className="grid gap-1">
                     <span className="text-ui-sm font-semibold text-muted-foreground">{grp.title}</span>
                     <div className="grid grid-cols-2 gap-1.5">
@@ -379,7 +382,7 @@ export function Inspector({
               </InspectorSection>
             )}
             {isVisualClip && <ClipAppearancePanel clip={selectedClip} onSetEffects={onSetEffects} />}
-            {(!isTextClip || isTitleText) && onSetTransform && (
+            {(isVisualClip || isTitleText) && onSetTransform && (
               <InspectorSection
                 className="gap-1.5"
                 title={

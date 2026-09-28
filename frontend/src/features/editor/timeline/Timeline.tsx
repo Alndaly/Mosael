@@ -51,6 +51,11 @@ function cachedPeaks(
   return value;
 }
 
+/** 有声音可处理的片段(分离、降噪),和素材库的判据一致:视频也算,图片不算。 */
+function clipHasSound(clip: Clip): boolean {
+  return clip.asset_kind === "audio" || clip.asset_kind === "video";
+}
+
 export interface TrimPayload {
   timeline_start: number;
   src_in: number;
@@ -159,6 +164,26 @@ export function Timeline({
 
   const tracks = sequence.tracks ?? [];
   const allClips = React.useMemo(() => tracks.flatMap((track) => track.clips ?? []), [tracks]);
+
+  // 删除 / 波纹删除只有一条路径:工具栏、Delete 键、片段右键都作用在**整个选区**上。
+  // 此前右键只删被点的那一段,多选后右键删除看着像只删了一半。
+  const deleteClips = (clipIds: string[]) => {
+    if (!onDeleteClip) return;
+    if (onDeleteClips) onDeleteClips(clipIds);
+    else clipIds.forEach((clipId) => onDeleteClip(clipId));
+  };
+  const rippleDeleteClips = (clipIds: string[]) => {
+    if (!onRippleDeleteClip) return;
+    if (onRippleDeleteClips) onRippleDeleteClips(clipIds);
+    else clipIds.forEach((clipId) => onRippleDeleteClip(clipId));
+  };
+  /** 右键菜单作用在谁身上:点的那一段在选区里就是整个选区,不在就只是它自己。 */
+  const menuTargets = (clipId: string) => {
+    const selected = useEditorStore.getState().selectedClipIds;
+    return selected.includes(clipId) ? selected : [clipId];
+  };
+  // 复制片段只复制素材片段:文字、字幕和脱机片段没有 asset_id,复制不出东西 —— 入口就不给。
+  const duplicateTarget = allClips.find((clip) => clip.id === selectedClipIds[selectedClipIds.length - 1]);
 
   // 落位动画(前身项目同款):提交回包落进缓存、而 EditorView 的效应还没清草稿的
   // 那一帧,缓存已是终值 — 把"追平了缓存的 settling 草稿"视作已清,片段在该帧带着
@@ -699,8 +724,8 @@ export function Timeline({
                 <Button
                   variant="ghost"
                   size="icon-sm"
-                  disabled={!selectedClipIds.length}
-                  onClick={() => selectedClipIds[0] && onDuplicateClip(selectedClipIds[selectedClipIds.length - 1])}
+                  disabled={!duplicateTarget?.asset_id}
+                  onClick={() => duplicateTarget && onDuplicateClip(duplicateTarget.id)}
                   aria-label={t("duplicateClip")}
                 >
                   <Copy size={14} />
@@ -716,11 +741,7 @@ export function Timeline({
                   variant="ghost"
                   size="icon-sm"
                   disabled={!selectedClipIds.length}
-                  onClick={() =>
-                    onRippleDeleteClips
-                      ? onRippleDeleteClips(selectedClipIds)
-                      : selectedClipIds.forEach((clipId) => onRippleDeleteClip(clipId))
-                  }
+                  onClick={() => rippleDeleteClips(selectedClipIds)}
                   aria-label={t("rippleDelete")}
                 >
                   <Waves size={14} />
@@ -736,9 +757,7 @@ export function Timeline({
                   variant="ghost"
                   size="icon-sm"
                   disabled={!selectedClipIds.length}
-                  onClick={() =>
-                    onDeleteClips ? onDeleteClips(selectedClipIds) : selectedClipIds.forEach((clipId) => onDeleteClip(clipId))
-                  }
+                  onClick={() => deleteClips(selectedClipIds)}
                   aria-label={t("deleteClip")}
                 >
                   <Trash2 size={14} />
@@ -1072,24 +1091,26 @@ export function Timeline({
                       onSelect={() => {
                         if (!useEditorStore.getState().selectedClipIds.includes(clip.id)) selectClip(clip.id);
                       }}
-                      onDelete={onDeleteClip ? () => onDeleteClip(clip.id) : undefined}
-                      onRippleDelete={onRippleDeleteClip ? () => onRippleDeleteClip(clip.id) : undefined}
+                      onDelete={onDeleteClip ? () => deleteClips(menuTargets(clip.id)) : undefined}
+                      onRippleDelete={onRippleDeleteClip ? () => rippleDeleteClips(menuTargets(clip.id)) : undefined}
                       onSplit={onSplitClip ? () => onSplitClip(clip.id) : undefined}
-                      onDuplicate={onDuplicateClip ? () => onDuplicateClip(clip.id) : undefined}
+                      onDuplicate={onDuplicateClip && clip.asset_id ? () => onDuplicateClip(clip.id) : undefined}
+                      // 下面三项按**素材类型**给,不按轨道:视频轨上完全可以放图片(AI 生成的
+                      // 静图就是这么落上去的),而图片没有声音。
                       onDetachAudio={
-                        onDetachAudio && track.kind === "video" && clip.asset_id
+                        onDetachAudio && track.kind === "video" && clip.asset_id && clip.asset_kind === "video"
                           ? () => onDetachAudio(clip.id)
                           : undefined
                       }
-                      // 视频轨和音频轨都给:声音在哪都能拆,而译配那条流程恰恰把原片整段
+                      // 视频和音频都给:声音在哪都能拆,而译配那条流程恰恰把原片整段
                       // 放在视频轨上(音频轨是空的)。
                       onSeparateAudio={
-                        onSeparateAudio && clip.asset_id && (track.kind === "video" || track.kind === "audio")
+                        onSeparateAudio && clip.asset_id && clipHasSound(clip)
                           ? () => onSeparateAudio(clip.id)
                           : undefined
                       }
                       onDenoise={
-                        onDenoise && clip.asset_id && (track.kind === "video" || track.kind === "audio")
+                        onDenoise && clip.asset_id && clipHasSound(clip)
                           ? () => onDenoise(clip.asset_id as string)
                           : undefined
                       }

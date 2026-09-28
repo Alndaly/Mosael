@@ -182,4 +182,18 @@ describe("逐字稿页的转写入口", () => {
     fireEvent.click(header);
     await waitFor(() => expect(started).toEqual(["voice"]));
   });
+
+  it("能转的都转过了:按钮禁用并说一声 —— 是正常状态,不是红字报错,也不发请求", async () => {
+    const { started } = serve({ transcripts: ["vid", "voice"] });
+    renderPanel(sequence([clip("c1", "vid", "video", 0)], [clip("c2", "voice", "audio", 0)]));
+
+    await screen.findByText("vid 说的话");
+    const button = screen.getByRole("button", { name: "aiTranscribe" });
+    expect(button).toBeDisabled();
+    expect(button).toHaveAttribute("title", "transcribeAllDone");
+    fireEvent.click(button);
+    expect(started).toEqual([]);
+    expect(document.querySelector(".text-destructive")).toBeNull();
+  });
 });
+

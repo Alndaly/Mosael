@@ -206,17 +206,13 @@ export function TranscriptPanel({
 
   const startAll = React.useCallback(() => {
     const pending = pendingIds;
+    // 全都转过了时两颗按钮本身就是禁用的(见 allTranscribed),这里不会走到。
+    if (pending.length === 0) return;
     setFailures([]);
     setAsrError(null);
-    // 全都转过了 → 点下去什么都不会发生。**说一声** —— 一个没有反应的按钮比一句话更让人困惑,
-    // 而这一屏此刻显示的正是那些已有的逐字稿,他要的东西其实已经在眼前了。
-    if (pending.length === 0) {
-      setAsrError(t("transcribeAllDone"));
-      return;
-    }
     setQueueTotal(pending.length);
     setQueue(pending);
-  }, [pendingIds, t]);
+  }, [pendingIds]);
   // **换个页面再回来,进度还在。**
   //
   // 队列活在组件的 state 里,一卸载就没了 —— 而任务在后端还跑着。此前回来看到的是一个安静的
@@ -308,15 +304,18 @@ export function TranscriptPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [queue.length, asrJobId, failures.length]);
   const asrRunning = startAsr.isPending || Boolean(asrJobId) || queue.length > 0;
+  // 能转的都转过了:按钮禁用,并用普通的说明文字说一声 —— 这是正常状态,不是出错,不该是红字;
+  // 而一颗点下去什么都不发生的按钮比一句话更让人困惑。
+  const allTranscribed = assetIds.length > 0 && pendingIds.length === 0;
   // 进度按**素材**数报,不按任务数 —— 用户看的是"这条时间线转到哪了"。
   const asrProgress = queueTotal > 1 ? `${Math.min(queueTotal - queue.length + 1, queueTotal)}/${queueTotal}` : "";
   const transcribeButton = assetIds.length > 0 && (
     <button
       type="button"
       className={PILL}
-      disabled={asrRunning || noAsrEngine || transcriptsLoading}
+      disabled={asrRunning || noAsrEngine || transcriptsLoading || allTranscribed}
       // 已经有逐字稿之后,这颗按钮转的是**后来加上来的**那几段 —— 数字让人知道点下去会转什么。
-      title={pendingIds.length > 0 ? t("transcribePendingHint").replace("{n}", String(pendingIds.length)) : undefined}
+      title={allTranscribed ? t("transcribeAllDone") : t("transcribePendingHint").replace("{n}", String(pendingIds.length))}
       onClick={startAll}
     >
       {/* 按钮只放**短**的:一个动词 + 进度。后端那句状态("funasr 转写中(首次会自动下载模型)")
@@ -534,12 +533,14 @@ export function TranscriptPanel({
           <p className="max-w-[240px] text-ui-xs leading-[1.6] text-muted-foreground">
             {assetIds.length === 0
               ? t("transcriptNoAudioClips")
-              : t("transcriptFlowHint").replace("{n}", String(pendingIds.length || assetIds.length))}
+              : allTranscribed
+                ? t("transcribeAllDone")
+                : t("transcriptFlowHint").replace("{n}", String(pendingIds.length))}
           </p>
         )}
         {busy && asrProgress && <p className="text-ui-xs tabular-nums">{asrProgress}</p>}
         {!busy && assetIds.length > 0 && (
-          <Button size="sm" disabled={noAsrEngine || transcriptsLoading} onClick={startAll}>
+          <Button size="sm" disabled={noAsrEngine || transcriptsLoading || allTranscribed} onClick={startAll}>
             <Mic size={13} /> {t("transcribeTimeline")}
           </Button>
         )}

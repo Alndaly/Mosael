@@ -49,7 +49,6 @@ const GRANDFATHERED = new Set<string>([
   "features/agent/trace/TraceView.tsx: h-6 w-6",
   "features/editor/Inspector.tsx: h-6",
   "features/plugins/PluginsView.tsx: h-6",
-  "features/settings/VoiceLibrarySection.tsx: h-6 w-6",
 ]);
 
 function sourceFiles(dir: string): string[] {

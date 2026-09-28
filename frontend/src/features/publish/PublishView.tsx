@@ -524,10 +524,16 @@ function CreatePublishDialog({
   });
   const platforms = useQuery({ queryKey: ["publish-platforms"], queryFn: listPublishPlatforms, enabled: open, staleTime: Infinity });
   const videos = (assets.data ?? []).filter((asset) => asset.kind === "video");
-  const selectedAccount = (accounts.data ?? []).find((account) => account.id === accountId) ?? null;
+  // 停用的账号发不出去(后端报 publishErr_accountDisabled):不列进可选项,只说一句它们去哪儿启用。
+  const allAccounts = accounts.data ?? [];
+  const usableAccounts = allAccounts.filter((account) => account.enabled);
+  const disabledAccounts = allAccounts.length - usableAccounts.length;
+  const selectedAccount = usableAccounts.find((account) => account.id === accountId) ?? null;
   const platformMeta =
     (platforms.data ?? []).find((item) => item.platform === selectedAccount?.platform) ?? null;
   const titleMax = platformMeta?.title_max ?? 300;
+  // 超长的标题后端会拒(publishErr_titleTooLong):计数变红的同时就不让提交,别等点了再报错。
+  const titleTooLong = title.trim().length > titleMax;
   const optionSpecs = platformMeta?.options ?? [];
   // 换平台就按新平台的声明重置:选项的键是平台专属的,带着上一个平台的键提交会被后端拒掉
   // (那是对的 —— 静默丢掉才会让人以为自己设了公开)。
@@ -581,7 +587,7 @@ function CreatePublishDialog({
             <Sparkles size={13} /> {t("publishAiCopy")}
           </Button>
           <Button variant="outline" size="sm" onClick={onClose}>{t("cancel")}</Button>
-          <Button size="sm" disabled={!assetId || !accountId} loading={create.isPending} onClick={() => create.mutate()}>
+          <Button size="sm" disabled={!assetId || !selectedAccount || titleTooLong} loading={create.isPending} onClick={() => create.mutate()}>
             <Rocket size={13} /> {t("publishStart")}
           </Button>
         </>
@@ -604,15 +610,17 @@ function CreatePublishDialog({
           <span>{t("publishAccount")}</span>
           <Combobox
             value={accountId ?? ""}
-            options={(accounts.data ?? []).map((account: PublishAccount) => ({ value: account.id, label: account.name }))}
+            options={usableAccounts.map((account: PublishAccount) => ({ value: account.id, label: account.name }))}
             placeholder={t("publishPickAccount")}
             emptyText={t("cmdkEmpty")}
             className="w-full"
             onValueChange={setAccountId}
           />
-          {(accounts.data ?? []).length === 0 && accounts.isSuccess && (
+          {accounts.isSuccess && (allAccounts.length === 0 || disabledAccounts > 0) && (
             <small>
-              {t("publishNoAccounts")}{" "}
+              {allAccounts.length === 0
+                ? t("publishNoAccounts")
+                : t("publishAccountsDisabledHidden").replace("{n}", String(disabledAccounts))}{" "}
               <button type="button" className="cursor-pointer border-0 bg-transparent p-0 text-[length:inherit] text-primary underline" onClick={onManageAccounts}>
                 {t("publishAccounts")}
               </button>
@@ -624,9 +632,9 @@ function CreatePublishDialog({
             {t("publishTitle")}
             <em className={cn(
               "ml-2 font-normal normal-case not-italic tracking-normal text-muted-foreground",
-              title.length > titleMax && "font-semibold text-destructive",
+              titleTooLong && "font-semibold text-destructive",
             )}>
-              {title.length}/{titleMax}
+              {title.trim().length}/{titleMax}
             </em>
           </span>
           <Input value={title} maxLength={titleMax + 20} onChange={(event) => setTitle(event.target.value)} />
