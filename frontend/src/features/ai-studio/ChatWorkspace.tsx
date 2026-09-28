@@ -3,7 +3,7 @@ import { SEGMENTED_LIST, segmentedTriggerClass } from "@/components/ui/tabs";
 import React from "react";
 import { StudioIndex } from "@/components/layout/StudioIndex";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronDown, ChevronRight, CircleDot, Database, Loader2, PanelRight, Paperclip, SearchX, Send, Sparkles, Square, Wrench } from "lucide-react";
+import { ChevronDown, ChevronRight, CircleDot, Database, Eye, Loader2, PanelRight, Paperclip, SearchX, Send, Sparkles, Square, Wrench } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -92,6 +92,9 @@ export function ChatWorkspace({
   // 当前会话、选择、新建、删后回落:和画布助手、免提浮标、页面跳转共用一份(见 currentAgentSession)。
   const current = useCurrentAgentSession(workspace.id);
   const activeSession = current.session;
+  //: 同事共享来的对话**只能看**(判据在 currentAgentSession.isViewOnly):输入区换成一句只读说明 —— 模型、
+  //: 会话设置、附件都在输入区里,一起不给;排队条、停止、拍板的按钮也是主人的。消息、轨迹、花费照看。
+  const readOnly = current.readOnly;
   //: 草稿是**编辑器文档**,不是字符串 —— `@` 出来的引用是原子节点(见 ChatComposer)。
   const [draft, setDraft] = React.useState<JSONContent>(emptyDocument);
   const draftText = React.useMemo(() => documentText(draft), [draft]);
@@ -318,7 +321,7 @@ export function ChatWorkspace({
   //: 确认卡掉回右上角的全局中心(少了「本会话始终允许」),选择卡哪儿都看不到,智能体干等到超时。
   const pendingCards = activeSession ? (
     <div className={cn(COMPOSER_COLUMN, "grid max-h-[40vh] min-w-0 gap-2 overflow-y-auto overflow-x-hidden empty:hidden")}>
-      <PendingDecisions workspaceId={workspace.id} sessionId={activeSession.id} />
+      <PendingDecisions workspaceId={workspace.id} sessionId={activeSession.id} readOnly={readOnly} />
     </div>
   ) : null;
 
@@ -450,17 +453,19 @@ export function ChatWorkspace({
                   label={t("chatParentRunning")}
                   meta={t("usageRunning").replace("{t}", formatElapsedSeconds(elapsedSeconds))}
                 />
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="xs"
-                  className="shrink-0"
-                  loading={stopTurn.isPending}
-                  onClick={() => stopTurn.mutate()}
-                >
-                  <Square size={11} fill="currentColor" />
-                  {t("chatStop")}
-                </Button>
+                {!readOnly && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="xs"
+                    className="shrink-0"
+                    loading={stopTurn.isPending}
+                    onClick={() => stopTurn.mutate()}
+                  >
+                    <Square size={11} fill="currentColor" />
+                    {t("chatStop")}
+                  </Button>
+                )}
               </div>
             )}
           </>
@@ -516,114 +521,127 @@ export function ChatWorkspace({
                     <Sparkles className="mb-6 size-9 text-primary" strokeWidth={1.4} />
                     <h2 className="text-3xl font-semibold leading-tight tracking-tight">{t("studioChatStart")}</h2>
                     <p className="mb-8 mt-4 max-w-[42ch] text-ui-md leading-relaxed text-muted-foreground">{t("studioChatIntro")}</p>
-                    <div className="flex flex-wrap gap-2">{(["Media", "Edit", "Workflow"] as const).map(kind => <Button key={kind} variant="outline" className="h-auto whitespace-normal py-3 text-left" onClick={() => setDraft({ type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text: t(`studioPrompt${kind}Text`) }] }] })}>{t(`studioPrompt${kind}`)}</Button>)}</div>
+                    {!readOnly && <div className="flex flex-wrap gap-2">{(["Media", "Edit", "Workflow"] as const).map(kind => <Button key={kind} variant="outline" className="h-auto whitespace-normal py-3 text-left" onClick={() => setDraft({ type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text: t(`studioPrompt${kind}Text`) }] }] })}>{t(`studioPrompt${kind}`)}</Button>)}</div>}
                   </div>
                 </div>
               )}
-              {activeSession && <PendingDecisions workspaceId={workspace.id} sessionId={activeSession.id} />}
+              {activeSession && <PendingDecisions workspaceId={workspace.id} sessionId={activeSession.id} readOnly={readOnly} />}
             </div>
             <JumpToLatest stick={stick} label={t("chatJumpToLatest")} newLabel={t("chatNewBelow")} />
             </div>
             )}
             {view === "trace" && pendingCards}
-            {/* Pending strip, above the composer: these have not been sent yet, so they do not
-                belong in the transcript. Each one can be steered into the running turn or
-                dropped — the Codex arrangement. */}
-            <QueuedMessages
-              messages={queue.data ?? []}
-              /* 和下面那个 form 同一个宽度表达式 —— 窗口一窄两个盒子必须一起缩。 */
-              className={COMPOSER_COLUMN}
-              onSteer={(id) => steerQueued.mutate(id)}
-              onCancel={(id) => cancelQueued.mutate(id)}
-              steering={steerQueued.isPending}
-              cancelling={cancelQueued.isPending}
-            />
-            <form
-              className={cn(COMPOSER_COLUMN, "mb-3.5 mt-1.5 flex flex-col gap-1 rounded-lg border border-border bg-control pb-1.5 pl-3 pr-2.5 pt-2.5 transition-colors duration-100 focus-within:border-ring")}
-              onSubmit={submit}
-            >
-              {/* 附件条属于输入框内部(文本框上方),而不是飘在圆角框外的左上角。 */}
-              {/* 附件和笔记引用是同一件事:这条消息里带了什么。一排,在输入卡里。 */}
-              <ComposerChips chips={[...attach.chips, ...noteAttach.chips]} uploading={attach.uploading} className="px-0.5" />
-              {attach.previewModal}
-              {noteAttach.dialog}
-              {/* `@` 唤起素材 / 笔记 / 画板 / 工作流。和画布助手共用一份 —— 同一个输入框在两个
-                  地方能力不同的话,用户没有任何办法预期哪个能干什么(附件那条也是这个理由)。 */}
-              <ChatComposer
-                workspaceId={workspace.id}
-                value={draft}
-                onChange={setDraft}
-                onSubmit={() => submit(new Event("submit") as unknown as React.FormEvent)}
-                onPaste={attach.onPaste}
-                placeholder={t("chatPlaceholder")}
-                className="min-h-11"
-              />
-              <div className="flex items-center justify-between gap-1.5 pt-0.5">
-                <div className="flex items-center gap-1.5">
-                  {noteAttach.trigger}
-                  {/* 28px —— 和画布助手那一行同一个刻度。见那边的说明。 */}
-                  <Button asChild variant="ghost" size="icon-xs" aria-label={t("attachFile")} disabled={attach.uploading}>
-                    <label>
-                      <input
-                        type="file"
-                        multiple
-                        className="hidden"
-                        onChange={(event) => {
-                          void attach.accept(event.currentTarget.files);
-                          event.currentTarget.value = "";
-                        }}
-                      />
-                      {attach.uploading ? <Loader2 size={14} className="animate-mosael-spin" /> : <Paperclip size={14} />}
-                    </label>
-                  </Button>
-                  {/* 和工作区助手共用同一个组件:两边各写一份的话,位置、顺序、有无迟早不一致。 */}
-                  <DictateButton
-                    onText={(text) =>
-                      setDraft((current) => appendText(current, text))
-                    }
-                  />
-                  {/* 免提不在这一行:它是"手离开键盘"的模式,而工具行只在助手面板打开时才在屏幕上 ——
-                      恰好在最需要它的时候不见了。改成应用级的浮标(features/agent/VoiceDock),
-                      由设置里的开关决定浮不浮。说话输入留着:那个是"把话填进这个框",本来就属于这里。 */}
-                  {/* 会话详情还在读时先用清单里那份:两者是同一条会话,只差水位。 */}
-                  <ModelPicker workspaceId={workspace.id} session={session.data ?? activeSession} />
-                  {/* 分析方式、思考档位、上下文整理收进这里 —— 它们是"配好就不再动"的东西,
-                      和每次都要用的模式/附件/模型平铺在一起只会稀释后者。 */}
-                  <SessionSettingsMenu
+            {readOnly ? (
+              // 同事共享来的对话:只能看。不摆一个点了会被拒的输入框,说清楚为什么、怎么办(自己开一条)。
+              <p
+                role="note"
+                className={cn(COMPOSER_COLUMN, "mb-3.5 mt-1.5 flex items-start gap-2 rounded-lg border border-dashed border-border px-3 py-2.5 text-ui-sm leading-[1.55] text-muted-foreground")}
+              >
+                <Eye size={14} className="mt-[3px] shrink-0" aria-hidden />
+                {t("chatSessionReadOnly")}
+              </p>
+            ) : (
+              <>
+                {/* Pending strip, above the composer: these have not been sent yet, so they do not
+                    belong in the transcript. Each one can be steered into the running turn or
+                    dropped — the Codex arrangement. */}
+                <QueuedMessages
+                  messages={queue.data ?? []}
+                  /* 和下面那个 form 同一个宽度表达式 —— 窗口一窄两个盒子必须一起缩。 */
+                  className={COMPOSER_COLUMN}
+                  onSteer={(id) => steerQueued.mutate(id)}
+                  onCancel={(id) => cancelQueued.mutate(id)}
+                  steering={steerQueued.isPending}
+                  cancelling={cancelQueued.isPending}
+                />
+                <form
+                  className={cn(COMPOSER_COLUMN, "mb-3.5 mt-1.5 flex flex-col gap-1 rounded-lg border border-border bg-control pb-1.5 pl-3 pr-2.5 pt-2.5 transition-colors duration-100 focus-within:border-ring")}
+                  onSubmit={submit}
+                >
+                  {/* 附件条属于输入框内部(文本框上方),而不是飘在圆角框外的左上角。 */}
+                  {/* 附件和笔记引用是同一件事:这条消息里带了什么。一排,在输入卡里。 */}
+                  <ComposerChips chips={[...attach.chips, ...noteAttach.chips]} uploading={attach.uploading} className="px-0.5" />
+                  {attach.previewModal}
+                  {noteAttach.dialog}
+                  {/* `@` 唤起素材 / 笔记 / 画板 / 工作流。和画布助手共用一份 —— 同一个输入框在两个
+                      地方能力不同的话,用户没有任何办法预期哪个能干什么(附件那条也是这个理由)。 */}
+                  <ChatComposer
                     workspaceId={workspace.id}
-                    session={session.data ?? activeSession}
-                    context={context}
-                    compacting={compactContext.isPending}
-                    onCompact={running ? undefined : () => compactContext.mutate()}
+                    value={draft}
+                    onChange={setDraft}
+                    onSubmit={() => submit(new Event("submit") as unknown as React.FormEvent)}
+                    onPaste={attach.onPaste}
+                    placeholder={t("chatPlaceholder")}
+                    className="min-h-11"
                   />
-                </div>
-                {/* One button that changes meaning, the way ChatGPT does it: while the agent
-                    works it stops the turn, and the moment you type something it becomes send
-                    again — because then the obvious intent is to say that, not to stop. */}
-                {showStop ? (
-                  <Button
-                    type="button"
-                    size="icon"
-                    className="shrink-0 rounded-full"
-                    aria-label={t("chatStop")}
-                    loading={stopTurn.isPending}
-                    onClick={() => stopTurn.mutate()}
-                  >
-                    <Square size={13} fill="currentColor" />
-                  </Button>
-                ) : (
-                  <Button
-                    type="submit"
-                    size="icon"
-                    className="shrink-0 rounded-full"
-                    aria-label={running ? t("chatSteer") : t("chatSend")}
-                    disabled={(!draftText.trim() && attach.isEmpty && !noteAttach.hasNotes) || attach.uploading} loading={sendMessage.isPending}
-                  >
-                    <Send size={15} />
-                  </Button>
-                )}
-              </div>
-            </form>
+                  <div className="flex items-center justify-between gap-1.5 pt-0.5">
+                    <div className="flex items-center gap-1.5">
+                      {noteAttach.trigger}
+                      {/* 28px —— 和画布助手那一行同一个刻度。见那边的说明。 */}
+                      <Button asChild variant="ghost" size="icon-xs" aria-label={t("attachFile")} disabled={attach.uploading}>
+                        <label>
+                          <input
+                            type="file"
+                            multiple
+                            className="hidden"
+                            onChange={(event) => {
+                              void attach.accept(event.currentTarget.files);
+                              event.currentTarget.value = "";
+                            }}
+                          />
+                          {attach.uploading ? <Loader2 size={14} className="animate-mosael-spin" /> : <Paperclip size={14} />}
+                        </label>
+                      </Button>
+                      {/* 和工作区助手共用同一个组件:两边各写一份的话,位置、顺序、有无迟早不一致。 */}
+                      <DictateButton
+                        onText={(text) =>
+                          setDraft((current) => appendText(current, text))
+                        }
+                      />
+                      {/* 免提不在这一行:它是"手离开键盘"的模式,而工具行只在助手面板打开时才在屏幕上 ——
+                          恰好在最需要它的时候不见了。改成应用级的浮标(features/agent/VoiceDock),
+                          由设置里的开关决定浮不浮。说话输入留着:那个是"把话填进这个框",本来就属于这里。 */}
+                      {/* 会话详情还在读时先用清单里那份:两者是同一条会话,只差水位。 */}
+                      <ModelPicker workspaceId={workspace.id} session={session.data ?? activeSession} />
+                      {/* 分析方式、思考档位、上下文整理收进这里 —— 它们是"配好就不再动"的东西,
+                          和每次都要用的模式/附件/模型平铺在一起只会稀释后者。 */}
+                      <SessionSettingsMenu
+                        workspaceId={workspace.id}
+                        session={session.data ?? activeSession}
+                        context={context}
+                        compacting={compactContext.isPending}
+                        onCompact={running ? undefined : () => compactContext.mutate()}
+                      />
+                    </div>
+                    {/* One button that changes meaning, the way ChatGPT does it: while the agent
+                        works it stops the turn, and the moment you type something it becomes send
+                        again — because then the obvious intent is to say that, not to stop. */}
+                    {showStop ? (
+                      <Button
+                        type="button"
+                        size="icon"
+                        className="shrink-0 rounded-full"
+                        aria-label={t("chatStop")}
+                        loading={stopTurn.isPending}
+                        onClick={() => stopTurn.mutate()}
+                      >
+                        <Square size={13} fill="currentColor" />
+                      </Button>
+                    ) : (
+                      <Button
+                        type="submit"
+                        size="icon"
+                        className="shrink-0 rounded-full"
+                        aria-label={running ? t("chatSteer") : t("chatSend")}
+                        disabled={(!draftText.trim() && attach.isEmpty && !noteAttach.hasNotes) || attach.uploading} loading={sendMessage.isPending}
+                      >
+                        <Send size={15} />
+                      </Button>
+                    )}
+                  </div>
+                </form>
+              </>
+            )}
             {/* 会话体征常驻在输入框下方,两个视图都在 —— 此前它挂在轨迹列表底部,随内容滚、
                 只有轨迹页有。宽度和输入框同一个公式,左右边缘对齐;px-3 让文字对上输入框的
                 圆角内缘,而不是顶着圆角外壳。 */}

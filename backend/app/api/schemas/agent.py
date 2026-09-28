@@ -61,7 +61,7 @@ class AgentQuestionItem(ApiModel):
 
 
 class AgentQuestionCreate(ApiModel):
-    workspace_id: str
+    #: 问题落在哪次对话里。工作区跟着对话走,不另报(见 routes/agent.ask_question)。
     session_id: str
     #: 形状由 domain/agent/questions.normalize 校 —— 校验和展示用同一份规则,
     #: 在这里再写一遍 pydantic 约束会变成第二个答案。

@@ -46,6 +46,7 @@ from app.domain import session_groups
 from app.domain.agent import memory as agent_memory
 from app.domain.agent import questions as agent_questions
 from app.domain.agent import plan as agent_plan
+from app.domain.agent.sessions import SHARE_KIND, readable_session, writable_session
 
 router = APIRouter(tags=["agent"])
 
@@ -83,9 +84,9 @@ def create_agent_session(body: AgentSessionCreate, db: DbSession, user: CurrentU
         model=body.model,
     )
     # 对话是**他的** —— 默认不共享给工作区(见 domain/sharing.KINDS)。
-    sharing.claim(db, "agent_session", session, user)
+    sharing.claim(db, SHARE_KIND, session, user)
     db.commit()
-    return sharing.annotate(db, "agent_session", [session], user, session.workspace_id)[0]
+    return _out(db, user, session)
 
 
 @router.get("/agent/sessions", response_model=list[AgentSessionOut])
@@ -96,25 +97,30 @@ def list_agent_sessions(workspace_id: str, db: DbSession, user: CurrentUser) -> 
         .where(
             AgentSession.workspace_id == workspace_id,
             AgentSession.origin == "ui",
-            sharing.visible_filter("agent_session", user, workspace_id),
+            sharing.visible_filter(SHARE_KIND, user, workspace_id),
         )
         # 手动位次优先,其次最近活跃。全是 0(没人拖过)时就是纯粹的"最近活跃在前"。
         .order_by(AgentSession.updated_at.desc())
         .limit(50)
     )
-    return sharing.annotate(db, "agent_session", list(db.scalars(stmt)), user, workspace_id)
+    return sharing.annotate(db, SHARE_KIND, list(db.scalars(stmt)), user, workspace_id)
+
+
+def _out(db: DbSession, user: CurrentUser, session: AgentSession) -> AgentSession:
+    """回出去的那一份标上 `is_mine` / `shared` —— 界面据 `is_mine` 决定这条对话给不给写(共享来的只能看)。"""
+    return sharing.annotate(db, SHARE_KIND, [session], user, session.workspace_id)[0]
 
 
 @router.get("/agent/sessions/{session_id}/messages", response_model=list[AgentMessageOut])
 def list_agent_messages(session_id: str, db: DbSession, user: CurrentUser) -> list[AgentMessage]:
-    session = _require_session(db, user, session_id)
+    session = readable_session(db, user, session_id)
     stmt = select(AgentMessage).where(AgentMessage.session_id == session.id).order_by(AgentMessage.created_at)
     return list(db.scalars(stmt))
 
 
 @router.get("/agent/sessions/{session_id}/usage-events", response_model=list[ProviderUsageEventOut])
 def list_agent_usage_events(session_id: str, db: DbSession, user: CurrentUser) -> list[ProviderUsageEvent]:
-    session = _require_session(db, user, session_id)
+    session = readable_session(db, user, session_id)
     stmt = (
         select(ProviderUsageEvent)
         .join(AgentMessage, ProviderUsageEvent.agent_message_id == AgentMessage.id)
@@ -126,7 +132,7 @@ def list_agent_usage_events(session_id: str, db: DbSession, user: CurrentUser) -
 
 @router.get("/agent/sessions/{session_id}", response_model=AgentSessionOut)
 def get_agent_session(session_id: str, db: DbSession, user: CurrentUser) -> AgentSessionOut:
-    session = _require_session(db, user, session_id)
+    session = _out(db, user, readable_session(db, user, session_id))
     out = AgentSessionOut.model_validate(session)
     context = host.session_context(db, session)
     out.context = AgentContextOut.model_validate(context) if context else None
@@ -137,8 +143,7 @@ def get_agent_session(session_id: str, db: DbSession, user: CurrentUser) -> Agen
 def post_agent_message(
     session_id: str, body: AgentMessageCreate, db: DbSession, user: CurrentUser
 ) -> AgentMessage:
-    session = _require_session(db, user, session_id)
-    ensure_workspace_perm(db, user, session.workspace_id, "ai")
+    session = writable_session(db, user, session_id)
     try:
         return host.post_user_message(
             db,
@@ -157,8 +162,7 @@ def post_agent_message(
 @router.post("/agent/sessions/{session_id}/compact", response_model=AgentCompactOut)
 def compact_agent_session(session_id: str, db: DbSession, user: CurrentUser) -> AgentCompactOut:
     """手动整理上下文。压缩要调一次模型做摘要,所以是用户主动触发,不做后台自动跑。"""
-    session = _require_session(db, user, session_id)
-    ensure_workspace_perm(db, user, session.workspace_id, "ai")
+    session = writable_session(db, user, session_id)
     try:
         result = host.compact_session_context(db, session, user)
     except host.AdapterError as exc:
@@ -169,7 +173,7 @@ def compact_agent_session(session_id: str, db: DbSession, user: CurrentUser) -> 
 @router.get("/agent/sessions/{session_id}/queue", response_model=list[AgentMessageOut])
 def list_queued_messages(session_id: str, db: DbSession, user: CurrentUser) -> list[AgentMessage]:
     """Messages waiting behind the current answer. Empty when nothing is running."""
-    session = _require_session(db, user, session_id)
+    session = readable_session(db, user, session_id)
     return host.queued_messages(db, session)
 
 
@@ -180,8 +184,7 @@ def steer_queued_message(session_id: str, message_id: str, db: DbSession, user: 
     The opt-in half of the pair: queuing is what happens by default, steering is a deliberate
     "change what you are doing now".
     """
-    session = _require_session(db, user, session_id)
-    ensure_workspace_perm(db, user, session.workspace_id, "ai")
+    session = writable_session(db, user, session_id)
     try:
         return {"steered": host.steer_queued_message(db, session, message_id, user)}
     except host.HostError as exc:
@@ -192,8 +195,7 @@ def steer_queued_message(session_id: str, message_id: str, db: DbSession, user: 
 def cancel_queued_message(session_id: str, message_id: str, db: DbSession, user: CurrentUser) -> dict:
     """Withdraw a queued message. Deleting the row alone is not enough — the model already
     holds it, so the turn's queue is resent without it."""
-    session = _require_session(db, user, session_id)
-    ensure_workspace_perm(db, user, session.workspace_id, "ai")
+    session = writable_session(db, user, session_id)
     try:
         remaining = host.cancel_queued_message(db, session, message_id)
     except host.HostError as exc:
@@ -208,14 +210,13 @@ def stop_agent_turn(session_id: str, db: DbSession, user: CurrentUser) -> dict:
     Not an error when nothing is running: the user pressing stop just as a turn finishes is
     a race they cannot see, and an error toast for it would be noise.
     """
-    session = _require_session(db, user, session_id)
-    ensure_workspace_perm(db, user, session.workspace_id, "ai")
+    session = writable_session(db, user, session_id)
     return {"stopped": host.stop_turn(db, session)}
 
 
 @router.patch("/agent/sessions/{session_id}", response_model=AgentSessionOut)
 def update_agent_session(session_id: str, body: AgentSessionUpdate, db: DbSession, user: CurrentUser) -> AgentSession:
-    session = _require_session(db, user, session_id)
+    session = writable_session(db, user, session_id)
     # 收纳不是活动:这一次只改了 group_id 的话,不该让对话显得「刚聊过」—— 列表就是按最近更新
     # 排的(手动排序已经去掉,它是唯一的排序依据),收一次纳就把顺序搅了。
     organising_only = body.model_fields_set <= {"group_id"} and body.group_id is not None
@@ -246,7 +247,6 @@ def update_agent_session(session_id: str, body: AgentSessionUpdate, db: DbSessio
         session.group_id = body.group_id or None
     if body.auto_allow_tools is not None:
         # 记下是谁定的:与模式同一条规则 —— 授权只对做出授权的那个人生效(见 domain/agent/autopilot)。
-        ensure_workspace_perm(db, user, session.workspace_id, "ai")
         session.auto_allow_tools = [str(name) for name in body.auto_allow_tools][:40]
         session.mode_set_by = user.id
         if session.mode_set_at is None:
@@ -258,7 +258,7 @@ def update_agent_session(session_id: str, body: AgentSessionUpdate, db: DbSessio
         db.execute(update(AgentSession).where(AgentSession.id == session.id).values(updated_at=kept_updated_at))
         db.commit()
     db.refresh(session)
-    return session
+    return _out(db, user, session)
 
 
 PERMISSION_MODES = ("manual", "auto", "bypass")
@@ -267,7 +267,8 @@ PERMISSION_MODES = ("manual", "auto", "bypass")
 def _set_permission_mode(db: DbSession, user: CurrentUser, session: AgentSession, mode: str) -> None:
     """切换这次对话的权限模式。
 
-    - 要 `ai` 权限:它决定的是"智能体能不问就做什么",和能不能用智能体是同一件事的两半。
+    - 要 `ai` 权限、要是主人:调用方已经过了写闸(`writable_session`)。它决定的是"智能体能不问就做
+      什么",和能不能用智能体是同一件事的两半。
     - **bypass 另要 admin**:它是「不问我就做」——发布、花钱、对外的动作都不再经过一次人眼。
       隔离执行器到位之后,"跑代码"本身已经不是提权(见 domain/sandbox),但**不问就做**仍然是
       一个工作区级别的决定,不是每个 editor 自己能给自己开的。
@@ -276,7 +277,6 @@ def _set_permission_mode(db: DbSession, user: CurrentUser, session: AgentSession
     """
     if mode not in PERMISSION_MODES:
         raise HTTPException(status_code=422, detail=tr("routeErr_badPermissionMode", modes="/".join(PERMISSION_MODES)))
-    ensure_workspace_perm(db, user, session.workspace_id, "ai")
     if mode == "bypass":
         if session.origin != "ui":
             raise HTTPException(status_code=403, detail=tr("routeErr_sharedSessionNoBypass"))
@@ -288,7 +288,7 @@ def _set_permission_mode(db: DbSession, user: CurrentUser, session: AgentSession
 
 @router.delete("/agent/sessions/{session_id}", status_code=204)
 def delete_agent_session(session_id: str, db: DbSession, user: CurrentUser) -> Response:
-    session = _require_session(db, user, session_id, perm="ai")
+    session = writable_session(db, user, session_id)
     sharing.forget(db, "agent_session", session.id)
     db.delete(session)
     db.commit()
@@ -303,7 +303,7 @@ async def stream_agent_turn(session_id: str, db: DbSession, user: CurrentUser) -
     FastAPI 对直接返回的 Response 不做序列化,所以它不影响流本身。有了它,前端两个消费者
     就从生成类型取形状,不再各写一份 `as {...}` 断言 —— 那两份此前已经不一样了。
     """
-    _require_session(db, user, session_id)
+    readable_session(db, user, session_id)
 
     async def generator():
         last_seq = -1
@@ -331,20 +331,6 @@ async def stream_agent_turn(session_id: str, db: DbSession, user: CurrentUser) -
     )
 
 
-def _require_session(db: DbSession, user: CurrentUser, session_id: str, *, perm: str | None = None) -> AgentSession:
-    session = db.get(AgentSession, session_id)
-    if session is None:
-        raise HTTPException(status_code=404, detail="Not found")
-    if perm is None:
-        ensure_workspace_access(db, user, session.workspace_id)
-    else:
-        ensure_workspace_perm(db, user, session.workspace_id, perm)
-    # 看不见就是不存在(404,不是 403)—— 和工作区边界同一条口径,不泄露"这里有一个你看不到的东西"。
-    if not sharing.may_use(db, "agent_session", session, user.id):
-        raise HTTPException(status_code=404, detail="Not found")
-    return session
-
-
 @router.put("/agent/sessions/{session_id}/plan", response_model=AgentSessionOut)
 def set_agent_plan(session_id: str, body: AgentPlanUpdate, db: DbSession, user: CurrentUser) -> AgentSession:
     """写这次会话的任务计划。
@@ -352,8 +338,7 @@ def set_agent_plan(session_id: str, body: AgentPlanUpdate, db: DbSession, user: 
     直接执行、不走确认卡:写计划不改动任何工程状态。每一步都要点一次确认的计划没有人会用,
     而真正的改动(改时间线、导出、生成)仍然各自出卡。
     """
-    session = _require_session(db, user, session_id)
-    ensure_workspace_perm(db, user, session.workspace_id, "ai")
+    session = writable_session(db, user, session_id)
     if not body.steps:
         # 空数组 = 清空计划(事情做完了)。这不是错误输入 —— 没有出口的话,一份做完的计划
         # 会一直挂在面板上,而"还剩几步"是它唯一要回答的问题。
@@ -365,7 +350,7 @@ def set_agent_plan(session_id: str, body: AgentPlanUpdate, db: DbSession, user: 
             raise HTTPException(status_code=422, detail=str(exc)) from exc
     db.commit()
     db.refresh(session)
-    return session
+    return _out(db, user, session)
 
 
 # ---------- 跨会话记忆 ----------
@@ -376,11 +361,16 @@ def set_agent_plan(session_id: str, body: AgentPlanUpdate, db: DbSession, user: 
 
 @router.post("/agent/questions", response_model=AgentQuestionOut, status_code=201)
 def ask_question(body: AgentQuestionCreate, db: DbSession, user: CurrentUser) -> AgentQuestion:
-    """智能体问用户一个有选项的问题。"""
-    ensure_workspace_perm(db, user, body.workspace_id, "ai")
+    """智能体问用户一个有选项的问题。
+
+    问题落在它那次对话里,往里问是写 —— 和发消息同一道闸(共享来的对话只能看)。工作区跟着对话走,
+    不由调用方另报一个:此前 MCP 那一侧缺省报的是「他的第一个工作区」,对话在别的工作区时,问题就
+    记在了另一个工作区名下。
+    """
+    session = writable_session(db, user, body.session_id)
     try:
         return agent_questions.ask(
-            db, workspace_id=body.workspace_id, session_id=body.session_id, questions=body.questions
+            db, workspace_id=session.workspace_id, session_id=session.id, questions=body.questions
         )
     except agent_questions.QuestionError as exc:
         # 422 而不是 500:这是模型给错了形状,消息里说清怎么改 —— 它下一步就是改了重发。
@@ -389,13 +379,15 @@ def ask_question(body: AgentQuestionCreate, db: DbSession, user: CurrentUser) ->
 
 @router.get("/agent/questions/{question_id}", response_model=AgentQuestionOut)
 def read_question(question_id: str, db: DbSession, user: CurrentUser) -> AgentQuestion:
-    return _require_question(db, user, question_id)
+    row = _question(db, question_id)
+    readable_session(db, user, row.session_id)
+    return row
 
 
 @router.get("/agent/questions", response_model=list[AgentQuestionOut])
 def list_pending_questions(session_id: str, db: DbSession, user: CurrentUser) -> list[AgentQuestion]:
     """某次对话里还没答的问题。**按会话取,不按工作区** —— 一个问题脱离上下文没有意义。"""
-    session = _require_session(db, user, session_id)
+    session = readable_session(db, user, session_id)
     return agent_questions.pending_for(db, session.id)
 
 
@@ -403,8 +395,9 @@ def list_pending_questions(session_id: str, db: DbSession, user: CurrentUser) ->
 def answer_question(
     question_id: str, body: AgentQuestionAnswer, db: DbSession, user: CurrentUser
 ) -> AgentQuestion:
-    row = _require_question(db, user, question_id)
-    ensure_workspace_perm(db, user, row.workspace_id, "ai")
+    row = _question(db, question_id)
+    # 作答会变成那次对话里的一条用户消息(deliver_to_session):是在里面写,只有主人。
+    writable_session(db, user, row.session_id)
     try:
         answered = agent_questions.answer(db, row, body.answers)
     except agent_questions.QuestionError as exc:
@@ -422,18 +415,18 @@ def dismiss_question(question_id: str, db: DbSession, user: CurrentUser) -> Agen
     「收到」由两条路保证:应用自己那条运行时停在 ask_user 这次工具调用上等着,跳过就是它的
     返回值;而那一轮已经不在了的时候(等待到点、直连 MCP、后端重启过),由这里送过去。
     """
-    row = _require_question(db, user, question_id)
-    ensure_workspace_perm(db, user, row.workspace_id, "ai")
+    row = _question(db, question_id)
+    writable_session(db, user, row.session_id)
     dismissed = agent_questions.dismiss(db, row)
     agent_questions.deliver_to_session(db, dismissed, user)
     return dismissed
 
 
-def _require_question(db: DbSession, user: CurrentUser, question_id: str) -> AgentQuestion:
+def _question(db: DbSession, question_id: str) -> AgentQuestion:
+    """只管存在性。看不看得见、能不能答,跟着它所在的那次对话走 —— 调用方接着过读闸或写闸。"""
     row = db.get(AgentQuestion, question_id)
     if row is None:
         raise HTTPException(status_code=404, detail=tr("routeErr_questionNotFound"))
-    ensure_workspace_access(db, user, row.workspace_id)
     return row
 
 
@@ -577,7 +570,7 @@ def set_pending_view(session_id: str, body: AgentPendingView, db: DbSession, use
     方向是反的:智能体跑在后端,而切页面是前端的事。落在会话行上而不是流里 —— 前端本来就在
     轮询会话状态,而免提浮标那种没开 SSE 的场景照样收得到,那恰恰是"带我过去"最有用的时候。
     """
-    session = _require_session(db, user, session_id, perm="ai")
+    session = writable_session(db, user, session_id)
     session.pending_view = f"{body.view}:{body.id}" if body.id else body.view
     db.commit()
     return {"pending_view": session.pending_view}
@@ -586,8 +579,10 @@ def set_pending_view(session_id: str, body: AgentPendingView, db: DbSession, use
 @router.delete("/agent/sessions/{session_id}/view", status_code=204)
 def clear_pending_view(session_id: str, db: DbSession, user: CurrentUser) -> Response:
     """跳完了。**由前端来清,不是读一次就清** —— 读了就清的话,两个开着的界面里
-    只有先读到的那个会跳,而另一个永远不知道发生过什么。"""
-    session = _require_session(db, user, session_id, perm="ai")
+    只有先读到的那个会跳,而另一个永远不知道发生过什么。
+
+    清它也是写:那是主人的「带我过去」,看共享对话的同事不该替他消费掉(界面上只读会话不跳)。"""
+    session = writable_session(db, user, session_id)
     session.pending_view = ""
     db.commit()
     return Response(status_code=204)

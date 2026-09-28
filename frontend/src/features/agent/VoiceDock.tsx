@@ -20,6 +20,7 @@
 
 import React from "react";
 import { X } from "lucide-react";
+import { toast } from "sonner";
 
 import { getAgentSession, listAgentMessages, sendAgentMessage } from "@/api/client";
 import { useI18n } from "@/app/preferences";
@@ -69,7 +70,12 @@ export function VoiceDock({ workspaceId, onClose }: { workspaceId: string; onClo
     failure,
     onUtterance: async (text) => {
       // 对着面板正显示的那条说;一条都没有才建 —— 建出来的就是面板接下来显示的那条,
-      // 而不是"我刚才对着浮标说的话去哪儿了"。
+      // 而不是"我刚才对着浮标说的话去哪儿了"。面板上是同事共享来只能看的那条,就说清楚
+      // (ensure 会拒,不替他另建一条 —— 那句话该发在哪儿由他定)。
+      if (current.readOnly) {
+        toast.error(t("chatSessionReadOnly"));
+        return;
+      }
       const target = (await current.ensure()).id;
       await sendAgentMessage(target, { content: text });
       void qc.invalidateQueries({ queryKey: ["agent-messages", target] });

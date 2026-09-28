@@ -3,6 +3,7 @@ import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Bot,
+  Eye,
   Move,
   PanelRight,
   Paperclip,
@@ -110,6 +111,9 @@ export function CanvasAgentChat({
   const current = useCurrentAgentSession(workspaceId, { pollList: 4000 });
   const sessionList = current.sessions;
   const activeSession = current.session;
+  //: 同事共享来的对话**只能看**(判据在 currentAgentSession.isViewOnly):输入卡整张换成只读说明,
+  //: 排队条和拍板的按钮也不给 —— 和 AI 工作台同一条。
+  const readOnly = current.readOnly;
   //: 空串 = 还没有会话(各查询都以它为 enabled 条件)。
   const sessionId = activeSession?.id ?? "";
   // 连流 → 攒状态 → 收尾失效:**只有一份**,和 AI 工作台共用(见 useAgentTurnStream)。
@@ -471,105 +475,117 @@ export function CanvasAgentChat({
             <AgentStatusRow label={t("chatThinking")} meta={t("usageRunning").replace("{t}", formatElapsedSeconds(elapsedSeconds))} />
           </div>
         )}
-        {activeSession && <PendingDecisions workspaceId={workspaceId} sessionId={activeSession.id} />}
+        {activeSession && <PendingDecisions workspaceId={workspaceId} sessionId={activeSession.id} readOnly={readOnly} />}
       </div>
       <JumpToLatest stick={stick} label={t("chatJumpToLatest")} newLabel={t("chatNewBelow")} />
       </div>
-      <QueuedMessages
-        messages={queue.data ?? []}
-        /* 和下面那张输入卡同样的留边(mx-2)—— 侧栏很窄,差这 8px 一眼就看得出来。 */
-        className={COMPOSER_COLUMN}
-        onSteer={(id) => steerQueued.mutate(id)}
-        onCancel={(id) => cancelQueued.mutate(id)}
-        steering={steerQueued.isPending}
-        cancelling={cancelQueued.isPending}
-      />
-      <div className={cn(COMPOSER_COLUMN, "mb-2 mt-2 flex flex-col gap-0.5 rounded-lg border border-border bg-control px-2 pb-1.5 pt-2 transition-[border-color] duration-100 focus-within:border-ring")}>
-        <input
-          ref={fileRef}
-          type="file"
-          multiple
-          hidden
-          onChange={(event) => {
-            void attach.accept(event.target.files);
-            event.target.value = "";
-          }}
-        />
-        {/* 内层去底色/边框/焦点环:外层输入卡已是表面,双层盒子叠着难看(对话页同款处理)。 */}
-        {/* 附件和笔记引用是同一件事:这条消息里带了什么。一排,在输入卡里。 */}
-        <ComposerChips chips={[...attach.chips, ...noteAttach.chips]} uploading={attach.uploading} />
-        {attach.previewModal}
-        {noteAttach.dialog}
-        {/* `@` 唤起素材 / 笔记 / 画板 / 工作流的引用。引用是原子节点,不是一段可以被删掉半个的字。 */}
-        <ChatComposer
-          workspaceId={workspaceId}
-          value={draft}
-          onChange={setDraft}
-          onSubmit={() => submit()}
-          onPaste={attach.onPaste}
-          placeholder={placeholder}
-        />
-        <div className="flex items-center justify-between gap-1.5">
-          <div className="flex min-w-0 items-center gap-1">
-            {noteAttach.trigger}
-            {/* icon-xs(28px)是工具栏那一档,整行统一走它。默认的 icon 是 36px,
-                在这一行里会比旁边的胶囊高出一截 —— 圆形按钮尤其藏不住这 8px。 */}
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              aria-label={t("wfAgentAttach")}
-              title={t("wfAgentAttach")}
-              onClick={() => fileRef.current?.click()}
-            >
-              <Paperclip size={14} />
-            </Button>
-            {/* 说话输入紧挨着附件:两者都是"往输入框里放东西",而模型选择是"怎么处理它"。 */}
-            <DictateButton
-              onText={(text) =>
-                // **追加**,不覆盖 —— 他可能先打了半句再改用说的。
-                setDraft((current) => appendText(current, text))
-              }
+      {readOnly ? (
+        <p
+          role="note"
+          className={cn(COMPOSER_COLUMN, "mb-2 mt-2 flex items-start gap-2 rounded-lg border border-dashed border-border px-2.5 py-2 text-ui-sm leading-[1.55] text-muted-foreground")}
+        >
+          <Eye size={14} className="mt-[3px] shrink-0" aria-hidden />
+          {t("chatSessionReadOnly")}
+        </p>
+      ) : (
+        <>
+          <QueuedMessages
+            messages={queue.data ?? []}
+            /* 和下面那张输入卡同样的留边(mx-2)—— 侧栏很窄,差这 8px 一眼就看得出来。 */
+            className={COMPOSER_COLUMN}
+            onSteer={(id) => steerQueued.mutate(id)}
+            onCancel={(id) => cancelQueued.mutate(id)}
+            steering={steerQueued.isPending}
+            cancelling={cancelQueued.isPending}
+          />
+          <div className={cn(COMPOSER_COLUMN, "mb-2 mt-2 flex flex-col gap-0.5 rounded-lg border border-border bg-control px-2 pb-1.5 pt-2 transition-[border-color] duration-100 focus-within:border-ring")}>
+            <input
+              ref={fileRef}
+              type="file"
+              multiple
+              hidden
+              onChange={(event) => {
+                void attach.accept(event.target.files);
+                event.target.value = "";
+              }}
             />
-            {/* 免提是另一件事:说话输入把话填进框里等你过目,这个直接发出去。做成一个按钮的
-                两种模式的话,每次都要先想清楚自己现在处在哪一种,而两者的后果差得很远。 */}
-            {/* 免提不在这一行:它是"手离开键盘"的模式,而工具行只在助手面板打开时才在屏幕上 ——
-                恰好在最需要它的时候不见了。改成应用级的浮标(features/agent/VoiceDock),
-                由设置里的开关决定浮不浮。说话输入留着:那个是"把话填进这个框",本来就属于这里。 */}
-            {/* 会话详情还在读时先用清单里那份:两者是同一条会话,只差水位。 */}
-            <ModelPicker workspaceId={workspaceId} session={live.data ?? activeSession} />
-            {/* 与 AI Studio 用同一个组件:此前两边各写各的工具行,同一个功能的位置、顺序、
-                有无都不一致。 */}
-            <SessionSettingsMenu
+            {/* 内层去底色/边框/焦点环:外层输入卡已是表面,双层盒子叠着难看(对话页同款处理)。 */}
+            {/* 附件和笔记引用是同一件事:这条消息里带了什么。一排,在输入卡里。 */}
+            <ComposerChips chips={[...attach.chips, ...noteAttach.chips]} uploading={attach.uploading} />
+            {attach.previewModal}
+            {noteAttach.dialog}
+            {/* `@` 唤起素材 / 笔记 / 画板 / 工作流的引用。引用是原子节点,不是一段可以被删掉半个的字。 */}
+            <ChatComposer
               workspaceId={workspaceId}
-              session={live.data ?? activeSession}
-              context={context}
-              compacting={compact.isPending}
-              onCompact={running ? undefined : () => compact.mutate()}
+              value={draft}
+              onChange={setDraft}
+              onSubmit={() => submit()}
+              onPaste={attach.onPaste}
+              placeholder={placeholder}
             />
+            <div className="flex items-center justify-between gap-1.5">
+              <div className="flex min-w-0 items-center gap-1">
+                {noteAttach.trigger}
+                {/* icon-xs(28px)是工具栏那一档,整行统一走它。默认的 icon 是 36px,
+                    在这一行里会比旁边的胶囊高出一截 —— 圆形按钮尤其藏不住这 8px。 */}
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  aria-label={t("wfAgentAttach")}
+                  title={t("wfAgentAttach")}
+                  onClick={() => fileRef.current?.click()}
+                >
+                  <Paperclip size={14} />
+                </Button>
+                {/* 说话输入紧挨着附件:两者都是"往输入框里放东西",而模型选择是"怎么处理它"。 */}
+                <DictateButton
+                  onText={(text) =>
+                    // **追加**,不覆盖 —— 他可能先打了半句再改用说的。
+                    setDraft((current) => appendText(current, text))
+                  }
+                />
+                {/* 免提是另一件事:说话输入把话填进框里等你过目,这个直接发出去。做成一个按钮的
+                    两种模式的话,每次都要先想清楚自己现在处在哪一种,而两者的后果差得很远。 */}
+                {/* 免提不在这一行:它是"手离开键盘"的模式,而工具行只在助手面板打开时才在屏幕上 ——
+                    恰好在最需要它的时候不见了。改成应用级的浮标(features/agent/VoiceDock),
+                    由设置里的开关决定浮不浮。说话输入留着:那个是"把话填进这个框",本来就属于这里。 */}
+                {/* 会话详情还在读时先用清单里那份:两者是同一条会话,只差水位。 */}
+                <ModelPicker workspaceId={workspaceId} session={live.data ?? activeSession} />
+                {/* 与 AI Studio 用同一个组件:此前两边各写各的工具行,同一个功能的位置、顺序、
+                    有无都不一致。 */}
+                <SessionSettingsMenu
+                  workspaceId={workspaceId}
+                  session={live.data ?? activeSession}
+                  context={context}
+                  compacting={compact.isPending}
+                  onCompact={running ? undefined : () => compact.mutate()}
+                />
+              </div>
+              {showStop ? (
+                <Button
+                  size="icon"
+                  className="rounded-full"
+                  aria-label={t("chatStop")}
+                  loading={stopTurn.isPending}
+                  onClick={() => stopTurn.mutate()}
+                >
+                  <Square size={12} fill="currentColor" />
+                </Button>
+              ) : (
+                <Button
+                  size="icon"
+                  className="rounded-full"
+                  aria-label={running ? t("chatSteer") : t("chatSend")}
+                  disabled={(!draftText.trim() && attach.isEmpty && !noteAttach.hasNotes) || attach.uploading} loading={send.isPending}
+                  onClick={submit}
+                >
+                  <Send size={14} />
+                </Button>
+              )}
+            </div>
           </div>
-          {showStop ? (
-            <Button
-              size="icon"
-              className="rounded-full"
-              aria-label={t("chatStop")}
-              loading={stopTurn.isPending}
-              onClick={() => stopTurn.mutate()}
-            >
-              <Square size={12} fill="currentColor" />
-            </Button>
-          ) : (
-            <Button
-              size="icon"
-              className="rounded-full"
-              aria-label={running ? t("chatSteer") : t("chatSend")}
-              disabled={(!draftText.trim() && attach.isEmpty && !noteAttach.hasNotes) || attach.uploading} loading={send.isPending}
-              onClick={submit}
-            >
-              <Send size={14} />
-            </Button>
-          )}
-        </div>
-      </div>
+        </>
+      )}
       <ConfirmDialog
         open={deletingSession !== null}
         title={t("deleteConfirmTitle")}

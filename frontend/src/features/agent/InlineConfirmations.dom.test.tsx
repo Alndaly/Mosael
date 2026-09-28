@@ -125,3 +125,15 @@ it("摘要里的 **强调** 渲染成粗体 —— 这是用户批准前唯一�
   expect((await screen.findByText("不隔离")).tagName).toBe("STRONG");
   expect(container.textContent).not.toContain("**");
 });
+
+it("同事共享来的对话:卡照样看得见,三档动作换成「等主人拍板」", async () => {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(
+    <QueryClientProvider client={client}>
+      <InlineConfirmations workspaceId="w1" allowKey="s1" readOnly />
+    </QueryClientProvider>,
+  );
+  expect(await screen.findByText("改时间线")).toBeTruthy();
+  expect(screen.getAllByText("agentDecisionOwnerOnly")).toHaveLength(pendingCards.length);
+  expect(screen.queryByRole("button", { name: /允许一次|本会话始终允许|拒绝/ })).toBeNull();
+});

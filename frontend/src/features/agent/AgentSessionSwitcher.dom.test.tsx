@@ -32,9 +32,9 @@ function FloatingSessionHeader() {
 }
 
 const sessions = [
-  { id: "one", title: "一个非常非常长的会话标题，需要在窗口标题处省略" },
-  { id: "two", title: "浏览器清理" },
-  { id: "three", title: "时间线粗剪" },
+  { id: "one", title: "一个非常非常长的会话标题，需要在窗口标题处省略", is_mine: true },
+  { id: "two", title: "浏览器清理", is_mine: true },
+  { id: "three", title: "时间线粗剪", is_mine: true },
 ];
 
 describe("AgentSessionSwitcher", () => {
@@ -113,5 +113,25 @@ describe("AgentSessionSwitcher", () => {
     await userEvent.click(screen.getByRole("button", { name: "会话" }));
     await userEvent.type(screen.getByRole("searchbox", { name: "搜索对话…" }), "不存在");
     expect(screen.getByText("没有匹配的对话")).toBeVisible();
+  });
+
+  it("同事共享来的那条能切过去看,但不给删", async () => {
+    const shared = { id: "shared", title: "同事的脚本讨论", is_mine: false };
+    const onSelect = vi.fn();
+    render(
+      <AgentSessionSwitcher
+        sessions={[sessions[0], shared]}
+        activeSession={sessions[0]}
+        deleting={false}
+        onSelect={onSelect}
+        onDelete={vi.fn()}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "会话" }));
+    expect(screen.getByRole("button", { name: `删除: ${sessions[0].title}` })).toBeVisible();
+    expect(screen.queryByRole("button", { name: `删除: ${shared.title}` })).toBeNull();
+    await userEvent.click(screen.getByText(shared.title));
+    expect(onSelect).toHaveBeenCalledWith("shared");
   });
 });

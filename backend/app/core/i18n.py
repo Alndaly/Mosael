@@ -1573,6 +1573,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "这个浏览器档案属于别人。共享给你只是可以用它 —— 改名、停用、改代理、清除登录数据和删除只有主人能做",
         "en": "This browser profile belongs to someone else. Sharing it lets you use it — only its owner can rename, disable, change the proxy, clear its sign-in data or delete it.",
     },
+    "shareErr_notManageable_agentSession": {
+        "zh": "这条对话是同事共享给你看的。在里面发消息、答选择卡、批确认卡,以及改名、删除、收进分组、改模型和权限只有主人能做",
+        "en": "This conversation was shared with you to view. Only its owner can message in it, answer or approve its cards, rename, delete or group it, or change its model and permissions.",
+    },
     "shareErr_notManageable_generationSession": {
         "zh": "这条生成会话是同事共享给你看的。改名、删除、收进分组、换模型和在里面继续生成只有主人能做",
         "en": "This generation session was shared with you to view. Only its owner can rename, delete, group, change its model or keep generating in it.",

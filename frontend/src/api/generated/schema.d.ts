@@ -6220,6 +6220,10 @@ export interface paths {
         /**
          * Ask Question
          * @description 智能体问用户一个有选项的问题。
+         *
+         *     问题落在它那次对话里,往里问是写 —— 和发消息同一道闸(共享来的对话只能看)。工作区跟着对话走,
+         *     不由调用方另报一个:此前 MCP 那一侧缺省报的是「他的第一个工作区」,对话在别的工作区时,问题就
+         *     记在了另一个工作区名下。
          */
         post: operations["ask_question_api_agent_questions_post"];
         delete?: never;
@@ -6428,6 +6432,8 @@ export interface paths {
          * Clear Pending View
          * @description 跳完了。**由前端来清,不是读一次就清** —— 读了就清的话,两个开着的界面里
          *     只有先读到的那个会跳,而另一个永远不知道发生过什么。
+         *
+         *     清它也是写:那是主人的「带我过去」,看共享对话的同事不该替他消费掉(界面上只读会话不跳)。
          */
         delete: operations["clear_pending_view_api_agent_sessions__session_id__view_delete"];
         options?: never;
@@ -7007,8 +7013,6 @@ export interface components {
         };
         /** AgentQuestionCreate */
         AgentQuestionCreate: {
-            /** Workspace Id */
-            workspace_id: string;
             /** Session Id */
             session_id: string;
             /** Questions */

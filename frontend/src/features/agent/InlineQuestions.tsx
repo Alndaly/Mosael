@@ -19,8 +19,10 @@ type Question = AgentQuestion;
  * 所以后端那一侧就没有任何自动通路(见 domain/agent/questions)。
  *
  * 「其它」是自由文本:模型给的选项常常不全,而逼人从三个都不对的里面挑一个,比不问还糟。
+ *
+ * `readOnly`:同事共享来的对话 —— 问题和选项照样摆出来,作答的那些控件不给(作答是在别人的对话里说话)。
  */
-export function InlineQuestions({ sessionId }: { sessionId: string }) {
+export function InlineQuestions({ sessionId, readOnly = false }: { sessionId: string; readOnly?: boolean }) {
   const qc = useQueryClient();
   const pending = useQuery({
     queryKey: ["agent-questions", sessionId],
@@ -37,6 +39,7 @@ export function InlineQuestions({ sessionId }: { sessionId: string }) {
         <QuestionCard
           key={row.id}
           row={row}
+          readOnly={readOnly}
           onDone={() => void qc.invalidateQueries({ queryKey: ["agent-questions", sessionId] })}
         />
       ))}
@@ -44,7 +47,7 @@ export function InlineQuestions({ sessionId }: { sessionId: string }) {
   );
 }
 
-function QuestionCard({ row, onDone }: { row: Question; onDone: () => void }) {
+function QuestionCard({ row, readOnly, onDone }: { row: Question; readOnly: boolean; onDone: () => void }) {
   const t = useI18n();
   const items = row.questions ?? [];
   // 每个问题选中的 label 集合。多选是集合,单选也是集合(长度 1)—— 两种形状分开写的话,
@@ -108,8 +111,9 @@ function QuestionCard({ row, onDone }: { row: Question; onDone: () => void }) {
                 <button
                   key={option.label}
                   type="button"
+                  disabled={readOnly}
                   className={cn(
-                    "grid cursor-pointer gap-0.5 rounded-md border bg-panel px-2.5 py-2 text-left transition-colors duration-100",
+                    "grid cursor-pointer gap-0.5 rounded-md border bg-panel px-2.5 py-2 text-left transition-colors duration-100 disabled:cursor-default",
                     chosen.includes(option.label)
                       ? "border-primary bg-accent"
                       : "border-border hover:border-border-strong",
@@ -128,25 +132,31 @@ function QuestionCard({ row, onDone }: { row: Question; onDone: () => void }) {
                 </button>
               ))}
               {/* 模型给的选项常常不全。逼人从三个都不对的里面挑一个,比不问还糟。 */}
-              <Input
-                size="sm"
-                className="border-border bg-panel"
-                placeholder={t("askOtherPlaceholder")}
-                value={other[item.question] ?? ""}
-                onChange={(event) => setOther((current) => ({ ...current, [item.question]: event.target.value }))}
-              />
+              {!readOnly && (
+                <Input
+                  size="sm"
+                  className="border-border bg-panel"
+                  placeholder={t("askOtherPlaceholder")}
+                  value={other[item.question] ?? ""}
+                  onChange={(event) => setOther((current) => ({ ...current, [item.question]: event.target.value }))}
+                />
+              )}
             </div>
           </div>
         );
       })}
-      <div className="flex items-center justify-end gap-1.5">
-        <Button variant="ghost" size="sm" loading={skip.isPending} onClick={() => skip.mutate()}>
-          {t("askSkip")}
-        </Button>
-        <Button size="sm" disabled={!complete} loading={answer.isPending} onClick={() => answer.mutate(answersFor())}>
-          {t("askSubmit")}
-        </Button>
-      </div>
+      {readOnly ? (
+        <p className="m-0 text-right text-ui-xs text-muted-foreground">{t("agentDecisionOwnerOnly")}</p>
+      ) : (
+        <div className="flex items-center justify-end gap-1.5">
+          <Button variant="ghost" size="sm" loading={skip.isPending} onClick={() => skip.mutate()}>
+            {t("askSkip")}
+          </Button>
+          <Button size="sm" disabled={!complete} loading={answer.isPending} onClick={() => answer.mutate(answersFor())}>
+            {t("askSubmit")}
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

@@ -51,7 +51,8 @@ GATED_HELPERS = {"require_sequence_access", "require_asset"}
 OWNERSHIP_GATES = {
     "_require_profile",
     "my_instance",
-    # 生成会话的写闸(domain/generation/sessions):看得见 + 工作区 `ai` 权限 + 是主人。共享来的只能看。
+    # 两类会话的写闸(domain/generation/sessions、domain/agent/sessions,判据在 domain/sharing.writable):
+    # 看得见 + 工作区 `ai` 权限 + 是主人。共享来的只能看。
     "writable_session",
 }
 

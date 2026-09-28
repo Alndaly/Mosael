@@ -21,10 +21,12 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@/api/client", () => mocks);
 
 import { agentSessionSelectionKey } from "@/features/agent/sessionSelection";
-import { ensureAgentSession, useCurrentAgentSession, useUpdateAgentSession } from "./currentAgentSession";
+import { ViewOnlySessionError, ensureAgentSession, useCurrentAgentSession, useUpdateAgentSession } from "./currentAgentSession";
 
 const KEY = agentSessionSelectionKey("w1");
-const session = (id: string) => ({ id, workspace_id: "w1", title: id }) as never;
+const session = (id: string) => ({ id, workspace_id: "w1", title: id, is_mine: true }) as never;
+//: 同事共享来的:后端标 `is_mine: false`,只能看。
+const shared = (id: string) => ({ id, workspace_id: "w1", title: id, is_mine: false }) as never;
 
 function setup() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -134,5 +136,47 @@ describe("当前智能体会话", () => {
     expect(mocks.createAgentSession).toHaveBeenCalledWith({ workspace_id: "w1" });
     expect(mocks.updateAgentSession).toHaveBeenCalledWith("s-created", { thinking_level: "high" });
     expect(both.result.current.panel.session?.id).toBe("s-created");
+  });
+});
+
+describe("同事共享来的对话只能看", () => {
+  it("没选过时不回落到它:当前会话是自己最近的那条", async () => {
+    mocks.listAgentSessions.mockResolvedValue([shared("s-shared"), session("s-mine")]);
+    const { both } = setup();
+    await waitFor(() => expect(both.result.current.panel.session?.id).toBe("s-mine"));
+    expect(both.result.current.panel.readOnly).toBe(false);
+  });
+
+  it("点开它就看它,但发消息被拒,而且不悄悄另建一条", async () => {
+    mocks.listAgentSessions.mockResolvedValue([shared("s-shared"), session("s-mine")]);
+    window.localStorage.setItem(KEY, "s-shared");
+    const { both, client } = setup();
+    await waitFor(() => expect(both.result.current.panel.session?.id).toBe("s-shared"));
+    expect(both.result.current.panel.readOnly).toBe(true);
+    expect(both.result.current.dock.readOnly).toBe(true);
+
+    await expect(act(() => ensureAgentSession(client, "w1"))).rejects.toBeInstanceOf(ViewOnlySessionError);
+    expect(mocks.createAgentSession).not.toHaveBeenCalled();
+    expect(window.localStorage.getItem(KEY)).toBe("s-shared");
+  });
+
+  it("会话设置也不往里写", async () => {
+    const { wrapper } = setup();
+    const update = renderHook(() => useUpdateAgentSession("w1", shared("s-shared")), { wrapper });
+    await expect(act(() => update.result.current.mutateAsync({ thinking_level: "high" }))).rejects.toBeInstanceOf(
+      ViewOnlySessionError,
+    );
+    expect(mocks.updateAgentSession).not.toHaveBeenCalled();
+    expect(mocks.createAgentSession).not.toHaveBeenCalled();
+  });
+
+  it("一条自己的都没有、只有共享来的:当前会话为空,要用时建自己的一条", async () => {
+    mocks.listAgentSessions.mockResolvedValue([shared("s-shared")]);
+    mocks.createAgentSession.mockResolvedValue(session("s-created"));
+    const { both, client } = setup();
+    await waitFor(() => expect(both.result.current.panel.listLoaded).toBe(true));
+    expect(both.result.current.panel.session).toBeNull();
+    const used = await act(() => ensureAgentSession(client, "w1"));
+    expect(used.id).toBe("s-created");
   });
 });

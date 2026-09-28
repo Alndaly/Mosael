@@ -50,3 +50,18 @@ it("问题和选项说明里的记号渲染成格式", async () => {
   expect(container.querySelector("button a")).toBeNull();
   expect(container.textContent).not.toMatch(/\*\*|`/);
 });
+
+it("同事共享来的对话:问题和选项照样看得见,作答的控件不给", async () => {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(
+    <QueryClientProvider client={client}>
+      <InlineQuestions sessionId="s1" readOnly />
+    </QueryClientProvider>,
+  );
+  expect(await screen.findByText("竖屏")).toBeTruthy();
+  expect(screen.getByText("agentDecisionOwnerOnly")).toBeTruthy();
+  expect(screen.getByRole("button", { name: /竖屏/ })).toBeDisabled();
+  expect(screen.queryByRole("button", { name: "askSubmit" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "askSkip" })).toBeNull();
+  expect(screen.queryByPlaceholderText("askOtherPlaceholder")).toBeNull();
+});

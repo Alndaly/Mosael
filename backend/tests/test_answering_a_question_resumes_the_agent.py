@@ -29,16 +29,9 @@ QUESTIONS = [
 
 
 def _ask(client, workspace_id: str) -> tuple[str, str]:
-    """建一个会话和一张待答的选择卡,返回 (session_id, question_id)。"""
-    with SessionLocal() as db:
-        session = AgentSession(workspace_id=workspace_id, title="会话")
-        db.add(session)
-        db.commit()
-        session_id = session.id
-    created = client.post(
-        "/api/agent/questions",
-        json={"workspace_id": workspace_id, "session_id": session_id, "questions": QUESTIONS},
-    )
+    """建一个(他自己的)会话和一张待答的选择卡,返回 (session_id, question_id)。"""
+    session_id = client.post("/api/agent/sessions", json={"workspace_id": workspace_id, "title": "会话"}).json()["id"]
+    created = client.post("/api/agent/questions", json={"session_id": session_id, "questions": QUESTIONS})
     assert created.status_code in (200, 201), created.text
     return session_id, created.json()["id"]
 
@@ -109,7 +102,8 @@ def test_重复回答仍然被拒() -> None:
 
 
 def test_会话没了不炸() -> None:
-    """会话被删掉之后再答一次:送不出去是正常结果,不是 500。"""
+    """会话被删掉之后再答一次:不是 500。问题跟着它那次对话走(能不能答由对话的写闸定),
+    对话没了,它对谁都不存在了 —— 404,也不往任何地方送。"""
     client = fresh_client()
     workspace = client.post("/api/workspaces", json={"name": "W"}).json()
     session_id, question_id = _ask(client, workspace["id"])
@@ -121,7 +115,7 @@ def test_会话没了不炸() -> None:
         f"/api/agent/questions/{question_id}/answer",
         json={"answers": {"成片走哪个方向?": ["告白场景"]}},
     )
-    assert answered.status_code == 200, answered.text
+    assert answered.status_code == 404, answered.text
     assert _user_messages(session_id) == []
 
 

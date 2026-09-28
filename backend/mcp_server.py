@@ -2495,9 +2495,12 @@ def list_agent_sessions(workspace_id: str = "") -> list[dict[str, Any]]:
 
     Use before notify_agent_session to find who to notify. status "running" means that
     agent is mid-turn right now; your notice would be queued behind its current work.
+    Only the user's own conversations are listed: one a teammate shared is view-only, so
+    it cannot be notified.
     """
     sessions = _get("/api/agent/sessions", {"workspace_id": workspace_id or _default_workspace_id()})
     me = _SESSION_ID.get()
+    # 共享来的对话只能看(domain/agent/sessions 的写闸):列出来只会让模型往里发一条必然被拒的通知。
     return [
         {
             "session_id": item.get("id"),
@@ -2506,11 +2509,12 @@ def list_agent_sessions(workspace_id: str = "") -> list[dict[str, Any]]:
             "is_self": item.get("id") == me,
         }
         for item in sessions
+        if item.get("is_mine")
     ]
 
 
 @mcp.tool()
-def ask_user(questions: list[dict[str, Any]], workspace_id: str = "") -> dict[str, Any]:
+def ask_user(questions: list[dict[str, Any]]) -> dict[str, Any]:
     """Ask the user to choose between options you cannot decide for them.
 
     How the waiting works is NOT described here on purpose: it differs per runtime and a
@@ -2540,14 +2544,8 @@ def ask_user(questions: list[dict[str, Any]], workspace_id: str = "") -> dict[st
     if not session_id:
         # 飞书 / 外部 MCP 客户端没有会话 —— 问题没地方显示,骗它说"等着"只会白等到超时。
         return {"error": "这次调用没有对话上下文,问不了 —— 请直接在回复里把选项写出来。"}
-    created = _post(
-        "/api/agent/questions",
-        {
-            "workspace_id": workspace_id or _default_workspace_id(),
-            "session_id": session_id,
-            "questions": questions,
-        },
-    )
+    # 工作区跟着这次对话走(后端按会话定),不另报 —— 缺省的「第一个工作区」未必是对话所在的那个。
+    created = _post("/api/agent/questions", {"session_id": session_id, "questions": questions})
     return {
         "question_id": created["id"],
         "status": created["status"],

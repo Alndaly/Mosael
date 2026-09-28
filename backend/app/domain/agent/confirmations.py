@@ -9,6 +9,7 @@ from app.core.i18n import DEFAULT_LOCALE, render_message
 from app.db.models import ToolConfirmation, User, now
 from app.domain.agent.confirmable import tool_spec
 from app.domain.agent.errors import ConfirmationError
+from app.domain.agent.sessions import ensure_decides_for
 from app.domain.jobs import reset_receipt, set_receipt
 from app.domain.permissions import ensure_workspace_perm
 
@@ -103,8 +104,12 @@ def authorize_and_approve(db: Session, user: User, confirmation: ToolConfirmatio
     此前这里还有第三道 —— `ensure_graph_node_privileges`,专门挡 code 节点。它随隔离执行器一起
     撤掉了(ADR 0008 D2):那道闸本来就是缺沙箱的补丁,而「谁有资格写代码」是个错问题。代码现在
     跑在内核强制的隔离里(见 domain/sandbox),写它就是普通的内容编辑。
+
+    卡挂在某次有主人的对话上时,还得**是那次对话的主人**(`ensure_decides_for`):对话共享给同事是
+    给他看,替主人拍板是在别人的对话里写 —— 批准之后的动作还会记在批的人头上、用他的钥匙跑。
     """
     ensure_workspace_perm(db, user, confirmation.workspace_id, "edit")
+    ensure_decides_for(db, confirmation.session_id, user.id)
     # 记在谁头上。自动放行也有人 —— 这次 turn 是以他的身份跑的,上面三道闸也是按他校验的。
     # `decision_mode` 不在这里定:默认就是 manual(人点的),自动放行会在派活之前先改掉它。
     confirmation.decided_by = user.id
@@ -135,8 +140,10 @@ def authorize_and_reject(db: Session, user: User, confirmation: ToolConfirmation
 
     这不是收紧:两个入口都是 POST,而 ensure_workspace_access 在 POST 上判的就是 edit,所以
     走 HTTP 一直如此。写成显式的,是为了不让同一个人在两条调用路径上得到两种答案。
+    有主人的对话里的卡,和批准同一条:只有主人。
     """
     ensure_workspace_perm(db, user, confirmation.workspace_id, "edit")
+    ensure_decides_for(db, confirmation.session_id, user.id)
     return reject_confirmation(db, confirmation)
 
 

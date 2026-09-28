@@ -47,8 +47,19 @@ const CHOICES = [
   className?: string;
 }[];
 
-/** `allowKey` 就是**会话 id**:既是白名单挂靠的会话,也是确认卡的归属筛选键。 */
-export function InlineConfirmations({ workspaceId, allowKey }: { workspaceId: string; allowKey: string }) {
+/**
+ * `allowKey` 就是**会话 id**:既是白名单挂靠的会话,也是确认卡的归属筛选键。
+ * `readOnly`:同事共享来的对话 —— 卡照样摆出来,三档动作换成一句「等主人拍板」。
+ */
+export function InlineConfirmations({
+  workspaceId,
+  allowKey,
+  readOnly = false,
+}: {
+  workspaceId: string;
+  allowKey: string;
+  readOnly?: boolean;
+}) {
   const t = useI18n();
   const qc = useQueryClient();
 
@@ -113,21 +124,25 @@ export function InlineConfirmations({ workspaceId, allowKey }: { workspaceId: st
           </details>
           {/* 转的只有被点的那一个;同一张卡的另外两个禁掉(一张卡只能有一个结论),
               别的卡完全不受影响 —— 它等的不是同一件事。 */}
-          <div className="flex flex-wrap gap-1.5">
-            {CHOICES.map(({ choice, icon: Icon, label, variant, className }) => (
-              <Button
-                key={choice}
-                size="sm"
-                variant={variant}
-                className={className}
-                loading={busy?.id === item.id && busy.choice === choice}
-                disabled={busy?.id === item.id}
-                onClick={() => decide.mutate({ id: item.id, tool: item.tool, choice })}
-              >
-                <Icon size={13} /> {t(label)}
-              </Button>
-            ))}
-          </div>
+          {readOnly ? (
+            <p className="m-0 text-ui-xs text-muted-foreground">{t("agentDecisionOwnerOnly")}</p>
+          ) : (
+            <div className="flex flex-wrap gap-1.5">
+              {CHOICES.map(({ choice, icon: Icon, label, variant, className }) => (
+                <Button
+                  key={choice}
+                  size="sm"
+                  variant={variant}
+                  className={className}
+                  loading={busy?.id === item.id && busy.choice === choice}
+                  disabled={busy?.id === item.id}
+                  onClick={() => decide.mutate({ id: item.id, tool: item.tool, choice })}
+                >
+                  <Icon size={13} /> {t(label)}
+                </Button>
+              ))}
+            </div>
+          )}
         </div>
       ))}
     </div>

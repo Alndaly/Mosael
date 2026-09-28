@@ -29,7 +29,9 @@ export function useAgentNavigation({
   const qc = useQueryClient();
   // 跳转跟着「当前会话」走 —— 和面板、浮标是同一条(见 currentAgentSession)。此前这里只读
   // localStorage,面板回落到第一条而没写存储时,智能体在那条会话里要求的跳转没人执行。
-  const sessionId = useCurrentAgentSession(workspaceId).session?.id ?? "";
+  // 同事共享来、只能看的那条不跟:那是智能体带**主人**过去,看的人不该被拽走,也清不掉它(清是写)。
+  const current = useCurrentAgentSession(workspaceId);
+  const sessionId = current.readOnly ? "" : current.session?.id ?? "";
 
   //: **和浮标用同一个 queryKey**,所以这不是第三个轮询 —— react-query 按 key 合并,
   //: 两个观察者共享同一次请求。各起一个 key 的话,一个会话每 1.5 秒会被打两次。

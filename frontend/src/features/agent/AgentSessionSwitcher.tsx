@@ -1,5 +1,5 @@
 import React from "react";
-import { Check, ChevronDown, Search, Trash2 } from "lucide-react";
+import { Check, ChevronDown, Eye, Search, Trash2 } from "lucide-react";
 
 import { useI18n } from "@/app/preferences";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -8,12 +8,15 @@ import { cn } from "@/lib/utils";
 export interface AgentSessionChoice {
   id: string;
   title: string;
+  /** 同事共享来的(`false`)只能看:能切过去看,不给删(见 currentAgentSession.isViewOnly)。 */
+  is_mine: boolean;
 }
 
 /**
  * 常驻智能体窗口的标题也是会话入口。
  *
  * 标题本身保持扁平，不再套一个输入框式外壳；只有展开后才出现承载搜索和列表的浮层。
+ * 同事共享来的那几条带一只眼睛、没有删除 —— 和 AI 工作台的会话列表同一条规矩。
  */
 export function AgentSessionSwitcher<T extends AgentSessionChoice>({
   sessions,
@@ -97,6 +100,7 @@ export function AgentSessionSwitcher<T extends AgentSessionChoice>({
                 <button
                   type="button"
                   className="flex min-w-0 cursor-pointer items-center justify-between gap-2.5 border-0 bg-transparent py-2 pl-2.5 pr-2 text-left text-ui-md text-inherit [&_span]:min-w-0 [&_span]:truncate [&_svg]:shrink-0 [&_svg]:text-primary"
+                  title={session.is_mine ? undefined : t("chatSessionReadOnly")}
                   onClick={() => {
                     setMenuOpen(false);
                     onSelect(session.id);
@@ -105,20 +109,24 @@ export function AgentSessionSwitcher<T extends AgentSessionChoice>({
                   <span>{session.title}</span>
                   {session.id === activeSession?.id && <Check size={13} />}
                 </button>
-                <button
-                  type="button"
-                  className="inline-flex size-[26px] cursor-pointer items-center justify-center rounded-md border-0 bg-transparent text-muted-foreground hover:bg-[color-mix(in_srgb,var(--destructive)_12%,transparent)] hover:text-destructive disabled:cursor-default disabled:opacity-45"
-                  aria-label={`${t("delete")}: ${session.title}`}
-                  title={t("delete")}
-                  disabled={deleting}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    setMenuOpen(false);
-                    onDelete(session);
-                  }}
-                >
-                  <Trash2 size={13} />
-                </button>
+                {session.is_mine ? (
+                  <button
+                    type="button"
+                    className="inline-flex size-[26px] cursor-pointer items-center justify-center rounded-md border-0 bg-transparent text-muted-foreground hover:bg-[color-mix(in_srgb,var(--destructive)_12%,transparent)] hover:text-destructive disabled:cursor-default disabled:opacity-45"
+                    aria-label={`${t("delete")}: ${session.title}`}
+                    title={t("delete")}
+                    disabled={deleting}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setMenuOpen(false);
+                      onDelete(session);
+                    }}
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                ) : (
+                  <Eye size={13} className="justify-self-center text-muted-foreground" aria-hidden />
+                )}
               </div>
             ))
           )}

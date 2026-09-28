@@ -89,6 +89,18 @@ describe("智能体要求的页面跳转", () => {
     expect(mocks.api.mock.calls.filter(([, init]) => init?.method === "DELETE")).toHaveLength(2);
   });
 
+  it("正看着同事共享来的对话:不跳、也不替主人清掉 —— 那是智能体带主人过去", async () => {
+    mocks.listAgentSessions.mockResolvedValue([{ id: "s-shared", workspace_id: "w1", title: "s-shared", is_mine: false }]);
+    window.localStorage.setItem(agentSessionSelectionKey("w1"), "s-shared");
+    mocks.pendingView = "publish";
+    serveSessions();
+    const onNavigate = vi.fn();
+    mount(onNavigate);
+    await waitFor(() => expect(mocks.listAgentSessions).toHaveBeenCalled());
+    expect(mocks.api).not.toHaveBeenCalled();
+    expect(onNavigate).not.toHaveBeenCalled();
+  });
+
   it("一条会话都没有时不轮询、不跳", async () => {
     mocks.listAgentSessions.mockResolvedValue([]);
     const onNavigate = vi.fn();

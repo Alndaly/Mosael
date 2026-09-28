@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.core.i18n import LocalizedError
 from app.domain.authority import Actor, Voucher, ensure
+from app.domain.permissions import NotVisible, PermissionDenied, ensure_workspace_access, ensure_workspace_perm
 from app.db.models import (
     AgentSession,
     BrowserProfile,
@@ -275,7 +276,8 @@ class NotManageableError(SharingError):
 _NOT_MANAGEABLE_KEYS: dict[str, str] = {
     "publish_account": "shareErr_notManageable_publishAccount",
     "browser_profile": "shareErr_notManageable_browserProfile",
-    #: 生成会话共享出去是给人**看**的(见 generation/sessions)。
+    #: 两类会话共享出去是给人**看**的(见下面的 `readable` / `writable`)。
+    "agent_session": "shareErr_notManageable_agentSession",
     "generation_session": "shareErr_notManageable_generationSession",
 }
 
@@ -288,10 +290,56 @@ def ensure_manageable(db: Session, kind: str, resource: Any, *, actor: str | Non
     里的内容,不是别人的登录态(和 routes/shares 同一条)。此前这几条路由只查工作区角色,同事猜到 id 就能
     删别人的私有账号。`actor` 必填;None 与没有主人的行一律拒绝。
 
-    生成会话也走这一道(见 generation/sessions):共享给同事是给他**看**,改名、删除、换模型、在里面接着生成只有主人。
+    两类会话也走这一道(见 `writable`):共享给同事是给他**看**,在里面写东西只有主人。
     """
     if resource is None or not actor or resource.owner_user_id != actor:
         raise NotManageableError(_NOT_MANAGEABLE_KEYS.get(kind, "shareErr_notManageable"))
+
+
+# ---------- 按 id 取一份:看的闸与写的闸 ----------
+#
+# 对话会话和生成会话是某人的私人工作线程。主人把它共享进工作区,是给同事**看** —— 历史、产出、花费
+# 都看得到;而改名、删除、收进分组、换模型 / 连接、在里面接着说话或生成,是**主人**的事。此前两类会话的
+# 写路由都只查了「看得见」,于是同事能删掉别人的会话;更隐蔽的是换模型:会话记着的是连接,连接归个人
+# (见 db.models.ProviderProfile),同事在别人的会话里一换,就把**他自己的**连接写进了别人的会话。
+#
+# 两类的判据一字不差,所以住在这里而不是各抄一份:取行、工作区成员、`may_use`、角色、主人 —— 哪一步
+# 日后要改,两类一起改。领域那一侧(generation/sessions、agent/sessions)只是把种类和权限档绑上。
+
+
+def readable(db: Session, kind: str, user: User, resource_id: str) -> Any:
+    """他看得见的那一份。看不见 = 不存在(`NotVisible`,api 回 404):不告诉他「这里有一份你看不到的东西」。
+
+    得是它所在工作区的人,还得「能用」(`may_use`:是他的,或者主人共享进了这个工作区)。只查前一半的话,
+    猜到 id 就能读别人私有的那一份。
+    """
+    resource = db.get(model_for(kind), resource_id)
+    if resource is None:
+        raise NotVisible("Not found")
+    ensure_workspace_access(db, user, resource.workspace_id)
+    if not may_use(db, kind, resource, user.id):
+        raise NotVisible("Not found")
+    return resource
+
+
+def writable(db: Session, kind: str, user: User, resource_id: str, *, perm: str) -> Any:
+    """他能改的那一份:先得看得见(否则 404),再得有工作区的 `perm` 权限,再得是主人(否则 403)。"""
+    resource = readable(db, kind, user, resource_id)
+    ensure_workspace_perm(db, user, resource.workspace_id, perm)
+    ensure_writable(db, kind, resource, user.id)
+    return resource
+
+
+def ensure_writable(db: Session, kind: str, resource: Any, actor_id: str | None) -> None:
+    """已经拿到行、只差最后一道「是不是主人」的地方用(生成漏斗、确认卡内核)。
+
+    判据就是 `ensure_manageable`,这里只把它的拒绝翻成授权层的 `PermissionDenied`(api 回 403,
+    见 main.py 的异常处理器),调用方不必各自 try/except。
+    """
+    try:
+        ensure_manageable(db, kind, resource, actor=actor_id)
+    except NotManageableError as exc:
+        raise PermissionDenied.relay(exc) from exc
 
 
 def shared_workspaces(db: Session, kind: str, resource_id: str) -> list[str]:

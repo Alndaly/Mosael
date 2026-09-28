@@ -18,6 +18,14 @@
  * - 四处用同一个清单、同一条规则现算,不写也看到同一条,写回换不来一致性。
  * 代价是「从没选过」时当前会话跟着最近活跃走。一旦**用上**它 —— 发消息、对浮标说话、改会话
  * 设置(都经过 `ensureAgentSession`)—— 这条就被记成选择,之后不会再被别的会话顶掉。
+ *
+ * **同事共享来的对话只能看**(后端 domain/agent/sessions 的写闸,`is_mine` 是它给的答案)。「能不能往里写」
+ * 只在这里判一次(`isViewOnly`),三处用它:
+ * - 回落只落在**自己的**对话上:没选过时的「当前会话」是一个猜测 —— 猜他要接着聊哪一条,而别人的那条他
+ *   接不下去。明确点开一条共享来的,它才是当前会话(看它);
+ * - `ensureAgentSession` 遇到只读的当前会话就拒(`ViewOnlySessionError`),**不悄悄新建一条** —— 新建会把
+ *   这句话发进一条他没看着的对话里,而屏幕上还停在别人那条;
+ * - 会话设置的写入(`useUpdateAgentSession`)同一条规矩。界面据 `readOnly` 把输入区换成只读说明。
  */
 
 import React from "react";
@@ -40,9 +48,24 @@ export function agentSessionsQueryKey(workspaceId: string) {
   return ["agent-sessions", workspaceId] as const;
 }
 
-/** 选过的那条优先;没选过、或选的那条已经不在清单里,就是第一条(清单按最近活跃排)。 */
+/** 同事共享来、只能看的对话。只认后端明说「不是你的」—— 没说的(刚建、还没回来)当作自己的。 */
+export function isViewOnly(session: { is_mine?: boolean } | null | undefined): boolean {
+  return session?.is_mine === false;
+}
+
+/** 要往一条只读的对话里写。带着给人看的那句话的 key,由界面翻。 */
+export class ViewOnlySessionError extends Error {
+  readonly messageKey = "chatSessionReadOnly" as const;
+
+  constructor() {
+    super("agent session is view-only");
+    this.name = "ViewOnlySessionError";
+  }
+}
+
+/** 选过的那条优先;没选过、或选的那条已经不在清单里,就是**自己的**第一条(清单按最近活跃排)。 */
 export function resolveCurrentSession(sessions: readonly AgentSession[], choice: string): AgentSession | null {
-  return sessions.find((item) => item.id === choice) ?? sessions[0] ?? null;
+  return sessions.find((item) => item.id === choice) ?? sessions.find((item) => !isViewOnly(item)) ?? null;
 }
 
 // —— 选择本身:localStorage + 同窗口广播 ——
@@ -97,7 +120,8 @@ async function createAndSelect(qc: QueryClient, workspaceId: string): Promise<Ag
 const ensuring = new Map<string, Promise<AgentSession>>();
 
 /**
- * 要**用**当前会话了:有就是它(并把它记成选择),没有就建一条。
+ * 要**用**当前会话了:有就是它(并把它记成选择),没有就建一条;它是同事共享来只能看的,就拒
+ * (`ViewOnlySessionError`)—— 不替他另建一条,那句话该发在哪儿由他自己定。
  *
  * 同一工作区同时只跑一个:面板发送和浮标说话撞在同一刻时,不该各建一条。
  */
@@ -119,6 +143,7 @@ export function ensureAgentSession(qc: QueryClient, workspaceId: string): Promis
           });
     const current = resolveCurrentSession(sessions, choice);
     if (!current) return createAndSelect(qc, workspaceId);
+    if (isViewOnly(current)) throw new ViewOnlySessionError();
     writeChoice(workspaceId, current.id);
     return current;
   })().finally(() => ensuring.delete(workspaceId));
@@ -149,6 +174,8 @@ export interface CurrentAgentSession {
   listLoaded: boolean;
   /** 当前会话;清单为空时为 null。 */
   session: AgentSession | null;
+  /** 当前会话是同事共享来只能看的:输入区、会话设置、拍板的按钮都不给(见 `isViewOnly`)。 */
+  readOnly: boolean;
   select: (sessionId: string) => void;
   /** 删掉了这些会话之后调:当前那条在其中就回落。 */
   forget: (ids: readonly string[]) => void;
@@ -192,6 +219,7 @@ export function useCurrentAgentSession(
     listPending: list.isPending,
     listLoaded: list.isSuccess,
     session,
+    readOnly: isViewOnly(session),
     select,
     forget,
     create,
@@ -205,11 +233,13 @@ export function useCurrentAgentSession(
  * **还没有会话时也能选**:先按「当前会话」的规则取一条(一条都没有就建),再写进去 —— 此前
  * 没有会话时这几样整块不见,第一条消息只能用默认值发。建会话接口只收模型两栏,其余三项只能
  * PATCH,所以统一走「取/建 → PATCH」一条路,而不是模型走 create、其余走 PATCH 两条。
+ * 只读的对话不写(和 `ensureAgentSession` 同一条):选择器在只读会话里本就不出现,这里是最后一道。
  */
 export function useUpdateAgentSession(workspaceId: string, session: AgentSession | null) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (patch: AgentSessionUpdate) => {
+      if (isViewOnly(session)) throw new ViewOnlySessionError();
       const target = session ?? (await ensureAgentSession(qc, workspaceId));
       await updateAgentSession(target.id, patch);
       return target.id;

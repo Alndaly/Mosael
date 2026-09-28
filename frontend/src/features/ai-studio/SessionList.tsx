@@ -66,10 +66,10 @@ interface SessionKindSpec {
   /** 批量删。措辞里带数量和「会一并删掉什么」—— 两种会话删掉的东西不一样。 */
   deleteManyBody: MessageKey;
   /**
-   * 同事共享来的会话**只能看**时,那一行说什么(不给改名、删除、收纳、拖动;批量选不中它)。空着 = 共享来的照样能管。
-   * 生成会话是这样(后端 generation/sessions 的写闸:只有主人能写);对话还没有这条规矩。
+   * 同事共享来的会话**只能看**,那一行说什么(不给改名、删除、收纳、拖动;批量选不中它)。两种会话同一条规矩
+   * (后端 domain/sharing 的写闸:只有主人能写),差的只是这句话。
    */
-  sharedIsViewOnly?: MessageKey;
+  sharedIsViewOnly: MessageKey;
 }
 
 const SESSION_KINDS: Record<SessionGroupKind, SessionKindSpec> = {
@@ -86,6 +86,7 @@ const SESSION_KINDS: Record<SessionGroupKind, SessionKindSpec> = {
     deleteBody: "deleteSessionBody",
     deleteGroupBody: "chatDeleteGroupBody",
     deleteManyBody: "chatDeleteSessionsBody",
+    sharedIsViewOnly: "chatSessionReadOnly",
   },
   generation: {
     sessionsQueryKey: "generation-sessions",
@@ -103,6 +104,11 @@ const SESSION_KINDS: Record<SessionGroupKind, SessionKindSpec> = {
     sharedIsViewOnly: "generationSessionReadOnly",
   },
 };
+
+/** 这个人能管的那几条:自己的。共享来只能看的不进多选(批量删一定会被拒,摆出来只是让他白点一次)。 */
+function manageable(session: ListedSession): boolean {
+  return session.is_mine;
+}
 
 /** 收进分组;`null` = 移出分组(接口用空串表达"改成没有")。 */
 function moveSessionToGroup(kind: SessionGroupKind, sessionId: string, groupId: string | null): Promise<unknown> {
@@ -166,12 +172,7 @@ export function SessionList({
     void qc.invalidateQueries({ queryKey: ["session-groups", kind, workspaceId] });
   };
 
-  //: 这个人能管的那几条。共享来只能看的不进多选:批量删一定会被拒,摆出来只是让他白点一次。
-  const manageable = React.useCallback(
-    (session: ListedSession) => !spec.sharedIsViewOnly || session.is_mine,
-    [spec.sharedIsViewOnly],
-  );
-  const manageableSessions = React.useMemo(() => sessions.filter(manageable), [sessions, manageable]);
+  const manageableSessions = React.useMemo(() => sessions.filter(manageable), [sessions]);
   const { selectMode, enter: enterSelectMode, selectedIds, toggle, selectAll, allSelected, exit } = useMultiSelect(
     manageableSessions,
     (session) => session.id,
@@ -251,7 +252,7 @@ export function SessionList({
     () => (keyword ? sessions.filter((session) => session.title.toLowerCase().includes(keyword)) : sessions),
     [sessions, keyword],
   );
-  const visibleManageable = React.useMemo(() => visible.filter(manageable), [visible, manageable]);
+  const visibleManageable = React.useMemo(() => visible.filter(manageable), [visible]);
   // 分组内 / 未分组两摞。会话本身的顺序(后端按 updated_at 倒序)在每一摞里保持不变。
   const byGroup = React.useMemo(() => {
     const map = new Map<string, ListedSession[]>();
