@@ -6,7 +6,7 @@ import { z } from "zod";
 
 import { useQuery } from "@tanstack/react-query";
 
-import { oauthPending, oauthProviders, oauthStart } from "@/api/client";
+import { ApiError, ApiOfflineError, oauthPending, oauthProviders, oauthStart } from "@/api/client";
 import { useAuth } from "@/app/auth";
 import { useI18n, usePreferences } from "@/app/preferences";
 import loginHeroUrl from "@/assets/login-hero.jpg";
@@ -20,19 +20,17 @@ import type { MessageKey } from "@/app/messages";
 
 type LoginValues = { username: string; displayName: string; password: string; confirm: string; inviteCode: string };
 
-/** Map a raw API error body to a friendly, accurate message — instead of always
- * blaming the credentials (a server/network error is not a wrong password). */
-function friendlyAuthError(raw: string, mode: "login" | "register", t: (key: MessageKey) => string): string {
-  try {
-    const detail = (JSON.parse(raw) as { detail?: unknown }).detail;
-    if (typeof detail === "string" && detail.toLowerCase().includes("exists")) return t("usernameTaken");
-  } catch {
-    /* not JSON (e.g. network failure) → fall through */
+/** 把登录/注册的失败说准 —— 连不上、后端出错都不是「账号密码错」。
+ *  按 transport 抛出的错误类型和状态码判断:到这里时 message 已经是翻好的人话,不再是响应体,
+ *  从 message 里猜(此前的做法)一条分支都走不到。 */
+function friendlyAuthError(err: unknown, mode: "login" | "register", t: (key: MessageKey) => string): string {
+  if (err instanceof ApiOfflineError) return t("loginNetworkError");
+  if (err instanceof ApiError) {
+    if (err.status >= 500) return t("loginServerError");
+    if (mode === "register" && err.status === 409) return t("usernameTaken");
+    //: 注册已转邀请制、邀请码无效:后端给的就是按界面语言翻好的原因,照说。
+    if (mode === "register" && err.status === 403) return err.message;
   }
-  if (!raw || raw.toLowerCase().includes("failed to fetch") || raw.toLowerCase().includes("networkerror")) {
-    return t("loginNetworkError");
-  }
-  if (/^5\d\d\b/.test(raw)) return t("loginServerError");
   return mode === "login" ? t("loginFailed") : t("registerFailed");
 }
 
@@ -78,7 +76,7 @@ export function LoginView() {
       if (mode === "login") await login(values.username, values.password);
       else await register(values.username, values.password, values.displayName, values.inviteCode);
     } catch (err) {
-      form.setError("root", { message: friendlyAuthError((err as Error).message, mode, t) });
+      form.setError("root", { message: friendlyAuthError(err, mode, t) });
     }
   });
 
