@@ -24,9 +24,10 @@ from typing import Any
 from sqlalchemy import inspect, text
 
 from app.core.config import LOGIN_SESSION_TTL, settings
-from app.core.db import Base, PARTITION_PREFIX, engine, now
+from app.core.db import Base, PARTITION_PREFIX, engine
 from app.core.tokens import TOKEN_SCHEME, token_digest
 from app.db.migration_runner import MigrationPhase, MigrationPlan, MigrationStep
+from app.db.model_base import now
 from app.db.safety import DATABASE_SCHEMA_VERSION, mark_database_version, snapshot_before_upgrade
 
 logger = logging.getLogger(__name__)
