@@ -1536,7 +1536,8 @@ export interface paths {
         };
         /**
          * Read Document
-         * @description 给智能体读:目录 + 第 first–last 段的正文(有字数上限,超了 `next` 说从哪段接着读)。还在解析会等一小会儿。
+         * @description 给智能体读:目录 + 第 first–last 段的正文,从第 first 段的第 offset 个字起(有字数上限,超了 `next`
+         *     说从哪接着读,可能是一段的中间)。还在解析会等一小会儿。
          */
         get: operations["read_document_api_assets__asset_id__document_get"];
         put?: never;
@@ -16634,6 +16635,7 @@ export interface operations {
             query?: {
                 first?: number;
                 last?: number | null;
+                offset?: number;
             };
             header?: never;
             path: {

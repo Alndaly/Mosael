@@ -65,13 +65,15 @@ def get_extraction_sections(asset_id: str, extraction_id: str, db: DbSession, us
 
 @router.get("/assets/{asset_id}/document")
 def read_document(asset_id: str, db: DbSession, user: CurrentUser,
-                  first: int = Query(1, ge=1), last: int | None = Query(None, ge=1)) -> dict:
-    """给智能体读:目录 + 第 first–last 段的正文(有字数上限,超了 `next` 说从哪段接着读)。还在解析会等一小会儿。"""
+                  first: int = Query(1, ge=1), last: int | None = Query(None, ge=1),
+                  offset: int = Query(0, ge=0)) -> dict:
+    """给智能体读:目录 + 第 first–last 段的正文,从第 first 段的第 offset 个字起(有字数上限,超了 `next`
+    说从哪接着读,可能是一段的中间)。还在解析会等一小会儿。"""
     from app.domain.documents.reading import DocumentReadError, read
 
     asset = _document(db, user, asset_id)
     try:
-        return read(db, asset.workspace_id, asset.id, first, last)
+        return read(db, asset.workspace_id, asset.id, first, last, offset)
     except DocumentReadError as exc:
         raise HTTPException(status_code=exc.status, detail=str(exc)) from exc
 

@@ -31,7 +31,8 @@ PAGE_IMAGE_LONG_EDGE = 1400
 #: 最多渲多少页的页面图 —— 几百页的 PDF 全渲一遍要几分钟、几百 MB,文字照样全抽。
 MAX_PAGE_IMAGES = 200
 #: 表格最多列多少行、多少列(一张十万行的表整张塞进 Markdown 没人读得完,也塞不进上下文)。
-MAX_TABLE_ROWS = 500
+#: 一张表最多取多少行。读的时候能在一段中间接着读(documents.reading),所以这里不必为了「一次读得完」压得很低。
+MAX_TABLE_ROWS = 2000
 MAX_TABLE_COLS = 40
 #: 一页平均少于这么多字,多半是扫描件 / 图片版 PDF。
 SCANNED_CHARS_PER_PAGE = 30

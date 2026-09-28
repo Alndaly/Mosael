@@ -67,19 +67,55 @@ def outline(extraction: AssetExtraction) -> list[dict[str, Any]]:
              "has_page_image": bool(one.get("image"))} for one in extraction.outline or []]
 
 
-def read(db: Session, workspace_id: str, asset_id: str, first: int = 1, last: int | None = None) -> dict[str, Any]:
+#: 一段剩下的预算不到这么多字,就不在这一段里切一截了:下一次从这一段开头读。
+MIN_PIECE_CHARS = 2_000
+
+
+def _cut(body: str, room: int) -> int:
+    """在 room 之内最后一个换行处切(一张表按整行切,不切半行);一行都放不下就硬切。"""
+    cut = body.rfind("\n", 0, room)
+    return cut + 1 if cut > 0 else room
+
+
+def _table_header(text: str) -> str:
+    """一段开头那张 Markdown 表的表头(表头行 + 分隔行)。续读切在表的中间时补回去,不然后半截只剩一堆没名字的列。"""
+    lines = text.splitlines()
+    for at in range(len(lines) - 1):
+        if lines[at].lstrip().startswith("|") and set(lines[at + 1].replace("|", "").strip()) <= set("-: ") and "-" in lines[at + 1]:
+            return f"{lines[at]}\n{lines[at + 1]}\n"
+    return ""
+
+
+def read(db: Session, workspace_id: str, asset_id: str, first: int = 1, last: int | None = None,
+         offset: int = 0) -> dict[str, Any]:
+    """第 first–last 段,从第 first 段的第 offset 个字起。预算用完时 `next` 说从哪接着读 —— 可能是**一段的中间**:
+    一张几百行的表是一整段,此前一段超过预算就只给前 4 万字、再没有办法读到后半(用户截图:智能体说
+    「卡在单次读取的上限上」)。切在表中间时,续读的那一截前面补上表头。"""
     asset = _document(db, workspace_id, asset_id)
     extraction = _ready(db, asset, wait=True)
+    first = max(1, first)
     last = min(last or extraction.sections, extraction.sections)
-    sections, used, next_index = [], 0, None
-    for section in read_sections(extraction, max(1, first), last):
-        size = len(section["markdown"])
-        if sections and used + size > READ_BUDGET_CHARS:
-            next_index = section["index"]
+    sections: list[dict[str, Any]] = []
+    used = 0
+    next_ref: dict[str, int] | None = None
+    for section in read_sections(extraction, first, last):
+        text = section["markdown"]
+        start = min(max(0, offset), len(text)) if section["index"] == first else 0
+        body = text[start:]
+        header = _table_header(text) if start and body.lstrip().startswith("|") else ""
+        room = READ_BUDGET_CHARS - used
+        if len(body) > room:
+            if sections and room < MIN_PIECE_CHARS:
+                next_ref = {"first": section["index"], "offset": start}
+                break
+            cut = _cut(body, room)
+            sections.append({"index": section["index"], "title": section.get("title") or "", "offset": start,
+                             "markdown": header + body[:cut], "complete": False})
+            next_ref = {"first": section["index"], "offset": start + cut}
             break
-        sections.append({"index": section["index"], "title": section.get("title") or "",
-                         "markdown": section["markdown"][:READ_BUDGET_CHARS]})
-        used += size
+        sections.append({"index": section["index"], "title": section.get("title") or "", "offset": start,
+                         "markdown": header + body, "complete": True})
+        used += len(body)
     return {
         "asset_id": asset.id,
         "name": asset.name,
@@ -90,8 +126,8 @@ def read(db: Session, workspace_id: str, asset_id: str, first: int = 1, last: in
         "notes": list(extraction.notes or []),
         "outline": outline(extraction),
         "sections": sections,
-        #: 预算用完了,下一次从这一段接着读;None = 读到了要的最后一段。
-        "next": next_index,
+        #: 预算用完了:下一次传 first / offset 接着读(offset 是那一段里的第几个字,0 = 从头);None = 读到了要的最后一段。
+        "next": next_ref,
     }
 
 
@@ -130,7 +166,7 @@ def attachment_context(db: Session, workspace_id: str, asset_ids: list[str]) -> 
         else:
             titles = "\n".join(f"{one['index']}. {one.get('title') or '(无标题)'}" for one in (done.outline or [])[:200])
             blocks.append(f"{header}共 {done.sections} {unit}、{done.chars} 字,太长不整篇放进来。目录:\n{titles}\n"
-                          f"用 read_document(asset_id, first, last) 按段读正文。")
+                          f"用 read_document(asset_id, first, last) 按段读正文;回包的 next 不为空就照它的 first / offset 接着读。")
         if done.page_images:
             blocks.append(f"(这份文档有 {len(done.page_images)} 页页面图:要看版式、图表、截图就用 "
                           f"analyze_document_pages(asset_id, pages, question)。)")

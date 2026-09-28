@@ -41,9 +41,35 @@ def test_按段读_预算用完说从哪段接着读(monkeypatch) -> None:
     first = client.get(f"/api/assets/{asset}/document").json()
     assert first["total"] == 4 and first["unit"] == "section"
     assert [one["title"] for one in first["outline"]] == ["第1章", "第2章", "第3章", "第4章"]
-    assert [one["index"] for one in first["sections"]] == [1, 2] and first["next"] == 3
+    assert [one["index"] for one in first["sections"]] == [1, 2] and first["next"] == {"first": 3, "offset": 0}
     rest = client.get(f"/api/assets/{asset}/document", params={"first": 3}).json()
     assert [one["index"] for one in rest["sections"]] == [3, 4] and rest["next"] is None
+
+
+def test_一段比预算还长_切在整行处_照_next_接着读_表格续读带表头(monkeypatch) -> None:
+    """一张几百行的表是一整段。此前一段超过预算只给前一截、没有办法读到后半(用户截图:智能体说
+    「卡在单次读取的上限上」)。现在 next 能指到一段的中间,续读的那一截前面补上表头,整张表读得全。"""
+    monkeypatch.setattr(reading, "READ_BUDGET_CHARS", 400)
+    monkeypatch.setattr(reading, "MIN_PIECE_CHARS", 50)
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+    csv = "序号,姓名,地址\n" + "\n".join(f"{n},学生{n},温州市瓯海区茶山街道第{n}号" for n in range(1, 61))
+    asset = _import(client, ws, "清单.csv", csv.encode())
+    seen: list[str] = []
+    cursor = {"first": 1, "offset": 0}
+    for _ in range(50):
+        page = client.get(f"/api/assets/{asset}/document", params=cursor).json()
+        piece = page["sections"][0]["markdown"]
+        lines = [line for line in piece.splitlines() if line.startswith("|")]
+        assert "序号" in lines[0], "每一截都从表头开始"
+        seen += [line for line in lines[2:]]
+        assert all(line.endswith("|") for line in lines), "按整行切,不切半行"
+        if page["next"] is None:
+            break
+        assert page["sections"][0]["complete"] is False
+        cursor = page["next"]
+    rows = [line.split("|")[1].strip() for line in seen]
+    assert rows == [str(n) for n in range(1, 61)], "一行不漏、一行不重"
 
 
 def test_挂进对话的文档_短的整篇_长的给目录(monkeypatch) -> None:

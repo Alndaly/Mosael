@@ -4343,7 +4343,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "docNote_littleText": {"zh": "抽出来的字很少,可能是扫描件或图片版:可以换 MinerU 这类插件做 OCR 解析", "en": "Very little text came out — it may be scanned or image-only. A plugin such as MinerU can OCR it."},
     "docNote_pageImagesCapped": {"zh": "页数太多,只渲了前 200 页的页面图(文字全抽了)", "en": "Too many pages: page images cover the first 200 pages (all the text is extracted)."},
     "docNote_noPageImages": {"zh": "装上 LibreOffice 能看到每一页的版式(智能体也能看图);现在只有文字和插图", "en": "Install LibreOffice to see each page's layout (the agent can look at it too); for now there's text and embedded images only."},
-    "docNote_tableTruncated": {"zh": "表格太大,只取了前 500 行、40 列", "en": "The table is large; only the first 500 rows and 40 columns are kept."},
+    "docNote_tableTruncated": {"zh": "表格太大,只取了前 2000 行、40 列", "en": "The table is large; only the first 2000 rows and 40 columns are kept."},
     "docErr_noParser": {"zh": "没有可用的文档解析", "en": "No document parser is available."},
     "docErr_parserIncomplete": {"zh": "文档解析用的「{plugin}」还没配好:缺 {missing}。去插件页补上,或在「设置 → 能力提供方」里换回本地解析", "en": "“{plugin}”, set for document parsing, isn't set up yet: missing {missing}. Complete it on the Plugins page, or switch back to local parsing under Settings → Capability providers."},
     "docErr_parserAmbiguous": {"zh": "配好了几家文档解析({names}),请在「设置 → 能力提供方」里定用哪一家", "en": "Several document parsers are set up ({names}); choose one under Settings → Capability providers."},

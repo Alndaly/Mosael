@@ -1183,13 +1183,16 @@ def analyze_asset(asset_id: str, question: str = "", mode: str = "auto") -> dict
 
 
 @mcp.tool()
-def read_document(asset_id: str, first: int = 1, last: int = 0) -> dict[str, Any]:
+def read_document(asset_id: str, first: int = 1, last: int = 0, offset: int = 0) -> dict[str, Any]:
     """Read-only: read an imported DOCUMENT asset (PDF, Word, PowerPoint, Excel, CSV, Markdown, text, web page, EPUB).
 
     Documents are parsed into Markdown when imported. Returns the outline (every page / slide
     / sheet / section with its title), then the text of sections first..last (1-based; last=0
-    means to the end), up to a size budget — when the budget runs out, `next` is the section to
-    continue from. Read long documents in ranges instead of all at once. `unit` says what a
+    means to the end), starting `offset` characters into section `first`, up to a size budget.
+    When the budget runs out, `next` is {"first", "offset"}: call again with exactly those to
+    continue — it can point into the middle of a section (a sheet with hundreds of rows is one
+    section; continuing inside a table repeats its header). A section with "complete": false
+    was cut there. Keep going until `next` is null before concluding the document ends. `unit` says what a
     section is (page, slide, sheet, section); `notes` are warnings such as "probably a scanned
     PDF". Waits briefly if the document is still being parsed. For layout, charts or pictures
     on a page, use analyze_document_pages. Do NOT use for knowledge-base notes (read_note) or
@@ -1198,6 +1201,8 @@ def read_document(asset_id: str, first: int = 1, last: int = 0) -> dict[str, Any
     params: dict[str, Any] = {"first": max(1, first)}
     if last:
         params["last"] = last
+    if offset:
+        params["offset"] = offset
     return _get(f"/api/assets/{asset_id}/document", params)
 
 
