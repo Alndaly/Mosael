@@ -3003,6 +3003,7 @@ export function NodeInspector({
       (node.type === "llm" && LLM_SPECIAL_CONFIG_KEYS.has(key)) ||
       (node.type === "ai_generate" && GENERATE_SPECIAL_CONFIG_KEYS.has(key)) ||
       (node.type === "ai_generate" && key === "prompt" && genPromptMode === "none"),
+    (key) => connectedInputs.includes(key),
   );
 
   // ── 功能区 ──────────────────────────────────────────────────────────────

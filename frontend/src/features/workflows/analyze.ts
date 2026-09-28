@@ -1,6 +1,6 @@
 import type { WorkflowGraph } from "@/api/client";
 
-import { isWorkflowFieldActive } from "@/features/nodeForms/fieldActivation";
+import { isWorkflowFieldActive, oneOfGroups } from "@/features/nodeForms/fieldActivation";
 import { fieldDataType, normalizeDataType, type DataType } from "@/features/nodeForms/fieldTypes";
 import type { PromptMode } from "@/lib/generationCapabilities";
 import { bodyKey, type ScopePath } from "@/features/workflows/scope";
@@ -16,6 +16,8 @@ export type IssueSeverity = "error" | "warn";
 export type IssueCode =
   | "missing-start" // 工作流没有开始节点
   | "required-missing" // 必填字段为空
+  | "one-of-both" // 同组(one_of)的字段填了不止一个
+  | "one-of-missing" // 同组(one_of)的字段一个都没填
   | "disconnected" // 非 start 节点无法从 start 到达
   | "stale-var" // 配置里引用了已删除的节点
   | "no-providers" // LLM 节点但一个供应商都没配
@@ -35,6 +37,8 @@ export interface NodeIssue {
   code: IssueCode;
   /** issue 关联的配置字段名(必填缺失 / 失效引用 / 类型不匹配所在字段)。 */
   configKey?: string;
+  /** one-of-*:那一组的全部字段名(声明顺序)。 */
+  group?: string[];
   /** stale-var:失效的完整引用,如 "{{llm-1.text}}"。 */
   ref?: string;
   /** type-mismatch:期望/实际类型,拼进文案。 */
@@ -95,6 +99,7 @@ interface ConfigSpecLike {
   required?: boolean;
   default?: unknown;
   active_when?: Record<string, unknown | unknown[]>;
+  one_of?: string;
   /** 这个字段装的是什么(素材/时间线/…)。**后端推好一起发过来**,见 domain/workflows。 */
   data_type?: string;
 }
@@ -270,6 +275,13 @@ function collect(
         // start 的 *params 通配前缀不算节点 id;引用不存在的节点即失效。
         if (!nodeIds.has(sourceId)) push("error", "stale-var", { configKey: key, ref });
       }
+    }
+
+    // 同组(one_of)恰好填一个 —— 与后端 validate_graph 的 _one_of_errors 同一条规矩。
+    for (const group of oneOfGroups(fieldSpecs)) {
+      const filled = group.filter((key) => !isEmpty(config[key]) || dataBound.has(`${node.id}:${key}`));
+      if (filled.length > 1) push("error", "one-of-both", { configKey: filled[0], group });
+      if (filled.length === 0) push("error", "one-of-missing", { configKey: group[0], group });
     }
 
     // 往里走一层。体里的节点和外面一样会缺必填、会引用不存在的东西 —— 只是此前没人看。

@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input";
 import { OptionPicker } from "@/components/ui/option-picker";
 import { NoteReferenceField } from "@/features/notes/NotePickerDialog";
 import { fieldDataType } from "@/features/nodeForms/fieldTypes";
-import { isWorkflowFieldActive } from "@/features/nodeForms/fieldActivation";
+import { isTakenByOneOfPeer, isWorkflowFieldActive } from "@/features/nodeForms/fieldActivation";
 import { MapField, bareRef } from "@/features/nodeForms/MapField";
 import { RefEditor } from "@/features/nodeForms/RefEditor";
 import { ScenePropsField, parseIds } from "@/features/nodeForms/ScenePropsField";
@@ -25,7 +25,7 @@ import { cn } from "@/lib/utils";
  * **一份节点声明 → 一张表单。** 工作流的节点检查器用它;创意画板上「跑一个工具」的格子也要用它。
  *
  * 字段怎么渲染、下拉从哪来、哪些收进「高级」、哪些此刻不参与,全由后端的字段声明说了算
- * (`type` / `options_from` + `depends_on` / `allow_custom` / `editor` / `advanced` / `active_when`,
+ * (`type` / `options_from` + `depends_on` / `allow_custom` / `editor` / `advanced` / `active_when` / `one_of`,
  * 见 backend/app/domain/workflows)。**这里不认识任何具体节点**(棘轮 nodeInspectorIsNodeAgnostic):
  * 插件节点是运行时才有的类型,按节点类型写的特例永远覆盖不到它。
  *
@@ -54,6 +54,8 @@ export interface ConfigSpec {
   options_from?: string;
   /** 满足这些父字段取值时，本字段才参与表单、选项请求和校验。 */
   active_when?: Record<string, unknown | unknown[]>;
+  /** 同组的字段恰好填一个(值是组名)。一格填了,同组其余的就不出现。 */
+  one_of?: string;
   /** 素材字段只收哪几种素材(image / video / audio;一种是字符串,几种是列表)—— 选择器只列那几种。 */
   media?: string | string[];
   /** 模板字段要写一段话(提示词):给高一点的编辑框。 */
@@ -132,16 +134,19 @@ function CodeField({ value, onChange }: { value: string; onChange: (value: strin
 
 /** 这个节点**此刻**要渲染的字段,分「基础 / 高级」两档,顺序就是后端声明的顺序。
 
-    不参与的字段(`active_when` 不满足)两档都不出现;`hidden` 是调用方自己的专区接管的字段。
+    不参与的字段(`active_when` 不满足)两档都不出现;同组(`one_of`)已经有一格填了的,其余几格也不出现;
+    `hidden` 是调用方自己的专区接管的字段;`isBound` 说哪些字段接了上游(那也算填了)。
     分级:留空也能跑的专业旋钮收进「高级」(由后端的 advanced 声明),第一眼只留下决定「这个节点
     在做什么」的字段 —— 十几个采样参数一上来就糊到脸上,新手根本无从下手。 */
 export function nodeConfigTiers(
   specs: Record<string, ConfigSpec>,
   config: Record<string, unknown>,
   hidden: (key: string) => boolean = () => false,
+  isBound: (key: string) => boolean = () => false,
 ): { basic: Array<[string, ConfigSpec]>; advanced: Array<[string, ConfigSpec]> } {
   const visible = Object.entries(specs)
     .filter(([, spec]) => isWorkflowFieldActive(spec, config, specs))
+    .filter(([key]) => !isTakenByOneOfPeer(key, specs, config, isBound))
     .filter(([key]) => !hidden(key));
   return {
     basic: visible.filter(([, spec]) => !spec?.advanced),

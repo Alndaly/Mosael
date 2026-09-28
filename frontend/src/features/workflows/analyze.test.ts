@@ -18,7 +18,7 @@ const registry: RegistryLike = {
     const table: Record<
       string,
       {
-        config?: Record<string, { type?: string; required?: boolean; data_type?: string; default?: string; depends_on?: string; active_when?: Record<string, unknown> }>;
+        config?: Record<string, { type?: string; required?: boolean; data_type?: string; default?: string; depends_on?: string; active_when?: Record<string, unknown>; one_of?: string }>;
         output_types?: Record<string, string>;
         body_scope?: Record<string, string[]>;
       }
@@ -52,6 +52,13 @@ const registry: RegistryLike = {
         config: {
           engine: { type: "string", required: true, default: "google" },
           profile_id: { type: "string", required: true, active_when: { engine: "ai" } },
+        },
+      },
+      // 素材和本机路径恰好填一个(NODE_TYPES 的 one_of)。
+      browser_upload: {
+        config: {
+          asset_id: { type: "template", one_of: "source" },
+          file_path: { type: "template", one_of: "source" },
         },
       },
       // 体内看得见哪些作用域名,由后端随节点声明发下来(NODE_TYPES 的 body_scope)。
@@ -234,6 +241,34 @@ describe("analyzeWorkflow", () => {
     expect(analyzeWorkflow(make("google"), registry, fullCtx).runnable).toBe(true);
     expect(issuesAtLayer(analyzeWorkflow(make("ai"), registry, fullCtx).issues, []).get("c")).toEqual([
       expect.objectContaining({ code: "required-missing", configKey: "profile_id" }),
+    ]);
+  });
+
+  it("同组(one_of)恰好填一个:都填了、都没填都是阻塞错误,接了上游也算填了", () => {
+    const make = (config: Record<string, unknown>, bound?: string) =>
+      graph(
+        [
+          { id: "start", type: "start", config: {} },
+          { id: "up", type: "browser_upload", config },
+        ],
+        [
+          { id: "e", source: "start", target: "up" },
+          ...(bound ? [{ id: "d", source: "start", target: "up", kind: "data", target_input: bound }] : []),
+        ] as WorkflowGraph["edges"],
+      );
+    const issuesOf = (g: WorkflowGraph) => issuesAtLayer(analyzeWorkflow(g, registry, fullCtx).issues, []).get("up") ?? [];
+
+    expect(issuesOf(make({ asset_id: "a1" }))).toEqual([]);
+    expect(issuesOf(make({ file_path: "/tmp/x.mp4" }))).toEqual([]);
+    expect(issuesOf(make({}, "asset_id"))).toEqual([]);
+    expect(issuesOf(make({ asset_id: "a1", file_path: "/tmp/x.mp4" }))).toEqual([
+      expect.objectContaining({ code: "one-of-both", severity: "error", group: ["asset_id", "file_path"] }),
+    ]);
+    expect(issuesOf(make({ file_path: "/tmp/x.mp4" }, "asset_id"))).toEqual([
+      expect.objectContaining({ code: "one-of-both" }),
+    ]);
+    expect(issuesOf(make({}))).toEqual([
+      expect.objectContaining({ code: "one-of-missing", severity: "error", group: ["asset_id", "file_path"] }),
     ]);
   });
 

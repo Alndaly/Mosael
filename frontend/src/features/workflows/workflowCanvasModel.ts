@@ -162,6 +162,14 @@ function workflowDataTypeName(t: Translate, type: DataType | undefined): string 
   return t(`wfType_${type ?? "any"}` as MessageKey);
 }
 
+/** 一组字段在界面上的名字(「素材 / 本机路径」),没有标签的退到键名。 */
+function fieldLabels(issue: NodeIssue, registry: NodeRegistry): string {
+  const specs = registry.get(issue.nodeType)?.config as Record<string, { label?: unknown } | undefined> | undefined;
+  return (issue.group ?? [])
+    .map((key) => String(specs?.[key]?.label ?? "").trim() || key)
+    .join(" / ");
+}
+
 /** Structured readiness issue → localized text for badges and the checklist. */
 export function workflowIssueText(t: Translate, issue: NodeIssue, registry: NodeRegistry): string {
   switch (issue.code) {
@@ -174,6 +182,10 @@ export function workflowIssueText(t: Translate, issue: NodeIssue, registry: Node
         const spec = registry.get(issue.nodeType)?.config?.[issue.configKey] as { label?: unknown } | undefined;
         return String(spec?.label ?? "").trim() || issue.configKey;
       })());
+    case "one-of-both":
+      return t("wfIssueOneOfBoth").replace("{k}", fieldLabels(issue, registry));
+    case "one-of-missing":
+      return t("wfIssueOneOfMissing").replace("{k}", fieldLabels(issue, registry));
     case "stale-var":
       return t("wfIssueStaleVar").replace("{ref}", issue.ref ?? "");
     case "disconnected":

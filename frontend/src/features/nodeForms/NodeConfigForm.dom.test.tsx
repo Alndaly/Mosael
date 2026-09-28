@@ -100,6 +100,19 @@ describe("节点表单", () => {
     expect(nodeConfigTiers(SPECS, {}, (key) => key === "video").basic.map(([key]) => key)).toEqual(["platform"]);
   });
 
+  it("同组(one_of)一格填了或接了上游,另一格不出现;两格都填了的旧节点两格都留着", () => {
+    const specs: Record<string, ConfigSpec> = {
+      asset_id: { type: "template", one_of: "source" },
+      file_path: { type: "template", one_of: "source" },
+    };
+    const keys = (config: Record<string, unknown>, isBound?: (key: string) => boolean) =>
+      nodeConfigTiers(specs, config, undefined, isBound).basic.map(([key]) => key);
+    expect(keys({})).toEqual(["asset_id", "file_path"]);
+    expect(keys({ file_path: "/tmp/x.mp4" })).toEqual(["file_path"]);
+    expect(keys({}, (key) => key === "asset_id")).toEqual(["asset_id"]);
+    expect(keys({ asset_id: "a1", file_path: "/tmp/x.mp4" })).toEqual(["asset_id", "file_path"]);
+  });
+
   it("没有宿主的连线时,字段只有手填 / 下拉,不给「接上游」的开关", async () => {
     renderForm({});
     await waitFor(() => expect(fieldKeys()).toEqual(["video", "platform"]));
