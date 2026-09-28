@@ -392,6 +392,32 @@ _VENDOR_PRESETS: dict[str, dict[str, Any]] = {
             },
         ],
     },
+    "volcano-visual": {
+        "label": "火山引擎 即梦 AI(视觉)",
+        "base_url": "https://visual.volcengineapi.com",
+        # 第五个火山配置:即梦 AI 的数字人 OmniHuman 1.5 属于「视觉智能」(服务名 cv、地域 cn-north-1),
+        # **只认账号级 AK/SK 签名** —— 方舟 Key 不行。文档 https://www.volcengine.com/docs/85621/1829013
+        "capabilities": "数字人:OmniHuman 1.5 说话照片(一张图 + 一段音频;需要账号级 AK/SK,素材要先配对象存储)",
+        "capability_ids": ["video"],
+        "fields": [
+            {
+                "key": "api_key",
+                "label": "Access Key ID (AK)",
+                "storage": "api_key",
+                "secret": True,
+                "required": True,
+                "hint": "火山引擎账号的 AK(访问控制 → API 访问密钥),账号要开通即梦 AI 的 OmniHuman。",
+            },
+            {
+                "key": "sk",
+                "label": "Secret Access Key (SK)",
+                "storage": "extra",
+                "secret": True,
+                "required": True,
+                "hint": "与 AK 配对的 SK。只用来给请求签名,不会发给对面。",
+            },
+        ],
+    },
     "openai-compatible": {
         "label": "OpenAI 兼容端点",
         "base_url": "",

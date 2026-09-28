@@ -2385,6 +2385,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "{vendor} is temporarily unavailable; try again later: {detail}",
     },
     "providerErr_noAudioData": {"zh": "{vendor} 没有返回音频", "en": "{vendor} returned no audio"},
+    "providerErr_volcanoVisualKeysMissing": {
+        "zh": "即梦 AI 要账号级的 AK 和 SK:在设置里的「火山引擎 即梦 AI」连接上填好",
+        "en": "Jimeng AI needs an account-level AK and SK: fill them in on the Volcengine Jimeng AI connection in Settings",
+    },
     "providerErr_volcanoMusicKeysMissing": {
         "zh": "火山引擎音乐生成需要账号的 AK 和 SK,请到设置里把这条连接补全",
         "en": "Volcengine music generation needs the account's AK and SK; complete the connection in Settings",

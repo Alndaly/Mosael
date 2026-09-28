@@ -20,6 +20,7 @@ from app.ai.providers.adapters.alibaba.dashscope.video import WanVideoAdapter
 from app.ai.providers.adapters.bytedance.ark.image import SeedreamAdapter
 from app.ai.providers.adapters.bytedance.ark.video import SeedanceAdapter
 from app.ai.providers.adapters.bytedance.volcano.music import VolcanoMusicAdapter
+from app.ai.providers.adapters.bytedance.volcano.omnihuman import VolcanoOmniHumanAdapter
 from app.ai.providers.adapters.bytedance.volcano.speech import VolcanoSpeechAdapter
 from app.ai.providers.adapters.evolink.generation import EvolinkGenerationAdapter
 from app.ai.providers.adapters.google.lyria import LyriaAdapter
@@ -59,6 +60,8 @@ def _generation_adapters() -> tuple[GenerationAdapter, ...]:
         KlingAudioAdapter(),
         VolcanoMusicAdapter(),
         DashScopeAudioAdapter(),
+        # 数字人(ADR 0028 阶段 4)。
+        VolcanoOmniHumanAdapter(),
     )
 
 

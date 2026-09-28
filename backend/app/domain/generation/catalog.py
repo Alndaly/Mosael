@@ -329,6 +329,22 @@ WAN_22_S2V_CAPABILITIES = {
     "source_duration_seconds": {"driving_audio": [1, 20]},
 }
 
+#: 火山 · 即梦 OmniHuman 1.5 说话照片(ADR 0028 阶段 4):一张图 + 一段音频 → 跟着音频说话的视频,可以加一句
+#: 提示词调画面、动作和运镜。素材只收公网链接(`url_only_roles`,漏斗先传到用户的对象存储);音频必须短于 60 秒。
+#: 输出 720 / 1080(默认 1080)。文档:https://www.volcengine.com/docs/85621/1829013
+VOLCANO_OMNIHUMAN_15_CAPABILITIES = {
+    "modes": ["speech-to-video"],
+    "prompt": "optional",
+    "parameter_keys": ["resolution", "seed", "first_frame", "driving_audio"],
+    "resolutions": ["720p", "1080p"],
+    "default_resolution": "1080p",
+    "source_limits": {"first_frame": 1, "driving_audio": 1},
+    "requires_source": [["first_frame"], ["driving_audio"]],
+    "url_only_roles": ["first_frame", "driving_audio"],
+    "duration_follows": "driving_audio",
+    "source_duration_seconds": {"driving_audio": [1, 59]},
+}
+
 #: 改口型(ADR 0028):一段已有视频的嘴对上新的音频;可选一张参考人像指定改哪张脸。视频、音频都是 2–120 秒;
 #: 音频比视频长时适配器开 `video_extension`,用正放倒放交替把视频补齐。不收提示词。
 VIDEORETALK_CAPABILITIES = {
@@ -1231,6 +1247,14 @@ BUILTIN_MODELS = [
         "capabilities": WAN_22_S2V_CAPABILITIES,
     },
     {
+        # 说话照片:火山 · 即梦 OmniHuman 1.5(数字人,ADR 0028 阶段 4)。走账号级 AK/SK 的「即梦 AI」连接。
+        "id": "volcano-visual:omnihuman-1.5:video",
+        "provider": "volcano-visual",
+        "kind": "video",
+        "model": "omnihuman-1.5",
+        "capabilities": VOLCANO_OMNIHUMAN_15_CAPABILITIES,
+    },
+    {
         # 改口型:一段已有视频的嘴对上新的一段话(数字人,ADR 0028)。
         "id": "alibaba:videoretalk:video",
         "provider": "alibaba",
@@ -1354,6 +1378,7 @@ CAPABILITY_PROFILES: dict[str, dict[str, Any]] = {
     "wan-27-i2v": WAN_27_I2V_CAPABILITIES,
     "wan-22-s2v": WAN_22_S2V_CAPABILITIES,
     "videoretalk": VIDEORETALK_CAPABILITIES,
+    "volcano-omnihuman-15": VOLCANO_OMNIHUMAN_15_CAPABILITIES,
     "wan-27-r2v": WAN_27_R2V_CAPABILITIES,
     "kling-legacy-video": KLING_LEGACY_VIDEO_CAPABILITIES,
     "kling-v3-video": KLING_V3_VIDEO_CAPABILITIES,
