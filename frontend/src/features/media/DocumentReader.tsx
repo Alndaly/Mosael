@@ -173,7 +173,7 @@ function ParsedBody({ assetId, extraction, failed }: { assetId: string; extracti
                 {section.title && <span className="min-w-0 truncate text-foreground">{section.title}</span>}
               </h3>
               <div className="min-w-0 text-ui-sm [overflow-wrap:anywhere]">
-                <AgentMarkdown>{withFileUrls(section.markdown ?? "", assetId, extraction.id)}</AgentMarkdown>
+                <AgentMarkdown fullTables>{withFileUrls(section.markdown ?? "", assetId, extraction.id)}</AgentMarkdown>
               </div>
             </section>
           ))}

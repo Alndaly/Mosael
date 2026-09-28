@@ -84,3 +84,14 @@ it("解析中能停:停的是那一次解析任务;停下之后说已停止,可�
   expect(document.querySelector("[data-document-stop]")).toBeNull();
   expect(screen.queryByRole("alert")).toBeNull();
 });
+
+it("表格按全高排,不套一个 300px 的小滚动框(几百行的表只看得见前几行)", async () => {
+  docs.listExtractions.mockResolvedValue([{ ...done, id: "x3", unit: "sheet", page_images: [], notes: [] }]);
+  const rows = Array.from({ length: 40 }, (_, i) => `| ${i + 1} | 学生${i + 1} |`).join("\n");
+  docs.extractionSections.mockResolvedValue({ total: 1, unit: "sheet", sections: [
+    { index: 1, title: "Sheet1", image: null, markdown: `| 序号 | 姓名 |\n| --- | --- |\n${rows}` }] });
+  mount();
+  await waitFor(() => expect(document.querySelector("[data-document-text] table")).not.toBeNull());
+  const box = document.querySelector("[data-document-text] table")!.parentElement!;
+  expect(box.style.maxHeight).toBe("");
+});

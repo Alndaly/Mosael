@@ -106,10 +106,16 @@ function CodeCard({ children }: React.ComponentProps<"pre"> & { node?: unknown }
 /** 定值:组件表每次换新对象都会让 Streamdown 重建一遍内部的 components。 */
 const COMPONENTS: Components = { pre: CodeCard, a: CitationLink };
 
-export function AgentMarkdown({ children }: { children: string }) {
+/**
+ * `fullTables`:表格按全高排、跟着外面一起滚。Streamdown 缺省把表格限在 300px、里面再套一层滚动框 ——
+ * 聊天气泡里正合适(一张大表不该把对话撑满一屏),文档阅读器里就成了一篇长文中间的一个小窗口,
+ * 几百行的表只看得见前三四行(用户截图:xlsx 被截断)。
+ */
+export function AgentMarkdown({ children, fullTables = false }: { children: string; fullTables?: boolean }) {
   const t = useI18n();
   return (
     <Streamdown
+      tableMaxHeight={fullTables ? Number.POSITIVE_INFINITY : undefined}
       className="min-w-0 max-w-full [&_:is(p,ul,ol,table)]:mx-0 [&_:is(p,ul,ol,table)]:mt-0 [&_:is(p,ul,ol,table)]:mb-2.5 [&_:is(p,ul,ol,table):last-child]:mb-0 [&_:is(h1,h2)]:mt-4 [&_:is(h1,h2)]:mb-2 [&_:is(h1,h2)]:text-[15px] [&_:is(h1,h2)]:font-[650] [&_:is(h1,h2)]:tracking-[-0.01em] [&_:is(h3,h4)]:mt-3 [&_:is(h3,h4)]:mb-1.5 [&_:is(h3,h4)]:text-ui-md [&_:is(h3,h4)]:font-[650] [&_:is(h1,h2,h3,h4):first-child]:mt-0 [&_table]:w-full [&_table]:border-collapse [&_table]:text-ui-sm [&_:is(th,td)]:border [&_:is(th,td)]:border-border [&_:is(th,td)]:px-2 [&_:is(th,td)]:py-1.5 [&_:is(th,td)]:text-left [&_th]:bg-secondary [&_th]:font-semibold [&_code]:rounded-sm [&_code]:bg-panel-inset [&_code]:px-1 [&_code]:py-px [&_code]:font-mono [&_code]:text-xs [&_pre_code]:rounded-none [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_pre_code]:text-[inherit] [&_:is(ul,ol)]:pl-[18px] [&_div:has(>div>table)]:my-2.5 [&_div:has(>div>table)]:rounded-none [&_div:has(>div>table)]:border-0 [&_div:has(>div>table)]:bg-transparent [&_div:has(>div>table)]:p-0 [&_div:has(>table)]:rounded-none [&_div:has(>table)]:border-0 [&_div:has(>table)]:bg-transparent"
       components={COMPONENTS}
       plugins={{ code: codeHighlighter }}
