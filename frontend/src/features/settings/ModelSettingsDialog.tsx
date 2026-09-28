@@ -2,8 +2,19 @@ import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, ChevronLeft } from "lucide-react";
 
-import { api } from "@/api/client";
-import type { components } from "@/api/generated/schema";
+import {
+  createGenerationProfile,
+  deleteGenerationProfile,
+  listCapabilityRefs,
+  listGenerationProfiles,
+  listProviderModels,
+  listProviderVendors,
+  updateGenerationProfile,
+  updateProviderModel,
+  type ProviderModel,
+  type ProviderModelUpdate,
+} from "@/api/client";
+import { providerKeys } from "@/api/queryKeys";
 import { useI18n } from "@/app/preferences";
 import { ModalShell } from "@/components/app/modals";
 import { Button } from "@/components/ui/button";
@@ -16,8 +27,9 @@ import { cn } from "@/lib/utils";
 
 import { CapabilityProfileForm, ProfileField } from "./GenerationProfileForm";
 import { CAPABILITY_TAGS, orderedCapabilities } from "./capabilityTags";
+import { invalidateProviderDependents } from "./providerCaches";
 
-type ModelSettings = components["schemas"]["ProviderModelOut"];
+type ModelSettings = ProviderModel;
 
 /** 草稿态:读模型回包里每个 kind 都是非空串,而编辑中 null 表示"这个 kind 改回跟随目录"
     (更新载荷 ProviderModelUpdate 允许 null)。共用同一个 state,所以这里显式放宽。 */
@@ -36,8 +48,6 @@ type ModelSettingsDraft = Omit<ModelSettings, "generation_capability_refs"> & {
  * 而它其实绝大多数时候一个字都不用改。
  */
 
-type VendorPreset = components["schemas"]["VendorPresetOut"];
-
 /**
  * 可选能力**由后端的 vendor 预设给**,不在这里手抄一份。
  *
@@ -53,8 +63,8 @@ type VendorPreset = components["schemas"]["VendorPresetOut"];
  */
 function useCapabilityOptions(vendor: string | undefined): string[] {
   const presets = useQuery({
-    queryKey: ["provider-vendors"],
-    queryFn: () => api<VendorPreset[]>("/api/settings/provider-vendors"),
+    queryKey: providerKeys.vendors(),
+    queryFn: listProviderVendors,
     staleTime: 300_000,
   });
   return React.useMemo(() => {
@@ -106,14 +116,6 @@ function AdvancedToggle({
   );
 }
 
-type CapabilityRefs = {
-  models: { value: string; provider: string; model: string; parameter_keys: string[] }[];
-  profiles: { value: string; profile: string; parameter_keys: string[]; custom?: boolean; id?: string }[];
-  /** 什么都不指时,这条通道本身给得出哪几项。**空 = 真的只剩提示词**;非空 = 键知道了,
-   *  但没人验证过这个模型收哪些取值。这两种处境要分开说。 */
-  fallback_keys?: string[];
-};
-
 /**
  * 「这一行的生成参数按什么来」。
  *
@@ -148,7 +150,7 @@ function CapabilityRefField({
   const t = useI18n();
   const refs = useQuery({
     queryKey: ["generation-capability-refs", profileId, kind],
-    queryFn: () => api<CapabilityRefs>(`/api/generation/capability-refs?kind=${kind}&profile_id=${profileId}`),
+    queryFn: () => listCapabilityRefs(kind, profileId),
     staleTime: 5 * 60_000,
   });
   const NONE = "__follow__";
@@ -259,8 +261,8 @@ export function ModelSettingsDialog({
   // 从合并后的模型列表里取这一行 —— 目录与覆盖的合并逻辑只该有一处,再开一个单独的读接口
   // 就会出现"列表说 128k、弹窗说 32k"这种两份真相。
   const settings = useQuery({
-    queryKey: ["provider-models", profileId],
-    queryFn: () => api<ModelSettings[]>(`/api/settings/providers/${profileId}/models`),
+    queryKey: providerKeys.models(profileId),
+    queryFn: () => listProviderModels(profileId),
     enabled: open,
     select: (rows) => rows.find((row) => row.id === modelId) ?? null,
   });
@@ -270,17 +272,10 @@ export function ModelSettingsDialog({
   }, [settings.data]);
 
   const save = useMutation({
-    mutationFn: (body: Record<string, unknown>) =>
-      api<ModelSettings>(`/api/settings/providers/${profileId}/models/${encodeURIComponent(modelId)}`, {
-        method: "PATCH",
-        body: JSON.stringify(body),
-      }),
+    mutationFn: (body: ProviderModelUpdate) => updateProviderModel(profileId, modelId, body),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["provider-models", profileId] });
-      void qc.invalidateQueries({ queryKey: ["provider-defaults"] });
-      void qc.invalidateQueries({ queryKey: ["capability-models"] });
-      // 能力标签决定它进不进生图 / 视频下拉。
-      void qc.invalidateQueries({ queryKey: ["generation-options"] });
+      // 能力标签决定它进不进默认模型的候选、生图 / 视频下拉。
+      void invalidateProviderDependents(qc);
       onOpenChange(false);
     },
   });
@@ -663,10 +658,8 @@ function ProfileBody({
   /* 从**列表**里取那一份,不新开一个"取单份"的接口:这条连接下的参数组本来就是个短清单,
      列表那次请求多半已经在缓存里 —— 为一份数据再加一条路由是给自己多留一处会走岔的口径。 */
   const existing = useQuery({
-    queryKey: ["generation-profiles", profileId, kind],
-    queryFn: () => api<{ id: string; name: string; capabilities: Record<string, unknown> }[]>(
-      `/api/settings/providers/${profileId}/generation-profiles?kind=${kind}`,
-    ),
+    queryKey: providerKeys.generationProfiles(profileId, kind),
+    queryFn: () => listGenerationProfiles(profileId, kind),
     enabled: Boolean(rowId),
   });
   const row = rowId ? existing.data?.find((one) => one.id === rowId) : undefined;
@@ -683,20 +676,14 @@ function ProfileBody({
   }, [rowId, row]);
 
   const save = useMutation({
-    mutationFn: (body: Record<string, unknown>) =>
-      rowId
-        ? api<{ id: string }>(`/api/settings/providers/${profileId}/generation-profiles/${rowId}`, {
-            method: "PATCH", body: JSON.stringify(body),
-          })
-        : api<{ id: string }>(`/api/settings/providers/${profileId}/generation-profiles`, {
-            method: "POST", body: JSON.stringify({ ...body, kind }),
-          }),
+    mutationFn: (body: { name: string; capabilities: Record<string, unknown> }) =>
+      rowId ? updateGenerationProfile(profileId, rowId, body) : createGenerationProfile(profileId, { ...body, kind }),
     onSuccess: (row) => onSaved(`profile:${row.id}`),
     //: 后端的报错已经点名了是哪个键,原样显示,别包一层"保存失败"。
     onError: (err: Error) => setError(err.message),
   });
   const remove = useMutation({
-    mutationFn: () => api<void>(`/api/settings/providers/${profileId}/generation-profiles/${rowId}`, { method: "DELETE" }),
+    mutationFn: () => deleteGenerationProfile(profileId, rowId!),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["generation-capability-refs", profileId, kind] });
       onBack();

@@ -20,6 +20,7 @@ export * from "@/api/domains/jobs";
 export * from "@/api/domains/notes";
 export * from "@/api/domains/notifications";
 export * from "@/api/domains/plugins";
+export * from "@/api/domains/providers";
 export * from "@/api/domains/publish";
 export * from "@/api/domains/scenes";
 export * from "@/api/domains/scheduler";

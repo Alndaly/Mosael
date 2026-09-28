@@ -2,12 +2,11 @@ import React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 
-import { api } from "@/api/client";
-import type { components } from "@/api/generated/schema";
+import { probeProviderHealth } from "@/api/client";
+import { providerKeys } from "@/api/queryKeys";
 import { useI18n } from "@/app/preferences";
 import { cn } from "@/lib/utils";
 
-type Health = components["schemas"]["ProviderHealthOut"];
 
 /**
  * 这条连接通不通、往返多久。
@@ -22,8 +21,8 @@ type Health = components["schemas"]["ProviderHealthOut"];
 export function ProviderHealth({ profileId, className }: { profileId: string; className?: string }) {
   const t = useI18n();
   const health = useQuery({
-    queryKey: ["provider-health", profileId],
-    queryFn: () => api<Health>(`/api/settings/providers/${profileId}/health`),
+    queryKey: providerKeys.health(profileId),
+    queryFn: () => probeProviderHealth(profileId),
     // 探活结果几分钟内没必要重来;切回窗口也不重探(那会在用户只是切了个应用时打一串请求)。
     staleTime: 120_000,
     refetchOnWindowFocus: false,

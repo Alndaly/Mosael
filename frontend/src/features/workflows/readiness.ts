@@ -9,20 +9,12 @@
 import React from "react";
 import { useQuery, type QueryClient } from "@tanstack/react-query";
 
-import { api, type GenerationOption, type WorkflowGraph } from "@/api/client";
-import type { components } from "@/api/generated/schema";
+import { api, listProviderProfiles, type GenerationOption, type ProviderProfile, type WorkflowGraph } from "@/api/client";
+import { providerKeys } from "@/api/queryKeys";
 import { GENERATION_KINDS, promptMode } from "@/lib/generationCapabilities";
 import { analyzeWorkflow, type Analysis, type AnalyzeContext, type RegistryLike } from "@/features/workflows/analyze";
 import { chatProfileIds, generationVendors } from "@/features/workflows/bindingReadiness";
 import { bodyKey } from "@/features/workflows/scope";
-
-type ProviderProfile = components["schemas"]["ProviderProfileOut"];
-
-/** 连接清单。和设置页同一个键 —— 在那边改了连接,这边的判断跟着失效重取。 */
-export const PROVIDER_PROFILES_KEY = ["provider-profiles"] as const;
-export function fetchProviderProfiles(): Promise<ProviderProfile[]> {
-  return api<ProviderProfile[]>("/api/settings/providers");
-}
 
 /** 每一种生成的模型清单,合成一份。检查器(参数区按 capabilities 渲染)和就绪判断(提示词要不要写)
  *  共用这一个键与取法 —— 同一份清单拉两种形状,两边迟早对不上。 */
@@ -86,7 +78,7 @@ function contextOf(
 /** 编辑器用:挂着两份清单的订阅,清单变了判断跟着变。和检查器共用查询键,自动去重。 */
 export function useWorkflowAnalysis(graph: WorkflowGraph, registry: RegistryLike): Analysis {
   const needs = React.useMemo(() => readinessNeeds(graph, registry), [graph, registry]);
-  const providers = useQuery({ queryKey: PROVIDER_PROFILES_KEY, queryFn: fetchProviderProfiles, enabled: needs.chat });
+  const providers = useQuery({ queryKey: providerKeys.profiles(), queryFn: listProviderProfiles, enabled: needs.chat });
   const models = useQuery({ queryKey: GENERATION_OPTIONS_KEY, queryFn: fetchAllGenerationOptions, enabled: needs.generation });
   const profiles = providers.isSuccess ? providers.data : undefined;
   const options = models.isSuccess ? models.data : undefined;
@@ -100,7 +92,7 @@ export function useWorkflowAnalysis(graph: WorkflowGraph, registry: RegistryLike
 export async function analyzeWorkflowNow(qc: QueryClient, graph: WorkflowGraph, registry: RegistryLike): Promise<Analysis> {
   const needs = readinessNeeds(graph, registry);
   const [profiles, options] = await Promise.all([
-    needs.chat ? qc.fetchQuery({ queryKey: PROVIDER_PROFILES_KEY, queryFn: fetchProviderProfiles }) : undefined,
+    needs.chat ? qc.fetchQuery({ queryKey: providerKeys.profiles(), queryFn: listProviderProfiles }) : undefined,
     needs.generation ? qc.fetchQuery({ queryKey: GENERATION_OPTIONS_KEY, queryFn: fetchAllGenerationOptions }) : undefined,
   ]);
   return analyzeWorkflow(graph, registry, contextOf(needs, profiles, options));

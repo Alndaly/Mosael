@@ -41,8 +41,13 @@ function fakeApi(path: string, init?: RequestInit): Promise<unknown> {
   if (path === "/api/settings/ai-runtime") return Promise.resolve({ max_retries: 3 });
   return Promise.resolve([]);
 }
-vi.mock("@/api/client", () => ({
+//: 裸路径和 api/domains/providers 的函数都经 transport 的 api;管理页自己那几个函数在 client 上单独替掉。
+vi.mock("@/api/transport", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/api/transport")>()),
   api: (path: string, init?: RequestInit) => fakeApi(path, init),
+}));
+vi.mock("@/api/client", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/api/client")>()),
   getAuthToken: () => "token",
   isCustomServer: () => false,
   getInstallSource: () => Promise.resolve({ pip_index: "" }),

@@ -2,7 +2,8 @@ import React from "react";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { ChevronDown, Loader2, Settings2 } from "lucide-react";
 
-import { api, listProviderModels } from "@/api/client";
+import { listProviderDefaults, listProviderModels, listProviderProfiles } from "@/api/client";
+import { providerKeys } from "@/api/queryKeys";
 import { useEffectiveChatModel } from "@/features/agent/effectiveModel";
 import { useUpdateAgentSession } from "@/features/agent/currentAgentSession";
 import type { components } from "@/api/generated/schema";
@@ -11,9 +12,7 @@ import { Button } from "@/components/ui/button";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { gotoSettings } from "@/lib/deepLink";
 
-type ProviderProfile = components["schemas"]["ProviderProfileOut"];
 type AgentSession = components["schemas"]["AgentSessionOut"];
-type ProviderDefault = components["schemas"]["ProviderDefaultOut"];
 
 const SEP = "::";
 
@@ -27,12 +26,12 @@ export function ModelPicker({ workspaceId, session }: { workspaceId: string; ses
   const t = useI18n();
 
   const providers = useQuery({
-    queryKey: ["provider-profiles"],
-    queryFn: () => api<ProviderProfile[]>("/api/settings/providers"),
+    queryKey: providerKeys.profiles(),
+    queryFn: listProviderProfiles,
   });
   const defaults = useQuery({
-    queryKey: ["provider-defaults"],
-    queryFn: () => api<ProviderDefault[]>("/api/settings/provider-defaults"),
+    queryKey: providerKeys.defaults(),
+    queryFn: listProviderDefaults,
   });
   const enabled = (providers.data ?? []).filter((profile) => profile.enabled);
   const defaultChat = (defaults.data ?? []).find((item) => item.capability === "chat");
@@ -41,7 +40,7 @@ export function ModelPicker({ workspaceId, session }: { workspaceId: string; ses
 
   const modelQueries = useQueries({
     queries: enabled.map((profile) => ({
-      queryKey: ["provider-models", profile.id],
+      queryKey: providerKeys.models(profile.id),
       queryFn: () => listProviderModels(profile.id),
       staleTime: 60_000,
     })),

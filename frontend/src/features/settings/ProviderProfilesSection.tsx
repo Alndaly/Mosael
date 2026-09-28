@@ -6,8 +6,18 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { ChevronDown, ExternalLink, KeyRound, ListChecks, LogIn, LogOut, MoreHorizontal, Pencil, Plug, Plus, Power, RotateCw, Trash2 } from "lucide-react";
 
-import { api } from "@/api/client";
-import type { components } from "@/api/generated/schema";
+import {
+  createProviderProfile,
+  deleteProviderProfile,
+  listProviderProfiles,
+  listProviderVendors,
+  setProviderCredential,
+  unlinkProviderOAuth,
+  updateProviderProfile,
+  type ProviderProfile,
+  type VendorPreset,
+} from "@/api/client";
+import { providerKeys } from "@/api/queryKeys";
 import { toast } from "sonner";
 import { useI18n } from "@/app/preferences";
 import { Badge } from "@/components/ui/badge";
@@ -28,8 +38,6 @@ import { gotoRecord, OPEN_PLUGIN_IN_MARKET } from "@/lib/deepLink";
 import { BulkActionBar, BulkCheckbox, BulkSelectTrigger } from "@/components/app/bulkSelection";
 import { useMultiSelect } from "@/lib/useMultiSelect";
 
-type ProviderProfile = components["schemas"]["ProviderProfileOut"];
-type VendorPreset = components["schemas"]["VendorPresetOut"];
 type ProfileForm = {
   vendor: string;
   name: string;
@@ -120,12 +128,12 @@ export function ProviderProfilesSection({
   const EMPTY: ProfileForm = { vendor: "moonshot", name: "", config: {} };
 
   const profiles = useQuery({
-    queryKey: ["provider-profiles"],
-    queryFn: () => api<ProviderProfile[]>("/api/settings/providers"),
+    queryKey: providerKeys.profiles(),
+    queryFn: listProviderProfiles,
   });
   const vendors = useQuery({
-    queryKey: ["provider-vendors"],
-    queryFn: () => api<VendorPreset[]>("/api/settings/provider-vendors"),
+    queryKey: providerKeys.vendors(),
+    queryFn: listProviderVendors,
   });
   // 档案启停/新增/删除都会改变"某能力有哪些模型可选":默认模型的下拉、生成选择器都要跟着变。
   const refresh = () => invalidateProviderDependents(qc);
@@ -204,13 +212,10 @@ export function ProviderProfilesSection({
 
   const create = useMutation({
     mutationFn: (values: ProfileForm) =>
-      api<ProviderProfile>("/api/settings/providers", {
-        method: "POST",
-        body: JSON.stringify({
-          name: values.name.trim(),
-          vendor: values.vendor,
-          config: cleanConfig(values.config),
-        }),
+      createProviderProfile({
+        name: values.name.trim(),
+        vendor: values.vendor,
+        config: cleanConfig(values.config),
       }),
     onSuccess: () => {
       closeModal();
@@ -236,15 +241,9 @@ export function ProviderProfilesSection({
       const apiKey = apiKeyField ? secrets[apiKeyField] : undefined;
       if (apiKeyField) delete secrets[apiKeyField];
       if (apiKey || Object.keys(secrets).length) {
-        await api(`/api/settings/providers/${id}/credential`, {
-          method: "PUT",
-          body: JSON.stringify({ api_key: apiKey ?? null, secrets }),
-        });
+        await setProviderCredential(id, { api_key: apiKey ?? null, secrets });
       }
-      await api<ProviderProfile>(`/api/settings/providers/${id}`, {
-        method: "PATCH",
-        body: JSON.stringify({ name: values.name.trim(), config }),
-      });
+      await updateProviderProfile(id, { name: values.name.trim(), config });
     },
     onSuccess: () => {
       closeModal();
@@ -258,14 +257,11 @@ export function ProviderProfilesSection({
   });
   const toggle = useMutation({
     mutationFn: (profile: ProviderProfile) =>
-      api<ProviderProfile>(`/api/settings/providers/${profile.id}`, {
-        method: "PATCH",
-        body: JSON.stringify({ enabled: !profile.enabled }),
-      }),
+      updateProviderProfile(profile.id, { enabled: !profile.enabled }),
     onSuccess: refresh,
   });
   const remove = useMutation({
-    mutationFn: (id: string) => api(`/api/settings/providers/${id}`, { method: "DELETE" }),
+    mutationFn: deleteProviderProfile,
     onSuccess: () => {
       refresh();
       setRemoving(null);
@@ -279,9 +275,7 @@ export function ProviderProfilesSection({
   const bulkPatch = useMutation({
     mutationFn: async ({ ids, enabled }: { ids: string[]; enabled: boolean }) => {
       await Promise.allSettled(
-        ids.map((id) =>
-          api(`/api/settings/providers/${id}`, { method: "PATCH", body: JSON.stringify({ enabled }) }),
-        ),
+        ids.map((id) => updateProviderProfile(id, { enabled })),
       );
     },
     onSuccess: () => {
@@ -291,7 +285,7 @@ export function ProviderProfilesSection({
   });
   const bulkRemove = useMutation({
     mutationFn: async (ids: string[]) => {
-      await Promise.allSettled(ids.map((id) => api(`/api/settings/providers/${id}`, { method: "DELETE" })));
+      await Promise.allSettled(ids.map(deleteProviderProfile));
     },
     onSuccess: () => {
       bulk.clear();
@@ -313,7 +307,7 @@ export function ProviderProfilesSection({
     setListAction({ kind, profileId: profile.id, at: Date.now() });
   };
   const logout = useMutation({
-    mutationFn: (id: string) => api(`/api/settings/providers/${id}/oauth`, { method: "DELETE" }),
+    mutationFn: unlinkProviderOAuth,
     onSuccess: refresh,
   });
   const isOauth = (profile: ProviderProfile) => profile.auth_type === "oauth";

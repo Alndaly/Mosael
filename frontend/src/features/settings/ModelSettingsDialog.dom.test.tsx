@@ -14,7 +14,10 @@ import React from "react";
 import { expect, it, vi } from "vitest";
 
 vi.mock("@/app/preferences", () => ({ useI18n: () => (k: string) => k, usePreferences: () => ({ locale: "zh-CN" }) }));
-vi.mock("@/api/client", () => ({ api: vi.fn(async () => ({ models: [], profiles: [] })) }));
+vi.mock("@/api/transport", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/api/transport")>()),
+  api: vi.fn(async () => ({ models: [], profiles: [] })),
+}));
 
 const model = (capabilities: string[], known = true, refs: Record<string, string> = {}) => ({
   id: "m", display_name: "", capability_ids: capabilities, effective_capability_ids: capabilities,

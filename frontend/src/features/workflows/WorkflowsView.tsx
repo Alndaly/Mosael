@@ -56,7 +56,6 @@ import {
 import { toast } from "sonner";
 
 import {
-  api,
   ApiError,
   cancelJob,
   createWorkflow,
@@ -66,6 +65,8 @@ import {
   getWorkflow,
   importWorkflow,
   listJobEvents,
+  listProviderDefaults,
+  listProviderProfiles,
   listWorkflowRuns,
   importAsset,
   listWorkflows,
@@ -79,7 +80,7 @@ import {
   type WorkflowTemplateId,
   type Workspace,
 } from "@/api/client";
-import type { components } from "@/api/generated/schema";
+import { providerKeys } from "@/api/queryKeys";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
 import { toPlainText } from "@/components/markdown/inlineSyntax";
@@ -187,10 +188,8 @@ import { chatProfileIds, generationVendors } from "@/features/workflows/bindingR
 import {
   analyzeWorkflowNow,
   fetchAllGenerationOptions,
-  fetchProviderProfiles,
   GENERATION_OPTIONS_KEY,
   generationModelOf,
-  PROVIDER_PROFILES_KEY,
   useWorkflowAnalysis,
 } from "@/features/workflows/readiness";
 import { RunOutputs, outputSummary } from "@/features/workflows/RunOutputs";
@@ -249,7 +248,6 @@ const isMarkerNode = (node: { type?: string }): boolean => node.type === "marker
 /** 「添加」菜单里代表标记的那一项。用一个不可能撞上节点类型的值,免得和插件节点重名。 */
 
 
-type ProviderDefault = components["schemas"]["ProviderDefaultOut"];
 
 
 
@@ -2679,8 +2677,8 @@ export function NodeInspector({
   const picksChatModel = node.type === "llm";
   // 动态选项源:按需拉取,只有对应节点类型选中时才请求。
   const providers = useQuery({
-    queryKey: PROVIDER_PROFILES_KEY,
-    queryFn: fetchProviderProfiles,
+    queryKey: providerKeys.profiles(),
+    queryFn: listProviderProfiles,
     enabled: picksChatModel || node.type === "ai_generate",
   });
   //: 插件的包与工具、发布账号、可调用工作流、对话连接与模型此前各拉一份清单、各写一段过滤,
@@ -2694,8 +2692,8 @@ export function NodeInspector({
     enabled: node.type === "ai_generate",
   });
   const providerDefaults = useQuery({
-    queryKey: ["provider-defaults"],
-    queryFn: () => api<ProviderDefault[]>("/api/settings/provider-defaults"),
+    queryKey: providerKeys.defaults(),
+    queryFn: listProviderDefaults,
     enabled: node.type === "ai_generate",
   });
   // 选项要现查的字段、素材下拉:由表单那一层按声明去拉(见 features/nodeForms)。

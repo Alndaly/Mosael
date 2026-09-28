@@ -24,6 +24,9 @@ const sessions = vi.hoisted(() => ({
 }));
 vi.mock("@/api/client", () => ({
   api: (...args: unknown[]) => api(...(args as [])),
+  //: 连接清单与能力默认按路径答(测试里的 api 替身按路径分),模型行单独桩。
+  listProviderProfiles: () => api("/api/settings/providers"),
+  listProviderDefaults: () => api("/api/settings/provider-defaults"),
   listProviderModels: (...args: unknown[]) => listProviderModels(...(args as [])),
   ...sessions,
 }));

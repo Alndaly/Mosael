@@ -18,7 +18,10 @@ vi.mock("@/app/preferences", () => ({
   usePreferences: () => ({ locale: "zh-CN" }),
 }));
 //: 让模型查询停在 pending —— 这一屏要测的就是"还没回来"的那一刻。
-vi.mock("@/api/client", () => ({ api: () => new Promise(() => {}) }));
+vi.mock("@/api/transport", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/api/transport")>()),
+  api: () => new Promise(() => {}),
+}));
 
 import { ProviderModelList } from "./ProviderModelList";
 

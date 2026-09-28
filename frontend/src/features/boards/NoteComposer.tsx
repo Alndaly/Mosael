@@ -1,4 +1,4 @@
-import { assetKeys } from "@/api/queryKeys";
+import { assetKeys, providerKeys } from "@/api/queryKeys";
 import React from "react";
 import { Film, Music, Sparkles, X } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
@@ -104,7 +104,7 @@ export function NoteComposer({
   );
 
   const models = useQuery({
-    queryKey: ["capability-models", "chat", "automation"],
+    queryKey: providerKeys.capabilityModels("chat", "automation"),
     queryFn: () => listCapabilityModels("chat", "automation"),
   });
   const options = models.data ?? [];

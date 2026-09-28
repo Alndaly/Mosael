@@ -2,7 +2,8 @@ import React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Brain } from "lucide-react";
 
-import { api } from "@/api/client";
+import { listCapabilityModels, type CapabilityModel } from "@/api/client";
+import { providerKeys } from "@/api/queryKeys";
 import type { components } from "@/api/generated/schema";
 import { useI18n } from "@/app/preferences";
 import { fieldTriggerClass } from "@/components/ui/field-trigger";
@@ -12,7 +13,6 @@ import { useUpdateAgentSession } from "@/features/agent/currentAgentSession";
 import { cn } from "@/lib/utils";
 
 type AgentSession = components["schemas"]["AgentSessionOut"];
-type CapabilityModel = components["schemas"]["CapabilityModelOut"];
 
 /**
  * 这个模型**真正发得出去**的档位。
@@ -50,8 +50,8 @@ export function ThinkingLevelPicker({ workspaceId, session }: { workspaceId: str
   const setLevel = useUpdateAgentSession(workspaceId, session);
   // 与模型选择器读同一份清单(同一个 queryKey → 同一份缓存,不多打一次请求)。
   const models = useQuery({
-    queryKey: ["capability-models", "chat"],
-    queryFn: () => api<CapabilityModel[]>("/api/settings/capability-models/chat"),
+    queryKey: providerKeys.capabilityModels("chat"),
+    queryFn: () => listCapabilityModels("chat"),
     staleTime: 60_000,
   });
   // **不能直接拿 session.model 去匹配**:它平时是空的(会话跟默认走),空值匹配不上目录里

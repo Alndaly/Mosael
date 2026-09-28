@@ -1,15 +1,20 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { api } from "@/api/client";
-import type { components } from "@/api/generated/schema";
+import {
+  listCapabilityModels,
+  listProviderDefaults,
+  listProviderProfiles,
+  setProviderDefault,
+  type CapabilityModel,
+  type ProviderDefault,
+} from "@/api/client";
+import { providerKeys } from "@/api/queryKeys";
 import { useI18n } from "@/app/preferences";
 import { OptionPicker } from "@/components/ui/option-picker";
 import { SettingsBlock, SettingsGroup, SettingsRow } from "@/components/settings/settings-layout";
 import { cn } from "@/lib/utils";
 
-type ProviderProfile = components["schemas"]["ProviderProfileOut"];
-type ProviderDefault = components["schemas"]["ProviderDefaultOut"];
 
 const NONE = "__none__";
 /** 这一页**默认展示**哪几个能力分区 —— 不是"系统里有哪些能力"(那份由后端预设给),
@@ -17,7 +22,6 @@ const NONE = "__none__";
  *  照着错的那份抄过一次(模型设置弹窗漏了 embedding)。 */
 const SECTIONS_SHOWN_BY_DEFAULT = ["chat", "image", "video"] as const;
 
-type CapabilityModel = components["schemas"]["CapabilityModelOut"];
 
 /**
  * 一行:某能力的默认模型。
@@ -46,8 +50,8 @@ function DefaultRow({
   const model = current?.model ?? "";
 
   const candidates = useQuery({
-    queryKey: ["capability-models", capability],
-    queryFn: () => api<CapabilityModel[]>(`/api/settings/capability-models/${capability}`),
+    queryKey: providerKeys.capabilityModels(capability),
+    queryFn: () => listCapabilityModels(capability),
     staleTime: 30_000,
   });
   const options = candidates.data ?? [];
@@ -57,12 +61,9 @@ function DefaultRow({
 
   const save = useMutation({
     mutationFn: (patch: { provider_profile_id: string | null; model: string }) =>
-      api(`/api/settings/provider-defaults/${capability}`, {
-        method: "PUT",
-        body: JSON.stringify(patch),
-      }),
+      setProviderDefault(capability, patch),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["provider-defaults"] });
+      void qc.invalidateQueries({ queryKey: providerKeys.defaults() });
       // 生成选择器按 `is_default` 预选 —— 换了默认,那边要跟着换。
       void qc.invalidateQueries({ queryKey: ["generation-options"] });
     },
@@ -128,14 +129,14 @@ export function ProviderDefaultsSection({
 }) {
   const t = useI18n();
   const providers = useQuery({
-    queryKey: ["provider-profiles"],
-    queryFn: () => api<ProviderProfile[]>("/api/settings/providers"),
+    queryKey: providerKeys.profiles(),
+    queryFn: listProviderProfiles,
   });
   // 只有**我自己**那一份。曾经还有一份部署默认(管理页读 /api/admin/provider-defaults)——
   // 删掉了:一个我没选过的模型替我回答,花我的额度、用我的钥匙,而我从没同意过。
   const defaults = useQuery({
-    queryKey: ["provider-defaults"],
-    queryFn: () => api<ProviderDefault[]>("/api/settings/provider-defaults"),
+    queryKey: providerKeys.defaults(),
+    queryFn: listProviderDefaults,
   });
 
   const byCapability = new Map((defaults.data ?? []).map((row) => [row.capability, row]));

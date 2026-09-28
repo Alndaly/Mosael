@@ -1,7 +1,7 @@
 import React from "react";
 import { Clock, Info, LayoutGrid, List, Pencil, Search, Trash2 } from "lucide-react";
 
-import type { components } from "@/api/generated/schema";
+import type { PricingRule } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { BulkCheckbox } from "@/components/app/bulkSelection";
 import type { useMultiSelect } from "@/lib/useMultiSelect";
@@ -10,7 +10,6 @@ import { Input } from "@/components/ui/input";
 import { OptionPicker } from "@/components/ui/option-picker";
 import { cn } from "@/lib/utils";
 
-type PricingRule = components["schemas"]["ProviderPricingRuleOut"];
 
 /**
  * 成本规则的浏览:**按模型成组**,可筛、可搜,卡片 / 列表两种看法。

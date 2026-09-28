@@ -4,10 +4,6 @@ import { api } from "@/api/transport";
 export type SessionGroup = components["schemas"]["SessionGroupOut"];
 export type SessionGroupKind = "agent" | "generation";
 
-/** 这里只要这几栏 —— 用 `Pick` 而不是手写一个同形的 interface:少写一栏是**有意收窄**,
- *  而手写那份在后端改名/删字段时不会有任何反应。 */
-export type CapabilityModel = Pick<components["schemas"]["CapabilityModelOut"], "provider_profile_id" | "provider_name" | "model" | "display_name">;
-
 export function listSessionGroups(workspaceId: string, kind: SessionGroupKind): Promise<SessionGroup[]> {
   return api<SessionGroup[]>(`/api/session-groups?workspace_id=${workspaceId}&kind=${kind}`);
 }
@@ -37,13 +33,6 @@ export function deleteSessionGroup(groupId: string): Promise<unknown> {
 
 export function deleteAgentSession(sessionId: string): Promise<unknown> {
   return api(`/api/agent/sessions/${sessionId}`, { method: "DELETE" });
-}
-
-export function listCapabilityModels(
-  capability: string,
-  surface: "all" | "agent" | "direct" | "gateway" | "automation" = "all",
-): Promise<CapabilityModel[]> {
-  return api<CapabilityModel[]>(`/api/settings/capability-models/${capability}?surface=${surface}`);
 }
 
 /** Share or unshare a user-owned resource with one workspace. */

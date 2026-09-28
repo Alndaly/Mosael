@@ -9,8 +9,14 @@ import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, ChevronRight, Copy, ExternalLink, Loader2 } from "lucide-react";
 
-import { api } from "@/api/client";
-import type { components } from "@/api/generated/schema";
+import {
+  answerProviderOAuthLogin,
+  cancelProviderOAuthLogin,
+  getProviderOAuthLogin,
+  startProviderOAuthLogin,
+  type ProviderOAuthLogin,
+} from "@/api/client";
+import { providerKeys } from "@/api/queryKeys";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,7 +24,7 @@ import { ModalShell } from "@/components/app/modals";
 import { invalidateProviderDependents } from "@/features/settings/providerCaches";
 import { isImeKeystroke } from "@/lib/shortcuts";
 
-type LoginState = components["schemas"]["OAuthLoginOut"];
+type LoginState = ProviderOAuthLogin;
 
 /** 授权要等用户去浏览器操作,轮询得足够勤才不会让「已经点完了」还转圈。 */
 const POLL_MS = 1000;
@@ -189,7 +195,7 @@ export function ProviderOAuthDialog({
   const [,setAnswer] = React.useState("");
 
   const start = useMutation({
-    mutationFn: () => api<LoginState>(`/api/settings/providers/${profileId}/oauth/login`, { method: "POST" }),
+    mutationFn: () => startProviderOAuthLogin(profileId),
     onSuccess: (state) => setLoginId(state.login_id),
   });
 
@@ -204,18 +210,15 @@ export function ProviderOAuthDialog({
   }, [open]);
 
   const state = useQuery({
-    queryKey: ["provider-oauth-login", profileId, loginId],
-    queryFn: () => api<LoginState>(`/api/settings/providers/${profileId}/oauth/login/${loginId}`),
+    queryKey: providerKeys.oauthLogin(profileId, loginId),
+    queryFn: () => getProviderOAuthLogin(profileId, loginId!),
     enabled: open && Boolean(loginId),
     refetchInterval: (query) => (query.state.data?.status === "running" ? POLL_MS : false),
   });
 
   const submitAnswer = useMutation({
     mutationFn: (value: string) =>
-      api<LoginState>(`/api/settings/providers/${profileId}/oauth/login/${loginId}/answer`, {
-        method: "POST",
-        body: JSON.stringify({ prompt_id: state.data?.prompt?.prompt_id ?? "", answer: value }),
-      }),
+      answerProviderOAuthLogin(profileId, loginId!, { prompt_id: state.data?.prompt?.prompt_id ?? "", answer: value }),
     onSuccess: () => {
       setAnswer("");
       void state.refetch();
@@ -225,7 +228,7 @@ export function ProviderOAuthDialog({
   const close = () => {
     // 关掉弹窗就放弃这次授权 —— 否则会留下一个最长等 15 分钟的进程。
     if (loginId && state.data?.status === "running") {
-      void api(`/api/settings/providers/${profileId}/oauth/login/${loginId}`, { method: "DELETE" }).catch(() => undefined);
+      void cancelProviderOAuthLogin(profileId, loginId).catch(() => undefined);
     }
     void invalidateProviderDependents(qc);
     onOpenChange(false);

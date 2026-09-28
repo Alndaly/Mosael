@@ -5,15 +5,20 @@ export type GenerationOption = components["schemas"]["GenerationOptionOut"];
 export type GenerationJob = components["schemas"]["GenerationJobOut"];
 export type GenerationCreateResponse = components["schemas"]["GenerationCreateResponse"];
 
-/** A model exposed by one provider profile. Unknown limits remain null, never guessed. */
-/** 这里只要这几栏 —— 用 `Pick` 而不是手写一个同形的 interface:少写一栏是**有意收窄**,
- *  而手写那份在后端改名/删字段时不会有任何反应。 */
-export type ProviderModel = Pick<components["schemas"]["ProviderModelOut"], "id" | "context_window" | "max_output_tokens">;
-
 export type PromptOptimizeResult = components["schemas"]["PromptOptimizeResponse"];
 
-export function listProviderModels(profileId: string): Promise<ProviderModel[]> {
-  return api<ProviderModel[]>(`/api/settings/providers/${profileId}/models`);
+/** 一条连接上的模型行,生成参数可以「和哪个内置模型一样」或「用哪份参数组」—— 模型设置弹窗的那一格。
+ *  后端回的是无类型的字典,形状以这里为准。 */
+export type CapabilityRefs = {
+  models: { value: string; provider: string; model: string; parameter_keys: string[] }[];
+  profiles: { value: string; profile: string; parameter_keys: string[]; custom?: boolean; id?: string }[];
+  /** 什么都不指时,这条通道本身给得出哪几项。**空 = 真的只剩提示词**;非空 = 键知道了,
+   *  但没人验证过这个模型收哪些取值。这两种处境要分开说。 */
+  fallback_keys?: string[];
+};
+
+export function listCapabilityRefs(kind: string, profileId: string): Promise<CapabilityRefs> {
+  return api<CapabilityRefs>(`/api/generation/capability-refs?kind=${encodeURIComponent(kind)}&profile_id=${profileId}`);
 }
 
 /** Rewrite an image prompt according to the selected provider and model conventions. */

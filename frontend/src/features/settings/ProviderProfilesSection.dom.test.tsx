@@ -34,9 +34,12 @@ let providersResult: unknown = [];
 let vendorsResult: unknown = [];
 const apiCalls: Array<{ path: string; init?: { method?: string; body?: string } }> = [];
 
-vi.mock("@/api/client", () => ({
+//: 替身落在 transport 上:api/domains/providers 的函数和组件里残留的直接调用都经过它。
+vi.mock("@/api/transport", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/api/transport")>()),
   api: async (path: string, init?: { method?: string; body?: string }) => {
     apiCalls.push({ path, init });
+    if (path.includes("/members")) return { my_role: "owner", members: [] };
     if (path.includes("/models")) return [];
     if (path.startsWith("/api/settings/providers")) {
       if (providersResult instanceof Error) throw providersResult;
@@ -45,7 +48,6 @@ vi.mock("@/api/client", () => ({
     if (path.startsWith("/api/settings/provider-vendors")) return vendorsResult;
     return [];
   },
-  listMembers: async () => ({ my_role: "owner", members: [] }),
 }));
 
 import { ProviderProfilesSection } from "@/features/settings/ProviderProfilesSection";

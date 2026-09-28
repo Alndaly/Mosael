@@ -15,7 +15,9 @@ vi.mock("@/app/preferences", () => ({
   useI18n: () => (key: string) => key,
 }));
 
-vi.mock("@/api/client", () => ({
+//: 替身落在 transport 上:api/domains/providers 的函数经过它。
+vi.mock("@/api/transport", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/api/transport")>()),
   api: async (path: string) => {
     if (path === "/api/settings/providers") return providers;
     return [];

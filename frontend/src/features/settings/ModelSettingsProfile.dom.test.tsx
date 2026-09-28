@@ -19,7 +19,11 @@ import { expect, it, vi } from "vitest";
 vi.mock("@/app/preferences", () => ({ useI18n: () => (k: string) => k, usePreferences: () => ({ locale: "zh-CN" }) }));
 
 const apiMock = vi.fn();
-vi.mock("@/api/client", () => ({ api: (...args: unknown[]) => apiMock(...args) }));
+//: 替身落在 transport 上:api/domains/providers 的函数经过它。
+vi.mock("@/api/transport", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/api/transport")>()),
+  api: (...args: unknown[]) => apiMock(...args),
+}));
 
 vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 

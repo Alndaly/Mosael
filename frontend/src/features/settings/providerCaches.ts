@@ -1,5 +1,7 @@
 import type { QueryClient } from "@tanstack/react-query";
 
+import { providerKeys } from "@/api/queryKeys";
+
 /**
  * **跟着供应商连接走的那些缓存**:建、改、删、启停连接,授权 / 退出登录,增删启停模型之后都要失效。
  *
@@ -11,10 +13,10 @@ import type { QueryClient } from "@tanstack/react-query";
  * 插件那一侧的同类清单见 features/plugins/pluginCaches。
  */
 export const PROVIDER_DEPENDENT_KEYS = [
-  ["provider-profiles"],
-  ["provider-models"],
-  ["provider-defaults"],
-  ["capability-models"],
+  providerKeys.profiles(),
+  providerKeys.models(),
+  providerKeys.defaults(),
+  providerKeys.capabilityModels(),
   ["generation-options"],
 ] as const;
 

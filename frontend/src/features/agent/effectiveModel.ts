@@ -1,10 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 
-import { api } from "@/api/client";
+import { listProviderDefaults } from "@/api/client";
+import { providerKeys } from "@/api/queryKeys";
 import type { components } from "@/api/generated/schema";
 
 type AgentSession = components["schemas"]["AgentSessionOut"];
-type ProviderDefault = components["schemas"]["ProviderDefaultOut"];
 
 /**
  * 这次对话**实际用的是哪个模型**。
@@ -38,8 +38,8 @@ export interface EffectiveChatModel {
 export function useEffectiveChatModel(session: AgentSession | null | undefined): EffectiveChatModel {
   // 与 ModelPicker / ChatWorkspace 同一个 queryKey —— 同一份缓存,不会多打一次请求。
   const defaults = useQuery({
-    queryKey: ["provider-defaults"],
-    queryFn: () => api<ProviderDefault[]>("/api/settings/provider-defaults"),
+    queryKey: providerKeys.defaults(),
+    queryFn: listProviderDefaults,
     staleTime: 60_000,
   });
   const fallback = (defaults.data ?? []).find((item) => item.capability === "chat");

@@ -2,8 +2,15 @@ import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { SlidersHorizontal, Tags, Trash2 } from "lucide-react";
 
-import { api } from "@/api/client";
-import type { components } from "@/api/generated/schema";
+import {
+  addProviderModel,
+  deleteProviderModel,
+  listProviderModels,
+  listProviderVendors,
+  updateProviderModel,
+  type ProviderModelUpdate,
+} from "@/api/client";
+import { providerKeys } from "@/api/queryKeys";
 import { useI18n } from "@/app/preferences";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -20,8 +27,6 @@ import { CAPABILITY_TAGS, orderedCapabilities } from "@/features/settings/capabi
 import { invalidateProviderDependents } from "@/features/settings/providerCaches";
 import { GENERATION_KINDS } from "@/lib/generationCapabilities";
 
-type ProviderModel = components["schemas"]["ProviderModelOut"];
-type VendorPreset = components["schemas"]["VendorPresetOut"];
 
 /** 模型行上的能力标签:短名 + 与设置侧栏同一套的图标。自动识别的(行上没标过)画成虚线框。 */
 function CapabilityChips({ ids, auto }: { ids: string[]; auto: boolean }) {
@@ -78,12 +83,12 @@ export function ProviderModelList({
   const [editing, setEditing] = React.useState<string | null>(null);
 
   const models = useQuery({
-    queryKey: ["provider-models", profileId],
-    queryFn: () => api<ProviderModel[]>(`/api/settings/providers/${profileId}/models`),
+    queryKey: providerKeys.models(profileId),
+    queryFn: () => listProviderModels(profileId),
   });
   const vendorPresets = useQuery({
-    queryKey: ["provider-vendors"],
-    queryFn: () => api<VendorPreset[]>("/api/settings/provider-vendors"),
+    queryKey: providerKeys.vendors(),
+    queryFn: listProviderVendors,
     staleTime: 300_000,
   });
   const invalidate = () => {
@@ -93,23 +98,16 @@ export function ProviderModelList({
 
   const add = useMutation({
     mutationFn: (modelId: string) =>
-      api(`/api/settings/providers/${profileId}/models`, {
-        method: "POST",
-        body: JSON.stringify({ model_id: modelId, enabled: true }),
-      }),
+      addProviderModel(profileId, { model_id: modelId, enabled: true }),
     onSuccess: invalidate,
   });
   const patch = useMutation({
-    mutationFn: ({ modelId, body }: { modelId: string; body: Record<string, unknown> }) =>
-      api(`/api/settings/providers/${profileId}/models/${encodeURIComponent(modelId)}`, {
-        method: "PATCH",
-        body: JSON.stringify(body),
-      }),
+    mutationFn: ({ modelId, body }: { modelId: string; body: ProviderModelUpdate }) =>
+      updateProviderModel(profileId, modelId, body),
     onSuccess: invalidate,
   });
   const remove = useMutation({
-    mutationFn: (modelId: string) =>
-      api(`/api/settings/providers/${profileId}/models/${encodeURIComponent(modelId)}`, { method: "DELETE" }),
+    mutationFn: (modelId: string) => deleteProviderModel(profileId, modelId),
     onSuccess: invalidate,
   });
 
@@ -145,15 +143,8 @@ export function ProviderModelList({
      逐个点开关的话,这件事要点十几次,中间还会点错行。 */
   const bulk = useMultiSelect(configured, (row) => row.id);
   const patchMany = useMutation({
-    mutationFn: async ({ ids, body }: { ids: string[]; body: Record<string, unknown> }) => {
-      await Promise.allSettled(
-        ids.map((id) =>
-          api(`/api/settings/providers/${profileId}/models/${encodeURIComponent(id)}`, {
-            method: "PATCH",
-            body: JSON.stringify(body),
-          }),
-        ),
-      );
+    mutationFn: async ({ ids, body }: { ids: string[]; body: ProviderModelUpdate }) => {
+      await Promise.allSettled(ids.map((id) => updateProviderModel(profileId, id, body)));
     },
     onSuccess: () => {
       bulk.clear();
@@ -162,9 +153,7 @@ export function ProviderModelList({
   });
   const removeMany = useMutation({
     mutationFn: async (ids: string[]) => {
-      await Promise.allSettled(
-        ids.map((id) => api(`/api/settings/providers/${profileId}/models/${encodeURIComponent(id)}`, { method: "DELETE" })),
-      );
+      await Promise.allSettled(ids.map((id) => deleteProviderModel(profileId, id)));
     },
     onSuccess: () => {
       bulk.clear();

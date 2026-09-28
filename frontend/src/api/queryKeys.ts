@@ -44,3 +44,29 @@ export const workspaceKeys = {
 export const voiceKeys = {
   all: (workspaceId: string) => ["voices", workspaceId] as const,
 };
+
+/**
+ * 模型服务商这一族(见 `api/domains/providers`)。连接、模型行、能力默认、能力候选这几份
+ * 互相牵连 —— 改了连接或模型,默认模型那几格和生成选择器都要跟着变 —— 所以失效它们的那份清单
+ * (`features/settings/providerCaches`、`features/plugins/pluginCaches`)也从这里取前缀。
+ */
+export const providerKeys = {
+  profiles: () => ["provider-profiles"] as const,
+  vendors: () => ["provider-vendors"] as const,
+  /** 不带参数是失效用的前缀;带连接 id 是那一条连接的模型行。 */
+  models: (profileId?: string) => (profileId ? (["provider-models", profileId] as const) : (["provider-models"] as const)),
+  defaults: () => ["provider-defaults"] as const,
+  /** 不带参数是失效用的前缀;带能力是那一项能力的候选,再带执行通道(`surface`)是那条通道上的。 */
+  capabilityModels: (capability?: string, surface?: string) =>
+    (capability
+      ? surface
+        ? (["capability-models", capability, surface] as const)
+        : (["capability-models", capability] as const)
+      : (["capability-models"] as const)),
+  health: (profileId: string) => ["provider-health", profileId] as const,
+  quota: (profileId: string) => ["provider-quota", profileId] as const,
+  /** 登录还没发起时 loginId 是 null(那时查询本就不开)。 */
+  oauthLogin: (profileId: string, loginId: string | null) => ["provider-oauth-login", profileId, loginId] as const,
+  generationProfiles: (profileId: string, kind: string) => ["generation-profiles", profileId, kind] as const,
+  pricingRules: (workspaceId: string) => ["provider-pricing-rules", workspaceId] as const,
+};

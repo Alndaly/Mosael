@@ -2,14 +2,14 @@ import React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Gauge, Loader2 } from "lucide-react";
 
-import { api } from "@/api/client";
+import { fetchProviderQuota } from "@/api/client";
 import type { components } from "@/api/generated/schema";
+import { providerKeys } from "@/api/queryKeys";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 
-type QuotaOut = components["schemas"]["ProviderQuotaOut"];
 type Metric = components["schemas"]["ProviderQuotaMetricOut"];
 
 /**
@@ -100,8 +100,8 @@ export function ProviderQuota({ profileId }: { profileId: string }) {
   const [open, setOpen] = React.useState(false);
 
   const quota = useQuery({
-    queryKey: ["provider-quota", profileId],
-    queryFn: () => api<QuotaOut>(`/api/settings/providers/${profileId}/quota`, { method: "POST" }),
+    queryKey: providerKeys.quota(profileId),
+    queryFn: () => fetchProviderQuota(profileId),
     // 只在气泡打开时查一次。这些端点都不是官方承诺的公开接口,自动轮询既容易撞限流,
     // 也会在对方改接口后变成后台里一直在失败的任务。
     enabled: open,

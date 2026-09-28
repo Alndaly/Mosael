@@ -2,8 +2,19 @@ import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, ReceiptText, SearchX, Sparkles, Trash2 } from "lucide-react";
 
-import { api, type Workspace } from "@/api/client";
-import type { components } from "@/api/generated/schema";
+import {
+  createPricingRule,
+  deletePricingRule,
+  listPricingRules,
+  listProviderProfiles,
+  listProviderVendors,
+  prefillPricingRules,
+  updatePricingRule,
+  type PricingPrefill,
+  type PricingRule,
+  type Workspace,
+} from "@/api/client";
+import { providerKeys } from "@/api/queryKeys";
 import type { MessageKey } from "@/app/messages";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
@@ -40,10 +51,7 @@ import {
   type RuleGroup,
 } from "./PricingRuleBrowser";
 
-type ProviderProfile = components["schemas"]["ProviderProfileOut"];
-type PricingRule = components["schemas"]["ProviderPricingRuleOut"];
-type PrefillResult = components["schemas"]["PricingPrefillOut"];
-type PrefillOutcome = { profileId: string; result: PrefillResult; error?: undefined } | { profileId: string; error: string; result?: undefined };
+type PrefillOutcome = { profileId: string; result: PricingPrefill; error?: undefined } | { profileId: string; error: string; result?: undefined };
 
 /** 仍未定价的模型最多列这么多个,其余折成「等 N 个」—— 一个中转挂几百个模型时,整串列出来没法读。 */
 const UNPRICED_PREVIEW = 8;
@@ -78,8 +86,8 @@ const DEFAULT_FORM: PricingForm = {
  *  漏了 embedding,于是它在列表行上有标签、在弹窗里连格子都没有。 */
 function useAllCapabilities(): string[] {
   const presets = useQuery({
-    queryKey: ["provider-vendors"],
-    queryFn: () => api<components["schemas"]["VendorPresetOut"][]>("/api/settings/provider-vendors"),
+    queryKey: providerKeys.vendors(),
+    queryFn: listProviderVendors,
     staleTime: 300_000,
   });
   return React.useMemo(() => {
@@ -159,7 +167,7 @@ function formFromRule(rule: PricingRule): PricingForm {
 }
 
 /** 一家的预填结果:建了几条、各从哪来,以及**还剩哪些模型没价** —— 那才是用户接下来要做的事。 */
-function PrefillSummary({ result }: { result: PrefillResult }) {
+function PrefillSummary({ result }: { result: PricingPrefill }) {
   const t = useI18n();
   const unpriced = result.unpriced_models;
   const shown = unpriced.slice(0, UNPRICED_PREVIEW).join(", ") + (unpriced.length > UNPRICED_PREVIEW ? " …" : "");
@@ -205,15 +213,15 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
   const [form, setForm] = React.useState<PricingForm>(DEFAULT_FORM);
 
   const profiles = useQuery({
-    queryKey: ["provider-profiles"],
-    queryFn: () => api<ProviderProfile[]>("/api/settings/providers"),
+    queryKey: providerKeys.profiles(),
+    queryFn: listProviderProfiles,
   });
   const rules = useQuery({
-    queryKey: ["provider-pricing-rules", workspace.id],
-    queryFn: () => api<PricingRule[]>(`/api/settings/provider-pricing-rules?workspace_id=${encodeURIComponent(workspace.id)}`),
+    queryKey: providerKeys.pricingRules(workspace.id),
+    queryFn: () => listPricingRules(workspace.id),
   });
   const refresh = () => {
-    void qc.invalidateQueries({ queryKey: ["provider-pricing-rules", workspace.id] });
+    void qc.invalidateQueries({ queryKey: providerKeys.pricingRules(workspace.id) });
     void qc.invalidateQueries({ queryKey: ["workspace-summary", workspace.id] });
   };
 
@@ -262,11 +270,7 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
   });
 
   const create = useMutation({
-    mutationFn: () =>
-      api<PricingRule>("/api/settings/provider-pricing-rules", {
-        method: "POST",
-        body: JSON.stringify(payload()),
-      }),
+    mutationFn: () => createPricingRule(payload()),
     onSuccess: () => {
       closeModal();
       refresh();
@@ -274,11 +278,7 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
   });
 
   const update = useMutation({
-    mutationFn: () =>
-      api<PricingRule>(`/api/settings/provider-pricing-rules/${editing?.id}`, {
-        method: "PATCH",
-        body: JSON.stringify(payload()),
-      }),
+    mutationFn: () => updatePricingRule(editing!.id, payload()),
     onSuccess: () => {
       closeModal();
       refresh();
@@ -288,7 +288,7 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
   // 删一条也要确认:批量删有确认框,单条却一点就没,而且没有撤销。
   const [deleting, setDeleting] = React.useState<PricingRule | null>(null);
   const remove = useMutation({
-    mutationFn: (id: string) => api(`/api/settings/provider-pricing-rules/${id}`, { method: "DELETE" }),
+    mutationFn: deletePricingRule,
     onSuccess: () => {
       setDeleting(null);
       refresh();
@@ -319,7 +319,7 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
       // 逐条发但一次性回报结果:后端没有批量删接口,而为了一个设置页列表去加一个
       // 破坏性的批量端点不划算。失败的那几条要单独说出来,不能被"已删除 N 项"盖过去。
       const results = await Promise.allSettled(
-        ids.map((id) => api(`/api/settings/provider-pricing-rules/${id}`, { method: "DELETE" })),
+        ids.map(deletePricingRule),
       );
       return { ok: results.filter((r) => r.status === "fulfilled").length, failed: results.filter((r) => r.status === "rejected").length };
     },
@@ -342,8 +342,7 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
   const recordPrefill = (outcome: PrefillOutcome) =>
     setPrefillResults((current) => [...current.filter((item) => item.profileId !== outcome.profileId), outcome]);
   const prefill = useMutation({
-    mutationFn: (profileId: string) =>
-      api<PrefillResult>(`/api/settings/providers/${profileId}/pricing/prefill`, { method: "POST" }),
+    mutationFn: prefillPricingRules,
     onSuccess: (result, profileId) => {
       recordPrefill({ profileId, result });
       refresh();

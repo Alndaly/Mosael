@@ -24,7 +24,10 @@ let catalog: unknown[] = [];
 //: 会话没写死模型时,档位要靠「设置 → AI 对话」的默认回退。两个端点得分开答。
 let defaults: unknown[] = [{ capability: "chat", provider_profile_id: "p1", model: "kimi-k3" }];
 const api = vi.fn(async (url: string) => (url.includes("provider-defaults") ? defaults : catalog));
-vi.mock("@/api/client", () => ({ api: (url: string) => api(url) }));
+vi.mock("@/api/transport", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/api/transport")>()),
+  api: (url: string) => api(url),
+}));
 
 import { ThinkingLevelPicker } from "./ThinkingLevelPicker";
 
