@@ -23,9 +23,11 @@ from typing import Any, Literal
 from sqlalchemy import select
 from sqlalchemy.orm import Session, object_session
 
+from app.ai.model_catalog import CatalogModel, fetch_models
 from app.core.i18n import tr
 from app.db.models import GenerationCapabilityDeclaration, ProviderModel, ProviderProfile
 from app.domain import thinking
+from app.domain.provider_credentials import ResolvedConnection
 from app.domain.providers import capability_ids_for_vendor, normalize_capability_ids
 
 #: 模型行上可被用户覆盖的运行时参数。留空表示跟随目录/保守默认 —— 与 False 是两回事。
@@ -430,3 +432,32 @@ def profile_capabilities(db: Session, profile: ProviderProfile) -> list[str]:
         if capability not in seen:
             seen.append(capability)
     return seen
+
+
+def catalog(connection: ResolvedConnection) -> list[CatalogModel]:
+    """这条连接的**目录**:供应商说它有什么模型,各自的窗口和单价(美元 / 百万 token)。
+
+    两种来源:订阅计划的目录只有登录才知道(Copilot 随档位变、OpenRouter 有几百个),登录时由 pi
+    带回、存在他自己那把钥匙上;API Key 连接现打 /models(带 TTL 缓存)。此前模型页和计价页各自
+    分一次这个支、各取一半字段。参数是**解析过的**连接(连接 + 这个人的钥匙)。
+    """
+    if connection.auth_type != "oauth":
+        return fetch_models(connection.base_url or "", connection.api_key or "")
+    models = []
+    for item in connection.model_catalog or []:
+        if not isinstance(item, dict) or not item.get("id"):
+            continue
+        # pi 的目录:cost 是 {input, output, cacheRead, cacheWrite},单位已是每百万 token。
+        cost = item.get("cost") if isinstance(item.get("cost"), dict) else {}
+        models.append(
+            CatalogModel(
+                id=str(item["id"]),
+                context_window=item.get("contextWindow"),
+                max_output_tokens=item.get("maxTokens"),
+                input_cost=cost.get("input"),
+                output_cost=cost.get("output"),
+                cache_read_cost=cost.get("cacheRead"),
+                cache_write_cost=cost.get("cacheWrite"),
+            )
+        )
+    return models

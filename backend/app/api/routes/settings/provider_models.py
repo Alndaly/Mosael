@@ -5,7 +5,6 @@ import logging
 from fastapi import APIRouter, HTTPException, Response
 
 from app.core.i18n import tr
-from app.ai.model_catalog import fetch_models
 from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import ProviderModelOut, ProviderModelUpdate
 from app.domain import model_limits, provider_credentials, provider_models, structured_output, thinking
@@ -18,21 +17,11 @@ from app.domain.permissions import require_own_profile
 router = APIRouter(tags=["settings"])
 logger = logging.getLogger(__name__)
 
-def _catalog_entries(profile: ResolvedConnection) -> dict[str, dict]:
-    """该连接的**目录**(供应商说它有什么)。订阅计划的目录只有登录才知道(Copilot 随档位变、
-    OpenRouter 有几百个),登录时由 pi 带回存下;API Key 档案现打 /models(带 TTL 缓存)。"""
-    if profile.auth_type == "oauth":
-        return {
-            str(item.get("id")): {
-                "context_window": item.get("contextWindow"),
-                "max_output_tokens": item.get("maxTokens"),
-            }
-            for item in (profile.model_catalog or [])
-            if isinstance(item, dict) and item.get("id")
-        }
+def _catalog_entries(connection: ResolvedConnection) -> dict[str, dict]:
+    """目录里每个模型的窗口,按模型 id 查(来源见 provider_models.catalog)。"""
     return {
-        m.id: {"context_window": m.context_window, "max_output_tokens": m.max_output_tokens}
-        for m in fetch_models(profile.base_url or "", profile.api_key or "")
+        model.id: {"context_window": model.context_window, "max_output_tokens": model.max_output_tokens}
+        for model in provider_models.catalog(connection)
     }
 
 
