@@ -4,6 +4,7 @@ import { assetFileUrl, type Asset } from "@/api/client";
 import { api } from "@/api/transport";
 import { useI18n } from "@/app/preferences";
 import { useImagePreview } from "@/components/app/image-preview";
+import { useAssetPreviewModal } from "@/features/media/AssetPreviewModalById";
 import { gotoRecord } from "@/lib/deepLink";
 import type { AgentReference, ReferenceKind } from "@/features/agent/references";
 
@@ -59,7 +60,8 @@ const ROUTES: Record<ReferenceKind, { probe: (id: string) => string; href?: (id:
 export function useReferencePreview() {
   const t = useI18n();
   const { openImagePreview } = useImagePreview();
-  return async (reference: AgentReference) => {
+  const { openAsset, modal } = useAssetPreviewModal();
+  const open = async (reference: AgentReference) => {
     const route = ROUTES[reference.kind];
     if (!route) return;
     const found = await api<Asset | unknown>(route.probe(reference.id)).catch(() => null);
@@ -76,10 +78,13 @@ export function useReferencePreview() {
     // 素材:要知道它是图还是视频才决定灯箱怎么放,而胶囊上只有 id 和名字。
     const asset = found as Asset;
     if (asset.kind !== "image" && asset.kind !== "video") {
-      // 音频、文档这类没有灯箱可放的,跳去素材库里定位它 —— 总比点了没反应强。
-      window.location.hash = `#/media?asset=${encodeURIComponent(asset.id)}`;
+      // 音频、文档这类没有灯箱可放的:就地打开素材详情(文档是三栏阅读)。此前是跳去素材库 ——
+      // 人正在对话里,点一下引用整页被带走,读完还得自己找回来。
+      openAsset(asset.id);
       return;
     }
     openImagePreview({ src: assetFileUrl(asset.id), title: asset.name, video: asset.kind === "video" });
   };
+  /** `modal` 由调用方挂进树里:素材详情是一个弹窗,得有地方渲染它。 */
+  return { open, modal };
 }

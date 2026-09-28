@@ -16,6 +16,7 @@ from app.domain.agent.prompt import (
     _prompt_with_context,
     build_system_prompt,
     origin_marker_for,
+    session_title,
     user_prompt,
     with_origin_envelope,
 )
@@ -60,11 +61,6 @@ logger = logging.getLogger(__name__)
 #: `duplicate column` during migration, or another test's message appearing in this test's list.
 #: See `wait_for_idle_turns` and its use in tests/util.fresh_client.
 TURN_THREAD_NAME = "agent-turn"
-
-# 与前端 userMessage.ATTACHMENT_TOKEN 同一协议。名称可以含空格，因此只取稳定的 id/kind 字段。
-
-
-
 
 def wait_for_idle_turns(timeout: float = 5.0) -> bool:
     """Block until no agent turn thread is running. Returns False if `timeout` ran out.
@@ -452,7 +448,7 @@ def post_user_message(
         },
     )
     if session.title == "新对话" and content.strip() and not origin_session_id:
-        session.title = content.strip()[:60]
+        session.title = session_title(content)
     db.add(message)
     db.commit()
 

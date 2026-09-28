@@ -4,6 +4,7 @@ import type { JSONContent } from "@tiptap/react";
 import { AssetInlinePreview } from "@/components/app/asset-preview";
 import { documentText } from "@/features/agent/ChatComposer";
 import { ReferenceDocument } from "@/features/agent/ReferenceDocument";
+import { useAssetPreviewModal } from "@/features/media/AssetPreviewModalById";
 import { assetFileUrl, assetPreviewUrl } from "@/api/client";
 import type { ImagePreviewItem } from "@/components/app/image-preview";
 
@@ -90,17 +91,7 @@ export function UserMessageContent({
         <ReferenceDocument document={document} />
         {trailing && <div className="whitespace-pre-wrap">{trailing}</div>}
         {attachments.length > 0 && (
-          <div className="flex flex-wrap gap-1.5">
-            {attachments.map((att) => (
-              <AssetInlinePreview
-                key={att.assetId}
-                assetId={att.assetId}
-                name={att.name}
-                kind={att.kind}
-                gallery={mediaGallery}
-              />
-            ))}
-          </div>
+          <AttachmentList attachments={attachments} mediaGallery={mediaGallery} />
         )}
       </div>
     );
@@ -109,17 +100,33 @@ export function UserMessageContent({
   return (
     <div className="grid gap-1.5">
       {text && <div className="whitespace-pre-wrap">{text}</div>}
-      <div className="flex flex-wrap gap-1.5">
-        {attachments.map((att) => (
-          <AssetInlinePreview
-            key={att.assetId}
-            assetId={att.assetId}
-            name={att.name}
-            kind={att.kind}
-            gallery={mediaGallery}
-          />
-        ))}
-      </div>
+      <AttachmentList attachments={attachments} mediaGallery={mediaGallery} />
+    </div>
+  );
+}
+
+/** 气泡里的附件。图、视频、音频就地预览;文档这类只剩文件胶囊的,点开是素材详情(文档是三栏阅读)。 */
+function AttachmentList({
+  attachments,
+  mediaGallery,
+}: {
+  attachments: ReturnType<typeof parseUserContent>["attachments"];
+  mediaGallery?: ImagePreviewItem[];
+}) {
+  const { openAsset, modal } = useAssetPreviewModal();
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {attachments.map((att) => (
+        <AssetInlinePreview
+          key={att.assetId}
+          assetId={att.assetId}
+          name={att.name}
+          kind={att.kind}
+          gallery={mediaGallery}
+          onOpenFile={() => openAsset(att.assetId)}
+        />
+      ))}
+      {modal}
     </div>
   );
 }

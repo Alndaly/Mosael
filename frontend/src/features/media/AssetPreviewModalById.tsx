@@ -1,3 +1,4 @@
+import React from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { api, type Asset } from "@/api/client";
@@ -17,4 +18,18 @@ export function AssetPreviewModalById({ id, onClose }: { id: string | null; onCl
   });
 
   return <AssetPreviewModal asset={id ? asset.data ?? null : null} onClose={onClose} />;
+}
+
+/**
+ * 「点一下打开这个素材的详情」给没有自己弹窗状态的地方用:返回打开函数和要挂进树里的弹窗。
+ *
+ * 文档、音频、3D 这些没有灯箱可放的素材,点开就是这张详情(文档是三栏阅读);图和视频照旧走全局灯箱。
+ */
+export function useAssetPreviewModal() {
+  const [id, setId] = React.useState<string | null>(null);
+  return {
+    openAsset: setId,
+    //: 没打开时什么都不挂:一屏几十个气泡各挂一个查询钩子,全花在没人点的东西上。
+    modal: id ? <AssetPreviewModalById id={id} onClose={() => setId(null)} /> : null,
+  };
 }

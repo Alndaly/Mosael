@@ -17,8 +17,13 @@ import type { ReferenceKind } from "@/features/agent/references";
  * 把字读出来,而不是空一块。
  */
 export function ReferenceDocument({ document }: { document: JSONContent }) {
-  const open = useReferencePreview();
-  return <div className="whitespace-pre-wrap">{(document.content ?? []).map((node, at) => renderBlock(node, at, open))}</div>;
+  const { open, modal } = useReferencePreview();
+  return (
+    <div className="whitespace-pre-wrap">
+      {(document.content ?? []).map((node, at) => renderBlock(node, at, open))}
+      {modal}
+    </div>
+  );
 }
 
 type Open = (reference: { kind: ReferenceKind; id: string; name: string }) => void;

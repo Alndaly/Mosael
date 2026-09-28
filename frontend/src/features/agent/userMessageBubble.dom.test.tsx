@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 import React from "react";
 import type { JSONContent } from "@tiptap/react";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@/api/client", () => ({
@@ -12,6 +12,8 @@ vi.mock("@/api/client", () => ({
 }));
 vi.mock("@/app/preferences", () => ({ useI18n: () => (key: string) => key }));
 vi.mock("@/components/app/image-preview", () => ({ useImagePreview: () => ({ openImagePreview: () => {} }) }));
+const openAsset = vi.fn();
+vi.mock("@/features/media/AssetPreviewModalById", () => ({ useAssetPreviewModal: () => ({ openAsset, modal: null }) }));
 
 import { UserMessageContent } from "./userMessage";
 
@@ -54,5 +56,12 @@ describe("用户气泡", () => {
   it("没有文档的老消息照旧按纯文本渲染", () => {
     const { container } = render(<UserMessageContent content="老消息" />);
     expect(container.textContent).toBe("老消息");
+  });
+
+  it("文档附件点一下是素材详情 —— 不是一个点不动的标签", () => {
+    //: PDF、Word 这类没有行内预览,只剩一颗文件胶囊;此前它是个 span,点了什么都不发生。
+    render(<UserMessageContent content={"分析一下这个协议\n[附件 asset_id=d1 名称=租赁协议.pdf 类型=document]"} />);
+    fireEvent.click(screen.getByRole("button", { name: "租赁协议.pdf" }));
+    expect(openAsset).toHaveBeenCalledWith("d1");
   });
 });

@@ -26,6 +26,7 @@ export function AssetInlinePreview({
   onNaturalSize,
   gallery,
   imageFallback,
+  onOpenFile,
 }: {
   assetId: string;
   name: string;
@@ -47,6 +48,9 @@ export function AssetInlinePreview({
   gallery?: ImagePreviewItem[];
   /** Scene cards can explain a missing preview instead of displaying a broken image. */
   imageFallback?: React.ReactNode;
+  /** 文档这类只剩文件胶囊的素材,点开怎么看。给了胶囊就是一颗按钮;没给就只是个标签。
+   *  详情弹窗住在素材功能里,这一层不认识它,所以由调用方传进来。 */
+  onOpenFile?: () => void;
 }) {
   const { openImagePreview } = useImagePreview();
   const [imageFailure, setImageFailure] = React.useState({ assetId: "", stage: 0 });
@@ -110,12 +114,21 @@ export function AssetInlinePreview({
     //: 不是拖动,进度条的 nodrag 写在 Scrubber 自己内部。
     return <AudioPlayerBar src={src} className={cn("h-10 rounded-lg border border-border bg-panel", className ?? "w-[260px] max-w-full")} />;
   }
-  return (
-    <span className="inline-flex max-w-full items-center gap-[5px] rounded-lg border border-border bg-panel px-2 py-1 text-ui-xs text-muted-foreground">
+  const chip = "inline-flex max-w-full items-center gap-[5px] rounded-lg border border-border bg-panel px-2 py-1 text-ui-xs text-muted-foreground";
+  const label = (
+    <>
       <Paperclip size={12} className="shrink-0" />
       <span className="min-w-0 truncate" title={name}>
         {name}
       </span>
-    </span>
+    </>
   );
+  if (onOpenFile) {
+    return (
+      <button type="button" className={cn(chip, "cursor-pointer hover:bg-control hover:text-foreground")} onClick={onOpenFile}>
+        {label}
+      </button>
+    );
+  }
+  return <span className={chip}>{label}</span>;
 }
