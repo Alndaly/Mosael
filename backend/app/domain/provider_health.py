@@ -22,7 +22,7 @@ import httpx
 
 from app.core.i18n import tr
 from app.domain.provider_credentials import ResolvedConnection
-from app.core.http_retry import RetryingClient
+from app.core.http_retry import RetryingClient, auth_headers
 from app.domain.provider_presets import provider_definition
 
 #: 探活要快。这不是业务请求 —— 慢到几秒的端点,用户想知道的也正是"它慢"。
@@ -56,7 +56,7 @@ def probe(profile: ResolvedConnection) -> HealthResult:
         # 没有 base_url 又不是订阅制:多半是还没配完,说不出在线与否。
         return HealthResult(supported=False)
     url = base + health_path_for(profile.vendor)
-    headers = {"Authorization": f"Bearer {profile.api_key}"} if profile.api_key else {}
+    headers = auth_headers(profile.api_key)
     started = time.monotonic()
     try:
         # 探活**不重试**:重试会把"慢"和"不通"都拉长成一个数字,而这里要的恰恰是当下这一次

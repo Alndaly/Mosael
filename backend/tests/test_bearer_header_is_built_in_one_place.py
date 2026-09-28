@@ -41,6 +41,9 @@ BACKEND = Path(__file__).resolve().parent.parent
 OPENAI_COMPATIBLE = (
     BACKEND / "app" / "domain" / "ai_chat.py",
     BACKEND / "app" / "ai" / "model_catalog.py",
+    #: 设置页的连接探活打的正是 Ollama、LM Studio 这类用户自己填地址的端点;它曾经自己拼,
+    #: 只含空白的密钥发出 "Bearer   " 这个非法头值,被当成「离线」。
+    BACKEND / "app" / "domain" / "provider_health.py",
 )
 
 
