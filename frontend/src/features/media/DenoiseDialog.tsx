@@ -4,13 +4,14 @@ import { Download, Info } from "lucide-react";
 import { toast } from "sonner";
 
 import { denoiseAsset, listDenoiseEngines, type DenoiseStrength } from "@/api/client";
+import { useIsDeploymentAdmin } from "@/app/auth";
 import type { MessageKey } from "@/app/messages";
 import { useI18n } from "@/app/preferences";
 import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
 import { ModalShell } from "@/components/app/modals";
 import { Button } from "@/components/ui/button";
 import { SEGMENTED_LIST, segmentedTriggerClass } from "@/components/ui/tabs";
-import { gotoJob, gotoSettings } from "@/lib/deepLink";
+import { gotoAdmin, gotoJob } from "@/lib/deepLink";
 import { cn } from "@/lib/utils";
 
 //: 分组小标题比选项本身轻一档 —— 和选项同号同色时,「方式」「强度」读起来像又一个选项。
@@ -30,6 +31,7 @@ const STRENGTH_LABELS: Record<DenoiseStrength, MessageKey> = {
  */
 export function DenoiseDialog({ assetId, onClose }: { assetId: string | null; onClose: () => void }) {
   const t = useI18n();
+  const isAdmin = useIsDeploymentAdmin();
   const open = assetId !== null;
   const engines = useQuery({ queryKey: ["denoise-engines"], queryFn: listDenoiseEngines, enabled: open, staleTime: 30_000 });
   const [engine, setEngine] = React.useState("");
@@ -80,10 +82,11 @@ export function DenoiseDialog({ assetId, onClose }: { assetId: string | null; on
               const selected = one.engine === chosen?.engine;
               const hintId = `denoise-hint-${one.engine}`;
               const needsSetup = !one.ready && Boolean(one.setup_hint);
-              //: 能下载的引擎,入口就是卡片右上角一个「去下载」—— 按钮本身说清了要做什么,引擎给的
-              //: 「去设置里哪儿下载」只作悬停提示和读屏说明;另起一行写出来会和说明文字抢,还和按钮说同一件事。
-              //: 不能下载的(比如缺系统组件)没有按钮可点,这句话才照常写在说明下面。
-              const downloadable = !one.ready && one.installable;
+              //: 能下载的引擎,入口就是卡片右上角一个「去下载」(落在管理页「引擎」)—— 按钮本身说清了要做什么,
+              //: 引擎给的「去哪儿下载」只作悬停提示和读屏说明;另起一行写出来会和说明文字抢,还和按钮说同一件事。
+              //: 下载只给部署管理员(routes/denoise.install_denoise_engine),所以成员没有这个按钮 —— 管理页对他
+              //: 没有入口;和不能下载的(比如缺系统组件)一样,那句提示照常写在说明下面,说清由谁来装。
+              const downloadable = !one.ready && one.installable && isAdmin;
               return (
                 <div
                   key={one.engine}
@@ -145,7 +148,7 @@ export function DenoiseDialog({ assetId, onClose }: { assetId: string | null; on
                       title={one.setup_hint || undefined}
                       onClick={() => {
                         onClose();
-                        gotoSettings("denoise");
+                        gotoAdmin("engines");
                       }}
                     >
                       <Download size={12} /> {t("denoiseGoDownload")}

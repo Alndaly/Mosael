@@ -16,16 +16,13 @@ vi.mock("@/features/settings/AppearanceSection", () => ({
   BackgroundSection: () => null,
   CustomCssSection: () => null,
 }));
-vi.mock("@/features/settings/AsrModelsSection", () => ({ AsrModelsSection: () => null }));
 vi.mock("@/features/settings/AutopilotRulesSection", () => ({ AutopilotRulesSection: () => null }));
 vi.mock("@/features/settings/BackendSection", () => ({ BackendSection: () => null }));
 vi.mock("@/features/settings/BuiltinTtsSection", () => ({ BuiltinTtsSection: () => null }));
 vi.mock("@/features/settings/FeishuSection", () => ({ FeishuSection: () => null }));
 vi.mock("@/features/settings/ProviderDefaultsSection", () => ({ ProviderDefaultsSection: () => null }));
 vi.mock("@/features/settings/ProviderProfilesSection", () => ({ ProviderProfilesSection: () => null }));
-vi.mock("@/features/settings/SeparationEnginesSection", () => ({ SeparationEnginesSection: () => null }));
 vi.mock("@/features/settings/TeamSection", () => ({ TeamSection: () => null }));
-vi.mock("@/features/settings/VoiceCloneSection", () => ({ VoiceCloneSection: () => null }));
 vi.mock("@/features/settings/VoiceLibrarySection", () => ({ VoiceLibrarySection: () => null }));
 
 import { ALL_SECTIONS, SETTINGS_GROUPS, resolveSettingsLink } from "./settingsSections";
@@ -38,34 +35,27 @@ describe("设置页结构", () => {
     expect(new Set(ids).size).toBe(ids.length);
   });
 
-  it("人声分离有自己的一页,不和转写挤在一起", () => {
-    //: 它们唯一的共同点是"在这台机器上跑",那是实现上的共性,不是用户找它时想的东西。
-    expect(ALL_SECTIONS.some((one) => one.id === "separation")).toBe(true);
-    expect(ALL_SECTIONS.find((one) => one.id === "separation")).not.toBe(
-      ALL_SECTIONS.find((one) => one.id === "transcribe"),
-    );
-  });
-
-  it("本机引擎各占一页,同一组", () => {
-    const engines = ["transcribe", "dubbing", "separation", "denoise"];
-    const groups = new Set(engines.map(groupOf));
-    expect(groups.size).toBe(1);
-    expect([...groups][0]).toBe("studioSettingsLocalEngines");
-  });
-
   it("只有部署管理员写得了的几页不在设置里", () => {
-    //: 成本规则、出站代理与重试、安装源、数据与诊断,后端都只许部署管理员写(ensure_deployment_admin)。
-    //: 摆在设置页时普通成员看得到表单、一保存就 403 —— 它们在管理页(features/admin/AdminView)。
+    //: 成本规则、出站代理与重试、安装源、数据与诊断,以及转写、人声分离、降噪三页本机引擎的安装,
+    //: 后端都只许部署管理员写(ensure_deployment_admin)。摆在设置页时普通成员看得到表单、一点就 403 ——
+    //: 它们在管理页(features/admin/AdminView,本机引擎在「引擎」tab)。
     const ids = ALL_SECTIONS.map((one) => one.id);
-    for (const gone of ["provider-pricing", "network", "ai-runtime", "install-source", "data"]) {
+    for (const gone of ["provider-pricing", "network", "ai-runtime", "install-source", "data", "transcribe", "separation", "denoise"]) {
       expect(ids, gone).not.toContain(gone);
     }
   });
 
+  it("配音那一页剩下的是这个工作区的音色库,归「个人与工作区」", () => {
+    //: 声音克隆的引擎、解释器、下载源存在整台部署共用的一行配置里,只许部署管理员写 —— 搬去了管理页。
+    //: 音色库是工作区的东西,留在这里;不再有「本机引擎」这一组(它剩下的只有安装)。
+    expect(groupOf("dubbing")).toBe("studioSettingsPersonal");
+    expect(SETTINGS_GROUPS.map((group) => group.title)).not.toContain("studioSettingsLocalEngines");
+  });
+
   it("云端供应商组里只有云端连接", () => {
-    //: 语音对话是智能体的说话方式,内置配音与克隆是本机的 —— 都不该出现在「AI 供应商」下面。
+    //: 语音对话是智能体的说话方式,内置配音与音色库不是云端连接 —— 都不该出现在「AI 供应商」下面。
     expect(groupOf("agent-voice")).toBe("studioSettingsAgent");
-    expect(groupOf("dubbing")).toBe("studioSettingsLocalEngines");
+    expect(groupOf("dubbing")).not.toBe("studioSettingsProviders");
   });
 });
 
@@ -77,9 +67,8 @@ describe("深链", () => {
     ["providers:video", "provider-video"],
     ["providers:tts", "provider-audio"],
     ["providers:podcast", "provider-audio"],
-    ["separation", "separation"],
-    //: 降噪对话框里没装的引擎旁边的「去下载」发的就是它。
-    ["denoise", "denoise"],
+    //: AI 生成 → 音频里「克隆要先有音色」的「管理音色」发的就是它。
+    ["dubbing", "dubbing"],
   ])("%s 落到 %s", (link, id) => {
     //: 这几个是代码里实际发出去的深链 —— 页挪了位置,它们必须还落得到。
     expect(resolveSettingsLink(link)?.id).toBe(id);
@@ -93,7 +82,10 @@ describe("深链", () => {
     //: 跳到一个无关的页比不跳更让人摸不着头脑。
     expect(resolveSettingsLink("没有这一页")).toBeNull();
     expect(resolveSettingsLink("providers:没有这种能力")).toBeNull();
-    //: 挪去管理页的那几页也一样:不在设置里给一个「最接近的」替身。
-    expect(resolveSettingsLink("provider-pricing")).toBeNull();
+    //: 挪去管理页的那几页也一样:不在设置里给一个「最接近的」替身。引擎没装的提示走的是
+    //: gotoAdmin("engines")(管理员)或一句说明(成员),不再发这几条设置深链。
+    for (const moved of ["provider-pricing", "transcribe", "separation", "denoise"]) {
+      expect(resolveSettingsLink(moved), moved).toBeNull();
+    }
   });
 });

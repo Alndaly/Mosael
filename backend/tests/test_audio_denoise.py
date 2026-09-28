@@ -226,7 +226,7 @@ class Test排队和开卡之前就判:
         monkeypatch.setattr(dm, "deepfilter_path", lambda: tmp_path / "nothing")
         dm.deepfilter_ready.cache_clear()
         try:
-            with pytest.raises(DenoiseError, match="设置"):
+            with pytest.raises(DenoiseError, match="管理 → 引擎"):
                 denoise.start_denoise_job(
                     None, asset=Asset(workspace_id="w", kind="audio", name="x", file_key="k"), created_by=None, engine="builtin:deepfilternet"
                 )

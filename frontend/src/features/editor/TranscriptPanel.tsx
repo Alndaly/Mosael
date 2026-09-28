@@ -9,7 +9,7 @@ import { api, getAssetTranscript, getJob, listAsrModels, transcribeAsset, type J
 import { transcriptKeys } from "@/api/queryKeys";
 import { asrEngineMissing, pendingTranscribeIds } from "@/features/editor/transcribeQueue";
 import { Button } from "@/components/ui/button";
-import { ConfigNotice } from "@/components/app/ConfigNotice";
+import { EngineNotice } from "@/components/app/ConfigNotice";
 import { kindHasSound } from "@/lib/assetKinds";
 import { pollWhileUnsettled } from "@/lib/pollWhileUnsettled";
 import { tokenTimelineRange } from "@/domain/timeline/karaoke";
@@ -322,14 +322,10 @@ export function TranscriptPanel({
       </span>
     </button>
   );
-  // 引擎没装:说清楚,并给一条直达设置「转写」的路。按钮同时禁用 —— 点下去只会排一个注定失败的任务。
+  // 引擎没装:说清楚,并给出路 —— 管理员直达管理页「引擎」,成员被告知由部署管理员安装(EngineNotice)。
+  // 按钮同时禁用 —— 点下去只会排一个注定失败的任务。
   const engineNotice = noAsrEngine && pendingIds.length > 0 && (
-    <ConfigNotice
-      message={t("transcribeNoEngine")}
-      actionLabel={t("wfGoConfigure")}
-      section="transcribe"
-      className="text-left"
-    />
+    <EngineNotice message={t("transcribeNoEngine")} className="text-left" />
   );
 
   const toggleToken = (key: string, clipId: string, srcStart: number, srcEnd: number) => {

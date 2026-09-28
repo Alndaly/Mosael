@@ -67,8 +67,8 @@ class VoiceUpdate(ApiModel):
 class SynthesizeRequest(ApiModel):
     text: str = Field(min_length=1, max_length=2000)
     project_id: str | None = None
-    #: 这一次用哪个本地引擎(f5-tts / fish-speech)。空 = 用设置页那个默认 ——
-    #: 设置页是默认,不是唯一。
+    #: 这一次用哪个本地引擎(f5-tts / fish-speech)。空 = 用部署配置里那个默认(管理页「引擎 → 声音克隆」)——
+    #: 那是默认,不是唯一。
     clone_model: str = Field(default="", max_length=40)
     clone_engine: str = Field(default="", max_length=40)
     #: 语速。**只有声明支持的引擎会用它**(见 TtsEngine.supports_speed):F5 的 infer 吃,

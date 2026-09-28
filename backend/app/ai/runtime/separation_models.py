@@ -219,7 +219,7 @@ def ensure_runtime(engine: str) -> None:
         if created.returncode != 0 or not venv_python.is_file():
             raise venv_failure(created.stderr or created.stdout)
 
-    # 和转写、克隆走同一个安装器,包括设置页那个 pip 镜像 —— 同一台机器上不该"一个走镜像、
+    # 和转写、克隆走同一个安装器,包括管理页「引擎」里那个 pip 镜像 —— 同一台机器上不该"一个走镜像、
     # 一个直连 PyPI",而那个设置项写的就是「装引擎依赖时用的 pip 索引」。
     from app.ai.runtime import config as runtime_config
 
@@ -244,7 +244,7 @@ def ensure_runtime(engine: str) -> None:
 
 
 # ---------------------------------------------------------------------------
-# 给设置页的那一面
+# 给管理页「引擎」的那一面
 # ---------------------------------------------------------------------------
 def list_status() -> list[dict[str, Any]]:
     """每个分离引擎现在是什么状态。

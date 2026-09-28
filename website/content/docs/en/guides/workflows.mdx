@@ -28,7 +28,7 @@ Downloads contain no account secrets or private assets, and do not automatically
 | Translated dubbing with subtitles | Transcribe line by line → translate each line (chat model, switchable to Google on the node) → lay subtitles on the original timecodes → dub each line and time-compress it into its slot → remove the original voice and keep the background music → export. If Remove voice is selected while separation is unavailable, the run fails explicitly before dubbing starts instead of switching to whole-track mute | A transcription engine, a chat model, a voice (cloned or a stock engine voice; Edge's free voices need no setup), and a voice separation engine installed in advance |
 
 The reduce-noise node uses the built-in engine by default. For speech-led material with messy noise (keyboards, dishes, chatter)
-switch it to `deepfilternet` (download it first under Settings → On-device engines → Noise reduction); it removes music as well.
+switch it to `deepfilternet` (a deployment admin downloads it first under Admin → Engines); it removes music as well.
 
 ## Canvas & nodes
 

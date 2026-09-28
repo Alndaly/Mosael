@@ -2379,7 +2379,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfNode_transcribe_asset_board": {"zh": "把音频或视频里说的话转成文字", "en": "Turn the speech in audio or video into text."},
     "wfNode_transcribe_asset_desc": {"zh": "对音视频素材跑 ASR,输出全文。", "en": "Run ASR over an audio or video asset and output the full text."},
     "wfNode_transcribe_asset_asset_id": {"zh": "要转写的素材 —— 只收视频或音频,图片会被拒", "en": "The asset to transcribe — audio or video only; images are rejected"},
-    "wfNode_transcribe_asset_engine": {"zh": "「自动」跟随设置页;选定一个会固定本次工作流用的转写引擎。", "en": "Auto follows Settings; an explicit choice pins the ASR engine for this workflow run."},
+    "wfNode_transcribe_asset_engine": {"zh": "「自动」用这台部署默认的转写引擎(没定就用装好的那个);选定一个会固定本次工作流用的转写引擎。", "en": "Auto uses this deployment's default ASR engine (whichever is installed if none is set); an explicit choice pins the ASR engine for this workflow run."},
     "wfField_first_section": {"zh": "从第几段", "en": "From section"},
     "wfField_last_section": {"zh": "到第几段", "en": "To section"},
     "wfOut_document_sections": {"zh": "各段", "en": "Sections"},
@@ -2704,12 +2704,12 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Could not measure the noise in this audio: {tool} gave no reason",
     },
     "providerErr_separationRuntimeBroken": {
-        "zh": "音频分离的运行环境还没装好(去设置里装一次):{detail}",
-        "en": "The audio separation runtime is not set up (install it once in Settings): {detail}",
+        "zh": "音频分离的运行环境还没装好(部署管理员在「管理 → 引擎」里装一次):{detail}",
+        "en": "The audio separation runtime is not set up (a deployment admin installs it once under Admin → Engines): {detail}",
     },
     "providerErr_separationRuntimeMissing": {
-        "zh": "音频分离的运行环境还没准备好,去设置里装一次",
-        "en": "The audio separation runtime is not ready. Install it once in Settings.",
+        "zh": "音频分离的运行环境还没准备好,部署管理员在「管理 → 引擎」里装一次即可",
+        "en": "The audio separation runtime is not ready. A deployment admin installs it once under Admin → Engines.",
     },
     "providerErr_separationFailed": {"zh": "分离失败:{detail}", "en": "Separation failed: {detail}"},
     "providerErr_separationExitCode": {"zh": "分离失败(退出码 {code})", "en": "Separation failed (exit code {code})"},
@@ -2736,8 +2736,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "No Python interpreter is available to create the runtime",
     },
     "runtimeErr_noBasePythonTts": {
-        "zh": "找不到可用于创建运行环境的 Python。请重装应用,或在设置里手动指定一个 TTS 解释器。",
-        "en": "No Python is available to create the runtime. Reinstall the app, or set a TTS interpreter manually in Settings.",
+        "zh": "找不到可用于创建运行环境的 Python。请重装应用,或在「管理 → 引擎 → 声音克隆」里手动指定一个 TTS 解释器(需要部署管理员)。",
+        "en": "No Python is available to create the runtime. Reinstall the app, or set a TTS interpreter manually under Admin → Engines → Voice cloning (deployment admins only).",
     },
     "runtimeErr_venvFailed": {"zh": "创建运行环境失败:{detail}", "en": "Could not create the runtime: {detail}"},
     "runtimeErr_venvFailedSilent": {"zh": "创建运行环境失败:没有留下原因", "en": "Could not create the runtime, and no reason was given"},
@@ -2774,8 +2774,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "A language pack is already downloading ({busy}). Wait for it to finish.",
     },
     "runtimeErr_f5RuntimeMissing": {
-        "zh": "请先在设置的「声音克隆」里安装 F5-TTS 运行环境",
-        "en": "Install the F5-TTS runtime first under Settings → Voice cloning",
+        "zh": "请先在「管理 → 引擎 → 声音克隆」里安装 F5-TTS 运行环境(需要部署管理员)",
+        "en": "Install the F5-TTS runtime first under Admin → Engines → Voice cloning (deployment admins only)",
     },
     "runtimeErr_f5CheckpointMissing": {
         "zh": "下载报成功,但检查点不在盘上",
@@ -2789,12 +2789,12 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Could not fetch the Fish Speech source: git gave no reason",
     },
     "runtimeErr_fishRepoMissing": {
-        "zh": "Fish Speech S2 不可用:需要 fishaudio/s2-pro 权重 + 官方 fish-speech 源码检出。在设置→声音克隆填『源码目录』『模型目录』,或设置 MOSAEL_FISH_REPO_DIR / MOSAEL_FISH_MODEL_DIR。(源码目录未找到)",
-        "en": "Fish Speech S2 is unavailable: it needs the fishaudio/s2-pro weights and an official fish-speech source checkout. Fill in “Source directory” and “Model directory” under Settings → Voice cloning, or set MOSAEL_FISH_REPO_DIR / MOSAEL_FISH_MODEL_DIR. (Source directory not found.)",
+        "zh": "Fish Speech S2 不可用:需要 fishaudio/s2-pro 权重 + 官方 fish-speech 源码检出。部署管理员在「管理 → 引擎 → 声音克隆」里下载 Fish Speech(源码与权重一并装好),或设置 MOSAEL_FISH_REPO_DIR / MOSAEL_FISH_MODEL_DIR。(源码目录未找到)",
+        "en": "Fish Speech S2 is unavailable: it needs the fishaudio/s2-pro weights and an official fish-speech source checkout. A deployment admin downloads Fish Speech under Admin → Engines → Voice cloning (it fetches both), or sets MOSAEL_FISH_REPO_DIR / MOSAEL_FISH_MODEL_DIR. (Source directory not found.)",
     },
     "runtimeErr_fishModelMissing": {
-        "zh": "Fish Speech S2 不可用:需要 fishaudio/s2-pro 权重 + 官方 fish-speech 源码检出。在设置→声音克隆填『源码目录』『模型目录』,或设置 MOSAEL_FISH_REPO_DIR / MOSAEL_FISH_MODEL_DIR。(模型目录缺少 codec.pth)",
-        "en": "Fish Speech S2 is unavailable: it needs the fishaudio/s2-pro weights and an official fish-speech source checkout. Fill in “Source directory” and “Model directory” under Settings → Voice cloning, or set MOSAEL_FISH_REPO_DIR / MOSAEL_FISH_MODEL_DIR. (codec.pth is missing from the model directory.)",
+        "zh": "Fish Speech S2 不可用:需要 fishaudio/s2-pro 权重 + 官方 fish-speech 源码检出。部署管理员在「管理 → 引擎 → 声音克隆」里下载 Fish Speech(源码与权重一并装好),或设置 MOSAEL_FISH_REPO_DIR / MOSAEL_FISH_MODEL_DIR。(模型目录缺少 codec.pth)",
+        "en": "Fish Speech S2 is unavailable: it needs the fishaudio/s2-pro weights and an official fish-speech source checkout. A deployment admin downloads Fish Speech under Admin → Engines → Voice cloning (it fetches both), or sets MOSAEL_FISH_REPO_DIR / MOSAEL_FISH_MODEL_DIR. (codec.pth is missing from the model directory.)",
     },
     "runtimeErr_fishNeedsReference": {"zh": "Fish Speech 需要参考音频", "en": "Fish Speech needs reference audio"},
     "runtimeErr_downloadNoReason": {
@@ -2961,7 +2961,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Split an audio or video asset into a voice stem and a background stem as two **new assets**; the original is untouched. The background is everything except the voice: music, ambience, effects. Use it in dubbing to keep the background: drop the voice, keep the rest, lay the dub on top. Requires a separation engine installed on this machine.",
     },
     "wfNode_separate_audio_asset_id": {"zh": "要分离的素材(音频或视频都行)", "en": "The asset to separate (audio or video)"},
-    "wfNode_separate_audio_engine": {"zh": "用哪一家分离:本机装好的引擎,或配好的分离插件;留空按你的默认(没定就用本机引擎)。本机引擎在「设置 → 本机引擎 → 人声分离」里装。", "en": "Which provider separates the audio: an on-device engine or a configured separation plugin; empty uses your default (the on-device engine if none). Install engines under Settings → On-device engines → Voice separation."},
+    "wfNode_separate_audio_engine": {"zh": "用哪一家分离:本机装好的引擎,或配好的分离插件;留空按你的默认(没定就用本机引擎)。本机引擎由部署管理员在「管理 → 引擎」里装。", "en": "Which provider separates the audio: an on-device engine or a configured separation plugin; empty uses your default (the on-device engine if none). On-device engines are installed by a deployment admin under Admin → Engines."},
     "sepEngine_demucs": {"zh": "Demucs(本机)", "en": "Demucs (local)"},
     "sepMsg_brokenRuntime": {
         # 解释器在、依赖却不全的那种(pip 装到一半断了)。不说"未安装" —— 用户明明记得装过。
@@ -3000,8 +3000,8 @@ MESSAGES: dict[str, dict[str, str]] = {
     "dubOriginalAudio_mute": {"zh": "原声整轨静音。", "en": "The original audio track is muted."},
     "dubOriginalAudio_separate": {"zh": "已拆出人声并去掉,背景音乐保留。", "en": "The original voice was separated out and removed; the background music is kept."},
     "dubOriginalAudio_mute_fallback": {
-        "zh": "没有可用的人声分离引擎,原声整轨静音 —— 背景音乐也一起没了。在「设置 → 本机引擎 → 人声分离」装好后重跑,可以保住背景音乐。",
-        "en": "No voice separation engine was available, so the whole original track was muted — the background music went with it. Install one under Settings → On-device engines → Voice separation and run again to keep the music.",
+        "zh": "没有可用的人声分离引擎,原声整轨静音 —— 背景音乐也一起没了。部署管理员在「管理 → 引擎」里装好人声分离后重跑,可以保住背景音乐。",
+        "en": "No voice separation engine was available, so the whole original track was muted — the background music went with it. Once a deployment admin installs voice separation under Admin → Engines, run again to keep the music.",
     },
     "denoiseEngine_ffmpeg": {"zh": "内置降噪", "en": "Built-in noise reduction"},
     "denoiseEngine_deepfilternet": {"zh": "DeepFilterNet 语音降噪", "en": "DeepFilterNet speech enhancement"},
@@ -3018,7 +3018,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "轻量的语音降噪模型,一阵一阵的噪声也能压下去,效果不如 DeepFilterNet。音乐会被当成噪声压低。不用装任何东西。",
         "en": "A lightweight speech model that also handles intermittent noise, though not as well as DeepFilterNet. Music is treated as noise. Nothing to install.",
     },
-    "denoiseSetup_deepfilternet": {"zh": "先在「设置 → 本机引擎 → 降噪」里下载 DeepFilterNet", "en": "Download DeepFilterNet first under Settings → On-device engines → Noise reduction"},
+    "denoiseSetup_deepfilternet": {"zh": "先由部署管理员在「管理 → 引擎」里下载 DeepFilterNet", "en": "A deployment admin downloads DeepFilterNet first under Admin → Engines"},
     "denoiseSetup_rnnoise": {"zh": "这台机器上的 ffmpeg 不带 RNNoise 滤镜(arnndn)", "en": "This machine's ffmpeg was built without the RNNoise filter (arnndn)"},
     "dlMsg_downloading": {"zh": "下载中…", "en": "Downloading…"},
     "wfOut_vocals_asset_id": {"zh": "人声", "en": "Voice"},
@@ -3599,8 +3599,8 @@ MESSAGES: dict[str, dict[str, str]] = {
     "ttsProvider_clone": {"zh": "本地音色克隆", "en": "Local voice clone"},
     "ttsProviderNote_cloneReady": {"zh": "用音色库里的克隆音色,完全本地。", "en": "Uses cloned voices from your library — fully local."},
     "ttsProviderNote_cloneMissing": {
-        "zh": "本地引擎还没装:去设置的「声音克隆」点「下载」装一次;只想马上出声的话,下面的「Edge 免费在线合成」不用装。",
-        "en": "The local engine isn't installed yet — install it once from Settings → Voice clone. If you just want sound now, Edge below needs no setup.",
+        "zh": "本地引擎还没装:部署管理员在「管理 → 引擎 → 声音克隆」里点「下载」装一次;只想马上出声的话,下面的「Edge 免费在线合成」不用装。",
+        "en": "The local engine isn't installed yet — a deployment admin installs it once under Admin → Engines → Voice cloning. If you just want sound now, Edge below needs no setup.",
     },
     "ttsProviderNote_edge": {
         "zh": "免费在线合成,无需任何配置;需联网,微软 Edge 同款音色。",
@@ -3810,12 +3810,12 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "This voice has no reference text, and {label} can't work it out on its own — it needs to know what the reference audio says to learn the voice, or the result will be unintelligible. Add the reference text to this voice in the voice library, or switch to F5-TTS (it transcribes the reference audio itself).",
     },
     "voiceErr_noRuntime": {
-        "zh": "{label} 还没有运行环境:没有任何 Python 解释器装了它。去设置的「声音克隆」那一页点「下载」,装一次就好;想马上出声可以先在上面的引擎里选「Edge 免费在线合成」,它不需要安装。",
-        "en": "{label} has no runtime yet: no Python interpreter has it installed. Go to Settings → Voice cloning and click Download — it only needs installing once. To get audio right away, pick the free Edge online engine above; it needs no install.",
+        "zh": "{label} 还没有运行环境:没有任何 Python 解释器装了它。部署管理员在「管理 → 引擎 → 声音克隆」里点「下载」,装一次就好;想马上出声可以先在上面的引擎里选「Edge 免费在线合成」,它不需要安装。",
+        "en": "{label} has no runtime yet: no Python interpreter has it installed. A deployment admin clicks Download under Admin → Engines → Voice cloning — it only needs installing once. To get audio right away, pick the free Edge online engine above; it needs no install.",
     },
     "voiceErr_noWeights": {
-        "zh": "{label} 的模型权重还没下好,现在合成不出声音。去设置的「声音克隆」那一页点「下载」补上 —— 这里不会替你下:那是几个 GB 的事,该由你决定什么时候开始。",
-        "en": "{label}'s model weights aren't downloaded yet, so it can't synthesise anything. Go to Settings → Voice cloning and click Download — it won't start on its own here, since it's several GB and you decide when.",
+        "zh": "{label} 的模型权重还没下好,现在合成不出声音。部署管理员在「管理 → 引擎 → 声音克隆」里点「下载」补上 —— 这里不会自动下:那是几个 GB 的事,该由管理员决定什么时候开始。",
+        "en": "{label}'s model weights aren't downloaded yet, so it can't synthesise anything. A deployment admin clicks Download under Admin → Engines → Voice cloning — it won't start on its own here, since it's several GB and the admin decides when.",
     },
     "voiceErr_unknownEngine": {"zh": "不认识的本地引擎:{engine}", "en": "Unknown local engine: {engine}"},
     "voiceErr_synthNoReason": {
@@ -3823,12 +3823,12 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Speech synthesis failed and the worker process left no reason. Try once more; if it keeps happening, please report it.",
     },
     "voiceErr_synthTorchcodec": {
-        "zh": "语音合成失败:音频解码库(torchcodec)加载不了:它需要一份版本对得上的 FFmpeg。升级引擎依赖通常就能解决(设置 →「声音克隆」→ 下载);若仍然如此,装一个 Homebrew 的 ffmpeg 即可,系统那份不会被改动。",
-        "en": "Speech synthesis failed: the audio decoding library (torchcodec) couldn't load — it needs a matching FFmpeg version. Upgrading the engine's dependencies usually fixes it (Settings → Voice cloning → Download); if not, install ffmpeg from Homebrew — the system copy is left untouched.",
+        "zh": "语音合成失败:音频解码库(torchcodec)加载不了:它需要一份版本对得上的 FFmpeg。升级引擎依赖通常就能解决(管理 → 引擎 →「声音克隆」→ 下载,需要部署管理员);若仍然如此,装一个 Homebrew 的 ffmpeg 即可,系统那份不会被改动。",
+        "en": "Speech synthesis failed: the audio decoding library (torchcodec) couldn't load — it needs a matching FFmpeg version. Upgrading the engine's dependencies usually fixes it (Admin → Engines → Voice cloning → Download, deployment admins only); if not, install ffmpeg from Homebrew — the system copy is left untouched.",
     },
     "voiceErr_synthMissingModule": {
-        "zh": "语音合成失败:{detail} —— 引擎的运行环境不完整。去设置的「声音克隆」那一页点「下载」,它会把缺的依赖补上。",
-        "en": "Speech synthesis failed: {detail} — the engine's runtime is incomplete. Go to Settings → Voice cloning and click Download to add the missing dependencies.",
+        "zh": "语音合成失败:{detail} —— 引擎的运行环境不完整。部署管理员在「管理 → 引擎 → 声音克隆」里点「下载」,它会把缺的依赖补上。",
+        "en": "Speech synthesis failed: {detail} — the engine's runtime is incomplete. A deployment admin clicks Download under Admin → Engines → Voice cloning to add the missing dependencies.",
     },
     "voiceErr_synthFailed": {"zh": "语音合成失败:{detail}", "en": "Speech synthesis failed: {detail}"},
     "voiceErr_synthNoAudio": {
@@ -3836,12 +3836,12 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Speech synthesis failed: the worker reported success but produced no audio.",
     },
     "voiceErr_jaCloneNeedsWeights": {
-        "zh": "这段文本是日文,而本地克隆现在装的权重念不了它。去设置的「声音克隆」下载日文模型(约 {size} GB)后就能用你自己的音色念;不想等的话,改用 Edge TTS 的日文音色或 OpenAI TTS。",
-        "en": "This text is Japanese, and the local cloning weights installed now can't read it. Download the Japanese model (about {size} GB) under Settings → Voice cloning to read it in your own voice — or, to skip the wait, use a Japanese Edge TTS voice or OpenAI TTS.",
+        "zh": "这段文本是日文,而本地克隆现在装的权重念不了它。部署管理员在「管理 → 引擎 → 声音克隆」下载日文模型(约 {size} GB)后就能用你自己的音色念;不想等的话,改用 Edge TTS 的日文音色或 OpenAI TTS。",
+        "en": "This text is Japanese, and the local cloning weights installed now can't read it. Once a deployment admin downloads the Japanese model (about {size} GB) under Admin → Engines → Voice cloning, it reads in your own voice — or, to skip the wait, use a Japanese Edge TTS voice or OpenAI TTS.",
     },
     "voiceErr_koCloneNeedsWeights": {
-        "zh": "这段文本是韩文,而本地克隆现在装的权重念不了它。去设置的「声音克隆」下载韩文模型(约 {size} GB)后就能用你自己的音色念;不想等的话,改用 Edge TTS 的韩文音色或 OpenAI TTS。",
-        "en": "This text is Korean, and the local cloning weights installed now can't read it. Download the Korean model (about {size} GB) under Settings → Voice cloning to read it in your own voice — or, to skip the wait, use a Korean Edge TTS voice or OpenAI TTS.",
+        "zh": "这段文本是韩文,而本地克隆现在装的权重念不了它。部署管理员在「管理 → 引擎 → 声音克隆」下载韩文模型(约 {size} GB)后就能用你自己的音色念;不想等的话,改用 Edge TTS 的韩文音色或 OpenAI TTS。",
+        "en": "This text is Korean, and the local cloning weights installed now can't read it. Once a deployment admin downloads the Korean model (about {size} GB) under Admin → Engines → Voice cloning, it reads in your own voice — or, to skip the wait, use a Korean Edge TTS voice or OpenAI TTS.",
     },
     "voiceErr_jaCloneUnsupported": {
         "zh": "这段文本是日文,而本地音色克隆没有能念它的模型 —— 它不会报错,只会念出一段听不懂的声音。改用 Edge TTS 的日文音色,或 OpenAI TTS。",
@@ -3913,12 +3913,12 @@ MESSAGES: dict[str, dict[str, str]] = {
     # 字幕配音与原声处理(domain/voices/subtitle_dub.py、original_audio.py)
     "dubErr_originalAudioMode": {"zh": "原声处理方式只能是 {modes}", "en": "The original-audio mode must be one of {modes}."},
     "dubErr_separationUnavailableForMode": {
-        "zh": "选择了「只去掉人声」，但音频分离引擎尚不可用；请先到设置中安装分离引擎，或明确改选「静音」",
-        "en": "You chose \"Remove voice only\", but no audio separation engine is available yet. Install one in Settings first, or choose \"Mute\" instead.",
+        "zh": "选择了「只去掉人声」，但音频分离引擎尚不可用；请部署管理员先在「管理 → 引擎」里安装，或明确改选「静音」",
+        "en": "You chose \"Remove voice only\", but no audio separation engine is available yet. Have a deployment admin install one under Admin → Engines first, or choose \"Mute\" instead.",
     },
     "dubErr_separationUnavailable": {
-        "zh": "音频分离引擎尚不可用；请先到设置中安装",
-        "en": "No audio separation engine is available yet — install one in Settings first.",
+        "zh": "音频分离引擎尚不可用；请部署管理员先在「管理 → 引擎」里安装",
+        "en": "No audio separation engine is available yet — a deployment admin installs one under Admin → Engines first.",
     },
     "dubErr_sequenceNotFound": {"zh": "时间线不存在", "en": "This timeline doesn't exist."},
     "dubErr_removeVoiceFailed": {"zh": "只去掉人声失败：{detail}", "en": "Couldn't remove the voice: {detail}"},
@@ -3942,18 +3942,18 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "“{plugin}” returned a transcript in the wrong shape (expected segments with start / end / text): {detail}",
     },
     "asrHint_runtimeMissing": {
-        "zh": "缺的是运行环境,不是模型:模型权重已经下好的话不用再下一遍,但还没有 Python 解释器装了 {engine}。去设置的「转写模型」那一页点「安装运行环境」,装一次就好。",
-        "en": "What's missing is the runtime, not the model: if the weights are already downloaded there's no need to download them again, but no Python interpreter has {engine} installed yet. Go to Settings → Transcription models and click Install runtime — it only needs doing once.",
+        "zh": "缺的是运行环境,不是模型:模型权重已经下好的话不用再下一遍,但还没有 Python 解释器装了 {engine}。部署管理员在「管理 → 引擎 → 转写模型」里点「安装运行环境」,装一次就好。",
+        "en": "What's missing is the runtime, not the model: if the weights are already downloaded there's no need to download them again, but no Python interpreter has {engine} installed yet. A deployment admin clicks Install runtime under Admin → Engines → Transcription models — it only needs doing once.",
     },
     "asrEngine_funasr": {"zh": "FunASR(本机)", "en": "FunASR (on device)"},
     "asrEngine_whisperx": {"zh": "WhisperX(本机)", "en": "WhisperX (on device)"},
     "asrErr_engineRuntimeMissing": {
-        "zh": "所选 ASR 引擎 {engine} 的运行环境不可用,请先到设置的「转写模型」安装。",
-        "en": "The runtime for the selected ASR engine {engine} isn't available. Install it under Settings → Transcription models first.",
+        "zh": "所选 ASR 引擎 {engine} 的运行环境不可用,请部署管理员先在「管理 → 引擎 → 转写模型」里安装。",
+        "en": "The runtime for the selected ASR engine {engine} isn't available. A deployment admin installs it first under Admin → Engines → Transcription models.",
     },
     "asrErr_noRuntime": {
-        "zh": "缺的是运行环境,不是模型:模型权重已经下好的话不用再下一遍,但还没有任何 Python 解释器装了 funasr 或 whisperx。去设置的「转写模型」那一页点「安装运行环境」,装一次就好。",
-        "en": "What's missing is the runtime, not the model: if the weights are already downloaded there's no need to download them again, but no Python interpreter has funasr or whisperx installed. Go to Settings → Transcription models and click Install runtime — it only needs doing once.",
+        "zh": "缺的是运行环境,不是模型:模型权重已经下好的话不用再下一遍,但还没有任何 Python 解释器装了 funasr 或 whisperx。部署管理员在「管理 → 引擎 → 转写模型」里点「安装运行环境」,装一次就好。",
+        "en": "What's missing is the runtime, not the model: if the weights are already downloaded there's no need to download them again, but no Python interpreter has funasr or whisperx installed. A deployment admin clicks Install runtime under Admin → Engines → Transcription models — it only needs doing once.",
     },
     "asrErr_audioExtractFailed": {"zh": "音频提取失败:{detail}", "en": "Couldn't extract the audio: {detail}"},
     "asrErr_dictationTooLong": {
@@ -3980,8 +3980,8 @@ MESSAGES: dict[str, dict[str, str]] = {
     # 人声与背景音分离(domain/separation.py)
     "separationErr_noEngine": {"zh": "没有可用的音频分离引擎", "en": "No audio separation engine is available."},
     "separationErr_noEngineInstall": {
-        "zh": "没有可用的音频分离引擎 —— 先在设置里装一个",
-        "en": "No audio separation engine is available — install one in Settings first.",
+        "zh": "没有可用的音频分离引擎 —— 部署管理员先在「管理 → 引擎」里装一个",
+        "en": "No audio separation engine is available — a deployment admin installs one under Admin → Engines first.",
     },
     "separationErr_fileMissing": {"zh": "这份素材的文件找不到了", "en": "This asset's file can't be found."},
     "separationErr_missingVocals": {"zh": "分离结果里缺少:人声", "en": "The separation result is missing the vocals."},

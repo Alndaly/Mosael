@@ -369,7 +369,7 @@ class Test原声处理归配音本身:
         sequence_id, clip_id = _sequence_with_subtitle(client)
         monkeypatch.setattr(separation, "available", lambda *_a, **_k: False)
 
-        with SessionLocal() as db, pytest.raises(DubError, match="只去掉人声.*安装分离引擎"):
+        with SessionLocal() as db, pytest.raises(DubError, match="只去掉人声.*管理 → 引擎.*安装"):
             start_subtitle_dub(
                 db,
                 sequence_id=sequence_id,

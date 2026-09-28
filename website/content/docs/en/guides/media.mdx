@@ -112,7 +112,7 @@ panel. Right-clicking an asset in the editor's media pool offers the same two.
   | Method | Good for | Music | Setup |
   | --- | --- | --- | --- |
   | Built-in | Steady noise: air conditioning, fans, hum | Untouched | None |
-  | DeepFilterNet | Speech-led recordings, including keyboards, dishes and chatter; the most natural voice | Removed | Download once under Settings → On-device engines → Noise reduction (about 30 MB) |
+  | DeepFilterNet | Speech-led recordings, including keyboards, dishes and chatter; the most natural voice | Removed | A deployment admin downloads it once under Admin → Engines (about 30 MB) |
   | RNNoise | Same, lighter and not as good as DeepFilterNet | Lowered | None |
 
   Built-in is the default, because "reduce noise" rarely means "and drop the music". It measures how
@@ -121,8 +121,9 @@ panel. Right-clicking an asset in the editor's media pool offers the same two.
   noise reduction: use *Separate voice and background* below and take the voice stem.
 - **Separate voice and background**: split into a voice asset and a background asset. The background
   is everything except the voice: music, ambience, effects. The engine runs on this machine and must
-  be installed first under Settings → On-device engines → Voice separation; a long asset takes many
-  minutes on a CPU. That page reports “Installed” only after actually loading the engine once — not
+  be installed first by a deployment admin under Admin → Engines (only deployment admins install engines;
+  other members see “installed by a deployment admin” where it is needed); a long asset takes many
+  minutes on a CPU. That section reports “Installed” only after actually loading the engine once — not
   by looking for a directory; if an install was interrupted it says the runtime is incomplete, and
   clicking Install again adds the missing dependencies.
 

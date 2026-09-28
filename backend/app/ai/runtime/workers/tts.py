@@ -124,11 +124,11 @@ def run_f5(request: dict[str, Any], output_path: str) -> str:
     return "f5-tts"
 
 
-#: 给人看的那句(「Fish Speech S2 不可用:……在设置→声音克隆填源码目录、模型目录」)在宿主的
+#: 给人看的那句(「Fish Speech S2 不可用:……在管理 → 引擎 → 声音克隆里下载」)在宿主的
 #: 文案表里(`runtimeErr_fish*`);这里只有给日志的英文原话。
 _FISH_HINT = (
     "Fish Speech S2 is unavailable: it needs the fishaudio/s2-pro weights and an official fish-speech "
-    "source checkout (Settings → Voice cloning, or MOSAEL_FISH_REPO_DIR / MOSAEL_FISH_MODEL_DIR)"
+    "source checkout (Admin → Engines → Voice cloning, or MOSAEL_FISH_REPO_DIR / MOSAEL_FISH_MODEL_DIR)"
 )
 
 

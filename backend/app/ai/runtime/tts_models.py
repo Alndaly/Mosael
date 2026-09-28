@@ -873,7 +873,7 @@ def ensure_engine_runtime(engine_id: str) -> None:
         DownloadProgress(status="downloading", message="dlMsg_installingDeps", params={"engine": engine.label}),
     )
     # 装到托管 venv 里。超时给足 —— torch 在慢网络下很久。
-    # pip 镜像来自设置页(与「模型下载源」分开:那个管 HF 权重,这个管 Python 包)。
+    # pip 镜像来自管理页「引擎」的安装源(与「模型下载源」分开:那个管 HF 权重,这个管 Python 包)。
     # 直连 PyPI 拉 2.5–3.5GB 在国内常常慢到不可用,所以这一项值得单独可切。
     try:
         pip_install.install(

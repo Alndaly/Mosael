@@ -8,14 +8,18 @@ import { usePersistentTab } from "@/lib/usePersistentTab";
 import { AdminOverview } from "./AdminOverview";
 import { AdminMembers } from "./AdminMembers";
 import { AiRuntimeSection } from "./AiRuntimeSection";
+import { AsrModelsSection } from "./AsrModelsSection";
 import { DataDiagnosticsSection } from "./DataDiagnosticsSection";
+import { DenoiseEnginesSection } from "./DenoiseEnginesSection";
 import { InstallSourceSection } from "./InstallSourceSection";
 import { ProviderPricingSection } from "./ProviderPricingSection";
 import { ProxySection } from "./ProxySection";
 import { RegistrationSection } from "./RegistrationSection";
+import { SeparationEnginesSection } from "./SeparationEnginesSection";
 import { SharedHostFoldersSection } from "./SharedHostFoldersSection";
+import { VoiceCloneSection } from "./VoiceCloneSection";
 
-const TABS = ["overview", "members", "pricing", "deployment"] as const;
+const TABS = ["overview", "members", "pricing", "engines", "deployment"] as const;
 export type AdminTab = (typeof TABS)[number];
 
 /**
@@ -28,12 +32,16 @@ export type AdminTab = (typeof TABS)[number];
  * 入口只对部署管理员显示(见 AppShell),后端每条路由也各自把关 —— 藏起来的入口不是权限。
  *
  * **判据是「谁能写」,不是「在哪个菜单里顺手」。** 后端只许部署管理员写的东西(ensure_deployment_admin)
- * 都在这里:成本规则、出站代理与重试、安装源、备份恢复。它们此前摆在设置页,对每个成员可见 ——
- * 普通成员看得到表单、一保存就 403;读代理被拒后还画着两个空框,等于告诉他「直连」。
+ * 都在这里:成本规则、出站代理与重试、本机引擎的安装与下载源、备份恢复。它们此前摆在设置页,
+ * 对每个成员可见 —— 普通成员看得到表单、一保存就 403;读代理被拒后还画着两个空框,等于告诉他「直连」。
  *
- * **分四个 tab**:概览(读数与两张图)、成员(账户与邀请码)、成本规则(用量按什么价入账)、
- * 部署设置(谁能加入、共享文件夹、网络出口、安装源、数据)。成本规则单独一个 tab:它是一整张
- * 可筛选、可批量删的表,挤进部署设置会把其余几节压到很下面。
+ * **分五个 tab**:概览(读数与两张图)、成员(账户与邀请码)、成本规则(用量按什么价入账)、
+ * 引擎(这台机器上装哪些本机引擎、从哪儿装)、部署设置(谁能加入、共享文件夹、网络出口、数据)。
+ * 成本规则单独一个 tab:它是一整张可筛选、可批量删的表,挤进部署设置会把其余几节压到很下面。
+ * 引擎也单独一个 tab,理由相同而更甚:转写、声音克隆、人声分离、降噪四节各是一张带进度条的清单,
+ * 克隆还有一张表单,合起来比部署设置其余几节加在一起还长;来这里的人要做的也是另一件事 ——
+ * 点下载、盯着几个 GB 走完,而不是改一个开关。安装源(pip 镜像)只管装这些引擎的依赖,跟着引擎走,
+ * 排在最前:先选好从哪儿拉,再点下面的安装。
  *
  * 版式上,页面本身是 STUDIO_PAGE —— 一条 flex 列,子项一律 `shrink-0`;每个 tab 的内容是一个
  * **不定高**的网格。行高只由内容决定,没有哪一节能被压扁、让下一节画到它身上(见 adminLayout)。
@@ -41,7 +49,8 @@ export type AdminTab = (typeof TABS)[number];
 export function AdminView({ workspace }: { workspace: Workspace }) {
   const t = useI18n();
   const [tab, setTab] = usePersistentTab<AdminTab>("admin", "overview", TABS);
-  // 深链(gotoAdmin):统计页的「N 次未定价」→ 成本规则。认不出的 tab 原地不动。
+  // 深链(gotoAdmin):统计页的「N 次未定价」→ 成本规则;转写、降噪等处「引擎没装」→ 引擎。
+  // 认不出的 tab 原地不动。
   useOpenRequest("mosael:open-admin", (link) => {
     const target = TABS.find((one) => one === link);
     if (target) setTab(target);
@@ -60,6 +69,7 @@ export function AdminView({ workspace }: { workspace: Workspace }) {
               { value: "overview", label: t("adminTabOverview") },
               { value: "members", label: t("adminTabMembers") },
               { value: "pricing", label: t("adminTabPricing") },
+              { value: "engines", label: t("adminTabEngines") },
               { value: "deployment", label: t("adminTabDeployment") },
             ]}
           />
@@ -71,6 +81,15 @@ export function AdminView({ workspace }: { workspace: Workspace }) {
         {tab === "overview" && <AdminOverview onConfigurePricing={() => setTab("pricing")} />}
         {tab === "members" && <AdminMembers onOpenDeployment={() => setTab("deployment")} />}
         {tab === "pricing" && <ProviderPricingSection workspace={workspace} />}
+        {tab === "engines" && (
+          <>
+            <InstallSourceSection />
+            <AsrModelsSection />
+            <VoiceCloneSection />
+            <SeparationEnginesSection />
+            <DenoiseEnginesSection />
+          </>
+        )}
         {tab === "deployment" && (
           <>
             <RegistrationSection />
@@ -79,7 +98,6 @@ export function AdminView({ workspace }: { workspace: Workspace }) {
             {/* 代理和重试挨着:回答的是同一个问题 —— 这台部署的 AI 调用怎么出去。 */}
             <ProxySection />
             <AiRuntimeSection />
-            <InstallSourceSection />
             <DataDiagnosticsSection />
           </>
         )}

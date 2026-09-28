@@ -12,7 +12,7 @@ import { ADMIN_CARD, AdminRow, AdminSection } from "./adminLayout";
 const PRESETS = ["pypi", "tsinghua", "aliyun", "tencent"] as const;
 
 /**
- * 管理 → 部署设置 → 安装源。
+ * 管理 → 引擎 → 安装源(排在最前:先选从哪儿拉,再点下面各引擎的安装)。
  *
  * **为什么是独立的一节**:这个值历史上只出现在「声音克隆」的表单里(克隆先有了它),而转写和
  * 人声分离装依赖时读的是同一份 —— 想给转写换个镜像的人得去「声音克隆」里找。三个引擎一次拉

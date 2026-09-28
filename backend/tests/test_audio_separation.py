@@ -317,7 +317,7 @@ class Test当作任务跑:
         from app.domain import separation
 
         monkeypatch.setattr(separation, "available", lambda *_a, **_k: False)
-        with pytest.raises(SeparationError, match="先在设置里装"):
+        with pytest.raises(SeparationError, match="管理 → 引擎"):
             separation.start_separation_job(
                 None, asset=Asset(workspace_id="w", kind="audio", name="x", file_key="k"), created_by=None
             )

@@ -4,6 +4,7 @@ import { AudioLines, Type } from "lucide-react";
 import { toast } from "sonner";
 
 import { downloadF5Model, dubSubtitles, listF5Models, ORIGINAL_AUDIO_MODES, type OriginalAudio, type Sequence } from "@/api/client";
+import { useIsDeploymentAdmin } from "@/app/auth";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -74,7 +75,9 @@ export function SubtitleDub({
 
   const texts = targets.map((clip) => dubTextOf(clip, line));
   const wantScript = detectScript(texts.join("\n"));
-  // 能念这段文字、但还没下的那份权重 —— 有它就把「下载」直接摆在这儿,不让人去设置页找。
+  // 能念这段文字、但还没下的那份权重 —— 有它就把「下载」直接摆在这儿,不让人去管理页找。
+  // 下载只给部署管理员(routes/voices.download_f5_model),成员这里只被告知由谁来下。
+  const isAdmin = useIsDeploymentAdmin();
   const missingModel = usesF5
     ? (f5Models.data ?? []).find((model) => wantScript && (model.languages ?? []).includes(wantScript) && !model.installed)
     : undefined;
@@ -211,7 +214,10 @@ export function SubtitleDub({
             : hasVoiceFor(mismatch, engine, voiceChoices)
               ? t("subtitleDubLangVoice").replaceAll("{lang}", langName)
               : t("subtitleDubLangEngine").replaceAll("{lang}", langName)}
-          {missingModel && (
+          {missingModel && !isAdmin && (
+            <span className="mt-1 block text-muted-foreground">{t("engineInstalledByAdmin")}</span>
+          )}
+          {missingModel && isAdmin && (
             <Button
               size="sm"
               variant="outline"

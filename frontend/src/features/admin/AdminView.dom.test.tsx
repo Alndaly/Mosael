@@ -7,7 +7,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Workspace } from "@/api/client";
 
 /**
- * 管理页:四个 tab 各自有哪几节、节与节**不可能叠在一起**、以及每一处会改东西的动作真的打到后端。
+ * 管理页:五个 tab 各自有哪几节、节与节**不可能叠在一起**、以及每一处会改东西的动作真的打到后端。
  *
  * 走真正的组件(只替掉接口和图表),不去测抽出来的字符串拼接函数:错常常发生在
  * "接口字段 → 屏幕上那行字"这一跳上,而那正是绕过组件就测不到的一跳。
@@ -77,12 +77,23 @@ vi.mock("@/api/client", async (importOriginal) => ({
     return Promise.resolve({ code: "NEW", note, used: false, expires_at: "2099-01-01T00:00:00Z" });
   },
   getSharedHostFolders: () => Promise.resolve({ folders: [] }),
+  // 引擎 tab:几节各自的清单。结构测试只关心有哪几节,给空清单就够。
+  listAsrModels: () => Promise.resolve([]),
+  downloadAsrModel: () => Promise.resolve({}),
+  getTtsConfig: () => Promise.resolve({ engine: "f5-tts", python_path: "", source: "hf", worker_ready: true, worker_python: "" }),
+  updateTtsConfig: () => Promise.resolve({}),
+  listTtsModels: () => Promise.resolve([]),
+  downloadTtsModel: () => Promise.resolve({}),
+  listSeparationEngines: () => Promise.resolve([]),
+  installSeparationEngine: () => Promise.resolve({}),
+  listDenoiseEngines: () => Promise.resolve([]),
+  installDenoiseEngine: () => Promise.resolve({}),
   setSharedHostFolders: (folders: string[]) => Promise.resolve({ folders }),
 }));
 
 const { AdminView } = await import("./AdminView");
 
-function show(people: Array<Record<string, unknown>> = [], tab?: "overview" | "members" | "pricing" | "deployment") {
+function show(people: Array<Record<string, unknown>> = [], tab?: "overview" | "members" | "pricing" | "engines" | "deployment") {
   rows.length = 0;
   rows.push(...people);
   if (tab) localStorage.setItem("mosael:tab:admin", tab);
@@ -121,7 +132,7 @@ function sections(container: HTMLElement) {
 }
 
 describe("结构", () => {
-  it("四个 tab 各有自己的几节,切换只换内容区", async () => {
+  it("五个 tab 各有自己的几节,切换只换内容区", async () => {
     const { container } = show([admin, base]);
     await screen.findByText("adminStatUsers");
     expect(sections(container)).toEqual(["range", "stats", "activity", "spend"]);
@@ -134,10 +145,22 @@ describe("结构", () => {
     await screen.findByText("pricingRulesTitle");
     expect(sections(container)).toEqual(["pricing"]);
 
+    // 本机引擎的安装与下载源:后端只许部署管理员装(ensure_deployment_admin),所以在这里、不在设置页。
+    // 安装源排在最前 —— 它只管装这几个引擎的依赖,先选好从哪儿拉,再点下面的安装。
+    fireEvent.click(screen.getByRole("button", { name: "adminTabEngines" }));
+    await screen.findByText("asrModelsTitle");
+    expect(sections(container)).toEqual([
+      "install-source",
+      "engine-transcribe",
+      "engine-clone",
+      "engine-separation",
+      "engine-denoise",
+    ]);
+
     // 只有部署管理员写得了的设置都在这里,不在设置页(见 AdminView 的说明)。
     fireEvent.click(screen.getByRole("button", { name: "adminTabDeployment" }));
     await screen.findByRole("switch", { name: "deployRegistrationOpen" });
-    expect(sections(container)).toEqual(["registration", "shared-folders", "proxy", "ai-runtime", "install-source", "data"]);
+    expect(sections(container)).toEqual(["registration", "shared-folders", "proxy", "ai-runtime", "data"]);
     // 选中的 tab 活过导航。
     expect(localStorage.getItem("mosael:tab:admin")).toBe("deployment");
   });
@@ -153,7 +176,7 @@ describe("结构", () => {
    *   2. 根以下没有任何元素带 h-full / min-h-0 —— 高度只由内容决定;
    *   3. 不再用 SettingsSectionStack(它自带 h-full min-h-0,是给「整个滚动区只有它」的设置页用的)。
    */
-  it.each(["overview", "members", "pricing", "deployment"] as const)("%s:没有哪一节能被压扁", async (tab) => {
+  it.each(["overview", "members", "pricing", "engines", "deployment"] as const)("%s:没有哪一节能被压扁", async (tab) => {
     const { container } = show([admin, base], tab);
     await waitFor(() => expect(container.querySelector("[data-admin-section]")).not.toBeNull());
     const page = container.querySelector<HTMLElement>("[data-admin-page]")!;
@@ -230,6 +253,15 @@ describe("概览", () => {
     // 认不出的 tab 原地不动。
     act(() => gotoAdmin("没有这个"));
     expect(sections(container)).toEqual(["pricing"]);
+  });
+
+  it("转写、降噪、配音处「引擎没装」的「去安装」经深链落到引擎 tab", async () => {
+    const { gotoAdmin } = await import("@/lib/deepLink");
+    const { container } = show();
+    await screen.findByText("adminStatUsers");
+    act(() => gotoAdmin("engines"));
+    await screen.findByText("asrModelsTitle");
+    expect(sections(container)).toContain("engine-transcribe");
   });
 });
 

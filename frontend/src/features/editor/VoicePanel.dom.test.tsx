@@ -70,9 +70,9 @@ function sequenceWith(texts: string[]) {
   } as never;
 }
 
-type Served = { voices?: unknown[]; texts?: string[]; weights?: unknown[]; onOpenSubtitles?: () => void };
+type Served = { voices?: unknown[]; texts?: string[]; weights?: unknown[]; onOpenSubtitles?: () => void; admin?: boolean };
 
-function renderPanel({ voices: voiceData = voices, texts = ["一条字幕"], weights = BASE_WEIGHTS, onOpenSubtitles }: Served = {}) {
+function renderPanel({ voices: voiceData = voices, texts = ["一条字幕"], weights = BASE_WEIGHTS, onOpenSubtitles, admin = true }: Served = {}) {
   const dubRequests: Array<Record<string, unknown>> = [];
   globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
@@ -80,7 +80,9 @@ function renderPanel({ voices: voiceData = voices, texts = ["一条字幕"], wei
       dubRequests.push(JSON.parse(String(init?.body)));
       return new Response(JSON.stringify({ id: "job-1", status: "queued" }), { status: 200, headers: { "content-type": "application/json" } });
     }
-    const body = url.includes("/tts/f5-models")
+    const body = url.includes("/api/auth/me")
+      ? { is_deployment_admin: admin }
+      : url.includes("/tts/f5-models")
       ? weights
       : url.includes("/api/tts/models")
         ? localEngines
@@ -312,7 +314,14 @@ describe("给字幕配音", () => {
   it("日文字幕 + 本地克隆:当场说缺哪份权重,并把下载放在手边", async () => {
     renderPanel({ texts: ["お漏らし。", "ここに寝てるんでしょ？"] });
     expect(await screen.findByText(/subtitleDubModelMissing/)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "subtitleDubModelDownload" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "subtitleDubModelDownload" })).toBeInTheDocument();
+  });
+
+  it("看的人不是部署管理员:说缺哪份权重、由谁来下,不给一个一点就被拒的下载按钮", async () => {
+    renderPanel({ texts: ["お漏らし。", "ここに寝てるんでしょ？"], admin: false });
+    expect(await screen.findByText(/subtitleDubModelMissing/)).toBeInTheDocument();
+    expect(screen.getByText("engineInstalledByAdmin")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "subtitleDubModelDownload" })).toBeNull();
   });
 
   it("日语权重装上之后,提示和下载入口一起消失", async () => {

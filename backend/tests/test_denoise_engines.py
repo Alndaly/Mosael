@@ -194,7 +194,7 @@ class TestDeepFilterNet适配器:
             assert not registry.DENOISE_ADAPTERS["deepfilternet"].runtime_ready()
             from app.core.db import SessionLocal
 
-            with SessionLocal() as db, pytest.raises(DenoiseError, match="设置"):
+            with SessionLocal() as db, pytest.raises(DenoiseError, match="管理 → 引擎"):
                 ready_adapter(db, None, "builtin:deepfilternet")
         finally:
             dm.deepfilter_ready.cache_clear()

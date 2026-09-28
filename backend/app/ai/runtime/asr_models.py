@@ -509,7 +509,7 @@ def ensure_engine_runtime(engine: str, *, progress_key: str | None = None) -> No
             raise venv_failure(created.stderr or created.stdout)
 
     _store.set(key, DownloadProgress(status="downloading", message="dlMsg_installingDeps", params={"engine": engine}))
-    # **和克隆走同一个安装器**,包括设置页那个 pip 镜像 —— 此前这里没带,于是同一台机器上
+    # **和克隆走同一个安装器**,包括管理页「引擎」里那个 pip 镜像 —— 此前这里没带,于是同一台机器上
     # 「声音克隆走镜像、转写直连 PyPI」,而设置项写的是「装引擎依赖时用的 pip 索引」。
     # 超时给足:torch 在慢网络下很久。
     #

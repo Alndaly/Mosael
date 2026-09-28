@@ -73,7 +73,7 @@ class DenoiseAdapter(Protocol):
     #: 会不会连音乐一起去掉。`auto` 只挑不会的那种 —— 用户说"降噪"时没有要求把配乐也拿掉。
     removes_music: bool
     #: 没准备好时告诉用户去哪儿准备(i18n key;永远就绪的引擎留空)。**准备这一步不替用户做**:
-    #: 下载、安装是设置里显式的一步,不该藏在"点一下降噪"后面。
+    #: 下载、安装是管理页「引擎」里显式的一步(只给部署管理员),不该藏在"点一下降噪"后面。
     setup_hint_key: str
 
     def runtime_ready(self) -> bool:

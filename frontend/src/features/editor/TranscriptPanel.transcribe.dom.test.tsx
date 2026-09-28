@@ -12,7 +12,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
  *
  * 这里钉住每一种状态下用户看到的是什么、点下去发的是哪几个请求:
  * 没有带声音的片段 → 说清楚为什么转不了;有 → 一个主按钮,去重、跳过已转过的;
- * 引擎没装 → 按钮禁用并直达设置「转写」;任务在跑(哪怕是别处发起的)→ 显示转写中。
+ * 引擎没装 → 按钮禁用;部署管理员直达管理页「引擎」,成员被告知由管理员安装;
+ * 任务在跑(哪怕是别处发起的)→ 显示转写中。
  */
 
 vi.mock("@/app/preferences", () => ({
@@ -70,6 +71,7 @@ function serve({
   transcripts = [] as string[],
   asrModels = [] as unknown[],
   jobs = [] as unknown[],
+  admin = false,
 } = {}) {
   const started: string[] = [];
   globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -89,6 +91,7 @@ function serve({
     if (job) return json({ id: job[1], status: "succeeded", kind: "transcribe", payload: {} });
     if (url.includes("/api/jobs?")) return json(jobs);
     if (url.includes("/api/asr/models")) return json(asrModels);
+    if (url.includes("/api/auth/me")) return json({ is_deployment_admin: admin });
     return json([]);
   }) as never;
   return { started };
@@ -133,19 +136,33 @@ describe("逐字稿页的转写入口", () => {
     expect(started).not.toContain("img");
   });
 
-  it("转写引擎没装:按钮禁用,并给一条去设置「转写」的路", async () => {
-    const { started } = serve({
-      asrModels: [
-        { id: "funasr", runtime_ready: false, runtime_checked: true, status: "installed" },
-        { id: "whisperx", runtime_ready: false, runtime_checked: true, status: "missing" },
-      ],
-    });
+  const NO_ENGINE = [
+    { id: "funasr", runtime_ready: false, runtime_checked: true, status: "installed" },
+    { id: "whisperx", runtime_ready: false, runtime_checked: true, status: "missing" },
+  ];
+
+  it("转写引擎没装:按钮禁用;部署管理员有一条去管理页「引擎」的路", async () => {
+    const { started } = serve({ asrModels: NO_ENGINE, admin: true });
+    const opened: string[] = [];
+    const listener = (event: Event) => opened.push(String((event as CustomEvent).detail));
+    window.addEventListener("mosael:open-admin", listener);
     renderPanel(sequence([clip("c1", "vid", "video", 0)]));
 
     expect(await screen.findByText("transcribeNoEngine")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /wfGoConfigure/ })).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole("button", { name: /engineGoInstall/ }));
+    await waitFor(() => expect(opened).toContain("engines"));
     expect(screen.getByRole("button", { name: /transcribeTimeline/ })).toBeDisabled();
     expect(started).toEqual([]);
+    window.removeEventListener("mosael:open-admin", listener);
+  });
+
+  it("转写引擎没装、看的人不是部署管理员:说由管理员安装,不给一个跳不进去的按钮", async () => {
+    serve({ asrModels: NO_ENGINE });
+    renderPanel(sequence([clip("c1", "vid", "video", 0)]));
+
+    expect(await screen.findByText("transcribeNoEngine")).toBeInTheDocument();
+    expect(await screen.findByText("engineInstalledByAdmin")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /engineGoInstall/ })).toBeNull();
   });
 
   it("引擎还没探完(runtime_checked=false)不算没装 —— 拿未知冒充结论会把能用的按钮锁死", async () => {

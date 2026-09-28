@@ -6,7 +6,7 @@ import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 /**
- * 设置 → 降噪:一页看全所有方式,只有要下载的那个有按钮。
+ * 管理 → 引擎 → 降噪:一节看全本机的几种方式,只有要下载的那个有按钮。
  */
 
 vi.mock("@/app/preferences", () => ({
@@ -14,7 +14,8 @@ vi.mock("@/app/preferences", () => ({
   usePreferences: () => ({ locale: "zh-CN" }),
 }));
 
-import { DenoiseEnginesSection } from "@/features/settings/DenoiseEnginesSection";
+import { DenoiseEnginesSection } from "./DenoiseEnginesSection";
+import { ADMIN_CARD } from "./adminLayout";
 
 const originalFetch = globalThis.fetch;
 afterEach(() => {
@@ -23,6 +24,8 @@ afterEach(() => {
 
 const BASE = { installable: false, status: "ready", setup_hint: "", message: "", size_bytes: 0, strengths: [] };
 const rows = (deepfilter: Record<string, unknown>) => [
+  // 这个人配好的降噪插件(ADR 0032):id 是连接 id。它是某个成员自己的连接,不是这台机器上装的引擎。
+  { ...BASE, engine: "conn-42", label: "某降噪插件", description: "插件", ready: true, removes_music: false },
   { ...BASE, engine: "builtin:ffmpeg", label: "内置降噪", description: "去底噪", ready: true, removes_music: false },
   {
     ...BASE, engine: "builtin:deepfilternet", label: "DeepFilterNet", description: "效果最好", ready: false,
@@ -37,7 +40,7 @@ function renderSection(deepfilter: Record<string, unknown> = {}) {
     const url = String(input);
     if (init?.method === "POST") {
       posts.push(url);
-      return new Response(JSON.stringify(rows({ status: "installing" })[1]), { status: 200, headers: { "content-type": "application/json" } });
+      return new Response(JSON.stringify(rows({ status: "installing" })[2]), { status: 200, headers: { "content-type": "application/json" } });
     }
     return new Response(JSON.stringify(rows(deepfilter)), { status: 200, headers: { "content-type": "application/json" } });
   }) as never;
@@ -51,9 +54,9 @@ function renderSection(deepfilter: Record<string, unknown> = {}) {
 }
 
 const rowOf = async (label: string) =>
-  (await screen.findByText(label)).closest('[data-slot="settings-item-row"]') as HTMLElement;
+  (await screen.findByText(label)).closest("[data-admin-row]") as HTMLElement;
 
-describe("降噪引擎设置页", () => {
+describe("降噪引擎", () => {
   it("只有要下载的那个有下载按钮,点了就装", async () => {
     const user = userEvent.setup();
     const { posts } = renderSection();
@@ -87,18 +90,24 @@ describe("降噪引擎设置页", () => {
     expect(within(deepfilter).queryByRole("button")).toBeNull();
   });
 
-  it("每个引擎是分组里的一行,不是一张带边框的卡片", async () => {
+  it("每个引擎是卡片里的一行,自己不再套一个框", async () => {
     renderSection();
     const row = await rowOf("DeepFilterNet");
-    // 直接挂在分组的正文下面 —— 分隔线由分组画,行自己不带框。
-    expect(row.parentElement).toHaveAttribute("data-slot", "settings-group-content");
+    // 直接挂在卡片下面 —— 分隔线由卡片画,行自己不带框。
+    expect(row.parentElement?.className).toBe(ADMIN_CARD);
     expect(row).not.toHaveClass("border");
     expect(row).not.toHaveClass("rounded-lg");
     // 「会去掉音乐」是安静的语义色淡底标签,不是描边的大写小标。
     const tag = within(row).getByText("denoiseRemovesMusicBadge");
-    expect(tag).toHaveAttribute("data-slot", "settings-tag");
+    expect(tag).toHaveAttribute("data-admin-tag");
     expect(tag).not.toHaveClass("border");
     expect(tag).not.toHaveClass("uppercase");
+  });
+
+  it("只列本机引擎,不列成员自己配的降噪插件", async () => {
+    renderSection();
+    await rowOf("DeepFilterNet");
+    expect(screen.queryByText("某降噪插件")).toBeNull();
   });
 
   it("装好了显示已安装", async () => {

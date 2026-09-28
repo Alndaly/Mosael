@@ -6,9 +6,10 @@
  * 分组里 —— 而分组本来就用分隔线把一行行隔开(SettingsGroup 的 `[&>*+*]:border-t`),其余设置
  * 全是这个样子。卡片套在分组里,等于在一个画了线的列表里又给每一行加一个框。
  *
- * 现在这类列表一律走 `SettingsItemRow`(components/settings/settings-layout.tsx):名字 + 元信息
- * + 说明在左,状态或按钮在右,进度横贯在底下。这条棘轮拦的是下一处再手搓卡片:
- * `features/settings` 与 `components/settings` 里同时带**圆角 + 整圈边框 + 表面底色**的类串。
+ * 那几页的列表后来走过一个专门的 `SettingsItemRow`;再后来它们整页搬去了管理页「引擎」(装引擎只给
+ * 部署管理员),在那里是 ADMIN_CARD 里的 AdminRow —— 管理页的版式本来就是「一张卡片、一行行」。
+ * 这条棘轮拦的仍是设置页里下一处再手搓卡片:`features/settings` 与 `components/settings` 里同时带
+ * **圆角 + 整圈边框 + 表面底色**的类串。
  *
  * 存量冻结在 GRANDFATHERED,每一条写清为什么它就该是一个框;清单只减不增。
  */

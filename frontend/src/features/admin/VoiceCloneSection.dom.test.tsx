@@ -53,7 +53,7 @@ vi.mock("@/api/client", () => ({
   downloadTtsModel: () => Promise.resolve(models[0]),
 }));
 
-import { VoiceCloneSection } from "@/features/settings/VoiceCloneSection";
+import { VoiceCloneSection } from "./VoiceCloneSection";
 
 function renderSection() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });

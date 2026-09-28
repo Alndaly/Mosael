@@ -16,18 +16,21 @@ import type { MessageKey } from "@/app/messages";
 import { useI18n } from "@/app/preferences";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel } from "@/components/ui/form";
+import { Form, FormField } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { SettingsBlock, SettingsGroup } from "@/components/settings/settings-layout";
-import { ModelDownloadRow } from "@/features/settings/ModelDownloadRow";
+import { SETTINGS_FIELD_WIDTH } from "@/components/settings/settings-layout";
 import { pollWhileUnsettled } from "@/lib/pollWhileUnsettled";
+import { cn } from "@/lib/utils";
+import { ADMIN_CARD, AdminRow, AdminSection } from "./adminLayout";
+import { ModelDownloadRow } from "./ModelDownloadRow";
 
 
 type ConfigForm = { engine: string; python_path: string; source: string; fish_repo_dir: string; fish_model_dir: string };
 
-/** Settings → 声音克隆:选引擎、指定装了 f5-tts 的 Python 解释器、下载源,并下载
-    引擎权重。装好并配好后合成即为真实音色;否则回退占位音。 */
+/** 管理 → 引擎 → 声音克隆:选默认克隆引擎、指定装了引擎的 Python 解释器、模型下载源,并下载
+    引擎权重。这几项存在整台部署共用的一行 TtsConfig 里,写入只给部署管理员
+    (routes/voices.set_tts_config:解释器路径会进子进程的 argv;下载同理),所以在管理页。 */
 const SOURCE_LABELS: Record<string, MessageKey> = {
   "hf-mirror": "settingsVoiceCloneSourceHfMirror",
   hf: "settingsVoiceCloneSourceHf",
@@ -168,134 +171,140 @@ export function VoiceCloneSection() {
   const showsPython = ready && selected === config.data?.engine && Boolean(config.data?.worker_python);
 
   return (
-    <SettingsGroup title={t("voiceCloneTitle")} description={t("voiceCloneDesc")}>
-      <SettingsBlock>
-        {config.data && (
-          <Alert variant={ready || runtimeChecking ? "default" : "destructive"}>
-            {ready ? <CheckCircle2 size={14} /> : <CircleAlert size={14} />}
-            <AlertDescription>
-              {ready
-                ? showsPython
-                  ? t("voiceCloneReady").replace("{python}", config.data.worker_python)
-                  : t("voiceCloneReadyOther").replace("{engine}", engineLabel)
-                : runtimeChecking
-                  ? t("runtimeChecking")
-                  : runtimeReady
-                    ? t("voiceCloneWeightsMissing").replace("{engine}", engineLabel)
-                    : t("voiceCloneNotReady").replace("{engine}", engineLabel)}
-            </AlertDescription>
-          </Alert>
-        )}
+    <AdminSection
+      id="engine-clone"
+      title={t("voiceCloneTitle")}
+      description={t("voiceCloneDesc")}
+      actions={
+        <>
+          {/* 「改了还没保存」讲的是**这个表单**的状态,所以只说一次、说在「保存」旁边。
+              此前每张引擎卡片下面各挂一遍,同一句话在一屏里出现两三次,读起来像是每个引擎
+              各自出了问题。 */}
+          {unsaved && <small className="text-ui-xs text-muted-foreground">{t("ttsSaveAndDownload")}</small>}
+          <Button size="sm" loading={save.isPending} onClick={submit}>
+            {t("save")}
+          </Button>
+        </>
+      }
+    >
+      {config.data && (
+        <Alert variant={ready || runtimeChecking ? "default" : "destructive"}>
+          {ready ? <CheckCircle2 size={14} /> : <CircleAlert size={14} />}
+          <AlertDescription>
+            {ready
+              ? showsPython
+                ? t("voiceCloneReady").replace("{python}", config.data.worker_python)
+                : t("voiceCloneReadyOther").replace("{engine}", engineLabel)
+              : runtimeChecking
+                ? t("runtimeChecking")
+                : runtimeReady
+                  ? t("voiceCloneWeightsMissing").replace("{engine}", engineLabel)
+                  : t("voiceCloneNotReady").replace("{engine}", engineLabel)}
+          </AlertDescription>
+        </Alert>
+      )}
 
-        <Form {...form}>
-          <form className="grid gap-2.5 [&_textarea]:resize-y [&_textarea]:rounded [&_textarea]:border [&_textarea]:border-border [&_textarea]:bg-field [&_textarea]:p-1.5 [&_textarea]:text-ui-sm [&_textarea]:text-foreground [&_textarea:focus-visible]:border-primary [&_textarea:focus-visible]:outline-none" onSubmit={submit} noValidate>
-            <FormField
-              control={form.control}
-              name="engine"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t("voiceCloneEngine")}</FormLabel>
-                  <Select value={field.value} onValueChange={field.onChange}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                    </FormControl>
+      <Form {...form}>
+        <form className={ADMIN_CARD} onSubmit={submit} noValidate>
+          <FormField
+            control={form.control}
+            name="engine"
+            render={({ field }) => (
+              <AdminRow label={t("voiceCloneEngine")}>
+                <Select value={field.value} onValueChange={field.onChange}>
+                  <SelectTrigger className={SETTINGS_FIELD_WIDTH} aria-label={t("voiceCloneEngine")}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="f5-tts">F5-TTS</SelectItem>
+                    <SelectItem value="fish-speech">Fish Speech</SelectItem>
+                  </SelectContent>
+                </Select>
+              </AdminRow>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="python_path"
+            render={({ field }) => (
+              <AdminRow label={t("voiceCloneInterpreter")} description={t("voiceCloneInterpreterHint")}>
+                <Input
+                  className={SETTINGS_FIELD_WIDTH}
+                  aria-label={t("voiceCloneInterpreter")}
+                  placeholder="/path/to/venv/bin/python"
+                  {...field}
+                />
+              </AdminRow>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="source"
+            render={({ field }) => (
+              <AdminRow label={t("voiceCloneSource")}>
+                {/* **选项和配置都到齐之前不挂载它。**
+                    Radix Select 对「挂载之后从外部改 value」反应不正常:实测渲染序列是
+                    `hf-mirror`(默认值) → `hf`(配置落下) → `''`(它自己清空并回调),
+                    而 react-hook-form 把最后那一下记成用户改动。于是一个字没动,页面却说
+                    「改了还没保存」,下拉显示的也不是存着的值 —— 用户看到的就是
+                    「保存点了没用」「每次进来都要再存一次」。
+                    等 reset **真的落进表单**了再挂(不是等数据到达——那中间隔着一帧,
+                    下拉正好在那一帧挂载),它的 value 从一开始就是最终值,不存在"事后被改"。
+                    不用「加 key 让它重挂」那招:重挂本身同样会带出一次 change。 */}
+                {!loaded ? (
+                  // 占位不能用 SelectTrigger —— 它必须长在 Select 里面。
+                  <div
+                    className={cn(
+                      SETTINGS_FIELD_WIDTH,
+                      "flex h-10 items-center rounded-md border border-field-border bg-transparent px-3 py-2 text-ui-sm text-muted-foreground",
+                    )}
+                  >
+                    {t("optionsLoading")}
+                  </div>
+                ) : (
+                  <Select
+                    key={engineValue}
+                    // 直接用表单里的值:reset 那一步已经归一化过,两者不再有不一致可言。
+                    value={field.value}
+                    onValueChange={field.onChange}
+                  >
+                    <SelectTrigger className={SETTINGS_FIELD_WIDTH} aria-label={t("voiceCloneSource")}>
+                      <SelectValue />
+                    </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="f5-tts">F5-TTS</SelectItem>
-                      <SelectItem value="fish-speech">Fish Speech</SelectItem>
+                      {sources.map((id) => (
+                        <SelectItem key={id} value={id}>
+                          {SOURCE_LABELS[id] ? t(SOURCE_LABELS[id]) : id}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="python_path"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t("voiceCloneInterpreter")}</FormLabel>
-                  <FormControl>
-                    <Input placeholder="/path/to/venv/bin/python" {...field} />
-                  </FormControl>
-                  <FormDescription>{t("voiceCloneInterpreterHint")}</FormDescription>
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="source"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t("voiceCloneSource")}</FormLabel>
-                  {/* **选项和配置都到齐之前不挂载它。**
-                      Radix Select 对「挂载之后从外部改 value」反应不正常:实测渲染序列是
-                      `hf-mirror`(默认值) → `hf`(配置落下) → `''`(它自己清空并回调),
-                      而 react-hook-form 把最后那一下记成用户改动。于是一个字没动,页面却说
-                      「改了还没保存」,下拉显示的也不是存着的值 —— 用户看到的就是
-                      「保存点了没用」「每次进来都要再存一次」。
-                      等 reset **真的落进表单**了再挂(不是等数据到达——那中间隔着一帧,
-                      下拉正好在那一帧挂载),它的 value 从一开始就是最终值,不存在"事后被改"。
-                      不用「加 key 让它重挂」那招:重挂本身同样会带出一次 change。 */}
-                  {!loaded ? (
-                    // 占位不能用 SelectTrigger —— 它必须长在 Select 里面。
-                    <div className="flex h-10 w-full items-center rounded-md border border-field-border bg-transparent px-3 py-2 text-ui-sm text-muted-foreground">
-                      {t("optionsLoading")}
-                    </div>
-                  ) : (
-                    <Select
-                      key={engineValue}
-                      // 直接用表单里的值:reset 那一步已经归一化过,两者不再有不一致可言。
-                      value={field.value}
-                      onValueChange={field.onChange}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {sources.map((id) => (
-                          <SelectItem key={id} value={id}>
-                            {SOURCE_LABELS[id] ? t(SOURCE_LABELS[id]) : id}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  )}
-                </FormItem>
-              )}
-            />
-            {/* pip 镜像不在这里了 —— 它归「本机引擎 → 安装源」。转写和人声分离装依赖时读的也是它,
-                挂在克隆名下的时候,想给转写换镜像的人得来「声音克隆」里找。 */}
-            {/* 「改了还没保存」讲的是**这个表单**的状态,所以只说一次、说在「保存」旁边。
-                此前每张引擎卡片下面各挂一遍,同一句话在一屏里出现两三次,读起来像是每个引擎
-                各自出了问题。 */}
-            <div className="mt-1 flex items-center justify-end gap-2">
-              {unsaved && <small className="text-ui-xs text-muted-foreground">{t("ttsSaveAndDownload")}</small>}
-              <Button type="submit" size="sm" loading={save.isPending}>
-                {t("save")}
-              </Button>
-            </div>
-          </form>
-        </Form>
-      </SettingsBlock>
-
-      {models.data?.map((model) => {
-        const busy = startingId === model.id || model.status === "downloading";
-        return (
-          <ModelDownloadRow
-            key={model.id}
-            model={model}
-            noRuntimeText={t("voiceModelNoRuntime")}
-            busy={busy}
-            // **禁用了就要说为什么。** 按钮此前只是静静地变灰 —— 用户看到的是"点了没反应",
-            // 而不是"这一个正在下"。和「重试点不动」是同一类:不给理由的禁用等于坏掉。
-            actionTitle={busy ? t("ttsThisDownloading") : unsaved ? t("ttsSaveAndDownload") : undefined}
-            onDownload={() => download.mutate(model.id)}
+                )}
+              </AdminRow>
+            )}
           />
-        );
-      })}
-    </SettingsGroup>
+          {/* pip 镜像不在这里 —— 它是这一页顶上的「安装源」。转写和人声分离装依赖时读的也是它,
+              挂在克隆名下的时候,想给转写换镜像的人得来「声音克隆」里找。 */}
+        </form>
+      </Form>
+
+      <div className={ADMIN_CARD}>
+        {models.data?.map((model) => {
+          const busy = startingId === model.id || model.status === "downloading";
+          return (
+            <ModelDownloadRow
+              key={model.id}
+              model={model}
+              noRuntimeText={t("voiceModelNoRuntime")}
+              busy={busy}
+              // **禁用了就要说为什么。** 按钮此前只是静静地变灰 —— 用户看到的是"点了没反应",
+              // 而不是"这一个正在下"。和「重试点不动」是同一类:不给理由的禁用等于坏掉。
+              actionTitle={busy ? t("ttsThisDownloading") : unsaved ? t("ttsSaveAndDownload") : undefined}
+              onDownload={() => download.mutate(model.id)}
+            />
+          );
+        })}
+      </div>
+    </AdminSection>
   );
 }

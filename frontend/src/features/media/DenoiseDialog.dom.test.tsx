@@ -9,7 +9,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
  * 降噪对话框:选"用哪种方式"和"下手多重"。
  *
  * 钉住的是:默认落在不去音乐的那种、默认中度;会去掉音乐的那种要说出来;没有档位的方式不摆
- * 那个旋钮;没准备好的方式点不了并说清去哪准备;提交的就是屏幕上选中的那两样。
+ * 那个旋钮;没准备好的方式点不了并说清去哪准备(要下载的:部署管理员直达管理页「引擎」,成员只看到
+ * 由谁来装);提交的就是屏幕上选中的那两样。
  */
 
 vi.mock("@/app/preferences", () => ({
@@ -31,10 +32,10 @@ const RNNOISE = { ...BASE, engine: "rnnoise", label: "RNNoise", description: "�
 const UNTIERED = { ...BASE, engine: "single", label: "单档引擎", description: "只有一种处理", ready: true, strengths: [], removes_music: false };
 const DEEPFILTER = {
   ...BASE, engine: "deepfilternet", label: "DeepFilterNet", description: "效果最好", ready: false, installable: true,
-  status: "missing", setup_hint: "先去设置里下载", strengths: ["light", "medium", "strong"], removes_music: true,
+  status: "missing", setup_hint: "先请部署管理员下载", strengths: ["light", "medium", "strong"], removes_music: true,
 };
 
-function renderDialog(engines: object[] = [BUILTIN, RNNOISE]) {
+function renderDialog(engines: object[] = [BUILTIN, RNNOISE], { admin = true } = {}) {
   const posts: Array<{ url: string; body: Record<string, unknown> }> = [];
   globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
@@ -42,7 +43,8 @@ function renderDialog(engines: object[] = [BUILTIN, RNNOISE]) {
       posts.push({ url, body: JSON.parse(String(init.body)) });
       return new Response(JSON.stringify({ id: "job-1", status: "queued" }), { status: 200, headers: { "content-type": "application/json" } });
     }
-    return new Response(JSON.stringify(url.includes("/denoise/engines") ? engines : []), {
+    const body = url.includes("/denoise/engines") ? engines : url.includes("/api/auth/me") ? { is_deployment_admin: admin } : [];
+    return new Response(JSON.stringify(body), {
       status: 200,
       headers: { "content-type": "application/json" },
     });
@@ -104,7 +106,7 @@ describe("降噪对话框", () => {
     const deepfilter = await screen.findByRole("radio", { name: /DeepFilterNet/ });
     expect(deepfilter).toBeDisabled();
     //: 能下载的引擎,屏幕上是右上角的「去下载」,引擎给的那句提示仍是这个选项的读屏说明。
-    expect(deepfilter).toHaveAccessibleDescription("先去设置里下载");
+    expect(deepfilter).toHaveAccessibleDescription("先请部署管理员下载");
     expect(deepfilter).toHaveTextContent("效果最好");
   });
 
@@ -116,17 +118,25 @@ describe("降噪对话框", () => {
     expect(screen.queryByRole("button", { name: /denoiseGoDownload/ })).toBeNull();
   });
 
-  it("有要下载的引擎没装时,给一个去设置的入口", async () => {
+  it("有要下载的引擎没装时,给部署管理员一个去管理页「引擎」的入口", async () => {
     const user = userEvent.setup();
     const opened: string[] = [];
     const listener = (event: Event) => opened.push(String((event as CustomEvent).detail));
-    window.addEventListener("mosael:open-settings", listener);
+    window.addEventListener("mosael:open-admin", listener);
     const { onClose } = renderDialog([BUILTIN, DEEPFILTER]);
     await user.click(await screen.findByRole("button", { name: /denoiseGoDownload/ }));
     expect(onClose).toHaveBeenCalled();
-    //: 深链事件是延迟发的(等设置页挂载),所以等它到。
-    await waitFor(() => expect(opened).toContain("denoise"));
-    window.removeEventListener("mosael:open-settings", listener);
+    //: 深链事件是延迟发的(等管理页挂载),所以等它到。
+    await waitFor(() => expect(opened).toContain("engines"));
+    window.removeEventListener("mosael:open-admin", listener);
+  });
+
+  it("看的人不是部署管理员:不给下载按钮(管理页对他没有入口),由谁来装的那句照常写出来", async () => {
+    renderDialog([BUILTIN, DEEPFILTER], { admin: false });
+    const deepfilter = await screen.findByRole("radio", { name: /DeepFilterNet/ });
+    expect(screen.getByText("先请部署管理员下载")).not.toHaveClass("sr-only");
+    expect(deepfilter).toHaveAccessibleDescription("先请部署管理员下载");
+    expect(screen.queryByRole("button", { name: /denoiseGoDownload/ })).toBeNull();
   });
 
   it("都装好了就不摆这个入口", async () => {

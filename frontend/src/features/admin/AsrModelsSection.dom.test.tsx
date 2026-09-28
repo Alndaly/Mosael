@@ -6,7 +6,7 @@ import React from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
- * 设置 → 本机引擎 → 转写:每个模型是分组里的一行(和其余设置同一套版式),而下载、进度、
+ * 管理 → 引擎 → 转写:每个模型是卡片里的一行(和管理页其余的行同一套版式),而下载、进度、
  * 「已安装」、运行环境检测、失败重试照旧。
  */
 
@@ -30,7 +30,8 @@ vi.mock("@/api/client", () => ({
   },
 }));
 
-import { AsrModelsSection } from "@/features/settings/AsrModelsSection";
+import { AsrModelsSection } from "./AsrModelsSection";
+import { ADMIN_CARD } from "./adminLayout";
 
 function renderSection(rows: Array<Record<string, unknown>>) {
   models = rows;
@@ -43,27 +44,27 @@ function renderSection(rows: Array<Record<string, unknown>>) {
 }
 
 const rowOf = async (label: string) =>
-  (await screen.findByText(label)).closest('[data-slot="settings-item-row"]') as HTMLElement;
+  (await screen.findByText(label)).closest("[data-admin-row]") as HTMLElement;
 
 beforeEach(() => {
   downloads.length = 0;
 });
 
-describe("转写模型设置", () => {
-  it("每个模型是分组里的一行:引擎族和大小是名字旁的小字,不是描边的大写小标", async () => {
+describe("转写模型", () => {
+  it("每个模型是卡片里的一行:引擎族和大小是名字旁的小字,不是描边的大写小标", async () => {
     renderSection([
       { ...base, id: "funasr", engine: "funasr", label: "FunASR(SenseVoice)" },
       { ...base, id: "whisperx", engine: "whisperx", label: "WhisperX" },
     ]);
     const row = await rowOf("FunASR(SenseVoice)");
-    expect(row.parentElement).toHaveAttribute("data-slot", "settings-group-content");
+    expect(row.parentElement?.className).toBe(ADMIN_CARD);
     expect(row).not.toHaveClass("border");
     expect(row).not.toHaveClass("rounded-lg");
-    const meta = row.querySelector('[data-slot="settings-item-meta"]')!;
+    const meta = row.querySelector("[data-admin-row-meta]")!;
     expect(meta).toHaveTextContent("funasr · 973 MB");
     expect(meta).not.toHaveClass("uppercase");
-    expect(within(row).getByText("中文识别")).toHaveAttribute("data-slot", "settings-item-description");
-    // 两行是同一个分组正文里的兄弟 —— 分隔线由分组画。
+    expect(within(row).getByText("中文识别")).toHaveAttribute("data-admin-row-description");
+    // 两行是同一张卡片里的兄弟 —— 分隔线由卡片画。
     expect((await rowOf("WhisperX")).parentElement).toBe(row.parentElement);
   });
 
@@ -77,7 +78,7 @@ describe("转写模型设置", () => {
   it("装好且跑得起来:右边是已安装,没有按钮", async () => {
     renderSection([{ ...base, id: "funasr", engine: "funasr", label: "FunASR", status: "installed", runtime_ready: true }]);
     const row = await rowOf("FunASR");
-    const state = within(row).getByText("asrModelInstalled").closest('[data-slot="settings-item-state"]');
+    const state = within(row).getByText("asrModelInstalled").closest("[data-admin-row-state]");
     expect(state).toHaveAttribute("data-tone", "success");
     expect(within(row).queryByRole("button")).toBeNull();
   });
@@ -85,7 +86,7 @@ describe("转写模型设置", () => {
   it("运行环境还没测完时说「正在检查」,不下结论也不摆按钮", async () => {
     renderSection([{ ...base, id: "funasr", engine: "funasr", label: "FunASR", status: "installed", runtime_checked: false }]);
     const row = await rowOf("FunASR");
-    expect(within(row).getByText("runtimeChecking")).toHaveAttribute("data-slot", "settings-item-note");
+    expect(within(row).getByText("runtimeChecking")).toHaveAttribute("data-admin-row-note");
     expect(within(row).queryByRole("button")).toBeNull();
     expect(row).not.toHaveTextContent("asrModelInstalled");
   });
@@ -105,10 +106,10 @@ describe("转写模型设置", () => {
       },
     ]);
     const row = await rowOf("FunASR");
-    const footer = row.querySelector('[data-slot="settings-item-footer"]')!;
+    const footer = row.querySelector("[data-admin-row-footer]")!;
     expect(within(footer as HTMLElement).getByRole("progressbar")).toBeInTheDocument();
     expect(footer).toHaveTextContent("/");
-    expect(row.querySelector('[data-slot="settings-item-state"]')).toHaveTextContent("50%");
+    expect(row.querySelector("[data-admin-row-state]")).toHaveTextContent("50%");
     expect(within(row).queryByRole("button")).toBeNull();
   });
 
@@ -117,9 +118,9 @@ describe("转写模型设置", () => {
       { ...base, id: "funasr", engine: "funasr", label: "FunASR", status: "downloading", message: "正在安装 torch" },
     ]);
     const row = await rowOf("FunASR");
-    expect(row.querySelector('[data-slot="settings-item-footer"]')).toBeNull();
-    expect(within(row).getByText("正在安装 torch").closest('[data-slot="settings-item-note"]')).not.toBeNull();
-    expect(row.querySelector('[data-slot="settings-item-state"]')).not.toHaveTextContent("%");
+    expect(row.querySelector("[data-admin-row-footer]")).toBeNull();
+    expect(within(row).getByText("正在安装 torch").closest("[data-admin-row-note]")).not.toBeNull();
+    expect(row.querySelector("[data-admin-row-state]")).not.toHaveTextContent("%");
   });
 
   it("失败原因原样显示,按钮变成重试", async () => {
@@ -128,7 +129,7 @@ describe("转写模型设置", () => {
       { ...base, id: "funasr", engine: "funasr", label: "FunASR", status: "failed", message: "连不上 ModelScope" },
     ]);
     const row = await rowOf("FunASR");
-    expect(within(row).getByText("连不上 ModelScope").closest('[data-slot="settings-item-note"]')).toHaveAttribute(
+    expect(within(row).getByText("连不上 ModelScope").closest("[data-admin-row-note]")).toHaveAttribute(
       "data-tone",
       "destructive",
     );

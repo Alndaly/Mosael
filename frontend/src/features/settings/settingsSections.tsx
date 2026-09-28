@@ -1,14 +1,11 @@
 import React from "react";
 import {
   AudioLines,
-  AudioWaveform,
   Brain,
   Link2,
   ImageIcon,
   MessageSquare,
-  Mic,
   Palette,
-  Scissors,
   Server,
   ShieldCheck,
   Speech,
@@ -23,18 +20,14 @@ import { AccountSection } from "@/features/settings/AccountSection";
 import { AgentMemorySection } from "@/features/settings/AgentMemorySection";
 import { AgentVoiceSection } from "@/features/settings/AgentVoiceSection";
 import { AppearanceSection, BackgroundSection, CustomCssSection } from "@/features/settings/AppearanceSection";
-import { AsrModelsSection } from "@/features/settings/AsrModelsSection";
 import { AutopilotRulesSection } from "@/features/settings/AutopilotRulesSection";
 import { BackendSection } from "@/features/settings/BackendSection";
 import { BuiltinTtsSection } from "@/features/settings/BuiltinTtsSection";
-import { DenoiseEnginesSection } from "@/features/settings/DenoiseEnginesSection";
 import { FeishuSection } from "@/features/settings/FeishuSection";
 import { ProviderDefaultsSection } from "@/features/settings/ProviderDefaultsSection";
 import { CapabilityProvidersSection } from "@/features/settings/CapabilityProvidersSection";
 import { ProviderProfilesSection } from "@/features/settings/ProviderProfilesSection";
-import { SeparationEnginesSection } from "@/features/settings/SeparationEnginesSection";
 import { TeamSection } from "@/features/settings/TeamSection";
-import { VoiceCloneSection } from "@/features/settings/VoiceCloneSection";
 import { VoiceLibrarySection } from "@/features/settings/VoiceLibrarySection";
 
 /**
@@ -48,8 +41,11 @@ import { VoiceLibrarySection } from "@/features/settings/VoiceLibrarySection";
  * 本机跑的音频模型"被放进「转写模型」;pip 镜像因为"克隆先有了它"只出现在声音克隆表单里,
  * 而转写和分离装依赖时读的是同一份;「语音与服务」组里装着飞书机器人和数据诊断。
  *
- * **只放每个成员自己能改的东西。** 后端只许部署管理员写的(成本规则、出站代理与重试、安装源、
- * 数据与诊断)在管理页(features/admin/AdminView):摆在这里时普通成员看得到表单、一保存就 403。
+ * **只放每个成员自己能改的东西。** 后端只许部署管理员写的(成本规则、出站代理与重试、数据与诊断,
+ * 以及本机引擎 —— 转写、声音克隆、人声分离、降噪的安装与下载源、pip 安装源)在管理页
+ * (features/admin/AdminView):摆在这里时普通成员看得到表单、一点就 403。本机引擎因此不再是
+ * 这里的一组:转写、人声分离、降噪三页除了安装什么都没有,整页搬走;配音那一页剩下的音色库
+ * 是这个工作区的东西,留下,归「个人与工作区」。
  */
 
 export type SettingsContext = {
@@ -103,6 +99,19 @@ export const SETTINGS_GROUPS: readonly SettingsGroup[] = [
           </>
         ),
       },
+      {
+        // 这个工作区的音色库,加上不用连接就能配音的几个内置引擎现在能不能用(只读)。
+        // 本地克隆引擎怎么装、用哪个解释器和下载源是部署级的,在管理页「引擎」。
+        id: "dubbing",
+        label: "settingsDubbingTitle",
+        icon: <AudioLines size={14} />,
+        render: ({ workspace }) => (
+          <>
+            <BuiltinTtsSection />
+            <VoiceLibrarySection workspace={workspace} />
+          </>
+        ),
+      },
     ],
   },
   {
@@ -131,8 +140,8 @@ export const SETTINGS_GROUPS: readonly SettingsGroup[] = [
         render: providerPage("video", "providerVideoTitle", "providerVideoDesc"),
       },
       {
-        // **只放云端的配音与播客连接。** 内置配音引擎、声音克隆是本机的,归「本机引擎」;
-        // 语音对话是智能体的一种说话方式,归「智能体」。
+        // **只放云端的配音与播客连接。** 内置配音引擎与音色库在「个人与工作区 → 配音与音色」,
+        // 本地克隆引擎的安装在管理页;语音对话是智能体的一种说话方式,归「智能体」。
         id: "provider-audio",
         label: "providerAudioTitle",
         icon: <AudioLines size={14} />,
@@ -178,38 +187,6 @@ export const SETTINGS_GROUPS: readonly SettingsGroup[] = [
         label: "autopilotTitle",
         icon: <ShieldCheck size={14} />,
         render: ({ workspace }) => <AutopilotRulesSection workspace={workspace} />,
-      },
-    ],
-  },
-  {
-    // 「装在这台机器上跑的模型」,每种能力一页。三个引擎共用的 pip 安装源是部署级的设置
-    // (只有部署管理员写得了),在管理页的「部署设置」里。
-    title: "studioSettingsLocalEngines",
-    sections: [
-      { id: "transcribe", label: "settingsTranscribeTitle", icon: <Mic size={14} />, render: () => <AsrModelsSection /> },
-      {
-        id: "dubbing",
-        label: "settingsDubbingTitle",
-        icon: <AudioLines size={14} />,
-        render: ({ workspace }) => (
-          <>
-            <BuiltinTtsSection />
-            <VoiceCloneSection />
-            <VoiceLibrarySection workspace={workspace} />
-          </>
-        ),
-      },
-      {
-        id: "separation",
-        label: "separationTitle",
-        icon: <Scissors size={14} />,
-        render: () => <SeparationEnginesSection />,
-      },
-      {
-        id: "denoise",
-        label: "denoiseEnginesTitle",
-        icon: <AudioWaveform size={14} />,
-        render: () => <DenoiseEnginesSection />,
       },
     ],
   },
