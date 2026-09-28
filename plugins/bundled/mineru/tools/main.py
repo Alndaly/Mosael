@@ -21,6 +21,12 @@ MinerU 自动开始解析;再轮询 `GET /api/v4/extract-results/batch/{batch_id
 `full_zip_url` —— zip 里有 `full.md`、`*_content_list.json`(每个块带 `page_idx`)和 `images/`。
 `code` 为 0 才算成功。单个文件 200MB、200 页封顶。
 
+## 网络
+
+MinerU 只在中国大陆区域提供服务:人在境外要走一个进大陆的代理,人在境内开着全局代理时反而要直连。
+「网络」一项三选一 —— 跟随系统代理(默认,macOS / Windows 的系统代理和 HTTPS_PROXY 环境变量都认)、
+直连、走指定的 HTTP 代理(`MINERU_PROXY`,例如 `http://127.0.0.1:7890`;标准库不认 SOCKS)。
+
 **只用标准库**:插件进程和后端不共用依赖。
 """
 from __future__ import annotations
@@ -66,11 +72,49 @@ class Reporter:
         return bool(self.cancel_file) and os.path.exists(self.cancel_file)
 
 
-def _request(url: str, *, method: str = "GET", headers: dict[str, str] | None = None, body: bytes | None = None,
-             timeout: float = REQUEST_TIMEOUT) -> bytes:
+class _BareUploadHandler(urllib.request.HTTPSHandler):
+    """上传到预签名地址时去掉 urllib 自动补的 `Content-type`。
+
+    只要请求带正文,urllib 就会补一个 `application/x-www-form-urlencoded` —— 预签名链接的签名里没有这个头,
+    对象存储回 403(SignatureDoesNotMatch)。MinerU 的文档要的正是「上传时不带 Content-Type」。
+    """
+
+    def https_request(self, request: urllib.request.Request) -> urllib.request.Request:
+        request = super().https_request(request)
+        if getattr(request, "bare_upload", False):
+            request.unredirected_hdrs.pop("Content-type", None)
+        return request
+
+
+def _opener(locale: str) -> urllib.request.OpenerDirector:
+    """按「网络」那一项配好的 opener。跟随系统时不加 ProxyHandler —— urllib 默认的那个就读系统代理。"""
+    mode = os.environ.get("MINERU_NETWORK", "").strip().lower() or "system"
+    handlers: list[urllib.request.BaseHandler] = [_BareUploadHandler()]
+    if mode == "direct":
+        handlers.append(urllib.request.ProxyHandler({}))
+    elif mode == "proxy":
+        proxy = os.environ.get("MINERU_PROXY", "").strip()
+        if not proxy:
+            raise ParseError(line(locale, "「网络」选了走指定代理,但代理地址是空的:去插件页填上,例如 http://127.0.0.1:7890",
+                                  "Network is set to use a proxy but the proxy address is empty: fill it in on the Plugins page, e.g. http://127.0.0.1:7890"))
+        if not proxy.lower().startswith(("http://", "https://")):
+            raise ParseError(line(locale, f"代理地址要以 http:// 或 https:// 开头(不支持 SOCKS):{proxy}",
+                                  f"The proxy address must start with http:// or https:// (SOCKS isn't supported): {proxy}"))
+        handlers.append(urllib.request.ProxyHandler({"http": proxy, "https": proxy}))
+    return urllib.request.build_opener(*handlers)
+
+
+def _request(locale: str, url: str, *, method: str = "GET", headers: dict[str, str] | None = None,
+             body: bytes | None = None, timeout: float = REQUEST_TIMEOUT, bare_upload: bool = False) -> bytes:
     request = urllib.request.Request(url, data=body, method=method, headers=headers or {})
-    with urllib.request.urlopen(request, timeout=timeout) as response:
+    request.bare_upload = bare_upload  # type: ignore[attr-defined]
+    with _opener(locale).open(request, timeout=timeout) as response:
         return response.read()
+
+
+def _region_hint(locale: str) -> str:
+    return line(locale, "MinerU 只在中国大陆区域提供服务:人在境外请在插件页把「网络」设成走一个进大陆的代理;人在境内开着全局代理的话,设成「直连」",
+                "MinerU only serves mainland China: outside it, set Network on the Plugins page to a proxy into mainland China; inside it with a global proxy on, set it to Direct")
 
 
 def _api(locale: str, token: str, path: str, *, payload: dict | None = None) -> dict:
@@ -81,15 +125,18 @@ def _api(locale: str, token: str, path: str, *, payload: dict | None = None) -> 
         headers["Content-Type"] = "application/json"
         body = json.dumps(payload).encode("utf-8")
     try:
-        raw = _request(API + path, method="POST" if payload is not None else "GET", headers=headers, body=body)
+        raw = _request(locale, API + path, method="POST" if payload is not None else "GET", headers=headers, body=body)
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="replace")[:300]
         if exc.code in (401, 403):
-            raise ParseError(line(locale, "MinerU 不认这个 Token(过期了或填错了),去插件页重新填一个",
-                                  "MinerU rejected the token (expired or wrong); enter a new one on the Plugins page")) from exc
+            #: 403 也可能是区域:境外的出口 IP 被拒。两种都说,让人自己对照。
+            raise ParseError(line(locale, "MinerU 拒绝了请求:Token 过期或填错了的话去插件页重新填一个。",
+                                  "MinerU refused the request: if the token expired or is wrong, enter a new one on the Plugins page. ")
+                             + (_region_hint(locale) if exc.code == 403 else "")) from exc
         raise ParseError(line(locale, f"MinerU 返回 {exc.code}:{detail}", f"MinerU returned {exc.code}: {detail}")) from exc
     except urllib.error.URLError as exc:
-        raise ParseError(line(locale, f"连不上 MinerU:{exc.reason}", f"Can't reach MinerU: {exc.reason}")) from exc
+        raise ParseError(line(locale, f"连不上 MinerU:{exc.reason}。", f"Can't reach MinerU: {exc.reason}. ")
+                         + _region_hint(locale)) from exc
     try:
         answer = json.loads(raw.decode("utf-8"))
     except ValueError as exc:
@@ -181,10 +228,15 @@ def parse(payload: dict, locale: str, reporter: Reporter) -> dict:
 
     reporter.progress(0.05, line(locale, "上传文档", "Uploading the document"))
     try:
-        #: 上传地址是签过名的对象存储链接:**不带 Content-Type**(带了签名就对不上)。
-        _request(urls[0], method="PUT", body=source.read_bytes(), timeout=600)
+        #: 上传地址是签过名的对象存储链接:**不带 Content-Type**(带了签名就对不上,见 _BareUploadHandler)。
+        _request(locale, urls[0], method="PUT", body=source.read_bytes(), timeout=600, bare_upload=True)
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")[:300]
+        raise ParseError(line(locale, f"上传到 MinerU 失败(HTTP {exc.code}):{detail}。",
+                              f"Upload to MinerU failed (HTTP {exc.code}): {detail}. ") + _region_hint(locale)) from exc
     except urllib.error.URLError as exc:
-        raise ParseError(line(locale, f"上传到 MinerU 失败:{exc}", f"Upload to MinerU failed: {exc}")) from exc
+        raise ParseError(line(locale, f"上传到 MinerU 失败:{exc.reason}。", f"Upload to MinerU failed: {exc.reason}. ")
+                         + _region_hint(locale)) from exc
 
     deadline = time.monotonic() + WAIT_SECONDS
     zip_url = ""
@@ -213,7 +265,11 @@ def parse(payload: dict, locale: str, reporter: Reporter) -> dict:
         raise ParseError(line(locale, "MinerU 太久没解析完,稍后再试", "MinerU took too long; try again later"))
 
     reporter.progress(0.9, line(locale, "取回结果", "Fetching the result"))
-    archive = zipfile.ZipFile(io.BytesIO(_request(zip_url, timeout=600)))
+    try:
+        archive = zipfile.ZipFile(io.BytesIO(_request(locale, zip_url, timeout=600)))
+    except urllib.error.URLError as exc:
+        raise ParseError(line(locale, f"取回 MinerU 的结果失败:{exc}。", f"Couldn't fetch MinerU's result: {exc}. ")
+                         + _region_hint(locale)) from exc
     unpacked = out / "_mineru"
     for member in archive.namelist():
         #: zip 里的路径不能走出解包目录。

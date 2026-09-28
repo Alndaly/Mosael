@@ -6,7 +6,7 @@
     "en": "MinerU document parsing"
   },
   "default_locale": "zh",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "author": {
     "name": "Mosael",
     "url": "https://mosael.com"
@@ -99,6 +99,55 @@
             }
           }
         ]
+      },
+      {
+        "key": "MINERU_NETWORK",
+        "label": {
+          "zh": "网络",
+          "en": "Network"
+        },
+        "type": "enum",
+        "default": "system",
+        "help": {
+          "zh": "MinerU 只在中国大陆区域提供服务。人在境外选「走指定代理」,填一个进大陆的代理;人在境内开着全局代理时选「直连」。",
+          "en": "MinerU only serves mainland China. Outside it, choose “Use a proxy” and enter a proxy into mainland China; inside it with a global proxy on, choose “Direct”."
+        },
+        "options": [
+          {
+            "value": "system",
+            "label": {
+              "zh": "跟随系统代理",
+              "en": "Follow the system proxy"
+            }
+          },
+          {
+            "value": "direct",
+            "label": {
+              "zh": "直连(不走代理)",
+              "en": "Direct (no proxy)"
+            }
+          },
+          {
+            "value": "proxy",
+            "label": {
+              "zh": "走指定代理",
+              "en": "Use a proxy"
+            }
+          }
+        ]
+      },
+      {
+        "key": "MINERU_PROXY",
+        "label": {
+          "zh": "代理地址",
+          "en": "Proxy address"
+        },
+        "type": "string",
+        "default": "",
+        "help": {
+          "zh": "只在「网络」选了「走指定代理」时用。HTTP 代理,例如 http://127.0.0.1:7890(不支持 SOCKS)。",
+          "en": "Used only when Network is “Use a proxy”. An HTTP proxy such as http://127.0.0.1:7890 (SOCKS isn't supported)."
+        }
       }
     ],
     "credentials": [

@@ -396,3 +396,39 @@ describe("清单里的说明带 markdown", () => {
     expect(container.textContent).not.toMatch(/\*\*|`/);
   });
 });
+
+describe("只替宿主做事的插件", () => {
+  //: MinerU 这类插件认领「文档解析」,那个工具只给宿主在解析任务里调,不进工具表。此前卡片上写着
+  //: 「已开启 0 / 0 个工具」「启用并授权插件后会显示可调用工具」—— 插件明明启用、授权了,读起来像坏了。
+  const pkg = {
+    id: "dev.mosael.mineru",
+    name: "MinerU 文档解析",
+    version: "1.1.0",
+    kind: "process",
+    multiple: false,
+    permissions: [],
+    provides: ["document_parse"],
+    config_fields: [],
+    credential_fields: [],
+    oauth: null,
+    instances: [],
+  } as unknown as PluginPackage;
+  const instance = {
+    id: "m1",
+    package_id: pkg.id,
+    name: "MinerU 文档解析",
+    enabled: true,
+    config: {},
+    blocked_reason: "",
+    authorization: "",
+    tools: [],
+    capability_status: {},
+  } as PluginInstance;
+
+  it("说它替宿主做什么,不摆一张空的工具表", () => {
+    wrap(<ConnectionCard pkg={pkg} instance={instance} workspaceId="w1" />);
+    expect(screen.getByText("pluginHostCapabilityDesc")).toBeTruthy();
+    expect(screen.queryByText("pluginExposedCount")).toBeNull();
+    expect(screen.queryByText("noTools")).toBeNull();
+  });
+});

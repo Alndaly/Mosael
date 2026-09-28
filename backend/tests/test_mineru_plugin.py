@@ -56,7 +56,7 @@ def test_插件_上传_轮询_取回_按页整理(tmp_path, monkeypatch, capsys)
         {"code": 0, "data": {"extract_result": [{"data_id": "?", "state": "done", "full_zip_url": "https://cdn/x.zip"}]}},
     ])
 
-    def fake_request(url, *, method="GET", headers=None, body=None, timeout=60):
+    def fake_request(locale, url, *, method="GET", headers=None, body=None, timeout=60, bare_upload=False):
         calls.append((method, url))
         if url.endswith("/api/v4/file-urls/batch"):
             sent = json.loads(body)
@@ -64,7 +64,7 @@ def test_插件_上传_轮询_取回_按页整理(tmp_path, monkeypatch, capsys)
             assert sent["files"][0]["name"] == "报告.pdf" and sent["model_version"] == "vlm" and sent["files"][0]["is_ocr"] is False
             return json.dumps({"code": 0, "data": {"batch_id": "b1", "file_urls": ["https://upload/signed"]}}).encode()
         if url == "https://upload/signed":
-            assert method == "PUT" and "Content-Type" not in (headers or {}), "签过名的上传地址不能带 Content-Type"
+            assert method == "PUT" and bare_upload and "Content-Type" not in (headers or {}), "签过名的上传地址不能带 Content-Type"
             return b""
         if "/extract-results/batch/b1" in url:
             return json.dumps(next(polls)).encode()
@@ -95,7 +95,7 @@ def test_插件_Token_不对说清楚去哪儿改(tmp_path, monkeypatch) -> None
 
     module = _plugin_module()
 
-    def rejected(url, **_kwargs):
+    def rejected(locale, url, **_kwargs):
         raise urllib.error.HTTPError(url, 401, "no", {}, io.BytesIO(b"{}"))
 
     monkeypatch.setattr(module, "_request", rejected)
@@ -104,6 +104,67 @@ def test_插件_Token_不对说清楚去哪儿改(tmp_path, monkeypatch) -> None
     source.write_bytes(b"x")
     with pytest.raises(module.ParseError, match="Token"):
         module.parse({"file": str(source)}, "zh", module.Reporter())
+
+
+def test_上传到预签名地址_真的不带_Content_Type() -> None:
+    """urllib 只要请求带正文就自动补 `application/x-www-form-urlencoded` —— 签名里没有它,对象存储回 403。
+    断言要落在 opener 真正发出去的那组头上:桩掉 `_request` 的话,这个头是在桩的下面才加的,测试看不见(之前就这么漏过)。"""
+    import urllib.request
+
+    module = _plugin_module()
+    opener = module._opener("zh")
+    handler = next(one for one in opener.handlers if isinstance(one, urllib.request.HTTPSHandler))
+
+    def sent_headers(bare: bool) -> dict:
+        request = urllib.request.Request("https://upload.example/signed", data=b"%PDF", method="PUT")
+        request.bare_upload = bare
+        return handler.https_request(request).unredirected_hdrs
+
+    assert "Content-type" not in sent_headers(True)
+    assert sent_headers(False)["Content-type"] == "application/x-www-form-urlencoded", "urllib 的默认行为变了,这层处理可以删"
+
+
+def test_网络_跟随系统_直连_指定代理(monkeypatch) -> None:
+    import urllib.request
+
+    module = _plugin_module()
+
+    def proxies() -> dict | None:
+        handlers = [one for one in module._opener("zh").handlers if isinstance(one, urllib.request.ProxyHandler)]
+        return handlers[0].proxies if handlers else None
+
+    #: 系统代理用环境变量模拟(urllib 的 getproxies 先读它)。
+    monkeypatch.setenv("HTTPS_PROXY", "http://system-proxy:8080")
+    monkeypatch.delenv("MINERU_NETWORK", raising=False)
+    assert (proxies() or {}).get("https") == "http://system-proxy:8080", "跟随系统:用系统代理"
+    monkeypatch.setenv("MINERU_NETWORK", "direct")
+    assert not proxies(), "直连:系统代理也不走"
+    monkeypatch.setenv("MINERU_NETWORK", "proxy")
+    monkeypatch.setenv("MINERU_PROXY", "http://127.0.0.1:7890")
+    assert proxies() == {"http": "http://127.0.0.1:7890", "https": "http://127.0.0.1:7890"}
+    for bad in ("", "socks5://127.0.0.1:7890"):
+        monkeypatch.setenv("MINERU_PROXY", bad)
+        with pytest.raises(module.ParseError, match="代理"):
+            module._opener("zh")
+
+
+def test_上传被拒_提示区域和代理设置(tmp_path, monkeypatch) -> None:
+    import urllib.error
+
+    module = _plugin_module()
+
+    def fake_request(locale, url, *, method="GET", **_kwargs):
+        if url.endswith("/api/v4/file-urls/batch"):
+            return json.dumps({"code": 0, "data": {"batch_id": "b1", "file_urls": ["https://upload/signed"]}}).encode()
+        raise urllib.error.HTTPError(url, 403, "Forbidden", {}, io.BytesIO(b"<Code>AccessDenied</Code>"))
+
+    monkeypatch.setattr(module, "_request", fake_request)
+    monkeypatch.setenv("MINERU_TOKEN", "t")
+    source = tmp_path / "a.pdf"
+    source.write_bytes(b"x")
+    with pytest.raises(module.ParseError) as caught:
+        module.parse({"file": str(source)}, "zh", module.Reporter())
+    assert "403" in str(caught.value) and "AccessDenied" in str(caught.value) and "中国大陆" in str(caught.value)
 
 
 def test_清单_只给宿主调_认领文档解析() -> None:

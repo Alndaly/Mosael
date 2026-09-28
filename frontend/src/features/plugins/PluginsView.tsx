@@ -54,6 +54,7 @@ import { ToolEffectBadge } from "@/features/plugins/ToolEffectBadge";
 import { ConnectionAuthorization } from "@/features/plugins/ConnectionAuthorization";
 import { GroupActions } from "@/features/plugins/GroupActions";
 import { invalidatePluginDependents } from "@/features/plugins/pluginCaches";
+import { describeProvides } from "@/features/plugins/pluginPermissions";
 import { cn } from "@/lib/utils";
 import { NodeConfigForm, nodeConfigTiers, useNodeFieldOptions, type ConfigSpec } from "@/features/nodeForms/NodeConfigForm";
 
@@ -565,6 +566,10 @@ export function ConnectionCard({ pkg, instance, workspaceId }: { pkg: PluginPack
   //: 替宿主做生成的插件(ComfyUI 这类)把模型交给选择器,而不是把工具交给智能体 —— 它的
   //: 「刷新」刷的是模型清单,卡片上该说的是「几个模型」而不是「开放了 0 / 0 个工具」。
   const generates = (pkg.provides ?? []).includes("generation");
+  //: 只替宿主做事的插件(MinerU 解析文档、对象存储给链接):认领能力的那个工具只给宿主调,不进工具表。
+  //: 这时说它做什么、去哪用;显示「已开启 0 / 0 个工具」「启用并授权后会显示可调用工具」只会让人以为它坏了。
+  const hostCapabilities = (pkg.provides ?? []).filter((one) => one !== "generation");
+  const hostOnly = !generates && tools.length === 0 && hostCapabilities.length > 0;
 
   return (
     <SettingsGroup
@@ -575,7 +580,12 @@ export function ConnectionCard({ pkg, instance, workspaceId }: { pkg: PluginPack
           ? instance.blocked_reason
           : generates && tools.length === 0
             ? t("pluginGenerationDesc")
-            : t("pluginExposedCount").replace("{n}", String(exposedCount)).replace("{total}", String(tools.length))
+            : hostOnly
+              ? t("pluginHostCapabilityDesc").replace(
+                  "{list}",
+                  hostCapabilities.map((one) => describeProvides(t, one) ?? one).join(t("listSeparator")),
+                )
+              : t("pluginExposedCount").replace("{n}", String(exposedCount)).replace("{total}", String(tools.length))
       }
       actions={
         <div className="flex items-center gap-2">
@@ -681,7 +691,7 @@ export function ConnectionCard({ pkg, instance, workspaceId }: { pkg: PluginPack
 
       {/* 只提供生成的插件没有给智能体和工作流的工具(认领生成的那个工具只给宿主调),
           一张空的勾选表只会让人以为它坏了。 */}
-      {(tools.length > 0 || !generates) && (
+      {(tools.length > 0 || (!generates && !hostOnly)) && (
         <CapabilityPicker
           instanceId={instance.id}
           workspaceId={workspaceId}

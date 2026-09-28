@@ -30,5 +30,6 @@ export function describePermission(t: Translate, permission: string): string | n
 /** 插件能替 Mosael 做的一类事(清单里的 `provides`)。认不出的返回 null,界面显示原词。 */
 export function describeProvides(t: Translate, capability: string): string | null {
   if (capability === "public_url") return t("pluginProvidesPublicUrl");
+  if (capability === "document_parse") return t("pluginProvidesDocumentParse");
   return null;
 }
