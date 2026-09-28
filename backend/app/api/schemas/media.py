@@ -184,12 +184,6 @@ class AssetFrameRequest(ApiModel):
     project_id: str | None = None
 
 
-class SequenceFrameRequest(ApiModel):
-    """把时间线在某一时刻的合成画面存成一份新素材。"""
-
-    at: float = 0
-
-
 class AssetExtractionOut(OrmModel):
     """文档的一次解析(ADR 0031 §2)。正文按段读:outline 里每段的标题、页面图和在全文里的起止。"""
 

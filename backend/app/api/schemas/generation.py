@@ -182,3 +182,51 @@ class GenerationSessionOut(OrmModel):
     kind: str | None = None
     created_at: datetime
     updated_at: datetime
+
+
+class GenerationCapabilityProfileOut(ApiModel):
+    """一份用户自己写下的参数组。"""
+
+    id: str
+    name: str
+    kind: str
+    capabilities: dict = Field(default_factory=dict)
+    #: 模型行上要存的那个值。前端不自己拼 —— 拼错了是一个解析不到的 ref。
+    ref: str
+
+
+class GenerationCapabilityProfileCreate(ApiModel):
+    name: str = Field(min_length=1, max_length=120)
+    kind: str = "image"
+    capabilities: dict = Field(default_factory=dict)
+
+
+class GenerationCapabilityProfileUpdate(ApiModel):
+    """只改传了的那几项。kind 不给改 —— 要换就新建一份(见路由里的说明)。"""
+
+    name: str | None = Field(default=None, max_length=120)
+    capabilities: dict | None = None
+
+
+class CapabilityProfileFieldOut(ApiModel):
+    """可视表单的一个字段:键、形状、分组。分组是后端语义,前端只翻译标签。"""
+
+    key: str
+    shape: str
+    group: str
+    #: 这一格是**哪个参数**的默认值(`default_quality` → `quality`)。只有 defaults 组有。
+    #: 界面据此决定"这个旋钮要不要有一格默认值",而不是自己攒一张名单。
+    defaults_for: str | None = None
+    #: `choice` 形状的可选值(提示词要不要写:required / optional / none)。别的形状没有这一项。
+    choices: list[str] | None = None
+
+
+class CapabilityProfileSchemaOut(ApiModel):
+    """参数组可视表单的结构描述 —— 表单唯一的事实源(见 domain/generation/custom_profiles.py)。"""
+
+    parameters: list[str]
+    enum_parameters: list[str]
+    source_roles: list[str]
+    #: 参数 → 装它可选值的那个键。不在这里的枚举参数,取值装在 parameter_choices 里。
+    choices_key: dict[str, str]
+    fields: list[CapabilityProfileFieldOut]
