@@ -418,11 +418,11 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "分组不存在",
         "en": "Group not found.",
     },
-    "routeErr_badPermissionMode": {
+    "agentErr_badPermissionMode": {
         "zh": "permission_mode 只能是 {modes}",
         "en": "permission_mode must be one of {modes}.",
     },
-    "routeErr_sharedSessionNoBypass": {
+    "agentErr_sharedSessionNoBypass": {
         "zh": "共享会话(如飞书)不能开 bypass —— 它不该由一个人替一群人开",
         "en": "Shared sessions (such as Feishu) can't use bypass — one person shouldn't turn it on for a whole group.",
     },

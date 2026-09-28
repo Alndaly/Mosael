@@ -320,6 +320,19 @@ def test_switching_to_bypass_requires_admin() -> None:
     assert denied.status_code == 403, denied.text
 
 
+def test_a_shared_session_never_gets_bypass() -> None:
+    """飞书会话是一个群共用的对话 —— bypass 不该由一个人替一群人开,管理员也不行。"""
+    owner = fresh_client()
+    workspace = owner.post("/api/workspaces", json={"name": "W"}).json()
+    session_id = owner.post("/api/agent/sessions", json={"workspace_id": workspace["id"], "title": "群"}).json()["id"]
+    with SessionLocal() as db:
+        db.get(AgentSession, session_id).origin = "feishu"
+        db.commit()
+    denied = owner.patch(f"/api/agent/sessions/{session_id}", json={"permission_mode": "bypass"})
+    assert denied.status_code == 403, denied.text
+    assert owner.patch(f"/api/agent/sessions/{session_id}", json={"permission_mode": "auto"}).status_code == 200
+
+
 def test_an_unknown_mode_is_refused() -> None:
     chat = Chat()
     chat.set_mode("whatever", expect=422)

@@ -12,7 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.i18n import tr
-from app.domain.agent import host
+from app.domain.agent import autopilot, host
 from app.domain.agent import stream as agent_stream
 from app.domain import sharing
 from app.api.deps import CurrentUser, DbSession
@@ -39,7 +39,7 @@ from app.api.schemas import (
     ProviderUsageEventOut,
 )
 from app.core.config import app_version
-from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm, ensure_workspace_role
+from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm
 from app.db.models import AgentMessage, AgentQuestion, AgentSession, AgentVoicePref, ProviderProfile, ProviderUsageEvent, now
 from app.domain.agent import list_agent_skills
 from app.domain import session_groups
@@ -235,7 +235,10 @@ def update_agent_session(session_id: str, body: AgentSessionUpdate, db: DbSessio
             raise HTTPException(status_code=422, detail=tr("routeErr_badThinkingLevel"))
         session.thinking_level = body.thinking_level
     if body.permission_mode is not None:
-        _set_permission_mode(db, user, session, body.permission_mode)
+        try:
+            autopilot.set_permission_mode(db, user, session, body.permission_mode)
+        except autopilot.PermissionModeError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
     if body.group_id is not None:
         session_groups.move_into(db, session, body.group_id, kind="agent")
     if body.auto_allow_tools is not None:
@@ -250,31 +253,6 @@ def update_agent_session(session_id: str, body: AgentSessionUpdate, db: DbSessio
         db.commit()
     db.refresh(session)
     return _out(db, user, session)
-
-
-PERMISSION_MODES = ("manual", "auto", "bypass")
-
-
-def _set_permission_mode(db: DbSession, user: CurrentUser, session: AgentSession, mode: str) -> None:
-    """切换这次对话的权限模式。
-
-    - 要 `ai` 权限、要是主人:调用方已经过了写闸(`writable_session`)。它决定的是"智能体能不问就做
-      什么",和能不能用智能体是同一件事的两半。
-    - **bypass 另要 admin**:它是「不问我就做」——发布、花钱、对外的动作都不再经过一次人眼。
-      隔离执行器到位之后,"跑代码"本身已经不是提权(见 domain/sandbox),但**不问就做**仍然是
-      一个工作区级别的决定,不是每个 editor 自己能给自己开的。
-    - **飞书会话不给 bypass**:那是一个群里所有人共用的对话,而 bypass 不该由一个人替一群人开。
-    - 记下**是谁开的**:授权只对做出授权的那个人生效(见 domain/agent/autopilot.decide)。
-    """
-    if mode not in PERMISSION_MODES:
-        raise HTTPException(status_code=422, detail=tr("routeErr_badPermissionMode", modes="/".join(PERMISSION_MODES)))
-    if mode == "bypass":
-        if session.origin != "ui":
-            raise HTTPException(status_code=403, detail=tr("routeErr_sharedSessionNoBypass"))
-        ensure_workspace_role(db, user, session.workspace_id, "admin")
-    session.permission_mode = mode
-    session.mode_set_by = user.id
-    session.mode_set_at = now()
 
 
 @router.delete("/agent/sessions/{session_id}", status_code=204)

@@ -10,10 +10,12 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.core.i18n import LocalizedError
 from app.core.security import find_session
 from app.db.models import AgentSession, ToolConfirmation, User, Workspace, now
 from app.domain.agent import judge as judge_module
 from app.domain.agent import rules
+from app.domain.permissions import PermissionDenied, ensure_workspace_role
 
 """自动放行:一张新开的确认卡该不该不问用户就执行。
 
@@ -298,3 +300,33 @@ __all__ = [
     "session_for_token",
     "wait_for_idle_autopilot",
 ]
+
+
+#: 权限模式:manual 每张卡都问人;auto 按规则与判断者放行;bypass 不问就做。
+PERMISSION_MODES = ("manual", "auto", "bypass")
+
+
+class PermissionModeError(LocalizedError, ValueError):
+    """不是认得的权限模式。api 回 422。"""
+
+
+def set_permission_mode(db: Session, user: User, session: AgentSession, mode: str) -> None:
+    """切换这次对话的权限模式。
+
+    - 要 `ai` 权限、要是主人:调用方已经过了写闸(`writable_session`)。它决定的是"智能体能不问就做
+      什么",和能不能用智能体是同一件事的两半。
+    - **bypass 另要 admin**:它是「不问我就做」——发布、花钱、对外的动作都不再经过一次人眼。
+      隔离执行器到位之后,"跑代码"本身已经不是提权(见 domain/sandbox),但**不问就做**仍然是
+      一个工作区级别的决定,不是每个 editor 自己能给自己开的。
+    - **飞书会话不给 bypass**:那是一个群里所有人共用的对话,而 bypass 不该由一个人替一群人开。
+    - 记下**是谁开的**:授权只对做出授权的那个人生效(见 decide)。
+    """
+    if mode not in PERMISSION_MODES:
+        raise PermissionModeError("agentErr_badPermissionMode", modes="/".join(PERMISSION_MODES))
+    if mode == "bypass":
+        if session.origin != "ui":
+            raise PermissionDenied("agentErr_sharedSessionNoBypass")
+        ensure_workspace_role(db, user, session.workspace_id, "admin")
+    session.permission_mode = mode
+    session.mode_set_by = user.id
+    session.mode_set_at = now()
