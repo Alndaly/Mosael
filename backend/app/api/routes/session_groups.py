@@ -57,6 +57,6 @@ def require_group(db: DbSession, user: CurrentUser, group_id: str) -> SessionGro
     """取一个当前用户看得见的分组。会话路由挪会话进组时也用它 —— 别处再写一遍就会漏鉴权。"""
     group = db.get(SessionGroup, group_id)
     if group is None:
-        raise HTTPException(status_code=404, detail=tr("routeErr_groupNotFound"))
+        raise HTTPException(status_code=404, detail=tr("sessionGroupErr_notFound"))
     ensure_workspace_access(db, user, group.workspace_id)
     return group

@@ -8,7 +8,7 @@ import asyncio
 
 from fastapi import APIRouter, HTTPException, Response
 from fastapi.responses import StreamingResponse
-from sqlalchemy import select, update
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.i18n import tr
@@ -217,8 +217,7 @@ def stop_agent_turn(session_id: str, db: DbSession, user: CurrentUser) -> dict:
 @router.patch("/agent/sessions/{session_id}", response_model=AgentSessionOut)
 def update_agent_session(session_id: str, body: AgentSessionUpdate, db: DbSession, user: CurrentUser) -> AgentSession:
     session = writable_session(db, user, session_id)
-    # 收纳不是活动:这一次只改了 group_id 的话,不该让对话显得「刚聊过」—— 列表就是按最近更新
-    # 排的(手动排序已经去掉,它是唯一的排序依据),收一次纳就把顺序搅了。
+    # 只改了分组就不算活动(见 session_groups.restore_updated_at)。
     organising_only = body.model_fields_set <= {"group_id"} and body.group_id is not None
     kept_updated_at = session.updated_at
     if body.title is not None:
@@ -238,13 +237,7 @@ def update_agent_session(session_id: str, body: AgentSessionUpdate, db: DbSessio
     if body.permission_mode is not None:
         _set_permission_mode(db, user, session, body.permission_mode)
     if body.group_id is not None:
-        # 空串 = 移出分组。非空则必须是**本工作区**的分组 —— 否则就能把对话塞进别人的分组里,
-        # 而分组是按工作区列出来的,那条对话会在两边都显得不知从哪来。
-        if body.group_id and not session_groups.resolve_member_group(
-            db, body.group_id, workspace_id=session.workspace_id, kind="agent"
-        ):
-            raise HTTPException(status_code=404, detail=tr("routeErr_groupNotFound"))
-        session.group_id = body.group_id or None
+        session_groups.move_into(db, session, body.group_id, kind="agent")
     if body.auto_allow_tools is not None:
         # 记下是谁定的:与模式同一条规则 —— 授权只对做出授权的那个人生效(见 domain/agent/autopilot)。
         session.auto_allow_tools = [str(name) for name in body.auto_allow_tools][:40]
@@ -253,9 +246,7 @@ def update_agent_session(session_id: str, body: AgentSessionUpdate, db: DbSessio
             session.mode_set_at = now()
     db.commit()
     if organising_only:
-        # **不能只是把 updated_at 赋回原值**:赋成原来的值,SQLAlchemy 的变更检测认为「没改」,
-        # 这一列就不进 SET,而 onupdate=now 照常把它顶成现在。必须走显式 UPDATE 把它写回去。
-        db.execute(update(AgentSession).where(AgentSession.id == session.id).values(updated_at=kept_updated_at))
+        session_groups.restore_updated_at(db, session, kept_updated_at)
         db.commit()
     db.refresh(session)
     return _out(db, user, session)

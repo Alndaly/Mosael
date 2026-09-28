@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, Response
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, select
 
 from app.core.i18n import tr
 from app.api.deps import CurrentUser, DbSession
@@ -80,18 +80,13 @@ def update_generation_session(
 ) -> GenerationSession:
     session = writable_session(db, user, session_id)
     fields = body.model_fields_set
-    # 收纳不是活动:这一次只改了 group_id 的话,不该让这条会话显得「刚生成过」—— 列表按
-    # updated_at 倒序排,收一次纳就把顺序搅了。和对话那边同一条规则(routes/agent.py)。
+    # 只改了分组就不算活动(见 session_groups.restore_updated_at)。
     organising_only = fields <= {"group_id"} and body.group_id is not None
     kept_updated_at = session.updated_at
     if "title" in fields and body.title is not None:
         session.title = body.title
     if "group_id" in fields:
-        if body.group_id and not session_groups.resolve_member_group(
-            db, body.group_id, workspace_id=session.workspace_id, kind="generation"
-        ):
-            raise HTTPException(status_code=404, detail=tr("routeErr_groupNotFound"))
-        session.group_id = body.group_id or None
+        session_groups.move_into(db, session, body.group_id or "", kind="generation")
     if "provider_profile_id" in fields:
         session.provider_profile_id = body.provider_profile_id
     if "model" in fields:
@@ -100,11 +95,7 @@ def update_generation_session(
         session.kind = body.kind
     db.commit()
     if organising_only:
-        # **不能只是把 updated_at 赋回原值**:赋成原来的值,SQLAlchemy 的变更检测认为「没改」,
-        # 这一列就不进 SET,而 onupdate=now 照常把它顶成现在。必须走显式 UPDATE 写回去。
-        db.execute(
-            update(GenerationSession).where(GenerationSession.id == session.id).values(updated_at=kept_updated_at)
-        )
+        session_groups.restore_updated_at(db, session, kept_updated_at)
         db.commit()
     db.refresh(session)
     return sharing.annotate(db, SHARE_KIND, [session], user, session.workspace_id)[0]

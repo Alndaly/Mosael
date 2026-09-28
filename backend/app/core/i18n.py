@@ -414,7 +414,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "thinking_level 只能是 off/low/medium/high",
         "en": "thinking_level must be off, low, medium, or high.",
     },
-    "routeErr_groupNotFound": {
+    "sessionGroupErr_notFound": {
         "zh": "分组不存在",
         "en": "Group not found.",
     },

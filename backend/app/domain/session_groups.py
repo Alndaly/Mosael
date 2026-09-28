@@ -14,6 +14,7 @@ from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from app.db.models import AgentSession, GenerationSession, SessionGroup
+from app.domain.permissions import NotVisible
 
 #: 每种分组管着哪张会话表。删分组时要清空的就是它 —— 新增一种会话时在这里补一行,
 #: 别在 delete_group 里写 if/else:漏掉一支的后果是成员留着一个指向空气的 group_id。
@@ -77,3 +78,21 @@ def resolve_member_group(db: Session, group_id: str, *, workspace_id: str, kind:
     if group is None or group.workspace_id != workspace_id or group.kind != kind:
         return None
     return group
+
+
+def move_into(db: Session, row: AgentSession | GenerationSession, group_id: str, *, kind: str) -> None:
+    """把一条会话收进分组;空串 = 移出分组。分组得接得住它(见 resolve_member_group),否则 404。"""
+    if group_id and resolve_member_group(db, group_id, workspace_id=row.workspace_id, kind=kind) is None:
+        raise NotVisible("sessionGroupErr_notFound")
+    row.group_id = group_id or None
+
+
+def restore_updated_at(db: Session, row: AgentSession | GenerationSession, updated_at) -> None:
+    """**收纳不是活动**:只改了分组的话,把会话的 updated_at 写回原值 —— 两边的会话列表都按它倒序排,
+    收一次纳不该让它显得「刚用过」、把顺序搅了。对话和生成同一条规矩,所以只写这一份。
+
+    **不能只是把属性赋回原值**:赋成原来的值,SQLAlchemy 的变更检测认为「没改」,这一列就不进 SET,
+    而 onupdate=now 照常把它顶成现在。所以走显式 UPDATE —— 调用方在提交完这次修改之后再调,再提交一次。
+    """
+    model = type(row)
+    db.execute(update(model).where(model.id == row.id).values(updated_at=updated_at))
