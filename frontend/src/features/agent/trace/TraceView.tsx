@@ -23,6 +23,7 @@ import { formatElapsedSeconds } from "@/lib/time";
 import { cn } from "@/lib/utils";
 import { buildTurns, traceStats, type TraceEvent, type TraceTurn } from "./traceModel";
 import { deriveTraceTimeline, type TraceTimelineMode } from "./traceTimeline";
+import { formatCompactTokens } from "../tokenCount";
 
 type TraceMessage = {
   id: string;
@@ -43,9 +44,7 @@ function seconds(value: number | null): string {
 }
 
 function tokens(value: number | null): string {
-  if (value == null) return "—";
-  if (value >= 1000) return `${(value / 1000).toFixed(value >= 10_000 ? 0 : 1)}K`;
-  return String(value);
+  return value == null ? "—" : formatCompactTokens(value);
 }
 
 const KIND_LABEL: Record<TraceEvent["kind"], string> = {

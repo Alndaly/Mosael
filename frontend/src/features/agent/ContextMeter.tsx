@@ -6,6 +6,7 @@ import { AgentMarkdown } from "@/components/markdown/Markdown";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Marker, MarkerContent } from "@/components/ui/marker";
 import { cn } from "@/lib/utils";
+import { formatCompactTokens } from "./tokenCount";
 
 /**
  * 上下文水位 + 手动整理入口。
@@ -49,11 +50,6 @@ export const PART_COLORS: Record<string, string> = {
   system: "bg-[var(--chart-image)]",
 };
 const PART_ORDER = ["messages", "tools", "system", "free"] as const;
-
-function formatTokens(value: number): string {
-  if (value >= 1000) return `${(value / 1000).toFixed(value >= 10_000 ? 0 : 1)}k`;
-  return String(value);
-}
 
 export function ContextMeter({
   context,
@@ -146,7 +142,7 @@ export function ContextBreakdown({ context }: { context: ContextInfo }) {
       <div className="flex items-baseline justify-between gap-2">
         <span className="text-ui-xs font-[620]">{t("agentContextBreakdown")}</span>
         <span className="timecode text-ui-2xs text-muted-foreground">
-          {formatTokens(context.used ?? context.tokens)} / {formatTokens(context.window)}
+          {formatCompactTokens(context.used ?? context.tokens)} / {formatCompactTokens(context.window)}
         </span>
       </div>
       <ul className="m-0 grid list-none gap-1 p-0">
@@ -162,7 +158,7 @@ export function ContextBreakdown({ context }: { context: ContextInfo }) {
               />
               <span className="min-w-0 flex-1 truncate">{t(`agentContextPart_${kind}`)}</span>
               <span className="timecode shrink-0 text-muted-foreground">
-                {formatTokens(tokens)} · {Math.round((tokens / context.window) * 100)}%
+                {formatCompactTokens(tokens)} · {Math.round((tokens / context.window) * 100)}%
               </span>
             </li>
           );
@@ -200,7 +196,7 @@ export function CompactionNotice({ info }: { info: CompactionInfo }) {
           <Scissors size={11} className="shrink-0" />
           {t("agentCompacted")
             .replace("{n}", String(info.droppedMessages))
-            .replace("{saved}", formatTokens(saved))}
+            .replace("{saved}", formatCompactTokens(saved))}
           {info.summary && (
             <button
               type="button"

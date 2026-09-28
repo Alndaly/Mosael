@@ -91,13 +91,18 @@ export function handleOffset(
 }
 
 /** 拖动:已经是个数,只夹范围。 */
-function clamp(bounds: SidebarBounds, value: number): number {
+export function clampSize(bounds: SidebarBounds, value: number): number {
   return Math.min(bounds.max, Math.max(bounds.min, value));
 }
 
-/** 读盘:可能没存过、也可能存坏了,先兜底再夹。合成一个函数时,拖到 0 会弹回默认宽。 */
-function clampSaved(bounds: SidebarBounds, value: unknown): number {
-  return clamp(bounds, Number(value) || bounds.fallback);
+/**
+ * 读盘:可能没存过、也可能存坏了,先兜底再夹。
+ *
+ * 和 clampSize 分开是因为 fallback 只属于这一侧 —— 合成一个函数时,拖到宽度恰好为 0
+ * 会走进 `|| fallback`,栏位弹回默认宽而不是收到最小值。
+ */
+export function clampSavedSize(bounds: SidebarBounds, value: unknown): number {
+  return clampSize(bounds, Number(value) || bounds.fallback);
 }
 
 export interface ResizableSidebar {
@@ -131,7 +136,7 @@ export function useResizableSidebar(
   const storageKey = `mosael.sidebar.v2.${key}`;
   const [width, setWidth] = React.useState(() => {
     try {
-      return clampSaved(bounds, window.localStorage.getItem(storageKey));
+      return clampSavedSize(bounds, window.localStorage.getItem(storageKey));
     } catch {
       return bounds.fallback;
     }
@@ -146,7 +151,7 @@ export function useResizableSidebar(
     const startX = event.clientX;
     const origin = width;
     const onMove = (moveEvent: PointerEvent) =>
-      setWidth(clamp(bounds, origin + sign * (moveEvent.clientX - startX)));
+      setWidth(clampSize(bounds, origin + sign * (moveEvent.clientX - startX)));
     const onUp = () => {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
@@ -198,7 +203,7 @@ export function useSidePanels(
   const [panels, setPanels] = React.useState(() => {
     try {
       const parsed = JSON.parse(window.localStorage.getItem(storageKey) ?? "{}");
-      return { left: clampSaved(bounds.left, parsed.left), right: clampSaved(bounds.right, parsed.right) };
+      return { left: clampSavedSize(bounds.left, parsed.left), right: clampSavedSize(bounds.right, parsed.right) };
     } catch {
       return { left: bounds.left.fallback, right: bounds.right.fallback };
     }
@@ -217,8 +222,8 @@ export function useSidePanels(
       // 右栏是**反向**的:往左拖它变宽。写成同一个方向的话,拖右边那条会觉得"反了"。
       setPanels((current) =>
         which === "left"
-          ? { ...current, left: clamp(bounds.left, origin.left + dx) }
-          : { ...current, right: clamp(bounds.right, origin.right - dx) },
+          ? { ...current, left: clampSize(bounds.left, origin.left + dx) }
+          : { ...current, right: clampSize(bounds.right, origin.right - dx) },
       );
     };
     const onUp = () => {
@@ -255,7 +260,7 @@ export function useResizableRow(key: string, bounds: SidebarBounds): ResizableRo
   const storageKey = `mosael.row.${key}`;
   const [height, setHeight] = React.useState(() => {
     try {
-      return clampSaved(bounds, window.localStorage.getItem(storageKey));
+      return clampSavedSize(bounds, window.localStorage.getItem(storageKey));
     } catch {
       return bounds.fallback;
     }
@@ -269,7 +274,7 @@ export function useResizableRow(key: string, bounds: SidebarBounds): ResizableRo
     event.preventDefault();
     const startY = event.clientY;
     const origin = height;
-    const onMove = (moveEvent: PointerEvent) => setHeight(clamp(bounds, origin + (moveEvent.clientY - startY)));
+    const onMove = (moveEvent: PointerEvent) => setHeight(clampSize(bounds, origin + (moveEvent.clientY - startY)));
     const onUp = () => {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);

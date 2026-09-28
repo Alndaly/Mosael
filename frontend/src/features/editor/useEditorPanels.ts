@@ -1,6 +1,7 @@
 import React from "react";
 
 import { useMediaMatch } from "@/lib/useMediaMatch";
+import { clampSavedSize, clampSize, type SidebarBounds } from "@/lib/useResizableSidebar";
 import { usePersistentTab } from "@/lib/usePersistentTab";
 
 const PANEL_SIZES_KEY = "mosael.editor.panels.v2";
@@ -8,36 +9,15 @@ const PANEL_SIZES_KEY = "mosael.editor.panels.v2";
 export const LEFT_TABS = ["media", "transcript", "subtitle", "voice"] as const;
 export type LeftTab = (typeof LEFT_TABS)[number];
 
-interface Bounds {
-  min: number;
-  max: number;
-  fallback: number;
-}
-
 /** 素材是缩略图列表,窄即可;逐字稿是整篇文档,需要宽栏。宽度按页签分别记忆。 */
-const LEFT_BOUNDS: Record<LeftTab, Bounds> = {
+const LEFT_BOUNDS: Record<LeftTab, SidebarBounds> = {
   media: { min: 180, max: 480, fallback: 252 },
   transcript: { min: 300, max: 620, fallback: 420 },
   subtitle: { min: 240, max: 520, fallback: 320 },
   voice: { min: 240, max: 520, fallback: 320 },
 };
-const RIGHT_BOUNDS: Bounds = { min: 200, max: 480, fallback: 264 };
-const TIMELINE_BOUNDS: Bounds = { min: 160, max: 560, fallback: 252 };
-
-/** 拖动:已经是个数,只夹范围。 */
-function clamp(bounds: Bounds, value: number): number {
-  return Math.min(bounds.max, Math.max(bounds.min, value));
-}
-
-/**
- * 读盘:可能没存过、也可能存坏了,先兜底再夹。
- *
- * 和 clamp 分开是因为 fallback 只属于这一侧 —— 合成一个函数时,拖到宽度恰好为 0
- * 会走进 `|| fallback`,栏位弹回默认宽而不是收到最小值。
- */
-function clampSaved(bounds: Bounds, value: unknown): number {
-  return clamp(bounds, Number(value) || bounds.fallback);
-}
+const RIGHT_BOUNDS: SidebarBounds = { min: 200, max: 480, fallback: 264 };
+const TIMELINE_BOUNDS: SidebarBounds = { min: 160, max: 560, fallback: 252 };
 
 export interface PanelSizes {
   left: Record<LeftTab, number>;
@@ -54,9 +34,9 @@ function readPanelSizes(): PanelSizes {
   }
   const saved = parsed.left ?? {};
   return {
-    left: Object.fromEntries(LEFT_TABS.map((tab) => [tab, clampSaved(LEFT_BOUNDS[tab], saved[tab])])) as Record<LeftTab, number>,
-    right: clampSaved(RIGHT_BOUNDS, parsed.right),
-    timeline: clampSaved(TIMELINE_BOUNDS, parsed.timeline),
+    left: Object.fromEntries(LEFT_TABS.map((tab) => [tab, clampSavedSize(LEFT_BOUNDS[tab], saved[tab])])) as Record<LeftTab, number>,
+    right: clampSavedSize(RIGHT_BOUNDS, parsed.right),
+    timeline: clampSavedSize(TIMELINE_BOUNDS, parsed.timeline),
   };
 }
 
@@ -97,13 +77,13 @@ export function useEditorPanels(): EditorPanels {
     const dragTab = tab;
     const onMove = (moveEvent: PointerEvent) => {
       if (which === "left") {
-        const next = clamp(LEFT_BOUNDS[dragTab], origin.left[dragTab] + (moveEvent.clientX - startX));
+        const next = clampSize(LEFT_BOUNDS[dragTab], origin.left[dragTab] + (moveEvent.clientX - startX));
         setSizes((current) => ({ ...current, left: { ...current.left, [dragTab]: next } }));
       } else if (which === "right") {
-        const next = clamp(RIGHT_BOUNDS, origin.right - (moveEvent.clientX - startX));
+        const next = clampSize(RIGHT_BOUNDS, origin.right - (moveEvent.clientX - startX));
         setSizes((current) => ({ ...current, right: next }));
       } else {
-        const next = clamp(TIMELINE_BOUNDS, origin.timeline - (moveEvent.clientY - startY));
+        const next = clampSize(TIMELINE_BOUNDS, origin.timeline - (moveEvent.clientY - startY));
         setSizes((current) => ({ ...current, timeline: next }));
       }
     };
