@@ -1,7 +1,8 @@
 import React from "react";
 import { useQueries } from "@tanstack/react-query";
 
-import { api, type Asset } from "@/api/client";
+import { getAsset, type Asset } from "@/api/client";
+import { assetKeys } from "@/api/queryKeys";
 import { AssetInlinePreview } from "@/components/app/asset-preview";
 import type { AssetOutput } from "@/features/workflows/runSteps";
 import { cn } from "@/lib/utils";
@@ -38,8 +39,8 @@ export function OutputAssets({
   const shown = items.slice(0, 2);
   const assets = useQueries({
     queries: shown.map((item) => ({
-      queryKey: ["asset", item.assetId],
-      queryFn: () => api<Asset>(`/api/assets/${item.assetId}`),
+      queryKey: assetKeys.detail(item.assetId),
+      queryFn: () => getAsset(item.assetId),
       staleTime: 60_000,
       retry: false,
     })),

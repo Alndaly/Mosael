@@ -14,7 +14,8 @@ import {
   XCircle,
 } from "lucide-react";
 
-import { api, type Asset } from "@/api/client";
+import { getAsset } from "@/api/client";
+import { assetKeys } from "@/api/queryKeys";
 import { useI18n } from "@/app/preferences";
 import { nodeTypeIcon } from "@/features/nodeForms/nodeIcons";
 import { OutputAssets } from "@/features/workflows/OutputAssets";
@@ -125,8 +126,8 @@ function WorkflowNode({ data, selected }: NodeProps) {
   // 素材节点的图标要跟着**这份素材本身**走:一张图和一段视频不该长同一个样子。
   // 取不到就退回类型图标 —— 素材可能已被删除,那是正常路径。
   const configAsset = useQuery({
-    queryKey: ["asset", d.configAssetId],
-    queryFn: () => api<Asset>(`/api/assets/${d.configAssetId}`),
+    queryKey: assetKeys.detail(d.configAssetId ?? ""),
+    queryFn: () => getAsset(d.configAssetId!),
     enabled: Boolean(d.configAssetId),
     staleTime: 60_000,
     retry: false,

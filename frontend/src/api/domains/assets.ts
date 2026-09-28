@@ -5,6 +5,10 @@ import { API_BASE, ApiError, api, getAuthToken } from "@/api/transport";
 
 export type Asset = components["schemas"]["AssetOut"];
 
+export function getAsset(assetId: string): Promise<Asset> {
+  return api<Asset>(`/api/assets/${assetId}`);
+}
+
 export type RemoteEntry = components["schemas"]["RemoteEntryOut"];
 
 export type UrlProbe = components["schemas"]["UrlProbeResponse"];

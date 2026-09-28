@@ -14,8 +14,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 const gone = new Set<string>();
 //: 只替掉发请求那一个出口,模块里别的东西(URL 拼装、类型)保持原样 —— 整块替掉的话,
 //: 渲染树里任何一个还没被 mock 到的导出都会让组件直接渲染不出来。
-vi.mock("@/api/client", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/api/client")>()),
+vi.mock("@/api/transport", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/api/transport")>()),
   api: async (path: string) => {
     const id = path.split("/").pop() ?? "";
     if (gone.has(id)) throw new Error("404");

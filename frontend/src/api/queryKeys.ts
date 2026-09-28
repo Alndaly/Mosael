@@ -30,6 +30,12 @@ export const assetKeys = {
     (projectId ? (["assets", workspaceId, projectId] as const) : (["assets", workspaceId] as const)),
   /** 失效用:所有工作区 —— 只在不知道自己动了哪个工作区时用(智能体的确认卡就是这种)。 */
   everywhere: () => ["assets"] as const,
+  /**
+   * 取数用:按 id 取的单份素材。只有 id 的地方(工具结果、工作流节点、笔记来源)拿不到工作区,
+   * 所以它挂在 `everywhere()` 下面 —— 改名、改标签、删除都按 `everywhere()` 失效,匹配得到它。
+   * 此前这份数据散在 `asset` / `agent-asset` / `note-source` 三个键族里,哪个都不会被失效。
+   */
+  detail: (assetId: string) => ["assets", "detail", assetId] as const,
 };
 
 /**

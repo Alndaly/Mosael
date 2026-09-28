@@ -1,7 +1,8 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
 
-import { api, type Asset } from "@/api/client";
+import { getAsset } from "@/api/client";
+import { assetKeys } from "@/api/queryKeys";
 import { AssetPreviewModal } from "@/features/media/AssetPreviewModal";
 
 /**
@@ -12,9 +13,9 @@ import { AssetPreviewModal } from "@/features/media/AssetPreviewModal";
  */
 export function AssetPreviewModalById({ id, onClose }: { id: string | null; onClose: () => void }) {
   const asset = useQuery({
-    queryKey: ["asset", id],
+    queryKey: assetKeys.detail(id ?? ""),
     enabled: Boolean(id),
-    queryFn: () => api<Asset>(`/api/assets/${id}`),
+    queryFn: () => getAsset(id!),
   });
 
   return <AssetPreviewModal asset={id ? asset.data ?? null : null} onClose={onClose} />;

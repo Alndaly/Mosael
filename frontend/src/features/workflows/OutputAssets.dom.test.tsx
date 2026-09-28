@@ -14,7 +14,8 @@ import { describe, expect, it, vi } from "vitest";
  * 两件事在这里钉住:**名字跟着素材走**,**尺寸按素材种类给**。
  */
 
-vi.mock("@/api/client", () => ({
+vi.mock("@/api/transport", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/api/transport")>()),
   api: vi.fn(async (path: string) => {
     const id = path.split("/").pop() as string;
     return { id, name: `素材 ${id}`, kind: id.startsWith("img") ? "image" : "audio" };

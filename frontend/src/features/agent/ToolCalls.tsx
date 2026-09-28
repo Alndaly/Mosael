@@ -2,7 +2,8 @@ import React from "react";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { Brain, Check, ChevronRight, CircleAlert, FileWarning, Loader2, Music } from "lucide-react";
 
-import { api, assetFileUrl, assetPreviewUrl, type Asset } from "@/api/client";
+import { assetFileUrl, assetPreviewUrl, getAsset, type Asset } from "@/api/client";
+import { assetKeys } from "@/api/queryKeys";
 import { useI18n } from "@/app/preferences";
 import { AgentMarkdown } from "@/components/markdown/Markdown";
 import { useImagePreview, type ImagePreviewItem } from "@/components/app/image-preview";
@@ -144,8 +145,8 @@ export function collectAssetIds(value: unknown, out: Set<string> = new Set()): S
 function MediaPreview({ assetId, gallery }: { assetId: string; gallery?: ImagePreviewItem[] }) {
   const { openImagePreview } = useImagePreview();
   const asset = useQuery({
-    queryKey: ["agent-asset", assetId],
-    queryFn: () => api<Asset>(`/api/assets/${assetId}`),
+    queryKey: assetKeys.detail(assetId),
+    queryFn: () => getAsset(assetId),
     staleTime: 60_000,
     retry: false,
   });
@@ -201,8 +202,8 @@ function MediaPreviewGrid({ assetIds }: { assetIds: string[] }) {
   const t = useI18n();
   const queries = useQueries({
     queries: assetIds.map((id) => ({
-      queryKey: ["agent-asset", id],
-      queryFn: () => api<Asset>(`/api/assets/${id}`),
+      queryKey: assetKeys.detail(id),
+      queryFn: () => getAsset(id),
       staleTime: 60_000,
       retry: false,
     })),
