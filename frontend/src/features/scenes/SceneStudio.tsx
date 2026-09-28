@@ -27,6 +27,7 @@ import { ScenePanel } from "./ScenePanel";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import React from "react";
 import { SceneSubsection } from "./SceneSubsection";
+import { SceneExportMenu } from "./SceneExportMenu";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArchiveRestore,
@@ -1041,68 +1042,15 @@ function SceneEditor({
               </div>
             </PopoverContent>
           </Popover>
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button variant="ghost" size="sm" disabled={!!busy}>
-                <Download size={15} />
-                {t("sceneExportFiles")}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent align="end" className="scene-export">
-              <button
-                onClick={() =>
-                  void work(t("sceneBusyExportModel"), async () =>
-                    download(await view.current!.glb(), `${draft.name}.glb`),
-                  )
-                }
-              >
-                {t("sceneExportGlb")}
-              </button>
-              <button
-                onClick={() =>
-                  download(
-                    new Blob([JSON.stringify(draft, null, 2)], {
-                      type: "application/json",
-                    }),
-                    `${draft.name}.json`,
-                  )
-                }
-              >
-                {t("sceneExportJson")}
-              </button>
-              <button
-                onClick={() =>
-                  void work(t("sceneBusySaveShotFrame"), async () => {
-                    await assetFrame(time);
-                    toast.success(t("sceneFrameSaved"));
-                  })
-                }
-              >
-                {t("sceneExportFrameToLibrary")}
-              </button>
-              <button
-                onClick={() =>
-                  void work(t("sceneBusyExportPreview"), async () => {
-                    await exportVideo();
-                    toast.success(t("scenePreviewSaved"));
-                  })
-                }
-              >
-                {t("sceneExportPreviewToLibrary")}
-              </button>
-              <hr />
-              <button onClick={() => void bridge("composition")}>
-                {t("sceneExportToImage")}
-              </button>
-              <button onClick={() => void bridge("frames")}>
-                {t("sceneExportFramesToVideo")}
-              </button>
-              <button onClick={() => void bridge("motion")}>
-                {t("sceneExportVideoToVideo")}
-              </button>
-              <p>{t("sceneExportNote")}</p>
-            </PopoverContent>
-          </Popover>
+          <SceneExportMenu
+            disabled={!!busy}
+            onExportGlb={() =>
+              void work(t("sceneBusyExportModel"), async () => download(await view.current!.glb(), `${draft.name}.glb`))
+            }
+            onExportJson={() =>
+              download(new Blob([JSON.stringify(draft, null, 2)], { type: "application/json" }), `${draft.name}.json`)
+            }
+          />
         </div>
       </header>
       {/* 两条提示带同一副骨架:图标 + 一句话 + 靠右的 xs 文字按钮。此前按钮是 sm(14px 字、

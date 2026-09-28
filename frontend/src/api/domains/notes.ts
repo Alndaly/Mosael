@@ -14,8 +14,14 @@ export type Note = NoteContent & {
   id: string; workspace_id: string; revision: number; created_at: string; updated_at: string;
 };
 export const emptyNote: NoteContent = { title: "", markdown: "", project_id: null, tags: [], topics: [], sources: [], favorite: false, trashed: false };
-export function listNotes(workspaceId: string, q = "", trashed = false, offset = 0) {
-  return api<Note[]>(`/api/notes?${new URLSearchParams({workspace_id: workspaceId, q, trashed: String(trashed), offset: String(offset), limit: "200"})}`);
+/** 列表的筛选。**在服务端筛**,和分页同一层 —— 在已加载的那一页里筛,翻不到的就筛不到。 */
+export type NoteListFilter = { trashed?: boolean; favorite?: boolean; topic?: string };
+export function listNotes(workspaceId: string, q = "", { trashed = false, favorite = false, topic = "" }: NoteListFilter = {}, offset = 0) {
+  return api<Note[]>(`/api/notes?${new URLSearchParams({workspace_id: workspaceId, q, trashed: String(trashed), favorite: String(favorite), topic, offset: String(offset), limit: "200"})}`);
+}
+/** 用到过的主题(最近改过的在前),给主题下拉 —— 同样不从已加载的那一页里凑。 */
+export function listNoteTopics(workspaceId: string, trashed = false) {
+  return api<string[]>(`/api/notes/topics?${new URLSearchParams({workspace_id: workspaceId, trashed: String(trashed)})}`);
 }
 export const getNote = (workspaceId: string, id: string) => api<Note>(`/api/notes/${id}?workspace_id=${encodeURIComponent(workspaceId)}`);
 export const createNote = (workspaceId: string, body: Partial<NoteContent>) => api<Note>("/api/notes", { method: "POST", body: JSON.stringify({ ...emptyNote, ...body, workspace_id: workspaceId }) });

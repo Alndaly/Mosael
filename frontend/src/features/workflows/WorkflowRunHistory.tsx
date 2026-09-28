@@ -57,6 +57,8 @@ function RunIcon({ status }: { status: string }) {
 export function WorkflowRunHistory({
   workflowId,
   registry,
+  viewedRunId,
+  onViewRun,
   nodeTypeById = {},
   mode,
   onModeChange,
@@ -65,6 +67,11 @@ export function WorkflowRunHistory({
   workflowId: string;
   /** 运行时节点注册表是输出类型的单一事实来源。 */
   registry: RegistryLike;
+  /** 正在看的那一次运行。**不归这个面板管**:编辑器只有一份「正在看哪一次」,画布的节点状态、
+   *  检查器的「本次产出」和这里的选中项都读它(见 boundRun.viewedRunId)。 */
+  viewedRunId: string | null;
+  /** 在列表里点了一次:交给编辑器,三处一起换过去。 */
+  onViewRun: (id: string) => void;
   /** 节点 id → 类型。用来查这一步的输出里哪些是素材。
    *  历史里的节点可能已被删改,查不到就退回纯文本 —— 不猜。 */
   nodeTypeById?: Record<string, string>;
@@ -83,7 +90,6 @@ export function WorkflowRunHistory({
     minW: 300,
   });
   const t = useI18n();
-  const [selectedId, setSelectedId] = React.useState<string | null>(null);
   const [expanded, setExpanded] = React.useState<Set<string>>(() => new Set());
 
   const runs = useQuery({
@@ -91,15 +97,12 @@ export function WorkflowRunHistory({
     queryFn: () => listWorkflowRuns(workflowId),
     refetchInterval: (q) => ((q.state.data as Job[] | undefined)?.some((j) => RUNNING.has(j.status)) ? 2000 : false),
   });
-  React.useEffect(() => {
-    if (!selectedId && runs.data && runs.data.length > 0) setSelectedId(runs.data[0].id);
-  }, [runs.data, selectedId]);
 
-  const selected = runs.data?.find((j) => j.id === selectedId) ?? null;
+  const selected = runs.data?.find((j) => j.id === viewedRunId) ?? null;
   const events = useQuery({
-    queryKey: ["job-events", selectedId],
-    queryFn: () => listJobEvents(selectedId!),
-    enabled: !!selectedId,
+    queryKey: ["job-events", viewedRunId],
+    queryFn: () => listJobEvents(viewedRunId!),
+    enabled: !!viewedRunId,
     refetchInterval: selected && RUNNING.has(selected.status) ? 1500 : false,
   });
   // 运行**结束后**必须再拉一次。轮询是「run 还在跑才开」,而 run 的状态先翻成终态、最后那批
@@ -113,7 +116,7 @@ export function WorkflowRunHistory({
   }, [settledKey]);
   const steps = React.useMemo(() => toSteps(events.data ?? []), [events.data]);
   //: 这次运行派生的子任务(出片、配音、导出…)。循环体里的那些只在这里看得见。
-  const children = useJobChildren(selectedId, Boolean(selected && RUNNING.has(selected.status)));
+  const children = useJobChildren(viewedRunId, Boolean(selected && RUNNING.has(selected.status)));
   React.useEffect(() => {
     const failedWithDetails = steps.filter((step) => step.status === "failed" && step.details).map((step) => step.nid);
     if (failedWithDetails.length === 0) return;
@@ -214,9 +217,10 @@ export function WorkflowRunHistory({
               type="button"
               className={cn(
                 "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-foreground hover:bg-secondary",
-                run.id === selectedId && "bg-accent hover:bg-accent",
+                run.id === viewedRunId && "bg-accent hover:bg-accent",
               )}
-              onClick={() => setSelectedId(run.id)}
+              aria-current={run.id === viewedRunId ? "true" : undefined}
+              onClick={() => onViewRun(run.id)}
             >
               <RunIcon status={run.status} />
               <span className="flex min-w-0 flex-1 flex-col gap-px">

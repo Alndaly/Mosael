@@ -472,15 +472,6 @@
 .scene-export button:hover {
   background: var(--secondary);
 }
-.scene-export p {
-  font-size: var(--text-ui-2xs);
-  padding: 8px 12px;
-  color: var(--muted-foreground);
-  line-height: 1.6;
-}
-.scene-export hr {
-  border-color: color-mix(in srgb, var(--foreground) 6%, transparent);
-}
 .scene-busy {
   position: absolute;
   inset: 0;

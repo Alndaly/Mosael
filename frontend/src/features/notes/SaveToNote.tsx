@@ -24,9 +24,11 @@ export type SaveToNoteVariant = { id: string; label: string; markdown: string; s
  * 并列的去处 —— 新建一篇、追加到已有的一篇。此前两个去处挤在一起:标题框和「新建笔记」一行,
  * 紧跟着一行灰字和一串没有边界的标题,读不出哪几样是一组、哪一行能点,列表还一路顶到弹窗底边。
  */
-export function SaveToNote({workspaceId, content, sources = [], variants, className, label, onSaved}: {
+export function SaveToNote({workspaceId, content, sources = [], variants, className, label, onSaved, trigger}: {
   workspaceId: string; content?: string; sources?: NoteSource[]; variants?: SaveToNoteVariant[];
   className?: string; label?: string; onSaved?: (note: Note) => void;
+  /** 入口长什么样由宿主定(画板操作条上是一枚图标,和别的动作同一种);不给就是默认那颗文字按钮。 */
+  trigger?: (props: {open: () => void; disabled: boolean; label: string}) => React.ReactNode;
 }) {
   const s = useNoteStrings(); const qc = useQueryClient(); const { locale } = usePreferences();
   const [open, setOpen] = React.useState(false); const [title, setTitle] = React.useState(""); const [q, setQ] = React.useState(""); const [busy, setBusy] = React.useState(false);
@@ -58,7 +60,8 @@ export function SaveToNote({workspaceId, content, sources = [], variants, classN
     all[Math.min(to, all.length - 1)]?.focus();
   }
 
-  return <><button type="button" className={className || "inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-secondary"} title={label || s.saveTo} disabled={!markdown.trim()} onClick={() => setOpen(true)}><BookPlus size={13} />{label || s.saveTo}</button>
+  const triggerProps = {open: () => setOpen(true), disabled: !markdown.trim(), label: label || s.saveTo};
+  return <>{trigger ? trigger(triggerProps) : <button type="button" className={className || "inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-secondary"} title={triggerProps.label} disabled={triggerProps.disabled} onClick={triggerProps.open}><BookPlus size={13} />{triggerProps.label}</button>}
     <ModalShell open={open} onOpenChange={value => { if (!busy) setOpen(value); }} title={label || s.saveTo} className="w-[480px]">
       <div className="grid gap-6">
         {variants && <div className={DIALOG_FIELD}>

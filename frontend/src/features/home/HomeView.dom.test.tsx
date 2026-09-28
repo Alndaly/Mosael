@@ -120,3 +120,36 @@ it("刚建好的项目亮的样子和选中一样:卡片圈封面、列表行铺
   expect(row.className).not.toMatch(/\bring-/);
   expect(row.className).toContain("var(--primary)_8%");
 });
+
+//: 和时间线同一条规则:右键的那一项在选区里,菜单作用于整个选区、只给能对一批做的动作;不在,就只是它自己。
+//: 此前多选着右键一项,菜单给的是单条的重命名 / 删除 —— 看着像批量删,实际只删了被点的那一条。
+it("多选时右键选区里的一项:菜单作用于整个选区;右键选区外的一项只作用于它自己", async () => {
+  render(provider(<HomeView workspace={workspace} projects={projects} onOpenProject={vi.fn()} />));
+  fireEvent.click(screen.getByRole("button", { name: "homeAll" }));
+  fireEvent.click(screen.getByRole("button", { name: "mediaSelectMode" }));
+  fireEvent.click(screen.getByRole("button", { name: "mediaSelectMode: Older film" }));
+
+  //: 选区里只有它一个:照旧是它自己的菜单。
+  fireEvent.contextMenu(screen.getByRole("button", { name: "Newer film" }), { clientX: 10, clientY: 10 });
+  expect(screen.getAllByRole("menuitem").map((item) => item.textContent)).toEqual(["homeOpenEditor", "rename", "delete"]);
+  fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
+
+  fireEvent.click(screen.getByRole("button", { name: "mediaSelectMode: Newer film" }));
+  fireEvent.contextMenu(screen.getByRole("button", { name: "Newer film" }), { clientX: 10, clientY: 10 });
+  expect(screen.getAllByRole("menuitem").map((item) => item.textContent)).toEqual(["deleteSelectedN"]);
+  fireEvent.click(screen.getByRole("menuitem", { name: "deleteSelectedN" }));
+  fireEvent.click(await screen.findByRole("button", { name: "confirm" }));
+  await waitFor(() => expect(mocks.deleteProject).toHaveBeenCalledTimes(2));
+  expect(mocks.deleteProject.mock.calls.map((call) => call[0]).sort()).toEqual(["newer", "older"]);
+});
+
+//: 排序方式跟着人走:「最近」那一栏本来就按更新时间排,切过去不能顺手把人选的排序改掉。
+it("切到「最近」再回「全部」,排序还是人选的那一种", () => {
+  localStorage.setItem("mosael:tab:home-collection", "all");
+  localStorage.setItem("mosael:tab:home-sort", "name");
+  render(provider(<HomeView workspace={workspace} projects={projects} onOpenProject={vi.fn()} />));
+  fireEvent.click(screen.getByRole("button", { name: "homeRecent" }));
+  expect(localStorage.getItem("mosael:tab:home-sort")).toBe("name");
+  fireEvent.click(screen.getByRole("button", { name: "homeAll" }));
+  expect(screen.getByRole("combobox", { name: "sortUpdated" })).toHaveTextContent("sortName");
+});

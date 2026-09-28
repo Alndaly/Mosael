@@ -14,12 +14,14 @@ import { emptyNote, type Note } from "@/api/domains/notes";
 vi.mock("@/app/preferences", () => ({ usePreferences: () => ({ locale: "zh-CN" }), useI18n: () => (key: string) => key }));
 const api = vi.hoisted(() => ({
   listNotes: vi.fn(async () => [] as Note[]),
+  listNoteTopics: vi.fn(async () => [] as string[]),
   getNote: vi.fn(async (_ws: string, id: string) => ({ id } as Note)),
   createNote: vi.fn(async (_ws: string, body: Partial<Note>) => ({ id: `new-${body.title}` } as Note)),
 }));
 vi.mock("@/api/domains/notes", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/api/domains/notes")>()),
   listNotes: api.listNotes,
+  listNoteTopics: api.listNoteTopics,
   getNote: api.getNote,
   createNote: api.createNote,
 }));
@@ -98,4 +100,17 @@ it("拖进来几个 .md 各成一篇,别的文件不碰,建完打开最后一篇
     { title: "乙", markdown: "乙的内容" },
   ]);
   await waitFor(() => expect(window.location.hash).toContain("note=new-%E4%B9%99"));
+});
+
+//: 收藏 / 主题**交给服务端筛**。此前拉回前 200 条再在浏览器里筛:收藏排在后面时空态说「还没有收藏」,
+//: 底下却挂着「加载更多」;主题下拉也只列得出已加载的那些笔记里的主题。
+it("切到收藏按参数向服务端取;主题下拉的选项来自服务端,不从已加载的那一页凑", async () => {
+  api.listNoteTopics.mockResolvedValue(["远处的专题"]);
+  mountView();
+  await waitFor(() => expect(api.listNotes).toHaveBeenCalledWith("ws", "", { trashed: false, favorite: false, topic: "" }, 0));
+  fireEvent.click(screen.getByRole("button", { name: "收藏" }));
+  await waitFor(() => expect(api.listNotes).toHaveBeenLastCalledWith("ws", "", { trashed: false, favorite: true, topic: "" }, 0));
+  //: 已加载的一页里一篇都没有,下拉照样列得出服务端说有的那个专题。
+  expect(await screen.findByText("专题")).toBeInTheDocument();
+  expect(api.listNoteTopics).toHaveBeenCalledWith("ws", false);
 });

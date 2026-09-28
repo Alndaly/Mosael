@@ -155,17 +155,41 @@ def append_note(db: Session, workspace_id: str, note_id: str, markdown: str,
     raise AssertionError("unreachable")  # pragma: no cover
 
 
-def query_notes(db: Session, workspace_id: str, query: str = "", *, limit: int = 20, offset: int = 0, trashed: bool = False) -> list[Note]:
-    """Literal, workspace-scoped knowledge lookup; excludes the recycle bin."""
+def query_notes(db: Session, workspace_id: str, query: str = "", *, limit: int = 20, offset: int = 0, trashed: bool = False,
+                favorite: bool = False, topic: str = "") -> list[Note]:
+    """Literal, workspace-scoped knowledge lookup; excludes the recycle bin.
+
+    「只看收藏」「某个主题」**在这里筛**,和分页同一层。此前笔记页把前 200 条拉回来再在浏览器里筛:
+    收藏排在 200 条之后时,空态写着「还没有收藏」,底下却挂着「加载更多」。
+    """
     import json
-    from sqlalchemy import or_, cast, String
+    from sqlalchemy import or_, cast, String, func
     stmt = select(Note).where(Note.workspace_id == workspace_id, Note.trashed == trashed)
+    if favorite:
+        stmt = stmt.where(Note.favorite.is_(True))
+    if topic:
+        #: 主题是 JSON 数组里的一项:按元素**整项相等**比,不按子串 ——「研究」不该筛出「研究生」。
+        each = func.json_each(Note.topics).table_valued("value")
+        stmt = stmt.where(select(each.c.value).where(each.c.value == topic).exists())
     for term in query.strip().split():
         escaped = json.dumps(term, ensure_ascii=True)[1:-1]
         stmt = stmt.where(or_(Note.title.icontains(term, autoescape=True), Note.markdown.icontains(term, autoescape=True),
                               *(cast(column, String).icontains(value, autoescape=True)
                                 for column in (Note.tags, Note.topics) for value in (term, escaped))))
     return list(db.scalars(stmt.order_by(Note.updated_at.desc(), Note.id).offset(offset).limit(limit)))
+
+
+def note_topics(db: Session, workspace_id: str, *, trashed: bool = False) -> list[str]:
+    """这个工作区(回收站内 / 外)用到过的主题,最近改过的笔记里的排在前面 —— 笔记页的主题下拉用它。
+
+    和筛选一样不能从已加载的那一页里凑:没翻到的笔记里的主题会选不到。只取主题这一列。
+    """
+    rows = db.scalars(
+        select(Note.topics)
+        .where(Note.workspace_id == workspace_id, Note.trashed == trashed)
+        .order_by(Note.updated_at.desc(), Note.id)
+    )
+    return list(dict.fromkeys(topic for topics in rows for topic in (topics or []) if topic))
 
 
 def read_reference(db: Session, workspace_id: str, note_id: str, revision: int | None = None) -> dict:

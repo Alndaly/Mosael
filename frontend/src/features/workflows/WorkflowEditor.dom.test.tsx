@@ -10,7 +10,11 @@ const apiMocks = vi.hoisted(() => ({
   updateWorkflow: vi.fn(),
   listWorkflowRuns: vi.fn(),
   runWorkflow: vi.fn(),
+  listJobEvents: vi.fn(),
+  listJobChildren: vi.fn(),
 }));
+const toastMocks = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn(), message: vi.fn(), info: vi.fn(), warning: vi.fn() }));
+vi.mock("sonner", () => ({ toast: Object.assign(vi.fn(), toastMocks) }));
 
 vi.mock("@/api/client", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/api/client")>()),
@@ -57,6 +61,8 @@ beforeEach(() => {
   localStorage.setItem("mosael:selected:workflows", "wf1");
   apiMocks.fetchWorkflowNodeTypes.mockResolvedValue(NODE_TYPES);
   apiMocks.listWorkflowRuns.mockResolvedValue([]);
+  apiMocks.listJobEvents.mockResolvedValue([]);
+  apiMocks.listJobChildren.mockResolvedValue([]);
   apiMocks.runWorkflow.mockResolvedValue({ id: "job-1", status: "queued" });
   apiMocks.updateWorkflow.mockImplementation(async (_id: string, body: { graph: WorkflowGraph }) => workflowWith(body.graph));
 });
@@ -415,4 +421,129 @@ it("钻进一层时,新画布定位好之前是藏着的(不在默认视口上�
   fireEvent.doubleClick(nodeEl("loop-1"));
   expect(document.querySelector(".react-flow")!.className).toContain("opacity-0");
   await waitFor(() => expect(document.querySelector(".react-flow")!.className).not.toContain("opacity-0"));
+});
+
+//: 整套一起跑时机器忙,画布挂载 + 钻层 + 定位要比默认的 1 秒久(renderEditor 等画布也给了 10 秒)。
+const SLOW = { timeout: 10000 };
+const SLOW_TEST = 30000;
+
+describe("正在看哪一次运行 —— 画布、检查器、执行历史只有一个答案", () => {
+  const RUNS = [
+    { id: "new", kind: "workflow", status: "succeeded", message: "最新一次", created_at: "2026-09-20T02:00:00", updated_at: "2026-09-20T02:00:05", payload: {} },
+    { id: "old", kind: "workflow", status: "failed", message: "较早一次", created_at: "2026-09-20T01:00:00", updated_at: "2026-09-20T01:00:05", payload: {} },
+  ];
+  const events = (jobId: string) => {
+    const at = "2026-09-20T01:00:01Z";
+    const step =
+      jobId === "new"
+        ? { id: "e1", job_id: jobId, type: "workflow.node.finished", created_at: at, payload: { node_id: "llm-1", name: "llm", outputs: {} } }
+        : { id: "e1", job_id: jobId, type: "workflow.node.failed", created_at: at, payload: { node_id: "llm-1", name: "llm", error: "挂了" } };
+    return [step, { id: "e2", job_id: jobId, type: "workflow.finished", created_at: at, payload: {} }];
+  };
+  const llmShows = (tone: "success" | "destructive") => nodeEl("llm-1").querySelector(`.text-${tone}`) !== null;
+
+  it("在历史里点开一次旧的,画布跟着换;「回到最新」一下三处一起回来", async () => {
+    apiMocks.listWorkflowRuns.mockResolvedValue(RUNS);
+    apiMocks.listJobEvents.mockImplementation(async (jobId: string) => events(jobId));
+    await renderEditor(CHAIN);
+    await waitFor(() => expect(llmShows("success")).toBe(true), SLOW);
+    expect(document.querySelector("[data-wf-viewing-past-run]")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "wfHistory" }));
+    fireEvent.click((await screen.findByText("较早一次", undefined, SLOW)).closest("button")!);
+    await waitFor(() => expect(llmShows("destructive")).toBe(true), SLOW);
+    expect(screen.getByText("较早一次").closest("button")!.getAttribute("aria-current")).toBe("true");
+
+    fireEvent.click(screen.getByRole("button", { name: "wfBackToLatestRun" }));
+    await waitFor(() => expect(llmShows("success")).toBe(true), SLOW);
+    expect(screen.getByText("最新一次").closest("button")!.getAttribute("aria-current")).toBe("true");
+    expect(document.querySelector("[data-wf-viewing-past-run]")).toBeNull();
+  }, SLOW_TEST);
+});
+
+describe("循环体里的就绪问题", () => {
+  const BROKEN_BODY = (() => {
+    const graph = structuredClone(LOOPED);
+    ((graph.nodes[1].config!.body as WorkflowGraph).nodes[0].config as Record<string, unknown>).template = "";
+    return graph;
+  })();
+  const badgeOf = (id: string) => nodeEl(id).querySelector('[aria-label="wfIssueRequired"]');
+
+  it("主流程上挂在循环节点头上;点清单那一条,进到循环体、选中出问题的那个节点,它身上也有角标", async () => {
+    await renderEditor(BROKEN_BODY);
+    await waitFor(() => expect(badgeOf("loop-1")).not.toBeNull(), SLOW);
+
+    fireEvent.click(screen.getByRole("button", { name: /^wfChecklist:/ }));
+    fireEvent.click(await screen.findByText("loop_foreach › 体内", undefined, SLOW));
+    const trail = screen.getByRole("navigation", { name: "page-trail" });
+    await waitFor(() => expect(within(trail).getByText("loop · wfLoopBody").getAttribute("aria-current")).toBe("page"), SLOW);
+    await waitFor(() => expect(nodeEl("template-1").className).toContain("selected"), SLOW);
+    expect(badgeOf("template-1")).not.toBeNull();
+  }, SLOW_TEST);
+});
+
+describe("工作流列表", () => {
+  const PLAIN: WorkflowGraph = {
+    nodes: [
+      { id: "start", type: "start", position: { x: 0, y: 0 }, config: {} },
+      { id: "template-1", type: "template", position: { x: 200, y: 0 }, config: { template: "hi" } },
+    ],
+    edges: [{ id: "e", source: "start", target: "template-1" }],
+  } as WorkflowGraph;
+
+  async function renderList(workflows: ReturnType<typeof workflowWith>[]) {
+    localStorage.removeItem("mosael:selected:workflows");
+    apiMocks.listWorkflows.mockResolvedValue(workflows);
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <TooltipProvider>
+          <WithPageTrail>
+            <WorkflowsView workspace={{ id: "w1", name: "w" } as Workspace} />
+          </WithPageTrail>
+        </TooltipProvider>
+      </QueryClientProvider>,
+    );
+    await screen.findAllByText("测试");
+  }
+  const menuItems = () => screen.getAllByRole("menuitem").map((item) => item.textContent?.trim());
+
+  //: 和编辑器的运行键同一个判据:同一张图在编辑器里跑不了,在列表上也不该排进队列。
+  it("卡片右键「运行」:有阻断问题就不发请求,说清卡在哪,给一个去编辑器看的出口", async () => {
+    const broken = structuredClone(PLAIN);
+    broken.nodes[1].config = { template: "" };
+    await renderList([workflowWith(broken)]);
+    fireEvent.contextMenu(screen.getByText("测试"), { clientX: 10, clientY: 10 });
+    fireEvent.click(screen.getByRole("menuitem", { name: "wfRun" }));
+    await waitFor(() => expect(toastMocks.error).toHaveBeenCalled());
+    expect(apiMocks.runWorkflow).not.toHaveBeenCalled();
+    const [text, options] = toastMocks.error.mock.calls[0] as [string, { action: { label: string; onClick: () => void } }];
+    expect(text).toBe("wfRunBlockedInList");
+    expect(options.action.label).toBe("wfOpenEditorToFix");
+    act(() => options.action.onClick());
+    await screen.findByRole("group", { name: "canvasTools" }, { timeout: 10000 });
+  });
+
+  it("卡片右键「运行」:判过没问题才发请求", async () => {
+    await renderList([workflowWith(PLAIN)]);
+    fireEvent.contextMenu(screen.getByText("测试"), { clientX: 10, clientY: 10 });
+    fireEvent.click(screen.getByRole("menuitem", { name: "wfRun" }));
+    await waitFor(() => expect(apiMocks.runWorkflow).toHaveBeenCalledWith("wf1"));
+    expect(toastMocks.success).toHaveBeenCalledWith("wfRunQueued");
+  });
+
+  //: 和时间线同一条规则:右键的那张在选区里就作用于整个选区,只给能对一批做的动作。
+  it("多选时右键选区里的一张:只给批量删除;右键选区外的一张:是它自己的菜单", async () => {
+    await renderList([workflowWith(PLAIN), { ...workflowWith(PLAIN), id: "wf2", name: "另一个" }]);
+    fireEvent.click(screen.getByRole("button", { name: "mediaSelectMode" }));
+    fireEvent.click(screen.getByRole("button", { name: "测试" }));
+    fireEvent.click(screen.getByRole("button", { name: "另一个" }));
+    fireEvent.contextMenu(screen.getByText("测试"), { clientX: 10, clientY: 10 });
+    expect(menuItems()).toEqual(["deleteSelectedN"]);
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
+
+    fireEvent.click(screen.getByRole("button", { name: "另一个" }));
+    fireEvent.contextMenu(screen.getByText("另一个"), { clientX: 10, clientY: 10 });
+    expect(menuItems()).toEqual(["wfRun", "rename", "wfExport", "delete"]);
+  });
 });

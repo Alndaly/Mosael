@@ -163,7 +163,7 @@ export interface NodeFieldOptions {
   dynamicOptions: (key: string, spec?: ConfigSpec) => Array<{ value: string; label: string }> | null;
   /** 现查的清单是空的时候,为什么。 */
   whyEmpty: (key: string) => EmptyOptions;
-  /** 工作区素材(有素材字段时才拉)。 */
+  /** 工作区素材(有素材字段、或宿主说它要时才拉,见 hostNeeds)。 */
   assets: Asset[];
 }
 
@@ -177,6 +177,8 @@ export function hasReference(value: string): boolean {
  * 素材型字段给工作区素材。`nodeType` / `workflowId` 只是**转给后端**的上下文(插件节点的包名在
  * 类型里、可调用工作流要排掉自己),这里不据此分支。
  */
+const NO_HOST_NEEDS: { assets?: boolean } = {};
+
 export function useNodeFieldOptions({
   specs,
   config,
@@ -184,12 +186,20 @@ export function useNodeFieldOptions({
   nodeType,
   workflowId = "",
   boundValues = {},
+  hostNeeds = NO_HOST_NEEDS,
 }: {
   specs: Record<string, ConfigSpec>;
   config: Record<string, unknown>;
   workspaceId: string;
   nodeType: string;
   workflowId?: string;
+  /**
+   * 宿主**自己渲染**、不走字段声明的控件要的清单。字段声明驱动的那部分(asset 型字段要素材、
+   * `options_from` 要现查)这里自己认得出来;宿主另画的专区认不出 —— 生成节点「输入素材」那几格
+   * 读的是 `assets`,而这个节点没有一个 asset 型字段,此前于是永远不拉、下拉永远是空的。
+   * 由宿主按它此刻**真画着**哪些控件来说,不是一个「总是拉」的开关。
+   */
+  hostNeeds?: { assets?: boolean };
   /** 接了上游的字段 → 那个上游**此刻**给出的值(画板上场景格给场景 id);说不出(工作流里上游的
    *  输出要运行时才有)就是空串。依赖它的字段按这个值查清单 —— 值在绑定里,不在 config 里。 */
   boundValues?: Record<string, string>;
@@ -225,12 +235,13 @@ export function useNodeFieldOptions({
   const pendingOptions = new Set(
     optionSpecs.filter((_, index) => dynamicOptionResults[index]?.isLoading).map(([key]) => key),
   );
-  // 强类型 asset 字段(如 素材转写.asset_id)手动模式下,给工作区素材下拉,免手填 UUID。
+  // 强类型 asset 字段(如 素材转写.asset_id)手动模式下,给工作区素材下拉,免手填 UUID;宿主自己画的素材
+  // 挑选(hostNeeds.assets)用的也是这一份。
   const hasAssetField = Object.values(specs).some((spec) => fieldDataType(spec) === "asset");
   const assets = useQuery({
     queryKey: ["workflow-assets", workspaceId],
     queryFn: () => listAssets(workspaceId),
-    enabled: hasAssetField,
+    enabled: hasAssetField || Boolean(hostNeeds.assets),
   });
 
   /** 一个字段的下拉选项;返回 null 表示它不是下拉。

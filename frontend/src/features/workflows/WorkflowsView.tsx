@@ -71,7 +71,6 @@ import {
   listWorkflows,
   runWorkflow,
   updateWorkflow,
-  type GenerationOption,
   type Job,
   type TaskEvent,
   type Workflow,
@@ -126,6 +125,7 @@ import {
 import { syncFromServer } from "@/features/workflows/serverSync";
 import { CanvasAgentChat, type CanvasAgentMode } from "@/features/agent/CanvasAgentChat";
 import {
+  CANVAS_GLASS_SURFACE_CLASS,
   canvasDockedPanelEdges,
   canvasRightDockOcclusion,
 } from "@/components/app/canvasPanelLayout";
@@ -177,12 +177,22 @@ import { usePersistentSelection, usePersistentTab, usePersistentViewport } from 
 const AGENT_MODES = ["docked", "floating"] as const;
 import { blurFloatingPanels, hasFocusedFloatingPanel } from "@/components/app/useFloatingPanel";
 import {
-  analyzeWorkflow,
   bodyScope,
   extractRefs,
   isNestedScopeConfig,
+  issuesAtLayer,
+  worstSeverity,
 } from "@/features/workflows/analyze";
 import { chatProfileIds, generationVendors } from "@/features/workflows/bindingReadiness";
+import {
+  analyzeWorkflowNow,
+  fetchAllGenerationOptions,
+  fetchProviderProfiles,
+  GENERATION_OPTIONS_KEY,
+  generationModelOf,
+  PROVIDER_PROFILES_KEY,
+  useWorkflowAnalysis,
+} from "@/features/workflows/readiness";
 import { RunOutputs, outputSummary } from "@/features/workflows/RunOutputs";
 import { collapseToSubgraph } from "@/features/workflows/collapse";
 import { pasteNodes, type NodeClip } from "@/features/workflows/clipboard";
@@ -199,7 +209,7 @@ import {
   type ScopePath,
 } from "@/features/workflows/scope";
 import { assetOutputs, outputRows, runEventIsTerminal, stepsByNode, type Step } from "@/features/workflows/runSteps";
-import { boundRunId, RUN_ACTIVE } from "@/features/workflows/boundRun";
+import { boundRunId, RUN_ACTIVE, viewedRunId } from "@/features/workflows/boundRun";
 import { errorText } from "@/api/errorMessage";
 import { isDataConnection, isDuplicateControlEdge } from "@/features/workflows/connections";
 import {
@@ -240,7 +250,6 @@ const isMarkerNode = (node: { type?: string }): boolean => node.type === "marker
 
 
 type ProviderDefault = components["schemas"]["ProviderDefaultOut"];
-type ProviderProfile = components["schemas"]["ProviderProfileOut"];
 
 
 
@@ -305,29 +314,6 @@ const AGENT_PANEL_KEY = "mosael:workflow-agent-open";
 const GENERATE_SPECIAL_CONFIG_KEYS = new Set([
   "provider_profile_id", "provider", "model", "kind", "parameters", "source_assets",
 ]);
-
-/** 每一种生成的模型清单,合成一份。面板(参数区按 capabilities 渲染)和编辑器(就绪检查看提示词要不要写)
- *  共用这一个 queryKey 与取法 —— 同一份清单拉两种形状,两边迟早对不上。 */
-const GENERATION_OPTIONS_KEY = ["generation-options", "all"] as const;
-async function fetchAllGenerationOptions(): Promise<GenerationOption[]> {
-  const lists = await Promise.all(
-    GENERATION_KINDS.map((kind) => api<GenerationOption[]>(`/api/generation/options?kind=${kind}`)),
-  );
-  return lists.flat();
-}
-
-/** AI 生成节点的配置指的是清单里哪一个模型。连接身份随模型一起存,同一 vendor/model 可以在多条连接上。 */
-function generationModelOf(models: GenerationOption[], config: Record<string, unknown>): GenerationOption | null {
-  return (
-    models.find(
-      (item) =>
-        item.provider === config.provider &&
-        item.model === config.model &&
-        item.kind === config.kind &&
-        (!config.provider_profile_id || item.provider_profile_id === config.provider_profile_id),
-    ) ?? null
-  );
-}
 
 const LLM_SPECIAL_CONFIG_KEYS = new Set([
   "preset",
@@ -448,19 +434,37 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
     },
     onError: (error: Error) => toast.error(t("wfImportFailed"), { description: error.message }),
   });
+  /**
+   * 卡片上的「运行」。和编辑器的运行键**同一个判据**(readiness):有阻断问题就不发请求,说清卡在哪、
+   * 给一个去编辑器看的出口。此前这里直接调接口 —— 同一张图在编辑器里运行键是灰的,在列表上却能排进
+   * 队列,跑到缺东西的那一步才失败。列表里本来就带着图(卡片数节点用的就是它),判一次的代价是
+   * 取齐两份清单,和编辑器共用缓存。
+   */
   const menuRun = useMutation({
-    mutationFn: (id: string) => runWorkflow(id),
-    onSuccess: (_data, id) => {
+    mutationFn: async (workflow: Workflow) => {
+      const types = await qc.ensureQueryData({ queryKey: ["workflow-node-types"], queryFn: fetchWorkflowNodeTypes });
+      const registry = new Map(types.map((item) => [item.type, item]));
+      const analysis = await analyzeWorkflowNow(qc, workflow.graph as unknown as WorkflowGraph, registry);
+      if (!analysis.runnable) return { blocked: analysis.errorCount };
+      return { job: await runWorkflow(workflow.id) };
+    },
+    onSuccess: (result, workflow) => {
+      if ("blocked" in result) {
+        toast.error(t("wfRunBlockedInList").replace("{name}", workflow.name).replace("{n}", String(result.blocked)), {
+          action: { label: t("wfOpenEditorToFix"), onClick: () => setSelectedId(workflow.id) },
+        });
+        return;
+      }
       toast.success(t("wfRunQueued"));
       // Without this the history panel, if already open with nothing in flight, never polls
       // and never refetches — the run appears only after navigating away and back.
-      void qc.invalidateQueries({ queryKey: ["workflow-runs", id] });
+      void qc.invalidateQueries({ queryKey: ["workflow-runs", workflow.id] });
     },
     onError: (error: Error) => toast.error(t("wfRunFailed"), { description: error.message }),
   });
-  // 卡片的 ⋯ 和右键菜单同一份清单(见 ActionContextMenuItems)。
+  // 卡片的 ⋯ 和(没在多选时的)右键菜单同一份清单(见 ActionContextMenuItems)。
   const cardActions = (workflow: Workflow): MenuAction[] => [
-    { label: t("wfRun"), icon: <Play />, disabled: menuRun.isPending, onSelect: () => menuRun.mutate(workflow.id) },
+    { label: t("wfRun"), icon: <Play />, disabled: menuRun.isPending, onSelect: () => menuRun.mutate(workflow) },
     { label: t("rename"), icon: <Pencil />, onSelect: () => setMenuRenaming(workflow) },
     { label: t("wfExport"), icon: <Download />, disabled: menuExport.isPending, onSelect: () => menuExport.mutate(workflow) },
     { label: t("delete"), icon: <Trash2 />, destructive: true, onSelect: () => setMenuDeleting(workflow) },
@@ -482,9 +486,23 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
   const enteringRoot = useSectionEntry("workflows", () => setSelectedId(null)) !== null;
   const selected = enteringRoot ? null : (workflows.data ?? []).find((w) => w.id === selectedId) ?? null;
   // 多选与素材页同一份状态机(见 lib/useMultiSelect)。
-  const { selectMode, setSelectMode, selectedIds, toggle, selectAll, allSelected, clear, exit } =
+  const { selectMode, setSelectMode, selectedIds, toggle, selectAll, allSelected, clear, exit, menuTargets } =
     useMultiSelect(workflows.data ?? [], (workflow) => workflow.id);
   const [batchDeleting, setBatchDeleting] = React.useState(false);
+  /** 右键菜单:右键的那张在选区里(且不止它一张)就作用于整个选区,只给能对一批做的动作 —— 和工具条上
+   *  的批量删除是同一件事;否则是这一张自己的菜单(见 useMultiSelect.menuTargets)。 */
+  const contextActions = (workflow: Workflow): MenuAction[] => {
+    const targets = menuTargets(workflow.id);
+    if (targets.length <= 1) return cardActions(workflow);
+    return [
+      {
+        label: t("deleteSelectedN").replace("{n}", String(targets.length)),
+        icon: <Trash2 />,
+        destructive: true,
+        onSelect: () => setBatchDeleting(true),
+      },
+    ];
+  };
   const batchRemove = useMutation({
     mutationFn: async () => {
       // 没有批量接口:逐条删,失败的报出去(和素材页同一种做法)。
@@ -670,7 +688,7 @@ export function WorkflowsView({ workspace }: { workspace: Workspace }) {
                 </div>
               </ContextMenuTrigger>
               <ContextMenuContent>
-                <ActionContextMenuItems actions={cardActions(workflow)} />
+                <ActionContextMenuItems actions={contextActions(workflow)} />
               </ContextMenuContent>
             </ContextMenu>
           ))}
@@ -984,8 +1002,9 @@ function WorkflowEditor({
   const canvas = useCanvasPosture();
   // 每张工作流、每一层各记各的位置 —— 换一张图、钻进一层,不该继承上一处停在哪儿。
   const viewport = usePersistentViewport(atRoot ? `workflow:${workflow.id}` : `workflow:${workflow.id}:${scopePath.join(":")}`);
-  /** 从别的层点了主流程里的某个节点(就绪清单):回到主流程,等那一层的画布挂好再聚焦它。 */
-  const pendingFocusRef = React.useRef<string | null>(null);
+  /** 从别的层点了就绪清单里的某个节点:换到它那一层,等**那一层**的画布挂好再聚焦它。记着是哪一层 ——
+   *  上一层的画布若还没走完自己的定位(onInit 在下一帧),它不能把这一笔领走。 */
+  const pendingFocusRef = React.useRef<{ scope: string; nodeId: string | null } | null>(null);
   /** 哪一层的画布已经定位好了。 */
   const [placedScope, setPlacedScope] = React.useState<string | null>(null);
 
@@ -1599,7 +1618,12 @@ function WorkflowEditor({
   /** 自己在这一页点「运行」起的那次。运行完不清,方便回看这次跑成什么样;再次运行或切换工作流
    *  时被顶掉。 */
   const [startedJobId, setStartedJobId] = React.useState<string | null>(null);
-  React.useEffect(() => setStartedJobId(null), [workflow.id]);
+  /** 用户在执行历史里点了哪一次(null = 没点过,跟随最新)。点「运行」、点「回到最新」都清掉它。 */
+  const [pinnedRunId, setPinnedRunId] = React.useState<string | null>(null);
+  React.useEffect(() => {
+    setStartedJobId(null);
+    setPinnedRunId(null);
+  }, [workflow.id]);
   /** 这个工作流最近的几次运行。**不是为了历史面板**,是为了认出**别处发起的**那一次:
    *
    *  子工作流是被父流程的 `call_workflow` 起来的(它有自己的 job,见 executors/subworkflow),
@@ -1616,11 +1640,21 @@ function WorkflowEditor({
     refetchInterval: (q) =>
       ((q.state.data as Job[] | undefined) ?? []).some((one) => RUN_ACTIVE.has(one.status)) ? 2000 : 8000,
   });
+  /** 跟随的那一次:自己起的 → 还在跑的 → 最近的(见 boundRun)。工具栏的运行 / 停止只看它。 */
   const runJobId = React.useMemo(() => boundRunId(startedJobId, runs.data), [startedJobId, runs.data]);
+  /** **正在看哪一次运行 —— 只有这一个。** 画布上的节点状态、检查器的「本次产出」、执行历史的选中项
+   *  都读它。此前历史面板自己记一份选中:在历史里点开一次旧的,画布和检查器还停在最近那次,
+   *  三处说的是两次运行。 */
+  const viewedRun = viewedRunId(pinnedRunId, runJobId, runs.data);
+  const viewRun = React.useCallback(
+    // 点的正是跟随着的那一次就等于「跟随」:之后再起一次运行,三处照样跟过去。
+    (id: string | null) => setPinnedRunId(id === runJobId ? null : id),
+    [runJobId],
+  );
   const runEvents = useQuery({
-    queryKey: ["job-events", runJobId],
-    queryFn: () => listJobEvents(runJobId ?? ""),
-    enabled: Boolean(runJobId),
+    queryKey: ["job-events", viewedRun],
+    queryFn: () => listJobEvents(viewedRun ?? ""),
+    enabled: Boolean(viewedRun),
     // 窗口没聚焦也要继续轮询:把应用放在一边看着工作流跑是常态,默认行为会暂停轮询,
     // 于是回头一看画布还停在半小时前的那一步。
     refetchIntervalInBackground: true,
@@ -1650,6 +1684,8 @@ function WorkflowEditor({
     mutationFn: () => runWorkflow(workflow.id),
     onSuccess: (job) => {
       setStartedJobId(job.id);
+      // 刚点的这一次就是要看的那一次 —— 哪怕刚才正停在一次旧运行上。
+      setPinnedRunId(null);
       toast.success(t("wfRunQueued"));
       void qc.invalidateQueries({ queryKey: ["workflow-runs", workflow.id] });
     },
@@ -1657,32 +1693,10 @@ function WorkflowEditor({
   });
   const selectedNode = graph.nodes.find((node) => node.id === selectedNodeId) ?? null;
 
-  // 就绪度分析:模型/密钥信号在编辑器层拉取(与属性面板共用 queryKey,自动去重),
-  // 供画布角标 + 运行前 checklist。只有图里真有对应节点才请求。
-  const hasLlm = rootGraph.nodes.some((node) => node.type === "llm");
-  const hasGen = rootGraph.nodes.some((node) => node.type === "ai_generate");
-  //: LLM 节点看连接清单,生成节点看生成模型清单(见 bindingReadiness)。
-  const providers = useQuery({
-    queryKey: ["provider-profiles"],
-    queryFn: () => api<ProviderProfile[]>("/api/settings/providers"),
-    enabled: hasLlm,
-  });
-  //: 生成节点的服务商配没配、提示词要不要写,都由这份模型清单说。
-  const generationModels = useQuery({
-    queryKey: GENERATION_OPTIONS_KEY,
-    queryFn: fetchAllGenerationOptions,
-    enabled: hasGen,
-  });
-  const analysis = React.useMemo(() => {
-    //: 和检查器的提醒同一个判定(bindingReadiness),两边不再各写一段。
-    return analyzeWorkflow(rootGraph, registry, {
-      chatProfileIds: chatProfileIds(providers.data ?? []),
-      chatProfilesLoaded: !hasLlm || providers.isSuccess,
-      generationVendors: generationVendors(generationModels.data ?? []),
-      generationModelsLoaded: !hasGen || generationModels.isSuccess,
-      generationPromptMode: (config) => promptMode(generationModelOf(generationModels.data ?? [], config)),
-    });
-  }, [rootGraph, registry, providers.data, providers.isSuccess, hasLlm, hasGen, generationModels.data, generationModels.isSuccess]);
+  // 就绪度分析:和列表卡片的「运行」、检查器的提醒同一个判据(见 readiness / bindingReadiness)。
+  // 喂画布角标(按当前这一层折,见 issuesAtLayer)和运行前的就绪清单。
+  const analysis = useWorkflowAnalysis(rootGraph, registry);
+  const layerIssues = React.useMemo(() => issuesAtLayer(analysis.issues, scopePath), [analysis.issues, scopePath]);
   /**
    * 运行 —— 工具栏的运行键和 ⌘Enter 共用这**一个**入口。
    *
@@ -1742,6 +1756,8 @@ function WorkflowEditor({
     <div ref={historyPanelRef} className="contents"><WorkflowRunHistory
       workflowId={workflow.id}
       registry={registry}
+      viewedRunId={viewedRun}
+      onViewRun={viewRun}
       // 历史面板据此判断某一步的输出是不是素材(节点注册表里声明为 asset),
       // 是就渲染成缩略图/播放器而不是一串裸 id。
       nodeTypeById={Object.fromEntries(rootGraph.nodes.map((n) => [n.id, n.type]))}
@@ -1864,14 +1880,13 @@ function WorkflowEditor({
         if (isMarkerNode(node)) {
           return { ...node, hidden: !markersVisible, focusable: markerMode, draggable: markerMode, selectable: markerMode, selected: markerMode && node.selected, style: { ...node.style, pointerEvents: markerMode ? "auto" as const : "none" as const }, data: { ...node.data, markers, editable: markerMode, onChange: patchMarker, onDelete: deleteMarker } };
         }
-        // 就绪度和运行状态按**主流程**的节点 id 记;体里的 id 是另一套命名空间(体里也可以有
-        // 一个 llm-1),拿去查只会张冠李戴。
-        const nodeIssues = atRoot ? analysis.byNode.get(node.id) : undefined;
-        const severity = atRoot ? analysis.severityByNode.get(node.id) : undefined;
-        const badge =
-          nodeIssues && severity
-            ? { severity, count: nodeIssues.length, title: nodeIssues.map((i) => workflowIssueText(t, i, registry)).join("\n") }
-            : null;
+        // 角标按**这一层**折好了(layerIssues):这一层自己的节点挂自己的问题,更深处的挂在通往它的容器上。
+        // 运行状态仍只认主流程:体里的节点不发事件(子图不带 job),体里的 id 又是另一套命名空间
+        // (体里也可以有一个 llm-1),拿去查只会张冠李戴。
+        const nodeIssues = layerIssues.get(node.id);
+        const badge = nodeIssues
+          ? { severity: worstSeverity(nodeIssues), count: nodeIssues.length, title: nodeIssues.map((i) => workflowIssueText(t, i, registry)).join("\n") }
+          : null;
         const step = atRoot ? runByNode[node.id] : undefined;
         return {
           ...node,
@@ -1894,7 +1909,7 @@ function WorkflowEditor({
       });
     },
     // registry / graph 也要在里面:缩略图和接点类型都读它们,漏了就一直是加载前的空值。
-    [nodes, analysis, t, runByNode, nodeZ, registry, graph, markers, patchMarker, deleteMarker, markerMode, markersVisible, annotationMode, searchHit, atRoot],
+    [nodes, layerIssues, t, runByNode, nodeZ, registry, graph, markers, patchMarker, deleteMarker, markerMode, markersVisible, annotationMode, searchHit, atRoot],
   );
 
   return (
@@ -1910,6 +1925,21 @@ function WorkflowEditor({
       <div className="pointer-events-none absolute inset-x-2 top-2 z-20 flex items-start justify-end gap-2 [&>*]:pointer-events-auto">
         {/* 「这是哪一个工作流、钻到了第几层」写在顶栏的路径里(工作流 / 批量配音 / 循环体,见
             components/layout/pageTrail),画布上只浮着操作这一组。保存状态没有单独的指示:失败弹 toast,运行键的 title 说「保存中」/「上次保存失败」。 */}
+        {/* 正停在一次较早的运行上:画布、检查器、历史三处都在说那一次,得有一个一眼看得到的出口回到最新。
+            挂在画布上而不是历史面板里 —— 面板关了,画布照样停在那一次。 */}
+        {viewedRun !== runJobId && (
+          <div
+            role="status"
+            data-wf-viewing-past-run=""
+            className={cn(CANVAS_GLASS_SURFACE_CLASS, "flex h-[42px] shrink-0 items-center gap-2 rounded-lg pl-3 pr-1 text-ui-xs text-muted-foreground")}
+          >
+            <History size={13} className="shrink-0" />
+            <span className="whitespace-nowrap">{t("wfViewingPastRun")}</span>
+            <Button size="sm" variant="secondary" onClick={() => viewRun(null)}>
+              {t("wfBackToLatestRun")}
+            </Button>
+          </div>
+        )}
         <CanvasToolbar
           label={t("canvasTools")}
           data-workflow-toolbar-actions=""
@@ -1982,10 +2012,15 @@ function WorkflowEditor({
                                   issue.severity === "error" ? "[&>svg]:text-destructive" : "[&>svg]:text-warning",
                                 )}
                                 onClick={() => {
-                                  // 就绪清单说的是主流程里的节点。人在体里时先回主流程,画布挂好再聚焦。
-                                  if (atRoot) return focusNode(issue.nodeId);
-                                  pendingFocusRef.current = issue.nodeId;
-                                  enterScope([]);
+                                  // 带人去问题所在的那一层,聚焦那个节点。已经在那一层就直接聚焦;要换层就
+                                  // 先记下来,等那一层的画布挂好(onInit)再聚焦。「缺开始节点」不属于哪个节点,只回主流程。
+                                  const target = issue.nodeId === "__workflow__" ? null : issue.nodeId;
+                                  if (scopeId(issue.path) === scopeKey) {
+                                    if (target) focusNode(target);
+                                    return;
+                                  }
+                                  pendingFocusRef.current = { scope: scopeId(issue.path), nodeId: target };
+                                  enterScope(issue.path);
                                 }}
                               >
                                 <AlertTriangle size={12} />
@@ -2292,8 +2327,10 @@ function WorkflowEditor({
                 canvas.handlers.onInit();
                 setPlacedScope(scopeKey);
                 const pending = pendingFocusRef.current;
-                pendingFocusRef.current = null;
-                if (pending) focusNode(pending);
+                if (pending?.scope === scopeKey) {
+                  pendingFocusRef.current = null;
+                  if (pending.nodeId) focusNode(pending.nodeId);
+                }
               });
             }}
             onNodesChange={onNodesChange}
@@ -2642,8 +2679,8 @@ export function NodeInspector({
   const picksChatModel = node.type === "llm";
   // 动态选项源:按需拉取,只有对应节点类型选中时才请求。
   const providers = useQuery({
-    queryKey: ["provider-profiles"],
-    queryFn: () => api<ProviderProfile[]>("/api/settings/providers"),
+    queryKey: PROVIDER_PROFILES_KEY,
+    queryFn: fetchProviderProfiles,
     enabled: picksChatModel || node.type === "ai_generate",
   });
   //: 插件的包与工具、发布账号、可调用工作流、对话连接与模型此前各拉一份清单、各写一段过滤,
@@ -2668,7 +2705,6 @@ export function NodeInspector({
     () => Object.fromEntries((node.inputs ?? []).map((key) => [key, ""])),
     [node.inputs],
   );
-  const fieldOptions = useNodeFieldOptions({ specs: allSpecs, config, workspaceId, nodeType: node.type, workflowId, boundValues });
   // 绑定校验:节点依赖的模型/服务没配好(空列表)或引用已失效(指向不存在的项)→ 顶部给提醒 + 配置入口。
   //: 判据和就绪清单同一份(bindingReadiness):清单报错的节点,这里也得说得出为什么。
   const bindingNotice = ((): { message: string; section: string; error?: boolean } | null => {
@@ -2944,6 +2980,11 @@ export function NodeInspector({
     () => extraLines(genSourceLines, genSourceRoles as readonly string[]),
     [genSourceLines, genSourceRoles],
   );
+  //: 「输入素材」那几格是这里自己画的专区(不走字段声明),它要的素材清单由这里说 —— 画着几格就要,一格没有就不拉。
+  const fieldOptions = useNodeFieldOptions({
+    specs: allSpecs, config, workspaceId, nodeType: node.type, workflowId, boundValues,
+    hostNeeds: { assets: genSourceRoles.length > 0 },
+  });
 
   // 面板真正要渲染的字段:llm / ai_generate 的那几项由各自的专区管,不走通用列表。
   // 顺序就是后端声明的顺序;基础 / 高级的分档规则在表单那一层(nodeConfigTiers)。

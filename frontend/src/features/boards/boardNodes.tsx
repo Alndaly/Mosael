@@ -1,6 +1,5 @@
 import React from "react";
 import { noteHref, type NoteReference } from "@/api/domains/notes";
-import { SaveToNote } from "@/features/notes/SaveToNote";
 import { Handle, NodeResizer, Position, useStore, type NodeProps } from "@xyflow/react";
 import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, BookOpen, Clapperboard, ExternalLink, FileText, Loader2, RefreshCw, Box, Ban, Clock3, Film as FilmIcon, Group, Image as ImageIcon, Music, Plus, Square as SquareIcon, StickyNote, UsersRound, type LucideIcon } from "lucide-react";
@@ -60,7 +59,6 @@ export function noteColorClass(color: string | undefined): string {
 export type BoardNodeData = {
   item: BoardItem;
   workspaceId?: string;
-  boardId?: string;
   document?: { reference?: NoteReference; pending: boolean; error?: string };
   onPickDocument?: (id: string) => void;
   onRefreshDocument?: (id: string) => void;
@@ -339,7 +337,7 @@ function useJobProgress(jobId: string | undefined, running: boolean): number {
 /** 便签:双击进入编辑。**单击不进** —— 单击是选中/拖动,想法摆位比改字更频繁。 */
 export function NoteNode({ data, selected }: NodeProps) {
   const nodeData = data as unknown as BoardNodeData;
-  const { item, onText, commentMode, workspaceId, boardId } = nodeData;
+  const { item, onText, commentMode } = nodeData;
   const t = useI18n();
   const [editing, setEditing] = React.useState(false);
   const ref = React.useRef<HTMLTextAreaElement | null>(null);
@@ -373,7 +371,6 @@ export function NoteNode({ data, selected }: NodeProps) {
     >
       <NodeResizer minWidth={120} minHeight={80} isVisible={selected} lineClassName="!border-transparent" handleClassName="!h-2 !w-2 !rounded-full !border-border-strong !bg-panel" />
       <NodeLabel data={nodeData} />
-      {selected && !editing && !commentMode && workspaceId && boardId && <div className="nodrag absolute right-0 top-full z-10 mt-2 whitespace-nowrap rounded-md bg-popover" onDoubleClick={e => e.stopPropagation()}><SaveToNote workspaceId={workspaceId} content={item.text || ""} sources={[{kind: "board", id: boardId, label: t("navBoards"), quote: item.text || ""}]} /></div>}
       <Ports visible={selected} disabled={commentMode} />
       {editing ? (
         //: **草稿式的框**(见 components/ui/draft-text):字住在 React Flow 的节点里,而 React Flow
@@ -931,7 +928,10 @@ export function SceneNode({ data, selected }: NodeProps) {
   const state = useRunState(item);
   const status = itemRunStatus(item);
   const fallback = <div data-board-scene-hint="" className="flex h-full flex-col items-center justify-center gap-2 bg-secondary/40 px-5 text-center text-muted-foreground"><Box size={32} strokeWidth={1.2} /><span className="text-ui-xs">{t(!item.scene_id ? "boardSceneBuildEmpty" : "boardScenePreviewMissing")}</span></div>;
-  const pending = status === "queued" || status === "running" || status === "failed";
+  //: 整格换成占位的只有**这一格自己的产出者**(按文字重搭场景:跑完这一格就换成新场景)。跑的是它的一项
+  //: 能力(吃 3D 场景的插件工具)时和别的内容格一样:场景照常显示,运行态是底边那一条(AbilityRun),
+  //: 跑挂了只在选中时挂出来 —— 此前不分是谁在跑,一次能力失败就把整格换成失败块,场景看不见了。
+  const pending = !runningAbility(item) && (status === "queued" || status === "running" || status === "failed");
   //: `group`:接点在悬停时显形(group-hover)—— 少了它,3D 场景格的接点只有选中了才看得见。
   return <div data-board-run-status={state["data-board-run-status"]} className={cn("group relative flex h-full w-full flex-col overflow-visible border border-border bg-panel shadow-sm", CELL_RADIUS, state.className)}>
     <NodeResizer minWidth={240} minHeight={180} isVisible={selected} lineClassName="!border-transparent" handleClassName="!h-2 !w-2 !rounded-full !border-border-strong !bg-panel" />
@@ -951,6 +951,7 @@ export function SceneNode({ data, selected }: NodeProps) {
           <Box size={15} className="shrink-0 text-muted-foreground" />
           <span className="min-w-0 flex-1 truncate text-ui-sm" title={item.text}>{item.text || t("boardKindScene")}</span>
         </footer>
+        <AbilityRun data={nodeData} selected={selected} />
       </>
     )}
   </div>;

@@ -286,9 +286,9 @@ it("选中的文档不加彩色描边(和图片、视频、便签同一条);3D �
   expect((scene.container.firstElementChild as HTMLElement).className.split(/\s+/)).toContain("group");
 });
 
-it("滚轮只在选中的那一格里滚它自己;没选中的文档、便签旁的「保存到笔记」不截住画布的平移", () => {
+it("滚轮只在选中的那一格里滚它自己;没选中的文档、选中的便签都不截住画布的平移", () => {
   //: 触控板模式下画布靠滚轮平移(panOnScroll)。挂着 nowheel 的元素会让滚轮停在它身上 ——
-  //: 此前文档正文一直挂着、「保存到笔记」那一层也挂着,平移时指针划过它们画布就停在半路。
+  //: 此前文档正文一直挂着,平移时指针划过它画布就停在半路。
   const Doc = BOARD_NODE_TYPES.document;
   const docProps = (selected: boolean) => ({ data: { item: { id: "doc", kind: "document", note_id: "n", note_revision: 1 },
     document: { reference: { title: "T", markdown: "正文", revision: 1 } } }, selected }) as unknown as React.ComponentProps<typeof Doc>;
@@ -304,13 +304,45 @@ it("滚轮只在选中的那一格里滚它自己;没选中的文档、便签旁
   const note = render(
     <QueryClientProvider client={client}>
       <Note {...({ id: "n1", data: { item: { id: "n1", kind: "note", x: 0, y: 0, text: "一段字" }, onText: vi.fn(), onAspect: vi.fn(),
-        workspaceId: "ws", boardId: "b1" }, selected: true } as unknown as React.ComponentProps<typeof Note>)} />
+        workspaceId: "ws" }, selected: true } as unknown as React.ComponentProps<typeof Note>)} />
     </QueryClientProvider>,
   );
-  const saveLayer = note.container.querySelector(".bg-popover");
-  expect(saveLayer, "「保存到笔记」那一层确实画出来了 —— 否则下面这句是在空处断言").not.toBeNull();
-  expect(saveLayer!.querySelector("button")).not.toBeNull();
+  //: 「保存到笔记」挪到了操作条上(BoardCanvas 的 ItemToolbar),格子自己身上不再挂一层按钮。
+  expect(note.container.querySelector("button"), "便签格子上没有自己的按钮").toBeNull();
   expect(note.container.querySelector(".nowheel"), "便签选中了、没在编辑:没有哪一块要截住滚轮").toBeNull();
+});
+
+//: 能力(吃 3D 场景的插件工具)跑挂了,和别的内容格一样:场景照常显示,失败条只在选中时挂出来。
+//: 此前不分是谁在跑,一次能力失败就把整格换成失败块。
+it("3D 场景格的能力跑挂了:场景照常显示,选中时底边挂失败条;自己的产出者(按文字重搭)挂了才整格换成失败", () => {
+  const Scene = BOARD_NODE_TYPES.scene;
+  const renderScene = (run: Record<string, unknown>, selected: boolean) => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false, enabled: false } } });
+    return render(
+      <QueryClientProvider client={client}>
+        <Scene {...({ id: "s", data: { item: { id: "s", kind: "scene", x: 0, y: 0, text: "展厅", run } }, selected } as unknown as React.ComponentProps<typeof Scene>)} />
+      </QueryClientProvider>,
+    );
+  };
+  const abilityFailed = { status: "failed", error: "插件挂了", ability: "node:plugin.scene_tool" };
+  const idle = renderScene(abilityFailed, false);
+  expect(idle.container.querySelector("[data-board-scene-pending]")).toBeNull();
+  expect(idle.container.textContent).toContain("展厅");
+  expect(idle.container.querySelector("[data-board-ability-run]"), "没选中时不挂失败条").toBeNull();
+  cleanup();
+
+  const picked = renderScene(abilityFailed, true);
+  expect(picked.container.querySelector("[data-board-scene-pending]")).toBeNull();
+  expect(picked.container.querySelector('[data-board-ability-run="failed"]')!.textContent).toContain("插件挂了");
+  cleanup();
+
+  const running = renderScene({ status: "running", job_id: "j", ability: "node:plugin.scene_tool" }, false);
+  expect(running.container.querySelector("[data-board-scene-pending]")).toBeNull();
+  expect(running.container.querySelector('[data-board-ability-run="running"]')).not.toBeNull();
+  cleanup();
+
+  const rebuild = renderScene({ status: "failed", error: "搭不出来" }, false);
+  expect(rebuild.container.querySelector("[data-board-scene-pending]"), "自己的产出者挂了仍是整格").not.toBeNull();
 });
 
 it("文档格在「让 AI 写」时:排队、扫光占位 + 这次的要求,不再显示「还没有内容」;写挂了在空状态下说原因", () => {

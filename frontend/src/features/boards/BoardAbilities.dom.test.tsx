@@ -123,10 +123,11 @@ describe("操作条上的能力", () => {
     expect(bar()).not.toContain("翻译");
   });
 
-  it("便签:让 AI 写和翻译;视频格:内置的四项直接摆,插件的那一项收进「⋯」", () => {
+  it("便签:保存到笔记、让 AI 写和翻译;视频格:内置的四项直接摆,插件的那一项收进「⋯」", () => {
     mount([noteItem, video]);
     select("n1");
-    expect(bar()).toEqual(["boardAskAiWrite", "翻译"]);
+    //: 「保存到笔记」和文档格的「转为笔记」同一种挂法,排在这一格的能力前面。
+    expect(bar()).toEqual(["保存到笔记", "boardAskAiWrite", "翻译"]);
     select("vi");
     expect(bar()).toEqual([
       "boardPreview", "boardTrim", "boardReplaceAsset", "素材转写", "视频转 GIF", "分离人声与背景音", "降噪", "boardMoreAbilities",

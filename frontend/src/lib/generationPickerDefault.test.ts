@@ -35,10 +35,11 @@ function sourceFiles(dir: string): string[] {
   return out;
 }
 
-/** 读生成选项的文件:用了这个类型,或者直接打了那个接口。 */
+/** 读生成选项的文件:用了这个类型、直接打了那个接口,或者读工作流那份合并清单(features/workflows/readiness
+ *  的 GENERATION_OPTIONS_KEY —— 工作流检查器拿到的就是它,类型和接口都不在它自己的文件里)。 */
 const CONSUMERS = sourceFiles(SRC).filter((file) => {
   const text = fs.readFileSync(file, "utf8");
-  return /\bGenerationOption\b/.test(text) || text.includes("/generation/options");
+  return /\bGenerationOption\b/.test(text) || text.includes("/generation/options") || /\bGENERATION_OPTIONS_KEY\b/.test(text);
 });
 
 const FIRST_ITEM_FALLBACK = /(\?\?|\|\|)\s*[\w.]*(?:[oO]ptions|[mM]odels)\[0\]/;

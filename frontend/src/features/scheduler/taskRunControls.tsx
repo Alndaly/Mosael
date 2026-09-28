@@ -10,9 +10,19 @@
 import React from "react";
 import { Play } from "lucide-react";
 
+import type { ScheduledTaskRun } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+
+/**
+ * 这个任务此刻有没有一次还没跑完 —— 和后端拒绝重入的判据一致(scheduler.executors.has_active_run,
+ * queued / running)。「立即运行」按它判,而不是按这一页发出去的那一次请求:请求几十毫秒就回来了,
+ * 任务却还在跑,此前转圈一停就又能点,连点几下后端才一次次回「还没跑完」。
+ */
+export function hasActiveRun(runs: readonly Pick<ScheduledTaskRun, "status">[] | undefined): boolean {
+  return (runs ?? []).some((run) => run.status === "queued" || run.status === "running");
+}
 
 export function TaskRunControls({
   enabled,
@@ -24,6 +34,7 @@ export function TaskRunControls({
   enabled: boolean;
   /** 跑不起来(绑的工作流已删除)。 */
   blocked: boolean;
+  /** 有一次还在跑(或正在发起)。这时按钮说「运行中」、点不动 —— 定时任务不重入。 */
   running: boolean;
   onRun: () => void;
   onToggle: (enabled: boolean) => void;
@@ -35,7 +46,7 @@ export function TaskRunControls({
     <div className="flex shrink-0 items-center gap-1.5">
       <span title={hint}>
         <Button variant="outline" disabled={!enabled || blocked} loading={running} onClick={onRun}>
-          <Play size={13} /> {t("runNow")}
+          <Play size={13} /> {running ? t("runStatus_running") : t("runNow")}
         </Button>
       </span>
       <label
