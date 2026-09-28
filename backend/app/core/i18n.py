@@ -3588,6 +3588,12 @@ MESSAGES: dict[str, dict[str, str]] = {
     "boardErr_documentNeedsNote": {"zh": "文档节点需要有效的笔记 ID", "en": "A document item needs a valid note ID."},
     "boardErr_documentNeedsRevision": {"zh": "文档节点需要有效的引用版本", "en": "A document item needs a valid note revision to reference."},
     "boardErr_sceneNeedsId": {"zh": "3D 场景节点需要 scene_id", "en": "A 3D scene item needs a scene_id."},
+    "boardErr_sequenceNeedsId": {"zh": "时间线格要带着它那条时间线的 sequence_id", "en": "A timeline item needs its sequence_id."},
+    "boardErr_sequenceNotInWorkspace": {"zh": "时间线格引用的时间线不在这个工作区", "en": "The timeline item points to a timeline outside this workspace."},
+    "seqErr_sequenceNotFound": {"zh": "找不到这条时间线", "en": "Timeline not found"},
+    "seqErr_assetNotInWorkspace": {"zh": "这份素材不在这条时间线所在的工作区", "en": "This asset is not in the timeline's workspace"},
+    "seqErr_noTrackForAsset": {"zh": "这条时间线上没有放 {kind} 的轨道", "en": "This timeline has no track for {kind}"},
+    "seqErr_assetHasNoLength": {"zh": "这份素材没有时长,放不上时间线", "en": "This asset has no length, so it cannot go on a timeline"},
     "boardErr_sceneHasNoAsset": {
         "zh": "3D 场景格 {item_id} 不存图片(asset_id):格子上画的是场景本身;要一张图,渲白模参考或放一格图片",
         "en": "3D scene item {item_id} holds no image (asset_id): it shows the scene itself. Render a blockout reference or add an image item.",

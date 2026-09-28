@@ -3,7 +3,7 @@ import { noteHref, type NoteReference } from "@/api/domains/notes";
 import { SaveToNote } from "@/features/notes/SaveToNote";
 import { Handle, NodeResizer, Position, useStore, type NodeProps } from "@xyflow/react";
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, BookOpen, ExternalLink, Loader2, RefreshCw, Box, Ban, Clock3, Film as FilmIcon, Group, Image as ImageIcon, Music, Plus, Square as SquareIcon, StickyNote, UsersRound, type LucideIcon } from "lucide-react";
+import { AlertTriangle, BookOpen, Clapperboard, ExternalLink, Loader2, RefreshCw, Box, Ban, Clock3, Film as FilmIcon, Group, Image as ImageIcon, Music, Plus, Square as SquareIcon, StickyNote, UsersRound, type LucideIcon } from "lucide-react";
 
 import { entityKeys, getEntity, getJob, isNodeProducer, type BoardItem, type BuiltinProducer } from "@/api/client";
 import { EntityThumb } from "@/features/entities/EntityMention";
@@ -19,6 +19,7 @@ import type { MessageKey } from "@/app/messages";
 import { cn } from "@/lib/utils";
 import { itemError, itemIsRunning, itemJobId, itemRunStatus, runningAbility, type BoardItemRunStatus } from "@/features/boards/boardItemState";
 import { SceneOverview } from "@/features/boards/SceneOverview";
+import { SequenceCell } from "@/features/boards/SequenceCell";
 import { BoardNodeLabel } from "@/features/boards/BoardNodeLabel";
 
 /**
@@ -153,6 +154,7 @@ const KIND_META: Record<BoardItem["kind"], { icon: LucideIcon; label: MessageKey
   audio: { icon: Music, label: "boardKindAudio", hint: "boardKindAudioHint" },
   frame: { icon: SquareIcon, label: "boardKindFrame", hint: "boardKindFrameHint" },
   entity: { icon: UsersRound, label: "boardKindEntity", hint: "boardEntityHint" },
+  sequence: { icon: Clapperboard, label: "boardKindSequence", hint: "boardSequenceHint" },
 };
 
 /** 这一类的图标。图标不需要翻译,所以它可以直接拿。 */
@@ -986,7 +988,27 @@ export const BOARD_NODE_TYPES: Record<BoardItem["kind"], React.ComponentType<Nod
   scene: SceneNode,
   document: DocumentNode,
   entity: EntityNode,
+  sequence: SequenceNode,
 };
+
+/**
+ * 时间线格(ADR 0030):画板上直接把几段片子拼成一条。身子在 SequenceCell(预览、缩略图条、剪刀 / 删除 / 在剪辑里打开),
+ * 这里只是和别的格子同一个外壳:名字、接点、选中的描边、拉大小。把一格视频 / 图片 / 音频连进来就是接到末尾(BoardCanvas 的 onConnect)。
+ */
+export function SequenceNode({ data, selected }: NodeProps) {
+  const nodeData = data as unknown as BoardNodeData;
+  const { item, commentMode } = nodeData;
+  return (
+    <div className={cn("group relative flex h-full w-full flex-col overflow-visible border border-border bg-panel shadow-sm", CELL_RADIUS,
+                       selected && "border-border-strong")}>
+      <NodeResizer minWidth={420} minHeight={320} isVisible={selected} lineClassName="!border-transparent"
+                   handleClassName="!h-2 !w-2 !rounded-full !border-border-strong !bg-panel" />
+      <NodeLabel data={nodeData} />
+      <Ports visible={selected} disabled={commentMode} />
+      {item.sequence_id ? <SequenceCell sequenceId={item.sequence_id} /> : null}
+    </div>
+  );
+}
 
 /** 指向素材库一份的那几种。**只此一处** —— 操作条给不给「换一份」、选择器能选什么,
  *  都问它;分散判的话,加一种就会有一处忘记改(音频此前正是这么漏掉「换一份」的)。 */
@@ -997,7 +1019,7 @@ export function isMediaKind(kind: string): kind is MediaKind {
   return (MEDIA_KINDS as readonly string[]).includes(kind);
 }
 
-/** 每种项新建时的默认大小。便签比图片矮 —— 它装的是一句话,不是一张图。 */
+/** 每种项新建时的默认大小。便签比图片矮 —— 它装的是一句话,不是一张图;时间线格上半预览、下半缩略图条(ADR 0030)。 */
 export const DEFAULT_SIZE: Record<BoardItem["kind"], { width: number; height: number }> = {
   note: { width: 220, height: 140 },
   image: { width: 260, height: 180 },
@@ -1007,4 +1029,5 @@ export const DEFAULT_SIZE: Record<BoardItem["kind"], { width: number; height: nu
   scene: { width: 320, height: 220 },
   document: { width: 320, height: 300 },
   entity: { width: 220, height: 280 },
+  sequence: { width: 560, height: 400 },
 };

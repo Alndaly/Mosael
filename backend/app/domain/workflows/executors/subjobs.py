@@ -375,10 +375,6 @@ def _sequence_in(db: Session, scope: RunScope, sequence_id: str) -> Sequence:
 
 #: 图片进时间线时的默认定格时长。图片没有 duration,不给个默认值的话 src_out 是 0,
 #: 整段会被判为空而拒掉 —— 而"把一张图接到时间线上"是很常见的用法。
-STILL_SECONDS = 5.0
-
-#: 素材种类 → 该进哪种轨道。没列的(图片)按视频走 —— 图片在时间线上就是一段定格视频。
-_TRACK_FOR_ASSET = {"audio": "audio"}
 
 
 @register("timeline_append")
@@ -389,7 +385,8 @@ def timeline_append(db: Session, scope: RunScope, config: dict[str, Any]) -> dic
     `{"kind": "insert_clip", "timeline_start": …}` —— 那个 timeline_start 还得自己算,
     而"接到末尾"本来就该由机器算。
     """
-    from app.domain.sequences.operations import InsertClip, SetClipSpeed, insert_clip, set_clip_speed, timeline_span
+    from app.domain.sequences.append import TRACK_FOR_ASSET, asset_span, track_end, track_for_asset
+    from app.domain.sequences.operations import InsertClip, SetClipSpeed, insert_clip, set_clip_speed
 
     sequence = _sequence_in(db, scope, str(config.get("sequence_id", "")).strip())
     asset_id = str(config.get("asset_id", "")).strip()
@@ -408,19 +405,14 @@ def timeline_append(db: Session, scope: RunScope, config: dict[str, Any]) -> dic
     else:
         # 留空就挑第一条同类轨道 —— 绝大多数时间线只有一条视频轨和一条音频轨,
         # 逼用户先跑一个「看一眼时间线」把 id 取出来是纯仪式。
-        want = _TRACK_FOR_ASSET.get(asset.kind, "video")
-        track = next((one for one in tracks if one.kind == want), None)
+        track = track_for_asset(sequence, asset.kind)
         if track is None:
-            raise WorkflowDomainError("wfErr_noSuchTrackKind", params={"kind": want})
+            raise WorkflowDomainError("wfErr_noSuchTrackKind", params={"kind": TRACK_FOR_ASSET.get(asset.kind, "video")})
 
     # 截取范围:留空就是整段素材。
     src_in = float(config.get("start") or 0.0)
     src_out = config.get("end")
-    # 时长在 media_info 里,不是独立列(见 domain/assets/importer 的探测)。
-    # 图片没有 duration —— 给它一个默认的定格时长,否则 src_out 会是 0、整段被判为空。
-    probed = (asset.media_info or {}).get("duration")
-    fallback = float(probed) if probed else (STILL_SECONDS if asset.kind == "image" else 0.0)
-    src_out = float(src_out) if src_out not in (None, "") else fallback
+    src_out = float(src_out) if src_out not in (None, "") else asset_span(asset)
     if src_out <= src_in:
         raise WorkflowDomainError("wfErr_trimRange")
 
@@ -432,10 +424,7 @@ def timeline_append(db: Session, scope: RunScope, config: dict[str, Any]) -> dic
         if timeline_start < 0:
             raise WorkflowDomainError("wfErr_startNegative")
     else:
-        timeline_start = max(
-            (clip.timeline_start + timeline_span(clip) for clip in (track.clips or [])),
-            default=0.0,
-        )
+        timeline_start = track_end(track)
     clip = insert_clip(
         db,
         sequence.id,

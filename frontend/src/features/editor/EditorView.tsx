@@ -149,7 +149,10 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
     queryKey: ["sequences", project.id],
     queryFn: () => api<Sequence[]>(`/api/projects/${project.id}/sequences`),
   });
-  const sequence = sequences.data?.[0] ?? null;
+  //: 链接里点名的那条时间线(画板上时间线格的「在剪辑里打开」,ADR 0030:一张画板的几格时间线在同一个项目里)。
+  //: 只在第一次渲染时读 —— 之后地址会被路由改写成只剩 ?p=。点名的不在这个项目里就回到默认:最近改过的那条。
+  const [namedSequence] = React.useState(() => new URLSearchParams(window.location.hash.split("?")[1] ?? "").get("s"));
+  const sequence = sequences.data?.find((one) => one.id === namedSequence) ?? sequences.data?.[0] ?? null;
 
   // 换时间线 = 换内容:播放头与播放状态是全局 store 的,不重置就会带着上一条时间线的进度
   // 继续播新序列(播放头还可能停在新序列长度之外)。这里按序列 id 归零并停播,覆盖所有切换

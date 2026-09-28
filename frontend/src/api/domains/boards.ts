@@ -9,7 +9,7 @@ export type BoardAbilitySetting = Partial<BoardRunForms["node"]>;
 export interface BoardItem {
   id: string;
   /** 画板上没有单独的工具格:把内容变成新内容的工具是内容格自己的能力(`form.abilities`,ADR 0025 修订)。 */
-  kind: "note" | "image" | "video" | "audio" | "frame" | "scene" | "document" | "entity";
+  kind: "note" | "image" | "video" | "audio" | "frame" | "scene" | "document" | "entity" | "sequence";
   /** 用户给这一格起的名字。**每种都有、只此一处**(分组框的名字也在这,不在 text)。
    *  没有 = 没起名,显示种类名(见 boardNodes.itemName)。和后端 canvas._normalize_title 同形。 */
   title?: string;
@@ -23,6 +23,8 @@ export interface BoardItem {
   color?: string;
   asset_id?: string;
   scene_id?: string;
+  /** 时间线格(ADR 0030)背后的那条时间线:放在画板自己的同名项目里,在剪辑页里也能接着改。 */
+  sequence_id?: string;
   /** 资产格(ADR 0027)引用的资产:资产库里的一个人物 / 场景 / 道具。连进生成格就等于在提示词里 @ 了它。 */
   entity_id?: string;
   note_id?: string;
@@ -109,6 +111,11 @@ export function listBoards(workspaceId: string): Promise<Board[]> {
 
 export function getBoard(boardId: string, workspaceId: string): Promise<Board> {
   return api<Board>(`/api/boards/${boardId}?workspace_id=${encodeURIComponent(workspaceId)}`);
+}
+
+/** 放一格时间线格之前,先给这张画板建好它那条时间线(ADR 0030)。 */
+export function createBoardSequence(boardId: string, workspaceId: string): Promise<{ sequence_id: string; name: string }> {
+  return api(`/api/boards/${boardId}/sequences`, { method: "POST", body: JSON.stringify({ workspace_id: workspaceId }) });
 }
 
 export function createBoard(body: { workspace_id: string; name?: string }): Promise<Board> {

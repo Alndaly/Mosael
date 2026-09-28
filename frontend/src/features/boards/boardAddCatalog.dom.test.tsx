@@ -36,9 +36,9 @@ describe("画板「添加」单子:只有格子,每一行都是图标、名字�
     Element.prototype.scrollIntoView ??= () => {};
   });
 
-  it("十种放法,没有工具那一组 —— 把内容变成新内容的事是格子自己的能力", () => {
+  it("十一种放法,没有工具那一组 —— 把内容变成新内容的事是格子自己的能力", () => {
     const rows = openMenu();
-    expect(rows).toHaveLength(10);
+    expect(rows).toHaveLength(11);
     for (const row of rows) {
       const [label, description] = lines(row);
       expect(label, "每一行都有名字").toBeTruthy();
@@ -62,6 +62,7 @@ describe("画板「添加」单子:只有格子,每一行都是图标、名字�
     expect(byLabel["素材"]).toBe("从素材库挑一张图片、一段视频或音频放上来");
     expect(byLabel["资产"]).toBe("资产库里的一个人物、场景或道具");
     expect(byLabel["3D 场景"]).toBe("引用一个 3D 场景");
+    expect(byLabel["时间线"]).toBe("把几段视频、图片、音频拼成一条:连进来就接到末尾");
     expect(byLabel["分组"]).toBe("把几格圈在一起");
   });
 

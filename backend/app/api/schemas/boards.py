@@ -24,6 +24,17 @@ class BoardCreate(ApiModel):
     canvas: dict | None = None
 
 
+class BoardSequenceCreate(ApiModel):
+    """给画板建一条时间线(时间线格,ADR 0030)。"""
+
+    workspace_id: str
+
+
+class BoardSequenceOut(ApiModel):
+    sequence_id: str
+    name: str
+
+
 class BoardDuplicate(ApiModel):
     workspace_id: str
     #: 副本叫什么。「× 副本」是界面语言里的一句话,由前端按当前语言拼好;留空就沿用原名。

@@ -8,12 +8,14 @@ import { CanvasPreview } from "@/components/layout/CanvasPreview";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowUpRight, Bot, Check, CheckSquare, Copy, LayoutGrid, ListChecks, Map as MapIcon, Maximize2, Pencil, Plus, Redo2, Trash2, Undo2, X } from "lucide-react";
 import { toast } from "sonner";
+import { errorText } from "@/api/errorMessage";
 
 import {
   api as api2,
   ApiError,
   cancelJob,
   createBoard,
+  createBoardSequence,
   isNodeProducer,
   listBoardProducers,
   deleteBoard,
@@ -929,6 +931,11 @@ function BoardDetail({
                 //: 「素材」一行挑三种:挑中哪一种就放哪一种格子。
                 if (kind === "pick-media") {
                   setPicking({ kind: "media", place: (assetId, media) => api?.add(media, { asset_id: assetId }) });
+                } else if (kind === "sequence-new") {
+                  //: 时间线格背后是一条正常的时间线(ADR 0030):先建好(放进这张画板的同名项目),再放格子。
+                  void createBoardSequence(board.id, workspaceId)
+                    .then((made) => api?.add("sequence", { sequence_id: made.sequence_id, text: made.name }))
+                    .catch((error: unknown) => toast.error(errorText(error)));
                 } else if (kind === "scene-new") {
                   //: 一格空的 3D 场景:连一段剧本进来,按剧本搭白模(场景格的这种填法就是它自己的产出者)。
                   api?.add("scene", { form: { producer: SCENE_FROM_TEXT } });

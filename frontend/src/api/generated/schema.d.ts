@@ -2006,6 +2006,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/sequences/{sequence_id}/append": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Append Asset
+         * @description 把整段素材接到它那种轨道的末尾;时间线还空着时画幅跟着它走(sequences.append)。
+         */
+        post: operations["append_asset_api_sequences__sequence_id__append_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/sequences/{sequence_id}/clips": {
         parameters: {
             query?: never;
@@ -4098,6 +4118,26 @@ export interface paths {
         head?: never;
         /** Update */
         patch: operations["update_api_boards__board_id__patch"];
+        trace?: never;
+    };
+    "/api/boards/{board_id}/sequences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Sequence
+         * @description 放一格时间线格之前先建好它那条时间线(放进这张画板的项目,ADR 0030)。
+         */
+        post: operations["create_sequence_api_boards__board_id__sequences_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/boards/{board_id}/duplicate": {
@@ -7136,6 +7176,14 @@ export interface components {
              */
             used_transcript: boolean;
         };
+        /**
+         * AppendAssetRequest
+         * @description 把整段素材接到它那种轨道的末尾(画板时间线格的连线,ADR 0030)。
+         */
+        AppendAssetRequest: {
+            /** Asset Id */
+            asset_id: string;
+        };
         /** AsrModelOut */
         AsrModelOut: {
             /** Id */
@@ -7558,6 +7606,21 @@ export interface components {
             form?: {
                 [key: string]: unknown;
             };
+        };
+        /**
+         * BoardSequenceCreate
+         * @description 给画板建一条时间线(时间线格,ADR 0030)。
+         */
+        BoardSequenceCreate: {
+            /** Workspace Id */
+            workspace_id: string;
+        };
+        /** BoardSequenceOut */
+        BoardSequenceOut: {
+            /** Sequence Id */
+            sequence_id: string;
+            /** Name */
+            name: string;
         };
         /** BoardUpdate */
         BoardUpdate: {
@@ -17207,6 +17270,41 @@ export interface operations {
             };
         };
     };
+    append_asset_api_sequences__sequence_id__append_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sequence_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AppendAssetRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SequenceOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     insert_clip_api_sequences__sequence_id__clips_post: {
         parameters: {
             query?: never;
@@ -21703,6 +21801,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BoardOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_sequence_api_boards__board_id__sequences_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                board_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BoardSequenceCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BoardSequenceOut"];
                 };
             };
             /** @description Validation Error */

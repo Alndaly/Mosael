@@ -87,7 +87,7 @@ def _field_error(item_key: str, bare_key: str, field: str, item_id: str, **param
 #: **资产格**(`entity`,ADR 0027):引用资产库里的一个人物 / 场景 / 道具(`entity_id`),显示封面、名字和种类。
 #: 它能当生成格的上游 —— 连进去就和在提示词里 `@` 它一样(见 actions.generate_on_board)。它自己不产出东西;
 #: 「补全多角度」「生成表情」这类能力是阶段 4 的事,到时照内容格能力的做法挂在它身上(`form.abilities`)。
-ITEM_KINDS = ("note", "image", "video", "audio", "frame", "scene", "document", "entity")
+ITEM_KINDS = ("note", "image", "video", "audio", "frame", "scene", "document", "entity", "sequence")
 
 #: 便签正文的格式。只有一种非默认的:能力交回的结构化数据(JSON)落成的便签,界面按代码排版。
 TEXT_FORMATS = ("json",)
@@ -103,6 +103,8 @@ DEFAULT_SIZE: dict[str, tuple[int, int]] = {
     "scene": (320, 220),
     "document": (320, 300),
     "entity": (220, 280),
+    #: 时间线格(ADR 0030):上半预览、下半一条缩略图条。
+    "sequence": (560, 400),
 }
 
 #: 素材在画板上**有自己那种格子**的几种:一份图片 / 视频 / 音频素材放进同名的格子里。能力交回的素材按它
@@ -542,6 +544,13 @@ def normalize_canvas(raw: Any) -> dict[str, Any]:
                     raise BoardDomainError("boardErr_sceneNeedsId")
                 item["scene_id"] = scene_id.strip()
 
+        if kind == "sequence":
+            #: 时间线格背后是一条正常的 Mosael 时间线(ADR 0030):放下时就建好了,所以一定带着 id。
+            sequence_id = entry.get("sequence_id")
+            if not isinstance(sequence_id, str) or not sequence_id.strip() or len(sequence_id) > 64:
+                raise BoardDomainError("boardErr_sequenceNeedsId")
+            item["sequence_id"] = sequence_id.strip()
+
         if kind == "entity":
             entity_id = entry.get("entity_id")
             if not isinstance(entity_id, str) or not entity_id.strip() or len(entity_id) > 64:
@@ -553,6 +562,8 @@ def normalize_canvas(raw: Any) -> dict[str, Any]:
         #: 场景,不是某一帧。此前它存着编辑器里导出过的一帧,格子上看到的和喂给下游的不是一张,还会过期。
         if kind == "scene" and asset_id is not None:
             raise BoardDomainError("boardErr_sceneHasNoAsset", item_id=item_id)
+        if kind == "sequence" and asset_id is not None:
+            raise BoardDomainError("boardErr_itemFieldInvalid", item_id=item_id, field="asset_id")
         if asset_id is not None:
             if not isinstance(asset_id, str) or not asset_id.strip():
                 raise BoardDomainError("boardErr_itemFieldInvalid", item_id=item_id, field="asset_id")
@@ -666,6 +677,17 @@ def _validate_references(
         owned = set(db.scalars(select(Scene3D.id).where(Scene3D.workspace_id == workspace_id, Scene3D.id.in_(ids))))
         if owned != ids:
             raise BoardDomainError("boardErr_sceneNotInWorkspace")
+
+    # 时间线格引用的时间线:只查新引入的(同下面的资产格)—— 时间线在剪辑页被删了,那一格照样能挪、能删。
+    from app.db.models import Sequence
+    retained_sequences = {item.get("sequence_id") for item in (existing or {}).get("items", []) if item["kind"] == "sequence"}
+    fresh_sequences = {item["sequence_id"] for item in canvas["items"]
+                       if item["kind"] == "sequence" and item["sequence_id"] not in retained_sequences}
+    if fresh_sequences:
+        owned_sequences = set(db.scalars(select(Sequence.id).where(
+            Sequence.workspace_id == workspace_id, Sequence.id.in_(fresh_sequences))))
+        if owned_sequences != fresh_sequences:
+            raise BoardDomainError("boardErr_sequenceNotInWorkspace")
 
     # 资产格引用的资产:**只查新引入的**,和文档、素材同一条 —— 资产删了之后那一格照样能挪、能删、能复制。
     from app.db.models import Entity

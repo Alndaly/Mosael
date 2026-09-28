@@ -88,6 +88,12 @@ class SequenceOut(OrmModel):
     tracks: list[TrackOut] = Field(default_factory=list)
 
 
+class AppendAssetRequest(ApiModel):
+    """把整段素材接到它那种轨道的末尾(画板时间线格的连线,ADR 0030)。"""
+
+    asset_id: str
+
+
 class InsertClipRequest(ApiModel):
     track_id: str
     asset_id: str

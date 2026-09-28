@@ -41,6 +41,7 @@
   "migrate-board-tool-cells-become-abilities": "9a9781fde35a091c",
   "migrate-board-trim-slots-record-their-source": "a2c4feb41524dfbf",
   "migrate-board-wiring-tools-become-notes": "13c0287caee11f94",
+  "migrate-boards-remember-their-project": "ee4b2d5172e5319d",
   "migrate-browser-action-leases": "db82d8419ae90156",
   "migrate-browser-boolean-options": "8656267a8529d045",
   "migrate-browser-pool": "ba842907261bd6f7",

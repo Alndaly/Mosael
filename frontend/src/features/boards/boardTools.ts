@@ -130,6 +130,8 @@ const KIND_ROWS: KindRow[] = [
   { value: "document", kind: "document", group: "create" },
   //: 一格空的 3D 场景,连一段剧本进来按剧本搭(「从库里放」那一行是挑一个现成的)。
   { value: "scene-new", kind: "scene", group: "create", text: { label: "boardKindScene", hint: "boardsNewSceneHint", icon: Box } },
+  //: 一格时间线(ADR 0030):放下时先建好它那条时间线,把视频、图片、音频连进来就是接到末尾。
+  { value: "sequence-new", kind: "sequence", group: "create" },
   //: 一行挑三种:弹窗里按图片 / 视频 / 音频筛,挑中哪一种放哪一种格子(AssetPickerDialog 的 `media`)。
   { value: "pick-media", kind: "image", group: "library", text: { label: "boardsAddMedia", hint: "boardsAddMediaHint", icon: FolderOpen } },
   //: 资产库里的人物 / 场景 / 道具(ADR 0027):先挑再放,和 3D 场景一样。

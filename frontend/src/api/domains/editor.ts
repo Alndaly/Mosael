@@ -39,6 +39,15 @@ export function deleteClipsBatch(sequenceId: string, clipIds: string[]): Promise
   });
 }
 
+export function getSequence(sequenceId: string): Promise<Sequence> {
+  return api<Sequence>(`/api/sequences/${sequenceId}`);
+}
+
+/** 把整段素材接到它那种轨道的末尾;时间线还空着时画幅跟着它走(后端 sequences.append)。 */
+export function appendAssetToSequence(sequenceId: string, assetId: string): Promise<Sequence> {
+  return api<Sequence>(`/api/sequences/${sequenceId}/append`, { method: "POST", body: JSON.stringify({ asset_id: assetId }) });
+}
+
 export function rippleDeleteClipsBatch(sequenceId: string, clipIds: string[]): Promise<Sequence> {
   return api<Sequence>(`/api/sequences/${sequenceId}/clips/ripple-delete-batch`, {
     method: "POST",

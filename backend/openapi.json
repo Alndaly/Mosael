@@ -5215,6 +5215,59 @@
         }
       }
     },
+    "/api/sequences/{sequence_id}/append": {
+      "post": {
+        "tags": [
+          "sequences"
+        ],
+        "summary": "Append Asset",
+        "description": "把整段素材接到它那种轨道的末尾;时间线还空着时画幅跟着它走(sequences.append)。",
+        "operationId": "append_asset_api_sequences__sequence_id__append_post",
+        "parameters": [
+          {
+            "name": "sequence_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Sequence Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AppendAssetRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SequenceOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/sequences/{sequence_id}/clips": {
       "post": {
         "tags": [
@@ -12118,6 +12171,59 @@
                     "type": "boolean"
                   },
                   "title": "Response Remove Api Boards  Board Id  Delete"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/boards/{board_id}/sequences": {
+      "post": {
+        "tags": [
+          "boards"
+        ],
+        "summary": "Create Sequence",
+        "description": "放一格时间线格之前先建好它那条时间线(放进这张画板的项目,ADR 0030)。",
+        "operationId": "create_sequence_api_boards__board_id__sequences_post",
+        "parameters": [
+          {
+            "name": "board_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Board Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BoardSequenceCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BoardSequenceOut"
                 }
               }
             }
@@ -20809,6 +20915,20 @@
         ],
         "title": "AnalyzeAssetResponse"
       },
+      "AppendAssetRequest": {
+        "properties": {
+          "asset_id": {
+            "type": "string",
+            "title": "Asset Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "asset_id"
+        ],
+        "title": "AppendAssetRequest",
+        "description": "把整段素材接到它那种轨道的末尾(画板时间线格的连线,ADR 0030)。"
+      },
       "AsrModelOut": {
         "properties": {
           "id": {
@@ -21655,6 +21775,38 @@
         ],
         "title": "BoardRun",
         "description": "在画板上跑一个产出者(生成、写字、念出来、截一段……),产出落回 `item_id` 那一格。\n\n`form` 是这个产出者自己的表单,形状由它声明、在领域里校验(见 domain/boards/producers)——\n这里不为每个产出者各开一个请求体。"
+      },
+      "BoardSequenceCreate": {
+        "properties": {
+          "workspace_id": {
+            "type": "string",
+            "title": "Workspace Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "workspace_id"
+        ],
+        "title": "BoardSequenceCreate",
+        "description": "给画板建一条时间线(时间线格,ADR 0030)。"
+      },
+      "BoardSequenceOut": {
+        "properties": {
+          "sequence_id": {
+            "type": "string",
+            "title": "Sequence Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "sequence_id",
+          "name"
+        ],
+        "title": "BoardSequenceOut"
       },
       "BoardUpdate": {
         "properties": {

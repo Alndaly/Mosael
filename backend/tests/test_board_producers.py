@@ -133,6 +133,10 @@ def test_写入之后每一个能产出的空槽都写明了产出者() -> None:
                 item["scene_id"] = "s1"
                 #: 场景格不存图(ADR 0029):「有产出」的那一种对它不存在。
                 item.pop("asset_id", None)
+            if kind == "sequence":
+                #: 时间线格背后是一条时间线(ADR 0030),不存图。
+                item["sequence_id"] = "q1"
+                item.pop("asset_id", None)
             if kind == "entity":
                 item["entity_id"] = "e1"
             if kind in ("frame", "entity") or (kind == "note" and name == "named"):

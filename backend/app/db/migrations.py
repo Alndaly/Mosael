@@ -1616,6 +1616,18 @@ def _migrate_board_scene_cells_hold_no_image() -> None:
                 )
 
 
+def _migrate_boards_remember_their_project() -> None:
+    """画板记着自己的项目(`boards.project_id`,ADR 0030):时间线格背后的时间线放在那里。老画板没有,第一次放
+    时间线格时才建 —— 这里只加列。**必须在 SCHEMA 之前**:create_all 不会给已有的表补列。"""
+    inspector = inspect(engine)
+    if "boards" not in set(inspector.get_table_names()):
+        return
+    if "project_id" in {column["name"] for column in inspector.get_columns("boards")}:
+        return
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE boards ADD COLUMN project_id VARCHAR(64)"))
+
+
 def _migrate_voices_declare_consent() -> None:
     """克隆音色加授权声明(ADR 0028 §5):`consent_kind` / `consent_by` / `consent_at`。
 
@@ -5016,6 +5028,7 @@ def migration_plan() -> MigrationPlan:
                 _migrate_plugin_authorization_rejected,
                 _migrate_drop_the_community_integration,
                 _migrate_voices_declare_consent,
+                _migrate_boards_remember_their_project,
             ),
             #: create_all 每次启动都要跑 —— 新版本加的表靠它建出来,记账跳过就再也建不了。
             *_recurring(MigrationPhase.SCHEMA, _create_current_schema),

@@ -7,7 +7,7 @@ from fastapi.exceptions import RequestValidationError
 
 from app.api.deps import CurrentUser, DbSession
 from app.core.i18n import get_current_locale
-from app.api.schemas import BoardCreate, BoardDuplicate, BoardOut, BoardProducerOut, BoardRun, BoardUpdate
+from app.api.schemas import BoardCreate, BoardDuplicate, BoardOut, BoardProducerOut, BoardRun, BoardSequenceCreate, BoardSequenceOut, BoardUpdate
 from app.db.models import Board
 from app.domain.boards import (
     BoardDomainError,
@@ -79,6 +79,19 @@ def create(body: BoardCreate, db: DbSession, user: CurrentUser) -> Board:
         return create_board(db, workspace_id=body.workspace_id, name=body.name, canvas=body.canvas, actor_id=user.id)
     except BoardDomainError as exc:
         raise _board_http_error(exc) from exc
+
+
+@router.post("/boards/{board_id}/sequences", response_model=BoardSequenceOut)
+def create_sequence(board_id: str, body: BoardSequenceCreate, db: DbSession, user: CurrentUser) -> dict:
+    """放一格时间线格之前先建好它那条时间线(放进这张画板的项目,ADR 0030)。"""
+    from app.domain.boards.timelines import create_board_sequence
+
+    ensure_workspace_perm(db, user, body.workspace_id, "edit")
+    try:
+        sequence = create_board_sequence(db, body.workspace_id, board_id)
+    except BoardDomainError as exc:
+        raise _board_http_error(exc) from exc
+    return {"sequence_id": sequence.id, "name": sequence.name}
 
 
 @router.post("/boards/{board_id}/duplicate", response_model=BoardOut)

@@ -20,6 +20,8 @@ class Board(Base):
     workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False)
     name: Mapped[str] = mapped_column(String(180), nullable=False)
     canvas: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    #: 这张画板的时间线格放进哪个项目(ADR 0030):第一次放时间线格时建一个同名项目,记在这里,画板改名不丢。
+    project_id: Mapped[str | None] = mapped_column(ForeignKey("projects.id", ondelete="SET NULL"), nullable=True)
     #: 客户端写入时携带的乐观并发令牌。它描述当前投影，不是历史版本号；每次成功写入加一。
     revision: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)

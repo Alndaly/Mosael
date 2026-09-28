@@ -13,10 +13,24 @@
  *    几十下撤销才回得到上一个状态。所以攒一下再记(和自动保存同一个道理)。
  *  · **有新动作时清掉重做。** 撤回去两步、又改了点别的,那两步就再也接不上了;留着的话
  *    「重做」会把用户带到一个他从没到过的画布。
+ *
+ * 时间线格(ADR 0030)里的剪刀、删除、拖动排序、连线加片段改的是**服务端的一条时间线**,不是画布:它们在这摞里记成
+ * 一个「时间线的一步」,撤到它时画布不动,调那条时间线自己的撤销(用户:「剪切操作不支持撤销吗」)。一摞里交错着两种步,
+ * ⌘Z 就按用户做的先后一步步退,不管那一步落在画布上还是时间线上。
  */
+
+/** 时间线格里做的一步:撤销 / 重做它就是那条时间线自己的撤销 / 重做。 */
+export type SequenceStep = { sequence: string };
+/** 一步:画布的一份快照(字符串),或者时间线的一步。 */
+export type Step = string | SequenceStep;
+
+export function sequenceOf(step: Step | undefined): string | null {
+  return typeof step === "object" ? step.sequence : null;
+}
+
 export interface History {
-  past: string[];
-  future: string[];
+  past: Step[];
+  future: Step[];
   /** 当前这一份 —— 它不在 past 里,撤销时才被推进 future。 */
   present: string;
 }
@@ -37,6 +51,12 @@ export function record(history: History, next: string, limit = 100): History {
   };
 }
 
+/** 记一步时间线上的操作。画布没变,present 不动;和画布的一步一样清掉重做。 */
+export function recordSequence(history: History, sequenceId: string, limit = 100): History {
+  const past = [...history.past, { sequence: sequenceId }];
+  return { past: past.length > limit ? past.slice(past.length - limit) : past, future: [], present: history.present };
+}
+
 export function canUndo(history: History): boolean {
   return history.past.length > 0;
 }
@@ -49,12 +69,15 @@ export function canRedo(history: History): boolean {
 export function undo(history: History): History | null {
   if (history.past.length === 0) return null;
   const past = history.past.slice(0, -1);
-  const present = history.past[history.past.length - 1];
-  return { past, future: [history.present, ...history.future], present };
+  const step = history.past[history.past.length - 1];
+  //: 时间线的一步:画布停在原处,这一步挪进重做。
+  if (typeof step === "object") return { past, future: [step, ...history.future], present: history.present };
+  return { past, future: [history.present, ...history.future], present: step };
 }
 
 export function redo(history: History): History | null {
   if (history.future.length === 0) return null;
-  const [present, ...future] = history.future;
-  return { past: [...history.past, history.present], future, present };
+  const [step, ...future] = history.future;
+  if (typeof step === "object") return { past: [...history.past, step], future, present: history.present };
+  return { past: [...history.past, history.present], future, present: step };
 }

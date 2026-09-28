@@ -1,0 +1,46 @@
+import React from "react";
+
+/**
+ * 一格时间线的播放头和选中的那一段(ADR 0030)。**格子和它上方的操作条读同一份**:剪刀切的是播放头所在的那一段、
+ * 删除删的是选中的那一段,而按钮在操作条上(用户:「这些按钮放到上方弹窗中去」),状态在格子里 —— 两处各存一份的话,
+ * 按钮拿到的播放头永远是上一次的。按时间线 id 存,不进画布数据(它是这一刻的界面状态,不是画板的内容)。
+ */
+export type SequenceCursor = { time: number; picked: string | null };
+
+const EMPTY: SequenceCursor = { time: 0, picked: null };
+const cursors = new Map<string, SequenceCursor>();
+const listeners = new Map<string, Set<() => void>>();
+
+export function readSequenceCursor(sequenceId: string): SequenceCursor {
+  return cursors.get(sequenceId) ?? EMPTY;
+}
+
+export function updateSequenceCursor(sequenceId: string, patch: Partial<SequenceCursor>): void {
+  cursors.set(sequenceId, { ...readSequenceCursor(sequenceId), ...patch });
+  for (const listener of listeners.get(sequenceId) ?? []) listener();
+}
+
+export function useSequenceCursor(sequenceId: string): SequenceCursor {
+  const subscribe = React.useCallback((listener: () => void) => {
+    const set = listeners.get(sequenceId) ?? new Set();
+    set.add(listener);
+    listeners.set(sequenceId, set);
+    return () => set.delete(listener);
+  }, [sequenceId]);
+  return React.useSyncExternalStore(subscribe, () => readSequenceCursor(sequenceId));
+}
+
+/**
+ * 格子里在时间线上做成了一步(剪刀、删除、拖动排序、连线加片段):告诉画布,记进画板的撤销栈(canvasHistory 的
+ * 「时间线的一步」)。格子和画布之间只隔这一条通知,格子不必知道画布的撤销栈长什么样。
+ */
+const editListeners = new Set<(sequenceId: string) => void>();
+
+export function noteSequenceEdit(sequenceId: string): void {
+  for (const listener of editListeners) listener(sequenceId);
+}
+
+export function onSequenceEdit(listener: (sequenceId: string) => void): () => void {
+  editListeners.add(listener);
+  return () => editListeners.delete(listener);
+}

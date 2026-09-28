@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { canRedo, canUndo, emptyHistory, record, redo, undo } from "./canvasHistory";
+import { canRedo, canUndo, emptyHistory, record, recordSequence, redo, sequenceOf, undo } from "./canvasHistory";
 
 describe("画布历史", () => {
   it("记一步、退一步、再回来", () => {
@@ -51,4 +51,30 @@ describe("画布历史", () => {
     expect(h.past[h.past.length - 1]).toBe("9");
     expect(h.present).toBe("10");
   });
-})
+
+  it("时间线格的一步和画布的步交错着退:退到时间线那一步时画布不动,重做再按原顺序回来", () => {
+    let h = record(emptyHistory("A"), "B");
+    h = recordSequence(h, "seq");
+    h = record(h, "C");
+    h = undo(h)!;
+    expect(h.present).toBe("B");
+    expect(sequenceOf(h.past.at(-1)), "下一步退的是时间线").toBe("seq");
+    h = undo(h)!;
+    expect(h.present, "撤时间线那一步时画布停在原处").toBe("B");
+    expect(sequenceOf(h.future[0])).toBe("seq");
+    h = undo(h)!;
+    expect(h.present).toBe("A");
+    h = redo(redo(redo(h)!)!)!;
+    expect(h.present).toBe("C");
+    expect(sequenceOf(h.past.at(-1))).toBeNull();
+    expect(sequenceOf(h.past.at(-2))).toBe("seq");
+  });
+
+  it("时间线上做了新的一步,重做就没了", () => {
+    let h = record(record(emptyHistory("A"), "B"), "C");
+    h = undo(h)!;
+    h = recordSequence(h, "seq");
+    expect(canRedo(h)).toBe(false);
+    expect(h.present).toBe("B");
+  });
+});

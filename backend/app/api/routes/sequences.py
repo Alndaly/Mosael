@@ -16,6 +16,7 @@ from app.api.schemas import (
     CutClipRangesRequest,
     CutClipRangesBatchRequest,
     ExportRequest,
+    AppendAssetRequest,
     InsertClipRequest,
     InsertTextClipRequest,
     JobOut,
@@ -206,6 +207,16 @@ def list_sequences(project_id: str, request: Request, db: DbSession, user: Curre
     if request.headers.get("if-none-match") == etag:
         return Response(status_code=304, headers=headers)
     return Response(f"[{','.join(bodies)}]", media_type="application/json", headers=headers)
+
+
+@router.post("/sequences/{sequence_id}/append", response_model=SequenceOut)
+def append_asset(sequence_id: str, body: AppendAssetRequest, db: DbSession, user: CurrentUser) -> Response:
+    """把整段素材接到它那种轨道的末尾;时间线还空着时画幅跟着它走(sequences.append)。"""
+    from app.domain.sequences.append import append_asset as append
+
+    require_sequence_access(db, user, sequence_id, perm="edit")
+    _apply(lambda: append(db, sequence_id, body.asset_id, actor_id=user.id))
+    return _sequence_response(_get_sequence(db, sequence_id))
 
 
 @router.post("/sequences/{sequence_id}/clips", response_model=SequenceOut)

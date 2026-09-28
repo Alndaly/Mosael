@@ -2,7 +2,7 @@ import { CANVAS_WINDOW_SURFACE_CLASS } from "@/components/app/canvasPanelLayout"
 import { CommentCard } from "@/features/collaboration/CommentCard";
 import { AnnotationModeHint } from "@/features/markers/AnnotationModeHint";
 import { NO_UPSTREAM, upstreamOf } from "./boardUpstream";
-import { useQueries, useQuery } from "@tanstack/react-query";
+import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { getNoteReference, noteReferenceQuery } from "@/api/domains/notes";
 import { NotePickerDialog } from "@/features/notes/NotePickerDialog";
@@ -54,11 +54,14 @@ import { ActionMenu } from "@/components/layout/ActionMenu";
 import { Hint, TooltipProvider } from "@/components/ui/tooltip";
 import { toPlainText } from "@/components/markdown/inlineSyntax";
 import { errorText } from "@/api/errorMessage";
+import { appendAssetToSequence, redoSequence, undoSequence } from "@/api/domains/editor";
+import { boardSequenceKey, SequenceToolbarActions } from "@/features/boards/SequenceCell";
 import { isMediaFile, useFileDrop } from "@/lib/useFileDrop";
 import { usePersistentViewport } from "@/lib/usePersistentTab";
 import { cn } from "@/lib/utils";
 import { isCanvasKeyTarget, listenKeys } from "@/lib/shortcuts";
-import { canRedo, canUndo, emptyHistory, record, redo, undo } from "@/features/boards/canvasHistory";
+import { canRedo, canUndo, emptyHistory, record, recordSequence, redo, sequenceOf, undo } from "@/features/boards/canvasHistory";
+import { noteSequenceEdit, onSequenceEdit } from "@/features/boards/sequenceCursor";
 import { TrimComposer } from "@/features/boards/TrimComposer";
 import { canAskWriter, composerOnDemand, renderAbility, renderComposer, slotProducers } from "@/features/boards/boardComposers";
 import { BOARD_NODE_TYPES, DEFAULT_SIZE, NOTE_COLORS, noteColorClass , isMediaKind, kindIcon, kindText, SPAWNABLE_KINDS, type MediaKind } from "@/features/boards/boardNodes";
@@ -406,6 +409,24 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
   const [inputMode] = useCanvasInputMode();
   const t = useI18n();
   const rf = React.useRef<ReactFlowInstance | null>(null);
+  const queryClient = useQueryClient();
+
+  /** 连进时间线格(ADR 0030)= 把那一格的素材接到这条时间线的末尾。连线本身照常留着;断开**不**从时间线上删 ——
+   *  那一段可能已经被切过、排过,自动删会丢掉这些手工。 */
+  const appendOnConnect = React.useCallback((connection: Connection) => {
+    const itemOf = (id: string | null) => (id ? (rf.current?.getNode(id)?.data as { item?: BoardItem } | undefined)?.item : undefined);
+    const source = itemOf(connection.source);
+    const target = itemOf(connection.target);
+    if (target?.kind !== "sequence" || !target.sequence_id || !source?.asset_id) return;
+    if (!["video", "image", "audio"].includes(source.kind)) return;
+    const sequenceId = target.sequence_id;
+    void appendAssetToSequence(sequenceId, source.asset_id)
+      .then((next) => {
+        queryClient.setQueryData(boardSequenceKey(sequenceId), next);
+        noteSequenceEdit(sequenceId);
+      })
+      .catch((error: unknown) => toast.error(errorText(error)));
+  }, [queryClient]);
   const surface = React.useRef<HTMLDivElement | null>(null);
   //: Backspace / Delete 只删冲着画布来的那一下 —— 和工作流编辑器同一个钩子。实例从 Provider 取,
   //: 不等 onInit:删除键在画布挂上的那一刻就该认。
@@ -888,23 +909,41 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
     return () => clearTimeout(timer);
   }, [serialized]);
 
+  //: 时间线格里做成的一步记进这摞(见 canvasHistory 的「时间线的一步」)。
+  React.useEffect(() => onSequenceEdit((sequenceId) => setHistory((current) => recordSequence(current, sequenceId))), []);
+
+  /** 撤 / 重做时间线格的一步:调那条时间线自己的撤销 / 重做,格子读的缓存换成回来的那条。 */
+  const replaySequence = React.useCallback((sequenceId: string, direction: "undo" | "redo") => {
+    void (direction === "undo" ? undoSequence(sequenceId) : redoSequence(sequenceId))
+      .then((next) => queryClient.setQueryData(boardSequenceKey(sequenceId), next))
+      .catch((error: unknown) => toast.error(errorText(error)));
+  }, [queryClient]);
+
+  //: 撤销 / 重做在更新函数**外面**算下一份、做副作用:时间线的撤销是一次网络请求,放进 setState 的更新函数里,
+  //: 开发模式下更新函数跑两遍就撤了两步。
+  const historyRef = React.useRef(history);
+  historyRef.current = history;
   const stepBack = React.useCallback(() => {
-    setHistory((current) => {
-      const next = undo(current);
-      if (!next) return current;
-      restore(next.present);
-      return next;
-    });
-  }, [restore]);
+    const current = historyRef.current;
+    const next = undo(current);
+    if (!next) return;
+    historyRef.current = next;
+    setHistory(next);
+    const sequenceId = sequenceOf(current.past.at(-1));
+    if (sequenceId) replaySequence(sequenceId, "undo");
+    else restore(next.present);
+  }, [restore, replaySequence]);
 
   const stepForward = React.useCallback(() => {
-    setHistory((current) => {
-      const next = redo(current);
-      if (!next) return current;
-      restore(next.present);
-      return next;
-    });
-  }, [restore]);
+    const current = historyRef.current;
+    const next = redo(current);
+    if (!next) return;
+    historyRef.current = next;
+    setHistory(next);
+    const sequenceId = sequenceOf(current.future[0]);
+    if (sequenceId) replaySequence(sequenceId, "redo");
+    else restore(next.present);
+  }, [restore, replaySequence]);
 
   /**
    * 把选中的这几项圈成一组:算出它们的外接矩形,四周留一点余量,摆一个分组框。
@@ -1248,6 +1287,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
         onConnect={(connection: Connection) => {
           if (commentMode || markerMode) return;
           setEdges((current) => addEdge(connection, current));
+          appendOnConnect(connection);
         }}
         // 可见的 + 在边界外，而真实锚点贴在边界上。扩大屏幕命中半径后，拖到 + 上即可
         // 自动吸附，不必再精确瞄准那个透明的 8px handle。
@@ -1956,6 +1996,30 @@ function ItemToolbar({
               <ExternalLink size={13} />
             </a>
           </Hint>
+        )}
+        {/* 时间线格(ADR 0030)的剪刀、删除、在剪辑里打开 —— 放在操作条上,不占格子里的地方(用户:「这些按钮放到上方弹窗中去」)。 */}
+        {single && item?.kind === "sequence" && item.sequence_id && (
+          //: 自成一段(右边一道分隔线):「删掉这一段」和格子自己的「删除」是两个垃圾桶,挨在一起分不清删的是什么。
+          <ToolbarCluster data-board-sequence-actions="">
+          <SequenceToolbarActions
+            sequenceId={item.sequence_id}
+            button={({ label, icon, onClick, disabled, href, marker }) => (
+              <Hint key={marker} label={label}>
+                {href !== undefined ? (
+                  <a aria-label={label} data-board-sequence-action={marker} href={href}
+                     className="grid h-7 w-7 cursor-pointer place-items-center rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground">
+                    {icon}
+                  </a>
+                ) : (
+                  <button type="button" aria-label={label} data-board-sequence-action={marker} disabled={disabled} onClick={onClick}
+                          className="grid h-7 w-7 cursor-pointer place-items-center rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent">
+                    {icon}
+                  </button>
+                )}
+              </Hint>
+            )}
+          />
+          </ToolbarCluster>
         )}
         {/* 改名只对一格有意义 —— 多选时一起改成同一个名字,等于让它们重新分不清。 */}
         {single && item && onRename && (

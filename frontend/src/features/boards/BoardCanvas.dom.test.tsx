@@ -4,6 +4,9 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import React from "react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
+const editor = vi.hoisted(() => ({ undoSequence: vi.fn(), redoSequence: vi.fn(), appendAssetToSequence: vi.fn(), getSequence: vi.fn() }));
+vi.mock("@/api/domains/editor", async (original) => ({ ...(await original<object>()), ...editor }));
+
 vi.mock("@/app/preferences", () => ({
   useI18n: () => (key: string) => key,
   usePreferences: () => ({ locale: "zh-CN", t: (key: string) => key }),
@@ -12,6 +15,7 @@ vi.mock("@/app/preferences", () => ({
 import type { BoardCanvas as Canvas } from "@/api/client";
 import { ImagePreviewProvider } from "@/components/app/image-preview";
 import { BoardCanvas, type BoardCanvasApi } from "@/features/boards/BoardCanvas";
+import { noteSequenceEdit } from "@/features/boards/sequenceCursor";
 
 beforeAll(() => {
   vi.stubGlobal("ResizeObserver", class { observe() {} unobserve() {} disconnect() {} });
@@ -76,6 +80,41 @@ describe("画板的撤销与服务端那份", () => {
     });
 
     expect(view.latest().items.map((one) => one.id)).toContain("agent");
+  });
+
+  it("时间线格里剪的一刀也在画板的撤销里:按做的先后退,退到它时调那条时间线的撤销、画布不动;重做同理", async () => {
+    editor.undoSequence.mockResolvedValue({ id: "seq", tracks: [] });
+    editor.redoSequence.mockResolvedValue({ id: "seq", tracks: [] });
+    const view = mount({ items: [note("n1", "")], edges: [], markers: [] });
+    act(() => view.api().patch("n1", { text: "先写一句" }));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500);
+    });
+    //: 格子里剪了一刀(SequenceCell 做成之后发这条通知)。
+    act(() => noteSequenceEdit("seq"));
+
+    act(() => view.api().undo());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500);
+    });
+    expect(editor.undoSequence).toHaveBeenCalledTimes(1);
+    expect(editor.undoSequence).toHaveBeenCalledWith("seq");
+    expect(view.latest().items[0]?.text, "撤的是时间线那一刀,画布上的字还在").toBe("先写一句");
+
+    act(() => view.api().undo());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500);
+    });
+    expect(editor.undoSequence).toHaveBeenCalledTimes(1);
+    expect(view.latest().items[0]?.text).toBe("");
+
+    act(() => view.api().redo());
+    act(() => view.api().redo());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500);
+    });
+    expect(editor.redoSequence).toHaveBeenCalledWith("seq");
+    expect(view.latest().items[0]?.text).toBe("先写一句");
   });
 });
 
