@@ -225,13 +225,15 @@ def append_message(
     return message
 
 
-def get_or_create_external_session(db: Session, *, workspace_id: str, external_key: str, title: str) -> AgentSession:
+def get_or_create_external_session(
+    db: Session, *, workspace_id: str, origin: str, external_key: str, title: str
+) -> AgentSession:
+    """外部入口(飞书的一个会话、一个工作流)各自那条长期会话:按 external_key 找回,没有就建。
+    `origin` 说是从哪来的 —— 飞书会话不给 bypass 之类的规则按它判(见 autopilot.set_permission_mode)。"""
     existing = db.scalar(select(AgentSession).where(AgentSession.external_key == external_key))
     if existing is not None:
         return existing
-    return create_session(
-        db, workspace_id=workspace_id, origin="feishu", external_key=external_key, title=title
-    )
+    return create_session(db, workspace_id=workspace_id, origin=origin, external_key=external_key, title=title)
 
 
 class HostError(LocalizedError, RuntimeError):

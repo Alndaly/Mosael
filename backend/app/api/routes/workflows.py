@@ -415,20 +415,13 @@ def workflow_agent_session(workflow_id: str, db: DbSession, user: CurrentUser) -
     """
     workflow = _get(db, workflow_id)
     ensure_workspace_perm(db, user, workflow.workspace_id, "edit")
-    from sqlalchemy import select
-
     from app.domain.agent import host
-    from app.db.models import AgentSession
 
-    key = f"workflow:{workflow_id}"
-    existing = db.scalar(select(AgentSession).where(AgentSession.external_key == key))
-    if existing is not None:
-        return existing
-    return host.create_session(
+    return host.get_or_create_external_session(
         db,
         workspace_id=workflow.workspace_id,
         origin="workflow",
-        external_key=key,
+        external_key=f"workflow:{workflow_id}",
         title=f"工作流 · {workflow.name}",
     )
 

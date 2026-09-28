@@ -65,7 +65,7 @@ def _board() -> tuple[TestClient, TestClient, TestClient, str, dict[str, str]]:
     viewer = _join(owner, workspace, "viewer", "viewer")
     with SessionLocal() as db:
         group_chat = host.get_or_create_external_session(
-            db, workspace_id=workspace, external_key="feishu:chat-1", title="飞书群"
+            db, workspace_id=workspace, origin="feishu", external_key="feishu:chat-1", title="飞书群"
         ).id
     gone = _session(owner, workspace, shared=True)
     cards = {

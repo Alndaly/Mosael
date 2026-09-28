@@ -188,6 +188,7 @@ def handle_incoming(
         session = get_or_create_external_session(
             db,
             workspace_id=bot.workspace_id,
+            origin="feishu",
             external_key=f"feishu:{bot.id}:{chat_id}",
             title=f"飞书 · {bot.name}",
         )
@@ -216,6 +217,7 @@ def handle_incoming(
         session = get_or_create_external_session(
             db,
             workspace_id=images_workspace,
+            origin="feishu",
             external_key=f"feishu:{bot.id}:{chat_id}",
             title=f"飞书 · {bot.name}",
         )

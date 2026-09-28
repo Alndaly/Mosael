@@ -245,7 +245,7 @@ def test_工作区的卡_全局确认中心照旧兜底() -> None:
     owner, workspace, mate = _team()
     with SessionLocal() as db:
         group_chat = host.get_or_create_external_session(
-            db, workspace_id=workspace, external_key="feishu:chat-1", title="飞书群"
+            db, workspace_id=workspace, origin="feishu", external_key="feishu:chat-1", title="飞书群"
         ).id
     no_session = _card(workspace, None)
     in_group_chat = _card(workspace, group_chat)
