@@ -18,6 +18,14 @@ export function assetReference(text: DocumentText): NoteReference {
 }
 
 /**
+ * 一格放着这份素材时写进去的字段:指向哪一份、叫什么。拖进来 / 粘贴进来(assetItem)和「添加 → 素材」
+ * (从素材库挑,见 BoardsView)写的是同一份 —— 此前后者只写 asset_id,同一份素材两种放法格子上的名字不一样。
+ */
+export function assetFields(asset: PlacedAsset): Pick<BoardItem, "asset_id" | "text"> {
+  return { asset_id: asset.id, text: asset.name };
+}
+
+/**
  * 一份素材 → 画板上放它的那一格。**素材上画板只走这一处**(拖进来的文件、粘贴进来的截图):图片、视频、
  * 音频各落成同名的格子 —— 服务端也按这张对照表收(canvas._ASSET_KIND_OF_ITEM),种类对不上存不下。
  *
@@ -30,8 +38,7 @@ export function assetItem(asset: PlacedAsset, at: { x: number; y: number }, inde
     x: Math.round(at.x + index * 24),
     y: Math.round(at.y + index * 24),
     ...DEFAULT_SIZE[asset.kind],
-    asset_id: asset.id,
-    text: asset.name,
+    ...assetFields(asset),
   });
 }
 

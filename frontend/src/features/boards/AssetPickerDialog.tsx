@@ -8,6 +8,7 @@ import { useI18n } from "@/app/preferences";
 import { PickListDialog } from "@/components/app/PickListDialog";
 import { Button } from "@/components/ui/button";
 import { kindIcon, kindText, MEDIA_KINDS, type MediaKind } from "@/features/boards/boardNodes";
+import type { PlacedAsset } from "@/features/boards/boardPlacement";
 
 /**
  * 往画板上贴一份现成素材:从素材库里挑。
@@ -16,7 +17,7 @@ import { kindIcon, kindText, MEDIA_KINDS, type MediaKind } from "@/features/boar
  * - **给一格换一份**(`kind` 是一种媒体):只列那一类。给视频格列图片,等于让人选一个贴上去之后是空白框的
  *   东西 —— 选择器里能选到的,就应该是贴上去能看的。
  * - **「添加 → 从库里放 → 素材」**(`kind` 是 `media`):图片、视频、音频都列,头里一排按种类筛;挑中哪一种
- *   就放哪一种格子(`onPick` 交回它的种类)。此前「添加」里是图片、视频、音频三行,和「新建」那三行是同样的格子。
+ *   就放哪一种格子(`onPick` 交回它的种类和名字,和拖进来的文件落成同样的一格,见 boardPlacement.assetFields)。此前「添加」里是图片、视频、音频三行,和「新建」那三行是同样的格子。
  *
  * 给了 `onBoard`(这张画板上已有的素材,时间线格的「+」)时头里多一枚「这张画板上的」,打开时先按它筛 ——
  * 往时间线里拼的多半是刚在画板上生成的那几段;点掉它就是整个素材库。
@@ -31,7 +32,7 @@ function describe(asset: Asset): string {
 }
 
 /** 挑得出来的素材种类:媒体三种,画板「从库里放」时还有文档。 */
-export type PickedKind = MediaKind | "document";
+export type PickedKind = PlacedAsset["kind"];
 
 export function AssetPickerDialog({
   open,
@@ -47,7 +48,7 @@ export function AssetPickerDialog({
   kind: MediaKind | "media";
   workspaceId: string;
   onOpenChange: (open: boolean) => void;
-  onPick: (assetId: string, kind: PickedKind) => void;
+  onPick: (asset: PlacedAsset) => void;
   /** 三种都列时连文档一起列(画板「从库里放」:文档落成一格文档格)。时间线的「+」不列 —— 文档放不上时间线。 */
   withDocuments?: boolean;
   /** 这张画板上已有的素材(去重)。给了就多一枚「这张画板上的」筛选,打开时先按它筛。 */
@@ -139,7 +140,7 @@ export function AssetPickerDialog({
         //: 三种混着列时写明是哪一种 —— 同名的一张图和一段视频,光看名字分不出。
         subtitle: [mixed ? kindLabel(asset.kind) : "", describe(asset)].filter(Boolean).join(" · "),
       })}
-      onPick={(asset) => onPick(asset.id, asset.kind as PickedKind)}
+      onPick={(asset) => onPick({ id: asset.id, name: asset.name || asset.original_filename || "", kind: asset.kind as PickedKind })}
       pending={assets.isLoading}
       error={assets.isError ? assets.error.message : null}
       onRetry={() => void assets.refetch()}

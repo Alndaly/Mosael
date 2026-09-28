@@ -330,6 +330,32 @@ it("文档格在「让 AI 写」时:排队、扫光占位 + 这次的要求,不�
   expect(failed.container.querySelector("[data-document-empty] [role=alert]")!.textContent).toContain("上游拒绝了请求");
 });
 
+it("「让 AI 写」是同步请求,本地的「在跑」没有任务号:便签、文档格照样盖上占位,只是不给停止;写挂了便签里写出原因", () => {
+  //: renderNode 默认给在跑的格子补 job-1;这里显式传一份没有 job_id 的运行态,和 runNoteWrite 打的那一份一样。
+  const onStop = vi.fn();
+  const note = renderNode("note", "running", { form: { producer: "write", prompt: "改短" }, run: { status: "running" } }, false, onStop);
+  expect(note.container.querySelector("[data-note-writing]"), "没有任务号也是在写").not.toBeNull();
+  expect(note.container.querySelector("[data-board-stop]"), "没有任务号就没有可取消的,不给一个点了没反应的停止").toBeNull();
+  cleanup();
+
+  const doc = renderNode("document", "running", { text: undefined, form: { producer: "write", prompt: "写" }, run: { status: "running" } }, false, onStop);
+  expect(doc.container.querySelector("[data-document-writing]")).not.toBeNull();
+  expect(doc.container.querySelector("[data-board-stop]")).toBeNull();
+  cleanup();
+
+  //: 有任务号的(服务端的快照)照旧能停。
+  const tracked = renderNode("note", "running", { form: { producer: "write", prompt: "改短" }, run: { status: "running", job_id: "j" } }, false, onStop);
+  expect(tracked.container.querySelector("[data-board-stop]")).not.toBeNull();
+  cleanup();
+
+  const failed = renderNode("note", "failed", { text: "原来的字", form: { producer: "write" } });
+  const alert = failed.container.querySelector("[data-note-write-failed]");
+  expect(alert, "写挂了不只是边框变红").not.toBeNull();
+  expect(alert!.textContent).toContain("生成失败");
+  expect(alert!.textContent).toContain("上游拒绝了请求");
+  expect(failed.container.textContent, "原来的字还在").toContain("原来的字");
+});
+
 it("在写的便签、文档格和生成中的图片格同一个样子:占位贴满整格,不缩进一圈", () => {
   const note = renderNode("note", "running", { text: "原来的字", form: { producer: "write", prompt: "改短" } });
   const noteCover = note.container.querySelector<HTMLElement>("[data-note-writing]");

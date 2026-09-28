@@ -31,6 +31,7 @@ import {
   listMembers,
   listBoards,
   updateBoard,
+  type Asset,
   type GenerationOption,
   type Board,
   type BoardCanvas as Canvas,
@@ -41,7 +42,7 @@ import {
 } from "@/api/client";
 import { useAuth } from "@/app/auth";
 import { isMediaKind, itemName, type MediaKind } from "@/features/boards/boardNodes";
-import type { PlacedAsset } from "@/features/boards/boardPlacement";
+import { assetFields, type PlacedAsset } from "@/features/boards/boardPlacement";
 import { boardAddCatalog, SCENE_FROM_TEXT } from "@/features/boards/boardTools";
 import { useI18n, usePreferences } from "@/app/preferences";
 import type { MessageKey } from "@/app/messages";
@@ -68,13 +69,15 @@ import { MarkerListButton } from "@/features/markers/MarkerListButton";
 import { canvasInsets } from "@/components/app/fitCanvasViewport";
 import { BoardCanvas, type BoardCanvasApi } from "@/features/boards/BoardCanvas";
 import { useAutosave } from "@/lib/useAutosave";
-import { AssetPickerDialog, type PickedKind } from "@/features/boards/AssetPickerDialog";
+import { AssetPickerDialog } from "@/features/boards/AssetPickerDialog";
 import { ScenePickerDialog } from "@/features/scenes/ScenePickerDialog";
 import { EntityPickerDialog } from "@/features/entities/EntityPickerDialog";
 import { announceEntityReceipt } from "@/features/entities/entityMeta";
 import { boardSettlementPatch, itemIsRunning, prunedLinksPatch, serverOwnedPatch } from "@/features/boards/boardItemState";
 import { runNoteWrite } from "@/features/boards/noteWriteLifecycle";
 import { createWriteQueue, sameContent } from "@/lib/optimisticWrites";
+import { importEach, importFailureText } from "@/lib/importEach";
+import { assetKeys } from "@/api/queryKeys";
 import { CollaborationSheet } from "@/features/collaboration/CollaborationSheet";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { SelectionCheck } from "@/components/app/SelectionCheck";
@@ -465,6 +468,8 @@ function BoardDetail({
   const [commentsVisible, setCommentsVisible] = React.useState(true);
   const [markersVisible, setMarkersVisible] = React.useState(true);
   const enterMarkerMode = () => { setMarkerMode(true); setMarkersVisible(true); setCommentMode(false); setActiveCommentId(null); };
+  //: 跳到一枚标记时先显示标记(画布的 jumpToMarker 调它;清单和快捷键同一条)。稳定引用:它在画布把手的依赖里。
+  const revealMarkers = React.useCallback(() => setMarkersVisible(true), []);
 
   const [activeCommentId, setActiveCommentId] = React.useState<string | null>(null);
 
@@ -509,7 +514,7 @@ function BoardDetail({
   //: 挑一份素材:给一格换一份(只列那一类),或「添加 → 素材」(三种都列,挑中哪种放哪种格子)。
   const [picking, setPicking] = React.useState<{
     kind: MediaKind | "media";
-    place: (assetId: string, kind: PickedKind) => void;
+    place: (asset: PlacedAsset) => void;
     /** 连文档一起列(「从库里放」:文档落成一格文档格)。 */
     withDocuments?: boolean;
     /** 这张画板上已有的素材(时间线格的「+」):选择器里多一枚「这张画板上的」。 */
@@ -645,19 +650,30 @@ function BoardDetail({
   );
 
   /** 系统里拖进来 / 粘贴进来的文件:先传进素材库,再由画布按种类各放一格(图片、视频、音频都有自己的格子,
-   *  见 boardPlacement.assetItem)。素材库认成别的种类的(画板上没有那种格子)只进库、不上画板。 */
+   *  见 boardPlacement.assetItem)。素材库认成别的种类的(画板上没有那种格子)只进库、不上画板。
+   *  **一个失败不拦后面的**(lib/importEach,和素材库的导入同一条):进了库的照样上画板、素材库照样刷新,
+   *  没进来的最后一并说。 */
   const upload = useMutation({
-    mutationFn: async (files: File[]) => {
-      const created: PlacedAsset[] = [];
-      for (const file of files) {
-        const asset = await importAsset({ workspaceId, file });
-        //: 文档(ADR 0031)落成一格文档格,喂给下游的是解析出的全文。
-        if (isMediaKind(asset.kind) || asset.kind === "document") created.push({ id: asset.id, name: asset.name, kind: asset.kind });
-      }
-      return created;
+    mutationFn: (files: File[]) => importEach(files, (file) => importAsset({ workspaceId, file })),
+    onSuccess: ({ imported, failed }) => {
+      if (imported.length) void queryClient.invalidateQueries({ queryKey: assetKeys.all(workspaceId) });
+      const partial = importFailureText(t, imported.length, failed);
+      if (partial) toast.error(partial);
     },
     onError: (error: Error) => toast.error(error.message),
   });
+  const uploadFiles = upload.mutateAsync;
+  const importFiles = React.useCallback(
+    async (files: File[]): Promise<PlacedAsset[]> => {
+      //: 整个请求都没发出去(onError 已经说过了)就什么也不放。
+      const { imported } = await uploadFiles(files).catch(() => ({ imported: [] as Asset[] }));
+      //: 文档(ADR 0031)落成一格文档格,喂给下游的是解析出的全文。
+      return imported.flatMap((asset): PlacedAsset[] =>
+        isMediaKind(asset.kind) || asset.kind === "document" ? [{ id: asset.id, name: asset.name, kind: asset.kind }] : [],
+      );
+    },
+    [uploadFiles],
+  );
 
   const save = React.useCallback(
     (next: Canvas) =>
@@ -936,7 +952,8 @@ function BoardDetail({
                 setActiveCommentId(null);
                 //: 「素材」一行挑三种:挑中哪一种就放哪一种格子。
                 if (kind === "pick-media") {
-                  setPicking({ kind: "media", withDocuments: true, place: (assetId, media) => api?.add(media, { asset_id: assetId }) });
+                  //: 和拖进来的文件写同样的字段(素材 + 它的名字,boardPlacement.assetFields)。
+                  setPicking({ kind: "media", withDocuments: true, place: (asset) => api?.add(asset.kind, assetFields(asset)) });
                 } else if (kind === "sequence-new") {
                   //: 时间线格背后是一条正常的时间线(ADR 0030):先建好(放进这张画板的同名项目),再放格子。
                   void createBoardSequence(board.id, workspaceId)
@@ -1028,10 +1045,7 @@ function BoardDetail({
             />
             <MarkerListButton
               markers={api?.markers ?? []}
-              onJump={(marker) => {
-                setMarkersVisible(true);
-                api?.jumpToMarker(marker);
-              }}
+              onJump={(marker) => api?.jumpToMarker(marker)}
             />
           </CanvasToolbarGroup>
           <CanvasToolbarGroup label={t("canvasViewTools")}>
@@ -1101,7 +1115,7 @@ function BoardDetail({
         canvas={board.canvas ?? { items: [], edges: [] }}
         getInsets={getCanvasInsets}
         onChange={setCanvas}
-        onPickAsset={(kind, place, options) => setPicking({ kind, place, onBoard: options?.onBoard })}
+        onPickAsset={(kind, place, options) => setPicking({ kind, place: (asset) => place(asset.id), onBoard: options?.onBoard })}
         onRun={run}
         onGrabFrame={grabFrame}
         models={models.data ?? []}
@@ -1110,11 +1124,12 @@ function BoardDetail({
         showMinimap={showMinimap}
         edgeShape={edgeShape}
         searchHighlight={searchHit}
-        onDropFiles={(files) => upload.mutateAsync(files)}
+        onDropFiles={importFiles}
         uploading={upload.isPending}
         commentMode={commentMode}
         markerMode={markerMode}
         markersVisible={markersVisible}
+        onRevealMarkers={revealMarkers}
         commentsVisible={commentsVisible}
         comments={comments.data ?? []}
         members={members.data?.members ?? []}
@@ -1212,8 +1227,8 @@ function BoardDetail({
         withDocuments={picking?.withDocuments}
         workspaceId={workspaceId}
         onOpenChange={(next) => !next && setPicking(null)}
-        onPick={(assetId, kind) => {
-          picking?.place(assetId, kind);
+        onPick={(asset) => {
+          picking?.place(asset);
           setPicking(null);
         }}
       />

@@ -19,6 +19,7 @@ vi.mock("@/api/domains/editor", () => api);
 vi.mock("@/api/domains/assets", () => ({ assetFileUrl: (id: string) => `/file/${id}`, assetThumbnailUrl: (id: string) => `/thumb/${id}` }));
 vi.mock("@/app/preferences", () => ({ useI18n: () => (key: string) => key }));
 
+import { ApiError } from "@/api/transport";
 import { boardSequenceKey, SequenceCell, SequenceToolbarActions, reorderedClips, sequenceSummary, stripLayout } from "./SequenceCell";
 import { onSequenceEdit, SequenceAddContext, updateSequenceCursor } from "./sequenceCursor";
 
@@ -169,9 +170,17 @@ describe("时间线格", () => {
     expect(await screen.findByText("boardSequenceEmpty")).toBeTruthy();
     expect(screen.getByText("boardSequenceStripEmpty")).toBeTruthy();
     unmount();
-    api.getSequence.mockRejectedValue(new Error("404"));
-    mount();
+    api.getSequence.mockRejectedValue(new ApiError("Not Found", 404, ""));
+    const gone = mount();
     await waitFor(() => expect(document.querySelector("[data-sequence-missing]")).not.toBeNull());
+    expect(screen.getByText("boardSequenceMissing")).toBeTruthy();
+    gone.unmount();
+    //: 别的错(断网、服务端出错)不是「删掉了」—— 说成删了,用户会去把这一格删掉。
+    api.getSequence.mockRejectedValue(new ApiError("Internal Server Error", 500, ""));
+    mount();
+    await waitFor(() => expect(document.querySelector("[data-sequence-load-failed]")).not.toBeNull());
+    expect(document.querySelector("[data-sequence-missing]")).toBeNull();
+    expect(screen.getByText("boardSequenceLoadFailed")).toBeTruthy();
   });
 
   it("条末尾的「+」交给画板挑素材(点名这一条时间线);格子单独渲染时没有「+」", async () => {

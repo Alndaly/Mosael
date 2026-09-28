@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { assetFileUrl, assetThumbnailUrl } from "@/api/domains/assets";
 import { getSequence, moveClipsBatch, rippleDeleteClipsBatch, splitClip, type Clip, type Sequence } from "@/api/domains/editor";
 import { errorText } from "@/api/errorMessage";
+import { ApiError } from "@/api/transport";
 import { useI18n } from "@/app/preferences";
 import { cn } from "@/lib/utils";
 import { isImeKeystroke } from "@/lib/shortcuts";
@@ -208,9 +209,16 @@ export function SequenceCell({ sequenceId }: { sequenceId: string }) {
   };
 
   if (sequence.isError) {
+    //: 只有 404 才是「删掉了」;断网、服务端出错说没能加载 —— 把一次偶发的失败说成删了,用户会去把这一格删掉。
+    const gone = sequence.error instanceof ApiError && sequence.error.status === 404;
     return (
-      <div data-sequence-missing="" className="grid min-h-0 flex-1 place-items-center px-4 text-center text-ui-xs text-muted-foreground">
-        {t("boardSequenceMissing")}
+      <div
+        data-sequence-missing={gone ? "" : undefined}
+        data-sequence-load-failed={gone ? undefined : ""}
+        role={gone ? undefined : "alert"}
+        className="grid min-h-0 flex-1 place-items-center px-4 text-center text-ui-xs text-muted-foreground"
+      >
+        {t(gone ? "boardSequenceMissing" : "boardSequenceLoadFailed")}
       </div>
     );
   }

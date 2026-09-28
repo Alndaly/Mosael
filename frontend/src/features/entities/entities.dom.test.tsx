@@ -72,6 +72,7 @@ vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn(), info: vi.f
 const lightbox = vi.hoisted(() => ({ openImagePreview: vi.fn() }));
 vi.mock("@/components/app/image-preview", () => ({ useImagePreview: () => lightbox }));
 
+import { toast } from "sonner";
 import { EntitiesView } from "./EntitiesView";
 import { AssetEntitiesList, SetAsReferenceDialog } from "./AssetEntities";
 
@@ -202,6 +203,31 @@ describe("资产页", () => {
     fireEvent.click(within(tabs).getByRole("button", { name: /场景/ }));
     expect(await screen.findByText("老街")).toBeTruthy();
     expect(screen.queryByText("张三")).toBeNull();
+  });
+
+  it("搜索在路上说在加载、搜挂了说出错 —— 都不是「没有匹配的内容」", async () => {
+    let answer!: (rows: EntitySummary[]) => void;
+    let refuse!: (error: Error) => void;
+    api.listEntities.mockImplementation((_ws: string, filters?: { q?: string }) => {
+      if (!filters?.q) return Promise.resolve([summary()]);
+      return new Promise<EntitySummary[]>((resolve, reject) => {
+        answer = resolve;
+        refuse = reject;
+      });
+    });
+    mount(<EntitiesView workspace={WORKSPACE} />);
+    await screen.findByText("张三");
+    fireEvent.change(screen.getByRole("textbox", { name: "entitiesSearch" }), { target: { value: "李" } });
+    expect(await screen.findByRole("status")).toBeTruthy();
+    expect(screen.queryByText("studioNoMatches")).toBeNull();
+    await act(async () => refuse(new Error("搜索服务挂了")));
+    expect(await screen.findByText("pageLoadError")).toBeTruthy();
+    expect(screen.getByText("搜索服务挂了")).toBeTruthy();
+    expect(screen.queryByText("studioNoMatches")).toBeNull();
+    //: 真的搜完了、一个都没有,才说没有匹配的。
+    fireEvent.click(screen.getByRole("button", { name: "retry" }));
+    await act(async () => answer([]));
+    expect(await screen.findByText("studioNoMatches")).toBeTruthy();
   });
 
   it("新建一个就打开它的详情", async () => {
@@ -414,6 +440,44 @@ describe("参考图墙", () => {
     await waitFor(() => expect(api.importAsset).toHaveBeenCalledWith({ workspaceId: "ws", file }));
     expect(api.importAsset).toHaveBeenCalledTimes(1);
     await waitFor(() => expect(api.addEntityReference).toHaveBeenCalledWith("e1", { asset_id: "a-dropped" }));
+  });
+
+  it("拖一批文件,中间一个导不进来:后面的照样导入、挂上,最后说清几个没进来;墙照实重取", async () => {
+    api.importAsset
+      .mockRejectedValueOnce(new Error("格式不支持"))
+      .mockResolvedValueOnce({ id: "a-second", kind: "image", name: "二.png" });
+    api.addEntityReference.mockResolvedValue(entity());
+    const wall = await openDetail();
+    const fetched = api.getEntity.mock.calls.length;
+    const target = wall.querySelector("[data-reference-drop]") as HTMLElement;
+    const first = new File(["x"], "一.png", { type: "image/png" });
+    const second = new File(["x"], "二.png", { type: "image/png" });
+    await act(async () => {
+      fireEvent.drop(target, { dataTransfer: { types: ["Files"], files: [first, second], items: [] } });
+    });
+    await waitFor(() => expect(api.addEntityReference).toHaveBeenCalledWith("e1", { asset_id: "a-second" }));
+    expect(api.importAsset).toHaveBeenCalledTimes(2);
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith("mediaImportPartial"));
+    await waitFor(() => expect(api.getEntity.mock.calls.length).toBeGreaterThan(fetched));
+  });
+
+  it("从素材库挂一批,挂到一半失败:前面挂上的照实显示 —— 失败也重取这个资产", async () => {
+    api.listAssets.mockResolvedValue([
+      { id: "a-new", kind: "image", name: "背面.png" },
+      { id: "a-two", kind: "image", name: "侧脸.png" },
+    ]);
+    api.addEntityReference.mockResolvedValueOnce(entity()).mockRejectedValueOnce(new Error("挂不上"));
+    const wall = await openDetail();
+    fireEvent.click(within(wall).getByRole("button", { name: "entityFromLibrary" }));
+    const dialog = await screen.findByRole("dialog");
+    const library = await within(dialog).findByRole("listbox", { name: "entityLibraryTitle" });
+    fireEvent.click(within(library).getByRole("option", { name: "背面.png" }));
+    fireEvent.click(within(library).getByRole("option", { name: "侧脸.png" }));
+    const fetched = api.getEntity.mock.calls.length;
+    fireEvent.click(within(dialog).getByRole("button", { name: "entityLibraryAdd" }));
+    await waitFor(() => expect(api.addEntityReference).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith("挂不上"));
+    await waitFor(() => expect(api.getEntity.mock.calls.length).toBeGreaterThan(fetched));
   });
 
   it("素材删了之后说得出少了哪一张,看过能清掉", async () => {

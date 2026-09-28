@@ -215,6 +215,23 @@ describe("删除键只认冲着画布来的那一下", () => {
   });
 });
 
+describe("跳到标记", () => {
+  it("快捷键跳过去和清单里点一样,先把藏起来的标记显示出来", async () => {
+    const onRevealMarkers = vi.fn();
+    mount(
+      { items: [], edges: [], markers: [{ id: "m1", name: "开头", x: 10, y: 20, shortcut: "Alt+1" }] },
+      { markersVisible: false, onRevealMarkers },
+    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10);
+    });
+    act(() => {
+      fireEvent.keyDown(window, { key: "1", code: "Digit1", altKey: true });
+    });
+    expect(onRevealMarkers).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("往画布上粘贴", () => {
   //: 粘贴冲着画布来才接(和删除键同一条判据,isCanvasKeyTarget):在输入框、编辑器里粘贴是往那儿贴字。
   function paste(target: HTMLElement, data: { text?: string; files?: File[] }) {
@@ -254,6 +271,35 @@ describe("往画布上粘贴", () => {
     expect(onDropFiles).toHaveBeenCalledTimes(1);
     const added = view.latest().items.find((one) => one.id !== "n1");
     expect(added).toMatchObject({ kind: "image", asset_id: "a0" });
+  });
+
+  it("评论 / 标记模式下拖文件进来和粘贴一样不接:画布这时只收批注", async () => {
+    const png = () => new File([new Uint8Array([1])], "shot.png", { type: "image/png" });
+    const dropOn = () => {
+      const file = png();
+      act(() => {
+        fireEvent.drop(document.querySelector(".react-flow")!, { dataTransfer: { types: ["Files"], files: [file], items: [] } });
+      });
+    };
+    const placed = async (files: File[]) => files.map((file, index) => ({ id: `a${index}`, name: file.name, kind: "image" as const }));
+
+    //: 对照:平常拖进来是接的 —— 否则下面两句是在一个根本收不到拖放的桩上断言。
+    const onDropFiles = vi.fn(placed);
+    mount({ items: [note("n1", "原来的")], edges: [], markers: [] }, { onDropFiles });
+    dropOn();
+    await settle();
+    expect(onDropFiles).toHaveBeenCalledTimes(1);
+    cleanup();
+
+    for (const mode of [{ commentMode: true }, { markerMode: true }]) {
+      const blocked = vi.fn(placed);
+      mount({ items: [note("n1", "原来的")], edges: [], markers: [] }, { onDropFiles: blocked, ...mode });
+      dropOn();
+      paste(document.body, { files: [png()] });
+      await settle();
+      expect(blocked, JSON.stringify(mode)).not.toHaveBeenCalled();
+      cleanup();
+    }
   });
 
   it("焦点在输入框里:不接,交给那个输入框", async () => {
