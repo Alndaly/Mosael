@@ -181,8 +181,8 @@ import {
   bodyScope,
   extractRefs,
   isNestedScopeConfig,
-  providerReadiness,
 } from "@/features/workflows/analyze";
+import { chatProfileIds, generationVendors } from "@/features/workflows/bindingReadiness";
 import { RunOutputs, outputSummary } from "@/features/workflows/RunOutputs";
 import { collapseToSubgraph } from "@/features/workflows/collapse";
 import { pasteNodes, type NodeClip } from "@/features/workflows/clipboard";
@@ -1661,28 +1661,28 @@ function WorkflowEditor({
   // 供画布角标 + 运行前 checklist。只有图里真有对应节点才请求。
   const hasLlm = rootGraph.nodes.some((node) => node.type === "llm");
   const hasGen = rootGraph.nodes.some((node) => node.type === "ai_generate");
+  //: LLM 节点看连接清单,生成节点看生成模型清单(见 bindingReadiness)。
   const providers = useQuery({
     queryKey: ["provider-profiles"],
     queryFn: () => api<ProviderProfile[]>("/api/settings/providers"),
-    enabled: hasLlm || hasGen,
+    enabled: hasLlm,
   });
-  //: 生成节点的提示词要不要写,由选中的模型说(描述符的 `prompt`)—— 就绪检查要看它。
+  //: 生成节点的服务商配没配、提示词要不要写,都由这份模型清单说。
   const generationModels = useQuery({
     queryKey: GENERATION_OPTIONS_KEY,
     queryFn: fetchAllGenerationOptions,
     enabled: hasGen,
   });
   const analysis = React.useMemo(() => {
-    //: 和检查器的提醒同一个判定(providerReadiness),两边不再各写一段。
-    const readiness = providerReadiness(providers.data ?? []);
+    //: 和检查器的提醒同一个判定(bindingReadiness),两边不再各写一段。
     return analyzeWorkflow(rootGraph, registry, {
-      providerIds: readiness.chatProfileIds,
-      providersLoaded: (!hasLlm && !hasGen) || providers.isSuccess,
-      configuredGenProviders: readiness.generationVendors,
-      genProvidersLoaded: !hasGen || providers.isSuccess,
+      chatProfileIds: chatProfileIds(providers.data ?? []),
+      chatProfilesLoaded: !hasLlm || providers.isSuccess,
+      generationVendors: generationVendors(generationModels.data ?? []),
+      generationModelsLoaded: !hasGen || generationModels.isSuccess,
       generationPromptMode: (config) => promptMode(generationModelOf(generationModels.data ?? [], config)),
     });
-  }, [rootGraph, registry, providers.data, providers.isSuccess, hasLlm, hasGen, generationModels.data]);
+  }, [rootGraph, registry, providers.data, providers.isSuccess, hasLlm, hasGen, generationModels.data, generationModels.isSuccess]);
   /**
    * 运行 —— 工具栏的运行键和 ⌘Enter 共用这**一个**入口。
    *
@@ -1693,22 +1693,32 @@ function WorkflowEditor({
    *
    * 运行键也只看这里的判据,不再看 dirty:自动保存撞上非 409 的错误后 dirty 一直是 true,
    * 运行键就一直灰着、说「保存中…」,而 ⌘Enter 这条能先重存再跑。
+   *
+   * 重入闸是 ref,不是 state:同一帧里连按两次 ⌘Enter,两次闭包读到的 state(和 run.isPending)
+   * 都还是旧值,会排两次运行。ref 从进门一直关到「排进队列」这一步落定;`launching` 只管按钮转圈。
    */
+  const launchingRef = React.useRef(false);
   const [launching, setLaunching] = React.useState(false);
   const startRun = React.useCallback(async () => {
-    if (run.isPending || launching || !analysis.runnable) return;
-    if (pendingSaveRef.current) {
-      setLaunching(true);
-      try {
-        await save.mutateAsync();
-      } catch {
-        return;
-      } finally {
-        setLaunching(false);
+    if (launchingRef.current || run.isPending || !analysis.runnable) return;
+    launchingRef.current = true;
+    try {
+      if (pendingSaveRef.current) {
+        setLaunching(true);
+        try {
+          await save.mutateAsync();
+        } catch {
+          return;
+        } finally {
+          setLaunching(false);
+        }
       }
+      // 失败提示在 run 自己的 onError 里给,这里只等它落定再开闸。
+      await run.mutateAsync().catch(() => undefined);
+    } finally {
+      launchingRef.current = false;
     }
-    run.mutate();
-  }, [run, save, launching, analysis.runnable]);
+  }, [run, save, analysis.runnable]);
   const checklistCount = analysis.errorCount + analysis.warnCount;
   const checklistLabel = analysis.errorCount
     ? t("wfChecklistBlocked").replace("{n}", String(analysis.errorCount))
@@ -2660,13 +2670,13 @@ export function NodeInspector({
   );
   const fieldOptions = useNodeFieldOptions({ specs: allSpecs, config, workspaceId, nodeType: node.type, workflowId, boundValues });
   // 绑定校验:节点依赖的模型/服务没配好(空列表)或引用已失效(指向不存在的项)→ 顶部给提醒 + 配置入口。
-  //: 判据和就绪清单同一份(providerReadiness):清单报错的节点,这里也得说得出为什么。
-  const readiness = providerReadiness(providers.data ?? []);
+  //: 判据和就绪清单同一份(bindingReadiness):清单报错的节点,这里也得说得出为什么。
   const bindingNotice = ((): { message: string; section: string; error?: boolean } | null => {
     if (node.type === "llm") {
-      if (providers.isSuccess && readiness.chatProfileIds.size === 0) return { message: t("wfNoProviders"), section: "providers" };
+      const usable = chatProfileIds(providers.data ?? []);
+      if (providers.isSuccess && usable.size === 0) return { message: t("wfNoProviders"), section: "providers" };
       const pid = config.profile_id;
-      if (typeof pid === "string" && pid && providers.isSuccess && !readiness.chatProfileIds.has(pid))
+      if (typeof pid === "string" && pid && providers.isSuccess && !usable.has(pid))
         return { message: t("wfProviderMissing"), section: "providers", error: true };
     }
     if (node.type === "ai_generate") {
@@ -2683,7 +2693,7 @@ export function NodeInspector({
       const capability = String(config.kind || matchedModel?.kind || "image");
       const capabilityLabel = t(GENERATION_KIND_LABELS[capability as GenerationKind] ?? "capImage");
       const section = `providers:${capability}`;
-      if (chosenProvider && providers.isSuccess && !readiness.generationVendors.has(chosenProvider)) {
+      if (chosenProvider && generationModels.isSuccess && !generationVendors(models).has(chosenProvider)) {
         return { message: t("wfIssueGenUnconfigured"), section, error: true };
       }
       if (chosenProvider && chosenModel && generationModels.isSuccess && !matchedModel) {

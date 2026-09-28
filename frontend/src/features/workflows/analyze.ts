@@ -2,7 +2,7 @@ import type { WorkflowGraph } from "@/api/client";
 
 import { isWorkflowFieldActive } from "@/features/nodeForms/fieldActivation";
 import { fieldDataType, normalizeDataType, type DataType } from "@/features/nodeForms/fieldTypes";
-import { GENERATION_KINDS, type PromptMode } from "@/lib/generationCapabilities";
+import type { PromptMode } from "@/lib/generationCapabilities";
 
 /**
  * 工作流"就绪度"分析:纯函数,单一事实来源,同时喂给画布告警角标、
@@ -19,7 +19,7 @@ export type IssueCode =
   | "stale-var" // 配置里引用了已删除的节点
   | "no-providers" // LLM 节点但一个供应商都没配
   | "provider-missing" // LLM 绑定的供应商配置已被删
-  | "gen-provider-unconfigured" // AI 生成选的服务商没配密钥
+  | "gen-provider-unconfigured" // AI 生成选的服务商下没有可用的生成模型
   | "type-mismatch"; // 数据边:上游输出类型与目标输入期望类型不兼容(软提示)
 
 export interface NodeIssue {
@@ -70,53 +70,13 @@ export function typesCompatible(source: DataType, target: DataType): boolean {
   return source === target;
 }
 
-/** 就绪判定要看的那几项连接字段(`/api/settings/providers` 的一行)。 */
-export interface ProviderProfileLike {
-  id: string;
-  vendor: string;
-  enabled: boolean;
-  auth_type: string;
-  oauth_linked: boolean;
-  base_url: string;
-  capability_ids?: string[];
-}
-
-/** 自动化(LLM 节点)能不能用这条连接:运行时走直连 API key,或不带工具的 OAuth 网关适配器。 */
-export function supportsAutomationChat(profile: ProviderProfileLike): boolean {
-  if (!profile.enabled) return false;
-  return profile.auth_type === "oauth" ? profile.oauth_linked : Boolean(profile.base_url?.trim());
-}
-
-/**
- * 连接清单 → 「LLM 节点能用哪些连接」「哪些生成服务商配好了」。
- *
- * 就绪清单(AnalyzeContext)和节点检查器的提醒**都从这里取**。此前两边各写一段:清单只认
- * supportsAutomationChat 的连接、检查器认全部,于是同一个节点清单里报错、检查器里一声不吭;
- * 生成服务商只收 image/video,音频生成节点永远被判成「没配」。生成的种类走 GENERATION_KINDS,
- * 加一种介质不用回来改这里。
- */
-export function providerReadiness(profiles: readonly ProviderProfileLike[]): {
-  chatProfileIds: Set<string>;
-  generationVendors: Set<string>;
-} {
-  const kinds: ReadonlySet<string> = new Set(GENERATION_KINDS);
-  return {
-    chatProfileIds: new Set(profiles.filter(supportsAutomationChat).map((profile) => profile.id)),
-    generationVendors: new Set(
-      profiles
-        .filter((profile) => profile.enabled && (profile.capability_ids ?? []).some((capability) => kinds.has(capability)))
-        .map((profile) => profile.vendor),
-    ),
-  };
-}
-
 export interface AnalyzeContext {
-  /** LLM 节点能用的连接 id(见 providerReadiness)。 */
-  providerIds: Set<string>;
-  providersLoaded: boolean;
-  /** 已启用、带任一生成能力的服务商名(见 providerReadiness)。 */
-  configuredGenProviders: Set<string>;
-  genProvidersLoaded: boolean;
+  /** LLM 节点能用的连接 id(见 bindingReadiness.chatProfileIds)。 */
+  chatProfileIds: Set<string>;
+  chatProfilesLoaded: boolean;
+  /** 有可用生成模型的服务商(见 bindingReadiness.generationVendors)。 */
+  generationVendors: Set<string>;
+  generationModelsLoaded: boolean;
   /**
    * AI 生成节点选中的那个模型对提示词的要求(描述符的 `prompt`,见 lib/generationCapabilities.promptMode)。
    * 提示词不再在节点声明里标必填 —— 放大这类模型不收提示词,标了就永远过不了检查;所以「空着算不算
@@ -322,9 +282,9 @@ function collect(
 
     // 绑定校验(与属性面板 bindingNotice 同源)
     if (node.type === "llm") {
-      if (ctx.providersLoaded && ctx.providerIds.size === 0) push("warn", "no-providers");
+      if (ctx.chatProfilesLoaded && ctx.chatProfileIds.size === 0) push("warn", "no-providers");
       const pid = config.profile_id;
-      if (typeof pid === "string" && pid && ctx.providersLoaded && !ctx.providerIds.has(pid))
+      if (typeof pid === "string" && pid && ctx.chatProfilesLoaded && !ctx.chatProfileIds.has(pid))
         push("error", "provider-missing", { configKey: "profile_id" });
     }
     if (node.type === "ai_generate") {
@@ -336,8 +296,8 @@ function collect(
       if (
         typeof provider === "string" &&
         provider &&
-        ctx.genProvidersLoaded &&
-        !ctx.configuredGenProviders.has(provider)
+        ctx.generationModelsLoaded &&
+        !ctx.generationVendors.has(provider)
       )
         push("error", "gen-provider-unconfigured", { configKey: "provider" });
     }

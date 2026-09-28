@@ -25,6 +25,7 @@ import { listJobChildren, listJobEvents, type Job } from "@/api/client";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { JobEventList } from "@/components/layout/JobEvents";
 import { useJobKinds } from "@/components/layout/jobKinds";
+import { runStatusText } from "@/components/layout/runStatus";
 import { cn } from "@/lib/utils";
 
 const ACTIVE = new Set(["queued", "running", "pending"]);
@@ -62,12 +63,6 @@ function ChildRow({ child }: { child: Job }) {
     refetchInterval: open && active ? 1500 : false,
   });
 
-  const statusKey = active
-    ? "running"
-    : child.status === "succeeded" || child.status === "failed"
-      ? child.status
-      : null;
-
   return (
     <li className="min-w-0 py-[5px] [&+&]:border-t [&+&]:border-border">
       <button
@@ -91,7 +86,7 @@ function ChildRow({ child }: { child: Job }) {
             active ? "text-primary" : child.status === "succeeded" ? "text-success" : "text-destructive",
           )}
         >
-          {statusKey ? t(`runStatus_${statusKey}` as never) : child.status}
+          {runStatusText(t, active ? "running" : child.status)}
         </span>
       </button>
       {open && (

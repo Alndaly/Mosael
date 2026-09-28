@@ -5,26 +5,17 @@ import { Ban, CheckCircle2, ChevronDown, ChevronRight, CircleDashed, Clock, Hist
 import { attestRequestOf, listJobEvents, listWorkflowRuns, type Job } from "@/api/client";
 import { AttestRevisionButton } from "@/features/workflows/AttestRevisionButton";
 import { useI18n } from "@/app/preferences";
-import type { MessageKey } from "@/app/messages";
 import type { RegistryLike } from "@/features/workflows/analyze";
 import { OutputAssets } from "@/features/workflows/OutputAssets";
-import { assetOutputs, outputRows, parseIso, toSteps } from "@/features/workflows/runSteps";
+import { assetOutputs, outputRows, parseIso, STEP_STATUS_LABELS, toSteps } from "@/features/workflows/runSteps";
 import { JobChildrenList, useJobChildren } from "@/components/layout/JobChildren";
+import { runStatusText } from "@/components/layout/runStatus";
 import { WorkflowFailureDetails } from "@/components/app/FailureDetails";
 import { DOCKABLE_PANEL_FRAME_CLASS, PANEL_HEADER_CLASS, useFloatingPanel } from "@/components/app/useFloatingPanel";
 import type { CanvasAgentMode } from "@/features/agent/CanvasAgentChat";
 import { cn } from "@/lib/utils";
 
 const RUNNING = new Set(["queued", "running"]);
-
-/** 任务状态的叫法,和任务中心、定时任务同一组 `runStatus_*`。不认识的状态原样给,不吞掉。 */
-const RUN_STATUS_LABELS: Record<string, MessageKey> = {
-  queued: "runStatus_queued",
-  running: "runStatus_running",
-  succeeded: "runStatus_succeeded",
-  failed: "runStatus_failed",
-  cancelled: "runStatus_cancelled",
-};
 
 function relTime(iso: string, now: number): string {
   const s = Math.max(0, (now - parseIso(iso)) / 1000);
@@ -229,7 +220,7 @@ export function WorkflowRunHistory({
             >
               <RunIcon status={run.status} />
               <span className="flex min-w-0 flex-1 flex-col gap-px">
-                <span className="truncate text-xs">{run.message || (RUN_STATUS_LABELS[run.status] ? t(RUN_STATUS_LABELS[run.status]) : run.status)}</span>
+                <span className="truncate text-xs">{run.message || runStatusText(t, run.status)}</span>
                 <span className="timecode text-ui-2xs text-muted-foreground">
                   {run.created_at ? relTime(run.created_at, now) : ""}
                   {typeof run.payload?.workflow_revision === "number" && ` · v${run.payload.workflow_revision}`}
@@ -302,7 +293,7 @@ export function WorkflowRunHistory({
                         </span>
                         {s.status === "skipped" || s.status === "cancelled" ? (
                           <span className="timecode inline-flex items-center gap-[3px] text-ui-2xs text-muted-foreground">
-                            {t(s.status === "skipped" ? "wfStepSkipped" : "wfStepCancelled")}
+                            {t(STEP_STATUS_LABELS[s.status])}
                           </span>
                         ) : s.status === "running" && s.startAt != null ? (
                           <span className="timecode inline-flex items-center gap-[3px] text-ui-2xs text-muted-foreground">

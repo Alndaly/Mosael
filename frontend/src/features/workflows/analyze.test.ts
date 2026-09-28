@@ -5,7 +5,6 @@ import {
   extractRefs,
   isNestedScopeConfig,
   outputType,
-  providerReadiness,
   typesCompatible,
   type AnalyzeContext,
   type RegistryLike,
@@ -84,10 +83,10 @@ describe("outputType", () => {
 });
 
 const fullCtx: AnalyzeContext = {
-  providerIds: new Set(["p1"]),
-  providersLoaded: true,
-  configuredGenProviders: new Set(["alibaba"]),
-  genProvidersLoaded: true,
+  chatProfileIds: new Set(["p1"]),
+  chatProfilesLoaded: true,
+  generationVendors: new Set(["alibaba"]),
+  generationModelsLoaded: true,
 };
 
 function graph(nodes: WorkflowGraph["nodes"], edges: WorkflowGraph["edges"] = []): WorkflowGraph {
@@ -288,12 +287,12 @@ describe("analyzeWorkflow", () => {
     );
     const a = analyzeWorkflow(g, registry, {
       ...fullCtx,
-      providerIds: new Set(),
+      chatProfileIds: new Set(),
     });
     expect(a.byNode.get("llm-1")?.some((i) => i.code === "no-providers" && i.severity === "warn")).toBe(true);
   });
 
-  it("errors when an ai_generate provider has no configured key", () => {
+  it("errors when an ai_generate provider has no usable generation model", () => {
     const g = graph(
       [
         { id: "start", type: "start", config: {} },
@@ -337,43 +336,33 @@ describe("analyzeWorkflow", () => {
       [{ id: "e1", source: "start", target: "llm-1" }],
     );
     const a = analyzeWorkflow(g, registry, {
-      providerIds: new Set(),
-      providersLoaded: false,
-      configuredGenProviders: new Set(),
-      genProvidersLoaded: false,
+      chatProfileIds: new Set(),
+      chatProfilesLoaded: false,
+      generationVendors: new Set(),
+      generationModelsLoaded: false,
     });
     // profile_id is set but providers not loaded yet — don't false-alarm.
     expect(a.byNode.get("llm-1")?.some((i) => i.code === "provider-missing")).toBeFalsy();
   });
-});
 
-
-describe("providerReadiness:就绪清单与检查器共用的连接判定", () => {
-  const profile = (over: Partial<Parameters<typeof providerReadiness>[0][number]>) => ({
-    id: "p", vendor: "v", enabled: true, auth_type: "api_key", oauth_linked: false, base_url: "https://x", ...over,
-  });
-
-  it("LLM 只认能跑自动化对话的连接:停用的、没地址的、没连上的 OAuth 都不算", () => {
-    const { chatProfileIds } = providerReadiness([
-      profile({ id: "ok" }),
-      profile({ id: "off", enabled: false }),
-      profile({ id: "no-url", base_url: " " }),
-      profile({ id: "oauth-unlinked", auth_type: "oauth", base_url: "" }),
-      profile({ id: "oauth-linked", auth_type: "oauth", oauth_linked: true, base_url: "" }),
-    ]);
-    expect([...chatProfileIds].sort()).toEqual(["oauth-linked", "ok"]);
-  });
-
-  it("生成服务商按全部生成种类算,音频也在内;停用的、只会对话的不算", () => {
-    const { generationVendors } = providerReadiness([
-      profile({ vendor: "suno", capability_ids: ["audio"] }),
-      profile({ vendor: "kling", capability_ids: ["video"] }),
-      profile({ vendor: "off", enabled: false, capability_ids: ["image"] }),
-      profile({ vendor: "chat-only", capability_ids: ["chat"] }),
-    ]);
-    expect([...generationVendors].sort()).toEqual(["kling", "suno"]);
+  it("生成模型清单没到之前,不报生成服务商没配", () => {
+    const g = graph(
+      [
+        { id: "start", type: "start", config: {} },
+        { id: "gen", type: "ai_generate", config: { provider: "openai", prompt: "cat" } },
+      ],
+      [{ id: "e1", source: "start", target: "gen" }],
+    );
+    const codes = (ctx: AnalyzeContext) => (analyzeWorkflow(g, registry, ctx).byNode.get("gen") ?? []).map((i) => i.code);
+    expect(codes({ ...fullCtx, generationVendors: new Set(), generationModelsLoaded: false })).not.toContain(
+      "gen-provider-unconfigured",
+    );
+    expect(codes({ ...fullCtx, generationVendors: new Set(), generationModelsLoaded: true })).toContain(
+      "gen-provider-unconfigured",
+    );
   });
 });
+
 
 describe("语音节点的音色", () => {
   /**

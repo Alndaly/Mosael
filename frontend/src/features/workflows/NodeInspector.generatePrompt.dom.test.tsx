@@ -68,13 +68,17 @@ const COMFY_PROFILE = {
 
 function renderInspector(
   capabilities: Record<string, unknown>,
-  { profiles = [COMFY_PROFILE], config }: { profiles?: unknown[]; config?: Record<string, unknown> } = {},
+  {
+    profiles = [COMFY_PROFILE],
+    config,
+    modelsListed = true,
+  }: { profiles?: unknown[]; config?: Record<string, unknown>; modelsListed?: boolean } = {},
 ) {
   globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
     const url = new URL(String(input), "http://x");
     let body: unknown = [];
     if (url.pathname.endsWith("/settings/providers")) body = profiles;
-    if (url.pathname.endsWith("/generation/options") && url.searchParams.get("kind") === "image") {
+    if (modelsListed && url.pathname.endsWith("/generation/options") && url.searchParams.get("kind") === "image") {
       body = [{
         id: "p1:image:upscale.json", provider_profile_id: "p1", profile_name: "ComfyUI", label: "ComfyUI · 放大",
         provider: "plugin:dev.mosael.comfyui", model: "upscale.json", kind: "image", capabilities,
@@ -147,9 +151,11 @@ describe("AI 生成节点顶部的配置提醒", () => {
     await waitFor(() => expect(screen.getByText("aiCapabilityNotConfigured")).toBeInTheDocument());
   });
 
-  //: 和就绪清单同一个判定(providerReadiness):清单判「服务商没配」的,这里也说。
-  it("所选服务商没有启用的生成连接:和就绪清单一样报出来", async () => {
-    renderInspector({ parameter_keys: ["seed"] }, { profiles: [{ ...COMFY_PROFILE, enabled: false }] });
+  //: 和就绪清单同一个判定(bindingReadiness.generationVendors):清单判「服务商没配」的,这里也说。
+  //: 判据是后端给的可用生成模型(和 AI 工作台同源),不是连接开没开:连接开着而模型全停了,
+  //: 后端不列它的模型,AI 工作台说「没配置」,这里也得这么说。
+  it("连接启用但所选服务商下没有可用的生成模型:和就绪清单、AI 工作台一样报「没配」", async () => {
+    renderInspector({ parameter_keys: ["seed"] }, { modelsListed: false });
     await waitFor(() => expect(screen.getByText("wfIssueGenUnconfigured")).toBeInTheDocument());
   });
 });

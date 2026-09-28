@@ -1,4 +1,5 @@
 import type { TaskEvent } from "@/api/client";
+import type { MessageKey } from "@/app/messages";
 import type { DataType } from "@/features/nodeForms/fieldTypes";
 import { outputLabel, outputType, type RegistryLike } from "@/features/workflows/analyze";
 
@@ -26,6 +27,15 @@ export type Step = {
   /** 跑着的时候节点自己报的进度(插件跑一张 ComfyUI 工作流:「采样 12/20」)。跑完就不再显示。 */
   progress?: number;
   message?: string;
+};
+
+/** 一步的状态怎么说。执行历史的步骤格和产出面板共用这一张;任务的状态是另一组(components/layout/runStatus)。 */
+export const STEP_STATUS_LABELS: Readonly<Record<Step["status"], MessageKey>> = {
+  running: "wfStepRunning",
+  done: "wfStepDone",
+  skipped: "wfStepSkipped",
+  failed: "wfStepFailed",
+  cancelled: "wfStepCancelled",
 };
 
 const TERMINAL_RUN_EVENTS = new Set(["workflow.failed", "workflow.cancelled", "job.failed", "job.cancelled"]);

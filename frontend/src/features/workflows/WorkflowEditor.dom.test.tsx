@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import React from "react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -380,6 +380,20 @@ describe("⌘Enter 运行", () => {
     fireEvent.click(runButton);
     await waitFor(() => expect(order).toContain("run"));
     expect(order).toEqual(["save-failed", "save", "run"]);
+  });
+
+  //: 重入闸此前是 state:同一帧连按两次,两次闭包读到的都是「没在启动」,排了两次运行。
+  it("同一帧连按两次 ⌘Enter 只排一次运行", async () => {
+    await renderEditor(CHAIN);
+    await waitFor(() => nodeEl("llm-1"));
+    // 两下放进同一个 act:中间不重渲染,和真机上同一帧里的两次按键一样,两次都跑同一个闭包。
+    act(() => {
+      fireEvent.keyDown(document.body, { key: "Enter", metaKey: true });
+      fireEvent.keyDown(document.body, { key: "Enter", metaKey: true });
+    });
+    await waitFor(() => expect(apiMocks.runWorkflow).toHaveBeenCalled());
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(apiMocks.runWorkflow).toHaveBeenCalledTimes(1);
   });
 
   it("有阻断问题时不跑(和运行键同一个判据)", async () => {

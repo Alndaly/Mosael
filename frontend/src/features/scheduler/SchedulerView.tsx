@@ -26,6 +26,7 @@ import {
   type Workspace,
 } from "@/api/client";
 import { useJobKinds } from "@/components/layout/jobKinds";
+import { runStatusText } from "@/components/layout/runStatus";
 import { AttestRevisionButton } from "@/features/workflows/AttestRevisionButton";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
@@ -651,7 +652,7 @@ function RunRow({ run, job }: { run: ScheduledTaskRun; job: Job | null }) {
       </span>
       <div className="grid min-w-0 flex-1 gap-px">
         <div className="flex min-w-0 items-baseline gap-1.5 [&_strong]:whitespace-nowrap [&_strong]:text-ui-sm">
-          <strong>{run.started_at ? relativeTime(run.started_at, locale) : t(`runStatus_${run.status}` as never)}</strong>
+          <strong>{run.started_at ? relativeTime(run.started_at, locale) : runStatusText(t, run.status)}</strong>
           {run.started_at && (
             <span className="timecode text-ui-xs text-muted-foreground">{run.started_at.replace("T", " ").slice(5, 19)}</span>
           )}
@@ -674,7 +675,7 @@ function RunRow({ run, job }: { run: ScheduledTaskRun; job: Job | null }) {
           !running && run.status === "queued" && "bg-[color-mix(in_srgb,var(--primary)_12%,transparent)] text-primary",
         )}
       >
-        {t(`runStatus_${running ? "running" : run.status}` as never)}
+        {runStatusText(t, running ? "running" : run.status)}
       </em>
       </div>
       {rows.length > 0 && (
