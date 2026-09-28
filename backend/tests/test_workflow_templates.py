@@ -639,12 +639,13 @@ def test_模板卡片和图一一对应() -> None:
         TALKING_SCRIPT_VIDEO,
         TRANSCRIPT_VIDEO_CLEANUP,
         TRANSLATED_DUB,
+        TRANSLATED_DUB_LIPSYNC,
     )
 
     known = {
         FULL_VIDEO_GENERATION, TRANSCRIPT_VIDEO_CLEANUP, TRANSLATED_DUB,
         HIGHLIGHT_SHORTS, PRODUCT_ON_MODEL, PRODUCT_PITCH_SHORT, FABRIC_LOOKBOOK, FOOTAGE_MONTAGE,
-        TALKING_SCRIPT_VIDEO,
+        TALKING_SCRIPT_VIDEO, TRANSLATED_DUB_LIPSYNC,
     }
     assert {card["id"] for card in TEMPLATE_CATALOG} == known
     for card in BUSINESS_TEMPLATE_CATALOG:
@@ -794,3 +795,21 @@ def test_稿子到数字人口播_分段配音逐段说话_授权留给跑的人
     speak = next(one for one in loop["config"]["body"]["nodes"] if one["id"] == "speak")
     assert speak["type"] == "image_speak" and speak["config"]["audio_asset_id"] == "{{loop.item.audio_asset_id}}"
     assert speak["config"]["consent"] == "", "这张脸是谁的、有没有同意,由跑的人确认"
+
+
+def test_视频翻译改口型_同一张译配图在导出之前多一步对口型_原来那条模板不变() -> None:
+    """ADR 0028 阶段 3:改口型接在配音之后、导出之前;前面几步和「视频译配」是同一张图(不另抄一份)。"""
+    from app.domain.workflows import validate_graph
+    from app.domain.workflows.templates import translated_dub_graph
+
+    plain = translated_dub_graph(voice_id="v1")
+    synced = translated_dub_graph(voice_id="v1", lipsync=True)
+    assert validate_graph(synced, require_config=False) == []
+    assert {node["id"] for node in synced["nodes"]} - {node["id"] for node in plain["nodes"]} == {"lip_sync"}
+    assert "lip_sync" not in {node["id"] for node in plain["nodes"]} and plain["meta"]["template_id"] == "translated_dub"
+    lip = _node(synced, "lip_sync")
+    assert lip["type"] == "dub_lipsync" and lip["config"]["consent"] == ""
+    wires = {(edge["source"], edge.get("source_output"), edge["target"], edge.get("target_input")) for edge in synced["edges"]}
+    assert ("video_on_timeline", "clip_id", "lip_sync", "clip_id") in wires and ("dubbing", "track_id", "lip_sync", "track_id") in wires
+    assert ("lip_sync", None, "export_dubbed_video", None) in wires, "对完口型才导出"
+    assert not any(edge["source"] == "dubbing" and edge["target"] == "export_dubbed_video" for edge in synced["edges"])

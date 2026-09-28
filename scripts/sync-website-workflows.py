@@ -41,6 +41,7 @@ def catalog_files() -> dict[str, str]:
         "transcript_video_cleanup": transcript_video_cleanup_graph(chat=ModelChoice()),
         # 音色按工作区取,导出给官网的那份不能带任何本机资源 —— 留空,导入后由用户自己挑。
         "translated_dub": translated_dub_graph(voice_id=""),
+        "translated_dub_lipsync": translated_dub_graph(voice_id="", lipsync=True),
         "highlight_shorts": highlight_shorts_graph(chat=ModelChoice()),
         #: 空的 ModelChoice 表示"这台机器上还没选默认模型" —— 官网那份本来就不该带任何本机选择。
         #: 上身图这条因此按**带视频**导出:图里多一个节点,用户没有视频模型时在画布上删掉它即可;

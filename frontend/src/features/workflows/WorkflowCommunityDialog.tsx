@@ -54,6 +54,7 @@ const TEMPLATE_ICONS: Record<string, typeof Film> = {
   full_video_generation: Film,
   transcript_video_cleanup: Scissors,
   translated_dub: Languages,
+  translated_dub_lipsync: Languages,
   highlight_shorts: Smartphone,
   product_on_model: Shirt,
   product_pitch_short: Megaphone,

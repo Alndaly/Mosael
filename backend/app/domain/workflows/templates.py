@@ -23,6 +23,7 @@ from app.domain.workflows.template_requirements import (
     REFERENCE_IMAGE_MODEL,
     REFERENCE_VIDEO_MODEL,
     SEPARATION_ENGINE,
+    LIPSYNC_VIDEO_MODEL,
     SPEECH_VIDEO_MODEL,
     TRANSCRIPTION_ENGINE,
     requirement,
@@ -49,6 +50,7 @@ from sqlalchemy.orm import Session
 FULL_VIDEO_GENERATION = "full_video_generation"
 TRANSCRIPT_VIDEO_CLEANUP = "transcript_video_cleanup"
 TRANSLATED_DUB = "translated_dub"
+TRANSLATED_DUB_LIPSYNC = "translated_dub_lipsync"
 
 
 @dataclass(frozen=True)
@@ -374,7 +376,28 @@ TEMPLATE_CATALOG: list[dict[str, Any]] = [
                 "Export"
             ]
         }
-    }
+    },
+    {
+        "id": TRANSLATED_DUB_LIPSYNC,
+        "name": {"zh": "视频翻译 · 改口型", "en": "Translated dubbing with lip-sync"},
+        "summary": {
+            "zh": "在「视频译配」的基础上,配完音再让原片里说话人的嘴对上译文配音:按两句之间的空当把原片切成模型收得下的块,有配音的块改口型,接回整段盖在原片上(原片不动,删掉那条轨就回到原样),导出成片带「AI 生成」标识。运行前在「让原片的嘴对上配音」上确认已取得本人授权。",
+            "en": "Everything in translated dubbing, then re-sync the speaker's lips to the translated dub: cut the source into chunks the model accepts at the gaps between lines, lip-sync the chunks with speech, and lay the joined result over the source (the source is untouched — delete that track to undo). The export carries an \"AI-generated\" label. Confirm the speaker's consent on the lip-sync step before running.",
+        },
+        "requires": [
+            requirement(TRANSCRIPTION_ENGINE, zh="可用的转写引擎", en="Available transcription engine"),
+            requirement(CHAT_MODEL, zh="翻译:AI 对话模型", en="Translation: a chat model"),
+            requirement(None, zh="一把嗓子:配音库的克隆音色,或某个引擎的现成音色", en="A voice: a cloned voice, or a built-in voice from any engine"),
+            requirement(SEPARATION_ENGINE, zh="人声分离引擎(需提前安装)", en="A voice separation engine installed in advance"),
+            requirement(LIPSYNC_VIDEO_MODEL, zh="会改口型的视频模型(比如百炼 videoretalk)", en="A lip-sync video model (for example Bailian videoretalk)"),
+            requirement(None, zh="单人、正脸清楚的说话视频", en="A video of one person speaking, face clearly visible"),
+        ],
+        "stages": {
+            "zh": ["选择视频", "生成带时间码逐字稿", "逐句翻译", "按原时间码铺译文字幕", "逐条配音并压回原长度", "让原片的嘴对上配音", "导出成片"],
+            "en": ["Choose a video", "Transcribe with timecodes", "Translate line by line", "Lay subtitles on the original timecodes",
+                   "Dub and time-compress", "Re-sync the lips to the dub", "Export"],
+        },
+    },
 ] + BUSINESS_TEMPLATE_CATALOG
 
 
@@ -397,9 +420,10 @@ def built_in_template_graph(
         ))
     if template_id == TRANSCRIPT_VIDEO_CLEANUP:
         return localised_names(locale, transcript_video_cleanup_graph(chat=chat))
-    if template_id == TRANSLATED_DUB:
+    if template_id in (TRANSLATED_DUB, TRANSLATED_DUB_LIPSYNC):
         # 音色和整片生成那条一样按工作区取:克隆音色存在工作区名下,不跟人走。
-        return localised_names(locale, translated_dub_graph(voice_id=_first_voice_id(db, workspace_id)))
+        return localised_names(locale, translated_dub_graph(
+            voice_id=_first_voice_id(db, workspace_id), lipsync=template_id == TRANSLATED_DUB_LIPSYNC))
     if template_id == HIGHLIGHT_SHORTS:
         # 不生成画面,所以只要对话模型;转写引擎由节点自己挑。
         return localised_names(locale, highlight_shorts_graph(chat=chat))
@@ -906,8 +930,12 @@ def transcript_video_cleanup_graph(*, chat: ModelChoice) -> dict[str, Any]:
     return normalize_graph(graph, node_types=NODE_TYPES)
 
 
-def translated_dub_graph(*, voice_id: str = "") -> dict[str, Any]:
-    """视频 → 逐字稿 → 逐句翻译 → 译文字幕 → 变速配音 → 导出。
+def translated_dub_graph(*, voice_id: str = "", lipsync: bool = False) -> dict[str, Any]:
+    """视频 → 逐字稿 → 逐句翻译 → 译文字幕 → 变速配音 →(改口型)→ 导出。
+
+    `lipsync`:「视频翻译 · 改口型」(ADR 0028 阶段 3)—— 配完音再让原片的嘴对上配音轨(`dub_lipsync`:按句间空当
+    切块改口型,接回整段放到最上面一条新视频轨,原片不动),然后才导出。前面几步一模一样,所以是同一张图多一个节点,
+    不另抄一份(抄出来的两份改一处就得改两处)。节点上的授权确认留空,由跑的人确认。
 
     **逐句翻译,不是整篇翻译。** 配音要对得上画面,所以每一句必须知道自己是第几秒到第几秒的 ——
     而那个时间码只存在于原始段落里。整篇丢给翻译再切回句子,切点不可能和原来一致(译文的句数
@@ -1072,6 +1100,26 @@ def translated_dub_graph(*, voice_id: str = "") -> dict[str, Any]:
             },
         },
     ]
+    if lipsync:
+        nodes.insert(next(index for index, node in enumerate(nodes) if node["id"] == "export_dubbed_video"), {
+            "id": "lip_sync",
+            "type": "dub_lipsync",
+            "name": {"zh": "让原片的嘴对上配音", "en": "Re-sync the lips to the dub"},
+            "position": {"x": 1950, "y": 440},
+            "config": {
+                "sequence_id": "{{dub_project.sequence_id}}",
+                "clip_id": "{{video_on_timeline.clip_id}}",
+                "track_id": "{{dubbing.track_id}}",
+                "model": "",
+                #: 留空:这张脸是谁的、有没有同意,由跑的人确认。
+                "consent": "",
+            },
+        })
+        output = next(node for node in nodes if node["id"] == "output")
+        output["config"]["values"].update({
+            "lipsync_asset_id": "{{lip_sync.asset_id}}",
+            "lipsync_track_id": "{{lip_sync.track_id}}",
+        })
     edges = [
         {"id": "start_source", "source": "start", "target": "source_video"},
         {"id": "source_transcript", "source": "source_video", "target": "verbatim_transcript"},
@@ -1083,12 +1131,15 @@ def translated_dub_graph(*, voice_id: str = "") -> dict[str, Any]:
         # 字幕要等视频真的落到时间线上才铺 —— 它的落点是 video_on_timeline 算出来的。
         {"id": "append_subtitles", "source": "video_on_timeline", "target": "translated_subtitles"},
         {"id": "subtitles_dub", "source": "translated_subtitles", "target": "dubbing"},
-        {"id": "dub_export", "source": "dubbing", "target": "export_dubbed_video"},
+        *([{"id": "dub_lipsync", "source": "dubbing", "target": "lip_sync"},
+           {"id": "lipsync_export", "source": "lip_sync", "target": "export_dubbed_video"}]
+          if lipsync else [{"id": "dub_export", "source": "dubbing", "target": "export_dubbed_video"}]),
         {"id": "export_notice", "source": "export_dubbed_video", "target": "done_notice"},
         {"id": "notice_output", "source": "done_notice", "target": "output"},
     ]
     graph = {
-        "meta": {"template_id": TRANSLATED_DUB, "template_version": 2, "source": "official"},
+        "meta": ({"template_id": TRANSLATED_DUB_LIPSYNC, "template_version": 1, "source": "official"} if lipsync
+                 else {"template_id": TRANSLATED_DUB, "template_version": 2, "source": "official"}),
         "nodes": nodes,
         "edges": edges,
     }
@@ -1131,7 +1182,7 @@ def requirement_statuses(db: Session, *, user_id: str, workspace_id: str) -> dic
     这里说缺,那一格就是空的。两处各写一份判据的话,迟早一处说齐、一处留空。
     """
     from app.ai.runtime import asr_models, separation_models
-    from app.domain.workflows.executors.talking import SPEECH_TO_VIDEO, talking_models
+    from app.domain.workflows.executors.talking import SPEECH_TO_VIDEO, VIDEO_LIPSYNC, talking_models
 
     has_chat = bool(_pick(db, user_id, "chat", lambda _db, choice: bool(choice.model)).model)
     statuses: dict[str, CheckStatus] = {
@@ -1142,6 +1193,7 @@ def requirement_statuses(db: Session, *, user_id: str, workspace_id: str) -> dic
         TRANSCRIPTION_ENGINE: _engines_status(asr_models.runtime_status, ["funasr", "whisperx"]),
         SEPARATION_ENGINE: _engines_status(separation_models.runtime_status, list(separation_models.ENGINES)),
         SPEECH_VIDEO_MODEL: "met" if talking_models(db, SPEECH_TO_VIDEO, user_id) else "missing",
+        LIPSYNC_VIDEO_MODEL: "met" if talking_models(db, VIDEO_LIPSYNC, user_id) else "missing",
     }
     return statuses
 

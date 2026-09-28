@@ -128,6 +128,8 @@ const NODE_ICONS: Record<string, LucideIcon> = {
   image_speak: MessageCircle,
   //: 长稿分段配音:一段稿子配成几段音频(和配音同一个图标)。
   talking_segments: AudioLines,
+  //: 译配对口型:和对口型同一个图标。
+  dub_lipsync: Speech,
   video_lipsync: Speech,
   note_search: Search,
   note_read: BookOpen,

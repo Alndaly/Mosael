@@ -49,6 +49,8 @@ EXEMPT: dict[str, str] = {
     #: 编辑那一刻列出来的,是这次运行要替掉的旧片段。值只该从上游接。
     "timeline_cut_ranges.clip_id": "clips come from the upstream step of the same run",
     "dub_subtitles.clip_ids": "clips come from the upstream step of the same run",
+    #: 原片那一段是同一次运行里「接到时间线」刚放上去的(译配模板的 video_on_timeline.clip_id)。
+    "dub_lipsync.clip_id": "the source clip comes from the upstream step of the same run",
 }
 
 _REPO = Path(__file__).resolve().parents[2]

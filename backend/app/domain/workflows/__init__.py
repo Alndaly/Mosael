@@ -377,6 +377,8 @@ _FIELD_LABELS = {
     "role": "wfField_role",
     "if_exists": "wfField_if_exists",
     "cues": "wfField_cues",
+    "chunk_count": "wfField_chunk_count",
+    "generated_count": "wfField_generated_count",
     "max_seconds": "wfField_max_seconds",
 }
 
@@ -1518,6 +1520,24 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
             "consent": {"type": "string", "required": True, "options": ["yes"], "description": "wfNode_talking_consent"},
         },
         "outputs": ["asset_id", "asset_ids", "audio_asset_id"],
+    },
+    "dub_lipsync": {
+        "external": False,
+        #: 每一块有配音的原片是一次付费的改口型。
+        "effects": "paid",
+        "category": "wfCat_ai",
+        "label": "wfNode_dub_lipsync",
+        "description": "wfNode_dub_lipsync_desc",
+        "config": {
+            "sequence_id": {"type": "template", "required": True, "options_from": "sequences", "description": "wfNode_dub_lipsync_sequence_id"},
+            "clip_id": {"type": "template", "required": True, "description": "wfNode_dub_lipsync_clip_id"},
+            "track_id": {"type": "template", "required": True, "depends_on": "sequence_id", "options_from": "sequence_tracks",
+                         "description": "wfNode_dub_lipsync_track_id"},
+            "model": {"type": "string", "options_from": "lipsync_models", "description": "wfNode_talking_model"},
+            "consent": {"type": "string", "required": True, "options": ["yes"], "description": "wfNode_talking_consent"},
+        },
+        "outputs": ["asset_id", "clip_id", "track_id", "chunk_count", "generated_count"],
+        "output_types": {"chunk_count": "number", "generated_count": "number"},
     },
     "talking_segments": {
         "external": False,

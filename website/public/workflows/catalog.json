@@ -154,6 +154,62 @@
     }
   },
   {
+    "id": "translated_dub_lipsync",
+    "name": {
+      "zh": "视频翻译 · 改口型",
+      "en": "Translated dubbing with lip-sync"
+    },
+    "summary": {
+      "zh": "在「视频译配」的基础上,配完音再让原片里说话人的嘴对上译文配音:按两句之间的空当把原片切成模型收得下的块,有配音的块改口型,接回整段盖在原片上(原片不动,删掉那条轨就回到原样),导出成片带「AI 生成」标识。运行前在「让原片的嘴对上配音」上确认已取得本人授权。",
+      "en": "Everything in translated dubbing, then re-sync the speaker's lips to the translated dub: cut the source into chunks the model accepts at the gaps between lines, lip-sync the chunks with speech, and lay the joined result over the source (the source is untouched — delete that track to undo). The export carries an \"AI-generated\" label. Confirm the speaker's consent on the lip-sync step before running."
+    },
+    "requires": {
+      "zh": [
+        "可用的转写引擎",
+        "翻译:AI 对话模型",
+        "一把嗓子:配音库的克隆音色,或某个引擎的现成音色",
+        "人声分离引擎(需提前安装)",
+        "会改口型的视频模型(比如百炼 videoretalk)",
+        "单人、正脸清楚的说话视频"
+      ],
+      "en": [
+        "Available transcription engine",
+        "Translation: a chat model",
+        "A voice: a cloned voice, or a built-in voice from any engine",
+        "A voice separation engine installed in advance",
+        "A lip-sync video model (for example Bailian videoretalk)",
+        "A video of one person speaking, face clearly visible"
+      ]
+    },
+    "stages": {
+      "zh": [
+        "选择视频",
+        "生成带时间码逐字稿",
+        "逐句翻译",
+        "按原时间码铺译文字幕",
+        "逐条配音并压回原长度",
+        "让原片的嘴对上配音",
+        "导出成片"
+      ],
+      "en": [
+        "Choose a video",
+        "Transcribe with timecodes",
+        "Translate line by line",
+        "Lay subtitles on the original timecodes",
+        "Dub and time-compress",
+        "Re-sync the lips to the dub",
+        "Export"
+      ]
+    },
+    "author": "Mosael",
+    "version": 1,
+    "nodes": 12,
+    "download": {
+      "zh": "/workflows/translated_dub_lipsync.zh.mosael-workflow.json",
+      "en": "/workflows/translated_dub_lipsync.en.mosael-workflow.json"
+    }
+  },
+  {
     "id": "highlight_shorts",
     "name": {
       "zh": "长视频切多条竖屏",

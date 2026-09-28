@@ -2985,6 +2985,28 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "The speech to say; connect an upstream audio (a segment from long-script voicing, or an audio item on a board), or leave empty to voice the script below",
     },
     "wfNode_image_speak_text": {"zh": "稿子(没接音频时用它配音)", "en": "Script (voiced when no audio is connected)"},
+    "wfNode_dub_lipsync": {"zh": "译配对口型", "en": "Lip-sync a dubbed timeline"},
+    "wfNode_dub_lipsync_desc": {
+        "zh": "译配好的时间线上,让原片的嘴对上配音轨:配音混成一段,原片按模型收得下的长度切块(切点落在两句之间),有配音的块改口型,接回整段放到最上面一条新视频轨,原片不动。",
+        "en": "On a dubbed timeline, re-sync the source's lips to the dub track: mix the dub into one audio, cut the source into chunks the model accepts (between lines), lip-sync the chunks with speech, and put the joined result on a new top video track, leaving the source untouched.",
+    },
+    "wfNode_dub_lipsync_sequence_id": {"zh": "译配好的那条时间线", "en": "The dubbed timeline"},
+    "wfNode_dub_lipsync_clip_id": {"zh": "时间线上的原片那一段(原速)", "en": "The source clip on the timeline (at normal speed)"},
+    "wfNode_dub_lipsync_track_id": {"zh": "配音所在的那条音频轨", "en": "The audio track holding the dub"},
+    "wfField_chunk_count": {"zh": "切了几块", "en": "Chunks"},
+    "wfField_generated_count": {"zh": "改了几块", "en": "Chunks re-synced"},
+    "wfErr_dubLipsyncNeedsClip": {"zh": "没找到时间线上的原片那一段", "en": "The source clip was not found on the timeline"},
+    "wfErr_dubLipsyncSpeed": {
+        "zh": "原片那一段变过速:先把它调回原速再对口型",
+        "en": "The source clip has a speed change; set it back to normal speed before lip-syncing",
+    },
+    "wfErr_dubLipsyncNeedsTrack": {"zh": "没找到配音所在的那条轨", "en": "The dub track was not found on this timeline"},
+    "wfErr_dubLipsyncNoSpeech": {
+        "zh": "配音轨上在原片这一段里一句都没有,没什么可对的",
+        "en": "The dub track has nothing over the source clip, so there is nothing to lip-sync",
+    },
+    "wfErr_dubLipsyncMediaFailed": {"zh": "对口型时「{step}」这一步失败了", "en": "Lip-sync failed at the step \"{step}\""},
+    "wfErr_dubLipsyncNoResult": {"zh": "第 {index} 块改口型没有交回视频", "en": "Chunk {index} came back from lip-sync without a video"},
     "wfNode_talking_segments": {"zh": "长稿分段配音", "en": "Voice a long script in segments"},
     "wfNode_talking_segments_desc": {
         "zh": "把一段长稿逐句配音,按说话照片模型能收的最长音频分成几段,每段一段音频;字幕时间用配出来的实际时长。接「让它说话」逐段出说话照片。",
