@@ -72,4 +72,7 @@ Mosael 已经有完整的剪辑(时间线、变换、调色、字幕、配音、
 
 1. 格子种类、建时间线、连线加片段、缩略图条(排序、删除、剪刀)、粗剪预览、在剪辑里打开、画板撤销。**已完成**(2026-09-28)。
 2. 导出落成右边一格;「+」挑素材。**已完成**(2026-09-28)。
-3. 智能体:`edit_board` 认识时间线格。
+3. 智能体:`edit_board` 认识时间线格。**已完成**(2026-09-28):`add_item` 不带 `sequence_id` = 新建一条(批准之后才建,
+   干跑时它不过引用那一道;boards.timelines.create_pending_sequences),带着就引用已有的;`connect` 进时间线格 = 接到
+   末尾,和界面拉线同一件事(append_connected_media,只接新连上的、有素材的);导出照渲白模那样 set_form + run_board_item。
+   get_board / list_board_producers / 系统提示都写明了。前端时间线格的缓存挂在 `sequences` 底下,确认卡执行后跟着刷新。

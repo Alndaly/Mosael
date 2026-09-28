@@ -43,6 +43,10 @@ SYSTEM_PROMPT_TEMPLATE = """你是 Mosael 的视频创作助手,运行在用户�
   的设置(config,别的输入用 bindings 接连进这一格的上游,同一批里 connect 一根线);再 run_board_item 带上 producer
   对宿主跑 —— 只读的直接跑,花钱或对外的会先弹卡。**3D 场景格自己会渲白模参考**:set_form 在场景格上写 config
   (shot_id 镜头、render 渲什么),再对场景格 run_board_item,首尾帧 / 运镜视频落在它右边。
+  **时间线格**(type "sequence")是画板上的一条真时间线:add_item 不带 sequence_id 就是新建一条(批准时建,放进
+  画板自己的项目);把有素材的视频 / 图片 / 音频格 connect 进它 = 接到末尾(和用户拉线一样),拼片子就这么拼。
+  切、挪、修剪用 edit_timeline(对它的 sequence_id,先 inspect_sequence 看片段);导出成片对它 set_form 写 config
+  (resolution / quality / ai_label,都可省)再 run_board_item,成片落在它右边。
 - 修改工作流画布用 get_workflow / list_workflow_node_types / edit_workflow。
   删除工作流节点必须调用 edit_workflow 的 remove_node 操作,不要调用 edit_timeline。
   start/开始节点也可以删除;删除后工作流保存为草稿,但运行前需要重新添加 start。

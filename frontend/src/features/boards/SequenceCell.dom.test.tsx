@@ -19,7 +19,7 @@ vi.mock("@/api/domains/editor", () => api);
 vi.mock("@/api/domains/assets", () => ({ assetFileUrl: (id: string) => `/file/${id}`, assetThumbnailUrl: (id: string) => `/thumb/${id}` }));
 vi.mock("@/app/preferences", () => ({ useI18n: () => (key: string) => key }));
 
-import { SequenceCell, SequenceToolbarActions, reorderedClips, sequenceSummary, stripLayout } from "./SequenceCell";
+import { boardSequenceKey, SequenceCell, SequenceToolbarActions, reorderedClips, sequenceSummary, stripLayout } from "./SequenceCell";
 import { onSequenceEdit, SequenceAddContext, updateSequenceCursor } from "./sequenceCursor";
 
 const clip = (id: string, start: number, length: number, extra: Record<string, unknown> = {}) => ({
@@ -195,5 +195,9 @@ describe("时间线格", () => {
   it("导出面板上那一行:几段(主视频轨)、多长(算上音频)、画幅", () => {
     expect(sequenceSummary({ ...SEQUENCE, width: 1080, height: 1920 } as never)).toEqual({ clips: 2, seconds: 6, size: "1080×1920" });
     expect(sequenceSummary(undefined)).toEqual({ clips: 0, seconds: 0, size: "" });
+  });
+
+  it("缓存挂在 sequences 底下:智能体改了时间线,确认卡执行后刷新 sequences 时它跟着重取", () => {
+    expect(boardSequenceKey("seq")[0]).toBe("sequences");
   });
 });

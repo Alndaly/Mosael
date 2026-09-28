@@ -230,11 +230,14 @@ def _validate_edit_board(db: Session, workspace_id: str, payload: dict[str, Any]
     # 先干跑一遍:写坏的算子要在**批准之前**就失败,而不是让用户点了同意才看到报错。
     # 和落库过同一道(形状 + 引用),见 boards.check_canvas;这次写下的表单再过一遍注册表
     # (工具在不在、绑定接不接得上),和界面、运行是同一张表,见 boards.producers.check_forms。
+    from app.domain.boards.timelines import without_pending_sequences
+
     before = board.canvas or {}
     _mark_abilities(db, operations, actor)
     try:
         after = apply_board_ops(before, operations)
-        check_canvas(db, workspace_id, after, board.canvas)
+        #: 新的时间线格批准之后才建时间线:干跑时它先不过引用那一道(别的照常查)。
+        check_canvas(db, workspace_id, without_pending_sequences(after), board.canvas)
         producers.check_forms(db, after, producers.written_forms(before, after), actor)
     except BoardDomainError as exc:
         raise ConfirmationError(str(exc)) from exc
@@ -268,12 +271,20 @@ def _execute_edit_board(db: Session, confirmation: Any, actor: str | None) -> di
     from app.domain.boards.ops import apply_board_ops
     from app.domain.boards import update_board
 
+    from app.domain.boards.timelines import append_connected_media, create_pending_sequences
+
     board = db.get(Board, str(payload["board_id"]))
     assert board is not None  # 开卡时校验过
+    before = board.canvas or {}
+    #: 「放一格新的时间线」:批准了才建时间线(放进画板的项目),id 写进算子。
+    operations = create_pending_sequences(db, board.workspace_id, board.id, payload["operations"])
     # 落到**批准这一刻**的画布上,而不是开卡时的那份快照 —— 这中间用户很可能还在拖东西。
-    canvas = apply_board_ops(board.canvas or {}, payload["operations"])
+    canvas = apply_board_ops(before, operations)
     update_board(db, workspace_id=board.workspace_id, board_id=board.id, name=None, canvas=canvas)
-    return {"board_id": board.id, "items": len(canvas.get("items", []))}
+    #: 新连进时间线格的素材接到末尾 —— 和界面上拉一根线同一件事。
+    appended = append_connected_media(db, board.workspace_id, before, canvas)
+    db.commit()
+    return {"board_id": board.id, "items": len(canvas.get("items", [])), "appended_clips": len(appended)}
 
 def _run_request(db: Session, workspace_id: str, payload: dict[str, Any], actor: str | None):
     """照画布上**现在**那一格拼一次运行:它存着的表单(或它的那一项能力的设置),它自己的位置,这张板当前的版本。

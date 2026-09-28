@@ -1974,6 +1974,9 @@ def get_board(board_id: str, workspace_id: str = "") -> dict[str, Any]:
     is one. An empty slot running a plugin generator carries form.producer (that
     generator), form.config and form.bindings; a 3D scene item (kind "scene")
     carries form.producer "scene_render" and form.config (its render settings).
+    A TIMELINE item (kind "sequence") is a real Mosael timeline: its sequence_id works
+    with inspect_sequence (see its clips) and edit_timeline (split, move, trim…); it
+    carries form.producer "sequence_export" and form.config (its export settings).
     """
     return _get(f"/api/boards/{board_id}", {"workspace_id": workspace_id or _default_workspace_id()})
 
@@ -2012,10 +2015,22 @@ def edit_board(board_id: str, operations: list[dict[str, Any]], workspace_id: st
     with set_form, then run_board_item on the scene item. The first/last frame and
     the camera-move video land as new items to its right.
 
+    A TIMELINE ITEM (type "sequence") strings clips into one video right on the board.
+    add_item it WITHOUT sequence_id to start a new timeline (created on approval, in
+    the board's own project, named after the board), or with the sequence_id of an
+    existing timeline of this workspace. CONNECTING a video / image / audio item that
+    has an asset INTO it appends that asset to the end of the timeline (video and
+    images to the main video track, audio to the audio track) — the same as the user
+    drawing that line; empty slots add nothing, and removing the line does not remove
+    the clip. Fine edits (split, reorder, trim) are edit_timeline on its sequence_id.
+    To export it, set_form its `config` (resolution original/1080p/720p/480p, quality
+    high/standard/compact, ai_label yes/no — all optional) and run_board_item on it;
+    the finished video lands as a new item to its right.
+
     operations is a list of:
       {"kind":"add_item","type":"note","item_id":"n1","x":80,"y":120,"text":"开场白","color":"yellow"}
           (item_id/x/y/width/height/title optional — the server auto-ids and lays out to the right)
-          type is one of note / image / video / audio / frame / scene / document / entity
+          type is one of note / image / video / audio / frame / scene / document / entity / sequence
       {"kind":"add_item","type":"image","asset_id":"<asset id>"}
           (places an existing asset; it must be in this workspace and match the item type:
            image → image asset, video → video asset, audio → audio asset)
@@ -2025,6 +2040,10 @@ def edit_board(board_id: str, operations: list[dict[str, Any]], workspace_id: st
           (an ASSET item — a character / location / prop from the asset library; it REQUIRES entity_id.
            connect it into an image/video slot and that generation uses it exactly like an @mention:
            its prompt descriptor is appended and its reference images are attached)
+      {"kind":"add_item","type":"sequence","item_id":"t1"}
+          (a NEW timeline, created when the user approves; add "sequence_id":"<id>" to show an existing one)
+      {"kind":"connect","source":"v1","target":"t1"}
+          (into a timeline item: appends v1's asset to the end of that timeline)
       {"kind":"add_item","type":"frame","title":"第一幕"}
           (a frame is named by title; it has no text)
       {"kind":"add_item","type":"document","note_id":"<read_note id>","note_revision":1}
@@ -2089,7 +2108,8 @@ def list_board_producers(workspace_id: str = "") -> list[dict[str, Any]]:
     tools appear only for plugins the user has connected. Built-in slot producers
     (generate/write/speak) are not listed — add empty slots and let the user generate.
     Also listed: "scene_render" (hosts ["scene"]) — the scene item renders itself; set
-    its config on the scene item and run_board_item on it.
+    its config on the scene item and run_board_item on it. And "sequence_export"
+    (hosts ["sequence"]) — a timeline item exports itself; its video lands to its right.
     """
     listed = _get("/api/boards/producers", {"workspace_id": workspace_id or _default_workspace_id()})
     return [one for one in listed if one.get("runs_from_draft")]

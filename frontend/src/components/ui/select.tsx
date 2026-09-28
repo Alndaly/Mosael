@@ -9,6 +9,7 @@ import { fieldTriggerClass, FIELD_TRIGGER_CHEVRON } from "@/components/ui/field-
 import { FLOATING_SURFACE, FLOATING_MOTION, MENU_SEPARATOR, FLOATING_COLLISION_PADDING } from "./floating"
 
 import { cn } from "@/lib/utils"
+import { swallowClickThrough } from "@/lib/clickThrough"
 
 const Select = SelectPrimitive.Root
 
@@ -98,6 +99,11 @@ const SelectContent = React.forwardRef<
       position={position}
       collisionPadding={FLOATING_COLLISION_PADDING}
       {...props}
+      //: 鼠标抬起就选中、菜单随即关掉,补发的 click 会落到菜单下面的东西上(画板上那格视频开始播放):吞掉那一下。
+      onPointerUp={(event) => {
+        props.onPointerUp?.(event)
+        swallowClickThrough(event, (target) => target instanceof Element && Boolean(target.closest("[data-radix-select-viewport]")))
+      }}
     >
       <SelectScrollUpButton />
       <SelectPrimitive.Viewport

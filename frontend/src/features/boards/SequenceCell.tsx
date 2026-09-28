@@ -17,8 +17,9 @@ import { noteSequenceEdit, readSequenceCursor, SequenceAddContext, updateSequenc
 /** 贴着格子外壳内沿上半的圆角(和 boardNodes 的 CELL_INNER_TOP_RADIUS 同一个值:外壳 rounded-xl 减 1px 边框)。 */
 const CELL_INNER_TOP_RADIUS = "rounded-t-[calc(var(--radius-xl)-1px)]";
 
-/** 时间线格读的那条时间线。连线加片段、剪刀、删除都拿回整条时间线,写回这一份缓存。 */
-export const boardSequenceKey = (sequenceId: string) => ["board-sequence", sequenceId] as const;
+/** 时间线格读的那条时间线。连线加片段、剪刀、删除都拿回整条时间线,写回这一份缓存。挂在 `sequences` 底下:
+ *  智能体改了时间线(edit_timeline、edit_board 连线接片段),确认卡执行后刷新 `sequences` 时这一份跟着重取。 */
+export const boardSequenceKey = (sequenceId: string) => ["sequences", "board-cell", sequenceId] as const;
 
 /** 缩略图条上一秒多宽(像素)。每段至少 44 像素,短镜头也点得中。 */
 const PIXELS_PER_SECOND = 22;

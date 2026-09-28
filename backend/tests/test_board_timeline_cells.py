@@ -208,3 +208,94 @@ def test_迁移_已经放下的时间线格写明导出_别的格子不动() -> 
     assert items["t"]["form"] == {"producer": "sequence_export"} and items["t"]["sequence_id"] == "s1"
     assert items["n"]["form"] == {"producer": "write"}
     assert read(untouched_id)[1] == 2
+
+
+# ── 智能体(edit_board)认识时间线格 ─────────────────────────────────────────
+
+
+def _edit_card(client, ws: str, board_id: str, operations: list[dict]):
+    return client.post("/api/confirmations", json={
+        "workspace_id": ws, "tool": "edit_board", "requested_by": "agent",
+        "payload": {"board_id": board_id, "operations": operations}})
+
+
+def test_智能体放一格新的时间线_批准了才建_连进来的素材接到末尾() -> None:
+    client, ws, board = _setup()
+    _asset(ws, "v1", "video", duration=4.0, width=720, height=1280)
+    _asset(ws, "pic", "image", width=720, height=1280)
+    client.patch(f"/api/boards/{board}", json={
+        "workspace_id": ws, "base_revision": board_revision(client, board, ws),
+        "canvas": {"items": [{"id": "v", "kind": "video", "x": 0, "y": 0, "asset_id": "v1"},
+                             {"id": "p", "kind": "image", "x": 0, "y": 300, "asset_id": "pic"},
+                             {"id": "slot", "kind": "video", "x": 0, "y": 600}], "edges": []}})
+    with SessionLocal() as db:
+        before = db.query(Sequence).count()
+
+    card = _edit_card(client, ws, board, [
+        {"kind": "add_item", "type": "sequence", "item_id": "t1"},
+        {"kind": "connect", "source": "v", "target": "t1"},
+        {"kind": "connect", "source": "p", "target": "t1"},
+        {"kind": "connect", "source": "slot", "target": "t1"},
+    ])
+    assert card.status_code == 200, card.text
+    with SessionLocal() as db:
+        assert db.query(Sequence).count() == before, "干跑不建时间线:用户还没点同意"
+    approved = client.post(f"/api/confirmations/{card.json()['id']}/approve").json()
+    assert approved["status"] == "executed", approved
+    assert approved["result"]["appended_clips"] == 2, "空槽没什么可接"
+
+    canvas = client.get(f"/api/boards/{board}", params={"workspace_id": ws}).json()["canvas"]
+    cell = next(one for one in canvas["items"] if one["id"] == "t1")
+    assert cell["form"] == {"producer": "sequence_export"}
+    assert cell["text"].startswith("樱花短片 · 时间线")
+    body = client.get(f"/api/sequences/{cell['sequence_id']}").json()
+    video = sorted(next(t for t in body["tracks"] if t["kind"] == "video")["clips"], key=lambda one: one["timeline_start"])
+    assert [one["asset_id"] for one in video] == ["v1", "pic"], "按连线的先后接到末尾"
+    with SessionLocal() as db:
+        assert db.get(Sequence, cell["sequence_id"]).project_id == db.get(Board, board).project_id
+
+    #: 再连一次同一根线不再接一遍;已经连着的也不重接。
+    again = _edit_card(client, ws, board, [{"kind": "connect", "source": "v", "target": "t1"},
+                                           {"kind": "set_title", "item_id": "t1", "title": "成片"}])
+    assert client.post(f"/api/confirmations/{again.json()['id']}/approve").json()["result"]["appended_clips"] == 0
+
+
+def test_智能体引用已有的时间线_别处的拒() -> None:
+    client, ws, board = _setup()
+    mine = client.post(f"/api/boards/{board}/sequences", json={"workspace_id": ws}).json()["sequence_id"]
+    card = _edit_card(client, ws, board, [{"kind": "add_item", "type": "sequence", "sequence_id": mine}])
+    assert card.status_code == 200, card.text
+    assert client.post(f"/api/confirmations/{card.json()['id']}/approve").json()["status"] == "executed"
+    assert any(one.get("sequence_id") == mine
+               for one in client.get(f"/api/boards/{board}", params={"workspace_id": ws}).json()["canvas"]["items"])
+
+    other = client.post("/api/workspaces", json={"name": "别处"}).json()["id"]
+    other_board = client.post("/api/boards", json={"workspace_id": other, "name": "B"}).json()["id"]
+    elsewhere = client.post(f"/api/boards/{other_board}/sequences", json={"workspace_id": other}).json()["sequence_id"]
+    refused = _edit_card(client, ws, board, [{"kind": "add_item", "type": "sequence", "sequence_id": elsewhere}])
+    assert refused.status_code == 422, refused.text
+
+
+def test_智能体给时间线格写导出设置_不认识的值开卡就拒() -> None:
+    client, ws, board = _setup()
+    sequence = client.post(f"/api/boards/{board}/sequences", json={"workspace_id": ws}).json()["sequence_id"]
+    client.patch(f"/api/boards/{board}", json={
+        "workspace_id": ws, "base_revision": board_revision(client, board, ws),
+        "canvas": {"items": [{"id": "t", "kind": "sequence", "x": 0, "y": 0, "sequence_id": sequence}], "edges": []}})
+    card = _edit_card(client, ws, board, [{"kind": "set_form", "item_id": "t", "config": {"resolution": "720p"}}])
+    assert card.status_code == 200, card.text
+    assert client.post(f"/api/confirmations/{card.json()['id']}/approve").json()["status"] == "executed"
+    item = next(one for one in client.get(f"/api/boards/{board}", params={"workspace_id": ws}).json()["canvas"]["items"])
+    assert item["form"] == {"config": {"resolution": "720p"}, "producer": "sequence_export"}
+    refused = _edit_card(client, ws, board, [{"kind": "set_form", "item_id": "t", "config": {"resolution": "4k"}}])
+    assert refused.status_code == 422, refused.text
+
+
+def test_工具说明里讲清时间线格() -> None:
+    import mcp_server
+    from app.domain.agent.prompt import SYSTEM_PROMPT_TEMPLATE as SYSTEM_PROMPT
+
+    assert "sequence" in mcp_server.edit_board.__doc__ and "TIMELINE ITEM" in mcp_server.edit_board.__doc__
+    assert "sequence_export" in mcp_server.get_board.__doc__
+    assert "sequence_export" in mcp_server.list_board_producers.__doc__
+    assert "时间线格" in SYSTEM_PROMPT
