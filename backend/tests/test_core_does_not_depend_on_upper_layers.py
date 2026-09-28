@@ -25,11 +25,11 @@ import pathlib
 #:   之上,方向是对的);
 #: - `media` 是 ffmpeg 适配器,只该会干活,不许认识业务(domain / api)。
 #:
-#: **`ai` 与 `audio` 故意不在这里。** 它们在这套代码库里并不是纯适配器 —— 智能体宿主、声音
-#: 克隆里都有实打实的业务判断,现在各有二十多处 import domain。给它们声明一条立刻需要几十条
+#: **`ai` 故意不在这里。** 它在这套代码库里并不是纯适配器 —— 智能体宿主、声音克隆里都有
+#: 实打实的业务判断,现在有二十多处 import domain。给它们声明一条立刻需要几十条
 #: 豁免的规则,等于写一条没人当真的规则;要不要拆是另一个决定,得先做那个决定。
 PURE_PACKAGES: dict[str, set[str]] = {
-    "core": {"domain", "audio", "media", "ai", "api", "integrations", "workers"},
+    "core": {"domain", "media", "ai", "api", "integrations", "workers"},
     "media": {"domain", "api"},
 }
 

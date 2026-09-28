@@ -340,7 +340,7 @@ def download_results(urls: list[str], output_dir: Path, kind: str) -> list[Path]
     for index, url in enumerate(urls, start=1):
         staged = output_dir / f"generated-{index}.download"
         content_type = download_to_path(url, staged, timeout=180)
-        # 音频的扩展名按音频的规矩定(mp4 容器里的音频记成 m4a,见 adapters/audio_files)。
+        # 音频的扩展名按音频的规矩定(mp4 容器里的音频记成 m4a,见 app/ai/audio_files)。
         suffix = audio_suffix(url, content_type) if kind == "audio" else _suffix(url, kind, content_type)
         target = output_dir / f"generated-{index}{suffix}"
         staged.replace(target)
