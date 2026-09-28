@@ -16,7 +16,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.i18n import LocalizedError, tr
-from app.db.models import GenerationCapabilityDeclaration, GenerationCapabilityProfile
+from app.db.models import GenerationCapabilityDeclaration, GenerationCapabilityProfile, ProviderProfile
 
 
 class CapabilityProfileError(LocalizedError, ValueError):
@@ -382,3 +382,55 @@ def _usable_name(db: Session, profile_id: str, kind: str, name: str, *, keep: st
     if any(other.name == name and other.id != keep for other in custom_profiles_for(db, profile_id, kind)):
         raise CapabilityProfileConflict("genErr_paramGroupNameTaken")
     return name
+
+
+def capability_ref_choices(db: Session, kind: str, profile: ProviderProfile | None) -> dict[str, list[Any]]:
+    """设置页里「这一行的生成参数按什么来」能选什么(口径见接口 GET /generation/capability-refs)。
+    给了连接就加上它自己的参数组和这条通道本身给得出的参数;**调用方负责确认连接是他自己的**。"""
+    from app.domain.generation.catalog import BUILTIN_MODELS, CAPABILITY_PROFILES, profile_id_for
+
+    models = [
+        {
+            "value": f"model:{item['provider']}/{item['model']}",
+            "provider": item["provider"],
+            "model": item["model"],
+            "profile": profile_id_for(item["provider"], item["model"], kind),
+            "parameter_keys": list(item["capabilities"].get("parameter_keys") or []),
+        }
+        for item in BUILTIN_MODELS
+        if item["kind"] == kind
+    ]
+    models.sort(key=lambda row: (row["model"], row["provider"]))
+    profiles = [
+        {
+            "value": f"profile:{name}",
+            "profile": name,
+            "parameter_keys": list(caps.get("parameter_keys") or []),
+            #: 内置的那份改不了 —— 它是我们查证过的事实,不是用户的断言。
+            "custom": False,
+        }
+        for name, caps in CAPABILITY_PROFILES.items()
+        #: 只列这一种 kind 用得上的 —— 图片档案摆进视频的下拉里是纯噪音。
+        if any(mode.endswith(f"-to-{'image' if kind == 'image' else 'video'}") for mode in (caps.get("modes") or []))
+    ]
+    profiles.sort(key=lambda row: row["profile"])
+    if profile is not None:
+        profiles.extend(
+            {
+                "value": f"profile:{row.id}",
+                "profile": row.name,
+                "parameter_keys": list((row.capabilities or {}).get("parameter_keys") or []),
+                #: 自己建的才改得了 —— 界面据此在字段旁给出「编辑这一份」,并拿 id 就地打开。
+                "custom": True,
+                "id": row.id,
+            }
+            for row in custom_profiles_for(db, profile.id, kind)
+        )
+    #: 什么都不指时,这条通道本身给得出哪几项。**空 = 真的只剩提示词**,非空 = 键知道了但
+    #: 取值范围没人验证过。界面要分开说这两种处境,合成一句会在其中一边说假话(见 ADR 0015)。
+    fallback_keys: list[str] = []
+    if profile is not None:
+        from app.domain.generation.catalog import adapter_parameter_surface
+
+        fallback_keys = list(adapter_parameter_surface(profile.vendor, kind))
+    return {"models": models, "profiles": profiles, "fallback_keys": fallback_keys}

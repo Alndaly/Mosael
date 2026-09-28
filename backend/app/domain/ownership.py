@@ -46,7 +46,7 @@ TABLE_OWNERS: dict[str, tuple[str, ...]] = {
     "Font": ("app/domain/fonts.py",),
     "GeneratedAsset": ("app/domain/generation/",),
     "GenerationJob": ("app/domain/generation/",),
-    "GenerationSession": ("app/domain/generation/", "app/api/routes/generation.py"),
+    "GenerationSession": ("app/domain/generation/",),
     # 任务总线(Job/TaskEvent 只在总线创建;进度/事件请走 jobs.py 的接口)
     "Job": ("app/domain/jobs.py",),
     "TaskEvent": ("app/domain/jobs.py",),

@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, Response
-from sqlalchemy import delete, select
+from sqlalchemy import select
 
 from app.core.i18n import tr
 from app.api.deps import CurrentUser, DbSession
@@ -19,14 +19,21 @@ from app.api.schemas import (
     PromptOptimizeRequest,
     PromptOptimizeResponse,
 )
-from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm
-from app.db.models import GeneratedAsset, GenerationJob, GenerationSession, Job, ProviderUsageEvent
-from app.domain import session_groups, sharing, usage
+from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm, require_own_profile
+from app.db.models import GenerationJob, GenerationSession
+from app.domain import session_groups, sharing
 from app.domain.generation import create_generation_job, generation_options
 from app.domain.generation.operations import GenerationDomainError
+from app.domain.generation.custom_profiles import capability_ref_choices
 from app.domain.generation.prompt_optimizer import PromptOptimizeError, optimize_image_prompt
 from app.domain.generation.runner import start_generation_thread
-from app.domain.generation.sessions import SHARE_KIND, readable_session, writable_session
+from app.domain.generation.sessions import (
+    SHARE_KIND,
+    delete_session,
+    new_session,
+    visible_history,
+    writable_session,
+)
 
 router = APIRouter(tags=["generation"])
 
@@ -36,18 +43,15 @@ def create_generation_session(
     body: GenerationSessionCreate, db: DbSession, user: CurrentUser
 ) -> GenerationSession:
     ensure_workspace_perm(db, user, body.workspace_id, "ai")
-    title = body.title.strip() or "新生成"
-    session = GenerationSession(
+    session = new_session(
+        db,
         workspace_id=body.workspace_id,
-        title=title,
+        owner_user_id=user.id,
+        title=body.title,
         provider_profile_id=body.provider_profile_id,
         model=body.model,
         kind=body.kind,
     )
-    db.add(session)
-    db.flush()
-    # 生成记录是**他的**私人工作线程 —— 默认不共享给工作区(见 domain/sharing.KINDS)。
-    sharing.claim(db, SHARE_KIND, session, user)
     db.commit()
     db.refresh(session)
     return sharing.annotate(db, SHARE_KIND, [session], user, session.workspace_id)[0]
@@ -103,14 +107,7 @@ def update_generation_session(
 
 @router.delete("/generation/sessions/{session_id}", status_code=204)
 def delete_generation_session(session_id: str, db: DbSession, user: CurrentUser) -> Response:
-    session = writable_session(db, user, session_id)
-    generations = list(db.scalars(select(GenerationJob).where(GenerationJob.session_id == session.id)))
-    job_ids = [generation.job_id for generation in generations if generation.job_id]
-    db.execute(delete(GenerationJob).where(GenerationJob.session_id == session.id))
-    if job_ids:
-        db.execute(delete(Job).where(Job.id.in_(job_ids)))
-    db.execute(delete(GenerationSession).where(GenerationSession.id == session.id))
-    sharing.forget(db, "generation_session", session.id)
+    delete_session(db, writable_session(db, user, session_id))
     db.commit()
     return Response(status_code=204)
 
@@ -152,58 +149,8 @@ def list_capability_refs(
     两边都带上 `parameter_keys`,好让用户在选之前就看得见"选它会得到哪几项",而不是选完
     回去翻界面。
     """
-    from app.domain.generation.catalog import BUILTIN_MODELS, CAPABILITY_PROFILES, profile_id_for
-
-    models = [
-        {
-            "value": f"model:{item['provider']}/{item['model']}",
-            "provider": item["provider"],
-            "model": item["model"],
-            "profile": profile_id_for(item["provider"], item["model"], kind),
-            "parameter_keys": list(item["capabilities"].get("parameter_keys") or []),
-        }
-        for item in BUILTIN_MODELS
-        if item["kind"] == kind
-    ]
-    models.sort(key=lambda row: (row["model"], row["provider"]))
-    profiles = [
-        {
-            "value": f"profile:{name}",
-            "profile": name,
-            "parameter_keys": list(caps.get("parameter_keys") or []),
-            #: 内置的那份改不了 —— 它是我们查证过的事实,不是用户的断言。
-            "custom": False,
-        }
-        for name, caps in CAPABILITY_PROFILES.items()
-        #: 只列这一种 kind 用得上的 —— 图片档案摆进视频的下拉里是纯噪音。
-        if any(mode.endswith(f"-to-{'image' if kind == 'image' else 'video'}") for mode in (caps.get("modes") or []))
-    ]
-    profiles.sort(key=lambda row: row["profile"])
-    if profile_id:
-        from app.domain.permissions import require_own_profile
-        from app.domain.generation.custom_profiles import custom_profiles_for
-
-        require_own_profile(db, user, profile_id)
-        profiles.extend(
-            {
-                "value": f"profile:{row.id}",
-                "profile": row.name,
-                "parameter_keys": list((row.capabilities or {}).get("parameter_keys") or []),
-                #: 自己建的才改得了 —— 界面据此在字段旁给出「编辑这一份」,并拿 id 就地打开。
-                "custom": True,
-                "id": row.id,
-            }
-            for row in custom_profiles_for(db, profile_id, kind)
-        )
-    #: 什么都不指时,这条通道本身给得出哪几项。**空 = 真的只剩提示词**,非空 = 键知道了但
-    #: 取值范围没人验证过。界面要分开说这两种处境,合成一句会在其中一边说假话(见 ADR 0015)。
-    fallback_keys: list[str] = []
-    if profile_id:
-        from app.domain.generation.catalog import adapter_parameter_surface
-
-        vendor = require_own_profile(db, user, profile_id).vendor
-        fallback_keys = list(adapter_parameter_surface(vendor, kind))
-    return {"models": models, "profiles": profiles, "fallback_keys": fallback_keys}
+    profile = require_own_profile(db, user, profile_id) if profile_id else None
+    return capability_ref_choices(db, kind, profile)
 
 
 @router.post("/generation/optimize-prompt", response_model=PromptOptimizeResponse)
@@ -249,69 +196,4 @@ def list_generation_jobs(
     session_id: str | None = None,
 ) -> list[GenerationJob]:
     ensure_workspace_access(db, user, workspace_id)
-    # 记录跟着它所属的会话走:私有会话里生成的东西不该在工作区的总列表里露出来 —— 否则「私有」
-    # 只挡住了标题,内容还在。不属于任何会话的老记录(session_id 为空)照旧全工作区可见。
-    visible_sessions = select(GenerationSession.id).where(sharing.visible_filter(SHARE_KIND, user, workspace_id))
-    stmt = select(GenerationJob).where(
-        GenerationJob.workspace_id == workspace_id,
-        (GenerationJob.session_id.is_(None)) | (GenerationJob.session_id.in_(visible_sessions)),
-    )
-    if session_id:
-        session = readable_session(db, user, session_id)
-        if session.workspace_id != workspace_id:
-            raise HTTPException(status_code=404, detail="Not found")
-        stmt = stmt.where(GenerationJob.session_id == session_id)
-    if kind:
-        stmt = stmt.where(GenerationJob.kind == kind)
-    # 按记录自身时间排序,不 join jobs:job 被任务中心清掉后(job_id 置空)
-    # 记录仍要出现在会话历史里 —— inner join 会把它们整个吞掉。
-    stmt = stmt.order_by(GenerationJob.created_at.asc(), GenerationJob.id.asc())
-    generations = list(db.scalars(stmt))
-    _attach_generation_costs(db, generations)
-    _attach_generation_assets(db, generations)
-    return generations
-
-
-def _attach_generation_assets(db: DbSession, generations: list[GenerationJob]) -> None:
-    """把每条生成的**全部**产出贴到瞬态属性上,供 GenerationJobOut 读。
-
-    result_asset_id 那一栏只放得下封面,而一次生成可能出多份(图像接口的 n)。真正的账在
-    generated_assets 里 —— 每一份产出一行。封面排第一,其余按它们登记的顺序跟在后面。
-    """
-    job_ids = [g.job_id for g in generations if g.job_id]
-    by_job: dict[str, list[str]] = {}
-    if job_ids:
-        for row in db.scalars(select(GeneratedAsset).where(GeneratedAsset.job_id.in_(job_ids))):
-            by_job.setdefault(str(row.job_id), []).append(row.asset_id)
-    for gen in generations:
-        cover = gen.result_asset_id
-        rest = [one for one in by_job.get(gen.job_id or "", []) if one != cover]
-        gen.result_asset_ids = ([cover] if cover else []) + rest  # type: ignore[attr-defined]
-
-
-def _attach_generation_costs(db: DbSession, generations: list[GenerationJob]) -> None:
-    """把各生成记录的计费(用量事件 source_type=generation_job)贴到瞬态属性上,供 GenerationJobOut 读。
-
-    一条生成可能有多个事件(started/succeeded…):已知费用按币种各自求和(usage.costs_by_currency,
-    人民币和美元不相加);有事件但都无价则计 unknown。
-    """
-    ids = [g.id for g in generations]
-    if not ids:
-        return
-    scope = (ProviderUsageEvent.source_type == "generation_job", ProviderUsageEvent.source_id.in_(ids))
-    costs = usage.costs_by_currency(db, *scope, group_by=(ProviderUsageEvent.source_id,))
-    # 置信度取计过价的那几条的(它们同出一处估算);一条都没计上价的就是 unknown。
-    confidence: dict[str, str] = {}
-    for source_id, cost_micros, cost_confidence in db.execute(
-        select(ProviderUsageEvent.source_id, ProviderUsageEvent.cost_micros, ProviderUsageEvent.cost_confidence).where(
-            *scope
-        )
-    ).all():
-        if cost_micros is not None:
-            confidence[source_id] = cost_confidence
-        else:
-            confidence.setdefault(source_id, "unknown")
-    for gen in generations:
-        gen.costs = costs.get((gen.id,), [])  # type: ignore[attr-defined]
-        gen.cost_confidence = confidence.get(gen.id)  # type: ignore[attr-defined]
-
+    return visible_history(db, user, workspace_id, kind=kind, session_id=session_id)

@@ -31,7 +31,7 @@ from app.domain.generation.catalog import (
 from app.domain.generation.resolution import GenerationResolutionError, resolve_generation_model
 from app.core.i18n import LocalizedError, pick_text, tr
 from app.db.models import Asset, GenerationJob, GenerationSession, ProviderProfile, now
-from app.domain.generation.sessions import ensure_writable
+from app.domain.generation.sessions import ensure_writable, new_session
 from app.domain.jobs import create_job
 
 logger = logging.getLogger(__name__)
@@ -468,17 +468,15 @@ def _resolve_session(
             named.title = _title_from_prompt(prompt)
         return named
     provider_profile_id, model, kind = engine
-    session = GenerationSession(
+    return new_session(
+        db,
         workspace_id=workspace_id,
-        title=_title_from_prompt(prompt),
         owner_user_id=created_by,
+        title=_title_from_prompt(prompt),
         provider_profile_id=provider_profile_id,
         model=model,
         kind=kind,
     )
-    db.add(session)
-    db.flush()
-    return session
 
 
 def _title_from_prompt(prompt: str) -> str:
