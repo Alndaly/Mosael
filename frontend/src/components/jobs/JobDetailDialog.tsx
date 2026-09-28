@@ -5,12 +5,12 @@ import { toast } from "sonner";
 
 import { cancelJob, getJob, listJobEvents, type Job } from "@/api/client";
 import { errorText } from "@/api/errorMessage";
-import { JobChildrenList, useJobChildren } from "@/components/layout/JobChildren";
-import { JobEventList } from "@/components/layout/JobEvents";
-import { JobResult } from "@/components/layout/JobResult";
+import { JobChildrenList, useJobChildren } from "@/components/jobs/JobChildren";
+import { JobEventList } from "@/components/jobs/JobEvents";
+import { JobResult } from "@/components/jobs/JobResult";
 import { EmptyState } from "@/components/layout/EmptyState";
-import { useJobKinds } from "@/components/layout/jobKinds";
-import { runStatusText } from "@/components/layout/runStatus";
+import { useJobKinds } from "@/components/jobs/jobKinds";
+import { runStatusText } from "@/components/jobs/runStatus";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { ModalShell } from "@/components/app/modals";

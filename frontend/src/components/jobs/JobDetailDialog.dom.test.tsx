@@ -18,7 +18,7 @@ vi.mock("@/app/preferences", () => ({
   useI18n: () => (key: string) => key,
   usePreferences: () => ({ locale: "zh-CN" }),
 }));
-vi.mock("@/components/layout/jobKinds", () => ({
+vi.mock("@/components/jobs/jobKinds", () => ({
   useJobKinds: () => ({ kindOf: () => ({ label: "工作流" }) }),
 }));
 vi.mock("@/api/client", () => ({

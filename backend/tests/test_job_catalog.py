@@ -67,7 +67,7 @@ def test_名字齐全_页面存在() -> None:
 
 
 def test_前端每种任务都有图标() -> None:
-    icons = (FRONTEND / "components" / "layout" / "jobKinds.tsx").read_text(encoding="utf-8")
+    icons = (FRONTEND / "components" / "jobs" / "jobKinds.tsx").read_text(encoding="utf-8")
     block = icons.split("JOB_KIND_ICONS", 1)[1].split("};", 1)[0]
     declared = set(re.findall(r"^\s*([a-z_]+):", block, re.M))
     assert declared == set(JOB_KINDS), {"缺图标": set(JOB_KINDS) - declared, "多余": declared - set(JOB_KINDS)}

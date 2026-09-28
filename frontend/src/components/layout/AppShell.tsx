@@ -23,8 +23,8 @@ import { Kbd } from "@/components/ui/kbd";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu";
-import { NotificationCenter } from "@/components/layout/NotificationCenter";
-import { TaskCenter } from "@/components/layout/TaskCenter";
+import { NotificationCenter } from "@/components/jobs/NotificationCenter";
+import { TaskCenter } from "@/components/jobs/TaskCenter";
 import {
   workspaceDeleteBlockedReason,
   workspaceMenuState,

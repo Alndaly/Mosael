@@ -22,7 +22,7 @@ import { describe, expect, it } from "vitest";
 
 const ROOT = join(import.meta.dirname, "../../../..");
 const CATALOG = readFileSync(join(ROOT, "backend/app/domain/job_catalog.py"), "utf8");
-const TASK_CENTER = readFileSync(join(import.meta.dirname, "../../components/layout/TaskCenter.tsx"), "utf8");
+const TASK_CENTER = readFileSync(join(import.meta.dirname, "../../components/jobs/TaskCenter.tsx"), "utf8");
 
 /** 去掉注释 —— 免得这条棘轮被「注释里提到 assets」喂饱(这个仓库出过空棘轮)。 */
 function code(src: string): string {

@@ -25,12 +25,12 @@ import {
   type Workflow,
   type Workspace,
 } from "@/api/client";
-import { useJobKinds } from "@/components/layout/jobKinds";
-import { runStatusText } from "@/components/layout/runStatus";
+import { useJobKinds } from "@/components/jobs/jobKinds";
+import { runStatusText } from "@/components/jobs/runStatus";
 import { AttestRevisionButton } from "@/features/workflows/AttestRevisionButton";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
-import { JobChildrenList, useJobChildren } from "@/components/layout/JobChildren";
+import { JobChildrenList, useJobChildren } from "@/components/jobs/JobChildren";
 import { elapsedSecondsBetween, formatElapsedSeconds, parseServerTime, relativeTime } from "@/lib/time";
 import { Button } from "@/components/ui/button";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";

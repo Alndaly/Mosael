@@ -27,7 +27,7 @@ export type Step = {
   message?: string;
 };
 
-/** 一步的状态怎么说。执行历史的步骤格和产出面板共用这一张;任务的状态是另一组(components/layout/runStatus)。 */
+/** 一步的状态怎么说。执行历史的步骤格和产出面板共用这一张;任务的状态是另一组(components/jobs/runStatus)。 */
 export const STEP_STATUS_LABELS: Readonly<Record<Step["status"], MessageKey>> = {
   running: "wfStepRunning",
   done: "wfStepDone",

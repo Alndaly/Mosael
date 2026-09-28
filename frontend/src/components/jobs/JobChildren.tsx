@@ -23,9 +23,9 @@ import { useQuery } from "@tanstack/react-query";
 
 import { listJobChildren, listJobEvents, type Job } from "@/api/client";
 import { useI18n, usePreferences } from "@/app/preferences";
-import { JobEventList } from "@/components/layout/JobEvents";
-import { useJobKinds } from "@/components/layout/jobKinds";
-import { runStatusText } from "@/components/layout/runStatus";
+import { JobEventList } from "@/components/jobs/JobEvents";
+import { useJobKinds } from "@/components/jobs/jobKinds";
+import { runStatusText } from "@/components/jobs/runStatus";
 import { cn } from "@/lib/utils";
 
 const ACTIVE = new Set(["queued", "running", "pending"]);

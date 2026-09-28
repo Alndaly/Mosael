@@ -23,7 +23,7 @@ vi.mock("@/api/client", () => ({
 }));
 
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { NotificationCenter } from "@/components/layout/NotificationCenter";
+import { NotificationCenter } from "@/components/jobs/NotificationCenter";
 
 const INVITE = { id: "i1", workspace_name: "别人的工作区", inviter_name: "小美", role: "editor" };
 

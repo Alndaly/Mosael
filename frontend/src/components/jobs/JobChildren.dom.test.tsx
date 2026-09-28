@@ -31,11 +31,11 @@ vi.mock("@/app/preferences", () => ({
   usePreferences: () => ({ locale: "zh" }),
 }));
 // 名字来自后端的任务目录(ADR-0018),这里不经网络。
-vi.mock("@/components/layout/jobKinds", () => ({
+vi.mock("@/components/jobs/jobKinds", () => ({
   useJobKinds: () => ({ kindOf: (kind: string) => ({ label: kind === "ai_generation" ? "AI 生成" : "任务" }) }),
 }));
 
-import { JobChildrenList } from "@/components/layout/JobChildren";
+import { JobChildrenList } from "@/components/jobs/JobChildren";
 
 const job = (id: string, kind: string, status: string, message = "", error = "") =>
   ({ id, kind, status, message, error }) as never;
