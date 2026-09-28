@@ -5,6 +5,7 @@ import { NO_UPSTREAM, upstreamOf } from "./boardUpstream";
 import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { getNoteReference, noteReferenceQuery } from "@/api/domains/notes";
+import { noteKeys } from "@/api/queryKeys";
 import { NotePickerDialog } from "@/features/notes/NotePickerDialog";
 import { SaveToNote } from "@/features/notes/SaveToNote";
 import { type BoardDocumentState } from "./boardDocumentSources";
@@ -1952,7 +1953,7 @@ function ItemToolbar({
                 const assetId = item.asset_id ?? "";
                 void saveDocumentAsNote(assetId)
                   .then((made) => {
-                    void queryClient.invalidateQueries({ queryKey: ["notes"] });
+                    void queryClient.invalidateQueries({ queryKey: noteKeys.everywhere() });
                     patch(item.id, { note_id: made.note_id, note_revision: 1, asset_id: undefined, text: made.title,
                                      form: { ...item.form, producer: "write" } });
                   })

@@ -1,4 +1,5 @@
 import type { components } from "@/api/generated/schema";
+import { noteKeys } from "@/api/queryKeys";
 import { api } from "@/api/transport";
 
 export type NoteSource = {
@@ -30,11 +31,29 @@ export const saveNote = (note: Note) => api<Note>(`/api/notes/${note.id}`, { met
 // (见 backend/app/domain/notes.append_note);带上手里这份常常是旧的修订号,只会把
 // 一次正常的追加判成冲突。
 export const appendNote = (note: Note, markdown: string, sources: NoteSource[]) => api<Note>(`/api/notes/${note.id}/append`, { method: "POST", body: JSON.stringify({ workspace_id: note.workspace_id, markdown, sources }) });
+/** 永久删除(只对已在回收站里的)。带 base_revision:别人刚改过的那一版不会被这次删掉。 */
+export const purgeNote = (workspaceId: string, noteId: string, baseRevision: number) =>
+  api<void>(`/api/notes/${noteId}?${new URLSearchParams({ workspace_id: workspaceId, base_revision: String(baseRevision) })}`, { method: "DELETE" });
+
+/** 修订历史。后端回的是无类型的列表,形状以这里为准。 */
+export type NoteRevisionSummary = { revision: number; title: string; created_at: string };
+export type NoteRevision = NoteContent & { revision: number };
+export const listNoteRevisions = (workspaceId: string, noteId: string) =>
+  api<NoteRevisionSummary[]>(`/api/notes/${noteId}/revisions?workspace_id=${encodeURIComponent(workspaceId)}`);
+export const getNoteRevision = (workspaceId: string, noteId: string, revision: number) =>
+  api<NoteRevision>(`/api/notes/${noteId}/revisions/${revision}?workspace_id=${encodeURIComponent(workspaceId)}`);
+/** 把某个旧修订恢复成新的一版。base_revision 是手里这份的修订号,和保存同一条乐观并发。 */
+export const restoreNoteRevision = (workspaceId: string, noteId: string, baseRevision: number, revision: number) =>
+  api<Note>(`/api/notes/${noteId}/restore`, { method: "POST", body: JSON.stringify({ workspace_id: workspaceId, base_revision: baseRevision, revision }) });
+
+/** 笔记来源里的一条对话消息原文(来源卡展开时看)。 */
+export const getNoteSourceMessage = (workspaceId: string, messageId: string) =>
+  api<{ content: string }>(`/api/notes/sources/message/${messageId}?workspace_id=${encodeURIComponent(workspaceId)}`);
 
 export type NoteReference = components["schemas"]["NoteReferenceOut"];
 export const getNoteReference = (workspaceId: string, id: string, revision?: number) =>
   api<NoteReference>(`/api/notes/${encodeURIComponent(id)}/reference?${new URLSearchParams({workspace_id: workspaceId, ...(revision ? {revision: String(revision)} : {})})}`);
 export const noteReferenceQuery = (workspaceId: string, id: string, revision?: number) => ({
-  queryKey: ["note-reference", workspaceId, id, revision],
+  queryKey: noteKeys.reference(workspaceId, id, revision),
   queryFn: () => getNoteReference(workspaceId, id, revision), enabled: Boolean(workspaceId && id), retry: false as const,
 });

@@ -1,10 +1,10 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ExternalLink, FileText, Play } from "lucide-react";
-import { api, assetFileUrl, assetPreviewUrl, getAsset } from "@/api/client";
-import { assetKeys } from "@/api/queryKeys";
+import { assetFileUrl, assetPreviewUrl, getAsset } from "@/api/client";
+import { assetKeys, noteKeys } from "@/api/queryKeys";
 import { gotoRecord } from "@/lib/deepLink";
-import type { NoteSource } from "@/api/domains/notes";
+import { getNoteSourceMessage, type NoteSource } from "@/api/domains/notes";
 import { noteHref } from "@/lib/deepLink";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { AgentMarkdown } from "@/components/markdown/Markdown";
@@ -14,8 +14,8 @@ export function SourceLink({ source, workspaceId }: { source: NoteSource; worksp
   const s = useNoteStrings();
   const [open, setOpen] = React.useState(false);
   const asset = useQuery({ queryKey: assetKeys.detail(source.id), queryFn: () => getAsset(source.id), enabled: open && source.kind === "asset" });
-  const detail = useQuery({ queryKey: ["note-source", workspaceId, source.kind, source.id],
-    queryFn: () => api<{ content: string }>(`/api/notes/sources/message/${source.id}?workspace_id=${encodeURIComponent(workspaceId)}`), enabled: open && source.kind === "message" });
+  const detail = useQuery({ queryKey: noteKeys.sourceMessage(workspaceId, source.id),
+    queryFn: () => getNoteSourceMessage(workspaceId, source.id), enabled: open && source.kind === "message" });
   if (source.kind === "url") return <a href={source.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-primary"><ExternalLink size={12} />{source.label || source.url}</a>;
   if (source.kind === "note") return <a href={noteHref(source.id, source.revision)} className="inline-flex items-center gap-1 text-primary"><FileText size={12} />{source.label || s.untitled}</a>;
   if (source.kind === "board") return <button type="button" onClick={() => gotoRecord("/boards", "mosael:open-board", source.id)} className="text-primary">{source.label || s.source}</button>;

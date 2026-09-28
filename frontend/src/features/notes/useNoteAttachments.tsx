@@ -2,6 +2,7 @@ import React from "react";
 import { BookOpen } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { listNotes, type Note } from "@/api/domains/notes";
+import { noteKeys } from "@/api/queryKeys";
 import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,7 +16,7 @@ export function useNoteAttachments(workspaceId: string) {
   const virtualAnchor = React.useRef({ getBoundingClientRect: () => (anchor.current || trigger.current)!.getBoundingClientRect() });
   const [active, setActive] = React.useState(0);
   const [selected, setSelected] = React.useState<Note[]>([]);
-  const notes = useQuery({queryKey: ["note-attach", workspaceId, q], queryFn: () => listNotes(workspaceId, q), enabled: open});
+  const notes = useQuery({queryKey: noteKeys.search(workspaceId, q), queryFn: () => listNotes(workspaceId, q), enabled: open});
   React.useEffect(() => { setSelected([]); setOpen(false); }, [workspaceId]);
   React.useEffect(() => setActive(0), [q]);
   function choose(n: Note) { setSelected(old => [...old.filter(x => x.id !== n.id), n]); setOpen(false); }

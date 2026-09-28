@@ -3,7 +3,7 @@ import { toast } from "sonner";
 
 import { saveDocumentAsNote } from "@/api/domains/documents";
 import { openNote } from "@/lib/deepLink";
-import { assetKeys } from "@/api/queryKeys";
+import { assetKeys, noteKeys } from "@/api/queryKeys";
 import { errorText } from "@/api/errorMessage";
 import { useI18n } from "@/app/preferences";
 
@@ -14,7 +14,7 @@ export function useSaveDocumentAsNote() {
   return useMutation({
     mutationFn: (assetId: string) => saveDocumentAsNote(assetId),
     onSuccess: (made) => {
-      void qc.invalidateQueries({ queryKey: ["notes"] });
+      void qc.invalidateQueries({ queryKey: noteKeys.everywhere() });
       //: 插图这时进了素材库。
       void qc.invalidateQueries({ queryKey: assetKeys.everywhere() });
       toast.success(t("docSavedAsNote").replace("{title}", made.title), {

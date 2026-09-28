@@ -2,10 +2,24 @@ import React from "react";
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertCircle, BookOpen, CheckSquare, SearchX, MoreHorizontal, Check, Loader2, PenLine, X, Plus, Star, Download, Import, PanelLeftClose, PanelLeftOpen, History, Info, Trash2, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
-import { api, type Workspace } from "@/api/client";
+import type { Workspace } from "@/api/client";
 import { ApiError } from "@/api/transport";
 import { PageLoadError } from "@/components/layout/EmptyState";
-import { createNote, getNote, listNotes, listNoteTopics, saveNote, type Note, type NoteContent } from "@/api/domains/notes";
+import {
+  createNote,
+  getNote,
+  getNoteRevision,
+  listNoteRevisions,
+  listNotes,
+  listNoteTopics,
+  purgeNote,
+  restoreNoteRevision,
+  saveNote,
+  type Note,
+  type NoteContent,
+  type NoteRevision,
+} from "@/api/domains/notes";
+import { noteKeys } from "@/api/queryKeys";
 import { noteHref, openNote } from "@/lib/deepLink";
 import { errorText } from "@/api/errorMessage";
 import { ConfirmDialog } from "@/components/app/modals";
@@ -68,13 +82,13 @@ export function NotesView({ workspace }: { workspace: Workspace }) {
   //: 收藏 / 主题**交给服务端筛**,和分页同一层。此前拉回前 200 条再在这里筛:收藏排在 200 条之后时,
   //: 空态写着「还没有收藏」,底下却挂着「加载更多」;主题下拉也只列得出已加载那些笔记里的主题。
   const listFilter = { trashed: filter === "trash", favorite: filter === "favorite", topic };
-  const notes = useInfiniteQuery({ queryKey: ["notes", workspace.id, search, listFilter], initialPageParam: 0,
+  const notes = useInfiniteQuery({ queryKey: noteKeys.page(workspace.id, search, listFilter), initialPageParam: 0,
     queryFn: ({ pageParam }) => listNotes(workspace.id, search, listFilter, pageParam), getNextPageParam: (last, pages) => last.length === 200 ? pages.length * 200 : undefined });
   const shown = notes.data?.pages.flat() || [];
-  const topics = useQuery({ queryKey: ["notes", workspace.id, "topics", filter === "trash"], queryFn: () => listNoteTopics(workspace.id, filter === "trash") }).data ?? [];
+  const topics = useQuery({ queryKey: noteKeys.topics(workspace.id, filter === "trash"), queryFn: () => listNoteTopics(workspace.id, filter === "trash") }).data ?? [];
   // 打开一篇就重新取一次(staleTime 0):缓存里的那份可能是移进回收站、收藏之前的,打开后看到的
   // 就是错的状态 —— 回收站里的笔记没有提示条、还能编辑。
-  const selected = useQuery({ queryKey: ["note", workspace.id, id], queryFn: () => getNote(workspace.id, id!), enabled: !!id, staleTime: 0 });
+  const selected = useQuery({ queryKey: noteKeys.detail(workspace.id, id ?? ""), queryFn: () => getNote(workspace.id, id!), enabled: !!id, staleTime: 0 });
   // 记住的那篇已经删了:不再自动打开它。
   React.useEffect(() => { if (selected.isError && id === rememberedNote(workspace.id)) rememberNote(workspace.id, null); }, [selected.isError, id, workspace.id]);
   async function listAction(action:NoteListAction, targets:Note[], value?:string) {
@@ -87,10 +101,10 @@ export function NotesView({ workspace }: { workspace: Workspace }) {
         else if(action==="duplicate") await createNote(workspace.id,{markdown:current.markdown,project_id:current.project_id,tags:current.tags,topics:current.topics,sources:current.sources,title:`${current.title||s.untitled} · ${s.copySuffix}`,trashed:false});
         else if(action==="delete") {
           if(!current.trashed)throw new Error("Move to trash first");
-          await api(`/api/notes/${current.id}?workspace_id=${encodeURIComponent(workspace.id)}&base_revision=${current.revision}`,{method:"DELETE"});
+          await purgeNote(workspace.id,current.id,current.revision);
           localStorage.removeItem(`mosael.note.draft.${workspace.id}.${current.id}`);
-          qc.removeQueries({queryKey:["note",workspace.id,current.id]});
-          qc.removeQueries({queryKey:["note-history",current.id]});
+          qc.removeQueries({queryKey:noteKeys.detail(workspace.id,current.id)});
+          qc.removeQueries({queryKey:noteKeys.history(current.id)});
         } else {
           const patch:Partial<NoteContent>=action==="rename"?{title:value||""}:action==="trash"||action==="restore"?{trashed:action==="trash"}:{favorite:action==="favorite"};
           const result=active?await active.update(patch):await saveNote({...current,...patch});
@@ -99,12 +113,12 @@ export function NotesView({ workspace }: { workspace: Workspace }) {
         done.push(target.id);
       }catch(e){failed++;toast.error(errorText(e));}
     }
-    await qc.invalidateQueries({queryKey:["notes",workspace.id]});
+    await qc.invalidateQueries({queryKey:noteKeys.lists(workspace.id)});
     if(["trash","restore","delete"].includes(action)&&id&&done.includes(id)){rememberNote(workspace.id,null);window.location.hash="#/notes";}
     if(failed)toast.error(s.partialFailure(failed));
     return done;
   }
-  async function add(markdown = "", title = "") { try { setFilter("all"); setQ(""); setTopic(""); const n = await createNote(workspace.id, { title, markdown }); void qc.invalidateQueries({ queryKey: ["notes", workspace.id] }); openNote(n.id); if (window.matchMedia("(max-width: 740px)").matches) setFocus(true); } catch (e) { toast.error(errorText(e)); } }
+  async function add(markdown = "", title = "") { try { setFilter("all"); setQ(""); setTopic(""); const n = await createNote(workspace.id, { title, markdown }); void qc.invalidateQueries({ queryKey: noteKeys.lists(workspace.id) }); openNote(n.id); if (window.matchMedia("(max-width: 740px)").matches) setFocus(true); } catch (e) { toast.error(errorText(e)); } }
   //: 导入一批 Markdown:按钮多选和拖进来是同一条路。逐篇建,一篇失败不拦后面的;建完打开最后一篇。
   async function importFiles(files: File[]) {
     const accepted = files.filter(isMarkdownFile);
@@ -116,7 +130,7 @@ export function NotesView({ workspace }: { workspace: Workspace }) {
       try { last = await createNote(workspace.id, { title: file.name.replace(/\.[^.]+$/, ""), markdown: await file.text() }); }
       catch { failed.push(file.name); }
     }
-    void qc.invalidateQueries({ queryKey: ["notes", workspace.id] });
+    void qc.invalidateQueries({ queryKey: noteKeys.lists(workspace.id) });
     if (last) openNote(last.id);
     const imported = accepted.length - failed.length;
     if (failed.length) toast.error(s.importPartial(imported, failed));
@@ -166,12 +180,12 @@ export function NoteDocument({ note, controller, focus, onFocus }: { note: Note;
   const historyPreview = React.useRef<HTMLDivElement>(null);
   const historyRequest = React.useRef(0);
   const [pendingVersion, setPendingVersion] = React.useState<number | null>(null);
-  const [historic, setHistoric] = React.useState<(NoteContent & {revision: number}) | null>(null);
-  const revisions = useQuery({ queryKey: ["note-history", note.id, draft.revision], queryFn: () => api<{revision: number; title: string; created_at: string}[]>(`/api/notes/${note.id}/revisions?workspace_id=${note.workspace_id}`), enabled: history });
+  const [historic, setHistoric] = React.useState<NoteRevision | null>(null);
+  const revisions = useQuery({ queryKey: noteKeys.history(note.id, draft.revision), queryFn: () => listNoteRevisions(note.workspace_id, note.id), enabled: history });
   const loadVersion = React.useCallback(async (revision: number) => {
     const request = ++historyRequest.current; setPendingVersion(revision);
     try {
-      const value = await api<NoteContent & {revision: number}>(`/api/notes/${note.id}/revisions/${revision}?workspace_id=${note.workspace_id}`);
+      const value = await getNoteRevision(note.workspace_id, note.id, revision);
       if (request === historyRequest.current) { setHistoric(value); if (historyPreview.current) historyPreview.current.scrollTop = 0; }
     } catch (e) { if (request === historyRequest.current) toast.error(errorText(e)); }
     finally { if (request === historyRequest.current) setPendingVersion(null); }
@@ -185,7 +199,7 @@ export function NoteDocument({ note, controller, focus, onFocus }: { note: Note;
       const current = latest.current; const next = current === sent ? result : {...current, revision: result.revision, updated_at: result.updated_at}; latest.current = next;
       if (current === sent) localStorage.removeItem(storageKey); else { try { localStorage.setItem(storageKey, JSON.stringify(next)); } catch { /* Keep the live draft. */ } }
       if (mounted.current) { setDraft(next); setStatus(current === sent ? "saved" : "draft"); setError(""); }
-      qc.setQueryData(["note", note.workspace_id, note.id], result); void qc.invalidateQueries({queryKey: ["notes", note.workspace_id]});
+      qc.setQueryData(noteKeys.detail(note.workspace_id, note.id), result); void qc.invalidateQueries({queryKey: noteKeys.lists(note.workspace_id)});
     } catch (e) { if (mounted.current) { setError(e instanceof ApiError && e.status === 409 ? s.conflict : errorText(e)); setStatus("error"); } }
     finally { busy.current = false; }
   }, [note.id, note.workspace_id, qc, s.conflict, storageKey]);
@@ -238,19 +252,19 @@ export function NoteDocument({ note, controller, focus, onFocus }: { note: Note;
     readRevision(); window.addEventListener("hashchange", readRevision);
     return () => window.removeEventListener("hashchange", readRevision);
   }, [note.id]);
-  async function restore() { if (!historic || busy.current) return; await persist(); if (JSON.stringify(latest.current) !== saved.current) return; try { const next = await api<Note>(`/api/notes/${note.id}/restore`, {method: "POST", body: JSON.stringify({workspace_id: note.workspace_id, base_revision: latest.current.revision, revision: historic.revision})}); saved.current = JSON.stringify(next); latest.current = next; setDraft(next); setHistoric(null); setHistory(false); setStatus("saved"); localStorage.removeItem(storageKey); qc.setQueryData(["note", note.workspace_id, note.id], next); void qc.invalidateQueries({queryKey: ["notes", note.workspace_id]}); } catch (e) { toast.error(errorText(e)); } }
+  async function restore() { if (!historic || busy.current) return; await persist(); if (JSON.stringify(latest.current) !== saved.current) return; try { const next = await restoreNoteRevision(note.workspace_id, note.id, latest.current.revision, historic.revision); saved.current = JSON.stringify(next); latest.current = next; setDraft(next); setHistoric(null); setHistory(false); setStatus("saved"); localStorage.removeItem(storageKey); qc.setQueryData(noteKeys.detail(note.workspace_id, note.id), next); void qc.invalidateQueries({queryKey: noteKeys.lists(note.workspace_id)}); } catch (e) { toast.error(errorText(e)); } }
   async function deleteForever() {
     if (deleting || busy.current) return;
     await persist();
     if (JSON.stringify(latest.current) !== saved.current) return;
     setDeleting(true);
     try {
-      await api(`/api/notes/${note.id}?workspace_id=${encodeURIComponent(note.workspace_id)}&base_revision=${latest.current.revision}`, {method:"DELETE"});
+      await purgeNote(note.workspace_id, note.id, latest.current.revision);
       localStorage.removeItem(storageKey);
       window.location.hash = "#/notes";
-      qc.removeQueries({queryKey:["note", note.workspace_id, note.id]});
-      qc.removeQueries({queryKey:["note-history", note.id]});
-      void qc.invalidateQueries({queryKey:["notes", note.workspace_id]});
+      qc.removeQueries({queryKey:noteKeys.detail(note.workspace_id, note.id)});
+      qc.removeQueries({queryKey:noteKeys.history(note.id)});
+      void qc.invalidateQueries({queryKey:noteKeys.lists(note.workspace_id)});
     } catch (e) { toast.error(errorText(e)); setDeleting(false); }
   }
   const [toolbarTarget, setToolbarTarget] = React.useState<HTMLDivElement | null>(null);

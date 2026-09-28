@@ -100,3 +100,27 @@ export const transcriptKeys = {
   all: () => ["transcript"] as const,
   of: (assetId: string) => ["transcript", assetId] as const,
 };
+
+/**
+ * 笔记。列表、主题、搜索选择器、附件选择器、引用卡都挂在 `lists(ws)` 下 —— 保存、删除、恢复之后
+ * 失效它一次就全部覆盖。此前同一份「按关键词列笔记」在 `note-picker` 与 `note-attach` 两个键族里,
+ * 只有一处会被失效,另一处在挂着的时候看的是旧的。
+ *
+ * **正在编辑的那一篇(`detail`)故意不在这个前缀下**:编辑器手里有草稿,列表一刷新不该把开着的
+ * 那篇也重取一遍;它由编辑器保存时自己 `setQueryData`。
+ */
+export const noteKeys = {
+  /** 失效用:所有工作区的笔记列表 —— 只在不知道动了哪个工作区时用(画板、素材页把东西存成笔记)。 */
+  everywhere: () => ["notes"] as const,
+  lists: (workspaceId: string) => ["notes", workspaceId] as const,
+  page: (workspaceId: string, search: string, filter: unknown) => ["notes", workspaceId, "page", search, filter] as const,
+  topics: (workspaceId: string, trashed: boolean) => ["notes", workspaceId, "topics", trashed] as const,
+  search: (workspaceId: string, q: string) => ["notes", workspaceId, "search", q] as const,
+  reference: (workspaceId: string, noteId: string, revision?: number) =>
+    ["notes", workspaceId, "reference", noteId, revision] as const,
+  detail: (workspaceId: string, noteId: string) => ["note", workspaceId, noteId] as const,
+  /** 不带修订号是失效用的前缀。 */
+  history: (noteId: string, revision?: number) =>
+    (revision === undefined ? (["note-history", noteId] as const) : (["note-history", noteId, revision] as const)),
+  sourceMessage: (workspaceId: string, messageId: string) => ["note-source", workspaceId, "message", messageId] as const,
+};

@@ -3,6 +3,7 @@ import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-quer
 import { BookPlus, CornerDownLeft, FileText, Loader2, Search } from "lucide-react";
 import { toast } from "sonner";
 import { appendNote, createNote, listNotes, type Note, type NoteSource } from "@/api/domains/notes";
+import { noteKeys } from "@/api/queryKeys";
 import { errorText } from "@/api/errorMessage";
 import { usePreferences } from "@/app/preferences";
 import { DIALOG_FIELD, ModalShell } from "@/components/app/modals";
@@ -34,7 +35,7 @@ export function SaveToNote({workspaceId, content, sources = [], variants, classN
   const [open, setOpen] = React.useState(false); const [title, setTitle] = React.useState(""); const [q, setQ] = React.useState(""); const [busy, setBusy] = React.useState(false);
   const [variantId, setVariantId] = React.useState(variants?.[0]?.id ?? "");
   // 打字过程中沿用上一份结果,不让列表在每个字之间塌成"载入中"再弹回来。
-  const notes = useQuery({queryKey: ["note-picker", workspaceId, q], queryFn: () => listNotes(workspaceId, q), enabled: open, placeholderData: keepPreviousData});
+  const notes = useQuery({queryKey: noteKeys.search(workspaceId, q), queryFn: () => listNotes(workspaceId, q), enabled: open, placeholderData: keepPreviousData});
   const listRef = React.useRef<HTMLDivElement | null>(null);
   const ids = React.useId();
   // 选中的那一份没了(调用方换了可选项)就退回第一份,不要停在一个不存在的 id 上。
@@ -44,7 +45,7 @@ export function SaveToNote({workspaceId, content, sources = [], variants, classN
   const candidates = notes.data?.filter(n => !n.trashed) ?? [];
   async function save(target?: Note) { setBusy(true); try {
     const n = target ? await appendNote(target, markdown, chosenSources) : await createNote(workspaceId, {title: title.trim() || markdown.replace(/[#*>\n]/g, " ").slice(0, 60), markdown, sources: chosenSources});
-    void qc.invalidateQueries({queryKey: ["notes", workspaceId]}); void qc.invalidateQueries({queryKey: ["note-picker", workspaceId]}); void qc.invalidateQueries({queryKey: ["note", workspaceId, n.id]});
+    void qc.invalidateQueries({queryKey: noteKeys.lists(workspaceId)}); void qc.invalidateQueries({queryKey: noteKeys.detail(workspaceId, n.id)});
     toast.success(s.done); onSaved?.(n); setOpen(false);
   } catch (e) { toast.error(errorText(e)); } finally { setBusy(false); } }
 

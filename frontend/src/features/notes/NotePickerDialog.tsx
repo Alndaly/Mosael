@@ -2,6 +2,7 @@ import React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { BookOpen, FileText } from "lucide-react";
 import { getNote, listNotes, type Note } from "@/api/domains/notes";
+import { noteKeys } from "@/api/queryKeys";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { PickListDialog } from "@/components/app/PickListDialog";
 import { Button } from "@/components/ui/button";
@@ -28,7 +29,7 @@ export function NotePickerDialog({
     return () => clearTimeout(timer);
   }, [search]);
   const notes = useQuery({
-    queryKey: ["note-picker", workspaceId, query],
+    queryKey: noteKeys.search(workspaceId, query),
     queryFn: () => listNotes(workspaceId, query),
     enabled: open,
   });
@@ -75,7 +76,7 @@ export function NoteReferenceField({
   const t = useI18n();
   const [open, setOpen] = React.useState(false);
   const note = useQuery({
-    queryKey: ["note", workspaceId, value],
+    queryKey: noteKeys.detail(workspaceId, value),
     queryFn: () => getNote(workspaceId, value),
     enabled: !!value,
     retry: false,
