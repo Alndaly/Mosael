@@ -310,8 +310,10 @@ credential 的进加密凭据库,声明成 config 的进明文配置 —— 令�
 
 两者都参与 `${...}` 展开,也都注入本地脚本的环境变量(**键名大写**:`API_KEY` → `$API_KEY`)。
 
-键名大写之后**不能盖掉宿主给的变量**(`PATH`、`HOME`、`LANG`、`MOSAEL_*`,以及 Windows 上的
-`SYSTEMROOT`、`APPDATA`、`TEMP` 等),配置和凭据之间大写后也不能撞名 —— 这两种写法装的时候就报错。
+键名大写之后**不能盖掉宿主给的变量**(`PATH`、`HOME`、`LANG`、`MOSAEL_*`,Windows 上的
+`SYSTEMROOT`、`APPDATA`、`TEMP` 等,以及出站代理那一组 `HTTP_PROXY` / `HTTPS_PROXY` / `ALL_PROXY` / `NO_PROXY` /
+`NODE_USE_ENV_PROXY`,见[网络:宿主给,你不用声明](#网络宿主给你不用声明)),配置和凭据之间大写后也不能撞名 ——
+这两种写法装的时候就报错。
 
 判据:**这个值要不要藏起来**。要 → 凭据。不要 → 配置。把区域塞进凭据,用户会得到一个没有选项、
 没有校验的密码框。
@@ -719,8 +721,8 @@ stdout 就和「替宿主做生成」同一套 NDJSON:进度一行一个,最后�
 | 直连 | `NO_PROXY=*`(只是不给代理变量不够:urllib、httpx 会退到系统代理) |
 | 走指定代理 | 这个连接自己的代理地址,绕过列表只有回环 |
 
-给了代理时还有 `NODE_USE_ENV_PROXY=1`(Node 24.5 起内置 fetch 看到它才认代理变量)。这几个变量排在你的配置与
-凭据之后:同名的配置盖不掉宿主替这个连接定的路。
+给了代理时还有 `NODE_USE_ENV_PROXY=1`(Node 24.5 起内置 fetch 看到它才认代理变量)。这几个名字(大小写都算)
+是宿主的:配置 / 凭据声明同名的键,装的时候就报错,和 `PATH`、`MOSAEL_*` 同一条(见「配置还是凭据?」)。
 
 所以写插件时**照库的默认读环境变量就行**:Python 的 `urllib` / `requests` / `httpx`、curl 都认;标准库不认
 SOCKS 的话,遇到 `socks5://` 自己说清楚(`plugins/bundled/mineru` 就是这么做的)。MCP 的 http 传输由宿主发请求,

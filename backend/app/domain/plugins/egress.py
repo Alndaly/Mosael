@@ -29,6 +29,7 @@ from typing import Any
 from urllib.parse import urlsplit
 from urllib.request import proxy_bypass_environment
 
+from mosael_formats.plugin_env import NODE_USE_ENV_PROXY
 from sqlalchemy.orm import Session
 
 from app.db.models import PluginInstance
@@ -46,10 +47,6 @@ PROXY_SCHEMES = ("http", "https", "socks5", "socks5h")
 #: 「谁都绕过」。curl、urllib、httpx、requests、Node 都认这个写法 —— 这是「直连」唯一能跨库说清的方式。
 BYPASS_ALL = "*"
 
-#: Node(24.5 起)只有看到它才让内置的 fetch 认 HTTP(S)_PROXY。`npx` 起的 MCP 服务多半是 Node,
-#: 不给它,注入的代理对它们等于没有;老版本 Node 不认识这个变量,多给一个无害。
-NODE_USE_ENV_PROXY = "NODE_USE_ENV_PROXY"
-
 
 @dataclass(frozen=True)
 class Egress:
@@ -63,7 +60,11 @@ class Egress:
     no_proxy: str = ""
 
     def child_env(self) -> dict[str, str]:
-        """注入插件子进程的那几个变量。大小写两份都给(见 network.proxy_env)。"""
+        """注入插件子进程的那几个变量。大小写两份都给(见 network.proxy_env)。
+
+        名字全在 `mosael_formats.plugin_env.EGRESS_KEYS` 里:清单校验按那一份挡插件声明同名的配置 / 凭据,
+        所以插件的配置本来就进不了这几格,不靠注入顺序。
+        """
         if self.proxy_url:
             return {**network.proxy_env(self.proxy_url, self.no_proxy), NODE_USE_ENV_PROXY: "1"}
         if self.no_proxy == BYPASS_ALL:

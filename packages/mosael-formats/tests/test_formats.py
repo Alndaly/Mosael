@@ -59,6 +59,11 @@ def test_清单解析按当时的语言挑名字() -> None:
         ({"id": "../x", "version": "1", "name": "n"}, "pluginErr_manifestBadId"),
         ({"id": "a", "version": "1", "name": "n", "instance": {"credentials": [{"key": "MOSAEL_X"}]}},
          "pluginErr_manifestReservedKey"),
+        # 出站代理是宿主替连接定的:配置里一个 `https_proxy` 大写后正好是那一格,填了也不会生效。
+        ({"id": "a", "version": "1", "name": "n", "instance": {"config": [{"key": "https_proxy"}]}},
+         "pluginErr_manifestReservedKey"),
+        ({"id": "a", "version": "1", "name": "n", "instance": {"credentials": [{"key": "NODE_USE_ENV_PROXY"}]}},
+         "pluginErr_manifestReservedKey"),
         ({"id": "a", "version": "1", "name": "n", "tools": {"declare": [{"name": "a.b"}]}},
          "pluginErr_manifestBadToolName"),
     ],

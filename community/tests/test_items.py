@@ -216,6 +216,7 @@ def test_插件_id_归第一个提交者(client, ctx, sms) -> None:
         (make_plugin_zip({"id": "x", "version": "1.0.0"}), "插件清单不合法"),
         (b"not a zip at all", "不是一个合法的 zip 包"),
         (make_plugin_zip(plugin_manifest(instance={"config": [{"key": "PATH"}]})), "盖掉宿主给插件的环境变量"),
+        (make_plugin_zip(plugin_manifest(instance={"config": [{"key": "no_proxy"}]})), "盖掉宿主给插件的环境变量"),
     ],
 )
 def test_恶意或不合格的插件包(client, ctx, sms, archive: bytes, expected: str) -> None:

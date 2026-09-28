@@ -47,8 +47,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Plugin manifest {path} declares two tools named {tool}.",
     },
     "pluginErr_manifestReservedKey": {
-        "zh": "插件清单 {path}:配置 / 凭据的键 {field} 会盖掉宿主给插件的环境变量(PATH、HOME、LANG、MOSAEL_* 等),请换个名字",
-        "en": "In plugin manifest {path}, the config/credential key {field} would override an environment variable the host provides (PATH, HOME, LANG, MOSAEL_* and so on); please rename it.",
+        "zh": "插件清单 {path}:配置 / 凭据的键 {field} 会盖掉宿主给插件的环境变量(PATH、HOME、LANG、MOSAEL_*、HTTPS_PROXY 这类出站代理变量等),请换个名字",
+        "en": "In plugin manifest {path}, the config/credential key {field} would override an environment variable the host provides (PATH, HOME, LANG, MOSAEL_*, outbound proxy variables such as HTTPS_PROXY, and so on); please rename it.",
     },
     "pluginErr_manifestDuplicateKey": {
         "zh": "插件清单 {path}:配置 / 凭据的键 {field} 和 {other} 大写后是同一个环境变量",

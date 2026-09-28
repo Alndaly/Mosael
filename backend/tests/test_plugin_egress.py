@@ -12,6 +12,7 @@ from __future__ import annotations
 import asyncio
 
 import pytest
+from mosael_formats.plugin_env import PROXY_KEYS, is_reserved
 
 from app.core.db import SessionLocal
 from app.db.models import PluginInstance
@@ -21,8 +22,6 @@ from app.domain.plugins.egress import Egress
 from app.domain.plugins.errors import PluginDomainError
 from app.domain.plugins.mcp_bridge import stdio_env
 from tests.test_plugins import SIMPLE, install
-
-PROXY_KEYS = ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY")
 
 
 def _global(proxy_url: str, no_proxy: str = "") -> None:
@@ -125,6 +124,11 @@ class Test两种子进程同一份_后端的请求同一个决定:
         assert env["HTTPS_PROXY"] == "http://p:1", "插件的配置盖掉了宿主替这个连接定的路"
         assert env["NODE_USE_ENV_PROXY"] == "1", "Node 写的 MCP 服务不看到它就不认代理变量"
         assert "HTTPS_PROXY" not in stdio_env({}, Egress())
+
+    def test_宿主注入的每个名字_清单都不让插件声明(self) -> None:
+        """名字只有一份(mosael_formats.plugin_env)。宿主多注入一个而那边没记,插件就能声明同名配置去跟宿主抢。"""
+        for egress in (Egress("http://p:1", "localhost"), Egress(no_proxy=plugin_egress.BYPASS_ALL), Egress()):
+            assert [key for key in egress.child_env() if not is_reserved(key)] == [], egress
 
     def test_后端替连接发的请求_代理_绕过_直连_跟随(self) -> None:
         proxied = Egress("http://p:1", network.effective_no_proxy(""))
