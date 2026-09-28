@@ -1,8 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-// 被测的是 Electron 主进程那份解析器。它是纯函数、没有 electron 依赖,所以能直接在这里测。
-// 放在前端测试里,是因为仓库只有这一套 vitest;逻辑归属仍是 electron/system/deepLink.ts。
-import { deepLinkFromArgv, parseDeepLink } from "../../../electron/system/deepLink";
+// 被测的是 Electron 主进程那份解析器。它是纯函数、没有 electron 依赖,不用替身。
+import { deepLinkFromArgv, parseDeepLink } from "./deepLink";
 
 describe("mosael:// 深链解析", () => {
   it("接受白名单内的 view", () => {

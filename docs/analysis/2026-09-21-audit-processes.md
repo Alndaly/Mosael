@@ -262,7 +262,7 @@ sidecar 专门为这件事发了一条事件。**唯独中间那一跳把问题�
 **永远执行不到**。而超时看门狗在第 1 步已经被 cancel 了,**没有任何东西能打破它**。
 
 **为什么看不出来。** 这个症状和仓库里已经记录过的一个 bug **一模一样**——
-`backend/tests/test_sidecar_backpressure.py` 的开头写着:
+`backend/tests/test_child_process_backpressure.py` 的开头写着:
 
 > The visible damage was not the hang itself: the session stayed marked running, so every later
 > message in that chat was refused with "a turn is already in flight", with no error shown.

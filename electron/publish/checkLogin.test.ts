@@ -1,8 +1,7 @@
 /**
  * 「这个账号登上了吗」——发布器判定登录态的那条规则。
  *
- * 被测的是 Electron 主进程里的适配器。放在这里是因为仓库只有这一套 vitest(与
- * deepLinkParse.test.ts 同因),逻辑归属仍是 electron/publish/adapters.ts。
+ * 被测的是 electron/publish/adapters.ts。
  *
  * ## 为什么值得单独测
  *
@@ -21,10 +20,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 // log.ts 会 `import { app } from "electron"` 落盘日志;这里只测判定逻辑,给个最小替身。
 vi.mock("electron", () => ({ app: { getPath: () => "/tmp" } }));
 
-import type { PageDriver } from "../../../electron/publish/pageDriver";
+import type { PageDriver } from "./pageDriver";
 
 // 动态 import:vi.mock("electron") 必须在模块求值前生效。
-const { TiktokAdapter, WeixinChannelsAdapter, YoutubeAdapter } = await import("../../../electron/publish/adapters");
+const { TiktokAdapter, WeixinChannelsAdapter, YoutubeAdapter } = await import("./adapters");
 
 interface FakePage {
   url: string;

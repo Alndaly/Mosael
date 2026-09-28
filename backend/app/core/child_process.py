@@ -226,7 +226,7 @@ class ChildProcess:
         现场:pi sidecar 那一轮被用户按「停止」结束,stdin 关了,`main()` 返回了,但 Node 要等
         事件循环空了才退,而后台子智能体还挂着在飞的 HTTP 请求。于是 `wait()` 不返回 →
         调用方 `finally` 里「把会话拨回 idle」那段永远执行不到 → **界面上那个会话永远停在
-        「思考中」**,之后每条消息都被拒绝(见 test_sidecar_backpressure 开头记的同一个症状:
+        「思考中」**,之后每条消息都被拒绝(见 test_child_process_backpressure 开头记的同一个症状:
         那次是 stderr 管道死锁,这次是另一条通往同一个症状的路)。
 
         所以收尾自己也要有时限,而且是**独立的第二个数**:看门狗管的是「这一轮跑太久」,

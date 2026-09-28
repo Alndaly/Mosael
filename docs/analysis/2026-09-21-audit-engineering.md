@@ -437,14 +437,14 @@ def schema_fingerprint() -> str:
 ```
 $ pytest tests/test_provider_models.py::test_comfyui_连不上时目录为空而不是报错
   4.68s
-$ pytest tests/test_llm_retry.py tests/test_provider_models.py::test_comfyui_连不上时目录为空而不是报错
+$ pytest tests/test_http_retry.py tests/test_provider_models.py::test_comfyui_连不上时目录为空而不是报错
  26.37s      ← 同一条测试,5.6 倍
 ```
 
 肇事者:
 
 ```
-backend/tests/test_llm_retry.py:144   client.put("/api/settings/ai-runtime", json={"max_retries": 6})
+backend/tests/test_http_retry.py:144   client.put("/api/settings/ai-runtime", json={"max_retries": 6})
 backend/app/core/http_retry.py:19     DEFAULT_MAX_RETRIES = 3        # 进程级 _max_retries
 ```
 
@@ -700,5 +700,5 @@ analysis/)**必然漂移,只是漂多久的问题**。
 
 **测试成本**
 - `/private/tmp/.../scratchpad/pytest.log` — 本次全量:3756 passed / 391.67s / 最慢 45 条占 50.8%
-- `backend/app/core/http_retry.py:19` + `backend/tests/test_llm_retry.py:144` — 串台的进程级重试次数
+- `backend/app/core/http_retry.py:19` + `backend/tests/test_http_retry.py:144` — 串台的进程级重试次数
 - `docs/PROCESS_STATE.md` — 16 条进程级状态,登记齐全但无重置纪律

@@ -7,7 +7,7 @@
 // 后果不是"子智能体多跑一会儿"。子智能体是一整个 agent 循环,没有自己的时限,它的 promise
 // 挂在 Node 的事件循环上 → `main()` 返回了进程也不退 → 后端 `finish()` 等不到它 →
 // 「把会话拨回 idle」那段永远执行不到 → **界面上那个会话永远停在「思考中」**,
-// 之后每条消息都被拒绝且不报错(和 backend/tests/test_sidecar_backpressure.py 同一个症状)。
+// 之后每条消息都被拒绝且不报错(和 backend/tests/test_child_process_backpressure.py 同一个症状)。
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
