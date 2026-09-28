@@ -27,10 +27,6 @@ const ROOTS = [join(SRC, "features", "settings"), join(SRC, "components", "setti
 /** 键是 `文件: 类串`(不带行号 —— 挪一行代码就要改清单的话,清单就没人愿意维护了)。 */
 const GRANDFATHERED = new Map<string, string>([
   [
-    "features/settings/PricingRuleBrowser.tsx: grid min-w-0 content-start gap-3 rounded-lg border border-border bg-panel p-4",
-    "成本规则的**卡片视图**是用户要的,右上角能切成列表;它是网格里的一格,不是分组里的一行",
-  ],
-  [
     "features/settings/ModelSettingsDialog.tsx: grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-md border border-border bg-panel px-3 py-2.5",
     "在弹窗里,没有 SettingsGroup 的分隔线可借;每个开关自带底色是那个弹窗的分组方式",
   ],

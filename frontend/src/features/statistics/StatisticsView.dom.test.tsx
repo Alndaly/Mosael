@@ -9,7 +9,7 @@ import { beforeEach, expect, it, vi } from "vitest";
 import type { Workspace } from "@/api/client";
 import { StatisticsView } from "./StatisticsView";
 
-const mocks = vi.hoisted(() => ({ summary: vi.fn(), assets: [] as unknown[], section: vi.fn(), settings: vi.fn() }));
+const mocks = vi.hoisted(() => ({ summary: vi.fn(), assets: [] as unknown[], section: vi.fn(), admin: vi.fn(), isAdmin: true }));
 vi.mock("@/api/client", async original => ({
   ...await original<typeof import("@/api/client")>(),
   workspaceSummary: mocks.summary,
@@ -17,7 +17,8 @@ vi.mock("@/api/client", async original => ({
   assetThumbnailUrl: (id: string) => `/thumbnail/${id}`,
 }));
 vi.mock("@/app/preferences", () => ({ useI18n: () => (key: string) => key, usePreferences: () => ({ locale: "en-US" }) }));
-vi.mock("@/lib/deepLink", () => ({ gotoSection: mocks.section, gotoSettings: mocks.settings }));
+vi.mock("@/lib/deepLink", () => ({ gotoSection: mocks.section, gotoAdmin: mocks.admin }));
+vi.mock("@/app/auth", () => ({ useIsDeploymentAdmin: () => mocks.isAdmin }));
 vi.mock("./StatisticsCharts", () => ({
   ActivityChart: () => <div>Activity chart</div>, AssetKindsChart: () => <div>Asset chart</div>,
   PublishActivityChart: () => <div>Publishing chart</div>, PublishPlatformsChart: () => <div>Platforms chart</div>,
@@ -27,7 +28,7 @@ const workspace = { id: "studio-a", name: "Studio A" } as Workspace;
 function provider(children: React.ReactNode) {
   return <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })}>{children}</QueryClientProvider>;
 }
-beforeEach(() => { vi.clearAllMocks(); localStorage.clear(); mocks.assets = []; });
+beforeEach(() => { vi.clearAllMocks(); localStorage.clear(); mocks.assets = []; mocks.isAdmin = true; });
 
 const SUMMARY = { project_count: 2, asset_count: 3, sequence_count: 1, workflow_count: 4, running_jobs: 5, usage_event_count: 6, usage_costs: [{ currency: "USD", micros: 12_340_000 }], window_days: 30, jobs_succeeded: 7, published: 8, usage_unknown_cost_events: 0, jobs_failed: 0, usage_cache_hit_ratio: 0 };
 
@@ -119,7 +120,7 @@ it("links only the tiles that have a list explaining their number, each to that 
     fireEvent.click(tile);
   }
   expect(mocks.section).toHaveBeenCalledTimes(4);
-  expect(mocks.settings).not.toHaveBeenCalled();
+  expect(mocks.admin).not.toHaveBeenCalled();
 });
 
 it("sends the unpriced count to the pricing rules, and leaves the failed count as a reading", async () => {
@@ -128,9 +129,20 @@ it("sends the unpriced count to the pricing rules, and leaves the failed count a
   const unpriced = await screen.findByRole("button", { name: "homeStatUsageUnknownSuffix" });
   expect(unpriced).toHaveAttribute("title", "homeChartUsageConfigurePricing");
   fireEvent.click(unpriced);
-  expect(mocks.settings).toHaveBeenCalledWith("provider-pricing");
+  // 价格规则在管理页的「成本规则」tab,不在设置页。
+  expect(mocks.admin).toHaveBeenCalledWith("pricing");
   expect(screen.getByText("homeStatJobsDone").closest("[data-stat]")).toHaveTextContent("homeStatJobsFailedSuffix");
   expect(screen.queryByRole("button", { name: /homeStatJobsFailedSuffix/ })).toBeNull();
+});
+
+// 价格规则只有部署管理员写得了:别人那里「N 未定价」只是读数,不给一条通向打不开的页面的路。
+it("leaves the unpriced count as a reading for members who cannot edit pricing", async () => {
+  mocks.isAdmin = false;
+  mocks.summary.mockResolvedValue({ ...SUMMARY, usage_unknown_cost_events: 3 });
+  render(provider(<StatisticsView workspace={workspace} />));
+  const usage = (await screen.findByText("homeStatAiUsage")).closest("[data-stat]")!;
+  expect(usage).toHaveTextContent("homeStatUsageUnknownSuffix");
+  expect(screen.queryByRole("button", { name: "homeStatUsageUnknownSuffix" })).toBeNull();
 });
 
 it("shows a recoverable statistics error instead of an empty dashboard", async () => {

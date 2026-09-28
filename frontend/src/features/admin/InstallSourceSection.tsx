@@ -5,17 +5,21 @@ import { toast } from "sonner";
 import { getInstallSource, updateInstallSource } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { OptionPicker } from "@/components/ui/option-picker";
-import { SETTINGS_FIELD_WIDTH, SettingsGroup, SettingsRow } from "@/components/settings/settings-layout";
+import { SETTINGS_FIELD_WIDTH } from "@/components/settings/settings-layout";
+import { ADMIN_CARD, AdminRow, AdminSection } from "./adminLayout";
 
 /** 预设的镜像 key。空串 = 官方 PyPI(后端据此不传 --index-url)。 */
 const PRESETS = ["pypi", "tsinghua", "aliyun", "tencent"] as const;
 
 /**
- * Settings → 本机引擎 → 安装源。
+ * 管理 → 部署设置 → 安装源。
  *
- * **为什么是独立的一页**:这个值历史上只出现在「声音克隆」的表单里(克隆先有了它),而转写和
+ * **为什么是独立的一节**:这个值历史上只出现在「声音克隆」的表单里(克隆先有了它),而转写和
  * 人声分离装依赖时读的是同一份 —— 想给转写换个镜像的人得去「声音克隆」里找。三个引擎一次拉
- * 2–3 GB 的 Python 依赖,国内直连 PyPI 常常慢到不可用,所以这是装任何本机引擎之前就该看得到的。
+ * 2–3 GB 的 Python 依赖,国内直连 PyPI 常常慢到不可用。
+ *
+ * **为什么在管理页**:往这台机器上装东西用哪个源,是部署级的设置,写入只给部署管理员
+ * (routes/settings/system.set_install_source)。放在设置页时普通成员也看得到、一改就 403。
  *
  * 选中即保存:这里只有一个字段,再要求点一次「保存」只是多一步。
  */
@@ -46,17 +50,19 @@ export function InstallSourceSection() {
   ];
 
   return (
-    <SettingsGroup title={t("installSourceTitle")} description={t("installSourceDesc")}>
-      <SettingsRow label={t("voiceClonePipIndex")} description={t("installSourcePipIndexHint")}>
-        <OptionPicker
-          ariaLabel={t("voiceClonePipIndex")}
-          className={SETTINGS_FIELD_WIDTH}
-          value={current}
-          disabled={source.isLoading || save.isPending}
-          onChange={(next) => save.mutate(next === "pypi" ? "" : next)}
-          options={options}
-        />
-      </SettingsRow>
-    </SettingsGroup>
+    <AdminSection id="install-source" title={t("installSourceTitle")} description={t("installSourceDesc")}>
+      <div className={ADMIN_CARD}>
+        <AdminRow label={t("voiceClonePipIndex")} description={t("installSourcePipIndexHint")}>
+          <OptionPicker
+            ariaLabel={t("voiceClonePipIndex")}
+            className={SETTINGS_FIELD_WIDTH}
+            value={current}
+            disabled={!source.data || save.isPending}
+            onChange={(next) => save.mutate(next === "pypi" ? "" : next)}
+            options={options}
+          />
+        </AdminRow>
+      </div>
+    </AdminSection>
   );
 }

@@ -104,6 +104,16 @@ export function gotoSettings(section: string): void {
   gotoRecord("/settings", "mosael:open-settings", section);
 }
 
+/**
+ * 跳到管理页的某个 tab(如「N 次未定价」→ 成本规则)。AdminView 监听 mosael:open-admin。
+ *
+ * 管理页只对部署管理员有入口 —— 调用方先判断 `useIsDeploymentAdmin()`,不是管理员就别给这条路:
+ * 后端每条管理接口都会拒绝他,跳过去是一页读不出来的东西。
+ */
+export function gotoAdmin(tab: string): void {
+  gotoRecord("/admin", "mosael:open-admin", tab);
+}
+
 /** 打开插件市场并找到某个插件(官网「在 Mosael 中打开」)。已经装了就直接选中它。 */
 export const OPEN_PLUGIN_IN_MARKET = "mosael:open-plugin-market";
 /** 打开工作流社区并选中某个官方模板(官网「在 Mosael 中打开」)。 */

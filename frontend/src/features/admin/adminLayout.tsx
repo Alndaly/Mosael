@@ -66,13 +66,27 @@ export function AdminRow({
   leading,
   children,
   className,
+  stacked = false,
 }: {
   label: React.ReactNode;
   description?: React.ReactNode;
   leading?: React.ReactNode;
   children?: React.ReactNode;
   className?: string;
+  /** 控件放到字下面、占满整行 —— 给要写一段话的控件(多行文本框)。放在右边那一格它会被挤成一条窄缝。 */
+  stacked?: boolean;
 }) {
+  if (stacked) {
+    return (
+      <div data-admin-row className={cn("grid min-w-0 gap-2 px-4 py-3", className)}>
+        <div className="grid min-w-0 gap-0.5">
+          <span className="min-w-0 text-ui-sm font-medium">{label}</span>
+          {description && <span className="min-w-0 text-ui-xs leading-normal text-muted-foreground">{description}</span>}
+        </div>
+        {children}
+      </div>
+    );
+  }
   return (
     <div data-admin-row className={cn("flex min-h-14 min-w-0 items-center gap-3 px-4 py-3", className)}>
       {leading}

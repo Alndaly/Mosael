@@ -185,7 +185,7 @@ PUBLISH_PLATFORMS: dict[str, dict[str, Any]] = {
         "title_max": 80,
         "short_title": False,
     },
-    # TikTok 与 YouTube 都在境外:登录和上传都要能连上它们,通常得配好出站代理(设置 → 本地后端 /
+    # TikTok 与 YouTube 都在境外:登录和上传都要能连上它们,通常得配好出站代理(管理 → 部署设置 /
     # 浏览器档案各自的代理)。连不上时表现为登录页打不开,而不是"登录失败"。
     "tiktok": {
         "label": "TikTok",

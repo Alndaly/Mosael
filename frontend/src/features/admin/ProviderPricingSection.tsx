@@ -13,9 +13,11 @@ import { BulkActionBar, BulkSelectTrigger, useBulkSelection } from "@/components
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { OptionPicker } from "@/components/ui/option-picker";
 import { Textarea } from "@/components/ui/textarea";
-import { SettingsEmpty, SettingsGroup, SettingsListBlock } from "@/components/settings/settings-layout";
+import { SettingsEmpty } from "@/components/settings/settings-layout";
 import { usePersistentTab } from "@/lib/usePersistentTab";
 import { toast } from "sonner";
+
+import { AdminSection } from "./adminLayout";
 
 import {
   TimePricesEditor,
@@ -182,6 +184,16 @@ function PrefillSummary({ result }: { result: PrefillResult }) {
   );
 }
 
+/**
+ * 成本规则 —— 用量按什么价入账。
+ *
+ * **在管理页,不在设置页。** 连接归个人,但价格是这台部署记账的口径:写入只给部署管理员
+ * (routes/settings/provider_pricing.py)。放在设置页时每个成员都看得到这张表、一保存就 403。
+ * 普通成员读到的只是结果 —— 统计页里的花费和「N 次未定价」,那里告诉他价格归管理员维护。
+ *
+ * 规则仍按工作区列(当前工作区的 + 对所有工作区生效的),新建的挂在当前工作区;「预填」只列
+ * **管理员自己的**连接,因为要拿他的钥匙去取目录(require_own_profile)。
+ */
 export function ProviderPricingSection({ workspace }: { workspace: Workspace }) {
   const t = useI18n();
   const pricingFormId = React.useId();
@@ -374,10 +386,14 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
   const canSubmit = amountToMicros(form.unitAmount) >= 0 && form.capability && form.billingUnit && form.currency.trim();
 
   return (
-    <SettingsGroup
+    <AdminSection
+      id="pricing"
       title={t("pricingRulesTitle")}
-      description={t("pricingRulesDesc")}
-      contentClassName={rules.data && ruleList.length === 0 ? "min-h-0" : undefined}
+      description={
+        <>
+          {t("pricingRulesDesc")} {t("pricingRulesScope").replace("{workspace}", workspace.name)}
+        </>
+      }
       actions={
         <div className="flex items-center gap-1.5">
           <BulkSelectTrigger active={bulk.active} onEnter={bulk.enter} disabled={ruleList.length === 0} />
@@ -633,41 +649,38 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
       {rules.data && ruleList.length === 0 ? (
         <SettingsEmpty icon={<ReceiptText size={20} />} title={t("pricingRulesEmpty")} />
       ) : (
-        <SettingsListBlock
-          toolbar={bulk.active ? (
+        <div className="grid min-w-0 gap-4">
+          {bulk.active && (
             <BulkActionBar active={bulk.active} count={bulk.count} allSelected={bulk.allSelected} onToggleAll={bulk.toggleAll} onExit={bulk.exit}>
               <Button variant="outline" size="sm" loading={removeMany.isPending} onClick={() => setBulkDeleting(true)}>
                 <Trash2 size={12} /> {t("bulkDelete")}
               </Button>
             </BulkActionBar>
-          ) : undefined}
-        >
-          <div className="grid gap-4 py-2">
-            <PricingRuleFilters
-              groups={allGroups}
-              filters={filters}
-              onChange={setFilters}
+          )}
+          <PricingRuleFilters
+            groups={allGroups}
+            filters={filters}
+            onChange={setFilters}
+            display={display}
+            onDisplay={setDisplay}
+            shown={groups.length}
+            labels={browserLabels}
+          />
+          {groups.length === 0 ? (
+            <SettingsEmpty icon={<SearchX size={20} />} title={t("pricingNoMatch")} />
+          ) : (
+            <PricingRuleGroups
+              groups={groups}
               display={display}
-              onDisplay={setDisplay}
-              shown={groups.length}
+              bulk={bulk}
               labels={browserLabels}
+              onEdit={openEdit}
+              onDelete={setDeleting}
+              onDeleteGroup={setDeletingGroup}
             />
-            {groups.length === 0 ? (
-              <SettingsEmpty icon={<SearchX size={20} />} title={t("pricingNoMatch")} />
-            ) : (
-              <PricingRuleGroups
-                groups={groups}
-                display={display}
-                bulk={bulk}
-                labels={browserLabels}
-                onEdit={openEdit}
-                onDelete={setDeleting}
-                onDeleteGroup={setDeletingGroup}
-              />
-            )}
-          </div>
-        </SettingsListBlock>
+          )}
+        </div>
       )}
-    </SettingsGroup>
+    </AdminSection>
   );
 }
