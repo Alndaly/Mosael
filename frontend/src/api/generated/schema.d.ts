@@ -922,24 +922,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/assets": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Assets */
-        get: operations["list_assets_api_assets_get"];
-        put?: never;
-        /** Create Asset */
-        post: operations["create_asset_api_assets_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/assets/import": {
         parameters: {
             query?: never;
@@ -1021,6 +1003,23 @@ export interface paths {
          *     标记由 Electron 在 spawn 后端时置入(见 electron/main.cjs)。
          */
         post: operations["import_local_asset_api_assets_import_local_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/assets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Assets */
+        get: operations["list_assets_api_assets_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -7447,31 +7446,6 @@ export interface components {
              * @default
              */
             message: string;
-        };
-        /** AssetCreate */
-        AssetCreate: {
-            /** Workspace Id */
-            workspace_id: string;
-            /** Project Id */
-            project_id?: string | null;
-            /** Kind */
-            kind: string;
-            /** Name */
-            name: string;
-            /**
-             * Original Filename
-             * @default
-             */
-            original_filename: string;
-            /**
-             * File Key
-             * @default
-             */
-            file_key: string;
-            /** Media Info */
-            media_info?: {
-                [key: string]: unknown;
-            };
         };
         /**
          * AssetEntityOut
@@ -15638,73 +15612,6 @@ export interface operations {
             };
         };
     };
-    list_assets_api_assets_get: {
-        parameters: {
-            query: {
-                workspace_id: string;
-                project_id?: string | null;
-                kind?: string | null;
-                name_contains?: string | null;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AssetOut"][];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    create_asset_api_assets_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AssetCreate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AssetOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     import_asset_api_assets_import_post: {
         parameters: {
             query?: never;
@@ -15824,6 +15731,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AssetOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_assets_api_assets_get: {
+        parameters: {
+            query: {
+                workspace_id: string;
+                project_id?: string | null;
+                kind?: string | null;
+                name_contains?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetOut"][];
                 };
             };
             /** @description Validation Error */

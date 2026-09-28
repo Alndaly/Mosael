@@ -344,6 +344,33 @@ def test_the_agent_upload_action_refuses_an_asset_and_a_path_together(tmp_path, 
     assert uploaded == []
 
 
+# ---------------- 存储键:客户端给不了,逃不出数据目录 ----------------
+# 此前 `POST /assets` 收客户端给的 file_key,而素材的文件接口按键把文件原样发出去:一个普通编辑者
+# 建一行 `file_key="/Users/主人/.ssh/id_rsa"`(或一串 `../`),再 GET /assets/{id}/file,就读到了
+# 这台电脑上的任意文件 —— 完全绕过上面那道闸。这个接口没有任何产品调用方,删掉了。
+
+
+def test_clients_cannot_create_an_asset_row_pointing_at_a_path(tmp_path) -> None:
+    owner, workspace, mate = _team()
+    secret = _secret(tmp_path)
+    for client in (owner, mate):
+        response = client.post(
+            "/api/assets",
+            json={"workspace_id": workspace["id"], "kind": "document", "name": "x", "file_key": str(secret)},
+        )
+        assert response.status_code == 405, response.text
+
+
+def test_a_storage_key_cannot_leave_the_data_dir(tmp_path) -> None:
+    from app.media.paths import StorageKeyError, resolve_key
+
+    secret = _secret(tmp_path)
+    for key in (str(secret), "../" * 12 + str(secret).lstrip("/"), "media/../../etc/hosts"):
+        with pytest.raises(StorageKeyError):
+            resolve_key(key)
+    assert resolve_key("media/assets/w/a/clip.mp4") == settings.data_dir / "media/assets/w/a/clip.mp4"
+
+
 # ---------------- 入口:按本机路径导入素材 ----------------
 
 

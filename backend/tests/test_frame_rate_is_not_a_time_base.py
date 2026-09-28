@@ -13,7 +13,7 @@ from app.core.config import settings
 from app.core.db import SessionLocal
 from app.db.models import Asset
 from app.media.probe import _frame_rate, probe_media
-from tests.util import fresh_client
+from tests.util import fresh_client, insert_asset
 
 pytestmark = pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg not installed")
 
@@ -47,14 +47,10 @@ def test_the_migration_recomputes_implausible_frame_rates() -> None:
     folder = settings.data_dir / "media" / "rec"
     folder.mkdir(parents=True, exist_ok=True)
     _millisecond_webm(folder / "rec.webm")
-    broken = client.post("/api/assets", json={"workspace_id": ws["id"], "kind": "video", "name": "rec",
-                                              "file_key": "media/rec/rec.webm", "media_info": {}}).json()
-    fine = client.post("/api/assets", json={"workspace_id": ws["id"], "kind": "video", "name": "ok",
-                                            "file_key": "media/rec/rec.webm", "media_info": {}}).json()
-    with SessionLocal() as db:
-        db.get(Asset, broken["id"]).media_info = {"fps": 1000.0, "duration": 2.0}
-        db.get(Asset, fine["id"]).media_info = {"fps": 60.0, "duration": 2.0}
-        db.commit()
+    broken = {"id": insert_asset(ws["id"], kind="video", name="rec", file_key="media/rec/rec.webm",
+                                 media_info={"fps": 1000.0, "duration": 2.0})}
+    fine = {"id": insert_asset(ws["id"], kind="video", name="ok", file_key="media/rec/rec.webm",
+                               media_info={"fps": 60.0, "duration": 2.0})}
 
     _migrate_frame_rate_is_not_a_time_base()
     with SessionLocal() as db:

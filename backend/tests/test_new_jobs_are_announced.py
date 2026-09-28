@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 from app.api.middleware import NEW_JOBS_HEADER
-from tests.util import fresh_client
+from tests.util import fresh_client, create_asset
 
 
 def _no_threads(monkeypatch) -> None:  # type: ignore[no-untyped-def]
@@ -18,15 +18,13 @@ def test_a_request_that_creates_a_job_says_so(monkeypatch) -> None:  # type: ign
     _no_threads(monkeypatch)
     client = fresh_client()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
-    created = client.post(
-        "/api/assets",
-        json={"workspace_id": ws["id"], "kind": "video", "name": "S",
-              "file_key": "media/s.mp4", "media_info": {"duration": 10}},
-    )
-    # 建素材不是建任务 —— 不该让任务中心白刷一次。
-    assert NEW_JOBS_HEADER not in created.headers
+    created = create_asset(client, {"workspace_id": ws["id"], "kind": "video", "name": "S",
+                                    "file_key": "media/s.mp4", "media_info": {"duration": 10}})
+    # 改名不是建任务 —— 不该让任务中心白刷一次。
+    renamed = client.patch(f"/api/assets/{created['id']}", json={"name": "S2"})
+    assert NEW_JOBS_HEADER not in renamed.headers
 
-    res = client.post(f"/api/assets/{created.json()['id']}/transcribe?engine=builtin:whisperx")
+    res = client.post(f"/api/assets/{created['id']}/transcribe?engine=builtin:whisperx")
     assert res.status_code == 200
     assert res.headers[NEW_JOBS_HEADER] == "1"
     # 下一个请求重新开始计:上一次的记录不会串过来。
@@ -38,11 +36,8 @@ def test_the_frontend_origin_can_read_the_header(monkeypatch) -> None:  # type: 
     _no_threads(monkeypatch)
     client = fresh_client()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
-    asset = client.post(
-        "/api/assets",
-        json={"workspace_id": ws["id"], "kind": "video", "name": "S",
-              "file_key": "media/s.mp4", "media_info": {"duration": 10}},
-    ).json()
+    asset = create_asset(client, {"workspace_id": ws["id"], "kind": "video", "name": "S",
+              "file_key": "media/s.mp4", "media_info": {"duration": 10}})
     res = client.post(
         f"/api/assets/{asset['id']}/transcribe?engine=builtin:whisperx",
         headers={"Origin": "http://127.0.0.1:5173"},

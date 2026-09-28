@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
-from tests.util import fresh_client
+from tests.util import fresh_client, create_asset
 
 
 def _setup_two_clips(client: TestClient) -> tuple[dict, list[dict]]:
@@ -17,17 +17,14 @@ def _setup_two_clips(client: TestClient) -> tuple[dict, list[dict]]:
         "/api/projects",
         json={"workspace_id": workspace["id"], "name": "P"},
     ).json()
-    asset = client.post(
-        "/api/assets",
-        json={
+    asset = create_asset(client, {
             "workspace_id": workspace["id"],
             "project_id": project["id"],
             "kind": "video",
             "name": "S",
             "file_key": "media/s.mp4",
             "media_info": {"duration": 20},
-        },
-    ).json()
+        })
     sequence = client.post(
         "/api/sequences",
         json={"workspace_id": workspace["id"], "project_id": project["id"], "name": "Main"},

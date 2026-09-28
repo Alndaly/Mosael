@@ -53,6 +53,20 @@ def scene_model_key(workspace_id: str, filename: str) -> str:
     return str(Path("media") / "scene-models" / workspace_id / filename)
 
 
+class StorageKeyError(ValueError):
+    """存储键逃出了数据目录。键都由上面这些 *_key 在服务端生成,碰到它只可能是 bug 或被塞了数据。"""
+
+
 def resolve_key(key: str) -> Path:
+    """存储键 → 数据目录里的文件。
+
+    **只认数据目录里的相对路径。** `data_dir / "/Users/x/.ssh/id_rsa"` 在 Python 里就是那个绝对
+    路径本身,`../` 也能一路走出去 —— 素材的文件接口按键把文件原样发出去,一个逃出去的键就是
+    一条读这台电脑上任意文件的路,绕过了 domain/host_files 那道闸。判的是键的写法(不展开软链接):
+    数据目录底下的软链接是部署自己放的,不归这里管。
+    """
+    parts = Path(key).parts
+    if Path(key).is_absolute() or ".." in parts:
+        raise StorageKeyError(key)
     return settings.data_dir / key
 

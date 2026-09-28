@@ -143,9 +143,3 @@ def test_导入时挂到别的工作区的项目_同样拒绝() -> None:
     )
     assert kept.status_code == 200, kept.text
     assert kept.json()["project_id"] == mine["id"]
-
-    created = client.post(
-        "/api/assets",
-        json={"workspace_id": ws["id"], "project_id": elsewhere["id"], "kind": "video", "name": "x"},
-    )
-    assert created.status_code == 422, created.text

@@ -4,7 +4,7 @@ from pathlib import Path
 
 from app.media.render_executor import build_ffmpeg_command
 from app.media.render_plan import build_render_plan
-from tests.util import fresh_client
+from tests.util import fresh_client, create_asset
 
 ASSETS = {"a1": {"file_key": "media/a.mp4"}}
 
@@ -92,11 +92,8 @@ def test_set_clip_speed_api_with_undo() -> None:
     client = fresh_client()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
     project = client.post("/api/projects", json={"workspace_id": ws["id"], "name": "P"}).json()
-    asset = client.post(
-        "/api/assets",
-        json={"workspace_id": ws["id"], "project_id": project["id"], "kind": "video", "name": "S",
-              "file_key": "media/s.mp4", "media_info": {"duration": 10}},
-    ).json()
+    asset = create_asset(client, {"workspace_id": ws["id"], "project_id": project["id"], "kind": "video", "name": "S",
+              "file_key": "media/s.mp4", "media_info": {"duration": 10}})
     sequence = client.post(
         "/api/sequences", json={"workspace_id": ws["id"], "project_id": project["id"], "name": "Main"}
     ).json()

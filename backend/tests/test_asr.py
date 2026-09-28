@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from app.ai.runtime.workers.asr import funasr_sentences_to_segments, whisperx_segments
 from app.domain.voices.transcription import parse_transcript_segments
-from tests.util import fresh_client
+from tests.util import fresh_client, create_asset
 
 
 def test_funasr_sentences_map_chars_to_word_tokens() -> None:
@@ -66,11 +66,8 @@ def test_transcribe_endpoint_creates_job(monkeypatch) -> None:
     monkeypatch.setattr("app.domain.voices.transcription._run_transcription", lambda job_id, asset_id: started.append(asset_id))
     client = fresh_client()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
-    asset = client.post(
-        "/api/assets",
-        json={"workspace_id": ws["id"], "kind": "video", "name": "S",
-              "file_key": "media/s.mp4", "media_info": {"duration": 10}},
-    ).json()
+    asset = create_asset(client, {"workspace_id": ws["id"], "kind": "video", "name": "S",
+              "file_key": "media/s.mp4", "media_info": {"duration": 10}})
 
     res = client.post(f"/api/assets/{asset['id']}/transcribe?engine=builtin:whisperx")
     assert res.status_code == 200
@@ -79,9 +76,6 @@ def test_transcribe_endpoint_creates_job(monkeypatch) -> None:
     assert job["payload"]["provider"] == "builtin:whisperx"
     assert started == [asset["id"]]
 
-    image = client.post(
-        "/api/assets",
-        json={"workspace_id": ws["id"], "kind": "image", "name": "I",
-              "file_key": "media/i.png", "media_info": {}},
-    ).json()
+    image = create_asset(client, {"workspace_id": ws["id"], "kind": "image", "name": "I",
+              "file_key": "media/i.png", "media_info": {}})
     assert client.post(f"/api/assets/{image['id']}/transcribe").status_code == 422

@@ -9,7 +9,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.media.render_plan import build_render_plan
-from tests.util import fresh_client
+from tests.util import fresh_client, create_asset
 
 HAS_FFMPEG = shutil.which("ffmpeg") is not None
 
@@ -257,11 +257,8 @@ def test_add_and_remove_track_with_undo() -> None:
 def test_set_clip_effects_undoable() -> None:
     client = fresh_client()
     ws, project, sequence = setup_project(client)
-    asset = client.post(
-        "/api/assets",
-        json={"workspace_id": ws["id"], "project_id": project["id"], "kind": "video", "name": "S",
-              "file_key": "media/s.mp4", "media_info": {"duration": 5}},
-    ).json()
+    asset = create_asset(client, {"workspace_id": ws["id"], "project_id": project["id"], "kind": "video", "name": "S",
+              "file_key": "media/s.mp4", "media_info": {"duration": 5}})
     track = next(t for t in sequence["tracks"] if t["kind"] == "video")
     state = client.post(
         f"/api/sequences/{sequence['id']}/clips",

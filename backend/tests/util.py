@@ -109,17 +109,40 @@ def make_video_asset(client, workspace_id: str) -> dict:
     media.mkdir(parents=True, exist_ok=True)
     source = media / "clip.mp4"
     source.write_bytes(b"fake-video-bytes")
-    created = client.post(
-        "/api/assets",
-        json={
-            "workspace_id": workspace_id,
-            "kind": "video",
-            "name": "成片A",
-            "file_key": "media/test-publish/clip.mp4",
-        },
-    )
-    assert created.status_code == 200, created.text
-    return created.json()
+    asset_id = insert_asset(workspace_id, kind="video", name="成片A", file_key="media/test-publish/clip.mp4")
+    return client.get(f"/api/assets/{asset_id}").json()
+
+
+def create_asset(client, body: dict) -> dict:
+    """造一行素材(见 insert_asset),返回接口看到的样子 —— `body` 用素材出参的字段名。"""
+    fields = {key: body[key] for key in ("kind", "name", "file_key", "project_id", "media_info", "original_filename") if key in body}
+    asset_id = insert_asset(body["workspace_id"], **fields)
+    return client.get(f"/api/assets/{asset_id}").json()
+
+
+def insert_asset(
+    workspace_id: str,
+    *,
+    kind: str,
+    name: str,
+    file_key: str = "",
+    project_id: str | None = None,
+    media_info: dict | None = None,
+    original_filename: str = "",
+) -> str:
+    """直接在库里放一行素材,返回 id。产品里素材只由导入 / 生成的领域函数建(文件落进数据目录、
+    键由服务端生成);测试要的常常只是「有这么一行、指着这个文件」。"""
+    from app.core.db import SessionLocal
+    from app.db.models import Asset
+
+    with SessionLocal() as db:
+        asset = Asset(
+            workspace_id=workspace_id, project_id=project_id, kind=kind, name=name,
+            file_key=file_key, media_info=media_info or {}, original_filename=original_filename,
+        )
+        db.add(asset)
+        db.commit()
+        return asset.id
 
 
 def seed_assets(workspace_id: str, kinds: dict[str, str]) -> None:

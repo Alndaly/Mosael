@@ -10,7 +10,7 @@ from app.domain.agent import prompt as agent_prompt
 from app.ai.sidecar.adapters import TurnResult
 from app.core.db import SessionLocal
 from app.core.config import settings
-from tests.util import add_provider, fresh_client
+from tests.util import add_provider, fresh_client, create_asset
 
 
 def _configured(client):
@@ -155,15 +155,12 @@ def test_image_attachment_pixels_reach_the_selected_agent_model(monkeypatch) -> 
     image_path.write_bytes(
         b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=")
     )
-    asset = client.post(
-        "/api/assets",
-        json={
+    asset = create_asset(client, {
             "workspace_id": workspace["id"],
             "kind": "image",
             "name": "一像素.png",
             "file_key": "media/test-agent-vision.png",
-        },
-    ).json()
+        })
     session = client.post("/api/agent/sessions", json={"workspace_id": workspace["id"]}).json()
 
     response = client.post(

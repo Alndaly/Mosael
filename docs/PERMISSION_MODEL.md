@@ -143,6 +143,9 @@ Blender 代码卡谁批准都跑。单机用时这台电脑就是用户自己的
   `ensure_deployment_admin`)里的路径。判断前一律 realpath —— 共享文件夹里的软链接、`..` 借不了道;
 - 没权限的人拿到的是 403(`hostErr_notReadable`),**不存在也是 403**:探不出别人机器上有什么;
 - 浏览器 `upload` 只能经 `browser.upload_file(…, HostFile)`,`run_action` 直接拒 upload;导航只认 http(s)。
+- 素材、字体、LUT 等的**存储键只由服务端生成**(`media/paths` 的各个 `*_key`),客户端给不了;`resolve_key`
+  拒绝绝对路径和 `..`。此前 `POST /assets` 收客户端给的 `file_key`,普通编辑者填一个绝对路径就能经素材的文件接口
+  读到这台电脑上的任意文件 —— 那个接口没有产品调用方,已删除。
 
 | 入口 | actor |
 | --- | --- |

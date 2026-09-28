@@ -2,17 +2,14 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
-from tests.util import fresh_client
+from tests.util import fresh_client, create_asset
 
 
 def setup_clip(client: TestClient) -> tuple[dict, dict]:
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
     project = client.post("/api/projects", json={"workspace_id": ws["id"], "name": "P"}).json()
-    asset = client.post(
-        "/api/assets",
-        json={"workspace_id": ws["id"], "project_id": project["id"], "kind": "video", "name": "S",
-              "file_key": "media/s.mp4", "media_info": {"duration": 10}},
-    ).json()
+    asset = create_asset(client, {"workspace_id": ws["id"], "project_id": project["id"], "kind": "video", "name": "S",
+              "file_key": "media/s.mp4", "media_info": {"duration": 10}})
     sequence = client.post(
         "/api/sequences", json={"workspace_id": ws["id"], "project_id": project["id"], "name": "Main"}
     ).json()
@@ -158,11 +155,8 @@ def _animated_clip(client: TestClient) -> tuple[dict, dict, str]:
     """一个带位置动画(x: -0.6 → 0.6)的片段,源区间 [0, 8]。"""
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
     project = client.post("/api/projects", json={"workspace_id": ws["id"], "name": "P"}).json()
-    asset = client.post(
-        "/api/assets",
-        json={"workspace_id": ws["id"], "project_id": project["id"], "kind": "video", "name": "S",
-              "file_key": "media/s.mp4", "media_info": {"duration": 10}},
-    ).json()
+    asset = create_asset(client, {"workspace_id": ws["id"], "project_id": project["id"], "kind": "video", "name": "S",
+              "file_key": "media/s.mp4", "media_info": {"duration": 10}})
     sequence = client.post(
         "/api/sequences", json={"workspace_id": ws["id"], "project_id": project["id"], "name": "Main"}
     ).json()
@@ -232,11 +226,8 @@ def _fx_clip(client: TestClient) -> tuple[str, dict]:
     """带音量关键帧 + 淡入淡出的片段,源区间 [0, 8]。"""
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
     project = client.post("/api/projects", json={"workspace_id": ws["id"], "name": "P"}).json()
-    asset = client.post(
-        "/api/assets",
-        json={"workspace_id": ws["id"], "project_id": project["id"], "kind": "video", "name": "S",
-              "file_key": "media/s.mp4", "media_info": {"duration": 10}},
-    ).json()
+    asset = create_asset(client, {"workspace_id": ws["id"], "project_id": project["id"], "kind": "video", "name": "S",
+              "file_key": "media/s.mp4", "media_info": {"duration": 10}})
     sequence = client.post(
         "/api/sequences", json={"workspace_id": ws["id"], "project_id": project["id"], "name": "Main"}
     ).json()

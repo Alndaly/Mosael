@@ -2,23 +2,20 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
-from tests.util import fresh_client
+from tests.util import fresh_client, create_asset
 
 
 def setup_clip(client: TestClient) -> tuple[dict, dict]:
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
     project = client.post("/api/projects", json={"workspace_id": ws["id"], "name": "P"}).json()
-    asset = client.post(
-        "/api/assets",
-        json={
+    asset = create_asset(client, {
             "workspace_id": ws["id"],
             "project_id": project["id"],
             "kind": "video",
             "name": "Talk",
             "file_key": "media/talk.mp4",
             "media_info": {"duration": 10},
-        },
-    ).json()
+        })
     sequence = client.post(
         "/api/sequences",
         json={"workspace_id": ws["id"], "project_id": project["id"], "name": "Main"},

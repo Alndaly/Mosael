@@ -14,7 +14,7 @@ import pytest
 from app.core.config import settings
 from app.core.db import SessionLocal
 from app.db.models import Asset
-from tests.util import fresh_client
+from tests.util import fresh_client, create_asset
 
 pytestmark = pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg not installed")
 
@@ -64,10 +64,7 @@ def test_an_imported_mov_is_stored_as_mp4_with_the_same_streams(tmp_path: Path) 
 def _mov_asset(client, name: str, original: str) -> tuple[str, Path]:  # type: ignore[no-untyped-def]
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
     key = f"media/rec-{name}/{original}"
-    asset = client.post(
-        "/api/assets",
-        json={"workspace_id": ws["id"], "kind": "video", "name": name, "file_key": key, "media_info": {}},
-    ).json()
+    asset = create_asset(client, {"workspace_id": ws["id"], "kind": "video", "name": name, "file_key": key, "media_info": {}})
     with SessionLocal() as db:
         db.get(Asset, asset["id"]).original_filename = original
         db.commit()

@@ -8,16 +8,6 @@ from typing import Any
 from pydantic import Field, computed_field
 from app.api.schemas.base import ApiModel, OrmModel
 
-class AssetCreate(ApiModel):
-    workspace_id: str
-    project_id: str | None = None
-    kind: str
-    name: str
-    original_filename: str = ""
-    file_key: str = ""
-    media_info: dict = Field(default_factory=dict)
-
-
 class AssetOut(OrmModel):
     id: str
     workspace_id: str

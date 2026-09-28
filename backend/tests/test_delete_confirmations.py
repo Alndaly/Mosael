@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from tests.util import fresh_client
+from tests.util import fresh_client, create_asset
 
 
 def _workspace(client):
@@ -14,16 +14,13 @@ def _workspace(client):
 
 
 def _asset(client, ws, name: str, project_id: str | None = None):
-    return client.post(
-        "/api/assets",
-        json={
+    return create_asset(client, {
             "workspace_id": ws["id"],
             "kind": "video",
             "name": name,
             "file_key": f"media/{name}.mp4",
             **({"project_id": project_id} if project_id else {}),
-        },
-    ).json()
+        })
 
 
 def test_删素材的卡是永久删除那一档() -> None:

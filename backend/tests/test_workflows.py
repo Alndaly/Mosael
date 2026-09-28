@@ -19,7 +19,7 @@ from app.domain.workflows import (
     update_workflow,
     validate_graph,
 )
-from tests.util import user_id, acting_as, add_provider, fresh_client
+from tests.util import user_id, acting_as, add_provider, fresh_client, create_asset
 
 
 def _install_llm_transport(monkeypatch, module, handler) -> None:
@@ -598,11 +598,8 @@ def test_asset_query_filters_and_feeds_loop() -> None:
     proj = client.post("/api/projects", json={"workspace_id": ws["id"], "name": "P"}).json()
 
     def mk(kind: str, name: str, tags: list[str] | None = None) -> dict:
-        asset = client.post(
-            "/api/assets",
-            json={"workspace_id": ws["id"], "project_id": proj["id"], "kind": kind, "name": name,
-                  "file_key": f"media/{name}", "media_info": {"duration": 3}},
-        ).json()
+        asset = create_asset(client, {"workspace_id": ws["id"], "project_id": proj["id"], "kind": kind, "name": name,
+                  "file_key": f"media/{name}", "media_info": {"duration": 3}})
         if tags:
             client.patch(f"/api/assets/{asset['id']}", json={"tags": tags})
         return asset

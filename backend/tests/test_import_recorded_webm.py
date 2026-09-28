@@ -8,7 +8,7 @@ import subprocess
 
 import pytest
 
-from tests.util import fresh_client
+from tests.util import fresh_client, create_asset
 
 pytestmark = pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg not installed")
 
@@ -83,10 +83,7 @@ def test_startup_reconcile_repairs_legacy_recordings() -> None:
     media = settings.media_dir / "legacy-rec"
     media.mkdir(parents=True, exist_ok=True)
     (media / "cam.webm").write_bytes(_durationless_recording())
-    created = client.post(
-        "/api/assets",
-        json={"workspace_id": ws["id"], "kind": "video", "name": "旧摄像头", "file_key": "media/legacy-rec/cam.webm"},
-    ).json()
+    created = create_asset(client, {"workspace_id": ws["id"], "kind": "video", "name": "旧摄像头", "file_key": "media/legacy-rec/cam.webm"})
     assert created["media_info"].get("duration") is None
 
     with SessionLocal() as db:

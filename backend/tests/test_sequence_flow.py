@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 
 from app.core.db import Base, engine
 from app.db.migrations import init_db
-from tests.util import fresh_client
+from tests.util import fresh_client, create_asset
 
 
 def reset_db(tmp_path: Path) -> None:
@@ -19,9 +19,7 @@ def test_workspace_project_asset_sequence_clip_flow(tmp_path: Path) -> None:
 
     ws = client.post("/api/workspaces", json={"name": "Workspace"}).json()
     project = client.post("/api/projects", json={"workspace_id": ws["id"], "name": "Project"}).json()
-    asset = client.post(
-        "/api/assets",
-        json={
+    asset = create_asset(client, {
             "workspace_id": ws["id"],
             "project_id": project["id"],
             "kind": "video",
@@ -29,8 +27,7 @@ def test_workspace_project_asset_sequence_clip_flow(tmp_path: Path) -> None:
             "original_filename": "clip.mp4",
             "file_key": "media/clip.mp4",
             "media_info": {"duration": 6},
-        },
-    ).json()
+        })
     sequence = client.post(
         "/api/sequences",
         json={"workspace_id": ws["id"], "project_id": project["id"], "name": "Main"},
@@ -60,9 +57,7 @@ def test_workspace_project_asset_sequence_clip_flow(tmp_path: Path) -> None:
 def _build_sequence_with_clip(client: TestClient) -> dict:
     ws = client.post("/api/workspaces", json={"name": "Workspace"}).json()
     project = client.post("/api/projects", json={"workspace_id": ws["id"], "name": "Project"}).json()
-    asset = client.post(
-        "/api/assets",
-        json={
+    asset = create_asset(client, {
             "workspace_id": ws["id"],
             "project_id": project["id"],
             "kind": "video",
@@ -70,8 +65,7 @@ def _build_sequence_with_clip(client: TestClient) -> dict:
             "original_filename": "clip.mp4",
             "file_key": "media/clip.mp4",
             "media_info": {"duration": 6},
-        },
-    ).json()
+        })
     sequence = client.post(
         "/api/sequences",
         json={"workspace_id": ws["id"], "project_id": project["id"], "name": "Main"},

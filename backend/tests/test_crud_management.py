@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from tests.util import fresh_client
+from tests.util import fresh_client, insert_asset, create_asset
 
 
 def test_project_rename_and_delete() -> None:
@@ -24,10 +24,7 @@ def test_project_asset_list_includes_workspace_level_assets() -> None:
     other = client.post("/api/projects", json={"workspace_id": ws["id"], "name": "Other"}).json()
 
     def mk(name: str, project_id: str | None) -> None:
-        body = {"workspace_id": ws["id"], "kind": "video", "name": name, "file_key": f"m/{name}"}
-        if project_id:
-            body["project_id"] = project_id
-        client.post("/api/assets", json=body)
+        insert_asset(ws["id"], kind="video", name=name, file_key=f"m/{name}", project_id=project_id)
 
     mk("workspace-level", None)  # 从「素材」页导入的那种
     mk("mine", proj["id"])
@@ -46,11 +43,8 @@ def test_asset_rename_and_delete_takes_referencing_clips_offline() -> None:
     client = fresh_client()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
     project = client.post("/api/projects", json={"workspace_id": ws["id"], "name": "P"}).json()
-    asset = client.post(
-        "/api/assets",
-        json={"workspace_id": ws["id"], "project_id": project["id"], "kind": "video", "name": "A",
-              "file_key": "media/a.mp4", "media_info": {"duration": 5}},
-    ).json()
+    asset = create_asset(client, {"workspace_id": ws["id"], "project_id": project["id"], "kind": "video", "name": "A",
+              "file_key": "media/a.mp4", "media_info": {"duration": 5}})
 
     renamed = client.patch(f"/api/assets/{asset['id']}", json={"name": "B-roll"}).json()
     assert renamed["name"] == "B-roll"
@@ -92,10 +86,7 @@ def test_asset_rename_and_delete_takes_referencing_clips_offline() -> None:
 def test_asset_tags_update_dedupes_and_trims() -> None:
     client = fresh_client()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
-    asset = client.post(
-        "/api/assets",
-        json={"workspace_id": ws["id"], "kind": "video", "name": "A", "file_key": "media/a.mp4"},
-    ).json()
+    asset = create_asset(client, {"workspace_id": ws["id"], "kind": "video", "name": "A", "file_key": "media/a.mp4"})
     assert asset["tags"] == []
 
     updated = client.patch(

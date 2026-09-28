@@ -9,7 +9,7 @@ from sqlalchemy import or_, select
 
 from app.core.i18n import tr
 from app.api.deps import CurrentUser, DbSession, PresentedToken
-from app.api.schemas import AssetFrameRequest, AnalyzeAssetRequest, AnalyzeAssetResponse, AssetCreate, AssetOut, AssetUpdate, DenoiseAssetRequest, JobOut, LocalImportRequest, TranscriptAttachRequest, TranscriptOut, UrlImportRequest, UrlProbeRequest, UrlProbeResponse, UrlSupportResponse, VideoToGifRequest
+from app.api.schemas import AssetFrameRequest, AnalyzeAssetRequest, AnalyzeAssetResponse, AssetOut, AssetUpdate, DenoiseAssetRequest, JobOut, LocalImportRequest, TranscriptAttachRequest, TranscriptOut, UrlImportRequest, UrlProbeRequest, UrlProbeResponse, UrlSupportResponse, VideoToGifRequest
 from app.domain.voices.transcription import ASRError, start_transcription
 from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm, require_asset
 from app.db.models import Asset, Job, Transcript
@@ -46,16 +46,6 @@ def url_support(
 
     extractor = matching_extractor(url)
     return {"supported": extractor is not None, "extractor": extractor or ""}
-
-
-@router.post("/assets", response_model=AssetOut)
-def create_asset(body: AssetCreate, db: DbSession, user: CurrentUser) -> Asset:
-    ensure_workspace_perm(db, user, body.workspace_id, "edit")
-    asset = Asset(**{**body.model_dump(), "project_id": asset_project(db, body.workspace_id, body.project_id)})
-    db.add(asset)
-    db.commit()
-    db.refresh(asset)
-    return asset
 
 
 @router.post("/assets/import", response_model=AssetOut)

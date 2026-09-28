@@ -78,14 +78,11 @@ def test_the_migration_replaces_old_thumbnails_of_real_assets() -> None:
     """迁移 migrate-thumbnails-keep-transparency:库里的素材、盘上的旧 JPEG 缩略图 → WebP;再跑一次什么都不做。"""
     from app.core.config import settings
     from app.db.migrations import _migrate_thumbnails_keep_transparency
-    from tests.util import fresh_client
+    from tests.util import create_asset, fresh_client
 
     client = fresh_client()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
-    client.post(
-        "/api/assets",
-        json={"workspace_id": ws["id"], "kind": "image", "name": "icon", "file_key": "media/icon/icon.png", "media_info": {}},
-    )
+    create_asset(client, {"workspace_id": ws["id"], "kind": "image", "name": "icon", "file_key": "media/icon/icon.png", "media_info": {}})
     folder = settings.data_dir / "media" / "icon"
     folder.mkdir(parents=True, exist_ok=True)
     _transparent_icon(folder / "icon.png")

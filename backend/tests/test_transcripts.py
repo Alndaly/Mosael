@@ -4,7 +4,7 @@ from fastapi.testclient import TestClient
 
 from app.core.db import SessionLocal
 from app.db.models import Job
-from tests.util import fresh_client
+from tests.util import fresh_client, create_asset
 
 
 def reset() -> TestClient:
@@ -14,17 +14,14 @@ def reset() -> TestClient:
 def make_asset(client: TestClient) -> dict:
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
     project = client.post("/api/projects", json={"workspace_id": ws["id"], "name": "P"}).json()
-    return client.post(
-        "/api/assets",
-        json={
+    return create_asset(client, {
             "workspace_id": ws["id"],
             "project_id": project["id"],
             "kind": "video",
             "name": "Talk",
             "file_key": "media/talk.mp4",
             "media_info": {"duration": 20},
-        },
-    ).json()
+        })
 
 
 SEGMENTS = [
@@ -123,9 +120,7 @@ def test_find_existing_transcript_by_legacy_url_import_job() -> None:
 def test_find_existing_transcript_by_remembered_source_url() -> None:
     client = reset()
     workspace = client.post("/api/workspaces", json={"name": "W"}).json()
-    asset = client.post(
-        "/api/assets",
-        json={
+    asset = create_asset(client, {
             "workspace_id": workspace["id"],
             "kind": "video",
             "source": "downloaded",
@@ -135,8 +130,7 @@ def test_find_existing_transcript_by_remembered_source_url() -> None:
                 "source_url": "https://www.youtube.com/watch?v=abc123&utm_source=old",
                 "source_url_key": "youtube:abc123",
             },
-        },
-    ).json()
+        })
     client.put(f"/api/assets/{asset['id']}/transcript", json={"language": "zh", "segments": SEGMENTS})
 
     response = client.get(

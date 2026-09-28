@@ -34,7 +34,6 @@ BACKEND_ROOT = Path(__file__).resolve().parent.parent
 # 名单只减不增:每修掉一处就从这里删一行,测试会提醒。2026-09-28 收回 7 条(建工作区、建时间线、
 # 两张单例配置表都改调拥有方的领域函数);第三方登录建号改走 members.create_account。
 ALLOWLIST: frozenset[tuple[str, str]] = frozenset({
-    ("app/api/routes/assets.py", "Asset"),
     ("app/api/routes/feishu.py", "FeishuBot"),
 })
 

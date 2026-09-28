@@ -11,7 +11,7 @@ from app.core.db import SessionLocal
 from app.db.models import Asset
 from app.domain.analysis import service
 from tests.media_fixtures import TINY_HEIC
-from tests.util import add_provider, fresh_client, make_video_asset
+from tests.util import add_provider, fresh_client, make_video_asset, create_asset
 
 
 def _me() -> str:
@@ -185,10 +185,7 @@ def test_analyze_rejects_audio_assets() -> None:
     client = fresh_client()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
     add_profile(client, "moonshot")
-    asset = client.post(
-        "/api/assets",
-        json={"workspace_id": ws["id"], "kind": "audio", "name": "song", "file_key": "media/s.mp3", "media_info": {}},
-    ).json()
+    asset = create_asset(client, {"workspace_id": ws["id"], "kind": "audio", "name": "song", "file_key": "media/s.mp3", "media_info": {}})
     res = client.post(f"/api/assets/{asset['id']}/analyze", json={"question": "?"})
     assert res.status_code == 422
 

@@ -19,23 +19,25 @@
 from __future__ import annotations
 
 import pathlib
+import shutil
 import subprocess
 
 import pytest
 
 from app.domain.voices import transcription
+from app.core.config import settings
 from app.core.db import SessionLocal
-from app.db.models import Asset, Job
-from tests.util import fresh_client
+from app.db.models import Job
+from tests.util import fresh_client, insert_asset
 
 
 def _asset(client, path: pathlib.Path, name: str) -> str:
+    """把这段视频放进数据目录,登记成一份素材。存储键只认数据目录里的相对路径(见 media/paths.resolve_key)。"""
     workspace_id = client.get("/api/workspaces").json()[0]["id"]
-    with SessionLocal() as db:
-        asset = Asset(workspace_id=workspace_id, name=name, kind="video", file_key=str(path))
-        db.add(asset)
-        db.commit()
-        return asset.id
+    key = f"media/test-transcribe/{path.name}"
+    (settings.data_dir / key).parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(path, settings.data_dir / key)
+    return insert_asset(workspace_id, kind="video", name=name, file_key=key)
 
 
 def _silent_video(tmp_path: pathlib.Path) -> pathlib.Path:

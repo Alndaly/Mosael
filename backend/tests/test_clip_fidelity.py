@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import pytest
 
-from tests.util import fresh_client
+from tests.util import fresh_client, create_asset
 
 
 @pytest.fixture()
@@ -30,9 +30,9 @@ def editor():
     with_sub = client.post(f"/api/sequences/{sequence['id']}/tracks", json={"kind": "subtitle"}).json()
     sub_track = next(t["id"] for t in with_sub["tracks"] if t["kind"] == "subtitle")
 
-    asset = client.post(
-        "/api/assets",
-        json={
+    asset = create_asset(
+        client,
+        {
             "workspace_id": ws,
             "project_id": project["id"],
             "kind": "video",
@@ -41,8 +41,7 @@ def editor():
             "media_info": {"duration": 20},
         },
     )
-    assert asset.status_code == 200, asset.text
-    asset_id = asset.json()["id"]
+    asset_id = asset["id"]
     return {
         "client": client,
         "ws": ws,
