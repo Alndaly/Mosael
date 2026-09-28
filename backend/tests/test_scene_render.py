@@ -13,10 +13,10 @@ import subprocess
 import numpy as np
 import pytest
 
-from app.domain.scene_render import render_frame, render_shot_video
-from app.domain.scene_render.meshes import meshes_for
-from app.domain.scene_render.sampling import sample_camera, sample_object
-from app.domain.scene_types import SceneContent, SceneObject, SceneShot
+from app.domain.scenes.render import render_frame, render_shot_video
+from app.domain.scenes.render.meshes import meshes_for
+from app.domain.scenes.render.sampling import sample_camera, sample_object
+from app.domain.scenes.types import SceneContent, SceneObject, SceneShot
 
 HAS_FFMPEG = shutil.which("ffmpeg") is not None
 
@@ -154,14 +154,14 @@ class Test自由视角给智能体自己检查:
     def test_俯瞰把远处的物体也装进画面(self) -> None:
         near = {"id": "a", "kind": "box", "position": [0, 0, 0], "color": "#ff0000"}
         far = {"id": "b", "kind": "box", "position": [12, 0, -8], "color": "#00ff00"}
-        from app.domain.scene_render import render_view
+        from app.domain.scenes.render import render_view
 
         image = np.asarray(render_view(_scene([near, far]), "overview", supersample=1).image).astype(int)
         assert (image[..., 0] > 80).any() and (image[..., 1] > 80).any(), "两个盒子都该在画面里"
 
     def test_顶视图看得出左右前后(self) -> None:
         """顶视时 +X 仍在画面右边 —— 布局图左右颠倒的话,模型会照着反的去挪。"""
-        from app.domain.scene_render import render_view
+        from app.domain.scenes.render import render_view
 
         left = {"id": "l", "kind": "box", "position": [-3, 0, 0], "color": "#ff0000"}
         right = {"id": "r", "kind": "box", "position": [3, 0, 0], "color": "#0000ff"}
@@ -173,7 +173,7 @@ class Test自由视角给智能体自己检查:
     def test_默认看第一个镜头的机位和俯瞰(self) -> None:
         from types import SimpleNamespace
 
-        from app.domain.scenes import view_scene
+        from app.domain.scenes.operations import view_scene
 
         content = _scene([{"id": "b", "kind": "box"}]).model_dump(mode="json")
         # 场景里没有导入模型,所以取模型库那一步根本不查库(见 scenes.model_library 的早返回)。
@@ -184,7 +184,7 @@ class Test自由视角给智能体自己检查:
     def test_不认识的视角直接说可选项(self) -> None:
         from types import SimpleNamespace
 
-        from app.domain.scenes import SceneDomainError, view_scene
+        from app.domain.scenes.operations import SceneDomainError, view_scene
 
         content = _scene([]).model_dump(mode="json")
         with pytest.raises(SceneDomainError, match="overview"):

@@ -19,13 +19,13 @@ from app.core.i18n import LocalizedError, tr
 from app.db.models import Project, Scene3D, Scene3DRevision, Scene3DModel
 from app.db.model_base import now
 from app.ai.providers.contracts.generation import FIRST_FRAME, LAST_FRAME, REFERENCE_IMAGE, REFERENCE_VIDEO
-from app.domain.scene_types import SceneContent
+from app.domain.scenes.types import SceneContent
 from app.media.paths import resolve_key, scene_model_dir, scene_model_key, scene_preview_dir
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, BinaryIO, Callable
 
 if TYPE_CHECKING:  # 渲染器带着 numpy,按这个文件一贯的做法留到函数里再导
-    from app.domain.scene_render.model_mesh import ModelLibrary
+    from app.domain.scenes.render.model_mesh import ModelLibrary
 
 
 class SceneDomainError(LocalizedError, ValueError):
@@ -387,7 +387,7 @@ def scene_overview_image(db: Session, scene: Scene3D) -> Path:
     任何东西。和出片参考同一个渲染器(scene_render),所以格子上看到的就是交给模型的白模。**按修订号缓存**:
     场景没改就不重渲;改了,旧修订那一张随手删掉(一个场景只留当前这一张)。
     """
-    from app.domain.scene_render import SceneRenderError, render_view
+    from app.domain.scenes.render import SceneRenderError, render_view
 
     directory = scene_preview_dir(scene.workspace_id)
     path = directory / f"{scene.id}-{scene.revision}.jpg"
@@ -474,7 +474,7 @@ def model_library(db: Session, scene: Scene3D, content: SceneContent) -> ModelLi
     只读 content 里真的被引用的那几份:场景目录里可能还躺着换下来的旧模型,解一份没人看的
     GLB 是白花的时间。**一个模型都没引用时连库都不查** —— 绝大多数白模场景是这一档。
     """
-    from app.domain.scene_render.model_mesh import ModelLibrary, library_for
+    from app.domain.scenes.render.model_mesh import ModelLibrary, library_for
 
     wanted = {obj.model_id for obj in content.objects if obj.kind == "model" and obj.model_id}
     if not wanted:
@@ -513,7 +513,7 @@ def view_scene(db: Session, scene: Scene3D, *, views: list[str], shot_id: str = 
     import base64
     import io
 
-    from app.domain.scene_render import FREE_VIEWS, SceneRenderError, find_shot, render_frame, render_view
+    from app.domain.scenes.render import FREE_VIEWS, SceneRenderError, find_shot, render_frame, render_view
 
     wanted = list(dict.fromkeys(views or ["shot", "overview"]))[:VIEW_LIMIT]
     unknown = [one for one in wanted if one != "shot" and one not in FREE_VIEWS]
@@ -582,7 +582,7 @@ def scene_reference(db: Session, workspace_id: str, *, scene_id: str, shot_id: s
 
     from app.db.models import Entity
     from app.domain.assets.importer import register_file_asset
-    from app.domain.scene_render import (
+    from app.domain.scenes.render import (
         SceneRenderError, describe_camera_move, figures_in_shot, find_shot, render_frame, render_shot_video,
     )
 
@@ -656,12 +656,12 @@ def render_shot_references(db: Session, scene: Scene3D, shot_id: str, *, render:
     """从一个镜头渲出白模参考,登记成本工作区的素材。**工作流节点、接口、智能体工具共用这一份。**
 
     返回首帧/尾帧/运镜视频的素材 id(没渲的是空串)、一句从机位轨迹算出来的镜头语言,以及
-    有几个导入模型没渲进去(后端渲不了 GLB,见 domain/scene_render)。
+    有几个导入模型没渲进去(后端渲不了 GLB,见 domain/scenes/render)。
     """
     import tempfile
 
     from app.domain.assets.importer import register_file_asset
-    from app.domain.scene_render import SceneRenderError, describe_camera_move, find_shot, render_frame, render_shot_video
+    from app.domain.scenes.render import SceneRenderError, describe_camera_move, find_shot, render_frame, render_shot_video
 
     if render not in REFERENCE_RENDERS:
         raise SceneDomainError("sceneErr_badRender", choices=", ".join(REFERENCE_RENDERS))

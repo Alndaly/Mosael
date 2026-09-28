@@ -166,7 +166,7 @@ sidecar 那份没跟上。开着 prompt caching 时 `input` 只剩新增的一�
 | 实现 | 位置 | 测试 |
 | --- | --- | --- |
 | 工作台(前端) | `frontend/src/features/scenes/sceneMeshes.ts`、`sceneGraph.ts`、`lighting.ts` | `scene3d.parity.test.ts` |
-| 白模渲染与 GLB 导出(后端) | `backend/app/domain/scene_render/` | `backend/tests/test_scene_3d_parity.py` |
+| 白模渲染与 GLB 导出(后端) | `backend/app/domain/scenes/render/` | `backend/tests/test_scene_3d_parity.py` |
 
 **为什么不共用一份实现**:工作台要在浏览器里用 three.js 交互编辑(拖物体、实时看光影、GPU 渲染);
 后端要无头渲白模参考帧和运镜视频(numpy 光栅化,可外派给 worker),同一份几何还要写成发往 Blender

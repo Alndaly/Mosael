@@ -23,8 +23,8 @@ def _workspace(client) -> str:
 
 
 def _scene(ws: str, layout: dict | None = None) -> str:
-    from app.domain.scene_types import SceneContent
-    from app.domain.scenes import create_scene
+    from app.domain.scenes.types import SceneContent
+    from app.domain.scenes.operations import create_scene
 
     import copy
 
@@ -39,7 +39,7 @@ def _scene(ws: str, layout: dict | None = None) -> str:
 def test_渲白模是挂在场景格上的内置产出者_工具格撤下画板() -> None:
     from app.domain.boards import producers
     from app.domain.boards.producer_ids import SLOT_PRODUCERS, derives_outputs, runs_from_draft
-    from app.domain.scenes import REFERENCE_RENDERS
+    from app.domain.scenes.operations import REFERENCE_RENDERS
     from app.domain.workflows import NODE_TYPES
 
     client = fresh_client()

@@ -224,7 +224,7 @@ def _scene_models(db: Session, ctx: OptionContext) -> list[Option]:
     模型归工作区(见 domain/scenes),所以这份清单不依赖任何一个场景:工作流每跑一次都新建
     场景,按场景列的话它永远是空的。
     """
-    from app.domain.scenes import list_models
+    from app.domain.scenes.operations import list_models
 
     return [{"value": model.id, "label": model.name} for model in list_models(db, ctx.workspace_id)]
 

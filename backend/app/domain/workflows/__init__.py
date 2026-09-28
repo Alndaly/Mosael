@@ -18,7 +18,7 @@ from app.ai.providers.contracts.denoise import DEFAULT_STRENGTH, STRENGTHS
 from app.domain.export_presets import EXPORT_QUALITIES, EXPORT_RESOLUTIONS
 from app.domain.generation.catalog import BUILTIN_MODELS, SOURCE_GROUPS, SOURCE_ROLE_LABELS
 from app.domain.media_kinds import declared_media
-from app.domain.scenes import REFERENCE_RENDERS
+from app.domain.scenes.operations import REFERENCE_RENDERS
 from app.domain.sequences.operations import EDIT_OP_KINDS
 
 import json
@@ -1117,7 +1117,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "output_types": {"texts": "json", "count": "number"},
     },
     #: 人声/背景音分离(ADR-0016)。**产出两份新素材,原素材一个字节不动。**
-    #: 3D 白模(见 executors/scenes.py 与 domain/scene_render)。
+    #: 3D 白模(见 executors/scenes.py 与 domain/scenes/render)。
     #: 交给布景师的**道具清单**:这个工作区里(通常是在 Blender 里建好再收进来的)哪些模型
     #: 可以摆进布景,各自多大。没有它的话,设计布景的那个 LLM 不可能凭空写出一串模型 id ——
     #: 于是自动流程里的布景永远只能是基本体拼的。

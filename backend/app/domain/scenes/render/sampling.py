@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from app.domain.scene_types import Keyframe, SceneObject, SceneShot
+from app.domain.scenes.types import Keyframe, SceneObject, SceneShot
 
 Vec3 = tuple[float, float, float]
 

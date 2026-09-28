@@ -326,7 +326,7 @@ return f"  ⚠️ 含{'、'.join(labels)}节点(后果在本应用之外,撤不�
 
 | 被删的东西 | 行为 | 位置 |
 | --- | --- | --- |
-| 导入模型 | **拒绝**,并点名还有哪几个场景在用 | `domain/scenes.py:336-351` |
+| 导入模型 | **拒绝**,并点名还有哪几个场景在用 | `domain/scenes/operations.py:336-351` |
 | 笔记 | **允许**;画板上那条坏引用仍可移动、可删除(专门留了 `retained` 豁免) | `domain/boards/canvas.py:347-350` |
 | 3D 场景 | **允许**,且没有任何人检查画板 | `api/routes/scenes.py:109-117` |
 
@@ -345,7 +345,7 @@ return f"  ⚠️ 含{'、'.join(labels)}节点(后果在本应用之外,撤不�
 领域模块里",`ownership.py:4-9`),而且 `EXEMPT_PREFIXES` 明确豁免了 `app/api/routes/`
 (`ownership.py:117`)。删除既不在地图的语义里,路由层又被豁免 —— 所以
 `routes/scenes.py:115` 那句裸的 `db.delete(scene)` 不会被任何东西看见。
-`domain/scenes.py` 里根本没有 `delete_scene` 这个函数,删除的"引用完整性决定"就这样
+`domain/scenes/operations.py` 里根本没有 `delete_scene` 这个函数,删除的"引用完整性决定"就这样
 整个落在了一个被豁免的层里。
 
 **为什么是架构问题而不是小 bug**
@@ -356,7 +356,7 @@ return f"  ⚠️ 含{'、'.join(labels)}节点(后果在本应用之外,撤不�
 
 **建议修法**
 
-1. 把删除搬进领域:`domain/scenes.delete_scene(db, workspace_id, scene_id)`,和
+1. 把删除搬进领域:`domain/scenes/operations.delete_scene(db, workspace_id, scene_id)`,和
    `delete_model` 同构 —— 先问"还有谁在用"(画板、以及任何将来会引用场景的东西),
    再决定拒绝还是放行;
 2. 在领域层写下**一条**"被引用者被删除时怎么办"的规矩(拒绝 + 点名 / 允许 + 坏引用可清理),
@@ -609,7 +609,7 @@ mine = task.claimed_by == worker if worker else True
 - `/Users/kinda/Developer/Mosael/backend/tests/test_executor_outputs_are_declared.py`
 
 **场景 / 画板 / 笔记**
-- `/Users/kinda/Developer/Mosael/backend/app/domain/scenes.py`
+- `/Users/kinda/Developer/Mosael/backend/app/domain/scenes/operations.py`
 - `/Users/kinda/Developer/Mosael/backend/app/api/routes/scenes.py`
 - `/Users/kinda/Developer/Mosael/backend/app/api/schemas/scenes.py`
 - `/Users/kinda/Developer/Mosael/backend/app/domain/boards/canvas.py`

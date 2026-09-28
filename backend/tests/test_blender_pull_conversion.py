@@ -7,9 +7,9 @@
 import math
 
 from app.domain.blender import bridge
-from app.domain.scene_render.gltf import LIGHT_UNIT
-from app.domain.scene_render.raster import hex_to_linear, sun_direction
-from app.domain.scene_types import SceneContent
+from app.domain.scenes.render.gltf import LIGHT_UNIT
+from app.domain.scenes.render.raster import hex_to_linear, sun_direction
+from app.domain.scenes.types import SceneContent
 from tests.test_blender_worker_export import load
 
 worker = load(lambda **options: None)

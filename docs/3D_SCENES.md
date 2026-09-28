@@ -19,7 +19,7 @@
 ## 同一份几何,三个消费者
 
 工作台的 three.js(`frontend/src/features/scenes/sceneMeshes.ts`)、后端的白模渲染器
-(`backend/app/domain/scene_render`)、以及发往 Blender 的 GLB(同一份 `meshes.py`)必须画出
+(`backend/app/domain/scenes/render`)、以及发往 Blender 的 GLB(同一份 `meshes.py`)必须画出
 同一个东西。人物多高、墙有多厚、运镜怎么缓动、色温换算成什么颜色 —— 任何一处对不上,
 参考图、成片和 Blender 里的场景就是三个场景,而且**所有测试都还是绿的**。
 
@@ -28,7 +28,7 @@
 再改两侧实现。
 
 后端渲染器只渲白模(每个物体取自己的颜色做漫反射)。**导入的 GLB 也画**,由
-[`scene_render/model_mesh.py`](../backend/app/domain/scene_render/model_mesh.py) 读成三角形,
+[`scenes/render/model_mesh.py`](../backend/app/domain/scenes/render/model_mesh.py) 读成三角形,
 颜色跟着图元自己的材质走(一份模型里有多种材质)。
 
 这一份存在的理由:此前 `kind="model"` 的物体在后端被整个跳过 —— 工作台(three.js)里看得见,
@@ -46,7 +46,7 @@ Blender 精简一次,而不是悄悄渲下去。
 | --- | --- | --- |
 | `get_scene` / `edit_scene` | 读场景、按 id 改物体与镜头(带 `base_revision` 的 CAS) | 无 |
 | `view_scene` | 把场景渲成图**交给模型看**:`shot` 是机位构图,`overview`/`top`/`front`/`side` 自动取景 | 只读 |
-| `blender_send_scene` | 把场景发进 Blender(GLB 由 `scene_render/gltf.py` 生成,不经浏览器) | 无 |
+| `blender_send_scene` | 把场景发进 Blender(GLB 由 `scenes/render/gltf.py` 生成,不经浏览器) | 无 |
 | `blender_inspect` / `blender_look` | 读 Blender 场景结构 / 渲几个角度给模型看 | 只读 |
 | `blender_execute` | 在 Blender 里跑 `bpy` 建模代码 | 确认卡,`external` 档,自动放行里单独一档 |
 | `blender_import_to_scene` | 把 Blender 里做好的东西作为一个模型物体加进场景 | 无 |

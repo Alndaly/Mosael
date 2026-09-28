@@ -191,7 +191,7 @@ export function kelvinRgb(kelvin: number): [number, number, number] {
 /**
  * 主光的方向单位向量。方位角 0 是 +Z(相机默认所在的一侧),顺时针转向 +X;仰角 90 是正上方。
  *
- * 后端的白模渲染器有同一份(`scene_render/raster.sun_direction`):同一个场景,预览里影子朝
+ * 后端的白模渲染器有同一份(`scenes/render/raster.sun_direction`):同一个场景,预览里影子朝
  * 左而参考图里朝右,给生成模型的光照提示就是错的。两份实现由 contracts/scene-3d-cases.json 钉住。
  * 放在这里而不是视口内部,是因为契约测试要够得着它 —— 藏在组件闭包里的公式验不了。
  */

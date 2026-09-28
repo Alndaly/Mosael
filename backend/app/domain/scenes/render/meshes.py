@@ -17,7 +17,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from app.domain.scene_types import SceneObject
+from app.domain.scenes.types import SceneObject
 
 #: 这几种没有可见几何:相机不拍自己(前端标了 editorOnly),分组只是容器,灯另算光照。
 NO_GEOMETRY = {"camera", "group", "light"}

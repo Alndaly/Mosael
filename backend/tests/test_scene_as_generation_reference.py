@@ -15,7 +15,7 @@ import pytest
 
 from app.core.db import SessionLocal
 from app.db.models import Asset, Entity
-from app.domain.scenes import SceneDomainError, scene_reference
+from app.domain.scenes.operations import SceneDomainError, scene_reference
 from tests.util import board_revision, fresh_client, run_on_board
 
 CAMERA = {"id": "cam-1", "kind": "camera", "position": [0, 1.6, 6], "target": [0, 1.2, 0], "fov": 40,

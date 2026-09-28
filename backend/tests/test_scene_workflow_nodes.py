@@ -143,10 +143,10 @@ def test_没指定镜头时_只有一个就用它_好几个就说清楚() -> Non
 
 def _import_glb(workspace_id: str, name: str, tmp_path, **params) -> str:
     """往这个工作区里收一份真 GLB,返回 model_id。用后端自己的写入器造,读的那一侧和写的对表。"""
-    from app.domain.scene_render import find_shot
-    from app.domain.scene_render.gltf import write_glb
-    from app.domain.scene_types import SceneContent
-    from app.domain.scenes import import_model
+    from app.domain.scenes.render import find_shot
+    from app.domain.scenes.render.gltf import write_glb
+    from app.domain.scenes.types import SceneContent
+    from app.domain.scenes.operations import import_model
 
     content = SceneContent.model_validate({
         "objects": [{"id": "b", "kind": "box", "parameters": params or {"width": 2, "height": 1, "depth": 3}},
@@ -205,7 +205,7 @@ class Test可用的3D道具:
         import json
         import struct
 
-        from app.domain.scenes import model_file
+        from app.domain.scenes.operations import model_file
         from app.db.models import Scene3DModel
 
         workflow = _workflow()

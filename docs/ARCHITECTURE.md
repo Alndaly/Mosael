@@ -843,7 +843,7 @@ Adapter 声明 `surface_depends_on_model = False` 要同时满足两条:不按�
 
 ### 3D 与画布协作（1.2.0）
 
-3D 的 `scene_types` 定义物体、相机和关键帧；镜头通过 `camera_id` 引用物体。`sceneGraph` 与 `sceneTracks` 处理姿态采样、分组和帧编辑，`SceneDopeSheet` 只负责时间线交互。参考帧、灰模与 GLB 共用去除编辑辅助对象的导出副本。
+3D 的 `domain/scenes/types` 定义物体、相机和关键帧；镜头通过 `camera_id` 引用物体。`sceneGraph` 与 `sceneTracks` 处理姿态采样、分组和帧编辑，`SceneDopeSheet` 只负责时间线交互。参考帧、灰模与 GLB 共用去除编辑辅助对象的导出副本。
 
 **导入的模型归工作区,不归某个场景**(1.4.2)。此前它挂在 `scene_id` 上,而**工作流每跑一次都
 新建一个场景** —— 于是在 Blender 里建好的产品模型在结构上永远进不了自动成片:那个场景还不存在,
@@ -851,12 +851,12 @@ Adapter 声明 `surface_depends_on_model = False` 要同时满足两条:不按�
 `create_scene_with_model` 特例一起消失了 —— 它们都是那个错位边界的产物。老数据由
 `_migrate_scene_models_to_workspace` 自动搬(表结构 + 文件目录,可重入)。
 
-**后端也能渲白模**(`domain/scene_render`):几何、机位采样、投影、光照逐项对照工作台的 three.js,
+**后端也能渲白模**(`domain/scenes/render`):几何、机位采样、投影、光照逐项对照工作台的 three.js,
 所以工作流和智能体(跑在后端)也能拿 3D 场景当生成参考。**导入的模型也画得出**
-(`scene_render/model_mesh`,1.4.2):此前后端把 `kind="model"` 整个跳过,而工作台的 three.js
+(`scenes/render/model_mesh`,1.4.2):此前后端把 `kind="model"` 整个跳过,而工作台的 three.js
 画得出 —— 于是同一个场景在编辑器里有那件道具、在自动流程渲的每一张参考帧里没有,两边都不报错。
 渲不动的(Draco/meshopt 压缩、面数超出 `TRIANGLE_BUDGET`、文件不在)逐条报出是哪一件、为什么
-(`model_warnings`),而不是只记一个数。`domain/scenes.render_shot_references` 是
+(`model_warnings`),而不是只记一个数。`domain/scenes/operations.render_shot_references` 是
 唯一的"渲参考 + 入库"实现,节点「渲染白模参考」(画板上是 3D 场景格自己的产出者 `scene_render`,跑同一个执行器)、接口 `POST /api/scenes/{id}/shots/{shot}/references`、
 智能体工具 `render_scene_references` 共用;还会从机位轨迹**算出**一句镜头语言(焦段、机位高度、
 推拉/环绕/跟拍/摇/俯仰)供提示词使用。拍摄相机按世界坐标摆,不随分组变换(和工作台的 `pose()` 一致)。

@@ -45,7 +45,7 @@ def scene_model_dir(workspace_id: str) -> Path:
 
 
 def scene_preview_dir(workspace_id: str) -> Path:
-    """画板上 3D 场景格的预览图缓存(按场景修订号,见 domain/scenes.scene_overview_image)。"""
+    """画板上 3D 场景格的预览图缓存(按场景修订号,见 domain/scenes/operations.scene_overview_image)。"""
     return settings.media_dir / "scene-previews" / workspace_id
 
 

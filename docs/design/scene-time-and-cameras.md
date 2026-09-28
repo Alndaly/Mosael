@@ -11,7 +11,7 @@
 
 一句话:**"随时间变化"这件事只授予了相机,而且是以「镜头」为容器。**
 
-整个 [`SceneContent`](../../backend/app/domain/scene_types.py) 里唯一带 `time` 的字段是
+整个 [`SceneContent`](../../backend/app/domain/scenes/types.py) 里唯一带 `time` 的字段是
 `shots[].frames[].time`。`SceneObject` 只有静态的 `position` / `rotation` / `scale`。于是:
 
 - **场景本身不能动。** "一个人沿轨迹走"在当前数据结构里**没有地方可以存** —— 不是界面没做,

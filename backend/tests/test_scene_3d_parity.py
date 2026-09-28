@@ -19,10 +19,10 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from app.domain.scene_render.meshes import meshes_for
-from app.domain.scene_render.raster import kelvin_rgb, sun_direction
-from app.domain.scene_render.sampling import sample_camera, sample_object
-from app.domain.scene_types import SceneObject, SceneShot
+from app.domain.scenes.render.meshes import meshes_for
+from app.domain.scenes.render.raster import kelvin_rgb, sun_direction
+from app.domain.scenes.render.sampling import sample_camera, sample_object
+from app.domain.scenes.types import SceneObject, SceneShot
 
 _CONTRACT = Path(__file__).resolve().parents[2] / "contracts" / "scene-3d-cases.json"
 

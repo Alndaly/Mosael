@@ -105,9 +105,9 @@ def test_还有场景摆着它就不让删模型_并且说出是哪几个():
 
 def _glb_bytes(tmp_path, **params):
     """一份真 GLB —— 用后端自己的写入器造,读的那一侧和写的那一侧对表。"""
-    from app.domain.scene_render import find_shot
-    from app.domain.scene_render.gltf import write_glb
-    from app.domain.scene_types import SceneContent
+    from app.domain.scenes.render import find_shot
+    from app.domain.scenes.render.gltf import write_glb
+    from app.domain.scenes.types import SceneContent
 
     content = SceneContent.model_validate({
         "objects": [{"id": "b", "kind": "box", "color": "#ff2200", "parameters": params or {"width": 2, "height": 2, "depth": 2}},
@@ -239,7 +239,7 @@ def test_glb_is_validated_from_its_head_so_it_can_be_much_larger(tmp_path):
     GLB 只要读文件头和那段 JSON(几百 KB),而内嵌 glTF 是一整份 JSON、资源是 base64 塞在
     里面的,校验必须 `json.loads` 整份 —— 那一下就是文件大小的好几倍内存。
     """
-    from app.domain.scenes import (EMBEDDED_GLTF_LIMIT_BYTES, MODEL_LIMIT_BYTES,
+    from app.domain.scenes.operations import (EMBEDDED_GLTF_LIMIT_BYTES, MODEL_LIMIT_BYTES,
                                    SceneTooLarge, validate_model_file)
 
     assert MODEL_LIMIT_BYTES > EMBEDDED_GLTF_LIMIT_BYTES
@@ -260,7 +260,7 @@ def test_refusing_a_too_large_model_never_contradicts_itself(tmp_path):
     500 MB 会变成「模型 100.0 MB,超出上限 100 MB」—— 读起来像 bug,还把用户往"再减一点点
     就行"骗。大小取文件的真实大小。
     """
-    from app.domain.scenes import EMBEDDED_GLTF_LIMIT_BYTES, MODEL_LIMIT_BYTES, SceneTooLarge, validate_model_file
+    from app.domain.scenes.operations import EMBEDDED_GLTF_LIMIT_BYTES, MODEL_LIMIT_BYTES, SceneTooLarge, validate_model_file
 
     def refuse(head: bytes, size: int) -> str:
         path = tmp_path / "model"
@@ -339,7 +339,7 @@ def test_场景列表带着画缩略图要的字段_但不背整条运镜轨():
 
 def test_场景缩略图的物体数有上限():
     """列表一次最多 200 个场景。不设限的话,一个大场景就能把列表页的响应拖垮。"""
-    from app.domain.scenes import PREVIEW_OBJECT_LIMIT, scene_preview
+    from app.domain.scenes.operations import PREVIEW_OBJECT_LIMIT, scene_preview
 
     many = {'objects': [{'id': f'o{i}', 'kind': 'box'} for i in range(PREVIEW_OBJECT_LIMIT + 25)]}
     assert len(scene_preview(many)['objects']) == PREVIEW_OBJECT_LIMIT
@@ -350,7 +350,7 @@ def test_物体的隐藏标记跟着场景存取_没带这个键的老内容照�
 
     `hidden` 是一个带默认值的字段,所以不需要迁移 —— 存量场景里没有这个键,读的时候按"没藏"补上。
     """
-    from app.domain.scene_types import SceneContent
+    from app.domain.scenes.types import SceneContent
 
     c, ws, scene = setup_scene()
     camera = next(o for o in scene['content']['objects'] if o['kind'] == 'camera')
@@ -374,7 +374,7 @@ def test_物体的隐藏标记跟着场景存取_没带这个键的老内容照�
 
 def test_缩略图不画藏起来的组里的东西():
     """只看自己那一位的话,藏起来的分组里的东西照样画在卡片上 —— 和出片不一致。"""
-    from app.domain.scenes import scene_preview
+    from app.domain.scenes.operations import scene_preview
 
     preview = scene_preview({'objects': [
         {'id': 'g', 'kind': 'group', 'hidden': True},

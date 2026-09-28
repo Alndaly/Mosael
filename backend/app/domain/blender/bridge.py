@@ -20,10 +20,10 @@ from app.core.config import settings
 from app.core.i18n import LocalizedError, get_current_locale, t
 from app.db.models import PluginInstance
 from app.domain.plugins import PluginDomainError, instances, tools
-from app.domain.scene_render.gltf import LIGHT_UNIT
-from app.domain.scene_render.raster import kelvin_rgb, linear_to_hex
-from app.domain.scene_types import SceneContent, SceneLighting, SceneObject, SceneShot
-from app.domain.scenes import create_scene, import_model, validate_model_file
+from app.domain.scenes.render.gltf import LIGHT_UNIT
+from app.domain.scenes.render.raster import kelvin_rgb, linear_to_hex
+from app.domain.scenes.types import SceneContent, SceneLighting, SceneObject, SceneShot
+from app.domain.scenes.operations import create_scene, import_model, validate_model_file
 from .scripts import command
 
 class BlenderDomainError(LocalizedError):
@@ -448,7 +448,7 @@ def native_lights(lights, room):
 
 
 def send(db, user, scene, instance_id, revision, shot_id):
-    """把这个场景发进 Blender。**GLB 由后端自己生成**(domain/scene_render/gltf)。
+    """把这个场景发进 Blender。**GLB 由后端自己生成**(domain/scenes/render/gltf)。
 
     此前这一份是浏览器用 three.js 导出再上传的,于是"发送场景"这件事要求有人正开着那个页面 ——
     跑在后端的智能体根本做不到。现在界面按钮和智能体工具走同一个实现、同一份几何。
@@ -458,10 +458,10 @@ def send(db, user, scene, instance_id, revision, shot_id):
     Blender 那边把对应的文件导进来挂上去(见 worker.attach_models)。
     """
     from app.db.models import Scene3DModel
-    from app.domain.scene_render import find_shot
-    from app.domain.scene_render.gltf import write_glb
-    from app.domain.scene_types import SceneContent
-    from app.domain.scenes import model_file
+    from app.domain.scenes.render import find_shot
+    from app.domain.scenes.render.gltf import write_glb
+    from app.domain.scenes.types import SceneContent
+    from app.domain.scenes.operations import model_file
 
     instance = resolve(db, user, instance_id)
     if revision != scene.revision:

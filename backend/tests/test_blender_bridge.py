@@ -5,7 +5,7 @@ from pathlib import Path
 from types import SimpleNamespace
 import pytest
 from app.domain.blender.bridge import BlenderDomainError
-from app.domain.scenes import SceneDomainError, model_file
+from app.domain.scenes.operations import SceneDomainError, model_file
 
 
 def _model_object(content):
@@ -18,7 +18,7 @@ from app.core.config import settings
 from app.db.models import User, PluginPackage, PluginInstance, Scene3D, Scene3DModel
 from app.domain.blender import bridge
 from app.domain.plugins.manifest import parse
-from app.domain.scene_types import SceneContent
+from app.domain.scenes.types import SceneContent
 from tests.test_scenes import setup_scene
 
 MANIFEST = Path(__file__).resolve().parents[2] / 'plugins/examples/blender/mosael.plugin.json'
@@ -51,7 +51,7 @@ def test_send_projects_camera_tracks_for_the_worker_without_mutating_the_snapsho
 
 
 def test_blender_projection_resolves_optional_key_fields():
-    from app.domain.scene_types import SceneContent
+    from app.domain.scenes.types import SceneContent
     content = SceneContent().model_dump(mode='json')
     content['objects'][0]['track'] = [{'time': 2, 'position': [3, 2, 5], 'target': [0, 1, 0], 'fov': None}]
     assert bridge.shots_with_frames(content)[0]['frames'][0]['fov'] == 45
@@ -97,7 +97,7 @@ def test_upstream_read_only_tools_skip_the_card_and_writers_do_not():
 
 
 def test_returned_baked_camera_keys_keep_linear_timing():
-    from app.domain.scene_types import SceneContent
+    from app.domain.scenes.types import SceneContent
     content = SceneContent().model_dump(mode='json')
     flat = bridge.shots_with_frames(content)
     flat[0]['easing'] = 'linear'

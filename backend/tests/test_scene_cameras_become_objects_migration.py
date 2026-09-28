@@ -15,7 +15,7 @@ from sqlalchemy import text
 
 from app.core.db import engine
 from app.db.migrations import _migrate_scene_cameras_become_objects
-from app.domain.scene_types import SceneContent
+from app.domain.scenes.types import SceneContent
 from tests.util import fresh_client
 
 OLD_CONTENT = {

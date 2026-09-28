@@ -6,7 +6,7 @@
 - `scene_create`:把一份布景(物体、机位轨迹、镜头、打光 —— 就是 SceneContent 的形状)建成
   一个真正的 3D 场景。它出现在「3D 场景」列表里,用户可以打开、在工作台里调。
 - `scene_render`:从某个镜头渲出白模首帧、尾帧和运镜视频,外加一句从机位轨迹**算出来**的镜头
-  语言。实现在 domain/scenes.render_shot_references —— 接口和智能体工具用的是同一份。
+  语言。实现在 domain/scenes/operations.render_shot_references —— 接口和智能体工具用的是同一份。
 """
 
 from __future__ import annotations
@@ -81,8 +81,8 @@ def scene_props(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[st
     import numpy as np
 
     from app.db.models import Scene3DModel
-    from app.domain.scene_render.model_mesh import read_model, UnsupportedModel
-    from app.domain.scenes import list_models, model_file
+    from app.domain.scenes.render.model_mesh import read_model, UnsupportedModel
+    from app.domain.scenes.operations import list_models, model_file
 
     # 逗号串(选择器存的)或列表(整串引用上游输出)都合法 —— 和素材 id 同一份解析。
     wanted = id_list(config.get("model_ids"))
@@ -115,8 +115,8 @@ def scene_props(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[st
 
 @register("scene_create")
 def scene_create(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
-    from app.domain.scene_types import SceneContent
-    from app.domain.scenes import SceneDomainError, create_scene
+    from app.domain.scenes.types import SceneContent
+    from app.domain.scenes.operations import SceneDomainError, create_scene
 
     name = str(config.get("name") or "").strip() or scope.name
     try:
@@ -140,7 +140,7 @@ def scene_create(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[s
 
 @register("scene_render")
 def scene_render(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
-    from app.domain.scenes import SceneDomainError, render_shot_references
+    from app.domain.scenes.operations import SceneDomainError, render_shot_references
 
     scene_id = str(config.get("scene_id") or "").strip()
     scene = db.get(Scene3D, scene_id) if scene_id else None

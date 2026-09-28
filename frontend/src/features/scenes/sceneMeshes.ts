@@ -5,7 +5,7 @@ import type { SceneObject } from "@/api/domains/scenes";
 /**
  * 每种场景物体长什么样 —— 工作台里看到的那一份几何。
  *
- * **它有三个消费者**:这里的 three.js 视口、后端的白模渲染器(`app/domain/scene_render/meshes.py`)、
+ * **它有三个消费者**:这里的 three.js 视口、后端的白模渲染器(`app/domain/scenes/render/meshes.py`)、
  * 以及发去 Blender 的 GLB(同一份 meshes.py)。三份实现必须画出同一个东西,否则参考图、
  * 成片和 Blender 里的场景会各是各的,而且错得很安静。一致性由 `contracts/scene-3d-cases.json`
  * 钉住,两侧各跑一遍(`scene3d.parity.test.ts` / `tests/test_scene_3d_parity.py`)。

@@ -72,7 +72,7 @@ from app.domain.permissions import NotVisible, PermissionDenied
 from app.domain.assets import AssetProjectError
 from app.domain.assets.importer import AssetFileTypeError
 from app.domain.notes import NoteDomainError
-from app.domain.scenes import SceneDomainError
+from app.domain.scenes.operations import SceneDomainError
 from app.domain.entities import EntityDomainError
 from app.domain.blender.bridge import BlenderDomainError
 from app.domain.assets import reconcile_broken_media_info

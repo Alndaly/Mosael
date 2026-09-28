@@ -935,7 +935,7 @@ function SceneEditor({
             //: 和「恢复历史版本」走同一条路(update → change):进撤销栈、由自动保存落库。
             //: 接收因此是一次可撤销的编辑,而不是一次绕过编辑器的写库。
             apply={(content) => { update(content); setSelected(null); setTime(0); setPlaying(false); }}
-            //: 只交出「发哪一版」—— GLB 由后端按这个修订生成(domain/scene_render/gltf),
+            //: 只交出「发哪一版」—— GLB 由后端按这个修订生成(domain/scenes/render/gltf),
             //: 所以草稿必须先落库:发的是库里那一份,不是屏幕上这一份。
             prepare={async () => {
             if (JSON.stringify(current.current) !== saved.current) throw new Error(t("sceneWaitForSave"));

@@ -11976,7 +11976,7 @@ export interface components {
         };
         /**
          * SceneReferenceRequest
-         * @description 从一个镜头渲白模参考(见 domain/scenes.render_shot_references)。
+         * @description 从一个镜头渲白模参考(见 domain/scenes/operations.render_shot_references)。
          */
         SceneReferenceRequest: {
             /** Workspace Id */

@@ -23,16 +23,16 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from app.domain.scene_render import _triangles, _world_matrices, find_shot
-from app.domain.scene_render.gltf import write_glb
-from app.domain.scene_render.model_mesh import (
+from app.domain.scenes.render import _triangles, _world_matrices, find_shot
+from app.domain.scenes.render.gltf import write_glb
+from app.domain.scenes.render.model_mesh import (
     TRIANGLE_BUDGET,
     ModelLibrary,
     UnsupportedModel,
     library_for,
     read_model,
 )
-from app.domain.scene_types import SceneContent
+from app.domain.scenes.types import SceneContent
 
 CAMERA = {"id": "cam", "kind": "camera", "position": [0, 1.6, 6], "target": [0, 1, 0], "fov": 45}
 

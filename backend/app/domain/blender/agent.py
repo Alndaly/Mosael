@@ -134,7 +134,7 @@ def import_to_scene(db, user, scene, *, base_revision: int, name: str = '', obje
     CAS —— 两次检查之间被改了,那一次照样冲突,而模型已经在这个工作区里了(它归工作区,不归
     场景),下一次直接摆上去就行,不必再导一遍。
     """
-    from app.domain.scenes import apply_scene_operations, import_model
+    from app.domain.scenes.operations import apply_scene_operations, import_model
 
     if base_revision != scene.revision:
         raise BlenderConflict('blenderErr_staleRevision', revision=scene.revision)

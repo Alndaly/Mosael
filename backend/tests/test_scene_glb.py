@@ -14,9 +14,9 @@ from pathlib import Path
 
 import numpy as np
 
-from app.domain.scene_render import find_shot
-from app.domain.scene_render.gltf import EXTRA_ID, EXTRA_MODEL, scene_document, write_glb
-from app.domain.scene_types import SceneContent
+from app.domain.scenes.render import find_shot
+from app.domain.scenes.render.gltf import EXTRA_ID, EXTRA_MODEL, scene_document, write_glb
+from app.domain.scenes.types import SceneContent
 
 CAMERA = {"id": "cam", "kind": "camera", "position": [0, 1.6, 6], "target": [0, 1, 0], "fov": 45}
 
@@ -110,7 +110,7 @@ def test_写出来的是一个能被认出来的_GLB(tmp_path) -> None:
     json_length, json_type = struct.unpack("<II", raw[12:20])
     assert json_type == 0x4E4F534A and json.loads(raw[20:20 + json_length])["asset"]["version"] == "2.0"
 
-    from app.domain.scenes import validate_model_file
+    from app.domain.scenes.operations import validate_model_file
 
     assert validate_model_file(target) == "glb"
 

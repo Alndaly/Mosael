@@ -6,7 +6,7 @@
 
 | 被删的 | 行为 | 在哪一层决定 |
 | --- | --- | --- |
-| 导入模型 | **拒绝**,并点名还有哪几个场景在用 | 领域(`domain/scenes.delete_model`) |
+| 导入模型 | **拒绝**,并点名还有哪几个场景在用 | 领域(`domain/scenes/operations.delete_model`) |
 | 笔记 | 允许;画板上那条坏引用仍可移动、可删除(专门留了豁免) | 领域(`boards/canvas`) |
 | 3D 场景 | 允许,**且没有任何人检查画板** | **路由**里一句裸的 `db.delete(scene)` |
 
@@ -28,7 +28,7 @@ from __future__ import annotations
 import pytest
 
 from app.core.db import SessionLocal
-from app.domain.scenes import SceneDomainError, boards_using_scene, delete_scene
+from app.domain.scenes.operations import SceneDomainError, boards_using_scene, delete_scene
 from tests.util import fresh_client
 
 

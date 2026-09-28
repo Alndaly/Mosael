@@ -24,9 +24,9 @@ import numpy as np
 from PIL import Image
 
 from app.core.i18n import LocalizedError, tr
-from app.domain.scene_render.meshes import FROM_FILE, meshes_for
-from app.domain.scene_render.model_mesh import ModelLibrary
-from app.domain.scene_render.raster import (
+from app.domain.scenes.render.meshes import FROM_FILE, meshes_for
+from app.domain.scenes.render.model_mesh import ModelLibrary
+from app.domain.scenes.render.raster import (
     Lighting,
     PointLight,
     Triangles,
@@ -35,8 +35,8 @@ from app.domain.scene_render.raster import (
     render,
     sun_direction,
 )
-from app.domain.scene_render.sampling import CameraPose, sample_camera, sample_object
-from app.domain.scene_types import SceneContent, SceneObject, SceneShot
+from app.domain.scenes.render.sampling import CameraPose, sample_camera, sample_object
+from app.domain.scenes.types import SceneContent, SceneObject, SceneShot
 
 #: 镜头比例 → 参考帧尺寸。短边 540:图像模型的参考图、视频模型的参考视频都收得下,
 #: 又不至于让后端一帧渲上好几秒。

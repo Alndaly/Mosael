@@ -1,7 +1,7 @@
 from datetime import datetime
 from pydantic import Field
 from app.api.schemas.base import ApiModel, OrmModel
-from app.domain.scene_types import SceneContent
+from app.domain.scenes.types import SceneContent
 
 
 class SceneCreate(ApiModel):
@@ -34,7 +34,7 @@ class SceneOperations(ApiModel):
 
 
 class SceneReferenceRequest(ApiModel):
-    """从一个镜头渲白模参考(见 domain/scenes.render_shot_references)。"""
+    """从一个镜头渲白模参考(见 domain/scenes/operations.render_shot_references)。"""
 
     workspace_id: str
     #: 取值见 domain/scenes.REFERENCE_RENDERS —— 由领域函数校验,这里不再抄一份清单。

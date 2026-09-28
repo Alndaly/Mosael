@@ -152,7 +152,7 @@ def test_Schema_没被强制时换一句话() -> None:
 
 
 def test_白模渲染与导入模型的报错_英文() -> None:
-    from app.domain.scene_render.model_mesh import UnsupportedModel, _refuse_compressed
+    from app.domain.scenes.render.model_mesh import UnsupportedModel, _refuse_compressed
 
     with pytest.raises(UnsupportedModel) as raised:
         _refuse_compressed({"extensionsRequired": ["KHR_draco_mesh_compression"]})

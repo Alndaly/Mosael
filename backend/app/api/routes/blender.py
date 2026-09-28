@@ -8,7 +8,7 @@ from app.api.deps import CurrentUser, DbSession
 from app.core.config import settings
 from app.db.models import PluginInstance
 from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm
-from app.domain.scenes import get_scene
+from app.domain.scenes.operations import get_scene
 from app.domain.blender import agent as blender_agent, bridge
 
 router = APIRouter(prefix='/scenes', tags=['Blender'])

@@ -89,9 +89,9 @@ def test_look_渲出图片且还原渲染设置(tmp_path) -> None:
 
 def test_发送_把后端生成的场景_连同导入的模型一起摆进_Blender(tmp_path) -> None:
     """端到端:后端生成 GLB → Blender 里出现同样的物体、分组、镜头;导入的模型挂在它的锚点下。"""
-    from app.domain.scene_render import find_shot
-    from app.domain.scene_render.gltf import write_glb
-    from app.domain.scene_types import SceneContent
+    from app.domain.scenes.render import find_shot
+    from app.domain.scenes.render.gltf import write_glb
+    from app.domain.scenes.types import SceneContent
 
     model = tmp_path / "prop.glb"
     _run(tmp_path, "export", {"objects": [], "output_path": str(model)},
@@ -231,9 +231,9 @@ def test_pull_取回原生相机和灯光(tmp_path) -> None:
 def test_发送再取回_机位和灯光不变(tmp_path) -> None:
     """Mosael 发过去的场景,在 Blender 里原样取回:机位靠自带的目标距离,灯光按发送时的换算反算。"""
     from app.domain.blender.bridge import native_cameras, native_lights, shots_with_frames
-    from app.domain.scene_render import find_shot
-    from app.domain.scene_render.gltf import write_glb
-    from app.domain.scene_types import SceneContent
+    from app.domain.scenes.render import find_shot
+    from app.domain.scenes.render.gltf import write_glb
+    from app.domain.scenes.types import SceneContent
 
     content = SceneContent.model_validate({
         "objects": [

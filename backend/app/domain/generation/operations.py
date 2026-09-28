@@ -148,8 +148,8 @@ def create_generation_job(
     notes: list[str] = []
     scene_receipt: dict[str, Any] | None = None
     if scene_reference:
-        from app.domain.scenes import SceneDomainError
-        from app.domain.scenes import scene_reference as render_scene_reference
+        from app.domain.scenes.operations import SceneDomainError
+        from app.domain.scenes.operations import scene_reference as render_scene_reference
 
         declared = allowed_parameter_keys(capabilities, kind) if capabilities and capabilities.get("parameter_keys") else None
         try:

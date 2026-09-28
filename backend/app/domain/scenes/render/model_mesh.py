@@ -39,7 +39,7 @@ from pathlib import Path
 import numpy as np
 
 from app.core.i18n import LocalizedError
-from app.domain.scene_render.meshes import Mesh
+from app.domain.scenes.render.meshes import Mesh
 
 #: 单份模型的面数上限。见模块开头那段:这是渲染时间的闸,不是格式限制。
 TRIANGLE_BUDGET = 150_000

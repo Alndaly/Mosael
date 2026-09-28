@@ -36,7 +36,7 @@
 **链条**:Blender 建模 → `blender_import_to_scene` → 场景里的 `kind="model"` 物体 →
 `scene_render` 渲参考帧 → 交给图像/视频模型当构图参考。
 
-**断点**在第四环:`scene_render/meshes.py` 里写着 `UNSUPPORTED = {"model"}`,后端渲染器把模型
+**断点**在第四环:`scenes/render/meshes.py` 里写着 `UNSUPPORTED = {"model"}`,后端渲染器把模型
 物体**整个跳过**,只在 `skipped_models` 里记一个数。
 
 **为什么看不出来**:工作台是 three.js,它**画得出**那份 GLB。所以用户在编辑器里看得见那件
@@ -46,7 +46,7 @@
 → look → import)和「工作流自动出片」这条链**成了两座孤岛**。前者的产出进不了后者的画面,
 于是前者只能人工在工作台里看 —— 那条链最贵的一段(agent 迭代建模)因此拿不到复利。
 
-**修法**:新增 `scene_render/model_mesh.py`,把 glTF/GLB 读成渲染器认得的三角形。读和写用同一套
+**修法**:新增 `scenes/render/model_mesh.py`,把 glTF/GLB 读成渲染器认得的三角形。读和写用同一套
 约定,测试让 `gltf.write_glb` 写出去的再读回来对表。渲不动的(Draco/meshopt 压缩、面数超预算)
 **逐条报出原因**,而不是记一个数。
 

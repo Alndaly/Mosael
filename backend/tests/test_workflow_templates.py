@@ -206,7 +206,7 @@ class Test分镜能选的路跟着视频模型走:
 
 def test_布景的形状就是_3D_场景的数据格式() -> None:
     """布景 LLM 的输出直接交给 scene_create 按 SceneContent 校验 —— 两边的字段必须对得上。"""
-    from app.domain.scene_types import SceneContent, SceneObject, SceneShot
+    from app.domain.scenes.types import SceneContent, SceneObject, SceneShot
     from app.domain.workflows.templates import _set_design_schema
 
     schema = _set_design_schema()
@@ -771,7 +771,7 @@ def test_布景台的组是场景格式本来就支持的() -> None:
     所以 scene_create 那一步一个字都不用改。"""
     import typing
 
-    from app.domain.scene_types import SceneObject
+    from app.domain.scenes.types import SceneObject
 
     kinds = typing.get_args(SceneObject.model_fields["kind"].annotation)
     assert "group" in kinds, kinds
