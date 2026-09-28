@@ -622,19 +622,19 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "未知的分离引擎",
         "en": "Unknown separation engine.",
     },
-    "routeErr_paramGroupNotFound": {
+    "genErr_paramGroupNotFound": {
         "zh": "这条连接下没有这个参数组",
         "en": "This connection has no such parameter group.",
     },
-    "routeErr_paramGroupNameRequired": {
+    "genErr_paramGroupNameRequired": {
         "zh": "给这份参数组起个名字",
         "en": "Give this parameter group a name.",
     },
-    "routeErr_paramGroupNameTaken": {
+    "genErr_paramGroupNameTaken": {
         "zh": "这条连接下已经有同名的参数组了",
         "en": "This connection already has a parameter group with that name.",
     },
-    "routeErr_paramGroupInUse": {
+    "genErr_paramGroupInUse": {
         "zh": "还有 {count} 个模型在使用这份参数模板，请先改回跟随目录",
         "en": "{count} model(s) still use this parameter template. Switch them back to following the catalog first.",
     },

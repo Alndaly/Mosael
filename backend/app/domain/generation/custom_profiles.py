@@ -16,11 +16,15 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.i18n import LocalizedError, tr
-from app.db.models import GenerationCapabilityProfile
+from app.db.models import GenerationCapabilityDeclaration, GenerationCapabilityProfile
 
 
 class CapabilityProfileError(LocalizedError, ValueError):
-    """保存被拒。带文案 key(`genErr_profile*`),按请求方的语言翻。"""
+    """保存被拒。带文案 key(`genErr_profile*` / `genErr_paramGroup*`),按请求方的语言翻。api 回 422。"""
+
+
+class CapabilityProfileConflict(CapabilityProfileError):
+    """和已有的状态冲突:同名的参数组已经有了,或者还有模型指着要删的这份。api 回 409。"""
 
 
 #: 描述符里认得的键。**白名单而不是黑名单**:写错一个键名(`sizes` 写成 `size`)不会报错,
@@ -328,3 +332,53 @@ def custom_capabilities_map(db: Session, profile_id: str, kind: str) -> dict[str
     于是落回兜底并在界面上显示"还没认出来" —— 比悄悄套用另一条连接的断言要好。
     """
     return {row.id: dict(row.capabilities or {}) for row in custom_profiles_for(db, profile_id, kind)}
+
+
+def custom_profile_in(db: Session, profile_id: str, ref_id: str) -> GenerationCapabilityProfile | None:
+    """这条连接下的某份参数组。跨连接取不到 —— 一份参数组只在它所属的那条连接里有意义。"""
+    row = db.get(GenerationCapabilityProfile, ref_id)
+    return row if row is not None and row.provider_profile_id == profile_id else None
+
+
+def create_custom_profile(
+    db: Session, profile_id: str, *, name: str, kind: str, capabilities: Any
+) -> GenerationCapabilityProfile:
+    """在这条连接下建一份参数组。名字在同一条连接、同一种类里不能重。"""
+    clean = validate_capabilities(capabilities, kind)
+    name = _usable_name(db, profile_id, kind, name, keep=None)
+    row = GenerationCapabilityProfile(provider_profile_id=profile_id, name=name, kind=kind, capabilities=clean)
+    db.add(row)
+    db.flush()
+    return row
+
+
+def update_custom_profile(
+    db: Session, row: GenerationCapabilityProfile, *, name: str | None = None, capabilities: Any = None
+) -> None:
+    """改名字、改能力描述。**种类不给改** —— 图片的尺寸清单套到视频上是另一套东西,而已经指着它
+    的那些模型行不会跟着改。要换就新建一份。"""
+    if name is not None:
+        row.name = _usable_name(db, row.provider_profile_id, row.kind, name, keep=row.id)
+    if capabilities is not None:
+        row.capabilities = validate_capabilities(capabilities, row.kind)
+
+
+def delete_custom_profile(db: Session, row: GenerationCapabilityProfile) -> None:
+    """删掉一份参数组。还有模型指着它时不给删,说出还有几个(理由见接口 DELETE …/generation-profiles)。"""
+    count = len(
+        db.scalars(
+            select(GenerationCapabilityDeclaration.id).where(GenerationCapabilityDeclaration.template_id == row.id)
+        ).all()
+    )
+    if count:
+        raise CapabilityProfileConflict("genErr_paramGroupInUse", count=count)
+    db.delete(row)
+
+
+def _usable_name(db: Session, profile_id: str, kind: str, name: str, *, keep: str | None) -> str:
+    name = name.strip()
+    if not name:
+        raise CapabilityProfileError("genErr_paramGroupNameRequired")
+    if any(other.name == name and other.id != keep for other in custom_profiles_for(db, profile_id, kind)):
+        raise CapabilityProfileConflict("genErr_paramGroupNameTaken")
+    return name

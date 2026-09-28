@@ -2,7 +2,7 @@
 
 **为什么不放在生成那组路由里**:它归连接(见 db.models.GenerationCapabilityProfile),和这条
 连接下的模型、默认值走同一道归属门(`require_own_profile`)。放到 /generation 下的话,归属判定
-就得再发明一遍。
+就得再发明一遍。规则(名字不重、种类不改、有模型指着不给删)在 domain/generation/custom_profiles。
 """
 from __future__ import annotations
 
@@ -17,11 +17,14 @@ from app.api.schemas import (
 )
 from app.db.models import GenerationCapabilityProfile
 from app.domain.generation.custom_profiles import (
+    CapabilityProfileConflict,
     CapabilityProfileError,
+    create_custom_profile,
+    custom_profile_in,
     custom_profiles_for,
-    validate_capabilities,
+    delete_custom_profile,
+    update_custom_profile,
 )
-
 from app.domain.permissions import require_own_profile
 
 router = APIRouter(tags=["settings"])
@@ -39,11 +42,14 @@ def _out(row: GenerationCapabilityProfile) -> GenerationCapabilityProfileOut:
 
 
 def _row(db, profile_id: str, ref_id: str) -> GenerationCapabilityProfile:
-    row = db.get(GenerationCapabilityProfile, ref_id)
-    #: 跨连接取不到 —— 一份参数组只在它所属的那条连接里有意义。
-    if row is None or row.provider_profile_id != profile_id:
-        raise HTTPException(status_code=404, detail=tr("routeErr_paramGroupNotFound"))
+    row = custom_profile_in(db, profile_id, ref_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail=tr("genErr_paramGroupNotFound"))
     return row
+
+
+def _refused(exc: CapabilityProfileError) -> HTTPException:
+    return HTTPException(status_code=409 if isinstance(exc, CapabilityProfileConflict) else 422, detail=str(exc))
 
 
 @router.get(
@@ -62,18 +68,9 @@ def list_profiles(profile_id: str, db: DbSession, user: CurrentUser, kind: str =
 def create_profile(profile_id: str, body: GenerationCapabilityProfileCreate, db: DbSession, user: CurrentUser):
     require_own_profile(db, user, profile_id, editing=True)
     try:
-        capabilities = validate_capabilities(body.capabilities, body.kind)
+        row = create_custom_profile(db, profile_id, name=body.name, kind=body.kind, capabilities=body.capabilities)
     except CapabilityProfileError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
-    name = body.name.strip()
-    if not name:
-        raise HTTPException(status_code=422, detail=tr("routeErr_paramGroupNameRequired"))
-    if any(row.name == name for row in custom_profiles_for(db, profile_id, body.kind)):
-        raise HTTPException(status_code=409, detail=tr("routeErr_paramGroupNameTaken"))
-    row = GenerationCapabilityProfile(
-        provider_profile_id=profile_id, name=name, kind=body.kind, capabilities=capabilities
-    )
-    db.add(row)
+        raise _refused(exc) from exc
     db.commit()
     db.refresh(row)
     return _out(row)
@@ -88,20 +85,10 @@ def update_profile(
 ):
     require_own_profile(db, user, profile_id, editing=True)
     row = _row(db, profile_id, ref_id)
-    if body.name is not None:
-        name = body.name.strip()
-        if not name:
-            raise HTTPException(status_code=422, detail=tr("routeErr_paramGroupNameRequired"))
-        if any(other.name == name and other.id != row.id for other in custom_profiles_for(db, profile_id, row.kind)):
-            raise HTTPException(status_code=409, detail=tr("routeErr_paramGroupNameTaken"))
-        row.name = name
-    if body.capabilities is not None:
-        try:
-            #: kind 不给改 —— 图片的尺寸清单套到视频上是另一套东西,而已经指着它的那些模型行
-            #: 不会跟着改。要换就新建一份。
-            row.capabilities = validate_capabilities(body.capabilities, row.kind)
-        except CapabilityProfileError as exc:
-            raise HTTPException(status_code=422, detail=str(exc)) from exc
+    try:
+        update_custom_profile(db, row, name=body.name, capabilities=body.capabilities)
+    except CapabilityProfileError as exc:
+        raise _refused(exc) from exc
     db.commit()
     db.refresh(row)
     return _out(row)
@@ -116,12 +103,9 @@ def delete_profile(profile_id: str, ref_id: str, db: DbSession, user: CurrentUse
     回答得出"当时配的是什么"。数据库层也由 template_id 的 FK(RESTRICT)兜住同一个不变量。
     """
     require_own_profile(db, user, profile_id, editing=True)
-    row = _row(db, profile_id, ref_id)
-    from app.domain.generation.resolution import template_reference_count
-
-    count = template_reference_count(db, row.id)
-    if count:
-        raise HTTPException(status_code=409, detail=tr("routeErr_paramGroupInUse", count=count))
-    db.delete(row)
+    try:
+        delete_custom_profile(db, _row(db, profile_id, ref_id))
+    except CapabilityProfileError as exc:
+        raise _refused(exc) from exc
     db.commit()
     return Response(status_code=204)

@@ -391,6 +391,21 @@ class Test删除正在使用的参数组:
         ).status_code == 204
 
 
+class Test参数组的名字:
+    def test_空名字_422_同一条连接同种类重名_409_改名同样校验(self) -> None:
+        client = fresh_client()
+        pid = _connection(client, "openai")
+        url = f"/api/settings/providers/{pid}/generation-profiles"
+        assert client.post(url, json={"name": "  ", "kind": "image", "capabilities": IMAGE_CAPS}).status_code == 422
+        first = _create_profile(client, pid, "中转那份", "image", IMAGE_CAPS).removeprefix("profile:")
+        taken = client.post(url, json={"name": "中转那份", "kind": "image", "capabilities": IMAGE_CAPS})
+        assert taken.status_code == 409, taken.text
+        second = _create_profile(client, pid, "另一份", "image", IMAGE_CAPS).removeprefix("profile:")
+        assert client.patch(f"{url}/{second}", json={"name": "中转那份"}).status_code == 409
+        assert client.patch(f"{url}/{first}", json={"name": "中转那份"}).status_code == 200  # 叫回自己的名字不算重
+        assert client.patch(f"{url}/{first}", json={"name": ""}).status_code == 422
+
+
 class Test兜底面走得出接口:
     """目录认不出的模型,界面靠这个面区分两种处境:「键知道了但取值没人验证过」和「真的只剩
     提示词」。合成一句会在其中一边说假话(见 ADR 0015)。

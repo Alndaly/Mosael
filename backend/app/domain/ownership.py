@@ -87,10 +87,7 @@ TABLE_OWNERS: dict[str, tuple[str, ...]] = {
     "ProviderModel": ("app/domain/provider_models.py",),
     #: 自定义参数组跟着连接走(FK + ondelete CASCADE),所以它没有自己的 owner_user_id ——
     #: 连接删了它一起清,不会留下指向虚空的孤儿。
-    "GenerationCapabilityProfile": (
-        "app/domain/generation/custom_profiles.py",
-        "app/api/routes/settings/generation_profiles.py",
-    ),
+    "GenerationCapabilityProfile": ("app/domain/generation/custom_profiles.py",),
     "GenerationCapabilityDeclaration": ("app/domain/generation/resolution.py",),
     "ProviderPricingRule": ("app/domain/usage.py",),
     "ProviderUsageEvent": ("app/domain/usage.py",),

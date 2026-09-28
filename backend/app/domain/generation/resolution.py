@@ -261,13 +261,3 @@ def _for_reader(capabilities: dict[str, Any]) -> dict[str, Any]:
             }
         readable[key] = spec
     return {**capabilities, "parameter_schema": readable}
-
-
-def template_reference_count(db: Session, template_id: str) -> int:
-    return len(
-        db.scalars(
-            select(GenerationCapabilityDeclaration.id).where(
-                GenerationCapabilityDeclaration.template_id == template_id
-            )
-        ).all()
-    )
