@@ -13,9 +13,9 @@ Python 脚本、把 stdin 的 JSON 翻译成一次 HTTP 调用、再把结果翻
 工具清单**从 server 现拉**(扫描时拉一次、缓存进 manifest),不在 manifest 里手抄 —— 手抄的
 清单会随 server 升级而烂,而且烂得很安静。这一点和 tikhub 插件不给端点清单是同一个判断。
 
-**进程隔离照旧**:stdio 传输本来就是 spawn 一个子进程,环境同样只有 PATH/HOME/LANG 加上这个
-插件自己声明的那几个凭据键。http 传输里 url/headers 支持 `${KEY}` 占位符,因为那些字段进不了
-子进程环境。
+**进程隔离照旧**:stdio 传输本来就是 spawn 一个子进程,环境同样只有 PATH/HOME/LANG、宿主替这个连接定的
+出站代理(见 egress)加上这个插件自己声明的那几个凭据键。http 传输里 url/headers 支持 `${KEY}` 占位符,
+因为那些字段进不了子进程环境;http 传输的请求由后端发,走的是同一个出站决定(`Egress.httpx_options`)。
 
 **为什么每次调用都重连,而不是常驻一个会话**:插件可以随时被停用、改配置、改凭据;常驻会话
 意味着要维护"什么时候该重启它"的一整套生命周期,而 MCP 的握手成本在本地是毫秒级。等真出现
@@ -33,6 +33,7 @@ from mcp.client.stdio import stdio_client
 
 from app.core.i18n import LocalizedError, get_current_locale
 from app.domain.plugins.child_env import base_env
+from app.domain.plugins.egress import UNDECIDED, Egress
 from app.domain.plugins.manifest import LOCALE_ENV, expand
 
 #: 连接 + 握手 + 一次调用的**默认**总预算。和进程类插件的 60s 对齐。
@@ -61,8 +62,8 @@ def _spec(manifest: dict[str, Any]) -> dict[str, Any]:
     return spec
 
 
-def stdio_env(env: dict[str, str]) -> dict[str, str]:
-    """stdio 传输的子进程环境:宿主给的最小集 + 这个插件自己的配置与凭据。
+def stdio_env(env: dict[str, str], egress: Egress = UNDECIDED) -> dict[str, str]:
+    """stdio 传输的子进程环境:宿主给的最小集 + 这个插件自己的配置与凭据 + 宿主替这个连接定的出站代理。
 
     最小集和进程插件是**同一份**(child_env.base_env)。此前这里手抄了 PATH/HOME/LANG 三个,
     漏了 Windows 上起进程必需的 SYSTEMROOT / APPDATA……—— `npx` / `uvx` 起的 MCP 插件在 Windows 上
@@ -75,10 +76,14 @@ def stdio_env(env: dict[str, str]) -> dict[str, str]:
         #: 我们塞不进去,所以这条走环境变量;http 那条走 Accept-Language。
         LOCALE_ENV: get_current_locale(),
         **env,
+        #: 和进程插件同一条(见 runtime._env):出站代理是宿主定的,排在插件自己的配置之后。
+        **egress.child_env(),
     }
 
 
-async def _run(manifest: dict[str, Any], env: dict[str, str], fn: Callable[[ClientSession], Awaitable[T]]) -> T:
+async def _run(
+    manifest: dict[str, Any], env: dict[str, str], fn: Callable[[ClientSession], Awaitable[T]], egress: Egress
+) -> T:
     spec = _spec(manifest)
     transport = str(spec.get("transport") or "stdio").strip().lower()
 
@@ -88,7 +93,7 @@ async def _run(manifest: dict[str, Any], env: dict[str, str], fn: Callable[[Clie
             raise McpBridgeError("pluginErr_mcpStdioNoCommand")
         args = [str(a) for a in (spec.get("args") or []) if str(a).strip()]
         params = StdioServerParameters(
-            command=command, args=args, env=stdio_env(env), cwd=str(manifest.get("_path") or "") or None
+            command=command, args=args, env=stdio_env(env, egress), cwd=str(manifest.get("_path") or "") or None
         )
         async with stdio_client(params) as (read, write):
             async with ClientSession(read, write) as session:
@@ -96,7 +101,9 @@ async def _run(manifest: dict[str, Any], env: dict[str, str], fn: Callable[[Clie
                 return await fn(session)
 
     if transport in ("http", "streamable-http"):
-        from mcp.client.streamable_http import create_mcp_http_client, streamable_http_client
+        import httpx2
+        from mcp.client.streamable_http import streamable_http_client
+        from mcp.shared._httpx_utils import MCP_DEFAULT_SSE_READ_TIMEOUT, MCP_DEFAULT_TIMEOUT
 
         url = expand(str(spec.get("url") or "").strip(), env)
         if not url:
@@ -104,7 +111,13 @@ async def _run(manifest: dict[str, Any], env: dict[str, str], fn: Callable[[Clie
         headers = {str(k): expand(str(v), env) for k, v in (spec.get("headers") or {}).items()}
         #: 作者没自己指定的话,带上读的人用的语言 —— 这是 HTTP 里说这件事的标准方式。
         headers.setdefault("Accept-Language", get_current_locale())
-        async with create_mcp_http_client(headers=headers or None) as http_client:
+        #: 不用 SDK 的 create_mcp_http_client:它不收代理参数,而这条请求是后端替这个连接发的,
+        #: 该走这个连接的出站决定(见 egress)。超时照抄它的缺省 —— 服务可能长时间开着一条响应流。
+        async with httpx2.AsyncClient(
+            headers=headers,
+            timeout=httpx2.Timeout(MCP_DEFAULT_TIMEOUT, read=MCP_DEFAULT_SSE_READ_TIMEOUT),
+            **egress.httpx_options(url),
+        ) as http_client:
             async with streamable_http_client(url, http_client=http_client) as (read, write):
                 async with ClientSession(read, write) as session:
                     await session.initialize()
@@ -118,11 +131,13 @@ def _sync(
     env: dict[str, str],
     fn: Callable[[ClientSession], Awaitable[T]],
     timeout: float = MCP_TIMEOUT_SECONDS,
+    *,
+    egress: Egress,
 ) -> T:
     """在自己的事件循环里跑一次。调用方是同步的(FastAPI 的同步端点在线程池里,
     工作流引擎也在线程里),所以这里可以直接 asyncio.run。"""
     try:
-        return asyncio.run(asyncio.wait_for(_run(manifest, env, fn), timeout=timeout))
+        return asyncio.run(asyncio.wait_for(_run(manifest, env, fn, egress), timeout=timeout))
     except McpBridgeError:
         raise
     except asyncio.TimeoutError as exc:
@@ -131,8 +146,10 @@ def _sync(
         raise McpBridgeError("pluginErr_mcpConnectFailed", detail=f"{type(exc).__name__}: {exc}"[:400]) from exc
 
 
-def discover_tools(manifest: dict[str, Any], env: dict[str, str] | None = None) -> list[dict[str, Any]]:
-    """向 server 要一次工具清单,转成 manifest.tools 的形状。"""
+def discover_tools(
+    manifest: dict[str, Any], env: dict[str, str] | None = None, egress: Egress = UNDECIDED
+) -> list[dict[str, Any]]:
+    """向 server 要一次工具清单,转成 manifest.tools 的形状。`egress` 不给 = 不注入代理、httpx 照缺省。"""
 
     async def _list(session: ClientSession) -> list[dict[str, Any]]:
         result = await session.list_tools()
@@ -149,7 +166,7 @@ def discover_tools(manifest: dict[str, Any], env: dict[str, str] | None = None) 
             for tool in result.tools
         ]
 
-    return _sync(manifest, env or {}, _list)
+    return _sync(manifest, env or {}, _list, egress=egress)
 
 
 def call_tool(
@@ -158,6 +175,7 @@ def call_tool(
     payload: dict[str, Any],
     env: dict[str, str],
     timeout: float = MCP_TIMEOUT_SECONDS,
+    egress: Egress = UNDECIDED,
 ) -> dict[str, Any]:
     """调一次工具。返回值统一成 dict —— 插件调用记录那张表存的是 JSON 对象。
 
@@ -188,7 +206,7 @@ def call_tool(
             return {"text": text}
         return parsed if isinstance(parsed, dict) else {"text": text}
 
-    return _sync(manifest, env, _call, timeout=timeout)
+    return _sync(manifest, env, _call, timeout=timeout, egress=egress)
 
 
 def _text(result: Any) -> str:

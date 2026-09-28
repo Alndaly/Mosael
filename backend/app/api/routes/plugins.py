@@ -321,6 +321,7 @@ def _instance(db: DbSession, instance) -> dict:
             for capability, status in (instance.capability_status or {}).items()
             if isinstance(status, dict)
         },
+        "network": {"mode": instance.network_mode, "proxy_url": instance.proxy_url},
     }
 
 
@@ -380,7 +381,11 @@ def update_instance(instance_id: str, body: PluginInstanceUpdate, db: DbSession,
             inst.set_config(db, instance, body.config, notify=False)
         if body.enabled is not None:
             inst.set_enabled(db, instance, body.enabled, notify=False)
-        host_capabilities.notify(db, instance, refresh=body.config is not None or body.enabled is not None)
+        if body.network is not None:
+            inst.set_network(db, instance, body.network.mode, body.network.proxy_url, notify=False)
+        host_capabilities.notify(
+            db, instance, refresh=any(one is not None for one in (body.config, body.enabled, body.network))
+        )
     except PluginDomainError as exc:
         raise _fail(exc) from exc
     return _instance(db, instance)

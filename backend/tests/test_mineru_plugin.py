@@ -124,28 +124,30 @@ def test_上传到预签名地址_真的不带_Content_Type() -> None:
     assert sent_headers(False)["Content-type"] == "application/x-www-form-urlencoded", "urllib 的默认行为变了,这层处理可以删"
 
 
-def test_网络_跟随系统_直连_指定代理(monkeypatch) -> None:
+def test_网络_照宿主注入的环境走_跟随_直连_指定代理(monkeypatch) -> None:
+    """走哪条路是宿主替这个连接定的(domain/plugins/egress),插件只用 urllib 默认的 ProxyHandler 读环境变量。
+    这里把三种决定各自给出的那份环境放进进程,看插件真正建出来的 opener 走不走代理。"""
     import urllib.request
+
+    from app.domain.plugins.egress import Egress
 
     module = _plugin_module()
 
-    def proxies() -> dict | None:
-        handlers = [one for one in module._opener("zh").handlers if isinstance(one, urllib.request.ProxyHandler)]
-        return handlers[0].proxies if handlers else None
+    def under(egress: Egress) -> dict:
+        for key in ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY"):
+            monkeypatch.delenv(key, raising=False)
+            monkeypatch.delenv(key.lower(), raising=False)
+        for key, value in egress.child_env().items():
+            monkeypatch.setenv(key, value)
+        handler = next(one for one in module._opener("zh").handlers if isinstance(one, urllib.request.ProxyHandler))
+        return handler.proxies
 
-    #: 系统代理用环境变量模拟(urllib 的 getproxies 先读它)。
-    monkeypatch.setenv("HTTPS_PROXY", "http://system-proxy:8080")
-    monkeypatch.delenv("MINERU_NETWORK", raising=False)
-    assert (proxies() or {}).get("https") == "http://system-proxy:8080", "跟随系统:用系统代理"
-    monkeypatch.setenv("MINERU_NETWORK", "direct")
-    assert not proxies(), "直连:系统代理也不走"
-    monkeypatch.setenv("MINERU_NETWORK", "proxy")
-    monkeypatch.setenv("MINERU_PROXY", "http://127.0.0.1:7890")
-    assert proxies() == {"http": "http://127.0.0.1:7890", "https": "http://127.0.0.1:7890"}
-    for bad in ("", "socks5://127.0.0.1:7890"):
-        monkeypatch.setenv("MINERU_PROXY", bad)
-        with pytest.raises(module.ParseError, match="代理"):
-            module._opener("zh")
+    assert under(Egress("http://127.0.0.1:7890", "localhost,127.0.0.1"))["https"] == "http://127.0.0.1:7890"
+    #: 直连是明说的 NO_PROXY=*:什么都不给的话,urllib 会退到系统代理。
+    direct = under(Egress(no_proxy="*"))
+    assert "https" not in direct and urllib.request.proxy_bypass_environment("mineru.net", direct)
+    with pytest.raises(module.ParseError, match="SOCKS"):
+        under(Egress("socks5://127.0.0.1:1080", "localhost"))
 
 
 def test_上传被拒_提示区域和代理设置(tmp_path, monkeypatch) -> None:
@@ -167,13 +169,13 @@ def test_上传被拒_提示区域和代理设置(tmp_path, monkeypatch) -> None
     assert "403" in str(caught.value) and "AccessDenied" in str(caught.value) and "中国大陆" in str(caught.value)
 
 
-def test_代理地址是选填_直连和跟随系统时不算缺配置() -> None:
-    """配置项缺省是必填;代理地址只在「走指定代理」时用,写成必填的话选了直连也被判「缺少配置: 代理地址」(用户截图)。"""
+def test_清单里没有自己的网络字段_那是宿主给每个连接的() -> None:
+    """代理曾是 MinerU 自己发明的一对配置(MINERU_NETWORK / MINERU_PROXY),跟的是系统代理,不知道 Mosael 的设置。
+    现在它是宿主给每个插件连接的「网络」(见 domain/plugins/egress);清单里再出现就是两套规矩。"""
     from app.domain.plugins.manifest import parse
 
     manifest = parse(json.loads((PLUGIN / "mosael.plugin.json").read_text(encoding="utf-8")), PLUGIN)
-    required = {field.key: field.required for field in manifest.config}
-    assert required["MINERU_PROXY"] is False and required["MINERU_NETWORK"] is True
+    assert not [field.key for field in manifest.config if "NETWORK" in field.key or "PROXY" in field.key]
 
 
 def test_清单_只给宿主调_认领文档解析() -> None:

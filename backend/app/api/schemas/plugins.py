@@ -86,6 +86,15 @@ class PluginProvidedModelOut(ApiModel):
     parameters: list[PluginProvidedParameterOut] = Field(default_factory=list)
 
 
+class PluginNetworkOut(ApiModel):
+    """这个连接往外连走哪条路(见 domain/plugins/egress)。"""
+
+    #: follow = 跟随 Mosael 的出站代理;direct = 直连;proxy = 走下面这个地址。
+    mode: Literal["follow", "direct", "proxy"] = "follow"
+    #: 只有 `proxy` 模式下有值。
+    proxy_url: str = ""
+
+
 class PluginInstanceOut(ApiModel):
     id: str
     package_id: str
@@ -100,6 +109,7 @@ class PluginInstanceOut(ApiModel):
     tools: list[PluginToolStateOut] = Field(default_factory=list)
     #: 它替宿主做的那些事上一次做得怎么样,按能力分(今天只有 generation)。
     capability_status: dict[str, PluginCapabilityStatusOut] = Field(default_factory=dict)
+    network: PluginNetworkOut = Field(default_factory=PluginNetworkOut)
 
 
 class PluginOAuthOut(ApiModel):
@@ -224,10 +234,17 @@ class PluginInstanceCreate(ApiModel):
     config: dict = Field(default_factory=dict)
 
 
+class PluginNetworkUpdate(ApiModel):
+    mode: Literal["follow", "direct", "proxy"]
+    #: `proxy` 模式必填;别的模式下忽略(存成空串)。
+    proxy_url: str = Field(default="", max_length=300)
+
+
 class PluginInstanceUpdate(ApiModel):
     name: str | None = None
     config: dict | None = None
     enabled: bool | None = None
+    network: PluginNetworkUpdate | None = None
 
 
 class PluginCapabilityUpdate(ApiModel):

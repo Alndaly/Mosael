@@ -4603,6 +4603,54 @@ def _migrate_plugin_authorization_rejected() -> None:
             conn.execute(text("ALTER TABLE plugin_instances ADD COLUMN authorization_rejected_at DATETIME"))
 
 
+def _migrate_plugin_connections_choose_their_network() -> None:
+    """插件连接有了宿主给的「网络」:`plugin_instances.network_mode` / `proxy_url`(见 domain/plugins/egress)。
+
+    此前全局出站代理到不了插件子进程,MinerU 就在自己的清单里发明了一对配置 `MINERU_NETWORK`
+    (system / direct / proxy)和 `MINERU_PROXY`。清单里这两项删了,存着它们的连接在这里搬到新的两列上:
+    system → follow(没配全局代理时两者是同一个行为;配了,默认就该跟着它走)、direct → direct、
+    proxy → proxy。选了走代理却没填地址的,当时每次调用都报错,搬成 follow。搬完从 config 里删掉 ——
+    不删的话它们照旧被注入插件进程,是两个没人读、也没人能改的变量。
+
+    `create_all` 不给已有的表加列,所以在它之前。老连接一律 follow:此前它们拿到的环境里根本没有代理变量,
+    follow 在没配全局代理时给的也正是这样的环境。**写死包 id 与取值**:迁移是历史的快照。幂等。
+    """
+    with engine.begin() as conn:
+        columns = {row[1] for row in conn.execute(text("PRAGMA table_info(plugin_instances)"))}
+        if not columns:
+            return
+        if "network_mode" not in columns:
+            conn.execute(text(
+                "ALTER TABLE plugin_instances ADD COLUMN network_mode VARCHAR(16) NOT NULL DEFAULT 'follow'"
+            ))
+        if "proxy_url" not in columns:
+            conn.execute(text("ALTER TABLE plugin_instances ADD COLUMN proxy_url VARCHAR(300) NOT NULL DEFAULT ''"))
+        rows = conn.execute(
+            text("SELECT id, config FROM plugin_instances WHERE package_id = 'dev.mosael.mineru'")
+        ).fetchall()
+        for instance_id, raw in rows:
+            try:
+                config = json.loads(raw) if isinstance(raw, str) else dict(raw or {})
+            except (TypeError, ValueError):
+                continue
+            if not isinstance(config, dict) or not {"MINERU_NETWORK", "MINERU_PROXY"} & set(config):
+                continue
+            chosen = str(config.pop("MINERU_NETWORK", "") or "").strip().lower()
+            url = str(config.pop("MINERU_PROXY", "") or "").strip()
+            mode = {"direct": "direct", "proxy": "proxy"}.get(chosen, "follow")
+            if mode == "proxy" and not url:
+                mode = "follow"
+            conn.execute(
+                text("UPDATE plugin_instances SET config = :c, network_mode = :m, proxy_url = :u WHERE id = :i"),
+                {
+                    "c": json.dumps(config, ensure_ascii=False),
+                    "m": mode,
+                    "u": url if mode == "proxy" else "",
+                    "i": instance_id,
+                },
+            )
+
+
 def _migrate_plugin_instances() -> None:
     """插件从「一行 = 一个包 = 一次接入」拆成「包 → 实例 → 能力」三层。
 
@@ -5186,6 +5234,7 @@ def migration_plan() -> MigrationPlan:
                 # 排在上一步之后:它可能刚把 plugin_instances 建出来。
                 _migrate_plugin_generation_columns,
                 _migrate_plugin_authorization_rejected,
+                _migrate_plugin_connections_choose_their_network,
                 _migrate_drop_the_community_integration,
                 _migrate_voices_declare_consent,
                 _migrate_boards_remember_their_project,

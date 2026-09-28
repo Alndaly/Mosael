@@ -123,6 +123,14 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "「{label}」不是合法的 JSON:第 {line} 行第 {column} 列,{detail}",
         "en": "“{label}” is not valid JSON: line {line}, column {column}: {detail}",
     },
+    "pluginErr_networkMode": {
+        "zh": "不认识的网络设置「{mode}」:只能是跟随 Mosael、直连或走指定代理",
+        "en": "Unknown network setting “{mode}”: it must be follow Mosael, direct, or a proxy.",
+    },
+    "pluginErr_proxyUrl": {
+        "zh": "代理地址「{url}」不对:要写全,例如 http://127.0.0.1:7890 或 socks5://127.0.0.1:1080",
+        "en": "The proxy address “{url}” is incomplete: write it in full, e.g. http://127.0.0.1:7890 or socks5://127.0.0.1:1080.",
+    },
     "pluginErr_artifactTooMany": {
         "zh": "插件一次交出的文件超过 {limit} 份",
         "en": "The plugin returned more than {limit} files in one call.",

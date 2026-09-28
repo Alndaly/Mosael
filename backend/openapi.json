@@ -27866,6 +27866,9 @@
             },
             "type": "object",
             "title": "Capability Status"
+          },
+          "network": {
+            "$ref": "#/components/schemas/PluginNetworkOut"
           }
         },
         "type": "object",
@@ -27912,6 +27915,16 @@
               }
             ],
             "title": "Enabled"
+          },
+          "network": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PluginNetworkUpdate"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -28153,6 +28166,52 @@
         ],
         "title": "PluginMarketTool",
         "description": "市场里一个插件声明的工具。只有「它是什么」,没有入参 —— 怎么调是装上之后的事。"
+      },
+      "PluginNetworkOut": {
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "follow",
+              "direct",
+              "proxy"
+            ],
+            "title": "Mode",
+            "default": "follow"
+          },
+          "proxy_url": {
+            "type": "string",
+            "title": "Proxy Url",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "title": "PluginNetworkOut",
+        "description": "这个连接往外连走哪条路(见 domain/plugins/egress)。"
+      },
+      "PluginNetworkUpdate": {
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "follow",
+              "direct",
+              "proxy"
+            ],
+            "title": "Mode"
+          },
+          "proxy_url": {
+            "type": "string",
+            "maxLength": 300,
+            "title": "Proxy Url",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "mode"
+        ],
+        "title": "PluginNetworkUpdate"
       },
       "PluginOAuthCode": {
         "properties": {

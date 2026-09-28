@@ -19,6 +19,7 @@ import pytest
 from app.db.models import Asset
 from app.domain.plugins import artifacts
 from app.domain.plugins.artifacts import ArtifactError, SCRATCH_ENV
+from app.domain.plugins.egress import Egress
 from app.domain.plugins.runtime import execute_tool
 from tests.util import fresh_client
 
@@ -72,7 +73,7 @@ class Test交出本地文件:
         with SessionLocal() as db:
             # 返回的是**引用**,不是 ORM 对象 —— 这一层不认识素材库(见 plugins/media_bridge)。
             ref, name = artifacts.register(
-                db, {"path": "a.txt"}, scratch, workspace_id=ws, project_id=None, fallback_name="t"
+                db, {"path": "a.txt"}, scratch, workspace_id=ws, project_id=None, fallback_name="t", egress=Egress()
             )
             db.commit()
             assert name == "a.txt"
@@ -96,7 +97,8 @@ class Test交出本地文件:
         with SessionLocal() as db:
             with pytest.raises(ArtifactError, match=SCRATCH_ENV):
                 artifacts.register(
-                    db, {"path": str(outsider)}, scratch, workspace_id=ws, project_id=None, fallback_name="t"
+                    db, {"path": str(outsider)}, scratch, workspace_id=ws, project_id=None, fallback_name="t",
+                    egress=Egress(),
                 )
 
     def test_用_dotdot_也绕不出去(self, tmp_path) -> None:
@@ -111,7 +113,8 @@ class Test交出本地文件:
         with SessionLocal() as db:
             with pytest.raises(ArtifactError, match=SCRATCH_ENV):
                 artifacts.register(
-                    db, {"path": "../secret.txt"}, scratch, workspace_id=ws, project_id=None, fallback_name="t"
+                    db, {"path": "../secret.txt"}, scratch, workspace_id=ws, project_id=None, fallback_name="t",
+                    egress=Egress(),
                 )
 
     def test_文件不存在说得明白(self, tmp_path) -> None:
@@ -124,7 +127,9 @@ class Test交出本地文件:
 
         with SessionLocal() as db:
             with pytest.raises(ArtifactError, match="不存在"):
-                artifacts.register(db, {"path": "nope"}, scratch, workspace_id=ws, project_id=None, fallback_name="t")
+                artifacts.register(
+                    db, {"path": "nope"}, scratch, workspace_id=ws, project_id=None, fallback_name="t", egress=Egress()
+                )
 
 
 class Test交出下载凭据:
@@ -146,6 +151,7 @@ class Test交出下载凭据:
                     workspace_id=ws,
                     project_id=None,
                     fallback_name="t",
+                    egress=Egress(),
                 )
 
     def test_下载时带上插件给的请求头(self, tmp_path, monkeypatch) -> None:
@@ -182,7 +188,9 @@ class Test交出下载凭据:
         monkeypatch.setattr(artifacts, "RetryingClient", FakeClient)
         scratch = tmp_path / "out"
         scratch.mkdir()
-        path = artifacts._download({"url": "https://e/x.mp4", "headers": {"User-Agent": "pan"}, "filename": "x.mp4"}, scratch)
+        path = artifacts._download(
+            {"url": "https://e/x.mp4", "headers": {"User-Agent": "pan"}, "filename": "x.mp4"}, scratch, egress=Egress()
+        )
         assert seen["headers"] == {"User-Agent": "pan"}
         assert path.read_bytes() == b"payload"
 
@@ -221,7 +229,7 @@ class Test交出下载凭据:
         scratch = tmp_path / "out"
         scratch.mkdir()
         with pytest.raises(ArtifactError, match="大小上限"):
-            artifacts._download({"url": "https://e/big"}, scratch)
+            artifacts._download({"url": "https://e/big"}, scratch, egress=Egress())
 
 
     @pytest.mark.parametrize("filename", ["..", ".", "inputs", "out.png", "../../etc/passwd"])
@@ -259,11 +267,11 @@ class Test交出下载凭据:
         scratch = tmp_path / "out"
         (scratch / "inputs").mkdir(parents=True)
         (scratch / "out.png").write_bytes(b"plugin wrote this")
-        path = artifacts._download({"url": "https://e/x", "filename": filename}, scratch)
+        path = artifacts._download({"url": "https://e/x", "filename": filename}, scratch, egress=Egress())
         assert path.read_bytes() == b"downloaded"
         assert path.resolve().is_relative_to(scratch.resolve())
         assert (scratch / "out.png").read_bytes() == b"plugin wrote this"
-        assert artifacts.fetch({"path": str(path)}, scratch) == path.resolve()
+        assert artifacts.fetch({"path": str(path)}, scratch, egress=Egress()) == path.resolve()
 
 
 class Test收口在唯一那条执行路径:
@@ -288,6 +296,7 @@ class Test收口在唯一那条执行路径:
                 workspace_id=ws,
                 project_id=None,
                 fallback_name="t",
+                egress=Egress(),
             )
             db.commit()
         assert "artifact" not in out
@@ -300,7 +309,9 @@ class Test收口在唯一那条执行路径:
         from app.core.db import SessionLocal
 
         with SessionLocal() as db:
-            out = _collect_artifact(db, {"text": "x"}, None, workspace_id=None, project_id=None, fallback_name="t")
+            out = _collect_artifact(
+                db, {"text": "x"}, None, workspace_id=None, project_id=None, fallback_name="t", egress=Egress()
+            )
         assert out == {"text": "x"}
 
     def test_没有归属工作区时说清楚(self, tmp_path) -> None:
@@ -312,7 +323,8 @@ class Test收口在唯一那条执行路径:
         with SessionLocal() as db:
             with pytest.raises(ArtifactError, match="工作区"):
                 _collect_artifact(
-                    db, {"artifact": {"path": "a"}}, tmp_path, workspace_id=None, project_id=None, fallback_name="t"
+                    db, {"artifact": {"path": "a"}}, tmp_path, workspace_id=None, project_id=None, fallback_name="t",
+                    egress=Egress(),
                 )
 
 

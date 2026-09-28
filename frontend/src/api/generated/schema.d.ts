@@ -10231,6 +10231,7 @@ export interface components {
             capability_status?: {
                 [key: string]: components["schemas"]["PluginCapabilityStatusOut"];
             };
+            network?: components["schemas"]["PluginNetworkOut"];
         };
         /** PluginInstanceUpdate */
         PluginInstanceUpdate: {
@@ -10242,6 +10243,7 @@ export interface components {
             } | null;
             /** Enabled */
             enabled?: boolean | null;
+            network?: components["schemas"]["PluginNetworkUpdate"] | null;
         };
         /** PluginInvocationOut */
         PluginInvocationOut: {
@@ -10400,6 +10402,36 @@ export interface components {
              * @default
              */
             effects: string;
+        };
+        /**
+         * PluginNetworkOut
+         * @description 这个连接往外连走哪条路(见 domain/plugins/egress)。
+         */
+        PluginNetworkOut: {
+            /**
+             * Mode
+             * @default follow
+             * @enum {string}
+             */
+            mode: "follow" | "direct" | "proxy";
+            /**
+             * Proxy Url
+             * @default
+             */
+            proxy_url: string;
+        };
+        /** PluginNetworkUpdate */
+        PluginNetworkUpdate: {
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "follow" | "direct" | "proxy";
+            /**
+             * Proxy Url
+             * @default
+             */
+            proxy_url: string;
         };
         /**
          * PluginOAuthCode

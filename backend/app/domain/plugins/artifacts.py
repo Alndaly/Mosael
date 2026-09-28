@@ -33,6 +33,7 @@ from sqlalchemy.orm import Session
 from app.core.http_retry import RetryingClient
 from app.core.i18n import LocalizedError
 from app.domain.plugins import media_bridge
+from app.domain.plugins.egress import Egress
 
 logger = logging.getLogger(__name__)
 
@@ -83,7 +84,7 @@ def _resolve_local(spec: dict[str, Any], scratch: Path) -> Path:
     return path
 
 
-def _download(spec: dict[str, Any], scratch: Path) -> Path:
+def _download(spec: dict[str, Any], scratch: Path, *, egress: Egress) -> Path:
     url = str(spec.get("url") or "").strip()
     if not url:
         raise ArtifactError("pluginErr_artifactNoUrl")
@@ -99,7 +100,11 @@ def _download(spec: dict[str, Any], scratch: Path) -> Path:
     target = Path(tempfile.mkdtemp(prefix=".download-", dir=scratch)) / name
     written = 0
     try:
-        with RetryingClient(timeout=DOWNLOAD_TIMEOUT_SECONDS, headers=headers, follow_redirects=True) as client:
+        # 地址是插件拿到的,这一趟由后端替那个连接去下:走它的出站决定(见 egress)。百度网盘的 dlink 这种
+        # 带地域限制的地址,插件换到它走的是哪条路,下它就得走同一条。
+        with RetryingClient(
+            timeout=DOWNLOAD_TIMEOUT_SECONDS, headers=headers, follow_redirects=True, **egress.httpx_options(url)
+        ) as client:
             with client.stream("GET", url) as response:
                 response.raise_for_status()
                 with target.open("wb") as handle:
@@ -113,14 +118,14 @@ def _download(spec: dict[str, Any], scratch: Path) -> Path:
     return target
 
 
-def fetch(spec: dict[str, Any], scratch: Path) -> Path:
+def fetch(spec: dict[str, Any], scratch: Path, *, egress: Egress) -> Path:
     """把一份产出**弄到手**:自己下好的就核对它落在暂存目录里,给的是地址就去下。返回本地路径。
 
     和「交给谁」分开:工具的产出进素材库(`register`),生成的产出交给生成执行器(它自己登记素材、
     记用量、写回执)—— 两条路收文件的规矩是同一套(落点受限、单份上限、只认 http(s)),不该各抄一份。
     """
     if spec.get("url"):
-        return _download(spec, scratch)
+        return _download(spec, scratch, egress=egress)
     return _resolve_local(spec, scratch)
 
 
@@ -132,9 +137,10 @@ def register(
     workspace_id: str,
     project_id: str | None,
     fallback_name: str,
+    egress: Egress,
 ) -> tuple[str, str]:
     """把一份产出交出去。两种交法在这里合流,交接那一步只有一条。返回 (引用, 名字)。"""
-    path = fetch(spec, scratch)
+    path = fetch(spec, scratch, egress=egress)
     name = str(spec.get("filename") or "").strip() or path.name or fallback_name
     # 落到哪儿由**装配层**决定(见 plugins/media_bridge)。这里不 import 素材库 ——
     # 插件系统不该因为"产出也许要进素材库"而认识素材库。

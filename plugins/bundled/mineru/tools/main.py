@@ -24,8 +24,9 @@ MinerU 自动开始解析;再轮询 `GET /api/v4/extract-results/batch/{batch_id
 ## 网络
 
 MinerU 只在中国大陆区域提供服务:人在境外要走一个进大陆的代理,人在境内开着全局代理时反而要直连。
-「网络」一项三选一 —— 跟随系统代理(默认,macOS / Windows 的系统代理和 HTTPS_PROXY 环境变量都认)、
-直连、走指定的 HTTP 代理(`MINERU_PROXY`,例如 `http://127.0.0.1:7890`;标准库不认 SOCKS)。
+**走哪条路不归插件管**:它是 Mosael 给每个插件连接的「网络」设置(跟随 Mosael / 直连 / 走指定代理),
+宿主把结果放进 `HTTPS_PROXY` / `NO_PROXY` 这些环境变量,urllib 默认的 ProxyHandler 就认它们 —— 所以这里
+什么都不用配,照常 `build_opener` 即可。标准库不认 SOCKS,遇到 socks 代理当场说清楚。
 
 **只用标准库**:插件进程和后端不共用依赖。
 """
@@ -87,21 +88,15 @@ class _BareUploadHandler(urllib.request.HTTPSHandler):
 
 
 def _opener(locale: str) -> urllib.request.OpenerDirector:
-    """按「网络」那一项配好的 opener。跟随系统时不加 ProxyHandler —— urllib 默认的那个就读系统代理。"""
-    mode = os.environ.get("MINERU_NETWORK", "").strip().lower() or "system"
-    handlers: list[urllib.request.BaseHandler] = [_BareUploadHandler()]
-    if mode == "direct":
-        handlers.append(urllib.request.ProxyHandler({}))
-    elif mode == "proxy":
-        proxy = os.environ.get("MINERU_PROXY", "").strip()
-        if not proxy:
-            raise ParseError(line(locale, "「网络」选了走指定代理,但代理地址是空的:去插件页填上,例如 http://127.0.0.1:7890",
-                                  "Network is set to use a proxy but the proxy address is empty: fill it in on the Plugins page, e.g. http://127.0.0.1:7890"))
-        if not proxy.lower().startswith(("http://", "https://")):
-            raise ParseError(line(locale, f"代理地址要以 http:// 或 https:// 开头(不支持 SOCKS):{proxy}",
-                                  f"The proxy address must start with http:// or https:// (SOCKS isn't supported): {proxy}"))
-        handlers.append(urllib.request.ProxyHandler({"http": proxy, "https": proxy}))
-    return urllib.request.build_opener(*handlers)
+    """urllib 默认的 opener(它的 ProxyHandler 读宿主注入的 *_PROXY / NO_PROXY),外加去掉上传头的那一层。
+
+    代理是 SOCKS 的话标准库走不了:它会把 socks5:// 当成一个 HTTP 代理去连,报出来的是一句莫名其妙的错。
+    """
+    proxy = urllib.request.getproxies().get("https", "")
+    if proxy.lower().startswith("socks"):
+        raise ParseError(line(locale, f"MinerU 插件不支持 SOCKS 代理({proxy}):在插件页把这个连接的「网络」换成一个 HTTP 代理,或者直连",
+                              f"The MinerU plugin can't use a SOCKS proxy ({proxy}): on the Plugins page, set this connection's Network to an HTTP proxy, or to Direct"))
+    return urllib.request.build_opener(_BareUploadHandler())
 
 
 def _request(locale: str, url: str, *, method: str = "GET", headers: dict[str, str] | None = None,
@@ -113,8 +108,8 @@ def _request(locale: str, url: str, *, method: str = "GET", headers: dict[str, s
 
 
 def _region_hint(locale: str) -> str:
-    return line(locale, "MinerU 只在中国大陆区域提供服务:人在境外请在插件页把「网络」设成走一个进大陆的代理;人在境内开着全局代理的话,设成「直连」",
-                "MinerU only serves mainland China: outside it, set Network on the Plugins page to a proxy into mainland China; inside it with a global proxy on, set it to Direct")
+    return line(locale, "MinerU 只在中国大陆区域提供服务:人在境外请在插件页把这个连接的「网络」设成走一个进大陆的代理;人在境内开着全局代理的话,设成「直连」",
+                "MinerU only serves mainland China: outside it, set this connection's Network on the Plugins page to a proxy into mainland China; inside it with a global proxy on, set it to Direct")
 
 
 def _api(locale: str, token: str, path: str, *, payload: dict | None = None) -> dict:

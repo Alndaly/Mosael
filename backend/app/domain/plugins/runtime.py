@@ -15,7 +15,8 @@ Contract with the plugin's entry script:
   令牌不该出现在那里。见 state。
 
 - The child gets a minimal environment: PATH/HOME/LANG (on Windows also the system variables a
-  process cannot start without — see child_env.WINDOWS_ESSENTIALS) plus **the credentials
+  process cannot start without — see child_env.WINDOWS_ESSENTIALS), the outbound proxy the host
+  chose for this connection (see egress), plus **the credentials
   this plugin itself declared** in its manifest (see credentials.py). It never
   receives the app's own provider keys, database, or API token — plugins cannot
   bypass the permission system by design because they receive nothing but their
@@ -46,6 +47,7 @@ from app.core.i18n import LocalizedError, get_current_locale
 from app.domain.jobs import current_parent_job_id, detach_job_child, register_job_child
 from app.domain.plugins.artifacts import SCRATCH_ENV as ARTIFACT_SCRATCH_ENV
 from app.domain.plugins.child_env import base_env
+from app.domain.plugins.egress import UNDECIDED, Egress
 from app.domain.plugins.manifest import LOCALE_ENV
 
 logger = logging.getLogger(__name__)
@@ -174,12 +176,14 @@ def execute_tool(
     scratch_dir: Path | None = None,
     timeout: float = PLUGIN_TIMEOUT_SECONDS,
     data_dir: Path | None = None,
+    egress: Egress = UNDECIDED,
 ) -> ToolResult:
     """Run the plugin entry once. Returns the tool output dict; raises
     PluginRuntimeError with an actionable message on any failure.
 
     `credentials` are this plugin's own declared keys, injected as environment
-    variables — never the app's.
+    variables — never the app's. `egress` is the route the host chose for this connection
+    (egress.resolve); not given = no proxy variables at all.
 
     `scratch_dir` 是这次调用的产出目录:插件要交出一个文件时写在那儿,路径经
     MOSAEL_PLUGIN_OUTPUT_DIR 告诉它(见 artifacts 的说明)。协议本身只搬 JSON,
@@ -190,7 +194,7 @@ def execute_tool(
     #: 语言,它就只能压一种。请求体和环境变量都给一份:进程插件读哪个都行,而 MCP 那条只有环境变量。
     locale = get_current_locale()
     request = json.dumps({"tool": tool_name, "input": input_payload, "locale": locale}, ensure_ascii=False)
-    env = _env(locale, credentials, scratch_dir, data_dir)
+    env = _env(locale, credentials, scratch_dir, data_dir, egress)
     started = time.monotonic()
     #: **跑在一个任务里时,这个进程归那个任务。** 取消任务要真的停下它,而不只是改一行状态 ——
     #: 否则一个跑十分钟的插件在用户点了停止之后照跑,工作流的并行分支、画板上的运行都一样。
@@ -250,7 +254,11 @@ def _python() -> str:
 
 
 def _env(
-    locale: str, credentials: dict[str, str] | None, scratch_dir: Path | None, data_dir: Path | None
+    locale: str,
+    credentials: dict[str, str] | None,
+    scratch_dir: Path | None,
+    data_dir: Path | None,
+    egress: Egress,
 ) -> dict[str, str]:
     return {
         **base_env(),
@@ -264,6 +272,8 @@ def _env(
         **({ARTIFACT_SCRATCH_ENV: str(scratch_dir)} if scratch_dir is not None else {}),
         **({DATA_ENV: str(data_dir)} if data_dir is not None else {}),
         **(credentials or {}),
+        #: 出站代理排在插件自己的配置之后:走哪条路是宿主替这个连接定的(见 egress),插件的配置盖不掉它。
+        **egress.child_env(),
     }
 
 
@@ -363,6 +373,7 @@ def stream_tool(
     scratch_dir: Path | None = None,
     timeout: float = PLUGIN_TIMEOUT_SECONDS,
     data_dir: Path | None = None,
+    egress: Egress = UNDECIDED,
 ) -> ToolResult:
     """跑一次**长活**:插件边做边说,最后一行给结果。
 
@@ -380,7 +391,7 @@ def stream_tool(
     locale = get_current_locale()
     request = json.dumps({"tool": tool_name, "input": input_payload, "locale": locale}, ensure_ascii=False)
     cancel_file = Path(f"{scratch_dir}.cancel") if scratch_dir is not None else None
-    env = _env(locale, credentials, scratch_dir, data_dir)
+    env = _env(locale, credentials, scratch_dir, data_dir, egress)
     if cancel_file is not None:
         env[CANCEL_ENV] = str(cancel_file)
     process = popen_text(

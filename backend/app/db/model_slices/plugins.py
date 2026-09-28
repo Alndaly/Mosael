@@ -80,6 +80,11 @@ class PluginInstance(Base):
     #: 一次调用成功了,就清掉 —— 见 domain/plugins/instances 的 note_authorization。
     #: 只有声明了 `instance.oauth` 的插件才会记。
     authorization_rejected_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    #: 这个连接往外连走哪条路:`follow`(跟随 Mosael 的出站代理)/ `direct` / `proxy`。和账号池里每个账号
+    #: 自己的代理同一个形状 —— 默认跟全局,单个连接可以覆盖。怎么落到插件身上只在 domain/plugins/egress 决定。
+    network_mode: Mapped[str] = mapped_column(String(16), nullable=False, default="follow", server_default="follow")
+    #: `network_mode == "proxy"` 时这个连接自己的代理地址;别的模式下是空串(不留一份看不见的旧值)。
+    proxy_url: Mapped[str] = mapped_column(String(300), nullable=False, default="", server_default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
 
