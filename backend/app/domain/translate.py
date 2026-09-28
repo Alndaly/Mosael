@@ -19,7 +19,7 @@ import httpx
 from app.core.i18n import LocalizedError
 from app.core.usage_scope import run_in_scope
 from app.domain.ai_chat import AiChatError, ChatTarget, chat, target_for
-from app.core import http_retry as ai_retry
+from app.core import http_retry
 from app.domain.usage import BillableCall, billable, once
 
 #: 调用方在哪条执行通道上(见 ai_chat.target_for 的 surface)。
@@ -150,7 +150,7 @@ def google_translate(text: str, target: str, source: str = "auto", client: httpx
     if not text.strip():
         return ""
     own = client is None
-    http = client or ai_retry.RetryingClient(timeout=_TIMEOUT)
+    http = client or http_retry.RetryingClient(timeout=_TIMEOUT)
     try:
         response = http.get(
             _GOOGLE_URL,
@@ -220,7 +220,7 @@ def translate_many(
     if chat_target is None:  # google:免费端点,不产生供应商用量,不开记账
         # 429 后立刻停：通用 RetryingClient 的指数重试适合有正式配额的供应商 API，但 Google
         # 免费端点会把同一出口的并发重试视为更多异常流量。共享连接仍保留，省掉逐句 TLS 握手。
-        with ai_retry.RetryingClient(timeout=_TIMEOUT * 2, max_retries=0) as client:
+        with http_retry.RetryingClient(timeout=_TIMEOUT * 2, max_retries=0) as client:
             last_started = 0.0
             for index, text in indexed:
                 wait = _GOOGLE_MIN_INTERVAL_SECONDS - (time.monotonic() - last_started)
@@ -232,7 +232,7 @@ def translate_many(
 
     # AI 供应商是有正式配额的 API，保留并发与通用重试策略。
     # 共享连接只对直连有意义:订阅授权走网关(sidecar),没有调用方 HTTP 连接可复用。
-    with ai_retry.RetryingClient(timeout=_TIMEOUT * 2) as client:
+    with http_retry.RetryingClient(timeout=_TIMEOUT * 2) as client:
         shared = None if chat_target.execution_surface == "gateway" else client
         # 整批记**一条**账:一条字幕轨几百句,逐句记会把 Token 图淹掉,而用户想知道的是
         # "这次翻译花了多少"。

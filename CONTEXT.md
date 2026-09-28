@@ -312,7 +312,7 @@ _Avoid_: 在生成链路里写 `if 是插件`;在设置页改插件建出来的�
 变成后台里一直失败的任务。查不到不抛 5xx:"这家不支持"和"这次没查成"是两种正常结果。
 
 **AI 调用重试**:
-`domain/ai_retry.RetryingClient`(httpx.Client 子类,在 `send()` 里对 429/5xx/RequestError 指数退避重试)。
+`core/http_retry.RetryingClient`(httpx.Client 子类,在 `send()` 里对 429/5xx/RequestError 指数退避重试)。
 它是**所有** AI 出站调用的统一入口(21 个模块直接 import),不是对话专属——生图、生视频、TTS、向量化同样会遇到限流。
 _Avoid_: 在某一条调用路径里手写重试循环
 

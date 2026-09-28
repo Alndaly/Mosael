@@ -62,7 +62,7 @@ def test_翻译走的是记账链路而不是又一份实现(monkeypatch) -> Non
     import httpx
 
     from app.db.models import ProviderUsageEvent
-    from app.core import http_retry as ai_retry
+    from app.core import http_retry
     from tests.util import add_provider, fresh_client
     from app.core.db import SessionLocal
 
@@ -76,8 +76,8 @@ def test_翻译走的是记账链路而不是又一份实现(monkeypatch) -> Non
         )
 
     transport = httpx.MockTransport(handler)
-    real = ai_retry.RetryingClient
-    monkeypatch.setattr(ai_retry, "RetryingClient", lambda *a, **kw: real(*a, **{**kw, "transport": transport}))
+    real = http_retry.RetryingClient
+    monkeypatch.setattr(http_retry, "RetryingClient", lambda *a, **kw: real(*a, **{**kw, "transport": transport}))
 
     client = fresh_client()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()
@@ -105,7 +105,7 @@ def test_工作流的单句翻译节点也记账(monkeypatch) -> None:
     调 chat 时**没带记账** —— 批量那条记、单句这条不记,于是工作流里的 AI 翻译在账上是隐身的。"""
     import httpx
 
-    from app.core import http_retry as ai_retry
+    from app.core import http_retry
     from app.core.db import SessionLocal
     from app.db.models import ProviderUsageEvent, Workflow
     from app.domain.workflows.executors import ai as ai_executors
@@ -121,8 +121,8 @@ def test_工作流的单句翻译节点也记账(monkeypatch) -> None:
         )
 
     transport = httpx.MockTransport(handler)
-    real = ai_retry.RetryingClient
-    monkeypatch.setattr(ai_retry, "RetryingClient", lambda *a, **kw: real(*a, **{**kw, "transport": transport}))
+    real = http_retry.RetryingClient
+    monkeypatch.setattr(http_retry, "RetryingClient", lambda *a, **kw: real(*a, **{**kw, "transport": transport}))
 
     client = fresh_client()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]

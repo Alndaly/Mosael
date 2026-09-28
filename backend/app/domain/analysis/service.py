@@ -12,7 +12,7 @@ import httpx
 
 
 from app.domain import provider_models
-from app.core import http_retry as ai_retry  # Gemini 的 generateContent 不是 /chat/completions,仍走裸重试
+from app.core import http_retry  # Gemini 的 generateContent 不是 /chat/completions,仍走裸重试
 from app.domain.ai_chat import AiChatError, chat, target_for
 from app.domain.usage import BillableCall, billable, once
 from sqlalchemy.orm import Session
@@ -265,7 +265,7 @@ def _call_gemini_video(
         ]
     }
     try:
-        response = ai_retry.post(
+        response = http_retry.post(
             f"{base_url}/models/{model}:generateContent",
             params={"key": profile.api_key},
             json=body,

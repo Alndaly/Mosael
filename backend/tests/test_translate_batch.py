@@ -78,7 +78,7 @@ def test_google_batch_disables_retry_storm(monkeypatch) -> None:
         def __enter__(self): return self
         def __exit__(self, *_args): return False
 
-    monkeypatch.setattr(tr.ai_retry, "RetryingClient", Client)
+    monkeypatch.setattr(tr.http_retry, "RetryingClient", Client)
     monkeypatch.setattr(tr, "google_translate", lambda text, target, source="auto", client=None: text)
     monkeypatch.setattr(tr, "_GOOGLE_MIN_INTERVAL_SECONDS", 0)
     assert tr.translate_many(None, ["a", "b"], "en", user_id=None) == ["a", "b"]

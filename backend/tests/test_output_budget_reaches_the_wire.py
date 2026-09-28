@@ -20,7 +20,7 @@ from __future__ import annotations
 import httpx
 import pytest
 
-from app.core import http_retry as ai_retry
+from app.core import http_retry
 from app.domain.ai_chat import ChatTarget, chat
 
 
@@ -35,9 +35,9 @@ def _install(monkeypatch, seen: list[dict]) -> None:
         seen.append(json.loads(request.content))
         return httpx.Response(200, request=_req(), json={"choices": [{"message": {"content": "ok"}}]})
 
-    real = ai_retry.RetryingClient
+    real = http_retry.RetryingClient
     monkeypatch.setattr(
-        ai_retry,
+        http_retry,
         "RetryingClient",
         lambda *a, **k: real(*a, **{**k, "transport": httpx.MockTransport(handler)}),
     )
@@ -45,7 +45,7 @@ def _install(monkeypatch, seen: list[dict]) -> None:
 
 @pytest.fixture(autouse=True)
 def _no_sleep(monkeypatch):
-    monkeypatch.setattr(ai_retry.time, "sleep", lambda *a, **k: None)
+    monkeypatch.setattr(http_retry.time, "sleep", lambda *a, **k: None)
 
 
 def test_解析出来的输出上限真的发出去了(monkeypatch) -> None:

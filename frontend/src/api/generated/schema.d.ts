@@ -5138,7 +5138,7 @@ export interface paths {
         /**
          * Set Ai Runtime
          * @description AI 供应商瞬断/限流时的最大重试次数。**对所有 AI 出站调用生效** ——
-         *     对话、生图、生视频、语音、向量化都走同一个带重试的传输层(domain/ai_retry)。
+         *     对话、生图、生视频、语音、向量化都走同一个带重试的传输层(core/http_retry)。
          */
         put: operations["set_ai_runtime_api_settings_ai_runtime_put"];
         post?: never;

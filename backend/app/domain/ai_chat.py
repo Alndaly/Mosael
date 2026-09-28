@@ -38,7 +38,7 @@ from sqlalchemy.orm import Session
 
 from app.core.i18n import LocalizedError, fragment, tr
 from app.domain.provider_credentials import ResolvedConnection
-from app.core import http_retry as ai_retry
+from app.core import http_retry
 from app.domain import provider_models
 from app.domain.usage import BillableCall
 
@@ -272,7 +272,7 @@ def chat(
             on_downgrade=on_downgrade,
         )
     url = f"{target.base_url.rstrip('/')}/chat/completions"
-    headers = ai_retry.auth_headers(target.api_key)
+    headers = http_retry.auth_headers(target.api_key)
     if call is not None:
         call.describe(provider=target.vendor, model=target.model, provider_profile_id=target.profile_id or None)
 
@@ -281,7 +281,7 @@ def chat(
             if client is not None:
                 response = client.post(url, headers=headers, json=payload, timeout=timeout)
             else:
-                response = ai_retry.post(url, headers=headers, json=payload, timeout=timeout, max_retries=max_retries)
+                response = http_retry.post(url, headers=headers, json=payload, timeout=timeout, max_retries=max_retries)
             try:
                 response.raise_for_status()
             except httpx.HTTPStatusError:
@@ -317,7 +317,7 @@ def chat(
     except httpx.RequestError as exc:
         # 带上「已重试 N 次」:同样是连不上,试过四次和只试了一次对用户是两件事 ——
         # 前者该去查网络或供应商,后者可能只是手滑填错了地址。
-        tried = max_retries if max_retries is not None else ai_retry.current_max_retries()
+        tried = max_retries if max_retries is not None else http_retry.current_max_retries()
         detail = _sanitize(str(exc), target.api_key)
         if client is None and tried > 0:
             raise AiChatError("aiChatErr_networkRetried", label=label, tries=tried, detail=detail) from exc
@@ -412,7 +412,7 @@ def _chat_gateway(
             }
             options: dict[str, Any] = {
                 "temperature": payload.get("temperature"),
-                "maxRetries": max_retries if max_retries is not None else ai_retry.current_max_retries(),
+                "maxRetries": max_retries if max_retries is not None else http_retry.current_max_retries(),
                 "timeoutMs": max(1, int(timeout * 1000)),
             }
             max_tokens = payload.get("max_tokens") or payload.get("max_completion_tokens")

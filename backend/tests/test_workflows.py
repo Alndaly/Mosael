@@ -27,18 +27,18 @@ def _install_llm_transport(monkeypatch, module, handler) -> None:
     换掉 httpx.post 既拦不住它,也把重试逻辑一起绕过去了。"""
     import httpx as _httpx
 
-    from app.core import http_retry as ai_retry
+    from app.core import http_retry
 
     transport = _httpx.MockTransport(handler)
-    real = ai_retry.RetryingClient
+    real = http_retry.RetryingClient
 
     def patched(*args, **kwargs):
         kwargs["transport"] = transport
         return real(*args, **kwargs)
 
-    # 只打 ai_retry 一处:LLM 节点现在经 domain/ai_chat 走 ai_retry.post,而 RetryingClient
-    # 是在 ai_retry 自己的命名空间里 new 的。(module 参数保留只为不改各调用点的写法。)
-    monkeypatch.setattr(ai_retry, "RetryingClient", patched)
+    # 只打 http_retry 一处:LLM 节点现在经 domain/ai_chat 走 http_retry.post,而 RetryingClient
+    # 是在 http_retry 自己的命名空间里 new 的。(module 参数保留只为不改各调用点的写法。)
+    monkeypatch.setattr(http_retry, "RetryingClient", patched)
 
 
 def linear_graph() -> dict:
@@ -2045,7 +2045,7 @@ def test_没被强制过的Schema_报错时要说出来(monkeypatch) -> None:
 
     import httpx
 
-    from app.core import http_retry as ai_retry
+    from app.core import http_retry
     from app.domain.workflows.executors import ai as ai_nodes
 
     client = fresh_client()
@@ -2064,12 +2064,12 @@ def test_没被强制过的Schema_报错时要说出来(monkeypatch) -> None:
             200, request=request, json={"choices": [{"message": {"content": '{"title": 42}'}}]}
         )
 
-    real = ai_retry.RetryingClient
+    real = http_retry.RetryingClient
     monkeypatch.setattr(
-        ai_retry, "RetryingClient",
+        http_retry, "RetryingClient",
         lambda *a, **k: real(*a, **{**k, "transport": httpx.MockTransport(handler)}),
     )
-    monkeypatch.setattr(ai_retry.time, "sleep", lambda *a, **k: None)
+    monkeypatch.setattr(http_retry.time, "sleep", lambda *a, **k: None)
 
     with SessionLocal() as db:
         profile = add_provider(

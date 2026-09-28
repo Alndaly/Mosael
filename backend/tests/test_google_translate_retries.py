@@ -19,7 +19,7 @@ from __future__ import annotations
 import httpx
 import pytest
 
-from app.core import http_retry as ai_retry
+from app.core import http_retry
 from app.domain import translate as tr
 
 
@@ -41,13 +41,13 @@ def _ok() -> httpx.Response:
 def test_逐句那条路撞上限流会重试(monkeypatch) -> None:
     transport, calls = _transport([httpx.Response(429), _ok()])
 
-    class Patched(ai_retry.RetryingClient):
+    class Patched(http_retry.RetryingClient):
         def __init__(self, *args, **kwargs) -> None:
             kwargs["transport"] = transport
             super().__init__(*args, **kwargs)
 
-    monkeypatch.setattr(ai_retry, "backoff_seconds", lambda attempt: 0)
-    monkeypatch.setattr(ai_retry, "RetryingClient", Patched)
+    monkeypatch.setattr(http_retry, "backoff_seconds", lambda attempt: 0)
+    monkeypatch.setattr(http_retry, "RetryingClient", Patched)
 
     assert tr.google_translate("你好", "en") == "hello"
     assert calls["n"] == 2, "第一次 429 之后应该再试一次"
@@ -56,13 +56,13 @@ def test_逐句那条路撞上限流会重试(monkeypatch) -> None:
 def test_一直限流才报错__而且说得出下一步(monkeypatch) -> None:
     transport, _ = _transport([httpx.Response(429)])
 
-    class Patched(ai_retry.RetryingClient):
+    class Patched(http_retry.RetryingClient):
         def __init__(self, *args, **kwargs) -> None:
             kwargs["transport"] = transport
             super().__init__(*args, **kwargs)
 
-    monkeypatch.setattr(ai_retry, "backoff_seconds", lambda attempt: 0)
-    monkeypatch.setattr(ai_retry, "RetryingClient", Patched)
+    monkeypatch.setattr(http_retry, "backoff_seconds", lambda attempt: 0)
+    monkeypatch.setattr(http_retry, "RetryingClient", Patched)
 
     with pytest.raises(tr.TranslateError) as caught:
         tr.google_translate("这是我工作室的 mac mini 小小玲珑", "en")
@@ -79,13 +79,13 @@ def test_一直限流才报错__而且说得出下一步(monkeypatch) -> None:
 def test_别的状态码也不把_URL_糊进去(monkeypatch) -> None:
     transport, _ = _transport([httpx.Response(503)])
 
-    class Patched(ai_retry.RetryingClient):
+    class Patched(http_retry.RetryingClient):
         def __init__(self, *args, **kwargs) -> None:
             kwargs["transport"] = transport
             super().__init__(*args, **kwargs)
 
-    monkeypatch.setattr(ai_retry, "backoff_seconds", lambda attempt: 0)
-    monkeypatch.setattr(ai_retry, "RetryingClient", Patched)
+    monkeypatch.setattr(http_retry, "backoff_seconds", lambda attempt: 0)
+    monkeypatch.setattr(http_retry, "RetryingClient", Patched)
 
     with pytest.raises(tr.TranslateError) as caught:
         tr.google_translate("你好", "en")
@@ -98,13 +98,13 @@ def test_调用方给了_client_就用它__不另开一个(monkeypatch) -> None:
     transport, calls = _transport([_ok()])
     opened = {"n": 0}
 
-    class Counting(ai_retry.RetryingClient):
+    class Counting(http_retry.RetryingClient):
         def __init__(self, *args, **kwargs) -> None:
             opened["n"] += 1
             kwargs["transport"] = transport
             super().__init__(*args, **kwargs)
 
-    monkeypatch.setattr(ai_retry, "RetryingClient", Counting)
+    monkeypatch.setattr(http_retry, "RetryingClient", Counting)
     with httpx.Client(transport=transport) as shared:
         assert tr.google_translate("你好", "en", client=shared) == "hello"
     assert opened["n"] == 0, "给了 client 还自己再开一个,等于每句一次握手"

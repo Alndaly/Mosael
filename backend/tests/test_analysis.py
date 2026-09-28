@@ -249,7 +249,7 @@ def test_analyze_video_native_qwen_video_url(monkeypatch) -> None:
         captured["json"] = kwargs.get("json")
         return _FakeResp({"choices": [{"message": {"content": "海边散步的女孩"}}]})
 
-    monkeypatch.setattr(service.ai_retry, "post", fake_post)
+    monkeypatch.setattr(service.http_retry, "post", fake_post)
     with SessionLocal() as db:
         _add_native_profile(db, "alibaba", base_url="https://dashscope/compatible-mode/v1", model="qwen-vl-max")
         asset = db.get(Asset, asset_json["id"])
@@ -273,7 +273,7 @@ def test_analyze_video_native_gemini_inline_data(monkeypatch) -> None:
         captured["params"] = kwargs.get("params")
         return _FakeResp({"candidates": [{"content": {"parts": [{"text": "Gemini 看到了海"}]}}]})
 
-    monkeypatch.setattr(service.ai_retry, "post", fake_post)
+    monkeypatch.setattr(service.http_retry, "post", fake_post)
     with SessionLocal() as db:
         _add_native_profile(
             db,
@@ -300,7 +300,7 @@ def test_analyze_native_gemini_refuses_missing_chat_model(monkeypatch) -> None:
     def unexpected_post(*_args, **_kwargs):
         pytest.fail("没有配置模型时不应发起 Gemini 请求")
 
-    monkeypatch.setattr(service.ai_retry, "post", unexpected_post)
+    monkeypatch.setattr(service.http_retry, "post", unexpected_post)
     with SessionLocal() as db:
         add_provider(
             db,

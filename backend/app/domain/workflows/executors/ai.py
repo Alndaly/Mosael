@@ -21,7 +21,7 @@ from app.domain.workflows.executors.common import text_lines
 LLM_TIMEOUT_SECONDS = 120
 
 # 供应商偶发瞬断(Server disconnected / 连接或读超时 / 429 限流 / 5xx 过载)是常态,让整条工作流
-# 一次就挂太脆。重试与退避统一在 domain/ai_retry 的传输层做,**所有 AI 出站调用共用**;
+# 一次就挂太脆。重试与退避统一在 core/http_retry 的传输层做,**所有 AI 出站调用共用**;
 # 这里只保留「读设置」这一步,因为工作流执行器手上正好有 db 会话。
 DEFAULT_MAX_RETRIES = 3
 MAX_RETRIES_CAP = 10

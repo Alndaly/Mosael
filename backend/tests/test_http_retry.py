@@ -3,7 +3,7 @@
 背景:供应商偶发「Server disconnected without sending a response」等网络瞬断,旧实现一次就把
 整条工作流判失败(真丢过一条,28 秒后同参数重试即成功)。这里锁定重试语义 + 可配置次数。
 
-重试现在做在传输层(domain/ai_retry.RetryingClient),**所有 AI 出站调用共用** —— 生图、
+重试现在做在传输层(core/http_retry.RetryingClient),**所有 AI 出站调用共用** —— 生图、
 生视频、语音、向量化此前一次都不重试,而设置页那句话读起来管的是全部。所以打桩点也从
 `httpx.post` 迁到了传输:绕过 RetryingClient 的打桩等于把被测逻辑一起绕过去。
 """
@@ -16,7 +16,7 @@ import pytest
 from app.core.db import SessionLocal
 from app.db.models import AiRuntimeConfig
 from app.domain.ai_chat import AiChatError, ChatTarget, chat
-from app.core import http_retry as ai_retry
+from app.core import http_retry
 from app.domain.workflows.executors import ai
 from tests.util import fresh_client
 
@@ -35,21 +35,21 @@ def _ok() -> httpx.Response:
 
 @pytest.fixture(autouse=True)
 def _no_sleep(monkeypatch):
-    monkeypatch.setattr(ai_retry.time, "sleep", lambda *a, **k: None)  # 别在测试里真退避
+    monkeypatch.setattr(http_retry.time, "sleep", lambda *a, **k: None)  # 别在测试里真退避
 
 
 def _install(monkeypatch, handler) -> None:
     """把 RetryingClient 的传输换成 MockTransport。handler 抛异常即模拟连接层错误。"""
     transport = httpx.MockTransport(handler)
-    real = ai_retry.RetryingClient
+    real = http_retry.RetryingClient
 
     def patched(*args, **kwargs):
         kwargs["transport"] = transport
         return real(*args, **kwargs)
 
-    # 只打 ai_retry 一处就够:LLM 节点现在经 domain/ai_chat 走 ai_retry.post,
-    # 而 ai_retry.post 是在自己的模块命名空间里 new 的 RetryingClient。
-    monkeypatch.setattr(ai_retry, "RetryingClient", patched)
+    # 只打 http_retry 一处就够:LLM 节点现在经 domain/ai_chat 走 http_retry.post,
+    # 而 http_retry.post 是在自己的模块命名空间里 new 的 RetryingClient。
+    monkeypatch.setattr(http_retry, "RetryingClient", patched)
 
 
 def test_transient_disconnect_then_succeeds(monkeypatch):
@@ -222,8 +222,8 @@ def test_重试对所有_AI_出站调用生效(monkeypatch):
             continue
         module = importlib.import_module(name)
         uses_client = getattr(module, "RetryingClient", None) is RetryingClient
-        uses_helpers = getattr(module, "ai_retry", None) is not None
-        # 对话类调用统一经 domain/ai_chat,而 ai_chat 自己走 ai_retry —— 也算接上了。
+        uses_helpers = getattr(module, "http_retry", None) is not None
+        # 对话类调用统一经 domain/ai_chat,而 ai_chat 自己走 http_retry —— 也算接上了。
         uses_chat = getattr(module, "chat", None) is ai_chat.chat
         if not (uses_client or uses_helpers or uses_chat):
             missing.append(name)
@@ -235,24 +235,24 @@ def test_设置写入即时生效不必重启(monkeypatch):
     与出站代理同一套做法:改完立刻生效。"""
     client = fresh_client()
     client.post("/api/workspaces", json={"name": "W"})  # 拥有工作区 → 满足 ensure_instance_admin
-    original = ai_retry.current_max_retries()
+    original = http_retry.current_max_retries()
     try:
         response = client.put("/api/settings/ai-runtime", json={"max_retries": 7})
         assert response.status_code == 200
-        assert ai_retry.current_max_retries() == 7
+        assert http_retry.current_max_retries() == 7
     finally:
-        ai_retry.set_max_retries(original)
+        http_retry.set_max_retries(original)
 
 
 def test_次数夹在合法区间():
-    original = ai_retry.current_max_retries()
+    original = http_retry.current_max_retries()
     try:
-        ai_retry.set_max_retries(-5)
-        assert ai_retry.current_max_retries() == 0  # 0 = 不重试
-        ai_retry.set_max_retries(99)
-        assert ai_retry.current_max_retries() == 10
+        http_retry.set_max_retries(-5)
+        assert http_retry.current_max_retries() == 0  # 0 = 不重试
+        http_retry.set_max_retries(99)
+        assert http_retry.current_max_retries() == 10
     finally:
-        ai_retry.set_max_retries(original)
+        http_retry.set_max_retries(original)
 
 
 def test_地址空着时给人话而不是_httpx_那句协议错误() -> None:

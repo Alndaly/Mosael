@@ -12,7 +12,7 @@
 这个仓库对同类问题已经三次选了同一条路,都写了理由:
   - `core/permissions._request_method` —— 就在隔壁,把 HTTP 方法绑进上下文供写闸门读;
   - `domain/network` 的出站代理 —— 改进程环境变量,"而不是给十几处 httpx.Client 逐个传";
-  - `domain/ai_retry` 的重试次数 —— "调用点散在十几个适配器里,其中不少拿不到 db 会话"。
+  - `core/http_retry` 的重试次数 —— "调用点散在十几个适配器里,其中不少拿不到 db 会话"。
 
 代价是隐式:出问题时"这笔钱为什么记在这个工作区"要看调用栈而不是签名。所以
 `billable()` 允许显式传 workspace_id 覆盖,显式永远优先。

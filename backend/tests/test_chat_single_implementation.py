@@ -39,7 +39,7 @@ def _files_containing(needle: str) -> list[str]:
     """哪些文件在**代码里**出现了这个字面量。
 
     刻意走 AST 而不是文本搜索:注释和文档字符串里提到 `/chat/completions` 是在解释这条约束
-    本身(ai_retry 的模块文档就在讲它),把那些算成违规,这条棘轮第一天就得挂一串豁免 ——
+    本身(http_retry 的模块文档就在讲它),把那些算成违规,这条棘轮第一天就得挂一串豁免 ——
     而豁免清单一长,它就不再是约束了。
     """
     tracked = subprocess.run(
