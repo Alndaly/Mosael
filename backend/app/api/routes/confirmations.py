@@ -7,7 +7,7 @@ from app.api.deps import CurrentUser, DbSession, PresentedToken
 from app.api.schemas import ConfirmationCreate, ConfirmationOut
 from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm
 from app.db.models import ToolConfirmation, now
-from app.integrations.feishu.service import announce_confirmation
+from app.integrations.feishu.approvals import announce_confirmation
 from app.domain.agent import autopilot
 from app.domain.agent.sessions import ensure_reads_for, reads_for_filter
 from app.domain.agent.confirmations import (
@@ -71,7 +71,7 @@ def open_confirmation(
         return confirmation
     # 把新卡推到它该出现的地方(目前只有飞书:从飞书驱动的会话,卡片应当回到那个飞书会话)。
     #
-    # 放在**路由层**而不是领域层:领域回调集成层会形成 confirmations ⇄ feishu.service 的循环
+    # 放在**路由层**而不是领域层:领域回调集成层会形成 confirmations ⇄ feishu.approvals 的循环
     # 依赖,只能靠函数内延迟导入绕开。路由是组合层,认识集成层是它的本分。request_confirmation
     # 全项目只有这一个调用方,所以挪上来覆盖面一点不减。
     announce_confirmation(db, confirmation)

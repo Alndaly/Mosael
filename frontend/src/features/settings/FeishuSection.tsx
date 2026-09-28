@@ -161,7 +161,7 @@ export function FeishuSection({ workspace }: { workspace: Workspace }) {
       {/* 这里曾常驻一条「还需去开发者后台开交互卡片」的横幅。**扫码一键创建已经把这两项配好了**,
           对绝大多数用户它就是一条错的指令 —— 照着去后台反而会怀疑自己漏配了什么。
           手动建的应用确实可能没开:那种情况后端在发卡片撞上 200340 时会把具体步骤写进机器人
-          状态那行小字(见 feishu/service.py 的 _CARD_SETUP_HINT),只在真需要时出现。 */}
+          状态那行小字(见 integrations/feishu/approvals.py 的 _CARD_SETUP_HINT),只在真需要时出现。 */}
 
       {hasBots ? (
         <SettingsListBlock>

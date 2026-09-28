@@ -1,8 +1,8 @@
 """子进程入口:一个机器人一条飞书长连接。
 
-``python -m app.integrations.feishu.worker <bot_id>`` — 由 service.start_connection
+``python -m app.integrations.feishu.worker <bot_id>`` — 由 connections.start_connection
 拉起。独立进程是 lark_oapi SDK 的硬约束:它的 ws 客户端共享模块级事件循环,同一进程
-跑多条连接会互相污染。子进程复用同一份代码与 SQLite,直接调 service.handle_incoming。
+跑多条连接会互相污染。子进程复用同一份代码与 SQLite,直接调 inbound.handle_incoming。
 """
 
 from __future__ import annotations
@@ -25,7 +25,8 @@ def main(bot_id: str) -> None:
 
     from app.core.db import SessionLocal
     from app.db.models import FeishuBot
-    from app.integrations.feishu import service
+    from app.domain.feishu import bots
+    from app.integrations.feishu import approvals, inbound
 
     with SessionLocal() as db:
         bot = db.get(FeishuBot, bot_id)
@@ -34,7 +35,7 @@ def main(bot_id: str) -> None:
             sys.exit(2)
         app_id, app_secret = bot.app_id, bot.app_secret
 
-    service.write_status(bot_id, "connecting")
+    bots.write_status(bot_id, "connecting")
 
     def _mark_online_after_grace() -> None:
         time.sleep(CONNECTING_GRACE_SECONDS)
@@ -64,12 +65,12 @@ def main(bot_id: str) -> None:
             if not chat_id:
                 return
             message_id = getattr(message, "message_id", "") or uuid.uuid4().hex
-            # 消息类型交给 service 判断,这里**不再过滤**。以前这行是
+            # 消息类型交给 inbound 判断,这里**不再过滤**。以前这行是
             # `if message_type != "text": return` —— 发张图片过来,worker 直接返回,
             # 用户那边永远等不到任何回复。静默丢弃是最糟的失败方式:它和"正在处理"
             # 长得一模一样,而人只会一直等下去。
             threading.Thread(
-                target=service.handle_incoming,
+                target=inbound.handle_incoming,
                 args=(bot_id, chat_id, message_id, open_id),
                 kwargs={
                     "message_type": (getattr(message, "message_type", "") or "").lower(),
@@ -95,7 +96,7 @@ def main(bot_id: str) -> None:
             value = getattr(action, "value", None) or {}
             if isinstance(value, str):
                 value = json.loads(value)
-            return service.handle_card_action(open_id, dict(value))
+            return approvals.handle_card_action(open_id, dict(value))
         except Exception:
             logger.exception("feishu card action failed bot=%s", bot_id)
             return {"toast": {"type": "error", "content": "处理失败,请到 Mosael 里查看"}}
@@ -112,7 +113,7 @@ def main(bot_id: str) -> None:
         client.start()  # blocking for the lifetime of the connection
     except Exception as exc:
         logger.exception("feishu worker exited bot=%s", bot_id)
-        service.write_status(bot_id, "error", str(exc))
+        bots.write_status(bot_id, "error", str(exc))
         raise
 
 

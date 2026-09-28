@@ -47,7 +47,7 @@
 | `app/ai/runtime/asr_daemon.py:_POOL` | 常驻 ASR 工作进程池 | 同上。语音对话的首句延迟就取决于这个池热没热。 |
 | `app/domain/agent/stream.py:_streams` | 正在跑的那一轮的 SSE 流 | 后端一重启线程即死,`finally` 执行不到,会话永远卡在「思考中」—— 所以有 `reconcile_orphaned_agent_sessions()` 在启动时统一拨回,并把那一轮留下的确认卡一并作废(否则那张卡还能被点,而它是**当场执行工具**的)。 |
 | `app/domain/jobs.py:_CHILDREN` | 任务的子进程句柄(ffmpeg / ASR / TTS) | 没有它,取消只是翻了个数据库字段:ffmpeg 跑完整段、烧掉用户明确要求停下的 CPU,然后把取消覆盖成「成功」。重启后旧句柄没了,那些孤儿由 `reconcile_orphaned_jobs` 收拾。 |
-| `app/integrations/feishu/service.py:_processes` | 每个机器人一个子进程 | 独立进程是 lark SDK 的硬约束(它的 ws 客户端共享模块级事件循环)。第二个后端会**再拉一份**,同一条消息被处理两次。 |
+| `app/integrations/feishu/connections.py:_processes` | 每个机器人一个子进程 | 独立进程是 lark SDK 的硬约束(它的 ws 客户端共享模块级事件循环)。第二个后端会**再拉一份**,同一条消息被处理两次。 |
 | `app/ai/sidecar/adapters.py:_LIVE` | 正在跑的 sidecar 轮次 | 同 `_streams`。 |
 | `app/workers/scheduler.py:_stop_event` | 定时任务线程的停止信号 | 每个进程一个调度线程 —— 多进程下同一条定时任务会被触发多次。 |
 | `app/domain/plugins/catalog_watch.py:_watch_stop`、`app/domain/plugins/catalog_watch.py:_watch_thread` | 插件目录的巡检线程(启动时把每个实例替宿主做的事刷一遍 —— 生成模型、运行时报出的工具 —— 之后每分钟问一次指纹,变了才重新拉) | 重启后重新刷一遍,不丢东西(目录缓存在模型行和 `discovered_tools` 上)。第二个进程会**再巡检一份**:每分钟多问一次 ComfyUI,结果一样,只是多一倍请求。 |
@@ -97,9 +97,9 @@
 - `app/ai/runtime/workers/tts.py:_LOADED` — 已加载的模型。
 - `app/api/routes/sequences.py:_SEQUENCE_JSON` — 序列 JSON 按 revision 缓存。每序列一条,不随流量增长。
 - `app/domain/provider_auth.py:_refresh_failed_at` — 刷新失败冷却。重启后是空的,于是第一次会说「已授权」哪怕它刷不动 —— **这个方向是有意选的**:说成"还不知道"只会晚一次发现,说成"需重新授权"是在没坏的时候喊坏。
-- `app/integrations/feishu/service.py:_token_cache`(租户令牌)、
-  `app/integrations/feishu/service.py:_seen`(消息去重)、
-  `app/integrations/feishu/service.py:_onboard_state`(引导流程)、`app/domain/poem.py:_token`。
+- `app/integrations/feishu/client.py:_token_cache`(租户令牌)、
+  `app/integrations/feishu/inbound.py:_seen`(消息去重)、
+  `app/integrations/feishu/onboarding.py:_onboard_state`(引导流程)、`app/domain/poem.py:_token`。
 
 ## 五、导入期注册表(不是"状态")
 

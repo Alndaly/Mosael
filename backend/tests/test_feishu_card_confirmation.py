@@ -5,7 +5,7 @@ import pytest
 from app.core.db import SessionLocal
 from app.db.models import FeishuBinding, FeishuBot, ToolConfirmation, User, WorkspaceMember
 from app.integrations.feishu import cards
-from app.integrations.feishu.service import handle_card_action
+from app.integrations.feishu.approvals import handle_card_action
 from tests.util import fresh_client
 
 """飞书确认卡的**授权**。
@@ -144,7 +144,8 @@ def test_missing_card_capability_degrades_to_text_and_records_why(ctx, monkeypat
     不了。能做的是撞上时降级成纯文本、把原因写进机器人状态,而不是让用户对着一张点了没反应的
     卡片猜 —— 更不能让确认本身建不出来。
     """
-    from app.integrations.feishu import service
+    from app.integrations.feishu import approvals
+    from app.integrations.feishu import client as feishu_client
 
     client, ws, user_id, _ = ctx
     with SessionLocal() as db:
@@ -155,11 +156,11 @@ def test_missing_card_capability_degrades_to_text_and_records_why(ctx, monkeypat
 
     sent: list[str] = []
     monkeypatch.setattr(
-        service, "send_card",
-        lambda *a, **k: (_ for _ in ()).throw(service.FeishuError("飞书发卡片失败: 200340")),
+        feishu_client, "send_card",
+        lambda *a, **k: (_ for _ in ()).throw(feishu_client.FeishuError("飞书发卡片失败: 200340")),
     )
-    monkeypatch.setattr(service, "send_text", lambda bot, chat, text: sent.append(text))
-    monkeypatch.setattr(service, "_feishu_origin", lambda db, sid: (db.get(FeishuBot, bot_id), "oc_chat"))
+    monkeypatch.setattr(feishu_client, "send_text", lambda bot, chat, text: sent.append(text))
+    monkeypatch.setattr(approvals, "_feishu_origin", lambda db, sid: (db.get(FeishuBot, bot_id), "oc_chat"))
 
     cid = _make_confirmation(client, ws)  # 建卡片时会触发推送
 
@@ -167,12 +168,13 @@ def test_missing_card_capability_degrades_to_text_and_records_why(ctx, monkeypat
     assert "等待确认" in sent[0] and "card.action.trigger" in sent[0]
     assert _status(cid) == "pending", "推送失败不该影响确认本身"
     with SessionLocal() as db:
-        assert service.CARD_CAPABILITY_ERROR in (db.get(FeishuBot, bot_id).status_detail or "")
+        assert approvals.CARD_CAPABILITY_ERROR in (db.get(FeishuBot, bot_id).status_detail or "")
 
 
 def test_card_send_failure_never_breaks_confirmation(ctx, monkeypatch) -> None:
     """连纯文本都发不出去时,确认仍然要建得出来(退化回桌面端确认中心兜底)。"""
-    from app.integrations.feishu import service
+    from app.integrations.feishu import approvals
+    from app.integrations.feishu import client as feishu_client
 
     client, ws, _, _ = ctx
     with SessionLocal() as db:
@@ -182,9 +184,9 @@ def test_card_send_failure_never_breaks_confirmation(ctx, monkeypatch) -> None:
         bot_id = bot.id
 
     boom = lambda *a, **k: (_ for _ in ()).throw(RuntimeError("网络炸了"))  # noqa: E731
-    monkeypatch.setattr(service, "send_card", boom)
-    monkeypatch.setattr(service, "send_text", boom)
-    monkeypatch.setattr(service, "_feishu_origin", lambda db, sid: (db.get(FeishuBot, bot_id), "oc_chat"))
+    monkeypatch.setattr(feishu_client, "send_card", boom)
+    monkeypatch.setattr(feishu_client, "send_text", boom)
+    monkeypatch.setattr(approvals, "_feishu_origin", lambda db, sid: (db.get(FeishuBot, bot_id), "oc_chat"))
 
     cid = _make_confirmation(client, ws)
     assert _status(cid) == "pending"

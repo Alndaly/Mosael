@@ -6,7 +6,9 @@ import time
 from app.ai.sidecar.adapters import TurnResult
 from app.core.db import SessionLocal
 from app.db.models import AgentSession
-from app.integrations.feishu import service
+from app.domain.feishu import bindings
+from app.integrations.feishu import client as feishu_client
+from app.integrations.feishu import inbound
 from tests.util import fresh_client
 
 
@@ -25,15 +27,15 @@ def _configured(client):
 
 
 def test_extract_text_strips_mentions() -> None:
-    assert service.extract_text('{"text": "@_user_1 @_user_2 帮我看看素材"}') == "帮我看看素材"
-    assert service.extract_text('{"text": "普通消息"}') == "普通消息"
-    assert service.extract_text("not-json") == ""
+    assert inbound.extract_text('{"text": "@_user_1 @_user_2 帮我看看素材"}') == "帮我看看素材"
+    assert inbound.extract_text('{"text": "普通消息"}') == "普通消息"
+    assert inbound.extract_text("not-json") == ""
 
 
 def test_seen_recently_dedupes() -> None:
     message_id = f"m-{time.time()}"
-    assert service.seen_recently(message_id) is False
-    assert service.seen_recently(message_id) is True
+    assert inbound.seen_recently(message_id) is False
+    assert inbound.seen_recently(message_id) is True
 
 
 def test_bot_crud_and_permissions() -> None:
@@ -70,14 +72,14 @@ def test_handle_incoming_routes_to_agent_and_replies(monkeypatch) -> None:
     # The sender must be bound to a member first — the bot acts with that member's perms.
     me = client.get("/api/auth/me").json()
     with SessionLocal() as db:
-        code, _ = service.issue_bind_code(db, ws["id"], me["id"])
-        assert service._redeem_bind_code(db, ws["id"], "ou_sender", code) is not None
+        code, _ = bindings.issue_bind_code(db, ws["id"], me["id"])
+        assert bindings.redeem_bind_code(db, ws["id"], "ou_sender", code) is not None
 
     sent: list[tuple[str, str]] = []
-    monkeypatch.setattr(service, "run_turn", lambda *a, **k: TurnResult(text="已查看,共 2 个素材"))
-    monkeypatch.setattr(service, "send_text", lambda bot, chat_id, text: sent.append((chat_id, text)))
+    monkeypatch.setattr(inbound, "run_turn", lambda *a, **k: TurnResult(text="已查看,共 2 个素材"))
+    monkeypatch.setattr(feishu_client, "send_text", lambda bot, chat_id, text: sent.append((chat_id, text)))
 
-    service.handle_incoming(bot["id"], "oc_chat_1", "msg-1", "ou_sender", content_json=json.dumps({"text": "看看素材"}))
+    inbound.handle_incoming(bot["id"], "oc_chat_1", "msg-1", "ou_sender", content_json=json.dumps({"text": "看看素材"}))
 
     assert sent == [("oc_chat_1", "已查看,共 2 个素材")]
     with SessionLocal() as db:
@@ -88,7 +90,7 @@ def test_handle_incoming_routes_to_agent_and_replies(monkeypatch) -> None:
         assert roles == ["user", "assistant"]
 
     # duplicate message id is dropped
-    service.handle_incoming(bot["id"], "oc_chat_1", "msg-1", "ou_sender", content_json=json.dumps({"text": "看看素材"}))
+    inbound.handle_incoming(bot["id"], "oc_chat_1", "msg-1", "ou_sender", content_json=json.dumps({"text": "看看素材"}))
     assert len(sent) == 1
 
 
@@ -100,10 +102,10 @@ def test_handle_incoming_unbound_sender_refused(monkeypatch) -> None:
     ).json()
     ran: list[bool] = []
     sent: list[str] = []
-    monkeypatch.setattr(service, "run_turn", lambda *a, **k: ran.append(True))
-    monkeypatch.setattr(service, "send_text", lambda bot, chat_id, text: sent.append(text))
+    monkeypatch.setattr(inbound, "run_turn", lambda *a, **k: ran.append(True))
+    monkeypatch.setattr(feishu_client, "send_text", lambda bot, chat_id, text: sent.append(text))
 
-    service.handle_incoming(bot["id"], "oc_chat_x", "msg-x", "ou_intruder", content_json=json.dumps({"text": "偷偷改点东西"}))
+    inbound.handle_incoming(bot["id"], "oc_chat_x", "msg-x", "ou_intruder", content_json=json.dumps({"text": "偷偷改点东西"}))
 
     assert ran == []  # the agent never ran for an unbound sender
     assert sent and "绑定" in sent[0]
@@ -125,13 +127,13 @@ def test_handle_incoming_adapter_error_still_replies(monkeypatch) -> None:
 
     me = client.get("/api/auth/me").json()
     with SessionLocal() as db:
-        code, _ = service.issue_bind_code(db, ws["id"], me["id"])
-        service._redeem_bind_code(db, ws["id"], "ou_sender2", code)
+        code, _ = bindings.issue_bind_code(db, ws["id"], me["id"])
+        bindings.redeem_bind_code(db, ws["id"], "ou_sender2", code)
 
-    monkeypatch.setattr(service, "run_turn", boom)
-    monkeypatch.setattr(service, "send_text", lambda bot, chat_id, text: sent.append(text))
+    monkeypatch.setattr(inbound, "run_turn", boom)
+    monkeypatch.setattr(feishu_client, "send_text", lambda bot, chat_id, text: sent.append(text))
 
-    service.handle_incoming(bot["id"], "oc_chat_2", "msg-2", "ou_sender2", content_json=json.dumps({"text": "hi"}))
+    inbound.handle_incoming(bot["id"], "oc_chat_2", "msg-2", "ou_sender2", content_json=json.dumps({"text": "hi"}))
     assert sent and "失败" in sent[0]
 
 
@@ -143,9 +145,9 @@ def _bound_bot(client, monkeypatch, sent: list):
     ).json()
     me = client.get("/api/auth/me").json()
     with SessionLocal() as db:
-        code, _ = service.issue_bind_code(db, ws["id"], me["id"])
-        assert service._redeem_bind_code(db, ws["id"], "ou_img", code) is not None
-    monkeypatch.setattr(service, "send_text", lambda bot, chat_id, text: sent.append((chat_id, text)))
+        code, _ = bindings.issue_bind_code(db, ws["id"], me["id"])
+        assert bindings.redeem_bind_code(db, ws["id"], "ou_img", code) is not None
+    monkeypatch.setattr(feishu_client, "send_text", lambda bot, chat_id, text: sent.append((chat_id, text)))
     return ws, bot
 
 
@@ -157,7 +159,7 @@ def test_不认识的消息类型不再石沉大海(monkeypatch) -> None:
     sent: list = []
     _, bot = _bound_bot(client, monkeypatch, sent)
 
-    service.handle_incoming(bot["id"], "oc_v", "msg-v", "ou_img", message_type="audio", content_json="{}")
+    inbound.handle_incoming(bot["id"], "oc_v", "msg-v", "ou_img", message_type="audio", content_json="{}")
 
     assert len(sent) == 1
     assert "看不了语音" in sent[0][1]
@@ -177,16 +179,16 @@ def test_图片消息进素材库_并把素材id带进提示(monkeypatch) -> Non
         "01f15c4890000000a49444154789c6360000002000100ffff03000006000557bfabd4"
         "0000000049454e44ae426082"
     )
-    monkeypatch.setattr(service, "download_message_resource", lambda *a, **k: png)
+    monkeypatch.setattr(feishu_client, "download_message_resource", lambda *a, **k: png)
     prompts: list[str] = []
 
     def fake_turn(*args, **kwargs):
         prompts.append(kwargs["prompt"])
         return TurnResult(text="看到了")
 
-    monkeypatch.setattr(service, "run_turn", fake_turn)
+    monkeypatch.setattr(inbound, "run_turn", fake_turn)
 
-    service.handle_incoming(
+    inbound.handle_incoming(
         bot["id"], "oc_i", "msg-i", "ou_img", message_type="image", content_json=json.dumps({"image_key": "img_k1"})
     )
 
@@ -206,16 +208,16 @@ def test_富文本消息的文字和内嵌图片都收(monkeypatch) -> None:
     _configured(client)
     sent: list = []
     _, bot = _bound_bot(client, monkeypatch, sent)
-    monkeypatch.setattr(service, "download_message_resource", lambda *a, **k: b"")
+    monkeypatch.setattr(feishu_client, "download_message_resource", lambda *a, **k: b"")
     prompts: list[str] = []
     monkeypatch.setattr(
-        service, "run_turn", lambda *a, **k: (prompts.append(k["prompt"]), TurnResult(text="收到"))[1]
+        inbound, "run_turn", lambda *a, **k: (prompts.append(k["prompt"]), TurnResult(text="收到"))[1]
     )
 
     content = json.dumps(
         {"title": "标题", "content": [[{"tag": "text", "text": "帮我看看"}, {"tag": "a", "text": "链接"}]]}
     )
-    service.handle_incoming(bot["id"], "oc_p", "msg-p", "ou_img", message_type="post", content_json=content)
+    inbound.handle_incoming(bot["id"], "oc_p", "msg-p", "ou_img", message_type="post", content_json=content)
 
     assert sent == [("oc_p", "收到")]
     assert "帮我看看" in prompts[0] and "标题" in prompts[0]
@@ -227,10 +229,10 @@ def test_图片下载失败也要回话(monkeypatch) -> None:
     _, bot = _bound_bot(client, monkeypatch, sent)
 
     def boom(*a, **k):
-        raise service.FeishuError("下载飞书资源失败(404)")
+        raise feishu_client.FeishuError("下载飞书资源失败(404)")
 
-    monkeypatch.setattr(service, "download_message_resource", boom)
-    service.handle_incoming(
+    monkeypatch.setattr(feishu_client, "download_message_resource", boom)
+    inbound.handle_incoming(
         bot["id"], "oc_e", "msg-e", "ou_img", message_type="image", content_json=json.dumps({"image_key": "k"})
     )
     assert len(sent) == 1 and "没能取回来" in sent[0][1]
@@ -244,8 +246,8 @@ def test_被重启打断的飞书会话会收到中断说明(monkeypatch) -> Non
     client = fresh_client()
     sent: list = []
     _, bot = _bound_bot(client, monkeypatch, sent)
-    monkeypatch.setattr(service, "run_turn", lambda *a, **k: TurnResult(text="好的"))
-    service.handle_incoming(bot["id"], "oc_r", "msg-r", "ou_img", content_json=json.dumps({"text": "hi"}))
+    monkeypatch.setattr(inbound, "run_turn", lambda *a, **k: TurnResult(text="好的"))
+    inbound.handle_incoming(bot["id"], "oc_r", "msg-r", "ou_img", content_json=json.dumps({"text": "hi"}))
     sent.clear()
 
     with SessionLocal() as db:
@@ -253,7 +255,7 @@ def test_被重启打断的飞书会话会收到中断说明(monkeypatch) -> Non
         session.status = "running"  # 模拟一轮跑到一半进程没了
         db.commit()
         assert reconcile_orphaned_agent_sessions(db) == 1
-        assert service.notify_interrupted_chats(db) == 1
+        assert inbound.notify_interrupted_chats(db) == 1
 
     assert sent == [("oc_r", "上一轮对话因后端重启而中断,请重新发送。")]
 
@@ -269,8 +271,8 @@ def test_中断说明只发一次_不随每次重启重发(monkeypatch) -> None:
     client = fresh_client()
     sent: list = []
     _, bot = _bound_bot(client, monkeypatch, sent)
-    monkeypatch.setattr(service, "run_turn", lambda *a, **k: TurnResult(text="好的"))
-    service.handle_incoming(bot["id"], "oc_once", "msg-o", "ou_img", content_json=json.dumps({"text": "hi"}))
+    monkeypatch.setattr(inbound, "run_turn", lambda *a, **k: TurnResult(text="好的"))
+    inbound.handle_incoming(bot["id"], "oc_once", "msg-o", "ou_img", content_json=json.dumps({"text": "hi"}))
     sent.clear()
 
     with SessionLocal() as db:
@@ -278,12 +280,12 @@ def test_中断说明只发一次_不随每次重启重发(monkeypatch) -> None:
         session.status = "running"
         db.commit()
         reconcile_orphaned_agent_sessions(db)
-        assert service.notify_interrupted_chats(db) == 1
+        assert inbound.notify_interrupted_chats(db) == 1
 
     # 第二次启动:没有新的中断,聊天里也没人说话 —— **不能**再发。
     with SessionLocal() as db:
         assert reconcile_orphaned_agent_sessions(db) == 0
-        assert service.notify_interrupted_chats(db) == 0
+        assert inbound.notify_interrupted_chats(db) == 0
     assert len(sent) == 1, f"同一条中断说明发了 {len(sent)} 次"
 
     # 但**又一次真的被打断**时,要再通知 —— 去重挡的是重复播报,不是后续的真中断。
@@ -292,7 +294,7 @@ def test_中断说明只发一次_不随每次重启重发(monkeypatch) -> None:
         session.status = "running"
         db.commit()
         assert reconcile_orphaned_agent_sessions(db) == 1
-        assert service.notify_interrupted_chats(db) == 1
+        assert inbound.notify_interrupted_chats(db) == 1
     assert len(sent) == 2
 
 
@@ -303,8 +305,8 @@ def test_发送失败不标记_下次启动重试(monkeypatch) -> None:
     client = fresh_client()
     sent: list = []
     _, bot = _bound_bot(client, monkeypatch, sent)
-    monkeypatch.setattr(service, "run_turn", lambda *a, **k: TurnResult(text="好的"))
-    service.handle_incoming(bot["id"], "oc_fail", "msg-f", "ou_img", content_json=json.dumps({"text": "hi"}))
+    monkeypatch.setattr(inbound, "run_turn", lambda *a, **k: TurnResult(text="好的"))
+    inbound.handle_incoming(bot["id"], "oc_fail", "msg-f", "ou_img", content_json=json.dumps({"text": "hi"}))
     sent.clear()
 
     with SessionLocal() as db:
@@ -314,12 +316,12 @@ def test_发送失败不标记_下次启动重试(monkeypatch) -> None:
         reconcile_orphaned_agent_sessions(db)
 
     def boom(*a, **k):
-        raise service.FeishuError("token 过期")
+        raise feishu_client.FeishuError("token 过期")
 
-    real_send = service.send_text
-    monkeypatch.setattr(service, "send_text", boom)
+    real_send = feishu_client.send_text
+    monkeypatch.setattr(feishu_client, "send_text", boom)
     with SessionLocal() as db:
-        assert service.notify_interrupted_chats(db) == 0  # 发失败
-    monkeypatch.setattr(service, "send_text", real_send)
+        assert inbound.notify_interrupted_chats(db) == 0  # 发失败
+    monkeypatch.setattr(feishu_client, "send_text", real_send)
     with SessionLocal() as db:
-        assert service.notify_interrupted_chats(db) == 1  # 恢复后补上
+        assert inbound.notify_interrupted_chats(db) == 1  # 恢复后补上
