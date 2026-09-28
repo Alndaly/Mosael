@@ -434,34 +434,36 @@ def test_a_session_used_by_someone_else_still_falls_back_to_manual(monkeypatch) 
     assert calls == []
 
 
-def test_opening_run_code_to_the_judge_shares_the_code_node_gate() -> None:
-    """「在这台机器上跑代码」这一项,和工作流里的 code 节点走**同一道闸**。
+def test_letting_host_code_skip_the_card_needs_the_deployment_admin() -> None:
+    """「在这台电脑上不隔离地跑代码」不再逐次问人,要这个**部署**的管理员点头。
 
-    同一个能力必须同一个门槛,否则承担风险的人不是做决定的人。所以这条准则不只要工作区 admin,
-    还要过 `ensure_instance_admin` —— 与 `ensure_graph_node_privileges` 完全一样的那道。
+    run_host_code 以后端的身份运行,能读写后端能读写的一切 —— 承担风险的是机器的主人,和「本机
+    文件归部署主人」同一条(domain/host_files)。沙箱里的 run_code 不在此列:代码跑在隔离里,
+    写它就是普通的内容编辑(ADR 0008 D2),工作区管理员说了算。
 
-    **注意它现在有多高**:`ensure_instance_admin` 的实际语义是「在任意一个工作区里是 owner/admin」,
-    不是「这台机器的主人」。所以今天它拦得住 editor,拦不住任何一个别处的管理员。这不是本条准则的
-    问题,是整套作用域模型里缺一层 —— 一旦那道闸收紧,这里跟着一起收紧,这正是共用它的意义。
+    钉的是一次真实的失效:这道闸曾经调的是前面已经过了的同一个工作区 admin 检查,等于不存在;
+    而且只拦 judge,比它更宽的 always 从旁边就过去了。
     """
     from tests.util import second_client
 
-    owner = fresh_client()
+    owner = fresh_client()  # 库里第一个账号 = 部署管理员
     workspace = owner.post("/api/workspaces", json={"name": "W"}).json()
-    mate = second_client("mate")
-    owner.post(f"/api/workspaces/{workspace['id']}/invitations", json={"username": "mate", "role": "editor"})
-    invitation = mate.get("/api/invitations").json()["invitations"][0]
-    mate.post(f"/api/invitations/{invitation['id']}/accept")
+    rules_url = f"/api/workspaces/{workspace['id']}/autopilot-rules"
+    admin = second_client("mate")
+    owner.post(f"/api/workspaces/{workspace['id']}/invitations", json={"username": "mate", "role": "admin"})
+    invitation = admin.get("/api/invitations").json()["invitations"][0]
+    admin.post(f"/api/invitations/{invitation['id']}/accept")
 
-    denied = mate.put(
-        f"/api/workspaces/{workspace['id']}/autopilot-rules", json={"rules": {"run_code": "judge"}}
-    )
-    assert denied.status_code == 403, denied.text
+    for level in ("judge", "always"):
+        denied = admin.put(rules_url, json={"rules": {"run_host_code": level}})
+        assert denied.status_code == 403, (level, denied.text)
 
-    allowed = owner.put(
-        f"/api/workspaces/{workspace['id']}/autopilot-rules", json={"rules": {"run_code": "judge"}}
-    )
-    assert allowed.status_code == 200, allowed.text
+    assert admin.put(rules_url, json={"rules": {"run_code": "judge"}}).status_code == 200
+
+    assert owner.put(rules_url, json={"rules": {"run_host_code": "judge"}}).status_code == 200
+    # 部署管理员打开之后,工作区管理员改别的准则不用再过这道闸 —— 它只管「放宽」那一下。
+    kept = admin.put(rules_url, json={"rules": {"run_host_code": "judge", "run_code": "ask"}})
+    assert kept.status_code == 200, kept.text
 
 
 def test_the_lists_are_workspace_level() -> None:

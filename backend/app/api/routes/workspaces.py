@@ -17,7 +17,7 @@ from app.api.schemas import (
     InvitationOut,
     InvitationListOut,
 )
-from app.domain.permissions import PermissionDenied, ensure_workspace_access, ensure_workspace_perm, ensure_workspace_role, workspace_role
+from app.domain.permissions import PermissionDenied, ensure_deployment_admin, ensure_workspace_access, ensure_workspace_perm, ensure_workspace_role, workspace_role
 from app.db.models import (
     User,
     Workspace,
@@ -84,17 +84,18 @@ def set_autopilot_rules(
         raise HTTPException(status_code=404, detail="Not found")
     incoming = autopilot_rules.normalize(body.rules)
     # 名单类的东西属于这个工作区(发布账号、浏览器档案本来就挂在它上面),工作区管理员说了算。
-    # **但「在这台机器上跑代码」不是** —— 它和工作流里的 code 节点是同一个能力,所以走同一道闸
-    # (ensure_deployment_admin)。同一个能力两个门槛的话,低的那个说了算,而承担风险的是机器的主人。
+    # 沙箱里跑的 run_code 也是(ADR 0008 D2:代码跑在内核强制的隔离里,写它就是普通的内容编辑)。
+    # **但「在这台电脑上不隔离地跑代码」(run_host_code)不是** —— 它能读写后端能读写的一切,
+    # 承担风险的是机器的主人,和「本机文件归部署主人」同一条(domain/host_files)。所以不再逐次
+    # 问人(交给判断者,或者 always 直接放行),要这个部署的管理员点头。
     #
-    # 那道闸今天有多高要说清楚:`ensure_deployment_admin` 的实际语义是「在**任意**一个工作区里是
-    # owner/admin」,不是「这台机器的主人」—— 它拦得住 editor,拦不住别处的管理员。这不是这条准则
-    # 的问题,是整套作用域模型里缺一层(见 docs/ADR 待议)。共用同一道闸的意义正在于此:那天它收紧,
-    # 这里跟着一起收紧,不需要有人记得回来改第二处。
+    # 此前这里调的是上面已经过了的同一个 ensure_workspace_role(..., "admin"),这道闸等于不存在;
+    # 而且只拦 judge,比它更宽的 always 从旁边就过去了。
     current = autopilot_rules.normalize(workspace.autopilot_rules)
-    if any(incoming[key] == "judge" and current[key] != "judge" for key in ("run_code", "run_host_code")):
+    loosened = incoming["run_host_code"] != "ask" and incoming["run_host_code"] != current["run_host_code"]
+    if loosened:
         try:
-            ensure_workspace_role(db, user, workspace_id, "admin")
+            ensure_deployment_admin(db, user)
         except PermissionDenied as exc:
             raise HTTPException(
                 status_code=403,
