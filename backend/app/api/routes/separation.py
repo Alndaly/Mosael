@@ -1,21 +1,21 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException
 
 from app.ai.runtime import separation_models
 from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import SeparationEngineOut
-from app.core.i18n import normalize_locale, tr, translate_fields
+from app.core.i18n import get_current_locale, tr, translate_fields
 from app.domain.permissions import ensure_deployment_admin
 
 router = APIRouter(tags=["separation"])
 
 
 @router.get("/separation/engines", response_model=list[SeparationEngineOut])
-def list_separation_engines(request: Request, user: CurrentUser) -> list[dict]:
+def list_separation_engines(user: CurrentUser) -> list[dict]:
     """人声/背景音分离引擎,以及它们装没装。"""
     # 领域里存的是 key,**在出口翻译**(见 core/i18n)——领域数据不必知道语言。
-    locale = normalize_locale(request.headers.get("accept-language"))
+    locale = get_current_locale()
     return [translate_fields(row, ("label", "message"), locale) for row in separation_models.list_status()]
 
 

@@ -3,13 +3,13 @@ from __future__ import annotations
 import time
 from datetime import timedelta
 
-from fastapi import APIRouter, File, HTTPException, Request, UploadFile
+from fastapi import APIRouter, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.i18n import tr
-from app.api.deps import CurrentUser, DbSession
+from app.api.deps import CurrentUser, DbSession, PresentedToken
 from app.api.schemas import (
     AuthCredentials,
     AuthOut,
@@ -261,12 +261,10 @@ def update_password(body: PasswordUpdate, db: DbSession, user: CurrentUser) -> d
 
 
 @router.post("/auth/logout")
-def logout(request: Request, db: DbSession, user: CurrentUser) -> dict:
-    # Read the token the same way get_current_user does. Reading only the header meant logging
-    # out of a ?token= session reported success and revoked nothing — a false confirmation,
-    # which is worse than refusing.
-    header = request.headers.get("authorization", "")
-    token = header.removeprefix("Bearer ").strip() or (request.query_params.get("token") or "").strip()
+def logout(db: DbSession, user: CurrentUser, token: PresentedToken) -> dict:
+    # Read the token the same way get_current_user does (PresentedToken is that same reader).
+    # Reading only the header meant logging out of a ?token= session reported success and
+    # revoked nothing — a false confirmation, which is worse than refusing.
     session = find_session(db, token)
     if session is not None and session.user_id == user.id:
         db.delete(session)

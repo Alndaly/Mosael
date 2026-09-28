@@ -5,12 +5,12 @@ import shutil
 import tempfile
 from pathlib import Path
 
-from fastapi import APIRouter, File, Form, HTTPException, Response, UploadFile, Request
+from fastapi import APIRouter, File, Form, HTTPException, Response, UploadFile
 from fastapi.responses import FileResponse
 
 from app.api.deps import CurrentUser, DbSession
 from app.domain.voices.transcription import ASRError
-from app.core.i18n import normalize_locale, tr, translate_fields
+from app.core.i18n import get_current_locale, tr, translate_fields
 from app.db.models import Job, Voice
 from app.api.schemas import (
     EngineSynthesizeRequest,
@@ -166,7 +166,7 @@ def synthesize(voice_id: str, body: SynthesizeRequest, db: DbSession, user: Curr
 
 
 @router.get("/tts/f5-models")
-def list_f5_models(request: Request, user: CurrentUser) -> list[dict]:
+def list_f5_models(user: CurrentUser) -> list[dict]:
     """本地克隆能用哪几份权重,各自认得什么语言、装没装。
 
     这是「引擎 / 模型」分开之后新长出来的一层:引擎什么语言都支持,支持范围由权重决定
@@ -174,7 +174,7 @@ def list_f5_models(request: Request, user: CurrentUser) -> list[dict]:
     """
     from app.ai.runtime import f5_models
 
-    locale = normalize_locale(request.headers.get("accept-language"))
+    locale = get_current_locale()
     return [translate_fields(row, ("label", "note"), locale) for row in f5_models.list_status()]
 
 
@@ -193,11 +193,11 @@ def download_f5_model(model_id: str, db: DbSession, user: CurrentUser) -> dict:
 
 
 @router.get("/tts/engines", response_model=list[TtsEngineChoiceOut])
-def list_tts_engines(request: Request, db: DbSession, user: CurrentUser) -> list[dict]:
+def list_tts_engines(db: DbSession, user: CurrentUser) -> list[dict]:
     """Engines the配音 UI can offer, and what each one needs from the user."""
     from app.domain.voices.engine_catalog import describe_engines
 
-    locale = normalize_locale(request.headers.get("accept-language"))
+    locale = get_current_locale()
     return [translate_fields(row, ("label", "note"), locale) for row in describe_engines(db, user.id)]
 
 
@@ -376,8 +376,8 @@ def set_tts_config(body: TtsConfigUpdate, db: DbSession, user: CurrentUser) -> d
 
 
 @router.get("/tts/models", response_model=list[TtsEngineOut])
-def list_tts_models(request: Request, user: CurrentUser) -> list[dict]:
-    locale = normalize_locale(request.headers.get("accept-language"))
+def list_tts_models(user: CurrentUser) -> list[dict]:
+    locale = get_current_locale()
     return [translate_fields(row, ("label", "detail", "message"), locale) for row in tts_models.list_status()]
 
 

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Response, Request
+from fastapi import APIRouter, HTTPException, Response
 from sqlalchemy import select
 
 from app.domain import sharing
@@ -17,7 +17,7 @@ from app.api.schemas import (
 )
 from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm
 from app.db.models import Asset, PublishAccount, PublishTask
-from app.core.i18n import normalize_locale, t
+from app.core.i18n import get_current_locale, t
 from app.domain.publish import (
     PUBLISH_PLATFORMS,
     PublishDomainError,
@@ -35,9 +35,9 @@ router = APIRouter(tags=["publish"])
 
 
 @router.get("/publish/platforms", response_model=list[PublishPlatformOut])
-def platforms(request: Request) -> list[dict]:
+def platforms() -> list[dict]:
     # 目录里存的是 key,**在出口翻译** —— 领域数据不必知道语言(见 core/i18n)。
-    locale = normalize_locale(request.headers.get("accept-language"))
+    locale = get_current_locale()
     return [
         {
             "platform": key,
