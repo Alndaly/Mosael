@@ -533,7 +533,9 @@ function CreatePublishDialog({
     (platforms.data ?? []).find((item) => item.platform === selectedAccount?.platform) ?? null;
   const titleMax = platformMeta?.title_max ?? 300;
   // 超长的标题后端会拒(publishErr_titleTooLong):计数变红的同时就不让提交,别等点了再报错。
-  const titleTooLong = title.trim().length > titleMax;
+  // 按码点数,和后端的 len() 同一把尺 —— `.length` 数的是 UTF-16 单元,一个 emoji 算两个,会提前拦下。
+  const titleLength = [...title.trim()].length;
+  const titleTooLong = titleLength > titleMax;
   const optionSpecs = platformMeta?.options ?? [];
   // 换平台就按新平台的声明重置:选项的键是平台专属的,带着上一个平台的键提交会被后端拒掉
   // (那是对的 —— 静默丢掉才会让人以为自己设了公开)。
@@ -634,7 +636,7 @@ function CreatePublishDialog({
               "ml-2 font-normal normal-case not-italic tracking-normal text-muted-foreground",
               titleTooLong && "font-semibold text-destructive",
             )}>
-              {title.trim().length}/{titleMax}
+              {titleLength}/{titleMax}
             </em>
           </span>
           <Input value={title} maxLength={titleMax + 20} onChange={(event) => setTitle(event.target.value)} />

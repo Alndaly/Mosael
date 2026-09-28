@@ -79,5 +79,9 @@ it("新建发布:不列停用账号并说明;标题超长时不能提交", async
   expect(submit).toBeEnabled();
   await user.type(title, "6");
   expect(submit).toBeDisabled();
+  // 按码点数(后端 len() 的尺):五个 emoji 是 5 个字,不是 10 个 UTF-16 单元。
+  await user.clear(title);
+  await user.type(title, "🎬🎬🎬🎬🎬");
+  expect(submit).toBeEnabled();
   client.clear();
 });

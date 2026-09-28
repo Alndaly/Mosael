@@ -43,8 +43,7 @@ import type { JSONContent } from "@tiptap/react";
 
 import { ChatComposer, appendText, collectReferences, documentText, emptyDocument } from "@/features/agent/ChatComposer";
 import type { AgentReference } from "@/features/agent/references";
-import { InlineConfirmations } from "@/features/agent/InlineConfirmations";
-import { InlineQuestions } from "@/features/agent/InlineQuestions";
+import { PendingDecisions } from "@/features/agent/PendingDecisions";
 import { AgentSessionSwitcher } from "@/features/agent/AgentSessionSwitcher";
 import { ModelPicker } from "@/features/agent/ModelPicker";
 import { AgentErrorCard, AgentTurnContent, type AgentTimelineItem } from "@/features/agent/ToolCalls";
@@ -533,8 +532,7 @@ export function CanvasAgentChat({
             <AgentStatusRow label={t("chatThinking")} meta={t("usageRunning").replace("{t}", formatElapsedSeconds(elapsedSeconds))} />
           </div>
         )}
-        {activeSession && <InlineConfirmations workspaceId={workspaceId} allowKey={activeSession.id} />}
-              {activeSession && <InlineQuestions sessionId={activeSession.id} />}
+        {activeSession && <PendingDecisions workspaceId={workspaceId} sessionId={activeSession.id} />}
       </div>
       <JumpToLatest stick={stick} label={t("chatJumpToLatest")} newLabel={t("chatNewBelow")} />
       </div>

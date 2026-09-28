@@ -53,8 +53,7 @@ import { InspectorCard, InspectorRow } from "@/components/layout/InspectorCard";
 import { PlanCard, planHistory, type PlanStep } from "@/features/agent/PlanCard";
 import { JumpToLatest, useStickToBottom } from "@/features/agent/stickToBottom";
 import { QueuedMessages } from "@/features/agent/QueuedMessages";
-import { InlineConfirmations } from "@/features/agent/InlineConfirmations";
-import { InlineQuestions } from "@/features/agent/InlineQuestions";
+import { PendingDecisions } from "@/features/agent/PendingDecisions";
 import { isRedundantAnswerRecord, recordedQuestionIds } from "@/features/agent/answerRecords";
 import { AgentTurnContent, type AgentTimelineItem, type ToolCall } from "@/features/agent/ToolCalls";
 import { formatElapsedSeconds } from "@/lib/time";
@@ -341,8 +340,7 @@ export function ChatWorkspace({
   //: 确认卡掉回右上角的全局中心(少了「本会话始终允许」),选择卡哪儿都看不到,智能体干等到超时。
   const pendingCards = activeSession ? (
     <div className={cn(COMPOSER_COLUMN, "grid max-h-[40vh] min-w-0 gap-2 overflow-y-auto overflow-x-hidden empty:hidden")}>
-      <InlineConfirmations workspaceId={workspace.id} allowKey={activeSession.id} />
-      <InlineQuestions sessionId={activeSession.id} />
+      <PendingDecisions workspaceId={workspace.id} sessionId={activeSession.id} />
     </div>
   ) : null;
 
@@ -534,8 +532,7 @@ export function ChatWorkspace({
                   </div>
                 </div>
               )}
-              {activeSession && <InlineConfirmations workspaceId={workspace.id} allowKey={activeSession.id} />}
-              {activeSession && <InlineQuestions sessionId={activeSession.id} />}
+              {activeSession && <PendingDecisions workspaceId={workspace.id} sessionId={activeSession.id} />}
             </div>
             <JumpToLatest stick={stick} label={t("chatJumpToLatest")} newLabel={t("chatNewBelow")} />
             </div>
