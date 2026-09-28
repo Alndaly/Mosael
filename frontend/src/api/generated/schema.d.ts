@@ -8073,6 +8073,8 @@ export interface components {
             automatic?: string | null;
             /** Options */
             options?: components["schemas"]["CapabilityProviderOut"][];
+            /** Used By */
+            used_by?: components["schemas"]["CapabilityUseOut"][];
         };
         /** CapabilityDefaultUpdate */
         CapabilityDefaultUpdate: {
@@ -8158,6 +8160,16 @@ export interface components {
             builtin: boolean;
             /** Missing */
             missing?: string[];
+        };
+        /**
+         * CapabilityUseOut
+         * @description 一项宿主能力用在哪(ADR 0032 §4),从能力表现算。
+         */
+        CapabilityUseOut: {
+            /** Kind */
+            kind: string;
+            /** Label */
+            label: string;
         };
         /**
          * ClipIdsRequest
@@ -10074,6 +10086,15 @@ export interface components {
                 [key: string]: boolean;
             };
         };
+        /** PluginCapabilityUseOut */
+        PluginCapabilityUseOut: {
+            /** Kind */
+            kind: string;
+            /** Label */
+            label: string;
+            /** Capability */
+            capability: string;
+        };
         /**
          * PluginCredentialOut
          * @description 插件声明的一项凭据 + 当前状态。secret 项的 value 是掩码,不是原值。
@@ -10185,6 +10206,8 @@ export interface components {
             description: string;
             /** Provides */
             provides?: string[];
+            /** Used By */
+            used_by?: components["schemas"]["PluginCapabilityUseOut"][];
         };
         /**
          * PluginInstallPreview

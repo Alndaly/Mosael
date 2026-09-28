@@ -12,17 +12,21 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 //: 路径在 api/domains/plugins 里,界面调的是**有名字的函数** —— 所以这里打桩的也是它们,
 //: 断言的是"带着哪个连接、哪个工具、哪些参数",而不是一串拼出来的 URL。
-const { listPluginCredentials, savePluginCredentials, invokePluginTool, listAssets } = vi.hoisted(() => ({
+const { listPluginCredentials, savePluginCredentials, invokePluginTool, listAssets, parseDocument } = vi.hoisted(() => ({
   listPluginCredentials: vi.fn(),
   savePluginCredentials: vi.fn(),
   invokePluginTool: vi.fn(),
   listAssets: vi.fn(),
+  parseDocument: vi.fn(),
 }));
 vi.mock("@/api/client", () => ({
   listPluginCredentials,
   savePluginCredentials,
   invokePluginTool,
   listAssets,
+  parseDocument,
+  denoiseAsset: vi.fn(),
+  separateAssetAudio: vi.fn(),
   fetchWorkflowFieldOptions: vi.fn().mockResolvedValue([]),
   startPluginOauth: vi.fn(),
   finishPluginOauth: vi.fn(),
@@ -70,7 +74,10 @@ beforeEach(() => {
     { id: "img-1", name: "海边.png", original_filename: "a.png", kind: "image" },
     { id: "img-2", name: "山.png", original_filename: "b.png", kind: "image" },
     { id: "vid-1", name: "成片.mp4", original_filename: "c.mp4", kind: "video" },
+    { id: "doc-1", name: "协议.pdf", original_filename: "d.pdf", kind: "document" },
   ]);
+  parseDocument.mockReset();
+  parseDocument.mockResolvedValue({ status: "parsing" });
   savePluginCredentials.mockReset();
   invokePluginTool.mockReset();
   listPluginCredentials.mockResolvedValue([
@@ -460,7 +467,15 @@ describe("只替宿主做事的插件", () => {
     blocked_reason: "",
     authorization: "",
     tools: [],
-    host_tools: [{ name: "mineru_parse", label: "用 MinerU 解析文档", description: "把一份文档交给 MinerU 解析成 Markdown", provides: ["document_parse"] }],
+    host_tools: [{
+      name: "mineru_parse", label: "用 MinerU 解析文档", description: "把一份文档交给 MinerU 解析成 Markdown", provides: ["document_parse"],
+      //: 「用在哪」是后端从能力表现算的(ADR 0032 §4),界面照着列,不自己写一句。
+      used_by: [
+        { capability: "document_parse", kind: "app", label: "文档详情 → 重新解析" },
+        { capability: "document_parse", kind: "workflow", label: "工作流节点「文档转 Markdown」的「解析方式」" },
+        { capability: "document_parse", kind: "agent", label: "智能体工具「重新解析文档」" },
+      ],
+    }],
     capability_status: {},
   } as PluginInstance;
 
@@ -473,7 +488,37 @@ describe("只替宿主做事的插件", () => {
     const row = document.querySelector<HTMLElement>("[data-host-tool='mineru_parse']")!;
     expect(row).toBeTruthy();
     expect(row.textContent).toContain("用 MinerU 解析文档");
-    expect(row.textContent).toContain("pluginProvidesDocumentParse");
+    //: 用户问「为何这个列表不是动态的」:用在哪按接口给的逐条列,页面、工作流、智能体各一条。
+    const uses = [...row.querySelectorAll<HTMLElement>("[data-capability-use]")];
+    expect(uses.map((one) => one.dataset.capabilityUse)).toEqual(["app", "workflow", "agent"]);
+    expect(uses[1].textContent).toContain("文档转 Markdown");
+    expect(row.querySelector("[data-host-tool-unused]")).toBeNull();
+  });
+
+  it("接口说没有地方用到时直说,不留一块空白", () => {
+    const unused = { ...instance, host_tools: [{ ...instance.host_tools![0], used_by: [] }] };
+    wrap(<ConnectionCard pkg={pkg} instance={unused as PluginInstance} workspaceId="w1" />);
+    expect(document.querySelector("[data-host-tool-unused]")?.textContent).toBe("pluginHostToolUnused");
+  });
+
+  it("插件页就能试一下:只列文档,走的是文档重新解析那一条路、点名这个连接", async () => {
+    wrap(<ConnectionCard pkg={pkg} instance={instance} workspaceId="w1" />);
+    const trial = document.querySelector<HTMLElement>("[data-host-tool-try='document_parse']")!;
+    fireEvent.click(within(trial).getByRole("button", { name: /pluginHostTryPick/ }));
+    expect(await screen.findByRole("option", { name: "协议.pdf" })).toBeTruthy();
+    expect(screen.queryByRole("option", { name: "海边.png" })).toBeNull();
+    fireEvent.click(screen.getByRole("option", { name: "协议.pdf" }));
+    fireEvent.click(within(trial).getByRole("button", { name: /pluginHostTry$/ }));
+    await waitFor(() => expect(parseDocument).toHaveBeenCalledWith("doc-1", "m1"));
+    expect(await within(trial).findByText("pluginHostTryParsing")).toBeTruthy();
+    expect(within(trial).getByRole("button", { name: "pluginHostTryOpen" })).toBeTruthy();
+  });
+
+  it("连接还用不了时不给「试一下」—— 原因卡片抬头已经说了", () => {
+    const blocked = { ...instance, blocked_reason: "还没填 MinerU 的 Token" };
+    wrap(<ConnectionCard pkg={pkg} instance={blocked as PluginInstance} workspaceId="w1" />);
+    expect(document.querySelector("[data-host-tool='mineru_parse']")).toBeTruthy();
+    expect(document.querySelector("[data-host-tool-try]")).toBeNull();
   });
 });
 

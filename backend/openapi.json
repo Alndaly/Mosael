@@ -23006,6 +23006,13 @@
             },
             "type": "array",
             "title": "Options"
+          },
+          "used_by": {
+            "items": {
+              "$ref": "#/components/schemas/CapabilityUseOut"
+            },
+            "type": "array",
+            "title": "Used By"
           }
         },
         "type": "object",
@@ -23220,6 +23227,25 @@
         ],
         "title": "CapabilityProviderOut",
         "description": "一项宿主能力的一个候选:内置实现(`builtin`),或这个人的一个插件连接。"
+      },
+      "CapabilityUseOut": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "label"
+        ],
+        "title": "CapabilityUseOut",
+        "description": "一项宿主能力用在哪(ADR 0032 §4),从能力表现算。"
       },
       "ClipIdsRequest": {
         "properties": {
@@ -27722,6 +27748,29 @@
         "type": "object",
         "title": "PluginCapabilityUpdate"
       },
+      "PluginCapabilityUseOut": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "capability": {
+            "type": "string",
+            "title": "Capability"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "label",
+          "capability"
+        ],
+        "title": "PluginCapabilityUseOut"
+      },
       "PluginCredentialOut": {
         "properties": {
           "key": {
@@ -27863,6 +27912,13 @@
             },
             "type": "array",
             "title": "Provides"
+          },
+          "used_by": {
+            "items": {
+              "$ref": "#/components/schemas/PluginCapabilityUseOut"
+            },
+            "type": "array",
+            "title": "Used By"
           }
         },
         "type": "object",

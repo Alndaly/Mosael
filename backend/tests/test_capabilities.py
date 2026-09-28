@@ -57,6 +57,11 @@ def test_设置页按能力表列出_降噪_分离_文档解析_外链() -> None
     documents = listed[2]
     assert documents["options"] == [{"id": "builtin:local", "name": "本地解析", "builtin": True, "missing": []}]
     assert documents["current"] is None and documents["automatic"] == "builtin:local"
+    #: 每项能力下面列「用在哪」(ADR 0032 §4):定了这一家,哪些地方跟着换 —— 现算,不手写。
+    kinds = {one["kind"] for one in documents["used_by"]}
+    assert kinds == {"app", "workflow", "agent"}
+    assert any("降噪" in one["label"] for one in denoise["used_by"] if one["kind"] == "workflow")
+    assert not any("设成默认" in one["label"] for one in documents["used_by"]), "设置页里不再说「在设置里设成默认」"
 
 
 def test_文档解析没定默认就用本地的_配好了云端也不悄悄换() -> None:
@@ -152,3 +157,22 @@ def test_清单里文档解析只给宿主调_规矩和生成一样(patch: dict,
     with pytest.raises(ManifestError) as raised:
         parse({**PARSER, **patch}, "/tmp/x")
     assert raised.value.key == key
+
+
+def test_点名自动用的那个之外的内置实现_存下来_挑的时候用它() -> None:
+    """降噪三个本机引擎:点名 RNNoise 此前报「没有这个连接」(用户截图)—— 默认那张表只认插件连接。"""
+    from app.domain import audio_capabilities, capabilities
+
+    client = fresh_client()
+    me = _me(client)
+    denoise = audio_capabilities.DENOISE
+    other = next(one.id for one in denoise.builtins if one.id != "builtin:ffmpeg")
+    response = client.put("/api/settings/capabilities/audio_denoise", json={"provider_id": other})
+    assert response.status_code == 200, response.text
+    assert response.json()["current"] == other
+    with SessionLocal() as db:
+        assert capabilities.choices(db, me, denoise)["current"] == other
+
+    #: 选回自动用的那个 = 清掉默认。
+    back = client.put("/api/settings/capabilities/audio_denoise", json={"provider_id": "builtin:ffmpeg"}).json()
+    assert back["current"] is None

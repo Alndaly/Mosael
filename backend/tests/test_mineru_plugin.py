@@ -258,6 +258,11 @@ def test_宿主_点名插件解析_按页切段_表格转成_Markdown_插图搬�
     package = next(one for one in client.get("/api/plugins").json() if one["id"] == FAKE_PARSER["id"])
     instance = package["instances"][0]
     assert instance["tools"] == [] and [tool["provides"] for tool in instance["host_tools"]] == [["document_parse"]]
+    #: 「用在哪」是能力表现算的(ADR 0032 §4):设置默认、文档详情、工作流节点、智能体工具都在,不是手写的一句话。
+    used = {(one["kind"], one["label"]) for one in instance["host_tools"][0]["used_by"]}
+    assert {kind for kind, _ in used} == {"app", "workflow", "agent"}
+    assert any(kind == "workflow" and "文档转 Markdown" in label for kind, label in used)
+    assert any(kind == "agent" and "reparse_document" in label for kind, label in used)
 
     #: 工作流「文档转 Markdown」能点名用哪一家:选项里有它;点名插件就用插件那一份,点名本地就用本地那一份。
     options = client.get("/api/workflows/field-options",

@@ -46,6 +46,19 @@ class PluginToolStateOut(ApiModel):
     form: dict = Field(default_factory=dict)
 
 
+class CapabilityUseOut(ApiModel):
+    """一项宿主能力用在哪(ADR 0032 §4),从能力表现算。"""
+
+    #: `app`(宿主界面上的入口)/ `workflow`(工作流或画板的节点字段)/ `agent`(智能体工具)。
+    kind: str
+    label: str
+
+
+class PluginCapabilityUseOut(CapabilityUseOut):
+    #: 插件工具可以认领几项能力,每条标明是哪一项。
+    capability: str
+
+
 class PluginHostToolOut(ApiModel):
     """只给 Mosael 调用的工具(认领了宿主能力:文档解析、生成……)。不进勾选表 —— 勾了也不会给智能体和工作流 ——
     但插件页要列出来:MinerU 这类插件只有这样的工具,不列的话那一块是空的,看不出它能做什么(用户截图)。"""
@@ -53,8 +66,10 @@ class PluginHostToolOut(ApiModel):
     name: str
     label: str = ""
     description: str = ""
-    #: 它替宿主做的是哪几件事(`document_parse` / `generation` / `public_url`)—— 界面据此说它用在哪。
+    #: 它替宿主做的是哪几件事(`document_parse` / `audio_denoise` / `generation` ……)。
     provides: list[str] = Field(default_factory=list)
+    #: 这些能力在 Mosael 里用在哪 —— 能力表现算的(ADR 0032 §4),不是手写的一句话。空 = 这个版本还用不到它。
+    used_by: list[PluginCapabilityUseOut] = Field(default_factory=list)
 
 
 class PluginCapabilityStatusOut(ApiModel):
@@ -351,6 +366,7 @@ class CapabilityChoicesOut(ApiModel):
     #: 不定的话会用的那一家(有内置实现就是它;没有的只有一家配好时才有),和现在定没定无关。
     automatic: str | None = None
     options: list[CapabilityProviderOut] = Field(default_factory=list)
+    used_by: list[CapabilityUseOut] = Field(default_factory=list)
 
 
 class CapabilityDefaultUpdate(ApiModel):

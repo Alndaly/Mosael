@@ -159,15 +159,22 @@ def register_use_finder(finder: Callable[[], list[Use]]) -> None:
         _use_finders.append(finder)
 
 
-def uses_of(name: str) -> list[Use]:
-    """这项能力用在哪。设置页的「设成默认」是每项能力都有的,排第一;再是登记的入口,最后是现算的。"""
+def uses_of(name: str, *, settings: bool = True) -> list[Use]:
+    """这项能力用在哪。设置页的「设成默认」是每项能力都有的,排第一;再是登记的入口,最后是现算的。
+    `settings=False`:设置页自己列的时候不带那一条 —— 在「能力提供方」里写「能力提供方:设成默认」是废话。"""
     from app.core.i18n import fragment
 
-    found = [Use(name, "app", fragment("capUse_settingsDefault"))] if name in _registry else []
+    found = [Use(name, "app", fragment("capUse_settingsDefault"))] if settings and name in _registry else []
     found += [one for one in _uses if one.capability == name]
     for finder in _use_finders:
         found += [one for one in finder() if one.capability == name]
     return found
+
+
+def used_by(name: str, *, settings: bool = True) -> list[dict[str, str]]:
+    """`uses_of` 译成给人看的一行一条(设置页、插件页照着列)。"""
+    return [{"kind": use.kind, "label": tr(use.label["__key"], **use.label.get("params", {}))}
+            for use in uses_of(name, settings=settings)]
 
 
 #: 工作流 / 画板字段里「挑一家」的通用选项来源:`options_from: "providers.<能力>"`(ADR 0032 §3)。
@@ -241,6 +248,8 @@ def choices(db: Session, owner_user_id: str, capability: Capability) -> dict[str
         "automatic": automatic.id if automatic else None,
         "options": [{"id": one.id, "name": one.name, "builtin": one.builtin, "missing": list(one.missing)}
                     for one in candidates],
+        #: 定了这一家,哪些地方跟着换(ADR 0032 §4)。
+        "used_by": used_by(capability.name, settings=False),
     }
 
 
@@ -300,7 +309,8 @@ def resolve_named(db: Session, owner_user_id: str | None, capability: Capability
 
 
 def set_default(db: Session, owner_user_id: str, capability: Capability, provider_id: str | None) -> None:
-    """定下(或清掉)这个人在这项能力上的默认。选内置的 = 清掉(没定默认时本来就用内置的)。"""
+    """定下(或清掉)这个人在这项能力上的默认。选「不定时本来就会用的」内置实现 = 清掉;别的内置实现(降噪的
+    RNNoise)是一次真的选择,照样存。"""
     from app.domain.plugins import capability_defaults
 
     #: 选的是「不定时本来就会用的那一家」= 清掉:以后内置实现换了先后,跟着走。
@@ -308,7 +318,8 @@ def set_default(db: Session, owner_user_id: str, capability: Capability, provide
     if provider_id is None or (automatic is not None and provider_id == automatic.id):
         capability_defaults.set_default(db, owner_user_id, capability.name, None)
         return
-    capability_defaults.set_default(db, owner_user_id, capability.name, provider_id)
+    capability_defaults.set_default(db, owner_user_id, capability.name, provider_id,
+                                    builtin_ids=frozenset(one.id for one in capability.builtins))
 
 
 __all__ = [
@@ -322,6 +333,7 @@ __all__ = [
     "Use",
     "register_use",
     "register_use_finder",
+    "used_by",
     "uses_of",
     "choose",
     "get",

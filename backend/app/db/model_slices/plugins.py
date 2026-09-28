@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Any
-from sqlalchemy import Boolean, DateTime, ForeignKey, JSON, String, Text
+from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, JSON, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 from app.core.db import Base
 from app.core.secrets_at_rest import EncryptedText
@@ -156,7 +156,11 @@ class PluginInvocation(Base):
 
 
 class PluginCapabilityDefault(Base):
-    """某个人把哪一个插件实例定为某项能力的默认 —— 素材外链、文档解析……(见 domain/capabilities)。
+    """某个人把哪一家定为某项能力的默认 —— 素材外链、文档解析、降噪……(见 domain/capabilities)。
+
+    那一家是**一个插件连接**(`instance_id`)或**一个内置实现**(`builtin_id`,如 `builtin:rnnoise`),两列恰有一列有值。
+    内置实现也要存:一项能力可以有几个(ADR 0032 §1),点名自动用的那个之外的(降噪的 RNNoise)就是一次真的选择。
+    此前只有 `instance_id`,点名 RNNoise 报「没有这个连接」(用户截图)。
 
     **一个人配了几家对象存储时,用哪一家必须由他说了算。** 此前按实例名的字母序取第一个:
     谁被用上取决于它叫什么,而排第一的那个没配好时整条生成直接报错,不会换到配好的那一家。
@@ -170,8 +174,13 @@ class PluginCapabilityDefault(Base):
 
     owner_user_id: Mapped[str] = mapped_column(String(64), primary_key=True)
     capability: Mapped[str] = mapped_column(String(40), primary_key=True)
-    instance_id: Mapped[str] = mapped_column(ForeignKey("plugin_instances.id", ondelete="CASCADE"), nullable=False)
+    instance_id: Mapped[str | None] = mapped_column(ForeignKey("plugin_instances.id", ondelete="CASCADE"), nullable=True)
+    builtin_id: Mapped[str | None] = mapped_column(String(80), nullable=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
+
+    __table_args__ = (
+        CheckConstraint("(instance_id IS NULL) != (builtin_id IS NULL)", name="ck_capability_default_one_provider"),
+    )
 
 
 class PluginPublicLink(Base):

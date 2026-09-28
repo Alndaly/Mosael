@@ -832,6 +832,39 @@ def _migrate_provider_defaults_per_person() -> None:
         conn.execute(text("ALTER TABLE provider_defaults_new RENAME TO provider_defaults"))
 
 
+def _migrate_capability_defaults_name_builtins() -> None:
+    """能力的默认可以是一个内置实现(ADR 0032 §1):`plugin_capability_defaults` 加 `builtin_id`,`instance_id` 改成可空。
+
+    降噪有三个本机引擎,点名自动用的那个之外的(RNNoise)是一次真的选择,此前只能存插件连接 id,选了报「没有这个连接」。
+    老行都是插件连接,原样搬;指向已删连接的悬空行不搬(本来就不作数)。SQLite 改不了列的可空性,所以按重建表的老办法:建新表 → 搬行 → 换名。
+    """
+    inspector = inspect(engine)
+    if "plugin_capability_defaults" not in set(inspector.get_table_names()):
+        return
+    if "builtin_id" in {c["name"] for c in inspector.get_columns("plugin_capability_defaults")}:
+        return
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "CREATE TABLE plugin_capability_defaults_new ("
+                "owner_user_id VARCHAR(64) NOT NULL, capability VARCHAR(40) NOT NULL, "
+                "instance_id VARCHAR(64) REFERENCES plugin_instances (id) ON DELETE CASCADE, "
+                "builtin_id VARCHAR(80), updated_at DATETIME NOT NULL, "
+                "PRIMARY KEY (owner_user_id, capability), "
+                "CONSTRAINT ck_capability_default_one_provider CHECK ((instance_id IS NULL) != (builtin_id IS NULL)))"
+            )
+        )
+        conn.execute(
+            text(
+                "INSERT INTO plugin_capability_defaults_new (owner_user_id, capability, instance_id, builtin_id, updated_at) "
+                "SELECT owner_user_id, capability, instance_id, NULL, updated_at FROM plugin_capability_defaults "
+                "WHERE instance_id IN (SELECT id FROM plugin_instances)"
+            )
+        )
+        conn.execute(text("DROP TABLE plugin_capability_defaults"))
+        conn.execute(text("ALTER TABLE plugin_capability_defaults_new RENAME TO plugin_capability_defaults"))
+
+
 def _migrate_hash_session_tokens() -> None:
     """把老库里明文存着的会话令牌就地换成哈希。
 
@@ -5389,6 +5422,7 @@ def migration_plan() -> MigrationPlan:
                 _migrate_drop_deployment_defaults,
                 _migrate_connections_get_an_owner,
                 _migrate_plugin_instances_get_an_owner,
+                _migrate_capability_defaults_name_builtins,
                 _migrate_drop_the_knowledge_base,
                 _migrate_hash_session_tokens,
                 _migrate_client_version,

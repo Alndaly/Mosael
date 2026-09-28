@@ -317,7 +317,8 @@ def _instance(db: DbSession, instance) -> dict:
         # internal 的工具只给宿主适配层用,勾选列表里不出现 —— 勾上也不会暴露,列出来只会让人以为能。
         "tools": [{**tool, "exposed": tool["name"] in chosen, "form": _tool_form(tool)}
                   for tool in tools if not tool["internal"]],
-        "host_tools": [{key: tool[key] for key in ("name", "label", "description", "provides")}
+        "host_tools": [{**{key: tool[key] for key in ("name", "label", "description", "provides")},
+                        "used_by": _used_by(tool["provides"])}
                        for tool in tools if tool["internal"] and tool["provides"]],
         "capability_status": {
             capability: _capability_status(status)
@@ -326,6 +327,12 @@ def _instance(db: DbSession, instance) -> dict:
         },
         "network": {"mode": instance.network_mode, "proxy_url": instance.proxy_url},
     }
+
+
+def _used_by(provides: list[str]) -> list[dict]:
+    from app.domain import capabilities
+
+    return [{"capability": capability, **use} for capability in provides for use in capabilities.used_by(capability)]
 
 
 def _tool_form(tool: dict) -> dict:
