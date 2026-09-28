@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import mimetypes
-from pathlib import Path
 
 from fastapi import APIRouter, File, Form, HTTPException, Query, Response, UploadFile
 from fastapi.responses import FileResponse
@@ -273,50 +272,25 @@ def analyze_asset_route(
     connection, model, workspace and video mode from that session. OAuth image/video-frame input
     uses the tool-free Gateway and never requires a caller-supplied service address.
     """
+    from app.core.security import find_session
+    from app.domain.agent.analysis_target import agent_session_target
     from app.domain.analysis.service import AnalysisError, analyze_asset
 
     asset = require_asset(db, user, asset_id)
     ensure_workspace_perm(db, user, asset.workspace_id, "ai")
-    resolved_connection = None
-    model = ""
-    surface = "direct"
-    mode = body.mode
-    # 智能体工具回连携带的短期令牌绑定 agent_session_id。当前模型从这份服务端事实解析，
-    # 不能让模型在工具参数里自报 profile/model —— 那既可伪造，也可能摸到别人的连接。
-    from app.core.security import find_session
-    from app.db.models import AgentSession
-
+    # 智能体工具回连带的短期令牌绑着 agent_session_id:那时用这次对话的连接和模型(见 agent_session_target)。
     auth = find_session(db, token)
-    if auth is not None and auth.agent_session_id:
-        session = db.get(AgentSession, auth.agent_session_id)
-        if session is None or session.workspace_id != asset.workspace_id:
-            raise HTTPException(status_code=422, detail=tr("routeErr_assetNotInAgentWorkspace"))
-        from app.ai.sidecar.adapters import AdapterError
-        from app.domain.agent.host import resolve_chat_provider
-
-        try:
-            _provider, model, resolved_connection = resolve_chat_provider(
-                db,
-                session.provider_profile_id,
-                session.model or "",
-                user_id=user.id,
-            )
-        except AdapterError as exc:
-            raise HTTPException(status_code=422, detail=str(exc)) from exc
-        surface = "automation"
-        mode = session.analysis_video_mode or "auto"
     try:
-        result = analyze_asset(
-            db,
-            asset,
-            body.question,
-            user_id=user.id,
-            profile_id=None if resolved_connection is not None else body.profile_id,
-            mode=mode,
-            resolved_connection=resolved_connection,
-            model=model,
-            surface=surface,
-        )
+        if auth is not None and auth.agent_session_id:
+            target = agent_session_target(db, auth.agent_session_id, workspace_id=asset.workspace_id, user_id=user.id)
+            result = analyze_asset(
+                db, asset, body.question, user_id=user.id, mode=target.mode,
+                resolved_connection=target.connection, model=target.model, surface="automation",
+            )
+        else:
+            result = analyze_asset(
+                db, asset, body.question, user_id=user.id, profile_id=body.profile_id, mode=body.mode,
+            )
     except AnalysisError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     # 分析本身只读,但记了一笔用量;记账跟调用方事务走(见 domain/usage.billable),得落盘。
@@ -484,31 +458,15 @@ def grab_asset_frame(asset_id: str, body: AssetFrameRequest, db: DbSession, user
 
     **原素材不动**,产出是新的一份 —— 取帧是「我要这个画面」,不是「把这段片子变成一张图」。
     """
-    import tempfile
-
-    from app.media.still import StillError, grab_frame
+    from app.domain.assets.frames import AssetFrameError, save_frame_as_asset
+    from app.media.still import StillError
 
     asset = _require_file_backed_asset(db, asset_id)
     ensure_workspace_perm(db, user, asset.workspace_id, "edit")
-    if asset.kind != "video":
-        raise HTTPException(status_code=400, detail=tr("routeErr_framesOnlyFromVideo"))
-
-    source = resolve_key(asset.file_key)
-    with tempfile.TemporaryDirectory(prefix="mosael-still-") as tmp:
-        target = Path(tmp) / "frame.jpg"
-        try:
-            grab_frame(source, body.at, target)
-        except StillError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
-        return register_file_asset(
-            db,
-            workspace_id=asset.workspace_id,
-            project_id=body.project_id or asset.project_id,
-            source_path=target,
-            #: 名字带上时间 —— 从同一段片子取三帧,光看「xxx 的帧」分不出哪张是哪张。
-            name=f"{asset.name} · {body.at:.1f}s",
-            source="generated",
-        )
+    try:
+        return save_frame_as_asset(db, asset, body.at, project_id=body.project_id)
+    except (AssetFrameError, StillError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.get("/assets/{asset_id}/filmstrip")

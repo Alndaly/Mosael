@@ -490,11 +490,11 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "项目不存在或不属于该工作区",
         "en": "The project doesn't exist or isn't in this workspace.",
     },
-    "routeErr_assetNotInAgentWorkspace": {
+    "analysisErr_assetNotInAgentWorkspace": {
         "zh": "素材不属于当前智能体会话的工作区",
         "en": "The asset isn't in this agent session's workspace.",
     },
-    "routeErr_framesOnlyFromVideo": {
+    "assetErr_framesOnlyFromVideo": {
         "zh": "只能从视频里取帧",
         "en": "Frames can only be taken from a video.",
     },
