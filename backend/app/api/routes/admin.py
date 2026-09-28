@@ -1,31 +1,15 @@
 from __future__ import annotations
 
-from datetime import datetime, time, timedelta
-
 from fastapi import APIRouter, HTTPException, Query, Response
 from pydantic import BaseModel
 from sqlalchemy import func, select
 
 from app.core.i18n import tr
 from app.api.deps import CurrentUser, DbSession
-from app.api.schemas import (
-    AdminOverviewOut,
-    AdminUserOut,
-    DaySeriesPoint,
-    UserSpendPoint,
-)
+from app.api.schemas import AdminOverviewOut, AdminUserOut
 from app.domain.permissions import ensure_deployment_admin
-from app.domain import dashboard, deployment, host_files, members, usage
-from app.db.models import (
-    Asset,
-    AuthSession,
-    Job,
-    ProviderUsageEvent,
-    User,
-    Workspace,
-    WorkspaceMember,
-    now,
-)
+from app.domain import dashboard, deployment, host_files, members
+from app.db.models import AuthSession, User, WorkspaceMember
 
 router = APIRouter(tags=["admin"])
 
@@ -37,10 +21,6 @@ router = APIRouter(tags=["admin"])
 整条路由都在 `ensure_deployment_admin` 后面:普通成员连列表都取不到,前端也据此决定要不要
 在侧边栏摆这个入口。
 """
-
-#: "最近还在用"的判据。
-ACTIVE_DAYS = 7
-
 
 @router.get("/admin/users", response_model=list[AdminUserOut])
 def list_users(db: DbSession, user: CurrentUser) -> list[AdminUserOut]:
@@ -149,78 +129,4 @@ def overview(
     算起。账户、工作区、素材是当前总数,不受它影响。
     """
     ensure_deployment_admin(db, user)
-    today = now().date()
-    first_day = today - timedelta(days=days - 1)
-    since = datetime.combine(first_day, time.min)
-    active_since = now() - timedelta(days=ACTIVE_DAYS)
-
-    active = db.scalar(
-        select(func.count(func.distinct(AuthSession.user_id))).where(AuthSession.last_seen_at >= active_since)
-    )
-    counted = {
-        str(day): (int(total), int(failed or 0))
-        for day, total, failed in db.execute(
-            select(
-                func.date(Job.created_at),
-                func.count(),
-                func.sum(func.iif(Job.status == "failed", 1, 0)),
-            )
-            .where(Job.created_at >= since)
-            .group_by(func.date(Job.created_at))
-        ).all()
-    }
-    # **没跑任务的那天也要有一格**,记 0。只回有数的日子,前端的类目轴就会把空着的日子挤掉 ——
-    # 九十天里跑过三天,画出来是三根挨着的柱子,看着像"这三天连着很忙"。
-    jobs_by_day = []
-    for offset in range(days):
-        day = str(first_day + timedelta(days=offset))
-        total, failed = counted.get(day, (0, 0))
-        jobs_by_day.append(DaySeriesPoint(day=day, total=total, failed=failed))
-    # 用量事件记的是"哪次调用花了多少",归属在 job 上 —— 顺着 job.created_by 就知道是谁花的。
-    in_window = ProviderUsageEvent.created_at >= since
-    through_job = ((Job, Job.id == ProviderUsageEvent.job_id),)
-    calls = {
-        user_id: (str(username or ""), int(count_ or 0))
-        for user_id, username, count_ in db.execute(
-            select(Job.created_by, User.username, func.count())
-            .select_from(ProviderUsageEvent)
-            .join(Job, Job.id == ProviderUsageEvent.job_id)
-            .join(User, User.id == Job.created_by, isouter=True)
-            .where(in_window)
-            .group_by(Job.created_by, User.username)
-        ).all()
-    }
-    spent = usage.costs_by_currency(db, in_window, group_by=(Job.created_by,), join=through_job)
-    totals = usage.costs_by_currency(db, in_window).get((), [])
-    # **排序不把各币种加起来比。**按这台部署的主要币种(计过价次数最多的那种)上的金额排,
-    # 再按调用次数 —— 单币种部署(绝大多数)里这就是"谁花得最多";混着两种钱时,另一种钱花得多
-    # 的人排在后面,但他的那笔照样原样列出来,不会被换算或吞掉。
-    primary = totals[0].currency if totals else ""
-
-    def primary_micros(costs: list[usage.CostAmount]) -> int:
-        return next((amount.micros for amount in costs if amount.currency == primary), 0)
-
-    ranked = sorted(
-        calls.items(),
-        key=lambda item: (primary_micros(spent.get((item[0],), [])), item[1][1]),
-        reverse=True,
-    )
-    spend = [
-        UserSpendPoint(
-            user_id=str(user_id or ""),
-            username=username,
-            costs=spent.get((user_id,), []),
-            calls=count_,
-        )
-        for user_id, (username, count_) in ranked[:20]
-    ]
-    return AdminOverviewOut(
-        costs=totals,
-        users=db.scalar(select(func.count()).select_from(User)) or 0,
-        active_users_7d=int(active or 0),
-        workspaces=db.scalar(select(func.count()).select_from(Workspace)) or 0,
-        assets=db.scalar(select(func.count()).select_from(Asset)) or 0,
-        jobs_by_day=jobs_by_day,
-        spend_by_user=spend,
-        window_days=days,
-    )
+    return AdminOverviewOut(**dashboard.deployment_overview(db, days=days))

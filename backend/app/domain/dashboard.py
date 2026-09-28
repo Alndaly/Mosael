@@ -9,20 +9,35 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, time, timedelta
 from typing import Any
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.db.models import Asset, Job, Project, PublishAccount, PublishTask, Sequence, Workflow, now
+from app.db.models import (
+    Asset,
+    AuthSession,
+    Job,
+    Project,
+    ProviderUsageEvent,
+    PublishAccount,
+    PublishTask,
+    Sequence,
+    User,
+    Workflow,
+    Workspace,
+    now,
+)
 from app.domain.publish import summary_bucket
-from app.domain.usage import summarize_usage
+from app.domain.usage import CostAmount, costs_by_currency, summarize_usage
 
 #: 统计窗口的默认值:最近一个月。统计页和管理页用同一套 —— 两页上的「近 N 天」是同一个意思。
 WINDOW_DAYS = 30
 #: 能选的最长窗口。再长就是在扫全库了,而那不是这两页要回答的问题。
 MAX_WINDOW_DAYS = 90
+#: 管理页上「最近还在用」的判据。
+ACTIVE_DAYS = 7
 
 
 def workspace_summary(db: Session, workspace_id: str, *, days: int = WINDOW_DAYS) -> dict[str, Any]:
@@ -122,4 +137,79 @@ def workspace_summary(db: Session, workspace_id: str, *, days: int = WINDOW_DAYS
         jobs_succeeded=sum(day["succeeded"] for day in daily),
         jobs_failed=sum(day["failed"] for day in daily),
         published=sum(day["succeeded"] for day in publish_daily),
+    )
+
+
+def deployment_overview(db: Session, *, days: int = WINDOW_DAYS) -> dict[str, Any]:
+    """管理页总览 —— **这台部署**的状况,不分工作区。只读。口径(按人分花销、`days` 窗口怎么算)
+    写在出口 routes/admin.overview 上,那段也是这个接口的 API 文档。"""
+    today = now().date()
+    first_day = today - timedelta(days=days - 1)
+    since = datetime.combine(first_day, time.min)
+    active_since = now() - timedelta(days=ACTIVE_DAYS)
+
+    active = db.scalar(
+        select(func.count(func.distinct(AuthSession.user_id))).where(AuthSession.last_seen_at >= active_since)
+    )
+    counted = {
+        str(day): (int(total), int(failed or 0))
+        for day, total, failed in db.execute(
+            select(
+                func.date(Job.created_at),
+                func.count(),
+                func.sum(func.iif(Job.status == "failed", 1, 0)),
+            )
+            .where(Job.created_at >= since)
+            .group_by(func.date(Job.created_at))
+        ).all()
+    }
+    # **没跑任务的那天也要有一格**,记 0。只回有数的日子,前端的类目轴就会把空着的日子挤掉 ——
+    # 九十天里跑过三天,画出来是三根挨着的柱子,看着像"这三天连着很忙"。
+    jobs_by_day = []
+    for offset in range(days):
+        day = str(first_day + timedelta(days=offset))
+        total, failed = counted.get(day, (0, 0))
+        jobs_by_day.append({"day": day, "total": total, "failed": failed})
+    # 用量事件记的是"哪次调用花了多少",归属在 job 上 —— 顺着 job.created_by 就知道是谁花的。
+    in_window = ProviderUsageEvent.created_at >= since
+    calls = {
+        user_id: (str(username or ""), int(count_ or 0))
+        for user_id, username, count_ in db.execute(
+            select(Job.created_by, User.username, func.count())
+            .select_from(ProviderUsageEvent)
+            .join(Job, Job.id == ProviderUsageEvent.job_id)
+            .join(User, User.id == Job.created_by, isouter=True)
+            .where(in_window)
+            .group_by(Job.created_by, User.username)
+        ).all()
+    }
+    spent = costs_by_currency(
+        db, in_window, group_by=(Job.created_by,), join=((Job, Job.id == ProviderUsageEvent.job_id),)
+    )
+    totals = costs_by_currency(db, in_window).get((), [])
+    # **排序不把各币种加起来比。**按这台部署的主要币种(计过价次数最多的那种)上的金额排,
+    # 再按调用次数 —— 单币种部署(绝大多数)里这就是"谁花得最多";混着两种钱时,另一种钱花得多
+    # 的人排在后面,但他的那笔照样原样列出来,不会被换算或吞掉。
+    primary = totals[0].currency if totals else ""
+
+    def primary_micros(costs: list[CostAmount]) -> int:
+        return next((amount.micros for amount in costs if amount.currency == primary), 0)
+
+    ranked = sorted(
+        calls.items(),
+        key=lambda item: (primary_micros(spent.get((item[0],), [])), item[1][1]),
+        reverse=True,
+    )
+    return dict(
+        costs=totals,
+        users=db.scalar(select(func.count()).select_from(User)) or 0,
+        active_users_7d=int(active or 0),
+        workspaces=db.scalar(select(func.count()).select_from(Workspace)) or 0,
+        assets=db.scalar(select(func.count()).select_from(Asset)) or 0,
+        jobs_by_day=jobs_by_day,
+        spend_by_user=[
+            {"user_id": str(user_id or ""), "username": username, "costs": spent.get((user_id,), []), "calls": count_}
+            for user_id, (username, count_) in ranked[:20]
+        ],
+        window_days=days,
     )
