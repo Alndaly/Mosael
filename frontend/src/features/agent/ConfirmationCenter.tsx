@@ -16,13 +16,17 @@ import { PermissionBadge } from "@/features/agent/PermissionBadge";
 /**
  * Global confirmation cards (plan §16.2): external agents propose mutations,
  * nothing runs until the user approves here.
+ *
+ * 只拉**我能拍板**的卡(`decidable`)。这里每张卡都只有「批准 / 拒绝」两个按钮,列一张我批不了的卡就是一张
+ * 点了回 403、又永远消不掉的卡:同事共享给我的对话里的卡正是这样 —— 我看得见,拍板只有主人。那种卡留在它自己的
+ * 对话里就地摆着(InlineConfirmations 的只读样子,写着「等对话的主人拍板」),这里不再冒出来。
  */
 export function ConfirmationCenter({ workspaceId }: { workspaceId: string }) {
   const t = useI18n();
   const qc = useQueryClient();
   const pending = useQuery({
-    queryKey: confirmationKeys.pending(workspaceId),
-    queryFn: () => listConfirmations({ workspaceId, status: "pending" }),
+    queryKey: confirmationKeys.toDecide(workspaceId),
+    queryFn: () => listConfirmations({ workspaceId, status: "pending", decidable: true }),
     refetchInterval: 2500,
     refetchOnWindowFocus: true,
   });
@@ -33,7 +37,7 @@ export function ConfirmationCenter({ workspaceId }: { workspaceId: string }) {
     onSuccess: () => invalidateAfterDecision(qc, workspaceId),
   });
 
-  // 按**归属**分工,而不是「有内联面就整体让位」:
+  // 在我能拍板的卡里,再按**归属**分工,而不是「有内联面就整体让位」:
   //  - 卡属于某个正开着的对话 → 那边内联显示,这里跳过(否则同一张卡出现两份);
   //  - 卡没有会话(MCP / 飞书等外部智能体)或它那次对话没开着 → 这里兜底,否则没人显示,
   //    智能体会一直干等。

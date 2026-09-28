@@ -83,11 +83,10 @@ export const providerKeys = {
  */
 export const confirmationKeys = {
   all: (workspaceId: string) => ["confirmations", workspaceId] as const,
-  /** 带会话 id 是那次对话的卡;不带是整个工作区的(全局确认中心兜底用)。 */
-  pending: (workspaceId: string, sessionId?: string) =>
-    (sessionId
-      ? (["confirmations", workspaceId, "pending", sessionId] as const)
-      : (["confirmations", workspaceId, "pending"] as const)),
+  /** 那次对话里等人拍板的卡(聊天里就地的那一叠)。 */
+  pending: (workspaceId: string, sessionId: string) => ["confirmations", workspaceId, "pending", sessionId] as const,
+  /** 这个工作区里**我能拍板**、还在等的卡(全局确认中心)。 */
+  toDecide: (workspaceId: string) => ["confirmations", workspaceId, "to-decide"] as const,
   approved: (workspaceId: string, sessionId: string) => ["confirmations", workspaceId, "approved", sessionId] as const,
 };
 

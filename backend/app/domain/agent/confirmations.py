@@ -2,16 +2,16 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import update
+from sqlalchemy import false, update
 from sqlalchemy.orm import Session
 
 from app.core.i18n import DEFAULT_LOCALE, render_message
 from app.db.models import ToolConfirmation, User, now
 from app.domain.agent.confirmable import tool_spec
 from app.domain.agent.errors import ConfirmationError
-from app.domain.agent.sessions import ensure_decides_for
+from app.domain.agent.sessions import decides_for_filter, ensure_decides_for
 from app.domain.jobs import reset_receipt, set_receipt
-from app.domain.permissions import ensure_workspace_perm
+from app.domain.permissions import ensure_workspace_perm, holds_workspace_perm
 
 """
 Confirmation kernel (plan §16.2/§17.2): mutating external-agent tools never
@@ -28,6 +28,7 @@ __all__ = [
     "approve_confirmation",
     "authorize_and_approve",
     "authorize_and_reject",
+    "decidable_filter",
     "effective_permission",
     "reject_confirmation",
     "request_confirmation",
@@ -108,8 +109,7 @@ def authorize_and_approve(db: Session, user: User, confirmation: ToolConfirmatio
     卡挂在某次有主人的对话上时,还得**是那次对话的主人**(`ensure_decides_for`):对话共享给同事是
     给他看,替主人拍板是在别人的对话里写 —— 批准之后的动作还会记在批的人头上、用他的钥匙跑。
     """
-    ensure_workspace_perm(db, user, confirmation.workspace_id, "edit")
-    ensure_decides_for(db, confirmation.session_id, user.id)
+    _ensure_decides(db, user, confirmation)
     # 记在谁头上。自动放行也有人 —— 这次 turn 是以他的身份跑的,上面三道闸也是按他校验的。
     # `decision_mode` 不在这里定:默认就是 manual(人点的),自动放行会在派活之前先改掉它。
     confirmation.decided_by = user.id
@@ -142,9 +142,31 @@ def authorize_and_reject(db: Session, user: User, confirmation: ToolConfirmation
     走 HTTP 一直如此。写成显式的,是为了不让同一个人在两条调用路径上得到两种答案。
     有主人的对话里的卡,和批准同一条:只有主人。
     """
+    _ensure_decides(db, user, confirmation)
+    return reject_confirmation(db, confirmation)
+
+
+# ---------- 谁能拍板:批的那一刻问一次,出清单时问一次 ----------
+#
+# 全局确认中心只列他能拍板的卡(`decidable_filter`):列出来却点不动(共享来的对话里的卡批了回 403)的那张,
+# 在中心里只是一张永远消不掉的卡。两处答的是同一个问题,所以两份判据紧挨着写,各由同一对子判据拼成 ——
+# 工作区的 edit 权限 + 卡所在的那次对话(domain/agent/sessions 的 ensure_decides_for / decides_for_filter)。
+
+
+def _ensure_decides(db: Session, user: User, confirmation: ToolConfirmation) -> None:
+    """批 / 拒一张卡之前:工作区的 edit(否则 403),再加那次对话的主人规矩(见 `ensure_decides_for`)。"""
     ensure_workspace_perm(db, user, confirmation.workspace_id, "edit")
     ensure_decides_for(db, confirmation.session_id, user.id)
-    return reject_confirmation(db, confirmation)
+
+
+def decidable_filter(db: Session, user: User, workspace_id: str) -> Any:
+    """`_ensure_decides` 的 SQL 版:这个工作区里他批得了的卡。角色不够就一张都没有。
+
+    只管「有没有资格」,不管状态:已经有结论的卡批了回 409,那是另一回事,列表按 `status` 另筛。
+    """
+    if not holds_workspace_perm(db, user, workspace_id, "edit"):
+        return false()
+    return (ToolConfirmation.workspace_id == workspace_id) & decides_for_filter(ToolConfirmation.session_id, user.id)
 
 
 

@@ -5399,7 +5399,10 @@ export interface paths {
          *         否则同工作区其它对话、工作流节点、外部智能体的卡都会挤进当前对话,更糟的是会被这边的
          *         「本会话始终允许」自动批准(授权范围逃逸)。
          *       - `unowned=true` —— 只要**没有会话**的卡(MCP 直连等外部智能体)。
-         *       - 都不传 —— 他看得见的全部。全局确认中心用这个,按「哪次对话正开着」在界面上分工。
+         *       - `decidable=true` —— 只要**他能拍板**的:列出来的每一张,批 / 拒都不会被权限挡回(判据与批的那一刻
+         *         同一对,见 domain/agent/confirmations.decidable_filter)。全局确认中心用这个 —— 共享来的对话里的卡
+         *         他看得见、批不了,那种卡只在聊天里就地摆着等主人,不该在中心里冒成一张点了就 403 的卡。
+         *       - 都不传 —— 他看得见的全部。
          */
         get: operations["list_confirmations_api_confirmations_get"];
         put?: never;
@@ -24950,6 +24953,7 @@ export interface operations {
                 limit?: number;
                 session_id?: string | null;
                 unowned?: boolean;
+                decidable?: boolean;
             };
             header?: never;
             path?: never;

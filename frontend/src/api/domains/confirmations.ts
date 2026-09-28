@@ -8,15 +8,20 @@ import { api } from "@/api/transport";
 export type Confirmation = components["schemas"]["ConfirmationOut"];
 export type ConfirmationStatus = "pending" | "approved" | "rejected";
 
-/** 一个工作区里某种状态的卡;带会话 id 就只要那次对话的。 */
+/**
+ * 一个工作区里某种状态的卡;带会话 id 就只要那次对话的。
+ * `decidable`:只要**我能拍板**的 —— 列出来的每一张批 / 拒都不会被权限挡回(共享来的对话里的卡看得见、批不了,不在其中)。
+ */
 export function listConfirmations(query: {
   workspaceId: string;
   status: ConfirmationStatus;
   sessionId?: string;
+  decidable?: boolean;
   limit?: number;
 }): Promise<Confirmation[]> {
   const params = new URLSearchParams({ workspace_id: query.workspaceId, status: query.status });
   if (query.sessionId) params.set("session_id", query.sessionId);
+  if (query.decidable) params.set("decidable", "true");
   if (query.limit != null) params.set("limit", String(query.limit));
   return api<Confirmation[]>(`/api/confirmations?${params}`);
 }

@@ -49,7 +49,8 @@ const CHOICES = [
 
 /**
  * `allowKey` 就是**会话 id**:既是白名单挂靠的会话,也是确认卡的归属筛选键。
- * `readOnly`:同事共享来的对话 —— 卡照样摆出来,三档动作换成一句「等主人拍板」。
+ * `readOnly`:同事共享来的对话 —— 卡照样摆出来,三档动作换成一句「等主人拍板」。这种卡只在这里出现:
+ * 全局确认中心只列我能拍板的(见 ConfirmationCenter),面板关着时它也不会跑到那边去。
  */
 export function InlineConfirmations({
   workspaceId,

@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import false, select
 from sqlalchemy.orm import Session
 
 from app.db.models import AgentSession, User
@@ -65,6 +65,19 @@ def reads_for_filter(session_id_column: Any, actor_id: str | None, workspace_id:
         AgentSession.owner_user_id.is_(None) | sharing.usable_filter(SHARE_KIND, actor_id, workspace_id)
     )
     return session_id_column.is_(None) | session_id_column.in_(seen)
+
+
+def decides_for_filter(session_id_column: Any, actor_id: str | None) -> Any:
+    """`ensure_decides_for` 的 SQL 版:没挂对话的、挂在无主对话上的、挂在**他自己的**对话上的。
+
+    比 `reads_for_filter` 窄的正是「共享给他看」的那一截:那些卡他看得见,拍板却回 403。对话已删的卡也不在
+    (子查询里没有那一行),和 `ensure_decides_for` 的 404 对上。`ensure_decides_for` 放行的每一种情形都得在这里
+    有一项、反之亦然 —— 「只列我能拍板的」和批的那一刻由两份判据各答一次,由
+    tests/test_decidable_confirmations.py 钉着两边答得一样。
+    """
+    mine = AgentSession.owner_user_id == actor_id if actor_id else false()
+    decidable = select(AgentSession.id).where(AgentSession.owner_user_id.is_(None) | mine)
+    return session_id_column.is_(None) | session_id_column.in_(decidable)
 
 
 def _owned_session_seen_by(db: Session, session_id: str | None, actor_id: str | None) -> AgentSession | None:

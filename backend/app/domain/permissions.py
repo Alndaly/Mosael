@@ -129,6 +129,15 @@ def ensure_workspace_perm(db: Session, user: User, workspace_id: str, perm: str)
     bind_workspace(workspace_id)
 
 
+def holds_workspace_perm(db: Session, user: User, workspace_id: str, perm: str) -> bool:
+    """`ensure_workspace_perm` 的问句版:不是成员或角色不够都答 False,不抛。
+
+    给列表用 —— 「只列他能做的」要在出清单时就答出和写闸同一个结论,而不是等他点了再 403。
+    """
+    role = workspace_role(db, user, workspace_id)
+    return role is not None and role_at_least(role, _PERM_ROLE.get(perm, "admin"))
+
+
 def ensure_deployment_admin(db: Session, user: User) -> None:
     """守**这个后端实例**的配置:网络出口、插件启用、解释器路径、模型下载。
 
