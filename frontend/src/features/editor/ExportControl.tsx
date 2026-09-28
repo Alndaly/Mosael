@@ -2,9 +2,8 @@ import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Download, Loader2 } from "lucide-react";
 
-import { api } from "@/api/transport";
 import { exportSequence, type ExportParams, type Sequence } from "@/api/domains/editor";
-import type { Job } from "@/api/domains/jobs";
+import { getJob } from "@/api/domains/jobs";
 import { useI18n } from "@/app/preferences";
 import { ModalShell } from "@/components/app/modals";
 import { Button } from "@/components/ui/button";
@@ -64,7 +63,7 @@ export function ExportControl({ sequence }: { sequence: Sequence }) {
   const job = useQuery({
     queryKey: ["job", jobId],
     enabled: Boolean(jobId),
-    queryFn: () => api<Job>(`/api/jobs/${jobId}`),
+    queryFn: () => getJob(jobId!),
     refetchInterval: (query) => {
       const status = query.state.data?.status;
       return status === "succeeded" || status === "failed" ? false : 700;

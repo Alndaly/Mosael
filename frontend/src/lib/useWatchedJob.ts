@@ -1,7 +1,7 @@
 import React from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { api, type Job } from "@/api/client";
+import { getJob } from "@/api/client";
 
 const isSettled = (status: string | undefined) => status === "succeeded" || status === "failed";
 
@@ -18,7 +18,7 @@ export function useWatchedJob() {
   const job = useQuery({
     queryKey: ["job", jobId],
     enabled: Boolean(jobId),
-    queryFn: () => api<Job>(`/api/jobs/${jobId}`),
+    queryFn: () => getJob(jobId!),
     refetchInterval: (query) => (isSettled(query.state.data?.status) ? false : 1000),
   });
   React.useEffect(() => {
