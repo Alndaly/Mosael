@@ -6,7 +6,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import { PreferencesProvider, usePreferences } from "./preferences";
 import { INTERFACE_FONTS } from "./interfaceFonts";
 
-vi.mock("@/api/client", () => ({ setApiLocale: vi.fn() }));
+vi.mock("@/api/client", () => ({ configureApiLocale: vi.fn() }));
 vi.mock("./interfaceFonts", async (original) => ({ ...await original<typeof import("./interfaceFonts")>(), loadInterfaceFont: vi.fn(() => Promise.resolve()) }));
 afterEach(() => { cleanup(); localStorage.clear(); document.documentElement.style.removeProperty("--font-sans"); });
 function Controls() {

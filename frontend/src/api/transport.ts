@@ -1,5 +1,4 @@
 import { humanError } from "@/api/errorMessage";
-import { messages } from "@/app/messages";
 
 const SERVER_KEY = "mosael.server.url";
 export const DEFAULT_API_BASE = "http://127.0.0.1:8800";
@@ -42,10 +41,16 @@ export function customServerHost(): string | null {
 const TOKEN_KEY = "mosael.auth.token";
 let authToken: string | null = typeof window === "undefined" ? null : window.localStorage.getItem(TOKEN_KEY);
 let onUnauthorized: (() => void) | null = null;
-let apiLocale = "zh";
+/**
+ * 语言相关的两样东西由界面层配置进来(见 app/preferences):请求带的 Accept-Language(后端据此选它
+ * 那部分文案的语言),以及连不上时那句话怎么说。api 层不认识界面的文案表 —— 那是上一层的东西;
+ * 此前这里为了一句离线提示 import 了整张中英文案表。
+ */
+export type ApiLocale = { locale: string; unreachable: (url: string) => string };
+let apiLocale: ApiLocale = { locale: "zh-CN", unreachable: (url) => `Can't reach ${url}` };
 
-export function setApiLocale(locale: string): void {
-  apiLocale = locale;
+export function configureApiLocale(next: ApiLocale): void {
+  apiLocale = next;
 }
 
 export class ApiOfflineError extends Error {
@@ -95,7 +100,7 @@ async function request(path: string, init?: RequestInit): Promise<Response> {
     // 版本号,而浏览器扩展发的是字面量 `browser-extension` —— 同一栏两个意思,管理页于是
     // 把扩展那一行渲染成「vbrowser-extension」。
     "X-Mosael-Client": `app/${__APP_VERSION__}`,
-    "Accept-Language": apiLocale,
+    "Accept-Language": apiLocale.locale,
     ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
   };
   const headers =
@@ -106,8 +111,7 @@ async function request(path: string, init?: RequestInit): Promise<Response> {
   try {
     response = await fetch(`${API_BASE}${path}`, { ...init, headers });
   } catch (cause) {
-    const text = messages[apiLocale === "en-US" ? "en-US" : "zh-CN"]["apiServerUnreachable"];
-    throw new ApiOfflineError(text.replace("{url}", API_BASE), { cause });
+    throw new ApiOfflineError(apiLocale.unreachable(API_BASE), { cause });
   }
   if (response.status === 401 && !path.startsWith("/api/auth/")) {
     onUnauthorized?.();

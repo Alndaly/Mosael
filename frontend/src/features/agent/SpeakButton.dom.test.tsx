@@ -23,7 +23,7 @@ vi.mock("sonner", () => ({
 }));
 vi.mock("@/app/preferences", () => ({ useI18n: () => (key: string) => key }));
 
-import { setApiLocale } from "@/api/client";
+import { configureApiLocale } from "@/api/client";
 import { SpeakButton } from "@/features/agent/SpeakButton";
 
 const played: { pause: ReturnType<typeof vi.fn> }[] = [];
@@ -98,13 +98,13 @@ describe("念给我听", () => {
   it("按界面语言要那句话 —— 请求带着 Accept-Language", async () => {
     const fetchSpy = okAudio();
     vi.stubGlobal("fetch", fetchSpy);
-    setApiLocale("en-US");
+    configureApiLocale({ locale: "en-US", unreachable: (url) => url });
     try {
       render(<SpeakButton text="read this" workspaceId="w1" />);
       fireEvent.click(screen.getByRole("button"));
       await waitFor(() => expect(played).toHaveLength(1));
     } finally {
-      setApiLocale("zh");
+      configureApiLocale({ locale: "zh-CN", unreachable: (url) => url });
     }
     const [url, init] = (fetchSpy as unknown as { mock: { calls: [string, RequestInit][] } }).mock.calls[0];
     expect(url).toMatch(/\/api\/agent\/speech$/);

@@ -4,7 +4,7 @@ import { messages, type MessageKey } from "@/app/messages";
 import { INTERFACE_FONTS, loadInterfaceFont, normalizeInterfaceFont, type InterfaceFont } from "@/app/interfaceFonts";
 import { useQueryClient } from "@tanstack/react-query";
 
-import { setApiLocale } from "@/api/client";
+import { configureApiLocale, type ApiLocale } from "@/api/client";
 
 export type Theme = "light" | "dark" | "system";
 type Locale = "zh-CN" | "en-US";
@@ -28,6 +28,14 @@ type PreferencesContextValue = {
 };
 
 const PreferencesContext = React.createContext<PreferencesContextValue | null>(null);
+
+/**
+ * 交给 api 层的那份语言配置:请求头,和连不上时那句话(文案在这一层,api 层不认识文案表)。
+ * 键写成带引号的下标,是为了让 messages.unused 棘轮认得出这条文案有人用。
+ */
+function apiLocaleOf(locale: Locale): ApiLocale {
+  return { locale, unreachable: (url) => messages[locale]["apiServerUnreachable"].replace("{url}", url) };
+}
 
 export function PreferencesProvider({ children }: { children: React.ReactNode }) {
   const [font, setFontState] = React.useState<InterfaceFont>(() => readPreferences().font);
@@ -58,8 +66,11 @@ export function PreferencesProvider({ children }: { children: React.ReactNode })
    */
   const queryClient = useQueryClient();
   const localeSettled = React.useRef(false);
+  // 首帧**同步**配一次:子组件的查询在它们自己的 effect 里发出,而子组件的 effect 先于下面这个执行 ——
+  // 只放在 effect 里的话,启动时最早那批请求带的是默认语言,连不上时说的也是默认那句。
+  React.useState(() => configureApiLocale(apiLocaleOf(locale)));
   React.useEffect(() => {
-    setApiLocale(locale);
+    configureApiLocale(apiLocaleOf(locale));
     // 首次挂载不作废:那时缓存本来就是空的,白跑一趟全量重取。
     if (!localeSettled.current) {
       localeSettled.current = true;
