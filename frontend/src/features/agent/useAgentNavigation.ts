@@ -16,30 +16,7 @@ import React from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api } from "@/api/client";
-import { agentSessionSelectionKey } from "@/features/agent/sessionSelection";
-
-/**
- * 当前选中的助手会话 id。
- *
- * 存在 localStorage 里,而**同一个标签页里改它不触发 storage 事件** —— 所以除了监听
- * 事件(别的窗口改的)还得轮一下(本页面板换会话)。抽出来是因为浮标和导航都要它,
- * 各写一份的话总有一份会忘掉后半句,表现为"面板换了会话,浮标还在对旧的说话"。
- */
-export function useSelectedAgentSessionId(workspaceId: string): string {
-  const key = agentSessionSelectionKey(workspaceId);
-  const [sessionId, setSessionId] = React.useState(() => window.localStorage.getItem(key) || "");
-  React.useEffect(() => {
-    const sync = () => setSessionId(window.localStorage.getItem(key) || "");
-    sync();
-    window.addEventListener("storage", sync);
-    const timer = window.setInterval(sync, 2000);
-    return () => {
-      window.removeEventListener("storage", sync);
-      window.clearInterval(timer);
-    };
-  }, [key]);
-  return sessionId;
-}
+import { useCurrentAgentSession } from "@/features/agent/currentAgentSession";
 
 export function useAgentNavigation({
   workspaceId,
@@ -50,7 +27,9 @@ export function useAgentNavigation({
   onNavigate: (view: string, id: string) => void;
 }) {
   const qc = useQueryClient();
-  const sessionId = useSelectedAgentSessionId(workspaceId);
+  // 跳转跟着「当前会话」走 —— 和面板、浮标是同一条(见 currentAgentSession)。此前这里只读
+  // localStorage,面板回落到第一条而没写存储时,智能体在那条会话里要求的跳转没人执行。
+  const sessionId = useCurrentAgentSession(workspaceId).session?.id ?? "";
 
   //: **和浮标用同一个 queryKey**,所以这不是第三个轮询 —— react-query 按 key 合并,
   //: 两个观察者共享同一次请求。各起一个 key 的话,一个会话每 1.5 秒会被打两次。

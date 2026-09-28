@@ -1,5 +1,5 @@
 import React from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { Brain } from "lucide-react";
 
 import { api } from "@/api/client";
@@ -8,6 +8,7 @@ import { useI18n } from "@/app/preferences";
 import { fieldTriggerClass } from "@/components/ui/field-trigger";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useEffectiveChatModel } from "@/features/agent/effectiveModel";
+import { useUpdateAgentSession } from "@/features/agent/currentAgentSession";
 import { cn } from "@/lib/utils";
 
 type AgentSession = components["schemas"]["AgentSessionOut"];
@@ -43,20 +44,10 @@ function levelsFor(model: CapabilityModel | undefined): readonly string[] {
  * off 时 pi 根本不向供应商要思考(reasoning 传 undefined)。这与模型设置里的「推理模型」
  * 是两件事:后者只决定拿到思考内容后**怎么解析**,不决定要不要。
  */
-export function ThinkingLevelPicker({ session }: { session: AgentSession | null }) {
+export function ThinkingLevelPicker({ workspaceId, session }: { workspaceId: string; session: AgentSession | null }) {
   const t = useI18n();
-  const qc = useQueryClient();
-  const setLevel = useMutation({
-    mutationFn: (level: string) =>
-      api(`/api/agent/sessions/${session!.id}`, {
-        method: "PATCH",
-        body: JSON.stringify({ thinking_level: level }),
-      }),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["agent-session", session?.id] });
-      void qc.invalidateQueries({ queryKey: ["agent-sessions"] });
-    },
-  });
+  // 没有会话时照样能选:先建出当前会话再写进去(见 useUpdateAgentSession)。
+  const setLevel = useUpdateAgentSession(workspaceId, session);
   // 与模型选择器读同一份清单(同一个 queryKey → 同一份缓存,不多打一次请求)。
   const models = useQuery({
     queryKey: ["capability-models", "chat"],
@@ -70,7 +61,6 @@ export function ThinkingLevelPicker({ session }: { session: AgentSession | null 
     (item) => item.model === effective.model && item.provider_profile_id === effective.providerProfileId,
   );
   const levels = levelsFor(current);
-  if (!session) return null;
 
   /*
    * **发不出档位时也要占住这一格。**
@@ -119,7 +109,8 @@ export function ThinkingLevelPicker({ session }: { session: AgentSession | null 
    * 「关闭」而实际什么都没发生;现在说的就是实际发生的事。
    */
   const offered = levels.includes("off") ? levels : ["off", ...levels];
-  const value = offered.includes(session.thinking_level) ? session.thinking_level : "off";
+  //: 还没有会话时按新会话的默认值(建表默认 off)显示。
+  const value = session && offered.includes(session.thinking_level) ? session.thinking_level : "off";
   // 只有开/关两档时,「低」这个名字没有意义 —— 它不是三档里的低,它就是"开"。
   // 判据看**这个清单**有几档:k3 补上「模型默认」之后是三档,那时「低」就是低。
   const binary = offered.length === 2;
@@ -137,7 +128,7 @@ export function ThinkingLevelPicker({ session }: { session: AgentSession | null 
             : t("agentThinkingHigh");
   return (
     // key 随 value 重挂,规避 Radix 对初始受控值不刷新触发器文本的问题(与分析方式同一处理)。
-    <Select key={value} value={value} onValueChange={(next) => setLevel.mutate(next)}>
+    <Select key={value} value={value} onValueChange={(next) => setLevel.mutate({ thinking_level: next })}>
       <SelectTrigger
         size="sm"
         className="w-full justify-between text-xs text-muted-foreground"

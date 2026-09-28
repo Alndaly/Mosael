@@ -31,8 +31,8 @@ vi.mock("@/lib/sse", () => ({
 
 const { useAgentTurnStream } = await import("./useAgentTurnStream");
 
-function Probe() {
-  const { streamText, attach } = useAgentTurnStream();
+function Probe({ viewed = "s1" }: { viewed?: string }) {
+  const { streamText, attach } = useAgentTurnStream(viewed);
   React.useEffect(() => {
     void attach("s1");
   }, [attach]);
@@ -95,4 +95,33 @@ it("收尾在 messages + session 两条失效都 settle 之后才清流态", asy
     await Promise.resolve();
   });
   await waitFor(() => expect(screen.getByLabelText("text").textContent).toBe(""));
+});
+
+// 当前会话现在可以从面板外面换掉(另一个面板、免提浮标),面板里没有「切会话」那一刻可以
+// 挂 reset —— 所以由这个 hook 自己认:看的不再是这条流的会话,就掐流、清流态。
+it("看的会话换成了别的:掐掉手上那条流,流态清空", async () => {
+  chunks.push(JSON.stringify({ text: "旧会话的半句", done: false, timeline: [] }));
+  const signals: AbortSignal[] = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (_url: string, init?: { signal?: AbortSignal }) => {
+      if (init?.signal) signals.push(init.signal);
+      return new Response("ok", { status: 200 });
+    }),
+  );
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const view = render(
+    <QueryClientProvider client={client}>
+      <Probe viewed="s1" />
+    </QueryClientProvider>,
+  );
+  await waitFor(() => expect(screen.getByLabelText("text").textContent).toBe("旧会话的半句"));
+
+  view.rerender(
+    <QueryClientProvider client={client}>
+      <Probe viewed="s2" />
+    </QueryClientProvider>,
+  );
+  expect(screen.getByLabelText("text").textContent).toBe("");
+  expect(signals[0]?.aborted).toBe(true);
 });

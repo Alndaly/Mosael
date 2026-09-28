@@ -1,9 +1,10 @@
 import React from "react";
-import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueries, useQuery } from "@tanstack/react-query";
 import { ChevronDown, Loader2, Settings2 } from "lucide-react";
 
 import { api, listProviderModels } from "@/api/client";
 import { useEffectiveChatModel } from "@/features/agent/effectiveModel";
+import { useUpdateAgentSession } from "@/features/agent/currentAgentSession";
 import type { components } from "@/api/generated/schema";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
@@ -19,10 +20,11 @@ const SEP = "::";
 /**
  * 对话模型选择器:列出每个启用供应商的可用模型(经 /providers/{id}/models),
  * 选中后写回会话的 provider_profile_id + model。会话未选则后端回退默认。
+ *
+ * 还没有会话时显示默认模型、照样能选:选了就先建出当前会话再写进去(见 useUpdateAgentSession)。
  */
 export function ModelPicker({ workspaceId, session }: { workspaceId: string; session: AgentSession | null }) {
   const t = useI18n();
-  const qc = useQueryClient();
 
   const providers = useQuery({
     queryKey: ["provider-profiles"],
@@ -56,19 +58,11 @@ export function ModelPicker({ workspaceId, session }: { workspaceId: string; ses
     }));
   });
 
-  const setModel = useMutation({
-    mutationFn: (value: string) => {
-      const [providerProfileId, ...rest] = value.split(SEP);
-      return api(`/api/agent/sessions/${session!.id}`, {
-        method: "PATCH",
-        body: JSON.stringify({ provider_profile_id: providerProfileId, model: rest.join(SEP) }),
-      });
-    },
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["agent-session", session?.id] });
-      void qc.invalidateQueries({ queryKey: ["agent-sessions", workspaceId] });
-    },
-  });
+  const update = useUpdateAgentSession(workspaceId, session);
+  const setModel = (value: string) => {
+    const [providerProfileId, ...rest] = value.split(SEP);
+    update.mutate({ provider_profile_id: providerProfileId, model: rest.join(SEP) });
+  };
 
   const loading = providers.isPending || defaults.isPending || modelQueries.some((query) => query.isPending);
   const failed = providers.isError || defaults.isError || modelQueries.some((query) => query.isError);
@@ -110,14 +104,6 @@ export function ModelPicker({ workspaceId, session }: { workspaceId: string; ses
       </Button>
     );
   }
-  //: 会话还没读到时也别让它消失 —— 那一刻你什么都没法切,但控件不该凭空不见。
-  if (!session) {
-    return (
-      <span className="inline-flex h-7 max-w-[220px] items-center rounded-md border border-field-border bg-field px-2 text-xs text-muted-foreground opacity-70">
-        <span className="truncate">{t("agentModelPlaceholder")}</span>
-      </span>
-    );
-  }
   const { providerProfileId: currentProfileId, model: currentModel } = effective;
   const current = currentProfileId && currentModel ? `${currentProfileId}${SEP}${currentModel}` : "";
   const currentLabel = options.find((option) => option.value === current)?.label ?? t("agentModelPlaceholder");
@@ -126,7 +112,7 @@ export function ModelPicker({ workspaceId, session }: { workspaceId: string; ses
   return (
     <SearchableSelect
       value={current}
-      onValueChange={(value) => setModel.mutate(value)}
+      onValueChange={setModel}
       options={options}
       searchPlaceholder={t("agentModelPlaceholder")}
       emptyText={t("cmdkEmpty")}
@@ -139,7 +125,12 @@ export function ModelPicker({ workspaceId, session }: { workspaceId: string; ses
           className="inline-flex h-7 w-auto min-w-0 max-w-[220px] items-center gap-1 rounded-md border border-field-border bg-field px-2 text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:border-primary focus-visible:outline-none"
         >
           <span className="truncate">{currentLabel}</span>
-          <ChevronDown size={13} className="shrink-0 opacity-50" />
+          {/* 没有会话时这一下要先建会话再写,不止一个来回 —— 转圈说明"收到了,在办"。 */}
+          {update.isPending ? (
+            <Loader2 size={13} className="shrink-0 animate-mosael-spin" />
+          ) : (
+            <ChevronDown size={13} className="shrink-0 opacity-50" />
+          )}
         </button>
       }
     />

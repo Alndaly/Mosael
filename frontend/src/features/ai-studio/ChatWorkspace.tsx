@@ -9,12 +9,10 @@ import { toast } from "sonner";
 import {
   agentManifest,
   compactAgentSession,
-  createAgentSession,
   dropQueuedMessage,
   getAgentSession,
   listAgentMessages,
   listAgentQueue,
-  listAgentSessions,
   listAgentTools,
   listAgentUsageEvents,
   sendAgentMessage,
@@ -47,7 +45,7 @@ import { LoadingState } from "@/components/layout/LoadingState";
 import { DictateButton } from "@/features/agent/DictateButton";
 import { ModelPicker } from "@/features/agent/ModelPicker";
 import { SessionSettingsMenu } from "@/features/agent/SessionSettingsMenu";
-import { agentSessionSelectionKey } from "@/features/agent/sessionSelection";
+import { useCurrentAgentSession } from "@/features/agent/currentAgentSession";
 import { type CompactionInfo, type ContextInfo } from "@/features/agent/ContextMeter";
 import { InspectorCard, InspectorRow } from "@/components/layout/InspectorCard";
 import { PlanCard, planHistory, type PlanStep } from "@/features/agent/PlanCard";
@@ -91,8 +89,9 @@ export function ChatWorkspace({
 }) {
   const t = useI18n();
   const qc = useQueryClient();
-  const sessionKey = agentSessionSelectionKey(workspace.id);
-  const [sessionId, setSessionId] = React.useState<string | null>(() => window.localStorage.getItem(sessionKey));
+  // 当前会话、选择、新建、删后回落:和画布助手、免提浮标、页面跳转共用一份(见 currentAgentSession)。
+  const current = useCurrentAgentSession(workspace.id);
+  const activeSession = current.session;
   //: 草稿是**编辑器文档**,不是字符串 —— `@` 出来的引用是原子节点(见 ChatComposer)。
   const [draft, setDraft] = React.useState<JSONContent>(emptyDocument);
   const draftText = React.useMemo(() => documentText(draft), [draft]);
@@ -111,16 +110,10 @@ export function ChatWorkspace({
   });
   // 连流 → 攒状态 → 收尾失效:**只有一份**,和画布助手共用(见 useAgentTurnStream)。
   // 此前两个面板各写一遍,而收尾那一步已经分岔 —— 隔壁每答完一句都会闪一下。
-  const { streamText, streamTimeline, attach: attachStream, reset: resetStream } = useAgentTurnStream();
+  const { streamText, streamTimeline, attach: attachStream } = useAgentTurnStream(activeSession?.id ?? null);
   //「对话」读答案,「轨迹」读执行。记住选择:排查问题的人往往连着看好几个会话的轨迹。
   const [view, setView] = usePersistentTab<"chat" | "trace">("agent-view", "chat", ["chat", "trace"]);
 
-  const sessions = useQuery({
-    queryKey: ["agent-sessions", workspace.id],
-    queryFn: () => listAgentSessions(workspace.id),
-  });
-  const activeSession =
-    (sessions.data ?? []).find((session) => session.id === sessionId) ?? (sessions.data ?? [])[0] ?? null;
   //: 贴底跟随。resetKey 用会话 id:换会话该从底部重新开始。
   const stick = useStickToBottom<HTMLDivElement>(activeSession?.id);
 
@@ -141,7 +134,7 @@ export function ChatWorkspace({
   const running = session.data?.status === "running";
   //: 会话清单还在路上,或者选中的这条会话的消息还在路上。两者都不算"这条会话是空的"。
   //: `enabled` 为假时 React Query 的 status 也是 pending,所以要先确认真的有一条会话在读。
-  const sessionLoading = sessions.isPending || (Boolean(activeSession) && messages.isPending);
+  const sessionLoading = current.listPending || (Boolean(activeSession) && messages.isPending);
   //: 免提模式念的就是最后一条**成功**的助手回复;失败的那条由 failure 单独念(它的 content
   //: 是「智能体执行失败」这类占位,念它等于什么都没说)。
   
@@ -204,25 +197,10 @@ export function ChatWorkspace({
     return () => window.clearInterval(timer);
   }, [running, activeSession?.id]);
 
-  const createSession = useMutation({
-    mutationFn: () =>
-      createAgentSession({ workspace_id: workspace.id }),
-    onSuccess: (created) => {
-      setSessionId(created.id);
-      window.localStorage.setItem(sessionKey, created.id);
-      void qc.invalidateQueries({ queryKey: ["agent-sessions", workspace.id] });
-    },
-  });
   // 发送时没有会话就先建一个(生成页同款「输入框直达」交互)。
   const sendMessage = useMutation({
     mutationFn: async ({ content, references, document }: { content: string; references: AgentReference[]; document: JSONContent }) => {
-      let targetId = activeSession?.id;
-      if (!targetId) {
-        const created = await createAgentSession({ workspace_id: workspace.id });
-        targetId = created.id;
-        setSessionId(created.id);
-        window.localStorage.setItem(sessionKey, created.id);
-      }
+      const targetId = (await current.ensure()).id;
       const message = await sendAgentMessage(targetId, { content, context: noteAttach.context, references, body_document: document });
       return { message, targetId };
     },
@@ -404,24 +382,13 @@ export function ChatWorkspace({
         <SessionList
           kind="agent"
           workspaceId={workspace.id}
-          sessions={sessions.data ?? []}
-          loaded={sessions.isSuccess}
+          sessions={current.sessions}
+          loaded={current.listLoaded}
           activeSessionId={activeSession?.id ?? null}
-          onSelect={(id) => {
-            // 旧会话的流不许串进新视图 —— 与画布助手的 switchSession 同一步。
-            if (id !== activeSession?.id) resetStream();
-            setSessionId(id);
-            window.localStorage.setItem(sessionKey, id);
-          }}
-          onCreate={() => createSession.mutate()}
-          creating={createSession.isPending}
-          onDeleted={(ids) => {
-            // 删掉的里面有正开着的那个,就把视图放下 —— 否则右侧还停在一个已经不存在的会话上。
-            if (sessionId && ids.includes(sessionId)) {
-              setSessionId(null);
-              window.localStorage.removeItem(sessionKey);
-            }
-          }}
+          onSelect={current.select}
+          onCreate={() => current.create.mutate()}
+          creating={current.create.isPending}
+          onDeleted={current.forget}
         />
       </StudioIndex>
 
@@ -469,12 +436,33 @@ export function ChatWorkspace({
         </div>
         {/* 生成页同款:没有会话也常驻输入框,空状态居中在消息区,首次发送自动建会话。
             输入框在两个视图下都在 —— 看轨迹时想到要补一句,不该先切回对话。
-            查看子代理时整个主区换成它的会话视图(无输入框:它的进程已结束,不可继续 ——
-            装一个发不出去的输入框比没有更糟)。 */}
+            查看子代理时整个主区换成它的会话视图。**没有输入框**:子代理不接受续聊,装一个发不出去
+            的输入框比没有更糟。**但父会话的这一轮可能还在跑**(子代理正是它派出去的),这时底部
+            留一条「父会话运行中 · 停止」—— 否则想停只能先退出子代理视图。 */}
         {viewingSubagent ? (
           <>
             <SubagentSessionView run={viewingSubagent} workspaceId={workspace.id} />
             {pendingCards}
+            {running && (
+              <div className={cn(COMPOSER_COLUMN, "mb-3.5 mt-1.5 flex min-w-0 items-center gap-2 rounded-lg border border-border bg-control py-1 pl-3 pr-1.5")}>
+                <AgentStatusRow
+                  className="min-w-0 flex-1"
+                  label={t("chatParentRunning")}
+                  meta={t("usageRunning").replace("{t}", formatElapsedSeconds(elapsedSeconds))}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="xs"
+                  className="shrink-0"
+                  loading={stopTurn.isPending}
+                  onClick={() => stopTurn.mutate()}
+                >
+                  <Square size={11} fill="currentColor" />
+                  {t("chatStop")}
+                </Button>
+              </div>
+            )}
           </>
         ) : (
           <>
@@ -597,11 +585,13 @@ export function ChatWorkspace({
                   {/* 免提不在这一行:它是"手离开键盘"的模式,而工具行只在助手面板打开时才在屏幕上 ——
                       恰好在最需要它的时候不见了。改成应用级的浮标(features/agent/VoiceDock),
                       由设置里的开关决定浮不浮。说话输入留着:那个是"把话填进这个框",本来就属于这里。 */}
-                  <ModelPicker workspaceId={workspace.id} session={session.data ?? null} />
+                  {/* 会话详情还在读时先用清单里那份:两者是同一条会话,只差水位。 */}
+                  <ModelPicker workspaceId={workspace.id} session={session.data ?? activeSession} />
                   {/* 分析方式、思考档位、上下文整理收进这里 —— 它们是"配好就不再动"的东西,
                       和每次都要用的模式/附件/模型平铺在一起只会稀释后者。 */}
                   <SessionSettingsMenu
-                    session={session.data ?? null}
+                    workspaceId={workspace.id}
+                    session={session.data ?? activeSession}
                     context={context}
                     compacting={compactContext.isPending}
                     onCompact={running ? undefined : () => compactContext.mutate()}

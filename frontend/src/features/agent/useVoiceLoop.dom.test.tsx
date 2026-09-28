@@ -11,7 +11,11 @@ const mocks = vi.hoisted(() => ({
   toastMessage: vi.fn(),
 }));
 
-vi.mock("@/api/client", () => ({ API_BASE: "http://api.test", getAuthToken: () => "token" }));
+vi.mock("@/api/client", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/api/client")>()),
+  API_BASE: "http://api.test",
+  getAuthToken: () => "token",
+}));
 vi.mock("@/lib/speechPlayback", () => ({
   playSpeech: mocks.playSpeech,
   stopSpeaking: mocks.stopSpeaking,
@@ -52,10 +56,7 @@ describe("useVoiceLoop", () => {
     getUserMedia.mockReset().mockResolvedValue({ getTracks: () => [{ stop: stopTrack }] });
     Object.defineProperty(navigator, "mediaDevices", { configurable: true, value: { getUserMedia } });
     vi.stubGlobal("AudioContext", FakeAudioContext);
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
-      ok: true,
-      blob: () => Promise.resolve(new Blob(["speech"])),
-    }));
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(new Blob(["speech"]), { status: 200 })));
   });
 
   afterEach(() => {
@@ -92,7 +93,7 @@ describe("useVoiceLoop", () => {
 
     rerender({ ...props, reply: "完成了" });
     await waitFor(() => expect(result.current.state).toBe("speaking"));
-    expect(fetch).toHaveBeenCalledWith("http://api.test/api/agent/speech", expect.objectContaining({ method: "POST" }));
+    expect(fetch).toHaveBeenCalledWith(expect.stringMatching(/\/api\/agent\/speech$/), expect.objectContaining({ method: "POST" }));
 
     await act(async () => playback.resolve());
     expect(result.current.state).toBe("listening");
