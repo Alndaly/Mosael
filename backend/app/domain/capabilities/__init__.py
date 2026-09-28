@@ -73,7 +73,7 @@ class Provider:
     id: str
     name: str
     builtin: bool = False
-    #: 还缺哪些必填项(配置和凭据);缺了就用不了。
+    #: 还缺哪些项(配置、凭据、待授予的权限);缺了就用不了。
     missing: tuple[str, ...] = ()
     instance: Any = None
     #: 插件里认领这项能力的那个工具;空 = 插件太旧(包上声明了、没有工具认领)。
@@ -101,14 +101,17 @@ def registered() -> list[Capability]:
 
 
 def _missing(db: Session, instance: Any) -> tuple[str, ...]:
-    """这个连接还缺哪些必填项(配置和凭据都算)。"""
+    """这个连接还缺哪些项:配置、凭据、待授予的权限。
+
+    和 `instances.blocked_reason` 用的是同几道门(missing_config / missing_credentials / permissions_granted),
+    不另写一份判定 —— 否则设置页下拉里选得到、真解析时才被权限挡回来,两边说的不是一回事。
+    """
     from app.domain.plugins import instances as inst
 
-    manifest = inst.manifest_for(db, instance)
-    values = inst.credential_values(db, instance.id)
-    return tuple(inst.missing_config(db, instance) + [
-        spec.label for spec in manifest.credentials if spec.required and not values.get(spec.key)
-    ])
+    absent = inst.missing_config(db, instance) + inst.missing_credentials(db, instance)
+    if not inst.permissions_granted(db, instance):
+        absent.append(tr("capMissing_permissions"))
+    return tuple(absent)
 
 
 def plugin_providers(db: Session, owner_user_id: str | None, capability: Capability) -> list[Provider]:

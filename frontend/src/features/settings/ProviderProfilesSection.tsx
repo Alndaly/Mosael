@@ -21,6 +21,7 @@ import { Popover, PopoverClose, PopoverContent, PopoverTrigger } from "@/compone
 import { ProviderModelList } from "@/features/settings/ProviderModelList";
 import { ProviderHealth } from "@/features/settings/ProviderHealth";
 import { ProviderQuota } from "@/features/settings/ProviderQuota";
+import { invalidateProviderDependents } from "@/features/settings/providerCaches";
 import { SettingsBlock, SettingsGroup, SettingsListBlock, SettingsListItem } from "@/components/settings/settings-layout";
 import { cn } from "@/lib/utils";
 import { gotoRecord, OPEN_PLUGIN_IN_MARKET } from "@/lib/deepLink";
@@ -123,13 +124,8 @@ export function ProviderProfilesSection({
     queryKey: ["provider-vendors"],
     queryFn: () => api<VendorPreset[]>("/api/settings/provider-vendors"),
   });
-  const refresh = () => {
-    // 档案启停/新增/删除都会改变"某能力有哪些模型可选",顶部那几个默认模型下拉读的是
-    // capability-models —— 不一起失效就得刷新整页才看得到新模型。
-    void qc.invalidateQueries({ queryKey: ["capability-models"] });
-    void qc.invalidateQueries({ queryKey: ["provider-defaults"] });
-    return qc.invalidateQueries({ queryKey: ["provider-profiles"] });
-  };
+  // 档案启停/新增/删除都会改变"某能力有哪些模型可选":默认模型的下拉、生成选择器都要跟着变。
+  const refresh = () => invalidateProviderDependents(qc);
   /** 某 vendor 的默认能力(新建/换 vendor 时用作能力初值)。 */
 
   const schema = React.useMemo(() => {

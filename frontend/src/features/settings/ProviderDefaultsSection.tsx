@@ -138,7 +138,6 @@ export function ProviderDefaultsSection({
     queryFn: () => api<ProviderDefault[]>("/api/settings/provider-defaults"),
   });
 
-  const enabled = (providers.data ?? []).filter((profile) => profile.enabled);
   const byCapability = new Map((defaults.data ?? []).map((row) => [row.capability, row]));
   const allRows: Array<{ capability: string; label: string }> = [
     { capability: "chat", label: t("capChat")},
@@ -146,8 +145,12 @@ export function ProviderDefaultsSection({
     { capability: "video", label: t("capVideo")},
     { capability: "audio", label: t("capAudio")},
   ];
-  const wanted = new Set(capabilities ?? SECTIONS_SHOWN_BY_DEFAULT);
+  const wanted = new Set<string>(capabilities ?? SECTIONS_SHOWN_BY_DEFAULT);
   const rows = allRows.filter((row) => wanted.has(row.capability));
+  //: 空态只看**这几种能力的**连接:图像页上有一条对话连接,不等于图像有东西可选。
+  //: 「一条都没有」和「有、但都停用了」下一步不一样(添加 / 启用),分开说。
+  const related = (providers.data ?? []).filter((profile) => (profile.capability_ids ?? []).some((one) => wanted.has(one)));
+  const enabled = related.filter((profile) => profile.enabled);
 
   React.useEffect(() => {
     if (!focusCapability) return;
@@ -166,7 +169,9 @@ export function ProviderDefaultsSection({
     >
       {enabled.length === 0 ? (
         <SettingsBlock>
-          <p className="m-0 text-xs text-muted-foreground">{t("providerDefaultsNoProvider")}</p>
+          <p className="m-0 text-xs text-muted-foreground">
+            {related.length === 0 ? t("providerDefaultsNoProvider") : t("providerDefaultsAllDisabled")}
+          </p>
         </SettingsBlock>
       ) : (
         <>

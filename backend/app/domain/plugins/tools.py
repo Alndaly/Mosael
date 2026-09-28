@@ -167,11 +167,15 @@ def refresh_tools(db: Session, instance: PluginInstance, *, notify: bool = True)
     try:
         discovered = discover_tools(_runtime_manifest(manifest), inst.secrets_for(db, instance))
     except McpBridgeError as exc:
+        # 拉不到的原因记在 `capability_status["tools"]`(和进程插件报工具清单同一格,见 dynamic_tools):
+        # 启用、改配置时顺手拉的那一次失败不往外抛,不记下来的话插件页只能说「没有工具」,说不出为什么。
+        inst.record_tool_list_failure(db, instance, exc)
         raise PluginDomainError(exc.key, **exc.params) from exc
     instance.discovered_tools = discovered
     db.commit()
     db.refresh(instance)
     inst.seed_capabilities(db, instance, manifest, [t["name"] for t in discovered])
+    inst.record_tool_list(db, instance, len(discovered))
     return instance
 
 

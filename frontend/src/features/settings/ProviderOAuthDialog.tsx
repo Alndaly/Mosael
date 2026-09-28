@@ -15,6 +15,7 @@ import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ModalShell } from "@/components/app/modals";
+import { invalidateProviderDependents } from "@/features/settings/providerCaches";
 import { isImeKeystroke } from "@/lib/shortcuts";
 
 type LoginState = components["schemas"]["OAuthLoginOut"];
@@ -226,9 +227,7 @@ export function ProviderOAuthDialog({
     if (loginId && state.data?.status === "running") {
       void api(`/api/settings/providers/${profileId}/oauth/login/${loginId}`, { method: "DELETE" }).catch(() => undefined);
     }
-    void qc.invalidateQueries({ queryKey: ["provider-profiles"] });
-    void qc.invalidateQueries({ queryKey: ["provider-models", profileId] });
-    void qc.invalidateQueries({ queryKey: ["capability-models"] });
+    void invalidateProviderDependents(qc);
     onOpenChange(false);
   };
 

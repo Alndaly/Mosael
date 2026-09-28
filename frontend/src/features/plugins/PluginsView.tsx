@@ -135,7 +135,8 @@ export function PluginsView({ workspaceId }: { workspaceId: string }) {
                 </div>
               ))}
             {list.map((item) => {
-              const live = (item.instances ?? []).filter((i) => i.enabled).length;
+              //: 绿点说的是「在用」:启用了**而且**能用。启用着但缺凭据、没授权的,亮绿点就是在说谎。
+              const live = (item.instances ?? []).filter((i) => i.enabled && !i.blocked_reason).length;
               return (
                 <button
                   key={item.id}
@@ -212,7 +213,7 @@ function PackageDetail({ pkg, workspaceId }: { pkg: PluginPackage; workspaceId: 
   const canAdd = pkg.multiple || (pkg.instances ?? []).length === 0;
 
   const instances = pkg.instances ?? [];
-  const live = instances.filter((one) => one.enabled).length;
+  const enabledCount = instances.filter((one) => one.enabled).length;
 
   return (
     <div className="grid w-full min-w-0 content-start gap-6">
@@ -300,10 +301,10 @@ function PackageDetail({ pkg, workspaceId }: { pkg: PluginPackage; workspaceId: 
           <span className="timecode">{pkg.id}</span>
           <span aria-hidden>·</span>
           <span>{pkg.kind === "mcp" ? t("pluginKindMcp") : t("pluginKindProcess")}</span>
-          {live > 0 && (
+          {enabledCount > 0 && (
             <>
               <span aria-hidden>·</span>
-              <span className="text-success">{t("pluginConnectionCount").replace("{n}", String(live))}</span>
+              <span className="text-success">{t("pluginEnabledCount").replace("{n}", String(enabledCount))}</span>
             </>
           )}
         </p>
@@ -539,7 +540,8 @@ export function ConnectionCard({ pkg, instance, workspaceId }: { pkg: PluginPack
   });
   const refresh = useMutation({
     mutationFn: () => refreshPluginInstance(instance.id),
-    onSuccess: () => invalidatePluginDependents(qc),
+    // 失败也刷新:拉不到的原因记在连接上(capability_status.tools),卡片要跟着说出来。
+    onSettled: () => invalidatePluginDependents(qc),
   });
   const setCapabilities = useMutation({
     mutationFn: (tools: Record<string, boolean>) =>
@@ -570,6 +572,14 @@ export function ConnectionCard({ pkg, instance, workspaceId }: { pkg: PluginPack
   //: 这时说它做什么、去哪用;显示「已开启 0 / 0 个工具」「启用并授权后会显示可调用工具」只会让人以为它坏了。
   const hostCapabilities = (pkg.provides ?? []).filter((one) => one !== "generation");
   const hostOnly = !generates && tools.length === 0 && hostCapabilities.length > 0;
+  //: 工具表为什么是空的。有 blocked_reason 就说它;没有时,MCP 连接是还没拿到清单(拉过但失败就带上原因),
+  //: 下一步是「刷新工具」—— 说「启用并授权后会显示」会让一个已经启用、授权好的连接读起来像坏了。
+  const noToolsText = ((): string => {
+    if (instance.blocked_reason) return instance.blocked_reason;
+    if (pkg.kind !== "mcp") return t("pluginNoToolsDeclared");
+    const fetchError = instance.capability_status?.tools?.error;
+    return fetchError ? t("pluginToolsFetchFailed").replace("{error}", fetchError) : t("pluginToolsNotFetched");
+  })();
 
   return (
     <SettingsGroup
@@ -585,7 +595,9 @@ export function ConnectionCard({ pkg, instance, workspaceId }: { pkg: PluginPack
                   "{list}",
                   hostCapabilities.map((one) => describeProvides(t, one) ?? one).join(t("listSeparator")),
                 )
-              : t("pluginExposedCount").replace("{n}", String(exposedCount)).replace("{total}", String(tools.length))
+              : tools.length === 0
+                ? noToolsText
+                : t("pluginExposedCount").replace("{n}", String(exposedCount)).replace("{total}", String(tools.length))
       }
       actions={
         <div className="flex items-center gap-2">
@@ -697,6 +709,7 @@ export function ConnectionCard({ pkg, instance, workspaceId }: { pkg: PluginPack
           workspaceId={workspaceId}
           tools={tools}
           blockedReason={instance.blocked_reason ?? ""}
+          emptyText={noToolsText}
           onToggle={(choices) => setCapabilities.mutate(choices)}
           pending={setCapabilities.isPending}
         />
@@ -719,6 +732,7 @@ function CapabilityPicker({
   workspaceId,
   tools,
   blockedReason,
+  emptyText,
   onToggle,
   pending,
 }: {
@@ -729,6 +743,8 @@ function CapabilityPicker({
    *  一路传**字符串**而不是布尔:理由在这里被丢掉的话,底下那个灰按钮就再也说不出
    *  自己为什么灰了 —— 而它离显示这句话的组标题有好几百像素。 */
   blockedReason: string;
+  /** 一个工具都没有时说什么(为什么空、下一步做什么),由卡片按连接的状态定。 */
+  emptyText: string;
   onToggle: (tools: Record<string, boolean>) => void;
   pending: boolean;
 }) {
@@ -754,7 +770,7 @@ function CapabilityPicker({
     <SettingsBlock>
       <p className="m-0 text-ui-xs text-muted-foreground">{t("pluginCapabilitiesDesc")}</p>
       {tools.length === 0 ? (
-        <p className="m-0 text-xs text-muted-foreground">{t("noTools")}</p>
+        <p className="m-0 text-xs text-muted-foreground">{emptyText}</p>
       ) : (
         <>
           {/* 和这张卡片上别的输入框同一档高度(标准的 md):此前搜索框写死 h-8、按钮用 sm,
