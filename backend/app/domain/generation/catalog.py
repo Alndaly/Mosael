@@ -358,6 +358,36 @@ VIDEORETALK_CAPABILITIES = {
     "source_duration_seconds": {"source_video": [2, 120], "driving_audio": [2, 120]},
 }
 
+#: 可灵数字人(ADR 0028 阶段 4):一张人像 + 一段配音 → 说话视频。图片、音频都能直接传(Base64),不必先换直链;
+#: 配音 2–300 秒;提示词可写动作、情绪、运镜(≤2500 字)。清晰度照可灵旧接口的规矩:1080p 走 pro(画质更好、更贵)。
+#: 文档:https://kling.ai/document-api/api/video/avatar(2026-09-28 读)。
+KLING_AVATAR_CAPABILITIES = {
+    "modes": ["speech-to-video"],
+    "prompt": "optional",
+    "max_prompt_chars": 2500,
+    "parameter_keys": ["resolution", "first_frame", "driving_audio"],
+    "resolutions": ["720p", "1080p"],
+    "default_resolution": "720p",
+    "source_limits": {"first_frame": 1, "driving_audio": 1},
+    "requires_source": [["first_frame"], ["driving_audio"]],
+    "duration_follows": "driving_audio",
+    "source_duration_seconds": {"driving_audio": [2, 300]},
+}
+
+#: 可灵对口型:原片里出现最久的那张脸,嘴对上新的一段配音。**先认人脸再对口型**两步由适配器做;认人脸那一步
+#: 只收视频链接(本地原片由生成漏斗先换成直链)。原片 2–60 秒、720p / 1080p;配音 2–60 秒。出片和原片一样长。
+#: 文档:https://kling.ai/document-api/api/video/lip-sync(2026-09-28 读)。
+KLING_LIPSYNC_CAPABILITIES = {
+    "modes": ["video-lipsync"],
+    "prompt": "none",
+    "parameter_keys": ["source_video", "driving_audio"],
+    "source_limits": {"source_video": 1, "driving_audio": 1},
+    "requires_source": [["source_video"], ["driving_audio"]],
+    "url_only_roles": ["source_video"],
+    "duration_follows": "source_video",
+    "source_duration_seconds": {"source_video": [2, 60], "driving_audio": [2, 60]},
+}
+
 #: 参考生视频。接口两句话把规矩说全了:
 #:   `Field required: input.media`      —— 必须给参考素材,不能空着跑
 #:   `Only first frame provided is not allowed` —— 光给首帧不算,首帧只是**辅助**
@@ -1263,6 +1293,22 @@ BUILTIN_MODELS = [
         "capabilities": VIDEORETALK_CAPABILITIES,
     },
     {
+        # 说话照片:可灵数字人。和可灵视频同一个连接(AccessKey + SecretKey)。
+        "id": "kuaishou:kling-avatar:video",
+        "provider": "kuaishou",
+        "kind": "video",
+        "model": "kling-avatar",
+        "capabilities": KLING_AVATAR_CAPABILITIES,
+    },
+    {
+        # 改口型:可灵对口型(先认人脸,再对口型)。
+        "id": "kuaishou:kling-lipsync:video",
+        "provider": "kuaishou",
+        "kind": "video",
+        "model": "kling-lipsync",
+        "capabilities": KLING_LIPSYNC_CAPABILITIES,
+    },
+    {
         # 参考生视频:照着参考图/参考视频里的人和风格拍,而不是从某一帧开始动。
         "id": "alibaba:wan2.7-r2v:video",
         "provider": "alibaba",
@@ -1379,6 +1425,8 @@ CAPABILITY_PROFILES: dict[str, dict[str, Any]] = {
     "wan-22-s2v": WAN_22_S2V_CAPABILITIES,
     "videoretalk": VIDEORETALK_CAPABILITIES,
     "volcano-omnihuman-15": VOLCANO_OMNIHUMAN_15_CAPABILITIES,
+    "kling-avatar": KLING_AVATAR_CAPABILITIES,
+    "kling-lipsync": KLING_LIPSYNC_CAPABILITIES,
     "wan-27-r2v": WAN_27_R2V_CAPABILITIES,
     "kling-legacy-video": KLING_LEGACY_VIDEO_CAPABILITIES,
     "kling-v3-video": KLING_V3_VIDEO_CAPABILITIES,

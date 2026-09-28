@@ -206,6 +206,8 @@ def test_重试对所有_AI_出站调用生效(monkeypatch):
         # 可灵的主体库:建主体是生成流程里的一步,用的是 kling.py 已经开好的那个连接
         # (同一个 base_url、同一份 JWT 鉴权)。自己再开一个等于把鉴权逻辑抄第二遍。
         "app.ai.providers.adapters.kuaishou.kling.elements",
+        # 可灵数字人与对口型:只拼请求体、挑人脸,提交和查询都在 video.py 那个连接上发。
+        "app.ai.providers.adapters.kuaishou.kling.avatar",
     }
 
     missing = []

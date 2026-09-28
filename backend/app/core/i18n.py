@@ -2362,6 +2362,9 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "{vendor} 的 API Key 还没配置,请在设置 → 供应商配置里填写",
         "en": "{vendor} API key is not configured. Add it in Settings → Provider config.",
     },
+    "providerErr_klingNoFace": {"zh": "可灵在这段视频里没认出人脸:换一段正脸清楚的视频", "en": "Kling found no face in this video; use one with a clear, frontal face."},
+    "providerErr_klingFaceTooShort": {"zh": "这段视频里人脸出现不到 2 秒(或配音不到 2 秒),可灵对不了口型", "en": "The face is on screen for less than 2 seconds (or the audio is shorter than 2 seconds), so Kling can't lip-sync it."},
+    "providerErr_klingAudioTooLarge": {"zh": "配音太长:可灵最多收 5MB 的音频,压成 mp3 还是超了,剪短一点再试", "en": "The audio is too long: Kling takes at most 5 MB, and it's still over after compressing to MP3. Shorten it and try again."},
     "providerErr_klingKeyMissing": {
         "zh": "可灵的 Access Key / API Key 还没配置,请在设置 → 供应商配置里填写",
         "en": "Kling Access Key / API key is not configured. Add it in Settings → Provider config.",

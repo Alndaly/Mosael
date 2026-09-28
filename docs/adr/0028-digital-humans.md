@@ -102,6 +102,17 @@ Accepted — 2026-09-28。维护者拍板了[数字人方案](../design/digital-
 未验证:说话照片的成片里是否自带那段音频(百炼文档没写明),模板按「自带」铺在视频轨上;第一次真跑时确认,不带的话
 在循环里把这段音频同时铺到音频轨。
 
+进度:火山 OmniHuman 1.5 已接(`adapters/bytedance/volcano/omnihuman.py`,说话照片)。可灵两个已接(2026-09-28,
+`adapters/kuaishou/kling/avatar.py`,挂在可灵视频适配器下按模型分):
+
+- `kling-avatar`(说话照片,`speech-to-video`):`/v1/videos/avatar/image2video` 一步提交,图和音频传**不带前缀的
+  Base64**,所以不要 `url_only_roles`;音频不是 mp3/wav/m4a/aac 或超了 5MB 的先转单声道 64kbps mp3。1080p 映射到 pro。
+- `kling-lipsync`(改口型,`video-lipsync`):先 `identify-face`(只收链接,故 `url_only_roles: [source_video]`),
+  挑出现最久的脸;再 `advanced-lip-sync`,配音从那张脸出现的时刻插入,截到「配音长度」与「脸在的时长」短的那个
+  (不足 2 秒提前报 `providerErr_klingFaceTooShort`),原声音量 0 —— 让人说**新的**这段话,原来的人声留着就是两段叠在一起。
+
+两家都照文档写、还没拿真实密钥跑到终态。
+
 ## 分步落地
 
 - 第 4 步已做(2026-09-28):克隆音色的授权声明(`voices.consent_kind` / `consent_by` / `consent_at`,迁移

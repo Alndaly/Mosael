@@ -11,6 +11,7 @@ from typing import Any
 import httpx
 
 from app.core.http_retry import RetryingClient
+from app.ai.providers.adapters.kuaishou.kling import avatar
 from app.ai.providers.adapters.kuaishou.kling.elements import build_element_contents, ensure_element
 
 from app.ai.providers.contracts.generation import (
@@ -217,9 +218,24 @@ class KlingVideoAdapter(GenerationAdapter):
     supports_resume = True
 
     def generate(self, request: GenerationRequest, context: GenerationAdapterContext, output_dir: Path) -> GenerationResult:
-        v3 = uses_contents_array(resolve_model(request, context))
+        model = resolve_model(request, context)
+        v3 = uses_contents_array(model)
         try:
             with self._client(context) as client:
+                if avatar.is_avatar(model):
+                    #: 数字人(说话照片):一次提交,查询在同一条路径下。
+                    task_id = _task_id(client.post(avatar.AVATAR_PATH, json=avatar.build_avatar_payload(request)))
+                    return self._collect(client, f"{avatar.AVATAR_PATH}/{task_id}", request, context, output_dir)
+                if avatar.is_lipsync(model):
+                    #: 对口型:先认原片里的人脸(拿会话和人脸时段),再把配音对到出现最久的那张脸上。
+                    identified = client.post(avatar.IDENTIFY_FACE_PATH, json={"video_url": avatar.video_url(request)})
+                    identified.raise_for_status()
+                    data = _checked(identified.json())
+                    face = avatar.pick_face(list(data.get("face_data") or []))
+                    body = avatar.build_lipsync_payload(str(data.get("session_id") or ""), face,
+                                                        avatar.audio_field(request), avatar.audio_duration_ms(request))
+                    task_id = _task_id(client.post(avatar.LIPSYNC_PATH, json=body))
+                    return self._collect(client, f"{avatar.LIPSYNC_PATH}/{task_id}", request, context, output_dir)
                 if v3:
                     # 多图参考:先把那几张图变成一个主体(查得到就复用,查不到才建),再引用它。
                     # 这一步是**另一个异步任务**,得在提交生成之前跑完 —— 拼请求体的时候顺手做
@@ -267,13 +283,30 @@ class KlingVideoAdapter(GenerationAdapter):
         self, client: RetryingClient, poll_path: str, request: GenerationRequest,
         context: GenerationAdapterContext, output_dir: Path,
     ) -> GenerationResult:
-        """提交之后的那一半。`generate` 和 `resume` 共用。v3 与否从模型名重算 —— 它不随任务变。"""
+        """提交之后的那一半。`generate` 和 `resume` 共用。v3 与否从模型名重算 —— 它不随任务变。
+        数字人、对口型回的是旧接口那种形状(task_status / task_result.videos)。"""
         v3 = uses_contents_array(resolve_model(request, context))
         url, poll_payload = poll_until_ready(client, poll_path, extract_video_url_v3 if v3 else extract_video_url)
         output_dir.mkdir(parents=True, exist_ok=True)
         target = output_dir / "generated.mp4"
         download_to_path(url, target)
         return GenerationResult(output_paths=[target], usage=metering_from_request(request), raw_usage=poll_payload)
+
+
+def _checked(payload: dict[str, Any]) -> dict[str, Any]:
+    """外层 `code` 不是 0 就是失败(可灵每个接口都是这样回的)。"""
+    if payload.get("code") not in (None, 0):
+        raise GenerationAdapterError("providerErr_generationFailed", vendor="Kling", detail=payload.get("message") or payload.get("code"))
+    return payload.get("data") if isinstance(payload.get("data"), dict) else {}
+
+
+def _task_id(response: httpx.Response) -> str:
+    response.raise_for_status()
+    data = _checked(response.json())
+    task_id = str(data.get("task_id") or data.get("id") or "")
+    if not task_id:
+        raise GenerationAdapterError("providerErr_noTaskId", vendor="Kling")
+    return task_id
 
 
 def auth_header(context: GenerationAdapterContext) -> str:
