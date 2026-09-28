@@ -569,6 +569,9 @@ SEEDANCE_2_VIDEO_CAPABILITIES = {
     "max_duration_seconds": 15,
     "supports_audio": True,
     "supports_generate_audio": True,
+    #: 方舟文档:`generate_audio` 默认 true(2.0 与 1.5 pro 支持)。不声明的话画板节点、AI 工作室当它「关」,
+    #: 出来的全是静音片 —— 和直接调接口的结果不一样。
+    "default_generate_audio": True,
 }
 
 #: 2.0 fast / mini:除了**分辨率只到 720p**,其余和 2.0 base 一样(文档原话:
@@ -625,6 +628,7 @@ SEEDANCE_15_VIDEO_CAPABILITIES = {
     "default_aspect_ratio": "adaptive",
     "supports_audio": True,
     "supports_generate_audio": True,
+    "default_generate_audio": True,
     "parameter_keys": [*SEEDANCE_1_VIDEO_CAPABILITIES["parameter_keys"], "generate_audio"],
     "boolean_parameters": ["camera_fixed", "generate_audio"],
 }
@@ -707,6 +711,7 @@ EVOLINK_SEEDANCE_15_CAPABILITIES = {
     "max_duration_seconds": 12,
     "supports_audio": True,
     "supports_generate_audio": True,
+    "default_generate_audio": True,
 }
 
 #: Seedance 2.0 在 Evolink 上和 2.5 一样，**模式属于模型 id**，不是一个模型上的运行时开关。
