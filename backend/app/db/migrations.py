@@ -1900,6 +1900,60 @@ def _migrate_generation_prompts_drop_the_source_legend() -> None:
                 )
 
 
+def _migrate_generation_prompts_drop_the_reference_documents() -> None:
+    """生成记录里的提示词再拆一刀:画板替用户拼进去的上游文档(「Reference documents (source material):」起)挪进
+    `prompt_notes`,排在已有补充的最前面。
+
+    画板此前在前端把连进来的文档整篇拼进提示词再提交,AI 工作台的用户气泡把文档正文当成他说的话画出来。现在文档由
+    生成漏斗补(generation.operations.documents_note)。切分依据是前端那条抬头的原文(自加进来就没改过、没翻译过),
+    连同它前面那个空行;模型收到的顺序不变(提示词、文档、原有的补充)。上一步迁移已经把「素材对照 + 它后面的文档」
+    整段挪走的记录里找不到这条抬头,不动。任务上那份请求副本和任务标题一起改。
+    """
+    marker = "\n\nReference documents (source material):"
+
+    def split(request: dict[str, Any]) -> dict[str, Any] | None:
+        prompt = request.get("prompt")
+        if not isinstance(prompt, str):
+            return None
+        cut = prompt.find(marker)
+        if cut < 0:
+            return None
+        notes = [one for one in request.get("prompt_notes") or [] if isinstance(one, str)]
+        return {**request, "prompt": prompt[:cut], "prompt_notes": [prompt[cut + 2:], *notes]}
+
+    def _json_object(raw: Any) -> dict[str, Any]:
+        """JSON 列读出来的一个对象;空的、坏的、不是对象的当它什么都没有(没有提示词可拆)。"""
+        try:
+            value = json.loads(raw) if isinstance(raw, str) else raw
+        except ValueError:
+            return {}
+        return dict(value) if isinstance(value, dict) else {}
+
+    tables = set(inspect(engine).get_table_names())
+    if "generation_jobs" not in tables:
+        return
+    with engine.begin() as conn:
+        for generation_id, raw in conn.execute(text("SELECT id, request FROM generation_jobs")).all():
+            changed = split(_json_object(raw))
+            if changed is not None:
+                conn.execute(
+                    text("UPDATE generation_jobs SET request = :request WHERE id = :id"),
+                    {"request": json.dumps(changed, ensure_ascii=False), "id": generation_id},
+                )
+        if "jobs" not in tables:
+            return
+        for job_id, raw in conn.execute(text("SELECT id, payload FROM jobs WHERE kind = 'ai_generation'")).all():
+            payload = _json_object(raw)
+            request = payload.get("request")
+            changed = split(request) if isinstance(request, dict) else None
+            if changed is not None:
+                payload = {**payload, "request": changed, "subject": changed["prompt"][:80]}
+                conn.execute(
+                    text("UPDATE jobs SET payload = :payload WHERE id = :id"),
+                    {"payload": json.dumps(payload, ensure_ascii=False), "id": job_id},
+                )
+
+
 def _migrate_asset_extractions_remember_page_images() -> None:
     """文档的解析结果记下按页的页面图(`asset_extractions.page_images`,ADR 0031:「原版」那一栏照它排)。
 
@@ -5666,6 +5720,8 @@ def migration_plan() -> MigrationPlan:
                 _backfill_generation_failures,
                 _migrate_generation_sessions_know_their_kind,
                 _migrate_generation_prompts_drop_the_source_legend,
+                #: 排在素材对照那一步之后:对照后面跟着的文档已被它整段挪走,这一步只切还留在提示词里的。
+                _migrate_generation_prompts_drop_the_reference_documents,
             ),
             *_steps(
                 MigrationPhase.FILESYSTEM,

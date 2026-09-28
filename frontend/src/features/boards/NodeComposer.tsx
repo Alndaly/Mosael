@@ -1,7 +1,6 @@
 import { assetKeys } from "@/api/queryKeys";
 import type { NoteReference } from "@/api/domains/notes";
 import { noteHref } from "@/lib/deepLink";
-import { documentPrompt } from "./boardDocumentSources";
 import React from "react";
 
 import { PromptTemplateButton, withTemplate } from "@/components/app/PromptTemplates";
@@ -421,6 +420,8 @@ export function NodeComposer({
   /** 上游**便签**给的文字。一张写着描述的便签连过来,意思是「照这段话画」—— 它不是参考图
    *  (便签根本没有图),而是提示词本身。 */
   upstreamTexts?: { itemId: string; text: string }[];
+  /** 连进这一格的文档格给的文档。这里只把它们摆在上面那一排(哪一篇、哪一版);正文由服务端按连线交给模型
+   *  (boards.actions.upstream_documents),不拼进提示词。 */
   upstreamDocuments?: NoteReference[];
   /** 连进这一格的资产格引用的资产(ADR 0027)。生成时服务端按连线把它们当成 `@` 了一样挂上;
    *  这里只用来把它们排在 `@` 菜单的「连进来的」那一组。 */
@@ -708,12 +709,12 @@ export function NodeComposer({
     //: 落到第一个收得下它的槽上(通常就是参考图)。
     //: 编辑器藏起来时,里面残留的 @ 也不算数 —— 用户看不见的引用不该发出去。
     const sourceAssets = mergeSourceAssets(sources, currentPromptMode === "none" ? [] : mentioned, library.data ?? [], slots);
-    //: 正文里写的是名字,而模型收到的是一串没有名字的素材 —— 那段「参考图 1 = 创作者.png」的对照由后端的
-    //: 生成漏斗补(画板生成总是要它,见 boards.actions.generate_on_board),不拼进这里:拼进来的话生成记录上
-    //: 存的就是拼过的字,AI 工作台的用户气泡会把它原样画出来。
+    //: 只发用户写的那句。正文里写的是名字,而模型收到的是一串没有名字的素材 —— 那段「参考图 1 = 创作者.png」的
+    //: 对照,和连进来的文档正文,都由后端按连线补给模型(见 boards.actions.generate_on_board),不拼进这里:拼进来的话
+    //: 生成记录上存的就是拼过的字,AI 工作台的用户气泡会把文档正文当成他说的话画出来。
     run(() =>
       onSubmit({
-        prompt: currentPromptMode === "none" ? "" : documentPrompt(text, upstreamDocuments ?? []),
+        prompt: text,
         provider: current.provider,
         providerProfileId: current.provider_profile_id,
         model: current.model,

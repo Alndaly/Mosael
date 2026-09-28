@@ -3,7 +3,8 @@
 - `migrate-generation-jobs-keep-their-failure`:老表补失败原因三列;
 - `backfill-generation-failures`:已经失败、任务还在的记录,把任务上的原因抄过来;
 - `migrate-generation-sessions-know-their-kind`:会话按最后一次生成记下种类(AI 工作台按它分「生成」「音频」两页);
-- `migrate-generation-prompts-drop-the-source-legend`:画板拼进提示词的「本次提供的素材:…」挪进 `prompt_notes`。
+- `migrate-generation-prompts-drop-the-source-legend`:画板拼进提示词的「本次提供的素材:…」挪进 `prompt_notes`;
+- `migrate-generation-prompts-drop-the-reference-documents`:画板拼进提示词的上游文档挪进 `prompt_notes`。
 """
 
 from __future__ import annotations
@@ -17,6 +18,7 @@ from app.core.db import SessionLocal, engine
 from app.db.migrations import (
     _backfill_generation_failures,
     _migrate_generation_jobs_keep_their_failure,
+    _migrate_generation_prompts_drop_the_reference_documents,
     _migrate_generation_prompts_drop_the_source_legend,
     _migrate_generation_sessions_know_their_kind,
 )
@@ -166,3 +168,41 @@ def test_画板拼进去的素材对照挪进补充_模型收到的一字不差(
     assert requests["plain"] == {"prompt": "只是一句话\n\n第二段"}
     assert payload["request"]["prompt"] == "把 创作者.png 里的人放到 街景.jpg"
     assert payload["subject"] == "把 创作者.png 里的人放到 街景.jpg"
+
+
+def test_画板拼进去的上游文档挪进补充_排在已有补充前面_模型收到的顺序不变() -> None:
+    ws = _workspace()
+    docs = "Reference documents (source material):\n\n[企划](#/notes?note=n&revision=2)\n# 第一幕\n\n清晨的码头"
+    with_notes = f"画第一幕\n\n{docs}"
+    only_docs = f"\n\n{docs}"
+    with SessionLocal() as db:
+        job = Job(workspace_id=ws, kind="ai_generation", status="succeeded",
+                  payload={"subject": with_notes[:80], "request": {"prompt": with_notes, "prompt_notes": ["张三: 黑色短发"]}})
+        db.add(job)
+        db.flush()
+        job_id = job.id
+        db.add_all([
+            GenerationJob(id="notes", workspace_id=ws, job_id=job_id, provider="x", model="m", kind="image",
+                          request={"prompt": with_notes, "prompt_notes": ["张三: 黑色短发"]}),
+            GenerationJob(id="empty", workspace_id=ws, provider="x", model="m", kind="image", request={"prompt": only_docs}),
+            # 上一步已经把「素材对照 + 它后面的文档」整段挪走的:提示词里没有抬头,不动。
+            GenerationJob(id="moved", workspace_id=ws, provider="x", model="m", kind="image",
+                          request={"prompt": "a cat", "prompt_notes": [f"Materials provided with this request:x\n\n{docs}"]}),
+            GenerationJob(id="plain", workspace_id=ws, provider="x", model="m", kind="image",
+                          request={"prompt": "Reference documents 写在正文里"}),
+        ])
+        db.commit()
+
+    _migrate_generation_prompts_drop_the_reference_documents()
+    _migrate_generation_prompts_drop_the_reference_documents()
+
+    with SessionLocal() as db:
+        requests = {row.id: row.request for row in db.query(GenerationJob)}
+        payload = db.get(Job, job_id).payload
+    assert requests["notes"] == {"prompt": "画第一幕", "prompt_notes": [docs, "张三: 黑色短发"]}
+    assert prompt_for_provider(requests["notes"]) == f"{with_notes}\n\n张三: 黑色短发"
+    assert requests["empty"] == {"prompt": "", "prompt_notes": [docs]}
+    assert requests["moved"]["prompt"] == "a cat"
+    assert requests["plain"] == {"prompt": "Reference documents 写在正文里"}
+    assert payload["request"]["prompt"] == "画第一幕"
+    assert payload["subject"] == "画第一幕"

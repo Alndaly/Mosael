@@ -32,3 +32,20 @@ it("框里删空过(留着一份空文档)再连上便签:框里显示便签的�
   fireEvent.click(screen.getByRole("button", { name: "boardGenerate" }));
   expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ prompt: "一只橘猫趴在窗台上" }));
 });
+
+it("连着文档:提交的只是框里写的那句,文档正文由服务端按连线交给模型", async () => {
+  const onSubmit = vi.fn();
+  const item = { id: "image", kind: "image", form: { prompt: "照这份脚本画第一幕" } } as unknown as BoardItem;
+  const doc = { note_id: "n", revision: 2, title: "脚本", markdown: "# 第一幕\n\n清晨的码头", tags: [], citation_url: "#/notes?note=n&revision=2" };
+  render(
+    <NodeComposer
+      item={item} models={[model]} busy={false} workspaceId="w" onPickAsset={vi.fn()} onFormChange={vi.fn()} onSubmit={onSubmit}
+      upstreamTexts={[]} upstreamDocuments={[doc]}
+    />,
+  );
+
+  await waitFor(() => expect(document.querySelector(".ProseMirror")?.textContent).toBe("照这份脚本画第一幕"));
+  fireEvent.click(screen.getByRole("button", { name: "boardGenerate" }));
+  expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ prompt: "照这份脚本画第一幕" }));
+  expect(screen.getByText(/脚本 · v2/)).toBeTruthy();
+});

@@ -66,7 +66,7 @@ export function upstreamOf(
  * 节点产出者(一项能力、空格子上的生成器)按绑定取值:哪个字段接哪几格由用户挑(能力的 `form.abilities[…].bindings`、
  * 生成器的 `form.bindings`),服务端也只取绑上的那几格(后端 boards/tools.resolve_bindings)。一篇连着、却没绑到
  * 任何字段的文档读不读得到与这次运行无关 —— 因为它挡掉整块面板的话,用户连「把绑定改到别的格子上」都做不了。
- * 内置的几块面板(生成、写字、念)把连进来的每一篇文档都拼进去(documentPrompt),所以每一格都算。
+ * 内置的几块面板(生成、写字、念)读连进来的每一篇文档(生成由服务端按连线取,见 boards.actions.upstream_documents),所以每一格都算。
  */
 function consumedSources(
   target: BoardItem | undefined,

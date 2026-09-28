@@ -28,7 +28,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.db.models import Board
-from app.domain.boards.actions import BoardInputError
+from app.domain.boards.actions import BoardInputError, document_cell
 from app.domain.boards.canvas import get_board, receipt_to_item
 from app.domain.jobs import create_job, dispatch_job, reset_receipt, set_receipt
 
@@ -125,17 +125,11 @@ def _value_of(db: Session, workspace_id: str, source: dict[str, Any], sink: str,
     if sink == "text":
         if kind == "note":
             return str(source.get("text") or "")
-        if kind == "document" and source.get("asset_id"):
-            #: 引用文档素材的文档格给的是解析出的全文(最新成功的那份;还没解析好就是还没有内容)。
-            from app.domain.documents.reading import document_text
-
-            return document_text(db, workspace_id, str(source["asset_id"]))
-        if not source.get("note_id"):
+        if kind != "document":
             return None
-        from app.domain.notes import read_reference
-
-        #: 文档给的是**钉住的那一版**的正文(和画布上看到的一致),不是最新版。
-        return str(read_reference(db, workspace_id, source["note_id"], source.get("note_revision"))["markdown"])
+        #: 文档格给正文:笔记钉住的那一版,或文档素材解析出的全文(还没解析好就是还没有内容)。和生成格读的是同一份。
+        document = document_cell(db, workspace_id, source)
+        return document.markdown if document else None
     if sink == "scene":
         return str(source.get("scene_id") or "") or None
     if sink == "sequence":

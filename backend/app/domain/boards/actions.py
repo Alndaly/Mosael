@@ -14,7 +14,7 @@ boards.trim,写字走 ai_chat —— 描述符校验、计量记账、任务中�
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy.orm import Session
 
@@ -29,6 +29,9 @@ from app.domain.boards.canvas import (
     receipt_to_item,
 )
 from app.domain.jobs import create_job, reset_receipt, run_job_inline, set_receipt
+
+if TYPE_CHECKING:
+    from app.domain.generation.operations import ReferenceDocument
 
 
 class BoardInputError(BoardDomainError):
@@ -130,6 +133,64 @@ def upstream_scene(board: Board, item_id: str) -> str | None:
     return None
 
 
+def document_cell(db: Session, workspace_id: str, item: dict[str, Any]) -> ReferenceDocument | None:
+    """一格文档格给出的那一篇(ADR 0031):引用笔记的给**钉住的那一版**(和画布上看到的一致,不是最新版),
+    引用文档素材的给解析出的全文,标题是素材名去掉扩展名(和文档格上显示的一致)。
+
+    还没挑文档、素材还没解析好(或解析没成)回 None;引用的笔记进了回收站、那一版没了,notes 的错误原样抛出。
+    """
+    from app.domain.generation.operations import ReferenceDocument
+
+    if item.get("note_id"):
+        from app.domain.notes import read_reference
+
+        ref = read_reference(db, workspace_id, str(item["note_id"]), item.get("note_revision"))
+        return ReferenceDocument(title=str(ref["title"]), markdown=str(ref["markdown"]))
+    if item.get("asset_id"):
+        from app.db.models import Asset
+        from app.domain.documents.reading import document_text
+
+        markdown = document_text(db, workspace_id, str(item["asset_id"]))
+        asset = db.get(Asset, str(item["asset_id"]))
+        if markdown is None or asset is None:
+            return None
+        return ReferenceDocument(title=asset.name.rsplit(".", 1)[0], markdown=markdown)
+    return None
+
+
+def upstream_documents(db: Session, workspace_id: str, board: Board, item_id: str) -> list[ReferenceDocument]:
+    """连进这一格的文档格给的文档,按连线的先后 —— 生成时整篇交给模型当素材(见 generation.documents_note)。
+
+    **由服务端按连线取,不由前端拼进提示词**:拼在前端的话,生成记录上存的就是拼过的字,AI 工作台的用户气泡
+    把文档正文当成他说的话画出来;给模型什么也成了前端说了算。
+
+    **读不到就不生成**(BoardInputError / notes 的错误):一篇连着却读不到的文档悄悄跳过,出来的东西少一块素材,
+    用户无从知道 —— 面板上同样拦着(documentBlocked)。
+    """
+    from app.domain.notes import NoteDomainError
+
+    canvas = board.canvas or {}
+    items = {str(one.get("id")): one for one in canvas.get("items") or [] if isinstance(one, dict)}
+    out: list[ReferenceDocument] = []
+    seen: set[str] = set()
+    for edge in canvas.get("edges") or []:
+        if not isinstance(edge, dict) or edge.get("target") != item_id:
+            continue
+        source_id = str(edge.get("source"))
+        source = items.get(source_id)
+        if source is None or source.get("kind") != "document" or source_id in seen:
+            continue
+        seen.add(source_id)
+        try:
+            document = document_cell(db, workspace_id, source)
+        except NoteDomainError as exc:
+            raise BoardInputError.relay(exc) from exc
+        if document is None:
+            raise BoardInputError("boardErr_upstreamDocumentUnreadable", name=str(source.get("text") or source_id))
+        out.append(document)
+    return out
+
+
 def generate_on_board(
     db: Session,
     *,
@@ -151,6 +212,7 @@ def generate_on_board(
 
     `entity_ids` 是正文里 `@` 到的资产;连进这一格的资产格在这里并进去(upstream_entities),
     之后两者是同一样东西。连进这一格的 3D 场景格(upstream_scene)按 `scene_reference`(镜头、用法)现渲成参考。
+    连进这一格的文档格(upstream_documents)整篇交给模型当素材。`prompt` 只是用户写的那句。
 
     **顺序**:建任务 → 摆占位 → 起任务。起在占位之前的话,一个当场失败的生成会把回执送到一格
     还不存在的地方。生成的错误(GenerationDomainError)原样抛出。
@@ -164,6 +226,7 @@ def generate_on_board(
     mentioned = list(dict.fromkeys([*(entity_ids or []), *upstream_entities(board, slot.item_id)]))
     scene_id = upstream_scene(board, slot.item_id)
     reference = {**(scene_reference or {}), "scene_id": scene_id} if scene_id else None
+    documents = upstream_documents(db, workspace_id, board, slot.item_id)
     token = set_receipt(receipt_to_item(slot.board_id, slot.item_id))
     try:
         generation, job = create_generation_job(
@@ -184,6 +247,7 @@ def generate_on_board(
             scene_reference=reference,
             #: 画板上的正文会按名字 `@` 素材,而模型收到的素材没有名字 —— 让漏斗在提示词后面补一段对照。
             name_sources=True,
+            documents=documents,
         )
     finally:
         reset_receipt(token)
@@ -191,7 +255,8 @@ def generate_on_board(
         db, workspace_id, slot, actor_id=actor_id, kind=kind, producer="generate", job_id=job.id,
         form={
             **form,
-            # 只存用户写的那句提示词;提交时接上的上游文档不该覆盖它。
+            #: 编辑器里的原样:换成不收提示词的模型时发出去的是空串,框里写过的字照样留着,换回来还在。
+            #: 调用方没给表单(智能体、脚本)时才用发出去的那句。
             "prompt": str(form.get("prompt") or prompt),
             "provider": generation.provider,
             "provider_profile_id": generation.provider_profile_id,

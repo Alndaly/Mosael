@@ -152,8 +152,8 @@ class SceneReferenceForm(_Form):
 
 
 class GenerateForm(_Form):
-    #: 发给模型的那句提示词(可带运行时追加的图例)。可以空着:要不要写由模型的描述符说(`prompt`),
-    #: 生成漏斗判 —— 放大这类不收提示词的模型本来就不该有。
+    #: 用户写的那句提示词。素材对照、连进来的文档、资产描述由生成漏斗补在后面(generation.create_generation_job),
+    #: 不拼进这里。可以空着:要不要写由模型的描述符说(`prompt`),生成漏斗判 —— 放大这类不收提示词的模型本来就不该有。
     prompt: str = ""
     provider: str = ""
     provider_profile_id: str = ""
@@ -168,7 +168,7 @@ class GenerateForm(_Form):
     #: 没连场景时这一项不起作用。连了场景却没写这一项 = 构图参考、场景只有一个镜头时用它。
     scene_reference: SceneReferenceForm | None = None
     #: 落在这一格上、用户可再次编辑的表单(草稿)。**和上面几样不是同一份**,所以不能由它们推出来:
-    #: 上面的 `prompt` 是发出去的那句(带着运行时追加的图例、拼进来的文档正文),`source_assets` 是
+    #: 上面的 `prompt` 是发出去的那句(不收提示词的模型发空串),`source_assets` 是
     #: 槽位挂的并上正文里 @ 到的;这里存的是用户写的那句、`prompt_document`、`mentioned_asset_ids`,
     #: 槽位只是槽位那一半 —— 重试时照它还原面板,@ 删掉的素材才不会被当成槽位里的再发一次。
     item_form: dict[str, Any] = Field(default_factory=dict)

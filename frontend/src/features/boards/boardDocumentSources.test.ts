@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
   boardSourceText,
   boardDocumentBlocked,
-  documentPrompt,
 } from "./boardDocumentSources";
 import type { BoardItem } from "@/api/domains/boards";
 const item: BoardItem = {
@@ -40,15 +39,6 @@ describe("document generation sources", () => {
       expect(boardDocumentBlocked(item, state)).toBe(true);
       expect(boardSourceText(item, state)).toBe("");
     }
-  });
-  it("keeps the instruction and complete reference together in generation input", () => {
-    expect(documentPrompt("Write a launch video", [reference])).toContain(
-      reference.markdown,
-    );
-    expect(documentPrompt("Write a launch video", [reference])).toMatch(
-      /^Write a launch video/,
-    );
-    expect(documentPrompt("plain", [])).toBe("plain");
   });
   it("preserves sticky notes as independent editable text", () => {
     const note: BoardItem = { ...item, kind: "note", text: "  Script  " };

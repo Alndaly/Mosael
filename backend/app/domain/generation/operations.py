@@ -4,6 +4,8 @@ import logging
 import re
 
 from collections import Counter
+from collections.abc import Sequence
+from dataclasses import dataclass
 
 from typing import Any
 
@@ -88,6 +90,24 @@ def source_legend(db: Session, workspace_id: str, source_assets: list[dict[str, 
     )
 
 
+@dataclass(frozen=True)
+class ReferenceDocument:
+    """交给模型当素材的一篇文档:标题和正文(笔记钉住的那一版,或文档素材解析出的全文)。"""
+
+    title: str
+    markdown: str
+
+
+def documents_note(documents: Sequence[ReferenceDocument]) -> str:
+    """「参考文档」那一段:抬头一行,接着每篇的标题一行、正文,篇与篇之间空一行。
+
+    **整篇给,不截断**:文档是用户连进来的素材,悄悄删掉后半篇,生成出来缺了哪一块他无从知道。
+    **标题不带链接**:笔记的引用地址(`#/notes?…`)只在应用里打得开,模型拿着它什么也做不了。
+    抬头按这次请求的语言(`genPromptReferenceDocuments`)。
+    """
+    return "\n\n".join([tr("genPromptReferenceDocuments"), *(f"{one.title}\n{one.markdown}" for one in documents)])
+
+
 def create_generation_job(
     db: Session,
     *,
@@ -106,6 +126,7 @@ def create_generation_job(
     entity_ids: list[str] | None = None,
     scene_reference: dict[str, str] | None = None,
     name_sources: bool = False,
+    documents: Sequence[ReferenceDocument] = (),
 ) -> tuple[GenerationJob, Any]:
     """建一次生成。`entity_ids` 是这次 `@` 到的资产(ADR 0027):展开成提示词描述和参考图,
     挂了哪几张、哪几张没挂上记进请求的 `entities`(见 domain/entities/mentions)。
@@ -116,7 +137,9 @@ def create_generation_job(
 
     `name_sources`:在提示词后面告诉模型每份素材叫什么、是那一种里的第几份(见 `source_legend`)。
 
-    **请求里的 `prompt` 只是用户写的那段。** 白模说明、资产描述、素材对照是漏斗替他补给模型的,各成一段记在
+    `documents`:连进来当素材的文档,整篇接在提示词后面(见 `documents_note`)。不收提示词的模型不给。
+
+    **请求里的 `prompt` 只是用户写的那段。** 连进来的文档、白模说明、资产描述、素材对照是漏斗替他补给模型的,各成一段记在
     `prompt_notes` 里,交给供应商时由 `prompt_for_provider` 接在后面 —— 生成记录上画的是他说的话,不是
     我们替他补的那几段。"""
     #: 点了名的会话**先**过写闸:共享给他的会话只能看。放在渲 3D 参考、把本地素材传上公网这些
@@ -145,7 +168,10 @@ def create_generation_job(
     capabilities = resolved.capabilities if resolved.capabilities_known else None
     #: 素材对照只说**调用方给的**那几份:后面 3D 参考渲出来的、`@` 资产挂上的,各自在自己那段说明里交代。
     legend = source_legend(db, workspace_id, source_assets) if name_sources and prompt.strip() else ""
-    notes: list[str] = []
+    #: 文档排在补充的最前面,紧跟用户写的那句 —— 画板此前在前端把它直接拼在正文后面,模型收到的顺序不变。
+    notes: list[str] = (
+        [documents_note(documents)] if documents and (capabilities is None or prompt_mode(capabilities) != "none") else []
+    )
     scene_receipt: dict[str, Any] | None = None
     if scene_reference:
         from app.domain.scenes.operations import SceneDomainError

@@ -33,18 +33,3 @@ export function boardDocumentBlocked(
       document.pending)
   );
 }
-
-export function documentPrompt(
-  prompt: string,
-  references: NoteReference[],
-): string {
-  if (!references.length) return prompt;
-  return [
-    prompt,
-    "Reference documents (source material):",
-    //: 文档素材(ADR 0031)没有笔记那种引用地址,只写标题。
-    ...references.map(
-      (ref) => `${ref.citation_url ? `[${ref.title}](${ref.citation_url})` : ref.title}\n${ref.markdown}`,
-    ),
-  ].join("\n\n");
-}

@@ -77,6 +77,7 @@
   "migrate-generation-capability-profiles": "4efdae207a221ca1",
   "migrate-generation-job-message-keys": "d177d5028f24c28a",
   "migrate-generation-jobs-keep-their-failure": "bda77737d368d035",
+  "migrate-generation-prompts-drop-the-reference-documents": "415f063ec119a346",
   "migrate-generation-prompts-drop-the-source-legend": "3053372fa4e01477",
   "migrate-generation-sessions-know-their-kind": "87d093ccd4f8c443",
   "migrate-hash-session-tokens": "fbeeb21a62f043b8",
