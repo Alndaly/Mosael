@@ -19,6 +19,7 @@ from app.core.i18n import LocalizedError, tr
 from app.core.security import hash_password
 from app.db.models import RegistrationInvite, User, Workspace, WorkspaceInvitation, WorkspaceMember, now
 from app.domain import deployment
+from app.domain.permissions import PermissionDenied
 from app.domain import notifications as notifications_svc
 
 _lock = threading.RLock()
@@ -232,6 +233,17 @@ def respond_invitation(db: Session, invitation_id: str, user: User, accept: bool
     return invitation
 
 
+def ensure_may_touch_owner(
+    db: Session, workspace_id: str, user_id: str, *, actor_role: str, new_role: str | None = None
+) -> None:
+    """**只有所有者能授予、改动或移除所有者。** 否则管理员能给自己(或同伙)升成所有者,或者把真正的
+    所有者请出去。`new_role` 是要改成的角色(移除成员时不给)。目标不是成员时不在这里管,由后面的操作报。"""
+    target = db.get(WorkspaceMember, {"workspace_id": workspace_id, "user_id": user_id})
+    touches_owner = new_role == "owner" or (target is not None and target.role == "owner")
+    if touches_owner and actor_role != "owner":
+        raise PermissionDenied("memberErr_onlyOwnerTouchesOwner")
+
+
 def set_role(db: Session, workspace_id: str, user_id: str, role: str) -> WorkspaceMember:
     with _lock:
         member = db.get(WorkspaceMember, {"workspace_id": workspace_id, "user_id": user_id})
@@ -335,3 +347,16 @@ def delete_account(db: Session, user: User) -> None:
             db.execute(text(f"DELETE FROM {table} WHERE {column} = :uid"), {"uid": user.id})
         db.delete(user)
         db.commit()
+
+
+def delete_workspace(db: Session, workspace_id: str) -> None:
+    """删工作区。成员和工作区里的各种资源由外键 CASCADE 带走;**文件不会** —— 3D 模型归工作区
+    (和字体、LUT 同一套),由这里显式清掉。"""
+    from app.domain.scenes.operations import delete_workspace_model_files
+
+    workspace = db.get(Workspace, workspace_id)
+    if workspace is None:
+        return
+    db.delete(workspace)
+    db.commit()
+    delete_workspace_model_files(workspace_id)

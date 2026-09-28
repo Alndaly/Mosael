@@ -1140,6 +1140,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "不能降级最后一个所有者",
         "en": "Can't demote the last owner.",
     },
+    "memberErr_onlyOwnerTouchesOwner": {
+        "zh": "只有所有者能授予、修改或移除所有者",
+        "en": "Only an owner can grant, change or remove the owner role.",
+    },
     "memberErr_lastOwnerRemove": {
         "zh": "不能移除最后一个所有者",
         "en": "Can't remove the last owner.",

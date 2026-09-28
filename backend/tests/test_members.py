@@ -107,6 +107,18 @@ def test_only_owner_can_grant_owner() -> None:
     assert promoted.status_code == 200 and promoted.json()["role"] == "owner"
 
 
+def test_only_owner_can_remove_or_demote_an_owner() -> None:
+    owner = fresh_client()
+    ws = _ws(owner)
+    ad = _join(owner, ws["id"], "ad", "admin")
+    owner_id = owner.get("/api/auth/me").json()["id"]
+    assert ad.delete(f"/api/workspaces/{ws['id']}/members/{owner_id}").status_code == 403
+    demoted = ad.patch(f"/api/workspaces/{ws['id']}/members/{owner_id}", json={"role": "viewer"})
+    assert demoted.status_code == 403, demoted.text
+    ad_id = ad.get("/api/auth/me").json()["id"]
+    assert ad.delete(f"/api/workspaces/{ws['id']}/members/{ad_id}").status_code == 204  # 自己退出照旧可以
+
+
 def test_rename_and_delete_role_gates() -> None:
     owner = fresh_client()
     ws = _ws(owner)

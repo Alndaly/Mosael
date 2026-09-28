@@ -109,15 +109,7 @@ def set_autopilot_rules(
 @router.delete("/workspaces/{workspace_id}", status_code=204)
 def delete_workspace(workspace_id: str, db: DbSession, user: CurrentUser) -> Response:
     ensure_workspace_role(db, user, workspace_id, "owner")
-    workspace = db.get(Workspace, workspace_id)
-    if workspace is not None:
-        db.delete(workspace)  # FK cascade removes members and all scoped resources
-        db.commit()
-        # 行是 CASCADE 走的,**文件不会** —— 3D 模型归工作区(见 domain/scenes),和字体、
-        # LUT 同一套,由删除那条路显式清掉。
-        from app.domain.scenes.operations import delete_workspace_model_files
-
-        delete_workspace_model_files(workspace_id)
+    members_svc.delete_workspace(db, workspace_id)
     return Response(status_code=204)
 
 
@@ -241,9 +233,7 @@ def set_member_role(
     target = db.get(WorkspaceMember, {"workspace_id": workspace_id, "user_id": user_id})
     if target is None:
         raise HTTPException(status_code=404, detail="Not found")
-    # Only an owner may grant or modify the owner role (prevents admins minting owners / self-promoting).
-    if (body.role == "owner" or target.role == "owner") and caller_role != "owner":
-        raise HTTPException(status_code=403, detail="Only an owner can change owner role")
+    members_svc.ensure_may_touch_owner(db, workspace_id, user_id, actor_role=caller_role, new_role=body.role)
     try:
         member = members_svc.set_role(db, workspace_id, user_id, body.role)
     except members_svc.MemberError as exc:
@@ -262,10 +252,7 @@ def remove_member(workspace_id: str, user_id: str, db: DbSession, user: CurrentU
     # Self-leave is allowed for any member; removing someone else needs the members perm.
     if user_id != user.id:
         ensure_workspace_perm(db, user, workspace_id, "members")
-        caller_role = workspace_role(db, user, workspace_id)
-        target = db.get(WorkspaceMember, {"workspace_id": workspace_id, "user_id": user_id})
-        if target is not None and target.role == "owner" and caller_role != "owner":
-            raise HTTPException(status_code=403, detail="Only an owner can remove an owner")
+        members_svc.ensure_may_touch_owner(db, workspace_id, user_id, actor_role=workspace_role(db, user, workspace_id))
     else:
         ensure_workspace_access(db, user, workspace_id)
     try:
