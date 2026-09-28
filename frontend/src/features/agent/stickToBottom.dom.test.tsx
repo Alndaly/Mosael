@@ -146,4 +146,20 @@ describe("贴底跟随", () => {
     expect(h.api.pinned).toBe(true);
     expect(el.scrollTop).toBe(el.scrollHeight - 600);
   });
+
+  it("滚动容器换了一个元素(切到轨迹再切回对话),新容器照样跟着往下滚", async () => {
+    //: 此前监听只在切会话时重绑,一直挂在已经卸载的旧容器上 —— 切一次轨迹回来就不再自动下滚(用户截图)。
+    function Switcher({ view }: { view: "chat" | "trace" }) {
+      const stick = useStickToBottom<HTMLDivElement>("session-1");
+      return view === "chat" ? <div key="chat" ref={stick.ref} data-testid="thread" /> : <div key="trace" data-testid="trace" />;
+    }
+    const view = render(<Switcher view="chat" />);
+    view.rerender(<Switcher view="trace" />);
+    view.rerender(<Switcher view="chat" />);
+    const el = view.getByTestId("thread");
+    const box = measurable(el, 600);
+    await appendContent(el, box, 400);
+    expect(el.scrollTop).toBe(400);
+  });
 });
+

@@ -30,8 +30,8 @@ const BOTTOM_SLACK = 48;
 const UP_NOISE = 2;
 
 export type StickToBottom<T extends HTMLElement> = {
-  /** 挂到滚动容器上。 */
-  ref: React.RefObject<T | null>;
+  /** 挂到滚动容器上(回调式:容器换了一个元素就重新绑,见 useStickToBottom)。 */
+  ref: (node: T | null) => void;
   /** 当前是否跟着最新内容走。为 false 时该露出「回到最新」。 */
   pinned: boolean;
   /** 不跟随期间底下又长出了新内容 —— 用来把按钮从"回到底部"强调成"有新消息"。 */
@@ -41,7 +41,15 @@ export type StickToBottom<T extends HTMLElement> = {
 };
 
 export function useStickToBottom<T extends HTMLElement>(resetKey?: unknown): StickToBottom<T> {
-  const ref = React.useRef<T | null>(null);
+  //: **滚动容器会换**:对话页切到「轨迹」再切回来、子代理视图进出,正文那一层是重新挂载的新元素。
+  //: 此前用 useRef 只在切会话时重绑,监听一直挂在已经卸载的旧元素上 —— 切一次轨迹回来就再也不跟着往下滚
+  //: (用户截图)。容器放进 state,换了就整套重绑。
+  const [element, setElement] = React.useState<T | null>(null);
+  const elementRef = React.useRef<T | null>(null);
+  const ref = React.useCallback((node: T | null) => {
+    elementRef.current = node;
+    setElement(node);
+  }, []);
   //: 跟随状态存两份:ref 给事件处理器读(它们不该因为 state 变化而重新绑),state 给界面渲染。
   const pinnedRef = React.useRef(true);
   const lastTopRef = React.useRef(0);
@@ -55,7 +63,7 @@ export function useStickToBottom<T extends HTMLElement>(resetKey?: unknown): Sti
   }, []);
 
   const scrollToBottom = React.useCallback(() => {
-    const el = ref.current;
+    const el = elementRef.current;
     if (!el) return;
     // **不走 `scrollTo({ behavior: "smooth" })`**:实测在 Electron 这类环境里它会被整个忽略 ——
     // scrollTop 一动不动,而我们已经把状态翻成"在跟随了",于是按钮消失、画面却还停在原处。
@@ -66,7 +74,7 @@ export function useStickToBottom<T extends HTMLElement>(resetKey?: unknown): Sti
   }, [setPinnedBoth]);
 
   React.useEffect(() => {
-    const el = ref.current;
+    const el = element;
     if (!el) return;
 
     const atBottom = () => el.scrollHeight - el.scrollTop - el.clientHeight <= BOTTOM_SLACK;
@@ -119,9 +127,9 @@ export function useStickToBottom<T extends HTMLElement>(resetKey?: unknown): Sti
       mutation.disconnect();
       resize.disconnect();
     };
-    // resetKey 换了(切会话)就整套重来:新会话该从底部开始,而不是继承上一个的滚动位置。
+    // resetKey 换了(切会话)或容器换了一个元素,就整套重来:新会话该从底部开始,而不是继承上一个的滚动位置。
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [resetKey, setPinnedBoth]);
+  }, [element, resetKey, setPinnedBoth]);
 
   // 切会话时把跟随打开 —— 上一个会话里用户翻到了半截,不该带进新会话。
   React.useEffect(() => {
