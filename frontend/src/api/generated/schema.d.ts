@@ -4336,7 +4336,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Source Message */
+        /**
+         * Source Message
+         * @description 笔记引用的一条对话消息。得看得见它所在的那次对话(`readable_session`):笔记是工作区的,引用的
+         *     对话却可能是某人没共享的私人线程 —— 引用它不等于把它公开。看不见和不存在同一个回答。
+         */
         get: operations["source_message_api_notes_sources_message__message_id__get"];
         put?: never;
         post?: never;
@@ -5387,14 +5391,15 @@ export interface paths {
         };
         /**
          * List Confirmations
-         * @description 待确认列表。
+         * @description 他看得见的确认卡。
          *
-         *     确认卡按**发起会话**归属:
-         *       - `session_id=X` —— 只要该会话的卡。聊天里的内联确认卡用这个,否则同工作区其它对话、
-         *         工作流节点、外部智能体的卡都会挤进当前对话,更糟的是会被这边的「本会话始终允许」
-         *         自动批准(授权范围逃逸)。
-         *       - `unowned=true` —— 只要**没有会话**的卡(MCP / 飞书等外部智能体)。全局确认中心用这个。
-         *       - 都不传 —— 全部,供调试/审计。
+         *     一张卡跟着发起它的那次对话走:别人没共享的对话里的卡(工具名、参数)他看不到,和那次对话本身一样
+         *     (判据在 domain/agent/sessions.reads_for_filter;没挂在对话上的、挂在无主的飞书群聊会话上的是工作区的卡)。
+         *       - `session_id=X` —— 只要这次对话的卡,先得看得见这次对话(否则 404)。聊天里的内联确认卡用这个,
+         *         否则同工作区其它对话、工作流节点、外部智能体的卡都会挤进当前对话,更糟的是会被这边的
+         *         「本会话始终允许」自动批准(授权范围逃逸)。
+         *       - `unowned=true` —— 只要**没有会话**的卡(MCP 直连等外部智能体)。
+         *       - 都不传 —— 他看得见的全部。全局确认中心用这个,按「哪次对话正开着」在界面上分工。
          */
         get: operations["list_confirmations_api_confirmations_get"];
         put?: never;

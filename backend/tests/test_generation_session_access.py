@@ -103,3 +103,79 @@ def test_会话列表按种类筛_生成页和音频页各看各的() -> None:
     assert ids("&kind=image&kind=video") == {image, video, untyped["id"]}
     assert ids("&kind=audio") == {audio}
     assert ids("") == {image, video, audio, untyped["id"]}
+
+
+# ---------- 任务总线上的那一行,跟着生成所在的会话走 ----------
+#
+# 每次生成在任务中心(`/api/jobs`)也有一行,payload 里就是提示词和整份请求。此前那几条路由只查了工作区成员,
+# 于是别人私有会话里写的提示词,在任务中心和生成页的进度列表里谁都看得到 —— 「私有」只挡住了会话列表。
+
+
+def _generation_job(workspace: str, sid: str, prompt: str = "一张不想给别人看的海报") -> str:
+    from app.core.db import SessionLocal
+    from app.db.models import GenerationJob, User
+    from app.domain.jobs import create_job
+
+    with SessionLocal() as db:
+        owner = db.query(User).filter(User.username == "tester").one()
+        job = create_job(
+            db, workspace_id=workspace, kind="ai_generation", created_by=owner.id,
+            payload={"subject": prompt, "request": {"prompt": prompt}},
+        )
+        db.add(GenerationJob(
+            workspace_id=workspace, session_id=sid, job_id=job.id, provider="test", model="m", kind="image",
+            request={"prompt": prompt},
+        ))
+        db.commit()
+        return job.id
+
+
+def _jobs_seen(client: TestClient, workspace: str) -> set[str]:
+    res = client.get(f"/api/jobs?workspace_id={workspace}&kind=ai_generation")
+    assert res.status_code == 200, res.text
+    return {job["id"] for job in res.json()}
+
+
+def test_没共享的会话_它的生成任务同事在任务中心看不到() -> None:
+    owner, workspace, mate = _team()
+    job = _generation_job(workspace, _session(owner, workspace, shared=False))
+
+    assert job not in _jobs_seen(mate, workspace)
+    missing = mate.get("/api/jobs/no-such-job")
+    for res in (
+        mate.get(f"/api/jobs/{job}"),
+        mate.get(f"/api/jobs/{job}/events"),
+        mate.get(f"/api/jobs/{job}/children"),
+        mate.post(f"/api/jobs/{job}/cancel"),
+    ):
+        assert (res.status_code, res.json()) == (missing.status_code, missing.json()) == (404, {"detail": "Job not found"})
+    assert owner.get(f"/api/jobs/{job}").json()["status"] == "queued"
+
+    assert job in _jobs_seen(owner, workspace)
+    assert owner.get(f"/api/jobs/{job}/events").status_code == 200
+
+
+def test_共享来的会话_它的生成任务同事看得见_取消不了() -> None:
+    """看是共享给他的;取消是在主人的会话里写 —— 那是主人正在付钱的一次生成。"""
+    owner, workspace, mate = _team()
+    job = _generation_job(workspace, _session(owner, workspace, shared=True))
+
+    assert job in _jobs_seen(mate, workspace)
+    assert mate.get(f"/api/jobs/{job}").status_code == 200
+    denied = mate.post(f"/api/jobs/{job}/cancel")
+    assert denied.status_code == 403, denied.text
+    assert owner.get(f"/api/jobs/{job}").json()["status"] == "queued"
+    assert owner.post(f"/api/jobs/{job}/cancel").status_code == 200
+
+
+def test_不挂在会话上的任务_仍是工作区的() -> None:
+    from app.core.db import SessionLocal
+    from app.domain.jobs import create_job
+
+    owner, workspace, mate = _team()
+    with SessionLocal() as db:
+        job = create_job(db, workspace_id=workspace, kind="export", created_by=None, payload={})
+        db.commit()
+        job_id = job.id
+    assert mate.get(f"/api/jobs/{job_id}").status_code == 200
+    assert job_id in {one["id"] for one in mate.get(f"/api/jobs?workspace_id={workspace}").json()}

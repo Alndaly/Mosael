@@ -4,18 +4,24 @@ from sqlalchemy import select, delete
 from app.core.i18n import tr
 from app.api.deps import CurrentUser, DbSession
 from app.api.schemas.notes import NoteAppend, NoteContent, NoteCreate, NoteOut, NoteRestore, NoteUpdate, NoteReferenceOut
-from app.db.models import AgentMessage, AgentSession, Note, NoteRevision
+from app.db.models import AgentMessage, Note, NoteRevision
+from app.domain.agent.sessions import readable_session
 from app.domain.notes import append_note, create_note, get_note, note_topics, save_note, read_reference, query_notes
-from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm, owning_workspace
+from app.domain.permissions import NotVisible, ensure_workspace_access, ensure_workspace_perm, owning_workspace
 
 router = APIRouter(tags=["notes"])
 
 
 @router.get("/notes/sources/message/{message_id}")
 def source_message(message_id: str, workspace_id: str, db: DbSession, user: CurrentUser):
+    """笔记引用的一条对话消息。得看得见它所在的那次对话(`readable_session`):笔记是工作区的,引用的
+    对话却可能是某人没共享的私人线程 —— 引用它不等于把它公开。看不见和不存在同一个回答。"""
     ensure_workspace_access(db, user, workspace_id)
     message = db.get(AgentMessage, message_id)
-    session = db.get(AgentSession, message.session_id) if message else None
+    try:
+        session = readable_session(db, user, message.session_id) if message else None
+    except NotVisible:
+        session = None
     if session is None or session.workspace_id != workspace_id:
         raise HTTPException(404, tr("routeErr_noteSourceNotFound"))
     return {"content": message.content, "session_id": session.id, "created_at": message.created_at}

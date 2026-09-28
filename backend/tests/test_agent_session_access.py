@@ -42,8 +42,8 @@ def _question(owner: TestClient, sid: str) -> str:
     return owner.post("/api/agent/questions", json={"session_id": sid, "questions": QUESTION}).json()["id"]
 
 
-def _card(workspace: str, sid: str) -> str:
-    """这次对话里的一张待批确认卡(browser_open:不校验外部实体,测的只是归属)。"""
+def _card(workspace: str, sid: str | None) -> str:
+    """这次对话里的一张待批确认卡(browser_open:不校验外部实体,测的只是归属)。`sid` 为空 = 没挂在对话上。"""
     with SessionLocal() as db:
         owner = db.query(User).filter(User.username == "tester").one()
         card = request_confirmation(
@@ -178,3 +178,104 @@ def test_问题记在它那次对话所在的工作区() -> None:
     sid = _session(owner, second, shared=False)
     asked = owner.post("/api/agent/questions", json={"session_id": sid, "questions": QUESTION}).json()
     assert asked["workspace_id"] == second
+
+
+# ---------- 挂在对话上的东西,跟着对话一起「看得见 / 看不见」 ----------
+#
+# 读闸不只守着 /agent/sessions/{id}/…:确认卡列着那次对话里的工具名和参数,笔记能引用对话里的一条消息。
+# 这两处此前只查了「是不是工作区的人」,同事拿着别人私有对话的 id(或不带 id 拉整个工作区的待确认)就读得到。
+
+
+def _message(sid: str, content: str = "预算只有三万") -> str:
+    from app.domain.agent import host
+
+    with SessionLocal() as db:
+        message = host.append_message(db, sid, role="user", content=content)
+        db.commit()
+        return message.id
+
+
+def _cards_seen(client: TestClient, workspace: str, **params: str) -> set[str]:
+    query = "".join(f"&{key}={value}" for key, value in params.items())
+    res = client.get(f"/api/confirmations?workspace_id={workspace}{query}")
+    assert res.status_code == 200, res.text
+    return {card["id"] for card in res.json()}
+
+
+def test_没共享的对话_同事看不到它的确认卡() -> None:
+    owner, workspace, mate = _team()
+    sid = _session(owner, workspace, shared=False)
+    card = _card(workspace, sid)
+
+    assert mate.get(f"/api/confirmations?workspace_id={workspace}&session_id={sid}").status_code == 404
+    assert card not in _cards_seen(mate, workspace)
+    assert card not in _cards_seen(mate, workspace, status="pending")
+    missing = mate.get("/api/confirmations/no-such-card")
+    for res in (
+        mate.get(f"/api/confirmations/{card}"),
+        mate.post(f"/api/confirmations/{card}/approve"),
+        mate.post(f"/api/confirmations/{card}/reject"),
+    ):
+        # 看不见和不存在是同一个回答,连 detail 都一样。
+        assert (res.status_code, res.json()) == (missing.status_code, missing.json()) == (404, {"detail": "Not found"})
+    with SessionLocal() as db:
+        assert db.get(ToolConfirmation, card).status == "pending"
+
+    # 主人自己照常看得见。
+    assert _cards_seen(owner, workspace, session_id=sid) == {card}
+    assert card in _cards_seen(owner, workspace, status="pending")
+    assert owner.get(f"/api/confirmations/{card}").status_code == 200
+
+
+def test_共享来的对话_同事看得见它的确认卡() -> None:
+    owner, workspace, mate = _team()
+    sid = _session(owner, workspace, shared=True)
+    card = _card(workspace, sid)
+
+    assert _cards_seen(mate, workspace, session_id=sid) == {card}
+    assert card in _cards_seen(mate, workspace, status="pending")
+    assert mate.get(f"/api/confirmations/{card}").status_code == 200
+
+
+def test_工作区的卡_全局确认中心照旧兜底() -> None:
+    """没挂在对话上的(MCP 直连)和挂在无主对话上的(飞书群聊会话)是工作区的卡:同事都看得见 ——
+    否则智能体会一直干等一个没人看得到的确认。"""
+    from app.domain.agent import host
+
+    owner, workspace, mate = _team()
+    with SessionLocal() as db:
+        group_chat = host.get_or_create_external_session(
+            db, workspace_id=workspace, external_key="feishu:chat-1", title="飞书群"
+        ).id
+    no_session = _card(workspace, None)
+    in_group_chat = _card(workspace, group_chat)
+
+    assert {no_session, in_group_chat} <= _cards_seen(mate, workspace, status="pending")
+    assert _cards_seen(mate, workspace, session_id=group_chat) == {in_group_chat}
+    assert mate.get(f"/api/confirmations/{in_group_chat}").status_code == 200
+
+
+def test_对话删了_留下的卡谁也看不到() -> None:
+    """卡上的会话 id 不设外键,对话删掉后卡还在。删掉的是主人的私人线程,卡(工具名、参数)不该因此变成全工作区可读。"""
+    owner, workspace, mate = _team()
+    sid = _session(owner, workspace, shared=False)
+    card = _card(workspace, sid)
+    assert owner.delete(f"/api/agent/sessions/{sid}").status_code == 204
+
+    assert card not in _cards_seen(mate, workspace)
+    assert mate.get(f"/api/confirmations/{card}").status_code == 404
+
+
+def test_笔记引用的消息_跟着它那次对话的可见性走() -> None:
+    owner, workspace, mate = _team()
+    private = _message(_session(owner, workspace, shared=False), "私下说的")
+    shared = _message(_session(owner, workspace, shared=True), "给大家看的")
+
+    def source(client: TestClient, message_id: str):
+        return client.get(f"/api/notes/sources/message/{message_id}?workspace_id={workspace}")
+
+    hidden, missing = source(mate, private), source(mate, "no-such-message")
+    assert (hidden.status_code, hidden.json()) == (missing.status_code, missing.json())
+    assert hidden.status_code == 404
+    assert source(mate, shared).json()["content"] == "给大家看的"
+    assert source(owner, private).json()["content"] == "私下说的"

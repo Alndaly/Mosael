@@ -360,12 +360,16 @@ def test_confirmations_scoped_by_session() -> None:
             client.headers["Authorization"] = f"Bearer {token}"
         return client.post("/api/confirmations", json=base).json()
 
-    a = card_as("sess-a")
-    b = card_as("sess-b")
+    def session() -> str:
+        return client.post("/api/agent/sessions", json={"workspace_id": ws["id"]}).json()["id"]
+
+    sess_a, sess_b = session(), session()
+    a = card_as(sess_a)
+    b = card_as(sess_b)
     ext = card_as(None)  # 外部智能体:没有会话
     client.headers["Authorization"] = login_token
 
-    assert a["session_id"] == "sess-a"
+    assert a["session_id"] == sess_a
     assert ext["session_id"] is None
 
     def ids(**params: str) -> set[str]:
@@ -374,11 +378,11 @@ def test_confirmations_scoped_by_session() -> None:
         return {row["id"] for row in rows}
 
     # 各自只看得到自己的
-    assert ids(session_id="sess-a") == {a["id"]}
-    assert ids(session_id="sess-b") == {b["id"]}
-    # 全局中心只兜没有会话的那些
+    assert ids(session_id=sess_a) == {a["id"]}
+    assert ids(session_id=sess_b) == {b["id"]}
+    # 只要没有会话的那些
     assert ids(unowned="true") == {ext["id"]}
-    # 不带筛选仍是全部(调试/审计)
+    # 不带筛选:他看得见的全部(这里全是他自己的)
     assert ids() == {a["id"], b["id"], ext["id"]}
 
 

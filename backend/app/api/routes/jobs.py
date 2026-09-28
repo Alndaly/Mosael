@@ -6,10 +6,11 @@ from sqlalchemy import select
 from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import JobKindCatalogOut, JobOut, TaskEventOut
 from app.core.i18n import get_current_locale, render_message, t
-from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm
+from app.domain.permissions import NotVisible, ensure_workspace_access, ensure_workspace_perm
 from app.db.models import Job, TaskEvent
 from app.domain import job_catalog
 from app.domain.jobs import cancel_job, clear_finished_jobs
+from app.domain.generation.sessions import ensure_job_readable, ensure_job_writable, jobs_filter
 
 router = APIRouter(tags=["jobs"])
 
@@ -23,7 +24,8 @@ def list_jobs(
     top_level: bool = False,
 ) -> list[Job]:
     ensure_workspace_access(db, user, workspace_id)
-    stmt = select(Job).where(Job.workspace_id == workspace_id)
+    # 别人私有会话里的生成不列:payload 里就是提示词(见 domain/generation/sessions.jobs_filter)。
+    stmt = select(Job).where(Job.workspace_id == workspace_id, jobs_filter(Job.id, user, workspace_id))
     if kind:
         stmt = stmt.where(Job.kind == kind)
     # 任务中心传 top_level=true:只列顶层任务,工作流派生的子任务(parent_job_id 非空)收到父下,
@@ -63,30 +65,26 @@ def delete_finished_jobs(workspace_id: str, db: DbSession, user: CurrentUser) ->
 
 @router.get("/jobs/{job_id}", response_model=JobOut)
 def get_job(job_id: str, db: DbSession, user: CurrentUser) -> Job:
-    job = db.get(Job, job_id)
-    if job is None:
-        raise HTTPException(status_code=404, detail="Job not found")
-    ensure_workspace_access(db, user, job.workspace_id)
-    return job
+    return _readable_job(db, user, job_id)
 
 
 @router.get("/jobs/{job_id}/children", response_model=list[JobOut])
 def list_job_children(job_id: str, db: DbSession, user: CurrentUser) -> list[Job]:
     """一个工作流 job 派生的子任务(发布/导出/转写/生成/配音)。任务详情里「收纳」展示。"""
-    parent = db.get(Job, job_id)
-    if parent is None:
-        raise HTTPException(status_code=404, detail="Job not found")
-    ensure_workspace_access(db, user, parent.workspace_id)
-    stmt = select(Job).where(Job.parent_job_id == job_id).order_by(Job.created_at.asc())
+    parent = _readable_job(db, user, job_id)
+    stmt = (
+        select(Job)
+        .where(Job.parent_job_id == job_id, jobs_filter(Job.id, user, parent.workspace_id))
+        .order_by(Job.created_at.asc())
+    )
     return list(db.scalars(stmt))
 
 
 @router.post("/jobs/{job_id}/cancel", response_model=JobOut)
 def cancel_job_route(job_id: str, db: DbSession, user: CurrentUser) -> Job:
-    job = db.get(Job, job_id)
-    if job is None:
-        raise HTTPException(status_code=404, detail="Job not found")
+    job = _readable_job(db, user, job_id)
     ensure_workspace_perm(db, user, job.workspace_id, "edit")
+    ensure_job_writable(db, user, job.id)
     try:
         return cancel_job(db, job)
     except ValueError as exc:
@@ -101,10 +99,7 @@ def list_job_events(job_id: str, db: DbSession, user: CurrentUser, limit: int = 
     每个节点的状态,取最新 N 条会把早期的 started 挤掉 —— 表现为「旧任务只剩最后一个节点、
     前面的步骤全没了」,而最后那个节点因为丢了 started 反而显示成一直在跑。
     """
-    job = db.get(Job, job_id)
-    if job is None:
-        raise HTTPException(status_code=404, detail="Job not found")
-    ensure_workspace_access(db, user, job.workspace_id)
+    _readable_job(db, user, job_id)
     events = list(
         db.scalars(
             select(TaskEvent)
@@ -131,3 +126,16 @@ def list_job_events(job_id: str, db: DbSession, user: CurrentUser, limit: int = 
             "created_at": event.created_at,
         })
     return out
+
+
+def _readable_job(db: DbSession, user: CurrentUser, job_id: str) -> Job:
+    """他看得见的那个任务:工作区的人,且看得见它所属的生成会话(若有)。看不见和不存在同一个回答(404)。"""
+    job = db.get(Job, job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    ensure_workspace_access(db, user, job.workspace_id)
+    try:
+        ensure_job_readable(db, user, job.id)
+    except NotVisible:
+        raise HTTPException(status_code=404, detail="Job not found") from None
+    return job
