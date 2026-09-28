@@ -99,20 +99,35 @@ def parse_local(source: Path, out_dir: Path, *, on_progress: Progress = _noop) -
     except Exception as exc:  # noqa: BLE001 —— 坏文件、加密文件:库各有各的异常,对用户都是「读不了这份」
         logger.warning("本地解析 %s 失败", source.name, exc_info=True)
         raise DocumentParseError("docErr_unreadable", detail=str(exc)[:200]) from exc
-    #: Office 文档的页面图:本机有 LibreOffice 就转 PDF 渲;没有就说一声。
-    if suffix in (".docx", ".pptx") and not any(one.image for one in parsed.sections):
+    attach_page_images(source, out_dir, parsed, on_progress)
+    return parsed
+
+
+def attach_page_images(source: Path, out_dir: Path, parsed: Parsed, on_progress: Progress = _noop) -> None:
+    """给解析结果配上页面图 —— **不管是谁解析的**(本地、MinerU……),页面图都由宿主照原件渲:PDF 直接渲,
+    Office 文档本机有 LibreOffice 就转 PDF 再渲,没有就说一声。段和页一一对得上(PDF 按页、PPT 按幻灯片切,
+    数目相同)就挂在各段上,对不上(Word 按章切)就单独记成 page_images。已经有页面图的不再渲。"""
+    from app.domain.documents import office
+
+    if any(one.image for one in parsed.sections) or parsed.page_images:
+        return
+    suffix = source.suffix.lower()
+    if suffix == ".pdf":
+        pdf: Path | None = source
+    elif suffix in (".docx", ".pptx", ".doc", ".ppt"):
         pdf = office.convert(source, "pdf", out_dir / "_converted")
         if pdf is None:
-            parsed.notes.append("docNote_noPageImages")
-        else:
-            images = _render_pdf_pages(pdf, out_dir, on_progress)
-            if parsed.unit == "slide":
-                for section, image in zip(parsed.sections, images):
-                    section.image = image
-            else:
-                #: docx 按章切,和页对不上:页面图单独记,按页取时用。
-                parsed.page_images = images
-    return parsed
+            if "docNote_noPageImages" not in parsed.notes:
+                parsed.notes.append("docNote_noPageImages")
+            return
+    else:
+        return
+    images = _render_pdf_pages(pdf, out_dir, on_progress)
+    if parsed.unit in ("page", "slide") and len(images) == len(parsed.sections):
+        for section, image in zip(parsed.sections, images):
+            section.image = image
+    else:
+        parsed.page_images = images
 
 
 # ── PDF ─────────────────────────────────────────────────────────────────────────

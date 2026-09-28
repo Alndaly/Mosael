@@ -135,3 +135,8 @@ Accepted — 2026-09-28。维护者拍板:
    (页面图 + 那几页的文字交给视觉模型,即上面的 `view_document_pages`);「转为笔记」(素材库右键 / ⋯、文档详情)。
    素材详情改成三栏:解析全文 | 原版页面 | 元信息,点段落标题原版栏滚到那一页。工作流节点和画板文档格还没做。
 5. **MinerU 插件**:云端 + 自建两种连接,选项、进度、结果交回;「用 MinerU 重新解析」。
+   **云端已完成**(2026-09-28):`plugins/bundled/mineru`(只用标准库):要上传地址 → PUT → 轮询(进度按已解析页数)→
+   取 zip,按 content_list 的 `page_idx` 整理成带页标记的 Markdown;宿主一侧 `documents/plugin_parse`(副本交给插件、
+   按页标记切段、HTML 表格转 Markdown、插图搬进解析目录),页面图一律由宿主照原件渲。协议写进 PLUGIN_MANIFEST。
+   **自建服务还没接**:MinerU 自建服务的 v1 接口(`mineru-kit api-server`)官方文档只给了 health / uploads / files,
+   提交与轮询任务的路径没写全,照着猜会写错 —— 等拿一台真服务对过再接。

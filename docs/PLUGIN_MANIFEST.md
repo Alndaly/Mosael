@@ -942,7 +942,18 @@ Amazon S3 / S3 兼容服务是**一个插件的五个选项**(枚举配置 `STOR
 | `tools` | —— | 每个连接报自己的工具 | 是 |
 
 只给宿主调的能力装的时候就查三条:只给进程形态、有且只有一个工具认领、那个工具不进智能体和工作流的工具表。
-`document_parse` 的调用协议(收一份文件、报进度、交回 Markdown 和图片)随 MinerU 插件一起定稿,见 ADR 0031。
+#### `document_parse` —— 把一份文档解析成 Markdown
+
+完整范例是 `plugins/bundled/mineru`。认领它的工具写 `"stream": true`(解析常要几分钟),宿主在文档解析任务里调它:
+
+- 入:`{"file": <原件副本的本地路径>, "filename": <原文件名>}` —— 副本放在这次的 `MOSAEL_PLUGIN_OUTPUT_DIR` 里;
+- 进度、取消:和别的流式工具一样(NDJSON 进度行、`MOSAEL_PLUGIN_CANCEL_FILE`);
+- 出:`{"markdown": "<输出目录里一份 Markdown 的相对路径>"}`。每一段前写一个 `<!-- page: N -->`(或 `slide` /
+  `sheet` / `section`),没写就按标题切;插图放在输出目录的 `images/` 下、正文里用相对路径引用;表格可以直接交
+  HTML(`<table>…</table>`),宿主转成 Markdown 表格。
+- **页面图不归你管**:宿主照原件自己渲(PDF 总有,Office 文档本机有 LibreOffice 才有),哪一家解析的都一样。
+
+交出去的文件路径必须落在输出目录里,否则整次解析判失败。
 
 ## 替宿主做生成
 

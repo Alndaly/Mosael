@@ -1,0 +1,26 @@
+# MinerU 文档解析
+
+把 PDF、Word、PPT、Excel 和图片交给 [MinerU](https://mineru.net) 解析成 Markdown:版面分析、OCR、表格和公式识别。
+扫描件、图片版 PDF、多栏排版、带公式和复杂表格的文档,比 Mosael 自带的本地解析好得多。
+
+## 怎么用
+
+1. 在 mineru.net 的「API 管理」里建一个 API Token。
+2. 在 Mosael 的「插件」页启用 MinerU,填上 Token。可以选模型(VLM 推荐)、文档语言、要不要强制 OCR。
+3. 两种用法:
+   - **某一份文档**:打开素材详情,「重新解析 → 用 MinerU 解析」;
+   - **以后都用它**:「设置 → 能力提供方 → 文档解析」选 MinerU,点「重新解析」时默认用它。
+
+导入文档时 Mosael 总是先用本地解析解一遍(不出本机、不花钱);交给 MinerU 必须是你点名的 —— 文档会上传到 MinerU。
+
+## 解析出什么
+
+- 按页标出的 Markdown:标题、段落、列表、公式(LaTeX)、表格(转成 Markdown 表格)、插图;
+- 每一页的页面图由 Mosael 照原件自己渲(PDF 总有;Word / PPT 要本机装了 LibreOffice)。
+
+智能体读这份文档时,读到的就是 MinerU 解析的这一份(同一份文档有几次解析时,用最新成功的那一次)。
+
+## 限制
+
+- 单个文件最多 200MB、200 页;免费额度每天有页数上限(以 mineru.net 为准)。
+- 目前接的是 MinerU 云端 API。自己部署的 MinerU 服务(`mineru-kit api-server`)还没接。

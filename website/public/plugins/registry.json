@@ -310,6 +310,48 @@
       "bundled": false
     },
     {
+      "id": "dev.mosael.mineru",
+      "name": {
+        "zh": "MinerU 文档解析",
+        "en": "MinerU document parsing"
+      },
+      "version": "1.0.0",
+      "description": {
+        "zh": "把 PDF、Word、PPT、Excel 和图片交给 MinerU(mineru.net)解析成 Markdown:版面分析、OCR、表格和公式识别,扫描件和复杂排版比本地解析强。在「设置 → 能力提供方 → 文档解析」里选它,或在文档详情里「用 MinerU 解析」。文档会上传到 MinerU。",
+        "en": "Parse PDF, Word, PowerPoint, Excel and images into Markdown with MinerU (mineru.net): layout analysis, OCR, tables and formulas — much better than local parsing on scans and complex layouts. Choose it under Settings → Capability providers → Document parsing, or use “Parse with MinerU” on a document. Documents are uploaded to MinerU."
+      },
+      "author": "Mosael",
+      "author_url": "https://mosael.com",
+      "docs": {
+        "zh": "https://mosael.com/zh/plugins/mineru",
+        "en": "https://mosael.com/en/plugins/mineru"
+      },
+      "homepage": "https://github.com/Alndaly/Mosael/tree/main/plugins/bundled/mineru",
+      "download": "",
+      "permissions": [
+        "network:mineru"
+      ],
+      "runtime": "process",
+      "provides": [
+        "document_parse"
+      ],
+      "tools": [
+        {
+          "name": "mineru_parse",
+          "label": {
+            "zh": "用 MinerU 解析文档",
+            "en": "Parse a document with MinerU"
+          },
+          "description": {
+            "zh": "把一份文档交给 MinerU 解析成 Markdown(按页标出,表格、公式、插图都保留)。宿主在解析任务里调它,不单独出现在工具表里。",
+            "en": "Parse a document into Markdown with MinerU (marked page by page, keeping tables, formulas and images). The host calls it inside a parse job; it isn't listed as a standalone tool."
+          },
+          "effects": "external"
+        }
+      ],
+      "bundled": true
+    },
+    {
       "id": "dev.mosael.object-storage",
       "name": {
         "zh": "对象存储",

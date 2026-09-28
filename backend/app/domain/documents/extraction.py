@@ -24,7 +24,7 @@ from app.core.db import SessionLocal
 from app.db.models import Asset, AssetExtraction, Job, now
 from app.domain import capabilities
 from app.domain.documents import CAPABILITY, DocumentParserUnavailable
-from app.domain.documents.local import DocumentParseError, Parsed, parse_local
+from app.domain.documents.local import DocumentParseError, Parsed, attach_page_images, parse_local
 from app.domain.jobs import create_job, dispatch_job, emit_job_event, finish_job, run_job_guarded, say
 from app.media.paths import asset_dir, resolve_key
 from app.media.thumbnails import thumbnail_path, write_thumbnail
@@ -116,6 +116,8 @@ def _body(job_id: str, extraction_id: str, builtin: bool) -> None:
                 parsed = parse_local(source, target, on_progress=progress)
             else:
                 parsed = _parse_with_plugin(db, extraction, asset, source, target, progress)
+                #: 页面图由宿主照原件渲,哪一家解析的都一样。
+                attach_page_images(source, target, parsed, progress)
             _write(db, extraction, asset, parsed, target)
         except Exception as exc:
             db.rollback()
@@ -132,7 +134,7 @@ def _body(job_id: str, extraction_id: str, builtin: bool) -> None:
 
 
 def _parse_with_plugin(db: Session, extraction: AssetExtraction, asset: Asset, source: Path, target: Path, progress) -> Parsed:
-    """交给声明了 `document_parse` 的插件(MinerU……)。协议随 MinerU 插件一起定(ADR 0031 第五步)。"""
+    """交给声明了 `document_parse` 的插件(MinerU……),协议见 documents/plugin_parse。"""
     from app.domain.documents.plugin_parse import parse_with_plugin
 
     return parse_with_plugin(db, extraction, asset, source, target, progress)

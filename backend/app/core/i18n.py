@@ -4262,6 +4262,8 @@ MESSAGES: dict[str, dict[str, str]] = {
     "docErr_parseFailedForRead": {"zh": "「{name}」没解析成:{error}。在素材详情里点「重新解析」(可以换一家)", "en": "“{name}” couldn't be parsed: {error}. Use Parse again in the asset details (you can pick another parser)."},
     "docErr_noPageImagesToLook": {"zh": "「{name}」没有页面图:PDF 总有;Word / PPT 要本机装了 LibreOffice 才有。先用 read_document 读文字", "en": "“{name}” has no page images: PDFs always do; Word and PowerPoint need LibreOffice on this computer. Read its text with read_document first."},
     "docErr_pageOutOfRange": {"zh": "页码要在 1–{total} 之间", "en": "Page numbers must be between 1 and {total}."},
+    "docErr_pluginFailed": {"zh": "「{plugin}」没解析成:{detail}", "en": "“{plugin}” couldn't parse it: {detail}"},
+    "docErr_pluginBadOutput": {"zh": "解析插件交回的结果不对({detail}):请更新这个插件", "en": "The parser plugin returned something unexpected ({detail}); update the plugin."},
     "docErr_notDocument": {"zh": "「{name}」不是文档,不用解析", "en": "“{name}” isn't a document; there's nothing to parse."},
     "docErr_fileMissing": {"zh": "「{name}」的文件不在了,解析不了", "en": "The file of “{name}” is missing, so it can't be parsed."},
     "docErr_unreadable": {"zh": "这份文档读不了(文件坏了,或者加了密码):{detail}", "en": "This document can't be read (it's damaged or password-protected): {detail}"},
