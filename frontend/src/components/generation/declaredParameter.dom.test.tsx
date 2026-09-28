@@ -12,7 +12,7 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@/app/preferences", () => ({ useI18n: () => (key: string) => key }));
 
-import { DEFAULT_CHOICE, DeclaredParameterControl, ParameterRow, declaredChoices } from "@/features/ai-studio/parameterPanel";
+import { DEFAULT_CHOICE, DeclaredParameterControl, ParameterRow, declaredChoices } from "@/components/generation/parameterPanel";
 import type { DeclaredParameter } from "@/lib/generationCapabilities";
 
 const steps: DeclaredParameter = {

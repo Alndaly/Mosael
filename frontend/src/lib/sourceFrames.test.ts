@@ -14,7 +14,7 @@ import {
   sourceAssetsFrom,
   withSlot,
   type SourceRole,
-} from "@/features/ai-studio/sourceFrames";
+} from "@/lib/sourceFrames";
 
 const anyRole = () => true;
 const model = (capabilities: Record<string, unknown>) =>

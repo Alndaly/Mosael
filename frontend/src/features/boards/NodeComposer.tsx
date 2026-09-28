@@ -20,8 +20,8 @@ import {
 import { useSubmitting } from "@/features/boards/useSubmitting";
 import { useI18n } from "@/app/preferences";
 import type { MessageKey } from "@/app/messages";
-import { ROLE_COPY, SOURCE_ROLES, type SourceRole } from "@/features/ai-studio/sourceFrames";
-import { ParameterRow, declaredChoices } from "@/features/ai-studio/parameterPanel";
+import { ROLE_COPY, SOURCE_ROLES, type SourceRole } from "@/lib/sourceFrames";
+import { ParameterRow, declaredChoices } from "@/components/generation/parameterPanel";
 import { Input } from "@/components/ui/input";
 import { OptionPicker } from "@/components/ui/option-picker";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -46,7 +46,7 @@ import {
   supportsParameter,
   videoResolutionOptions,
 } from "@/lib/generationCapabilities";
-import { GENERATION_BOOLEAN_LABELS, GENERATION_PARAMETER_LABELS } from "@/app/generationParameterLabels";
+import { GENERATION_BOOLEAN_LABELS, GENERATION_PARAMETER_LABELS } from "@/lib/generationParameterLabels";
 import { cn } from "@/lib/utils";
 import { toPlainText } from "@/components/markdown/inlineSyntax";
 import { BoardComposerShell } from "@/features/boards/BoardComposerShell";
@@ -155,7 +155,7 @@ export function durationRangeOptions(range: { min: number; max: number }): { val
   });
 }
 
-/** 角色的中文名 —— 和 AI 工作台共用那一份(features/ai-studio/sourceFrames.ROLE_COPY),
+/** 角色的中文名 —— 和 AI 工作台共用那一份(lib/sourceFrames.ROLE_COPY),
  *  不在这里再抄一张表。 */
 /** ROLE_COPY 里存的是 i18n 的 key,**不是**给人看的字 —— 不过一遍 t() 就会把
  *  「genFirstFrame」原样挂到提示上。 */

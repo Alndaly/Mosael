@@ -7,7 +7,7 @@ import { assetPreviewUrl, assetThumbnailUrl, importAsset, type Asset } from "@/a
 import { useI18n } from "@/app/preferences";
 import { useImagePreview } from "@/components/app/image-preview";
 import { Button } from "@/components/ui/button";
-import { EMPTY_SLOT, ROLE_COPY, isEmptySlot, type FrameSlot, type SourceRole } from "@/features/ai-studio/sourceFrames";
+import { EMPTY_SLOT, ROLE_COPY, isEmptySlot, type FrameSlot, type SourceRole } from "@/lib/sourceFrames";
 
 /**
  * 「带角色的输入素材」在面板里的样子:**一格一格的缩略图**,不是一行一行的表单。

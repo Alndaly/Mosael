@@ -15,7 +15,7 @@ import { SettingsRow } from "@/components/settings/settings-layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ROLE_COPY, type SourceRole } from "@/features/ai-studio/sourceFrames";
+import { ROLE_COPY, type SourceRole } from "@/lib/sourceFrames";
 import { relativeTime } from "@/lib/time";
 import { cn } from "@/lib/utils";
 

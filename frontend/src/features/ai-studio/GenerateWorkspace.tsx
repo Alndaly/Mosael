@@ -58,7 +58,7 @@ import {
   PARAMETER_CONTROL_CLASS,
   ParameterField,
   ParameterSection,
-} from "@/features/ai-studio/parameterPanel";
+} from "@/components/generation/parameterPanel";
 import { elapsedSecondsBetween, formatElapsedSeconds, useNow } from "@/lib/time";
 import { MessageFooter, MessageTime } from "@/features/agent/messageUsage";
 import { formatCosts } from "@/lib/money";
@@ -86,7 +86,7 @@ import {
   promptToSend,
   videoResolutionOptions,
 } from "@/lib/generationCapabilities";
-import { GENERATION_BOOLEAN_LABELS, GENERATION_PARAMETER_LABELS } from "@/app/generationParameterLabels";
+import { GENERATION_BOOLEAN_LABELS, GENERATION_PARAMETER_LABELS } from "@/lib/generationParameterLabels";
 import { FrameSlotField, KeyframePairField } from "@/features/ai-studio/FrameSlotField";
 import { DurationFollowsNote, TruncationHint, durationFollowsRole } from "@/features/ai-studio/durationFollows";
 import {
@@ -111,7 +111,7 @@ import {
   type FrameSlot,
   type SourceRole,
   type FrameSlots,
-} from "@/features/ai-studio/sourceFrames";
+} from "@/lib/sourceFrames";
 import { cn } from "@/lib/utils";
 import { toPlainText } from "@/components/markdown/inlineSyntax";
 

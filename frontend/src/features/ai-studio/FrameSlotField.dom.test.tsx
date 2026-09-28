@@ -20,7 +20,7 @@ vi.mock("@/api/client", () => ({
 }));
 
 import { FrameSlotField, KeyframePairField } from "@/features/ai-studio/FrameSlotField";
-import { EMPTY_SLOT } from "@/features/ai-studio/sourceFrames";
+import { EMPTY_SLOT } from "@/lib/sourceFrames";
 
 function mount(ui: React.ReactElement) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });

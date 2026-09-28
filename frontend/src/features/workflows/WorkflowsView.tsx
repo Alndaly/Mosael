@@ -164,8 +164,8 @@ import {
   GENERATION_BOOLEAN_LABELS,
   GENERATION_KIND_LABELS,
   GENERATION_PARAMETER_LABELS,
-} from "@/app/generationParameterLabels";
-import { declaredChoices } from "@/features/ai-studio/parameterPanel";
+} from "@/lib/generationParameterLabels";
+import { declaredChoices } from "@/components/generation/parameterPanel";
 import { cn } from "@/lib/utils";
 import { SelectionCheck } from "@/components/app/SelectionCheck";
 import { EdgeShapeToggle, shapeEdges, useEdgeShape } from "@/components/app/canvasEdgeShape";

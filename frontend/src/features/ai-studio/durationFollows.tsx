@@ -4,7 +4,7 @@ import { listAssets, type Asset, type GenerationOption } from "@/api/client";
 import { assetKeys } from "@/api/queryKeys";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
-import type { FrameSlot } from "@/features/ai-studio/sourceFrames";
+import type { FrameSlot } from "@/lib/sourceFrames";
 
 /**
  * 数字人那几条描述符规则在生成页上的样子(ADR 0028 §2):
