@@ -1,12 +1,12 @@
 from fastapi import APIRouter, HTTPException, Query, Response
-from sqlalchemy import select, delete
+from sqlalchemy import select
 
 from app.core.i18n import tr
 from app.api.deps import CurrentUser, DbSession
 from app.api.schemas.notes import NoteAppend, NoteContent, NoteCreate, NoteOut, NoteRestore, NoteUpdate, NoteReferenceOut
 from app.db.models import AgentMessage, Note, NoteRevision
 from app.domain.agent.sessions import readable_session
-from app.domain.notes import append_note, create_note, get_note, note_topics, save_note, read_reference, query_notes
+from app.domain.notes import append_note, create_note, get_note, note_topics, purge_note, save_note, read_reference, query_notes
 from app.domain.permissions import NotVisible, ensure_workspace_access, ensure_workspace_perm, owning_workspace
 
 router = APIRouter(tags=["notes"])
@@ -77,15 +77,7 @@ def edit(note_id: str, body: NoteUpdate, db: DbSession, user: CurrentUser):
 def permanently_delete(note_id: str, workspace_id: str, db: DbSession, user: CurrentUser,
                        base_revision: int = Query(ge=1)):
     ensure_workspace_perm(db, user, workspace_id, "edit")
-    note = get_note(db, workspace_id, note_id)
-    if not note.trashed:
-        raise HTTPException(409, tr("routeErr_noteTrashFirst"))
-    result = db.execute(delete(Note).where(Note.id == note_id, Note.workspace_id == workspace_id,
-                                         Note.trashed.is_(True), Note.revision == base_revision))
-    if result.rowcount != 1:
-        db.rollback()
-        raise HTTPException(409, tr("routeErr_noteChangedBeforeDelete"))
-    db.commit()
+    purge_note(db, workspace_id, note_id, base_revision)
     return Response(status_code=204)
 
 

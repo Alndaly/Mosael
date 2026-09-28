@@ -546,11 +546,11 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "来源不存在",
         "en": "Source not found.",
     },
-    "routeErr_noteTrashFirst": {
+    "noteErr_trashFirst": {
         "zh": "请先将笔记移入回收站",
         "en": "Move the note to the trash first.",
     },
-    "routeErr_noteChangedBeforeDelete": {
+    "noteErr_changedBeforeDelete": {
         "zh": "笔记状态已变化，请重新载入后再删除",
         "en": "The note has changed. Reload it before deleting.",
     },

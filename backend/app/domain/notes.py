@@ -8,7 +8,7 @@
 状态码由边界统一翻(见 main.py 的异常处理器),每个子类各对应一个**故意的**答案。
 与 `domain/permissions` 同构。
 """
-from sqlalchemy import select, update
+from sqlalchemy import delete, select, update
 from sqlalchemy.orm import Session
 
 from app.core.i18n import LocalizedError
@@ -114,6 +114,21 @@ def save_note(db: Session, workspace_id: str, note_id: str, base_revision: int, 
     db.commit()
     db.refresh(note)
     return note
+
+
+def purge_note(db: Session, workspace_id: str, note_id: str, base_revision: int) -> None:
+    """永久删除。只删回收站里的,而且修订号得对得上 —— 条件删除:看到的那一版之后有人恢复或改过它,
+    就不删(409),而不是把别人刚救回来的那篇一并抹掉。"""
+    note = get_note(db, workspace_id, note_id)
+    if not note.trashed:
+        raise NoteConflict("noteErr_trashFirst")
+    result = db.execute(delete(Note).where(
+        Note.id == note_id, Note.workspace_id == workspace_id, Note.trashed.is_(True), Note.revision == base_revision,
+    ))
+    if result.rowcount != 1:
+        db.rollback()
+        raise NoteConflict("noteErr_changedBeforeDelete")
+    db.commit()
 
 
 #: 追加撞上并发写入时重读当前修订再试几次。冲突只可能来自"另一次写入刚落地",
