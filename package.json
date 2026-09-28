@@ -93,7 +93,33 @@
       "provisioningProfile": "build/mosael.provisionprofile",
       "notarize": true,
       "hardenedRuntime": true,
-      "sign": "scripts/sign-mac.cjs"
+      "sign": "scripts/sign-mac.cjs",
+      "fileAssociations": [
+        {
+          "ext": [
+            "mp4",
+            "mov",
+            "m4v",
+            "mkv",
+            "webm"
+          ],
+          "name": "视频",
+          "role": "Editor",
+          "rank": "Alternate"
+        },
+        {
+          "ext": [
+            "mp3",
+            "wav",
+            "m4a",
+            "aac",
+            "flac"
+          ],
+          "name": "音频",
+          "role": "Editor",
+          "rank": "Alternate"
+        }
+      ]
     },
     "win": {
       "icon": "build/icon.png",
@@ -116,30 +142,6 @@
         "schemes": [
           "mosael"
         ]
-      }
-    ],
-    "fileAssociations": [
-      {
-        "ext": [
-          "mp4",
-          "mov",
-          "m4v",
-          "mkv",
-          "webm"
-        ],
-        "name": "视频",
-        "role": "Editor"
-      },
-      {
-        "ext": [
-          "mp3",
-          "wav",
-          "m4a",
-          "aac",
-          "flac"
-        ],
-        "name": "音频",
-        "role": "Editor"
       }
     ]
   },

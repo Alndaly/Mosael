@@ -689,7 +689,7 @@ MCP·stdio 在环境变量,MCP·http 在 `Accept-Language` —— 清单里的�
 | `power` | 有任务在跑时 `prevent-app-suspension`。渲染/发布是分钟到小时级,机器合盖会把 ffmpeg 一起挂起 |
 | `badge` | mac/Linux 角标数字、Windows 任务栏进度。切走之后也看得到进度 |
 | `notify` | 任务完成通知,**窗口有焦点时不发**(应用内已有 toast,否则同一件事说两遍) |
-| `protocol` | `mosael://` 唤起 + 视频/音频文件关联 + 全局快捷键 |
+| `protocol` | `mosael://` 唤起 + 视频/音频文件关联(只进「打开方式」候选,不抢默认程序:Windows 由 build/installer.nsh 登记,mac 标成 Alternate)+ 全局快捷键 |
 
 两条贯穿性的约束:
 
