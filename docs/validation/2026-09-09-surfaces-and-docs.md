@@ -25,7 +25,7 @@ Website ESLint remains blocked before analyzing code: the installed typescript-e
 Start the built website on port 3002, then run:
 
 ```sh
-backend/.venv/bin/python scripts/verify-docs-navigation.py
+backend/.venv/bin/python website/scripts/verify-docs-navigation.py
 ```
 
 Screenshots and the machine-readable matrix are written to `output/playwright/`. They include `docs-{locale}-{theme}-{width}.png` and `docs-menu-{locale}-{theme}-{width}.png`. Local board checks are saved as `board-soft-boundaries-{theme}.png` in the same folder. These are validation captures, not replacements for historical 1.2.0 recordings.

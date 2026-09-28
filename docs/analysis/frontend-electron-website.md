@@ -328,7 +328,7 @@ sequenceDiagram
 ### 4.2 页面与内容
 
 - 页面:首页(按「无限画布→3D 场景→素材→剪辑→AI 智能体→工作流」六章节组织,`page.tsx:17-24` CHAPTERS)、changelog、插件市场 + 详情、工作流模板、文档三节,另有 `robots.ts`/`sitemap.ts`/`search.json`。**没有独立下载页**:首页 CTA 直指 GitHub Releases(`src/lib/site.ts`);changelog 实时拉 GitHub Releases API(1h revalidate),失败回退快照 `content/releases.json`;release notes 只做纯文本摘录、不执行 MDX(`release-data.ts:30-40`——不信任外部输入,`javascript:` 注入会被改写)。
-- `content/` 是 MDX:`content/docs/<zh|en>/<start|guides|about>/*.mdx`,frontmatter **手写解析而不引入 YAML 依赖**(`src/lib/docs.ts:37-49`);导航六组只在 `src/lib/docs-navigation.ts` 维护,物理目录保持不变以保留已发布 URL。文档配图带 `capture-manifest.json` 哈希清单,由 `scripts/record-doc-media.py` 录制,URL 带 `?v=` 版本号。
+- `content/` 是 MDX:`content/docs/<zh|en>/<start|guides|about>/*.mdx`,frontmatter **手写解析而不引入 YAML 依赖**(`src/lib/docs.ts:37-49`);导航六组只在 `src/lib/docs-navigation.ts` 维护,物理目录保持不变以保留已发布 URL。文档配图带 `capture-manifest.json` 哈希清单,由 `website/scripts/record-doc-media.py` 录制,URL 带 `?v=` 版本号。
 
 ### 4.3 插件市场(与桌面端的分工)
 

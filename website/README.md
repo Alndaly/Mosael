@@ -71,7 +71,7 @@ props 传。
   `src/i18n/config.ts` 的 `DEFAULT_LOCALE`)。全站路由都在 `[locale]` 段下,因为
   `<html lang>` 必须跟着语言变,而真正的根布局拿不到动态参数。这里不做 Accept-Language
   协商:那需要 middleware,会让每个请求都过一次边缘函数,还让站点没法纯静态导出。
-- **配图会过期,而过期的配图比没有更糟**。重录用 `scripts/record-doc-media.py`,它同时写
+- **配图会过期,而过期的配图比没有更糟**。重录用 `website/scripts/record-doc-media.py`,它同时写
   `website/public/media/`;别退回手工截图。
 
 ## 界面实拍
@@ -93,4 +93,4 @@ props 传。
 `backend/.venv/bin/python -m pytest backend/tests/test_site_docs_stay_in_sync.py -q`。
 交互验证覆盖 390 / 768 / 1100 / 1440 像素宽度、中英文和明暗主题。
 
-启动构建后的官网后，可从仓库根目录运行 `backend/.venv/bin/python scripts/verify-docs-navigation.py` 复查目录交互；`--base-url` 可指定预览地址，截图与结果默认写入 `output/playwright/`。
+启动构建后的官网后，可从仓库根目录运行 `backend/.venv/bin/python website/scripts/verify-docs-navigation.py` 复查目录交互；`--base-url` 可指定预览地址，截图与结果默认写入 `output/playwright/`。

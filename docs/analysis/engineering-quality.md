@@ -155,7 +155,7 @@ graph TD
 
 ### 2.4 E2E 与打包冒烟
 
-没有 Playwright 式的 UI E2E 套件（`scripts/record-doc-media.py`、`capture-homepage.py` 用 Playwright 但服务官网截图，非测试）。真正的跨进程 E2E 是 **`test/bundle.smoke.mjs`**：
+没有 Playwright 式的 UI E2E 套件（`website/scripts/record-doc-media.py`、`capture-homepage.py` 用 Playwright 但服务官网截图，非测试）。真正的跨进程 E2E 是 **`test/bundle.smoke.mjs`**：
 
 - 用 `test/upgrade_db_fixture.py seed` 造一个**最小旧版数据库**（手写 SQL 建 `publish_tasks`/`boards` 旧表并插 legacy 行）；
 - 启动 `release/` 下真正的打包 Electron 产物（mac 找 `Mosael.app/Contents/MacOS/Mosael`，win 找 `win-unpacked/Mosael.exe`）；

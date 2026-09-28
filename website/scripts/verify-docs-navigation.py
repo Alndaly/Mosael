@@ -1,13 +1,13 @@
 """Verify docs navigation against a running website; save real browser screenshots.
 
-Run from the repository root with backend/.venv/bin/python scripts/verify-docs-navigation.py.
+Run from the repository root with backend/.venv/bin/python website/scripts/verify-docs-navigation.py.
 Start a production website first (pnpm --dir website start --port 3002).
 """
 import argparse
 import json
 from pathlib import Path
 from playwright.sync_api import sync_playwright, expect
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--base-url', default='http://127.0.0.1:3002')
 parser.add_argument('--output', type=Path, default=ROOT / 'output/playwright')

@@ -7,7 +7,7 @@ import path from "node:path";
  * next/image 要真实的 width/height —— 它按这两个数算出宽高比来占位,填错了图会被拉变形。
  * 文档正文里的 `![]()` 只给得出路径,所以尺寸在构建时从 public/ 下的文件里读。
  *
- * 只认 PNG 和 GIF:这两种就是 `scripts/record-doc-media.py` 的全部产物。多出第三种格式时
+ * 只认 PNG 和 GIF:这两种就是 `website/scripts/record-doc-media.py` 的全部产物。多出第三种格式时
  * 这里会明确抛错,而不是悄悄回落到一个猜的比例。
  */
 const cache = new Map<string, { width: number; height: number }>();
@@ -15,7 +15,7 @@ const cache = new Map<string, { width: number; height: number }>();
 /**
  * 同名的深色版在哪。`/media/screens/x.png` → `/media/screens/dark/x.png`。
  *
- * 录制脚本(scripts/record-doc-media.py)把深色那套放在各目录的 `dark/` 子目录里、文件名
+ * 录制脚本(website/scripts/record-doc-media.py)把深色那套放在各目录的 `dark/` 子目录里、文件名
  * 保持一致 —— 于是文档正文里的 `![](/media/screens/x.png)` 一个字都不用改。
  */
 export function darkTwin(src: string): string {

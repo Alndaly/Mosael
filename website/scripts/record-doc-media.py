@@ -7,7 +7,7 @@ including hover, typing, scrolling and popup transitions. A failed scene stops t
 an old asset cannot silently pass as a fresh recording.
 
 Example:
-  backend/.venv/bin/python scripts/record-doc-media.py --api http://127.0.0.1:8812 \
+  backend/.venv/bin/python website/scripts/record-doc-media.py --api http://127.0.0.1:8812 \
     --token-file /tmp/demo-token.json --fixture /tmp/demo-capture.json
 The fixture contains project, board, workflow IDs and assets (forest, narration, forest-frame).
 The token file is a JSON string, never included in the public capture manifest.
@@ -24,7 +24,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from playwright.sync_api import sync_playwright
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 PUBLIC = ROOT / 'website/public/media'
 VIEWPORT = {'width':1440, 'height':900}
 

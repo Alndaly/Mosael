@@ -13,7 +13,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 from playwright.sync_api import sync_playwright
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 PUBLIC = ROOT / 'website/public/media'
 VIEWPORT = {'width': 1440, 'height': 940}
 

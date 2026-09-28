@@ -30,7 +30,7 @@ Run the current frontend on `http://127.0.0.1:5173` and an **isolated demo backe
 Prepare a private JSON-string token file and a fixture JSON containing `project`, `sequence`, `board`, `workflow` IDs and an `assets` map with `forest`, `narration` and `forest-frame` IDs. The recording script names its expected demo cards explicitly; keep those titles aligned when updating the fixture. Never commit either authentication tokens or the demo database.
 
 ```bash
-backend/.venv/bin/python scripts/record-doc-media.py \
+backend/.venv/bin/python website/scripts/record-doc-media.py \
   --api http://127.0.0.1:8812 \
   --token-file /tmp/demo-token.json \
   --fixture /tmp/demo-capture.json
@@ -63,7 +63,7 @@ The homepage composes these original screenshots as overlapping windows in HTML.
 Re-capture with the existing Python Playwright environment and prepared local demo fixtures (tokens are JSON strings in private local files):
 
 ```sh
-backend/.venv/bin/python scripts/capture-homepage.py \
+backend/.venv/bin/python website/scripts/capture-homepage.py \
   --scene-api http://127.0.0.1:8813 --scene-token /private/path/scene-token.json \
   --editor-api http://127.0.0.1:8812 --editor-token /private/path/editor-token.json \
   --editor-fixture /private/path/editor-fixture.json
