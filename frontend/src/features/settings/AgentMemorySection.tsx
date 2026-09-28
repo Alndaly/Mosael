@@ -12,7 +12,7 @@ import { ConfirmDialog, DIALOG_FIELD, ModalShell } from "@/components/app/modals
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { SettingsEmpty, SettingsGroup, SettingsListBlock, SettingsListItem } from "@/components/settings/settings-layout";
-import { relativeTime } from "@/lib/time";
+import { parseServerTime, relativeTime } from "@/lib/time";
 import { formatCombo } from "@/lib/shortcuts";
 import { cn } from "@/lib/utils";
 
@@ -454,16 +454,11 @@ function useClipped<T extends HTMLElement>(content: string) {
 
 /** 后端两个时间戳各自取一次 now(),新建的那一条也会差几微秒 —— 差出一秒以上才算改过。 */
 function wasEdited(memory: AgentMemory): boolean {
-  return toDate(memory.updated_at).getTime() - toDate(memory.created_at).getTime() > 1000;
-}
-
-/** 后端时间是不带时区的 UTC ISO 串(见 lib/time.relativeTime)。 */
-function toDate(iso: string): Date {
-  return new Date(/Z|[+-]\d\d:?\d\d$/.test(iso) ? iso : `${iso}Z`);
+  return parseServerTime(memory.updated_at).getTime() - parseServerTime(memory.created_at).getTime() > 1000;
 }
 
 function absoluteTime(iso: string, locale: string): string {
-  return toDate(iso).toLocaleString(locale, { dateStyle: "medium", timeStyle: "short" });
+  return parseServerTime(iso).toLocaleString(locale, { dateStyle: "medium", timeStyle: "short" });
 }
 
 function clip(text: string, max: number): string {

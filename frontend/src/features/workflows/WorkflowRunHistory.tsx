@@ -7,7 +7,8 @@ import { AttestRevisionButton } from "@/features/workflows/AttestRevisionButton"
 import { useI18n } from "@/app/preferences";
 import type { RegistryLike } from "@/features/workflows/analyze";
 import { OutputAssets } from "@/features/workflows/OutputAssets";
-import { assetOutputs, outputRows, parseIso, STEP_STATUS_LABELS, toSteps } from "@/features/workflows/runSteps";
+import { assetOutputs, outputRows, STEP_STATUS_LABELS, toSteps } from "@/features/workflows/runSteps";
+import { parseServerTime } from "@/lib/time";
 import { JobChildrenList, useJobChildren } from "@/components/layout/JobChildren";
 import { runStatusText } from "@/components/layout/runStatus";
 import { WorkflowFailureDetails } from "@/components/app/FailureDetails";
@@ -18,14 +19,14 @@ import { cn } from "@/lib/utils";
 const RUNNING = new Set(["queued", "running"]);
 
 function relTime(iso: string, now: number): string {
-  const s = Math.max(0, (now - parseIso(iso)) / 1000);
+  const s = Math.max(0, (now - parseServerTime(iso).getTime()) / 1000);
   if (s < 60) return `${Math.floor(s)}s`;
   if (s < 3600) return `${Math.floor(s / 60)}m`;
   if (s < 86400) return `${Math.floor(s / 3600)}h`;
   return `${Math.floor(s / 86400)}d`;
 }
 function ms(a: string, b: string): number {
-  return Math.max(0, parseIso(b) - parseIso(a));
+  return Math.max(0, parseServerTime(b).getTime() - parseServerTime(a).getTime());
 }
 
 
@@ -229,7 +230,7 @@ export function WorkflowRunHistory({
                   {run.created_at ? relTime(run.created_at, now) : ""}
                   {typeof run.payload?.workflow_revision === "number" && ` · v${run.payload.workflow_revision}`}
                   {run.created_at && RUNNING.has(run.status)
-                    ? ` · ${Math.max(0, (now - parseIso(run.created_at)) / 1000).toFixed(0)}s`
+                    ? ` · ${Math.max(0, (now - parseServerTime(run.created_at).getTime()) / 1000).toFixed(0)}s`
                     : run.created_at && run.updated_at && ` · ${(ms(run.created_at, run.updated_at) / 1000).toFixed(1)}s`}
                 </span>
               </span>

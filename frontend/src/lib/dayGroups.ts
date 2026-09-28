@@ -1,3 +1,5 @@
+import { parseServerTime } from "@/lib/time";
+
 /**
  * 按「哪一天」把一串记录分栏。
  *
@@ -19,8 +21,7 @@ export type DayGroup<T> = {
 
 function parseBackendIso(iso: string): Date | null {
   if (!iso) return null;
-  const normalized = /Z|[+-]\d\d:?\d\d$/.test(iso) ? iso : `${iso}Z`;
-  const date = new Date(normalized);
+  const date = parseServerTime(iso);
   return Number.isNaN(date.getTime()) ? null : date;
 }
 

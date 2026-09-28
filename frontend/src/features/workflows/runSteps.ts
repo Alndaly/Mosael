@@ -2,6 +2,7 @@ import type { TaskEvent } from "@/api/client";
 import type { MessageKey } from "@/app/messages";
 import type { DataType } from "@/features/nodeForms/fieldTypes";
 import { outputLabel, outputType, type RegistryLike } from "@/features/workflows/analyze";
+import { parseServerTime } from "@/lib/time";
 
 /**
  * 一次运行的事件流 → 每个节点的状态。
@@ -10,9 +11,6 @@ import { outputLabel, outputType, type RegistryLike } from "@/features/workflows
  * 迟早会在某一处漏掉一种事件(比如 skipped —— 条件分支没走到的那一侧),于是两处对同一次运行
  * 给出不同的说法。
  */
-export function parseIso(iso: string): number {
-  return Date.parse(iso.endsWith("Z") || iso.includes("+") ? iso : iso + "Z");
-}
 
 export type Step = {
   nid: string;
@@ -55,7 +53,7 @@ export function toSteps(events: TaskEvent[]): Step[] {
   let terminal: "failed" | "cancelled" | undefined;
   for (const e of sorted) {
     if (TERMINAL_RUN_EVENTS.has(e.type)) {
-      terminalAt = e.created_at ? parseIso(e.created_at) : undefined;
+      terminalAt = e.created_at ? parseServerTime(e.created_at).getTime() : undefined;
       //: 取消和失败一样要收口在跑的那一步,但说法不同:此前一律标成 failed,
       //: 用户点了停止,画布和历史里却是一片红框「失败」。有一条取消就按取消说。
       if (terminal !== "cancelled") terminal = CANCEL_RUN_EVENTS.has(e.type) ? "cancelled" : "failed";
@@ -74,7 +72,7 @@ export function toSteps(events: TaskEvent[]): Step[] {
     if (!nid) continue;
     if (e.type === "workflow.node.started") {
       if (!byNode.has(nid)) order.push(nid);
-      byNode.set(nid, { nid, name: p.name ?? nid, status: "running", startAt: e.created_at ? parseIso(e.created_at) : undefined });
+      byNode.set(nid, { nid, name: p.name ?? nid, status: "running", startAt: e.created_at ? parseServerTime(e.created_at).getTime() : undefined });
     } else if (e.type === "workflow.node.finished") {
       let s = byNode.get(nid);
       if (!s) {
@@ -84,7 +82,7 @@ export function toSteps(events: TaskEvent[]): Step[] {
       }
       s.status = "done";
       s.outputs = p.outputs;
-      if (s.startAt != null && e.created_at) s.ms = Math.max(0, parseIso(e.created_at) - s.startAt);
+      if (s.startAt != null && e.created_at) s.ms = Math.max(0, parseServerTime(e.created_at).getTime() - s.startAt);
     } else if (e.type === "workflow.node.failed") {
       let s = byNode.get(nid);
       if (!s) {
@@ -95,7 +93,7 @@ export function toSteps(events: TaskEvent[]): Step[] {
       s.status = "failed";
       s.error = p.error;
       s.details = p.details;
-      if (s.startAt != null && e.created_at) s.ms = Math.max(0, parseIso(e.created_at) - s.startAt);
+      if (s.startAt != null && e.created_at) s.ms = Math.max(0, parseServerTime(e.created_at).getTime() - s.startAt);
     } else if (e.type === "workflow.node.progress") {
       const s = byNode.get(nid);
       if (s && s.status === "running") {

@@ -35,7 +35,7 @@ import { SelectionCheck } from "@/components/app/SelectionCheck";
 import { dayGroupOf, groupByLocalDay } from "@/lib/dayGroups";
 import { useMultiSelect } from "@/lib/useMultiSelect";
 import { gotoRecord, useOpenRequest, useSectionEntry } from "@/lib/deepLink";
-import { useNow } from "@/lib/time";
+import { parseServerTime, useNow } from "@/lib/time";
 import { cn } from "@/lib/utils";
 
 const ACTIVE = new Set(["queued", "running", "pending"]);
@@ -315,10 +315,9 @@ function StatusIcon({ status }: { status: string }) {
   return <Icon size={13} className={cn("shrink-0", tone, spin && "animate-mosael-spin")} aria-hidden />;
 }
 
-/** 后端时间无时区标记,补 Z 再按本地时区显示(与 lib/time、lib/dayGroups 同一约定)。 */
+/** 按本地时区显示后端时间。 */
 function localTime(iso: string, locale: string): string {
-  const normalized = /Z|[+-]\d\d:?\d\d$/.test(iso) ? iso : `${iso}Z`;
-  const date = new Date(normalized);
+  const date = parseServerTime(iso);
   return Number.isNaN(date.getTime()) ? "" : date.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" });
 }
 

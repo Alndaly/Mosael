@@ -31,7 +31,7 @@ import { AttestRevisionButton } from "@/features/workflows/AttestRevisionButton"
 import { useI18n, usePreferences } from "@/app/preferences";
 import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
 import { JobChildrenList, useJobChildren } from "@/components/layout/JobChildren";
-import { relativeTime } from "@/lib/time";
+import { elapsedSecondsBetween, formatElapsedSeconds, parseServerTime, relativeTime } from "@/lib/time";
 import { Button } from "@/components/ui/button";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { Input } from "@/components/ui/input";
@@ -532,13 +532,11 @@ function TaskDetail({ task, workspaceId }: { task: ScheduledTask; workspaceId: s
     },
   });
 
-  // 后端时间是 UTC 无时区标记的 ISO 串;补 Z 再按本地时区、当前语言给人读。
-  const formatTime = (iso: string) => {
-    const normalized = /Z|[+-]\d\d:?\d\d$/.test(iso) ? iso : `${iso}Z`;
-    return new Date(normalized).toLocaleString(locale, {
+  // 按本地时区、当前语言给人读。
+  const formatTime = (iso: string) =>
+    parseServerTime(iso).toLocaleString(locale, {
       month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit",
     });
-  };
   const localTime = (iso: string | null | undefined) => (iso ? formatTime(iso) : null);
   // 计划 / 下次运行按触发方式说人话,见 scheduleText。
   const scheduleLabel = scheduleText(task, t, locale, formatTime);
@@ -634,16 +632,8 @@ function RunRow({ run, job }: { run: ScheduledTaskRun; job: Job | null }) {
   const { locale } = usePreferences();
   const running = run.status === "queued" || run.status === "running";
   // 耗时:两端都有才算;运行中显示已流逝。
-  const durationText = (() => {
-    if (!run.started_at) return null;
-    const start = new Date(/Z|[+-]\d\d:?\d\d$/.test(run.started_at) ? run.started_at : `${run.started_at}Z`).getTime();
-    const end = run.finished_at
-      ? new Date(/Z|[+-]\d\d:?\d\d$/.test(run.finished_at) ? run.finished_at : `${run.finished_at}Z`).getTime()
-      : Date.now();
-    const seconds = Math.max(0, (end - start) / 1000);
-    if (seconds < 60) return `${seconds.toFixed(1)}s`;
-    return `${Math.floor(seconds / 60)}m ${Math.round(seconds % 60)}s`;
-  })();
+  const seconds = elapsedSecondsBetween(run.started_at, run.finished_at ?? new Date());
+  const durationText = seconds == null ? null : formatElapsedSeconds(seconds);
   const message = run.error ?? (running ? job?.message : null);
   const attest = run.status === "failed" ? attestRequestOf((run.result as Record<string, unknown> | undefined)?.attest) : null;
   //: 这一次运行派生的子任务。**只在跑着的时候拉** —— 历史里几十条各拉一次是白花请求,

@@ -12,10 +12,14 @@ export function useNow(intervalMs: number): Date {
   return now;
 }
 
-/** 后端时间是 UTC 无时区标记的 ISO 串;补 Z 再算相对时间。 */
+/** 后端时间是 UTC、不带时区标记的 ISO 串:补 Z 再解析,否则会被当成本地时间。
+ *  已经带 Z 或 ±hh:mm 偏移的原样解析。读后端时间戳一律经过这里。 */
+export function parseServerTime(iso: string): Date {
+  return new Date(/Z|[+-]\d\d:?\d\d$/.test(iso) ? iso : `${iso}Z`);
+}
+
 export function relativeTime(iso: string, locale: string): string {
-  const normalized = /Z|[+-]\d\d:?\d\d$/.test(iso) ? iso : `${iso}Z`;
-  const deltaSeconds = Math.round((new Date(normalized).getTime() - Date.now()) / 1000);
+  const deltaSeconds = Math.round((parseServerTime(iso).getTime() - Date.now()) / 1000);
   const rtf = new Intl.RelativeTimeFormat(locale, { numeric: "auto" });
   const abs = Math.abs(deltaSeconds);
   if (abs < 60) return rtf.format(Math.trunc(deltaSeconds), "second");
@@ -36,11 +40,8 @@ export function formatElapsedSeconds(seconds: number): string {
 
 export function elapsedSecondsBetween(startIso: string | null | undefined, endIso: string | Date | null | undefined): number | null {
   if (!startIso || !endIso) return null;
-  const start = new Date(/Z|[+-]\d\d:?\d\d$/.test(startIso) ? startIso : `${startIso}Z`).getTime();
-  const end =
-    endIso instanceof Date
-      ? endIso.getTime()
-      : new Date(/Z|[+-]\d\d:?\d\d$/.test(endIso) ? endIso : `${endIso}Z`).getTime();
+  const start = parseServerTime(startIso).getTime();
+  const end = endIso instanceof Date ? endIso.getTime() : parseServerTime(endIso).getTime();
   if (Number.isNaN(start) || Number.isNaN(end)) return null;
   return Math.max(0, (end - start) / 1000);
 }

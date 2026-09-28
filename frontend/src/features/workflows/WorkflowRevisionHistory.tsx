@@ -27,7 +27,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import { relativeTime } from "@/lib/time";
+import { parseServerTime, relativeTime } from "@/lib/time";
 
 const SOURCE_LABELS: Record<string, MessageKey> = {
   create: "wfRevisionSourceCreate",
@@ -40,8 +40,7 @@ const SOURCE_LABELS: Record<string, MessageKey> = {
 };
 
 function absoluteTime(iso: string, locale: string): string {
-  const normalized = /Z|[+-]\d\d:?\d\d$/.test(iso) ? iso : `${iso}Z`;
-  return new Date(normalized).toLocaleString(locale);
+  return parseServerTime(iso).toLocaleString(locale);
 }
 
 export function WorkflowRevisionHistory({

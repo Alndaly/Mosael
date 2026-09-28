@@ -13,11 +13,11 @@ import { cn } from "@/lib/utils";
 import { assetKindKey } from "@/lib/assetKinds";
 import { DocumentReader } from "@/features/media/DocumentReader";
 import { documentFacts } from "@/lib/assetKinds";
+import { parseServerTime } from "@/lib/time";
 
 /** 后端时间是无时区的 UTC ISO 串;补 Z 再按本地时区显示到分钟。 */
 function formatDateTime(iso: string): string {
-  const normalized = /Z|[+-]\d\d:?\d\d$/.test(iso) ? iso : `${iso}Z`;
-  const date = new Date(normalized);
+  const date = parseServerTime(iso);
   if (Number.isNaN(date.getTime())) return iso;
   const p = (n: number) => String(n).padStart(2, "0");
   return `${date.getFullYear()}-${p(date.getMonth() + 1)}-${p(date.getDate())} ${p(date.getHours())}:${p(date.getMinutes())}`;

@@ -37,6 +37,7 @@ import { SelectionCheck } from "@/components/app/SelectionCheck";
 import { useMultiSelect } from "@/lib/useMultiSelect";
 import { usePersistentSet, usePersistentTab } from "@/lib/usePersistentTab";
 import { cn } from "@/lib/utils";
+import { parseServerTime } from "@/lib/time";
 import { Skeleton } from "@/components/ui/skeleton";
 
 const KIND_FILTERS = ["all", "video", "audio", "image", "document"] as const;
@@ -652,8 +653,7 @@ function kindIcon(kind: string) {
 
 /** 后端时间是 UTC 无时区标记的 ISO 串;补 Z 再按本地时区取短日期。 */
 export function formatShortDate(iso: string): string {
-  const normalized = /Z|[+-]\d\d:?\d\d$/.test(iso) ? iso : `${iso}Z`;
-  const date = new Date(normalized);
+  const date = parseServerTime(iso);
   return `${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
