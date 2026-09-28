@@ -77,7 +77,10 @@ export function NotificationCenter({ workspaceId }: { workspaceId: string }) {
   const pendingInvites = invitations.data?.invitations ?? [];
 
   const items = query.data?.items ?? [];
-  const unread = (query.data?.unread ?? 0) + pendingInvites.length;
+  //: 角标 = 未读通知 + 待处理邀请:两样都等着人看。但「全部已读」只管通知 —— 邀请不是读了就算,
+  //: 得接受或拒绝;此前按角标判,只有邀请时也摆着它,点了数字纹丝不动。
+  const unreadNotifications = query.data?.unread ?? 0;
+  const unread = unreadNotifications + pendingInvites.length;
 
   // 点通知 → 跳业务页并打开那条记录(payload 里带记录 id,走 mosael:open-* 深链通道)。
   const openItem = (item: AppNotification) => {
@@ -115,7 +118,7 @@ export function NotificationCenter({ workspaceId }: { workspaceId: string }) {
         <div className="flex items-center justify-between border-b border-divider px-5 py-5 [&_strong]:text-lg">
           <strong>{t("notifTitle")}</strong>
           <span className="flex items-center gap-2.5">
-            {unread > 0 && (
+            {unreadNotifications > 0 && (
               <button
                 type="button"
                 className="inline-flex cursor-pointer items-center gap-1 border-0 bg-transparent text-ui-xs text-muted-foreground hover:text-foreground"

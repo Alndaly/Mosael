@@ -7,6 +7,7 @@ import {
   FileImage,
   FileVideo,
   FolderPlus,
+  MonitorCog,
   Moon,
   Rocket,
   SearchX,
@@ -20,6 +21,7 @@ import { useI18n, usePreferences } from "@/app/preferences";
 import { Highlight } from "@/components/app/Highlight";
 import type { StudioView } from "@/components/layout/AppShell";
 import { NAV_ITEMS } from "@/components/layout/navLabels";
+import { THEME_LABEL_KEYS, nextTheme } from "@/components/layout/themeCycle";
 import {
   CommandDialog,
   CommandGroup,
@@ -43,11 +45,16 @@ export function CommandPalette({
   projects,
   onNavigate,
   onOpenProject,
+  onCreateProject,
+  creatingProject,
 }: {
   workspace: Workspace;
   projects: ProjectWithStats[];
   onNavigate: (view: StudioView) => void;
   onOpenProject: (projectId: string) => void;
+  /** 和顶栏项目切换器同一个动作:直接建一个并打开,不是跳回首页让人再点一次。 */
+  onCreateProject: () => void;
+  creatingProject?: boolean;
 }) {
   const t = useI18n();
   const { theme, setTheme } = usePreferences();
@@ -168,16 +175,18 @@ export function CommandPalette({
 
   // 关掉内建过滤后 cmdk 不再自动高亮第一项(Enter 会没有目标)— 受控高亮:
   // 结果集头名变化(=输入变化)时重置到第一项,方向键仍经 onValueChange 自由移动。
-  const firstValue =
-    q === ""
-      ? "action-new-project"
-      : navMatches.length > 0
-        ? `nav-${navMatches[0].view}`
-        : projectMatches.length > 0
-          ? `project-${projectMatches[0].id}`
-          : assetMatches.length > 0
-            ? `asset-${assetMatches[0].id}`
-              : "";
+  //: 「第一项」按**下面实际渲染的顺序**取 —— 此前是手抄的一条链,漏了工作流和发布记录两组,
+  //: 只搜到它们时 Enter 没有目标。改渲染顺序时这张表跟着改。
+  const renderedValues = [
+    ...(q === "" ? ["action-new-project", "action-toggle-theme"] : []),
+    ...navMatches.map((entry) => `nav-${entry.view}`),
+    ...projectMatches.map((project) => `project-${project.id}`),
+    ...workflowMatches.map((workflow) => `workflow-${workflow.id}`),
+    ...publishMatches.map((task) => `publish-${task.id}`),
+    ...assetMatches.map((asset) => `asset-${asset.id}`),
+  ];
+  const firstValue = renderedValues[0] ?? "";
+  const upcomingTheme = nextTheme(theme);
   const [highlighted, setHighlighted] = React.useState(firstValue);
   React.useEffect(() => {
     setHighlighted(firstValue);
@@ -215,16 +224,15 @@ export function CommandPalette({
         {q === "" && (
           <>
             <CommandGroup heading={t("cmdkQuickActions")}>
-              <CommandItem value="action-new-project" onSelect={() => run(() => onNavigate("home"))}>
+              <CommandItem value="action-new-project" disabled={creatingProject} onSelect={() => run(onCreateProject)}>
                 <FolderPlus size={14} />
                 {t("createProject")}
               </CommandItem>
-              <CommandItem
-                value="action-toggle-theme"
-                onSelect={() => run(() => setTheme(theme === "dark" ? "light" : "dark"))}
-              >
-                {theme === "dark" ? <Sun size={14} /> : <Moon size={14} />}
+              {/* 和顶栏那个按钮同一个循环(themeCycle):浅 → 深 → 跟随系统。显示的是按下去会到哪一档。 */}
+              <CommandItem value="action-toggle-theme" onSelect={() => run(() => setTheme(upcomingTheme))}>
+                {upcomingTheme === "light" ? <Sun size={14} /> : upcomingTheme === "dark" ? <Moon size={14} /> : <MonitorCog size={14} />}
                 {t("cmdkToggleTheme")}
+                <span className="ml-auto text-ui-xs text-muted-foreground">{t(THEME_LABEL_KEYS[upcomingTheme])}</span>
               </CommandItem>
             </CommandGroup>
             <CommandSeparator />

@@ -76,6 +76,10 @@ it("keeps workspace switching and management reachable from both sidebar sizes",
     expect(within(popup).getByRole("button", { name: "rename: Studio" })).toBeEnabled();
     expect(within(popup).getByRole("button", { name: "rename: Second studio" })).toBeDisabled();
     expect(within(popup).getByRole("button", { name: "delete: Second studio" })).toBeDisabled();
+    // 灰掉的按钮说原因(和设置页同一份门槛,见 workspaceMenu)
+    expect(within(popup).getByRole("button", { name: "rename: Second studio" })).toHaveAttribute("title", "workspaceRenameNeedsAdmin");
+    expect(within(popup).getByRole("button", { name: "delete: Second studio" })).toHaveAttribute("title", "workspaceDeleteNeedsOwner");
+    expect(within(popup).getByRole("button", { name: "delete: Studio" })).toHaveAttribute("title", "delete");
     expect(within(popup).getByRole("button", { name: "workspaceNew" })).toBeEnabled();
     fireEvent.change(within(popup).getByRole("textbox", { name: "workspaceSearch" }), { target: { value: "Second" } });
     expect(within(popup).queryByRole("button", { name: "rename: Studio" })).not.toBeInTheDocument();

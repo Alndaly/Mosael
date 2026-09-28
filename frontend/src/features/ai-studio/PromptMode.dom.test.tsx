@@ -56,25 +56,28 @@ beforeEach(() => {
   localStorage.setItem("mosael:tab:ai-studio", "generate");
 });
 
-function imageOption(model: string, capabilities: Record<string, unknown>) {
+function imageOption(model: string, capabilities: Record<string, unknown>, kind = "image", adapterAvailable = true) {
   return {
-    id: `p1:image:${model}`,
+    id: `p1:${kind}:${model}`,
     provider_profile_id: "p1",
     profile_name: "ComfyUI",
     provider: "plugin:dev.mosael.comfyui",
-    kind: "image",
+    kind,
     model,
     label: `ComfyUI · ${model}`,
     capabilities,
     capabilities_known: true,
-    adapter_available: true,
+    adapter_available: adapterAvailable,
     is_default: true,
   };
 }
 
 const SESSION = { id: "s1", workspace_id: "w1", title: "会话", created_at: "2026-09-01T00:00:00Z", updated_at: "2026-09-01T00:00:00Z" };
 
-function renderStudio(capabilities: Record<string, unknown>) {
+function renderStudio(
+  capabilities: Record<string, unknown> | null,
+  { kind = "image", adapterAvailable = true, chatDefault = false } = {},
+) {
   const posts: Array<{ url: string; body: Record<string, unknown> }> = [];
   globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
@@ -84,11 +87,15 @@ function renderStudio(capabilities: Record<string, unknown>) {
       return json({ generation: { id: "g-new" }, job: { id: "j-new", status: "queued" } });
     }
     if (init?.method === "PATCH") return json(SESSION);
-    if (url.includes("/api/generation/options?kind=image")) return json([imageOption("upscale.json", capabilities)]);
+    if (capabilities && url.includes(`/api/generation/options?kind=${kind}`)) {
+      return json([imageOption("upscale.json", capabilities, kind, adapterAvailable)]);
+    }
     if (url.includes("/api/generation/options")) return json([]);
     if (url.includes("/api/generation/sessions")) return json([SESSION]);
     if (url.includes("/api/generation/jobs")) return json([]);
-    if (url.includes("/api/settings/providers")) return json([{ id: "p1", name: "ComfyUI", vendor: "plugin:dev.mosael.comfyui", enabled: true }]);
+    if (url.includes("/api/settings/provider-defaults")) {
+      return json(chatDefault ? [{ capability: "chat", provider_profile_id: "llm", model: "gpt", is_mine: true }] : []);
+    }
     return json([]);
   }) as never;
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -112,6 +119,9 @@ describe("提示词要不要写,照模型说的摆", () => {
     const user = userEvent.setup();
     const { posts } = renderStudio({ modes: ["image-to-image"], parameter_keys: [], prompt: "none" });
     expect(await screen.findByText("genPromptNotUsed")).toBeInTheDocument();
+    // 空态不再把同一句话重复一遍(它原来固定说「描述你想生成的画面」)
+    expect(screen.getAllByText("genPromptNotUsed")).toHaveLength(1);
+    expect(screen.queryByText("promptPlaceholder")).toBeNull();
     expect(screen.queryByRole("textbox", { name: "genPromptLabel" })).toBeNull();
     expect(screen.queryByRole("button", { name: /optimizePrompt/ })).toBeNull();
     const submit = screen.getByRole("button", { name: "generate" });
@@ -137,10 +147,57 @@ describe("提示词要不要写,照模型说的摆", () => {
     renderStudio({ modes: ["text-to-image"], parameter_keys: [] });
     const box = await screen.findByRole("textbox", { name: "genPromptLabel" });
     expect(box).toHaveAttribute("placeholder", "promptPlaceholder");
+    await waitFor(() => expect(screen.getByText("promptPlaceholder")).toBeInTheDocument());
     await waitFor(() => expect(screen.getAllByText("ComfyUI · upscale.json").length).toBeGreaterThan(0));
     const submit = screen.getByRole("button", { name: "generate" });
     expect(submit).toBeDisabled();
     await user.type(box, "一只猫");
     await waitFor(() => expect(submit).toBeEnabled());
+  });
+});
+
+describe("优化提示词看的是对话模型", () => {
+  it("图像模型的适配器不可用也能点;没有对话默认模型才灰掉,并说原因", async () => {
+    const user = userEvent.setup();
+    renderStudio({ modes: ["text-to-image"], parameter_keys: [] }, { adapterAvailable: false, chatDefault: true });
+    const box = await screen.findByRole("textbox", { name: "genPromptLabel" });
+    await user.type(box, "一只猫");
+    const optimize = await screen.findByRole("button", { name: /optimizePrompt/ });
+    await waitFor(() => expect(optimize).toBeEnabled());
+  });
+
+  it("没有对话默认模型:灰掉,title 说原因", async () => {
+    const user = userEvent.setup();
+    renderStudio({ modes: ["text-to-image"], parameter_keys: [] });
+    const box = await screen.findByRole("textbox", { name: "genPromptLabel" });
+    await user.type(box, "一只猫");
+    const optimize = await screen.findByRole("button", { name: /optimizePrompt/ });
+    await waitFor(() => expect(optimize).toHaveAttribute("title", "optimizePromptNeedsChatModel"));
+    expect(optimize).toBeDisabled();
+  });
+});
+
+describe("一个生成模型都没有", () => {
+  it("说的是「没有可用的生成模型」,参数栏开着时只摆这一个入口", async () => {
+    renderStudio(null);
+    expect(await screen.findByText("generationNoModels")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /wfGoConfigure/ })).toBeInTheDocument();
+    expect(screen.queryByText(/aiCapabilityNotConfigured/)).toBeNull();
+    expect(screen.queryByRole("button", { name: "generationConfigureModel" })).toBeNull();
+  });
+});
+
+describe("时长没声明就不发(和画板一致,ADR 0015)", () => {
+  it("视频模型既没默认时长也没档位:框是空的,发出去不带 duration_seconds", async () => {
+    const user = userEvent.setup();
+    const { posts } = renderStudio({ modes: ["text-to-video"], parameter_keys: ["duration_seconds"] }, { kind: "video" });
+    const duration = await screen.findByRole("spinbutton", { name: "genDuration" });
+    expect(duration).toHaveValue(null);
+    await user.type(screen.getByRole("textbox", { name: "genPromptLabel" }), "海浪");
+    const submit = screen.getByRole("button", { name: "generate" });
+    await waitFor(() => expect(submit).toBeEnabled());
+    await user.click(submit);
+    const body = await sentBody(posts);
+    expect(body.parameters).not.toHaveProperty("duration_seconds");
   });
 });

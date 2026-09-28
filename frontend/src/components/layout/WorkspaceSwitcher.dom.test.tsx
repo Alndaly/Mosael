@@ -25,11 +25,12 @@ const created: Workspace = { id: "ws-new", name: "新工作区", role: "owner" }
 let server: Workspace[] = [{ id: "ws-1", name: "默认工作区", role: "owner" } as Workspace];
 const listed = vi.fn(async () => server);
 const createWorkspace = vi.fn(async (name: string) => { server = [created, ...server]; return { ...created, name }; });
+const deleteWorkspace = vi.fn(async (id: string) => { server = server.filter((one) => one.id !== id); });
 vi.mock("@/api/client", async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   createWorkspace: (name: string) => createWorkspace(name),
   renameWorkspace: vi.fn(),
-  deleteWorkspace: vi.fn(),
+  deleteWorkspace: (id: string) => deleteWorkspace(id),
 }));
 
 /** 复刻 App.tsx 里 WorkspaceGate 的接线:列表来自 useQuery,当前工作区由 activeId 解析。 */
@@ -92,3 +93,21 @@ it("新建之后立刻出现在列表里,并且切了过去", async () => {
   await waitFor(() => expect(resolved[resolved.length - 1]).toBe("ws-new"));
 });
 
+/**
+ * 删的正是当前工作区:先落到下一个,再从列表里拿掉它。收尾在 workspaceList.useDeleteWorkspace,
+ * 设置 → 团队与成员里的删除按钮用的是同一份。
+ */
+it("删掉当前工作区之后,落到剩下的那个", async () => {
+  server = [
+    { id: "ws-1", name: "默认工作区", role: "owner" } as Workspace,
+    { id: "ws-2", name: "第二个", role: "owner" } as Workspace,
+  ];
+  const { client, resolved } = shell();
+  fireEvent.click(await screen.findByRole("button", { name: new RegExp(zh.workspaceSwitch) }));
+  fireEvent.click(await screen.findByRole("button", { name: `${zh.delete}: 默认工作区` }));
+  fireEvent.click(await screen.findByRole("button", { name: zh.confirm }));
+
+  await waitFor(() => expect(deleteWorkspace).toHaveBeenCalledWith("ws-1"));
+  await waitFor(() => expect(resolved[resolved.length - 1]).toBe("ws-2"));
+  expect(client.getQueryData<Workspace[]>(["workspaces"])?.map((one) => one.id)).not.toContain("ws-1");
+});

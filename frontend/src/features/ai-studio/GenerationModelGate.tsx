@@ -8,9 +8,19 @@ import { gotoSettings } from "@/lib/deepLink";
  * 生成区的无模型出口。
  *
  * 生成模型列表为空时，继续留一个禁用发送键只会让人猜发生了什么；这里把同一块位置
- * 换成明确的设置入口，并直达图像生成供应商。配置完成后查询刷新，正常模型标签会回来。
+ * 换成明确的设置入口，直达调用方给的那一页供应商设置(按所选能力,不写死图像)。
+ * 配置完成后查询刷新，正常模型标签会回来。
  */
-export function GenerationModelGate({ hasModel, loading }: { hasModel: boolean; loading: boolean }) {
+export function GenerationModelGate({
+  hasModel,
+  loading,
+  section,
+}: {
+  hasModel: boolean;
+  loading: boolean;
+  /** 设置页分区,如 `providers:video`。 */
+  section: string;
+}) {
   const t = useI18n();
   if (hasModel || loading) return null;
 
@@ -20,7 +30,7 @@ export function GenerationModelGate({ hasModel, loading }: { hasModel: boolean; 
       variant="outline"
       size="xs"
       className="gap-1 text-muted-foreground hover:text-foreground"
-      onClick={() => gotoSettings("providers:image")}
+      onClick={() => gotoSettings(section)}
     >
       <Settings2 size={13} />
       {t("generationConfigureModel")}

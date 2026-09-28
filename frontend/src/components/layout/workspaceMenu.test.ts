@@ -12,7 +12,11 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { workspaceMenuState as menuState } from "@/components/layout/workspaceMenu";
+import {
+  workspaceDeleteBlockedReason,
+  workspaceMenuState as menuState,
+  workspaceRenameBlockedReason,
+} from "@/components/layout/workspaceMenu";
 
 describe("工作区右键菜单的门槛", () => {
   it("viewer / editor 改不了名,也删不掉", () => {
@@ -46,5 +50,15 @@ describe("工作区右键菜单的门槛", () => {
       expect(s.renameDisabled, `role=${role} 被当成了有权限`).toBe(true);
       expect(s.deleteDisabled).toBe(true);
     }
+  });
+
+  it("灰掉时说得出为什么:权限不够和只剩一个是两句话", () => {
+    expect(workspaceRenameBlockedReason(menuState("editor", 3))).toBe("workspaceRenameNeedsAdmin");
+    expect(workspaceRenameBlockedReason(menuState("admin", 3))).toBeNull();
+    expect(workspaceDeleteBlockedReason(menuState("admin", 3))).toBe("workspaceDeleteNeedsOwner");
+    // 权限不够优先:admin 在只剩一个时,缺的首先是权限
+    expect(workspaceDeleteBlockedReason(menuState("admin", 1))).toBe("workspaceDeleteNeedsOwner");
+    expect(workspaceDeleteBlockedReason(menuState("owner", 1))).toBe("workspaceDeleteLastOne");
+    expect(workspaceDeleteBlockedReason(menuState("owner", 2))).toBeNull();
   });
 });

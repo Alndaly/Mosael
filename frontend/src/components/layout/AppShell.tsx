@@ -19,7 +19,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { createWorkspace, deleteWorkspace, renameWorkspace, userAvatarUrl, type Workspace } from "@/api/client";
+import { createWorkspace, renameWorkspace, userAvatarUrl, type Workspace } from "@/api/client";
 import { useAuth, useIsDeploymentAdmin } from "@/app/auth";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { Input } from "@/components/ui/input";
@@ -29,7 +29,13 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { NotificationCenter } from "@/components/layout/NotificationCenter";
 import { TaskCenter } from "@/components/layout/TaskCenter";
-import { workspaceMenuState } from "@/components/layout/workspaceMenu";
+import {
+  workspaceDeleteBlockedReason,
+  workspaceMenuState,
+  workspaceRenameBlockedReason,
+} from "@/components/layout/workspaceMenu";
+import { useDeleteWorkspace } from "@/components/layout/workspaceList";
+import { THEME_LABEL_KEYS, nextTheme } from "@/components/layout/themeCycle";
 import { ConfirmDialog, RenameDialog } from "@/components/app/modals";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { navItemsAt, navLabelKey, type NavItem, type StudioView } from "@/components/layout/navLabels";
@@ -244,14 +250,14 @@ export function AppShell({
               <Button
                 variant="ghost"
                 size="icon"
-                onClick={() => setTheme(theme === "light" ? "dark" : theme === "dark" ? "system" : "light")}
+                onClick={() => setTheme(nextTheme(theme))}
                 aria-label={t("settingsTheme")}
               >
                 {theme === "light" ? <Sun size={15} /> : theme === "dark" ? <Moon size={15} /> : <MonitorCog size={15} />}
               </Button>
             </TooltipTrigger>
             <TooltipContent>
-              {theme === "light" ? t("themeLight") : theme === "dark" ? t("themeDark") : t("themeSystem")}
+              {t(THEME_LABEL_KEYS[theme])}
             </TooltipContent>
           </Tooltip>
           <Tooltip>
@@ -398,21 +404,9 @@ function WorkspaceSwitcher({
     onSettled: () => setRenaming(null),
   });
 
-  const removeMut = useMutation({
-    mutationFn: (id: string) => deleteWorkspace(id),
-    onSuccess: (_data, id) => {
-      // 删掉的正好是当前这个的话,先把选择挪到别处再让列表失效 —— 反过来的话,
-      // 中间那一瞬列表里没有当前工作区,WorkspaceGate 会先弹一次。
-      if (id === workspaceId) {
-        const next = workspaces.find((ws) => ws.id !== id);
-        if (next) onSelectWorkspace?.(next.id);
-      }
-      qc.setQueryData<Workspace[]>(["workspaces"], (old) => old?.filter((ws) => ws.id !== id));
-      void qc.invalidateQueries({ queryKey: ["workspaces"] });
-      toast.success(t("workspaceDeleted"));
-    },
-    onError: (error: Error) => toast.error(error.message),
-    // 删完(成没成)再关确认框 —— 进行中它一直开着、确认键转圈。
+  const removeMut = useDeleteWorkspace({
+    currentWorkspaceId: workspaceId,
+    onSelectWorkspace,
     onSettled: () => setRemoving(null),
   });
 
@@ -454,6 +448,9 @@ function WorkspaceSwitcher({
           <div className="max-h-72 overflow-y-auto">
           {workspaces.filter(ws => ws.name.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase())).map((ws) => {
             const gate = workspaceMenuState(ws.role, workspaces.length);
+            //: 灰掉的按钮要说为什么 —— 权限不够和「只剩这一个」是两件事,用户得知道该找谁、还是先建一个。
+            const renameReason = workspaceRenameBlockedReason(gate);
+            const deleteReason = workspaceDeleteBlockedReason(gate);
             return (
               <ContextMenu key={ws.id}>
                 <ContextMenuTrigger asChild>
@@ -463,8 +460,8 @@ function WorkspaceSwitcher({
                       <span className="truncate">{ws.name}</span>
                       {ws.id === workspaceId && <Check size={14} className="ml-auto shrink-0 text-primary" />}
                     </button>
-                    <Button variant="ghost" size="icon-xs" disabled={gate.renameDisabled} aria-label={`${t("rename")}: ${ws.name}`} title={t("rename")} onClick={() => { setOpen(false); setRenaming(ws); }}><Pencil /></Button>
-                    <Button variant="ghost" size="icon-xs" disabled={gate.deleteDisabled} aria-label={`${t("delete")}: ${ws.name}`} title={t("delete")} className="text-destructive hover:text-destructive" onClick={() => { setOpen(false); setRemoving(ws); }}><Trash2 /></Button>
+                    <Button variant="ghost" size="icon-xs" disabled={gate.renameDisabled} aria-label={`${t("rename")}: ${ws.name}`} title={renameReason ? t(renameReason) : t("rename")} onClick={() => { setOpen(false); setRenaming(ws); }}><Pencil /></Button>
+                    <Button variant="ghost" size="icon-xs" disabled={gate.deleteDisabled} aria-label={`${t("delete")}: ${ws.name}`} title={deleteReason ? t(deleteReason) : t("delete")} className="text-destructive hover:text-destructive" onClick={() => { setOpen(false); setRemoving(ws); }}><Trash2 /></Button>
                   </div>
                 </ContextMenuTrigger>
                 <ContextMenuContent>

@@ -15,7 +15,6 @@ import { toast } from "sonner";
 import {
   inviteMember,
   listActivity,
-  deleteWorkspace,
   listMembers,
   removeMember,
   renameWorkspace,
@@ -33,6 +32,8 @@ import { Form, FormControl, FormField, FormItem, FormLabel } from "@/components/
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SettingsBlock, SettingsBlockTitle, SettingsGroup, SettingsList, SettingsListBlock, SettingsListItem } from "@/components/settings/settings-layout";
+import { workspaceDeleteBlockedReason, workspaceMenuState } from "@/components/layout/workspaceMenu";
+import { WORKSPACES_QUERY, useDeleteWorkspace } from "@/components/layout/workspaceList";
 import { relativeTime } from "@/lib/time";
 
 /** Per-permission icon for the member-permissions popover (scannability). */
@@ -77,6 +78,11 @@ export function TeamSection({ workspace }: { workspace: Workspace }) {
   const myRole = members.data?.my_role ?? workspace.role ?? "viewer";
   const canManage = atLeast(myRole, "admin");
   const isOwner = myRole === "owner";
+  //: 改名 / 删除工作区的门槛和切换器同一份(workspaceMenuState):包括「只剩一个不许删」。
+  //: 权限不够的直接不摆;只剩一个的摆出来但灰掉,并说原因 —— 他有权限,只是现在不能删。
+  const workspaces = useQuery(WORKSPACES_QUERY);
+  const gate = workspaceMenuState(myRole, workspaces.data?.length ?? 0);
+  const deleteReason = workspaceDeleteBlockedReason(gate);
   const roleLabel = (role: string) => t(`role_${role}` as never) as string;
 
   const roleMut = useMutation({
@@ -101,16 +107,8 @@ export function TeamSection({ workspace }: { workspace: Workspace }) {
     onError: onErr,
     onSettled: () => setRenameOpen(false),
   });
-  const deleteMut = useMutation({
-    mutationFn: () => deleteWorkspace(wid),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["workspaces"] });
-      toast.success(t("workspaceDeleted"));
-    },
-    onError: onErr,
-    // 删完(成没成)再关确认框 —— 进行中它一直开着、确认键转圈。
-    onSettled: () => setDeleteOpen(false),
-  });
+  //: 删完的收尾(删的是当前工作区就落到下一个)和切换器共用一份,见 workspaceList。
+  const deleteMut = useDeleteWorkspace({ currentWorkspaceId: wid, onSettled: () => setDeleteOpen(false) });
 
   return (
     <SettingsGroup title={t("teamTitle")} description={t("teamDesc")}>
@@ -131,13 +129,20 @@ export function TeamSection({ workspace }: { workspace: Workspace }) {
             </div>
           </div>
           <div className="flex shrink-0 gap-1.5">
-            {canManage && (
-              <Button variant="outline" size="sm" onClick={() => setRenameOpen(true)}>
+            {gate.renameBlockedBy !== "role" && (
+              <Button variant="outline" size="sm" disabled={gate.renameDisabled} onClick={() => setRenameOpen(true)}>
                 <Pencil size={13} /> {t("rename")}
               </Button>
             )}
-            {isOwner && (
-              <Button variant="outline" size="sm" className="text-destructive hover:text-destructive" onClick={() => setDeleteOpen(true)}>
+            {gate.deleteBlockedBy !== "role" && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-destructive hover:text-destructive"
+                disabled={gate.deleteDisabled}
+                title={deleteReason ? t(deleteReason) : undefined}
+                onClick={() => setDeleteOpen(true)}
+              >
                 <Trash2 size={13} /> {t("deleteWorkspace")}
               </Button>
             )}
@@ -200,7 +205,7 @@ export function TeamSection({ workspace }: { workspace: Workspace }) {
         body={t("deleteWorkspaceConfirm").replace("{name}", workspace.name)}
         onCancel={() => setDeleteOpen(false)}
         pending={deleteMut.isPending}
-        onConfirm={() => deleteMut.mutate()}
+        onConfirm={() => deleteMut.mutate(wid)}
       />
     </SettingsGroup>
   );

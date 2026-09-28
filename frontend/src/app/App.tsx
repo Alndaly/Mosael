@@ -43,6 +43,7 @@ import { AppShell, type StudioView } from "@/components/layout/AppShell";
 import { STUDIO_VIEWS } from "@/components/layout/navLabels";
 import { PAGE_RENDERERS } from "@/app/pages";
 import { CommandPalette } from "@/components/layout/CommandPalette";
+import { WORKSPACES_QUERY } from "@/components/layout/workspaceList";
 import { LoadingState } from "@/components/layout/LoadingState";
 import { ConfirmationCenter } from "@/features/agent/ConfirmationCenter";
 import { VoiceDock } from "@/features/agent/VoiceDock";
@@ -317,10 +318,7 @@ function persistWorkspaceId(id: string) {
 function WorkspaceGate() {
   const t = useI18n();
   const qc = useQueryClient();
-  const workspaces = useQuery({
-    queryKey: ["workspaces"],
-    queryFn: () => api<Workspace[]>("/api/workspaces"),
-  });
+  const workspaces = useQuery(WORKSPACES_QUERY);
   // The active workspace is persisted so a refresh — or a newer workspace appearing at
   // list[0] (newest first) — can't switch the user out of the workspace their jobs/projects live in.
   const [activeId, setActiveId] = React.useState<string | null>(
@@ -565,6 +563,8 @@ function Studio({
           projects={projects.data ?? []}
           onNavigate={navigate}
           onOpenProject={openProject}
+          onCreateProject={() => createProject.mutate()}
+          creatingProject={createProject.isPending}
         />
         <ConfirmationCenter workspaceId={workspace.id} />
         {/* 免提浮标挂在**应用级**,不挂在助手面板里:它存在的意义正是"手在别处、面板收起来了"

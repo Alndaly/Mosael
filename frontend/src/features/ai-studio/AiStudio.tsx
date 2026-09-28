@@ -52,6 +52,7 @@ import { useImagePreview } from "@/components/app/image-preview";
 import { AudioWorkspace } from "@/features/ai-studio/AudioWorkspace";
 import { ChatWorkspace } from "@/features/ai-studio/ChatWorkspace";
 import { generationSessionSelectionKey } from "@/features/agent/sessionSelection";
+import { useEffectiveChatModel } from "@/features/agent/effectiveModel";
 import {
   DeclaredParameterControl,
   PARAMETER_CONTROL_CLASS,
@@ -70,6 +71,7 @@ import {
   declaredParameters,
   declaredParameterValue,
   defaultDuration,
+  DURATION_UNSET,
   durationOptions,
   durationRange,
   durationChoices,
@@ -114,7 +116,6 @@ import {
 import { cn } from "@/lib/utils";
 import { toPlainText } from "@/components/markdown/inlineSyntax";
 
-type ProviderProfile = components["schemas"]["ProviderProfileOut"];
 type GenerationSession = components["schemas"]["GenerationSessionOut"];
 
 const ENGINE_SEP = "::";
@@ -162,11 +163,14 @@ function defaultGenerationConfig(model: GenerationOption | null): GenerationConf
   const ratios = aspectRatioOptions(model);
   // 音频的时长**可以不给**(多数音乐模型按歌词长短自己定曲长):只认模型**声明了**的默认值,
   // 没声明就空着、空着就不发 —— 不能像视频那样取区间的第一档(Suno 会被悄悄定成 10 秒)。
+  // 视频同理:模型既没声明默认值也没给档位时 defaultDuration 回 DURATION_UNSET(0),那就空着 ——
+  // 框里摆个 0 再原样发出去,等于替用户选了「0 秒」(和画板 NodeComposer 同一条,见 ADR 0015)。
   const declaredDuration = model?.capabilities?.default_duration_seconds;
+  const videoDuration = defaultDuration(model);
   const duration =
     model?.kind === "audio"
       ? typeof declaredDuration === "number" ? String(declaredDuration) : ""
-      : String(defaultDuration(model));
+      : videoDuration === DURATION_UNSET ? "" : String(videoDuration);
   return {
     size: capabilityString(model, "default_size", sizes[0] ?? ""),
     numImages: "1",
@@ -237,9 +241,11 @@ function generationParameters(model: GenerationOption, config: GenerationConfig)
     return params;
   }
   const params: Record<string, string | number | boolean> = { ...shared };
-  if (supportsParameter(model, "duration_seconds")) {
+  // 空着或 0 = 未设置,不发,让模型用它自己的默认(与画板一致,见 lib/generationCapabilities.DURATION_UNSET)。
+  if (supportsParameter(model, "duration_seconds") && config.durationSeconds.trim() !== "") {
     // 不在前端悄悄夹到上下界：-1 这类特殊值会被夹坏，真正非法的值应由统一校验器明确报错。
-    params.duration_seconds = Number(config.durationSeconds);
+    const seconds = Number(config.durationSeconds);
+    if (seconds !== DURATION_UNSET) params.duration_seconds = seconds;
   }
   // 尺寸**按模型声明的来**。这一支此前只认 `resolution`(720p 那种档位名)—— 那是按火山 /
   // 可灵那几家定的形状,而万相收的是 `宽*高` 的像素对。声明了 size 的模型于是一个尺寸都发不出去,
@@ -357,10 +363,6 @@ function GenerateWorkspace({
     queryKey: ["generation-options", "audio"],
     queryFn: () => api<GenerationOption[]>("/api/generation/options?kind=audio"),
   });
-  const providers = useQuery({
-    queryKey: ["provider-profiles"],
-    queryFn: () => api<ProviderProfile[]>("/api/settings/providers"),
-  });
   const jobs = useQuery({
     queryKey: ["jobs", workspace.id, "ai_generation"],
     queryFn: () => api<Job[]>(`/api/jobs?workspace_id=${workspace.id}&kind=ai_generation`),
@@ -386,10 +388,6 @@ function GenerateWorkspace({
     refetchOnWindowFocus: true,
   });
 
-  const providerById = React.useMemo(
-    () => new Map((providers.data ?? []).filter((profile) => profile.enabled).map((profile) => [profile.id, profile])),
-    [providers.data],
-  );
   const modelOptions = React.useMemo<GenerationEngineOption[]>(
     () =>
       [...(imageOptions.data ?? []), ...(videoOptions.data ?? []), ...(audioOptions.data ?? [])].map((option) => ({
@@ -414,6 +412,12 @@ function GenerateWorkspace({
     pickGenerationOption(modelOptions, { kind: "image" }) ??
     pickGenerationOption(modelOptions);
   const generationModelsLoading = imageOptions.isPending || videoOptions.isPending || audioOptions.isPending;
+  //: 三类生成一个模型都没有。选项在后端就只列启用连接下启用的模型(provider_models.models_for_capability),
+  //: 所以「没配置」只有这一种样子 —— 不再拿设置页的连接列表另判一遍「选中的这个配没配」:
+  //: 那一判只在连接列表还没到或取失败时为真,表现为提示条一闪、或一直挂着。
+  const noGenerationModels = modelOptions.length === 0 && !generationModelsLoading;
+  //: 去配置时落到哪一页:选中的模型是哪种能力就去哪种;一个都没选时看会话记着的能力,再没有才去图像。
+  const settingsSection = `providers:${selectedModel?.kind ?? activeSession?.kind ?? "image"}`;
   const selectedAdapterAvailable = selectedModel?.adapter_available ?? false;
   const selectedSizes = sizeOptions(selectedModel);
   const selectedDurations = durationChoices(selectedModel, generationConfig.resolution);
@@ -436,6 +440,16 @@ function GenerateWorkspace({
   const isAudioModel = selectedModel?.kind === "audio";
   //: 这个模型对提示词的要求(见 promptMode):不收的不摆框,可以不写的在占位里说清楚。
   const selectedPromptMode = promptMode(selectedModel);
+  //: 输入框占位和空态正文说的是同一句话,按所选模型来:可选的说可选,音频说声音,其余说画面。
+  //: 不收提示词的那一句由输入框那一格说,空态不再重复一遍。
+  const promptHintKey =
+    selectedPromptMode === "none"
+      ? "genPromptNotUsed"
+      : selectedPromptMode === "optional"
+        ? "promptPlaceholderOptional"
+        : isAudioModel
+          ? "audioPromptPlaceholder"
+          : "promptPlaceholder";
   const supportsLyrics = isAudioModel && supportsParameter(selectedModel, "lyrics");
   const supportsInstrumental = isAudioModel && supportsParameter(selectedModel, "instrumental");
   const selectedAudioRoles = audioSourceRoles(selectedModel);
@@ -488,7 +502,6 @@ function GenerateWorkspace({
   const capabilityLabel = (kind: string) =>
     kind === "image" ? t("capImage") : kind === "video" ? t("capVideo") : kind === "audio" ? t("capAudio") : kind;
   const canSubmitText = hasEnoughText(selectedModel, prompt, generationConfig.lyrics, generationConfig.instrumental);
-  const selectedCapabilityMissing = selectedModel ? !providerById.has(selectedModel.provider_profile_id) : false;
   const setConfigValue = (key: keyof GenerationConfig, value: string) =>
     setGenerationConfig((current) => ({ ...current, [key]: value }));
   const setFrames = (role: SourceRole, slots: FrameSlot[]) =>
@@ -628,6 +641,10 @@ function GenerateWorkspace({
       void qc.invalidateQueries({ queryKey: ["generation-jobs", workspace.id, targetSessionId] });
     },
   });
+  //: 优化走的是「对话」默认 LLM,不是图像模型(见下方 mutationFn):能不能点看对话默认模型在不在,
+  //: 和图像模型的适配器可不可用无关。默认值还在路上时不算缺。
+  const chatModel = useEffectiveChatModel(null);
+  const chatModelMissing = !chatModel.pending && !chatModel.providerProfileId;
   // 分平台提示词优化:按当前所选图像模型的平台习惯重写提示框内容(与助手技能共用同一后端)。
   const optimizePrompt = useMutation({
     mutationFn: () =>
@@ -759,7 +776,7 @@ function GenerateWorkspace({
           )}
           {!(activeSession && sessionJobs.isLoading) && ordered.length === 0 && (
             <div className="m-auto">
-              <EmptyState icon={<Sparkles size={22} />} title={t("noGenerationJobs")} body={t("promptPlaceholder")} />
+              <EmptyState icon={<Sparkles size={22} />} title={t("noGenerationJobs")} body={selectedPromptMode === "none" ? undefined : t(promptHintKey)} />
             </div>
           )}
           {ordered.map((generation) => (
@@ -789,13 +806,7 @@ function GenerateWorkspace({
               className="max-h-[220px] min-h-11 w-full min-w-0 resize-none border-0 bg-transparent px-0 py-0.5 pb-1.5 text-ui-md leading-[1.55] shadow-none outline-none focus-visible:ring-0"
               value={prompt}
               aria-label={t("genPromptLabel")}
-              placeholder={t(
-                selectedPromptMode === "optional"
-                  ? "promptPlaceholderOptional"
-                  : isAudioModel
-                    ? "audioPromptPlaceholder"
-                    : "promptPlaceholder",
-              )}
+              placeholder={t(promptHintKey)}
               onChange={(event) => {
                 setPrompt(event.target.value);
                 event.target.style.height = "auto";
@@ -819,7 +830,10 @@ function GenerateWorkspace({
                   {selectedModel.label}
                 </span>
               )}
-              <GenerationModelGate hasModel={Boolean(selectedModel)} loading={generationModelsLoading} />
+              {/* 参数栏开着时,「一个模型都没有」由那边的提示条说,这里不再摆第二个入口。 */}
+              {!(noGenerationModels && parametersOpen) && (
+                <GenerationModelGate hasModel={Boolean(selectedModel)} loading={generationModelsLoading} section={settingsSection} />
+              )}
               {selectedModel?.kind === "image" && selectedPromptMode !== "none" && (
                 <Button
                   type="button"
@@ -827,10 +841,10 @@ function GenerateWorkspace({
                   size="xs"
                   className="gap-1 text-muted-foreground hover:text-foreground"
                   // createGeneration 是**别的**操作在跑,那是 disable;自己在跑才是 loading。
-                  disabled={!prompt.trim() || !selectedAdapterAvailable || createGeneration.isPending}
+                  disabled={!prompt.trim() || chatModelMissing || createGeneration.isPending}
                   loading={optimizePrompt.isPending}
                   onClick={() => optimizePrompt.mutate()}
-                  title={t("optimizePrompt")}
+                  title={chatModelMissing ? t("optimizePromptNeedsChatModel") : t("optimizePrompt")}
                 >
                   <Wand2 size={13} />
                   {t("optimizePrompt")}
@@ -871,23 +885,13 @@ function GenerateWorkspace({
         </div>
 
         <div className="grid min-h-0 min-w-0 flex-1 grid-cols-[minmax(0,1fr)] content-start gap-6 overflow-y-auto overflow-x-hidden p-4">
-          {modelOptions.length === 0 && !generationModelsLoading && (
+          {noGenerationModels && (
             <ConfigNotice
-              message={t("aiCapabilityNotConfigured").replace("{capability}", capabilityLabel("image"))}
+              message={t("generationNoModels")}
               actionLabel={t("wfGoConfigure")}
-              section="providers:image"
+              section={settingsSection}
               className="items-center gap-[7px] rounded-lg px-[9px] py-2 text-ui-xs leading-[1.45]"
               textClassName="line-clamp-3"
-              actionClassName="self-center"
-            />
-          )}
-          {selectedModel && selectedCapabilityMissing && (
-            <ConfigNotice
-              message={t("aiCapabilityNotConfigured").replace("{capability}", capabilityLabel(selectedModel.kind))}
-              actionLabel={t("wfGoConfigure")}
-              section={`providers:${selectedModel.kind}`}
-              className="items-center gap-[7px] rounded-lg px-[9px] py-2 text-ui-xs leading-[1.45]"
-              textClassName="line-clamp-2"
               actionClassName="self-center"
             />
           )}
@@ -1028,8 +1032,8 @@ function GenerateWorkspace({
                         aria-label={t("genDuration")}
                         min={audioDurationRange?.min}
                         max={audioDurationRange?.max}
-                        // 音频的时长空着 = 让模型按歌词长短自己定。
-                        placeholder={isAudioModel ? t("genDurationAuto") : undefined}
+                        // 时长空着 = 不发,让模型自己定(音频按歌词长短,视频用它自己的默认)。
+                        placeholder={t("genDurationAuto")}
                         value={generationConfig.durationSeconds}
                         onChange={(event) => setConfigValue("durationSeconds", event.target.value)}
                       />
