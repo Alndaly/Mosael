@@ -491,7 +491,7 @@ def view_scene(db: Session, scene: Scene3D, *, views: list[str], shot_id: str = 
     """把场景渲成几张图**给智能体看** —— 改完摆位后自己检查,而不是凭数字想象。不登记素材、不落盘。
 
     `views` 里的 `shot` 是那个镜头的机位看到的画面(构图),其余是自由视角(见
-    scene_render.FREE_VIEWS):从上面看布局、从正面/侧面看高度关系。不超采样:给模型检查摆位用,
+    render.FREE_VIEWS):从上面看布局、从正面/侧面看高度关系。不超采样:给模型检查摆位用,
     边缘锯齿无所谓,而智能体一轮里会看很多次,快四倍比好看有用。
     """
     import base64
