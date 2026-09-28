@@ -24,6 +24,8 @@ from app.ai.providers.adapters.bytedance.volcano.omnihuman import VolcanoOmniHum
 from app.ai.providers.adapters.bytedance.volcano.speech import VolcanoSpeechAdapter
 from app.ai.providers.adapters.evolink.generation import EvolinkGenerationAdapter
 from app.ai.providers.adapters.google.lyria import LyriaAdapter
+from app.ai.providers.adapters.hedra.video import HedraVideoAdapter
+from app.ai.providers.adapters.heygen.video import HeyGenVideoAdapter
 from app.ai.providers.adapters.google.veo import VeoAdapter
 from app.ai.providers.adapters.kuaishou.kling.audio import KlingAudioAdapter
 from app.ai.providers.adapters.kuaishou.kling.video import KlingVideoAdapter
@@ -62,6 +64,8 @@ def _generation_adapters() -> tuple[GenerationAdapter, ...]:
         DashScopeAudioAdapter(),
         # 数字人(ADR 0028 阶段 4)。
         VolcanoOmniHumanAdapter(),
+        HeyGenVideoAdapter(),
+        HedraVideoAdapter(),
     )
 
 

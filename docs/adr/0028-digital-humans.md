@@ -113,6 +113,19 @@ Accepted — 2026-09-28。维护者拍板了[数字人方案](../design/digital-
 
 两家都照文档写、还没拿真实密钥跑到终态。
 
+海外两家已接(2026-09-28),各一个新供应商连接(`heygen`、`hedra`,只填 API Key):
+
+- HeyGen(`adapters/heygen/video.py`):`heygen-avatar-iv`(说话照片,`POST /v3/videos` 的 `type: image`,人像内联
+  Base64,配音走 HeyGen 直传 —— 预签名 PUT 不带 Key)与 `heygen-lipsync`(改口型,`POST /v3/lipsyncs`,精度模式;
+  原片只收 mp4 / webm)。配音上限文档两处不一(30 分钟 / 10 分钟),描述符按严的 600 秒。
+- Hedra(`adapters/hedra/video.py`):`hedra-character-3`(说话照片)。图和配音**只能**用它 `/v3/files` 发回的临时
+  链接(外链一律拒),所以链接素材也先下到本地再传;提示词必填,用户没写给一句中性的;画幅没有 auto,按原图挑最近一档。
+  Hedra 没有视频改口型的模型。
+- 三家(可灵、HeyGen、Hedra)的本地素材都不需要用户的对象存储,只有可灵对口型的原片(认人脸只收链接)例外。
+  配音 / 人像转格式共用 `media/vendor_formats`。
+
+同样照文档写、还没拿真实密钥跑到终态。阶段 4 的三家到此接齐;本机(ComfyUI 模板图)仍不在这一期。
+
 ## 分步落地
 
 - 第 4 步已做(2026-09-28):克隆音色的授权声明(`voices.consent_kind` / `consent_by` / `consent_at`,迁移

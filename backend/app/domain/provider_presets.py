@@ -418,6 +418,42 @@ _VENDOR_PRESETS: dict[str, dict[str, Any]] = {
             },
         ],
     },
+    "heygen": {
+        "label": "HeyGen",
+        "base_url": "https://api.heygen.com",
+        # 海外数字人(ADR 0028 阶段 4):说话照片(Avatar IV)和对口型。本地素材走 HeyGen 自己的直传,不用配对象存储。
+        # 文档 https://developers.heygen.com/audio-to-video.md
+        "capabilities": "数字人:说话照片(一张图 + 一段配音)与对口型(原片换一段新配音)",
+        "capability_ids": ["video"],
+        "fields": [
+            {
+                "key": "api_key",
+                "label": "API Key",
+                "storage": "api_key",
+                "secret": True,
+                "required": True,
+                "hint": "HeyGen 开发者后台(app.heygen.com/developers)里创建。按 API 用量计费,和网页版订阅的额度分开。",
+            },
+        ],
+    },
+    "hedra": {
+        "label": "Hedra",
+        "base_url": "https://api.hedra.com/v3",
+        # 海外数字人(ADR 0028 阶段 4):Character-3 说话照片,音频最长 10 分钟。图和音频先传到 Hedra 自己的临时存储。
+        # 文档 https://www.hedra.com/docs/api-reference/v3/run-a-model/run-hedra-character-3-hedra-character-3.md
+        "capabilities": "数字人:Character-3 说话照片(一张图 + 一段配音,最长 10 分钟)",
+        "capability_ids": ["video"],
+        "fields": [
+            {
+                "key": "api_key",
+                "label": "API Key",
+                "storage": "api_key",
+                "secret": True,
+                "required": True,
+                "hint": "Hedra 开发者后台(hedra.com/develop/api-keys)里创建,形如 key_id:secret。API 钱包是预付的,和 Studio 的余额分开,先充值再用。",
+            },
+        ],
+    },
     "openai-compatible": {
         "label": "OpenAI 兼容端点",
         "base_url": "",

@@ -345,6 +345,49 @@ VOLCANO_OMNIHUMAN_15_CAPABILITIES = {
     "source_duration_seconds": {"driving_audio": [1, 59]},
 }
 
+#: HeyGen 说话照片(ADR 0028 阶段 4,海外):Avatar IV 把任意一张人像跟着配音动起来,可以写一句动作提示词
+#: (`motion_prompt`)。本地素材走 HeyGen 自己的直传,所以不要 `url_only_roles`。配音上限文档两处说法不一
+#: (30 分钟 / 头像输入 10 分钟),按严的写 600 秒。文档:https://developers.heygen.com/audio-to-video.md
+HEYGEN_AVATAR_CAPABILITIES = {
+    "modes": ["speech-to-video"],
+    "prompt": "optional",
+    "parameter_keys": ["resolution", "first_frame", "driving_audio"],
+    "resolutions": ["720p", "1080p"],
+    "default_resolution": "1080p",
+    "source_limits": {"first_frame": 1, "driving_audio": 1},
+    "requires_source": [["first_frame"], ["driving_audio"]],
+    "duration_follows": "driving_audio",
+    "source_duration_seconds": {"driving_audio": [1, 600]},
+}
+
+#: HeyGen 对口型:原片的嘴对上新配音(精度模式)。成片长度跟着新配音走(`enable_dynamic_duration` 默认开)。
+#: 原片只收 mp4 / webm。文档没写时长上限,只按直传的 200MiB 封顶,描述符不编一个。
+#: 文档:https://developers.heygen.com/lipsync-precision.md
+HEYGEN_LIPSYNC_CAPABILITIES = {
+    "modes": ["video-lipsync"],
+    "prompt": "none",
+    "parameter_keys": ["source_video", "driving_audio"],
+    "source_limits": {"source_video": 1, "driving_audio": 1},
+    "requires_source": [["source_video"], ["driving_audio"]],
+    "duration_follows": "driving_audio",
+}
+
+#: Hedra Character-3 说话照片(ADR 0028 阶段 4,海外):一张图 + 一段配音(0.5–600 秒,描述符按整秒写 1–600)。
+#: 提示词接口要求必填,没写就由适配器给一句中性的;画幅按原图挑最接近的一档。图和音频先传到 Hedra 自己的
+#: 临时存储(它只认自己发的链接),不用对象存储。
+#: 文档:https://www.hedra.com/docs/api-reference/v3/run-a-model/run-hedra-character-3-hedra-character-3.md
+HEDRA_CHARACTER_3_CAPABILITIES = {
+    "modes": ["speech-to-video"],
+    "prompt": "optional",
+    "parameter_keys": ["resolution", "first_frame", "driving_audio"],
+    "resolutions": ["540p", "720p", "1080p"],
+    "default_resolution": "720p",
+    "source_limits": {"first_frame": 1, "driving_audio": 1},
+    "requires_source": [["first_frame"], ["driving_audio"]],
+    "duration_follows": "driving_audio",
+    "source_duration_seconds": {"driving_audio": [1, 600]},
+}
+
 #: 改口型(ADR 0028):一段已有视频的嘴对上新的音频;可选一张参考人像指定改哪张脸。视频、音频都是 2–120 秒;
 #: 音频比视频长时适配器开 `video_extension`,用正放倒放交替把视频补齐。不收提示词。
 VIDEORETALK_CAPABILITIES = {
@@ -1290,6 +1333,29 @@ BUILTIN_MODELS = [
         "capabilities": VOLCANO_OMNIHUMAN_15_CAPABILITIES,
     },
     {
+        # 说话照片 / 对口型:HeyGen(海外数字人,ADR 0028 阶段 4)。
+        "id": "heygen:heygen-avatar-iv:video",
+        "provider": "heygen",
+        "kind": "video",
+        "model": "heygen-avatar-iv",
+        "capabilities": HEYGEN_AVATAR_CAPABILITIES,
+    },
+    {
+        "id": "heygen:heygen-lipsync:video",
+        "provider": "heygen",
+        "kind": "video",
+        "model": "heygen-lipsync",
+        "capabilities": HEYGEN_LIPSYNC_CAPABILITIES,
+    },
+    {
+        # 说话照片:Hedra Character-3(海外数字人,ADR 0028 阶段 4)。
+        "id": "hedra:hedra-character-3:video",
+        "provider": "hedra",
+        "kind": "video",
+        "model": "hedra-character-3",
+        "capabilities": HEDRA_CHARACTER_3_CAPABILITIES,
+    },
+    {
         # 改口型:一段已有视频的嘴对上新的一段话(数字人,ADR 0028)。
         "id": "alibaba:videoretalk:video",
         "provider": "alibaba",
@@ -1430,6 +1496,9 @@ CAPABILITY_PROFILES: dict[str, dict[str, Any]] = {
     "wan-22-s2v": WAN_22_S2V_CAPABILITIES,
     "videoretalk": VIDEORETALK_CAPABILITIES,
     "volcano-omnihuman-15": VOLCANO_OMNIHUMAN_15_CAPABILITIES,
+    "heygen-avatar-iv": HEYGEN_AVATAR_CAPABILITIES,
+    "heygen-lipsync": HEYGEN_LIPSYNC_CAPABILITIES,
+    "hedra-character-3": HEDRA_CHARACTER_3_CAPABILITIES,
     "kling-avatar": KLING_AVATAR_CAPABILITIES,
     "kling-lipsync": KLING_LIPSYNC_CAPABILITIES,
     "wan-27-r2v": WAN_27_R2V_CAPABILITIES,
