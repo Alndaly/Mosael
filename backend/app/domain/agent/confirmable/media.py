@@ -306,6 +306,43 @@ def _execute_convert_video_to_gif(db: Session, confirmation: Any, actor: str | N
     )
     return {"job_id": job.id, "source_asset_id": asset.id}
 
+def _validate_split_image_grid(db: Session, workspace_id: str, payload: dict[str, Any], actor: str | None) -> None:
+    from app.db.models import Asset
+    from app.domain.assets.image_grid import ImageGridError, parse_grid
+
+    asset = db.get(Asset, str(payload.get("asset_id") or ""))
+    if asset is None or asset.workspace_id != workspace_id:
+        raise ConfirmationError("confirmErr_assetNotFound")
+    if asset.kind != "image":
+        raise ConfirmationError("confirmErr_gridNeedsImage")
+    try:
+        parse_grid(str(payload.get("grid") or "3x3"))
+    except ImageGridError as exc:
+        raise ConfirmationError(exc.key, **exc.params) from exc
+
+
+def _summarize_split_image_grid(db: Session, payload: dict[str, Any]) -> Summary:
+    from app.domain.assets.image_grid import GRIDS
+
+    rows, cols = GRIDS.get(str(payload.get("grid") or "3x3"), (3, 3))
+    return "confirm_splitImageGrid", {"rows": rows, "cols": cols, "count": rows * cols}
+
+
+def _execute_split_image_grid(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
+    """本机切,一两秒的事,不起后台任务:确认完直接交回切出来的那几张。"""
+    payload = confirmation.payload
+    from app.db.models import Asset
+    from app.domain.assets.image_grid import ImageGridError, split_image_grid
+
+    asset = db.get(Asset, str(payload["asset_id"]))
+    if asset is None or asset.workspace_id != confirmation.workspace_id:
+        raise ConfirmationError("confirmErr_assetNotFound")
+    try:
+        pieces = split_image_grid(db, asset, grid=str(payload.get("grid") or "3x3"), gutter=bool(payload.get("trim_gutter")))
+    except ImageGridError as exc:
+        raise ConfirmationError(exc.key, **exc.params) from exc
+    return {"asset_ids": [piece.id for piece in pieces], "source_asset_id": asset.id}
+
 confirmable_tool(ConfirmableTool(
     name="edit_timeline",
     permission="edit",
@@ -365,3 +402,12 @@ confirmable_tool(ConfirmableTool(
     validate=_validate_convert_video_to_gif,
 ))
 
+
+confirmable_tool(ConfirmableTool(
+    name="split_image_grid",
+    permission="edit",
+    cost="none",
+    summarize=_summarize_split_image_grid,
+    execute=_execute_split_image_grid,
+    validate=_validate_split_image_grid,
+))

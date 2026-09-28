@@ -7,7 +7,7 @@ summaries — never raw internal schemas.
 
 <!-- BEGIN generated: tools -->
 
-共 **98** 个工具,其中 **26** 个走确认卡、**1** 个停下来等用户作答。
+共 **99** 个工具,其中 **27** 个走确认卡、**1** 个停下来等用户作答。
 
 | 工具 | 门控 | 说明 |
 | --- | --- | --- |
@@ -101,6 +101,7 @@ summaries — never raw internal schemas.
 | `search_notes` | 直接执行 | Search workspace notes by title, body and tags, including Chinese. Returns snippets, |
 | `separate_audio` | 确认卡 | Confirmation required: split an audio or video asset into a voice stem and a |
 | `sleep` | 直接执行 | Runs directly: pause for a few seconds before the next step. |
+| `split_image_grid` | 确认卡 | Confirmation required: split an EXISTING grid image (a 3x3 sticker sheet, a 2x2 storyboard) into NEW images. |
 | `transcribe_asset` | 直接执行 | Runs directly: run speech-to-text on an audio/video asset; returns the job. |
 | `translate_text` | 直接执行 | Runs directly: translate text into a target language. |
 | `update_asset` | 直接执行 | Runs directly: rename an asset and/or move it into a project. |

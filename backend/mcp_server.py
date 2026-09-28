@@ -165,6 +165,7 @@ CONFIRMATION_TOOLS = frozenset(
         "edit_timeline",
         "render_sequence",
         "convert_video_to_gif",
+        "split_image_grid",
         "separate_audio",
         "denoise_audio",
         "generate_image",
@@ -644,6 +645,31 @@ def convert_video_to_gif(
                 "start": start,
                 "duration": duration,
             },
+        },
+    )
+    return _confirmation_reply(confirmation)
+
+
+@mcp.tool()
+def split_image_grid(
+    asset_id: str,
+    grid: str = "3x3",
+    trim_gutter: bool = False,
+    workspace_id: str = "",
+) -> dict[str, Any]:
+    """Confirmation required: split an EXISTING grid image (a 3x3 sticker sheet, a 2x2 storyboard) into NEW images.
+
+    grid is `rows x columns`: 2x2, 3x3, 1x2, 2x1, 1x3, 3x1, 2x3, 3x2, 3x4 or 4x3. The image is cut into equal
+    tiles in reading order; each tile becomes a new asset with lineage back to the source, which is never changed.
+    trim_gutter removes a same-coloured border (the white or black lines between tiles), at most 6% per side.
+    """
+    confirmation = _post(
+        "/api/confirmations",
+        {
+            "workspace_id": workspace_id or _default_workspace_id(),
+            "tool": "split_image_grid",
+            "requested_by": _REQUESTED_BY.get(),
+            "payload": {"asset_id": asset_id, "grid": grid, "trim_gutter": trim_gutter},
         },
     )
     return _confirmation_reply(confirmation)

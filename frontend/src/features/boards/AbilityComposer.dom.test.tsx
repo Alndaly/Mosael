@@ -224,6 +224,27 @@ describe("一格的能力的面板", () => {
     await waitFor(() => expect(within(barField("target_lang")!).getByRole("combobox").textContent).toContain("英语"));
   });
 
+  it("有正文的能力:设置全进「参数」,底栏只剩参数和发送;必填空着时参数按钮上有个点", async () => {
+    //: 「让它说话」的「已取得授权 ▾」「Edge 免费语音 ▾」夹在稿子下面、发送键旁边,读起来像状态不像设置(用户截图)。
+    stubApi([{ value: "i1", label: "我的回声" }]);
+    const speak = {
+      ...TOOL,
+      hosts: ["image"],
+      host_fields: { image: "asset_id" },
+      config: {
+        asset_id: { type: "template", required: true, media: "image", label: "图片", board_sources: ["image"] },
+        text: { type: "template", label: "稿子", board_sources: [] },
+        consent: { type: "string", required: true, options: ["yes"], label: "授权", board_sources: [] },
+        engine: { type: "string", options: ["edge", "clone"], label: "引擎", board_sources: [] },
+      },
+    } as unknown as BoardProducerInfo;
+    mount(<Stateful sources={[]} tool={speak} hostField="asset_id" />);
+    await waitFor(() => expect(sendButton()).toBeTruthy());
+    expect(panel().querySelector('textarea[data-field-key="text"]')).toBeTruthy();
+    expect(document.querySelectorAll("[data-board-composer-bar] [data-field-key]")).toHaveLength(0);
+    expect(screen.getByRole("button", { name: "boardGenerationSettings" }).dataset.attention).toBe("true");
+  });
+
   it("有连接时不说「将用你的连接 X」;没有这个插件的连接:说清楚、给去插件页的入口,不让点运行", async () => {
     stubApi([{ value: "i1", label: "我的回声" }]);
     const { unmount } = mount(<Stateful initial={{ config: { text: "hi" } }} sources={[]} />);

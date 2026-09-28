@@ -155,7 +155,11 @@ export function AbilityComposer({
     connections.isSuccess &&
     (connections.data ?? []).length === 1 &&
     (!filled(config[connectionKey]) || config[connectionKey] === connections.data?.[0]?.value);
-  const fields = composerFields({ specs, config, bindings, hostField, fits, hidden: soleConnection ? connectionKey : null });
+  const fields = composerFields({
+    specs, config, bindings, hostField, fits,
+    hidden: soleConnection ? connectionKey : null,
+    quietBarWithBody: Boolean(ability),
+  });
   const soleDefault = (key: string, spec: BoardFieldSpec) =>
     Boolean(spec.sole_option_default) && (fieldOptions.dynamicOptions(key, spec) ?? []).length === 1;
   const missing = missingFields(fields, config, bindings, soleDefault).map(([key, spec]) => fieldLabel(key, spec));

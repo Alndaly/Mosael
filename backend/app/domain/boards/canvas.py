@@ -19,6 +19,7 @@
 from __future__ import annotations
 
 import json
+import math
 import logging
 from collections.abc import Callable
 from typing import Any
@@ -1136,7 +1137,8 @@ def _deliver_if_already_settled(db: Session, board: Board, item: dict[str, Any])
 #: 一次运行的产出是哪几种。和工作流的输出类型词表对得上的那一半(见 boards.tools.board_outputs)。
 #: `note`:一篇笔记的一版(文档格上写字交回的,见 actions._write_note)。
 #: `scene`:一个 3D 场景(「按文字搭 3D 场景」交回的),落成一格 3D 场景格。
-OUTPUT_TYPES = ("asset", "text", "json", "note", "scene")
+#: `layout`:不是一格,是这一轮怎么摆(`columns`:按几列排)—— 宫格切分交回的几张照原来的宫格摆,不竖成一列。
+OUTPUT_TYPES = ("asset", "text", "json", "note", "scene", "layout")
 
 
 def outputs_of(job: Any) -> list[dict[str, Any]]:
@@ -1174,6 +1176,10 @@ MAX_DERIVED_ITEMS = 12
 #: 派生出来的几格离宿主多远、彼此隔多远(画布坐标)。上下留得宽一点:每一格的名字挂在框外正上方。
 _DERIVED_GAP_X = 80.0
 _DERIVED_GAP_Y = 48.0
+#: 排成一片(宫格)时:每一格多宽、左右两格之间多远。上下之间仍是 _DERIVED_GAP_Y —— 每一格头上有一行
+#: 标签(「图片」),行距小了标签就压在上一张图上。
+_GRID_TILE_WIDTH = 200.0
+_GRID_GAP_IN_ROW = 24.0
 
 
 def _derived_item(output: dict[str, Any], assets: dict[str, tuple[str, str]]) -> dict[str, Any] | None:
@@ -1227,6 +1233,19 @@ def _overflow_value(output: dict[str, Any], assets: dict[str, tuple[str, str]]) 
     return output.get("value")
 
 
+def _grid_tile_size(host: dict[str, Any], columns: int, rows: int) -> tuple[float, float]:
+    """宫格切出的每一张在画布上多大:宽定一档,高照「宿主那张图的比例 × 行列」算 —— 九宫格切出的是
+    和原图一样比例的小图的话,每张就是原图宽的 1/列、高的 1/行。
+
+    高度不能用图片格的缺省(那是一张横图的比例):界面拿到图会按真实比例把格子拉高,排好的下一行
+    就被压住了(用户截图:切出的九张挤成一团,标签盖在上一张图上)。宿主没有尺寸就当它是方的。
+    """
+    width = float(host.get("width") or 0)
+    height = float(host.get("height") or 0)
+    ratio = (width / columns) / (height / rows) if width > 0 and height > 0 else 1.0
+    return _GRID_TILE_WIDTH, round(_GRID_TILE_WIDTH / max(ratio, 0.1), 1)
+
+
 def _derive(
     host: dict[str, Any],
     outputs: list[dict[str, Any]],
@@ -1240,6 +1259,9 @@ def _derive(
     **每一轮都是新的一列,不覆盖上一轮。** 摆在宿主右边、再往右避开它连出去的那几格;一列里
     从上往下排。上一轮的产出是用户可能已经拿去用的东西(连到了别处、改过字),重跑把它们换掉的话,
     下游悄悄变了。
+
+    产出里带着 `layout`(节点声明了 `board_columns`,见 boards.tools.board_outputs)时按那么多列排成一片:
+    九宫格切出的九张摆回 3×3,一眼对得上原图里的位置。
     """
     landed = [output for output in outputs if _derived_item(output, assets)]
     made = [one for one in (_derived_item(output, assets) for output in landed) if one]
@@ -1263,22 +1285,29 @@ def _derive(
         + [float(one.get("x") or 0) + float(one.get("width") or DEFAULT_SIZE.get(str(one.get("kind")), (0, 0))[0])
            for one in earlier]
     )
-    x = right + _DERIVED_GAP_X
-    y = float(host.get("y") or 0)
+    left = right + _DERIVED_GAP_X
+    top = float(host.get("y") or 0)
+    layout = next((one for one in outputs if one.get("type") == "layout"), None)
+    columns = max(1, min(len(made), int((layout or {}).get("columns") or 1)))
+    tile = _grid_tile_size(host, columns, math.ceil(len(made) / columns)) if layout else None
     taken = {str(one.get("id")) for one in items}
     new_items: list[dict[str, Any]] = []
     new_edges: list[dict[str, Any]] = []
     suffix = 0
-    for one in made:
+    x, y, row_height = left, top, 0.0
+    for index, one in enumerate(made):
+        if index and index % columns == 0:
+            x, y, row_height = left, y + row_height + _DERIVED_GAP_Y, 0.0
         suffix += 1
         while f"{host_id}-out-{suffix}" in taken:
             suffix += 1
         item_id = f"{host_id}-out-{suffix}"
         taken.add(item_id)
-        width, height = DEFAULT_SIZE[one["kind"]]
+        width, height = tile if tile and one["kind"] == "image" else DEFAULT_SIZE[one["kind"]]
         new_items.append({"id": item_id, **one, "x": x, "y": y, "width": float(width), "height": float(height)})
         new_edges.append({"id": f"{host_id}->{item_id}", "source": host_id, "target": item_id})
-        y += height + _DERIVED_GAP_Y
+        x += width + _GRID_GAP_IN_ROW
+        row_height = max(row_height, float(height))
     return new_items, new_edges
 
 

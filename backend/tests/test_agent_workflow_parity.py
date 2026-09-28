@@ -47,6 +47,7 @@ NODE_TO_TOOL: dict[str, str] = {
     "export_sequence": "render_sequence",
     "document_to_markdown": "read_document",
     "video_to_gif": "convert_video_to_gif",
+    "image_grid_split": "split_image_grid",
     "ai_generate": "generate_image",  # 与 generate_video 同一节点的两种 kind
     "publish": "publish_asset",
     "http_request": "http_request",

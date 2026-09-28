@@ -11,7 +11,10 @@ import { fieldDataType } from "@/features/nodeForms/fieldTypes";
  *    不是一段正文、不是一个参数 —— 它**就是**宿主;
  *  · **上游芯片**:别的能接上游的字段(`board_sources`),有得接或已经接上的,各一组;
  *  · **正文**:第一段自由的字(出图的提示词),没接上游的;
- *  · **底栏芯片**:挑一个的字段(固定选项、现查的清单),必填的在前,至多三枚;
+ *  · **底栏芯片**:挑一个的字段(固定选项、现查的清单),必填的在前,至多三枚。**一格的能力有正文要写时不摆**
+ *    (`quietBarWithBody`):「让它说话」的「已取得授权 ▾」「Edge 免费语音 ▾」夹在稿子下面、发送键旁边,
+ *    读起来像状态不像设置(用户截图),那时全进「参数」。没有正文的能力(宫格切分)设置就是它的全部,
+ *    芯片摆在底栏正合适 —— 铺成两行大下拉反而难看(也是用户截图);
  *  · 其余进「参数」。
  */
 
@@ -80,6 +83,7 @@ export function composerFields({
   hostField,
   fits,
   hidden,
+  quietBarWithBody = false,
 }: {
   specs: Record<string, BoardFieldSpec>;
   config: Record<string, unknown>;
@@ -88,6 +92,8 @@ export function composerFields({
   fits: (key: string) => BoardItem[];
   /** 不摆出来、也不算「还差」的一个字段(只有一个连接时的连接字段:留空就是用它)。 */
   hidden?: string | null;
+  /** 有正文要写时底栏不摆芯片,全进「参数」(一格的能力)。 */
+  quietBarWithBody?: boolean;
 }): ComposerFields {
   const isBound = (key: string) => Boolean(bindings[key]?.length);
   const notHost = ([key]: Field) => key !== hostField && key !== hidden;
@@ -100,7 +106,7 @@ export function composerFields({
   const chips = basic
     .filter(([key, spec]) => picksOne(spec) && !isBound(key) && key !== body?.[0])
     .sort(([, a], [, b]) => Number(Boolean(b.required)) - Number(Boolean(a.required)))
-    .slice(0, BAR_CHIP_LIMIT);
+    .slice(0, quietBarWithBody && body ? 0 : BAR_CHIP_LIMIT);
   const placed = new Set([body?.[0], ...chips.map(([key]) => key)]);
   const rest = active.filter(([key]) => !placed.has(key) && !isBound(key));
   const attention = rest.some(([key, spec]) => spec.required && !filled(config[key]) && !filled(spec.default));

@@ -219,6 +219,25 @@ def asset_update(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[s
     return {"updated": updated, "count": len(updated)}
 
 
+@register("image_grid_split")
+def image_grid_split(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
+    """一张宫格拼图 → 几张单图(见 assets.image_grid)。`asset_id` 是第一张,下游多数节点只接一份。"""
+    from app.domain.assets.image_grid import ImageGridError, parse_grid, split_image_grid
+
+    asset = db.get(Asset, str(config.get("asset_id") or ""))
+    if asset is None or asset.workspace_id != scope.workspace_id:
+        raise WorkflowDomainError("wfErr_gridAssetNotInWorkspace")
+    grid = str(config.get("grid") or "3x3")
+    try:
+        _rows, cols = parse_grid(grid)
+        pieces = split_image_grid(db, asset, grid=grid, gutter=str(config.get("gutter") or "keep") == "trim")
+    except ImageGridError as exc:
+        raise WorkflowDomainError.from_error(exc) from exc
+    ids = [piece.id for piece in pieces]
+    return {"asset_ids": ids, "asset_id": ids[0] if ids else "", "count": len(ids), "columns": cols,
+            "source_asset_id": asset.id}
+
+
 @register("project_create")
 def project_create(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
     name = str(config.get("name") or "").strip()

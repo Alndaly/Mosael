@@ -302,6 +302,10 @@ def board_outputs(meta: dict[str, Any], output: dict[str, Any]) -> list[dict[str
             produced.append({"type": "json", "value": value})
         else:
             produced.extend(_sniff(value))
+    #: 节点点名了「按几列排」的输出(`board_columns`,宫格切分交回的列数):落板时照这个排成一片。
+    columns = output.get(str(meta.get("board_columns") or "")) if meta.get("board_columns") else None
+    if isinstance(columns, (int, float)) and int(columns) > 1 and produced:
+        produced.append({"type": "layout", "columns": int(columns)})
     return produced
 
 

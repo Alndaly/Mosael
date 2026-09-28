@@ -1,4 +1,5 @@
 import {
+  Grid3x3,
   MessageCircle,
   FileText,
   Speech,
@@ -151,6 +152,7 @@ const NODE_ICONS: Record<string, LucideIcon> = {
   dub_subtitles: Mic,
   inspect_sequence: Search,
   video_to_gif: FileVideo,
+  image_grid_split: Grid3x3,
   asset: ImageIcon,
 };
 
