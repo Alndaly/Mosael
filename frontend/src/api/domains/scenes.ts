@@ -1,5 +1,5 @@
 import type { components } from "@/api/generated/schema";
-import { api, API_BASE, getAuthToken } from "@/api/transport";
+import { api, API_BASE, apiBlob, getAuthToken } from "@/api/transport";
 export type Vec3 = [number, number, number];
 
 /** 预览用的物体:后端 `scene_preview` 挑出来的那几个字段,不含造型解释。 */
@@ -87,18 +87,62 @@ export async function uploadSceneModel(ws: string, file: File) {
 }
 export const deleteSceneModel = (ws: string, id: string) =>
   api<void>(`/api/scene-models/${id}?${query(ws)}`, { method: "DELETE" });
-export async function readSceneModel(
-  ws: string,
-  id: string,
-  signal?: AbortSignal,
-) {
-  const res = await fetch(`${API_BASE}/api/scene-models/${id}?${query(ws)}`, {
-    headers: { Authorization: `Bearer ${getAuthToken()}` },
-    signal,
-  });
-  if (!res.ok) throw new Error(`Model load failed (${res.status})`);
-  return res.arrayBuffer();
+export async function readSceneModel(ws: string, id: string, signal?: AbortSignal) {
+  return (await apiBlob(`/api/scene-models/${id}?${query(ws)}`, { signal })).arrayBuffer();
 }
 
 export const deleteScene = (ws: string, id: string) =>
   api<void>(`/api/scenes/${id}?${query(ws)}`, { method: "DELETE" });
+
+// ── 与 Blender 往返 ────────────────────────────────────────────────────────────
+// 后端这几条路由没声明响应模型(生成的 schema 里是 unknown),形状在这里写一次,两个面板共用。
+
+export type BlenderConnections = {
+  local: boolean;
+  connections: { id: string; name: string; enabled: boolean }[];
+};
+/** 一次「发给 Blender」:就绪之后可以接回来,接回来之后 `received_scene_id` 指向落下的那个场景。 */
+export type BlenderTransfer = {
+  id: string;
+  instance_id: string;
+  status: string;
+  source_revision: number;
+  scene_name: string | null;
+  created_at: string;
+  received_scene_id: string | null;
+  warnings: string[] | null;
+  error: string | null;
+};
+type SceneRef = Pick<Scene, "id" | "workspace_id">;
+const blender = (scene: SceneRef) => `/api/scenes/${scene.id}/blender`;
+
+export const listBlenderConnections = () => api<BlenderConnections>("/api/scenes/blender/connections");
+export const checkBlenderConnection = (instanceId: string) =>
+  api<{ name: string }>(`/api/scenes/blender/connections/${instanceId}/check`, { method: "POST" });
+/** 把 Blender 里当前打开的那个场景取回来,存成这个工作区里的一个新场景。 */
+export const pullFromBlender = (ws: string, instanceId: string) =>
+  api<{ scene_id: string; name: string; warnings: string[] }>(
+    `/api/scenes/blender/pull?${query(ws)}&instance_id=${encodeURIComponent(instanceId)}`,
+    { method: "POST" },
+  );
+
+export const listBlenderTransfers = (scene: SceneRef) =>
+  api<BlenderTransfer[]>(`${blender(scene)}?${query(scene.workspace_id)}`);
+/** 发的是**已经落库的**那个修订:GLB 由后端按它生成,不需要有人开着这个页面。 */
+export const sendToBlender = (scene: SceneRef, body: { instance_id: string; revision: number; shot_id: string }) =>
+  api<BlenderTransfer>(blender(scene), {
+    method: "POST",
+    body: JSON.stringify({ workspace_id: scene.workspace_id, ...body }),
+  });
+/** 接回到当前场景上:只把内容交回来,由调用方当成一次普通改动写下去(可撤销)。 */
+export const receiveIntoScene = (scene: SceneRef, transferId: string) =>
+  api<BlenderTransfer & { content: SceneContent }>(
+    `${blender(scene)}/${transferId}/receive?${query(scene.workspace_id)}&into_current=true`,
+    { method: "POST" },
+  );
+/** 接回来另存为一个新场景。 */
+export const receiveAsNewScene = (scene: SceneRef, transferId: string) =>
+  api<BlenderTransfer>(`${blender(scene)}/${transferId}/receive?${query(scene.workspace_id)}`, { method: "POST" });
+/** 这次传输在 Blender 那边的工程文件(.blend)。 */
+export const downloadBlenderProject = (scene: SceneRef, transferId: string) =>
+  apiBlob(`${blender(scene)}/${transferId}/project?${query(scene.workspace_id)}`);

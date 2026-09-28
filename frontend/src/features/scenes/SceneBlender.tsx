@@ -12,11 +12,21 @@ import {
   Plug,
   RefreshCw,
 } from "lucide-react";
-import { api, API_BASE, getAuthToken } from "@/api/transport";
 import { usePreferences } from "@/app/preferences";
 import { docsUrl } from "@/lib/deepLink";
 import { saveBlobToDisk } from "@/lib/download";
-import type { Scene, SceneContent } from "@/api/domains/scenes";
+import {
+  checkBlenderConnection,
+  downloadBlenderProject,
+  listBlenderConnections,
+  listBlenderTransfers,
+  receiveAsNewScene,
+  receiveIntoScene,
+  sendToBlender,
+  type Scene,
+  type SceneContent,
+} from "@/api/domains/scenes";
+import { blenderKeys } from "@/api/queryKeys";
 import { errorText } from "@/api/errorMessage";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/layout/EmptyState";
@@ -27,17 +37,6 @@ import {
 } from "@/components/ui/popover";
 import { Pick } from "./SceneControls";
 
-type Transfer = {
-  id: string;
-  instance_id: string;
-  status: string;
-  source_revision: number;
-  scene_name: string | null;
-  created_at: string;
-  received_scene_id: string | null;
-  warnings: string[] | null;
-  error: string | null;
-};
 export function SceneBlender({
   scene,
   pending,
@@ -64,21 +63,15 @@ export function SceneBlender({
   const [message, setMessage] = React.useState(""),
     [failure, setFailure] = React.useState("");
   const [checked, setChecked] = React.useState(false);
-  const query = `workspace_id=${encodeURIComponent(scene.workspace_id)}`;
-  const base = `/api/scenes/${scene.id}/blender`;
   const connections = useQuery({
-    queryKey: ["blender-connections"],
+    queryKey: blenderKeys.connections(),
     enabled: open,
-    queryFn: () =>
-      api<{
-        local: boolean;
-        connections: { id: string; name: string; enabled: boolean }[];
-      }>("/api/scenes/blender/connections"),
+    queryFn: listBlenderConnections,
   });
   const transfers = useQuery({
-    queryKey: ["blender-transfers", scene.id],
+    queryKey: blenderKeys.transfers(scene.id),
     enabled: open,
-    queryFn: () => api<Transfer[]>(`${base}?${query}`),
+    queryFn: () => listBlenderTransfers(scene),
   });
   const available =
     connections.data?.connections.filter((c) => c.enabled) ?? [];
@@ -216,10 +209,7 @@ export function SceneBlender({
                 disabled={unavailable}
                 onClick={() =>
                   void run(t("sceneBlenderChecking"), async () => {
-                    const result = await api<{ name: string }>(
-                      `/api/scenes/blender/connections/${instance}/check`,
-                      { method: "POST" },
-                    );
+                    const result = await checkBlenderConnection(instance);
                     setChecked(true);
                     setMessage(t("sceneBlenderConnected").replace("{name}", result.name));
                   })
@@ -234,14 +224,10 @@ export function SceneBlender({
               onClick={() =>
                 void run(t("sceneBlenderSending"), async () => {
                   const ready = await prepare();
-                  const result = await api<Transfer>(base, {
-                    method: "POST",
-                    body: JSON.stringify({
-                      workspace_id: scene.workspace_id,
-                      instance_id: instance,
-                      revision: ready.revision,
-                      shot_id: ready.shotId,
-                    }),
+                  const result = await sendToBlender(scene, {
+                    instance_id: instance,
+                    revision: ready.revision,
+                    shot_id: ready.shotId,
                   });
                   setSelectedTransfer(result.id);
                   setMessage(t("sceneBlenderSent").replace("{name}", result.scene_name ?? ""));
@@ -267,10 +253,7 @@ export function SceneBlender({
               disabled={unavailable || !latest}
               onClick={() =>
                 void run(t("sceneBlenderReceive"), async () => {
-                  const result = await api<Transfer & { content: SceneContent }>(
-                    `${base}/${latest!.id}/receive?${query}&into_current=true`,
-                    { method: "POST" },
-                  );
+                  const result = await receiveIntoScene(scene, latest!.id);
                   apply(result.content);
                   setMessage(t("sceneBlenderReceivedCurrent"));
                 })
@@ -315,10 +298,7 @@ export function SceneBlender({
                     disabled={unavailable}
                     onClick={() =>
                       void run(t("sceneBlenderReceiveAsNew"), async () => {
-                        const result = await api<Transfer>(
-                          `${base}/${latest.id}/receive?${query}`,
-                          { method: "POST" },
-                        );
+                        const result = await receiveAsNewScene(scene, latest.id);
                         setMessage(
                           result.received_scene_id
                             ? t("sceneBlenderReceivedNew")
@@ -348,17 +328,7 @@ export function SceneBlender({
                     disabled={busy}
                     onClick={() =>
                       void run(t("sceneBlenderDownloading"), async () => {
-                        const res = await fetch(
-                          `${API_BASE}${base}/${latest.id}/project?${query}`,
-                          {
-                            headers: {
-                              Authorization: `Bearer ${getAuthToken()}`,
-                            },
-                          },
-                        );
-                        if (!res.ok)
-                          throw new Error(t("sceneBlenderDownloadFailed"));
-                        saveBlobToDisk(await res.blob(), `${scene.name}.blend`);
+                        saveBlobToDisk(await downloadBlenderProject(scene, latest.id), `${scene.name}.blend`);
                       })
                     }
                   >

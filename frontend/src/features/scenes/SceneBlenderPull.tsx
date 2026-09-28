@@ -2,7 +2,8 @@ import React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Box, Loader2, MonitorSmartphone, Plug, ArrowUpRight } from "lucide-react";
 import { toast } from "sonner";
-import { api } from "@/api/transport";
+import { listBlenderConnections, pullFromBlender } from "@/api/domains/scenes";
+import { blenderKeys } from "@/api/queryKeys";
 import { errorText } from "@/api/errorMessage";
 import { Button } from "@/components/ui/button";
 import { usePreferences } from "@/app/preferences";
@@ -34,23 +35,16 @@ export function SceneBlenderPull({
   const [open, setOpen] = React.useState(false);
   const [busy, setBusy] = React.useState("");
   const connections = useQuery({
-    queryKey: ["blender-connections"],
+    queryKey: blenderKeys.connections(),
     enabled: open,
-    queryFn: () =>
-      api<{
-        local: boolean;
-        connections: { id: string; name: string; enabled: boolean }[];
-      }>("/api/scenes/blender/connections"),
+    queryFn: listBlenderConnections,
   });
   const available = (connections.data?.connections ?? []).filter((c) => c.enabled);
 
   async function pull(instanceId: string) {
     setBusy(instanceId);
     try {
-      const result = await api<{ scene_id: string; name: string; warnings: string[] }>(
-        `/api/scenes/blender/pull?workspace_id=${encodeURIComponent(workspaceId)}&instance_id=${encodeURIComponent(instanceId)}`,
-        { method: "POST" },
-      );
+      const result = await pullFromBlender(workspaceId, instanceId);
       setOpen(false);
       toast.success(t("sceneBlenderPulled").replace("{name}", result.name));
       // 相机取不回来是常态,不是错 —— 单独说一句,别混在成功提示里一闪而过。

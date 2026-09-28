@@ -16,7 +16,7 @@ export const RATCHET = true;
 
 const SRC = join(import.meta.dirname, "..");
 //: 存量。**只减不增** —— 迁完一块就把这个数字改小。
-const BASELINE = 62;
+const BASELINE = 58;
 
 function sources(dir: string): string[] {
   const out: string[] = [];
@@ -45,5 +45,16 @@ describe("接口接缝", () => {
       `现拼路径最多的几处:${worst.slice(0, 5).map(([f, n]) => `${f}(${n})`).join("、")}。` +
         "新代码请加到 api/domains/*;迁完记得把 BASELINE 改小。",
     ).toBeLessThanOrEqual(BASELINE);
+  });
+
+  // 绕过 transport 直接 fetch 后端,丢的不只是路径:401 不会登出、掉线不会说「连不上」、
+  // 报错体不会被读出来、请求头少了语言和客户端版本。流(SSE)和二进制也各有 transport 的入口
+  // (`apiStream`、`apiBlob`),所以这一条是零,不是存量。
+  it("界面里没有绕过 transport 直连后端的 fetch", () => {
+    const bypass = /\bfetch\(\s*`\$\{API_BASE\}/;
+    const offenders = sources(SRC)
+      .filter((path) => bypass.test(readFileSync(path, "utf8")))
+      .map((path) => path.slice(SRC.length + 1));
+    expect(offenders, "改用 api/domains/* 里的函数(底下是 api / apiBlob / apiStream)").toEqual([]);
   });
 });

@@ -124,3 +124,12 @@ export const noteKeys = {
     (revision === undefined ? (["note-history", noteId] as const) : (["note-history", noteId, revision] as const)),
   sourceMessage: (workspaceId: string, messageId: string) => ["note-source", workspaceId, "message", messageId] as const,
 };
+
+/**
+ * 与 Blender 往返(见 `api/domains/scenes`)。连接清单是用户级的,发送面板和「从 Blender 取回」
+ * 共用一份;传输记录按场景。
+ */
+export const blenderKeys = {
+  connections: () => ["blender-connections"] as const,
+  transfers: (sceneId: string) => ["blender-transfers", sceneId] as const,
+};
