@@ -3,7 +3,7 @@
  *
  * 本地推理服务(Ollama / LM Studio)对词表外字符(常见 emoji)逐字节输出
  * `<0xF0>` 字面 token,UI 于是看到 `<0xF0><0x9F><0x97><0x84>`(🗄 的 UTF-8
- * 四字节)。后端落库前已重组(app/ai/agent/textclean.py);这里是渲染兜底,
+ * 四字节)。后端落库前已重组(backend/app/domain/agent/textclean.py);这里是渲染兜底,
  * 主要覆盖**流式中**的文本(delta 尚未落库)与历史存量消息。
  * 解不出合法 UTF-8 的串原样保留。
  */

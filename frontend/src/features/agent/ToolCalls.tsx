@@ -10,7 +10,7 @@ import { AudioPlayerBar, VideoPlayer } from "@/components/app/media-playback";
 import { HighlightedCode } from "@/features/agent/HighlightedCode";
 import { Marker, MarkerContent, MarkerIcon } from "@/components/ui/marker";
 import { AGENT_ROW_BODY_CLASS, AGENT_ROW_CLASS, AGENT_ROW_ICON_CLASS, AGENT_ROW_TEXT_CLASS, AGENT_TEXT_BLOCK_CLASS } from "@/features/agent/agentRow";
-import { decodeByteFallback } from "@/lib/byteFallback";
+import { decodeByteFallback } from "@/features/agent/byteFallback";
 import { formatElapsedSeconds } from "@/lib/time";
 import { cn } from "@/lib/utils";
 import { ToolResultCard, detectShape, toolResultData } from "./toolResultShapes";
