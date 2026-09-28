@@ -82,7 +82,5 @@ export function useFileDrop(
   };
 }
 
-/** 能进素材库的:视频、图片、音频。别的(比如一份 PDF)直接忽略,不弹错。 */
-export function isMediaFile(file: File): boolean {
-  return /^(video|image|audio)\//.test(file.type);
-}
+/** 媒体 / 文档的判断住在 lib/assetKinds;这里转出去,拖放的调用处照旧从这里取。 */
+export { isImportableFile, isMediaFile } from "@/lib/assetKinds";

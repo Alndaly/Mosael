@@ -3331,6 +3331,33 @@ def _migrate_mov_videos_become_mp4() -> None:
             )
 
 
+def _migrate_documents_are_not_videos() -> None:
+    """此前认不出的文件一律当成视频入库(ADR 0031):按扩展名是文档的,改回 `document`。
+
+    media_info 换成文档那一份(格式、大小 —— 页数、封面等解析时写);当视频探出来的时长、帧率本来就是空的或瞎编的。
+    视频那一侧留下的派生文件(ffmpeg 取不出帧,一般没有)不动 —— 文档不读它们。
+    """
+    from app.media.paths import resolve_key
+    from app.media.probe import DOCUMENT_EXTENSIONS
+
+    inspector = inspect(engine)
+    if "assets" not in set(inspector.get_table_names()):
+        return
+    with engine.connect() as conn:
+        rows = conn.execute(
+            text("SELECT id, original_filename, file_key FROM assets WHERE kind = 'video' AND file_key != ''")
+        ).all()
+    for asset_id, original, file_key in rows:
+        suffix = Path(original or file_key).suffix.lower()
+        if suffix not in DOCUMENT_EXTENSIONS:
+            continue
+        path = resolve_key(file_key)
+        info = {"format": suffix.lstrip("."), **({"size_bytes": path.stat().st_size} if path.is_file() else {})}
+        with engine.begin() as conn:
+            conn.execute(text("UPDATE assets SET kind = 'document', media_info = :info WHERE id = :id"),
+                         {"info": json.dumps(info), "id": asset_id})
+
+
 def _migrate_frame_rate_is_not_a_time_base() -> None:
     """浏览器录的 webm 以毫秒计时,此前探测把 1000/1 当成了帧率(素材详情写着「1000fps」)。
 
@@ -5160,6 +5187,7 @@ def migration_plan() -> MigrationPlan:
                 _migrate_thumbnails_keep_transparency,
                 _migrate_mov_videos_become_mp4,
                 _migrate_frame_rate_is_not_a_time_base,
+                _migrate_documents_are_not_videos,
             ),
             #: 对账:随包解释器换次版本后,旧 venv 跑不起来了。放在搬共用 venv 之后,搬过来的也要过这一道。
             *_recurring(MigrationPhase.FILESYSTEM, _drop_venvs_built_on_another_python),

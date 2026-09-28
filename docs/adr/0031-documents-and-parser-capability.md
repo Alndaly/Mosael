@@ -117,6 +117,8 @@ Accepted — 2026-09-28。维护者拍板:
 ## 分步落地(提议)
 
 1. **文档素材**:`document` 种类、白名单判种类、迁移改回错判的、缩略图 / 页数、素材库筛选、前端上传认这些格式。
+   **已完成**(2026-09-28):扩展名 / 类型认文档;认不出、ffprobe 也探不出画面声音的拒收(415,说清楚能导什么),
+   说了是视频的照收;时间线拒放文档(`insert_clip`);迁移 `migrate-documents-are-not-videos`;缩略图和页数随第三步解析写。
 2. **能力表**:`domain/capabilities`,把 `public_url`、`generation` 搬上去;「设置 → 默认提供方」。
 3. **本地解析 + 派生物**:`asset_extractions`、`document_parse` 任务、markitdown + pypdfium2、页面图。
 4. **智能体读文档**:`read_document`、`view_document_pages`、附件进上下文的规则;工作流节点;画板文档格喂全文;存成笔记。

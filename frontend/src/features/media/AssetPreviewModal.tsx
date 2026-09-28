@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Check, Copy, Maximize2 } from "lucide-react";
+import { Check, Copy, FileText, Maximize2 } from "lucide-react";
 
 import { assetFileUrl, assetPreviewUrl, type Asset } from "@/api/client";
 import { useI18n } from "@/app/preferences";
@@ -10,6 +10,7 @@ import { MediaPreviewPlayer } from "@/components/app/MediaPreviewPlayer";
 import { formatTimecode } from "@/domain/timeline/geometry";
 import { AssetEntitiesList } from "@/features/entities/AssetEntities";
 import { cn } from "@/lib/utils";
+import { assetKindKey } from "@/lib/assetKinds";
 
 /** 后端时间是无时区的 UTC ISO 串;补 Z 再按本地时区显示到分钟。 */
 function formatDateTime(iso: string): string {
@@ -58,7 +59,7 @@ export function AssetPreviewModal({ asset, onClose }: { asset: Asset | null; onC
   // Chromium does not decode HEIC/HEIF. Images must use the backend's browser-compatible
   // representation; video and audio still stream the untouched original file.
   const src = asset.kind === "image" ? assetPreviewUrl(asset.id) : assetFileUrl(asset.id);
-  const kindLabel = asset.kind === "video" ? t("kindVideo") : asset.kind === "audio" ? t("kindAudio") : t("kindImage");
+  const kindLabel = t(assetKindKey(asset.kind));
   const sourceLabel =
     asset.source === "generated" ? t("mediaSourceGenerated") : asset.source === "exported" ? t("mediaSourceExported") : t("mediaSourceImported");
   const tags = asset.tags ?? [];
@@ -90,6 +91,16 @@ export function AssetPreviewModal({ asset, onClose }: { asset: Asset | null; onC
           <div className="relative grid min-h-0 min-w-0 grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)] overflow-hidden bg-workspace-subtle">
             {(asset.kind === "video" || asset.kind === "audio") && (
               <MediaPreviewPlayer key={asset.id} kind={asset.kind} src={src} assetId={asset.id} />
+            )}
+            {asset.kind === "document" && (
+              //: 文档(ADR 0031):解析之后这里读全文;还没解析时如实说是什么文件。
+              <div data-asset-document="" className="grid h-full place-items-center p-6 text-center text-muted-foreground">
+                <span className="grid justify-items-center gap-2">
+                  <FileText size={36} strokeWidth={1.3} />
+                  <span className="text-ui-sm text-foreground">{String((asset.media_info as { format?: string }).format ?? "").toUpperCase()}</span>
+                  <span className="max-w-[28rem] text-ui-xs leading-relaxed">{t("assetDocumentNotParsed")}</span>
+                </span>
+              </div>
             )}
             {asset.kind === "image" && (
               <button
@@ -142,7 +153,7 @@ export function AssetPreviewModal({ asset, onClose }: { asset: Asset | null; onC
                 <InfoRow label={t("assetOriginalName")}>{asset.original_filename}</InfoRow>
               )}
               {/* 这张图是哪些资产的参考图(ADR 0027)。删这份素材时,它们各少一张参考图。 */}
-              {asset.kind !== "audio" && (
+              {(asset.kind === "image" || asset.kind === "video") && (
                 <InfoRow label={t("assetEntitiesTitle")}>
                   <AssetEntitiesList asset={asset} />
                 </InfoRow>

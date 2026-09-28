@@ -64,6 +64,18 @@ describe("AssetPreviewModal", () => {
     });
   });
 
+  it("文档(ADR 0031)不当图片画:说是什么格式、解析之后能做什么;没有「属于哪些资产」", () => {
+    const doc = { ...imageAsset, id: "doc", name: "方案.pptx", original_filename: "方案.pptx", kind: "document",
+                  media_info: { format: "pptx", size_bytes: 2048 } };
+    render(<AssetPreviewModal asset={doc as never} onClose={vi.fn()} />);
+    expect(screen.queryByRole("img")).toBeNull();
+    const body = document.querySelector("[data-asset-document]");
+    expect(body?.textContent).toContain("PPTX");
+    expect(body?.textContent).toContain("assetDocumentNotParsed");
+    expect(screen.queryByText("assetEntitiesTitle")).toBeNull();
+    expect(screen.getByText("kindDocument")).toBeTruthy();
+  });
+
   it("renders audio with the shared custom player instead of native controls", () => {
     render(<AssetPreviewModal asset={audioAsset as never} onClose={vi.fn()} />);
 

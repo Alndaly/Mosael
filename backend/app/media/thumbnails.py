@@ -32,7 +32,8 @@ def write_thumbnail(image: Image.Image, target: Path) -> None:
 
 def generate_thumbnail(source: Path, kind: str, asset_directory: Path) -> Path | None:
     """Best-effort thumbnail extraction; import must never fail because of it."""
-    if kind == "audio":
+    #: 文档的封面是解析时渲的第一页(ADR 0031),不在导入这一步用 ffmpeg 取帧。
+    if kind in ("audio", "document"):
         return None
     target = thumbnail_path(asset_directory)
     if kind == "image":

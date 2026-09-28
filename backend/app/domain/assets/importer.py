@@ -12,10 +12,22 @@ from sqlalchemy.orm import Session
 from app.db.models import Asset, new_id
 from app.domain.assets.project_scope import asset_project
 from app.media.paths import asset_dir, asset_key, resolve_key
-from app.media.probe import guess_kind, probe_media, remux_in_place, repackage_as_mp4
+from app.core.i18n import LocalizedError
+from app.media.probe import declared_video, guess_kind, probe_media, remux_in_place, repackage_as_mp4
 from app.domain.assets.proxies import start_proxy_job
 from app.media.thumbnails import generate_thumbnail, thumbnail_path
 from app.media.waveform import generate_waveform, waveform_path
+
+
+class AssetFileTypeError(LocalizedError, ValueError):
+    """这种文件素材库不收:不是图片、视频、音频,也不是认得的文档。"""
+
+    status = 415
+
+
+def _document_info(path: Path) -> dict:
+    """文档在导入这一步只记格式和大小;页数、字数、封面由解析写(ADR 0031 §2)。"""
+    return {"format": path.suffix.lower().lstrip("."), "size_bytes": path.stat().st_size}
 
 
 def _probe_with_duration_repair(target: Path, kind: str) -> dict:
@@ -165,10 +177,18 @@ def _import_stream(
         shutil.copyfileobj(stream, out)
 
     kind = guess_kind(target, content_type)
-    if kind == "video" and (repackaged := repackage_as_mp4(target)) is not None:
-        # 录屏这类 .mov 在界面里拖进度条会卡住;原样换成 mp4 容器(见 repackage_as_mp4)。
-        target, original = repackaged, repackaged.name
-    media_info = _probe_with_duration_repair(target, kind)
+    if kind == "document":
+        media_info = _document_info(target)
+    else:
+        if kind == "video" and (repackaged := repackage_as_mp4(target)) is not None:
+            # 录屏这类 .mov 在界面里拖进度条会卡住;原样换成 mp4 容器(见 repackage_as_mp4)。
+            target, original = repackaged, repackaged.name
+        media_info = _probe_with_duration_repair(target, kind)
+        #: 不是认得的种类(扩展名、类型都没说是视频),也探不出画面和声音:不收 —— 此前一律兜底成视频。
+        if kind == "video" and not declared_video(target, content_type) and not (
+                media_info.get("duration") or media_info.get("width")):
+            shutil.rmtree(target_dir, ignore_errors=True)
+            raise AssetFileTypeError("assetErr_unsupportedFileType", name=original)
     if generate_thumbnail(target, kind, target_dir) is not None:
         media_info = {**media_info, "has_thumbnail": True}
     if generate_waveform(target, kind, target_dir) is not None:

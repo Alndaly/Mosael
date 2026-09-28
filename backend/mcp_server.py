@@ -367,9 +367,11 @@ def list_assets(workspace_id: str = "", kind: str = "", name_contains: str = "")
     """Read-only: list media assets in a workspace (id, name, kind, source, duration).
 
     Use when you need asset_id values for timeline clips, visual analysis, tagging,
-    or choosing generated/imported media. Filter with kind ("video"/"image"/"audio")
-    and/or name_contains to batch-select. Do NOT use for knowledge-base documents,
-    scripts, notes, or workflow nodes — use list_workflows instead.
+    or choosing generated/imported media. Filter with kind ("video"/"image"/"audio"/
+    "document") and/or name_contains to batch-select. kind "document" is an uploaded
+    file — PDF, Word, PowerPoint, Excel, CSV, Markdown, text, web page, EPUB; it has no
+    picture or sound, so it never goes on a timeline or into generation as a reference.
+    Do NOT use for knowledge-base notes or workflow nodes (read_note / list_workflows).
     Leave workspace_id empty to use the first workspace.
     """
     if not workspace_id:

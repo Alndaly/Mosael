@@ -19,12 +19,13 @@ import { cn } from "@/lib/utils";
 import { saveAssetToDisk } from "@/lib/download";
 import { usePersistentSet, usePersistentTab } from "@/lib/usePersistentTab";
 import { useDraggable } from "@dnd-kit/core";
+import { assetKindKey, isMediaAsset } from "@/lib/assetKinds";
 
 const KIND_FILTERS = ["all", "video", "audio", "image"] as const;
 type KindFilter = (typeof KIND_FILTERS)[number];
 
 export function MediaPool({
-  assets,
+  assets: projectAssets,
   uploading,
   onImportFiles,
   onRecord,
@@ -36,6 +37,8 @@ export function MediaPool({
   onRecord: () => void;
   onAddToTimeline: (asset: Asset) => void;
 }) {
+  //: 剪辑页的素材池只列能放上时间线的:文档(ADR 0031)没有画面和声音,在素材库里看、给智能体读。
+  const assets = React.useMemo(() => projectAssets.filter(isMediaAsset), [projectAssets]);
   const t = useI18n();
   const qc = useQueryClient();
   const [renaming, setRenaming] = React.useState<Asset | null>(null);
@@ -250,7 +253,7 @@ function PoolItem({ asset, onAdd }: { asset: Asset; onAdd: () => void }) {
         {/* 标签和时长同一行,有没有标签行高都一样;挤不下的标签收成「+N」,面板拖到最窄时
             标签先被截掉,不把行撑出面板。 */}
         <span className="flex min-w-0 items-center gap-1.5">
-          <small className="timecode shrink-0">{duration != null ? formatTimecode(duration) : t(asset.kind === "image" ? "kindImage" : asset.kind === "audio" ? "kindAudio" : "kindVideo")}</small>
+          <small className="timecode shrink-0">{duration != null ? formatTimecode(duration) : t(assetKindKey(asset.kind))}</small>
           <TagChips tags={tagsOf(asset)} tone="surface" className="overflow-hidden" />
         </span>
       </div>

@@ -25,18 +25,52 @@ AUDIO_EXTENSIONS = {".m4a", ".mp3", ".wav", ".aac", ".flac", ".ogg", ".opus", ".
 _UNKNOWN_MIMES = {"application/octet-stream", "binary/octet-stream", "application/unknown"}
 
 
-def guess_kind(path: Path, content_type: str | None = None) -> str:
-    if path.suffix.lower() in AUDIO_EXTENSIONS:
-        return "audio"
-    mime = (content_type or "").strip().lower()
+#: 文档(ADR 0031):按扩展名认。Office、PDF、表格、纯文本 / Markdown、网页、电子书。
+DOCUMENT_EXTENSIONS = {
+    ".pdf", ".docx", ".doc", ".pptx", ".ppt", ".xlsx", ".xls", ".csv",
+    ".md", ".markdown", ".txt", ".html", ".htm", ".epub",
+}
+#: 扩展名丢了、客户端报了真类型时也认得出。
+_DOCUMENT_MIMES = {
+    "application/pdf", "application/msword", "application/vnd.ms-powerpoint", "application/vnd.ms-excel",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "text/csv", "text/markdown", "text/plain", "text/html", "application/epub+zip",
+}
+
+
+def _mime(path: Path, content_type: str | None) -> str:
+    mime = (content_type or "").strip().lower().split(";")[0].strip()
     if not mime or mime in _UNKNOWN_MIMES:
         # 客户端没给或说不知道 —— 扩展名这时是唯一的线索,而它多半是对的。
         mime = mimetypes.guess_type(path.name)[0] or ""
+    return mime
+
+
+def guess_kind(path: Path, content_type: str | None = None) -> str:
+    """素材的种类。图片、音频、文档按扩展名 / 类型认;剩下的先当视频 —— **是不是真的视频由导入时的探测定**
+    (declared_video + probe_media,见 assets.importer):一份认不出、也探不出画面和声音的文件不进素材库。
+    此前一律兜底成视频,一份 pptx 进了「视频」、还去起了一个代理转码。"""
+    suffix = path.suffix.lower()
+    if suffix in AUDIO_EXTENSIONS:
+        return "audio"
+    if suffix in DOCUMENT_EXTENSIONS:
+        return "document"
+    mime = _mime(path, content_type)
     if mime.startswith("image/"):
         return "image"
     if mime.startswith("audio/"):
         return "audio"
+    if mime in _DOCUMENT_MIMES:
+        return "document"
     return "video"
+
+
+def declared_video(path: Path, content_type: str | None = None) -> bool:
+    """扩展名或客户端说它是视频。说了的,探测失败也照样收(坏文件由 reconcile_broken_media_info 补);
+    没说的,探不出画面和声音就不收。"""
+    return _mime(path, content_type).startswith("video/")
 
 
 def probe_media(path: Path, *, measure_missing_duration: bool = True) -> dict[str, Any]:

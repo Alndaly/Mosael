@@ -7,6 +7,7 @@ from typing import Any
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
+from app.domain.media_kinds import MEDIA_KINDS
 from app.db.models import Asset, Clip, Sequence, SequenceOperation, SequenceRevision, Track
 from app.domain.sequences.errors import SequenceDomainError
 from app.media.render_plan import TRANSFORM_BOUNDS, TRANSFORM_DEFAULTS
@@ -161,6 +162,9 @@ def insert_clip(db: Session, sequence_id: str, op: InsertClip) -> Clip:
         raise SequenceDomainError("Track not found")
     if asset is None or asset.workspace_id != sequence.workspace_id:
         raise SequenceDomainError("Asset not found")
+    if asset.kind not in MEDIA_KINDS:
+        #: 文档(ADR 0031)没有画面和声音可放 —— 渲染时会炸在 ffmpeg 里,在这里就说清楚。
+        raise SequenceDomainError("seqErr_assetNotMedia", name=asset.name)
     _validate_clip_range(op.timeline_start, op.src_in, op.src_out)
 
     clip = Clip(

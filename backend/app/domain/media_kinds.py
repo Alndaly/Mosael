@@ -10,6 +10,8 @@ from __future__ import annotations
 from typing import Any
 
 MEDIA_KINDS: tuple[str, ...] = ("image", "video", "audio")
+#: 素材库里的全部种类:媒体,加上文档(ADR 0031)。文档没有画面和声音,不进时间线、不当生成的参考。
+ASSET_KINDS: tuple[str, ...] = (*MEDIA_KINDS, "document")
 
 
 def declared_media(value: Any) -> tuple[str, ...]:
@@ -18,4 +20,4 @@ def declared_media(value: Any) -> tuple[str, ...]:
     return tuple(kind for kind in MEDIA_KINDS if kind in values)
 
 
-__all__ = ["MEDIA_KINDS", "declared_media"]
+__all__ = ["ASSET_KINDS", "MEDIA_KINDS", "declared_media"]

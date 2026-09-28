@@ -6,12 +6,13 @@ import { Popover, PopoverContent, PopoverTrigger, PopoverClose } from "@/compone
 import React from "react";
 import { useOpenRequest, useSectionEntry } from "@/lib/deepLink";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, CircleDot, Columns2, Download, FileAudio, FileImage, FileVideo, FolderOpen, ImagePlus, Layers, Link2, ListChecks, AudioWaveform, Loader2, Pencil, Scissors, Tag, Trash2, Upload, X } from "lucide-react";
+import { Check, CircleDot, Columns2, Download, FileAudio, FileImage, FileText, FileVideo, FolderOpen, ImagePlus, Layers, Link2, ListChecks, AudioWaveform, Loader2, Pencil, Scissors, Tag, Trash2, Upload, X } from "lucide-react";
 
 import { api, assetThumbnailUrl, convertVideoToGif, deleteAsset, separateAssetAudio, renameAsset, setAssetTags, type Asset, type Workspace } from "@/api/client";
 import { UrlImportDialog } from "@/features/media/UrlImportDialog";
 import { saveAssetToDisk } from "@/lib/download";
-import { isMediaFile, useFileDrop } from "@/lib/useFileDrop";
+import { isImportableFile, useFileDrop } from "@/lib/useFileDrop";
+import { assetKindKey, IMPORT_ACCEPT, isMediaAsset } from "@/lib/assetKinds";
 import { toast } from "sonner";
 import { useI18n } from "@/app/preferences";
 import { AssetCompareView } from "@/features/media/AssetCompareView";
@@ -37,7 +38,7 @@ import { usePersistentSet, usePersistentTab } from "@/lib/usePersistentTab";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 
-const KIND_FILTERS = ["all", "video", "audio", "image"] as const;
+const KIND_FILTERS = ["all", "video", "audio", "image", "document"] as const;
 type KindFilter = (typeof KIND_FILTERS)[number];
 
 const SORT_KEYS = ["created", "updated", "name", "duration"] as const;
@@ -132,7 +133,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
     onSuccess: () => toast.success(t("separateAudioQueued")),
     onError: (error: Error) => toast.error(error.message),
   });
-  const drop = useFileDrop((files) => importFiles.mutate(files), isMediaFile);
+  const drop = useFileDrop((files) => importFiles.mutate(files), isImportableFile);
   const rename = useMutation({
     mutationFn: ({ id, name }: { id: string; name: string }) => renameAsset(id, name),
     onSuccess: () => {
@@ -243,6 +244,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
     video: t("kindVideo"),
     audio: t("kindAudio"),
     image: t("kindImage"),
+    document: t("kindDocument"),
   };
 
   return (
@@ -277,7 +279,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
               <input
                 ref={importInputRef}
                 type="file"
-                accept="video/*,audio/*,image/*"
+                accept={IMPORT_ACCEPT}
                 multiple
                 className="hidden"
                 disabled={importFiles.isPending}
@@ -426,7 +428,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
                       <PopoverClose asChild><Button variant="ghost" className="justify-start" onClick={() => saveAssetToDisk(asset)}><Download />{t("assetSaveLocal")}</Button></PopoverClose>
                       <PopoverClose asChild><Button variant="ghost" className="justify-start" onClick={() => setRenaming(asset)}><Pencil />{t("rename")}</Button></PopoverClose>
                       <PopoverClose asChild><Button variant="ghost" className="justify-start" onClick={() => setEditingTags(asset)}><Tag />{t("editTags")}</Button></PopoverClose>
-                      {asset.kind !== "audio" && <PopoverClose asChild><Button variant="ghost" className="justify-start" onClick={() => setReferencing(asset)}><Layers />{t("assetSetAsReference")}</Button></PopoverClose>}
+                      {isMediaAsset(asset) && asset.kind !== "audio" && <PopoverClose asChild><Button variant="ghost" className="justify-start" onClick={() => setReferencing(asset)}><Layers />{t("assetSetAsReference")}</Button></PopoverClose>}
                       {asset.kind === "video" && <PopoverClose asChild><Button variant="ghost" className="justify-start" loading={convertGif.isPending} onClick={() => convertGif.mutate(asset.id)}><ImagePlus />{t("assetConvertGif")}</Button></PopoverClose>}
                       {hasSound(asset) && <PopoverClose asChild><Button variant="ghost" className="justify-start" loading={separateAudio.isPending} onClick={() => separateAudio.mutate(asset.id)}><Scissors />{t("separateAudio")}</Button></PopoverClose>}
                       {hasSound(asset) && <PopoverClose asChild><Button variant="ghost" className="justify-start" onClick={() => setDenoising(asset.id)}><AudioWaveform />{t("denoiseAction")}</Button></PopoverClose>}
@@ -445,7 +447,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
                 <ContextMenuItem onSelect={() => setEditingTags(asset)}>
                   <Tag /> {t("editTags")}
                 </ContextMenuItem>
-                {asset.kind !== "audio" && (
+                {isMediaAsset(asset) && asset.kind !== "audio" && (
                   <ContextMenuItem onSelect={() => setReferencing(asset)}>
                     <Layers /> {t("assetSetAsReference")}
                   </ContextMenuItem>
@@ -539,7 +541,8 @@ function AssetTile({ asset, selected = false, list = false }: { asset: Asset; se
   const duration = asset.media_info.duration as number | undefined;
   const width = asset.media_info.width as number | undefined;
   const fps = asset.media_info.fps as number | undefined;
-  const hasThumb = asset.kind !== "audio" && !thumbFailed;
+  //: 文档的封面是解析时渲的第一页(ADR 0031),还没有就画图标。
+  const hasThumb = asset.kind !== "audio" && (asset.kind !== "document" || Boolean(asset.media_info.has_thumbnail)) && !thumbFailed;
   return (
     <article
       className={cn(
@@ -577,11 +580,11 @@ function AssetTile({ asset, selected = false, list = false }: { asset: Asset; se
           {asset.name}
         </strong>
         <div className="flex items-center gap-1.5">
-          <span className="text-ui-xs text-muted-foreground">{t(asset.kind === "image" ? "kindImage" : asset.kind === "audio" ? "kindAudio" : "kindVideo")}</span>
+          <span className="text-ui-xs text-muted-foreground">{t(assetKindKey(asset.kind))}</span>
           <small className="text-ui-xs text-muted-foreground">{asset.source === "generated" ? t("mediaSourceGenerated") : asset.source === "exported" ? t("mediaSourceExported") : t("mediaSourceImported")}</small>
         </div>
         <span className="truncate font-mono text-ui-xs tabular-nums text-muted-foreground">
-          {width ? `${width}×${asset.media_info.height}` : "—"}
+          {asset.kind === "document" ? documentFacts(asset) : width ? `${width}×${asset.media_info.height}` : "—"}
           {asset.kind === "video" && fps ? ` · ${Math.round(Number(fps))}fps` : ""}
           {asset.created_at ? ` · ${formatShortDate(asset.created_at)}` : ""}
         </span>
@@ -629,9 +632,17 @@ function MediaLibrarySkeleton({ list }: { list: boolean }) {
   );
 }
 
+/** 文档那一行:格式、页数(解析过才有)、大小。 */
+function documentFacts(asset: Asset): string {
+  const info = asset.media_info as { format?: string; pages?: number; size_bytes?: number };
+  const size = info.size_bytes ? (info.size_bytes >= 1024 * 1024 ? `${(info.size_bytes / 1024 / 1024).toFixed(1)}MB` : `${Math.max(1, Math.round(info.size_bytes / 1024))}KB`) : "";
+  return [String(info.format ?? "").toUpperCase(), info.pages ? `${info.pages}p` : "", size].filter(Boolean).join(" · ") || "—";
+}
+
 function kindIcon(kind: string) {
   if (kind === "audio") return <FileAudio size={22} />;
   if (kind === "image") return <FileImage size={22} />;
+  if (kind === "document") return <FileText size={22} />;
   return <FileVideo size={22} />;
 }
 

@@ -69,6 +69,7 @@ logger = logging.getLogger(__name__)
 from app.api.deps.auth import get_current_user
 from app.domain.permissions import NotVisible, PermissionDenied
 from app.domain.assets import AssetProjectError
+from app.domain.assets.importer import AssetFileTypeError
 from app.domain.notes import NoteDomainError
 from app.domain.scenes import SceneDomainError
 from app.domain.entities import EntityDomainError
@@ -206,6 +207,11 @@ def _install_permission_handlers(app: FastAPI) -> None:
     async def _asset_project_error(_request: Request, exc: AssetProjectError) -> JSONResponse:
         """素材要挂的项目不在这个工作区。入库有十几个入口(上传、按路径、从链接、插件交回的
         文件……),判断收在 assets/project_scope 一处,翻成 422 也收在这一处。"""
+        return JSONResponse(status_code=exc.status, content={"detail": str(exc)})
+
+    @app.exception_handler(AssetFileTypeError)
+    async def _asset_file_type_error(_request: Request, exc: AssetFileTypeError) -> JSONResponse:
+        """素材库不收这种文件(ADR 0031)。和上面同一个理由:入库的入口很多,判断在 assets/importer 一处,翻成 415 也在这一处。"""
         return JSONResponse(status_code=exc.status, content={"detail": str(exc)})
 
     @app.exception_handler(SceneDomainError)

@@ -59,6 +59,7 @@
   "migrate-connections-get-an-owner": "8afda861625e48f2",
   "migrate-deployment-admin": "81e8028d04c2d247",
   "migrate-deployment-config": "bf223562fa845289",
+  "migrate-documents-are-not-videos": "793ed9ac018dc05a",
   "migrate-drop-deployment-defaults": "c6cb8f8b6a4ab3e9",
   "migrate-drop-local-publish-accounts": "b97ce4a14e2492d1",
   "migrate-drop-the-community-integration": "800cab70903fb3b7",
