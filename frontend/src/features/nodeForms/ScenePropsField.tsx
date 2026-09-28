@@ -15,6 +15,7 @@ import { useQuery } from "@tanstack/react-query";
 import { listSceneModels } from "@/api/domains/scenes";
 import { useI18n } from "@/app/preferences";
 import { Checkbox } from "@/components/ui/checkbox";
+import { formatBytes } from "@/lib/bytes";
 
 /** 逗号分隔的 id 串 ⇄ id 集合。空串就是空集(= 全部)。 */
 export function parseIds(value: string): string[] {
@@ -66,7 +67,7 @@ export function ScenePropsField({
             />
             <span className="min-w-0 truncate">{model.name}</span>
             <span className="ml-auto shrink-0 tabular-nums text-muted-foreground">
-              {(model.size / 1024 / 1024).toFixed(1)} MB
+              {formatBytes(model.size)}
             </span>
           </label>
         ))}

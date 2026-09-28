@@ -13,6 +13,11 @@ describe("formatBytes", () => {
     expect(formatBytes(250_000_000)).toBe("250 MB");
   });
 
+  it("10 MB 以下带一位小数", () => {
+    expect(formatBytes(3_400_000)).toBe("3.4 MB");
+    expect(formatBytes(12_400_000)).toBe("12 MB");
+  });
+
   it("零和负数不崩", () => {
     expect(formatBytes(0)).toBe("0 MB");
     expect(formatBytes(-1)).toBe("0 MB");

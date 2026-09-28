@@ -15,7 +15,7 @@ import { tokenTimelineRange } from "@/domain/timeline/karaoke";
 import { speakerChipStyle, speakerLabel, speakerShort, speakersAreMeaningful } from "@/features/editor/transcriptSpeakers";
 import type { components } from "@/api/generated/schema";
 import { useI18n } from "@/app/preferences";
-import { formatTimecode } from "@/domain/timeline/geometry";
+import { formatTimecode } from "@/lib/time";
 import {
   detectSilences,
   isFillerToken,

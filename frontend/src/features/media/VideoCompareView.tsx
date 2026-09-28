@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 import { listenKeys } from "@/lib/shortcuts";
 import { WINDOW_CHROME_HEIGHT, WINDOW_CHROME_INSET } from "@/lib/windowChrome";
 import { MIN_CELL, useBestFit } from "./AssetCompareView";
-import { formatSeconds } from "./MediaLibraryView";
+import { formatTimecode } from "@/lib/time";
 
 /**
  * 视频对比:几条视频铺在一屏里**一起播**。
@@ -41,7 +41,7 @@ function metaOf(asset: Asset): string {
   const info = (asset.media_info ?? {}) as Record<string, unknown>;
   const size = Number(info.width) > 0 && Number(info.height) > 0 ? `${info.width}×${info.height}` : "";
   const fps = Number(info.fps) > 0 ? `${Math.round(Number(info.fps) * 100) / 100}fps` : "";
-  return [size, fps, formatSeconds(durationOf(asset))].filter(Boolean).join(" · ");
+  return [size, fps, formatTimecode(durationOf(asset))].filter(Boolean).join(" · ");
 }
 
 export function VideoCompareView({ assets, onClose }: { assets: Asset[]; onClose: () => void }) {
@@ -260,7 +260,7 @@ export function VideoCompareView({ assets, onClose }: { assets: Asset[]; onClose
           <StepForward size={13} />
         </Button>
         <span className="timecode min-w-[5.5rem] text-center text-ui-xs tabular-nums text-muted-foreground">
-          {formatSeconds(time)} / {formatSeconds(total)}
+          {formatTimecode(time)} / {formatTimecode(total)}
         </span>
         <input
           type="range"

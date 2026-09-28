@@ -15,6 +15,7 @@ import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { MENU_ITEM, MENU_SEPARATOR } from "@/components/ui/floating";
+import { saveBlobToDisk } from "@/lib/download";
 import { useFileDrop } from "@/lib/useFileDrop";
 import { useResizableSidebar } from "@/lib/useResizableSidebar";
 import { usePersistentTab } from "@/lib/usePersistentTab";
@@ -45,7 +46,7 @@ export function exportMarkdown(note: Pick<Note, "title" | "markdown" | "sources"
   const blob = new Blob([`# ${note.title}\n\n${note.markdown}${sources ? `\n\n---\n\n${sources}\n` : ""}`], { type: "text/markdown;charset=utf-8" });
   // 控制字符是故意的:这是文件名净化,\x00-\x1f 在各家文件系统上都非法,和 <>:"/\\|?* 一起替掉。
   // eslint-disable-next-line no-control-regex
-  const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = `${(note.title || "note").replace(/[<>:"/\\|?*\x00-\x1f]/g, "_").slice(0, 100)}.md`; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+  saveBlobToDisk(blob, `${(note.title || "note").replace(/[<>:"/\\|?*\x00-\x1f]/g, "_").slice(0, 100)}.md`);
 }
 
 export function NotesView({ workspace }: { workspace: Workspace }) {

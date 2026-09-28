@@ -15,6 +15,7 @@ import {
 import { api, API_BASE, getAuthToken } from "@/api/transport";
 import { usePreferences } from "@/app/preferences";
 import { docsUrl } from "@/lib/deepLink";
+import { saveBlobToDisk } from "@/lib/download";
 import type { Scene, SceneContent } from "@/api/domains/scenes";
 import { errorText } from "@/api/errorMessage";
 import { Button } from "@/components/ui/button";
@@ -357,12 +358,7 @@ export function SceneBlender({
                         );
                         if (!res.ok)
                           throw new Error(t("sceneBlenderDownloadFailed"));
-                        const url = URL.createObjectURL(await res.blob()),
-                          a = document.createElement("a");
-                        a.href = url;
-                        a.download = `${scene.name}.blend`;
-                        a.click();
-                        setTimeout(() => URL.revokeObjectURL(url), 1000);
+                        saveBlobToDisk(await res.blob(), `${scene.name}.blend`);
                       })
                     }
                   >

@@ -11,7 +11,6 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import {
   clipEnd,
   formatRulerLabel,
-  formatTimecode,
   pxToTime,
   resolveMove,
   resolveTrim,
@@ -21,6 +20,7 @@ import {
   timeToPx,
   trackEdgeTimes,
 } from "@/domain/timeline/geometry";
+import { formatTimecode } from "@/lib/time";
 import { downsamplePeaks, slicePeaks } from "@/domain/timeline/waveform";
 import { MIN_PX_PER_SECOND, useEditorStore } from "@/features/editor/editorStore";
 import { TimelineClip } from "./TimelineClip";

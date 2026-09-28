@@ -1,4 +1,5 @@
 import type { MessageKey } from "@/app/messages";
+import { formatBytes } from "./bytes";
 
 /**
  * 素材的几种和导入时认哪些文件(ADR 0031)。
@@ -57,8 +58,6 @@ export function assetKindKey(kind: string): MessageKey {
 /** 文档那一行:格式、页数(解析过才有)、大小 —— 素材库的卡片和详情用同一句。 */
 export function documentFacts(asset: { media_info: Record<string, unknown> }): string {
   const info = asset.media_info as { format?: string; pages?: number; size_bytes?: number };
-  const size = info.size_bytes
-    ? info.size_bytes >= 1024 * 1024 ? `${(info.size_bytes / 1024 / 1024).toFixed(1)}MB` : `${Math.max(1, Math.round(info.size_bytes / 1024))}KB`
-    : "";
+  const size = info.size_bytes ? formatBytes(info.size_bytes) : "";
   return [String(info.format ?? "").toUpperCase(), info.pages ? `${info.pages}p` : "", size].filter(Boolean).join(" · ") || "—";
 }

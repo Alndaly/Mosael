@@ -15,7 +15,8 @@ import type { Font } from "@/api/client";
 
 import { translateTexts, type Sequence } from "@/api/client";
 import { useI18n } from "@/app/preferences";
-import { clipEnd, formatTimecode } from "@/domain/timeline/geometry";
+import { clipEnd } from "@/domain/timeline/geometry";
+import { formatTimecode } from "@/lib/time";
 import { PILL } from "@/features/editor/pill";
 import { SaveToNote } from "@/features/notes/SaveToNote";
 import { useNoteStrings } from "@/features/notes/strings";

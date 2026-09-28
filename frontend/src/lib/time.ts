@@ -18,6 +18,22 @@ export function parseServerTime(iso: string): Date {
   return new Date(/Z|[+-]\d\d:?\d\d$/.test(iso) ? iso : `${iso}Z`);
 }
 
+/** 按本地时区取「月-日」短日期。 */
+export function formatShortDate(iso: string): string {
+  const date = parseServerTime(iso);
+  return `${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+/** MM:SS.d — the editor's working precision readout. */
+export function formatTimecode(seconds: number): string {
+  const sign = seconds < 0 ? "-" : "";
+  const abs = Math.abs(seconds);
+  const minutes = Math.floor(abs / 60);
+  const secs = Math.floor(abs % 60);
+  const tenths = Math.floor((abs * 10) % 10);
+  return `${sign}${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")}.${tenths}`;
+}
+
 export function relativeTime(iso: string, locale: string): string {
   const deltaSeconds = Math.round((parseServerTime(iso).getTime() - Date.now()) / 1000);
   const rtf = new Intl.RelativeTimeFormat(locale, { numeric: "auto" });

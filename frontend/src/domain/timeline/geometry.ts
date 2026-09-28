@@ -224,16 +224,6 @@ export function overlapsAny(
 
 /* ---------- Timecode ---------- */
 
-/** MM:SS.d — the editor's working precision readout. */
-export function formatTimecode(seconds: number): string {
-  const sign = seconds < 0 ? "-" : "";
-  const abs = Math.abs(seconds);
-  const minutes = Math.floor(abs / 60);
-  const secs = Math.floor(abs % 60);
-  const tenths = Math.floor((abs * 10) % 10);
-  return `${sign}${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")}.${tenths}`;
-}
-
 /** Compact ruler label: M:SS below an hour, H:MM:SS above. */
 export function formatRulerLabel(seconds: number): string {
   const abs = Math.max(0, Math.round(seconds));

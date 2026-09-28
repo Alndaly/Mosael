@@ -3,6 +3,8 @@ import { usePageTrail } from "@/components/layout/pageTrail";
 import { PageHeading, STUDIO_PAGE } from "@/components/layout/StudioPage";
 import { useI18n } from "@/app/preferences";
 import type { MessageKey } from "@/app/messages";
+import { formatBytes } from "@/lib/bytes";
+import { saveBlobToDisk } from "@/lib/download";
 import { cn } from "@/lib/utils";
 import { listenKeys } from "@/lib/shortcuts";
 import { HANDLE_COLUMN, handleOffset, useResizableSidebar } from "@/lib/useResizableSidebar";
@@ -126,14 +128,6 @@ import { SHOT_FPS } from "./encodeVideo";
 import { SceneViewport, type ViewportHandle } from "./SceneViewport";
 import "./scenes.css";
 
-function download(blob: Blob, name: string) {
-  const url = URL.createObjectURL(blob),
-    a = document.createElement("a");
-  a.href = url;
-  a.download = name;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
 /**
  * 「添加」里能放进场景的东西。**按用途分组**,顺序即呈现顺序(SearchableSelect 不重排)。
  *
@@ -354,7 +348,7 @@ function SceneEditor({
         label: m.name,
         group: t("sceneAddGroupModels"),
         keywords: ["model", "glb", "moxing", m.name],
-        description: `${(m.size / 1024 / 1024).toFixed(1)} MB · ${m.format.toUpperCase()}`,
+        description: `${formatBytes(m.size)} · ${m.format.toUpperCase()}`,
       })),
     ],
     [sceneModels.data, t],
@@ -1045,10 +1039,10 @@ function SceneEditor({
           <SceneExportMenu
             disabled={!!busy}
             onExportGlb={() =>
-              void work(t("sceneBusyExportModel"), async () => download(await view.current!.glb(), `${draft.name}.glb`))
+              void work(t("sceneBusyExportModel"), async () => saveBlobToDisk(await view.current!.glb(), `${draft.name}.glb`))
             }
             onExportJson={() =>
-              download(new Blob([JSON.stringify(draft, null, 2)], { type: "application/json" }), `${draft.name}.json`)
+              saveBlobToDisk(new Blob([JSON.stringify(draft, null, 2)], { type: "application/json" }), `${draft.name}.json`)
             }
           />
         </div>
@@ -1067,7 +1061,7 @@ function SceneEditor({
               size="xs"
               variant="ghost"
               onClick={() =>
-                download(
+                saveBlobToDisk(
                   new Blob([JSON.stringify(draft, null, 2)], {
                     type: "application/json",
                   }),

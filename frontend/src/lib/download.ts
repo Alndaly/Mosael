@@ -15,10 +15,10 @@ export function saveAssetToDisk(asset: Pick<Asset, "id" | "name" | "original_fil
   anchor.remove();
 }
 
-/** 把 JSON 数据落成本地文件(工作流导出等)。走 Blob object URL,同域 download
- *  属性生效,文件名可控;用完即回收 URL。 */
-export function saveJsonToDisk(filename: string, data: unknown): void {
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+/** 把前端手里的一块数据落成本地文件(场景 .glb、笔记 .md、工作流 JSON 等)。走 Blob object
+ *  URL,同域 download 属性生效,文件名可控。URL 晚一拍再回收:点击只是发起下载,有的浏览器
+ *  要在这之后才去读 Blob,当场回收会拿到一个空文件。 */
+export function saveBlobToDisk(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
@@ -27,5 +27,9 @@ export function saveJsonToDisk(filename: string, data: unknown): void {
   document.body.appendChild(anchor);
   anchor.click();
   anchor.remove();
-  URL.revokeObjectURL(url);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+export function saveJsonToDisk(filename: string, data: unknown): void {
+  saveBlobToDisk(new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }), filename);
 }

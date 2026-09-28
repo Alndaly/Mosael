@@ -13,7 +13,7 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { elapsedSecondsBetween, parseServerTime } from "@/lib/time";
+import { elapsedSecondsBetween, formatTimecode, parseServerTime } from "@/lib/time";
 
 const SRC = join(import.meta.dirname, "..");
 const OWNER = join(SRC, "lib", "time.ts");
@@ -39,6 +39,14 @@ describe("parseServerTime", () => {
 
   it("耗时按同一规则算两端", () => {
     expect(elapsedSecondsBetween("2026-09-28T08:00:00", "2026-09-28T08:00:30Z")).toBe(30);
+  });
+});
+
+describe("formatTimecode", () => {
+  it("MM:SS.d", () => {
+    expect(formatTimecode(0)).toBe("00:00.0");
+    expect(formatTimecode(75.26)).toBe("01:15.2");
+    expect(formatTimecode(-1.5)).toBe("-00:01.5");
   });
 });
 

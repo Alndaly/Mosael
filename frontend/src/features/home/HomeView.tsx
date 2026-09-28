@@ -21,8 +21,7 @@ import { useI18n, usePreferences } from "@/app/preferences";
 import { STUDIO_PAGE, CollectionTabs } from "@/components/layout/StudioPage";
 import { HomeHero } from "@/features/home/HomeHero";
 import { poemOfToday, randomPoem, type Poem } from "@/features/home/poems";
-import { relativeTime } from "@/lib/time";
-import { formatSeconds, formatShortDate } from "@/features/media/MediaLibraryView";
+import { formatShortDate, formatTimecode, relativeTime } from "@/lib/time";
 import { Button } from "@/components/ui/button";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { ConfirmDialog, RenameDialog } from "@/components/app/modals";
@@ -352,7 +351,7 @@ function ProjectPresentation({ project, featured = false, className, onOpen, onR
       >
         <button type="button" aria-label={`${selecting ? t("mediaSelectMode") : t("homeOpenEditor")}: ${project.name}`} aria-pressed={selecting ? selected : undefined} className={cn("relative flex cursor-pointer items-center justify-center overflow-hidden rounded-lg border border-divider bg-panel-inset focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", featured ? "aspect-video min-h-32 w-full flex-1 lg:aspect-auto" : "h-20 w-32 shrink-0 max-[640px]:w-20", featured && "transition-shadow", marked && featured && "ring-2 ring-primary")}>
           {cover && !failed ? <img src={assetThumbnailUrl(cover)} alt="" loading="lazy" onError={() => setFailed(true)} className="size-full object-cover transition-transform duration-300 motion-safe:group-hover:scale-[1.025]" /> : <span className="flex flex-col items-center gap-3 text-muted-foreground"><Clapperboard size={featured ? 32 : 24} strokeWidth={1.3} />{featured && <span className="text-ui-xs">{t("homeNoCover")}</span>}</span>}
-          {(project.timeline_duration ?? 0) > 0 && <span className="absolute bottom-2 right-2 rounded bg-black/75 px-1.5 py-0.5 font-mono text-xs text-white">{formatSeconds(project.timeline_duration!)}</span>}
+          {(project.timeline_duration ?? 0) > 0 && <span className="absolute bottom-2 right-2 rounded bg-black/75 px-1.5 py-0.5 font-mono text-xs text-white">{formatTimecode(project.timeline_duration!)}</span>}
           {selecting && <SelectionCheck selected={selected} />}
         </button>
         <div className={cn("flex min-w-0 items-start gap-2", !featured && "flex-1 items-center")}>

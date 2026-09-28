@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { OptionPicker } from "@/components/ui/option-picker";
 import { Switch } from "@/components/ui/switch";
 import { knownBestHeight, qualityHint, qualityOptions } from "@/features/media/urlImportQuality";
-import { formatTimecode } from "@/domain/timeline/geometry";
+import { formatTimecode } from "@/lib/time";
 import { cn } from "@/lib/utils";
 
 /**

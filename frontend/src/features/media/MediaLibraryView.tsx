@@ -37,7 +37,7 @@ import { SelectionCheck } from "@/components/app/SelectionCheck";
 import { useMultiSelect } from "@/lib/useMultiSelect";
 import { usePersistentSet, usePersistentTab } from "@/lib/usePersistentTab";
 import { cn } from "@/lib/utils";
-import { parseServerTime } from "@/lib/time";
+import { formatShortDate, formatTimecode } from "@/lib/time";
 import { Skeleton } from "@/components/ui/skeleton";
 
 const KIND_FILTERS = ["all", "video", "audio", "image", "document"] as const;
@@ -581,7 +581,7 @@ function AssetTile({ asset, selected = false, list = false }: { asset: Asset; se
         {/* 时长角标只对有时基的素材(视频/音频)有意义;图片 duration 恒为 0,别显示 00:00。 */}
         {asset.kind !== "image" && duration != null && (
           <span className="absolute bottom-1.5 right-1.5 rounded-sm bg-[rgba(10,12,15,0.75)] px-[5px] py-px font-mono text-ui-xs tabular-nums text-[#e8eaed]">
-            {formatSeconds(duration)}
+            {formatTimecode(duration)}
           </span>
         )}
         {/* 标签叠在缩略图左下角(而非信息区),这样有无标签的卡片信息区一样高、栅格不错位。 */}
@@ -651,17 +651,3 @@ function kindIcon(kind: string) {
   return <FileVideo size={22} />;
 }
 
-/** 后端时间是 UTC 无时区标记的 ISO 串;补 Z 再按本地时区取短日期。 */
-export function formatShortDate(iso: string): string {
-  const date = parseServerTime(iso);
-  return `${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-}
-
-export function formatSeconds(total: number): string {
-  const sign = total < 0 ? "-" : "";
-  const abs = Math.abs(total);
-  const minutes = Math.floor(abs / 60);
-  const seconds = Math.floor(abs % 60);
-  const tenths = Math.floor((abs * 10) % 10);
-  return `${sign}${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}.${tenths}`;
-}

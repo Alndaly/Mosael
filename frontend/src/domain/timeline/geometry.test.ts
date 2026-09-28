@@ -4,7 +4,6 @@ import {
   clipDuration,
   clipEnd,
   formatRulerLabel,
-  formatTimecode,
   overlapsAny,
   pxToTime,
   resolveMove,
@@ -179,12 +178,6 @@ describe("overlapsAny", () => {
 });
 
 describe("timecode", () => {
-  it("formats working timecode", () => {
-    expect(formatTimecode(0)).toBe("00:00.0");
-    expect(formatTimecode(75.26)).toBe("01:15.2");
-    expect(formatTimecode(-1.5)).toBe("-00:01.5");
-  });
-
   it("formats ruler labels", () => {
     expect(formatRulerLabel(0)).toBe("0:00");
     expect(formatRulerLabel(65)).toBe("1:05");

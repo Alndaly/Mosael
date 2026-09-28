@@ -7,13 +7,12 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { useImagePreview } from "@/components/app/image-preview";
 import { MediaPreviewPlayer } from "@/components/app/MediaPreviewPlayer";
-import { formatTimecode } from "@/domain/timeline/geometry";
 import { AssetEntitiesList } from "@/features/entities/AssetEntities";
 import { cn } from "@/lib/utils";
 import { assetKindKey } from "@/lib/assetKinds";
 import { DocumentReader } from "@/features/media/DocumentReader";
 import { documentFacts } from "@/lib/assetKinds";
-import { parseServerTime } from "@/lib/time";
+import { formatTimecode, parseServerTime } from "@/lib/time";
 
 /** 后端时间是无时区的 UTC ISO 串;补 Z 再按本地时区显示到分钟。 */
 function formatDateTime(iso: string): string {

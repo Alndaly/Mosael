@@ -14,7 +14,7 @@ import { TagChips } from "@/features/media/TagChips";
 import { TAG_MATCHES, tagsOf, matchesTags, tagCounts, type TagMatch } from "@/lib/tags";
 import { useImagePreview } from "@/components/app/image-preview";
 import { Input } from "@/components/ui/input";
-import { formatTimecode } from "@/domain/timeline/geometry";
+import { formatTimecode } from "@/lib/time";
 import { cn } from "@/lib/utils";
 import { saveAssetToDisk } from "@/lib/download";
 import { usePersistentSet, usePersistentTab } from "@/lib/usePersistentTab";
