@@ -715,8 +715,43 @@ export function ConnectionCard({ pkg, instance, workspaceId }: { pkg: PluginPack
         />
       )}
 
+      {(instance.host_tools ?? []).length > 0 && <HostToolList tools={instance.host_tools ?? []} />}
+
       <InvocationList instanceId={instance.id} />
     </SettingsGroup>
+  );
+}
+
+/**
+ * 只给 Mosael 调用的工具(认领了文档解析、生成这类宿主能力)。不能勾选开放 —— 它们说的是宿主那一套协议 ——
+ * 但要列出来:MinerU 只有这样的工具,不列的话插件页上看不出它能做什么、在哪用(用户截图:「为何没有工具列表」)。
+ */
+function HostToolList({ tools }: { tools: NonNullable<PluginInstance["host_tools"]> }) {
+  const t = useI18n();
+  return (
+    <SettingsBlock>
+      <p className="m-0 text-ui-xs text-muted-foreground">{t("pluginHostToolsDesc")}</p>
+      <ul data-plugin-host-tools="" className="m-0 grid list-none gap-2 p-0">
+        {tools.map((tool) => (
+          <li key={tool.name} data-host-tool={tool.name} className="grid gap-1 rounded-lg border border-border px-3 py-2.5">
+            <span className="flex min-w-0 items-baseline gap-2">
+              <span className="text-ui-sm font-medium text-foreground">{tool.label || tool.name}</span>
+              <code className="truncate text-ui-2xs text-muted-foreground">{tool.name}</code>
+            </span>
+            {tool.description && (
+              <span className="text-ui-xs leading-relaxed text-muted-foreground">
+                <InlineMarkdown text={tool.description} />
+              </span>
+            )}
+            {(tool.provides ?? []).map((one) => (
+              <span key={one} className="text-ui-xs leading-relaxed text-foreground">
+                {describeProvides(t, one) ?? one}
+              </span>
+            ))}
+          </li>
+        ))}
+      </ul>
+    </SettingsBlock>
   );
 }
 

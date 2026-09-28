@@ -47,11 +47,13 @@ def extraction_dir(extraction: AssetExtraction) -> Path:
     return asset_dir(extraction.workspace_id, extraction.asset_id) / "extracted" / extraction.id
 
 
-def latest_extraction(db: Session, asset_id: str, *, succeeded: bool = True) -> AssetExtraction | None:
-    """这份文档最新的一次解析(默认只看成功的)。"""
+def latest_extraction(db: Session, asset_id: str, *, succeeded: bool = True, parser: str | None = None) -> AssetExtraction | None:
+    """这份文档最新的一次解析(默认只看成功的;`parser` 只看这一家解析的)。"""
     query = select(AssetExtraction).where(AssetExtraction.asset_id == asset_id)
     if succeeded:
         query = query.where(AssetExtraction.status == "succeeded")
+    if parser:
+        query = query.where(AssetExtraction.parser == parser)
     return db.scalars(query.order_by(AssetExtraction.created_at.desc())).first()
 
 

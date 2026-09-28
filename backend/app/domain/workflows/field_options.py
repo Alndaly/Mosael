@@ -356,6 +356,15 @@ def _talking_models(mode: str) -> Source:
     return list_them
 
 
+def _document_parsers(db: Session, ctx: OptionContext) -> list[Option]:
+    """文档交给谁解析:本地解析,和这个人配好了的插件连接(MinerU……)。缺配置、缺凭据的不列。"""
+    from app.domain import capabilities
+    from app.domain.documents import CAPABILITY
+
+    return [{"value": one.id, "label": one.name}
+            for one in capabilities.providers(db, ctx.user_id, CAPABILITY) if not one.missing]
+
+
 def _automation_chat_models(db: Session, ctx: OptionContext) -> list[Option]:
     """能跑自动化对话的模型,**跨连接直接列模型** —— 和画板「让 AI 写」、设置页默认模型同一份清单
     (provider_models.models_for_capability)。值是 `<连接 id>:<模型>`,一次挑定两样:「先选连接再选模型」逼人先知道
@@ -376,6 +385,7 @@ def split_chat_model(value: str) -> tuple[str, str]:
 
 SOURCES: dict[str, Source] = {
     "automation_chat_models": _automation_chat_models,
+    "document_parsers": _document_parsers,
     "speech_video_models": _talking_models("speech-to-video"),
     "lipsync_models": _talking_models("video-lipsync"),
     "entities": _entities,

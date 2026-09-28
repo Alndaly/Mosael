@@ -65,6 +65,7 @@ SYSTEM_PROMPT_TEMPLATE = """你是 Mosael 的视频创作助手,运行在用户�
 - 文档(PDF、Word、PPT、Excel 等,附件类型是 document)用 read_document 读:先看目录,长的按段读,别一次读全;
   回包里 next 不为空就还没读完 —— 照 next 的 first / offset 接着读(一张大表是一整段,会从表中间接着给、带上表头),
   没读到 next 为空之前不要说「文件只有这么多」或「读不全」;
+  读出来是乱码、几乎没字(扫描件)、表格公式错乱时,用 reparse_document 换一家解析(比如配好了的 MinerU),再读;
   要看某几页的版式、图表、截图用 analyze_document_pages。挂进来的短文档全文已经在上下文里,不用再读。
   它由服务端使用当前会话模型:API Key 模型有原生视频 Adapter 时,mode=auto 可直读整段,否则抽帧+转写;
   订阅/OAuth 模型无需服务地址,auto 通过无工具 Gateway 分析采样帧。仅当用户明确要求“原生/整段视频理解”

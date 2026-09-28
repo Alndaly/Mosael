@@ -46,6 +46,17 @@ class PluginToolStateOut(ApiModel):
     form: dict = Field(default_factory=dict)
 
 
+class PluginHostToolOut(ApiModel):
+    """只给 Mosael 调用的工具(认领了宿主能力:文档解析、生成……)。不进勾选表 —— 勾了也不会给智能体和工作流 ——
+    但插件页要列出来:MinerU 这类插件只有这样的工具,不列的话那一块是空的,看不出它能做什么(用户截图)。"""
+
+    name: str
+    label: str = ""
+    description: str = ""
+    #: 它替宿主做的是哪几件事(`document_parse` / `generation` / `public_url`)—— 界面据此说它用在哪。
+    provides: list[str] = Field(default_factory=list)
+
+
 class PluginCapabilityStatusOut(ApiModel):
     """一项宿主能力上一次对齐的结果。生成能力:刷出了几个模型、什么时候、没刷出来的话为什么。"""
 
@@ -98,6 +109,7 @@ class PluginInstanceOut(ApiModel):
     #: 没声明 oauth 的是空串。只按授权写的那几格**填没填**算,令牌不出后端。
     authorization: Literal["", "unauthorized", "authorized", "rejected"] = ""
     tools: list[PluginToolStateOut] = Field(default_factory=list)
+    host_tools: list[PluginHostToolOut] = Field(default_factory=list)
     #: 它替宿主做的那些事上一次做得怎么样,按能力分(今天只有 generation)。
     capability_status: dict[str, PluginCapabilityStatusOut] = Field(default_factory=dict)
 

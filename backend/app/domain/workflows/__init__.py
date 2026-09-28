@@ -322,6 +322,7 @@ _FIELD_LABELS = {
     "width": "wfField_width",
     "grid": "wfField_grid",
     "gutter": "wfField_gutter",
+    "parser": "wfField_parser",
     "workflow_id": "wfField_workflow_id",
     # 下列主要出现在输出端,也可被同名配置字段复用。
     "applied": "wfField_applied",
@@ -863,6 +864,8 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "config": {
             "asset_id": {"type": "template", "required": True, "media": "document",
                          "description": "wfNode_document_to_markdown_asset_id"},
+            #: 用哪一家的解析(本地 / MinerU 这类插件连接)。空 = 已有的最新一份,没有就本地解析一遍。
+            "parser": {"type": "string", "options_from": "document_parsers", "description": "wfNode_document_to_markdown_parser"},
             "first": {"advanced": True, "type": "number", "label": "wfField_first_section", "description": "wfNode_document_to_markdown_first"},
             "last": {"advanced": True, "type": "number", "label": "wfField_last_section", "description": "wfNode_document_to_markdown_last"},
         },

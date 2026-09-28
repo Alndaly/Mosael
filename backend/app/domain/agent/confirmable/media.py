@@ -8,7 +8,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.core.i18n import fragment
+from app.core.i18n import fragment, tr
 from app.domain.agent.confirmable.registry import ConfirmableTool, Summary, confirmable_tool
 from app.domain.agent.errors import ConfirmationError
 from app.db.models import Sequence
@@ -343,6 +343,55 @@ def _execute_split_image_grid(db: Session, confirmation: Any, actor: str | None)
         raise ConfirmationError(exc.key, **exc.params) from exc
     return {"asset_ids": [piece.id for piece in pieces], "source_asset_id": asset.id}
 
+def _document_parser(db: Session, actor: str | None, name_or_id: str):
+    """智能体说的是解析方式的名字(「MinerU 文档解析」「本地解析」)或 id;认不出就说清楚有哪几家。"""
+    from app.domain import capabilities
+    from app.domain.documents import CAPABILITY
+
+    wanted = name_or_id.strip().lower()
+    ready = [one for one in capabilities.providers(db, actor, CAPABILITY) if not one.missing]
+    found = next((one for one in ready if wanted in (one.id.lower(), one.name.lower())), None) or \
+        next((one for one in ready if wanted and wanted in one.name.lower()), None)
+    if found is None:
+        raise ConfirmationError("confirmErr_unknownParser", parser=name_or_id,
+                                choices=tr("punct_listSep").join(one.name for one in ready))
+    return found
+
+
+def _validate_reparse_document(db: Session, workspace_id: str, payload: dict[str, Any], actor: str | None) -> None:
+    from app.db.models import Asset
+
+    asset = db.get(Asset, str(payload.get("asset_id") or ""))
+    if asset is None or asset.workspace_id != workspace_id:
+        raise ConfirmationError("confirmErr_assetNotFound")
+    if asset.kind != "document":
+        raise ConfirmationError("confirmErr_parseNeedsDocument")
+    _document_parser(db, actor, str(payload.get("parser") or ""))
+
+
+def _summarize_reparse_document(db: Session, payload: dict[str, Any]) -> Summary:
+    #: 选的是插件(MinerU)时文档会离开本机 —— 卡上总说一句,不在这里再去查是哪一种。
+    return "confirm_reparseDocument", {"parser": str(payload.get("parser") or "")}
+
+
+def _execute_reparse_document(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
+    """起一次解析,交回解析任务;读正文用 read_document(它会等一小会儿,云端解析常要几分钟,还在解析就过一会儿再读)。"""
+    payload = confirmation.payload
+    from app.db.models import Asset
+    from app.domain.capabilities import CapabilityUnavailable
+    from app.domain.documents.extraction import start_parse
+    from app.domain.documents.local import DocumentParseError
+
+    asset = db.get(Asset, str(payload["asset_id"]))
+    if asset is None or asset.workspace_id != confirmation.workspace_id:
+        raise ConfirmationError("confirmErr_assetNotFound")
+    provider = _document_parser(db, actor, str(payload.get("parser") or ""))
+    try:
+        extraction = start_parse(db, asset, owner_user_id=actor, provider_id=provider.id, created_by=actor)
+    except (CapabilityUnavailable, DocumentParseError) as exc:
+        raise ConfirmationError(exc.key, **exc.params) from exc
+    return {"asset_id": asset.id, "extraction_id": extraction.id, "job_id": extraction.job_id, "parser": provider.name}
+
 confirmable_tool(ConfirmableTool(
     name="edit_timeline",
     permission="edit",
@@ -410,4 +459,14 @@ confirmable_tool(ConfirmableTool(
     summarize=_summarize_split_image_grid,
     execute=_execute_split_image_grid,
     validate=_validate_split_image_grid,
+))
+
+
+confirmable_tool(ConfirmableTool(
+    name="reparse_document",
+    permission="edit",
+    cost="none",
+    summarize=_summarize_reparse_document,
+    execute=_execute_reparse_document,
+    validate=_validate_reparse_document,
 ))

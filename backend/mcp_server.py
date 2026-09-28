@@ -166,6 +166,7 @@ CONFIRMATION_TOOLS = frozenset(
         "render_sequence",
         "convert_video_to_gif",
         "split_image_grid",
+        "reparse_document",
         "separate_audio",
         "denoise_audio",
         "generate_image",
@@ -1204,6 +1205,29 @@ def read_document(asset_id: str, first: int = 1, last: int = 0, offset: int = 0)
     if offset:
         params["offset"] = offset
     return _get(f"/api/assets/{asset_id}/document", params)
+
+
+@mcp.tool()
+def reparse_document(asset_id: str, parser: str, workspace_id: str = "") -> dict[str, Any]:
+    """Confirmation required: parse a DOCUMENT asset again with a named parser — "本地解析" (local) or a
+    configured plugin such as "MinerU 文档解析" (better for scans, image-only PDFs, multi-column layouts,
+    formulas and complex tables; the document is uploaded to that service).
+
+    `parser` is the parser's name (or id); an unknown name returns the ready ones. This starts a parse job
+    and returns its job_id; then read the result with read_document (cloud parsing can take minutes — if it
+    says it is still parsing, read again later). Use it when read_document's text is garbled, empty or says
+    the PDF is probably scanned.
+    """
+    confirmation = _post(
+        "/api/confirmations",
+        {
+            "workspace_id": workspace_id or _default_workspace_id(),
+            "tool": "reparse_document",
+            "requested_by": _REQUESTED_BY.get(),
+            "payload": {"asset_id": asset_id, "parser": parser},
+        },
+    )
+    return _confirmation_reply(confirmation)
 
 
 @mcp.tool()

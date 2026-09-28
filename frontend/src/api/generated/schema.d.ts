@@ -10113,6 +10113,27 @@ export interface components {
             language: string;
         };
         /**
+         * PluginHostToolOut
+         * @description 只给 Mosael 调用的工具(认领了宿主能力:文档解析、生成……)。不进勾选表 —— 勾了也不会给智能体和工作流 ——
+         *     但插件页要列出来:MinerU 这类插件只有这样的工具,不列的话那一块是空的,看不出它能做什么(用户截图)。
+         */
+        PluginHostToolOut: {
+            /** Name */
+            name: string;
+            /**
+             * Label
+             * @default
+             */
+            label: string;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /** Provides */
+            provides?: string[];
+        };
+        /**
          * PluginInstallPreview
          * @description 装之前先看清楚:它是谁、要什么权限。
          */
@@ -10228,6 +10249,8 @@ export interface components {
             authorization: "" | "unauthorized" | "authorized" | "rejected";
             /** Tools */
             tools?: components["schemas"]["PluginToolStateOut"][];
+            /** Host Tools */
+            host_tools?: components["schemas"]["PluginHostToolOut"][];
             /** Capability Status */
             capability_status?: {
                 [key: string]: components["schemas"]["PluginCapabilityStatusOut"];

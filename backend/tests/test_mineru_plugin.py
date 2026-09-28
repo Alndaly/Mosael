@@ -251,3 +251,38 @@ def test_宿主_点名插件解析_按页切段_表格转成_Markdown_插图搬�
     assert image.status_code == 200 and image.content.startswith(b"\x89PNG")
     #: 读的时候用最新成功的那一份 —— 智能体读到的就是插件解析的。
     assert client.get(f"/api/assets/{made['id']}/document").json()["parser"] == "假解析"
+
+    #: 插件页:只给宿主调的那个工具也列出来(写着它替 Mosael 做什么),不再是一片空白(用户截图)。
+    package = next(one for one in client.get("/api/plugins").json() if one["id"] == FAKE_PARSER["id"])
+    instance = package["instances"][0]
+    assert instance["tools"] == [] and [tool["provides"] for tool in instance["host_tools"]] == [["document_parse"]]
+
+    #: 工作流「文档转 Markdown」能点名用哪一家:选项里有它;点名插件就用插件那一份,点名本地就用本地那一份。
+    options = client.get("/api/workflows/field-options",
+                         params={"workspace_id": ws, "source": "document_parsers"}).json()
+    assert {"builtin:local", plugin["id"]} <= {one["value"] for one in options}
+    from app.domain.workflows.executors import get_executor
+    from tests.test_document_reading import _scope
+
+    run = get_executor("document_to_markdown")
+    with SessionLocal() as db:
+        by_plugin = run(db, _scope(ws), {"asset_id": made["id"], "parser": plugin["id"]})
+        by_local = run(db, _scope(ws), {"asset_id": made["id"], "parser": "builtin:local"})
+    assert "封面" in by_plugin["markdown"] and "封面" not in by_local["markdown"] and "Cover" in by_local["markdown"]
+
+    #: 智能体:reparse_document 按名字认解析方式,认不出说清楚有哪几家;起的是一次解析任务。
+    from types import SimpleNamespace
+
+    from app.domain.agent.confirmable.registry import tool_spec
+    from app.domain.agent.errors import ConfirmationError
+    from app.db.models import User
+
+    spec = tool_spec("reparse_document")
+    with SessionLocal() as db:
+        owner = db.query(User).first().id
+        with pytest.raises(ConfirmationError) as unknown:
+            spec.validate(db, ws, {"asset_id": made["id"], "parser": "不存在的"}, owner)
+        assert unknown.value.key == "confirmErr_unknownParser" and "假解析" in str(unknown.value)
+        spec.validate(db, ws, {"asset_id": made["id"], "parser": "假解析"}, owner)
+        started = spec.execute(db, SimpleNamespace(payload={"asset_id": made["id"], "parser": "假解析"}, workspace_id=ws), owner)
+    assert started["parser"] == "假解析" and settled(started["extraction_id"])["status"] == "succeeded"

@@ -423,14 +423,20 @@ describe("只替宿主做事的插件", () => {
     blocked_reason: "",
     authorization: "",
     tools: [],
+    host_tools: [{ name: "mineru_parse", label: "用 MinerU 解析文档", description: "把一份文档交给 MinerU 解析成 Markdown", provides: ["document_parse"] }],
     capability_status: {},
   } as PluginInstance;
 
-  it("说它替宿主做什么,不摆一张空的工具表", () => {
+  it("说它替宿主做什么,不摆一张空的勾选表;只给 Mosael 调的工具照样列出来、写着在哪用", () => {
     wrap(<ConnectionCard pkg={pkg} instance={instance} workspaceId="w1" />);
     expect(screen.getByText("pluginHostCapabilityDesc")).toBeTruthy();
     expect(screen.queryByText("pluginExposedCount")).toBeNull();
     expect(screen.queryByText("pluginToolsNotFetched")).toBeNull();
+    //: 用户截图:「mineru 这里为何还是没有工具列表」—— 它唯一的工具只给宿主调,此前整块不显示。
+    const row = document.querySelector<HTMLElement>("[data-host-tool='mineru_parse']")!;
+    expect(row).toBeTruthy();
+    expect(row.textContent).toContain("用 MinerU 解析文档");
+    expect(row.textContent).toContain("pluginProvidesDocumentParse");
   });
 });
 

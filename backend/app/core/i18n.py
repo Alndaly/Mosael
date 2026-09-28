@@ -766,8 +766,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Workflow revision not found.",
     },
     "routeErr_judgeHostCodeNeedsAdmin": {
-        "zh": "把「本机执行代码」交给判断者需要这台机器的管理员权限 —— 它和工作流里的代码节点是同一个能力",
-        "en": "Letting the judge approve \"run code on this machine\" requires admin rights on this machine — it's the same capability as the code node in workflows.",
+        "zh": "把「本机执行代码」交给判断者需要这台机器的管理员权限 —— 代码在本机不隔离地跑,承担风险的是这台机器的主人",
+        "en": "Letting the judge approve \"run code on this machine\" requires admin rights on this machine — the code runs unsandboxed here, and the risk falls on the machine's owner.",
     },
     "routeErr_poemUnreachable": {
         "zh": "今日诗词暂时不可达:{detail}",
@@ -893,6 +893,14 @@ MESSAGES: dict[str, dict[str, str]] = {
     "confirmErr_videoNotInWorkspace": {
         "zh": "这个工作区里没有这份视频素材",
         "en": "This workspace has no such video asset.",
+    },
+    "confirmErr_parseNeedsDocument": {
+        "zh": "只有文档素材(PDF、Word、PPT、Excel……)可以解析",
+        "en": "Only document assets (PDF, Word, PowerPoint, Excel…) can be parsed.",
+    },
+    "confirmErr_unknownParser": {
+        "zh": "没有叫「{parser}」的解析方式;配好了的有:{choices}",
+        "en": "There is no parser called “{parser}”; the ready ones are: {choices}",
     },
     "confirmErr_gridNeedsImage": {
         "zh": "只有图片素材可以切宫格",
@@ -1925,6 +1933,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "把视频转成新的 GIF({fps} fps,宽 {width} px{clip}),原视频不变",
         "en": "Convert the video into a new GIF ({fps} fps, {width} px wide{clip}); the video is unchanged",
     },
+    "confirm_reparseDocument": {
+        "zh": "用「{parser}」重新解析这份文档;选的不是本地解析的话,文档会上传到那一家",
+        "en": "Re-parse this document with “{parser}”; unless it is the local parser, the document is uploaded to that service",
+    },
     "confirm_splitImageGrid": {
         "zh": "把这张图按 {rows} 行 {cols} 列切成 {count} 张新图,原图不变",
         "en": "Split this image into {count} new images ({rows} rows × {cols} columns); the original is unchanged",
@@ -2208,6 +2220,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfField_assets": {"zh": "素材列表", "en": "Assets"},
     "wfField_audio_track_id": {"zh": "音频轨道", "en": "Audio track"},
     "wfField_count": {"zh": "数量", "en": "Count"},
+    "wfField_parser": {"zh": "解析方式", "en": "Parser"},
     "wfField_columns": {"zh": "列数", "en": "Columns"},
     "wfField_grid": {"zh": "切法", "en": "Grid"},
     "wfField_gutter": {"zh": "分隔线", "en": "Gutters"},
@@ -2317,6 +2330,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfNode_document_to_markdown": {"zh": "文档转 Markdown", "en": "Document to Markdown"},
     "wfNode_document_to_markdown_desc": {"zh": "把一份 PDF / Word / PPT / Excel 文档转成 Markdown 正文,接写作、翻译、生成。用最新一次解析的结果,还没解析过就先在本机解析。", "en": "Turn a PDF / Word / PowerPoint / Excel document into Markdown text for writing, translating or generating. Uses the latest parse, or parses it locally first."},
     "wfNode_document_to_markdown_asset_id": {"zh": "要读的文档素材", "en": "The document asset to read"},
+    "wfNode_document_to_markdown_parser": {"zh": "用哪一家的解析(本地 / MinerU 这类插件);留空用已有的最新一份,没有就本地解析", "en": "Which parser to use (local / a plugin such as MinerU); empty = the latest existing one, or parse locally if there is none"},
     "wfNode_document_to_markdown_first": {"zh": "从第几段开始(页 / 幻灯片 / 表 / 章,从 1 数);留空从头", "en": "First section to take (page / slide / sheet / chapter, from 1); empty = from the start"},
     "wfNode_document_to_markdown_last": {"zh": "到第几段为止;留空到最后", "en": "Last section to take; empty = to the end"},
     "wfNode_export_sequence": {"zh": "导出时间线", "en": "Export timeline"},

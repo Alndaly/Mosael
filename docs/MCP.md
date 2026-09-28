@@ -7,7 +7,7 @@ summaries — never raw internal schemas.
 
 <!-- BEGIN generated: tools -->
 
-共 **99** 个工具,其中 **27** 个走确认卡、**1** 个停下来等用户作答。
+共 **100** 个工具,其中 **28** 个走确认卡、**1** 个停下来等用户作答。
 
 | 工具 | 门控 | 说明 |
 | --- | --- | --- |
@@ -94,6 +94,7 @@ summaries — never raw internal schemas.
 | `remember` | 直接执行 | Runs directly: save a durable fact or convention to cross-session memory. |
 | `render_scene_references` | 直接执行 | Render blockout references of one shot of a 3D scene and save them as assets: |
 | `render_sequence` | 确认卡 | Confirmation required: export an existing VIDEO TIMELINE sequence to mp4. |
+| `reparse_document` | 确认卡 | Confirmation required: parse a DOCUMENT asset again with a named parser — "本地解析" (local) or a |
 | `run_board_item` | 确认卡 | Run an ABILITY of a content item on a creative board (or its slot generator / 3D render), as if the user pressed it. |
 | `run_code` | 确认卡 | Confirmation required: run a short Python snippet in an ISOLATED sandbox and return `output`. |
 | `run_host_code` | 确认卡 | Confirmation required: run Python directly on the user's computer, NOT isolated. |

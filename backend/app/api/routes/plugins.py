@@ -305,6 +305,7 @@ def _field(spec) -> dict:
 
 def _instance(db: DbSession, instance) -> dict:
     chosen = inst.exposed_tools(db, instance.id)
+    tools = tools_domain.all_tools(db, instance)
     return {
         "id": instance.id,
         "package_id": instance.package_id,
@@ -315,7 +316,9 @@ def _instance(db: DbSession, instance) -> dict:
         "authorization": inst.authorization_state(db, instance),
         # internal 的工具只给宿主适配层用,勾选列表里不出现 —— 勾上也不会暴露,列出来只会让人以为能。
         "tools": [{**tool, "exposed": tool["name"] in chosen, "form": _tool_form(tool)}
-                  for tool in tools_domain.all_tools(db, instance) if not tool["internal"]],
+                  for tool in tools if not tool["internal"]],
+        "host_tools": [{key: tool[key] for key in ("name", "label", "description", "provides")}
+                       for tool in tools if tool["internal"] and tool["provides"]],
         "capability_status": {
             capability: _capability_status(status)
             for capability, status in (instance.capability_status or {}).items()

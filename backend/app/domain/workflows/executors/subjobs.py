@@ -122,22 +122,30 @@ def export_params(config: dict[str, Any]) -> dict[str, Any] | None:
 
 @register("document_to_markdown")
 def document_to_markdown(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
-    """一份文档素材 → 解析出的 Markdown(ADR 0031)。用最新成功的那份解析;还没解析过(或上次失败了)就先用
-    本地解析解一遍、等它做完。`first` / `last` 只取那几段(页 / 幻灯片 / 表 / 章,1 起)。"""
+    """一份文档素材 → 解析出的 Markdown(ADR 0031)。`parser` 点名用哪一家(本地 / MinerU 这类插件连接):
+    有这一家成功的解析就用它,没有就让它解析一遍、等它做完。不点名:用最新成功的那份,还没解析过(或上次
+    失败了)就先用本地解析解一遍。`first` / `last` 只取那几段(页 / 幻灯片 / 表 / 章,1 起)。"""
+    from app.domain.capabilities import CapabilityUnavailable
     from app.domain.documents import LOCAL_PARSER
     from app.domain.documents.extraction import latest_extraction, read_sections, start_parse
+    from app.domain.documents.local import DocumentParseError
 
     asset = _asset_in(db, scope, str(config.get("asset_id") or "").strip())
     if asset.kind != "document":
         raise WorkflowDomainError("wfErr_notDocument", params={"name": asset.name})
-    extraction = latest_extraction(db, asset.id)
+    parser = str(config.get("parser") or "").strip() or None
+    extraction = latest_extraction(db, asset.id, parser=parser)
     if extraction is None:
-        running = latest_extraction(db, asset.id, succeeded=False)
+        running = latest_extraction(db, asset.id, succeeded=False, parser=parser)
         if running is None or running.status not in ("queued", "running"):
-            running = start_parse(db, asset, owner_user_id=None, provider_id=LOCAL_PARSER, created_by=current_actor(db))
+            actor = current_actor(db)
+            try:
+                running = start_parse(db, asset, owner_user_id=actor, provider_id=parser or LOCAL_PARSER, created_by=actor)
+            except (CapabilityUnavailable, DocumentParseError) as exc:
+                raise WorkflowDomainError.from_error(exc) from exc
         asset_id, job_id = asset.id, running.job_id
         wait_for_job(job_id or "", release=db)
-        extraction = latest_extraction(db, asset_id)
+        extraction = latest_extraction(db, asset_id, parser=parser)
         if extraction is None:
             raise WorkflowDomainError("wfErr_documentNotParsed", params={"name": asset.name})
     total = extraction.sections
