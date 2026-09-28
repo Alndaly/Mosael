@@ -1958,7 +1958,7 @@ export interface paths {
         put?: never;
         /**
          * Translate Texts
-         * @description Translate a batch of strings (Google free or an AI provider). Empty strings pass through.
+         * @description 翻一批文字,用哪一家见 domain/translate(能力表)。空串原样回。
          */
         post: operations["translate_texts_api_translate_post"];
         delete?: never;
@@ -12778,7 +12778,7 @@ export interface components {
             target_lang: string;
             /**
              * Engine
-             * @default google
+             * @default
              */
             engine: string;
             /** Profile Id */

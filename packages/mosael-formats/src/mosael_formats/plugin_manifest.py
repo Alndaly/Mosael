@@ -70,7 +70,12 @@ AUDIO_SEPARATION = "audio_separation"
 #: `transcription`:把一段语音转成带时间的逐字稿(ADR 0032 第三步)。认领的工具收一份 16k 单声道 wav,交回分段
 #: (起止时间、文字,可带说话人和词级时间);宿主负责抽音轨、落成逐字稿、听写时拼成一句话。
 TRANSCRIPTION = "transcription"
-HOST_ONLY_CAPABILITIES = frozenset({GENERATION, TOOLS, DOCUMENT_PARSE, AUDIO_DENOISE, AUDIO_SEPARATION, TRANSCRIPTION})
+#: `translation`:把一批文字译成目标语言(ADR 0032 第三步)。认领的工具收一批句子、交回同样条数的译文;字幕轨的
+#: 分批、边翻边写回、记账都是宿主的事。
+TRANSLATION = "translation"
+HOST_ONLY_CAPABILITIES = frozenset(
+    {GENERATION, TOOLS, DOCUMENT_PARSE, AUDIO_DENOISE, AUDIO_SEPARATION, TRANSCRIPTION, TRANSLATION}
+)
 
 
 def text_of(value: Any, locale: str | None = None, *, author_locale: str = "") -> str:
@@ -658,6 +663,7 @@ __all__ = [
     "HOST_ONLY_CAPABILITIES",
     "KEY_RE",
     "TRANSCRIPTION",
+    "TRANSLATION",
     "MANIFEST_FILENAME",
     "Manifest",
     "ManifestError",

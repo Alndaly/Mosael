@@ -17,7 +17,8 @@ class TranslateRequest(ApiModel):
     #: 那是唯一出口),所以这里不必为了迁就轨道长度把它调大:每一批都在这个数以内。
     texts: list[str] = Field(min_length=1, max_length=500)
     target_lang: str
-    engine: str = Field(default="google", pattern="^(google|ai)$")
+    #: 翻译提供方 id(`builtin:google`、`builtin:chat`、插件连接 id);空 = 按这个人的默认(ADR 0032)。
+    engine: str = ""
     profile_id: str | None = None
 
 

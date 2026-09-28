@@ -237,7 +237,7 @@ class Test官方工作流:
             if edge.get("kind") == "data" and edge["target"] == "translate_lines"
         } == {("verbatim_transcript", "segments", "texts")}
         #: 官方模板不把成败押在免费端点上 —— 这条链路本来就在用用户自己的供应商。
-        assert nodes["translate_lines"]["config"]["engine"] == "ai"
+        assert nodes["translate_lines"]["config"]["engine"] == "builtin:chat"
 
     def test_新节点都归了类(self) -> None:
         """EXTERNAL/INTERNAL 合起来必须覆盖全部节点 —— 漏掉的那个恰恰是没人想过后果的那个。"""

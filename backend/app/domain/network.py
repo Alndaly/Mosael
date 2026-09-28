@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import os
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.db.models import NetworkConfig
@@ -55,10 +56,17 @@ def get_config(db: Session) -> NetworkConfig:
     if row is None:
         # 默认绕过列表在这里给,不放在列默认值上:那会让 db.models 反向 import 领域层,
         # 形成 models ⇄ domain.network 的循环(分层测试会拦住)。
-        row = NetworkConfig(id="default", no_proxy=",".join(DEFAULT_BYPASS_HOSTS))
-        db.add(row)
+        #
+        # **建行会和别的线程撞上**:几个插件调用同时起跑,各自读到「还没有」、各自去建,后到的那个撞唯一约束
+        # (CI 上 test_同时在跑的插件调用不超过名额 反复红在这里)。建行放进保存点,撞上了只回滚这一小步 ——
+        # 说明别人已经建好了,再读一次就是它。
+        try:
+            with db.begin_nested():
+                db.add(NetworkConfig(id="default", no_proxy=",".join(DEFAULT_BYPASS_HOSTS)))
+        except IntegrityError:
+            pass
         db.commit()
-        db.refresh(row)
+        row = db.get(NetworkConfig, "default", populate_existing=True)
     return row
 
 

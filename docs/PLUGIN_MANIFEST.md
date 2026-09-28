@@ -965,6 +965,7 @@ Amazon S3 / S3 兼容服务是**一个插件的五个选项**(枚举配置 `STOR
 | `audio_denoise` | ffmpeg 频谱降噪、DeepFilterNet、RNNoise | 第一个不会去掉配乐、跑得起来的本机引擎 | 是 |
 | `audio_separation` | Demucs | 本机引擎 | 是 |
 | `transcription` | FunASR、WhisperX | 第一个装好了运行环境的本机引擎 —— 声音交给云端必须是用户自己定过的 | 是 |
+| `translation` | Google 免费翻译、对话模型 | Google 免费翻译(对话模型要花钱,点名或定成默认才用) | 是 |
 | `generation` | —— | 每个连接都是一家供应商(见下一节) | 是 |
 | `tools` | —— | 每个连接报自己的工具 | 是 |
 
@@ -1000,6 +1001,15 @@ Amazon S3 / S3 兼容服务是**一个插件的五个选项**(枚举配置 `STOR
   "words": [{"start": 0.0, "end": 0.3, "word": "……"}]}]}` —— `start` / `end` 是秒,`speaker`、`words` 可以不给
   (给了剪辑页才有说话人筛选和逐词高亮);`segments` 不是列表、某段缺 `start` / `end` / `text`,整次判失败;
 - 进度、取消:同上。
+
+#### `translation` —— 把一批文字译成目标语言
+
+字幕轨的分批、边翻边写回、双语排版、记账都是宿主的事。认领的工具是**普通工具**(不必 `stream`),一次收一批:
+
+- 入:`{"texts": ["……", "……"], "target": "en", "source": "auto"}` —— `target` 用 `en`、`zh-CN`、`zh-TW`、`ja`、`ko`、
+  `fr`、`de`、`es`、`ru` 这类代码;空串宿主自己留位,不会发给你;
+- 出:`{"texts": ["……", "……"]}` —— **条数和顺序都要和收到的一样**,第 i 条译文就是第 i 句的;对不上整批作废,
+  宿主不把错位的译文写进字幕轨。
 
 ## 替宿主做生成
 

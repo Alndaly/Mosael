@@ -13,6 +13,7 @@ import { AlertTriangle, FileText, Loader2, NotebookPen, RefreshCw, Square } from
 import { toast } from "sonner";
 
 import { listCapabilityChoices } from "@/api/domains/capabilities";
+import { capabilityKeys } from "@/api/queryKeys";
 import { cancelJob } from "@/api/domains/jobs";
 import { extractionFileUrl, extractionSections, listExtractions, parseDocument, type AssetExtraction } from "@/api/domains/documents";
 import { errorText } from "@/api/errorMessage";
@@ -205,7 +206,7 @@ function ParsedBody({ assetId, extraction, failed }: { assetId: string; extracti
 /** 「重新解析」:本地解析 + 配好了的插件,和「设置 → 能力提供方」同一张表。 */
 function ReparseMenu({ disabled, onPick }: { disabled: boolean; onPick: (providerId: string | null) => void }) {
   const t = useI18n();
-  const choices = useQuery({ queryKey: ["capability-providers"], queryFn: listCapabilityChoices });
+  const choices = useQuery({ queryKey: capabilityKeys.choices(), queryFn: listCapabilityChoices });
   const options = (choices.data ?? []).find((one) => one.capability === "document_parse")?.options ?? [];
   const ready = options.filter((option) => (option.missing ?? []).length === 0);
   return (

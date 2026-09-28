@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "Translated dubbing with lip-sync",
   "description": "Everything in translated dubbing, then re-sync the speaker's lips to the translated dub: cut the source into chunks the model accepts at the gaps between lines, lip-sync the chunks with speech, and lay the joined result over the source (the source is untouched — delete that track to undo). The export carries an \"AI-generated\" label. Confirm the speaker's consent on the lip-sync step before running.",
-  "graph_hash": "d0487ab6a49f7b5a73cbbc4e81b4b1f0c3106f300800d002cfa0f55ad1bbd9cf",
+  "graph_hash": "66d9f7b731c99faecd6252ebfd43caa0f80a2102b082732c91f00ac46fbf1c4d",
   "graph": {
     "meta": {
       "template_id": "translated_dub_lipsync",
@@ -104,7 +104,7 @@
         "config": {
           "texts": "",
           "target_lang": "en",
-          "engine": "ai"
+          "engine": "builtin:chat"
         },
         "inputs": [
           "texts"

@@ -1021,7 +1021,7 @@ def translated_dub_graph(*, voice_id: str = "", lipsync: bool = False) -> dict[s
                 # (机房、VPN、代理出口尤其容易中)。一条官方模板不能把成败押在这上面。
                 # 这条链路本来就在用用户自己的供应商(转写、配音都是),翻译用同一套不是新的
                 # 花费面;而且 LLM 读的是整句,译文比逐词接口好。节点上仍然可以换回 google。
-                "engine": "ai",
+                "engine": "builtin:chat",
             },
         },
         {

@@ -2,9 +2,9 @@
  * 字幕翻译的引擎选择必须真的传到后端。
  *
  * 这条拦的是本项目反复出现的一种形状:**能力在下层做好了,入口却没接上**。
- * `translateTexts` 的 `engine` 参数有默认值 `"google"`,domain/translate.py 两条路(google / ai)
- * 也早就都在 —— 于是「不接」看起来一切正常:代码能编译、翻译能出结果,只是永远走免费那条,
- * 用户配好的模型一次都不会被调用,而且没有任何报错提示这件事。
+ * `translateTexts` 的 `engine` 参数有默认值(空 = 按默认),后端能力表里 Google、对话模型、翻译插件
+ * 也都在 —— 于是「不接」看起来一切正常:代码能编译、翻译能出结果,只是永远走默认那一家,
+ * 用户点的那一家一次都不会被调用,而且没有任何报错提示这件事。
  *
  * 所以断言的是「调用点带上了 engine」,不是「组件里有个下拉」:有下拉但没传参,正是要拦的那种。
  */
@@ -32,9 +32,11 @@ describe("字幕翻译引擎", () => {
     expect(call![1]).toContain("engine");
   });
 
-  it("两条引擎都能选到", () => {
+  it("能选的那几家照能力表列,不写死 google / ai(ADR 0032:插件也能插进来)", () => {
     const body = code(PANEL);
-    expect(body).toContain('value="google"');
-    expect(body).toContain('value="ai"');
+    expect(body).toContain("listCapabilityChoices");
+    expect(body).toContain('"translation"');
+    expect(body).not.toContain('value="google"');
+    expect(body).not.toContain('value="ai"');
   });
 });

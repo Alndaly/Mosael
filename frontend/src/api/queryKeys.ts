@@ -78,6 +78,14 @@ export const providerKeys = {
 };
 
 /**
+ * 宿主能力由谁提供(见 `api/domains/capabilities`):「设置 → 能力提供方」、文档的「重新解析」、字幕的「翻译」
+ * 读的是同一份候选,设置里改了默认,那几处的菜单跟着变。
+ */
+export const capabilityKeys = {
+  choices: () => ["capability-providers"] as const,
+};
+
+/**
  * 确认卡(见 `api/domains/confirmations`)。取数按状态、按会话细分;批准 / 拒绝之后失效用
  * `.all(ws)` —— 待批的那几份和「自动放行留痕」那一栏都在它下面。
  */

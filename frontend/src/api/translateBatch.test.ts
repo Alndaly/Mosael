@@ -62,11 +62,11 @@ describe("翻译分批", () => {
     fetchMock.mockImplementation(async (_url: string, init: RequestInit) =>
       reply({ translations: (JSON.parse(String(init.body)).texts as string[]).map(() => "") }),
     );
-    await translateTexts("w1", Array.from({ length: 900 }, (_, i) => `c${i}`), "ja", "ai");
+    await translateTexts("w1", Array.from({ length: 900 }, (_, i) => `c${i}`), "ja", "builtin:chat");
     expect(fetchMock.mock.calls.length).toBeGreaterThan(1);
     for (const body of bodiesSentTo(fetchMock)) {
       expect(body.target_lang).toBe("ja");
-      expect(body.engine).toBe("ai");
+      expect(body.engine).toBe("builtin:chat");
       expect(body.workspace_id).toBe("w1");
     }
   });
@@ -82,7 +82,7 @@ describe("边翻边落地", () => {
 
     const texts = Array.from({ length: 900 }, (_, i) => `cue-${i}`);
     const handed: Array<{ offset: number; first: string; count: number }> = [];
-    await translateTexts("w1", texts, "en", "google", async (batch, offset) => {
+    await translateTexts("w1", texts, "en", "builtin:google", async (batch, offset) => {
       handed.push({ offset, first: batch[0], count: batch.length });
     });
 
@@ -104,7 +104,7 @@ describe("边翻边落地", () => {
     const texts = Array.from({ length: 900 }, (_, i) => `cue-${i}`);
     let calls = 0;
     await expect(
-      translateTexts("w1", texts, "en", "google", async () => {
+      translateTexts("w1", texts, "en", "builtin:google", async () => {
         calls += 1;
         if (calls === 1) throw new Error("轨道写入失败");
       }),

@@ -65,7 +65,7 @@ def test_ai_concurrency_is_bounded(monkeypatch) -> None:
     monkeypatch.setattr(tr, "resolve_ai_chat_target", lambda *args, **kwargs: SimpleNamespace(execution_surface="direct"))
     monkeypatch.setattr(tr, "ai_translate_with", fake_ai)
     monkeypatch.setattr(tr, "billable", lambda *args, **kwargs: Billing())
-    tr.translate_many(None, [f"c{i}" for i in range(64)], "en", user_id=None, engine="ai")
+    tr.translate_many(None, [f"c{i}" for i in range(64)], "en", user_id=None, engine="builtin:chat")
     assert 1 < peak <= tr._MAX_PARALLEL
 
 
@@ -129,7 +129,7 @@ def test_ai_provider_is_read_once_before_the_pool_starts() -> None:
             return None
 
     with pytest.raises(tr.TranslateError):  # no enabled provider
-        tr.translate_many(FakeSession(), ["a", "b", "c"], "en", user_id=None, engine="ai")
+        tr.translate_many(FakeSession(), ["a", "b", "c"], "en", user_id=None, engine="builtin:chat")
     assert reads, "provider was never resolved"
     assert all(name == threading.current_thread().name for name in reads), (
         "the DB was read from a worker thread"

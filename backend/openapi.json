@@ -5038,7 +5038,7 @@
           "translate"
         ],
         "summary": "Translate Texts",
-        "description": "Translate a batch of strings (Google free or an AI provider). Empty strings pass through.",
+        "description": "翻一批文字,用哪一家见 domain/translate(能力表)。空串原样回。",
         "operationId": "translate_texts_api_translate_post",
         "requestBody": {
           "content": {
@@ -33499,9 +33499,8 @@
           },
           "engine": {
             "type": "string",
-            "pattern": "^(google|ai)$",
             "title": "Engine",
-            "default": "google"
+            "default": ""
           },
           "profile_id": {
             "anyOf": [

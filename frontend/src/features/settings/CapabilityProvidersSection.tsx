@@ -11,6 +11,7 @@ import React from "react";
 import { CircleDashed } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import { capabilityKeys } from "@/api/queryKeys";
 import { listCapabilityChoices, setCapabilityDefault, type CapabilityChoices as Choices } from "@/api/domains/capabilities";
 import type { MessageKey } from "@/app/messages";
 import { useI18n } from "@/app/preferences";
@@ -27,7 +28,7 @@ import {
 import { Button } from "@/components/ui/button";
 
 const UNSET = "__unset__";
-const KEY = ["capability-providers"] as const;
+const KEY = capabilityKeys.choices();
 
 /** 一家都没有时怎么说:素材外链要去建一个对象存储连接;别的能力说句通用的。 */
 const NONE_HINT: Record<string, MessageKey> = { public_url: "assetLinkNone" };

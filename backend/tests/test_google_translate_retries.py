@@ -147,7 +147,7 @@ def test_批量节点收段落也收字符串__顺序就是对齐(monkeypatch) -
         {
             "texts": [{"start": 0, "end": 1, "text": "第一句"}, {"text": ""}, {"text": "第三句"}],
             "target_lang": "en",
-            "engine": "google",
+            "engine": "builtin:google",
         },
     )
 
@@ -209,7 +209,7 @@ def test_模板不再逐句发请求() -> None:
     #: **官方模板不走免费端点。** 它按出口 IP 封,而且往往不会自己好(真机上直接请求拿到的是
     #: Google 的 "Sorry..." 拦截页,重试多少次都一样)。一条官方模板不能把成败押在这上面;
     #: 而这条链路本来就在用用户自己的供应商(转写、配音都是),翻译用同一套不是新的花费面。
-    assert step["config"]["engine"] == "ai", step["config"]
+    assert step["config"]["engine"] == "builtin:chat", step["config"]
 
 
 def test_目标语言和音色留在能选它们的那个控件上() -> None:
@@ -270,13 +270,14 @@ def test_翻译用哪个模型是能配的() -> None:
 
     for node_type in ("translate", "translate_lines"):
         config = NODE_TYPES[node_type]["config"]
-        assert config["engine"]["default"] == "google"
+        #: 翻译提供方来自能力表(ADR 0032),不写死 google / ai;不点名按运行者的默认。
+        assert config["engine"]["options_from"] == "providers.translation" and "default" not in config["engine"]
         assert "model" in config, node_type
         #: 换连接就换了一整套模型 id,旧的那个在新连接下不存在 —— 声明出来界面才会跟着变。
         assert config["model"]["depends_on"] == "profile_id"
-        assert not config["profile_id"].get("advanced"), "选了 ai 之后它立刻要紧,不该收在高级里"
-        assert config["profile_id"]["active_when"] == {"engine": "ai"}
-        assert config["model"]["active_when"] == {"engine": "ai"}
+        assert not config["profile_id"].get("advanced"), "选了对话模型之后它立刻要紧,不该收在高级里"
+        assert config["profile_id"]["active_when"] == {"engine": "builtin:chat"}
+        assert config["model"]["active_when"] == {"engine": "builtin:chat"}
 
 
 def test_模型一路传到调用目标(monkeypatch) -> None:

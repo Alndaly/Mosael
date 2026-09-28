@@ -13,7 +13,7 @@ router = APIRouter(tags=["translate"])
 
 @router.post("/translate", response_model=TranslateResponse)
 def translate_texts(body: TranslateRequest, db: DbSession, user: CurrentUser) -> dict:
-    """Translate a batch of strings (Google free or an AI provider). Empty strings pass through."""
+    """翻一批文字,用哪一家见 domain/translate(能力表)。空串原样回。"""
     # ensure_workspace_member 而不是 ensure_workspace_access:翻译不改这个工作区的任何数据,
     # 查看者也该能用。过闸门的同时把工作区绑进上下文,AI 翻译的用量据此归属。
     ensure_workspace_member(db, user, body.workspace_id)

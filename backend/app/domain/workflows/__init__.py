@@ -1082,11 +1082,12 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
                 "required": True,
                 "options": ["en", "zh-CN", "zh-TW", "ja", "ko", "fr", "de", "es", "ru"],
             },
-            "engine": {"type": "string", "description": "wfNode_translate_engine", "options": ["google", "ai"], "default": "google"},
-            "profile_id": {"type": "string", "description": "wfNode_translate_profile_id", "depends_on": "engine", "options_from": "chat_connections", "active_when": {"engine": "ai"}},
+            #: 翻译提供方(ADR 0032):Google 免费、对话模型、插件连接并列;空 = 按运行者的默认。
+            "engine": {"type": "string", "description": "wfNode_translate_engine", "options_from": "providers.translation"},
+            "profile_id": {"type": "string", "description": "wfNode_translate_profile_id", "depends_on": "engine", "options_from": "chat_connections", "active_when": {"engine": "builtin:chat"}},
             # 一条连接上常常挂着好几个模型 —— 「用哪条连接」和「用哪个模型」是两个问题。
             # 留空按这条连接的 chat 能力解析(和 llm 节点同一条路)。
-            "model": {"type": "string", "description": "wfNode_translate_model", "depends_on": "profile_id", "options_from": "chat_models", "allow_custom": True, "active_when": {"engine": "ai"}},
+            "model": {"type": "string", "description": "wfNode_translate_model", "depends_on": "profile_id", "options_from": "chat_models", "allow_custom": True, "active_when": {"engine": "builtin:chat"}},
         },
         "outputs": ["text"],
     },
@@ -1105,13 +1106,14 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
                 "required": True,
                 "options": ["en", "zh-CN", "zh-TW", "ja", "ko", "fr", "de", "es", "ru"],
             },
-            "engine": {"type": "string", "description": "wfNode_translate_engine", "options": ["google", "ai"], "default": "google"},
+            #: 翻译提供方(ADR 0032):Google 免费、对话模型、插件连接并列;空 = 按运行者的默认。
+            "engine": {"type": "string", "description": "wfNode_translate_engine", "options_from": "providers.translation"},
             # 选了 ai 之后「用哪条连接」立刻变成要紧事,所以它不在高级里。
             # depends_on:换引擎就换了这一格的意义(google 下它没用),声明出来界面才会跟着变。
-            "profile_id": {"type": "string", "description": "wfNode_translate_profile_id", "depends_on": "engine", "options_from": "chat_connections", "active_when": {"engine": "ai"}},
+            "profile_id": {"type": "string", "description": "wfNode_translate_profile_id", "depends_on": "engine", "options_from": "chat_connections", "active_when": {"engine": "builtin:chat"}},
             # 一条连接上常常挂着好几个模型 —— 「用哪条连接」和「用哪个模型」是两个问题。
             # 留空按这条连接的 chat 能力解析(和 llm 节点同一条路)。
-            "model": {"type": "string", "description": "wfNode_translate_model", "depends_on": "profile_id", "options_from": "chat_models", "allow_custom": True, "active_when": {"engine": "ai"}},
+            "model": {"type": "string", "description": "wfNode_translate_model", "depends_on": "profile_id", "options_from": "chat_models", "allow_custom": True, "active_when": {"engine": "builtin:chat"}},
         },
         "outputs": ["texts", "count"],
         "output_types": {"texts": "json", "count": "number"},

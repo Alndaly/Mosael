@@ -684,7 +684,7 @@ def test_delay_node_clamps(monkeypatch) -> None:
 def test_translate_node_google(monkeypatch) -> None:
     from app.domain.workflows.executors import ai as ai_nodes
 
-    monkeypatch.setattr("app.domain.translate.google_translate", lambda text, target, source="auto": f"[{target}]{text}")
+    monkeypatch.setattr("app.domain.translate.google_translate", lambda text, target, source="auto", client=None: f"[{target}]{text}")
     assert ai_nodes.translate(None, None, {"text": "hi", "target_lang": "zh-CN"}) == {"text": "[zh-CN]hi"}
     assert ai_nodes.translate(None, None, {"text": "  ", "target_lang": "en"}) == {"text": ""}  # empty short-circuit
 
@@ -2020,7 +2020,7 @@ def test_翻译节点也能用订阅授权的连接(monkeypatch) -> None:
         workflow = Workflow(workspace_id=workspace_id, name="W", graph={"nodes": [], "edges": []})
         db.add(workflow)
         db.flush()
-        config = {"target_lang": "zh-CN", "engine": "ai", "profile_id": profile.id}
+        config = {"target_lang": "zh-CN", "engine": "builtin:chat", "profile_id": profile.id}
         with acting_as(db):
             single = ai_nodes.translate(db, workflow, {**config, "text": "hello"})
             batch = ai_nodes.translate_lines(db, workflow, {**config, "texts": ["hello", "world"]})

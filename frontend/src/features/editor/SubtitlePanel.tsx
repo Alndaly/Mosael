@@ -1,5 +1,5 @@
 import React from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { AudioLines, Bold, ChevronDown, ChevronRight, Languages, Loader2, Plus, Sparkles, Trash2, Type, Upload } from "lucide-react";
 import { toast } from "sonner";
 
@@ -14,6 +14,8 @@ import { uploadedFontStack } from "@/features/editor/FontFaces";
 import type { Font } from "@/api/client";
 
 import { translateTexts, type Sequence } from "@/api/client";
+import { listCapabilityChoices } from "@/api/domains/capabilities";
+import { capabilityKeys } from "@/api/queryKeys";
 import { useI18n } from "@/app/preferences";
 import { clipEnd } from "@/domain/timeline/geometry";
 import { formatTimecode } from "@/lib/time";
@@ -23,6 +25,9 @@ import { useNoteStrings } from "@/features/notes/strings";
 import { noteExportVariants, type NoteExportLine } from "@/features/editor/noteExport";
 import { useEditorStore } from "@/features/editor/editorStore";
 import { cn } from "@/lib/utils";
+
+//: 下拉里「按默认」那一项的值(OptionPicker 不收空串当值)。发给接口时是空串。
+const DEFAULT_ENGINE = "__default__";
 
 
 /**
@@ -242,10 +247,13 @@ function SubtitleTranslate({
   const [open, setOpen] = React.useState(false);
   const [lang, setLang] = React.useState<string>("en");
   const [bilingual, setBilingual] = React.useState(false);
-  // 翻译引擎。后端两条路早就都在(domain/translate 的 google / ai),缺的只是界面上的这个选择 ——
-  // 于是字幕永远走免费的 Google:它快、不要密钥,但整句直译、不看上下文,人名和口语常年翻车。
-  // 走 LLM 则用当前工作区配好的模型,能顺着上下文润色。默认仍是 google:它不花钱也不要配置。
-  const [engine, setEngine] = React.useState<"google" | "ai">("google");
+  // 用哪一家翻:照能力表列(ADR 0032)—— Google 免费、对话模型、装了的翻译插件并列,空 = 按「设置 → 能力提供方」
+  // 里的默认(没定就是 Google:它不花钱也不要配置)。此前这里写死 google / ai 两项,插件插不进来。
+  const [engine, setEngine] = React.useState("");
+  const providers = useQuery({ queryKey: capabilityKeys.choices(), queryFn: listCapabilityChoices, enabled: open });
+  const translation = (providers.data ?? []).find((one) => one.capability === "translation");
+  const readyProviders = (translation?.options ?? []).filter((option) => (option.missing ?? []).length === 0);
+  const defaultName = (translation?.options ?? []).find((option) => option.id === (translation?.current ?? translation?.automatic))?.name;
   const selectedClipIds = useEditorStore((state) => state.selectedClipIds);
   // Only cues that are actually selected count — selecting a video clip should not silently
   // narrow a translation down to nothing.
@@ -340,15 +348,17 @@ function SubtitleTranslate({
         </label>
         <label className="grid gap-1 [&>span]:text-xs [&>span]:font-semibold [&>span]:text-foreground">
           <span>{t("subtitleTranslateEngine")}</span>
-          <Select value={engine} onValueChange={(next) => setEngine(next as "google" | "ai")}>
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="google">{t("subtitleTranslateEngineGoogle")}</SelectItem>
-              <SelectItem value="ai">{t("subtitleTranslateEngineAi")}</SelectItem>
-            </SelectContent>
-          </Select>
+          <OptionPicker
+            value={engine || DEFAULT_ENGINE}
+            onChange={(next) => setEngine(next === DEFAULT_ENGINE ? "" : next)}
+            options={[
+              {
+                value: DEFAULT_ENGINE,
+                label: defaultName ? t("subtitleTranslateEngineDefaultNamed").replace("{name}", defaultName) : t("subtitleTranslateEngineDefault"),
+              },
+              ...readyProviders.map((option) => ({ value: option.id, label: option.name })),
+            ]}
+          />
         </label>
         {selectedSubtitles.length > 0 && (
           <label className="flex items-center justify-between gap-2 text-xs text-muted-foreground">

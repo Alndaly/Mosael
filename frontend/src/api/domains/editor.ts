@@ -228,7 +228,8 @@ export async function translateTexts(
   workspaceId: string,
   texts: string[],
   targetLang: string,
-  engine: "google" | "ai" = "google",
+  /** 翻译提供方 id(`builtin:google`、`builtin:chat`、插件连接 id);空 = 按这个人的默认(ADR 0032)。 */
+  engine = "",
   /** Awaited after every batch so callers can persist incremental progress atomically. */
   onBatch?: (translations: string[], offset: number) => void | Promise<void>,
 ): Promise<{ translations: string[] }> {

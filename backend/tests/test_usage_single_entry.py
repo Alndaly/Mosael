@@ -87,7 +87,7 @@ def test_翻译走的是记账链路而不是又一份实现(monkeypatch) -> Non
 
     res = client.post(
         "/api/translate",
-        json={"workspace_id": ws["id"], "texts": ["hello", "world"], "target_lang": "zh", "engine": "ai"},
+        json={"workspace_id": ws["id"], "texts": ["hello", "world"], "target_lang": "zh", "engine": "builtin:chat"},
     )
     assert res.status_code == 200, res.text
 
@@ -132,7 +132,7 @@ def test_工作流的单句翻译节点也记账(monkeypatch) -> None:
         db.add(workflow)
         db.commit()
         with acting_as(db):
-            out = ai_executors.translate(db, workflow, {"text": "hello", "target_lang": "zh-CN", "engine": "ai"})
+            out = ai_executors.translate(db, workflow, {"text": "hello", "target_lang": "zh-CN", "engine": "builtin:chat"})
         db.commit()
     assert out == {"text": "你好"}
 
