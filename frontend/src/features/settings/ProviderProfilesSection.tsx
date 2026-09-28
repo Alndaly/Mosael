@@ -49,6 +49,8 @@ const VENDOR_DOCS: Record<string, string> = {
   "openai-tts": "https://platform.openai.com/api-keys",
   google: "https://aistudio.google.com/app/apikey",
   kuaishou: "https://klingai.com/",
+  heygen: "https://app.heygen.com/developers",
+  hedra: "https://www.hedra.com/develop/api-keys",
   "volcano-podcast": "https://console.volcengine.com/speech/service",
   volcano: "https://console.volcengine.com/speech/service",
 };

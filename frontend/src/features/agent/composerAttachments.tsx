@@ -4,6 +4,7 @@ import { FileText, Music } from "lucide-react";
 import { assetFileUrl, assetThumbnailUrl, importAsset, type Asset } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { useImagePreview, type ImagePreviewItem } from "@/components/app/image-preview";
+import { useAssetPreviewModal } from "@/features/media/AssetPreviewModalById";
 import type { ComposerChip } from "@/lib/composerChip";
 import { toast } from "sonner";
 
@@ -54,6 +55,8 @@ export interface ComposerAttachments {
   clear: () => void;
   /** 交给 ComposerChips 显示的一排小条 —— 和笔记引用拼在同一排里。 */
   chips: ComposerChip[];
+  /** 点开音频、文档附件时的素材详情弹窗。调用方把它挂进树里(和输入框同一层)。 */
+  previewModal: React.ReactNode;
 }
 
 export function useComposerAttachments(workspaceId: string): ComposerAttachments {
@@ -120,6 +123,7 @@ export function useComposerAttachments(workspaceId: string): ComposerAttachments
   const removeFile = React.useCallback((index: number) => setFiles((c) => c.filter((_, i) => i !== index)), []);
 
   const { openImagePreview } = useImagePreview();
+  const { openAsset, modal: assetModal } = useAssetPreviewModal();
   const chips = React.useMemo<ComposerChip[]>(() => {
     // 图和视频一起进画廊:点开任意一张都能左右翻,不必关掉再点下一张。
     const gallery: ImagePreviewItem[] = media
@@ -132,9 +136,10 @@ export function useComposerAttachments(workspaceId: string): ComposerAttachments
         // 音频没有画面,给个音符;文档给个文件图标(封面要等解析完);图和视频都有缩略图(视频那张是封面帧)。
         thumbnail: asset.kind === "audio" || asset.kind === "document" ? undefined : assetThumbnailUrl(asset.id),
         icon: asset.kind === "document" ? <FileText size={11} /> : <Music size={11} />,
+        //: 音频、文档没有灯箱可放:点开是素材详情(文档是三栏阅读),不是点了没反应。
         onOpen:
           asset.kind === "audio" || asset.kind === "document"
-            ? undefined
+            ? () => openAsset(asset.id)
             : () =>
                 openImagePreview({
                   src: assetFileUrl(asset.id),
@@ -153,7 +158,7 @@ export function useComposerAttachments(workspaceId: string): ComposerAttachments
         onRemove: () => removeFile(index),
       })),
     ];
-  }, [media, files, openImagePreview, removeMedia, removeFile]);
+  }, [media, files, openImagePreview, openAsset, removeMedia, removeFile]);
 
   return {
     media,
@@ -165,6 +170,7 @@ export function useComposerAttachments(workspaceId: string): ComposerAttachments
     removeMedia,
     removeFile,
     chips,
+    previewModal: assetModal,
     clear: React.useCallback(() => {
       setMedia([]);
       setFiles([]);

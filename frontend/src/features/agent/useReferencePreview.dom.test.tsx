@@ -14,12 +14,16 @@ const openImagePreview = vi.fn();
 vi.mock("@/components/app/image-preview", () => ({ useImagePreview: () => ({ openImagePreview }) }));
 const toastError = vi.fn();
 vi.mock("sonner", () => ({ toast: { error: (...args: unknown[]) => toastError(...args) } }));
+const openAsset = vi.fn();
+vi.mock("@/features/media/AssetPreviewModalById", () => ({
+  useAssetPreviewModal: () => ({ openAsset, modal: null }),
+}));
 
 import { useReferencePreview } from "./useReferencePreview";
 import type { AgentReference } from "./references";
 
 function Probe({ reference }: { reference: AgentReference }) {
-  const open = useReferencePreview();
+  const { open } = useReferencePreview();
   return <button type="button" onClick={() => void open(reference)}>go</button>;
 }
 const click = async (reference: AgentReference) => {
@@ -31,6 +35,7 @@ const click = async (reference: AgentReference) => {
 beforeEach(() => {
   apiCall.mockReset();
   openImagePreview.mockReset();
+  openAsset.mockReset();
   toastError.mockReset();
   window.location.hash = "";
 });
@@ -84,12 +89,18 @@ describe("点开引用", () => {
     expect(openImagePreview).toHaveBeenCalledWith(expect.objectContaining({ src: "/file/a1", video: false }));
   });
 
-  it("没有画面的素材去素材库里定位 —— 总比点了没反应强", async () => {
-    // 此前音频/文档是 `if (kind !== image && !== video) return;`:点了什么都不发生。
-    apiCall.mockResolvedValue({ id: "a2", name: "旁白", kind: "audio" });
-    await click({ kind: "asset", id: "a2", name: "旁白" });
+  it("没有画面的素材(音频、文档)就地打开素材详情 —— 不把人从对话里带走", async () => {
+    // 更早是 `if (kind !== image && !== video) return;`:点了什么都不发生;后来改成跳去素材库,
+    // 人正在对话里却被整页带走。文档的详情就是三栏阅读,就地弹出来。
+    for (const kind of ["audio", "document"]) {
+      openAsset.mockReset();
+      apiCall.mockResolvedValue({ id: "a2", name: "协议.pdf", kind });
+      const view = await click({ kind: "asset", id: "a2", name: "协议.pdf" });
+      expect(openAsset).toHaveBeenCalledWith("a2");
+      view.unmount();
+    }
     expect(openImagePreview).not.toHaveBeenCalled();
-    expect(window.location.hash).toContain("asset=a2");
+    expect(window.location.hash).toBe("");
   });
 
   it("只在点的时候问一次 —— 渲染时一次都不问", async () => {

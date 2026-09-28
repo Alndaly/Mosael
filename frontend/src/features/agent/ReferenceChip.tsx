@@ -20,13 +20,14 @@ export const REFERENCE_NODE = "agentRef";
 
 /** 编辑器里的那颗胶囊。点它 = 点开看看(和气泡里一样)。 */
 function EditorChip({ node }: { node: { attrs: Record<string, unknown> } }) {
-  const open = useReferencePreview();
+  const { open, modal } = useReferencePreview();
   const kind = String(node.attrs.kind) as ReferenceKind;
   const id = String(node.attrs.refId);
   const name = String(node.attrs.name ?? "");
   return (
     <NodeViewWrapper as="span" data-agent-ref="">
       <ReferenceBadge kind={kind} id={id} name={name} onOpen={() => void open({ kind, id, name })} />
+      {modal}
     </NodeViewWrapper>
   );
 }

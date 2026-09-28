@@ -114,4 +114,14 @@ def fetch_bytes(
     raise RuntimeError(f"Too many redirects while downloading media: {url}")
 
 
-__all__ = ["DownloadedBytes", "download_to_path", "fetch_bytes", "trusted_headers_for_url"]
+def put_to_presigned_url(url: str, data: bytes, headers: dict[str, str] | None = None, *, timeout: float = 600) -> None:
+    """把字节 PUT 到供应商发的预签名上传地址(HeyGen 的直传)。
+
+    **不带任何凭据**:地址本身就是授权,供应商的 Key 不该跟着去对象存储那边;对面要求的头(`upload_headers`)
+    原样带上 —— 签名里签过它们,少一个就 403。
+    """
+    with RetryingClient(timeout=timeout, follow_redirects=False) as client:
+        client.put(url, content=data, headers=dict(headers or {})).raise_for_status()
+
+
+__all__ = ["DownloadedBytes", "download_to_path", "fetch_bytes", "put_to_presigned_url", "trusted_headers_for_url"]

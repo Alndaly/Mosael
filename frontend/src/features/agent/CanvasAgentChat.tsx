@@ -559,6 +559,7 @@ export function CanvasAgentChat({
         {/* 内层去底色/边框/焦点环:外层输入卡已是表面,双层盒子叠着难看(对话页同款处理)。 */}
         {/* 附件和笔记引用是同一件事:这条消息里带了什么。一排,在输入卡里。 */}
         <ComposerChips chips={[...attach.chips, ...noteAttach.chips]} uploading={attach.uploading} />
+        {attach.previewModal}
         {noteAttach.dialog}
         {/* `@` 唤起素材 / 笔记 / 画板 / 工作流的引用。引用是原子节点,不是一段可以被删掉半个的字。 */}
         <ChatComposer

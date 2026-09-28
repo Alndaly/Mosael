@@ -115,7 +115,24 @@ SYSTEM_PROMPT_TEMPLATE = """你是 Mosael 的视频创作助手,运行在用户�
 不要读写本机文件系统,不要执行 shell 命令;只使用 mosael 工具与对话。"""
 
 
-_ATTACHED_ASSET = re.compile(r"\[附件 asset_id=(\S+) 名称=.*? 类型=([a-z]+)\]")
+#: 用户消息里的附件标记(与前端 userMessage.ATTACHMENT_TOKEN 同一协议):id、名称、类型。名称可以含空格,
+#: 所以非贪婪匹配到「 类型=」。
+_ATTACHED_ASSET = re.compile(r"\[附件 asset_id=(\S+) 名称=(.*?) 类型=([a-z]+)\]")
+#: 文本附件内联成的那段:`[标签 文件名]` 一行,接着一个围栏块(前端 composerAttachments.textAttachmentBlock)。
+_TEXT_ATTACHMENT = re.compile(r"\[[^\]\n]+\]\n```.*?(```|$)", re.S)
+SESSION_TITLE_CHARS = 60
+
+
+def session_title(content: str) -> str:
+    """新会话的标题取用户敲的那句话。
+
+    附件标记和文本附件的围栏块是发送时拼上去的,不是人说的话 —— 此前标题直接截正文前 60 个字,
+    挂了一份 PDF 的会话就叫「分析一下这个协议 [附件 asset_id=3884… 名称=YS」。只发了附件没写字的,
+    用第一份附件的名字。
+    """
+    names = [name.strip() for _id, name, _kind in _ATTACHED_ASSET.findall(content) if name.strip()]
+    said = " ".join(_TEXT_ATTACHMENT.sub(" ", _ATTACHED_ASSET.sub(" ", content)).split())
+    return (said or (names[0] if names else content.strip()))[:SESSION_TITLE_CHARS]
 
 
 MAX_AGENT_IMAGES = 4
@@ -132,7 +149,7 @@ def _attached_images(db: Session, workspace_id: str, prompt: str) -> list[dict[s
     out: list[dict[str, str]] = []
     used = 0
     seen: set[str] = set()
-    for asset_id, kind in _ATTACHED_ASSET.findall(prompt):
+    for asset_id, _name, kind in _ATTACHED_ASSET.findall(prompt):
         if len(out) >= MAX_AGENT_IMAGES:
             break
         if kind != "image" or asset_id in seen:
@@ -246,7 +263,7 @@ def user_prompt(
         content, references_context(payload.get("references"), db=db, workspace_id=workspace_id)
     )
     #: 挂进来的文档(ADR 0031):短的整篇、长的目录,正文让模型用 read_document 自己取。
-    documents = list(dict.fromkeys(asset_id for asset_id, kind in _ATTACHED_ASSET.findall(content) if kind == "document"))
+    documents = list(dict.fromkeys(asset_id for asset_id, _name, kind in _ATTACHED_ASSET.findall(content) if kind == "document"))
     if documents and db is not None:
         from app.domain.documents.reading import attachment_context
 

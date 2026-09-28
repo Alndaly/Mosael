@@ -1658,6 +1658,34 @@ def _migrate_board_sequence_cells_name_their_producer() -> None:
                 )
 
 
+def _migrate_agent_session_titles_drop_attachment_tokens() -> None:
+    """会话标题里的附件标记去掉:此前标题直接截首条消息的前 60 个字,挂了附件的会话标题里就是一截
+    `[附件 asset_id=… 名称=…`。照首条用户消息重算 —— 附件标记、文本附件的围栏块都不算;只发了附件的用附件名。
+    只动标题里带着那截标记的会话(用户自己改过的标题不会长这样)。规则抄一份在这里:迁移不跟着领域代码变。
+    """
+    import re
+
+    attached = re.compile(r"\[附件 asset_id=(\S+) 名称=(.*?) 类型=([a-z]+)\]")
+    fenced = re.compile(r"\[[^\]\n]+\]\n```.*?(```|$)", re.S)
+    if "agent_sessions" not in set(inspect(engine).get_table_names()):
+        return
+    with engine.begin() as conn:
+        rows = conn.execute(text("SELECT id FROM agent_sessions WHERE title LIKE :marker"),
+                            {"marker": "%[附件 asset_id=%"}).fetchall()
+        for (session_id,) in rows:
+            first = conn.execute(
+                text("SELECT content FROM agent_messages WHERE session_id = :id AND role = 'user' "
+                     "ORDER BY created_at, id LIMIT 1"),
+                {"id": session_id},
+            ).scalar()
+            if not first:
+                continue
+            names = [name.strip() for _id, name, _kind in attached.findall(first) if name.strip()]
+            said = " ".join(fenced.sub(" ", attached.sub(" ", first)).split())
+            title = (said or (names[0] if names else first.strip()))[:60]
+            conn.execute(text("UPDATE agent_sessions SET title = :title WHERE id = :id"), {"title": title, "id": session_id})
+
+
 def _migrate_asset_extractions_remember_page_images() -> None:
     """文档的解析结果记下按页的页面图(`asset_extractions.page_images`,ADR 0031:「原版」那一栏照它排)。
 
@@ -5206,6 +5234,7 @@ def migration_plan() -> MigrationPlan:
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_board_scene_cells_hold_no_image),
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_board_scene_render_drops_project),
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_board_sequence_cells_name_their_producer),
+            *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_agent_session_titles_drop_attachment_tokens),
             *_steps(
                 MigrationPhase.FILESYSTEM,
                 _migrate_shared_venvs,

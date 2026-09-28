@@ -1622,6 +1622,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "没能把处理后的声音放回视频:{detail}",
         "en": "Couldn't put the processed audio back into the video: {detail}",
     },
+    "mediaErr_vendorFormat": {
+        "zh": "{what}没成功:{detail}",
+        "en": "Couldn't convert the file for the provider ({what}): {detail}",
+    },
     "audioErr_ffmpegNoReason": {
         "zh": "ffmpeg 没有说明原因",
         "en": "ffmpeg gave no reason",
@@ -2404,6 +2408,18 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "{vendor} is temporarily unavailable; try again later: {detail}",
     },
     "providerErr_noAudioData": {"zh": "{vendor} 没有返回音频", "en": "{vendor} returned no audio"},
+    "providerErr_heygenKeyMissing": {
+        "zh": "HeyGen 还没填 API Key:在设置里的「HeyGen」连接上填好",
+        "en": "HeyGen has no API key yet: fill it in on the HeyGen connection in Settings",
+    },
+    "providerErr_heygenVideoFormat": {
+        "zh": "HeyGen 的对口型只收 mp4 / webm 的原片,这段是 {format}:先在剪辑里导出成 mp4 再试",
+        "en": "HeyGen lip-sync only takes mp4 / webm source videos and this one is {format}: export it as mp4 first",
+    },
+    "providerErr_hedraKeyMissing": {
+        "zh": "Hedra 还没填 API Key:在设置里的「Hedra」连接上填好(形如 key_id:secret)",
+        "en": "Hedra has no API key yet: fill it in on the Hedra connection in Settings (key_id:secret)",
+    },
     "providerErr_volcanoVisualKeysMissing": {
         "zh": "即梦 AI 要账号级的 AK 和 SK:在设置里的「火山引擎 即梦 AI」连接上填好",
         "en": "Jimeng AI needs an account-level AK and SK: fill them in on the Volcengine Jimeng AI connection in Settings",

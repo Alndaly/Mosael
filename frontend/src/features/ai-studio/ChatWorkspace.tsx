@@ -360,7 +360,7 @@ export function ChatWorkspace({
     observer.observe(toolbar);
     return () => observer.disconnect();
   }, []);
-  const showRight = view !== "trace" && environmentOpen && !narrow;
+  const showRight = environmentOpen && !narrow;
   // 内联 gridTemplateColumns 会覆盖 class 里的 max-[...] 回退,所以断点在 JS 里一起判:
   // 单列也显式指定,避免 matchMedia 的 ≤ 与 CSS max-width 的 < 在断点处不一致。
   const columns = single
@@ -371,8 +371,8 @@ export function ChatWorkspace({
 
 
   return (
-    // 轨迹视图下右侧那栏让位:排查时要的是一行行看得清的步骤和一屏放得下的详情,
-    // 而「智能体环境」是开工前的配置视图 —— 两者在同一屏上争的是同一份宽度。
+    // 右侧「智能体环境」在对话、轨迹两个视图下都能开:此前轨迹视图替人把它收掉、连开关都藏了,
+    // 排查时想对照这个会话用的模型、工具就只能切回对话。宽度紧的话自己点开关收起。
     <div
       className={cn(
         "relative grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)] max-[820px]:grid-cols-[minmax(0,1fr)] max-[760px]:grid-rows-[minmax(0,1fr)_auto]",
@@ -459,7 +459,7 @@ export function ChatWorkspace({
           </div>
           </>
           )}
-          {view === "chat" && <Button variant={environmentOpen ? "secondary" : "ghost"} size="icon-sm" aria-label={t("agentInspectorTitle")} title={t("agentInspectorTitle")} aria-pressed={environmentOpen} aria-expanded={environmentOpen} aria-controls={environmentOpen ? environmentId : undefined} onClick={() => setEnvironmentOpen(!environmentOpen)}><PanelRight /></Button>}
+          <Button variant={environmentOpen ? "secondary" : "ghost"} size="icon-sm" aria-label={t("agentInspectorTitle")} title={t("agentInspectorTitle")} aria-pressed={environmentOpen} aria-expanded={environmentOpen} aria-controls={environmentOpen ? environmentId : undefined} onClick={() => setEnvironmentOpen(!environmentOpen)}><PanelRight /></Button>
           {/* 「N 个子代理」:这个会话派出过的子智能体入口(DSH 同款位置)。没派过就不渲染。 */}
           {!viewingSubagent && (
             <span className="shrink-0 empty:hidden">
@@ -557,6 +557,7 @@ export function ChatWorkspace({
               {/* 附件条属于输入框内部(文本框上方),而不是飘在圆角框外的左上角。 */}
               {/* 附件和笔记引用是同一件事:这条消息里带了什么。一排,在输入卡里。 */}
               <ComposerChips chips={[...attach.chips, ...noteAttach.chips]} uploading={attach.uploading} className="px-0.5" />
+              {attach.previewModal}
               {noteAttach.dialog}
               {/* `@` 唤起素材 / 笔记 / 画板 / 工作流。和画布助手共用一份 —— 同一个输入框在两个
                   地方能力不同的话,用户没有任何办法预期哪个能干什么(附件那条也是这个理由)。 */}
@@ -645,7 +646,7 @@ export function ChatWorkspace({
         )}
       </section>
 
-      {view === "chat" && environmentOpen && <div id={environmentId}
+      {environmentOpen && <div id={environmentId}
         className={cn("min-h-0 min-w-0 overflow-hidden border-l border-divider bg-workspace-subtle", narrow && "workspace-overlay absolute bottom-0 right-0 z-30 w-[min(360px,100%)]")}
         style={narrow ? { top: toolbarHeight } : undefined}
       ><ChatInspector

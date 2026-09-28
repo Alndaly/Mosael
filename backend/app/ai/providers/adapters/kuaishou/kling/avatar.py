@@ -80,19 +80,14 @@ def image_field(request: GenerationRequest) -> str:
 
 
 def _audio_bytes(path: Path) -> bytes:
-    """配音文件的字节;不是 mp3 / 超了 5MB 的先转成单声道 64kbps mp3(可灵收 mp3/wav/m4a/aac,≤5MB)。"""
+    """配音文件的字节;不是 mp3/wav/m4a/aac、或超了 5MB 的先转成单声道 mp3(可灵收这四种,≤5MB)。"""
     raw = path.read_bytes()
     if path.suffix.lower() in (".mp3", ".wav", ".m4a", ".aac") and len(raw) <= MAX_AUDIO_BYTES:
         return raw
-    from app.core.child_process import run_logged
+    from app.media.vendor_formats import speech_mp3
 
     with tempfile.TemporaryDirectory(prefix="mosael-kling-audio-") as folder:
-        target = Path(folder) / "voice.mp3"
-        result = run_logged(["ffmpeg", "-y", "-v", "error", "-i", str(path), "-ac", "1", "-b:a", "64k", str(target)],
-                            capture_output=True, text=True, timeout=300, what="配音转 mp3")
-        if result.returncode != 0 or not target.is_file():
-            raise GenerationAdapterError("providerErr_upstreamInvalidParams", vendor="Kling", detail="audio conversion failed")
-        converted = target.read_bytes()
+        converted = speech_mp3(path, Path(folder) / "voice.mp3").read_bytes()
     if len(converted) > MAX_AUDIO_BYTES:
         raise GenerationAdapterError("providerErr_klingAudioTooLarge")
     return converted
