@@ -16,7 +16,7 @@ import React from "react";
 import { Loader2, Square, Volume2 } from "lucide-react";
 
 import { useI18n } from "@/app/preferences";
-import { playSpeech, stopSpeaking } from "@/lib/speechPlayback";
+import { playBlob, stopPlayback } from "@/lib/audioPlayback";
 import { reportSpeechFailure, synthesizeSpeech } from "@/features/agent/agentSpeech";
 import { FOOTER_ACTION_CLASS } from "@/features/agent/messageUsage";
 import { cn } from "@/lib/utils";
@@ -37,7 +37,7 @@ export function SpeakButton({
   React.useEffect(() => {
     // 组件没了(切会话、清空对话)声音也该停 —— 否则它会继续念一条已经不在屏幕上的消息。
     return () => {
-      if (stateRef.current === "playing") stopSpeaking();
+      if (stateRef.current === "playing") stopPlayback();
     };
   }, []);
 
@@ -45,13 +45,13 @@ export function SpeakButton({
   stateRef.current = state;
 
   async function play() {
-    stopSpeaking();
+    stopPlayback();
     setState("loading");
     try {
       const audio = await synthesizeSpeech(text, workspaceId ?? "");
       setState("playing");
-      // playSpeech 会接管前一段(见 speechPlayback):连点两条消息时,前一条自己停掉。
-      await playSpeech(audio);
+      // playBlob 会接管前一段(见 lib/audioPlayback):连点两条消息时,前一条自己停掉。
+      await playBlob(audio);
       reset();
     } catch (error) {
       reportSpeechFailure(error, t("speakFailed"));
@@ -70,7 +70,7 @@ export function SpeakButton({
       aria-label={active ? t("speakStop") : t("speak")}
       title={active ? t("speakStop") : t("speak")}
       disabled={busy || !text.trim()}
-      onClick={() => (active ? stopSpeaking() : void play())}
+      onClick={() => (active ? stopPlayback() : void play())}
     >
       {busy ? (
         <Loader2 size={11} className="animate-mosael-spin" />

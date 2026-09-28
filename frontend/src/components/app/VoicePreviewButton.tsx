@@ -5,10 +5,10 @@ import { toast } from "sonner";
 import { errorText } from "@/api/errorMessage";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
-import { playSpeech, stopSpeaking } from "@/lib/speechPlayback";
+import { playBlob, stopPlayback } from "@/lib/audioPlayback";
 
 /**
- * 试听键:点一下取来念,再点一下停。同一时刻只响一段(和对话里念消息共用 lib/speechPlayback 那一个播放器)。
+ * 试听键:点一下取来念,再点一下停。同一时刻只响一段(和对话里念消息共用 lib/audioPlayback 那一个播放器)。
  *
  * 音频从哪来由调用方给(`load`)—— 各处试听的是不同的东西,取、播、停这一段是同一件事。
  * `disabledReason` 是灰着的时候 title 上那句「为什么点不了」。
@@ -33,7 +33,7 @@ export function VoicePreviewButton({
     return () => {
       mounted.current = false;
       // 只停自己念的那段:别处(对话里的喇叭)正在响的不归这里管。
-      if (playing.current) stopSpeaking();
+      if (playing.current) stopPlayback();
     };
   }, []);
 
@@ -44,7 +44,7 @@ export function VoicePreviewButton({
       if (!mounted.current) return;
       setState("playing");
       playing.current = true;
-      await playSpeech(audio);
+      await playBlob(audio);
     } catch (error) {
       toast.error(errorText(error));
     } finally {
@@ -62,7 +62,7 @@ export function VoicePreviewButton({
       disabled={disabled}
       aria-label={label}
       title={disabled ? (disabledReason ?? label) : label}
-      onClick={() => (state === "playing" ? stopSpeaking() : void play())}
+      onClick={() => (state === "playing" ? stopPlayback() : void play())}
     >
       {state === "playing" ? <Square /> : <Volume2 />}
     </Button>

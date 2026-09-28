@@ -66,8 +66,8 @@ vi.mock("@/app/preferences", () => ({
   useI18n: () => (key: string) => key,
   usePreferences: () => ({ locale: "zh" }),
 }));
-const playback = vi.hoisted(() => ({ playSpeech: vi.fn(async () => {}), stopSpeaking: vi.fn() }));
-vi.mock("@/lib/speechPlayback", () => playback);
+const playback = vi.hoisted(() => ({ playBlob: vi.fn(async () => {}), stopPlayback: vi.fn() }));
+vi.mock("@/lib/audioPlayback", () => playback);
 vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn(), info: vi.fn() } }));
 const lightbox = vi.hoisted(() => ({ openImagePreview: vi.fn() }));
 vi.mock("@/components/app/image-preview", () => ({ useImagePreview: () => lightbox }));
@@ -592,7 +592,7 @@ describe("音色试听", () => {
         workspace_id: "ws", engine: "clone", voice: "v1", text: "entityVoicePreviewText",
       }),
     );
-    await waitFor(() => expect(playback.playSpeech).toHaveBeenCalledWith(audio));
+    await waitFor(() => expect(playback.playBlob).toHaveBeenCalledWith(audio));
   });
 
   it("没挑嗓子时按钮是灰的", async () => {

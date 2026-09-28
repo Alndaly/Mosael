@@ -5,8 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useVoiceLoop } from "./useVoiceLoop";
 
 const mocks = vi.hoisted(() => ({
-  playSpeech: vi.fn(),
-  stopSpeaking: vi.fn(),
+  playBlob: vi.fn(),
+  stopPlayback: vi.fn(),
   toastError: vi.fn(),
   toastMessage: vi.fn(),
 }));
@@ -16,9 +16,9 @@ vi.mock("@/api/client", async (importOriginal) => ({
   API_BASE: "http://api.test",
   getAuthToken: () => "token",
 }));
-vi.mock("@/lib/speechPlayback", () => ({
-  playSpeech: mocks.playSpeech,
-  stopSpeaking: mocks.stopSpeaking,
+vi.mock("@/lib/audioPlayback", () => ({
+  playBlob: mocks.playBlob,
+  stopPlayback: mocks.stopPlayback,
 }));
 vi.mock("sonner", () => ({ toast: { error: mocks.toastError, message: mocks.toastMessage } }));
 vi.mock("@/app/preferences", async () => {
@@ -48,8 +48,8 @@ describe("useVoiceLoop", () => {
   const getUserMedia = vi.fn();
 
   beforeEach(() => {
-    mocks.playSpeech.mockReset().mockResolvedValue(undefined);
-    mocks.stopSpeaking.mockReset();
+    mocks.playBlob.mockReset().mockResolvedValue(undefined);
+    mocks.stopPlayback.mockReset();
     mocks.toastError.mockReset();
     mocks.toastMessage.mockReset();
     stopTrack.mockReset();
@@ -81,12 +81,12 @@ describe("useVoiceLoop", () => {
     act(() => result.current.stop());
     expect(result.current.state).toBe("off");
     expect(stopTrack).toHaveBeenCalledOnce();
-    expect(mocks.stopSpeaking).toHaveBeenCalledOnce();
+    expect(mocks.stopPlayback).toHaveBeenCalledOnce();
   });
 
   it("moves speaking back to listening only after playback settles", async () => {
     const playback = deferred();
-    mocks.playSpeech.mockReturnValueOnce(playback.promise);
+    mocks.playBlob.mockReturnValueOnce(playback.promise);
     const props = { workspaceId: "w1", onUtterance: vi.fn(), reply: "", busy: false };
     const { result, rerender } = renderHook((next: typeof props) => useVoiceLoop(next), { initialProps: props });
     await act(async () => result.current.start());

@@ -20,7 +20,7 @@ import { toast } from "sonner";
 import { API_BASE, getAuthToken } from "@/api/client";
 import { reportSpeechFailure, synthesizeSpeech } from "@/features/agent/agentSpeech";
 import { useI18n } from "@/app/preferences";
-import { playSpeech, stopSpeaking } from "@/lib/speechPlayback";
+import { playBlob, stopPlayback } from "@/lib/audioPlayback";
 import { matchSpokenChoice } from "@/features/agent/spokenChoice";
 import { UtteranceDetector } from "@/features/agent/utteranceDetector";
 
@@ -85,7 +85,7 @@ export function useVoiceLoop({
     async (text: string) => {
       if (!text.trim()) return;
       try {
-        await playSpeech(await synthesizeSpeech(text, workspaceId));
+        await playBlob(await synthesizeSpeech(text, workspaceId));
       } catch (error) {
         reportSpeechFailure(error, t("agentVoiceSpeakFailed"));
       }
@@ -202,7 +202,7 @@ export function useVoiceLoop({
 
       if (event === "speaking" && !recorderRef.current) {
         // **打断在这里发生。** 它正在念,而你开口了 —— 掐掉播放,开始录。
-        if (stateRef.current === "speaking") stopSpeaking();
+        if (stateRef.current === "speaking") stopPlayback();
         setState("hearing");
         beginClip();
         return;
@@ -225,7 +225,7 @@ export function useVoiceLoop({
 
   const stop = React.useCallback(() => {
     teardown();
-    stopSpeaking();
+    stopPlayback();
     setState("off");
   }, [teardown]);
 

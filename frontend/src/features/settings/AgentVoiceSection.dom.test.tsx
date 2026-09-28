@@ -23,7 +23,7 @@ const saved = {
 let pref = saved;
 const setAgentVoice = vi.fn();
 const fetchAgentVoicePreview = vi.fn();
-const playSpeech = vi.fn();
+const playBlob = vi.fn();
 
 vi.mock("@/api/client", () => ({
   getAgentVoice: () => Promise.resolve(pref),
@@ -32,7 +32,7 @@ vi.mock("@/api/client", () => ({
   setAgentVoice: (body: unknown) => setAgentVoice(body),
   fetchAgentVoicePreview: (body: unknown) => fetchAgentVoicePreview(body),
 }));
-vi.mock("@/lib/speechPlayback", () => ({ playSpeech: (blob: Blob) => playSpeech(blob), stopSpeaking: () => {} }));
+vi.mock("@/lib/audioPlayback", () => ({ playBlob: (blob: Blob) => playBlob(blob), stopPlayback: () => {} }));
 vi.mock("@/app/preferences", () => ({
   useI18n: () => (key: string) => key,
   usePreferences: () => ({ voiceDock: false, setVoiceDock: () => {} }),
@@ -74,20 +74,20 @@ describe("试听", () => {
   beforeEach(() => {
     pref = saved;
     fetchAgentVoicePreview.mockReset();
-    playSpeech.mockReset();
+    playBlob.mockReset();
   });
 
   it("开关关着也能试听:试听是决定打开之前听一下效果", async () => {
     const audio = new Blob(["ID3"], { type: "audio/mpeg" });
     fetchAgentVoicePreview.mockResolvedValue(audio);
-    playSpeech.mockResolvedValue(undefined);
+    playBlob.mockResolvedValue(undefined);
     renderSection();
     const preview = await screen.findByRole("button", { name: "voicePreview" });
     await waitFor(() => expect(preview).toBeEnabled());
     expect(screen.getByRole("switch", { name: "agentVoiceEnabled" })).not.toBeChecked();
 
     await userEvent.setup().click(preview);
-    await waitFor(() => expect(playSpeech).toHaveBeenCalledWith(audio));
+    await waitFor(() => expect(playBlob).toHaveBeenCalledWith(audio));
     expect(fetchAgentVoicePreview).toHaveBeenCalledWith({ workspace_id: "ws-1", text: "agentVoiceSample" });
   });
 
