@@ -58,6 +58,7 @@ const TEMPLATE_ICONS: Record<string, typeof Film> = {
   highlight_shorts: Smartphone,
   product_on_model: Shirt,
   product_pitch_short: Megaphone,
+  product_pitch_presenter: UserRound,
   footage_montage: Clapperboard,
   fabric_lookbook: Palette,
   talking_script_video: UserRound,

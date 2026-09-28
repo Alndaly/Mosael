@@ -635,6 +635,7 @@ def test_模板卡片和图一一对应() -> None:
         HIGHLIGHT_SHORTS,
         PRODUCT_ON_MODEL,
         FOOTAGE_MONTAGE,
+        PRODUCT_PITCH_PRESENTER,
         PRODUCT_PITCH_SHORT,
         TALKING_SCRIPT_VIDEO,
         TRANSCRIPT_VIDEO_CLEANUP,
@@ -645,7 +646,7 @@ def test_模板卡片和图一一对应() -> None:
     known = {
         FULL_VIDEO_GENERATION, TRANSCRIPT_VIDEO_CLEANUP, TRANSLATED_DUB,
         HIGHLIGHT_SHORTS, PRODUCT_ON_MODEL, PRODUCT_PITCH_SHORT, FABRIC_LOOKBOOK, FOOTAGE_MONTAGE,
-        TALKING_SCRIPT_VIDEO, TRANSLATED_DUB_LIPSYNC,
+        TALKING_SCRIPT_VIDEO, TRANSLATED_DUB_LIPSYNC, PRODUCT_PITCH_PRESENTER,
     }
     assert {card["id"] for card in TEMPLATE_CATALOG} == known
     for card in BUSINESS_TEMPLATE_CATALOG:
@@ -813,3 +814,27 @@ def test_视频翻译改口型_同一张译配图在导出之前多一步对口�
     assert ("video_on_timeline", "clip_id", "lip_sync", "clip_id") in wires and ("dubbing", "track_id", "lip_sync", "track_id") in wires
     assert ("lip_sync", None, "export_dubbed_video", None) in wires, "对完口型才导出"
     assert not any(edge["source"] == "dubbing" and edge["target"] == "export_dubbed_video" for edge in synced["edges"])
+
+
+def test_数字人出镜带货_开场收尾由资产人物说_每拍用它的嗓子配画外音_顺序是开场各拍收尾() -> None:
+    """ADR 0028 阶段 3「带货口播升级」:同一张带货图换掉口播那一段;不出镜的那条不变。"""
+    from app.domain.workflows import validate_graph
+    from app.domain.workflows.templates_business import product_pitch_short_graph
+
+    graph = product_pitch_short_graph(chat=CHAT, image=SEEDREAM, presenter=True)
+    assert validate_graph(graph, require_config=False) == []
+    ids = {node["id"] for node in graph["nodes"]}
+    assert {"presenter", "hook_talk", "cta_talk"} <= ids and not {"voice_over", "voice_on_timeline"} & ids
+    assert _node(graph, "presenter")["config"]["entity_id"] == "", "主播由跑的人挑"
+    assert "出镜" in _node(graph, "pitch_script")["config"]["system"]
+    wires = {(edge["source"], edge.get("source_output"), edge["target"], edge.get("target_input")) for edge in graph["edges"]}
+    assert ("presenter", "entity_id", "hook_talk", "entity_id") in wires and ("presenter", "entity_id", "cta_talk", "entity_id") in wires
+    assert ("hook_place", None, "shoot_beats", None) in wires and ("shoot_beats", None, "cta_place", None) in wires, "开场 → 各拍 → 收尾"
+    body = _node(graph, "shoot_beats")["config"]["body"]
+    voice = next(node for node in body["nodes"] if node["id"] == "beat_voice")
+    assert voice["config"]["text"] == "{{loop.item.narration}}" and voice["config"]["voice"] == "{{input.voice_id}}"
+    inner = {(edge["source"], edge.get("source_output"), edge["target"], edge.get("target_input")) for edge in body["edges"]}
+    assert ("beat_on_timeline", "timeline_start", "beat_voice_place", "at") in inner, "画外音对齐这一拍的开头"
+
+    plain = product_pitch_short_graph(chat=CHAT, image=SEEDREAM)
+    assert "presenter" not in {node["id"] for node in plain["nodes"]} and plain["meta"]["template_id"] == "product_pitch_short"

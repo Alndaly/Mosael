@@ -36,6 +36,7 @@ PRODUCT_PITCH_SHORT = "product_pitch_short"
 FABRIC_LOOKBOOK = "fabric_lookbook"
 FOOTAGE_MONTAGE = "footage_montage"
 TALKING_SCRIPT_VIDEO = "talking_script_video"
+PRODUCT_PITCH_PRESENTER = "product_pitch_presenter"
 
 #: 竖屏。短视频平台的默认画幅 —— 横屏素材按 cover 居中裁进来(和剪辑台的「改画幅」同一套)。
 VERTICAL = {"width": 1080, "height": 1920}
@@ -610,13 +611,17 @@ def _pitch_schema() -> dict[str, Any]:
     )
 
 
-def product_pitch_short_graph(*, chat: Any, image: Any, voice_id: str = "") -> dict[str, Any]:
+def product_pitch_short_graph(*, chat: Any, image: Any, voice_id: str = "", presenter: bool = False) -> dict[str, Any]:
     """商品图 + 几条卖点 → 口播脚本(分拍)→ 每拍出一张画面 + 配一段音 → 组装 → 字幕 → 导出。
 
     和「模特上身图」的分别:那个交付的是**素材**(图和视频,你拿去自己用),这个交付的是**一条成片**。
 
     口播和画面按"拍"对齐:每一拍自己的时长由脚本给出,画面按这个时长铺在时间线上,配音也按拍合成。
     这样画面切换和话说到哪儿是对得上的 —— 而不是先出一段音再让画面自己猜。
+
+    `presenter`:「数字人出镜」(ADR 0028 阶段 3「带货口播升级」)—— 开场钩子和收尾号召换成资产库里的人物**出镜说**
+    (`entity_speak`:脸、嗓子、授权声明都是那个人物资产的,没声明的真人当场拒),中间每一拍仍是商品画面,这一拍的口播
+    用同一个人物的嗓子念、放在这一拍开头。前面几步和不出镜的一样,所以是同一张图换掉口播那一段,不另抄一份。
     """
     system = """你是带货短视频的编导。用户给你一件商品和几条卖点，你要写一条 20-45 秒、能直接拍的
 口播脚本，按"拍"拆开。
@@ -630,6 +635,11 @@ def product_pitch_short_graph(*, chat: Any, image: Any, voice_id: str = "") -> d
 - caption 是屏幕上的短句，不是把 narration 原样抄一遍。
 
 只输出符合 JSON Schema 的对象。"""
+    if presenter:
+        system += """
+
+这一条由一位主播**出镜**说开场钩子(hook_line)和结尾号召(call_to_action):这两句是对着镜头说的话,
+口语、自然,各自念出来不超过 8 秒;中间的每一拍是商品画面,narration 是画外音。"""
 
     nodes: list[dict[str, Any]] = [
         {
@@ -806,6 +816,8 @@ def product_pitch_short_graph(*, chat: Any, image: Any, voice_id: str = "") -> d
             },
         },
     ]
+    if presenter:
+        return _with_presenter(nodes)
     edges = [
         {"id": "start_photo", "source": "start", "target": "product_photo"},
         {"id": "start_script", "source": "start", "target": "pitch_script"},
@@ -1209,6 +1221,124 @@ def talking_script_video_graph(*, voice_id: str = "") -> dict[str, Any]:
     )
 
 
+def _with_presenter(nodes: list[dict[str, Any]]) -> dict[str, Any]:
+    """带货口播换成「数字人出镜」(见 product_pitch_short_graph 的 `presenter`):去掉整条合成的旁白,
+    加一个挑主播的节点、开场和收尾两段出镜说话,逐拍的循环里给每一拍配这位主播的嗓子。
+
+    时间线上的顺序是**开场 → 各拍 → 收尾**,靠连线定先后(接到时间线是往轨尾接的)。出镜那两段自带声音;
+    每一拍的画外音放在音频轨上、对齐这一拍的开头。
+    """
+    by_id = {node["id"]: node for node in nodes}
+    kept = [node for node in nodes if node["id"] not in ("voice_over", "voice_on_timeline")]
+    shoot = by_id["shoot_beats"]
+    shoot["name"] = {"zh": "逐拍出画面、配画外音并上时间线", "en": "Paint, voice and place each beat"}
+    shoot["config"]["inputs"].update({
+        "audio_track_id": "{{pitch_project.audio_track_id}}",
+        "voice_engine": "{{presenter.voice_engine}}",
+        "voice_id": "{{presenter.voice_id}}",
+    })
+    body = shoot["config"]["body"]
+    body["nodes"] += [
+        {
+            "id": "beat_voice",
+            "type": "synthesize_speech",
+            "name": {"zh": "用主播的嗓子念这一拍", "en": "Voice this beat in the presenter's voice"},
+            "position": {"x": 400, "y": 320},
+            "config": {"text": "{{loop.item.narration}}", "engine": "{{input.voice_engine}}", "voice": "{{input.voice_id}}"},
+        },
+        {
+            "id": "beat_voice_place",
+            "type": "timeline_append",
+            "name": {"zh": "画外音对齐这一拍开头", "en": "Line the voice up with the beat"},
+            "position": {"x": 720, "y": 320},
+            "config": {
+                "sequence_id": "{{input.sequence_id}}",
+                "asset_id": "{{beat_voice.asset_id}}",
+                "track_id": "{{input.audio_track_id}}",
+                "at": "{{beat_on_timeline.timeline_start}}",
+            },
+        },
+    ]
+    body["edges"] += [
+        {"id": "place_voice", "source": "beat_on_timeline", "target": "beat_voice_place"},
+        {"id": "voice_voice_place", "source": "beat_voice", "target": "beat_voice_place"},
+    ]
+    talk = [
+        {
+            "id": "presenter",
+            "type": "entity_get",
+            "name": {"zh": "挑一位主播(资产库里的人物)", "en": "Pick the presenter (a character from the asset library)"},
+            "position": {"x": 330, "y": 520},
+            #: 留空,由跑的人挑:脸、嗓子和授权声明都跟着这个人物走。
+            "config": {"entity_id": "", "kind": "character"},
+        },
+        {
+            "id": "hook_talk",
+            "type": "entity_speak",
+            "name": {"zh": "主播出镜说开场", "en": "Presenter speaks the hook"},
+            "position": {"x": 650, "y": 620},
+            "config": {"entity_id": "{{presenter.entity_id}}", "text": "{{pitch_script.json.hook_line}}", "model": ""},
+        },
+        {
+            "id": "hook_place",
+            "type": "timeline_append",
+            "name": {"zh": "开场放在最前面", "en": "Put the hook first"},
+            "position": {"x": 970, "y": 620},
+            "config": {"sequence_id": "{{pitch_project.sequence_id}}", "asset_id": "{{hook_talk.asset_id}}",
+                       "track_id": "{{pitch_project.video_track_id}}"},
+        },
+        {
+            "id": "cta_talk",
+            "type": "entity_speak",
+            "name": {"zh": "主播出镜说收尾", "en": "Presenter speaks the call to action"},
+            "position": {"x": 650, "y": 800},
+            "config": {"entity_id": "{{presenter.entity_id}}", "text": "{{pitch_script.json.call_to_action}}", "model": ""},
+        },
+        {
+            "id": "cta_place",
+            "type": "timeline_append",
+            "name": {"zh": "收尾接在最后", "en": "Put the call to action last"},
+            "position": {"x": 1290, "y": 800},
+            "config": {"sequence_id": "{{pitch_project.sequence_id}}", "asset_id": "{{cta_talk.asset_id}}",
+                       "track_id": "{{pitch_project.video_track_id}}"},
+        },
+    ]
+    kept[kept.index(shoot):kept.index(shoot)] = talk
+    output = next(node for node in kept if node["id"] == "output")
+    output["config"]["values"].pop("voice_asset_id", None)
+    output["config"]["values"].update({"hook_asset_id": "{{hook_talk.asset_id}}", "cta_asset_id": "{{cta_talk.asset_id}}"})
+    edges = [
+        {"id": "start_photo", "source": "start", "target": "product_photo"},
+        {"id": "start_script", "source": "start", "target": "pitch_script"},
+        {"id": "start_project", "source": "start", "target": "pitch_project"},
+        {"id": "start_presenter", "source": "start", "target": "presenter"},
+        {"id": "presenter_hook", "source": "presenter", "target": "hook_talk"},
+        {"id": "script_hook", "source": "pitch_script", "target": "hook_talk"},
+        {"id": "presenter_cta", "source": "presenter", "target": "cta_talk"},
+        {"id": "script_cta", "source": "pitch_script", "target": "cta_talk"},
+        #: 先后:开场接上 → 各拍 → 收尾(都是往视频轨尾接)。
+        {"id": "hook_place_edge", "source": "hook_talk", "target": "hook_place"},
+        {"id": "project_hook", "source": "pitch_project", "target": "hook_place"},
+        {"id": "hook_then_beats", "source": "hook_place", "target": "shoot_beats"},
+        {"id": "script_shoot", "source": "pitch_script", "target": "shoot_beats"},
+        {"id": "photo_shoot", "source": "product_photo", "target": "shoot_beats"},
+        {"id": "presenter_shoot", "source": "presenter", "target": "shoot_beats"},
+        {"id": "beats_then_cta", "source": "shoot_beats", "target": "cta_place"},
+        {"id": "cta_place_edge", "source": "cta_talk", "target": "cta_place"},
+        {"id": "cta_export", "source": "cta_place", "target": "export_short"},
+        {"id": "export_notice", "source": "export_short", "target": "done_notice"},
+        {"id": "notice_output", "source": "done_notice", "target": "output"},
+    ]
+    return normalize_graph(
+        {
+            "meta": {"template_id": PRODUCT_PITCH_PRESENTER, "template_version": 1, "source": "official"},
+            "nodes": kept,
+            "edges": edges,
+        },
+        node_types=NODE_TYPES,
+    )
+
+
 #: 模板库里这四条的卡片。和 `TEMPLATE_CATALOG` 里那三条同一个形状,由 templates.py 拼在一起 ——
 #: 卡片和图分开写是因为**卡片要先于图存在**:用户是照着 requires 判断自己能不能跑的。
 BUSINESS_TEMPLATE_CATALOG: list[dict[str, Any]] = [
@@ -1325,6 +1455,26 @@ BUSINESS_TEMPLATE_CATALOG: list[dict[str, Any]] = [
         "stages": {
             "zh": ["填稿子", "选一张正脸", "长稿分段配音", "逐段让它说话并接上时间线", "按配音时间铺字幕", "导出成片"],
             "en": ["The script", "Pick a portrait", "Voice the script in segments", "Make each segment speak onto the timeline", "Caption from the voicing times", "Export the video"],
+        },
+    },
+    {
+        "id": PRODUCT_PITCH_PRESENTER,
+        "name": {"zh": "商品 → 数字人出镜带货口播", "en": "Product into a presenter-led short"},
+        "summary": {
+            "zh": "在「带货口播短视频」的基础上,开场钩子和收尾号召换成资产库里的一位人物出镜说出来(用它的脸和嗓子),中间每一拍仍是带商品的画面,口播用同一个嗓子念、对齐每一拍的开头,导出竖屏成片(带「AI 生成」标识)。人物要先在资产库里有正面图和音色;真人要有授权声明,克隆音色也要声明是谁的。",
+            "en": "Everything in the talking-head short, but a character from your asset library speaks the hook and the call to action on camera (with its own face and voice), while each beat in between stays a product shot voiced in the same voice and lined up with the beat, exported as a vertical short with an \"AI-generated\" label. The character needs a front image and a voice in the asset library; real people need a consent declaration, and a cloned voice needs one too.",
+        },
+        "requires": [
+            requirement(CHAT_MODEL, zh="AI 对话模型", en="Chat model"),
+            requirement(REFERENCE_IMAGE_MODEL, zh="能带参考图出图的图像模型", en="Image model that takes reference images"),
+            requirement(SPEECH_VIDEO_MODEL, zh="会「说话照片」的视频模型", en="A speaking-photo video model"),
+            requirement(None, zh="资产库里一位有正面图和音色的人物", en="A character in the asset library with a front image and a voice"),
+            requirement(None, zh="一张商品图", en="A product photo"),
+        ],
+        "stages": {
+            "zh": ["填商品与卖点", "写分拍口播脚本", "挑一位主播", "主播出镜说开场", "逐拍出画面、配画外音", "主播出镜说收尾", "导出竖屏成片"],
+            "en": ["Product and selling points", "Write the beat-by-beat script", "Pick the presenter", "Presenter speaks the hook",
+                   "Paint and voice each beat", "Presenter speaks the call to action", "Export the vertical short"],
         },
     },
 ]

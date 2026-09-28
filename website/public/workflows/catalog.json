@@ -496,5 +496,59 @@
       "zh": "/workflows/talking_script_video.zh.mosael-workflow.json",
       "en": "/workflows/talking_script_video.en.mosael-workflow.json"
     }
+  },
+  {
+    "id": "product_pitch_presenter",
+    "name": {
+      "zh": "商品 → 数字人出镜带货口播",
+      "en": "Product into a presenter-led short"
+    },
+    "summary": {
+      "zh": "在「带货口播短视频」的基础上,开场钩子和收尾号召换成资产库里的一位人物出镜说出来(用它的脸和嗓子),中间每一拍仍是带商品的画面,口播用同一个嗓子念、对齐每一拍的开头,导出竖屏成片(带「AI 生成」标识)。人物要先在资产库里有正面图和音色;真人要有授权声明,克隆音色也要声明是谁的。",
+      "en": "Everything in the talking-head short, but a character from your asset library speaks the hook and the call to action on camera (with its own face and voice), while each beat in between stays a product shot voiced in the same voice and lined up with the beat, exported as a vertical short with an \"AI-generated\" label. The character needs a front image and a voice in the asset library; real people need a consent declaration, and a cloned voice needs one too."
+    },
+    "requires": {
+      "zh": [
+        "AI 对话模型",
+        "能带参考图出图的图像模型",
+        "会「说话照片」的视频模型",
+        "资产库里一位有正面图和音色的人物",
+        "一张商品图"
+      ],
+      "en": [
+        "Chat model",
+        "Image model that takes reference images",
+        "A speaking-photo video model",
+        "A character in the asset library with a front image and a voice",
+        "A product photo"
+      ]
+    },
+    "stages": {
+      "zh": [
+        "填商品与卖点",
+        "写分拍口播脚本",
+        "挑一位主播",
+        "主播出镜说开场",
+        "逐拍出画面、配画外音",
+        "主播出镜说收尾",
+        "导出竖屏成片"
+      ],
+      "en": [
+        "Product and selling points",
+        "Write the beat-by-beat script",
+        "Pick the presenter",
+        "Presenter speaks the hook",
+        "Paint and voice each beat",
+        "Presenter speaks the call to action",
+        "Export the vertical short"
+      ]
+    },
+    "author": "Mosael",
+    "version": 1,
+    "nodes": 13,
+    "download": {
+      "zh": "/workflows/product_pitch_presenter.zh.mosael-workflow.json",
+      "en": "/workflows/product_pitch_presenter.en.mosael-workflow.json"
+    }
   }
 ]

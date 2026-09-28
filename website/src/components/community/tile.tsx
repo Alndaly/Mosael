@@ -50,6 +50,7 @@ const WORKFLOW_ICONS: Record<string, LucideIcon> = {
   highlight_shorts: Smartphone,
   product_on_model: Shirt,
   product_pitch_short: ShoppingBag,
+  product_pitch_presenter: UserRound,
   footage_montage: Clapperboard,
   fabric_lookbook: Layers,
   talking_script_video: UserRound,

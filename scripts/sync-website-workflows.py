@@ -50,6 +50,7 @@ def catalog_files() -> dict[str, str]:
             chat=ModelChoice(), image=ModelChoice(), video=ModelChoice(model="placeholder"),
         ),
         "product_pitch_short": product_pitch_short_graph(chat=ModelChoice(), image=ModelChoice(), voice_id=""),
+        "product_pitch_presenter": product_pitch_short_graph(chat=ModelChoice(), image=ModelChoice(), voice_id="", presenter=True),
         "fabric_lookbook": fabric_lookbook_graph(chat=ModelChoice(), image=ModelChoice()),
         "footage_montage": footage_montage_graph(chat=ModelChoice(), voice_id=""),
         "talking_script_video": talking_script_video_graph(voice_id=""),
