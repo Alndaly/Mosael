@@ -35,6 +35,10 @@ class UserOut(OrmModel):
     #: 这个部署的管理员(见 core/permissions.ensure_deployment_admin)。界面据此决定要不要
     #: 摆出「部署」那一块、以及能不能把一把钥匙共享给全员。
     is_deployment_admin: bool = False
+    #: 这个账号挂着的第三方登录(`google` / `apple`,见 OAuthIdentity)。空 = 用户名加密码的账号。
+    #: users 表上没有这一格 —— 身份映射本来就在 oauth_identities 里,另存一份只会两处漂移;
+    #: 所以它不是 ORM 属性,由 routes/auth.current_user_out 查出来填上。
+    oauth_providers: list[str] = Field(default_factory=list)
 
 
 class AdminUserOut(ApiModel):

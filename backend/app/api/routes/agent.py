@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import tempfile
+from collections.abc import Callable
 from pathlib import Path
 
 import asyncio
@@ -8,6 +9,7 @@ import asyncio
 from fastapi import APIRouter, HTTPException, Response
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select, update
+from sqlalchemy.orm import Session
 
 from app.core.i18n import tr
 from app.domain.agent import host
@@ -38,7 +40,7 @@ from app.api.schemas import (
 )
 from app.core.config import app_version
 from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm, ensure_workspace_role
-from app.db.models import AgentMessage, AgentQuestion, AgentSession, ProviderProfile, ProviderUsageEvent, now
+from app.db.models import AgentMessage, AgentQuestion, AgentSession, AgentVoicePref, ProviderProfile, ProviderUsageEvent, now
 from app.domain.agent import list_agent_skills
 from app.domain import session_groups
 from app.domain.agent import memory as agent_memory
@@ -513,39 +515,53 @@ def speak(body: AgentSpeechRequest, db: DbSession, user: CurrentUser) -> Respons
     这条路同时给三件事用:消息底部的播放、确认卡与提问的语音化、失败出声。它们共用同一个
     音色配置(settings/agent-voice),因为对用户来说那就是"它的声音"。
 
-    没设过音色就说没设 —— 不替他挑一个(同 provider-defaults 的立场)。
+    没设过音色就说没设 —— 不替他挑一个(同 provider-defaults 的立场);「让它出声」关着就不念。
     """
-    from app.domain.voices import agent_voice, voices as voices_domain
+    from app.domain.voices import agent_voice
+
+    # 念一句是**花钱的**(各家 TTS 按字符计费),所以要 ai 权限,和对话、生成同一档。
+    # 记账挂在这个工作区上,那它就得先证明自己在这个工作区里能花钱。
+    ensure_workspace_perm(db, user, body.workspace_id, "ai")
+    return _speak_with_agent_voice(db, user, body, agent_voice.require_enabled, source_type="agent_speech")
+
+
+@router.post("/agent/speech/preview")
+def preview_speech(body: AgentSpeechRequest, db: DbSession, user: CurrentUser) -> Response:
+    """试听设置里存着的那份对话音色。**只要求选好,不要求开着** —— 试听是配置时听一下效果,
+    而「先打开才能听」等于让人先对一个没听过的声音点头。
+
+    和 /agent/speech 只差这道闸:合成走同一个 agent_voice.speak,听到的就是以后念给他的那个声音。
+    """
+    from app.domain.voices import agent_voice
+
+    # 试听照样花钱、照样记账:权限和真念同一档。
+    ensure_workspace_perm(db, user, body.workspace_id, "ai")
+    return _speak_with_agent_voice(db, user, body, agent_voice.require_ready, source_type="agent_voice_preview")
+
+
+def _speak_with_agent_voice(
+    db: DbSession,
+    user: CurrentUser,
+    body: AgentSpeechRequest,
+    require: Callable[[Session, str], AgentVoicePref],
+    *,
+    source_type: str,
+) -> Response:
+    """两条发声路共用的后半段:取配置(闸由 `require` 定)、合成、原样回音频。ai 权限由调用方先查。"""
+    from app.domain.voices import agent_voice
 
     text = body.text.strip()
     if not text:
         raise HTTPException(status_code=422, detail=tr("routeErr_nothingToRead"))
-    # 念一句是**花钱的**(各家 TTS 按字符计费),所以要 ai 权限,和对话、生成同一档。
-    # 记账挂在这个工作区上,那它就得先证明自己在这个工作区里能花钱。
-    ensure_workspace_perm(db, user, body.workspace_id, "ai")
     try:
-        pref = agent_voice.require(db, user.id)
-    except agent_voice.AgentVoiceNotConfigured as exc:
-        # 409 而不是 500:这是"还没配置",一个用户点两下就能解决的状态。
+        pref = require(db, user.id)
+    except agent_voice.AgentVoiceUnavailable as exc:
+        # 409 而不是 500:这是"还没配好 / 关着",一个用户点两下就能解决的状态。
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     with tempfile.TemporaryDirectory(prefix="mosael-say-") as tmp:
         try:
-            out = voices_domain.speak_to_file(
-                db,
-                text=text,
-                engine=pref.engine,
-                engine_voice=pref.engine_voice,
-                speed=pref.speed,
-                workspace_id=body.workspace_id,
-                user_id=user.id,
-                voice_resource=pref.engine_voice_resource,
-                provider_profile_id=pref.provider_profile_id,
-                model_override=pref.engine_model,
-                out_dir=Path(tmp),
-                # 记账的来源:不是 job,是这个人的这次对话发声。**照样要记** ——
-                # 各家 TTS 按字符计费,念一句也是钱(见 speak_to_file)。
-                source_type="agent_speech",
-                source_id=user.id,
+            out = agent_voice.speak(
+                db, pref, text=text, workspace_id=body.workspace_id, out_dir=Path(tmp), source_type=source_type
             )
         except Exception as exc:  # noqa: BLE001 — 合成失败是结果,不是服务端故障
             raise HTTPException(status_code=422, detail=str(exc)[:300]) from exc

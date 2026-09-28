@@ -1,7 +1,7 @@
 import React from "react";
 import { Loader2, Server } from "lucide-react";
 
-import { API_BASE, DEFAULT_API_BASE, isCustomServer, setServerUrl } from "@/api/client";
+import { API_BASE, customServerHost, isCustomServer, setServerUrl } from "@/api/client";
 import { errorText } from "@/api/errorMessage";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
@@ -19,7 +19,7 @@ export function ServerPicker() {
   const [testing, setTesting] = React.useState(false);
   const [failed, setFailed] = React.useState<string | null>(null);
 
-  const currentLabel = isCustomServer() ? safeHost(API_BASE) : t("serverLocal");
+  const currentLabel = customServerHost() ?? t("serverLocal");
 
   const apply = async (force: boolean) => {
     // 本地:清覆盖回默认;远程:探活通过(或强连)才写入。
@@ -124,12 +124,4 @@ export function ServerPicker() {
       <p className="m-0 text-ui-xs leading-normal text-muted-foreground">{t("serverPickerHint")}</p>
     </div>
   );
-}
-
-function safeHost(url: string): string {
-  try {
-    return new URL(url).host;
-  } catch {
-    return url === DEFAULT_API_BASE ? url : url;
-  }
 }

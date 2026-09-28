@@ -10,12 +10,12 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Search,
-  Settings,
   Trash2,
+  UserRound,
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { userAvatarUrl, type Workspace } from "@/api/client";
+import { customServerHost, userAvatarUrl, type Workspace } from "@/api/client";
 import { useAuth, useIsDeploymentAdmin } from "@/app/auth";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { Input } from "@/components/ui/input";
@@ -31,9 +31,11 @@ import {
   workspaceRenameBlockedReason,
 } from "@/components/layout/workspaceMenu";
 import { THEME_ICONS, THEME_LABEL_KEYS, nextTheme } from "@/components/layout/themeCycle";
+import { accountOrigin } from "@/components/layout/accountOrigin";
 import { ConfirmDialog, RenameDialog } from "@/components/app/modals";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { navItemsAt, navLabelKey, type NavItem, type StudioView } from "@/components/layout/navLabels";
+import { gotoSettings } from "@/lib/deepLink";
 import { cn } from "@/lib/utils";
 import { useCreateWorkspace, useDeleteWorkspace, useRenameWorkspace } from "@/lib/workspaces";
 import { PageTrailProvider, type PageTrail } from "@/components/layout/pageTrail";
@@ -283,7 +285,7 @@ export function AppShell({
         </nav>
         <div className="mt-3 grid shrink-0 gap-1 border-t border-divider pt-3">
           {FOOTER_NAV.map(railItem)}
-          <RailUserMenu compact={compact} onOpenSettings={() => onViewChange("settings")} />
+          <RailUserMenu compact={compact} />
         </div>
       </aside>
       {/* data-glass-surface:开了自定义背景时由 tokens.css 统一给模糊 —— 几何一个字都不改。
@@ -489,13 +491,14 @@ function WorkspaceSwitcher({
 }
 
 /** 侧栏底部的用户入口:头像(用户名首字)→ 账号菜单 + 版本号。 */
-function RailUserMenu({ compact, onOpenSettings }: { compact: boolean; onOpenSettings: () => void }) {
+function RailUserMenu({ compact }: { compact: boolean }) {
   const t = useI18n();
   const { user, logout } = useAuth();
   const [open, setOpen] = React.useState(false);
   const displayName = user?.display_name || user?.username || "user";
   const initial = displayName.slice(0, 1).toUpperCase();
   const avatarSrc = user?.avatar_key && user.id ? userAvatarUrl(user.id, user.avatar_key) : "";
+  const origin = accountOrigin(t, customServerHost(), user?.oauth_providers ?? []);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -512,20 +515,23 @@ function RailUserMenu({ compact, onOpenSettings }: { compact: boolean; onOpenSet
           <span className="grid h-8 w-8 place-items-center overflow-hidden rounded-full bg-[color-mix(in_srgb,var(--primary)_12%,transparent)] text-ui-md font-bold text-primary">
             {avatarSrc ? <img src={avatarSrc} className="h-full w-full object-cover" alt="" /> : initial}
           </span>
-          <div className="grid [&_small]:text-ui-xs [&_small]:text-muted-foreground [&_strong]:text-ui-md">
+          <div className="grid min-w-0 [&_small]:text-ui-xs [&_small]:text-muted-foreground [&_strong]:text-ui-md">
             <strong>{displayName}</strong>
-            <small>{user?.username ? `@${user.username} · ${t("railLocalAccount")}` : t("railLocalAccount")}</small>
+            {user?.username && <small>@{user.username}</small>}
+            <small>{origin}</small>
           </div>
         </div>
         <div className="grid gap-0.5 border-t border-divider pt-2 [&_button]:flex [&_button]:cursor-pointer [&_button]:items-center [&_button]:gap-1.5 [&_button]:rounded [&_button]:border-0 [&_button]:bg-transparent [&_button]:px-1.5 [&_button]:py-[7px] [&_button]:text-left [&_button]:text-ui-sm [&_button]:text-foreground [&_button]:transition-colors [&_button]:duration-100 [&_button:hover]:bg-secondary">
+          {/* 直达「账号」那一节:侧栏底部已经有一个「设置」,而它回到的是上次停留的分区 ——
+              从账号菜单点进去的人要的是账号本身。 */}
           <button
             type="button"
             onClick={() => {
               setOpen(false);
-              onOpenSettings();
+              gotoSettings("account");
             }}
           >
-            <Settings size={13} /> {t("navSettings")}
+            <UserRound size={13} /> {t("railAccountSettings")}
           </button>
           <button
             type="button"

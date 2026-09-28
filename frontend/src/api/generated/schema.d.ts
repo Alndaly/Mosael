@@ -6350,9 +6350,32 @@ export interface paths {
          *     这条路同时给三件事用:消息底部的播放、确认卡与提问的语音化、失败出声。它们共用同一个
          *     音色配置(settings/agent-voice),因为对用户来说那就是"它的声音"。
          *
-         *     没设过音色就说没设 —— 不替他挑一个(同 provider-defaults 的立场)。
+         *     没设过音色就说没设 —— 不替他挑一个(同 provider-defaults 的立场);「让它出声」关着就不念。
          */
         post: operations["speak_api_agent_speech_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agent/speech/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview Speech
+         * @description 试听设置里存着的那份对话音色。**只要求选好,不要求开着** —— 试听是配置时听一下效果,
+         *     而「先打开才能听」等于让人先对一个没听过的声音点头。
+         *
+         *     和 /agent/speech 只差这道闸:合成走同一个 agent_voice.speak,听到的就是以后念给他的那个声音。
+         */
+        post: operations["preview_speech_api_agent_speech_preview_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -13029,6 +13052,8 @@ export interface components {
              * @default false
              */
             is_deployment_admin: boolean;
+            /** Oauth Providers */
+            oauth_providers?: string[];
         };
         /** UserProfileUpdate */
         UserProfileUpdate: {
@@ -26925,6 +26950,39 @@ export interface operations {
         };
     };
     speak_api_agent_speech_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentSpeechRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_speech_api_agent_speech_preview_post: {
         parameters: {
             query?: never;
             header?: never;

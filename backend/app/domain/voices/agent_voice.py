@@ -9,14 +9,18 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from sqlalchemy.orm import Session
 
 from app.core.i18n import LocalizedError
 from app.db.models import AgentVoicePref
+from app.domain.voices import voices as voices_domain
 
 
-class AgentVoiceNotConfigured(LocalizedError, RuntimeError):
-    """还没选过对话音色。**这不是故障** —— 界面据此提示去设置里选一个,而不是报错。"""
+class AgentVoiceUnavailable(LocalizedError, RuntimeError):
+    """这会儿念不了:还没选好音色,或者「让它出声」关着。**这不是故障** —— 界面据此指路去设置,
+    而不是报错。两种情形用同一个类型、不同的文案 key:调用方的处置一样(409 + 那句话)。"""
 
 
 def get_row(db: Session, user_id: str) -> AgentVoicePref | None:
@@ -56,9 +60,39 @@ def upsert(
     return row
 
 
-def require(db: Session, user_id: str) -> AgentVoicePref:
-    """拿这个人的对话音色,没设过就说没设 —— 不替他挑一个。"""
+def require_ready(db: Session, user_id: str) -> AgentVoicePref:
+    """引擎和音色都选好了的那份配置 —— **不问开关**。试听只要这个:配置的时候听一下效果,
+    本来就发生在打开之前。没设过就说没设,不替他挑一个。"""
     row = get_row(db, user_id)
-    if row is None or not row.enabled or not row.engine:
-        raise AgentVoiceNotConfigured("voiceErr_agentVoiceNotConfigured")
+    if row is None or not row.engine or not row.engine_voice:
+        raise AgentVoiceUnavailable("voiceErr_agentVoiceNotConfigured")
     return row
+
+
+def require_enabled(db: Session, user_id: str) -> AgentVoicePref:
+    """对话里真要出声用的:选好了,**而且**「让它出声」开着。关着就是只用文字,那是他的选择。"""
+    row = require_ready(db, user_id)
+    if not row.enabled:
+        raise AgentVoiceUnavailable("voiceErr_agentVoiceDisabled")
+    return row
+
+
+def speak(db: Session, row: AgentVoicePref, *, text: str, workspace_id: str, out_dir: Path, source_type: str) -> Path:
+    """用这份配置念一句,落到 `out_dir`。对话发声和试听都走这里 —— 试听听到的,就是以后念给他的
+    那个声音;两处各拼一遍参数的话,少带一样(语速、资源族、模型)试听就和真用对不上。"""
+    return voices_domain.speak_to_file(
+        db,
+        text=text,
+        engine=row.engine,
+        engine_voice=row.engine_voice,
+        speed=row.speed,
+        workspace_id=workspace_id,
+        user_id=row.owner_user_id,
+        voice_resource=row.engine_voice_resource,
+        provider_profile_id=row.provider_profile_id,
+        model_override=row.engine_model,
+        out_dir=out_dir,
+        # 记账挂在这个人身上:不是 job,是他的一次发声。**照样要记** —— 各家 TTS 按字符计费。
+        source_type=source_type,
+        source_id=row.owner_user_id,
+    )

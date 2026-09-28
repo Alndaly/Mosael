@@ -18996,8 +18996,48 @@
           "agent"
         ],
         "summary": "Speak",
-        "description": "念一句话,把音频**直接回给调用方**。\n\n**不建任务、不入素材库。** 对话里念出来的每一句都登记成素材的话,说十句就是十个音频\n文件 —— 而它们说完就没用了。这和配音是两件事:配音的产出要留存、要进时间线,所以它\n走 job + register_file_asset;这里的产出活到播完为止。\n\n这条路同时给三件事用:消息底部的播放、确认卡与提问的语音化、失败出声。它们共用同一个\n音色配置(settings/agent-voice),因为对用户来说那就是\"它的声音\"。\n\n没设过音色就说没设 —— 不替他挑一个(同 provider-defaults 的立场)。",
+        "description": "念一句话,把音频**直接回给调用方**。\n\n**不建任务、不入素材库。** 对话里念出来的每一句都登记成素材的话,说十句就是十个音频\n文件 —— 而它们说完就没用了。这和配音是两件事:配音的产出要留存、要进时间线,所以它\n走 job + register_file_asset;这里的产出活到播完为止。\n\n这条路同时给三件事用:消息底部的播放、确认卡与提问的语音化、失败出声。它们共用同一个\n音色配置(settings/agent-voice),因为对用户来说那就是\"它的声音\"。\n\n没设过音色就说没设 —— 不替他挑一个(同 provider-defaults 的立场);「让它出声」关着就不念。",
         "operationId": "speak_api_agent_speech_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentSpeechRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/agent/speech/preview": {
+      "post": {
+        "tags": [
+          "agent"
+        ],
+        "summary": "Preview Speech",
+        "description": "试听设置里存着的那份对话音色。**只要求选好,不要求开着** —— 试听是配置时听一下效果,\n而「先打开才能听」等于让人先对一个没听过的声音点头。\n\n和 /agent/speech 只差这道闸:合成走同一个 agent_voice.speak,听到的就是以后念给他的那个声音。",
+        "operationId": "preview_speech_api_agent_speech_preview_post",
         "requestBody": {
           "content": {
             "application/json": {
@@ -33906,6 +33946,13 @@
             "type": "boolean",
             "title": "Is Deployment Admin",
             "default": false
+          },
+          "oauth_providers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Oauth Providers"
           }
         },
         "type": "object",

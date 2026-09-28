@@ -13,13 +13,13 @@ import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
-import { getAgentVoice, listTtsEngines, listTtsVoices, setAgentVoice } from "@/api/client";
+import { fetchAgentVoicePreview, getAgentVoice, listTtsEngines, listTtsVoices, setAgentVoice } from "@/api/client";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { OptionPicker } from "@/components/ui/option-picker";
 import { Switch } from "@/components/ui/switch";
 import { SETTINGS_FIELD_WIDTH, SettingsGroup, SettingsRow } from "@/components/settings/settings-layout";
-import { SpeakButton } from "@/features/agent/SpeakButton";
+import { VoicePreviewButton } from "@/components/app/VoicePreviewButton";
 
 const SPEEDS = [0.75, 1, 1.25, 1.5, 2];
 
@@ -63,12 +63,17 @@ export function AgentVoiceSection({ workspaceId }: { workspaceId: string }) {
         speed,
         enabled,
       }),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ["agent-voice"] }),
+    // 回包就是存下的那份:直接放进缓存,试听键不必等一次重新拉取才知道「屏幕上的已经存好了」。
+    onSuccess: (saved) => qc.setQueryData(["agent-voice"], saved),
     onError: (error: Error) => toast.error(error.message),
   });
 
   const enabled = pref.data?.enabled ?? false;
   const ready = Boolean(engine && voice);
+  //: 试听念的是**存着的**那份(和对话里真念同一份),所以屏幕上的选择还没落库时先不给点 ——
+  //: 否则刚换了音色就点,听到的是换之前那个。改完即存,这段空档只有一个请求那么长。
+  const persisted =
+    pref.data?.engine === engine && pref.data?.engine_voice === voice && pref.data?.speed === speed;
 
   //: **改完即存,没有保存按钮。** 但存的时机有个条件:换引擎会把音色清空(旧音色在新引擎下
   //: 不存在),那一瞬间的组合是「新引擎 + 空音色」—— 存下去等于存了一份用不了的配置。
@@ -136,10 +141,13 @@ export function AgentVoiceSection({ workspaceId }: { workspaceId: string }) {
             placeholder={t("agentVoicePickVoice")}
             className={SETTINGS_FIELD_WIDTH}
           />
-          {/* 试听走的是**和播放按钮同一条路**,所以听到的就是它以后念给你的那个声音 ——
-              另写一条试听接口的话,试听好听、真用起来不是它,而这种不一致最难查。
-              也因此开关关着时不给试听:那条路只认已开启的配置(agent_voice.require),关着点只会回 409。 */}
-          {enabled && ready && <SpeakButton text={t("agentVoiceSample")} workspaceId={workspaceId} />}
+          {/* 试听和对话里真念走同一个合成(后端 agent_voice.speak),听到的就是以后念给你的那个声音。
+              它只要求选好、不要求开关开着:试听本来就发生在决定打开之前。 */}
+          <VoicePreviewButton
+            load={() => fetchAgentVoicePreview({ workspace_id: workspaceId, text: t("agentVoiceSample") })}
+            disabled={!ready || !persisted}
+            disabledReason={t("agentVoicePreviewNeedsVoice")}
+          />
         </div>
       </SettingsRow>
       <SettingsRow label={t("agentVoiceSpeed")} description={t("agentVoiceSpeedDesc")}>

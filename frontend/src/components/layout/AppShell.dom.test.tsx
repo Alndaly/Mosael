@@ -8,20 +8,20 @@ import { AppShell } from "./AppShell";
 import { usePageTrail } from "./pageTrail";
 import { NAV_ITEMS } from "./navLabels";
 
-const state = vi.hoisted(() => ({ admin: false }));
+const state = vi.hoisted(() => ({ admin: false, user: { username: "studio" } as Record<string, unknown> }));
 vi.mock("@/api/client", async (original) => ({ ...await original<typeof import("@/api/client")>(), api: async () => ({ is_deployment_admin: state.admin }) }));
 // useIsDeploymentAdmin 用真的:它问的是 /api/auth/me,而上面那个 api 桩按 state.admin 回话 ——
 // 「管理员才看得到管理」这条就是从那一问开始的,桩掉它等于跳过了要测的东西。
 vi.mock("@/app/auth", async (original) => ({
   ...(await original<typeof import("@/app/auth")>()),
-  useAuth: () => ({ user: { username: "studio" }, logout: vi.fn() }),
+  useAuth: () => ({ user: state.user, logout: vi.fn() }),
 }));
 vi.mock("@/app/preferences", () => ({
   useI18n: () => (key: string) => key,
   usePreferences: () => ({ theme: "light", locale: "zh-CN", setTheme: vi.fn(), setLocale: vi.fn() }),
 }));
 
-beforeEach(() => { state.admin = false; localStorage.clear(); });
+beforeEach(() => { state.admin = false; state.user = { username: "studio" }; localStorage.clear(); });
 
 function mount(overrides: Partial<React.ComponentProps<typeof AppShell>> = {}) {
   const navigate = vi.fn();
@@ -119,4 +119,22 @@ it("子页面交上来的路径接在顶栏的页面名后面:前面几段点得
   rerender(shell(false));
   expect(within(header).queryByText("小美")).toBeNull();
   expect(within(header).queryByRole("button", { name: "navEntities" })).toBeNull();
+});
+
+it("账号菜单说出账号从哪来;「账号设置」直达设置里的账号那一节,而不是上次停留的分区", async () => {
+  state.user = { username: "ada", oauth_providers: ["google"] };
+  mount();
+  fireEvent.click(screen.getByRole("button", { name: "ada" }));
+  const popup = await screen.findByRole("dialog");
+  // 文案表被桩成原样回 key:两半都在,说明服务器那一半和登录方式那一半都接上了。
+  expect(within(popup).getByText("railLocalAccount · railSignedInWith")).toBeVisible();
+  expect(within(popup).queryByText(/^@ada · /)).toBeNull();
+
+  const opened = vi.fn();
+  const listener = (event: Event) => opened((event as CustomEvent<string>).detail);
+  window.addEventListener("mosael:open-settings", listener);
+  fireEvent.click(within(popup).getByRole("button", { name: "railAccountSettings" }));
+  window.removeEventListener("mosael:open-settings", listener);
+  expect(window.location.hash).toBe("#/settings");
+  expect(opened).toHaveBeenCalledWith("account");
 });

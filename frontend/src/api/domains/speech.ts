@@ -1,6 +1,6 @@
 import type { components } from "@/api/generated/schema";
 import type { Job } from "@/api/domains/jobs";
-import { API_BASE, api, getAuthToken } from "@/api/transport";
+import { API_BASE, api, apiBlob, getAuthToken } from "@/api/transport";
 
 export type AsrModel = components["schemas"]["AsrModelOut"];
 export type Voice = components["schemas"]["VoiceOut"];
@@ -172,22 +172,18 @@ export function dubSubtitles(
  * 试听一把嗓子,拿回一段音频。本地克隆的音色放它的参考录音(那就是它);别的引擎念 `text` 这一小句,走和真用时
  * 同一条合成路(`POST /api/tts/preview`),不建任务、不进素材库。
  */
-export async function fetchVoicePreview(body: { workspace_id: string; engine: string; voice: string; text: string }): Promise<Blob> {
-  const token = getAuthToken();
-  const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
-  const response =
-    body.engine === "clone"
-      ? await fetch(`${API_BASE}/api/voices/${encodeURIComponent(body.voice)}/sample`, { headers })
-      : await fetch(`${API_BASE}/api/tts/preview`, {
-          method: "POST",
-          headers: { ...headers, "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        });
-  if (!response.ok) {
-    const detail = (await response.json().catch(() => null))?.detail;
-    throw new Error(typeof detail === "string" && detail ? detail : `HTTP ${response.status}`);
-  }
-  return response.blob();
+export function fetchVoicePreview(body: { workspace_id: string; engine: string; voice: string; text: string }): Promise<Blob> {
+  return body.engine === "clone"
+    ? apiBlob(`/api/voices/${encodeURIComponent(body.voice)}/sample`)
+    : apiBlob("/api/tts/preview", { method: "POST", body: JSON.stringify(body) });
+}
+
+/**
+ * 试听设置里存着的那份对话音色(`POST /api/agent/speech/preview`)。和对话里真念走同一个合成,
+ * 只是不要求「让它出声」开着 —— 试听发生在打开之前。
+ */
+export function fetchAgentVoicePreview(body: { workspace_id: string; text: string }): Promise<Blob> {
+  return apiBlob("/api/agent/speech/preview", { method: "POST", body: JSON.stringify(body) });
 }
 
 export function voiceSampleUrl(id: string): string {

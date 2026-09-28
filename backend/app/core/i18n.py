@@ -3851,6 +3851,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "还没有选语音对话的音色 —— 到设置的「语音对话」里选一个。它和配音的默认音色是分开的:配音要质量,对话要快。",
         "en": "No voice is chosen for voice chat yet — pick one under Settings → Voice chat. It's separate from the default voiceover voice: voiceovers want quality, chat wants speed.",
     },
+    "voiceErr_agentVoiceDisabled": {
+        "zh": "「让它出声」关着 —— 到设置的「语音对话」里打开,智能体才会念出来。",
+        "en": "Speak replies is off — turn it on under Settings → Voice chat to hear the agent.",
+    },
     # 字幕配音与原声处理(domain/voices/subtitle_dub.py、original_audio.py)
     "dubErr_originalAudioMode": {"zh": "原声处理方式只能是 {modes}", "en": "The original-audio mode must be one of {modes}."},
     "dubErr_separationUnavailableForMode": {
