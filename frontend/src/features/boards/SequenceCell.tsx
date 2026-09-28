@@ -2,7 +2,7 @@ import { DndContext, PointerSensor, closestCenter, useSensor, useSensors, type D
 import { SortableContext, arrayMove, horizontalListSortingStrategy, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Clapperboard, ExternalLink, Pause, Play, Scissors, Trash2, Volume2, VolumeX } from "lucide-react";
+import { Clapperboard, ExternalLink, Pause, Play, Plus, Scissors, Trash2, Volume2, VolumeX } from "lucide-react";
 import React from "react";
 import { toast } from "sonner";
 
@@ -12,7 +12,7 @@ import { errorText } from "@/api/errorMessage";
 import { useI18n } from "@/app/preferences";
 import { cn } from "@/lib/utils";
 import { isImeKeystroke } from "@/lib/shortcuts";
-import { noteSequenceEdit, readSequenceCursor, updateSequenceCursor, useSequenceCursor } from "@/features/boards/sequenceCursor";
+import { noteSequenceEdit, readSequenceCursor, SequenceAddContext, updateSequenceCursor, useSequenceCursor } from "@/features/boards/sequenceCursor";
 
 /** 贴着格子外壳内沿上半的圆角(和 boardNodes 的 CELL_INNER_TOP_RADIUS 同一个值:外壳 rounded-xl 减 1px 边框)。 */
 const CELL_INNER_TOP_RADIUS = "rounded-t-[calc(var(--radius-xl)-1px)]";
@@ -35,6 +35,16 @@ function mainTracks(sequence: Sequence | undefined) {
       .filter((clip) => clip.asset_id)
       .sort((a, b) => a.timeline_start - b.timeline_start);
   return { video: sorted("video"), audio: sorted("audio") };
+}
+
+/** 导出面板上那一行:几段、多长、画幅。 */
+export function sequenceSummary(sequence: Sequence | undefined) {
+  const { video, audio } = mainTracks(sequence);
+  return {
+    clips: video.length,
+    seconds: Math.max(0, ...video.map(end), ...audio.map(end)),
+    size: sequence ? `${sequence.width}×${sequence.height}` : "",
+  };
 }
 
 function clipAt(clips: Clip[], time: number): Clip | undefined {
@@ -167,6 +177,19 @@ export function SequenceCell({ sequenceId }: { sequenceId: string }) {
   });
 
   const pickedClip = video.find((clip) => clip.id === picked);
+  const addToSequence = React.useContext(SequenceAddContext);
+  const addButton = addToSequence ? (
+    <button
+      type="button"
+      data-sequence-add=""
+      aria-label={t("boardSequenceAdd")}
+      title={t("boardSequenceAdd")}
+      onClick={() => addToSequence(sequenceId)}
+      className="nodrag nopan grid h-full w-11 shrink-0 cursor-pointer place-items-center rounded border border-dashed border-border bg-transparent text-muted-foreground hover:border-border-strong hover:bg-secondary hover:text-foreground"
+    >
+      <Plus size={15} />
+    </button>
+  ) : null;
 
   /** 条上的横坐标(条自己的像素,已按画布缩放折回、算上横向滚动)。画布缩放时屏幕像素和条的像素不是一回事。 */
   const stripX = (clientX: number) => {
@@ -272,8 +295,9 @@ export function SequenceCell({ sequenceId }: { sequenceId: string }) {
                         video.length > 0 && "nodrag nopan cursor-pointer")}
           onPointerDown={(event) => {
             if (video.length === 0) return;
-            //: 按在空白处或播放头上 = 拖播放头;按在某一段上由拖动库处理(点一下选中,拖着换顺序)。
-            if ((event.target as HTMLElement).closest("[data-sequence-clip]")) return;
+            //: 按在空白处或播放头上 = 拖播放头;按在某一段上由拖动库处理(点一下选中,拖着换顺序)。「+」是个按钮:
+            //: 这里抓了指针的话,松手的 click 会落到条上而不是它。
+            if ((event.target as HTMLElement).closest("[data-sequence-clip], [data-sequence-add]")) return;
             event.currentTarget.setPointerCapture?.(event.pointerId);
             scrubbing.current = true;
             seek(event.clientX);
@@ -289,8 +313,9 @@ export function SequenceCell({ sequenceId }: { sequenceId: string }) {
           }}
         >
           {video.length === 0 ? (
-            <div className="grid h-full place-items-center px-3 text-center text-ui-2xs text-muted-foreground">
-              {t("boardSequenceStripEmpty")}
+            <div className="flex h-full items-center gap-2 px-1.5 py-1.5">
+              {addButton}
+              <span className="min-w-0 flex-1 text-center text-ui-2xs text-muted-foreground">{t("boardSequenceStripEmpty")}</span>
             </div>
           ) : (
             <DndContext
@@ -321,6 +346,8 @@ export function SequenceCell({ sequenceId }: { sequenceId: string }) {
                       }}
                     />
                   ))}
+                  {/* 「+」不是一段:不进排序,跟在最后一段后面。 */}
+                  {addButton}
                   {!dragging && (
                     //: 播放头:一根贴满条高的线,顶上一个圆点手柄;白描边 + 阴影,压在任何缩略图上都看得见。
                     //: 线两侧各留几像素的抓取区,按住左右拖(按下落到条上,走拖播放头那条路)。

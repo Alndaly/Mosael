@@ -10,7 +10,7 @@
 画板上没有单独的工具格:把内容变成新内容的工具是内容格自己的**能力**(ADR 0025 修订)。它们的设置也由算子写 ——
 `set_form` 带上 `ability: true` 写进那一格的 `form.abilities[producer]`(调用方按注册表判它是不是一项能力,
 见智能体的 edit_board)。一格**自己**的表单只在它存着的就是一次运行发的那一份时才由算子写
-(producer_ids.runs_from_draft):空格子上的生成器(`node:*`)、3D 场景格渲白模(`scene_render`,只有 config)。
+(producer_ids.runs_from_draft):空格子上的生成器(`node:*`)、3D 场景格渲白模(`scene_render`)和时间线格导出(`sequence_export`)(后两种只有 config)。
 这里只管**形状**(是个节点产出者、是个对象);「这个人有没有这个工具、绑定接得上吗、字段对不对」要看
 注册表和整张画布,由调用方在落库之前问 boards.producers.check_forms(见智能体的 edit_board)。
 """
@@ -63,7 +63,7 @@ def _own_form(op: dict[str, Any], current: dict[str, Any], item_id: str) -> dict
     """按算子写一格**自己**的表单:`{"config", "bindings", "producer"}`(产出者排最后,和 actions._pending 一致)。
 
     · `producer` 只能是一个节点产出者(`node:<节点类型>`,空格子上的生成器),或 3D 场景格的渲白模
-      (`scene_render`,只有 config)。内置的写字 / 生成 / 念 / 截的表单是各自面板的形状,由用户在面板上填;
+      (`scene_render`)、时间线格的导出(`sequence_export`),后两种只有 config。内置的写字 / 生成 / 念 / 截的表单是各自面板的形状,由用户在面板上填;
       替他写一份面板不认的表单,只会让面板打不开。
     · 换了产出者,旧的 config / bindings 属于上一个,一并清掉;能力的设置(`abilities`)归这一格,留着。
     """

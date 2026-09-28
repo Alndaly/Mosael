@@ -57,3 +57,24 @@ it("给一格换一份:只列那一类,没有筛选条", async () => {
   expect(titles()[0]).toContain("海报");
   expect(screen.queryByRole("group", { name: "boardsPickMediaKind" })).toBeNull();
 });
+
+it("时间线格的「+」:先列这张画板上的素材;点掉「这张画板上的」就是整个素材库", async () => {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(
+    <QueryClientProvider client={client}>
+      <AssetPickerDialog open kind="media" workspaceId="ws" onOpenChange={vi.fn()} onPick={vi.fn()} onBoard={["vid"]} />
+    </QueryClientProvider>,
+  );
+  await waitFor(() => expect(titles()).toHaveLength(1));
+  expect(titles()[0]).toContain("开场");
+  const onBoard = screen.getByRole("button", { name: "boardsPickOnBoard" });
+  expect(onBoard.getAttribute("aria-pressed")).toBe("true");
+  fireEvent.click(onBoard);
+  await waitFor(() => expect(titles()).toHaveLength(3));
+});
+
+it("没有画板上的素材就不多那一枚", async () => {
+  mount("media");
+  await waitFor(() => expect(titles()).toHaveLength(3));
+  expect(screen.queryByRole("button", { name: "boardsPickOnBoard" })).toBeNull();
+});

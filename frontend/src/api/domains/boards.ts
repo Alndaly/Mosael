@@ -145,8 +145,9 @@ export function deleteBoard(boardId: string, workspaceId: string): Promise<void>
  *
  * 内置的各有专门的面板;`node:<节点类型>` 跑一个节点(内容格的能力、空格子上的生成器),表单由节点声明生成。
  * `scene_render` 挂在 3D 场景格上:从场景的一个镜头渲白模参考(跑的是工作流那个节点,产出新建在场景格右边)。
+ * `sequence_export` 挂在时间线格上:把那条时间线导出成一段成片,落成右边一格视频(ADR 0030 §4)。
  */
-export type BuiltinProducer = "generate" | "scene_render" | "speak" | "trim" | "write";
+export type BuiltinProducer = "generate" | "scene_render" | "sequence_export" | "speak" | "trim" | "write";
 export type NodeProducer = `node:${string}`;
 export type BoardProducer = BuiltinProducer | NodeProducer;
 
@@ -160,7 +161,7 @@ export function isNodeProducer(producer: string | undefined | null): producer is
  * 产出**不落进宿主**、新建成宿主右边几格的内置产出者。和后端 boards/producer_ids.DERIVED_BUILTINS 同一张表 ——
  * 宿主自己的 asset_id(3D 场景格的缩略图)不是它的产出:有它照样挂面板、照样还能再跑。
  */
-const DERIVED_BUILTINS: ReadonlySet<BoardProducer> = new Set<BoardProducer>(["scene_render"]);
+const DERIVED_BUILTINS: ReadonlySet<BoardProducer> = new Set<BoardProducer>(["scene_render", "sequence_export"]);
 
 /** 这一格**自己的**产出者把产出新建在它右边(场景格渲白模),而不是填进它。能力一律新建在右边,不看这个。 */
 export function derivesOutputs(producer: BoardProducer | undefined | null): boolean {
@@ -179,6 +180,8 @@ const SLOT_PRODUCER: Partial<Record<BoardItem["kind"], BuiltinProducer>> = {
   scene: "scene_render",
   //: 文档格也会「让 AI 写」:写出一篇笔记(和后端 SLOT_PRODUCERS 同一张表)。
   document: "write",
+  //: 时间线格挂导出:成片落在右边,格子自己永远「还能再导」。
+  sequence: "sequence_export",
 };
 
 /**
@@ -249,6 +252,10 @@ export interface BoardRunForms {
   /** 3D 场景格渲白模:场景由那一格给;镜头留空 = 场景只有一个镜头时用它。和后端 producers.SceneRenderForm 同形 ——
    *  存在那一格上的表单就是这一份。 */
   scene_render: { config: { shot_id?: string; render?: "stills" | "video" | "both"; project_id?: string } };
+  /** 时间线格导出:时间线由那一格给。和后端 producers.SequenceExportForm 同形,取值和剪辑页的导出同一组。 */
+  sequence_export: {
+    config: { resolution?: "original" | "1080p" | "720p" | "480p"; quality?: "high" | "standard" | "compact"; ai_label?: "yes" | "no" };
+  };
   /** 节点产出者(一项能力、空格子上的生成器):节点配置 + 哪些字段接上游(值由服务端运行时从画布上取;
    *  能力吃的那一格的内容由服务端从宿主取,不在这里)。和后端 producers.NodeForm 同形。 */
   node: { config: Record<string, unknown>; bindings: Record<string, { from: string }[]> };

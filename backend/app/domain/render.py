@@ -16,6 +16,7 @@ from app.core.i18n import tr
 from app.domain.jobs import RENDER_SLOTS, dispatch_job, run_job_guarded, say
 from app.db.models import Asset, Font, Job, Lut, Sequence, Track
 from app.domain.assets.importer import register_file_asset
+from app.domain.export_presets import QUALITY_PRESETS, RESOLUTION_PRESETS
 from app.domain.jobs import create_job, emit_job_event, finish_job, register_job_child, unregister_job_child
 from app.media.paths import resolve_key
 from app.media.render_executor import (
@@ -48,10 +49,7 @@ def _asset_kinds(db: Session, sequence: Sequence) -> dict[str, dict[str, str]]:
         for asset in db.scalars(select(Asset).where(Asset.id.in_(ids)))
     }
 
-# 导出参数(对话框可调,全部可省略 → 维持原有行为):
-# resolution 是目标短边档位,只降不升;quality 映射 (CRF, x264 preset)。
-RESOLUTION_PRESETS = {"1080p": 1080, "720p": 720, "480p": 480}
-QUALITY_PRESETS = {"high": (18, "medium"), "standard": (20, "veryfast"), "compact": (26, "veryfast")}
+# 导出参数(对话框可调,全部可省略 → 维持原有行为)的几档见 export_presets。
 
 
 def resolve_export_output(

@@ -1628,6 +1628,36 @@ def _migrate_boards_remember_their_project() -> None:
         conn.execute(text("ALTER TABLE boards ADD COLUMN project_id VARCHAR(64)"))
 
 
+def _migrate_board_sequence_cells_name_their_producer() -> None:
+    """时间线格挂导出(ADR 0030 §4,`sequence_export`):已经放下的时间线格写明它的产出者,面板照它挂。
+
+    新写入的由 normalize 按 SLOT_PRODUCERS 补;这里补的是还没被写过一次的那些。改到的板版本号 +1。
+    """
+    if "boards" not in set(inspect(engine).get_table_names()):
+        return
+    with engine.begin() as conn:
+        for board_id, raw, revision in conn.execute(text("SELECT id, canvas, revision FROM boards")).fetchall():
+            try:
+                canvas = json.loads(raw) if isinstance(raw, str) else raw
+            except (TypeError, ValueError):
+                continue
+            if not isinstance(canvas, dict) or not isinstance(canvas.get("items"), list):
+                continue
+            changed = False
+            for item in canvas["items"]:
+                if not isinstance(item, dict) or item.get("kind") != "sequence":
+                    continue
+                form = item.get("form") if isinstance(item.get("form"), dict) else {}
+                if form.get("producer") is None:
+                    item["form"] = {**form, "producer": "sequence_export"}
+                    changed = True
+            if changed:
+                conn.execute(
+                    text("UPDATE boards SET canvas = :canvas, revision = :revision WHERE id = :id"),
+                    {"canvas": json.dumps(canvas, ensure_ascii=False), "revision": int(revision or 0) + 1, "id": board_id},
+                )
+
+
 def _migrate_voices_declare_consent() -> None:
     """克隆音色加授权声明(ADR 0028 §5):`consent_kind` / `consent_by` / `consent_at`。
 
@@ -5123,6 +5153,7 @@ def migration_plan() -> MigrationPlan:
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_board_documents_can_be_written),
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_board_scene_cells_hold_no_image),
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_board_scene_render_drops_project),
+            *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_board_sequence_cells_name_their_producer),
             *_steps(
                 MigrationPhase.FILESYSTEM,
                 _migrate_shared_venvs,

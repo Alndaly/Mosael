@@ -44,3 +44,10 @@ export function onSequenceEdit(listener: (sequenceId: string) => void): () => vo
   editListeners.add(listener);
   return () => editListeners.delete(listener);
 }
+
+/**
+ * 条末尾的「+」:给这条时间线挑一份素材接到末尾(从这张画板上已有的格子里,或素材库里)。挑素材的弹窗在画板那一层
+ * (BoardsView),格子够不着 —— 画布把「给这条时间线挑」放进这个 context。没有(单独渲染格子时)就不画「+」。
+ * 住在这个不引 UI 的模块里:热更新重跑格子组件时 context 的身份不变(见 app/contextIdentity.test)。
+ */
+export const SequenceAddContext = React.createContext<((sequenceId: string) => void) | null>(null);

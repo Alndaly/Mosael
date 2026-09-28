@@ -41,11 +41,13 @@ def test_内置的产出者各自挂在该挂的格子上() -> None:
     with SessionLocal() as db:
         registry = producers.list_producers(db, None)
     by_id = {one.id: one for one in registry if not one.id.startswith("node:")}
-    assert set(by_id) == {"generate", "speak", "trim", "write", "scene_render"}
+    assert set(by_id) == {"generate", "speak", "trim", "write", "scene_render", "sequence_export"}
     #: canvas 校验表单时认的那张名字表,和注册表是同一份。
     assert set(BUILTIN_PRODUCER_IDS) == set(by_id)
     #: 能挑来填空槽的是这几个(一种格子有两个时面板上给切换);截一段得先有一段素材。场景格永远「还能再渲」。
-    assert {one for one in by_id if by_id[one].fills_empty_slot} == {"generate", "speak", "write", "scene_render"}
+    #: 时间线格永远「还能再导」。
+    assert {one for one in by_id if by_id[one].fills_empty_slot} == {"generate", "speak", "write", "scene_render",
+                                                                      "sequence_export"}
 
     #: 生成挂在哪由生成目录说了算,不在画板这边另写一份。
     assert by_id["generate"].hosts == tuple(KINDS)
@@ -54,12 +56,14 @@ def test_内置的产出者各自挂在该挂的格子上() -> None:
     assert by_id["speak"].hosts == ("audio",)
     assert set(by_id["trim"].hosts) == {"video", "audio"}
     assert by_id["scene_render"].hosts == ("scene",)
+    assert by_id["sequence_export"].hosts == ("sequence",)
 
     assert {one: by_id[one].permission for one in by_id} == {
         "generate": "edit", "speak": "edit", "trim": "edit", "write": "ai", "scene_render": "edit",
+        "sequence_export": "edit",
     }
-    #: 智能体替人跑时要不要确认卡看这个:本机截取、本机渲白模既不花钱也不出门。
-    assert {one for one in by_id if by_id[one].effects == "none"} == {"trim", "scene_render"}
+    #: 智能体替人跑时要不要确认卡看这个:本机截取、本机渲白模、本机导出既不花钱也不出门。
+    assert {one for one in by_id if by_id[one].effects == "none"} == {"trim", "scene_render", "sequence_export"}
     assert all(one.effects in ("none", "paid", "external") for one in by_id.values())
 
 
@@ -80,7 +84,7 @@ def test_新放下的一格挂哪个产出者() -> None:
     from app.domain.boards.producer_ids import SLOT_PRODUCERS
 
     assert SLOT_PRODUCERS == {"note": "write", "image": "generate", "video": "generate", "audio": "speak",
-                              "scene": "scene_render", "document": "write"}
+                              "scene": "scene_render", "document": "write", "sequence": "sequence_export"}
     assert SLOT_PRODUCERS.get("frame") is None, "分组框不产出"
 
 

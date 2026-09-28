@@ -372,6 +372,72 @@ describe("选中之后挂什么", () => {
     expect(document.querySelector("[data-board-scene-open]"), "还没有场景就没有可编辑的").toBeNull();
   });
 
+  describe("时间线格(ADR 0030)", () => {
+    const clip = (id: string, start: number) => ({ id, asset_id: `a-${id}`, asset_kind: "video", timeline_start: start, src_in: 0, src_out: 2, speed: 1 });
+    const SEQUENCE = { id: "seq", project_id: "p", width: 1080, height: 1920,
+                       tracks: [{ id: "v", kind: "video", position: 0, clips: [clip("a", 0), clip("b", 2)] }] };
+    const EXPORT = {
+      id: "sequence_export", type: "sequence_export", runs_from_draft: true, hosts: ["sequence"], role: "slot",
+      fills_empty_slot: true, label: "导出成片", description: "", outputs: ["asset_id"],
+      config: {
+        resolution: { type: "string", default: "original", options: ["original", "720p"], option_labels: { original: "原样", "720p": "720p" }, label: "resolution" },
+        quality: { type: "string", default: "standard", options: ["standard", "compact"], label: "quality" },
+        ai_label: { type: "string", default: "yes", options: ["yes", "no"], label: "ai_label" },
+      },
+    };
+    const board = {
+      items: [
+        { id: "t", kind: "sequence" as const, x: 0, y: 0, width: 560, height: 400, sequence_id: "seq", text: "时间线 1",
+          form: { producer: "sequence_export" as const } },
+        { id: "v1", kind: "video" as const, x: 700, y: 0, asset_id: "clip-1" },
+        { id: "v2", kind: "video" as const, x: 700, y: 300, asset_id: "clip-1" },
+      ],
+      edges: [], markers: [],
+    };
+
+    it("选中时间线格不弹导出面板;操作条上「导出」才打开,发送起一次导出(只发导出自己的几项)", async () => {
+      editor.getSequence.mockResolvedValue(SEQUENCE);
+      const onRun = vi.fn(async () => undefined);
+      mount(board, { onRun, producers: [EXPORT] as never });
+      select("t");
+      expect(document.querySelector('[data-board-composer="sequence-export"]'), "选中多半是要剪、要排").toBeNull();
+      const exportButton = toolbarButton("boardSequenceExport");
+      expect(exportButton, "操作条上有「导出」").toBeTruthy();
+      act(() => exportButton!.click());
+      const panel = document.querySelector('[data-board-composer="sequence-export"]');
+      expect(panel).not.toBeNull();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(10);
+      });
+      //: 时间线有两段:说的是几段、多长、画幅,不是「还是空的」。
+      expect(panel!.querySelector("[data-sequence-export-summary]")?.textContent).toContain("boardSequenceExportSummary");
+      act(() => panel!.querySelector<HTMLButtonElement>('button[aria-label="boardSequenceExport"]')!.click());
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(10);
+      });
+      expect(onRun).toHaveBeenCalledWith(expect.objectContaining({ producer: "sequence_export", item_id: "t", kind: "sequence", form: { config: {} } }));
+    });
+
+    it("条末尾的「+」开素材选择器(先列这张画板上的素材),挑中就接到末尾、记进撤销", async () => {
+      editor.getSequence.mockResolvedValue(SEQUENCE);
+      editor.appendAssetToSequence.mockResolvedValue(SEQUENCE);
+      const onPickAsset = vi.fn();
+      mount(board, { onPickAsset });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(10);
+      });
+      const add = document.querySelector<HTMLButtonElement>("[data-sequence-add]");
+      expect(add, "条末尾有「+」").not.toBeNull();
+      act(() => add!.click());
+      expect(onPickAsset).toHaveBeenCalledWith("media", expect.any(Function), { onBoard: ["clip-1"] });
+      await act(async () => {
+        onPickAsset.mock.calls[0][1]("clip-1");
+        await vi.advanceTimersByTimeAsync(10);
+      });
+      expect(editor.appendAssetToSequence).toHaveBeenCalledWith("seq", "clip-1");
+    });
+  });
+
   it("空的图片槽选中就挂生成面板(那一格就是要生成的)", () => {
     mount(
       { items: [{ id: "i1", kind: "image", x: 0, y: 0, width: 260, height: 180, form: { producer: "generate" } }], edges: [], markers: [] },

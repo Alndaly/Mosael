@@ -16,6 +16,7 @@ import { AudioComposer } from "@/features/boards/AudioComposer";
 import { NodeComposer } from "@/features/boards/NodeComposer";
 import { NoteComposer } from "@/features/boards/NoteComposer";
 import { SceneComposer } from "@/features/boards/SceneComposer";
+import { SequenceExportComposer } from "@/features/boards/SequenceExportComposer";
 import { TrimComposer } from "@/features/boards/TrimComposer";
 import { itemFormResetKey, itemIsRunning, producerOf } from "@/features/boards/boardItemState";
 import type { BoardDocumentState } from "@/features/boards/boardDocumentSources";
@@ -144,6 +145,19 @@ export const BUILTIN_COMPOSERS: Record<BuiltinProducer, (host: ComposerHost) => 
     />
   ),
 
+  //: 时间线格的导出:按需打开(操作条上的「导出」)。时间线就是这一格,不吃上游;成片新建在右边。
+  sequence_export: ({ item, position, workspaceId, producers, onFormChange, run }) => (
+    <SequenceExportComposer
+      key={item.id}
+      item={item}
+      producer={producers?.find((one) => one.id === "sequence_export" && one.runs_from_draft && one.hosts.includes(item.kind))}
+      workspaceId={workspaceId}
+      busy={itemIsRunning(item)}
+      onFormChange={onFormChange}
+      onRun={(form) => run({ producer: "sequence_export", item_id: item.id, kind: item.kind, ...position, form })}
+    />
+  ),
+
   //: 还没有产出的图片/视频槽:提示词面板 —— 节点本身就是生成单元。
   generate: ({ item, position, workspaceId, feeding, documents, models, onFormChange, onPickAsset, run }) => (
     <NodeComposer
@@ -260,6 +274,8 @@ const COMPOSER_ON_DEMAND: Record<BuiltinProducer, boolean> = {
   speak: false,
   trim: false,
   scene_render: false,
+  //: 选中时间线格多半是要剪、要排:导出面板由操作条上的「导出」打开。
+  sequence_export: true,
 };
 
 export function composerOnDemand(producer: BoardProducer): boolean {
@@ -269,6 +285,11 @@ export function composerOnDemand(producer: BoardProducer): boolean {
 /** 这一格能不能打开按需的面板(「让 AI 写」)。能力交回的结构化数据(JSON 便签)不给 —— 它是一份数据,
  *  不是一段要改写的文案。 */
 export function canAskWriter(item: BoardItem): boolean {
+  return producerOf(item) === "write" && canOpenOnDemand(item);
+}
+
+/** 这一格自己的产出者是按需的,且此刻能打开(操作条上点开的「让 AI 写」「导出」)。面板名就是产出者的名字。 */
+export function canOpenOnDemand(item: BoardItem): boolean {
   const producer = producerOf(item);
   return Boolean(producer && composerOnDemand(producer) && item.text_format !== "json");
 }

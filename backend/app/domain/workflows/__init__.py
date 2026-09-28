@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from app.ai.providers.contracts.denoise import DEFAULT_STRENGTH, STRENGTHS
 from app.ai.providers.registry import DENOISE_ADAPTERS, SEPARATION_ADAPTERS
+from app.domain.export_presets import EXPORT_QUALITIES, EXPORT_RESOLUTIONS
 from app.domain.generation.catalog import BUILTIN_MODELS, SOURCE_GROUPS, SOURCE_ROLE_LABELS
 from app.domain.media_kinds import declared_media
 from app.domain.scenes import REFERENCE_RENDERS
@@ -357,6 +358,9 @@ _FIELD_LABELS = {
     "shot_ids": "wfField_shot_ids",
     "shot_count": "wfField_shot_count",
     "render": "wfField_render",
+    "resolution": "wfField_resolution",
+    "quality": "wfField_quality",
+    "ai_label": "wfField_ai_label",
     "source_group": "wfField_source_group",
     "entity_ids": "wfField_entity_ids",
     "entity_id": "wfField_entity_id",
@@ -647,12 +651,23 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "outputs": ["text", "timed_text", "segments", "language", "transcript_id", "duration"],
         "output_types": {"segments": "json", "duration": "number"},
     },
+    #: 画板上的时间线格导出也跑这一个(内置产出者 `sequence_export`,见 boards.producers):时间线由格子给,
+    #: 分辨率 / 画质 / 「AI 生成」标识读的是这同一份字段声明,和剪辑页导出同一组取值(render.EXPORT_*)。
     "export_sequence": {
         "external": False,
         "category": "wfCat_asset",
         "label": "wfNode_export_sequence",
         "description": "wfNode_export_sequence_desc",
-        "config": {"sequence_id": {"type": "template", "required": True, "options_from": "sequences"}},
+        "output_media": {"asset_id": "video"},
+        "config": {
+            "sequence_id": {"type": "template", "required": True, "options_from": "sequences"},
+            "resolution": {"type": "string", "default": "original", "options": list(EXPORT_RESOLUTIONS),
+                           "description": "wfNode_export_sequence_resolution"},
+            "quality": {"type": "string", "default": "standard", "options": list(EXPORT_QUALITIES),
+                        "description": "wfNode_export_sequence_quality"},
+            "ai_label": {"type": "string", "default": "yes", "options": ["yes", "no"],
+                         "description": "wfNode_export_sequence_ai_label"},
+        },
         "outputs": ["asset_id"],
     },
     "note_search": {

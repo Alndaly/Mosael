@@ -53,6 +53,7 @@ from app.domain.boards.canvas import BoardDomainError
 from app.domain.boards.producer_ids import (
     BUILTIN_PRODUCER_IDS,
     SCENE_PRODUCER,
+    SEQUENCE_PRODUCER,
     node_producer_id,
     node_type_of,
     runs_from_draft,
@@ -228,6 +229,28 @@ class SceneRenderForm(_Form):
     config: SceneRenderConfig = Field(default_factory=SceneRenderConfig)
 
 
+#: 时间线格导出收的那几个字段 —— **就是工作流节点 `export_sequence` 声明的那几个**(说明、选项、缺省读那一份,
+#: 见 _sequence_export_meta),少了 `sequence_id`:时间线由宿主那一格给。
+SEQUENCE_EXPORT_FIELDS = ("resolution", "quality", "ai_label")
+
+
+class SequenceExportConfig(_Form):
+    """时间线格上导出的设置。和节点的配置同名同义,取值是同一张表(export_presets,棘轮钉着)。"""
+
+    model_config = ConfigDict(allow_inf_nan=False, extra="forbid")
+
+    resolution: Literal["original", "1080p", "720p", "480p"] = "original"
+    quality: Literal["high", "standard", "compact"] = "standard"
+    #: 成片里有数字人片段时,片头和画面一角加「AI 生成」(ADR 0028 §5)。默认开、允许关,同剪辑页。
+    ai_label: Literal["yes", "no"] = "yes"
+
+
+class SequenceExportForm(_Form):
+    """时间线格上的表单。存在那一格上的就是这一份(`form.config`),跑完不清,下一次照它再导。"""
+
+    config: SequenceExportConfig = Field(default_factory=SequenceExportConfig)
+
+
 def _start_generate(db: Session, request: RunRequest, form: GenerateForm) -> Board:
     return generate_on_board(
         db,
@@ -371,6 +394,61 @@ def _scene_render_meta() -> dict[str, Any]:
     }
 
 
+#: 导出吃的是宿主那一格的时间线:节点的 `sequence_id` 字段(boards.tools.host_value 的 `sequence`)。
+_SEQUENCE_HOST = ("sequence_id", "sequence")
+
+
+def _sequence_export_args(form: SequenceExportForm) -> dict[str, Any]:
+    """时间线格上的一次导出 → 跑节点那条路要的东西(和渲白模同一个形状,见 _scene_render_args)。"""
+    return {
+        "node_type": "export_sequence",
+        "meta": _sequence_export_meta(),
+        "config": form.config.model_dump(),
+        "bindings": {},
+        "host_input": _SEQUENCE_HOST,
+    }
+
+
+def _start_sequence_export(db: Session, request: RunRequest, form: SequenceExportForm) -> Board:
+    """在时间线格上导出一次:**工作流节点 `export_sequence` 的同一个执行器**(起一次正常的导出任务、等它做完),
+    走能力那条路(`board_run` 任务、能停),成片新建成时间线格右边的一格视频。时间线格自己不动。"""
+    from app.core.i18n import get_current_locale, t
+    from app.domain.boards.tools import run_node_on_board
+
+    return run_node_on_board(
+        db,
+        request=request,
+        **_sequence_export_args(form),
+        label=t("boardProducer_sequence_export", get_current_locale()),
+        draft={"config": form.config.model_dump(exclude_unset=True)},
+    )
+
+
+def _preflight_sequence_export(db: Session, request: RunRequest, form: SequenceExportForm) -> dict[str, Any]:
+    from app.core.i18n import get_current_locale, t
+    from app.domain.boards.tools import prepare_node_run
+
+    prepare_node_run(db, request=request, **_sequence_export_args(form),
+                     label=t("boardProducer_sequence_export", get_current_locale()))
+    return {}
+
+
+def _sequence_export_meta() -> dict[str, Any]:
+    """导出给界面的描述:名字和一句说明是画板自己的,字段和输出是工作流节点那一份(不抄)。"""
+    from app.domain.workflows import NODE_TYPES
+
+    node = NODE_TYPES["export_sequence"]
+    return {
+        **_builtin_meta(SEQUENCE_PRODUCER),
+        "config": {key: dict(node["config"][key]) for key in SEQUENCE_EXPORT_FIELDS},
+        "outputs": list(node["outputs"]),
+        "output_types": dict(node.get("output_types") or {}),
+        "output_labels": dict(node.get("output_labels") or {}),
+        "output_media": dict(node.get("output_media") or {}),
+        "board_outputs": ["asset_id"],
+    }
+
+
 def _builtin_meta(producer_id: str) -> dict[str, Any]:
     """内置产出者给界面的那一点描述:名字和一句说明(i18n key)。没有字段声明 —— 它们的面板是专门写的。"""
     return {
@@ -458,6 +536,20 @@ def _builtins() -> dict[str, Producer]:
                 start=_start_scene_render,
                 preflight=_preflight_scene_render,
                 #: 起任务之前就会失败的那几种(和能力同一条路,见 boards.tools.prepare_node_run)。
+                failures=(WorkflowDomainError,),
+            ),
+            Producer(
+                id=SEQUENCE_PRODUCER,
+                meta=_sequence_export_meta(),
+                #: 时间线格永远「还能再导」:成片落在右边(producer_ids.DERIVED_BUILTINS)。新放下的时间线格挂的就是它。
+                fills_empty_slot=True,
+                hosts=("sequence",),
+                permission="edit",
+                #: 本机渲染,不花钱、不出门。
+                effects="none",
+                form=SequenceExportForm,
+                start=_start_sequence_export,
+                preflight=_preflight_sequence_export,
                 failures=(WorkflowDomainError,),
             ),
         )

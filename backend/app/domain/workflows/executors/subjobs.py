@@ -97,6 +97,29 @@ def transcribe_asset(db: Session, scope: RunScope, config: dict[str, Any]) -> di
     }
 
 
+def export_params(config: dict[str, Any]) -> dict[str, Any] | None:
+    """节点配置 → 导出参数(和剪辑页的导出对话框同形)。一样都没填就是 None:按默认档导出。"""
+    from app.domain.export_presets import EXPORT_QUALITIES, EXPORT_RESOLUTIONS
+
+    params: dict[str, Any] = {}
+    resolution = str(config.get("resolution") or "").strip()
+    if resolution:
+        if resolution not in EXPORT_RESOLUTIONS:
+            raise WorkflowDomainError("wfErr_exportOptionUnknown", params={"field": "resolution", "value": resolution})
+        params["resolution"] = resolution
+    quality = str(config.get("quality") or "").strip()
+    if quality:
+        if quality not in EXPORT_QUALITIES:
+            raise WorkflowDomainError("wfErr_exportOptionUnknown", params={"field": "quality", "value": quality})
+        params["quality"] = quality
+    label = str(config.get("ai_label") or "").strip().lower()
+    if label:
+        if label not in ("yes", "no"):
+            raise WorkflowDomainError("wfErr_exportOptionUnknown", params={"field": "ai_label", "value": label})
+        params["ai_label"] = label == "yes"
+    return params or None
+
+
 @register("export_sequence")
 def export_sequence(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
     from app.domain.render import start_export
@@ -104,7 +127,7 @@ def export_sequence(db: Session, scope: RunScope, config: dict[str, Any]) -> dic
     # start_export 会把渲染任务建在**序列所属的那个工作区**(workspace_id=sequence.workspace_id),
     # 所以不挡的话,A 工作区的工作流能在 B 工作区里起一个渲染任务并拿到产出的 asset_id。
     sequence = _sequence_in(db, scope, str(config.get("sequence_id", "")).strip())
-    child = start_export(db, sequence.id, created_by=current_actor(db))
+    child = start_export(db, sequence.id, export_params(config), created_by=current_actor(db))
     final = wait_for_job(child.id, release=db)
     asset_id = str((final.result or {}).get("asset_id", ""))
     return {"asset_id": asset_id}

@@ -437,6 +437,7 @@ const RUN_FAILED: Record<BuiltinProducer, MessageKey> = {
   speak: "boardSpeakFailed",
   trim: "boardTrimFailed",
   scene_render: "boardSceneRenderFailed",
+  sequence_export: "boardSequenceExportFailed",
 };
 
 function BoardDetail({
@@ -509,6 +510,8 @@ function BoardDetail({
   const [picking, setPicking] = React.useState<{
     kind: MediaKind | "media";
     place: (assetId: string, kind: MediaKind) => void;
+    /** 这张画板上已有的素材(时间线格的「+」):选择器里多一枚「这张画板上的」。 */
+    onBoard?: string[];
   } | null>(null);
   //: 3D 场景**先选后放**。后端要求 scene 节点必须带 scene_id(domain/boards/canvas.py),
   //: 所以不能像文档那样先落一个空节点再补 —— 那种节点存不下去。
@@ -1095,7 +1098,7 @@ function BoardDetail({
         canvas={board.canvas ?? { items: [], edges: [] }}
         getInsets={getCanvasInsets}
         onChange={setCanvas}
-        onPickAsset={(kind, place) => setPicking({ kind, place })}
+        onPickAsset={(kind, place, options) => setPicking({ kind, place, onBoard: options?.onBoard })}
         onRun={run}
         onGrabFrame={grabFrame}
         models={models.data ?? []}
@@ -1202,6 +1205,7 @@ function BoardDetail({
       <AssetPickerDialog
         open={picking !== null}
         kind={picking?.kind ?? "image"}
+        onBoard={picking?.onBoard}
         workspaceId={workspaceId}
         onOpenChange={(next) => !next && setPicking(null)}
         onPick={(assetId, kind) => {

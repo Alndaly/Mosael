@@ -108,7 +108,7 @@ def _is_list_field(key: str, spec: dict[str, Any]) -> bool:
 def host_value(db: Session, workspace_id: str, host: dict[str, Any], key: str, sink: str) -> Any:
     """一项能力挂着的那一格,给它吃内容的那个字段的值;宿主还没有内容(空槽、空便签、没挑笔记的文档)回 None。
 
-    和上游格子给的是同一种值(_value_of):便签给字、文档给钉住那一版的正文、媒体给素材、3D 场景给场景。
+    和上游格子给的是同一种值(_value_of):便签给字、文档给钉住那一版的正文、媒体给素材、3D 场景给场景、时间线格给时间线。
     收一串素材的字段(`*_asset_ids`)给一份的列表。
     """
     value = _value_of(db, workspace_id, host, sink, [str(host.get("kind"))])
@@ -133,6 +133,8 @@ def _value_of(db: Session, workspace_id: str, source: dict[str, Any], sink: str,
         return str(read_reference(db, workspace_id, source["note_id"], source.get("note_revision"))["markdown"])
     if sink == "scene":
         return str(source.get("scene_id") or "") or None
+    if sink == "sequence":
+        return str(source.get("sequence_id") or "") or None
     if sink == "entity":
         return str(source.get("entity_id") or "") or None
     return str(source.get("asset_id") or "") or None

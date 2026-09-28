@@ -19,8 +19,8 @@ vi.mock("@/api/domains/editor", () => api);
 vi.mock("@/api/domains/assets", () => ({ assetFileUrl: (id: string) => `/file/${id}`, assetThumbnailUrl: (id: string) => `/thumb/${id}` }));
 vi.mock("@/app/preferences", () => ({ useI18n: () => (key: string) => key }));
 
-import { SequenceCell, SequenceToolbarActions, reorderedClips, stripLayout } from "./SequenceCell";
-import { onSequenceEdit, updateSequenceCursor } from "./sequenceCursor";
+import { SequenceCell, SequenceToolbarActions, reorderedClips, sequenceSummary, stripLayout } from "./SequenceCell";
+import { onSequenceEdit, SequenceAddContext, updateSequenceCursor } from "./sequenceCursor";
 
 const clip = (id: string, start: number, length: number, extra: Record<string, unknown> = {}) => ({
   id, asset_id: `a-${id}`, asset_kind: "video", timeline_start: start, src_in: 0, src_out: length, speed: 1, ...extra,
@@ -172,5 +172,28 @@ describe("时间线格", () => {
     api.getSequence.mockRejectedValue(new Error("404"));
     mount();
     await waitFor(() => expect(document.querySelector("[data-sequence-missing]")).not.toBeNull());
+  });
+
+  it("条末尾的「+」交给画板挑素材(点名这一条时间线);格子单独渲染时没有「+」", async () => {
+    mount();
+    await waitFor(() => expect(tile("a")).not.toBeNull());
+    expect(document.querySelector("[data-sequence-add]")).toBeNull();
+    const pick = vi.fn();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <SequenceAddContext.Provider value={pick}>
+          <SequenceCell sequenceId="seq" />
+        </SequenceAddContext.Provider>
+      </QueryClientProvider>,
+    );
+    await waitFor(() => expect(document.querySelector("[data-sequence-add]")).not.toBeNull());
+    fireEvent.click(document.querySelector("[data-sequence-add]")!);
+    expect(pick).toHaveBeenCalledWith("seq");
+  });
+
+  it("导出面板上那一行:几段(主视频轨)、多长(算上音频)、画幅", () => {
+    expect(sequenceSummary({ ...SEQUENCE, width: 1080, height: 1920 } as never)).toEqual({ clips: 2, seconds: 6, size: "1080×1920" });
+    expect(sequenceSummary(undefined)).toEqual({ clips: 0, seconds: 0, size: "" });
   });
 });

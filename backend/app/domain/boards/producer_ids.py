@@ -10,7 +10,7 @@ import re
 from typing import Any
 
 #: 内置产出者的名字。注册表里的几个与它一一对应(tests/test_board_producers.py 钉着)。
-BUILTIN_PRODUCER_IDS = ("generate", "scene_render", "speak", "trim", "write")
+BUILTIN_PRODUCER_IDS = ("generate", "scene_render", "sequence_export", "speak", "trim", "write")
 
 #: 便签上的产出者:写字。新放下的便签、能力交回的文字落成的便签都挂它(见下面的 SLOT_PRODUCERS、
 #: canvas._derived_item)—— 放在这张名字表里,因为画布那一侧也要用,而它不能回头认识注册表。
@@ -21,12 +21,15 @@ NOTE_PRODUCER = "write"
 #: 场景格自己会做的事,和「剪一段」挂在视频 / 音频格上同一个样子。
 SCENE_PRODUCER = "scene_render"
 
-#: 产出**不落进宿主**、而是新建成宿主右边几格的内置产出者(ADR 0025 的 `landing: derived`)。内置的只有渲白模 ——
+#: 时间线格上的产出者:把这一格的时间线导出成一段成片,落成右边一格视频(ADR 0030 §4)。
+SEQUENCE_PRODUCER = "sequence_export"
+
+#: 产出**不落进宿主**、而是新建成宿主右边几格的内置产出者(ADR 0025 的 `landing: derived`)。渲白模 ——
 #: 宿主是 3D 场景格,它的内容是那个场景,渲出来的首尾帧、运镜视频是右边新的几格,场景格一个字段
-#: 不动。宿主的表单因此**就是**下一次运行发的那一份(不会被产出清掉):智能体能照它替人点运行(见 derives_outputs)。
+#: 不动;时间线格的导出同理,成片是右边一格视频。宿主的表单因此**就是**下一次运行发的那一份(不会被产出清掉):智能体能照它替人点运行(见 derives_outputs)。
 #: 内容格的**能力**(转写、翻译、分离……,见 boards.transforms 的 `ability`)也是这样落,但它们不写进宿主自己的
 #: 产出者:一次能力的运行记在 `run.ability` 上(见 ability_of)。
-DERIVED_BUILTINS = frozenset({SCENE_PRODUCER})
+DERIVED_BUILTINS = frozenset({SCENE_PRODUCER, SEQUENCE_PRODUCER})
 
 #: 一种格子**还没有产出时**挂哪个产出者(新放下的一格的缺省):便签写字、音频念、图片/视频生成;
 #: 3D 场景格挂渲白模(它的产出落在右边,
@@ -40,6 +43,8 @@ SLOT_PRODUCERS: dict[str, str] = {
     #: 文档格也会「让 AI 写」:写出来的是一篇笔记(空的新建一篇,引用着的写成它的新一版),
     #: 和便签同一个写字产出者 —— 看着上游的图、资产、便签写(见 actions.write_on_board)。
     "document": NOTE_PRODUCER,
+    #: 时间线格挂导出(它的产出落在右边,格子自己永远「还能再导」)。
+    "sequence": SEQUENCE_PRODUCER,
 }
 
 

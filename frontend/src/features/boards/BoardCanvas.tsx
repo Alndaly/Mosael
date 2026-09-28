@@ -29,7 +29,7 @@ import {
   type Node,
   type ReactFlowInstance,
 } from "@xyflow/react";
-import { BookOpen, ChevronDown, Copy, ExternalLink, FileUp, Group, Loader2, Maximize2, MessageSquare, MoreHorizontal, PencilLine, Plus, Replace, Scissors, Sparkles, Trash2, type LucideIcon } from "lucide-react";
+import { BookOpen, ChevronDown, Copy, Download, ExternalLink, FileUp, Group, Loader2, Maximize2, MessageSquare, MoreHorizontal, PencilLine, Plus, Replace, Scissors, Sparkles, Trash2, type LucideIcon } from "lucide-react";
 
 import { assetFileUrl, assetPreviewUrl, entityKeys, getEntity, type CollaborationComment, type WorkspaceMember } from "@/api/client";
 import { useI18n } from "@/app/preferences";
@@ -61,9 +61,9 @@ import { usePersistentViewport } from "@/lib/usePersistentTab";
 import { cn } from "@/lib/utils";
 import { isCanvasKeyTarget, listenKeys } from "@/lib/shortcuts";
 import { canRedo, canUndo, emptyHistory, record, recordSequence, redo, sequenceOf, undo } from "@/features/boards/canvasHistory";
-import { noteSequenceEdit, onSequenceEdit } from "@/features/boards/sequenceCursor";
+import { noteSequenceEdit, onSequenceEdit, SequenceAddContext } from "@/features/boards/sequenceCursor";
 import { TrimComposer } from "@/features/boards/TrimComposer";
-import { canAskWriter, composerOnDemand, renderAbility, renderComposer, slotProducers } from "@/features/boards/boardComposers";
+import { canAskWriter, canOpenOnDemand, composerOnDemand, renderAbility, renderComposer, slotProducers } from "@/features/boards/boardComposers";
 import { BOARD_NODE_TYPES, DEFAULT_SIZE, NOTE_COLORS, noteColorClass , isMediaKind, kindIcon, kindText, SPAWNABLE_KINDS, type MediaKind } from "@/features/boards/boardNodes";
 import { composerView, copiedItem, itemIsRunning, newSlotForm, producerOf, runningAbility, withAbility, withProducer } from "@/features/boards/boardItemState";
 import { useKeepInCanvas } from "@/features/boards/BoardComposerShell";
@@ -352,8 +352,9 @@ interface Props {
   workspaceId: string;
   canvas: Canvas;
   onChange: (canvas: Canvas) => void;
-  /** 让上层开素材选择器。kind 决定它列图片还是视频 —— 选得到的就该是贴上去能看的。 */
-  onPickAsset: (kind: MediaKind, place: (assetId: string) => void) => void;
+  /** 让上层开素材选择器。kind 决定它列图片还是视频 —— 选得到的就该是贴上去能看的;`media` 是三种都列。
+   *  `onBoard`:这张画板上已有的素材,选择器里多一个「画板上的」筛选。 */
+  onPickAsset: (kind: MediaKind | "media", place: (assetId: string) => void, options?: { onBoard?: string[] }) => void;
   /**
    * 在某一格上跑一个产出者(生成、写字、念出来、截一段)。上层拿得到 workspaceId 和接口,画布只
    * 提供「落在哪一格」和「表单是什么」。写字同步返回,其余摆好占位就回、产出由回执填回来。
@@ -411,6 +412,15 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
   const rf = React.useRef<ReactFlowInstance | null>(null);
   const queryClient = useQueryClient();
 
+  /** 一份素材接到时间线末尾(视频、图片进主视频轨,音频进音频轨),格子读的缓存换成回来的那条,记进撤销。 */
+  const appendToSequence = React.useCallback((sequenceId: string, assetId: string) => {
+    void appendAssetToSequence(sequenceId, assetId)
+      .then((next) => {
+        queryClient.setQueryData(boardSequenceKey(sequenceId), next);
+        noteSequenceEdit(sequenceId);
+      })
+      .catch((error: unknown) => toast.error(errorText(error)));
+  }, [queryClient]);
   /** 连进时间线格(ADR 0030)= 把那一格的素材接到这条时间线的末尾。连线本身照常留着;断开**不**从时间线上删 ——
    *  那一段可能已经被切过、排过,自动删会丢掉这些手工。 */
   const appendOnConnect = React.useCallback((connection: Connection) => {
@@ -419,14 +429,16 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
     const target = itemOf(connection.target);
     if (target?.kind !== "sequence" || !target.sequence_id || !source?.asset_id) return;
     if (!["video", "image", "audio"].includes(source.kind)) return;
-    const sequenceId = target.sequence_id;
-    void appendAssetToSequence(sequenceId, source.asset_id)
-      .then((next) => {
-        queryClient.setQueryData(boardSequenceKey(sequenceId), next);
-        noteSequenceEdit(sequenceId);
-      })
-      .catch((error: unknown) => toast.error(errorText(error)));
-  }, [queryClient]);
+    appendToSequence(target.sequence_id, source.asset_id);
+  }, [appendToSequence]);
+  /** 时间线格上的「+」:挑一份素材(这张画板上已有的,或素材库里的)接到末尾,和连线进来同一件事。 */
+  const pickForSequence = React.useCallback((sequenceId: string) => {
+    const onBoard = [...new Set((rf.current?.getNodes() ?? [])
+      .map((node) => (node.data as { item?: BoardItem }).item)
+      .filter((one): one is BoardItem => Boolean(one?.asset_id && isMediaKind(one.kind)))
+      .map((one) => one.asset_id as string))];
+    onPickAsset("media", (assetId) => appendToSequence(sequenceId, assetId), { onBoard });
+  }, [appendToSequence, onPickAsset]);
   const surface = React.useRef<HTMLDivElement | null>(null);
   //: Backspace / Delete 只删冲着画布来的那一下 —— 和工作流编辑器同一个钩子。实例从 Provider 取,
   //: 不等 onInit:删除键在画布挂上的那一刻就该认。
@@ -601,12 +613,13 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
   }, [panel]);
   const opened = panel && composerItem && panel.itemId === composerItem.id ? panel.name : null;
   const trimming = panel?.name === TRIM_PANEL ? panel.itemId : null;
-  //: 点开的是这一格的一项能力:它的面板**换下**这一格自己的那块(场景格的渲白模、空槽的生成)。
-  const ability = opened && opened !== WRITER_PANEL && opened !== TRIM_PANEL ? (opened as BoardProducer) : null;
   const slotProducer = composerItem ? producerOf(composerItem) : null;
+  //: 点开的是这一格的一项能力:它的面板**换下**这一格自己的那块(场景格的渲白模、空槽的生成)。按需的面板
+  //: (「让 AI 写」「导出」)的名字就是这一格自己的产出者,不是能力。
+  const ability = opened && opened !== TRIM_PANEL && opened !== slotProducer ? (opened as BoardProducer) : null;
   const producer =
     slotProducer && !ability && opened !== TRIM_PANEL &&
-    (!composerOnDemand(slotProducer) || (opened === WRITER_PANEL && composerItem && canAskWriter(composerItem)))
+    (!composerOnDemand(slotProducer) || (opened === slotProducer && composerItem && canOpenOnDemand(composerItem)))
       ? slotProducer
       : null;
 
@@ -621,7 +634,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
   //: 才去算、才会被取不到的上游文档拦住。一项能力按它自己的绑定算(多输入的工具接连进这一格的上游)。
   const feeding = composerItem && ability
     ? upstreamOf(composerItem.id, boardItems(nodes), edges, documents, composerItem.form?.abilities?.[ability]?.bindings ?? {})
-    : composerItem && producer && producer !== "trim" && producer !== "scene_render"
+    : composerItem && producer && producer !== "trim" && producer !== "scene_render" && producer !== "sequence_export"
       ? upstreamOf(composerItem.id, boardItems(nodes), edges, documents)
       : NO_UPSTREAM;
 
@@ -1255,6 +1268,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
       }}
     >
       <MarkerEditorProvider enabled={markerMode && markersVisible}>
+      <SequenceAddContext.Provider value={pickForSequence}>
       <ReactFlow
         nodes={display.nodes}
         edges={display.edges}
@@ -1552,6 +1566,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
           nodeStrokeColor="transparent"
         />}
       </ReactFlow>
+      </SequenceAddContext.Provider>
       </MarkerEditorProvider>
 
       {markerMode && <AnnotationModeHint kind="marker" onExit={onExitMarkerMode} />}
@@ -1674,6 +1689,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
 /** 操作条上点开的那两块不是能力的面板。 */
 const WRITER_PANEL = "write";
 const TRIM_PANEL = "trim";
+const SEQUENCE_EXPORT_PANEL = "sequence_export";
 
 type GrowKind = (typeof SPAWNABLE_KINDS)[number];
 
@@ -2019,6 +2035,17 @@ function ItemToolbar({
               </Hint>
             )}
           />
+          {/* 导出:打开导出面板(按需的面板,面板名就是产出者的名字)。成片落成右边一格视频。 */}
+          {onPanel && canOpenOnDemand(item) && (
+            <ToolbarIcon
+              name="sequence-export"
+              icon={Download}
+              label={t("boardSequenceExport")}
+              hint={t("boardSequenceExportHint")}
+              pressed={open(SEQUENCE_EXPORT_PANEL)}
+              onClick={() => onPanel(item.id, SEQUENCE_EXPORT_PANEL)}
+            />
+          )}
           </ToolbarCluster>
         )}
         {/* 改名只对一格有意义 —— 多选时一起改成同一个名字,等于让它们重新分不清。 */}

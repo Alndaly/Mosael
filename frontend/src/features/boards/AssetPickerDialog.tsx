@@ -17,6 +17,9 @@ import { kindIcon, kindText, MEDIA_KINDS, type MediaKind } from "@/features/boar
  *   东西 —— 选择器里能选到的,就应该是贴上去能看的。
  * - **「添加 → 从库里放 → 素材」**(`kind` 是 `media`):图片、视频、音频都列,头里一排按种类筛;挑中哪一种
  *   就放哪一种格子(`onPick` 交回它的种类)。此前「添加」里是图片、视频、音频三行,和「新建」那三行是同样的格子。
+ *
+ * 给了 `onBoard`(这张画板上已有的素材,时间线格的「+」)时头里多一枚「这张画板上的」,打开时先按它筛 ——
+ * 往时间线里拼的多半是刚在画板上生成的那几段;点掉它就是整个素材库。
  */
 /** 行尾那句说明:尺寸、时长 —— 挑素材时真正要看的东西。取不到就不写,不编。 */
 function describe(asset: Asset): string {
@@ -33,6 +36,7 @@ export function AssetPickerDialog({
   workspaceId,
   onOpenChange,
   onPick,
+  onBoard,
 }: {
   open: boolean;
   /** 列哪一类;`media` 是三种都列、头里按种类筛。**选得到的就该是贴上去能看的**。 */
@@ -40,10 +44,18 @@ export function AssetPickerDialog({
   workspaceId: string;
   onOpenChange: (open: boolean) => void;
   onPick: (assetId: string, kind: MediaKind) => void;
+  /** 这张画板上已有的素材(去重)。给了就多一枚「这张画板上的」筛选,打开时先按它筛。 */
+  onBoard?: readonly string[];
 }) {
   const t = useI18n();
   const [keyword, setKeyword] = React.useState("");
   const [only, setOnly] = React.useState<MediaKind | "all">("all");
+  const boardSet = React.useMemo(() => new Set(onBoard ?? []), [onBoard]);
+  const [boardOnly, setBoardOnly] = React.useState(false);
+  //: 每次打开:有画板上的素材就先按它筛。
+  React.useEffect(() => {
+    if (open) setBoardOnly(boardSet.size > 0);
+  }, [open, boardSet]);
   const mixed = kind === "media";
   const kinds: readonly MediaKind[] = !mixed ? [kind] : only === "all" ? MEDIA_KINDS : [only];
 
@@ -54,13 +66,14 @@ export function AssetPickerDialog({
   });
 
   const images = React.useMemo(() => {
-    const all = (assets.data ?? []).filter((asset: Asset) => (kinds as readonly string[]).includes(asset.kind));
+    const all = (assets.data ?? []).filter((asset: Asset) =>
+      (kinds as readonly string[]).includes(asset.kind) && (!boardOnly || boardSet.has(asset.id)));
     const needle = keyword.trim().toLowerCase();
     if (!needle) return all;
     return all.filter((asset: Asset) =>
       `${asset.name ?? ""} ${asset.original_filename ?? ""}`.toLowerCase().includes(needle),
     );
-  }, [assets.data, kinds, keyword]);
+  }, [assets.data, kinds, keyword, boardOnly, boardSet]);
 
   const EmptyIcon = mixed ? ImageIcon : kindIcon(kind);
   const kindLabel = (one: string) => kindText(t, one as MediaKind).label;
@@ -72,6 +85,20 @@ export function AssetPickerDialog({
       filters={
         mixed ? (
           <div role="group" aria-label={t("boardsPickMediaKind")} className="flex flex-wrap gap-1">
+            {boardSet.size > 0 && (
+              <Button
+                type="button"
+                size="sm"
+                variant={boardOnly ? "secondary" : "ghost"}
+                aria-pressed={boardOnly}
+                data-pick-on-board=""
+                onClick={() => setBoardOnly((on) => !on)}
+              >
+                {t("boardsPickOnBoard")}
+              </Button>
+            )}
+            {/* 「这张画板上的」和按种类筛是两件事(可以叠着用):隔一道线,两个按下态不像同一组里的二选一。 */}
+            {boardSet.size > 0 && <span aria-hidden="true" className="mx-1 my-1 w-px self-stretch bg-border" />}
             {(["all", ...MEDIA_KINDS] as const).map((one) => (
               <Button
                 key={one}

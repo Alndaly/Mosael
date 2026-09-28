@@ -288,6 +288,7 @@ const RUN_COPY: Record<BuiltinProducer, { running: MessageKey; failed: MessageKe
   write: { running: "generating", failed: "boardNodeGenerateFailed" },
   trim: { running: "boardToolRunning", failed: "boardNodeRunFailed" },
   scene_render: { running: "boardToolRunning", failed: "boardNodeRunFailed" },
+  sequence_export: { running: "boardSequenceExporting", failed: "boardSequenceExportFailed" },
 };
 const TOOL_RUN_COPY: { running: MessageKey; failed: MessageKey } = { running: "boardToolRunning", failed: "boardNodeRunFailed" };
 
@@ -419,7 +420,7 @@ function AbilityRun({ data, selected }: { data: BoardNodeData; selected?: boolea
   return <AbilityRunStrip data={data} />;
 }
 
-function AbilityRunStrip({ data }: { data: BoardNodeData }) {
+function AbilityRunStrip({ data, className }: { data: BoardNodeData; className?: string }) {
   const t = useI18n();
   const { item, onStop, commentMode, abilityLabel } = data;
   const status = itemRunStatus(item);
@@ -431,7 +432,7 @@ function AbilityRunStrip({ data }: { data: BoardNodeData }) {
     <div
       data-board-ability-run={status}
       role={running ? "status" : "alert"}
-      className="nodrag nopan absolute inset-x-1 bottom-1 z-10 flex min-w-0 items-center gap-2 overflow-hidden rounded-md border border-border bg-panel/95 px-2 py-1 text-ui-2xs shadow-sm backdrop-blur"
+      className={cn("nodrag nopan absolute inset-x-1 bottom-1 z-10 flex min-w-0 items-center gap-2 overflow-hidden rounded-md border border-border bg-panel/95 px-2 py-1 text-ui-2xs shadow-sm backdrop-blur", className)}
     >
       {running ? <Loader2 size={11} className="shrink-0 animate-spin text-primary" /> : <AlertTriangle size={11} className="shrink-0 text-destructive" />}
       <span className={cn("min-w-0 flex-1 truncate", running ? "text-primary" : "text-destructive")}>
@@ -998,6 +999,10 @@ export const BOARD_NODE_TYPES: Record<BoardItem["kind"], React.ComponentType<Nod
 export function SequenceNode({ data, selected }: NodeProps) {
   const nodeData = data as unknown as BoardNodeData;
   const { item, commentMode } = nodeData;
+  const status = itemRunStatus(item);
+  //: 导出在跑(或选中时上一次没导成):预览上方一条状态,预览和条照常能用 —— 导出按起跑那一刻的时间线渲,
+  //: 接着剪不影响这一次。
+  const exporting = status === "queued" || status === "running" || (selected && (status === "failed" || status === "cancelled"));
   return (
     <div className={cn("group relative flex h-full w-full flex-col overflow-visible border border-border bg-panel shadow-sm", CELL_RADIUS,
                        selected && "border-border-strong")}>
@@ -1006,6 +1011,7 @@ export function SequenceNode({ data, selected }: NodeProps) {
       <NodeLabel data={nodeData} />
       <Ports visible={selected} disabled={commentMode} />
       {item.sequence_id ? <SequenceCell sequenceId={item.sequence_id} /> : null}
+      {exporting && <AbilityRunStrip data={nodeData} className="top-1 bottom-auto" />}
     </div>
   );
 }
