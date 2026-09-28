@@ -12,14 +12,41 @@
 
 import React from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 const listProviderModels = vi.fn();
 const api = vi.fn();
+const sessions = vi.hoisted(() => ({
+  listAgentSessions: vi.fn(),
+  createAgentSession: vi.fn(),
+  updateAgentSession: vi.fn(),
+}));
 vi.mock("@/api/client", () => ({
   api: (...args: unknown[]) => api(...(args as [])),
   listProviderModels: (...args: unknown[]) => listProviderModels(...(args as [])),
+  ...sessions,
+}));
+//: 下拉本身(Popover + cmdk)不是这里要验的;每个选项摊成一个按钮,只验「选了之后写到哪」。
+vi.mock("@/components/ui/searchable-select", () => ({
+  SearchableSelect: ({
+    trigger,
+    options,
+    onValueChange,
+  }: {
+    trigger: React.ReactNode;
+    options: { value: string; label: string }[];
+    onValueChange: (value: string) => void;
+  }) => (
+    <>
+      {trigger}
+      {options.map((option) => (
+        <button key={option.value} type="button" data-option={option.value} onClick={() => onValueChange(option.value)}>
+          {option.label}
+        </button>
+      ))}
+    </>
+  ),
 }));
 vi.mock("@/app/preferences", () => ({
   useI18n: () => (key: string) =>
@@ -87,5 +114,29 @@ describe("模型选择器", () => {
     expect(trigger.textContent).toContain("deepseek-v4-flash");
     //: 少了东西要说一声,不能一声不吭。
     expect(trigger.getAttribute("title")).toBe("有连接的模型列表没读出来");
+  });
+});
+
+describe("还没有会话时", () => {
+  it("照样能选模型:先建出当前会话,再把模型写进去", async () => {
+    api.mockImplementation((path: string) =>
+      path.includes("provider-defaults")
+        ? Promise.resolve([])
+        : Promise.resolve([{ id: "p1", name: "连接", enabled: true }]),
+    );
+    listProviderModels.mockResolvedValue([{ id: "m-fast" }, { id: "m-deep" }]);
+    sessions.listAgentSessions.mockResolvedValue([]);
+    sessions.createAgentSession.mockResolvedValue({ id: "s-new", workspace_id: "ws", title: "新对话" });
+    sessions.updateAgentSession.mockResolvedValue({});
+    mount(null);
+
+    //: 此前这里是一个点不动的占位 —— 空工作区里第一条消息只能用默认模型发。
+    fireEvent.click(await screen.findByRole("button", { name: "m-deep" }));
+    await waitFor(() =>
+      expect(sessions.updateAgentSession).toHaveBeenCalledWith("s-new", { provider_profile_id: "p1", model: "m-deep" }),
+    );
+    expect(sessions.createAgentSession).toHaveBeenCalledWith({ workspace_id: "ws" });
+    //: 建出来的就是「当前会话」—— 面板、浮标接下来看到的都是它。
+    expect(window.localStorage.getItem("mosael.agent.session.ws")).toBe("s-new");
   });
 });

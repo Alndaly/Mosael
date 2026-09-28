@@ -6,7 +6,8 @@ import { Activity, Clapperboard, Clock3, Coins, Film, Layers, Megaphone, Workflo
 import { workspaceSummary, type Workspace } from "@/api/client";
 import type { MessageKey } from "@/app/messages";
 import { useI18n, usePreferences } from "@/app/preferences";
-import { gotoSection, gotoSettings } from "@/lib/deepLink";
+import { useIsDeploymentAdmin } from "@/app/auth";
+import { gotoAdmin, gotoSection } from "@/lib/deepLink";
 import { formatCosts } from "@/lib/money";
 import { Button } from "@/components/ui/button";
 import { usePersistentTab } from "@/lib/usePersistentTab";
@@ -32,6 +33,7 @@ const STAT_TILE = "grid grid-cols-[minmax(0,1fr)_auto] grid-rows-[auto_auto] ite
  *     和这个工作区级的总数对不上 —— 不可点。
  *   - AI 花费:解释它的是「AI 用量」tab 里的费用图和按供应商分摊,tab 就在上面一格之遥。它不做成
  *     按钮,因为唯一能**动手**的「N 未定价」就在它里面、单独链到价格规则 —— 按钮里不能再套按钮。
+ *     价格规则只有部署管理员写得了(在管理页),所以这条链只给管理员;别人那里「N 未定价」只是读数。
  *   - 近 N 天完成:解释它的就是下方的活动图,跳走反而离开了答案。任务中心只列最近十来组已结束
  *     的任务、不按窗口算,对不上这个数。
  */
@@ -71,6 +73,7 @@ export function StatisticsView({ workspace }: { workspace: Workspace }) {
   });
 
   const openTaskCenter = () => window.dispatchEvent(new CustomEvent("mosael:open-tasks"));
+  const configurePricing = useIsDeploymentAdmin() ? () => gotoAdmin("pricing") : undefined;
 
   const stats = summary.data;
   // 「近 N 天」取**这份数据自己的**窗口,不取控件上的值:换范围时新数据还没到的那一刻,标题要说的
@@ -96,7 +99,7 @@ export function StatisticsView({ workspace }: { workspace: Workspace }) {
             stats.usage_unknown_cost_events > 0
               ? {
                   text: t("homeStatUsageUnknownSuffix").replace("{n}", String(stats.usage_unknown_cost_events)),
-                  open: () => gotoSettings("provider-pricing"),
+                  open: configurePricing,
                   openLabel: "homeChartUsageConfigurePricing",
                 }
               : undefined,
@@ -227,6 +230,7 @@ export function StatisticsView({ workspace }: { workspace: Workspace }) {
             unknown={stats.usage_unknown_cost_events}
             unpriced={stats.usage_unpriced}
             byProvider={stats.usage_by_provider}
+            onConfigurePricing={configurePricing}
           />
         </section>
         <section className={CARD}>

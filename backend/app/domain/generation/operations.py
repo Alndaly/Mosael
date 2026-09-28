@@ -29,6 +29,7 @@ from app.domain.generation.catalog import (
 from app.domain.generation.resolution import GenerationResolutionError, resolve_generation_model
 from app.core.i18n import LocalizedError, pick_text, tr
 from app.db.models import Asset, GenerationJob, GenerationSession, ProviderProfile, now
+from app.domain.generation.sessions import ensure_writable
 from app.domain.jobs import create_job
 
 logger = logging.getLogger(__name__)
@@ -48,6 +49,45 @@ def requested_negative_prompt(negative_prompt: str, parameters: dict[str, Any]) 
     return explicit or str(parameters.get("negative_prompt") or "").strip()
 
 
+def prompt_for_provider(request: dict[str, Any]) -> str:
+    """交给供应商的那段提示词:用户写的(`prompt`),后面一段一段接上漏斗替他补的说明(`prompt_notes`)。
+
+    提交前的文字校验和执行时交给适配器的是同一段 —— 都经这里拼。没有补充就是他写的原样。
+    """
+    prompt = str(request.get("prompt") or "")
+    notes = [str(note) for note in request.get("prompt_notes") or [] if str(note).strip()]
+    if not notes:
+        return prompt
+    return "\n\n".join(part for part in (prompt.strip(), *notes) if part)
+
+
+def source_legend(db: Session, workspace_id: str, source_assets: list[dict[str, str]]) -> str:
+    """「谁是第几份」:`首帧 1 = 开场.png` / `参考图 1 = 创作者.png; 参考图 2 = 街景.jpg`,一种素材一行。
+
+    **模型收到的是一串没有名字的素材。** 用户在画板上写「把 创作者.png 里的人放到 街景.jpg」—— 那两个名字对他
+    有意义,对模型只是两个词:它拿到的是 `image: [url, url]`。所以把对应关系明写出来:
+
+    - **按种类各数各的。** 适配器按角色过滤成一串(seedream 的 `image` 就是参考图那几份),「第几份」只在同一种
+      里有意义 —— 跨种类连着数会把首帧算成参考图的第一张。
+    - **重名要分得开**:同名的两份在说明里靠序号分开。
+    - **认不出名字的不写**:「参考图 2 = 」比不写更糟。
+
+    种类的叫法按这次请求的语言(`genRole_*`),和提交校验的报错同一份。
+    """
+    by_role: dict[str, list[str]] = {}
+    for entry in source_assets:
+        asset = db.get(Asset, str(entry.get("asset_id") or ""))
+        if asset is None or asset.workspace_id != workspace_id:
+            continue
+        name = (asset.name or asset.original_filename or "").strip()
+        if name:
+            by_role.setdefault(str(entry.get("role") or FIRST_FRAME), []).append(name)
+    return "\n".join(
+        "; ".join(f"{_label(role)} {index} = {name}" for index, name in enumerate(names, start=1))
+        for role, names in by_role.items()
+    )
+
+
 def create_generation_job(
     db: Session,
     *,
@@ -65,13 +105,23 @@ def create_generation_job(
     provider_profile_id: str | None = None,
     entity_ids: list[str] | None = None,
     scene_reference: dict[str, str] | None = None,
+    name_sources: bool = False,
 ) -> tuple[GenerationJob, Any]:
     """建一次生成。`entity_ids` 是这次 `@` 到的资产(ADR 0027):展开成提示词描述和参考图,
     挂了哪几张、哪几张没挂上记进请求的 `entities`(见 domain/entities/mentions)。
 
     `scene_reference`(`scene_id` / `shot_id` / `use`)是这次的「3D 参考」(ADR 0029):在这里**现渲**成素材挂上,
     提示词里并进白模说明;镜头里看得见的人偶演的人物并进 `entity_ids`,和 `@` 同一条路。用了哪个修订、渲出了哪几份
-    记进请求的 `scene_reference`。"""
+    记进请求的 `scene_reference`。
+
+    `name_sources`:在提示词后面告诉模型每份素材叫什么、是那一种里的第几份(见 `source_legend`)。
+
+    **请求里的 `prompt` 只是用户写的那段。** 白模说明、资产描述、素材对照是漏斗替他补给模型的,各成一段记在
+    `prompt_notes` 里,交给供应商时由 `prompt_for_provider` 接在后面 —— 生成记录上画的是他说的话,不是
+    我们替他补的那几段。"""
+    #: 点了名的会话**先**过写闸:共享给他的会话只能看。放在渲 3D 参考、把本地素材传上公网这些
+    #: 花时间(可能花钱)的事之前 —— 一个注定被拒的请求不该先把那些做完。
+    named = _named_session(db, workspace_id=workspace_id, session_id=session_id, actor=created_by) if session_id else None
     provider = provider.strip()
     model = model.strip()
     if not provider or not model:
@@ -93,6 +143,9 @@ def create_generation_job(
         raise GenerationDomainError("genErr_adapterUnavailable", provider=provider, kind=kind)
 
     capabilities = resolved.capabilities if resolved.capabilities_known else None
+    #: 素材对照只说**调用方给的**那几份:后面 3D 参考渲出来的、`@` 资产挂上的,各自在自己那段说明里交代。
+    legend = source_legend(db, workspace_id, source_assets) if name_sources and prompt.strip() else ""
+    notes: list[str] = []
     scene_receipt: dict[str, Any] | None = None
     if scene_reference:
         from app.domain.scenes import SceneDomainError
@@ -108,8 +161,8 @@ def create_generation_job(
         except SceneDomainError as exc:
             raise GenerationDomainError(exc.key, **exc.params) from exc
         source_assets = [*source_assets, *rendered.source_assets]
-        if capabilities is None or prompt_mode(capabilities) != "none":
-            prompt = "\n\n".join(part for part in (prompt.strip(), rendered.prompt) if part)
+        if rendered.prompt and (capabilities is None or prompt_mode(capabilities) != "none"):
+            notes.append(rendered.prompt)
         entity_ids = [*(entity_ids or []), *(one for one in rendered.entity_ids if one not in (entity_ids or []))]
         scene_receipt = rendered.receipt
 
@@ -121,7 +174,6 @@ def create_generation_job(
             db,
             workspace_id,
             list(entity_ids or []),
-            prompt=prompt,
             source_assets=source_assets,
             parameters=parameters,
             kind=kind,
@@ -129,7 +181,9 @@ def create_generation_job(
         )
     except EntityDomainError as exc:
         raise GenerationDomainError(exc.key, **exc.params) from exc
-    prompt, source_assets = expansion.prompt, expansion.source_assets
+    source_assets = expansion.source_assets
+    notes.extend(note for note in (expansion.note, tr("genPromptSourceLegend", legend=legend) if legend else "") if note)
+    request_text = {"prompt": prompt, **({"prompt_notes": notes} if notes else {})}
 
     validate_against_capabilities(
         provider,
@@ -139,8 +193,9 @@ def create_generation_job(
         source_assets,
         capabilities=resolved.capabilities if resolved.capabilities_known else None,
     )
+    #: 规矩按**模型收到的**那段判:只 `@` 了资产、自己一个字没写,描述也算提示词(此前两者本来就拼在一起判)。
     validate_text_inputs(
-        provider, model, kind, prompt, parameters,
+        provider, model, kind, prompt_for_provider(request_text), parameters,
         capabilities=resolved.capabilities if resolved.capabilities_known else None,
     )
     uploaded = _validate_source_assets(
@@ -157,11 +212,16 @@ def create_generation_job(
     negative_prompt = requested_negative_prompt(negative_prompt, parameters)
 
     session = _resolve_session(
-        db, workspace_id=workspace_id, session_id=session_id, prompt=prompt, created_by=created_by
+        db,
+        workspace_id=workspace_id,
+        named=named,
+        prompt=prompt,
+        created_by=created_by,
+        engine=(provider_profile.id if provider_profile else None, model, kind),
     )
     request = {
         "project_id": project_id,
-        "prompt": prompt,
+        **request_text,
         "negative_prompt": negative_prompt,
         "parameters": parameters,
         "source_assets": source_assets,
@@ -176,7 +236,7 @@ def create_generation_job(
         kind="ai_generation",
         created_by=created_by,
         payload={
-            "subject": prompt[:80],
+            "subject": (prompt or prompt_for_provider(request_text))[:80],
             "provider_profile_id": provider_profile.id if provider_profile else None,
             "provider": provider,
             "model": model,
@@ -345,10 +405,29 @@ def _resolve_provider_profile(
     return profile
 
 
+def _named_session(db: Session, *, workspace_id: str, session_id: str, actor: str | None) -> GenerationSession:
+    """调用方点了名的那条会话:得在这个工作区里,而且得是**他自己的** —— 共享给他的会话只能看
+    (见 generation/sessions)。"""
+    session = db.get(GenerationSession, session_id)
+    if session is None or session.workspace_id != workspace_id:
+        raise GenerationDomainError("Generation session not found in this workspace")
+    ensure_writable(db, session, actor)
+    return session
+
+
 def _resolve_session(
-    db: Session, *, workspace_id: str, session_id: str | None, prompt: str, created_by: str | None
+    db: Session,
+    *,
+    workspace_id: str,
+    named: GenerationSession | None,
+    prompt: str,
+    created_by: str | None,
+    engine: tuple[str | None, str, str],
 ) -> GenerationSession:
-    """这一次生成收在哪条会话线程里。没点名就现开一条。
+    """这一次生成收在哪条会话线程里:点了名的(已经过了 `_named_session`)就是那条,没点名就现开一条。
+
+    现开的那条记下这次的连接、模型和种类(`engine`):AI 工作台按种类把会话分到「生成」和「音频」两页,
+    不记的话,从画板生成的一首歌会出现在「生成」页里;记下模型,打开这条会话时选择器停在它用过的那个上。
 
     **现开的那条必须有主。** 生成会话和对话一样是某人的私人线程,列表按
     `owner_user_id == 我 或 被共享` 过滤 —— 不设主人的话它是 NULL,谁都匹配不上,
@@ -358,15 +437,18 @@ def _resolve_session(
     界面那条路一直是传 session_id 的,所以这件事只在**另外四个入口**上发生:从画板生成、
     工作流的 ai_generate、智能体生成、定时任务 —— 它们都传 session_id=None。
     """
-    if session_id:
-        session = db.get(GenerationSession, session_id)
-        if session is None or session.workspace_id != workspace_id:
-            raise GenerationDomainError("Generation session not found in this workspace")
-        if session.title == "新生成":
-            session.title = _title_from_prompt(prompt)
-        return session
+    if named is not None:
+        if named.title == "新生成":
+            named.title = _title_from_prompt(prompt)
+        return named
+    provider_profile_id, model, kind = engine
     session = GenerationSession(
-        workspace_id=workspace_id, title=_title_from_prompt(prompt), owner_user_id=created_by
+        workspace_id=workspace_id,
+        title=_title_from_prompt(prompt),
+        owner_user_id=created_by,
+        provider_profile_id=provider_profile_id,
+        model=model,
+        kind=kind,
     )
     db.add(session)
     db.flush()

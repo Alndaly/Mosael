@@ -14,11 +14,10 @@
 
 import React from "react";
 import { Loader2, Square, Volume2 } from "lucide-react";
-import { toast } from "sonner";
 
-import { API_BASE, getAuthToken } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { playSpeech, stopSpeaking } from "@/lib/speechPlayback";
+import { reportSpeechFailure, synthesizeSpeech } from "@/features/agent/agentSpeech";
 import { FOOTER_ACTION_CLASS } from "@/features/agent/messageUsage";
 import { cn } from "@/lib/utils";
 
@@ -49,28 +48,13 @@ export function SpeakButton({
     stopSpeaking();
     setState("loading");
     try {
-      const token = getAuthToken();
-      const response = await fetch(`${API_BASE}/api/agent/speech`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({ text, workspace_id: workspaceId ?? "" }),
-      });
-      if (!response.ok) {
-        const detail = (await response.json().catch(() => null))?.detail;
-        // 409 = 还没选音色。那是个待办,不是故障 —— 说清楚下一步在哪。
-        toast[response.status === 409 ? "message" : "error"](detail || t("speakFailed"));
-        setState("idle");
-        return;
-      }
+      const audio = await synthesizeSpeech(text, workspaceId ?? "");
       setState("playing");
       // playSpeech 会接管前一段(见 speechPlayback):连点两条消息时,前一条自己停掉。
-      await playSpeech(await response.blob());
+      await playSpeech(audio);
       reset();
-    } catch {
-      toast.error(t("speakFailed"));
+    } catch (error) {
+      reportSpeechFailure(error, t("speakFailed"));
       setState("idle");
     }
   }

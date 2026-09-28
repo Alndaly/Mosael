@@ -11,7 +11,6 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("@/features/settings/AccountSection", () => ({ AccountSection: () => null }));
 vi.mock("@/features/settings/AgentMemorySection", () => ({ AgentMemorySection: () => null }));
 vi.mock("@/features/settings/AgentVoiceSection", () => ({ AgentVoiceSection: () => null }));
-vi.mock("@/features/settings/AiRuntimeSection", () => ({ AiRuntimeSection: () => null }));
 vi.mock("@/features/settings/AppearanceSection", () => ({
   AppearanceSection: () => null,
   BackgroundSection: () => null,
@@ -19,13 +18,10 @@ vi.mock("@/features/settings/AppearanceSection", () => ({
 }));
 vi.mock("@/features/settings/AsrModelsSection", () => ({ AsrModelsSection: () => null }));
 vi.mock("@/features/settings/AutopilotRulesSection", () => ({ AutopilotRulesSection: () => null }));
-vi.mock("@/features/settings/BackendSection", () => ({ BackendSection: () => null, ProxySection: () => null }));
+vi.mock("@/features/settings/BackendSection", () => ({ BackendSection: () => null }));
 vi.mock("@/features/settings/BuiltinTtsSection", () => ({ BuiltinTtsSection: () => null }));
-vi.mock("@/features/settings/DataDiagnosticsSection", () => ({ DataDiagnosticsSection: () => null }));
 vi.mock("@/features/settings/FeishuSection", () => ({ FeishuSection: () => null }));
-vi.mock("@/features/settings/InstallSourceSection", () => ({ InstallSourceSection: () => null }));
 vi.mock("@/features/settings/ProviderDefaultsSection", () => ({ ProviderDefaultsSection: () => null }));
-vi.mock("@/features/settings/ProviderPricingSection", () => ({ ProviderPricingSection: () => null }));
 vi.mock("@/features/settings/ProviderProfilesSection", () => ({ ProviderProfilesSection: () => null }));
 vi.mock("@/features/settings/SeparationEnginesSection", () => ({ SeparationEnginesSection: () => null }));
 vi.mock("@/features/settings/TeamSection", () => ({ TeamSection: () => null }));
@@ -50,18 +46,20 @@ describe("设置页结构", () => {
     );
   });
 
-  it("安装源是独立的一页,和三个本机引擎同组", () => {
-    //: 它被转写、克隆、分离三个引擎共用 —— 挂在哪一个名下都是错的说法。
-    const engines = ["transcribe", "dubbing", "separation", "denoise", "install-source"];
+  it("本机引擎各占一页,同一组", () => {
+    const engines = ["transcribe", "dubbing", "separation", "denoise"];
     const groups = new Set(engines.map(groupOf));
     expect(groups.size).toBe(1);
     expect([...groups][0]).toBe("studioSettingsLocalEngines");
   });
 
-  it("代理和重试在同一页", () => {
-    //: 两者回答的是同一个问题:所有 AI 调用怎么出去。此前重试独占一页,代理挂在「本地后端」下面。
-    expect(ALL_SECTIONS.some((one) => one.id === "network")).toBe(true);
-    expect(ALL_SECTIONS.some((one) => one.id === "ai-runtime")).toBe(false);
+  it("只有部署管理员写得了的几页不在设置里", () => {
+    //: 成本规则、出站代理与重试、安装源、数据与诊断,后端都只许部署管理员写(ensure_deployment_admin)。
+    //: 摆在设置页时普通成员看得到表单、一保存就 403 —— 它们在管理页(features/admin/AdminView)。
+    const ids = ALL_SECTIONS.map((one) => one.id);
+    for (const gone of ["provider-pricing", "network", "ai-runtime", "install-source", "data"]) {
+      expect(ids, gone).not.toContain(gone);
+    }
   });
 
   it("云端供应商组里只有云端连接", () => {
@@ -79,7 +77,6 @@ describe("深链", () => {
     ["providers:video", "provider-video"],
     ["providers:tts", "provider-audio"],
     ["providers:podcast", "provider-audio"],
-    ["provider-pricing", "provider-pricing"],
     ["separation", "separation"],
     //: 降噪对话框里没装的引擎旁边的「去下载」发的就是它。
     ["denoise", "denoise"],
@@ -96,5 +93,7 @@ describe("深链", () => {
     //: 跳到一个无关的页比不跳更让人摸不着头脑。
     expect(resolveSettingsLink("没有这一页")).toBeNull();
     expect(resolveSettingsLink("providers:没有这种能力")).toBeNull();
+    //: 挪去管理页的那几页也一样:不在设置里给一个「最接近的」替身。
+    expect(resolveSettingsLink("provider-pricing")).toBeNull();
   });
 });

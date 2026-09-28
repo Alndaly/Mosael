@@ -8,6 +8,8 @@ import { api } from "@/api/transport";
 
 export type PluginPackage = components["schemas"]["PluginPackageOut"];
 export type PluginInstance = components["schemas"]["PluginInstanceOut"];
+/** 连接往外连走哪条路:跟随 Mosael / 直连 / 走它自己的代理(见 backend domain/plugins/egress)。 */
+export type PluginNetwork = components["schemas"]["PluginNetworkOut"];
 export type PluginField = components["schemas"]["PluginFieldOut"];
 export type PluginCapabilityStatus = components["schemas"]["PluginCapabilityStatusOut"];
 export type PluginToolState = components["schemas"]["PluginToolStateOut"];

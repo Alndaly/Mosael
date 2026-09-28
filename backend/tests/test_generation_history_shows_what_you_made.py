@@ -13,12 +13,14 @@
 
 from __future__ import annotations
 
+import pytest
+
 from sqlalchemy import select
 
 from app.core.db import SessionLocal
 from app.db.models import GenerationSession, User
 from app.domain import sharing
-from app.domain.generation.operations import _resolve_session
+from app.domain.generation.operations import _named_session, _resolve_session
 from tests.util import fresh_client
 
 
@@ -42,7 +44,8 @@ def _visible_to(db, user, workspace_id: str) -> set[str]:
 
 def _session(db, workspace_id: str, owner: str | None):
     return _resolve_session(
-        db, workspace_id=workspace_id, session_id=None, prompt="一只红苹果", created_by=owner
+        db, workspace_id=workspace_id, named=None, prompt="一只红苹果", created_by=owner,
+        engine=(None, "gpt-image-1", "image"),
     )
 
 
@@ -87,14 +90,43 @@ def test_点名了就用那一条_不新建() -> None:
         db.add(existing)
         db.flush()
         before = len(list(db.scalars(select(GenerationSession.id))))
+        named = _named_session(db, workspace_id=workspace["id"], session_id=existing.id, actor=me.id)
         got = _resolve_session(
-            db, workspace_id=workspace["id"], session_id=existing.id, prompt="一只红苹果",
-            created_by="另一个人",
+            db, workspace_id=workspace["id"], named=named, prompt="一只红苹果",
+            created_by=me.id, engine=(None, "gpt-image-1", "image"),
         )
         assert got.id == existing.id
-        # 「新生成」这个占位标题会被第一条提示词顶掉,但归属不动 —— 别人在我的线程里生成
-        # 不该把它变成别人的。
+        # 「新生成」这个占位标题会被第一条提示词顶掉。
         assert got.title == "一只红苹果"
         assert got.owner_user_id == me.id
         assert len(list(db.scalars(select(GenerationSession.id)))) == before
+        db.rollback()
+
+
+def test_别人的会话里不能生成_共享给他也只是看() -> None:
+    """会话记着模型和连接,而连接归个人 —— 同事往别人的线程里放生成,等于把他自己的东西写进别人的会话。
+    判据在 generation/sessions(tests/test_generation_session_access.py 从接口那一头钉着)。"""
+    from app.domain.permissions import PermissionDenied
+
+    client = fresh_client()
+    workspace = client.post("/api/workspaces", json={"name": "W"}).json()
+    with SessionLocal() as db:
+        me = _me(db)
+        existing = GenerationSession(workspace_id=workspace["id"], title="新生成", owner_user_id=me.id)
+        db.add(existing)
+        db.flush()
+        with pytest.raises(PermissionDenied):
+            _named_session(db, workspace_id=workspace["id"], session_id=existing.id, actor="另一个人")
+        db.rollback()
+
+
+def test_现开的会话记下这次的种类和模型_音频不会跑进生成页() -> None:
+    client = fresh_client()
+    workspace = client.post("/api/workspaces", json={"name": "W"}).json()
+    with SessionLocal() as db:
+        session = _resolve_session(
+            db, workspace_id=workspace["id"], named=None, prompt="一首海边的歌", created_by=_me(db).id,
+            engine=(None, "suno-v5", "audio"),
+        )
+        assert (session.kind, session.model) == ("audio", "suno-v5")
         db.rollback()

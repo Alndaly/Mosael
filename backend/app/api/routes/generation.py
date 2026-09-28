@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Response
+from fastapi import APIRouter, HTTPException, Query, Response
 from sqlalchemy import delete, select, update
 
 from app.core.i18n import tr
@@ -26,6 +26,7 @@ from app.domain.generation import create_generation_job, generation_options
 from app.domain.generation.operations import GenerationDomainError
 from app.domain.generation.prompt_optimizer import PromptOptimizeError, optimize_image_prompt
 from app.domain.generation.runner import start_generation_thread
+from app.domain.generation.sessions import SHARE_KIND, readable_session, writable_session
 
 router = APIRouter(tags=["generation"])
 
@@ -46,32 +47,38 @@ def create_generation_session(
     db.add(session)
     db.flush()
     # 生成记录是**他的**私人工作线程 —— 默认不共享给工作区(见 domain/sharing.KINDS)。
-    sharing.claim(db, "generation_session", session, user)
+    sharing.claim(db, SHARE_KIND, session, user)
     db.commit()
     db.refresh(session)
-    return sharing.annotate(db, "generation_session", [session], user, session.workspace_id)[0]
+    return sharing.annotate(db, SHARE_KIND, [session], user, session.workspace_id)[0]
 
 
 @router.get("/generation/sessions", response_model=list[GenerationSessionOut])
-def list_generation_sessions(workspace_id: str, db: DbSession, user: CurrentUser) -> list[GenerationSession]:
+def list_generation_sessions(
+    workspace_id: str,
+    db: DbSession,
+    user: CurrentUser,
+    kind: list[str] = Query(default_factory=list),
+) -> list[GenerationSession]:
+    """这个人在这个工作区里看得见的生成会话。`kind` 可以给几个:AI 工作台「生成」页要图像和视频,
+    「音频」页要音频 —— 在这里筛而不是在界面上筛,因为列表有条数上限,界面筛的话一页的会话能把
+    另一页的挤出去。"""
     ensure_workspace_access(db, user, workspace_id)
-    stmt = (
-        select(GenerationSession)
-        .where(
-            GenerationSession.workspace_id == workspace_id,
-            sharing.visible_filter("generation_session", user, workspace_id),
-        )
-        .order_by(GenerationSession.updated_at.desc())
-        .limit(50)
+    stmt = select(GenerationSession).where(
+        GenerationSession.workspace_id == workspace_id,
+        sharing.visible_filter(SHARE_KIND, user, workspace_id),
     )
-    return sharing.annotate(db, "generation_session", list(db.scalars(stmt)), user, workspace_id)
+    if kind:
+        stmt = stmt.where(GenerationSession.kind.in_(kind))
+    stmt = stmt.order_by(GenerationSession.updated_at.desc()).limit(50)
+    return sharing.annotate(db, SHARE_KIND, list(db.scalars(stmt)), user, workspace_id)
 
 
 @router.patch("/generation/sessions/{session_id}", response_model=GenerationSessionOut)
 def update_generation_session(
     session_id: str, body: GenerationSessionUpdate, db: DbSession, user: CurrentUser
 ) -> GenerationSession:
-    session = _require_generation_session(db, user, session_id, perm="ai")
+    session = writable_session(db, user, session_id)
     fields = body.model_fields_set
     # 收纳不是活动:这一次只改了 group_id 的话,不该让这条会话显得「刚生成过」—— 列表按
     # updated_at 倒序排,收一次纳就把顺序搅了。和对话那边同一条规则(routes/agent.py)。
@@ -89,7 +96,7 @@ def update_generation_session(
         session.provider_profile_id = body.provider_profile_id
     if "model" in fields:
         session.model = body.model
-    if "kind" in fields:
+    if "kind" in fields and body.kind is not None:
         session.kind = body.kind
     db.commit()
     if organising_only:
@@ -100,12 +107,12 @@ def update_generation_session(
         )
         db.commit()
     db.refresh(session)
-    return session
+    return sharing.annotate(db, SHARE_KIND, [session], user, session.workspace_id)[0]
 
 
 @router.delete("/generation/sessions/{session_id}", status_code=204)
 def delete_generation_session(session_id: str, db: DbSession, user: CurrentUser) -> Response:
-    session = _require_generation_session(db, user, session_id, perm="ai")
+    session = writable_session(db, user, session_id)
     generations = list(db.scalars(select(GenerationJob).where(GenerationJob.session_id == session.id)))
     job_ids = [generation.job_id for generation in generations if generation.job_id]
     db.execute(delete(GenerationJob).where(GenerationJob.session_id == session.id))
@@ -253,15 +260,13 @@ def list_generation_jobs(
     ensure_workspace_access(db, user, workspace_id)
     # 记录跟着它所属的会话走:私有会话里生成的东西不该在工作区的总列表里露出来 —— 否则「私有」
     # 只挡住了标题,内容还在。不属于任何会话的老记录(session_id 为空)照旧全工作区可见。
-    visible_sessions = select(GenerationSession.id).where(
-        sharing.visible_filter("generation_session", user, workspace_id)
-    )
+    visible_sessions = select(GenerationSession.id).where(sharing.visible_filter(SHARE_KIND, user, workspace_id))
     stmt = select(GenerationJob).where(
         GenerationJob.workspace_id == workspace_id,
         (GenerationJob.session_id.is_(None)) | (GenerationJob.session_id.in_(visible_sessions)),
     )
     if session_id:
-        session = _require_generation_session(db, user, session_id)
+        session = readable_session(db, user, session_id)
         if session.workspace_id != workspace_id:
             raise HTTPException(status_code=404, detail="Not found")
         stmt = stmt.where(GenerationJob.session_id == session_id)
@@ -319,16 +324,3 @@ def _attach_generation_costs(db: DbSession, generations: list[GenerationJob]) ->
         gen.costs = costs.get((gen.id,), [])  # type: ignore[attr-defined]
         gen.cost_confidence = confidence.get(gen.id)  # type: ignore[attr-defined]
 
-
-def _require_generation_session(db: DbSession, user: CurrentUser, session_id: str, *, perm: str | None = None) -> GenerationSession:
-    session = db.get(GenerationSession, session_id)
-    if session is None:
-        raise HTTPException(status_code=404, detail="Not found")
-    if perm is None:
-        ensure_workspace_access(db, user, session.workspace_id)
-    else:
-        ensure_workspace_perm(db, user, session.workspace_id, perm)
-    # 看不见还不够:猜到 id 也得用不了,否则「私有」只是列表上的一层遮挡。
-    if not sharing.may_use(db, "generation_session", session, user.id):
-        raise HTTPException(status_code=404, detail="Not found")
-    return session

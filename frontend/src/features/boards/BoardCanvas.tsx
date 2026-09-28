@@ -6,6 +6,7 @@ import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { getNoteReference, noteReferenceQuery } from "@/api/domains/notes";
 import { NotePickerDialog } from "@/features/notes/NotePickerDialog";
+import { SaveToNote } from "@/features/notes/SaveToNote";
 import { type BoardDocumentState } from "./boardDocumentSources";
 import { useCanvasInputMode, canvasWheelProps } from "@/components/app/canvasInputMode";
 import React from "react";
@@ -29,7 +30,7 @@ import {
   type Node,
   type ReactFlowInstance,
 } from "@xyflow/react";
-import { BookOpen, ChevronDown, Copy, Download, NotebookPen, ExternalLink, FileUp, Group, Loader2, Maximize2, MessageSquare, MoreHorizontal, PencilLine, Plus, Replace, Scissors, Sparkles, Trash2, type LucideIcon } from "lucide-react";
+import { BookOpen, BookPlus, ChevronDown, Copy, Download, NotebookPen, ExternalLink, FileUp, Group, Loader2, Maximize2, MessageSquare, MoreHorizontal, PencilLine, Plus, Replace, Scissors, Sparkles, Trash2, type LucideIcon } from "lucide-react";
 
 import { assetFileUrl, assetPreviewUrl, entityKeys, getEntity, type CollaborationComment, type WorkspaceMember } from "@/api/client";
 import { useI18n } from "@/app/preferences";
@@ -874,7 +875,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
           ...node,
           className: searchHighlightClass(searchHighlight, node.id),
           draggable: !commentMode && !markerMode, selectable: !commentMode && !markerMode,
-          data: { ...node.data, onText: setText, onAspect: setAspect, renaming: renaming === node.id, onRenaming: setRenaming, onRename: setTitle, commentMode: commentMode || markerMode, workspaceId, boardId, document: documents.get(node.id), onPickDocument: setPickingDocument, onRefreshDocument: refreshDocument, refreshingDocument: refreshingDocument === node.id,
+          data: { ...node.data, onText: setText, onAspect: setAspect, renaming: renaming === node.id, onRenaming: setRenaming, onRename: setTitle, commentMode: commentMode || markerMode, workspaceId, document: documents.get(node.id), onPickDocument: setPickingDocument, onRefreshDocument: refreshDocument, refreshingDocument: refreshingDocument === node.id,
             //: 停止属于运行态的外壳:每一种在跑的格子都有(生成、念、写、截、能力)。
             onStop,
             abilityLabel: abilityLabel((node.data as unknown as { item: BoardItem }).item) },
@@ -1642,6 +1643,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
         onRename={commentMode || markerMode ? undefined : setRenaming}
         onPickAsset={onPickAsset}
         onPickDocument={commentMode || markerMode || !workspaceId ? undefined : setPickingDocument}
+        saveToNote={commentMode || markerMode || !workspaceId ? undefined : { workspaceId, boardId }}
         onSpawn={onRun ? spawnLinked : undefined}
         producers={producers}
         panel={panel}
@@ -1771,6 +1773,7 @@ function ItemToolbar({
   onRename,
   onPickAsset,
   onPickDocument,
+  saveToNote,
   onSpawn,
   producers,
   panel,
@@ -1787,6 +1790,8 @@ function ItemToolbar({
   onPickAsset: Props["onPickAsset"];
   /** 给文档格挑一篇笔记(引用 / 换一篇)。评论、标记模式下不给。 */
   onPickDocument?: (itemId: string) => void;
+  /** 便签「保存到笔记」存到哪、出处记哪张画板。评论、标记模式下不给。 */
+  saveToNote?: { workspaceId: string; boardId: string };
   /** 从这一项长出下一项并连上。没给 = 这张画板不支持生成(上层没接生成能力)。 */
   onSpawn?: (
     kind: (typeof SPAWNABLE_KINDS)[number],
@@ -1953,6 +1958,19 @@ function ItemToolbar({
                   })
                   .catch((error: unknown) => toast.error(errorText(error)));
               }}
+            />
+          )}
+          {/* 便签「保存到笔记」:和文档格的「转为笔记」同一种挂法 —— 操作条上的一个动作,只在单选时给。
+              此前它挂在便签格子外面,多选几张便签就各冒一颗按钮,而操作条上什么都没有。
+              没有字的便签不给:存不出东西。 */}
+          {single && item?.kind === "note" && saveToNote && item.text?.trim() && (
+            <SaveToNote
+              workspaceId={saveToNote.workspaceId}
+              content={item.text}
+              sources={[{ kind: "board", id: saveToNote.boardId, label: t("navBoards"), quote: item.text }]}
+              trigger={({ open: openDialog, label }) => (
+                <ToolbarIcon name="note-to-note" icon={BookPlus} label={label} onClick={openDialog} />
+              )}
             />
           )}
           {single && item?.kind === "document" && !item.asset_id && onPickDocument && (

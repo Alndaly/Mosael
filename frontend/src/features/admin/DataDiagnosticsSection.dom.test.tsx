@@ -8,7 +8,7 @@ vi.mock("@/app/preferences", () => ({ useI18n: () => (key: string) => key }));
 const api = vi.hoisted(() => vi.fn());
 vi.mock("@/api/client", () => ({ api, getAuthToken: () => "test-token", isCustomServer: () => false }));
 
-import { DataDiagnosticsSection } from "@/features/settings/DataDiagnosticsSection";
+import { DataDiagnosticsSection } from "./DataDiagnosticsSection";
 
 afterEach(() => {
   delete (window as unknown as { mosaelDesktop?: unknown }).mosaelDesktop;

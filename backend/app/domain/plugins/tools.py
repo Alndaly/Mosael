@@ -21,7 +21,7 @@ from app.core.i18n import tr
 from app.db.models import PluginInstance, PluginInvocation, PluginPackage
 from app.domain.effects import plugin_tool_effects
 from app.domain.jobs import PLUGIN_SLOTS, report_progress
-from app.domain.plugins import artifacts, inputs as plugin_inputs, instances as inst, state as plugin_state
+from app.domain.plugins import artifacts, egress as plugin_egress, inputs as plugin_inputs, instances as inst, state as plugin_state
 from app.domain.plugins.artifacts import ArtifactError, cleanup_scratch_dir, make_scratch_dir
 from app.domain.plugins.errors import PluginDomainError
 from app.domain.plugins.manifest import GENERATION, HOST_ONLY_CAPABILITIES, Manifest, localized_tool, text_of, tool_label
@@ -165,7 +165,9 @@ def refresh_tools(db: Session, instance: PluginInstance, *, notify: bool = True)
         if absent:
             raise PluginDomainError("pluginErr_fillFirst", names=tr("punct_listSep").join(absent))
     try:
-        discovered = discover_tools(_runtime_manifest(manifest), inst.secrets_for(db, instance))
+        discovered = discover_tools(
+            _runtime_manifest(manifest), inst.secrets_for(db, instance), plugin_egress.resolve(db, instance)
+        )
     except McpBridgeError as exc:
         # 拉不到的原因记在 `capability_status["tools"]`(和进程插件报工具清单同一格,见 dynamic_tools):
         # 启用、改配置时顺手拉的那一次失败不往外抛,不记下来的话插件页只能说「没有工具」,说不出为什么。
@@ -284,6 +286,8 @@ def invoke(
     db.commit()
 
     manifest = inst.manifest_for(db, instance)
+    #: 这个连接往外连走哪条路:子进程的代理变量、后端替它发的请求,都照这一个决定(见 egress)。
+    egress = plugin_egress.resolve(db, instance)
     scratch: Path | None = None
     # 进程隔离:插件崩了、超时了、吐了非 JSON —— 失败的是这次调用记录,不是应用。
     baseline: dict[str, str] | None = None
@@ -304,6 +308,7 @@ def invoke(
                     tool_name,
                     payload,
                     secrets,
+                    egress=egress,
                     **({"timeout": timeout} if timeout is not None else {}),
                 )
         else:
@@ -321,19 +326,20 @@ def invoke(
                 if tool["stream"]:
                     result = stream_tool(
                         Path(manifest.path), manifest.runtime.entry, tool_name, resolved, env,
-                        hooks=_tool_hooks(), scratch_dir=scratch, data_dir=data_dir, **budget,
+                        hooks=_tool_hooks(), scratch_dir=scratch, data_dir=data_dir, egress=egress, **budget,
                     )
                 else:
                     result = execute_tool(
                         Path(manifest.path), manifest.runtime.entry, tool_name, resolved, env,
-                        scratch_dir=scratch, data_dir=data_dir, **budget,
+                        scratch_dir=scratch, data_dir=data_dir, egress=egress, **budget,
                     )
             output = result.output
             # 先落状态再收产出:刷新出来的令牌得先存住。反过来的话,收产出那一步出任何岔子
             # (下载失败、磁盘满),这次刷新就白做了 —— 而旧令牌已经被百度那边作废了。
             plugin_state.persist(db, instance, result.state, baseline=baseline)
         output = _collect_artifact(
-            db, output, scratch, workspace_id=workspace_id, project_id=project_id, fallback_name=tool_name
+            db, output, scratch, workspace_id=workspace_id, project_id=project_id, fallback_name=tool_name,
+            egress=egress,
         )
         invocation.status, invocation.output = "succeeded", output
         inst.note_authorization(db, instance, rejected=False)
@@ -432,6 +438,7 @@ def invoke_host(
         run_kwargs: dict[str, Any] = {
             "scratch_dir": scratch,
             "data_dir": _ensure_data_dir(manifest.id),
+            "egress": plugin_egress.resolve(db, instance),
             **({"timeout": budget} if budget is not None else {}),
         }
         #: 这次注入的那一份:写回 state 时按它做比较交换(见 plugins/state.persist)。
@@ -551,6 +558,7 @@ def _collect_artifact(
     workspace_id: str | None,
     project_id: str | None,
     fallback_name: str,
+    egress: plugin_egress.Egress,
 ) -> dict[str, Any]:
     """把输出里的文件产出收进素材库:`artifact`(一份)换成 `asset_id`,`artifacts`(一串)换成
     `assets` / `asset_ids`,并在还没有 `asset_id` 时把第一份记成它 —— 下游(工作流里 `{{n1.asset_id}}`)
@@ -571,14 +579,16 @@ def _collect_artifact(
         raise ArtifactError("pluginErr_artifactNeedsWorkspace")
     if isinstance(single, dict):
         ref, name = artifacts.register(
-            db, single, scratch, workspace_id=workspace_id, project_id=project_id, fallback_name=fallback_name
+            db, single, scratch, workspace_id=workspace_id, project_id=project_id, fallback_name=fallback_name,
+            egress=egress,
         )
         collected.update({"asset_id": ref, "asset_name": name})
     if isinstance(many, list):
         assets: list[dict[str, Any]] = []
         for spec in specs:
             ref, name = artifacts.register(
-                db, spec, scratch, workspace_id=workspace_id, project_id=project_id, fallback_name=fallback_name
+                db, spec, scratch, workspace_id=workspace_id, project_id=project_id, fallback_name=fallback_name,
+                egress=egress,
             )
             extras = {
                 str(key): value for key, value in spec.items()

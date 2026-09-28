@@ -123,6 +123,14 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "「{label}」不是合法的 JSON:第 {line} 行第 {column} 列,{detail}",
         "en": "“{label}” is not valid JSON: line {line}, column {column}: {detail}",
     },
+    "pluginErr_networkMode": {
+        "zh": "不认识的网络设置「{mode}」:只能是跟随 Mosael、直连或走指定代理",
+        "en": "Unknown network setting “{mode}”: it must be follow Mosael, direct, or a proxy.",
+    },
+    "pluginErr_proxyUrl": {
+        "zh": "代理地址「{url}」不对:要写全,例如 http://127.0.0.1:7890 或 socks5://127.0.0.1:1080",
+        "en": "The proxy address “{url}” is incomplete: write it in full, e.g. http://127.0.0.1:7890 or socks5://127.0.0.1:1080.",
+    },
     "pluginErr_artifactTooMany": {
         "zh": "插件一次交出的文件超过 {limit} 份",
         "en": "The plugin returned more than {limit} files in one call.",
@@ -1543,6 +1551,10 @@ MESSAGES: dict[str, dict[str, str]] = {
     "shareErr_notManageable_browserProfile": {
         "zh": "这个浏览器档案属于别人。共享给你只是可以用它 —— 改名、停用、改代理、清除登录数据和删除只有主人能做",
         "en": "This browser profile belongs to someone else. Sharing it lets you use it — only its owner can rename, disable, change the proxy, clear its sign-in data or delete it.",
+    },
+    "shareErr_notManageable_generationSession": {
+        "zh": "这条生成会话是同事共享给你看的。改名、删除、收进分组、换模型和在里面继续生成只有主人能做",
+        "en": "This generation session was shared with you to view. Only its owner can rename, delete, group, change its model or keep generating in it.",
     },
     "shareErr_unknownKind": {
         "zh": "未知的资源类型:{kind}",
@@ -3871,6 +3883,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "还没有选语音对话的音色 —— 到设置的「语音对话」里选一个。它和配音的默认音色是分开的:配音要质量,对话要快。",
         "en": "No voice is chosen for voice chat yet — pick one under Settings → Voice chat. It's separate from the default voiceover voice: voiceovers want quality, chat wants speed.",
     },
+    "voiceErr_agentVoiceDisabled": {
+        "zh": "「让它出声」关着 —— 到设置的「语音对话」里打开,智能体才会念出来。",
+        "en": "Speak replies is off — turn it on under Settings → Voice chat to hear the agent.",
+    },
     # 字幕配音与原声处理(domain/voices/subtitle_dub.py、original_audio.py)
     "dubErr_originalAudioMode": {"zh": "原声处理方式只能是 {modes}", "en": "The original-audio mode must be one of {modes}."},
     "dubErr_separationUnavailableForMode": {
@@ -3988,6 +4004,12 @@ MESSAGES: dict[str, dict[str, str]] = {
     "genRole_first_clip": {"zh": "待续写的片段", "en": "clip to extend"},
     "genRole_driving_audio": {"zh": "驱动音频", "en": "driving audio"},
     "genRole_mask": {"zh": "蒙版", "en": "mask"},
+    # 接在提示词后面告诉模型「谁是第几份」(见 generation.operations.source_legend)。这是说给模型听的,
+    # 冒号后面不留空,和画板此前在前端拼的那一句一字不差。
+    "genPromptSourceLegend": {
+        "zh": "本次提供的素材:{legend}",
+        "en": "Materials provided with this request:{legend}",
+    },
     "genErr_orSep": {"zh": "或", "en": " or "},
     "genErr_andSep": {"zh": " 和 ", "en": " and "},
     "genErr_none": {"zh": "无", "en": "none"},
@@ -4493,8 +4515,12 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "The clip this step refers to no longer exists, so it can't be undone.",
     },
     "seqErr_subtitleTrackHasNoSound": {
-        "zh": "字幕轨没有声音,不能独奏或闪避",
-        "en": "A subtitle track has no sound, so it can't be soloed or ducked.",
+        "zh": "字幕轨没有声音,不能静音、独奏或闪避;不想显示字幕请用隐藏",
+        "en": "A subtitle track has no sound, so it can't be muted, soloed or ducked. Hide it to stop showing the subtitles.",
+    },
+    "seqErr_onlySubtitleTracksHide": {
+        "zh": "只有字幕轨可以隐藏",
+        "en": "Only subtitle tracks can be hidden.",
     },
     "seqErr_detachAudioVideoOnly": {"zh": "只能从视频片段分离音频", "en": "Audio can only be detached from a video clip."},
     "seqErr_clipNoAudioSource": {"zh": "该片段没有音频源", "en": "This clip has no audio source."},

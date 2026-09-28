@@ -13,7 +13,6 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { expect, it, vi } from "vitest";
 
 vi.mock("@/app/preferences", () => ({ useI18n: () => (key: string) => key, usePreferences: () => ({ locale: "en-US" }) }));
-vi.mock("@/lib/deepLink", () => ({ gotoSettings: vi.fn() }));
 vi.mock("recharts", () => ({
   BarChart: ({ data, children }: { data: Array<{ cost: number }>; children: React.ReactNode }) => (
     <div>
@@ -38,7 +37,7 @@ vi.mock("@/components/app/chart", () => ({
   ChartLegendContent: ({ extra }: { extra: React.ReactNode }) => <>{extra}</>,
 }));
 
-const { UsageCostPanel } = await import("./StatisticsCharts");
+const { UsageCostChart, UsageCostPanel } = await import("./StatisticsCharts");
 
 const CNY = (micros: number) => ({ currency: "CNY", micros });
 const USD = (micros: number) => ({ currency: "USD", micros });
@@ -86,4 +85,33 @@ it("只有一种钱时没有切换,也不多一句解释", () => {
   expect(screen.queryByRole("radiogroup")).toBeNull();
   expect(screen.queryByText("homeChartUsageCurrencyHint")).toBeNull();
   expect(screen.getByTestId("bars")).toHaveTextContent("8000000,4000000");
+});
+
+/**
+ * 一笔都没计上价时,空态给下一步 —— 但**价格规则只有部署管理员写得了**(在管理页)。
+ * 给普通成员一个「去设置价格规则」,点进去是一个他打不开的页面;所以他那里只说一句归谁维护。
+ */
+function unpricedChart(onConfigurePricing?: () => void) {
+  return render(
+    <UsageCostChart
+      currency=""
+      unknown={3}
+      unpriced={[{ provider: "openai", model: "gpt-x", events: 3, reason: "no_rule" }] as never}
+      daily={[{ date: "2026-09-24", costs: [], events: 3, unknown: 3 }]}
+      onConfigurePricing={onConfigurePricing}
+    />,
+  );
+}
+
+it("未定价:管理员拿到去配价格的按钮", () => {
+  const configure = vi.fn();
+  unpricedChart(configure);
+  fireEvent.click(screen.getByRole("button", { name: "homeChartUsageConfigurePricing" }));
+  expect(configure).toHaveBeenCalledOnce();
+});
+
+it("未定价:普通成员没有按钮,只说价格归管理员维护", () => {
+  unpricedChart();
+  expect(screen.queryByRole("button", { name: "homeChartUsageConfigurePricing" })).toBeNull();
+  expect(screen.getByText("homeChartUsagePricingByAdmin")).toBeInTheDocument();
 });

@@ -464,6 +464,55 @@ def _migrate_subtitle_tracks_carry_no_sound() -> None:
         conn.execute(text("UPDATE tracks SET solo = 0, duck = 0 WHERE kind = 'subtitle' AND (solo = 1 OR duck = 1)"))
 
 
+def _migrate_subtitle_tracks_hide_instead_of_mute() -> None:
+    """轨道补 `hidden` 列,字幕轨上的「静音」搬成「隐藏」。
+
+    此前轨道只有一个 `muted`,两个意思:字幕轨借它表示「不显示这条字幕」,视频轨上它除了关声音还顺带
+    把花字藏掉 —— 而轨道头上画的是喇叭。现在 `muted` 只管声音,`hidden` 只管字幕显示,字幕轨不再收
+    `muted`(set_track_state 拒绝),所以已有的字幕轨静音在这里改记成隐藏,用户看到的效果不变。
+
+    操作日志里记下的轨道状态一起改写(`set_track_state` 的前后两份、`remove_track` 的那一份):不改的话,
+    撤销一次老的「字幕轨静音」写回的是一个已经不起作用的字段,而撤销以为自己做完了。改写后每份状态都
+    带着 `hidden`,撤销直接读它。
+    """
+    inspector = inspect(engine)
+    tables = set(inspector.get_table_names())
+    if "tracks" not in tables:
+        return
+    columns = {c["name"] for c in inspector.get_columns("tracks")}
+    with engine.begin() as conn:
+        if "hidden" not in columns:
+            conn.execute(text("ALTER TABLE tracks ADD COLUMN hidden BOOLEAN NOT NULL DEFAULT 0"))
+        conn.execute(text("UPDATE tracks SET hidden = 1, muted = 0 WHERE kind = 'subtitle' AND muted = 1"))
+        if "sequence_operations" not in tables:
+            return
+        rows = conn.execute(
+            text("SELECT id, kind, payload FROM sequence_operations WHERE kind IN ('set_track_state', 'remove_track')")
+        ).all()
+        payloads = {row[0]: (row[1], json.loads(row[2]) if isinstance(row[2], str) else dict(row[2] or {})) for row in rows}
+        # 被删掉的轨不在 tracks 表里了,它是不是字幕轨只有 remove_track 那份记录知道。
+        subtitle_ids = {row[0] for row in conn.execute(text("SELECT id FROM tracks WHERE kind = 'subtitle'"))}
+        subtitle_ids |= {
+            payload.get("track_id") for kind, payload in payloads.values()
+            if kind == "remove_track" and payload.get("kind") == "subtitle"
+        }
+        for op_id, (kind, payload) in payloads.items():
+            if "hidden" in payload:
+                continue  # 已经是新形状(重跑,或本版本写下的)
+            subtitle = payload.get("track_id") in subtitle_ids
+            states = [payload]
+            if kind == "set_track_state" and isinstance(payload.get("previous"), dict):
+                states.append(payload["previous"])
+            for state in states:
+                state["hidden"] = bool(state.get("muted")) if subtitle else False
+                if subtitle:
+                    state["muted"] = False
+            conn.execute(
+                text("UPDATE sequence_operations SET payload = :payload WHERE id = :id"),
+                {"payload": json.dumps(payload, ensure_ascii=False), "id": op_id},
+            )
+
+
 def _migrate_generation_capability_profiles() -> None:
     """建生成参数模板与逐模型、逐 kind 的声明表。
 
@@ -1684,6 +1733,137 @@ def _migrate_agent_session_titles_drop_attachment_tokens() -> None:
             said = " ".join(fenced.sub(" ", attached.sub(" ", first)).split())
             title = (said or (names[0] if names else first.strip()))[:60]
             conn.execute(text("UPDATE agent_sessions SET title = :title WHERE id = :id"), {"title": title, "id": session_id})
+
+
+def _migrate_generation_jobs_keep_their_failure() -> None:
+    """generation_jobs 补失败原因三列(`error` / `error_key` / `error_params`,和 jobs 同形)。
+
+    此前失败原因只在任务上,而任务会被任务中心的「清空已结束」删掉(生成记录的 job_id 随之置空)—— 清过一次,
+    AI 工作台的失败卡就只剩一句「生成失败」。加列必须在 SCHEMA 之前:之后 ORM 上的 GenerationJob 已经指望它们在了。
+    已有记录的回填在 AFTER_SCHEMA 的 backfill-generation-failures:它要读 jobs.error_key,那一列在很老的库上
+    是 AFTER_SCHEMA 才补上的。
+    """
+    inspector = inspect(engine)
+    if "generation_jobs" not in set(inspector.get_table_names()):
+        return
+    columns = {c["name"] for c in inspector.get_columns("generation_jobs")}
+    with engine.begin() as conn:
+        if "error" not in columns:
+            conn.execute(text("ALTER TABLE generation_jobs ADD COLUMN error TEXT"))
+        if "error_key" not in columns:
+            conn.execute(text("ALTER TABLE generation_jobs ADD COLUMN error_key VARCHAR(80) NOT NULL DEFAULT ''"))
+        if "error_params" not in columns:
+            conn.execute(text("ALTER TABLE generation_jobs ADD COLUMN error_params JSON NOT NULL DEFAULT '{}'"))
+
+
+def _backfill_generation_failures() -> None:
+    """已经失败、任务还在的生成记录,把任务上的失败原因抄过来(key、参数、原话一起)。
+
+    任务已经被清掉的那些找不回原因了 —— 它们照旧显示「生成失败」。有产出的不动(那是成功的),已经有原因的不动。
+    """
+    tables = set(inspect(engine).get_table_names())
+    if not {"generation_jobs", "jobs"} <= tables:
+        return
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "UPDATE generation_jobs SET "
+                "error = (SELECT jobs.error FROM jobs WHERE jobs.id = generation_jobs.job_id), "
+                "error_key = (SELECT jobs.error_key FROM jobs WHERE jobs.id = generation_jobs.job_id), "
+                "error_params = (SELECT jobs.error_params FROM jobs WHERE jobs.id = generation_jobs.job_id) "
+                "WHERE result_asset_id IS NULL AND error IS NULL "
+                "AND job_id IN (SELECT id FROM jobs WHERE status = 'failed')"
+            )
+        )
+
+
+def _migrate_generation_sessions_know_their_kind() -> None:
+    """每条生成会话都记下种类:AI 工作台按它分页 —— 图像 / 视频在「生成」页,音乐 / 音效在「音频」页。
+
+    此前 kind 只在用户在选择器里点过模型时才写,从画板、工作流、智能体、定时任务开出来的会话一律是空的;而音频模型
+    此前和图像、视频挤在同一个选择器里,一条会话可以先出图、后出歌。规则:会话记着的就是它**最后一次生成**用的那个
+    (连接、模型、种类)—— 只在会话没记种类、或记着的和最后一次生成不在同一页时改写(一页之内换过模型的不动,
+    那是用户的选择);从没生成过又没记种类的归「生成」页。先出图后出歌的会话整条跟着最后那一次走,历史一条不少。
+    """
+    if "generation_sessions" not in set(inspect(engine).get_table_names()):
+        return
+    with engine.begin() as conn:
+        sessions = conn.execute(text("SELECT id, kind FROM generation_sessions")).all()
+        for session_id, kind in sessions:
+            latest = conn.execute(
+                text(
+                    "SELECT kind, model, provider_profile_id FROM generation_jobs WHERE session_id = :id "
+                    "ORDER BY created_at DESC, id DESC LIMIT 1"
+                ),
+                {"id": session_id},
+            ).first()
+            if latest is None:
+                if not kind:
+                    conn.execute(text("UPDATE generation_sessions SET kind = 'image' WHERE id = :id"), {"id": session_id})
+                continue
+            if kind and (kind == "audio") == (latest[0] == "audio"):
+                continue
+            conn.execute(
+                text(
+                    "UPDATE generation_sessions SET kind = :kind, model = :model, provider_profile_id = :profile "
+                    "WHERE id = :id"
+                ),
+                {"kind": latest[0], "model": latest[1], "profile": latest[2], "id": session_id},
+            )
+
+
+def _migrate_generation_prompts_drop_the_source_legend() -> None:
+    """生成记录里的提示词拆开:用户写的留在 `prompt`,画板替他补的「本次提供的素材:…」挪进 `prompt_notes`。
+
+    画板此前在前端把这段对照拼进提示词再提交,于是记录里存的是拼过的字,AI 工作台的用户气泡原样画出来。现在这段由
+    生成漏斗补(generation.operations.source_legend),记在 `prompt_notes` 里,交给供应商时再接上 —— 模型收到的
+    和原来一字不差。切分依据是前端那条文案的中英原文(`boardPromptLegend`,自加进来就没改过),连同它前面那个空行;
+    它后面的(上游文档、3D 参考的说明、资产描述)原样跟着挪过去。任务上那份请求副本和任务标题一起改。
+    """
+    markers = ("\n\n本次提供的素材:", "\n\nMaterials provided with this request:")
+
+    def split(request: dict[str, Any]) -> dict[str, Any] | None:
+        prompt = request.get("prompt")
+        if not isinstance(prompt, str):
+            return None
+        found = [index for index in (prompt.find(marker) for marker in markers) if index >= 0]
+        if not found:
+            return None
+        cut = min(found)
+        notes = [one for one in request.get("prompt_notes") or [] if isinstance(one, str)]
+        return {**request, "prompt": prompt[:cut], "prompt_notes": [prompt[cut + 2:], *notes]}
+
+    def _json_object(raw: Any) -> dict[str, Any]:
+        """JSON 列读出来的一个对象;空的、坏的、不是对象的当它什么都没有(没有提示词可拆)。"""
+        try:
+            value = json.loads(raw) if isinstance(raw, str) else raw
+        except ValueError:
+            return {}
+        return dict(value) if isinstance(value, dict) else {}
+
+    tables = set(inspect(engine).get_table_names())
+    if "generation_jobs" not in tables:
+        return
+    with engine.begin() as conn:
+        for generation_id, raw in conn.execute(text("SELECT id, request FROM generation_jobs")).all():
+            changed = split(_json_object(raw))
+            if changed is not None:
+                conn.execute(
+                    text("UPDATE generation_jobs SET request = :request WHERE id = :id"),
+                    {"request": json.dumps(changed, ensure_ascii=False), "id": generation_id},
+                )
+        if "jobs" not in tables:
+            return
+        for job_id, raw in conn.execute(text("SELECT id, payload FROM jobs WHERE kind = 'ai_generation'")).all():
+            payload = _json_object(raw)
+            request = payload.get("request")
+            changed = split(request) if isinstance(request, dict) else None
+            if changed is not None:
+                payload = {**payload, "request": changed, "subject": changed["prompt"][:80]}
+                conn.execute(
+                    text("UPDATE jobs SET payload = :payload WHERE id = :id"),
+                    {"payload": json.dumps(payload, ensure_ascii=False), "id": job_id},
+                )
 
 
 def _migrate_asset_extractions_remember_page_images() -> None:
@@ -4554,6 +4734,54 @@ def _migrate_plugin_authorization_rejected() -> None:
             conn.execute(text("ALTER TABLE plugin_instances ADD COLUMN authorization_rejected_at DATETIME"))
 
 
+def _migrate_plugin_connections_choose_their_network() -> None:
+    """插件连接有了宿主给的「网络」:`plugin_instances.network_mode` / `proxy_url`(见 domain/plugins/egress)。
+
+    此前全局出站代理到不了插件子进程,MinerU 就在自己的清单里发明了一对配置 `MINERU_NETWORK`
+    (system / direct / proxy)和 `MINERU_PROXY`。清单里这两项删了,存着它们的连接在这里搬到新的两列上:
+    system → follow(没配全局代理时两者是同一个行为;配了,默认就该跟着它走)、direct → direct、
+    proxy → proxy。选了走代理却没填地址的,当时每次调用都报错,搬成 follow。搬完从 config 里删掉 ——
+    不删的话它们照旧被注入插件进程,是两个没人读、也没人能改的变量。
+
+    `create_all` 不给已有的表加列,所以在它之前。老连接一律 follow:此前它们拿到的环境里根本没有代理变量,
+    follow 在没配全局代理时给的也正是这样的环境。**写死包 id 与取值**:迁移是历史的快照。幂等。
+    """
+    with engine.begin() as conn:
+        columns = {row[1] for row in conn.execute(text("PRAGMA table_info(plugin_instances)"))}
+        if not columns:
+            return
+        if "network_mode" not in columns:
+            conn.execute(text(
+                "ALTER TABLE plugin_instances ADD COLUMN network_mode VARCHAR(16) NOT NULL DEFAULT 'follow'"
+            ))
+        if "proxy_url" not in columns:
+            conn.execute(text("ALTER TABLE plugin_instances ADD COLUMN proxy_url VARCHAR(300) NOT NULL DEFAULT ''"))
+        rows = conn.execute(
+            text("SELECT id, config FROM plugin_instances WHERE package_id = 'dev.mosael.mineru'")
+        ).fetchall()
+        for instance_id, raw in rows:
+            try:
+                config = json.loads(raw) if isinstance(raw, str) else dict(raw or {})
+            except (TypeError, ValueError):
+                continue
+            if not isinstance(config, dict) or not {"MINERU_NETWORK", "MINERU_PROXY"} & set(config):
+                continue
+            chosen = str(config.pop("MINERU_NETWORK", "") or "").strip().lower()
+            url = str(config.pop("MINERU_PROXY", "") or "").strip()
+            mode = {"direct": "direct", "proxy": "proxy"}.get(chosen, "follow")
+            if mode == "proxy" and not url:
+                mode = "follow"
+            conn.execute(
+                text("UPDATE plugin_instances SET config = :c, network_mode = :m, proxy_url = :u WHERE id = :i"),
+                {
+                    "c": json.dumps(config, ensure_ascii=False),
+                    "m": mode,
+                    "u": url if mode == "proxy" else "",
+                    "i": instance_id,
+                },
+            )
+
+
 def _migrate_plugin_instances() -> None:
     """插件从「一行 = 一个包 = 一次接入」拆成「包 → 实例 → 能力」三层。
 
@@ -5202,6 +5430,8 @@ def migration_plan() -> MigrationPlan:
                 _migrate_job_worker_leases,
                 _migrate_browser_pool,
                 _migrate_clip_offline_asset,
+                # 加列必须在 SCHEMA 之前:之后 ORM 上的 Track 已经指望 hidden 存在了。
+                _migrate_subtitle_tracks_hide_instead_of_mute,
                 _migrate_model_structured_output,
                 _migrate_browser_profile_start_url,
                 _migrate_usage_unpriced_reason,
@@ -5212,10 +5442,13 @@ def migration_plan() -> MigrationPlan:
                 # 排在上一步之后:它可能刚把 plugin_instances 建出来。
                 _migrate_plugin_generation_columns,
                 _migrate_plugin_authorization_rejected,
+                _migrate_plugin_connections_choose_their_network,
                 _migrate_drop_the_community_integration,
                 _migrate_voices_declare_consent,
                 _migrate_boards_remember_their_project,
                 _migrate_asset_extractions_remember_page_images,
+                # 加列必须在 SCHEMA 之前:之后 ORM 上的 GenerationJob 已经指望失败原因那三列在了。
+                _migrate_generation_jobs_keep_their_failure,
             ),
             #: create_all 每次启动都要跑 —— 新版本加的表靠它建出来,记账跳过就再也建不了。
             *_recurring(MigrationPhase.SCHEMA, _create_current_schema),
@@ -5313,6 +5546,14 @@ def migration_plan() -> MigrationPlan:
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_board_scene_render_drops_project),
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_board_sequence_cells_name_their_producer),
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_agent_session_titles_drop_attachment_tokens),
+            #: 生成记录自己存失败原因、会话按种类分页、提示词里拆出画板补的素材对照。回填要读 jobs.error_key ——
+            #: 它在很老的库上由上面的 migrate-job-message-i18n 补上,所以排在它后面。
+            *_steps(
+                MigrationPhase.AFTER_SCHEMA,
+                _backfill_generation_failures,
+                _migrate_generation_sessions_know_their_kind,
+                _migrate_generation_prompts_drop_the_source_legend,
+            ),
             *_steps(
                 MigrationPhase.FILESYSTEM,
                 _migrate_shared_venvs,

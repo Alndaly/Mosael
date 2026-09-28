@@ -16,6 +16,7 @@ vi.mock("@/app/preferences", () => ({
   useI18n: () => (key: string) =>
     ({
       runNow: "立即运行",
+      runStatus_running: "运行中",
       pluginOn: "启用",
       pluginOff: "停用",
       taskBlockedWorkflowGone: "绑定的工作流已删除,这个任务不能启用或运行",
@@ -23,13 +24,13 @@ vi.mock("@/app/preferences", () => ({
   usePreferences: () => ({ locale: "zh" }),
 }));
 
-import { TaskRunControls } from "./taskRunControls";
+import { hasActiveRun, TaskRunControls } from "./taskRunControls";
 
-function mount(enabled: boolean, blocked: boolean) {
+function mount(enabled: boolean, blocked: boolean, running = false) {
   const onRun = vi.fn();
   const onToggle = vi.fn();
-  render(<TaskRunControls enabled={enabled} blocked={blocked} running={false} onRun={onRun} onToggle={onToggle} />);
-  return { onRun, onToggle, run: screen.getByRole("button", { name: /立即运行/ }), toggle: screen.getByRole("switch") };
+  render(<TaskRunControls enabled={enabled} blocked={blocked} running={running} onRun={onRun} onToggle={onToggle} />);
+  return { onRun, onToggle, run: screen.getByRole("button", { name: /立即运行|运行中/ }), toggle: screen.getByRole("switch") };
 }
 
 describe("跑不起来的任务", () => {
@@ -69,5 +70,24 @@ describe("跑得起来的任务", () => {
     expect((run as HTMLButtonElement).disabled).toBe(true);
     fireEvent.click(toggle);
     expect(onToggle).toHaveBeenCalledWith(true);
+  });
+});
+
+//: 定时任务不重入(后端 has_active_run 拒绝)。此前按钮的转圈只跟着「这一次请求」:请求几十毫秒就回来,
+//: 任务还在跑,按钮又能点了 —— 连点就是一串 409。现在按任务实际有没有一次在跑判。
+describe("有一次还在跑", () => {
+  it("按钮说「运行中」、点不动", () => {
+    const { run, onRun } = mount(true, false, true);
+    expect(run.textContent).toContain("运行中");
+    expect((run as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(run);
+    expect(onRun).not.toHaveBeenCalled();
+  });
+
+  it("排队中和运行中都算在跑,跑完的不算(和后端 ACTIVE_RUN_STATUSES 一致)", () => {
+    expect(hasActiveRun([{ status: "queued" }])).toBe(true);
+    expect(hasActiveRun([{ status: "succeeded" }, { status: "running" }])).toBe(true);
+    expect(hasActiveRun([{ status: "succeeded" }, { status: "failed" }, { status: "cancelled" }])).toBe(false);
+    expect(hasActiveRun(undefined)).toBe(false);
   });
 });

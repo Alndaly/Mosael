@@ -1,7 +1,7 @@
 import React from "react";
 import { AlignCenter, AlignLeft, AlignRight, Bold, Diamond, Italic, Loader2, RotateCcw, Trash2, Upload, X } from "lucide-react";
 
-import type { Asset, Clip, Font, Sequence } from "@/api/client";
+import type { Asset, Clip, Font } from "@/api/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { OptionPicker } from "@/components/ui/option-picker";
@@ -42,8 +42,11 @@ type GradeKey = (typeof GRADE_KEYS)[number];
 
 const INSPECTOR_TABS = ["props", "color"] as const;
 
+/**
+ * 右栏检查器:**只管选中的片段**,没选中就不出现(EditorView)。序列级的设置(画幅、填充方式)
+ * 在时间线工具栏的「序列设置」里(SequenceSettings)。
+ */
 export function Inspector({
-  sequence,
   workspaceId,
   selectedClip,
   assets,
@@ -51,7 +54,6 @@ export function Inspector({
   onDeleteClip,
   onSetEffects,
   onSetTransform,
-  onReframe,
   onSetSpeed,
   onSetGain,
   onSetText,
@@ -61,16 +63,14 @@ export function Inspector({
   uploadingFont,
   onClose,
 }: {
-  sequence: Sequence;
   workspaceId: string;
-  selectedClip: Clip | null;
+  selectedClip: Clip;
   assets: Asset[];
   /** 花字(video 轨上的文本元素):复用画面元素的 transform 面板(定位/缩放/旋转 + 关键帧)。 */
   isTitleText?: boolean;
   onDeleteClip: (clipId: string) => void;
   onSetEffects: (clipId: string, effects: Record<string, unknown>) => void;
   onSetTransform?: (clipId: string, transform: Record<string, unknown>) => void;
-  onReframe?: (width: number, height: number, fillMode: string) => void;
   onSetSpeed?: (clipId: string, speed: number) => void;
   onSetGain?: (clipId: string, gain: number, muted: boolean) => void;
   onSetText?: (clipId: string, text: string) => void;
@@ -85,21 +85,19 @@ export function Inspector({
   const t = useI18n();
   // 同上:切走再回来还在这一栏。
   const [tab, setTab] = usePersistentTab<"props" | "color">("editor-inspector", "props", INSPECTOR_TABS);
-  const asset = selectedClip?.asset_id ? assets.find((item) => item.id === selectedClip.asset_id) : null;
-  const offlineAsset = (selectedClip?.offline_asset ?? null) as { name?: string } | null;
+  const asset = selectedClip.asset_id ? assets.find((item) => item.id === selectedClip.asset_id) : null;
+  const offlineAsset = (selectedClip.offline_asset ?? null) as { name?: string } | null;
   //: 脱机片段的 asset_id 同样为空,但它不是文字片段 —— 少了这一项,一段被删掉素材的画面
   //: 会被当成花字,右栏给出一个空的文本框让用户去改。
-  const isTextClip = Boolean(
-    selectedClip && !selectedClip.asset_id && !offlineAsset && selectedClip.text_override != null,
-  );
+  const isTextClip = !selectedClip.asset_id && !offlineAsset && selectedClip.text_override != null;
   // 哪些区块出现由**素材类型**决定,不由轨道决定:音频没有画面(调色、变换、画面淡入淡出),
   // 图片没有声音(音量、声音淡入淡出)。
-  const clipKind = selectedClip?.asset_kind ?? "";
+  const clipKind = selectedClip.asset_kind ?? "";
   const isVisualClip = kindIsVisual(clipKind);
   const hasSound = kindHasSound(clipKind);
   // 没有画面的片段(音频、字幕、花字)没有调色页;记住的页签不改,换回画面片段时还在原处。
   const activeTab = isVisualClip ? tab : "props";
-  const effects = (selectedClip?.effects ?? {}) as {
+  const effects = (selectedClip.effects ?? {}) as {
     fade_in?: number;
     fade_out?: number;
     video_fade_in?: number;
@@ -112,12 +110,11 @@ export function Inspector({
     key: "fade_in" | "fade_out" | "video_fade_in" | "video_fade_out",
     raw: string,
   ) => {
-    if (!selectedClip) return;
     const value = Math.max(0, Number(raw) || 0);
     onSetEffects(selectedClip.id, { ...selectedClip.effects, [key]: value });
   };
 
-  const rawTransform = (selectedClip?.transform as Record<string, unknown>) ?? {};
+  const rawTransform = (selectedClip.transform as Record<string, unknown>) ?? {};
   const keyframes: Keyframe[] = Array.isArray(rawTransform.keyframes) ? (rawTransform.keyframes as Keyframe[]) : [];
   const transform = {
     scale: typeof rawTransform.scale === "number" ? rawTransform.scale : 1,
@@ -131,10 +128,10 @@ export function Inspector({
   // 所在的片段进度——该属性已有关键帧时写该进度点,否则改静态基值;钻石按钮在该属性上打/删点。
   const playhead = useEditorStore((s) => s.playhead);
   const setPlayhead = useEditorStore((s) => s.setPlayhead);
-  const progress = selectedClip ? clipProgress(selectedClip, playhead) : 0;
-  const clipDuration = selectedClip ? (selectedClip.src_out - selectedClip.src_in) / (selectedClip.speed || 1) : 0;
+  const progress = clipProgress(selectedClip, playhead);
+  const clipDuration = (selectedClip.src_out - selectedClip.src_in) / (selectedClip.speed || 1);
   const commitTransform = (next: Record<string, unknown>) => {
-    if (!selectedClip || !onSetTransform) return;
+    if (!onSetTransform) return;
     onSetTransform(selectedClip.id, next);
   };
   const propKeyed = (prop: KfProp) => propTimes(keyframes, prop).length > 0;
@@ -148,7 +145,7 @@ export function Inspector({
   };
   const toggleProp = (prop: KfProp) => commitTransform({ ...transform, keyframes: togglePropKeyframe(keyframes, prop, progress, shownProp(prop)) });
   const clearKeyframes = () => commitTransform({ scale: transform.scale, x: transform.x, y: transform.y, rotation: transform.rotation, opacity: transform.opacity });
-  const seekToKeyframe = (t: number) => selectedClip && setPlayhead(selectedClip.timeline_start + t * clipDuration);
+  const seekToKeyframe = (t: number) => setPlayhead(selectedClip.timeline_start + t * clipDuration);
   const anyKeyframes = keyframes.length > 0;
   const animated = hasActiveKeyframes(transform);
   const isIdentityTransform =
@@ -157,7 +154,7 @@ export function Inspector({
   return (
     <section className="min-h-0 editor-pane overflow-hidden bg-workspace-panel grid min-h-0 grid-rows-[auto_minmax(0,1fr)]">
       <div className="editor-pane-header flex items-center justify-between px-4 [&_h2]:m-0 [&_h2]:text-ui-sm [&_h2]:font-semibold [&_h2]:text-muted-foreground">
-        {selectedClip && isVisualClip ? (
+        {isVisualClip ? (
           /* 用剪辑台自己那套 tab(`.editor-mode-tab`,和左栏的素材/逐字稿/字幕/配音同一个),
              不是通用的 SEGMENTED_LIST。后者会在两个标签外面再包一层 40px 的承托底色 ——
              塞进 44px 的面板头里上下只剩 2px,而同排的图标按钮才 24px,于是这一块又高又重;
@@ -187,17 +184,15 @@ export function Inspector({
           <h2>{t("inspector")}</h2>
         )}
         <div className="flex items-center gap-0.5">
-          {selectedClip && (
-            <button
-              type="button"
-              className="grid h-6 w-6 cursor-pointer place-items-center rounded-md border-0 bg-transparent text-muted-foreground transition-[color,background] duration-100 hover:bg-[color-mix(in_oklab,var(--destructive)_10%,transparent)] hover:text-destructive"
-              title={t("deleteClip")}
-              aria-label={t("deleteClip")}
-              onClick={() => onDeleteClip(selectedClip.id)}
-            >
-              <Trash2 size={13} />
-            </button>
-          )}
+          <button
+            type="button"
+            className="grid h-6 w-6 cursor-pointer place-items-center rounded-md border-0 bg-transparent text-muted-foreground transition-[color,background] duration-100 hover:bg-[color-mix(in_oklab,var(--destructive)_10%,transparent)] hover:text-destructive"
+            title={t("deleteClip")}
+            aria-label={t("deleteClip")}
+            onClick={() => onDeleteClip(selectedClip.id)}
+          >
+            <Trash2 size={13} />
+          </button>
           {onClose && (
             <button
               type="button"
@@ -211,334 +206,268 @@ export function Inspector({
           )}
         </div>
       </div>
-      {selectedClip ? (
-        activeTab === "color" ? (
-          <ColorGradePanel
-            clip={selectedClip}
-            workspaceId={workspaceId}
-            targetName={asset?.name ?? selectedClip.asset_id?.slice(0, 8) ?? ""}
-            effects={effects}
-            onSetEffects={onSetEffects}
-          />
-        ) : (
-          <div className="grid min-h-0 grid-cols-[minmax(0,1fr)] content-start gap-4 overflow-y-auto overflow-x-hidden p-4 [&_dl]:m-0 [&_dl]:grid [&_dl]:grid-cols-[92px_minmax(0,1fr)] [&_dl]:gap-[9px] [&_dl]:text-xs [&_dt]:text-muted-foreground [&_dd]:m-0 [&_dd]:min-w-0">
-            <dl>
-              <dt>{t("asset")}</dt>
-              <dd className="truncate" title={offlineAsset ? `${t("clipOffline")} · ${offlineAsset.name ?? ""}` : asset?.name}>
-                {offlineAsset
-                  ? offlineAsset.name || t("clipOffline")
-                  : asset?.name ?? selectedClip.asset_id?.slice(0, 8) ?? (isTitleText ? t("titleText") : t("subtitleText"))}
-              </dd>
-              <dt>{t("timelineRange")}</dt>
-              <dd className="timecode">
-                {formatTimecode(selectedClip.timeline_start)} – {formatTimecode(clipEnd(selectedClip))}
-              </dd>
-              <dt>{t("sourceRange")}</dt>
-              <dd className="timecode">
-                {formatTimecode(selectedClip.src_in)} – {formatTimecode(selectedClip.src_out)}
-              </dd>
-              <dt>{t("duration")}</dt>
-              <dd className="timecode">{formatTimecode(selectedClip.src_out - selectedClip.src_in)}</dd>
-              <dt>{t("speed")}</dt>
-              <dd className="timecode">{selectedClip.speed.toFixed(2)}x</dd>
-            </dl>
-            {offlineAsset && (
-              /* 说清楚**现在怎么办**:这一段还在时间线上占着位置,但导出会被拒。
-                 只说"素材已删除"的话,用户下一步不知道该做什么。 */
-              <p className="m-0 rounded-md border border-destructive/50 bg-[color-mix(in_srgb,var(--destructive)_10%,transparent)] px-2.5 py-2 text-xs leading-[1.5] text-foreground">
-                {t("clipOfflineHint")}
-              </p>
-            )}
-            {isTextClip && onSetText && (
-              <InspectorSection title={isTitleText ? t("titleText") : t("subtitleText")}>
-                <Textarea
-                  key={`text-${selectedClip.id}`}
-                  className="w-full resize-y rounded-md border border-border bg-field px-[9px] py-[7px] text-ui-sm leading-normal text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-1 focus-visible:outline-ring"
-                  rows={3}
-                  defaultValue={selectedClip.text_override ?? ""}
-                  onBlur={(event) => {
-                    const value = event.target.value.trim();
-                    if (value && value !== selectedClip.text_override) onSetText(selectedClip.id, value);
-                  }}
-                />
-              </InspectorSection>
-            )}
-            {isTitleText && (
-              <TextStylePanel
-                clip={selectedClip}
-                onSetEffects={onSetEffects}
-                fonts={fonts ?? []}
-                onUploadFont={onUploadFont}
-                onDeleteFont={onDeleteFont}
-                uploadingFont={uploadingFont}
-              />
-            )}
-            {!isTextClip && onSetSpeed && (
-              <InspectorSection title={t("speed")}>
-                <div className="flex flex-wrap gap-1">
-                  {SPEED_OPTIONS.map((option) => (
-                    <button
-                      key={option}
-                      type="button"
-                      className={cn("min-w-[34px] cursor-pointer rounded-md border border-border bg-control px-1.5 py-1 text-xs text-muted-foreground transition-[border-color,color,background-color] duration-100 hover:border-border-strong hover:text-foreground", Math.abs(selectedClip.speed - option) < 0.001 && "border-primary bg-accent text-accent-foreground hover:border-primary hover:text-accent-foreground")}
-                      onClick={() => onSetSpeed(selectedClip.id, option)}
-                    >
-                      {option}x
-                    </button>
-                  ))}
-                </div>
-              </InspectorSection>
-            )}
-            {/* A clip carries its own audio (video clips too, like PR/DaVinci): mix its level/mute. 音量可打关键帧。 */}
-            {hasSound && onSetGain &&
-              (() => {
-                const gainKfs: GainKeyframe[] = Array.isArray((effects as { gain_keyframes?: unknown }).gain_keyframes)
-                  ? ((effects as { gain_keyframes?: GainKeyframe[] }).gain_keyframes ?? [])
-                  : [];
-                const gainKeyed = gainKfs.length > 0;
-                const shownGain = gainKeyed ? sampleGain(gainKfs, selectedClip.gain, progress) : selectedClip.gain;
-                const onGainKf = gainKeyed && gainKeyTimes(gainKfs).some((tt) => Math.abs(tt - progress) < 0.02);
-                return (
-                  <InspectorSection
-                    title={t("clipAudio")}
-                    action={
-                      <button
-                        type="button"
-                        className={cn("min-w-[34px] cursor-pointer rounded-md border border-border bg-control px-1.5 py-1 text-xs text-muted-foreground transition-[border-color,color,background-color] duration-100 hover:border-border-strong hover:text-foreground", selectedClip.muted && "border-primary bg-accent text-accent-foreground hover:border-primary hover:text-accent-foreground")}
-                        onClick={() => onSetGain(selectedClip.id, selectedClip.gain, !selectedClip.muted)}
-                      >
-                        {selectedClip.muted ? t("clipMuted") : t("clipMute")}
-                      </button>
-                    }
-                  >
-                    <div className="grid grid-cols-[52px_1fr_40px_20px] items-center gap-2">
-                      <span className="text-ui-xs text-muted-foreground">{t("gain")}</span>
-                      <Slider
-                        key={`gain-${selectedClip.id}-${shownGain.toFixed(3)}-${gainKfs.length}`}
-                        min={0}
-                        max={2}
-                        step={0.05}
-                        defaultValue={[shownGain]}
-                        disabled={selectedClip.muted}
-                        onValueCommit={([value]) => {
-                          if (gainKeyed) onSetEffects(selectedClip.id, { ...selectedClip.effects, gain_keyframes: upsertGainKeyframe(gainKfs, progress, value) });
-                          else onSetGain(selectedClip.id, value, selectedClip.muted);
-                        }}
-                      />
-                      <span className="timecode text-right text-ui-xs text-muted-foreground">{Math.round(shownGain * 100)}%</span>
-                      <button
-                        type="button"
-                        title={onGainKf ? t("kfRemoveHere") : t("kfAddHere")}
-                        aria-label={onGainKf ? t("kfRemoveHere") : t("kfAddHere")}
-                        disabled={selectedClip.muted}
-                        className={cn("grid h-5 w-5 cursor-pointer place-items-center rounded border-0 bg-transparent disabled:cursor-default disabled:opacity-40", onGainKf ? "text-primary" : gainKeyed ? "text-muted-foreground hover:text-primary" : "text-muted-foreground/50 hover:text-primary")}
-                        onClick={() => onSetEffects(selectedClip.id, { ...selectedClip.effects, gain_keyframes: toggleGainKeyframe(gainKfs, progress, shownGain) })}
-                      >
-                        <Diamond size={11} fill={onGainKf ? "currentColor" : "none"} />
-                      </button>
-                    </div>
-                  </InspectorSection>
-                );
-              })()}
-            {(isVisualClip || hasSound) && (
-              <InspectorSection>
-                {[
-                  ...(isVisualClip
-                    ? [{ title: t("videoFade"), inKey: "video_fade_in", outKey: "video_fade_out", inV: effects.video_fade_in, outV: effects.video_fade_out } as const]
-                    : []),
-                  ...(hasSound
-                    ? [{ title: t("audioFade"), inKey: "fade_in", outKey: "fade_out", inV: effects.fade_in, outV: effects.fade_out } as const]
-                    : []),
-                ].map((grp) => (
-                  <div key={grp.title} className="grid gap-1">
-                    <span className="text-ui-sm font-semibold text-muted-foreground">{grp.title}</span>
-                    <div className="grid grid-cols-2 gap-1.5">
-                      {(
-                        [
-                          { key: grp.inKey, label: t("fadeIn"), value: grp.inV },
-                          { key: grp.outKey, label: t("fadeOut"), value: grp.outV },
-                        ] as const
-                      ).map((f) => (
-                        <label key={f.key} className="grid grid-cols-[auto_1fr] items-center gap-1.5">
-                          <span className="text-ui-xs text-muted-foreground">{f.label}</span>
-                          <div className="relative">
-                            <Input
-                              key={`${f.key}-${selectedClip.id}`}
-                              size="xs"
-                              className="w-full rounded-md border border-border bg-field pl-1.5 pr-5 text-xs tabular-nums text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-1 focus-visible:outline-ring"
-                              type="number"
-                              min={0}
-                              step={0.1}
-                              defaultValue={f.value ?? 0}
-                              onBlur={(event) => applyFade(f.key, event.target.value)}
-                              aria-label={`${grp.title} · ${f.label}`}
-                            />
-                            <span className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-ui-2xs text-muted-foreground">s</span>
-                          </div>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </InspectorSection>
-            )}
-            {isVisualClip && <ClipAppearancePanel clip={selectedClip} onSetEffects={onSetEffects} />}
-            {(isVisualClip || isTitleText) && onSetTransform && (
-              <InspectorSection
-                className="gap-1.5"
-                title={
-                  <>
-                    {t("transformTitle")}
-                    {animated && <Diamond size={10} className="text-primary" fill="currentColor" />}
-                  </>
-                }
-                action={
-                  <div className="flex items-center gap-2">
-                    {anyKeyframes && (
-                      <button type="button" className="cursor-pointer border-0 bg-transparent text-ui-xs text-muted-foreground hover:text-destructive" onClick={clearKeyframes}>
-                        {t("kfClear")}
-                      </button>
-                    )}
-                    {!isIdentityTransform && (
-                      <button
-                        type="button"
-                        className="cursor-pointer border-0 bg-transparent text-ui-xs text-muted-foreground hover:text-foreground"
-                        onClick={() => commitTransform({ scale: 1, x: 0, y: 0, rotation: 0, opacity: 1 })}
-                      >
-                        {t("transformReset")}
-                      </button>
-                    )}
-                  </div>
-                }
-              >
-                {(
-                  [
-                    { key: "scale", label: t("transformScale"), min: 0.1, max: 4, step: 0.05, fmt: (v: number) => `${Math.round(v * 100)}%`, kf: true },
-                    { key: "rotation", label: t("transformRotation"), min: -180, max: 180, step: 1, fmt: (v: number) => `${Math.round(v)}°`, kf: true },
-                    { key: "opacity", label: t("transformOpacity"), min: 0, max: 1, step: 0.05, fmt: (v: number) => `${Math.round(v * 100)}%`, kf: true },
-                    { key: "x", label: t("transformPosX"), min: -1, max: 1, step: 0.02, fmt: (v: number) => v.toFixed(2), kf: true },
-                    { key: "y", label: t("transformPosY"), min: -1, max: 1, step: 0.02, fmt: (v: number) => v.toFixed(2), kf: true },
-                  ] as const
-                ).map((row) => {
-                  const keyed = row.kf && propKeyed(row.key as KfProp);
-                  // 该属性在当前播放头进度处是否已有关键帧点——打下第一个点就点亮,不必等到两个点。
-                  const onKf = keyed && propTimes(keyframes, row.key as KfProp).some((tt) => Math.abs(tt - progress) < 0.02);
-                  return (
-                    <div key={row.key} className="grid grid-cols-[52px_1fr_40px_20px] items-center gap-2">
-                      <span className="text-ui-xs text-muted-foreground">{row.label}</span>
-                      <Slider
-                        // 值/进度入 key:改画幅、重置、或移动播放头(采样值变)后重挂非受控滑块。
-                        key={`${row.key}-${selectedClip.id}-${shown[row.key].toFixed(3)}-${keyframes.length}`}
-                        min={row.min}
-                        max={row.max}
-                        step={row.step}
-                        defaultValue={[shown[row.key]]}
-                        onValueCommit={([value]) => setProp(row.key as KfProp, value)}
-                      />
-                      <span className="timecode text-right text-ui-xs text-muted-foreground">{row.fmt(shown[row.key])}</span>
-                      {row.kf ? (
-                        <button
-                          type="button"
-                          title={onKf ? t("kfRemoveHere") : t("kfAddHere")}
-                          aria-label={onKf ? t("kfRemoveHere") : t("kfAddHere")}
-                          className={cn("grid h-5 w-5 cursor-pointer place-items-center rounded border-0 bg-transparent", onKf ? "text-primary" : keyed ? "text-muted-foreground hover:text-primary" : "text-muted-foreground/50 hover:text-primary")}
-                          onClick={() => toggleProp(row.key as KfProp)}
-                        >
-                          <Diamond size={11} fill={onKf ? "currentColor" : "none"} />
-                        </button>
-                      ) : (
-                        <span />
-                      )}
-                    </div>
-                  );
-                })}
-                {/* 关键帧点总览:合并所有属性的时间点,点击跳转;每属性自己的钻石在上面各行。 */}
-                {anyKeyframes && (
-                  <div className="mt-0.5 flex flex-wrap items-center gap-1">
-                    {[...new Set(keyframes.map((k) => k.t))].sort((a, b) => a - b).map((tt) => {
-                      const near = Math.abs(tt - progress) < 0.02;
-                      return (
-                        <button
-                          key={tt}
-                          type="button"
-                          title={`${Math.round(tt * 100)}%`}
-                          className={cn("timecode cursor-pointer rounded-full border px-1.5 py-0.5 text-ui-2xs", near ? "border-primary bg-accent text-accent-foreground" : "border-border text-muted-foreground hover:border-primary")}
-                          onClick={() => seekToKeyframe(tt)}
-                        >
-                          {Math.round(tt * 100)}%
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-                <span className="text-ui-2xs leading-[1.4] text-muted-foreground">{anyKeyframes ? t("kfHintActive") : t("kfHintEmpty")}</span>
-              </InspectorSection>
-            )}
-          </div>
-        )
+      {activeTab === "color" ? (
+        <ColorGradePanel
+          clip={selectedClip}
+          workspaceId={workspaceId}
+          targetName={asset?.name ?? selectedClip.asset_id?.slice(0, 8) ?? ""}
+          effects={effects}
+          onSetEffects={onSetEffects}
+        />
       ) : (
         <div className="grid min-h-0 grid-cols-[minmax(0,1fr)] content-start gap-4 overflow-y-auto overflow-x-hidden p-4 [&_dl]:m-0 [&_dl]:grid [&_dl]:grid-cols-[92px_minmax(0,1fr)] [&_dl]:gap-[9px] [&_dl]:text-xs [&_dt]:text-muted-foreground [&_dd]:m-0 [&_dd]:min-w-0">
           <dl>
-            <dt>{t("sequence")}</dt>
-            <dd>{sequence.name}</dd>
-            <dt>{t("revision")}</dt>
-            <dd className="timecode">{sequence.revision}</dd>
-            <dt>{t("format")}</dt>
-            <dd className="timecode">
-              {sequence.width}×{sequence.height} · {sequence.fps}fps
+            <dt>{t("asset")}</dt>
+            <dd className="truncate" title={offlineAsset ? `${t("clipOffline")} · ${offlineAsset.name ?? ""}` : asset?.name}>
+              {offlineAsset
+                ? offlineAsset.name || t("clipOffline")
+                : asset?.name ?? selectedClip.asset_id?.slice(0, 8) ?? (isTitleText ? t("titleText") : t("subtitleText"))}
             </dd>
+            <dt>{t("timelineRange")}</dt>
+            <dd className="timecode">
+              {formatTimecode(selectedClip.timeline_start)} – {formatTimecode(clipEnd(selectedClip))}
+            </dd>
+            <dt>{t("sourceRange")}</dt>
+            <dd className="timecode">
+              {formatTimecode(selectedClip.src_in)} – {formatTimecode(selectedClip.src_out)}
+            </dd>
+            <dt>{t("duration")}</dt>
+            <dd className="timecode">{formatTimecode(selectedClip.src_out - selectedClip.src_in)}</dd>
+            <dt>{t("speed")}</dt>
+            <dd className="timecode">{selectedClip.speed.toFixed(2)}x</dd>
           </dl>
-          {onReframe && (
-            <InspectorSection title={t("reframeTitle")}>
+          {offlineAsset && (
+            /* 说清楚**现在怎么办**:这一段还在时间线上占着位置,但导出会被拒。
+               只说"素材已删除"的话,用户下一步不知道该做什么。 */
+            <p className="m-0 rounded-md border border-destructive/50 bg-[color-mix(in_srgb,var(--destructive)_10%,transparent)] px-2.5 py-2 text-xs leading-[1.5] text-foreground">
+              {t("clipOfflineHint")}
+            </p>
+          )}
+          {isTextClip && onSetText && (
+            <InspectorSection title={isTitleText ? t("titleText") : t("subtitleText")}>
+              <Textarea
+                key={`text-${selectedClip.id}`}
+                className="w-full resize-y rounded-md border border-border bg-field px-[9px] py-[7px] text-ui-sm leading-normal text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-1 focus-visible:outline-ring"
+                rows={3}
+                defaultValue={selectedClip.text_override ?? ""}
+                onBlur={(event) => {
+                  const value = event.target.value.trim();
+                  if (value && value !== selectedClip.text_override) onSetText(selectedClip.id, value);
+                }}
+              />
+            </InspectorSection>
+          )}
+          {isTitleText && (
+            <TextStylePanel
+              clip={selectedClip}
+              onSetEffects={onSetEffects}
+              fonts={fonts ?? []}
+              onUploadFont={onUploadFont}
+              onDeleteFont={onDeleteFont}
+              uploadingFont={uploadingFont}
+            />
+          )}
+          {!isTextClip && onSetSpeed && (
+            <InspectorSection title={t("speed")}>
               <div className="flex flex-wrap gap-1">
-                {(
-                  [
-                    { label: "16:9", w: 1920, h: 1080 },
-                    { label: "9:16", w: 1080, h: 1920 },
-                    { label: "1:1", w: 1080, h: 1080 },
-                    { label: "4:5", w: 1080, h: 1350 },
-                  ] as const
-                ).map((preset) => {
-                  const fill = (sequence.reframe as { fill_mode?: string })?.fill_mode ?? "cover";
-                  return (
-                    <button
-                      key={preset.label}
-                      type="button"
-                      className={cn("min-w-[34px] cursor-pointer rounded-md border border-border bg-control px-1.5 py-1 text-xs text-muted-foreground transition-[border-color,color,background-color] duration-100 hover:border-border-strong hover:text-foreground", sequence.width === preset.w && sequence.height === preset.h && "border-primary bg-accent text-accent-foreground hover:border-primary hover:text-accent-foreground")}
-                      onClick={() => onReframe(preset.w, preset.h, fill)}
-                    >
-                      {preset.label}
-                    </button>
-                  );
-                })}
-              </div>
-              <span className="text-ui-sm font-semibold text-muted-foreground">{t("reframeFill")}</span>
-              <div className="flex flex-wrap gap-1">
-                {(
-                  [
-                    { key: "cover", label: t("fillCover") },
-                    { key: "contain", label: t("fillContain") },
-                    { key: "blur", label: t("fillBlur") },
-                  ] as const
-                ).map((mode) => {
-                  const fill = (sequence.reframe as { fill_mode?: string })?.fill_mode ?? "cover";
-                  return (
-                    <button
-                      key={mode.key}
-                      type="button"
-                      className={cn("min-w-[34px] cursor-pointer rounded-md border border-border bg-control px-1.5 py-1 text-xs text-muted-foreground transition-[border-color,color,background-color] duration-100 hover:border-border-strong hover:text-foreground", fill === mode.key && "border-primary bg-accent text-accent-foreground hover:border-primary hover:text-accent-foreground")}
-                      onClick={() => onReframe(sequence.width, sequence.height, mode.key)}
-                    >
-                      {mode.label}
-                    </button>
-                  );
-                })}
+                {SPEED_OPTIONS.map((option) => (
+                  <button
+                    key={option}
+                    type="button"
+                    className={cn("min-w-[34px] cursor-pointer rounded-md border border-border bg-control px-1.5 py-1 text-xs text-muted-foreground transition-[border-color,color,background-color] duration-100 hover:border-border-strong hover:text-foreground", Math.abs(selectedClip.speed - option) < 0.001 && "border-primary bg-accent text-accent-foreground hover:border-primary hover:text-accent-foreground")}
+                    onClick={() => onSetSpeed(selectedClip.id, option)}
+                  >
+                    {option}x
+                  </button>
+                ))}
               </div>
             </InspectorSection>
           )}
-          <InspectorSection>
-            <p className="m-0 text-xs text-muted-foreground">{t("noSelection")}</p>
-          </InspectorSection>
+          {/* A clip carries its own audio (video clips too, like PR/DaVinci): mix its level/mute. 音量可打关键帧。 */}
+          {hasSound && onSetGain &&
+            (() => {
+              const gainKfs: GainKeyframe[] = Array.isArray((effects as { gain_keyframes?: unknown }).gain_keyframes)
+                ? ((effects as { gain_keyframes?: GainKeyframe[] }).gain_keyframes ?? [])
+                : [];
+              const gainKeyed = gainKfs.length > 0;
+              const shownGain = gainKeyed ? sampleGain(gainKfs, selectedClip.gain, progress) : selectedClip.gain;
+              const onGainKf = gainKeyed && gainKeyTimes(gainKfs).some((tt) => Math.abs(tt - progress) < 0.02);
+              return (
+                <InspectorSection
+                  title={t("clipAudio")}
+                  action={
+                    <button
+                      type="button"
+                      className={cn("min-w-[34px] cursor-pointer rounded-md border border-border bg-control px-1.5 py-1 text-xs text-muted-foreground transition-[border-color,color,background-color] duration-100 hover:border-border-strong hover:text-foreground", selectedClip.muted && "border-primary bg-accent text-accent-foreground hover:border-primary hover:text-accent-foreground")}
+                      onClick={() => onSetGain(selectedClip.id, selectedClip.gain, !selectedClip.muted)}
+                    >
+                      {selectedClip.muted ? t("clipMuted") : t("clipMute")}
+                    </button>
+                  }
+                >
+                  <div className="grid grid-cols-[52px_1fr_40px_20px] items-center gap-2">
+                    <span className="text-ui-xs text-muted-foreground">{t("gain")}</span>
+                    <Slider
+                      key={`gain-${selectedClip.id}-${shownGain.toFixed(3)}-${gainKfs.length}`}
+                      min={0}
+                      max={2}
+                      step={0.05}
+                      defaultValue={[shownGain]}
+                      disabled={selectedClip.muted}
+                      onValueCommit={([value]) => {
+                        if (gainKeyed) onSetEffects(selectedClip.id, { ...selectedClip.effects, gain_keyframes: upsertGainKeyframe(gainKfs, progress, value) });
+                        else onSetGain(selectedClip.id, value, selectedClip.muted);
+                      }}
+                    />
+                    <span className="timecode text-right text-ui-xs text-muted-foreground">{Math.round(shownGain * 100)}%</span>
+                    <button
+                      type="button"
+                      title={onGainKf ? t("kfRemoveHere") : t("kfAddHere")}
+                      aria-label={onGainKf ? t("kfRemoveHere") : t("kfAddHere")}
+                      disabled={selectedClip.muted}
+                      className={cn("grid h-5 w-5 cursor-pointer place-items-center rounded border-0 bg-transparent disabled:cursor-default disabled:opacity-40", onGainKf ? "text-primary" : gainKeyed ? "text-muted-foreground hover:text-primary" : "text-muted-foreground/50 hover:text-primary")}
+                      onClick={() => onSetEffects(selectedClip.id, { ...selectedClip.effects, gain_keyframes: toggleGainKeyframe(gainKfs, progress, shownGain) })}
+                    >
+                      <Diamond size={11} fill={onGainKf ? "currentColor" : "none"} />
+                    </button>
+                  </div>
+                </InspectorSection>
+              );
+            })()}
+          {(isVisualClip || hasSound) && (
+            <InspectorSection>
+              {[
+                ...(isVisualClip
+                  ? [{ title: t("videoFade"), inKey: "video_fade_in", outKey: "video_fade_out", inV: effects.video_fade_in, outV: effects.video_fade_out } as const]
+                  : []),
+                ...(hasSound
+                  ? [{ title: t("audioFade"), inKey: "fade_in", outKey: "fade_out", inV: effects.fade_in, outV: effects.fade_out } as const]
+                  : []),
+              ].map((grp) => (
+                <div key={grp.title} className="grid gap-1">
+                  <span className="text-ui-sm font-semibold text-muted-foreground">{grp.title}</span>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {(
+                      [
+                        { key: grp.inKey, label: t("fadeIn"), value: grp.inV },
+                        { key: grp.outKey, label: t("fadeOut"), value: grp.outV },
+                      ] as const
+                    ).map((f) => (
+                      <label key={f.key} className="grid grid-cols-[auto_1fr] items-center gap-1.5">
+                        <span className="text-ui-xs text-muted-foreground">{f.label}</span>
+                        <div className="relative">
+                          <Input
+                            key={`${f.key}-${selectedClip.id}`}
+                            size="xs"
+                            className="w-full rounded-md border border-border bg-field pl-1.5 pr-5 text-xs tabular-nums text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-1 focus-visible:outline-ring"
+                            type="number"
+                            min={0}
+                            step={0.1}
+                            defaultValue={f.value ?? 0}
+                            onBlur={(event) => applyFade(f.key, event.target.value)}
+                            aria-label={`${grp.title} · ${f.label}`}
+                          />
+                          <span className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-ui-2xs text-muted-foreground">s</span>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </InspectorSection>
+          )}
+          {isVisualClip && <ClipAppearancePanel clip={selectedClip} onSetEffects={onSetEffects} />}
+          {(isVisualClip || isTitleText) && onSetTransform && (
+            <InspectorSection
+              className="gap-1.5"
+              title={
+                <>
+                  {t("transformTitle")}
+                  {animated && <Diamond size={10} className="text-primary" fill="currentColor" />}
+                </>
+              }
+              action={
+                <div className="flex items-center gap-2">
+                  {anyKeyframes && (
+                    <button type="button" className="cursor-pointer border-0 bg-transparent text-ui-xs text-muted-foreground hover:text-destructive" onClick={clearKeyframes}>
+                      {t("kfClear")}
+                    </button>
+                  )}
+                  {!isIdentityTransform && (
+                    <button
+                      type="button"
+                      className="cursor-pointer border-0 bg-transparent text-ui-xs text-muted-foreground hover:text-foreground"
+                      onClick={() => commitTransform({ scale: 1, x: 0, y: 0, rotation: 0, opacity: 1 })}
+                    >
+                      {t("transformReset")}
+                    </button>
+                  )}
+                </div>
+              }
+            >
+              {(
+                [
+                  { key: "scale", label: t("transformScale"), min: 0.1, max: 4, step: 0.05, fmt: (v: number) => `${Math.round(v * 100)}%`, kf: true },
+                  { key: "rotation", label: t("transformRotation"), min: -180, max: 180, step: 1, fmt: (v: number) => `${Math.round(v)}°`, kf: true },
+                  { key: "opacity", label: t("transformOpacity"), min: 0, max: 1, step: 0.05, fmt: (v: number) => `${Math.round(v * 100)}%`, kf: true },
+                  { key: "x", label: t("transformPosX"), min: -1, max: 1, step: 0.02, fmt: (v: number) => v.toFixed(2), kf: true },
+                  { key: "y", label: t("transformPosY"), min: -1, max: 1, step: 0.02, fmt: (v: number) => v.toFixed(2), kf: true },
+                ] as const
+              ).map((row) => {
+                const keyed = row.kf && propKeyed(row.key as KfProp);
+                // 该属性在当前播放头进度处是否已有关键帧点——打下第一个点就点亮,不必等到两个点。
+                const onKf = keyed && propTimes(keyframes, row.key as KfProp).some((tt) => Math.abs(tt - progress) < 0.02);
+                return (
+                  <div key={row.key} className="grid grid-cols-[52px_1fr_40px_20px] items-center gap-2">
+                    <span className="text-ui-xs text-muted-foreground">{row.label}</span>
+                    <Slider
+                      // 值/进度入 key:改画幅、重置、或移动播放头(采样值变)后重挂非受控滑块。
+                      key={`${row.key}-${selectedClip.id}-${shown[row.key].toFixed(3)}-${keyframes.length}`}
+                      min={row.min}
+                      max={row.max}
+                      step={row.step}
+                      defaultValue={[shown[row.key]]}
+                      onValueCommit={([value]) => setProp(row.key as KfProp, value)}
+                    />
+                    <span className="timecode text-right text-ui-xs text-muted-foreground">{row.fmt(shown[row.key])}</span>
+                    {row.kf ? (
+                      <button
+                        type="button"
+                        title={onKf ? t("kfRemoveHere") : t("kfAddHere")}
+                        aria-label={onKf ? t("kfRemoveHere") : t("kfAddHere")}
+                        className={cn("grid h-5 w-5 cursor-pointer place-items-center rounded border-0 bg-transparent", onKf ? "text-primary" : keyed ? "text-muted-foreground hover:text-primary" : "text-muted-foreground/50 hover:text-primary")}
+                        onClick={() => toggleProp(row.key as KfProp)}
+                      >
+                        <Diamond size={11} fill={onKf ? "currentColor" : "none"} />
+                      </button>
+                    ) : (
+                      <span />
+                    )}
+                  </div>
+                );
+              })}
+              {/* 关键帧点总览:合并所有属性的时间点,点击跳转;每属性自己的钻石在上面各行。 */}
+              {anyKeyframes && (
+                <div className="mt-0.5 flex flex-wrap items-center gap-1">
+                  {[...new Set(keyframes.map((k) => k.t))].sort((a, b) => a - b).map((tt) => {
+                    const near = Math.abs(tt - progress) < 0.02;
+                    return (
+                      <button
+                        key={tt}
+                        type="button"
+                        title={`${Math.round(tt * 100)}%`}
+                        className={cn("timecode cursor-pointer rounded-full border px-1.5 py-0.5 text-ui-2xs", near ? "border-primary bg-accent text-accent-foreground" : "border-border text-muted-foreground hover:border-primary")}
+                        onClick={() => seekToKeyframe(tt)}
+                      >
+                        {Math.round(tt * 100)}%
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+              <span className="text-ui-2xs leading-[1.4] text-muted-foreground">{anyKeyframes ? t("kfHintActive") : t("kfHintEmpty")}</span>
+            </InspectorSection>
+          )}
         </div>
       )}
     </section>

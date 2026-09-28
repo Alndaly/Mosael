@@ -22,3 +22,15 @@ export function boundRunId(startedId: string | null, runs: Job[] | undefined): s
   const list = runs ?? [];
   return (list.find((one) => RUN_ACTIVE.has(one.status)) ?? list[0])?.id ?? null;
 }
+
+/**
+ * **正在看的是哪一次运行。** 画布上的节点状态、检查器的「本次产出」、执行历史的选中项都读它。
+ *
+ * `pinnedId` 是用户在历史里手动点的那一次;没点过就是 `followedId`(上面 boundRunId 选出的那次)。
+ * 点过的那次已经不在历史里了(被清理、列表只留最近若干条)就回到跟随 —— 不停在一个不存在的 id 上,
+ * 画布因此不会一片空白而工具栏却在说「有一次在跑」。
+ */
+export function viewedRunId(pinnedId: string | null, followedId: string | null, runs: Job[] | undefined): string | null {
+  if (pinnedId && (runs ?? []).some((one) => one.id === pinnedId)) return pinnedId;
+  return followedId;
+}

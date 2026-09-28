@@ -13,7 +13,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { boundRunId, RUN_ACTIVE } from "./boundRun";
+import { boundRunId, RUN_ACTIVE, viewedRunId } from "./boundRun";
 
 const run = (id: string, status: string) => ({ id, status }) as never;
 
@@ -43,5 +43,20 @@ describe("画布绑定的运行", () => {
     expect(RUN_ACTIVE.has("pending")).toBe(true);
     expect(RUN_ACTIVE.has("running")).toBe(true);
     expect(RUN_ACTIVE.has("succeeded")).toBe(false);
+  });
+});
+
+describe("正在看哪一次运行", () => {
+  //: 此前执行历史自己记一份选中:在历史里点开一次旧的,画布和检查器还停在最近那次。
+  it("没点过就跟随", () => {
+    expect(viewedRunId(null, "latest", [run("latest", "succeeded"), run("older", "failed")])).toBe("latest");
+  });
+
+  it("点了一次旧的就一直看那一次 —— 哪怕又冒出来一次新的", () => {
+    expect(viewedRunId("older", "newest", [run("newest", "running"), run("latest", "succeeded"), run("older", "failed")])).toBe("older");
+  });
+
+  it("点的那次已经不在历史里了就回到跟随,不停在一个不存在的 id 上", () => {
+    expect(viewedRunId("gone", "latest", [run("latest", "succeeded")])).toBe("latest");
   });
 });

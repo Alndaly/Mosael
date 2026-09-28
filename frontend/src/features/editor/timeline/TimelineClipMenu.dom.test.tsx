@@ -4,7 +4,8 @@
  *
  * - 删除 / 波纹删除和工具栏、Delete 键同一条路径:右键的那段在选区里,删的是**整个选区**。
  *   此前多选后右键删除只删被点的那一段。
- * - 「分离音频 / 分离人声与背景音 / 降噪」按素材类型给:视频轨上的图片没有声音。
+ * - 「分离音频」按素材类型给:视频轨上的图片没有声音。它是片段级的(把这一段的声音摘到音频轨);
+ *   「分离人声与背景音」「降噪」处理整份素材、产出进素材库,所以不在片段菜单里,在素材的菜单里。
  * - 文字、字幕、脱机片段没有素材可复制:菜单里不给「复制片段」,工具栏上的那颗灰掉。
  */
 import { DndContext } from "@dnd-kit/core";
@@ -51,8 +52,6 @@ function renderTimeline() {
     onRippleDeleteClips: vi.fn(),
     onDuplicateClip: vi.fn(),
     onDetachAudio: vi.fn(),
-    onSeparateAudio: vi.fn(),
-    onDenoise: vi.fn(),
   };
   const sequence = { id: "s", name: "S", width: 1920, height: 1080, fps: 30, tracks } as unknown as Sequence;
   render(
@@ -102,29 +101,33 @@ describe("片段右键:删除作用在选区上", () => {
   });
 });
 
-describe("片段右键:按素材类型给声音相关的动作", () => {
-  it("视频:分离音频、分离人声与背景音、降噪都有", async () => {
-    renderTimeline();
+describe("片段右键:声音相关的动作", () => {
+  it("视频:有「分离音频」", async () => {
+    const handlers = renderTimeline();
     openMenu("film");
-    await screen.findByRole("menuitem", { name: "deleteClip" });
-    expect(menuItems()).toEqual(expect.arrayContaining(["detachAudio", "separateAudio", "denoiseAction"]));
+    await userEvent.click(await screen.findByRole("menuitem", { name: "detachAudio" }));
+    expect(handlers.onDetachAudio).toHaveBeenCalledWith("film");
   });
 
-  it("视频轨上的图片:一个都没有", async () => {
+  it("视频轨上的图片、音频:没有「分离音频」", async () => {
     renderTimeline();
-    openMenu("still");
-    await screen.findByRole("menuitem", { name: "deleteClip" });
-    expect(menuItems()).not.toContain("detachAudio");
-    expect(menuItems()).not.toContain("separateAudio");
-    expect(menuItems()).not.toContain("denoiseAction");
+    for (const name of ["still", "voice"]) {
+      openMenu(name);
+      await screen.findByRole("menuitem", { name: "deleteClip" });
+      expect(menuItems()).not.toContain("detachAudio");
+      await userEvent.keyboard("{Escape}");
+    }
   });
 
-  it("音频:能分离人声、能降噪,「分离音频」只给视频", async () => {
+  it("人声分离和降噪处理的是整份素材,不在任何片段的菜单里", async () => {
     renderTimeline();
-    openMenu("voice");
-    await screen.findByRole("menuitem", { name: "deleteClip" });
-    expect(menuItems()).toEqual(expect.arrayContaining(["separateAudio", "denoiseAction"]));
-    expect(menuItems()).not.toContain("detachAudio");
+    for (const name of ["film", "voice"]) {
+      openMenu(name);
+      await screen.findByRole("menuitem", { name: "deleteClip" });
+      expect(menuItems()).not.toContain("separateAudio");
+      expect(menuItems()).not.toContain("denoiseAction");
+      await userEvent.keyboard("{Escape}");
+    }
   });
 });
 

@@ -36,11 +36,17 @@ export type AgentTurnStream = {
   streamTimeline: AgentTimelineItem[];
   /** 接上某个会话的流。重复接同一个是空操作。 */
   attach: (sessionId: string) => Promise<void>;
-  /** 掐掉当前的流并清空流态(切会话、关面板时用)。 */
-  reset: () => void;
 };
 
-export function useAgentTurnStream(): AgentTurnStream {
+/**
+ * `viewedSessionId`:面板此刻显示的会话。流只属于它 —— 换成别的会话(不管是这个面板里点的、
+ * 另一个面板里点的、还是浮标新建的),手上那条流就掐掉、流态清空。
+ *
+ * 规则放在这里而不是让面板在「切会话」的地方各调一次 reset:当前会话现在可以从面板外面换掉
+ * (见 currentAgentSession),面板里已经没有一个"切会话"的时刻可以挂这一步。只掐**别的会话**
+ * 的流:发送时新建的会话会先被选中、再接流,两步的先后不该让刚接上的流被自己掐掉。
+ */
+export function useAgentTurnStream(viewedSessionId: string | null): AgentTurnStream {
   const qc = useQueryClient();
   const [streamText, setStreamText] = React.useState("");
   const [streamTimeline, setStreamTimeline] = React.useState<AgentTimelineItem[]>([]);
@@ -61,6 +67,10 @@ export function useAgentTurnStream(): AgentTurnStream {
 
   // 卸载时一定要掐:这两个面板都是被条件挂载的,关掉它是常态而不是边缘情况。
   React.useEffect(() => () => abortRef.current?.abort(), []);
+
+  React.useEffect(() => {
+    if (streamingRef.current && streamingRef.current !== viewedSessionId) reset();
+  }, [viewedSessionId, reset]);
 
   const attach = React.useCallback(
     async (targetSessionId: string) => {
@@ -118,5 +128,5 @@ export function useAgentTurnStream(): AgentTurnStream {
     [qc],
   );
 
-  return { streamText, streamTimeline, attach, reset };
+  return { streamText, streamTimeline, attach };
 }

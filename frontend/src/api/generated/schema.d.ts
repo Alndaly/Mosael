@@ -3055,7 +3055,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Generation Sessions */
+        /**
+         * List Generation Sessions
+         * @description 这个人在这个工作区里看得见的生成会话。`kind` 可以给几个:AI 工作台「生成」页要图像和视频,
+         *     「音频」页要音频 —— 在这里筛而不是在界面上筛,因为列表有条数上限,界面筛的话一页的会话能把
+         *     另一页的挤出去。
+         */
         get: operations["list_generation_sessions_api_generation_sessions_get"];
         put?: never;
         /** Create Generation Session */
@@ -4354,6 +4359,26 @@ export interface paths {
         put?: never;
         /** Create */
         post: operations["create_api_notes_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/notes/topics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Topics
+         * @description 笔记页的主题下拉。在 `/notes/{note_id}` 之前声明,否则 `topics` 会被当成一篇笔记的 id。
+         */
+        get: operations["list_topics_api_notes_topics_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -6351,9 +6376,32 @@ export interface paths {
          *     这条路同时给三件事用:消息底部的播放、确认卡与提问的语音化、失败出声。它们共用同一个
          *     音色配置(settings/agent-voice),因为对用户来说那就是"它的声音"。
          *
-         *     没设过音色就说没设 —— 不替他挑一个(同 provider-defaults 的立场)。
+         *     没设过音色就说没设 —— 不替他挑一个(同 provider-defaults 的立场);「让它出声」关着就不念。
          */
         post: operations["speak_api_agent_speech_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agent/speech/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview Speech
+         * @description 试听设置里存着的那份对话音色。**只要求选好,不要求开着** —— 试听是配置时听一下效果,
+         *     而「先打开才能听」等于让人先对一个没听过的声音点头。
+         *
+         *     和 /agent/speech 只差这道闸:合成走同一个 agent_voice.speak,听到的就是以后念给他的那个声音。
+         */
+        post: operations["preview_speech_api_agent_speech_preview_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -9213,6 +9261,8 @@ export interface components {
              * @default []
              */
             result_asset_ids: string[];
+            /** Error */
+            error?: string | null;
             /**
              * Created At
              * Format: date-time
@@ -9286,8 +9336,11 @@ export interface components {
             provider_profile_id?: string | null;
             /** Model */
             model?: string | null;
-            /** Kind */
-            kind?: string | null;
+            /**
+             * Kind
+             * @default image
+             */
+            kind: string;
         };
         /** GenerationSessionOut */
         GenerationSessionOut: {
@@ -10255,6 +10308,7 @@ export interface components {
             capability_status?: {
                 [key: string]: components["schemas"]["PluginCapabilityStatusOut"];
             };
+            network?: components["schemas"]["PluginNetworkOut"];
         };
         /** PluginInstanceUpdate */
         PluginInstanceUpdate: {
@@ -10266,6 +10320,7 @@ export interface components {
             } | null;
             /** Enabled */
             enabled?: boolean | null;
+            network?: components["schemas"]["PluginNetworkUpdate"] | null;
         };
         /** PluginInvocationOut */
         PluginInvocationOut: {
@@ -10424,6 +10479,36 @@ export interface components {
              * @default
              */
             effects: string;
+        };
+        /**
+         * PluginNetworkOut
+         * @description 这个连接往外连走哪条路(见 domain/plugins/egress)。
+         */
+        PluginNetworkOut: {
+            /**
+             * Mode
+             * @default follow
+             * @enum {string}
+             */
+            mode: "follow" | "direct" | "proxy";
+            /**
+             * Proxy Url
+             * @default
+             */
+            proxy_url: string;
+        };
+        /** PluginNetworkUpdate */
+        PluginNetworkUpdate: {
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "follow" | "direct" | "proxy";
+            /**
+             * Proxy Url
+             * @default
+             */
+            proxy_url: string;
         };
         /**
          * PluginOAuthCode
@@ -12304,6 +12389,8 @@ export interface components {
         SetTrackStateRequest: {
             /** Muted */
             muted?: boolean | null;
+            /** Hidden */
+            hidden?: boolean | null;
             /** Locked */
             locked?: boolean | null;
             /** Solo */
@@ -12567,6 +12654,11 @@ export interface components {
             locked: boolean;
             /** Muted */
             muted: boolean;
+            /**
+             * Hidden
+             * @default false
+             */
+            hidden: boolean;
             /**
              * Solo
              * @default false
@@ -13014,6 +13106,8 @@ export interface components {
              * @default false
              */
             is_deployment_admin: boolean;
+            /** Oauth Providers */
+            oauth_providers?: string[];
         };
         /** UserProfileUpdate */
         UserProfileUpdate: {
@@ -19681,6 +19775,7 @@ export interface operations {
         parameters: {
             query: {
                 workspace_id: string;
+                kind?: string[];
             };
             header?: never;
             path?: never;
@@ -22560,6 +22655,8 @@ export interface operations {
                 workspace_id: string;
                 q?: string;
                 trashed?: boolean;
+                favorite?: boolean;
+                topic?: string;
                 limit?: number;
                 offset?: number;
             };
@@ -22609,6 +22706,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["NoteOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_topics_api_notes_topics_get: {
+        parameters: {
+            query: {
+                workspace_id: string;
+                trashed?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string[];
                 };
             };
             /** @description Validation Error */
@@ -26911,6 +27040,39 @@ export interface operations {
         };
     };
     speak_api_agent_speech_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentSpeechRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_speech_api_agent_speech_preview_post: {
         parameters: {
             query?: never;
             header?: never;

@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { api, type Workspace } from "@/api/client";
 import { ApiError } from "@/api/transport";
 import { PageLoadError } from "@/components/layout/EmptyState";
-import { createNote, getNote, listNotes, noteHref, openNote, saveNote, type Note, type NoteContent } from "@/api/domains/notes";
+import { createNote, getNote, listNotes, listNoteTopics, noteHref, openNote, saveNote, type Note, type NoteContent } from "@/api/domains/notes";
 import { errorText } from "@/api/errorMessage";
 import { ConfirmDialog } from "@/components/app/modals";
 import { Button } from "@/components/ui/button";
@@ -63,11 +63,13 @@ export function NotesView({ workspace }: { workspace: Workspace }) {
   const [filter, setFilter] = usePersistentTab("notes-filter", "all", NOTE_FILTERS); const [topic, setTopic] = React.useState("");
   const [focus, setFocus] = React.useState(() => !!locationNote() && window.matchMedia("(max-width: 740px)").matches); const input = React.useRef<HTMLInputElement>(null);
   React.useEffect(() => { const read = () => setId(locationNote()); window.addEventListener("hashchange", read); return () => window.removeEventListener("hashchange", read); }, []);
-  const notes = useInfiniteQuery({ queryKey: ["notes", workspace.id, search, filter === "trash"], initialPageParam: 0,
-    queryFn: ({ pageParam }) => listNotes(workspace.id, search, filter === "trash", pageParam), getNextPageParam: (last, pages) => last.length === 200 ? pages.length * 200 : undefined });
-  const rows = notes.data?.pages.flat() || [];
-  const topics = [...new Set(rows.flatMap(n => n.topics))];
-  const shown = rows.filter(n => (filter !== "favorite" || n.favorite) && (!topic || n.topics.includes(topic)));
+  //: 收藏 / 主题**交给服务端筛**,和分页同一层。此前拉回前 200 条再在这里筛:收藏排在 200 条之后时,
+  //: 空态写着「还没有收藏」,底下却挂着「加载更多」;主题下拉也只列得出已加载那些笔记里的主题。
+  const listFilter = { trashed: filter === "trash", favorite: filter === "favorite", topic };
+  const notes = useInfiniteQuery({ queryKey: ["notes", workspace.id, search, listFilter], initialPageParam: 0,
+    queryFn: ({ pageParam }) => listNotes(workspace.id, search, listFilter, pageParam), getNextPageParam: (last, pages) => last.length === 200 ? pages.length * 200 : undefined });
+  const shown = notes.data?.pages.flat() || [];
+  const topics = useQuery({ queryKey: ["notes", workspace.id, "topics", filter === "trash"], queryFn: () => listNoteTopics(workspace.id, filter === "trash") }).data ?? [];
   // 打开一篇就重新取一次(staleTime 0):缓存里的那份可能是移进回收站、收藏之前的,打开后看到的
   // 就是错的状态 —— 回收站里的笔记没有提示条、还能编辑。
   const selected = useQuery({ queryKey: ["note", workspace.id, id], queryFn: () => getNote(workspace.id, id!), enabled: !!id, staleTime: 0 });

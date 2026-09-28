@@ -8,13 +8,18 @@ import { errorText } from "@/api/errorMessage";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { SettingsGroup, SettingsRow } from "@/components/settings/settings-layout";
+import { ADMIN_CARD, AdminRow, AdminSection } from "./adminLayout";
 
 type AiRuntimeConfig = components["schemas"]["AiRuntimeConfigOut"];
 
 const clampRetries = (n: number): number => Math.max(0, Math.min(10, Math.floor(Number.isFinite(n) ? n : 3)));
 
-/** AI 运行时设置:目前只有「供应商瞬断时的最大重试次数」(0..10)。工作流 LLM 节点用。 */
+/**
+ * AI 运行时:目前只有「供应商瞬断时的最大重试次数」(0..10),对所有 AI 出站调用生效。
+ *
+ * 和出站代理挨着放在「部署设置」里:两者回答的是同一个问题 —— 这台部署的 AI 调用怎么出去;
+ * 写入也同一条权限(部署管理员,见 routes/settings/system.py)。
+ */
 export function AiRuntimeSection() {
   const t = useI18n();
   const qc = useQueryClient();
@@ -42,22 +47,25 @@ export function AiRuntimeSection() {
   const dirty = config.data != null && current !== config.data.max_retries;
 
   return (
-    <SettingsGroup title={t("aiRuntimeTitle")} description={t("aiRuntimeDesc")}>
-      <SettingsRow label={t("aiMaxRetriesLabel")} description={t("aiMaxRetriesDesc")}>
-        <Input
-          type="number"
-          min={0}
-          max={10}
-          // 0–10 的两位数,标准字段宽度在这儿只会拖一条空槽。
-          className="w-20"
-          value={String(current)}
-          disabled={config.isLoading}
-          onChange={(e) => setDraft(e.target.value === "" ? 0 : clampRetries(Number(e.target.value)))}
-        />
-        <Button disabled={!dirty} loading={save.isPending} onClick={() => save.mutate(clampRetries(current))}>
-          {t("save")}
-        </Button>
-      </SettingsRow>
-    </SettingsGroup>
+    <AdminSection id="ai-runtime" title={t("aiRuntimeTitle")} description={t("aiRuntimeDesc")}>
+      <div className={ADMIN_CARD}>
+        <AdminRow label={t("aiMaxRetriesLabel")} description={t("aiMaxRetriesDesc")}>
+          <Input
+            type="number"
+            min={0}
+            max={10}
+            // 0–10 的两位数,标准字段宽度在这儿只会拖一条空槽。
+            className="w-20"
+            aria-label={t("aiMaxRetriesLabel")}
+            value={String(current)}
+            disabled={!config.data}
+            onChange={(e) => setDraft(e.target.value === "" ? 0 : clampRetries(Number(e.target.value)))}
+          />
+          <Button disabled={!dirty} loading={save.isPending} onClick={() => save.mutate(clampRetries(current))}>
+            {t("save")}
+          </Button>
+        </AdminRow>
+      </div>
+    </AdminSection>
   );
 }

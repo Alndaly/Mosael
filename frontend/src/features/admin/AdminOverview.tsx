@@ -8,7 +8,6 @@ import { EmptyState } from "@/components/layout/EmptyState";
 import { RangePicker, useStatRange } from "@/components/layout/RangePicker";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { gotoSettings } from "@/lib/deepLink";
 import { formatCosts, microsIn } from "@/lib/money";
 import { AdminActivityChart } from "./AdminActivityChart";
 
@@ -21,7 +20,7 @@ const CARD_TITLE = "m-0 text-ui-sm font-semibold text-foreground";
  * 范围管哪几块要写在明面上:任务活动和按人花费跟着它走,账户、工作区、素材是当前总数。所以
  * 跟着范围走的每一块,标题里都带着「近 N 天」—— 不必回头去找那个控件才知道这个数算的是多久。
  */
-export function AdminOverview() {
+export function AdminOverview({ onConfigurePricing }: { onConfigurePricing: () => void }) {
   const t = useI18n();
   const { locale } = usePreferences();
   const [days, setDays] = useStatRange("admin-range");
@@ -88,7 +87,7 @@ export function AdminOverview() {
                 {t("adminSpendTitle")} <span className="font-normal text-muted-foreground">· {lastDays}</span>
               </h2>
             </header>
-            <SpendByPerson loading={overview.isPending} stats={stats} />
+            <SpendByPerson loading={overview.isPending} stats={stats} onConfigurePricing={onConfigurePricing} />
           </section>
         </div>
       </div>
@@ -119,7 +118,16 @@ function StatTile({ label, value, hint, loading }: { label: string; value?: numb
  * 条形只能按一种钱量:取这台部署的主要币种(后端把它排在 costs 第一笔,也按它给人排序)。
  * 其他币种的钱照原样写在旁边 —— 不换算、不相加。
  */
-function SpendByPerson({ stats, loading }: { stats?: Overview; loading: boolean }) {
+function SpendByPerson({
+  stats,
+  loading,
+  onConfigurePricing,
+}: {
+  stats?: Overview;
+  loading: boolean;
+  /** 成本规则就在同一页的另一个 tab,不跳去设置页 —— 那里没有它(只有管理员写得了,见 AdminView)。 */
+  onConfigurePricing: () => void;
+}) {
   const t = useI18n();
   const { locale } = usePreferences();
   if (loading) {
@@ -140,7 +148,7 @@ function SpendByPerson({ stats, loading }: { stats?: Overview; loading: boolean 
         title={t("adminNoSpendTitle")}
         body={t("adminNoSpend")}
         action={
-          <Button variant="outline" size="xs" onClick={() => gotoSettings("provider-pricing")}>
+          <Button variant="outline" size="xs" onClick={onConfigurePricing}>
             {t("homeChartUsageConfigurePricing")}
           </Button>
         }

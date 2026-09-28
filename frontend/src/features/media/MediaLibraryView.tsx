@@ -8,7 +8,7 @@ import { useOpenRequest, useSectionEntry } from "@/lib/deepLink";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, CircleDot, Columns2, Download, FileAudio, FileImage, FileText, FileVideo, FolderOpen, ImagePlus, Layers, NotebookPen, Link2, ListChecks, AudioWaveform, Loader2, Pencil, Scissors, Tag, Trash2, Upload, X } from "lucide-react";
 
-import { api, assetThumbnailUrl, convertVideoToGif, deleteAsset, separateAssetAudio, renameAsset, setAssetTags, type Asset, type Workspace } from "@/api/client";
+import { api, assetThumbnailUrl, convertVideoToGif, deleteAsset, renameAsset, setAssetTags, type Asset, type Workspace } from "@/api/client";
 import { UrlImportDialog } from "@/features/media/UrlImportDialog";
 import { saveAssetToDisk } from "@/lib/download";
 import { isImportableFile, useFileDrop } from "@/lib/useFileDrop";
@@ -18,7 +18,7 @@ import { toast } from "sonner";
 import { useI18n } from "@/app/preferences";
 import { AssetCompareView } from "@/features/media/AssetCompareView";
 import { VideoCompareView } from "@/features/media/VideoCompareView";
-import { DenoiseDialog } from "@/features/media/DenoiseDialog";
+import { useAssetAudioActions } from "@/features/media/useAssetAudioActions";
 import { Button } from "@/components/ui/button";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { Input } from "@/components/ui/input";
@@ -137,13 +137,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
     onSuccess: () => toast.success(t("assetConvertGifQueued")),
     onError: (error: Error) => toast.error(error.message),
   });
-  const [denoising, setDenoising] = React.useState<string | null>(null);
-  // 拆成人声 + 背景音两份新素材(ADR-0016)。排任务,不等结果;没装引擎时后端直接说清楚。
-  const separateAudio = useMutation({
-    mutationFn: (assetId: string) => separateAssetAudio(assetId),
-    onSuccess: () => toast.success(t("separateAudioQueued")),
-    onError: (error: Error) => toast.error(error.message),
-  });
+  const { separate: separateAudio, denoise, denoiseDialog } = useAssetAudioActions();
   const drop = useFileDrop((files) => importFiles.mutate(files), isImportableFile);
   const rename = useMutation({
     mutationFn: ({ id, name }: { id: string; name: string }) => renameAsset(id, name),
@@ -443,7 +437,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
                       {asset.kind === "document" && <PopoverClose asChild><Button variant="ghost" className="justify-start" loading={saveAsNote.isPending} onClick={() => saveAsNote.mutate(asset.id)}><NotebookPen />{t("docSaveAsNote")}</Button></PopoverClose>}
                       {asset.kind === "video" && <PopoverClose asChild><Button variant="ghost" className="justify-start" loading={convertGif.isPending} onClick={() => convertGif.mutate(asset.id)}><ImagePlus />{t("assetConvertGif")}</Button></PopoverClose>}
                       {kindHasSound(asset.kind) && <PopoverClose asChild><Button variant="ghost" className="justify-start" loading={separateAudio.isPending} onClick={() => separateAudio.mutate(asset.id)}><Scissors />{t("separateAudio")}</Button></PopoverClose>}
-                      {kindHasSound(asset.kind) && <PopoverClose asChild><Button variant="ghost" className="justify-start" onClick={() => setDenoising(asset.id)}><AudioWaveform />{t("denoiseAction")}</Button></PopoverClose>}
+                      {kindHasSound(asset.kind) && <PopoverClose asChild><Button variant="ghost" className="justify-start" onClick={() => denoise(asset.id)}><AudioWaveform />{t("denoiseAction")}</Button></PopoverClose>}
                       <PopoverClose asChild><Button variant="ghost" className="justify-start text-destructive" onClick={() => setDeleting(asset)}><Trash2 />{t("delete")}</Button></PopoverClose>
                     </PopoverContent></Popover>
                   </div>}
@@ -475,7 +469,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
                   </ContextMenuItem>
                 )}
                 {kindHasSound(asset.kind) && (
-                  <ContextMenuItem onSelect={() => setDenoising(asset.id)}>
+                  <ContextMenuItem onSelect={() => denoise(asset.id)}>
                     <AudioWaveform /> {t("denoiseAction")}
                   </ContextMenuItem>
                 )}
@@ -496,7 +490,7 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
 
       <AssetPreviewModal asset={previewing} onClose={() => setPreviewing(null)} />
       <SetAsReferenceDialog asset={referencing} onClose={() => setReferencing(null)} />
-      <DenoiseDialog assetId={denoising} onClose={() => setDenoising(null)} />
+      {denoiseDialog}
       <RenameDialog
         open={renaming !== null}
         title={t("renameAsset")}

@@ -147,3 +147,27 @@ def test_笔记和画板的详情路由不带_workspace_id_也能读():
     assert c.get(f"/api/notes/{note['id']}?workspace_id={mine}").status_code == 200
     assert c.get(f"/api/notes/{note['id']}?workspace_id={other}").status_code == 404
     assert c.get(f"/api/boards/{board['id']}?workspace_id={other}").status_code == 404
+
+
+def test_收藏和主题在服务端筛_不受第一页限制():
+    """此前笔记页拉回前 200 条再在浏览器里筛:收藏排在后面时,空态说「还没有收藏」,底下却挂着「加载更多」。"""
+    c, ws = setup()
+    starred = c.post("/api/notes", json={"workspace_id": ws, "title": "收藏的那篇", "markdown": "", "topics": ["研究"]}).json()
+    c.patch(f"/api/notes/{starred['id']}", json={**starred, "base_revision": 1, "favorite": True})
+    for index in range(3):
+        c.post("/api/notes", json={"workspace_id": ws, "title": f"后来的 {index}", "markdown": "", "topics": ["研究生", "日常"]})
+
+    #: 收藏那篇最早改,按更新时间排在最后;只取一条的一页里也要筛得到它。
+    first_page = c.get("/api/notes", params={"workspace_id": ws, "favorite": True, "limit": 1}).json()
+    assert [note["id"] for note in first_page] == [starred["id"]]
+
+    #: 主题按整项比:「研究」不筛出只有「研究生」的笔记。
+    by_topic = c.get("/api/notes", params={"workspace_id": ws, "topic": "研究", "limit": 1}).json()
+    assert [note["id"] for note in by_topic] == [starred["id"]]
+    assert len(c.get("/api/notes", params={"workspace_id": ws, "topic": "日常"}).json()) == 3
+    assert c.get("/api/notes", params={"workspace_id": ws, "topic": "日常", "favorite": True}).json() == []
+
+    #: 主题下拉也从服务端来,不从已加载的那一页凑;最近改过的笔记里的主题在前。
+    topics = c.get("/api/notes/topics", params={"workspace_id": ws}).json()
+    assert topics == ["研究生", "日常", "研究"]
+    assert c.get("/api/notes/topics", params={"workspace_id": ws, "trashed": True}).json() == []

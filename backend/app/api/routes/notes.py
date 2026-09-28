@@ -5,7 +5,7 @@ from app.core.i18n import tr
 from app.api.deps import CurrentUser, DbSession
 from app.api.schemas.notes import NoteAppend, NoteContent, NoteCreate, NoteOut, NoteRestore, NoteUpdate, NoteReferenceOut
 from app.db.models import AgentMessage, AgentSession, Note, NoteRevision
-from app.domain.notes import append_note, create_note, get_note, save_note, read_reference, query_notes
+from app.domain.notes import append_note, create_note, get_note, note_topics, save_note, read_reference, query_notes
 from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm, owning_workspace
 
 router = APIRouter(tags=["notes"])
@@ -23,9 +23,17 @@ def source_message(message_id: str, workspace_id: str, db: DbSession, user: Curr
 
 @router.get("/notes", response_model=list[NoteOut])
 def list_notes(workspace_id: str, db: DbSession, user: CurrentUser, q: str = Query("", max_length=300),
-               trashed: bool = False, limit: int = Query(100, ge=1, le=200), offset: int = Query(0, ge=0)):
+               trashed: bool = False, favorite: bool = False, topic: str = Query("", max_length=200),
+               limit: int = Query(100, ge=1, le=200), offset: int = Query(0, ge=0)):
     ensure_workspace_access(db, user, workspace_id)
-    return query_notes(db, workspace_id, q, limit=limit, offset=offset, trashed=trashed)
+    return query_notes(db, workspace_id, q, limit=limit, offset=offset, trashed=trashed, favorite=favorite, topic=topic)
+
+
+@router.get("/notes/topics", response_model=list[str])
+def list_topics(workspace_id: str, db: DbSession, user: CurrentUser, trashed: bool = False):
+    """笔记页的主题下拉。在 `/notes/{note_id}` 之前声明,否则 `topics` 会被当成一篇笔记的 id。"""
+    ensure_workspace_access(db, user, workspace_id)
+    return note_topics(db, workspace_id, trashed=trashed)
 
 
 @router.post("/notes", response_model=NoteOut)

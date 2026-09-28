@@ -4,7 +4,9 @@ import {
   analyzeWorkflow,
   extractRefs,
   isNestedScopeConfig,
+  issuesAtLayer,
   outputType,
+  worstSeverity,
   typesCompatible,
   type AnalyzeContext,
   type RegistryLike,
@@ -152,7 +154,7 @@ describe("analyzeWorkflow", () => {
       ],
     );
     const a = analyzeWorkflow(g, registry, fullCtx);
-    const mismatch = a.byNode.get("tr")?.find((i) => i.code === "type-mismatch");
+    const mismatch = issuesAtLayer(a.issues, []).get("tr")?.find((i) => i.code === "type-mismatch");
     expect(mismatch).toMatchObject({ severity: "warn", expected: "asset", actual: "text", configKey: "asset_id" });
     // 软提示不阻断运行。
     expect(a.runnable).toBe(true);
@@ -175,7 +177,7 @@ describe("analyzeWorkflow", () => {
       [{ id: "e1", source: "start", target: "sg" }],
     );
     const a = analyzeWorkflow(g, registry, fullCtx);
-    expect((a.byNode.get("sg") ?? []).filter((i) => i.code === "stale-var")).toEqual([]);
+    expect((issuesAtLayer(a.issues, []).get("sg") ?? []).filter((i) => i.code === "stale-var")).toEqual([]);
   });
 
   it("does not warn when an asset output feeds an asset slot", () => {
@@ -191,7 +193,7 @@ describe("analyzeWorkflow", () => {
       ],
     );
     const a = analyzeWorkflow(g, registry, fullCtx);
-    expect(a.byNode.get("tr")?.some((i) => i.code === "type-mismatch")).toBeFalsy();
+    expect(issuesAtLayer(a.issues, []).get("tr")?.some((i) => i.code === "type-mismatch")).toBeFalsy();
   });
 
 
@@ -217,7 +219,7 @@ describe("analyzeWorkflow", () => {
       [{ id: "e1", source: "start", target: "llm-1" }],
     );
     const a = analyzeWorkflow(g, registry, fullCtx);
-    expect(a.byNode.get("llm-1")?.[0]).toMatchObject({ code: "required-missing", configKey: "prompt", severity: "error" });
+    expect(issuesAtLayer(a.issues, []).get("llm-1")?.[0]).toMatchObject({ code: "required-missing", configKey: "prompt", severity: "error" });
     expect(a.runnable).toBe(false);
   });
 
@@ -230,7 +232,7 @@ describe("analyzeWorkflow", () => {
       [{ id: "e", source: "start", target: "c" }],
     );
     expect(analyzeWorkflow(make("google"), registry, fullCtx).runnable).toBe(true);
-    expect(analyzeWorkflow(make("ai"), registry, fullCtx).byNode.get("c")).toEqual([
+    expect(issuesAtLayer(analyzeWorkflow(make("ai"), registry, fullCtx).issues, []).get("c")).toEqual([
       expect.objectContaining({ code: "required-missing", configKey: "profile_id" }),
     ]);
   });
@@ -244,7 +246,7 @@ describe("analyzeWorkflow", () => {
       [{ id: "e1", source: "start", target: "tmpl" }],
     );
     const a = analyzeWorkflow(g, registry, fullCtx);
-    const stale = a.byNode.get("tmpl")?.find((i) => i.code === "stale-var");
+    const stale = issuesAtLayer(a.issues, []).get("tmpl")?.find((i) => i.code === "stale-var");
     expect(stale).toMatchObject({ ref: "{{ghost.text}}", configKey: "template", severity: "error" });
   });
 
@@ -254,8 +256,8 @@ describe("analyzeWorkflow", () => {
       { id: "tmpl", type: "template", config: { template: "x" } }, // no edge from start
     ]);
     const a = analyzeWorkflow(g, registry, fullCtx);
-    expect(a.byNode.get("tmpl")?.some((i) => i.code === "disconnected")).toBe(true);
-    expect(a.severityByNode.get("tmpl")).toBe("warn");
+    expect(issuesAtLayer(a.issues, []).get("tmpl")?.some((i) => i.code === "disconnected")).toBe(true);
+    expect(worstSeverity(issuesAtLayer(a.issues, []).get("tmpl") ?? [])).toBe("warn");
   });
 
   it("blocks running when the workflow has no start node", () => {
@@ -273,7 +275,7 @@ describe("analyzeWorkflow", () => {
       [{ id: "e1", source: "start", target: "llm-1" }],
     );
     const a = analyzeWorkflow(g, registry, fullCtx);
-    expect(a.byNode.get("llm-1")?.some((i) => i.code === "provider-missing")).toBe(true);
+    expect(issuesAtLayer(a.issues, []).get("llm-1")?.some((i) => i.code === "provider-missing")).toBe(true);
     expect(a.runnable).toBe(false);
   });
 
@@ -289,7 +291,7 @@ describe("analyzeWorkflow", () => {
       ...fullCtx,
       chatProfileIds: new Set(),
     });
-    expect(a.byNode.get("llm-1")?.some((i) => i.code === "no-providers" && i.severity === "warn")).toBe(true);
+    expect(issuesAtLayer(a.issues, []).get("llm-1")?.some((i) => i.code === "no-providers" && i.severity === "warn")).toBe(true);
   });
 
   it("errors when an ai_generate provider has no usable generation model", () => {
@@ -301,7 +303,7 @@ describe("analyzeWorkflow", () => {
       [{ id: "e1", source: "start", target: "gen" }],
     );
     const a = analyzeWorkflow(g, registry, fullCtx);
-    expect(a.byNode.get("gen")?.some((i) => i.code === "gen-provider-unconfigured")).toBe(true);
+    expect(issuesAtLayer(a.issues, []).get("gen")?.some((i) => i.code === "gen-provider-unconfigured")).toBe(true);
   });
 
   it("ai_generate 的提示词要不要写由选中的模型说:不收的、可以不写的空着不报,要写的空着报", () => {
@@ -313,7 +315,7 @@ describe("analyzeWorkflow", () => {
       [{ id: "e1", source: "start", target: "gen" }],
     );
     const missingPrompt = (ctx: AnalyzeContext) =>
-      analyzeWorkflow(g, registry, ctx).byNode.get("gen")?.some(
+      issuesAtLayer(analyzeWorkflow(g, registry, ctx).issues, []).get("gen")?.some(
         (i) => i.code === "required-missing" && i.configKey === "prompt",
       ) ?? false;
     // 模型清单还没到(没给判据):和以前一样按要写拦。
@@ -342,7 +344,7 @@ describe("analyzeWorkflow", () => {
       generationModelsLoaded: false,
     });
     // profile_id is set but providers not loaded yet — don't false-alarm.
-    expect(a.byNode.get("llm-1")?.some((i) => i.code === "provider-missing")).toBeFalsy();
+    expect(issuesAtLayer(a.issues, []).get("llm-1")?.some((i) => i.code === "provider-missing")).toBeFalsy();
   });
 
   it("生成模型清单没到之前,不报生成服务商没配", () => {
@@ -353,7 +355,7 @@ describe("analyzeWorkflow", () => {
       ],
       [{ id: "e1", source: "start", target: "gen" }],
     );
-    const codes = (ctx: AnalyzeContext) => (analyzeWorkflow(g, registry, ctx).byNode.get("gen") ?? []).map((i) => i.code);
+    const codes = (ctx: AnalyzeContext) => (issuesAtLayer(analyzeWorkflow(g, registry, ctx).issues, []).get("gen") ?? []).map((i) => i.code);
     expect(codes({ ...fullCtx, generationVendors: new Set(), generationModelsLoaded: false })).not.toContain(
       "gen-provider-unconfigured",
     );
@@ -380,7 +382,7 @@ describe("语音节点的音色", () => {
 
   it("没选音色就报错", () => {
     const a = analyzeWorkflow(node({ text: "念一句", engine: "edge" }), registry, fullCtx);
-    expect(a.byNode.get("sp")).toContainEqual(
+    expect(issuesAtLayer(a.issues, []).get("sp")).toContainEqual(
       expect.objectContaining({ code: "required-missing", configKey: "voice", severity: "error" }),
     );
     expect(a.runnable).toBe(false);
@@ -389,7 +391,7 @@ describe("语音节点的音色", () => {
   it("选了就不报 —— 不管是哪个引擎的", () => {
     for (const config of [{ engine: "clone", voice: "v1" }, { engine: "edge", voice: "zh-CN-XiaoxiaoNeural" }]) {
       const a = analyzeWorkflow(node({ text: "念一句", ...config }), registry, fullCtx);
-      const missing = (a.byNode.get("sp") ?? []).filter((i) => i.code === "required-missing");
+      const missing = (issuesAtLayer(a.issues, []).get("sp") ?? []).filter((i) => i.code === "required-missing");
       expect(missing, JSON.stringify(config)).toEqual([]);
     }
   });
@@ -406,7 +408,7 @@ describe("语音节点的音色", () => {
         { id: "d1", source: "start", target: "sp", kind: "data", source_output: "params", target_input: "voice" },
       ],
     );
-    const missing = (analyzeWorkflow(g, registry, fullCtx).byNode.get("sp") ?? []).filter(
+    const missing = (issuesAtLayer(analyzeWorkflow(g, registry, fullCtx).issues, []).get("sp") ?? []).filter(
       (i) => i.code === "required-missing",
     );
     expect(missing).toEqual([]);
@@ -441,14 +443,37 @@ describe("循环体和子图里的节点", () => {
     expect(a.errorCount).toBe(1);
   });
 
-  it("问题记在外层那个节点头上，名字带路径", () => {
-    // 画布上只画得出顶层节点 —— 给一个画不出来的 id 挂角标,等于这条问题没人看得见。
+  it("问题记在它真正所在的那一层;主流程上折到容器头上,钻进去挂在出问题的那个节点上", () => {
+    // 此前一律改记到外层容器名下:钻进循环体一个角标都看不到,点清单也只能停在容器上。
     const a = analyzeWorkflow(withBody([{ id: "inner", type: "template", name: "拼一句", config: { template: "" } }]), registry, fullCtx);
-    expect(a.byNode.get("inner")).toBeUndefined();
-    expect(a.byNode.get("loop")).toEqual([
-      expect.objectContaining({ nodeId: "loop", nodeName: "逐镜生成 › 拼一句", code: "required-missing" }),
+    expect(a.issues).toEqual([
+      expect.objectContaining({ nodeId: "inner", path: ["loop"], nodeName: "逐镜生成 › 拼一句", code: "required-missing" }),
     ]);
-    expect(a.severityByNode.get("loop")).toBe("error");
+    const root = issuesAtLayer(a.issues, []);
+    expect(root.get("inner")).toBeUndefined();
+    expect(root.get("loop")).toHaveLength(1);
+    expect(worstSeverity(root.get("loop") ?? [])).toBe("error");
+    const inside = issuesAtLayer(a.issues, ["loop"]);
+    expect(inside.get("inner")).toHaveLength(1);
+    expect(inside.get("loop")).toBeUndefined();
+  });
+
+  it("体里再套一层:每一层都只看得见通往问题的那一个节点", () => {
+    const nested = {
+      nodes: [{ id: "deep", type: "template", config: { template: "" } }],
+      edges: [],
+    };
+    const a = analyzeWorkflow(
+      withBody([{ id: "inner-loop", type: "loop_foreach", config: { items: "{{loop.item}}", body: nested } }]),
+      registry,
+      fullCtx,
+    );
+    expect(a.issues).toContainEqual(expect.objectContaining({ nodeId: "deep", path: ["loop", "inner-loop"] }));
+    expect([...issuesAtLayer(a.issues, []).keys()]).toEqual(["loop"]);
+    expect([...issuesAtLayer(a.issues, ["loop"]).keys()]).toEqual(["inner-loop"]);
+    expect([...issuesAtLayer(a.issues, ["loop", "inner-loop"]).keys()]).toEqual(["deep"]);
+    //: 别的分支里的问题不挂在这一层。
+    expect(issuesAtLayer(a.issues, ["elsewhere"]).size).toBe(0);
   });
 
   it("体里的 {{loop.*}} / {{input.*}} 不算失效引用", () => {
@@ -494,7 +519,7 @@ describe("循环体和子图里的节点", () => {
       registry,
       fullCtx,
     );
-    expect(a.issues).toContainEqual(expect.objectContaining({ nodeId: "box", code: "stale-var", ref }));
+    expect(a.issues).toContainEqual(expect.objectContaining({ nodeId: "inner", path: ["box"], code: "stale-var", ref }));
     expect(a.runnable).toBe(false);
   });
 

@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session
 
 from app.db.model_base import now
 from app.db.models import PluginCapability, PluginCredential, PluginInstance, PluginPackage, PluginPermissionGrant
-from app.domain.plugins import host_capabilities, oauth as plugin_oauth
+from app.domain.plugins import egress, host_capabilities, oauth as plugin_oauth
 from app.domain.plugins.errors import PluginDomainError
 from app.domain.plugins.manifest import TOOLS, Field, Manifest, manifest_of, render_name
 from app.core.i18n import tr
@@ -197,6 +197,23 @@ def set_config(
         _pull_tools(db, instance)
     if notify:
         # 配置变了(换了一台服务器)= 它能做的事可能变了,重新问一遍。
+        host_capabilities.notify(db, instance, refresh=True)
+    return instance
+
+
+def set_network(
+    db: Session, instance: PluginInstance, mode: str, proxy_url: str = "", *, notify: bool = True
+) -> PluginInstance:
+    """这个连接往外连走哪条路:跟随 Mosael / 直连 / 走它自己的代理(见 egress)。
+
+    和改配置一样顺手重拉一次:MCP 的工具清单、替宿主做事的那一侧(模型目录)此前可能正是因为路不通才空着。
+    """
+    instance.network_mode, instance.proxy_url = egress.normalize(mode, proxy_url)
+    db.commit()
+    db.refresh(instance)
+    if instance.enabled and manifest_for(db, instance).is_mcp:
+        _pull_tools(db, instance)
+    if notify:
         host_capabilities.notify(db, instance, refresh=True)
     return instance
 
@@ -498,5 +515,6 @@ __all__ = [
     "set_capability_status",
     "set_enabled",
     "set_exposed",
+    "set_network",
     "set_permissions",
 ]

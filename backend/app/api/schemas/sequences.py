@@ -53,7 +53,10 @@ class TrackOut(OrmModel):
     name: str
     position: int
     locked: bool
+    #: 只管声音;字幕轨上恒为 False(它没有声音)。
     muted: bool
+    #: 只管字幕的显示;目前只有字幕轨会是 True。
+    hidden: bool = False
     solo: bool = False
     duck: bool = False
     #: 这条轨的用途;空 = 普通轨。界面据此认出「配音轨」并把再一次的配音放回同一条。
@@ -203,6 +206,7 @@ class SetSubtitleStyleRequest(ApiModel):
 
 class SetTrackStateRequest(ApiModel):
     muted: bool | None = None
+    hidden: bool | None = None
     locked: bool | None = None
     solo: bool | None = None
     duck: bool | None = None

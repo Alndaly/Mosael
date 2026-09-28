@@ -79,4 +79,16 @@ describe("多选", () => {
 
     expect(result.current.selectedIds.has("b")).toBe(false);
   });
+
+  it("右键菜单的对象:点的那项在选区里就是整个选区,不在就只是它自己(和时间线同一条)", () => {
+    const { result } = renderHook(() => useMultiSelect(items("a", "b", "c"), (item) => item.id));
+
+    //: 不在选择模式时,右键永远只作用于被点的那一项。
+    expect(result.current.menuTargets("a")).toEqual(["a"]);
+    act(() => result.current.setSelectMode(true));
+    act(() => result.current.toggle("a"));
+    act(() => result.current.toggle("b"));
+    expect(result.current.menuTargets("b").sort()).toEqual(["a", "b"]);
+    expect(result.current.menuTargets("c")).toEqual(["c"]);
+  });
 });

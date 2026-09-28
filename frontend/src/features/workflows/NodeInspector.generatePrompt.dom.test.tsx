@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import React from "react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
@@ -39,6 +39,7 @@ beforeAll(() => {
 const originalFetch = globalThis.fetch;
 afterEach(() => {
   globalThis.fetch = originalFetch;
+  askedPaths.length = 0;
   cleanup();
 });
 
@@ -66,6 +67,8 @@ const COMFY_PROFILE = {
   base_url: "http://127.0.0.1:8188", capability_ids: ["image"],
 };
 
+const askedPaths: string[] = [];
+
 function renderInspector(
   capabilities: Record<string, unknown>,
   {
@@ -76,8 +79,10 @@ function renderInspector(
 ) {
   globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
     const url = new URL(String(input), "http://x");
+    askedPaths.push(url.pathname);
     let body: unknown = [];
     if (url.pathname.endsWith("/settings/providers")) body = profiles;
+    if (url.pathname.endsWith("/api/assets")) body = [{ id: "a1", kind: "image", name: "产品图", original_filename: "p.png" }];
     if (modelsListed && url.pathname.endsWith("/generation/options") && url.searchParams.get("kind") === "image") {
       body = [{
         id: "p1:image:upscale.json", provider_profile_id: "p1", profile_name: "ComfyUI", label: "ComfyUI · 放大",
@@ -157,5 +162,24 @@ describe("AI 生成节点顶部的配置提醒", () => {
   it("连接启用但所选服务商下没有可用的生成模型:和就绪清单、AI 工作台一样报「没配」", async () => {
     renderInspector({ parameter_keys: ["seed"] }, { modelsListed: false });
     await waitFor(() => expect(screen.getByText("wfIssueGenUnconfigured")).toBeInTheDocument());
+  });
+});
+
+//: 「输入素材」那几格是检查器自己画的专区,读的是字段选项里的素材清单。此前清单只在节点**声明了**
+//: asset 型字段时才拉,而生成节点一个也没有 —— 下拉永远是空的。现在由画着这几格的检查器说它要。
+describe("AI 生成节点的输入素材", () => {
+  it("模型收参考图:那一格的下拉里有工作区素材", async () => {
+    renderInspector({ parameter_keys: ["reference_image"] });
+    await waitFor(() => expect(askedPaths).toContain("/api/assets"));
+    const trigger = (await screen.findByText("wfGenSourcePlaceholder")).closest<HTMLElement>('[role="combobox"]')!;
+    fireEvent.click(trigger);
+    expect(await screen.findByText("产品图")).toBeInTheDocument();
+  });
+
+  it("模型不收任何素材:不去拉素材清单", async () => {
+    renderInspector({ parameter_keys: ["seed"] });
+    await waitFor(() => expect(askedPaths.some((path) => path.endsWith("/generation/options"))).toBe(true));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(askedPaths).not.toContain("/api/assets");
   });
 });

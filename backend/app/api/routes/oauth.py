@@ -34,6 +34,7 @@ from sqlalchemy.orm import Session
 
 from app.core.i18n import LocalizedError, tr
 from app.api.deps import DbSession
+from app.api.routes.auth import current_user_out
 from app.core.config import settings
 from app.core.security import hash_password, mint_login_session
 from app.db.models import OAuthIdentity, User
@@ -171,7 +172,8 @@ def _handle_callback(provider: str, params: dict[str, str], db: Session) -> HTML
             display_name=str(claims.get("name") or ""),
         )
         token = mint_login_session(db, user.id)
-        _finish(pending_id, token=token, user={"id": user.id, "username": user.username, "display_name": user.display_name})
+        # 和密码登录回同一个形状(AuthOut.user):前端拿它直接落座,少一格就少显示一样。
+        _finish(pending_id, token=token, user=current_user_out(db, user).model_dump())
     except Exception as exc:  # 把原因带回前端轮询,而不是让用户对着浏览器空页猜
         _finish(pending_id, error=str(exc)[:300])
         return _result_page(tr("oauthLogin_failedPage"), ok=False)

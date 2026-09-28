@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session
 
 from app.db.models import PluginInstance
 from app.domain.plugins import artifacts
+from app.domain.plugins import egress as plugin_egress
 from app.domain.plugins import instances as inst
 from app.domain.plugins import tools
 from app.domain.plugins.errors import PluginDomainError
@@ -241,6 +242,8 @@ def generate(
     if instance is None:
         raise PluginDomainError("pluginErr_instanceNotFound")
     name = instance.name
+    #: 产出若是一个地址,由后端替这个连接去下 —— 走这个连接的出站决定(和插件进程拿到的是同一个,见 egress)。
+    egress = plugin_egress.resolve(db, instance)
     collected: list[Path] = []
     extras: dict[str, Any] = {}
     # 调用记录里留的那一份:不带本地路径(那是一次性的暂存路径),只说挂了哪几种素材。
@@ -284,7 +287,7 @@ def generate(
             if not isinstance(spec, dict):
                 continue
             # 和工具产出同一套规矩(落点受限、单份上限、只认 http(s)),见 artifacts.fetch。
-            got = artifacts.fetch(spec, scratch)
+            got = artifacts.fetch(spec, scratch, egress=egress)
             target = output_dir / f"{index:02d}-{got.name}"
             shutil.move(str(got), target)
             collected.append(target)

@@ -28,6 +28,22 @@ def _choose_voice(**overrides) -> None:
         agent_voice.upsert(db, _me(), **{"engine": "edge", "engine_voice": "zh-CN-XiaoxiaoNeural", **overrides})
 
 
+def _record_speech(monkeypatch) -> list[dict]:
+    """替掉真合成,记下每次交给 speak_to_file 的参数。"""
+    from app.domain.voices import voices as voices_domain
+
+    calls: list[dict] = []
+
+    def _fake_speak(_db, **kwargs):
+        calls.append(kwargs)
+        out = Path(kwargs["out_dir"]) / "speech.mp3"
+        out.write_bytes(b"ID3fake-audio")
+        return out
+
+    monkeypatch.setattr(voices_domain, "speak_to_file", _fake_speak)
+    return calls
+
+
 def test_没设过音色就说没设而不是替他挑一个() -> None:
     client = fresh_client()
     workspace = client.post("/api/workspaces", json={"name": "W"}).json()
@@ -104,3 +120,51 @@ def test_语速被夹在可用区间里() -> None:
         json={"engine": "edge", "engine_voice": "x", "speed": 9.0, "enabled": True},
     )
     assert reply.json()["speed"] == 2.0
+
+
+def test_关着时对话不出声_而且说的是关着而不是没选(monkeypatch) -> None:
+    client = fresh_client()
+    workspace = client.post("/api/workspaces", json={"name": "W"}).json()
+    _choose_voice(enabled=False)
+    calls = _record_speech(monkeypatch)
+
+    reply = client.post("/api/agent/speech", json={"text": "念一句", "workspace_id": workspace["id"]})
+    assert reply.status_code == 409, reply.text
+    assert "让它出声" in reply.json()["detail"]
+    assert calls == [], "关着还是去合成了 —— 那是一笔他没同意的钱"
+
+
+def test_试听不要求开着_只要求选好(monkeypatch) -> None:
+    """试听是配置时听一下效果,发生在打开之前;「先打开才能听」等于让人先对没听过的声音点头。"""
+    client = fresh_client()
+    workspace = client.post("/api/workspaces", json={"name": "W"}).json()
+    calls = _record_speech(monkeypatch)
+
+    untouched = client.post("/api/agent/speech/preview", json={"text": "试听", "workspace_id": workspace["id"]})
+    assert untouched.status_code == 409 and "语音对话" in untouched.json()["detail"]
+
+    _choose_voice(engine_voice="", enabled=False)
+    no_voice = client.post("/api/agent/speech/preview", json={"text": "试听", "workspace_id": workspace["id"]})
+    assert no_voice.status_code == 409, "只选了引擎没选音色,不算选好"
+
+    _choose_voice(enabled=False)
+    reply = client.post("/api/agent/speech/preview", json={"text": "试听", "workspace_id": workspace["id"]})
+    assert reply.status_code == 200, reply.text
+    assert reply.content == b"ID3fake-audio"
+    assert len(calls) == 1
+
+
+def test_试听和真念走的是同一套参数(monkeypatch) -> None:
+    """试听听到的得是以后念给他的那个声音:两条路交给合成的东西,除了记账来源,一样不差。"""
+    client = fresh_client()
+    workspace = client.post("/api/workspaces", json={"name": "W"}).json()
+    _choose_voice(speed=1.5, engine_voice_resource="seed-tts-1.0", engine_model="m-1")
+    calls = _record_speech(monkeypatch)
+
+    for path in ("/api/agent/speech/preview", "/api/agent/speech"):
+        assert client.post(path, json={"text": "同一句", "workspace_id": workspace["id"]}).status_code == 200
+
+    preview, spoken = ({k: v for k, v in call.items() if k not in {"out_dir", "source_type"}} for call in calls)
+    assert preview == spoken
+    assert spoken["speed"] == 1.5 and spoken["voice_resource"] == "seed-tts-1.0" and spoken["model_override"] == "m-1"
+    assert [call["source_type"] for call in calls] == ["agent_voice_preview", "agent_speech"]

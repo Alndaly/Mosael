@@ -29,6 +29,16 @@ export function isCustomServer(): boolean {
   return API_BASE !== DEFAULT_API_BASE;
 }
 
+/** 连的是别处的服务器时,它给人看的那一截(主机名加端口);连本机时是 null。 */
+export function customServerHost(): string | null {
+  if (!isCustomServer()) return null;
+  try {
+    return new URL(API_BASE).host;
+  } catch {
+    return API_BASE;
+  }
+}
+
 const TOKEN_KEY = "mosael.auth.token";
 let authToken: string | null = typeof window === "undefined" ? null : window.localStorage.getItem(TOKEN_KEY);
 let onUnauthorized: (() => void) | null = null;
@@ -78,8 +88,8 @@ export function setUnauthorizedHandler(handler: (() => void) | null): void {
   onUnauthorized = handler;
 }
 
-/** Unified HTTP seam for every domain client. */
-export async function api<T>(path: string, init?: RequestInit): Promise<T> {
+/** Unified HTTP seam for every domain client: headers, offline, 401 and error bodies are handled once. */
+async function request(path: string, init?: RequestInit): Promise<Response> {
   const auth: Record<string, string> = {
     // 语法是 `<界面>/<版本>`(见 backend/app/api/deps/auth.parse_client_header)。此前这里只发
     // 版本号,而浏览器扩展发的是字面量 `browser-extension` —— 同一栏两个意思,管理页于是
@@ -114,6 +124,16 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   if (response.headers.has(NEW_JOBS_HEADER) && typeof window !== "undefined") {
     window.dispatchEvent(new Event(JOBS_CREATED_EVENT));
   }
+  return response;
+}
+
+export async function api<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await request(path, init);
   if (response.status === 204) return undefined as T;
   return response.json() as Promise<T>;
+}
+
+/** 回的是一段二进制(试听的音频)而不是 JSON 的接口。报错、掉线、401 和 `api` 同一套处理。 */
+export async function apiBlob(path: string, init?: RequestInit): Promise<Blob> {
+  return (await request(path, init)).blob();
 }

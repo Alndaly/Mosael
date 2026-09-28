@@ -393,6 +393,39 @@ describe("选中之后挂什么", () => {
     expect(document.querySelector('[role="dialog"]'), "点了才弹挑笔记").not.toBeNull();
   });
 
+  //: 和文档格的「转为笔记」同一种挂法:操作条上的一个动作。此前它挂在便签格子外面,多选几张便签各冒一颗。
+  it("便签的「保存到笔记」在操作条上,点了才弹;多选时操作条只给共通动作,没有它", () => {
+    mount({ items: [note("n1", "一段想法"), note("n2", "另一段")], edges: [], markers: [] });
+    const action = () => document.querySelector<HTMLButtonElement>('.react-flow__node-toolbar [data-board-action="note-to-note"]');
+    select("n1");
+    expect(action(), "操作条上有「保存到笔记」").not.toBeNull();
+    const onCell = [...document.querySelectorAll('[data-id="n1"] button')].filter((one) => one.textContent?.includes("保存到笔记"));
+    expect(onCell, "格子自己身上不再挂这颗按钮").toEqual([]);
+
+    //: 按住多选键、点第二张:三步分开 act —— 多选键按下要先落进 React Flow 的状态,点击才认它。
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Control", ctrlKey: true }));
+    });
+    act(() => {
+      document.querySelector('[data-id="n2"]')!.dispatchEvent(new MouseEvent("click", { bubbles: true, ctrlKey: true }));
+    });
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent("keyup", { key: "Control" }));
+    });
+    expect(document.querySelectorAll(".react-flow__node.selected")).toHaveLength(2);
+    expect(action(), "多选时没有它").toBeNull();
+
+    select("n1");
+    act(() => action()!.click());
+    expect(document.querySelector('[role="dialog"]'), "点了才弹").not.toBeNull();
+  });
+
+  it("没有字的便签不给「保存到笔记」—— 存不出东西", () => {
+    mount({ items: [note("n1", "  ")], edges: [], markers: [] });
+    select("n1");
+    expect(document.querySelector('[data-board-action="note-to-note"]')).toBeNull();
+  });
+
   it("工具交回的 JSON 便签没有「让 AI 写」", () => {
     mount({ items: [writeNote("j1", { text: '{"a":1}', text_format: "json" })], edges: [], markers: [] }, { onRun: vi.fn(async () => undefined) });
     select("j1");

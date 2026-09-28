@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 /**
- * 设置 → AI 成本规则。钉住三件被用户撞到的事:
+ * 管理 → 成本规则。钉住三件被用户撞到的事:
  * - 「按目录预填」只转点的那一行(此前整列一起转圈变灰),结果说清是哪一家;
  * - 删一条规则要确认(此前一点就没,而批量删却有确认框);
  * - 编辑表单里只有字段标题加粗(此前整个 label 带 font-semibold,输入框里的字全成了粗体)。
@@ -72,7 +72,7 @@ function mount(onPrefill?: (resolve: (r: Response) => void) => void, rules: unkn
   }) as typeof fetch;
   render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-      <ProviderPricingSection workspace={{ id: "ws" } as never} />
+      <ProviderPricingSection workspace={{ id: "ws", name: "Studio" } as never} />
     </QueryClientProvider>,
   );
   return calls;

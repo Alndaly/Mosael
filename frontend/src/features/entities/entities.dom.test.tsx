@@ -585,7 +585,7 @@ describe("音色试听", () => {
     api.fetchVoicePreview.mockResolvedValue(audio);
     mount(<EntitiesView workspace={WORKSPACE} />);
     fireEvent.click(await screen.findByRole("button", { name: "entitySettings" }));
-    const preview = await screen.findByRole("button", { name: "entityVoicePreview" });
+    const preview = await screen.findByRole("button", { name: "voicePreview" });
     fireEvent.click(preview);
     await waitFor(() =>
       expect(api.fetchVoicePreview).toHaveBeenCalledWith({
@@ -601,7 +601,7 @@ describe("音色试听", () => {
     api.getEntity.mockResolvedValue(entity({ attributes: { real_person: false } }));
     mount(<EntitiesView workspace={WORKSPACE} />);
     fireEvent.click(await screen.findByRole("button", { name: "entitySettings" }));
-    expect(((await screen.findByRole("button", { name: "entityVoicePreview" })) as HTMLButtonElement).disabled).toBe(true);
+    expect(((await screen.findByRole("button", { name: "voicePreview" })) as HTMLButtonElement).disabled).toBe(true);
   });
 });
 

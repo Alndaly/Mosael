@@ -8566,6 +8566,7 @@
           "generation"
         ],
         "summary": "List Generation Sessions",
+        "description": "这个人在这个工作区里看得见的生成会话。`kind` 可以给几个:AI 工作台「生成」页要图像和视频,\n「音频」页要音频 —— 在这里筛而不是在界面上筛,因为列表有条数上限,界面筛的话一页的会话能把\n另一页的挤出去。",
         "operationId": "list_generation_sessions_api_generation_sessions_get",
         "parameters": [
           {
@@ -8575,6 +8576,18 @@
             "schema": {
               "type": "string",
               "title": "Workspace Id"
+            }
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "title": "Kind"
             }
           }
         ],
@@ -12896,6 +12909,27 @@
             }
           },
           {
+            "name": "favorite",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Favorite"
+            }
+          },
+          {
+            "name": "topic",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 200,
+              "default": "",
+              "title": "Topic"
+            }
+          },
+          {
             "name": "limit",
             "in": "query",
             "required": false,
@@ -12969,6 +13003,63 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/NoteOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/notes/topics": {
+      "get": {
+        "tags": [
+          "notes"
+        ],
+        "summary": "List Topics",
+        "description": "笔记页的主题下拉。在 `/notes/{note_id}` 之前声明,否则 `topics` 会被当成一篇笔记的 id。",
+        "operationId": "list_topics_api_notes_topics_get",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Workspace Id"
+            }
+          },
+          {
+            "name": "trashed",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Trashed"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "title": "Response List Topics Api Notes Topics Get"
                 }
               }
             }
@@ -19007,8 +19098,48 @@
           "agent"
         ],
         "summary": "Speak",
-        "description": "念一句话,把音频**直接回给调用方**。\n\n**不建任务、不入素材库。** 对话里念出来的每一句都登记成素材的话,说十句就是十个音频\n文件 —— 而它们说完就没用了。这和配音是两件事:配音的产出要留存、要进时间线,所以它\n走 job + register_file_asset;这里的产出活到播完为止。\n\n这条路同时给三件事用:消息底部的播放、确认卡与提问的语音化、失败出声。它们共用同一个\n音色配置(settings/agent-voice),因为对用户来说那就是\"它的声音\"。\n\n没设过音色就说没设 —— 不替他挑一个(同 provider-defaults 的立场)。",
+        "description": "念一句话,把音频**直接回给调用方**。\n\n**不建任务、不入素材库。** 对话里念出来的每一句都登记成素材的话,说十句就是十个音频\n文件 —— 而它们说完就没用了。这和配音是两件事:配音的产出要留存、要进时间线,所以它\n走 job + register_file_asset;这里的产出活到播完为止。\n\n这条路同时给三件事用:消息底部的播放、确认卡与提问的语音化、失败出声。它们共用同一个\n音色配置(settings/agent-voice),因为对用户来说那就是\"它的声音\"。\n\n没设过音色就说没设 —— 不替他挑一个(同 provider-defaults 的立场);「让它出声」关着就不念。",
         "operationId": "speak_api_agent_speech_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentSpeechRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/agent/speech/preview": {
+      "post": {
+        "tags": [
+          "agent"
+        ],
+        "summary": "Preview Speech",
+        "description": "试听设置里存着的那份对话音色。**只要求选好,不要求开着** —— 试听是配置时听一下效果,\n而「先打开才能听」等于让人先对一个没听过的声音点头。\n\n和 /agent/speech 只差这道闸:合成走同一个 agent_voice.speak,听到的就是以后念给他的那个声音。",
+        "operationId": "preview_speech_api_agent_speech_preview_post",
         "requestBody": {
           "content": {
             "application/json": {
@@ -25702,6 +25833,17 @@
             "title": "Result Asset Ids",
             "default": []
           },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
@@ -25846,16 +25988,10 @@
             "title": "Model"
           },
           "kind": {
-            "anyOf": [
-              {
-                "type": "string",
-                "pattern": "^(image|video|audio)$"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Kind"
+            "type": "string",
+            "pattern": "^(image|video|audio)$",
+            "title": "Kind",
+            "default": "image"
           }
         },
         "type": "object",
@@ -27915,6 +28051,9 @@
             },
             "type": "object",
             "title": "Capability Status"
+          },
+          "network": {
+            "$ref": "#/components/schemas/PluginNetworkOut"
           }
         },
         "type": "object",
@@ -27961,6 +28100,16 @@
               }
             ],
             "title": "Enabled"
+          },
+          "network": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PluginNetworkUpdate"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -28202,6 +28351,52 @@
         ],
         "title": "PluginMarketTool",
         "description": "市场里一个插件声明的工具。只有「它是什么」,没有入参 —— 怎么调是装上之后的事。"
+      },
+      "PluginNetworkOut": {
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "follow",
+              "direct",
+              "proxy"
+            ],
+            "title": "Mode",
+            "default": "follow"
+          },
+          "proxy_url": {
+            "type": "string",
+            "title": "Proxy Url",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "title": "PluginNetworkOut",
+        "description": "这个连接往外连走哪条路(见 domain/plugins/egress)。"
+      },
+      "PluginNetworkUpdate": {
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "follow",
+              "direct",
+              "proxy"
+            ],
+            "title": "Mode"
+          },
+          "proxy_url": {
+            "type": "string",
+            "maxLength": 300,
+            "title": "Proxy Url",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "mode"
+        ],
+        "title": "PluginNetworkUpdate"
       },
       "PluginOAuthCode": {
         "properties": {
@@ -32538,6 +32733,17 @@
             ],
             "title": "Muted"
           },
+          "hidden": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hidden"
+          },
           "locked": {
             "anyOf": [
               {
@@ -33042,6 +33248,11 @@
           "muted": {
             "type": "boolean",
             "title": "Muted"
+          },
+          "hidden": {
+            "type": "boolean",
+            "title": "Hidden",
+            "default": false
           },
           "solo": {
             "type": "boolean",
@@ -33880,6 +34091,13 @@
             "type": "boolean",
             "title": "Is Deployment Admin",
             "default": false
+          },
+          "oauth_providers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Oauth Providers"
           }
         },
         "type": "object",

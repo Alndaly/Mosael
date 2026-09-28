@@ -48,7 +48,12 @@ GATED_HELPERS = {"require_sequence_access", "require_asset"}
 #: **归属即权限**的那几个:东西归某个人,判据就是"它是不是我的",没有角色可言。
 #: 它们各自是所在模块里唯一的取对象入口,取不到自己的就 404(见 settings._require_profile、
 #: plugins.my_instance)。写在这里而不是让棘轮猜:漏掉一个的后果是那条路径能改别人的东西。
-OWNERSHIP_GATES = {"_require_profile", "my_instance"}
+OWNERSHIP_GATES = {
+    "_require_profile",
+    "my_instance",
+    # 生成会话的写闸(domain/generation/sessions):看得见 + 工作区 `ai` 权限 + 是主人。共享来的只能看。
+    "writable_session",
+}
 
 
 def _local_gated_helpers(tree: ast.Module) -> set[str]:

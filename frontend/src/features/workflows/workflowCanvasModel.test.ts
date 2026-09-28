@@ -99,6 +99,7 @@ describe("workflow canvas model", () => {
     ]);
     const issue: NodeIssue = {
       nodeId: "n1",
+      path: [],
       nodeName: "自定义节点",
       nodeType: "custom",
       severity: "error",

@@ -17,7 +17,6 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from "@/components/app/chart";
-import { gotoSettings } from "@/lib/deepLink";
 
 /**
  * 统计页图表(shadcn/ui chart + Recharts):窗口内任务活动(堆叠柱)+ 素材构成(环形)等。
@@ -103,6 +102,7 @@ export function UsageCostPanel({
   unknown,
   unpriced,
   byProvider,
+  onConfigurePricing,
 }: {
   title: React.ReactNode;
   daily: WorkspaceSummary["usage_daily"];
@@ -111,6 +111,8 @@ export function UsageCostPanel({
   unknown: number;
   unpriced?: WorkspaceSummary["usage_unpriced"];
   byProvider: WorkspaceSummary["usage_by_provider"];
+  /** 去配价格规则。只有部署管理员有(规则在管理页);没有时只说一句归谁维护。 */
+  onConfigurePricing?: () => void;
 }) {
   const t = useI18n();
   const currencies = costs.map((cost) => cost.currency);
@@ -144,7 +146,7 @@ export function UsageCostPanel({
           </span>
         )}
       </h2>
-      <UsageCostChart daily={daily} currency={currency} unknown={unknown} unpriced={unpriced} />
+      <UsageCostChart daily={daily} currency={currency} unknown={unknown} unpriced={unpriced} onConfigurePricing={onConfigurePricing} />
       {/* 看完总额之后的下一个问题就是"钱花在谁身上" —— 这份分摊后端一直在算,
           只是没人读(见前端审计 2.2)。 */}
       <UsageByProvider byProvider={byProvider} currency={currency} />
@@ -158,6 +160,7 @@ export function UsageCostChart({
   currency,
   unknown,
   unpriced,
+  onConfigurePricing,
 }: {
   daily: WorkspaceSummary["usage_daily"];
   /** 画哪一种钱。空串 = 这段时间一笔都没计上价。 */
@@ -165,6 +168,7 @@ export function UsageCostChart({
   unknown: number;
   /** 没能定价的「供应商 + 模型」及次数,由后端聚合(见 domain/usage.summarize_usage)。 */
   unpriced?: WorkspaceSummary["usage_unpriced"];
+  onConfigurePricing?: () => void;
 }) {
   const t = useI18n();
   const { locale } = usePreferences();
@@ -195,13 +199,17 @@ export function UsageCostChart({
             : undefined
         }
         action={
-          <button
-            type="button"
-            className="cursor-pointer border-0 bg-transparent text-ui-xs text-primary hover:underline"
-            onClick={() => gotoSettings("provider-pricing")}
-          >
-            {t("homeChartUsageConfigurePricing")}
-          </button>
+          onConfigurePricing ? (
+            <button
+              type="button"
+              className="cursor-pointer border-0 bg-transparent text-ui-xs text-primary hover:underline"
+              onClick={onConfigurePricing}
+            >
+              {t("homeChartUsageConfigurePricing")}
+            </button>
+          ) : (
+            <span className="text-ui-xs text-muted-foreground">{t("homeChartUsagePricingByAdmin")}</span>
+          )
         }
       />
     );

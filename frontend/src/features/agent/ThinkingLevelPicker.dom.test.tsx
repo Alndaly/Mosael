@@ -44,7 +44,7 @@ function mount(which: unknown = session) {
   return render(
     <QueryClientProvider client={client}>
       {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-      <ThinkingLevelPicker session={which as any} />
+      <ThinkingLevelPicker workspaceId="ws" session={which as any} />
     </QueryClientProvider>,
   );
 }
@@ -158,5 +158,14 @@ describe("思考档位", () => {
     const { container } = mount(inheriting);
     expect(container.textContent).toContain("读取模型…");
     expect(container.textContent).not.toContain("发不出思考档位");
+  });
+
+  //: 空工作区里第一条消息发出之前,正是定档位的时候 —— 此前没有会话这一格直接不渲染。
+  it("还没有会话也在,按新会话的默认值(建表默认 off)显示", async () => {
+    catalog = [model({ reasoning: true, thinking_levels: ["off", "low", "high"] })];
+    mount(null);
+    const trigger = await screen.findByRole("combobox");
+    expect(trigger.textContent).toContain("关闭");
+    expect(trigger).not.toBeDisabled();
   });
 });

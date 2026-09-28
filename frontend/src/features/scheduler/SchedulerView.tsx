@@ -42,11 +42,39 @@ import { EmptyState, PageLoadError } from "@/components/layout/EmptyState";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { BoundWorkflowRow as BoundWorkflowRowView, isBoundWorkflowGone } from "./boundWorkflowRow";
-import { TaskRunControls } from "./taskRunControls";
+import { hasActiveRun, TaskRunControls } from "./taskRunControls";
 import { nextRunText, scheduleText } from "./scheduleText";
 import { SettingsRow } from "@/components/settings/settings-layout";
 import { usePersistentSelection } from "@/lib/usePersistentTab";
 import { cn } from "@/lib/utils";
+
+/** 一个任务的运行记录。详情页和右键菜单读同一份(同一个键、同一种轮询)。 */
+function taskRunsQuery(taskId: string) {
+  return {
+    queryKey: ["task-runs", taskId],
+    queryFn: () => listScheduledTaskRuns(taskId),
+    // **空闲时也要问。** 此前只在「已经知道有一条在跑」时才轮询,而外部触发(webhook)、到点的
+    // 排程、别的同事点的「立即运行」都不经过这个页面 —— 那一条前端根本不知道,于是永远等不到,
+    // 非得刷新页面。有在跑的 2 秒一问,空闲 5 秒一问;页面在后台时 react-query 自己会停。
+    refetchInterval: (query: { state: { data?: ScheduledTaskRun[] } }) => (hasActiveRun(query.state.data) ? 2000 : 5000),
+    refetchOnWindowFocus: true,
+  };
+}
+
+/**
+ * 右键菜单里的「立即运行」。菜单打开才挂载,挂载时问一次这个任务有没有在跑 —— 列表上别的任务的运行
+ * 记录平时没人取,不问的话菜单只能照常给一个点了就被后端拒绝的项。
+ */
+function TaskMenuRunItem({ task, blocked, onRun }: { task: ScheduledTask; blocked: boolean; onRun: () => void }) {
+  const t = useI18n();
+  const runs = useQuery(taskRunsQuery(task.id));
+  const active = hasActiveRun(runs.data);
+  return (
+    <ContextMenuItem disabled={!task.enabled || blocked || runs.isPending || active} onSelect={onRun}>
+      <Play /> {active ? t("runStatus_running") : t("runNow")}
+    </ContextMenuItem>
+  );
+}
 
 function useWorkflows(workspaceId: string) {
   return useQuery({ queryKey: ["workflows", workspaceId], queryFn: () => listWorkflows(workspaceId) });
@@ -88,7 +116,12 @@ export function SchedulerView({ workspace, project }: { workspace: Workspace; pr
   });
   const menuRun = useMutation({
     mutationFn: runScheduledTask,
-    onSuccess: refreshTasks,
+    onSuccess: (_result, taskId) => {
+      refreshTasks();
+      void qc.invalidateQueries({ queryKey: ["task-runs", taskId] });
+    },
+    //: 菜单打开之后才冒出来的那一次(到点的排程、webhook)只有后端知道:它回 409「还没跑完」,
+    //: 由全局的失败提示说出来(app/mutationErrors)。
   });
   const menuToggle = useMutation({
     mutationFn: ({ id, enabled }: { id: string; enabled: boolean }) =>
@@ -185,9 +218,7 @@ export function SchedulerView({ workspace, project }: { workspace: Workspace; pr
                   </button>
                 </ContextMenuTrigger>
                 <ContextMenuContent>
-                  <ContextMenuItem disabled={!task.enabled || isBlocked(task)} onSelect={() => menuRun.mutate(task.id)}>
-                    <Play /> {t("runNow")}
-                  </ContextMenuItem>
+                  <TaskMenuRunItem task={task} blocked={isBlocked(task)} onRun={() => menuRun.mutate(task.id)} />
                   <ContextMenuItem
                     disabled={!task.enabled && isBlocked(task)}
                     onSelect={() => menuToggle.mutate({ id: task.id, enabled: !task.enabled })}
@@ -464,16 +495,7 @@ function TaskDetail({ task, workspaceId }: { task: ScheduledTask; workspaceId: s
   const qc = useQueryClient();
   const [deleting, setDeleting] = React.useState(false);
 
-  const runs = useQuery({
-    queryKey: ["task-runs", task.id],
-    queryFn: () => listScheduledTaskRuns(task.id),
-    // **空闲时也要问。** 此前只在「已经知道有一条在跑」时才轮询,而外部触发(webhook)、到点的
-    // 排程、别的同事点的「立即运行」都不经过这个页面 —— 那一条前端根本不知道,于是永远等不到,
-    // 非得刷新页面。有在跑的 2 秒一问,空闲 5 秒一问;页面在后台时 react-query 自己会停。
-    refetchInterval: (query) =>
-      (query.state.data ?? []).some((run) => run.status === "queued" || run.status === "running") ? 2000 : 5000,
-    refetchOnWindowFocus: true,
-  });
+  const runs = useQuery(taskRunsQuery(task.id));
   // 冒出一条新运行(或最新那条变了状态)时,顶上的「上次运行 / 下次运行」也要跟着换。
   const newest = runs.data?.[0];
   const newestKey = newest ? `${newest.id}:${newest.status}` : "";
@@ -531,7 +553,8 @@ function TaskDetail({ task, workspaceId }: { task: ScheduledTask; workspaceId: s
           <TaskRunControls
             enabled={task.enabled}
             blocked={blocked}
-            running={runTask.isPending}
+            // 按**这个任务实际有没有一次在跑**判,和工作流编辑器的运行键同一个意思;请求那几十毫秒也算。
+            running={runTask.isPending || hasActiveRun(runs.data)}
             onRun={() => runTask.mutate()}
             onToggle={(checked) => toggleTask.mutate(checked)}
           />

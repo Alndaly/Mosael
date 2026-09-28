@@ -60,5 +60,15 @@ export function useMultiSelect<T>(items: readonly T[], idOf: (item: T) => string
     setSelectedIds(new Set());
   }, []);
 
-  return { selectMode, setSelectMode, selectedIds, toggle, selectAll, allSelected, clear, exit };
+  /**
+   * 右键菜单作用在谁身上 —— 和时间线同一条规则(editor/timeline/Timeline 的 menuTargets):
+   * 右键的那一项在选区里,就是整个选区;不在,就只是它自己。此前多选着右键一项,菜单给的是
+   * 单条的重命名 / 删除,作用在被点的那一项上 —— 看着像批量删,实际只删了一条。
+   */
+  const menuTargets = React.useCallback(
+    (id: string): string[] => (selectMode && selectedIds.has(id) ? [...selectedIds] : [id]),
+    [selectMode, selectedIds],
+  );
+
+  return { selectMode, setSelectMode, selectedIds, toggle, selectAll, allSelected, clear, exit, menuTargets };
 }

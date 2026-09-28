@@ -45,7 +45,10 @@ class Track(Base):
     name: Mapped[str] = mapped_column(String(120), nullable=False)
     position: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     locked: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    #: 静音只管**声音**,任何 kind 都一样:视频轨静音后画面和花字照旧(见 media/scene.py)。
     muted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    #: 隐藏只管**字幕的显示**:预览和成片里都不画这条字幕轨。字幕轨没有声音,所以它不借 muted。
+    hidden: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     solo: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     duck: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)  # 有其它音频时压低本轨
     #: 这条轨**是干什么的**,空 = 一条普通轨。目前只有 "dub"(字幕配音落地的地方)。

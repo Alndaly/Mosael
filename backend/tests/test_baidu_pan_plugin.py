@@ -277,6 +277,7 @@ class Test和_artifact_通道合得上:
         """
         from app.core.db import SessionLocal
         from app.domain.plugins import artifacts
+        from app.domain.plugins.egress import Egress
         from app.domain.plugins.tools import _collect_artifact
         from tests.util import fresh_client
 
@@ -324,7 +325,8 @@ class Test和_artifact_通道合得上:
 
         with SessionLocal() as db:
             collected = _collect_artifact(
-                db, plugin_output, scratch, workspace_id=ws, project_id=None, fallback_name="pan_import"
+                db, plugin_output, scratch, workspace_id=ws, project_id=None, fallback_name="pan_import",
+                egress=Egress(),
             )
             db.commit()
 

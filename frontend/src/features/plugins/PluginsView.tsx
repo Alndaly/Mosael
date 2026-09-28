@@ -52,6 +52,7 @@ import { CodeConfigControl, CodeFieldEditor, isCodeField, jsonProblem } from "@/
 import { GenerationModelsRow } from "@/features/plugins/ProvidedModels";
 import { ToolEffectBadge } from "@/features/plugins/ToolEffectBadge";
 import { ConnectionAuthorization } from "@/features/plugins/ConnectionAuthorization";
+import { ConnectionNetwork } from "@/features/plugins/ConnectionNetwork";
 import { GroupActions } from "@/features/plugins/GroupActions";
 import { invalidatePluginDependents } from "@/features/plugins/pluginCaches";
 import { describeProvides } from "@/features/plugins/pluginPermissions";
@@ -673,6 +674,9 @@ export function ConnectionCard({ pkg, instance, workspaceId }: { pkg: PluginPack
       {(pkg.credential_fields ?? []).length > 0 && (
         <CredentialRows instanceId={instance.id} oauthFields={pkg.oauth?.fills ?? []} />
       )}
+
+      {/* 网络是宿主给**每个**连接的一行(不是清单里的配置),排在插件自己声明的配置与凭据之后。 */}
+      <ConnectionNetwork instanceId={instance.id} network={instance.network ?? { mode: "follow", proxy_url: "" }} />
 
       {generates && (
         <GenerationModelsRow

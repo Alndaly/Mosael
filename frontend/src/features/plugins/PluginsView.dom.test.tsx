@@ -131,6 +131,43 @@ describe("授权是连接级别的", () => {
   });
 });
 
+describe("网络是宿主给每个连接的一行", () => {
+  //: 走哪个代理不是插件的业务配置:清单里不写,每个连接都有,排在插件自己声明的配置与凭据之后。
+  it("没声明任何网络字段的插件也有这一行,排在凭据后面,默认跟随 Mosael", async () => {
+    const pkg = {
+      id: "dev.mosael.mineru",
+      name: "MinerU",
+      version: "1.2.0",
+      kind: "process",
+      multiple: false,
+      permissions: [],
+      provides: [],
+      config_fields: [],
+      credential_fields: [{ key: "APP_KEY", label: "AppKey", required: true, secret: true }],
+      oauth: null,
+      instances: [],
+    } as unknown as PluginPackage;
+    const instance = {
+      id: "i1",
+      package_id: pkg.id,
+      name: "MinerU",
+      enabled: true,
+      config: {},
+      blocked_reason: "",
+      authorization: "",
+      tools: [],
+      capability_status: {},
+      network: { mode: "follow", proxy_url: "" },
+    } as PluginInstance;
+    const { container } = wrap(<ConnectionCard pkg={pkg} instance={instance} workspaceId="w1" />);
+    await screen.findByPlaceholderText("APP_KEY");
+    const rows = [...container.querySelectorAll('[data-slot="settings-row"]')].map((row) => row.textContent ?? "");
+    const network = rows.findIndex((text) => text.includes("pluginNetwork"));
+    expect(network).toBeGreaterThan(rows.findIndex((text) => text.includes("AppKey")));
+    expect(rows[network]).toContain("pluginNetworkFollow");
+  });
+});
+
 describe("授权会填的令牌不在凭据里", () => {
   it("凭据只列 AppKey 这类注册应用拿的;令牌归授权那一行", async () => {
     listPluginCredentials.mockResolvedValue([

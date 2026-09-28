@@ -1,11 +1,13 @@
 /** @vitest-environment jsdom */
 import React from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { Workspace } from "@/api/client";
+
 /**
- * 管理页:三个 tab 各自有哪几节、节与节**不可能叠在一起**、以及每一处会改东西的动作真的打到后端。
+ * 管理页:四个 tab 各自有哪几节、节与节**不可能叠在一起**、以及每一处会改东西的动作真的打到后端。
  *
  * 走真正的组件(只替掉接口和图表),不去测抽出来的字符串拼接函数:错常常发生在
  * "接口字段 → 屏幕上那行字"这一跳上,而那正是绕过组件就测不到的一跳。
@@ -15,19 +17,36 @@ const t = (key: string) => key;
 vi.mock("@/app/preferences", () => ({ useI18n: () => t, usePreferences: () => ({ locale: "en-US" }) }));
 vi.mock("./AdminActivityChart", () => ({ AdminActivityChart: () => null }));
 vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
-vi.mock("@/lib/deepLink", () => ({ gotoSettings: vi.fn() }));
 
 const rows: Array<Record<string, unknown>> = [];
 let overview: Record<string, unknown> = { spend_by_user: [], jobs_by_day: [], costs: [], window_days: 30 };
 let openRegistration = true;
+/** 出站代理读得到什么:null = 读失败(后端拒了、或者断网)。 */
+let network: Record<string, unknown> | null = { proxy_url: "", no_proxy: "" };
 const calls = {
+  api: vi.fn(),
   overview: vi.fn(),
   setAdmin: vi.fn(),
   deleteAccount: vi.fn(),
   setOpenRegistration: vi.fn(),
   createInvite: vi.fn(),
 };
+/** 部署设置与成本规则那几节走通用的 `api(path)`:按路径给一份最小的回包。 */
+function fakeApi(path: string, init?: RequestInit): Promise<unknown> {
+  calls.api(init?.method ?? "GET", path, init?.body ? JSON.parse(String(init.body)) : undefined);
+  if (path === "/api/settings/network") {
+    if (init?.method === "PUT") return Promise.resolve(JSON.parse(String(init.body)));
+    return network ? Promise.resolve(network) : Promise.reject(new Error("forbidden"));
+  }
+  if (path === "/api/settings/ai-runtime") return Promise.resolve({ max_retries: 3 });
+  return Promise.resolve([]);
+}
 vi.mock("@/api/client", () => ({
+  api: (path: string, init?: RequestInit) => fakeApi(path, init),
+  getAuthToken: () => "token",
+  isCustomServer: () => false,
+  getInstallSource: () => Promise.resolve({ pip_index: "" }),
+  updateInstallSource: (pip_index: string) => Promise.resolve({ pip_index }),
   adminOverview: (days: number) => {
     calls.overview(days);
     return Promise.resolve({ ...overview, window_days: days });
@@ -58,14 +77,14 @@ vi.mock("@/api/client", () => ({
 
 const { AdminView } = await import("./AdminView");
 
-function show(people: Array<Record<string, unknown>> = [], tab?: "overview" | "members" | "deployment") {
+function show(people: Array<Record<string, unknown>> = [], tab?: "overview" | "members" | "pricing" | "deployment") {
   rows.length = 0;
   rows.push(...people);
   if (tab) localStorage.setItem("mosael:tab:admin", tab);
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
-      <AdminView />
+      <AdminView workspace={{ id: "ws", name: "Studio" } as Workspace} />
     </QueryClientProvider>,
   );
 }
@@ -86,6 +105,7 @@ const admin = { ...base, id: "a1", username: "boss", display_name: "Boss", is_de
 beforeEach(() => {
   localStorage.clear();
   openRegistration = true;
+  network = { proxy_url: "", no_proxy: "" };
   overview = { spend_by_user: [], jobs_by_day: [], costs: [], window_days: 30 };
   for (const fn of Object.values(calls)) fn.mockClear();
 });
@@ -96,7 +116,7 @@ function sections(container: HTMLElement) {
 }
 
 describe("结构", () => {
-  it("三个 tab 各有自己的几节,切换只换内容区", async () => {
+  it("四个 tab 各有自己的几节,切换只换内容区", async () => {
     const { container } = show([admin, base]);
     await screen.findByText("adminStatUsers");
     expect(sections(container)).toEqual(["range", "stats", "activity", "spend"]);
@@ -105,9 +125,14 @@ describe("结构", () => {
     await screen.findByText("Demo");
     expect(sections(container)).toEqual(["accounts", "invites"]);
 
+    fireEvent.click(screen.getByRole("button", { name: "adminTabPricing" }));
+    await screen.findByText("pricingRulesTitle");
+    expect(sections(container)).toEqual(["pricing"]);
+
+    // 只有部署管理员写得了的设置都在这里,不在设置页(见 AdminView 的说明)。
     fireEvent.click(screen.getByRole("button", { name: "adminTabDeployment" }));
     await screen.findByRole("switch", { name: "deployRegistrationOpen" });
-    expect(sections(container)).toEqual(["registration", "shared-folders"]);
+    expect(sections(container)).toEqual(["registration", "shared-folders", "proxy", "ai-runtime", "install-source", "data"]);
     // 选中的 tab 活过导航。
     expect(localStorage.getItem("mosael:tab:admin")).toBe("deployment");
   });
@@ -123,7 +148,7 @@ describe("结构", () => {
    *   2. 根以下没有任何元素带 h-full / min-h-0 —— 高度只由内容决定;
    *   3. 不再用 SettingsSectionStack(它自带 h-full min-h-0,是给「整个滚动区只有它」的设置页用的)。
    */
-  it.each(["overview", "members", "deployment"] as const)("%s:没有哪一节能被压扁", async (tab) => {
+  it.each(["overview", "members", "pricing", "deployment"] as const)("%s:没有哪一节能被压扁", async (tab) => {
     const { container } = show([admin, base], tab);
     await waitFor(() => expect(container.querySelector("[data-admin-section]")).not.toBeNull());
     const page = container.querySelector<HTMLElement>("[data-admin-page]")!;
@@ -182,11 +207,24 @@ describe("概览", () => {
     expect(screen.getByText("adminSpendCurrencyHint")).toBeInTheDocument();
   });
 
-  it("没有花费时给下一步:去设置价格规则", async () => {
-    const { gotoSettings } = await import("@/lib/deepLink");
-    show();
+  it("没有花费时给下一步:同一页的「成本规则」tab,不跳去设置页", async () => {
+    const { container } = show();
     fireEvent.click(await screen.findByRole("button", { name: "homeChartUsageConfigurePricing" }));
-    expect(gotoSettings).toHaveBeenCalledWith("provider-pricing");
+    await screen.findByText("pricingRulesTitle");
+    expect(sections(container)).toEqual(["pricing"]);
+    expect(localStorage.getItem("mosael:tab:admin")).toBe("pricing");
+  });
+
+  it("统计页的「N 次未定价」经深链落到成本规则 tab", async () => {
+    const { gotoAdmin } = await import("@/lib/deepLink");
+    const { container } = show();
+    await screen.findByText("adminStatUsers");
+    act(() => gotoAdmin("pricing"));
+    await screen.findByText("pricingRulesTitle");
+    expect(sections(container)).toEqual(["pricing"]);
+    // 认不出的 tab 原地不动。
+    act(() => gotoAdmin("没有这个"));
+    expect(sections(container)).toEqual(["pricing"]);
   });
 });
 
@@ -264,5 +302,32 @@ describe("部署设置", () => {
     fireEvent.click(toggle);
     await waitFor(() => expect(calls.setOpenRegistration).toHaveBeenCalledWith(false));
     await waitFor(() => expect(screen.getByText("deployRegistrationOpenOff")).toBeInTheDocument());
+  });
+
+  /**
+   * 代理读不到时**不给填**。设置页那一版读被拒后照样画两个空框 —— 读起来就是「直连」,一句错话;
+   * 顺手一存还会把真正的代理清掉。
+   */
+  it("出站代理没读到就不给填;读到了才能改、存", async () => {
+    network = null;
+    show([admin], "deployment");
+    const url = await screen.findByRole("textbox", { name: "proxyUrl" });
+    await waitFor(() => expect(calls.api).toHaveBeenCalledWith("GET", "/api/settings/network", undefined));
+    expect(url).toBeDisabled();
+    expect(screen.getByRole("textbox", { name: "proxyNoProxy" })).toBeDisabled();
+  });
+
+  it("出站代理改完才能存,存的是逗号分隔的绕过列表", async () => {
+    network = { proxy_url: "", no_proxy: "a.com, b.com" };
+    show([admin], "deployment");
+    const url = await screen.findByRole("textbox", { name: "proxyUrl" });
+    await waitFor(() => expect(url).toBeEnabled());
+    const save = within(screen.getByRole("region", { name: "proxyTitle" })).getByRole("button", { name: "save" });
+    expect(save).toBeDisabled();
+    fireEvent.change(url, { target: { value: "http://127.0.0.1:7890" } });
+    fireEvent.click(save);
+    await waitFor(() =>
+      expect(calls.api).toHaveBeenCalledWith("PUT", "/api/settings/network", { proxy_url: "http://127.0.0.1:7890", no_proxy: "a.com, b.com" }),
+    );
   });
 });

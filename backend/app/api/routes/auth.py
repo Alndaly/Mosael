@@ -6,6 +6,7 @@ from datetime import timedelta
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy import func, select
+from sqlalchemy.orm import Session
 
 from app.core.i18n import tr
 from app.api.deps import CurrentUser, DbSession
@@ -24,12 +25,25 @@ from app.core.config import settings
 from app.domain.permissions import ensure_deployment_admin
 from app.core.security import find_session, hash_password, mint_login_session, new_session_token, verify_password
 from app.domain import deployment
-from app.db.models import RegistrationInvite, User, Workspace, WorkspaceMember, now
+from app.db.models import OAuthIdentity, RegistrationInvite, User, Workspace, WorkspaceMember, now
 
 router = APIRouter(tags=["auth"])
 
 #: 邀请码的有效期。够对方从收到消息到坐下来注册,又不至于长期挂在那儿。
 INVITE_TTL = timedelta(days=7)
+
+
+def current_user_out(db: Session, user: User) -> UserOut:
+    """**我**这个账号交给界面的样子 —— 登录、注册、第三方登录取票、/me 及其改动都从这里出。
+
+    多一步查询是因为「怎么登进来的」不在 users 行上,在 oauth_identities 里。各出口各写一遍
+    model_validate 的话,漏掉的那个出口就会把一个 Google 账号报成密码账号(第三方登录取票
+    此前就只回三个字段,头像要到下次启动才出现)。
+    """
+    providers = db.scalars(
+        select(OAuthIdentity.provider).where(OAuthIdentity.user_id == user.id).order_by(OAuthIdentity.created_at)
+    ).all()
+    return UserOut.model_validate(user).model_copy(update={"oauth_providers": list(providers)})
 
 
 @router.post("/auth/register", response_model=AuthOut)
@@ -72,7 +86,7 @@ def register(body: RegisterCredentials, db: DbSession) -> AuthOut:
         invite.used_by = user.id  # 一次性:同一个码不能再换第二个账号
     token = _create_session(db, user)
     db.commit()
-    return AuthOut(token=token, user=UserOut.model_validate(user))
+    return AuthOut(token=token, user=current_user_out(db, user))
 
 
 def _usable_invite(db: DbSession, code: str) -> RegistrationInvite | None:
@@ -169,12 +183,12 @@ def login(body: AuthCredentials, db: DbSession) -> AuthOut:
         raise HTTPException(status_code=401, detail="Invalid username or password")
     token = _create_session(db, user)
     db.commit()
-    return AuthOut(token=token, user=UserOut.model_validate(user))
+    return AuthOut(token=token, user=current_user_out(db, user))
 
 
 @router.get("/auth/me", response_model=UserOut)
-def me(user: CurrentUser) -> UserOut:
-    return UserOut.model_validate(user)
+def me(db: DbSession, user: CurrentUser) -> UserOut:
+    return current_user_out(db, user)
 
 
 @router.patch("/auth/me", response_model=UserOut)
@@ -189,7 +203,7 @@ def update_me(body: UserProfileUpdate, db: DbSession, user: CurrentUser) -> User
     user.signature = body.signature.strip()
     db.commit()
     db.refresh(user)
-    return UserOut.model_validate(user)
+    return current_user_out(db, user)
 
 
 _AVATAR_TYPES = {"image/png": "png", "image/jpeg": "jpg", "image/webp": "webp"}
@@ -218,7 +232,7 @@ async def upload_avatar(db: DbSession, user: CurrentUser, file: UploadFile = Fil
     if previous and previous.startswith("avatars/"):
         (settings.data_dir / previous).unlink(missing_ok=True)
     db.refresh(user)
-    return UserOut.model_validate(user)
+    return current_user_out(db, user)
 
 
 @router.get("/auth/users/{user_id}/avatar")

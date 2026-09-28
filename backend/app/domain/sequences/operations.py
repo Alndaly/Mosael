@@ -581,6 +581,7 @@ def remove_track(db: Session, sequence_id: str, op: RemoveTrack) -> Sequence:
         "name": track.name,
         "position": track.position,
         "muted": track.muted,
+        "hidden": track.hidden,
         "solo": track.solo,
         "locked": track.locked,
         "duck": track.duck,
@@ -1126,6 +1127,7 @@ class SplitClip:
 class SetTrackState:
     track_id: str
     muted: bool | None = None
+    hidden: bool | None = None
     locked: bool | None = None
     solo: bool | None = None
     duck: bool | None = None
@@ -1189,13 +1191,20 @@ def set_track_state(db: Session, sequence_id: str, op: SetTrackState) -> Sequenc
     track = db.get(Track, op.track_id)
     if track is None or track.sequence_id != sequence_id:
         raise SequenceDomainError("Track not found")
-    # 独奏 / 闪避是**声音**的开关,字幕轨没有声音。独奏一条字幕轨的结果是反的:「有轨在独奏」
-    # 成立,别的轨一律闭嘴 —— 预览和成片里所有声音都没了。
-    if track.kind == "subtitle" and (op.solo or op.duck):
+    # 静音 / 独奏 / 闪避是**声音**的开关,字幕轨没有声音。独奏一条字幕轨的结果是反的:「有轨在
+    # 独奏」成立,别的轨一律闭嘴 —— 预览和成片里所有声音都没了。字幕轨不显示用的是 hidden。
+    if track.kind == "subtitle" and (op.muted or op.solo or op.duck):
         raise SequenceDomainError("seqErr_subtitleTrackHasNoSound")
-    previous = {"muted": track.muted, "locked": track.locked, "solo": track.solo, "duck": track.duck}
+    # 隐藏目前只对字幕轨有定义(预览和导出都只在字幕上读它);别的轨存下来也不会起作用。
+    if track.kind != "subtitle" and op.hidden:
+        raise SequenceDomainError("seqErr_onlySubtitleTracksHide")
+    previous = {
+        "muted": track.muted, "hidden": track.hidden, "locked": track.locked, "solo": track.solo, "duck": track.duck,
+    }
     if op.muted is not None:
         track.muted = op.muted
+    if op.hidden is not None:
+        track.hidden = op.hidden
     if op.locked is not None:
         track.locked = op.locked
     if op.solo is not None:
@@ -1209,6 +1218,7 @@ def set_track_state(db: Session, sequence_id: str, op: SetTrackState) -> Sequenc
         payload={
             "track_id": track.id,
             "muted": track.muted,
+            "hidden": track.hidden,
             "locked": track.locked,
             "solo": track.solo,
             "duck": track.duck,

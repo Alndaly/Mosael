@@ -144,7 +144,7 @@ export function HomeView({
 
   // 多选与素材、工作流、发布同一份状态机(见 lib/useMultiSelect):退出即清空、全选只作用于
   // 当前看得见的那些(搜索之后)、被删掉的自动剔除。
-  const { selectMode, setSelectMode, selectedIds, toggle, selectAll, allSelected, clear, exit } =
+  const { selectMode, setSelectMode, selectedIds, toggle, selectAll, allSelected, clear, exit, menuTargets } =
     useMultiSelect(visible, (project) => project.id);
   const [batchDeleting, setBatchDeleting] = React.useState(false);
   const batchRemove = useMutation({
@@ -209,7 +209,7 @@ export function HomeView({
         holidayOverride={holidayOverride}
       />
       <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
-        <CollectionTabs label={t("homeProjectsTitle")} value={collection} onChange={mode => { setCollection(mode); if (mode === "recent") setSortKey("updated"); }} items={[{ value: "recent", label: t("homeRecent") }, { value: "all", label: t("homeAll") }]} />
+        <CollectionTabs label={t("homeProjectsTitle")} value={collection} onChange={setCollection} items={[{ value: "recent", label: t("homeRecent") }, { value: "all", label: t("homeAll") }]} />
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           {projects.length > 0 && (selectMode ? (
             <>
@@ -237,6 +237,8 @@ export function HomeView({
             </Button>
           ))}
           <div className="relative"><Search className="pointer-events-none absolute left-3 top-3 size-4 text-muted-foreground" /><Input aria-label={t("searchProjects")} className="w-52 pl-9" value={search} placeholder={t("searchProjects")} onChange={(event) => setSearch(event.target.value)} /></div>
+          {/* 「最近」这一栏本身就是按更新时间排的,这里只是**显示**成它;人选的那种排序原样留着,回到「全部」
+              还是他选的那一种 —— 切到「最近」时不去改写它(那等于替人把排序改了)。 */}
           <Select value={collection === "recent" ? "updated" : sortKey} onValueChange={(value) => { setSortKey(value as "updated" | "created" | "name"); setCollection("all"); }}>
             <SelectTrigger className="w-auto min-w-36" aria-label={t("sortUpdated")}><SelectValue /></SelectTrigger>
             <SelectContent className="max-w-none">
@@ -261,10 +263,10 @@ export function HomeView({
         <>
           {visible.length === 0 && <p className="py-10 text-center text-muted-foreground">{t("homeNoSearchResults")}</p>}
           {collection === "recent" && !search.trim() && <div className={cn("grid grid-cols-1 gap-6", visible.length >= 3 ? "lg:h-[470px] lg:grid-cols-[1.2fr_1fr] lg:grid-rows-2" : "lg:grid-cols-2")}>
-            {visible.slice(0, 3).map((project, index) => <ProjectPresentation key={project.id} project={project} featured className={index === 0 && visible.length >= 3 ? "lg:row-span-2" : undefined} onOpen={onOpenProject} onRename={setRenaming} onDelete={setDeleting} selecting={selectMode} selected={selectedIds.has(project.id)} onToggle={toggle} highlighted={justCreated === project.id} />)}
+            {visible.slice(0, 3).map((project, index) => <ProjectPresentation key={project.id} project={project} featured className={index === 0 && visible.length >= 3 ? "lg:row-span-2" : undefined} onOpen={onOpenProject} onRename={setRenaming} onDelete={setDeleting} selecting={selectMode} selected={selectedIds.has(project.id)} onToggle={toggle} menuSelection={menuTargets(project.id).length} onDeleteSelection={() => setBatchDeleting(true)} highlighted={justCreated === project.id} />)}
           </div>}
           <div className="grid gap-1 empty:hidden">
-            {(collection === "recent" && !search.trim() ? visible.slice(3) : visible).map(project => <ProjectPresentation key={project.id} project={project} onOpen={onOpenProject} onRename={setRenaming} onDelete={setDeleting} selecting={selectMode} selected={selectedIds.has(project.id)} onToggle={toggle} highlighted={justCreated === project.id} />)}
+            {(collection === "recent" && !search.trim() ? visible.slice(3) : visible).map(project => <ProjectPresentation key={project.id} project={project} onOpen={onOpenProject} onRename={setRenaming} onDelete={setDeleting} selecting={selectMode} selected={selectedIds.has(project.id)} onToggle={toggle} menuSelection={menuTargets(project.id).length} onDeleteSelection={() => setBatchDeleting(true)} highlighted={justCreated === project.id} />)}
           </div>
         </>
       )}
@@ -307,11 +309,14 @@ export function HomeView({
 }
 
 /** Every presentation shares the same actions; images always belong to this project. */
-function ProjectPresentation({ project, featured = false, className, onOpen, onRename, onDelete, selecting = false, selected = false, onToggle, highlighted = false }: {
+function ProjectPresentation({ project, featured = false, className, onOpen, onRename, onDelete, selecting = false, selected = false, onToggle, menuSelection = 1, onDeleteSelection, highlighted = false }: {
   project: ProjectWithStats; featured?: boolean; className?: string;
   onOpen: (id: string) => void; onRename: (project: Project) => void; onDelete: (project: Project) => void;
   /** 选择模式下点卡片是勾选,不是打开;单条的操作菜单收起来(批量动作在工具条上)。 */
   selecting?: boolean; selected?: boolean; onToggle?: (id: string) => void;
+  /** 右键菜单作用于几项(useMultiSelect.menuTargets):大于 1 = 右键的这一项在选区里,菜单作用于整个选区,
+   *  只给能对一批做的动作;和时间线同一条规则。 */
+  menuSelection?: number; onDeleteSelection?: () => void;
   /** 刚建好的那一个:亮一下,让人一眼看到它在哪儿。 */
   highlighted?: boolean;
 }) {
@@ -374,10 +379,16 @@ function ProjectPresentation({ project, featured = false, className, onOpen, onR
       </article>
     </ContextMenuTrigger>
     <ContextMenuContent>
-      <ContextMenuItem onSelect={open}><Scissors />{t("homeOpenEditor")}</ContextMenuItem>
-      <ContextMenuItem onSelect={() => onRename(project)}><Pencil />{t("rename")}</ContextMenuItem>
-      <ContextMenuSeparator />
-      <ContextMenuItem className="text-destructive focus:text-destructive" onSelect={() => onDelete(project)}><Trash2 />{t("delete")}</ContextMenuItem>
+      {menuSelection > 1 && onDeleteSelection ? (
+        <ContextMenuItem className="text-destructive focus:text-destructive" onSelect={onDeleteSelection}><Trash2 />{t("deleteSelectedN").replace("{n}", String(menuSelection))}</ContextMenuItem>
+      ) : (
+        <>
+          <ContextMenuItem onSelect={open}><Scissors />{t("homeOpenEditor")}</ContextMenuItem>
+          <ContextMenuItem onSelect={() => onRename(project)}><Pencil />{t("rename")}</ContextMenuItem>
+          <ContextMenuSeparator />
+          <ContextMenuItem className="text-destructive focus:text-destructive" onSelect={() => onDelete(project)}><Trash2 />{t("delete")}</ContextMenuItem>
+        </>
+      )}
     </ContextMenuContent>
   </ContextMenu>;
 }

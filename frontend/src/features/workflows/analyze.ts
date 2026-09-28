@@ -3,6 +3,7 @@ import type { WorkflowGraph } from "@/api/client";
 import { isWorkflowFieldActive } from "@/features/nodeForms/fieldActivation";
 import { fieldDataType, normalizeDataType, type DataType } from "@/features/nodeForms/fieldTypes";
 import type { PromptMode } from "@/lib/generationCapabilities";
+import { bodyKey, type ScopePath } from "@/features/workflows/scope";
 
 /**
  * 工作流"就绪度"分析:纯函数,单一事实来源,同时喂给画布告警角标、
@@ -23,7 +24,11 @@ export type IssueCode =
   | "type-mismatch"; // 数据边:上游输出类型与目标输入期望类型不兼容(软提示)
 
 export interface NodeIssue {
+  /** 问题所在的那个节点 —— **在它自己那一层里**的 id(体里的 id 和主流程是两套命名空间)。 */
   nodeId: string;
+  /** 这个节点住在哪一层:从主流程往里经过的容器节点 id,`[]` 是主流程(同 scope.ts 的 ScopePath)。 */
+  path: ScopePath;
+  /** 给人读的名字。体里的带上路径(「逐镜生成 › 合成口播」)—— 就绪清单是整张图的,得说清在哪一层。 */
   nodeName: string;
   nodeType: string;
   severity: IssueSeverity;
@@ -176,10 +181,8 @@ function reachableFromStart(graph: WorkflowGraph): Set<string> {
 }
 
 export interface Analysis {
+  /** 整张图(含所有循环体 / 子图)里的问题。画布上某一层怎么挂角标见 issuesAtLayer。 */
   issues: NodeIssue[];
-  byNode: Map<string, NodeIssue[]>;
-  /** 每个节点的最高严重度,画布角标用。 */
-  severityByNode: Map<string, IssueSeverity>;
   errorCount: number;
   warnCount: number;
   /** 有 error 时禁止运行。 */
@@ -197,9 +200,10 @@ export interface Analysis {
  * 不是节点,是作用域给的东西。不把它们算进来的话,递归下去会把每一条正常引用都报成失效;
  * 多算一个的话,引用了一个运行时根本不存在的名字也会被放行。所以只认节点声明的那几个。
  *
- * `insideName` 有值时,这一层的问题**记在外层那个节点头上** —— 画布上只画得出顶层节点,
- * 给一个画不出来的 id 挂角标等于这条问题没人看得见。名字里带上路径("逐镜生成 › 合成口播"),
- * 于是点开哪一个仍然一目了然。
+ * 每条问题记的是**它真正所在的那一层和那个节点**(`path` + `nodeId`)。画布在哪一层,就由
+ * issuesAtLayer 把问题折到那一层看得见的节点上:体里的问题在主流程上挂在容器头上,钻进去
+ * 就挂在出问题的那个节点上。此前问题一律改记到外层容器名下,于是钻进循环体一个角标都看不到,
+ * 点清单也只会被弹回主流程、停在容器上。
  */
 function collect(
   graph: WorkflowGraph,
@@ -207,16 +211,17 @@ function collect(
   ctx: AnalyzeContext,
   issues: NodeIssue[],
   scopeExtras: ReadonlySet<string> = new Set(),
-  attributeTo = "",
+  path: ScopePath = [],
   insideName = "",
 ): void {
   const nodeIds = new Set([...graph.nodes.map((n) => n.id), ...scopeExtras]);
   const reachable = reachableFromStart(graph);
   // 「没有开始节点」只对顶层成立 —— 循环体本来就没有 start,它由外层驱动。
   const hasStart = graph.nodes.some((n) => n.type === "start");
-  if (!hasStart && !attributeTo) {
+  if (!hasStart && path.length === 0) {
     issues.push({
       nodeId: "__workflow__",
+      path,
       nodeName: "Workflow",
       nodeType: "workflow",
       severity: "error",
@@ -236,7 +241,8 @@ function collect(
     const config = (node.config ?? {}) as Record<string, unknown>;
     const push = (severity: IssueSeverity, code: IssueCode, extra?: Partial<NodeIssue>) =>
       issues.push({
-        nodeId: attributeTo || node.id,
+        nodeId: node.id,
+        path,
         nodeName: insideName ? `${insideName} › ${nodeName}` : nodeName,
         nodeType: node.type,
         severity,
@@ -267,7 +273,9 @@ function collect(
     }
 
     // 往里走一层。体里的节点和外面一样会缺必填、会引用不存在的东西 —— 只是此前没人看。
-    const body = (node.config as Record<string, unknown> | undefined)?.body;
+    // 体存在哪个字段由声明说(scope.bodyKey),和画布钻进去的是同一个字段,路径因此对得上。
+    const key = bodyKey(registry, node.type);
+    const body = key ? config[key] : undefined;
     if (body && typeof body === "object" && Array.isArray((body as WorkflowGraph).nodes)) {
       collect(
         body as WorkflowGraph,
@@ -275,7 +283,7 @@ function collect(
         ctx,
         issues,
         new Set(bodyScope(registry, node.type)),
-        attributeTo || node.id,
+        [...path, node.id],
         insideName ? `${insideName} › ${nodeName}` : nodeName,
       );
     }
@@ -317,7 +325,8 @@ function collect(
     const expected = inputType(registry, target.type, edge.target_input);
     if (!typesCompatible(actual, expected)) {
       issues.push({
-        nodeId: attributeTo || target.id,
+        nodeId: target.id,
+        path,
         nodeName: insideName
           ? `${insideName} › ${target.name || target.type}`
           : target.name || target.type,
@@ -340,16 +349,32 @@ export function analyzeWorkflow(
 ): Analysis {
   const issues: NodeIssue[] = [];
   collect(graph, registry, ctx, issues);
-
-  const byNode = new Map<string, NodeIssue[]>();
-  const severityByNode = new Map<string, IssueSeverity>();
-  for (const issue of issues) {
-    byNode.set(issue.nodeId, [...(byNode.get(issue.nodeId) ?? []), issue]);
-    if (issue.severity === "error" || !severityByNode.has(issue.nodeId)) {
-      severityByNode.set(issue.nodeId, issue.severity === "error" ? "error" : severityByNode.get(issue.nodeId) ?? "warn");
-    }
-  }
   const errorCount = issues.filter((i) => i.severity === "error").length;
   const warnCount = issues.length - errorCount;
-  return { issues, byNode, severityByNode, errorCount, warnCount, runnable: errorCount === 0 };
+  return { issues, errorCount, warnCount, runnable: errorCount === 0 };
+}
+
+/** `path` 是不是 `layer` 本身或它里面的某一层。 */
+function isWithin(path: ScopePath, layer: ScopePath): boolean {
+  return path.length >= layer.length && layer.every((id, index) => path[index] === id);
+}
+
+/**
+ * 画布停在 `layer` 这一层时,每个看得见的节点身上挂哪些问题:这一层自己的节点挂自己的,
+ * 更深处的问题挂在通往它的那个容器上(主流程上看得出「循环里有东西要修」,钻进去再看是哪一个)。
+ * 别的分支、更外层的问题不在这一层显示 —— 它们在就绪清单里,点一下会带人过去。
+ */
+export function issuesAtLayer(issues: readonly NodeIssue[], layer: ScopePath): Map<string, NodeIssue[]> {
+  const out = new Map<string, NodeIssue[]>();
+  for (const issue of issues) {
+    if (!isWithin(issue.path, layer)) continue;
+    const at = issue.path.length === layer.length ? issue.nodeId : issue.path[layer.length];
+    out.set(at, [...(out.get(at) ?? []), issue]);
+  }
+  return out;
+}
+
+/** 一串问题里最重的那一档(角标的颜色)。 */
+export function worstSeverity(issues: readonly NodeIssue[]): IssueSeverity {
+  return issues.some((issue) => issue.severity === "error") ? "error" : "warn";
 }

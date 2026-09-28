@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { BookImage, Clapperboard, Layers, LayoutGrid, Plus, ShieldAlert, ShieldCheck, Trash2, Workflow as WorkflowIcon, X, Check, Loader2, Square, Volume2 } from "lucide-react";
+import { BookImage, Clapperboard, Layers, LayoutGrid, Plus, ShieldAlert, ShieldCheck, Trash2, Workflow as WorkflowIcon, X, Check } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -35,7 +35,7 @@ import { fieldTriggerClass } from "@/components/ui/field-trigger";
 import { OptionPicker } from "@/components/ui/option-picker";
 import { Skeleton } from "@/components/ui/skeleton";
 import { usePageTrail } from "@/components/layout/pageTrail";
-import { playSpeech, stopSpeaking } from "@/lib/speechPlayback";
+import { VoicePreviewButton } from "@/components/app/VoicePreviewButton";
 import { usePersistentTab } from "@/lib/usePersistentTab";
 import { cn } from "@/lib/utils";
 import { toPlainText } from "@/components/markdown/inlineSyntax";
@@ -561,6 +561,8 @@ function VoiceField({
     if (engine) setPicked(engine);
   }, [engine]);
   const { engines, voices } = useVoiceOptions(workspaceId, picked);
+  //: 存着的音色只属于存着的那个引擎:切到别的引擎时下拉回到「无」,试听也没有可念的。
+  const pickedVoice = voice && picked === (engine || VOICE_LIBRARY_ENGINE) ? voice : "";
   const engineOptions = engines.data ?? [];
   //: 存着的引擎现在没就绪(缺了 Key)也照样显示它,不把人已经选好的东西悄悄换掉。
   const withCurrent = engineOptions.some((one) => one.value === picked)
@@ -580,64 +582,17 @@ function VoiceField({
         />
         <OptionPicker
           ariaLabel={t("entityVoice")}
-          value={voice && picked === (engine || VOICE_LIBRARY_ENGINE) ? voice : NONE}
+          value={pickedVoice || NONE}
           onChange={(next) => onChange(next === NONE ? { voice_engine: "", voice_id: "" } : { voice_engine: picked, voice_id: next })}
           options={[{ value: NONE, label: t("entityNone") }, ...(voices.data ?? [])]}
         />
         <VoicePreviewButton
-          workspaceId={workspaceId}
-          engine={picked}
-          voice={voice && picked === (engine || VOICE_LIBRARY_ENGINE) ? voice : ""}
-          text={t("entityVoicePreviewText").replace("{name}", name)}
+          load={() => fetchVoicePreview({ workspace_id: workspaceId, engine: picked, voice: pickedVoice, text: t("entityVoicePreviewText").replace("{name}", name) })}
+          disabled={!pickedVoice}
+          disabledReason={t("entityVoicePreviewPick")}
         />
       </div>
     </Field>
-  );
-}
-
-/** 试听:点一下念出来,再点一下停。同一时刻只响一段(和对话里念消息共用一个播放器)。 */
-function VoicePreviewButton({ workspaceId, engine, voice, text }: { workspaceId: string; engine: string; voice: string; text: string }) {
-  const t = useI18n();
-  const [state, setState] = React.useState<"idle" | "loading" | "playing">("idle");
-  const live = React.useRef(true);
-  React.useEffect(
-    () => () => {
-      live.current = false;
-      stopSpeaking();
-    },
-    [],
-  );
-  const play = async () => {
-    if (state !== "idle") {
-      stopSpeaking();
-      setState("idle");
-      return;
-    }
-    setState("loading");
-    try {
-      const audio = await fetchVoicePreview({ workspace_id: workspaceId, engine, voice, text });
-      if (!live.current) return;
-      setState("playing");
-      await playSpeech(audio);
-    } catch (error) {
-      toast.error(errorText(error));
-    } finally {
-      if (live.current) setState("idle");
-    }
-  };
-  const label = state === "idle" ? t("entityVoicePreview") : t("entityVoicePreviewStop");
-  return (
-    <Button
-      variant="outline"
-      size="icon"
-      disabled={!voice}
-      aria-label={label}
-      title={voice ? label : t("entityVoicePreviewPick")}
-      onClick={() => void play()}
-      data-voice-preview={state}
-    >
-      {state === "loading" ? <Loader2 className="animate-mosael-spin" /> : state === "playing" ? <Square /> : <Volume2 />}
-    </Button>
   );
 }
 

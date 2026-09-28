@@ -19,7 +19,7 @@ def test_mcp_发现保留给人看的_tool_title(monkeypatch) -> None:
         async def list_tools(self):
             return SimpleNamespace(tools=[tool])
 
-    def run(_manifest, _env, fn):
+    def run(_manifest, _env, fn, **_kwargs):
         return asyncio.run(fn(Session()))
 
     monkeypatch.setattr(mcp_bridge, "_sync", run)
@@ -46,7 +46,7 @@ def test_调用方给的预算原样用在这一次_mcp_调用上(monkeypatch) -
 
     seen: list[float] = []
 
-    def run(_manifest, _env, fn, timeout=mcp_bridge.MCP_TIMEOUT_SECONDS):
+    def run(_manifest, _env, fn, timeout=mcp_bridge.MCP_TIMEOUT_SECONDS, **_kwargs):
         seen.append(timeout)
         return asyncio.run(fn(Session()))
 

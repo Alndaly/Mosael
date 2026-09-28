@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import Field
+from pydantic import Field, ValidationInfo, field_validator
 
 from app.api.schemas.base import ApiModel, CostAmountOut, OrmModel
-from app.api.schemas.jobs import JobOut
+from app.api.schemas.jobs import JobOut, _rendered
 from app.ai.providers.contracts.generation import FIRST_FRAME, SOURCE_ROLES
 
 
@@ -98,6 +98,11 @@ class GenerationJobOut(OrmModel):
     #: 界面照这一串出图,不然用户选了 4 张、只看得见 1 张(另外 3 张确实在素材库里,他不知道)。
     #: 封面排在第一。由路由从 generated_assets 贴上来。
     result_asset_ids: list[str] = []
+    #: 失败原因(生成记录自己存的一份,任务被清掉之后还在)。和 JobOut.error 同一套:key 与参数只为翻译服务,
+    #: **必须声明在 error 之前**;error 按请求方的语言翻好,没有 key 的(第三方原话)原样返回。
+    error_key: str = Field(default="", exclude=True)
+    error_params: dict = Field(default_factory=dict, exclude=True)
+    error: str | None = None
     created_at: datetime
     updated_at: datetime
     # 计费:取自本次生成记录的用量事件(source_type=generation_job)。costs 为已知估算费用,
@@ -105,6 +110,21 @@ class GenerationJobOut(OrmModel):
     # (前端显示「未定价」);没有事件时两者都空。
     costs: list[CostAmountOut] = []
     cost_confidence: str | None = None
+
+    @field_validator("error_key", mode="before")
+    @classmethod
+    def _key_or_empty(cls, value: object) -> object:
+        return value or ""
+
+    @field_validator("error_params", mode="before")
+    @classmethod
+    def _params_or_empty(cls, value: object) -> object:
+        return value or {}
+
+    @field_validator("error", mode="before")
+    @classmethod
+    def _translate_error(cls, value: object, info: ValidationInfo) -> object:
+        return _rendered(value, info, "error_key", "error_params")
 
 
 class GenerationCreateResponse(ApiModel):
@@ -135,7 +155,8 @@ class GenerationSessionCreate(ApiModel):
     title: str = Field(default="新生成", max_length=200)
     provider_profile_id: str | None = None
     model: str | None = Field(default=None, max_length=120)
-    kind: str | None = Field(default=None, pattern="^(image|video|audio)$")
+    #: 会话一定有种类:AI 工作台按它分页(图像 / 视频在「生成」页,音频在「音频」页)。没说就是图像。
+    kind: str = Field(default="image", pattern="^(image|video|audio)$")
 
 
 class GenerationSessionUpdate(ApiModel):

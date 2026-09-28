@@ -18,6 +18,7 @@ import React from "react";
 import { toast } from "sonner";
 
 import { API_BASE, getAuthToken } from "@/api/client";
+import { reportSpeechFailure, synthesizeSpeech } from "@/features/agent/agentSpeech";
 import { useI18n } from "@/app/preferences";
 import { playSpeech, stopSpeaking } from "@/lib/speechPlayback";
 import { matchSpokenChoice } from "@/features/agent/spokenChoice";
@@ -84,20 +85,9 @@ export function useVoiceLoop({
     async (text: string) => {
       if (!text.trim()) return;
       try {
-        const token = getAuthToken();
-        const response = await fetch(`${API_BASE}/api/agent/speech`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-          body: JSON.stringify({ text: text.slice(0, 4000), workspace_id: workspaceId }),
-        });
-        if (!response.ok) {
-          const detail = (await response.json().catch(() => null))?.detail;
-          toast[response.status === 409 ? "message" : "error"](detail || t("agentVoiceSpeakFailed"));
-          return;
-        }
-        await playSpeech(await response.blob());
-      } catch {
-        toast.error(t("agentVoiceSpeakFailed"));
+        await playSpeech(await synthesizeSpeech(text, workspaceId));
+      } catch (error) {
+        reportSpeechFailure(error, t("agentVoiceSpeakFailed"));
       }
     },
     [workspaceId, t],

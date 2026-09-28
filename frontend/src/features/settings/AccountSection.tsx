@@ -2,13 +2,14 @@ import React from "react";
 import { Camera, Check, Loader2, LogOut } from "lucide-react";
 import { toast } from "sonner";
 
-import { userAvatarUrl } from "@/api/client";
+import { customServerHost, userAvatarUrl } from "@/api/client";
 import { errorText } from "@/api/errorMessage";
 import { useAuth } from "@/app/auth";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { accountOrigin } from "@/components/layout/accountOrigin";
 import { SettingsBlock, SettingsField, SettingsForm, SettingsGroup } from "@/components/settings/settings-layout";
 import { cn } from "@/lib/utils";
 
@@ -98,7 +99,9 @@ export function AccountSection() {
   return (
     <SettingsGroup
       title={t("settingsAccount")}
-      description={t("settingsAccountDesc")}
+      // 和账号菜单同一行:这是哪台服务器上的账号、怎么登进来的。此前写死「本地账号,数据都在这台设备上」,
+      // 连着团队服务器的人从菜单点「账号设置」进来,看到的是和菜单相反的说法。
+      description={accountOrigin(t, customServerHost(), user?.oauth_providers ?? [])}
       actions={
         <Button variant="outline" size="sm" onClick={() => void logout()}>
           <LogOut size={13} /> {t("signOut")}

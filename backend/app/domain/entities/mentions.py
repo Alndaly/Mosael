@@ -64,7 +64,9 @@ class _Mention:
 
 @dataclass(frozen=True)
 class Expansion:
-    prompt: str
+    #: 点名的资产的提示词描述(`张三: 黑色短发`,一个资产一行),没有就是空串。它是**给模型的补充**,不改用户
+    #: 写的那句 —— 生成漏斗把它记进请求的 `prompt_notes`,交给供应商时接在提示词后面(见 generation.operations)。
+    note: str
     source_assets: list[dict[str, str]]
     #: 写进生成请求的回执:每个点名的资产挂了哪几张、哪几张没挂上、为什么。
     receipt: list[dict[str, Any]]
@@ -152,19 +154,18 @@ def attach_entities(
     workspace_id: str,
     entity_ids: list[str],
     *,
-    prompt: str,
     source_assets: list[dict[str, str]],
     parameters: dict[str, Any],
     kind: str,
     capabilities: dict[str, Any] | None,
 ) -> Expansion:
-    """把点名的资产展开成提示词和参考素材。没点名就原样返回(回执为空)。
+    """把点名的资产展开成提示词描述和参考素材。没点名就原样返回(回执为空)。
 
     `capabilities` 是这个模型的描述符;查不到时是 None —— 那就不挂任何参考图(不知道它收几张)。
     """
     ids = parse_entity_ids(entity_ids)
     if not ids:
-        return Expansion(prompt=prompt, source_assets=list(source_assets), receipt=[])
+        return Expansion(note="", source_assets=list(source_assets), receipt=[])
     mentions = [_mention(db, entity) for entity in resolve_mentions(db, workspace_id, ids)]
 
     # 提示词描述。不收提示词的模型(放大、抠图)不拼 —— 拼了提交会被拒,照实记一笔。
@@ -174,7 +175,6 @@ def attach_entities(
             if mention.descriptor:
                 mention.notes.append(NOTE_PROMPT_SKIPPED)
         lines = []
-    expanded = "\n\n".join(part for part in (prompt.strip(), "\n".join(lines)) if part) if lines else prompt
 
     budget, reason = _budget(capabilities, source_assets, parameters, kind)
     already = {str(entry.get("asset_id") or "") for entry in source_assets}
@@ -225,7 +225,7 @@ def attach_entities(
             "dropped": dropped,
             "notes": notes,
         })
-    return Expansion(prompt=expanded, source_assets=[*source_assets, *added], receipt=receipt)
+    return Expansion(note="\n".join(lines), source_assets=[*source_assets, *added], receipt=receipt)
 
 
 __all__ = ["Expansion", "MAX_MENTIONS", "attach_entities", "parse_entity_ids", "resolve_mentions"]

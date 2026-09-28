@@ -1,14 +1,13 @@
 import React from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ShieldAlert, ShieldCheck, ShieldQuestion } from "lucide-react";
 
-import { api } from "@/api/client";
 import type { components } from "@/api/generated/schema";
 import { useAuth } from "@/app/auth";
 import { useI18n } from "@/app/preferences";
 import { ModalShell } from "@/components/app/modals";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
+import { useUpdateAgentSession } from "@/features/agent/currentAgentSession";
 import { cn } from "@/lib/utils";
 
 type AgentSession = components["schemas"]["AgentSessionOut"];
@@ -41,25 +40,14 @@ export const PERMISSION_MODE_ICON = {
  * 放行本身在**服务端**判定(domain/agent/autopilot):此前「本会话始终允许」是浏览器 localStorage
  * 里的一段自动批准,聊天面板一关组件就卸载,而 turn 还在跑。
  */
-export function PermissionModePicker({ session }: { session: AgentSession | null }) {
+export function PermissionModePicker({ workspaceId, session }: { workspaceId: string; session: AgentSession | null }) {
   const t = useI18n();
   const { user } = useAuth();
-  const qc = useQueryClient();
   const [pendingBypass, setPendingBypass] = React.useState(false);
 
-  const setMode = useMutation({
-    mutationFn: (mode: PermissionMode) =>
-      api(`/api/agent/sessions/${session!.id}`, {
-        method: "PATCH",
-        body: JSON.stringify({ permission_mode: mode }),
-      }),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["agent-session", session?.id] });
-      void qc.invalidateQueries({ queryKey: ["agent-sessions"] });
-    },
-  });
+  // 没有会话时照样能选:先建出当前会话再写进去(见 useUpdateAgentSession)。
+  const setMode = useUpdateAgentSession(workspaceId, session);
 
-  if (!session) return null;
   const mode = permissionModeOf(session);
   const Icon = PERMISSION_MODE_ICON[mode];
   /**
@@ -70,7 +58,7 @@ export function PermissionModePicker({ session }: { session: AgentSession | null
    * 而他的每一次调用照样弹卡,界面此前没有任何地方能告诉他为什么。
    * 一个看着是开的、却不生效的开关,用户多半会归结为"这功能不稳定"。
    */
-  const setByOther = Boolean(session.mode_set_by && user && session.mode_set_by !== user.id);
+  const setByOther = Boolean(session?.mode_set_by && user && session.mode_set_by !== user.id);
 
   return (
     <>
@@ -80,7 +68,7 @@ export function PermissionModePicker({ session }: { session: AgentSession | null
         value={mode}
         onValueChange={(next) => {
           if (next === "bypass") return setPendingBypass(true);
-          setMode.mutate(next as PermissionMode);
+          setMode.mutate({ permission_mode: next });
         }}
       >
         <SelectTrigger
@@ -128,7 +116,7 @@ export function PermissionModePicker({ session }: { session: AgentSession | null
         footer={
           <>
             <Button variant="outline" onClick={() => setPendingBypass(false)}>{t("cancel")}</Button>
-            <Button variant="destructive" loading={setMode.isPending} onClick={() => setMode.mutate("bypass", { onSuccess: () => setPendingBypass(false) })}>
+            <Button variant="destructive" loading={setMode.isPending} onClick={() => setMode.mutate({ permission_mode: "bypass" }, { onSuccess: () => setPendingBypass(false) })}>
               {t("permModeBypassConfirmCta")}
             </Button>
           </>

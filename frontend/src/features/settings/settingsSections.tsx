@@ -3,15 +3,11 @@ import {
   AudioLines,
   AudioWaveform,
   Brain,
-  Database,
-  Download,
-  Globe,
   Link2,
   ImageIcon,
   MessageSquare,
   Mic,
   Palette,
-  ReceiptText,
   Scissors,
   Server,
   ShieldCheck,
@@ -26,19 +22,15 @@ import type { MessageKey } from "@/app/messages";
 import { AccountSection } from "@/features/settings/AccountSection";
 import { AgentMemorySection } from "@/features/settings/AgentMemorySection";
 import { AgentVoiceSection } from "@/features/settings/AgentVoiceSection";
-import { AiRuntimeSection } from "@/features/settings/AiRuntimeSection";
 import { AppearanceSection, BackgroundSection, CustomCssSection } from "@/features/settings/AppearanceSection";
 import { AsrModelsSection } from "@/features/settings/AsrModelsSection";
 import { AutopilotRulesSection } from "@/features/settings/AutopilotRulesSection";
-import { BackendSection, ProxySection } from "@/features/settings/BackendSection";
+import { BackendSection } from "@/features/settings/BackendSection";
 import { BuiltinTtsSection } from "@/features/settings/BuiltinTtsSection";
-import { DataDiagnosticsSection } from "@/features/settings/DataDiagnosticsSection";
 import { DenoiseEnginesSection } from "@/features/settings/DenoiseEnginesSection";
 import { FeishuSection } from "@/features/settings/FeishuSection";
-import { InstallSourceSection } from "@/features/settings/InstallSourceSection";
 import { ProviderDefaultsSection } from "@/features/settings/ProviderDefaultsSection";
 import { CapabilityProvidersSection } from "@/features/settings/CapabilityProvidersSection";
-import { ProviderPricingSection } from "@/features/settings/ProviderPricingSection";
 import { ProviderProfilesSection } from "@/features/settings/ProviderProfilesSection";
 import { SeparationEnginesSection } from "@/features/settings/SeparationEnginesSection";
 import { TeamSection } from "@/features/settings/TeamSection";
@@ -55,6 +47,9 @@ import { VoiceLibrarySection } from "@/features/settings/VoiceLibrarySection";
  * **分组按用户找它时在想什么,不按它在代码里挨着谁。** 反例就是上一版:人声分离因为"也是
  * 本机跑的音频模型"被放进「转写模型」;pip 镜像因为"克隆先有了它"只出现在声音克隆表单里,
  * 而转写和分离装依赖时读的是同一份;「语音与服务」组里装着飞书机器人和数据诊断。
+ *
+ * **只放每个成员自己能改的东西。** 后端只许部署管理员写的(成本规则、出站代理与重试、安装源、
+ * 数据与诊断)在管理页(features/admin/AdminView):摆在这里时普通成员看得到表单、一保存就 403。
  */
 
 export type SettingsContext = {
@@ -111,7 +106,7 @@ export const SETTINGS_GROUPS: readonly SettingsGroup[] = [
     ],
   },
   {
-    // 「用哪家的哪个模型、花多少钱」—— 全是云端连接。
+    // 「用哪家的哪个模型」—— 全是云端连接。花多少钱(成本规则)只有部署管理员写得了,在管理页。
     title: "studioSettingsProviders",
     sections: [
       {
@@ -160,12 +155,6 @@ export const SETTINGS_GROUPS: readonly SettingsGroup[] = [
           </>
         ),
       },
-      {
-        id: "provider-pricing",
-        label: "providerPricingTitle",
-        icon: <ReceiptText size={14} />,
-        render: ({ workspace }) => <ProviderPricingSection workspace={workspace} />,
-      },
     ],
   },
   {
@@ -193,8 +182,8 @@ export const SETTINGS_GROUPS: readonly SettingsGroup[] = [
     ],
   },
   {
-    // 「装在这台机器上跑的模型」。每种能力一页,共用的 pip 安装源单独一页 ——
-    // 它被转写、克隆、分离三个引擎读,挂在哪一个名下都是错的说法。
+    // 「装在这台机器上跑的模型」,每种能力一页。三个引擎共用的 pip 安装源是部署级的设置
+    // (只有部署管理员写得了),在管理页的「部署设置」里。
     title: "studioSettingsLocalEngines",
     sections: [
       { id: "transcribe", label: "settingsTranscribeTitle", icon: <Mic size={14} />, render: () => <AsrModelsSection /> },
@@ -222,12 +211,6 @@ export const SETTINGS_GROUPS: readonly SettingsGroup[] = [
         icon: <AudioWaveform size={14} />,
         render: () => <DenoiseEnginesSection />,
       },
-      {
-        id: "install-source",
-        label: "installSourceTitle",
-        icon: <Download size={14} />,
-        render: () => <InstallSourceSection />,
-      },
     ],
   },
   {
@@ -248,28 +231,10 @@ export const SETTINGS_GROUPS: readonly SettingsGroup[] = [
         render: () => <CapabilityProvidersSection />,
       },
       {
-        // 出站代理 + 失败重试:回答的是同一个问题 —— 所有 AI 调用怎么出去。
-        id: "network",
-        label: "settingsNetworkTitle",
-        icon: <Globe size={14} />,
-        render: () => (
-          <>
-            <ProxySection />
-            <AiRuntimeSection />
-          </>
-        ),
-      },
-      {
         id: "backend",
         label: "settingsBackend",
         icon: <Server size={14} />,
         render: ({ workspace }) => <BackendSection workspace={workspace} />,
-      },
-      {
-        id: "data",
-        label: "dataDiagnosticsTitle",
-        icon: <Database size={14} />,
-        render: () => <DataDiagnosticsSection />,
       },
     ],
   },

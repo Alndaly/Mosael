@@ -15,8 +15,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { SettingsGroup, SettingsRow, SettingsSectionStack } from "@/components/settings/settings-layout";
+import { ADMIN_CARD, AdminRow, AdminSection } from "./adminLayout";
 
+/**
+ * 数据与诊断:备份、恢复、诊断包 —— 动的是整台部署的数据库和日志,不是某个人的东西。
+ *
+ * 所以在管理页:备份和恢复的接口只给部署管理员(routes/settings/data.py),诊断包里是整台后端的日志。
+ */
 export function DataDiagnosticsSection() {
   const t = useI18n();
   const [exporting, setExporting] = React.useState(false);
@@ -33,9 +38,9 @@ export function DataDiagnosticsSection() {
     : t("dataDiagnosticsDesktopOnly");
 
   return (
-    <SettingsSectionStack>
-      <SettingsGroup title={t("dataDiagnosticsTitle")} description={t("dataDiagnosticsDesc")}>
-        <SettingsRow label={t("dataDiagnosticsBundle")} description={t("dataDiagnosticsBundleDesc")}>
+    <AdminSection id="data" title={t("dataDiagnosticsTitle")} description={t("dataDiagnosticsDesc")}>
+      <div className={ADMIN_CARD}>
+        <AdminRow label={t("dataDiagnosticsBundle")} description={t("dataDiagnosticsBundleDesc")}>
           {exportDiagnostics ? (
             <Button
               size="sm"
@@ -59,8 +64,8 @@ export function DataDiagnosticsSection() {
           ) : (
             <span className="text-ui-sm text-muted-foreground">{unavailableLabel}</span>
           )}
-        </SettingsRow>
-        <SettingsRow label={t("dataDiagnosticsBackup")} description={t("dataDiagnosticsBackupDesc")}>
+        </AdminRow>
+        <AdminRow label={t("dataDiagnosticsBackup")} description={t("dataDiagnosticsBackupDesc")}>
           {createBackup ? (
             <Button
               size="sm"
@@ -89,8 +94,8 @@ export function DataDiagnosticsSection() {
           ) : (
             <span className="text-ui-sm text-muted-foreground">{unavailableLabel}</span>
           )}
-        </SettingsRow>
-        <SettingsRow label={t("dataDiagnosticsRestore")} description={t("dataDiagnosticsRestoreDesc")}>
+        </AdminRow>
+        <AdminRow label={t("dataDiagnosticsRestore")} description={t("dataDiagnosticsRestoreDesc")}>
           {applyRestore ? (
             <>
               <input
@@ -118,8 +123,8 @@ export function DataDiagnosticsSection() {
           ) : (
             <span className="text-ui-sm text-muted-foreground">{unavailableLabel}</span>
           )}
-        </SettingsRow>
-      </SettingsGroup>
+        </AdminRow>
+      </div>
       <AlertDialog open={pendingRestore !== null} onOpenChange={(open) => !open && setPendingRestore(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -155,6 +160,6 @@ export function DataDiagnosticsSection() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </SettingsSectionStack>
+    </AdminSection>
   );
 }

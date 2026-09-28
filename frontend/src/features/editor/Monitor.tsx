@@ -13,6 +13,7 @@ import { buildAudioSources } from "@/features/editor/playback/audioMix";
 import { compositorSupported } from "@/features/editor/playback/compositorFlag";
 import { PreviewUnavailable } from "@/features/editor/playback/PreviewUnavailable";
 import { blockingPreviewState, resolvesOnItsOwn } from "@/features/editor/playback/previewReadiness";
+import { textLayers } from "@/features/editor/playback/textLayers";
 import { readSubtitleStyle, subtitleCss } from "@/features/editor/subtitleStyle";
 import { readTextStyle, textStyleCss } from "@/features/editor/textStyle";
 import { applyTransformCommit, clipProgress, sampleTransform } from "@/features/editor/keyframes";
@@ -97,21 +98,12 @@ export function Monitor({
     [videoTracks],
   );
   
-  const subtitleClips = React.useMemo(
-    () =>
-      (sequence.tracks ?? [])
-        .filter((item) => item.kind === "subtitle" && !item.muted)
-        .flatMap((track) => track.clips ?? []),
+  // 字幕与花字画哪些由 textLayers 决定(导出侧同一条规则,contracts/text-layer-cases.json):
+  // 隐藏的字幕轨不画;静音只管声音,静音视频轨上的花字照旧。花字作为最上层 DOM 叠加渲染(与
+  // compositor/element 视频路径解耦,和字幕同理),用 transform 定位、随关键帧动画,匹配后端 ASS 烧录。
+  const { subtitles: subtitleClips, titles: textOverlayClips } = React.useMemo(
+    () => textLayers(sequence.tracks ?? []),
     [sequence],
-  );
-  // 花字:video 轨上无 asset 的文本片段。作为最上层 DOM 叠加渲染(与 compositor/element 视频路径
-  // 解耦,和字幕同理),用 transform 定位、随关键帧动画,匹配后端 ASS 烧录。
-  const textOverlayClips = React.useMemo(
-    () =>
-      videoTracks
-        .filter((track) => !track.muted)
-        .flatMap((track) => (track.clips ?? []).filter((clip) => !clip.asset_id && clip.text_override)),
-    [videoTracks],
   );
   const activeTextClips = React.useMemo(
     () => textOverlayClips.filter((clip) => playhead >= clip.timeline_start && playhead < clipEnd(clip)),

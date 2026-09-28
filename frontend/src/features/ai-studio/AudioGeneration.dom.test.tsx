@@ -6,11 +6,13 @@ import React from "react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
- * AI 生成里的**音频**(音乐、BGM、音效,ADR 0022):和图像、视频同一个会话、同一个模型选择器,
- * 只多两样 —— 歌词编辑器和纯音乐开关;结果是一段(或几段)声音,不是缩略图。
+ * AI 生成里的**音频**(音乐、BGM、音效,ADR 0022):和图像、视频同一条生成管线、同一个会话工作台,但在
+ * 「音频」页的「音乐与音效」里 —— 找音乐的人进的是「音频」页。只多两样:歌词编辑器和纯音乐开关;结果是
+ * 一段(或几段)声音,不是缩略图。
  *
- * 钉住的是:选了音频模型才长出歌词栏;只给歌词不给描述也能提交,发出去的是 kind=audio 和
- * 歌词;纯音乐时歌词栏灰掉、不发歌词;一次交回两首时两首都有播放器。
+ * 钉住的是:音乐音效在「音频」页、只列音频模型和音频会话,「生成」页不再列它们;选了音频模型才长出歌词栏;
+ * 只给歌词不给描述也能提交,发出去的是 kind=audio 和歌词;纯音乐时歌词栏灰掉、不发歌词;一次交回两首时
+ * 两首都有播放器。
  */
 
 vi.mock("@/app/preferences", () => ({
@@ -53,8 +55,9 @@ afterEach(() => {
 });
 beforeEach(() => {
   localStorage.clear();
-  // 直接落在「生成」那一页。
-  localStorage.setItem("mosael:tab:ai-studio", "generate");
+  // 直接落在「音频」页的「音乐与音效」。
+  localStorage.setItem("mosael:tab:ai-studio", "audio");
+  localStorage.setItem("mosael:tab:ai-studio-audio", "music");
 });
 
 function audioOption(capabilities: Record<string, unknown>) {
@@ -95,8 +98,10 @@ function renderStudio({
   jobs = [] as unknown[],
 } = {}) {
   const posts: Array<{ url: string; body: Record<string, unknown> }> = [];
+  const gets: string[] = [];
   globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
+    if (!init?.method || init.method === "GET") gets.push(url);
     const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
     if (init?.method === "POST") {
       posts.push({ url, body: JSON.parse(String(init.body)) });
@@ -119,7 +124,7 @@ function renderStudio({
       </ImagePreviewProvider>
     </QueryClientProvider>,
   );
-  return { posts };
+  return { posts, gets };
 }
 
 describe("音频生成的控件", () => {
@@ -193,6 +198,33 @@ describe("音频生成的控件", () => {
     await waitFor(() => expect(posts.some((one) => one.url.includes("/api/generation/jobs"))).toBe(true));
     const sent = posts.find((one) => one.url.includes("/api/generation/jobs"))!.body;
     expect(sent.parameters).not.toHaveProperty("duration_seconds");
+  });
+});
+
+describe("音乐与音效在「音频」页", () => {
+  it("只拉音频模型和音频会话;新会话记成音频", async () => {
+    const user = userEvent.setup();
+    const { posts, gets } = renderStudio();
+    await screen.findByRole("textbox", { name: "genLyrics" });
+    expect(screen.getByRole("tab", { name: /audioModeMusic/ })).toHaveAttribute("aria-selected", "true");
+    const options = gets.filter((url) => url.includes("/api/generation/options"));
+    expect(options.every((url) => url.includes("kind=audio"))).toBe(true);
+    expect(gets.some((url) => url.includes("/api/generation/sessions") && url.includes("&kind=audio"))).toBe(true);
+    expect(gets.some((url) => url.includes("/api/generation/sessions") && url.includes("kind=image"))).toBe(false);
+
+    await user.click(screen.getByRole("button", { name: "generationNewSession" }));
+    await waitFor(() => expect(posts.some((one) => one.url.endsWith("/api/generation/sessions"))).toBe(true));
+    expect(posts.find((one) => one.url.endsWith("/api/generation/sessions"))!.body).toMatchObject({ kind: "audio" });
+  });
+
+  it("「生成」页不再列音频模型:只拉图像和视频", async () => {
+    localStorage.setItem("mosael:tab:ai-studio", "generate");
+    const { gets } = renderStudio();
+    await waitFor(() => expect(gets.some((url) => url.includes("/api/generation/options?kind=video"))).toBe(true));
+    expect(gets.some((url) => url.includes("/api/generation/options?kind=image"))).toBe(true);
+    expect(gets.some((url) => url.includes("/api/generation/options?kind=audio"))).toBe(false);
+    expect(gets.some((url) => url.includes("/api/generation/sessions") && url.includes("&kind=image&kind=video"))).toBe(true);
+    expect(screen.queryByRole("textbox", { name: "genLyrics" })).toBeNull();
   });
 });
 

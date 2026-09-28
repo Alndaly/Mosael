@@ -1,7 +1,7 @@
 import React from "react";
 import { assetKeys } from "@/api/queryKeys";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { AudioLines, Mic, Settings2, Wand2 } from "lucide-react";
+import { AudioLines, Mic, Music, Settings2, Wand2 } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -21,6 +21,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SEGMENTED_LIST, segmentedTriggerClass } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { GenerateWorkspace } from "@/features/ai-studio/GenerateWorkspace";
 import { PODCAST_ENGINE } from "@/features/voice/speechEngines";
 import { FIELD, FIELD_SPEED, FieldRow, SpeechVoiceFields, SpeedPicker, VoiceField, VoicePicker } from "@/features/voice/SpeechVoiceFields";
 import { useSpeechVoice } from "@/features/voice/useSpeechVoice";
@@ -30,24 +31,34 @@ import { relativeTime } from "@/lib/time";
 import { usePersistentTab } from "@/lib/usePersistentTab";
 import { cn } from "@/lib/utils";
 
-type AudioMode = "speech" | "podcast";
+const AUDIO_MODES = ["speech", "podcast", "music"] as const;
+type AudioMode = (typeof AUDIO_MODES)[number];
 type PodcastMode = "summarize" | "read" | "research";
 
-//: 两种产物在素材库里的 source —— 「最近生成」据此只列这一页做出来的东西。
-const OUTPUT_SOURCE: Record<AudioMode, string> = { speech: "tts", podcast: "podcast" };
+const AUDIO_MODE_TABS = {
+  speech: { icon: Mic, label: "audioModeSpeech" },
+  podcast: { icon: AudioLines, label: "audioModePodcast" },
+  music: { icon: Music, label: "audioModeMusic" },
+} as const;
+
+//: 念字和播客在素材库里的 source —— 「最近生成」据此只列这一页做出来的东西。
+const OUTPUT_SOURCE: Record<Exclude<AudioMode, "music">, string> = { speech: "tts", podcast: "podcast" };
 
 /**
  * AI 生成 → 音频:产出**独立的音频素材**,和哪条时间线无关。
  *
  * - 语音:用选定的引擎和声音念一段文字。
  * - 播客:两个发音人把一段材料改写成对话、照读,或联网检索后讨论。
+ * - 音乐与音效:音乐、BGM、音效、给视频配声 —— 走和图像、视频**同一条生成管线**(ADR 0022),所以这一格就是
+ *   「生成」页那个会话式的工作台,只列音频模型、只列音频会话(`GenerateWorkspace medium="audio"`)。
+ *   此前它们挤在「生成」页的模型选择器里,找音乐的人进的是这一页,在这里找不到。
  *
- * 此前两者都挤在剪辑台的「配音」栏里 —— 可它们的产物只是进素材库,不碰时间线;而剪辑台那一栏
+ * 此前前两者都挤在剪辑台的「配音」栏里 —— 可它们的产物只是进素材库,不碰时间线;而剪辑台那一栏
  * 真正该做的「给字幕配音」反倒藏在别处。引擎/声音的选择与剪辑台共用 SpeechVoiceFields。
  */
 export function AudioWorkspace({ workspace, switcher }: { workspace: Workspace; switcher?: React.ReactNode }) {
   const t = useI18n();
-  const [mode, setMode] = usePersistentTab<AudioMode>("ai-studio-audio", "speech", ["speech", "podcast"]);
+  const [mode, setMode] = usePersistentTab<AudioMode>("ai-studio-audio", "speech", AUDIO_MODES);
   // 做完了由任务中心说、由它刷新素材库;这里只管按钮忙不忙。
   const job = useWatchedJob();
   const onQueued = (queued: Job) => {
@@ -55,12 +66,13 @@ export function AudioWorkspace({ workspace, switcher }: { workspace: Workspace; 
     job.watch(queued.id);
   };
 
-  return (
-    <section className="grid min-h-0 min-w-0 grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)] overflow-hidden bg-workspace-panel">
-      <div className="flex min-h-14 min-w-0 flex-wrap items-center gap-2 border-b border-divider px-4 py-1.5 max-[821px]:pl-14">
-        {switcher}
-        <div className={SEGMENTED_LIST} role="tablist" aria-label={t("aiTabAudio")}>
-          {(["speech", "podcast"] as const).map((item) => (
+  const header = (
+    <>
+      {switcher}
+      <div className={SEGMENTED_LIST} role="tablist" aria-label={t("aiTabAudio")}>
+        {AUDIO_MODES.map((item) => {
+          const { icon: Icon, label } = AUDIO_MODE_TABS[item];
+          return (
             <button
               key={item}
               type="button"
@@ -69,11 +81,21 @@ export function AudioWorkspace({ workspace, switcher }: { workspace: Workspace; 
               className={segmentedTriggerClass(mode === item)}
               onClick={() => setMode(item)}
             >
-              {item === "speech" ? <Mic size={13} /> : <AudioLines size={13} />}
-              {t(item === "speech" ? "audioModeSpeech" : "audioModePodcast")}
+              <Icon size={13} />
+              {t(label)}
             </button>
-          ))}
-        </div>
+          );
+        })}
+      </div>
+    </>
+  );
+
+  if (mode === "music") return <GenerateWorkspace workspace={workspace} medium="audio" switcher={header} />;
+
+  return (
+    <section className="grid min-h-0 min-w-0 grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)] overflow-hidden bg-workspace-panel">
+      <div className="flex min-h-14 min-w-0 flex-wrap items-center gap-2 border-b border-divider px-4 py-1.5 max-[821px]:pl-14">
+        {header}
       </div>
       <div className="min-h-0 overflow-y-auto overflow-x-hidden px-4 py-6">
         <div className="mx-auto grid w-full max-w-[680px] gap-8">

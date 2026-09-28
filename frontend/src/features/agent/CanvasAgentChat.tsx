@@ -21,13 +21,11 @@ import { DictateButton } from "@/features/agent/DictateButton";
 import {
   type Asset,
   compactAgentSession,
-  createAgentSession,
   deleteAgentSession,
   dropQueuedMessage,
   getAgentSession,
   listAgentMessages,
   listAgentQueue,
-  listAgentSessions,
   listAgentUsageEvents,
   sendAgentMessage,
   steerQueuedMessage,
@@ -53,7 +51,7 @@ import { AgentStatusRow } from "@/features/agent/AgentStatusRow";
 import { JumpToLatest, useStickToBottom } from "@/features/agent/stickToBottom";
 import { QueuedMessages } from "@/features/agent/QueuedMessages";
 import { ConfirmDialog } from "@/components/app/modals";
-import { agentSessionSelectionKey } from "@/features/agent/sessionSelection";
+import { useCurrentAgentSession } from "@/features/agent/currentAgentSession";
 import { formatElapsedSeconds } from "@/lib/time";
 import { CompactionNotice, type CompactionInfo, type ContextInfo } from "@/features/agent/ContextMeter";
 import { SessionSettingsMenu } from "@/features/agent/SessionSettingsMenu";
@@ -107,10 +105,17 @@ export function CanvasAgentChat({
   const draftText = React.useMemo(() => documentText(draft), [draft]);
   const draftRefs = React.useMemo(() => collectReferences(draft), [draft]);
   const noteAttach = useNoteAttachments(workspaceId);
+  // 多会话:和 AI 工作台、免提浮标、页面跳转共用同一个「当前会话」(见 currentAgentSession)——
+  // 选择、新建、删后回落都在那里,这里不再各写一份。
+  const current = useCurrentAgentSession(workspaceId, { pollList: 4000 });
+  const sessionList = current.sessions;
+  const activeSession = current.session;
+  //: 空串 = 还没有会话(各查询都以它为 enabled 条件)。
+  const sessionId = activeSession?.id ?? "";
   // 连流 → 攒状态 → 收尾失效:**只有一份**,和 AI 工作台共用(见 useAgentTurnStream)。
   // 此前这里各写了一遍,而收尾那一步停在没修之前的写法 —— 每答完一句都会闪一下,
   // 而那个 bug 在隔壁文件里早就被诊断、注释、修好过。
-  const { streamText, streamTimeline, attach: attachStream, reset: resetStream } = useAgentTurnStream();
+  const { streamText, streamTimeline, attach: attachStream } = useAgentTurnStream(activeSession?.id ?? null);
   // 附件三种入口(选文件 / 拖放 / 粘贴)与对话页共用同一套逻辑,见 composerAttachments。
   const attach = useComposerAttachments(workspaceId);
   const fileRef = React.useRef<HTMLInputElement | null>(null);
@@ -123,65 +128,16 @@ export function CanvasAgentChat({
     floating: isFloating,
   });
 
-  // 多会话:工作流入口复用全局 AI 会话池,只共享选中的 session id。
-  const sessionKey = agentSessionSelectionKey(workspaceId);
-  const sessions = useQuery({
-    queryKey: ["agent-sessions", workspaceId],
-    queryFn: () => listAgentSessions(workspaceId),
-    // 首条消息会把「新对话」自动改题,轮询让下拉里的标题跟上
-    refetchInterval: 4000,
-  });
-  const [selectedId, setSelectedId] = React.useState<string | null>(
-    () => window.localStorage.getItem(sessionKey) || null,
-  );
-  const sessionList = sessions.data ?? [];
-  const activeSession = sessionList.find((item) => item.id === selectedId) ?? sessionList[0] ?? null;
   //: 贴底跟随(见 features/agent/stickToBottom)。此前这里是无条件 scrollTop = scrollHeight
   //: —— 用户往上翻历史会被每一次内容更新硬拽回底部。
   const stick = useStickToBottom<HTMLDivElement>(activeSession?.id);
-  const sessionId = activeSession?.id ?? null;
-  const switchSession = (nextId: string) => {
-    if (nextId === selectedId) return;
-    // 旧会话的流不许串进新视图:先掐流、清流态,再切。
-    resetStream();
-    setSelectedId(nextId);
-    window.localStorage.setItem(sessionKey, nextId);
-  };
-  const clearSessionSelection = () => {
-    resetStream();
-    setSelectedId(null);
-    window.localStorage.removeItem(sessionKey);
-  };
-  const newSession = useMutation({
-    mutationFn: () =>
-      createAgentSession({ workspace_id: workspaceId }),
-    onSuccess: (created) => {
-      // 先播种缓存再切换:等 invalidate 重拉的间隙里 selectedId 在列表里找不到,
-      // 会瞬间回落到默认会话——看起来就像「点了没反应」。
-      qc.setQueryData<AgentSession[]>(["agent-sessions", workspaceId], (old) => [
-        created,
-        ...(old ?? []).filter((item) => item.id !== created.id),
-      ]);
-      switchSession(created.id);
-      void qc.invalidateQueries({ queryKey: ["agent-sessions", workspaceId] });
-    },
-  });
+  const newSession = current.create;
   const [deletingSession, setDeletingSession] = React.useState<AgentSession | null>(null);
   const deleteSession = useMutation({
     mutationFn: (id: string) => deleteAgentSession(id),
     onSuccess: (_data, deletedId) => {
       setDeletingSession(null);
-      const fallback = sessionList.find((item) => item.id !== deletedId) ?? null;
-      qc.setQueryData<AgentSession[]>(["agent-sessions", workspaceId], (old) =>
-        (old ?? []).filter((item) => item.id !== deletedId),
-      );
-      if (deletedId === sessionId) {
-        if (fallback) switchSession(fallback.id);
-        else clearSessionSelection();
-      }
-      qc.removeQueries({ queryKey: ["agent-messages", deletedId] });
-      qc.removeQueries({ queryKey: ["agent-session", deletedId] });
-      qc.removeQueries({ queryKey: ["agent-queue", deletedId] });
+      current.forget([deletedId]);
       void qc.invalidateQueries({ queryKey: ["agent-sessions", workspaceId] });
     },
   });
@@ -193,7 +149,8 @@ export function CanvasAgentChat({
     refetchInterval: 1500,
     refetchOnWindowFocus: true,
   });
-  const sessionLoading = sessions.isPending || (Boolean(sessionId) && messages.isPending);
+  const sessionLoading = current.listPending || (Boolean(sessionId) && messages.isPending);
+  /** 会话详情:运行状态、水位(列表接口不带 —— 那要为每个会话各算一次,而界面只看当前这个)。 */
   const live = useQuery({
     queryKey: ["agent-session", sessionId],
     enabled: Boolean(sessionId),
@@ -253,26 +210,17 @@ export function CanvasAgentChat({
   const recordedQuestions = React.useMemo(() => recordedQuestionIds(allMessages), [allMessages]);
   const visibleMessages = allMessages.filter((message) => !isRedundantAnswerRecord(message, recordedQuestions));
 
-  /** 会话详情:列表接口不带水位(那要为每个会话各算一次,而界面只看当前这个)。
-   *  跟着消息一起刷新 —— 一轮结束后水位就该更新。 */
-  const sessionDetail = useQuery({
-    queryKey: ["agent-session", sessionId],
-    queryFn: () => getAgentSession(sessionId),
-    enabled: Boolean(sessionId),
-    refetchInterval: running ? 4000 : false,
-  });
-
   /** 水位由会话详情**现算**给出,不从消息 payload 里翻。
    *  挂在消息上等于"必须先成功跑一轮才看得到" —— 而想知道"还能聊多久"的时刻恰恰在开口之前:
    *  刚打开旧会话、刚换过模型、上一轮失败了,这些时候都没有新的一轮可以带回这个数。 */
-  const context = (sessionDetail.data?.context ?? null) as ContextInfo | null;
+  const context = (live.data?.context ?? null) as ContextInfo | null;
 
   const compact = useMutation({
     mutationFn: () => compactAgentSession<{ compaction: CompactionInfo | null }>(sessionId),
     // 压成功了对话里会多一条整理记录;没得压和压失败必须说出来,否则只是 loading 闪一下。
     onSuccess: (result) => {
       void messages.refetch();
-      void sessionDetail.refetch();
+      void live.refetch();
       if (!result?.compaction) toast.message(t("agentCompactNothing"));
     },
     onError: (error) => toast.error(`${t("agentCompactFailed")}:${(error as Error).message}`),
@@ -340,16 +288,7 @@ export function CanvasAgentChat({
       if (noteAttach.hasNotes) visibleContent += `\n${noteAttach.summary}`;
       visibleContent = visibleContent.trim();
       const context = [contextLine, fileBlock, noteAttach.context].filter(Boolean).join("\n\n");
-      let targetId = sessionId;
-      if (!targetId) {
-        const created = await createAgentSession({ workspace_id: workspaceId });
-        qc.setQueryData<AgentSession[]>(["agent-sessions", workspaceId], (old) => [
-          created,
-          ...(old ?? []).filter((item) => item.id !== created.id),
-        ]);
-        switchSession(created.id);
-        targetId = created.id;
-      }
+      const targetId = (await current.ensure()).id;
       const message = await sendAgentMessage(targetId, { content: visibleContent, context, references, body_document: document });
       return { message, targetId };
     },
@@ -411,7 +350,7 @@ export function CanvasAgentChat({
             sessions={sessionList}
             activeSession={activeSession}
             deleting={deleteSession.isPending}
-            onSelect={switchSession}
+            onSelect={current.select}
             onDelete={setDeletingSession}
           />
         </h2>
@@ -596,11 +535,13 @@ export function CanvasAgentChat({
             {/* 免提不在这一行:它是"手离开键盘"的模式,而工具行只在助手面板打开时才在屏幕上 ——
                 恰好在最需要它的时候不见了。改成应用级的浮标(features/agent/VoiceDock),
                 由设置里的开关决定浮不浮。说话输入留着:那个是"把话填进这个框",本来就属于这里。 */}
-            <ModelPicker workspaceId={workspaceId} session={activeSession} />
+            {/* 会话详情还在读时先用清单里那份:两者是同一条会话,只差水位。 */}
+            <ModelPicker workspaceId={workspaceId} session={live.data ?? activeSession} />
             {/* 与 AI Studio 用同一个组件:此前两边各写各的工具行,同一个功能的位置、顺序、
                 有无都不一致。 */}
             <SessionSettingsMenu
-              session={sessionDetail.data ?? null}
+              workspaceId={workspaceId}
+              session={live.data ?? activeSession}
               context={context}
               compacting={compact.isPending}
               onCompact={running ? undefined : () => compact.mutate()}

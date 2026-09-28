@@ -73,6 +73,6 @@ export const PAGE_RENDERERS: Record<StudioView, (ctx: PageContext) => React.Reac
   "browser-pool": (ctx) => <BrowserPoolView workspace={ctx.workspace} />,
   scheduler: (ctx) => <SchedulerView workspace={ctx.workspace} project={ctx.project} />,
   plugins: (ctx) => <PluginsView workspaceId={ctx.workspace.id} />,
-  admin: () => <AdminView />,
+  admin: (ctx) => <AdminView workspace={ctx.workspace} />,
   settings: (ctx) => <SettingsView workspace={ctx.workspace} />,
 };

@@ -128,5 +128,6 @@ def test_生成漏斗挂上渲出来的素材_说明并进提示词_回执记下
         )
         request = generation.request
     assert [one["role"] for one in request["source_assets"]] == ["reference_image"]
-    assert request["prompt"].startswith("她在草原上奔跑") and "白模" in request["prompt"]
+    # 白模说明是补给模型的一段,不写进他那句话里。
+    assert request["prompt"] == "她在草原上奔跑" and "白模" in request["prompt_notes"][0]
     assert request["scene_reference"]["scene_id"] == scene_id and request["scene_reference"]["entity_ids"] == [mei]
