@@ -20,6 +20,7 @@ import { COLOR_PRESETS, matchColorPreset, presetColorPayload } from "@/features/
 import { ClipAppearancePanel } from "@/features/editor/ClipAppearancePanel";
 import { InspectorSection } from "@/features/editor/InspectorSection";
 import { LutPicker } from "@/features/editor/LutPicker";
+import { kindHasSound, kindIsVisual } from "@/lib/assetKinds";
 import { usePersistentTab } from "@/lib/usePersistentTab";
 import { cn } from "@/lib/utils";
 
@@ -92,10 +93,10 @@ export function Inspector({
     selectedClip && !selectedClip.asset_id && !offlineAsset && selectedClip.text_override != null,
   );
   // 哪些区块出现由**素材类型**决定,不由轨道决定:音频没有画面(调色、变换、画面淡入淡出),
-  // 图片没有声音(音量、声音淡入淡出)。读片段自带的 asset_kind —— 脱机片段也报它原来的类型。
+  // 图片没有声音(音量、声音淡入淡出)。
   const clipKind = selectedClip?.asset_kind ?? "";
-  const isVisualClip = clipKind === "video" || clipKind === "image";
-  const hasSound = clipKind === "video" || clipKind === "audio";
+  const isVisualClip = kindIsVisual(clipKind);
+  const hasSound = kindHasSound(clipKind);
   // 没有画面的片段(音频、字幕、花字)没有调色页;记住的页签不改,换回画面片段时还在原处。
   const activeTab = isVisualClip ? tab : "props";
   const effects = (selectedClip?.effects ?? {}) as {

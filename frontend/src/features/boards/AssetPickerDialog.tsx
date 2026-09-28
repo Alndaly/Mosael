@@ -8,7 +8,7 @@ import { useI18n } from "@/app/preferences";
 import { PickListDialog } from "@/components/app/PickListDialog";
 import { Button } from "@/components/ui/button";
 import { kindIcon, kindText, MEDIA_KINDS, type MediaKind } from "@/features/boards/boardNodes";
-import type { PlacedAsset } from "@/features/boards/boardPlacement";
+import { placedAsset, type PlacedAsset } from "@/features/boards/boardPlacement";
 
 /**
  * 往画板上贴一份现成素材:从素材库里挑。
@@ -140,7 +140,10 @@ export function AssetPickerDialog({
         //: 三种混着列时写明是哪一种 —— 同名的一张图和一段视频,光看名字分不出。
         subtitle: [mixed ? kindLabel(asset.kind) : "", describe(asset)].filter(Boolean).join(" · "),
       })}
-      onPick={(asset) => onPick({ id: asset.id, name: asset.name || asset.original_filename || "", kind: asset.kind as PickedKind })}
+      onPick={(asset) => {
+        const placed = placedAsset(asset);
+        if (placed) onPick(placed);
+      }}
       pending={assets.isLoading}
       error={assets.isError ? assets.error.message : null}
       onRetry={() => void assets.refetch()}

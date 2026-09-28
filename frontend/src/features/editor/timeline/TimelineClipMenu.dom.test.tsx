@@ -47,9 +47,7 @@ const assets = ["film", "still", "voice"].map((id) => ({ id: `asset-${id}`, name
 
 function renderTimeline() {
   const handlers = {
-    onDeleteClip: vi.fn(),
     onDeleteClips: vi.fn(),
-    onRippleDeleteClip: vi.fn(),
     onRippleDeleteClips: vi.fn(),
     onDuplicateClip: vi.fn(),
     onDetachAudio: vi.fn(),

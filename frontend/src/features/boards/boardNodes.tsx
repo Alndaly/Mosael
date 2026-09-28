@@ -5,12 +5,14 @@ import { Handle, NodeResizer, Position, useStore, type NodeProps } from "@xyflow
 import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, BookOpen, Clapperboard, ExternalLink, FileText, Loader2, RefreshCw, Box, Ban, Clock3, Film as FilmIcon, Group, Image as ImageIcon, Music, Plus, Square as SquareIcon, StickyNote, UsersRound, type LucideIcon } from "lucide-react";
 
-import { ApiError, entityKeys, getEntity, getJob, isNodeProducer, type BoardItem, type BuiltinProducer } from "@/api/client";
+import { entityKeys, getEntity, getJob, isNodeProducer, type BoardItem, type BuiltinProducer } from "@/api/client";
+import { isNotFound } from "@/api/transport";
 import { EntityThumb } from "@/features/entities/EntityMention";
 import { entityKindIcon, useCatalogLabels } from "@/features/entities/entityMeta";
 import { AssetInlinePreview } from "@/components/app/asset-preview";
 import { BoardAudio, BoardVideo } from "@/features/boards/BoardPlayer";
 import { DraftTextarea } from "@/components/ui/draft-text";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { NoteReader } from "@/features/notes/NoteEditor";
 import "@/features/notes/notes.css";
@@ -960,7 +962,8 @@ export function SceneNode({ data, selected }: NodeProps) {
  * 见后端 boards/actions.upstream_entities);提示词框的 `@` 菜单里它排在「连进来的」那一组。
  * 「补全多角度」「生成表情」这类能力照内容格能力的做法挂在它身上(`form.abilities`):跑的时候外壳和底边那一条运行态
  * 和图片格一样(useRunState + AbilityRun)—— 此前这一格不画运行态,点了「生成表情」看不出在跑、也停不下来。
- * 资产删了(404),这一格还在(能挪、能删),写明「资产已删除」;别的错(断网、服务端出错)说没能加载 —— 那不是删了。
+ * 资产删了(404),这一格还在(能挪、能删),写明「资产已删除」;别的错(断网、服务端出错)说没能加载、给一个重试
+ * —— 那不是删了,而查询是 retry:false,不会自己再试。
  */
 export function EntityNode({ data, selected }: NodeProps) {
   const nodeData = data as unknown as BoardNodeData;
@@ -975,6 +978,7 @@ export function EntityNode({ data, selected }: NodeProps) {
     retry: false,
   });
   const found = entity.data;
+  const gone = isNotFound(entity.error);
   const KindIcon = entityKindIcon(found?.kind ?? "character");
   const open = () => {
     if (item.entity_id) window.location.hash = `#/entities?entity=${encodeURIComponent(item.entity_id)}`;
@@ -993,7 +997,12 @@ export function EntityNode({ data, selected }: NodeProps) {
         {entity.isError ? (
           <div className="flex h-full flex-col items-center justify-center gap-2 px-4 text-center text-muted-foreground">
             <AlertTriangle size={22} strokeWidth={1.4} />
-            <span className="text-ui-xs">{t(entity.error instanceof ApiError && entity.error.status === 404 ? "boardEntityMissing" : "boardEntityLoadFailed")}</span>
+            <span className="text-ui-xs">{t(gone ? "boardEntityMissing" : "boardEntityLoadFailed")}</span>
+            {!gone && (
+              <Button type="button" size="xs" variant="outline" className="nodrag nopan" loading={entity.isFetching} onClick={() => void entity.refetch()}>
+                {t("retry")}
+              </Button>
+            )}
           </div>
         ) : found ? (
           <EntityThumb entity={{ kind: found.kind, cover_asset_id: found.display_cover_asset_id ?? null }} className="h-full w-full rounded-none" />

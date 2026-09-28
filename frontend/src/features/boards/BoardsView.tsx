@@ -31,7 +31,6 @@ import {
   listMembers,
   listBoards,
   updateBoard,
-  type Asset,
   type GenerationOption,
   type Board,
   type BoardCanvas as Canvas,
@@ -41,8 +40,8 @@ import {
   type CollaborationComment,
 } from "@/api/client";
 import { useAuth } from "@/app/auth";
-import { isMediaKind, itemName, type MediaKind } from "@/features/boards/boardNodes";
-import { assetFields, type PlacedAsset } from "@/features/boards/boardPlacement";
+import { itemName, type MediaKind } from "@/features/boards/boardNodes";
+import { assetFields, placedAsset, type PlacedAsset } from "@/features/boards/boardPlacement";
 import { boardAddCatalog, SCENE_FROM_TEXT } from "@/features/boards/boardTools";
 import { useI18n, usePreferences } from "@/app/preferences";
 import type { MessageKey } from "@/app/messages";
@@ -650,7 +649,7 @@ function BoardDetail({
   );
 
   /** 系统里拖进来 / 粘贴进来的文件:先传进素材库,再由画布按种类各放一格(图片、视频、音频都有自己的格子,
-   *  见 boardPlacement.assetItem)。素材库认成别的种类的(画板上没有那种格子)只进库、不上画板。
+   *  见 boardPlacement.assetItem;文档落成一格文档格)。哪些种类放得上画板由 boardPlacement.placedAsset 判。
    *  **一个失败不拦后面的**(lib/importEach,和素材库的导入同一条):进了库的照样上画板、素材库照样刷新,
    *  没进来的最后一并说。 */
   const upload = useMutation({
@@ -660,17 +659,12 @@ function BoardDetail({
       const partial = importFailureText(t, imported.length, failed);
       if (partial) toast.error(partial);
     },
-    onError: (error: Error) => toast.error(error.message),
   });
   const uploadFiles = upload.mutateAsync;
   const importFiles = React.useCallback(
     async (files: File[]): Promise<PlacedAsset[]> => {
-      //: 整个请求都没发出去(onError 已经说过了)就什么也不放。
-      const { imported } = await uploadFiles(files).catch(() => ({ imported: [] as Asset[] }));
-      //: 文档(ADR 0031)落成一格文档格,喂给下游的是解析出的全文。
-      return imported.flatMap((asset): PlacedAsset[] =>
-        isMediaKind(asset.kind) || asset.kind === "document" ? [{ id: asset.id, name: asset.name, kind: asset.kind }] : [],
-      );
+      const { imported } = await uploadFiles(files);
+      return imported.map(placedAsset).filter((one): one is PlacedAsset => one !== null);
     },
     [uploadFiles],
   );

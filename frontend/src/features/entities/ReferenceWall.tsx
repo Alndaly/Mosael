@@ -155,7 +155,6 @@ export function ReferenceWall({ entity, workspaceId }: { entity: Entity; workspa
       const partial = importFailureText(t, imported.length, failed);
       if (partial) toast.error(partial);
     },
-    onError: fail,
   });
   const drop = useFileDrop((files) => upload.mutate(files), referable);
 

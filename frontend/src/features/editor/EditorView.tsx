@@ -1089,8 +1089,6 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
             const track = (sequence.tracks ?? []).find((item) => item.id === trackId);
             setTrackPendingRemoval({ id: trackId, name: track?.name ?? "", clips: clipCount });
           }}
-          onDeleteClip={(clipId) => deleteClipMutation.mutate(clipId)}
-          onRippleDeleteClip={(clipId) => rippleDeleteMutation.mutate([clipId])}
           onDeleteClips={(clipIds) => deleteClipsMutation.mutate(clipIds)}
           onRippleDeleteClips={(clipIds) => rippleDeleteMutation.mutate(clipIds)}
           onSplitClip={(clipId) => splitAtPlayhead(clipId)}

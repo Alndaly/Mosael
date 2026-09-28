@@ -148,6 +148,27 @@ function VoiceRow({
   // 编辑中不响应「点一行选中」:在输入框里点一下不该顺手换掉配音用的嗓子。
   const selectable = Boolean(onSelect) && !editing;
 
+  // 名字 + 说明是这一行的摘要。能选时它本身就是那颗「选中」按钮(键盘能 Tab 到、Enter / Space 能按);
+  // 试听、编辑、删除和「补授权声明」是它旁边的兄弟按钮,不嵌在里面 —— 按钮里套按钮,读屏和键盘都会乱。
+  const summary = (
+    <>
+      <span className={cn("min-w-0 truncate text-ui-sm text-foreground", selected && "font-medium")}>{voice.name}</span>
+      {/* 第二行是这条音色的"说明":来源 + 参考文本。首行只留名字,读起来才有主次。 */}
+      <span className="block truncate text-ui-2xs leading-[1.5] text-muted-foreground" title={voice.reference_text}>
+        <span className="text-muted-foreground/70">{origin}</span>
+        {voice.reference_text ? (
+          ` · ${voice.reference_text}`
+        ) : (
+          // 没有参考文本时**说出来**:Fish Speech 拿不到它就合成不出能听的东西,
+          // 而这条音色在下拉里看起来和别的一样正常。
+          <>
+            {" · "}
+            <span className="text-destructive">{t("voiceNoReferenceText")}</span>
+          </>
+        )}
+      </span>
+    </>
+  );
   return (
     // 按钮相对**整行**(名字 + 底下那句说明)居中,而不是贴着名字那一行 —— 所以文字自成一列、
     // 按钮是另一列,由 items-center 管这两列的竖向关系。
@@ -155,86 +176,75 @@ function VoiceRow({
       className={cn(
         "flex min-w-0 items-center gap-2 py-2",
         onSelect ? "rounded-md px-2" : "first:pt-0 last:pb-0",
-        selectable && "cursor-pointer hover:bg-secondary",
+        selectable && "hover:bg-secondary",
         selected && "bg-[color-mix(in_srgb,var(--primary)_8%,transparent)] hover:bg-[color-mix(in_srgb,var(--primary)_8%,transparent)]",
       )}
       data-voice-row={voice.id}
-      aria-current={selected || undefined}
-      role={selectable ? "button" : undefined}
-      tabIndex={selectable ? 0 : undefined}
-      onClick={selectable ? onSelect : undefined}
     >
       <div className="grid min-w-0 flex-1 gap-0.5">
         {editing ? (
-          <Input
-            size="sm"
-            className="min-w-0"
-            aria-label={t("voiceName")}
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            autoFocus
-          />
-        ) : (
-          <span className={cn("min-w-0 truncate text-ui-sm text-foreground", selected && "font-medium")}>{voice.name}</span>
-        )}
-        {editing ? (
-          <div className="mt-1 grid gap-1.5">
-            <Textarea rows={2} value={text} placeholder={t("voiceRefText")} onChange={(event) => setText(event.target.value)} />
-            <small className="text-ui-xs leading-[1.4] text-muted-foreground">{t("voiceEditHint")}</small>
-            <VoiceConsentPicker
-              name={`voice-consent-${voice.id}`}
-              value={voice.consent_kind}
-              disabled={declare.isPending}
-              onChange={(kind) => declare.mutate(kind)}
-            />
-            <VoiceConsentStatus kind={voice.consent_kind} declaredAt={voice.consent_at} />
-            <div className="flex items-center justify-between gap-2">
-              {/* 让本机的转写引擎听一遍参考音频把文本填上 —— 比让用户打一遍自己说过的话强。 */}
-              <Button
-                size="sm"
-                variant="ghost"
-                disabled={!voice.has_reference}
-                loading={recognize.isPending}
-                onClick={() => recognize.mutate()}
-              >
-                <Wand2 size={12} /> {t("voiceRecognize")}
-              </Button>
-              <Button
-                size="sm"
-                disabled={!dirty}
-                loading={save.isPending}
-                onClick={() => save.mutate({ name: name.trim(), reference_text: text })}
-              >
-                <Check size={12} /> {t("save")}
-              </Button>
-            </div>
-          </div>
-        ) : (
-          // 第二行是这条音色的"说明":来源 + 参考文本。首行只留名字,读起来才有主次。
           <>
-            <p className="m-0 truncate text-ui-2xs leading-[1.5] text-muted-foreground" title={voice.reference_text}>
-              <span className="text-muted-foreground/70">{origin}</span>
-              {voice.reference_text ? (
-                ` · ${voice.reference_text}`
-              ) : (
-                // 没有参考文本时**说出来**:Fish Speech 拿不到它就合成不出能听的东西,
-                // 而这条音色在下拉里看起来和别的一样正常。
-                <>
-                  {" · "}
-                  <span className="text-destructive">{t("voiceNoReferenceText")}</span>
-                </>
-              )}
-            </p>
+            <Input
+              size="sm"
+              className="min-w-0"
+              aria-label={t("voiceName")}
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              autoFocus
+            />
+            <div className="mt-1 grid gap-1.5">
+              <Textarea rows={2} value={text} placeholder={t("voiceRefText")} onChange={(event) => setText(event.target.value)} />
+              <small className="text-ui-xs leading-[1.4] text-muted-foreground">{t("voiceEditHint")}</small>
+              <VoiceConsentPicker
+                name={`voice-consent-${voice.id}`}
+                value={voice.consent_kind}
+                disabled={declare.isPending}
+                onChange={(kind) => declare.mutate(kind)}
+              />
+              <VoiceConsentStatus kind={voice.consent_kind} declaredAt={voice.consent_at} />
+              <div className="flex items-center justify-between gap-2">
+                {/* 让本机的转写引擎听一遍参考音频把文本填上 —— 比让用户打一遍自己说过的话强。 */}
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  disabled={!voice.has_reference}
+                  loading={recognize.isPending}
+                  onClick={() => recognize.mutate()}
+                >
+                  <Wand2 size={12} /> {t("voiceRecognize")}
+                </Button>
+                <Button
+                  size="sm"
+                  disabled={!dirty}
+                  loading={save.isPending}
+                  onClick={() => save.mutate({ name: name.trim(), reference_text: text })}
+                >
+                  <Check size={12} /> {t("save")}
+                </Button>
+              </div>
+            </div>
+          </>
+        ) : (
+          <>
+            {selectable ? (
+              <button
+                type="button"
+                aria-current={selected || undefined}
+                className="grid min-w-0 cursor-pointer gap-0.5 rounded-sm border-0 bg-transparent p-0 text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                onClick={onSelect}
+              >
+                {summary}
+              </button>
+            ) : (
+              <div className="grid min-w-0 gap-0.5">{summary}</div>
+            )}
             {/* 升级前建的音色没有声明:用于数字人之前要补上(点编辑在那里选)。已声明的不多占一行。 */}
             {voice.consent_kind === "undeclared" && (
               <button
                 type="button"
                 data-voice-consent-missing=""
                 className="flex cursor-pointer items-center gap-1 border-0 bg-transparent p-0 text-left text-ui-2xs text-warning hover:underline"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onToggleEdit();
-                }}
+                onClick={onToggleEdit}
               >
                 <ShieldAlert size={11} /> {t("voiceConsentMissing")}
               </button>
@@ -243,9 +253,8 @@ function VoiceRow({
         )}
       </div>
       {/* **常驻显示,不藏在 hover 后面。** 藏起来省的是一点视觉噪声,代价是"这一行能干什么"
-          要靠试出来 —— 而这三件事(试听、改名、删)正是来这个库的理由。
-          行上的点击是「选中」,所以按钮自己的点击不往上冒。 */}
-      <div className="flex shrink-0 items-center gap-0.5" onClick={(event) => event.stopPropagation()}>
+          要靠试出来 —— 而这三件事(试听、改名、删)正是来这个库的理由。 */}
+      <div className="flex shrink-0 items-center gap-0.5">
         <Button
           size="icon-xs"
           variant="ghost"

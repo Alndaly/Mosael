@@ -9,6 +9,7 @@ import { API_BASE, api, getAuthToken, getJob, listAsrModels, transcribeAsset, ty
 import { asrEngineMissing, pendingTranscribeIds } from "@/features/editor/transcribeQueue";
 import { Button } from "@/components/ui/button";
 import { ConfigNotice } from "@/components/layout/ConfigNotice";
+import { kindHasSound } from "@/lib/assetKinds";
 import { pollWhileUnsettled } from "@/lib/pollWhileUnsettled";
 import { tokenTimelineRange } from "@/domain/timeline/karaoke";
 import { speakerChipStyle, speakerLabel, speakerShort, speakersAreMeaningful } from "@/features/editor/transcriptSpeakers";
@@ -81,23 +82,19 @@ export function TranscriptPanel({
   const [asrError, setAsrError] = React.useState<string | null>(null);
 
   // 逐字稿覆盖 V1(主叙事画面)加所有音轨(口播/旁白常在 A1)。
-  // **按素材类型挑,不按轨道类型挑。** 视频轨上完全可以放图片(AI 生成的静图就是这么落上去的),
-  // 而图片没有声音 —— 此前这里收的是"第一条视频轨 + 所有音频轨"的全部片段,于是一张静图排在
-  // 最前时,转写就拿它去调接口,回来一句「只有视频或音频素材可以转写」。
   const videoClips = React.useMemo(() => {
     const tracks = sequence.tracks ?? [];
     const mainVideo = tracks.find((item) => item.kind === "video");
     const audioTracks = tracks.filter((item) => item.kind === "audio");
     return [...(mainVideo?.clips ?? []), ...audioTracks.flatMap((track) => track.clips ?? [])];
   }, [sequence]);
-  // **按素材类型筛,不按轨道类型。** 视频轨上完全可以放图片(AI 生成的静图就是这么落上去的),
-  // 而图片没有声音。此前这里不筛,于是一张静图排在最前时,「AI 转写」拿它去调接口,回来一句
-  // 「只有视频或音频素材可以转写」—— 而同一条时间线的音频轨上明明躺着一段录音。
+  // **按素材类型筛,不按轨道类型。** 视频轨上完全可以放图片,而图片没有声音:不筛的话一张静图排在
+  // 最前时,「AI 转写」拿它去调接口,只换回一句「只有视频或音频素材可以转写」。
   const assetIds = React.useMemo(
     () => [
       ...new Set(
         videoClips
-          .filter((clip) => clip.asset_kind === "video" || clip.asset_kind === "audio")
+          .filter((clip) => kindHasSound(clip.asset_kind))
           .map((clip) => clip.asset_id)
           .filter((id): id is string => Boolean(id)),
       ),

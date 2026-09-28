@@ -24,6 +24,7 @@ import {
 import { downsamplePeaks, slicePeaks } from "@/domain/timeline/waveform";
 import { MIN_PX_PER_SECOND, useEditorStore } from "@/stores/editorStore";
 import { TimelineClip } from "./TimelineClip";
+import { kindHasSound } from "@/lib/assetKinds";
 import { cn } from "@/lib/utils";
 import { useDndMonitor, useDroppable } from "@dnd-kit/core";
 
@@ -51,11 +52,6 @@ function cachedPeaks(
   return value;
 }
 
-/** 有声音可处理的片段(分离、降噪),和素材库的判据一致:视频也算,图片不算。 */
-function clipHasSound(clip: Clip): boolean {
-  return clip.asset_kind === "audio" || clip.asset_kind === "video";
-}
-
 export interface TrimPayload {
   timeline_start: number;
   src_in: number;
@@ -73,9 +69,7 @@ export function Timeline({
   onAddTrack,
   onMoveTrack,
   onRemoveTrack,
-  onDeleteClip,
   onDeleteClips,
-  onRippleDeleteClip,
   onRippleDeleteClips,
   onSplitClip,
   onSplitClipAt,
@@ -100,10 +94,9 @@ export function Timeline({
   onMoveTrack?: (trackId: string, direction: "up" | "down") => void;
   /** Second argument is how many clips are on the track, so the caller can confirm first. */
   onRemoveTrack?: (trackId: string, clipCount: number) => void;
-  onDeleteClip?: (clipId: string) => void;
-  /** 多选批量删除:一条操作、一步撤销。缺省时回落为逐个删(会变成 N 步撤销)。 */
+  /** 删掉这几段(一段也走它):一条操作、一步撤销。不给就不出删除入口。 */
   onDeleteClips?: (clipIds: string[]) => void;
-  onRippleDeleteClip?: (clipId: string) => void;
+  /** 波纹删除这几段,下游跟着前移。同样一条操作、一步撤销。 */
   onRippleDeleteClips?: (clipIds: string[]) => void;
   /** 不给 clipId 就切播放头下的那一段(没选中东西时也能用)。 */
   onSplitClip?: (clipId?: string) => void;
@@ -165,19 +158,10 @@ export function Timeline({
   const tracks = sequence.tracks ?? [];
   const allClips = React.useMemo(() => tracks.flatMap((track) => track.clips ?? []), [tracks]);
 
-  // 删除 / 波纹删除只有一条路径:工具栏、Delete 键、片段右键都作用在**整个选区**上。
-  // 此前右键只删被点的那一段,多选后右键删除看着像只删了一半。
-  const deleteClips = (clipIds: string[]) => {
-    if (!onDeleteClip) return;
-    if (onDeleteClips) onDeleteClips(clipIds);
-    else clipIds.forEach((clipId) => onDeleteClip(clipId));
-  };
-  const rippleDeleteClips = (clipIds: string[]) => {
-    if (!onRippleDeleteClip) return;
-    if (onRippleDeleteClips) onRippleDeleteClips(clipIds);
-    else clipIds.forEach((clipId) => onRippleDeleteClip(clipId));
-  };
-  /** 右键菜单作用在谁身上:点的那一段在选区里就是整个选区,不在就只是它自己。 */
+  /**
+   * 右键菜单作用在谁身上:点的那一段在选区里就是整个选区,不在就只是它自己。删除 / 波纹删除因此和
+   * 工具栏一样作用在整个选区上 —— 多选后右键只删被点的那一段,看着像只删了一半。
+   */
   const menuTargets = (clipId: string) => {
     const selected = useEditorStore.getState().selectedClipIds;
     return selected.includes(clipId) ? selected : [clipId];
@@ -280,18 +264,17 @@ export function Timeline({
   }, [editMode, dragDraft, dragMoveDuration, tracks]);
   const assetById = React.useMemo(() => new Map(assets.map((asset) => [asset.id, asset])), [assets]);
 
-  // Waveforms for audio-track clips whose assets have a cached waveform.
+  //: 有声音的片段画波形 —— 视频也带声音(和 PR / DaVinci 一样),图片没有,放在视频轨上也不画。
+  //: 按片段的素材类型收,不按轨道;下面画的时候只按素材查这张表。
   const waveformAssetIds = React.useMemo(() => {
     const ids = new Set<string>();
-    for (const track of tracks) {
-      // Video clips carry their own audio too — show its waveform, like PR/DaVinci.
-      if (track.kind !== "audio" && track.kind !== "video") continue;
-      for (const clip of track.clips ?? []) {
-        if (clip.asset_id && assetById.get(clip.asset_id)?.media_info.has_waveform) ids.add(clip.asset_id);
+    for (const clip of allClips) {
+      if (clip.asset_id && kindHasSound(clip.asset_kind) && assetById.get(clip.asset_id)?.media_info.has_waveform) {
+        ids.add(clip.asset_id);
       }
     }
     return [...ids];
-  }, [tracks, assetById]);
+  }, [allClips, assetById]);
   const waveformQueries = useQueries({
     queries: waveformAssetIds.map((assetId) => ({
       queryKey: ["waveform", assetId],
@@ -689,7 +672,7 @@ export function Timeline({
         </div>
         <div className="flex items-center gap-0.5">
           {toolbarExtra}
-          {(onSplitClip || onDuplicateClip || onDeleteClip) && <span className="mx-[3px] h-4 w-px bg-divider" />}
+          {(onSplitClip || onDuplicateClip || onDeleteClips) && <span className="mx-[3px] h-4 w-px bg-divider" />}
           {onSplitClip && (
             <Tooltip>
               <TooltipTrigger asChild>
@@ -734,14 +717,14 @@ export function Timeline({
               <TooltipContent>{t("duplicateClip")}</TooltipContent>
             </Tooltip>
           )}
-          {onRippleDeleteClip && (
+          {onRippleDeleteClips && (
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
                   variant="ghost"
                   size="icon-sm"
                   disabled={!selectedClipIds.length}
-                  onClick={() => rippleDeleteClips(selectedClipIds)}
+                  onClick={() => onRippleDeleteClips(selectedClipIds)}
                   aria-label={t("rippleDelete")}
                 >
                   <Waves size={14} />
@@ -750,14 +733,14 @@ export function Timeline({
               <TooltipContent>{t("rippleDelete")}</TooltipContent>
             </Tooltip>
           )}
-          {onDeleteClip && (
+          {onDeleteClips && (
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
                   variant="ghost"
                   size="icon-sm"
                   disabled={!selectedClipIds.length}
-                  onClick={() => deleteClips(selectedClipIds)}
+                  onClick={() => onDeleteClips(selectedClipIds)}
                   aria-label={t("deleteClip")}
                 >
                   <Trash2 size={14} />
@@ -1056,10 +1039,7 @@ export function Timeline({
                       ? insertRipple.split
                       : null;
                   const displaySrcOut = splitPreview ? splitPreview.cutSrc : display.src_out;
-                  const waveform =
-                    (track.kind === "audio" || track.kind === "video") && clip.asset_id
-                      ? waveformByAsset.get(clip.asset_id)
-                      : undefined;
+                  const waveform = clip.asset_id ? waveformByAsset.get(clip.asset_id) : undefined;
                   const clipWidth = Math.max(10, timeToPx((displaySrcOut - display.src_in) / (clip.speed || 1), pxPerSecond));
                   const peaks =
                     waveform && clip.asset_id
@@ -1091,8 +1071,8 @@ export function Timeline({
                       onSelect={() => {
                         if (!useEditorStore.getState().selectedClipIds.includes(clip.id)) selectClip(clip.id);
                       }}
-                      onDelete={onDeleteClip ? () => deleteClips(menuTargets(clip.id)) : undefined}
-                      onRippleDelete={onRippleDeleteClip ? () => rippleDeleteClips(menuTargets(clip.id)) : undefined}
+                      onDelete={onDeleteClips ? () => onDeleteClips(menuTargets(clip.id)) : undefined}
+                      onRippleDelete={onRippleDeleteClips ? () => onRippleDeleteClips(menuTargets(clip.id)) : undefined}
                       onSplit={onSplitClip ? () => onSplitClip(clip.id) : undefined}
                       onDuplicate={onDuplicateClip && clip.asset_id ? () => onDuplicateClip(clip.id) : undefined}
                       // 下面三项按**素材类型**给,不按轨道:视频轨上完全可以放图片(AI 生成的
@@ -1105,12 +1085,12 @@ export function Timeline({
                       // 视频和音频都给:声音在哪都能拆,而译配那条流程恰恰把原片整段
                       // 放在视频轨上(音频轨是空的)。
                       onSeparateAudio={
-                        onSeparateAudio && clip.asset_id && clipHasSound(clip)
+                        onSeparateAudio && clip.asset_id && kindHasSound(clip.asset_kind)
                           ? () => onSeparateAudio(clip.id)
                           : undefined
                       }
                       onDenoise={
-                        onDenoise && clip.asset_id && clipHasSound(clip)
+                        onDenoise && clip.asset_id && kindHasSound(clip.asset_kind)
                           ? () => onDenoise(clip.asset_id as string)
                           : undefined
                       }
@@ -1126,10 +1106,7 @@ export function Timeline({
                     if (!src) return null;
                     const { cutSrc, tailDuration } = insertRipple.split;
                     const width = Math.max(10, timeToPx(tailDuration, pxPerSecond));
-                    const waveform =
-                      (track.kind === "audio" || track.kind === "video") && src.asset_id
-                        ? waveformByAsset.get(src.asset_id)
-                        : undefined;
+                    const waveform = src.asset_id ? waveformByAsset.get(src.asset_id) : undefined;
                     const peaks =
                       waveform && src.asset_id
                         ? cachedPeaks(peaksCache.current, src.asset_id, waveform, cutSrc, src.src_out, width)
