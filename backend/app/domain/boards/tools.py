@@ -125,6 +125,11 @@ def _value_of(db: Session, workspace_id: str, source: dict[str, Any], sink: str,
     if sink == "text":
         if kind == "note":
             return str(source.get("text") or "")
+        if kind == "document" and source.get("asset_id"):
+            #: 引用文档素材的文档格给的是解析出的全文(最新成功的那份;还没解析好就是还没有内容)。
+            from app.domain.documents.reading import document_text
+
+            return document_text(db, workspace_id, str(source["asset_id"]))
         if not source.get("note_id"):
             return None
         from app.domain.notes import read_reference

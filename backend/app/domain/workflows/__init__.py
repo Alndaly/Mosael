@@ -850,6 +850,23 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         #: 图像接口的 n 能一次出好几张,不声明的话下游连不到它们(执行体一直在返回)。
         "outputs": ["asset_id", "asset_ids", "generation_id"],
     },
+    #: 文档(ADR 0031):一份 PDF / Word / PPT / Excel 素材 → 解析出的 Markdown。用最新成功的那份解析;
+    #: 还没解析过就先用本地解析解一遍再给。接写作、翻译、生成。
+    "document_to_markdown": {
+        "external": False,
+        "category": "wfCat_knowledge",
+        "label": "wfNode_document_to_markdown",
+        "description": "wfNode_document_to_markdown_desc",
+        "config": {
+            "asset_id": {"type": "template", "required": True, "media": "document",
+                         "description": "wfNode_document_to_markdown_asset_id"},
+            "first": {"advanced": True, "type": "number", "label": "wfField_first_section", "description": "wfNode_document_to_markdown_first"},
+            "last": {"advanced": True, "type": "number", "label": "wfField_last_section", "description": "wfNode_document_to_markdown_last"},
+        },
+        "outputs": ["markdown", "title", "sections", "total", "unit"],
+        "output_labels": {"sections": "wfOut_document_sections", "total": "wfOut_document_total", "unit": "wfOut_document_unit"},
+        "output_types": {"markdown": "text", "title": "text", "sections": "json", "total": "number", "unit": "text"},
+    },
     "video_to_gif": {
         "external": False,
         "surfaces": ["workflow", "board"],

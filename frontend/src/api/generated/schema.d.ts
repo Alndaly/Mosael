@@ -1547,6 +1547,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/assets/{asset_id}/document/text": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Document Full Text
+         * @description 画板上的文档格:解析出的全文(不带段标记)和解析的状态。连进写作 / 生成格时喂的就是它。
+         */
+        get: operations["document_full_text_api_assets__asset_id__document_text_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/assets/{asset_id}/document/analyze": {
         parameters: {
             query?: never;
@@ -8544,6 +8564,28 @@ export interface components {
         DocumentParseRequest: {
             /** Provider Id */
             provider_id?: string | null;
+        };
+        /**
+         * DocumentTextOut
+         * @description 画板上文档格要的全文。`status`:ready 读得到 / parsing 还在解析 / failed 解析失败(`error` 说原因)。
+         */
+        DocumentTextOut: {
+            /** Asset Id */
+            asset_id: string;
+            /** Title */
+            title: string;
+            /**
+             * Markdown
+             * @default
+             */
+            markdown: string;
+            /** Status */
+            status: string;
+            /**
+             * Error
+             * @default
+             */
+            error: string;
         };
         /**
          * EngineSynthesizeRequest
@@ -16610,6 +16652,37 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    document_full_text_api_assets__asset_id__document_text_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                asset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentTextOut"];
                 };
             };
             /** @description Validation Error */

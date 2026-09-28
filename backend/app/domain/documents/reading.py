@@ -93,6 +93,18 @@ def read(db: Session, workspace_id: str, asset_id: str, first: int = 1, last: in
     }
 
 
+def document_text(db: Session, workspace_id: str, asset_id: str) -> str | None:
+    """一份文档素材解析出的全文(不带段标记);不是这个工作区的、还没解析好的回 None。给画板上的文档格、工作流用。"""
+    asset = db.get(Asset, asset_id)
+    if asset is None or asset.workspace_id != workspace_id or asset.kind != "document":
+        return None
+    done = latest_extraction(db, asset.id)
+    if done is None:
+        return None
+    separator = "\n\n---\n\n" if done.unit in ("page", "slide") else "\n\n"
+    return separator.join(one["markdown"].strip() for one in read_sections(done, 1, done.sections) if one["markdown"].strip())
+
+
 def attachment_context(db: Session, workspace_id: str, asset_ids: list[str]) -> str:
     """对话里挂的文档 → 给模型看的那段上下文。短的整篇放进来,长的放目录,正文让它自己取。"""
     blocks: list[str] = []

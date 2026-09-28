@@ -68,7 +68,7 @@ import { MarkerListButton } from "@/features/markers/MarkerListButton";
 import { canvasInsets } from "@/components/app/fitCanvasViewport";
 import { BoardCanvas, type BoardCanvasApi } from "@/features/boards/BoardCanvas";
 import { useAutosave } from "@/lib/useAutosave";
-import { AssetPickerDialog } from "@/features/boards/AssetPickerDialog";
+import { AssetPickerDialog, type PickedKind } from "@/features/boards/AssetPickerDialog";
 import { ScenePickerDialog } from "@/features/scenes/ScenePickerDialog";
 import { EntityPickerDialog } from "@/features/entities/EntityPickerDialog";
 import { announceEntityReceipt } from "@/features/entities/entityMeta";
@@ -509,7 +509,9 @@ function BoardDetail({
   //: 挑一份素材:给一格换一份(只列那一类),或「添加 → 素材」(三种都列,挑中哪种放哪种格子)。
   const [picking, setPicking] = React.useState<{
     kind: MediaKind | "media";
-    place: (assetId: string, kind: MediaKind) => void;
+    place: (assetId: string, kind: PickedKind) => void;
+    /** 连文档一起列(「从库里放」:文档落成一格文档格)。 */
+    withDocuments?: boolean;
     /** 这张画板上已有的素材(时间线格的「+」):选择器里多一枚「这张画板上的」。 */
     onBoard?: string[];
   } | null>(null);
@@ -649,7 +651,8 @@ function BoardDetail({
       const created: PlacedAsset[] = [];
       for (const file of files) {
         const asset = await importAsset({ workspaceId, file });
-        if (isMediaKind(asset.kind)) created.push({ id: asset.id, name: asset.name, kind: asset.kind });
+        //: 文档(ADR 0031)落成一格文档格,喂给下游的是解析出的全文。
+        if (isMediaKind(asset.kind) || asset.kind === "document") created.push({ id: asset.id, name: asset.name, kind: asset.kind });
       }
       return created;
     },
@@ -933,7 +936,7 @@ function BoardDetail({
                 setActiveCommentId(null);
                 //: 「素材」一行挑三种:挑中哪一种就放哪一种格子。
                 if (kind === "pick-media") {
-                  setPicking({ kind: "media", place: (assetId, media) => api?.add(media, { asset_id: assetId }) });
+                  setPicking({ kind: "media", withDocuments: true, place: (assetId, media) => api?.add(media, { asset_id: assetId }) });
                 } else if (kind === "sequence-new") {
                   //: 时间线格背后是一条正常的时间线(ADR 0030):先建好(放进这张画板的同名项目),再放格子。
                   void createBoardSequence(board.id, workspaceId)
@@ -1206,6 +1209,7 @@ function BoardDetail({
         open={picking !== null}
         kind={picking?.kind ?? "image"}
         onBoard={picking?.onBoard}
+        withDocuments={picking?.withDocuments}
         workspaceId={workspaceId}
         onOpenChange={(next) => !next && setPicking(null)}
         onPick={(assetId, kind) => {

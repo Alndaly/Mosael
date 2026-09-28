@@ -12,8 +12,8 @@ import re
 
 from sqlalchemy.orm import Session
 
-from app.db.models import Asset, AssetExtraction, Note
-from app.domain.documents.extraction import DocumentParseError, extraction_dir, latest_extraction, read_sections
+from app.db.models import Asset, Note
+from app.domain.documents.extraction import DocumentParseError, extraction_dir, latest_extraction
 from app.domain.note_types import NoteContent, NoteSource
 
 #: 笔记正文的上限(NoteContent.markdown)。超了截断并说一句 —— 几百页的 PDF 存成一篇笔记本来就读不完。
@@ -21,16 +21,16 @@ NOTE_LIMIT = 480_000
 _IMAGE = re.compile(r"!\[([^\]]*)\]\(((?:images|pages)/[^)\s]+)\)")
 
 
-def save_as_note(db: Session, asset: Asset, extraction: AssetExtraction | None = None) -> Note:
+def save_as_note(db: Session, asset: Asset) -> Note:
     from app.domain.assets.importer import register_file_asset
     from app.domain.notes import create_note
 
-    extraction = extraction or latest_extraction(db, asset.id)
-    if extraction is None or extraction.status != "succeeded":
+    from app.domain.documents.reading import document_text
+
+    extraction = latest_extraction(db, asset.id)
+    body = document_text(db, asset.workspace_id, asset.id)
+    if extraction is None or body is None:
         raise DocumentParseError("docErr_notParsedYet", name=asset.name)
-    sections = read_sections(extraction, 1, extraction.sections)
-    separator = "\n\n---\n\n" if extraction.unit in ("page", "slide") else "\n\n"
-    body = separator.join(one["markdown"].strip() for one in sections if one["markdown"].strip())
 
     root = extraction_dir(extraction)
     kept: dict[str, str] = {}

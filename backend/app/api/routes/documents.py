@@ -6,7 +6,7 @@ from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import FileResponse
 
 from app.api.deps import CurrentUser, DbSession
-from app.api.schemas import AssetExtractionOut, DocumentNoteOut, DocumentPagesRequest, DocumentParseRequest, ExtractionSectionsOut
+from app.api.schemas import AssetExtractionOut, DocumentNoteOut, DocumentTextOut, DocumentPagesRequest, DocumentParseRequest, ExtractionSectionsOut
 from app.db.models import Asset, AssetExtraction
 from app.domain.capabilities import CapabilityUnavailable
 from app.domain.documents.extraction import DocumentParseError, extraction_dir, read_sections, start_parse
@@ -74,6 +74,20 @@ def read_document(asset_id: str, db: DbSession, user: CurrentUser,
         return read(db, asset.workspace_id, asset.id, first, last)
     except DocumentReadError as exc:
         raise HTTPException(status_code=exc.status, detail=str(exc)) from exc
+
+
+@router.get("/assets/{asset_id}/document/text", response_model=DocumentTextOut)
+def document_full_text(asset_id: str, db: DbSession, user: CurrentUser) -> dict:
+    """画板上的文档格:解析出的全文(不带段标记)和解析的状态。连进写作 / 生成格时喂的就是它。"""
+    from app.domain.documents.extraction import latest_extraction
+    from app.domain.documents.reading import document_text
+
+    asset = _document(db, user, asset_id)
+    text = document_text(db, asset.workspace_id, asset.id)
+    latest = latest_extraction(db, asset.id, succeeded=False)
+    status = "ready" if text is not None else "failed" if latest is not None and latest.status == "failed" else "parsing"
+    return {"asset_id": asset.id, "title": asset.name.rsplit(".", 1)[0], "markdown": text or "", "status": status,
+            "error": latest.error if status == "failed" and latest is not None else ""}
 
 
 @router.post("/assets/{asset_id}/document/analyze")

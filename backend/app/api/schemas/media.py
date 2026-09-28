@@ -242,3 +242,13 @@ class DocumentPagesRequest(ApiModel):
     pages: list[int] = Field(min_length=1, max_length=20)
     question: str = Field(default="", max_length=4000)
     profile_id: str | None = None
+
+
+class DocumentTextOut(ApiModel):
+    """画板上文档格要的全文。`status`:ready 读得到 / parsing 还在解析 / failed 解析失败(`error` 说原因)。"""
+
+    asset_id: str
+    title: str
+    markdown: str = ""
+    status: str
+    error: str = ""

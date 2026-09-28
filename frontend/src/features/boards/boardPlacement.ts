@@ -1,13 +1,20 @@
 import { withSlotProducer, type BoardItem } from "@/api/client";
-import { isMediaFile } from "@/lib/useFileDrop";
+import type { DocumentText } from "@/api/domains/documents";
+import type { NoteReference } from "@/api/domains/notes";
+import { isImportableFile } from "@/lib/useFileDrop";
 
 import { DEFAULT_SIZE, type MediaKind } from "./boardNodes";
 
-/** 进了素材库、要摆上画板的一份素材。 */
+/** 进了素材库、要摆上画板的一份素材:媒体各落成同名的格子,文档(ADR 0031)落成一格文档格。 */
 export interface PlacedAsset {
   id: string;
   name: string;
-  kind: MediaKind;
+  kind: MediaKind | "document";
+}
+
+/** 文档素材解析出的全文 → 和笔记引用同一个样子,连进写作 / 生成格的那一侧不必分它是哪一种。 */
+export function assetReference(text: DocumentText): NoteReference {
+  return { note_id: "", revision: 0, title: text.title, markdown: text.markdown, tags: [], citation_url: "" };
 }
 
 /**
@@ -39,7 +46,7 @@ const NOTE_TEXT_LIMIT = 20_000;
 export function clipboardContent(data: Pick<DataTransfer, "files" | "getData"> | null): { files: File[] } | { text: string } | null {
   if (!data) return null;
   const files = Array.from(data.files ?? [])
-    .filter(isMediaFile)
+    .filter(isImportableFile)
     // 截图粘贴进来的 File 没有名字(name 是空串)。给它一个,否则素材库里出现一排无名文件。
     .map((file) =>
       file.name ? file : new File([file], `pasted-${Date.now()}.${file.type.split("/")[1] || "png"}`, { type: file.type }),

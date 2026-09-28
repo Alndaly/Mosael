@@ -1,5 +1,6 @@
 import {
   MessageCircle,
+  FileText,
   Speech,
   ScanBox,
   Rotate3d,
@@ -133,6 +134,7 @@ const NODE_ICONS: Record<string, LucideIcon> = {
   video_lipsync: Speech,
   note_search: Search,
   note_read: BookOpen,
+  document_to_markdown: FileText,
   note_create: BookPlus,
   asset_tag: Tags,
   asset_update: FolderInput,

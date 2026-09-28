@@ -2085,6 +2085,9 @@ def edit_board(board_id: str, operations: list[dict[str, Any]], workspace_id: st
           (a frame is named by title; it has no text)
       {"kind":"add_item","type":"document","note_id":"<read_note id>","note_revision":1}
           (pins a workspace note revision; connect to writing/image/video/audio nodes to use its full text)
+      {"kind":"add_item","type":"document","asset_id":"<list_assets id, kind document>"}
+          (an imported PDF / Word / PowerPoint / Excel file as a read-only source: connected items get its
+           parsed full text; use either note_id or asset_id, not both)
       {"kind":"set_title","item_id":"i1","title":"主视觉"}
           (name/rename any item, max 120 chars; "" clears the name)
       {"kind":"set_text","item_id":"n1","text":"新内容"}

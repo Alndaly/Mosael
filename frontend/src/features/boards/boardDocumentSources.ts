@@ -27,7 +27,7 @@ export function boardDocumentBlocked(
 ): boolean {
   return (
     item.kind === "document" &&
-    (!item.note_id ||
+    ((!item.note_id && !item.asset_id) ||
       !document?.reference ||
       !!document.error ||
       document.pending)
@@ -42,8 +42,9 @@ export function documentPrompt(
   return [
     prompt,
     "Reference documents (source material):",
+    //: 文档素材(ADR 0031)没有笔记那种引用地址,只写标题。
     ...references.map(
-      (ref) => `[${ref.title}](${ref.citation_url})\n${ref.markdown}`,
+      (ref) => `${ref.citation_url ? `[${ref.title}](${ref.citation_url})` : ref.title}\n${ref.markdown}`,
     ),
   ].join("\n\n");
 }

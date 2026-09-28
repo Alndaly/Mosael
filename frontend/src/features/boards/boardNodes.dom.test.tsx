@@ -349,3 +349,18 @@ it("在写的便签、文档格和生成中的图片格同一个样子:占位贴
   const translating = renderNode("note", "running", { text: "hello", form: { producer: "write" }, run: { status: "running", job_id: "j", ability: "node:translate" } });
   expect(translating.container.querySelector("[data-note-writing]")).toBeNull();
 });
+
+it("文档格引用文档素材(ADR 0031):标着是原件、只读,预览解析出的全文;还在解析说在解析;解析失败说原因", () => {
+  const Node = BOARD_NODE_TYPES.document;
+  const props = (document: unknown) => ({ data: { item: { id: "doc", kind: "document", asset_id: "a1", text: "方案.pptx" }, document },
+    selected: false }) as unknown as React.ComponentProps<typeof Node>;
+  const { container, rerender } = render(<Node {...props({ reference: { title: "方案", markdown: "# 营收\n增长 20%", revision: 0 } })} />);
+  expect(container.querySelector("[data-document-preview]")?.textContent).toContain("增长 20%");
+  expect(container.textContent).toContain("documentFromAsset");
+  expect(container.querySelector('a[href="#/media?asset=a1"]')).not.toBeNull();
+  expect(container.querySelector("[data-document-empty]")).toBeNull();
+  rerender(<Node {...props({ pending: true })} />);
+  expect(container.textContent).toContain("documentParsing");
+  rerender(<Node {...props({ pending: false, error: "文件坏了" })} />);
+  expect(container.querySelector('[role="alert"]')?.textContent).toContain("文件坏了");
+});

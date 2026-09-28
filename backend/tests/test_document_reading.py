@@ -98,3 +98,98 @@ def test_不是文档_或者别的工作区的_不给读() -> None:
     asset = _import(client, other, "a.md", b"# x")
     with SessionLocal() as db, pytest.raises(reading.DocumentReadError):
         reading.read(db, ws, asset)
+
+
+# ── 工作流节点「文档转 Markdown」 ───────────────────────────────────────────
+
+
+def _scope(ws: str):
+    from app.domain.boards.tools import BoardScope
+
+    return BoardScope(workspace_id=ws, id="test", name="测试")
+
+
+def test_工作流节点_读解析出的正文_可以只取几段() -> None:
+    from app.domain.workflows.executors import get_executor
+
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+    asset = _import(client, ws, "deck.pptx", pptx_bytes([("开场", ["欢迎"], ""), ("结尾", ["谢谢"], "")]))
+    run = get_executor("document_to_markdown")
+    with SessionLocal() as db:
+        whole = run(db, _scope(ws), {"asset_id": asset})
+    assert whole["total"] == 2 and whole["unit"] == "slide" and whole["title"] == "deck"
+    assert "# 开场" in whole["markdown"] and "\n\n---\n\n# 结尾" in whole["markdown"]
+    assert [one["title"] for one in whole["sections"]] == ["开场", "结尾"]
+    with SessionLocal() as db:
+        tail = run(db, _scope(ws), {"asset_id": asset, "first": 2})
+    assert [one["index"] for one in tail["sections"]] == [2] and "开场" not in tail["markdown"]
+
+
+def test_工作流节点_还没解析过的先在本机解析一遍() -> None:
+    from app.db.models import AssetExtraction
+    from app.domain.workflows.executors import get_executor
+
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+    asset = _import(client, ws, "a.md", "# 标题\n正文".encode())
+    with SessionLocal() as db:
+        db.query(AssetExtraction).delete()
+        db.commit()
+    with SessionLocal() as db:
+        out = get_executor("document_to_markdown")(db, _scope(ws), {"asset_id": asset})
+    assert "正文" in out["markdown"]
+
+
+def test_工作流节点_不是文档的说清楚() -> None:
+    from app.domain.workflows import WorkflowDomainError
+    from app.domain.workflows.executors import get_executor
+    from tests.util import make_video_asset
+
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+    video = make_video_asset(client, ws)["id"]
+    with SessionLocal() as db, pytest.raises(WorkflowDomainError) as raised:
+        get_executor("document_to_markdown")(db, _scope(ws), {"asset_id": video})
+    assert raised.value.key == "wfErr_notDocument"
+
+
+# ── 画板上的文档格引用文档素材 ──────────────────────────────────────────────
+
+
+def test_画板_文档格引用文档素材_存得下_种类不对或和笔记同时写都拒(monkeypatch) -> None:
+    from tests.util import board_revision, make_video_asset
+
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+    doc = _import(client, ws, "brief.md", "# 简报\n今天发布。".encode())
+    video = make_video_asset(client, ws)["id"]
+    board = client.post("/api/boards", json={"workspace_id": ws, "name": "B"}).json()["id"]
+
+    def save(items):
+        return client.patch(f"/api/boards/{board}", json={"workspace_id": ws, "base_revision": board_revision(client, board, ws),
+                                                          "canvas": {"items": items, "edges": []}})
+
+    saved = save([{"id": "d", "kind": "document", "x": 0, "y": 0, "asset_id": doc}])
+    assert saved.status_code == 200, saved.text
+    cell = saved.json()["canvas"]["items"][0]
+    assert cell["asset_id"] == doc and "form" not in cell, "引用文档素材的是只读来源,不挂写字的产出者"
+    assert save([{"id": "v", "kind": "document", "x": 0, "y": 0, "asset_id": video}]).status_code == 400
+    both = save([{"id": "b", "kind": "document", "x": 0, "y": 0, "asset_id": doc, "note_id": "n", "note_revision": 1}])
+    assert both.status_code == 400, both.text
+
+    text = client.get(f"/api/assets/{doc}/document/text").json()
+    assert text["status"] == "ready" and text["title"] == "brief" and "今天发布。" in text["markdown"]
+
+
+def test_画板_节点从文档格取文字_取到的是解析出的全文() -> None:
+    from app.domain.boards.tools import _value_of
+
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+    doc = _import(client, ws, "brief.md", "# 简报\n今天发布。".encode())
+    with SessionLocal() as db:
+        value = _value_of(db, ws, {"id": "d", "kind": "document", "asset_id": doc}, "text", ["note", "document"])
+        elsewhere = _value_of(db, "other-ws", {"id": "d", "kind": "document", "asset_id": doc}, "text", ["note", "document"])
+    assert value is not None and "今天发布。" in value
+    assert elsewhere is None, "别的工作区的文档读不到"

@@ -29,7 +29,7 @@ import {
   type Node,
   type ReactFlowInstance,
 } from "@xyflow/react";
-import { BookOpen, ChevronDown, Copy, Download, ExternalLink, FileUp, Group, Loader2, Maximize2, MessageSquare, MoreHorizontal, PencilLine, Plus, Replace, Scissors, Sparkles, Trash2, type LucideIcon } from "lucide-react";
+import { BookOpen, ChevronDown, Copy, Download, NotebookPen, ExternalLink, FileUp, Group, Loader2, Maximize2, MessageSquare, MoreHorizontal, PencilLine, Plus, Replace, Scissors, Sparkles, Trash2, type LucideIcon } from "lucide-react";
 
 import { assetFileUrl, assetPreviewUrl, entityKeys, getEntity, type CollaborationComment, type WorkspaceMember } from "@/api/client";
 import { useI18n } from "@/app/preferences";
@@ -55,8 +55,9 @@ import { Hint, TooltipProvider } from "@/components/ui/tooltip";
 import { toPlainText } from "@/components/markdown/inlineSyntax";
 import { errorText } from "@/api/errorMessage";
 import { appendAssetToSequence, redoSequence, undoSequence } from "@/api/domains/editor";
+import { documentText, saveDocumentAsNote, type DocumentText } from "@/api/domains/documents";
 import { boardSequenceKey, SequenceToolbarActions } from "@/features/boards/SequenceCell";
-import { isMediaFile, useFileDrop } from "@/lib/useFileDrop";
+import { isImportableFile, useFileDrop } from "@/lib/useFileDrop";
 import { usePersistentViewport } from "@/lib/usePersistentTab";
 import { cn } from "@/lib/utils";
 import { isCanvasKeyTarget, listenKeys } from "@/lib/shortcuts";
@@ -68,7 +69,7 @@ import { BOARD_NODE_TYPES, DEFAULT_SIZE, NOTE_COLORS, noteColorClass , isMediaKi
 import { composerView, copiedItem, itemIsRunning, newSlotForm, producerOf, runningAbility, withAbility, withProducer } from "@/features/boards/boardItemState";
 import { useKeepInCanvas } from "@/features/boards/BoardComposerShell";
 import { BOARD_NODE_PANEL_OFFSET } from "@/features/boards/boardLayout";
-import { assetItem, clipboardContent, type PlacedAsset } from "@/features/boards/boardPlacement";
+import { assetItem, assetReference, clipboardContent, type PlacedAsset } from "@/features/boards/boardPlacement";
 import { useCanvasDeleteKey } from "@/components/app/useCanvasDeleteKey";
 import { CommentComposer, type CommentDraft } from "@/features/collaboration/CommentComposer";
 import { MarkerPin } from "@/features/markers/MarkerPin";
@@ -561,11 +562,30 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
   const [pickingDocument, setPickingDocument] = React.useState<string | null>(null);
   const [refreshingDocument, setRefreshingDocument] = React.useState<string | null>(null);
   const documentItems = boardItems(nodes).filter(item => item.kind === "document");
-  const documentQueries = useQueries({queries: documentItems.map(item => noteReferenceQuery(workspaceId ?? "", item.note_id ?? "", item.note_revision))});
-  const documents = new Map<string, BoardDocumentState>(documentItems.map((item, index) => [item.id, {
-    reference: documentQueries[index].data, pending: !!item.note_id && documentQueries[index].isPending,
-    error: documentQueries[index].error?.message,
-  }]));
+  //: 文档格引用一篇笔记(可让 AI 写),或一份文档素材(ADR 0031:只读来源,喂解析出的全文)。两种都收成同一种
+  //: 「引用」交给下游 —— 连进写作 / 生成格的那一侧不必分它是哪一种。
+  const noteQueries = useQueries({queries: documentItems.map(item => noteReferenceQuery(workspaceId ?? "", item.note_id ?? "", item.note_revision))});
+  const assetQueries = useQueries({queries: documentItems.map(item => ({
+    queryKey: ["asset", item.asset_id ?? "", "document-text"] as const,
+    queryFn: () => documentText(item.asset_id ?? ""),
+    enabled: Boolean(item.asset_id && !item.note_id),
+    //: 导入时自动解析的那一下常常还没做完:在解析就隔两秒再问。
+    refetchInterval: (query: { state: { data?: DocumentText } }) => (query.state.data?.status === "parsing" ? 2000 : false),
+  }))});
+  const documents = new Map<string, BoardDocumentState>(documentItems.map((item, index) => {
+    if (item.asset_id && !item.note_id) {
+      const text = assetQueries[index].data;
+      return [item.id, {
+        reference: text?.status === "ready" ? assetReference(text) : undefined,
+        pending: !text || text.status === "parsing",
+        error: assetQueries[index].error?.message ?? (text?.status === "failed" ? text.error || t("documentUnavailable") : undefined),
+      }];
+    }
+    return [item.id, {
+      reference: noteQueries[index].data, pending: !!item.note_id && noteQueries[index].isPending,
+      error: noteQueries[index].error?.message,
+    }];
+  }));
   const refreshDocument = async (id: string) => {
     const item = documentItems.find(item => item.id === id);
     if (!item?.note_id || !workspaceId) return;
@@ -1161,7 +1181,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
     },
     [onDropFiles, setNodes],
   );
-  const drop = useFileDrop((files) => importAndPlace(files, dropAt.current ?? { x: 0, y: 0 }), isMediaFile);
+  const drop = useFileDrop((files) => importAndPlace(files, dropAt.current ?? { x: 0, y: 0 }), isImportableFile);
 
   /**
    * 粘贴到画布上:截图 / 复制的媒体文件先进素材库再各放一格,一段文字落成一张便签,摆在视野中心。
@@ -1787,6 +1807,7 @@ function ItemToolbar({
     enabled: Boolean(entityId),
     retry: false,
   }).data?.kind;
+  const queryClient = useQueryClient();
   if (selected.length === 0) return null;
   const item = single ? (single.data as unknown as { item: BoardItem }).item : null;
   const patch = (id: string, next: Partial<BoardItem>) =>
@@ -1901,7 +1922,25 @@ function ItemToolbar({
           )}
           {/* 文档格引用哪一篇笔记:**操作条上的一个动作**,不是点格子的副作用 —— 点格子是选中它(拖、连线、
               让 AI 写都从选中开始)。还没引用时叫「引用笔记」,引用着的叫「换一篇」。 */}
-          {single && item?.kind === "document" && onPickDocument && (
+          {/* 引用文档素材的文档格(ADR 0031):「转为笔记」把全文存成一篇笔记,这一格原地换成引用它 —— 从此能改、能让 AI 写。 */}
+          {single && item?.kind === "document" && item.asset_id && !item.note_id && (
+            <ToolbarIcon
+              name="document-to-note"
+              icon={NotebookPen}
+              label={t("docSaveAsNote")}
+              onClick={() => {
+                const assetId = item.asset_id ?? "";
+                void saveDocumentAsNote(assetId)
+                  .then((made) => {
+                    void queryClient.invalidateQueries({ queryKey: ["notes"] });
+                    patch(item.id, { note_id: made.note_id, note_revision: 1, asset_id: undefined, text: made.title,
+                                     form: { ...item.form, producer: "write" } });
+                  })
+                  .catch((error: unknown) => toast.error(errorText(error)));
+              }}
+            />
+          )}
+          {single && item?.kind === "document" && !item.asset_id && onPickDocument && (
             <ToolbarIcon
               name="pick-document"
               icon={item.note_id ? Replace : BookOpen}

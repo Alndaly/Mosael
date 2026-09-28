@@ -30,9 +30,12 @@ describe("素材和粘贴板落到画板上", () => {
     expect(got && "files" in got ? got.files.map((file) => file.name) : null).toEqual([expect.stringMatching(/^pasted-\d+\.png$/)]);
 
     expect(clipboardContent(clipboard([], "  一段想法  "))).toEqual({ text: "一段想法" });
-    //: 不是媒体的文件(文档)不当素材放;有文字就落文字。
+    //: 文档(ADR 0031)也收:进素材库、落成一格文档格。素材库不收的文件(压缩包)不当素材放,有文字就落文字。
     const pdf = new File(["x"], "a.pdf", { type: "application/pdf" });
-    expect(clipboardContent(clipboard([pdf], "说明"))).toEqual({ text: "说明" });
+    const pasted = clipboardContent(clipboard([pdf], "说明"));
+    expect(pasted && "files" in pasted ? pasted.files.map((file) => file.name) : null).toEqual(["a.pdf"]);
+    const zip = new File(["x"], "a.zip", { type: "application/zip" });
+    expect(clipboardContent(clipboard([zip], "说明"))).toEqual({ text: "说明" });
     expect(clipboardContent(clipboard([], "   "))).toBeNull();
     expect(clipboardContent(null)).toBeNull();
   });
@@ -40,5 +43,17 @@ describe("素材和粘贴板落到画板上", () => {
   it("超长的文字截到便签能存下的长度", () => {
     const got = clipboardContent(clipboard([], "字".repeat(30_000)));
     expect(got && "text" in got ? got.text.length : 0).toBe(20_000);
+  });
+});
+
+describe("文档素材上画板(ADR 0031)", () => {
+  it("落成一格文档格,不挂写字的产出者;全文收成和笔记引用同一个样子", async () => {
+    const { assetItem, assetReference } = await import("./boardPlacement");
+    const item = assetItem({ id: "a1", name: "方案.pptx", kind: "document" }, { x: 0, y: 0 });
+    expect(item.kind).toBe("document");
+    expect(item.asset_id).toBe("a1");
+    expect(item.form?.producer).toBeUndefined();
+    expect(assetReference({ asset_id: "a1", title: "方案", markdown: "正文", status: "ready", error: "" }))
+      .toEqual({ note_id: "", revision: 0, title: "方案", markdown: "正文", tags: [], citation_url: "" });
   });
 });

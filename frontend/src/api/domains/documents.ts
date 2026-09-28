@@ -32,3 +32,10 @@ export function extractionFileUrl(assetId: string, extractionId: string, path: s
 export function saveDocumentAsNote(assetId: string): Promise<{ note_id: string; title: string }> {
   return api<{ note_id: string; title: string }>(`/api/assets/${assetId}/note`, { method: "POST" });
 }
+
+export type DocumentText = components["schemas"]["DocumentTextOut"];
+
+/** 画板上的文档格:解析出的全文和解析的状态(连进写作 / 生成格时喂的就是它)。 */
+export function documentText(assetId: string): Promise<DocumentText> {
+  return api<DocumentText>(`/api/assets/${assetId}/document/text`);
+}

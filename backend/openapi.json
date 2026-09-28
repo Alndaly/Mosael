@@ -4077,6 +4077,49 @@
         }
       }
     },
+    "/api/assets/{asset_id}/document/text": {
+      "get": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Document Full Text",
+        "description": "画板上的文档格:解析出的全文(不带段标记)和解析的状态。连进写作 / 生成格时喂的就是它。",
+        "operationId": "document_full_text_api_assets__asset_id__document_text_get",
+        "parameters": [
+          {
+            "name": "asset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Asset Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentTextOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/assets/{asset_id}/document/analyze": {
       "post": {
         "tags": [
@@ -24066,6 +24109,40 @@
         },
         "type": "object",
         "title": "DocumentParseRequest"
+      },
+      "DocumentTextOut": {
+        "properties": {
+          "asset_id": {
+            "type": "string",
+            "title": "Asset Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "markdown": {
+            "type": "string",
+            "title": "Markdown",
+            "default": ""
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "error": {
+            "type": "string",
+            "title": "Error",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "asset_id",
+          "title",
+          "status"
+        ],
+        "title": "DocumentTextOut",
+        "description": "画板上文档格要的全文。`status`:ready 读得到 / parsing 还在解析 / failed 解析失败(`error` 说原因)。"
       },
       "EngineSynthesizeRequest": {
         "properties": {

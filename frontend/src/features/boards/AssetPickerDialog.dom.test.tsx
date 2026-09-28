@@ -14,6 +14,7 @@ const assets = [
   { id: "vid", kind: "video", name: "开场", media_info: { duration: 12 } },
   { id: "aud", kind: "audio", name: "旁白", media_info: {} },
   { id: "doc", kind: "file", name: "说明.pdf", media_info: {} },
+  { id: "deck", kind: "document", name: "方案.pptx", media_info: {} },
 ];
 vi.mock("@/api/client", () => ({
   listAssets: vi.fn(async () => assets),
@@ -77,4 +78,24 @@ it("没有画板上的素材就不多那一枚", async () => {
   mount("media");
   await waitFor(() => expect(titles()).toHaveLength(3));
   expect(screen.queryByRole("button", { name: "boardsPickOnBoard" })).toBeNull();
+});
+
+
+it("画板「从库里放」连文档一起列(落成文档格);时间线的「+」不列文档", async () => {
+  const onPick = vi.fn();
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(
+    <QueryClientProvider client={client}>
+      <AssetPickerDialog open kind="media" workspaceId="ws" onOpenChange={vi.fn()} onPick={onPick} withDocuments />
+    </QueryClientProvider>,
+  );
+  await waitFor(() => expect(titles()).toHaveLength(4));
+  fireEvent.click(screen.getByRole("button", { name: "kindDocument" }));
+  await waitFor(() => expect(titles()).toHaveLength(1));
+  fireEvent.click(screen.getAllByRole("option")[0]);
+  expect(onPick).toHaveBeenCalledWith("deck", "document");
+  cleanup();
+  mount("media");
+  await waitFor(() => expect(titles()).toHaveLength(3));
+  expect(titles().join("|")).not.toContain("方案.pptx");
 });

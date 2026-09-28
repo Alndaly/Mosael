@@ -3,7 +3,7 @@ import { noteHref, type NoteReference } from "@/api/domains/notes";
 import { SaveToNote } from "@/features/notes/SaveToNote";
 import { Handle, NodeResizer, Position, useStore, type NodeProps } from "@xyflow/react";
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, BookOpen, Clapperboard, ExternalLink, Loader2, RefreshCw, Box, Ban, Clock3, Film as FilmIcon, Group, Image as ImageIcon, Music, Plus, Square as SquareIcon, StickyNote, UsersRound, type LucideIcon } from "lucide-react";
+import { AlertTriangle, BookOpen, Clapperboard, ExternalLink, FileText, Loader2, RefreshCw, Box, Ban, Clock3, Film as FilmIcon, Group, Image as ImageIcon, Music, Plus, Square as SquareIcon, StickyNote, UsersRound, type LucideIcon } from "lucide-react";
 
 import { entityKeys, getEntity, getJob, isNodeProducer, type BoardItem, type BuiltinProducer } from "@/api/client";
 import { EntityThumb } from "@/features/entities/EntityMention";
@@ -760,6 +760,9 @@ function DocumentNode({ data, selected }: NodeProps) {
   } = nodeData;
   const t = useI18n();
   const ref = document?.reference;
+  //: 引用一份文档素材(ADR 0031):只读的来源,格子里是解析出的全文;引用笔记的才能让 AI 写。
+  const fromAsset = Boolean(item.asset_id && !item.note_id);
+  const referenced = Boolean(item.note_id) || fromAsset;
   const iconButton =
     "nodrag nopan inline-flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground disabled:opacity-40";
   //: 「让 AI 写」在写这一篇(不是跑它的一项能力,那一种挂在底边的运行态上):和空槽生成同一个样子 ——
@@ -787,9 +790,9 @@ function DocumentNode({ data, selected }: NodeProps) {
       {/* 标题行只在**选了一篇笔记**之后出现,写的是那篇笔记的名字。还没选时它只会是第二个「文档」—— 格子上方的
           标签已经这么写了;那时整格就是一块安静的空状态,和空的图片格一样。 */}
       {writing && <WritingCover item={item} onStop={stop} data-document-writing="" />}
-      {item.note_id && !writing && (
+      {referenced && !writing && (
       <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-3">
-        <BookOpen size={16} className="shrink-0 text-primary" />
+        {fromAsset ? <FileText size={16} className="shrink-0 text-primary" /> : <BookOpen size={16} className="shrink-0 text-primary" />}
         <span
           className="min-w-0 flex-1 truncate text-ui-sm font-medium"
           title={ref?.title || item.text}
@@ -798,7 +801,7 @@ function DocumentNode({ data, selected }: NodeProps) {
         </span>
       </header>
       )}
-      {writing ? null : !item.note_id ? (
+      {writing ? null : !referenced ? (
         //: **一块安静的空状态,不是按钮**:点格子就是选中它(和空的图片格一样);引用哪一篇、让 AI 写一篇,
         //: 都在选中之后上方的操作条里 —— 此前整格是「选择笔记」按钮,想选中、拖动、让 AI 写都先弹出挑笔记。
         <div
@@ -814,19 +817,20 @@ function DocumentNode({ data, selected }: NodeProps) {
             </span>
           )}
         </div>
-      ) : document?.pending ? (
-        <div
-          className="m-auto p-4 text-ui-xs text-muted-foreground"
-          role="status"
-        >
-          {t("documentLoading")}
-        </div>
       ) : document?.error ? (
         <div
           role="alert"
-          className="m-auto p-4 text-center text-ui-xs text-muted-foreground"
+          className="m-auto p-4 text-center text-ui-xs text-muted-foreground [overflow-wrap:anywhere]"
         >
-          {t("documentUnavailable")}
+          {fromAsset ? document.error : t("documentUnavailable")}
+        </div>
+      ) : document?.pending ? (
+        <div
+          className="m-auto flex items-center gap-1.5 p-4 text-ui-xs text-muted-foreground"
+          role="status"
+        >
+          {fromAsset && <Loader2 size={12} className="animate-spin" />}
+          {t(fromAsset ? "documentParsing" : "documentLoading")}
         </div>
       ) : (
         //: **和笔记页同一个渲染器**(NoteReader,同一套 .note-prose),只由 .note-card 把尺度缩到卡片上 ——
@@ -840,6 +844,20 @@ function DocumentNode({ data, selected }: NodeProps) {
             <p className="text-muted-foreground">…</p>
           )}
         </div>
+      )}
+      {fromAsset && (
+        //: 文档素材:底边写着它是一份原件,右边一个「打开」去素材详情看原版和全文。
+        <footer className="flex shrink-0 items-center gap-2 border-t border-border px-3 py-2">
+          <span className="min-w-0 flex-1 truncate text-ui-2xs text-muted-foreground">{t("documentFromAsset")}</span>
+          <a
+            className={iconButton}
+            href={`#/media?asset=${encodeURIComponent(item.asset_id ?? "")}`}
+            title={t("documentOpenAsset")}
+            aria-label={t("documentOpenAsset")}
+          >
+            <ExternalLink size={14} />
+          </a>
+        </footer>
       )}
       {item.note_id && (
         <footer className="flex shrink-0 items-center gap-2 border-t border-border px-3 py-2">

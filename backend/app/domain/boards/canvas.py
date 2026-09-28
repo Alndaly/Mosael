@@ -114,7 +114,8 @@ _MEDIA_KINDS = ("image", "video", "audio")
 
 #: 一种格子的 `asset_id` 必须是哪种素材(见 _validate_asset_references)。
 #: 不在表里的种类只问「是不是这个工作区的」。
-_ASSET_KIND_OF_ITEM: dict[str, str] = {kind: kind for kind in _MEDIA_KINDS}
+#: 文档格引用的素材得是文档(ADR 0031):一份 PDF / PPT 放上画板就是一格文档格,喂给下游的是解析出的全文。
+_ASSET_KIND_OF_ITEM: dict[str, str] = {**{kind: kind for kind in _MEDIA_KINDS}, "document": "document"}
 
 #: 一个 item 至少要有的东西。坐标必须是数,否则画布渲染不出来。
 _REQUIRED = ("id", "kind", "x", "y")
@@ -534,6 +535,9 @@ def normalize_canvas(raw: Any) -> dict[str, Any]:
                 if isinstance(revision, bool) or not isinstance(revision, int) or revision < 1:
                     raise BoardDomainError("boardErr_documentNeedsRevision")
                 item["note_id"], item["note_revision"] = note_id.strip(), revision
+            #: 文档格引用**一篇笔记或一份文档素材**,二选一:笔记能让 AI 写,素材是只读的来源(PDF / PPT 原件)。
+            if note_id is not None and entry.get("asset_id") is not None:
+                raise BoardDomainError("boardErr_documentNoteOrAsset", item_id=item_id)
 
         if kind == "scene":
             #: 3D 场景格可以先空着:放下一格,连一段剧本进来按剧本搭(scene_from_text 是空场景格的一种填法)。

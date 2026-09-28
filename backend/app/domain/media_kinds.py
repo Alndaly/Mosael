@@ -15,9 +15,10 @@ ASSET_KINDS: tuple[str, ...] = (*MEDIA_KINDS, "document")
 
 
 def declared_media(value: Any) -> tuple[str, ...]:
-    """声明里写的 → 收哪几种素材(按 MEDIA_KINDS 的顺序)。空 = 没限制;认不出的项丢掉。"""
+    """声明里写的 → 收哪几种素材(按 ASSET_KINDS 的顺序,文档也算:「文档转 Markdown」只收文档)。
+    空 = 没限制;认不出的项丢掉。"""
     values = [value] if isinstance(value, str) else value if isinstance(value, list) else []
-    return tuple(kind for kind in MEDIA_KINDS if kind in values)
+    return tuple(kind for kind in ASSET_KINDS if kind in values)
 
 
 __all__ = ["ASSET_KINDS", "MEDIA_KINDS", "declared_media"]

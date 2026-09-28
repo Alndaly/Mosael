@@ -30,6 +30,9 @@ function describe(asset: Asset): string {
   return parts.join(" · ");
 }
 
+/** 挑得出来的素材种类:媒体三种,画板「从库里放」时还有文档。 */
+export type PickedKind = MediaKind | "document";
+
 export function AssetPickerDialog({
   open,
   kind,
@@ -37,19 +40,23 @@ export function AssetPickerDialog({
   onOpenChange,
   onPick,
   onBoard,
+  withDocuments = false,
 }: {
   open: boolean;
   /** 列哪一类;`media` 是三种都列、头里按种类筛。**选得到的就该是贴上去能看的**。 */
   kind: MediaKind | "media";
   workspaceId: string;
   onOpenChange: (open: boolean) => void;
-  onPick: (assetId: string, kind: MediaKind) => void;
+  onPick: (assetId: string, kind: PickedKind) => void;
+  /** 三种都列时连文档一起列(画板「从库里放」:文档落成一格文档格)。时间线的「+」不列 —— 文档放不上时间线。 */
+  withDocuments?: boolean;
   /** 这张画板上已有的素材(去重)。给了就多一枚「这张画板上的」筛选,打开时先按它筛。 */
   onBoard?: readonly string[];
 }) {
   const t = useI18n();
   const [keyword, setKeyword] = React.useState("");
-  const [only, setOnly] = React.useState<MediaKind | "all">("all");
+  const [only, setOnly] = React.useState<PickedKind | "all">("all");
+  const listed: readonly PickedKind[] = withDocuments ? [...MEDIA_KINDS, "document"] : MEDIA_KINDS;
   const boardSet = React.useMemo(() => new Set(onBoard ?? []), [onBoard]);
   const [boardOnly, setBoardOnly] = React.useState(false);
   //: 每次打开:有画板上的素材就先按它筛。
@@ -57,7 +64,7 @@ export function AssetPickerDialog({
     if (open) setBoardOnly(boardSet.size > 0);
   }, [open, boardSet]);
   const mixed = kind === "media";
-  const kinds: readonly MediaKind[] = !mixed ? [kind] : only === "all" ? MEDIA_KINDS : [only];
+  const kinds: readonly PickedKind[] = !mixed ? [kind] : only === "all" ? listed : [only];
 
   const assets = useQuery({
     queryKey: assetKeys.list(workspaceId),
@@ -76,7 +83,7 @@ export function AssetPickerDialog({
   }, [assets.data, kinds, keyword, boardOnly, boardSet]);
 
   const EmptyIcon = mixed ? ImageIcon : kindIcon(kind);
-  const kindLabel = (one: string) => kindText(t, one as MediaKind).label;
+  const kindLabel = (one: string) => (one === "document" ? t("kindDocument") : kindText(t, one as MediaKind).label);
   return (
     <PickListDialog
       open={open}
@@ -99,7 +106,7 @@ export function AssetPickerDialog({
             )}
             {/* 「这张画板上的」和按种类筛是两件事(可以叠着用):隔一道线,两个按下态不像同一组里的二选一。 */}
             {boardSet.size > 0 && <span aria-hidden="true" className="mx-1 my-1 w-px self-stretch bg-border" />}
-            {(["all", ...MEDIA_KINDS] as const).map((one) => (
+            {(["all", ...listed] as const).map((one) => (
               <Button
                 key={one}
                 type="button"
@@ -132,7 +139,7 @@ export function AssetPickerDialog({
         //: 三种混着列时写明是哪一种 —— 同名的一张图和一段视频,光看名字分不出。
         subtitle: [mixed ? kindLabel(asset.kind) : "", describe(asset)].filter(Boolean).join(" · "),
       })}
-      onPick={(asset) => onPick(asset.id, asset.kind as MediaKind)}
+      onPick={(asset) => onPick(asset.id, asset.kind as PickedKind)}
       pending={assets.isLoading}
       error={assets.isError ? assets.error.message : null}
       onRetry={() => void assets.refetch()}

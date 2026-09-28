@@ -93,6 +93,15 @@ export function MediaLibraryView({ workspace }: { workspace: Workspace }) {
     queryKey: assetKeys.list(workspace.id),
     queryFn: () => api<Asset[]>(`/api/assets?workspace_id=${workspace.id}`),
   });
+  //: `#/media?asset=<id>` 直接打开那一份的详情(画板上的文档格、智能体的引用胶囊跳过来):素材拉回来之后开一次,
+  //: 开过就把参数摘掉 —— 否则关掉详情再回到这一页又弹出来。
+  React.useEffect(() => {
+    const wanted = new URLSearchParams(window.location.hash.split("?")[1] || "").get("asset");
+    const found = wanted ? assets.data?.find((one) => one.id === wanted) : undefined;
+    if (!found) return;
+    setPreviewing(found);
+    window.history.replaceState(null, "", window.location.hash.split("?")[0] || "#/media");
+  }, [assets.data]);
   // 多选的状态机是共用的(见 lib/useMultiSelect)—— 素材、发布记录、工作流三处同一份。
   const { selectMode, setSelectMode, selectedIds, toggle: toggleSelected, selectAll, allSelected, clear: clearSelection, exit: exitSelectMode } =
     useMultiSelect(assets.data ?? [], (asset) => asset.id);

@@ -120,6 +120,40 @@ def export_params(config: dict[str, Any]) -> dict[str, Any] | None:
     return params or None
 
 
+@register("document_to_markdown")
+def document_to_markdown(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
+    """一份文档素材 → 解析出的 Markdown(ADR 0031)。用最新成功的那份解析;还没解析过(或上次失败了)就先用
+    本地解析解一遍、等它做完。`first` / `last` 只取那几段(页 / 幻灯片 / 表 / 章,1 起)。"""
+    from app.domain.documents import LOCAL_PARSER
+    from app.domain.documents.extraction import latest_extraction, read_sections, start_parse
+
+    asset = _asset_in(db, scope, str(config.get("asset_id") or "").strip())
+    if asset.kind != "document":
+        raise WorkflowDomainError("wfErr_notDocument", params={"name": asset.name})
+    extraction = latest_extraction(db, asset.id)
+    if extraction is None:
+        running = latest_extraction(db, asset.id, succeeded=False)
+        if running is None or running.status not in ("queued", "running"):
+            running = start_parse(db, asset, owner_user_id=None, provider_id=LOCAL_PARSER, created_by=current_actor(db))
+        asset_id, job_id = asset.id, running.job_id
+        wait_for_job(job_id or "", release=db)
+        extraction = latest_extraction(db, asset_id)
+        if extraction is None:
+            raise WorkflowDomainError("wfErr_documentNotParsed", params={"name": asset.name})
+    total = extraction.sections
+    first = max(1, int(config.get("first") or 1))
+    last = min(total, int(config.get("last") or total))
+    sections = read_sections(extraction, first, last)
+    separator = "\n\n---\n\n" if extraction.unit in ("page", "slide") else "\n\n"
+    return {
+        "markdown": separator.join(one["markdown"].strip() for one in sections if one["markdown"].strip()),
+        "title": asset.name.rsplit(".", 1)[0],
+        "sections": [{"index": one["index"], "title": one.get("title") or "", "markdown": one["markdown"]} for one in sections],
+        "total": total,
+        "unit": extraction.unit,
+    }
+
+
 @register("export_sequence")
 def export_sequence(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
     from app.domain.render import start_export
