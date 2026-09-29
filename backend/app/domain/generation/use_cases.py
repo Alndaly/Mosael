@@ -50,7 +50,7 @@ def history(
 # ---------------- 写 ----------------
 
 
-def open_session(
+def start_session(
     db: Session,
     user: User,
     workspace_id: str,

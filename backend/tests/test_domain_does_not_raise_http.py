@@ -47,15 +47,9 @@ def _fastapi_imports(tree: ast.AST) -> list[str]:
 
 RATCHET = True
 
-#: 存量的 fastapi 耦合,**只减不增**。这些不是 HTTP 控制流,是把 `UploadFile` 当参数类型
-#: 用 —— 危害小得多(领域函数仍然可以被非 HTTP 调用方喂一个鸭子类型),但它依然让领域层
-#: 认识了一个 web 框架的类型。想清掉的话:收一个自己的「上传的文件」协议(名字 + 可读流),
-#: 路由那侧把 UploadFile 适配过去。
-_FASTAPI_ALLOWLIST = {
-    "assets/importer.py": ["UploadFile"],
-    "fonts.py": ["UploadFile"],
-    "luts.py": ["UploadFile"],
-}
+#: 存量的 fastapi 耦合,**只减不增**。已经清零:此前几处是把 `UploadFile` 当参数类型用,
+#: 现在领域收的是自己的「上传的文件」协议(core/uploads.UploadedFile),路由传的 UploadFile 按结构满足它。
+_FASTAPI_ALLOWLIST: dict[str, list[str]] = {}
 
 
 @pytest.mark.parametrize("path", _modules(), ids=_ids())

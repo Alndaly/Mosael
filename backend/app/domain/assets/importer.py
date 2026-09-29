@@ -5,7 +5,7 @@ import shutil
 from pathlib import Path
 from typing import BinaryIO
 
-from fastapi import UploadFile
+from app.core.uploads import UploadedFile
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -102,7 +102,7 @@ def import_uploaded_asset(
     *,
     workspace_id: str,
     project_id: str | None,
-    upload: UploadFile,
+    upload: UploadedFile,
     name: str | None = None,
 ) -> Asset:
     return _import_stream(

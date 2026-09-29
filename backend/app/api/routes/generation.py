@@ -35,7 +35,7 @@ def create_generation_session(
     body: GenerationSessionCreate, db: Tx, user: CurrentUser
 ) -> GenerationSession:
     fields = body.model_dump()
-    return generation.open_session(db, user, fields.pop("workspace_id"), **fields)
+    return generation.start_session(db, user, fields.pop("workspace_id"), **fields)
 
 
 @router.get("/generation/sessions", response_model=list[GenerationSessionOut])

@@ -12,7 +12,7 @@ import logging
 import shutil
 from pathlib import Path
 
-from fastapi import UploadFile
+from app.core.uploads import UploadedFile
 from sqlalchemy.orm import Session
 
 from app.core.i18n import LocalizedError
@@ -60,7 +60,7 @@ def read_font_family(path: Path, fallback: str) -> str:
     return fallback.rsplit(".", 1)[0] or "Custom Font"
 
 
-def import_uploaded_font(db: Session, *, workspace_id: str, upload: UploadFile) -> Font:
+def import_uploaded_font(db: Session, *, workspace_id: str, upload: UploadedFile) -> Font:
     original = Path(upload.filename or "font.ttf").name
     if not original.lower().endswith(ALLOWED_FONT_SUFFIXES):
         raise FontError("fontErr_badType")

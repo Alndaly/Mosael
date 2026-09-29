@@ -34,6 +34,6 @@ def merged(*tables: dict[str, dict[str, str]]) -> dict[str, dict[str, str]]:
     for table in tables:
         clash = out.keys() & table.keys()
         if clash:
-            raise ValueError(f"文案 key 重名:{sorted(clash)}")
+            raise ValueError(f"duplicate message keys: {sorted(clash)}")
         out.update(table)
     return out

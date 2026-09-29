@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-from fastapi import UploadFile
+from app.core.uploads import UploadedFile
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -34,7 +34,7 @@ def list_fonts(db: Session, user: User, workspace_id: str) -> list[Font]:
     return list(db.scalars(stmt))
 
 
-def upload_font(db: Session, user: User, workspace_id: str, upload: UploadFile) -> Font:
+def upload_font(db: Session, user: User, workspace_id: str, upload: UploadedFile) -> Font:
     ensure_workspace_perm(db, user, workspace_id, "upload")
     return import_uploaded_font(db, workspace_id=workspace_id, upload=upload)
 

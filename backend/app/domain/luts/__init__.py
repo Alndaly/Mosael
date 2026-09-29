@@ -9,7 +9,7 @@ from __future__ import annotations
 import shutil
 from pathlib import Path
 
-from fastapi import UploadFile
+from app.core.uploads import UploadedFile
 from sqlalchemy.orm import Session
 
 from app.core.i18n import LocalizedError
@@ -59,7 +59,7 @@ def import_uploaded_lut(
     db: Session,
     *,
     workspace_id: str,
-    upload: UploadFile,
+    upload: UploadedFile,
     name: str | None = None,
 ) -> Lut:
     original = Path(upload.filename or "lut.cube").name
