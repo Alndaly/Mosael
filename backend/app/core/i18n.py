@@ -4523,10 +4523,6 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "判断者的回答里没有 allow 布尔值:{raw}",
         "en": "The judge's answer has no boolean \"allow\": {raw}",
     },
-    "agentErr_loginSidecarMissing": {
-        "zh": "pi sidecar 未构建:{path}(在 agent-sidecar 目录执行 pnpm build)",
-        "en": "The pi sidecar is not built: {path} (run pnpm build in the agent-sidecar directory).",
-    },
     "agentErr_loginStartFailed": {"zh": "登录进程启动失败", "en": "Could not start the sign-in process."},
     "agentErr_loginExited": {"zh": "登录进程意外结束", "en": "The sign-in process ended unexpectedly."},
     "agentErr_loginTimeout": {"zh": "授权超时,请重新发起登录", "en": "Authorization timed out. Start the sign-in again."},

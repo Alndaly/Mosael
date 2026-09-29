@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from app.domain.agent import login as login_mod
+from app.ai.sidecar import pi_client
 from tests.util import fresh_client
 
 """订阅计划的授权登录(设备码 / 浏览器授权)全链路。
@@ -50,7 +51,7 @@ for line in sys.stdin:
 def fake_sidecar(tmp_path: Path, monkeypatch):
     script = tmp_path / "sidecar.py"
     script.write_text(FAKE_SIDECAR)
-    monkeypatch.setattr(login_mod, "pi_sidecar_command", lambda: (sys.executable, str(script)))
+    monkeypatch.setattr(pi_client, "pi_sidecar_command", lambda: (sys.executable, str(script)))
     return script
 
 

@@ -98,9 +98,6 @@ def gateway_complete(
     timeout: float = 180,
 ) -> GatewayResult:
     """Run one stateless, tool-free completion through pi's provider/OAuth machinery."""
-    node, sidecar = pi_sidecar_command()
-    if not Path(sidecar).exists():
-        raise SidecarError("aiErr_sidecarNotBuilt", path=sidecar)
     frame = {
         "type": "gateway_complete",
         "turnId": "gateway",
@@ -128,13 +125,7 @@ def gateway_complete(
         "token": token,
         "options": options or {},
     }
-    env = {**os.environ}
-    if os.environ.get("MOSAEL_AGENT_BIN_NODE"):
-        env["ELECTRON_RUN_AS_NODE"] = "1"
-    env = proxy_env(env)
-    process = popen_text(
-        [node, sidecar], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env
-    )
+    process = spawn_pi()
     assert process.stdin is not None and process.stdout is not None
     process.stdin.write(json.dumps(frame) + "\n")
     process.stdin.flush()
@@ -349,6 +340,25 @@ def pi_sidecar_command() -> tuple[str, str]:
     return node, sidecar
 
 
+def spawn_pi(*, stderr: int = subprocess.PIPE) -> subprocess.Popen:
+    """起一个 pi sidecar 进程,stdin / stdout 走 JSONL。一轮对话、压缩、无工具补全、刷新令牌、订阅登录都从这里起。
+
+    此前这段「找 node 和脚本 → 查构建产物在不在 → 拼环境变量 → 起进程」写了五份,其中环境变量那两条
+    (打包版的 ELECTRON_RUN_AS_NODE、出网代理)漏一条就是一类只在打包版或只在代理后面才出现的故障。
+    """
+    node, sidecar = pi_sidecar_command()
+    if not Path(sidecar).exists():
+        raise SidecarError("aiErr_sidecarNotBuilt", path=sidecar)
+    env = {**os.environ}
+    # 打包版把 Electron 二进制当 node 用(MOSAEL_AGENT_BIN_NODE),需 ELECTRON_RUN_AS_NODE=1;
+    # 真 node(dev)会忽略该变量,所以仅在显式指定 node 时加,最稳妥。
+    if os.environ.get("MOSAEL_AGENT_BIN_NODE"):
+        env["ELECTRON_RUN_AS_NODE"] = "1"
+    # 出站代理:Node 默认不认这几个变量,sidecar 自己会装 EnvHttpProxyAgent 来读(见 proxy.ts)。
+    env = proxy_env(env)
+    return popen_text([node, sidecar], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=stderr, text=True, env=env)
+
+
 def _run_pi(
     prompt: str,
     system_prompt: str,
@@ -372,9 +382,6 @@ def _run_pi(
     carries pi's serialized messages for multi-turn memory (round-tripped)."""
     if not provider or not model:
         raise SidecarError("aiErr_noProvider")
-    node, sidecar = pi_sidecar_command()
-    if not Path(sidecar).exists():
-        raise SidecarError("aiErr_sidecarNotBuilt", path=sidecar)
 
     frame = {
         "type": "run_turn",
@@ -415,16 +422,7 @@ def _run_pi(
         # 文本模型不接收它们，正文里的 asset_id 仍可让智能体回落 analyze_asset。
         "images": images or [],
     }
-    # 打包版把 Electron 二进制当 node 用(MOSAEL_AGENT_BIN_NODE),需 ELECTRON_RUN_AS_NODE=1;
-    # 真 node(dev)会忽略该变量,所以仅在显式指定 node 时加,最稳妥。
-    env = {**os.environ}
-    if os.environ.get("MOSAEL_AGENT_BIN_NODE"):
-        env["ELECTRON_RUN_AS_NODE"] = "1"
-    # 出站代理:Node 默认不认这几个变量,sidecar 自己会装 EnvHttpProxyAgent 来读(见 proxy.ts)。
-    env = proxy_env(env)
-    process = popen_text(
-        [node, sidecar], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env
-    )
+    process = spawn_pi()
     assert process.stdin is not None and process.stdout is not None
     process.stdin.write(json.dumps(frame) + "\n")
     process.stdin.flush()
@@ -575,9 +573,6 @@ def compact_session(
     """
     if not provider or not model:
         raise SidecarError("aiErr_noProvider")
-    node, sidecar = pi_sidecar_command()
-    if not Path(sidecar).exists():
-        raise SidecarError("aiErr_sidecarNotBuilt", path=sidecar)
     frame = {
         "type": "compact",
         "turnId": "compact",
@@ -597,13 +592,7 @@ def compact_session(
         "model": model,
         "sessionState": adapter_state,
     }
-    env = {**os.environ}
-    if os.environ.get("MOSAEL_AGENT_BIN_NODE"):
-        env["ELECTRON_RUN_AS_NODE"] = "1"
-    env = proxy_env(env)
-    process = popen_text(
-        [node, sidecar], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env
-    )
+    process = spawn_pi()
     assert process.stdin is not None and process.stdout is not None
     process.stdin.write(json.dumps(frame) + "\n")
     process.stdin.flush()
@@ -635,9 +624,6 @@ def refresh_oauth_credential(*, api_base: str, token: str, pi_provider: str, pro
     调一次 `models.getAuth` —— 它返回前会刷新并把新凭据经租约写回后端。自己在 Python 里
     实现刷新等于把六家协议再抄一遍,而当初把订阅制交给 pi 就是为了不抄。
     """
-    node, sidecar = pi_sidecar_command()
-    if not Path(sidecar).exists():
-        raise SidecarError("aiErr_sidecarNotBuilt", path=sidecar)
     frame = {
         "type": "refresh_credential",
         "turnId": "refresh",
@@ -647,13 +633,7 @@ def refresh_oauth_credential(*, api_base: str, token: str, pi_provider: str, pro
         "apiBase": api_base,
         "token": token,
     }
-    env = {**os.environ}
-    if os.environ.get("MOSAEL_AGENT_BIN_NODE"):
-        env["ELECTRON_RUN_AS_NODE"] = "1"
-    env = proxy_env(env)
-    process = popen_text(
-        [node, sidecar], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env
-    )
+    process = spawn_pi()
     assert process.stdin is not None and process.stdout is not None
     process.stdin.write(json.dumps(frame) + "\n")
     process.stdin.flush()

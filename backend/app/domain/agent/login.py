@@ -15,14 +15,12 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import subprocess
 import threading
 import time
 from dataclasses import dataclass, field
 
-from app.ai.sidecar.pi_client import proxy_env, pi_sidecar_command
-from app.core.child_process import popen_text
+from app.ai.sidecar.pi_client import SidecarError, spawn_pi
 from app.core.i18n import LocalizedError, get_current_locale, t
 
 logger = logging.getLogger(__name__)
@@ -194,23 +192,11 @@ def start_login(
     if existing is not None:
         return existing
 
-    node, sidecar = pi_sidecar_command()
-    if not os.path.exists(sidecar):
-        raise LoginError("agentErr_loginSidecarMissing", path=sidecar)
-
-    env = {**os.environ}
-    if os.environ.get("MOSAEL_AGENT_BIN_NODE"):
-        env["ELECTRON_RUN_AS_NODE"] = "1"
-    # 授权换令牌走的是同一条出站链路 —— 被判地区不支持时,这一步和后面的对话请求一起被拒。
-    env = proxy_env(env)
-    process = popen_text(
-        [node, sidecar],
-        stdin=subprocess.PIPE,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.DEVNULL,
-        text=True,
-        env=env,
-    )
+    # 授权换令牌走的是同一条出站链路(spawn_pi 带上了代理)—— 被判地区不支持时,这一步和后面的对话请求一起被拒。
+    try:
+        process = spawn_pi(stderr=subprocess.DEVNULL)
+    except SidecarError as exc:
+        raise LoginError.relay(exc) from exc
     session = LoginSession(login_id=login_id, profile_id=profile_id, process=process)
     with _sessions_lock:
         _sessions[login_id] = session
