@@ -121,6 +121,34 @@ def test_迁移_被当成视频的文档改回来_真视频不动() -> None:
         assert real.kind == "video" and real.media_info == {"fps": 1.0}
 
 
+def test_迁移改回来的文档_有人读的时候补上本地解析_解析过的不再补() -> None:
+    """改回来的那批从没解析过:阅读器打开、智能体读、画板取正文时补上导入时本该做的本地解析(不看默认)。"""
+    from app.db.models import AssetExtraction
+    from app.domain.documents import LOCAL_PARSER
+    from app.domain.documents.reading import document_text
+    from app.media.paths import asset_dir, asset_key
+
+    client = fresh_client()
+    ws = _ws(client)
+    with SessionLocal() as db:
+        for asset_id in ("old", "board"):
+            folder = asset_dir(ws, asset_id)
+            folder.mkdir(parents=True, exist_ok=True)
+            (folder / "notes.md").write_text("# 标题\n\n正文", encoding="utf-8")
+            db.add(Asset(id=asset_id, workspace_id=ws, kind="document", name="notes.md", original_filename="notes.md",
+                         file_key=asset_key(ws, asset_id, "notes.md"), media_info={"format": "md"}))
+        db.commit()
+
+    listed = client.get("/api/assets/old/extractions")
+    assert listed.status_code == 200, listed.text
+    assert [one["parser"] for one in listed.json()] == [LOCAL_PARSER], "阅读器一打开就在解析"
+    assert len(client.get("/api/assets/old/extractions").json()) == 1, "解析过了就不再补"
+
+    with SessionLocal() as db:
+        assert document_text(db, ws, "board") is None, "这一次还读不到"
+        assert db.query(AssetExtraction).filter(AssetExtraction.asset_id == "board").count() == 1, "但已经补上了解析"
+
+
 def test_前端认的文档扩展名和后端是同一张表() -> None:
     import re
 

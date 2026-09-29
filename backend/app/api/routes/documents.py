@@ -33,10 +33,14 @@ def _extraction(db, user, asset_id: str, extraction_id: str) -> AssetExtraction:
 
 @router.get("/assets/{asset_id}/extractions", response_model=list[AssetExtractionOut])
 def list_extractions(asset_id: str, db: DbSession, user: CurrentUser) -> list[AssetExtraction]:
-    """这份文档的每一次解析,新的在前。"""
+    """这份文档的每一次解析,新的在前。一次都没有过的(升级改回来的那批)在这里补上本地解析 —— 阅读器打开就看到
+    「解析中」,而不是一句「还没解析」(见 documents.extraction.ensure_parsed)。"""
     from sqlalchemy import select
 
+    from app.domain.documents.extraction import ensure_parsed
+
     asset = _document(db, user, asset_id)
+    ensure_parsed(db, asset)
     return list(db.scalars(select(AssetExtraction).where(AssetExtraction.asset_id == asset.id)
                            .order_by(AssetExtraction.created_at.desc())))
 

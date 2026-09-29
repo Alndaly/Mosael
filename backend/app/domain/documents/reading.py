@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from app.core.i18n import LocalizedError
 from app.db.models import Asset, AssetExtraction
-from app.domain.documents.extraction import extraction_dir, latest_extraction, read_sections
+from app.domain.documents.extraction import ensure_parsed, extraction_dir, latest_extraction, read_sections
 
 #: 整篇直接放进对话上下文的上限(字)。再长只放目录,正文按段取。
 INLINE_CHARS = 12_000
@@ -44,6 +44,7 @@ def _document(db: Session, workspace_id: str, asset_id: str) -> Asset:
 def _ready(db: Session, asset: Asset, *, wait: bool) -> AssetExtraction:
     """最新成功的那份解析;还在解析就等一会儿(wait),失败 / 没有就说清楚。"""
     deadline = time.monotonic() + (WAIT_SECONDS if wait else 0)
+    ensure_parsed(db, asset)
     while True:
         done = latest_extraction(db, asset.id)
         if done is not None:
@@ -138,6 +139,8 @@ def document_text(db: Session, workspace_id: str, asset_id: str) -> str | None:
         return None
     done = latest_extraction(db, asset.id)
     if done is None:
+        #: 从没解析过(升级改回来的那批):补上本地解析,这一次照样说「还读不到」,下一次就有了。
+        ensure_parsed(db, asset)
         return None
     separator = "\n\n---\n\n" if done.unit in ("page", "slide") else "\n\n"
     return separator.join(one["markdown"].strip() for one in read_sections(done, 1, done.sections) if one["markdown"].strip())
@@ -153,6 +156,7 @@ def attachment_context(db: Session, workspace_id: str, asset_ids: list[str]) -> 
         done = latest_extraction(db, asset.id)
         header = f"【文档 {asset.name}(asset_id={asset.id})】"
         if done is None:
+            ensure_parsed(db, asset)
             latest = latest_extraction(db, asset.id, succeeded=False)
             state = ("还在解析" if latest is None or latest.status in ("queued", "running")
                      else "解析被停下了,还没有可读的正文" if latest.status == "cancelled" else f"解析失败:{latest.error[:200]}")

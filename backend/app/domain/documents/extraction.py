@@ -84,6 +84,20 @@ def start_parse(
     return extraction
 
 
+def ensure_parsed(db: Session, asset: Asset) -> AssetExtraction | None:
+    """一次解析都没有过的文档,补上导入时本该做的那次**本地解析**,交回它;解析过(不管成没成)就什么都不做。
+
+    正常导入的文档一进来就解析(assets.importer);没有的是升级迁移改回来的那一批 —— 此前被当成视频入库、
+    从没解析过(migrations 的 documents-are-not-videos)。它们在有人读的那一刻(阅读器、智能体、画板)补上。
+    和导入时同一条:只用本地解析,不看他的默认 —— 交给云端必须是人点名的。
+    """
+    from app.domain.documents import LOCAL_PARSER
+
+    if asset.kind != "document" or latest_extraction(db, asset.id, succeeded=False) is not None:
+        return None
+    return start_parse(db, asset, owner_user_id=None, provider_id=LOCAL_PARSER)
+
+
 class ParseStopped(Exception):
     """解析任务被人停下了。不是失败,也不带原因。"""
 
