@@ -5,7 +5,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from app.api.deps import DbSession
+from app.api.deps import DbSession, Tx
 from app.db.models import PublishAccount, PublishTask
 from app.domain.publish import PublishDomainError
 from app.domain.publish import worker as publish_worker
@@ -52,7 +52,7 @@ class AccountPatchRequest(BaseModel):
 
 
 @router.post("/publish/worker/claim")
-def claim(body: ClaimRequest, db: DbSession) -> dict[str, Any]:
+def claim(body: ClaimRequest, db: Tx) -> dict[str, Any]:
     return {"task": publish_worker.claim_next_pending(db, body.exclude_accounts, worker=body.worker)}
 
 
@@ -65,7 +65,7 @@ def task_status(task_id: str, db: DbSession) -> dict[str, Any]:
 
 
 @router.patch("/publish/worker/report")
-def report(body: ReportRequest, db: DbSession) -> dict[str, Any]:
+def report(body: ReportRequest, db: Tx) -> dict[str, Any]:
     try:
         task = publish_worker.report_task(
             db,
@@ -81,17 +81,17 @@ def report(body: ReportRequest, db: DbSession) -> dict[str, Any]:
 
 
 @router.post("/publish/worker/claim-check")
-def claim_check(db: DbSession) -> dict[str, Any]:
+def claim_check(db: Tx) -> dict[str, Any]:
     return {"account": publish_worker.claim_check(db)}
 
 
 @router.post("/publish/worker/mark-due")
-def mark_due(db: DbSession) -> dict[str, Any]:
+def mark_due(db: Tx) -> dict[str, Any]:
     return {"marked": publish_worker.mark_due(db)}
 
 
 @router.patch("/publish/worker/account")
-def patch_account(body: AccountPatchRequest, db: DbSession) -> dict[str, Any]:
+def patch_account(body: AccountPatchRequest, db: Tx) -> dict[str, Any]:
     try:
         account = publish_worker.patch_account(
             db,

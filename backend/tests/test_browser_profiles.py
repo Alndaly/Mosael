@@ -60,6 +60,7 @@ def test_new_publish_account_gets_pool_profile() -> None:
     ws = _ws(client)
     with SessionLocal() as db:
         acc = create_account(db, workspace_id=ws, platform="bilibili", name="B站主号", config={}, owner=_me(db))
+        db.commit()  # 测试是入口:领域函数不提交
         acc_id = acc.id
         assert acc.profile_id is not None
         prof = db.get(BrowserProfile, acc.profile_id)
@@ -76,6 +77,7 @@ def test_backfill_relinks_legacy_account_preserving_partition() -> None:
     ws = _ws(client)
     with SessionLocal() as db:
         acc_id = create_account(db, workspace_id=ws, platform="bilibili", name="老号", config={}, owner=_me(db)).id
+        db.commit()  # 测试是入口:领域函数不提交
         # 模拟老库:清掉自动建的档案与指针,回到「有账号、无档案」的历史态
         acc = db.get(PublishAccount, acc_id)
         db.delete(db.get(BrowserProfile, acc.profile_id))
@@ -183,6 +185,7 @@ def test_cannot_delete_bound_or_busy_profile() -> None:
     # 绑定了发布账号 → 拒删
     with SessionLocal() as db:
         acc_id = create_account(db, workspace_id=ws, platform="bilibili", name="B", config={}, owner=_me(db)).id
+        db.commit()  # 测试是入口:领域函数不提交
     _backfill_browser_pool()
     with SessionLocal() as db:
         bound_pid = db.get(PublishAccount, acc_id).profile_id

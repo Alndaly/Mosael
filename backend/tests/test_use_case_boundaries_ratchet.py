@@ -66,8 +66,6 @@ DOMAIN_COMMITS: dict[str, int] = {
     "app/domain/plugins/packages.py": 2,
     "app/domain/plugins/tools.py": 8,
     "app/domain/providers/auth.py": 1,
-    "app/domain/publish/__init__.py": 6,
-    "app/domain/publish/worker.py": 7,
     "app/domain/render.py": 8,
     "app/domain/scenes/operations.py": 5,
     "app/domain/sequences/append.py": 1,
