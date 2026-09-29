@@ -6,7 +6,7 @@
 >
 > 范围:`backend/app/ai/`(供应商三层、适配器、生成契约、本机运行时)+
 > `domain/provider*.py`、`domain/model_limits.py`、`domain/structured_output.py`、
-> `domain/thinking.py`、`domain/ai_chat.py`、`domain/generation/`、`domain/usage.py`
+> `domain/thinking.py`、`domain/ai_chat.py`、`domain/generation/`、`domain/billing/usage.py`
 > 里与之直接相邻的部分。不含工作流引擎本体、剪辑内核、智能体宿主、前端、Electron。
 
 ---
@@ -558,7 +558,7 @@ double-booking」(`usage.py:217-219`)。
 - `backend/app/domain/model_limits.py` —— 内置上限表与唯一合并处(§2.4)
 - `backend/app/domain/structured_output.py` —— 哪家支持 `json_schema`
 - `backend/app/domain/thinking.py` —— 思考档位表
-- `backend/app/domain/usage.py` —— `BillableCall` / `billable` / `record_usage`(§2.6)
+- `backend/app/domain/billing/usage.py` —— `BillableCall` / `billable` / `record_usage`(§2.6)
 - `backend/app/domain/agent/judge.py` —— 放行判断(§2.3)
 - `backend/app/domain/generation/runner.py` —— 生成任务执行与记账
 - `backend/app/domain/generation/operations.py` —— 参数与素材的唯一校验处

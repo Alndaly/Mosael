@@ -20,7 +20,7 @@ from dataclasses import dataclass
 
 
 from app.domain.ai_chat import AiChatError, ChatTarget, chat, target_for
-from app.domain.usage import BillableCall, billable, once
+from app.domain.billing.usage import BillableCall, billable, once
 from sqlalchemy.orm import Session
 
 from app.domain import provider_models

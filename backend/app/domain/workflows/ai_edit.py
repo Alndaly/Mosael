@@ -14,7 +14,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.domain.ai_chat import AiChatError, ChatTarget, chat, target_for
-from app.domain.usage import BillableCall, billable, once
+from app.domain.billing.usage import BillableCall, billable, once
 from app.domain.providers import require_connection
 from app.core.i18n import LocalizedError, get_current_locale, t, tr
 from app.domain.workflows import (

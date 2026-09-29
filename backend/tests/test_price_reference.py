@@ -12,10 +12,10 @@ from decimal import Decimal
 
 import pytest
 
-from app.domain import price_reference
-from app.domain.price_reference import LIST_PRICES, ListPrice, lookup, lookup_for_relay
+from app.domain.billing import price_reference
+from app.domain.billing.price_reference import LIST_PRICES, ListPrice, lookup, lookup_for_relay
 from app.domain.provider_presets import KNOWN_CAPABILITY_IDS, provider_definition
-from app.domain.usage import PRICING_BILLING_UNITS
+from app.domain.billing.usage import PRICING_BILLING_UNITS
 
 # 这条测试是一道**棘轮**:它进 docs/CONVENTIONS.md 的清单,由 scripts/sync-ratchet-docs.py 生成。
 RATCHET = True
@@ -106,7 +106,7 @@ def test_no_cell_is_written_twice() -> None:
 def test_time_of_day_prices_are_well_formed() -> None:
     """分时段价(约定 4):时段过得了规则自己的校验、有时区、时段价同样为正且换算无零头;
     没有时段的条目不许带时区 —— 那是写到一半的条目。"""
-    from app.domain.price_schedule import normalize_schedule
+    from app.domain.billing.price_schedule import normalize_schedule
 
     for entry in LIST_PRICES:
         if not entry.time_prices:

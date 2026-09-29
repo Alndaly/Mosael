@@ -128,7 +128,7 @@ def ask(
             raise JudgeUnavailable("agentErr_judgeNoModel")
         target = target_for(db, profile)
     from app.core.db import SessionLocal as _Session
-    from app.domain.usage import billable, once
+    from app.domain.billing.usage import billable, once
 
     with _Session() as billing_db, billable(
         billing_db,

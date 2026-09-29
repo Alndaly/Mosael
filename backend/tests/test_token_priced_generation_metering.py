@@ -1,6 +1,6 @@
 """按 token 计价的生成(Seedance 视频、GPT Image 生图):计量要记**回包里实际计费的 token 数**。
 
-官方价目表给这两种模型预填的是「每百万输出 token」的价(见 domain/price_reference)。适配器
+官方价目表给这两种模型预填的是「每百万输出 token」的价(见 domain/billing/price_reference)。适配器
 只报请求侧那份(按提示词估的几十个 token)的话,规则要么对不上、要么对上一个差好几个数量级的数。
 """
 
@@ -9,7 +9,7 @@ from __future__ import annotations
 from app.ai.providers.adapters.bytedance.ark.video import seedance_metering
 from app.ai.providers.adapters.openai.image import image_metering
 from app.ai.providers.contracts.generation import GenerationRequest
-from app.domain.usage import _quantity_for_unit
+from app.domain.billing.usage import _quantity_for_unit
 
 
 def test_seedance_records_the_billed_completion_tokens() -> None:

@@ -263,7 +263,7 @@ def test_clearing_finished_jobs_keeps_generation_history() -> None:
 
 def test_generation_jobs_surface_cost(tmp_path: Path) -> None:
     """生成结果带出计费:有已知费用显金额;有事件但无定价显 unknown;无事件为空。"""
-    from app.domain.usage import record_usage
+    from app.domain.billing.usage import record_usage
 
     client = fresh_client()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()

@@ -11,7 +11,7 @@ import { OptionPicker } from "@/components/ui/option-picker";
 import { TimePicker } from "@/components/ui/time-picker";
 
 /**
- * 计价规则的「分时段价格」:同一条规则在一周里的某几段收另一个价(后端见 domain/price_schedule)。
+ * 计价规则的「分时段价格」:同一条规则在一周里的某几段收另一个价(后端见 domain/billing/price_schedule)。
  *
  * **它是这条规则价目的一部分,不是另一条规则。**币种、计价单位跟着规则走,时段只改金额;
  * 不落在任何时段里的时刻按规则的单价计。所以这一块放在单价下面,而不是在列表里多出一行。

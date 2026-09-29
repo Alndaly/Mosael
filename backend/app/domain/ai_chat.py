@@ -12,7 +12,7 @@
   - **空密钥**:只有提示词优化处理了「本地端点无鉴权」。其余几处发 `Bearer `(尾随空格),
     httpx 判定为非法头值直接抛,而报错内容和鉴权毫无关系,查半天才想到是密钥没填。
   - **用量**:一条都不记。首页那张 Token 图和成本统计因此是漏的,且漏得没有提示。
-    (记账本身不在这里 —— 它归 domain/usage.billable;这里只负责把 token 报进去。)
+    (记账本身不在这里 —— 它归 domain/billing/usage.billable;这里只负责把 token 报进去。)
 
 温度、超时、是否强制 JSON 这些**确实**该因用途而异,所以它们是参数;上面那四件不该。
 
@@ -40,7 +40,7 @@ from app.core.i18n import LocalizedError, fragment, tr
 from app.domain.provider_credentials import ResolvedConnection
 from app.core import http_retry
 from app.domain import provider_models
-from app.domain.usage import BillableCall
+from app.domain.billing.usage import BillableCall
 
 logger = logging.getLogger(__name__)
 
@@ -228,7 +228,7 @@ def chat(
     """跑一次对话补全,返回助手消息的文本。
 
     client 给了就复用它(整批字幕共用连接,省掉每条一次 TLS 握手);此时重试由该 client 决定。
-    call 给了就把 token 计量报进那次记账(见 domain/usage.billable)。
+    call 给了就把 token 计量报进那次记账(见 domain/billing/usage.billable)。
     allow_response_format_fallback 只供会在本地继续解析/校验 JSON 的调用方开启。
 
     on_downgrade 在**每一次降级发生时**被叫一下。降级本身是对的(不这么做就是一个用户看不懂

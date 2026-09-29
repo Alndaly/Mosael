@@ -166,7 +166,7 @@ export function UsageCostChart({
   /** 画哪一种钱。空串 = 这段时间一笔都没计上价。 */
   currency: string;
   unknown: number;
-  /** 没能定价的「供应商 + 模型」及次数,由后端聚合(见 domain/usage.summarize_usage)。 */
+  /** 没能定价的「供应商 + 模型」及次数,由后端聚合(见 domain/billing/usage.summarize_usage)。 */
   unpriced?: WorkspaceSummary["usage_unpriced"];
   onConfigurePricing?: () => void;
 }) {

@@ -18,8 +18,8 @@ import pytest
 
 from app.core.db import SessionLocal
 from app.db.models import ProviderPricingRule
-from app.domain.price_schedule import PriceScheduleError, normalize_schedule, price_at, window_at
-from app.domain.usage import create_pricing_rule, record_usage
+from app.domain.billing.price_schedule import PriceScheduleError, normalize_schedule, price_at, window_at
+from app.domain.billing.usage import create_pricing_rule, record_usage
 from tests.util import fresh_client
 
 #: DeepSeek 的形状:基础价是空闲价,工作日两段高峰。

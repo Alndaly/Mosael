@@ -422,7 +422,7 @@ def write_on_board(
     """
     from app.domain.ai_chat import AiChatError, chat, target_for
     from app.domain.providers import require_connection
-    from app.domain.usage import billable, once
+    from app.domain.billing.usage import billable, once
 
     prompt = prompt.strip()
     if not prompt:

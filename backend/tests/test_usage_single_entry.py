@@ -21,7 +21,7 @@ from pathlib import Path
 
 BACKEND = Path(__file__).resolve().parents[1]
 
-OWNER = "app/domain/usage.py"
+OWNER = "app/domain/billing/usage.py"
 
 #: 例外 → 理由。只减不增。
 EXEMPT: dict[str, str] = {}
@@ -47,7 +47,7 @@ def _callers_of(name: str) -> list[str]:
 def test_只有_usage_模块直接记账() -> None:
     offenders = [rel for rel in _callers_of("record_usage") if rel != OWNER and rel not in EXEMPT]
     assert offenders == [], (
-        "记账又出现了第二个入口 —— 请改用 app.domain.usage.billable():\n  " + "\n  ".join(offenders)
+        "记账又出现了第二个入口 —— 请改用 app.domain.billing.usage.billable():\n  " + "\n  ".join(offenders)
     )
 
 
@@ -147,7 +147,7 @@ def test_没有工作区归属时不静默(caplog) -> None:
     import logging
 
     from app.core.db import SessionLocal
-    from app.domain.usage import billable, once
+    from app.domain.billing.usage import billable, once
 
     with SessionLocal() as db, caplog.at_level(logging.WARNING):
         # 幂等键是必填的(见 test_billing_keys_are_deliberate):没有隐式兜底,

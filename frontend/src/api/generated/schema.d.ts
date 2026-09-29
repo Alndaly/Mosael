@@ -5053,7 +5053,7 @@ export interface paths {
          * @description 给这条连接的模型补齐缺失的计价规则:端点目录的报价优先,官方价目表补缺。
          *
          *     **只补不改**:已有规则一概不动 —— 目录和价目表都是厂商挂牌价,用户填过的才是他核对过的账。
-         *     为 0 的报价也不写(那是「未标价 / 订阅内含」,不是「免费」)。见 domain/pricing_prefill。
+         *     为 0 的报价也不写(那是「未标价 / 订阅内含」,不是「免费」)。见 domain/billing/pricing_prefill。
          */
         post: operations["prefill_provider_pricing_api_settings_providers__profile_id__pricing_prefill_post"];
         delete?: never;
@@ -8413,7 +8413,7 @@ export interface components {
         };
         /**
          * CostAmountOut
-         * @description 一个币种下的一笔钱(domain/usage.CostAmount)。
+         * @description 一个币种下的一笔钱(domain/billing/usage.CostAmount)。
          *
          *     金额的汇总**一律是这种东西的列表**,每个币种一笔:人民币和美元不相加,也不按汇率换算。
          *     列表顺序固定为计过价次数多的币种在前 —— 第一笔就是「主要用的那种钱」。
@@ -10831,7 +10831,7 @@ export interface components {
         };
         /**
          * PricingTimeWindow
-         * @description 分时段价格里的一个时段(见 domain/price_schedule)。
+         * @description 分时段价格里的一个时段(见 domain/billing/price_schedule)。
          *
          *     这里只管形状;钟点格式、是否重叠、时区对不对由领域层校验 —— 那边的报错带界面语言,
          *     这里用 pattern 拦下来只会得到一句英文的 Pydantic 报错。

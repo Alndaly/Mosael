@@ -14,7 +14,7 @@ import httpx
 from app.domain import provider_models
 from app.core import http_retry  # Gemini 的 generateContent 不是 /chat/completions,仍走裸重试
 from app.domain.ai_chat import AiChatError, chat, target_for
-from app.domain.usage import BillableCall, billable, once
+from app.domain.billing.usage import BillableCall, billable, once
 from sqlalchemy.orm import Session
 
 from app.ai.providers.contracts.generation import sanitize_adapter_error

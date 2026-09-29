@@ -89,8 +89,8 @@ TABLE_OWNERS: dict[str, tuple[str, ...]] = {
     #: 连接删了它一起清,不会留下指向虚空的孤儿。
     "GenerationCapabilityProfile": ("app/domain/generation/custom_profiles.py",),
     "GenerationCapabilityDeclaration": ("app/domain/generation/resolution.py",),
-    "ProviderPricingRule": ("app/domain/usage.py",),
-    "ProviderUsageEvent": ("app/domain/usage.py",),
+    "ProviderPricingRule": ("app/domain/billing/usage.py",),
+    "ProviderUsageEvent": ("app/domain/billing/usage.py",),
     "AiRuntimeConfig": ("app/domain/ai_runtime.py",),
     # 单例行由 network 域按需创建(get_config),路由只负责改值。
     "NetworkConfig": ("app/domain/network.py",),

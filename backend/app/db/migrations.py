@@ -5576,7 +5576,7 @@ def _migrate_usage_unpriced_reason() -> None:
 
 
 def _migrate_pricing_time_prices() -> None:
-    """计价规则带上分时段价格(见 domain/price_schedule)。
+    """计价规则带上分时段价格(见 domain/billing/price_schedule)。
 
     老规则一律是「全天一个价」:时段为空列表、时区为空 —— 这正是它们一直以来的含义,不必猜。
     """

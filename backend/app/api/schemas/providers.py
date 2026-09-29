@@ -149,7 +149,7 @@ class PricingPrefillOut(ApiModel):
     created: int
     #: 其中按端点模型目录的报价建的。
     created_from_catalog: int
-    #: 其中按官方价目表(domain/price_reference)建的。
+    #: 其中按官方价目表(domain/billing/price_reference)建的。
     created_from_reference: int
     #: 新建的规则里带分时段价格的条数(如 DeepSeek 的高峰 / 空闲价)—— 界面单独说一句,
     #: 免得用户以为记的只是一个固定价。
@@ -295,7 +295,7 @@ class ProviderDefaultUpdate(ApiModel):
 
 
 class PricingTimeWindow(ApiModel):
-    """分时段价格里的一个时段(见 domain/price_schedule)。
+    """分时段价格里的一个时段(见 domain/billing/price_schedule)。
 
     这里只管形状;钟点格式、是否重叠、时区对不对由领域层校验 —— 那边的报错带界面语言,
     这里用 pattern 拦下来只会得到一句英文的 Pydantic 报错。

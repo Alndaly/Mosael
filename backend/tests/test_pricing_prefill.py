@@ -184,7 +184,7 @@ def test_subscription_profile_prefills_from_its_stored_catalog(client_fixture) -
 def test_prefilled_rules_actually_price_a_turn(monkeypatch, client_fixture) -> None:
     """端到端:预填完就能算出钱来 —— 否则这个按钮只是往表里塞行。"""
     from app.core.db import SessionLocal
-    from app.domain.usage import record_usage
+    from app.domain.billing.usage import record_usage
 
     client = client_fixture
     _stub_models(monkeypatch, {"data": [{"id": "m", "pricing": {"prompt": "0.000003", "completion": "0.000015"}}]})
@@ -208,7 +208,7 @@ def test_prefilled_rules_actually_price_a_turn(monkeypatch, client_fixture) -> N
     assert event.cost_micros == 6_000_000, f"实际 ${(event.cost_micros or 0) / 1e6:.2f}"
 
 
-# ---------- 官方价目表补缺(domain/price_reference)----------
+# ---------- 官方价目表补缺(domain/billing/price_reference)----------
 
 
 def _add_models(profile_id: str, *models: tuple[str, list[str]]) -> None:
@@ -326,7 +326,7 @@ def test_price_list_never_touches_or_mixes_with_existing_rules(monkeypatch, clie
 def test_generation_and_speech_models_get_their_own_units(monkeypatch, client_fixture) -> None:
     """生图按张、生视频按秒、语音按字符 —— 这几种从来没被预填过,目录也不可能给。"""
     from app.core.db import SessionLocal
-    from app.domain.usage import record_usage
+    from app.domain.billing.usage import record_usage
 
     client = client_fixture
     _stub_models(monkeypatch, {"data": []})

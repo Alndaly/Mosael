@@ -293,7 +293,7 @@ def analyze_asset_route(
             )
     except AnalysisError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    # 分析本身只读,但记了一笔用量;记账跟调用方事务走(见 domain/usage.billable),得落盘。
+    # 分析本身只读,但记了一笔用量;记账跟调用方事务走(见 domain/billing/usage.billable),得落盘。
     db.commit()
     return AnalyzeAssetResponse(**result)
 

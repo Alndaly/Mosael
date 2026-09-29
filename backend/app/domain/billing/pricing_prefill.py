@@ -5,7 +5,7 @@
 - **目录(catalog)在前。**它是这个端点**自己**说的价 —— 中转站、OpenRouter 报的就是它们实际
   收的钱,比原厂挂牌价更贴近账单。
 - **价目表(reference)补缺。**多数官方端点(DeepSeek、百炼、方舟、Kimi、MiniMax)的目录只列 id,
-  这时才去 `domain/price_reference` 查原厂挂牌价;生图、生视频、语音这几种非 token 计价的能力,
+  这时才去 `domain/billing/price_reference` 查原厂挂牌价;生图、生视频、语音这几种非 token 计价的能力,
   也只有价目表给得出来。
 
 **按模型整体取一边,不逐格拼。**目录给了一个模型的进出价,就不再从价目表给它补缓存价:两边的数
@@ -24,12 +24,12 @@ from sqlalchemy.orm import Session
 
 from app.core.i18n import get_current_locale, tr
 from app.db.models import ProviderPricingRule, ProviderProfile
-from app.domain import price_reference
-from app.domain.price_reference import ListPrice
+from app.domain.billing import price_reference
+from app.domain.billing.price_reference import ListPrice
 from app.domain.provider_models import effective_capabilities, list_models
 from app.domain.provider_presets import provider_definition
 from app.domain.providers import capability_ids_for_vendor
-from app.domain.usage import CATALOG_PRICE_UNITS, PriceQuote, prefill_model_pricing
+from app.domain.billing.usage import CATALOG_PRICE_UNITS, PriceQuote, prefill_model_pricing
 
 #: 目录报价的币种。OpenRouter 一类端点与 pi 的 ModelCost 都按美元报。
 CATALOG_CURRENCY = "USD"

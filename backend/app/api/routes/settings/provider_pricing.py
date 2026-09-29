@@ -16,8 +16,8 @@ from app.domain import provider_credentials, provider_models
 from app.domain.permissions import ensure_deployment_admin, ensure_workspace_access
 from app.domain.provider_credentials import ResolvedConnection
 from app.domain.providers import supports_capability
-from app.domain.pricing_prefill import prefill_profile_pricing
-from app.domain.usage import create_pricing_rule, delete_pricing_rule, update_pricing_rule
+from app.domain.billing.pricing_prefill import prefill_profile_pricing
+from app.domain.billing.usage import create_pricing_rule, delete_pricing_rule, update_pricing_rule
 
 from app.domain.permissions import require_own_profile
 
@@ -45,7 +45,7 @@ def prefill_provider_pricing(profile_id: str, db: DbSession, user: CurrentUser) 
     """给这条连接的模型补齐缺失的计价规则:端点目录的报价优先,官方价目表补缺。
 
     **只补不改**:已有规则一概不动 —— 目录和价目表都是厂商挂牌价,用户填过的才是他核对过的账。
-    为 0 的报价也不写(那是「未标价 / 订阅内含」,不是「免费」)。见 domain/pricing_prefill。
+    为 0 的报价也不写(那是「未标价 / 订阅内含」,不是「免费」)。见 domain/billing/pricing_prefill。
     """
     ensure_deployment_admin(db, user)
     profile = require_own_profile(db, user, profile_id)

@@ -9,7 +9,7 @@
 from __future__ import annotations
 
 from app.core.db import SessionLocal
-from app.domain.usage import record_usage, summarize_usage
+from app.domain.billing.usage import record_usage, summarize_usage
 from tests.util import fresh_client
 
 

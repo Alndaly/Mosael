@@ -452,7 +452,7 @@ export function traceStats(turns: TraceTurn[], usageEvents: AgentUsageEvent[]): 
 }
 
 /**
- * 用量事件里的缓存 token。后端按 cache_read_token / cache_write_token 计量(domain/usage)。
+ * 用量事件里的缓存 token。后端按 cache_read_token / cache_write_token 计量(domain/billing/usage)。
  *
  * **一条都没报过就是 null,不是 0。** 不是每个供应商都回缓存字段;当 0 算的话,命中率会稳稳
  * 显示成「0%」—— 一个看起来是结论的数字,实际上只是「这家没告诉我们」。这两句话得让人分得开。

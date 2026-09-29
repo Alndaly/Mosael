@@ -30,7 +30,7 @@ import ast
 import inspect
 from pathlib import Path
 
-from app.domain.usage import billable, once
+from app.domain.billing.usage import billable, once
 
 APP = Path(__file__).resolve().parent.parent / "app"
 
@@ -38,8 +38,8 @@ APP = Path(__file__).resolve().parent.parent / "app"
 def _billable_calls() -> list[tuple[str, int, bool]]:
     found: list[tuple[str, int, bool]] = []
     for path in sorted(APP.rglob("*.py")):
-        if path.name == "usage.py":
-            continue  # 定义处
+        if path == APP / "domain" / "billing" / "usage.py":
+            continue  # 定义处(按完整路径认:别处叫 usage.py 的文件照样要查)
         try:
             tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         except SyntaxError:  # pragma: no cover
@@ -83,7 +83,7 @@ def test_once_每次都不一样_而且看得出是它() -> None:
 def test_稳定键真的会去重() -> None:
     """同一个键记两次,只该有一行 —— 这是"重放不重复计费"那句话的实体。"""
     from app.core.db import SessionLocal
-    from app.domain.usage import record_usage
+    from app.domain.billing.usage import record_usage
     from tests.util import fresh_client
 
     client = fresh_client()

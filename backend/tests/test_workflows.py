@@ -1841,7 +1841,7 @@ def test_llm_节点会把用量记进账(monkeypatch) -> None:
 def test_经引擎跑的节点_记下的账真的落了库(monkeypatch) -> None:
     """上面那条直接调执行器,然后**自己** commit —— 于是它测不到引擎那一侧。
 
-    记账跟着调用方的事务走(见 domain/usage.billable),而引擎给每个节点开的会话此前用完就
+    记账跟着调用方的事务走(见 domain/billing/usage.billable),而引擎给每个节点开的会话此前用完就
     关、从不 commit:LLM 节点、翻译节点在真实运行里记下的每一笔账都随会话关闭回滚掉了,
     首页的 Token 图和成本统计里工作流的 AI 调用是隐身的。
     """

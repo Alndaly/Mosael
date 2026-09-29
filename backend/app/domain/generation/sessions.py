@@ -14,7 +14,8 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.db.models import GeneratedAsset, GenerationJob, GenerationSession, Job, ProviderUsageEvent, User
-from app.domain import sharing, usage
+from app.domain import sharing
+from app.domain.billing import usage
 from app.domain.permissions import NotVisible
 
 #: 共享记录里这一类叫什么(见 domain/sharing.KINDS)。

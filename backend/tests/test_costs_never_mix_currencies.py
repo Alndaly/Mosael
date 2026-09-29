@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from app.core.db import SessionLocal
 from app.db.models import GenerationJob, Job, ProviderPricingRule, ProviderUsageEvent, User
-from app.domain.usage import CostAmount, record_usage, summarize_usage
+from app.domain.billing.usage import CostAmount, record_usage, summarize_usage
 from tests.util import fresh_client, second_client
 
 CNY = {"currency": "CNY", "micros": 12_000_000}

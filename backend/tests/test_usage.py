@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from app.core.db import SessionLocal
 from app.db.models import ProviderPricingRule, ProviderUsageEvent
-from app.domain.usage import record_usage, summarize_usage
+from app.domain.billing.usage import record_usage, summarize_usage
 from tests.util import fresh_client
 
 
@@ -204,7 +204,7 @@ def test_缓存读写单列并算出命中率() -> None:
     命中率的分母是**提示词总量**(input + cacheRead + cacheWrite,三者不相交),
     不是 total_tokens:把补全 token 算进去会让这个比例随回答长短漂移。
     """
-    from app.domain.usage import _token_usage
+    from app.domain.billing.usage import _token_usage
 
     split = _token_usage({"input_token": 300, "output_token": 100, "cache_read_token": 700, "cache_write_token": 0})
     assert split == {
@@ -246,7 +246,7 @@ def test_调用方回滚_账照样留下_引用断开() -> None:
     账引用的任务是调用方刚 flush、随回滚一起没了的 —— 引用置空,和 schema 的 SET NULL 同义。
     """
     from app.db.models import Job
-    from app.domain.usage import billable, once
+    from app.domain.billing.usage import billable, once
 
     client = fresh_client()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
@@ -272,7 +272,7 @@ def test_调用方回滚_账照样留下_引用断开() -> None:
 
 
 def test_调用方提交了_不会补出第二条() -> None:
-    from app.domain.usage import billable
+    from app.domain.billing.usage import billable
 
     client = fresh_client()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]

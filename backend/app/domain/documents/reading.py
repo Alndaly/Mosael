@@ -177,7 +177,7 @@ def analyze_pages(db: Session, workspace_id: str, asset_id: str, pages: list[int
                   user_id: str | None, profile_id: str | None = None) -> dict[str, Any]:
     """那几页的页面图 + 那几页的文字 → 视觉模型。页码按「原版」那一栏数(第几张页面图)。"""
     from app.domain.analysis.service import call_vision_model, image_part, select_analysis_connection
-    from app.domain.usage import billable, once
+    from app.domain.billing.usage import billable, once
 
     asset = _document(db, workspace_id, asset_id)
     extraction = _ready(db, asset, wait=True)

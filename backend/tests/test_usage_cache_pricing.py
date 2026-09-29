@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.domain.usage import PRICING_BILLING_UNITS, _quantity_for_unit
+from app.domain.billing.usage import PRICING_BILLING_UNITS, _quantity_for_unit
 
 """缓存 token 的计价。
 
@@ -57,7 +57,7 @@ def test_cache_read_actually_produces_cost_end_to_end() -> None:
     上面几条测的是单位解析,这条测的是**钱**:以前缓存读那一项在这里悄无声息地变成 0。
     """
     from app.core.db import SessionLocal
-    from app.domain.usage import create_pricing_rule, record_usage
+    from app.domain.billing.usage import create_pricing_rule, record_usage
     from tests.util import fresh_client
 
     client = fresh_client()

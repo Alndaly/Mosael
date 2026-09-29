@@ -40,7 +40,7 @@ from app.core.i18n import LocalizedError, get_current_locale, set_current_locale
 from app.core.security import mint_service_session, revoke_session
 from app.db.models import AgentMessage, AgentSession, ToolConfirmation, User, now
 from app.core.token_estimate import estimate_text_tokens
-from app.domain.usage import billable
+from app.domain.billing.usage import billable
 
 """
 Agent host (plan §16 + user decision): sessions and messages live in Mosael;

@@ -30,7 +30,7 @@ from app.db.models import (
     now,
 )
 from app.domain.publish import summary_bucket
-from app.domain.usage import CostAmount, costs_by_currency, summarize_usage
+from app.domain.billing.usage import CostAmount, costs_by_currency, summarize_usage
 
 #: 统计窗口的默认值:最近一个月。统计页和管理页用同一套 —— 两页上的「近 N 天」是同一个意思。
 WINDOW_DAYS = 30

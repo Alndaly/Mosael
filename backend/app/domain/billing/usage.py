@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session, SessionTransaction
 from app.core.usage_scope import current_workspace
 from app.db.models import ProviderPricingRule, ProviderUsageEvent, now
 from app.domain.jobs import emit_job_event
-from app.domain.price_schedule import normalize_schedule, price_at
+from app.domain.billing.price_schedule import normalize_schedule, price_at
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +34,7 @@ class CostAmount:
     """一个币种下的一笔钱。
 
     **不同币种的钱永远不相加。**计价规则带币种 —— 国内厂商按人民币、海外厂商按美元(内置价目表
-    domain/price_reference 保留厂商原币种)—— 而此前每一处汇总都是把 `cost_micros` 直接加起来,
+    domain/billing/price_reference 保留厂商原币种)—— 而此前每一处汇总都是把 `cost_micros` 直接加起来,
     再贴上「最近一条计过价的事件」的币种:¥12 + $4.5 显示成 16.5 USD。那个数既不是人民币也不是
     美元,而且换一条最近事件,单位就跟着变。
 
@@ -202,9 +202,9 @@ class PriceQuote:
     """一条待预填的单价:哪个能力、按什么单位、多少钱、从哪来。
 
     `source` 是 `catalog`(端点自己的目录报的)或 `reference`(官方价目表,见
-    domain/price_reference)—— 写进规则的 source 列,界面和用户都分得清哪条是哪来的。
+    domain/billing/price_reference)—— 写进规则的 source 列,界面和用户都分得清哪条是哪来的。
 
-    `time_prices` / `time_zone` 是这一个价的分时段价目(见 domain/price_schedule):它是**同一条
+    `time_prices` / `time_zone` 是这一个价的分时段价目(见 domain/billing/price_schedule):它是**同一条
     规则**的一部分,不是另一条规则 —— DeepSeek 的高峰价和空闲价落在同一行上。
     """
 
@@ -639,7 +639,7 @@ def _best_price_rules(
     """每个计价单位挑一条规则:作用域最具体的那条(连接 > 工作区 > 供应商 > 模型),同分取生效最晚的。
 
     **时间只用来判生效期,不参与挑选。**分时段价格是挑出来那条规则**自己**的价目,由
-    `price_schedule.price_at` 在算钱时取档 —— 挑规则和取单价是两件事(见 domain/price_schedule)。
+    `price_schedule.price_at` 在算钱时取档 —— 挑规则和取单价是两件事(见 domain/billing/price_schedule)。
     """
     moment = moment or now()
     candidates = list(

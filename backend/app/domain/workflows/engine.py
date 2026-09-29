@@ -380,7 +380,7 @@ def execute_graph(
                 wf = node_db.get(Workflow, wf_id)
                 outputs = handler(node_db, wf, config)
                 # **节点跑完就是它的事务边界。** 只在成功时提交:失败节点半途 flush 的东西不该留下。
-                # 账不在此列 —— 付过费的调用在调用方回滚之后由记账那一层补写(见 domain/usage
+                # 账不在此列 —— 付过费的调用在调用方回滚之后由记账那一层补写(见 domain/billing/usage
                 # 的 _settle_usage),这里不用为它破例。
                 node_db.commit()
                 return outputs

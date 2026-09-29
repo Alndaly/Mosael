@@ -44,7 +44,7 @@ from app.domain.jobs import (
 )
 from app.domain.assets.importer import register_file_asset
 from app.media.paths import resolve_key
-from app.domain.usage import billable
+from app.domain.billing.usage import billable
 
 """
 Generation runner: executes a generation job off-thread. Results always land

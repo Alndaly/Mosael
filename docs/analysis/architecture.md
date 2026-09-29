@@ -499,7 +499,7 @@ graph TD
 - `domain/ai_retry.RetryingClient`(httpx.Client 子类,`send()` 里对 429/5xx/RequestError 指数退避+抖动)是所有 AI 出站调用的统一入口——实测 23 个模块引用(文档写 15,已过时,见 §13);限流对生图/生视频/TTS/向量化一视同仁。
 - `domain/provider_quota.py` 六家订阅额度解析器,**只在用户点击时查**(非官方接口,轮询既撞限流又会变成后台一直失败的任务);查不到不抛 5xx——"这家不支持"和"这次没查成"是两种正常结果。
 - `ai/providers/media_transfer.py` 统一远程媒体下载:预签名地址不带凭据、跨源重定向丢受信头、流式 `.part` 原子落盘、inline 64MB 上限。
-- **用量台账**:`provider_usage_events` + `provider_pricing_rules` + `domain/usage.py`;调用方只上报 provider/model/capability/units/raw_usage,价格估算与幂等写入收敛在台账模块;台账从任务总线、智能体、生成执行器**接收事实,不反向决定业务是否成功**。
+- **用量台账**:`provider_usage_events` + `provider_pricing_rules` + `domain/billing/usage.py`;调用方只上报 provider/model/capability/units/raw_usage,价格估算与幂等写入收敛在台账模块;台账从任务总线、智能体、生成执行器**接收事实,不反向决定业务是否成功**。
 
 ---
 

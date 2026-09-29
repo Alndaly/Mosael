@@ -23,7 +23,7 @@ from app.domain.plugins.manifest import TRANSLATION
 from app.core.usage_scope import run_in_scope
 from app.domain.ai_chat import AiChatError, ChatTarget, chat, target_for
 from app.core import http_retry
-from app.domain.usage import BillableCall, billable, once
+from app.domain.billing.usage import BillableCall, billable, once
 
 #: 调用方在哪条执行通道上(见 ai_chat.target_for 的 surface)。
 ChatSurface = Literal["direct", "automation"]

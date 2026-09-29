@@ -696,7 +696,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "(国际站)",
         "en": " (international)",
     },
-    # 分时段价格的校验(domain/price_schedule)。时段按界面上的顺序从 1 数。
+    # 分时段价格的校验(domain/billing/price_schedule)。时段按界面上的顺序从 1 数。
     "pricingErr_timeZoneRequired": {
         "zh": "分时段价格需要选一个时区",
         "en": "Time-of-day prices need a time zone.",

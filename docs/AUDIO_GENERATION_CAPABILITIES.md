@@ -42,7 +42,7 @@
 
 - 用量:`audios`(交回几首)、`lyrics_characters`、`audio_seconds`(供应商回报的计费秒数优先,否则按登记后探测的
   真实时长;**不**记请求里的时长)。计价单位:`audio`(按首)、`audio_second`(按秒)、`request`。
-- 已收挂牌价(`backend/app/domain/price_reference.py`,2026-09):Lyria 3.5 / 3 Pro $0.08/首、Clip $0.04/首
+- 已收挂牌价(`backend/app/domain/billing/price_reference.py`,2026-09):Lyria 3.5 / 3 Pro $0.08/首、Clip $0.04/首
   ([价目](https://ai.google.dev/gemini-api/docs/pricing));百炼 Fun-Music v1 ¥0.002/秒、preview ¥0.005/秒
   ([价目](https://help.aliyun.com/zh/model-studio/model-pricing));火山后付费 ¥0.002/秒
   ([计费](https://www.volcengine.com/docs/84992/1404661))。

@@ -1,4 +1,4 @@
-"""首页与管理台那两屏统计的响应体(聚合在 domain/dashboard 与 domain/usage)。"""
+"""首页与管理台那两屏统计的响应体(聚合在 domain/dashboard 与 domain/billing/usage)。"""
 
 from __future__ import annotations
 
@@ -122,7 +122,7 @@ class WorkspaceSummaryOut(ApiModel):
     usage_unknown_cost_events: int = 0
     #: 没能定价的「供应商 + 模型 + 能力」及其次数。界面据此说清**缺哪个模型的价**,
     #: 而不是笼统一句「暂无价格规则」——后者在用户配了规则、只是没配这个模型时是错的。
-    #: `reason` 为 `mixed_currency` 的那几行是规则配了、但币种不一致(见 domain/usage.record_usage)。
+    #: `reason` 为 `mixed_currency` 的那几行是规则配了、但币种不一致(见 domain/billing/usage.record_usage)。
     usage_unpriced: list[UnpricedUsageOut] = Field(default_factory=list)
     #: cacheRead / 提示词总量(input + cacheRead + cacheWrite)。0..1。
     usage_cache_hit_ratio: float = 0.0

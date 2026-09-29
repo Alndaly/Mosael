@@ -28,7 +28,7 @@ class OrmModel(ApiModel):
 
 
 class CostAmountOut(OrmModel):
-    """一个币种下的一笔钱(domain/usage.CostAmount)。
+    """一个币种下的一笔钱(domain/billing/usage.CostAmount)。
 
     金额的汇总**一律是这种东西的列表**,每个币种一笔:人民币和美元不相加,也不按汇率换算。
     列表顺序固定为计过价次数多的币种在前 —— 第一笔就是「主要用的那种钱」。

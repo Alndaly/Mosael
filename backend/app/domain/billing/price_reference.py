@@ -20,7 +20,7 @@
    默认的 720P / 不含视频输入),备注里把其余档位写出来,用户用的是别的档一眼就知道要改。
    拿不准哪档算"基础"的,宁可不收。
 4. **分时段的价按厂商的时段原样记。**高峰 / 空闲这种按钟点变的价是**同一条规则**的价目
-   (见 `domain/price_schedule`):条目的 `amount` 是厂商说的「其余时段」那个价,`time_prices`
+   (见 `domain/billing/price_schedule`):条目的 `amount` 是厂商说的「其余时段」那个价,`time_prices`
    是它明确列出钟点的时段,`time_zone` 是它公布时段用的时区 —— 不替厂商换算成 UTC。
    厂商只说了「其余时段」的,「其余」就是基础价(DeepSeek:列出的是高峰,其余全是空闲)。
 5. **中转站只按 id 精确匹配,而且只在 id 唯一属于某一家时。**中转(OpenAI 兼容端点、Evolink、
@@ -84,7 +84,7 @@ REGIONS = ("cn", "intl", "global")
 @dataclass(frozen=True)
 class TimePrice:
     """一个时段的挂牌价。钟点是条目 `time_zone` 里的,`weekdays` 为 ISO 星期、空 = 每天
-    (语义与 domain/price_schedule 相同);`amount` 与条目的 `amount` 同单位、同 `per`。"""
+    (语义与 domain/billing/price_schedule 相同);`amount` 与条目的 `amount` 同单位、同 `per`。"""
 
     start: str
     end: str
@@ -145,7 +145,7 @@ class ListPrice:
 
     @property
     def time_prices_micros(self) -> tuple[dict[str, object], ...]:
-        """换算成规则上存的时段形状(见 domain/price_schedule)。"""
+        """换算成规则上存的时段形状(见 domain/billing/price_schedule)。"""
         return tuple(
             {
                 "start": window.start,
