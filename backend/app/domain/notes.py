@@ -12,6 +12,9 @@ from sqlalchemy import delete, select, update
 from sqlalchemy.orm import Session
 
 from app.core.i18n import LocalizedError
+from app.domain import sharing
+from app.domain.agent.sessions import SHARE_KIND as SESSION_SHARE_KIND
+from app.domain.authority import Actor, ensure
 from app.domain.note_types import NoteContent
 from app.db.models import Asset, AgentMessage, AgentSession, Board, Note, NoteRevision, Project
 from app.db.model_base import now
@@ -50,7 +53,18 @@ def snapshot(note: Note) -> dict:
     return {key: getattr(note, key) for key in FIELDS}
 
 
-def validate_content(db: Session, workspace_id: str, content: NoteContent, existing_sources: list[dict] | None = None) -> dict:
+def validate_content(db: Session, workspace_id: str, content: NoteContent, *, actor: Actor,
+                     existing_sources: list[dict] | None = None) -> dict:
+    """落库前的一份笔记内容。`actor` 是**替谁写**:引用一条对话消息,得是这个人看得见的那次对话。
+
+    笔记是工作区的,对话却是某人的私人线程(domain/sharing.KINDS)。只查「消息在这个工作区」的话,同事猜到
+    别人私有对话里的消息 id 就能写进来 —— 读不到内容,却能借「写不写得进」探出这个 id 在不在,写进去的引用
+    还会以「来源」挂着。判据和读回来的那一刻(routes/notes.source_message → readable_session)是同一份
+    `may_use`,于是写得进的引用一定读得回来;看不见和不存在给同一个错误。
+
+    `actor` 没有缺省:没有「不知道是谁就放行」这一档。说不出是谁(None)时引用不了任何对话消息,
+    和 `sharing.may_use` 同一条。工作流传的是整份 `Authority`:被执行那一版图的担保人也得看得见。
+    """
     data = content.model_dump()
     data["title"] = data["title"].strip()
     for key in ("tags", "topics"):
@@ -76,6 +90,8 @@ def validate_content(db: Session, workspace_id: str, content: NoteContent, exist
             obj = db.get({"asset": Asset, "board": Board, "note": Note}[kind], key)
         if obj is None or obj.workspace_id != workspace_id:
             raise NoteNotFound("noteErr_sourceNotInWorkspace")
+        if kind == "message":
+            _ensure_cites_session(db, obj, actor)
         if kind == "note":
             if obj.trashed:
                 raise NoteConflict("noteErr_referencedTrashed")
@@ -85,8 +101,20 @@ def validate_content(db: Session, workspace_id: str, content: NoteContent, exist
     return data
 
 
-def create_note(db: Session, workspace_id: str, content: NoteContent) -> Note:
-    note = Note(workspace_id=workspace_id, **validate_content(db, workspace_id, content))
+def _ensure_cites_session(db: Session, session: AgentSession, actor: Actor) -> None:
+    """引用这次对话里的消息之前:`actor` 得看得见它。
+
+    跑的人看不见、或者被执行那一版图没有担保人看得见,都和「消息不存在」同一个答案 —— 分开答就是告诉他
+    「这里有一条你看不到的消息」。
+    """
+    def hidden(*_: object) -> NoteNotFound:
+        return NoteNotFound("noteErr_sourceNotInWorkspace")
+
+    ensure(actor, lambda user: sharing.may_use(db, SESSION_SHARE_KIND, session, user), denied=hidden, unvouched=hidden)
+
+
+def create_note(db: Session, workspace_id: str, content: NoteContent, *, actor: Actor) -> Note:
+    note = Note(workspace_id=workspace_id, **validate_content(db, workspace_id, content, actor=actor))
     db.add(note)
     db.flush()
     db.add(NoteRevision(note_id=note.id, revision=note.revision, snapshot=snapshot(note)))
@@ -95,12 +123,15 @@ def create_note(db: Session, workspace_id: str, content: NoteContent) -> Note:
     return note
 
 
-def save_note(db: Session, workspace_id: str, note_id: str, base_revision: int, content: NoteContent,
-              restored_sources: list[dict] | None = None) -> Note:
+def save_note(db: Session, workspace_id: str, note_id: str, base_revision: int, content: NoteContent, *,
+              actor: Actor, restored_sources: list[dict] | None = None) -> Note:
+    """写成新的一版。笔记上已有的来源(和要恢复的那一版上的)原样放行,不再按 `actor` 重判:它们落库时
+    已经过了当时写的那个人的闸,同事改正文不该因为看不见别人引的那条消息而写不进;新加的来源照判。"""
     note = get_note(db, workspace_id, note_id)
     if note.revision != base_revision:
         raise NoteConflict("noteErr_changedElsewhere")
-    data = validate_content(db, workspace_id, content, note.sources + (restored_sources or []))
+    data = validate_content(db, workspace_id, content, actor=actor,
+                            existing_sources=note.sources + (restored_sources or []))
     if data == snapshot(note):
         return note
     # Compare-and-swap also catches two requests that read the same revision concurrently.
@@ -141,7 +172,7 @@ APPEND_RETRIES = 4
 
 
 def append_note(db: Session, workspace_id: str, note_id: str, markdown: str,
-                sources: list[dict]) -> Note:
+                sources: list[dict], *, actor: Actor) -> Note:
     """把一段内容追加到笔记末尾。
 
     **不拿调用方的 base_revision 做条件更新。** 追加到末尾与文档别处的编辑可交换,而调用方
@@ -160,7 +191,7 @@ def append_note(db: Session, workspace_id: str, note_id: str, markdown: str,
         data["sources"] = note.sources + sources
         try:
             return save_note(db, workspace_id, note_id, note.revision,
-                             NoteContent.model_validate(data))
+                             NoteContent.model_validate(data), actor=actor)
         except NoteConflict:
             # 只可能是修订号对不上:读到写之间有人抢先落地了一版,重读再追加就好。
             # 「在回收站里」同样是 NoteConflict,但它在 try 之外就抛掉了 —— 那种重试

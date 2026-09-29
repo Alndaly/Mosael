@@ -45,7 +45,7 @@ def list_topics(workspace_id: str, db: DbSession, user: CurrentUser, trashed: bo
 @router.post("/notes", response_model=NoteOut)
 def create(body: NoteCreate, db: DbSession, user: CurrentUser):
     ensure_workspace_perm(db, user, body.workspace_id, "edit")
-    return create_note(db, body.workspace_id, NoteContent.model_validate(body.model_dump()))
+    return create_note(db, body.workspace_id, NoteContent.model_validate(body.model_dump()), actor=user.id)
 
 
 @router.get("/notes/{note_id}", response_model=NoteOut)
@@ -70,7 +70,8 @@ def reference(note_id: str, workspace_id: str, db: DbSession, user: CurrentUser,
 @router.patch("/notes/{note_id}", response_model=NoteOut)
 def edit(note_id: str, body: NoteUpdate, db: DbSession, user: CurrentUser):
     ensure_workspace_perm(db, user, body.workspace_id, "edit")
-    return save_note(db, body.workspace_id, note_id, body.base_revision, NoteContent.model_validate(body.model_dump()))
+    return save_note(db, body.workspace_id, note_id, body.base_revision, NoteContent.model_validate(body.model_dump()),
+                     actor=user.id)
 
 
 @router.delete("/notes/{note_id}", status_code=204)
@@ -85,7 +86,7 @@ def permanently_delete(note_id: str, workspace_id: str, db: DbSession, user: Cur
 def append(note_id: str, body: NoteAppend, db: DbSession, user: CurrentUser):
     ensure_workspace_perm(db, user, body.workspace_id, "edit")
     return append_note(db, body.workspace_id, note_id, body.markdown,
-                       [s.model_dump() for s in body.sources])
+                       [s.model_dump() for s in body.sources], actor=user.id)
 
 
 @router.get("/notes/{note_id}/revisions")
@@ -114,4 +115,4 @@ def restore(note_id: str, body: NoteRestore, db: DbSession, user: CurrentUser):
     if row is None:
         raise HTTPException(404, tr("routeErr_noteVersionNotFound"))
     return save_note(db, body.workspace_id, note_id, body.base_revision, NoteContent.model_validate(row.snapshot),
-                     restored_sources=row.snapshot["sources"])
+                     actor=user.id, restored_sources=row.snapshot["sources"])

@@ -21,7 +21,7 @@ NOTE_LIMIT = 480_000
 _IMAGE = re.compile(r"!\[([^\]]*)\]\(((?:images|pages)/[^)\s]+)\)")
 
 
-def save_as_note(db: Session, asset: Asset) -> Note:
+def save_as_note(db: Session, asset: Asset, *, actor_id: str) -> Note:
     from app.domain.assets.importer import register_file_asset
     from app.domain.notes import create_note
 
@@ -55,4 +55,4 @@ def save_as_note(db: Session, asset: Asset) -> Note:
         markdown=body,
         project_id=asset.project_id,
         sources=[NoteSource(kind="asset", id=asset.id, label=asset.name)],
-    ))
+    ), actor=actor_id)

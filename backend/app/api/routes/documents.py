@@ -118,7 +118,7 @@ def save_document_as_note(asset_id: str, db: DbSession, user: CurrentUser) -> di
     asset = _document(db, user, asset_id)
     ensure_workspace_perm(db, user, asset.workspace_id, "edit")
     try:
-        note = save_as_note(db, asset)
+        note = save_as_note(db, asset, actor_id=user.id)
     except DocumentParseError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     return {"note_id": note.id, "title": note.title}

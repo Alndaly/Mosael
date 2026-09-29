@@ -529,7 +529,7 @@ def write_on_board(
                 timeout=WRITE_TIMEOUT_SECONDS[kind],
             ).strip()
         if kind == "document":
-            return {"outputs": [_write_note(db, workspace_id, board, note_id, text)]}
+            return {"outputs": [_write_note(db, workspace_id, board, note_id, text, actor_id=actor_id)]}
         return {"text": text}
 
     run_job_inline(db, job, write, running="jobMsg_boardWriteRunning", done="jobMsg_boardWriteDone")
@@ -545,22 +545,24 @@ def _note_title(markdown: str) -> str:
     return title[:60]
 
 
-def _write_note(db: Session, workspace_id: str, board: Board, note_id: str, markdown: str) -> dict[str, Any]:
+def _write_note(db: Session, workspace_id: str, board: Board, note_id: str, markdown: str, *,
+                actor_id: str) -> dict[str, Any]:
     """文档格写出来的正文落成笔记:引用着一篇的写成它的新一版,空的新建一篇(来源记上这张画板)。
-    交回一份 `note` 产出,回执据此把文档格钉到这一版(canvas.outputs_of)。"""
+    交回一份 `note` 产出,回执据此把文档格钉到这一版(canvas.outputs_of)。替点「写」的那个人写 ——
+    笔记上原有的来源照留,新加的只有这张画板。"""
     from app.domain.note_types import NoteContent
     from app.domain.notes import create_note, get_note, save_note, snapshot
 
     if note_id:
         note = get_note(db, workspace_id, note_id)
         note = save_note(db, workspace_id, note_id, note.revision,
-                         NoteContent.model_validate({**snapshot(note), "markdown": markdown}))
+                         NoteContent.model_validate({**snapshot(note), "markdown": markdown}), actor=actor_id)
     else:
         note = create_note(db, workspace_id, NoteContent.model_validate({
             "title": _note_title(markdown),
             "markdown": markdown,
             "sources": [{"kind": "board", "id": board.id, "label": board.name, "quote": ""}],
-        }))
+        }), actor=actor_id)
     return {"type": "note", "note_id": note.id, "revision": note.revision, "title": note.title}
 
 

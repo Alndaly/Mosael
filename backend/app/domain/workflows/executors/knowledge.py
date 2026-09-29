@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from app.domain.note_types import NoteContent
 from app.domain.notes import NoteDomainError, create_note, query_notes, read_reference
 from app.domain.workflows import WorkflowDomainError, field_name
+from app.domain.workflows.authority import current_authority
 from app.domain.workflows.executors import RunScope, register
 
 
@@ -70,7 +71,9 @@ def note_create(db: Session, scope: RunScope, config: dict) -> dict:
         content = NoteContent(title=config.get("title") or "", markdown=config.get("markdown") or "", tags=tags)
         if not content.markdown.strip():
             raise WorkflowDomainError("wfErr_noteBodyEmpty")
-        note = create_note(db, scope.workspace_id, content)
+        # 替这次运行写(跑的人 + 被执行那一版的担保人)。这个节点不收来源,写不进任何对话消息的引用;
+        # 日后收了,闸也已经按这份授权判。
+        note = create_note(db, scope.workspace_id, content, actor=current_authority(db))
         ref = read_reference(db, scope.workspace_id, note.id)
         return {"note_id": ref["note_id"], "title": ref["title"], "revision": ref["revision"], "citation_url": ref["citation_url"]}
     except (NoteDomainError, ValidationError) as exc:
