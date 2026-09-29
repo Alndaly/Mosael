@@ -110,7 +110,7 @@
       "implementations": [
         {
           "runtime": "python",
-          "location": "backend/app/domain/boards/canvas.py",
+          "location": "backend/app/domain/boards/shape.py",
           "symbol": "MAX_TITLE_CHARS"
         },
         {
