@@ -15,7 +15,12 @@
 以后把内置实现拆成插件,调用方一行不改。
 
 **这里不认识任何一项能力的宿主侧**:外链由 generation/public_links、文档解析由 documents 各自定义契约,
-在组装根登记进来(见 app.main._wire_seams),和 plugins/host_capabilities 同一个手法。
+在组装根登记进来(见 app.main._wire_seams)。
+
+**只有这一张表**(ADR 0032 §1)。生成、工具清单也登记在这里,只是不参与挑选(`pickable=False`:生成按「连接 +
+模型」挑,工具清单是每个连接自己报的);它们在表里是为了叫得出名字、说得出用在哪,以及挂上**插件实例变了
+之后宿主侧怎么跟着对齐**的钩子(`on_instance_change` / `listing`)。插件域经 plugins/host_capabilities 转发通知,
+但不再自己存一张登记表 —— 组装根把 `instance_hooks` 交给它查(插件域照旧不 import 这里)。
 """
 
 from __future__ import annotations
@@ -81,6 +86,14 @@ class Capability:
     #: 这项能力有没有「默认用哪家」。配音没有:引擎和音色是成对选的(克隆音色的 id 换到 Edge 上就是错的),
     #: 每个入口都点名 —— 设置页只列候选和「用在哪」,不给默认的选择器。
     defaultable: bool = True
+    #: 走不走这里的挑法。生成(按连接 + 模型挑,ADR 0020)和工具清单(每个连接自己报)不走:它们没有候选、没有默认,
+    #: 不进设置页,`get` 查不到;表里只留名字、用在哪和下面两个钩子。
+    pickable: bool = True
+    #: 插件实例变了(改名、换服务器、启停、授权、凭据),宿主那一侧怎么跟着对齐:`(db, instance, refresh)`。
+    #: `refresh` = 这次变动可能让「插件能做什么」变了,该重新问插件一遍。经 plugins/host_capabilities.notify 调。
+    on_instance_change: Callable[[Session, Any, bool], None] | None = None
+    #: 这个实例在这项能力上做出来的东西怎么列给插件页(生成 → 它提供的模型)。
+    listing: Callable[[Session, Any], list[dict[str, Any]]] | None = None
 
 
 @dataclass(frozen=True)
@@ -109,12 +122,21 @@ def register(capability: Capability) -> None:
 
 
 def get(name: str) -> Capability | None:
-    return _registry.get(name)
+    """一项**走挑法**的能力;生成、工具清单这类不参与挑选的查不到(见 `pickable`)。"""
+    found = _registry.get(name)
+    return found if found is not None and found.pickable else None
 
 
 def registered() -> list[Capability]:
-    """登记过的全部能力,按名字排(设置页照这个顺序列)。"""
-    return [_registry[name] for name in sorted(_registry)]
+    """走挑法的全部能力,按名字排(设置页照这个顺序列)。"""
+    return [_registry[name] for name in sorted(_registry) if _registry[name].pickable]
+
+
+def instance_hooks(name: str) -> tuple[Callable[[Session, Any, bool], None] | None, Callable[[Session, Any], list[dict[str, Any]]] | None]:
+    """这项能力在插件实例变动时的两个钩子(对齐、列清单);没登记这项能力或没有钩子时是 None。
+    组装根把它交给 plugins/host_capabilities 查 —— 插件域不 import 这里。"""
+    found = _registry.get(name)
+    return (found.on_instance_change, found.listing) if found is not None else (None, None)
 
 
 def _missing(db: Session, instance: Any) -> tuple[str, ...]:
@@ -171,7 +193,7 @@ def uses_of(name: str, *, settings: bool = True) -> list[Use]:
 
     #: 没有默认的能力(配音)不在设置里「设成默认」。
     found = [Use(name, "app", fragment("capUse_settingsDefault"))] \
-        if settings and name in _registry and _registry[name].defaultable else []
+        if settings and get(name) is not None and _registry[name].defaultable else []
     found += [one for one in _uses if one.capability == name]
     for finder in _use_finders:
         found += [one for one in finder() if one.capability == name]
@@ -184,15 +206,12 @@ def used_by(name: str, *, settings: bool = True) -> list[dict[str, str]]:
             for use in uses_of(name, settings=settings)]
 
 
-#: 不走能力表、但同样能写进 `provides` 的两项:生成按「连接 + 模型」挑(ADR 0020),工具清单是每个连接自己报的。
-#: 它们没有候选、没有默认,只需要一个名字 —— 插件市场按能力筛、插件页说它替宿主做什么时要叫得出来。
-_OUTSIDE_TABLE = {"generation": "capability_generation", "tools": "capability_tools"}
-
-
 def vocabulary() -> list[dict[str, Any]]:
-    """`provides` 里能写的每一项:名字、界面上叫什么、装上之后用在哪。插件市场、插件页照它说,不各写一份。"""
-    terms = [(one.name, one.label_key) for one in registered()] + sorted(_OUTSIDE_TABLE.items())
-    return [{"name": name, "label": tr(label_key), "used_by": used_by(name)} for name, label_key in terms]
+    """`provides` 里能写的每一项:名字、界面上叫什么、装上之后用在哪。插件市场、插件页照它说,不各写一份。
+    走挑法的在前,再是不参与挑选的(生成、工具清单),各按名字排。"""
+    outside = [_registry[name] for name in sorted(_registry) if not _registry[name].pickable]
+    return [{"name": one.name, "label": tr(one.label_key), "used_by": used_by(one.name)}
+            for one in registered() + outside]
 
 
 #: 工作流 / 画板字段里「挑一家」的通用选项来源:`options_from: "providers.<能力>"`(ADR 0032 §3)。
@@ -351,6 +370,7 @@ __all__ = [
     "CapabilityUnavailable",
     "Provider",
     "choices",
+    "instance_hooks",
     "resolve_named",
     "PROVIDERS_SOURCE",
     "Use",

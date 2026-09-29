@@ -283,8 +283,8 @@ def _wire_seams() -> None:
     # 同一条道理:sidecar 是基础设施,不认识"网络配置存在哪张表"。
     from app.ai.sidecar import pi_client
     from app.domain.network import subprocess_env_for_child
-    # 插件可以是生成供应商(ADR 0020):生成域把「实例变了就对齐连接」和「plugin:<包> 的 Adapter」
-    # 登记进来。插件域不认识生成域,ai/providers 的 registry 也不认识插件 —— 两头都是在这里接上的。
+    # 插件可以是生成供应商(ADR 0020):生成域把「实例变了就对齐连接」(能力表的 generation 那一项)和
+    # 「plugin:<包> 的 Adapter」登记进来。插件域不认识生成域,ai/providers 的 registry 也不认识插件 —— 两头都是在这里接上的。
     from app.domain.generation import plugin_connections
     # 插件可以在运行时报出工具(ComfyUI:每张工作流一个);清单刷新之后,存着的老节点由工作流域改写。
     from app.domain.plugins import dynamic_tools
@@ -307,6 +307,17 @@ def _wire_seams() -> None:
     capabilities.register(transcription.CAPABILITY)
     capabilities.register(translate.CAPABILITY)
     capabilities.register(speech.CAPABILITY)
+    # 生成、工具清单也在这张表里(ADR 0032 §1:只剩一张),只是不参与挑选;表里挂着插件实例变了之后宿主侧怎么
+    # 对齐的钩子。插件域不 import 能力表,由这里把查钩子的函数交给它的转发器。
+    from app.domain.plugins import host_capabilities
+    from app.domain.plugins.manifest import GENERATION, TOOLS
+
+    capabilities.register(plugin_connections.CAPABILITY)
+    capabilities.register(capabilities.Capability(
+        name=TOOLS, label_key="capability_tools", description_key="capability_tools", pickable=False,
+        on_instance_change=dynamic_tools.refresh,
+    ))
+    host_capabilities.use_table(capabilities.instance_hooks)
     # 「用在哪」(ADR 0032 §4):宿主界面入口各自登记;工作流节点、智能体工具现扫各自的注册表。
     documents.register_uses()
     public_links.register_uses()
@@ -314,9 +325,8 @@ def _wire_seams() -> None:
     transcription.register_uses()
     translate.register_uses()
     speech.register_uses()
-    #: 生成、工具清单不走能力表(没有候选、没有默认),用在哪也照样说得出。
+    #: 生成、工具清单不走挑法(没有候选、没有默认),用在哪也照样说得出。
     from app.core.i18n import fragment
-    from app.domain.plugins.manifest import GENERATION, TOOLS
 
     capabilities.register_use(capabilities.Use(GENERATION, "app", fragment("capUse_generationModels")))
     capabilities.register_use(capabilities.Use(TOOLS, "app", fragment("capUse_pluginTools")))
@@ -327,7 +337,6 @@ def _wire_seams() -> None:
     capabilities.register_use_finder(confirmable_registry.capability_uses)
     agent_receipts.install()
     plugin_connections.install()
-    dynamic_tools.install()
     plugin_references.install()
     board_plugin_references.install()
     asset_plugin_bridge.install()

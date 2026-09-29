@@ -98,7 +98,9 @@
 4. **配音**:`engine_catalog` 收进能力表,音色清单是提供方的清单钩子。
 5. **设置页总览、市场按能力筛选**。
 
-进度:第 1 步除「`host_capabilities` 并入能力表」外已落地(插件页宿主工具的「用在哪」由接口现算、文档解析 / 降噪 /
+进度:第 1 步已落地 ——「`host_capabilities` 并入能力表」:生成、工具清单作为不参与挑选的两项(`pickable=False`)
+登记进能力表,实例变动的对齐钩子与插件页的清单挂在表里(`on_instance_change` / `listing`),`host_capabilities`
+只剩按表查钩子、转发通知(查法由组装根注入,插件域不 import 能力表);(插件页宿主工具的「用在哪」由接口现算、文档解析 / 降噪 /
 分离能在插件页「试一下」,走的是宿主真实的入口);第 2 步已落地;第 3 步的转写已落地(`transcription`:本机 FunASR / WhisperX 是内置提供方,素材转写、听写、
 参考音频识别、工作流节点走同一个 transcriber;部署配置 `asr_provider` 不再参与挑选),翻译已落地(`translation`:`builtin:google` / `builtin:chat` 加插件,
 对话模型那一家带连接 / 模型两个参数,节点里 `active_when: {engine: builtin:chat}`;剪辑页字幕翻译的引擎下拉照能力表列);第 4 步已落地(`speech`:内置引擎 id 统一成 `builtin:<适配器名>`,

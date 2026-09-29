@@ -28,7 +28,6 @@ from sqlalchemy.orm import Session
 
 from app.db.models import PluginInstance
 from app.domain.effects import EFFECTS, NONE as NO_EFFECTS
-from app.domain.plugins import host_capabilities
 from app.domain.plugins import instances as inst
 from app.domain.plugins import tools
 from app.domain.plugins.errors import PluginDomainError
@@ -54,7 +53,7 @@ _MIRROR_KEY = re.compile(r"^[A-Za-z0-9_.:\-]{1,128}$")
 _MIRROR_MODEL_MAX = 512
 
 #: 清单刷新之后要跟着动的那些(把存着的老节点改写成新工具,见 domain/workflows/plugin_references)。
-#: 插件域不认识工作流域 —— 由那边在组装根登记进来,方向和 host_capabilities 一样。
+#: 插件域不认识工作流域 —— 由那边在组装根登记进来(和能力表的实例钩子同一个方向)。
 Listener = Callable[[Session, PluginInstance], None]
 _listeners: list[Listener] = []
 
@@ -185,9 +184,4 @@ def refresh(db: Session, instance: PluginInstance, refresh: bool) -> None:
             logger.exception("插件实例 %s 的工具清单刷新之后,跟着动的那一侧出错", instance.id)
 
 
-def install() -> None:
-    """组装根调一次:登记 `tools` 这项能力的宿主侧。"""
-    host_capabilities.register(TOOLS, refresh)
-
-
-__all__ = ["CATALOG_TIMEOUT_SECONDS", "MAX_TOOLS", "clean_mirror", "install", "on_refreshed", "refresh"]
+__all__ = ["CATALOG_TIMEOUT_SECONDS", "MAX_TOOLS", "clean_mirror", "on_refreshed", "refresh"]

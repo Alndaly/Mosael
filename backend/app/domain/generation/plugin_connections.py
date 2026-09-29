@@ -8,7 +8,8 @@
 - Adapter(`PluginGenerationAdapter`)在 `ai/providers/registry` 的动态来源里登记,生成执行器照常调它。
 
 插件那一侧的契约(问目录、做一次生成、拷文件进出)在 domain/plugins/generation;这里只负责把它
-接到生成领域上。方向是单向的:这里认识插件域,插件域不认识这里(它经 host_capabilities 通知)。
+接到生成领域上。方向是单向的:这里认识插件域,插件域不认识这里 —— 「实例变了就对齐连接」登记在能力表的
+`generation` 那一项(`CAPABILITY`),插件域经 host_capabilities 转发通知。
 """
 
 from __future__ import annotations
@@ -39,9 +40,9 @@ from app.core.config import settings
 from app.core.db import SessionLocal
 from app.core.i18n import LocalizedError, get_current_locale, pick_text
 from app.db.models import PluginInstance, ProviderProfile
+from app.domain import capabilities
 from app.domain.providers import models as provider_models
 from app.domain.generation.catalog import GENERATION_KINDS, PROMPT_MODES
-from app.domain.plugins import host_capabilities
 from app.domain.plugins import instances as inst
 from app.domain.plugins import generation as plugin_generation
 from app.domain.plugins.errors import PluginDomainError
@@ -400,13 +401,25 @@ def _adapter_source(vendor: str, kind: str) -> GenerationAdapter | None:
     return PluginGenerationAdapter(package_id, kind)
 
 
+#: 能力表里的 `generation`(ADR 0032 §1):不走能力表的挑法(按连接 + 模型挑,ADR 0020),登记它是为了叫得出名字、
+#: 说得出用在哪,以及插件实例变了之后对齐连接(`_handler`)、在插件页列出它提供的模型(`provided_models`)。
+CAPABILITY = capabilities.Capability(
+    name=GENERATION,
+    label_key="capability_generation",
+    description_key="capability_generation",
+    pickable=False,
+    on_instance_change=_handler,
+    listing=provided_models,
+)
+
+
 def install() -> None:
-    """组装根调一次:登记宿主侧(实例变了就对齐连接)和 Adapter 的动态来源。"""
-    host_capabilities.register(GENERATION, _handler, listing=provided_models)
+    """组装根调一次:登记 Adapter 的动态来源(能力表那一项由组装根登记,见 `CAPABILITY`)。"""
     register_generation_adapter_source(_adapter_source)
 
 
 __all__ = [
+    "CAPABILITY",
     "GENERATION_KINDS",
     "PluginGenerationAdapter",
     "VENDOR_PREFIX",

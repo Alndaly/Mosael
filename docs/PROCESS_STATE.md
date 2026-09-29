@@ -120,8 +120,9 @@
   登记,运行时只读;挑哪一家读的是库里的默认,不在这里。
 - `app/domain/capabilities/__init__.py:_uses`、`app/domain/capabilities/__init__.py:_use_finders` — 一项能力「用在哪」
   (ADR 0032 §4):宿主界面入口登记的那几条,和现扫工作流节点、智能体工具的函数。组装根在导入期登记,运行时只读。
-- `app/domain/plugins/host_capabilities.py:_handlers` — 插件实例变了,谁替宿主那一侧对齐(今天是生成:
-  实例 → 连接 + 模型行,见 ADR 0020);`app/domain/plugins/host_capabilities.py:_listings` —— 那一侧做出来的东西怎么列给插件页(生成 → 提供的模型)。
+- `app/domain/plugins/host_capabilities.py:_lookup` — 插件实例变了,去哪查宿主那一侧的对齐钩子:组装根交给它
+  `capabilities.instance_hooks`。钩子本身登记在能力表 `_registry` 里(生成:实例 → 连接 + 模型行,见 ADR 0020;
+  工具清单:重问插件报了哪些工具),这里不另存一张表(ADR 0032 §1)。
 - `app/domain/plugins/dynamic_tools.py:_listeners` —— 插件报出的工具清单刷新之后跟着动的那一侧(工作流域:把存着的老节点改写成取代它的工具)。
 - `app/ai/providers/registry.py:_GENERATION_SOURCES` — 生成 Adapter 的动态来源(`plugin:<包 id>` → 插件生成
   供应商)。装了哪些插件在库里,这张表只记「去哪儿问」。
