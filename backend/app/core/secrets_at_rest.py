@@ -4,6 +4,8 @@ import functools
 import json
 import logging
 import os
+import sys
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -22,17 +24,24 @@ logger = logging.getLogger(__name__)
 
 主密钥**不放在库里**(同一个文件里的钥匙和锁等于没锁),按顺序取:
 
+    标准输入                  桌面版:Electron 用系统钥匙串封存主密钥(electron/master-key.cjs),起后端时
+                              设 MOSAEL_SECRET_KEY_STDIN=1、从标准输入交第一行。**不走环境变量**:同一个系统
+                              用户的其他进程(插件)读得到另一个进程的环境变量;数据目录里也就没有明文密钥。
     MOSAEL_SECRET_KEY    环境变量 —— 服务端部署的答案(systemd EnvironmentFile、docker
-                              secret、k8s secret)。桌面版由 Electron 从系统钥匙串取出后传进来,
-                              于是桌面与服务端走的是同一条路,不需要第二套机制。
-    <数据目录>/secret.key      0600 的文件 —— 裸跑 uvicorn 时的兜底。它只挡"库文件单独泄露",
-                              挡不住"整个数据目录被拷走";这是如实的降级,不是等价方案。
+                              secret、k8s secret)。
+    <数据目录>/secret.key      0600 的文件 —— 裸跑 uvicorn、或系统没有可用钥匙串时的兜底。它只挡"库文件单独
+                              泄露",挡不住"整个数据目录被拷走";这是如实的降级,不是等价方案。
+
+需要同一把密钥的子进程(飞书连接)由 `child_handoff` 给出怎么交:密钥是从标准输入来的,就照样经它的
+标准输入交下去。
 
 加解密挂在**列类型**上(见 EncryptedText/EncryptedJSON),领域代码一行都不用改 —— 也就没有
 "这里记得解密、那里忘了"的可能。
 """
 
 ENV_VAR = "MOSAEL_SECRET_KEY"
+#: 设为 1 = 主密钥在标准输入的第一行(桌面版,见模块说明)。读到之后从本进程环境里摘掉,子进程不继承。
+STDIN_FLAG = "MOSAEL_SECRET_KEY_STDIN"
 KEY_FILENAME = "secret.key"
 
 #: 装秘密的列。**登记在这一处**,棘轮据此检查它们确实用了加密类型
@@ -55,17 +64,43 @@ def key_path() -> Path:
     return settings.data_dir / KEY_FILENAME
 
 
+#: 主密钥从哪来的(stdin / env / file),`child_handoff` 据此决定怎么交给子进程。
+_source = ""
+_lock = threading.Lock()
+
+
+def _from_stdin() -> bytes:
+    """读标准输入的第一行。只读一次(`master_key` 缓存),读完从环境里摘掉标记,子进程不会再去读它们的 stdin。"""
+    line = sys.stdin.buffer.readline() if sys.stdin is not None else b""
+    os.environ.pop(STDIN_FLAG, None)
+    key = line.strip()
+    if not key:
+        raise RuntimeError(f"{STDIN_FLAG}=1,但标准输入里没有主密钥")
+    return key
+
+
 @functools.lru_cache(maxsize=1)
 def master_key() -> bytes:
-    """这个部署的主密钥。环境变量优先;没有就在数据目录里建一个 0600 的。
+    """这个部署的主密钥:标准输入(桌面版)> 环境变量 > 数据目录里的 0600 文件(没有就建一个)。
 
     缓存:每读一次列都去碰一次文件系统没有意义,而"密钥是哪一把"在一次进程生命周期里不变。
-    测试换密钥时调 `master_key.cache_clear()`。
+    测试换密钥时调 `master_key.cache_clear()`。加锁:第一次取可能同时来自几条线程,而标准输入只能读一次。
     """
+    with _lock:
+        return _load()
+
+
+def _load() -> bytes:
+    global _source
+    if os.environ.get(STDIN_FLAG) == "1":
+        _source = "stdin"
+        return _from_stdin()
     supplied = (os.environ.get(ENV_VAR) or "").strip()
     if supplied:
+        _source = "env"
         return supplied.encode()
 
+    _source = "file"
     path = key_path()
     if path.is_file():
         return path.read_bytes().strip()
@@ -78,6 +113,17 @@ def master_key() -> bytes:
         file.write(generated)
     logger.info("生成了新的落盘加密密钥:%s(请随数据目录一起备份 —— 丢了就解不开已存的凭据)", path)
     return generated
+
+
+def child_handoff() -> tuple[dict[str, str], str | None]:
+    """要用同一把主密钥的子进程怎么拿到它:(要加的环境变量, 要写进它标准输入的一行)。
+
+    密钥是从标准输入来的(桌面版)就照样经子进程的标准输入交下去;环境变量、文件两种情况子进程照同一条路
+    自己取,什么都不用给。"""
+    key = master_key()
+    if _source == "stdin":
+        return {STDIN_FLAG: "1"}, key.decode() + "\n"
+    return {}, None
 
 
 def encrypt(plaintext: str) -> str:

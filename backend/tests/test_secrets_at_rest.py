@@ -27,6 +27,8 @@ from __future__ import annotations
 RATCHET = True
 
 
+import os
+
 from sqlalchemy import text
 
 from app.core.db import SessionLocal, engine
@@ -217,3 +219,51 @@ def test_the_migration_is_idempotent() -> None:
     with SessionLocal() as db:
         me = db.query(User).order_by(User.created_at).first()
         assert db.get(ProviderCredential, {"profile_id": profile_id, "owner_user_id": me.id}).api_key == "sk-PLAINTEXT-1234"
+
+
+def test_desktop_hands_the_key_over_stdin_and_nothing_lands_on_disk_or_in_env(monkeypatch, tmp_path) -> None:
+    """桌面版:Electron 用钥匙串封存主密钥,经标准输入交给后端。数据目录里没有明文文件,子进程也不继承标记。"""
+    import io
+
+    from cryptography.fernet import Fernet
+
+    supplied = Fernet.generate_key()
+    monkeypatch.setattr(secrets_at_rest, "key_path", lambda: tmp_path / "secret.key")
+    monkeypatch.delenv("MOSAEL_SECRET_KEY", raising=False)
+    monkeypatch.setenv("MOSAEL_SECRET_KEY_STDIN", "1")
+    monkeypatch.setattr(secrets_at_rest.sys, "stdin", io.TextIOWrapper(io.BytesIO(supplied + b"\n")))
+    secrets_at_rest.master_key.cache_clear()
+    try:
+        assert secrets_at_rest.master_key() == supplied
+        assert not (tmp_path / "secret.key").exists(), "数据目录里不落明文密钥"
+        assert "MOSAEL_SECRET_KEY_STDIN" not in os.environ, "读完摘掉标记,子进程不会去读它们的 stdin"
+        env, line = secrets_at_rest.child_handoff()
+        assert env == {"MOSAEL_SECRET_KEY_STDIN": "1"} and line == supplied.decode() + "\n", "要用密钥的子进程照样经 stdin 拿"
+    finally:
+        secrets_at_rest.master_key.cache_clear()
+
+
+def test_the_stdin_flag_without_a_key_fails_loudly(monkeypatch) -> None:
+    import io
+
+    import pytest
+
+    monkeypatch.setenv("MOSAEL_SECRET_KEY_STDIN", "1")
+    monkeypatch.setattr(secrets_at_rest.sys, "stdin", io.TextIOWrapper(io.BytesIO(b"")))
+    secrets_at_rest.master_key.cache_clear()
+    try:
+        with pytest.raises(RuntimeError):
+            secrets_at_rest.master_key()
+    finally:
+        secrets_at_rest.master_key.cache_clear()
+
+
+def test_env_and_file_keys_need_no_handoff(monkeypatch) -> None:
+    from cryptography.fernet import Fernet
+
+    monkeypatch.setenv("MOSAEL_SECRET_KEY", Fernet.generate_key().decode())
+    secrets_at_rest.master_key.cache_clear()
+    try:
+        assert secrets_at_rest.child_handoff() == ({}, None)
+    finally:
+        secrets_at_rest.master_key.cache_clear()

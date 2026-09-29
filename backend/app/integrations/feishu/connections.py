@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import subprocess
 import threading
 from pathlib import Path
@@ -14,6 +15,7 @@ from sqlalchemy import select
 
 from app.core import interpreter
 from app.core.child_process import popen_text
+from app.core.secrets_at_rest import child_handoff
 from app.core.db import SessionLocal
 from app.db.models import FeishuBot
 from app.domain.feishu import bots
@@ -32,10 +34,17 @@ def start_connection(bot_id: str) -> None:
         if existing is not None and existing.poll() is None:
             return
         bots.write_status(bot_id, "connecting")
+        #: 子进程要解开机器人的 app_secret:主密钥按主进程拿到它的同一条路交下去(见 core/secrets_at_rest)。
+        extra_env, key_line = child_handoff()
         process = popen_text(
             [str(python) if python.exists() else interpreter.base_python(), "-m", "app.integrations.feishu.worker", bot_id],
             cwd=backend_dir,
+            env={**os.environ, **extra_env},
+            stdin=subprocess.PIPE if key_line else None,
         )
+        if key_line and process.stdin is not None:
+            process.stdin.write(key_line)
+            process.stdin.close()
         _processes[bot_id] = process
 
 

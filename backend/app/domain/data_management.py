@@ -28,7 +28,10 @@ from app.db.safety import DATABASE_SCHEMA_VERSION, database_version
 BACKUP_FORMAT = "mosael-backup"
 BACKUP_FORMAT_VERSION = 1
 BACKUP_DIRECTORIES = ("media", "plugins", "avatars")
-BACKUP_FILES = ("secret.key",)
+#: 主密钥跟着备份走的形态:桌面版是钥匙串封存的 `secret.key.sealed`(electron/master-key.cjs)—— 只有这台
+#: 机器上的这个系统用户解得开,备份被拿走时已存的凭据仍是锁着的;换一台机器恢复,凭据要重新填。
+#: 没有钥匙串的部署(服务端、裸跑)才有明文 `secret.key`,那是如实的降级,见 core/secrets_at_rest。
+BACKUP_FILES = ("secret.key.sealed", "secret.key")
 RESTORE_MARKER = ".mosael-restore.json"
 MAX_ARCHIVE_ENTRIES = 100_000
 MAX_MANIFEST_BYTES = 5 * 1024 * 1024

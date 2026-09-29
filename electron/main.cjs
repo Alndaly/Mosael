@@ -7,6 +7,7 @@ const {
   ipcMain,
   nativeImage,
   net,
+  safeStorage,
   shell,
   systemPreferences,
 } = require("electron");
@@ -15,6 +16,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { loginShellPath } = require("./login-shell-path.cjs");
+const { resolveMasterKey } = require("./master-key.cjs");
 const { Readable } = require("node:stream");
 const { pipeline } = require("node:stream/promises");
 const {
@@ -301,6 +303,21 @@ async function ensureBackend() {
     );
     if (fs.existsSync(ttsPython)) backendEnv.MOSAEL_TTS_BASE_PYTHON = ttsPython;
   }
+  // 落盘加密的主密钥:系统钥匙串封存,经标准输入交给后端(见 master-key.cjs)。钥匙串不可用时是 null,
+  // 后端照旧用数据目录里的 secret.key。**只在打包版这么做**:开发时常有人对着同一个数据目录手动起 uvicorn,
+  // 明文文件被收走的话,手动起的那个会新建一把钥匙,已存的凭据全解不开。
+  let masterKey = null;
+  if (!isDev) {
+    try {
+      masterKey = resolveMasterKey(configuredDataDir, safeStorage);
+    } catch (error) {
+      appendMainLog("master-key-unavailable", error);
+    }
+  }
+  if (masterKey) {
+    backendEnv.MOSAEL_SECRET_KEY_STDIN = "1";
+    stdio = stdio === "inherit" ? ["pipe", "inherit", "inherit"] : stdio === "ignore" ? ["pipe", "ignore", "ignore"] : ["pipe", stdio[1], stdio[2]];
+  }
   const spawnedBackend = spawn(command, args, {
     cwd,
     env: backendEnv,
@@ -315,6 +332,7 @@ async function ensureBackend() {
     // 非 Windows 上该字段被忽略。
     windowsHide: true,
   });
+  if (masterKey && spawnedBackend.stdin) spawnedBackend.stdin.end(`${masterKey}\n`);
   backend = spawnedBackend;
   spawnedBackend.on("exit", (code) => {
     if (backend === spawnedBackend) backend = null;

@@ -89,6 +89,11 @@ from app.workers.scheduler import start_scheduler_loop, stop_scheduler_loop
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     configure_logging()  # 先配好日志,后续启动步骤才追溯得到
     logger.info("Mosael backend starting (host=%s port=%s)", settings.backend_host, settings.backend_port)
+    # 主密钥先取:桌面版由 Electron 经标准输入交来(见 core/secrets_at_rest),在启动时读掉,不留到某次
+    # 解密时才在随便哪条线程里去读;读不到在这里就报出来。
+    from app.core.secrets_at_rest import master_key
+
+    master_key()
     init_db()
     # 「配置从数据库读」「代理怎么算」这两道缝装在 _wire_seams(导入期),不在这里 —— 见那里的注释。
     _prepare_network()
