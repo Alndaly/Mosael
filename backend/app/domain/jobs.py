@@ -601,6 +601,13 @@ class JobRunner:
 _runner = JobRunner(MAX_ACTIVE_JOBS)
 
 
+def reset_runner() -> None:
+    """换一个空的派发器。**给测试框架用**,和 wait_for_idle_jobs 同一个性质:替身线程不会执行
+    任务体,它占的名额永远不还,不换的话会串到后面的测试里。生产里没有理由调它。"""
+    global _runner
+    _runner = JobRunner(MAX_ACTIVE_JOBS)
+
+
 def waiting_on_other_jobs():
     """当前任务(按 contextvar 认)在等别的任务 —— 见 JobRunner.parked。"""
     return _runner.parked(current_parent_job_id())

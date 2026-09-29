@@ -57,6 +57,12 @@ def _no_stragglers_from_the_previous_test():
     wait_for_idle_autopilot()
     wait_for_idle_jobs()
     yield
+    # 有些测试把 jobs 里的 Thread 换成「start 什么都不做」的替身:派发器以为那个任务还在跑,名额永远
+    # 不还 —— 漏满上限之后,**后面每一条测试**派发的任务都排队不动,表现是全量跑到一半整体卡住。
+    # 每条测试之后换一个新的派发器;真在跑的线程照旧由上面那几个 wait 等着。
+    from app.domain.jobs import reset_runner
+
+    reset_runner()
 
 
 @pytest.fixture(autouse=True)
