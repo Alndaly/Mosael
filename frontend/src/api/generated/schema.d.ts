@@ -173,6 +173,8 @@ export interface paths {
         /**
          * Upload Avatar
          * @description 上传/替换头像:落 data_dir/avatars/<uid>-<ts>.<ext>,key 带时间戳天然破缓存。
+         *
+         *     同步端点(跑在线程池里):写盘和数据库都是阻塞调用,放在 async 里会卡住事件循环。
          */
         post: operations["upload_avatar_api_auth_me_avatar_post"];
         delete?: never;

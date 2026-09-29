@@ -13,7 +13,7 @@ from fastapi.testclient import TestClient
 
 import mcp_server
 from app.core.db import SessionLocal
-from app.core.security import mint_service_session
+from app.core.security import mint_tool_call_session
 from app.db.models import User
 from app.domain.authority import Authority, Voucher
 from app.domain.note_types import NoteContent
@@ -102,7 +102,7 @@ def test_画板上同事改写文档格_笔记上原有的来源照留() -> None
 
 
 def test_智能体在自己的对话里把消息存成笔记_操作人是这一轮的发起人(monkeypatch) -> None:
-    """智能体的工具走 HTTP,带的是这一轮铸给**发消息的那个人**的令牌(agent/host._mint_service_session),
+    """智能体的工具走 HTTP,带的是这一轮铸给**发消息的那个人**的令牌(工具体回连用的是 routes/agent_tools 铸的 tool_call 令牌,同一个人、同一个会话),
     没有跳过检查的「系统」身份:主人的智能体能引主人自己的对话,同事的智能体引不了主人的私有对话。"""
     owner, workspace, mate = _team()
     mine = _session(owner, workspace, shared=False)
@@ -112,7 +112,7 @@ def test_智能体在自己的对话里把消息存成笔记_操作人是这一�
     def agent_of(username: str, session_id: str) -> list[tuple[str, str, int, str]]:
         client = TestClient(app)
         with SessionLocal() as db:
-            client.headers["Authorization"] = f"Bearer {mint_service_session(db, _user_id(username), agent_session_id=session_id)}"
+            client.headers["Authorization"] = f"Bearer {mint_tool_call_session(db, _user_id(username), agent_session_id=session_id)}"
         return _route_through(monkeypatch, client)
 
     agent_of("tester", mine)
