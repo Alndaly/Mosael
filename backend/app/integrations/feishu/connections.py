@@ -1,72 +1,164 @@
-"""每个机器人一个长连接子进程(`python -m app.integrations.feishu.worker <bot_id>`)的起停。
+"""每个机器人一个长连接子进程(`python -m app.integrations.feishu.worker <bot_id>`)的起停,以及它转发来的事件。
 
 独立进程是 lark_oapi SDK 的硬约束:它的 ws 客户端共享模块级事件循环,同一进程跑多条连接会互相污染。
+但子进程**只转发**(协议见 worker.py):消息、卡片点击、连接状态都经管道回到这里,在主进程里处理 ——
+和桌面端同一条 turn 管线、同一个数据库连接池,子进程既不开库也不拿主密钥。连接凭据(app_id/app_secret)
+由这里解密后经 stdin 交给它,不进命令行、不进环境变量。
 """
 
 from __future__ import annotations
 
+import json
 import logging
-import os
 import subprocess
 import threading
 from pathlib import Path
+from typing import Any
 
 from sqlalchemy import select
 
 from app.core import interpreter
 from app.core.child_process import popen_text
-from app.core.secrets_at_rest import child_handoff
 from app.core.db import SessionLocal
 from app.db.models import FeishuBot
 from app.domain.feishu import bots
+from app.integrations.feishu import approvals, inbound
+from app.integrations.feishu.worker import PROTOCOL
 
 logger = logging.getLogger(__name__)
 
-_processes: dict[str, subprocess.Popen] = {}
+
+class Connection:
+    """一个机器人的 worker 进程,和往它 stdin 写答复的那把锁。"""
+
+    def __init__(self, bot_id: str, process: subprocess.Popen) -> None:
+        self.bot_id = bot_id
+        self.process = process
+        self._write_lock = threading.Lock()
+
+    def send(self, payload: dict[str, Any]) -> None:
+        stdin = self.process.stdin
+        if stdin is None:
+            return
+        with self._write_lock:
+            try:
+                stdin.write(json.dumps(payload, ensure_ascii=False) + "\n")
+                stdin.flush()
+            except (BrokenPipeError, OSError, ValueError):
+                logger.warning("feishu worker stdin closed bot=%s", self.bot_id)
+
+
+_processes: dict[str, Connection] = {}
 _process_lock = threading.Lock()
+
+
+def dispatch(connection: Connection, event: dict[str, Any]) -> None:
+    """worker 转来的一条事件。慢活(一轮对话、一次批准)都丢给线程,读管道的循环不能停。"""
+    kind = event.get("event")
+    if kind == "message":
+        threading.Thread(
+            target=inbound.handle_incoming,
+            args=(connection.bot_id, str(event.get("chat_id") or ""), str(event.get("message_id") or "")),
+            kwargs={
+                "sender_open_id": str(event.get("open_id") or ""),
+                "message_type": str(event.get("message_type") or ""),
+                "content_json": str(event.get("content") or ""),
+            },
+            daemon=True,
+            name="feishu-inbound",
+        ).start()
+    elif kind == "card":
+
+        def decide() -> None:
+            try:
+                value = event.get("value")
+                result = approvals.handle_card_action(str(event.get("open_id") or ""), value if isinstance(value, dict) else {})
+            except Exception:  # noqa: BLE001 —— 回一句总比让飞书那头超时强
+                logger.exception("feishu card decision crashed bot=%s", connection.bot_id)
+                result = {"toast": {"type": "error", "content": "处理失败,请到 Mosael 里查看"}}
+            connection.send({"id": event.get("id"), "result": dict(result)})
+
+        threading.Thread(target=decide, daemon=True, name="feishu-card").start()
+    elif kind == "status":
+        status = str(event.get("status") or "")
+        if status == "online":
+            with SessionLocal() as db:
+                row = db.get(FeishuBot, connection.bot_id)
+                if row is not None and row.status == "connecting":
+                    row.status = "online"
+                    db.commit()
+        elif status:
+            bots.write_status(connection.bot_id, status, str(event.get("detail") or ""))
+
+
+def _pump(connection: Connection) -> None:
+    """读 worker 的 stdout 直到它退出。协议行分发,其余当日志。"""
+    stdout = connection.process.stdout
+    if stdout is None:
+        return
+    for line in stdout:
+        if not line.startswith(PROTOCOL):
+            if line.strip():
+                logger.info("feishu[%s] %s", connection.bot_id, line.rstrip())
+            continue
+        try:
+            dispatch(connection, json.loads(line[len(PROTOCOL):]))
+        except Exception:  # noqa: BLE001 —— 一条坏事件不该掐断整条连接
+            logger.exception("feishu event dispatch failed bot=%s", connection.bot_id)
+    code = connection.process.wait()
+    with _process_lock:
+        still_current = _processes.get(connection.bot_id) is connection
+        if still_current:
+            del _processes[connection.bot_id]
+    # 被 stop_connection 停掉的不算出错;自己退出的要让设置页看得见。
+    if still_current:
+        bots.write_status(connection.bot_id, "error", f"长连接进程退出(code {code})")
 
 
 def start_connection(bot_id: str) -> None:
     backend_dir = Path(__file__).resolve().parents[3]
     python = backend_dir / ".venv" / "bin" / "python"
+    with SessionLocal() as db:
+        bot = db.get(FeishuBot, bot_id)
+        if bot is None:
+            raise LookupError(bot_id)
+        credentials = {"app_id": bot.app_id, "app_secret": bot.app_secret}
     with _process_lock:
         existing = _processes.get(bot_id)
-        if existing is not None and existing.poll() is None:
+        if existing is not None and existing.process.poll() is None:
             return
         bots.write_status(bot_id, "connecting")
-        #: 子进程要解开机器人的 app_secret:主密钥按主进程拿到它的同一条路交下去(见 core/secrets_at_rest)。
-        extra_env, key_line = child_handoff()
         process = popen_text(
             [str(python) if python.exists() else interpreter.base_python(), "-m", "app.integrations.feishu.worker", bot_id],
             cwd=backend_dir,
-            env={**os.environ, **extra_env},
-            stdin=subprocess.PIPE if key_line else None,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
         )
-        if key_line and process.stdin is not None:
-            process.stdin.write(key_line)
-            process.stdin.close()
-        _processes[bot_id] = process
+        connection = Connection(bot_id, process)
+        connection.send(credentials)
+        _processes[bot_id] = connection
+    threading.Thread(target=_pump, args=(connection,), daemon=True, name=f"feishu-{bot_id[:8]}").start()
 
 
 def stop_connection(bot_id: str) -> None:
     with _process_lock:
-        process = _processes.pop(bot_id, None)
-    if process is not None and process.poll() is None:
-        process.terminate()
+        connection = _processes.pop(bot_id, None)
+    if connection is not None and connection.process.poll() is None:
+        connection.process.terminate()
         try:
-            process.wait(timeout=5)
+            connection.process.wait(timeout=5)
         except subprocess.TimeoutExpired:
-            process.kill()
+            connection.process.kill()
     bots.write_status(bot_id, "offline")
 
 
 def autostart_enabled_bots() -> None:
     with SessionLocal() as db:
-        bots = db.scalars(select(FeishuBot).where(FeishuBot.enabled.is_(True))).all()
-        for bot in bots:
+        enabled = db.scalars(select(FeishuBot).where(FeishuBot.enabled.is_(True))).all()
+        for bot in enabled:
             bot.status = "offline"
         db.commit()
-        bot_ids = [bot.id for bot in bots]
+        bot_ids = [bot.id for bot in enabled]
     for bot_id in bot_ids:
         try:
             start_connection(bot_id)

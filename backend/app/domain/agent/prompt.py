@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 
 from app.db.models import AgentMessage, AgentSession, Asset
 from app.domain.agent import memory as agent_memory
+from app.domain.agent import origins
 
 SYSTEM_PROMPT_TEMPLATE = """你是 Mosael 的视频创作助手,运行在用户本机的 Mosael 工作台里。
 你唯一的工作对象是 Mosael 里的素材、时间线与生成能力,通过 mosael MCP 工具操作:
@@ -373,4 +374,8 @@ def build_system_prompt(db: Session, session: AgentSession) -> str:
         prompt += '\n\n【用户设定】本次会话视频分析方式=原生:调用 analyze_asset 分析视频时必须传 mode="native"(直读整段视频)。'
     elif session.analysis_video_mode == "frames":
         prompt += '\n\n【用户设定】本次会话视频分析方式=抽帧:调用 analyze_asset 分析视频时必须传 mode="frames"(抽帧+转写)。'
+    # 外部渠道(飞书……)各自补一段:权限档、回复形态。见 domain/agent/origins。
+    note = origins.system_note(db, session)
+    if note:
+        prompt += "\n\n" + note
     return prompt

@@ -2,8 +2,9 @@
 
 飞书(Lark)双向接入,移植自旧项目的长连接方案:lark_oapi.ws.Client 长连接收消息(无需公网 webhook),
 tenant_access_token 发消息。每个机器人一个独立子进程(见 connections;SDK 的事件循环是模块级共享的,
-进程才是安全隔离边界),子进程收到消息就调这里的 handle_incoming。消息路由到智能体宿主层的外部会话
-(external_key = feishu:bot:chat),以**发消息的那个绑定成员**的身份跑,回复发回原会话。
+进程才是安全隔离边界),但子进程**只转发事件**:消息经管道回到主进程,由这里的 handle_incoming 交给
+智能体宿主层的外部会话(external_key = feishu:bot:chat),以**发消息的那个绑定成员**的身份跑,回复
+由 deliver_turn 发回原会话。
 """
 
 from __future__ import annotations
@@ -15,15 +16,13 @@ import threading
 import time
 from collections import OrderedDict
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.ai.sidecar.pi_client import SidecarError, run_turn
-from app.core.config import settings
 from app.core.db import SessionLocal
-from app.core.security import mint_service_session
-from app.db.models import AgentSession, FeishuBot, now
-from app.domain.agent.host import append_message, get_or_create_external_session, resolve_chat_provider
-from app.domain.agent.prompt import SYSTEM_PROMPT_TEMPLATE
+from app.db.models import AgentMessage, AgentSession, FeishuBot
+from app.domain.agent import origins
+from app.domain.agent.host import get_or_create_external_session, post_user_message
 from app.domain.feishu import bindings
 from app.integrations.feishu import client
 
@@ -154,8 +153,15 @@ def handle_incoming(
     message_type: str = "text",
     content_json: str = "",
 ) -> None:
-    """Runs inside the worker process: route one Feishu message through the agent host,
-    acting as the SENDER's bound account (not a blanket owner). Unbound senders are refused."""
+    """主进程里跑(worker 只负责把长连接收到的事件转过来):把一条飞书消息交给**和桌面端同一条**
+    turn 管线(host.post_user_message),以**发消息的那个绑定成员**的身份跑。未绑定的人被拒。
+
+    此前这里是第二份 turn 实现(自己拼提示、解析供应商、调 run_turn、落库),而且跑在 worker
+    子进程里 —— 桌面端的排队、失败轮留轨迹、计费、失败也回存记忆,飞书一样都没有。现在:
+
+    - 会话正忙时这条**排队**,轮到它时照样回复(以前是回一句「上一条还在处理中」就丢掉)。
+    - 回复由 origins 的 turn_finished 钩子送回(见文件末尾的登记),和这一轮在哪条线程跑完无关。
+    """
     if seen_recently(message_id):
         return
     text = extract_text(content_json)
@@ -185,23 +191,13 @@ def handle_incoming(
                     "然后把绑定码直接发给我完成绑定。",
                 )
             return
-        session = get_or_create_external_session(
-            db,
-            workspace_id=bot.workspace_id,
-            origin="feishu",
-            external_key=f"feishu:{bot.id}:{chat_id}",
-            title=f"飞书 · {bot.name}",
-        )
-        if session.status == "running":
-            client.send_text(bot, chat_id, "上一条还在处理中,稍等片刻再发~")
-            return
         # 图片下载要几秒(下载 + 探测 + 缩略图),不该占着数据库会话;而 bot 是纯配置,
         # 出了 session 只用它的 id/app_id/app_secret 调 REST,detached 也够用。
         db.expunge(bot)
-        images_workspace = bot.workspace_id
+        workspace_id = bot.workspace_id
 
     if image_keys:
-        asset_ids = _ingest_images(bot, images_workspace, message_id, image_keys)
+        asset_ids = _ingest_images(bot, workspace_id, message_id, image_keys)
         if not asset_ids:
             client.send_text(bot, chat_id, "图片没能取回来(飞书资源下载失败),换一张或稍后再试。")
             return
@@ -213,102 +209,112 @@ def handle_incoming(
         )
         text = f"{text}\n{note}" if text else note
 
+    # 「码字中」指示:给用户那条消息贴 Typing 反应,飞书客户端渲染成动画输入指示。
+    # **先贴再交**:这一轮可能在 post_user_message 返回之前就跑完了,收尾时得找得到它。
+    typing_reaction = client.add_reaction(bot, message_id, client.REACTION_TYPING)
     with SessionLocal() as db:
         session = get_or_create_external_session(
             db,
-            workspace_id=images_workspace,
+            workspace_id=workspace_id,
             origin="feishu",
             external_key=f"feishu:{bot.id}:{chat_id}",
             title=f"飞书 · {bot.name}",
         )
-        user = bindings.resolve_sender(db, images_workspace, sender_open_id)
+        user = bindings.resolve_sender(db, workspace_id, sender_open_id)
         if user is None:
-            return
-        append_message(db, session.id, role="user", content=text)
-        session.status = "running"
-        # 铸造即提交,连同上面的消息与状态。带上会话:确认卡的归属由令牌决定(见 core/security),
-        # 飞书这条链路同样靠它把卡送回**发起它的那个飞书会话**(announce_confirmation 按 session 找回)。
-        token = mint_service_session(db, user.id, agent_session_id=session.id)
-        session_id, adapter, workspace_id, capability = (
-            session.id, session.adapter, bot.workspace_id, bot.capability
-        )
-        adapter_state = session.adapter_state  # pi 多轮记忆:与 AI Studio 同一套回环
-        # 供应商解析必须在这里做(与 AI Studio 同一助手):裸调 run_turn 不带 provider,
-        # pi 适配器会直接报「未配置可用的 AI 供应商」,哪怕设置里已配好。
-        try:
-            # 行动人是**发消息的那个绑定成员**,不是会话的主人 —— 飞书会话是机器人建的
-            # (一个群一个,owner_user_id 为空),而群里每个人各用各的钥匙、各自的默认模型。
-            # 与上面 mint_service_session 用的是同一个人。
-            provider_dict, agent_model, _profile = resolve_chat_provider(
-                db, session.provider_profile_id, session.model or "", user_id=user.id
-            )
-        except SidecarError as exc:
-            provider_dict, agent_model = None, None
-            provider_error = str(exc)
-        else:
-            provider_error = None
-
-    system_prompt = SYSTEM_PROMPT_TEMPLATE.format(
-        workspace_id=workspace_id,
-    )
-    system_prompt += "\n" + CAPABILITY_NOTES.get(capability, CAPABILITY_NOTES["editor"])
-    system_prompt += "\n你正通过飞书对话,回复保持简短(几句话内),不用 markdown 标题。"
-    api_base = f"http://{settings.backend_host}:{settings.backend_port}"
-
-    # 「码字中」指示:给用户那条消息贴 Typing 反应,飞书客户端渲染成动画输入指示。
-    # bot 对象来自已关闭的 session,但 id/app_id/app_secret 均已加载,REST 调用够用。
-    typing_reaction = client.add_reaction(bot, message_id, client.REACTION_TYPING)
-
-    reply_text = ""
-    error: str | None = None
-    new_adapter_state: object | None = None
-    try:
-        if provider_error:
-            raise SidecarError(provider_error)
-        result = run_turn(
-            adapter,
-            prompt=text,
-            system_prompt=system_prompt,
-            api_base=api_base,
-            token=token,
-            provider=provider_dict,
-            model=agent_model,
-            workspace_id=workspace_id,
-            adapter_state=adapter_state,
-            session_key=session_id,
-        )
-        reply_text = result.text or "(空回复)"
-        new_adapter_state = result.adapter_state
-    except SidecarError as exc:
-        # 适配器错误本就是给人看的中文(没配供应商/缺模型/sidecar 未构建)——
-        # 原样带给用户,笼统的「稍后再试」只会让人反复重试同一个配置问题。
-        reply_text = f"智能体执行失败:{exc}"
-        error = str(exc)[:800]
-    except Exception as exc:  # the worker thread must never die silently
-        logger.exception("feishu turn crashed bot=%s", bot_id)
-        reply_text = "智能体执行异常,请查看后端日志。"
-        error = str(exc)[:800]
-
-    with SessionLocal() as db:
-        session = db.get(AgentSession, session_id)
-        if session is not None:
-            append_message(db, session.id, role="assistant", content=reply_text, error=error)
-            if new_adapter_state is not None:
-                session.adapter_state = new_adapter_state
-            session.status = "idle"
-            session.updated_at = now()
-            db.commit()
-        bot = db.get(FeishuBot, bot_id)
-        if bot is not None:
-            # 收尾指示:摘掉 Typing;出错时换成 CrossMark 让用户一眼看到这轮失败了。
             if typing_reaction:
                 client.remove_reaction(bot, message_id, typing_reaction)
-            if error:
+            return
+        _awaiting(session.id, message_id, typing_reaction)
+        try:
+            post_user_message(db, session, text, user)
+        except Exception:
+            logger.exception("feishu message could not be handed to the agent bot=%s", bot_id)
+            _settle(session.id)
+            if typing_reaction:
+                client.remove_reaction(bot, message_id, typing_reaction)
+            client.add_reaction(bot, message_id, client.REACTION_FAILURE)
+            client.send_text(bot, chat_id, "消息没能交给智能体,请查看后端日志。")
+
+
+# ---------------- 一轮跑完:把结果送回飞书 ----------------
+
+#: 每个会话里还在等回复的飞书消息(按到达顺序),收尾时摘掉它们的 Typing 反应。
+#: 一轮对应一条:会话正忙时后来的消息排队,host 按先来后到一条一轮地跑。
+_awaiting_replies: dict[str, list[tuple[str, str | None]]] = {}
+_awaiting_lock = threading.Lock()
+
+
+def _awaiting(session_id: str, message_id: str, reaction_id: str | None) -> None:
+    with _awaiting_lock:
+        _awaiting_replies.setdefault(session_id, []).append((message_id, reaction_id))
+
+
+def _settle(session_id: str) -> tuple[str, str | None] | None:
+    with _awaiting_lock:
+        waiting = _awaiting_replies.get(session_id)
+        if not waiting:
+            return None
+        first = waiting.pop(0)
+        if not waiting:
+            del _awaiting_replies[session_id]
+        return first
+
+
+def _route(db: Session, session: AgentSession) -> tuple[FeishuBot, str] | None:
+    """external_key 形如 feishu:<bot_id>:<chat_id>;chat_id 里不含冒号。"""
+    parts = (session.external_key or "").split(":", 2)
+    if len(parts) != 3 or parts[0] != "feishu":
+        return None
+    bot = db.get(FeishuBot, parts[1])
+    return (bot, parts[2]) if bot is not None else None
+
+
+def deliver_turn(session_id: str) -> None:
+    """host 一轮收尾后调用:把最后一条助手消息发回原飞书会话,摘掉 Typing,失败的轮次贴个叉。"""
+    waiting = _settle(session_id)
+    with SessionLocal() as db:
+        session = db.get(AgentSession, session_id)
+        if session is None:
+            return
+        route = _route(db, session)
+        if route is None:
+            return
+        bot, chat_id = route
+        reply = db.scalars(
+            select(AgentMessage)
+            .where(AgentMessage.session_id == session_id, AgentMessage.role == "assistant")
+            .order_by(AgentMessage.created_at.desc())
+            .limit(1)
+        ).first()
+        text = (reply.content if reply is not None else "") or "(空回复)"
+        failed = reply is None or bool(reply.error)
+        if waiting is not None:
+            message_id, reaction_id = waiting
+            # 收尾指示:摘掉 Typing;出错时换成 CrossMark 让用户一眼看到这轮失败了。
+            if reaction_id:
+                client.remove_reaction(bot, message_id, reaction_id)
+            if failed:
                 client.add_reaction(bot, message_id, client.REACTION_FAILURE)
-            try:
-                client.send_text(bot, chat_id, reply_text)
-            except client.FeishuError:
-                logger.exception("feishu reply failed bot=%s chat=%s", bot_id, chat_id)
+        if not bot.enabled:
+            return
+        try:
+            client.send_text(bot, chat_id, text)
+        except client.FeishuError:
+            logger.exception("feishu reply failed bot=%s chat=%s", bot.id, chat_id)
+
+
+def system_note(db: Session, session: AgentSession) -> str:
+    """飞书会话额外的系统提示:机器人的权限档,和「这是聊天软件,回复要短」。"""
+    route = _route(db, session)
+    capability = route[0].capability if route is not None else "editor"
+    return (
+        CAPABILITY_NOTES.get(capability, CAPABILITY_NOTES["editor"])
+        + "\n你正通过飞书对话,回复保持简短(几句话内),不用 markdown 标题。"
+    )
+
+
+origins.register("feishu", origins.ExternalOrigin(system_note=system_note, turn_finished=deliver_turn))
 
 
 def notify_interrupted_chats(db: Session) -> int:

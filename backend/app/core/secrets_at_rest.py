@@ -32,8 +32,8 @@ logger = logging.getLogger(__name__)
     <数据目录>/secret.key      0600 的文件 —— 裸跑 uvicorn、或系统没有可用钥匙串时的兜底。它只挡"库文件单独
                               泄露",挡不住"整个数据目录被拷走";这是如实的降级,不是等价方案。
 
-需要同一把密钥的子进程(飞书连接)由 `child_handoff` 给出怎么交:密钥是从标准输入来的,就照样经它的
-标准输入交下去。
+**只有这个进程**拿主密钥。子进程(飞书长连接 worker 等)不开库、不解密:要用的凭据由主进程解开后
+经它们的标准输入交下去(见 integrations/feishu/connections)。
 
 加解密挂在**列类型**上(见 EncryptedText/EncryptedJSON),领域代码一行都不用改 —— 也就没有
 "这里记得解密、那里忘了"的可能。
@@ -64,8 +64,6 @@ def key_path() -> Path:
     return settings.data_dir / KEY_FILENAME
 
 
-#: 主密钥从哪来的(stdin / env / file),`child_handoff` 据此决定怎么交给子进程。
-_source = ""
 _lock = threading.Lock()
 
 
@@ -91,16 +89,12 @@ def master_key() -> bytes:
 
 
 def _load() -> bytes:
-    global _source
     if os.environ.get(STDIN_FLAG) == "1":
-        _source = "stdin"
         return _from_stdin()
     supplied = (os.environ.get(ENV_VAR) or "").strip()
     if supplied:
-        _source = "env"
         return supplied.encode()
 
-    _source = "file"
     path = key_path()
     if path.is_file():
         return path.read_bytes().strip()
@@ -113,17 +107,6 @@ def _load() -> bytes:
         file.write(generated)
     logger.info("生成了新的落盘加密密钥:%s(请随数据目录一起备份 —— 丢了就解不开已存的凭据)", path)
     return generated
-
-
-def child_handoff() -> tuple[dict[str, str], str | None]:
-    """要用同一把主密钥的子进程怎么拿到它:(要加的环境变量, 要写进它标准输入的一行)。
-
-    密钥是从标准输入来的(桌面版)就照样经子进程的标准输入交下去;环境变量、文件两种情况子进程照同一条路
-    自己取,什么都不用给。"""
-    key = master_key()
-    if _source == "stdin":
-        return {STDIN_FLAG: "1"}, key.decode() + "\n"
-    return {}, None
 
 
 def encrypt(plaintext: str) -> str:

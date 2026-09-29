@@ -29,6 +29,7 @@ from app.domain.agent.stream import (
     _stream_tool_event,
     _timeline_for_payload,
 )
+from app.domain.agent import origins
 from app.domain.agent.textclean import decode_byte_fallback
 from app.domain.providers import models as provider_models
 from app.domain.providers.runtime import sidecar_provider
@@ -455,7 +456,7 @@ def post_user_message(
     db.commit()
 
     token = _mint_service_token(db, user, session.id)
-    _start_turn(session.id, prompt, token)
+    _start_turn(session.id, prompt, token, actor_id=user.id)
     db.refresh(message)
     return message
 
@@ -475,7 +476,7 @@ def _mint_service_token(db: Session, user: User, agent_session_id: str | None = 
     return mint_service_session(db, user.id, agent_session_id=agent_session_id)
 
 
-def _start_turn(session_id: str, prompt: str, token: str) -> None:
+def _start_turn(session_id: str, prompt: str, token: str, *, actor_id: str | None = None) -> None:
     """开一轮。
 
     **流要在起线程之前备好。** 界面拿到 POST 的回应之后才去连 `/stream`,而这一轮的流状态
@@ -494,7 +495,7 @@ def _start_turn(session_id: str, prompt: str, token: str) -> None:
 
     def run() -> None:
         set_current_locale(locale)
-        _run_turn_thread(session_id, prompt, token)
+        _run_turn_thread(session_id, prompt, token, actor_id=actor_id)
 
     threading.Thread(target=run, daemon=True, name=TURN_THREAD_NAME).start()
 
@@ -513,7 +514,7 @@ def _failed_turn_timeline(session_id: str) -> dict:
     return {"timeline": timeline} if timeline else {}
 
 
-def _run_turn_thread(session_id: str, prompt: str, token: str) -> None:
+def _run_turn_thread(session_id: str, prompt: str, token: str, *, actor_id: str | None = None) -> None:
     api_base = f"http://{settings.backend_host}:{settings.backend_port}"
     final_text = ""
     turn_started = time.monotonic()
@@ -521,6 +522,8 @@ def _run_turn_thread(session_id: str, prompt: str, token: str) -> None:
         session = db.get(AgentSession, session_id)
         if session is None:
             return
+        #: 先记下:收尾时会话可能已被删掉,那时再读它的属性会抛。
+        origin = session.origin
         provider_profile_id: str | None = None
         provider_vendor = ""
         provider_model = ""
@@ -533,8 +536,10 @@ def _run_turn_thread(session_id: str, prompt: str, token: str) -> None:
             provider_dict: dict | None = None
             agent_model: str | None = None
             if session.adapter == "pi":
+                # 外部渠道的会话(飞书一个群一个)没有主人:用的是**发这条消息的人**的钥匙与默认模型,
+                # 和给这一轮铸令牌的是同一个人。
                 provider_dict, agent_model, profile = resolve_chat_provider(
-                    db, session.provider_profile_id, session.model or "", user_id=session.owner_user_id
+                    db, session.provider_profile_id, session.model or "", user_id=session.owner_user_id or actor_id
                 )
                 if profile is not None:
                     provider_profile_id = profile.id
@@ -710,6 +715,8 @@ def _run_turn_thread(session_id: str, prompt: str, token: str) -> None:
                 logger.warning("Could not finalise session %s; it may have been deleted", session_id)
                 db.rollback()
             _stream_finish(session_id, final_text)
+    # 外部渠道(飞书……)把这一轮的结果送回原会话。在 drain 之前:排队的下一轮不该抢在这一轮的回复前面。
+    origins.turn_finished(origin, session_id)
     # Outside the session block on purpose: the drain opens its own session and starts the
     # next turn, and doing that while this one still held the connection would nest them.
     _drain_queue(session_id)
@@ -770,7 +777,7 @@ def _drain_queue_locked(session_id: str) -> None:
         # 排队那条也要补信封:它和直发走的是同一件事,只是晚一点跑。漏在这儿的话,
         # 「对方正忙」时收到的消息,模型就不知道它是谁发的。
         content = with_origin_envelope(content, payload)
-    _start_turn(session_id, content, token)
+    _start_turn(session_id, content, token, actor_id=owner.id)
 
 
 def reconcile_orphaned_agent_sessions(db: Session) -> int:

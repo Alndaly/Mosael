@@ -237,8 +237,6 @@ def test_desktop_hands_the_key_over_stdin_and_nothing_lands_on_disk_or_in_env(mo
         assert secrets_at_rest.master_key() == supplied
         assert not (tmp_path / "secret.key").exists(), "数据目录里不落明文密钥"
         assert "MOSAEL_SECRET_KEY_STDIN" not in os.environ, "读完摘掉标记,子进程不会去读它们的 stdin"
-        env, line = secrets_at_rest.child_handoff()
-        assert env == {"MOSAEL_SECRET_KEY_STDIN": "1"} and line == supplied.decode() + "\n", "要用密钥的子进程照样经 stdin 拿"
     finally:
         secrets_at_rest.master_key.cache_clear()
 
@@ -254,16 +252,5 @@ def test_the_stdin_flag_without_a_key_fails_loudly(monkeypatch) -> None:
     try:
         with pytest.raises(RuntimeError):
             secrets_at_rest.master_key()
-    finally:
-        secrets_at_rest.master_key.cache_clear()
-
-
-def test_env_and_file_keys_need_no_handoff(monkeypatch) -> None:
-    from cryptography.fernet import Fernet
-
-    monkeypatch.setenv("MOSAEL_SECRET_KEY", Fernet.generate_key().decode())
-    secrets_at_rest.master_key.cache_clear()
-    try:
-        assert secrets_at_rest.child_handoff() == ({}, None)
     finally:
         secrets_at_rest.master_key.cache_clear()
