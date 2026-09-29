@@ -16,6 +16,14 @@ from __future__ import annotations
 from app.ai.runtime import tts_models
 
 
+
+def _sized(path, size: int) -> None:
+    """一个**稀疏**文件:体积对得上,不占内存也不占盘。此前写的是 `b"y" * 8_000_000_000`,
+    一条用例要在内存里攒 8 GB,在内存小的机器(CI 容器)上直接被 OOM 杀掉,连带整轮全量一起没了。"""
+    with open(path, "wb") as file:
+        file.truncate(size)
+
+
 def test_modelscope_is_offered_for_f5_now() -> None:
     assert "modelscope" in tts_models.sources_for("f5-tts")
 
@@ -58,7 +66,7 @@ def test_a_managed_checkpoint_counts_as_installed(tmp_path, monkeypatch) -> None
     """下到我们自己的目录里,安装检测要认得 —— 否则页面会说"没下",而它就在盘上。"""
     weights = tmp_path / "f5"
     weights.mkdir()
-    (weights / "model.safetensors").write_bytes(b"x" * 1_400_000_000)
+    _sized(weights / "model.safetensors", 1_400_000_000)
     (weights / "vocab.txt").write_text("a\nb\n", encoding="utf-8")
     monkeypatch.setattr(tts_models, "_f5_model_dir", lambda: weights)
 

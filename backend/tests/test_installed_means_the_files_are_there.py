@@ -22,6 +22,14 @@ import json
 from app.ai.runtime import tts_models
 
 
+
+def _sized(path, size: int) -> None:
+    """一个**稀疏**文件:体积对得上,不占内存也不占盘。此前写的是 `b"y" * 8_000_000_000`,
+    一条用例要在内存里攒 8 GB,在内存小的机器(CI 容器)上直接被 OOM 杀掉,连带整轮全量一起没了。"""
+    with open(path, "wb") as file:
+        file.truncate(size)
+
+
 def _fish_dir(root, *, shards: dict[str, int], total_size: int, codec: bool = True):
     """造一个 fish 权重目录:index 声明需要哪些分片、合起来多少字节。"""
     model = root / "fish-speech-s2-pro"
@@ -109,7 +117,7 @@ def test_no_index_falls_back_to_the_old_ratio(tmp_path, monkeypatch) -> None:
     model = tmp_path / "legacy"
     model.mkdir()
     (model / "codec.pth").write_bytes(b"x" * 1024)
-    (model / "weights.bin").write_bytes(b"y" * 8_000_000_000)
+    _sized(model / "weights.bin", 8_000_000_000)
     monkeypatch.setattr(tts_models, "_fish_model_dir", lambda: model)
 
     assert tts_models._is_installed(tts_models._BY_ID["fish-speech"]) is True
@@ -123,7 +131,7 @@ def test_an_in_flight_hf_download_is_not_installed(tmp_path, monkeypatch) -> Non
     root = tmp_path / "hub"
     cache = root / "models--SWivid--F5-TTS" / "blobs"
     cache.mkdir(parents=True)
-    (cache / "abc").write_bytes(b"y" * 1_400_000_000)
+    _sized(cache / "abc", 1_400_000_000)
     (cache / "def.incomplete").write_bytes(b"z" * 1000)
     monkeypatch.setattr(tts_models, "_hf_roots", lambda: [root])
 
@@ -134,7 +142,7 @@ def test_a_finished_hf_download_is_installed(tmp_path, monkeypatch) -> None:
     root = tmp_path / "hub"
     cache = root / "models--SWivid--F5-TTS" / "blobs"
     cache.mkdir(parents=True)
-    (cache / "abc").write_bytes(b"y" * 1_400_000_000)
+    _sized(cache / "abc", 1_400_000_000)
     monkeypatch.setattr(tts_models, "_hf_roots", lambda: [root])
 
     assert tts_models._is_installed(tts_models._BY_ID["f5-tts"]) is True

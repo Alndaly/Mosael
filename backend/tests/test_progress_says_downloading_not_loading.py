@@ -22,6 +22,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "app" / "ai" / "run
 import tts as tts_worker  # noqa: E402
 
 
+
+def _sized(path, size: int) -> None:
+    """一个**稀疏**文件:体积对得上,不占内存也不占盘。此前写的是 `b"y" * 8_000_000_000`,
+    一条用例要在内存里攒 8 GB,在内存小的机器(CI 容器)上直接被 OOM 杀掉,连带整轮全量一起没了。"""
+    with open(path, "wb") as file:
+        file.truncate(size)
+
+
 def test_it_says_downloading_when_the_vocoder_is_missing(tmp_path, monkeypatch) -> None:
     said: list[str] = []
     monkeypatch.setattr(tts_worker, "_progress", lambda phase, fraction, message="": said.append(f"{phase}:{message}"))
@@ -55,7 +63,7 @@ def test_the_cache_check_looks_for_real_bytes(tmp_path, monkeypatch) -> None:
 
     blobs = root / "models--charactr--vocos-mel-24khz" / "blobs"
     blobs.mkdir()
-    (blobs / "abc").write_bytes(b"x" * 20_000_000)
+    _sized(blobs / "abc", 20_000_000)
 
     assert tts_worker._hf_cached("models--charactr--vocos-mel-24khz") is True
 
