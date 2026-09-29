@@ -28048,6 +28048,12 @@
             "maxLength": 40,
             "title": "Advertised Version",
             "default": ""
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^([0-9a-fA-F]{64})?$",
+            "title": "Sha256",
+            "default": ""
           }
         },
         "type": "object",
@@ -28320,6 +28326,11 @@
           "download": {
             "type": "string",
             "title": "Download",
+            "default": ""
+          },
+          "sha256": {
+            "type": "string",
+            "title": "Sha256",
             "default": ""
           },
           "permissions": {

@@ -29,6 +29,7 @@ Release 的附件」;新版本应用不读它。
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import sys
@@ -127,6 +128,14 @@ def verify_packages(index: dict, packages: Path) -> None:
         raise SystemExit("插件包和索引对不上:\n  " + "\n  ".join(problems))
 
 
+def attach_digests(index: dict, packages: Path) -> None:
+    """给每条要下载的索引写上它那个包的 sha256。应用装包时照它核对(backend domain/plugins/registry.verify_digest):
+    下载地址被换掉、CDN 给错了文件,装之前就拒 —— 索引和包在同一次发版里生成,许的就是给的。"""
+    for one in index["plugins"]:
+        if not one["bundled"]:
+            one["sha256"] = hashlib.sha256((packages / f"{one['id']}.zip").read_bytes()).hexdigest()
+
+
 def _write(index: dict, out: Path) -> None:
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(index, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
@@ -153,6 +162,7 @@ def main(argv: list[str] | None = None) -> None:
         parser.error("--release 要带 --packages:索引只能和它核对过的那批插件包一起发")
     index = release_index(args.release, args.repo)
     verify_packages(index, args.packages)
+    attach_digests(index, args.packages)
     out = args.packages / RELEASE_INDEX_NAME
     _write(index, out)
     print(f"已写入 {out}({args.release},{len(index['plugins'])} 个插件,插件包逐个核对过)")

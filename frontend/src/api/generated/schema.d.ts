@@ -10320,6 +10320,11 @@ export interface components {
              * @default
              */
             advertised_version: string;
+            /**
+             * Sha256
+             * @default
+             */
+            sha256: string;
         };
         /** PluginInstanceCreate */
         PluginInstanceCreate: {
@@ -10462,6 +10467,11 @@ export interface components {
              * @default
              */
             download: string;
+            /**
+             * Sha256
+             * @default
+             */
+            sha256: string;
             /** Permissions */
             permissions?: string[];
             /**

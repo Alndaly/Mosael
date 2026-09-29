@@ -14,7 +14,7 @@ import React from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const OSS = {
-  id: "dev.mosael.aliyun-oss", name: "阿里云 OSS", version: "0.1.2", download: "https://x/oss.zip",
+  id: "dev.mosael.aliyun-oss", name: "阿里云 OSS", version: "0.1.2", download: "https://x/oss.zip", sha256: "abababababababababababababababababababababababababababababababab",
   description: "把素材传到阿里云 OSS,换回一条**公网直链** —— 有些供应商只收链接。",
   permissions: ["network:oss"], installed: false, installed_version: "", author: "Mosael", author_url: "https://mosael.com",
   docs: "https://mosael.com/zh/plugins/aliyun-oss", homepage: "https://help.aliyun.com/zh/oss/",
@@ -220,12 +220,12 @@ describe("安装", () => {
     const { onChanged } = renderMarket();
     await screen.findByRole("list", { name: "pluginMarket" });
     await user.click(within(card("阿里云 OSS")).getByRole("button", { name: "pluginInstall" }));
-    expect(mocks.preview).toHaveBeenCalledWith("https://x/oss.zip", "0.1.2");
+    expect(mocks.preview, "索引给的 sha256 一路交给后端核对").toHaveBeenCalledWith("https://x/oss.zip", "0.1.2", "abababababababababababababababababababababababababababababababab");
     const confirm = await screen.findByRole("dialog", { name: "pluginInstallConfirmTitle" });
     expect(within(confirm).getByText("network:oss")).toBeTruthy();
     expect(mocks.install).not.toHaveBeenCalled();
     await user.click(within(confirm).getByRole("button", { name: "pluginInstall" }));
-    await waitFor(() => expect(mocks.install).toHaveBeenCalledWith("https://x/oss.zip", false, "0.1.2"));
+    await waitFor(() => expect(mocks.install).toHaveBeenCalledWith("https://x/oss.zip", false, "0.1.2", "abababababababababababababababababababababababababababababababab"));
     await waitFor(() => expect(onChanged).toHaveBeenCalled());
   });
 
@@ -237,7 +237,7 @@ describe("安装", () => {
     await user.click(screen.getByRole("button", { name: "pluginUpdate" }));
     const confirm = await screen.findByRole("dialog", { name: "pluginInstallConfirmTitle" });
     await user.click(within(confirm).getByRole("button", { name: "pluginUpdate" }));
-    await waitFor(() => expect(mocks.install).toHaveBeenCalledWith("https://x/pan.zip", true, "0.5.1"));
+    await waitFor(() => expect(mocks.install).toHaveBeenCalledWith("https://x/pan.zip", true, "0.5.1", ""));
   });
 
   it("确认卡上的版本是包里实际那一版;和市场写的不同时点明", async () => {
@@ -349,7 +349,7 @@ describe("新版本还没发布", () => {
     expect(within(card("Remotion 动画")).getByText("pluginMarketHasUpdate")).toBeTruthy();
 
     await user.click(within(card("Remotion 动画")).getByRole("button", { name: "pluginUpdate" }));
-    expect(mocks.preview).toHaveBeenCalledWith("https://x/remotion.zip", "0.2.0");
+    expect(mocks.preview).toHaveBeenCalledWith("https://x/remotion.zip", "0.2.0", "");
     await waitFor(() => expect(toast.info).toHaveBeenCalledWith("pluginUpdateNotReleased"));
     expect(screen.queryByRole("dialog", { name: "pluginInstallConfirmTitle" })).toBeNull();
     expect(mocks.install).not.toHaveBeenCalled();

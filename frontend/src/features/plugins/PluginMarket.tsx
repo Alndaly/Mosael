@@ -34,7 +34,8 @@ type MarketEntry = Awaited<ReturnType<typeof listPluginMarket>>["plugins"][numbe
 type InstallPreview = Awaited<ReturnType<typeof previewPluginInstall>>;
 type Filter = "all" | "installed" | "updates";
 /** 从哪个地址装,以及市场给这一条写的版本(从链接装时为空)。后者让后端认得出「许的新版还没发布」。 */
-type PickTarget = { url: string; advertised: string };
+/** `sha256`:索引给这个包写的摘要(发版索引里有),后端下载后照它核对;从链接装时为空。 */
+type PickTarget = { url: string; advertised: string; sha256?: string };
 
 /**
  * 一条市场条目此刻**要人做什么**。装过 ≠ 有新版;内置的另算一态 —— 它跟着应用装、跟着应用
@@ -54,7 +55,7 @@ function stanceOf(entry: MarketEntry): Stance {
 
 /** 从市场里的这一条装:带上它许的版本。 */
 function pickOf(entry: MarketEntry): PickTarget {
-  return { url: entry.download, advertised: entry.version };
+  return { url: entry.download, advertised: entry.version, sha256: entry.sha256 ?? "" };
 }
 
 /**
@@ -153,7 +154,7 @@ export function PluginMarketDialog({
   };
 
   const preview = useMutation({
-    mutationFn: (target: PickTarget) => previewPluginInstall(target.url, target.advertised),
+    mutationFn: (target: PickTarget) => previewPluginInstall(target.url, target.advertised, target.sha256),
     onSuccess: (data, target) => {
       setUrlOpen(false);
       //: 市场许了新版,包里却不比装着的新:不弹那张写着「更新」的确认卡 —— 装下去什么都不会变。
@@ -170,7 +171,7 @@ export function PluginMarketDialog({
 
   const install = useMutation({
     mutationFn: ({ target, overwrite }: { target: PickTarget; overwrite: boolean }) =>
-      installPlugin(target.url, overwrite, target.advertised),
+      installPlugin(target.url, overwrite, target.advertised, target.sha256),
     onSuccess: () => {
       setPending(null);
       setUrl("");

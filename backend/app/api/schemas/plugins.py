@@ -187,6 +187,8 @@ class PluginMarketEntry(ApiModel):
     homepage: str = ""
     docs: str = ""
     download: str = ""
+    #: 包的 sha256(发版索引里有;内置插件、老索引没有)。从市场装时原样交回,后端下载后核对。
+    sha256: str = ""
     permissions: list[str] = Field(default_factory=list)
     #: process = 本机脚本,工具就是 `tools` 那几个;mcp = 接一个 MCP server,工具由它自己报,装上才知道。
     runtime: str = "process"
@@ -227,6 +229,8 @@ class PluginInstallRequest(ApiModel):
     #: 从市场点的:索引里给这一条写的版本。有它才是「从市场更新」—— 下下来的包不比装着的新时,
     #: 不装、不报「已更新」,而是说「新版本还没发布」。从链接装时为空(同一版重装是有意的)。
     advertised_version: str = Field(default="", max_length=40)
+    #: 从市场点的:索引给这个包写的 sha256。下下来的包对不上就不装(地址被换、CDN 给错了文件)。
+    sha256: str = Field(default="", pattern="^([0-9a-fA-F]{64})?$")
 
 
 class PluginInstallPreview(ApiModel):

@@ -272,8 +272,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "The token endpoint returned none of the declared fields — check \"stores\" in the plugin manifest.",
     },
     "pluginErr_marketBadScheme": {
-        "zh": "插件市场地址只能是 http/https",
-        "en": "The plugin marketplace URL must be http or https.",
+        "zh": "插件市场地址只能是 https(本机调试可以用 http://127.0.0.1)",
+        "en": "The plugin marketplace URL must use https (plain http only for 127.0.0.1 during development).",
     },
     "pluginErr_marketUnreachable": {
         "zh": "打不开插件市场:{detail}",
@@ -292,8 +292,12 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "The plugin marketplace has the wrong format; expected {example}",
     },
     "pluginErr_downloadBadScheme": {
-        "zh": "插件下载地址只能是 http/https",
-        "en": "The plugin download URL must be http or https.",
+        "zh": "插件下载地址只能是 https(本机调试可以用 http://127.0.0.1)",
+        "en": "The plugin download URL must use https (plain http only for 127.0.0.1 during development).",
+    },
+    "pluginErr_archiveDigestMismatch": {
+        "zh": "下载到的插件包和市场索引里登记的不一致(sha256 对不上),没有安装。可能是下载地址被替换或传输出错,稍后再试或联系插件作者",
+        "en": "The downloaded plugin package doesn't match the one listed in the marketplace (sha256 mismatch), so it wasn't installed. The download may have been swapped or corrupted; try again later or contact the plugin author.",
     },
     "pluginErr_downloadFailed": {
         "zh": "下载插件失败:{detail}",

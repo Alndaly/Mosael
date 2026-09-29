@@ -82,7 +82,7 @@ def fetch_index(url: str) -> list[dict[str, Any]]:
     拉不到时市场里照样列着随应用内置的插件(见 routes/plugins.browse_market)—— 那不是远端的
     兜底副本,而是本机装着的事实;拉不到的原因照样交给界面说出来。
     """
-    if not url.startswith(("http://", "https://")):
+    if not secure_url(url):
         raise PluginDomainError("pluginErr_marketBadScheme")
     try:
         # 市场列表是一段前台交互,不能继承 AI 供应商那套多次退避重试。远端挂掉时应在一次
@@ -156,8 +156,31 @@ def bundled_entry(manifest: Manifest) -> dict[str, Any]:
     }
 
 
+def secure_url(url: str) -> bool:
+    """索引和插件包只从 https 拿;明文 http 只认本机回环(自己架的开发用索引)。
+
+    装一个插件就是往这台机器上放一份会被执行的代码。走明文的话,路上任何一个人都能把包换掉 ——
+    那是一次远程代码执行,而不是「下载失败」。"""
+    from urllib.parse import urlsplit
+
+    parts = urlsplit(url.strip())
+    if parts.scheme == "https":
+        return bool(parts.hostname)
+    return parts.scheme == "http" and (parts.hostname or "") in ("127.0.0.1", "localhost", "::1")
+
+
+def verify_digest(data: bytes, expected: str) -> None:
+    """包的 sha256 和索引许的对不上就拒(发版时由 scripts/sync-plugin-registry.py 写进索引)。
+    `expected` 为空 = 这一条没有摘要(从链接装、老索引),不核对。"""
+    import hashlib
+
+    wanted = expected.strip().lower()
+    if wanted and hashlib.sha256(data).hexdigest() != wanted:
+        raise PluginDomainError("pluginErr_archiveDigestMismatch")
+
+
 def _download(url: str) -> bytes:
-    if not url.startswith(("http://", "https://")):
+    if not secure_url(url):
         raise PluginDomainError("pluginErr_downloadBadScheme")
     written = bytearray()
     try:
@@ -259,9 +282,11 @@ def _swap_in(staging: Path, target: Path, *, overwrite: bool, name: str) -> None
     shutil.rmtree(retired, ignore_errors=True)
 
 
-def download_archive(url: str) -> bytes:
-    """把一个插件包下下来(大小有上限,只认 http/https)。装和预览都从这里拿字节。"""
-    return _download(url)
+def download_archive(url: str, *, sha256: str = "") -> bytes:
+    """把一个插件包下下来(大小有上限,只认 https;给了摘要就核对)。装和预览都从这里拿字节。"""
+    data = _download(url)
+    verify_digest(data, sha256)
+    return data
 
 
 def read_manifest(data: bytes) -> dict[str, Any]:
@@ -286,4 +311,6 @@ __all__ = [
     "inspect_archive",
     "install_archive",
     "read_manifest",
+    "secure_url",
+    "verify_digest",
 ]

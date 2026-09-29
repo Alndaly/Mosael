@@ -80,7 +80,7 @@ class Test版本先后:
 def served(monkeypatch):
     """下载地址给的是哪一版:按地址查表,测试里随时改。"""
     table: dict[str, str] = {}
-    monkeypatch.setattr(market, "download_archive", lambda url: _zip(table[url]))
+    monkeypatch.setattr(market, "download_archive", lambda url, **_kw: _zip(table[url]))
     return table
 
 

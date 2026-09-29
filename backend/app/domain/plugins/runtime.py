@@ -17,10 +17,13 @@ Contract with the plugin's entry script:
 - The child gets a minimal environment: PATH/HOME/LANG (on Windows also the system variables a
   process cannot start without — see child_env.WINDOWS_ESSENTIALS), the outbound proxy the host
   chose for this connection (see egress), plus **the credentials
-  this plugin itself declared** in its manifest (see credentials.py). It never
-  receives the app's own provider keys, database, or API token — plugins cannot
-  bypass the permission system by design because they receive nothing but their
-  input payload and their own declared secrets.
+  this plugin itself declared** in its manifest (see credentials.py). It is not
+  *handed* the app's own provider keys, database, or API token. That is an
+  environment boundary, not a sandbox: the child runs as the same OS user as the
+  backend and can read any file that user can. The at-rest master key therefore
+  must not live next to the database on desktop (see core/secrets_at_rest), and
+  packages are only installed over https with the index's sha256 verified
+  (see registry.secure_url / verify_digest).
 - Anything long-running or mutating goes through jobs and confirmation cards.
 - Every call is recorded in plugin_invocations; a crashing or hanging plugin
   fails its invocation, never the app.

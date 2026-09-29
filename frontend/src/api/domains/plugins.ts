@@ -72,13 +72,14 @@ export const listPluginMarket = () => api<PluginMarketListing>("/api/plugins/mar
  * `advertisedVersion`:从市场点的时候,索引给这一条写的版本(从链接装时留空)。有它,后端才认得出
  * 「从市场更新、而包里其实不比装着的新」—— 那时不装、也不报「已更新」,而是说新版本还没发布。
  */
-export const previewPluginInstall = (url: string, advertisedVersion = "") =>
+export const previewPluginInstall = (url: string, advertisedVersion = "", sha256 = "") =>
   api<PluginInstallPreview>("/api/plugins/install/preview", {
     method: "POST",
-    body: JSON.stringify({ url, advertised_version: advertisedVersion }),
+    body: JSON.stringify({ url, advertised_version: advertisedVersion, sha256 }),
   });
-export const installPlugin = (url: string, overwrite: boolean, advertisedVersion = "") =>
+/** `sha256`:市场索引给这个包写的摘要,后端下载后核对,对不上不装。从链接装时留空。 */
+export const installPlugin = (url: string, overwrite: boolean, advertisedVersion = "", sha256 = "") =>
   api("/api/plugins/install", {
     method: "POST",
-    body: JSON.stringify({ url, overwrite, advertised_version: advertisedVersion }),
+    body: JSON.stringify({ url, overwrite, advertised_version: advertisedVersion, sha256 }),
   });

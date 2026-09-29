@@ -107,7 +107,7 @@ def _market_entry(entry: dict, installed: dict[str, PluginPackage], holds: dict[
     package = installed.get(entry["id"])
     update = updates.state_of(entry, package, holds.get(entry["id"]))
     return PluginMarketEntry(
-        **{key: str(entry.get(key, "")) for key in ("id", "version", "author", "homepage", "download")},
+        **{key: str(entry.get(key, "")) for key in ("id", "version", "author", "homepage", "download", "sha256")},
         author_url=web_url(entry.get("author_url")),
         #: docs 在索引里也可以按语言分,和名字、简介一样在这儿定语言。
         docs=web_url(text_of(entry.get("docs"))),
@@ -146,7 +146,7 @@ def preview_install(body: PluginInstallRequest, db: DbSession, user: CurrentUser
     ensure_deployment_admin(db, user)
     url = body.url.strip()
     try:
-        raw = market.read_manifest(market.download_archive(url))
+        raw = market.read_manifest(market.download_archive(url, sha256=body.sha256))
     except PluginDomainError as exc:
         raise _fail(exc) from exc
     #: 从市场点「更新」:包里实际那一版不比装着的新,就不给确认卡(那张卡会说「更新」),
@@ -185,7 +185,7 @@ def install_from_url(body: PluginInstallRequest, db: DbSession, user: CurrentUse
     ensure_deployment_admin(db, user)
     url = body.url.strip()
     try:
-        data = market.download_archive(url)
+        data = market.download_archive(url, sha256=body.sha256)
         raw = market.read_manifest(data)
         if updates.not_released(db, raw, advertised_version=body.advertised_version, download=url):
             db.commit()

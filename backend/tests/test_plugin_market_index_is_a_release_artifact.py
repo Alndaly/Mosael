@@ -82,7 +82,16 @@ def test_核对过的包才写索引(generator, tmp_path) -> None:
     _pack(packages, generator.release_index("v1.5.3"))
     generator.main(["--release", "v1.5.3", "--repo", "Alndaly/Mosael", "--packages", str(packages)])
     written = json.loads((packages / "registry.json").read_text(encoding="utf-8"))
-    assert written == generator.release_index("v1.5.3", "Alndaly/Mosael")
+    expected = generator.release_index("v1.5.3", "Alndaly/Mosael")
+    assert [{k: v for k, v in one.items() if k != "sha256"} for one in written["plugins"]] == expected["plugins"]
+    import hashlib
+
+    for one in written["plugins"]:
+        if one["bundled"]:
+            assert "sha256" not in one, "内置插件跟着应用走,没有包可核对"
+        else:
+            assert one["sha256"] == hashlib.sha256((packages / f"{one['id']}.zip").read_bytes()).hexdigest(), \
+                "每个要下载的包都带着它的 sha256,应用装的时候照它核对"
 
 
 def test_包里的版本和索引对不上_发版失败(generator, tmp_path) -> None:
