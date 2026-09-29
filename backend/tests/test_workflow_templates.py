@@ -484,9 +484,10 @@ def test_每个模板节点都写了中英两份名字() -> None:
     import pathlib
 
     workflows = pathlib.Path(__file__).resolve().parents[1] / "app" / "domain" / "workflows"
-    #: **两份模板文件都要扫。** 只扫 templates.py 的话,新加的那个文件天生免检 ——
-    #: 而"漏一种语言"恰恰是新写模板时最容易犯的。
-    sources = [workflows / "templates.py", workflows / "templates_business.py"]
+    #: **每一份模板文件都要扫。** 只扫 templates.py 的话,新加的那个文件天生免检 ——
+    #: 而"漏一种语言"恰恰是新写模板时最容易犯的。所以按 templates*.py 找,而不是列名字。
+    sources = sorted(workflows.glob("templates*.py"))
+    assert workflows / "templates_full_video.py" in sources and workflows / "templates_business.py" in sources
     missing = []
     for node in ast.walk(ast.parse("\n".join(one.read_text(encoding="utf-8") for one in sources))):
         if not isinstance(node, ast.Dict):

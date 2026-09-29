@@ -121,16 +121,20 @@ def test_没有第二处把角色名铺开写() -> None:
 
     app_dir = _p.Path(__file__).resolve().parents[1] / "app"
     #: 产地本身,以及供应商各自的**线上字段名映射**(万相把 source_video 叫 video,
-    #: 那是两套命名之间的翻译,不是抄我们的表)。
+    #: 那是两套命名之间的翻译,不是抄我们的表)。描述符的数据住在 generation/descriptors/ 下
+    #: (catalog 的一部分,按介质分文件),整个目录算产地。
     allowed = (
         "providers/contracts/generation.py",
         "generation/catalog.py",
         "providers/adapters/alibaba/dashscope/video.py",
     )
+    allowed_dirs = ("domain/generation/descriptors",)
 
     offenders = []
     for path in sorted(app_dir.rglob("*.py")):
         if "__pycache__" in path.parts or any(str(path).endswith(one) for one in allowed):
+            continue
+        if any(str(path.parent).endswith(one) for one in allowed_dirs):
             continue
         try:
             tree = ast.parse(path.read_text())
