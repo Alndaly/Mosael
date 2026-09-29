@@ -1,7 +1,25 @@
+import fs from "node:fs";
+import path from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 // 被测的是 Electron 主进程那份解析器。它是纯函数、没有 electron 依赖,不用替身。
-import { deepLinkFromArgv, parseDeepLink } from "./deepLink";
+import { ALLOWED_VIEWS, deepLinkFromArgv, parseDeepLink } from "./deepLink";
+
+const studioViews = JSON.parse(
+  fs.readFileSync(path.resolve(__dirname, "../../contracts/studio-views.json"), "utf8"),
+) as { views: string[] };
+
+describe("深链白名单 = contracts/studio-views.json", () => {
+  it("和前端导航、智能体 open_view 认同一组页面", () => {
+    expect([...ALLOWED_VIEWS].sort()).toEqual([...studioViews.views].sort());
+  });
+
+  it("官网能链到的每一页都唤得起来,早已不存在的 kb 不再认", () => {
+    for (const view of studioViews.views) expect(parseDeepLink(`mosael://open?view=${view}`)).toEqual({ view });
+    expect(parseDeepLink("mosael://open?view=kb")).toBeNull();
+  });
+});
 
 describe("mosael:// 深链解析", () => {
   it("接受白名单内的 view", () => {
@@ -61,7 +79,7 @@ describe("mosael:// 深链解析", () => {
   });
 
   it("从 argv 里挑出深链(Windows/Linux 的唤起方式)", () => {
-    expect(deepLinkFromArgv(["C:\\app.exe", "--flag", "mosael://open?view=kb"])).toEqual({ view: "kb" });
+    expect(deepLinkFromArgv(["C:\\app.exe", "--flag", "mosael://open?view=notes"])).toEqual({ view: "notes" });
     expect(deepLinkFromArgv(["C:\\app.exe", "--flag"])).toBeNull();
     // 混着一个不合法的和一个合法的:取合法的那个,不因为前一个失败就放弃。
     expect(deepLinkFromArgv(["app", "mosael://run?x=1", "mosael://open?view=media"])).toEqual({

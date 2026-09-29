@@ -1,0 +1,29 @@
+{
+  "contract": "studio-views",
+  "version": 1,
+  "readme": "contracts/README.md",
+  "description": "界面上能去的页面(前端 StudioView)。三处按它把关:mosael:// 深链的白名单、智能体 open_view 工具的白名单、前端导航本身。此前三份各自手写:深链还认一个早就不存在的 kb,却不认资产、笔记、场景、画板、管理;从官网点「在 Mosael 中打开」到这几页,应用被唤起却停在原地,没有任何报错。",
+  "views": [
+    "home",
+    "statistics",
+    "media",
+    "entities",
+    "notes",
+    "scenes",
+    "boards",
+    "editor",
+    "ai",
+    "publish",
+    "workflows",
+    "browser-pool",
+    "scheduler",
+    "plugins",
+    "admin",
+    "settings"
+  ],
+  "implementations": [
+    { "runtime": "frontend", "location": "frontend/src/components/layout/navLabels.ts", "symbol": "NAV_ITEMS", "test": "frontend/src/app/sharedConstants.parity.test.ts" },
+    { "runtime": "electron", "location": "electron/system/deepLink.ts", "symbol": "ALLOWED_VIEWS", "test": "electron/system/deepLink.test.ts" },
+    { "runtime": "python", "location": "backend/mcp_server.py", "symbol": "_VIEWS", "test": "backend/tests/test_shared_constants_parity.py" }
+  ]
+}

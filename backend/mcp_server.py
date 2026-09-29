@@ -747,8 +747,8 @@ def generate_image(
 _SURFACES = ("all", "agent", "direct", "gateway", "automation")
 
 
-#: 能跳到哪儿。**白名单**,和前端的 StudioView 一一对应 —— 透传任意字符串等于让模型
-#: 往 location.hash 里塞东西,而它拼错一个字的表现是"点了没反应"。
+#: 能跳到哪儿。**白名单**,和前端的 StudioView 一一对应(contracts/studio-views.json 钉住)—— 透传任意
+#: 字符串等于让模型往 location.hash 里塞东西,而它拼错一个字的表现是"点了没反应"。
 _VIEWS = (
     "home", "statistics", "media", "entities", "notes", "scenes", "editor", "ai", "publish", "settings",
     "workflows", "boards", "scheduler", "plugins", "browser-pool", "admin",

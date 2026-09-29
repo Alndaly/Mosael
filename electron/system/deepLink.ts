@@ -23,20 +23,27 @@
  * 添加不添加仍由人点。各自只在对应的页面上认,字符集同样限死。
  */
 
-/** 与前端 StudioView 一致。白名单而非透传:避免把任意字符串塞进 location.hash。 */
-const ALLOWED_VIEWS = new Set([
+/**
+ * 与前端 StudioView 一致 —— 由 contracts/studio-views.json 钉住(deepLink.test.ts 比对)。
+ * 白名单而非透传:避免把任意字符串塞进 location.hash。
+ */
+export const ALLOWED_VIEWS: ReadonlySet<string> = new Set([
   "home",
   "statistics",
   "media",
+  "entities",
+  "notes",
+  "scenes",
+  "boards",
   "editor",
   "ai",
   "publish",
-  "kb",
-  "settings",
   "workflows",
+  "browser-pool",
   "scheduler",
   "plugins",
-  "browser-pool",
+  "admin",
+  "settings",
 ]);
 
 /** 记录 id 是后端生成的十六进制串;限死字符集,免得经由 hash 注入奇怪的东西。 */

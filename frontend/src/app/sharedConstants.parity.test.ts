@@ -18,6 +18,8 @@
 import { describe, expect, it } from "vitest";
 
 import contract from "../../../contracts/shared-constants.json";
+import studioViews from "../../../contracts/studio-views.json";
+import { NAV_ITEMS } from "@/components/layout/navLabels";
 import { WINDOW_CHROME_HEIGHT } from "@/lib/windowChrome";
 import { PUBLISH_BAR_HEIGHT } from "@/app/App";
 import { BOARD_ITEM_TITLE_MAX } from "@/features/boards/BoardNodeLabel";
@@ -51,5 +53,12 @@ describe("shared-constants 的前端一侧", () => {
 
     expect(declared).toContain("frontend/src/app/App.tsx:PUBLISH_BAR_HEIGHT");
     expect(declared).toContain("frontend/src/lib/windowChrome.ts:WINDOW_CHROME_HEIGHT");
+  });
+});
+
+describe("contracts/studio-views.json 的前端一侧", () => {
+  it("导航里的页面就是契约里那一组 —— 深链和智能体 open_view 按它把关", () => {
+    // NAV_ITEMS 是 StudioView 的全部取值(每个页面一条);新加一页而契约没跟上,深链和智能体都跳不过去。
+    expect(NAV_ITEMS.map((item) => item.view).sort()).toEqual([...studioViews.views].sort());
   });
 });

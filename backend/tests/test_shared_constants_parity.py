@@ -131,3 +131,19 @@ def test_python_side_is_read_by_import_not_only_by_regex() -> None:
 
     wanted = next(item for item in _constants() if item["name"] == "publish_partition_prefix")
     assert PARTITION_PREFIX == wanted["value"]
+
+
+def test_agent_open_view_knows_every_studio_view() -> None:
+    """contracts/studio-views.json 的 Python 一侧:智能体 open_view 的白名单。
+
+    按 AST 读而不是 import:mcp_server 一 import 就建 MCP 服务、读环境。"""
+    import ast
+
+    views = json.loads((REPO / "contracts" / "studio-views.json").read_text(encoding="utf-8"))["views"]
+    tree = ast.parse((REPO / "backend" / "mcp_server.py").read_text(encoding="utf-8"))
+    declared = next(
+        ast.literal_eval(node.value)
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Assign) and any(getattr(t, "id", "") == "_VIEWS" for t in node.targets)
+    )
+    assert sorted(declared) == sorted(views), "智能体能跳的页面和界面上实有的页面对不上"
