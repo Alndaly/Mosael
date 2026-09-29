@@ -98,7 +98,7 @@ TABLE_OWNERS: dict[str, tuple[str, ...]] = {
     # 智能体/集成
     "AgentSession": ("app/domain/agent/",),
     # 分组对话和生成共用一张表(kind 分开),所以归属在中立的 domain/session_groups。
-    "SessionGroup": ("app/domain/session_groups.py",),
+    "SessionGroup": ("app/domain/session_groups/",),
     "AgentMessage": ("app/domain/agent/",),
     "AgentMemory": ("app/domain/agent/",),
     "AgentQuestion": ("app/domain/agent/",),

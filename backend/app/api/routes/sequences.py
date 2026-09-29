@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from app.domain.sequences import use_cases as sequence_use_cases
-from app.api.deps import CurrentUser, DbSession
+from app.api.deps import CurrentUser, DbSession, Tx
 from app.api.schemas import (
     AssetOut,
     SequenceFrameRequest,
@@ -43,10 +43,9 @@ from app.api.schemas import (
     SplitClipRequest,
     TrimClipRequest,
 )
-from app.db.models import Asset, Job, Project, Sequence, Track
-from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm, require_sequence_access
+from app.db.models import Asset, Job, Sequence, Track
+from app.domain.permissions import require_sequence_access
 from app.domain.render import start_export
-from app.domain.sequences import create_sequence_scaffold
 from app.domain.sequences.errors import SequenceDomainError
 from app.domain.sequences.history import can_redo, can_undo, redo as redo_operation, undo as undo_operation
 from app.media.render_plan import RenderPlanError
@@ -118,20 +117,10 @@ router = APIRouter(tags=["sequences"])
 
 
 @router.post("/sequences", response_model=SequenceOut)
-def create_sequence(body: SequenceCreate, db: DbSession, user: CurrentUser) -> Response:
-    ensure_workspace_perm(db, user, body.workspace_id, "edit")
-    # workspace_id was authorised, project_id was not — and the listing route filters only on
-    # project_id, so pointing a sequence at someone else's project put attacker-controlled rows
-    # (names, track and clip structure) inside a project they cannot otherwise touch.
-    project = db.get(Project, body.project_id)
-    if project is None or project.workspace_id != body.workspace_id:
-        raise HTTPException(status_code=404, detail="Project not found in this workspace")
-    sequence = create_sequence_scaffold(
-        db, project, name=body.name, width=body.width, height=body.height, fps=body.fps,
-    ).sequence
-    if project.active_sequence_id is None:
-        project.active_sequence_id = sequence.id
-    db.commit()
+def create_sequence(body: SequenceCreate, db: Tx, user: CurrentUser) -> Response:
+    sequence = sequence_use_cases.create(
+        db, user, body.workspace_id, body.project_id, name=body.name, width=body.width, height=body.height, fps=body.fps
+    )
     return _get_sequence(db, sequence.id)
 
 
@@ -156,19 +145,10 @@ _PAYLOAD_SHAPE = _payload_shape_digest()
 
 @router.get("/projects/{project_id}/sequences", response_model=list[SequenceOut])
 def list_sequences(project_id: str, request: Request, db: DbSession, user: CurrentUser) -> Response:
-    project = db.get(Project, project_id)
-    if project is not None:
-        ensure_workspace_access(db, user, project.workspace_id)
     # The editor polls this. Read the revisions first — a tiny scalar query — and only load the
     # full track/clip graph for sequences whose serialised form we do not already hold. Between
     # edits that turns a poll from "materialise 200 clips and encode them" into two dict lookups.
-    ids_and_revisions = list(
-        db.execute(
-            select(Sequence.id, Sequence.revision)
-            .where(Sequence.project_id == project_id)
-            .order_by(Sequence.updated_at.desc())
-        )
-    )
+    ids_and_revisions = sequence_use_cases.revisions_of_project(db, user, project_id)
     stale = [sid for sid, revision in ids_and_revisions if _SEQUENCE_JSON.get(sid, (None,))[0] != revision]
     if stale:
         stmt = (
@@ -506,52 +486,25 @@ def redo_sequence(
 
 
 @router.post("/sequences/{sequence_id}/dub-subtitles", response_model=JobOut)
-def dub_subtitles(sequence_id: str, body: SubtitleDubRequest, db: DbSession, user: CurrentUser) -> Job:
+def dub_subtitles(sequence_id: str, body: SubtitleDubRequest, db: Tx, user: CurrentUser) -> Job:
     """给选中的字幕条配音,产物落到一条新的音频轨。
 
     两道闸门都要过:配音**改这条时间线**(edit),也**花 AI 的钱**(ai)。少判一个,就等于让
     只读成员消费工作区的额度、或者让有额度的人改别人的片子。
     """
-    sequence = require_sequence_access(db, user, sequence_id, perm="edit")
-    ensure_workspace_perm(db, user, sequence.workspace_id, "ai")
-    from app.domain.voices.engine_catalog import synthesis_params
-    from app.domain.voices.speech import CLONE_ENGINE
-    from app.domain.voices.subtitle_dub import DubError, start_subtitle_dub
+    from app.domain.voices import use_cases as voices
+    from app.domain.voices.subtitle_dub import DubError
     from app.domain.voices.voices import VoiceError
 
-    clone = (body.engine or CLONE_ENGINE) == CLONE_ENGINE
     try:
-        synthesis = synthesis_params(
-            db,
-            engine=body.engine,
-            voice=(body.voice_id or "") if clone else body.engine_voice,
-            speed=body.speed,
-            user_id=user.id,
-            workspace_id=sequence.workspace_id,
-            clone_engine=body.clone_engine,
-            clone_model=body.clone_model,
-            provider_profile_id=body.provider_profile_id,
-            engine_model=body.engine_model,
-            engine_voice_resource=body.engine_voice_resource,
-        )
-        return start_subtitle_dub(
-            db,
-            sequence_id=sequence_id,
-            clip_ids=list(body.clip_ids),
-            match_duration=body.match_duration,
-            line=body.line,
-            created_by=user.id,
-            synthesis=synthesis,
-            original_audio=body.original_audio,
-        )
+        return voices.dub_subtitles(db, user, sequence_id, **body.model_dump())
     except (DubError, VoiceError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.post("/sequences/{sequence_id}/export", response_model=JobOut)
-def export_sequence(sequence_id: str, db: DbSession, user: CurrentUser, body: ExportRequest | None = None) -> Job:
-    sequence = require_sequence_access(db, user, sequence_id)
-    ensure_workspace_perm(db, user, sequence.workspace_id, "export")
+def export_sequence(sequence_id: str, db: Tx, user: CurrentUser, body: ExportRequest | None = None) -> Job:
+    sequence_use_cases.exportable(db, user, sequence_id)
     try:
         return start_export(db, sequence_id, body.model_dump() if body else None, created_by=user.id)
     except LookupError as exc:
@@ -562,7 +515,7 @@ def export_sequence(sequence_id: str, db: DbSession, user: CurrentUser, body: Ex
 
 @router.post("/sequences/{sequence_id}/frame", response_model=AssetOut)
 def grab_sequence_frame_route(
-    sequence_id: str, body: SequenceFrameRequest, db: DbSession, user: CurrentUser
+    sequence_id: str, body: SequenceFrameRequest, db: Tx, user: CurrentUser
 ) -> Asset:
     """取播放头这一帧,存成一份新素材。
 
@@ -572,8 +525,7 @@ def grab_sequence_frame_route(
     from app.domain.render import grab_sequence_frame
     from app.media.render_executor import RenderExecutionError
 
-    sequence = require_sequence_access(db, user, sequence_id)
-    ensure_workspace_perm(db, user, sequence.workspace_id, "export")
+    sequence_use_cases.exportable(db, user, sequence_id)
     try:
         return grab_sequence_frame(db, sequence_id, body.at, created_by=user.id)
     except RenderPlanError as exc:

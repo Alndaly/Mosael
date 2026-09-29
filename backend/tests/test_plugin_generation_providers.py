@@ -526,7 +526,7 @@ def test_取消经取消文件传到插件(plugged) -> None:
 def test_重启后接着取_不再提交(plugged, monkeypatch: pytest.MonkeyPatch) -> None:
     client, instance_id = plugged
     workspace = client.post("/api/workspaces", json={"name": "生成"}).json()["id"]
-    monkeypatch.setattr("app.api.routes.generation.start_generation_thread", lambda _generation_id: None)
+    monkeypatch.setattr("app.domain.generation.use_cases.start_generation_thread", lambda _generation_id: None)
     job_id = _submit(client, workspace, instance_id, "一只猫").json()["job"]["id"]
     with SessionLocal() as db:
         job = db.get(Job, job_id)

@@ -8,8 +8,8 @@ from __future__ import annotations
 
 from sqlalchemy.orm import Session
 
-from app.db.models import Asset, User, Voice
-from app.domain.permissions import NotVisible, ensure_workspace_access, ensure_workspace_perm
+from app.db.models import Asset, Job, User, Voice
+from app.domain.permissions import NotVisible, ensure_workspace_access, ensure_workspace_perm, require_sequence_access
 from app.domain.voices import voices
 
 
@@ -46,3 +46,50 @@ def ensure_can_list(db: Session, user: User, workspace_id: str) -> None:
 def ensure_can_speak(db: Session, user: User, workspace_id: str) -> None:
     """在这个工作区里建音色、合成、做播客。"""
     ensure_workspace_perm(db, user, workspace_id, "ai")
+
+
+def dub_subtitles(
+    db: Session,
+    user: User,
+    sequence_id: str,
+    *,
+    clip_ids: list[str],
+    match_duration: bool,
+    line: str,
+    original_audio: str,
+    engine: str,
+    voice_id: str | None,
+    engine_voice: str,
+    speed: float,
+    **options: object,
+) -> Job:
+    """给时间线上选中的字幕条配音:要 `edit`(改这条时间线)也要 `ai`(花钱)。
+
+    `options` 是引擎那一套附加项(见 synthesis_params)。
+    """
+    from app.domain.voices.engine_catalog import synthesis_params
+    from app.domain.voices.speech import CLONE_ENGINE
+    from app.domain.voices.subtitle_dub import start_subtitle_dub
+
+    sequence = require_sequence_access(db, user, sequence_id, perm="edit")
+    ensure_workspace_perm(db, user, sequence.workspace_id, "ai")
+    clone = (engine or CLONE_ENGINE) == CLONE_ENGINE
+    synthesis = synthesis_params(
+        db,
+        engine=engine,
+        voice=(voice_id or "") if clone else engine_voice,
+        speed=speed,
+        user_id=user.id,
+        workspace_id=sequence.workspace_id,
+        **options,
+    )
+    return start_subtitle_dub(
+        db,
+        sequence_id=sequence_id,
+        clip_ids=list(clip_ids),
+        match_duration=match_duration,
+        line=line,
+        created_by=user.id,
+        synthesis=synthesis,
+        original_audio=original_audio,
+    )

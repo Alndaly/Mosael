@@ -37,7 +37,7 @@ def reset_db(tmp_path: Path) -> None:
 def test_generation_job_creates_job_and_generation_record(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     # 不真起生成线程:这条用例断言的是"任务建出来了",而真跑会拿假 key 去打网络,
     # 线程里的异常还会飘到后面的用例里(实测污染了同文件的下一条)。
-    monkeypatch.setattr("app.api.routes.generation.start_generation_thread", lambda _generation_id: None)
+    monkeypatch.setattr("app.domain.generation.use_cases.start_generation_thread", lambda _generation_id: None)
     client = fresh_client()
 
     ws = client.post("/api/workspaces", json={"name": "Workspace"}).json()
@@ -97,7 +97,7 @@ def test_没配过就没得选() -> None:
 
 
 def test_generation_sessions_scope_jobs_and_can_be_managed(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("app.api.routes.generation.start_generation_thread", lambda _generation_id: None)
+    monkeypatch.setattr("app.domain.generation.use_cases.start_generation_thread", lambda _generation_id: None)
     client = fresh_client()
 
     ws = client.post("/api/workspaces", json={"name": "Workspace"}).json()

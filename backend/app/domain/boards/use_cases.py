@@ -1,6 +1,6 @@
-"""画板的读用例:谁看得见哪些画板、画板上能用哪些产出者(见 CONVENTIONS「一次用例一个事务,授权在领域里」)。
+"""画板的用例:谁看得见哪些画板、谁能建改删、画板上能跑哪些产出者(见 CONVENTIONS「一次用例一个事务,授权在领域里」)。
 
-写(建、改、跑格子)的闸暂时还在路由里,随后按同一条规矩迁过来(tests/test_use_case_boundaries_ratchet)。
+看只要是成员;建、改、删、复制、放时间线格都要 `edit`;跑一个产出者要什么由产出者自己声明。
 """
 
 from __future__ import annotations
@@ -9,10 +9,11 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.db.models import Board, User
+from app.db.models import Board, Sequence, User
 from app.domain.boards import producers
-from app.domain.boards.canvas import get_board, list_boards
-from app.domain.permissions import ensure_workspace_access, owning_workspace
+from app.domain.boards.canvas import create_board, delete_board, duplicate_board, get_board, list_boards, update_board
+from app.domain.boards.timelines import create_board_sequence
+from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm, owning_workspace
 
 
 def list_all(db: Session, user: User, workspace_id: str) -> list[Board]:
@@ -31,3 +32,61 @@ def producers_for(db: Session, user: User, workspace_id: str, locale: str) -> li
     """画板上**这个人**能用的产出者(插件工具只列他自己接的),按 `locale` 翻好。"""
     ensure_workspace_access(db, user, workspace_id)
     return producers.describe(db, user.id, locale)
+
+
+# ---------------- 写 ----------------
+
+
+def create(db: Session, user: User, workspace_id: str, *, name: str, canvas: dict[str, Any] | None) -> Board:
+    ensure_workspace_perm(db, user, workspace_id, "edit")
+    return create_board(db, workspace_id=workspace_id, name=name, canvas=canvas, actor_id=user.id)
+
+
+def create_timeline(db: Session, user: User, workspace_id: str, board_id: str) -> Sequence:
+    """放一格时间线格之前先建好它那条时间线(放进这张画板的项目,ADR 0030)。"""
+    ensure_workspace_perm(db, user, workspace_id, "edit")
+    return create_board_sequence(db, workspace_id, board_id)
+
+
+def duplicate(db: Session, user: User, workspace_id: str, board_id: str, *, name: str) -> Board:
+    ensure_workspace_perm(db, user, workspace_id, "edit")
+    return duplicate_board(db, workspace_id=workspace_id, board_id=board_id, name=name, actor_id=user.id)
+
+
+def update(
+    db: Session,
+    user: User,
+    workspace_id: str,
+    board_id: str,
+    *,
+    name: str | None,
+    canvas: dict[str, Any] | None,
+    base_revision: int,
+) -> Board:
+    ensure_workspace_perm(db, user, workspace_id, "edit")
+    return update_board(
+        db,
+        workspace_id=workspace_id,
+        board_id=board_id,
+        name=name,
+        canvas=canvas,
+        base_revision=base_revision,
+        actor_id=user.id,
+    )
+
+
+def delete(db: Session, user: User, workspace_id: str, board_id: str) -> None:
+    ensure_workspace_perm(db, user, workspace_id, "edit")
+    delete_board(db, workspace_id, board_id, actor_id=user.id)
+
+
+def run(db: Session, user: User, workspace_id: str, board_id: str, *, producer: str, **request: Any) -> Board:
+    """在画板上跑一个产出者(见 producers.run)。跑它要什么权限由产出者声明;插件工具用的是**这个人**自己的连接。"""
+    chosen = producers.get_producer(db, producer, user.id)
+    ensure_workspace_perm(db, user, workspace_id, chosen.permission)
+    return producers.run(
+        db,
+        producers.RunRequest(
+            workspace_id=workspace_id, board_id=board_id, actor_id=user.id, producer=chosen.id, **request
+        ),
+    )
