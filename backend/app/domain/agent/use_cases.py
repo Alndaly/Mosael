@@ -11,7 +11,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.models import AgentMemory, AgentQuestion, AgentSession, User
+from app.db.models import AgentMemory, AgentMessage, AgentQuestion, AgentSession, User
 from app.domain import sharing
 from app.domain.agent import memory as agent_memory
 from app.domain.agent import plan as agent_plan
@@ -67,6 +67,23 @@ def set_pending_view(db: Session, user: User, session_id: str, view: str, record
 def clear_pending_view(db: Session, user: User, session_id: str) -> None:
     """跳完了。清它也是写:那是主人的「带我过去」,看共享对话的同事不该替他消费掉。"""
     writable_session(db, user, session_id).pending_view = ""
+
+
+def cited_message(db: Session, user: User, workspace_id: str, message_id: str) -> tuple[AgentMessage, str]:
+    """笔记引用的一条对话消息。得看得见它所在的那次对话:笔记是工作区的,引用的对话却可能是某人没共享的
+    私人线程 —— 引用它不等于把它公开。看不见和不存在同一个回答。
+
+    放在智能体这边而不是笔记那边:它问的是「这次对话你看不看得见」,笔记域认识了会话就和智能体成环。
+    """
+    ensure_workspace_access(db, user, workspace_id)
+    message = db.get(AgentMessage, message_id)
+    try:
+        session = readable_session(db, user, message.session_id) if message else None
+    except NotVisible:
+        session = None
+    if message is None or session is None or session.workspace_id != workspace_id:
+        raise NotVisible("routeErr_noteSourceNotFound")
+    return message, session.id
 
 
 # ---------------- 问用户 ----------------

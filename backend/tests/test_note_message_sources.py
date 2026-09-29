@@ -102,7 +102,7 @@ def test_画板上同事改写文档格_笔记上原有的来源照留() -> None
 
 
 def test_智能体在自己的对话里把消息存成笔记_操作人是这一轮的发起人(monkeypatch) -> None:
-    """智能体的工具走 HTTP,带的是这一轮铸给**发消息的那个人**的令牌(工具体回连用的是 routes/agent_tools 铸的 tool_call 令牌,同一个人、同一个会话),
+    """智能体的工具以**发消息的那个人**的身份跑(工具直接调领域用例,行动人就是这次调用的人),
     没有跳过检查的「系统」身份:主人的智能体能引主人自己的对话,同事的智能体引不了主人的私有对话。"""
     owner, workspace, mate = _team()
     mine = _session(owner, workspace, shared=False)
@@ -126,4 +126,5 @@ def test_智能体在自己的对话里把消息存成笔记_操作人是这一�
             mcp_server.create_note(title="摘录", markdown="偷看", workspace_id=workspace, sources=[_cite(message_id)])
         told.append(str(caught.value))
     hidden, missing = told
-    assert hidden.startswith("404") and hidden == missing, "模型读到的两句话一字不差"
+    # 看不见和不存在同一个说法(工具直接调领域,读到的是领域的那句话,不再带 HTTP 状态码前缀)。
+    assert hidden == missing and hidden, "模型读到的两句话一字不差"

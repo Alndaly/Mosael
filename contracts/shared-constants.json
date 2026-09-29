@@ -59,7 +59,7 @@
       "implementations": [
         {
           "runtime": "python",
-          "location": "backend/app/domain/notes.py",
+          "location": "backend/app/domain/notes/__init__.py",
           "symbol": "APPEND_SEPARATOR"
         },
         {

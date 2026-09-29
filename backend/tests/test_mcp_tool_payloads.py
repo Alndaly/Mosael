@@ -138,6 +138,16 @@ def _route_through(monkeypatch, client) -> list[tuple[str, str, int, str]]:
     monkeypatch.setattr(mcp_server, "_patch", lambda path, payload: call("PATCH", path, json=payload))
     monkeypatch.setattr(mcp_server, "_put", lambda path, payload: call("PUT", path, json=payload))
     monkeypatch.setattr(mcp_server, "_delete", lambda path: call("DELETE", path))
+    # 已经改成直接调领域的工具不走上面这些出口,它们按「这次调用是谁」在自己的事务里取出行动人。
+    # 这里认的就是这个 TestClient 登录的那个人 —— 和经 /api/agent/tools 调用时同一个身份。
+    import contextvars
+
+    from app.core.db import SessionLocal
+    from app.core.security import find_session
+
+    with SessionLocal() as db:
+        caller = find_session(db, client.headers["Authorization"].removeprefix("Bearer ")).user_id
+    monkeypatch.setattr(mcp_server, "_CALLER_ID", contextvars.ContextVar("test_caller", default=caller))
     return seen
 
 
