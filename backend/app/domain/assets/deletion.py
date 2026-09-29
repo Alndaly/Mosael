@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
+from app.core.unit_of_work import after_commit
 from app.db.models import Asset, Clip
 from app.db.models import Sequence as SequenceModel
 from app.media.paths import resolve_key
@@ -67,9 +68,9 @@ def delete_asset(db: Session, asset: Asset) -> Deleted:
     asset_id = asset.id
     file_dir = resolve_key(asset.file_key).parent if asset.file_key else None
     db.delete(asset)
-    db.commit()
+    # **不在这里提交**(见 core/unit_of_work):一次删一批时要么全删、要么全不删。
     # 文件在**提交之后**才清:反过来的话,一次提交失败会留下一条指向空文件的素材记录 ——
-    # 界面上它还在,点开是坏的,而没有任何地方记得它为什么坏。
-    if file_dir is not None and file_dir.is_dir():
-        shutil.rmtree(file_dir, ignore_errors=True)
+    # 界面上它还在,点开是坏的,而没有任何地方记得它为什么坏。回滚了就不清。
+    if file_dir is not None:
+        after_commit(db, lambda: shutil.rmtree(file_dir, ignore_errors=True) if file_dir.is_dir() else None)
     return Deleted(asset_id=asset_id, name=name, offline_clips=count)

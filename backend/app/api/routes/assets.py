@@ -4,20 +4,15 @@ import mimetypes
 
 from fastapi import APIRouter, File, Form, HTTPException, Query, Response, UploadFile
 from fastapi.responses import FileResponse
-from sqlalchemy import or_, select
 
 from app.core.i18n import tr
-from app.api.deps import CurrentUser, DbSession, PresentedToken
+from app.api.deps import CurrentUser, DbSession, PresentedToken, Tx
 from app.api.schemas import AssetFrameRequest, AnalyzeAssetRequest, AnalyzeAssetResponse, AssetOut, AssetUpdate, DenoiseAssetRequest, JobOut, LocalImportRequest, TranscriptAttachRequest, TranscriptOut, UrlImportRequest, UrlProbeRequest, UrlProbeResponse, UrlSupportResponse, VideoToGifRequest
-from app.domain.voices.transcription import ASRError, start_transcription
-from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm, require_asset
+from app.domain.voices.transcription import ASRError
 from app.db.models import Asset, Job, Transcript
 from app.core.config import settings
-from app.domain.assets import asset_project, delete_asset_with_clips, import_uploaded_asset, register_file_asset
-from app.domain.assets.proxies import start_proxy_job
 from app.domain import host_files
-from app.domain.assets.source_url import find_transcript_by_source
-from app.domain.transcripts import attach_transcript, get_transcript_for_asset
+from app.domain.assets import use_cases
 from app.domain.transcripts.operations import SegmentIn, TokenIn, TranscriptDomainError
 from app.media.image_preview import browser_compatible_image
 from app.media.paths import resolve_key
@@ -40,7 +35,7 @@ def url_support(
     This is intentionally distinct from ``probe-url``: the side panel only needs to know whether
     importing the active page is meaningful. It must not make the user wait for remote metadata.
     """
-    ensure_workspace_access(db, user, workspace_id)
+    use_cases.ensure_can_browse(db, user, workspace_id)
     from app.media.ytdlp import matching_extractor
 
     extractor = matching_extractor(url)
@@ -49,21 +44,14 @@ def url_support(
 
 @router.post("/assets/import", response_model=AssetOut)
 def import_asset(
-    db: DbSession,
+    db: Tx,
     user: CurrentUser,
     workspace_id: str = Form(...),
     project_id: str | None = Form(None),
     name: str | None = Form(None),
     file: UploadFile = File(...),
 ) -> Asset:
-    ensure_workspace_perm(db, user, workspace_id, "upload")
-    return import_uploaded_asset(
-        db,
-        workspace_id=workspace_id,
-        project_id=project_id,
-        name=name,
-        upload=file,
-    )
+    return use_cases.import_upload(db, user, workspace_id, project_id=project_id, name=name, upload=file)
 
 
 @router.post("/assets/probe-url", response_model=UrlProbeResponse)
@@ -76,7 +64,7 @@ def probe_url(body: UrlProbeRequest, db: DbSession, user: CurrentUser) -> dict:
     权限按 `upload` 判:探测本身只是出网读一份公开元数据,但它是导入的第一步,而能看的人不等于
     能往这个工作区里塞东西。
     """
-    ensure_workspace_perm(db, user, body.workspace_id, "upload")
+    use_cases.ensure_can_import(db, user, body.workspace_id)
     from app.core.i18n import get_current_locale, t
     from app.domain.assets.from_url import probe_url as probe
     from app.media.ytdlp import YtdlpError
@@ -115,21 +103,20 @@ def probe_url(body: UrlProbeRequest, db: DbSession, user: CurrentUser) -> dict:
 
 
 @router.post("/assets/import-url", response_model=JobOut)
-def import_from_url(body: UrlImportRequest, db: DbSession, user: CurrentUser) -> Job:
+def import_from_url(body: UrlImportRequest, db: Tx, user: CurrentUser) -> Job:
     """把选中的条目下载进素材库。返回任务 —— 下载要跑一阵,不该占着一个请求。"""
-    ensure_workspace_perm(db, user, body.workspace_id, "upload")
     from app.domain import sharing
-    from app.domain.assets.from_url import UrlImportError, start_url_import
+    from app.domain.assets.from_url import UrlImportError
     from app.domain.browser import BrowserDomainError
 
     try:
-        return start_url_import(
+        return use_cases.import_from_url(
             db,
-            workspace_id=body.workspace_id,
+            user,
+            body.workspace_id,
             project_id=body.project_id,
             items=[item.model_dump() for item in body.items],
             kind=body.kind,
-            created_by=user.id,
             profile_id=body.profile_id,
             max_height=body.max_height,
         )
@@ -151,7 +138,7 @@ _LOCAL_IMPORT_SUFFIXES = {
 @router.post("/assets/import-local", response_model=AssetOut)
 def import_local_asset(
     body: LocalImportRequest,
-    db: DbSession,
+    db: Tx,
     user: CurrentUser,
 ) -> Asset:
     """按本机绝对路径导入(桌面端把文件拖到应用图标上 / 「用 Mosael 打开」)。
@@ -162,7 +149,7 @@ def import_local_asset(
     """
     if not settings.local_desktop:
         raise HTTPException(status_code=404, detail="Not found")
-    ensure_workspace_perm(db, user, body.workspace_id, "upload")
+    use_cases.ensure_can_import(db, user, body.workspace_id)
 
     # 桌面端的后端也可能被同事经远程访问连上 —— 这台电脑上的文件仍是部署主人的,
     # 读之前过同一道闸(见 domain/host_files)。放行的是**真实路径**:软链接名叫 .mp4 不算数。
@@ -174,14 +161,7 @@ def import_local_asset(
         raise HTTPException(status_code=422, detail=tr("routeErr_unsupportedFileType", suffix=path.suffix))
     # 复用「登记一个已存在的本机文件」这条既有路径 —— 渲染成片、配音产出、AI 生成结果
     # 走的都是它。拖进来的文件只是 source 标签不同。
-    return register_file_asset(
-        db,
-        workspace_id=body.workspace_id,
-        project_id=body.project_id,
-        source_path=path,
-        name=path.name,
-        source="imported",
-    )
+    return use_cases.import_local(db, user, body.workspace_id, project_id=body.project_id, path=path)
 
 
 @router.get("/assets", response_model=list[AssetOut])
@@ -193,25 +173,15 @@ def list_assets(
     kind: str | None = None,
     name_contains: str | None = None,
 ) -> list[Asset]:
-    ensure_workspace_access(db, user, workspace_id)
-    stmt = select(Asset).where(Asset.workspace_id == workspace_id)
-    if project_id:
-        # 工作区级素材(project_id IS NULL)属于整个工作区,任何项目都该能用它 —— 否则从
-        # 「素材」页导入的素材在剪辑页看不到(素材页按工作区列,剪辑页按项目过滤)。
-        stmt = stmt.where(or_(Asset.project_id == project_id, Asset.project_id.is_(None)))
-    if kind and kind != "all":
-        stmt = stmt.where(Asset.kind == kind)
-    if name_contains:
-        stmt = stmt.where(Asset.name.contains(name_contains))
-    stmt = stmt.order_by(Asset.created_at.desc())
-    return list(db.scalars(stmt))
+    return use_cases.list_assets(
+        db, user, workspace_id, project_id=project_id, kind=kind, name_contains=name_contains
+    )
 
 
 @router.get("/assets/transcript-by-source", response_model=TranscriptOut)
 def get_transcript_by_source(workspace_id: str, url: str, db: DbSession, user: CurrentUser) -> Transcript:
     """Resolve a completed transcript for a previously imported video URL."""
-    ensure_workspace_access(db, user, workspace_id)
-    transcript = find_transcript_by_source(db, workspace_id, url)
+    transcript = use_cases.transcript_by_source(db, user, workspace_id, url)
     if transcript is None:
         raise HTTPException(status_code=404, detail="Transcript not found")
     return transcript
@@ -220,40 +190,18 @@ def get_transcript_by_source(workspace_id: str, url: str, db: DbSession, user: C
 @router.get("/assets/{asset_id}", response_model=AssetOut)
 def get_asset(asset_id: str, db: DbSession, user: CurrentUser) -> Asset:
     # 单资产详情。前端 MediaPreview / 智能体工具卡靠它拉元数据;缺这个路由会 404,
-    # 卡片就一直显示「素材不可用」。require_asset 已内含工作区访问校验。
-    return require_asset(db, user, asset_id)
+    # 卡片就一直显示「素材不可用」。
+    return use_cases.readable(db, user, asset_id)
 
 
 @router.patch("/assets/{asset_id}", response_model=AssetOut)
-def update_asset(asset_id: str, body: AssetUpdate, db: DbSession, user: CurrentUser) -> Asset:
-    asset = require_asset(db, user, asset_id)
-    ensure_workspace_perm(db, user, asset.workspace_id, "edit")
-    if body.name is not None:
-        asset.name = body.name
-    if body.tags is not None:
-        # 标签去重且保序;空白标签直接丢弃。
-        cleaned: list[str] = []
-        for tag in body.tags:
-            value = tag.strip()[:40]
-            if value and value not in cleaned:
-                cleaned.append(value)
-        asset.tags = cleaned
-    if body.project_id is not None:
-        # 跨工作区归档会让素材从原工作区消失 —— 拒绝而不是静默照做(见 assets/project_scope);
-        # 空串 = 移出项目。
-        asset.project_id = asset_project(db, asset.workspace_id, body.project_id)
-    db.commit()
-    db.refresh(asset)
-    return asset
+def update_asset(asset_id: str, body: AssetUpdate, db: Tx, user: CurrentUser) -> Asset:
+    return use_cases.update_asset(db, user, asset_id, name=body.name, tags=body.tags, project_id=body.project_id)
 
 
 @router.delete("/assets/{asset_id}", status_code=204)
-def delete_asset(asset_id: str, db: DbSession, user: CurrentUser) -> Response:
-    asset = require_asset(db, user, asset_id)
-    ensure_workspace_perm(db, user, asset.workspace_id, "delete")
-    # 删除的三个后果(清文件、引用它的片段转脱机占位、受影响序列推版本号)全在
-    # domain/assets/deletion 一处 —— 智能体的确认卡走同一个函数。
-    delete_asset_with_clips(db, asset)
+def delete_asset(asset_id: str, db: Tx, user: CurrentUser) -> Response:
+    use_cases.delete_asset(db, user, asset_id)
     return Response(status_code=204)
 
 
@@ -261,7 +209,7 @@ def delete_asset(asset_id: str, db: DbSession, user: CurrentUser) -> Response:
 def analyze_asset_route(
     asset_id: str,
     body: AnalyzeAssetRequest,
-    db: DbSession,
+    db: Tx,
     user: CurrentUser,
     token: PresentedToken,
 ) -> AnalyzeAssetResponse:
@@ -274,39 +222,30 @@ def analyze_asset_route(
     """
     from app.core.security import find_session
     from app.domain.agent.analysis_target import agent_session_target
-    from app.domain.analysis.service import AnalysisError, analyze_asset
+    from app.domain.analysis.service import AnalysisError
 
-    asset = require_asset(db, user, asset_id)
-    ensure_workspace_perm(db, user, asset.workspace_id, "ai")
     # 智能体工具回连带的短期令牌绑着 agent_session_id:那时用这次对话的连接和模型(见 agent_session_target)。
     auth = find_session(db, token)
     try:
+        target = None
         if auth is not None and auth.agent_session_id:
-            target = agent_session_target(db, auth.agent_session_id, workspace_id=asset.workspace_id, user_id=user.id)
-            result = analyze_asset(
-                db, asset, body.question, user_id=user.id, mode=target.mode,
-                resolved_connection=target.connection, model=target.model, surface="automation",
-            )
-        else:
-            result = analyze_asset(
-                db, asset, body.question, user_id=user.id, profile_id=body.profile_id, mode=body.mode,
-            )
+            workspace_id = use_cases.readable(db, user, asset_id).workspace_id
+            target = agent_session_target(db, auth.agent_session_id, workspace_id=workspace_id, user_id=user.id)
+        result = use_cases.analyze(
+            db, user, asset_id, body.question, session_target=target, profile_id=body.profile_id, mode=body.mode,
+        )
     except AnalysisError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    # 分析本身只读,但记了一笔用量;记账跟调用方事务走(见 domain/billing/usage.billable),得落盘。
-    db.commit()
     return AnalyzeAssetResponse(**result)
 
 
 @router.put("/assets/{asset_id}/transcript", response_model=TranscriptOut)
-def put_transcript(asset_id: str, body: TranscriptAttachRequest, db: DbSession, user: CurrentUser) -> Transcript:
-    if db.get(Asset, asset_id) is not None:
-        asset = require_asset(db, user, asset_id)
-        ensure_workspace_perm(db, user, asset.workspace_id, "edit")
+def put_transcript(asset_id: str, body: TranscriptAttachRequest, db: Tx, user: CurrentUser) -> Transcript:
     try:
-        transcript = attach_transcript(
+        return use_cases.attach_transcript(
             db,
-            asset_id=asset_id,
+            user,
+            asset_id,
             language=body.language,
             source=body.source,
             segments=[
@@ -325,13 +264,12 @@ def put_transcript(asset_id: str, body: TranscriptAttachRequest, db: DbSession, 
         )
     except TranscriptDomainError as exc:
         raise HTTPException(status_code=exc.status, detail=str(exc)) from exc
-    return get_transcript_for_asset(db, asset_id) or transcript
 
 
 @router.post("/assets/{asset_id}/transcribe", response_model=JobOut)
 def transcribe_asset(
     asset_id: str,
-    db: DbSession,
+    db: Tx,
     user: CurrentUser,
     language: str = "",
     engine: str = "",
@@ -340,25 +278,22 @@ def transcribe_asset(
 
     语言只传给识别模型,不暗中切换引擎。挑法见 `transcription.transcriber`(ADR 0032)。
     """
-    asset = require_asset(db, user, asset_id)
-    ensure_workspace_perm(db, user, asset.workspace_id, "ai")
     try:
-        return start_transcription(db, asset_id, created_by=user.id, language=language, engine=engine)
+        return use_cases.start_transcription(db, user, asset_id, language=language, engine=engine)
     except ASRError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.post("/assets/{asset_id}/convert-gif", response_model=JobOut)
-def convert_asset_to_gif(asset_id: str, body: VideoToGifRequest, db: DbSession, user: CurrentUser) -> Job:
+def convert_asset_to_gif(asset_id: str, body: VideoToGifRequest, db: Tx, user: CurrentUser) -> Job:
     """Create a **new** GIF asset. The source video remains untouched."""
-    from app.domain.assets.video_gif import VideoGifError, start_video_to_gif
+    from app.domain.assets.video_gif import VideoGifError
 
-    asset = require_asset(db, user, asset_id, perm="edit")
     try:
-        return start_video_to_gif(
+        return use_cases.start_gif(
             db,
-            asset=asset,
-            created_by=user.id,
+            user,
+            asset_id,
             fps=body.fps,
             width=body.width,
             start=body.start,
@@ -369,39 +304,32 @@ def convert_asset_to_gif(asset_id: str, body: VideoToGifRequest, db: DbSession, 
 
 
 @router.post("/assets/{asset_id}/separate", response_model=JobOut)
-def separate_asset_audio(asset_id: str, db: DbSession, user: CurrentUser, engine: str = "") -> Job:
+def separate_asset_audio(asset_id: str, db: Tx, user: CurrentUser, engine: str = "") -> Job:
     """拆成人声 + 背景音两份**新**素材;原素材不动(ADR-0016)。
 
     排成任务而不是同步返回:一段长素材在 CPU 上要跑十几分钟,而那样长的 HTTP 请求会先被
     某一层断掉 —— 用户看到"失败了",后台其实还在跑。
     """
     from app.ai.providers.contracts.separation import SeparationError
-    from app.domain.assets.separation import start_separation_job
-
-    asset = require_asset(db, user, asset_id, perm="edit")
     try:
-        return start_separation_job(db, asset=asset, created_by=user.id, engine=engine)
+        return use_cases.start_separation(db, user, asset_id, engine=engine)
     except SeparationError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.post("/assets/{asset_id}/denoise", response_model=JobOut)
-def denoise_asset_audio(asset_id: str, body: DenoiseAssetRequest, db: DbSession, user: CurrentUser) -> Job:
+def denoise_asset_audio(asset_id: str, body: DenoiseAssetRequest, db: Tx, user: CurrentUser) -> Job:
     """降噪,产出一份**新**素材;原素材不动(ADR-0017)。排成任务,理由同分离。"""
     from app.ai.providers.contracts.denoise import DenoiseError
-    from app.domain.assets.denoise import start_denoise_job
-
-    asset = require_asset(db, user, asset_id, perm="edit")
     try:
-        return start_denoise_job(db, asset=asset, created_by=user.id, engine=body.engine, strength=body.strength)
+        return use_cases.start_denoise(db, user, asset_id, engine=body.engine, strength=body.strength)
     except DenoiseError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.get("/assets/{asset_id}/transcript", response_model=TranscriptOut)
 def get_transcript(asset_id: str, db: DbSession, user: CurrentUser) -> Transcript:
-    require_asset(db, user, asset_id)
-    transcript = get_transcript_for_asset(db, asset_id)
+    transcript = use_cases.transcript_of(db, user, asset_id)
     if transcript is None:
         raise HTTPException(status_code=404, detail="Transcript not found")
     return transcript
@@ -409,8 +337,7 @@ def get_transcript(asset_id: str, db: DbSession, user: CurrentUser) -> Transcrip
 
 @router.get("/assets/{asset_id}/file")
 def get_asset_file(asset_id: str, db: DbSession, user: CurrentUser) -> FileResponse:
-    asset = _require_file_backed_asset(db, asset_id)
-    ensure_workspace_access(db, user, asset.workspace_id)
+    asset = use_cases.readable_file(db, user, asset_id)
     path = resolve_key(asset.file_key)
     if not path.is_file():
         raise HTTPException(status_code=404, detail="Asset file missing")
@@ -425,8 +352,7 @@ def get_asset_preview(asset_id: str, db: DbSession, user: CurrentUser) -> FileRe
     The original file remains the download source. Unsupported browser containers such as HEIC
     are decoded into a cached JPEG, including for assets imported before this endpoint existed.
     """
-    asset = _require_file_backed_asset(db, asset_id)
-    ensure_workspace_access(db, user, asset.workspace_id)
+    asset = use_cases.readable_file(db, user, asset_id)
     if asset.kind != "image":
         raise HTTPException(status_code=422, detail="Preview is only available for image assets")
     source = resolve_key(asset.file_key)
@@ -441,8 +367,7 @@ def get_asset_preview(asset_id: str, db: DbSession, user: CurrentUser) -> FileRe
 
 @router.get("/assets/{asset_id}/thumbnail")
 def get_asset_thumbnail(asset_id: str, db: DbSession, user: CurrentUser) -> FileResponse:
-    asset = _require_file_backed_asset(db, asset_id)
-    ensure_workspace_access(db, user, asset.workspace_id)
+    asset = use_cases.readable_file(db, user, asset_id)
     source = resolve_key(asset.file_key)
     thumb = thumbnail_path(source.parent)
     if not thumb.is_file():
@@ -453,18 +378,16 @@ def get_asset_thumbnail(asset_id: str, db: DbSession, user: CurrentUser) -> File
 
 
 @router.post("/assets/{asset_id}/frame", response_model=AssetOut)
-def grab_asset_frame(asset_id: str, body: AssetFrameRequest, db: DbSession, user: CurrentUser) -> Asset:
+def grab_asset_frame(asset_id: str, body: AssetFrameRequest, db: Tx, user: CurrentUser) -> Asset:
     """取这段视频的某一帧,存成一份新素材。
 
     **原素材不动**,产出是新的一份 —— 取帧是「我要这个画面」,不是「把这段片子变成一张图」。
     """
-    from app.domain.assets.frames import AssetFrameError, save_frame_as_asset
+    from app.domain.assets.frames import AssetFrameError
     from app.media.still import StillError
 
-    asset = _require_file_backed_asset(db, asset_id)
-    ensure_workspace_perm(db, user, asset.workspace_id, "edit")
     try:
-        return save_frame_as_asset(db, asset, body.at, project_id=body.project_id)
+        return use_cases.grab_frame(db, user, asset_id, body.at, project_id=body.project_id)
     except (AssetFrameError, StillError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -474,8 +397,7 @@ def get_asset_filmstrip(asset_id: str, db: DbSession, user: CurrentUser) -> File
     """剪辑面板用的帧条(一张横向长图)。**按需生成、落盘缓存** —— 和缩略图同一条路。"""
     from app.media.filmstrip import filmstrip_path, generate_filmstrip
 
-    asset = _require_file_backed_asset(db, asset_id)
-    ensure_workspace_access(db, user, asset.workspace_id)
+    asset = use_cases.readable_file(db, user, asset_id)
     source = resolve_key(asset.file_key)
     strip = filmstrip_path(source.parent)
     if not strip.is_file():
@@ -487,8 +409,7 @@ def get_asset_filmstrip(asset_id: str, db: DbSession, user: CurrentUser) -> File
 
 @router.get("/assets/{asset_id}/waveform")
 def get_asset_waveform(asset_id: str, db: DbSession, user: CurrentUser) -> FileResponse:
-    asset = _require_file_backed_asset(db, asset_id)
-    ensure_workspace_access(db, user, asset.workspace_id)
+    asset = use_cases.readable_file(db, user, asset_id)
     waveform = waveform_path(resolve_key(asset.file_key).parent)
     if not waveform.is_file():
         raise HTTPException(status_code=404, detail="Waveform not available")
@@ -498,8 +419,7 @@ def get_asset_waveform(asset_id: str, db: DbSession, user: CurrentUser) -> FileR
 @router.get("/assets/{asset_id}/proxy")
 def get_asset_proxy(asset_id: str, db: DbSession, user: CurrentUser) -> FileResponse:
     """The 720p preview proxy the compositor decodes (see media/proxy.py)."""
-    asset = _require_file_backed_asset(db, asset_id)
-    ensure_workspace_access(db, user, asset.workspace_id)
+    asset = use_cases.readable_file(db, user, asset_id)
     proxy = proxy_path(resolve_key(asset.file_key).parent)
     if not proxy.is_file():
         raise HTTPException(status_code=404, detail="Proxy not available")
@@ -508,17 +428,9 @@ def get_asset_proxy(asset_id: str, db: DbSession, user: CurrentUser) -> FileResp
 
 
 @router.post("/assets/{asset_id}/proxy", response_model=JobOut)
-def regenerate_asset_proxy(asset_id: str, db: DbSession, user: CurrentUser):
+def regenerate_asset_proxy(asset_id: str, db: Tx, user: CurrentUser):
     """Force a fresh proxy transcode (e.g. after a failed one)."""
-    asset = require_asset(db, user, asset_id, perm="edit")
-    job = start_proxy_job(db, asset, created_by=user.id, force=True)
+    job = use_cases.regenerate_proxy(db, user, asset_id)
     if job is None:
         raise HTTPException(status_code=422, detail=tr("routeErr_noProxyForAsset"))
     return job
-
-
-def _require_file_backed_asset(db: DbSession, asset_id: str) -> Asset:
-    asset = db.get(Asset, asset_id)
-    if asset is None or not asset.file_key:
-        raise HTTPException(status_code=404, detail="Asset not found")
-    return asset

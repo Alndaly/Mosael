@@ -133,17 +133,21 @@ def create_generation_job(db: Session, **request: Any) -> tuple[GenerationJob, A
 
 
 def _discard_rendered(db: Session, workspace_id: str, asset_ids: list[str]) -> None:
-    from sqlalchemy import select
 
     from app.domain.assets.deletion import delete_asset
 
+    from app.core.unit_of_work import unit_of_work
+
     db.rollback()
-    for asset in db.scalars(select(Asset).where(Asset.workspace_id == workspace_id, Asset.id.in_(asset_ids))):
+    # 每张各自一个事务:清理不成的那张不该拖着别的一起留下。
+    for asset_id in asset_ids:
         try:
-            delete_asset(db, asset)
+            with unit_of_work() as cleanup:
+                asset = cleanup.get(Asset, asset_id)
+                if asset is not None and asset.workspace_id == workspace_id:
+                    delete_asset(cleanup, asset)
         except Exception:  # noqa: BLE001 — 清理不成不该盖住真正的拒绝原因
-            db.rollback()
-            logger.warning("没能删掉渲出来的 3D 参考素材 %s", asset.id, exc_info=True)
+            logger.warning("没能删掉渲出来的 3D 参考素材 %s", asset_id, exc_info=True)
 
 
 def _create_generation_job(
