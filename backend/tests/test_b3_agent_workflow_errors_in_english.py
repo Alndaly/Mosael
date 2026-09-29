@@ -76,7 +76,7 @@ def test_智能体回合的线程带着发消息的人的语言(monkeypatch) -> 
     seen: list[str] = []
     done = threading.Event()
 
-    def fake_turn(session_id: str, prompt: str, token: str) -> None:
+    def fake_turn(session_id: str, prompt: str, token: str, **_kw) -> None:
         seen.append(get_current_locale())
         done.set()
 

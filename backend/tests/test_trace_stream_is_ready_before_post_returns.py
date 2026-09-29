@@ -21,7 +21,7 @@ def test_起线程之前流就已经开着(monkeypatch) -> None:
     seen: list[bool] = []
     started = threading.Event()
 
-    def fake_thread_target(session_id: str, prompt: str, token: str) -> None:
+    def fake_thread_target(session_id: str, prompt: str, token: str, **_kw) -> None:
         started.set()
 
     monkeypatch.setattr(host, "_run_turn_thread", fake_thread_target)
