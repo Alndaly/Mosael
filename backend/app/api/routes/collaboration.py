@@ -2,8 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Response
 
-from app.core.i18n import tr
-from app.api.deps import CurrentUser, DbSession
+from app.api.deps import CurrentUser, DbSession, Tx
 from app.api.schemas.collaboration import (
     ActivityOut,
     CommentAnchorUpdate,
@@ -11,18 +10,8 @@ from app.api.schemas.collaboration import (
     CommentContentUpdate,
     CommentOut,
 )
-from app.db.models import Comment
-from app.domain.collaboration import (
-    CollaborationError,
-    CommentOwnershipError,
-    create_comment,
-    delete_comment,
-    edit_comment,
-    list_activity,
-    list_comments,
-    move_comment,
-)
-from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm
+from app.domain.collaboration import CollaborationError, CommentOwnershipError
+from app.domain.collaboration import use_cases as collaboration
 
 router = APIRouter(tags=["collaboration"])
 
@@ -36,9 +25,8 @@ def activity(
     subject_id: str | None = None,
     limit: int = 50,
 ) -> list[dict]:
-    ensure_workspace_access(db, user, workspace_id)
-    return list_activity(
-        db, workspace_id, subject_type=subject_type, subject_id=subject_id, limit=limit
+    return collaboration.list_activity(
+        db, user, workspace_id, subject_type=subject_type, subject_id=subject_id, limit=limit
     )
 
 
@@ -50,99 +38,64 @@ def comments(
     db: DbSession,
     user: CurrentUser,
 ) -> list[dict]:
-    ensure_workspace_access(db, user, workspace_id)
     try:
-        return list_comments(db, workspace_id, subject_type, subject_id)
+        return collaboration.list_comments(db, user, workspace_id, subject_type, subject_id)
     except CollaborationError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @router.post("/comments", response_model=CommentOut)
-def add_comment(body: CommentCreate, db: DbSession, user: CurrentUser) -> dict:
-    ensure_workspace_perm(db, user, body.workspace_id, "edit")
+def add_comment(body: CommentCreate, db: Tx, user: CurrentUser) -> dict:
     try:
-        comment = create_comment(
+        return collaboration.create_comment(
             db,
-            workspace_id=body.workspace_id,
+            user,
+            body.workspace_id,
             subject_type=body.subject_type,
             subject_id=body.subject_id,
-            author_id=user.id,
             body=body.body,
             mentioned_user_ids=body.mentioned_user_ids,
             anchor=body.anchor.model_dump(exclude_none=True) if body.anchor else None,
             body_document=body.body_document,
         )
-        comment_id = comment.id
-        db.commit()
-        return next(
-            one
-            for one in list_comments(db, body.workspace_id, body.subject_type, body.subject_id)
-            if one["id"] == comment_id
-        )
     except CollaborationError as exc:
-        db.rollback()
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.patch("/comments/{comment_id}", response_model=CommentOut)
-def update_comment_anchor(comment_id: str, body: CommentAnchorUpdate, db: DbSession, user: CurrentUser) -> dict:
-    ensure_workspace_perm(db, user, body.workspace_id, "edit")
-    comment = db.get(Comment, comment_id)
-    if comment is None or comment.workspace_id != body.workspace_id:
-        raise HTTPException(status_code=404, detail=tr("routeErr_commentNotFound"))
+def update_comment_anchor(comment_id: str, body: CommentAnchorUpdate, db: Tx, user: CurrentUser) -> dict:
     try:
-        move_comment(
-            db,
-            comment,
-            actor_id=user.id,
-            anchor=body.anchor.model_dump(exclude_none=True),
-        )
-        db.commit()
-        return next(
-            one
-            for one in list_comments(db, comment.workspace_id, comment.subject_type, comment.subject_id)
-            if one["id"] == comment.id
+        return collaboration.move_comment(
+            db, user, body.workspace_id, comment_id, body.anchor.model_dump(exclude_none=True)
         )
     except CommentOwnershipError as exc:
-        db.rollback()
         raise HTTPException(status_code=403, detail=str(exc)) from exc
     except CollaborationError as exc:
-        db.rollback()
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.put("/comments/{comment_id}/content", response_model=CommentOut)
-def update_comment_content(comment_id: str, body: CommentContentUpdate, db: DbSession, user: CurrentUser) -> dict:
-    ensure_workspace_perm(db, user, body.workspace_id, "edit")
-    comment = db.get(Comment, comment_id)
-    if comment is None or comment.workspace_id != body.workspace_id:
-        raise HTTPException(status_code=404, detail=tr("routeErr_commentNotFound"))
+def update_comment_content(comment_id: str, body: CommentContentUpdate, db: Tx, user: CurrentUser) -> dict:
     try:
-        edit_comment(db, comment, actor_id=user.id, body=body.body,
-                     body_document=body.body_document, mentioned_user_ids=body.mentioned_user_ids)
-        db.commit()
-        return next(one for one in list_comments(db, comment.workspace_id, comment.subject_type, comment.subject_id)
-                    if one["id"] == comment.id)
+        return collaboration.edit_comment(
+            db,
+            user,
+            body.workspace_id,
+            comment_id,
+            body=body.body,
+            body_document=body.body_document,
+            mentioned_user_ids=body.mentioned_user_ids,
+        )
     except CommentOwnershipError as exc:
-        db.rollback()
         raise HTTPException(status_code=403, detail=str(exc)) from exc
     except CollaborationError as exc:
-        db.rollback()
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.delete("/comments/{comment_id}", status_code=204)
-def remove_comment(comment_id: str, workspace_id: str, db: DbSession, user: CurrentUser) -> Response:
-    ensure_workspace_perm(db, user, workspace_id, "edit")
-    comment = db.get(Comment, comment_id)
-    if comment is None or comment.workspace_id != workspace_id:
-        raise HTTPException(status_code=404, detail=tr("routeErr_commentNotFound"))
+def remove_comment(comment_id: str, workspace_id: str, db: Tx, user: CurrentUser) -> Response:
     try:
-        delete_comment(db, comment, actor_id=user.id)
-        db.commit()
-        return Response(status_code=204)
+        collaboration.delete_comment(db, user, workspace_id, comment_id)
     except CommentOwnershipError as exc:
-        db.rollback()
         raise HTTPException(status_code=403, detail=str(exc)) from exc
-
-
+    return Response(status_code=204)
