@@ -4,7 +4,7 @@
 同一组接口,由 `kind` 分开(见 db/models.SessionGroup)。留在 `agent/` 下面时,生成那边
 要用就只能反向 import 对话域,或者照抄一份。
 
-**行创建收在这里**,路由只做鉴权与转述 —— 这是仓库的数据归属纪律(domain/ownership.py,
+**行创建收在这里**,路由只做转述(闸在 use_cases) —— 这是仓库的数据归属纪律(domain/ownership.py,
 由 tests/test_data_ownership_ratchet.py 钉住):谁拥有这张表,谁才能造它的行。
 """
 
@@ -24,22 +24,18 @@ MEMBER_MODEL = {"agent": AgentSession, "generation": GenerationSession}
 def create_group(db: Session, *, workspace_id: str, kind: str, name: str, owner_user_id: str | None) -> SessionGroup:
     group = SessionGroup(workspace_id=workspace_id, kind=kind, owner_user_id=owner_user_id, name=name.strip())
     db.add(group)
-    db.commit()
+    db.flush()
     db.refresh(group)
     return group
 
 
 def rename_group(db: Session, group: SessionGroup, name: str) -> SessionGroup:
     group.name = name.strip()
-    db.commit()
-    db.refresh(group)
     return group
 
 
 def set_group_order(db: Session, group: SessionGroup, sort_order: int) -> SessionGroup:
     group.sort_order = sort_order
-    db.commit()
-    db.refresh(group)
     return group
 
 
@@ -52,7 +48,6 @@ def delete_group(db: Session, group: SessionGroup) -> None:
     model = MEMBER_MODEL[group.kind]
     db.execute(update(model).where(model.group_id == group.id).values(group_id=None))
     db.delete(group)
-    db.commit()
 
 
 def list_groups(db: Session, workspace_id: str, kind: str) -> list[SessionGroup]:

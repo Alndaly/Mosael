@@ -3,10 +3,8 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, Response
-from sqlalchemy import select
-
 from app.core.i18n import tr
-from app.api.deps import CurrentUser, DbSession
+from app.api.deps import CurrentUser, DbSession, Tx
 from app.api.schemas import (
     CapabilityProfileSchemaOut,
     GenerationCreate,
@@ -19,42 +17,25 @@ from app.api.schemas import (
     PromptOptimizeRequest,
     PromptOptimizeResponse,
 )
-from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm, require_own_profile
+from app.domain.permissions import require_own_profile
 from app.db.models import GenerationJob, GenerationSession
 from app.domain import session_groups, sharing
-from app.domain.generation import create_generation_job, generation_options
+from app.domain.generation import generation_options
+from app.domain.generation import use_cases as generation
 from app.domain.generation.operations import GenerationDomainError
 from app.domain.generation.custom_profiles import capability_ref_choices
-from app.domain.generation.prompt_optimizer import PromptOptimizeError, optimize_image_prompt
-from app.domain.generation.runner import start_generation_thread
-from app.domain.generation.sessions import (
-    SHARE_KIND,
-    delete_session,
-    new_session,
-    visible_history,
-    writable_session,
-)
+from app.domain.generation.prompt_optimizer import PromptOptimizeError
+from app.domain.generation.sessions import SHARE_KIND, delete_session, writable_session
 
 router = APIRouter(tags=["generation"])
 
 
 @router.post("/generation/sessions", response_model=GenerationSessionOut)
 def create_generation_session(
-    body: GenerationSessionCreate, db: DbSession, user: CurrentUser
+    body: GenerationSessionCreate, db: Tx, user: CurrentUser
 ) -> GenerationSession:
-    ensure_workspace_perm(db, user, body.workspace_id, "ai")
-    session = new_session(
-        db,
-        workspace_id=body.workspace_id,
-        owner_user_id=user.id,
-        title=body.title,
-        provider_profile_id=body.provider_profile_id,
-        model=body.model,
-        kind=body.kind,
-    )
-    db.commit()
-    db.refresh(session)
-    return sharing.annotate(db, SHARE_KIND, [session], user, session.workspace_id)[0]
+    fields = body.model_dump()
+    return generation.open_session(db, user, fields.pop("workspace_id"), **fields)
 
 
 @router.get("/generation/sessions", response_model=list[GenerationSessionOut])
@@ -67,15 +48,7 @@ def list_generation_sessions(
     """这个人在这个工作区里看得见的生成会话。`kind` 可以给几个:AI 工作台「生成」页要图像和视频,
     「音频」页要音频 —— 在这里筛而不是在界面上筛,因为列表有条数上限,界面筛的话一页的会话能把
     另一页的挤出去。"""
-    ensure_workspace_access(db, user, workspace_id)
-    stmt = select(GenerationSession).where(
-        GenerationSession.workspace_id == workspace_id,
-        sharing.visible_filter(SHARE_KIND, user, workspace_id),
-    )
-    if kind:
-        stmt = stmt.where(GenerationSession.kind.in_(kind))
-    stmt = stmt.order_by(GenerationSession.updated_at.desc()).limit(50)
-    return sharing.annotate(db, SHARE_KIND, list(db.scalars(stmt)), user, workspace_id)
+    return generation.list_sessions(db, user, workspace_id, kind)
 
 
 @router.patch("/generation/sessions/{session_id}", response_model=GenerationSessionOut)
@@ -154,35 +127,25 @@ def list_capability_refs(
 
 
 @router.post("/generation/optimize-prompt", response_model=PromptOptimizeResponse)
-def optimize_prompt(body: PromptOptimizeRequest, db: DbSession, user: CurrentUser) -> PromptOptimizeResponse:
+def optimize_prompt(body: PromptOptimizeRequest, db: Tx, user: CurrentUser) -> PromptOptimizeResponse:
     """把提示词按目标图像平台(provider/model)的习惯优化。前端「优化」按钮与智能助手技能共用。"""
-    ensure_workspace_perm(db, user, body.workspace_id, "ai")
+    fields = body.model_dump()
     try:
-        result = optimize_image_prompt(
-            db,
-            user_id=user.id,
-            raw_prompt=body.prompt,
-            provider=body.provider,
-            model=body.model,
-            profile_id=body.provider_profile_id,
-            ui_language=body.language,
-        )
+        result = generation.optimize_prompt(db, user, fields.pop("workspace_id"), **fields)
     except PromptOptimizeError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    db.commit()  # 优化本身只读,但记了一笔用量;记账跟调用方事务走,得落盘
     return PromptOptimizeResponse(**result)
 
 
 @router.post("/generation/jobs", response_model=GenerationCreateResponse)
-def create_generation(body: GenerationCreate, db: DbSession, user: CurrentUser) -> GenerationCreateResponse:
-    ensure_workspace_perm(db, user, body.workspace_id, "ai")
+def create_generation(body: GenerationCreate, db: Tx, user: CurrentUser) -> GenerationCreateResponse:
+    fields = body.model_dump()
     try:
-        generation, job = create_generation_job(db, created_by=user.id, **body.model_dump())
+        created, job = generation.generate(db, user, fields.pop("workspace_id"), **fields)
     except GenerationDomainError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    start_generation_thread(generation.id)
     return GenerationCreateResponse(
-        generation=GenerationJobOut.model_validate(generation),
+        generation=GenerationJobOut.model_validate(created),
         job=job,
     )
 
@@ -195,5 +158,4 @@ def list_generation_jobs(
     kind: str | None = None,
     session_id: str | None = None,
 ) -> list[GenerationJob]:
-    ensure_workspace_access(db, user, workspace_id)
-    return visible_history(db, user, workspace_id, kind=kind, session_id=session_id)
+    return generation.history(db, user, workspace_id, kind=kind, session_id=session_id)
