@@ -33,7 +33,7 @@ from urllib.parse import urlparse
 
 import httpx
 
-from app.ai.audio_files import audio_suffix
+from app.ai.providers.adapters.shared.audio_files import audio_suffix
 from app.ai.providers.contracts.generation import (
     FIRST_CLIP,
     FIRST_FRAME,
@@ -48,12 +48,10 @@ from app.ai.providers.contracts.generation import (
     GenerationAdapterContext,
     GenerationAdapterError,
     metering_from_request,
-    poll_until_ready,
-    adapter_http_error,
-    categorized_http_error,
     source_url_values,
-    upstream_error,
 )
+from app.ai.providers.adapters.shared.errors import adapter_http_error, categorized_http_error, upstream_error
+from app.ai.providers.adapters.shared.polling import poll_until_ready
 from app.core.http_retry import RetryingClient
 from app.media.image_preview import browser_compatible_image
 from app.ai.media_transfer import download_to_path
@@ -340,7 +338,7 @@ def download_results(urls: list[str], output_dir: Path, kind: str) -> list[Path]
     for index, url in enumerate(urls, start=1):
         staged = output_dir / f"generated-{index}.download"
         content_type = download_to_path(url, staged, timeout=180)
-        # 音频的扩展名按音频的规矩定(mp4 容器里的音频记成 m4a,见 app/ai/audio_files)。
+        # 音频的扩展名按音频的规矩定(mp4 容器里的音频记成 m4a,见 adapters/shared/audio_files)。
         suffix = audio_suffix(url, content_type) if kind == "audio" else _suffix(url, kind, content_type)
         target = output_dir / f"generated-{index}{suffix}"
         staged.replace(target)

@@ -36,7 +36,7 @@ def _json(body: Any, status: int = 200) -> httpx.Response:
 
 @pytest.fixture(autouse=True)
 def _no_sleep(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("app.ai.providers.contracts.generation.time.sleep", lambda _s: None)
+    monkeypatch.setattr("app.ai.providers.adapters.shared.polling.time.sleep", lambda _s: None)
 
 
 @pytest.fixture
@@ -50,7 +50,7 @@ def downloads(monkeypatch: pytest.MonkeyPatch) -> list[str]:
         target.write_bytes(b"ID3fake")
         return "audio/mpeg" if url.endswith(".mp3") else "audio/wav" if url.endswith(".wav") else "video/mp4"
 
-    monkeypatch.setattr("app.ai.audio_files.download_to_path", fake_download)
+    monkeypatch.setattr("app.ai.providers.adapters.shared.audio_files.download_to_path", fake_download)
     # Evolink 的结果下载和图像、视频共用它自己模块里那一处。
     monkeypatch.setattr("app.ai.providers.adapters.evolink.generation.download_to_path", fake_download)
     return fetched
@@ -472,7 +472,7 @@ def test_百炼错误码归类(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) 
      ("https://x/a.bin", "video/mp4", ".m4a"), ("https://x/a", "", ".mp3")],
 )
 def test_音频扩展名按回包优先_mp4容器记成m4a(url: str, content_type: str, suffix: str) -> None:
-    from app.ai.audio_files import audio_suffix
+    from app.ai.providers.adapters.shared.audio_files import audio_suffix
     from app.media.probe import guess_kind
 
     assert audio_suffix(url, content_type) == suffix

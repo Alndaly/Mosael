@@ -32,18 +32,17 @@ from typing import Any
 import httpx
 
 from app.ai.providers.contracts.generation import (
-    REFERENCE_IMAGE,
     GenerationAdapter,
     GenerationAdapterContext,
     GenerationAdapterError,
     GenerationRequest,
     GenerationResult,
-    categorized_http_error,
     image_file_to_base64,
     metering_from_request,
-    upstream_error,
+    REFERENCE_IMAGE,
 )
-from app.ai.audio_files import audio_suffix
+from app.ai.providers.adapters.shared.errors import categorized_http_error, upstream_error
+from app.ai.providers.adapters.shared.audio_files import audio_suffix
 from app.core.http_retry import RetryingClient
 
 GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta"

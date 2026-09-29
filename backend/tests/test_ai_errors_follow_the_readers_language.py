@@ -27,7 +27,7 @@ def english():
 
 
 def test_上游的原话放进翻好的句子里(english) -> None:
-    from app.ai.providers.contracts.generation import adapter_http_error
+    from app.ai.providers.adapters.shared.errors import adapter_http_error
 
     request = httpx.Request("POST", "https://api.example.test/v1/videos")
     response = httpx.Response(401, request=request, text='{"error":"invalid key sk-secret"}')
@@ -44,7 +44,8 @@ def test_上游的原话放进翻好的句子里(english) -> None:
 
 
 def test_轮询超时带上是哪一家和远端任务号(english) -> None:
-    from app.ai.providers.contracts.generation import GenerationAdapterError, poll_until_ready
+    from app.ai.providers.contracts.generation import GenerationAdapterError
+    from app.ai.providers.adapters.shared.polling import poll_until_ready
 
     class _Running:
         def get(self, _path):

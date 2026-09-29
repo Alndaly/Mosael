@@ -10,6 +10,9 @@
 
 from __future__ import annotations
 
+import inspect
+import re
+
 import httpx
 import pytest
 
@@ -208,13 +211,29 @@ def test_重试对所有_AI_出站调用生效(monkeypatch):
         "app.ai.providers.adapters.kuaishou.kling.elements",
         # 可灵数字人与对口型:只拼请求体、挑人脸,提交和查询都在 video.py 那个连接上发。
         "app.ai.providers.adapters.kuaishou.kling.avatar",
+        # 共用的轮询循环:拿各家适配器开好的那个 client 去 GET。
+        "app.ai.providers.adapters.shared.polling",
+        # 音频产出落盘:下载走 media_transfer.download_to_path(RetryingClient)。
+        "app.ai.providers.adapters.shared.audio_files",
     }
+
+    #: **只加工别人抛出的 httpx 异常**的模块:要 httpx 是为了异常类型,自己不建连接、不发请求。
+    #: 判据是源码里没有任何建连接 / 发请求的写法 —— 哪天它开始自己发了,这条豁免就当场失效。
+    HANDLES_HTTP_ERRORS = {
+        # HTTP 失败 → 带文案 key 的错误(按状态码归类、带脱敏的回包原文)。
+        "app.ai.providers.adapters.shared.errors",
+    }
+    sends = re.compile(r"httpx\.(Client|AsyncClient|get|post|put|patch|delete|request|stream)\b")
 
     missing = []
     for name in modules:
         if name in BORROWS_CLIENT:
             module = importlib.import_module(name)
             assert not hasattr(module, "httpx"), f"{name} 自己发 HTTP 了,豁免不再成立"
+            continue
+        if name in HANDLES_HTTP_ERRORS:
+            module = importlib.import_module(name)
+            assert not sends.search(inspect.getsource(module)), f"{name} 自己发 HTTP 了,豁免不再成立"
             continue
         if name in NO_HTTP:
             module = importlib.import_module(name)

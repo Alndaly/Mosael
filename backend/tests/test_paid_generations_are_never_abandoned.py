@@ -28,9 +28,9 @@ import pytest
 from app.ai.providers.contracts.generation import (
     GenerationAdapterError,
     RemoteTaskWatch,
-    poll_until_ready,
     watching_remote_tasks,
 )
+from app.ai.providers.adapters.shared.polling import poll_until_ready
 from app.core.db import SessionLocal
 from app.db.models import GenerationJob, Job
 
@@ -93,7 +93,8 @@ def test_每一家走异步任务的适配器都能取回() -> None:
     offenders = sorted(
         str(path.relative_to(APP))
         for path in (APP / "ai/providers/adapters").rglob("*.py")
-        if "poll_until_ready(" in path.read_text(encoding="utf-8")
+        if path != APP / "ai/providers/adapters/shared/polling.py"  # 定义处,不是调用它的适配器
+        and "poll_until_ready(" in path.read_text(encoding="utf-8")
         and "supports_resume = True" not in path.read_text(encoding="utf-8")
     )
     assert not offenders, f"这些适配器会留下远端任务,却不能接着取:{offenders}"

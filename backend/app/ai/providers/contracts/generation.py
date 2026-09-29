@@ -10,7 +10,6 @@ import base64
 import math
 import mimetypes
 import re
-import time
 from abc import ABC, abstractmethod
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -19,9 +18,8 @@ from pathlib import Path
 from urllib.parse import urlsplit
 from collections.abc import Callable, Iterator
 from collections import Counter
-from typing import Any, TypeVar
+from typing import Any
 
-import httpx
 
 from app.core.i18n import LocalizedError
 from app.core.token_estimate import estimate_text_tokens
@@ -333,82 +331,6 @@ def sanitize_adapter_error(message: str, credential: str | None) -> str:
     return text[:500]
 
 
-def adapter_http_error(vendor: str, exc: httpx.HTTPError, credential: str | None) -> GenerationAdapterError:
-    """Surface provider HTTP failures with the response body when available.
-
-    httpx's default message links to MDN but omits the provider's JSON error, which is the
-    part users need to fix a model name, unsupported size, or missing capability.
-
-    返回的是**一条带 key 的错误**,不是一句拼好的话:「{vendor} 请求失败:…」这半句要跟着读的人
-    的语言走,后面那段上游原文(已脱敏)原样放进 `detail`。
-    """
-    return GenerationAdapterError("providerErr_requestFailed", vendor=vendor, detail=http_error_detail(exc, credential))
-
-
-#: 供应商回话里**常见的几类失败**,各对应一句按读的人语言翻好的话。上游原文(已脱敏)仍放进
-#: `detail`,我们不翻、也不猜它;类别只是让用户一眼知道下一步是**换钥匙、充值、等一会儿、改提示词
-#: 还是改参数** —— 此前一律是「{vendor} 生成失败:1008 insufficient balance」,中文界面上只剩一串
-#: 英文和一个数字。
-#:
-#: 哪个错误码属于哪一类由各家 Adapter 按自己的文档判(错误码表各家各一套),这里只收类别。
-UPSTREAM_ERROR_KEYS = {
-    "auth": "providerErr_upstreamAuth",
-    "balance": "providerErr_upstreamBalance",
-    "rate_limited": "providerErr_upstreamRateLimited",
-    "content_blocked": "providerErr_upstreamContentBlocked",
-    "invalid_params": "providerErr_upstreamInvalidParams",
-    "not_entitled": "providerErr_upstreamNotEntitled",
-    "unavailable": "providerErr_upstreamUnavailable",
-}
-
-
-def upstream_error(vendor: str, category: str | None, detail: Any) -> GenerationAdapterError:
-    """一条归了类的上游失败。认不出类别的落回通用的「生成失败」,原文照带。"""
-    key = UPSTREAM_ERROR_KEYS.get(category or "", "providerErr_generationFailed")
-    return GenerationAdapterError(key, vendor=vendor, detail=str(detail)[:500])
-
-
-def http_status_category(status: int) -> str | None:
-    """HTTP 状态码 → 失败类别(见 UPSTREAM_ERROR_KEYS)。只收各家通用的那几个含义;
-    认不出的回 None,由调用方落回通用的「请求失败」。"""
-    if status in (401, 403):
-        return "auth"
-    if status == 402:
-        return "balance"
-    if status == 429:
-        return "rate_limited"
-    if status in (400, 422):
-        return "invalid_params"
-    if status >= 500:
-        return "unavailable"
-    return None
-
-
-def categorized_http_error(vendor: str, exc: httpx.HTTPError, credential: str | None) -> GenerationAdapterError:
-    """同 `adapter_http_error`,但按状态码归类 —— 用户看到的是「密钥不对 / 余额不足 / 限流了」,
-    而不是一句「请求失败」加一段英文回包。上游原文照样在 `detail` 里。"""
-    response = getattr(exc, "response", None)
-    category = http_status_category(response.status_code) if response is not None else None
-    detail = http_error_detail(exc, credential)
-    if category is None:
-        return GenerationAdapterError("providerErr_requestFailed", vendor=vendor, detail=detail)
-    return upstream_error(vendor, category, detail)
-
-
-def http_error_detail(exc: httpx.HTTPError, credential: str | None) -> str:
-    """上游 HTTP 失败的原文:httpx 那句 + 回包正文(截断、脱敏)。"""
-    message = str(exc)
-    response = getattr(exc, "response", None)
-    if response is not None:
-        try:
-            body = response.text.strip()
-        except Exception:  # noqa: BLE001 - best-effort diagnostics only
-            body = ""
-        if body:
-            message = f"{message}; body: {body[:800]}"
-    return sanitize_adapter_error(message, credential)
-
-
 def image_file_to_base64(path: Path) -> tuple[str, str]:
     """Return (mime_type, base64) for a local image source file."""
     mime_type = mimetypes.guess_type(path.name)[0] or "image/png"
@@ -421,9 +343,6 @@ def image_file_to_data_url(path: Path) -> str:
     return f"data:{mime_type};base64,{data}"
 
 
-#: 异步任务的默认节奏。各家可以覆盖,但没有理由的话就用这一份 —— 此前七个文件各定义了一次
-#: 自己的 POLL_INTERVAL,而它们的值本来就一样。
-POLL_INTERVAL_SECONDS = 2.0
 #: **这个上限只防"供应商永远不回话",不是"我们等烦了"。**
 #:
 #: 此前是 300 秒,而它是按"一条视频大概多久"定的 —— 可远端任务一旦提交就在花钱,我们这边
@@ -481,54 +400,6 @@ def remote_task_cancelled() -> bool:
 
 
 #: 轮询到手的产物形状由那一家决定:一个地址,或者一串(图像接口的 n 一次给多张)。
-_Ready = TypeVar("_Ready")
-
-
-def poll_until_ready(
-    client: Any,
-    poll_path: str,
-    extract: "Callable[[dict[str, Any]], _Ready | None]",
-    *,
-    interval: float = POLL_INTERVAL_SECONDS,
-    timeout: float = POLL_TIMEOUT_SECONDS,
-    vendor: str = "",
-) -> tuple[_Ready, dict[str, Any]]:
-    """轮询一个异步任务到终态,返回 (产物地址, 终态回包)。
-
-    几乎所有外部生成 API 都是同一个形状:提交拿 id → 轮询到终态 → 下载。此前**六家各写了一遍
-    这个循环**,各自定义间隔、各自抛超时 —— 代价不是行数,是每家都可能漏掉一件事,而没有任何
-    机制能发现谁漏了。
-
-    `extract` 负责读懂那一家的终态:拿到产物就回产物,还没结束回 None,失败**自己抛**
-    (它才知道那家把失败原因放在哪个字段)。回的是一个地址还是**一串**地址由那一家决定 ——
-    图像接口的 `n` 一次会给回多张,收成单数的话多出来的那几张就在这儿被丢掉了。
-
-    计时用 `time.monotonic()` 而不是 `time.time()`:墙钟会跳(NTP 校时、夏令时),跳一下
-    要么把还在跑的任务判成超时,要么让它多等一个小时。六家原本都用的是墙钟。
-    """
-    #: **开始等之前先报回执。** 这是远端任务号唯一一次离开适配器的局部变量。
-    remember_remote_task(poll_path)
-    deadline = time.monotonic() + timeout
-    payload: dict[str, Any] = {}
-    while time.monotonic() < deadline:
-        if remote_task_cancelled():
-            raise GenerationAdapterError("providerErr_cancelled")
-        response = client.get(poll_path)
-        response.raise_for_status()
-        payload = response.json()
-        ready = extract(payload)
-        if ready:
-            return ready, payload
-        time.sleep(interval)
-    # 是哪一家超时了由调用方给(`vendor`):那句话会一路显示到用户眼前,收成一份不带名字的
-    # 通用句子等于把"是哪一家超时了"这个信息删掉。
-    # 远端任务号一起说出来:走到这里它多半仍在花钱,那是唯一能让人去供应商后台找回它的线索。
-    hours = f"{timeout / 3600:g}"
-    if vendor:
-        raise GenerationAdapterError("providerErr_vendorPollTimeout", vendor=vendor, task=poll_path, hours=hours)
-    raise GenerationAdapterError("providerErr_pollTimeout", task=poll_path, hours=hours)
-
-
 #: 每个角色对应的「直接给个 url」参数名。界面既可以选素材库里的图,也可以粘一个外链;
 #: 两条路进来的东西是同一样,所以在这里合流,而不是让每个适配器各写一遍回落。
 ROLE_URL_PARAMETERS = {

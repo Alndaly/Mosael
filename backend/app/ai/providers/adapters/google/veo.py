@@ -11,17 +11,16 @@ from app.core.http_retry import RetryingClient
 
 from app.ai.providers.contracts.generation import (
     FIRST_FRAME,
-    poll_until_ready,
     GenerationAdapter,
-    GenerationRequest,
-    GenerationResult,
     GenerationAdapterContext,
     GenerationAdapterError,
+    GenerationRequest,
+    GenerationResult,
     image_file_to_base64,
     metering_from_request,
-    adapter_http_error,
-    http_error_detail,
 )
+from app.ai.providers.adapters.shared.errors import adapter_http_error, http_error_detail
+from app.ai.providers.adapters.shared.polling import poll_until_ready
 from app.ai.media_transfer import download_to_path, fetch_bytes
 
 """

@@ -8,7 +8,6 @@ import httpx
 from app.core.http_retry import RetryingClient
 
 from app.ai.providers.contracts.generation import (
-    poll_until_ready,
     GenerationAdapter,
     GenerationRequest,
     GenerationResult,
@@ -22,8 +21,9 @@ from app.ai.providers.contracts.generation import (
     first_frame_value,
     source_values,
     metering_from_request,
-    adapter_http_error,
 )
+from app.ai.providers.adapters.shared.errors import adapter_http_error
+from app.ai.providers.adapters.shared.polling import poll_until_ready
 from app.ai.media_transfer import download_to_path
 
 """

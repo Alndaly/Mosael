@@ -24,7 +24,7 @@ from typing import Any
 import httpx
 
 from app.ai.providers.adapters.alibaba.dashscope import connection
-from app.ai.audio_files import download_audio
+from app.ai.providers.adapters.shared.audio_files import download_audio
 from app.ai.providers.contracts.generation import (
     REFERENCE_AUDIO,
     GenerationAdapter,
@@ -32,12 +32,10 @@ from app.ai.providers.contracts.generation import (
     GenerationAdapterError,
     GenerationRequest,
     GenerationResult,
-    http_error_detail,
-    http_status_category,
     metering_from_request,
     source_values,
-    upstream_error,
 )
+from app.ai.providers.adapters.shared.errors import http_error_detail, http_status_category, upstream_error
 from app.core.http_retry import RetryingClient
 
 VENDOR_LABEL = "阿里云百炼"

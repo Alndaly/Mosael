@@ -10,7 +10,6 @@ from app.ai.providers.adapters.kuaishou.kling import avatar, connection
 from app.ai.providers.adapters.kuaishou.kling.elements import build_element_contents, ensure_element
 
 from app.ai.providers.contracts.generation import (
-    poll_until_ready,
     GenerationAdapter,
     GenerationRequest,
     GenerationResult,
@@ -22,8 +21,9 @@ from app.ai.providers.contracts.generation import (
     subject_groups,
     REFERENCE_IMAGE,
     metering_from_request,
-    adapter_http_error,
 )
+from app.ai.providers.adapters.shared.errors import adapter_http_error
+from app.ai.providers.adapters.shared.polling import poll_until_ready
 from app.ai.media_transfer import download_to_path
 
 """

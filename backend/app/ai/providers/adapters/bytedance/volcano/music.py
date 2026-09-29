@@ -29,7 +29,7 @@ from typing import Any
 
 import httpx
 
-from app.ai.audio_files import download_audio
+from app.ai.providers.adapters.shared.audio_files import download_audio
 from app.ai.providers.adapters.bytedance.volcano.openapi_sign import HOST, signed_headers
 from app.ai.providers.contracts.generation import (
     GenerationAdapter,
@@ -37,12 +37,10 @@ from app.ai.providers.contracts.generation import (
     GenerationAdapterError,
     GenerationRequest,
     GenerationResult,
-    http_error_detail,
-    http_status_category,
     metering_from_request,
-    poll_until_ready,
-    upstream_error,
 )
+from app.ai.providers.adapters.shared.errors import http_error_detail, http_status_category, upstream_error
+from app.ai.providers.adapters.shared.polling import poll_until_ready
 from app.core.http_retry import RetryingClient
 
 SERVICE = "imagination"

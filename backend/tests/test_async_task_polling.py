@@ -13,7 +13,8 @@ import time
 
 import pytest
 
-from app.ai.providers.contracts.generation import GenerationAdapterError, poll_until_ready
+from app.ai.providers.contracts.generation import GenerationAdapterError
+from app.ai.providers.adapters.shared.polling import poll_until_ready
 
 
 class _FakeResponse:

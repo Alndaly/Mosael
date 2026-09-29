@@ -11,10 +11,10 @@ from app.ai.providers.contracts.generation import (
     GenerationAdapterContext,
     GenerationAdapterError,
     metering_from_request,
-    adapter_http_error,
     sanitize_adapter_error,
     source_values,
 )
+from app.ai.providers.adapters.shared.errors import adapter_http_error
 from app.ai.media_transfer import DownloadedBytes
 from app.ai.providers.adapters.kuaishou.kling.video import build_submit_payload as kling_payload, extract_video_url as extract_kling_video_url
 from app.ai.providers.adapters.openai.image import (

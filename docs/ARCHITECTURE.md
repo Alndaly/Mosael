@@ -427,6 +427,7 @@ Provider 代码用三层 Module 表达能力与连接协议两条轴：
 | --- | --- | --- |
 | `app/ai/providers/contracts/` | 图像/视频生成与语音能力 Interface | 不依赖 Adapter 或 Registry |
 | `app/ai/providers/adapters/` | 按供应商/平台连接协议组织的 Implementation | 依赖契约和共享下载 Seam，不反向依赖公共门面或 Registry |
+| `app/ai/providers/adapters/shared/` | 只有适配器用的实现辅助:HTTP 失败归类、异步任务轮询、音频产出落盘 | 放在 adapters 底下,领域碰不到;契约层因此只剩领域也要认的类型与角色 |
 | `app/ai/providers/registry.py` | 内置 Adapter 的唯一装配入口 | 精确注册 `(vendor, kind)` / 语音引擎 id，重复键启动失败 |
 | `app.ai.providers` | 领域调用方的稳定公共 Interface | 领域 Module 不直接选择具体 Adapter |
 

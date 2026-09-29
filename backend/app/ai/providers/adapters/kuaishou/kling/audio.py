@@ -25,7 +25,7 @@ from typing import Any
 
 import httpx
 
-from app.ai.audio_files import download_audio
+from app.ai.providers.adapters.shared.audio_files import download_audio
 from app.ai.providers.adapters.kuaishou.kling import connection
 from app.ai.providers.contracts.generation import (
     SOURCE_VIDEO,
@@ -34,12 +34,11 @@ from app.ai.providers.contracts.generation import (
     GenerationAdapterError,
     GenerationRequest,
     GenerationResult,
-    categorized_http_error,
     metering_from_request,
-    poll_until_ready,
     source_url_values,
-    upstream_error,
 )
+from app.ai.providers.adapters.shared.errors import categorized_http_error, upstream_error
+from app.ai.providers.adapters.shared.polling import poll_until_ready
 from app.core.http_retry import RetryingClient
 
 VENDOR_LABEL = "Kling"

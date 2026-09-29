@@ -18,9 +18,9 @@ from app.ai.providers.contracts.generation import (
     GenerationAdapterContext,
     GenerationAdapterError,
     metering_from_request,
-    adapter_http_error,
     source_url_values,
 )
+from app.ai.providers.adapters.shared.errors import adapter_http_error
 from app.ai.media_transfer import fetch_bytes
 
 """
