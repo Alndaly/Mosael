@@ -498,10 +498,10 @@
     {
       "id": "dev.mosael.text-toolkit",
       "name": "Text Toolkit",
-      "version": "0.2.2",
+      "version": "0.3.0",
       "description": {
-        "zh": "文本小工具:统计字数、词数与念完要多久,提取 #话题# 与 #hashtag 标签。纯本地计算,无需任何权限。",
-        "en": "Small text utilities: count characters and words, estimate read-aloud time, and pull out #topic# and #hashtag tags. All local, no permissions needed."
+        "zh": "文本小工具:统计字数与念完要多久,把口播稿断成字幕行,按字数截短,清理文案里多余的空格、空行和半角标点,把 Markdown 转成能直接贴的纯文本,提取 #话题#、网址、@ 提及和邮箱。纯本地计算,无需任何权限。",
+        "en": "Small text utilities: count words and read-aloud time, break a script into subtitle lines, shorten text to a length, tidy stray spaces, blank lines and half-width punctuation, turn Markdown into paste-ready plain text, and pull out hashtags, links, @mentions and emails. All local, no permissions needed."
       },
       "author": "Mosael",
       "author_url": "https://mosael.com",
@@ -536,6 +536,66 @@
           "description": {
             "zh": "从文案中提取 #话题# 与 #hashtag 标签,按出现的先后;大小写不同的算同一个,纯数字的(#1)不算。",
             "en": "Pull #topic# and #hashtag tags out of a piece of copy, in order of appearance; case-insensitive duplicates and all-digit tags (#1) are skipped."
+          },
+          "effects": "none"
+        },
+        {
+          "name": "split_lines",
+          "label": {
+            "zh": "断成字幕行",
+            "en": "Split into subtitle lines"
+          },
+          "description": {
+            "zh": "把一段口播稿断成字幕行:一句一句来,太长的句子在逗号、顿号这类停顿处再切,英文不在词中间断;行尾的逗号、句号按字幕惯例省掉。",
+            "en": "Break a script into subtitle lines: sentence by sentence, splitting long sentences at commas and other pauses, never inside an English word; trailing commas and periods are dropped, as subtitles usually do."
+          },
+          "effects": "none"
+        },
+        {
+          "name": "truncate",
+          "label": {
+            "zh": "按字数截短",
+            "en": "Shorten to a length"
+          },
+          "description": {
+            "zh": "把文字截到指定字数以内(省略号算在里面),尽量停在停顿或词的边界上。适合封面文字、简介预览、有字数上限的地方。",
+            "en": "Shorten text to a character limit (the ellipsis counts), stopping at a pause or word boundary where possible. Handy for cover text, previews and anywhere with a length cap."
+          },
+          "effects": "none"
+        },
+        {
+          "name": "clean_text",
+          "label": {
+            "zh": "清理文案",
+            "en": "Tidy up copy"
+          },
+          "description": {
+            "zh": "去掉看不见的零宽字符、多余的空格和空行,全角字母数字换成半角;可选把中文后面的半角标点换成全角、在中英文之间加空格、去掉表情。",
+            "en": "Remove invisible zero-width characters, stray spaces and extra blank lines, and turn full-width letters and digits half-width; optionally switch half-width punctuation after Chinese to full-width, add spaces between Chinese and Latin text, and strip emoji."
+          },
+          "effects": "none"
+        },
+        {
+          "name": "strip_markdown",
+          "label": {
+            "zh": "Markdown 转纯文本",
+            "en": "Markdown to plain text"
+          },
+          "description": {
+            "zh": "去掉标题、加粗、链接、引用这些 Markdown 记号,列表换成「• 」,代码块留代码 —— 得到能直接贴到发布平台上的纯文本。",
+            "en": "Remove Markdown marks such as headings, bold, links and quotes, turn list items into \"• \" and keep code as is — plain text ready to paste into a publishing platform."
+          },
+          "effects": "none"
+        },
+        {
+          "name": "extract_links",
+          "label": {
+            "zh": "提取链接与提及",
+            "en": "Extract links and mentions"
+          },
+          "description": {
+            "zh": "提取文案里的网址、@ 提及和邮箱,各按出现的先后,重复的只留一次。",
+            "en": "Pull the links, @mentions and email addresses out of a piece of copy, each in order of appearance, without duplicates."
           },
           "effects": "none"
         }

@@ -36,6 +36,16 @@ def test_example_plugin_word_count_end_to_end() -> None:
     assert tags["hashtags"] == ["好物", "newvideo"]
 
 
+def test_example_plugin_text_tools_end_to_end() -> None:
+    """后加的几个工具走一遍真实的子进程协议:表单、工作流节点送来的数字和开关是字符串。"""
+    lines = execute_tool(*_example(), "split_lines", {"text": "你好，世界。再见", "max_chars": "8"}).output
+    assert lines["lines"] == ["你好，世界", "再见"]
+    short = execute_tool(*_example(), "truncate", {"text": "一二三四五六七八九十", "max_chars": "6"}).output
+    assert short["text"] == "一二三四五…"
+    clean = execute_tool(*_example(), "clean_text", {"text": "你好,世界", "chinese_punctuation": "false"}).output
+    assert clean["text"] == "你好,世界"
+
+
 def test_plugin_error_response_raises() -> None:
     with pytest.raises(PluginRuntimeError, match="不认识的工具:nope"):
         execute_tool(*_example(), "nope", {})
