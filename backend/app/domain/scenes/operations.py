@@ -547,6 +547,32 @@ class SceneReference:
     prompt: str = ""
     entity_ids: list[str] = field(default_factory=list)
     receipt: dict[str, Any] = field(default_factory=dict)
+    #: 这一次**新渲**出来的素材(不含复用的):生成随后被拒时由调用方删掉,不在素材库里留下没人用的白模。
+    rendered_asset_ids: list[str] = field(default_factory=list)
+
+
+#: 往回找多少次生成,看同一个场景修订、同一个镜头、同一种用法渲过没有。
+_REUSE_LOOKBACK = 50
+
+
+def _reusable_render(db: Session, workspace_id: str, key: dict[str, Any], roles: list[str]) -> list[dict[str, str]] | None:
+    """同一个场景修订、同一个镜头、同一种用法、同一组角色之前渲过、素材还在:直接用那几份,不再渲一遍
+    (运镜一渲半分钟;重新生成几次是常事)。场景一改修订就变,自然渲新的。"""
+    from app.db.models import Asset, GenerationJob
+
+    rows = db.scalars(select(GenerationJob).where(GenerationJob.workspace_id == workspace_id)
+                      .order_by(GenerationJob.created_at.desc()).limit(_REUSE_LOOKBACK))
+    for row in rows:
+        receipt = (row.request or {}).get("scene_reference") or {}
+        if any(receipt.get(name) != value for name, value in key.items()):
+            continue
+        asset_ids = [str(one) for one in receipt.get("asset_ids") or []]
+        if len(asset_ids) != len(roles):
+            continue
+        present = set(db.scalars(select(Asset.id).where(Asset.workspace_id == workspace_id, Asset.id.in_(asset_ids))))
+        if present == set(asset_ids):
+            return [{"asset_id": asset_id, "role": role} for asset_id, role in zip(asset_ids, roles, strict=True)]
+    return None
 
 
 def scene_reference(db: Session, workspace_id: str, *, scene_id: str, shot_id: str, use: str, kind: str,
@@ -589,7 +615,10 @@ def scene_reference(db: Session, workspace_id: str, *, scene_id: str, shot_id: s
         raise SceneDomainError(str(exc)) from exc
 
     label = f"{scene.name} · {shot.name}"
-    sources: list[dict[str, str]] = []
+    roles = [*_USE_ROLES[use], *([LAST_FRAME] if use == "frames" and last is not None and accepts(LAST_FRAME) else [])]
+    key = {"scene_id": scene.id, "revision": scene.revision, "shot_id": shot.id, "use": use}
+    reused = _reusable_render(db, workspace_id, key, roles)
+    sources: list[dict[str, str]] = list(reused or [])
     with tempfile.TemporaryDirectory(prefix="mosael-scene-ref-") as folder:
         work = Path(folder)
 
@@ -598,7 +627,9 @@ def scene_reference(db: Session, workspace_id: str, *, scene_id: str, shot_id: s
                                         name=name, source="graybox")
             sources.append({"asset_id": asset.id, "role": role})
 
-        if use == "composition":
+        if reused is not None:
+            pass
+        elif use == "composition":
             first.image.save(work / "composition.png")
             keep(work / "composition.png", f"{label} · 白模构图", REFERENCE_IMAGE)
         elif use == "frames":
@@ -630,8 +661,8 @@ def scene_reference(db: Session, workspace_id: str, *, scene_id: str, shot_id: s
         lines.append(tr("sceneRef_cameraMove", move=describe_camera_move(first.camera, last.camera)))
     return SceneReference(
         source_assets=sources, prompt="\n".join(lines), entity_ids=entity_ids,
-        receipt={"scene_id": scene.id, "revision": scene.revision, "shot_id": shot.id, "use": use,
-                 "asset_ids": [one["asset_id"] for one in sources], "entity_ids": entity_ids},
+        receipt={**key, "asset_ids": [one["asset_id"] for one in sources], "entity_ids": entity_ids},
+        rendered_asset_ids=[] if reused is not None else [one["asset_id"] for one in sources],
     )
 
 

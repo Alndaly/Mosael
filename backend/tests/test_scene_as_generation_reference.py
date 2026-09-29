@@ -131,3 +131,62 @@ def test_生成漏斗挂上渲出来的素材_说明并进提示词_回执记下
     # 白模说明是补给模型的一段,不写进他那句话里。
     assert request["prompt"] == "她在草原上奔跑" and "白模" in request["prompt_notes"][0]
     assert request["scene_reference"]["scene_id"] == scene_id and request["scene_reference"]["entity_ids"] == [mei]
+
+
+def _generate(ws: str, profile: str, scene_id: str, **extra):
+    from app.domain.generation import create_generation_job
+
+    with SessionLocal() as db:
+        generation, _job = create_generation_job(
+            db, workspace_id=ws, session_id=None, project_id=None, created_by=None, provider="bytedance",
+            provider_profile_id=profile, model="doubao-seedance-2-0-260128", kind="video", prompt="她在草原上奔跑",
+            negative_prompt="", parameters=extra.pop("parameters", {}), source_assets=[],
+            scene_reference={"scene_id": scene_id, "shot_id": "", "use": "composition"}, **extra,
+        )
+        return generation.request
+
+
+def _grayboxes(ws: str) -> set[str]:
+    with SessionLocal() as db:
+        return {row.id for row in db.query(Asset).filter(Asset.workspace_id == ws, Asset.source == "graybox")}
+
+
+def test_同一修订同一镜头再生成_复用渲过的那份_场景改了才重渲(monkeypatch) -> None:
+    from app.domain import jobs as jobs_bus
+
+    from tests.test_entity_generation_paths import _seedance
+
+    monkeypatch.setattr(jobs_bus, "_EXECUTION_MODES", {**jobs_bus._EXECUTION_MODES, "ai_generation": "external"})
+    client, ws, scene_id, _mei = _setup()
+    profile = _seedance(client)
+    first = _generate(ws, profile, scene_id)
+    again = _generate(ws, profile, scene_id)
+    assert again["source_assets"] == first["source_assets"] and len(_grayboxes(ws)) == 1, "没改场景:不再渲一遍"
+
+    scene = client.get(f"/api/scenes/{scene_id}?workspace_id={ws}").json()
+    content = scene["content"]
+    content["objects"][1]["position"] = [1, 0, 0]
+    changed = client.patch(f"/api/scenes/{scene_id}", json={"workspace_id": ws, "name": scene["name"], "content": content,
+                                                            "base_revision": scene["revision"]})
+    assert changed.status_code == 200, changed.text
+    moved = _generate(ws, profile, scene_id)
+    assert moved["source_assets"] != first["source_assets"] and len(_grayboxes(ws)) == 2, "改了场景:渲新的"
+
+
+def test_渲完之后生成被拒_新渲的白模不留在素材库里(monkeypatch) -> None:
+    from app.domain import jobs as jobs_bus
+    from app.domain.generation.operations import GenerationDomainError
+
+    from tests.test_entity_generation_paths import _seedance
+
+    monkeypatch.setattr(jobs_bus, "_EXECUTION_MODES", {**jobs_bus._EXECUTION_MODES, "ai_generation": "external"})
+    client, ws, scene_id, _mei = _setup()
+    profile = _seedance(client)
+    with pytest.raises(GenerationDomainError):
+        _generate(ws, profile, scene_id, parameters={"no_such_parameter": 1})
+    assert _grayboxes(ws) == set()
+
+    kept = _generate(ws, profile, scene_id)
+    with pytest.raises(GenerationDomainError):
+        _generate(ws, profile, scene_id, parameters={"no_such_parameter": 1})
+    assert _grayboxes(ws) == {kept["source_assets"][0]["asset_id"]}, "复用的那份别人还在用,不删"

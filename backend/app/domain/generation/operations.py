@@ -117,9 +117,40 @@ def is_digital_human_request(source_assets: Sequence[dict[str, Any]], parameters
     return bool(str(parameters.get(f"{DRIVING_AUDIO}_url") or "").strip())
 
 
-def create_generation_job(
+def create_generation_job(db: Session, **request: Any) -> tuple[GenerationJob, Any]:
+    """建一次生成(参数见 `_create_generation_job`)。
+
+    「3D 参考」是在漏斗里现渲的(见下),渲出来就登记成素材;渲完之后这次生成被拒(模型不收、素材不合规……),
+    新渲的那几份没人用,留在素材库里只是一堆看不懂来历的白模 —— 在这里删掉。复用的(之前渲过、还在用)不动。
+    """
+    rendered_ids: list[str] = []
+    try:
+        return _create_generation_job(db, rendered_ids=rendered_ids, **request)
+    except Exception:
+        if rendered_ids:
+            _discard_rendered(db, request.get("workspace_id") or "", rendered_ids)
+        raise
+
+
+def _discard_rendered(db: Session, workspace_id: str, asset_ids: list[str]) -> None:
+    from sqlalchemy import select
+
+    from app.domain.assets.deletion import delete_asset
+
+    db.rollback()
+    for asset in db.scalars(select(Asset).where(Asset.workspace_id == workspace_id, Asset.id.in_(asset_ids))):
+        try:
+            delete_asset(db, asset)
+        except Exception:  # noqa: BLE001 — 清理不成不该盖住真正的拒绝原因
+            db.rollback()
+            logger.warning("没能删掉渲出来的 3D 参考素材 %s", asset.id, exc_info=True)
+
+
+def _create_generation_job(
     db: Session,
     *,
+    #: 这次现渲出来的 3D 参考素材 id 往这里记(调用方失败时删掉,见 `create_generation_job`)。
+    rendered_ids: list[str],
     workspace_id: str,
     session_id: str | None,
     project_id: str | None,
@@ -204,6 +235,7 @@ def create_generation_job(
             )
         except SceneDomainError as exc:
             raise GenerationDomainError(exc.key, **exc.params) from exc
+        rendered_ids.extend(rendered.rendered_asset_ids)
         source_assets = [*source_assets, *rendered.source_assets]
         if rendered.prompt and (capabilities is None or prompt_mode(capabilities) != "none"):
             notes.append(rendered.prompt)
