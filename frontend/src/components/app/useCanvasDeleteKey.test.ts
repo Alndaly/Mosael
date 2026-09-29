@@ -25,7 +25,7 @@ describe("React Flow 画布的删除键", () => {
 
   it("找得到画布(找不到说明这条棘轮失效了)", () => {
     expect(canvases.map(({ path }) => path)).toEqual(
-      expect.arrayContaining(["features/boards/BoardCanvas.tsx", "features/workflows/WorkflowsView.tsx"]),
+      expect.arrayContaining(["features/boards/BoardCanvas.tsx", "features/workflows/WorkflowEditor.tsx"]),
     );
   });
 

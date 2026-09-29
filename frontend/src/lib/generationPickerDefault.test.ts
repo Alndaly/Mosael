@@ -47,7 +47,7 @@ const FIRST_ITEM_FALLBACK = /(\?\?|\|\|)\s*[\w.]*(?:[oO]ptions|[mM]odels)\[0\]/;
 describe("生成模型选择器的默认", () => {
   it("扫描面站得住", () => {
     const names = CONSUMERS.map((file) => path.relative(SRC, file));
-    for (const expected of ["features/boards/NodeComposer.tsx", "features/ai-studio/GenerateWorkspace.tsx", "features/workflows/WorkflowsView.tsx"]) {
+    for (const expected of ["features/boards/NodeComposer.tsx", "features/ai-studio/GenerateWorkspace.tsx", "features/workflows/NodeInspector.tsx", "features/workflows/nodeInspectorGenerate.tsx"]) {
       expect(names).toContain(expected);
     }
   });

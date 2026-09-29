@@ -19,7 +19,26 @@ export const RATCHET = true;
 //: 字段怎么渲染、下拉从哪来,住在节点表单那一层(features/nodeForms)—— 工作流检查器和画板
 //: 上的工具格共用它。检查器自己只剩宿主的事(数据边、专区)。
 const VIEW = readFileSync(join(import.meta.dirname, "../nodeForms/NodeConfigForm.tsx"), "utf8");
-const INSPECTOR = readFileSync(join(import.meta.dirname, "WorkflowsView.tsx"), "utf8");
+//: 工作流页拆成了几份(列表、编辑器、检查器和它的两个专区……),这里把它们**全部**连起来扫 ——
+//: 只扫检查器那一份的话,别的文件里再长出一份 renderField 就查不到了。
+const INSPECTOR = [
+  "WorkflowsView.tsx",
+  "WorkflowCard.tsx",
+  "WorkflowEditor.tsx",
+  "WorkflowEditorToolbar.tsx",
+  "NodeInspector.tsx",
+  "nodeInspectorGenerate.tsx",
+  "nodeInspectorLlm.tsx",
+  "useWorkflowGraph.ts",
+  "useWorkflowCanvasEdits.ts",
+  "useWorkflowSave.ts",
+  "useWorkflowRun.ts",
+  "useWorkflowEditorKeys.ts",
+  "useWorkflowDisplayElements.ts",
+  "workflowViewShared.ts",
+]
+  .map((name) => readFileSync(join(import.meta.dirname, name), "utf8"))
+  .join("\n");
 //: 画板上一格的能力(和空格子上的生成器)是这份表单的第二个宿主(ADR 0021 P2,ADR 0025 修订):面板和它分字段的那一层。
 const BOARD_TOOL = ["../boards/AbilityComposer.tsx", "../boards/composerFields.ts"]
   .map((path) => readFileSync(join(import.meta.dirname, path), "utf8"))
