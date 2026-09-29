@@ -48,6 +48,12 @@ def _capture_token(monkeypatch) -> list[str]:
         return []
 
     monkeypatch.setattr(mcp_server, "_get", fake_get)
+    # 工具正逐个改成直接调领域、不再回连;这里用一个临时的「还在回连」的工具,考的是回连这套机制本身,
+    # 不随哪个具体工具先迁移而失效。等回连整个删掉,这条测试连同那份短期令牌一起删。
+    monkeypatch.setattr(
+        mcp_server, "probe_loopback", lambda workspace_id="": mcp_server._get("/api/probe", {"workspace_id": workspace_id}),
+        raising=False,
+    )
     return seen
 
 
@@ -59,7 +65,7 @@ def test_tool_calls_do_not_accumulate_credentials(monkeypatch) -> None:
 
     for _ in range(3):
         response = client.post(
-            "/api/agent/tools/list_projects",
+            "/api/agent/tools/probe_loopback",
             json={"arguments": {"workspace_id": workspace["id"]}, "requested_by": "test"},
         )
         assert response.status_code == 200, response.text
@@ -77,7 +83,7 @@ def test_the_tool_body_gets_a_credential_that_resolves_to_the_caller(monkeypatch
     seen = _capture_token(monkeypatch)
 
     response = client.post(
-        "/api/agent/tools/list_projects",
+        "/api/agent/tools/probe_loopback",
         json={"arguments": {"workspace_id": workspace["id"]}, "requested_by": "test"},
     )
 
@@ -97,7 +103,7 @@ def test_the_callers_own_session_survives_the_call(monkeypatch) -> None:
     _capture_token(monkeypatch)
 
     client.post(
-        "/api/agent/tools/list_projects",
+        "/api/agent/tools/probe_loopback",
         json={"arguments": {"workspace_id": workspace["id"]}, "requested_by": "test"},
     )
 

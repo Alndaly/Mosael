@@ -731,7 +731,11 @@ def open_view(view: str, id: str = "") -> dict[str, Any]:
     if not session_id:
         # 飞书 / 外部 MCP 客户端没有界面可跳 —— 说清楚,别假装做了。
         return {"error": "这次调用没有界面上下文,跳不了 —— 直接在回复里说清楚在哪一页。"}
-    _post(f"/api/agent/sessions/{session_id}/view", {"view": view, "id": id.strip()})
+    from app.api.schemas import AgentPendingView
+    from app.domain.agent import use_cases
+
+    request = AgentPendingView(view=view, id=id.strip())
+    _use_case(use_cases.set_pending_view, session_id, request.view, request.id)
     return {"view": view, "id": id.strip(), "message": "已经把界面带过去了。"}
 
 
@@ -1292,7 +1296,14 @@ def remember(content: str, workspace_id: str = "", project_id: str = "") -> dict
     body = {"workspace_id": ws, "content": content, "source": "agent"}
     if project_id:
         body["project_id"] = project_id
-    row = _post("/api/agent/memories", body)
+    from app.api.schemas import AgentMemoryCreate, AgentMemoryOut
+    from app.domain.agent import use_cases
+
+    request = AgentMemoryCreate(**body)
+    row = _use_case(
+        use_cases.remember, request.workspace_id, request.content, project_id=request.project_id,
+        source=request.source, out=AgentMemoryOut,
+    )
     return {"memory_id": row["id"], "content": row["content"], "scope": "project" if row.get("project_id") else "workspace"}
 
 
@@ -1308,7 +1319,10 @@ def list_memories(workspace_id: str = "", project_id: str = "") -> list[dict[str
     params: dict[str, Any] = {"workspace_id": ws}
     if project_id:
         params["project_id"] = project_id
-    rows = _get("/api/agent/memories", params)
+    from app.api.schemas import AgentMemoryOut
+    from app.domain.agent import use_cases
+
+    rows = _use_case(use_cases.list_memories, params["workspace_id"], params.get("project_id"), out=AgentMemoryOut)
     return [
         {"memory_id": row["id"], "content": row["content"], "source": row.get("source", "agent")}
         for row in rows
@@ -1323,7 +1337,9 @@ def forget(memory_id: str) -> dict[str, Any]:
     entry is wrong. Get memory_id from list_memories. Deleting is not undoable,
     so do not clear memories the user did not ask you to clear.
     """
-    _delete(f"/api/agent/memories/{memory_id}")
+    from app.domain.agent import use_cases
+
+    _use_case(use_cases.forget, memory_id)
     return {"memory_id": memory_id, "forgotten": True}
 
 
@@ -1344,7 +1360,11 @@ def update_plan(steps: list[Any]) -> dict[str, Any]:
     session_id = _SESSION_ID.get()
     if not session_id:
         return {"error": "update_plan 只能在 Mosael 的对话会话里使用"}
-    session = _put(f"/api/agent/sessions/{session_id}/plan", {"steps": steps})
+    from app.api.schemas import AgentPlanUpdate, AgentSessionOut
+    from app.domain.agent import use_cases
+
+    request = AgentPlanUpdate(steps=steps)
+    session = _use_case(use_cases.set_plan, session_id, request.steps, out=AgentSessionOut)
     return {"plan": session.get("plan") or []}
 
 
@@ -2488,7 +2508,10 @@ def list_agent_sessions(workspace_id: str = "") -> list[dict[str, Any]]:
     Only the user's own conversations are listed: one a teammate shared is view-only, so
     it cannot be notified.
     """
-    sessions = _get("/api/agent/sessions", {"workspace_id": workspace_id or _default_workspace_id()})
+    from app.api.schemas import AgentSessionOut
+    from app.domain.agent import use_cases
+
+    sessions = _use_case(use_cases.list_sessions, workspace_id or _default_workspace_id(), out=AgentSessionOut)
     me = _SESSION_ID.get()
     # 共享来的对话只能看(domain/agent/sessions 的写闸):列出来只会让模型往里发一条必然被拒的通知。
     return [
@@ -2535,7 +2558,11 @@ def ask_user(questions: list[dict[str, Any]]) -> dict[str, Any]:
         # 飞书 / 外部 MCP 客户端没有会话 —— 问题没地方显示,骗它说"等着"只会白等到超时。
         return {"error": "这次调用没有对话上下文,问不了 —— 请直接在回复里把选项写出来。"}
     # 工作区跟着这次对话走(后端按会话定),不另报 —— 缺省的「第一个工作区」未必是对话所在的那个。
-    created = _post("/api/agent/questions", {"session_id": session_id, "questions": questions})
+    from app.api.schemas import AgentQuestionCreate, AgentQuestionOut
+    from app.domain.agent import use_cases
+
+    request = AgentQuestionCreate(session_id=session_id, questions=questions)
+    created = _use_case(use_cases.ask, request.session_id, request.questions, out=AgentQuestionOut)
     return {
         "question_id": created["id"],
         "status": created["status"],
@@ -2546,7 +2573,10 @@ def ask_user(questions: list[dict[str, Any]]) -> dict[str, Any]:
 @tool(effect="reads")
 def get_answer(question_id: str) -> dict[str, Any]:
     """Read what the user picked for an ask_user question (or whether they skipped)."""
-    row = _get(f"/api/agent/questions/{question_id}")
+    from app.api.schemas import AgentQuestionOut
+    from app.domain.agent import use_cases
+
+    row = _use_case(use_cases.question, question_id, out=AgentQuestionOut)
     if row.get("status") == "pending":
         return {"status": "pending"}
     if row.get("status") == "dismissed":
