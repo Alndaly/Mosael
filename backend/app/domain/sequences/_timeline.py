@@ -1,0 +1,264 @@
+"""时间线操作的共用底座:取序列/片段、校验、记操作日志,以及切分时的字段继承与关键帧重投影。"""
+
+from __future__ import annotations
+
+import math
+from typing import Any
+
+from sqlalchemy import update
+from sqlalchemy.orm import Session
+
+from app.db.models import Clip, Sequence, SequenceOperation, SequenceRevision
+from app.domain.sequences.errors import SequenceDomainError, SequenceNotFound
+
+
+MIN_CUT_REMAINDER = 0.05
+
+
+def _clip_payload(clip: Clip) -> dict[str, Any]:
+    payload = {
+        "clip_id": clip.id,
+        "track_id": clip.track_id,
+        "asset_id": clip.asset_id,
+        "timeline_start": clip.timeline_start,
+        "src_in": clip.src_in,
+        "src_out": clip.src_out,
+    }
+    for field in RESTORABLE_CLIP_FIELDS:
+        payload[field] = getattr(clip, field)
+    return payload
+
+
+#: Everything about a clip beyond where it sits. Recorded on every operation that may have to
+#: rebuild the clip later, because none of it can be recovered from anywhere else — undoing a
+#: delete used to hand back a clip at 1x, unity gain, unmuted and ungraded, and a subtitle with
+#: no text at all. Read back with .get() and a default so operations recorded before this
+#: existed still replay.
+RESTORABLE_CLIP_FIELDS = ("speed", "gain", "muted", "effects", "transform", "text_override")
+
+#: What a piece carved out of a clip inherits. A half is still the same footage at the same
+#: speed with the same grade, and half a caption still says what the caption said — rebuilding a
+#: piece from position alone reset all of it.
+#:
+#: 这里曾经还排除过一个 `linked_clip_id`,理由写得很认真(「那配对的是两个具体的行,而切出来
+#: 的是新行」)—— 而那个字段**从来没有任何一处写过它**,永远是 null:一个不存在的配对,
+#: 被精心地排除在继承之外。已连列带 schema 一起删掉(见迁移 drop-clip-linked-clip-id)。
+INHERITED_CLIP_FIELDS = ("speed", "gain", "muted", "effects", "transform", "text_override")
+
+
+def _inherited(clip: Clip) -> dict[str, Any]:
+    return {field: getattr(clip, field) for field in INHERITED_CLIP_FIELDS}
+
+
+_KEYFRAME_PROPS = ("scale", "x", "y", "opacity", "rotation")
+
+
+def _sample_keyframe_track(points: list[tuple[float, float]], t: float) -> float:
+    """分段线性 + 端点保持 —— 与前端 sampleProp、导出端 _kf_sample 同语义。"""
+    if t <= points[0][0]:
+        return points[0][1]
+    if t >= points[-1][0]:
+        return points[-1][1]
+    for (t0, v0), (t1, v1) in zip(points, points[1:]):
+        if t0 <= t <= t1:
+            factor = (t - t0) / (t1 - t0) if t1 > t0 else 0.0
+            return v0 + (v1 - v0) * factor
+    return points[-1][1]
+
+
+def _slice_keyframes(
+    raw: Any, props: tuple[str, ...], orig_in: float, orig_out: float, piece_in: float, piece_out: float
+) -> list[dict[str, Any]] | None:
+    """关键帧列表 → 裁到 [piece_in, piece_out] 后的列表;无可切内容时返回 None。
+
+    关键帧的 t 是**片段内归一化进度**(0=片段头、1=片段尾)。按源时间把动画重投影到新片段的
+    进度轴:段首/段尾取原动画在该处的采样值(跨切点连续、接得上),中间落在本段内的关键帧
+    按比例重映射。
+    """
+    if not isinstance(raw, list) or not raw:
+        return None
+    span = orig_out - orig_in
+    piece_span = piece_out - piece_in
+    if span <= 0 or piece_span <= 0:
+        return None
+
+    sliced: list[dict[str, Any]] = []
+    for prop in props:
+        points = sorted(
+            (float(kf["t"]), float(kf[prop]))
+            for kf in raw
+            if isinstance(kf, dict)
+            and isinstance(kf.get("t"), (int, float))
+            and isinstance(kf.get(prop), (int, float))
+        )
+        if not points:
+            continue
+        values: dict[float, float] = {}
+        # 两端必取:它们承接上一段的结尾 / 下一段的开头。
+        for edge_q, edge_src in ((0.0, piece_in), (1.0, piece_out)):
+            values[edge_q] = _sample_keyframe_track(points, (edge_src - orig_in) / span)
+        for progress, value in points:
+            q = (orig_in + progress * span - piece_in) / piece_span
+            if 1e-6 < q < 1 - 1e-6:
+                values[round(q, 6)] = value
+        sliced.extend({"t": q, prop: values[q]} for q in sorted(values))
+    return sliced or None
+
+
+def _sliced_transform(
+    transform: Any, orig_in: float, orig_out: float, piece_in: float, piece_out: float
+) -> Any:
+    """画面变换(位置/缩放/旋转/透明度)动画裁到某一段;无关键帧则原样返回。
+
+    不裁的话每段都会从头重播整段动画 —— 用户看到的是"切一刀,画面在切点跳回动画起点"。
+    """
+    if not isinstance(transform, dict):
+        return transform
+    sliced = _slice_keyframes(transform.get("keyframes"), _KEYFRAME_PROPS, orig_in, orig_out, piece_in, piece_out)
+    return transform if sliced is None else {**transform, "keyframes": sliced}
+
+
+def _sliced_effects(
+    effects: Any, orig_in: float, orig_out: float, piece_in: float, piece_out: float
+) -> Any:
+    """effects 里同样按片段计时的东西,也要跟着切:
+
+    · **音量关键帧**(gain_keyframes)与 transform 关键帧同构(t 为片段内进度)——不裁则每段
+      重播整条音量曲线。
+    · **淡入淡出**(fade_in/out、video_fade_in/out)是相对片段首尾的绝对秒数。原样复制会让
+      每一段都在自己的首尾淡一次 —— 切一刀,切点处画面黑一下、声音断一下(段落切换处的
+      "黑屏/断音"多半来源于此)。淡入只属于**首段**、淡出只属于**末段**,中间的切点不该有。
+    """
+    if not isinstance(effects, dict):
+        return effects
+    updated = dict(effects)
+    sliced = _slice_keyframes(effects.get("gain_keyframes"), ("gain",), orig_in, orig_out, piece_in, piece_out)
+    if sliced is not None:
+        updated["gain_keyframes"] = sliced
+    epsilon = 1e-6
+    if piece_in > orig_in + epsilon:  # 不是首段 → 不该再淡入
+        for key in ("fade_in", "video_fade_in"):
+            if updated.get(key):
+                updated[key] = 0.0
+    if piece_out < orig_out - epsilon:  # 不是末段 → 不该在切点淡出
+        for key in ("fade_out", "video_fade_out"):
+            if updated.get(key):
+                updated[key] = 0.0
+    return updated
+
+
+def _sliced_inherited(
+    inherited: dict[str, Any], orig_in: float, orig_out: float, piece_in: float, piece_out: float
+) -> dict[str, Any]:
+    """切分出的一段应继承的字段:transform / effects 里按片段计时的部分都投影到该段。"""
+    return {
+        **inherited,
+        "transform": _sliced_transform(inherited.get("transform"), orig_in, orig_out, piece_in, piece_out),
+        "effects": _sliced_effects(inherited.get("effects"), orig_in, orig_out, piece_in, piece_out),
+    }
+
+
+def timeline_span(clip: Clip) -> float:
+    """How long the clip occupies the TIMELINE. src_out - src_in is a duration in SOURCE time;
+    at 2x that footage takes half as long to play. Confusing the two put split/cut pieces and
+    ripple-shifted followers at the wrong times and let them overwrite their neighbours."""
+    return (clip.src_out - clip.src_in) / (clip.speed or 1.0)
+
+
+def _require_sequence(db: Session, sequence_id: str) -> Sequence:
+    sequence = db.get(Sequence, sequence_id)
+    if sequence is None:
+        raise SequenceNotFound("Sequence not found")
+    return sequence
+
+
+def _require_clip(db: Session, sequence_id: str, clip_id: str) -> Clip:
+    clip = db.get(Clip, clip_id)
+    if clip is None or clip.sequence_id != sequence_id:
+        raise SequenceNotFound("Clip not found")
+    return clip
+
+
+def _validate_clip_range(timeline_start: float, src_in: float, src_out: float) -> None:
+    """片段在时间线上和素材内的位置。
+
+    **先要求有限,再比大小。** 任何和 NaN 的比较都是 False —— 只靠 `< 0` / `<= src_in`
+    这几条,NaN 会把它们全部"满足"而畅通无阻;Infinity 同理(inf < 0 是 False,而
+    src_out=inf 比任何 src_in 都大,于是"出点要晚于入点"也成立)。
+
+    放进去的代价不对称:NaN 存下之后,这条时间线序列化出的 `{"timeline_start": NaN}`
+    不是合法 JSON,浏览器再也打不开它;src_out=inf 则是一段**无限长**的片段,会一路进到
+    渲染计划里。而来源不必是恶意客户端 —— 前端算时间码时一次除以零(时长为 0 的素材、
+    缩放为 0)就是 NaN,智能体的 edit_timeline 也直接收这几个数。
+    """
+    for name, value in (("timeline_start", timeline_start), ("src_in", src_in), ("src_out", src_out)):
+        if not math.isfinite(value):
+            raise SequenceDomainError(f"{name} must be a finite number")
+    if timeline_start < 0:
+        raise SequenceDomainError("timeline_start must be non-negative")
+    if src_in < 0:
+        raise SequenceDomainError("src_in must be non-negative")
+    if src_out <= src_in:
+        raise SequenceDomainError("src_out must be greater than src_in")
+
+
+def _record_operation(
+    db: Session,
+    sequence: Sequence,
+    *,
+    kind: str,
+    payload: dict[str, Any],
+    summary: dict[str, Any],
+    actor_id: str | None,
+    undo_of: str | None = None,
+) -> None:
+    before = sequence.revision
+    after = before + 1
+    # 版本号自增走**条件 UPDATE**,不是读出来加一再写回去。
+    #
+    # 后者是 check-then-act:两个写入方都读到 5,都写 6,于是两条编辑共用一个版本号 —— 而
+    # 版本号是撤销栈排序的依据(revision_after)、也是序列 JSON 缓存的键,两处都会因此错乱。
+    # 让数据库来挑赢家,输的那个改动 0 行,当场知道自己晚了一步。
+    #
+    # 这条路径以前基本只有一个人在走,现在不是了:智能体批准一张确认卡就会改时间线,而用户
+    # 同时还在拖片段 —— 两个写入方同时存在已经是常态。
+    # (和 domain/agent/confirmations.py 的 _claim 同一个手法。)
+    claimed = db.execute(
+        update(Sequence).where(Sequence.id == sequence.id, Sequence.revision == before).values(revision=after)
+    ).rowcount
+    if claimed == 0:
+        raise SequenceDomainError("seqErr_revisionConflict")
+    operation = SequenceOperation(
+            workspace_id=sequence.workspace_id,
+            sequence_id=sequence.id,
+            revision_before=before,
+            revision_after=after,
+            kind=kind,
+            payload=payload,
+            actor_id=actor_id,
+            undo_of=undo_of,
+        )
+    db.add(operation)
+    db.flush()
+    from app.domain.collaboration import record_activity
+
+    record_activity(
+        db,
+        workspace_id=sequence.workspace_id,
+        actor_id=actor_id,
+        action="sequence.operation",
+        subject_type="sequence",
+        subject_id=sequence.id,
+        summary="编辑了时间线",
+        payload={"kind": kind, "revision_before": before, "revision_after": after},
+        source_type="sequence_operation",
+        source_id=operation.id,
+    )
+    db.add(
+        SequenceRevision(
+            workspace_id=sequence.workspace_id,
+            sequence_id=sequence.id,
+            revision=after,
+            summary=summary,
+        )
+    )
