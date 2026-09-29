@@ -1,7 +1,11 @@
-# Mosael MCP Server
+# Mosael 智能体工具
 
-Minimal external-agent surface. Tools return stable product
-summaries — never raw internal schemas.
+智能体(AI Studio、飞书、子智能体)能用的工具清单。工具返回稳定的产品摘要,不暴露内部表结构。
+
+**只在后端进程内运行**:sidecar 经 `GET /api/agent/tools` 发现工具、经 `POST /api/agent/tools/{name}` 调用。
+不再作为独立的 MCP(stdio)服务对外提供 —— 那要求工具体经 HTTP 回连后端,而进程内这条路本不需要。
+注册表在 `backend/mcp_server.py`(名字是历史遗留):每个工具的 `@tool(effect=...)` 声明它做了什么,
+工具体正在逐个改成直接调领域用例。
 
 ## Tools
 
@@ -229,23 +233,6 @@ plain-text notice that says which switches to flip — it does not fail silently
 All tools default to the first workspace when `workspace_id` is omitted.
 `inspect_sequence` accepts either `sequence_id` or `project_id` (most recent
 sequence).
-
-## Running
-
-The backend HTTP API must be running (default `http://127.0.0.1:8800`,
-override with `MOSAEL_API`). The API requires local authentication, so pass a
-session token via `MOSAEL_TOKEN` (obtain one with `POST /api/auth/login`).
-
-```bash
-cd backend
-MOSAEL_TOKEN=<session-token> .venv/bin/python mcp_server.py   # stdio transport
-```
-
-Register with an MCP client, e.g. Claude Code:
-
-```bash
-claude mcp add mosael -- /path/to/Mosael/backend/.venv/bin/python /path/to/Mosael/backend/mcp_server.py
-```
 
 ## Roadmap
 

@@ -202,6 +202,7 @@ def invoke_agent_tool(
             api_base=f"http://{settings.backend_host}:{settings.backend_port}",
             requested_by=body.requested_by,
             session_id=agent_session_id or "",
+            user_id=user.id,
         ):
             try:
                 result = fn(**arguments)

@@ -96,3 +96,35 @@ def test_update_tidies_tags_and_leaves_the_commit_to_the_caller() -> None:
         use_cases.update_asset(db, _user(db, editor), asset_id, tags=[" x ", "x", "", "y" * 50])
     with SessionLocal() as db:
         assert db.get(Asset, asset_id).tags == ["x", "y" * use_cases.TAG_MAX_CHARS]
+
+
+def test_asset_tools_call_the_domain_directly_not_the_api(monkeypatch) -> None:
+    """智能体的素材工具直接调这些用例:不再经 HTTP 回连,闸是同一道。"""
+    import mcp_server
+    from fastapi.testclient import TestClient
+
+    from app.core.security import mint_service_session
+    from app.main import app
+
+    def no_loopback(*_args, **_kwargs):
+        raise AssertionError("素材工具不该再经 HTTP 回连后端")
+
+    for name in ("_get", "_post", "_patch", "_put", "_delete"):
+        monkeypatch.setattr(mcp_server, name, no_loopback)
+
+    workspace_id, viewer = _workspace_with("viewer")
+    asset_id = insert_asset(workspace_id, kind="image", name="a")
+    owner = TestClient(app)
+
+    def call(username: str, tool: str, arguments: dict):
+        with SessionLocal() as db:
+            token = mint_service_session(db, _user(db, username).id)
+        owner.headers["Authorization"] = f"Bearer {token}"
+        return owner.post(f"/api/agent/tools/{tool}", json={"arguments": arguments}).json()
+
+    refused = call(viewer, "update_asset_tags", {"asset_id": asset_id, "tags": ["x"]})
+    assert "error" in refused, refused
+    done = call("tester", "update_asset_tags", {"asset_id": asset_id, "tags": ["x", "x", " y "]})
+    assert done["result"]["tags"] == ["x", "y"], done
+    listed = call(viewer, "list_assets", {"workspace_id": workspace_id})
+    assert [item["id"] for item in listed["result"]] == [asset_id]

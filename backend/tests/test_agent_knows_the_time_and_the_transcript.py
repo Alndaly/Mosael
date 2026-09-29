@@ -71,7 +71,8 @@ def test_transcript_narrows_by_time_and_owns_up_to_truncating(monkeypatch) -> No
         {"start_time": i * 2.0, "end_time": i * 2.0 + 1.5, "text": f"第{i}句", "speaker": "A", "tokens": [1, 2, 3]}
         for i in range(500)
     ]
-    monkeypatch.setattr(mcp_server, "_get", lambda path, params=None: {
+    # 工具直接调领域用例(`_use_case`);这里替掉的就是那一次调用,只看工具怎么裁剪结果。
+    monkeypatch.setattr(mcp_server, "_use_case", lambda *a, **k: {
         "language": "zh", "status": "done", "segments": segments,
     })
 
@@ -90,7 +91,7 @@ def test_transcript_narrows_by_time_and_owns_up_to_truncating(monkeypatch) -> No
 
 
 def test_transcript_keeps_the_speaker_only_when_there_is_one(monkeypatch) -> None:
-    monkeypatch.setattr(mcp_server, "_get", lambda path, params=None: {
+    monkeypatch.setattr(mcp_server, "_use_case", lambda *a, **k: {
         "language": "zh", "status": "done",
         "segments": [
             {"start_time": 0, "end_time": 1, "text": "有说话人", "speaker": "B"},
@@ -107,7 +108,11 @@ def test_url_import_refuses_a_link_it_could_not_probe(monkeypatch) -> None:
     import pytest
 
     monkeypatch.setattr(mcp_server, "_default_workspace_id", lambda: "w1")
-    monkeypatch.setattr(mcp_server, "_post", lambda path, body=None: {"title": "", "entries": []})
+    from types import SimpleNamespace
+
+    monkeypatch.setattr(
+        mcp_server, "_use_case", lambda *a, **k: SimpleNamespace(title="", entries=[], is_playlist=False, truncated=False)
+    )
     with pytest.raises(ValueError, match="探不到"):
         mcp_server.import_media_from_url("https://example.com/nope")
 
