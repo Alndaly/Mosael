@@ -47,6 +47,7 @@
 | `app/ai/runtime/asr_daemon.py:_POOL` | 常驻 ASR 工作进程池 | 同上。语音对话的首句延迟就取决于这个池热没热。 |
 | `app/domain/agent/stream.py:_streams` | 正在跑的那一轮的 SSE 流 | 后端一重启线程即死,`finally` 执行不到,会话永远卡在「思考中」—— 所以有 `reconcile_orphaned_agent_sessions()` 在启动时统一拨回,并把那一轮留下的确认卡一并作废(否则那张卡还能被点,而它是**当场执行工具**的)。 |
 | `app/domain/jobs.py:_CHILDREN` | 任务的子进程句柄(ffmpeg / ASR / TTS) | 没有它,取消只是翻了个数据库字段:ffmpeg 跑完整段、烧掉用户明确要求停下的 CPU,然后把取消覆盖成「成功」。重启后旧句柄没了,那些孤儿由 `reconcile_orphaned_jobs` 收拾。 |
+| `app/integrations/feishu/inbound.py:_awaiting_replies` | 每个会话里还在等回复的飞书消息(收尾时摘 Typing 反应) | 一轮在哪个进程跑完,就在哪个进程收尾;第二个进程看不见别人贴的反应。重启丢了它,只是那几条消息上的「码字中」不会被摘掉 —— 回复照样发。 |
 | `app/integrations/feishu/connections.py:_processes` | 每个机器人一个子进程 | 独立进程是 lark SDK 的硬约束(它的 ws 客户端共享模块级事件循环)。第二个后端会**再拉一份**,同一条消息被处理两次。 |
 | `app/ai/sidecar/pi_client.py:_LIVE` | 正在跑的 sidecar 轮次 | 同 `_streams`。 |
 | `app/workers/scheduler.py:_stop_event` | 定时任务线程的停止信号 | 每个进程一个调度线程 —— 多进程下同一条定时任务会被触发多次。 |
@@ -112,9 +113,10 @@
   `app/domain/jobs.py:_SETTLE_LISTENERS`(任务落终态后谁跟着收拾,目前是浏览器:工作流一次运行开的会话随它关)、
   `app/domain/jobs.py:_RESUMERS`(重启后哪一类任务能**接着干**而不是判失败 —— 目前只有生成:
   提交给供应商之后远端照样在生成、照样扣费。回执本身落在 `Job.payload.remote_task`,不在内存里)
-- `app/domain/sequences/undo/__init__.py:_REGISTRY`
-- `app/domain/workflows/executors/__init__.py:_REGISTRY`、
-  `app/domain/workflows/executors/__init__.py:_PREFIX_REGISTRY`
+- `app/domain/sequences/undo/registry.py:_REGISTRY`
+- `app/domain/workflows/executors/registry.py:_REGISTRY`、
+  `app/domain/workflows/executors/registry.py:_PREFIX_REGISTRY`
+- `app/domain/agent/origins.py:_origins`(外部渠道登记的系统提示补充与 turn 收尾回送;飞书在 import 时登记)
 - `app/domain/plugins/media_bridge.py:_sink`、`app/domain/plugins/media_bridge.py:_source`
 - `app/domain/capabilities/__init__.py:_registry` — 宿主能力的契约表(素材外链、文档解析……,ADR 0031 §5):组装根在导入期
   登记,运行时只读;挑哪一家读的是库里的默认,不在这里。
