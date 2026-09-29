@@ -104,15 +104,37 @@ GATED_IN_THE_DOMAIN = {
 }
 
 
-def _names_a_permission(fn: ast.AST, gated: set[str]) -> bool:
+def _names_a_permission(fn: ast.AST, gated: set[str], use_cases: frozenset[str] = frozenset()) -> bool:
     for node in ast.walk(fn):
-        if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)):
+        if not isinstance(node, ast.Call):
             continue
-        if node.func.id in EXPLICIT or node.func.id in OWNERSHIP_GATES:
+        # 调了一个**自己点名了权限**的领域用例(见 _domain_use_cases):闸在更靠里的一层,
+        # 对每一条调用路径生效(HTTP、智能体工具、飞书),不是放行。
+        if isinstance(node.func, ast.Attribute) and node.func.attr in use_cases:
+            return True
+        if not isinstance(node.func, ast.Name):
+            continue
+        if node.func.id in EXPLICIT or node.func.id in OWNERSHIP_GATES or node.func.id in use_cases:
             return True
         if node.func.id in gated and any(k.arg == "perm" for k in node.keywords):
             return True
     return False
+
+
+#: 领域用例所在的模块(约定见 CONVENTIONS「一次用例一个事务,授权在领域里」):那里的函数收行动人、自己过闸。
+DOMAIN_USE_CASE_MODULES = ("app/domain/assets/use_cases.py", "app/domain/agent/proposals.py")
+
+
+def _domain_use_cases() -> frozenset[str]:
+    """用例模块里**按同一条规矩**点名了写权限的函数。只读闸(ensure_workspace_access、不带 perm 的
+    require_asset)不算 —— 路由调一个只读用例,不等于它的写操作有闸。"""
+    names: set[str] = set()
+    for module in DOMAIN_USE_CASE_MODULES:
+        tree = ast.parse(pathlib.Path(module).read_text(encoding="utf-8"))
+        for fn in tree.body:
+            if isinstance(fn, ast.FunctionDef) and _names_a_permission(fn, GATED_HELPERS):
+                names.add(fn.name)
+    return frozenset(names)
 
 
 def _mutating_routes() -> list[tuple[str, str, bool]]:
@@ -122,6 +144,7 @@ def _mutating_routes() -> list[tuple[str, str, bool]]:
             continue
         tree = ast.parse(path.read_text())
         gated = GATED_HELPERS | _local_gated_helpers(tree)
+        use_cases = _domain_use_cases()
         for fn in [n for n in ast.walk(tree) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]:
             verbs = {
                 d.func.attr
@@ -130,7 +153,7 @@ def _mutating_routes() -> list[tuple[str, str, bool]]:
             } & MUTATING
             if not verbs:
                 continue
-            out.append((path.name, fn.name, _names_a_permission(fn, gated)))
+            out.append((path.name, fn.name, _names_a_permission(fn, gated, use_cases)))
     return out
 
 

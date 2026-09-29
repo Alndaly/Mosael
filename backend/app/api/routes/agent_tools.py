@@ -117,7 +117,8 @@ def _invoke_plugin_tool(
     工作区:参数给了用参数(上面已经过了 ensure_workspace_member),没给就用这份凭据那次对话的 ——
     sidecar 不带这个参数,而卡总得开在某个工作区里,插件交出的文件也要收进它的素材库。
     """
-    from app.api.routes.confirmations import open_confirmation
+    from app.domain.agent.autopilot import session_for_token
+    from app.domain.agent.proposals import propose
     from app.domain.agent.confirmable.plugin_tools import exposed_tool
     from app.domain.effects import needs_card
     from app.domain.plugins import PluginDomainError
@@ -132,11 +133,10 @@ def _invoke_plugin_tool(
     if needs_card(match["effects"]):
         if not workspace_id:
             raise HTTPException(status_code=422, detail=tr("routeErr_pluginToolNeedsWorkspace", name=name))
-        # 开卡是写操作,和 POST /api/confirmations 同一道闸。
-        ensure_workspace_perm(db, user, workspace_id, "edit")
-        confirmation = open_confirmation(
-            db, user, token, workspace_id=workspace_id, tool=name, payload={"arguments": dict(body.arguments)},
-            requested_by=body.requested_by or "external-agent",
+        # 开卡的闸、自动放行、推送都在 propose 里 —— 和 POST /api/confirmations、内置工具同一份。
+        confirmation = propose(
+            db, user, workspace_id=workspace_id, tool=name, payload={"arguments": dict(body.arguments)},
+            requested_by=body.requested_by or "external-agent", session_id=session_for_token(db, token),
         )
         return {"result": tool_registry()._confirmation_reply({
             "id": confirmation.id,

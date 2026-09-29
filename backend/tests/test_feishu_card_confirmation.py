@@ -38,6 +38,31 @@ def _make_confirmation(client, workspace_id: str) -> str:
     return res.json()["id"]
 
 
+def _make_feishu_confirmation(client, workspace_id: str, bot_id: str) -> str:
+    """在一次**飞书会话**里开卡 —— 推送按卡挂着的会话决定去哪(domain/agent/origins),和生产里一样。
+
+    凭据是那一轮铸的令牌:卡挂在哪次对话由凭据决定,不由请求体声明。
+    """
+    from app.core.security import mint_service_session
+    from app.domain.agent.host import get_or_create_external_session
+
+    with SessionLocal() as db:
+        session = get_or_create_external_session(
+            db, workspace_id=workspace_id, origin="feishu", external_key=f"feishu:{bot_id}:oc_chat", title="飞书",
+        )
+        me = db.scalars(__import__("sqlalchemy").select(User)).first()
+        token = mint_service_session(db, me.id, agent_session_id=session.id)
+    previous = client.headers.get("Authorization")
+    client.headers["Authorization"] = f"Bearer {token}"
+    try:
+        return _make_confirmation(client, workspace_id)
+    finally:
+        if previous is None:
+            client.headers.pop("Authorization", None)
+        else:
+            client.headers["Authorization"] = previous
+
+
 def _status(confirmation_id: str) -> str:
     with SessionLocal() as db:
         row = db.get(ToolConfirmation, confirmation_id)
@@ -160,9 +185,8 @@ def test_missing_card_capability_degrades_to_text_and_records_why(ctx, monkeypat
         lambda *a, **k: (_ for _ in ()).throw(feishu_client.FeishuError("飞书发卡片失败: 200340")),
     )
     monkeypatch.setattr(feishu_client, "send_text", lambda bot, chat, text: sent.append(text))
-    monkeypatch.setattr(approvals, "_feishu_origin", lambda db, sid: (db.get(FeishuBot, bot_id), "oc_chat"))
 
-    cid = _make_confirmation(client, ws)  # 建卡片时会触发推送
+    cid = _make_feishu_confirmation(client, ws, bot_id)  # 建卡片时会触发推送
 
     assert sent, "卡片发不出去时应当退成纯文本,而不是什么都不发"
     assert "等待确认" in sent[0] and "card.action.trigger" in sent[0]
@@ -173,7 +197,6 @@ def test_missing_card_capability_degrades_to_text_and_records_why(ctx, monkeypat
 
 def test_card_send_failure_never_breaks_confirmation(ctx, monkeypatch) -> None:
     """连纯文本都发不出去时,确认仍然要建得出来(退化回桌面端确认中心兜底)。"""
-    from app.integrations.feishu import approvals
     from app.integrations.feishu import client as feishu_client
 
     client, ws, _, _ = ctx
@@ -186,9 +209,8 @@ def test_card_send_failure_never_breaks_confirmation(ctx, monkeypatch) -> None:
     boom = lambda *a, **k: (_ for _ in ()).throw(RuntimeError("网络炸了"))  # noqa: E731
     monkeypatch.setattr(feishu_client, "send_card", boom)
     monkeypatch.setattr(feishu_client, "send_text", boom)
-    monkeypatch.setattr(approvals, "_feishu_origin", lambda db, sid: (db.get(FeishuBot, bot_id), "oc_chat"))
 
-    cid = _make_confirmation(client, ws)
+    cid = _make_feishu_confirmation(client, ws, bot_id)
     assert _status(cid) == "pending"
 
 

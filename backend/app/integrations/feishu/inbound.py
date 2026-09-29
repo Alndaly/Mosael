@@ -314,7 +314,16 @@ def system_note(db: Session, session: AgentSession) -> str:
     )
 
 
-origins.register("feishu", origins.ExternalOrigin(system_note=system_note, turn_finished=deliver_turn))
+def _announce(db: Session, confirmation) -> None:
+    from app.integrations.feishu.approvals import announce_confirmation
+
+    announce_confirmation(db, confirmation)
+
+
+origins.register(
+    "feishu",
+    origins.ExternalOrigin(system_note=system_note, turn_finished=deliver_turn, confirmation_opened=_announce),
+)
 
 
 def notify_interrupted_chats(db: Session) -> int:

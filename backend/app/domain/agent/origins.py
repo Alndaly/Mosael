@@ -4,10 +4,12 @@
 自己落库 —— 和 host 那一份各走各的。于是桌面端有的(排队、失败轮留轨迹、计费、上下文补全、
 失败也回存记忆)飞书一样都没有,改一处漏一处。
 
-现在外部来源只做两件 host 不知道的事:
+现在外部来源只做这几件 host 不知道的事:
 
 - ``system_note(db, session)``:这类会话额外的系统提示(比如飞书的权限档、回复要短)。
 - ``turn_finished(session_id)``:一轮跑完(成功或失败)之后把结果送回原渠道。
+- ``confirmation_opened(db, confirmation)``:这类会话里开出一张确认卡,推到原渠道(飞书把卡片发回那个群)。
+  此前推送写在开卡的**路由**里 —— 于是只有经 HTTP 开的卡会推,智能体直接开的卡不会。
 
 登记在这里而不是让 host 去 import 集成层 —— 领域不依赖集成(见 tests/test_import_layering)。
 """
@@ -20,7 +22,7 @@ from dataclasses import dataclass
 
 from sqlalchemy.orm import Session
 
-from app.db.models import AgentSession
+from app.db.models import AgentSession, ToolConfirmation
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +31,7 @@ logger = logging.getLogger(__name__)
 class ExternalOrigin:
     system_note: Callable[[Session, AgentSession], str] | None = None
     turn_finished: Callable[[str], None] | None = None
+    confirmation_opened: Callable[[Session, ToolConfirmation], None] | None = None
 
 
 _origins: dict[str, ExternalOrigin] = {}
@@ -54,3 +57,17 @@ def turn_finished(origin: str | None, session_id: str) -> None:
         handler.turn_finished(session_id)
     except Exception:  # noqa: BLE001 —— 见 docstring
         logger.exception("delivering a finished turn to %s failed session=%s", origin, session_id)
+
+
+def confirmation_opened(db: Session, confirmation: ToolConfirmation) -> None:
+    """一张新卡挂在某次外部会话上时,交给那个渠道去推。推送失败只记日志 —— 卡本身已经开好了。"""
+    if not confirmation.session_id:
+        return
+    session = db.get(AgentSession, confirmation.session_id)
+    handler = _origins.get((session.origin if session is not None else "") or "")
+    if handler is None or handler.confirmation_opened is None:
+        return
+    try:
+        handler.confirmation_opened(db, confirmation)
+    except Exception:  # noqa: BLE001 —— 见 docstring
+        logger.exception("announcing a confirmation to %s failed confirmation=%s", session.origin, confirmation.id)

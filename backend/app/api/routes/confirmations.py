@@ -5,9 +5,8 @@ from sqlalchemy import or_, select
 
 from app.api.deps import CurrentUser, DbSession, PresentedToken
 from app.api.schemas import ConfirmationCreate, ConfirmationOut
-from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm
+from app.domain.permissions import ensure_workspace_access
 from app.db.models import ToolConfirmation, now
-from app.integrations.feishu.approvals import announce_confirmation
 from app.domain.agent import autopilot
 from app.domain.agent.sessions import ensure_reads_for, reads_for_filter
 from app.domain.agent.confirmations import (
@@ -15,8 +14,8 @@ from app.domain.agent.confirmations import (
     authorize_and_approve,
     authorize_and_reject,
     decidable_filter,
-    request_confirmation,
 )
+from app.domain.agent.proposals import propose
 
 router = APIRouter(tags=["confirmations"])
 
@@ -25,57 +24,18 @@ router = APIRouter(tags=["confirmations"])
 def create_confirmation(
     body: ConfirmationCreate, db: DbSession, user: CurrentUser, token: PresentedToken
 ) -> ToolConfirmation:
-    ensure_workspace_perm(db, user, body.workspace_id, "edit")
-    return open_confirmation(
-        db, user, token, workspace_id=body.workspace_id, tool=body.tool, payload=body.payload,
-        requested_by=body.requested_by,
-    )
+    """开卡的四步(过闸、建卡、判自动放行、推到原渠道)在 domain/agent/proposals.propose,智能体工具直接调同一个。
 
-
-def open_confirmation(
-    db: DbSession,
-    user: CurrentUser,
-    token: str,
-    *,
-    workspace_id: str,
-    tool: str,
-    payload: dict,
-    requested_by: str,
-) -> ToolConfirmation:
-    """开一张卡、判自动放行、推到它该出现的地方。上面这条路由和智能体直接调插件工具(routes/agent_tools)
-    都走这里 —— 那条路要的是同样的三步,抄一份的话,谁往这里加一道校验那边就静默漏掉。
-
-    **权限由调用方先点名**(`ensure_workspace_perm(..., "edit")`):写路由自己写出它要的权限,这是
-    tests/test_write_permission_is_explicit.py 守着的规矩,不藏进辅助函数里。
+    归属**由凭据决定**,不由请求体声明:一次 turn 一个令牌,铸的时候正好知道是哪次对话。没有会话的凭据
+    (登录令牌)开出来的卡就是无主的,由全局确认中心兜底。
     """
-    # 归属**由凭据决定**,不由请求体声明。一次 turn 一个令牌,铸的时候正好知道是哪次对话;调用方
-    # 转述的话就可以被伪造 —— 任何拿着同一份凭据的通道,填上别人的会话 id 就能把自己的动作挂进
-    # 那次对话(三档权限模式下,那等于挂进别人开的自动放行)。没有会话的凭据(登录令牌、MCP 直连)
-    # 开出来的卡就是无主的,由全局确认中心兜底。
     try:
-        confirmation = request_confirmation(
-            db,
-            workspace_id=workspace_id,
-            tool=tool,
-            payload=payload,
-            actor_id=user.id,
-            requested_by=requested_by,
-            session_id=autopilot.session_for_token(db, token),
+        return propose(
+            db, user, workspace_id=body.workspace_id, tool=body.tool, payload=body.payload,
+            requested_by=body.requested_by, session_id=autopilot.session_for_token(db, token),
         )
     except ConfirmationError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    # 该不该不问就执行。判定就地做完(全是本地查询),执行交给后台线程 —— `_execute` 是阻塞的,
-    # 就地跑会让工具体的回连超时,产出「已执行但报超时」。放行了就不必再问用户,飞书那边也不用
-    # 推一张没人需要点的卡。
-    if autopilot.consider(db, user, confirmation):
-        return confirmation
-    # 把新卡推到它该出现的地方(目前只有飞书:从飞书驱动的会话,卡片应当回到那个飞书会话)。
-    #
-    # 放在**路由层**而不是领域层:领域回调集成层会形成 confirmations ⇄ feishu.approvals 的循环
-    # 依赖,只能靠函数内延迟导入绕开。路由是组合层,认识集成层是它的本分。request_confirmation
-    # 全项目只有这一个调用方,所以挪上来覆盖面一点不减。
-    announce_confirmation(db, confirmation)
-    return confirmation
 
 
 @router.get("/confirmations", response_model=list[ConfirmationOut])
