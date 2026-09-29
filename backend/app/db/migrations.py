@@ -5220,6 +5220,95 @@ def _migrate_translation_engines_are_providers() -> None:
                                  {"value": json.dumps(rewritten, ensure_ascii=False), "id": row["id"]})
 
 
+def _migrate_speech_engines_are_providers() -> None:
+    """配音引擎从裸名改成能力表的提供方 id(ADR 0032 第四步):`clone` → `builtin:clone`,`edge` / `openai` /
+    `volcano` / `alibaba` / `alibaba-cosyvoice` 同理;空的不动(画板的配音表单里空 = 克隆音色),认不出的
+    (插件连接 id)原样留着。
+
+    改四处:工作流里念字的五种节点(含循环体、子图)、画板(配音表单顶层的 `engine`、生成器表单与能力设置里
+    这五种节点的 `config.engine`)、实体的 `voice_engine`、智能体语音偏好 `agent_voice_prefs.engine`。
+    必须在 _migrate_workflow_revisions 之前。规则抄在这里,迁移不跟着领域代码变。
+    """
+    node_types = {"synthesize_speech", "dub_subtitles", "image_speak", "video_lipsync", "talking_segments"}
+    engines = {"clone", "edge", "openai", "volcano", "alibaba", "alibaba-cosyvoice"}
+
+    def renamed(value: Any) -> Any:
+        return f"builtin:{value}" if isinstance(value, str) and value.strip() in engines else value
+
+    def fixed(config: Any) -> Any:
+        if not isinstance(config, dict) or "engine" not in config:
+            return config
+        return {**config, "engine": renamed(config["engine"])}
+
+    def rewrite_graph(graph: Any) -> Any:
+        if not isinstance(graph, dict):
+            return graph
+        nodes = []
+        for node in graph.get("nodes") or []:
+            if not isinstance(node, dict):
+                nodes.append(node)
+                continue
+            config = dict(node.get("config") or {})
+            if node.get("type") in node_types:
+                config = fixed(config)
+            for key, value in list(config.items()):
+                if isinstance(value, dict) and isinstance(value.get("nodes"), list):
+                    config[key] = rewrite_graph(value)
+            nodes.append({**node, "config": config} if config != (node.get("config") or {}) else node)
+        return {**graph, "nodes": nodes}
+
+    def rewrite_canvas(canvas: Any) -> Any:
+        if not isinstance(canvas, dict):
+            return canvas
+        items = []
+        for item in canvas.get("items") or []:
+            form = item.get("form") if isinstance(item, dict) else None
+            if not isinstance(form, dict):
+                items.append(item)
+                continue
+            form = dict(form)
+            producer = str(form.get("producer") or "")
+            if producer == "speak" and "engine" in form:
+                form["engine"] = renamed(form["engine"])
+            if producer.removeprefix("node:") in node_types:
+                form["config"] = fixed(form.get("config"))
+            abilities = form.get("abilities")
+            if isinstance(abilities, dict):
+                form["abilities"] = {
+                    key: ({**ability, "config": fixed(ability.get("config"))}
+                          if key.removeprefix("node:") in node_types and isinstance(ability, dict) else ability)
+                    for key, ability in abilities.items()
+                }
+            items.append({**item, "form": form})
+        return {**canvas, "items": items}
+
+    def rewrite_attributes(attributes: Any) -> Any:
+        if not isinstance(attributes, dict) or "voice_engine" not in attributes:
+            return attributes
+        return {**attributes, "voice_engine": renamed(attributes["voice_engine"])}
+
+    tables = set(inspect(engine).get_table_names())
+    with engine.begin() as conn:
+        for table, column, rewrite in (("workflows", "graph", rewrite_graph), ("boards", "canvas", rewrite_canvas),
+                                       ("entities", "attributes", rewrite_attributes)):
+            if table not in tables:
+                continue
+            for row in conn.execute(text(f"SELECT id, {column} FROM {table}")).mappings().all():
+                raw = row[column]
+                try:
+                    value = json.loads(raw) if isinstance(raw, str) else raw
+                except (TypeError, ValueError):
+                    continue
+                rewritten = rewrite(value)
+                if rewritten != value:
+                    conn.execute(text(f"UPDATE {table} SET {column} = :value WHERE id = :id"),
+                                 {"value": json.dumps(rewritten, ensure_ascii=False), "id": row["id"]})
+        if "agent_voice_prefs" in tables:
+            for old in engines:
+                conn.execute(text("UPDATE agent_voice_prefs SET engine = :new WHERE engine = :old"),
+                             {"new": f"builtin:{old}", "old": old})
+
+
 def _migrate_condition_literals_are_json() -> None:
     """条件节点两边手写的 `True` / `False` 改写成 `true` / `false`。
 
@@ -5736,6 +5825,7 @@ def migration_plan() -> MigrationPlan:
                 _migrate_audio_engines_are_providers,
                 _migrate_transcription_engines_are_providers,
                 _migrate_translation_engines_are_providers,
+                _migrate_speech_engines_are_providers,
                 _migrate_workflow_revisions,
                 _disable_tasks_bound_to_deleted_workflows,
                 # 排在所有会落修订的迁移之后:它们写下的那几版也要有作者。

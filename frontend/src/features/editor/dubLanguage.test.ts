@@ -33,13 +33,13 @@ describe("书写系统识别", () => {
 
 describe("音色语言", () => {
   it("Edge 的 id 自带 locale", () => {
-    expect(voiceLanguage("edge", "ja-JP-NanamiNeural")).toBe("ja");
-    expect(voiceLanguage("edge", "zh-CN-XiaoxiaoNeural")).toBe("zh");
+    expect(voiceLanguage("builtin:edge", "ja-JP-NanamiNeural")).toBe("ja");
+    expect(voiceLanguage("builtin:edge", "zh-CN-XiaoxiaoNeural")).toBe("zh");
   });
 
   it("其余引擎看前缀,但只认已知语言 —— `my_custom_voice` 的 `my_` 不是语言代码", () => {
-    expect(voiceLanguage("volcano", "zh_female_cancan_mars_bigtts")).toBe("zh");
-    expect(voiceLanguage("volcano", "my_custom_voice_42")).toBe("");
+    expect(voiceLanguage("builtin:volcano", "zh_female_cancan_mars_bigtts")).toBe("zh");
+    expect(voiceLanguage("builtin:volcano", "my_custom_voice_42")).toBe("");
   });
 });
 
@@ -47,29 +47,29 @@ describe("念不念得了", () => {
   const ja = ["お漏らし。", "ここに寝てるんでしょ？"];
 
   it("日文交给只装了中英权重的本地克隆 —— 念不了", () => {
-    expect(unspeakable(ja, "clone", "", ["zh", "en"])).toBe("ja");
+    expect(unspeakable(ja, "builtin:clone", "", ["zh", "en"])).toBe("ja");
   });
 
   it("装上日语权重之后就念得了 —— 语言能力是**权重**的属性,不是引擎的", () => {
-    expect(unspeakable(ja, "clone", "", ["zh", "en", "ja"])).toBe("");
+    expect(unspeakable(ja, "builtin:clone", "", ["zh", "en", "ja"])).toBe("");
   });
 
   it("日文配 ja 音色 —— 正是该放行的情形", () => {
-    expect(unspeakable(ja, "edge", "ja-JP-NanamiNeural")).toBe("");
+    expect(unspeakable(ja, "builtin:edge", "ja-JP-NanamiNeural")).toBe("");
   });
 
   it("日文配中文音色 —— 拦", () => {
-    expect(unspeakable(ja, "edge", "zh-CN-XiaoxiaoNeural")).toBe("ja");
-    expect(unspeakable(ja, "volcano", "zh_female_cancan_mars_bigtts")).toBe("ja");
+    expect(unspeakable(ja, "builtin:edge", "zh-CN-XiaoxiaoNeural")).toBe("ja");
+    expect(unspeakable(ja, "builtin:volcano", "zh_female_cancan_mars_bigtts")).toBe("ja");
   });
 
   it("音色语言拿不准时一律当能念 —— 错误的警告会让人怀疑所有警告", () => {
-    expect(unspeakable(ja, "openai", "alloy")).toBe("");
-    expect(unspeakable(ja, "volcano", "my_custom_voice_42")).toBe("");
+    expect(unspeakable(ja, "builtin:openai", "alloy")).toBe("");
+    expect(unspeakable(ja, "builtin:volcano", "my_custom_voice_42")).toBe("");
   });
 
   it("中文字幕不触发任何提示", () => {
-    expect(unspeakable(["这是中文", "第二条"], "clone", "", ["zh", "en"])).toBe("");
+    expect(unspeakable(["这是中文", "第二条"], "builtin:clone", "", ["zh", "en"])).toBe("");
   });
 });
 
@@ -83,17 +83,17 @@ describe("默认就选对,而不是先选错再警告", () => {
 
   it("日文字幕 + Edge → 直接落在日语音色上", () => {
     // 用户选了 Edge 却看到「晓晓」和一条警告,只会以为选错了引擎 —— 他没错,是默认值错了。
-    expect(pickVoiceFor("ja", "edge", edgeVoices)).toBe("ja-JP-NanamiNeural");
+    expect(pickVoiceFor("ja", "builtin:edge", edgeVoices)).toBe("ja-JP-NanamiNeural");
   });
 
   it("挑不出来时返回空串 —— 保持引擎自己的默认,不硬塞一个", () => {
-    expect(pickVoiceFor("ja", "volcano", [{ value: "zh_female_cancan_mars_bigtts" }])).toBe("");
-    expect(pickVoiceFor("", "edge", edgeVoices)).toBe("");
+    expect(pickVoiceFor("ja", "builtin:volcano", [{ value: "zh_female_cancan_mars_bigtts" }])).toBe("");
+    expect(pickVoiceFor("", "builtin:edge", edgeVoices)).toBe("");
   });
 
   it("有没有能念的,决定提示说「换音色」还是「换引擎」", () => {
-    expect(hasVoiceFor("ja", "edge", edgeVoices)).toBe(true);
-    expect(hasVoiceFor("ja", "volcano", [{ value: "zh_female_cancan_mars_bigtts" }])).toBe(false);
+    expect(hasVoiceFor("ja", "builtin:edge", edgeVoices)).toBe(true);
+    expect(hasVoiceFor("ja", "builtin:volcano", [{ value: "zh_female_cancan_mars_bigtts" }])).toBe(false);
   });
 });
 

@@ -75,7 +75,7 @@ def test_refuses_when_nothing_selected_has_text() -> None:
                 clip_ids=[clip_id],
                 match_duration=False,
                 created_by=None,
-                synthesis={"engine": "volcano", "engine_voice": "v", "workspace_id": "w"},
+                synthesis={"engine": "builtin:volcano", "engine_voice": "v", "workspace_id": "w"},
             )
 
 
@@ -85,7 +85,7 @@ def test_dubbing_needs_both_edit_and_ai_permission() -> None:
     sequence_id, clip_id = _sequence_with_subtitle(client)
     response = client.post(
         f"/api/sequences/{sequence_id}/dub-subtitles",
-        json={"clip_ids": [clip_id], "engine": "volcano", "engine_voice": "v"},
+        json={"clip_ids": [clip_id], "engine": "builtin:volcano", "engine_voice": "v"},
     )
     # 这个用户是工作区所有者,两道权限都有 —— 挡下来的会是"没配供应商",而不是 403。
     assert response.status_code != 403, response.text
@@ -342,7 +342,7 @@ class Test原声处理归配音本身:
         with SessionLocal() as db:
             job_id = start_subtitle_dub(
                 db, sequence_id=sequence_id, clip_ids=[clip_id], match_duration=False, created_by=None,
-                synthesis={"engine": "volcano", "engine_voice": "v", "workspace_id": "w"},
+                synthesis={"engine": "builtin:volcano", "engine_voice": "v", "workspace_id": "w"},
                 original_audio="mute",
             ).id
         assert wait_for_idle_jobs(10)
@@ -407,7 +407,7 @@ class Test原声处理归配音本身:
         )
         assert response.status_code == 422 and "到此为止" in response.text, response.text
         assert captured["original_audio"] == "separate"
-        assert captured["synthesis"] == {"engine": "clone", "speed": 1.0, "voice_id": voice, "clone_model": "m"}
+        assert captured["synthesis"] == {"engine": "builtin:clone", "speed": 1.0, "voice_id": voice, "clone_model": "m"}
 
     def test_别的工作区的音色用不了(self) -> None:
         client = fresh_client()

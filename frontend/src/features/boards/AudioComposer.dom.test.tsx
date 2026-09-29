@@ -24,13 +24,13 @@ vi.mock("@tanstack/react-query", () => ({
     const [name, arg] = queryKey as [string, string];
     if (name === "tts-engines") {
       return { data: [
-        { id: "clone", label: "本地音色克隆", voices: [], needs_key: false, needs_voice_id: false, note: "", ready: true },
-        { id: "edge", label: "Edge 免费语音", voices: ["zh-CN-XiaoxiaoNeural", "en-US-JennyNeural"], needs_key: false, needs_voice_id: false, note: "", ready: true },
-        { id: "volcano-podcast", label: "火山播客", voices: ["a", "b"], needs_key: true, needs_voice_id: false, note: "", ready: true },
+        { id: "builtin:clone", label: "本地音色克隆", voices: [], needs_key: false, needs_voice_id: false, note: "", ready: true },
+        { id: "builtin:edge", label: "Edge 免费语音", voices: ["zh-CN-XiaoxiaoNeural", "en-US-JennyNeural"], needs_key: false, needs_voice_id: false, note: "", ready: true },
+        { id: "builtin:volcano-podcast", label: "火山播客", voices: ["a", "b"], needs_key: true, needs_voice_id: false, note: "", ready: true },
       ] };
     }
     if (name === "voices") return { data: [] };           // 克隆库是空的 —— 正是那台新机器
-    if (name === "tts-voices" && arg === "edge") {
+    if (name === "tts-voices" && arg === "builtin:edge") {
       return { data: [{ value: "zh-CN-XiaoxiaoNeural", label: "晓晓(女·温暖)" }, { value: "en-US-JennyNeural", label: "Jenny" }] };
     }
     return { data: [] };
@@ -52,12 +52,12 @@ it("克隆库空着时,别的引擎照样摆得出来 —— 那句「没有音�
 
 it("选了引擎音色之后,发出去的是 engine/engineVoice,不是空的 voiceId", async () => {
   const onSpeak = vi.fn();
-  render(<AudioComposer item={{ ...item, form: { prompt: "念这段", engine: "edge" } } as BoardItem}
+  render(<AudioComposer item={{ ...item, form: { prompt: "念这段", engine: "builtin:edge" } } as BoardItem}
     busy={false} workspaceId="w" onSpeak={onSpeak} onFormChange={vi.fn()} />);
   await waitFor(() => expect(screen.getByRole("combobox", { name: "subtitleDubVoice" })).toBeInTheDocument());
   fireEvent.click(screen.getByRole("button", { name: "boardSpeak" }));
   expect(onSpeak).toHaveBeenCalledWith({
-    text: "念这段", voiceId: "", engine: "edge", engineVoice: "zh-CN-XiaoxiaoNeural",
+    text: "念这段", voiceId: "", engine: "builtin:edge", engineVoice: "zh-CN-XiaoxiaoNeural",
   });
 });
 

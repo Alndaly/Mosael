@@ -158,16 +158,16 @@ def test_engine_list_marks_which_engines_need_a_typed_voice_id() -> None:
     client = fresh_client()
     engines = {item["id"]: item for item in client.get("/api/tts/engines").json()}
 
-    assert engines["clone"]["needs_key"] is False
+    assert engines["builtin:clone"]["needs_key"] is False
     # openai-tts 与 openai-compatible-tts 已并成一个 "openai":前者拆分是"能力要分开"的
     # 产物(能力现在挂模型行),后者存在的唯一理由是"要填自定义 endpoint",而档案本来就有
     # base_url 字段。旧 id 仍能被解析(REMOTE_SPEECH_ADAPTERS 里留作只读别名),但不再出现在列表里。
-    assert engines["openai"]["needs_voice_id"] is False and engines["openai"]["voices"]
+    assert engines["builtin:openai"]["needs_voice_id"] is False and engines["builtin:openai"]["voices"]
     assert "openai-tts" not in engines and "openai-compatible-tts" not in engines
     # 火山's catalogue is account-specific, but /api/tts/voices always answers with a list —
     # live when AK/SK are configured, built-in otherwise — so the panel offers a dropdown
     # rather than asking the user to type an opaque id.
-    assert engines["volcano"]["needs_voice_id"] is False and engines["volcano"]["voices"]
+    assert engines["builtin:volcano"]["needs_voice_id"] is False and engines["builtin:volcano"]["voices"]
 
 
 def test_自建兼容端点的_base_url_能走到引擎() -> None:
@@ -204,7 +204,7 @@ def test_自建兼容端点的_base_url_能走到引擎() -> None:
             json={
                 "workspace_id": workspace_id,
                 "text": "hello",
-                "engine": "openai",
+                "engine": "builtin:openai",
                 "engine_voice": "alloy",
             },
         )
@@ -249,7 +249,7 @@ def test_the_voice_resource_survives_the_hand_off_to_the_job_thread() -> None:
             json={
                 "workspace_id": workspace_id,
                 "text": "你好",
-                "engine": "volcano",
+                "engine": "builtin:volcano",
                 "engine_voice": "zh_male_custom_bigtts",
                 "engine_voice_resource": "seed-icl-2.0",
             },

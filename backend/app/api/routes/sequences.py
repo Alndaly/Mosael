@@ -508,7 +508,8 @@ def dub_subtitles(sequence_id: str, body: SubtitleDubRequest, db: DbSession, use
     """
     sequence = require_sequence_access(db, user, sequence_id, perm="edit")
     ensure_workspace_perm(db, user, sequence.workspace_id, "ai")
-    from app.domain.voices.engine_catalog import CLONE_ENGINE, synthesis_params
+    from app.domain.voices.engine_catalog import synthesis_params
+    from app.domain.voices.speech import CLONE_ENGINE
     from app.domain.voices.subtitle_dub import DubError, start_subtitle_dub
     from app.domain.voices.voices import VoiceError
 

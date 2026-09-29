@@ -42,13 +42,13 @@ def test_引擎清单_克隆在前_只列就绪的_不列播客(monkeypatch) -> 
     from app.domain.workflows.field_options import field_options
 
     monkeypatch.setattr(engine_catalog, "describe_engines", lambda db=None, user_id=None: [
-        {"id": "clone", "label": "ttsProvider_clone", "ready": False},
-        {"id": "edge", "label": "Edge", "ready": True},
-        {"id": "volcano", "label": "火山", "ready": False},
+        {"id": "builtin:clone", "label": "ttsProvider_clone", "ready": False},
+        {"id": "builtin:edge", "label": "Edge", "ready": True},
+        {"id": "builtin:volcano", "label": "火山", "ready": False},
         {"id": engine_catalog.PODCAST_ENGINE, "label": "播客", "ready": True},
     ])
     options = field_options(None, "speech_engines", _ctx())
-    assert [one["value"] for one in options] == ["clone", "edge"]
+    assert [one["value"] for one in options] == ["builtin:clone", "builtin:edge"]
     assert options[0]["label"] == "克隆音色(配音库)"
 
 
@@ -69,7 +69,7 @@ def test_音色清单跟着引擎变(monkeypatch) -> None:
         ])
         db.commit()
 
-        cloned = field_options(db, "speech_voices", _ctx(mine, parent="clone"))
+        cloned = field_options(db, "speech_voices", _ctx(mine, parent="builtin:clone"))
         assert [one["label"] for one in cloned] == ["我的嗓子"]
         #: 没选引擎时按克隆算 —— 和执行体一致。
         assert field_options(db, "speech_voices", _ctx(mine, parent="")) == cloned
@@ -77,14 +77,14 @@ def test_音色清单跟着引擎变(monkeypatch) -> None:
         monkeypatch.setattr(engine_catalog, "list_engine_voices", lambda db, engine, user_id: [
             {"value": f"{engine}-1", "label": "晓晓", "resource_id": "res"},
         ])
-        assert field_options(db, "speech_voices", _ctx(mine, parent="edge")) == [{"value": "edge-1", "label": "晓晓"}]
+        assert field_options(db, "speech_voices", _ctx(mine, parent="builtin:edge")) == [{"value": "builtin:edge-1", "label": "晓晓"}]
 
 
 def test_接口要工作区权限_来源写错说清楚() -> None:
     client = fresh_client()
     workspace = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
 
-    ok = client.get("/api/workflows/field-options", params={"source": "speech_voices", "workspace_id": workspace, "parent": "clone"})
+    ok = client.get("/api/workflows/field-options", params={"source": "speech_voices", "workspace_id": workspace, "parent": "builtin:clone"})
     assert ok.status_code == 200, ok.text
     assert ok.json() == []
 
@@ -116,7 +116,7 @@ class _VoiceDB:
         return type("V", (), {"id": key, "workspace_id": self.workspace_id})()
 
 
-@pytest.mark.parametrize("engine", ["", "clone"])
+@pytest.mark.parametrize("engine", ["", "builtin:clone"])
 def test_执行体把克隆音色交给克隆那条(engine, monkeypatch) -> None:
     from app.domain.workflows.executors import subjobs
 

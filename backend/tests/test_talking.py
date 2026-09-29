@@ -76,10 +76,10 @@ def _roles(fakes: Fakes) -> list[tuple[str, str]]:
 
 def test_人物说话_用它自己的嗓子配音_正面图加这段配音做说话照片(setup) -> None:
     client, ws, fakes = setup
-    person = _character(client, ws, voice_engine="edge", voice_id="zh-CN-XiaoxiaoNeural")
+    person = _character(client, ws, voice_engine="builtin:edge", voice_id="zh-CN-XiaoxiaoNeural")
     with SessionLocal() as db:
         out = talking.entity_speak(db, _scope(ws), {"entity_id": person, "text": "大家好,我是小美"})
-    assert fakes.spoken == [{"text": "大家好,我是小美", "engine": "edge", "voice": "zh-CN-XiaoxiaoNeural"}]
+    assert fakes.spoken == [{"text": "大家好,我是小美", "engine": "builtin:edge", "voice": "zh-CN-XiaoxiaoNeural"}]
     assert _roles(fakes) == [("face", "first_frame"), ("voice-1", "driving_audio")], "正面图是脸,不是挑图先后的第一张"
     assert fakes.generated[-1]["model"] == "wan2.2-s2v", "默认视频模型不会说话照片,就用第一个会的"
     assert out == {"asset_id": "talk", "asset_ids": ["talk"], "audio_asset_id": "voice-1"}
@@ -87,7 +87,7 @@ def test_人物说话_用它自己的嗓子配音_正面图加这段配音做说
 
 def test_人物说话的门槛_真人没声明_没音色_不是人物_都在起任务之前拦(setup) -> None:
     client, ws, fakes = setup
-    real = _character(client, ws, real_person=True, voice_engine="edge", voice_id="v")
+    real = _character(client, ws, real_person=True, voice_engine="builtin:edge", voice_id="v")
     mute = _character(client, ws)
     place = client.post("/api/entities", json={"workspace_id": ws, "kind": "location", "name": "天台"}).json()["id"]
     for entity_id, key in ((real, "wfErr_entitySpeakNoConsent"), (mute, "wfErr_entitySpeakNoVoice"),
@@ -100,7 +100,7 @@ def test_人物说话的门槛_真人没声明_没音色_不是人物_都在起�
 
 def test_图片格说话_没确认授权不跑_确认了用挑的嗓子(setup) -> None:
     _client, ws, fakes = setup
-    config = {"asset_id": "face", "text": "你好", "engine": "clone", "voice": "v1"}
+    config = {"asset_id": "face", "text": "你好", "engine": "builtin:clone", "voice": "v1"}
     with SessionLocal() as db, pytest.raises(WorkflowDomainError) as caught:
         talking.image_speak(db, _scope(ws), config)
     assert caught.value.key == "wfErr_talkingNeedsConsent" and fakes.spoken == []
@@ -146,7 +146,7 @@ def test_详情页上让真人说话_没声明就当场_422_不起任务(setup) 
     from app.db.models import Job
 
     client, ws, fakes = setup
-    real = _character(client, ws, real_person=True, voice_engine="edge", voice_id="v")
+    real = _character(client, ws, real_person=True, voice_engine="builtin:edge", voice_id="v")
     refused = client.post(f"/api/entities/{real}/draw", json={"ability": "speak", "text": "你好"})
     assert refused.status_code == 422 and "声明" in refused.json()["detail"]
     with SessionLocal() as db:

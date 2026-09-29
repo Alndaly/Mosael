@@ -7,6 +7,7 @@
  * 判据与后端同一套:**只认书写系统**。假名只出现在日文里、谚文只出现在韩文里,这是硬证据;
  * 汉字中日共用、拉丁字母几十种语言共用,证明不了任何事,所以不据此提示。
  */
+import { CLONE_ENGINE, EDGE_ENGINE } from "@/api/domains/speech";
 
 /** 平假名 + 片假名。 */
 const KANA = /[぀-ヿ]/g;
@@ -51,7 +52,7 @@ const VOICE_ID_LANGS = new Set(["zh", "en", "ja", "ko", "es", "fr", "de", "ru", 
 
 export function voiceLanguage(engine: string, voice: string): string {
   if (!voice) return "";
-  if (engine === "edge") {
+  if (engine === EDGE_ENGINE) {
     const head = voice.split("-", 1)[0]?.toLowerCase() ?? "";
     return head.length === 2 ? head : "";
   }
@@ -77,7 +78,7 @@ export function unspeakable(
   if (!script) return "";
   // 克隆引擎不是「只认中英」—— 那是**权重**的属性,而权重可以再下一份。写死在这里的话,
   // 用户下完日语模型仍然会被告知念不了(后端已经改成按权重判,前端一度还写着死的)。
-  if (engine === "clone") return cloneLanguages.includes(script) ? "" : script;
+  if (engine === CLONE_ENGINE) return cloneLanguages.includes(script) ? "" : script;
   const language = voiceLanguage(engine, voice);
   return language && language !== script ? script : "";
 }

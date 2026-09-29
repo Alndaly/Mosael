@@ -70,13 +70,13 @@ def test_没声明的克隆音色用于数字人_配音之前就拦(gate) -> Non
     client, ws, spoken = gate
     voice = make_voice(ws, "老王")
     scope = SimpleNamespace(workspace_id=ws, id="board:b", name="画板")
-    config = {"asset_id": "face", "text": "你好", "engine": "clone", "voice": voice, "consent": "yes"}
+    config = {"asset_id": "face", "text": "你好", "engine": "builtin:clone", "voice": voice, "consent": "yes"}
     with SessionLocal() as db, pytest.raises(WorkflowDomainError) as refused:
         talking.image_speak(db, scope, config)
     assert refused.value.key == "wfErr_voiceConsentMissing" and spoken == []
 
     person = client.post("/api/entities", json={"workspace_id": ws, "kind": "character", "name": "小美",
-                                                "attributes": {"voice_engine": "clone", "voice_id": voice}}).json()["id"]
+                                                "attributes": {"voice_engine": "builtin:clone", "voice_id": voice}}).json()["id"]
     client.post(f"/api/entities/{person}/references", json={"asset_id": "face", "role": "front"})
     with SessionLocal() as db, pytest.raises(WorkflowDomainError) as refused:
         talking.check_entity_speak(db, ws, {"entity_id": person, "text": "你好"}, None)
@@ -89,8 +89,8 @@ def test_引擎自带的嗓子不是谁的克隆_不问声明(gate) -> None:
     _client, ws, _spoken = gate
     voice = make_voice(ws)
     with SessionLocal() as db:
-        _require_voice_consent(db, "edge", "zh-CN-XiaoxiaoNeural")
+        _require_voice_consent(db, "builtin:edge", "zh-CN-XiaoxiaoNeural")
         db.get(Voice, voice).consent_kind = "self"
         db.commit()
-        _require_voice_consent(db, "clone", voice)
+        _require_voice_consent(db, "builtin:clone", voice)
         _require_voice_consent(db, "", voice)

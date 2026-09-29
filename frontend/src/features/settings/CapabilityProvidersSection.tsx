@@ -24,6 +24,7 @@ import {
   SettingsItemNote,
   SettingsItemRow,
   SettingsItemState,
+  SettingsTag,
 } from "@/components/settings/settings-layout";
 import { Button } from "@/components/ui/button";
 
@@ -35,7 +36,52 @@ const NONE_HINT: Record<string, MessageKey> = { public_url: "assetLinkNone" };
 
 export function CapabilityProvidersSection() {
   const state = useQuery({ queryKey: KEY, queryFn: listCapabilityChoices });
-  return <>{(state.data ?? []).map((choices) => <CapabilityGroup key={choices.capability} choices={choices} />)}</>;
+  return (
+    <>
+      {(state.data ?? []).map((choices) =>
+        choices.defaultable === false
+          ? <ProvidersOnlyGroup key={choices.capability} choices={choices} />
+          : <CapabilityGroup key={choices.capability} choices={choices} />,
+      )}
+    </>
+  );
+}
+
+/**
+ * 没有「默认用哪家」的能力(配音:引擎和音色成对选,每个入口都点名)。不摆选择器 —— 摆了也改变不了任何地方 ——
+ * 只列有哪几家、没配好的缺什么、用在哪。
+ */
+function ProvidersOnlyGroup({ choices }: { choices: Choices }) {
+  const t = useI18n();
+  const options = choices.options ?? [];
+  const ready = options.filter((option) => (option.missing ?? []).length === 0);
+  const unready = options.filter((option) => (option.missing ?? []).length > 0);
+  const uses = choices.used_by ?? [];
+  return (
+    <SettingsGroup title={choices.label} description={toPlainText(choices.description)}>
+      <SettingsItemRow
+        label={t("capabilityProviders")}
+        description={t("capabilityNoDefault")}
+        notes={
+          <>
+            {ready.length > 0 && (
+              <div data-capability-ready="" className="flex flex-wrap gap-1.5 pt-1">
+                {ready.map((option) => <SettingsTag key={option.id}>{option.name}</SettingsTag>)}
+              </div>
+            )}
+            {unready.map((option) => (
+              <SettingsItemNote key={option.id} icon={<CircleDashed size={13} aria-hidden />}>
+                {t(option.builtin ? "capabilityBuiltinUnready" : "assetLinkMissing")
+                  .replace("{name}", option.name)
+                  .replace("{fields}", (option.missing ?? []).join(t("listSeparator")))}
+              </SettingsItemNote>
+            ))}
+          </>
+        }
+        footer={uses.length > 0 ? <CapabilityUseList uses={uses} label={t("capabilityUsedBy")} /> : undefined}
+      />
+    </SettingsGroup>
+  );
 }
 
 function CapabilityGroup({ choices }: { choices: Choices }) {

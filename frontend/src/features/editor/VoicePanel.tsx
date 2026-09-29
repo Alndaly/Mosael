@@ -6,6 +6,7 @@ import { SubtitleDub } from "@/features/editor/SubtitleDub";
 import { SpeechVoiceFields } from "@/features/voice/SpeechVoiceFields";
 import { useSpeechVoice } from "@/features/voice/useSpeechVoice";
 import { VoiceLibrary } from "@/features/voice/VoiceLibrary";
+import { CLONE_ENGINE } from "@/api/domains/speech";
 
 /**
  * 剪辑台的「配音」页:**只管和这条时间线有关的声音** —— 给字幕配音,以及它要用的音色库。
@@ -38,7 +39,7 @@ export function VoicePanel({
           <SubtitleDub sequence={sequence} voice={voice} onOpenSubtitles={onOpenSubtitles} />
         </div>
         {/* 音色库只服务本地克隆;远端引擎有自己的目录,在它们下面摆这个库暗示了一层不存在的关系。 */}
-        {voice.engine === "clone" && (
+        {voice.engine === CLONE_ENGINE && (
           <VoiceLibrary
             workspace={workspace}
             project={project}

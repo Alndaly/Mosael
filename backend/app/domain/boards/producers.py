@@ -286,7 +286,8 @@ def _start_write(db: Session, request: RunRequest, form: WriteForm) -> Board:
 
 
 def _start_speak(db: Session, request: RunRequest, form: SpeakForm) -> Board:
-    from app.domain.voices.engine_catalog import CLONE_ENGINE, synthesis_params
+    from app.domain.voices.engine_catalog import synthesis_params
+    from app.domain.voices.speech import CLONE_ENGINE
 
     engine = form.engine.strip() or CLONE_ENGINE
     # 引擎音色和克隆音色两条都要能走(此前只传 voice_id,画板配音只认克隆音色)。

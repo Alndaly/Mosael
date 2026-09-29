@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 import React from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import { expect, it, vi } from "vitest";
 
 /**
@@ -26,6 +26,12 @@ const listed = [
     options: [{ id: "builtin:local", name: "本地解析", builtin: true, missing: [] }, { id: "m1", name: "MinerU 云端", builtin: false, missing: [] }] },
   { capability: "audio_separation", label: "分离人声", description: "拆人声", current: null, automatic: "builtin:demucs",
     options: [{ id: "builtin:demucs", name: "Demucs(本机)", builtin: true, missing: [] }] },
+  { capability: "speech", label: "配音", description: "念字", current: null, automatic: null, defaultable: false,
+    options: [
+      { id: "builtin:clone", name: "本地音色克隆", builtin: true, missing: [] },
+      { id: "builtin:openai", name: "OpenAI", builtin: true, missing: ["还没配好这家的连接"] },
+    ],
+    used_by: [{ kind: "app", label: "剪辑页字幕:「配音」" }] },
   { capability: "public_url", label: "素材外链", description: "换直链", current: null, automatic: null, options: [] },
 ];
 vi.mock("@/api/domains/capabilities", () => ({ listCapabilityChoices: vi.fn(async () => listed), setCapabilityDefault: vi.fn() }));
@@ -74,9 +80,11 @@ it("几个内置实现并列可选:自动用的那个就是「不指定」,别�
     </QueryClientProvider>,
   );
   await waitFor(() => expect(screen.getByText("降噪")).toBeTruthy());
-  const picker = container.querySelector<HTMLElement>("[data-picker]")!;
+  const denoise = screen.getByText("降噪").closest('[data-slot="settings-group"]') as HTMLElement;
+  const picker = denoise.querySelector<HTMLElement>("[data-picker]")!;
   expect([...picker.querySelectorAll("li")].map((one) => one.textContent)).toEqual(["内置降噪", "DeepFilterNet", "云端降噪"]);
-  expect(screen.getByText("capabilityBuiltinUnready")).toBeTruthy();
+  expect(within(denoise).getByText("capabilityBuiltinUnready")).toBeTruthy();
+  expect(container.querySelectorAll("[data-picker]").length).toBeGreaterThan(1);
 });
 
 it("每项能力下面列「用在哪」,照接口给的逐条列;接口没给就不画这一行", async () => {
@@ -86,8 +94,27 @@ it("每项能力下面列「用在哪」,照接口给的逐条列;接口没给�
     </QueryClientProvider>,
   );
   await waitFor(() => expect(screen.getByText("降噪")).toBeTruthy());
-  const lists = container.querySelectorAll("[data-capability-uses]");
+  const denoise = screen.getByText("降噪").closest('[data-slot="settings-group"]') as HTMLElement;
+  const lists = denoise.querySelectorAll("[data-capability-uses]");
   expect(lists).toHaveLength(1);
+  //: 分离人声、文档解析、外链的样例数据没给 used_by —— 那几组不画这一行。
+  expect(container.querySelectorAll("[data-capability-uses]")).toHaveLength(2);
   expect([...lists[0].querySelectorAll<HTMLElement>("[data-capability-use]")].map((one) => one.dataset.capabilityUse)).toEqual(["app", "workflow", "agent"]);
   expect(lists[0].textContent).toContain("工作流节点「降噪」的「引擎」");
+});
+
+it("没有默认的能力(配音)不摆选择器:列有哪几家、缺什么、用在哪", async () => {
+  const { container } = render(
+    <QueryClientProvider client={new QueryClient()}>
+      <CapabilityProvidersSection />
+    </QueryClientProvider>,
+  );
+  await waitFor(() => expect(screen.getByText("配音")).toBeTruthy());
+  const group = screen.getByText("配音").closest('[data-slot="settings-group"]') as HTMLElement;
+  expect(group.querySelector("[data-picker]")).toBeNull();
+  expect(group.textContent).toContain("capabilityNoDefault");
+  expect(group.querySelector("[data-capability-ready]")?.textContent).toBe("本地音色克隆");
+  expect(group.textContent).toContain("capabilityBuiltinUnready");
+  expect(group.querySelectorAll("[data-capability-use]")).toHaveLength(1);
+  expect(container.querySelectorAll("[data-picker]").length).toBeGreaterThan(0);
 });

@@ -33,7 +33,7 @@ def _scope(ws: str):
 
 def test_取资产_点名一个_交出提示词描述和按挑图先后排的参考图() -> None:
     client, ws = _setup()
-    made = _character(client, ws, prompt="短发,校服", attributes={"voice_engine": "edge", "voice_id": "zh-CN-XiaoxiaoNeural"})
+    made = _character(client, ws, prompt="短发,校服", attributes={"voice_engine": "builtin:edge", "voice_id": "zh-CN-XiaoxiaoNeural"})
     for asset_id, role in (("side", "side"), ("front", "front"), ("sheet", "turnaround"), ("clip", "concept")):
         client.post(f"/api/entities/{made['id']}/references", json={"asset_id": asset_id, "role": role})
     with SessionLocal() as db:
@@ -41,7 +41,7 @@ def test_取资产_点名一个_交出提示词描述和按挑图先后排的参
     assert out["found"] == 1 and out["name"] == "林小满" and out["prompt"] == "短发,校服"
     assert out["asset_ids"] == ["sheet", "front", "side"], "三视图 > 正面 > 其余;视频不交"
     assert out["asset_id"] == "sheet", "没设封面时是挑图顺序的第一张"
-    assert (out["voice_engine"], out["voice_id"]) == ("edge", "zh-CN-XiaoxiaoNeural")
+    assert (out["voice_engine"], out["voice_id"]) == ("builtin:edge", "zh-CN-XiaoxiaoNeural")
 
     variant = client.post(f"/api/entities/{made['id']}/variants", json={"name": "冬装", "prompt": "羽绒服"}).json()
     client.post(f"/api/entities/{variant['id']}/references", json={"asset_id": "winter"})

@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "视频译配 · 字幕与配音",
   "description": "把一段视频逐句转写、逐句翻译，按原时间码铺上译文字幕，再逐条配音并变速压回原段落长度。原声里的人声拆出去、背景音乐留着；开始前需装好人声分离引擎。",
-  "graph_hash": "655b7f4c16d3230d06883a955eb656146191033d10655a8e9679012d7bf640c4",
+  "graph_hash": "4ab31b9edbf1f5e650b50fb9295f713c0978c2317f4be8b499e70ae88b39ef54",
   "graph": {
     "meta": {
       "template_id": "translated_dub",
@@ -146,7 +146,7 @@
           "match_duration": "yes",
           "line": "all",
           "original_audio": "separate",
-          "engine": "clone",
+          "engine": "builtin:clone",
           "voice": ""
         },
         "inputs": [

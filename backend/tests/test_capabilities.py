@@ -50,7 +50,7 @@ def _documents(client) -> dict:
 def test_设置页按能力表列出每一项能力() -> None:
     client = fresh_client()
     listed = client.get("/api/settings/capabilities").json()
-    assert [one["capability"] for one in listed] == ["audio_denoise", "audio_separation", "document_parse", "public_url", "transcription", "translation"]
+    assert [one["capability"] for one in listed] == ["audio_denoise", "audio_separation", "document_parse", "public_url", "speech", "transcription", "translation"]
     #: 本机引擎是内置提供方(ADR 0032),和插件连接并列;没定默认用第一个允许自动、跑得起来的。
     denoise = listed[0]
     assert [one["id"] for one in denoise["options"]][:1] == ["builtin:ffmpeg"] and denoise["automatic"] == "builtin:ffmpeg"

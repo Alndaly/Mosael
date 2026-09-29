@@ -32,9 +32,9 @@ afterEach(() => { globalThis.fetch = originalFetch; });
 beforeEach(() => localStorage.clear());
 
 const ENGINES = [
-  { id: "clone", label: "本地音色克隆", needs_key: false, needs_voice_id: false, voices: [], ready: true },
-  { id: "edge", label: "Edge TTS", needs_key: false, needs_voice_id: false, voices: [], ready: true },
-  { id: "volcano-podcast", label: "火山播客", needs_key: true, needs_voice_id: false, voices: [], ready: true },
+  { id: "builtin:clone", label: "本地音色克隆", needs_key: false, needs_voice_id: false, voices: [], ready: true },
+  { id: "builtin:edge", label: "Edge TTS", needs_key: false, needs_voice_id: false, voices: [], ready: true },
+  { id: "builtin:volcano-podcast", label: "火山播客", needs_key: true, needs_voice_id: false, voices: [], ready: true },
 ];
 
 const ASSETS = [
@@ -53,7 +53,7 @@ function renderWorkspace({ engines = ENGINES, voices = [] as unknown[] } = {}) {
     }
     const body = url.includes("/tts/engines")
       ? engines
-      : url.includes("/tts/voices?engine=volcano-podcast")
+      : url.includes("/tts/voices?engine=builtin%3Avolcano-podcast")
         ? [{ value: "host-a", label: "主持人 A" }, { value: "host-b", label: "主持人 B" }]
         : url.includes("/tts/voices")
           ? [{ value: "edge-voice", label: "Edge Voice" }]
@@ -92,7 +92,7 @@ describe("语音", () => {
 
     await waitFor(() => expect(posts).toHaveLength(1));
     expect(posts[0].url).toContain("/api/tts/synthesize");
-    expect(posts[0].body).toMatchObject({ workspace_id: "w1", text: "你好", engine: "edge", engine_voice: "edge-voice" });
+    expect(posts[0].body).toMatchObject({ workspace_id: "w1", text: "你好", engine: "builtin:edge", engine_voice: "edge-voice" });
     // 这一页不绑项目 —— 产物是工作区级的素材。
     expect(posts[0].body.project_id).toBeUndefined();
   });
@@ -133,7 +133,7 @@ describe("播客", () => {
   });
 
   it("没配播客服务:给去配置的入口,不摆表单", async () => {
-    renderWorkspace({ engines: ENGINES.filter((engine) => engine.id !== "volcano-podcast") });
+    renderWorkspace({ engines: ENGINES.filter((engine) => engine.id !== "builtin:volcano-podcast") });
     await openPodcast();
     expect(await screen.findByRole("button", { name: /audioConfigurePodcast/ })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /voiceGenerate/ })).toBeNull();

@@ -225,7 +225,7 @@ class TestDispatchWiring:
         with SessionLocal() as db:
             job = start_synthesis(
             db,
-            created_by=None, text="你好", project_id=None, workspace_id=workspace_id, engine="f5")
+            created_by=None, text="你好", project_id=None, workspace_id=workspace_id, engine="builtin:edge")
             db.refresh(job)
             assert job.status == "queued"
             assert claim_next_job(db, kinds=["tts"]).id == job.id

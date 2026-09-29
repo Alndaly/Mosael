@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "Montage from your own footage",
   "description": "Pull a tagged batch of footage you already shot, let the model order the story, decide which clip each beat uses and how long it runs, and write the narration; then lay every segment on the timeline in order, speak and caption each one, and export. Nothing is generated — the picture is your own footage, and without a configured voice it falls back to captions only.",
-  "graph_hash": "e9c2dc0c4528c237b7050a1e76ac2c33baac88ecdba11674a6a5750b8eb3f644",
+  "graph_hash": "dcfc2eb973d6a57a7ba697ad66b793c84dc396d47925c56d00f8788609c3164a",
   "graph": {
     "meta": {
       "template_id": "footage_montage",
@@ -253,7 +253,7 @@
                 },
                 "config": {
                   "text": "{{loop.item.narration}}",
-                  "engine": "clone",
+                  "engine": "builtin:clone",
                   "voice": "{{input.voice_id}}"
                 }
               },

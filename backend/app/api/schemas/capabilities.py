@@ -35,6 +35,8 @@ class CapabilityChoicesOut(ApiModel):
     current: str | None = None
     #: 不定的话会用的那一家(有内置实现就是它;没有的只有一家配好时才有),和现在定没定无关。
     automatic: str | None = None
+    #: 有没有「默认用哪家」。配音没有(引擎和音色成对选,每个入口都点名):设置页只列候选和用在哪。
+    defaultable: bool = True
     options: list[CapabilityProviderOut] = Field(default_factory=list)
     used_by: list[CapabilityUseOut] = Field(default_factory=list)
 

@@ -767,7 +767,7 @@ def product_pitch_short_graph(*, chat: Any, image: Any, voice_id: str = "", pres
             "position": {"x": 970, "y": 480},
             "config": {
                 "text": "{{pitch_script.json.hook_line}}\n{{pitch_script.json.call_to_action}}",
-                "engine": "clone",
+                "engine": "builtin:clone",
                 "voice": "{{start.voice_id}}",
             },
         },
@@ -1106,7 +1106,7 @@ def talking_script_video_graph(*, voice_id: str = "") -> dict[str, Any]:
             "type": "talking_segments",
             "name": {"zh": "长稿分段配音", "en": "Voice the script in segments"},
             "position": {"x": 330, "y": 400},
-            "config": {"text": "{{start.script}}", "engine": "clone", "voice": "{{start.voice_id}}", "model": ""},
+            "config": {"text": "{{start.script}}", "engine": "builtin:clone", "voice": "{{start.voice_id}}", "model": ""},
         },
         {
             "id": "project",
@@ -1587,7 +1587,7 @@ def footage_montage_graph(*, chat: Any, voice_id: str = "") -> dict[str, Any]:
             "type": "synthesize_speech",
             "name": {"zh": "念这一段的旁白", "en": "Speak this segment's narration"},
             "position": {"x": 1040, "y": 300},
-            "config": {"text": "{{loop.item.narration}}", "engine": "clone", "voice": "{{input.voice_id}}"},
+            "config": {"text": "{{loop.item.narration}}", "engine": "builtin:clone", "voice": "{{input.voice_id}}"},
         },
         {
             "id": "place_voice",

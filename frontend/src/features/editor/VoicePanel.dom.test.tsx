@@ -90,9 +90,9 @@ function renderPanel({ voices: voiceData = voices, texts = ["一条字幕"], wei
           ? { engine: "f5-tts", python_path: "", source: "modelscope" }
           : url.includes("/tts/engines")
             ? [
-                { id: "clone", label: "本地音色克隆", needs_key: false, needs_voice_id: false, voices: [], note: "clone note", ready: true },
-                { id: "edge", label: "Edge TTS", needs_key: false, needs_voice_id: false, voices: [], ready: true },
-                { id: "volcano-podcast", label: "火山播客", needs_key: true, needs_voice_id: false, voices: [], ready: true },
+                { id: "builtin:clone", label: "本地音色克隆", needs_key: false, needs_voice_id: false, voices: [], note: "clone note", ready: true },
+                { id: "builtin:edge", label: "Edge TTS", needs_key: false, needs_voice_id: false, voices: [], ready: true },
+                { id: "builtin:volcano-podcast", label: "火山播客", needs_key: true, needs_voice_id: false, voices: [], ready: true },
               ]
             : url.includes("/tts/voices")
               ? [{ value: "edge-voice", label: "Edge Voice" }]
@@ -308,7 +308,7 @@ describe("给字幕配音", () => {
     await waitFor(() => expect(apply).toBeEnabled());
     await user.click(apply);
     await waitFor(() => expect(dubRequests).toHaveLength(1));
-    expect(dubRequests[0]).toMatchObject({ clip_ids: ["c1"], engine: "clone", voice_id: "v1", clone_engine: "f5-tts", speed: 1 });
+    expect(dubRequests[0]).toMatchObject({ clip_ids: ["c1"], engine: "builtin:clone", voice_id: "v1", clone_engine: "f5-tts", speed: 1 });
   });
 
   it("日文字幕 + 本地克隆:当场说缺哪份权重,并把下载放在手边", async () => {

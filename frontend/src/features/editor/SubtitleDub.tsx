@@ -16,6 +16,7 @@ import type { SpeechVoice } from "@/features/voice/useSpeechVoice";
 import { useWatchedJob } from "@/lib/useWatchedJob";
 import { formatBytes } from "@/lib/bytes";
 import { useEditorStore } from "@/features/editor/editorStore";
+import { CLONE_ENGINE } from "@/api/domains/speech";
 
 type Line = "all" | "first" | "last";
 
@@ -63,7 +64,7 @@ export function SubtitleDub({
   //: 用哪份 F5 权重。空 = 按文字自动挑 —— 中日韩俄阿印能认出来,而法德西意芬都写拉丁字母,
   //: 没有任何字符能证明"这是法语而不是英语",只能由用户明说。
   const [weights, setWeights] = React.useState(NONE);
-  const usesF5 = voice.engine === "clone" && voice.cloneEngine === "f5-tts";
+  const usesF5 = voice.engine === CLONE_ENGINE && voice.cloneEngine === "f5-tts";
   const f5Models = useQuery({
     queryKey: ["f5-models"],
     queryFn: listF5Models,
@@ -90,7 +91,7 @@ export function SubtitleDub({
   // **默认就选对**:用户还没亲手挑过发音人时,按字幕的文字挑一个念得了的。挑过就不再覆盖。
   const { engine, engineVoiceChoice, voiceChoices, setEngineVoice } = voice;
   React.useEffect(() => {
-    if (engine === "clone" || engineVoiceChoice || voiceChoices.length === 0) return;
+    if (engine === CLONE_ENGINE || engineVoiceChoice || voiceChoices.length === 0) return;
     const match = pickVoiceFor(wantScript, engine, voiceChoices);
     if (match) setEngineVoice(match);
   }, [engine, engineVoiceChoice, voiceChoices, wantScript, setEngineVoice]);
@@ -100,12 +101,12 @@ export function SubtitleDub({
   // 克隆能念什么是 **F5 权重**的属性;Fish Speech 一份模型念多语,不拿 F5 的清单去判它。
   // 权重清单还没到时也不判 —— 空清单会把每一种语言都说成念不了。
   const mismatch =
-    engine === "clone" && (!usesF5 || !f5Models.isSuccess)
+    engine === CLONE_ENGINE && (!usesF5 || !f5Models.isSuccess)
       ? ""
       : unspeakable(
           texts,
           engine,
-          engine === "clone" ? "" : voice.engineVoice,
+          engine === CLONE_ENGINE ? "" : voice.engineVoice,
           installedWeights.flatMap((model) => model.languages ?? []),
         );
   const langName = mismatch ? t(`langName_${mismatch}` as never) : "";

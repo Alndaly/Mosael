@@ -1,6 +1,6 @@
 """语音合成有两条路,每个调用方都要能走通它声称支持的那一条。
 
-`start_synthesis` 的分叉在 `engine` 上,而它的**默认值是 `"clone"`** —— clone 那条必须查到
+`start_synthesis` 的分叉在 `engine` 上,而它的**默认值是 `"builtin:clone"`** —— clone 那条必须查到
 一行 Voice。于是一个只传 voice_id 的调用方就永远只能用克隆音色,**而没有任何一处写着这件事**:
 是那个默认值替它做的决定。工作流的 synthesize_speech 节点和画板配音都这么漏过,表现是用户
 选了引擎音色却毫无作用 —— 没有报错,只是那个参数根本没被送下去。
@@ -62,8 +62,8 @@ class Test工作流节点:
             engine_catalog, "list_engine_voices",
             lambda db, engine, user_id: [{"value": "zh_female_x", "label": "x", "resource_id": "res-9"}],
         )
-        self._run({"text": "念一句", "engine": "volcano", "voice": "zh_female_x", "speed": 1.25}, monkeypatch)
-        assert captured["engine"] == "volcano"
+        self._run({"text": "念一句", "engine": "builtin:volcano", "voice": "zh_female_x", "speed": 1.25}, monkeypatch)
+        assert captured["engine"] == "builtin:volcano"
         assert captured["engine_voice"] == "zh_female_x"
         assert captured["engine_voice_resource"] == "res-9"
         assert "voice_id" not in captured, "引擎那条不该收到克隆那条的参数"
@@ -72,20 +72,20 @@ class Test工作流节点:
         assert captured["workspace_id"] == "ws-1"
 
     def test_克隆时音色就是配音库里的那一个(self, captured, monkeypatch) -> None:
-        self._run({"text": "念一句", "engine": "clone", "voice": "v-1"}, monkeypatch)
-        assert captured["engine"] == "clone"
+        self._run({"text": "念一句", "engine": "builtin:clone", "voice": "v-1"}, monkeypatch)
+        assert captured["engine"] == "builtin:clone"
         assert captured["voice_id"] == "v-1"
         assert "engine_voice" not in captured
 
     def test_没填引擎按克隆算(self, captured, monkeypatch) -> None:
         self._run({"text": "念一句", "voice": "v-1"}, monkeypatch)
-        assert captured["engine"] == "clone" and captured["voice_id"] == "v-1"
+        assert captured["engine"] == "builtin:clone" and captured["voice_id"] == "v-1"
 
     def test_没选音色时直说(self, captured, monkeypatch) -> None:
         from app.domain.workflows import WorkflowDomainError
 
         with pytest.raises(WorkflowDomainError, match="没有选音色"):
-            self._run({"text": "念一句", "engine": "edge"}, monkeypatch)
+            self._run({"text": "念一句", "engine": "builtin:edge"}, monkeypatch)
 
 
 class Test画板配音:
@@ -113,7 +113,7 @@ def test_音色是一格_清单跟着引擎变() -> None:
         keys = list(config)
         #: 顺序就是界面顺序:先说嗓子从哪来,再挑一把。
         assert keys.index("engine") + 1 == keys.index("voice"), keys
-        assert config["engine"]["default"] == "clone"
+        assert config["engine"]["default"] == "builtin:clone"
         assert config["engine"]["options_from"] in SOURCES
         assert config["voice"]["options_from"] in SOURCES
         assert config["voice"]["depends_on"] == "engine"

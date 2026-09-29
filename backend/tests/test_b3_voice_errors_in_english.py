@@ -53,7 +53,7 @@ def test_language_guard_names_the_language_in_english() -> None:
     from app.domain.voices.voices import VoiceError, _refuse_if_unspeakable
 
     with pytest.raises(VoiceError) as caught:
-        _refuse_if_unspeakable("三日前のだったらちょっとお腹壊しちゃうかな", "edge", "zh-CN-XiaoxiaoNeural", "")
+        _refuse_if_unspeakable("三日前のだったらちょっとお腹壊しちゃうかな", "builtin:edge", "zh-CN-XiaoxiaoNeural", "")
 
     assert _en(caught.value) == "This text is Japanese, but the selected Edge voice is zh. Pick a voice that starts with ja-."
     assert "日文" not in _en(caught.value)

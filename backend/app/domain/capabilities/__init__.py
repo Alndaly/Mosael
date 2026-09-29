@@ -48,8 +48,10 @@ class Builtin:
     id: str
     #: 在设置页和结果上叫什么(i18n key)。
     name_key: str
-    #: 此刻缺什么(没装依赖、没拉权重、缺 Key):回一串给人看的说明,空 = 跑得起来。不给 = 总是跑得起来。
-    ready: Callable[[], tuple[str, ...]] | None = None
+    #: 这个人此刻缺什么(没装依赖、没拉权重、没配那条连接):`ready(db, owner_user_id)` 回一串给人看的说明,
+    #: 空 = 跑得起来。不给 = 总是跑得起来。带着人:要钥匙的内置实现(配音的 OpenAI、翻译的对话模型)看的是**他**
+    #: 配没配好 —— 钥匙归人。
+    ready: Callable[[Session, str | None], tuple[str, ...]] | None = None
     #: 没人定默认时能不能自动用它。会顺手去掉配乐的语音降噪模型就不能 —— 用户说「降噪」没要求把音乐拿掉。
     automatic: bool = True
 
@@ -76,6 +78,9 @@ class Capability:
     #: 没定默认、也没有内置实现时,只有一家配好就不问直接用。**数据会离开本机的能力**(文档交给云端解析)
     #: 不该这样:用哪家必须他自己定过。
     auto_single: bool = True
+    #: 这项能力有没有「默认用哪家」。配音没有:引擎和音色是成对选的(克隆音色的 id 换到 Edge 上就是错的),
+    #: 每个入口都点名 —— 设置页只列候选和「用在哪」,不给默认的选择器。
+    defaultable: bool = True
 
 
 @dataclass(frozen=True)
@@ -205,15 +210,16 @@ def plugin_providers(db: Session, owner_user_id: str | None, capability: Capabil
     return sorted(found, key=lambda one: one.name)
 
 
-def _builtins(capability: Capability) -> list[Provider]:
-    return [Provider(id=one.id, name=tr(one.name_key), builtin=True, missing=tuple(one.ready() if one.ready else ()),
+def _builtins(db: Session, owner_user_id: str | None, capability: Capability) -> list[Provider]:
+    return [Provider(id=one.id, name=tr(one.name_key), builtin=True,
+                     missing=tuple(one.ready(db, owner_user_id) if one.ready else ()),
                      extra={"automatic": one.automatic})
             for one in capability.builtins]
 
 
 def providers(db: Session, owner_user_id: str | None, capability: Capability) -> list[Provider]:
     """全部候选:内置的在前(按契约给的先后),再是插件连接。"""
-    return _builtins(capability) + plugin_providers(db, owner_user_id, capability)
+    return _builtins(db, owner_user_id, capability) + plugin_providers(db, owner_user_id, capability)
 
 
 def _default_id(db: Session, owner_user_id: str | None, capability: Capability) -> str | None:
@@ -246,6 +252,8 @@ def choices(db: Session, owner_user_id: str, capability: Capability) -> dict[str
         "current": chosen,
         #: **不选的话**会用哪一家 —— 和当前选没选无关(选定之后它不改口)。
         "automatic": automatic.id if automatic else None,
+        #: 没有「默认用哪家」的能力(配音):设置页只列候选和用在哪。
+        "defaultable": capability.defaultable,
         "options": [{"id": one.id, "name": one.name, "builtin": one.builtin, "missing": list(one.missing)}
                     for one in candidates],
         #: 定了这一家,哪些地方跟着换(ADR 0032 §4)。
@@ -313,8 +321,10 @@ def set_default(db: Session, owner_user_id: str, capability: Capability, provide
     RNNoise)是一次真的选择,照样存。"""
     from app.domain.plugins import capability_defaults
 
+    if not capability.defaultable:
+        raise capability.error("capErr_notDefaultable", name=tr(capability.label_key))
     #: 选的是「不定时本来就会用的那一家」= 清掉:以后内置实现换了先后,跟着走。
-    automatic = _automatic(capability, _builtins(capability))
+    automatic = _automatic(capability, _builtins(db, owner_user_id, capability))
     if provider_id is None or (automatic is not None and provider_id == automatic.id):
         capability_defaults.set_default(db, owner_user_id, capability.name, None)
         return

@@ -1040,7 +1040,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
             "engine": {
                 "type": "string",
                 # 留空 = 克隆,和执行体一致。
-                "default": "clone",
+                "default": "builtin:clone",
                 "options_from": "speech_engines",
                 "description": "wfNode_speech_engine",
             },
@@ -1350,7 +1350,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
             # 和「语音合成」同一对字段、同一份声明(见那里的说明)。
             "engine": {
                 "type": "string",
-                "default": "clone",
+                "default": "builtin:clone",
                 "options_from": "speech_engines",
                 "description": "wfNode_speech_engine",
             },
@@ -1558,7 +1558,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
             "audio_asset_id": {"type": "template", "media": "audio", "board_host": False,
                                 "description": "wfNode_image_speak_audio"},
             "text": {"type": "template", "description": "wfNode_image_speak_text"},
-            "engine": {"type": "string", "default": "clone", "options_from": "speech_engines", "description": "wfNode_speech_engine"},
+            "engine": {"type": "string", "default": "builtin:clone", "options_from": "speech_engines", "description": "wfNode_speech_engine"},
             "voice": {"type": "string", "depends_on": "engine", "options_from": "speech_voices", "description": "wfNode_speech_voice"},
             "model": {"type": "string", "options_from": "speech_video_models", "description": "wfNode_talking_model"},
             "consent": {"type": "string", "required": True, "options": ["yes"], "description": "wfNode_talking_consent"},
@@ -1581,7 +1581,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
             "audio_asset_id": {"type": "template", "media": "audio", "board_host": False,
                                 "description": "wfNode_video_lipsync_audio"},
             "text": {"type": "template", "description": "wfNode_video_lipsync_text"},
-            "engine": {"type": "string", "default": "clone", "options_from": "speech_engines", "description": "wfNode_speech_engine"},
+            "engine": {"type": "string", "default": "builtin:clone", "options_from": "speech_engines", "description": "wfNode_speech_engine"},
             "voice": {"type": "string", "depends_on": "engine", "options_from": "speech_voices", "description": "wfNode_speech_voice"},
             "model": {"type": "string", "options_from": "lipsync_models", "description": "wfNode_talking_model"},
             "consent": {"type": "string", "required": True, "options": ["yes"], "description": "wfNode_talking_consent"},
@@ -1615,7 +1615,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "description": "wfNode_talking_segments_desc",
         "config": {
             "text": {"type": "template", "required": True, "description": "wfNode_talking_segments_text"},
-            "engine": {"type": "string", "default": "clone", "options_from": "speech_engines", "description": "wfNode_speech_engine"},
+            "engine": {"type": "string", "default": "builtin:clone", "options_from": "speech_engines", "description": "wfNode_speech_engine"},
             "voice": {"type": "string", "depends_on": "engine", "options_from": "speech_voices", "description": "wfNode_speech_voice"},
             "model": {"type": "string", "options_from": "speech_video_models", "description": "wfNode_talking_segments_model"},
             "max_seconds": {"advanced": True, "type": "number", "description": "wfNode_talking_segments_max_seconds"},

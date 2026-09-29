@@ -42,7 +42,9 @@ def _setup():
 def test_翻译插件和内置两家并列_节点下拉里都在() -> None:
     client, ws, _me, plugin = _setup()
     options = client.get("/api/workflows/field-options", params={"workspace_id": ws, "source": "providers.translation"}).json()
-    assert {"builtin:google", "builtin:chat", plugin} <= {one["value"] for one in options}
+    #: 对话模型那一家要他自己有一条对话连接,这里没有,所以下拉里不列。
+    assert {"builtin:google", plugin} <= {one["value"] for one in options}
+    assert "builtin:chat" not in {one["value"] for one in options}
 
 
 def test_字幕翻译接口点名插件_空串占位_顺序对齐() -> None:

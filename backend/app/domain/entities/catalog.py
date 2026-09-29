@@ -51,7 +51,7 @@ DEFAULT_ROLE: dict[str, str] = {"character": "front", "location": "concept", "pr
 
 #: 音色库(本地克隆)这个引擎的名字 —— 和 voices.engine_catalog.CLONE_ENGINE 是同一个值;这里不 import 它,
 #: 词表这一层不依赖配音引擎的装配。
-VOICE_LIBRARY_ENGINE = "clone"
+VOICE_LIBRARY_ENGINE = "builtin:clone"
 
 #: 真人 / 虚构的授权声明(数字人方案「合规」一节)。真人要 `self` 或 `authorized` 才能用于数字人功能。
 CONSENT_KINDS: tuple[str, ...] = ("self", "authorized", "fictional")

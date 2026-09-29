@@ -5,6 +5,8 @@
 `audio`,和既有的 `audio → ai` 撞成环(见 tests/test_import_layering)。
 
 界线因此是清楚的:**"怎么跟这家说话"在 ai,"这个部署现在能用什么"在这里。**
+
+配音是一项宿主能力(ADR 0032 第四步):id、契约和插件协议见 `voices.speech`;这里列的是界面上挑引擎看的那一份。
 """
 
 from __future__ import annotations
@@ -12,6 +14,18 @@ from __future__ import annotations
 import logging
 
 from sqlalchemy.orm import Session
+
+from app.domain.voices.speech import (
+    BUILTIN_PREFIX,
+    CAPABILITY,
+    CLONE_ENGINE,
+    PODCAST_ENGINE,
+    SPEECH,
+    adapter_id,
+    engine_ready,
+    is_plugin,
+    require_engine,
+)
 
 from app.ai.providers import (
     EDGE_BUILTIN_VOICES,
@@ -26,12 +40,6 @@ from app.ai.providers import (
 )
 
 logger = logging.getLogger(__name__)
-
-#: 播客引擎:一次产出一整段双人对话,不是"念一句话"那种 —— 念字的地方都不该列它。
-PODCAST_ENGINE = "volcano-podcast"
-#: 「克隆音色」这一项。没选引擎时按它算。
-CLONE_ENGINE = "clone"
-
 
 def active_model_for(engine_cls: type, user_id: str | None = None) -> str:
     """当前用户给某个百炼引擎配的模型;取不到就回它的默认模型。
@@ -78,7 +86,7 @@ def describe_engines(db: Session | None, user_id: str | None = None) -> list[dic
     clone_ready, _checked = tts_models.runtime_status(tts_config.get().engine)
     engines: list[dict[str, object]] = [
         {
-            "id": "clone",
+            "id": CLONE_ENGINE,
             "label": "ttsProvider_clone",
             "needs_key": False,
             # 本地克隆按**模型**定(F5 的 infer 吃 speed,fish 的请求里根本没这项),
@@ -90,7 +98,7 @@ def describe_engines(db: Session | None, user_id: str | None = None) -> list[dic
             "note": "ttsProviderNote_cloneReady" if clone_ready else "ttsProviderNote_cloneMissing",
         },
         {
-            "id": EdgeSpeechAdapter.engine_id,
+            "id": f"{BUILTIN_PREFIX}{EdgeSpeechAdapter.engine_id}",
             "label": EdgeSpeechAdapter.label_key,
             "needs_key": False,
             "supports_speed": True,
@@ -99,7 +107,7 @@ def describe_engines(db: Session | None, user_id: str | None = None) -> list[dic
             "note": "ttsProviderNote_edge",
         },
         {
-            "id": OpenAISpeechAdapter.engine_id,
+            "id": f"{BUILTIN_PREFIX}{OpenAISpeechAdapter.engine_id}",
             "label": OpenAISpeechAdapter.label_key,
             "needs_key": True,
             "supports_speed": True,
@@ -117,7 +125,7 @@ def describe_engines(db: Session | None, user_id: str | None = None) -> list[dic
             "note": "ttsProviderNote_volcanoPodcast",
         },
         {
-            "id": BailianSpeechAdapter.engine_id,
+            "id": f"{BUILTIN_PREFIX}{BailianSpeechAdapter.engine_id}",
             "label": BailianSpeechAdapter.label_key,
             "needs_key": True,
             # qwen-tts 家族没有语速参数。摆一个拨不动的旋钮比不摆更糟。
@@ -130,7 +138,7 @@ def describe_engines(db: Session | None, user_id: str | None = None) -> list[dic
         },
         {
             # 同一把 DashScope Key 的第二套 API。分开列的理由见 CosyVoiceSpeechAdapter 的说明。
-            "id": CosyVoiceSpeechAdapter.engine_id,
+            "id": f"{BUILTIN_PREFIX}{CosyVoiceSpeechAdapter.engine_id}",
             "label": CosyVoiceSpeechAdapter.label_key,
             "needs_key": True,
             # 实测 rate=1.5 把 2.25 秒的句子变成 1.50 秒,是真变速。
@@ -140,7 +148,7 @@ def describe_engines(db: Session | None, user_id: str | None = None) -> list[dic
             "note": "ttsProviderNote_cosyvoice",
         },
         {
-            "id": VolcanoSpeechAdapter.engine_id,
+            "id": f"{BUILTIN_PREFIX}{VolcanoSpeechAdapter.engine_id}",
             "label": VolcanoSpeechAdapter.label_key,
             "needs_key": True,
             "supports_speed": True,
@@ -153,25 +161,50 @@ def describe_engines(db: Session | None, user_id: str | None = None) -> list[dic
         },
     ]
     for engine in engines:
-        engine.setdefault("ready", _engine_ready(db, str(engine["id"]), bool(engine["needs_key"]), user_id))
-    return engines
+        engine.setdefault("ready", engine_ready(db, adapter_id(str(engine["id"])), bool(engine["needs_key"]), user_id))
+    return engines + _plugin_engines(db, user_id)
 
 
-def _engine_ready(db: Session | None, engine_id: str, needs_key: bool, user_id: str | None) -> bool:
-    """这个引擎**现在**能不能用 —— 不出网就能回答。
-
-    三种情况:本机克隆看装没装(上面已经探过);不要钥匙的(Edge)随时能用;要钥匙的要看
-    **这个人**有没有配好那条连接 —— 钥匙归人(见 domain/provider_credentials),别人配过不算。
-    """
-    if not needs_key:
-        return True
+def _plugin_engines(db: Session | None, user_id: str | None) -> list[dict[str, object]]:
+    """认领 `speech` 的插件连接,和内置引擎同一个形状。音色问插件要(`op: voices`);没配好的照列,`ready` 为假。"""
     if db is None:
-        return False
-    from app.domain.providers import resolve_connection
+        return []
+    from app.domain import capabilities
 
-    vendor = connection_vendor_for_speech_engine(engine_id)
-    connection = resolve_connection(db, vendor, user_id=user_id)
-    return connection is not None and bool(connection.api_key or connection.extra)
+    found: list[dict[str, object]] = []
+    for provider in capabilities.plugin_providers(db, user_id, CAPABILITY):
+        ready = not provider.missing and bool(provider.tool)
+        found.append({
+            "id": provider.id,
+            "label": provider.name,
+            "needs_key": False,
+            "supports_speed": True,
+            "needs_voice_id": False,
+            "voices": [voice["value"] for voice in _plugin_voices(db, provider)] if ready else [],
+            "ready": ready,
+            "note": "",
+            "plugin": True,
+        })
+    return found
+
+
+def _plugin_voices(db: Session, provider) -> list[dict[str, str]]:
+    """插件连接能念的音色(`op: voices`)。问不到就是空清单,原因记进日志 —— 一个坏插件不该让引擎下拉整个拉不出来。"""
+    from app.domain.plugins.errors import PluginDomainError
+    from app.domain.plugins.runtime import PluginRuntimeError
+    from app.domain.plugins.tools import invoke_host
+
+    try:
+        output = invoke_host(db, provider.id, SPEECH, {"op": "voices"}, record=False)
+    except (PluginDomainError, PluginRuntimeError) as exc:
+        logger.info("speech plugin %s voices unavailable: %s", provider.id, exc)
+        return []
+    voices = output.get("voices") if isinstance(output, dict) else None
+    return [
+        {"value": str(voice.get("id")), "label": str(voice.get("name") or voice.get("id"))}
+        for voice in (voices if isinstance(voices, list) else [])
+        if isinstance(voice, dict) and voice.get("id")
+    ]
 
 
 def list_engine_voices(db: Session, engine: str, *, user_id: str | None) -> list[dict[str, str]]:
@@ -189,7 +222,13 @@ def list_engine_voices(db: Session, engine: str, *, user_id: str | None) -> list
     # `if engine != "volcano": return []` —— 于是加一个引擎要改两处(引擎目录 + 这里),
     # 漏掉第二处的表现是"引擎选得出来,但音色下拉是空的"。百炼刚接进来时就是这样。
     # 音色清单只有一个产地:describe_engines()。这里只负责**火山那条实时的**。
-    if engine in (BailianSpeechAdapter.engine_id, "alibaba-cosyvoice"):
+    if is_plugin(engine):
+        from app.domain import capabilities
+
+        provider = next((one for one in capabilities.plugin_providers(db, user_id, CAPABILITY) if one.id == engine), None)
+        return _plugin_voices(db, provider) if provider is not None and not provider.missing else []
+    engine = adapter_id(engine)
+    if engine in (BailianSpeechAdapter.engine_id, CosyVoiceSpeechAdapter.engine_id):
         # 百炼的音色**跟着模型走**(qwen3-tts-flash 有 qwen-tts 没有的几个,CosyVoice 的
         # id 更是完全另一套)。这里解析模型必须和合成时**同一条路径**,否则下拉列的是 A 的
         # 音色、发出去的是 B 的请求 —— 用户选了个看着合法的音色,拿回一句"音色不存在"。
@@ -200,7 +239,7 @@ def list_engine_voices(db: Session, engine: str, *, user_id: str | None) -> list
         ]
 
     if engine != "volcano":
-        fixed = next((item for item in describe_engines(db, user_id) if item["id"] == engine), None)
+        fixed = next((item for item in describe_engines(db, user_id) if item["id"] == f"{BUILTIN_PREFIX}{engine}"), None)
         voices = list(fixed.get("voices") or []) if fixed else []
         # **标签要从所有带标签的清单里找**,不只是 edge。engine 目录里的 `voices` 是纯 id
         # (schema 是 list[str]),而 edge / 播客 / 火山内置那三张表都是 (id, 名字) 成对的 ——
@@ -271,6 +310,7 @@ def synthesis_params(db: Session, *, engine: str, voice: str, speed: float = 1.0
     voice = (voice or "").strip()
     if not voice:
         raise VoiceError("voiceErr_noVoiceSelected")
+    require_engine(db, engine, user_id=user_id)
     unknown = set(options) - set(_CLONE_OPTIONS) - set(_ENGINE_OPTIONS)
     if unknown:
         # 调用方的编程错误,不会到界面上。

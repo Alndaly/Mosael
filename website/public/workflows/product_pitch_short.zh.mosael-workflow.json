@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "商品 → 带货口播短视频",
   "description": "给一张商品图和几条卖点,写一条分拍的口播脚本,每一拍出一张带商品的画面、按这一拍的时长铺上时间线,配上口播与屏幕短句,导出竖屏成片。卖点只用你给的那几条,不编功效和数据。",
-  "graph_hash": "c085b9b28ae6503237f04858e1975cf85a83b12d6c56af8bcd3feb9520b40ed0",
+  "graph_hash": "c8af2e3c74d7691861daab0533a52c4e7a96db88751cdd2744cced1d365363fe",
   "graph": {
     "meta": {
       "template_id": "product_pitch_short",
@@ -217,7 +217,7 @@
         },
         "config": {
           "text": "{{pitch_script.json.hook_line}}\n{{pitch_script.json.call_to_action}}",
-          "engine": "clone",
+          "engine": "builtin:clone",
           "voice": "{{start.voice_id}}"
         }
       },

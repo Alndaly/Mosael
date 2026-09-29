@@ -29,6 +29,7 @@ from app.core.child_process import run_logged
 from app.core.i18n import LocalizedError
 from app.core.text import blame_line, strip_ansi
 from app.core.config import settings
+from app.domain.voices.speech import CLONE_ENGINE, EDGE_ENGINE, SPEECH, adapter_id, is_plugin, require_engine
 
 logger = logging.getLogger(__name__)
 
@@ -145,7 +146,7 @@ def _refuse_if_unspeakable(text: str, engine: str, engine_voice: str, clone_engi
     #: 「这段文本是日文」的语言名每种界面语言各说各的,所以按文种各一条文案,而不是把一个
     #: 中文语言名当参数塞进英文句子里。detect_script 只认得出这两种。
     keys = _SCRIPT_REFUSALS[script]
-    if engine == "clone":
+    if engine == CLONE_ENGINE:
         if not clone_supports(script):
             from app.ai.runtime import f5_models
 
@@ -156,7 +157,7 @@ def _refuse_if_unspeakable(text: str, engine: str, engine_voice: str, clone_engi
                 raise VoiceError(keys["needs_weights"], size=str(size))
             raise VoiceError(keys["clone_unsupported"])
         return
-    if engine == "edge":
+    if engine == EDGE_ENGINE:
         voice_lang = edge_voice_language(engine_voice)
         if voice_lang and voice_lang != script:
             raise VoiceError(keys["edge_mismatch"], voice_lang=voice_lang)
@@ -406,7 +407,7 @@ def start_synthesis(
     created_by: str | None,
     voice_id: str | None = None,
     workspace_id: str = "",
-    engine: str = "clone",
+    engine: str = CLONE_ENGINE,
     engine_voice: str = "",
     engine_voice_resource: str = "",
     provider_profile_id: str | None = None,
@@ -427,7 +428,8 @@ def start_synthesis(
     # 只会安静地交出一段念不对的音频。
     _refuse_if_unspeakable(text, engine, engine_voice, clone_engine)
     voice = None
-    if engine == "clone":
+    require_engine(db, engine, user_id=created_by)
+    if engine == CLONE_ENGINE:
         voice = db.get(Voice, voice_id or "")
         if voice is None:
             raise VoiceError("voiceErr_voiceNotFound")
@@ -465,7 +467,7 @@ def start_synthesis(
             "project_id": project_id,
             "text": text[:200],
             "engine": engine,
-            "clone_engine": clone_engine if engine == "clone" else "",
+            "clone_engine": clone_engine if engine == CLONE_ENGINE else "",
             "clone_model": clone_model,
             "engine_voice": engine_voice,
             "provider_profile_id": provider_profile_id,
@@ -501,7 +503,7 @@ def _run_synthesis(
     voice_id: str | None,
     text: str,
     project_id: str | None,
-    engine: str = "clone",
+    engine: str = CLONE_ENGINE,
     engine_voice: str = "",
     speed: float = 1.0,
     workspace_id: str = "",
@@ -532,7 +534,7 @@ def _run_synthesis(
         clone_engine,
         clone_model,
     )
-    if engine == "clone":
+    if engine == CLONE_ENGINE:
         with TTS_SLOTS:
             run_job_guarded(job_id, lambda: _run_synthesis_body(*args), what="配音")
     else:
@@ -563,7 +565,7 @@ def _run_synthesis_body(
     voice_id: str | None,
     text: str,
     project_id: str | None,
-    engine: str = "clone",
+    engine: str = CLONE_ENGINE,
     engine_voice: str = "",
     speed: float = 1.0,
     workspace_id: str = "",
@@ -578,8 +580,8 @@ def _run_synthesis_body(
         if job is None:
             return
         try:
-            voice = db.get(Voice, voice_id) if engine == "clone" else None
-            if engine == "clone" and voice is None:
+            voice = db.get(Voice, voice_id) if engine == CLONE_ENGINE else None
+            if engine == CLONE_ENGINE and voice is None:
                 raise VoiceError("voiceErr_voiceNotFound")
             job.status = "running"
             job.progress = 0.2
@@ -587,7 +589,7 @@ def _run_synthesis_body(
             emit_job_event(db, job.id, "job.running", {})
             db.commit()
 
-            if engine != "clone":
+            if engine != CLONE_ENGINE:
                 _synthesize_remote(
                     db, job, engine, engine_voice, text, speed,
                     workspace_id=workspace_id or job.workspace_id, project_id=project_id,
@@ -724,6 +726,10 @@ def speak_to_file(
     )
     from app.domain.providers import resolve_connection
 
+    if is_plugin(engine):
+        return _speak_with_plugin(db, engine, text=text, voice=engine_voice, speed=speed, out_dir=out_dir)
+    #: 能力表里是 `builtin:edge`,`ai` 层的适配器认裸名 `edge`。
+    engine = adapter_id(engine)
     # The profile carries base_url too. Reading only the key would send a proxy user's request
     # to api.openai.com with a key that is not valid there — a 401 with no hint as to why.
     # 引擎 id 通常就是 vendor id,百炼是唯一的例外:qwen-tts 与 CosyVoice 是两个引擎、
@@ -770,6 +776,38 @@ def speak_to_file(
         call.meter(characters=len(text), requests=1)
         adapter.synthesize(SpeechSynthesisRequest(text=text, voice=engine_voice, speed=speed), out)
     return out
+
+
+def _speak_with_plugin(db, engine: str, *, text: str, voice: str, speed: float, out_dir: Path) -> Path:
+    """认领 `speech` 的插件连接念一句(`op: speak`),交回的音频拷进 `out_dir`。协议见 voices.speech。
+    用量归插件自己的账,宿主不替它记字符。"""
+    import shutil
+
+    from app.domain.plugins.errors import PluginDomainError
+    from app.domain.plugins.runtime import PluginRuntimeError
+    from app.domain.plugins.tools import invoke_host, staged_output
+    from app.db.models import PluginInstance
+
+    instance = db.get(PluginInstance, engine)
+    name = instance.name if instance is not None else engine
+    made: list[Path] = []
+
+    def collect(output: dict, scratch: Path) -> dict:
+        produced = staged_output(scratch, output.get("audio"))
+        if produced is None:
+            raise VoiceError("voiceErr_pluginBadOutput", plugin=name, detail=str(output.get("audio"))[:200])
+        out_dir.mkdir(parents=True, exist_ok=True)
+        target = out_dir / f"speech{produced.suffix.lower() or '.wav'}"
+        shutil.copyfile(produced, target)
+        made.append(target)
+        return {"audio": str(output.get("audio"))}
+
+    #: 可用性(启用、配置、凭据、授权)由 invoke_host 判,不在这里再判一遍。
+    try:
+        invoke_host(db, engine, SPEECH, {"op": "speak", "text": text, "voice": voice, "speed": speed}, collect=collect)
+    except (PluginDomainError, PluginRuntimeError) as exc:
+        raise VoiceError("voiceErr_pluginFailed", plugin=name, detail=str(exc)[:500]) from exc
+    return made[0]
 
 
 def _synthesize_remote(

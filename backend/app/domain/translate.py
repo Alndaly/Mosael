@@ -16,7 +16,7 @@ from typing import Literal
 
 import httpx
 
-from app.core.i18n import LocalizedError
+from app.core.i18n import LocalizedError, tr
 from app.domain import capabilities
 from app.domain.capabilities import Builtin, Capability, CapabilityUnavailable, Provider
 from app.domain.plugins.manifest import TRANSLATION
@@ -67,6 +67,16 @@ class TranslateProviderUnavailable(CapabilityUnavailable, TranslateError):
 GOOGLE = "builtin:google"
 CHAT = "builtin:chat"
 
+
+def _chat_ready(db, owner_user_id: str | None) -> tuple[str, ...]:
+    """对话模型那一家要**这个人**有一条启用着的对话连接 —— 钥匙归人。"""
+    from app.domain.providers import first_enabled_connection
+
+    #: 没有主人(系统任务、单元测试)就没有「他的连接」—— 连接归人。
+    if db is None or not owner_user_id or first_enabled_connection(db, owner_user_id=owner_user_id) is None:
+        return (tr("translateHint_noChatConnection"),)
+    return ()
+
 CAPABILITY = Capability(
     name=TRANSLATION,
     label_key="capability_translation",
@@ -77,7 +87,7 @@ CAPABILITY = Capability(
     builtins=(
         Builtin(id=GOOGLE, name_key="translateEngine_google"),
         #: 要花钱,不替他自动挑;定成默认或点名才用。
-        Builtin(id=CHAT, name_key="translateEngine_chat", automatic=False),
+        Builtin(id=CHAT, name_key="translateEngine_chat", ready=_chat_ready, automatic=False),
     ),
     #: 文字交给插件(多半是云端、多半计费)必须是他自己定过的。
     auto_single=False,

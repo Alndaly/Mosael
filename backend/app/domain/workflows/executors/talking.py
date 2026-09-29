@@ -68,7 +68,7 @@ def _require_voice_consent(db: Session, engine: str, voice: str) -> None:
     """克隆音色要有授权声明才能用于数字人(ADR 0028 §5)。引擎自带的嗓子(Edge、各家云端)不是谁的克隆,不问。
     在花钱之前问 —— 配完音才拒,那段配音就白付了。"""
     from app.db.models import Voice
-    from app.domain.voices.engine_catalog import CLONE_ENGINE
+    from app.domain.voices.speech import CLONE_ENGINE
     from app.domain.voices.voices import usable_for_digital_human
 
     if (engine or CLONE_ENGINE) != CLONE_ENGINE or not voice:

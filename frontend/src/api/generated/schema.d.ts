@@ -8057,6 +8057,11 @@ export interface components {
             current?: string | null;
             /** Automatic */
             automatic?: string | null;
+            /**
+             * Defaultable
+             * @default true
+             */
+            defaultable: boolean;
             /** Options */
             options?: components["schemas"]["CapabilityProviderOut"][];
             /** Used By */
@@ -12528,7 +12533,7 @@ export interface components {
             original_audio: "duck" | "mute" | "keep" | "separate";
             /**
              * Engine
-             * @default clone
+             * @default builtin:clone
              */
             engine: string;
             /** Voice Id */

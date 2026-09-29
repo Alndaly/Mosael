@@ -28,6 +28,6 @@ def set_capability_default(name: str, body: CapabilityDefaultUpdate, db: DbSessi
         raise HTTPException(status_code=404, detail=name)
     try:
         capabilities.set_default(db, user.id, capability, body.provider_id)
-    except PluginDomainError as exc:
+    except (PluginDomainError, capabilities.CapabilityUnavailable) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return capabilities.choices(db, user.id, capability)

@@ -64,7 +64,7 @@ def _runtime_ready(engine: str):
     在 asr_models(此前这里自己又探了一遍,两份缓存两个答案:模型页说「已安装」,一转写就报没有运行环境)。
     **不会自己去装**几 GB 的依赖:缺了就说清楚去哪装。"""
 
-    def missing() -> tuple[str, ...]:
+    def missing(_db: Session, _owner: str | None) -> tuple[str, ...]:
         return () if asr_models.resolve_engine_python(engine) else (tr("asrHint_runtimeMissing", engine=engine),)
 
     return missing

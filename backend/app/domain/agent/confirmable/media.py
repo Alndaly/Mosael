@@ -114,6 +114,12 @@ def _validate_dub_subtitles(db: Session, workspace_id: str, payload: dict[str, A
 
     if str(payload.get("original_audio") or DEFAULT_ORIGINAL_AUDIO) not in ORIGINAL_AUDIO_MODES:
         raise ConfirmationError("confirmErr_badOriginalAudio", modes=" / ".join(ORIGINAL_AUDIO_MODES))
+    #: 智能体说的是引擎的名字(「Edge」「火山」)或 id,认出来换成 id;没说就是克隆音色(ADR 0032 第四步)。
+    from app.domain.voices.speech import CAPABILITY as SPEECH
+
+    named = str(payload.get("engine") or "").strip()
+    if named:
+        payload["engine"] = _named_provider(db, actor, SPEECH, named).id
 
 
 def _summarize_dub_subtitles(db: Session, payload: dict[str, Any]) -> str:
@@ -138,7 +144,8 @@ def _summarize_dub_subtitles(db: Session, payload: dict[str, Any]) -> str:
 
 def _execute_dub_subtitles(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
     payload = confirmation.payload
-    from app.domain.voices.engine_catalog import CLONE_ENGINE, synthesis_params
+    from app.domain.voices.engine_catalog import synthesis_params
+    from app.domain.voices.speech import CLONE_ENGINE
     from app.domain.voices.original_audio import DEFAULT_ORIGINAL_AUDIO
     from app.domain.voices.subtitle_dub import start_subtitle_dub, subtitle_clip_ids
 
@@ -430,6 +437,7 @@ confirmable_tool(ConfirmableTool(
     summarize=_summarize_dub_subtitles,
     execute=_execute_dub_subtitles,
     validate=_validate_dub_subtitles,
+    capability="speech",
 ))
 
 

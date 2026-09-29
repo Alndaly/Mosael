@@ -10,6 +10,7 @@ import { useSubmitting } from "@/features/boards/useSubmitting";
 import { useI18n } from "@/app/preferences";
 import { BAR_PICKER, BoardComposerShell } from "@/features/boards/BoardComposerShell";
 import { isImeKeystroke } from "@/lib/shortcuts";
+import { CLONE_ENGINE } from "@/api/domains/speech";
 
 /**
  * 音频节点的「念出来」面板。
@@ -91,7 +92,7 @@ export function AudioComposer({
   //: 这一行只有一个下拉,所以只摆报得出音色清单的引擎 —— 理由见 compactSpeechEngineChoices。
   const engineChoices = compactSpeechEngineChoices(engines.data);
   const activeEngine = engineChoices.find((one) => one.id === engine) ?? engineChoices[0] ?? null;
-  const usingClone = (activeEngine?.id ?? "clone") === "clone";
+  const usingClone = (activeEngine?.id ?? CLONE_ENGINE) === CLONE_ENGINE;
 
   const voices = useVoiceLibrary(workspaceId, { enabled: usingClone });
   //: 发音人按引擎现拉 —— 火山的目录跟着账号走,不是引擎列表的一部分(和字幕面板同源)。

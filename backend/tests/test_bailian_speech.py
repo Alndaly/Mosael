@@ -98,7 +98,7 @@ def test_认不出的模型回空_由界面退回填id() -> None:
 def test_引擎目录声明了要能填音色id() -> None:
     from app.domain.voices.engine_catalog import describe_engines
 
-    entry = next(e for e in describe_engines(None) if e["id"] == "alibaba")
+    entry = next(e for e in describe_engines(None) if e["id"] == "builtin:alibaba")
     assert entry["needs_voice_id"] is True, "认不出的模型会得到一个空下拉,而不是输入框"
     assert entry["supports_speed"] is False
 
@@ -204,7 +204,7 @@ def test_两个引擎共用同一条连接的凭据() -> None:
 
     assert connection_vendor_for_speech_engine(CosyVoiceSpeechAdapter.engine_id) == "alibaba"
     assert connection_vendor_for_speech_engine("alibaba") == "alibaba"
-    # 别的引擎照旧:引擎 id 就是 vendor id。
+    # 别的引擎照旧:引擎 id 就是 vendor id(ai 层说裸名,能力表里的 builtin: 前缀在 voices.speech 摘掉)。
     assert connection_vendor_for_speech_engine("volcano") == "volcano"
     assert connection_vendor_for_speech_engine("openai") == "openai"
 
@@ -227,10 +227,10 @@ def test_两个引擎各自的音色和语速() -> None:
     from app.domain.voices.engine_catalog import describe_engines
 
     entries = {e["id"]: e for e in describe_engines(None)}
-    assert entries["alibaba"]["supports_speed"] is False
-    assert entries[CosyVoiceSpeechAdapter.engine_id]["supports_speed"] is True
+    assert entries["builtin:alibaba"]["supports_speed"] is False
+    assert entries[f"builtin:{CosyVoiceSpeechAdapter.engine_id}"]["supports_speed"] is True
     # 音色两边完全不同,混用会被拒。
-    assert not set(entries["alibaba"]["voices"]) & set(entries[CosyVoiceSpeechAdapter.engine_id]["voices"])
+    assert not set(entries["builtin:alibaba"]["voices"]) & set(entries[f"builtin:{CosyVoiceSpeechAdapter.engine_id}"]["voices"])
 
 
 def test_cosyvoice引擎默认就是能用的模型() -> None:

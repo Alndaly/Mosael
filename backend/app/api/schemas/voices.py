@@ -89,7 +89,8 @@ class SubtitleDubRequest(ApiModel):
     line: str = Field(default="all", pattern="^(all|first|last)$")
     #: 配好之后原声怎么办(见 domain/voices/original_audio)。
     original_audio: Literal["duck", "mute", "keep", "separate"] = "duck"
-    engine: str = Field(default="clone", max_length=40)
+    #: 配音引擎(能力表里的提供方 id:`builtin:clone`、`builtin:edge`、插件连接 id……)。
+    engine: str = Field(default="builtin:clone", max_length=80)
     #: 克隆引擎要一个音色行;远端引擎不需要,它自带发音人。
     voice_id: str | None = None
     clone_engine: str = Field(default="", max_length=40)

@@ -1057,7 +1057,7 @@ def translated_dub_graph(*, voice_id: str = "", lipsync: bool = False) -> dict[s
                 # 所以先拆:人声那半丢掉、背景音留着,配音叠在背景音之上。装了分离引擎才做得到；
                 # 没装时在排配音任务前明确失败，绝不能把用户选择静默改成整轨静音。
                 "original_audio": "separate",
-                "engine": "clone",
+                "engine": "builtin:clone",
                 "voice": voice_id,
             },
         },
@@ -1508,7 +1508,7 @@ JSON Schema 的对象。"""
                 "name": {"zh": "合成该镜口播", "en": "Synthesise this shot's narration"},
                 "position": {"x": 700, "y": 420},
                 # 开始节点里填的是配音库音色的 id,所以引擎是克隆;想用引擎音色,改这里的两格。
-                "config": {"text": "{{loop.item.narration}}", "engine": "clone", "voice": "{{input.voice_id}}"},
+                "config": {"text": "{{loop.item.narration}}", "engine": "builtin:clone", "voice": "{{input.voice_id}}"},
             },
         ],
         "edges": [

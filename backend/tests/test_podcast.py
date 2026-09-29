@@ -324,8 +324,8 @@ class TestTheJobEndpoint:
     def test_the_engine_is_offered_with_its_speakers(self) -> None:
         client = self._client()
         engines = {item["id"]: item for item in client.get("/api/tts/engines").json()}
-        assert engines["volcano-podcast"]["voices"], "the podcast engine has no speakers to offer"
-        assert engines["volcano-podcast"]["needs_key"] is True
+        assert engines["builtin:volcano-podcast"]["voices"], "the podcast engine has no speakers to offer"
+        assert engines["builtin:volcano-podcast"]["needs_key"] is True
 
     def test_an_unknown_mode_is_refused(self) -> None:
         client = self._client()

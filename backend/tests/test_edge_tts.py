@@ -33,14 +33,14 @@ def _client():
 
 def test_edge_is_offered_without_a_key() -> None:
     """The whole point of the engine: usable before anything is configured."""
-    entry = next(e for e in describe_engines(None) if e["id"] == "edge")
+    entry = next(e for e in describe_engines(None) if e["id"] == "builtin:edge")
     assert entry["needs_key"] is False
     assert entry["voices"], "an empty dropdown would read as 'this engine has no voices'"
 
 
 def test_edge_voices_come_from_the_builtin_catalogue() -> None:
     client = _client()
-    res = client.get("/api/tts/voices?engine=edge")
+    res = client.get("/api/tts/voices?engine=builtin:edge")
     assert res.status_code == 200, res.text
     voices = res.json()
     assert [v["value"] for v in voices] == [v for v, _ in EDGE_BUILTIN_VOICES]
@@ -117,8 +117,8 @@ def test_每个引擎都说得出自己能不能用() -> None:
         assert isinstance(engine.get("ready"), bool), f"{engine['id']} 没说自己能不能用"
     by_id = {str(engine["id"]): engine for engine in engines}
     #: 不要钥匙的随时能用;要钥匙而这个人没配的,不列出来 —— 列出来只会让人选中之后才失败。
-    assert by_id["edge"]["ready"] is True
-    assert by_id["openai"]["ready"] is False
+    assert by_id["builtin:edge"]["ready"] is True
+    assert by_id["builtin:openai"]["ready"] is False
 
 
 def test_没配连接时引擎清单只剩不要钥匙的那几个() -> None:
@@ -131,5 +131,5 @@ def test_没配连接时引擎清单只剩不要钥匙的那几个() -> None:
     with SessionLocal() as db:
         options = field_options(db, "speech_engines", OptionContext(workspace_id=workspace, user_id=None, parent="", locale="zh"))
     values = [one["value"] for one in options]
-    assert values[0] == "clone", "克隆总在最前"
-    assert "edge" in values, "不要钥匙的引擎必须列得出来(真机上这里只剩了克隆)"
+    assert values[0] == "builtin:clone", "克隆总在最前"
+    assert "builtin:edge" in values, "不要钥匙的引擎必须列得出来(真机上这里只剩了克隆)"

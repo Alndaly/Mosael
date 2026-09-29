@@ -42,6 +42,7 @@ import { toPlainText } from "@/components/markdown/inlineSyntax";
 import { EntityGrid, EntitySelectionBar, useEntityCollection } from "@/features/entities/EntityCollection";
 import { ReferenceWall } from "@/features/entities/ReferenceWall";
 import { entityDisplayName, entityKindIcon, useCatalogLabels } from "@/features/entities/entityMeta";
+import { CLONE_ENGINE } from "@/api/domains/speech";
 
 const FIELD = "w-full rounded-md border border-border bg-field px-3 py-2 text-ui-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring";
 const NONE = "__none__";
@@ -518,7 +519,7 @@ function ColorField({ label, value, onChange }: { label: string; value: string; 
 }
 
 /** 本地克隆(音色库)这个引擎的名字,和后端 entities.catalog.VOICE_LIBRARY_ENGINE 同一个值。 */
-const VOICE_LIBRARY_ENGINE = "clone";
+const VOICE_LIBRARY_ENGINE = CLONE_ENGINE;
 
 /** 引擎清单、某个引擎的音色清单:和工作流「念稿」节点问的是同一个接口,列出来的一样。 */
 function useVoiceOptions(workspaceId: string, engine: string) {

@@ -73,8 +73,11 @@ TRANSCRIPTION = "transcription"
 #: `translation`:把一批文字译成目标语言(ADR 0032 第三步)。认领的工具收一批句子、交回同样条数的译文;字幕轨的
 #: 分批、边翻边写回、记账都是宿主的事。
 TRANSLATION = "translation"
+#: `speech`:用一个音色把一段文字念出来(ADR 0032 第四步)。认领的工具按 `op` 回答两件事:有哪些音色、念一句;
+#: 登记成素材、贴到时间线、字幕逐句配音的对齐都是宿主的事。
+SPEECH = "speech"
 HOST_ONLY_CAPABILITIES = frozenset(
-    {GENERATION, TOOLS, DOCUMENT_PARSE, AUDIO_DENOISE, AUDIO_SEPARATION, TRANSCRIPTION, TRANSLATION}
+    {GENERATION, TOOLS, DOCUMENT_PARSE, AUDIO_DENOISE, AUDIO_SEPARATION, TRANSCRIPTION, TRANSLATION, SPEECH}
 )
 
 
@@ -664,6 +667,7 @@ __all__ = [
     "KEY_RE",
     "TRANSCRIPTION",
     "TRANSLATION",
+    "SPEECH",
     "MANIFEST_FILENAME",
     "Manifest",
     "ManifestError",

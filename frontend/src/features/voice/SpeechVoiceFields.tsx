@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import type { MessageKey } from "@/app/messages";
 import { runtimeState, type SpeechVoice } from "@/features/voice/useSpeechVoice";
 import { cn } from "@/lib/utils";
+import { CLONE_ENGINE } from "@/api/domains/speech";
 
 /** 带小标签的紧凑表单格:下拉全长一个样,没有标签就分不清「音色」「语速」「发音人 B」谁是谁 ——
     标签贴在控件上方而不是靠占位符。 */
@@ -98,7 +99,7 @@ export function SpeechVoiceFields({ voice }: { voice: SpeechVoice }) {
 
       {/* 本地克隆:**音色也在这里选**,和远端引擎的发音人同一个位置 ——
           此前唯一的选法是去下面的音色库点卡片,没点之前悄悄用第一个。 */}
-      {engine === "clone" && (
+      {engine === CLONE_ENGINE && (
         <FieldRow>
           {/* 没装好的照样列出来但标明白,而不是藏起来让人猜为什么少了一个。 */}
           <VoiceField label={t("voicePanelCloneEngine")} className={FIELD_WIDE}>
@@ -142,7 +143,7 @@ export function SpeechVoiceFields({ voice }: { voice: SpeechVoice }) {
         </FieldRow>
       )}
 
-      {engine !== "clone" && voiceChoices.length > 0 && (
+      {engine !== CLONE_ENGINE && voiceChoices.length > 0 && (
         <FieldRow className="flex-nowrap">
           {/* 语速藏起来时音色独占一行 —— flex-1 自然铺满,不必另给宽度。 */}
           <VoiceField label={t("voiceEngineVoice")} className="min-w-0 flex-1">
@@ -158,7 +159,7 @@ export function SpeechVoiceFields({ voice }: { voice: SpeechVoice }) {
 
       {/* 目录拉不到、需要手填发音人 id 的引擎。两样都没有就**整行不渲染** ——
           此前这里会剩下一个 76px 宽、孤零零的语速下拉。 */}
-      {engine !== "clone" && voiceChoices.length === 0 && (activeEngine?.needs_voice_id || voice.speedSupported) && (
+      {engine !== CLONE_ENGINE && voiceChoices.length === 0 && (activeEngine?.needs_voice_id || voice.speedSupported) && (
         <FieldRow className="flex-nowrap">
           {activeEngine?.needs_voice_id && (
             <VoiceField label={t("voiceEngineVoiceId")} className="min-w-0 flex-1">
@@ -179,10 +180,10 @@ export function SpeechVoiceFields({ voice }: { voice: SpeechVoice }) {
         </FieldRow>
       )}
 
-      {engine !== "clone" && voiceChoices.length === 0 && activeEngine?.needs_voice_id && !voice.engineVoiceChoice.trim() && (
+      {engine !== CLONE_ENGINE && voiceChoices.length === 0 && activeEngine?.needs_voice_id && !voice.engineVoiceChoice.trim() && (
         <p className="m-0 text-ui-xs leading-[1.45] text-muted-foreground">{t("voiceNeedEngineVoice")}</p>
       )}
-      {engine !== "clone" && activeEngine?.note && (
+      {engine !== CLONE_ENGINE && activeEngine?.note && (
         <p className={cn("m-0 text-ui-xs leading-[1.45] text-muted-foreground", activeEngine.ready === false && "text-destructive")}>
           {activeEngine.note}
         </p>

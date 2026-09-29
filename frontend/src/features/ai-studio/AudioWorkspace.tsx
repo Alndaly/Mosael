@@ -22,7 +22,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { SEGMENTED_LIST, segmentedTriggerClass } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { GenerateWorkspace } from "@/features/ai-studio/GenerateWorkspace";
-import { PODCAST_ENGINE } from "@/features/voice/speechEngines";
+import { CLONE_ENGINE, PODCAST_ENGINE } from "@/api/domains/speech";
 import { FIELD, FIELD_SPEED, FieldRow, SpeechVoiceFields, SpeedPicker, VoiceField, VoicePicker } from "@/features/voice/SpeechVoiceFields";
 import { useSpeechVoice } from "@/features/voice/useSpeechVoice";
 import { useWatchedJob } from "@/lib/useWatchedJob";
@@ -118,7 +118,7 @@ function SpeechForm({ workspace, busy, onQueued }: { workspace: Workspace; busy:
   const synth = useMutation({
     mutationFn: () => {
       const { engine, voice_id, ...rest } = voice.params;
-      return engine === "clone"
+      return engine === CLONE_ENGINE
         ? synthesizeVoice(voice_id as string, { text, ...rest })
         : synthesizeWithEngine({ workspace_id: workspace.id, text, engine, ...rest });
     },
@@ -129,7 +129,7 @@ function SpeechForm({ workspace, busy, onQueued }: { workspace: Workspace; busy:
     onError: (error: Error) => toast.error(error.message),
   });
   // 克隆要先有音色。音色库在设置里管(这一页不绑项目,没有「从说话人提取」的素材可挑)。
-  const needsVoice = voice.engine === "clone" && voice.libraryLoaded && voice.library.length === 0;
+  const needsVoice = voice.engine === CLONE_ENGINE && voice.libraryLoaded && voice.library.length === 0;
 
   return (
     <div className="grid gap-3">

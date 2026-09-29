@@ -130,7 +130,7 @@ def test_engine_catalogs_speak_the_caller_language() -> None:
     assert CJK.search(small_zh["detail"]) and not CJK.search(small_en["detail"])
 
     engines_en = client.get("/api/tts/engines", headers={"Accept-Language": "en"}).json()
-    clone = next(row for row in engines_en if row["id"] == "clone")
+    clone = next(row for row in engines_en if row["id"] == "builtin:clone")
     assert clone["label"] == "Local voice clone"
     # 翻过之后不该再有 key 的样子 —— 忘了接出口翻译正是这个形状。
     assert not any(str(row.get("label", "")).startswith("ttsProvider_") for row in engines_en)

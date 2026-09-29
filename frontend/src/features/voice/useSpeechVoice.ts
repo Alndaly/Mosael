@@ -5,6 +5,7 @@ import { getTtsConfig, listTtsEngines, listTtsModels, listTtsVoices } from "@/ap
 import { pollWhileUnsettled } from "@/lib/pollWhileUnsettled";
 import { speechEngineChoices } from "@/features/voice/speechEngines";
 import { useVoiceLibrary } from "@/features/voice/useVoiceLibrary";
+import { CLONE_ENGINE } from "@/api/domains/speech";
 
 /** 合成请求里「谁来念」那几个字段。/voices/{id}/synthesize、/tts/synthesize、字幕配音收的都是它。 */
 export type SpeechParams = {
@@ -36,7 +37,7 @@ export function runtimeState(runtime: LocalRuntime | undefined): "checking" | "r
  */
 export function useSpeechVoice(workspaceId: string) {
   // "clone" 是本地参考音克隆,要音色库里的一行;其余是远端引擎,自带发音人。
-  const [engine, setEngineState] = React.useState("clone");
+  const [engine, setEngineState] = React.useState(CLONE_ENGINE);
   const [voiceChoice, setVoiceChoice] = React.useState<string | null>(null);
   const [engineVoiceChoice, setEngineVoiceChoice] = React.useState("");
   const [cloneEngineChoice, setCloneEngineChoice] = React.useState("");
@@ -58,7 +59,7 @@ export function useSpeechVoice(workspaceId: string) {
   const engineVoices = useQuery({
     queryKey: ["tts-voices", engine],
     queryFn: () => listTtsVoices(engine),
-    enabled: engine !== "clone",
+    enabled: engine !== CLONE_ENGINE,
   });
 
   const setEngine = (next: string) => {
@@ -85,17 +86,17 @@ export function useSpeechVoice(workspaceId: string) {
   // 语速跟着**引擎能力**走:F5 吃 speed,fish 的请求里根本没有这一项;百炼的 qwen-tts 也没有。
   // 远端引擎缺这个字段时按支持处理(老引擎行为不变)。
   const speedSupported =
-    engine === "clone" ? Boolean(cloneRuntime?.supports_speed) : activeEngine?.supports_speed !== false;
+    engine === CLONE_ENGINE ? Boolean(cloneRuntime?.supports_speed) : activeEngine?.supports_speed !== false;
 
   // 克隆要有音色且引擎装好;远端引擎要么有目录,要么它自己说需要手填 id 而用户填了。
   const ready =
-    engine === "clone"
+    engine === CLONE_ENGINE
       ? Boolean(voiceId) && cloneUsable
       : voiceChoices.length > 0 || !activeEngine?.needs_voice_id || Boolean(engineVoiceChoice.trim());
 
   // 不支持语速时**不发** —— 发了也只会被忽略,而"传了却没用"正是那种谎。
   const params: SpeechParams =
-    engine === "clone"
+    engine === CLONE_ENGINE
       ? { engine, voice_id: voiceId, clone_engine: cloneEngine, ...(speedSupported ? { speed } : {}) }
       : {
           engine,

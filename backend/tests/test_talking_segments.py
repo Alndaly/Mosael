@@ -68,7 +68,7 @@ def voicing(monkeypatch):
 def test_按实测时长凑段_字幕时间照配音(voicing) -> None:
     voicing.seconds.update({"甲。": 8, "乙。": 7, "丙。": 6, "丁。": 9})
     with SessionLocal() as db:
-        out = talking_segments(db, voicing.scope, {"text": "甲。乙。丙。丁。", "engine": "edge", "voice": "v"})
+        out = talking_segments(db, voicing.scope, {"text": "甲。乙。丙。丁。", "engine": "builtin:edge", "voice": "v"})
     assert voicing.joined == [["甲。", "乙。"], ["丙。", "丁。"]], "8+7=15,再加 6 就超 20 秒 —— 从句子之间断"
     assert [(one["audio_asset_id"], one["start"], one["duration"], one["text"]) for one in out["segments"]] == [
         ("joined-1", 0, 15, "甲。乙。"), ("joined-2", 15, 15, "丙。丁。")]
@@ -80,25 +80,25 @@ def test_按实测时长凑段_字幕时间照配音(voicing) -> None:
 def test_一句一段的直接用那一段_上限只能往小里调(voicing) -> None:
     voicing.seconds.update({"甲。": 8, "乙。": 7})
     with SessionLocal() as db:
-        out = talking_segments(db, voicing.scope, {"text": "甲。乙。", "engine": "edge", "voice": "v", "max_seconds": 10})
+        out = talking_segments(db, voicing.scope, {"text": "甲。乙。", "engine": "builtin:edge", "voice": "v", "max_seconds": 10})
         assert out["count"] == 2 and voicing.joined == []
         assert db.get(Asset, out["segments"][0]["audio_asset_id"]).name == "甲。"
         voicing.joined.clear()
-        wider = talking_segments(db, voicing.scope, {"text": "甲。乙。", "engine": "edge", "voice": "v", "max_seconds": 99})
+        wider = talking_segments(db, voicing.scope, {"text": "甲。乙。", "engine": "builtin:edge", "voice": "v", "max_seconds": 99})
     assert wider["count"] == 1, "填得比模型上限大不算数,按模型的 20 秒"
 
 
 def test_一句配出来就超上限_说是哪一句_不往下走(voicing) -> None:
     voicing.seconds.update({"很长的一句。": 23})
     with SessionLocal() as db, pytest.raises(WorkflowDomainError) as refused:
-        talking_segments(db, voicing.scope, {"text": "很长的一句。", "engine": "edge", "voice": "v"})
+        talking_segments(db, voicing.scope, {"text": "很长的一句。", "engine": "builtin:edge", "voice": "v"})
     assert refused.value.key == "wfErr_talkingSentenceTooLong" and refused.value.params["sentence"] == "很长的一句。"
 
 
 def test_没声明的克隆音色_配第一句之前就拦(voicing) -> None:
     voice = make_voice(voicing.ws, "老王")
     with SessionLocal() as db, pytest.raises(WorkflowDomainError) as refused:
-        talking_segments(db, voicing.scope, {"text": "你好。", "engine": "clone", "voice": voice})
+        talking_segments(db, voicing.scope, {"text": "你好。", "engine": "builtin:clone", "voice": voice})
     assert refused.value.key == "wfErr_voiceConsentMissing" and voicing.spoken == []
 
 

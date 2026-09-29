@@ -22918,6 +22918,11 @@
             ],
             "title": "Automatic"
           },
+          "defaultable": {
+            "type": "boolean",
+            "title": "Defaultable",
+            "default": true
+          },
           "options": {
             "items": {
               "$ref": "#/components/schemas/CapabilityProviderOut"
@@ -32986,9 +32991,9 @@
           },
           "engine": {
             "type": "string",
-            "maxLength": 40,
+            "maxLength": 80,
             "title": "Engine",
-            "default": "clone"
+            "default": "builtin:clone"
           },
           "voice_id": {
             "anyOf": [

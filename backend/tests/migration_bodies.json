@@ -116,6 +116,7 @@
   "migrate-shared-host-folders": "d75d0a271bbdb3e9",
   "migrate-shared-venvs": "26c7c33f9f8280c6",
   "migrate-source-assets-get-a-role": "17d49cdaf1d8fd8f",
+  "migrate-speech-engines-are-providers": "8161675736bfb9bd",
   "migrate-subtitle-tracks-carry-no-sound": "fc096a887b9fd89a",
   "migrate-subtitle-tracks-hide-instead-of-mute": "ae1ceb529f844de6",
   "migrate-thumbnails-keep-transparency": "39a26d3fc75ce497",

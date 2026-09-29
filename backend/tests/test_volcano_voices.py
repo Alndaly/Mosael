@@ -30,7 +30,7 @@ def _voices(client, engine: str) -> list[dict]:
 
 def test_without_ak_sk_the_builtin_list_is_served() -> None:
     client = _admin_client()
-    voices = _voices(client, "volcano")
+    voices = _voices(client, "builtin:volcano")
     assert [v["value"] for v in voices] == [v for v, _ in VOLCANO_BUILTIN_VOICES]
     assert voices[0]["label"] and voices[0]["label"] != voices[0]["value"], "labels should be readable"
 
@@ -47,7 +47,7 @@ def test_with_ak_sk_the_account_list_wins_and_carries_the_family(monkeypatch) ->
         lambda ak, sk: [{"VoiceType": "zh_male_custom_bigtts", "Name": "定制音色", "ResourceID": "seed-icl-2.0"}],
     )
 
-    voices = _voices(client, "volcano")
+    voices = _voices(client, "builtin:volcano")
 
     assert voices == [{"value": "zh_male_custom_bigtts", "label": "定制音色", "resource_id": "seed-icl-2.0"}]
 
@@ -65,25 +65,25 @@ def test_a_failing_account_lookup_falls_back_instead_of_erroring(monkeypatch) ->
 
     monkeypatch.setattr("app.integrations.volc_openapi.list_all_speakers", boom)
 
-    assert [v["value"] for v in _voices(client, "volcano")] == [v for v, _ in VOLCANO_BUILTIN_VOICES]
+    assert [v["value"] for v in _voices(client, "builtin:volcano")] == [v for v, _ in VOLCANO_BUILTIN_VOICES]
 
 
 def test_podcast_voices_are_the_saturn_set() -> None:
     """These only work on the podcast socket; offering the normal TTS voices there fails."""
     client = _admin_client()
-    assert [v["value"] for v in _voices(client, "volcano-podcast")] == [v for v, _ in PODCAST_SPEAKERS]
+    assert [v["value"] for v in _voices(client, "builtin:volcano-podcast")] == [v for v, _ in PODCAST_SPEAKERS]
 
 
 def test_openai_voices_come_from_the_engine_constant() -> None:
     client = _admin_client()
-    assert "alloy" in [v["value"] for v in _voices(client, "openai")]
+    assert "alloy" in [v["value"] for v in _voices(client, "builtin:openai")]
     # 旧 id **不再**解析:启动迁移把库里的三处都改掉了,读取代码里不留别名(见 ADR 0006)。
     assert _voices(client, "openai-tts") == []
 
 
 def test_an_engine_with_no_listable_voices_answers_empty() -> None:
     """Clone picks from the voice library, not from an engine catalogue."""
-    assert _voices(_admin_client(), "clone") == []
+    assert _voices(_admin_client(), "builtin:clone") == []
 
 
 class TestSigning:

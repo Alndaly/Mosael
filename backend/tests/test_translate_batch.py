@@ -11,6 +11,14 @@ import time
 import pytest
 
 from app.domain import translate as tr
+from app.domain.capabilities import Provider
+
+
+@pytest.fixture(autouse=True)
+def _named_builtin(monkeypatch: pytest.MonkeyPatch) -> None:
+    """这里只看批量的流控:挑哪一家(能力表)另有测试,直接给点名的那一家(没点名就是 Google)。"""
+    monkeypatch.setattr(tr.capabilities, "pick",
+                        lambda _db, _owner, _cap, provider_id, **_: Provider(id=provider_id or tr.GOOGLE, name="", builtin=True))
 
 
 def test_google_batch_is_serial_instead_of_bursting_the_free_endpoint(monkeypatch) -> None:

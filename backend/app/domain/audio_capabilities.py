@@ -41,7 +41,7 @@ class SeparationProviderUnavailable(CapabilityUnavailable, SeparationError):
 
 
 def _ready(adapter: Any, hint_key: str, fallback_key: str):
-    def missing() -> tuple[str, ...]:
+    def missing(_db: Session, _owner: str | None) -> tuple[str, ...]:
         if adapter.runtime_ready():
             return ()
         return (tr(hint_key) if hint_key else tr(fallback_key, engine=adapter.engine_id),)

@@ -238,7 +238,8 @@ def preview_voice(body: VoicePreviewRequest, db: DbSession, user: CurrentUser) -
     speak_to_file(解析连接、筛模型、记账),听到的就是以后念台词的那个声音。不建任务、不进素材库:试听
     活到播完为止。本地克隆的音色不在这里 —— 它的参考录音就是它(`GET /voices/{id}/sample`)。
     """
-    from app.domain.voices.engine_catalog import CLONE_ENGINE, synthesis_params
+    from app.domain.voices.engine_catalog import synthesis_params
+    from app.domain.voices.speech import CLONE_ENGINE
 
     # 念一句是花钱的(各家 TTS 按字符计费),和配音同一档权限;记账挂在这个工作区上。
     ensure_workspace_perm(db, user, body.workspace_id, "ai")

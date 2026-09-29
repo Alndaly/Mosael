@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "Product into a talking-head short",
   "description": "From a product photo and a few selling points, write a beat-by-beat script, paint one frame per beat with the product in it, lay each on the timeline for that beat's length, add the voice-over and on-screen lines, and export a vertical short. Only the selling points you provide are used — no invented claims or figures.",
-  "graph_hash": "0475536cd7eae0f9587fb8ea6d4b41606c4887ca2f0f59f63c98f0e7c1a3795e",
+  "graph_hash": "6d44f7bfe0ae6ee398c1229d4faf488cb6f3d6331c818ab739e0401d4148051f",
   "graph": {
     "meta": {
       "template_id": "product_pitch_short",
@@ -217,7 +217,7 @@
         },
         "config": {
           "text": "{{pitch_script.json.hook_line}}\n{{pitch_script.json.call_to_action}}",
-          "engine": "clone",
+          "engine": "builtin:clone",
           "voice": "{{start.voice_id}}"
         }
       },

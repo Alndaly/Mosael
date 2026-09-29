@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "自有素材混剪 · 配音与字幕",
   "description": "按标签取出你已经拍好的一批素材,让模型排出叙事顺序、定每段用哪条素材和留多久、写好旁白,然后按顺序接上时间线,逐段配音并铺字幕,导出成片。不生成任何画面 —— 画面就是你自己的素材;没有配音音色时自动只出字幕。",
-  "graph_hash": "058a8a29a23723d8c59308ece5edc174c60438ff0e399443e4543b047671a273",
+  "graph_hash": "8b3d53d210747ce1cabf6ce2d80d24144cb40641ef90242a6dc0cb7ddac1ddce",
   "graph": {
     "meta": {
       "template_id": "footage_montage",
@@ -253,7 +253,7 @@
                 },
                 "config": {
                   "text": "{{loop.item.narration}}",
-                  "engine": "clone",
+                  "engine": "builtin:clone",
                   "voice": "{{input.voice_id}}"
                 }
               },

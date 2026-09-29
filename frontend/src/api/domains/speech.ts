@@ -2,6 +2,17 @@ import type { components } from "@/api/generated/schema";
 import type { Job } from "@/api/domains/jobs";
 import { API_BASE, api, apiBlob, getAuthToken } from "@/api/transport";
 
+/**
+ * 配音引擎的 id 是能力表里的提供方 id(ADR 0032 第四步):内置的带 `builtin:` 前缀,插件连接是它的连接 id。
+ * 要按某一家分支的地方只认这里的常量,不在各处手写字面量。
+ */
+/** 克隆音色(工作区配音库里的那些嗓子)。没选引擎时按它算。 */
+export const CLONE_ENGINE = "builtin:clone";
+/** Edge:不要钥匙,音色名里带着语言(见 editor/dubLanguage)。 */
+export const EDGE_ENGINE = "builtin:edge";
+/** 播客引擎。一次产出一整段双人对话 —— 它有自己的表单(AI 生成 → 音频 → 播客)。 */
+export const PODCAST_ENGINE = "builtin:volcano-podcast";
+
 export type AsrModel = components["schemas"]["AsrModelOut"];
 export type Voice = components["schemas"]["VoiceOut"];
 export type Transcript = components["schemas"]["TranscriptOut"];
@@ -173,7 +184,7 @@ export function dubSubtitles(
  * 同一条合成路(`POST /api/tts/preview`),不建任务、不进素材库。
  */
 export function fetchVoicePreview(body: { workspace_id: string; engine: string; voice: string; text: string }): Promise<Blob> {
-  return body.engine === "clone"
+  return body.engine === CLONE_ENGINE
     ? apiBlob(`/api/voices/${encodeURIComponent(body.voice)}/sample`)
     : apiBlob("/api/tts/preview", { method: "POST", body: JSON.stringify(body) });
 }
