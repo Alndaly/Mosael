@@ -26,6 +26,7 @@ def _me() -> str:
 def _choose_voice(**overrides) -> None:
     with SessionLocal() as db:
         agent_voice.upsert(db, _me(), **{"engine": "edge", "engine_voice": "zh-CN-XiaoxiaoNeural", **overrides})
+        db.commit()  # 领域函数不提交,测试就是这里的入口
 
 
 def _record_speech(monkeypatch) -> list[dict]:

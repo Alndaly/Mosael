@@ -8,7 +8,7 @@ from pathlib import Path
 from fastapi import APIRouter, File, Form, HTTPException, Response, UploadFile
 from fastapi.responses import FileResponse
 
-from app.api.deps import CurrentUser, DbSession
+from app.api.deps import CurrentUser, DbSession, Tx
 from app.domain.voices.transcription import ASRError
 from app.core.i18n import get_current_locale, tr, translate_fields
 from app.db.models import Job, Voice
@@ -59,7 +59,7 @@ def list_voices(workspace_id: str, db: DbSession, user: CurrentUser) -> list[dic
 
 @router.post("/voices/upload", response_model=VoiceOut)
 def upload_voice(
-    db: DbSession,
+    db: Tx,
     user: CurrentUser,
     workspace_id: str = Form(...),
     name: str = Form(...),
@@ -85,7 +85,7 @@ def upload_voice(
 
 
 @router.post("/voices/from-speaker", response_model=VoiceOut)
-def voice_from_speaker(body: VoiceFromSpeakerRequest, db: DbSession, user: CurrentUser) -> dict:
+def voice_from_speaker(body: VoiceFromSpeakerRequest, db: Tx, user: CurrentUser) -> dict:
 
     asset = voice_uc.source_asset(db, user, body.asset_id)
     try:
@@ -99,7 +99,7 @@ def voice_from_speaker(body: VoiceFromSpeakerRequest, db: DbSession, user: Curre
 
 
 @router.patch("/voices/{voice_id}", response_model=VoiceOut)
-def update_voice(voice_id: str, body: VoiceUpdate, db: DbSession, user: CurrentUser) -> dict:
+def update_voice(voice_id: str, body: VoiceUpdate, db: Tx, user: CurrentUser) -> dict:
     voice = voice_uc.usable(db, user, voice_id)
     try:
         return _voice_out(voices.update_voice(db, voice, name=body.name, reference_text=body.reference_text,
@@ -109,7 +109,7 @@ def update_voice(voice_id: str, body: VoiceUpdate, db: DbSession, user: CurrentU
 
 
 @router.post("/voices/{voice_id}/recognize-reference", response_model=VoiceOut)
-def recognize_reference(voice_id: str, db: DbSession, user: CurrentUser) -> Voice:
+def recognize_reference(voice_id: str, db: Tx, user: CurrentUser) -> Voice:
     """转写一遍参考音频(按这个人的转写默认),把参考文本填上。"""
     voice = voice_uc.usable(db, user, voice_id)
     try:
@@ -119,7 +119,7 @@ def recognize_reference(voice_id: str, db: DbSession, user: CurrentUser) -> Voic
 
 
 @router.delete("/voices/{voice_id}", status_code=204)
-def delete_voice(voice_id: str, db: DbSession, user: CurrentUser) -> Response:
+def delete_voice(voice_id: str, db: Tx, user: CurrentUser) -> Response:
     voice = voice_uc.usable(db, user, voice_id)
     voices.delete_voice(db, voice)
     return Response(status_code=204)

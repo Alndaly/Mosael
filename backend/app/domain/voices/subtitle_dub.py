@@ -21,6 +21,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.db import SessionLocal
+from app.core.unit_of_work import unit_of_work
 from app.core.i18n import DEFAULT_LOCALE, LocalizedError, t
 from app.db.models import Asset, Clip, Job, Sequence, Track
 from app.domain.jobs import JobError, blame, create_job, dispatch_job, emit_job_event, finish_job, say
@@ -190,7 +191,7 @@ def _speed_for(audio_seconds: float, slot_seconds: float) -> float | None:
 
 
 def _run_dub(job_id: str) -> None:
-    with SessionLocal() as db:
+    with unit_of_work() as db:
         job = db.get(Job, job_id)
         if job is None:
             return
@@ -206,10 +207,8 @@ def _run_dub(job_id: str) -> None:
         created_by = job.created_by
         # 状态一律经 finish_job 写:排队时就被取消的,不能在这里被写回 running。
         if not finish_job(db, job, status="running"):
-            db.commit()
             return
         emit_job_event(db, job.id, "job.running", {})
-        db.commit()
 
     from app.domain.voices.voices import start_synthesis
 
@@ -219,7 +218,8 @@ def _run_dub(job_id: str) -> None:
     total = len(clip_ids)
     try:
         for index, clip_id in enumerate(clip_ids):
-            with SessionLocal() as db:
+            # 每一句各自一个事务:配好的那几句不因为后面哪一句出错而跟着没了。
+            with unit_of_work() as db:
                 clip = db.get(Clip, clip_id)
                 if clip is None:
                     failed += 1
@@ -238,9 +238,9 @@ def _run_dub(job_id: str) -> None:
                     )
                 except JobError:
                     # 这次配音已经收尾(用户取消,或外面那条工作流取消后级联下来):总线不再让它
-                    # 派下一句。每一句都是一次付费合成,到此为止。
+                    # 派下一句。每一句都是一次付费合成,到此为止。这一句什么都不留。
+                    db.rollback()
                     return
-                db.commit()
                 child_id = child.id
 
             try:
@@ -251,7 +251,7 @@ def _run_dub(job_id: str) -> None:
                 logger.warning("字幕配音:第 %s 条失败:%s", index + 1, str(exc)[:200])
                 continue
 
-            with SessionLocal() as db:
+            with unit_of_work() as db:
                 asset = db.get(Asset, asset_id)
                 audio_seconds = float((asset.media_info or {}).get("duration") or 0.0) if asset else 0.0
                 if audio_seconds <= 0:
@@ -283,12 +283,10 @@ def _run_dub(job_id: str) -> None:
                 done += 1
                 job = db.get(Job, job_id)
                 if not finish_job(db, job, status="running", progress=(index + 1) / max(1, total)):
-                    db.commit()
                     return
                 say(job, "jobMsg_dubRunning", done=done, total=total)
-                db.commit()
 
-        with SessionLocal() as db:
+        with unit_of_work() as db:
             job = db.get(Job, job_id)
             if job is None:
                 return
@@ -302,10 +300,14 @@ def _run_dub(job_id: str) -> None:
                     emit_job_event(db, job.id, "job.failed", {})
             elif finish_job(db, job, status="running"):
                 # 原声的处理放在**任务里**、成功之前:分离要跑一阵,而任务说"完成"时成片应当已经是
-                # 最终的样子。它自己开会话改时间线(每一步都是剪辑操作,各自提交)。
-                # 先确认没被取消 —— 取消了的配音不该再去动原片的音轨。
+                # 最终的样子。先确认没被取消 —— 取消了的配音不该再去动原片的音轨。
+                # 这一笔提交是有意的:finish_job 拿了 SQLite 的写锁,分离一跑就是几分钟,不先放掉,
+                # 别的会话(任务进度、界面上的剪辑)等过 busy_timeout 就写不进去。
                 db.commit()
                 applied = apply_original_audio(db, sequence_id, track_id, original_audio, actor_id=created_by)
+                # 先 flush 再 expire:原声处理改的东西(分离出的 stem、剪辑操作)还没提交,
+                # 直接 expire 会把没写下去的改动丢掉;expire 是为了读到别的会话写进来的取消。
+                db.flush()
                 db.expire_all()
                 job = db.get(Job, job_id)
                 # 部分失败也是成功的一种:配好的那些是真的配好了。但**不能都说成「完成」** ——
@@ -317,15 +319,13 @@ def _run_dub(job_id: str) -> None:
                     else:
                         say(job, "jobMsg_dubDone", done=done)
                     emit_job_event(db, job.id, "job.succeeded", {"track_id": track_id})
-            db.commit()
     except Exception as exc:  # noqa: BLE001 — 任何意外都要落进任务行,否则会话永远停在 running
         logger.exception("字幕配音任务 %s 失败", job_id)
-        with SessionLocal() as db:
+        with unit_of_work() as db:
             job = db.get(Job, job_id)
             if job is not None and finish_job(db, job, status="failed", **blame(exc)):
                 say(job, "jobMsg_dubFailed")
                 emit_job_event(db, job.id, "job.failed", {})
-            db.commit()
 
 
 def _dub_track(db: Session, sequence_id: str, created_by: str | None) -> str:
@@ -348,7 +348,6 @@ def _dub_track(db: Session, sequence_id: str, created_by: str | None) -> str:
     ]
     track = max(fresh, key=lambda track: track.position)
     track.role = "dub"
-    db.commit()
     return track.id
 
 

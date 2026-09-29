@@ -55,7 +55,7 @@ def upsert(
     # 语速给个可用区间:各家引擎对超出范围的值反应不一,有的直接拒、有的悄悄夹取。
     row.speed = min(max(float(speed), 0.5), 2.0)
     row.enabled = bool(enabled)
-    db.commit()
+    db.flush()
     db.refresh(row)
     return row
 

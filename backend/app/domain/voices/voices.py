@@ -17,7 +17,7 @@ from app.domain.providers import models as provider_models
 from app.domain.billing.usage import billable, once
 from app.ai.runtime import tts_daemon, tts_models
 from app.ai.runtime.tts_language import clone_supports, detect_script, edge_voice_language
-from app.core.db import SessionLocal
+from app.core.unit_of_work import after_commit, unit_of_work
 from app.domain.jobs import TTS_SLOTS, blame, run_job_guarded, say
 from app.db.models import Asset, Job, Voice
 from app.db.model_base import now
@@ -254,7 +254,7 @@ def create_from_upload(db: Session, *, workspace_id: str, source: Path, name: st
         consent_at=now(),
     )
     db.add(voice)
-    db.commit()
+    db.flush()
     db.refresh(voice)
     return voice
 
@@ -320,7 +320,7 @@ def create_from_speaker(db: Session, *, workspace_id: str, asset_id: str, speake
         consent_at=now(),
     )
     db.add(voice)
-    db.commit()
+    db.flush()
     db.refresh(voice)
     return voice
 
@@ -355,7 +355,7 @@ def recognize_reference_text(db: Session, voice: Voice, *, actor_id: str | None)
     if not text:
         raise VoiceError("voiceErr_nothingHeard")
     voice.reference_text = text
-    db.commit()
+    db.flush()
     db.refresh(voice)
     return voice
 
@@ -380,7 +380,7 @@ def update_voice(db: Session, voice: Voice, *, name: str | None, reference_text:
         voice.consent_kind = _declared(consent_kind)
         voice.consent_by = actor_id
         voice.consent_at = now()
-    db.commit()
+    db.flush()
     db.refresh(voice)
     return voice
 
@@ -388,11 +388,16 @@ def update_voice(db: Session, voice: Voice, *, name: str | None, reference_text:
 def delete_voice(db: Session, voice: Voice) -> None:
     ref_dir = resolve_key(voice.reference_key).parent if voice.reference_key else None
     db.delete(voice)
-    db.commit()
-    if ref_dir is not None and ref_dir.is_dir():
+    if ref_dir is not None:
+        # 参考音频等行真删掉了再删:回滚了的删除不该把文件带走。
+        after_commit(db, lambda: _remove_dir(ref_dir))
+
+
+def _remove_dir(path: Path) -> None:
+    if path.is_dir():
         import shutil
 
-        shutil.rmtree(ref_dir, ignore_errors=True)
+        shutil.rmtree(path, ignore_errors=True)
 
 
 def reference_path(voice: Voice) -> Path:
@@ -549,7 +554,7 @@ def _update_progress(job_id: str, event: dict) -> None:
     """
     fraction = event.get("fraction")
     message = event.get("message") or ""
-    with SessionLocal() as db:
+    with unit_of_work() as db:
         job = db.get(Job, job_id)
         if job is None or job.status != "running":
             return
@@ -557,7 +562,6 @@ def _update_progress(job_id: str, event: dict) -> None:
             job.progress = max(job.progress or 0.0, min(0.95, float(fraction)))
         if message:
             say(job, message)
-        db.commit()
 
 
 def _run_synthesis_body(
@@ -575,7 +579,7 @@ def _run_synthesis_body(
     clone_engine: str = "",
     clone_model: str = "",
 ) -> None:
-    with SessionLocal() as db:
+    with unit_of_work() as db:
         job = db.get(Job, job_id)
         if job is None:
             return
@@ -587,6 +591,7 @@ def _run_synthesis_body(
             job.progress = 0.2
             say(job, "jobMsg_ttsRunning", voice=voice.name if voice else (engine_voice or engine))
             emit_job_event(db, job.id, "job.running", {})
+            # 「在念」先落库:合成要一阵(本机克隆十几分钟),界面要马上看得到。
             db.commit()
 
             if engine != CLONE_ENGINE:
@@ -648,6 +653,7 @@ def _run_synthesis_body(
                 used = result.get("engine", engine)
                 job = db.get(Job, job_id)
                 job.progress = 0.95
+                # 念完了,先把进度落库再登记素材(拷贝、探测、画波形还要一会儿)。
                 db.commit()
                 asset = register_file_asset(
                     db,
@@ -663,7 +669,6 @@ def _run_synthesis_body(
             say(job, "jobMsg_ttsDone")
             job.result = {"asset_id": asset.id, "engine": used}
             emit_job_event(db, job.id, "job.succeeded", {"asset_id": asset.id})
-            db.commit()
         except Exception as exc:  # noqa: BLE001
             db.rollback()
             job = db.get(Job, job_id)
@@ -674,7 +679,6 @@ def _run_synthesis_body(
                 for field, value in blame(exc).items():
                     setattr(job, field, value)
                 emit_job_event(db, job.id, "job.failed", {})
-                db.commit()
             # 失败落进任务行是给用户看的;日志是给排查的人看的。此前只有前者,于是一次
             # 失败在日志里一个字都没有 —— 而这一整天的排查全靠日志。
             logger.warning("配音任务 %s 失败(%s):%s", job_id, engine, str(exc)[:400])
@@ -847,6 +851,7 @@ def _synthesize_remote(
             job_id=job.id,
         )
         job.progress = 0.85
+        # 付过费的那次合成已经回来了:进度(和这次的用量)先落库,再登记素材。
         db.commit()
         asset = register_file_asset(
             db,
@@ -862,7 +867,6 @@ def _synthesize_remote(
     say(job, "jobMsg_ttsDone")
     job.result = {"asset_id": asset.id, "engine": engine}
     emit_job_event(db, job.id, "job.succeeded", {"asset_id": asset.id})
-    db.commit()
 
 
 def start_podcast(
@@ -945,13 +949,14 @@ def _run_podcast_body(
     from app.ai.providers import synthesize_volcano_podcast
     from app.domain.providers.selection import resolve_connection
 
-    with SessionLocal() as db:
+    with unit_of_work() as db:
         job = db.get(Job, job_id)
         if job is None:
             return
         job.status = "running"
         job.progress = 0.2
         emit_job_event(db, job.id, "job.running", {})
+        # 「在做」先落库:一次播客合成要几分钟,界面要马上看得到。
         db.commit()
 
         profile = resolve_connection(db, "volcano-podcast", provider_profile_id, user_id=job.created_by)
@@ -989,6 +994,7 @@ def _run_podcast_body(
                 )
             job = db.get(Job, job_id)
             job.progress = 0.85
+            # 付过费的那次合成已经回来了:进度(和这次的用量)先落库,再登记素材。
             db.commit()
             asset = register_file_asset(
                 db,
@@ -1008,4 +1014,3 @@ def _run_podcast_body(
         # transcript can run the normal 转写 over the generated audio, which measures them.
         job.result = {"asset_id": asset.id, "texts": result.texts}
         emit_job_event(db, job.id, "job.succeeded", {"asset_id": asset.id})
-        db.commit()

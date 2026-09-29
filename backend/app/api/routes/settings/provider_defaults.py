@@ -5,7 +5,7 @@ from typing import Literal
 from fastapi import APIRouter, HTTPException
 
 from app.core.i18n import tr
-from app.api.deps import CurrentUser, DbSession
+from app.api.deps import CurrentUser, DbSession, Tx
 from app.api.schemas import AgentVoiceOut, AgentVoiceUpdate, CapabilityModelOut, ProviderDefaultOut, ProviderDefaultUpdate
 from app.db.models import ProviderModel
 from app.domain.providers import thinking
@@ -142,7 +142,7 @@ def get_agent_voice(db: DbSession, user: CurrentUser) -> AgentVoiceOut:
 
 
 @router.put("/settings/agent-voice", response_model=AgentVoiceOut)
-def set_agent_voice(body: AgentVoiceUpdate, db: DbSession, user: CurrentUser) -> AgentVoiceOut:
+def set_agent_voice(body: AgentVoiceUpdate, db: Tx, user: CurrentUser) -> AgentVoiceOut:
     """设**我自己**的对话音色。只有这一档 —— 没有部署默认(同 provider-defaults)。"""
     from app.domain.voices import agent_voice
 

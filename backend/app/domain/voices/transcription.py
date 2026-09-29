@@ -30,6 +30,7 @@ from app.core.config import settings
 from app.core.i18n import LocalizedError, tr
 from app.core.text import blame_line
 from app.core.db import SessionLocal
+from app.core.unit_of_work import unit_of_work
 from app.domain.jobs import ASR_SLOTS, blame, finish_job, run_job_guarded, say
 from app.db.models import Asset, Job
 from app.domain.jobs import create_job, dispatch_job, emit_job_event
@@ -140,7 +141,7 @@ class PluginTranscriber:
             return {"language": heard["language"], "segments": len(segments)}
 
         try:
-            with SessionLocal() as db:
+            with unit_of_work() as db:
                 invoke_host(db, self._provider.id, TRANSCRIPTION, {}, prepare=prepare, collect=collect,
                             hooks=quiet_hooks())
         except (PluginDomainError, PluginRuntimeError) as exc:
@@ -304,13 +305,12 @@ def _mirror_model_download_progress(job_id: str, engine_id: str) -> threading.Ev
     def _loop() -> None:
         while not stop.wait(2.0):
             fraction = asr_models.measure_fraction(entry)
-            with SessionLocal() as db:
+            with unit_of_work() as db:
                 job = db.get(Job, job_id)
                 if job is None or job.status != "running":
                     return
                 job.progress = round(0.25 + fraction * 0.6, 4)  # 0.25..0.85
                 say(job, "jobMsg_asrDownloading", percent=int(fraction * 100))
-                db.commit()
 
     threading.Thread(target=_loop, daemon=True).start()
     return stop
@@ -369,7 +369,7 @@ def _run_transcription(job_id: str, asset_id: str) -> None:
 
 
 def _run_transcription_body(job_id: str, asset_id: str) -> None:
-    with SessionLocal() as db:
+    with unit_of_work() as db:
         job = db.get(Job, job_id)
         if job is None:
             return
@@ -380,10 +380,10 @@ def _run_transcription_body(job_id: str, asset_id: str) -> None:
             # 状态经 finish_job 写:排队时就被取消的不被写回 running,转完时不盖掉中途的取消
             # (工作流取消会级联到这里,而手里这份 Job 是开始时读的)。
             if not finish_job(db, job, status="running", progress=0.1):
-                db.commit()
                 return
             say(job, "jobMsg_asrRunning", provider=chosen.name)
             emit_job_event(db, job.id, "job.running", {"provider": engine_id})
+            # 「在转」先落库:转写要一阵,界面要马上看得到;也把 finish_job 拿的写锁放掉。
             db.commit()
             logger.info("transcription job %s: engine=%s asset=%s", job_id, engine_id, asset_id)
 
@@ -393,6 +393,7 @@ def _run_transcription_body(job_id: str, asset_id: str) -> None:
                 wav = Path(tmp) / "audio.wav"
                 _extract_audio(source, wav)
                 job.progress = 0.25
+                # 进度落库再去转:第一次转写要在库里下 2GB 模型,这一笔不落,界面就停在 10%。
                 db.commit()
                 # First transcribe on a machine downloads ~2GB of models inside the
                 # library — surface that as job progress instead of a frozen 25%.
@@ -417,7 +418,6 @@ def _run_transcription_body(job_id: str, asset_id: str) -> None:
             if finish_job(db, job, status="succeeded", progress=1.0, result=result):
                 say(job, "jobMsg_asrDone")
                 emit_job_event(db, job.id, "job.succeeded", {"transcript_id": transcript.id})
-            db.commit()
             logger.info("transcription job %s succeeded: %d segments (%s)", job_id, len(segments), engine_id)
         except Exception as exc:  # noqa: BLE001 — worker thread must record, not die
             db.rollback()
@@ -426,7 +426,6 @@ def _run_transcription_body(job_id: str, asset_id: str) -> None:
             if job is not None and finish_job(db, job, status="failed", **blame(exc)):
                 say(job, "jobMsg_asrFailed")
                 emit_job_event(db, job.id, "job.failed", {})
-            db.commit()
             logger.warning("transcription job %s failed: %s", job_id, exc)
 
 
