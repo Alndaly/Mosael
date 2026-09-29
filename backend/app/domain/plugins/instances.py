@@ -425,7 +425,7 @@ def set_exposed(db: Session, instance: PluginInstance, choices: dict[str, bool])
             db.add(PluginCapability(instance_id=instance.id, tool_name=tool_name, exposed=exposed))
         else:
             row.exposed = exposed
-    db.commit()
+    db.flush()
 
 
 def seed_capabilities(
