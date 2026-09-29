@@ -76,6 +76,7 @@ def test_voice_from_transcribed_speaker() -> None:
             ],
             source="test",
         )
+        db.commit()  # 领域函数不提交,测试就是这里的入口
 
     voice = client.post(
         "/api/voices/from-speaker",

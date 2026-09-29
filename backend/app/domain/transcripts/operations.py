@@ -86,7 +86,7 @@ def attach_transcript(
                     text=token.text,
                 )
             )
-    db.commit()
+    db.flush()
     db.refresh(transcript)
     return transcript
 
