@@ -6,7 +6,7 @@ import json
 import sys
 from pathlib import Path
 
-from app.ai.sidecar import adapters
+from app.ai.sidecar import pi_client
 from app.core.db import SessionLocal
 from app.domain.ai_chat import ChatTarget, chat, target_for
 from app.domain.providers import credentials as provider_credentials
@@ -32,9 +32,9 @@ def test_gateway_frame_contains_identity_not_an_exposed_http_endpoint(tmp_path: 
     script.write_text(GATEWAY_SIDECAR)
     log = tmp_path / "frame.json"
     monkeypatch.setenv("FRAME_LOG", str(log))
-    monkeypatch.setattr(adapters, "pi_sidecar_command", lambda: (sys.executable, str(script)))
+    monkeypatch.setattr(pi_client, "pi_sidecar_command", lambda: (sys.executable, str(script)))
 
-    result = adapters.gateway_complete(
+    result = pi_client.gateway_complete(
         system_prompt="只回答正文",
         prompt="写一句",
         images=[{"data": "aW1hZ2U=", "mimeType": "image/png"}],
@@ -68,9 +68,9 @@ def test_chat_uses_gateway_adapter_for_an_automation_target(monkeypatch) -> None
 
     def fake_complete(**kwargs):
         captured.update(kwargs)
-        return adapters.GatewayResult(text="from oauth", usage={"input": 3, "output": 2})
+        return pi_client.GatewayResult(text="from oauth", usage={"input": 3, "output": 2})
 
-    monkeypatch.setattr(adapters, "gateway_complete", fake_complete)
+    monkeypatch.setattr(pi_client, "gateway_complete", fake_complete)
     target = ChatTarget(
         base_url="",
         api_key="",
@@ -128,10 +128,9 @@ def test_automation_target_resolves_oauth_identity_without_a_base_url(monkeypatc
 
     with SessionLocal() as db:
         assert find_session(db, target.gateway_token) is not None
-    monkeypatch.setattr(
-        adapters,
+    monkeypatch.setattr(pi_client,
         "gateway_complete",
-        lambda **_kwargs: adapters.GatewayResult(text="ok", usage={"input": 1, "output": 1}),
+        lambda **_kwargs: pi_client.GatewayResult(text="ok", usage={"input": 1, "output": 1}),
     )
     assert chat(target, [{"role": "user", "content": "hello"}]) == "ok"
     with SessionLocal() as db:

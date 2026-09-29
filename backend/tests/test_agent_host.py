@@ -3,11 +3,11 @@ from __future__ import annotations
 import time
 from base64 import b64decode
 
-from app.ai.sidecar import adapters
+from app.ai.sidecar import pi_client
 from app.domain.agent import host
 from app.domain.agent import stream as agent_stream
 from app.domain.agent import prompt as agent_prompt
-from app.ai.sidecar.adapters import TurnResult
+from app.ai.sidecar.pi_client import TurnResult
 from app.core.db import SessionLocal
 from app.core.config import settings
 from tests.util import add_provider, fresh_client, create_asset
@@ -210,7 +210,7 @@ def test_message_context_is_sent_to_agent_but_not_stored_in_transcript(monkeypat
 
 def test_turn_error_becomes_assistant_error_message(monkeypatch) -> None:
     def failing_run_turn(*args, **kwargs):
-        raise adapters.AdapterError("boom --api-key sk-secret")
+        raise pi_client.SidecarError("boom --api-key sk-secret")
 
     monkeypatch.setattr(host, "run_turn", failing_run_turn)
 
@@ -241,7 +241,7 @@ def test_failed_turn_keeps_real_usage_and_context(monkeypatch) -> None:
     }
 
     def failing_run_turn(*args, **kwargs):
-        raise adapters.AdapterError(
+        raise pi_client.SidecarError(
             "模型已用完本轮 4,096 Token 输出额度",
             human="模型已用完本轮 4,096 Token 输出额度",
             usage=real_usage,
@@ -275,7 +275,7 @@ def test_失败气泡说得出原因时就别说套话(monkeypatch) -> None:
     timed_out = "智能体运行超过 600 秒未返回,已终止。"
 
     def slow_run_turn(*args, **kwargs):
-        raise adapters.AdapterError(f"{timed_out}\n[sidecar] boot log", human=timed_out)
+        raise pi_client.SidecarError(f"{timed_out}\n[sidecar] boot log", human=timed_out)
 
     monkeypatch.setattr(host, "run_turn", slow_run_turn)
     client = fresh_client()
@@ -299,7 +299,7 @@ def test_失败气泡说得出原因时就别说套话(monkeypatch) -> None:
 
 def test_只有一段日志时仍然退回那句常量(monkeypatch) -> None:
     def crashed_run_turn(*args, **kwargs):
-        raise adapters.AdapterError("Traceback (most recent call last): ...")
+        raise pi_client.SidecarError("Traceback (most recent call last): ...")
 
     monkeypatch.setattr(host, "run_turn", crashed_run_turn)
     client = fresh_client()
@@ -613,7 +613,7 @@ def test_记账之后prompt快照和水位不被覆盖丢掉(monkeypatch) -> Non
     {usage, timeline},第一次构造时的 prompt / context / compaction 全被覆盖。
     轨迹里的 SYSTEM / CONTEXT 行因此从来没出现过。"""
     from app.domain.agent import host
-    from app.ai.sidecar.adapters import TurnResult
+    from app.ai.sidecar.pi_client import TurnResult
     from tests.util import fresh_client
 
     monkeypatch.setattr(
@@ -682,7 +682,7 @@ def test_失败的一轮把已经做过的事留在记录里(monkeypatch) -> Non
         kwargs["on_tool"]({"type": "tool_start", "toolCallId": "t1", "name": "view_scene",
                            "args": {"views": ["overview"]}})
         kwargs["on_tool"]({"type": "tool_end", "toolCallId": "t1", "result": "ok", "isError": False})
-        raise adapters.AdapterError("Connection error.", human="智能体执行失败，请稍后重试。")
+        raise pi_client.SidecarError("Connection error.", human="智能体执行失败，请稍后重试。")
 
     monkeypatch.setattr(host, "run_turn", failing_run_turn)
     client = fresh_client()
@@ -704,7 +704,7 @@ def test_失败的一轮把已经做过的事留在记录里(monkeypatch) -> Non
 def test_没有过程的失败不会凭空多出一条空记录(monkeypatch) -> None:
     """失败在第一步(连供应商都没解析出来)时,timeline 该是没有,而不是一条空的。"""
     def failing_run_turn(*args, **kwargs):
-        raise adapters.AdapterError("boom")
+        raise pi_client.SidecarError("boom")
 
     monkeypatch.setattr(host, "run_turn", failing_run_turn)
     client = fresh_client()

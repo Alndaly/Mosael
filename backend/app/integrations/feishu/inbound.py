@@ -17,7 +17,7 @@ from collections import OrderedDict
 
 from sqlalchemy.orm import Session
 
-from app.ai.sidecar.adapters import AdapterError, run_turn
+from app.ai.sidecar.pi_client import SidecarError, run_turn
 from app.core.config import settings
 from app.core.db import SessionLocal
 from app.core.security import mint_service_session
@@ -242,7 +242,7 @@ def handle_incoming(
             provider_dict, agent_model, _profile = resolve_chat_provider(
                 db, session.provider_profile_id, session.model or "", user_id=user.id
             )
-        except AdapterError as exc:
+        except SidecarError as exc:
             provider_dict, agent_model = None, None
             provider_error = str(exc)
         else:
@@ -264,7 +264,7 @@ def handle_incoming(
     new_adapter_state: object | None = None
     try:
         if provider_error:
-            raise AdapterError(provider_error)
+            raise SidecarError(provider_error)
         result = run_turn(
             adapter,
             prompt=text,
@@ -279,7 +279,7 @@ def handle_incoming(
         )
         reply_text = result.text or "(空回复)"
         new_adapter_state = result.adapter_state
-    except AdapterError as exc:
+    except SidecarError as exc:
         # 适配器错误本就是给人看的中文(没配供应商/缺模型/sidecar 未构建)——
         # 原样带给用户,笼统的「稍后再试」只会让人反复重试同一个配置问题。
         reply_text = f"智能体执行失败:{exc}"

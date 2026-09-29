@@ -93,7 +93,7 @@ def test_the_refresh_still_happens(monkeypatch) -> None:
 def test_a_failing_refresh_never_reaches_the_response(monkeypatch) -> None:
     """刷不动是**那条连接**的事,不该变成整页的错误 —— 断网时每条订阅连接都会刷不动。"""
     def boom(**kwargs):
-        raise provider_auth.AdapterError("OAuth refresh failed: fetch failed")
+        raise provider_auth.SidecarError("OAuth refresh failed: fetch failed")
 
     monkeypatch.setattr(provider_auth, "refresh_oauth_credential", boom)
     provider_auth._refresh_failed_at.clear()
@@ -137,10 +137,10 @@ def test_an_expired_token_being_refreshed_does_not_cry_wolf(monkeypatch) -> None
 
 def test_a_token_that_really_cannot_be_refreshed_does_say_so(monkeypatch) -> None:
     """反过来:真的刷不动就必须说。不然「需重新授权」这个状态等于没有了。"""
-    from app.ai.sidecar.adapters import AdapterError
+    from app.ai.sidecar.pi_client import SidecarError
 
     def refuse(**kwargs):
-        raise AdapterError("OAuth refresh failed for anthropic: fetch failed")
+        raise SidecarError("OAuth refresh failed for anthropic: fetch failed")
 
     monkeypatch.setattr(provider_auth, "refresh_oauth_credential", refuse)
     provider_auth._refresh_failed_at.clear()

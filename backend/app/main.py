@@ -281,7 +281,7 @@ def _wire_seams() -> None:
     from app.ai.runtime import config as tts_runtime_config
     from app.domain.voices import tts_settings
     # 同一条道理:sidecar 是基础设施,不认识"网络配置存在哪张表"。
-    from app.ai.sidecar import adapters as sidecar_adapters
+    from app.ai.sidecar import pi_client
     from app.domain.network import subprocess_env_for_child
     # 插件可以是生成供应商(ADR 0020):生成域把「实例变了就对齐连接」和「plugin:<包> 的 Adapter」
     # 登记进来。插件域不认识生成域,ai/providers 的 registry 也不认识插件 —— 两头都是在这里接上的。
@@ -327,7 +327,7 @@ def _wire_seams() -> None:
     board_receipts.install()
     browser_sessions.install()
     tts_runtime_config.use_source(tts_settings.load)
-    sidecar_adapters.use_proxy_source(subprocess_env_for_child)
+    pi_client.use_proxy_source(subprocess_env_for_child)
 
 
 _wire_seams()

@@ -63,10 +63,10 @@
    > backend send it as an ordinary next turn instead of dropping it.**
 
 2. `agent-sidecar/src/protocol.ts:221` —— 事件类型里有它:`{type:"queued"; mode; pending: boolean}`。
-3. `backend/app/ai/sidecar/adapters.py:400-446` —— `_run_pi` 的事件循环:`text_delta` /
+3. `backend/app/ai/sidecar/pi_client.py:400-446` —— `_run_pi` 的事件循环:`text_delta` /
    `thinking_*` / `tool_*` / `turn_done` / `error` / `aborted`。**没有 `queued` 分支**,落进
    `elif` 链的末尾,什么也不做。
-4. `backend/app/ai/sidecar/adapters.py:214-229`(`_LiveTurn.send`)/ `:246-252`(`steer_turn`)——
+4. `backend/app/ai/sidecar/pi_client.py:214-229`(`_LiveTurn.send`)/ `:246-252`(`steer_turn`)——
    返回值是**管道写入是否成功**,不是「对面接住了吗」。
 5. `backend/app/domain/agent/host.py:890-903` —— `steer_queued_message` 把那个布尔当成
    「插进去了」,为真就 `_unqueue(db, message)` + `commit`:`queued` 标被摘掉。
@@ -240,7 +240,7 @@ sidecar 专门为这件事发了一条事件。**唯独中间那一跳把问题�
        self._process.wait()          # ← 然后无限期等
    ```
 
-2. `backend/app/ai/sidecar/adapters.py:446-456` —— `_run_pi` 的 `finally` 里
+2. `backend/app/ai/sidecar/pi_client.py:446-456` —— `_run_pi` 的 `finally` 里
    `live.close()`(关 stdin)之后调 `child.finish()`。
 3. `agent-sidecar/src/index.ts:232` —— stdin 关了,`main()` 返回,**但没有 `process.exit()`**。
    Node 要等事件循环空了才退。
@@ -642,7 +642,7 @@ video.currentTime = Math.max(0, Math.min(..., message.seconds));
 ## 附:关键文件路径
 
 **后端 ↔ sidecar**
-- `/Users/kinda/Developer/Mosael/backend/app/ai/sidecar/adapters.py`
+- `/Users/kinda/Developer/Mosael/backend/app/ai/sidecar/pi_client.py`
 - `/Users/kinda/Developer/Mosael/agent-sidecar/src/protocol.ts`
 - `/Users/kinda/Developer/Mosael/agent-sidecar/src/index.ts`
 - `/Users/kinda/Developer/Mosael/agent-sidecar/src/pi.ts`

@@ -134,7 +134,7 @@
       },
       "outer": {
         "runtime": "python",
-        "location": "backend/app/ai/sidecar/adapters.py",
+        "location": "backend/app/ai/sidecar/pi_client.py",
         "symbol": "TURN_TIMEOUT_SECONDS",
         "unit": "s"
       }

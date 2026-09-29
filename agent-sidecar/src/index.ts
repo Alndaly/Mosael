@@ -173,7 +173,7 @@ async function main(): Promise<void> {
   });
   const rl = readline.createInterface({ input: process.stdin });
   send({ type: "ready" });
-  //: **一次性的请求**:后端写一帧就关 stdin(补全、压缩、刷新凭据 —— 见 backend/app/ai/sidecar/adapters.py),
+  //: **一次性的请求**:后端写一帧就关 stdin(补全、压缩、刷新凭据 —— 见 backend/app/ai/sidecar/pi_client.py),
   //: 结果只从 stdout 回。读循环结束时它们多半还在路上(一次模型请求要几秒),退出前得等它们把结果写出去 ——
   //: 此前读循环一结束就 exit,这三种请求**一个都送不回结果**,后端只拿到这段启动日志当报错(「写不出来」)。
   //: 对话轮次不在这里:stdin 关了说明后端不要它了,挂着的轮次正是「stdin 关了就退」要甩掉的东西。

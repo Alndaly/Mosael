@@ -51,11 +51,11 @@ def test_no_default_means_no_model_not_a_random_one() -> None:
 
 def test_the_agent_says_so_instead_of_picking_someone_elses_model() -> None:
     """报出来的话要能看懂,而且要指向下一步。"""
-    from app.domain.agent.host import AdapterError, resolve_chat_provider
+    from app.domain.agent.host import SidecarError, resolve_chat_provider
 
     _client, _other, _mine, me = _deployment_with_two_connections()
     with SessionLocal() as db:
-        with pytest.raises(AdapterError) as caught:
+        with pytest.raises(SidecarError) as caught:
             resolve_chat_provider(db, None, "", user_id=me)
         assert "模型" in str(caught.value)
 
@@ -75,7 +75,7 @@ def test_my_own_default_decides_it() -> None:
 
 def test_someone_elses_default_does_not_answer_for_me() -> None:
     """别人设过不等于我设过。删掉部署那一档之后,这是唯一还可能"替我回答"的东西。"""
-    from app.domain.agent.host import AdapterError, resolve_chat_provider
+    from app.domain.agent.host import SidecarError, resolve_chat_provider
 
     _client, _other, mine, me = _deployment_with_two_connections()
     with SessionLocal() as db:
@@ -85,6 +85,6 @@ def test_someone_elses_default_does_not_answer_for_me() -> None:
     mate = second_client("mate")
     with SessionLocal() as db:
         mate_id = db.query(User).filter(User.username == "mate").one().id
-        with pytest.raises(AdapterError):
+        with pytest.raises(SidecarError):
             resolve_chat_provider(db, None, "", user_id=mate_id)
     assert mate.get("/api/auth/me").status_code == 200

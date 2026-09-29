@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException
 
 from app.core.i18n import tr
-from app.ai.sidecar.adapters import AdapterError, refresh_oauth_credential
+from app.ai.sidecar.pi_client import SidecarError, refresh_oauth_credential
 from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import OAuthAnswerIn, OAuthLoginOut, OAuthPromptOut, ProviderModelOut, ProviderProfileOut, ProviderQuotaOut
 from app.core.config import settings as settings_config
@@ -157,7 +157,7 @@ def fetch_provider_quota(profile_id: str, db: DbSession, user: CurrentUser) -> P
             )
             db.refresh(mine) if mine is not None else None
             credential = read_credential(provider_credentials.get(db, profile.id, user.id))
-        except AdapterError as exc:
+        except SidecarError as exc:
             return ProviderQuotaOut(supported=True, error=tr("routeErr_tokenRefreshFailed", detail=str(exc)))
     try:
         snapshot = fetch_quota(pi_provider, credential)

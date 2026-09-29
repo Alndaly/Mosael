@@ -14,7 +14,7 @@ from __future__ import annotations
 import time
 
 from app.domain.agent import host
-from app.ai.sidecar.adapters import TurnResult
+from app.ai.sidecar.pi_client import TurnResult
 from app.core.db import SessionLocal
 from app.db.models import AgentMessage, AgentSession, ProviderUsageEvent
 from tests.util import fresh_client

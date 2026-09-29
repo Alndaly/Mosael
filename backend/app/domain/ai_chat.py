@@ -395,7 +395,7 @@ def _chat_gateway(
     """
     if client is not None:
         raise AiChatError("aiChatErr_gatewayNoClient", label=label)
-    from app.ai.sidecar.adapters import AdapterError, gateway_complete
+    from app.ai.sidecar.pi_client import SidecarError, gateway_complete
 
     # **在发请求之前说清这条账是谁的**,和直连那条对齐。原先放在成功之后,于是调用失败时
     # 那条账没有 provider / model,会落进 `UsageSummary.unpriced` 里那堆"没能定价"的记录 ——
@@ -434,7 +434,7 @@ def _chat_gateway(
                     options=options,
                     timeout=timeout,
                 )
-            except AdapterError as exc:
+            except SidecarError as exc:
                 fallback = (
                     _downgrade_response_format_payload(payload)
                     if allow_response_format_fallback and _rejects_response_format(str(exc))

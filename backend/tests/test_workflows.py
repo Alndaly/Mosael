@@ -1021,7 +1021,7 @@ def test_llm_node_locally_validates_schema_after_provider_response(monkeypatch) 
 
 
 def test_llm_node_uses_the_tool_free_gateway_for_oauth(monkeypatch) -> None:
-    from app.ai.sidecar import adapters
+    from app.ai.sidecar import pi_client
     from app.domain.workflows.executors import ai as ai_nodes
 
     client = fresh_client()
@@ -1030,9 +1030,9 @@ def test_llm_node_uses_the_tool_free_gateway_for_oauth(monkeypatch) -> None:
 
     def fake_gateway(**kwargs):
         captured.update(kwargs)
-        return adapters.GatewayResult(text="订阅模型回答", usage={"input": 7, "output": 3})
+        return pi_client.GatewayResult(text="订阅模型回答", usage={"input": 7, "output": 3})
 
-    monkeypatch.setattr(adapters, "gateway_complete", fake_gateway)
+    monkeypatch.setattr(pi_client, "gateway_complete", fake_gateway)
     with SessionLocal() as db:
         profile = add_provider(
             db,
@@ -1939,7 +1939,7 @@ def test_订阅授权那条路也会降级_而不是一个硬400(monkeypatch) ->
     (json_schema → json_object → 纯文本),连订阅授权的就是一个硬 400 —— 而界面上这两种
     连接长得一模一样。静默忽略一个「我已经允许你降级」的承诺是最坏的一种处理。
     """
-    from app.ai.sidecar import adapters
+    from app.ai.sidecar import pi_client
     from app.domain.workflows.executors import ai as ai_nodes
 
     client = fresh_client()
@@ -1951,10 +1951,10 @@ def test_订阅授权那条路也会降级_而不是一个硬400(monkeypatch) ->
         sampling = (kwargs.get("options") or {}).get("samplingParams") or {}
         kind = (sampling.get("response_format") or {}).get("type")
         if kind == "json_schema":
-            raise adapters.AdapterError("response_format json_schema is not supported by this provider")
-        return adapters.GatewayResult(text='{"title":"海边"}', usage={"input": 7, "output": 3})
+            raise pi_client.SidecarError("response_format json_schema is not supported by this provider")
+        return pi_client.GatewayResult(text='{"title":"海边"}', usage={"input": 7, "output": 3})
 
-    monkeypatch.setattr(adapters, "gateway_complete", fake_gateway)
+    monkeypatch.setattr(pi_client, "gateway_complete", fake_gateway)
     with SessionLocal() as db:
         profile = add_provider(
             db,
@@ -2000,7 +2000,7 @@ def test_翻译节点也能用订阅授权的连接(monkeypatch) -> None:
     但翻译解析调用目标时走的是 direct 通道,选中它就报「当前操作只支持直连 API,请改用
     …工作流…入口」—— 而用户此刻就在工作流里。同一个下拉、两个节点,一个能用一个不能。
     """
-    from app.ai.sidecar import adapters
+    from app.ai.sidecar import pi_client
     from app.domain.workflows.executors import ai as ai_nodes
 
     client = fresh_client()
@@ -2009,9 +2009,9 @@ def test_翻译节点也能用订阅授权的连接(monkeypatch) -> None:
 
     def fake_gateway(**kwargs):
         seen.append(kwargs)
-        return adapters.GatewayResult(text="你好", usage={"input": 3, "output": 1})
+        return pi_client.GatewayResult(text="你好", usage={"input": 3, "output": 1})
 
-    monkeypatch.setattr(adapters, "gateway_complete", fake_gateway)
+    monkeypatch.setattr(pi_client, "gateway_complete", fake_gateway)
     with SessionLocal() as db:
         profile = add_provider(
             db, name="Kimi Code", vendor="kimi-coding", base_url="", auth_type="oauth",

@@ -10,7 +10,7 @@ from dataclasses import dataclass
 
 from sqlalchemy.orm import Session
 
-from app.ai.sidecar.adapters import AdapterError
+from app.ai.sidecar.pi_client import SidecarError
 from app.db.models import AgentSession
 from app.domain.agent.host import resolve_chat_provider
 from app.domain.analysis.service import AnalysisError
@@ -39,6 +39,6 @@ def agent_session_target(db: Session, agent_session_id: str, *, workspace_id: st
         _provider, model, connection = resolve_chat_provider(
             db, session.provider_profile_id, session.model or "", user_id=user_id
         )
-    except AdapterError as exc:
+    except SidecarError as exc:
         raise AnalysisError.relay(exc) from exc
     return AgentSessionTarget(connection=connection, model=model, mode=session.analysis_video_mode or "auto")

@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import time
 
-from app.ai.sidecar.adapters import TurnResult
+from app.ai.sidecar.pi_client import TurnResult
 from app.core.db import SessionLocal
 from app.db.models import AgentSession
 from app.domain.feishu import bindings
@@ -120,10 +120,10 @@ def test_handle_incoming_adapter_error_still_replies(monkeypatch) -> None:
     ).json()
 
     sent: list[str] = []
-    from app.ai.sidecar.adapters import AdapterError
+    from app.ai.sidecar.pi_client import SidecarError
 
     def boom(*args, **kwargs):
-        raise AdapterError("cli exploded")
+        raise SidecarError("cli exploded")
 
     me = client.get("/api/auth/me").json()
     with SessionLocal() as db:

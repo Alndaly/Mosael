@@ -141,10 +141,10 @@ def test_分离_worker_真跑一次_报的是_key(english, tmp_path) -> None:
 
 
 def test_智能体没配供应商时说英文(english) -> None:
-    from app.ai.sidecar import adapters
+    from app.ai.sidecar import pi_client
 
-    with pytest.raises(adapters.AdapterError) as err:
-        adapters.compact_session(api_base="", token="", provider=None, model=None, adapter_state=None)
+    with pytest.raises(pi_client.SidecarError) as err:
+        pi_client.compact_session(api_base="", token="", provider=None, model=None, adapter_state=None)
     assert str(err.value) == "No AI provider is available. Add and enable one in Settings."
 
 

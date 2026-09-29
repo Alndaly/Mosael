@@ -3,7 +3,7 @@
 ## 为什么这条看不出来
 
 两侧是两种语言、两个运行时:`agent-sidecar/src/protocol.ts` 的 `Event` 联合是 TypeScript,
-接它的是 `adapters.py` / `domain/agent/login.py` 里的 `elif` 链。**没有任何一处同时看得见这两边。**
+接它的是 `ai/sidecar/pi_client.py` / `domain/agent/login.py` 里的 `elif` 链。**没有任何一处同时看得见这两边。**
 sidecar 多发一种事件,后端那条 `elif` 链默默落到末尾什么也不做;两侧都不报错,行为只是少了一块。
 
 本仓库真实发生过:sidecar 专门为「那一轮在用户打字和这一帧到达之间结束了」发一条
@@ -29,7 +29,7 @@ REPO = Path(__file__).resolve().parent.parent.parent
 PROTOCOL = REPO / "agent-sidecar" / "src" / "protocol.ts"
 #: 接事件的那几处。新增一处读 sidecar 事件的地方,要加进来。
 CONSUMERS = (
-    REPO / "backend" / "app" / "ai" / "sidecar" / "adapters.py",
+    REPO / "backend" / "app" / "ai" / "sidecar" / "pi_client.py",
     REPO / "backend" / "app" / "domain" / "agent" / "login.py",
 )
 

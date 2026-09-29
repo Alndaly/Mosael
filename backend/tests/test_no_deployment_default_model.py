@@ -85,7 +85,7 @@ def test_resolving_without_my_own_default_gives_nothing() -> None:
 
 def test_a_chat_without_a_chosen_model_says_so() -> None:
     """报错要说清下一步做什么,而不是"未配置供应商"。"""
-    from app.domain.agent.host import AdapterError, resolve_chat_provider
+    from app.domain.agent.host import SidecarError, resolve_chat_provider
 
     fresh_client()
     _provider()
@@ -94,7 +94,7 @@ def test_a_chat_without_a_chosen_model_says_so() -> None:
         user_id = db.execute(
             __import__("sqlalchemy").text("SELECT id FROM users LIMIT 1")
         ).scalar_one()
-        with pytest.raises(AdapterError) as caught:
+        with pytest.raises(SidecarError) as caught:
             resolve_chat_provider(db, None, "", user_id=user_id)
 
     message = str(caught.value)

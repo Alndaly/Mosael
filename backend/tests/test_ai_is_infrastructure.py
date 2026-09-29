@@ -4,7 +4,7 @@
 把模型跑起来」(runtime)。这两件事都和「这个部署里谁配了什么、这次要给谁记账」无关。
 
 反过来才对:`domain` 需要什么就去调 `ai`,而 `ai` 需要什么就**声明出来、等着被喂**
-(ai/runtime/config.use_source、ai/sidecar/adapters.use_proxy_source),由组合层
+(ai/runtime/config.use_source、ai/sidecar/pi_client.use_proxy_source),由组合层
 (app/main.py 的启动装配)接上。
 
 这条约束此前**不成立**:ai → domain 有 33 条边,domain → ai 有 17 条,两个包互相依赖。
@@ -63,10 +63,10 @@ def test_ai_不认识业务层() -> None:
 def test_注入点确实存在_而不是靠自觉() -> None:
     """把"不许 import"变成"有地方可以被喂"。只禁不给出路的话,下一个人只能违反它。"""
     from app.ai.runtime import config
-    from app.ai.sidecar import adapters
+    from app.ai.sidecar import pi_client
 
     assert callable(config.use_source), "运行时没有配置注入点"
-    assert callable(adapters.use_proxy_source), "sidecar 没有代理注入点"
+    assert callable(pi_client.use_proxy_source), "sidecar 没有代理注入点"
 
     # 没装的时候也要能工作 —— 单跑一个 worker 子进程时没人会去装配。
     assert config._from_env().engine, "没装配置来源时拿不到可用的默认值"
@@ -85,9 +85,9 @@ def test_接缝在导入期就接上了_不是等到_lifespan() -> None:
     import app.main  # noqa: F401  —— 组装根,import 它就等于装配完成
 
     from app.ai.runtime import config
-    from app.ai.sidecar import adapters
+    from app.ai.sidecar import pi_client
     from app.domain.network import subprocess_env_for_child
     from app.domain.voices import tts_settings
 
     assert config._source is tts_settings.load, "TTS 配置来源没接上:读到的会是环境变量默认值,不是用户存的那份"
-    assert adapters._proxy_source is subprocess_env_for_child, "sidecar 代理来源没接上:子进程会不带代理起来"
+    assert pi_client._proxy_source is subprocess_env_for_child, "sidecar 代理来源没接上:子进程会不带代理起来"

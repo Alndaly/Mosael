@@ -36,7 +36,7 @@ DIRECT = (BACKEND / "app" / "domain" / "ai_chat.py",)
 SIDECAR = (
     BACKEND / "app" / "domain" / "providers" / "runtime.py",
     BACKEND / "app" / "domain" / "providers" / "models.py",
-    BACKEND / "app" / "ai" / "sidecar" / "adapters.py",
+    BACKEND / "app" / "ai" / "sidecar" / "pi_client.py",
 )
 
 #: 只有 sidecar 用得上的格子。**每一条都要写清楚为什么**,而且这张表只减不增 ——

@@ -29,7 +29,7 @@ from dataclasses import dataclass
 
 from sqlalchemy.orm import Session
 
-from app.ai.sidecar.adapters import AdapterError, refresh_oauth_credential
+from app.ai.sidecar.pi_client import SidecarError, refresh_oauth_credential
 from app.core.config import settings
 from app.core.i18n import LocalizedError
 from app.db.models import ProviderCredential, ProviderProfile
@@ -270,7 +270,7 @@ def _refresh_in_background(token: str, pending: list[tuple[str, str, str, dict]]
                 profile_id=profile_id,
                 credential=credential,
             )
-        except AdapterError as exc:
+        except SidecarError as exc:
             logger.warning("刷新 %s 的订阅令牌失败:%s", name, exc)
             _refresh_failed_at[profile_id] = now
             continue

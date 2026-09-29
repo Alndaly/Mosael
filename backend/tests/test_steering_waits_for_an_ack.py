@@ -20,8 +20,8 @@ from __future__ import annotations
 
 import threading
 
-from app.ai.sidecar import adapters
-from app.ai.sidecar.adapters import _LIVE, _LIVE_LOCK, _LiveTurn, abort_turn, steer_turn
+from app.ai.sidecar import pi_client
+from app.ai.sidecar.pi_client import _LIVE, _LIVE_LOCK, _LiveTurn, abort_turn, steer_turn
 
 
 class _Pipe:
@@ -154,4 +154,4 @@ def _wait_until(predicate, timeout: float = 2.0) -> None:
 
 
 def test_超时常量是给本地管道的_不是给网络的() -> None:
-    assert 0 < adapters.ACK_TIMEOUT_SECONDS <= 5, "这是一次本地管道来回,不该让用户等更久"
+    assert 0 < pi_client.ACK_TIMEOUT_SECONDS <= 5, "这是一次本地管道来回,不该让用户等更久"

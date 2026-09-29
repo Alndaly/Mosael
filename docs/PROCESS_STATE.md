@@ -48,7 +48,7 @@
 | `app/domain/agent/stream.py:_streams` | 正在跑的那一轮的 SSE 流 | 后端一重启线程即死,`finally` 执行不到,会话永远卡在「思考中」—— 所以有 `reconcile_orphaned_agent_sessions()` 在启动时统一拨回,并把那一轮留下的确认卡一并作废(否则那张卡还能被点,而它是**当场执行工具**的)。 |
 | `app/domain/jobs.py:_CHILDREN` | 任务的子进程句柄(ffmpeg / ASR / TTS) | 没有它,取消只是翻了个数据库字段:ffmpeg 跑完整段、烧掉用户明确要求停下的 CPU,然后把取消覆盖成「成功」。重启后旧句柄没了,那些孤儿由 `reconcile_orphaned_jobs` 收拾。 |
 | `app/integrations/feishu/connections.py:_processes` | 每个机器人一个子进程 | 独立进程是 lark SDK 的硬约束(它的 ws 客户端共享模块级事件循环)。第二个后端会**再拉一份**,同一条消息被处理两次。 |
-| `app/ai/sidecar/adapters.py:_LIVE` | 正在跑的 sidecar 轮次 | 同 `_streams`。 |
+| `app/ai/sidecar/pi_client.py:_LIVE` | 正在跑的 sidecar 轮次 | 同 `_streams`。 |
 | `app/workers/scheduler.py:_stop_event` | 定时任务线程的停止信号 | 每个进程一个调度线程 —— 多进程下同一条定时任务会被触发多次。 |
 | `app/domain/plugins/catalog_watch.py:_watch_stop`、`app/domain/plugins/catalog_watch.py:_watch_thread` | 插件目录的巡检线程(启动时把每个实例替宿主做的事刷一遍 —— 生成模型、运行时报出的工具 —— 之后每分钟问一次指纹,变了才重新拉) | 重启后重新刷一遍,不丢东西(目录缓存在模型行和 `discovered_tools` 上)。第二个进程会**再巡检一份**:每分钟多问一次 ComfyUI,结果一样,只是多一倍请求。 |
 
@@ -69,7 +69,7 @@
 - `app/core/http_retry.py:_max_retries` — 出站重试次数。调用点散在十几个适配器里,不少拿不到 db 会话。
 - `app/core/logging.py:_configured` — 日志装配一次的闸。
 - `app/ai/runtime/config.py:_cached`、`app/ai/runtime/config.py:_source` — TTS 运行时配置及其来源。
-- `app/ai/sidecar/adapters.py:_proxy_source` — 出站代理来源。
+- `app/ai/sidecar/pi_client.py:_proxy_source` — 出站代理来源。
 - 代理环境变量本身写在 `app/domain/network.py`(改的是**本进程**的 env,而不是给十几处 `httpx.Client` 逐个传 `proxy=`)。
 
 ## 四、纯缓存与去重

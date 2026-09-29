@@ -548,7 +548,7 @@ double-booking」(`usage.py:217-219`)。
   `poll_until_ready`、`RemoteTaskWatch`
 - `backend/app/ai/providers/registry.py` —— 适配器注册
 - `backend/app/ai/model_catalog.py` —— 端点 `/models` 目录与 TTL 缓存(§2.5)
-- `backend/app/ai/sidecar/adapters.py` —— pi sidecar 的 `run_turn` / `gateway_complete` 帧
+- `backend/app/ai/sidecar/pi_client.py` —— pi sidecar 的 `run_turn` / `gateway_complete` 帧
 
 **领域侧**
 - `backend/app/domain/ai_chat.py` —— 直连对话补全的唯一实现(§2.1 / §2.2 / §2.3)

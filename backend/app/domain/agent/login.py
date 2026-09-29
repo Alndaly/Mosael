@@ -21,7 +21,7 @@ import threading
 import time
 from dataclasses import dataclass, field
 
-from app.ai.sidecar.adapters import proxy_env, pi_sidecar_command
+from app.ai.sidecar.pi_client import proxy_env, pi_sidecar_command
 from app.core.child_process import popen_text
 from app.core.i18n import LocalizedError, get_current_locale, t
 

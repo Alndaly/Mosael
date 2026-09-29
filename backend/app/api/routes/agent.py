@@ -165,7 +165,7 @@ def compact_agent_session(session_id: str, db: DbSession, user: CurrentUser) -> 
     session = writable_session(db, user, session_id)
     try:
         result = host.compact_session_context(db, session, user)
-    except host.AdapterError as exc:
+    except host.SidecarError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return AgentCompactOut(**result)
 

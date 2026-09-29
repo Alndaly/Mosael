@@ -26,7 +26,7 @@ TURN_TIMEOUT_SECONDS = 600
 
 
 
-class AdapterError(LocalizedError, RuntimeError):
+class SidecarError(LocalizedError, RuntimeError):
     """一次调用失败。
 
     带文案 key(`aiErr_*`,见 core/i18n),`str(exc)` 按读的人的语言翻;sidecar / 供应商回的原话
@@ -100,7 +100,7 @@ def gateway_complete(
     """Run one stateless, tool-free completion through pi's provider/OAuth machinery."""
     node, sidecar = pi_sidecar_command()
     if not Path(sidecar).exists():
-        raise AdapterError("aiErr_sidecarNotBuilt", path=sidecar)
+        raise SidecarError("aiErr_sidecarNotBuilt", path=sidecar)
     frame = {
         "type": "gateway_complete",
         "turnId": "gateway",
@@ -157,8 +157,8 @@ def gateway_complete(
             raise _reported(event, "aiErr_gatewayFailed")
     stderr = _tail(child.finish())
     if child.timed_out:
-        raise AdapterError("aiErr_gatewayTimeout", seconds=f"{timeout:g}")
-    raise AdapterError(stderr or "aiErr_gatewayNoResult")
+        raise SidecarError("aiErr_gatewayTimeout", seconds=f"{timeout:g}")
+    raise SidecarError(stderr or "aiErr_gatewayNoResult")
 
 def run_turn(
     adapter: str,
@@ -197,7 +197,7 @@ def run_turn(
             thinking_level=thinking_level,
             images=images,
         )
-    raise AdapterError(f"Unknown agent adapter: {adapter}")
+    raise SidecarError(f"Unknown agent adapter: {adapter}")
 
 
 #: 等 sidecar 回一句「接住了没有」的上限。本地管道一个来回,对面收到帧就立刻回 ——
@@ -371,10 +371,10 @@ def _run_pi(
     service token; mutations still flow through confirmation cards. adapter_state
     carries pi's serialized messages for multi-turn memory (round-tripped)."""
     if not provider or not model:
-        raise AdapterError("aiErr_noProvider")
+        raise SidecarError("aiErr_noProvider")
     node, sidecar = pi_sidecar_command()
     if not Path(sidecar).exists():
-        raise AdapterError("aiErr_sidecarNotBuilt", path=sidecar)
+        raise SidecarError("aiErr_sidecarNotBuilt", path=sidecar)
 
     frame = {
         "type": "run_turn",
@@ -485,7 +485,7 @@ def _run_pi(
                 detail = _tail(str(event.get("message", "pi sidecar error")))
                 # 还没产出任何文本/工具调用就失败,基本都是供应商配置问题(端点不对、模型不存在、
                 # 鉴权失败),给一句可操作的提示;已经跑起来后的失败就只报原始错误。
-                # 失败也可能带着记忆回来(见 AdapterError 的说明)。
+                # 失败也可能带着记忆回来(见 SidecarError 的说明)。
                 failed_state = event.get("sessionState")
                 failed_usage = event.get("usage")
                 failed_context = event.get("context")
@@ -496,10 +496,10 @@ def _run_pi(
                     "code": error_code,
                 }
                 if error_code == "output_limit":
-                    raise AdapterError(detail, failed_state, human=detail, **error_kwargs)
+                    raise SidecarError(detail, failed_state, human=detail, **error_kwargs)
                 if not saw_tool:
-                    raise AdapterError("aiErr_turnFailedCheckProvider", failed_state, detail=detail, **error_kwargs)
-                raise AdapterError(detail, failed_state, **error_kwargs)
+                    raise SidecarError("aiErr_turnFailedCheckProvider", failed_state, detail=detail, **error_kwargs)
+                raise SidecarError(detail, failed_state, **error_kwargs)
             elif kind == "aborted":
                 aborted = True
     finally:
@@ -516,12 +516,12 @@ def _run_pi(
         # `human` 是落进对话气泡的那一句(见 domain/agent/host),按**此刻**的语言渲染。
         human = tr("aiErr_turnTimeout", seconds=TURN_TIMEOUT_SECONDS)
         if stderr_tail:
-            raise AdapterError("aiErr_turnTimeoutDetail", seconds=TURN_TIMEOUT_SECONDS, detail=stderr_tail, human=human)
-        raise AdapterError("aiErr_turnTimeout", seconds=TURN_TIMEOUT_SECONDS, human=human)
+            raise SidecarError("aiErr_turnTimeoutDetail", seconds=TURN_TIMEOUT_SECONDS, detail=stderr_tail, human=human)
+        raise SidecarError("aiErr_turnTimeout", seconds=TURN_TIMEOUT_SECONDS, human=human)
     if result_text is None:
         if stderr_tail:
-            raise AdapterError(stderr_tail)
-        raise AdapterError("aiErr_sidecarExited", exit_code=process.returncode)
+            raise SidecarError(stderr_tail)
+        raise SidecarError("aiErr_sidecarExited", exit_code=process.returncode)
     if aborted:
         # A stopped turn is a normal outcome, not a failure: the user asked for it, and the
         # partial text is real output they watched arrive.
@@ -531,8 +531,8 @@ def _run_pi(
         # (unreachable base_url, wrong model name, bad key) and pi swallowed it. Never let that
         # surface as an empty chat bubble — the user has to be told why nothing came back.
         if stderr_tail:
-            raise AdapterError(stderr_tail)
-        raise AdapterError("aiErr_emptyReply", human=tr("aiErr_emptyReply"))
+            raise SidecarError(stderr_tail)
+        raise SidecarError("aiErr_emptyReply", human=tr("aiErr_emptyReply"))
     return TurnResult(
         text=result_text.strip(),
         adapter_state=result_state,
@@ -544,11 +544,11 @@ def _tail(text: str, limit: int = 500) -> str:
     return text.strip()[-limit:]
 
 
-def _reported(event: dict, fallback_key: str) -> AdapterError:
+def _reported(event: dict, fallback_key: str) -> SidecarError:
     """sidecar 回了一条 `error` 事件:它说了原因就原样交出(那是它/供应商的话,我们不翻);
     没说就用 `fallback_key` 那一句。"""
     message = _tail(str(event.get("message") or ""))
-    return AdapterError(message or fallback_key)
+    return SidecarError(message or fallback_key)
 
 
 @dataclass
@@ -574,10 +574,10 @@ def compact_session(
     再问一句话才生效,和这个动作的语义对不上。摘要仍然会花一次模型调用,所以它是手动的。
     """
     if not provider or not model:
-        raise AdapterError("aiErr_noProvider")
+        raise SidecarError("aiErr_noProvider")
     node, sidecar = pi_sidecar_command()
     if not Path(sidecar).exists():
-        raise AdapterError("aiErr_sidecarNotBuilt", path=sidecar)
+        raise SidecarError("aiErr_sidecarNotBuilt", path=sidecar)
     frame = {
         "type": "compact",
         "turnId": "compact",
@@ -625,7 +625,7 @@ def compact_session(
         if event.get("type") == "error":
             child.finish()
             raise _reported(event, "aiErr_compactFailed")
-    raise AdapterError(_tail(child.finish()) or "aiErr_compactNoResult")
+    raise SidecarError(_tail(child.finish()) or "aiErr_compactNoResult")
 
 
 def refresh_oauth_credential(*, api_base: str, token: str, pi_provider: str, profile_id: str, credential: dict | None) -> bool:
@@ -637,7 +637,7 @@ def refresh_oauth_credential(*, api_base: str, token: str, pi_provider: str, pro
     """
     node, sidecar = pi_sidecar_command()
     if not Path(sidecar).exists():
-        raise AdapterError("aiErr_sidecarNotBuilt", path=sidecar)
+        raise SidecarError("aiErr_sidecarNotBuilt", path=sidecar)
     frame = {
         "type": "refresh_credential",
         "turnId": "refresh",
@@ -671,4 +671,4 @@ def refresh_oauth_credential(*, api_base: str, token: str, pi_provider: str, pro
         if event.get("type") == "error":
             child.finish()
             raise _reported(event, "aiErr_refreshFailed")
-    raise AdapterError(_tail(child.finish()) or "aiErr_refreshNoResult")
+    raise SidecarError(_tail(child.finish()) or "aiErr_refreshNoResult")

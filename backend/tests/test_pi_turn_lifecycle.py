@@ -19,7 +19,7 @@ from pathlib import Path
 
 import pytest
 
-from app.ai.sidecar import adapters
+from app.ai.sidecar import pi_client
 
 #: Answers the turn, then reports every control frame it receives back through stderr, so a
 #: test can assert on what the backend actually wrote — the steering channel is otherwise
@@ -74,13 +74,13 @@ for _ in sys.stdin:
 def fake_sidecar(tmp_path: Path, monkeypatch):
     script = tmp_path / "sidecar.py"
     script.write_text(FAKE_SIDECAR)
-    monkeypatch.setattr(adapters, "pi_sidecar_command", lambda: (sys.executable, str(script)))
+    monkeypatch.setattr(pi_client, "pi_sidecar_command", lambda: (sys.executable, str(script)))
     monkeypatch.setattr(Path, "exists", lambda self: True, raising=False)
     return script
 
 
 def _run(**kwargs):
-    return adapters._run_pi(
+    return pi_client._run_pi(
         "hi",
         "system",
         "http://127.0.0.1:8899",
@@ -109,27 +109,27 @@ def test_the_turn_ends_at_turn_done_not_at_process_exit(fake_sidecar) -> None:
 def test_the_live_channel_is_released_when_the_turn_ends(fake_sidecar) -> None:
     """A stale entry would let a later steer write into a finished turn's stdin."""
     _run(session_id="sess-1")
-    assert "sess-1" not in adapters._LIVE
+    assert "sess-1" not in pi_client._LIVE
 
 
 def test_the_live_channel_is_released_when_the_sidecar_reports_an_error(tmp_path: Path, monkeypatch) -> None:
     script = tmp_path / "error_sidecar.py"
     script.write_text(ERROR_SIDECAR)
-    monkeypatch.setattr(adapters, "pi_sidecar_command", lambda: (sys.executable, str(script)))
+    monkeypatch.setattr(pi_client, "pi_sidecar_command", lambda: (sys.executable, str(script)))
     monkeypatch.setattr(Path, "exists", lambda self: True, raising=False)
 
-    with pytest.raises(adapters.AdapterError, match="provider failed"):
+    with pytest.raises(pi_client.SidecarError, match="provider failed"):
         _run(session_id="sess-error")
 
-    assert "sess-error" not in adapters._LIVE
+    assert "sess-error" not in pi_client._LIVE
 
 
 def test_steering_reaches_a_running_turn_and_not_a_finished_one(fake_sidecar) -> None:
     """steer_turn's return value is what the caller uses to decide between injecting the
     message and running it as an ordinary next turn."""
-    assert adapters.steer_turn("sess-2", "改一下") is False  # nothing running
+    assert pi_client.steer_turn("sess-2", "改一下") is False  # nothing running
     _run(session_id="sess-2")
-    assert adapters.steer_turn("sess-2", "改一下") is False  # finished, channel closed
+    assert pi_client.steer_turn("sess-2", "改一下") is False  # finished, channel closed
 
 
 @pytest.fixture
@@ -138,7 +138,7 @@ def echo_sidecar(tmp_path: Path, monkeypatch):
     script.write_text(ECHO_SIDECAR)
     log = tmp_path / "frames.jsonl"
     monkeypatch.setenv("FRAME_LOG", str(log))
-    monkeypatch.setattr(adapters, "pi_sidecar_command", lambda: (sys.executable, str(script)))
+    monkeypatch.setattr(pi_client, "pi_sidecar_command", lambda: (sys.executable, str(script)))
     monkeypatch.setattr(Path, "exists", lambda self: True, raising=False)
     return log
 
@@ -168,11 +168,11 @@ class TestControlFrames:
             time.sleep(0.4)
             act()
             time.sleep(0.2)
-            adapters.abort_turn(session_id)
+            pi_client.abort_turn(session_id)
 
         thread = threading.Thread(target=drive, daemon=True)
         thread.start()
-        capture["result"] = adapters._run_pi(
+        capture["result"] = pi_client._run_pi(
             "hi", "system", "http://x", "token", "ws",
             {"base_url": "http://x", "api_key": "k", "vendor": "v"},
             "model", None, None, None, session_id=session_id, images=images,
@@ -181,7 +181,7 @@ class TestControlFrames:
 
     def test_a_steer_reaches_the_sidecar_in_the_shape_it_parses(self, echo_sidecar) -> None:
         capture: dict = {}
-        self._run_with("s-steer", lambda: adapters.steer_turn("s-steer", "改成竖屏"), capture)
+        self._run_with("s-steer", lambda: pi_client.steer_turn("s-steer", "改成竖屏"), capture)
         frames = _frames(echo_sidecar)
 
         steer = next(f for f in frames if f["type"] == "steer")
@@ -193,7 +193,7 @@ class TestControlFrames:
         """Per-message cancel depends on this: pi can only clear its queue, so the client
         declares what should remain rather than what to remove."""
         capture: dict = {}
-        self._run_with("s-queue", lambda: adapters.set_turn_queue("s-queue", ["二", "三"]), capture)
+        self._run_with("s-queue", lambda: pi_client.set_turn_queue("s-queue", ["二", "三"]), capture)
         frames = _frames(echo_sidecar)
 
         queue = next(f for f in frames if f["type"] == "queue")
@@ -202,7 +202,7 @@ class TestControlFrames:
     def test_an_empty_queue_is_sent_as_an_empty_list_not_skipped(self, echo_sidecar) -> None:
         """Withdrawing the only queued message must actually clear pi's queue."""
         capture: dict = {}
-        self._run_with("s-empty", lambda: adapters.set_turn_queue("s-empty", []), capture)
+        self._run_with("s-empty", lambda: pi_client.set_turn_queue("s-empty", []), capture)
         frames = _frames(echo_sidecar)
 
         queue = next(f for f in frames if f["type"] == "queue")

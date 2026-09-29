@@ -93,13 +93,13 @@ def test_失败带回来的记忆要存下来() -> None:
     不回存的话记忆回滚到上一次成功,模型下次醒来不知道自己已经建过项目、改过时间线,
     于是会再做一遍。这是比「不知道失败过」更贵的那个后果。
     """
-    from app.ai.sidecar.adapters import AdapterError
+    from app.ai.sidecar.pi_client import SidecarError
 
-    error = AdapterError("上游 5xx", [{"role": "assistant", "content": "我已经建好项目了"}])
+    error = SidecarError("上游 5xx", [{"role": "assistant", "content": "我已经建好项目了"}])
     assert error.adapter_state == [{"role": "assistant", "content": "我已经建好项目了"}]
 
     # 拿不到就是 None —— sidecar 整个进程没了的那种,确实无从补起。
-    assert AdapterError("进程没了").adapter_state is None
+    assert SidecarError("进程没了").adapter_state is None
 
 
 def test_sidecar_在错误事件里带上记忆() -> None:

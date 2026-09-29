@@ -9,7 +9,7 @@ import time
 from sqlalchemy import exists, select, update
 from sqlalchemy.orm import Session
 
-from app.ai.sidecar.adapters import AdapterError, TurnResult, abort_turn, compact_session, run_turn, steer_turn
+from app.ai.sidecar.pi_client import SidecarError, TurnResult, abort_turn, compact_session, run_turn, steer_turn
 from app.domain.agent.prompt import (
     _attached_images,
     _prompt_snapshot,
@@ -100,7 +100,7 @@ def resolve_chat_provider(
         # **不再回退到"第一个启用的连接"。** 那个兜底的失败方式跑出来过:界面显示 DeepSeek、
         # 回答却是「我是 Kimi」—— 碰巧第一个是订阅计划连接,而订阅走它自己的 provider 定义
         # (自带身份、自带思考)。没有默认就说没有,这句话用户看得懂;悄悄换一个他看不懂。
-        raise AdapterError(tr("agentErr_noChatModelChosen"))
+        raise SidecarError(tr("agentErr_noChatModelChosen"))
     if not (model or "").strip():
         # 没指定模型时用这条连接下第一个能对话的模型。default_model 那个字段正在退场 ——
         # 它是"一档案一模型"时代的写法,同一条连接有多个对话模型时它给不出答案。
@@ -112,7 +112,7 @@ def resolve_chat_provider(
     # A profile with no usable model would otherwise reach the sidecar as model=""
     # and come back as a silent empty turn.
     if not agent_model:
-        raise AdapterError(tr("agentErr_connectionNoModel", name=profile.name))
+        raise SidecarError(tr("agentErr_connectionNoModel", name=profile.name))
     provider_dict = sidecar_provider(db, profile, agent_model)
     return provider_dict, agent_model, profile
 
@@ -567,7 +567,7 @@ def _run_turn_thread(session_id: str, prompt: str, token: str) -> None:
             # model call failed somewhere upstream. Surfacing it as an empty bubble is what made
             # provider misconfiguration look like "nothing happened".
             if not final_text.strip() and not timeline:
-                raise AdapterError(tr("agentErr_emptyReply"))
+                raise SidecarError(tr("agentErr_emptyReply"))
             usage = _usage_from_started(turn_started, stream_state.get("first_token_at"))
             usage["metering"] = _turn_metering(prompt, final_text, result.usage)
             prompt_snapshot = _prompt_snapshot(db, session.id, system_prompt)
@@ -618,7 +618,7 @@ def _run_turn_thread(session_id: str, prompt: str, token: str) -> None:
                 # 上下文水位、压缩标记整个覆盖丢了。表现是轨迹里永远见不到 SYSTEM/CONTEXT 行,
                 # 而写入代码、读取代码单看都是对的(真机上最近 300 条消息里快照 0 条)。
                 assistant_message.payload = {**(assistant_message.payload or {}), "usage": usage}
-        except AdapterError as exc:
+        except SidecarError as exc:
             # **失败也回存记忆(拿得到的话)。** 这一轮是跑过的:失败点之前的工具调用真的发生了,
             # 它们改过的东西留在库里。不回存的话记忆回滚到上一次成功,模型下次醒来不知道自己
             # 已经做过那些事,于是会再做一遍 —— 而它做的是建项目、改时间线这类有副作用的事。
