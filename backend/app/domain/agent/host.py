@@ -518,18 +518,25 @@ def _run_turn_thread(session_id: str, prompt: str, token: str, *, actor_id: str 
     api_base = f"http://{settings.backend_host}:{settings.backend_port}"
     final_text = ""
     turn_started = time.monotonic()
+    provider_profile_id: str | None = None
+    provider_vendor = ""
+    provider_model = ""
+    result: TurnResult | None = None
+    #: 准备或运行时的失败,留到落库那一段里按原样抛出 —— 和那里自己抛的错走同一组 except。
+    failure: BaseException | None = None
+
+    # ---- 1. 准备:短会话,读完就还连接 ----
+    # **跑模型的那几分钟不占数据库连接。** 此前整轮包在一个会话里:一轮对话几分钟,连接就被钉几分钟,
+    # 而这期间它唯一的用处是最后写一条消息。几个会话同时在想,连接池就空了,别的请求排在它们后面。
     with SessionLocal() as db:
         session = db.get(AgentSession, session_id)
         if session is None:
             return
         #: 先记下:收尾时会话可能已被删掉,那时再读它的属性会抛。
         origin = session.origin
-        provider_profile_id: str | None = None
-        provider_vendor = ""
-        provider_model = ""
-        # Everything below runs inside the try: a failure while resolving the provider (or
-        # building the prompt) must still write an error message and reset session.status —
-        # otherwise the worker dies silently and the session hangs in "running" forever.
+        # Everything below is caught: a failure while resolving the provider (or building the
+        # prompt) must still write an error message and reset session.status — otherwise the
+        # worker dies silently and the session hangs in "running" forever.
         try:
             system_prompt = build_system_prompt(db, session)
             # pi 适配器的对话模型:优先用会话选定的供应商+模型,否则回退第一个启用供应商及其默认模型
@@ -545,23 +552,49 @@ def _run_turn_thread(session_id: str, prompt: str, token: str, *, actor_id: str 
                     provider_profile_id = profile.id
                     provider_vendor = profile.vendor
                     provider_model = agent_model or ""
-            result: TurnResult = run_turn(
-                session.adapter,
-                prompt=prompt,
-                system_prompt=system_prompt,
-                api_base=api_base,
-                token=token,
+            turn_kwargs = {
+                "prompt": prompt,
+                "system_prompt": system_prompt,
+                "api_base": api_base,
+                "token": token,
+                "thinking_level": session.thinking_level or "off",
+                "provider": provider_dict,
+                "model": agent_model,
+                "workspace_id": session.workspace_id,
+                "adapter_state": session.adapter_state,
+                "session_key": session.id,
+                "images": _attached_images(db, session.workspace_id, prompt),
+            }
+            adapter = session.adapter
+        except Exception as exc:  # noqa: BLE001 —— 见上
+            failure = exc
+
+    # ---- 2. 运行:不持有任何数据库会话 ----
+    if failure is None:
+        try:
+            result = run_turn(
+                adapter,
                 on_delta=lambda delta: _stream_append(session_id, delta),
                 on_tool=lambda event: _stream_tool_event(session_id, event),
                 on_thinking=lambda event: _stream_thinking(session_id, event),
-                thinking_level=session.thinking_level or "off",
-                provider=provider_dict,
-                model=agent_model,
-                workspace_id=session.workspace_id,
-                adapter_state=session.adapter_state,
-                session_key=session.id,
-                images=_attached_images(db, session.workspace_id, prompt),
+                **turn_kwargs,
             )
+        except Exception as exc:  # noqa: BLE001 —— 落库那一段按类型处理
+            failure = exc
+
+    # ---- 3. 落库:再开一个短会话 ----
+    with SessionLocal() as db:
+        session = db.get(AgentSession, session_id)
+        if session is None:
+            # 这一轮跑着的时候会话被删了:没有地方写结果,但令牌照样要收回、流照样要收尾。
+            revoke_session(db, token)
+            db.commit()
+            _stream_finish(session_id, final_text)
+            return
+        try:
+            if failure is not None:
+                raise failure
+            assert result is not None
             # 本地模型的 byte-fallback token(<0xF0>… 字面串)在落库前重组回 UTF-8。
             final_text = decode_byte_fallback(result.text)
             if result.adapter_state is not None:

@@ -5,7 +5,9 @@ import logging
 import secrets
 import threading
 import time
+from collections import deque
 from collections.abc import Callable
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any
@@ -198,7 +200,6 @@ def kill_job_child(job_id: str) -> bool:
 RENDER_SLOTS = threading.Semaphore(2)
 ASR_SLOTS = threading.Semaphore(1)      # torch/funasr: one model in memory at a time
 TTS_SLOTS = threading.Semaphore(1)
-GENERATION_SLOTS = threading.Semaphore(4)  # mostly waiting on a remote API
 #: 同时在跑的插件工具调用。每一次都是一个新进程(进程插件起一个解释器,MCP·stdio 起一个 server),
 #: 大多在等第三方接口 —— 但工作流里一个循环 × 并行分支就能同时拉起几十个。见 plugins/tools.invoke。
 PLUGIN_SLOTS = threading.Semaphore(4)
@@ -518,6 +519,90 @@ def external_kinds() -> tuple[str, ...]:
 #: 见 `wait_for_idle_jobs` 及它在 tests/util.fresh_client 里的用处。
 JOB_THREAD_NAME = "job-run"
 
+#: 同时**在干活**的进程内任务上限。此前每派发一个任务就起一个线程,不设上限:一次批量补字幕、一个
+#: 工作流循环 × 并行分支,就是几百个线程同时在跑(或在各自的资源名额上睡着)。
+MAX_ACTIVE_JOBS = 16
+
+
+class JobRunner:
+    """有上限的任务派发:名额满了就排队,有任务结束再放下一个进来。
+
+    **不能是一个普通的定长线程池。** 工作流这类任务会等自己的子任务(workflows.executors.common.wait_until):
+    池子被一群「等子任务」的父任务占满时,子任务永远排不上 —— 死锁。所以等的时候**把名额让出来**
+    (`parked`),等完再拿回去(可以暂时超额:回来的父任务不该排在自己的子任务后面)。
+    """
+
+    def __init__(self, limit: int) -> None:
+        self.limit = limit
+        self._lock = threading.Lock()
+        self._active = 0
+        self._queue: deque[tuple[str, Callable[[], None]]] = deque()
+        self._running: set[str] = set()
+        self._parked: dict[str, int] = {}
+
+    def submit(self, job_id: str, body: Callable[[], None]) -> None:
+        with self._lock:
+            self._queue.append((job_id, body))
+            admitted = self._admit_locked()
+        self._start(admitted)
+
+    def _admit_locked(self) -> list[tuple[str, Callable[[], None]]]:
+        admitted = []
+        while self._queue and self._active < self.limit:
+            job_id, body = self._queue.popleft()
+            self._active += 1
+            self._running.add(job_id)
+            admitted.append((job_id, body))
+        return admitted
+
+    def _start(self, admitted: list[tuple[str, Callable[[], None]]]) -> None:
+        for job_id, body in admitted:
+            threading.Thread(target=self._run, args=(job_id, body), name=JOB_THREAD_NAME, daemon=True).start()
+
+    def _run(self, job_id: str, body: Callable[[], None]) -> None:
+        try:
+            body()
+        finally:
+            with self._lock:
+                self._running.discard(job_id)
+                self._active -= 1
+                admitted = self._admit_locked()
+            self._start(admitted)
+
+    @contextmanager
+    def parked(self, job_id: str | None):
+        """这个任务在等别的任务:等待期间不占名额。同一个任务的几条线程(并行节点)同时在等只让一次。"""
+        with self._lock:
+            holds = job_id is not None and job_id in self._running
+            if holds:
+                waiting = self._parked.get(job_id, 0)
+                self._parked[job_id] = waiting + 1
+                if waiting == 0:
+                    self._active -= 1
+            admitted = self._admit_locked() if holds else []
+        self._start(admitted)
+        try:
+            yield
+        finally:
+            if holds:
+                with self._lock:
+                    self._parked[job_id] -= 1
+                    if self._parked[job_id] == 0:
+                        del self._parked[job_id]
+                        self._active += 1
+
+    def idle(self) -> bool:
+        with self._lock:
+            return not self._running and not self._queue
+
+
+_runner = JobRunner(MAX_ACTIVE_JOBS)
+
+
+def waiting_on_other_jobs():
+    """当前任务(按 contextvar 认)在等别的任务 —— 见 JobRunner.parked。"""
+    return _runner.parked(current_parent_job_id())
+
 
 def wait_for_idle_jobs(timeout: float = 5.0) -> bool:
     """Block until no in-process job thread is running. Returns False if `timeout` ran out.
@@ -530,10 +615,13 @@ def wait_for_idle_jobs(timeout: float = 5.0) -> bool:
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         alive = [t for t in threading.enumerate() if t.name == JOB_THREAD_NAME and t.is_alive()]
-        if not alive:
+        if not alive and _runner.idle():
             return True
-        alive[0].join(timeout=max(0.0, deadline - time.monotonic()))
-    return not any(t.name == JOB_THREAD_NAME and t.is_alive() for t in threading.enumerate())
+        if alive:
+            alive[0].join(timeout=max(0.0, min(0.5, deadline - time.monotonic())))
+        else:
+            time.sleep(0.01)  # 排着队、线程还没起来的那一小段
+    return _runner.idle() and not any(t.name == JOB_THREAD_NAME and t.is_alive() for t in threading.enumerate())
 
 
 def dispatch_job(db: Session, job: Job, thread_target: Callable[[], None]) -> bool:
@@ -562,7 +650,7 @@ def dispatch_job(db: Session, job: Job, thread_target: Callable[[], None]) -> bo
         finally:
             reset_parent_job(token)
 
-    threading.Thread(target=run_as_job, name=JOB_THREAD_NAME, daemon=True).start()
+    _runner.submit(job_id, run_as_job)
     logger.info("job %s [%s] dispatched in-process", job.id, job.kind)
     return True
 

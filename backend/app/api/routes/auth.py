@@ -188,12 +188,15 @@ _AVATAR_MAX_BYTES = 4 * 1024 * 1024
 
 
 @router.post("/auth/me/avatar", response_model=UserOut)
-async def upload_avatar(db: DbSession, user: CurrentUser, file: UploadFile = File(...)) -> UserOut:
-    """上传/替换头像:落 data_dir/avatars/<uid>-<ts>.<ext>,key 带时间戳天然破缓存。"""
+def upload_avatar(db: DbSession, user: CurrentUser, file: UploadFile = File(...)) -> UserOut:
+    """上传/替换头像:落 data_dir/avatars/<uid>-<ts>.<ext>,key 带时间戳天然破缓存。
+
+    同步端点(跑在线程池里):写盘和数据库都是阻塞调用,放在 async 里会卡住事件循环。"""
     ext = _AVATAR_TYPES.get((file.content_type or "").lower())
     if ext is None:
         raise HTTPException(status_code=415, detail=tr("routeErr_avatarType"))
-    data = await file.read()
+    #: 多读一个字节就知道超没超,不必整份读进来。
+    data = file.file.read(_AVATAR_MAX_BYTES + 1)
     if not data:
         raise HTTPException(status_code=422, detail=tr("routeErr_emptyFile"))
     if len(data) > _AVATAR_MAX_BYTES:

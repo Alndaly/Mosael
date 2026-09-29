@@ -58,3 +58,13 @@ def pool() -> WorkerPool:
         if _POOL is None:
             _POOL = WorkerPool()
         return _POOL
+
+
+def shutdown_pool() -> None:
+    """后端退出时放掉常驻进程。不放的话它们要靠自己的父进程看门狗发现后端没了(隔一秒看一眼),
+    而退出流程里正在读写的那些模型进程会被半路掐断。"""
+    global _POOL
+    with _POOL_LOCK:
+        current, _POOL = _POOL, None
+    if current is not None:
+        current.shutdown()

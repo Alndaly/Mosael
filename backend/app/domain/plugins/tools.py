@@ -473,8 +473,8 @@ def invoke_host(
         env = inst.process_env(db, instance)
         result: ToolResult
         # 一问一答(问目录)和别的工具调用一样占一个插件名额(jobs.PLUGIN_SLOTS)。流式的那条
-        # 不占:它是一次生成,已经在生成任务的名额(GENERATION_SLOTS)里了 —— 一段跑一小时的
-        # 视频占着插件名额,别的插件调用就得陪它等一小时。**两条都先交还连接**(见 _plugin_slot)。
+        # 不占:它是一次生成,跑在生成任务里,受任务派发的上限约束(jobs.MAX_ACTIVE_JOBS)—— 一段跑
+        # 一小时的视频占着插件名额,别的插件调用就得陪它等一小时。**两条都先交还连接**(见 _plugin_slot)。
         with _plugin_slot(db, take=hooks is None):
             if hooks is not None:
                 result = stream_tool(

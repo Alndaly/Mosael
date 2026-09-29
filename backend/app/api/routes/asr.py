@@ -4,6 +4,7 @@ import tempfile
 from pathlib import Path
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from starlette.concurrency import run_in_threadpool
 
 from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import AsrModelOut
@@ -68,7 +69,12 @@ async def dictate(
         if size == 0:
             raise HTTPException(status_code=422, detail=tr("routeErr_noAudio"))
         try:
-            return {"text": transcription.transcribe_clip(raw, owner_user_id=user.id, language=language, engine=engine)}
+            # 识别是阻塞的(等常驻 worker,几秒到几十秒),而这是个 async 端点:直接调会把整个事件循环
+            # 卡住 —— 期间所有请求(包括别人的 SSE)都停着。交给线程池。
+            text = await run_in_threadpool(
+                transcription.transcribe_clip, raw, owner_user_id=user.id, language=language, engine=engine
+            )
+            return {"text": text}
         except transcription.DictationTooLong as exc:
             raise HTTPException(status_code=413, detail=str(exc)) from exc
         except transcription.ASRError as exc:

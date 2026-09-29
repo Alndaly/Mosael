@@ -28,6 +28,7 @@ from typing import Any
 import httpx
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse
+from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -145,7 +146,8 @@ def callback_get(provider: str, request: Request, db: DbSession) -> HTMLResponse
 @router.post("/auth/oauth/{provider}/callback")
 async def callback_post(provider: str, request: Request, db: DbSession) -> HTMLResponse:
     form = await request.form()  # Apple 的 form_post 回调
-    return _handle_callback(provider, {k: str(v) for k, v in form.items()}, db)
+    # 换 token 是一次阻塞的网络请求:交给线程池,别在事件循环上等供应商。
+    return await run_in_threadpool(_handle_callback, provider, {k: str(v) for k, v in form.items()}, db)
 
 
 def _handle_callback(provider: str, params: dict[str, str], db: Session) -> HTMLResponse:

@@ -82,7 +82,8 @@ def models(workspace_id: str, db: DbSession, user: CurrentUser):
 
 
 @router.post("/scene-models")
-async def upload(db: DbSession, user: CurrentUser, workspace_id: str = Form(...), file: UploadFile = File(...)):
+def upload(db: DbSession, user: CurrentUser, workspace_id: str = Form(...), file: UploadFile = File(...)):
+    # 同步端点(跑在线程池里):导入是拷一份可能上百 MB 的文件,放在 async 里会把事件循环卡住。
     ensure_workspace_perm(db, user, workspace_id, "edit")
     # **把文件对象直接交出去,一个字节都不经过这里。** multipart 解析时整份已经落到临时文件上,
     # `file.file` 就是那个句柄;`file.size` 是真实大小,用来在落盘之前就挡掉超限的。

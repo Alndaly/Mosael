@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any, TypeVar
 
 from app.core.db import SessionLocal
 from app.db.models import Job
-from app.domain.jobs import cancel_job_tree, current_parent_job_id
+from app.domain.jobs import cancel_job_tree, current_parent_job_id, waiting_on_other_jobs
 from app.domain.workflows import NODE_TYPES, WorkflowDomainError
 from app.domain.workflows.run_scope import halted
 
@@ -51,7 +51,8 @@ def wait_until(
     if release is not None:
         release.commit()
         release.close()
-    with _budget_released(release is not None):
+    # 等的时候也不占任务名额:一群等子任务的父任务占满名额,子任务就永远排不上(见 jobs.JobRunner)。
+    with _budget_released(release is not None), waiting_on_other_jobs():
         while True:
             with SessionLocal() as db:
                 value = check(db)

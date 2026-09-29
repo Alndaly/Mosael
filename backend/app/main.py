@@ -155,6 +155,11 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     stop_scheduler_loop()
     if settings.feishu_autostart:
         stop_all_connections()
+    # 常驻的识别 / 合成进程(一个就是几 GB 权重)跟着后端一起走。
+    from app.ai.runtime import asr_daemon, tts_daemon
+
+    asr_daemon.shutdown_pool()
+    tts_daemon.shutdown_pool()
 
 
 def _prepare_network() -> None:
