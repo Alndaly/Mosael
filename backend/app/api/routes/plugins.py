@@ -10,7 +10,7 @@ from fastapi import APIRouter, HTTPException
 from sqlalchemy import select
 
 from app.core.i18n import get_current_locale, render_message, tr
-from app.api.deps import CurrentUser, DbSession
+from app.api.deps import CurrentUser, DbSession, Tx
 from app.api.schemas import (
     CapabilityTermOut,
     PluginOAuthCode,
@@ -35,7 +35,7 @@ from app.api.schemas import (
 )
 from app.core.config import settings
 from app.domain.effects import EFFECTS
-from app.domain.permissions import ensure_deployment_admin, ensure_workspace_perm
+from app.domain.permissions import ensure_deployment_admin
 from app.db.models import PluginInstance, PluginInvocation, PluginMarketHold, PluginPackage
 from app.domain.plugins import PluginDomainError
 from app.domain.plugins import bundled
@@ -47,6 +47,7 @@ from app.domain.plugins import packages as pkg
 from app.domain.plugins import registry as market
 from app.domain.plugins import tools as tools_domain
 from app.domain.plugins import updates
+from app.domain.plugins import use_cases as plugin_use_cases
 from app.domain.plugins.manifest import GENERATION, manifest_of, text_of, web_url
 
 router = APIRouter(tags=["plugins"])
@@ -486,14 +487,13 @@ def list_exposed_tools(db: DbSession, user: CurrentUser) -> list[dict]:
 
 @router.post("/plugins/instances/{instance_id}/tools/{tool_name}/invoke", response_model=PluginInvocationOut)
 def invoke_tool(
-    instance_id: str, tool_name: str, body: PluginInvokeRequest, db: DbSession, user: CurrentUser
+    instance_id: str, tool_name: str, body: PluginInvokeRequest, db: Tx, user: CurrentUser
 ) -> PluginInvocation:
-    my_instance(db, instance_id, user)  # 归属判定,和这个接入上其余操作同一道门
-    if body.workspace_id is not None:
-        # 工具可能读取素材或产出文件；工作区由调用界面指定，入库前先过写权限。
-        ensure_workspace_perm(db, user, body.workspace_id, "edit")
+    # 归属判定与 my_instance 同一个回答;工作区由调用界面指定,入库前先过写权限(见 domain/plugins/use_cases)。
     try:
-        return tools_domain.invoke(db, instance_id, tool_name, body.input, workspace_id=body.workspace_id)
+        return plugin_use_cases.invoke_tool(
+            db, user, instance_id, tool_name, body.input, workspace_id=body.workspace_id
+        )
     except PluginDomainError as exc:
         raise _fail(exc) from exc
 

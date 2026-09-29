@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import tempfile
-from collections.abc import Callable
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 
 import asyncio
@@ -9,7 +10,6 @@ import asyncio
 from fastapi import APIRouter, HTTPException, Response
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select
-from sqlalchemy.orm import Session
 
 from app.core.i18n import tr
 from app.domain.agent import autopilot, host
@@ -40,8 +40,7 @@ from app.api.schemas import (
     ProviderUsageEventOut,
 )
 from app.core.config import app_version
-from app.domain.permissions import ensure_workspace_perm
-from app.db.models import AgentMessage, AgentQuestion, AgentSession, AgentVoicePref, ProviderProfile, ProviderUsageEvent, now
+from app.db.models import AgentMessage, AgentQuestion, AgentSession, ProviderUsageEvent, now
 from app.domain.agent import list_agent_skills
 from app.domain import session_groups
 from app.domain.agent import questions as agent_questions
@@ -50,42 +49,21 @@ from app.domain.agent.sessions import SHARE_KIND, readable_session, writable_ses
 router = APIRouter(tags=["agent"])
 
 
-def _checked_profile_id(db: DbSession, user: CurrentUser, profile_id: str | None) -> str | None:
-    """会话钉在哪条连接上。**不存在就当场说不存在,不要留给数据库去炸。**
-
-    provider_profile_id 是外键。给一个不存在的 id(界面开着时被另一处删掉、客户端拿着过期的
-    id、或者有人手抄时截断了),插入会以 FOREIGN KEY constraint failed 结束 —— 接口回的是
-    一个裸 500,既不说是哪个字段,也不说该怎么办,还会在监控里记成服务端故障。
-
-    **不要求它是启用的**:停用只是「暂时别用」,把会话钉在上面仍然合理(运行时 resolve_chat_provider
-    自己会回退到默认连接)。这里挡的只是「指向一条根本不存在、或者不属于你的连接」。
-    """
-    wanted = (profile_id or "").strip()
-    if not wanted:
-        return None
-    profile = db.get(ProviderProfile, wanted)
-    # 连接归人。别人的和不存在的对他是同一件事 —— 分开说等于确认了这个 id 有效。
-    if profile is None or (profile.owner_user_id is not None and profile.owner_user_id != user.id):
-        raise HTTPException(status_code=422, detail=tr("routeErr_aiConnectionNotFound"))
-    return profile.id
-
-
 @router.post("/agent/sessions", response_model=AgentSessionOut)
-def create_agent_session(body: AgentSessionCreate, db: DbSession, user: CurrentUser) -> AgentSession:
-    ensure_workspace_perm(db, user, body.workspace_id, "ai")
-    session = host.create_session(
-        db,
-        workspace_id=body.workspace_id,
-        project_id=body.project_id,
-        title=body.title,
-        adapter=body.adapter,
-        provider_profile_id=_checked_profile_id(db, user, body.provider_profile_id),
-        model=body.model,
-    )
-    # 对话是**他的** —— 默认不共享给工作区(见 domain/sharing.KINDS)。
-    sharing.claim(db, SHARE_KIND, session, user)
-    db.commit()
-    return _out(db, user, session)
+def create_agent_session(body: AgentSessionCreate, db: Tx, user: CurrentUser) -> AgentSession:
+    try:
+        return agent_use_cases.start_session(
+            db,
+            user,
+            body.workspace_id,
+            title=body.title,
+            project_id=body.project_id,
+            adapter=body.adapter,
+            provider_profile_id=body.provider_profile_id,
+            model=body.model,
+        )
+    except agent_use_cases.UnknownConnection as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.get("/agent/sessions", response_model=list[AgentSessionOut])
@@ -210,7 +188,10 @@ def update_agent_session(session_id: str, body: AgentSessionUpdate, db: DbSessio
     if body.title is not None:
         session.title = body.title
     if body.provider_profile_id is not None:
-        session.provider_profile_id = _checked_profile_id(db, user, body.provider_profile_id)
+        try:
+            session.provider_profile_id = agent_use_cases.checked_profile_id(db, user, body.provider_profile_id)
+        except agent_use_cases.UnknownConnection as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
     if body.model is not None:
         session.model = body.model or None
     if body.analysis_video_mode is not None:
@@ -386,7 +367,7 @@ def get_agent_manifest(db: DbSession, user: CurrentUser) -> AgentManifestOut:
 
 
 @router.post("/agent/speech")
-def speak(body: AgentSpeechRequest, db: DbSession, user: CurrentUser) -> Response:
+def speak(body: AgentSpeechRequest, db: Tx, user: CurrentUser) -> Response:
     """念一句话,把音频**直接回给调用方**。
 
     **不建任务、不入素材库。** 对话里念出来的每一句都登记成素材的话,说十句就是十个音频
@@ -398,57 +379,41 @@ def speak(body: AgentSpeechRequest, db: DbSession, user: CurrentUser) -> Respons
 
     没设过音色就说没设 —— 不替他挑一个(同 provider-defaults 的立场);「让它出声」关着就不念。
     """
-    from app.domain.voices import agent_voice
-
-    # 念一句是**花钱的**(各家 TTS 按字符计费),所以要 ai 权限,和对话、生成同一档。
-    # 记账挂在这个工作区上,那它就得先证明自己在这个工作区里能花钱。
-    ensure_workspace_perm(db, user, body.workspace_id, "ai")
-    return _speak_with_agent_voice(db, user, body, agent_voice.require_enabled, source_type="agent_speech")
+    with tempfile.TemporaryDirectory(prefix="mosael-say-") as tmp, _speech_errors():
+        return _audio(agent_use_cases.speak_line(db, user, body.workspace_id, body.text, out_dir=Path(tmp)))
 
 
 @router.post("/agent/speech/preview")
-def preview_speech(body: AgentSpeechRequest, db: DbSession, user: CurrentUser) -> Response:
+def preview_speech(body: AgentSpeechRequest, db: Tx, user: CurrentUser) -> Response:
     """试听设置里存着的那份对话音色。**只要求选好,不要求开着** —— 试听是配置时听一下效果,
     而「先打开才能听」等于让人先对一个没听过的声音点头。
 
     和 /agent/speech 只差这道闸:合成走同一个 agent_voice.speak,听到的就是以后念给他的那个声音。
     """
+    with tempfile.TemporaryDirectory(prefix="mosael-say-") as tmp, _speech_errors():
+        return _audio(
+            agent_use_cases.speak_line(db, user, body.workspace_id, body.text, out_dir=Path(tmp), preview=True)
+        )
+
+
+@contextmanager
+def _speech_errors() -> Iterator[None]:
+    """两条发声路共用的错误翻译。闸与取配置在 agent/use_cases.speak_line。"""
     from app.domain.voices import agent_voice
 
-    # 试听照样花钱、照样记账:权限和真念同一档。
-    ensure_workspace_perm(db, user, body.workspace_id, "ai")
-    return _speak_with_agent_voice(db, user, body, agent_voice.require_ready, source_type="agent_voice_preview")
-
-
-def _speak_with_agent_voice(
-    db: DbSession,
-    user: CurrentUser,
-    body: AgentSpeechRequest,
-    require: Callable[[Session, str], AgentVoicePref],
-    *,
-    source_type: str,
-) -> Response:
-    """两条发声路共用的后半段:取配置(闸由 `require` 定)、合成、原样回音频。ai 权限由调用方先查。"""
-    from app.domain.voices import agent_voice
-
-    text = body.text.strip()
-    if not text:
-        raise HTTPException(status_code=422, detail=tr("routeErr_nothingToRead"))
     try:
-        pref = require(db, user.id)
+        yield
+    except (agent_use_cases.NothingToSay, agent_use_cases.SpeechFailed) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     except agent_voice.AgentVoiceUnavailable as exc:
         # 409 而不是 500:这是"还没配好 / 关着",一个用户点两下就能解决的状态。
         raise HTTPException(status_code=409, detail=str(exc)) from exc
-    with tempfile.TemporaryDirectory(prefix="mosael-say-") as tmp:
-        try:
-            out = agent_voice.speak(
-                db, pref, text=text, workspace_id=body.workspace_id, out_dir=Path(tmp), source_type=source_type
-            )
-        except Exception as exc:  # noqa: BLE001 — 合成失败是结果,不是服务端故障
-            raise HTTPException(status_code=422, detail=str(exc)[:300]) from exc
-        audio = out.read_bytes()
-        media_type = "audio/mpeg" if out.suffix == ".mp3" else "audio/wav"
-    return Response(content=audio, media_type=media_type, headers={"Cache-Control": "no-store"})
+
+
+def _audio(out: Path) -> Response:
+    """原样回音频(临时目录删掉之前读出来)。"""
+    media_type = "audio/mpeg" if out.suffix == ".mp3" else "audio/wav"
+    return Response(content=out.read_bytes(), media_type=media_type, headers={"Cache-Control": "no-store"})
 
 
 @router.post("/agent/sessions/{session_id}/view")

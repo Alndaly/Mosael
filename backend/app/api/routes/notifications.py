@@ -1,31 +1,26 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException
-from sqlalchemy import func, select
 
 from app.core.i18n import tr
-from app.api.deps import CurrentUser, DbSession
+from app.api.deps import CurrentUser, DbSession, Tx
 from app.api.schemas import NotificationListOut, NotificationOut, NotifyRequest
-from app.domain.permissions import ensure_workspace_access
 from app.db.models import Notification
-from app.domain.notifications import clear_read, mark_all_read, mark_read, notify
+from app.domain.notifications import use_cases as notifications
 
 router = APIRouter(tags=["notifications"])
 
 
 @router.post("/notifications", response_model=NotificationOut)
-def create_notification(body: NotifyRequest, db: DbSession, user: CurrentUser) -> Notification:
+def create_notification(body: NotifyRequest, db: Tx, user: CurrentUser) -> Notification:
     """给工作区成员推一条站内通知。
 
     工作流的「发送通知」节点走的是同一个领域函数;这条端点是为了让智能体也能用 ——
     同一个能力不该因为入口不同而只存在于一边。
     """
-    ensure_workspace_access(db, user, body.workspace_id)
-    rows = notify(db, body.workspace_id, type="agent", title=body.title, body=body.body)
-    db.commit()
+    rows = notifications.post(db, user, body.workspace_id, body.title, body.body)
     if not rows:
         raise HTTPException(status_code=422, detail=tr("routeErr_noNotifiableMembers"))
-    db.refresh(rows[0])
     return rows[0]
 
 
@@ -37,52 +32,24 @@ def list_notifications(
     unread_only: bool = False,
     limit: int = 50,
 ) -> NotificationListOut:
-    ensure_workspace_access(db, user, workspace_id)
-    stmt = select(Notification).where(
-        Notification.workspace_id == workspace_id,
-        Notification.user_id == user.id,
-    )
-    if unread_only:
-        stmt = stmt.where(Notification.read_at.is_(None))
-    items = list(db.scalars(stmt.order_by(Notification.created_at.desc()).limit(min(limit, 100))))
-    unread = db.scalar(
-        select(func.count())
-        .select_from(Notification)
-        .where(
-            Notification.workspace_id == workspace_id,
-            Notification.user_id == user.id,
-            Notification.read_at.is_(None),
-        )
-    )
+    items, unread = notifications.list_mine(db, user, workspace_id, unread_only=unread_only, limit=limit)
     return NotificationListOut(
         items=[NotificationOut.model_validate(item) for item in items],
-        unread=int(unread or 0),
+        unread=unread,
     )
 
 
 @router.post("/notifications/{notification_id}/read", response_model=NotificationOut)
-def read_notification(notification_id: str, db: DbSession, user: CurrentUser) -> Notification:
-    item = db.get(Notification, notification_id)
-    if item is None or item.user_id != user.id:
-        raise HTTPException(status_code=404, detail="Notification not found")
-    mark_read(db, item)
-    db.commit()
-    db.refresh(item)
-    return item
+def read_notification(notification_id: str, db: Tx, user: CurrentUser) -> Notification:
+    return notifications.read(db, user, notification_id)
 
 
 @router.post("/notifications/read-all")
-def read_all_notifications(workspace_id: str, db: DbSession, user: CurrentUser) -> dict:
-    ensure_workspace_access(db, user, workspace_id)
-    count = mark_all_read(db, workspace_id, user.id)
-    db.commit()
-    return {"read": count}
+def read_all_notifications(workspace_id: str, db: Tx, user: CurrentUser) -> dict:
+    return {"read": notifications.read_all(db, user, workspace_id)}
 
 
 @router.delete("/notifications/read")
-def delete_read_notifications(workspace_id: str, db: DbSession, user: CurrentUser) -> dict:
+def delete_read_notifications(workspace_id: str, db: Tx, user: CurrentUser) -> dict:
     """清空自己已读的通知。读过的没有第二次价值,却会把面板一直占满;未读的不动。"""
-    ensure_workspace_access(db, user, workspace_id)
-    count = clear_read(db, workspace_id, user.id)
-    db.commit()
-    return {"removed": count}
+    return {"removed": notifications.clear_read(db, user, workspace_id)}

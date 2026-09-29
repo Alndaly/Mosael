@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Response
-from sqlalchemy import or_, select
-
 from app.core.i18n import tr
 from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import (
@@ -14,9 +12,10 @@ from app.api.schemas import (
 from app.db.models import ProviderPricingRule
 from app.domain.providers import credentials as provider_credentials
 from app.domain.providers import models as provider_models
-from app.domain.permissions import ensure_deployment_admin, ensure_workspace_access
+from app.domain.permissions import ensure_deployment_admin
 from app.domain.providers.credentials import ResolvedConnection
 from app.domain.providers.selection import supports_capability
+from app.domain.billing import use_cases as billing
 from app.domain.billing.pricing_prefill import prefill_profile_pricing
 from app.domain.billing.usage import create_pricing_rule, delete_pricing_rule, update_pricing_rule
 
@@ -98,25 +97,7 @@ def list_provider_pricing_rules(
     登录用户开放,于是 A 工作区的成员能读到 B 工作区谈下来的单价。写入一直是 deployment admin,
     读却没有门 —— 一张表两套判据,漏的那一半不会报错。
     """
-    if workspace_id:
-        ensure_workspace_access(db, user, workspace_id)
-    else:
-        ensure_deployment_admin(db, user)
-    stmt = select(ProviderPricingRule).order_by(
-        ProviderPricingRule.capability.asc(),
-        ProviderPricingRule.provider.asc(),
-        ProviderPricingRule.model.asc(),
-        ProviderPricingRule.created_at.asc(),
-    )
-    if workspace_id:
-        # 不属于任何工作区的规则(预填出来的都是这种,挂在连接上)对**每个**工作区都生效
-        # (见 usage._best_price_rules),所以它们也得出现在这个工作区的列表里。此前这里只取
-        # `workspace_id == 当前工作区`,于是预填报了「新建 12 条」,列表里却一条都看不见。
-        stmt = stmt.where(
-            or_(ProviderPricingRule.workspace_id == workspace_id, ProviderPricingRule.workspace_id.is_(None))
-        )
-    rules = db.scalars(stmt).all()
-    return [ProviderPricingRuleOut.model_validate(rule) for rule in rules]
+    return [ProviderPricingRuleOut.model_validate(rule) for rule in billing.list_pricing_rules(db, user, workspace_id)]
 
 
 @router.post("/settings/provider-pricing-rules", response_model=ProviderPricingRuleOut)
