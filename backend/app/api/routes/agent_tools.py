@@ -33,7 +33,7 @@ from pydantic import BaseModel
 from app.core.i18n import tr
 from app.api.deps import CurrentUser, DbSession, PresentedToken
 from app.domain.permissions import ensure_workspace_member, ensure_workspace_perm
-from app.core.security import find_session
+from app.core.security import find_session, mint_tool_call_session, revoke_session
 # 清单本身在领域层 —— 上下文水位也要按它算"工具定义占了多少",而那段代码在 api 层之下。
 from app.domain.agent.tool_manifest import PLUGIN_TOOL_PREFIX, ToolSpec, agent_tool_specs, tool_registry
 
@@ -191,22 +191,30 @@ def invoke_agent_tool(
     if dropped:
         # 丢了什么要留痕:静默容错在排查时会变成"参数明明传了却没生效"。
         logger.info("tool %s: dropped unsupported arguments %s", name, dropped)
-    # 工具体回连本 API,所以要带调用方的凭据 —— 用**调用方这次带进来的那份**,不另铸一个
-    # (此前每次调用铸一行永久的 AuthSession)。地址用本进程自己的,不靠导入期默认的 8800。
-    with registry.calling_as(
-        token=token,
-        api_base=f"http://{settings.backend_host}:{settings.backend_port}",
-        requested_by=body.requested_by,
-        session_id=(auth.agent_session_id if auth is not None else None) or "",
-    ):
-        try:
-            result = fn(**arguments)
-        except TypeError as exc:  # 缺必填参数(含把参数名拼错的情况)—— 是模型的输入问题,不是服务端故障
-            accepted = ", ".join(_accepted_names(fn)) or tr("routeErr_toolArgsNone")
-            raise HTTPException(status_code=422, detail=tr("routeErr_toolBadArgs", detail=str(exc), accepted=accepted)) from exc
-        except Exception as exc:  # noqa: BLE001 — a failing tool is a result, not a 500
-            logger.warning("tool %s failed: %s", name, exc)
-            return {"error": str(exc)[:500]}
+    # 工具体回连本 API,要带一份凭据。**不是调用方带进来的那份**:交给 sidecar 的服务令牌只准用在工具通道上
+    # (core/security.SERVICE_PATH_PREFIXES),工具体要调的却是任意 REST。所以为这一次调用铸一份同一个人、
+    # 同一次对话的令牌,它从不离开本进程,调用结束就撤掉(不留永久行)。地址用本进程自己的,不靠导入期默认的 8800。
+    agent_session_id = (auth.agent_session_id if auth is not None else None) or None
+    inner = mint_tool_call_session(db, user.id, agent_session_id=agent_session_id)
+    try:
+        with registry.calling_as(
+            token=inner,
+            api_base=f"http://{settings.backend_host}:{settings.backend_port}",
+            requested_by=body.requested_by,
+            session_id=agent_session_id or "",
+        ):
+            try:
+                result = fn(**arguments)
+            except TypeError as exc:  # 缺必填参数(含把参数名拼错的情况)—— 是模型的输入问题,不是服务端故障
+                accepted = ", ".join(_accepted_names(fn)) or tr("routeErr_toolArgsNone")
+                raise HTTPException(status_code=422, detail=tr("routeErr_toolBadArgs", detail=str(exc), accepted=accepted)) from exc
+            except Exception as exc:  # noqa: BLE001 — a failing tool is a result, not a 500
+                logger.warning("tool %s failed: %s", name, exc)
+                return {"error": str(exc)[:500]}
+    finally:
+        db.expire_all()
+        revoke_session(db, inner)
+        db.commit()
     return _as_payload(result)
 
 

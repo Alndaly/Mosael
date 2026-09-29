@@ -121,7 +121,7 @@ def test_service_tokens_do_not_slide() -> None:
     before = _row(token).expires_at
 
     client.headers["Authorization"] = f"Bearer {token}"
-    assert client.get("/api/workspaces").status_code == 200
+    assert client.get("/api/agent/tools").status_code == 200
 
     assert _row(token).expires_at == before, "服务令牌被续期了"
 
@@ -166,3 +166,14 @@ def test_a_second_login_does_not_disturb_the_first() -> None:
 
     assert _row(first_token) is not None
     assert _row(logged_in.json()["token"]) is not None
+
+
+def test_service_tokens_only_reach_the_tool_channel() -> None:
+    """交给 sidecar 的服务令牌只能取工具、调工具、等确认卡 / 选择卡、回写供应商凭据 —— 不再是半小时的全权登录态。"""
+    client = fresh_client()
+    with SessionLocal() as db:
+        token = mint_service_session(db, _user_id("tester"))
+    client.headers["Authorization"] = f"Bearer {token}"
+    assert client.get("/api/agent/tools").status_code == 200
+    for path in ("/api/workspaces", "/api/auth/me", "/api/plugins"):
+        assert client.get(path).status_code == 403, path

@@ -5,8 +5,8 @@
 都铸一个新令牌给工具体回连用,`finally` 里只重置了 contextvar,行没人删。一次十步的任务就是
 十个永久凭据,而它们和登录会话是同一张表、同一种权力。
 
-工具体需要的是「调用方自己的凭据」—— 那个凭据**已经在请求头里**了,再铸一个只是多一份没人
-回收的密钥。这些用例钉住:调用之后行数不增,而绑给工具体的那个令牌确实认得出调用方本人。
+工具体拿到的是一份同一个人、只活这一次调用的令牌,调用结束就撤掉 —— 不用调用方那份,因为交给
+sidecar 的服务令牌只准用在工具通道上。这些用例钉住:调用之后行数不增,而绑给工具体的那个令牌确实认得出调用方本人。
 
 用例不让回环真的发出去(整个套件都是这么做的:monkeypatch 掉 `mcp_server` 的 HTTP 助手)。
 不这么做的话,请求会打到开发机上**真在跑的**那个后端 —— 测试从此依赖有没有人开着 8800。
@@ -27,12 +27,24 @@ def _auth_rows() -> int:
         return db.query(AuthSession).count()
 
 
+#: 工具体回连那一刻,它手上的令牌认出的是谁(调用结束令牌就撤了,之后再查不到)。
+seen_users: list[str] = []
+
+
+def _user_id_of(token: str) -> str:
+    with SessionLocal() as db:
+        return find_session(db, token).user_id
+
+
 def _capture_token(monkeypatch) -> list[str]:
-    """拦下工具体的回连,记下它当时绑着的令牌。"""
+    """拦下工具体的回连,记下它当时绑着的令牌和那一刻它认出的人。"""
     seen: list[str] = []
+    seen_users.clear()
 
     def fake_get(path: str, params=None):
-        seen.append(mcp_server._API_TOKEN.get())
+        token = mcp_server._API_TOKEN.get()
+        seen.append(token)
+        seen_users.append(_user_id_of(token))
         return []
 
     monkeypatch.setattr(mcp_server, "_get", fake_get)
@@ -56,7 +68,10 @@ def test_tool_calls_do_not_accumulate_credentials(monkeypatch) -> None:
 
 
 def test_the_tool_body_gets_a_credential_that_resolves_to_the_caller(monkeypatch) -> None:
-    """行数不增不能靠"把工具调用弄坏"换来:工具体拿到的必须是一个真能认出调用方的令牌。"""
+    """行数不增不能靠"把工具调用弄坏"换来:工具体拿到的必须是一个真能认出调用方的令牌。
+
+    它**不是**调用方带进来的那份:交给 sidecar 的服务令牌只准用在工具通道上(core/security.SERVICE_PATH_PREFIXES),
+    工具体回连的却是任意 REST。所以是一份同一个人的、只活这一次调用的令牌,调用结束就撤掉。"""
     client = fresh_client()
     workspace = client.post("/api/workspaces", json={"name": "W"}).json()
     seen = _capture_token(monkeypatch)
@@ -69,10 +84,10 @@ def test_the_tool_body_gets_a_credential_that_resolves_to_the_caller(monkeypatch
     assert response.status_code == 200, response.text
     assert len(seen) == 1 and seen[0], "工具体没有拿到任何令牌"
     caller_token = client.headers["Authorization"].removeprefix("Bearer ")
-    assert seen[0] == caller_token, "工具体拿的不是调用方自己的凭据"
+    assert seen[0] != caller_token, "调用方的凭据不该被原样交给工具体"
+    assert seen_users and seen_users[0] == _user_id_of(caller_token), "工具体认出的不是调用方这个人"
     with SessionLocal() as db:
-        # 库里存的是哈希(见 core/tokens),按来客手上那串取行要走 find_session。
-        assert find_session(db, seen[0]) is not None, "这个令牌在库里不存在,回连会 401"
+        assert find_session(db, seen[0]) is None, "调用结束之后这份令牌还在"
 
 
 def test_the_callers_own_session_survives_the_call(monkeypatch) -> None:
