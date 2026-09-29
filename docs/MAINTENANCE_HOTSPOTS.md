@@ -121,16 +121,17 @@ Interface 从「全局 class 名 + cascade」变成了「设计刻度」——�
 
 ## 4. 超大 feature 文件
 
-`WorkflowsView.tsx`(4086 行,还在长)、`EditorView.tsx`(1305)、`timeline/Timeline.tsx`(1.2k)。
+~~`WorkflowsView.tsx`(4086 行,还在长)~~ → 已拆(2026-09-29,见 4.2)、`EditorView.tsx`(1305 → 现 1136)、
+`timeline/Timeline.tsx`(1.2k,现 1281)。
 
 按**内聚度**过一遍之后(2026-08-25 重新量过),结论和最初的判断不一样 —— 行数不是判据:
 
-| | 行 | 查询 | state | 判断 |
-| --- | --- | --- | --- | --- |
-| `Timeline` | 1197 | **0** | 6 | 大而内聚,不拆 |
-| `NodeInspector` | 904 | 9 | **1** | 纯渲染,904 行是**宽度**不是混乱,不拆 |
-| `WorkflowEditor` | 1123 | 6 | 14 | 见下 |
-| `Editor` | ~~1143~~ 925 | **37** | ~~7~~ 3 | 面板摆放已抽走;剩下的是序列变更 |
+| | 行(2026-08-25) | 现在(2026-09-29) | 查询 | state | 判断 |
+| --- | --- | --- | --- | --- | --- |
+| `Timeline` | 1197 | 1281 | **0** | 6 | 大而内聚,不拆 |
+| `NodeInspector` | 904 | 663(AI 生成、LLM 两段另成文件) | 9 | **1** | 纯渲染,904 行是**宽度**不是混乱,不拆 |
+| `WorkflowEditor` | 1123 | 811(画布行为收进 6 个 hook,见 4.2) | 6 | 14 | 见下 |
+| `Editor` | ~~1143~~ 925 | 1136(`EditorView.tsx`) | **37** | ~~7~~ 3 | 面板摆放已抽走;剩下的是序列变更 |
 
 `WorkflowEditor` 曾被判定为"最该拆的那个"。重新量之后:它的 state 分四组,而**「图数据」那组
 (nodes/edges/dirty/runJobId)被引用 106 次**,其余三组加起来 36 次 —— 也就是说它其实也是
@@ -154,6 +155,24 @@ Interface 从「全局 class 名 + cascade」变成了「设计刻度」——�
 
 > 教训:「这个文件太大了」不是一条可执行的判据。**查询数与 state 分组**才是 —— 前者说明它
 > 承担了多少件事,后者说明那些事彼此相不相干。
+
+### 4.2 前后端几个巨型文件 — 已按职责拆开(2026-09-29)
+
+纯搬运,不改行为;原路径保留为入口并转发原来导出的名字,调用方一处没动。按路径扫源码的测试跟着改扫新位置。
+
+| 文件 | 拆前 | 拆后 | 去向 |
+| --- | --- | --- | --- |
+| `frontend/src/app/messages.ts` | 7,360 | 11 | `app/messages/<语言>/<分区>.ts`,中英各 14 片,每对分区键集合相同(测试守着) |
+| `frontend/src/features/workflows/WorkflowsView.tsx` | 3,678 | 433 | 列表页;编辑器 `WorkflowEditor.tsx`(811)+ `useWorkflow{Graph,CanvasEdits,Save,Run,EditorKeys,DisplayElements}` + 工具栏 + 检查器三件 |
+| `frontend/src/features/boards/BoardCanvas.tsx` | 2,316 | 831 | 工具栏、评论层、`useBoard{History,Viewport,Documents,FileImport,SequenceLinks,ItemEdits}`、`useFrameDrag`、纯函数 |
+| `backend/app/core/i18n.py` | 5,123 | 251 | 文案表分到 `core/messages/` 14 片,合并时 key 重名直接报错 |
+| `backend/app/domain/sequences/operations.py` | 1,872 | 241 | 只留时间线操作表;算子分到 placement / tracks / text / clip_properties / cutting |
+| `backend/app/domain/boards/canvas.py` | ~1,580 | 188 | shape / validation / persistence / run_state / outputs / receipts |
+| `backend/app/domain/generation/catalog.py` | 1,717 | 364 | 能力描述符数据分到 `generation/descriptors/` |
+| `backend/app/domain/workflows/templates.py` | 2,050 | 346 | 三张大图模板与模型选择、schema 各成一个 `templates_*.py` |
+
+**没拆**:`backend/app/db/migrations.py`(5,912 行)是按时间排的历史迁移,每条是一份冻结快照,
+按行数拆开只会让「这一步在谁之前」更难看清。
 
 ### 4.1 三个数据装配文件 — 第一阶段已完成（2026-09-01）
 

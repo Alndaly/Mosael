@@ -78,7 +78,7 @@ graph TD
 
 ### 1.4 i18n 与偏好
 
-- `app/messages.ts` 5,320 行,zh-CN / en-US 键成对(棘轮守着);`useI18n()` 出自 `PreferencesProvider`(`app/preferences.tsx`),切语言时 `setApiLocale` + 作废已缓存 query(否则页面留着上一种语言的数据)。
+- `app/messages.ts` 5,320 行(2026-09-29 已拆:入口 11 行,中英各 14 片在 `app/messages/<语言>/`),zh-CN / en-US 键成对(棘轮守着);`useI18n()` 出自 `PreferencesProvider`(`app/preferences.tsx`),切语言时 `setApiLocale` + 作废已缓存 query(否则页面留着上一种语言的数据)。
 - 后端任务消息存 key + 参数,读时按 `Accept-Language` 翻——用户切语言后历史记录跟着变(ARCHITECTURE.md「多语言」)。
 
 ### 1.5 深链与跨页跳转
@@ -190,7 +190,7 @@ stateDiagram-v2
 #### 时间线与几何
 
 - `domain/timeline/geometry.ts`(245 行)纯函数:`timeToPx/pxToTime/clipDuration/clipEnd/sequenceDuration`;标尺 `rulerStep(minLabelPx=72)` + `rulerTicks`;**两级吸附**(`snapTimeTiered` L117-127):目标轨自身片段边缘优先,播放头/零点/跨轨边缘只在本轨无命中时参与(单一候选池会让字幕 cue 边界劫持同轨对接);`resolveMove` 首尾双边吸附取近边;`resolveTrim` 锚定素材端、`MIN_CLIP_DURATION=0.05`。
-- `Timeline.tsx`(1,213 行):拖拽草稿存 `editorStore.dragDraft`,渲染侧把草稿投影成地图;insert 模式涟漪预览;组拖 followers 渲染侧投影、提交合并进一次批量。
+- `Timeline.tsx`(1,213 行,2026-09-29 为 1,281 行):拖拽草稿存 `editorStore.dragDraft`,渲染侧把草稿投影成地图;insert 模式涟漪预览;组拖 followers 渲染侧投影、提交合并进一次批量。
 - **editorStore.ts(121 行)无 zundo**:撤销在服务端——`undoSequence/redoSequence` mutation(EditorView.tsx:558-570),后端 `sequence_operations` 落一条 revision,zundo 只用于工作流画布。
 - **一次手势 = 一条操作 = 一步撤销**:批量端点 `deleteClipsBatch / rippleDeleteClipsBatch / moveClipsBatch / cutClipRangesBatch / splitClipAtPointsBatch`(`api/domains/editor.ts`),后端 `test_delete_clips_batch.py:35` 钉住「一次 revision 一次撤销」。
 
@@ -215,7 +215,7 @@ stateDiagram-v2
 
 #### EditorView 编排
 
-`EditorView.tsx`(1,330 行):CSS Grid 布局(`editorColumns` L817-823),左栏四页签独立记忆宽度(`useEditorPanels.ts`,`localStorage["mosael.editor.panels.v2"]`,紧凑断点 ≤1000px 收成两列);React Query 持有全部服务端实体,mutation 成功多用 `applySequence(updated)` 直接写缓存而非 invalidate(避免窗口期);editorStore 只装瞬时态。
+`EditorView.tsx`(1,330 行,2026-09-29 为 1,136 行):CSS Grid 布局(`editorColumns` L817-823),左栏四页签独立记忆宽度(`useEditorPanels.ts`,`localStorage["mosael.editor.panels.v2"]`,紧凑断点 ≤1000px 收成两列);React Query 持有全部服务端实体,mutation 成功多用 `applySequence(updated)` 直接写缓存而非 invalidate(避免窗口期);editorStore 只装瞬时态。
 
 ### 3.2 画板(`features/boards/`):无限画布
 
@@ -256,7 +256,7 @@ sequenceDiagram
 ### 3.4 3D 工作台(`features/scenes/`)
 
 - `SceneStudio` 走 `React.lazy`(pages.tsx:23)——three.js 是大依赖,lazy + Suspense 移出首屏 bundle;解码器(KTX2/Draco/meshopt)由 `vite.config.ts` 的 `threeDecoders()` 插件**从装着的那个 three 里取**、按固定文件名落盘(升级 three 自动跟上,不走 CDN,可离线)。
-- `SceneStudio.tsx`(1,550 行)是容器:SceneViewport(OrbitControls/TransformControls/GLTFExporter)/ SceneDopeSheet / SceneCameraPanel / SceneInspector / SceneHistory / SceneBlender(Blender 联动);保存用同一套乐观并发(`saveScene` 带 `base_revision`,`api/domains/scenes.ts` L60-68)。
+- `SceneStudio.tsx`(1,550 行,2026-09-29 为 1,666 行)是容器:SceneViewport(OrbitControls/TransformControls/GLTFExporter)/ SceneDopeSheet / SceneCameraPanel / SceneInspector / SceneHistory / SceneBlender(Blender 联动);保存用同一套乐观并发(`saveScene` 带 `base_revision`,`api/domains/scenes.ts` L60-68)。
 - 数据模型:`SceneContent { objects, shots, lighting }`;`track: Keyframe[]` **空轨即静止**;镜头与机位成对创建(`makeShot` 必须指向真实存在的相机,后端会拒);采样 `sampleObject/sampleCamera` 端点保持 + 按镜头 easing 插值(smoothstep `u*u*(3-2*u)`)。
 - `sceneTracks.ts` 关键帧纯逻辑层:`MAX_KEYS=100`(与后端上限一致)、`EPSILON=0.001` 判同帧、`moveSceneKeys` 批量平移原子化(碰撞或越界整体不落);`SceneDopeSheet` 拖帧按 `SHOT_FPS` 吸附;手动调整过的物体进 posing 态,采样值不会在下一帧把它抹回去,直到按 `I` 打帧(SceneStudio.tsx L1287-1291)。
 
@@ -357,6 +357,7 @@ sequenceDiagram
 
 - **轮询密度**:智能体生态在 SSE 之外叠加了 5+ 条 1.2–4s 的轮询回路,画板另有 2.5s 回执轮询、确认卡 2.5s、选择卡 2s——本地单用户无碍,团队服务器模式下并发客户端的 QPS 值得关注。
 - **单体大文件**:WorkflowsView.tsx 3,967 行、BoardCanvas.tsx 1,751 行、SceneStudio.tsx 1,550 行、AiStudio.tsx 1,411 行、EditorView.tsx 1,330 行、messages.ts 5,320 行——功能内聚但单文件认知负荷高,靠文件头长注释维系。
+  (2026-09-29 更新:WorkflowsView 433、BoardCanvas 831、messages.ts 11 行入口,均已按职责拆开,见 `docs/MAINTENANCE_HOTSPOTS.md` 4.2;AiStudio.tsx 现 50 行,工作台本体在 `GenerateWorkspace.tsx`;SceneStudio 1,666、EditorView 1,136 未拆。)
 - **lint 空缺**:typescript-eslint 不支持 TS 7 导致 eslint 路线封闭(前端与官网同),oxlint 只开 14 条;`react-hooks/exhaustive-deps` 37 处与 React Compiler 规则组约 120 处显式搁置,依赖人工纪律与测试补偿。
 - **hash 路由的局限**:`file://` 兼容的代价是 URL 表达力弱(query 参数自拼),深链靠 `mosael:open-*` 事件三连发兜底挂载竞速——务实但脆弱(80/300/800ms 之外挂载的更慢视图会丢事件)。
 - **WebAuthn hybrid 缺位**:扫码/手机 passkey 是 Electron 未暴露的能力(webauthn.cjs 头注释),只能等平台开放。

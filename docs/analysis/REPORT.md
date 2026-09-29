@@ -316,7 +316,7 @@ code 节点无 Docker 就拒绝执行,不得以普通子进程回落;worker key 
 | 6 | **中** | **轮询密度**:智能体生态在 SSE 之外叠加 5+ 条 1.2–4s 轮询回路,画板 2.5s 回执轮询、确认卡 2.5s、选择卡 2s——本地单用户无碍,团队服务器模式下并发客户端 QPS 值得关注。 | `frontend-electron-website.md` §5.2 |
 | 7 | **中** | **发布 Bus Factor = 1**:公证依赖维护者本机钥匙串 `mosael-release` + 手工十余步;"一个人 + 一台 Mac"。流程文档极佳,但仍是单点。Windows 包无代码签名(SmartScreen 警告伤转化)。 | `docs/RELEASING.md`、`docs/MACOS_SIGNING.md` |
 | 8 | ~~低(立刻可修)~~ ✅ 已修复 | ~~**`minimumReleaseAge` 空转配置** + **`mosael-backend.spec` 陈旧漂移**~~:已补 `minimumReleaseAge: 4320`(3 天冷静期);spec 核实为未跟踪的本地构建产物,已删除。 | `pnpm-workspace.yaml:16`、`package.json:17` |
-| 9 | **低** | **单体大文件认知负荷**:WorkflowsView.tsx 3,967 行、messages.ts 5,320 行、mcp_server.py 2,183 行等;靠文件头长注释维系,功能内聚但定位成本高。 | t3/t4 报告实测 |
+| 9 | **低** | **单体大文件认知负荷**:WorkflowsView.tsx 3,967 行、messages.ts 5,320 行、mcp_server.py 2,183 行等(2026-09-29 更新:前两者已按职责拆开,现为 433 / 11 行入口;mcp_server.py 已并入进程内工具注册表,不再单独成文件);靠文件头长注释维系,功能内聚但定位成本高。 | t3/t4 报告实测 |
 | 10 | **低** | **其余已知取舍**:回合级 sidecar 每轮 spawn 的固定开销;MCP 插件每次调用重连(stdio 冷启延迟未实测);51 个 `_migrate_*` 长期膨胀(退休门槛 v0.1.0);插件市场无签名无审核(防线压在安装时);Python 收成两个版本:后端 3.14、随包解释器 3.13.15(whisperx 尚不支持 3.14;此前是 3.11 声明/3.13 CI/3.12.11 随包三版共存);扩展无自动更新通道;`react-hooks/exhaustive-deps` 37 处与 React Compiler 规则 ~120 处搁置。 | 各分报告风险节 |
 
 ---

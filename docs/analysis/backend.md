@@ -99,7 +99,7 @@ graph TD
 
 ### 3.3 表结构演进:**不跑迁移框架**
 
-`init_db()` = `Base.metadata.create_all` + `app/db/migrations.py`(2059 行)里 **51 个 `_migrate_*` 函数**按需补差(加列/改外键/回填/加密迁移/哈希会话令牌等)。规约(CONTEXT.md:137-149):
+`init_db()` = `Base.metadata.create_all` + `app/db/migrations.py`(2059 行;2026-09-29 为 5,912 行)里 **51 个 `_migrate_*` 函数**按需补差(加列/改外键/回填/加密迁移/哈希会话令牌等)。规约(CONTEXT.md:137-149):
 
 - 改表 = 改 `model_slices/*.py` **且** 加一个 `_migrate_*`,少一步就是"新装机好、老用户崩";
 - Alembic 已整体移除——"30 个迁移文件从不被执行,且自 2026-07-23 起与 models.py 漂移(模型改 6 次、迁移 0 次)"(ARCHITECTURE.md:184-185);
