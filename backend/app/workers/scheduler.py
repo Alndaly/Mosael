@@ -62,9 +62,13 @@ def _loop(stop: threading.Event) -> None:
 
 
 def tick(db: Session) -> list[str]:
-    """One pass: sync run states, then trigger due tasks. Returns run ids created."""
+    """One pass: sync run states, then trigger due tasks. Returns run ids created.
+
+    这里是入口:领域函数不提交,每一步在这里提交 —— 一个任务触发失败回滚时,不带走前面已经做完的。
+    """
     expire_worker_leases(db)
     sync_run_states(db)
+    db.commit()
 
     created: list[str] = []
     due = db.scalars(
@@ -91,5 +95,6 @@ def tick(db: Session) -> list[str]:
             task.next_run_at = None
             db.commit()
             continue
+        db.commit()
         created.append(run.id)
     return created

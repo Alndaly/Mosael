@@ -148,6 +148,7 @@ def _fire(client: TestClient, task: dict) -> tuple[Job, ScheduledTaskRun]:
             from app.domain.scheduler.executors import sync_run_states
 
             sync_run_states(db)
+            db.commit()
             job = db.get(Job, fired.json()["job_id"])
             run = db.query(ScheduledTaskRun).filter(ScheduledTaskRun.job_id == job.id).one()
             if job.status in ("succeeded", "failed") and run.status in ("succeeded", "failed"):

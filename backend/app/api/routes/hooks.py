@@ -16,7 +16,7 @@ from datetime import datetime
 
 from fastapi import APIRouter, HTTPException
 
-from app.api.deps import DbSession
+from app.api.deps import DbSession, Tx
 from app.api.schemas import JobOut
 from app.core.i18n import tr
 from app.db.models import Job, ScheduledTask, ScheduledTaskRun
@@ -77,7 +77,7 @@ def _out(db, run: ScheduledTaskRun) -> HookRunOut:
 
 
 @router.post("/hooks/scheduled-tasks/{task_id}")
-def fire_scheduled_task(task_id: str, secret: str, db: DbSession) -> dict:
+def fire_scheduled_task(task_id: str, secret: str, db: Tx) -> dict:
     task = _task(db, task_id, secret)
     try:
         run, job = trigger_scheduled_task(db, task)

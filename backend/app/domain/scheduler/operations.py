@@ -61,7 +61,7 @@ def create_scheduled_task(
         next_run_at=compute_next_run_at(trigger_type, schedule, timezone=timezone) if enabled else None,
     )
     db.add(task)
-    db.commit()
+    db.flush()
     db.refresh(task)
     return task
 
@@ -81,7 +81,7 @@ def update_scheduled_task(db: Session, task: ScheduledTask, changes: dict[str, A
         if value is not None:
             setattr(task, key, value)
     task.next_run_at = compute_next_run_at(task.trigger_type, task.schedule, timezone=task.timezone) if task.enabled else None
-    db.commit()
+    db.flush()
     db.refresh(task)
     return task
 
@@ -101,7 +101,7 @@ def rotate_webhook_secret(db: Session, task: ScheduledTask) -> ScheduledTask:
     if task.trigger_type != "webhook":
         raise SchedulerDomainError("schedErr_notWebhook")
     task.payload = {**(task.payload or {}), "webhook_secret": secrets.token_urlsafe(24)}
-    db.commit()
+    db.flush()
     db.refresh(task)
     return task
 
@@ -111,6 +111,9 @@ def trigger_scheduled_task(db: Session, task: ScheduledTask) -> tuple[ScheduledT
 
     此前三处各拼一套:调度循环查了重入、webhook 查了(借 worker 模块的私有函数)、「立即运行」
     没查 —— 连点两下就是两次并发的同一个任务。
+
+    不提交:三个入口各自提交(调度循环每触发一个就提交一次,两条路由用 Tx)。要等提交之后才能做的
+    (起生成线程)由执行体登记成 after_commit。
     """
     from app.domain.scheduler.executors import dispatch_scheduled_job, has_active_run
 
@@ -125,7 +128,7 @@ def trigger_scheduled_task(db: Session, task: ScheduledTask) -> tuple[ScheduledT
         task.enabled = False
         task.next_run_at = None
     task.last_run_at = now()
-    db.commit()
+    db.flush()
     db.refresh(run)
     db.refresh(job)
     return run, job
@@ -189,7 +192,7 @@ def _open_run(db: Session, task: ScheduledTask) -> tuple[ScheduledTaskRun, Any]:
     )
     run.job_id = job.id
     task.next_run_at = compute_next_run_at(task.trigger_type, task.schedule, timezone=task.timezone)
-    db.commit()
+    db.flush()
     db.refresh(task)
     db.refresh(run)
     db.refresh(job)

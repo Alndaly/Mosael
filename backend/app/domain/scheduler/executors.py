@@ -22,6 +22,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.i18n import LocalizedError
+from app.core.unit_of_work import after_commit
 from app.db.models import Job, ScheduledTask, ScheduledTaskRun, Workflow, now
 from app.domain.jobs import TERMINAL_STATUSES, blame, finish_job, reset_parent_job, say, set_parent_job
 
@@ -55,7 +56,6 @@ def _run_workflow(db: Session, task: ScheduledTask, run: ScheduledTaskRun, job: 
     # 复用包装任务作为工作流任务:引擎直接在它上面推进度和终态。
     job.payload = {**job.payload, "workflow_id": workflow.id}
     run.status = "running"
-    db.commit()
     start_workflow_job(db, workflow, created_by=task.owner_user_id, params=dict(payload.get("params") or {}), job=job)
 
 
@@ -85,7 +85,9 @@ def _run_generation(db: Session, task: ScheduledTask, run: ScheduledTaskRun, job
         digital_human_consent=payload.get("digital_human_consent") is True,
     )
     if _delegate(db, run, job, delegated.id, f"Dispatched generation {generation.id}"):
-        start_generation_thread(generation.id)
+        # 生成线程重开会话去读刚建的行 —— 等入口提交之后再起。
+        generation_id = generation.id
+        after_commit(db, lambda: start_generation_thread(generation_id))
 
 
 def _run_export(db: Session, task: ScheduledTask, run: ScheduledTaskRun, job: Job) -> None:
@@ -99,12 +101,10 @@ def _run_export(db: Session, task: ScheduledTask, run: ScheduledTaskRun, job: Jo
 def _delegate(db: Session, run: ScheduledTaskRun, job: Job, delegated_id: str, message: str) -> bool:
     """包装任务把活交给了另一个任务。包装任务已被取消时返回 False(交出去的那个随级联停下)。"""
     if not finish_job(db, job, status="running"):
-        db.commit()
         return False
     say(job, message)
     run.status = "running"
     job.result = {"delegated_job_id": delegated_id}
-    db.commit()
     return True
 
 
@@ -134,7 +134,9 @@ SCHEDULED_READINESS: dict[str, Readiness] = {
 
 
 def dispatch_scheduled_job(db: Session, task: ScheduledTask, run: ScheduledTaskRun, job: Job) -> None:
-    """按种类派给执行体。执行体里建的任务归这个包装任务(严格档:包装任务结束了就不再派生)。"""
+    """按种类派给执行体。执行体里建的任务归这个包装任务(严格档:包装任务结束了就不再派生)。
+
+    不提交:派发失败也只是把失败写在运行记录上,由触发它的入口一起提交。"""
     executor = SCHEDULED_EXECUTORS.get(task.kind)
     token = set_parent_job(job.id)
     try:
@@ -145,12 +147,10 @@ def dispatch_scheduled_job(db: Session, task: ScheduledTask, run: ScheduledTaskR
     except Exception as exc:  # noqa: BLE001 — 任何失败都要落进运行记录,否则它永远是"进行中"
         logger.warning("定时任务 %s 派发失败:%s", task.id, exc)
         if not finish_job(db, job, status="failed", **blame(exc)):
-            db.commit()
             return
         run.status = "failed"
         run.error = str(exc)[:500]
         run.finished_at = now()
-        db.commit()
     finally:
         reset_parent_job(token)
 
@@ -167,7 +167,7 @@ def has_active_run(db: Session, task_id: str) -> bool:
 
 
 def sync_run_states(db: Session) -> None:
-    """把任务的终态抄到运行记录上。活交出去了的,看交出去的那个任务。"""
+    """把任务的终态抄到运行记录上。活交出去了的,看交出去的那个任务。不提交(调度循环每轮提交)。"""
     runs = db.scalars(select(ScheduledTaskRun).where(ScheduledTaskRun.status.in_(ACTIVE_RUN_STATUSES))).all()
     for run in runs:
         job = db.get(Job, run.job_id) if run.job_id else None
@@ -191,4 +191,4 @@ def sync_run_states(db: Session) -> None:
             run.result = {**(run.result or {}), "attest": attest}
         run.finished_at = now()
         say(job, source.message)
-    db.commit()
+    db.flush()
