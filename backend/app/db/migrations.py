@@ -4546,6 +4546,39 @@ def _merge_object_storage_plugins() -> None:
         logger.info("把 %d 个对象存储连接合进了「对象存储」插件", len(instances))
 
 
+def _upgrade_stored_plugin_manifests() -> None:
+    """包记录里存着的清单跟着清单迁移链(domain/plugins/migrations)升到当前版本。
+
+    **对账,不是迁移**:清单版本随哪一版应用都可能 +1。磁盘上的清单只在扫描时升,而扫描要人点「扫描插件」
+    或装包才跑;在那之前读的一直是记录里存的那份。清单规则收紧时(Manim 0.2 的 `PIP_INDEX_URL` 配置项成了
+    宿主占着的名字),那份就解析不过 —— 插件页、智能体会话、工作流一碰到插件就 500。
+
+    只动记录:`_path` 是扫描写进去的运行时字段,迁移链会清掉它,这里放回去。磁盘那份下次扫描时由同一串步骤改。
+    """
+    from app.domain.plugins.manifest import PATH_KEY
+    from app.domain.plugins.migrations import upgrade
+
+    if "plugin_packages" not in set(inspect(engine).get_table_names()):
+        return
+    with engine.begin() as conn:
+        for package_id, stored in conn.execute(text("SELECT id, manifest FROM plugin_packages")).fetchall():
+            try:
+                raw = json.loads(stored) if isinstance(stored, str) else dict(stored or {})
+            except (TypeError, ValueError):
+                continue
+            if not isinstance(raw, dict):
+                continue
+            path = raw.get(PATH_KEY)
+            if not upgrade(raw):
+                continue
+            if path:
+                raw[PATH_KEY] = path
+            conn.execute(
+                text("UPDATE plugin_packages SET manifest = :m WHERE id = :i"),
+                {"m": json.dumps(raw, ensure_ascii=False), "i": package_id},
+            )
+
+
 def _install_bundled_plugins() -> None:
     """随应用发的插件(`plugins/bundled/`)装进插件目录并登记包记录。
 
@@ -5896,6 +5929,8 @@ def migration_plan() -> MigrationPlan:
                 MigrationPhase.AFTER_SCHEMA,
                 _cleanup_orphan_resource_shares,
                 _migrate_job_keys_are_keys,
+                # 在装随包插件之前:它要把每个包的清单解析一遍。
+                _upgrade_stored_plugin_manifests,
                 # 随应用发的插件每个版本都可能变(见 domain/plugins/bundled)。排在所有一次性迁移
                 # 之后、而且在要用到它的包记录的那些迁移之前。
                 _install_bundled_plugins,

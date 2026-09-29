@@ -1,6 +1,6 @@
 {
   "id": "dev.mosael.baidu-pan",
-  "manifest_version": 1,
+  "manifest_version": 2,
   "name": {
     "zh": "百度网盘",
     "en": "Baidu Netdisk"

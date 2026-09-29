@@ -37,7 +37,7 @@
   "id": "dev.example.text",          // 稳定唯一 id;改了等于换了个插件
   "name": { "zh": "文本工具", "en": "Text Toolkit" },   // 给人看的文字可按语言写,见「多语言」
   "version": "1.0.0",
-  "manifest_version": 1,
+  "manifest_version": 2,
 
   "runtime": { "kind": "process", "entry": "main.py" },
 
@@ -237,7 +237,7 @@ credential 的进加密凭据库,声明成 config 的进明文配置 —— 令�
   "id": "com.example.thing",
   "name": "示例服务",
   "version": "1.0.0",
-  "manifest_version": 1,
+  "manifest_version": 2,
 
   // 本地进程:spawn 一个子进程
   "runtime": { "kind": "mcp", "transport": "stdio", "command": "npx", "args": ["-y", "@scope/server"] },
@@ -866,7 +866,7 @@ return {"summary": "已导入 3 个文件" if locale.startswith("zh") else "Impo
 | --- | --- |
 | `id` / `name` / `version` | 必填。`id` 是稳定标识,改了等于换了个插件;只能用字母、数字和 `._-`,以字母或数字开头(它就是插件目录名);`name` 可写成按语言分的对象;`version` 按语义化版本写(`1.2.0`、`1.3.0-beta.1`):市场按它比先后决定「有新版」,写不成语义化版本的只能按「不相等」判 |
 | `default_locale` | 可选。你那些裸字符串是用哪种语言写的(见「多语言」),挑不到要的语言时先退到它 |
-| `manifest_version` | 当前是 `1`。老清单扫描时自动迁移并补上 |
+| `manifest_version` | 当前是 `2`。老清单扫描时自动迁移并补上;已装的包存着的那份启动时也升 |
 | `homepage` | **你的文档站**。界面在插件详情页、市场条目、安装确认三处给一个「文档」链接;不写就不画。只认 `http(s)` |
 | `docs` | 在 Mosael 里怎么用的文档,可按语言分;有它时「文档」指向它 |
 | `author` | `{name, url}`,`name` 可按语言分;显示在名字旁边,`url` 可点 |

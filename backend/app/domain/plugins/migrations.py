@@ -19,6 +19,7 @@ import shutil
 from pathlib import Path
 from typing import Any
 
+from mosael_formats.plugin_env import PACKAGE_SOURCE_ENV
 from mosael_formats.plugin_manifest import MANIFEST_FILENAME
 
 logger = logging.getLogger(__name__)
@@ -30,8 +31,9 @@ CANONICAL_FILENAME = MANIFEST_FILENAME
 #: 迁移时会被认出来并改名的通用写法。
 LEGACY_FILENAMES = ("plugin.json",)
 
-#: 当前清单版本。加一个新的迁移步骤就 +1,并把它加进 _STEPS。
-MANIFEST_VERSION = 1
+#: 当前清单版本。加一个新的迁移步骤就 +1,并把它加进 _STEPS。装好的包存着的清单也跟着升(见
+#: db/migrations 的 `upgrade-stored-plugin-manifests`),所以**收紧清单规则时,老清单要能被某一步改合格**。
+MANIFEST_VERSION = 2
 
 
 def _to_runtime_block(raw: dict[str, Any]) -> bool:
@@ -107,8 +109,58 @@ def _drop_runtime_cache(raw: dict[str, Any]) -> bool:
     return removed
 
 
+def _package_mirror_fields_to_sources(raw: dict[str, Any]) -> bool:
+    """配置 / 凭据里自带的装包镜像(键是 `PIP_INDEX_URL`、`NPM_CONFIG_REGISTRY` 这类)→ `package_sources`。
+
+    镜像改由宿主按连接注入之后,这些键成了宿主占着的名字,带着它们的清单不再合格 —— 装着 Manim 0.2
+    的库,插件页、智能体会话一打开就报「会盖掉宿主给插件的环境变量」。删掉这一格、声明它要的那种源,
+    插件读到的还是同一个变量,只是值由宿主给。连接里填过的地址由数据库迁移搬成连接自己的覆盖。
+    """
+    instance = raw.get("instance")
+    if not isinstance(instance, dict):
+        return False
+    wanted: list[str] = []
+    for kind in ("config", "credentials"):
+        fields = instance.get(kind)
+        if not isinstance(fields, list):
+            continue
+        kept = []
+        for spec in fields:
+            key = str(spec.get("key") or "").upper() if isinstance(spec, dict) else ""
+            source = next((name for name, keys in PACKAGE_SOURCE_ENV.items() if key in keys), None)
+            if source is None:
+                kept.append(spec)
+            elif source not in wanted:
+                wanted.append(source)
+        if len(kept) != len(fields):
+            instance[kind] = kept
+    if not wanted:
+        return False
+    declared = raw.get("package_sources")
+    sources = [str(one) for one in declared] if isinstance(declared, list) else []
+    raw["package_sources"] = [*sources, *(one for one in wanted if one not in sources)]
+    return True
+
+
 #: 按顺序跑。加新步骤往后追加,并把 MANIFEST_VERSION +1。
-_STEPS = (_to_runtime_block, _to_instance_block, _to_tools_object, _drop_runtime_cache)
+_STEPS = (
+    _to_runtime_block,
+    _to_instance_block,
+    _to_tools_object,
+    _drop_runtime_cache,
+    _package_mirror_fields_to_sources,
+)
+
+
+def upgrade(raw: dict[str, Any]) -> bool:
+    """把一份清单(就地)升到当前版本。→ 是否改动过。磁盘上的清单(`migrate_directory`)和包记录里
+    存着的那份(数据库迁移)走的是同一串步骤。"""
+    if int(raw.get("manifest_version") or 0) >= MANIFEST_VERSION:
+        return False
+    for step in _STEPS:
+        step(raw)
+    raw["manifest_version"] = MANIFEST_VERSION
+    return True
 
 
 def migrate_directory(directory: Path) -> Path | None:
@@ -126,13 +178,7 @@ def migrate_directory(directory: Path) -> Path | None:
     if not isinstance(raw, dict):
         return path
 
-    changed = False
-    if int(raw.get("manifest_version") or 0) < MANIFEST_VERSION:
-        for step in _STEPS:
-            changed = step(raw) or changed
-        raw["manifest_version"] = MANIFEST_VERSION
-        changed = True
-
+    changed = upgrade(raw)
     canonical = directory / CANONICAL_FILENAME
     if changed:
         _backup(path)
@@ -161,4 +207,4 @@ def _backup(path: Path) -> None:
         shutil.copy2(path, backup)
 
 
-__all__ = ["CANONICAL_FILENAME", "LEGACY_FILENAMES", "MANIFEST_VERSION", "migrate_directory"]
+__all__ = ["CANONICAL_FILENAME", "LEGACY_FILENAMES", "MANIFEST_VERSION", "migrate_directory", "upgrade"]
