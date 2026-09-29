@@ -178,7 +178,9 @@ def test_确认卡的权限档次前端都有文案() -> None:
     table = re.search(r"const LABEL_KEYS = \{(.*?)\} as const;", badge, re.S)
     assert table is not None, "PermissionBadge.tsx 里找不到 LABEL_KEYS —— 改了形状就回来改这条"
     keys = dict(re.findall(r'"?([\w-]+)"?:\s*"(\w+)"', table.group(1)))
-    messages = (frontend / "app/messages.ts").read_text("utf-8")
+    # 文案表:入口 app/messages.ts,正文按分区放在 app/messages/<语言>/*.ts
+    tables = [frontend / "app/messages.ts", *sorted((frontend / "app/messages").rglob("*.ts"))]
+    messages = "\n".join(path.read_text("utf-8") for path in tables)
     # 每一档都要有键,**不管现在有没有工具挂在上面** —— 新加的档往往先落在 PERMISSIONS 里,
     # 等第一个工具挂上去才发现文案没写,而那时它已经出现在用户面前了。
     for permission in {*PERMISSIONS, *(one.permission for one in tool_specs().values())}:

@@ -79,6 +79,9 @@ def test_the_ui_actually_has_the_switch() -> None:
     assert "setOpenRegistration(" in section, "管理页没有调这个开关"
     assert "deployRegistrationOpen" in section
 
-    for name in ("app/messages.ts", "features/admin/RegistrationSection.tsx"):
-        text = (frontend / name).read_text()
+    # 文案表:入口 app/messages.ts,正文按分区放在 app/messages/<语言>/*.ts
+    tables = sorted((frontend / "app/messages").rglob("*.ts"))
+    for path in [frontend / "app/messages.ts", *tables, frontend / "features/admin/RegistrationSection.tsx"]:
+        name = path.relative_to(frontend).as_posix()
+        text = path.read_text()
         assert "MOSAEL_OPEN_REGISTRATION" not in text, f"{name} 还在教人改环境变量"

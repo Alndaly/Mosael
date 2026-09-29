@@ -22,13 +22,25 @@ export const RATCHET = true;
 
 const SRC = join(import.meta.dirname, "..");
 const MESSAGES = join(SRC, "app", "messages.ts");
+// 文案正文按分区放在 app/messages/<语言>/<分区>.ts,入口 messages.ts 只负责拼。
+const MESSAGE_TABLES = join(SRC, "app", "messages");
 
 function sources(dir: string): string[] {
   return readdirSync(dir).flatMap((entry) => {
     const path = join(dir, entry);
+    if (path === MESSAGE_TABLES) return [];
     if (statSync(path).isDirectory()) return sources(path);
     return /\.tsx?$/.test(path) && path !== MESSAGES ? [path] : [];
   });
+}
+
+/** 所有分区文件(两种语言),不含只做拼接的 index.ts。 */
+function tableFiles(): string[] {
+  return readdirSync(MESSAGE_TABLES).flatMap((locale) =>
+    readdirSync(join(MESSAGE_TABLES, locale))
+      .filter((name) => name.endsWith(".ts") && name !== "index.ts")
+      .map((name) => join(MESSAGE_TABLES, locale, name)),
+  );
 }
 
 /** 模板里**每一段字面量**都是线索:`studioPrompt${kind}Text` 给出 studioPrompt 和 Text。 */
@@ -45,8 +57,9 @@ function templateFragments(code: string): Set<string> {
 }
 
 describe("文案表", () => {
-  const messages = readFileSync(MESSAGES, "utf8");
-  const keys = [...messages.matchAll(/^ {4}(\w+):/gm)].map((one) => one[1]);
+  // 分区文件里每张表是顶层对象,条目缩进两格。
+  const messages = tableFiles().map((path) => readFileSync(path, "utf8")).join("\n");
+  const keys = [...messages.matchAll(/^ {2}(\w+):/gm)].map((one) => one[1]);
   const code = sources(SRC).map((path) => readFileSync(path, "utf8")).join("\n");
   const fragments = templateFragments(code);
   // 源码里所有被引号包住的单词,**扫一遍**收进集合。此前是每个键各编一条正则、各扫一遍全部
