@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextvars
+import functools
 import logging
 import secrets
 import threading
@@ -557,7 +558,8 @@ class JobRunner:
 
     def _start(self, admitted: list[tuple[str, Callable[[], None]]]) -> None:
         for job_id, body in admitted:
-            threading.Thread(target=self._run, args=(job_id, body), name=JOB_THREAD_NAME, daemon=True).start()
+            # 目标是无参的:测试里有把 Thread 替成「同步调 target()」的替身,不传 args。
+            threading.Thread(target=functools.partial(self._run, job_id, body), name=JOB_THREAD_NAME, daemon=True).start()
 
     def _run(self, job_id: str, body: Callable[[], None]) -> None:
         try:
