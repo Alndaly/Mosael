@@ -8,6 +8,7 @@ const {
   nativeImage,
   net,
   safeStorage,
+  session,
   shell,
   systemPreferences,
 } = require("electron");
@@ -16,7 +17,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { loginShellPath } = require("./login-shell-path.cjs");
-const { resolveMasterKey } = require("./master-key.cjs");
+const { resolveMasterKey, shellToken } = require("./master-key.cjs");
 const { Readable } = require("node:stream");
 const { pipeline } = require("node:stream/promises");
 const {
@@ -231,6 +232,23 @@ function backendCommand() {
   return { command: path.join(packagedDir, executable), args: [], cwd: packagedDir };
 }
 
+/**
+ * 给这个应用发往本机后端的请求加上 `X-Mosael-Shell`(见 master-key.cjs 的壳令牌)。只挂本机后端的地址 ——
+ * 连远程服务器时那边不认这个头,也不该把它发出去。
+ */
+//: 每次起后端都重新算(恢复备份之后数据目录换了,主密钥也就换了),监听只挂一次、读这个变量。
+let currentShellToken = "";
+let shellHeaderInstalled = false;
+function installShellHeader(token) {
+  currentShellToken = token;
+  if (shellHeaderInstalled) return;
+  shellHeaderInstalled = true;
+  const urls = [`http://127.0.0.1:${BACKEND_PORT}/*`, `http://localhost:${BACKEND_PORT}/*`];
+  session.defaultSession.webRequest.onBeforeSendHeaders({ urls }, (details, callback) => {
+    callback({ requestHeaders: { ...details.requestHeaders, "X-Mosael-Shell": currentShellToken } });
+  });
+}
+
 async function isHealthy() {
   try {
     const res = await net.fetch(`${BACKEND_URL}/api/health`, { signal: AbortSignal.timeout(1500) });
@@ -309,7 +327,10 @@ async function ensureBackend() {
   let masterKey = null;
   if (!isDev) {
     try {
-      masterKey = resolveMasterKey(configuredDataDir, safeStorage);
+      const resolved = resolveMasterKey(configuredDataDir, safeStorage);
+      // 壳令牌:界面(file://,Origin 为 null)发往本机后端的请求都带上它,后端只放行带着它的 null 来源。
+      installShellHeader(shellToken(resolved.key));
+      if (resolved.sealed) masterKey = resolved.key;
     } catch (error) {
       appendMainLog("master-key-unavailable", error);
     }

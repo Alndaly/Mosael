@@ -70,6 +70,8 @@ class Settings(BaseSettings):
     #: **仍然不接受 `*`**,理由见 main.py 那段:/api/auth 按性质开放,通配符下任何页面都能在
     #: 这个后端上给自己开个号并读回 token。要哪个域名就写哪个域名。
     cors_origins: str = ""
+    #: 允许的 Host 头(逗号分隔,MOSAEL_ALLOWED_HOSTS)。桌面版不配也只认本机的名字;服务端部署配了才检查。见 allowed_hosts。
+    allowed_hosts: str = ""
 
     # 远程部署的入口保护。None = 自动（桌面/回环关闭，监听外网地址时开启）；显式 0/1 可覆盖。
     # 这是单进程应用，所以进程内窗口与真实执行模型一致；若未来横向扩展，见 PROCESS_STATE。
@@ -170,3 +172,14 @@ LOGIN_SESSION_TTL = timedelta(days=30)
 #: 服务令牌:一次有界操作的凭据(对话轮次上限 600s、设备码登录几分钟、OAuth 刷新一瞬间)。
 #: 半小时足够宽,又把"忘了撤销"的代价从永久压到半小时。
 SERVICE_SESSION_TTL = timedelta(minutes=30)
+
+
+def allowed_hosts() -> list[str]:
+    """Host 头白名单:部署者配了就用配的;桌面版(和用户在同一台机器上)只认本机的名字 —— 挡 DNS rebinding
+    (把自己的域名解析到 127.0.0.1 的网页发来的请求,Host 是它自己的域名)。服务端没配就不检查:那里用什么域名、
+    IP 访问只有部署者知道,猜错就是整台服务器打不开。"""
+    configured = [one.strip() for one in settings.allowed_hosts.split(",") if one.strip()]
+    if configured:
+        return configured
+    return ["127.0.0.1", "localhost"] if settings.local_desktop else []
+

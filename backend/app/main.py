@@ -57,7 +57,7 @@ from app.api.routes.boards import router as boards_router
 from app.api.routes.notes import router as notes_router
 from app.api.routes.workflows import router as workflows_router
 from app.api.routes.workspaces import router as workspaces_router
-from app.core.config import settings
+from app.core.config import allowed_hosts, settings
 from app.api.middleware import NEW_JOBS_HEADER, AnnounceNewJobs, AnswerCrashes, CarryLocale
 from app.api.deps import require_worker_key
 from app.core.logging import configure_logging
@@ -418,6 +418,19 @@ def create_app() -> FastAPI:
         # 跨源时浏览器默认只让页面读到几个基础响应头;这个要点名放行,前端才看得见。
         expose_headers=[NEW_JOBS_HEADER],
     )
+    # 名单里的 `null` 只给打包版的界面(file://)用;任何网页里的 sandboxed iframe 也是 `null`。桌面版在 CORS
+    # **外面**再加一道:null 来源必须带主密钥派生的壳令牌(见 core/shell_origin)。后加的中间件在外层,先于 CORS 生效。
+    if settings.local_desktop:
+        from app.core.shell_origin import ShellOriginGuard
+
+        app.add_middleware(ShellOriginGuard)
+    # Host 头必须是本机的名字(或部署者在 MOSAEL_ALLOWED_HOSTS 里写的):挡 DNS rebinding —— 一个把自己的域名
+    # 解析到 127.0.0.1 的网页,发出的请求 Host 是它自己的域名。
+    allowed = allowed_hosts()
+    if allowed:
+        from starlette.middleware.trustedhost import TrustedHostMiddleware
+
+        app.add_middleware(TrustedHostMiddleware, allowed_hosts=allowed)
 
     app.include_router(health_router, prefix="/api")
     app.include_router(auth_router, prefix="/api")
