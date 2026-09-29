@@ -195,6 +195,7 @@ def call_tool(
         # structured_content 是 MCP 后来加的结构化返回;有就用它,没有就把文本块拼起来。
         structured = getattr(result, "structured_content", None)
         if isinstance(structured, dict):
+            _refuse_upstream_failure(structured)
             return structured
         # 没有 output_schema 的工具(大多数)只回文本块,而那段文本往往本身就是 JSON。
         # 解出来给调用方,而不是塞一个 {"text": "{...}"} —— 后者让工作流的 {{变量}} 引用和
@@ -204,9 +205,39 @@ def call_tool(
             parsed = json.loads(text)
         except (ValueError, TypeError):
             return {"text": text}
-        return parsed if isinstance(parsed, dict) else {"text": text}
+        if isinstance(parsed, dict):
+            _refuse_upstream_failure(parsed)
+            return parsed
+        return {"text": text}
 
     return _sync(manifest, env, _call, timeout=timeout, egress=egress)
+
+
+def _refuse_upstream_failure(payload: dict[str, Any]) -> None:
+    """上游失败了,MCP 服务却没设 `is_error`,把错误当正常结果交回来 —— 认出来按失败算。
+
+    TikHub 就是这样:key 被拒时回 `{"result": "{\"error\": \"unauthorized\", ..., \"status\": 403}"}`,
+    插件页那条调用记录因此写着「成功」,智能体、工作流也拿它当数据往下走(用户截图)。
+
+    只认一种**明确**的形状,不猜:带 `error` 且 `status` / `status_code` 是 4xx / 5xx 的对象;可以包在
+    `result` 里,也可以是 `result` 里的一段 JSON 文本(FastMCP 把非对象返回值这样包)。只有 `status` 没有
+    `error` 的正常数据(比如一条视频的状态码)不算。
+    """
+    body: Any = payload
+    if set(payload) == {"result"}:
+        body = payload["result"]
+        if isinstance(body, str):
+            try:
+                body = json.loads(body)
+            except (ValueError, TypeError):
+                return
+    if not isinstance(body, dict) or not body.get("error"):
+        return
+    status = body.get("status", body.get("status_code"))
+    if isinstance(status, bool) or not isinstance(status, int) or not 400 <= status <= 599:
+        return
+    said = body.get("message") or body.get("error")
+    raise McpBridgeError("pluginErr_upstream", detail=f"{said}(HTTP {status})")
 
 
 def _text(result: Any) -> str:
