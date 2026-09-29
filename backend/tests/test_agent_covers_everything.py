@@ -29,10 +29,9 @@ REQUIRED: dict[str, dict[str, str]] = {
         "编排时间线": "edit_timeline",
         "导出成片": "render_sequence",
     },
-    "插件": {
-        "看有哪些插件工具": "list_plugin_tools",
-        "调用插件工具": "invoke_plugin_tool",
-    },
+    # 「插件」这一块不在这里:插件工具展开成清单里的一等工具(plugin__<连接>__<工具>),看得见就是能调,
+    # 由 tests/test_plugins.py 钉着。此前的 list_plugin_tools / invoke_plugin_tool 两个元工具只为独立的
+    # MCP 客户端留着,而那条路已经没有了。
     "工作流": {
         "看有哪些工作流": "list_workflows",
         "看有哪些节点类型": "list_workflow_node_types",

@@ -84,7 +84,8 @@ def test_可用节点类型只有一处组装() -> None:
     source = inspect.getsource(available_node_types)
     assert "plugin_node_types" in source
 
-    for module in ("app/api/routes/workflows.py", "app/domain/workflows/ai_edit.py"):
+    # 接口和智能体工具都经 workflows/use_cases.node_types 取这份清单。
+    for module in ("app/domain/workflows/use_cases.py", "app/domain/workflows/ai_edit.py"):
         text = (APP.parent / module).read_text(encoding="utf-8")
         assert "available_node_types(" in text, f"{module} 又自己组了一份"
 

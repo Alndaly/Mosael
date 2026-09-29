@@ -1081,12 +1081,11 @@ export interface paths {
         put?: never;
         /**
          * Analyze Asset Route
-         * @description Analyze an existing image or video.
+         * @description Analyze an existing image or video with the independently selected analysis profile.
          *
-         *     Ordinary authenticated HTTP requests use the independently selected analysis profile.
-         *     Agent-tool service tokens are bound to an AgentSession, so the server derives the current
-         *     connection, model, workspace and video mode from that session. OAuth image/video-frame input
-         *     uses the tool-free Gateway and never requires a caller-supplied service address.
+         *     The agent does not come through here: its analyze_asset tool derives the connection, model and
+         *     video mode from its own conversation. OAuth image/video-frame input uses the tool-free Gateway
+         *     and never requires a caller-supplied service address.
          */
         post: operations["analyze_asset_route_api_assets__asset_id__analyze_post"];
         delete?: never;
@@ -4350,8 +4349,7 @@ export interface paths {
         };
         /**
          * Source Message
-         * @description 笔记引用的一条对话消息。得看得见它所在的那次对话(`readable_session`):笔记是工作区的,引用的
-         *     对话却可能是某人没共享的私人线程 —— 引用它不等于把它公开。看不见和不存在同一个回答。
+         * @description 笔记引用的一条对话消息(看得见它所在的那次对话才给,见 agent/use_cases.cited_message)。
          */
         get: operations["source_message_api_notes_sources_message__message_id__get"];
         put?: never;
@@ -5418,7 +5416,13 @@ export interface paths {
          */
         get: operations["list_confirmations_api_confirmations_get"];
         put?: never;
-        /** Create Confirmation */
+        /**
+         * Create Confirmation
+         * @description 开卡的四步(过闸、建卡、判自动放行、推到原渠道)在 domain/agent/proposals.propose,智能体工具直接调同一个。
+         *
+         *     归属**由凭据决定**,不由请求体声明:一次 turn 一个令牌,铸的时候正好知道是哪次对话。没有会话的凭据
+         *     (登录令牌)开出来的卡就是无主的,由全局确认中心兜底。
+         */
         post: operations["create_confirmation_api_confirmations_post"];
         delete?: never;
         options?: never;
@@ -6231,10 +6235,7 @@ export interface paths {
         get?: never;
         /**
          * Set Agent Plan
-         * @description 写这次会话的任务计划。
-         *
-         *     直接执行、不走确认卡:写计划不改动任何工程状态。每一步都要点一次确认的计划没有人会用,
-         *     而真正的改动(改时间线、导出、生成)仍然各自出卡。
+         * @description 写这次会话的任务计划(见 agent/use_cases.set_plan)。
          */
         put: operations["set_agent_plan_api_agent_sessions__session_id__plan_put"];
         post?: never;
@@ -6251,19 +6252,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * List Pending Questions
-         * @description 某次对话里还没答的问题。**按会话取,不按工作区** —— 一个问题脱离上下文没有意义。
-         */
+        /** List Pending Questions */
         get: operations["list_pending_questions_api_agent_questions_get"];
         put?: never;
         /**
          * Ask Question
-         * @description 智能体问用户一个有选项的问题。
-         *
-         *     问题落在它那次对话里,往里问是写 —— 和发消息同一道闸(共享来的对话只能看)。工作区跟着对话走,
-         *     不由调用方另报一个:此前 MCP 那一侧缺省报的是「他的第一个工作区」,对话在别的工作区时,问题就
-         *     记在了另一个工作区名下。
+         * @description 智能体问用户一个有选项的问题(闸与归属见 agent/use_cases.ask)。
          */
         post: operations["ask_question_api_agent_questions_post"];
         delete?: never;
@@ -6318,9 +6312,6 @@ export interface paths {
         /**
          * Dismiss Question
          * @description 不想答。模型会收到「用户跳过了」并继续往下走,而不是卡在那儿等。
-         *
-         *     「收到」由两条路保证:应用自己那条运行时停在 ask_user 这次工具调用上等着,跳过就是它的
-         *     返回值;而那一轮已经不在了的时候(等待到点、直连 MCP、后端重启过),由这里送过去。
          */
         post: operations["dismiss_question_api_agent_questions__question_id__dismiss_post"];
         delete?: never;

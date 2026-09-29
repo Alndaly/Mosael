@@ -106,11 +106,8 @@ def test_asset_tools_call_the_domain_directly_not_the_api(monkeypatch) -> None:
     from app.core.security import mint_service_session
     from app.main import app
 
-    def no_loopback(*_args, **_kwargs):
-        raise AssertionError("素材工具不该再经 HTTP 回连后端")
-
-    for name in ("_get", "_post", "_patch", "_put", "_delete"):
-        monkeypatch.setattr(mcp_server, name, no_loopback)
+    # 回连的出口整个不存在了:工具只能直接调领域。
+    assert not any(hasattr(mcp_server, name) for name in ("_get", "_post", "_patch", "_put", "_delete"))
 
     workspace_id, viewer = _workspace_with("viewer")
     asset_id = insert_asset(workspace_id, kind="image", name="a")

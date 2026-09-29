@@ -32,19 +32,15 @@ def test_the_manifest_is_the_mcp_registry_exactly() -> None:
     """The guard against the drift that caused this. If a tool is added to mcp_server.py it
     appears here with no second edit; if this ever diverges, something grew a second list.
 
-    The two plugin meta-tools are the one deliberate subtraction: plugin tools are expanded
-    into the manifest as first-class entries, so list_plugin_tools/invoke_plugin_tool would be
-    a second path to the same capability. They stay registered for MCP clients, which do not
-    get the expansion."""
+    Plugin tools are expanded into the manifest as first-class entries, so there is no
+    meta-tool left to subtract (the old list_plugin_tools / invoke_plugin_tool were only
+    there for stand-alone MCP clients, which are gone)."""
     import asyncio
-
-    from app.domain.agent.tool_manifest import PLUGIN_META_TOOLS as _PLUGIN_META_TOOLS
 
     client = fresh_client()
     served = {tool["name"] for tool in _builtin(client)}
     registered = {tool.name for tool in asyncio.run(mcp_server.mcp.list_tools())}
-    assert served == registered - _PLUGIN_META_TOOLS
-    assert _PLUGIN_META_TOOLS <= registered, "MCP 客户端仍然靠这两个元工具发现插件"
+    assert served == registered
     assert len(served) > 20, "the registry looks truncated"
 
 
@@ -121,10 +117,10 @@ def test_workflow_graph_ops_sent_to_edit_timeline_get_recoverable_feedback(monke
     the right tool instead of leaking the unrelated Sequence validator."""
     client = fresh_client()
 
-    def should_not_post(*_args, **_kwargs) -> dict:
+    def should_not_open(*_args, **_kwargs) -> dict:
         raise AssertionError("workflow graph ops should be rejected before creating a timeline confirmation")
 
-    monkeypatch.setattr(mcp_server, "_post", should_not_post)
+    monkeypatch.setattr(mcp_server, "_open_card", should_not_open)
     workspace_id = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
 
     res = client.post(
@@ -145,26 +141,23 @@ def test_workflow_graph_ops_sent_to_edit_timeline_get_recoverable_feedback(monke
     assert "Sequence not found" not in error
 
 
-def test_the_token_is_context_bound_not_global() -> None:
-    """One process serves many turns at once. A module-level token would leak one caller's
-    credential into another's request."""
+def test_the_caller_is_context_bound_not_global() -> None:
+    """One process serves many turns at once. A module-level caller would run one person's tool
+    call with another person's identity."""
     import contextvars
 
-    assert isinstance(mcp_server._API_TOKEN, contextvars.ContextVar)
+    assert isinstance(mcp_server._CALLER_ID, contextvars.ContextVar)
 
-    def read_in_context(value: str) -> str:
-        reset = mcp_server.set_api_token(value)
-        try:
-            return mcp_server._auth_headers()["Authorization"]
-        finally:
-            mcp_server._API_TOKEN.reset(reset)
+    def read_in_context(user_id: str) -> str:
+        with mcp_server.calling_as(user_id=user_id):
+            return mcp_server._CALLER_ID.get()
 
     ctx_a = contextvars.copy_context()
     ctx_b = contextvars.copy_context()
-    assert ctx_a.run(read_in_context, "token-a") == "Bearer token-a"
-    assert ctx_b.run(read_in_context, "token-b") == "Bearer token-b"
+    assert ctx_a.run(read_in_context, "user-a") == "user-a"
+    assert ctx_b.run(read_in_context, "user-b") == "user-b"
     # Neither leaked into the ambient context.
-    assert "Authorization" not in mcp_server._auth_headers() or mcp_server._API_TOKEN.get() == ""
+    assert mcp_server._CALLER_ID.get() == ""
 
 
 def test_the_manifest_is_enough_to_build_a_tool_from() -> None:
@@ -249,16 +242,8 @@ def test_requested_by_reaches_the_confirmation_card(monkeypatch) -> None:
     """sidecar 经 invoke 通道调用时,确认卡显示的请求方应是它自己(pi-agent),
     而不是注册表默认的 mcp-agent。
 
-    工具体经 loopback HTTP 回连后端;TestClient 没有真实端口,把 _post 路由回
-    TestClient 本身——链路其余部分(invoke → 工具 → 确认卡)保持真实。"""
+    整条链路都是真的(invoke → 工具 → 直接调领域开卡)。"""
     client = fresh_client()
-
-    def fake_post(path: str, payload: dict) -> dict:
-        res = client.post(path, json=payload)
-        assert res.status_code < 300, res.text
-        return res.json()
-
-    monkeypatch.setattr(mcp_server, "_post", fake_post)
     workspace_id = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
     project = client.post("/api/projects", json={"workspace_id": workspace_id, "name": "P"}).json()
     sequence = client.post(
@@ -281,16 +266,8 @@ def test_requested_by_reaches_the_confirmation_card(monkeypatch) -> None:
 def test_generation_models_are_agent_discoverable(monkeypatch) -> None:
     """The agent can only pick a (provider, model) pair if something tells it that pair exists —
     list_generation_models is that something, read-only and confirmation-free."""
-    import mcp_server
 
     client = fresh_client()
-
-    def fake_get(path: str, params: dict | None = None) -> object:
-        res = client.get(path, params=params)
-        assert res.status_code < 300, res.text
-        return res.json()
-
-    monkeypatch.setattr(mcp_server, "_get", fake_get)
     workspace_id = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
     # 生成选项现在直接来自用户配置的连接+模型(不再有内置目录表),所以先配一条。
     profile = client.post(

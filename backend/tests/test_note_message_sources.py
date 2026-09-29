@@ -13,7 +13,7 @@ from fastapi.testclient import TestClient
 
 import mcp_server
 from app.core.db import SessionLocal
-from app.core.security import mint_tool_call_session
+from app.core.security import mint_service_session
 from app.db.models import User
 from app.domain.authority import Authority, Voucher
 from app.domain.note_types import NoteContent
@@ -112,7 +112,7 @@ def test_智能体在自己的对话里把消息存成笔记_操作人是这一�
     def agent_of(username: str, session_id: str) -> list[tuple[str, str, int, str]]:
         client = TestClient(app)
         with SessionLocal() as db:
-            client.headers["Authorization"] = f"Bearer {mint_tool_call_session(db, _user_id(username), agent_session_id=session_id)}"
+            client.headers["Authorization"] = f"Bearer {mint_service_session(db, _user_id(username), agent_session_id=session_id)}"
         return _route_through(monkeypatch, client)
 
     agent_of("tester", mine)

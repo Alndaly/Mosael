@@ -174,9 +174,9 @@
       }
     },
     {
-      "name": "blender_agent_step_fits_inside_the_mcp_client",
+      "name": "blender_agent_step_fits_inside_the_tool_call",
       "rule": "less_than",
-      "why": "智能体的 blender_inspect / look / execute 由 MCP 客户端调用,而 mcp_server 给它的 HTTP 预算是 180 秒。后端等得比调用方久没有任何意义:对方早就放弃了,而我们还占着那把独占锁 —— 用户的下一次操作被挡在外面,且没有人说得出为什么。(Blender **场景互通**那条是另一个数,它由界面发起,上面没有更短的预算压着。)",
+      "why": "智能体的 blender_inspect / look / execute 由 sidecar 经 /api/agent/tools 调用,它给每次工具调用的预算是 TOOL_CALL_TIMEOUT_MS(180 秒)。后端等 Blender 等得比调用方久没有任何意义:对方早就放弃了,而我们还占着那把独占锁 —— 用户的下一次操作被挡在外面,且没有人说得出为什么。(Blender **场景互通**那条是另一个数,它由界面发起,上面没有更短的预算压着。)此前外层是 mcp_server 回连后端的 HTTP 超时;工具改成进程内直接调领域之后,那一层没有了,真正压着它的是 sidecar。",
       "inner": {
         "runtime": "python",
         "location": "backend/app/domain/blender/bridge.py",
@@ -184,10 +184,10 @@
         "unit": "s"
       },
       "outer": {
-        "runtime": "python",
-        "location": "backend/mcp_server.py",
-        "symbol": "BLENDER_CLIENT_TIMEOUT_SECONDS",
-        "unit": "s"
+        "runtime": "agent-sidecar",
+        "location": "agent-sidecar/src/tools.ts",
+        "symbol": "TOOL_CALL_TIMEOUT_MS",
+        "unit": "ms"
       }
     }
   ]

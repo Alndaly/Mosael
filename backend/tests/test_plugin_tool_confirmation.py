@@ -17,7 +17,6 @@ import time
 
 import pytest
 
-import mcp_server
 from app.core.db import SessionLocal
 from app.core.security import mint_service_session
 from app.db.models import PluginInvocation, ToolConfirmation, User
@@ -335,33 +334,6 @@ def test_画板上的生成器和对话里是同一条规矩() -> None:
     card = _card(response.json()["id"])
     assert card.status == "pending" and card.permission == "external"
     assert "会在你的电脑上运行代码" in card.summary
-
-
-def test_MCP直连走同一条路_有后果的回一张待确认卡(monkeypatch) -> None:
-    setup = Setup()
-    client = setup.client
-
-    def call(method: str, path: str, **kwargs):
-        response = client.request(method, path, **kwargs)
-        mcp_server._raise_with_detail(response)
-        return response.json()
-
-    monkeypatch.setattr(mcp_server, "_get", lambda path, params=None, **_: call("GET", path, params=params))
-    monkeypatch.setattr(mcp_server, "_post", lambda path, payload, **_: call("POST", path, json=payload))
-
-    listed = {tool["name"]: tool for tool in mcp_server.list_plugin_tools()}
-    assert listed["render"]["effects"] == "local-code" and listed["peek"]["effects"] == "none"
-
-    direct = mcp_server.invoke_plugin_tool(setup.instance_id, "peek", {"text": "hi"})
-    assert direct["status"] == "succeeded" and direct["output"]["echo"] == {"text": "hi"}
-
-    pending = mcp_server.invoke_plugin_tool(setup.instance_id, "render", {"code": "x"})
-    assert pending["status"] == "pending" and pending["confirmation_id"]
-    assert "get_confirmation" in pending["message"]
-    card = _card(pending["confirmation_id"])
-    #: MCP 直连没有会话:卡无主,永远等人(不继承任何模式)。
-    assert card.session_id is None and card.status == "pending" and card.requested_by == "mcp-agent"
-    assert _runs("render") == 0
 
 
 def test_市场索引和清单同一个算法() -> None:

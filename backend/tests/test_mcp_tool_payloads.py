@@ -76,7 +76,6 @@ ARGS: dict[str, dict[str, Any]] = {
     "list_provider_models": {},
     # 没有界面上下文时它自己回一句"跳不了" —— 冒烟正好走那条路,不发请求。
     "open_view": {"view": "home"},
-    "list_plugin_tools": {},
     "list_publish_accounts": {},
     "list_publish_tasks": {},
     "browser_pool_list": {},
@@ -101,10 +100,9 @@ ARGS: dict[str, dict[str, Any]] = {
     "update_asset_tags": {"asset_id": "no-such-asset", "tags": ["a"]},
     "forget": {"memory_id": "no-such-memory"},
     "update_plan": {"steps": [{"title": "第一步", "status": "pending"}]},
-    "invoke_plugin_tool": {"tool_name": "no-such-tool", "arguments": {}},
     "browser_navigate": {"session_id": "no-such-session", "url": "https://example.test"},
     "browser_click": {"session_id": "no-such-session", "selector": "#x"},
-    "browser_type": {"session_id": "no-such-session", "selector": "#x", "text": "hi"},
+    "browser_type": {"session_id": "no-such-session", "selector": "#x", "value": "hi"},
     "browser_read": {"session_id": "no-such-session"},
     "browser_wait": {"session_id": "no-such-session", "text": "x", "timeout_ms": 1},
     "browser_scroll": {"session_id": "no-such-session", "dy": 100},
@@ -123,23 +121,9 @@ SKIP: dict[str, str] = {
 }
 
 
-def _route_through(monkeypatch, client) -> list[tuple[str, str, int, str]]:
-    """把 mcp_server 的 HTTP 出口接到 TestClient 上,并记下每次往返。"""
-    seen: list[tuple[str, str, int, str]] = []
-
-    def call(method: str, path: str, **kwargs):
-        response = client.request(method, path, **kwargs)
-        seen.append((method, path, response.status_code, response.text[:400]))
-        mcp_server._raise_with_detail(response)
-        return response.json() if response.content else None
-
-    monkeypatch.setattr(mcp_server, "_get", lambda path, params=None, **_: call("GET", path, params=params))
-    monkeypatch.setattr(mcp_server, "_post", lambda path, payload, **_: call("POST", path, json=payload))
-    monkeypatch.setattr(mcp_server, "_patch", lambda path, payload: call("PATCH", path, json=payload))
-    monkeypatch.setattr(mcp_server, "_put", lambda path, payload: call("PUT", path, json=payload))
-    monkeypatch.setattr(mcp_server, "_delete", lambda path: call("DELETE", path))
-    # 已经改成直接调领域的工具不走上面这些出口,它们按「这次调用是谁」在自己的事务里取出行动人。
-    # 这里认的就是这个 TestClient 登录的那个人 —— 和经 /api/agent/tools 调用时同一个身份。
+def _route_through(monkeypatch, client) -> None:
+    """让直接调领域的工具认得出「这次调用是谁」:就是这个 TestClient 登录的那个人 —— 和经
+    /api/agent/tools 调用时同一个身份。工具不再经 HTTP 回连,所以没有往返可记。"""
     import contextvars
 
     from app.core.db import SessionLocal
@@ -148,37 +132,36 @@ def _route_through(monkeypatch, client) -> list[tuple[str, str, int, str]]:
     with SessionLocal() as db:
         caller = find_session(db, client.headers["Authorization"].removeprefix("Bearer ")).user_id
     monkeypatch.setattr(mcp_server, "_CALLER_ID", contextvars.ContextVar("test_caller", default=caller))
-    return seen
 
 
-def _is_shape_rejection(status: int, body: str) -> bool:
-    """422 且错误指向请求体 —— 这就是「工具发的东西后端不认识」。
+def _is_shape_rejection(exc: BaseException) -> bool:
+    """这次失败是**契约**问题,不是数据问题。
 
-    别的 422(领域校验,如「素材不存在」)不算:那是数据问题,而这个测试传的本来就是
-    不存在的 id。
+    工具直接调领域之后,「载荷形状不对」换了两种样子:给用例传了它不认识的参数(TypeError),或者
+    按工具自己的最小参数造出来的请求模型过不了校验(ValidationError)。资源不存在、没权限这类领域错误
+    不算 —— 这个测试传的本来就是不存在的 id。
     """
-    return status == 422 and '"body"' in body
+    from pydantic import ValidationError
+
+    return isinstance(exc, (TypeError, ValidationError))
 
 
 def test_每个工具发出去的载荷后端都接得住(monkeypatch) -> None:
     client = fresh_client()
     client.post("/api/workspaces", json={"name": "W"})  # 工具默认取第一个工作区
-    seen = _route_through(monkeypatch, client)
+    _route_through(monkeypatch, client)
 
     tools = {tool.name: tool for tool in asyncio.run(mcp_server.mcp.list_tools())}
     broken: list[str] = []
     for name, args in ARGS.items():
         if name not in tools:
             continue
-        before = len(seen)
         try:
             getattr(mcp_server, name)(**args)
-        except Exception:  # noqa: BLE001 — 领域错误是预期的(传的都是不存在的 id)
-            pass
-        for method, path, status, body in seen[before:]:
-            if _is_shape_rejection(status, body):
-                broken.append(f"{name} → {method} {path}: {body[:200]}")
-    assert broken == [], "这些工具发的载荷后端不认识(必然每次都失败):\n  " + "\n  ".join(broken)
+        except Exception as exc:  # noqa: BLE001 — 领域错误是预期的(传的都是不存在的 id)
+            if _is_shape_rejection(exc):
+                broken.append(f"{name}: {type(exc).__name__}: {str(exc)[:200]}")
+    assert broken == [], "这些工具调领域的方式不对(必然每次都失败):\n  " + "\n  ".join(broken)
 
 
 def test_每个直接执行的工具要么冒烟要么写明为什么不冒烟() -> None:
@@ -210,7 +193,7 @@ def test_节点类型先返回轻量目录_指定类型才返回完整配置(mon
             "tool_name": "",
         }
     ]
-    monkeypatch.setattr(mcp_server, "_get", lambda _path: rows)
+    monkeypatch.setattr(mcp_server, "_use_case", lambda *_a, **_k: rows)
 
     catalog = mcp_server.list_workflow_node_types()
     assert catalog == [

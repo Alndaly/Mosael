@@ -368,7 +368,7 @@ def test_vision_call_refuses_a_profile_with_no_chat_model() -> None:
 def test_agent_video_analysis_uses_current_oauth_model_and_gateway(monkeypatch) -> None:
     """已有视频走当前会话模型：抽帧可以复用 Gateway 图片协议，不要求 OAuth 连接填服务地址。"""
     from app.ai.sidecar import pi_client
-    from app.core.security import mint_tool_call_session  # 工具体回连用的那种(见 routes/agent_tools)
+    from app.core.security import mint_service_session  # 那一轮交给 sidecar 的令牌:只能调工具通道
     from app.db.models import User
 
     client = fresh_client()
@@ -410,17 +410,18 @@ def test_agent_video_analysis_uses_current_oauth_model_and_gateway(monkeypatch) 
     monkeypatch.setattr(service, "extract_video_frames", lambda _path: [b"frame-1", b"frame-2"])
     with SessionLocal() as db:
         user = db.query(User).order_by(User.created_at).first()
-        tool_token = mint_tool_call_session(db, user.id, agent_session_id=session["id"])
+        tool_token = mint_service_session(db, user.id, agent_session_id=session["id"])
     client.headers["Authorization"] = f"Bearer {tool_token}"
 
+    # 智能体看视频走 analyze_asset 这个工具(进程内直接调领域);会话由令牌认出。
     response = client.post(
-        f"/api/assets/{asset['id']}/analyze",
+        "/api/agent/tools/analyze_asset",
         # 即使工具参数说 auto，也以用户在这次会话里选定的 frames 为准。
-        json={"question": "视频里发生了什么？", "mode": "auto"},
+        json={"arguments": {"asset_id": asset["id"], "question": "视频里发生了什么？", "mode": "auto"}},
     )
 
     assert response.status_code == 200, response.text
-    assert response.json() == {
+    assert response.json()["result"] == {
         "answer": "K3 看到了两段画面",
         "provider": "kimi-coding",
         "model": "k3",
@@ -439,7 +440,7 @@ def test_agent_video_analysis_uses_current_oauth_model_and_gateway(monkeypatch) 
 def test_agent_oauth_native_video_requires_frames(monkeypatch) -> None:
     """Gateway 没有 video block；显式 native 不能暗中退化，也不能要求用户伪造服务地址。"""
     from app.ai.sidecar import pi_client
-    from app.core.security import mint_tool_call_session  # 工具体回连用的那种(见 routes/agent_tools)
+    from app.core.security import mint_service_session  # 那一轮交给 sidecar 的令牌:只能调工具通道
     from app.db.models import User
 
     client = fresh_client()
@@ -467,15 +468,15 @@ def test_agent_oauth_native_video_requires_frames(monkeypatch) -> None:
     monkeypatch.setattr(service, "extract_video_frames", lambda _path: pytest.fail("native 不应静默改成抽帧"))
     with SessionLocal() as db:
         user = db.query(User).order_by(User.created_at).first()
-        tool_token = mint_tool_call_session(db, user.id, agent_session_id=session["id"])
+        tool_token = mint_service_session(db, user.id, agent_session_id=session["id"])
     client.headers["Authorization"] = f"Bearer {tool_token}"
 
     response = client.post(
-        f"/api/assets/{asset['id']}/analyze",
+        "/api/agent/tools/analyze_asset",
         # 工具参数不能覆盖用户在会话中明确选择的 native。
-        json={"question": "描述视频", "mode": "frames"},
+        json={"arguments": {"asset_id": asset["id"], "question": "描述视频", "mode": "frames"}},
     )
 
-    assert response.status_code == 422
-    assert "OAuth" in response.json()["detail"]
-    assert "抽帧" in response.json()["detail"]
+    assert response.status_code == 200, response.text
+    error = response.json()["error"]
+    assert "OAuth" in error and "抽帧" in error

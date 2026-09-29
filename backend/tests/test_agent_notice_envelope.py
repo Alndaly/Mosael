@@ -36,5 +36,5 @@ def test_MCP那侧不再自己拼信封() -> None:
     body = source[source.index("def notify_agent_session"):]
     body = body[: body.index("\ndef ")]
     assert "【来自另一个智能体会话的通知】" not in body, "notify_agent_session 又开始自己拼信封了"
-    assert '"content": text' in body, "发出去的正文不是原样文本"
-    assert '"origin_session_id"' in body, "来源没走结构化字段"
+    assert "content=text" in body, "发出去的正文不是原样文本"
+    assert "origin_session_id=" in body, "来源没走结构化字段"

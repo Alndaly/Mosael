@@ -11,7 +11,7 @@
 
 <!-- BEGIN generated: tools -->
 
-共 **100** 个工具,其中 **28** 个走确认卡、**1** 个停下来等用户作答。
+共 **98** 个工具,其中 **28** 个走确认卡、**1** 个停下来等用户作答。
 
 | 工具 | 门控 | 说明 |
 | --- | --- | --- |
@@ -70,7 +70,6 @@
 | `http_request` | 确认卡 | Confirmation required: call an external HTTP API (POST/PUT/PATCH/DELETE). |
 | `import_media_from_url` | 直接执行 | Runs directly: download a video or audio from a link into the asset library. |
 | `inspect_sequence` | 直接执行 | Read-only: inspect a VIDEO TIMELINE sequence — format, revision, duration, tracks, clips. |
-| `invoke_plugin_tool` | 直接执行 | Invoke one plugin tool returned by list_plugin_tools. |
 | `list_agent_sessions` | 直接执行 | Runs directly: list the agent sessions in this workspace (id, title, status). |
 | `list_assets` | 直接执行 | Read-only: list media assets in a workspace (id, name, kind, source, duration). |
 | `list_board_producers` | 直接执行 | Read-only: list what content items on a creative board can DO — their abilities and slot generators. |
@@ -79,7 +78,6 @@
 | `list_generation_models` | 直接执行 | List the AI generation engines available to generate_image / generate_video / generate_sound. |
 | `list_jobs` | 直接执行 | Read-only: list recent background jobs (renders, transcriptions, generations, imports). |
 | `list_memories` | 直接执行 | Read-only: list what you already remember in this workspace. |
-| `list_plugin_tools` | 直接执行 | Read-only: list tools exposed by the user's enabled plugin connections. |
 | `list_projects` | 直接执行 | Read-only: list video projects in a workspace (id, name, active_sequence_id). |
 | `list_provider_models` | 直接执行 | List the AI connections and models this user has actually configured, by capability. |
 | `list_publish_accounts` | 直接执行 | Read-only: the platform accounts already logged in, for publish_asset. |

@@ -4,120 +4,23 @@
 和后端进程内给 pi sidecar 用的工具集 —— 前者要求工具体经 HTTP 回连后端(独立进程只能这么做),于是
 后者也跟着绕一圈:进程内序列化 → HTTP → 反序列化,还得为这一圈专门铸一份短期令牌。
 
-工具体正在逐个改成直接调领域用例(见 `_use_case`);还没改的仍经 `_get/_post` 回连,等全部迁完,
-回连和它的令牌一起删掉。MCPServer 对象现在只用来按函数签名生成参数 schema。
+工具体直接调领域用例(`_use_case`),逻辑长在路由里的只读查询直接调路由函数本体(`_route`),都在同一个
+进程、同一次事务里,不经 HTTP。MCPServer 对象现在只用来按函数签名生成参数 schema。
 """
 
 from __future__ import annotations
 
 from app.domain.generation.catalog import SOURCE_ROLE_HELP, SOURCE_ROLE_LABELS
-from app.domain.agent.tool_manifest import agent_tool_name
 import contextlib
 import contextvars
 import json
 from typing import Any
 
-import httpx
 from mcp.types import ImageContent, TextContent
 # mcp 2.0 把 FastMCP 改名为 MCPServer(mcp.server.fastmcp 整个模块已移除),装饰器与 run() 不变。
 from mcp.server.mcpserver import MCPServer
 
-#: Where the tool bodies call back to. Bound per context for the same reason the token is:
-#: as a stdio MCP server the environment settles it, but in-process (the pi sidecar path) the
-#: backend knows its own address and the default is only right by coincidence. It was baked in
-#: at import time, so every tool 401'd or misrouted the moment the backend ran on any port
-#: other than 8800 — a packaged build picking a free port, or two instances side by side.
-_API_BASE: contextvars.ContextVar[str] = contextvars.ContextVar("mosael_api_base", default="")
-
-
-def set_api_base(base: str) -> contextvars.Token:
-    return _API_BASE.set(base)
-
-
-def api_base() -> str:
-    return _API_BASE.get()
-
-# The token is a ContextVar rather than a module constant: a single process handles many users'
-# turns concurrently and each needs its own credential. A global would leak one caller's token
-# into another's request. 没有从环境变量读的默认值:不再作为独立进程跑,凭据只由 calling_as 给。
-_API_TOKEN: contextvars.ContextVar[str] = contextvars.ContextVar("mosael_api_token", default="")
-
-
-def set_api_token(token: str):
-    """Bind the token for the current context. Returns the reset token."""
-    return _API_TOKEN.set(token)
-
-
-def _auth_headers() -> dict[str, str]:
-    token = _API_TOKEN.get()
-    return {"Authorization": f"Bearer {token}"} if token else {}
-
 mcp = MCPServer("mosael")
-
-
-def _raise_with_detail(response: httpx.Response) -> None:
-    """4xx/5xx 时把后端的 detail 带进异常文本。
-
-    裸的 `422 Unprocessable Content` 对模型毫无用处——它无法自我纠正;
-    detail(如「不能删除 start 节点」)才是它需要的反馈。"""
-    if response.is_success:
-        return
-    detail = ""
-    try:
-        body = response.json()
-        detail = str(body.get("detail", "")) if isinstance(body, dict) else ""
-    except ValueError:
-        detail = response.text[:300]
-    message = f"{response.status_code} {response.reason_phrase}"
-    if detail:
-        message += f": {detail}"
-    raise ValueError(message)
-
-
-#: 智能体那几个 Blender 工具等后端多久。**后端那一侧必须比它短** ——
-#: 等得比调用方久没有任何意义:对方早就放弃了,而后端还占着那把独占锁,用户的下一次操作被挡
-#: 在外面。先后关系由 contracts/shared-constants.json 的 budgets 钉着
-#: (对面是 blender/bridge.BLENDER_AGENT_TIMEOUT_SECONDS)。
-BLENDER_CLIENT_TIMEOUT_SECONDS = 180
-
-
-def _get(path: str, params: dict[str, Any] | None = None, *, timeout: float = 15) -> Any:
-    headers = _auth_headers()
-    with httpx.Client(base_url=api_base(), timeout=timeout, headers=headers) as client:
-        response = client.get(path, params=params)
-        _raise_with_detail(response)
-        return response.json()
-
-
-def _post(path: str, payload: dict[str, Any], *, timeout: float = 30) -> Any:
-    headers = _auth_headers()
-    with httpx.Client(base_url=api_base(), timeout=timeout, headers=headers) as client:
-        response = client.post(path, json=payload)
-        _raise_with_detail(response)
-        return response.json()
-
-
-def _patch(path: str, payload: dict[str, Any]) -> Any:
-    headers = _auth_headers()
-    with httpx.Client(base_url=api_base(), timeout=30, headers=headers) as client:
-        response = client.patch(path, json=payload)
-        _raise_with_detail(response)
-        return response.json()
-
-
-def _put(path: str, payload: dict[str, Any]) -> Any:
-    headers = _auth_headers()
-    with httpx.Client(base_url=api_base(), timeout=30, headers=headers) as client:
-        response = client.put(path, json=payload)
-        _raise_with_detail(response)
-        return response.json()
-
-
-def _delete(path: str) -> None:
-    headers = _auth_headers()
-    with httpx.Client(base_url=api_base(), timeout=30, headers=headers) as client:
-        response = client.delete(path)
-        _raise_with_detail(response)
 
 
 def _workspaces() -> list[dict[str, Any]]:
@@ -127,6 +30,31 @@ def _workspaces() -> list[dict[str, Any]]:
     return _use_case(
         lambda db, user: [{"id": ws.id, "name": ws.name, "role": role} for ws, role in members.workspaces_of(db, user.id)]
     )
+
+
+def _route(fn, *, out: Any = None, **params: Any) -> Any:
+    """在进程内直接调一个**路由函数本体**(不经 HTTP)—— 给逻辑就长在路由里的只读查询用(按人的设置、
+    展示用的组装)。闸、查询、出口形状都是那一份;`out` 传它的 response_model:经 HTTP 时那一层会把
+    ORM 对象按它过滤(比如发布账号不带登录态),直接调同样要过滤。
+
+    **每个参数都要显式给**:直接调用时,没给的参数拿到的是 `Query(...)` 那个对象本身,而不是它的默认值。
+    路由抛的 HTTPException 变成一句模型读得懂的错误,带着状态码和原因,模型据此自己纠正。
+    """
+    from fastapi import HTTPException
+    from fastapi.encoders import jsonable_encoder
+
+    def call(db, user):
+        try:
+            result = fn(db=db, user=user, **params)
+        except HTTPException as exc:
+            raise ValueError(f"{exc.status_code}: {exc.detail}") from None
+        if out is not None:
+            result = (
+                [out.model_validate(item) for item in result] if isinstance(result, list) else out.model_validate(result)
+            )
+        return jsonable_encoder(result)
+
+    return _use_case(call)
 
 
 def _default_workspace_id() -> str:
@@ -244,22 +172,22 @@ def set_session_id(session_id: str) -> contextvars.Token:
 _CALLER_ID: contextvars.ContextVar[str] = contextvars.ContextVar("mosael_caller_id", default="")
 
 
-def calling_as(
-    *, token: str, api_base: str, requested_by: str = "", session_id: str = "", user_id: str = ""
-):
-    """在进程内以某个调用方的身份跑工具。几个上下文变量一起设、一起还原 —— 调用方不必知道这里有几个、叫什么。"""
-    return _calling_as(token=token, api_base=api_base, requested_by=requested_by, session_id=session_id, user_id=user_id)
+def calling_as(*, user_id: str, requested_by: str = "", session_id: str = ""):
+    """在进程内以某个调用方的身份跑工具。几个上下文变量一起设、一起还原 —— 调用方不必知道这里有几个、叫什么。
+
+    只有**身份**:这次调用是谁、属于哪次对话、谁发起的。工具体直接调领域用例,不再经 HTTP 回连,
+    所以没有令牌、没有后端地址要交给它。
+    """
+    return _calling_as(user_id=user_id, requested_by=requested_by, session_id=session_id)
 
 
 @contextlib.contextmanager
-def _calling_as(*, token: str, api_base: str, requested_by: str, session_id: str, user_id: str):
-    resets = [(_API_TOKEN, _API_TOKEN.set(token)), (_API_BASE, _API_BASE.set(api_base))]
+def _calling_as(*, user_id: str, requested_by: str, session_id: str):
+    resets = [(_CALLER_ID, _CALLER_ID.set(user_id))]
     if requested_by:
         resets.append((_REQUESTED_BY, _REQUESTED_BY.set(requested_by)))
     if session_id:
         resets.append((_SESSION_ID, _SESSION_ID.set(session_id)))
-    if user_id:
-        resets.append((_CALLER_ID, _CALLER_ID.set(user_id)))
     try:
         yield
     finally:
@@ -775,7 +703,9 @@ def list_provider_models(capability: str = "", surface: str = "") -> dict[str, A
         raise ValueError(f"unknown surface {surface!r}; valid values are {list(_SURFACES)}")
     # 能力清单从 provider-defaults 的回包推导 —— 它每种能力回一行。在这里另抄一份
     # DEFAULTABLE_CAPABILITIES 就成了第二份名单,而后端加一种能力时没有任何东西会提醒它。
-    defaults = _get("/api/settings/provider-defaults")
+    from app.api.routes.settings.provider_defaults import list_capability_models, list_provider_defaults
+
+    defaults = _route(list_provider_defaults)
     known = [row["capability"] for row in defaults]
     if capability and capability not in known:
         raise ValueError(f"unknown capability {capability!r}; this backend has {known}")
@@ -787,7 +717,7 @@ def list_provider_models(capability: str = "", surface: str = "") -> dict[str, A
     }
     models: list[dict[str, Any]] = []
     for one in [capability] if capability else known:
-        for item in _get(f"/api/settings/capability-models/{one}", {"surface": surface or "all"}):
+        for item in _route(list_capability_models, capability=one, surface=surface or "all"):
             models.append(
                 {
                     "capability": one,
@@ -816,10 +746,12 @@ def list_generation_models(kind: str = "") -> list[dict[str, Any]]:
     Each entry's "prompt" says whether the model needs a prompt: "required", "optional", or
     "none" (it takes none — an upscale workflow; send it no prompt).
     """
+    from app.api.routes.generation import list_generation_options
+
     kinds = [kind] if kind in _GENERATION_KINDS else list(_GENERATION_KINDS)
     out: list[dict[str, Any]] = []
     for one in kinds:
-        for item in _get("/api/generation/options", {"kind": one}):
+        for item in _route(list_generation_options, kind=one):
             capabilities = item.get("capabilities") or {}
             out.append(
                 {
@@ -1164,12 +1096,9 @@ def read_document(asset_id: str, first: int = 1, last: int = 0, offset: int = 0)
     on a page, use analyze_document_pages. Do NOT use for knowledge-base notes (read_note) or
     for image/video/audio assets (analyze_asset).
     """
-    params: dict[str, Any] = {"first": max(1, first)}
-    if last:
-        params["last"] = last
-    if offset:
-        params["offset"] = offset
-    return _get(f"/api/assets/{asset_id}/document", params)
+    from app.api.routes.documents import read_document as read
+
+    return _route(read, asset_id=asset_id, first=max(1, first), last=last or None, offset=max(0, offset))
 
 
 @tool(effect="confirms")
@@ -1204,54 +1133,10 @@ def analyze_document_pages(asset_id: str, pages: list[int], question: str = "") 
     computer (read_document's `page_images` says how many there are). Use read_document for
     the text itself.
     """
-    return _post(f"/api/assets/{asset_id}/document/analyze", {"pages": pages, "question": question})
+    from app.api.routes.documents import analyze_document
+    from app.api.schemas import DocumentPagesRequest
 
-
-@tool(effect="reads")
-def list_plugin_tools() -> list[dict[str, Any]]:
-    """Read-only: list tools exposed by the user's enabled plugin connections.
-
-    Use only when the built-in Mosael tools do not cover the user's request and a
-    plugin-specific capability may. Each entry has instance_id (which connection),
-    instance_name, name, description, input_schema and effects ("none" runs directly;
-    "paid", "external" or "local-code" asks the user first); call with invoke_plugin_tool.
-    Do NOT use for built-in timeline/workflow/media operations when a first-party
-    tool exists.
-    """
-    return _get("/api/plugins/tools")
-
-
-@tool(effect="writes")
-def invoke_plugin_tool(
-    instance_id: str, tool_name: str, input: dict[str, Any], workspace_id: str = ""
-) -> dict[str, Any]:
-    """Invoke one plugin tool returned by list_plugin_tools.
-
-    Use only with an instance_id/tool_name/input_schema you got from list_plugin_tools —
-    instance_id picks WHICH connection (the same plugin can be connected more than once,
-    e.g. one per platform). A tool whose effects is "none" runs directly and returns
-    status, output and error. A tool that costs money ("paid"), acts outside Mosael
-    ("external") or runs code on this computer ("local-code") needs the user's approval:
-    the call returns a pending confirmation_id instead, and the tool runs only if they
-    approve. Built-in Mosael edits, renders, generations, operations, and workflow runs
-    should use their dedicated first-party tools instead.
-    """
-    # 和 sidecar 同一条路(/api/agent/tools/plugin__…):要不要先问人由工具声明的后果决定,在那里判,
-    # 这边不再判一遍。插件页「试一下」那条路由是人点的,智能体不走它。
-    reply = _post(
-        f"/api/agent/tools/{agent_tool_name(instance_id, tool_name)}"
-        f"?workspace_id={workspace_id or _default_workspace_id()}",
-        {"arguments": input, "requested_by": _REQUESTED_BY.get()},
-    )
-    if reply.get("error"):
-        return {"status": "failed", "output": {}, "error": reply["error"]}
-    result = reply.get("result")
-    if isinstance(result, dict) and result.get("confirmation_id"):
-        return result
-    return {"status": "succeeded", "output": result if result is not None else {}, "error": None}
-
-
-
+    return _route(analyze_document, asset_id=asset_id, body=DocumentPagesRequest(pages=pages, question=question))
 
 
 @tool(effect="writes")
@@ -1376,15 +1261,10 @@ def update_plan(steps: list[Any]) -> dict[str, Any]:
 
 
 def _browser_act(session_id: str, action: str, args: dict[str, Any], workspace_id: str) -> dict[str, Any]:
-    resp = _post(
-        "/api/agent-browser/act",
-        {
-            "workspace_id": workspace_id or _default_workspace_id(),
-            "session_id": session_id,
-            "action": action,
-            "args": args,
-        },
-    )
+    from app.api.routes.agent_browser import ActRequest, act
+
+    request = ActRequest(workspace_id=workspace_id or _default_workspace_id(), session_id=session_id, action=action, args=args)
+    resp = _route(act, body=request)
     return resp.get("result", {}) if isinstance(resp, dict) else {}
 
 
@@ -1420,7 +1300,10 @@ def browser_pool_list(workspace_id: str = "") -> dict[str, Any]:
     (publish accounts + generic site logins they manage). Returns each profile's id, name, platform
     (null = generic) and whether it's logged in. NO cookies or credentials are exposed. Use this to find
     the right profile, then browser_pool_open(profile_id) to REQUEST the user's approval to use it."""
-    rows = _get("/api/browser/profiles", {"workspace_id": workspace_id or _default_workspace_id()})
+    from app.api.routes.browser_profiles import list_profiles
+    from app.api.schemas import BrowserProfileOut
+
+    rows = _route(list_profiles, workspace_id=workspace_id or _default_workspace_id(), out=BrowserProfileOut)
     profiles = []
     if isinstance(rows, list):
         for p in rows:
@@ -1503,10 +1386,9 @@ def browser_wait(
 @tool(effect="writes")
 def browser_close(session_id: str, workspace_id: str = "") -> dict[str, Any]:
     """Close a browser session (frees the view; a throwaway session's cookies/storage are wiped)."""
-    return _post(
-        "/api/agent-browser/close",
-        {"workspace_id": workspace_id or _default_workspace_id(), "session_id": session_id},
-    )
+    from app.api.routes.agent_browser import CloseRequest, close
+
+    return _route(close, body=CloseRequest(workspace_id=workspace_id or _default_workspace_id(), session_id=session_id))
 
 
 @tool(effect="reads")
@@ -1715,8 +1597,9 @@ def blender_inspect(instance_id: str = "", workspace_id: str = "") -> dict[str, 
     type, parent, location, rotation (degrees), scale, dimensions (metres) and, for meshes, vertex /
     face counts, modifiers and materials. Blender is Z-up. Call this before blender_execute so your
     code targets objects that exist. Needs the Blender MCP plugin and the Blender add-on running."""
-    params = {"workspace_id": workspace_id or _default_workspace_id(), "instance_id": instance_id}
-    return _get("/api/scenes/blender/agent/inspect", params, timeout=60)
+    from app.domain.blender import use_cases
+
+    return _use_case(use_cases.inspect, workspace_id or _default_workspace_id(), instance_id)
 
 
 @tool(effect="reads")
@@ -1740,10 +1623,12 @@ def blender_look(views: list[str] | None = None, objects: list[str] | None = Non
     solid render hides completely; 'rendered' uses EEVEE to show real materials and lights
     (slower). Render settings are restored afterwards.
     """
-    data = _get("/api/scenes/blender/agent/look", {
-        "workspace_id": workspace_id or _default_workspace_id(), "views": views or [],
-        "objects": objects or [], "shading": shading, "zoom": zoom, "instance_id": instance_id,
-    }, timeout=BLENDER_CLIENT_TIMEOUT_SECONDS)
+    from app.domain.blender import use_cases
+
+    data = _use_case(
+        use_cases.look, workspace_id or _default_workspace_id(), views=views or [], objects=objects or [],
+        shading=shading, zoom=zoom, instance_id=instance_id,
+    )
     return _with_images(data)
 
 
@@ -1786,11 +1671,19 @@ def blender_send_scene(scene_id: str, shot_id: str = "", instance_id: str = "",
     with blender_import_to_scene (or the user's 「接收 Blender 修改」 button, which returns
     geometry AND camera moves into this same scene).
     """
-    scene = _get(f"/api/scenes/{scene_id}", {"workspace_id": workspace_id or _default_workspace_id()})
-    return _post(f"/api/scenes/{scene_id}/blender", {
-        "workspace_id": workspace_id or _default_workspace_id(), "instance_id": instance_id,
-        "revision": scene["revision"], "shot_id": shot_id or scene["content"]["shots"][0]["id"],
-    }, timeout=BLENDER_CLIENT_TIMEOUT_SECONDS)
+    from app.domain.blender import use_cases
+    from app.domain.scenes import use_cases as scenes
+
+    workspace = workspace_id or _default_workspace_id()
+
+    def send(db, user):
+        scene = scenes.read(db, user, workspace, scene_id)
+        return use_cases.send(
+            db, user, workspace, scene_id, instance_id=instance_id, revision=scene.revision,
+            shot_id=shot_id or scene.content["shots"][0]["id"],
+        )
+
+    return _use_case(send)
 
 
 @tool(effect="writes")
@@ -1807,10 +1700,12 @@ def blender_import_to_scene(scene_id: str, base_revision: int, name: str = "", o
     triangle budget (decimate in Blender before exporting); view_scene says so in model_warnings when
     it cannot draw one. blender_look still judges the model itself better (Blender's own shading).
     """
-    return _post(f"/api/scenes/{scene_id}/blender/agent/import", {
-        "workspace_id": workspace_id or _default_workspace_id(), "base_revision": base_revision,
-        "name": name, "objects": objects or [], "position": position, "instance_id": instance_id,
-    }, timeout=BLENDER_CLIENT_TIMEOUT_SECONDS)
+    from app.domain.blender import use_cases
+
+    return _use_case(
+        use_cases.import_to_scene, workspace_id or _default_workspace_id(), scene_id, base_revision=base_revision,
+        name=name, objects=objects or [], position=position, instance_id=instance_id,
+    )
 
 
 @tool(effect="writes")
@@ -1911,7 +1806,9 @@ def web_search(query: str, count: int = 5) -> list[dict[str, Any]]:
     promising page. Do NOT use for the user's local assets, projects, or
     workflows — use list_assets/list_projects/list_workflows.
     """
-    return _get("/api/websearch", {"q": query, "count": count}).get("results", [])
+    from app.domain.websearch import search
+
+    return search(query, max(1, min(int(count), 10)))
 
 
 @tool(effect="reads")
@@ -1922,7 +1819,9 @@ def fetch_url(url: str) -> dict[str, Any]:
     Only http/https public pages are allowed; internal/localhost addresses are
     blocked. Do NOT use for local Mosael assets/workflows.
     """
-    return _get("/api/webfetch", {"url": url})
+    from app.domain.websearch import fetch
+
+    return fetch(url)
 
 
 @tool(effect="reads")
@@ -1933,7 +1832,10 @@ def list_workflows(workspace_id: str = "") -> list[dict[str, Any]]:
     workflow_id before get_workflow/edit_workflow/run_workflow. Do NOT use for
     video projects or timeline sequence IDs — use list_projects/inspect_sequence.
     """
-    workflows = _get("/api/workflows", {"workspace_id": workspace_id or _default_workspace_id()})
+    from app.api.schemas import WorkflowOut
+    from app.domain.workflows import use_cases
+
+    workflows = _use_case(use_cases.list_workflows, workspace_id or _default_workspace_id(), out=WorkflowOut)
     return [
         {
             "id": workflow["id"],
@@ -1953,7 +1855,10 @@ def get_workflow(workflow_id: str) -> dict[str, Any]:
     or update_workflow so you preserve existing nodes/edges and know exact
     node_id values. Do NOT use for video timelines — use inspect_sequence.
     """
-    return _get(f"/api/workflows/{workflow_id}")
+    from app.api.schemas import WorkflowOut
+    from app.domain.workflows import use_cases
+
+    return _use_case(use_cases.readable, workflow_id, out=WorkflowOut)
 
 
 @tool(effect="reads")
@@ -1966,7 +1871,12 @@ def list_workflow_node_types(node_type: str = "") -> list[dict[str, Any]] | dict
     upstream outputs downstream as {{node_id.output}}.
     Do NOT use for video timeline tracks/clips or media asset tags.
     """
-    rows = _get("/api/workflows/node-types")
+    from app.core.i18n import get_current_locale
+    from app.domain.workflows import use_cases
+
+    from app.api.schemas import WorkflowNodeTypeOut
+
+    rows = _use_case(use_cases.node_types, get_current_locale(), out=WorkflowNodeTypeOut)
     wanted = node_type.strip()
     if wanted:
         match = next((row for row in rows if row.get("type") == wanted), None)
@@ -2096,7 +2006,10 @@ def list_boards(workspace_id: str = "") -> list[dict[str, Any]]:
     frames that the user brainstorms on — NOT a visual workflow and NOT a video
     timeline. Use this to find a board_id before get_board/edit_board.
     """
-    boards = _get("/api/boards", {"workspace_id": workspace_id or _default_workspace_id()})
+    from app.api.schemas import BoardOut
+    from app.domain.boards import use_cases
+
+    boards = _use_case(use_cases.list_all, workspace_id or _default_workspace_id(), out=BoardOut)
     return [
         {"id": b["id"], "name": b["name"], "items": len((b.get("canvas") or {}).get("items", []))}
         for b in boards
@@ -2122,7 +2035,10 @@ def get_board(board_id: str, workspace_id: str = "") -> dict[str, Any]:
     with inspect_sequence (see its clips) and edit_timeline (split, move, trim…); it
     carries form.producer "sequence_export" and form.config (its export settings).
     """
-    return _get(f"/api/boards/{board_id}", {"workspace_id": workspace_id or _default_workspace_id()})
+    from app.api.schemas import BoardOut
+    from app.domain.boards import use_cases
+
+    return _use_case(use_cases.read, board_id, workspace_id or _default_workspace_id(), out=BoardOut)
 
 
 @tool(effect="confirms")
@@ -2257,7 +2173,15 @@ def list_board_producers(workspace_id: str = "") -> list[dict[str, Any]]:
     its config on the scene item and run_board_item on it. And "sequence_export"
     (hosts ["sequence"]) — a timeline item exports itself; its video lands to its right.
     """
-    listed = _get("/api/boards/producers", {"workspace_id": workspace_id or _default_workspace_id()})
+    from app.core.i18n import get_current_locale
+    from app.domain.boards import use_cases
+
+    from app.api.schemas import BoardProducerOut
+
+    # 同一个出口形状(和界面从 /boards/producers 拿到的逐字一样):经 HTTP 时那一层会按它过滤。
+    listed = _use_case(
+        use_cases.producers_for, workspace_id or _default_workspace_id(), get_current_locale(), out=BoardProducerOut
+    )
     return [one for one in listed if one.get("runs_from_draft")]
 
 
@@ -2318,7 +2242,10 @@ def get_confirmation(confirmation_id: str) -> dict[str, Any]:
     decides in Mosael; result/error explain the outcome. Do NOT call this to find
     projects, assets, workflows, jobs, or arbitrary IDs.
     """
-    confirmation = _get(f"/api/confirmations/{confirmation_id}")
+    from app.api.routes.confirmations import get_confirmation as read
+    from app.api.schemas import ConfirmationOut
+
+    confirmation = _route(read, confirmation_id=confirmation_id, out=ConfirmationOut)
     return {
         "confirmation_id": confirmation["id"],
         "status": confirmation["status"],
@@ -2364,14 +2291,16 @@ def translate_text(text: str, target: str, engine: str = "google", workspace_id:
     engine is "google" (free, no key needed) or "ai" (uses a configured AI provider).
     Do NOT use for transcribing audio — that is transcribe_asset.
     """
-    body = _post(
-        "/api/translate",
-        {
-            "workspace_id": workspace_id or _default_workspace_id(),
-            "texts": [text],
-            "target_lang": target,
-            "engine": engine if engine in ("google", "ai") else "google",
-        },
+    from app.api.routes.translate import translate_texts
+    from app.api.schemas.translate import TranslateRequest, TranslateResponse
+
+    body = _route(
+        translate_texts,
+        body=TranslateRequest(
+            workspace_id=workspace_id or _default_workspace_id(), texts=[text], target_lang=target,
+            engine=engine if engine in ("google", "ai") else "google",
+        ),
+        out=TranslateResponse,
     )
     return {"text": (body.get("translations") or [""])[0]}
 
@@ -2543,10 +2472,11 @@ def notify_workspace(title: str, body: str = "", workspace_id: str = "") -> dict
     Use to report the end of something long the user asked you to do while they were away.
     Do NOT use to talk to the user in this conversation — just say it in your reply.
     """
-    return _post(
-        "/api/notifications",
-        {"workspace_id": workspace_id or _default_workspace_id(), "title": title, "body": body},
-    )
+    from app.api.routes.notifications import create_notification
+    from app.api.schemas import NotificationOut, NotifyRequest
+
+    request = NotifyRequest(workspace_id=workspace_id or _default_workspace_id(), title=title, body=body)
+    return _route(create_notification, body=request, out=NotificationOut)
 
 
 @tool(effect="reads")
@@ -2652,10 +2582,11 @@ def notify_agent_session(session_id: str, message: str) -> dict[str, Any]:
     # 来源只走结构化字段。信封(给模型看的那句「这条来自另一个会话」)由收信那侧在**拼提示词
     # 时**加上,见 host.agent_notice_envelope —— 拼进 content 的话,用户在对话里看到的就是一行
     # 方括号标签加一串 32 位 id,而那两样都是写给模型的。
-    result = _post(
-        f"/api/agent/sessions/{session_id}/messages",
-        {"content": text, "origin_session_id": me or None},
-    )
+    from app.api.routes.agent import post_agent_message
+    from app.api.schemas import AgentMessageCreate, AgentMessageOut
+
+    request = AgentMessageCreate(content=text, origin_session_id=me or None)
+    result = _route(post_agent_message, session_id=session_id, body=request, out=AgentMessageOut)
     queued = bool((result.get("payload") or {}).get("queued")) if isinstance(result, dict) else False
     return {
         "delivered": True,
@@ -2721,7 +2652,10 @@ def publish_asset(
 @tool(effect="reads")
 def list_publish_accounts(workspace_id: str = "") -> list[dict[str, Any]]:
     """Read-only: the platform accounts already logged in, for publish_asset."""
-    return _get("/api/publish/accounts", {"workspace_id": workspace_id or _default_workspace_id()})
+    from app.api.routes.publish import list_accounts
+    from app.api.schemas import PublishAccountOut
+
+    return _route(list_accounts, workspace_id=workspace_id or _default_workspace_id(), out=PublishAccountOut)
 
 
 @tool(effect="reads")
@@ -2734,7 +2668,10 @@ def list_publish_tasks(status: str = "", limit: int = 20, workspace_id: str = ""
     post_id means the platform's reply was not read at publish time — do not guess one from
     the title. `status` filters (success / failed / running / pending …).
     """
-    tasks = _get("/api/publish/tasks", {"workspace_id": workspace_id or _default_workspace_id()})
+    from app.api.routes.publish import list_publish_tasks
+    from app.api.schemas import PublishTaskOut
+
+    tasks = _route(list_publish_tasks, workspace_id=workspace_id or _default_workspace_id(), out=PublishTaskOut)
     if status:
         tasks = [task for task in tasks if task.get("status") == status]
     keep = ("id", "platform", "account_name", "asset_id", "asset_name", "title", "status", "error", "post", "created_at")

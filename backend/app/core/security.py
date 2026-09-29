@@ -18,7 +18,6 @@ __all__ = [
     "hash_password",
     "mint_login_session",
     "mint_service_session",
-    "mint_tool_call_session",
     "new_session_token",
     "SERVICE_PATH_PREFIXES",
     "prune_expired_sessions",
@@ -114,22 +113,13 @@ def mint_service_session(db, user_id: str, *, agent_session_id: str | None = Non
 #: 服务令牌(交给 sidecar、飞书连接这类进程外的调用方)**只能**用在这几组路由上:取工具清单、调工具、
 #: 等确认卡 / 选择卡的结果、回写供应商凭据 —— sidecar 用到的正好是这些(agent-sidecar/src)。此前它和登录态
 #: 一样通行全部接口,半小时内谁拿到它(sidecar 进程、它起的子进程)就能以这个人的身份调任何 REST。
-#: 工具体在后端里回连本 API 用的是另一份只活一次调用的令牌(`mint_tool_call_session`),不在这张表里受限。
+#: 工具体在后端进程里直接调领域用例,不再回连本 API,所以没有第二种令牌。
 SERVICE_PATH_PREFIXES = (
     "/api/agent/tools",
     "/api/confirmations",
     "/api/agent/questions/",
     "/api/agent/provider-credentials",
 )
-
-
-def mint_tool_call_session(db, user_id: str, *, agent_session_id: str | None = None) -> str:
-    """一次工具调用里,工具体回连本 API 用的凭据:和发起它的 turn 同一个人、同一次对话,**只活这一次调用**
-    (调用方用完就 `revoke_session`)。它从不离开后端进程 —— 交给 sidecar 的服务令牌因此可以收窄到
-    `SERVICE_PATH_PREFIXES`。"""
-    return _mint(
-        db, user_id, kind="tool_call", ttl=SERVICE_SESSION_TTL, commit=True, agent_session_id=agent_session_id
-    )
 
 
 def _mint(

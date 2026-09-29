@@ -16,12 +16,11 @@ from app.domain.boards import (
     create_board,
     delete_board,
     duplicate_board,
-    get_board,
-    list_boards,
     update_board,
 )
 from app.domain.boards import producers
-from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm, owning_workspace
+from app.domain.boards import use_cases as board_reads
+from app.domain.permissions import ensure_workspace_perm
 
 router = APIRouter(tags=["boards"])
 
@@ -46,8 +45,7 @@ def _board_http_error(exc: BoardDomainError) -> HTTPException:
 
 @router.get("/boards", response_model=list[BoardOut])
 def list_all(workspace_id: str, db: DbSession, user: CurrentUser) -> list[Board]:
-    ensure_workspace_access(db, user, workspace_id)
-    return list_boards(db, workspace_id)
+    return board_reads.list_all(db, user, workspace_id)
 
 
 @router.get("/boards/producers", response_model=list[BoardProducerOut])
@@ -57,17 +55,14 @@ def list_producers(workspace_id: str, db: DbSession, user: CurrentUser) -> list[
     节点的描述和工作流节点面板是同一份(标签、分组、字段一个字都不差),按请求方的语言翻好。
     **注册在 `/boards/{board_id}` 之前** —— 反过来的话 `producers` 会被当成一张板的 id。
     """
-    ensure_workspace_access(db, user, workspace_id)
-    return producers.describe(db, user.id, get_current_locale())
+    return board_reads.producers_for(db, user, workspace_id, get_current_locale())
 
 
 @router.get("/boards/{board_id}", response_model=BoardOut)
 def read(board_id: str, db: DbSession, user: CurrentUser, workspace_id: str | None = None) -> Board:
     """`workspace_id` **可选** —— 画板自带归属,和素材/工作流那两条详情路由一致(同 notes.read)。"""
-    ws = workspace_id or owning_workspace(db, Board, board_id)
-    ensure_workspace_access(db, user, ws)
     try:
-        return get_board(db, ws, board_id)
+        return board_reads.read(db, user, board_id, workspace_id)
     except BoardDomainError as exc:
         raise _board_http_error(exc) from exc
 

@@ -39,7 +39,6 @@ MUTATING = {
     "notify_workspace",
     "transcribe_asset",
     "update_plan",
-    "invoke_plugin_tool",
 }
 
 

@@ -6,7 +6,7 @@ from fastapi import APIRouter, File, Form, HTTPException, Query, Response, Uploa
 from fastapi.responses import FileResponse
 
 from app.core.i18n import tr
-from app.api.deps import CurrentUser, DbSession, PresentedToken, Tx
+from app.api.deps import CurrentUser, DbSession, Tx
 from app.api.schemas import AssetFrameRequest, AnalyzeAssetRequest, AnalyzeAssetResponse, AssetOut, AssetUpdate, DenoiseAssetRequest, JobOut, LocalImportRequest, TranscriptAttachRequest, TranscriptOut, UrlImportRequest, UrlProbeRequest, UrlProbeResponse, UrlSupportResponse, VideoToGifRequest
 from app.domain.voices.transcription import ASRError
 from app.db.models import Asset, Job, Transcript
@@ -211,29 +211,19 @@ def analyze_asset_route(
     body: AnalyzeAssetRequest,
     db: Tx,
     user: CurrentUser,
-    token: PresentedToken,
 ) -> AnalyzeAssetResponse:
-    """Analyze an existing image or video.
+    """Analyze an existing image or video with the independently selected analysis profile.
 
-    Ordinary authenticated HTTP requests use the independently selected analysis profile.
-    Agent-tool service tokens are bound to an AgentSession, so the server derives the current
-    connection, model, workspace and video mode from that session. OAuth image/video-frame input
-    uses the tool-free Gateway and never requires a caller-supplied service address.
+    The agent does not come through here: its analyze_asset tool derives the connection, model and
+    video mode from its own conversation. OAuth image/video-frame input uses the tool-free Gateway
+    and never requires a caller-supplied service address.
     """
-    from app.core.security import find_session
-    from app.domain.agent.analysis_target import agent_session_target
     from app.domain.analysis.service import AnalysisError
 
-    # 智能体工具回连带的短期令牌绑着 agent_session_id:那时用这次对话的连接和模型(见 agent_session_target)。
-    auth = find_session(db, token)
+    # 智能体看素材走 analyze_asset 这个工具(用这次对话的连接、模型和视频分析方式,见 mcp_server);
+    # 这条路由是人点的,用他单独选的分析配置。
     try:
-        target = None
-        if auth is not None and auth.agent_session_id:
-            workspace_id = use_cases.readable(db, user, asset_id).workspace_id
-            target = agent_session_target(db, auth.agent_session_id, workspace_id=workspace_id, user_id=user.id)
-        result = use_cases.analyze(
-            db, user, asset_id, body.question, session_target=target, profile_id=body.profile_id, mode=body.mode,
-        )
+        result = use_cases.analyze(db, user, asset_id, body.question, profile_id=body.profile_id, mode=body.mode)
     except AnalysisError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return AnalyzeAssetResponse(**result)

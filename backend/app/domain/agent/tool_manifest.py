@@ -43,11 +43,6 @@ class ToolSpec(BaseModel):
     awaits_answer: bool = False
 
 
-#: 展开成一等公民之后,这两个元工具就是同一份东西的第二条路径 —— 留着只会让模型在
-#: "直接调 plugin__x__y" 和 "先 list 再 invoke" 之间摇摆,而后者多烧一轮还更容易填错参数。
-#: 它们仍然留在 mcp_server.py 里:走 MCP 协议的客户端(Claude CLI 等)自己不做展开,靠它们发现。
-PLUGIN_META_TOOLS = frozenset({"list_plugin_tools", "invoke_plugin_tool"})
-
 PLUGIN_TOOL_PREFIX = "plugin__"
 _SAFE_NAME = re.compile(r"[^A-Za-z0-9_]+")
 
@@ -171,6 +166,5 @@ def agent_tool_specs(db: Any, user_id: str | None = None) -> list[ToolSpec]:
             read_only=tool.name in registry.READ_ONLY_TOOLS,
         )
         for tool in tools
-        if tool.name not in PLUGIN_META_TOOLS
     ]
     return specs + _plugin_tool_specs(db, user_id)

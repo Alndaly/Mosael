@@ -100,8 +100,7 @@ ROUTE_AUTHORIZATION: dict[str, int] = {
     "app/api/routes/agent.py": 3,
     "app/api/routes/agent_browser.py": 2,
     "app/api/routes/agent_tools.py": 1,
-    "app/api/routes/blender.py": 8,
-    "app/api/routes/boards.py": 9,
+    "app/api/routes/boards.py": 6,
     "app/api/routes/browser_profiles.py": 5,
     "app/api/routes/collaboration.py": 6,
     "app/api/routes/confirmations.py": 2,
@@ -120,7 +119,7 @@ ROUTE_AUTHORIZATION: dict[str, int] = {
     "app/api/routes/settings/provider_pricing.py": 1,
     "app/api/routes/shares.py": 1,
     "app/api/routes/voices.py": 11,
-    "app/api/routes/workflows.py": 19,
+    "app/api/routes/workflows.py": 17,
     "app/api/routes/workspaces.py": 6,
 }
 

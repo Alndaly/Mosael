@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import pytest
 
-import mcp_server
 from tests.test_board_producers import SHOUT, _connect, _derived, _install_plugin, _me, _settled
 from tests.util import fresh_client, second_client
 
@@ -248,21 +247,7 @@ def test_一格上别的能力的插件卸了_不拦这一次写的东西(tmp_pa
 
 
 def _route_mcp_to(client, monkeypatch) -> None:
-    """工具体经回环 HTTP 回连后端;TestClient 没有真实端口,把 _get/_post 路由回它本身。"""
-
-    def fake_get(path: str, params: dict | None = None, **_kwargs) -> object:
-        res = client.get(path, params=params)
-        assert res.status_code < 300, res.text
-        return res.json()
-
-    def fake_post(path: str, payload: dict, **_kwargs) -> object:
-        res = client.post(path, json=payload)
-        if res.status_code >= 300:
-            raise ValueError(f"{res.status_code}: {res.json().get('detail')}")
-        return res.json()
-
-    monkeypatch.setattr(mcp_server, "_get", fake_get)
-    monkeypatch.setattr(mcp_server, "_post", fake_post)
+    """工具直接调领域、不再经 HTTP 回连,这里已经不需要接线;留着这个名字只是为了下面的用例不必改调用。"""
 
 
 def test_list_board_producers_只列这个人自己接的工具(tmp_path, monkeypatch) -> None:

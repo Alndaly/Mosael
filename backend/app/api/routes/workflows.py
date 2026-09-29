@@ -32,7 +32,6 @@ from app.domain.permissions import ensure_workspace_access, ensure_workspace_per
 from app.domain.scheduler import stop_tasks_bound_to_workflow
 from app.db.models import Job, Workflow, WorkflowRevision
 from app.domain.workflows import (
-    available_node_types,
     WorkflowDomainError,
     create_workflow,
     list_workflows,
@@ -44,7 +43,7 @@ from app.domain.workflows.file_export import (
     ascii_file_stem,
     export_payload,
 )
-from app.domain.workflows.node_catalog import describe_node_types
+from app.domain.workflows import use_cases as workflow_reads
 from app.domain.workflows.revisions import (
     WorkflowGraphConflict,
     WorkflowRevisionError,
@@ -74,7 +73,7 @@ def node_types(db: DbSession, user: CurrentUser) -> list[dict]:
     """
     #: 语言从 Accept-Language 来,不是从某个全局配置来:这是个多租户、可远程部署的后端,
     #: 没有「服务端语言」这回事。
-    return describe_node_types(available_node_types(db, user_id=user.id), get_current_locale())
+    return workflow_reads.node_types(db, user, get_current_locale())
 
 
 @router.get("/workflows/templates", response_model=list[WorkflowTemplateOut])
@@ -162,8 +161,7 @@ def workflow_field_options(
 
 @router.get("/workflows", response_model=list[WorkflowOut])
 def list_all(workspace_id: str, db: DbSession, user: CurrentUser) -> list[Workflow]:
-    ensure_workspace_access(db, user, workspace_id)
-    return list_workflows(db, workspace_id)
+    return workflow_reads.list_workflows(db, user, workspace_id)
 
 
 def _localized(exc: WorkflowDomainError) -> str:
@@ -255,9 +253,7 @@ def import_one(body: WorkflowImportRequest, db: DbSession, user: CurrentUser) ->
 
 @router.get("/workflows/{workflow_id}", response_model=WorkflowOut)
 def get_one(workflow_id: str, db: DbSession, user: CurrentUser) -> Workflow:
-    workflow = _get(db, workflow_id)
-    ensure_workspace_access(db, user, workflow.workspace_id)
-    return workflow
+    return workflow_reads.readable(db, user, workflow_id)
 
 
 @router.patch("/workflows/{workflow_id}", response_model=WorkflowOut)

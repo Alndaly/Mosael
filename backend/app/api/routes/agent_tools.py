@@ -33,7 +33,7 @@ from pydantic import BaseModel
 from app.core.i18n import tr
 from app.api.deps import CurrentUser, DbSession, PresentedToken
 from app.domain.permissions import ensure_workspace_member, ensure_workspace_perm
-from app.core.security import find_session, mint_tool_call_session, revoke_session
+from app.core.security import find_session
 # 清单本身在领域层 —— 上下文水位也要按它算"工具定义占了多少",而那段代码在 api 层之下。
 from app.domain.agent.tool_manifest import PLUGIN_TOOL_PREFIX, ToolSpec, agent_tool_specs, tool_registry
 
@@ -118,6 +118,7 @@ def _invoke_plugin_tool(
     sidecar 不带这个参数,而卡总得开在某个工作区里,插件交出的文件也要收进它的素材库。
     """
     from app.domain.agent.autopilot import session_for_token
+    from app.domain.agent.errors import ConfirmationError
     from app.domain.agent.proposals import propose
     from app.domain.agent.confirmable.plugin_tools import exposed_tool
     from app.domain.effects import needs_card
@@ -134,10 +135,14 @@ def _invoke_plugin_tool(
         if not workspace_id:
             raise HTTPException(status_code=422, detail=tr("routeErr_pluginToolNeedsWorkspace", name=name))
         # 开卡的闸、自动放行、推送都在 propose 里 —— 和 POST /api/confirmations、内置工具同一份。
-        confirmation = propose(
-            db, user, workspace_id=workspace_id, tool=name, payload={"arguments": dict(body.arguments)},
-            requested_by=body.requested_by or "external-agent", session_id=session_for_token(db, token),
-        )
+        try:
+            confirmation = propose(
+                db, user, workspace_id=workspace_id, tool=name, payload={"arguments": dict(body.arguments)},
+                requested_by=body.requested_by or "external-agent", session_id=session_for_token(db, token),
+            )
+        except ConfirmationError as exc:
+            # 参数不对(缺必填、类型错)开卡时就拒:模型据这句话改了重发,而不是等人批准了才炸。
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
         return {"result": tool_registry()._confirmation_reply({
             "id": confirmation.id,
             "status": confirmation.status,
@@ -181,8 +186,6 @@ def invoke_agent_tool(
     if fn is None or not callable(fn) or name.startswith("_"):
         raise HTTPException(status_code=404, detail=f"Tool {name} not found")
 
-    from app.core.config import settings
-
     # 这次调用属于哪次对话:从**令牌**取,不从参数取。turn 令牌铸造时就带着它
     # (core/security.mint_service_session),而参数是调用方自己填的 —— 填上别人的会话 id 就能把
     # 计划写进别人的对话。
@@ -191,31 +194,18 @@ def invoke_agent_tool(
     if dropped:
         # 丢了什么要留痕:静默容错在排查时会变成"参数明明传了却没生效"。
         logger.info("tool %s: dropped unsupported arguments %s", name, dropped)
-    # 工具体回连本 API,要带一份凭据。**不是调用方带进来的那份**:交给 sidecar 的服务令牌只准用在工具通道上
-    # (core/security.SERVICE_PATH_PREFIXES),工具体要调的却是任意 REST。所以为这一次调用铸一份同一个人、
-    # 同一次对话的令牌,它从不离开本进程,调用结束就撤掉(不留永久行)。地址用本进程自己的,不靠导入期默认的 8800。
+    # 工具体在本进程里直接调领域用例,以**这个人**的身份(见 mcp_server._use_case):不再经 HTTP 回连,
+    # 也就不再需要为每次调用铸一份短期令牌。
     agent_session_id = (auth.agent_session_id if auth is not None else None) or None
-    inner = mint_tool_call_session(db, user.id, agent_session_id=agent_session_id)
-    try:
-        with registry.calling_as(
-            token=inner,
-            api_base=f"http://{settings.backend_host}:{settings.backend_port}",
-            requested_by=body.requested_by,
-            session_id=agent_session_id or "",
-            user_id=user.id,
-        ):
-            try:
-                result = fn(**arguments)
-            except TypeError as exc:  # 缺必填参数(含把参数名拼错的情况)—— 是模型的输入问题,不是服务端故障
-                accepted = ", ".join(_accepted_names(fn)) or tr("routeErr_toolArgsNone")
-                raise HTTPException(status_code=422, detail=tr("routeErr_toolBadArgs", detail=str(exc), accepted=accepted)) from exc
-            except Exception as exc:  # noqa: BLE001 — a failing tool is a result, not a 500
-                logger.warning("tool %s failed: %s", name, exc)
-                return {"error": str(exc)[:500]}
-    finally:
-        db.expire_all()
-        revoke_session(db, inner)
-        db.commit()
+    with registry.calling_as(user_id=user.id, requested_by=body.requested_by, session_id=agent_session_id or ""):
+        try:
+            result = fn(**arguments)
+        except TypeError as exc:  # 缺必填参数(含把参数名拼错的情况)—— 是模型的输入问题,不是服务端故障
+            accepted = ", ".join(_accepted_names(fn)) or tr("routeErr_toolArgsNone")
+            raise HTTPException(status_code=422, detail=tr("routeErr_toolBadArgs", detail=str(exc), accepted=accepted)) from exc
+        except Exception as exc:  # noqa: BLE001 — a failing tool is a result, not a 500
+            logger.warning("tool %s failed: %s", name, exc)
+            return {"error": str(exc)[:500]}
     return _as_payload(result)
 
 
