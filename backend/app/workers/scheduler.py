@@ -55,6 +55,7 @@ def _loop(stop: threading.Event) -> None:
                 if time.monotonic() - last_prune >= PRUNE_INTERVAL_SECONDS:
                     last_prune = time.monotonic()
                     removed = prune_task_events(db)
+                    db.commit()
                     if removed:
                         logger.info("Task-event retention removed %d rows", removed)
         except Exception:  # the loop must survive any single bad tick

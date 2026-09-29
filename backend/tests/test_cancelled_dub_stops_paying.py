@@ -52,6 +52,7 @@ def test_取消之后剩下的句子不再合成_任务也不会被写回完成(
             # 第一句合成期间,用户取消了(或者取消了外面那条工作流,级联下来)。
             with SessionLocal() as other:
                 cancel_job(other, other.get(Job, dub["id"]))
+                other.commit()  # 测试是入口:cancel_job 不提交
         audio = Asset(workspace_id=ws, kind="audio", name=text, file_key="media/d.wav", media_info={"duration": 2.0})
         db.add(audio)
         db.flush()

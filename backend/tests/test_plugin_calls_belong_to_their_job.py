@@ -87,6 +87,7 @@ def test_取消任务会杀掉正在跑的插件进程(tmp_path) -> None:
     started = time.monotonic()
     with SessionLocal() as db:
         cancel_job(db, db.get(Job, job_id))
+        db.commit()  # 测试是入口:cancel_job 不提交
     for thread in threads:
         thread.join(timeout=15)
         assert not thread.is_alive(), "插件进程比取消它的任务活得久"
@@ -103,6 +104,7 @@ def test_任务已经取消了才起的插件进程当场就停(tmp_path) -> Non
     job_id = _running_job()
     with SessionLocal() as db:
         cancel_job(db, db.get(Job, job_id))
+        db.commit()  # 测试是入口:cancel_job 不提交
     outcome: dict[str, BaseException | None] = {}
     thread = _run_in_job(job_id, _sleeper(tmp_path), outcome)
     thread.join(timeout=15)

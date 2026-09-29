@@ -473,7 +473,6 @@ def record_failure(db, job: Job) -> None:
         generation.error = job.error
         generation.error_key = job.error_key or ""
         generation.error_params = dict(job.error_params or {})
-    db.commit()
 
 
 #: 重启后这一类任务**接着取**,而不是判失败。登记在总线上(见 jobs.register_resumer),

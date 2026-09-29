@@ -134,6 +134,7 @@ class TestReport:
         with SessionLocal() as db:
             job = claim_next_job(db)
             cancel_job(db, job)
+            db.commit()  # 测试是入口:cancel_job 不提交
             report_job(db, job, lease_token=job.lease_token, status="succeeded", result={"asset_id": "a1"})
             db.refresh(job)
             assert job.status == "failed" and job.error == "已取消"

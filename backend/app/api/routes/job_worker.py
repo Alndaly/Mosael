@@ -13,7 +13,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from app.core.i18n import tr
-from app.api.deps import DbSession
+from app.api.deps import DbSession, Tx
 from app.db.models import Job
 from app.domain.jobs import claim_next_job, external_kinds, renew_worker_leases, report_job
 
@@ -85,7 +85,7 @@ def report(body: ReportRequest, db: DbSession) -> dict[str, Any]:
 
 
 @router.post("/jobs/worker/heartbeat")
-def heartbeat(body: HeartbeatRequest, db: DbSession) -> dict[str, Any]:
+def heartbeat(body: HeartbeatRequest, db: Tx) -> dict[str, Any]:
     # 曾经有一个 `_HEARTBEATS` 字典记在这里 —— 全仓零个读者,而它按 worker 名字无限长。
     # 续约真正发生在下面那一行(任务行上的 lease),这条心跳的作用就是**带着 claims 来续约**。
     renewed = renew_worker_leases(db, worker=body.worker, claims=[claim.model_dump() for claim in body.claims])

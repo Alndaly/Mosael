@@ -49,6 +49,7 @@ def test_nested_loop_stops_after_parent_is_cancelled(monkeypatch):
         parent = db.get(Job, parent_id)
         if parent.status == "running":
             cancel_job(db, parent)
+            db.commit()  # 测试是入口:cancel_job 不提交
         return {}
     handler = Mock(side_effect=leaf)
     monkeypatch.setattr("app.domain.workflows.engine.get_executor", lambda kind: handler if kind == "output" else get_executor(kind))

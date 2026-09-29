@@ -47,6 +47,7 @@ def test_a_worker_cannot_overwrite_a_cancellation() -> None:
 
         with SessionLocal() as other:
             cancel_job(other, other.get(Job, job_id))
+            other.commit()  # 测试是入口:cancel_job 不提交
 
         # The worker now finishes and tries to report success against its stale object.
         wrote = finish_job(db, worker_view, status="succeeded", message="Export complete")
@@ -84,6 +85,7 @@ def test_cancelling_kills_the_registered_child() -> None:
     try:
         with SessionLocal() as db:
             cancel_job(db, db.get(Job, job_id))
+            db.commit()  # 测试是入口:cancel_job 不提交
         # If cancel had only flipped the row, this would block until the sleep finished.
         assert process.wait(timeout=10) != 0, "the child outlived its cancelled job"
     finally:
@@ -103,6 +105,7 @@ def test_a_finished_job_stops_being_cancellable() -> None:
         assert job.status in TERMINAL_STATUSES
         try:
             cancel_job(db, job)
+            db.commit()  # 测试是入口:cancel_job 不提交
         except ValueError:
             return
     raise AssertionError("cancelling an already-finished job should be refused")
@@ -117,6 +120,7 @@ def test_cancelled_queued_export_never_starts_renderer(monkeypatch):
     job_id = _job(ws, status="queued")
     with SessionLocal() as db:
         cancel_job(db, db.get(Job, job_id))
+        db.commit()  # 测试是入口:cancel_job 不提交
     renderer = Mock(side_effect=RuntimeError("renderer must not start"))
     monkeypatch.setattr(render, "execute_render", renderer)
     render._run_export(job_id, SimpleNamespace(render_plan_hash="test"))
@@ -132,6 +136,7 @@ def test_child_registered_after_cancellation_is_killed():
     job_id = _job(ws)
     with SessionLocal() as db:
         cancel_job(db, db.get(Job, job_id))
+        db.commit()  # 测试是入口:cancel_job 不提交
     child = Mock()
     try:
         register_job_child(job_id, child)
@@ -156,6 +161,7 @@ def test_generation_cancelled_during_provider_call_does_not_import_results(monke
     def generate(*args):
         with SessionLocal() as other:
             cancel_job(other, other.get(Job, job_id))
+            other.commit()  # 测试是入口:cancel_job 不提交
         return SimpleNamespace(output_paths=[tmp_path / "not-imported.png"])
     adapter = SimpleNamespace(requires_credentials=lambda: False, validate_request=lambda r: None,
                               supports_progress_callbacks=False, generate=generate)

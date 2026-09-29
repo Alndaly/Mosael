@@ -110,6 +110,7 @@ def test_cancel_workflow_cascades_to_descendants() -> None:
 
     with SessionLocal() as db:
         cancel_job(db, db.get(Job, ids[0]))
+        db.commit()  # 测试是入口:cancel_job 不提交
 
     with SessionLocal() as db:
         assert db.get(Job, ids[0]).status == "failed"  # 父工作流
@@ -198,6 +199,7 @@ def test_严格上下文里_父任务取消后不再派生() -> None:
         parent = create_job(db, created_by=None, workspace_id=ws, kind="workflow", payload={})
         db.commit()
         cancel_job(db, parent)
+        db.commit()  # 测试是入口:cancel_job 不提交
         parent_id = parent.id
     token = set_parent_job(parent_id)
     try:
@@ -221,5 +223,6 @@ def test_取消字幕配音连带停掉逐句合成() -> None:
     parent_id = _dispatch_and_wait(ws, body)
     with SessionLocal() as db:
         cancel_job(db, db.get(Job, parent_id))
+        db.commit()  # 测试是入口:cancel_job 不提交
     with SessionLocal() as db:
         assert db.get(Job, created[0]).status == "failed"
