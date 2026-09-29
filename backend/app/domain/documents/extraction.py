@@ -20,7 +20,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.db import SessionLocal
+from app.core.unit_of_work import unit_of_work
 from app.db.models import Asset, AssetExtraction, Job, now
 from app.domain import capabilities
 from app.domain.documents import CAPABILITY, DocumentParserUnavailable
@@ -78,7 +78,6 @@ def start_parse(
         message="jobMsg_documentParseQueued",
     )
     extraction.job_id = job.id
-    db.commit()
     extraction_id, job_id, builtin = extraction.id, job.id, provider.builtin
     dispatch_job(db, job, lambda: run_job_guarded(job_id, lambda: _body(job_id, extraction_id, builtin), what="文档解析"))
     return extraction
@@ -110,18 +109,18 @@ def _job_cancelled(db: Session, job_id: str) -> bool:
 
 
 def _body(job_id: str, extraction_id: str, builtin: bool) -> None:
-    with SessionLocal() as db:
+    with unit_of_work() as db:
         job = db.get(Job, job_id)
         extraction = db.get(AssetExtraction, extraction_id)
         asset = db.get(Asset, extraction.asset_id) if extraction else None
         if job is None or extraction is None or asset is None:
             return
         if not finish_job(db, job, status="running", progress=0.02):
-            db.commit()
             return
         extraction.status = "running"
         say(job, "jobMsg_documentParseRunning", params={"parser": extraction.parser_name})
         emit_job_event(db, job.id, "job.running", {})
+        # 「在解析」先落库:几百页要解一阵,阅读器要马上看得到;也把 finish_job 拿的写锁放掉。
         db.commit()
 
         target = extraction_dir(extraction)
@@ -130,11 +129,10 @@ def _body(job_id: str, extraction_id: str, builtin: bool) -> None:
 
         def progress(fraction: float, message: str) -> None:
             """报进度;任务已经被停下(任务中心、阅读器上的「停止」)就在这一页之后收手 —— 此前照样读完几百页。"""
-            with SessionLocal() as progress_db:
+            with unit_of_work() as progress_db:
                 current = progress_db.get(Job, job_id)
                 if current is not None and finish_job(progress_db, current, status="running", progress=round(max(0.02, min(fraction, 0.98)), 3)):
                     say(current, message)
-                    progress_db.commit()
                 elif current is not None and was_cancelled(current):
                     raise ParseStopped()
 
@@ -156,6 +154,8 @@ def _body(job_id: str, extraction_id: str, builtin: bool) -> None:
             if failed is not None:
                 failed.status, failed.finished_at = ("cancelled" if stopped else "failed"), now()
                 failed.error = "" if stopped else str(exc)[:2000]
+                # 下面还要原样抛出去(交给 run_job_guarded 记到任务上),抛出去这个事务就回滚了 ——
+                # 这一行的「失败 / 已停下」得先落库。
                 db.commit()
             #: 停下的不是失败:任务那一侧已经是「已取消」(cancel_job 写的),这里不再抛出一条失败盖上去。
             if stopped:
@@ -166,7 +166,6 @@ def _body(job_id: str, extraction_id: str, builtin: bool) -> None:
         if finish_job(db, job, status="succeeded", progress=1.0, result=result):
             say(job, "jobMsg_documentParseDone")
             emit_job_event(db, job.id, "job.succeeded", dict(result))
-        db.commit()
 
 
 def _parse_with_plugin(db: Session, extraction: AssetExtraction, asset: Asset, source: Path, target: Path, progress) -> Parsed:
@@ -213,7 +212,6 @@ def _write(db: Session, extraction: AssetExtraction, asset: Asset, parsed: Parse
         except Exception:  # noqa: BLE001 —— 封面是锦上添花,解析本身成了
             logger.warning("文档 %s 的封面没写成", asset.id, exc_info=True)
     asset.media_info = info
-    db.commit()
 
 
 def reconcile_orphaned_extractions(db: Session) -> int:
@@ -223,7 +221,6 @@ def reconcile_orphaned_extractions(db: Session) -> int:
     rows = list(db.scalars(select(AssetExtraction).where(AssetExtraction.status.in_(("queued", "running")))))
     for row in rows:
         row.status, row.error, row.finished_at = "failed", tr("docErr_interruptedByRestart"), now()
-    db.commit()
     return len(rows)
 
 

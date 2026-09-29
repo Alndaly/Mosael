@@ -44,7 +44,7 @@ DOMAIN_COMMITS: dict[str, int] = {
     "app/domain/boards/tools.py": 2,
     "app/domain/boards/trim.py": 3,
     "app/domain/browser/__init__.py": 14,
-    "app/domain/documents/extraction.py": 8,
+    "app/domain/documents/extraction.py": 2,
     "app/domain/entities/drawing.py": 2,
     "app/domain/entities/library.py": 8,
     "app/domain/feishu/bindings.py": 1,
