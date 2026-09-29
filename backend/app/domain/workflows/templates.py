@@ -660,7 +660,7 @@ def _set_design_schema() -> dict[str, Any]:
     给 [0,1,0] / 45,不动的物体 track 给空数组,关键帧里相机的 rotation、物体的 target/fov 写了也会被摘掉。
     """
     vec3 = {"type": "array", "items": {"type": "number"}, "minItems": 3, "maxItems": 3}
-    #: 相机和物体共用一种关键帧(scene_types.Keyframe):相机用 target / fov,物体(跑动的人)用 rotation。
+    #: 相机和物体共用一种关键帧(scenes.types.Keyframe):相机用 target / fov,物体(跑动的人)用 rotation。
     #: 严格模式要求每一格都在,用不上的那几格由 executors/scenes._canonical 按物体种类摘掉。
     keyframe = {"time": {"type": "number", "minimum": 0}, "position": vec3, "target": vec3,
                 "fov": {"type": "number", "minimum": 10, "maximum": 120}, "rotation": vec3}

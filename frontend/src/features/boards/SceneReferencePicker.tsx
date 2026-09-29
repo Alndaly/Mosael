@@ -10,7 +10,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { supportsParameter } from "@/lib/generationCapabilities";
 import { cn } from "@/lib/utils";
 
-/** 每种用法要模型收的那个素材角色(和后端 scenes._USE_ROLES 同一张表)。 */
+/** 每种用法要模型收的那个素材角色(和后端 domain/scenes/operations._USE_ROLES 同一张表)。 */
 const USE_ROLE: Record<SceneReferenceUse, string> = {
   composition: "reference_image",
   frames: "first_frame",

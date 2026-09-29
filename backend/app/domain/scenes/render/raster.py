@@ -3,7 +3,7 @@
 光照对照工作台(`SceneViewport.tsx` / `lighting.ts`,由 `contracts/scene-3d-cases.json` 钉住):半球环境光(天空白、地面 #666879,强度 = 场景的
 ambient)+ 一盏平行主光(方向由方位角/高度角定,颜色按色温,带阴影)+ 场景里的点光源;
 ACES Filmic 色调映射、sRGB 输出。材质只取漫反射 —— 白模要传的是**光的结构和构图**,
-不是高光(见前端 clayReference.ts 那段"为什么送灰模")。
+不是高光(见 ADR 0029:参考图是白模,只取构图、机位、人物站位和光的方向)。
 
 **这里不是工作台那个 three.js 渲染器**,两者的软阴影、抗锯齿细节会有差别。一致的是必须
 一致的那些:几何(meshes.py)、机位与时间采样(sampling.py)、投影(竖直 fov、Y 朝上、

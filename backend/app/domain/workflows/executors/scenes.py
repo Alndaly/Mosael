@@ -44,7 +44,7 @@ def _layout(value: Any) -> dict[str, Any]:
 _OPTIONAL_REFERENCES = ("parent_id", "model_id", "entity_id")
 
 
-#: 关键帧上哪几格归谁用(scene_types.Keyframe):相机看 target / fov,物体看 rotation。严格模式要求每一格都在,
+#: 关键帧上哪几格归谁用(scenes.types.Keyframe):相机看 target / fov,物体看 rotation。严格模式要求每一格都在,
 #: 用不上的那几格是填充值 —— 留着的话,人物关键帧的 target 会被当成「看向」校验(和位置重合就拒)。
 _CAMERA_ONLY_KEYS = ("target", "fov")
 _OBJECT_ONLY_KEYS = ("rotation",)

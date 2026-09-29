@@ -35,11 +35,6 @@ const api = vi.hoisted(() => ({
   fetchVoicePreview: vi.fn(),
   listScenes: vi.fn(),
   listSceneModels: vi.fn(),
-  getEntityCommunity: vi.fn(),
-  getCommunityStatus: vi.fn(),
-  publishEntityToCommunity: vi.fn(),
-  browseCommunityAssets: vi.fn(),
-  importEntityFromCommunity: vi.fn(),
   drawEntity: vi.fn(),
   api: vi.fn(),
 }));
@@ -56,7 +51,6 @@ vi.mock("@/api/client", () => ({
     detail: (ws: string, id: string) => ["entities", ws, "detail", id],
     usage: (ws: string, id: string) => ["entities", ws, "usage", id],
     ofAsset: (ws: string, id: string) => ["entities", ws, "asset", id],
-    community: (ws: string, id: string) => ["entities", ws, "community", id],
     catalog: () => ["entity-catalog"],
   },
   entityReceipt: () => [],
@@ -153,16 +147,6 @@ function mount(ui: React.ReactElement) {
 
 const WORKSPACE = { id: "ws", name: "W" } as never;
 
-function communityState(over: Record<string, unknown> = {}) {
-  return {
-    published: null,
-    source: null,
-    latest_version: null,
-    status: { configured: true, origin: "https://mosael.com", connected: true, handle: "me", display_name: "我" },
-    ...over,
-  };
-}
-
 beforeEach(() => {
   for (const one of Object.values(api)) one.mockReset();
   api.getEntityCatalog.mockResolvedValue(CATALOG);
@@ -177,8 +161,6 @@ beforeEach(() => {
   api.listScenes.mockResolvedValue([]);
   api.listSceneModels.mockResolvedValue([]);
   api.getEntityUsage.mockResolvedValue({ boards: [], generations: [], workflows: [] });
-  api.getEntityCommunity.mockResolvedValue(communityState());
-  api.getCommunityStatus.mockResolvedValue(communityState().status);
   window.location.hash = "#/entities";
   //: 页签记在 localStorage 里(usePersistentTab),上一条测试点过「场景」的话这一条会从场景开始。
   window.localStorage.clear();
