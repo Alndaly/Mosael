@@ -20,12 +20,19 @@ from pathlib import Path
 from app.domain.sequences import undo as undo_registry
 from tests.util import fresh_client, make_video_asset
 
-OPERATIONS = Path(__file__).resolve().parents[1] / "app/domain/sequences/operations.py"
+SEQUENCES = Path(__file__).resolve().parents[1] / "app/domain/sequences"
+
+
+def _operation_sources() -> str:
+    """时间线算子按职责拆在 sequences 包的各子模块里;history.py 只记 undo / redo 的账,不算。"""
+    return "\n".join(
+        path.read_text("utf-8") for path in sorted(SEQUENCES.glob("*.py")) if path.name != "history.py"
+    )
 
 
 def _recorded_kinds() -> set[str]:
-    """operations.py 里 _record_operation(kind="…") 实际会写进日志的所有 kind。"""
-    source = OPERATIONS.read_text("utf-8")
+    """sequences 包里 _record_operation(kind="…") 实际会写进日志的所有 kind。"""
+    source = _operation_sources()
     calls = re.findall(r"_record_operation\((.*?)\n    \)", source, re.S)
     assert calls, "没有解析到任何 _record_operation 调用 —— 解析式该跟着代码改了"
     return {m.group(1) for m in (re.search(r'kind="([a-z_]+)"', call) for call in calls) if m}
@@ -44,7 +51,7 @@ def test_每一种记录下来的操作都登记了逆操作() -> None:
 def test_注册表里没有已经不再记录的操作() -> None:
     """只减不增。留一条指向已删操作的登记,下一个人会以为那条路还活着。"""
     recorded = _recorded_kinds()
-    # undo / redo 是撤销机制自己追加的记账,不在 operations.py 的静态文本里,单独放行。
+    # undo / redo 是撤销机制自己追加的记账,不在算子模块的静态文本里,单独放行。
     bookkeeping = {"undo", "redo"}
     stale = sorted((set(undo_registry.undoable_kinds()) | set(undo_registry.NOT_UNDOABLE)) - recorded - bookkeeping)
     assert stale == [], f"登记了不存在的操作: {stale}"
