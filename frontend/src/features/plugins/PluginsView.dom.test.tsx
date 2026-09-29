@@ -382,6 +382,24 @@ describe("配置字段的控件", () => {
     expect(screen.getByRole("button")).toBeTruthy();
   });
 
+  it("布尔配置是开关,不是一个写着 false 的文本框;拨一下存成 true / false", () => {
+    //: 用户截图:Manim 的「不限制自定义代码」清单里声明的是 boolean,界面却给了一个框、里面写着 false。
+    const onChange = vi.fn();
+    render(<FieldInput field={field({ type: "boolean", label: "不限制自定义代码" })} value="false" onChange={onChange} />);
+    const toggle = screen.getByRole("switch", { name: "不限制自定义代码" });
+    expect(screen.queryByRole("textbox")).toBeNull();
+    expect(toggle.getAttribute("aria-checked")).toBe("false");
+    fireEvent.click(toggle);
+    expect(onChange).toHaveBeenCalledWith("true");
+  });
+
+  it("布尔的各种写法都认:True、1 算开,空串(没填)算关", () => {
+    const { rerender } = render(<FieldInput field={field({ type: "boolean", label: "开关" })} value="True" onChange={vi.fn()} />);
+    expect(screen.getByRole("switch").getAttribute("aria-checked")).toBe("true");
+    rerender(<FieldInput field={field({ type: "boolean", label: "开关" })} value="" onChange={vi.fn()} />);
+    expect(screen.getByRole("switch").getAttribute("aria-checked")).toBe("false");
+  });
+
   it("改动能传出去", () => {
     const onChange = vi.fn();
     render(<FieldInput field={field({ label: "连接端口" })} value="9876" onChange={onChange} />);

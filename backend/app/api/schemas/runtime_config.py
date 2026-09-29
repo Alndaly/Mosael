@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pydantic import Field
+from app.api.schemas.plugins import PackageSourcePresetOut
 from app.api.schemas.base import ApiModel
 
 class NetworkConfigOut(ApiModel):
@@ -106,14 +107,22 @@ class TtsConfigUpdate(ApiModel):
 
 
 class InstallSourceOut(ApiModel):
-    """本机引擎装依赖时用哪个 pip 索引。转写、声音克隆、人声分离三个引擎共用这一份。"""
+    """「管理 → 下载源」:装东西从哪个镜像拉。本机引擎(转写、克隆、分离)用 pip 那一行;声明了
+    `package_sources` 的插件在没自己覆盖时跟随这两行(见 domain/plugins/package_sources)。"""
 
     #: 预设 key(pypi/tsinghua/aliyun/tencent)或自定义 index URL;空 = 官方 PyPI。
     pip_index: str = ""
+    #: 预设 key(npmjs/npmmirror/tencent/huawei)或自定义地址;空 = 官方 npm。
+    npm_registry: str = ""
+    #: 两行下拉的预设 —— 名字由后端给,界面不写死镜像清单。
+    pip_presets: list[PackageSourcePresetOut] = Field(default_factory=list)
+    npm_presets: list[PackageSourcePresetOut] = Field(default_factory=list)
 
 
 class InstallSourceUpdate(ApiModel):
-    pip_index: str = Field(default="", max_length=200)
+    #: 只改给了的那一行;空串 = 官方源。
+    pip_index: str | None = Field(default=None, max_length=200)
+    npm_registry: str | None = Field(default=None, max_length=200)
 
 
 class DenoiseEngineOut(ApiModel):

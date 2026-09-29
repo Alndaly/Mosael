@@ -6,7 +6,7 @@
     "en": "Remotion Animation"
   },
   "default_locale": "zh",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "homepage": "https://github.com/Alndaly/Mosael/tree/main/plugins/examples/remotion",
   "author": {
     "name": "Mosael",
@@ -25,6 +25,7 @@
     "network:npm",
     "filesystem:write"
   ],
+  "package_sources": ["npm"],
   "skills": [
     {
       "id": "remotion",
@@ -37,19 +38,6 @@
   "instance": {
     "multiple": false,
     "config": [
-      {
-        "key": "NPM_REGISTRY",
-        "label": {
-          "zh": "npm 镜像",
-          "en": "npm registry"
-        },
-        "type": "string",
-        "required": false,
-        "help": {
-          "zh": "可选。留空用官方源;国内网络可以填 https://registry.npmmirror.com。只在第一次准备渲染环境时用到。",
-          "en": "Optional. Leave empty for the official registry. Used only when preparing the rendering environment."
-        }
-      },
       {
         "key": "BROWSER_EXECUTABLE",
         "label": {

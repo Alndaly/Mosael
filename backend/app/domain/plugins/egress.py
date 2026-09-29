@@ -35,6 +35,7 @@ from sqlalchemy.orm import Session
 from app.db.models import PluginInstance
 from app.domain import network
 from app.domain.plugins.errors import PluginDomainError
+from app.domain.plugins.manifest import Manifest
 
 FOLLOW = "follow"
 DIRECT = "direct"
@@ -58,6 +59,9 @@ class Egress:
 
     proxy_url: str = ""
     no_proxy: str = ""
+    #: 装包从哪个镜像拉(见 domain/plugins/package_sources):注入进程的那几个变量。和代理同属「宿主替这个连接
+    #: 定的对外环境」,一起算、一起注入;远程请求用不上它。
+    package_env: tuple[tuple[str, str], ...] = ()
 
     def child_env(self) -> dict[str, str]:
         """注入插件子进程的那几个变量。大小写两份都给(见 network.proxy_env)。
@@ -65,11 +69,12 @@ class Egress:
         名字全在 `mosael_formats.plugin_env.EGRESS_KEYS` 里:清单校验按那一份挡插件声明同名的配置 / 凭据,
         所以插件的配置本来就进不了这几格,不靠注入顺序。
         """
+        mirrors = dict(self.package_env)
         if self.proxy_url:
-            return {**network.proxy_env(self.proxy_url, self.no_proxy), NODE_USE_ENV_PROXY: "1"}
+            return {**network.proxy_env(self.proxy_url, self.no_proxy), NODE_USE_ENV_PROXY: "1", **mirrors}
         if self.no_proxy == BYPASS_ALL:
-            return {"NO_PROXY": BYPASS_ALL, "no_proxy": BYPASS_ALL}
-        return {}
+            return {"NO_PROXY": BYPASS_ALL, "no_proxy": BYPASS_ALL, **mirrors}
+        return mirrors
 
     def httpx_options(self, url: str) -> dict[str, Any]:
         """后端替这个连接请求 `url` 时交给 httpx 的参数 —— 和 `child_env()` 是同一个决定。
@@ -93,15 +98,19 @@ class Egress:
 UNDECIDED = Egress()
 
 
-def resolve(db: Session, instance: PluginInstance) -> Egress:
-    """**唯一的决策**:连接自己的覆盖 > Mosael 的全局出站代理。"""
+def resolve(db: Session, instance: PluginInstance, manifest: Manifest) -> Egress:
+    """**唯一的决策**:连接自己的覆盖 > Mosael 的全局设置 —— 出站代理和包镜像都是。`manifest` 说它要从哪几个包
+    生态装东西(清单的 `package_sources`),由调用方给:它们手里本来就有这个连接的清单。"""
+    from app.domain.plugins import package_sources
+
+    mirrors = tuple(sorted(package_sources.child_env(manifest.package_sources, instance.package_sources).items()))
     if instance.network_mode == DIRECT:
-        return Egress(no_proxy=BYPASS_ALL)
+        return Egress(no_proxy=BYPASS_ALL, package_env=mirrors)
     if instance.network_mode == PROXY:
-        return Egress(proxy_url=instance.proxy_url, no_proxy=network.effective_no_proxy(""))
+        return Egress(proxy_url=instance.proxy_url, no_proxy=network.effective_no_proxy(""), package_env=mirrors)
     config = network.get_config(db)
     url = (config.proxy_url or "").strip()
-    return Egress(proxy_url=url, no_proxy=network.effective_no_proxy(config.no_proxy) if url else "")
+    return Egress(proxy_url=url, no_proxy=network.effective_no_proxy(config.no_proxy) if url else "", package_env=mirrors)
 
 
 def normalize(mode: str, proxy_url: str) -> tuple[str, str]:

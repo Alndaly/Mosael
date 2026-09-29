@@ -47,8 +47,12 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Plugin manifest {path} declares two tools named {tool}.",
     },
     "pluginErr_manifestReservedKey": {
-        "zh": "插件清单 {path}:配置 / 凭据的键 {field} 会盖掉宿主给插件的环境变量(PATH、HOME、LANG、MOSAEL_*、HTTPS_PROXY 这类出站代理变量等),请换个名字",
-        "en": "In plugin manifest {path}, the config/credential key {field} would override an environment variable the host provides (PATH, HOME, LANG, MOSAEL_*, outbound proxy variables such as HTTPS_PROXY, and so on); please rename it.",
+        "zh": "插件清单 {path}:配置 / 凭据的键 {field} 会盖掉宿主给插件的环境变量(PATH、HOME、LANG、MOSAEL_*、HTTPS_PROXY 这类出站代理变量、PIP_INDEX_URL / npm_config_registry 这类镜像变量等),请换个名字;要装包的镜像就声明 package_sources,由宿主注入",
+        "en": "In plugin manifest {path}, the config/credential key {field} would override an environment variable the host provides (PATH, HOME, LANG, MOSAEL_*, outbound proxy variables such as HTTPS_PROXY, mirror variables such as PIP_INDEX_URL / npm_config_registry, and so on); please rename it. For a package mirror, declare package_sources and the host injects it.",
+    },
+    "pluginErr_manifestPackageSources": {
+        "zh": "插件清单 {path}:package_sources 里有认不出的包生态 {value}(认得的:{known})",
+        "en": "In plugin manifest {path}, package_sources has an unknown package ecosystem {value} (known: {known}).",
     },
     "pluginErr_manifestDuplicateKey": {
         "zh": "插件清单 {path}:配置 / 凭据的键 {field} 和 {other} 大写后是同一个环境变量",

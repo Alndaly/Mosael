@@ -85,6 +85,9 @@ class PluginInstance(Base):
     network_mode: Mapped[str] = mapped_column(String(16), nullable=False, default="follow", server_default="follow")
     #: `network_mode == "proxy"` 时这个连接自己的代理地址;别的模式下是空串(不留一份看不见的旧值)。
     proxy_url: Mapped[str] = mapped_column(String(300), nullable=False, default="", server_default="")
+    #: 这个连接装包从哪个镜像拉,按生态(`pypi`、`npm`)记**覆盖**:预设 key 或自定义地址;没记的那一项跟随
+    #: 「管理 → 下载源」。只对清单里声明了 `package_sources` 的生态有意义;怎么注入见 domain/plugins/package_sources。
+    package_sources: Mapped[dict[str, str]] = mapped_column(JSON, nullable=False, default=dict, server_default="{}")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
 

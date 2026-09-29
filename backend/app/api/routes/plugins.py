@@ -41,6 +41,7 @@ from app.domain.plugins import PluginDomainError
 from app.domain.plugins import bundled
 from app.domain.plugins import host_capabilities
 from app.domain.plugins import instances as inst
+from app.domain.plugins import package_sources
 from app.domain.plugins import install as installer
 from app.domain.plugins import oauth as plugin_oauth
 from app.domain.plugins import packages as pkg
@@ -315,6 +316,8 @@ def _instance(db: DbSession, instance) -> dict:
             if isinstance(status, dict)
         },
         "network": {"mode": instance.network_mode, "proxy_url": instance.proxy_url},
+        "package_sources": package_sources.describe(inst.manifest_for(db, instance).package_sources,
+                                                    instance.package_sources),
     }
 
 
@@ -369,7 +372,7 @@ def create_instance(package_id: str, body: PluginInstanceCreate, db: DbSession, 
 
 
 @router.patch("/plugins/instances/{instance_id}", response_model=PluginInstanceOut)
-def update_instance(instance_id: str, body: PluginInstanceUpdate, db: DbSession, user: CurrentUser) -> dict:
+def update_instance(instance_id: str, body: PluginInstanceUpdate, db: Tx, user: CurrentUser) -> dict:
     try:
         instance = my_instance(db, instance_id, user)
         # 一次保存可能同时改名、改配置、启停:逐个改、**最后统一通知一次**替宿主做事的那一侧 ——
@@ -382,6 +385,8 @@ def update_instance(instance_id: str, body: PluginInstanceUpdate, db: DbSession,
             inst.set_enabled(db, instance, body.enabled, notify=False)
         if body.network is not None:
             inst.set_network(db, instance, body.network.mode, body.network.proxy_url, notify=False)
+        if body.package_sources is not None:
+            inst.set_package_sources(db, instance, body.package_sources)
         host_capabilities.notify(
             db, instance, refresh=any(one is not None for one in (body.config, body.enabled, body.network))
         )

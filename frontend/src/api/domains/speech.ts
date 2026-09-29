@@ -218,8 +218,9 @@ export function getInstallSource(): Promise<InstallSource> {
   return api<InstallSource>("/api/settings/install-source");
 }
 
-export function updateInstallSource(pip_index: string): Promise<InstallSource> {
-  return api<InstallSource>("/api/settings/install-source", { method: "PUT", body: JSON.stringify({ pip_index }) });
+/** 只改给了的那一行(pip / npm);空串 = 官方源。 */
+export function updateInstallSource(body: { pip_index?: string; npm_registry?: string }): Promise<InstallSource> {
+  return api<InstallSource>("/api/settings/install-source", { method: "PUT", body: JSON.stringify(body) });
 }
 
 export function getTtsConfig(): Promise<TtsConfig> {

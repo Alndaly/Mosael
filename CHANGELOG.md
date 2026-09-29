@@ -165,6 +165,9 @@ commit list and downloadable artifacts.
   用户写的那句,连进来的文档由后端按连线和工作区校验取(见「修好了」里那一条)。
 
 ### 改了
+- **插件装包的镜像改由 Mosael 统一管。** 「管理 → 下载源」(原「安装源」)多了 npm 一行;插件在清单里声明
+  `package_sources`,每个连接上多一行「PyPI 镜像」/「npm 镜像」下拉,默认跟随下载源、可以单独换预设或自定义地址。
+  Manim、Remotion 0.3.0 起去掉了自己的镜像文本框,旧连接里填过的地址升级时自动搬过来。
 
 - **能力的引擎 id 统一成 `builtin:<名字>`,存着的数据升级时自动改写。** 降噪(`builtin:ffmpeg`、`builtin:deepfilternet`、
   `builtin:rnnoise`)、分离人声(`builtin:demucs`)、转写(`builtin:funasr`、`builtin:whisperx`)、翻译(`builtin:google`、
@@ -199,6 +202,8 @@ commit list and downloadable artifacts.
   `digital_human_consent`(开卡时就检查),工作流「AI 生成素材」节点的高级设置里多一项授权确认。生成记录上留着这次声明。
 
 ### 修好了
+- **插件的布尔配置是开关了。** 清单里声明成 `boolean` 的配置(Manim 的「不限制自定义代码」)此前渲染成一个写着
+  `false` 的文本框。
 - **插件工具失败了不再显示成「成功」。** 有的 MCP 服务(比如 TikHub)在上游拒绝时不按协议标出错,而是把
   `{"error": …, "status": 403}` 当正常结果交回来,插件页的调用记录因此写着成功,智能体和工作流也拿它当数据往下走。
   现在带 `error` 且状态码是 4xx / 5xx 的结果按失败记,原因写的是上游原话和状态码。

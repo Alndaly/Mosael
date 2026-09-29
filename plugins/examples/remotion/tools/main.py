@@ -166,16 +166,15 @@ def install_dependencies(node: Node, locale: str, send: Emit, deadline: float) -
     (ws / ".installed").unlink(missing_ok=True)
     args = [npm_binary(node, locale), "install", "--no-audit", "--no-fund", "--loglevel=error",
             "--cache", str(data_dir(locale) / "npm-cache")]
-    registry = os.environ.get("NPM_REGISTRY", "").strip()
-    if registry:
-        args.append(f"--registry={registry}")
+    # 镜像不用自己带:宿主按这个连接的「npm 镜像」注入 npm_config_registry,npm 自己就认(清单里声明了
+    # package_sources: ["npm"])。
     try:
         done = follow(args, locale=locale, timeout=_remaining(deadline), cwd=ws)
     except TimedOut as exc:
         raise PluginError(line(
             locale,
-            "安装依赖超时。国内网络可以在插件配置里把 npm 镜像设成 https://registry.npmmirror.com 再试。",
-            "Installing dependencies timed out. Try setting the npm registry in the plugin settings.",
+            "安装依赖超时。国内网络可以在这个连接的「npm 镜像」里选 npmmirror,或在「管理 → 下载源」里统一换,再试。",
+            "Installing dependencies timed out. Pick a closer npm registry for this connection, or change it for everything under Admin → Download sources, then try again.",
         )) from exc
     if done.returncode != 0:
         raise PluginError(line(locale, "安装依赖失败:", "Installing dependencies failed: ") + _tail("\n".join(done.tail)))

@@ -39,7 +39,7 @@ Remotion 不是 MIT 许可。按 [Remotion License](https://www.remotion.dev/lic
 
 ## 国内网络
 
-- **npm 装不动**:在插件配置「npm 镜像」填 `https://registry.npmmirror.com`,再运行一次「准备渲染环境」。
+- **npm 装不动**:在这个连接的「npm 镜像」里选 npmmirror(默认跟随「管理 → 下载源」),再运行一次「准备渲染环境」。
 - **浏览器下不下来**:Remotion 自带的浏览器从 Google 的服务器下载。下载失败时插件会自动改用本机的 Chrome / Edge;也可以在「浏览器路径」里直接填它们的可执行文件路径。
 
 ## 自定义动画怎么写

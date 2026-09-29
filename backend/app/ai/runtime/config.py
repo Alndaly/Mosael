@@ -28,6 +28,15 @@ PIP_INDEXES = {
     "tencent": "https://mirrors.cloud.tencent.com/pypi/simple",
 }
 
+#: npm 源预设。和 pip 那张表同一个用法:空 = 官方 registry.npmjs.org,不在表里的值当作自填的地址。
+#: 本机引擎不用 npm;声明了 `package_sources: ["npm"]` 的插件(Remotion)装依赖时用它(见 domain/plugins/package_sources)。
+NPM_REGISTRIES = {
+    "npmjs": "",
+    "npmmirror": "https://registry.npmmirror.com",
+    "tencent": "https://mirrors.cloud.tencent.com/npm/",
+    "huawei": "https://repo.huaweicloud.com/repository/npm/",
+}
+
 # Model-download source → the HF endpoint the worker/download subprocess should use.
 # 只有 HuggingFace 系的源在这里 —— 它们的区别就是一个 base URL。
 # ModelScope 不在:它不是 HF 兼容端点,走的是另一个客户端(见 ai/runtime/tts_worker),
@@ -170,6 +179,8 @@ class TtsRuntimeConfig:
     #: 装引擎依赖时用的 pip 索引(预设 key 或自定义 URL)。带默认值放最后:它是可选设置,
     #: 不该逼所有构造点都改签名。
     pip_index: str = ""
+    #: 插件装 npm 依赖时用的源(预设 key 或自定义 URL);空 = 官方。
+    npm_registry: str = ""
 
     @property
     def pip_index_url(self) -> str:

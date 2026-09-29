@@ -51,7 +51,7 @@ vi.mock("@/api/client", async (importOriginal) => ({
   getAuthToken: () => "token",
   isCustomServer: () => false,
   getInstallSource: () => Promise.resolve({ pip_index: "" }),
-  updateInstallSource: (pip_index: string) => Promise.resolve({ pip_index }),
+  updateInstallSource: (body: { pip_index?: string }) => Promise.resolve({ pip_index: body.pip_index ?? "" }),
   adminOverview: (days: number) => {
     calls.overview(days);
     return Promise.resolve({ ...overview, window_days: days });
@@ -146,7 +146,7 @@ describe("结构", () => {
     expect(sections(container)).toEqual(["pricing"]);
 
     // 本机引擎的安装与下载源:后端只许部署管理员装(ensure_deployment_admin),所以在这里、不在设置页。
-    // 安装源排在最前 —— 它只管装这几个引擎的依赖,先选好从哪儿拉,再点下面的安装。
+    // 下载源排在最前 —— 它只管装这几个引擎的依赖,先选好从哪儿拉,再点下面的安装。
     fireEvent.click(screen.getByRole("button", { name: "adminTabEngines" }));
     await screen.findByText("asrModelsTitle");
     expect(sections(container)).toEqual([

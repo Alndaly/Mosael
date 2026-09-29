@@ -33,6 +33,15 @@ NODE_USE_ENV_PROXY = "NODE_USE_ENV_PROXY"
 #: 出站代理那一组宿主会写的全部名字。
 EGRESS_KEYS = (*PROXY_KEYS, NODE_USE_ENV_PROXY)
 
+#: 装包从哪个镜像拉(清单里的 `package_sources`),宿主替这个连接定、按各生态自己认的变量名注入:
+#: pip 认 PIP_INDEX_URL,uv 认 UV_DEFAULT_INDEX,npm 认 npm_config_registry(大小写都认,这里只记大写)。
+#: 插件不必自己带一个「镜像」配置项 —— 那样每个插件各存一份镜像地址,和管理页的下载源互不知道。
+PACKAGE_SOURCE_ENV = {
+    "pypi": ("PIP_INDEX_URL", "UV_DEFAULT_INDEX"),
+    "npm": ("NPM_CONFIG_REGISTRY",),
+}
+PACKAGE_SOURCE_KEYS = tuple(key for keys in PACKAGE_SOURCE_ENV.values() for key in keys)
+
 #: 宿主和插件之间的约定变量(产出目录、持久目录、取消文件、语言……)都用这个前缀。
 HOST_PREFIX = "MOSAEL_"
 
@@ -44,10 +53,12 @@ def is_reserved(key: str) -> bool:
         upper in BASE_KEYS
         or upper in WINDOWS_ESSENTIALS
         or upper in EGRESS_KEYS
+        or upper in PACKAGE_SOURCE_KEYS
         or upper.startswith(HOST_PREFIX)
     )
 
 
 __all__ = [
-    "BASE_KEYS", "EGRESS_KEYS", "HOST_PREFIX", "NODE_USE_ENV_PROXY", "PROXY_KEYS", "WINDOWS_ESSENTIALS", "is_reserved",
+    "BASE_KEYS", "EGRESS_KEYS", "HOST_PREFIX", "NODE_USE_ENV_PROXY", "PACKAGE_SOURCE_ENV", "PACKAGE_SOURCE_KEYS",
+    "PROXY_KEYS", "WINDOWS_ESSENTIALS", "is_reserved",
 ]

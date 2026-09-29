@@ -23,7 +23,7 @@ from typing import Any
 
 from mosael_formats.effects import EFFECTS, NONE as NO_EFFECTS
 from mosael_formats.i18n import FormatError, pick_text
-from mosael_formats.plugin_env import is_reserved
+from mosael_formats.plugin_env import PACKAGE_SOURCE_ENV, is_reserved
 
 #: 清单的规范文件名。一个插件目录一份清单,一个名字。
 MANIFEST_FILENAME = "mosael.plugin.json"
@@ -254,6 +254,9 @@ class Manifest:
     #: 清单里那些**裸字符串**是用哪种语言写的。挑不到要的语言时先退到它,再退到部署缺省 ——
     #: 不写就退到作者写的第一条。它同时是告诉插件进程「这次要说哪种语言」的兜底(见 runtime)。
     default_locale: str = ""
+    #: 这个插件装东西要从哪几个包生态拉(`pypi`、`npm`)。声明了,宿主就按这个连接的「下载源」把镜像地址
+    #: 注入进程(变量名见 plugin_env.PACKAGE_SOURCE_ENV),连接设置里多一行可以覆盖的下拉。
+    package_sources: list[str] = field(default_factory=list)
 
     def tool_providing(self, capability: str) -> str:
         """清单里**声明自己负责** `capability` 的那个工具名(工具声明上的 `provides`);没有就是空串。
@@ -378,7 +381,7 @@ def _fields(raw: Any, *, secret: bool, pick: Callable[[Any], str] = text_of) -> 
                 # 凭据默认按密文对待,漏标不该导致明文回显;配置默认明文。
                 secret=bool(entry.get("secret", secret)),
                 options=options,
-                default=str(entry.get("default") or ""),
+                default=_default_text(entry.get("default")),
                 multiline=entry.get("multiline") is True and declared_type in ("string", ""),
                 language=_language(declared_type, entry.get("language")),
             )
@@ -551,7 +554,30 @@ def parse(raw: dict[str, Any], path: str) -> Manifest:
         # instance.credentials 里的键,放在顶层的话作者会把它写在它引用的东西旁边(合理),
         # 然后得到一个静默消失的授权按钮 —— 这个坑第一个踩进去的就是写解析器的人。
         oauth=oauth_spec(instance.get("oauth")),
+        package_sources=_package_sources(raw.get("package_sources"), path),
     )
+
+
+def _package_sources(raw: Any, path: str) -> list[str]:
+    """认得的包生态才收:写错一个(`pip`)就是一个永远不会被注入的镜像,插件装依赖时照样走官方源慢到超时。"""
+    if raw is None:
+        return []
+    if not isinstance(raw, list) or not all(isinstance(one, str) for one in raw):
+        raise ManifestError("pluginErr_manifestPackageSources", path=path, value=str(raw)[:80],
+                            known=", ".join(PACKAGE_SOURCE_ENV))
+    unknown = [one for one in raw if one not in PACKAGE_SOURCE_ENV]
+    if unknown:
+        raise ManifestError("pluginErr_manifestPackageSources", path=path, value=", ".join(unknown),
+                            known=", ".join(PACKAGE_SOURCE_ENV))
+    return list(dict.fromkeys(raw))
+
+
+def _default_text(value: Any) -> str:
+    """配置的缺省值 → 字符串(配置注入插件进程时都是环境变量)。布尔写成 `true` / `false`:`str(False)` 是 `"False"`、
+    `False or ""` 是空串,界面上的开关和插件都认不准。"""
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    return "" if value is None else str(value)
 
 
 def _check_field_keys(fields: list[Field], path: str) -> None:

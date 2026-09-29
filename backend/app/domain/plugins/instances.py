@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session
 
 from app.db.model_base import now
 from app.db.models import PluginCapability, PluginCredential, PluginInstance, PluginPackage, PluginPermissionGrant
-from app.domain.plugins import egress, host_capabilities, oauth as plugin_oauth
+from app.domain.plugins import egress, host_capabilities, oauth as plugin_oauth, package_sources
 from app.domain.plugins.errors import PluginDomainError
 from app.domain.plugins.manifest import TOOLS, Field, Manifest, manifest_of, render_name
 from app.core.i18n import tr
@@ -215,6 +215,22 @@ def set_network(
         _pull_tools(db, instance)
     if notify:
         host_capabilities.notify(db, instance, refresh=True)
+    return instance
+
+
+def set_package_sources(db: Session, instance: PluginInstance, choices: dict[str, str]) -> PluginInstance:
+    """这个连接装包从哪个镜像拉(见 package_sources):只改给了的生态;空串 = 改回跟随「管理 → 下载源」。
+    不用重拉工具清单 —— 镜像只在插件下次装依赖时才用到。"""
+    overrides = dict(instance.package_sources or {})
+    for source, choice in choices.items():
+        normalized = package_sources.normalize(source, choice)
+        if normalized:
+            overrides[source] = normalized
+        else:
+            overrides.pop(source, None)
+    #: 换一个新 dict 赋回去:JSON 列原地改,ORM 看不出它变了。提交交给入口层(路由的 Tx)。
+    instance.package_sources = overrides
+    db.flush()
     return instance
 
 

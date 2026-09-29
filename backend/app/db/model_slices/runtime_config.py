@@ -80,6 +80,8 @@ class TtsConfig(Base):
     #: 装引擎依赖(torch 等 2.5–3.5GB)时用的 pip 索引。空 = 官方 PyPI。
     #: 与 source 分开:那个管模型权重从哪拉(HuggingFace),这个管 Python 包从哪拉。
     pip_index: Mapped[str] = mapped_column(String(200), nullable=False, default="")
+    #: 插件装 npm 依赖用的源(预设 key 或自定义 URL);空 = 官方。和 pip_index 一起是「管理 → 下载源」。
+    npm_registry: Mapped[str] = mapped_column(String(200), nullable=False, default="", server_default="")
     # Fish Speech runs from a source checkout + a local weights dir (with codec.pth);
     # empty = fall back to the app-managed install. See domain/tts_config.py.
     fish_repo_dir: Mapped[str] = mapped_column(String(500), nullable=False, default="")

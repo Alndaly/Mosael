@@ -6,7 +6,7 @@
     "en": "Manim Teaching Animation"
   },
   "default_locale": "zh",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "homepage": "https://docs.manim.community/",
   "author": {
     "name": "Mosael",
@@ -25,6 +25,7 @@
     "network:pypi",
     "filesystem:write"
   ],
+  "package_sources": ["pypi"],
   "skills": [
     {
       "id": "manim",
@@ -37,19 +38,6 @@
   "instance": {
     "multiple": false,
     "config": [
-      {
-        "key": "PIP_INDEX_URL",
-        "label": {
-          "zh": "PyPI 镜像",
-          "en": "PyPI mirror"
-        },
-        "type": "string",
-        "required": false,
-        "help": {
-          "zh": "可选。留空用官方源;国内网络可以填 `https://pypi.tuna.tsinghua.edu.cn/simple`。只在准备环境时用到。",
-          "en": "Optional. Leave empty for the official index. Used only while preparing the environment."
-        }
-      },
       {
         "key": "PYTHON_EXECUTABLE",
         "label": {

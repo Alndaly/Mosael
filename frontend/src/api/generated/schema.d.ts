@@ -5170,11 +5170,11 @@ export interface paths {
         };
         /**
          * Get Install Source
-         * @description 本机引擎装依赖用哪个 pip 索引。
+         * @description 「管理 → 下载源」:本机引擎装依赖用的 pip 索引,和插件装包时跟随的 pip / npm 镜像。
          *
-         *     **为什么单独一对接口**:这个值历史上存在 tts_config 里(克隆先有了它),于是它在设置页里
-         *     也只出现在克隆表单中 —— 而转写和人声分离装依赖时读的是同一份。想给转写换镜像的人得去
-         *     「声音克隆」里找。存储位置不动(搬表是另一件事),但界面和接口不再挂在克隆名下。
+         *     **为什么单独一对接口**:pip 那一行历史上存在 tts_config 里(克隆先有了它),于是它在设置页里
+         *     也只出现在克隆表单中 —— 而转写和人声分离装依赖时读的是同一份。存储位置不动(搬表是另一件事),
+         *     但界面和接口不再挂在克隆名下。
          */
         get: operations["get_install_source_api_settings_install_source_get"];
         /** Set Install Source */
@@ -9520,7 +9520,8 @@ export interface components {
         };
         /**
          * InstallSourceOut
-         * @description 本机引擎装依赖时用哪个 pip 索引。转写、声音克隆、人声分离三个引擎共用这一份。
+         * @description 「管理 → 下载源」:装东西从哪个镜像拉。本机引擎(转写、克隆、分离)用 pip 那一行;声明了
+         *     `package_sources` 的插件在没自己覆盖时跟随这两行(见 domain/plugins/package_sources)。
          */
         InstallSourceOut: {
             /**
@@ -9528,14 +9529,22 @@ export interface components {
              * @default
              */
             pip_index: string;
+            /**
+             * Npm Registry
+             * @default
+             */
+            npm_registry: string;
+            /** Pip Presets */
+            pip_presets?: components["schemas"]["PackageSourcePresetOut"][];
+            /** Npm Presets */
+            npm_presets?: components["schemas"]["PackageSourcePresetOut"][];
         };
         /** InstallSourceUpdate */
         InstallSourceUpdate: {
-            /**
-             * Pip Index
-             * @default
-             */
-            pip_index: string;
+            /** Pip Index */
+            pip_index?: string | null;
+            /** Npm Registry */
+            npm_registry?: string | null;
         };
         /** InvitationListOut */
         InvitationListOut: {
@@ -10086,6 +10095,21 @@ export interface components {
                 [key: string]: unknown;
             }[];
         };
+        /**
+         * PackageSourcePresetOut
+         * @description 一个预设镜像:key、名字、地址(官方源的地址是空串)。
+         */
+        PackageSourcePresetOut: {
+            /** Value */
+            value: string;
+            /** Label */
+            label: string;
+            /**
+             * Url
+             * @default
+             */
+            url: string;
+        };
         /** PasswordUpdate */
         PasswordUpdate: {
             /** Current Password */
@@ -10368,6 +10392,8 @@ export interface components {
                 [key: string]: components["schemas"]["PluginCapabilityStatusOut"];
             };
             network?: components["schemas"]["PluginNetworkOut"];
+            /** Package Sources */
+            package_sources?: components["schemas"]["PluginPackageSourceOut"][];
         };
         /** PluginInstanceUpdate */
         PluginInstanceUpdate: {
@@ -10380,6 +10406,10 @@ export interface components {
             /** Enabled */
             enabled?: boolean | null;
             network?: components["schemas"]["PluginNetworkUpdate"] | null;
+            /** Package Sources */
+            package_sources?: {
+                [key: string]: string;
+            } | null;
         };
         /** PluginInvocationOut */
         PluginInvocationOut: {
@@ -10644,6 +10674,28 @@ export interface components {
             bundled: boolean;
             /** Instances */
             instances?: components["schemas"]["PluginInstanceOut"][];
+        };
+        /**
+         * PluginPackageSourceOut
+         * @description 这个连接装包从哪个镜像拉,一个生态一行(见 domain/plugins/package_sources)。只列清单里声明了的生态。
+         */
+        PluginPackageSourceOut: {
+            /** Source */
+            source: string;
+            /** Label */
+            label: string;
+            /**
+             * Value
+             * @default
+             */
+            value: string;
+            /**
+             * Host Label
+             * @default
+             */
+            host_label: string;
+            /** Presets */
+            presets?: components["schemas"]["PackageSourcePresetOut"][];
         };
         /** PluginPermissionGrantOut */
         PluginPermissionGrantOut: {

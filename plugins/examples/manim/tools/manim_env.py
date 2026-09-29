@@ -371,8 +371,8 @@ def _pip(args: list[str], send: Emit, locale: str, *, timeout: float, start: flo
 def _install_timed_out(locale: str) -> str:
     return line(
         locale,
-        "安装超时。网络慢的话在插件配置里填一个 PyPI 镜像(如 https://pypi.tuna.tsinghua.edu.cn/simple)再试。",
-        "Installation timed out. On a slow network, set a PyPI mirror in the plugin settings and try again.",
+        "安装超时。网络慢的话在这个连接的「PyPI 镜像」里选一个近的(如清华),或在「管理 → 下载源」里统一换,再试。",
+        "Installation timed out. On a slow network, pick a closer PyPI mirror for this connection, or change it for everything under Admin → Download sources, then try again.",
     )
 
 
@@ -415,6 +415,7 @@ def _build(send: Emit, locale: str, venv: Path, deadline: float) -> None:
                           + (created.stderr or created.stdout).strip()[-600:])
     args = [str(venv_python(venv)), "-m", "pip", "install", "--disable-pip-version-check", "--no-input",
             "--progress-bar", "off", f"manim=={MANIM_VERSION}"]
+    #: 宿主按这个连接的「PyPI 镜像」注入(清单里声明了 package_sources: ["pypi"]);没有就是官方源。
     index = os.environ.get("PIP_INDEX_URL", "").strip()
     if index:
         args += ["--index-url", index]

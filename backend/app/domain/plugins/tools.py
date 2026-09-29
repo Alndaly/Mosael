@@ -166,7 +166,7 @@ def refresh_tools(db: Session, instance: PluginInstance, *, notify: bool = True)
             raise PluginDomainError("pluginErr_fillFirst", names=tr("punct_listSep").join(absent))
     try:
         discovered = discover_tools(
-            _runtime_manifest(manifest), inst.secrets_for(db, instance), plugin_egress.resolve(db, instance)
+            _runtime_manifest(manifest), inst.secrets_for(db, instance), plugin_egress.resolve(db, instance, manifest)
         )
     except McpBridgeError as exc:
         # 拉不到的原因记在 `capability_status["tools"]`(和进程插件报工具清单同一格,见 dynamic_tools):
@@ -288,7 +288,7 @@ def invoke(
 
     manifest = inst.manifest_for(db, instance)
     #: 这个连接往外连走哪条路:子进程的代理变量、后端替它发的请求,都照这一个决定(见 egress)。
-    egress = plugin_egress.resolve(db, instance)
+    egress = plugin_egress.resolve(db, instance, manifest)
     scratch: Path | None = None
     # 进程隔离:插件崩了、超时了、吐了非 JSON —— 失败的是这次调用记录,不是应用。
     baseline: dict[str, str] | None = None
@@ -466,7 +466,7 @@ def invoke_host(
         run_kwargs: dict[str, Any] = {
             "scratch_dir": scratch,
             "data_dir": _ensure_data_dir(manifest.id),
-            "egress": plugin_egress.resolve(db, instance),
+            "egress": plugin_egress.resolve(db, instance, manifest),
             **({"timeout": budget} if budget is not None else {}),
         }
         #: 这次注入的那一份:写回 state 时按它做比较交换(见 plugins/state.persist)。

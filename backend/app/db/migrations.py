@@ -4822,6 +4822,54 @@ def _migrate_plugin_authorization_rejected() -> None:
             conn.execute(text("ALTER TABLE plugin_instances ADD COLUMN authorization_rejected_at DATETIME"))
 
 
+def _migrate_plugin_connections_choose_package_sources() -> None:
+    """包镜像由宿主给:`tts_config.npm_registry`(管理 → 下载源的 npm 那一行)、`plugin_instances.package_sources`
+    (连接自己的覆盖,见 domain/plugins/package_sources)。
+
+    此前 Manim、Remotion 各在自己的清单里带一个镜像配置项(`PIP_INDEX_URL`、`NPM_REGISTRY`),是自由文本框,
+    和管理页的 pip 下载源互不知道。新版清单删了这两项、改声明 `package_sources`;存着它们的连接在这里搬成
+    连接自己的覆盖 —— 填的地址正好是某个预设的,记成那个预设的 key。搬完从 config 里删掉,不删就还会被注入。
+
+    `create_all` 不给已有的表加列,所以在它之前。**写死包 id、配置键和预设地址**:迁移是历史的快照。幂等。
+    """
+    presets = {
+        "pypi": {"https://pypi.tuna.tsinghua.edu.cn/simple": "tsinghua", "https://mirrors.aliyun.com/pypi/simple/": "aliyun",
+                 "https://mirrors.cloud.tencent.com/pypi/simple": "tencent"},
+        "npm": {"https://registry.npmmirror.com": "npmmirror", "https://mirrors.cloud.tencent.com/npm/": "tencent",
+                "https://repo.huaweicloud.com/repository/npm/": "huawei"},
+    }
+    moves = {"dev.mosael.manim": ("PIP_INDEX_URL", "pypi"), "dev.mosael.remotion": ("NPM_REGISTRY", "npm")}
+    with engine.begin() as conn:
+        tts_columns = {row[1] for row in conn.execute(text("PRAGMA table_info(tts_config)"))}
+        if tts_columns and "npm_registry" not in tts_columns:
+            conn.execute(text("ALTER TABLE tts_config ADD COLUMN npm_registry VARCHAR(200) NOT NULL DEFAULT ''"))
+        columns = {row[1] for row in conn.execute(text("PRAGMA table_info(plugin_instances)"))}
+        if not columns:
+            return
+        if "package_sources" not in columns:
+            conn.execute(text("ALTER TABLE plugin_instances ADD COLUMN package_sources JSON NOT NULL DEFAULT '{}'"))
+        for package_id, (key, source) in moves.items():
+            rows = conn.execute(
+                text("SELECT id, config, package_sources FROM plugin_instances WHERE package_id = :p"), {"p": package_id}
+            ).fetchall()
+            for instance_id, raw_config, raw_sources in rows:
+                try:
+                    config = json.loads(raw_config) if isinstance(raw_config, str) else dict(raw_config or {})
+                    sources = json.loads(raw_sources) if isinstance(raw_sources, str) else dict(raw_sources or {})
+                except (TypeError, ValueError):
+                    continue
+                if not isinstance(config, dict) or key not in config:
+                    continue
+                url = str(config.pop(key) or "").strip()
+                if url and isinstance(sources, dict) and not sources.get(source):
+                    sources[source] = presets[source].get(url) or presets[source].get(url.rstrip("/")) or url
+                conn.execute(
+                    text("UPDATE plugin_instances SET config = :c, package_sources = :s WHERE id = :i"),
+                    {"c": json.dumps(config, ensure_ascii=False), "s": json.dumps(sources, ensure_ascii=False),
+                     "i": instance_id},
+                )
+
+
 def _migrate_plugin_connections_choose_their_network() -> None:
     """插件连接有了宿主给的「网络」:`plugin_instances.network_mode` / `proxy_url`(见 domain/plugins/egress)。
 
@@ -5779,6 +5827,7 @@ def migration_plan() -> MigrationPlan:
                 _migrate_plugin_generation_columns,
                 _migrate_plugin_authorization_rejected,
                 _migrate_plugin_connections_choose_their_network,
+                _migrate_plugin_connections_choose_package_sources,
                 _migrate_drop_the_community_integration,
                 _migrate_voices_declare_consent,
                 _migrate_boards_remember_their_project,

@@ -7,6 +7,20 @@ from __future__ import annotations
 
 MESSAGES: dict[str, dict[str, str]] = {
     # ---- B1 · 01_plugins ----
+    "pkgSource_pypiTitle": {"zh": "PyPI 镜像", "en": "PyPI mirror"},
+    "pkgSource_npmTitle": {"zh": "npm 镜像", "en": "npm registry"},
+    "pkgSource_pypiOfficial": {"zh": "官方 PyPI", "en": "Official PyPI"},
+    "pkgSource_npmOfficial": {"zh": "官方 npm", "en": "Official npm"},
+    "pkgSource_tsinghua": {"zh": "清华大学", "en": "Tsinghua University"},
+    "pkgSource_aliyun": {"zh": "阿里云", "en": "Alibaba Cloud"},
+    "pkgSource_tencent": {"zh": "腾讯云", "en": "Tencent Cloud"},
+    "pkgSource_huawei": {"zh": "华为云", "en": "Huawei Cloud"},
+    "pkgSource_npmmirror": {"zh": "npmmirror(阿里)", "en": "npmmirror (Alibaba)"},
+    "pluginErr_packageSourceUnknown": {"zh": "认不出的包生态:{source}", "en": "Unknown package ecosystem: {source}"},
+    "pluginErr_packageSourceUrl": {
+        "zh": "镜像地址要以 http:// 或 https:// 开头:{url}",
+        "en": "A mirror address must start with http:// or https://: {url}",
+    },
     "pluginErr_upstream": {
         "zh": "{detail}",
         "en": "{detail}",

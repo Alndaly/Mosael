@@ -15538,7 +15538,7 @@
           "settings"
         ],
         "summary": "Get Install Source",
-        "description": "本机引擎装依赖用哪个 pip 索引。\n\n**为什么单独一对接口**:这个值历史上存在 tts_config 里(克隆先有了它),于是它在设置页里\n也只出现在克隆表单中 —— 而转写和人声分离装依赖时读的是同一份。想给转写换镜像的人得去\n「声音克隆」里找。存储位置不动(搬表是另一件事),但界面和接口不再挂在克隆名下。",
+        "description": "「管理 → 下载源」:本机引擎装依赖用的 pip 索引,和插件装包时跟随的 pip / npm 镜像。\n\n**为什么单独一对接口**:pip 那一行历史上存在 tts_config 里(克隆先有了它),于是它在设置页里\n也只出现在克隆表单中 —— 而转写和人声分离装依赖时读的是同一份。存储位置不动(搬表是另一件事),\n但界面和接口不再挂在克隆名下。",
         "operationId": "get_install_source_api_settings_install_source_get",
         "responses": {
           "200": {
@@ -26385,19 +26385,56 @@
             "type": "string",
             "title": "Pip Index",
             "default": ""
+          },
+          "npm_registry": {
+            "type": "string",
+            "title": "Npm Registry",
+            "default": ""
+          },
+          "pip_presets": {
+            "items": {
+              "$ref": "#/components/schemas/PackageSourcePresetOut"
+            },
+            "type": "array",
+            "title": "Pip Presets"
+          },
+          "npm_presets": {
+            "items": {
+              "$ref": "#/components/schemas/PackageSourcePresetOut"
+            },
+            "type": "array",
+            "title": "Npm Presets"
           }
         },
         "type": "object",
         "title": "InstallSourceOut",
-        "description": "本机引擎装依赖时用哪个 pip 索引。转写、声音克隆、人声分离三个引擎共用这一份。"
+        "description": "「管理 → 下载源」:装东西从哪个镜像拉。本机引擎(转写、克隆、分离)用 pip 那一行;声明了\n`package_sources` 的插件在没自己覆盖时跟随这两行(见 domain/plugins/package_sources)。"
       },
       "InstallSourceUpdate": {
         "properties": {
           "pip_index": {
-            "type": "string",
-            "maxLength": 200,
-            "title": "Pip Index",
-            "default": ""
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pip Index"
+          },
+          "npm_registry": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Npm Registry"
           }
         },
         "type": "object",
@@ -27693,6 +27730,30 @@
         "title": "OAuthPromptOut",
         "description": "登录流程中需要用户作答的一步(输入授权码、选账号……)。"
       },
+      "PackageSourcePresetOut": {
+        "properties": {
+          "value": {
+            "type": "string",
+            "title": "Value"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "value",
+          "label"
+        ],
+        "title": "PackageSourcePresetOut",
+        "description": "一个预设镜像:key、名字、地址(官方源的地址是空串)。"
+      },
       "PasswordUpdate": {
         "properties": {
           "current_password": {
@@ -28141,6 +28202,13 @@
           },
           "network": {
             "$ref": "#/components/schemas/PluginNetworkOut"
+          },
+          "package_sources": {
+            "items": {
+              "$ref": "#/components/schemas/PluginPackageSourceOut"
+            },
+            "type": "array",
+            "title": "Package Sources"
           }
         },
         "type": "object",
@@ -28197,6 +28265,20 @@
                 "type": "null"
               }
             ]
+          },
+          "package_sources": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Package Sources"
           }
         },
         "type": "object",
@@ -28622,6 +28704,42 @@
           "version"
         ],
         "title": "PluginPackageOut"
+      },
+      "PluginPackageSourceOut": {
+        "properties": {
+          "source": {
+            "type": "string",
+            "title": "Source"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "value": {
+            "type": "string",
+            "title": "Value",
+            "default": ""
+          },
+          "host_label": {
+            "type": "string",
+            "title": "Host Label",
+            "default": ""
+          },
+          "presets": {
+            "items": {
+              "$ref": "#/components/schemas/PackageSourcePresetOut"
+            },
+            "type": "array",
+            "title": "Presets"
+          }
+        },
+        "type": "object",
+        "required": [
+          "source",
+          "label"
+        ],
+        "title": "PluginPackageSourceOut",
+        "description": "这个连接装包从哪个镜像拉,一个生态一行(见 domain/plugins/package_sources)。只列清单里声明了的生态。"
       },
       "PluginPermissionGrantOut": {
         "properties": {

@@ -53,6 +53,7 @@ import { GenerationModelsRow } from "@/features/plugins/ProvidedModels";
 import { ToolEffectBadge } from "@/features/plugins/ToolEffectBadge";
 import { ConnectionAuthorization } from "@/features/plugins/ConnectionAuthorization";
 import { ConnectionNetwork } from "@/features/plugins/ConnectionNetwork";
+import { ConnectionPackageSources } from "@/features/plugins/ConnectionPackageSources";
 import { GroupActions } from "@/features/plugins/GroupActions";
 import { invalidatePluginDependents } from "@/features/plugins/pluginCaches";
 import { HostToolList } from "@/features/plugins/HostTools";
@@ -491,7 +492,24 @@ export function FieldInput({
       />
     );
   }
+  if (field.type === "boolean") {
+    //: 开关,不是一个写着 `false` 的文本框(用户截图:「不限制自定义代码」)。值照旧是字符串 —— 配置注入插件进程
+    //: 时都是环境变量 —— 存 `"true"` / `"false"`,插件那头按字符串认。
+    return (
+      <Switch
+        className={className}
+        aria-label={field.label}
+        checked={isTruthy(value)}
+        onCheckedChange={(checked) => onChange(checked ? "true" : "false")}
+      />
+    );
+  }
   return <FieldText field={field} value={value} onChange={onChange} className={className} commit={commit} />;
+}
+
+/** 配置里布尔值的字符串写法:`true` / `1` / `yes` / `on` 算开,别的(含空串 = 没填,按清单缺省的关)算关。 */
+function isTruthy(value: string): boolean {
+  return ["true", "1", "yes", "on"].includes(value.trim().toLowerCase());
 }
 
 /** 文本类的配置项。**草稿式**(见 components/ui/draft-text):连接上的配置住在服务端,
@@ -685,6 +703,9 @@ export function ConnectionCard({ pkg, instance, workspaceId }: { pkg: PluginPack
 
       {/* 网络是宿主给**每个**连接的一行(不是清单里的配置),排在插件自己声明的配置与凭据之后。 */}
       <ConnectionNetwork instanceId={instance.id} network={instance.network ?? { mode: "follow", proxy_url: "" }} />
+      {(instance.package_sources ?? []).length > 0 && (
+        <ConnectionPackageSources instanceId={instance.id} sources={instance.package_sources ?? []} />
+      )}
 
       {generates && (
         <GenerationModelsRow

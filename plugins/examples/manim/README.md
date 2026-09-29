@@ -82,7 +82,7 @@ Manim 需要 Python 3.11+(插件用随 Mosael 发的那个 Python,不用你装),
 
 ### 插件配置
 
-- **PyPI 镜像**:国内网络可以填 `https://pypi.tuna.tsinghua.edu.cn/simple`。
+- **PyPI 镜像**:在这个连接的设置里选(清华 / 阿里 / 腾讯 / 自定义),默认跟随「管理 → 下载源」。
 - **已装 Manim 的 Python**:已经用 conda / uv 装好 Manim 的,填那个环境里 python 的完整路径,就不再装一份。
 - **不限制自定义代码**:见上面「安全」。
 

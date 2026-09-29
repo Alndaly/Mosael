@@ -243,7 +243,7 @@ def generate(
         raise PluginDomainError("pluginErr_instanceNotFound")
     name = instance.name
     #: 产出若是一个地址,由后端替这个连接去下 —— 走这个连接的出站决定(和插件进程拿到的是同一个,见 egress)。
-    egress = plugin_egress.resolve(db, instance)
+    egress = plugin_egress.resolve(db, instance, inst.manifest_for(db, instance))
     collected: list[Path] = []
     extras: dict[str, Any] = {}
     # 调用记录里留的那一份:不带本地路径(那是一次性的暂存路径),只说挂了哪几种素材。

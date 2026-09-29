@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 
 from app.api.deps import CurrentUser, DbSession, Tx
 from app.api.schemas import (
@@ -71,15 +71,26 @@ def set_ai_runtime(body: AiRuntimeConfigUpdate, db: Tx, user: CurrentUser) -> Ai
 
 @router.get("/settings/install-source", response_model=InstallSourceOut)
 def get_install_source(db: DbSession, user: CurrentUser) -> InstallSourceOut:
-    """本机引擎装依赖用哪个 pip 索引。
+    """「管理 → 下载源」:本机引擎装依赖用的 pip 索引,和插件装包时跟随的 pip / npm 镜像。
 
-    **为什么单独一对接口**:这个值历史上存在 tts_config 里(克隆先有了它),于是它在设置页里
-    也只出现在克隆表单中 —— 而转写和人声分离装依赖时读的是同一份。想给转写换镜像的人得去
-    「声音克隆」里找。存储位置不动(搬表是另一件事),但界面和接口不再挂在克隆名下。
+    **为什么单独一对接口**:pip 那一行历史上存在 tts_config 里(克隆先有了它),于是它在设置页里
+    也只出现在克隆表单中 —— 而转写和人声分离装依赖时读的是同一份。存储位置不动(搬表是另一件事),
+    但界面和接口不再挂在克隆名下。
     """
-    from app.ai.runtime import config as runtime_config
+    return _install_source_out()
 
-    return InstallSourceOut(pip_index=runtime_config.get().pip_index or "")
+
+def _install_source_out() -> InstallSourceOut:
+    from app.ai.runtime import config as runtime_config
+    from app.domain.plugins import package_sources
+
+    current = runtime_config.get()
+    return InstallSourceOut(
+        pip_index=current.pip_index or "",
+        npm_registry=current.npm_registry or "",
+        pip_presets=package_sources.presets_out("pypi"),
+        npm_presets=package_sources.presets_out("npm"),
+    )
 
 
 @router.put("/settings/install-source", response_model=InstallSourceOut)
@@ -87,10 +98,18 @@ def set_install_source(body: InstallSourceUpdate, db: DbSession, user: CurrentUs
     # 往这台机器上装东西用哪个源,是部署级的设置 —— 和装引擎本身同一条权限。
     ensure_deployment_admin(db, user)
     from app.ai.runtime import config as runtime_config
+    from app.domain.plugins import package_sources
+    from app.domain.plugins.errors import PluginDomainError
 
     row = tts_settings.saved_row(db)
-    #: 只写这一个字段 —— 克隆那几项(引擎、解释器、下载源、fish 目录)一个都不碰。
-    row.pip_index = body.pip_index.strip()
+    try:
+        #: 只写给了的那几个字段 —— 克隆那几项(引擎、解释器、下载源、fish 目录)一个都不碰。
+        if body.pip_index is not None:
+            row.pip_index = package_sources.normalize("pypi", body.pip_index)
+        if body.npm_registry is not None:
+            row.npm_registry = package_sources.normalize("npm", body.npm_registry)
+    except PluginDomainError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     db.commit()
     runtime_config.refresh()
-    return InstallSourceOut(pip_index=runtime_config.get().pip_index or "")
+    return _install_source_out()

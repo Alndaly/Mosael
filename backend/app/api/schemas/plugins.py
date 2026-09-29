@@ -105,6 +105,27 @@ class PluginProvidedModelOut(ApiModel):
     parameters: list[PluginProvidedParameterOut] = Field(default_factory=list)
 
 
+class PackageSourcePresetOut(ApiModel):
+    """一个预设镜像:key、名字、地址(官方源的地址是空串)。"""
+
+    value: str
+    label: str
+    url: str = ""
+
+
+class PluginPackageSourceOut(ApiModel):
+    """这个连接装包从哪个镜像拉,一个生态一行(见 domain/plugins/package_sources)。只列清单里声明了的生态。"""
+
+    #: `pypi` / `npm`。
+    source: str
+    label: str
+    #: 连接自己的覆盖:预设 key 或自定义地址;空 = 跟随「管理 → 下载源」。
+    value: str = ""
+    #: 跟随时实际是哪一个(管理页定的那个的名字),下拉里「跟随 Mosael(…)」照它写。
+    host_label: str = ""
+    presets: list[PackageSourcePresetOut] = Field(default_factory=list)
+
+
 class PluginNetworkOut(ApiModel):
     """这个连接往外连走哪条路(见 domain/plugins/egress)。"""
 
@@ -130,6 +151,7 @@ class PluginInstanceOut(ApiModel):
     #: 它替宿主做的那些事上一次做得怎么样,按能力分(今天只有 generation)。
     capability_status: dict[str, PluginCapabilityStatusOut] = Field(default_factory=dict)
     network: PluginNetworkOut = Field(default_factory=PluginNetworkOut)
+    package_sources: list[PluginPackageSourceOut] = Field(default_factory=list)
 
 
 class PluginOAuthOut(ApiModel):
@@ -269,6 +291,8 @@ class PluginInstanceUpdate(ApiModel):
     config: dict | None = None
     enabled: bool | None = None
     network: PluginNetworkUpdate | None = None
+    #: 生态 → 预设 key 或自定义地址;空串 = 改回跟随。只动给了的那几个生态。
+    package_sources: dict[str, str] | None = None
 
 
 class PluginCapabilityUpdate(ApiModel):

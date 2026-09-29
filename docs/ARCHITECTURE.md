@@ -61,7 +61,7 @@ shadcn）暴露，布局使用 Tailwind v4 utility；`styles.css` 只保留 Tail
 | `assets/from_url.py`(配 `media/ytdlp.py`) | 从链接导入素材:先探清单再下选中的几条,音频/视频与画质上限在下载前定;需要登录的站点**借浏览器池档案的 cookie**(经既有动作队列问 Electron 要),入库仍走 `register_file_asset` |
 | `assets/video_gif.py`(配 `media/video_gif.py`) | 视频转 GIF:领域层排任务并登记派生素材,媒体层只负责 ffmpeg 转码。来源关系只写到新 GIF 的 `media_info`,原视频字节与记录都不改;素材页右键与工作流节点共用这一条路径 |
 | `plugins/` | 插件:子进程执行 + 权限门 + MCP 暴露;市场索引与安装(`registry.py`)、文件双向搬运(`artifacts.py` 交出 / `inputs.py` 收下)、跨调用状态(`state.py`)。**不认识素材库** —— `media_bridge.py` 只定义来源与落点的契约,由 `domain/assets/plugin_bridge` 在组装根登记(同 jobs 不认识智能体) |
-| `core/pip_install.py` | **通往 pip 的唯一一道门**(声音克隆 / 转写共用)。带上管理页「引擎」里那个安装源镜像、`--prefer-binary`(挡的是"为了新版本号去本机编译 Rust")、够用的超时重试;失败时挑出 pip 自己的结论行而不是取输出尾巴,并把完整输出落盘 |
+| `core/pip_install.py` | **通往 pip 的唯一一道门**(声音克隆 / 转写共用)。带上管理页「引擎」里那个下载源镜像、`--prefer-binary`(挡的是"为了新版本号去本机编译 Rust")、够用的超时重试;失败时挑出 pip 自己的结论行而不是取输出尾巴,并把完整输出落盘 |
 | `core/run_log.py` | 子进程的完整输出落盘(`~/.mosael/logs/`)。装依赖、下权重两条路共用 —— 界面只放一句话,而排查要全文,此前全文哪儿都没有 |
 | `core/text.blame_line` | 从子进程输出里挑出**说明失败原因**的那一行。**不取最后一行**:那常常是收尾提示、分隔线,或者一根 tqdm 进度条(这个坑踩过三次,判据因此收在一处) |
 | `ai/runtime/remote_size.py` | 问下载源要**实际的**文件大小(HuggingFace `?blobs=true` / ModelScope `/repo/files?Recursive=True`),按这次真正要取的文件算而不是整仓。问不到就退回目录里的估算**并说出它是估算** |
@@ -359,7 +359,7 @@ f5-tts / fish-speech 都要 torch + torchaudio + transformers,**2.5–3.5 GB**�
 之后自动可用。管理页「引擎 → 声音克隆」的「TTS 解释器」因此是**高级覆盖项**,留空是常态。
 
 **本机引擎的安装在管理页,不在设置页。** 转写、声音克隆、人声分离、降噪的安装 / 下载、克隆的解释器与
-模型下载源、pip 安装源,后端都是 `ensure_deployment_admin`:往这台机器上装东西是部署级动作,不属于
+模型下载源、pip 下载源,后端都是 `ensure_deployment_admin`:往这台机器上装东西是部署级动作,不属于
 任何工作区。所以它们在 `features/admin` 的「引擎」tab;设置页只留成员自己的东西(配音那一页剩下
 工作区音色库和内置引擎的只读状态)。用到引擎的地方(逐字稿、降噪对话框、字幕配音)引擎没装时,
 部署管理员得到一条去「引擎」tab 的路,成员得到一句「由部署管理员安装」(`components/layout/ConfigNotice`
