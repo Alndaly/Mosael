@@ -46,6 +46,7 @@ def _graph(*steps: dict) -> dict:
 def _start(ws: str, graph: dict) -> str:
     with SessionLocal() as db:
         workflow = create_workflow(db, workspace_id=ws, name="RPA", graph=graph, created_by=user_id())
+        db.commit()  # 测试是入口:领域函数不提交
         return start_workflow_job(db, workflow, created_by=None).id
 
 
@@ -110,6 +111,7 @@ def test_取消时正在等的那一步当场放手_排着的动作不再执行(
 
     with SessionLocal() as db:
         cancel_job(db, db.get(Job, job_id))
+        db.commit()  # 测试是入口:cancel_job 不提交
     # 等待节点给了 60 秒 + 15 秒的余量。取消之后要在几秒内收场,而不是等满它。
     assert wait_for_idle_jobs(5), "取消之后,等待那一步还挂在那里等它自己超时"
     with SessionLocal() as db:
@@ -125,6 +127,7 @@ def test_同一条工作流并发两次_不共用一个池档案会话(monkeypat
         owner = db.query(User).order_by(User.created_at).first()
         profile_id = bdom.create_profile(db, workspace_id=ws, name="池号", owner=owner).id
         workflow = create_workflow(db, workspace_id=ws, name="W", graph={"nodes": [], "edges": []}, created_by=user_id())
+        db.commit()  # 测试是入口:领域函数不提交
         runs = []
         for _ in range(2):
             # 替档案主人跑:池档案只有主人和被共享到的人能借(见 browser.usable_profile)。

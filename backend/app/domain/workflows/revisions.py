@@ -315,7 +315,7 @@ def restore_workflow_revision(
         created_by=created_by,
         note=f"v{target_revision}",
     )
-    db.commit()
+    db.flush()
     db.refresh(workflow)
     return restored
 
@@ -358,6 +358,6 @@ def attest_revision(db: Session, workflow: Workflow, target_revision: int, *, at
         source_type="workflow_revision_attestation",
         source_id=attestation.id,
     )
-    db.commit()
+    db.flush()
     db.refresh(revision)
     return revision

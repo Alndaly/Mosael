@@ -7,7 +7,7 @@ from fastapi import APIRouter, HTTPException, Response
 from mosael_formats import workflow_file
 from sqlalchemy import select
 
-from app.api.deps import CurrentUser, DbSession
+from app.api.deps import CurrentUser, DbSession, Tx
 from app.core.i18n import get_current_locale, render_message, tr
 from typing import TYPE_CHECKING
 
@@ -170,7 +170,7 @@ def _localized(exc: WorkflowDomainError) -> str:
 
 
 @router.post("/workflows", response_model=WorkflowOut)
-def create(body: WorkflowCreate, db: DbSession, user: CurrentUser) -> Workflow:
+def create(body: WorkflowCreate, db: Tx, user: CurrentUser) -> Workflow:
     workflow_uc.ensure_can_edit(db, user, body.workspace_id)
     try:
         graph = body.graph
@@ -217,7 +217,7 @@ def export_one(workflow_id: str, db: DbSession, user: CurrentUser) -> Response:
 
 
 @router.post("/workflows/import", response_model=WorkflowOut)
-def import_one(body: WorkflowImportRequest, db: DbSession, user: CurrentUser) -> Workflow:
+def import_one(body: WorkflowImportRequest, db: Tx, user: CurrentUser) -> Workflow:
     workflow_uc.ensure_can_edit(db, user, body.workspace_id)
     try:
         envelope = workflow_file.read_workflow_file(body.data)
@@ -255,7 +255,7 @@ def get_one(workflow_id: str, db: DbSession, user: CurrentUser) -> Workflow:
 
 
 @router.patch("/workflows/{workflow_id}", response_model=WorkflowOut)
-def update(workflow_id: str, body: WorkflowUpdate, db: DbSession, user: CurrentUser) -> Workflow:
+def update(workflow_id: str, body: WorkflowUpdate, db: Tx, user: CurrentUser) -> Workflow:
     workflow = workflow_uc.editable(db, user, workflow_id)
     changes = body.model_dump(exclude_unset=True, exclude={"base_graph_hash"})
     try:
@@ -296,7 +296,7 @@ def list_revisions(workflow_id: str, db: DbSession, user: CurrentUser) -> list[W
 
 
 @router.post("/workflows/{workflow_id}/revisions/{revision}/attest", response_model=WorkflowRevisionOut)
-def attest(workflow_id: str, revision: int, db: DbSession, user: CurrentUser) -> WorkflowRevision:
+def attest(workflow_id: str, revision: int, db: Tx, user: CurrentUser) -> WorkflowRevision:
     """「认可这一版」:不改图、不增版,只把自己记成这一版的担保人。
 
     同事改过的一版要借主人的私有发布账号 / 浏览器档案 / 本机文件时,运行会停下来说这一版需要主人
@@ -321,7 +321,7 @@ def get_revision(workflow_id: str, revision: int, db: DbSession, user: CurrentUs
 
 
 @router.post("/workflows/{workflow_id}/revisions/{revision}/restore", response_model=WorkflowOut)
-def restore_revision(workflow_id: str, revision: int, db: DbSession, user: CurrentUser) -> Workflow:
+def restore_revision(workflow_id: str, revision: int, db: Tx, user: CurrentUser) -> Workflow:
     workflow = workflow_uc.editable(db, user, workflow_id)
     try:
         restore_workflow_revision(db, workflow, revision, created_by=user.id)
@@ -331,14 +331,13 @@ def restore_revision(workflow_id: str, revision: int, db: DbSession, user: Curre
 
 
 @router.delete("/workflows/{workflow_id}", status_code=204)
-def delete(workflow_id: str, db: DbSession, user: CurrentUser) -> Response:
+def delete(workflow_id: str, db: Tx, user: CurrentUser) -> Response:
     workflow = workflow_uc.editable(db, user, workflow_id)
     # 绑着它的定时任务**同一个事务里停用** —— 此前删工作流不管它们:任务仍是启用的,到点照样
     # 触发、照样失败,手动的也照样能点「立即运行」。这一步排在路由这层(和 sharing.forget 一样),
     # 因为定时任务依赖工作流、工作流不能反过来认识定时任务(见 tests/test_import_layering.py)。
     stop_tasks_bound_to_workflow(db, workflow)
     db.delete(workflow)
-    db.commit()
     return Response(status_code=204)
 
 

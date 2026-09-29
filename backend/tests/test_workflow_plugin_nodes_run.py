@@ -44,6 +44,7 @@ def _run(graph: dict) -> tuple[str, dict, str | None, str]:
     ws = fresh_client().post("/api/workspaces", json={"name": "W"}).json()["id"]
     with SessionLocal() as db:
         workflow = create_workflow(db, workspace_id=ws, name="插件节点", graph=graph, created_by=user_id())
+        db.commit()  # 测试是入口:领域函数不提交
         job_id = start_workflow_job(db, workflow, created_by=None).id
     for _ in range(100):
         with SessionLocal() as db:

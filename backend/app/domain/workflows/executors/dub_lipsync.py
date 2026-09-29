@@ -195,9 +195,8 @@ def dub_lipsync(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[st
     track = next(one for one in sequence.tracks if one.id not in before)
     for _ in range(len(sequence.tracks)):
         move_track(db, sequence.id, MoveTrack(track_id=track.id, direction="up"))
-    db.commit()
+    db.flush()
     placed = insert_clip(db, sequence.id, InsertClip(track_id=track.id, asset_id=final,
                                                     timeline_start=float(clip.timeline_start), src_in=0.0, src_out=length))
-    db.commit()
     return {"asset_id": final, "clip_id": placed.id, "track_id": track.id, "chunk_count": len(chunks),
             "generated_count": generated}

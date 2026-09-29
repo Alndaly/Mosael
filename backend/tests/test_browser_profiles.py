@@ -123,6 +123,7 @@ def test_workflow_browser_open_pool_mode() -> None:
         pid = browser.create_profile(db, workspace_id=ws, name="流程用池号", owner=_me(db)).id
         db.commit()  # 测试是入口:领域函数不提交
         wf = create_workflow(db, workspace_id=ws, name="W", graph={"nodes": [], "edges": []}, created_by=user_id())
+        db.commit()  # 测试是入口:领域函数不提交
         wf_id = wf.id
         # 这次运行替谁跑:池档案是某人的登录身份,说不出是谁在用就不能借(见 browser.usable_profile)。
         run_id = create_job(db, workspace_id=ws, kind="workflow", payload=pinned(db, wf), created_by=_me(db).id).id

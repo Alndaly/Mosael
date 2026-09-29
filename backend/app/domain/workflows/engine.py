@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session
 
 from app.core.db import POOL_RESERVE, SessionLocal, pool_capacity
 from app.core.i18n import DEFAULT_LOCALE, t
+from app.core.unit_of_work import unit_of_work
 from app.db.models import Job, Workflow, WorkflowRevision
 from app.domain.jobs import (
     blame,
@@ -179,7 +180,8 @@ def _check_generation_text(db: Session, graph: Any, actor: str | None) -> None:
 
 
 def _run_workflow_thread(workflow_id: str, revision_id: str, job_id: str, params: dict[str, Any]) -> None:
-    with SessionLocal() as db:
+    # 线程就是入口:正常走完提交(失败也记在任务上、正常走完),真抛出去才回滚。
+    with unit_of_work() as db:
         job = db.get(Job, job_id)
         workflow = db.get(Workflow, workflow_id)
         revision = db.get(WorkflowRevision, revision_id)
@@ -197,7 +199,6 @@ def _run_workflow_thread(workflow_id: str, revision_id: str, job_id: str, params
             failure = _failure_payload(exc)
             #: 失败原因连同它的 key 一起落库 —— 接口按读的人的语言翻(见 jobs.blame)。
             if not finish_job(db, job, status="failed", **blame(exc)):
-                db.commit()
                 return
             # JobOut 也保留一份终态现场。事件流是完整时间线；result.failure 让只读取 job 的
             # 消费方同样能展示诊断，而不是只能看到一句“失败”。
@@ -213,7 +214,6 @@ def _run_workflow_thread(workflow_id: str, revision_id: str, job_id: str, params
                 link="#/workflows",
                 payload={"workflow_id": workflow.id, "job_id": job.id},
             )
-            db.commit()
 
 
 def _failure_payload(exc: Exception) -> dict[str, Any]:
@@ -397,12 +397,11 @@ def execute_graph(
         """
 
         def listen(fraction: float, message: str) -> None:
-            with SessionLocal() as progress_db:
+            with unit_of_work() as progress_db:
                 emit_job_event(progress_db, job.id, "workflow.node.progress", {
                     "node_id": nid, "name": node_label(nid), "name_key": node_label_key(nid),
                     "progress": round(fraction, 4), "message": message,
                 })
-                progress_db.commit()
 
         return listen
 

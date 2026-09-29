@@ -245,7 +245,9 @@ def test_a_called_workflows_own_revision_counts_too() -> None:
     profile_id = _profile(owner, workspace["id"])
     with SessionLocal() as db:
         parent = workflows.create_workflow(db, workspace_id=workspace["id"], name="父", created_by=_uid("tester"))
+        db.commit()  # 测试是入口:领域函数不提交
         child = workflows.create_workflow(db, workspace_id=workspace["id"], name="子", created_by=_uid("mate"))
+        db.commit()  # 测试是入口:领域函数不提交
 
         def pinned(workflow: Workflow) -> dict:
             revision = current_workflow_revision(db, workflow)

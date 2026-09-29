@@ -55,6 +55,7 @@ def test_call_workflow_passes_inputs_and_returns_declared_output() -> None:
                 "edges": [{"id": "e1", "source": "start", "target": "out"}],
             }, created_by=user_id(),
         )
+        db.commit()  # 测试是入口:领域函数不提交
         child_id = child.id
         # 父流程:start → 调用子流程 → 用自己的 output 节点把子输出转成父输出(完整 A 契约)
         parent = create_workflow(
@@ -73,6 +74,7 @@ def test_call_workflow_passes_inputs_and_returns_declared_output() -> None:
                 ],
             }, created_by=user_id(),
         )
+        db.commit()  # 测试是入口:领域函数不提交
         parent_id = parent.id
 
     status, result, err, parent_job = _run(parent_id)
@@ -101,6 +103,7 @@ def test_self_recursion_is_rejected() -> None:
                 "edges": [{"id": "e1", "source": "start", "target": "call"}],
             }, created_by=user_id(),
         )
+        db.commit()  # 测试是入口:领域函数不提交
         wf_id = wf.id
         # 深拷贝重建,确保 SQLAlchemy 侦测到 JSON 变更(原地改同一 dict 不会触发)。
         import copy
@@ -110,6 +113,7 @@ def test_self_recursion_is_rejected() -> None:
             if node["id"] == "call":
                 node["config"]["workflow_id"] = wf_id  # 指向自己
         update_workflow(db, wf, {"graph": graph}, base_graph_hash=wf.graph_hash, created_by=user_id())
+        db.commit()  # 测试是入口:领域函数不提交
 
     status, _result, err, _ = _run(wf_id)
     assert status == "failed"
@@ -149,6 +153,7 @@ def test_subgraph_seeds_input_and_resolves_output() -> None:
                 ],
             }, created_by=user_id(),
         )
+        db.commit()  # 测试是入口:领域函数不提交
         wf_id = wf.id
 
     status, result, err, _ = _run(wf_id)
@@ -197,6 +202,7 @@ def test_subgraph_nests_arbitrarily() -> None:
                 ],
             }, created_by=user_id(),
         )
+        db.commit()  # 测试是入口:领域函数不提交
         wf_id = wf.id
 
     status, result, err, _ = _run(wf_id)

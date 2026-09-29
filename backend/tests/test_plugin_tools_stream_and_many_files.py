@@ -180,6 +180,7 @@ def test_工作流节点里的进度成了节点事件(monkeypatch) -> None:
              "edges": [{"id": "e1", "source": "start", "target": "n1"}]}
     with SessionLocal() as db:
         workflow = create_workflow(db, workspace_id=ws, name="进度", graph=graph, created_by=user_id())
+        db.commit()  # 测试是入口:领域函数不提交
         job_id = start_workflow_job(db, workflow, created_by=None).id
     for _ in range(100):
         with SessionLocal() as db:
