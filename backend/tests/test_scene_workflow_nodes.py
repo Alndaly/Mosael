@@ -46,7 +46,9 @@ def _workflow() -> Workflow:
 
 def _run(node_type: str, workflow: Workflow, config: dict) -> dict:
     with SessionLocal() as db:
-        return get_executor(node_type)(db, db.get(Workflow, workflow.id), config)
+        out = get_executor(node_type)(db, db.get(Workflow, workflow.id), config)
+        db.commit()  # 节点不提交,引擎跑完一个节点才提交(engine.run_node);这里就是那个引擎
+        return out
 
 
 def test_布景建成一个真正的_3D_场景() -> None:
@@ -156,7 +158,9 @@ def _import_glb(workspace_id: str, name: str, tmp_path, **params) -> str:
     target = tmp_path / f"{name}.glb"
     write_glb(content, find_shot(content, "s"), target)
     with SessionLocal() as db, target.open("rb") as stream:
-        return import_model(db, workspace_id, name, stream).id
+        model_id = import_model(db, workspace_id, name, stream).id
+        db.commit()  # 测试就是入口:导入模型只 flush
+        return model_id
 
 
 class Test可用的3D道具:

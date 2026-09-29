@@ -15,6 +15,7 @@ from uuid import uuid4
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 from app.core.i18n import LocalizedError, tr
+from app.core.unit_of_work import after_commit
 from app.db.models import Project, Scene3D, Scene3DRevision, Scene3DModel
 from app.db.model_base import now
 from app.db import references
@@ -136,7 +137,7 @@ def create_scene(db: Session, workspace_id: str, name: str, content: SceneConten
     db.add(scene)
     db.flush()
     db.add(Scene3DRevision(scene_id=scene.id, revision=1, snapshot={"name": name, "content": scene.content}))
-    db.commit()
+    db.flush()
     db.refresh(scene)
     return scene
 
@@ -151,11 +152,12 @@ def save_scene(db: Session, scene: Scene3D, base_revision: int, name: str, conte
     result = db.execute(update(Scene3D).where(Scene3D.id == scene.id, Scene3D.revision == base_revision).values(
         name=name, content=data, revision=base_revision+1, updated_at=now()), execution_options={"synchronize_session": False})
     if result.rowcount != 1:
-        db.rollback()
+        # 条件 UPDATE 一行没动,不用回滚(那会把调用方这次用例里别的改动一起丢掉);内存里这份作废,下次读库里的。
+        db.expire(scene)
         raise SceneConflict("sceneErr_changed")
     references.resync(db, "scene", scene.id)
     db.add(Scene3DRevision(scene_id=scene.id, revision=base_revision+1, snapshot={"name": name, "content": data}))
-    db.commit()
+    db.flush()
     db.refresh(scene)
     return scene
 
@@ -287,9 +289,8 @@ def import_model(db: Session, workspace_id: str, name: str, source: BinaryIO,
                          file_key=scene_model_key(workspace_id, final.name), size=size)
     db.add(model)
     try:
-        db.commit()
+        db.flush()
     except Exception:
-        db.rollback()
         final.unlink(missing_ok=True)   # 行没落成,文件不留
         raise
     db.refresh(model)
@@ -352,8 +353,8 @@ def delete_scene(db: Session, workspace_id: str, scene_id: str) -> None:
     if using:
         raise SceneDomainError("sceneErr_usedByBoards", names=tr("punct_listSep").join(using[:5]))
     db.delete(scene)
-    db.commit()
-    _drop_previews(workspace_id, scene_id)
+    # 预览图是文件:行真的删掉(提交)之后再清,回滚了就留着。
+    after_commit(db, lambda: _drop_previews(workspace_id, scene_id))
 
 
 def _drop_previews(workspace_id: str, scene_id: str) -> None:
@@ -403,8 +404,8 @@ def delete_model(db: Session, workspace_id: str, model_id: str) -> None:
         raise SceneDomainError("sceneErr_usedByScenes", names=tr("punct_listSep").join(using[:5]))
     path = model_file(model)
     db.delete(model)
-    db.commit()
-    path.unlink(missing_ok=True)   # 行没了才删文件:反过来的话,删文件成功、提交失败就只剩一条指空的行
+    # 行没了(提交成功)才删文件:反过来的话,删文件成功、提交失败就只剩一条指空的行
+    after_commit(db, lambda: path.unlink(missing_ok=True))
 
 
 def delete_workspace_model_files(workspace_id: str) -> None:

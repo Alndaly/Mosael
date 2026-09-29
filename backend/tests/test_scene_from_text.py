@@ -47,6 +47,7 @@ def test_照文字搭一个场景_不是每镜一个布景台_相机规矩和整
     scope = _scope()
     with SessionLocal() as db:
         out = scene_from_text(db, scope, {"text": "# 天台告白\n第一镜:小美推门走上天台……", "max_shots": 3, "aspect": "9:16"})
+        db.commit()  # 节点不提交,引擎跑完一个节点才提交;这里就是那个引擎
     assert out["shot_count"] == 1 and out["name"] == "天台告白", "没起名就取文字的第一行"
     source = "这段文字(没写明的尺寸、身高、光线按常识定)"
     assert single_set_rules(5, source=source) in written["system"]
