@@ -18,7 +18,8 @@ export function CollectionDetail({ storageKey, label, index, selected, children 
   return <div data-slot="collection-detail" className="relative grid min-h-0 flex-1 grid-cols-[var(--studio-index-width)_minmax(0,1fr)] overflow-hidden bg-workspace-panel max-[880px]:grid-cols-[minmax(0,1fr)] max-[880px]:grid-rows-[auto_minmax(0,1fr)]"
     style={{ "--studio-index-width": `${sidebar.width}px` } as React.CSSProperties}>
     <aside aria-label={label} className="flex min-h-0 min-w-0 flex-col overflow-hidden border-r border-divider bg-workspace-subtle max-[880px]:border-r-0 max-[880px]:border-b">
-      <div className="grid content-start gap-1 overflow-y-auto p-1.5 max-[880px]:flex max-[880px]:items-center max-[880px]:overflow-x-auto max-[880px]:p-3">{index}</div>
+      {/* 撑满侧栏:列表只有一个空态(加载失败、还没有东西)时它要落在侧栏正中,而不是贴在顶上。 */}
+      <div className="grid min-h-0 flex-1 content-start gap-1 overflow-y-auto p-1.5 has-[>.empty-state:only-child]:content-center max-[880px]:flex max-[880px]:items-center max-[880px]:overflow-x-auto max-[880px]:p-3">{index}</div>
     </aside>
     <div {...sidebar.handleProps} className={cn(sidebar.handleProps.className, "max-[880px]:hidden")} />
     <div data-slot="collection-detail-content" className={cn("@container/settings grid min-h-0 min-w-0 overflow-y-auto px-6 py-6 xl:px-8", selected ? "content-start" : "place-items-center")}>
