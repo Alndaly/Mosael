@@ -37,7 +37,7 @@ describe("跳转要避开右栏面板", () => {
   it("两张画布都把讨论跳转交给算过遮挡的那条路", () => {
     for (const [path, call] of [
       ["features/boards/BoardCanvas.tsx", "centerOn({ x, y })"],
-      ["features/workflows/WorkflowsView.tsx", "getCanvasInsets()"],
+      ["features/workflows/WorkflowEditor.tsx", "getCanvasInsets()"],
     ] as const) {
       const source = read(path);
       // 取**最后**一次:第一次是接口里的类型声明,拿它切等于什么也没断言。

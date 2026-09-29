@@ -95,7 +95,7 @@ describe("讨论侧栏", () => {
      */
     const read = (name: string) =>
       readFileSync(join(import.meta.dirname, "..", name), "utf8");
-    for (const view of ["boards/BoardsView.tsx", "workflows/WorkflowsView.tsx"]) {
+    for (const view of ["boards/BoardsView.tsx", "workflows/WorkflowEditor.tsx"]) {
       expect(read(view), `${view} 该用共用的讨论侧栏`).toContain(
         'from "@/features/collaboration/CollaborationSheet"',
       );

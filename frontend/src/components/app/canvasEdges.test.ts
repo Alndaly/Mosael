@@ -66,7 +66,7 @@ describe("连线的外观只在一处", () => {
     //: 走空目录的话,下面那条断言天然成立。
     const files = sources(SRC).map((path) => path.slice(SRC.length + 1));
     expect(files.length).toBeGreaterThan(300);
-    for (const one of ["features/boards/BoardCanvas.tsx", "features/workflows/WorkflowsView.tsx", "components/app/canvasPendingLink.tsx", HOME]) {
+    for (const one of ["features/boards/BoardCanvas.tsx", "features/workflows/WorkflowEditor.tsx", "components/app/canvasPendingLink.tsx", HOME]) {
       expect(files, one).toContain(one);
     }
   });
