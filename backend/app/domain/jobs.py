@@ -980,7 +980,7 @@ def prune_task_events(db: Session, *, now: datetime | None = None) -> int:
     return removed
 
 
-def clear_finished_jobs(db: Session, workspace_id: str) -> int:
+def clear_finished_jobs(db: Session, workspace_id: str, *, removable: Any = None) -> int:
     """任务中心的「清空已结束」:删掉面板上列着的那些已结束任务,**连同它们收纳的子任务**。返回删了几个。
 
     面板只列顶层任务(子任务收在父任务的详情里,见 routes/jobs 的 `top_level`),所以清的单位是**一棵树**:
@@ -991,8 +991,15 @@ def clear_finished_jobs(db: Session, workspace_id: str) -> int:
     还在跑的那个就成了面板上永远看不见的孤儿。
 
     父任务早就不在了的行(旧版本的清空留下的孤儿)当作顶层:面板看不见它们,它们也不再属于任何还在的东西。
+
+    `removable`:清的人能动哪些行(`jobs` 表上的 SQL 条件,见 generation/sessions.jobs_writable_filter)。
+    一棵树里只要有一行他动不了(别人私有会话里的生成),整棵留着 —— 和取消任务同一道闸。
     """
     jobs = list(db.scalars(select(Job).where(Job.workspace_id == workspace_id)))
+    allowed = (
+        None if removable is None
+        else set(db.scalars(select(Job.id).where(Job.workspace_id == workspace_id, removable)))
+    )
     present = {job.id for job in jobs}
     children: dict[str, list[Job]] = {}
     for job in jobs:
@@ -1013,6 +1020,8 @@ def clear_finished_jobs(db: Session, workspace_id: str) -> int:
             continue
         nodes = tree(root)
         if any(node.status not in TERMINAL_STATUSES for node in nodes):
+            continue
+        if allowed is not None and any(node.id not in allowed for node in nodes):
             continue
         for node in nodes:
             db.execute(delete(TaskEvent).where(TaskEvent.job_id == node.id))

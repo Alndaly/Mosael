@@ -56,6 +56,22 @@ def jobs_filter(job_id_column: Any, user: User, workspace_id: str) -> Any:
     return job_id_column.not_in(hidden)
 
 
+def jobs_writable_filter(job_id_column: Any, user: User) -> Any:
+    """`jobs` 表上他能动(取消、清掉)的那些(SQL 条件):不是别人会话里的生成。判据和 `ensure_job_writable` 一样 ——
+    挂在某条会话上的,只有会话主人;没有主人的会话一律不算他的(同 domain/sharing.ensure_manageable)。"""
+    from sqlalchemy import or_
+
+    others = select(GenerationSession.id).where(
+        or_(GenerationSession.owner_user_id.is_(None), GenerationSession.owner_user_id != user.id)
+    )
+    foreign = select(GenerationJob.job_id).where(
+        GenerationJob.job_id.is_not(None),
+        GenerationJob.session_id.is_not(None),
+        GenerationJob.session_id.in_(others),
+    )
+    return job_id_column.not_in(foreign)
+
+
 def ensure_job_readable(db: Session, user: User, job_id: str) -> None:
     """按 id 看一个任务之前。它是某条会话里的生成时,得看得见那条会话(否则 404)。"""
     _session_of_job(db, user, job_id)

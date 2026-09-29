@@ -10,7 +10,12 @@ from app.domain.permissions import NotVisible, ensure_workspace_access, ensure_w
 from app.db.models import Job, TaskEvent
 from app.domain import job_catalog
 from app.domain.jobs import cancel_job, clear_finished_jobs
-from app.domain.generation.sessions import ensure_job_readable, ensure_job_writable, jobs_filter
+from app.domain.generation.sessions import (
+    ensure_job_readable,
+    ensure_job_writable,
+    jobs_filter,
+    jobs_writable_filter,
+)
 
 router = APIRouter(tags=["jobs"])
 
@@ -60,7 +65,8 @@ def list_job_kinds(user: CurrentUser) -> dict:
 @router.delete("/jobs/finished")
 def delete_finished_jobs(workspace_id: str, db: DbSession, user: CurrentUser) -> dict:
     ensure_workspace_perm(db, user, workspace_id, "edit")
-    return {"removed": clear_finished_jobs(db, workspace_id)}
+    # 别人私有会话里的生成不归他清(和取消同一道闸,见 generation/sessions.jobs_writable_filter)。
+    return {"removed": clear_finished_jobs(db, workspace_id, removable=jobs_writable_filter(Job.id, user))}
 
 
 @router.get("/jobs/{job_id}", response_model=JobOut)

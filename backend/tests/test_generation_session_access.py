@@ -168,6 +168,27 @@ def test_共享来的会话_它的生成任务同事看得见_取消不了() -> 
     assert owner.post(f"/api/jobs/{job}/cancel").status_code == 200
 
 
+def test_清空已结束_别人会话里的生成_同事清不掉() -> None:
+    """「清空已结束」是按整个工作区删的;别人私有 / 共享会话里的生成,和取消一样只有主人能动。"""
+    from app.core.db import SessionLocal
+    from app.db.models import Job
+    from app.domain.jobs import create_job
+
+    owner, workspace, mate = _team()
+    private = _generation_job(workspace, _session(owner, workspace, shared=False))
+    shared = _generation_job(workspace, _session(owner, workspace, shared=True))
+    with SessionLocal() as db:
+        loose = create_job(db, workspace_id=workspace, kind="export", created_by=None, payload={}).id
+        for job_id in (private, shared, loose):
+            db.get(Job, job_id).status = "succeeded"
+        db.commit()
+
+    assert mate.delete(f"/api/jobs/finished?workspace_id={workspace}").json() == {"removed": 1}, "只清得掉工作区的那一个"
+    assert owner.get(f"/api/jobs/{private}").status_code == 200
+    assert owner.get(f"/api/jobs/{shared}").status_code == 200
+    assert owner.delete(f"/api/jobs/finished?workspace_id={workspace}").json() == {"removed": 2}, "主人清得掉自己的"
+
+
 def test_不挂在会话上的任务_仍是工作区的() -> None:
     from app.core.db import SessionLocal
     from app.domain.jobs import create_job
