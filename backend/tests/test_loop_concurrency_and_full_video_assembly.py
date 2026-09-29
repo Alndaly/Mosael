@@ -17,7 +17,7 @@ from typing import Any
 
 import pytest
 
-from app.core.db import SessionLocal
+from app.core.unit_of_work import unit_of_work
 from app.db.models import Asset, Clip, Track, Workflow
 from app.domain.workflows import WorkflowDomainError
 from app.domain.workflows import executors as registry
@@ -32,7 +32,7 @@ def _workspace() -> str:
 
 
 def _workflow(ws: str) -> Workflow:
-    with SessionLocal() as db:
+    with unit_of_work() as db:
         workflow = Workflow(workspace_id=ws, name="W", graph={"nodes": [], "edges": []})
         db.add(workflow)
         db.commit()
@@ -42,7 +42,7 @@ def _workflow(ws: str) -> Workflow:
 
 
 def _loop(ws: str, config: dict[str, Any]) -> dict[str, Any]:
-    with SessionLocal() as db:
+    with unit_of_work() as db:
         workflow = db.get(Workflow, _workflow(ws).id)
         return get_executor("loop_foreach")(db, workflow, config)
 
@@ -156,14 +156,14 @@ class Test循环并发:
 
 def _sequence(ws: str) -> tuple[str, str, str]:
     """一条和整片生成里一样的新时间线(视频轨 + 音频轨),用的就是那个节点。"""
-    with SessionLocal() as db:
+    with unit_of_work() as db:
         workflow = db.get(Workflow, _workflow(ws).id)
         made = get_executor("project_sequence_create")(db, workflow, {"name": "成片", "width": 1280, "height": 720, "fps": 30})
     return made["sequence_id"], made["video_track_id"], made["audio_track_id"]
 
 
 def _asset(ws: str, kind: str, duration: float, name: str) -> str:
-    with SessionLocal() as db:
+    with unit_of_work() as db:
         asset = Asset(workspace_id=ws, kind=kind, name=name, source="generated", file_key=f"k-{name}", media_info={"duration": duration})
         db.add(asset)
         db.commit()
@@ -179,20 +179,20 @@ class Test按字段取字幕:
             {"placed": "", "caption": {"text": "这一镜没有口播"}},
             {"placed": {"timeline_start": 5, "timeline_end": 7}, "caption": {"text": "第二句"}},
         ]
-        with SessionLocal() as db:
+        with unit_of_work() as db:
             out = get_executor("generate_subtitles")(db, db.get(Workflow, _workflow(ws).id), {
                 "sequence_id": sequence_id, "segments": segments,
                 "start_field": "placed.timeline_start", "end_field": "placed.timeline_end", "text_field": "caption.text",
             })
         assert out["count"] == 2
-        with SessionLocal() as db:
+        with unit_of_work() as db:
             clips = sorted(db.query(Clip).filter(Clip.id.in_(out["clip_ids"])).all(), key=lambda c: c.timeline_start)
             assert [(c.timeline_start, c.text_override) for c in clips] == [(0.0, "第一句"), (5.0, "第二句")]
 
     def test_允许为空时交出0条_不建空轨(self) -> None:
         ws = _workspace()
         sequence_id, _, _ = _sequence(ws)
-        with SessionLocal() as db:
+        with unit_of_work() as db:
             tracks_before = db.query(Track).filter(Track.sequence_id == sequence_id).count()
             out = get_executor("generate_subtitles")(db, db.get(Workflow, _workflow(ws).id), {
                 "sequence_id": sequence_id, "segments": [{"start": "", "end": "", "text": ""}], "allow_empty": "yes",
@@ -290,7 +290,7 @@ class Test整片生成的中段:
         assert not cancelled
         assert context["narration_subtitles"]["count"] == 2, "没有口播的镜头不该出字幕"
 
-        with SessionLocal() as db:
+        with unit_of_work() as db:
             video = sorted(db.query(Clip).filter(Clip.track_id == video_track).all(), key=lambda c: c.timeline_start)
             names = [db.get(Asset, clip.asset_id).name for clip in video]
             assert names == ["p1", "p2", "p3"], "并发生成之后,上时间线仍要按镜头顺序"
@@ -330,7 +330,7 @@ class Test整片生成的中段:
         )
         assert not cancelled
         assert context["narration_subtitles"]["count"] == 0
-        with SessionLocal() as db:
+        with unit_of_work() as db:
             assert db.query(Clip).filter(Clip.track_id == video_track).count() == 1
 
 

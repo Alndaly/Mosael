@@ -12,7 +12,7 @@ from typing import Any
 
 import pytest
 
-from app.core.db import SessionLocal
+from app.core.unit_of_work import unit_of_work
 from app.domain.workflows import NODE_TYPES, WorkflowDomainError
 from app.domain.workflows.executors import entities as executors
 from app.domain.workflows.field_options import OptionContext, field_options
@@ -84,7 +84,7 @@ def _roles(client, entity_id: str) -> list[tuple[str, str]]:
 def test_补全多角度_只画还没有的角度_每张都点名这个资产_画成的按角度挂回去(setup) -> None:
     client, ws, fake = setup
     entity_id = _entity(client, ws)
-    with SessionLocal() as db:
+    with unit_of_work() as db:
         out = executors.entity_angles(db, _scope(ws), {"entity_id": entity_id})
 
     assert [call["entity_ids"] for call in fake.calls] == [[entity_id]] * 3, "每一张都 @ 着这个资产,参考图由 @资产 那条路挂"
@@ -95,11 +95,11 @@ def test_补全多角度_只画还没有的角度_每张都点名这个资产_�
                    "added": 3, "failed": 0}
     assert _roles(client, entity_id) == [("front", "front"), ("drawn-0", "side"), ("drawn-1", "back"), ("drawn-2", "turnaround")]
 
-    with SessionLocal() as db, pytest.raises(WorkflowDomainError) as complete:
+    with unit_of_work() as db, pytest.raises(WorkflowDomainError) as complete:
         executors.entity_angles(db, _scope(ws), {"entity_id": entity_id})
     assert complete.value.key == "wfErr_entityAnglesComplete", "都有了就直说,不白花钱再画一遍"
 
-    with SessionLocal() as db:
+    with unit_of_work() as db:
         again = executors.entity_angles(db, _scope(ws), {"entity_id": entity_id, "scope": "all", "model": "p2:image:edit"})
     assert again["added"] == 4 and fake.calls[-1]["provider"] == "other", "「每个角度都重画」四张都画,用点名的模型"
 
@@ -107,7 +107,7 @@ def test_补全多角度_只画还没有的角度_每张都点名这个资产_�
 def test_场景的角度是机位_补的是全景_反打_俯视里还没有的(setup) -> None:
     client, ws, fake = setup
     entity_id = _entity(client, ws, kind="location", name="旧城天台", refs=(("front", "wide"),))
-    with SessionLocal() as db:
+    with unit_of_work() as db:
         out = executors.entity_angles(db, _scope(ws), {"entity_id": entity_id})
     assert out["added"] == 2 and "Reverse angle" in fake.calls[0]["prompt"]
     assert [role for _asset, role in _roles(client, entity_id)] == ["wide", "reverse", "overhead"]
@@ -125,7 +125,7 @@ def test_画不出同一个的_先说清楚_不花钱(setup) -> None:
         ({"entity_id": usable, "scope": "some"}, "wfErr_entityAnglesScope"),
     ]
     for config, key in cases:
-        with SessionLocal() as db, pytest.raises(WorkflowDomainError) as caught:
+        with unit_of_work() as db, pytest.raises(WorkflowDomainError) as caught:
             executors.entity_angles(db, _scope(ws), config)
         assert caught.value.key == key, config
     assert fake.calls == [], "这些都该在建生成任务之前挡下"
@@ -135,16 +135,16 @@ def test_生成表情_只有人物_一种一张_挂成表情(setup) -> None:
     client, ws, fake = setup
     prop = _entity(client, ws, kind="prop", name="红伞")
     person = _entity(client, ws)
-    with SessionLocal() as db, pytest.raises(WorkflowDomainError) as caught:
+    with unit_of_work() as db, pytest.raises(WorkflowDomainError) as caught:
         executors.entity_expressions(db, _scope(ws), {"entity_id": prop})
     assert caught.value.key == "wfErr_entityExpressionsCharacterOnly"
 
-    with SessionLocal() as db:
+    with unit_of_work() as db:
         out = executors.entity_expressions(db, _scope(ws), {"entity_id": person, "expressions": "开心、哭 ,开心\n害羞"})
     assert out["added"] == 3 and [("开心" in c["prompt"], "哭" in c["prompt"]) for c in fake.calls][:2] == [(True, False), (False, True)]
     assert [role for _asset, role in _roles(client, person)] == ["front", "expression", "expression", "expression"]
 
-    with SessionLocal() as db:
+    with unit_of_work() as db:
         executors.entity_expressions(db, _scope(ws), {"entity_id": person})
     assert len(fake.calls) == 3 + 5, "没写就画缺省的五种"
 
@@ -153,14 +153,14 @@ def test_有几张没画成_画成的照样挂上_一张都没成才失败(setup
     client, ws, fake = setup
     entity_id = _entity(client, ws)
     fake.fail = {1}
-    with SessionLocal() as db:
+    with unit_of_work() as db:
         out = executors.entity_angles(db, _scope(ws), {"entity_id": entity_id})
     assert (out["added"], out["failed"]) == (2, 1)
     assert [role for _asset, role in _roles(client, entity_id)] == ["front", "side", "turnaround"]
 
     other = _entity(client, ws, name="阿澄")
     fake.fail = {3, 4, 5}
-    with SessionLocal() as db, pytest.raises(WorkflowDomainError) as caught:
+    with unit_of_work() as db, pytest.raises(WorkflowDomainError) as caught:
         executors.entity_angles(db, _scope(ws), {"entity_id": other})
     assert caught.value.key == "wfErr_childFailed", "带着第一张没画成的原因"
     assert _roles(client, other) == [("front", "front")]
@@ -169,7 +169,7 @@ def test_有几张没画成_画成的照样挂上_一张都没成才失败(setup
 def test_模型下拉只列收参考图的_默认那个标出来(setup) -> None:
     client, ws, _fake = setup
     ctx = OptionContext(workspace_id=ws, user_id=None, parent="", locale="zh")
-    with SessionLocal() as db:
+    with unit_of_work() as db:
         options = field_options(db, "reference_image_models", ctx)
     assert options == [
         {"value": "p1:image:edit", "label": "连接 · 能改图 · 默认"},
@@ -188,7 +188,7 @@ def test_画板上是资产格的能力_宿主给的是它引用的资产_要花
         assert board_role(meta) == "ability" and board_hosts(meta) == ("entity",)
         assert host_fields(meta) == {"entity": "entity_id"} and board_group(meta) == "entity"
     fresh_client()
-    with SessionLocal() as db:
+    with unit_of_work() as db:
         producers = _node_producers(db, None)
         assert producers["node:entity_angles"].effects == "paid", "付费生成:智能体替人点要确认卡"
         assert producers["node:entity_expressions"].hosts == ("entity",)
@@ -230,7 +230,7 @@ def test_资产格不是一个样子_生成表情只挂在人物上_场景点了
     place = _entity(client, ws, kind="location", name="竹林小径", refs=(("front", "wide"),))
     person = _entity(client, ws)
     meta = NODE_TYPES["entity_expressions"]["config"]["entity_id"]
-    with SessionLocal() as db:
+    with unit_of_work() as db:
         with pytest.raises(BoardInputError) as caught:
             _check_entity_kind(db, ws, place, meta, "生成表情")
         assert caught.value.key == "boardErr_abilityNotForEntityKind"

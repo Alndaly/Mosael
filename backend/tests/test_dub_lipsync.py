@@ -13,8 +13,8 @@ from types import SimpleNamespace
 
 import pytest
 
+from app.core.unit_of_work import unit_of_work
 from app.core.config import settings
-from app.core.db import SessionLocal
 from app.db.models import Clip, Project, Sequence, Track, Workspace
 from app.domain.assets.importer import register_file_asset
 from app.domain.render import build_plan_for_sequence, digital_human_assets
@@ -43,7 +43,7 @@ def dubbed(monkeypatch):
     _media("src.mp4", ["-f", "lavfi", "-i", "testsrc=size=320x240:rate=25:duration=6", "-f", "lavfi", "-i",
                        "sine=duration=6", "-shortest", "-c:v", "libx264", "-pix_fmt", "yuv420p"])
     _media("line.wav", ["-f", "lavfi", "-i", "sine=frequency=660:duration=1"])
-    with SessionLocal() as db:
+    with unit_of_work() as db:
         ws = Workspace(name="W")
         db.add(ws)
         db.flush()
@@ -79,11 +79,11 @@ def _config(ids, **extra):
 def test_整条跑通_切两块都改口型_接回整段放在最上面_原片不动(dubbed) -> None:
     ids, calls = dubbed
     scope = SimpleNamespace(workspace_id=ids.ws, id="wf:1", name="译配")
-    with SessionLocal() as db:
+    with unit_of_work() as db:
         out = dub_lipsync(db, scope, _config(ids))
     assert (out["chunk_count"], out["generated_count"]) == (2, 2), "6 秒按 4 秒上限、在两句之间(第 3 秒)切成两块"
     assert [[one["role"] for one in sources] for sources in calls] == [["source_video", "driving_audio"]] * 2
-    with SessionLocal() as db:
+    with unit_of_work() as db:
         sequence = db.get(Sequence, ids.sequence)
         top = min(sequence.tracks, key=lambda track: track.position)
         assert top.id == out["track_id"] and top.kind == "video", "新轨挪到最上面,盖住原片"
@@ -101,12 +101,12 @@ def test_整条跑通_切两块都改口型_接回整段放在最上面_原片�
 
 def test_没有配音的块用原片_不花钱(dubbed) -> None:
     ids, calls = dubbed
-    with SessionLocal() as db:
+    with unit_of_work() as db:
         for clip in db.query(Clip).filter(Clip.track_id == ids.dub, Clip.timeline_start == 4):
             db.delete(clip)
         db.commit()
     scope = SimpleNamespace(workspace_id=ids.ws, id="wf:1", name="译配")
-    with SessionLocal() as db:
+    with unit_of_work() as db:
         out = dub_lipsync(db, scope, _config(ids))
     assert (out["chunk_count"], out["generated_count"], len(calls)) == (2, 1, 1)
 
@@ -114,7 +114,7 @@ def test_没有配音的块用原片_不花钱(dubbed) -> None:
 def test_动手之前说清楚(dubbed) -> None:
     ids, calls = dubbed
     scope = SimpleNamespace(workspace_id=ids.ws, id="wf:1", name="译配")
-    with SessionLocal() as db:
+    with unit_of_work() as db:
         with pytest.raises(WorkflowDomainError) as refused:
             dub_lipsync(db, scope, _config(ids, consent=""))
         assert refused.value.key == "wfErr_talkingNeedsConsent"
