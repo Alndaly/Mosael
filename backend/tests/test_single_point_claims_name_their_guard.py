@@ -75,7 +75,7 @@ ALLOWLIST: frozenset[str] = frozenset({
     "app/domain/assets/importer.py:唯一实现",
     "app/domain/deployment.py:唯一真相",
     "app/domain/plugins/tools.py:唯一的执行路径",
-    "app/domain/workflows/__init__.py:唯一入口",
+    "app/domain/workflows/node_types.py:唯一入口",
     "app/domain/workflows/binding.py:唯一实现",
 })
 

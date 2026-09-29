@@ -73,7 +73,8 @@ def _from_stdin() -> bytes:
     os.environ.pop(STDIN_FLAG, None)
     key = line.strip()
     if not key:
-        raise RuntimeError(f"{STDIN_FLAG}=1,但标准输入里没有主密钥")
+        # 给部署的人看的启动失败(进程起不来),不是界面上的报错 —— 不走文案表。
+        raise RuntimeError(f"{STDIN_FLAG}=1 but no master key arrived on stdin")
     return key
 
 
