@@ -82,6 +82,7 @@ class Test回答:
         sid = client.post("/api/agent/sessions", json={"workspace_id": ws}).json()["id"]
         with SessionLocal() as db:
             row = q.ask(db, workspace_id=ws, session_id=sid, questions=_ok())
+            db.commit()  # 测试是入口:领域函数不提交
             return row.id, row
 
     def test_记下选了什么(self) -> None:

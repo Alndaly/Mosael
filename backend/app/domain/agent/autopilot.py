@@ -259,10 +259,11 @@ def _execute_thread(confirmation_id: str, user_id: str) -> None:
     这里调的是 `authorize_and_approve`,和 HTTP 路由、飞书回调**同一个函数**:自动放行绕过的是
     「用户同意」,不是「他有没有这个权限」。三道授权闸一道不少;挡下来了就当作没有自动放行过。
     """
-    from app.core.db import SessionLocal
+    from app.core.unit_of_work import unit_of_work
     from app.domain.agent.confirmations import authorize_and_approve
 
-    with SessionLocal() as db:
+    # 线程就是入口:批准(或退回用户)在这里一起提交。
+    with unit_of_work() as db:
         confirmation = db.get(ToolConfirmation, confirmation_id)
         user = db.get(User, user_id)
         if confirmation is None or user is None:
@@ -282,7 +283,6 @@ def _fall_back_to_a_human(db: Session, confirmation_id: str, reason: str) -> Non
     confirmation.decision_mode = "manual"
     confirmation.decided_by = None
     confirmation.decision_detail = {**(confirmation.decision_detail or {}), "autopilot_failed": reason[:300]}
-    db.commit()
 
 
 def session_for_token(db: Session, token: str) -> str | None:

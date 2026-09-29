@@ -44,10 +44,12 @@ def _card(workspace: str, sid: str | None) -> str:
     """一张待批的 browser_open 卡(不校验外部实体,测的只是归属)。`sid` 为空 = 没挂在对话上。"""
     with SessionLocal() as db:
         actor = db.query(User).filter(User.username == "tester").one()
-        return request_confirmation(
+        card_id = request_confirmation(
             db, workspace_id=workspace, tool="browser_open", payload={"url": "https://example.com"},
             actor_id=actor.id, session_id=sid,
         ).id
+        db.commit()  # 测试是入口:领域函数不提交
+        return card_id
 
 
 def _listed(client: TestClient, workspace: str, *, decidable: bool) -> set[str]:

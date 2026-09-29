@@ -146,6 +146,7 @@ def handle_card_action(open_id: str, value: dict[str, Any]) -> CardDecision:
             else:
                 authorize_and_reject(db, user, confirmation)
                 decision = "rejected"
+            db.commit()  # 卡片回调是入口:领域函数不提交
         except ConfirmationError as exc:
             return _toast(str(exc))
         except Exception:  # noqa: BLE001 — 含权限不足(code 节点)与执行失败

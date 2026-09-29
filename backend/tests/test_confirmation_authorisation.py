@@ -60,6 +60,7 @@ def _approve_off_the_request_thread(card_id: str, username: str) -> BaseExceptio
             confirmation = db.get(ToolConfirmation, card_id)
             try:
                 authorize_and_approve(db, user, confirmation)
+                db.commit()  # 测试是入口:领域函数不提交
             except BaseException as exc:  # noqa: BLE001 —— 用例要看的就是它抛没抛
                 captured[0] = exc
 
@@ -119,6 +120,7 @@ def _reject_off_the_request_thread(card_id: str, username: str) -> BaseException
             user = db.query(User).filter(User.username == username).one()
             try:
                 authorize_and_reject(db, user, db.get(ToolConfirmation, card_id))
+                db.commit()  # 测试是入口:领域函数不提交
             except BaseException as exc:  # noqa: BLE001
                 captured[0] = exc
 

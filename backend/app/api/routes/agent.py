@@ -143,7 +143,7 @@ def list_queued_messages(session_id: str, db: DbSession, user: CurrentUser) -> l
 
 
 @router.post("/agent/sessions/{session_id}/queue/{message_id}/steer")
-def steer_queued_message(session_id: str, message_id: str, db: DbSession, user: CurrentUser) -> dict:
+def steer_queued_message(session_id: str, message_id: str, db: Tx, user: CurrentUser) -> dict:
     """Cut a queued message into the running turn instead of letting it wait.
 
     The opt-in half of the pair: queuing is what happens by default, steering is a deliberate
@@ -157,7 +157,7 @@ def steer_queued_message(session_id: str, message_id: str, db: DbSession, user: 
 
 
 @router.delete("/agent/sessions/{session_id}/queue/{message_id}")
-def cancel_queued_message(session_id: str, message_id: str, db: DbSession, user: CurrentUser) -> dict:
+def cancel_queued_message(session_id: str, message_id: str, db: Tx, user: CurrentUser) -> dict:
     """Withdraw a queued message. Deleting the row alone is not enough — the model already
     holds it, so the turn's queue is resent without it."""
     session = writable_session(db, user, session_id)

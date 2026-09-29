@@ -283,7 +283,7 @@ def _execute_edit_board(db: Session, confirmation: Any, actor: str | None) -> di
     update_board(db, workspace_id=board.workspace_id, board_id=board.id, name=None, canvas=canvas)
     #: 新连进时间线格的素材接到末尾 —— 和界面上拉一根线同一件事。
     appended = append_connected_media(db, board.workspace_id, before, canvas)
-    db.commit()
+    db.flush()
     return {"board_id": board.id, "items": len(canvas.get("items", [])), "appended_clips": len(appended)}
 
 def _run_request(db: Session, workspace_id: str, payload: dict[str, Any], actor: str | None):

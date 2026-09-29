@@ -90,7 +90,7 @@ def normalize(raw: Any) -> list[dict[str, Any]]:
 def ask(db: Session, *, workspace_id: str, session_id: str, questions: Any) -> AgentQuestion:
     row = AgentQuestion(workspace_id=workspace_id, session_id=session_id, questions=normalize(questions))
     db.add(row)
-    db.commit()
+    db.flush()
     db.refresh(row)
     return row
 
@@ -133,7 +133,7 @@ def answer(db: Session, row: AgentQuestion, answers: dict[str, Any]) -> AgentQue
     row.answers = cleaned
     row.status = "answered"
     row.answered_at = now()
-    db.commit()
+    db.flush()
     db.refresh(row)
     return row
 
@@ -143,7 +143,7 @@ def dismiss(db: Session, row: AgentQuestion) -> AgentQuestion:
     if row.status == "pending":
         row.status = "dismissed"
         row.answered_at = now()
-        db.commit()
+        db.flush()
         db.refresh(row)
     return row
 

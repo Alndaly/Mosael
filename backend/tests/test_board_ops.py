@@ -213,6 +213,7 @@ def test_智能体删掉上游那一格或那根线_下游槽位里从那条线�
             payload={"board_id": board_id, "operations": [operation]}, actor_id=None, requested_by="agent",
         )
         done = approve_confirmation(db, card)
+        db.commit()  # 测试是入口:领域函数不提交
         assert done.status == "executed", done.error
 
     canvas = client.get(f"/api/boards/{board_id}", params={"workspace_id": ws}).json()["canvas"]
