@@ -4,7 +4,7 @@ import { PageHeading } from "@/components/layout/StudioPage";
 import React from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { BookOpen, CheckCircle2, ChevronDown, ChevronRight, CircleAlert, Copy, ExternalLink, KeyRound, Lock, Play, Plug, Plus, RefreshCcw, Store, Terminal, Trash2 } from "lucide-react";
+import { BookOpen, CheckCircle2, ChevronDown, ChevronRight, CircleAlert, Copy, ExternalLink, KeyRound, Lock, Play, Plug, Plus, RefreshCcw, Store, Trash2 } from "lucide-react";
 
 import {
   clearPluginInvocations,
@@ -57,6 +57,7 @@ import { ConnectionPackageSources } from "@/features/plugins/ConnectionPackageSo
 import { GroupActions } from "@/features/plugins/GroupActions";
 import { invalidatePluginDependents } from "@/features/plugins/pluginCaches";
 import { HostToolList } from "@/features/plugins/HostTools";
+import { ToolRowFrame } from "@/features/plugins/ToolRowFrame";
 import { useCapabilityTerms } from "@/features/plugins/capabilityTerms";
 import { cn } from "@/lib/utils";
 import { NodeConfigForm, nodeConfigTiers, useNodeFieldOptions, type ConfigSpec } from "@/features/nodeForms/NodeConfigForm";
@@ -1004,51 +1005,31 @@ export const ToolRow = React.memo(function ToolRow({
   });
 
   return (
-    <div className="overflow-hidden rounded-lg border border-border bg-panel">
-      <div className="flex items-center gap-3 px-4">
-        {/* 勾 = 暴不暴露给智能体和工作流。默认关 —— 一个 MCP 端点可能报几十个工具。 */}
-        <span className="grid size-7 shrink-0 place-items-center">
-          <Checkbox checked={tool.exposed} onCheckedChange={(next) => onToggle(next === true)} aria-label={tool.name} />
-        </span>
-        <button
-          type="button"
-          className="flex min-w-0 flex-1 cursor-pointer items-center gap-1.5 border-0 bg-transparent py-4 text-left"
-          onClick={() => setOpen((value) => !value)}
-        >
-          <Terminal size={14} className="shrink-0" />
-          <div className="min-w-0 flex-1 [&>small]:block [&>small]:truncate [&>small]:text-ui-xs [&>small]:text-muted-foreground [&>strong]:block [&>strong]:truncate [&>strong]:text-ui-sm [&>strong]:font-semibold">
-            <strong>{tool.label || tool.name}</strong>
-            {/* 在展开按钮里:链接只留文字。 */}
-            <small>
-              <InlineMarkdown text={tool.description} links={false} />
-            </small>
-          </div>
-          {tool.read_only && (
-            <small className="whitespace-nowrap rounded-full bg-secondary px-1.5 py-px text-ui-2xs text-muted-foreground">
-              {t("pluginToolReadOnly")}
-            </small>
-          )}
-          <ToolEffectBadge effects={tool.effects} />
-          {open ? (
-            <ChevronDown size={13} className="shrink-0 text-muted-foreground" />
-          ) : (
-            <ChevronRight size={13} className="shrink-0 text-muted-foreground" />
-          )}
-        </button>
-      </div>
-      {open && (
-        <div className="grid gap-5 border-t border-divider bg-panel-subtle/40 p-5">
-          <ToolTryForm
-            tool={tool}
-            workspaceId={workspaceId}
-            blockedReason={blockedReason}
-            pending={invoke.isPending}
-            onRun={(config) => invoke.mutate(config)}
-          />
-          {result && <ResultBlock ok={result.status === "succeeded"} body={result.status === "succeeded" ? result.output : result.error ?? result.status} />}
-        </div>
-      )}
-    </div>
+    <ToolRowFrame
+      // 勾 = 暴不暴露给智能体和工作流。默认关 —— 一个 MCP 端点可能报几十个工具。
+      lead={<Checkbox checked={tool.exposed} onCheckedChange={(next) => onToggle(next === true)} aria-label={tool.name} />}
+      label={tool.label || tool.name}
+      description={tool.description}
+      badges={<>
+        {tool.read_only && (
+          <small className="whitespace-nowrap rounded-full bg-secondary px-1.5 py-px text-ui-2xs text-muted-foreground">
+            {t("pluginToolReadOnly")}
+          </small>
+        )}
+        <ToolEffectBadge effects={tool.effects} />
+      </>}
+      open={open}
+      onOpenChange={setOpen}
+    >
+      <ToolTryForm
+        tool={tool}
+        workspaceId={workspaceId}
+        blockedReason={blockedReason}
+        pending={invoke.isPending}
+        onRun={(config) => invoke.mutate(config)}
+      />
+      {result && <ResultBlock ok={result.status === "succeeded"} body={result.status === "succeeded" ? result.output : result.error ?? result.status} />}
+    </ToolRowFrame>
   );
 });
 

@@ -503,8 +503,7 @@ describe("只替宿主做事的插件", () => {
     expect(screen.queryByText("pluginExposedCount")).toBeNull();
     expect(screen.queryByText("pluginToolsNotFetched")).toBeNull();
     //: 用户截图:「mineru 这里为何还是没有工具列表」—— 它唯一的工具只给宿主调,此前整块不显示。
-    const row = document.querySelector<HTMLElement>("[data-host-tool='mineru_parse']")!;
-    expect(row).toBeTruthy();
+    const row = expandHostTool("mineru_parse");
     expect(row.textContent).toContain("用 MinerU 解析文档");
     //: 用户问「为何这个列表不是动态的」:用在哪按接口给的逐条列,页面、工作流、智能体各一条。
     const uses = [...row.querySelectorAll<HTMLElement>("[data-capability-use]")];
@@ -516,12 +515,12 @@ describe("只替宿主做事的插件", () => {
   it("接口说没有地方用到时直说,不留一块空白", () => {
     const unused = { ...instance, host_tools: [{ ...instance.host_tools![0], used_by: [] }] };
     wrap(<ConnectionCard pkg={pkg} instance={unused as PluginInstance} workspaceId="w1" />);
-    expect(document.querySelector("[data-host-tool-unused]")?.textContent).toBe("pluginHostToolUnused");
+    expect(expandHostTool("mineru_parse").querySelector("[data-host-tool-unused]")?.textContent).toBe("pluginHostToolUnused");
   });
 
   it("插件页就能试一下:只列文档,走的是文档重新解析那一条路、点名这个连接", async () => {
     wrap(<ConnectionCard pkg={pkg} instance={instance} workspaceId="w1" />);
-    const trial = document.querySelector<HTMLElement>("[data-host-tool-try='document_parse']")!;
+    const trial = expandHostTool("mineru_parse").querySelector<HTMLElement>("[data-host-tool-try='document_parse']")!;
     fireEvent.click(within(trial).getByRole("button", { name: /pluginHostTryPick/ }));
     expect(await screen.findByRole("option", { name: "协议.pdf" })).toBeTruthy();
     expect(screen.queryByRole("option", { name: "海边.png" })).toBeNull();
@@ -535,9 +534,32 @@ describe("只替宿主做事的插件", () => {
   it("连接还用不了时不给「试一下」—— 原因卡片抬头已经说了", () => {
     const blocked = { ...instance, blocked_reason: "还没填 MinerU 的 Token" };
     wrap(<ConnectionCard pkg={pkg} instance={blocked as PluginInstance} workspaceId="w1" />);
-    expect(document.querySelector("[data-host-tool='mineru_parse']")).toBeTruthy();
-    expect(document.querySelector("[data-host-tool-try]")).toBeNull();
+    //: 展开了再看:收着的行里本来就没有「试一下」,不展开这条断言什么也没验。
+    const row = expandHostTool("mineru_parse");
+    expect(row.querySelector("[data-capability-use]")).toBeTruthy();
+    expect(row.querySelector("[data-host-tool-try]")).toBeNull();
   });
+
+  it("和开放的工具同一种行:收着时一行名字 + 说明,左边一把锁代替勾,点开才是用在哪和试一下", () => {
+    //: 用户截图:「mineru 插件的这个工具的样式为何和别的插件的工具不一样」—— 此前是一张常开的卡片,
+    //: 还露着裸的工具键名。
+    wrap(<ConnectionCard pkg={pkg} instance={instance} workspaceId="w1" />);
+    const row = document.querySelector<HTMLElement>("[data-host-tool='mineru_parse']")!;
+    const toggle = within(row).getByRole("button", { expanded: false });
+    expect(toggle.textContent).toContain("用 MinerU 解析文档");
+    expect(toggle.textContent).toContain("pluginHostToolBadge");
+    expect(row.textContent).not.toContain("mineru_parse");
+    expect(within(row).queryByRole("checkbox")).toBeNull();
+    expect(row.querySelector("[data-capability-use]")).toBeNull();
+    fireEvent.click(toggle);
+    expect(row.querySelector("[data-capability-use]")).toBeTruthy();
+  });
+
+  function expandHostTool(name: string): HTMLElement {
+    const row = document.querySelector<HTMLElement>(`[data-host-tool='${name}']`)!;
+    fireEvent.click(within(row).getByRole("button", { expanded: false }));
+    return row;
+  }
 });
 
 describe("MCP 连接的工具表是空的", () => {

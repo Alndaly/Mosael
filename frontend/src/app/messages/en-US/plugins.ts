@@ -273,6 +273,7 @@ export const plugins = {
   pluginToolDisableAll: "Disable all",
   pluginToolNoMatch: "No matching tools",
   pluginCapabilitiesDesc: "Pick the tools to expose to the agent and workflows. Off by default — a service may offer dozens, and exposing all of them floods the node palette and the agent's tool table.",
+  pluginHostToolBadge: "Called by Mosael",
   pluginHostToolUnused: "Nothing in this version of Mosael uses it yet.",
   pluginHostTry: "Try it",
   pluginHostTryPick: "Pick an asset",

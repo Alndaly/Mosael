@@ -279,6 +279,7 @@ export const plugins = {
   pluginToolDisableAll: "全关",
   pluginToolNoMatch: "没有匹配的工具",
   pluginCapabilitiesDesc: "勾选要开放给智能体与工作流的工具。默认不开 —— 一个服务可能提供几十个工具,全开会淹掉节点面板和智能体的工具表。",
+  pluginHostToolBadge: "由 Mosael 调用",
   pluginHostToolUnused: "这一版 Mosael 还没有地方用到它。",
   pluginHostTry: "试一下",
   pluginHostTryPick: "挑一份素材",

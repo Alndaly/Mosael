@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Play } from "lucide-react";
+import { Lock, Play } from "lucide-react";
 
 import {
   denoiseAsset,
@@ -13,12 +13,12 @@ import { errorText } from "@/api/errorMessage";
 import { assetKeys } from "@/api/queryKeys";
 import type { MessageKey } from "@/app/messages";
 import { useI18n } from "@/app/preferences";
-import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
 import { CapabilityUseList } from "@/components/settings/CapabilityUseList";
 import { SettingsBlock } from "@/components/settings/settings-layout";
 import { Button } from "@/components/ui/button";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { AssetPreviewModalById } from "@/features/media/AssetPreviewModalById";
+import { ToolRowFrame } from "@/features/plugins/ToolRowFrame";
 
 type HostTool = NonNullable<PluginInstance["host_tools"]>[number];
 
@@ -49,30 +49,48 @@ export function HostToolList({ tools, instanceId, workspaceId, blocked }: {
   return (
     <SettingsBlock>
       <p className="m-0 text-ui-xs text-muted-foreground">{t("pluginHostToolsDesc")}</p>
-      <ul data-plugin-host-tools="" className="m-0 grid list-none gap-2 p-0">
+      <div data-plugin-host-tools="" className="-mx-1 grid auto-rows-min content-start gap-1.5 px-1">
         {tools.map((tool) => (
-          <li key={tool.name} data-host-tool={tool.name} className="grid gap-2 rounded-lg border border-border px-3 py-2.5">
-            <span className="flex min-w-0 items-baseline gap-2">
-              <span className="text-ui-sm font-medium text-foreground">{tool.label || tool.name}</span>
-              <code className="truncate text-ui-2xs text-muted-foreground">{tool.name}</code>
-            </span>
-            {tool.description && (
-              <span className="text-ui-xs leading-relaxed text-muted-foreground">
-                <InlineMarkdown text={tool.description} />
-              </span>
-            )}
-            {(tool.used_by ?? []).length === 0 ? (
-              <span data-host-tool-unused="" className="text-ui-xs text-muted-foreground">{t("pluginHostToolUnused")}</span>
-            ) : (
-              <CapabilityUseList uses={tool.used_by ?? []} label={t("capabilityUsedBy")} />
-            )}
-            {!blocked && (tool.provides ?? []).filter((one) => TRIALS[one]).map((capability) => (
-              <HostToolTry key={capability} capability={capability} instanceId={instanceId} workspaceId={workspaceId} />
-            ))}
-          </li>
+          <HostToolRow key={tool.name} tool={tool} instanceId={instanceId} workspaceId={workspaceId} blocked={blocked} />
         ))}
-      </ul>
+      </div>
     </SettingsBlock>
+  );
+}
+
+/** 和开放的工具同一个外壳(ToolRowFrame):左边一把锁代替开放的勾,点开是「用在哪」和「试一下」。 */
+function HostToolRow({ tool, instanceId, workspaceId, blocked }: {
+  tool: HostTool;
+  instanceId: string;
+  workspaceId: string;
+  blocked: boolean;
+}) {
+  const t = useI18n();
+  const [open, setOpen] = React.useState(false);
+  const trials = blocked ? [] : (tool.provides ?? []).filter((one) => TRIALS[one]);
+  return (
+    <ToolRowFrame
+      data-host-tool={tool.name}
+      lead={<Lock size={13} aria-hidden className="text-muted-foreground" />}
+      label={tool.label || tool.name}
+      description={tool.description}
+      badges={
+        <small className="whitespace-nowrap rounded-full bg-secondary px-1.5 py-px text-ui-2xs text-muted-foreground">
+          {t("pluginHostToolBadge")}
+        </small>
+      }
+      open={open}
+      onOpenChange={setOpen}
+    >
+      {(tool.used_by ?? []).length === 0 ? (
+        <p data-host-tool-unused="" className="m-0 text-ui-xs text-muted-foreground">{t("pluginHostToolUnused")}</p>
+      ) : (
+        <CapabilityUseList uses={tool.used_by ?? []} label={t("capabilityUsedBy")} />
+      )}
+      {trials.map((capability) => (
+        <HostToolTry key={capability} capability={capability} instanceId={instanceId} workspaceId={workspaceId} />
+      ))}
+    </ToolRowFrame>
   );
 }
 
@@ -91,7 +109,7 @@ function HostToolTry({ capability, instanceId, workspaceId }: { capability: stri
     .map((asset) => ({ value: asset.id, label: asset.name }));
   const run = useMutation({ mutationFn: () => trial.run(assetId, instanceId) });
   return (
-    <div data-host-tool-try={capability} className="grid gap-1.5 border-t border-divider pt-2">
+    <div data-host-tool-try={capability} className="grid gap-1.5">
       <div className="flex flex-wrap items-center gap-2">
         <SearchableSelect
           value={assetId}

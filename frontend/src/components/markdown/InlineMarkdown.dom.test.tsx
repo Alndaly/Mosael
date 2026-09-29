@@ -69,6 +69,9 @@ const ALLOWED = new Set([
   // 通用下拉:调用方传进来的已经是纯文本(节点面板那边先过了 toPlainText)。
   "components/ui/searchable-select.tsx {item.description}",
   "components/ui/option-picker.tsx description={one.description}",
+  // 工具行的外壳(ToolRowFrame)自己把说明交给 InlineMarkdown(展开按钮里,链接只留文字)。
+  "features/plugins/PluginsView.tsx description={tool.description}",
+  "features/plugins/HostTools.tsx description={tool.description}",
 ]);
 
 // `<AgentMarkdown>{…}</AgentMarkdown>` 是块级的那条出口(模型写的整段摘要),同样算过了关。
