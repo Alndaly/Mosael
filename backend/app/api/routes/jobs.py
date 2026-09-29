@@ -7,13 +7,8 @@ from app.api.deps import CurrentUser, DbSession, Tx
 from app.domain.job_center import use_cases as job_center
 from app.api.schemas import JobKindCatalogOut, JobOut, TaskEventOut
 from app.core.i18n import get_current_locale, render_message, t
-from app.domain.permissions import ensure_workspace_perm
 from app.db.models import Job, TaskEvent
 from app.domain import job_catalog
-from app.domain.jobs import clear_finished_jobs
-from app.domain.generation.sessions import (
-    jobs_writable_filter,
-)
 
 router = APIRouter(tags=["jobs"])
 
@@ -52,10 +47,8 @@ def list_job_kinds(user: CurrentUser) -> dict:
 
 
 @router.delete("/jobs/finished")
-def delete_finished_jobs(workspace_id: str, db: DbSession, user: CurrentUser) -> dict:
-    ensure_workspace_perm(db, user, workspace_id, "edit")
-    # 别人私有会话里的生成不归他清(和取消同一道闸,见 generation/sessions.jobs_writable_filter)。
-    return {"removed": clear_finished_jobs(db, workspace_id, removable=jobs_writable_filter(Job.id, user))}
+def delete_finished_jobs(workspace_id: str, db: Tx, user: CurrentUser) -> dict:
+    return {"removed": job_center.clear_finished(db, user, workspace_id)}
 
 
 @router.get("/jobs/{job_id}", response_model=JobOut)

@@ -1124,5 +1124,5 @@ def clear_finished_jobs(db: Session, workspace_id: str, *, removable: Any = None
             db.execute(delete(TaskEvent).where(TaskEvent.job_id == node.id))
             db.delete(node)
         removed += len(nodes)
-    db.commit()
+    db.flush()
     return removed

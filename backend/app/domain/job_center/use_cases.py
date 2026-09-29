@@ -10,8 +10,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.models import Job, User
-from app.domain.generation.sessions import ensure_job_readable, ensure_job_writable, jobs_filter
-from app.domain.jobs import cancel_job
+from app.domain.generation.sessions import ensure_job_readable, ensure_job_writable, jobs_filter, jobs_writable_filter
+from app.domain.jobs import cancel_job, clear_finished_jobs
 from app.domain.permissions import NotVisible, ensure_workspace_access, ensure_workspace_perm
 
 
@@ -59,3 +59,9 @@ def cancel(db: Session, user: User, job_id: str) -> Job:
     ensure_workspace_perm(db, user, job.workspace_id, "edit")
     ensure_job_writable(db, user, job.id)
     return cancel_job(db, job)
+
+
+def clear_finished(db: Session, user: User, workspace_id: str) -> int:
+    """任务中心的「清空已结束」。别人私有会话里的生成不归他清 —— 和取消同一道闸。"""
+    ensure_workspace_perm(db, user, workspace_id, "edit")
+    return clear_finished_jobs(db, workspace_id, removable=jobs_writable_filter(Job.id, user))

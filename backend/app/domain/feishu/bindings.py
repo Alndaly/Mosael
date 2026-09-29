@@ -44,7 +44,7 @@ def issue_bind_code(db: Session, workspace_id: str, user_id: str) -> tuple[str, 
     code = secrets.token_hex(3).upper()  # 6 hex chars
     expires = now() + timedelta(minutes=10)
     db.merge(FeishuBindCode(workspace_id=workspace_id, code=code, user_id=user_id, expires_at=expires))
-    db.commit()
+    db.flush()
     return code, expires
 
 
@@ -61,4 +61,3 @@ def remove_binding(db: Session, workspace_id: str, open_id: str) -> None:
     binding = db.get(FeishuBinding, {"workspace_id": workspace_id, "open_id": open_id})
     if binding is not None:
         db.delete(binding)
-        db.commit()

@@ -134,9 +134,15 @@ def _domain_use_cases() -> frozenset[str]:
     for module in _use_case_modules():
         tree = ast.parse(module.read_text(encoding="utf-8"))
         gated = GATED_HELPERS | _local_gated_helpers(tree)
-        for fn in tree.body:
-            if isinstance(fn, ast.FunctionDef) and _names_a_permission(fn, gated):
-                names.add(fn.name)
+        functions = [fn for fn in tree.body if isinstance(fn, ast.FunctionDef)]
+        # 同一模块里的「取对象顺带过闸」(如 feishu.editable_bot):调它的用例同样点名了权限。一直传递到不再变多。
+        local: set[str] = set()
+        while True:
+            found = {fn.name for fn in functions if _names_a_permission(fn, gated, frozenset(local))}
+            if found == local:
+                break
+            local = found
+        names |= local
     return frozenset(names)
 
 
