@@ -122,15 +122,17 @@ def _names_a_permission(fn: ast.AST, gated: set[str], use_cases: frozenset[str] 
 
 
 #: 领域用例所在的模块(约定见 CONVENTIONS「一次用例一个事务,授权在领域里」):那里的函数收行动人、自己过闸。
-DOMAIN_USE_CASE_MODULES = ("app/domain/assets/use_cases.py", "app/domain/agent/proposals.py")
+#: 按约定的文件名 `use_cases.py` 自动收,不手写清单;另加开确认卡的那一处。
+def _use_case_modules() -> list[pathlib.Path]:
+    return sorted(pathlib.Path("app/domain").rglob("use_cases.py")) + [pathlib.Path("app/domain/agent/proposals.py")]
 
 
 def _domain_use_cases() -> frozenset[str]:
     """用例模块里**按同一条规矩**点名了写权限的函数。只读闸(ensure_workspace_access、不带 perm 的
     require_asset)不算 —— 路由调一个只读用例,不等于它的写操作有闸。"""
     names: set[str] = set()
-    for module in DOMAIN_USE_CASE_MODULES:
-        tree = ast.parse(pathlib.Path(module).read_text(encoding="utf-8"))
+    for module in _use_case_modules():
+        tree = ast.parse(module.read_text(encoding="utf-8"))
         for fn in tree.body:
             if isinstance(fn, ast.FunctionDef) and _names_a_permission(fn, GATED_HELPERS):
                 names.add(fn.name)

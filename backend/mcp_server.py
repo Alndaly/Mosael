@@ -1481,7 +1481,9 @@ def browser_close(session_id: str, workspace_id: str = "") -> dict[str, Any]:
 @tool(effect="reads")
 def list_scenes(workspace_id: str = "") -> list[dict[str, Any]]:
     """List persistent 3D scenes in the workspace, with object and shot counts."""
-    return _get("/api/scenes", {"workspace_id": workspace_id or _default_workspace_id()})
+    from app.domain.scenes import use_cases
+
+    return _use_case(use_cases.list_scenes, workspace_id or _default_workspace_id())
 
 
 @tool(effect="reads")
@@ -1489,14 +1491,22 @@ def get_scene(scene_id: str, workspace_id: str = "") -> dict[str, Any]:
     """Read the current editable 3D scene, objects, materials, camera shots and revision.
     Positions/dimensions are metres; rotations are XYZ degrees. Read before editing.
     This returns geometry data, not a rendered image; do not claim visual inspection."""
-    return _get(f"/api/scenes/{scene_id}", {"workspace_id": workspace_id or _default_workspace_id()})
+    from app.api.schemas.scenes import SceneOut
+    from app.domain.scenes import use_cases
+
+    return _use_case(use_cases.read, workspace_id or _default_workspace_id(), scene_id, out=SceneOut)
 
 
 @tool(effect="writes")
 def create_scene(name: str, workspace_id: str = "") -> dict[str, Any]:
     """Create an empty persistent 3D scene. Then use edit_scene to add geometry and camera shots.
     Uses the user's selected chat model; no specific model or external generation service required."""
-    return _post("/api/scenes", {"workspace_id": workspace_id or _default_workspace_id(), "name": name})
+    from app.api.schemas.scenes import SceneCreate, SceneOut
+    from app.domain.scenes import use_cases
+
+    # 同一份请求校验(名字长度、空场景的形状)—— 直接调用例不经过 HTTP,校验不能跟着丢。
+    request = SceneCreate(workspace_id=workspace_id or _default_workspace_id(), name=name)
+    return _use_case(use_cases.create, request.workspace_id, request.name, request.content, out=SceneOut)
 
 
 @tool(effect="writes")
@@ -1521,9 +1531,18 @@ def edit_scene(scene_id: str, base_revision: int, objects: list[dict[str, Any]] 
     yourself; interpolation does not perform collision avoidance. No executable code is accepted.
     If revision conflicts, re-read and merge; never overwrite changes blindly.
     """
-    return _post(f"/api/scenes/{scene_id}/operations", {"workspace_id": workspace_id or _default_workspace_id(),
-        "base_revision": base_revision, "objects": objects or [], "remove_ids": remove_ids or [],
-        "shots": shots, "name": name})
+    from app.api.schemas.scenes import SceneOperations, SceneOut
+    from app.domain.scenes import use_cases
+
+    # 同一份请求校验(对象、删除、镜头的数量上限)。
+    request = SceneOperations(
+        workspace_id=workspace_id or _default_workspace_id(), base_revision=base_revision,
+        objects=objects or [], remove_ids=remove_ids or [], shots=shots, name=name,
+    )
+    return _use_case(
+        use_cases.apply_operations, request.workspace_id, scene_id, base_revision=request.base_revision,
+        objects=request.objects, remove_ids=request.remove_ids, shots=request.shots, name=request.name, out=SceneOut,
+    )
 
 
 @tool(effect="reads")
@@ -1605,7 +1624,9 @@ def list_scene_models(workspace_id: str = "") -> list[dict[str, Any]]:
     place the same prop in any scene. Use an id here as `model_id` on a `kind: "model"` object in
     edit_scene to place it. view_scene draws these models, so you can check the placement yourself.
     """
-    return _get("/api/scene-models", {"workspace_id": workspace_id or _default_workspace_id()})
+    from app.domain.scenes import use_cases
+
+    return _use_case(use_cases.list_models, workspace_id or _default_workspace_id())
 
 
 @tool(effect="reads")
@@ -1623,10 +1644,11 @@ def view_scene(scene_id: str, views: list[str] | None = None, shot_id: str = "",
     compression, over the triangle budget, missing file) is counted in skipped_models and explained
     in model_warnings — read those instead of assuming the frame is complete.
     """
-    data = _get(f"/api/scenes/{scene_id}/view", {
-        "workspace_id": workspace_id or _default_workspace_id(),
-        "views": views or [], "shot_id": shot_id, "time": time,
-    }, timeout=60)  # 本机渲染:复杂场景四个角度要几秒,15s 的默认读超时不够
+    from app.domain.scenes import use_cases
+
+    data = _use_case(
+        use_cases.view, workspace_id or _default_workspace_id(), scene_id, views=views or [], shot_id=shot_id, time=time
+    )
     return _with_images(data)
 
 
@@ -1745,10 +1767,13 @@ def render_scene_references(scene_id: str, shot_id: str, render: str = "stills",
     skipped_models / model_warnings report any that could not be (compressed mesh, over the triangle
     budget, missing file) — check them before trusting the frame. Rendered locally, free. Use the frames as reference_image or
     first_frame/last_frame, and the video as reference_video, for generate_image / generate_video."""
-    return _post(f"/api/scenes/{scene_id}/shots/{shot_id}/references", {
-        "workspace_id": workspace_id or _default_workspace_id(), "render": render,
-        "project_id": project_id or None,
-    })
+    from app.api.schemas.scenes import SceneReferenceOut
+    from app.domain.scenes import use_cases
+
+    return _use_case(
+        use_cases.render_references, workspace_id or _default_workspace_id(), scene_id, shot_id,
+        render=render, project_id=project_id or None, out=SceneReferenceOut,
+    )
 
 
 @tool(effect="reads")
