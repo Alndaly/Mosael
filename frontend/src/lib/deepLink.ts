@@ -129,6 +129,16 @@ export function gotoAdmin(tab: string): void {
 
 /** 打开插件市场并找到某个插件(官网「在 Mosael 中打开」)。已经装了就直接选中它。 */
 export const OPEN_PLUGIN_IN_MARKET = "mosael:open-plugin-market";
+/**
+ * 打开插件市场、只看能做某件事的插件(`provides` 里的一项,如 `audio_denoise`)。设置「能力提供方」里
+ * 「去插件市场找」用它:用户知道自己要做什么,不知道哪个插件能做(ADR 0032 §5)。
+ */
+export const OPEN_MARKET_FOR_CAPABILITY = "mosael:open-market-capability";
+
+/** 跳到插件页并打开市场,按能力筛好。 */
+export function findPluginsFor(capability: string): void {
+  gotoRecord("/plugins", OPEN_MARKET_FOR_CAPABILITY, capability);
+}
 /** 打开工作流社区并选中某个官方模板(官网「在 Mosael 中打开」)。 */
 export const OPEN_WORKFLOW_TEMPLATE = "mosael:open-workflow-template";
 

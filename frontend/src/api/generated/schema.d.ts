@@ -5608,6 +5608,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/plugins/capabilities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Capability Terms
+         * @description 插件能替 Mosael 做的那几类事(清单里的 `provides`):叫什么、装上之后用在哪。插件市场按它筛,插件页照它说。
+         */
+        get: operations["list_capability_terms_api_plugins_capabilities_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/plugins/market": {
         parameters: {
             query?: never;
@@ -8151,6 +8171,18 @@ export interface components {
             builtin: boolean;
             /** Missing */
             missing?: string[];
+        };
+        /**
+         * CapabilityTermOut
+         * @description 插件清单 `provides` 里能写的一项:叫什么、装上之后用在哪(插件市场按它筛、插件页照它说)。
+         */
+        CapabilityTermOut: {
+            /** Name */
+            name: string;
+            /** Label */
+            label: string;
+            /** Used By */
+            used_by?: components["schemas"]["CapabilityUseOut"][];
         };
         /**
          * CapabilityUseOut
@@ -25441,6 +25473,35 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PluginPackageOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_capability_terms_api_plugins_capabilities_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CapabilityTermOut"][];
                 };
             };
             /** @description Validation Error */

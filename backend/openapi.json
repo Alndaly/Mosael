@@ -16867,6 +16867,42 @@
         }
       }
     },
+    "/api/plugins/capabilities": {
+      "get": {
+        "tags": [
+          "plugins"
+        ],
+        "summary": "List Capability Terms",
+        "description": "插件能替 Mosael 做的那几类事(清单里的 `provides`):叫什么、装上之后用在哪。插件市场按它筛,插件页照它说。",
+        "operationId": "list_capability_terms_api_plugins_capabilities_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CapabilityTermOut"
+                  },
+                  "type": "array",
+                  "title": "Response List Capability Terms Api Plugins Capabilities Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/plugins/market": {
       "get": {
         "tags": [
@@ -23150,6 +23186,32 @@
         ],
         "title": "CapabilityProviderOut",
         "description": "一项宿主能力的一个候选:内置实现(`builtin`),或这个人的一个插件连接。"
+      },
+      "CapabilityTermOut": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "used_by": {
+            "items": {
+              "$ref": "#/components/schemas/CapabilityUseOut"
+            },
+            "type": "array",
+            "title": "Used By"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "label"
+        ],
+        "title": "CapabilityTermOut",
+        "description": "插件清单 `provides` 里能写的一项:叫什么、装上之后用在哪(插件市场按它筛、插件页照它说)。"
       },
       "CapabilityUseOut": {
         "properties": {

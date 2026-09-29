@@ -33,7 +33,7 @@ import {
 import { useI18n } from "@/app/preferences";
 import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
 import { toPlainText } from "@/components/markdown/inlineSyntax";
-import { OPEN_PLUGIN_IN_MARKET, useOpenRequest } from "@/lib/deepLink";
+import { OPEN_MARKET_FOR_CAPABILITY, OPEN_PLUGIN_IN_MARKET, useOpenRequest } from "@/lib/deepLink";
 import { ConfirmDialog, ModalShell } from "@/components/app/modals";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -56,7 +56,7 @@ import { ConnectionNetwork } from "@/features/plugins/ConnectionNetwork";
 import { GroupActions } from "@/features/plugins/GroupActions";
 import { invalidatePluginDependents } from "@/features/plugins/pluginCaches";
 import { HostToolList } from "@/features/plugins/HostTools";
-import { describeProvides } from "@/features/plugins/pluginPermissions";
+import { useCapabilityTerms } from "@/features/plugins/capabilityTerms";
 import { cn } from "@/lib/utils";
 import { NodeConfigForm, nodeConfigTiers, useNodeFieldOptions, type ConfigSpec } from "@/features/nodeForms/NodeConfigForm";
 
@@ -98,6 +98,12 @@ export function PluginsView({ workspaceId }: { workspaceId: string }) {
   //: 现在它是头部的一个按钮 + 一张弹窗,宽度归它自己。
   const [marketOpen, setMarketOpen] = React.useState(false);
   const [marketFocus, setMarketFocus] = React.useState<string | null>(null);
+  //: 从设置「能力提供方」来:打开市场,只看能做这件事的插件。
+  const [marketCapability, setMarketCapability] = React.useState<string | null>(null);
+  useOpenRequest(OPEN_MARKET_FOR_CAPABILITY, (capability) => {
+    setMarketCapability(capability);
+    setMarketOpen(true);
+  });
   //: 官网「在 Mosael 中打开」:装过了就选中它的页,没装就打开市场、找到它 —— 装不装由人点。
   useOpenRequest(
     OPEN_PLUGIN_IN_MARKET,
@@ -119,7 +125,7 @@ export function PluginsView({ workspaceId }: { workspaceId: string }) {
   const heading = <PageHeading className={COLLECTION_DETAIL_HEADING} title={t("pluginsTitle")} description={t("studioPluginsDesc")} count={packages.data?.length} actions={<><ScanButton pending={scan.isPending} onScan={() => scan.mutate()} /><Button onClick={() => setMarketOpen(true)}><Store />{t("studioBrowsePlugins")}</Button></>} />;
   if (empty) return <div className={COLLECTION_DETAIL_PAGE}>
     {heading}<div className="flex min-h-0 flex-1 overflow-y-auto"><EmptyState icon={<Plug size={28} />} title={t("pluginsTitle")} body={t("noPluginsGuide").replace("{dir}", pluginsDir.data?.path ?? "")} action={<Button onClick={() => setMarketOpen(true)}><Store />{t("studioBrowsePlugins")}</Button>} /></div>
-    <PluginMarketDialog open={marketOpen} focusId={marketFocus} onOpenChange={(next) => { setMarketOpen(next); if (!next) setMarketFocus(null); }} onChanged={() => invalidatePluginDependents(qc)} />
+    <PluginMarketDialog open={marketOpen} focusId={marketFocus} capability={marketCapability} onOpenChange={(next) => { setMarketOpen(next); if (!next) { setMarketFocus(null); setMarketCapability(null); } }} onChanged={() => invalidatePluginDependents(qc)} />
   </div>;
 
   return (
@@ -172,7 +178,7 @@ export function PluginsView({ workspaceId }: { workspaceId: string }) {
             <EmptyState icon={<Plug size={22} />} title={t("pickDetailTitle")} body={t("pickDetailBody")} />
           )}
       </CollectionDetail>
-      <PluginMarketDialog open={marketOpen} focusId={marketFocus} onOpenChange={(next) => { setMarketOpen(next); if (!next) setMarketFocus(null); }} onChanged={() => invalidatePluginDependents(qc)} />
+      <PluginMarketDialog open={marketOpen} focusId={marketFocus} capability={marketCapability} onOpenChange={(next) => { setMarketOpen(next); if (!next) { setMarketFocus(null); setMarketCapability(null); } }} onChanged={() => invalidatePluginDependents(qc)} />
     </div>
   );
 }
@@ -573,6 +579,7 @@ export function ConnectionCard({ pkg, instance, workspaceId }: { pkg: PluginPack
   //: 只替宿主做事的插件(MinerU 解析文档、对象存储给链接):认领能力的那个工具只给宿主调,不进工具表。
   //: 这时说它做什么、去哪用;显示「已开启 0 / 0 个工具」「启用并授权后会显示可调用工具」只会让人以为它坏了。
   const hostCapabilities = (pkg.provides ?? []).filter((one) => one !== "generation");
+  const { labelOf } = useCapabilityTerms();
   const hostOnly = !generates && tools.length === 0 && hostCapabilities.length > 0;
   //: 工具表为什么是空的。有 blocked_reason 就说它;没有时,MCP 连接是还没拿到清单(拉过但失败就带上原因),
   //: 下一步是「刷新工具」—— 说「启用并授权后会显示」会让一个已经启用、授权好的连接读起来像坏了。
@@ -595,7 +602,7 @@ export function ConnectionCard({ pkg, instance, workspaceId }: { pkg: PluginPack
             : hostOnly
               ? t("pluginHostCapabilityDesc").replace(
                   "{list}",
-                  hostCapabilities.map((one) => describeProvides(t, one) ?? one).join(t("listSeparator")),
+                  hostCapabilities.map(labelOf).join(t("listSeparator")),
                 )
               : tools.length === 0
                 ? noToolsText

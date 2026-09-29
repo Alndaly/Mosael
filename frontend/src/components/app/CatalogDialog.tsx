@@ -39,6 +39,7 @@ export function CatalogDialog<T, F extends string = string>({
   onQueryChange,
   headerActions,
   filters,
+  refine,
   notice,
   items,
   itemKey,
@@ -61,6 +62,8 @@ export function CatalogDialog<T, F extends string = string>({
   /** 搜索框右边的按钮(插件市场的「从链接安装」)。 */
   headerActions?: React.ReactNode;
   filters?: { label: string; value: F; onChange: (value: F) => void; items: CatalogFilter<F>[] };
+  /** 筛选行右端的第二个维度(插件市场:按「它能替 Mosael 做什么」筛)。一组页签装不下两个维度。 */
+  refine?: React.ReactNode;
   /** 网格上方的一条提示(插件市场:远端索引拉不到,下面只列出内置的)。详情页上不显示。 */
   notice?: React.ReactNode;
   /** 已经按搜索和筛选过滤好的条目。 */
@@ -153,8 +156,13 @@ export function CatalogDialog<T, F extends string = string>({
               </label>
               {headerActions}
             </div>
-            {filters && (
-              <CollectionTabs label={filters.label} value={filters.value} onChange={filters.onChange} items={filters.items} />
+            {(filters || refine) && (
+              <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
+                {filters && (
+                  <CollectionTabs label={filters.label} value={filters.value} onChange={filters.onChange} items={filters.items} />
+                )}
+                {refine}
+              </div>
             )}
           </div>
         )

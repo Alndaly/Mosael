@@ -1977,6 +1977,11 @@ MESSAGES: dict[str, dict[str, str]] = {
     "capUse_assetDenoise": {"zh": "素材库的音频 / 视频:「降噪」时挑引擎", "en": "Audio / video in the media library: pick the engine when denoising"},
     "capUse_assetTranscribe": {"zh": "素材库 / 剪辑页的逐字稿:「转写」", "en": "Transcripts in the library / editor: Transcribe"},
     "capUse_dictation": {"zh": "输入框里的语音输入", "en": "Voice input in text boxes"},
+    "capability_generation": {"zh": "生成(图片、视频、音频……)", "en": "Generation (images, video, audio…)"},
+    "capability_tools": {"zh": "给智能体和工作流的工具", "en": "Tools for the agent and workflows"},
+    "capUse_generationPublicUrl": {"zh": "生成时:只收链接的模型(方舟 Seedance 的参考视频等)自动把本地素材传上去换链接", "en": "When generating: for models that only take links (Seedance reference video, etc.), local assets are uploaded for a link automatically"},
+    "capUse_generationModels": {"zh": "各处生成的模型下拉:AI 工作室、画板、工作流的生成节点", "en": "Model pickers wherever you generate: AI studio, boards, workflow generation nodes"},
+    "capUse_pluginTools": {"zh": "智能体和工作流的工具表(在插件页勾选开放哪几个)", "en": "Tool lists of the agent and workflows (choose which to expose on the Plugins page)"},
     "capability_transcription": {"zh": "转写", "en": "Transcription"},
     "capability_transcription_desc": {
         "zh": "把一段语音转成带时间的逐字稿,听写也走它。本机引擎之外,装了转写插件的也能在这里选;没定默认时用装好了运行环境的本机引擎。",

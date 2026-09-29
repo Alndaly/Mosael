@@ -169,7 +169,9 @@ def uses_of(name: str, *, settings: bool = True) -> list[Use]:
     `settings=False`:设置页自己列的时候不带那一条 —— 在「能力提供方」里写「能力提供方:设成默认」是废话。"""
     from app.core.i18n import fragment
 
-    found = [Use(name, "app", fragment("capUse_settingsDefault"))] if settings and name in _registry else []
+    #: 没有默认的能力(配音)不在设置里「设成默认」。
+    found = [Use(name, "app", fragment("capUse_settingsDefault"))] \
+        if settings and name in _registry and _registry[name].defaultable else []
     found += [one for one in _uses if one.capability == name]
     for finder in _use_finders:
         found += [one for one in finder() if one.capability == name]
@@ -180,6 +182,17 @@ def used_by(name: str, *, settings: bool = True) -> list[dict[str, str]]:
     """`uses_of` 译成给人看的一行一条(设置页、插件页照着列)。"""
     return [{"kind": use.kind, "label": tr(use.label["__key"], **use.label.get("params", {}))}
             for use in uses_of(name, settings=settings)]
+
+
+#: 不走能力表、但同样能写进 `provides` 的两项:生成按「连接 + 模型」挑(ADR 0020),工具清单是每个连接自己报的。
+#: 它们没有候选、没有默认,只需要一个名字 —— 插件市场按能力筛、插件页说它替宿主做什么时要叫得出来。
+_OUTSIDE_TABLE = {"generation": "capability_generation", "tools": "capability_tools"}
+
+
+def vocabulary() -> list[dict[str, Any]]:
+    """`provides` 里能写的每一项:名字、界面上叫什么、装上之后用在哪。插件市场、插件页照它说,不各写一份。"""
+    terms = [(one.name, one.label_key) for one in registered()] + sorted(_OUTSIDE_TABLE.items())
+    return [{"name": name, "label": tr(label_key), "used_by": used_by(name)} for name, label_key in terms]
 
 
 #: 工作流 / 画板字段里「挑一家」的通用选项来源:`options_from: "providers.<能力>"`(ADR 0032 §3)。
@@ -345,6 +358,7 @@ __all__ = [
     "register_use_finder",
     "used_by",
     "uses_of",
+    "vocabulary",
     "choose",
     "get",
     "pick",

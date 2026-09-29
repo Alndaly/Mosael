@@ -36,6 +36,8 @@ const listed = [
 ];
 vi.mock("@/api/domains/capabilities", () => ({ listCapabilityChoices: vi.fn(async () => listed), setCapabilityDefault: vi.fn() }));
 vi.mock("@/app/preferences", () => ({ useI18n: () => (key: string) => key }));
+const { findPluginsFor } = vi.hoisted(() => ({ findPluginsFor: vi.fn() }));
+vi.mock("@/lib/deepLink", () => ({ findPluginsFor }));
 //: 下拉在 jsdom 里点不开;这里只关心**给了哪几项**,所以把选项平铺出来。
 vi.mock("@/components/ui/option-picker", () => ({
   OptionPicker: ({ options }: { options: Array<{ value: string; label: string }> }) => (
@@ -117,4 +119,17 @@ it("没有默认的能力(配音)不摆选择器:列有哪几家、缺什么、�
   expect(group.textContent).toContain("capabilityBuiltinUnready");
   expect(group.querySelectorAll("[data-capability-use]")).toHaveLength(1);
   expect(container.querySelectorAll("[data-picker]").length).toBeGreaterThan(0);
+});
+
+it("每项能力都能去插件市场找「谁还能做这件事」,带着这项能力去", async () => {
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <CapabilityProvidersSection />
+    </QueryClientProvider>,
+  );
+  await waitFor(() => expect(screen.getByText("配音")).toBeTruthy());
+  expect(screen.getAllByRole("button", { name: /capabilityFindPlugins/ })).toHaveLength(listed.length);
+  const speech = screen.getByText("配音").closest('[data-slot="settings-group"]') as HTMLElement;
+  within(speech).getByRole("button", { name: /capabilityFindPlugins/ }).click();
+  expect(findPluginsFor).toHaveBeenCalledWith("speech");
 });

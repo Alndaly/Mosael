@@ -83,6 +83,8 @@ export const providerKeys = {
  */
 export const capabilityKeys = {
   choices: () => ["capability-providers"] as const,
+  /** `provides` 能写的那几项叫什么、用在哪 —— 插件市场和插件页共用。 */
+  terms: () => ["capability-terms"] as const,
 };
 
 /**

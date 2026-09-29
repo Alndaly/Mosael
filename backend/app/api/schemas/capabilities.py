@@ -25,6 +25,14 @@ class CapabilityProviderOut(ApiModel):
     missing: list[str] = Field(default_factory=list)
 
 
+class CapabilityTermOut(ApiModel):
+    """插件清单 `provides` 里能写的一项:叫什么、装上之后用在哪(插件市场按它筛、插件页照它说)。"""
+
+    name: str
+    label: str
+    used_by: list[CapabilityUseOut] = Field(default_factory=list)
+
+
 class CapabilityChoicesOut(ApiModel):
     """「设置 → 能力提供方」里的一项(ADR 0031 §5)。"""
 

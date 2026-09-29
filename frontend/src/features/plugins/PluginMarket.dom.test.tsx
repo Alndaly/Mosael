@@ -57,6 +57,22 @@ vi.mock("@/api/client", () => ({
   installPlugin: mocks.install,
   removePluginPackage: mocks.remove,
 }));
+//: 能力的名字和「用在哪」由后端给(ADR 0032 §4),前端不写。
+vi.mock("@/api/domains/capabilities", () => ({
+  listCapabilityTerms: async () => [
+    { name: "public_url", label: "素材外链", used_by: [{ kind: "app", label: "生成时自动换链接" }] },
+    { name: "audio_denoise", label: "降噪", used_by: [] },
+    { name: "generation", label: "生成", used_by: [] },
+  ],
+}));
+//: 下拉在 jsdom 里点不开;按能力筛只关心「给了哪几项、选了哪一项」,平铺成按钮。
+vi.mock("@/components/ui/option-picker", () => ({
+  OptionPicker: ({ options, onChange, value }: { options: Array<{ value: string; label: string }>; onChange: (v: string) => void; value: string }) => (
+    <div data-picker="" data-value={value}>
+      {options.map((one) => <button key={one.value} type="button" onClick={() => onChange(one.value)}>{one.label}</button>)}
+    </div>
+  ),
+}));
 vi.mock("@/app/preferences", () => ({
   useI18n: () => (key: string) => key,
   usePreferences: () => ({ locale: "zh-CN" }),
@@ -66,12 +82,12 @@ vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.f
 import { toast } from "sonner";
 import { PluginMarketDialog } from "@/features/plugins/PluginMarket";
 
-function renderMarket() {
+function renderMarket(capability?: string) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const onChanged = vi.fn();
   render(
     <QueryClientProvider client={client}>
-      <PluginMarketDialog open onOpenChange={vi.fn()} onChanged={onChanged} />
+      <PluginMarketDialog open onOpenChange={vi.fn()} onChanged={onChanged} capability={capability} />
     </QueryClientProvider>,
   );
   return { onChanged };
@@ -150,7 +166,10 @@ describe("插件详情", () => {
     expect(within(dialog).getByText("pluginPermNetwork")).toBeTruthy();
     expect(within(dialog).getByText("network:oss")).toBeTruthy();
     expect(within(dialog).getByText("oss_upload")).toBeTruthy();
-    expect(within(dialog).getByText("pluginProvidesPublicUrl")).toBeTruthy();
+    //: 它能替 Mosael 做什么:后端词表里的名字,和装上之后出现在哪。
+    const provides = dialog.querySelector<HTMLElement>("[data-provides='public_url']")!;
+    expect(provides.textContent).toContain("素材外链");
+    expect(provides.querySelector("[data-capability-use]")?.textContent).toBe("生成时自动换链接");
     // 进详情时焦点给返回键:读屏从这一页的开头读起。
     expect(document.activeElement).toBe(screen.getByRole("button", { name: "pluginMarketBack" }));
   });
@@ -365,5 +384,28 @@ describe("新版本还没发布", () => {
     await screen.findByRole("list", { name: "pluginMarket" });
     expect(within(card("Remotion 动画")).queryByRole("button", { name: "pluginUpdate" })).toBeNull();
     expect(within(card("Remotion 动画")).getByText("pluginMarketInstalledBadge")).toBeTruthy();
+  });
+});
+
+describe("按能力筛", () => {
+  it("只列市场里真有插件能做的那几项,各带条数;选一项只剩能做它的", async () => {
+    renderMarket();
+    const list = await screen.findByRole("list", { name: "pluginMarket" });
+    const picker = await waitFor(() => {
+      const found = document.querySelector<HTMLElement>("[data-picker]");
+      if (!found) throw new Error("no picker yet");
+      return found;
+    });
+    //: 降噪、生成在词表里,但眼前这几条都不会做 —— 不列(OSS 会做素材外链)。
+    expect([...picker.querySelectorAll("button")].map((one) => one.textContent)).toEqual(["pluginMarketCapabilityAny", "素材外链 · 1"]);
+    fireEvent.click(within(picker).getByRole("button", { name: "素材外链 · 1" }));
+    await waitFor(() => expect(within(list).getAllByRole("listitem")).toHaveLength(1));
+    expect(within(list).getByText(OSS.name)).toBeTruthy();
+  });
+
+  it("从设置「能力提供方」来(带着能力打开):一打开就只看能做这件事的", async () => {
+    renderMarket("public_url");
+    const list = await screen.findByRole("list", { name: "pluginMarket" });
+    await waitFor(() => expect(within(list).getAllByRole("listitem")).toHaveLength(1));
   });
 });

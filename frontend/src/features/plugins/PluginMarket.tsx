@@ -22,7 +22,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
-import { describePermission, describeProvides } from "@/features/plugins/pluginPermissions";
+import { describePermission } from "@/features/plugins/pluginPermissions";
+import { useCapabilityTerms } from "@/features/plugins/capabilityTerms";
+import { CapabilityUseList } from "@/components/settings/CapabilityUseList";
+import { OptionPicker } from "@/components/ui/option-picker";
 import { ToolEffectBadge } from "@/features/plugins/ToolEffectBadge";
 import { isImeKeystroke } from "@/lib/shortcuts";
 import { cn } from "@/lib/utils";
@@ -70,6 +73,9 @@ function matches(entry: MarketEntry, query: string): boolean {
   );
 }
 
+//: 按能力筛的下拉里「不限」那一项的值(OptionPicker 不收空串当值)。
+const ANY_CAPABILITY = "__any__";
+
 function passes(entry: MarketEntry, filter: Filter): boolean {
   if (filter === "installed") return Boolean(entry.installed);
   if (filter === "updates") return stanceOf(entry) === "update";
@@ -99,6 +105,7 @@ export function PluginMarketDialog({
   onOpenChange,
   onChanged,
   focusId,
+  capability: wantedCapability,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -106,11 +113,19 @@ export function PluginMarketDialog({
   onChanged: () => void;
   /** 打开时直接看这个插件(官网「在 Mosael 中打开」):翻到它的详情页。 */
   focusId?: string | null;
+  /** 打开时只看能做这件事的插件(设置「能力提供方」里的「去插件市场找」)。 */
+  capability?: string | null;
 }) {
   const t = useI18n();
   const qc = useQueryClient();
   const [query, setQuery] = React.useState("");
   const [filter, setFilter] = React.useState<Filter>("all");
+  //: 按「它能替 Mosael 做什么」筛(ADR 0032 §5:「谁能做降噪」)。空 = 不限。和上面那组页签是两个维度。
+  const [capability, setCapability] = React.useState("");
+  const { terms } = useCapabilityTerms();
+  React.useEffect(() => {
+    if (open) setCapability(wantedCapability ?? "");
+  }, [open, wantedCapability]);
   const [detailId, setDetailId] = React.useState<string | null>(null);
   const [url, setUrl] = React.useState("");
   const [urlOpen, setUrlOpen] = React.useState(false);
@@ -183,7 +198,12 @@ export function PluginMarketDialog({
   //: 远端索引拉不到时,接口照样列出随应用内置的插件,并把原因放在 index_error 里。
   const indexError = market.data?.index_error ?? "";
   const searched = entries.filter((entry) => matches(entry, query));
-  const shown = searched.filter((entry) => passes(entry, filter));
+  const capable = searched.filter((entry) => !capability || (entry.provides ?? []).includes(capability));
+  const shown = capable.filter((entry) => passes(entry, filter));
+  //: 只列市场里真有插件能做的那几项,各带条数 —— 选一个没有插件的能力只会得到一片空白。
+  const offered = terms
+    .map((term) => ({ term, count: searched.filter((entry) => (entry.provides ?? []).includes(term.name)).length }))
+    .filter(({ term, count }) => count > 0 || term.name === capability);
   const detail = entries.find((entry) => entry.id === detailId) ?? null;
 
   //: 官网「在 Mosael 中打开」:市场一到货就翻到它的详情;还没装的,再直接弹出**安装确认**
@@ -204,7 +224,7 @@ export function PluginMarketDialog({
 
   const busyWith = (entry: MarketEntry) => preview.isPending && preview.variables?.url === entry.download;
 
-  const count = (which: Filter) => searched.filter((entry) => passes(entry, which)).length;
+  const count = (which: Filter) => capable.filter((entry) => passes(entry, which)).length;
   const placeholder = market.isLoading ? (
     <div className="grid w-full grid-cols-[repeat(auto-fill,minmax(min(100%,264px),1fr))] content-start gap-3 self-start" aria-hidden>
       {[0, 1, 2, 3, 4, 5].map((i) => (
@@ -252,12 +272,27 @@ export function PluginMarketDialog({
               value: filter,
               onChange: setFilter,
               items: [
-                { value: "all", label: t("catalogFilterAll"), count: searched.length },
+                { value: "all", label: t("catalogFilterAll"), count: capable.length },
                 { value: "installed", label: t("pluginMarketFilterInstalled"), count: count("installed") },
                 { value: "updates", label: t("pluginMarketFilterUpdates"), count: count("updates") },
               ],
             }
           : undefined
+      }
+      refine={
+        offered.length > 0 ? (
+          <OptionPicker
+            size="sm"
+            ariaLabel={t("pluginMarketCapability")}
+            value={capability || ANY_CAPABILITY}
+            onChange={(next) => setCapability(next === ANY_CAPABILITY ? "" : next)}
+            options={[
+              { value: ANY_CAPABILITY, label: t("pluginMarketCapabilityAny") },
+              ...offered.map(({ term, count }) => ({ value: term.name, label: `${term.label} · ${count}` })),
+            ]}
+            className="w-[240px] max-w-full"
+          />
+        ) : undefined
       }
       //: 拉不到索引、但还有内置的可列:说清楚下面为什么只有这几个,别让人以为市场里就这些。
       notice={
@@ -477,6 +512,7 @@ function MarketDetail({
   const stance = stanceOf(entry);
   const perms = entry.permissions ?? [];
   const tools = entry.tools ?? [];
+  const { termOf } = useCapabilityTerms();
   const provides = entry.provides ?? [];
   const docs = entry.docs || entry.homepage;
 
@@ -577,13 +613,20 @@ function MarketDetail({
       )}
       {provides.length > 0 && (
         <CatalogSection title={t("pluginMarketProvides")}>
-          <ul className="m-0 grid list-none gap-1.5 p-0 text-ui-sm text-foreground">
-            {provides.map((one) => (
-              <li key={one} className="flex items-start gap-2">
-                <Check size={14} className="mt-0.5 shrink-0 text-success" aria-hidden />
-                <span>{describeProvides(t, one) ?? one}</span>
-              </li>
-            ))}
+          {/* 每一项:它叫什么,装上之后出现在哪(后端从能力表现算,ADR 0032 §4)。 */}
+          <ul data-market-provides="" className="m-0 grid list-none gap-3 p-0 text-ui-sm text-foreground">
+            {provides.map((one) => {
+              const term = termOf(one);
+              return (
+                <li key={one} data-provides={one} className="grid gap-1.5">
+                  <span className="flex items-center gap-2 font-medium">
+                    <Check size={14} className="shrink-0 text-success" aria-hidden />
+                    {term?.label ?? one}
+                  </span>
+                  {(term?.used_by ?? []).length > 0 && <CapabilityUseList uses={term?.used_by ?? []} label={t("capabilityUsedBy")} />}
+                </li>
+              );
+            })}
           </ul>
         </CatalogSection>
       )}

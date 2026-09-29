@@ -86,6 +86,14 @@ CAPABILITY = Capability(
 )
 
 
+def register_uses() -> None:
+    """素材外链用在哪(ADR 0032 §4):它没有界面入口,是生成时自动走的一步。"""
+    from app.core.i18n import fragment
+    from app.domain.capabilities import Use, register_use
+
+    register_use(Use(CAPABILITY.name, "app", fragment("capUse_generationPublicUrl")))
+
+
 def choose_uploader(db: "Session", owner_user_id: str | None, asset_name: str):
     """挑出这一次用哪一家存储,挑不出来时抛 `NoUploader`(消息给用户看)。"""
     provider = capabilities.choose(db, owner_user_id, CAPABILITY, asset=asset_name)

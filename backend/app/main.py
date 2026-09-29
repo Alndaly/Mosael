@@ -309,10 +309,17 @@ def _wire_seams() -> None:
     capabilities.register(speech.CAPABILITY)
     # 「用在哪」(ADR 0032 §4):宿主界面入口各自登记;工作流节点、智能体工具现扫各自的注册表。
     documents.register_uses()
+    public_links.register_uses()
     audio_capabilities.register_uses()
     transcription.register_uses()
     translate.register_uses()
     speech.register_uses()
+    #: 生成、工具清单不走能力表(没有候选、没有默认),用在哪也照样说得出。
+    from app.core.i18n import fragment
+    from app.domain.plugins.manifest import GENERATION, TOOLS
+
+    capabilities.register_use(capabilities.Use(GENERATION, "app", fragment("capUse_generationModels")))
+    capabilities.register_use(capabilities.Use(TOOLS, "app", fragment("capUse_pluginTools")))
     from app.domain.agent.confirmable import registry as confirmable_registry
     from app.domain.workflows import capability_uses as workflow_capability_uses
 

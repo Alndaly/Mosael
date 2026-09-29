@@ -12,6 +12,7 @@ from sqlalchemy import select
 from app.core.i18n import get_current_locale, render_message, tr
 from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import (
+    CapabilityTermOut,
     PluginOAuthCode,
     PluginCapabilityUpdate,
     PluginCredentialOut,
@@ -65,6 +66,14 @@ def scan_packages(db: DbSession, user: CurrentUser) -> list[dict]:
     except PluginDomainError as exc:
         raise _fail(exc) from exc
     return _packages(db, user)
+
+
+@router.get("/plugins/capabilities", response_model=list[CapabilityTermOut])
+def list_capability_terms(user: CurrentUser) -> list[dict]:
+    """插件能替 Mosael 做的那几类事(清单里的 `provides`):叫什么、装上之后用在哪。插件市场按它筛,插件页照它说。"""
+    from app.domain import capabilities
+
+    return capabilities.vocabulary()
 
 
 @router.get("/plugins/market", response_model=PluginMarketOut)

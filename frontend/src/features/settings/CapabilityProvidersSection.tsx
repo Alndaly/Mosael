@@ -8,7 +8,7 @@
  * backend/app/domain/capabilities。
  */
 import React from "react";
-import { CircleDashed } from "lucide-react";
+import { CircleDashed, Store } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { capabilityKeys } from "@/api/queryKeys";
@@ -27,6 +27,7 @@ import {
   SettingsTag,
 } from "@/components/settings/settings-layout";
 import { Button } from "@/components/ui/button";
+import { findPluginsFor } from "@/lib/deepLink";
 
 const UNSET = "__unset__";
 const KEY = capabilityKeys.choices();
@@ -58,7 +59,7 @@ function ProvidersOnlyGroup({ choices }: { choices: Choices }) {
   const unready = options.filter((option) => (option.missing ?? []).length > 0);
   const uses = choices.used_by ?? [];
   return (
-    <SettingsGroup title={choices.label} description={toPlainText(choices.description)}>
+    <SettingsGroup title={choices.label} description={toPlainText(choices.description)} actions={<FindPlugins capability={choices.capability} />}>
       <SettingsItemRow
         label={t("capabilityProviders")}
         description={t("capabilityNoDefault")}
@@ -114,7 +115,7 @@ function CapabilityGroup({ choices }: { choices: Choices }) {
   const nothingElse = ready.length === 0 && !choices.current;
 
   return (
-    <SettingsGroup title={choices.label} description={toPlainText(choices.description)}>
+    <SettingsGroup title={choices.label} description={toPlainText(choices.description)} actions={<FindPlugins capability={choices.capability} />}>
       <SettingsItemRow
         label={t("capabilityProvider")}
         description={
@@ -156,5 +157,16 @@ function CapabilityGroup({ choices }: { choices: Choices }) {
         )}
       </SettingsItemRow>
     </SettingsGroup>
+  );
+}
+
+/** 「谁还能做这件事」:去插件市场,只看能做这一项的插件(ADR 0032 §5)。 */
+function FindPlugins({ capability }: { capability: string }) {
+  const t = useI18n();
+  return (
+    <Button size="xs" variant="ghost" onClick={() => findPluginsFor(capability)}>
+      <Store size={12} aria-hidden />
+      {t("capabilityFindPlugins")}
+    </Button>
   );
 }
