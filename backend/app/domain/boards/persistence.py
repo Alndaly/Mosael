@@ -68,7 +68,6 @@ def create_board(
         summary="创建了无限画布",
         payload={"revision": board.revision},
     )
-    db.commit()
     db.refresh(board)
     return board
 
@@ -106,7 +105,7 @@ def _copy_timelines(db: Session, board: Board) -> None:
         item["sequence_id"] = copied[old]
     if copied:
         board.canvas = canvas
-        db.commit()
+        db.flush()
         db.refresh(board)
 
 
@@ -211,6 +210,8 @@ def update_board(
         summary="重命名了无限画布" if action == "board.renamed" else "编辑了无限画布",
         payload={"base_revision": expected, "revision": expected + 1},
     )
+    # 这一次提交暂时留着:比较并交换撞车时上面要 rollback 重读,而任务总线送画板回执
+    # (jobs._after_jobs_settled → deliver_generated)调完不替送信方提交 —— 两处都靠这里落库。
     db.commit()
     db.expire_all()
     return get_board(db, workspace_id, board_id)
@@ -231,4 +232,3 @@ def delete_board(db: Session, workspace_id: str, board_id: str, *, actor_id: str
         payload={"name": board.name, "revision": board.revision},
     )
     db.delete(board)
-    db.commit()

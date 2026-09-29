@@ -293,6 +293,7 @@ def test_空格子上存着的生成器改挂生成(tmp_path: Path) -> None:
     with SessionLocal() as db:
         assert rewrite_mirrored_tools(db) == 1
         assert rewrite_mirrored_tools(db) == 0, "改过的不再改:重复跑是安全的"
+        db.commit()  # 改写函数只改对象,提交归入口(reconcile_plugin_tool_cells)
 
     board = client.get(f"/api/boards/{board_id}", params={"workspace_id": ws}).json()
     assert board["revision"] == revision + 1, "开着这张板的旧快照要撞 409,不能把改写盖回去"

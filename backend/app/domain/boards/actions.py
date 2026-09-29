@@ -461,6 +461,8 @@ def write_on_board(
         )
     finally:
         reset_receipt(token)
+    # 有意的提交:任务先落库,再摆占位、再在这个线程里等模型写(几十秒到几分钟)。占位的合并撞上
+    # 并发写入时会回滚重来(update_board),不能把这一行任务一起卷走;等模型的时候也不该攥着写锁。
     db.commit()
     _pending(
         db, workspace_id, Slot(board_id, item_id, 0, 0), actor_id=actor_id, kind=kind, producer="write", job_id=job.id,

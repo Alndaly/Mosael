@@ -219,6 +219,7 @@ def test_画板上存着的老插件节点也改写过去(connected) -> None:
         db.add(board)
         db.commit()
         assert board_references.rewrite_replaced_tools(db) == 1
+        db.commit()  # 改写函数只改对象,提交归入口(reconcile_plugin_tool_cells)
         db.refresh(board)
         by_id = {item["id"]: item for item in board.canvas["items"]}
         assert by_id["act"]["form"] == {"config": {"cfg_3": 6}, "bindings": {"prompt": [{"from": "note"}]},

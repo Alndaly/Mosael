@@ -20,9 +20,9 @@ from pathlib import Path
 from sqlalchemy.orm import Session
 
 from app.core.child_process import run_logged
-from app.core.db import SessionLocal
 from app.core.i18n import LocalizedError
 from app.core.config import settings
+from app.core.unit_of_work import unit_of_work
 from app.db.models import Asset, Job
 from app.domain.assets.importer import register_file_asset
 from app.domain.jobs import create_job, dispatch_job, emit_job_event, run_job_guarded, say
@@ -67,8 +67,7 @@ def start_trim(
         payload={"asset_id": asset.id, "subject": asset.name},
         message="jobMsg_trimQueued",
     )
-    db.commit()
-    # 经总线派发。此前这里是一句裸的线程创建 —— 线程没有 JOB_THREAD_NAME,
+    # 经总线派发(dispatch_job 先提交再起线程,线程读得到这一行)。此前这里是一句裸的线程创建 —— 线程没有 JOB_THREAD_NAME,
     # `wait_for_idle_jobs()` 按名字找不到它(测试里 fresh_client() 就会在它还活着时
     # drop_all),而且这个 kind 的执行模式形同虚设:注册成 external 也照样在进程内跑。
     dispatch_job(
@@ -82,7 +81,9 @@ def start_trim(
 
 
 def _trim_body(job_id: str, asset_id: str, start: float, end: float, mute: bool) -> None:
-    with SessionLocal() as db:
+    # 任务线程的入口就是这次用例的边界:正常走完提交,抛出来回滚(失败由 run_job_guarded 落进任务)。
+    # 中间那次提交是有意的:ffmpeg 要跑一阵,「在截」得先让别的会话看得见。
+    with unit_of_work() as db:
         job = db.get(Job, job_id)
         asset = db.get(Asset, asset_id)
         if job is None or asset is None:
@@ -129,5 +130,4 @@ def _trim_body(job_id: str, asset_id: str, start: float, end: float, mute: bool)
         #: 和语音合成同一个形状(单数)—— 画板的回执两种都读得懂,见 domain/boards。
         job.result = {"asset_id": made.id}
         emit_job_event(db, job.id, "job.succeeded", {"asset_id": made.id})
-        db.commit()
         logger.info("trim %s [%.2f, %.2f] -> asset %s", asset.id, start, end, made.id)

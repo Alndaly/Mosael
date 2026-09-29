@@ -29,7 +29,7 @@ def create_board_sequence(db: Session, workspace_id: str, board_id: str) -> Sequ
     count = sum(1 for _ in project.sequences) if project.sequences is not None else 0
     scaffold = create_sequence_scaffold(db, project, name=f"{board.name} · 时间线 {count + 1}",
                                         width=DEFAULT_WIDTH, height=DEFAULT_HEIGHT, fps=DEFAULT_FPS)
-    db.commit()
+    db.flush()
     db.refresh(scaffold.sequence)
     return scaffold.sequence
 
