@@ -69,5 +69,4 @@ def append_asset(db: Session, sequence_id: str, asset_id: str, *, actor_id: str 
                                                                  actor_id=actor_id))
     clip = insert_clip(db, sequence.id, InsertClip(track_id=track.id, asset_id=asset.id, timeline_start=track_end(track),
                                                    src_in=0.0, src_out=span, actor_id=actor_id))
-    db.commit()
     return clip

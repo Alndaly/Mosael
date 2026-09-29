@@ -262,3 +262,7 @@ def _record_operation(
             summary=summary,
         )
     )
+    # 每个编辑算子都以记账收尾,**不提交** —— 提交是入口层的事(路由的 Tx、节点、后台任务)。
+    # 这里 flush 一次:同一事务里接着组合的下一个算子(apply_edit_operations、配音任务)
+    # 查到的就是这一步之后的时间线,冲突也在这一步当场报出来。
+    db.flush()

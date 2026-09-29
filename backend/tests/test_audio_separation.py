@@ -262,6 +262,7 @@ class Test配音流程忠实执行用户选择:
         seq_id, dub_id, footage_id, background_id = ids
         with SessionLocal() as db:
             assert original_audio.apply_original_audio(db, seq_id, dub_id, "separate", actor_id=None) == "separate"
+            db.commit()  # 剪辑算子不提交,提交归入口(这里是测试自己)
         assert separated == [footage_id]
 
         def check(db) -> None:
@@ -281,6 +282,7 @@ class Test配音流程忠实执行用户选择:
             assert not plan.video_segments[0].muted
             assert all(item.source.asset_id != background_id for item in plan.audio_overlays)
             redo(db, seq_id)
+            db.commit()
         with SessionLocal() as db:
             check(db)
 

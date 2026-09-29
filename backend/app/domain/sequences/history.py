@@ -50,7 +50,6 @@ def undo(db: Session, sequence_id: str, *, expected_revision: int | None = None)
         actor_id=None,
         undo_of=operation.id,
     )
-    db.commit()
     return sequence
 
 
@@ -75,7 +74,6 @@ def redo(db: Session, sequence_id: str, *, expected_revision: int | None = None)
         actor_id=None,
         undo_of=undo_operation.id,
     )
-    db.commit()
     return sequence
 
 
