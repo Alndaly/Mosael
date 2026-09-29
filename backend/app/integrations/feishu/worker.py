@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import sys
 import threading
 import time
@@ -83,6 +84,18 @@ class CardReplies:
                 logger.warning("feishu worker: unreadable reply line")
 
 
+def follow_parent(replies: CardReplies, lines, exit_process=os._exit) -> None:
+    """读主进程的答复;**管道一关就退出**。
+
+    stdin 是主进程攥着的那一头:它关了,就是主进程没了(崩了、被杀了、测试跑完没收尾)。此前这里读到
+    EOF 就安静地停下,而 `client.start()` 那条长连接照跑 —— 孤儿进程一直占着飞书连接,主进程重启后
+    同一个机器人就有了两条连接,每条消息收两遍;测试里一次留下几十个,把内存吃光。
+    """
+    replies.pump(lines)
+    logger.info("feishu worker: parent closed the pipe, exiting")
+    exit_process(0)
+
+
 def message_event(data: Any) -> dict[str, Any] | None:
     """SDK 的消息事件 → 协议事件。机器人(包括自己)发的一律不转 —— 防回环。"""
     event = getattr(data, "event", None)
@@ -131,7 +144,7 @@ def main(bot_id: str) -> None:
         sys.exit(2)
 
     replies = CardReplies()
-    threading.Thread(target=replies.pump, args=(sys.stdin,), daemon=True).start()
+    threading.Thread(target=follow_parent, args=(replies, sys.stdin), daemon=True).start()
 
     def _mark_online_after_grace() -> None:
         time.sleep(CONNECTING_GRACE_SECONDS)

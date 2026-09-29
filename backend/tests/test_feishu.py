@@ -442,3 +442,36 @@ def test_卡片答复超时也给飞书一个回应() -> None:
     finally:
         worker.emit = original
     assert "toast" in result
+
+
+def test_主进程没了_worker_跟着退出_不留孤儿占着连接() -> None:
+    """stdin 是主进程攥着的那一头。它关了(主进程崩了、测试跑完没收尾),worker 必须自己退出 ——
+    否则长连接照跑,重启后同一个机器人有两条连接,测试里一次留下几十个进程把内存吃光。"""
+    import subprocess
+    import sys
+
+    process = subprocess.Popen(
+        [sys.executable, "-m", "app.integrations.feishu.worker", "bot-orphan"],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        text=True,
+    )
+    try:
+        process.stdin.write(json.dumps({"app_id": "cli_x", "app_secret": "s"}) + "\n")
+        process.stdin.flush()
+        time.sleep(1.0)
+        assert process.poll() is None, "还没关管道就退出了 —— 这条测试没测到东西"
+        process.stdin.close()
+        assert process.wait(timeout=20) == 0
+    finally:
+        if process.poll() is None:
+            process.kill()
+
+
+def test_follow_parent_读完就退() -> None:
+    from app.integrations.feishu.worker import CardReplies, follow_parent
+
+    exits: list[int] = []
+    follow_parent(CardReplies(), iter(['{"id": 1, "result": {}}\n']), exit_process=exits.append)
+    assert exits == [0]
