@@ -120,14 +120,21 @@ def _delete(path: str) -> None:
         _raise_with_detail(response)
 
 
-def _default_workspace_id() -> str:
-    """没给工作区时用调用人的第一个工作区(和界面上默认选中的是同一个)。"""
+def _workspaces() -> list[dict[str, Any]]:
+    """调用人所在的工作区(和界面上的顺序一样,第一个就是默认选中的那个)。"""
     from app.domain import members
 
-    workspaces = _use_case(lambda db, user: [ws.id for ws, _role in members.workspaces_of(db, user.id)])
+    return _use_case(
+        lambda db, user: [{"id": ws.id, "name": ws.name, "role": role} for ws, role in members.workspaces_of(db, user.id)]
+    )
+
+
+def _default_workspace_id() -> str:
+    """没给工作区时用调用人的第一个工作区(和界面上默认选中的是同一个)。"""
+    workspaces = _workspaces()
     if not workspaces:
         raise ValueError("No workspace available")
-    return workspaces[0]
+    return workspaces[0]["id"]
 
 
 def _open_card(request: dict[str, Any]) -> dict[str, Any]:
@@ -322,7 +329,7 @@ def list_assets(workspace_id: str = "", kind: str = "", name_contains: str = "")
     Leave workspace_id empty to use the first workspace.
     """
     if not workspace_id:
-        workspaces = _get("/api/workspaces")
+        workspaces = _workspaces()
         if not workspaces:
             return []
         workspace_id = workspaces[0]["id"]
@@ -356,16 +363,18 @@ def inspect_sequence(sequence_id: str = "", project_id: str = "") -> dict[str, A
     if not sequence_id:
         if not project_id:
             raise ValueError("Provide sequence_id or project_id")
-        sequences = _get(f"/api/projects/{project_id}/sequences")
-        if not sequences:
-            raise ValueError("Project has no sequences")
-        sequence_id = sequences[0]["id"]
-    sequence = _get(f"/api/sequences/{sequence_id}")
+    from app.api.schemas import SequenceOut
+    from app.domain.assets import use_cases as assets
+    from app.domain.sequences import use_cases as sequences
 
-    workspaces_assets = {
-        asset["id"]: asset["name"]
-        for asset in _get("/api/assets", {"workspace_id": sequence["workspace_id"]})
-    }
+    def load(db, user) -> tuple[dict[str, Any], dict[str, str]]:
+        row = sequences.readable(db, user, sequence_id) if sequence_id else sequences.latest_of_project(db, user, project_id)
+        if row is None:
+            raise ValueError("Project has no sequences")
+        names = {asset.id: asset.name for asset in assets.list_assets(db, user, row.workspace_id)}
+        return SequenceOut.model_validate(row).model_dump(mode="json"), names
+
+    sequence, workspaces_assets = _use_case(load)
     duration = 0.0
     tracks_summary = []
     for track in sequence.get("tracks", []):
@@ -414,11 +423,13 @@ def list_projects(workspace_id: str = "") -> list[dict[str, Any]]:
     list_workflows for workflows.
     """
     if not workspace_id:
-        workspaces = _get("/api/workspaces")
+        workspaces = _workspaces()
         if not workspaces:
             return []
         workspace_id = workspaces[0]["id"]
-    projects = _get("/api/projects", {"workspace_id": workspace_id})
+    from app.domain.projects import use_cases
+
+    projects = _use_case(use_cases.list_with_stats, workspace_id)
     return [
         {"id": project["id"], "name": project["name"], "active_sequence_id": project.get("active_sequence_id")}
         for project in projects
@@ -2367,7 +2378,10 @@ def get_job(job_id: str) -> dict[str, Any]:
 
     Returns status/progress/result/error. Use after a tool that returns a job.
     """
-    return _get(f"/api/jobs/{job_id}")
+    from app.api.schemas import JobOut
+    from app.domain.job_center import use_cases
+
+    return _use_case(use_cases.readable, job_id, out=JobOut)
 
 
 @tool(effect="writes")
@@ -2377,7 +2391,11 @@ def create_project(name: str, workspace_id: str = "") -> dict[str, Any]:
     Use before organising assets under a new piece of work. Pair with update_asset to
     move existing assets into it.
     """
-    return _post("/api/projects", {"workspace_id": workspace_id or _default_workspace_id(), "name": name})
+    from app.api.schemas import ProjectCreate, ProjectOut
+    from app.domain.projects import use_cases
+
+    request = ProjectCreate(workspace_id=workspace_id or _default_workspace_id(), name=name)
+    return _use_case(use_cases.create, request.workspace_id, request.name, out=ProjectOut)
 
 
 @tool(effect="writes")
@@ -2759,10 +2777,10 @@ def list_jobs(workspace_id: str = "", kind: str = "", limit: int = 20) -> list[d
     find it. Also use to check whether work you started earlier in the conversation finished.
     Filter with kind ("render", "transcribe", "url_import", "generation"…). Newest first.
     """
-    params = {"workspace_id": workspace_id or _default_workspace_id(), "top_level": "true"}
-    if kind:
-        params["kind"] = kind
-    jobs = _get("/api/jobs", params=params)
+    from app.api.schemas import JobOut
+    from app.domain.job_center import use_cases
+
+    jobs = _use_case(use_cases.list_jobs, workspace_id or _default_workspace_id(), kind=kind or None, top_level=True, out=JobOut)
     return jobs[: max(1, min(int(limit), 100))]
 
 
@@ -2898,7 +2916,7 @@ def list_workspaces() -> list[dict[str, Any]]:
     user mentions a workspace by name, or when a listing comes back emptier than expected,
     then pass the right workspace_id explicitly.
     """
-    return _get("/api/workspaces")
+    return _workspaces()
 
 
 #: 由上面每个工具的 `@tool(effect=...)` 派生(见 `tool` 的说明)。读它们的代码(manifest、子智能体的工具挑选、

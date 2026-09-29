@@ -133,8 +133,9 @@ def _domain_use_cases() -> frozenset[str]:
     names: set[str] = set()
     for module in _use_case_modules():
         tree = ast.parse(module.read_text(encoding="utf-8"))
+        gated = GATED_HELPERS | _local_gated_helpers(tree)
         for fn in tree.body:
-            if isinstance(fn, ast.FunctionDef) and _names_a_permission(fn, GATED_HELPERS):
+            if isinstance(fn, ast.FunctionDef) and _names_a_permission(fn, gated):
                 names.add(fn.name)
     return frozenset(names)
 

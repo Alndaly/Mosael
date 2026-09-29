@@ -7,6 +7,7 @@ from fastapi import APIRouter, HTTPException, Request, Response
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
+from app.domain.sequences import use_cases as sequence_use_cases
 from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import (
     AssetOut,
@@ -136,8 +137,7 @@ def create_sequence(body: SequenceCreate, db: DbSession, user: CurrentUser) -> R
 
 @router.get("/sequences/{sequence_id}", response_model=SequenceOut)
 def get_sequence(sequence_id: str, db: DbSession, user: CurrentUser) -> Response:
-    require_sequence_access(db, user, sequence_id)
-    return _sequence_response(_get_sequence(db, sequence_id))
+    return _sequence_response(sequence_use_cases.readable(db, user, sequence_id))
 
 
 def _payload_shape_digest() -> str:
