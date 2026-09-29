@@ -8,7 +8,7 @@ from pathlib import Path
 
 from sqlalchemy.orm import Session
 
-from app.core.db import SessionLocal
+from app.core.unit_of_work import unit_of_work
 from app.core.i18n import LocalizedError
 from app.db.models import Asset, Job
 from app.domain.assets.importer import register_file_asset
@@ -55,7 +55,6 @@ def start_video_to_gif(
         },
         message="jobMsg_videoGifQueued",
     )
-    db.commit()
     # 经总线派发。此前这里是一句裸的线程创建 —— 线程没有 JOB_THREAD_NAME,
     # `wait_for_idle_jobs()` 按名字找不到它(测试里 fresh_client() 就会在它还活着时
     # drop_all),而且这个 kind 的执行模式形同虚设:注册成 external 也照样在进程内跑。
@@ -73,7 +72,7 @@ def _run(job_id: str, asset_id: str, fps: int, width: int, start: float, duratio
 
 
 def _body(job_id: str, asset_id: str, fps: int, width: int, start: float, duration: float | None) -> None:
-    with SessionLocal() as db:
+    with unit_of_work() as db:
         job = db.get(Job, job_id)
         asset = db.get(Asset, asset_id)
         if job is None or asset is None:
@@ -81,10 +80,10 @@ def _body(job_id: str, asset_id: str, fps: int, width: int, start: float, durati
         # 状态经 finish_job 写:排队时就被取消的不被写回 running,编码完时不盖掉中途的取消
         # (工作流取消会级联到这里,而手里这份 Job 是开始时读的)。
         if not finish_job(db, job, status="running", progress=0.1):
-            db.commit()
             return
         say(job, "jobMsg_videoGifRunning")
         emit_job_event(db, job.id, "job.running", {})
+        # 「在跑」先落库:编码要一阵,界面要马上看得到;也把 finish_job 拿的写锁放掉。
         db.commit()
 
         source = resolve_key(asset.file_key)
@@ -111,13 +110,11 @@ def _body(job_id: str, asset_id: str, fps: int, width: int, start: float, durati
                 "gif_start": start,
                 "gif_duration": duration,
             }
-            db.commit()
 
         result = {"asset_id": made.id, "source_asset_id": asset.id}
         if finish_job(db, job, status="succeeded", progress=1.0, result=result):
             say(job, "jobMsg_videoGifDone")
             emit_job_event(db, job.id, "job.succeeded", dict(result))
-        db.commit()
         logger.info("video %s -> gif asset %s", asset.id, made.id)
 
 

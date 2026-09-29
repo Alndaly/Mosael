@@ -19,8 +19,8 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.core.db import SessionLocal
 from app.core.i18n import LocalizedError
+from app.core.unit_of_work import unit_of_work
 from app.db.models import Job
 from app.domain.assets import register_file_asset
 from app.domain.assets.source_url import remember_asset_source
@@ -88,7 +88,7 @@ def start_url_import(
 
 
 def _run(job_id: str) -> None:
-    with SessionLocal() as db:
+    with unit_of_work() as db:
         job = db.get(Job, job_id)
         if job is None:
             return
@@ -102,7 +102,6 @@ def _run(job_id: str) -> None:
         actor = job.created_by
         job.status = "running"
         emit_job_event(db, job.id, "job.running", {})
-        db.commit()
 
     done = 0
     failed = 0
@@ -118,13 +117,12 @@ def _run(job_id: str) -> None:
                 def report(fraction: float, _text: str, index: int = index, title: str = title) -> None:
                     # 整批的进度 = 已完成的条数 + 当前这条的进度。只报当前条的话,进度条会在
                     # 每条开头掉回 0;只报条数的话,一条 20 分钟的下载看起来像卡住了。
-                    with SessionLocal() as progress_db:
+                    with unit_of_work() as progress_db:
                         live = progress_db.get(Job, job_id)
                         if live is None:
                             return
                         live.progress = (index + fraction) / max(1, total)
                         say(live, "jobMsg_urlImportItem", n=index + 1, total=total, title=title[:40])
-                        progress_db.commit()
 
                 path = ytdlp.download(
                     item["url"],
@@ -143,7 +141,8 @@ def _run(job_id: str) -> None:
                 logger.warning("从链接导入:第 %s 条失败:%s", index + 1, str(exc)[:200])
                 continue
 
-            with SessionLocal() as db:
+            # 一条一个事务:下好的那些不因为后面哪一条出错而跟着没了。
+            with unit_of_work() as db:
                 asset = register_file_asset(
                     db,
                     workspace_id=workspace_id,
@@ -153,12 +152,11 @@ def _run(job_id: str) -> None:
                     source="downloaded",
                 )
                 remember_asset_source(asset, item["url"])
-                db.commit()
-                asset_ids.append(asset.id)
+            asset_ids.append(asset.id)
             path.unlink(missing_ok=True)
             done += 1
 
-        with SessionLocal() as db:
+        with unit_of_work() as db:
             job = db.get(Job, job_id)
             if job is None:
                 return
@@ -181,17 +179,15 @@ def _run(job_id: str) -> None:
                     say(job, "jobMsg_urlImportDone", done=done)
                 job.result = {"asset_ids": asset_ids, "done": done, "failed": failed}
                 emit_job_event(db, job.id, "job.succeeded", {"asset_ids": asset_ids})
-            db.commit()
     except Exception as exc:  # noqa: BLE001 — 任何意外都要落进任务行,否则它永远停在 running
         logger.exception("从链接导入任务 %s 失败", job_id)
-        with SessionLocal() as db:
+        with unit_of_work() as db:
             job = db.get(Job, job_id)
             if job is not None:
                 job.status = "failed"
                 say(job, "jobMsg_urlImportFailed")
                 job.error = str(exc)[:600]
                 emit_job_event(db, job.id, "job.failed", {})
-                db.commit()
     finally:
         shutil.rmtree(workdir, ignore_errors=True)
 
@@ -270,7 +266,7 @@ def _cookie_file(workspace_id: str, profile_id: str, workdir: Path, *, actor: st
 
     session = None
     try:
-        with SessionLocal() as db:
+        with unit_of_work() as db:
             session = browser.open_session(
                 db, workspace_id=workspace_id, profile_id=profile_id, owner_kind="workflow", owner_id=None,
                 actor=actor,
@@ -291,5 +287,5 @@ def _cookie_file(workspace_id: str, profile_id: str, workdir: Path, *, actor: st
         return None
     finally:
         if session is not None:
-            with SessionLocal() as db:
+            with unit_of_work() as db:
                 browser.close_session(db, session.id)

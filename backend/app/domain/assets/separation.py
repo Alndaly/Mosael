@@ -27,7 +27,7 @@ from app.ai.providers.contracts.separation import (
     SeparationError,
     SeparationRequest,
 )
-from app.core.db import SessionLocal
+from app.core.unit_of_work import unit_of_work
 from app.db.models import Asset, Job
 from app.domain.assets.importer import register_file_asset
 from app.media.audio_io import AudioIOError, as_audio
@@ -139,7 +139,6 @@ def separate_asset(
             "stem": stem,
             "separation_engine": adapter.engine_id,
         }
-    db.commit()
     return SeparatedAssets(vocals=made[VOCALS], background=made[BACKGROUND], engine=adapter.engine_id)
 
 
@@ -180,7 +179,6 @@ def start_separation_job(db: Session, *, asset: Asset, created_by: str | None, e
         payload={"asset_id": asset.id, "subject": asset.name, "engine": engine},
         message="jobMsg_separateQueued",
     )
-    db.commit()
     dispatch_job(db, job, lambda: _run_job(job.id, asset.id, engine))
     return job
 
@@ -191,7 +189,7 @@ def _run_job(job_id: str, asset_id: str, engine: str) -> None:
 
 
 def _job_body(job_id: str, asset_id: str, engine: str) -> None:
-    with SessionLocal() as db:
+    with unit_of_work() as db:
         job = db.get(Job, job_id)
         asset = db.get(Asset, asset_id)
         if job is None or asset is None:
@@ -199,10 +197,10 @@ def _job_body(job_id: str, asset_id: str, engine: str) -> None:
         # 状态一律经 finish_job 写:排队时就被取消的不被写回 running,跑完时不盖掉中途的取消
         # (工作流取消会级联到这里 —— 模型停不下来,但取消过的活不能又变成「完成」)。
         if not finish_job(db, job, status="running", progress=0.1):
-            db.commit()
             return
         say(job, "jobMsg_separateRunning")
         emit_job_event(db, job.id, "job.running", {})
+        # 「在跑」先落库:分离要跑十几分钟,界面要马上看得到;也把 finish_job 拿的写锁放掉。
         db.commit()
 
         made = separate_asset(db, asset, engine=engine, owner_user_id=job.created_by)
@@ -216,5 +214,4 @@ def _job_body(job_id: str, asset_id: str, engine: str) -> None:
         if finish_job(db, job, status="succeeded", progress=1.0, result=result):
             say(job, "jobMsg_separateDone")
             emit_job_event(db, job.id, "job.succeeded", dict(result))
-        db.commit()
         logger.info("asset %s -> stems %s / %s", asset.id, made.vocals.id, made.background.id)

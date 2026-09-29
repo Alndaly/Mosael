@@ -88,6 +88,7 @@ def test_startup_reconcile_repairs_legacy_recordings() -> None:
 
     with SessionLocal() as db:
         assert reconcile_broken_media_info(db) == 1
+        db.commit()  # 提交归入口(启动时是 main 的 unit_of_work),测试就是这里的入口
 
     repaired = client.get(f"/api/assets?workspace_id={ws['id']}").json()[0]
     info = repaired["media_info"]

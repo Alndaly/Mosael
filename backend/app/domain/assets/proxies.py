@@ -15,7 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.core.db import SessionLocal
+from app.core.unit_of_work import unit_of_work
 from app.db.models import Asset, Job
 from app.domain.jobs import create_job, dispatch_job, emit_job_event, run_job_guarded, say
 from app.media.paths import resolve_key
@@ -44,7 +44,6 @@ def _set_proxy_meta(db: Session, asset_id: str, status: str, *, key: str | None 
     elif status != "ready":
         info.pop("proxy_key", None)
     asset.media_info = info
-    db.commit()
 
 
 def proxies_possible(asset: Asset) -> bool:
@@ -83,9 +82,8 @@ def start_proxy_job(db: Session, asset: Asset, *, created_by: str | None, force:
     info["proxy_status"] = "pending"
     info.pop("proxy_key", None)
     asset.media_info = info
-    db.commit()
-    # 经总线派发。此前这里是一句裸的线程创建 —— 线程没有 JOB_THREAD_NAME,
-    # `wait_for_idle_jobs()` 按名字找不到它(测试里 fresh_client() 就会在它还活着时
+    # 经总线派发(它先提交再起线程,线程读得到这里刚写的 pending)。此前这里是一句裸的线程创建 ——
+    # 线程没有 JOB_THREAD_NAME,`wait_for_idle_jobs()` 按名字找不到它(测试里 fresh_client() 就会在它还活着时
     # drop_all),而且这个 kind 的执行模式形同虚设:注册成 external 也照样在进程内跑。
     dispatch_job(db, job, lambda: _run_proxy(job.id, asset.id))
     return job
@@ -105,7 +103,7 @@ def _run_proxy(job_id: str, asset_id: str) -> None:
 
 
 def _proxy_body(job_id: str, asset_id: str) -> None:
-    with SessionLocal() as db:
+    with unit_of_work() as db:
         job = db.get(Job, job_id)
         if job is None:
             return
@@ -114,6 +112,7 @@ def _proxy_body(job_id: str, asset_id: str) -> None:
             say(job, "jobMsg_proxyRunning")
             job.progress = 0.1
             emit_job_event(db, job.id, "job.running", {})
+            # 「在跑」先落库:转码要一阵,界面要马上看得到。
             db.commit()
 
             asset = db.get(Asset, asset_id)
@@ -132,7 +131,6 @@ def _proxy_body(job_id: str, asset_id: str) -> None:
                 say(job, "jobMsg_proxyDone")
                 job.result = {"proxy_key": key}
                 emit_job_event(db, job.id, "job.succeeded", {"proxy_key": key})
-                db.commit()
             else:
                 _fail(db, job_id, asset_id, "ffmpeg 代理转码失败")
         except Exception as exc:  # a worker thread must record failure, never die silently
@@ -148,7 +146,6 @@ def _fail(db: Session, job_id: str, asset_id: str, reason: str) -> None:
         say(job, "jobMsg_proxyFailed")
         job.error = reason
         emit_job_event(db, job.id, "job.failed", {"reason": reason})
-        db.commit()
 
 
 def reconcile_missing_proxies(db: Session) -> int:

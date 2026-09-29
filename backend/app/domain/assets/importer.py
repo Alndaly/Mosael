@@ -69,8 +69,6 @@ def reconcile_broken_media_info(db: Session) -> int:
         # 合并而不是替换:media_info 还承载 proxy 状态等旗标。
         asset.media_info = {**info, **probed, **extras}
         repaired += 1
-    if repaired:
-        db.commit()
     return repaired
 
 
@@ -205,6 +203,10 @@ def _import_stream(
         media_info=media_info,
     )
     db.add(asset)
+    # **这一笔提交是有意留下的**(入口层之外少数几处之一):字节已经落了盘,行跟着落库;调用方
+    # 常常连着登记好几份(分离的两条 stem、宫格的九张、白模的首尾帧再加一段运镜),每一份之间
+    # 还有探测、缩略图、波形、渲染这些慢活 —— 不在这里提交的话,SQLite 的写锁要一路攥到
+    # 最后一份登记完,别的会话(任务进度)等过 busy_timeout 就报「database is locked」。
     db.commit()
     db.refresh(asset)
     # 代理转码只是 ffmpeg,不碰任何凭据、不花额度 —— 没有主体是如实的,不是漏填。

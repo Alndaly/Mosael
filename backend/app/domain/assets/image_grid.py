@@ -121,7 +121,6 @@ def split_image_grid(db: Session, asset: Asset, *, grid: str = DEFAULT_GRID, gut
                 "grid_cell": [index // cols + 1, index % cols + 1],
             }
             made.append(piece)
-    db.commit()
     return made
 
 

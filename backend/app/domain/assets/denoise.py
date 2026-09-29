@@ -27,7 +27,7 @@ from app.ai.providers.contracts.denoise import (
 )
 from app.ai.providers.registry import DENOISE_ADAPTERS
 from app.ai.runtime import denoise_models
-from app.core.db import SessionLocal
+from app.core.unit_of_work import unit_of_work
 from app.db.models import Asset, Job
 from app.domain.assets.importer import register_file_asset
 from app.domain.jobs import RENDER_SLOTS, create_job, dispatch_job, emit_job_event, finish_job, run_job_guarded, say
@@ -152,7 +152,6 @@ def denoise_asset(
         "denoise_engine": adapter.engine_id,
         "denoise_strength": request_strength if adapter.strengths else None,
     }
-    db.commit()
     return made, adapter.engine_id
 
 
@@ -200,7 +199,6 @@ def start_denoise_job(
         payload={"asset_id": asset.id, "subject": asset.name, "engine": engine, "strength": strength},
         message="jobMsg_denoiseQueued",
     )
-    db.commit()
     dispatch_job(db, job, lambda: _run_job(job.id, asset.id, engine, strength))
     return job
 
@@ -212,17 +210,17 @@ def _run_job(job_id: str, asset_id: str, engine: str, strength: str) -> None:
 
 
 def _job_body(job_id: str, asset_id: str, engine: str, strength: str) -> None:
-    with SessionLocal() as db:
+    with unit_of_work() as db:
         job = db.get(Job, job_id)
         asset = db.get(Asset, asset_id)
         if job is None or asset is None:
             return
         # 状态经 finish_job 写,理由同分离(见 separation._job_body)。
         if not finish_job(db, job, status="running", progress=0.1):
-            db.commit()
             return
         say(job, "jobMsg_denoiseRunning")
         emit_job_event(db, job.id, "job.running", {})
+        # 「在跑」先落库:降噪要跑一阵,界面要马上看得到;也把 finish_job 拿的写锁放掉。
         db.commit()
 
         made, used = denoise_asset(db, asset, engine=engine, strength=strength, owner_user_id=job.created_by)
@@ -231,5 +229,4 @@ def _job_body(job_id: str, asset_id: str, engine: str, strength: str) -> None:
         if finish_job(db, job, status="succeeded", progress=1.0, result=result):
             say(job, "jobMsg_denoiseDone")
             emit_job_event(db, job.id, "job.succeeded", dict(result))
-        db.commit()
         logger.info("asset %s -> denoised %s (%s)", asset.id, made.id, used)

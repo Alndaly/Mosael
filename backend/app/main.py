@@ -64,6 +64,7 @@ from app.core.logging import configure_logging
 from app.core.rate_limit import install_rate_limiting
 from app.core.worker_key import issue_worker_key
 from app.core.db import SessionLocal
+from app.core.unit_of_work import unit_of_work
 from app.db.migrations import init_db
 
 logger = logging.getLogger(__name__)
@@ -107,7 +108,8 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         register_external_kind(kind)
     if external:
         logger.info("external job kinds (driven by outside worker): %s", ", ".join(external))
-    with SessionLocal() as db:
+    # 启动收尾是一次用例:下面几个函数只改对象,这一段正常结束时一起提交(见 core/unit_of_work)。
+    with unit_of_work() as db:
         # 重启杀掉一切进程内的线程/子进程/连接,**在调用之前就落库的那些「进行中」的行
         # 自己不会醒过来**。谁来收尾登记在 domain/restart 的那张表上,由一条棘轮按 ORM
         # 推导出「哪些表需要登记」——此前是四个手写的调用,而第五、第六处照样漏了。
