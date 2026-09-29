@@ -249,18 +249,25 @@ def build_plan_for_sequence(db: Session, sequence_id: str, export_params: dict |
     )
 
 
+#: 由数字人片段拼接出来的素材(如「译配对口型」把几块改口型结果接成的整段):它不是任何一条生成记录的产出,
+#: 生成记录认不出它,登记时就标上这个来源。
+DIGITAL_HUMAN_SOURCE = "digital_human"
+
+
 def digital_human_assets(db: Session, asset_ids: set[str]) -> set[str]:
     """这几份素材里哪些是**数字人**生成的:生成时有一段驱动音频(说话照片、对口型;模式见 ADR 0028 §1)。
 
     按生成记录认,不按模型名认 —— 以后接进来的数字人模型也是「脸 + 驱动音频」这个组合。驱动音频可能在提交时
     换成了直链(`driving_audio_url`,见 generation.operations 的临时存储那一段),两处都看。
+    数字人片段拼接出来的素材没有生成记录,按来源 `DIGITAL_HUMAN_SOURCE` 认。
     """
     from app.ai.providers.contracts.generation import DRIVING_AUDIO
     from app.db.models import GenerationJob
 
     if not asset_ids:
         return set()
-    found: set[str] = set()
+    found: set[str] = set(db.scalars(select(Asset.id).where(Asset.id.in_(asset_ids),
+                                                            Asset.source == DIGITAL_HUMAN_SOURCE)))
     for row in db.scalars(select(GenerationJob).where(GenerationJob.result_asset_id.in_(asset_ids))):
         request = row.request or {}
         roles = {str((one or {}).get("role") or "") for one in request.get("source_assets") or []}

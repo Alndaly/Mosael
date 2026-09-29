@@ -113,6 +113,7 @@ def dub_lipsync(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[st
     """一条译配好的时间线上,原片那一段的嘴对上配音轨(见模块说明)。"""
     from app.db.models import Clip, Track
     from app.domain.assets.importer import register_file_asset
+    from app.domain.render import DIGITAL_HUMAN_SOURCE
     from app.domain.sequences.operations import AddTrack, InsertClip, MoveTrack, add_track, insert_clip, move_track
     from app.domain.workflows.executors.subjobs import _asset_in, _sequence_in
     from app.media.paths import resolve_key
@@ -158,9 +159,9 @@ def dub_lipsync(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[st
         voice = work / "voice.wav"
         _mix_voice(lines, span, voice)
 
-        def keep(path: Path, name: str) -> str:
+        def keep(path: Path, name: str, source: str = "derived") -> str:
             return register_file_asset(db, workspace_id=scope.workspace_id, project_id=None, source_path=path,
-                                       name=name, source="derived").id
+                                       name=name, source=source).id
 
         parts: list[Path] = []
         for index, (begin, end) in enumerate(chunks, start=1):
@@ -182,7 +183,8 @@ def dub_lipsync(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[st
             generated += 1
         joined = work / "lipsync.mp4"
         _join(parts, width, height, fps, joined)
-        final = keep(joined, f"{video.name} · 对口型")
+        #: 接回的整段不是哪一条生成记录的产出:标上数字人来源,导出时照样加 AI 标识(ADR 0028 §5)。
+        final = keep(joined, f"{video.name} · 对口型", DIGITAL_HUMAN_SOURCE)
     #: 接回来的整段可能比原片短几帧(各块按帧取整):铺上去的长度取两者较短的那个。
     length = min(span, float((_asset_in(db, scope, final).media_info or {}).get("duration") or span))
 
