@@ -12,6 +12,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.ai.providers import (
+    DRIVING_AUDIO,
     FIRST_FRAME,
     REFERENCE_AUDIO,
     REFERENCE_IMAGE,
@@ -108,6 +109,14 @@ def documents_note(documents: Sequence[ReferenceDocument]) -> str:
     return "\n\n".join([tr("genPromptReferenceDocuments"), *(f"{one.title}\n{one.markdown}" for one in documents)])
 
 
+def is_digital_human_request(source_assets: Sequence[dict[str, Any]], parameters: dict[str, Any]) -> bool:
+    """这一次是不是数字人生成:带一段驱动音频(说话照片、对口型;ADR 0028 §1)。按素材角色认,不按模型名认;
+    驱动音频也可能是用户直接给的链接(`driving_audio_url`)。和导出时认数字人片段(render.digital_human_assets)同一条。"""
+    if any(str((one or {}).get("role") or "") == DRIVING_AUDIO for one in source_assets):
+        return True
+    return bool(str(parameters.get(f"{DRIVING_AUDIO}_url") or "").strip())
+
+
 def create_generation_job(
     db: Session,
     *,
@@ -127,6 +136,7 @@ def create_generation_job(
     scene_reference: dict[str, str] | None = None,
     name_sources: bool = False,
     documents: Sequence[ReferenceDocument] = (),
+    digital_human_consent: bool = False,
 ) -> tuple[GenerationJob, Any]:
     """建一次生成。`entity_ids` 是这次 `@` 到的资产(ADR 0027):展开成提示词描述和参考图,
     挂了哪几张、哪几张没挂上记进请求的 `entities`(见 domain/entities/mentions)。
@@ -139,12 +149,20 @@ def create_generation_job(
 
     `documents`:连进来当素材的文档,整篇接在提示词后面(见 `documents_note`)。不收提示词的模型不给。
 
+    `digital_human_consent`:带驱动音频的生成(说话照片、对口型,即数字人)必须由调用方声明「已取得画面中人物的
+    授权」(ADR 0028 §5),否则当场拒 —— AI 工作台、智能体、画板、工作流、定时任务都从这里过,一处都漏不掉。
+    工作流里人物说话 / 图片说话 / 对口型的节点在自己那一层已经查过(资产声明或面板上的确认),传 True 进来。
+
     **请求里的 `prompt` 只是用户写的那段。** 连进来的文档、白模说明、资产描述、素材对照是漏斗替他补给模型的,各成一段记在
     `prompt_notes` 里,交给供应商时由 `prompt_for_provider` 接在后面 —— 生成记录上画的是他说的话,不是
     我们替他补的那几段。"""
     #: 点了名的会话**先**过写闸:共享给他的会话只能看。放在渲 3D 参考、把本地素材传上公网这些
     #: 花时间(可能花钱)的事之前 —— 一个注定被拒的请求不该先把那些做完。
     named = _named_session(db, workspace_id=workspace_id, session_id=session_id, actor=created_by) if session_id else None
+    #: 数字人的授权同样在花钱(上传、渲参考)之前问。
+    talking = is_digital_human_request(source_assets, parameters)
+    if talking and not digital_human_consent:
+        raise GenerationDomainError("genErr_digitalHumanNeedsConsent")
     provider = provider.strip()
     model = model.strip()
     if not provider or not model:
@@ -256,6 +274,9 @@ def create_generation_job(
         request["entities"] = expansion.receipt
     if scene_receipt:
         request["scene_reference"] = scene_receipt
+    if talking:
+        #: 谁、在这一次声明了授权:生成记录上留底(提交的人就是 created_by)。
+        request["digital_human_consent"] = True
     job = create_job(
         db,
         workspace_id=workspace_id,

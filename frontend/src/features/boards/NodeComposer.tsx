@@ -21,6 +21,7 @@ import { useSubmitting } from "@/features/boards/useSubmitting";
 import { useI18n } from "@/app/preferences";
 import type { MessageKey } from "@/app/messages";
 import { ROLE_COPY, SOURCE_ROLES, type SourceRole } from "@/lib/sourceFrames";
+import { DigitalHumanConsent } from "@/components/generation/DigitalHumanConsent";
 import { ParameterRow, declaredChoices } from "@/components/generation/parameterPanel";
 import { Input } from "@/components/ui/input";
 import { OptionPicker } from "@/components/ui/option-picker";
@@ -408,6 +409,8 @@ export function NodeComposer({
     entityIds: string[];
     /** 连进来的 3D 场景怎么用(ADR 0029);没连场景时不给。 */
     sceneReference?: SceneReferenceForm;
+    /** 挂了驱动音频(数字人)时,本人勾上的「已取得画面中人物的授权」。 */
+    digitalHumanConsent: boolean;
     form: NonNullable<BoardItem["form"]>;
   }) => void;
   /** 每一次编辑都写回节点，而不是留在面板组件的临时 state 里。 */
@@ -696,7 +699,13 @@ export function NodeComposer({
   //: 这次用哪个镜头(挑过的还在场景里 / 只有一个镜头)。好几个镜头却没挑、场景还没查到时发不出去 —— 服务端不猜镜头。
   const sceneShot = resolvedShot(referencedScene, sceneReference.shot_id);
   const sceneReady = !upstreamScene || (sceneUses.length > 0 && Boolean(referencedScene) && Boolean(sceneShot));
-  const canSend = Boolean(current) && hasEnoughText(current, prompt) && sceneReady;
+  //: 挂了驱动音频 = 数字人生成:要勾上授权才发得出去(后端生成漏斗同一条)。不存进格子的表单 —— 每次发都要本人勾。
+  //: 按**发出去的**那一份判:正文里 `@` 到的一段音频也会落进驱动音频的槽(见 mergeSourceAssets)。
+  const [digitalHumanConsent, setDigitalHumanConsent] = React.useState(false);
+  const outgoingSources = mergeSourceAssets(sources, currentPromptMode === "none" ? [] : mentioned, library.data ?? [], slots);
+  const needsDigitalHumanConsent = outgoingSources.some((one) => one.role === "driving_audio");
+  const canSend =
+    Boolean(current) && hasEnoughText(current, prompt) && sceneReady && (!needsDigitalHumanConsent || digitalHumanConsent);
 
   const send = () => {
     //: 不收提示词的模型:编辑器里残留的字(换模型之前写的)不跟着发出去。
@@ -708,7 +717,7 @@ export function NodeComposer({
     //: 重复的那一份也算进参考图的份数,挂到上限就直接拒了。正文里的 @ 没有角色,
     //: 落到第一个收得下它的槽上(通常就是参考图)。
     //: 编辑器藏起来时,里面残留的 @ 也不算数 —— 用户看不见的引用不该发出去。
-    const sourceAssets = mergeSourceAssets(sources, currentPromptMode === "none" ? [] : mentioned, library.data ?? [], slots);
+    const sourceAssets = outgoingSources;
     //: 只发用户写的那句。正文里写的是名字,而模型收到的是一串没有名字的素材 —— 那段「参考图 1 = 创作者.png」的
     //: 对照,和连进来的文档正文,都由后端按连线补给模型(见 boards.actions.generate_on_board),不拼进这里:拼进来的话
     //: 生成记录上存的就是拼过的字,AI 工作台的用户气泡会把文档正文当成他说的话画出来。
@@ -722,6 +731,7 @@ export function NodeComposer({
         sourceAssets,
         entityIds: mentionedEntities,
         ...(upstreamScene && sceneUse ? { sceneReference: { shot_id: sceneShot, use: sceneUse } } : {}),
+        digitalHumanConsent: needsDigitalHumanConsent && digitalHumanConsent,
         form: editableForm,
       }),
     );
@@ -1168,6 +1178,9 @@ export function NodeComposer({
           onSubmit={send}
           emptyHint={() => (slots.length === 0 ? t("boardNoSourceSlots") : "")}
         />
+      )}
+      {needsDigitalHumanConsent && (
+        <DigitalHumanConsent checked={digitalHumanConsent} onChange={setDigitalHumanConsent} />
       )}
     </BoardComposerShell>
   );

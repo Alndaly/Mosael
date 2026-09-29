@@ -983,6 +983,7 @@ def generate_video(
     parameters: dict[str, Any] | None = None,
     source_assets: list[dict[str, str]] | None = None,
     entity_ids: list[str] | None = None,
+    digital_human_consent: bool = False,
 ) -> dict[str, Any]:
     """Confirmation required: generate a NEW video asset from a text prompt.
 
@@ -1023,7 +1024,10 @@ def generate_video(
     its front reference image as first_frame and that audio as driving_audio.
     Only animate a real person's face or voice when the user has said they are
     that person or have the person's consent (get_entity shows
-    usable_for_digital_human); never for anyone else.
+    usable_for_digital_human); never for anyone else. Any request with a
+    driving_audio is rejected unless digital_human_consent is true: set it only
+    after the user has confirmed, in this conversation, that they have the
+    pictured person's consent (or the face is fictional / their own).
 
     Do NOT use for exporting an existing sequence (render_sequence), running a
     workflow (run_workflow), or editing workflow nodes (edit_workflow).
@@ -1042,6 +1046,7 @@ def generate_video(
                 "parameters": parameters or {},
                 "source_assets": source_assets or [],
                 "entity_ids": [str(one) for one in (entity_ids or [])],
+                "digital_human_consent": bool(digital_human_consent),
             },
         },
     )

@@ -227,6 +227,8 @@ export interface BoardRunForms {
     entity_ids?: string[];
     /** 连进来的 3D 场景怎么用(ADR 0029):镜头(空 = 场景只有一个时用它)、用法;场景本身由服务端按连线取。 */
     scene_reference?: { shot_id: string; use: SceneReferenceUse };
+    /** 挂了驱动音频(数字人)时本人勾上的授权(ADR 0028 §5);不勾时服务端的生成漏斗拒。 */
+    digital_human_consent?: boolean;
     /** 落在这一格上、用户可再次编辑的表单(不含运行时追加的图例)。 */
     item_form?: BoardItem["form"];
   };

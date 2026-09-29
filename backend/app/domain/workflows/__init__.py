@@ -852,6 +852,9 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
                 "type": "template", "options_from": "entities", "editor": "id_list",
                 "description": "wfNode_ai_generate_entity_ids",
             },
+            #: 挂了驱动音频(说话照片、对口型,即数字人)时必须选上,生成漏斗才放行(ADR 0028 §5)。别的生成用不上,
+            #: 所以不标必填、收在高级里。
+            "consent": {"advanced": True, "type": "string", "options": ["yes"], "description": "wfNode_talking_consent"},
         },
         #: asset_id 是**封面**(下游多数节点只接一份),asset_ids 是这次出的全部 ——
         #: 图像接口的 n 能一次出好几张,不声明的话下游连不到它们(执行体一直在返回)。

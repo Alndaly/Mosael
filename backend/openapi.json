@@ -25738,6 +25738,11 @@
             "type": "array",
             "maxItems": 8,
             "title": "Entity Ids"
+          },
+          "digital_human_consent": {
+            "type": "boolean",
+            "title": "Digital Human Consent",
+            "default": false
           }
         },
         "type": "object",

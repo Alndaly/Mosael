@@ -111,6 +111,8 @@ def _generate(db: Session, scope: RunScope, model: dict[str, Any], sources: list
             negative_prompt="",
             parameters={},
             source_assets=sources,
+            #: 授权在这一层查过了:人物资产的声明(check_entity_speak)或面板上的确认(_require_consent)。
+            digital_human_consent=True,
         )
     except GenerationDomainError as exc:
         raise WorkflowDomainError.from_error(exc) from exc

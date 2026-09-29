@@ -45,6 +45,8 @@ def _execute_generation(db: Session, confirmation: Any, actor: str | None) -> di
         parameters=dict(payload.get("parameters") or {}),
         source_assets=parse_source_assets(payload.get("source_assets"), kind=kind),
         entity_ids=parse_entity_ids(payload.get("entity_ids")),
+        #: 智能体声明的授权(generate_video 的 digital_human_consent);卡片由人批准时一并过目。
+        digital_human_consent=payload.get("digital_human_consent") is True,
     )
     start_generation_thread(generation.id)
     result: dict[str, Any] = {"job_id": job.id, "generation_id": generation.id}
@@ -85,6 +87,12 @@ def _summarize_generate_image(db: Session, payload: dict[str, Any]) -> Summary:
     return "confirm_generateImage", {"asked": _asked_for(payload)}
 
 def _validate_generate_video(db: Session, workspace_id: str, payload: dict[str, Any], actor: str | None) -> None:
+    from app.domain.generation.operations import is_digital_human_request
+
+    #: 数字人没声明授权:开卡时就说,不等人批准之后才在漏斗里被拒。
+    sources = [one for one in payload.get("source_assets") or [] if isinstance(one, dict)]
+    if is_digital_human_request(sources, dict(payload.get("parameters") or {})) and payload.get("digital_human_consent") is not True:
+        raise ConfirmationError("genErr_digitalHumanNeedsConsent")
     _check_generation_text(db, payload, actor, "video")
 
 def _summarize_generate_video(db: Session, payload: dict[str, Any]) -> Summary:

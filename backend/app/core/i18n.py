@@ -4114,6 +4114,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "{provider}/{kind} 没有可用的生成适配器",
         "en": "No generation adapter is available for {provider}/{kind}.",
     },
+    "genErr_digitalHumanNeedsConsent": {
+        "zh": "这是数字人生成(带驱动音频):先确认已取得画面中人物的授权 —— 本人,或已取得其单独同意",
+        "en": "This is a digital-human generation (it has driving audio): confirm you have the pictured person's consent first — it's you, or they agreed separately.",
+    },
     "genErr_sourceGroup": {"zh": "素材分组只能是 {groups}", "en": "The asset group must be one of: {groups}"},
     "genErr_unknownRole": {"zh": "未知的素材角色:{role}", "en": "Unknown asset role: {role}"},
     "genErr_notInteger": {

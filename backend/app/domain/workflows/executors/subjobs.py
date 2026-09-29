@@ -204,6 +204,7 @@ def ai_generate(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[st
             ),
             #: 点名的资产按本工作流的工作区取(scope.workspace_id);别处的 id 由生成漏斗当场拒。
             entity_ids=parse_entity_ids(config.get("entity_ids")),
+            digital_human_consent=str(config.get("consent") or "").strip() == "yes",
         )
     except GenerationDomainError as exc:
         raise WorkflowDomainError.from_error(exc) from exc

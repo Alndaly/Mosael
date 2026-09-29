@@ -81,6 +81,8 @@ def _run_generation(db: Session, task: ScheduledTask, run: ScheduledTaskRun, job
         negative_prompt=str(payload.get("negative_prompt", "")),
         parameters=dict(payload.get("parameters") or {}),
         source_assets=parse_source_assets(payload.get("source_assets"), kind=kind),
+        #: 挂任务的人在建任务时声明过的数字人授权(见 create_generation_job)。
+        digital_human_consent=payload.get("digital_human_consent") is True,
     )
     if _delegate(db, run, job, delegated.id, f"Dispatched generation {generation.id}"):
         start_generation_thread(generation.id)

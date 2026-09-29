@@ -80,6 +80,8 @@ class GenerationCreate(ApiModel):
     #: 这次 `@` 到的资产(ADR 0027):提示词描述拼进提示词,参考图按模型收得下的张数挂上。
     #: 挂了哪几张、哪几张没挂上,回在 `request.entities` 里。
     entity_ids: list[str] = Field(default_factory=list, max_length=8)
+    #: 数字人(带驱动音频的说话照片、对口型)必须勾上「已取得画面中人物的授权」,否则 422(ADR 0028 §5)。
+    digital_human_consent: bool = False
 
 
 class GenerationJobOut(OrmModel):

@@ -167,6 +167,8 @@ class GenerateForm(_Form):
     #: 连进这一格的 3D 场景怎么用。**场景本身由连线给**(actions.upstream_scene),和资产格同一条:线在它就在;
     #: 没连场景时这一项不起作用。连了场景却没写这一项 = 构图参考、场景只有一个镜头时用它。
     scene_reference: SceneReferenceForm | None = None
+    #: 数字人(挂了驱动音频的说话照片、对口型)要勾上「已取得画面中人物的授权」,生成漏斗才放行(ADR 0028 §5)。
+    digital_human_consent: bool = False
     #: 落在这一格上、用户可再次编辑的表单(草稿)。**和上面几样不是同一份**,所以不能由它们推出来:
     #: 上面的 `prompt` 是发出去的那句(不收提示词的模型发空串),`source_assets` 是
     #: 槽位挂的并上正文里 @ 到的;这里存的是用户写的那句、`prompt_document`、`mentioned_asset_ids`,
@@ -266,6 +268,7 @@ def _start_generate(db: Session, request: RunRequest, form: GenerateForm) -> Boa
         form=dict(form.item_form),
         entity_ids=list(form.entity_ids),
         scene_reference=form.scene_reference.model_dump() if form.scene_reference else None,
+        digital_human_consent=form.digital_human_consent,
     )
 
 

@@ -9261,6 +9261,11 @@ export interface components {
             source_assets?: components["schemas"]["SourceAssetRef"][];
             /** Entity Ids */
             entity_ids?: string[];
+            /**
+             * Digital Human Consent
+             * @default false
+             */
+            digital_human_consent: boolean;
         };
         /** GenerationCreateResponse */
         GenerationCreateResponse: {

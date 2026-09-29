@@ -90,6 +90,7 @@ import {
 import { GENERATION_BOOLEAN_LABELS, GENERATION_PARAMETER_LABELS } from "@/lib/generationParameterLabels";
 import { FrameSlotField, KeyframePairField } from "@/features/ai-studio/FrameSlotField";
 import { DurationFollowsNote, TruncationHint, durationFollowsRole } from "@/features/ai-studio/durationFollows";
+import { DigitalHumanConsent } from "@/components/generation/DigitalHumanConsent";
 import {
   AUDIO_SOURCE_HINTS,
   GeneratedAudioList,
@@ -464,8 +465,13 @@ export function GenerateWorkspace({
   React.useEffect(() => {
     setModelId(null);
   }, [activeSession?.id]);
+  //: 挂了驱动音频 = 数字人生成:提交前必须勾上授权(后端生成漏斗同一条,不勾就 422)。换模型时清掉,不替他带过去。
+  const [digitalHumanConsent, setDigitalHumanConsent] = React.useState(false);
+  const needsDigitalHumanConsent =
+    videoInputRoles.includes("driving_audio") && filledCount(generationConfig.frames, "driving_audio") > 0;
   React.useEffect(() => {
     setGenerationConfig(defaultGenerationConfig(selectedModel));
+    setDigitalHumanConsent(false);
   }, [selectedModel?.value]);
   const modelGroups = React.useMemo(() => {
     const grouped = new Map<string, GenerationEngineOption[]>();
@@ -610,6 +616,7 @@ export function GenerateWorkspace({
             (role) => supportsParameter(selectedModel, role),
           ),
           entity_ids: mentionedEntities.map((one) => one.id),
+          digital_human_consent: needsDigitalHumanConsent && digitalHumanConsent,
         }),
       });
       return targetSessionId;
@@ -683,6 +690,10 @@ export function GenerateWorkspace({
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
     if (readOnly || !canSubmitText || !selectedModel || !selectedAdapterAvailable || createGeneration.isPending) return;
+    if (needsDigitalHumanConsent && !digitalHumanConsent) {
+      toast.error(t("genDigitalHumanConsentNeeded"));
+      return;
+    }
     stick.scrollToBottom(); // 自己发的消息一定要看得见
     createGeneration.mutate();
   };
@@ -1185,6 +1196,9 @@ export function GenerateWorkspace({
                     disabledReason={t("genSourceGroupsExclusive")}
                   />
                 ))}
+                {needsDigitalHumanConsent && (
+                  <DigitalHumanConsent checked={digitalHumanConsent} onChange={setDigitalHumanConsent} />
+                )}
                 {videoReferenceRoles.map((role, index) => (
                   <FrameSlotField
                     key={role}

@@ -224,6 +224,7 @@ def generate_on_board(
     form: dict[str, Any],
     entity_ids: list[str] | None = None,
     scene_reference: dict[str, str] | None = None,
+    digital_human_consent: bool = False,
 ) -> Board:
     """在画板上出图出片。没点名模型时由漏斗用这个人的默认。
 
@@ -265,6 +266,7 @@ def generate_on_board(
             #: 画板上的正文会按名字 `@` 素材,而模型收到的素材没有名字 —— 让漏斗在提示词后面补一段对照。
             name_sources=True,
             documents=documents,
+            digital_human_consent=digital_human_consent,
         )
     finally:
         reset_receipt(token)
