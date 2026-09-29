@@ -5,8 +5,7 @@
 > `文件:行号`。本次**没有改动任何代码**,只写了这一份报告。
 >
 > 范围:`backend/app/ai/`(供应商三层、适配器、生成契约、本机运行时)+
-> `domain/provider*.py`、`domain/model_limits.py`、`domain/structured_output.py`、
-> `domain/thinking.py`、`domain/ai_chat.py`、`domain/generation/`、`domain/billing/usage.py`
+> `domain/providers/`、`domain/ai_chat.py`、`domain/generation/`、`domain/billing/usage.py`
 > 里与之直接相邻的部分。不含工作流引擎本体、剪辑内核、智能体宿主、前端、Electron。
 
 ---
@@ -553,11 +552,11 @@ double-booking」(`usage.py:217-219`)。
 
 **领域侧**
 - `backend/app/domain/ai_chat.py` —— 直连对话补全的唯一实现(§2.1 / §2.2 / §2.3)
-- `backend/app/domain/provider_runtime.py` —— 发给 pi 的那份 provider payload
-- `backend/app/domain/provider_models.py` —— `RUNTIME_FIELDS` / `runtime_limits`
-- `backend/app/domain/model_limits.py` —— 内置上限表与唯一合并处(§2.4)
-- `backend/app/domain/structured_output.py` —— 哪家支持 `json_schema`
-- `backend/app/domain/thinking.py` —— 思考档位表
+- `backend/app/domain/providers/runtime.py` —— 发给 pi 的那份 provider payload
+- `backend/app/domain/providers/models.py` —— `RUNTIME_FIELDS` / `runtime_limits`
+- `backend/app/domain/providers/model_limits.py` —— 内置上限表与唯一合并处(§2.4)
+- `backend/app/domain/providers/structured_output.py` —— 哪家支持 `json_schema`
+- `backend/app/domain/providers/thinking.py` —— 思考档位表
 - `backend/app/domain/billing/usage.py` —— `BillableCall` / `billable` / `record_usage`(§2.6)
 - `backend/app/domain/agent/judge.py` —— 放行判断(§2.3)
 - `backend/app/domain/generation/runner.py` —— 生成任务执行与记账

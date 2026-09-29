@@ -114,7 +114,7 @@ sidecar 专门为这件事发了一条事件。**唯独中间那一跳把问题�
 
 链条:
 
-1. `backend/app/domain/provider_auth.py:91-97` —— `_check_lease` 抛 `CredentialLeaseError` 有
+1. `backend/app/domain/providers/auth.py:91-97` —— `_check_lease` 抛 `CredentialLeaseError` 有
    **两个不同的原因**,消息也不同:
    - `held.token != token` → 「租约已失效(**超时或被顶替**)」= 别人抢走并已经写了新凭据;
    - `held.expires_at <= now` → 「租约已超时」= **没有别人**,只是我自己慢了。
@@ -651,7 +651,7 @@ video.currentTime = Math.max(0, Math.min(..., message.seconds));
 - `/Users/kinda/Developer/Mosael/agent-sidecar/src/subagent.ts`
 - `/Users/kinda/Developer/Mosael/backend/app/domain/agent/host.py`
 - `/Users/kinda/Developer/Mosael/backend/app/domain/agent/login.py`
-- `/Users/kinda/Developer/Mosael/backend/app/domain/provider_auth.py`
+- `/Users/kinda/Developer/Mosael/backend/app/domain/providers/auth.py`
 - `/Users/kinda/Developer/Mosael/backend/app/api/routes/agent_credentials.py`
 - `/Users/kinda/Developer/Mosael/backend/app/core/child_process.py`
 

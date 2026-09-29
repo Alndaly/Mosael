@@ -72,7 +72,7 @@ def test_saving_the_form_without_a_secret_keeps_the_stored_one() -> None:
     with SessionLocal() as db:
         stored = db.get(ProviderProfile, created["id"])
         assert stored.name == "renamed"
-        # 密的附加字段跟着**钥匙**走(见 domain/provider_credentials);「空 = 不变」这条规则
+        # 密的附加字段跟着**钥匙**走(见 domain/providers/credentials);「空 = 不变」这条规则
         # 没变,变的只是它存在哪。
         assert _my_secrets(db, created["id"]) == {"ak": "AKLTsecret", "sk": "SKsupersecret"}
 
@@ -122,7 +122,7 @@ def test_the_form_spec_is_served_with_the_vendor() -> None:
 def test_resolved_connection_contains_visible_options() -> None:
     from app.core.db import SessionLocal
     from app.db.models import User
-    from app.domain.providers import resolve_connection
+    from app.domain.providers.selection import resolve_connection
 
     client = _admin_client()
     _create(client, "volcano-podcast", {"appid": "1234567890"})

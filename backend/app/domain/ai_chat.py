@@ -37,9 +37,9 @@ import httpx
 from sqlalchemy.orm import Session
 
 from app.core.i18n import LocalizedError, fragment, tr
-from app.domain.provider_credentials import ResolvedConnection
+from app.domain.providers.credentials import ResolvedConnection
 from app.core import http_retry
-from app.domain import provider_models
+from app.domain.providers import models as provider_models
 from app.domain.billing.usage import BillableCall
 
 logger = logging.getLogger(__name__)
@@ -101,7 +101,7 @@ class ChatTarget:
     gateway_api_base: str = ""
     gateway_token: str = field(default="", repr=False)
     #: 这个端点能不能把 JSON Schema 当成**生成时的硬约束**。`None` = 不知道(照发,被拒了再降级)。
-    #: 见 domain/structured_output。
+    #: 见 domain/providers/structured_output。
     structured_output: bool | None = None
     #: 这一轮最多能出多少 token —— `model_limits.resolve` 合并出来的那个数
     #: (用户在模型设置里填的 → 供应商目录 → 内置表 → 回退)。
@@ -133,7 +133,7 @@ def target_for(
             raise AiChatError("aiChat_oauthRequired", name=profile.name)
         from app.core.config import settings
         from app.core.security import mint_service_session
-        from app.domain.provider_runtime import sidecar_provider
+        from app.domain.providers.runtime import sidecar_provider
 
         return ChatTarget(
             base_url="",
@@ -178,7 +178,8 @@ def _max_output_tokens(db: Session, profile: ResolvedConnection, model: str) -> 
     `resolve` 的文档写着「唯一的合并处」,那句话是成立的:问题从来不是有第二处合并,
     而是**有一条通道根本不经过它**。这个函数就是让它经过。
     """
-    from app.domain import model_limits, provider_models
+    from app.domain.providers import model_limits
+    from app.domain.providers import models as provider_models
     from app.ai.model_catalog import cached_model
 
     row = provider_models.get_model(db, profile.id, model)
@@ -202,7 +203,8 @@ def _structured_output(db: Session, profile: ResolvedConnection, model: str) -> 
 
     取不到模型行也不算错 —— 没配置过的模型照样能用,只是没有任何覆盖。
     """
-    from app.domain import provider_models, structured_output
+    from app.domain.providers import models as provider_models
+    from app.domain.providers import structured_output
 
     row = provider_models.get_model(db, profile.id, model)
     return structured_output.effective_support(

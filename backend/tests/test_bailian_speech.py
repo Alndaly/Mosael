@@ -32,7 +32,7 @@ def test_没有key直接拒绝_而不是发一个必然失败的请求() -> None
 
 def test_引擎id就是vendor_id() -> None:
     """domain/voices/voices.py 拿 engine 去 resolve_connection,对不上就找不到那份凭据。"""
-    from app.domain.provider_presets import provider_definition
+    from app.domain.providers.presets import provider_definition
 
     definition = provider_definition(BailianSpeechAdapter.engine_id)
     assert definition is not None

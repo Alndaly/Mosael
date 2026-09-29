@@ -419,7 +419,7 @@ f5-tts / fish-speech 都要 torch + torchaudio + transformers,**2.5–3.5 GB**�
 - 供应商创建表单中的 `storage=default_model` 只是“创建时顺手加入一条模型行”，界面称为
   **初始模型**，不是能力默认；编辑连接时隐藏，由模型列表管理。Endpoint 属于供应商连接协议，标签
   不跟当前设置分区叫“对话/视频 Endpoint”；多能力供应商由各 Adapter 将同一地址归一到对应原生根。
-- **数据归属**是 `app/domain/provider_models.py`,建行只经它的 `upsert`(棘轮盯着)。
+- **数据归属**是 `app/domain/providers/models.py`,建行只经它的 `upsert`(棘轮盯着)。
 
 Provider 代码用三层 Module 表达能力与连接协议两条轴：
 
@@ -482,7 +482,7 @@ Gateway 的边界与安全不变量见
 「已过期」,而它只要被用到就会自己好。刷不动才是用户需要知道的事,那时才用警告色说「需重新授权」;
 失败带 5 分钟冷却,否则这个最常被拉的接口会每次都起一个 node 去撞同一堵墙。
 
-**额度只在点击时查**(`domain/provider_quota.py`,六家各一个解析器)。这些端点都不是官方承诺的
+**额度只在点击时查**(`domain/providers/quota.py`,六家各一个解析器)。这些端点都不是官方承诺的
 公开接口(Anthropic 的 `oauth/usage`、Codex 的 `codex/usage` 都是各自 CLI 内部在用),定时轮询
 既容易撞限流,也会在对方改接口后变成后台里一直失败的任务。查不到不抛 5xx——"这家不支持"和
 "这次没查成"都是正常结果,统一的 500 错误提示会把两者吞成一句"请求失败"。
@@ -494,8 +494,8 @@ Gateway 的边界与安全不变量见
 ## 智能体的上下文:预算与整理
 
 **窗口来自模型**:模型行的 `context_window` → 供应商目录 → **内置查证表** → 双档回退:云端 **128K**,
-本机/LAN **32K**(按 base_url 判定)。四层合并**只在 `backend/app/domain/model_limits.py` 的 `resolve()`
-一处发生**,**三条执行通道**都经过它:智能体那条(`domain/provider_runtime`)、直连 HTTP 那条
+本机/LAN **32K**(按 base_url 判定)。四层合并**只在 `backend/app/domain/providers/model_limits.py` 的 `resolve()`
+一处发生**,**三条执行通道**都经过它:智能体那条(`domain/providers/runtime`)、直连 HTTP 那条
 (`domain/ai_chat.target_for`,翻译/素材分析/工作流 LLM/AI 编排/发布文案/提示词优化/画板写作/放行判断
 八个调用点)、以及设置页的回显 —— 界面显示的数和请求真正带的数必须是同一个。
 

@@ -11,7 +11,7 @@ from typing import Any, Literal
 import httpx
 
 
-from app.domain import provider_models
+from app.domain.providers import models as provider_models
 from app.core import http_retry  # Gemini 的 generateContent 不是 /chat/completions,仍走裸重试
 from app.domain.ai_chat import AiChatError, chat, target_for
 from app.domain.billing.usage import BillableCall, billable, once
@@ -20,9 +20,9 @@ from sqlalchemy.orm import Session
 from app.ai.providers.contracts.generation import sanitize_adapter_error
 from app.core.i18n import LocalizedError
 from app.db.models import Asset, ProviderProfile
-from app.domain import provider_credentials
-from app.domain.provider_credentials import ResolvedConnection
-from app.domain.providers import find_enabled_connection, list_enabled_connections
+from app.domain.providers import credentials as provider_credentials
+from app.domain.providers.credentials import ResolvedConnection
+from app.domain.providers.selection import find_enabled_connection, list_enabled_connections
 from app.media.image_preview import browser_compatible_image
 from app.media.paths import resolve_key
 from app.core.child_process import run_logged
@@ -78,7 +78,7 @@ def select_analysis_connection(db: Session, profile_id: str | None, user_id: str
     """挑一条能做多模态的连接,并绑上**这个人**的钥匙。
 
     钥匙解析不出来就报出来,而不是换一条能用的 —— 「我以为用的是自己的额度,其实花的是别人的钱」
-    是这里最坏的失败方式(见 domain/provider_credentials)。
+    是这里最坏的失败方式(见 domain/providers/credentials)。
     """
     if profile_id:
         profile = find_enabled_connection(db, "", profile_id, owner_user_id=user_id)

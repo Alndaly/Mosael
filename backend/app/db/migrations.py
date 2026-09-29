@@ -810,7 +810,7 @@ def _migrate_provider_defaults_per_person() -> None:
     老库里那一行是**整个部署共用的默认**,没有主人。它曾被搬成 `owner_user_id = ''`(那时还有
     "部署默认"这一档),而那一档已经删掉了 —— 所以这里**不搬**:一行没有主人的默认,找不到
     任何一个人可以诚实地记在他名下。搬给所有人等于替每个人做了一次他没做过的选择,正是删掉
-    这一档要避免的事。升级后每个人第一次用时自己选一个(见 domain/provider_defaults.get_row)。
+    这一档要避免的事。升级后每个人第一次用时自己选一个(见 domain/providers/defaults.get_row)。
 
     SQLite 改不了主键,所以按重建表的老办法:建新表 → 换名。
     """
@@ -1147,7 +1147,7 @@ def _migrate_job_actor() -> None:
     """`jobs` 补 `created_by`:这活儿**替谁干**。
 
     后台线程手里只有一个 job,没有这一栏就答不出该用谁的钥匙、花谁的额度(见 domain/jobs.create_job
-    与 domain/provider_credentials)。老任务回填成 NULL —— 它们跑完了,而"当初是谁要的"这件事
+    与 domain/providers/credentials)。老任务回填成 NULL —— 它们跑完了,而"当初是谁要的"这件事
     老数据里确实没有记过,编一个出来比留空更糟。
     """
     inspector = inspect(engine)
@@ -1173,7 +1173,7 @@ def _migrate_provider_credentials() -> None:
     """钥匙从 `provider_profiles` 搬到 `provider_credentials`,并把那几列删掉。
 
     升级前所有人共用档案行上那把钥匙。迁移把它归到**最早那位部署管理员**名下 —— 有主人,而且
-    只有他能用。别人各配各的(见 domain/provider_credentials:没有"共享钥匙"这回事,它没有界面,
+    只有他能用。别人各配各的(见 domain/providers/credentials:没有"共享钥匙"这回事,它没有界面,
     而且回退到别人的钥匙正是这张表要消灭的东西)。
 
     **搬走而不是并存**:密钥列留在档案行上,就等于留着一条不经过解析、读到别人钥匙的路。
@@ -2291,7 +2291,7 @@ def _drop_legacy_profile_columns() -> None:
 
     两者都是"一档案一模型"时代的字段:default_model 不区分能力(对话档案的默认模型被拿去当
     生图模型用过),capability_ids 挂在连接上导致同一个端点只能二选一。能力与模型现在都在
-    provider_models 行上,读取点已全部切走(见 domain/provider_models)。
+    provider_models 行上,读取点已全部切走(见 domain/providers/models)。
 
     SQLite 从 3.35 起支持 DROP COLUMN;删不掉就跳过 —— 留着一个没人读的列不影响任何行为,
     而在启动路径上抛异常会让应用起不来。
@@ -4618,7 +4618,7 @@ def _forget_comfyui_run_workflow_tool() -> None:
 
 
 def _migrate_generation_capabilities_need_evidence() -> None:
-    """生成能力要有正面证据(见 domain/provider_models.evidenced_capabilities):把**没写能力**的模型行按新规则
+    """生成能力要有正面证据(见 domain/providers/models.evidenced_capabilities):把**没写能力**的模型行按新规则
     认出来的能力**写进** `capability_ids`,让设置页的能力标签和选择器看的是同一份、看得见也改得了。
 
     此前行上没写能力时兜底的是整个供应商预设:OpenAI 兼容连接(147ai、Ollama)上的每个对话模型都是生图模型,
@@ -4644,8 +4644,8 @@ def _migrate_generation_capabilities_need_evidence() -> None:
     if "provider_models" not in tables or "provider_profiles" not in tables:
         return
     from app.domain.generation.catalog import GENERATION_KINDS, resolve_capability_ref
-    from app.domain.provider_models import evidenced_capabilities, infer_capabilities
-    from app.domain.providers import ALL_CAPABILITY_IDS, capability_ids_for_vendor
+    from app.domain.providers.models import evidenced_capabilities, infer_capabilities
+    from app.domain.providers.selection import ALL_CAPABILITY_IDS, capability_ids_for_vendor
 
     def loads(raw: Any, fallback: Any) -> Any:
         if raw is None:
@@ -5536,7 +5536,7 @@ def _migrate_model_structured_output() -> None:
     """模型行记得下「这个端点支不支持 json_schema」。
 
     此前没有任何地方写得下这件事,于是不支持的端点上 Schema 只是个事后本地校验,而用户看不出来 ——
-    他在节点里写着 strict,实际跑的却是纯文本(见 domain/structured_output)。
+    他在节点里写着 strict,实际跑的却是纯文本(见 domain/providers/structured_output)。
     """
     with engine.begin() as conn:
         columns = {row[1] for row in conn.execute(text("PRAGMA table_info(provider_models)"))}

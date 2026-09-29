@@ -140,7 +140,7 @@ class ProviderModel(Base):
     vision: Mapped[bool | None] = mapped_column(Boolean, nullable=True, default=None)
     reasoning_effort: Mapped[bool | None] = mapped_column(Boolean, nullable=True, default=None)
     developer_role: Mapped[bool | None] = mapped_column(Boolean, nullable=True, default=None)
-    #: 这个端点能不能把 JSON Schema 当成**生成时的硬约束**(见 domain/structured_output)。
+    #: 这个端点能不能把 JSON Schema 当成**生成时的硬约束**(见 domain/providers/structured_output)。
     #: 留空 = 跟随查证过的结论;查不到就维持现状(照发,被拒了由网关降级)。
     structured_output: Mapped[bool | None] = mapped_column(Boolean, nullable=True, default=None)
     #: 生成参数(尺寸/时长/参考图…)**按什么来**。上面那几格都是对话模型的开关,生成模型此前一格
@@ -247,7 +247,7 @@ class ProviderDefault(Base):
     D3 的同一条道理)。
 
     **没有"部署默认"这一档。** 曾经有过一行 `owner_user_id=""` 当作"还没设过的人的起点",
-    删掉了(见 domain/provider_defaults.get_row):它看起来温和 —— 只在你没设时生效 —— 但造成的
+    删掉了(见 domain/providers/defaults.get_row):它看起来温和 —— 只在你没设时生效 —— 但造成的
     正是这个应用里反复出现的那种误解:界面上你没选过任何模型,回答却来自某个你不知道的模型,
     花的是你的额度、用的是你的钥匙。没设就说没设。
 

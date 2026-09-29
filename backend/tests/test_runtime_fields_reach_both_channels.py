@@ -27,15 +27,15 @@ RATCHET = True
 import ast
 from pathlib import Path
 
-from app.domain.provider_models import RUNTIME_FIELDS
+from app.domain.providers.models import RUNTIME_FIELDS
 
 BACKEND = Path(__file__).resolve().parent.parent
 #: 直连那条通道的落点。这里读得到某一格,才算它在这条路上「接上了」。
 DIRECT = (BACKEND / "app" / "domain" / "ai_chat.py",)
 #: sidecar 那条通道的落点。
 SIDECAR = (
-    BACKEND / "app" / "domain" / "provider_runtime.py",
-    BACKEND / "app" / "domain" / "provider_models.py",
+    BACKEND / "app" / "domain" / "providers" / "runtime.py",
+    BACKEND / "app" / "domain" / "providers" / "models.py",
     BACKEND / "app" / "ai" / "sidecar" / "adapters.py",
 )
 
@@ -43,7 +43,7 @@ SIDECAR = (
 #: 它是一份"已知债务"清单,不是一个让整类字段消失的开关。
 SIDECAR_ONLY: dict[str, str] = {
     "reasoning_effort": (
-        "思考档位。**各家的参数不是同一套词,猜错一个值就是整轮 400**(见 domain/thinking),"
+        "思考档位。**各家的参数不是同一套词,猜错一个值就是整轮 400**(见 domain/providers/thinking),"
         "所以直连通道要发它必须先经查证过的按 vendor 映射 —— 那是 AI 审计 2.4 那条的活。"
         "在那之前宁可不发,也不发一个猜的。"
     ),

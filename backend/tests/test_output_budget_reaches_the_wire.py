@@ -83,7 +83,7 @@ def test_解析不出上限时不瞎发(monkeypatch) -> None:
 def test_两条通道取的是同一个数() -> None:
     """`target_for` 解析出的上限,必须和 `sidecar_provider` 拼给 pi 的那个是同一个 ——
     `model_limits.resolve` 自称「唯一的合并处」,这条钉住两边真的都经过它。"""
-    from app.domain import model_limits
+    from app.domain.providers import model_limits
 
     # 纯函数层面对齐就够:两边都传同一组入参时,resolve 只有一个答案。
     kwargs = dict(model_id="deepseek-v4-flash", base_url="https://api.deepseek.com", vendor="deepseek")
@@ -101,9 +101,9 @@ def test_用户在模型设置里填的那个数_一路走到线上() -> None:
     """
     from app.core.db import SessionLocal
     from app.db.models import ProviderProfile
-    from app.domain import provider_models
+    from app.domain.providers import models as provider_models
     from app.domain.ai_chat import target_for
-    from app.domain.provider_credentials import ResolvedConnection
+    from app.domain.providers.credentials import ResolvedConnection
     from tests.util import fresh_client
 
     client = fresh_client()

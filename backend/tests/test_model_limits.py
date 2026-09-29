@@ -1,6 +1,6 @@
 """内置的模型上限表:形状、优先级、以及「宁可报小」那条。
 
-这张表是**手写的查证结果**(见 app/domain/model_limits 模块头),没有任何上游会纠正它 ——
+这张表是**手写的查证结果**(见 app/domain/providers/model_limits 模块头),没有任何上游会纠正它 ——
 写错一个数,用户要么白白少掉九成窗口,要么发出一个会被服务端拒的 max_tokens,而两种都不会
 在测试里自己暴露出来。所以这里盯的是那几条**写表时容易违反的约定**,而不是逐条复读数字。
 """
@@ -9,8 +9,8 @@ from __future__ import annotations
 
 import pytest
 
-from app.domain import model_limits
-from app.domain.model_limits import (
+from app.domain.providers import model_limits
+from app.domain.providers.model_limits import (
     FALLBACK_CONTEXT_WINDOW,
     KNOWN_LIMITS,
     OUTPUT_BUDGET_CAP,
@@ -156,7 +156,7 @@ class Test思考吃不吃输出额度:
     """
 
     def test_勾了推理模型的未知模型_额度必须高于非推理档(self) -> None:
-        from app.domain.model_limits import FALLBACK_MAX_OUTPUT_TOKENS, resolve
+        from app.domain.providers.model_limits import FALLBACK_MAX_OUTPUT_TOKENS, resolve
 
         kwargs = dict(model_id="my-custom-thinker", base_url="http://127.0.0.1:11434/v1",
                       vendor="openai-compatible")
@@ -170,7 +170,7 @@ class Test思考吃不吃输出额度:
 
     def test_查证过会思考的_不用勾也算数(self) -> None:
         """qwen / GLM / r1 这类:我们发不出它们的档位,但它们确实在思考。"""
-        from app.domain.model_limits import FALLBACK_MAX_OUTPUT_TOKENS, resolve
+        from app.domain.providers.model_limits import FALLBACK_MAX_OUTPUT_TOKENS, resolve
 
         for model in ("qwen3-235b", "deepseek-r1-distill-32b", "glm-4.6"):
             got = resolve(model_id=model, base_url="http://127.0.0.1:11434/v1",
@@ -179,7 +179,7 @@ class Test思考吃不吃输出额度:
 
     def test_查证过的结论压过用户的猜测(self) -> None:
         """勾不勾都一样 —— 查证过的行为比一个复选框更可信。"""
-        from app.domain.model_limits import resolve
+        from app.domain.providers.model_limits import resolve
 
         kwargs = dict(model_id="qwen3-235b", base_url="http://127.0.0.1:11434/v1",
                       vendor="openai-compatible")
@@ -187,7 +187,7 @@ class Test思考吃不吃输出额度:
                 == resolve(**kwargs, reasoning=False).effective_max_output_tokens)
 
     def test_两个谓词回答的是两个问题(self) -> None:
-        from app.domain.thinking import UNKNOWN, burns_output_budget, profile_for
+        from app.domain.providers.thinking import UNKNOWN, burns_output_budget, profile_for
 
         # qwen:发不出档位(UNKNOWN),但确实思考。这一对正是原先那个 bug 的形状。
         assert profile_for("openai-compatible", "qwen3-235b") is UNKNOWN

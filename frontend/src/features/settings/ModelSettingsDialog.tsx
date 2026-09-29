@@ -545,7 +545,7 @@ export function ModelSettingsDialog({
                   onChange={(next) => setDraft((prev) => (prev ? { ...prev, reasoning: next } : prev))}
                 />
                 {/* 「推理模型」是**开关总闸**,而档位发不发得出去是另一件事(见后端
-                    domain/thinking)。两者此前只有前者露在界面上,于是"开着却没有档位"
+                    domain/providers/thinking)。两者此前只有前者露在界面上,于是"开着却没有档位"
                     读起来像配漏了 —— 而它恰恰是我们主动不给的。 */}
                 <p className="m-0 pl-0.5 text-xs leading-[1.45] text-muted-foreground">
                   {(settings.data?.thinking_levels ?? []).length > 0

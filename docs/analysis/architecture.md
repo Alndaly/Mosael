@@ -430,7 +430,7 @@ sequenceDiagram
 
 ### 8.4 上下文预算与整理(双端一致机制)
 
-- **窗口来自模型**:模型行 `context_window` → 供应商目录 → **内置查证表**(`backend/app/domain/model_limits.py`,2026-09 起)→ 回退。回退是**双回退**——云端 128K(`FALLBACK_CONTEXT_WINDOW`)、本机/LAN 32K(`LOCAL_FALLBACK_CONTEXT_WINDOW`),按 base_url 的 hostname 判私网;两侧(`domain/model_limits.py` 与 `compaction.ts:60+`)同一套规则,由 `contracts/context-meter-cases.json` 钉死。合并只发生在 `model_limits.resolve` 一处,运行时(`provider_runtime`)与设置页共用它。
+- **窗口来自模型**:模型行 `context_window` → 供应商目录 → **内置查证表**(`backend/app/domain/providers/model_limits.py`,2026-09 起)→ 回退。回退是**双回退**——云端 128K(`FALLBACK_CONTEXT_WINDOW`)、本机/LAN 32K(`LOCAL_FALLBACK_CONTEXT_WINDOW`),按 base_url 的 hostname 判私网;两侧(`domain/providers/model_limits.py` 与 `compaction.ts:60+`)同一套规则,由 `contracts/context-meter-cases.json` 钉死。合并只发生在 `model_limits.resolve` 一处,运行时(`provider_runtime`)与设置页共用它。
 - **用量估算锚定真实 usage**:取最后一条带 usage 的助手消息(input+output),此后新消息按 `CHARS_PER_TOKEN = 3.5` 估——sidecar(compaction.ts:47)与后端(context_meter.py:28)逐字一致。
 - **整理发生在两轮之间**,不在 `transformContext`(那个每次 LLM 调用都跑):超窗口 `COMPACT_RATIO = 0.8` 时把早期对话交给模型摘要,保留最近 `KEEP_RECENT = 8` 条;**切点必须回退到一条 user 消息**(否则留下没有 tool_call 的孤儿 tool_result,下一轮 400);摘要失败降级截断但**如实回报**——静默降级会让用户以为上下文还在。
 
@@ -450,7 +450,7 @@ sequenceDiagram
 | 层 | 表 | 职责 |
 | --- | --- | --- |
 | 连接 | `provider_profiles` | 端点 + 鉴权方式(api_key/oauth);归创建它的用户(`owner_user_id`) |
-| 模型 | `provider_models` | 能力与运行时参数的**唯一挂载点**:`capability_ids`(空则回落 vendor 预设)、`context_window`、`reasoning`/`vision`/`reasoning_effort`/`developer_role`;建行只经 `domain/provider_models.py` 的 `upsert` |
+| 模型 | `provider_models` | 能力与运行时参数的**唯一挂载点**:`capability_ids`(空则回落 vendor 预设)、`context_window`、`reasoning`/`vision`/`reasoning_effort`/`developer_role`;建行只经 `domain/providers/models.py` 的 `upsert` |
 | 能力默认 | `provider_defaults` | 每种能力指向**一行模型**;没有或失效就返回未配置,**不静默替用户挑** |
 
 秘密与连接生命周期分开:`ProviderCredential` 按 `(profile_id, owner_user_id)` 存 API Key/OAuth/密字段/动态模型目录;业务读取只拿 `ResolvedConnection`,`resolve_connection()` 不跨用户回退。早期"一档案一模型 + default_model"迫使**拿模型名当档案名**建一堆档案、同一把 key 重复五遍——三个字段已删,二十来处 `profile.default_model` 收敛到 `provider_models.model_id_for()`。
@@ -497,7 +497,7 @@ graph TD
 ### 9.4 横切:重试、额度、媒体传输、用量台账
 
 - `domain/ai_retry.RetryingClient`(httpx.Client 子类,`send()` 里对 429/5xx/RequestError 指数退避+抖动)是所有 AI 出站调用的统一入口——实测 23 个模块引用(文档写 15,已过时,见 §13);限流对生图/生视频/TTS/向量化一视同仁。
-- `domain/provider_quota.py` 六家订阅额度解析器,**只在用户点击时查**(非官方接口,轮询既撞限流又会变成后台一直失败的任务);查不到不抛 5xx——"这家不支持"和"这次没查成"是两种正常结果。
+- `domain/providers/quota.py` 六家订阅额度解析器,**只在用户点击时查**(非官方接口,轮询既撞限流又会变成后台一直失败的任务);查不到不抛 5xx——"这家不支持"和"这次没查成"是两种正常结果。
 - `ai/providers/media_transfer.py` 统一远程媒体下载:预签名地址不带凭据、跨源重定向丢受信头、流式 `.part` 原子落盘、inline 64MB 上限。
 - **用量台账**:`provider_usage_events` + `provider_pricing_rules` + `domain/billing/usage.py`;调用方只上报 provider/model/capability/units/raw_usage,价格估算与幂等写入收敛在台账模块;台账从任务总线、智能体、生成执行器**接收事实,不反向决定业务是否成功**。
 

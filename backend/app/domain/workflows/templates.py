@@ -12,8 +12,8 @@ from typing import Any
 from app.db.models import ProviderModel, Voice
 from app.domain.generation.catalog import known_capabilities_for
 from app.domain.generation.resolution import resolve_row
-from app.domain.provider_defaults import get_row
-from app.domain.provider_models import effective_capabilities
+from app.domain.providers.defaults import get_row
+from app.domain.providers.models import effective_capabilities
 from app.domain.workflows import NODE_TYPES, WorkflowDomainError
 from app.domain.workflows.normalization import normalize_graph
 from app.domain.workflows.template_requirements import (
@@ -148,7 +148,7 @@ def _pick(db: Session, user_id: str, kind: str, usable) -> ModelChoice:
     chosen = _default_model(db, kind, user_id)
     if usable(db, chosen):
         return chosen
-    from app.domain import provider_models
+    from app.domain.providers import models as provider_models
 
     for model in provider_models.models_for_capability(db, kind, user_id=user_id):
         if model.profile is None or not model.profile.enabled or kind not in effective_capabilities(model):

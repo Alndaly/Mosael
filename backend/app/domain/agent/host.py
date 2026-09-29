@@ -30,10 +30,10 @@ from app.domain.agent.stream import (
     _timeline_for_payload,
 )
 from app.domain.agent.textclean import decode_byte_fallback
-from app.domain import provider_models
-from app.domain.provider_runtime import sidecar_provider
+from app.domain.providers import models as provider_models
+from app.domain.providers.runtime import sidecar_provider
 from app.domain.context_meter import CHARS_PER_TOKEN, context_breakdown, context_tokens
-from app.domain.model_limits import fallback_context_window
+from app.domain.providers.model_limits import fallback_context_window
 from app.core.config import settings
 from app.core.db import SessionLocal
 from app.core.i18n import LocalizedError, get_current_locale, set_current_locale, tr
@@ -83,9 +83,9 @@ def resolve_chat_provider(
     """pi 适配器的供应商三级解析:会话选定 → 「对话」能力默认 → 第一个启用供应商。
     AI Studio 与飞书共用 — 飞书早先裸调 run_turn 不带 provider,配好了供应商也
     永远报「未配置」,就是漏了这一步。返回 (provider_dict, model, profile)。"""
-    from app.domain.providers import resolve_connection
+    from app.domain.providers.selection import resolve_connection
 
-    from app.domain import provider_credentials
+    from app.domain.providers import credentials as provider_credentials
 
     profile = None
     if provider_profile_id:
@@ -1026,7 +1026,7 @@ def session_model_catalog(db: Session, profile_id: str | None, user_id: str | No
     if not profile_id:
         return []
 
-    from app.domain import provider_credentials
+    from app.domain.providers import credentials as provider_credentials
 
     # 目录跟着钥匙走:两个人的订阅档位可以不一样,拿别人的目录去算窗口是错的。
     mine = provider_credentials.get(db, profile_id, user_id) if user_id else None

@@ -18,14 +18,14 @@ import pytest
 
 from app.core.db import SessionLocal
 from app.db.models import GenerationCapabilityDeclaration, ProviderProfile
-from app.domain import provider_models
+from app.domain.providers import models as provider_models
 from app.domain.generation.catalog import GENERATION_KINDS
 from app.domain.generation.resolution import (
     GenerationResolutionError,
     generation_options,
     resolve_generation_model,
 )
-from app.domain.provider_presets import provider_definition, _VENDOR_PRESETS
+from app.domain.providers.presets import provider_definition, _VENDOR_PRESETS
 from tests.util import fresh_client, user_id
 
 UNKNOWN = "definitely-not-in-any-catalog-7f3a"
@@ -116,7 +116,7 @@ def test_默认模型被摘掉这项能力就不再是默认() -> None:
     fresh_client()
     me = user_id()
     with SessionLocal() as db:
-        from app.domain.provider_defaults import set_default
+        from app.domain.providers.defaults import set_default
 
         row = _row(db, "openai-compatible", "my-flux", capability_ids=["chat", "image"])
         set_default(db, "image", row, owner_user_id=me)
@@ -131,7 +131,7 @@ def test_生成选项标出默认模型_没设就一项都不标() -> None:
     fresh_client()
     me = user_id()
     with SessionLocal() as db:
-        from app.domain.provider_defaults import set_default
+        from app.domain.providers.defaults import set_default
 
         first = _row(db, "openai-compatible", "a-image", capability_ids=["image"])
         second = _row(db, "openai-compatible", "b-image", capability_ids=["image"])

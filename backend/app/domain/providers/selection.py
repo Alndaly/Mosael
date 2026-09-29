@@ -11,13 +11,13 @@ from sqlalchemy.orm import Session
 
 from app.core.i18n import LocalizedError, tr
 from app.db.models import ProviderProfile
-from app.domain import provider_credentials
-from app.domain.provider_presets import (
+from app.domain.providers import credentials as provider_credentials
+from app.domain.providers.presets import (
     KNOWN_AUTH_TYPES,
     KNOWN_CAPABILITY_IDS,
     provider_definition,
 )
-from app.domain.provider_credentials import ResolvedConnection
+from app.domain.providers.credentials import ResolvedConnection
 
 #: 已知鉴权方式。顺序即 UI 上的优先级(订阅制排前面,因为不需要用户去找 Key)。
 AUTH_TYPES = KNOWN_AUTH_TYPES

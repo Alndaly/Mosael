@@ -271,7 +271,7 @@ pi-ai 0.82 重排模块后,`api/*.lazy` 入口一旦被 esbuild 打进单文件,
 
 ## 12. 同一个常量在 sidecar 和后端各写了一份 — ✅ 已由契约钉住
 
-四个回退常量在 `agent-sidecar/src/{pi,compaction}.ts` 与 `backend/app/domain/model_limits.py`
+四个回退常量在 `agent-sidecar/src/{pi,compaction}.ts` 与 `backend/app/domain/providers/model_limits.py`
 各有一份:`FALLBACK_CONTEXT_WINDOW = 128000`、`LOCAL_FALLBACK_CONTEXT_WINDOW = 32000`
 (本机/LAN 端点)、`FALLBACK_MAX_OUTPUT_TOKENS = 4096`、`FALLBACK_REASONING_MAX_OUTPUT_TOKENS = 32768`,
 以及 `CHARS_PER_TOKEN = 3.5`(`compaction.ts` ↔ `domain/context_meter.py`)。
@@ -281,8 +281,8 @@ REST)。现在由 [`contracts/context-meter-cases.json`](../contracts/context-me
 常量和两条回退公式(窗口按端点、输出额度按窗口与思考能力)都有语料,两侧各跑一遍。
 
 **回退只是最后一手。** 真实上限的来源依次是:用户在模型设置里填的 → 供应商 `/models` 目录 →
-`backend/app/domain/model_limits.py` 里内置的查证表 → 上面那几个回退常量。内置表**只在后端**,
-sidecar 拿到的是后端算好的数(见 `domain/provider_runtime.sidecar_provider`),所以它不进契约 ——
+`backend/app/domain/providers/model_limits.py` 里内置的查证表 → 上面那几个回退常量。内置表**只在后端**,
+sidecar 拿到的是后端算好的数(见 `domain/providers/runtime.sidecar_provider`),所以它不进契约 ——
 进契约的是两侧都要会算的那份回退。
 
 内置表是**手写的查证结果**,没有上游会纠正它:改一条就更新模块头的来源与日期,

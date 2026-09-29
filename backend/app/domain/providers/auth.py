@@ -33,9 +33,9 @@ from app.ai.sidecar.adapters import AdapterError, refresh_oauth_credential
 from app.core.config import settings
 from app.core.i18n import LocalizedError
 from app.db.models import ProviderCredential, ProviderProfile
-from app.domain import provider_credentials
-from app.domain.provider_quota import is_expired
-from app.domain.providers import pi_provider_id
+from app.domain.providers import credentials as provider_credentials
+from app.domain.providers.quota import is_expired
+from app.domain.providers.selection import pi_provider_id
 
 #: 持有租约期间只做一次刷新 HTTP 调用,给足余量。超过即视为持有者已死。
 LEASE_TTL_SECONDS = 30.0
@@ -140,7 +140,7 @@ def read_credential(credential: ProviderCredential | None) -> dict | None:
     """这把钥匙上存着的 OAuth 凭据(pi 的 Credential 原样),没有则 None。
 
     参数是**一把具体的钥匙**而不是档案:凭据归人之后,「这个档案的凭据」不再是一个有答案的
-    问题 —— 得先说清是谁的(见 domain/provider_credentials)。
+    问题 —— 得先说清是谁的(见 domain/providers/credentials)。
     """
     stored = credential.oauth_credential if credential is not None else None
     return dict(stored) if isinstance(stored, dict) else None

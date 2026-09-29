@@ -175,7 +175,7 @@ def test_描述里名出全部合法能力() -> None:
     """
     import asyncio
 
-    from app.domain.provider_defaults import DEFAULTABLE_CAPABILITIES
+    from app.domain.providers.defaults import DEFAULTABLE_CAPABILITIES
 
     tools = {tool.name: tool for tool in asyncio.run(mcp_server.mcp.list_tools())}
     description = tools["list_provider_models"].description or ""

@@ -8,9 +8,9 @@ from app.core.i18n import tr
 from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import AgentVoiceOut, AgentVoiceUpdate, CapabilityModelOut, ProviderDefaultOut, ProviderDefaultUpdate
 from app.db.models import ProviderModel
-from app.domain import thinking
-from app.domain import provider_models
-from app.domain.provider_defaults import DEFAULTABLE_CAPABILITIES, set_default
+from app.domain.providers import thinking
+from app.domain.providers import models as provider_models
+from app.domain.providers.defaults import DEFAULTABLE_CAPABILITIES, set_default
 
 from app.domain.permissions import require_own_profile
 
@@ -19,7 +19,7 @@ router = APIRouter(tags=["settings"])
 @router.get("/settings/provider-defaults", response_model=list[ProviderDefaultOut])
 def list_provider_defaults(db: DbSession, user: CurrentUser) -> list[ProviderDefaultOut]:
     """**我**在每种能力下的默认供应商+模型。我没设过的就是空 —— 没有部署兜底那一档。"""
-    from app.domain.provider_defaults import get_row
+    from app.domain.providers.defaults import get_row
 
     out: list[ProviderDefaultOut] = []
     for capability in DEFAULTABLE_CAPABILITIES:
@@ -82,7 +82,7 @@ def set_provider_default(
 
     不要求部署管理员:「我默认用哪个模型」是个人偏好,和钥匙一样(见 db.models.ProviderDefault)。
     曾经有过 `for_deployment` —— 写那一行 `owner_user_id=""` 当作"还没设过的人的起点" ——
-    删掉了:替人做的选择必须是他自己做的(见 domain/provider_defaults.get_row)。
+    删掉了:替人做的选择必须是他自己做的(见 domain/providers/defaults.get_row)。
     """
     if capability not in DEFAULTABLE_CAPABILITIES:
         raise HTTPException(status_code=404, detail=tr("routeErr_unknownCapability"))

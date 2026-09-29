@@ -20,7 +20,7 @@ from __future__ import annotations
 import threading
 import time
 
-from app.domain import provider_auth
+from app.domain.providers import auth as provider_auth
 from tests.util import add_provider, fresh_client
 from app.core.db import SessionLocal
 

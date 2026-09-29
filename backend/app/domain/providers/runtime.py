@@ -10,9 +10,10 @@ from __future__ import annotations
 from sqlalchemy.orm import Session
 
 from app.ai.model_catalog import cached_model
-from app.domain import model_limits, provider_models
-from app.domain.provider_credentials import ResolvedConnection
-from app.domain.providers import pi_provider_id
+from app.domain.providers import model_limits
+from app.domain.providers import models as provider_models
+from app.domain.providers.credentials import ResolvedConnection
+from app.domain.providers.selection import pi_provider_id
 
 
 def sidecar_provider(db: Session, profile: ResolvedConnection, model: str) -> dict:

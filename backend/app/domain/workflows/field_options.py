@@ -83,8 +83,8 @@ def _chat_connections(db: Session, ctx: OptionContext) -> list[Option]:
 
     判据和界面上那份一致:启用的;订阅计划要连过;填 Key 的要有 base_url。
     """
-    from app.domain import provider_credentials
-    from app.domain.providers import list_enabled_connections
+    from app.domain.providers import credentials as provider_credentials
+    from app.domain.providers.selection import list_enabled_connections
 
     options: list[Option] = []
     for profile in list_enabled_connections(db, owner_user_id=ctx.user_id):
@@ -109,7 +109,7 @@ def _chat_models(db: Session, ctx: OptionContext) -> list[Option]:
     同一端点上的生图/生视频模型也在下拉里,选中就是一次注定 400 的对话请求;也不核对连接
     归谁,拿别人的连接 id 当 parent 就能看到他配了哪些模型。
     """
-    from app.domain import provider_models
+    from app.domain.providers import models as provider_models
 
     parent = ctx.parent.strip()
     if not parent:
@@ -378,7 +378,7 @@ def _automation_chat_models(db: Session, ctx: OptionContext) -> list[Option]:
     """能跑自动化对话的模型,**跨连接直接列模型** —— 和画板「让 AI 写」、设置页默认模型同一份清单
     (provider_models.models_for_capability)。值是 `<连接 id>:<模型>`,一次挑定两样:「先选连接再选模型」逼人先知道
     模型挂在哪条连接下,而那恰恰是他不关心的事。"""
-    from app.domain import provider_models
+    from app.domain.providers import models as provider_models
 
     return [
         {"value": f"{row.provider_profile_id}:{row.model_id}", "label": row.display_name or row.model_id}

@@ -26,7 +26,7 @@ class Job(Base):
     id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
     workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False)
     #: 这活儿**替谁干**。后台线程手里只有一个 job:没有这一栏,它就答不出该用谁的钥匙、
-    #: 花谁的额度,于是只能全体共用一把(见 domain/provider_credentials)。定时触发的任务
+    #: 花谁的额度,于是只能全体共用一把(见 domain/providers/credentials)。定时触发的任务
     #: 记的是挂它的那个人(ScheduledTask.owner_user_id)—— 定时执行没有"当时的操作人",
     #: 但一定有一个"当初挂上去的人"。
     created_by: Mapped[str | None] = mapped_column(

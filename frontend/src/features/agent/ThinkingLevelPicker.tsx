@@ -17,7 +17,7 @@ type AgentSession = components["schemas"]["AgentSessionOut"];
 /**
  * 这个模型**真正发得出去**的档位。
  *
- * 由后端按 vendor + 模型名给(见 backend/app/domain/thinking.py),不再在这里推 ——
+ * 由后端按 vendor + 模型名给(见 backend/app/domain/providers/thinking.py),不再在这里推 ——
  * 各家的思考参数不是同一套词,而**猜错一个值就是整轮 400**。查证过的几家才有档位,
  * 其余是空清单,界面据此说"这条连接发不出思考档位"。
  *

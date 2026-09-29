@@ -132,13 +132,13 @@ def engine_ready(db: Session | None, engine_id: str, needs_key: bool, user_id: s
     """这个引擎**现在**能不能用 —— 不出网就能回答。
 
     三种情况:本机克隆看装没装(上面已经探过);不要钥匙的(Edge)随时能用;要钥匙的要看
-    **这个人**有没有配好那条连接 —— 钥匙归人(见 domain/provider_credentials),别人配过不算。
+    **这个人**有没有配好那条连接 —— 钥匙归人(见 domain/providers/credentials),别人配过不算。
     """
     if not needs_key:
         return True
     if db is None:
         return False
-    from app.domain.providers import resolve_connection
+    from app.domain.providers.selection import resolve_connection
 
     vendor = connection_vendor_for_speech_engine(engine_id)
     connection = resolve_connection(db, vendor, user_id=user_id)

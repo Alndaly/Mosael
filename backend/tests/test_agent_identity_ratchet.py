@@ -153,7 +153,7 @@ def test_the_decision_is_recorded_against_a_person() -> None:
     """自动放行也有人 —— 这次执行记在他头上,而不是记在"智能体"头上。
 
     智能体不是主体:它花的是批准者的额度、用的是批准者的钥匙(见 Job.created_by 与
-    domain/provider_credentials)。
+    domain/providers/credentials)。
     """
     owner = fresh_client()
     workspace = owner.post("/api/workspaces", json={"name": "W"}).json()

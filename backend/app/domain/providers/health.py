@@ -21,9 +21,9 @@ from dataclasses import dataclass
 import httpx
 
 from app.core.i18n import tr
-from app.domain.provider_credentials import ResolvedConnection
+from app.domain.providers.credentials import ResolvedConnection
 from app.core.http_retry import RetryingClient, auth_headers
-from app.domain.provider_presets import provider_definition
+from app.domain.providers.presets import provider_definition
 
 #: 探活要快。这不是业务请求 —— 慢到几秒的端点,用户想知道的也正是"它慢"。
 PROBE_TIMEOUT_SECONDS = 6

@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.domain.provider_quota import (
+from app.domain.providers.quota import (
     QuotaUnavailable,
     access_token,
     parse_anthropic,
@@ -169,7 +169,7 @@ def test_取访问令牌兼容各家键名(credential, expected):
 def test_过期判定按毫秒():
     """expires 是 epoch **毫秒**(pi 里判的是 Date.now() >= expires)。
     按秒比会让每一份凭据都显示成过期 —— 差三个数量级。"""
-    from app.domain.provider_quota import is_expired
+    from app.domain.providers.quota import is_expired
 
     now_ms = 1_700_000_000_000
     assert is_expired({"expires": now_ms - 1}, now_ms=now_ms) is True
@@ -182,13 +182,13 @@ def test_过期判定按毫秒():
 def test_过期与无权限是两种错():
     """403 基本是"这个端点不给这个账号用",和过期是两回事。混成一句会让用户
     反复去重新授权,而问题根本不在授权上。"""
-    from app.domain.provider_quota import CredentialExpired, QuotaUnavailable
+    from app.domain.providers.quota import CredentialExpired, QuotaUnavailable
 
     assert issubclass(CredentialExpired, QuotaUnavailable)
 
 
 def test_过期的凭据不发请求直接报过期():
-    from app.domain.provider_quota import CredentialExpired, fetch_quota
+    from app.domain.providers.quota import CredentialExpired, fetch_quota
 
     with pytest.raises(CredentialExpired):
         fetch_quota("anthropic", {"type": "oauth", "access": "tok", "expires": 1})
@@ -198,7 +198,7 @@ def _expired_oauth_client(name: str):
     """建一个凭据已过期的订阅档案,返回 (client, profile_id)。"""
     import time as _time
 
-    from app.domain import provider_auth
+    from app.domain.providers import auth as provider_auth
     from app.core.db import SessionLocal
     from tests.util import add_provider, fresh_client
 
@@ -225,14 +225,14 @@ def test_列出档案时自动刷新过期令牌(monkeypatch):
     """**过期本身不该走到用户面前**:订阅计划的 access token 只有几小时,刷新是协议里
     就有的一步。此前只有对话和查额度会触发刷新,于是隔夜打开设置页必然看到一行已过期 ——
     而它只要被用到就会自己好。这条锁住:列表接口自己先刷,刷成了就不再报过期。"""
-    from app.domain import provider_auth
+    from app.domain.providers import auth as provider_auth
     from app.core.db import SessionLocal
     from app.db.models import ProviderCredential
 
     client, profile_id, past = _expired_oauth_client("隔夜的订阅")
 
     def fake_refresh(**kwargs):
-        # 刷新写回的是**那个人**的钥匙,不再是档案行(见 domain/provider_credentials)。
+        # 刷新写回的是**那个人**的钥匙,不再是档案行(见 domain/providers/credentials)。
         with SessionLocal() as inner:
             row = inner.query(ProviderCredential).filter(ProviderCredential.profile_id == profile_id).one()
             row.oauth_credential = {"type": "oauth", "access": "new", "refresh": "r2", "expires": past + 10**7}
@@ -261,7 +261,7 @@ def test_列出档案时自动刷新过期令牌(monkeypatch):
 def test_刷新失败才报过期_且不会每次都重试(monkeypatch):
     """刷不动才是用户需要知道的事(refresh token 被吊销、账号在别处登出)—— 那时前端用
     警告色说"需重新授权"。同时:失败不该让最常被拉的这个接口每次都去起一次 node 撞同一堵墙。"""
-    from app.domain import provider_auth
+    from app.domain.providers import auth as provider_auth
     from app.ai.sidecar.adapters import AdapterError
 
     client, profile_id, _ = _expired_oauth_client("掉线的订阅")
@@ -310,7 +310,7 @@ def test_令牌过期时先刷新再查(monkeypatch):
     def fake_refresh(**kwargs):
         called.update(kwargs)
         # 模拟 pi 刷新后写回:换上一个尚未过期的令牌
-        # 刷新写回的是**那个人**的钥匙,不再是档案行(见 domain/provider_credentials)。
+        # 刷新写回的是**那个人**的钥匙,不再是档案行(见 domain/providers/credentials)。
         from app.db.models import ProviderCredential
 
         with SessionLocal() as inner:
@@ -339,7 +339,7 @@ def test_探活把_凭据不对_和_服务没起_分开() -> None:
     混成一个"离线"会让用户去重启一个根本没问题的服务。"""
     import httpx
 
-    from app.domain.provider_credentials import ResolvedConnection
+    from app.domain.providers.credentials import ResolvedConnection
 
     # 探活拿到的是**解析过的连接**(连接 + 这个人的钥匙),不再是 ORM 档案。
     profile = ResolvedConnection(
@@ -353,7 +353,7 @@ def test_探活把_凭据不对_和_服务没起_分开() -> None:
         def __exit__(self, *a): return False
         def get(self, url, headers=None): return httpx.Response(self.status, request=httpx.Request("GET", url))
 
-    import app.domain.provider_health as mod
+    import app.domain.providers.health as mod
 
     mod.RetryingClient = lambda **kw: _Stub(401)  # type: ignore[assignment]
     assert mod.probe(profile).online is True
@@ -364,8 +364,8 @@ def test_探活把_凭据不对_和_服务没起_分开() -> None:
 def test_订阅计划不探活() -> None:
     """它们没有我们持有的 base_url,端点在 pi 的 Provider 定义里。返回 supported=False,
     界面据此整列不显示,而不是显示一个假的"离线"。"""
-    from app.domain import provider_health
-    from app.domain.provider_credentials import ResolvedConnection
+    from app.domain.providers import health as provider_health
+    from app.domain.providers.credentials import ResolvedConnection
 
     profile = ResolvedConnection(id="p", name="Kimi", vendor="kimi", base_url="", auth_type="oauth", enabled=True)
     assert provider_health.probe(profile).supported is False

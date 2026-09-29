@@ -70,7 +70,7 @@ CHAT = "builtin:chat"
 
 def _chat_ready(db, owner_user_id: str | None) -> tuple[str, ...]:
     """对话模型那一家要**这个人**有一条启用着的对话连接 —— 钥匙归人。"""
-    from app.domain.providers import first_enabled_connection
+    from app.domain.providers.selection import first_enabled_connection
 
     #: 没有主人(系统任务、单元测试)就没有「他的连接」—— 连接归人。
     if db is None or not owner_user_id or first_enabled_connection(db, owner_user_id=owner_user_id) is None:
@@ -111,8 +111,8 @@ def resolve_ai_chat_target(
 ) -> ChatTarget:
     """`surface` 是调用方所在的执行通道(见 ai_chat.target_for):工作流节点是 automation ——
     订阅授权的连接经网关可用,和 LLM 节点一样;界面上的翻译接口是 direct。"""
-    from app.domain import provider_credentials
-    from app.domain.providers import find_enabled_connection, first_enabled_connection
+    from app.domain.providers import credentials as provider_credentials
+    from app.domain.providers.selection import find_enabled_connection, first_enabled_connection
 
     profile = (
         find_enabled_connection(db, "", profile_id, owner_user_id=user_id)

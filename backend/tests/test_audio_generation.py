@@ -25,7 +25,7 @@ from app.ai.providers.contracts.generation import (
 )
 from app.core.db import SessionLocal
 from app.db.models import Asset, GeneratedAsset, Job, ProviderUsageEvent
-from app.domain import provider_models
+from app.domain.providers import models as provider_models
 from app.domain.billing import price_reference
 from app.domain.generation import catalog as C
 from app.domain.generation.operations import (
@@ -35,8 +35,8 @@ from app.domain.generation.operations import (
 )
 from app.domain.generation.resolution import KINDS
 from app.domain.generation.runner import expected_asset_kind
-from app.domain.provider_defaults import DEFAULTABLE_CAPABILITIES
-from app.domain.provider_presets import KNOWN_CAPABILITY_IDS
+from app.domain.providers.defaults import DEFAULTABLE_CAPABILITIES
+from app.domain.providers.presets import KNOWN_CAPABILITY_IDS
 from app.domain.billing.usage import PRICING_BILLING_UNITS, _quantity_for_unit
 from sqlalchemy import select
 from tests.util import add_provider, fresh_client, wait_status

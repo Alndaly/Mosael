@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from app.core.db import SessionLocal
-from app.domain.providers import resolve_connection
+from app.domain.providers.selection import resolve_connection
 from tests.util import add_provider, fresh_client
 
 

@@ -237,5 +237,5 @@ def _execute_approved(db: Session, confirmation: ToolConfirmation) -> dict[str, 
     if spec is None:
         raise ConfirmationError(f"No executor for tool {confirmation.tool}")
     # 这一步替谁干:批准它的那个人。智能体自己不是主体 —— 它花的是批准者的额度、用的是
-    # 批准者的钥匙(见 domain/provider_credentials 与 Job.created_by)。
+    # 批准者的钥匙(见 domain/providers/credentials 与 Job.created_by)。
     return spec.execute(db, confirmation, confirmation.decided_by)

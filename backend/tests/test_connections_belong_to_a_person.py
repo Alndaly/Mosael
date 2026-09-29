@@ -107,7 +107,7 @@ def test_i_can_see_my_own_endpoint() -> None:
 
 def test_connection_resolution_checks_vendor_as_well_as_owner() -> None:
     """显式 id 不能让调用方口中的 vendor 失效；否则 MiniMax 那条路能拿 OpenAI 连接去调用。"""
-    from app.domain.providers import find_enabled_connection
+    from app.domain.providers.selection import find_enabled_connection
 
     client = fresh_client()
     profile_id = _create(client, "OpenAI")

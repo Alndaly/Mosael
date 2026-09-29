@@ -175,12 +175,13 @@ def add_provider(db, *, model: str = "", capability_ids=None, owner_username: st
     话,任何按能力解析模型的地方都会拿到空串(这正是重构时十几条测试红掉的原因,而它们红得
     有道理:少了模型行,那条连接确实没有可用模型)。
 
-    钥匙同理:`api_key` / `oauth_credential` 不再是连接上的列(见 domain/provider_credentials),
+    钥匙同理:`api_key` / `oauth_credential` 不再是连接上的列(见 domain/providers/credentials),
     传进来的落成**某个人**的钥匙 —— 默认是最早那个账号。要指名给谁就传 owner_username。
     没有"共享钥匙"这回事:每个人配自己的。
     """
     from app.db.models import ProviderProfile, User
-    from app.domain import provider_credentials, provider_models
+    from app.domain.providers import credentials as provider_credentials
+    from app.domain.providers import models as provider_models
 
     api_key = fields.pop("api_key", None)
     oauth_credential = fields.pop("oauth_credential", None)
@@ -205,7 +206,7 @@ def add_provider(db, *, model: str = "", capability_ids=None, owner_username: st
         # "部署默认"——见 provider_models.resolve_default),所以"配好了一条连接"在测试里必须包含
         # "某个人把它设成了自己的默认"。真实使用里也是同一步:谁配的钥匙,谁顺手选一下。
         # 已经有默认的能力不覆盖;要测「没有默认时怎么办」传 make_default=False。
-        from app.domain import provider_defaults
+        from app.domain.providers import defaults as provider_defaults
 
         if make_default:
             for capability in provider_models.effective_capabilities(row) if owner is not None else ():

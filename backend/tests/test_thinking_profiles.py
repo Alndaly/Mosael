@@ -10,7 +10,7 @@ k3 **一直思考**:`reasoning_effort` 只收 low/high/max,没有关闭这一说
 
 from __future__ import annotations
 
-from app.domain.thinking import LEVELS, UNKNOWN, profile_for
+from app.domain.providers.thinking import LEVELS, UNKNOWN, profile_for
 
 
 def test_kimi_k3_关不掉_而且没有中档() -> None:

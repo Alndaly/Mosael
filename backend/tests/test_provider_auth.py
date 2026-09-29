@@ -5,14 +5,14 @@ import time
 
 import pytest
 
-from app.domain.provider_auth import (
+from app.domain.providers.auth import (
     CredentialLeaseError,
     acquire_lease,
     commit_credential,
     read_credential,
     release_lease,
 )
-from app.domain.providers import auth_types_for_vendor, normalize_auth_type, pi_provider_id
+from app.domain.providers.selection import auth_types_for_vendor, normalize_auth_type, pi_provider_id
 
 """OAuth 凭据的互斥刷新。
 
@@ -27,7 +27,7 @@ sidecar,而对话页 / 工作流 / 飞书可以同时开工;两个 sidecar 拿�
 
 
 def _me() -> str:
-    """当前这个部署里的那个人。租约与凭据现在都按人定位(见 domain/provider_credentials),
+    """当前这个部署里的那个人。租约与凭据现在都按人定位(见 domain/providers/credentials),
     而 owner_user_id 是真外键 —— 编一个字符串会撞约束。"""
     from app.core.db import SessionLocal
     from app.db.models import User
@@ -86,7 +86,7 @@ def test_different_profiles_do_not_block_each_other() -> None:
 
 def test_a_dead_holder_does_not_lock_the_provider_forever(monkeypatch) -> None:
     """持有者会崩(sidecar 被杀、超时)。没有 TTL 的话一次崩溃就让该供应商永久不可刷新。"""
-    import app.domain.provider_auth as mod
+    import app.domain.providers.auth as mod
 
     monkeypatch.setattr(mod, "LEASE_TTL_SECONDS", 0.05)
     acquire_lease("p-dead", "u")  # 拿了就"死"了,永不释放
@@ -212,7 +212,7 @@ def test_租约只是自己超时时_照写不误(client_fixture) -> None:
     **「我拿到租约之后有没有别人写过」**。
     """
     from app.core.db import SessionLocal
-    from app.domain import provider_credentials
+    from app.domain.providers import credentials as provider_credentials
 
     client, profile_id = client_fixture
     lease = acquire_lease(profile_id, _me())
@@ -233,7 +233,7 @@ def test_租约只是自己超时时_照写不误(client_fixture) -> None:
 def test_有人在这期间写过就该丢掉自己这份(client_fixture) -> None:
     """被顶替是另一回事:别人刷出来的才是新的,我这份该丢。"""
     from app.core.db import SessionLocal
-    from app.domain import provider_credentials
+    from app.domain.providers import credentials as provider_credentials
 
     client, profile_id = client_fixture
     stale = acquire_lease(profile_id, _me())
@@ -256,7 +256,7 @@ def test_有人在这期间写过就该丢掉自己这份(client_fixture) -> Non
 
 def test_两种失败带着不同的code() -> None:
     """`code` 是给另一个运行时看的 —— sidecar 必须分得清这两件事,因为处置正好相反。"""
-    from app.domain.provider_auth import _check_lease, _lease_key
+    from app.domain.providers.auth import _check_lease, _lease_key
 
     key = _lease_key("p-code", "u")
     mine = acquire_lease("p-code", "u")
@@ -280,7 +280,7 @@ def test_两种失败带着不同的code() -> None:
 
 def test_续租让慢的那次不被顶替() -> None:
     """TTL 用来发现**死掉的**持有者,不该用来罚慢的那个 —— 一次走代理的跨境刷新很容易超过 30 秒。"""
-    from app.domain.provider_auth import renew_lease
+    from app.domain.providers.auth import renew_lease
 
     token = acquire_lease("p-renew", "u")
     try:
@@ -292,7 +292,7 @@ def test_续租让慢的那次不被顶替() -> None:
 
 
 def test_续租的租约不会在原TTL处过期(monkeypatch) -> None:
-    import app.domain.provider_auth as auth
+    import app.domain.providers.auth as auth
 
     clock = {"t": 1000.0}
     monkeypatch.setattr(auth, "_now", lambda: clock["t"])

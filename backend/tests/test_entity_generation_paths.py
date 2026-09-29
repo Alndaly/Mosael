@@ -14,7 +14,7 @@ import pytest
 
 from app.core.db import SessionLocal
 from app.db.models import Entity, EntityReference, ProviderProfile
-from app.domain import provider_models
+from app.domain.providers import models as provider_models
 from app.domain.generation.operations import prompt_for_provider
 from tests.util import board_revision, fresh_client, run_on_board, seed_assets
 

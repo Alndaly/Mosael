@@ -262,9 +262,9 @@ def test_地址空着时给人话而不是_httpx_那句协议错误() -> None:
 
     from app.core.db import SessionLocal
     from app.db.models import ProviderProfile
-    from app.domain import provider_models
+    from app.domain.providers import models as provider_models
     from app.domain.ai_chat import AiChatError, target_for
-    from app.domain.provider_credentials import ResolvedConnection
+    from app.domain.providers.credentials import ResolvedConnection
     from tests.util import fresh_client
 
     client = fresh_client()
@@ -288,9 +288,9 @@ def test_订阅连接不报_去填服务地址_而是说清只有智能体能用
 
     from app.core.db import SessionLocal
     from app.db.models import ProviderProfile
-    from app.domain import provider_models
+    from app.domain.providers import models as provider_models
     from app.domain.ai_chat import AiChatError, target_for
-    from app.domain.provider_credentials import ResolvedConnection
+    from app.domain.providers.credentials import ResolvedConnection
     from tests.util import fresh_client
 
     client = fresh_client()

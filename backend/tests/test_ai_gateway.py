@@ -9,7 +9,7 @@ from pathlib import Path
 from app.ai.sidecar import adapters
 from app.core.db import SessionLocal
 from app.domain.ai_chat import ChatTarget, chat, target_for
-from app.domain import provider_credentials
+from app.domain.providers import credentials as provider_credentials
 from tests.util import add_provider, fresh_client
 
 

@@ -23,8 +23,8 @@ from app.domain.ai_chat import AiChatError, ChatTarget, chat, target_for
 from app.domain.billing.usage import BillableCall, billable, once
 from sqlalchemy.orm import Session
 
-from app.domain import provider_models
-from app.domain.providers import require_connection
+from app.domain.providers import models as provider_models
+from app.domain.providers.selection import require_connection
 from app.core.i18n import LocalizedError
 
 _LLM_TIMEOUT_SECONDS = 60.0
@@ -211,7 +211,7 @@ def optimize_image_prompt(
     # 图像模型、且可能没有 chat 端点 / 密钥(空密钥会拼出非法的 'Bearer ' 头)。缺省时回退到显式
     # 传入的 profile / 首个启用的供应商。
     default = provider_models.resolve_default(db, "chat", user_id)
-    from app.domain import provider_credentials
+    from app.domain.providers import credentials as provider_credentials
 
     chat_profile = (
         provider_credentials.resolve_connection(db, default.profile, user_id) if default is not None else None

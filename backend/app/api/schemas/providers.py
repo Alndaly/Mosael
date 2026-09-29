@@ -40,12 +40,12 @@ class ProviderModelOut(ApiModel):
     vision: bool | None = None
     reasoning_effort: bool | None = None
     developer_role: bool | None = None
-    #: 这个端点能不能把 JSON Schema 当成**生成时的硬约束**(见 domain/structured_output)。
+    #: 这个端点能不能把 JSON Schema 当成**生成时的硬约束**(见 domain/providers/structured_output)。
     structured_output: bool | None = None
     #: 查证过的结论:True/False = 已知,None = 没查证过(维持现状:照发,被拒了再降级)。
     #: 和上面那一格是两回事 —— 那是"用户填了什么",这是"我们知道什么"。
     known_structured_output: bool | None = None
-    #: 这个模型**真正发得出去**的思考档位(见 domain/thinking)。空 = 一档都发不出。
+    #: 这个模型**真正发得出去**的思考档位(见 domain/providers/thinking)。空 = 一档都发不出。
     #: 设置页据此在「推理模型」旁边说清楚:开着这个开关也不会有档位可选,那不是配错了。
     thinking_levels: list[str] = Field(default_factory=list)
     #: 生成参数按什么来 —— `model:<provider>/<model>` 或 `profile:<id>`,留空 = 跟随目录。
@@ -223,7 +223,7 @@ class ProviderProfileOut(OrmModel):
     enabled: bool
     created_at: datetime
     #: **我自己**那把钥匙的尾四位(订阅计划是「已登录」)。别人的钥匙这里一律为空 ——
-    #: 连尾数都不该露(见 domain/provider_credentials)。
+    #: 连尾数都不该露(见 domain/providers/credentials)。
     key_hint: str = ""
     #: 我在这条连接上配过自己的钥匙吗。没配 → 这条连接对我不可用,界面直说。
     is_mine: bool = False
@@ -246,7 +246,7 @@ class ProviderProfileOut(OrmModel):
     quota_supported: bool = False
     #: access token 是否已过期。`oauth_linked` 只说"存过凭据",不说"现在有效" —— 两者分开,
     #: 卡片才能把「已授权但令牌过期」如实说出来,而不是让用户看着"已授权"却处处碰壁。
-    #: 过期不等于要重新授权:下次对话时 pi 会自动刷新(见 domain/provider_quota 的注释)。
+    #: 过期不等于要重新授权:下次对话时 pi 会自动刷新(见 domain/providers/quota 的注释)。
     oauth_expired: bool = False
 
     #: ORM 列 capability_ids 可为 None(=沿用 vendor 默认);model_validate 时先归一成 []。
@@ -282,7 +282,7 @@ class CapabilityModelOut(ApiModel):
     reasoning: bool | None = None
     #: 能不能**分档**(low/medium/high)。False/None 而 reasoning 为真 = 只能开/关。
     reasoning_effort: bool | None = None
-    #: 这个模型**真正发得出去**的思考档位(见 domain/thinking)。空 = 一档都发不出,
+    #: 这个模型**真正发得出去**的思考档位(见 domain/providers/thinking)。空 = 一档都发不出,
     #: 界面据此说"这条连接发不出思考档位",而不是摆四个做同一件事的选项。
     #: 这和上面两个字段是两回事:那两个说"这个模型会不会思考、能不能分档",
     #: 这个说"**我们**能不能把话传过去"。Kimi k3 会思考、也分档,但关不掉。

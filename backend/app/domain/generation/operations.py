@@ -329,7 +329,7 @@ def _default_model(db: Session, kind: str, user_id: str | None) -> tuple[str, st
     此前这段在三个入口里各抄一份,工作流节点则干脆不认;放在漏斗里,四个入口就是同一个答案。
     没有默认就直说,不替他挑一个(见 provider_models.resolve_default 的说明)。
     """
-    from app.domain import provider_models
+    from app.domain.providers import models as provider_models
 
     default = provider_models.resolve_default(db, kind, user_id)
     if default is None or default.profile is None:
@@ -486,7 +486,7 @@ def _title_from_prompt(prompt: str) -> str:
 
 def _vendor_can_generate(db: Session, vendor: str, kind: str) -> bool:
     """有没有一条启用的连接,其下有启用的模型声明了这种生成能力。"""
-    from app.domain import provider_models
+    from app.domain.providers import models as provider_models
 
     return any(
         model.profile is not None and model.profile.vendor == vendor

@@ -9,7 +9,7 @@
 
 from __future__ import annotations
 
-from app.domain.structured_output import effective_support, known_support
+from app.domain.providers.structured_output import effective_support, known_support
 from app.domain.workflows.executors.ai import _honour_structured_output
 
 

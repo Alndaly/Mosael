@@ -297,10 +297,10 @@ def test_模型一路传到调用目标(monkeypatch) -> None:
         name = "x"
 
     monkeypatch.setattr(
-        "app.domain.providers.find_enabled_connection", lambda *a, **k: _Profile(), raising=False
+        "app.domain.providers.selection.find_enabled_connection", lambda *a, **k: _Profile(), raising=False
     )
     monkeypatch.setattr(
-        "app.domain.provider_credentials.resolve_connection", lambda *a, **k: object(), raising=False
+        "app.domain.providers.credentials.resolve_connection", lambda *a, **k: object(), raising=False
     )
 
     assert tr.resolve_ai_chat_target(None, "p1", "u1", "kimi-k3") == "target"

@@ -14,7 +14,7 @@ import pytest
 
 from app.domain.billing import price_reference
 from app.domain.billing.price_reference import LIST_PRICES, ListPrice, lookup, lookup_for_relay
-from app.domain.provider_presets import KNOWN_CAPABILITY_IDS, provider_definition
+from app.domain.providers.presets import KNOWN_CAPABILITY_IDS, provider_definition
 from app.domain.billing.usage import PRICING_BILLING_UNITS
 
 # 这条测试是一道**棘轮**:它进 docs/CONVENTIONS.md 的清单,由 scripts/sync-ratchet-docs.py 生成。

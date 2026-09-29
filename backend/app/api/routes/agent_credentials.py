@@ -6,9 +6,9 @@
 两个接口对应 pi 的 `CredentialStore.modify` 一次调用的两半 —— 先 acquire 拿到独占权与当前值,
 在 sidecar 里完成刷新,再 commit 写回。**不能合并成一个 PUT**:那样两个并发的 sidecar 会各自
 刷新一次,而订阅制的 refresh token 多是一次性的,后手会让先手刚存好的凭据当场作废(表现为
-「刚登录就被登出」)。互斥的实现见 app.domain.provider_auth。
+「刚登录就被登出」)。互斥的实现见 app.domain.providers.auth。
 
-鉴权:每个人只碰**自己那把钥匙**(见 domain/provider_credentials)。此前这里认的是「能发起一轮
+鉴权:每个人只碰**自己那把钥匙**(见 domain/providers/credentials)。此前这里认的是「能发起一轮
 对话的人」,而凭据当时挂在档案行上、不属于任何人 —— 于是任何一个成员都能 acquire 到别人登录的
 订阅账号的明文凭据。现在 acquire/commit 都按 (连接, 当前用户) 定位:读不到别人的,写坏也只坏
 自己的,顶多是自己那条连接要重新登录。
@@ -24,8 +24,8 @@ from pydantic import BaseModel
 from app.core.i18n import tr
 from app.api.deps import CurrentUser, DbSession
 from app.db.models import ProviderProfile
-from app.domain import provider_credentials
-from app.domain.provider_auth import (
+from app.domain.providers import credentials as provider_credentials
+from app.domain.providers.auth import (
     CredentialLeaseError,
     acquire_lease,
     commit_credential,

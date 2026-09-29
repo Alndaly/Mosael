@@ -153,7 +153,7 @@ def ask(
 
 
 def _pick_profile(db, user_id: str | None):
-    from app.domain import provider_models
+    from app.domain.providers import models as provider_models
 
     default = provider_models.resolve_default(db, "chat", user_id)
     return default.profile if default is not None else None

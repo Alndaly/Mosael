@@ -14,7 +14,7 @@ import socket
 
 from app.core.db import SessionLocal
 from app.db.models import ProviderProfile, User
-from app.domain import provider_credentials
+from app.domain.providers import credentials as provider_credentials
 from tests.util import fresh_client, second_client
 
 PACKAGE = "dev.mosael.comfyui"

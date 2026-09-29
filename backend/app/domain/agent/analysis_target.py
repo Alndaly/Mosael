@@ -14,7 +14,7 @@ from app.ai.sidecar.adapters import AdapterError
 from app.db.models import AgentSession
 from app.domain.agent.host import resolve_chat_provider
 from app.domain.analysis.service import AnalysisError
-from app.domain.provider_credentials import ResolvedConnection
+from app.domain.providers.credentials import ResolvedConnection
 
 
 @dataclass(frozen=True)

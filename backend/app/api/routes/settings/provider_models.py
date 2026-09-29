@@ -7,9 +7,13 @@ from fastapi import APIRouter, HTTPException, Response
 from app.core.i18n import tr
 from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import ProviderModelOut, ProviderModelUpdate
-from app.domain import model_limits, provider_credentials, provider_models, structured_output, thinking
-from app.domain.provider_credentials import ResolvedConnection
-from app.domain.providers import normalize_capability_ids
+from app.domain.providers import model_limits
+from app.domain.providers import credentials as provider_credentials
+from app.domain.providers import models as provider_models
+from app.domain.providers import structured_output
+from app.domain.providers import thinking
+from app.domain.providers.credentials import ResolvedConnection
+from app.domain.providers.selection import normalize_capability_ids
 
 from app.domain.permissions import require_own_profile
 
@@ -56,7 +60,7 @@ def _known_fields(
     界面显示的必须是运行时会用的数,而不是界面自己再算一份回退 —— 弹窗此前写死
     `FALLBACK_CONTEXT_WINDOW = 32000`,而远程端点运行时用的是 128000(32000 只给本机/
     局域网):用户看到的数和请求真正带的数不是一个,于是「为什么只有 16,384 输出额度」
-    这种问题从界面上根本推不出来。合并规则在 domain/model_limits 一处。
+    这种问题从界面上根本推不出来。合并规则在 domain/providers/model_limits 一处。
     """
     resolved = model_limits.resolve(
         model_id=model_id,
@@ -78,7 +82,7 @@ def _known_fields(
         "effective_context_window": resolved.effective_context_window,
         "effective_max_output_tokens": resolved.effective_max_output_tokens,
         # 和会话里的模型选择器同一条判据(provider_defaults 那边也查这张表):档位由
-        # domain/thinking 说了算,查不到的模型一档都发不出去 —— 设置页要说出来,否则
+        # domain/providers/thinking 说了算,查不到的模型一档都发不出去 —— 设置页要说出来,否则
         # 用户只会看到「推理模型」开着、会话里却一个档位都没有,以为是自己漏配了什么。
         "thinking_levels": thinking.profile_for(vendor, model_id).levels(),
         # 查证过的结论。和模型行上那一格分开给 —— 界面要能说出「你没填,而我们知道这个端点不支持」。

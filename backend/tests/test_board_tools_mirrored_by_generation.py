@@ -76,7 +76,7 @@ def _connect_reporting(owner_id: str, *, with_model: bool, name: str = "我的 C
     from app.db.models import PluginInstance, ProviderModel
     from app.domain.plugins.dynamic_tools import clean_mirror
     from app.domain.plugins.tools import refresh_tools
-    from app.domain.providers import adopt_plugin_connection
+    from app.domain.providers.selection import adopt_plugin_connection
 
     reported = [{**tool, **({"mirrors": clean_mirror(tool["mirrors"])} if "mirrors" in tool else {})} for tool in REPORTED]
     with SessionLocal() as db:
@@ -324,7 +324,7 @@ def test_保存加预览的ControlNet工作流_存着的工具格也改写成生
     from app.domain.plugins import runtime
     from app.domain.plugins.dynamic_tools import clean_mirror
     from app.domain.plugins.tools import refresh_tools
-    from app.domain.providers import adopt_plugin_connection
+    from app.domain.providers.selection import adopt_plugin_connection
     from tests.fake_comfyui import CONTROLNET_API, FakeComfyUI
     from tests.util import seed_assets
 

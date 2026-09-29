@@ -51,8 +51,8 @@ def active_model_for(engine_cls: type, user_id: str | None = None) -> str:
     default = getattr(engine_cls, "DEFAULT_MODEL", "")
     try:
         from app.core.db import SessionLocal
-        from app.domain import provider_models
-        from app.domain.providers import find_enabled_connection
+        from app.domain.providers import models as provider_models
+        from app.domain.providers.selection import find_enabled_connection
 
         with SessionLocal() as db:
             profile = find_enabled_connection(
@@ -216,7 +216,7 @@ def list_engine_voices(db: Session, engine: str, *, user_id: str | None) -> list
     it is smaller and can go stale, which is a far better failure than an empty dropdown.
     """
     from app.ai.providers import REMOTE_SPEECH_ADAPTERS
-    from app.domain.providers import resolve_connection
+    from app.domain.providers.selection import resolve_connection
 
     # **固定音色的引擎不在这里再写一遍。** 这个函数原本是逐引擎的 if 分支,末尾一句
     # `if engine != "volcano": return []` —— 于是加一个引擎要改两处(引擎目录 + 这里),
@@ -248,7 +248,7 @@ def list_engine_voices(db: Session, engine: str, *, user_id: str | None) -> list
         labels = {**dict(EDGE_BUILTIN_VOICES), **dict(PODCAST_SPEAKERS), **dict(VOLCANO_BUILTIN_VOICES)}
         return [{"value": voice, "label": labels.get(voice, voice)} for voice in voices]
 
-    # ak/sk 是密字段,跟着**我自己**那把钥匙走(见 domain/provider_credentials) ——
+    # ak/sk 是密字段,跟着**我自己**那把钥匙走(见 domain/providers/credentials) ——
     # 列音色用的是我的账号,不是"这个部署里随便谁的"。
     volcano = resolve_connection(db, "volcano", user_id=user_id)
     ak, sk = str((volcano.extra if volcano else {}).get("ak") or ""), str((volcano.extra if volcano else {}).get("sk") or "")

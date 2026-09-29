@@ -427,7 +427,7 @@ def _writable_profile(client) -> str:
     顶上会在落账时炸。调用由测试自己 mock 掉,不会真的发出去。"""
     from app.core.db import SessionLocal
     from app.db.models import ProviderProfile
-    from app.domain import provider_models
+    from app.domain.providers import models as provider_models
 
     profile_id = client.post(
         "/api/settings/providers",
@@ -1090,7 +1090,7 @@ def test_便签上已有内容时是改写而不是重写() -> None:
 
     from app.core.db import SessionLocal
     from app.db.models import ProviderProfile
-    from app.domain import provider_models
+    from app.domain.providers import models as provider_models
 
     client = fresh_client()
     ws = _workspace(client)
@@ -1146,7 +1146,7 @@ def test_连过来的图片会让模型看着写() -> None:
 
     from app.core.db import SessionLocal
     from app.db.models import ProviderProfile
-    from app.domain import provider_models
+    from app.domain.providers import models as provider_models
 
     client = fresh_client()
     ws = _workspace(client)
@@ -1300,7 +1300,7 @@ def test_上游便签给的材料和要求分开发() -> None:
 
     from app.core.db import SessionLocal
     from app.db.models import ProviderProfile
-    from app.domain import provider_models
+    from app.domain.providers import models as provider_models
 
     client = fresh_client()
     ws = _workspace(client)

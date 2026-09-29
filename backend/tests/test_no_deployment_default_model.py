@@ -71,7 +71,7 @@ def test_someone_elses_default_is_not_mine() -> None:
 
 def test_resolving_without_my_own_default_gives_nothing() -> None:
     """解析链的终点是 None,不是"某个还凑合的模型"。"""
-    from app.domain import provider_models
+    from app.domain.providers import models as provider_models
 
     fresh_client()
     _provider()
@@ -168,7 +168,7 @@ def test_a_deployment_row_left_in_the_database_is_ignored() -> None:
     """
     from sqlalchemy import text
 
-    from app.domain import provider_models
+    from app.domain.providers import models as provider_models
 
     client = fresh_client()
     profile_id = _provider()

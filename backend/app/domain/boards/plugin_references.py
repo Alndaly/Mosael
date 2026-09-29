@@ -169,7 +169,7 @@ def generation_index(db: Session, user_id: str | None, kinds: Any = None) -> Gen
     问的就是生成选择器问的那一个(provider_models.models_for_capability),不另判「能不能用」;只收插件连接
     (`plugin_instance_id` 指回实例)下的 —— 工具和模型要是**同一个连接**的才算同一件事。
     """
-    from app.domain import provider_models
+    from app.domain.providers import models as provider_models
     from app.domain.generation.catalog import GENERATION_KINDS
 
     index: GenerationIndex = {}

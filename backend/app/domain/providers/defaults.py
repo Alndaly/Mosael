@@ -21,7 +21,7 @@ def get_row(db: Session, capability: str, user_id: str | None) -> ProviderDefaul
     那种误解:界面上你没选过任何模型,回答却来自某个你不知道的模型,花的是你的额度、用的是
     你的钥匙,而你从没同意过。
 
-    和凭据解析同一个形状(见 domain/provider_credentials.pick),理由也同一条:替人做的选择
+    和凭据解析同一个形状(见 domain/providers/credentials.pick),理由也同一条:替人做的选择
     必须是他自己做的。
     """
     if not user_id:

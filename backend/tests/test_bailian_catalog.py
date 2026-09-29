@@ -51,7 +51,7 @@ def test_能力按模型推_不套用vendor全集() -> None:
     后果是具体的:从目录里加一个 qwen-tts,它会被声明成"也能做视频",随即出现在视频生成的
     下拉里 —— 选了必然失败,而用户只会以为是自己配错了。
     """
-    from app.domain.provider_models import infer_capabilities
+    from app.domain.providers.models import infer_capabilities
 
     assert infer_capabilities("alibaba", "wan2.7-i2v") == ["video"]
     assert infer_capabilities("alibaba", "wan2.2-t2v-plus") == ["video"]
@@ -65,7 +65,7 @@ def test_能力按模型推_不套用vendor全集() -> None:
 def test_推不出来的回空_由调用方回落() -> None:
     """对话模型的名字没有可靠线索,硬推只会推错。推不出来就回空,让 vendor 兜底 ——
     行为和以前一样,不是收紧。"""
-    from app.domain.provider_models import infer_capabilities
+    from app.domain.providers.models import infer_capabilities
 
     assert infer_capabilities("alibaba", "qwen-max") == []
     assert infer_capabilities("alibaba", "") == []

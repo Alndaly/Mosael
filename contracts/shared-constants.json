@@ -76,7 +76,7 @@
       "implementations": [
         {
           "runtime": "python",
-          "location": "backend/app/domain/provider_auth.py",
+          "location": "backend/app/domain/providers/auth.py",
           "symbol": "LEASE_TTL_SECONDS"
         },
         {
@@ -93,7 +93,7 @@
       "implementations": [
         {
           "runtime": "python",
-          "location": "backend/app/domain/provider_auth.py",
+          "location": "backend/app/domain/providers/auth.py",
           "symbol": "ACQUIRE_TIMEOUT_SECONDS"
         },
         {

@@ -7,7 +7,7 @@
     "锚点规则:从后往前找**最近一条带 usage 的 assistant 消息**;它的 usage 就是供应商上次实际看到的量,锚之后的消息才需要估算;一条 usage 都没有就整段估算。",
     "usage 里 input/output 都为空(或都是 0)的不算锚 —— 那种消息说明不了供应商看到了多少。",
     "语料里的文本刻意只用 BMP 字符(ASCII 与常用汉字):Python 的 len() 数码点、JS 的 .length 数 UTF-16 码元,两者只在非 BMP(emoji、罕用字)上分叉。那是一个估算器可以接受的近似,写进契约只会逼两侧互相迁就,所以不放进来 —— 与 ADR-0004 把调色留在契约之外是同一类取舍。",
-    "`max_output_cases` 是**回退中的回退**:目录、用户设置、以及后端内置的查证表(backend/app/domain/model_limits.py)都没有这个模型时才走到这里。回退的形状要两侧一致,否则界面上显示的额度和请求真正带的 max_tokens 不是一个数。内置表只在后端,sidecar 拿到的是后端算好的数 —— 表不进契约,回退进。"
+    "`max_output_cases` 是**回退中的回退**:目录、用户设置、以及后端内置的查证表(backend/app/domain/providers/model_limits.py)都没有这个模型时才走到这里。回退的形状要两侧一致,否则界面上显示的额度和请求真正带的 max_tokens 不是一个数。内置表只在后端,sidecar 拿到的是后端算好的数 —— 表不进契约,回退进。"
   ],
   "constants": {
     "chars_per_token": 3.5,

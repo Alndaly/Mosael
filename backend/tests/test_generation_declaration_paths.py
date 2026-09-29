@@ -17,7 +17,7 @@ from sqlalchemy import select
 
 from app.core.db import SessionLocal
 from app.db.models import ProviderProfile, User
-from app.domain import provider_models
+from app.domain.providers import models as provider_models
 from app.domain.generation.operations import GenerationDomainError, create_generation_job
 from tests.util import fresh_client, run_on_board, second_client
 

@@ -26,9 +26,9 @@ from app.core.i18n import get_current_locale, tr
 from app.db.models import ProviderPricingRule, ProviderProfile
 from app.domain.billing import price_reference
 from app.domain.billing.price_reference import ListPrice
-from app.domain.provider_models import effective_capabilities, list_models
-from app.domain.provider_presets import provider_definition
-from app.domain.providers import capability_ids_for_vendor
+from app.domain.providers.models import effective_capabilities, list_models
+from app.domain.providers.presets import provider_definition
+from app.domain.providers.selection import capability_ids_for_vendor
 from app.domain.billing.usage import CATALOG_PRICE_UNITS, PriceQuote, prefill_model_pricing
 
 #: 目录报价的币种。OpenRouter 一类端点与 pi 的 ModelCost 都按美元报。

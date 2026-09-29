@@ -229,7 +229,7 @@ def test_对话模型只列这条连接上会对话的_而且得是我的连接(
     连接 id 当 parent 就能看到他那条连接上配了哪些模型。
     """
     from app.db.models import User
-    from app.domain import provider_models
+    from app.domain.providers import models as provider_models
     from app.domain.workflows.field_options import field_options
     from tests.util import add_provider, second_client
 

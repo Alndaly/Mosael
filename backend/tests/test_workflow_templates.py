@@ -346,7 +346,7 @@ class Test示范工作流要挑得动的模型:
 
     def test_默认图像模型只会文生图时换一个能带参考的(self) -> None:
         from app.core.db import SessionLocal
-        from app.domain.provider_defaults import set_default
+        from app.domain.providers.defaults import set_default
         from app.domain.workflows.templates import _reference_image_model
         from tests.util import fresh_client
 

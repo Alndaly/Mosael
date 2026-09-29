@@ -15,8 +15,8 @@ from __future__ import annotations
 from app.core.db import SessionLocal
 from app.db.models import User
 from app.db.models import ProviderProfile
-from app.domain import provider_models
-from app.domain.provider_defaults import set_default
+from app.domain.providers import models as provider_models
+from app.domain.providers.defaults import set_default
 from tests.util import add_provider, fresh_client
 
 

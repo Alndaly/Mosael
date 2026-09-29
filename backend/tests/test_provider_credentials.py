@@ -108,7 +108,7 @@ def test_i_cannot_change_someone_elses_connection() -> None:
 
 def test_each_person_uses_their_own_key() -> None:
     """两个人各配各的连接、各配各的钥匙,取到的必须是自己那把。"""
-    from app.domain import provider_credentials
+    from app.domain.providers import credentials as provider_credentials
 
     admin, mate = _deployment_admin_and_member()
     theirs = _connection(admin)
@@ -130,7 +130,7 @@ def test_default_resolution_never_selects_another_users_earlier_connection() -> 
     否则管理员较早创建的连接会被所有人先选中；随后凭据装配又正确地拒绝跨用户读取，最终让
     已经配置好自己连接的普通成员得到 None。
     """
-    from app.domain import providers
+    from app.domain.providers import selection as providers
 
     admin, mate = _deployment_admin_and_member()
     theirs = _connection(admin, "管理员较早创建的")
@@ -164,7 +164,7 @@ def test_there_is_no_such_thing_as_a_shared_key() -> None:
     """**没有回退。** 曾经有过一个 `shared` 位(部署管理员放一把大家都能用的),删掉了:它没有
     任何界面(等于隐藏状态),而且回退到别人的钥匙正是这张表要消灭的东西。"""
     from app.db.models import ProviderCredential
-    from app.domain import provider_credentials
+    from app.domain.providers import credentials as provider_credentials
 
     admin, _mate = _deployment_admin_and_member()
     profile_id = _connection(admin)
@@ -204,7 +204,7 @@ def test_the_migration_hands_existing_keys_to_the_deployment_admin() -> None:
 
     _migrate_provider_credentials()
 
-    from app.domain import provider_credentials
+    from app.domain.providers import credentials as provider_credentials
 
     with SessionLocal() as db:
         mine = provider_credentials.resolve_connection(db, db.get(ProviderProfile, profile_id), _user_id("tester"))
@@ -246,7 +246,7 @@ def test_the_migration_adds_missing_columns_to_an_existing_credential_table() ->
 
     _migrate_provider_credentials()  # 不该抛
 
-    from app.domain import provider_credentials
+    from app.domain.providers import credentials as provider_credentials
 
     with SessionLocal() as db:
         resolved = provider_credentials.resolve_connection(db, db.get(ProviderProfile, profile_id), _user_id("tester"))

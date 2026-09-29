@@ -174,7 +174,7 @@ def test_api_key_vendors_cannot_start_an_oauth_login(client_and_profile) -> None
 def test_logout_clears_both_the_credential_and_the_catalog(fake_sidecar, client_and_profile) -> None:
     """留下目录会让登出后的模型选择器仍列着一堆用不了的模型。"""
     from app.core.db import SessionLocal
-    from app.domain.provider_auth import acquire_lease, commit_credential
+    from app.domain.providers.auth import acquire_lease, commit_credential
 
     client, profile_id = client_and_profile
     login_id = client.post(f"/api/settings/providers/{profile_id}/oauth/login").json()["login_id"]

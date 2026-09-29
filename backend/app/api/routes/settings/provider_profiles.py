@@ -15,10 +15,13 @@ from app.api.schemas import (
     VendorPresetOut,
 )
 from app.db.models import ProviderProfile
-from app.domain import provider_auth, provider_connections, provider_credentials, provider_health
+from app.domain.providers import auth as provider_auth
+from app.domain.providers import connections as provider_connections
+from app.domain.providers import credentials as provider_credentials
+from app.domain.providers import health as provider_health
 from app.domain.agent.host import mint_tool_token
 from app.domain.permissions import require_own_profile
-from app.domain.provider_presets import provider_definitions
+from app.domain.providers.presets import provider_definitions
 
 router = APIRouter(tags=["settings"])
 

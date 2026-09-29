@@ -20,7 +20,7 @@ from __future__ import annotations
 import pytest
 
 from app.ai.providers import has_capability_implementation
-from app.domain.provider_presets import provider_definition, provider_definitions
+from app.domain.providers.presets import provider_definition, provider_definitions
 
 # 这条测试是一道**棘轮**:它进 docs/CONVENTIONS.md 的清单,由 scripts/sync-ratchet-docs.py 生成。
 RATCHET = True

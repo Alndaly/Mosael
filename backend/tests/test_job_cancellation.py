@@ -160,7 +160,7 @@ def test_generation_cancelled_during_provider_call_does_not_import_results(monke
     adapter = SimpleNamespace(requires_credentials=lambda: False, validate_request=lambda r: None,
                               supports_progress_callbacks=False, generate=generate)
     monkeypatch.setattr(runner, "get_generation_adapter", lambda *a: adapter)
-    monkeypatch.setattr("app.domain.providers.resolve_connection", lambda *a, **kw: None)
+    monkeypatch.setattr("app.domain.providers.selection.resolve_connection", lambda *a, **kw: None)
     monkeypatch.setattr(runner, "_record_generation_usage", lambda *a, **kw: None)
     importer = Mock(side_effect=AssertionError("cancelled output must not be imported"))
     monkeypatch.setattr(runner, "register_file_asset", importer)

@@ -107,7 +107,7 @@ def _summarize_generate_audio(db: Session, payload: dict[str, Any]) -> Summary:
 def _execute_generate_audio(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
     payload = confirmation.payload
     from app.domain.voices.voices import start_synthesis
-    from app.domain import provider_models
+    from app.domain.providers import models as provider_models
 
     profile_id = str(payload.get("provider_profile_id") or "").strip()
     engine = str(payload.get("engine") or payload.get("provider") or "").strip()
@@ -152,7 +152,7 @@ def _summarize_generate_podcast(db: Session, payload: dict[str, Any]) -> Summary
 def _execute_generate_podcast(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
     payload = confirmation.payload
     from app.domain.voices.voices import start_podcast
-    from app.domain import provider_models
+    from app.domain.providers import models as provider_models
 
     profile_id = str(payload.get("provider_profile_id") or "").strip()
     if not profile_id:

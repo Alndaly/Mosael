@@ -43,7 +43,7 @@ def test_profile_picking_prefers_vision_vendors() -> None:
     with SessionLocal() as db:
         from app.db.models import User
 
-        # 钥匙是建连接那个人的 —— 解析要说清「为谁」(见 domain/provider_credentials)。
+        # 钥匙是建连接那个人的 —— 解析要说清「为谁」(见 domain/providers/credentials)。
         me = db.query(User).order_by(User.created_at).first().id
         assert service.select_analysis_connection(db, None, me).vendor == "moonshot"  # order: moonshot first
 
@@ -352,7 +352,7 @@ def test_vision_call_refuses_a_profile_with_no_chat_model() -> None:
     那个回落曾经真实存在:用户选的是 Kimi,分析却跑在别家端点的 gpt-4o-mini 上 ——
     静默换模型换厂商,正是 provider_credentials 要消灭的「花错钱」。
     """
-    from app.domain.provider_credentials import ResolvedConnection
+    from app.domain.providers.credentials import ResolvedConnection
 
     fresh_client()  # 建表 —— 没有它,单独跑这条测试时 model_id_for 会撞「没有这张表」
     profile = ResolvedConnection(

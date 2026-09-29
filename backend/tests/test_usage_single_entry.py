@@ -170,7 +170,7 @@ def test_每种能力都有记账的路径() -> None:
     import subprocess
     from pathlib import Path as _Path
 
-    from app.domain.providers import ALL_CAPABILITY_IDS
+    from app.domain.providers.selection import ALL_CAPABILITY_IDS
 
     backend = _Path(__file__).resolve().parents[1]
     tracked = subprocess.run(

@@ -79,7 +79,7 @@ NOT_WORKSPACE_SCOPED = {
     "workspaces.py",     # 建工作区本身(还没有工作区可查)、成员管理各自 ensure_workspace_role
     "invitations.py",    # 受邀人应答自己的邀请
     "notifications.py",  # 自己的通知
-    "agent_credentials.py",  # 每个人自己的钥匙(见 domain/provider_credentials)
+    "agent_credentials.py",  # 每个人自己的钥匙(见 domain/providers/credentials)
     "shares.py",         # 主人共享自己的东西(只认主人,不看角色)
     "job_worker.py",     # 外部任务执行器的认领/回报通道(独立的 worker key)
     "oauth.py",          # 第三方登录:还没有登录用户,更没有工作区

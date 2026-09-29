@@ -39,7 +39,7 @@ from app.core.config import settings
 from app.core.db import SessionLocal
 from app.core.i18n import LocalizedError, get_current_locale, pick_text
 from app.db.models import PluginInstance, ProviderProfile
-from app.domain import provider_models
+from app.domain.providers import models as provider_models
 from app.domain.generation.catalog import GENERATION_KINDS, PROMPT_MODES
 from app.domain.plugins import host_capabilities
 from app.domain.plugins import instances as inst
@@ -176,7 +176,7 @@ def sync(db: Session, instance: PluginInstance, refresh: bool) -> None:
     if GENERATION not in manifest.provides:
         return
     usable = not inst.blocked_reason(db, instance)
-    from app.domain.providers import adopt_plugin_connection
+    from app.domain.providers.selection import adopt_plugin_connection
 
     profile = adopt_plugin_connection(
         db,

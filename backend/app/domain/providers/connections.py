@@ -16,12 +16,13 @@ from sqlalchemy.orm import Session
 
 from app.core.i18n import LocalizedError
 from app.db.models import ProviderCredential, ProviderProfile
-from app.domain import provider_credentials, provider_models
+from app.domain.providers import credentials as provider_credentials
+from app.domain.providers import models as provider_models
 from app.domain.generation.plugin_connections import package_of
-from app.domain.provider_auth import read_credential, refresh_recently_failed
-from app.domain.provider_presets import ProviderField, provider_definition
-from app.domain.provider_quota import is_expired, supports_quota
-from app.domain.providers import normalize_auth_type, pi_provider_id
+from app.domain.providers.auth import read_credential, refresh_recently_failed
+from app.domain.providers.presets import ProviderField, provider_definition
+from app.domain.providers.quota import is_expired, supports_quota
+from app.domain.providers.selection import normalize_auth_type, pi_provider_id
 
 
 class ConnectionConfigError(LocalizedError, ValueError):

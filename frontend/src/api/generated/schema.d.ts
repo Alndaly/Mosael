@@ -5002,7 +5002,7 @@ export interface paths {
          *
          *     不要求部署管理员:「我默认用哪个模型」是个人偏好,和钥匙一样(见 db.models.ProviderDefault)。
          *     曾经有过 `for_deployment` —— 写那一行 `owner_user_id=""` 当作"还没设过的人的起点" ——
-         *     删掉了:替人做的选择必须是他自己做的(见 domain/provider_defaults.get_row)。
+         *     删掉了:替人做的选择必须是他自己做的(见 domain/providers/defaults.get_row)。
          */
         put: operations["set_provider_default_api_settings_provider_defaults__capability__put"];
         post?: never;

@@ -19,7 +19,7 @@ from app.db.models import (
     GenerationCapabilityProfile,
     ProviderModel,
 )
-from app.domain import provider_models
+from app.domain.providers import models as provider_models
 from app.domain.generation.catalog import (
     GENERATION_KINDS,
     capabilities_are_known,

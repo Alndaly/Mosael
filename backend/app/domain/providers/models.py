@@ -26,9 +26,9 @@ from sqlalchemy.orm import Session, object_session
 from app.ai.model_catalog import CatalogModel, fetch_models
 from app.core.i18n import tr
 from app.db.models import GenerationCapabilityDeclaration, ProviderModel, ProviderProfile
-from app.domain import thinking
-from app.domain.provider_credentials import ResolvedConnection
-from app.domain.providers import capability_ids_for_vendor, normalize_capability_ids
+from app.domain.providers import thinking
+from app.domain.providers.credentials import ResolvedConnection
+from app.domain.providers.selection import capability_ids_for_vendor, normalize_capability_ids
 
 #: 模型行上可被用户覆盖的运行时参数。留空表示跟随目录/保守默认 —— 与 False 是两回事。
 RUNTIME_FIELDS = (
@@ -216,7 +216,7 @@ def models_for_capability(
     if surface in {"direct", "gateway", "automation"}:
         # OAuth 订阅由 pi Adapter 持有端点和凭据；后端直连 Adapter 没有 base_url/api_key 可用。
         # 能力同为 chat 只说明模型会对话，不代表两条执行通道可以互换。
-        from app.domain import provider_credentials
+        from app.domain.providers import credentials as provider_credentials
 
         def direct(model: ProviderModel) -> bool:
             return (
@@ -255,7 +255,7 @@ def resolve_default(db: Session, capability: str, user_id: str | None = None) ->
 
     `user_id` 给 None(后台里确实没有人的那些路径)时直接回 None:没有人,就没有他的默认。
     """
-    from app.domain.provider_defaults import get_row
+    from app.domain.providers.defaults import get_row
 
     row = get_row(db, capability, user_id)
     if row is not None and row.provider_model_id:
@@ -284,7 +284,7 @@ def runtime_limits(model: ProviderModel | None) -> dict[str, Any]:
         if value is not None:
             values[field] = value
     # 各家的思考参数不是同一套词,而**猜错一个值就是整轮 400**。查证过的按 vendor 给,
-    # 其余不声明(见 domain/thinking)。pi 拿 thinkingLevelMap 决定某一档发什么、发不发。
+    # 其余不声明(见 domain/providers/thinking)。pi 拿 thinkingLevelMap 决定某一档发什么、发不发。
     profile = thinking.profile_for(model.profile.vendor if model.profile else "", model.model_id)
     if any(mapped is not None for mapped in profile.level_map.values()):
         values["thinking_level_map"] = profile.level_map

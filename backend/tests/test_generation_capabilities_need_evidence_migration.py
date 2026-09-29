@@ -22,7 +22,7 @@ from app.db.models import (
     ProviderModel,
     ProviderProfile,
 )
-from app.domain import provider_models
+from app.domain.providers import models as provider_models
 from app.domain.generation.resolution import GenerationResolutionError, generation_options, resolve_generation_model
 from tests.util import fresh_client, user_id
 

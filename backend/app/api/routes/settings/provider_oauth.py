@@ -8,7 +8,8 @@ from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import OAuthAnswerIn, OAuthLoginOut, OAuthPromptOut, ProviderModelOut, ProviderProfileOut, ProviderQuotaOut
 from app.core.config import settings as settings_config
 from app.db.models import ProviderProfile, new_id
-from app.domain import provider_credentials, provider_models
+from app.domain.providers import credentials as provider_credentials
+from app.domain.providers import models as provider_models
 from app.domain.agent.host import mint_tool_token
 from app.domain.agent.login import (
     LoginError,
@@ -17,9 +18,9 @@ from app.domain.agent.login import (
     get_session as get_login_session,
     start_login,
 )
-from app.domain.provider_auth import acquire_lease, commit_credential, read_credential
-from app.domain.provider_quota import QuotaUnavailable, fetch_quota, is_expired, supports_quota
-from app.domain.providers import pi_provider_id
+from app.domain.providers.auth import acquire_lease, commit_credential, read_credential
+from app.domain.providers.quota import QuotaUnavailable, fetch_quota, is_expired, supports_quota
+from app.domain.providers.selection import pi_provider_id
 
 from app.domain.permissions import require_own_profile
 

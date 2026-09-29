@@ -3,7 +3,7 @@
  *
  * 用户在全局搜索框里看到「搜索页面、项目、素材、**知识库**…」—— 而那个东西整个不存在了:
  * 后端没有 dataset 节点、没有 dataset_id 字段,连 embedding 能力都没有任何消费者
- * (`domain/provider_defaults` 的注释就写着「知识库删掉之后 embedding 没有任何消费者」)。
+ * (`domain/providers/defaults` 的注释就写着「知识库删掉之后 embedding 没有任何消费者」)。
  *
  * 最糟的三条不是搜索框那句,是这几句 **在教用户去做一件做不到的事**:
  *

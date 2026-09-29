@@ -31,7 +31,7 @@ from sqlalchemy import select
 from app.core.db import SessionLocal
 from app.core.i18n import LocalizedError, tr
 from app.db.models import Asset, GeneratedAsset, GenerationJob, Job
-from app.domain import provider_models
+from app.domain.providers import models as provider_models
 from app.domain.generation.operations import prompt_for_provider
 from app.domain.jobs import (
     blame,
@@ -132,7 +132,7 @@ def _run_generation(generation_id: str, *, resume_from: str = "") -> None:
             ))
             return
 
-        from app.domain.providers import resolve_connection
+        from app.domain.providers.selection import resolve_connection
 
         # 这次生成替谁干:job 上记着(见 Job.created_by)—— 用他的钥匙、花他的额度。
         profile = resolve_connection(db, generation.provider, generation.provider_profile_id, user_id=job.created_by)

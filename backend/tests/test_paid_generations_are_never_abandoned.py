@@ -159,7 +159,7 @@ def _adapter(**overrides: Any) -> SimpleNamespace:
 def quiet_runner(monkeypatch):
     from app.domain.generation import runner
 
-    monkeypatch.setattr("app.domain.providers.resolve_connection", lambda *a, **kw: None)
+    monkeypatch.setattr("app.domain.providers.selection.resolve_connection", lambda *a, **kw: None)
     monkeypatch.setattr(runner, "_record_generation_usage", lambda *a, **kw: None)
     return runner
 

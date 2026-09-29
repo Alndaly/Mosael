@@ -261,7 +261,7 @@ def test_提交前就说清楚_而且只拦真没有链接的那一份() -> None
 
     from app.core.db import SessionLocal
     from app.db.models import Asset, ProviderProfile, User
-    from app.domain import provider_models
+    from app.domain.providers import models as provider_models
     from app.domain.generation.operations import GenerationDomainError, create_generation_job
     from tests.util import fresh_client
 

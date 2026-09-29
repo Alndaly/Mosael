@@ -13,7 +13,7 @@ from pathlib import Path
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.domain import provider_models
+from app.domain.providers import models as provider_models
 from app.domain.billing.usage import billable, once
 from app.ai.runtime import tts_daemon, tts_models
 from app.ai.runtime.tts_language import clone_supports, detect_script, edge_voice_language
@@ -724,7 +724,7 @@ def speak_to_file(
         build_speech_adapter,
         connection_vendor_for_speech_engine,
     )
-    from app.domain.providers import resolve_connection
+    from app.domain.providers.selection import resolve_connection
 
     if is_plugin(engine):
         return _speak_with_plugin(db, engine, text=text, voice=engine_voice, speed=speed, out_dir=out_dir)
@@ -943,7 +943,7 @@ def _run_podcast_body(
     provider_profile_id: str | None = None,
 ) -> None:
     from app.ai.providers import synthesize_volcano_podcast
-    from app.domain.providers import resolve_connection
+    from app.domain.providers.selection import resolve_connection
 
     with SessionLocal() as db:
         job = db.get(Job, job_id)

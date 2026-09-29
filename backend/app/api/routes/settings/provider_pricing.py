@@ -12,10 +12,11 @@ from app.api.schemas import (
     ProviderPricingRuleUpdate,
 )
 from app.db.models import ProviderPricingRule
-from app.domain import provider_credentials, provider_models
+from app.domain.providers import credentials as provider_credentials
+from app.domain.providers import models as provider_models
 from app.domain.permissions import ensure_deployment_admin, ensure_workspace_access
-from app.domain.provider_credentials import ResolvedConnection
-from app.domain.providers import supports_capability
+from app.domain.providers.credentials import ResolvedConnection
+from app.domain.providers.selection import supports_capability
 from app.domain.billing.pricing_prefill import prefill_profile_pricing
 from app.domain.billing.usage import create_pricing_rule, delete_pricing_rule, update_pricing_rule
 

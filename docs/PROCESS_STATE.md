@@ -29,7 +29,7 @@
 
 | 位置 | 是什么 | 起第二个进程会怎样 |
 | --- | --- | --- |
-| `app/domain/provider_auth.py:_leases` | 刷新供应商令牌的租约(独占权 + TTL) | 两个进程各锁各的,于是两边同时刷同一份令牌。冲突在**写回时**才发现,而那时两次网络请求都已经打出去了 —— 后写的赢,先写的那份 refresh_token 被对方作废。sidecar 本来就是多进程,它们**都经由后端**,所以后端内存锁正是这套拓扑下真正的临界区。 |
+| `app/domain/providers/auth.py:_leases` | 刷新供应商令牌的租约(独占权 + TTL) | 两个进程各锁各的,于是两边同时刷同一份令牌。冲突在**写回时**才发现,而那时两次网络请求都已经打出去了 —— 后写的赢,先写的那份 refresh_token 被对方作废。sidecar 本来就是多进程,它们**都经由后端**,所以后端内存锁正是这套拓扑下真正的临界区。 |
 | `app/core/worker_key.py:_key` | 执行器通道的密钥,每进程随机 | 执行器只认得它拿到的那一份,发到另一个进程上全是 401 —— 而发布、浏览器自动化、external 任务会各自看起来单独坏了。**已有出路**:配 `MOSAEL_WORKER_KEY` 就固定成同一个(见 `test_worker_key_can_cross_a_network.py`)。 |
 | `app/api/routes/oauth.py:_pending` | 登录 OAuth 的待完成流(state / PKCE verifier,TTL 600s) | 授权回调**必须落回发起它的那个进程**。落到另一个上就是"state 不匹配",而用户看到的是一句登录失败,重试还是失败(负载均衡多半又把他分到另一边)。 |
 | `app/domain/publish/worker.py` 的认领(心跳在 `app/domain/publish/worker.py:_last_heartbeat`) | `claim_next_pending` 靠同事务内 select→update 保证原子 | 那句原子性写着「单进程 SQLite 后端 + 单个 worker」。多个认领者会重复领同一条待发布任务 —— 同一个视频发两遍。 |
@@ -96,7 +96,7 @@
   同一个 venv 会互相踩 —— 当前部署是单后端进程(见第一节),真要起第二个时这一条要一起想。
 - `app/ai/runtime/workers/tts.py:_LOADED` — 已加载的模型。
 - `app/api/routes/sequences.py:_SEQUENCE_JSON` — 序列 JSON 按 revision 缓存。每序列一条,不随流量增长。
-- `app/domain/provider_auth.py:_refresh_failed_at` — 刷新失败冷却。重启后是空的,于是第一次会说「已授权」哪怕它刷不动 —— **这个方向是有意选的**:说成"还不知道"只会晚一次发现,说成"需重新授权"是在没坏的时候喊坏。
+- `app/domain/providers/auth.py:_refresh_failed_at` — 刷新失败冷却。重启后是空的,于是第一次会说「已授权」哪怕它刷不动 —— **这个方向是有意选的**:说成"还不知道"只会晚一次发现,说成"需重新授权"是在没坏的时候喊坏。
 - `app/integrations/feishu/client.py:_token_cache`(租户令牌)、
   `app/integrations/feishu/inbound.py:_seen`(消息去重)、
   `app/integrations/feishu/onboarding.py:_onboard_state`(引导流程)、`app/domain/poem.py:_token`。

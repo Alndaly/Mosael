@@ -8,14 +8,14 @@
 输出上限,而我们按 16,384 发,一轮思考还没说完就报「模型已用完本轮输出额度」。
 
 `ai/model_catalog` 那边写着「端点没给的字段一律留空,不猜」,这条仍然成立 —— 这张表不是猜,
-是**查证过的事实**(2026-09,来源见下),和 `domain/thinking` 那张思考档位表同一性质:
+是**查证过的事实**(2026-09,来源见下),和 `domain/providers/thinking` 那张思考档位表同一性质:
 查得到的写进来,查不到的走回退。
 
 ## 三条约定
 
 1. **按模型名前缀匹配,不按 vendor。** 中转端点的 vendor 一律是 `openai-compatible`,
    后面挂的可能是任何一家;OpenRouter 的 id 还带 `厂商/` 前缀。按 vendor 查表在这两种
-   最常见的配置下必然落空 —— 那正是 `domain/thinking._by_model_name` 踩过的坑。
+   最常见的配置下必然落空 —— 那正是 `domain/providers/thinking._by_model_name` 踩过的坑。
 2. **最长前缀赢。** `grok-4.6` 要用它自己那条,而不是 `grok-4` 那条。这也让**家族兜底**
    成立:`claude-` 给整个家族一个保守的 200K/64K,具体型号的那几条再逐个盖掉它。没有兜底
    的话,表里漏掉一个新型号 = 那个型号直接掉回 128K,而它的同门明明都写着 1M。
@@ -43,7 +43,7 @@ import ipaddress
 from dataclasses import dataclass
 from urllib.parse import urlparse
 
-from app.domain import thinking
+from app.domain.providers import thinking
 
 #: 目录查不到、也没手动设时的窗口。**必须与 sidecar 的两个 fallback 常量一致** ——
 #: 云端按 128K、本机/LAN 按 32K;界面与运行时用不同值会让水位和压缩行为对不上。

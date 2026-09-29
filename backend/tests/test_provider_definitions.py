@@ -6,8 +6,8 @@ from dataclasses import FrozenInstanceError
 
 import pytest
 
-from app.domain.provider_presets import ProviderDefinition, provider_definition, provider_definitions
-from app.domain import provider_presets
+from app.domain.providers.presets import ProviderDefinition, provider_definition, provider_definitions
+from app.domain.providers import presets as provider_presets
 
 
 def test_definition_exposes_typed_immutable_provider_metadata() -> None:

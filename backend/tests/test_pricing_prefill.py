@@ -155,12 +155,12 @@ def test_subscription_profile_prefills_from_its_stored_catalog(client_fixture) -
     """订阅计划的目录来自登录时 pi 带回的那份(cost 用 cacheRead/cacheWrite 命名)。"""
     from app.core.db import SessionLocal
     from app.db.models import User
-    from app.domain import provider_credentials
+    from app.domain.providers import credentials as provider_credentials
 
     client = client_fixture
     profile_id = _profile(client, "kimi-coding", {})
     with SessionLocal() as db:
-        # 目录是**这次登录**的结果,跟着钥匙走(见 domain/provider_credentials)。
+        # 目录是**这次登录**的结果,跟着钥匙走(见 domain/providers/credentials)。
         me = db.query(User).order_by(User.created_at).first()
         credential = provider_credentials.upsert(db, profile_id, me.id, api_key="k")
         credential.model_catalog = [
@@ -215,7 +215,7 @@ def _add_models(profile_id: str, *models: tuple[str, list[str]]) -> None:
     """给连接挂几条模型行 —— 生图/生视频连接的模型只在这里,不在 /models 目录里。"""
     from app.core.db import SessionLocal
     from app.db.models import ProviderProfile
-    from app.domain import provider_models
+    from app.domain.providers import models as provider_models
 
     with SessionLocal() as db:
         profile = db.get(ProviderProfile, profile_id)
