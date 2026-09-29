@@ -7333,6 +7333,7 @@
           "sequences"
         ],
         "summary": "Undo Sequence",
+        "description": "`expected_revision`:调用方看到的是第几版(画板上的撤销带着它)。时间线已经在别处改过就 409,不撤别人的那一步。",
         "operationId": "undo_sequence_api_sequences__sequence_id__undo_post",
         "parameters": [
           {
@@ -7342,6 +7343,22 @@
             "schema": {
               "type": "string",
               "title": "Sequence Id"
+            }
+          },
+          {
+            "name": "expected_revision",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Expected Revision"
             }
           }
         ],
@@ -7375,6 +7392,7 @@
           "sequences"
         ],
         "summary": "Redo Sequence",
+        "description": "`expected_revision` 同撤销。",
         "operationId": "redo_sequence_api_sequences__sequence_id__redo_post",
         "parameters": [
           {
@@ -7384,6 +7402,22 @@
             "schema": {
               "type": "string",
               "title": "Sequence Id"
+            }
+          },
+          {
+            "name": "expected_revision",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Expected Revision"
             }
           }
         ],

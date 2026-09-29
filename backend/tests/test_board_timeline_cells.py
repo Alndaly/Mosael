@@ -84,6 +84,53 @@ def test_接到末尾_画幅跟着第一段_音频进音频轨_图片定格五�
     assert client.post(f"/api/sequences/{sequence}/append", json={"asset_id": "blank"}).status_code == 422
 
 
+def test_复制画板_时间线格各自复制一条_不和原板共用() -> None:
+    """共用的话在副本里剪一刀原板跟着变,两边的撤销还会互相撤掉对方的步骤。"""
+    client, ws, board = _setup()
+    sequence = client.post(f"/api/boards/{board}/sequences", json={"workspace_id": ws}).json()["sequence_id"]
+    _asset(ws, "v1", "video", duration=4.0, width=720, height=1280)
+    client.post(f"/api/sequences/{sequence}/append", json={"asset_id": "v1"})
+    client.patch(f"/api/boards/{board}", json={
+        "workspace_id": ws, "base_revision": board_revision(client, board, ws),
+        "canvas": {"items": [{"id": "t", "kind": "sequence", "x": 0, "y": 0, "sequence_id": sequence},
+                             {"id": "t2", "kind": "sequence", "x": 400, "y": 0, "sequence_id": sequence}], "edges": []}})
+
+    copy = client.post(f"/api/boards/{board}/duplicate", json={"workspace_id": ws, "name": "副本"})
+    assert copy.status_code == 200, copy.text
+    ids = {item["sequence_id"] for item in copy.json()["canvas"]["items"]}
+    assert len(ids) == 1 and sequence not in ids, "副本指向自己的那一条;同一条时间线的两格复制后仍是同一条"
+    with SessionLocal() as db:
+        original, copied = db.get(Sequence, sequence), db.get(Sequence, ids.pop())
+        assert copied.project_id == db.get(Board, copy.json()["id"]).project_id != original.project_id
+        assert (copied.width, copied.height) == (720, 1280)
+        clips = [(clip.asset_id, clip.timeline_start, clip.src_out) for track in copied.tracks for clip in track.clips]
+        assert clips == [("v1", 0.0, 4.0)]
+        assert {track.id for track in copied.tracks}.isdisjoint({track.id for track in original.tracks})
+
+
+def test_画板上的撤销带着版本号_时间线在别处改过就不撤别人的那一步() -> None:
+    client, ws, board = _setup()
+    sequence = client.post(f"/api/boards/{board}/sequences", json={"workspace_id": ws}).json()["sequence_id"]
+    _asset(ws, "v1", "video", duration=4.0, width=720, height=1280)
+    _asset(ws, "v2", "video", duration=3.0, width=720, height=1280)
+    mine = client.post(f"/api/sequences/{sequence}/append", json={"asset_id": "v1"}).json()["revision"]
+    #: 剪辑页(或智能体)又在同一条时间线上接了一段。
+    client.post(f"/api/sequences/{sequence}/append", json={"asset_id": "v2"})
+
+    refused = client.post(f"/api/sequences/{sequence}/undo?expected_revision={mine}")
+    assert refused.status_code == 409, refused.text
+    clips = [clip["asset_id"] for track in client.get(f"/api/sequences/{sequence}").json()["tracks"] for clip in track["clips"]]
+    assert sorted(clips) == ["v1", "v2"], "别处接的那一段没被撤掉"
+
+    current = client.get(f"/api/sequences/{sequence}").json()["revision"]
+    undone = client.post(f"/api/sequences/{sequence}/undo?expected_revision={current}")
+    assert undone.status_code == 200, undone.text
+    redone = client.post(f"/api/sequences/{sequence}/redo?expected_revision={undone.json()['revision']}")
+    assert redone.status_code == 200, redone.text
+    assert client.post(f"/api/sequences/{sequence}/redo?expected_revision={current}").status_code == 409
+    assert client.post(f"/api/sequences/{sequence}/undo").status_code == 200, "不带版本号(剪辑页)照旧撤最新一步"
+
+
 def test_迁移_画板记着项目这一列() -> None:
     from app.db.migrations import migration_plan
 

@@ -21,3 +21,10 @@ class SequenceNotFound(SequenceDomainError):
     """这条时间线不存在。"""
 
     status = 404
+
+
+class SequenceChangedElsewhere(SequenceDomainError):
+    """调用方以为时间线停在某一版,它却已经在别处被改过(剪辑页、智能体、另一个人)。这时照「最新的一步」撤,
+    撤掉的就不是他以为的那一步 —— 拒掉,让他去看一眼。"""
+
+    status = 409

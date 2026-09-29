@@ -293,12 +293,15 @@ export function setClipEffects(
   });
 }
 
-export function undoSequence(sequenceId: string): Promise<Sequence> {
-  return api<Sequence>(`/api/sequences/${sequenceId}/undo`, { method: "POST" });
+/** `expectedRevision`:调用方看到的是第几版。给了而时间线已在别处改过,服务端回 409、不撤别人的那一步(画板上的撤销)。 */
+export function undoSequence(sequenceId: string, expectedRevision?: number): Promise<Sequence> {
+  const query = expectedRevision === undefined ? "" : `?expected_revision=${expectedRevision}`;
+  return api<Sequence>(`/api/sequences/${sequenceId}/undo${query}`, { method: "POST" });
 }
 
-export function redoSequence(sequenceId: string): Promise<Sequence> {
-  return api<Sequence>(`/api/sequences/${sequenceId}/redo`, { method: "POST" });
+export function redoSequence(sequenceId: string, expectedRevision?: number): Promise<Sequence> {
+  const query = expectedRevision === undefined ? "" : `?expected_revision=${expectedRevision}`;
+  return api<Sequence>(`/api/sequences/${sequenceId}/redo${query}`, { method: "POST" });
 }
 
 export type ExportParams = components["schemas"]["ExportRequest"];

@@ -63,7 +63,7 @@ import { isImportableFile, useFileDrop } from "@/lib/useFileDrop";
 import { usePersistentViewport } from "@/lib/usePersistentTab";
 import { cn } from "@/lib/utils";
 import { isCanvasKeyTarget, listenKeys } from "@/lib/shortcuts";
-import { canRedo, canUndo, emptyHistory, record, recordSequence, redo, sequenceOf, undo } from "@/features/boards/canvasHistory";
+import { canRedo, canUndo, dropSequenceStep, emptyHistory, record, recordSequence, redo, retagSequenceStep, undo, type SequenceStep } from "@/features/boards/canvasHistory";
 import { noteSequenceEdit, onSequenceEdit, SequenceAddContext } from "@/features/boards/sequenceCursor";
 import { TrimComposer } from "@/features/boards/TrimComposer";
 import { canAskWriter, canOpenOnDemand, composerOnDemand, renderAbility, renderComposer, slotProducers } from "@/features/boards/boardComposers";
@@ -422,7 +422,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
     void appendAssetToSequence(sequenceId, assetId)
       .then((next) => {
         queryClient.setQueryData(boardSequenceKey(sequenceId), next);
-        noteSequenceEdit(sequenceId);
+        noteSequenceEdit(sequenceId, next.revision);
       })
       .catch((error: unknown) => toast.error(errorText(error)));
   }, [queryClient]);
@@ -950,13 +950,25 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
   }, [serialized]);
 
   //: 时间线格里做成的一步记进这摞(见 canvasHistory 的「时间线的一步」)。
-  React.useEffect(() => onSequenceEdit((sequenceId) => setHistory((current) => recordSequence(current, sequenceId))), []);
+  React.useEffect(
+    () => onSequenceEdit((sequenceId, revision) => setHistory((current) => recordSequence(current, sequenceId, revision))),
+    [],
+  );
 
-  /** 撤 / 重做时间线格的一步:调那条时间线自己的撤销 / 重做,格子读的缓存换成回来的那条。 */
-  const replaySequence = React.useCallback((sequenceId: string, direction: "undo" | "redo") => {
-    void (direction === "undo" ? undoSequence(sequenceId) : redoSequence(sequenceId))
-      .then((next) => queryClient.setQueryData(boardSequenceKey(sequenceId), next))
-      .catch((error: unknown) => toast.error(errorText(error)));
+  /** 撤 / 重做时间线格的一步:带着这一步记的版本号调那条时间线自己的撤销 / 重做(时间线在别处又改过就被拒,
+   *  不撤别人的那一步),格子读的缓存换成回来的那条。做成了,这一步的版本号换成新的一版;没做成,这一步拿掉。 */
+  const replaySequence = React.useCallback((step: SequenceStep, direction: "undo" | "redo") => {
+    //: 撤销之后这一步挪进了重做的开头,重做之后回到了撤销的末尾。
+    const where = direction === "undo" ? "future" : "past";
+    void (direction === "undo" ? undoSequence(step.sequence, step.revision) : redoSequence(step.sequence, step.revision))
+      .then((next) => {
+        queryClient.setQueryData(boardSequenceKey(step.sequence), next);
+        setHistory((current) => retagSequenceStep(current, where, next.revision));
+      })
+      .catch((error: unknown) => {
+        setHistory((current) => dropSequenceStep(current, where));
+        toast.error(errorText(error));
+      });
   }, [queryClient]);
 
   //: 撤销 / 重做在更新函数**外面**算下一份、做副作用:时间线的撤销是一次网络请求,放进 setState 的更新函数里,
@@ -969,8 +981,8 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
     if (!next) return;
     historyRef.current = next;
     setHistory(next);
-    const sequenceId = sequenceOf(current.past.at(-1));
-    if (sequenceId) replaySequence(sequenceId, "undo");
+    const step = current.past.at(-1);
+    if (typeof step === "object") replaySequence(step, "undo");
     else restore(next.present);
   }, [restore, replaySequence]);
 
@@ -980,8 +992,8 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
     if (!next) return;
     historyRef.current = next;
     setHistory(next);
-    const sequenceId = sequenceOf(current.future[0]);
-    if (sequenceId) replaySequence(sequenceId, "redo");
+    const step = current.future[0];
+    if (typeof step === "object") replaySequence(step, "redo");
     else restore(next.present);
   }, [restore, replaySequence]);
 

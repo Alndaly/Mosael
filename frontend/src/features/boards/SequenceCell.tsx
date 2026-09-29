@@ -174,7 +174,7 @@ export function SequenceCell({ sequenceId }: { sequenceId: string }) {
     },
     onSuccess: (next) => {
       settle(next);
-      noteSequenceEdit(sequenceId);
+      noteSequenceEdit(sequenceId, next.revision);
     },
     onError: fail,
   });
@@ -444,7 +444,7 @@ export function useSequenceActions(sequenceId: string) {
     mutationFn: (clip: Clip) => splitClip(sequenceId, clip.id, clip.src_in + (time - clip.timeline_start) * (clip.speed || 1)),
     onSuccess: (next) => {
       settle(next);
-      noteSequenceEdit(sequenceId);
+      noteSequenceEdit(sequenceId, next.revision);
     },
     onError: fail,
   });
@@ -453,7 +453,7 @@ export function useSequenceActions(sequenceId: string) {
     onSuccess: (next) => {
       settle(next);
       updateSequenceCursor(sequenceId, { picked: null });
-      noteSequenceEdit(sequenceId);
+      noteSequenceEdit(sequenceId, next.revision);
     },
     onError: fail,
   });

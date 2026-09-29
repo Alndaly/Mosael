@@ -802,6 +802,43 @@ def create_board(
     return board
 
 
+def board_project(db: Session, board: Board) -> Any:
+    """这张画板的项目(放它的时间线格的时间线,ADR 0030):记着的那个还在就用它,不在就建一个同名的。"""
+    from app.db.models import Project
+    from app.domain.projects import create_project
+
+    existing = db.get(Project, board.project_id) if board.project_id else None
+    if existing is not None and existing.workspace_id == board.workspace_id:
+        return existing
+    project = create_project(db, board.workspace_id, board.name)
+    board.project_id = project.id
+    return project
+
+
+def _copy_timelines(db: Session, board: Board) -> None:
+    """副本上的时间线格各自复制一条时间线,放进副本自己的项目。**不和原板共用**:共用的话在副本里剪一刀,
+    原板那一格跟着变,两边的撤销还会互相撤掉对方的步骤。原来那条已经不在的格子照原样留着(和原板一样是空的)。"""
+    from app.db.models import Sequence
+    from app.domain.sequences import copy_sequence
+
+    canvas = json.loads(json.dumps(board.canvas or {}))
+    copied: dict[str, str] = {}
+    for item in canvas.get("items") or []:
+        old = str(item.get("sequence_id") or "") if item.get("kind") == "sequence" else ""
+        if not old:
+            continue
+        if old not in copied:
+            source = db.get(Sequence, old)
+            if source is None or source.workspace_id != board.workspace_id:
+                continue
+            copied[old] = copy_sequence(db, source, board_project(db, board), name=source.name).id
+        item["sequence_id"] = copied[old]
+    if copied:
+        board.canvas = canvas
+        db.commit()
+        db.refresh(board)
+
+
 def duplicate_board(
     db: Session, *, workspace_id: str, board_id: str, name: str = "", actor_id: str | None = None
 ) -> Board:
@@ -815,6 +852,8 @@ def duplicate_board(
 
     评论不跟着走:它们是对**那一张**的讨论,挂在原板的 subject_id 上。名字由调用方给(「× 副本」
     是界面语言里的一句话,这一层不替它挑语言);没给就沿用原名。
+
+    时间线格背后的时间线复制一份放进副本自己的项目(见 `_copy_timelines`),不和原板共用。
     """
     source = get_board(db, workspace_id, board_id)
     canvas = json.loads(json.dumps(source.canvas or {}))
@@ -822,7 +861,7 @@ def duplicate_board(
         run = item.get("run")
         if isinstance(run, dict) and run.get("status") in ("queued", "running"):
             item.pop("run")
-    return create_board(
+    board = create_board(
         db,
         workspace_id=workspace_id,
         name=(name or "").strip() or source.name,
@@ -830,6 +869,8 @@ def duplicate_board(
         actor_id=actor_id,
         copied_from=source.canvas,
     )
+    _copy_timelines(db, board)
+    return board
 
 
 def update_board(

@@ -486,16 +486,22 @@ def set_clip_effects(
 
 
 @router.post("/sequences/{sequence_id}/undo", response_model=SequenceOut)
-def undo_sequence(sequence_id: str, db: DbSession, user: CurrentUser) -> Response:
+def undo_sequence(
+    sequence_id: str, db: DbSession, user: CurrentUser, expected_revision: int | None = None
+) -> Response:
+    """`expected_revision`:调用方看到的是第几版(画板上的撤销带着它)。时间线已经在别处改过就 409,不撤别人的那一步。"""
     require_sequence_access(db, user, sequence_id, perm="edit")
-    _apply(lambda: undo_operation(db, sequence_id))
+    _apply(lambda: undo_operation(db, sequence_id, expected_revision=expected_revision))
     return _sequence_response(_get_sequence(db, sequence_id))
 
 
 @router.post("/sequences/{sequence_id}/redo", response_model=SequenceOut)
-def redo_sequence(sequence_id: str, db: DbSession, user: CurrentUser) -> Response:
+def redo_sequence(
+    sequence_id: str, db: DbSession, user: CurrentUser, expected_revision: int | None = None
+) -> Response:
+    """`expected_revision` 同撤销。"""
     require_sequence_access(db, user, sequence_id, perm="edit")
-    _apply(lambda: redo_operation(db, sequence_id))
+    _apply(lambda: redo_operation(db, sequence_id, expected_revision=expected_revision))
     return _sequence_response(_get_sequence(db, sequence_id))
 
 

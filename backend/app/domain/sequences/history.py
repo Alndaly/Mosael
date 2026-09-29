@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.db.models import Sequence, SequenceOperation
 from app.domain.sequences import undo as undo_registry
-from app.domain.sequences.errors import SequenceDomainError
+from app.domain.sequences.errors import SequenceChangedElsewhere, SequenceDomainError
 from app.domain.sequences.operations import _record_operation, _require_sequence
 
 #: 可撤销的操作类型 —— **派生**自注册表,不是另一份手写清单。
@@ -26,8 +26,15 @@ from app.domain.sequences.operations import _record_operation, _require_sequence
 UNDOABLE_KINDS = undo_registry.undoable_kinds()
 
 
-def undo(db: Session, sequence_id: str) -> Sequence:
+def _expect(sequence: Sequence, expected_revision: int | None) -> None:
+    """调用方说了「我看到的是第几版」(画板上的撤销:它只知道自己做的那一步):不是这一版就拒,不去撤别人做的。"""
+    if expected_revision is not None and sequence.revision != expected_revision:
+        raise SequenceChangedElsewhere("seqErr_changedElsewhere")
+
+
+def undo(db: Session, sequence_id: str, *, expected_revision: int | None = None) -> Sequence:
     sequence = _require_sequence(db, sequence_id)
+    _expect(sequence, expected_revision)
     operation = _latest_undoable(db, sequence_id)
     if operation is None:
         raise SequenceDomainError("seqErr_nothingToUndo")
@@ -47,8 +54,9 @@ def undo(db: Session, sequence_id: str) -> Sequence:
     return sequence
 
 
-def redo(db: Session, sequence_id: str) -> Sequence:
+def redo(db: Session, sequence_id: str, *, expected_revision: int | None = None) -> Sequence:
     sequence = _require_sequence(db, sequence_id)
+    _expect(sequence, expected_revision)
     undo_operation = _latest_active_undo(db, sequence_id)
     if undo_operation is None or _has_edit_after(db, sequence_id, undo_operation.revision_after):
         raise SequenceDomainError("seqErr_nothingToRedo")

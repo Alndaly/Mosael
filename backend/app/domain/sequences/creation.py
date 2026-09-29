@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 
 from sqlalchemy.orm import Session
 
-from app.db.models import Project, Sequence, Track
+from app.db.models import Clip, Project, Sequence, Track
 
 
 @dataclass(frozen=True)
@@ -46,3 +47,41 @@ def create_sequence_scaffold(
     db.add_all([sequence, video, audio])
     db.flush()
     return SequenceScaffold(sequence=sequence, video_track=video, audio_track=audio)
+
+
+def copy_sequence(db: Session, source: Sequence, project: Project, *, name: str) -> Sequence:
+    """把 ``source`` 复制成 ``project`` 里的一条新时间线:画幅、改画幅、字幕样式、每条轨和轨上的每一段。
+
+    编辑历史(操作、撤销、修订)不带过去 —— 副本从这一刻开始自己的历史;素材是引用,不复制文件。
+    在调用方的事务里 flush,不提交。
+    """
+    copy = Sequence(
+        workspace_id=project.workspace_id,
+        project=project,
+        name=name,
+        width=source.width,
+        height=source.height,
+        fps=source.fps,
+        reframe=dict(source.reframe or {}),
+        subtitle_style=dict(source.subtitle_style or {}),
+    )
+    db.add(copy)
+    db.flush()
+    for track in source.tracks:
+        new_track = Track(
+            sequence=copy, kind=track.kind, name=track.name, position=track.position, locked=track.locked,
+            muted=track.muted, hidden=track.hidden, solo=track.solo, duck=track.duck, role=track.role,
+        )
+        db.add(new_track)
+        db.flush()
+        for clip in track.clips:
+            db.add(Clip(
+                workspace_id=project.workspace_id, sequence_id=copy.id, track_id=new_track.id,
+                asset_id=clip.asset_id, timeline_start=clip.timeline_start, src_in=clip.src_in, src_out=clip.src_out,
+                speed=clip.speed, gain=clip.gain, muted=clip.muted, text_override=clip.text_override,
+                offline_asset=dict(clip.offline_asset) if clip.offline_asset else None,
+                effects=json.loads(json.dumps(clip.effects or {})),
+                transform=dict(clip.transform or {}),
+            ))
+    db.flush()
+    return copy

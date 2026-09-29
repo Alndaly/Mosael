@@ -2679,7 +2679,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Undo Sequence */
+        /**
+         * Undo Sequence
+         * @description `expected_revision`:调用方看到的是第几版(画板上的撤销带着它)。时间线已经在别处改过就 409,不撤别人的那一步。
+         */
         post: operations["undo_sequence_api_sequences__sequence_id__undo_post"];
         delete?: never;
         options?: never;
@@ -2696,7 +2699,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Redo Sequence */
+        /**
+         * Redo Sequence
+         * @description `expected_revision` 同撤销。
+         */
         post: operations["redo_sequence_api_sequences__sequence_id__redo_post"];
         delete?: never;
         options?: never;
@@ -19039,7 +19045,9 @@ export interface operations {
     };
     undo_sequence_api_sequences__sequence_id__undo_post: {
         parameters: {
-            query?: never;
+            query?: {
+                expected_revision?: number | null;
+            };
             header?: never;
             path: {
                 sequence_id: string;
@@ -19070,7 +19078,9 @@ export interface operations {
     };
     redo_sequence_api_sequences__sequence_id__redo_post: {
         parameters: {
-            query?: never;
+            query?: {
+                expected_revision?: number | null;
+            };
             header?: never;
             path: {
                 sequence_id: string;

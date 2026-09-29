@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { canRedo, canUndo, emptyHistory, record, recordSequence, redo, sequenceOf, undo } from "./canvasHistory";
+import { canRedo, canUndo, dropSequenceStep, emptyHistory, record, recordSequence, redo, retagSequenceStep, sequenceOf, undo } from "./canvasHistory";
 
 describe("画布历史", () => {
   it("记一步、退一步、再回来", () => {
@@ -54,7 +54,7 @@ describe("画布历史", () => {
 
   it("时间线格的一步和画布的步交错着退:退到时间线那一步时画布不动,重做再按原顺序回来", () => {
     let h = record(emptyHistory("A"), "B");
-    h = recordSequence(h, "seq");
+    h = recordSequence(h, "seq", 3);
     h = record(h, "C");
     h = undo(h)!;
     expect(h.present).toBe("B");
@@ -70,10 +70,26 @@ describe("画布历史", () => {
     expect(sequenceOf(h.past.at(-2))).toBe("seq");
   });
 
+  it("时间线的一步记着版本号:撤成了换成回来的那一版,撤不成就从摞里拿掉", () => {
+    let h = recordSequence(record(emptyHistory("A"), "B"), "seq", 3);
+    h = undo(h)!;
+    expect(h.future[0]).toEqual({ sequence: "seq", revision: 3 });
+    h = retagSequenceStep(h, "future", 4);
+    expect(h.future[0], "重做时照撤销之后那一版比").toEqual({ sequence: "seq", revision: 4 });
+    h = redo(h)!;
+    h = retagSequenceStep(h, "past", 5);
+    expect(h.past.at(-1)).toEqual({ sequence: "seq", revision: 5 });
+    h = undo(h)!;
+    h = dropSequenceStep(h, "future");
+    expect(canRedo(h), "在别处改过、撤不成的那一步不再留着").toBe(false);
+    expect(h.past, "画布的步不受影响").toEqual(["A"]);
+    expect(dropSequenceStep(h, "past"), "画布的一步不是它能拿掉的").toBe(h);
+  });
+
   it("时间线上做了新的一步,重做就没了", () => {
     let h = record(record(emptyHistory("A"), "B"), "C");
     h = undo(h)!;
-    h = recordSequence(h, "seq");
+    h = recordSequence(h, "seq", 3);
     expect(canRedo(h)).toBe(false);
     expect(h.present).toBe("B");
   });

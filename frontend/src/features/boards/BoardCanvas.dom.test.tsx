@@ -83,22 +83,22 @@ describe("画板的撤销与服务端那份", () => {
   });
 
   it("时间线格里剪的一刀也在画板的撤销里:按做的先后退,退到它时调那条时间线的撤销、画布不动;重做同理", async () => {
-    editor.undoSequence.mockResolvedValue({ id: "seq", tracks: [] });
-    editor.redoSequence.mockResolvedValue({ id: "seq", tracks: [] });
+    editor.undoSequence.mockResolvedValue({ id: "seq", tracks: [], revision: 4 });
+    editor.redoSequence.mockResolvedValue({ id: "seq", tracks: [], revision: 5 });
     const view = mount({ items: [note("n1", "")], edges: [], markers: [] });
     act(() => view.api().patch("n1", { text: "先写一句" }));
     await act(async () => {
       await vi.advanceTimersByTimeAsync(500);
     });
     //: 格子里剪了一刀(SequenceCell 做成之后发这条通知)。
-    act(() => noteSequenceEdit("seq"));
+    act(() => noteSequenceEdit("seq", 3));
 
     act(() => view.api().undo());
     await act(async () => {
       await vi.advanceTimersByTimeAsync(500);
     });
     expect(editor.undoSequence).toHaveBeenCalledTimes(1);
-    expect(editor.undoSequence).toHaveBeenCalledWith("seq");
+    expect(editor.undoSequence, "带着这一步做完时的版本号去撤").toHaveBeenCalledWith("seq", 3);
     expect(view.latest().items[0]?.text, "撤的是时间线那一刀,画布上的字还在").toBe("先写一句");
 
     act(() => view.api().undo());
@@ -113,8 +113,38 @@ describe("画板的撤销与服务端那份", () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(500);
     });
-    expect(editor.redoSequence).toHaveBeenCalledWith("seq");
+    expect(editor.redoSequence, "重做照撤销回来的那一版比").toHaveBeenCalledWith("seq", 4);
     expect(view.latest().items[0]?.text).toBe("先写一句");
+  });
+
+  it("时间线在别处改过:撤那一步被拒,这一步从摞里拿掉,下一次 ⌘Z 退的是画布", async () => {
+    editor.undoSequence.mockReset();
+    editor.redoSequence.mockReset();
+    editor.undoSequence.mockRejectedValue(new Error("这条时间线在别处改过"));
+    const view = mount({ items: [note("n1", "")], edges: [], markers: [] });
+    act(() => view.api().patch("n1", { text: "先写一句" }));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500);
+    });
+    act(() => noteSequenceEdit("seq", 3));
+
+    act(() => view.api().undo());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500);
+    });
+    expect(editor.undoSequence).toHaveBeenCalledWith("seq", 3);
+    act(() => view.api().redo());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500);
+    });
+    expect(editor.redoSequence, "撤不成的那一步不留在重做里").not.toHaveBeenCalled();
+
+    act(() => view.api().undo());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500);
+    });
+    expect(editor.undoSequence).toHaveBeenCalledTimes(1);
+    expect(view.latest().items[0]?.text, "下一步退的是画布上的字").toBe("");
   });
 });
 

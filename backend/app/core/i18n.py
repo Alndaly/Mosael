@@ -4589,6 +4589,10 @@ MESSAGES: dict[str, dict[str, str]] = {
     # 时间线(序列)
     "seqErr_nothingToUndo": {"zh": "没有可撤销的操作", "en": "Nothing to undo."},
     "seqErr_nothingToRedo": {"zh": "没有可重做的操作", "en": "Nothing to redo."},
+    "seqErr_changedElsewhere": {
+        "zh": "这条时间线在别处改过(剪辑页、智能体或别人),这一步不能从这里撤销 / 重做了 —— 去剪辑页里看一眼再改",
+        "en": "This timeline was changed elsewhere (the editor, the agent or someone else), so this step can't be undone or redone from here. Check it in the editor.",
+    },
     "seqErr_undoTrackHasClips": {
         "zh": "轨道上还有片段,撤销不了「新建轨道」",
         "en": "The track still has clips, so \"Add track\" can't be undone.",
