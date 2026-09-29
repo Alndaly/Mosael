@@ -29,11 +29,12 @@ logger = logging.getLogger(__name__)
 
 
 class Connection:
-    """一个机器人的 worker 进程,和往它 stdin 写答复的那把锁。"""
+    """一个机器人的 worker 进程、读它 stdout 的那条泵线程,和往它 stdin 写答复的那把锁。"""
 
     def __init__(self, bot_id: str, process: subprocess.Popen) -> None:
         self.bot_id = bot_id
         self.process = process
+        self.pump: threading.Thread | None = None
         self._write_lock = threading.Lock()
 
     def send(self, payload: dict[str, Any]) -> None:
@@ -49,7 +50,12 @@ class Connection:
 
 
 _processes: dict[str, Connection] = {}
+#: 还活着的泵线程。子进程自己退出时,它的连接先从 `_processes` 里摘掉,泵还要写最后一次状态 ——
+#: 停机时要等的是**所有**还在跑的泵,不只是表里那几条。
+_pumps: set[threading.Thread] = set()
 _process_lock = threading.Lock()
+#: 停一条连接时等它的泵读完剩下的输出、写完状态。子进程已被终止,管道很快见底,正常远到不了这么久。
+_PUMP_JOIN_SECONDS = 5
 
 
 def dispatch(connection: Connection, event: dict[str, Any]) -> None:
@@ -93,6 +99,14 @@ def dispatch(connection: Connection, event: dict[str, Any]) -> None:
 
 def _pump(connection: Connection) -> None:
     """读 worker 的 stdout 直到它退出。协议行分发,其余当日志。"""
+    try:
+        _drain(connection)
+    finally:
+        with _process_lock:
+            _pumps.discard(threading.current_thread())
+
+
+def _drain(connection: Connection) -> None:
     stdout = connection.process.stdout
     if stdout is None:
         return
@@ -137,18 +151,25 @@ def start_connection(bot_id: str) -> None:
         connection = Connection(bot_id, process)
         connection.send(credentials)
         _processes[bot_id] = connection
-    threading.Thread(target=_pump, args=(connection,), daemon=True, name=f"feishu-{bot_id[:8]}").start()
+        connection.pump = threading.Thread(target=_pump, args=(connection,), daemon=True, name=f"feishu-{bot_id[:8]}")
+        _pumps.add(connection.pump)
+    connection.pump.start()
 
 
 def stop_connection(bot_id: str) -> None:
+    """停掉这条连接,**等它的泵退出**再写「离线」。不等的话泵还在后台读剩下的输出、写状态 —— 停机时它会
+    在库关掉之后才写(测试里是写进下一条用例清过的库:CI 上的「no such table: feishu_bots」)。"""
     with _process_lock:
         connection = _processes.pop(bot_id, None)
-    if connection is not None and connection.process.poll() is None:
-        connection.process.terminate()
-        try:
-            connection.process.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            connection.process.kill()
+    if connection is not None:
+        if connection.process.poll() is None:
+            connection.process.terminate()
+            try:
+                connection.process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                connection.process.kill()
+        if connection.pump is not None and connection.pump is not threading.current_thread():
+            connection.pump.join(_PUMP_JOIN_SECONDS)
     bots.write_status(bot_id, "offline")
 
 
@@ -167,10 +188,15 @@ def autostart_enabled_bots() -> None:
 
 
 def stop_all_connections() -> None:
+    """停掉所有连接,并等所有还在跑的泵收尾 —— 包括子进程自己先退出、已经不在表里、还在写最后一次状态的那几条。"""
     with _process_lock:
         ids = list(_processes)
     for bot_id in ids:
         stop_connection(bot_id)
+    with _process_lock:
+        leftovers = [pump for pump in _pumps if pump is not threading.current_thread()]
+    for pump in leftovers:
+        pump.join(_PUMP_JOIN_SECONDS)
 
 
 def start_or_report(bot_id: str) -> None:

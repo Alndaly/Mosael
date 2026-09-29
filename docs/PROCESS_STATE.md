@@ -50,6 +50,7 @@
 | `app/domain/jobs.py:_runner` | 进程内任务的派发器:名额、排队中的任务体 | 上限按进程算,第二个进程再给一份 16 个名额。排着队的任务体只在内存里 —— 重启丢了它们,对应的行还是 queued,由 reconcile_after_restart 按「重启打断」收尾,和正在跑的一样处理。 |
 | `app/integrations/feishu/inbound.py:_awaiting_replies` | 每个会话里还在等回复的飞书消息(收尾时摘 Typing 反应) | 一轮在哪个进程跑完,就在哪个进程收尾;第二个进程看不见别人贴的反应。重启丢了它,只是那几条消息上的「码字中」不会被摘掉 —— 回复照样发。 |
 | `app/integrations/feishu/connections.py:_processes` | 每个机器人一个子进程 | 独立进程是 lark SDK 的硬约束(它的 ws 客户端共享模块级事件循环)。第二个后端会**再拉一份**,同一条消息被处理两次。 |
+| `app/integrations/feishu/connections.py:_pumps` | 还活着的泵线程(读 worker 输出、写最后一次状态) | 和 `_processes` 同属一个进程。子进程自己退出时连接先从表里摘掉、泵还在写,停机要等的是它们全部 —— 不等就会在库关掉之后才写(测试里写进下一条用例清过的库)。重启时随进程一起没了,不需要恢复。 |
 | `app/ai/sidecar/pi_client.py:_LIVE` | 正在跑的 sidecar 轮次 | 同 `_streams`。 |
 | `app/workers/scheduler.py:_stop_event` | 定时任务线程的停止信号 | 每个进程一个调度线程 —— 多进程下同一条定时任务会被触发多次。 |
 | `app/domain/plugins/catalog_watch.py:_watch_stop`、`app/domain/plugins/catalog_watch.py:_watch_thread` | 插件目录的巡检线程(启动时把每个实例替宿主做的事刷一遍 —— 生成模型、运行时报出的工具 —— 之后每分钟问一次指纹,变了才重新拉) | 重启后重新刷一遍,不丢东西(目录缓存在模型行和 `discovered_tools` 上)。第二个进程会**再巡检一份**:每分钟多问一次 ComfyUI,结果一样,只是多一倍请求。 |

@@ -446,12 +446,26 @@ def test_卡片答复超时也给飞书一个回应() -> None:
 
 def test_主进程没了_worker_跟着退出_不留孤儿占着连接() -> None:
     """stdin 是主进程攥着的那一头。它关了(主进程崩了、测试跑完没收尾),worker 必须自己退出 ——
-    否则长连接照跑,重启后同一个机器人有两条连接,测试里一次留下几十个进程把内存吃光。"""
+    否则长连接照跑,重启后同一个机器人有两条连接,测试里一次留下几十个进程把内存吃光。
+
+    长连接客户端换成**不出网、一直挂着**的替身:要测的是「管道断了就走」,不是连飞书。此前起的是真客户端,
+    拿假凭据去连 open.feishu.cn —— 被拒之后 worker 以 1 退出,和「关管道 → 以 0 退出」抢先后,谁先到看网速,
+    CI 上时红时绿;而且测试套不该出网。"""
     import subprocess
     import sys
 
+    offline_worker = (
+        "import sys, threading\n"
+        "import lark_oapi\n"
+        "class _Offline:\n"
+        "    def __init__(self, *args, **kwargs): pass\n"
+        "    def start(self): threading.Event().wait()\n"
+        "lark_oapi.ws.Client = _Offline\n"
+        "from app.integrations.feishu import worker\n"
+        "worker.main(sys.argv[1])\n"
+    )
     process = subprocess.Popen(
-        [sys.executable, "-m", "app.integrations.feishu.worker", "bot-orphan"],
+        [sys.executable, "-c", offline_worker, "bot-orphan"],
         stdin=subprocess.PIPE,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,

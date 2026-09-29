@@ -63,6 +63,12 @@ def _no_stragglers_from_the_previous_test():
     from app.domain.jobs import reset_runner
 
     reset_runner()
+    # 用例里经接口建的飞书机器人会真的起一个 worker 子进程和一条读它输出的泵线程。子进程拿假凭据连不上、
+    # 自己退出后,泵还要写最后一次状态 —— 不在这里收掉的话,它会写进**下一条**用例刚清过的库,
+    # CI 上报成那一条的「no such table: feishu_bots」(时红时绿,红的那条是无辜的)。
+    from app.integrations.feishu.connections import stop_all_connections
+
+    stop_all_connections()
 
 
 @pytest.fixture(autouse=True)
