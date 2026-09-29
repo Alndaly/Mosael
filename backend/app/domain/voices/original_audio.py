@@ -26,7 +26,7 @@ def ensure_original_audio_mode(mode: str) -> None:
     if mode not in ORIGINAL_AUDIO_MODES:
         raise OriginalAudioError("dubErr_originalAudioMode", modes=" / ".join(ORIGINAL_AUDIO_MODES))
     if mode == "separate":
-        from app.domain.separation import available
+        from app.domain.assets.separation import available
 
         from app.core.db import SessionLocal
 
@@ -114,7 +114,7 @@ def _split_voice_from_music(db: Session, sequence_id: str, dub_track_id: str, *,
     ``separate``，任何静音降级都会改变成片语义，因此失败必须原样上报。
     """
     from app.ai.providers.contracts.separation import SeparationError
-    from app.domain.separation import available, separate_asset
+    from app.domain.assets.separation import available, separate_asset
     from app.domain.sequences.operations import DetachClipAudio, detach_clip_audio
 
     if not available(db, None):

@@ -4003,7 +4003,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "\"{name}\" has no audio track, so there's nothing to transcribe.",
     },
     "asrErr_emptyResult": {"zh": "转写结果为空", "en": "The transcription came back empty."},
-    # 降噪(domain/denoise.py)
+    # 降噪(domain/assets/denoise.py)
     "denoiseErr_unknownEngine": {"zh": "没有这个降噪引擎:{name}", "en": "There's no noise-reduction engine called {name}."},
     "separationErr_unknownEngine": {"zh": "没有这个分离引擎:{name}", "en": "There's no vocal-separation engine called {name}."},
     "denoiseErr_noEngine": {"zh": "没有可用的降噪引擎", "en": "No noise-reduction engine is available."},
@@ -4011,7 +4011,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "denoiseErr_notMedia": {"zh": "只有音频或视频素材可以降噪", "en": "Only audio or video assets can be denoised."},
     "denoiseErr_fileMissing": {"zh": "这份素材的文件找不到了", "en": "This asset's file can't be found."},
     "denoiseErr_noLocalFile": {"zh": "这份素材没有本地文件", "en": "This asset has no local file."},
-    # 人声与背景音分离(domain/separation.py)
+    # 人声与背景音分离(domain/assets/separation.py)
     "separationErr_noEngine": {"zh": "没有可用的音频分离引擎", "en": "No audio separation engine is available."},
     "separationErr_noEngineInstall": {
         "zh": "没有可用的音频分离引擎 —— 部署管理员先在「管理 → 引擎」里装一个",

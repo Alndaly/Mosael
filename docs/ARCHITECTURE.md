@@ -797,7 +797,7 @@ steering 存在「最后一次取队列之后 settle」的竞态,而 sidecar 是
 
 两件事同一个形状 —— 契约(`ai/providers/contracts/{separation,denoise}.py`)只说要什么、拿到什么,
 不提引擎;实现在 `adapters/local/`;`registry.py` 是唯一装配点,重复 id 启动即失败;领域层
-(`domain/separation.py`、`domain/denoise.py`)负责素材那一侧:取声音、调引擎、登记**新**素材,
+(`domain/assets/separation.py`、`domain/assets/denoise.py`)负责素材那一侧:取声音、调引擎、登记**新**素材,
 原素材一个字节不动。四个入口(工作流节点、智能体工具、素材库、剪辑台右键)只跟领域层说话,
 加一个引擎不改任何入口。
 

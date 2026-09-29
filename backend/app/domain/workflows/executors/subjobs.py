@@ -865,7 +865,7 @@ def separate_audio_node(db: Session, scope: RunScope, config: dict[str, Any]) ->
     连接预算(见 wait_for_job)。
     """
     from app.ai.providers.contracts.separation import SeparationError
-    from app.domain.separation import start_separation_job
+    from app.domain.assets.separation import start_separation_job
 
     #: **收进工作区**,不是直接 db.get —— asset_id 常常来自上游节点,少了这一条,
     #: A 工作区的工作流能拆 B 工作区的素材,而产出的两份 stem 是要返回到工作流输出里的。
@@ -891,7 +891,7 @@ def denoise_audio_node(db: Session, scope: RunScope, config: dict[str, Any]) -> 
     排成子任务再等它,理由同分离节点。
     """
     from app.ai.providers.contracts.denoise import DenoiseError
-    from app.domain.denoise import start_denoise_job
+    from app.domain.assets.denoise import start_denoise_job
 
     # 收进工作区(同分离节点):asset_id 常常来自上游,不能让一个工作区的流程动另一个工作区的素材。
     asset = _asset_in(db, scope, str(config.get("asset_id") or "").strip())

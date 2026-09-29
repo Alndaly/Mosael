@@ -2,7 +2,7 @@
 
 和 ``contracts/separation.py`` 同一个形状(ADR-0017):契约只说**要什么、拿到什么**,不提任何
 引擎;实现在 ``adapters/``,装配在 ``registry.py``。调用方(工作流节点、智能体工具、素材库、
-剪辑台)只跟 ``domain/denoise.py`` 说话,不认识引擎 —— 加一个引擎不需要改任何入口。
+剪辑台)只跟 ``domain/assets/denoise.py`` 说话,不认识引擎 —— 加一个引擎不需要改任何入口。
 """
 
 from __future__ import annotations

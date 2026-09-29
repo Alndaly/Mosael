@@ -5,7 +5,7 @@ from fastapi import APIRouter, HTTPException
 from app.api.deps import CurrentUser, DbSession
 from app.api.schemas import DenoiseEngineOut
 from app.core.i18n import get_current_locale, tr, translate_fields
-from app.domain.denoise import install_engine, list_engines
+from app.domain.assets.denoise import install_engine, list_engines
 from app.domain.permissions import ensure_deployment_admin
 
 router = APIRouter(tags=["denoise"])

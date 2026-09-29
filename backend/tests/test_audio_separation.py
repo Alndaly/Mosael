@@ -75,7 +75,8 @@ class Test能力可用性是问出来的:
     def test_available_真的去问引擎(self, monkeypatch) -> None:
         """它是配音流程决定"拆还是静音"的那个判据。恒真的话,一台没装引擎的机器会走进
         分离那条路,然后在里面失败 —— 而那条路的全部意义就是"问得到才做"。"""
-        from app.domain import audio_capabilities, separation
+        from app.domain import audio_capabilities
+        from app.domain.assets import separation
 
         def none(*_args):
             raise audio_capabilities.SeparationProviderUnavailable("separationErr_noEngine")
@@ -99,7 +100,7 @@ class Test分离产出新素材:
     def test_原素材不动__拆出两份新的(self, monkeypatch, tmp_path) -> None:
         from app.core.db import SessionLocal
         from app.db.models import Asset
-        from app.domain import separation
+        from app.domain.assets import separation
         from tests.util import fresh_client
 
         client = fresh_client()
@@ -130,7 +131,7 @@ class Test分离产出新素材:
         """少的那条会一路空到成片里 —— 而那时已经离这里很远了。"""
         from app.core.db import SessionLocal
         from app.db.models import Asset
-        from app.domain import separation
+        from app.domain.assets import separation
         from tests.util import fresh_client
 
         client = fresh_client()
@@ -149,7 +150,7 @@ class Test分离产出新素材:
 
     def test_没引擎时说得出是没引擎(self, monkeypatch) -> None:
         from app.db.models import Asset
-        from app.domain import separation
+        from app.domain.assets import separation
 
         monkeypatch.setattr(audio_capabilities, "separation_adapter", _no_engine)
         with pytest.raises(SeparationError, match="没有可用"):
@@ -178,7 +179,7 @@ class Test配音流程忠实执行用户选择:
     def test_没装引擎时明确失败__不擅自静音(self, monkeypatch) -> None:
         from app.domain.voices import original_audio as subjobs
 
-        from app.domain import separation
+        from app.domain.assets import separation
 
         monkeypatch.setattr(separation, "available", lambda *_a, **_k: False)
         seen: list[str] = []
@@ -221,7 +222,7 @@ class Test配音流程忠实执行用户选择:
         """
         from app.core.db import SessionLocal
         from app.db.models import Asset, Clip, Project, Sequence, Track, Workspace
-        from app.domain import separation as sep
+        from app.domain.assets import separation as sep
         from app.domain.render import build_plan_for_sequence
         from app.domain.sequences.history import redo, undo
         from app.domain.voices import original_audio
@@ -285,7 +286,7 @@ class Test配音流程忠实执行用户选择:
 
     def test_分到一半失败_时间线一点没动(self, monkeypatch) -> None:
         """失败必须上报；这之前不能留下半套背景音轨。"""
-        from app.domain import separation as sep
+        from app.domain.assets import separation as sep
         from app.domain.sequences import operations as ops
         from app.domain.voices import original_audio
 
@@ -314,7 +315,7 @@ class Test当作任务跑:
     def test_没有引擎时不排队__当场说清楚(self, monkeypatch) -> None:
         """排一个注定失败的任务,只是把同一句话推迟十秒说 —— 而中间那十秒用户以为它在干活。"""
         from app.db.models import Asset
-        from app.domain import separation
+        from app.domain.assets import separation
 
         monkeypatch.setattr(separation, "available", lambda *_a, **_k: False)
         with pytest.raises(SeparationError, match="管理 → 引擎"):
@@ -324,7 +325,7 @@ class Test当作任务跑:
 
     def test_只有音频和视频能拆(self, monkeypatch) -> None:
         from app.db.models import Asset
-        from app.domain import separation
+        from app.domain.assets import separation
 
         monkeypatch.setattr(separation, "available", lambda *_a, **_k: True)
         with pytest.raises(SeparationError, match="只有音频或视频"):
@@ -337,7 +338,7 @@ class Test当作任务跑:
         没有它,素材库里多出两份来历不明的音频,而"人声还是背景音"只能靠名字猜。"""
         from app.core.db import SessionLocal
         from app.db.models import Asset, Job
-        from app.domain import separation
+        from app.domain.assets import separation
         from tests.util import fresh_client
 
         client = fresh_client()

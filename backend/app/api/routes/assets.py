@@ -376,7 +376,7 @@ def separate_asset_audio(asset_id: str, db: DbSession, user: CurrentUser, engine
     某一层断掉 —— 用户看到"失败了",后台其实还在跑。
     """
     from app.ai.providers.contracts.separation import SeparationError
-    from app.domain.separation import start_separation_job
+    from app.domain.assets.separation import start_separation_job
 
     asset = require_asset(db, user, asset_id, perm="edit")
     try:
@@ -389,7 +389,7 @@ def separate_asset_audio(asset_id: str, db: DbSession, user: CurrentUser, engine
 def denoise_asset_audio(asset_id: str, body: DenoiseAssetRequest, db: DbSession, user: CurrentUser) -> Job:
     """降噪,产出一份**新**素材;原素材不动(ADR-0017)。排成任务,理由同分离。"""
     from app.ai.providers.contracts.denoise import DenoiseError
-    from app.domain.denoise import start_denoise_job
+    from app.domain.assets.denoise import start_denoise_job
 
     asset = require_asset(db, user, asset_id, perm="edit")
     try:

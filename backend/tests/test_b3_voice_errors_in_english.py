@@ -97,8 +97,8 @@ def test_asr_errors_are_localized_and_dictation_stays_a_subclass() -> None:
 def test_denoise_and_separation_errors_stay_catchable_as_the_contract_errors() -> None:
     from app.ai.providers.contracts.denoise import DenoiseError
     from app.ai.providers.contracts.separation import SeparationError
-    from app.domain.denoise import ready_adapter
-    from app.domain.separation import start_separation_job
+    from app.domain.assets.denoise import ready_adapter
+    from app.domain.assets.separation import start_separation_job
 
     with pytest.raises(DenoiseError) as denoised:
         ready_adapter(None, None, "no-such-engine")

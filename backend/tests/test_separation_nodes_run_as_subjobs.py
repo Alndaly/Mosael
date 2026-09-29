@@ -17,7 +17,7 @@ import pytest
 from app.ai.providers.contracts.separation import BACKGROUND, VOCALS, SeparationRequest
 from app.core.db import SessionLocal
 from app.db.models import Asset, Workflow
-from app.domain import denoise, separation
+from app.domain.assets import denoise, separation
 from app.domain.jobs import RENDER_SLOTS
 from app.domain.workflows.executors import common, get_executor
 from tests.util import fresh_client

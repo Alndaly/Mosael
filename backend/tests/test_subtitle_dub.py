@@ -363,7 +363,7 @@ class Test原声处理归配音本身:
             )
 
     def test_明确选择只去人声时_没装分离引擎就不排任务(self, monkeypatch) -> None:
-        from app.domain import separation
+        from app.domain.assets import separation
 
         client = fresh_client()
         sequence_id, clip_id = _sequence_with_subtitle(client)

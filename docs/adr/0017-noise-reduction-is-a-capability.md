@@ -39,7 +39,7 @@ record only covers what differs.
      removes music; the user has to ask for it.
 3. **B and D are left as slots**, not written. Same rule as ADR 0016: no adapter is written against
    a request shape nobody has observed.
-4. **The domain** (`domain/denoise.py`) owns the asset side: extract audio at full quality, call the
+4. **The domain** (`domain/assets/denoise.py`) owns the asset side: extract audio at full quality, call the
    adapter, and — for a video — put the cleaned audio back into a **new** video with the picture
    stream copied. The source asset is never modified.
 5. **One registry, four entry points**: the `denoise_audio` workflow node, the `denoise_audio` agent

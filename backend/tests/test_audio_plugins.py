@@ -55,7 +55,7 @@ def _setup(tmp_path):
 
 
 def test_降噪插件和本机引擎并列_点名它就走插件_产出记着是谁降的(tmp_path) -> None:
-    from app.domain.denoise import denoise_asset
+    from app.domain.assets.denoise import denoise_asset
 
     client, ws, me, plugin, asset_id = _setup(tmp_path)
     options = client.get("/api/workflows/field-options", params={"workspace_id": ws, "source": "providers.audio_denoise"}).json()
@@ -70,7 +70,7 @@ def test_降噪插件和本机引擎并列_点名它就走插件_产出记着是
 
 
 def test_分离插件_点名它拆出两份新素材(tmp_path) -> None:
-    from app.domain.separation import separate_asset
+    from app.domain.assets.separation import separate_asset
 
     _client, _ws, me, plugin, asset_id = _setup(tmp_path)
     with SessionLocal() as db:
@@ -83,7 +83,7 @@ def test_别人的插件连接点不到_不借用别人的密钥(tmp_path) -> No
     import pytest
 
     from app.domain.audio_capabilities import DenoiseProviderUnavailable
-    from app.domain.denoise import ready_adapter
+    from app.domain.assets.denoise import ready_adapter
 
     _client, _ws, _me, plugin, _asset = _setup(tmp_path)
     with SessionLocal() as db, pytest.raises(DenoiseProviderUnavailable):

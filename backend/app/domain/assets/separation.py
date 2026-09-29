@@ -32,6 +32,7 @@ from app.db.models import Asset, Job
 from app.domain.assets.importer import register_file_asset
 from app.media.audio_io import AudioIOError, as_audio
 from app.domain.jobs import RENDER_SLOTS, create_job, dispatch_job, emit_job_event, finish_job, run_job_guarded, say
+from app.media.paths import resolve_key
 
 logger = logging.getLogger(__name__)
 
@@ -145,8 +146,6 @@ def separate_asset(
 def _source_path(asset: Asset) -> Path | None:
     """素材的本机文件。走 `file_key` + resolve_key —— 转写那条路也是这么问的,
     而 Asset 上并没有一个现成的 `path` 字段(顶层那几个常见字段其实住在 media_info 里)。"""
-    from app.media.paths import resolve_key
-
     if not asset.file_key:
         return None
     return resolve_key(asset.file_key)

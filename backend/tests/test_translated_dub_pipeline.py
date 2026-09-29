@@ -29,7 +29,8 @@ SYNTH_SECONDS = 4.0
 
 @pytest.fixture
 def stubs(monkeypatch):
-    from app.domain import render, separation, translate as translate_domain
+    from app.domain import render, translate as translate_domain
+    from app.domain.assets import separation
     from app.domain.voices import transcription, voices
 
     def fake_transcribe(db, asset_id, *, created_by=None, language="", engine=""):

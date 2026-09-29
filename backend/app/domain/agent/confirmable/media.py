@@ -195,7 +195,7 @@ def _summarize_separate_audio(db: Session, payload: dict[str, Any]) -> Summary:
 def _execute_separate_audio(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
     payload = confirmation.payload
     from app.db.models import Asset
-    from app.domain.separation import start_separation_job
+    from app.domain.assets.separation import start_separation_job
 
     asset = db.get(Asset, str(payload["asset_id"]))
     if asset is None or asset.workspace_id != confirmation.workspace_id:
@@ -210,7 +210,7 @@ def _validate_denoise_audio(db: Session, workspace_id: str, payload: dict[str, A
     from app.ai.providers.contracts.denoise import DenoiseError, checked_strength
     from app.db.models import Asset
     from app.core.i18n import t
-    from app.domain.denoise import DENOISABLE_KINDS, ready_adapter
+    from app.domain.assets.denoise import DENOISABLE_KINDS, ready_adapter
 
     asset = db.get(Asset, str(payload.get("asset_id") or ""))
     if asset is None or asset.workspace_id != workspace_id:
@@ -258,7 +258,7 @@ def _summarize_denoise_audio(db: Session, payload: dict[str, Any]) -> Summary:
 def _execute_denoise_audio(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
     payload = confirmation.payload
     from app.db.models import Asset
-    from app.domain.denoise import start_denoise_job
+    from app.domain.assets.denoise import start_denoise_job
 
     asset = db.get(Asset, str(payload["asset_id"]))
     if asset is None or asset.workspace_id != confirmation.workspace_id:

@@ -10,7 +10,7 @@
   - 入:`{"file": <暂存目录里一份 wav 的路径>, "filename": <原素材名>}`,降噪多一个 `"strength": light|medium|strong`;
   - 出:降噪 `{"audio": <暂存目录里的相对路径>}`,分离 `{"vocals": …, "background": …}`;
   - 进度、取消和别的流式工具同一套(NDJSON 进度行、`MOSAEL_PLUGIN_CANCEL_FILE`)。
-  抽音轨、放回视频、登记成新素材都是宿主的事(domain/denoise、domain/separation),插件只处理一段音频。
+  抽音轨、放回视频、登记成新素材都是宿主的事(domain/assets/denoise、domain/assets/separation),插件只处理一段音频。
 """
 
 from __future__ import annotations

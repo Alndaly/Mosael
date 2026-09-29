@@ -186,7 +186,7 @@ class TestDeepFilterNet适配器:
     def test_没装时说清去哪装(self, monkeypatch, tmp_path) -> None:
         from app.ai.providers import registry
         from app.ai.runtime import denoise_models as dm
-        from app.domain.denoise import ready_adapter
+        from app.domain.assets.denoise import ready_adapter
 
         monkeypatch.setattr(dm, "deepfilter_path", lambda: tmp_path / "nothing")
         dm.deepfilter_ready.cache_clear()
@@ -223,7 +223,7 @@ class Test引擎自己说得清自己:
 
     def test_清单带着安装状态(self, monkeypatch, tmp_path) -> None:
         from app.ai.runtime import denoise_models as dm
-        from app.domain.denoise import list_engines
+        from app.domain.assets.denoise import list_engines
 
         monkeypatch.setattr(dm, "deepfilter_path", lambda: tmp_path / "nothing")
         dm.deepfilter_ready.cache_clear()

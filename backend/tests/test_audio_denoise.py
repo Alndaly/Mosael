@@ -150,7 +150,7 @@ class Test引擎的挑法:
     def test_不点名是内置的频谱降噪(self) -> None:
         """挑法走能力表(ADR 0032):本机引擎是 `audio_denoise` 的内置提供方,没定默认用第一个允许自动的。"""
         from app.core.db import SessionLocal
-        from app.domain.denoise import ready_adapter
+        from app.domain.assets.denoise import ready_adapter
 
         with SessionLocal() as db:
             assert ready_adapter(db, None, "").engine_id == "ffmpeg"
@@ -204,14 +204,14 @@ class Test边界:
 class Test排队和开卡之前就判:
     def test_只有音频和视频能降噪(self) -> None:
         from app.db.models import Asset
-        from app.domain.denoise import start_denoise_job
+        from app.domain.assets.denoise import start_denoise_job
 
         with pytest.raises(DenoiseError, match="只有音频或视频"):
             start_denoise_job(None, asset=Asset(workspace_id="w", kind="image", name="x", file_key="k"), created_by=None)
 
     def test_档位写错不排队(self) -> None:
         from app.db.models import Asset
-        from app.domain.denoise import start_denoise_job
+        from app.domain.assets.denoise import start_denoise_job
 
         with pytest.raises(DenoiseError, match="档位"):
             start_denoise_job(
@@ -221,7 +221,7 @@ class Test排队和开卡之前就判:
     def test_引擎没准备好不排队__说清去哪准备(self, monkeypatch, tmp_path) -> None:
         from app.ai.runtime import denoise_models as dm
         from app.db.models import Asset
-        from app.domain import denoise
+        from app.domain.assets import denoise
 
         monkeypatch.setattr(dm, "deepfilter_path", lambda: tmp_path / "nothing")
         dm.deepfilter_ready.cache_clear()
@@ -263,7 +263,7 @@ class Test产出新素材:
 
     def test_音频进音频出__原素材不动(self, monkeypatch, tmp_path) -> None:
         from app.core.db import SessionLocal
-        from app.domain import denoise
+        from app.domain.assets import denoise
         from tests.util import fresh_client
 
         client = fresh_client()
@@ -287,7 +287,7 @@ class Test产出新素材:
     def test_视频进视频出__画面原样拷贝(self, monkeypatch, tmp_path) -> None:
         """用户对一段视频点降噪,要的是一段干净的视频,不是一段要自己再合回去的音频。"""
         from app.core.db import SessionLocal
-        from app.domain import denoise
+        from app.domain.assets import denoise
         from app.media.paths import resolve_key
         from tests.util import fresh_client
 
@@ -319,7 +319,7 @@ class Test产出新素材:
 
     def test_不能降噪的素材在领域层就拒(self, tmp_path) -> None:
         from app.db.models import Asset
-        from app.domain.denoise import denoise_asset
+        from app.domain.assets.denoise import denoise_asset
 
         with pytest.raises(DenoiseError, match="只有音频或视频"):
             denoise_asset(None, Asset(workspace_id="w", kind="image", name="x", file_key="k"))
@@ -346,7 +346,7 @@ class Test取声音不降采样:
         assert stream["sample_rate"] == "48000" and stream["channels"] == 2
 
     def test_分离也走这条(self) -> None:
-        text = Path("app/domain/separation.py").read_text(encoding="utf-8")
+        text = Path("app/domain/assets/separation.py").read_text(encoding="utf-8")
         assert "as_audio" in text and "_extract_audio" not in text
 
 
@@ -355,7 +355,7 @@ class Test工作流节点和确认卡:
     def test_节点产出新素材__只动本工作区的素材(self, monkeypatch, tmp_path) -> None:
         from app.core.db import SessionLocal
         from app.db.models import Asset, Workflow
-        from app.domain import denoise
+        from app.domain.assets import denoise
         from app.domain.workflows.executors.subjobs import denoise_audio_node
         from app.domain.workflows import WorkflowDomainError
         from tests.util import fresh_client
