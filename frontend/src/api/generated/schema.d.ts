@@ -1491,7 +1491,8 @@ export interface paths {
         };
         /**
          * List Extractions
-         * @description 这份文档的每一次解析,新的在前。
+         * @description 这份文档的每一次解析,新的在前。一次都没有过的(升级改回来的那批)在这里补上本地解析 —— 阅读器打开就看到
+         *     「解析中」,而不是一句「还没解析」(见 documents.extraction.ensure_parsed)。
          */
         get: operations["list_extractions_api_assets__asset_id__extractions_get"];
         put?: never;
