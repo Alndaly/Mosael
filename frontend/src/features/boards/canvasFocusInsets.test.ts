@@ -20,7 +20,11 @@ const strip = (source: string) => source.replace(/\/\*[\s\S]*?\*\//g, "").replac
 
 describe("跳转要避开右栏面板", () => {
   it("画板画布不再自己 setCenter —— 那条路不认识遮挡", () => {
-    expect(strip(read("features/boards/BoardCanvas.tsx"))).not.toMatch(/\.setCenter\(/);
+    //: 视口动作(居中、跳标记、查找跳转)拆进了 useBoardViewport —— 画布和它都查。
+    for (const file of ["features/boards/BoardCanvas.tsx", "features/boards/useBoardViewport.ts"]) {
+      expect(strip(read(file)), file).not.toMatch(/\.setCenter\(/);
+    }
+    expect(read("features/boards/useBoardViewport.ts")).toContain("centerCanvasViewport(");
   });
 
   it("画板画布向页面要「哪块看得见」,而不是自己猜", () => {

@@ -65,13 +65,13 @@ describe("画布的叠放顺序", () => {
     }
     expect(
       offenders,
-      "把它写进本画布的 LAYERS 表(见 boards/BoardCanvas.tsx 与 workflows/workflowCanvasModel.ts):" +
+      "把它写进本画布的 LAYERS 表(见 boards/boardCanvasModel.ts 与 workflows/workflowCanvasModel.ts):" +
         "一个孤零零的数说不出它压在谁之上,而下一个人只能再挑一个。",
     ).toEqual([]);
   });
 
   it("两块画布都还有 LAYERS 表 —— 规则要有地方可查", () => {
-    for (const file of ["boards/BoardCanvas.tsx", "workflows/workflowCanvasModel.ts"]) {
+    for (const file of ["boards/boardCanvasModel.ts", "workflows/workflowCanvasModel.ts"]) {
       expect(readFileSync(join(FEATURES, file), "utf8"), `${file} 里没有 LAYERS 表`).toContain("const LAYERS = {");
     }
   });

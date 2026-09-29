@@ -35,7 +35,8 @@ describe("画板表单的提交状态", () => {
   });
 
   it("节点上方操作条使用较大的点击区", () => {
-    const source = fs.readFileSync(path.join(HERE, "BoardCanvas.tsx"), "utf8");
+    //: 操作条(ItemToolbar)从 BoardCanvas 拆到了 BoardItemToolbar。
+    const source = fs.readFileSync(path.join(HERE, "BoardItemToolbar.tsx"), "utf8");
     expect(source).toMatch(/rounded-full[^"\n]*\bp-1\.5/);
     expect(source).toContain('h-7 w-7 cursor-pointer');
   });

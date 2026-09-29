@@ -1,17 +1,9 @@
 import { CANVAS_WINDOW_SURFACE_CLASS } from "@/components/app/canvasPanelLayout";
-import { CommentCard } from "@/features/collaboration/CommentCard";
 import { AnnotationModeHint } from "@/features/markers/AnnotationModeHint";
 import { NO_UPSTREAM, upstreamOf } from "./boardUpstream";
-import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
-import { getNoteReference, noteReferenceQuery } from "@/api/domains/notes";
-import { noteKeys } from "@/api/queryKeys";
 import { NotePickerDialog } from "@/features/notes/NotePickerDialog";
-import { SaveToNote } from "@/features/notes/SaveToNote";
-import { type BoardDocumentState } from "./boardDocumentSources";
 import { useCanvasInputMode, canvasWheelProps } from "@/components/app/canvasInputMode";
 import React from "react";
-import { carriedByFrame } from "@/features/boards/frameCarry";
 import {
   Background,
   BackgroundVariant,
@@ -20,7 +12,6 @@ import {
   NodeToolbar,
   Position,
   ReactFlowProvider,
-  ViewportPortal,
   addEdge,
   useEdgesState,
   useNodesState,
@@ -31,13 +22,11 @@ import {
   type Node,
   type ReactFlowInstance,
 } from "@xyflow/react";
-import { BookOpen, BookPlus, ChevronDown, Copy, Download, NotebookPen, ExternalLink, FileUp, Group, Loader2, Maximize2, MessageSquare, MoreHorizontal, PencilLine, Plus, Replace, Scissors, Sparkles, Trash2, type LucideIcon } from "lucide-react";
+import { FileUp, Loader2 } from "lucide-react";
 
-import { assetFileUrl, assetPreviewUrl, entityKeys, getEntity, type CollaborationComment, type WorkspaceMember } from "@/api/client";
+import { type CollaborationComment, type WorkspaceMember } from "@/api/client";
 import { useI18n } from "@/app/preferences";
-import type { MessageKey } from "@/app/messages";
-import { useImagePreview } from "@/components/app/image-preview";
-import { centerCanvasViewport, fitCanvasViewport, visibleCanvasSize, type CanvasViewportInsets } from "@/components/app/fitCanvasViewport";
+import { fitCanvasViewport, type CanvasViewportInsets } from "@/components/app/fitCanvasViewport";
 import { shapeEdges, type EdgeShape } from "@/components/app/canvasEdgeShape";
 import { CANVAS_EDGE_CLASS, CANVAS_EDGE_OPTIONS } from "@/components/app/canvasEdges";
 import {
@@ -51,40 +40,53 @@ import {
 import { searchHighlightClass, type CanvasSearchHighlight } from "@/components/app/CanvasNodeSearch";
 
 import { type BoardCanvas as Canvas, type BoardItem, type BoardProducer, type BoardProducerInfo, type BoardRunRequest, type GenerationOption } from "@/api/client";
-import { boardAbilities, boardToolIcon, DIRECT_ABILITIES, firstSentence, hostHasContent } from "@/features/boards/boardTools";
-import { ActionMenu } from "@/components/app/ActionMenu";
-import { Hint, TooltipProvider } from "@/components/ui/tooltip";
-import { toPlainText } from "@/components/markdown/inlineSyntax";
-import { errorText } from "@/api/errorMessage";
-import { appendAssetToSequence, redoSequence, undoSequence } from "@/api/domains/editor";
-import { documentText, saveDocumentAsNote, type DocumentText } from "@/api/domains/documents";
-import { boardSequenceKey, SequenceToolbarActions } from "@/features/boards/SequenceCell";
-import { isImportableFile, useFileDrop } from "@/lib/useFileDrop";
 import { usePersistentViewport } from "@/lib/usePersistentTab";
 import { cn } from "@/lib/utils";
-import { isCanvasKeyTarget, listenKeys } from "@/lib/shortcuts";
-import { canRedo, canUndo, dropSequenceStep, emptyHistory, record, recordSequence, redo, retagSequenceStep, undo, type SequenceStep } from "@/features/boards/canvasHistory";
-import { noteSequenceEdit, onSequenceEdit, SequenceAddContext } from "@/features/boards/sequenceCursor";
+import { listenKeys } from "@/lib/shortcuts";
+import { canRedo, canUndo } from "@/features/boards/canvasHistory";
+import { SequenceAddContext } from "@/features/boards/sequenceCursor";
 import { TrimComposer } from "@/features/boards/TrimComposer";
-import { canAskWriter, canOpenOnDemand, composerOnDemand, renderAbility, renderComposer, slotProducers } from "@/features/boards/boardComposers";
-import { BOARD_NODE_TYPES, DEFAULT_SIZE, NOTE_COLORS, noteColorClass , isMediaKind, kindIcon, kindText, SPAWNABLE_KINDS, type MediaKind } from "@/features/boards/boardNodes";
-import { composerView, copiedItem, itemIsRunning, newSlotForm, producerOf, runningAbility, withAbility, withProducer } from "@/features/boards/boardItemState";
-import { useKeepInCanvas } from "@/features/boards/BoardComposerShell";
+import { canAskWriter, canOpenOnDemand, composerOnDemand, renderAbility, renderComposer } from "@/features/boards/boardComposers";
+import { BOARD_NODE_TYPES, DEFAULT_SIZE, kindIcon, kindText, SPAWNABLE_KINDS } from "@/features/boards/boardNodes";
+import { composerView, newSlotForm, producerOf, runningAbility, withAbility, withProducer } from "@/features/boards/boardItemState";
 import { BOARD_NODE_PANEL_OFFSET } from "@/features/boards/boardLayout";
-import { assetItem, assetReference, clipboardContent, type PlacedAsset } from "@/features/boards/boardPlacement";
+import { type PlacedAsset } from "@/features/boards/boardPlacement";
 import { useCanvasDeleteKey } from "@/components/app/useCanvasDeleteKey";
-import { CommentComposer, type CommentDraft } from "@/features/collaboration/CommentComposer";
+import { type CommentDraft } from "@/features/collaboration/CommentComposer";
 import { MarkerPin } from "@/features/markers/MarkerPin";
 import { MarkerEditorProvider } from "@/features/markers/MarkerEditorProvider";
+import { toMarkerNodes, type CanvasMarker } from "@/features/markers/markers";
 import {
-  MARKER_PREFIX,
-  MAX_MARKERS,
-  newMarkerId,
-  nextMarkerName,
-  toMarkerNodes,
-  type CanvasMarker,
-} from "@/features/markers/markers";
-import { useMarkerShortcuts } from "@/features/markers/useMarkerShortcuts";
+  LAYERS,
+  boardItems,
+  canPlaceCommentDraft,
+  copySelected,
+  focusBoardNode,
+  toNodes,
+  type BoardPickAsset,
+} from "@/features/boards/boardCanvasModel";
+import { ItemToolbar, TRIM_PANEL, WRITER_PANEL } from "@/features/boards/BoardItemToolbar";
+import { BoardCommentLayer, useBoardCommentDraft } from "@/features/boards/BoardCommentLayer";
+import { useBoardDocuments } from "@/features/boards/useBoardDocuments";
+import { useBoardFileImport } from "@/features/boards/useBoardFileImport";
+import { useBoardHistory } from "@/features/boards/useBoardHistory";
+import { useBoardSequenceLinks } from "@/features/boards/useBoardSequenceLinks";
+import { useBoardViewport } from "@/features/boards/useBoardViewport";
+import { useFrameDrag } from "@/features/boards/useFrameDrag";
+
+//: 纯函数拆到了 boardCanvasModel.ts;别处(和测试)仍从这里取。
+export {
+  boardItems,
+  canMoveComment,
+  canPlaceCommentDraft,
+  copySelected,
+  focusBoardNode,
+  moveCommentAnchorByScreenDelta,
+  searchFocusZoom,
+  shouldDismissCommentOverlay,
+  shouldSuppressCommentPlacement,
+  toCanvas,
+} from "@/features/boards/boardCanvasModel";
 
 /** 拉线松手后那块占位的大小:选的时候不随高亮变(见 usePendingLink),取一格图片的默认大小。 */
 const PENDING_GHOST_SIZE = DEFAULT_SIZE.image;
@@ -131,220 +133,6 @@ export interface BoardCanvasApi {
  *  BOARD_NODE_TYPES 那张按 kind 索引的表。 */
 const CANVAS_NODE_TYPES = { ...BOARD_NODE_TYPES, marker: MarkerPin, ...PENDING_LINK_NODE_TYPES };
 
-/**
- * 这块画布的层次 —— **一处说了算**。
- *
- * 规则是"旗子压在所有内容之上"。它此前是调用处一个凭手感挑的 `zIndex: 2`,而工作流那块画布
- * 写的是 950:两个数不是谁错了,是同一条规则在两边各挑了一个常数,而规则本身没写在任何地方。
- * 加一种新节点类型时,该挑几没有参照系可查。
- */
-const LAYERS = {
-  /** 分组框永远在最底 —— 它是背景,盖住上面的项就没法点了。 */
-  frame: 0,
-  /**
-   * 连线夹在分组框和项之间。在框之下的话(此前就是:两者都是 0,而 React Flow 把节点那层排在
-   * 连线之后),框那层 3% 的底色和虚线边框就压在线上,线一穿过框就像被切了一刀;在项之上的话,
-   * 线头会压住卡片。夹在中间:线完整地画在框上面,两头钻进卡片底下,箭头尖顶在卡片边框上。
-   */
-  edge: 1,
-  item: 2,
-  /** 一枚贴在画布上的旗子,被别的东西盖住就点不到了。 */
-  marker: 3,
-  /** 拉线松手时的占位和那根待定的线:它说的是「新的一格会落在这儿」,被已有的项盖住就等于没说。 */
-  pending: 4,
-} as const;
-
-function toNodes(items: BoardItem[]): Node[] {
-  return items.map((item) => ({
-    id: item.id,
-    type: item.kind,
-    position: { x: item.x, y: item.y },
-    width: item.width ?? DEFAULT_SIZE[item.kind].width,
-    height: item.height ?? DEFAULT_SIZE[item.kind].height,
-    data: { item },
-    zIndex: item.kind === "frame" ? LAYERS.frame : LAYERS.item,
-  }));
-}
-
-/** 把 React Flow 的当前状态汇成要存的画布。**位置以 React Flow 为准** —— 它才是刚被拖过的那份。 */
-export function toCanvas(nodes: Node[], edges: Edge[]): Canvas {
-  // 标记不是画板项,也连不了线 —— 所以它不进这张表。
-  const alive = new Set(nodes.filter((node) => node.type !== "marker").map((node) => node.id));
-  return {
-    items: nodes
-      .filter((node) => node.type !== "marker")
-      .map((node) => {
-        const { item } = node.data as unknown as { item: BoardItem };
-        return {
-          ...item,
-          x: Math.round(node.position.x),
-          y: Math.round(node.position.y),
-          width: Math.round(node.width ?? node.measured?.width ?? DEFAULT_SIZE[item.kind].width),
-          height: Math.round(node.height ?? node.measured?.height ?? DEFAULT_SIZE[item.kind].height),
-        };
-      }),
-    /*
-     * **不放出悬空的线。** 后端校验「连线两端必须都是画板上的项」,一根指向已删节点的线会让
-     * **整张画板存不下去** —— 用户看到的是「画板没能保存」,而画面上那个节点早就不见了,
-     * 根本联想不到是它。删除按钮那条路已经一并删线(见 removeSelected),这里是最后一道:
-     * 序列化是唯一知道 items 和 edges 全貌的地方,别的路径再漏一次也漏不出去。
-     */
-    edges: edges
-      .filter((edge) => alive.has(edge.source) && alive.has(edge.target))
-      .map((edge) => ({ id: edge.id, source: edge.source, target: edge.target })),
-    // 标记单独一份,不混进 items —— 它没有素材、不生成、连不了线,混进去的话每一处遍历
-    // items 的地方(生成、导出、缩略图、连线校验)都要先分辨一次"这个是不是标记"。
-    markers: nodes
-      .filter((node) => node.type === "marker")
-      .map((node) => ({
-        ...(node.data as unknown as { marker: CanvasMarker }).marker,
-        x: Math.round(node.position.x),
-        y: Math.round(node.position.y),
-      })),
-  };
-}
-
-/**
- * 画布上的**画板项**。标记不是画板项 —— 它的 data 里没有 `item`。
- *
- * **只此一处。** 直接对全部节点 `node.data.item` 遍历的地方,加了标记之后就是一次崩溃:
- * 读到的是 undefined,下一句 `.kind` 当场抛,而抛在派生里就是整张画板白屏 ——
- * 加一枚标记,这张画板就再也打不开了。收成一个函数,是为了让"标记没有 item"只需要被记住一次。
- */
-export function boardItems(nodes: Node[]): BoardItem[] {
-  return nodes
-    .filter((node) => node.type !== "marker")
-    .map((node) => (node.data as unknown as { item: BoardItem }).item);
-}
-
-/**
- * 复制选中的几项:换新 id、错开一点放,复制出来的那几项成为新的选中。
- *
- * **一起复制的几项之间的线也跟着复制**,两端接到新的那几格上 —— 一张便签连着一个图片槽,
- * 复制这一对是想要「同一套再来一份」;线不跟着来的话,副本里的图片槽拿不到那段提示词,
- * 那条线表达的关系就丢了。连着没被选中那项的线不跟着来:那一端没有副本可接。
- *
- * 每一格按 copiedItem 复制(进行中的运行态不带过去)。
- */
-export function copySelected(nodes: Node[], edges: Edge[]): { nodes: Node[]; edges: Edge[] } {
-  // 标记也可能被选中(它在画布上就是一个节点),但它没有 item —— 而且"复制一枚旗子"
-  // 本来也不成立:两枚指着同一处的标记不表达任何东西。
-  const picked = nodes.filter((node) => node.selected && node.type !== "marker");
-  const renamed = new Map<string, string>();
-  const copies = picked.map((node) => {
-    const source = (node.data as unknown as { item: BoardItem }).item;
-    const copy = copiedItem(source, `${source.kind}-${Math.random().toString(36).slice(2, 9)}`);
-    renamed.set(node.id, copy.id);
-    return {
-      ...node,
-      id: copy.id,
-      // 错开一点放,不然复制出来的正好盖在原件上,看着像什么都没发生。
-      position: { x: node.position.x + 24, y: node.position.y + 24 },
-      selected: true,
-      data: { ...node.data, item: copy },
-    };
-  });
-  const copiedEdges = edges.flatMap((edge) => {
-    const source = renamed.get(edge.source);
-    const target = renamed.get(edge.target);
-    return source && target ? [{ id: `${edge.id}-${source}-${target}`, source, target }] : [];
-  });
-  //: 槽位里顺着线挂上的那几份跟着线走:上游也一起复制了的,出处改记成新的那一格(线也复制了);
-  //: 没一起复制的,副本上没有那根线,存的时候服务端把它摘掉 —— 和删掉那根线是同一条规则。
-  const rewired = copies.map((node) => {
-    const item = (node.data as unknown as { item: BoardItem }).item;
-    const sources = item.form?.source_assets;
-    if (!sources?.some((one) => one.from && renamed.has(one.from))) return node;
-    const source_assets = sources.map((one) =>
-      one.from && renamed.has(one.from) ? { ...one, from: renamed.get(one.from) } : one,
-    );
-    return { ...node, data: { ...node.data, item: { ...item, form: { ...item.form, source_assets } } } };
-  });
-  return {
-    nodes: [...nodes.map((node) => ({ ...node, selected: false })), ...rewired],
-    edges: [...edges, ...copiedEdges],
-  };
-}
-
-/** 一次普通点击的选择结果。显式收口，避免 React Flow 的内部选择事件与受控 nodes 回写竞态。 */
-export function focusBoardNode(nodes: Node[], nodeId: string): Node[] {
-  let changed = false;
-  const next = nodes.map((node) => {
-    const selected = node.id === nodeId;
-    if (Boolean(node.selected) === selected) return node;
-    changed = true;
-    return { ...node, selected };
-  });
-  return changed ? next : nodes;
-}
-
-/** A draft is a transient editor, not a canvas selection. Keep it stable until it is submitted or
- * cancelled so clicks used to focus/type cannot silently move it to a new anchor. */
-export function canPlaceCommentDraft(
-  commentMode: boolean,
-  hasDraft: boolean,
-  gestureMoved = false,
-  dismissedActiveComment = false,
-): boolean {
-  return commentMode && !hasDraft && !gestureMoved && !dismissedActiveComment;
-}
-
-export function canMoveComment(authorId: string | null | undefined, currentUserId: string | null | undefined): boolean {
-  return Boolean(authorId && currentUserId && authorId === currentUserId);
-}
-
-type CanvasCommentAnchor = NonNullable<CollaborationComment["anchor"]>;
-type ScreenPoint = { x: number; y: number };
-
-/** Keep comment movement stable at every zoom level by measuring the pointer delta in flow space. */
-export function moveCommentAnchorByScreenDelta(
-  anchor: CanvasCommentAnchor,
-  startScreen: ScreenPoint,
-  currentScreen: ScreenPoint,
-  screenToFlowPosition: (point: ScreenPoint) => ScreenPoint,
-): CanvasCommentAnchor {
-  const start = screenToFlowPosition(startScreen);
-  const current = screenToFlowPosition(currentScreen);
-  return {
-    ...anchor,
-    x: (anchor.x ?? 0) + current.x - start.x,
-    y: (anchor.y ?? 0) + current.y - start.y,
-  };
-}
-
-export function shouldDismissCommentOverlay(
-  hasActiveComment: boolean,
-  hasDraft: boolean,
-  pointerInsideOverlay: boolean,
-): boolean {
-  return (hasActiveComment || hasDraft) && !pointerInsideOverlay;
-}
-
-export function shouldSuppressCommentPlacement(gesture: {
-  moved: boolean;
-  dismissedActive: boolean;
-  startedInsideOverlay: boolean;
-  endedInsideOverlay: boolean;
-}): boolean {
-  return gesture.moved
-    || gesture.dismissedActive
-    || (gesture.startedInsideOverlay && !gesture.endedInsideOverlay);
-}
-
-/**
- * 查找节点跳过去时的缩放:至少拉到 0.9(看得清字),节点大到放不下时退到刚好装得下、四周留一圈;
- * 不超过画布的最大缩放。已经比 0.9 更近、而且装得下时保持原样 —— 用户自己拉近的,别替他拉远。
- */
-export function searchFocusZoom(
-  current: number,
-  size: { width: number; height: number },
-  visible: { width: number; height: number },
-  maxZoom = 2.5,
-): number {
-  const fit = Math.min(visible.width / (size.width * 1.25), visible.height / (size.height * 1.25));
-  return Math.min(Math.max(current, 0.9), fit, maxZoom);
-}
-
 export function BoardCommentModeHint({ onExit }: { onExit?: () => void }) {
   return <AnnotationModeHint kind="comment" onExit={onExit} />;
 }
@@ -357,7 +145,7 @@ interface Props {
   onChange: (canvas: Canvas) => void;
   /** 让上层开素材选择器。kind 决定它列图片还是视频 —— 选得到的就该是贴上去能看的;`media` 是三种都列。
    *  `onBoard`:这张画板上已有的素材,选择器里多一个「画板上的」筛选。 */
-  onPickAsset: (kind: MediaKind | "media", place: (assetId: string) => void, options?: { onBoard?: string[] }) => void;
+  onPickAsset: BoardPickAsset;
   /**
    * 在某一格上跑一个产出者(生成、写字、念出来、截一段)。上层拿得到 workspaceId 和接口,画布只
    * 提供「落在哪一格」和「表单是什么」。写字同步返回,其余摆好占位就回、产出由回执填回来。
@@ -415,35 +203,8 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
   const [inputMode] = useCanvasInputMode();
   const t = useI18n();
   const rf = React.useRef<ReactFlowInstance | null>(null);
-  const queryClient = useQueryClient();
 
-  /** 一份素材接到时间线末尾(视频、图片进主视频轨,音频进音频轨),格子读的缓存换成回来的那条,记进撤销。 */
-  const appendToSequence = React.useCallback((sequenceId: string, assetId: string) => {
-    void appendAssetToSequence(sequenceId, assetId)
-      .then((next) => {
-        queryClient.setQueryData(boardSequenceKey(sequenceId), next);
-        noteSequenceEdit(sequenceId, next.revision);
-      })
-      .catch((error: unknown) => toast.error(errorText(error)));
-  }, [queryClient]);
-  /** 连进时间线格(ADR 0030)= 把那一格的素材接到这条时间线的末尾。连线本身照常留着;断开**不**从时间线上删 ——
-   *  那一段可能已经被切过、排过,自动删会丢掉这些手工。 */
-  const appendOnConnect = React.useCallback((connection: Connection) => {
-    const itemOf = (id: string | null) => (id ? (rf.current?.getNode(id)?.data as { item?: BoardItem } | undefined)?.item : undefined);
-    const source = itemOf(connection.source);
-    const target = itemOf(connection.target);
-    if (target?.kind !== "sequence" || !target.sequence_id || !source?.asset_id) return;
-    if (!["video", "image", "audio"].includes(source.kind)) return;
-    appendToSequence(target.sequence_id, source.asset_id);
-  }, [appendToSequence]);
-  /** 时间线格上的「+」:挑一份素材(这张画板上已有的,或素材库里的)接到末尾,和连线进来同一件事。 */
-  const pickForSequence = React.useCallback((sequenceId: string) => {
-    const onBoard = [...new Set((rf.current?.getNodes() ?? [])
-      .map((node) => (node.data as { item?: BoardItem }).item)
-      .filter((one): one is BoardItem => Boolean(one?.asset_id && isMediaKind(one.kind)))
-      .map((one) => one.asset_id as string))];
-    onPickAsset("media", (assetId) => appendToSequence(sequenceId, assetId), { onBoard });
-  }, [appendToSequence, onPickAsset]);
+  const { appendOnConnect, pickForSequence } = useBoardSequenceLinks({ rf, onPickAsset });
   const surface = React.useRef<HTMLDivElement | null>(null);
   //: Backspace / Delete 只删冲着画布来的那一下 —— 和工作流编辑器同一个钩子。实例从 Provider 取,
   //: 不等 onInit:删除键在画布挂上的那一刻就该认。
@@ -453,32 +214,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
   useCanvasDeleteKey(surface, flowRef);
   const viewport = usePersistentViewport(`board:${boardId}`);
   const [ready, setReady] = React.useState(false);
-  const [draftAnchor, setDraftAnchor] = React.useState<NonNullable<CollaborationComment["anchor"]> | null>(null);
-  const [commentPositions, setCommentPositions] = React.useState<Record<string, { x: number; y: number }>>({});
-  const paneGesture = React.useRef<{
-    x: number;
-    y: number;
-    moved: boolean;
-    dismissedActive: boolean;
-    startedInsideOverlay: boolean;
-  } | null>(null);
-  const suppressPaneClick = React.useRef(false);
-  const commentDrag = React.useRef<{
-    id: string;
-    pointerId: number;
-    startScreen: { x: number; y: number };
-    origin: { x: number; y: number };
-    nodeId?: string;
-    moved: boolean;
-    last?: { x: number; y: number };
-  } | null>(null);
-  const draftCommentDrag = React.useRef<{
-    pointerId: number;
-    startScreen: ScreenPoint;
-    origin: CanvasCommentAnchor;
-    moved: boolean;
-  } | null>(null);
-  const suppressCommentClick = React.useRef<string | null>(null);
+  const { draftAnchor, setDraftAnchor, suppressPaneClick, paneHandlers } = useBoardCommentDraft({ commentMode, activeCommentId, onSelectComment });
 
   const [nodes, setNodes, onNodesChange] = useNodesState([...toNodes(canvas.items), ...toMarkerNodes(canvas.markers ?? [], LAYERS.marker)]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>(
@@ -490,19 +226,6 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
     else setNodes((current) => current.map((node) => (node.selected ? { ...node, selected: false } : node)));
   }, [commentMode, setNodes]);
   React.useEffect(() => { setNodes(current => current.map(node => ({ ...node, selected: false }))); }, [markerMode, markersVisible, setNodes]);
-
-  React.useEffect(() => {
-    if (!shouldDismissCommentOverlay(Boolean(activeCommentId), Boolean(draftAnchor), false)) return;
-    const dismissOnOutsidePointer = (event: PointerEvent) => {
-      const target = event.target instanceof Element ? event.target : null;
-      const insideOverlay = Boolean(target?.closest("[data-board-comment-overlay], [data-suggestion-menu]"));
-      if (!shouldDismissCommentOverlay(Boolean(activeCommentId), Boolean(draftAnchor), insideOverlay)) return;
-      if (activeCommentId) onSelectComment?.(null);
-      if (draftAnchor) setDraftAnchor(null);
-    };
-    document.addEventListener("pointerdown", dismissOnOutsidePointer, true);
-    return () => document.removeEventListener("pointerdown", dismissOnOutsidePointer, true);
-  }, [activeCommentId, draftAnchor, onSelectComment]);
 
   // 文字改动直接落进节点 data —— 走 setNodes 而不是回写上层,理由同上:
   // 上层一变就重建节点,正在打字的 textarea 会失焦。
@@ -558,52 +281,9 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
     );
   }, [setNodes]);
 
-
-  // 每次画布变了就汇一份给上层去存。**用 JSON 比对而不是引用比对** —— React Flow 每次
-  // 拖动都换新对象,引用比对等于每帧都报"变了"。
+  const { documents, pickingDocument, setPickingDocument, refreshingDocument, refreshDocument } = useBoardDocuments({ nodes, setNodes, workspaceId });
   //: 选中的那个空槽/生成中的槽 —— 只有一个被选中时才挂面板,多选没有单一的作用对象。
   /** 选中的**还空着**的那一项 —— 空槽就是「等着被填」,面板挂在它下面。 */
-  const [pickingDocument, setPickingDocument] = React.useState<string | null>(null);
-  const [refreshingDocument, setRefreshingDocument] = React.useState<string | null>(null);
-  const documentItems = boardItems(nodes).filter(item => item.kind === "document");
-  //: 文档格引用一篇笔记(可让 AI 写),或一份文档素材(ADR 0031:只读来源,喂解析出的全文)。两种都收成同一种
-  //: 「引用」交给下游 —— 连进写作 / 生成格的那一侧不必分它是哪一种。
-  const noteQueries = useQueries({queries: documentItems.map(item => noteReferenceQuery(workspaceId ?? "", item.note_id ?? "", item.note_revision))});
-  const assetQueries = useQueries({queries: documentItems.map(item => ({
-    queryKey: ["asset", item.asset_id ?? "", "document-text"] as const,
-    queryFn: () => documentText(item.asset_id ?? ""),
-    enabled: Boolean(item.asset_id && !item.note_id),
-    //: 导入时自动解析的那一下常常还没做完:在解析就隔两秒再问。
-    refetchInterval: (query: { state: { data?: DocumentText } }) => (query.state.data?.status === "parsing" ? 2000 : false),
-  }))});
-  const documents = new Map<string, BoardDocumentState>(documentItems.map((item, index) => {
-    if (item.asset_id && !item.note_id) {
-      const text = assetQueries[index].data;
-      return [item.id, {
-        reference: text?.status === "ready" ? assetReference(text) : undefined,
-        pending: !text || text.status === "parsing",
-        error: assetQueries[index].error?.message ?? (text?.status === "failed" ? text.error || t("documentUnavailable") : undefined),
-      }];
-    }
-    return [item.id, {
-      reference: noteQueries[index].data, pending: !!item.note_id && noteQueries[index].isPending,
-      error: noteQueries[index].error?.message,
-    }];
-  }));
-  const refreshDocument = async (id: string) => {
-    const item = documentItems.find(item => item.id === id);
-    if (!item?.note_id || !workspaceId) return;
-    setRefreshingDocument(id);
-    try {
-      const reference = await getNoteReference(workspaceId, item.note_id);
-      setNodes(current => current.map(node => {
-        const currentItem = (node.data as {item: BoardItem}).item;
-        // A delayed request must not replace a different note chosen in the meantime.
-        return node.id === id && currentItem.note_id === item.note_id ? {...node, data: {...node.data, item: {...currentItem, text: reference.title, note_revision: reference.revision}}} : node;
-      }));
-    } catch (error) { toast.error(errorText(error)); }
-    finally { setRefreshingDocument(null); }
-  };
   //: 选中的那一格底下挂哪个产出者的面板 —— 规则在 producerOf,这里只认「选中了一格」。
   const composerItem = React.useMemo(() => {
     const picked = nodes.filter((node) => node.selected && node.type !== "marker");
@@ -662,85 +342,18 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
       ? upstreamOf(composerItem.id, boardItems(nodes), edges, documents)
       : NO_UPSTREAM;
 
-  /**
-   * 拖动分组框时被它带着走的那几项。
-   *
-   * **在按下的那一刻定下来,拖的过程中不再变。** 边拖边判「谁在框里」的话,框扫过谁就会
-   * 顺手把谁卷走 —— 用户只是想把这一组挪到右边,结果沿途的东西全被推到了一起。
-   */
-  const carried = React.useRef<{ id: string; from: { x: number; y: number } }[]>([]);
-  const dragFrom = React.useRef<{ x: number; y: number } | null>(null);
+  const { beginFrameDrag, dragFrame, endFrameDrag } = useFrameDrag({ nodes, setNodes });
 
-  const beginFrameDrag = React.useCallback(
-    (node: Node) => {
-      const item = (node.data as unknown as { item?: BoardItem }).item;
-      carried.current = [];
-      dragFrom.current = null;
-      // 标记节点没有 item(它不是画板项)—— 不先问一句,拖一枚旗子就会在这里抛。
-      if (!item || item.kind !== "frame" || !item.move_children) return;
-      const left = node.position.x;
-      const top = node.position.y;
-      const right = left + (node.width ?? DEFAULT_SIZE.frame.width);
-      const bottom = top + (node.height ?? DEFAULT_SIZE.frame.height);
-      dragFrom.current = { ...node.position };
-      //: 判定规则在 frameCarry.ts —— 它是一条规则不是渲染,而它出过一个只有嵌套时
-      //: 才看得见的错(外框把内框里的东西带走了,却把内框留在原地)。
-      const positions = new Map(nodes.map((one) => [one.id, one.position]));
-      carried.current = carriedByFrame(
-        { id: node.id, kind: "frame", x: left, y: top, width: right - left, height: bottom - top },
-        nodes.map((one) => ({
-          id: one.id,
-          kind: String(one.type ?? ""),
-          x: one.position.x,
-          y: one.position.y,
-          width: one.width ?? 0,
-          height: one.height ?? 0,
-        })),
-      ).map((one) => ({ id: one.id, from: { ...(positions.get(one.id) ?? { x: one.x, y: one.y }) } }));
-    },
-    [nodes],
-  );
-
-  const dragFrame = React.useCallback(
-    (node: Node) => {
-      const from = dragFrom.current;
-      if (!from || carried.current.length === 0) return;
-      //: 位移始终从**按下时**的位置算起,不是上一帧 —— 逐帧累加的话,某一帧被丢掉
-      //: (拖得快时会)就永久错开一段。
-      const dx = node.position.x - from.x;
-      const dy = node.position.y - from.y;
-      const moves = new Map(carried.current.map((one) => [one.id, one.from]));
-      setNodes((current) =>
-        current.map((one) => {
-          const origin = moves.get(one.id);
-          return origin ? { ...one, position: { x: origin.x + dx, y: origin.y + dy } } : one;
-        }),
-      );
-    },
-    [setNodes],
-  );
-
-  // ── 标记(位置书签)────────────────────────────────────────────────────────
-  //: 事实来源和画板项一样是 React Flow 的 nodes —— 拖动、选中、⌫ 删除因此全是白拿的,
-  //: 撤销/重做也一样(历史存的是整份 toCanvas 快照,里面本来就带着 markers)。
-  //: **经序列化取回一份稳定引用。** 这份清单要交给工具条(见 onReady 那条 effect),而
-  //: `nodes` 每拖一帧就换一次身份 —— 直接 map 出来的话,拖任何一个节点都会让工具条跟着
-  //: 重挂一遍。标记至多几十个,序列化的代价远小于每帧一次的重渲染。
-  const markerKey = React.useMemo(
-    () => JSON.stringify(nodes.filter((node) => node.type === "marker").map((node) => ({
-      ...(node.data as unknown as { marker: CanvasMarker }).marker,
-      x: Math.round(node.position.x),
-      y: Math.round(node.position.y),
-    }))),
-    [nodes],
-  );
-  const markers = React.useMemo(() => JSON.parse(markerKey) as CanvasMarker[], [markerKey]);
-
-  const patchMarker = React.useCallback((next: CanvasMarker) => {
-    setNodes((current) =>
-      current.map((node) => (node.id === MARKER_PREFIX + next.id ? { ...node, data: { ...node.data, marker: next } } : node)),
-    );
-  }, [setNodes]);
+  // ── 标记(位置书签)与视口:见 useBoardViewport ──────────────────────────────
+  const { markers, patchMarker, deleteMarker, insetsOf, centerOn, jumpToMarker, focusItem, addMarker } = useBoardViewport({
+    nodes,
+    setNodes,
+    rf,
+    surface,
+    getInsets,
+    onRevealMarkers,
+    commentMode,
+  });
 
   /**
    * 删掉选中的这几项,**连同挂在它们上面的线**。
@@ -767,97 +380,6 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
     setNodes(copied.nodes);
     setEdges(copied.edges);
   }, [nodes, edges, setNodes, setEdges]);
-
-  const deleteMarker = React.useCallback((id: string) => {
-    setNodes((current) => current.filter((node) => node.id !== MARKER_PREFIX + id));
-  }, [setNodes]);
-
-  /** 画布上没被右栏盖住的那块。页面没给就是整块。 */
-  const insetsOf = React.useCallback(
-    (pane: HTMLElement): CanvasViewportInsets => getInsets?.(pane) ?? {},
-    [getInsets],
-  );
-
-  /**
-   * 把一个流坐标点摆到**看得见的那块**的正中。
-   *
-   * 不是 `instance.setCenter` —— 它照整块画布居中,而右栏的智能体是盖在画布上的:
-   * 目标正好落在它底下,看着像"点了没反应"。跳标记、跳评论都从这里走。
-   */
-  const centerOn = React.useCallback((point: { x: number; y: number }) => {
-    const instance = rf.current;
-    const pane = surface.current;
-    if (!instance || !pane) return;
-    void centerCanvasViewport(instance, pane, point, insetsOf(pane), {
-      zoom: Math.max(instance.getZoom(), 0.9),
-      duration: 350,
-    });
-  }, [insetsOf]);
-
-  /** 跳到某个标记。视口居中过去,不改选中态 —— 跳转是"我要看那儿",不是"我要改那个"。
-   *  **先把标记显示出来**:快捷键和清单两个入口都走这里 —— 此前只有清单那一处记得显示,按快捷键跳过去
-   *  落在一块看不见旗子的地方。 */
-  const jumpToMarker = React.useCallback((marker: CanvasMarker) => {
-    onRevealMarkers?.();
-    // 加半枚旗子:节点坐标是左上角,照它居中的话旗子整个偏在右下。
-    centerOn({ x: marker.x + 60, y: marker.y + 14 });
-  }, [centerOn, onRevealMarkers]);
-
-  useMarkerShortcuts(markers, jumpToMarker, !commentMode);
-
-  /** 查找节点跳到某一项。和跳标记一样只动视口、不改选中态 —— 按 Enter 一路往下看的时候,
-   *  每一格都弹出自己的面板会把画布盖满。 */
-  const focusItem = React.useCallback((itemId: string) => {
-    const instance = rf.current;
-    const pane = surface.current;
-    const node = instance?.getNode(itemId);
-    if (!instance || !pane || !node) return;
-    const size = {
-      width: node.measured?.width ?? node.width ?? 200,
-      height: node.measured?.height ?? node.height ?? 120,
-    };
-    const insets = insetsOf(pane);
-    void centerCanvasViewport(
-      instance,
-      pane,
-      { x: node.position.x + size.width / 2, y: node.position.y + size.height / 2 },
-      insets,
-      {
-        zoom: searchFocusZoom(instance.getZoom(), size, visibleCanvasSize(pane.clientWidth, pane.clientHeight, insets)),
-        duration: 350,
-      },
-    );
-  }, [insetsOf]);
-
-  /** 在当前视口中心放一枚标记。放在**看得见的地方**:标记标的是"我现在在看的这块地方"。 */
-  const addMarker = React.useCallback((point?: { x: number; y: number }) => {
-    const instance = rf.current;
-    const pane = surface.current;
-    if (!instance || !pane) return;
-    let placed = false;
-    setNodes((current) => {
-      const existing = current
-        .filter((node) => node.type === "marker")
-        .map((node) => (node.data as unknown as { marker: CanvasMarker }).marker);
-      if (existing.length >= MAX_MARKERS) return current;
-      // 同样避开右栏:一枚落在智能体底下的标记,加完就看不见。
-      const rect = pane.getBoundingClientRect();
-      const visible = visibleCanvasSize(pane.clientWidth, pane.clientHeight, insetsOf(pane));
-      const center = point ?? instance.screenToFlowPosition({
-        x: rect.left + visible.left + visible.width / 2,
-        y: rect.top + visible.top + visible.height / 2,
-      });
-      const marker: CanvasMarker = {
-        id: newMarkerId(existing),
-        name: nextMarkerName(t("markers"), existing),
-        x: Math.round(center.x),
-        y: Math.round(center.y),
-      };
-      placed = true;
-      return [...current.map((node) => ({ ...node, selected: false })), ...toMarkerNodes([marker], LAYERS.marker).map((node) => ({ ...node, selected: true }))];
-    });
-    if (!placed) toast.error(t("markerLimit").replace("{n}", String(MAX_MARKERS)));
-  }, [setNodes, t, insetsOf]);
 
   /** 一格上在跑(或上一轮跑)的那项能力叫什么:运行态那一条上写它。清单没到、查不到时不写。 */
   const abilityLabel = (item: BoardItem): string | undefined => {
@@ -890,112 +412,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
     selectable: !commentMode && !markerMode,
   }));
 
-  const serialized = React.useMemo(() => JSON.stringify(toCanvas(nodes, edges)), [nodes, edges]);
-  React.useEffect(() => {
-    onChange(JSON.parse(serialized) as Canvas);
-  }, [serialized, onChange]);
-
-  /**
-   * 撤销/重做。存的是**整份画布的快照** —— 画板的事实来源是 React Flow 的 nodes/edges,
-   * 撤销就是把某一份装回去(工作流那边挂在 zundo 上,因为它的事实来源是 store 里的 graph)。
-   */
-  const [history, setHistory] = React.useState(() => emptyHistory(serialized));
-  //: 正在装回去的那一份 —— 它引发的这一轮变化**不能再进历史**,否则撤一步会立刻被记成
-  //: 一次新编辑,重做就永远回不去了(表现是「撤销键按一下就灰了」)。
-  const restoring = React.useRef<string | null>(null);
-
-  /** 把一份画布装进 React Flow,回它装进去之后序列化出来的样子(和 `serialized` 同一种写法)。 */
-  const load = React.useCallback(
-    (canvas: Canvas): string => {
-      const nextNodes = [...toNodes(canvas.items), ...toMarkerNodes(canvas.markers ?? [], LAYERS.marker)];
-      const nextEdges = canvas.edges.map((edge) => ({ id: edge.id, source: edge.source, target: edge.target }));
-      setNodes(nextNodes);
-      setEdges(nextEdges);
-      return JSON.stringify(toCanvas(nextNodes, nextEdges));
-    },
-    [setNodes, setEdges],
-  );
-
-  const restore = React.useCallback(
-    (snapshot: string) => {
-      restoring.current = load(JSON.parse(snapshot) as Canvas);
-    },
-    [load],
-  );
-
-  /**
-   * 换成服务端那份(冲突之后、或回执落地时采用服务端画布)。**历史从这一份重新开始。**
-   *
-   * 之前那摞快照都建立在一份已经不成立的画布上:撤一步装回去的是「别人改之前」的样子 ——
-   * 智能体刚加的便签、别处刚落回的产出一起消失,下一次自动保存再带着新版本号把它们存没了。
-   */
-  const replace = React.useCallback(
-    (canvas: Canvas) => {
-      const snapshot = load(canvas);
-      restoring.current = snapshot;
-      setHistory(emptyHistory(snapshot));
-    },
-    [load],
-  );
-
-  React.useEffect(() => {
-    if (restoring.current === serialized) {
-      restoring.current = null;
-      return;
-    }
-    //: **攒一下再记。** 拖一个节点会发几十次位置更新,一次一步的话用户得按几十下撤销
-    //: 才回得到上一个状态。
-    const timer = setTimeout(() => setHistory((current) => record(current, serialized)), 400);
-    return () => clearTimeout(timer);
-  }, [serialized]);
-
-  //: 时间线格里做成的一步记进这摞(见 canvasHistory 的「时间线的一步」)。
-  React.useEffect(
-    () => onSequenceEdit((sequenceId, revision) => setHistory((current) => recordSequence(current, sequenceId, revision))),
-    [],
-  );
-
-  /** 撤 / 重做时间线格的一步:带着这一步记的版本号调那条时间线自己的撤销 / 重做(时间线在别处又改过就被拒,
-   *  不撤别人的那一步),格子读的缓存换成回来的那条。做成了,这一步的版本号换成新的一版;没做成,这一步拿掉。 */
-  const replaySequence = React.useCallback((step: SequenceStep, direction: "undo" | "redo") => {
-    //: 撤销之后这一步挪进了重做的开头,重做之后回到了撤销的末尾。
-    const where = direction === "undo" ? "future" : "past";
-    void (direction === "undo" ? undoSequence(step.sequence, step.revision) : redoSequence(step.sequence, step.revision))
-      .then((next) => {
-        queryClient.setQueryData(boardSequenceKey(step.sequence), next);
-        setHistory((current) => retagSequenceStep(current, where, next.revision));
-      })
-      .catch((error: unknown) => {
-        setHistory((current) => dropSequenceStep(current, where));
-        toast.error(errorText(error));
-      });
-  }, [queryClient]);
-
-  //: 撤销 / 重做在更新函数**外面**算下一份、做副作用:时间线的撤销是一次网络请求,放进 setState 的更新函数里,
-  //: 开发模式下更新函数跑两遍就撤了两步。
-  const historyRef = React.useRef(history);
-  historyRef.current = history;
-  const stepBack = React.useCallback(() => {
-    const current = historyRef.current;
-    const next = undo(current);
-    if (!next) return;
-    historyRef.current = next;
-    setHistory(next);
-    const step = current.past.at(-1);
-    if (typeof step === "object") replaySequence(step, "undo");
-    else restore(next.present);
-  }, [restore, replaySequence]);
-
-  const stepForward = React.useCallback(() => {
-    const current = historyRef.current;
-    const next = redo(current);
-    if (!next) return;
-    historyRef.current = next;
-    setHistory(next);
-    const step = current.future[0];
-    if (typeof step === "object") replaySequence(step, "redo");
-    else restore(next.present);
-  }, [restore, replaySequence]);
+  const { history, replace, stepBack, stepForward } = useBoardHistory({ nodes, edges, setNodes, setEdges, onChange });
 
   /**
    * 把选中的这几项圈成一组:算出它们的外接矩形,四周留一点余量,摆一个分组框。
@@ -1177,67 +594,8 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
     [setNodes],
   );
 
-  /**
-   * 从系统里拖文件进来 —— 传进素材库,再就地摆到落点上。
-   *
-   * 用仓库现成的 useFileDrop:整块区域拖放的三个坑(子元素边界上的 dragleave 抖动、
-   * 浏览器默认打开文件、拖文字也亮提示)它已经处理过了,自己写要再踩一遍。
-   *
-   * **落点要在 drop 那一刻算**(那时才有鼠标位置),而 useFileDrop 的回调拿不到事件 ——
-   * 和工作流那边一样,用一个 ref 把坐标从事件里带出来。
-   */
-  const dropAt = React.useRef<{ x: number; y: number } | null>(null);
-  /** 文件进素材库,回来的每一份按种类各放一格(见 boardPlacement.assetItem)。拖进来和粘贴进来走这同一条。 */
-  const importAndPlace = React.useCallback(
-    (files: File[], at: { x: number; y: number }) => {
-      void onDropFiles?.(files).then((assets) => {
-        if (!assets?.length) return;
-        setNodes((current) => [
-          ...current.map((node) => ({ ...node, selected: false })),
-          ...toNodes(assets.map((asset, index) => assetItem(asset, at, index))),
-        ]);
-      });
-    },
-    [onDropFiles, setNodes],
-  );
-  //: 评论 / 标记模式下画布只收批注,不收东西:拖文件进来和粘贴(下面)一样拦住,连「松手放在这里」的提示也不亮。
   const annotating = commentMode || markerMode;
-  const drop = useFileDrop(
-    (files) => {
-      if (!annotating) importAndPlace(files, dropAt.current ?? { x: 0, y: 0 });
-    },
-    isImportableFile,
-    () => !annotating,
-  );
-
-  /**
-   * 粘贴到画布上:截图 / 复制的媒体文件先进素材库再各放一格,一段文字落成一张便签,摆在视野中心。
-   *
-   * **冲着画布来的才接**(isCanvasKeyTarget):在便签里、提示词框里、任何输入框或编辑器里粘贴,是往那里
-   * 贴字,不是往画布上放东西;经 Portal 弹出去的菜单、对话框也不算。评论 / 标记模式下不接(拖放同一条)。
-   */
-  React.useEffect(() => {
-    const onPaste = (event: ClipboardEvent) => {
-      if (event.defaultPrevented || annotating) return;
-      if (!isCanvasKeyTarget(event.target, surface.current)) return;
-      const content = clipboardContent(event.clipboardData);
-      if (!content) return;
-      event.preventDefault();
-      //: 便签走「添加」那一条(摆在视野中心、加完就选中);素材也摆在视野中心。
-      if ("text" in content) {
-        add("note", { text: content.text });
-        return;
-      }
-      const instance = rf.current;
-      const box = surface.current?.getBoundingClientRect();
-      const center = instance && box
-        ? instance.screenToFlowPosition({ x: box.left + box.width / 2, y: box.top + box.height / 2 })
-        : { x: 0, y: 0 };
-      importAndPlace(content.files, center);
-    };
-    document.addEventListener("paste", onPaste);
-    return () => document.removeEventListener("paste", onPaste);
-  }, [add, importAndPlace, annotating]);
+  const { drop, dropAt } = useBoardFileImport({ onDropFiles, setNodes, annotating, add, rf, surface });
 
   React.useEffect(() => {
     onReady?.({
@@ -1277,42 +635,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
         const instance = rf.current;
         if (instance) dropAt.current = instance.screenToFlowPosition({ x: event.clientX, y: event.clientY });
       }}
-      onPointerDownCapture={(event) => {
-        if (!commentMode || event.button !== 0) return;
-        const target = event.target instanceof Element ? event.target : null;
-        if (target?.closest("[data-suggestion-menu], [data-board-comment-mode-hint]")) return;
-        const startedInsideOverlay = Boolean(target?.closest("[data-board-comment-overlay]"));
-        const dismissedActive = Boolean(activeCommentId || draftAnchor);
-        paneGesture.current = {
-          x: event.clientX,
-          y: event.clientY,
-          moved: false,
-          dismissedActive: startedInsideOverlay ? false : dismissedActive,
-          startedInsideOverlay,
-        };
-        if (startedInsideOverlay) return;
-        if (activeCommentId) onSelectComment?.(null);
-        if (draftAnchor) setDraftAnchor(null);
-      }}
-      onPointerMoveCapture={(event) => {
-        const gesture = paneGesture.current;
-        if (!gesture) return;
-        if (Math.hypot(event.clientX - gesture.x, event.clientY - gesture.y) > 5) gesture.moved = true;
-      }}
-      onPointerUpCapture={(event) => {
-        const gesture = paneGesture.current;
-        paneGesture.current = null;
-        if (!gesture) return;
-        const target = event.target instanceof Element ? event.target : null;
-        const endedInsideOverlay = Boolean(target?.closest("[data-board-comment-overlay], [data-suggestion-menu]"));
-        if (!shouldSuppressCommentPlacement({ ...gesture, endedInsideOverlay })) return;
-        // pointerup is followed by click. Keep the guard through that click, then release it.
-        suppressPaneClick.current = true;
-        window.setTimeout(() => { suppressPaneClick.current = false; }, 0);
-      }}
-      onPointerCancelCapture={() => {
-        paneGesture.current = null;
-      }}
+      {...paneHandlers}
     >
       <MarkerEditorProvider enabled={markerMode && markersVisible}>
       <SequenceAddContext.Provider value={pickForSequence}>
@@ -1364,10 +687,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
         }}
         onNodeDragStart={(_event, node) => beginFrameDrag(node)}
         onNodeDrag={(_event, node) => dragFrame(node)}
-        onNodeDragStop={() => {
-          carried.current = [];
-          dragFrom.current = null;
-        }}
+        onNodeDragStop={endFrameDrag}
         onInit={(instance) => {
           rf.current = instance as unknown as ReactFlowInstance;
           requestAnimationFrame(() => {
@@ -1414,186 +734,21 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
         elementsSelectable={!commentMode}
       >
         <Background variant={BackgroundVariant.Dots} gap={20} size={1.2} />
-        {commentsVisible && (
-          <ViewportPortal>
-            {comments.map((comment, index) => {
-              const preview = commentPositions[comment.id];
-              const x = preview?.x ?? comment.anchor?.x;
-              const y = preview?.y ?? comment.anchor?.y;
-              if (typeof x !== "number" || typeof y !== "number") return null;
-              const active = commentMode && activeCommentId === comment.id;
-              const movable = commentMode && Boolean(onMoveComment) && canMoveComment(comment.author_id, currentUserId);
-              return (
-                <div
-                  key={comment.id}
-                  data-board-comment-overlay=""
-                  className="nodrag nopan pointer-events-none absolute z-10 flex items-start gap-2"
-                  style={{ left: x, top: y }}
-                  onPointerDown={(event) => event.stopPropagation()}
-                  onMouseDown={(event) => event.stopPropagation()}
-                  onClick={(event) => event.stopPropagation()}
-                  onDoubleClick={(event) => event.stopPropagation()}
-                >
-                  <button
-                    type="button"
-                    className={cn(
-                      "grid h-7 w-7 touch-none -translate-x-1/2 -translate-y-1/2 shrink-0 place-items-center rounded-full border text-ui-2xs font-semibold shadow-[var(--shadow-panel)] transition-transform hover:scale-110",
-                      movable && "cursor-grab active:cursor-grabbing",
-                      active
-                        ? "border-primary bg-action text-action-foreground"
-                        : "border-floating-border bg-panel/90 text-foreground backdrop-blur-xl",
-                    )}
-                    tabIndex={commentMode ? 0 : -1}
-                    style={{ pointerEvents: commentMode ? "auto" : "none" }}
-                    title={comment.body}
-                    aria-label={`${t("comments")} ${index + 1}`}
-                    onPointerDown={(event) => {
-                      event.stopPropagation();
-                      if (!movable || event.button !== 0) return;
-                      event.currentTarget.setPointerCapture(event.pointerId);
-                      commentDrag.current = {
-                        id: comment.id,
-                        pointerId: event.pointerId,
-                        startScreen: { x: event.clientX, y: event.clientY },
-                        origin: { x, y },
-                        nodeId: comment.anchor?.node_id ?? undefined,
-                        moved: false,
-                      };
-                    }}
-                    onPointerMove={(event) => {
-                      const drag = commentDrag.current;
-                      const instance = rf.current;
-                      if (!drag || drag.id !== comment.id || drag.pointerId !== event.pointerId || !instance) return;
-                      if (!drag.moved && Math.hypot(event.clientX - drag.startScreen.x, event.clientY - drag.startScreen.y) <= 4) return;
-                      drag.moved = true;
-                      const start = instance.screenToFlowPosition(drag.startScreen);
-                      const current = instance.screenToFlowPosition({ x: event.clientX, y: event.clientY });
-                      drag.last = {
-                        x: drag.origin.x + current.x - start.x,
-                        y: drag.origin.y + current.y - start.y,
-                      };
-                      const next = drag.last;
-                      setCommentPositions((positions) => ({ ...positions, [comment.id]: next }));
-                    }}
-                    onPointerUp={(event) => {
-                      const drag = commentDrag.current;
-                      if (!drag || drag.id !== comment.id || drag.pointerId !== event.pointerId) return;
-                      commentDrag.current = null;
-                      if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
-                      if (!drag.moved || !drag.last) return;
-                      suppressCommentClick.current = comment.id;
-                      window.setTimeout(() => {
-                        if (suppressCommentClick.current === comment.id) suppressCommentClick.current = null;
-                      }, 0);
-                      const anchor = { kind: "canvas" as const, ...drag.last, ...(drag.nodeId ? { node_id: drag.nodeId } : {}) };
-                      void Promise.resolve(onMoveComment?.(comment, anchor))
-                        .catch(() => undefined)
-                        .finally(() => {
-                          setCommentPositions((positions) => {
-                            const next = { ...positions };
-                            delete next[comment.id];
-                            return next;
-                          });
-                        });
-                    }}
-                    onPointerCancel={(event) => {
-                      const drag = commentDrag.current;
-                      if (!drag || drag.id !== comment.id || drag.pointerId !== event.pointerId) return;
-                      commentDrag.current = null;
-                      setCommentPositions((positions) => {
-                        const next = { ...positions };
-                        delete next[comment.id];
-                        return next;
-                      });
-                    }}
-                    onClick={() => {
-                      if (suppressCommentClick.current === comment.id) {
-                        suppressCommentClick.current = null;
-                        return;
-                      }
-                      onSelectComment?.(comment);
-                    }}
-                  >
-                    {index + 1}
-                  </button>
-                  {active && (
-                    <div className="-ml-3.5 -translate-y-3">
-                      <CommentCard comment={comment} members={members} currentUserId={currentUserId}
-                        onDelete={onDeleteComment ? () => onDeleteComment(comment) : undefined} />
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-            {draftAnchor && typeof draftAnchor.x === "number" && typeof draftAnchor.y === "number" && (
-              <div
-                data-board-comment-overlay=""
-                className="nodrag nopan pointer-events-none absolute z-20 flex items-start gap-2"
-                style={{ left: draftAnchor.x, top: draftAnchor.y }}
-                onPointerDown={(event) => event.stopPropagation()}
-                onMouseDown={(event) => event.stopPropagation()}
-                onClick={(event) => event.stopPropagation()}
-                onDoubleClick={(event) => event.stopPropagation()}
-              >
-                <button
-                  type="button"
-                  data-comment-drag-handle=""
-                  className="pointer-events-auto grid h-7 w-7 touch-none -translate-x-1/2 -translate-y-1/2 shrink-0 cursor-grab place-items-center rounded-full bg-action text-action-foreground shadow-[var(--shadow-panel)] active:cursor-grabbing"
-                  aria-label={t("comments")}
-                  onPointerDown={(event) => {
-                    if (event.button !== 0) return;
-                    event.preventDefault();
-                    event.stopPropagation();
-                    event.currentTarget.setPointerCapture(event.pointerId);
-                    draftCommentDrag.current = {
-                      pointerId: event.pointerId,
-                      startScreen: { x: event.clientX, y: event.clientY },
-                      origin: draftAnchor,
-                      moved: false,
-                    };
-                  }}
-                  onPointerMove={(event) => {
-                    const drag = draftCommentDrag.current;
-                    const instance = rf.current;
-                    if (!drag || drag.pointerId !== event.pointerId || !instance) return;
-                    if (!drag.moved && Math.hypot(event.clientX - drag.startScreen.x, event.clientY - drag.startScreen.y) <= 4) return;
-                    drag.moved = true;
-                    setDraftAnchor(moveCommentAnchorByScreenDelta(
-                      drag.origin,
-                      drag.startScreen,
-                      { x: event.clientX, y: event.clientY },
-                      (point) => instance.screenToFlowPosition(point),
-                    ));
-                  }}
-                  onPointerUp={(event) => {
-                    const drag = draftCommentDrag.current;
-                    if (!drag || drag.pointerId !== event.pointerId) return;
-                    draftCommentDrag.current = null;
-                    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
-                  }}
-                  onPointerCancel={(event) => {
-                    const drag = draftCommentDrag.current;
-                    if (!drag || drag.pointerId !== event.pointerId) return;
-                    draftCommentDrag.current = null;
-                    setDraftAnchor(drag.origin);
-                  }}
-                >
-                  <MessageSquare size={13} />
-                </button>
-                <div className="-ml-3.5 -translate-y-3">
-                  <CommentComposer
-                    members={members}
-                    onCancel={() => setDraftAnchor(null)}
-                    onSubmit={async (draft) => {
-                      await onCreateComment?.(draftAnchor, draft);
-                      setDraftAnchor(null);
-                    }}
-                  />
-                </div>
-              </div>
-            )}
-          </ViewportPortal>
-        )}
+        <BoardCommentLayer
+          visible={commentsVisible}
+          rf={rf}
+          commentMode={commentMode}
+          comments={comments}
+          members={members}
+          currentUserId={currentUserId}
+          activeCommentId={activeCommentId}
+          draftAnchor={draftAnchor}
+          setDraftAnchor={setDraftAnchor}
+          onSelectComment={onSelectComment}
+          onCreateComment={onCreateComment}
+          onMoveComment={onMoveComment}
+          onDeleteComment={onDeleteComment}
+        />
         {/* 缩放钮/预览图**不吃应用主题**(xyflow 默认一律白底)—— 深色下就是右下角一块白。
             把 --xy-* 映射到设计令牌,和工作流页用的是同一套(见 WorkflowsView 里那段说明)。 */}
         {showMinimap && <MiniMap
@@ -1731,579 +886,6 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
         producers,
       })}
     </div>
-  );
-}
-
-/** 操作条上点开的那两块不是能力的面板。 */
-const WRITER_PANEL = "write";
-const TRIM_PANEL = "trim";
-const SEQUENCE_EXPORT_PANEL = "sequence_export";
-
-type GrowKind = (typeof SPAWNABLE_KINDS)[number];
-
-/** 操作条上「接着做」的按钮按这个顺序排。 */
-const GROW_ORDER: GrowKind[] = ["image", "video", "note", "audio"];
-
-/**
- * 「接着做」:选中一格,能从它长出哪几种格子,悬停时各说什么。**一张表**,按(这一格的种类 → 长出的种类)查。
- *
- * 此前能长出哪几种是一串按种类的判断,悬停说明又另写一处,只分「便签 → 图片」和「其余 → 视频」两句 ——
- * 于是便签往下接视频时说「用这段文字生成图片」,文档往下接图片时说「用这张图当首帧生成视频」。
- * 便签、文档给的是文字:往下接图片、视频、音频(念出来)、文案;图片给首帧、视频给参考、音频给配乐:往下接视频;
- * 谁都能往下接一段文案。
- */
-const GROW: Partial<Record<BoardItem["kind"], Partial<Record<GrowKind, MessageKey>>>> = {
-  //: 便签不往下长「文案」:它自己就是一段文案,改写、翻译是它自己的能力(让 AI 写 / 翻译),再长出一张便签是第三个入口。
-  note: { image: "boardSpawnImageFromNote", video: "boardSpawnVideoFromText", audio: "boardSpawnAudio" },
-  document: { image: "boardSpawnImageFromNote", video: "boardSpawnVideoFromText", note: "boardSpawnNote", audio: "boardSpawnAudio" },
-  image: { video: "boardSpawnVideoFromImage", note: "boardSpawnNote" },
-  video: { video: "boardSpawnVideoFromVideo", note: "boardSpawnNote" },
-  audio: { video: "boardSpawnVideoFromAudio", note: "boardSpawnNote" },
-  //: 3D 场景给的是**场景**,不是一张图(ADR 0029):连进去的那一格面板上挑镜头和用法,生成时现渲。
-  //: 不往下长文案 —— 场景格没有文字可接。
-  scene: { image: "boardSpawnImageFromScene", video: "boardSpawnVideoFromScene" },
-};
-
-/**
- * 选中一项时浮在它上面的操作条。
- *
- * **按类型给动作,不给一套通用的**:便签要换颜色,图片/视频要换素材,分组框两者都不要。
- * 摆一排一半是灰的按钮,等于让用户每次都先分辨哪些能点。
- *
- * **中间那一段是这一格的能力**(TapNow 那样一排图标):看大图、剪一段、换一份、让 AI 写,再接这一格会的
- * 那几件事 —— 音频格的转写、分离、降噪,视频格的转 GIF,便签的翻译,插件工具按它吃什么内容挂上来
- * (后端 `role: "ability"` + `hosts`,见 boardTools.boardAbilities)。直接摆 DIRECT_ABILITIES 项,内置的在前,
- * 其余收进「⋯」。点一项,它的面板挂在格子下面;点另一项,下面那块换成它的;再点一次收起(BoardCanvas 的 panel)。
- *
- * 位置跟着选中项走 —— 用 NodeToolbar,它渲染在 React Flow 的视口层里,平移缩放时自己跟着动
- * (工作流那边的检查器用的是同一个原语)。
- */
-function ItemToolbar({
-  nodes,
-  setNodes,
-  onRemoveSelected,
-  onCopySelected,
-  onRename,
-  onPickAsset,
-  onPickDocument,
-  saveToNote,
-  onSpawn,
-  producers,
-  panel,
-  onPanel,
-}: {
-  nodes: Node[];
-  setNodes: React.Dispatch<React.SetStateAction<Node[]>>;
-  /** 删掉选中的这几项 —— **连同挂在它们上面的线**。见 Inner 里的实现。 */
-  onRemoveSelected: () => void;
-  /** 复制选中的这几项(见 copySelected)。 */
-  onCopySelected: () => void;
-  /** 给这一格改名:打开它上方名字那一处的输入框(和双击名字是同一个状态)。 */
-  onRename?: (itemId: string) => void;
-  onPickAsset: Props["onPickAsset"];
-  /** 给文档格挑一篇笔记(引用 / 换一篇)。评论、标记模式下不给。 */
-  onPickDocument?: (itemId: string) => void;
-  /** 便签「保存到笔记」存到哪、出处记哪张画板。评论、标记模式下不给。 */
-  saveToNote?: { workspaceId: string; boardId: string };
-  /** 从这一项长出下一项并连上。没给 = 这张画板不支持生成(上层没接生成能力)。 */
-  onSpawn?: (
-    kind: (typeof SPAWNABLE_KINDS)[number],
-    from: string,
-    at: { x: number; y: number },
-    fromIsSource?: boolean,
-  ) => void;
-  /** 产出者清单:这一格有哪些能力、空槽能在哪几个产出者之间切(音频槽:配音 / 生成 / 插件的生成器)。 */
-  producers?: BoardProducerInfo[];
-  /** 此刻点开的那一块面板(让 AI 写、剪一段、一项能力)—— 按钮据此是按下态,再点一次收起。 */
-  panel?: { itemId: string; name: string } | null;
-  /** 打开 / 收起这一格的一块面板。没给 = 这张画板不能跑(上层没接产出者)。 */
-  onPanel?: (itemId: string, name: string) => void;
-}) {
-  const t = useI18n();
-  const { openImagePreview } = useImagePreview();
-  // 标记不进这条操作条:它没有素材、不生成、不换一份,而这里每个动作都要读它没有的 item
-  // (「复制一份」此前就会在这里抛)。它自己的改名/绑键/删除开在旗子上。
-  const selected = nodes.filter((node) => node.selected && node.type !== "marker");
-  // 多选时只给共通的动作 —— 逐个类型的动作在混选下没有一致的含义。
-  const single = selected.length === 1 ? selected[0] : null;
-  //: 操作条和面板一样,格子贴着画布边时不钻到侧栏底下(横向平移回来;它只有一行,不收高度)。
-  const bar = React.useRef<HTMLDivElement | null>(null);
-  const fit = useKeepInCanvas(bar, { vertical: false });
-  //: 资产格的能力看它引用的是哪一种资产(人物才有「生成表情」)。和格子自己取的是同一份缓存。
-  const singleData = single?.data as unknown as { item: BoardItem; workspaceId?: string } | undefined;
-  const entityId = singleData?.item.kind === "entity" ? (singleData.item.entity_id ?? "") : "";
-  const entityKind = useQuery({
-    queryKey: entityKeys.detail(singleData?.workspaceId ?? "", entityId),
-    queryFn: () => getEntity(entityId),
-    enabled: Boolean(entityId),
-    retry: false,
-  }).data?.kind;
-  const queryClient = useQueryClient();
-  if (selected.length === 0) return null;
-  const item = single ? (single.data as unknown as { item: BoardItem }).item : null;
-  const patch = (id: string, next: Partial<BoardItem>) =>
-    setNodes((current) =>
-      current.map((node) =>
-        node.id === id
-          ? { ...node, data: { ...node.data, item: { ...(node.data as { item: BoardItem }).item, ...next } } }
-          : node,
-      ),
-    );
-  const open = (name: string) => Boolean(item && panel?.itemId === item.id && panel.name === name);
-  const abilities = item && onPanel ? boardAbilities(item, producers, entityKind) : [];
-  //: 直接摆几项;点开的那一项哪怕排在后面也摆出来(不然按下态藏在「⋯」里,看不出下面那块是谁的)。
-  const direct = abilities.filter((one, index) => index < DIRECT_ABILITIES || open(one.id));
-  const overflow = abilities.filter((one) => !direct.includes(one));
-  const slots = single && item && !itemIsRunning(item) ? slotProducers(item, producers) : [];
-  return (
-    //: 上下浮层都从**节点边框**量同一段距离。类型标签挂在节点外,但不能因此让上方浮层
-    //: 另用一套数字 —— 否则一眼看过去就是上疏下密。
-    <NodeToolbar nodeId={selected.map((node) => node.id)} isVisible position={Position.Top} offset={BOARD_NODE_PANEL_OFFSET}>
-      {/* 这条上几乎全是图标:名字靠悬停说明(Hint)。自己带一个 Provider —— 从一枚滑到下一枚时不再等一遍。 */}
-      <TooltipProvider delayDuration={300} skipDelayDuration={400}>
-      <div
-        ref={bar}
-        style={fit}
-        className="nodrag nopan flex items-center gap-1 whitespace-nowrap rounded-full border border-floating-border bg-panel p-1.5 shadow-[var(--shadow-panel)]"
-      >
-        {/* 按类型来的几段各装在一格里,**分隔线是那一格自己的右边框**(ToolbarCluster)。于是它不可能在没有
-            动作时出现 —— 此前那道线自己抄了一遍「上面有没有东西」的条件,加了音频节点之后就和实际渲染分了岔。 */}
-        <ToolbarCluster>
-          {item?.kind === "note" &&
-            NOTE_COLORS.map((color) => (
-              <button
-                key={color}
-                type="button"
-                aria-label={color}
-                className={cn(
-                  "h-6 w-6 cursor-pointer rounded-full border transition-transform hover:scale-110",
-                  noteColorClass(color),
-                  item.color === color && "ring-2 ring-primary ring-offset-1 ring-offset-[var(--panel)]",
-                )}
-                onClick={() => patch(item.id, { color })}
-              />
-            ))}
-          {/* 分组框:**这一组是不是一个整体**。开着的时候拖框会把框里的东西一起带走 ——
-              没有它的话,想把一组想法整体挪个位置就得一个个拖。 */}
-          {item?.kind === "frame" && (
-            <Hint label={t(item.move_children ? "boardMoveChildrenOn" : "boardMoveChildrenOff")}>
-            <button
-              type="button"
-              aria-pressed={Boolean(item.move_children)}
-              className={cn(
-                "flex cursor-pointer items-center gap-1.5 shrink-0 whitespace-nowrap rounded-full px-2.5 py-1.5 text-ui-xs transition-colors",
-                item.move_children
-                  ? "bg-primary/12 text-primary"
-                  : "text-muted-foreground hover:bg-secondary hover:text-foreground",
-              )}
-              onClick={() => patch(item.id, { move_children: !item.move_children })}
-            >
-              <Group size={13} /> {t("boardMoveChildren")}
-            </button>
-            </Hint>
-          )}
-        </ToolbarCluster>
-
-        {/* 这一格的能力:一排图标,名字在悬停和读屏里。 */}
-        <ToolbarCluster data-board-abilities="">
-          {/* 预览:**看大图是一个明确的动作,不是点在图上的副作用**。画布上点一下的意思是
-              选中这个节点 —— 让图片自己接管点击的话,操作条和表单都弹不出来。 */}
-          {(item?.kind === "image" || item?.kind === "video") && item.asset_id && (
-            <ToolbarIcon
-              name="preview"
-              icon={Maximize2}
-              label={t("boardPreview")}
-              hint={t("boardPreviewTitle")}
-              onClick={() =>
-                openImagePreview({
-                  src: item.kind === "image"
-                    ? assetPreviewUrl(item.asset_id as string)
-                    : assetFileUrl(item.asset_id as string),
-                  title: item.title || item.text || "",
-                  //: 视频走同一个灯箱,只是那一项渲染成播放器 —— 见 image-preview。
-                  video: item.kind === "video",
-                })
-              }
-            />
-          )}
-          {/* 剪一段:视听素材才有时间轴,一张图截不出「第 3 秒」。 */}
-          {onPanel && item?.asset_id && (item.kind === "video" || item.kind === "audio") && (
-            <ToolbarIcon
-              name="trim"
-              icon={Scissors}
-              label={t("boardTrim")}
-              hint={t("boardTrimTitle")}
-              pressed={open(TRIM_PANEL)}
-              onClick={() => onPanel(item.id, TRIM_PANEL)}
-            />
-          )}
-          {/* 在跑的格子不给换:产出归服务端,本地换上的素材会在保存时被丢掉、再被回滚(见 serverOwnedPatch),
-              看起来就是换上的那份悄悄消失了。和「生成」、切换产出者同一条。 */}
-          {item && isMediaKind(item.kind) && !itemIsRunning(item) && (
-            <ToolbarIcon
-              name="replace"
-              icon={Replace}
-              label={t("boardReplaceAsset")}
-              onClick={() =>
-                onPickAsset(item.kind as MediaKind, (assetId) =>
-                  // 手动换素材不是上一轮 AI 任务的“成功产物”。把运行态归回 idle，同时 asset_id
-                  // 变化会让对应 Composer 从节点表单重新水合，清掉上一轮局部 touched/submitting。
-                  patch(item.id, { asset_id: assetId, run: { status: "idle" } }),
-                )
-              }
-            />
-          )}
-          {/* 文档格引用哪一篇笔记:**操作条上的一个动作**,不是点格子的副作用 —— 点格子是选中它(拖、连线、
-              让 AI 写都从选中开始)。还没引用时叫「引用笔记」,引用着的叫「换一篇」。 */}
-          {/* 引用文档素材的文档格(ADR 0031):「转为笔记」把全文存成一篇笔记,这一格原地换成引用它 —— 从此能改、能让 AI 写。 */}
-          {single && item?.kind === "document" && item.asset_id && !item.note_id && (
-            <ToolbarIcon
-              name="document-to-note"
-              icon={NotebookPen}
-              label={t("docSaveAsNote")}
-              onClick={() => {
-                const assetId = item.asset_id ?? "";
-                void saveDocumentAsNote(assetId)
-                  .then((made) => {
-                    void queryClient.invalidateQueries({ queryKey: noteKeys.everywhere() });
-                    patch(item.id, { note_id: made.note_id, note_revision: 1, asset_id: undefined, text: made.title,
-                                     form: { ...item.form, producer: "write" } });
-                  })
-                  .catch((error: unknown) => toast.error(errorText(error)));
-              }}
-            />
-          )}
-          {/* 便签「保存到笔记」:和文档格的「转为笔记」同一种挂法 —— 操作条上的一个动作,只在单选时给。
-              此前它挂在便签格子外面,多选几张便签就各冒一颗按钮,而操作条上什么都没有。
-              没有字的便签不给:存不出东西。 */}
-          {single && item?.kind === "note" && saveToNote && item.text?.trim() && (
-            <SaveToNote
-              workspaceId={saveToNote.workspaceId}
-              content={item.text}
-              sources={[{ kind: "board", id: saveToNote.boardId, label: t("navBoards"), quote: item.text }]}
-              trigger={({ open: openDialog, label }) => (
-                <ToolbarIcon name="note-to-note" icon={BookPlus} label={label} onClick={openDialog} />
-              )}
-            />
-          )}
-          {single && item?.kind === "document" && !item.asset_id && onPickDocument && (
-            <ToolbarIcon
-              name="pick-document"
-              icon={item.note_id ? Replace : BookOpen}
-              label={t(item.note_id ? "documentReplace" : "documentPick")}
-              onClick={() => onPickDocument(item.id)}
-            />
-          )}
-          {/* 让 AI 写:**明确的一个动作**,不是选中的副作用(见 Inner 的 panel)。能力交回的结构化数据
-              (JSON 便签)不给 —— 那是一份数据,不是一段要改写的文案。 */}
-          {single && item && onPanel && canAskWriter(item) && (
-            <ToolbarIcon
-              name="write"
-              icon={Sparkles}
-              label={t("boardAskAiWrite")}
-              hint={t("boardAskAiWriteTitle")}
-              pressed={open(WRITER_PANEL)}
-              onClick={() => onPanel(item.id, WRITER_PANEL)}
-            />
-          )}
-          {single && item && onPanel &&
-            direct.map((ability) => (
-              <ToolbarIcon
-                key={ability.id}
-                name={ability.id}
-                ability
-                icon={boardToolIcon(ability)}
-                label={ability.label}
-                hint={firstSentence(ability.board_description ?? "")}
-                pressed={open(ability.id)}
-                onClick={() => onPanel(item.id, ability.id)}
-              />
-            ))}
-          {single && item && onPanel && overflow.length > 0 && (
-            <ActionMenu
-              label={t("boardMoreAbilities")}
-              trigger={<MoreButton label={t("boardMoreAbilities")} />}
-              actions={overflow.map((ability) => {
-                const Icon = boardToolIcon(ability);
-                return {
-                  label: ability.label,
-                  icon: <Icon size={14} />,
-                  hint: ability.plugin_name || undefined,
-                  onSelect: () => onPanel(item.id, ability.id),
-                };
-              })}
-            />
-          )}
-        </ToolbarCluster>
-
-        {/* 空槽用什么产出:一种格子有几个能填空槽的产出者时(音频槽:配音 / 生成音乐音效;插件的生成器)给一个切换。
-            **只换表单上写的那个产出者**,面板随之换成它的;在跑的时候不给换。内置的和此刻选着的那个摆在外面,
-            别的生成器收进「⋯」。 */}
-        {single && item && slots.length > 0 && (
-          <ToolbarCluster>
-            <SlotSwitch item={item} slots={slots} onSwitch={(producer) => patch(item.id, { form: { ...item.form, producer } })} />
-          </ToolbarCluster>
-        )}
-
-        {/* 从这一项长出下一项:**放一个空节点并连上,不是直接开跑**。空节点一选中它的面板就开着,
-            用户还能改模型、改比例、再挂张参考图 —— 点一下就把任务发出去的话,这些他一个都来不及说。
-            长出哪几种、每一个悬停时说什么,是同一张表(GROW);图标是要长出来的那种格子的图标,
-            一眼看出这一下会多出一张图、一段视频还是一张便签。已经在跑的那一项不给(它还没有产出)。
-            前面一个淡淡的「生成」,后面每一枚只写要长出来的那种东西(图片、视频、文案、音频)。 */}
-        {onSpawn && single && item && !itemIsRunning(item) && hostHasContent(item) && GROW_ORDER.some((kind) => GROW[item.kind]?.[kind]) && (
-          <ToolbarCluster>
-            <ActionMenu
-              label={t("boardGrowLabel")}
-              align="start"
-              trigger={
-                <button
-                  type="button"
-                  aria-label={t("boardGrowLabel")}
-                  aria-haspopup="menu"
-                  data-board-grow-menu=""
-                  className="flex shrink-0 cursor-pointer items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-1.5 text-ui-xs text-muted-foreground hover:bg-secondary hover:text-foreground data-[state=open]:bg-secondary data-[state=open]:text-foreground"
-                >
-                  <Plus size={13} /> {t("boardGrowLabel")} <ChevronDown size={12} className="opacity-60" />
-                </button>
-              }
-              actions={GROW_ORDER.filter((kind) => GROW[item.kind]?.[kind]).map((kind) => {
-                const Icon = kindIcon(kind);
-                return {
-                  //: 每一行把这一下说全(「用这张图当首帧生成视频」),不是光秃秃的「视频」—— 菜单里有地方写,
-                  //: 而同一个「视频」从便签、图片、音频长出来是三件不同的事。
-                  label: t(GROW[item.kind]?.[kind] as MessageKey),
-                  icon: <Icon size={14} />,
-                  onSelect: () =>
-                    onSpawn(kind, item.id, {
-                      x: single.position.x + (single.width ?? 260) + 60,
-                      y: single.position.y + (single.height ?? 180) / 2,
-                    }),
-                };
-              })}
-            />
-          </ToolbarCluster>
-        )}
-
-        {/* 去编辑器改这个场景。**入口挂在格子上,不挂在面板里** —— 面板随挑的那一种填法换(渲白模 / 按文字搭),
-            此前它只在「渲白模参考」的面板头上,切到「按文字搭」就找不到了(用户截图)。 */}
-        {single && item?.kind === "scene" && item.scene_id && (
-          <Hint label={t("boardSceneOpen")}>
-            <a
-              aria-label={t("boardSceneOpen")}
-              data-board-scene-open=""
-              href={`#/scenes?scene=${encodeURIComponent(item.scene_id)}`}
-              className="grid h-7 w-7 cursor-pointer place-items-center rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground"
-            >
-              <ExternalLink size={13} />
-            </a>
-          </Hint>
-        )}
-        {/* 时间线格(ADR 0030)的剪刀、删除、在剪辑里打开 —— 放在操作条上,不占格子里的地方(用户:「这些按钮放到上方弹窗中去」)。 */}
-        {single && item?.kind === "sequence" && item.sequence_id && (
-          //: 自成一段(右边一道分隔线):「删掉这一段」和格子自己的「删除」是两个垃圾桶,挨在一起分不清删的是什么。
-          <ToolbarCluster data-board-sequence-actions="">
-          <SequenceToolbarActions
-            sequenceId={item.sequence_id}
-            button={({ label, icon, onClick, disabled, href, marker }) => (
-              <Hint key={marker} label={label}>
-                {href !== undefined ? (
-                  <a aria-label={label} data-board-sequence-action={marker} href={href}
-                     className="grid h-7 w-7 cursor-pointer place-items-center rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground">
-                    {icon}
-                  </a>
-                ) : (
-                  <button type="button" aria-label={label} data-board-sequence-action={marker} disabled={disabled} onClick={onClick}
-                          className="grid h-7 w-7 cursor-pointer place-items-center rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent">
-                    {icon}
-                  </button>
-                )}
-              </Hint>
-            )}
-          />
-          {/* 导出:打开导出面板(按需的面板,面板名就是产出者的名字)。成片落成右边一格视频。 */}
-          {onPanel && canOpenOnDemand(item) && (
-            <ToolbarIcon
-              name="sequence-export"
-              icon={Download}
-              label={t("boardSequenceExport")}
-              hint={t("boardSequenceExportHint")}
-              pressed={open(SEQUENCE_EXPORT_PANEL)}
-              onClick={() => onPanel(item.id, SEQUENCE_EXPORT_PANEL)}
-            />
-          )}
-          </ToolbarCluster>
-        )}
-        {/* 改名只对一格有意义 —— 多选时一起改成同一个名字,等于让它们重新分不清。 */}
-        {single && item && onRename && (
-          <Hint label={t("rename")}>
-          <button
-            type="button"
-            aria-label={t("rename")}
-            className="grid h-7 w-7 cursor-pointer place-items-center rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground"
-            onClick={() => onRename(item.id)}
-          >
-            <PencilLine size={13} />
-          </button>
-          </Hint>
-        )}
-        <Hint label={t("copy")}>
-        <button
-          type="button"
-          aria-label={t("copy")}
-          className="grid h-7 w-7 cursor-pointer place-items-center rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground"
-          onClick={onCopySelected}
-        >
-          <Copy size={13} />
-        </button>
-        </Hint>
-        <Hint label={t("delete")}>
-        <button
-          type="button"
-          aria-label={t("delete")}
-          className="grid h-7 w-7 cursor-pointer place-items-center rounded-full text-muted-foreground hover:text-destructive"
-          onClick={onRemoveSelected}
-        >
-          <Trash2 size={13} />
-        </button>
-        </Hint>
-      </div>
-      </TooltipProvider>
-    </NodeToolbar>
-  );
-}
-
-/** 操作条上的一段:空着就不占地方,有东西时右边一道分隔线(那一格自己的右边框)。 */
-function ToolbarCluster({ children, ...rest }: React.HTMLAttributes<HTMLDivElement>) {
-  return (
-    <div
-      {...rest}
-      className="flex items-center gap-0.5 empty:hidden [&:not(:empty)]:mr-1 [&:not(:empty)]:border-r [&:not(:empty)]:border-border [&:not(:empty)]:pr-1.5"
-    >
-      {children}
-    </div>
-  );
-}
-
-/**
- * 操作条上的一枚图标按钮:看大图、剪一段、换一份、让 AI 写,和这一格的每一项能力,都是这一个样子 ——
- * 图标、名字在悬停和读屏里(`aria-label`),点开了一块面板的那一枚是按下态。
- */
-function ToolbarIcon({
-  name,
-  icon: Icon,
-  label,
-  hint,
-  pressed,
-  ability = false,
-  onClick,
-}: {
-  name: string;
-  icon: LucideIcon;
-  label: string;
-  hint?: string;
-  pressed?: boolean;
-  /** 这一枚是这一格的一项能力(`data-board-ability`,测试和样式的钩子)。 */
-  ability?: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <Hint label={label} hint={hint}>
-    <button
-      type="button"
-      aria-label={label}
-      aria-pressed={pressed === undefined ? undefined : pressed}
-      data-board-action={ability ? undefined : name}
-      data-board-ability={ability ? name : undefined}
-      className={cn(
-        "grid h-7 w-7 shrink-0 cursor-pointer place-items-center rounded-full transition-colors hover:bg-secondary hover:text-foreground",
-        pressed ? "bg-secondary text-foreground" : "text-muted-foreground",
-      )}
-      onClick={onClick}
-    >
-      <Icon size={14} />
-    </button>
-    </Hint>
-  );
-}
-
-/** 操作条上的「⋯」:和别的图标同一个尺寸、同一种悬停说明(ActionMenu 自带的那颗是 `title`)。 */
-const MoreButton = React.forwardRef<HTMLButtonElement, { label: string } & React.ButtonHTMLAttributes<HTMLButtonElement>>(
-  ({ label, className, ...rest }, ref) => (
-    <Hint label={label}>
-      <button
-        ref={ref}
-        type="button"
-        aria-label={label}
-        aria-haspopup="menu"
-        {...rest}
-        className={cn(
-          "grid h-7 w-7 shrink-0 cursor-pointer place-items-center rounded-full text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground data-[state=open]:bg-secondary data-[state=open]:text-foreground",
-          className,
-        )}
-      >
-        <MoreHorizontal size={14} />
-      </button>
-    </Hint>
-  ),
-);
-MoreButton.displayName = "MoreButton";
-
-/** 空槽上摆在外面的产出者:内置的(配音、生成)和此刻选着的那一个;插件的生成器多了收进「⋯」。 */
-const SLOT_INLINE = 3;
-
-/**
- * 空槽用什么产出的切换。内置的写名字(「配音」「生成」),插件的生成器带它的图标;多出来的收进「⋯」。
- * 选中的那一个是按下态,换一个只换表单上写的产出者(面板随之换成它的)。
- */
-function SlotSwitch({
-  item,
-  slots,
-  onSwitch,
-}: {
-  item: BoardItem;
-  slots: BoardProducerInfo[];
-  onSwitch: (producer: BoardProducer) => void;
-}) {
-  const t = useI18n();
-  const current = item.form?.producer;
-  const inline = slots.filter((one, index) => index < SLOT_INLINE || one.id === current);
-  const more = slots.filter((one) => !inline.includes(one));
-  return (
-    <>
-      <div role="radiogroup" aria-label={t("boardProducerSwitch")} className="flex items-center gap-0.5 rounded-full bg-secondary/60 p-0.5">
-        {inline.map((one) => {
-          const on = current === one.id;
-          const Icon = one.id.startsWith("node:") ? boardToolIcon(one) : null;
-          return (
-            <Hint key={one.id} label={one.label} hint={firstSentence(toPlainText(one.board_description || one.description || ""))}>
-            <button
-              type="button"
-              role="radio"
-              aria-checked={on}
-              className={cn(
-                "flex max-w-40 cursor-pointer items-center gap-1 rounded-full px-2.5 py-1 text-ui-xs transition-colors",
-                on ? "bg-panel text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
-              )}
-              onClick={() => onSwitch(one.id as BoardProducer)}
-            >
-              {Icon ? <Icon size={12} className="shrink-0" /> : null}
-              <span className="truncate">{one.label}</span>
-            </button>
-            </Hint>
-          );
-        })}
-      </div>
-      {more.length > 0 && (
-        <ActionMenu
-          label={t("boardMoreGenerators")}
-          trigger={<MoreButton label={t("boardMoreGenerators")} />}
-          actions={more.map((one) => {
-            const Icon = boardToolIcon(one);
-            return { label: one.label, icon: <Icon size={14} />, hint: one.plugin_name || undefined, onSelect: () => onSwitch(one.id as BoardProducer) };
-          })}
-        />
-      )}
-    </>
   );
 }
 
