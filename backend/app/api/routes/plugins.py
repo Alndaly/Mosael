@@ -422,7 +422,7 @@ def list_instance_models(instance_id: str, db: DbSession, user: CurrentUser) -> 
 
 @router.patch("/plugins/instances/{instance_id}/capabilities", response_model=PluginInstanceOut)
 def update_capabilities(
-    instance_id: str, body: PluginCapabilityUpdate, db: DbSession, user: CurrentUser
+    instance_id: str, body: PluginCapabilityUpdate, db: Tx, user: CurrentUser
 ) -> dict:
     try:
         instance = my_instance(db, instance_id, user)
@@ -543,7 +543,7 @@ def clear_invocations(db: DbSession, user: CurrentUser, instance_id: str | None 
 # 两条路由都要求部署管理员的年代看不出来:两边都 403/404,像是权限不够。
 
 @router.delete("/plugins/{package_id}", status_code=204)
-def uninstall_package(package_id: str, db: DbSession, user: CurrentUser) -> None:
+def uninstall_package(package_id: str, db: Tx, user: CurrentUser) -> None:
     """卸载:删掉插件目录,连同它的实例、凭据、授权、调用记录。
 
     **连目录一起删**,否则下一次扫描又把它装回来 —— 用户看到的是"我删了它怎么又回来了"。

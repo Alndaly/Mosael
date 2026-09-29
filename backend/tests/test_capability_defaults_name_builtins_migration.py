@@ -72,6 +72,7 @@ def test_老行原样搬过去_之后能存内置实现_跑第二次不动() -> 
         capability_defaults.set_default(db, "u1", "audio_denoise", "builtin:rnnoise",
                                         builtin_ids=frozenset({"builtin:ffmpeg", "builtin:rnnoise"}))
         assert capability_defaults.default_of(db, "u1", "audio_denoise") == "builtin:rnnoise"
+        db.commit()  # 测试是入口:领域函数不提交
 
     _migrate_capability_defaults_name_builtins()
     assert _rows() == [("u1", "audio_denoise", None, "builtin:rnnoise"), ("u1", "document_parse", instance, None)]

@@ -116,7 +116,7 @@ def uninstall(db: Session, package_id: str, plugins_dir: Path) -> None:
     # 持久目录随包一起走:卸载后留着它,下次装回来就会读到上一个版本攒下的东西(甚至别人的)。
     shutil.rmtree(data_dir_for(package_id), ignore_errors=True)
     db.delete(package)
-    db.commit()
+    db.flush()
 
 
 def _prune(db: Session, plugins_dir: Path) -> None:

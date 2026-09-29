@@ -114,6 +114,7 @@ def _workflow(ws: str, graph: dict) -> str:
 
     with SessionLocal() as db:
         workflow = create_workflow(db, workspace_id=ws, name="老节点", created_by=user_id())
+        db.commit()  # 测试是入口:领域函数不提交
         revision = current_workflow_revision(db, workflow)
         workflow.graph, revision.graph = graph, graph
         workflow.graph_hash = revision.graph_hash = graph_digest(graph)

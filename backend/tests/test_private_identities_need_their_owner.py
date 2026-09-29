@@ -199,6 +199,7 @@ def _run_node(node_type: str, workspace_id: str, actor_id: str | None, config: d
 
     with SessionLocal() as db:
         workflow = create_workflow(db, workspace_id=workspace_id, name="W", graph={"nodes": [], "edges": []}, created_by=actor_id)
+        db.commit()  # 测试是入口:领域函数不提交
         workflow_id = workflow.id
         run = create_job(db, workspace_id=workspace_id, kind="workflow", payload=pinned(db, workflow), created_by=actor_id)
         run.status = "running"

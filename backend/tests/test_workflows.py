@@ -319,11 +319,13 @@ def test_workflow_revision_history_returns_the_latest_bounded_window() -> None:
     graph = linear_graph()
     with SessionLocal() as db:
         workflow = create_workflow(db, workspace_id=workspace_id, name="Many revisions", graph=graph, created_by=user_id())
+        db.commit()  # 测试是入口:领域函数不提交
         total = WORKFLOW_REVISION_HISTORY_LIMIT + 3
         for revision in range(2, total + 1):
             changed = linear_graph()
             changed["nodes"][1]["config"]["template"] = f"revision {revision}"
             update_workflow(db, workflow, {"graph": changed}, base_graph_hash=workflow.graph_hash, created_by=user_id())
+            db.commit()  # 测试是入口:领域函数不提交
 
         visible = list_workflow_revisions(db, workflow.id)
         assert len(visible) == WORKFLOW_REVISION_HISTORY_LIMIT
@@ -357,6 +359,7 @@ def test_queued_run_executes_the_revision_pinned_at_enqueue(monkeypatch) -> None
     before["nodes"][1]["config"]["template"] = "入队前"
     with SessionLocal() as db:
         workflow = create_workflow(db, workspace_id=ws["id"], name="固定修订", graph=before, created_by=user_id())
+        db.commit()  # 测试是入口:领域函数不提交
         job = workflow_engine.start_workflow_job(db, workflow, created_by=None)
         job_id = job.id
         monkeypatch.setattr(workflow_engine.threading, "Thread", real_thread)
@@ -364,6 +367,7 @@ def test_queued_run_executes_the_revision_pinned_at_enqueue(monkeypatch) -> None
         after = linear_graph()
         after["nodes"][1]["config"]["template"] = "入队后"
         update_workflow(db, workflow, {"graph": after}, base_graph_hash=workflow.graph_hash, created_by=user_id())
+        db.commit()  # 测试是入口:领域函数不提交
 
     target = pending["target"]
     assert callable(target)
@@ -1480,6 +1484,7 @@ def test_一个节点失败_兄弟节点等着的子任务跟着取消(monkeypat
             from app.domain.jobs import cancel_job
 
             cancel_job(db, db.get(Job, children[0]))
+            db.commit()  # 测试是入口:cancel_job 不提交
         thread.join(timeout=5)
     assert not stuck, "一个节点失败了,引擎还在等兄弟节点的子任务自己跑完"
     assert isinstance(outcome.get("error"), WorkflowDomainError)
@@ -1502,6 +1507,7 @@ def test_延时节点等着的时候_取消立刻生效(monkeypatch) -> None:
     time.sleep(0.3)
     with SessionLocal() as db:
         cancel_job(db, db.get(Job, job_id))
+        db.commit()  # 测试是入口:cancel_job 不提交
     thread.join(timeout=5)
     stuck = thread.is_alive()
     assert not stuck, "取消了,延时节点还在睡"

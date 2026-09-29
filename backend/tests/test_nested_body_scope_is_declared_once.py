@@ -46,6 +46,7 @@ def _saved(graph: dict) -> Workflow:
     ws = fresh_client().post("/api/workspaces", json={"name": "W"}).json()["id"]
     with SessionLocal() as db:
         workflow = create_workflow(db, workspace_id=ws, name="体的作用域", graph=graph, created_by=user_id())
+        db.commit()  # 测试是入口:领域函数不提交
         db.expunge(workflow)
         return workflow
 

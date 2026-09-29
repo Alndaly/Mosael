@@ -4,6 +4,8 @@
 账号内嵌视图完成上传、回报状态;账号登录态巡检同理。后端是唯一
 事实源,worker 无状态。同账号任务必须串行(共享一个登录视图),
 所以 claim 支持 exclude_accounts。
+
+这里的函数都不提交:每一次回连是一次用例,由路由(routes/publish_worker,Tx)提交。
 """
 
 from __future__ import annotations
@@ -86,7 +88,7 @@ def reclaim_orphaned_running(db: Session, exclude_accounts: list[str], *, worker
         _notify_status(db, task)
         reclaimed += 1
     if reclaimed:
-        db.commit()
+        db.flush()
     return reclaimed
 
 
@@ -132,7 +134,7 @@ def claim_next_pending(
         task.status = "failed"
         task.error_message = "素材文件缺失"
         _sync_job(db, task)
-        db.commit()
+        db.flush()
         return None
 
     task.status = "running"
@@ -142,7 +144,7 @@ def claim_next_pending(
         if job is not None:
             job.status = "running"
             say(job, "jobMsg_publishRunning", title=task.title or asset.name)
-    db.commit()
+    db.flush()
     return {
         "id": task.id,
         "account_id": account.id,
@@ -192,7 +194,7 @@ def report_task(
         elif status != "running":
             # failed / login_required / blocked / permission_required / waiting_manual…
             logger.warning("publish task %s → %s: %s", task_id, status, error_message or task.title)
-    db.commit()
+    db.flush()
     db.refresh(task)
     return task
 
@@ -280,7 +282,7 @@ def claim_check(db: Session) -> dict[str, Any] | None:
             previous = account.binding_status
             account.binding_status = "checking"
             account.last_checked_at = now()
-            db.commit()
+            db.flush()
             return {
                 "account_id": account.id,
                 "platform": account.platform,
@@ -298,7 +300,7 @@ def mark_due(db: Session) -> int:
     ).all()
     for account in accounts:
         account.last_checked_at = None
-    db.commit()
+    db.flush()
     return len(accounts)
 
 
@@ -318,6 +320,6 @@ def patch_account(
         account.binding_status = binding_status
         account.last_checked_at = now()
     account.last_error = last_error
-    db.commit()
+    db.flush()
     db.refresh(account)
     return account

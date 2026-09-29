@@ -21,12 +21,14 @@ def default_of(db: Session, owner_user_id: str, capability: str) -> str | None:
 
 def set_default(db: Session, owner_user_id: str, capability: str, provider_id: str | None,
                 *, builtin_ids: frozenset[str] = frozenset()) -> None:
-    """定下(或清掉,`provider_id=None`)这个人在这项能力上的默认。`builtin_ids`:这项能力的内置实现有哪几个。"""
+    """定下(或清掉,`provider_id=None`)这个人在这项能力上的默认。`builtin_ids`:这项能力的内置实现有哪几个。
+
+    不提交,由入口提交。"""
     row = db.get(PluginCapabilityDefault, (owner_user_id, capability))
     if provider_id is None:
         if row is not None:
             db.delete(row)
-            db.commit()
+            db.flush()
         return
     if provider_id in builtin_ids:
         instance_id, builtin_id = None, provider_id
@@ -42,4 +44,4 @@ def set_default(db: Session, owner_user_id: str, capability: str, provider_id: s
                                        instance_id=instance_id, builtin_id=builtin_id))
     else:
         row.instance_id, row.builtin_id = instance_id, builtin_id
-    db.commit()
+    db.flush()

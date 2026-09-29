@@ -8,7 +8,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException
-from app.api.deps import CurrentUser, DbSession
+from app.api.deps import CurrentUser, DbSession, Tx
 from app.api.schemas import CapabilityChoicesOut, CapabilityDefaultUpdate
 from app.domain import capabilities
 from app.domain.plugins.errors import PluginDomainError
@@ -22,7 +22,7 @@ def list_capability_choices(db: DbSession, user: CurrentUser) -> list[dict]:
 
 
 @router.put("/settings/capabilities/{name}", response_model=CapabilityChoicesOut)
-def set_capability_default(name: str, body: CapabilityDefaultUpdate, db: DbSession, user: CurrentUser) -> dict:
+def set_capability_default(name: str, body: CapabilityDefaultUpdate, db: Tx, user: CurrentUser) -> dict:
     capability = capabilities.get(name)
     if capability is None:
         raise HTTPException(status_code=404, detail=name)

@@ -3,7 +3,7 @@
 看档案列表不点名权限;建、改、删档案、记下打开过、在会话上跑动作 / 关会话点名 edit。
 档案存的是**某人已登录的浏览器**,能不能用还要过 sharing 的归属判据;改、删只认主人,那道闸
 (`browser.update_profile` / `delete_profile`,actor 必填)由路由直接点名。不提交事务
-(底下的 create_profile、close_session 仍自己提交,它们还有别的调用方)。
+(底下的 close_session 仍自己提交:关会话是收尾,不能随调用方回滚)。
 """
 
 from __future__ import annotations

@@ -898,7 +898,7 @@ def cancel_queued_message(db: Session, session: AgentSession, message_id: str) -
     if message is None or message.session_id != session.id or not (message.payload or {}).get("queued"):
         raise HostError("agentErr_messageAlreadyRunning")
     db.delete(message)
-    db.commit()
+    db.flush()
     return [item.content for item in _queued_messages(db, session)]
 
 
@@ -948,7 +948,7 @@ def steer_queued_message(db: Session, session: AgentSession, message_id: str, us
     if not steer_turn(session.id, _prompt_with_context(message.content, (message.payload or {}).get("context"))):
         return False
     _unqueue(db, message)
-    db.commit()
+    db.flush()
     return True
 
 

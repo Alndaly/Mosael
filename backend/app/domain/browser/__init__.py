@@ -23,6 +23,7 @@ from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from app.core.db import SessionLocal
+from app.core.unit_of_work import unit_of_work
 from app.core.i18n import LocalizedError, is_message_key
 from app.domain import sharing
 from app.domain.authority import Actor
@@ -89,7 +90,7 @@ def create_profile(
     db.flush()
     prof.partition = partition or f"persist:pool-{prof.id}"
     sharing.claim(db, "browser_profile", prof, owner)
-    db.commit()
+    db.flush()
     db.refresh(prof)
     return prof
 
@@ -142,7 +143,7 @@ def update_profile(
         prof.proxy = (proxy or None) if isinstance(proxy, str) else None
     if enabled is not None:
         prof.enabled = enabled
-    db.commit()
+    db.flush()
     db.refresh(prof)
     return prof
 
@@ -160,7 +161,7 @@ def delete_profile(db: Session, workspace_id: str, profile_id: str, *, actor: st
         raise BrowserDomainError("browserErr_profileLinkedToAccount")
     sharing.forget(db, "browser_profile", prof.id)
     db.delete(prof)
-    db.commit()
+    db.flush()
 
 
 def open_session(
@@ -211,6 +212,8 @@ def open_session(
     db.add(session)
     db.flush()
     session.partition = _partition_for(session)  # 依赖 id(临时会话),故 flush 后再算
+    # 这里仍提交:调用方紧接着就 run_action —— 入队和轮询各开自己的会话,执行器在另一个进程里,
+    # 都得先看得见这个会话。
     db.commit()
     db.refresh(session)
     return session
@@ -242,7 +245,7 @@ def _open_profile_session(
     )
     db.add(session)
     prof.last_used_at = now()
-    db.commit()
+    db.commit()  # 同 open_session:紧接着的动作在别的会话里读它
     db.refresh(session)
     return session
 
@@ -285,6 +288,8 @@ def close_session(db: Session, session_id: str) -> None:
             session_id=session_id, workspace_id=session.workspace_id, action="close", args={}, status="queued"
         )
     )
+    # 这里仍提交:关会话多半是收尾(下载失败的 finally、运行落终态后的收拾),调用方随后可能回滚,
+    # 关掉这件事不能跟着回滚 —— 否则执行器那边的视图和排着的动作就没人收了。
     db.commit()
 
 
@@ -372,7 +377,8 @@ def upload_file(
 
 
 def _enqueue(session_id: str, action: str, args: dict | None, *, timeout: float) -> dict:
-    with SessionLocal() as db:
+    # 入队是自己的一次用例:提交之后执行器(另一个进程)和下面的轮询才看得见它。
+    with unit_of_work() as db:
         session = db.get(BrowserSession, session_id)
         if session is None or session.status != "open":
             raise BrowserDomainError("browserErr_sessionClosed")
@@ -384,7 +390,7 @@ def _enqueue(session_id: str, action: str, args: dict | None, *, timeout: float)
             status="queued",
         )
         db.add(act)
-        db.commit()
+        db.flush()
         action_id = act.id
 
     deadline = time.monotonic() + timeout
@@ -406,12 +412,11 @@ def _enqueue(session_id: str, action: str, args: dict | None, *, timeout: float)
                 raise BrowserDomainError("browserErr_actionFailed")
 
     # 超时:把动作落 failed(未被 worker 认领/执行器无响应),再抛。
-    with SessionLocal() as db:
+    with unit_of_work() as db:
         act = db.get(BrowserAction, action_id)
         if act is not None and act.status in ("queued", "running"):
             act.status = "failed"
             act.error = "browserErr_actionTimeout"
-            db.commit()
     raise BrowserDomainError("browserErr_actionTimeout")
 
 
@@ -436,7 +441,7 @@ def expire_action_leases(db: Session) -> int:
         act.status = "failed"
         act.error = "browserErr_executorLost"
     if stale:
-        db.commit()
+        db.flush()
     return len(stale)
 
 
@@ -463,7 +468,6 @@ def renew_action_leases(db: Session, *, worker: str, claims: list[dict[str, str]
         ).rowcount
         if count:
             renewed.append(str(claim.get("action_id")))
-    db.commit()
     return renewed
 
 
@@ -489,7 +493,6 @@ def claim_next_action(db: Session, *, worker: str = "") -> dict | None:
             .where(BrowserAction.id == act.id, BrowserAction.status == "queued")
             .values(status="running", lease_worker=worker or None, lease_token=token, lease_expires_at=expires)
         ).rowcount
-        db.commit()
         if not changed:
             continue  # 被别的 worker 抢了,取下一条
         session = db.get(BrowserSession, act.session_id)
@@ -542,7 +545,7 @@ def report_action(
         session = db.get(BrowserSession, act.session_id)
         if session is not None:
             session.last_url = last_url
-    db.commit()
+    db.flush()
     db.refresh(act)
     return act
 
@@ -551,7 +554,7 @@ def reconcile_browser_state() -> int:
     """后端重启:执行器视图已随旧进程消失,把残留的未终态动作落 failed、开着的会话落 closed。
     返回清理的动作数。"""
     cleaned = 0
-    with SessionLocal() as db:
+    with unit_of_work() as db:
         stale = db.scalars(select(BrowserAction).where(BrowserAction.status.in_(("queued", "running")))).all()
         for act in stale:
             act.status = "failed"
@@ -559,8 +562,4 @@ def reconcile_browser_state() -> int:
             cleaned += 1
         for session in db.scalars(select(BrowserSession).where(BrowserSession.status == "open")).all():
             session.status = "closed"
-        if stale:
-            db.commit()
-        else:
-            db.commit()
     return cleaned

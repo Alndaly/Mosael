@@ -108,7 +108,7 @@ def create_workflow(
         created_by=created_by,
         note=revision_note,
     )
-    db.commit()
+    db.flush()
     db.refresh(workflow)
     return workflow
 
@@ -160,7 +160,7 @@ def update_workflow(
         workflow.name = changes["name"]
     if changes.get("description") is not None:
         workflow.description = changes["description"]
-    db.commit()
+    db.flush()
     db.refresh(workflow)
     return workflow
 
@@ -186,7 +186,7 @@ def edit_workflow_graph(
         source=source,
         created_by=created_by,
     )
-    db.commit()
+    db.flush()
     db.refresh(workflow)
     return workflow
 

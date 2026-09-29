@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException, Response
 
 from app.domain import sharing
-from app.api.deps import CurrentUser, DbSession
+from app.api.deps import CurrentUser, DbSession, Tx
 from app.api.schemas import (
     PublishAccountCreate,
     PublishAccountOut,
@@ -66,7 +66,7 @@ def list_accounts(workspace_id: str, db: DbSession, user: CurrentUser) -> list[P
 
 
 @router.post("/publish/accounts", response_model=PublishAccountOut)
-def create_account_route(body: PublishAccountCreate, db: DbSession, user: CurrentUser) -> PublishAccount:
+def create_account_route(body: PublishAccountCreate, db: Tx, user: CurrentUser) -> PublishAccount:
     publish_uc.ensure_can_publish(db, user, body.workspace_id)
     try:
         return create_account(
@@ -83,7 +83,7 @@ def create_account_route(body: PublishAccountCreate, db: DbSession, user: Curren
 
 
 @router.patch("/publish/accounts/{account_id}", response_model=PublishAccountOut)
-def update_account_route(account_id: str, body: PublishAccountUpdate, db: DbSession, user: CurrentUser) -> PublishAccount:
+def update_account_route(account_id: str, body: PublishAccountUpdate, db: Tx, user: CurrentUser) -> PublishAccount:
     account = publish_uc.manageable_account(db, user, account_id)
     try:
         return update_account(db, account, body.model_dump(exclude_unset=True), actor=user.id)
@@ -92,7 +92,7 @@ def update_account_route(account_id: str, body: PublishAccountUpdate, db: DbSess
 
 
 @router.post("/publish/accounts/{account_id}/recheck", response_model=PublishAccountOut)
-def recheck_account_route(account_id: str, db: DbSession, user: CurrentUser) -> PublishAccount:
+def recheck_account_route(account_id: str, db: Tx, user: CurrentUser) -> PublishAccount:
     """把账号标记为待复检:执行器的下一次巡检立刻认领它重测登录态。"""
     account = publish_uc.manageable_account(db, user, account_id)
     try:
@@ -102,7 +102,7 @@ def recheck_account_route(account_id: str, db: DbSession, user: CurrentUser) -> 
 
 
 @router.delete("/publish/accounts/{account_id}", status_code=204)
-def delete_account_route(account_id: str, db: DbSession, user: CurrentUser) -> Response:
+def delete_account_route(account_id: str, db: Tx, user: CurrentUser) -> Response:
     account = publish_uc.manageable_account(db, user, account_id)
     try:
         delete_account(db, account, actor=user.id)
@@ -118,7 +118,7 @@ def list_publish_tasks(workspace_id: str, db: DbSession, user: CurrentUser) -> l
 
 
 @router.post("/publish/tasks", response_model=PublishTaskOut)
-def create_publish_task(body: PublishCreate, db: DbSession, user: CurrentUser) -> dict:
+def create_publish_task(body: PublishCreate, db: Tx, user: CurrentUser) -> dict:
     publish_uc.ensure_can_publish(db, user, body.workspace_id)
     account = db.get(PublishAccount, body.account_id)
     if account is None or account.workspace_id != body.workspace_id:
@@ -148,10 +148,9 @@ def create_publish_task(body: PublishCreate, db: DbSession, user: CurrentUser) -
 
 
 @router.delete("/publish/tasks/{task_id}", status_code=204)
-def delete_publish_task(task_id: str, db: DbSession, user: CurrentUser) -> Response:
+def delete_publish_task(task_id: str, db: Tx, user: CurrentUser) -> Response:
     task = publish_uc.deletable_task(db, user, task_id)
     db.delete(task)
-    db.commit()
     return Response(status_code=204)
 
 

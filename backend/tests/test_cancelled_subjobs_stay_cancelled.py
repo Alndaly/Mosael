@@ -43,6 +43,7 @@ def _job(ws: str, kind: str) -> str:
 def _cancel(job_id: str) -> None:
     with SessionLocal() as other:
         cancel_job(other, other.get(Job, job_id))
+        other.commit()  # 测试是入口:cancel_job 不提交
 
 
 def _assert_still_cancelled(job_id: str) -> None:

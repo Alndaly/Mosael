@@ -357,7 +357,7 @@ def edit_timeline(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[
         applied = apply_edit_operations(db, sequence_id, operations)
     except SequenceDomainError as exc:
         raise WorkflowDomainError.from_error(exc) from exc
-    db.commit()
+    db.flush()
     sequence = db.get(Sequence, sequence_id)
     return {"applied": applied, "sequence_id": sequence_id, "revision": sequence.revision if sequence else 0}
 
@@ -540,7 +540,7 @@ def timeline_add_track(db: Session, scope: RunScope, config: dict[str, Any]) -> 
     kind = str(config.get("kind", "video")).strip() or "video"
     before = {one.id for one in (sequence.tracks or [])}
     add_track(db, sequence.id, AddTrack(kind=kind))
-    db.commit()
+    db.flush()
     db.refresh(sequence)
     created = next((one.id for one in (sequence.tracks or []) if one.id not in before), "")
     return {"track_id": created, "sequence_id": sequence.id}
@@ -558,7 +558,6 @@ def timeline_clear(db: Session, scope: RunScope, config: dict[str, Any]) -> dict
     clip_ids = [clip.id for track in (sequence.tracks or []) for clip in (track.clips or [])]
     for clip_id in clip_ids:
         delete_clip(db, sequence.id, DeleteClip(clip_id=clip_id))
-    db.commit()
     return {"removed": len(clip_ids), "sequence_id": sequence.id}
 
 
@@ -717,7 +716,7 @@ def _subtitle_track(db: Session, sequence: Sequence, track_id: str) -> str:
         return min(existing, key=lambda one: one.position).id
     before = {one.id for one in tracks}
     add_track(db, sequence.id, AddTrack(kind="subtitle"))
-    db.commit()
+    db.flush()
     db.refresh(sequence)
     created = next((one.id for one in (sequence.tracks or []) if one.id not in before), "")
     if not created:

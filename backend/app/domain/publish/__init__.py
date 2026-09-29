@@ -279,8 +279,6 @@ def create_account(
     db.flush()
     # 平台登录态是某人的身份 —— 默认只有他自己看得见,要给同事用得由他显式共享(见 domain/sharing)。
     sharing.claim(db, "publish_account", account, owner)
-    db.commit()
-    db.refresh(account)
     # 发布账号即浏览器池档案(组合):按其登录分区 persist:<PARTITION_PREFIX>-<id> 建档并回填,pool 页统一可见,
     # 工作流/智能体可复用其登录。浏览器域负责建档,发布域只写指针(见 domain/browser)。
     from app.domain import browser
@@ -289,7 +287,7 @@ def create_account(
         db, workspace_id=workspace_id, name=name, owner=owner, proxy=account.proxy, partition=f"persist:{PARTITION_PREFIX}-{account.id}"
     )
     account.profile_id = profile.id
-    db.commit()
+    db.flush()
     db.refresh(account)
     return account
 
@@ -306,7 +304,7 @@ def update_account(db: Session, account: PublishAccount, changes: dict[str, Any]
     if "proxy" in changes:
         # 空串 → 清成 None(直连);否则存去空白后的值。
         account.proxy = (changes["proxy"] or "").strip() or None
-    db.commit()
+    db.flush()
     db.refresh(account)
     return account
 
@@ -317,7 +315,7 @@ def recheck_account(db: Session, account: PublishAccount, *, actor: str | None) 
     account.binding_status = "unknown"
     account.last_checked_at = None
     account.last_error = None
-    db.commit()
+    db.flush()
     db.refresh(account)
     return account
 
@@ -327,7 +325,7 @@ def delete_account(db: Session, account: PublishAccount, *, actor: str | None) -
     sharing.ensure_manageable(db, "publish_account", account, actor=actor)
     sharing.forget(db, "publish_account", account.id)
     db.delete(account)
-    db.commit()
+    db.flush()
 
 
 def start_publish(
@@ -394,7 +392,7 @@ def start_publish(
     db.flush()
     # job payload 带上 task_id:任务中心点击发布任务可直达对应发布详情。
     job.payload = {**job.payload, "task_id": task.id}
-    db.commit()
+    db.flush()
     db.refresh(task)
     return task
 

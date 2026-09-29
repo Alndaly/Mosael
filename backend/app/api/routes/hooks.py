@@ -16,7 +16,7 @@ from datetime import datetime
 
 from fastapi import APIRouter, HTTPException
 
-from app.api.deps import DbSession
+from app.api.deps import DbSession, Tx
 from app.api.schemas import JobOut
 from app.core.i18n import tr
 from app.db.models import Job, ScheduledTask, ScheduledTaskRun
@@ -77,7 +77,7 @@ def _out(db, run: ScheduledTaskRun) -> HookRunOut:
 
 
 @router.post("/hooks/scheduled-tasks/{task_id}")
-def fire_scheduled_task(task_id: str, secret: str, db: DbSession) -> dict:
+def fire_scheduled_task(task_id: str, secret: str, db: Tx) -> dict:
     task = _task(db, task_id, secret)
     try:
         run, job = trigger_scheduled_task(db, task)
@@ -94,7 +94,7 @@ def get_hook_run(task_id: str, run_id: str, secret: str, db: DbSession) -> HookR
 
 
 @router.post("/hooks/scheduled-tasks/{task_id}/runs/{run_id}/cancel", response_model=HookRunOut)
-def cancel_hook_run(task_id: str, run_id: str, secret: str, db: DbSession) -> HookRunOut:
+def cancel_hook_run(task_id: str, run_id: str, secret: str, db: Tx) -> HookRunOut:
     """取消这次运行。节点粒度:正在执行的那一步跑完就停,派生的子任务一并取消(见 jobs.cancel_job)。"""
     task = _task(db, task_id, secret)
     run = _run(db, task, run_id)

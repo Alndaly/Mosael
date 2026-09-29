@@ -112,7 +112,6 @@ def send_notify(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[st
         link="#/workflows",
         payload={"workflow_id": scope.id},
     )
-    db.commit()
     return {"sent": True}
 
 
@@ -185,7 +184,6 @@ def asset_tag(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str,
         # unchanged as far as SQLAlchemy is concerned, and the write silently does nothing.
         asset.tags = merged
         updated.append({"id": asset.id, "name": asset.name, "tags": merged})
-    db.commit()
     return {"updated": updated, "count": len(updated)}
 
 
@@ -216,7 +214,6 @@ def asset_update(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[s
         if project_id:
             asset.project_id = project_id
         updated.append({"id": asset.id, "name": asset.name, "project_id": asset.project_id})
-    db.commit()
     return {"updated": updated, "count": len(updated)}
 
 
@@ -245,7 +242,7 @@ def project_create(db: Session, scope: RunScope, config: dict[str, Any]) -> dict
     if not name:
         raise WorkflowDomainError("wfErr_projectNameEmpty")
     project = create_project(db, scope.workspace_id, name)
-    db.commit()
+    db.flush()
     return {"project_id": project.id, "name": project.name}
 
 
@@ -280,7 +277,7 @@ def project_sequence_create(db: Session, scope: RunScope, config: dict[str, Any]
         fps=fps,
     )
     project.active_sequence_id = scaffold.sequence.id
-    db.commit()
+    db.flush()
     return {
         "project_id": project.id,
         "sequence_id": scaffold.sequence.id,

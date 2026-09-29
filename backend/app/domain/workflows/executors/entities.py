@@ -351,7 +351,6 @@ def draw_and_attach(db: Session, scope: RunScope, drawing: Drawing) -> dict[str,
             entity = add_reference(db, entity, asset_id, role)
     except EntityDomainError as exc:
         raise WorkflowDomainError.from_error(exc) from exc
-    db.commit()
     asset_ids = [asset_id for _role, asset_id in drawn]
     return {"asset_ids": asset_ids, "asset_id": asset_ids[0], "entity_id": drawing.entity_id,
             "added": len(asset_ids), "failed": len(errors)}

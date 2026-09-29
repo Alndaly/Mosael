@@ -139,6 +139,7 @@ def test_跑到一半被取消_收尾时不把自己写回完成(monkeypatch, au
         def wrapped(*args, **kwargs):
             with SessionLocal() as other:
                 cancel_job(other, other.get(Job, job_id))
+                other.commit()  # 测试是入口:cancel_job 不提交
             return run(*args, **kwargs)
 
         return wrapped

@@ -146,6 +146,7 @@ def _write_behind_our_back(workflow_id: str, template: str) -> None:
         row = other.get(Workflow, workflow_id)
         assert row is not None
         update_workflow(other, row, {"graph": _graph(template)}, base_graph_hash=row.graph_hash, created_by=user_id())
+        other.commit()  # 测试是入口:领域函数不提交
 
 
 def test_整图保存的读写空档里有人写入_撞冲突而不是重试着盖掉() -> None:
@@ -194,6 +195,7 @@ def test_按算子改图_撞上并发写入就在最新那份上重做() -> None
         row = db.get(Workflow, workflow["id"])
         assert row is not None
         edit_workflow_graph(db, row, rename_start, source="agent", created_by=user_id())
+        db.commit()  # 测试是入口:领域函数不提交
     current = client.get(f"/api/workflows/{workflow['id']}").json()
     assert current["graph"]["nodes"][0]["name"] == "智能体改的名"
     assert current["graph"]["nodes"][1]["config"]["template"] == "空档里写的"

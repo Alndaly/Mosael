@@ -50,6 +50,7 @@ def _card(workspace: str, sid: str | None) -> str:
             db, workspace_id=workspace, tool="browser_open", payload={"url": "https://example.com"},
             actor_id=owner.id, session_id=sid,
         )
+        db.commit()  # 测试是入口:领域函数不提交
         return card.id
 
 

@@ -174,8 +174,9 @@ def refresh_tools(db: Session, instance: PluginInstance, *, notify: bool = True)
         inst.record_tool_list_failure(db, instance, exc)
         raise PluginDomainError(exc.key, **exc.params) from exc
     instance.discovered_tools = discovered
-    db.commit()
+    db.flush()
     db.refresh(instance)
+    # 连同清单一起由 seed_capabilities 提交。
     inst.seed_capabilities(db, instance, manifest, [t["name"] for t in discovered])
     inst.record_tool_list(db, instance, len(discovered))
     return instance

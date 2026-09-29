@@ -20,7 +20,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from app.api.deps import DbSession
+from app.api.deps import Tx
 from app.domain.browser import claim_next_action, renew_action_leases, report_action
 
 router = APIRouter(tags=["browser-worker"])
@@ -55,13 +55,13 @@ class HeartbeatRequest(BaseModel):
 
 
 @router.post("/browser/worker/claim")
-def claim(body: ClaimRequest, db: DbSession) -> dict[str, Any]:
+def claim(body: ClaimRequest, db: Tx) -> dict[str, Any]:
     action = claim_next_action(db, worker=body.worker)
     return {"action": action}
 
 
 @router.patch("/browser/worker/report")
-def report(body: ReportRequest, db: DbSession) -> dict[str, Any]:
+def report(body: ReportRequest, db: Tx) -> dict[str, Any]:
     try:
         act = report_action(
             db,
@@ -78,7 +78,7 @@ def report(body: ReportRequest, db: DbSession) -> dict[str, Any]:
 
 
 @router.post("/browser/worker/heartbeat")
-def heartbeat(body: HeartbeatRequest, db: DbSession) -> dict[str, Any]:
+def heartbeat(body: HeartbeatRequest, db: Tx) -> dict[str, Any]:
     """执行器报「我还在」,并**给手上那些动作续约**。
 
     返回 `renewed`:真的续上了的那些 id。没续上的,执行器那边该停手 —— 它手上那条已经被

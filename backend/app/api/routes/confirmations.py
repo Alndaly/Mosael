@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException
-from app.api.deps import CurrentUser, DbSession, PresentedToken
+from app.api.deps import CurrentUser, DbSession, PresentedToken, Tx
 from app.api.schemas import ConfirmationCreate, ConfirmationOut
 from app.db.models import ToolConfirmation
 from app.domain.agent import autopilot
@@ -68,7 +68,7 @@ def get_confirmation(confirmation_id: str, db: DbSession, user: CurrentUser) -> 
 # 「能不能批、批了会发生什么」在 domain/agent/confirmations.authorize_and_* 里,
 # 和飞书卡片那条入口共用同一份 —— 校验规则不该按入口各写一遍。
 @router.post("/confirmations/{confirmation_id}/approve", response_model=ConfirmationOut)
-def approve(confirmation_id: str, db: DbSession, user: CurrentUser) -> ToolConfirmation:
+def approve(confirmation_id: str, db: Tx, user: CurrentUser) -> ToolConfirmation:
     confirmation = _get_or_404(db, confirmation_id)
     try:
         return authorize_and_approve(db, user, confirmation)
@@ -77,7 +77,7 @@ def approve(confirmation_id: str, db: DbSession, user: CurrentUser) -> ToolConfi
 
 
 @router.post("/confirmations/{confirmation_id}/reject", response_model=ConfirmationOut)
-def reject(confirmation_id: str, db: DbSession, user: CurrentUser) -> ToolConfirmation:
+def reject(confirmation_id: str, db: Tx, user: CurrentUser) -> ToolConfirmation:
     confirmation = _get_or_404(db, confirmation_id)
     try:
         return authorize_and_reject(db, user, confirmation)

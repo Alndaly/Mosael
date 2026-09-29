@@ -81,7 +81,7 @@ def request_confirmation(
         session_id=session_id,
     )
     db.add(confirmation)
-    db.commit()
+    db.flush()
     db.refresh(confirmation)
     return confirmation
 
@@ -174,7 +174,7 @@ def decidable_filter(db: Session, user: User, workspace_id: str) -> Any:
 def reject_confirmation(db: Session, confirmation: ToolConfirmation) -> ToolConfirmation:
     _claim(db, confirmation, "rejected")
     confirmation.resolved_at = now()
-    db.commit()
+    db.flush()
     return confirmation
 
 
@@ -188,7 +188,8 @@ def approve_confirmation(db: Session, confirmation: ToolConfirmation) -> ToolCon
         confirmation.status = "failed"
         confirmation.error = str(exc)[:500]
     confirmation.resolved_at = now()
-    db.commit()
+    # 不提交:批准的入口(路由、飞书回调、自动放行的线程)提交。认领那一笔已经在 _claim 里落了。
+    db.flush()
     db.refresh(confirmation)
     return confirmation
 
@@ -207,6 +208,8 @@ def _claim(db: Session, confirmation: ToolConfirmation, to_status: str) -> None:
         .where(ToolConfirmation.id == confirmation.id, ToolConfirmation.status == "pending")
         .values(status=to_status)
     )
+    # 这里仍提交:认领是「这张卡归我执行了」,要在执行器开跑之前落定 —— 执行器可能很慢、可能付费,
+    # 中途进程没了,卡也不能回到 pending 被再批一次;提交同时放掉 SQLite 的写锁,不让慢执行器攥着它。
     db.commit()
     db.refresh(confirmation)
     if result.rowcount != 1:

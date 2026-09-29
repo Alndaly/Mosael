@@ -136,6 +136,7 @@ def test_scheduled_export_cancels_child_and_stays_cancelled(monkeypatch):
         child = db.get(Job, job.result["delegated_job_id"])
         assert child.parent_job_id == job.id
         cancel_job(db, job)
+        db.commit()  # 测试是入口:cancel_job 不提交
         db.refresh(child)
         assert child.status == "failed"
         # A legacy worker's late result must not change the cancelled wrapper.

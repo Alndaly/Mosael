@@ -45,7 +45,9 @@ def _tags_of(asset_id: str) -> list[str]:
 
 def _run(handler, workflow_id: str, config: dict):
     with SessionLocal() as db:
-        return handler(db, db.get(Workflow, workflow_id), config)
+        out = handler(db, db.get(Workflow, workflow_id), config)
+        db.commit()  # 和引擎一样:节点跑完由调用方提交
+        return out
 
 
 class TestIdList:

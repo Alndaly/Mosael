@@ -200,7 +200,8 @@ def sync(db: Session, instance: PluginInstance, refresh: bool) -> None:
         if model.kind in GENERATION_KINDS
     ]
     count = provider_models.replace_declared_catalog(db, profile, entries)
-    db.commit()
+    db.flush()
+    # 连同模型清单一起由 set_capability_status 提交。
     inst.set_capability_status(
         db,
         instance,

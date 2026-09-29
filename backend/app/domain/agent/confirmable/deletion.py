@@ -136,7 +136,7 @@ def _execute_delete_projects(db: Session, confirmation: Any, actor: str | None) 
             continue
         deleted.append({"project_id": project.id, "name": project.name})
         db.delete(project)
-    db.commit()
+    db.flush()
     return {"deleted": deleted}
 
 

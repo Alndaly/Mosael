@@ -17,6 +17,7 @@ from sqlalchemy import delete, event, inspect, select
 from sqlalchemy.orm import Session
 
 from app.core.db import SessionLocal
+from app.core.unit_of_work import unit_of_work
 from app.core.i18n import DEFAULT_LOCALE, LocalizedError, t
 from app.db.models import Job, TaskEvent
 from app.db.models import now as models_now
@@ -221,12 +222,11 @@ def run_job_guarded(job_id: str, body: Callable[[], None], *, what: str = "job")
     except Exception as exc:  # noqa: BLE001 — a worker thread must never die silently
         logger.exception("%s worker crashed (job=%s)", what, job_id)
         try:
-            with SessionLocal() as db:
+            with unit_of_work() as db:
                 job = db.get(Job, job_id)
                 if job is not None and finish_job(db, job, status="failed", **blame(exc)):
                     say(job, "jobMsg_genericFailed", what=what)
                     db.add(TaskEvent(job_id=job.id, type="job.failed", payload={"stage": "worker"}))
-                    db.commit()
         except Exception:  # noqa: BLE001 — the DB is what failed; nothing left to try
             logger.exception("could not record the failure of %s %s", what, job_id)
 
@@ -451,6 +451,8 @@ def _after_jobs_settled(session: Session) -> None:
             for name, listener in list(_SETTLE_LISTENERS.items()):
                 try:
                     listener(fresh, job)
+                    # 这里是收拾动作的入口:每一个收拾动作单独提交,前一个不被后一个的失败带走。
+                    fresh.commit()
                 except Exception:
                     # 收拾不成**不能**反过来改写任务的终态 —— 那一笔已经提交了。记下来。
                     fresh.rollback()
@@ -880,7 +882,8 @@ def cancel_job(db: Session, job: Job) -> Job:
     if seen is None:
         db.rollback()
         raise JobError("jobErr_alreadyFinished")
-    db.commit()
+    # 不提交:入口(任务中心的取消、webhook 的取消)提交。子进程已经在上面掐掉了。
+    db.flush()
     db.refresh(job)
     logger.info("job %s [%s] cancelled by user (cascaded %d descendants)", job.id, job.kind, len(seen) - 1)
     return job
@@ -984,7 +987,6 @@ def renew_worker_leases(db: Session, *, worker: str, claims: list[dict[str, str]
         ).values(lease_expires_at=now + timedelta(seconds=WORKER_LEASE_SECONDS))).rowcount
         if count:
             renewed.append(claim["job_id"])
-    db.commit()
     return renewed
 
 
@@ -1073,7 +1075,6 @@ def prune_task_events(db: Session, *, now: datetime | None = None) -> int:
             delete(TaskEvent).where(TaskEvent.job_id == job.id, TaskEvent.id.not_in(keep_ids))
         )
         removed += result.rowcount or 0
-    db.commit()
     return removed
 
 

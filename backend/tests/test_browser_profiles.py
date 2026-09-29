@@ -60,6 +60,7 @@ def test_new_publish_account_gets_pool_profile() -> None:
     ws = _ws(client)
     with SessionLocal() as db:
         acc = create_account(db, workspace_id=ws, platform="bilibili", name="B站主号", config={}, owner=_me(db))
+        db.commit()  # 测试是入口:领域函数不提交
         acc_id = acc.id
         assert acc.profile_id is not None
         prof = db.get(BrowserProfile, acc.profile_id)
@@ -76,6 +77,7 @@ def test_backfill_relinks_legacy_account_preserving_partition() -> None:
     ws = _ws(client)
     with SessionLocal() as db:
         acc_id = create_account(db, workspace_id=ws, platform="bilibili", name="老号", config={}, owner=_me(db)).id
+        db.commit()  # 测试是入口:领域函数不提交
         # 模拟老库:清掉自动建的档案与指针,回到「有账号、无档案」的历史态
         acc = db.get(PublishAccount, acc_id)
         db.delete(db.get(BrowserProfile, acc.profile_id))
@@ -99,6 +101,7 @@ def test_profile_lease_one_active_session() -> None:
     ws = _ws(client)
     with SessionLocal() as db:
         pid = browser.create_profile(db, workspace_id=ws, name="池号", owner=_me(db)).id
+        db.commit()  # 测试是入口:领域函数不提交
     with SessionLocal() as db:
         s1 = browser.open_session(db, workspace_id=ws, profile_id=pid, owner_kind="agent", owner_id="A", actor=_me(db).id)
         assert s1.kind == "profile" and s1.partition.startswith("persist:pool-")
@@ -118,7 +121,9 @@ def test_workflow_browser_open_pool_mode() -> None:
     ws = _ws(client)
     with SessionLocal() as db:
         pid = browser.create_profile(db, workspace_id=ws, name="流程用池号", owner=_me(db)).id
+        db.commit()  # 测试是入口:领域函数不提交
         wf = create_workflow(db, workspace_id=ws, name="W", graph={"nodes": [], "edges": []}, created_by=user_id())
+        db.commit()  # 测试是入口:领域函数不提交
         wf_id = wf.id
         # 这次运行替谁跑:池档案是某人的登录身份,说不出是谁在用就不能借(见 browser.usable_profile)。
         run_id = create_job(db, workspace_id=ws, kind="workflow", payload=pinned(db, wf), created_by=_me(db).id).id
@@ -147,6 +152,7 @@ def test_agent_pool_open_requires_confirmation_naming_identity() -> None:
     ws = _ws(client)
     with SessionLocal() as db:
         pid = browser.create_profile(db, workspace_id=ws, name="采集号", owner=_me(db)).id
+        db.commit()  # 测试是入口:领域函数不提交
     conf = client.post(
         "/api/confirmations",
         json={"workspace_id": ws, "tool": "browser_pool_open", "payload": {"profile_id": pid, "url": ""}},
@@ -183,6 +189,7 @@ def test_cannot_delete_bound_or_busy_profile() -> None:
     # 绑定了发布账号 → 拒删
     with SessionLocal() as db:
         acc_id = create_account(db, workspace_id=ws, platform="bilibili", name="B", config={}, owner=_me(db)).id
+        db.commit()  # 测试是入口:领域函数不提交
     _backfill_browser_pool()
     with SessionLocal() as db:
         bound_pid = db.get(PublishAccount, acc_id).profile_id
@@ -191,6 +198,7 @@ def test_cannot_delete_bound_or_busy_profile() -> None:
     # 有活动会话 → 拒删
     with SessionLocal() as db:
         pid = browser.create_profile(db, workspace_id=ws, name="忙", owner=_me(db)).id
+        db.commit()  # 测试是入口:领域函数不提交
         browser.open_session(db, workspace_id=ws, profile_id=pid, owner_kind="agent", owner_id="A", actor=_me(db).id)
         with pytest.raises(browser.BrowserDomainError):
             browser.delete_profile(db, ws, pid, actor=_me(db).id)
