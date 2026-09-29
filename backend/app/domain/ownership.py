@@ -42,8 +42,8 @@ TABLE_OWNERS: dict[str, tuple[str, ...]] = {
     "ClipTranscriptRef": ("app/domain/transcripts/", "app/domain/sequences/"),
     # 资源库
     "Voice": ("app/domain/voices/voices.py",),
-    "Lut": ("app/domain/luts.py",),
-    "Font": ("app/domain/fonts.py",),
+    "Lut": ("app/domain/luts/",),
+    "Font": ("app/domain/fonts/",),
     "GeneratedAsset": ("app/domain/generation/",),
     "GenerationJob": ("app/domain/generation/",),
     "GenerationSession": ("app/domain/generation/",),
@@ -51,9 +51,9 @@ TABLE_OWNERS: dict[str, tuple[str, ...]] = {
     "Job": ("app/domain/jobs.py",),
     "TaskEvent": ("app/domain/jobs.py",),
     "Notification": ("app/domain/notifications.py",),
-    "ActivityEvent": ("app/domain/collaboration.py",),
-    "Comment": ("app/domain/collaboration.py",),
-    "CommentMention": ("app/domain/collaboration.py",),
+    "ActivityEvent": ("app/domain/collaboration/",),
+    "Comment": ("app/domain/collaboration/",),
+    "CommentMention": ("app/domain/collaboration/",),
     # 编排
     # 「谁的」与「共享给谁」是同一张表管的,所以它只归 sharing 域写。
     # 部署级开关只归 deployment 域写 —— 「这台后端怎么对外」只该有一处答案。

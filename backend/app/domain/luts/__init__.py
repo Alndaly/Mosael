@@ -92,7 +92,7 @@ def import_uploaded_lut(
         size=len(raw),
     )
     db.add(lut)
-    db.commit()
+    db.flush()
     db.refresh(lut)
     return lut
 

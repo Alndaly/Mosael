@@ -11,11 +11,9 @@ from typing import Any
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from app.core.i18n import tr
-from app.api.deps import CurrentUser, DbSession
-from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm
-from app.db.models import BrowserSession
+from app.api.deps import CurrentUser, DbSession, Tx
 from app.domain import browser, host_files, sharing
+from app.domain.browser import use_cases as sessions
 
 router = APIRouter(tags=["agent-browser"])
 
@@ -32,25 +30,12 @@ class CloseRequest(BaseModel):
     session_id: str
 
 
-def _verify(db, user, workspace_id: str, session_id: str, *, perm: str | None = None) -> BrowserSession:
-    if perm is None:
-        ensure_workspace_access(db, user, workspace_id)
-    else:
-        ensure_workspace_perm(db, user, workspace_id, perm)
-    # 池档案会话还要他自己能用那个档案 —— 拿到会话 id 不等于有权用别人已登录的浏览器
-    # (见 domain/browser.attach_session)。
-    try:
-        session = browser.attach_session(db, session_id, workspace_id=workspace_id, actor=user.id)
-    except sharing.NotUsableError as exc:
-        raise HTTPException(status_code=403, detail=str(exc)) from exc
-    if session is None:
-        raise HTTPException(status_code=404, detail=tr("routeErr_browserSessionNotFound"))
-    return session
-
-
 @router.post("/agent-browser/act")
 def act(body: ActRequest, db: DbSession, user: CurrentUser) -> dict[str, Any]:
-    _verify(db, user, body.workspace_id, body.session_id, perm="edit")
+    try:
+        sessions.operable_session(db, user, body.workspace_id, body.session_id)
+    except sharing.NotUsableError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
     try:
         if body.action == "upload":
             # 此前 args 原样交给执行器:`{"path": "~/.ssh/id_rsa"}` 就能把这台电脑上的私钥塞进任意网页。
@@ -79,7 +64,9 @@ def act(body: ActRequest, db: DbSession, user: CurrentUser) -> dict[str, Any]:
 
 
 @router.post("/agent-browser/close")
-def close(body: CloseRequest, db: DbSession, user: CurrentUser) -> dict[str, Any]:
-    _verify(db, user, body.workspace_id, body.session_id, perm="edit")
-    browser.close_session(db, body.session_id)
+def close(body: CloseRequest, db: Tx, user: CurrentUser) -> dict[str, Any]:
+    try:
+        sessions.close_session(db, user, body.workspace_id, body.session_id)
+    except sharing.NotUsableError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
     return {"ok": True}

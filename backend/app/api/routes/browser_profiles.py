@@ -9,13 +9,12 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException, Response
 from sqlalchemy import select
 
-from app.core.i18n import tr
 from app.domain import sharing
-from app.api.deps import CurrentUser, DbSession
+from app.api.deps import CurrentUser, DbSession, Tx
 from app.api.schemas import BrowserProfileCreate, BrowserProfileOpened, BrowserProfileOut, BrowserProfileUpdate
-from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm
-from app.db.models import BrowserProfile, PublishAccount, User, now
+from app.db.models import BrowserProfile, PublishAccount, User
 from app.domain import browser
+from app.domain.browser import use_cases as profiles
 
 router = APIRouter(tags=["browser-profiles"])
 
@@ -45,32 +44,22 @@ def _serialize(db, prof: BrowserProfile, user: User, shared: set[str]) -> Browse
 
 @router.get("/browser/profiles", response_model=list[BrowserProfileOut])
 def list_profiles(workspace_id: str, db: DbSession, user: CurrentUser) -> list[BrowserProfileOut]:
-    ensure_workspace_access(db, user, workspace_id)
     # 档案存的是**某人已登录的浏览器** —— 默认只有主人看得见(见 domain/sharing)。
     shared = sharing.shared_ids(db, "browser_profile", workspace_id)
-    return [
-        _serialize(db, prof, user, shared)
-        for prof in browser.list_profiles(db, workspace_id)
-        if sharing.may_use(db, "browser_profile", prof, user.id)
-    ]
+    return [_serialize(db, prof, user, shared) for prof in profiles.list_profiles(db, user, workspace_id)]
 
 
 @router.post("/browser/profiles", response_model=BrowserProfileOut)
-def create_profile(body: BrowserProfileCreate, db: DbSession, user: CurrentUser) -> BrowserProfileOut:
-    ensure_workspace_perm(db, user, body.workspace_id, "edit")
-    prof = browser.create_profile(db, workspace_id=body.workspace_id, name=body.name, owner=user, proxy=body.proxy)
-    db.commit()
+def create_profile(body: BrowserProfileCreate, db: Tx, user: CurrentUser) -> BrowserProfileOut:
+    prof = profiles.create_profile(db, user, body.workspace_id, name=body.name, proxy=body.proxy)
     return _serialize(db, prof, user, sharing.shared_ids(db, "browser_profile", body.workspace_id))
 
 
 @router.patch("/browser/profiles/{profile_id}", response_model=BrowserProfileOut)
 def update_profile(
-    profile_id: str, body: BrowserProfileUpdate, db: DbSession, user: CurrentUser
+    profile_id: str, body: BrowserProfileUpdate, db: Tx, user: CurrentUser
 ) -> BrowserProfileOut:
-    prof = db.get(BrowserProfile, profile_id)
-    if prof is None:
-        raise HTTPException(status_code=404, detail=tr("routeErr_browserProfileNotFound"))
-    ensure_workspace_perm(db, user, prof.workspace_id, "edit")
+    prof = profiles.manageable_profile(db, user, profile_id)
     fields = body.model_fields_set
     try:
         prof = browser.update_profile(
@@ -91,7 +80,7 @@ def update_profile(
 
 @router.post("/browser/profiles/{profile_id}/opened", response_model=BrowserProfileOut)
 def record_opened(
-    profile_id: str, body: BrowserProfileOpened, db: DbSession, user: CurrentUser
+    profile_id: str, body: BrowserProfileOpened, db: Tx, user: CurrentUser
 ) -> BrowserProfileOut:
     """人在应用里用过这个档案:记下它停在哪一页(下次从这里开)和时间。
 
@@ -100,22 +89,13 @@ def record_opened(
     此前手动打开不留任何痕迹 —— 只有工作流/智能体借档案(domain/browser 的 acquire)才更新
     last_used_at,于是一个刚登过、天天在用的档案卡片上一直写着「尚未使用」。
     """
-    prof = db.get(BrowserProfile, profile_id)
-    if prof is None or not sharing.may_use(db, "browser_profile", prof, user.id):
-        raise HTTPException(status_code=404, detail=tr("routeErr_browserProfileNotFound"))
-    ensure_workspace_perm(db, user, prof.workspace_id, "edit")
-    prof.start_url = body.url
-    prof.last_used_at = now()
-    db.commit()
+    prof = profiles.record_opened(db, user, profile_id, body.url)
     return _serialize(db, prof, user, sharing.shared_ids(db, "browser_profile", prof.workspace_id))
 
 
 @router.delete("/browser/profiles/{profile_id}", status_code=204)
-def delete_profile(profile_id: str, db: DbSession, user: CurrentUser) -> Response:
-    prof = db.get(BrowserProfile, profile_id)
-    if prof is None:
-        raise HTTPException(status_code=404, detail=tr("routeErr_browserProfileNotFound"))
-    ensure_workspace_perm(db, user, prof.workspace_id, "edit")
+def delete_profile(profile_id: str, db: Tx, user: CurrentUser) -> Response:
+    prof = profiles.manageable_profile(db, user, profile_id)
     try:
         browser.delete_profile(db, prof.workspace_id, profile_id, actor=user.id)
     except sharing.NotManageableError as exc:

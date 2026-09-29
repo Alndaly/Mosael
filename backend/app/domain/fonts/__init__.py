@@ -93,7 +93,7 @@ def import_uploaded_font(db: Session, *, workspace_id: str, upload: UploadFile) 
         size=len(raw),
     )
     db.add(font)
-    db.commit()
+    db.flush()
     db.refresh(font)
     return font
 

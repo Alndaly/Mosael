@@ -1,63 +1,41 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, File, Form, HTTPException, Response, UploadFile
-from sqlalchemy import select
 
-from app.api.deps import CurrentUser, DbSession
+from app.api.deps import CurrentUser, DbSession, Tx
 from app.api.schemas import LutOut, LutUpdate
-from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm
 from app.db.models import Lut
-from app.domain.luts import LutError, delete_lut_files, import_uploaded_lut
+from app.domain.luts import LutError
+from app.domain.luts import use_cases as luts
 
 router = APIRouter(tags=["luts"])
 
 
-def _require_lut(db: DbSession, user: CurrentUser, lut_id: str, *, perm: str | None = None) -> Lut:
-    lut = db.get(Lut, lut_id)
-    if lut is None:
-        raise HTTPException(status_code=404, detail="LUT not found")
-    if perm is None:
-        ensure_workspace_access(db, user, lut.workspace_id)
-    else:
-        ensure_workspace_perm(db, user, lut.workspace_id, perm)
-    return lut
-
-
 @router.get("/luts", response_model=list[LutOut])
 def list_luts(workspace_id: str, db: DbSession, user: CurrentUser) -> list[Lut]:
-    ensure_workspace_access(db, user, workspace_id)
-    stmt = select(Lut).where(Lut.workspace_id == workspace_id).order_by(Lut.created_at.desc())
-    return list(db.scalars(stmt))
+    return luts.list_luts(db, user, workspace_id)
 
 
 @router.post("/luts", response_model=LutOut)
 def upload_lut(
-    db: DbSession,
+    db: Tx,
     user: CurrentUser,
     workspace_id: str = Form(...),
     name: str | None = Form(None),
     file: UploadFile = File(...),
 ) -> Lut:
-    ensure_workspace_perm(db, user, workspace_id, "upload")
     try:
-        return import_uploaded_lut(db, workspace_id=workspace_id, upload=file, name=name)
+        return luts.upload_lut(db, user, workspace_id, file, name)
     except LutError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.patch("/luts/{lut_id}", response_model=LutOut)
-def rename_lut(lut_id: str, body: LutUpdate, db: DbSession, user: CurrentUser) -> Lut:
-    lut = _require_lut(db, user, lut_id, perm="upload")
-    lut.name = body.name.strip() or lut.name
-    db.commit()
-    db.refresh(lut)
-    return lut
+def rename_lut(lut_id: str, body: LutUpdate, db: Tx, user: CurrentUser) -> Lut:
+    return luts.rename_lut(db, user, lut_id, body.name)
 
 
 @router.delete("/luts/{lut_id}", status_code=204)
-def delete_lut(lut_id: str, db: DbSession, user: CurrentUser) -> Response:
-    lut = _require_lut(db, user, lut_id, perm="upload")
-    delete_lut_files(lut)
-    db.delete(lut)
-    db.commit()
+def delete_lut(lut_id: str, db: Tx, user: CurrentUser) -> Response:
+    luts.delete_lut(db, user, lut_id)
     return Response(status_code=204)
