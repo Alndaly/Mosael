@@ -5658,6 +5658,14 @@ def _drop_plugin_packages_that_break_the_manifest_rules() -> None:
                 conn.execute(text("DELETE FROM plugin_packages WHERE id = :id"), {"id": package_id})
 
 
+def _reindex_record_references() -> None:
+    """引用表(record_references)是派生数据:抽取规则一变,整张按新规则重建。"""
+    from app.db.references import reindex
+
+    with engine.begin() as conn:
+        reindex(conn)
+
+
 def _create_current_schema() -> None:
     """The single boundary between migrations for existing tables and new-table creation."""
 
@@ -5887,6 +5895,9 @@ def migration_plan() -> MigrationPlan:
                 #: 排在素材对照那一步之后:对照后面跟着的文档已被它整段挪走,这一步只切还留在提示词里的。
                 _migrate_generation_prompts_drop_the_reference_documents,
             ),
+            #: 对账:引用表按当前抽取规则建(见 db/references)。排在所有改写 JSON 的迁移之后 —— 那些是原生 SQL,
+            #: 不经过 flush 时的维护;抽取规则的版本号变了才整张重建,平常是一次查询。
+            *_recurring(MigrationPhase.AFTER_SCHEMA, _reindex_record_references),
             *_steps(
                 MigrationPhase.FILESYSTEM,
                 _migrate_shared_venvs,

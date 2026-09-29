@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.core.i18n import LocalizedError
 from app.db.models import ScheduledTask, ScheduledTaskRun, Workflow, now
 from app.domain.jobs import create_job
+from app.domain.references import referrers
 
 logger = logging.getLogger(__name__)
 
@@ -151,14 +152,13 @@ def stop_tasks_bound_to_workflow(db: Session, workflow: Workflow) -> list[Schedu
     失败;手动任务则照样能点「立即运行」。任务本身留着(连同它的运行记录和那条「绑定的工作流
     已删除」),删不删由人决定 —— 但它不能再自己跑。
     """
-    tasks = db.scalars(
+    stopped = list(db.scalars(
         select(ScheduledTask).where(
             ScheduledTask.workspace_id == workflow.workspace_id,
-            ScheduledTask.kind == "workflow",
             ScheduledTask.enabled.is_(True),
+            ScheduledTask.id.in_(referrers("workflow", workflow.id, "scheduled_task")),
         )
-    ).all()
-    stopped = [task for task in tasks if str((task.payload or {}).get("workflow_id", "")) == workflow.id]
+    ))
     for task in stopped:
         task.enabled = False
         task.next_run_at = None

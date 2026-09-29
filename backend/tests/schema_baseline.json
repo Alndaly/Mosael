@@ -581,6 +581,18 @@
     "updated_at",
     "workspace_id"
   ],
+  "record_reference_index": [
+    "id",
+    "version"
+  ],
+  "record_references": [
+    "how",
+    "source_id",
+    "source_kind",
+    "target_id",
+    "target_kind",
+    "workspace_id"
+  ],
   "registration_invites": [
     "code",
     "created_at",

@@ -17,6 +17,8 @@ from sqlalchemy.orm import Session
 from app.core.i18n import LocalizedError, tr
 from app.db.models import Project, Scene3D, Scene3DRevision, Scene3DModel
 from app.db.model_base import now
+from app.db import references
+from app.domain.references import referrers
 from app.ai.providers.contracts.generation import FIRST_FRAME, LAST_FRAME, REFERENCE_IMAGE, REFERENCE_VIDEO
 from app.domain.scenes import glb
 from app.domain.scenes.types import SceneContent
@@ -151,6 +153,7 @@ def save_scene(db: Session, scene: Scene3D, base_revision: int, name: str, conte
     if result.rowcount != 1:
         db.rollback()
         raise SceneConflict("sceneErr_changed")
+    references.resync(db, "scene", scene.id)
     db.add(Scene3DRevision(scene_id=scene.id, revision=base_revision+1, snapshot={"name": name, "content": data}))
     db.commit()
     db.refresh(scene)
@@ -307,24 +310,18 @@ def list_models(db: Session, workspace_id: str) -> list[Scene3DModel]:
 
 def scenes_using_model(db: Session, workspace_id: str, model_id: str) -> list[str]:
     """还有哪些场景摆着这份模型(名字)。删之前要知道 —— 删了那些场景里就是一个空位。"""
-    using = []
-    for scene in db.scalars(select(Scene3D).where(Scene3D.workspace_id == workspace_id)):
-        objects = (scene.content or {}).get("objects") or []
-        if any(isinstance(o, dict) and o.get("model_id") == model_id for o in objects):
-            using.append(scene.name)
-    return using
+    return list(db.scalars(
+        select(Scene3D.name).where(Scene3D.workspace_id == workspace_id, Scene3D.id.in_(referrers("scene_model", model_id, "scene")))
+    ))
 
 
 def boards_using_scene(db: Session, workspace_id: str, scene_id: str) -> list[str]:
     """还有哪些画板摆着这个 3D 场景(名字)。"""
     from app.db.models import Board
 
-    using: list[str] = []
-    for board in db.scalars(select(Board).where(Board.workspace_id == workspace_id)):
-        items = ((board.canvas or {}).get("items")) or []
-        if any(isinstance(item, dict) and item.get("scene_id") == scene_id for item in items):
-            using.append(board.name)
-    return using
+    return list(db.scalars(
+        select(Board.name).where(Board.workspace_id == workspace_id, Board.id.in_(referrers("scene", scene_id, "board")))
+    ))
 
 
 def delete_scene(db: Session, workspace_id: str, scene_id: str) -> None:

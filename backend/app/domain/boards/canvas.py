@@ -28,6 +28,7 @@ from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from app.core.i18n import LocalizedError, tr
+from app.db import references
 from app.db.models import Board, now
 from app.domain.boards.producer_ids import (
     NOTE_PRODUCER,
@@ -926,6 +927,7 @@ def update_board(
         db.rollback()
         current = get_board(db, workspace_id, board_id)
         raise BoardRevisionConflict(expected, current.revision)
+    references.resync(db, "board", board_id)
     from app.domain.collaboration import record_activity
 
     action = "board.renamed" if name is not None and canvas is None else "board.updated"

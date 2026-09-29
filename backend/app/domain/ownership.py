@@ -70,8 +70,8 @@ TABLE_OWNERS: dict[str, tuple[str, ...]] = {
     "Scene3DRevision": ("app/domain/scenes/operations.py",),
     "Scene3DModel": ("app/domain/scenes/operations.py",),
     "Board": ("app/domain/boards/",),
-    "Note": ("app/domain/notes.py",),
-    "NoteRevision": ("app/domain/notes.py",),
+    "Note": ("app/domain/notes/",),
+    "NoteRevision": ("app/domain/notes/",),
     # 发布
     "PublishAccount": ("app/domain/publish/",),
     "PublishTask": ("app/domain/publish/",),
@@ -117,6 +117,9 @@ TABLE_OWNERS: dict[str, tuple[str, ...]] = {
     "PluginCapabilityDefault": ("app/domain/plugins/",),
     #: 素材外链的缓存由生成链路写(传完记下、过期重传),见 generation/public_links。
     "PluginPublicLink": ("app/domain/generation/public_links.py",),
+    #: 引用表是派生数据:只由 db/references 按各来源的 JSON 写(flush 时跟着写、启动时按版本重建)。
+    "RecordReference": ("app/db/references.py",),
+    "RecordReferenceIndex": ("app/db/references.py",),
 }
 
 #: 不受这条规矩约束的层。

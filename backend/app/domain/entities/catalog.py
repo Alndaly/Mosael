@@ -11,6 +11,8 @@ import re
 from datetime import UTC, datetime
 from typing import Any
 
+from app.db.references import split_ids
+
 #: 三种资产。「风格」那一种先不做(ADR 0027「以后再议」)。
 KINDS: tuple[str, ...] = ("character", "location", "prop")
 
@@ -191,20 +193,7 @@ def attach_order(kind: str, roles: list[tuple[str, str]]) -> list[str]:
 
 
 def parse_entity_ids(value: Any) -> list[str]:
-    """点名的资产:一串 id,或者逗号 / 换行分隔的一段字(工作流的模板字段插值之后就是这样)。去重保序。"""
-    if value is None:
-        return []
-    if isinstance(value, str):
-        parts: list[Any] = value.replace("，", ",").replace("\n", ",").split(",")
-    elif isinstance(value, (list, tuple)):
-        parts = []
-        for one in value:
-            parts.extend(one if isinstance(one, (list, tuple)) else [one])
-    else:
-        return []
-    out: list[str] = []
-    for part in parts:
-        text = str(part or "").strip()
-        if text and text not in out:
-            out.append(text)
-    return out
+    """点名的资产:一串 id,或者逗号 / 换行分隔的一段字(工作流的模板字段插值之后就是这样)。去重保序。
+
+    和引用表抽取工作流节点时同一条拆法(db/references.split_ids)—— 两处拆得不一样,「在哪里用过」就会漏。"""
+    return split_ids(value)

@@ -41,3 +41,7 @@ from app.db.model_slices.generation import GeneratedAsset, GenerationJob, Genera
 from app.db.model_slices.agent import SESSION_GROUP_KINDS, AgentMemory, AgentMessage, AgentQuestion, AgentSession, SessionGroup, ToolConfirmation  # noqa: E402,F401
 from app.db.model_slices.feishu import FeishuBindCode, FeishuBinding, FeishuBot  # noqa: E402,F401
 from app.db.model_slices.plugins import PluginCapability, PluginCapabilityDefault, PluginCredential, PluginInstance, PluginInvocation, PluginMarketHold, PluginPackage, PluginPermissionGrant, PluginPublicLink  # noqa: E402,F401
+from app.db.model_slices.references import RecordReference, RecordReferenceIndex  # noqa: E402,F401
+
+#: 引用表的维护挂在 Session 上(after_flush)。和模型一起装进来:用得到模型的地方就有维护,不靠谁记得去注册。
+import app.db.references  # noqa: E402,F401

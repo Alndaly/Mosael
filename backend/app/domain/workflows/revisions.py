@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 
 from app.core.i18n import LocalizedError
 from app.db.model_base import now
+from app.db import references
 from app.db.models import Workflow, WorkflowRevision, WorkflowRevisionAttestation
 
 
@@ -203,6 +204,7 @@ def commit_graph_revision(
             db.flush()
             db.refresh(workflow)
             if int(written or 0) == 1:
+                references.resync(db, "workflow", workflow.id)
                 return None
             continue
 
@@ -218,6 +220,7 @@ def commit_graph_revision(
         ).scalar_one_or_none()
         if revision_number is None:
             continue
+        references.resync(db, "workflow", workflow.id)
 
         revision = WorkflowRevision(
             workflow_id=workflow.id,

@@ -13,11 +13,12 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import String, cast, func, select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.i18n import LocalizedError
 from app.db.models import Asset, Board, Entity, EntityReference, GenerationJob, Workflow, now
+from app.domain.references import referrers
 from app.domain.entities.catalog import (
     DEFAULT_ROLE,
     KINDS,
@@ -31,7 +32,6 @@ from app.domain.entities.catalog import (
     VOICE_LIBRARY_ENGINE,
     AttributeProblem,
     normalize_attributes,
-    parse_entity_ids,
 )
 
 
@@ -495,62 +495,34 @@ class Usage:
 USAGE_GENERATION_LIMIT = 50
 
 
-def board_uses(canvas: Any, entity_id: str) -> str | None:
-    """一张画布怎么用到这个资产:有它的资产格(`cell`)、或提示词里 @ 了它(`mention`),都没有是 None。"""
-    how: str | None = None
-    for item in (canvas or {}).get("items") or []:
-        if not isinstance(item, dict):
-            continue
-        if item.get("kind") == "entity" and item.get("entity_id") == entity_id:
-            return "cell"
-        form = item.get("form") if isinstance(item.get("form"), dict) else {}
-        if entity_id in (form.get("mentioned_entity_ids") or []):
-            how = "mention"
-    return how
-
-
 def entity_usage(db: Session, entity: Entity, *, visible_sessions: Any = None) -> Usage:
     """这个资产在哪里用过:画板(资产格 / 提示词里 @)、生成记录(请求里点名了它)、工作流(生成节点点名了它)。
 
     `visible_sessions`:调用方看得见的生成会话(一条 SQL 子查询)。私有会话里的记录不该在这里露出来 ——
-    和生成记录列表同一个判据。
-
-    都按 JSON 文本先粗筛、再逐行确认:一个工作区的画板 / 工作流是几十到几百张,生成记录只取最新的几十条。
+    和生成记录列表同一个判据。按引用表反查(见 db/references),不再把整列 JSON 转成字符串去粗筛。
     """
-    needle = f"%{entity.id}%"
-    boards: list[tuple[Board, str]] = []
-    for board in db.scalars(
-        select(Board).where(Board.workspace_id == entity.workspace_id, cast(Board.canvas, String).like(needle))
-        .order_by(Board.updated_at.desc())
-    ):
-        how = board_uses(board.canvas, entity.id)
-        if how:
-            boards.append((board, how))
+    cells = set(db.scalars(referrers("entity", entity.id, "board", how="cell")))
+    boards = [
+        (board, "cell" if board.id in cells else "mention")
+        for board in db.scalars(
+            select(Board).where(Board.workspace_id == entity.workspace_id, Board.id.in_(referrers("entity", entity.id, "board")))
+            .order_by(Board.updated_at.desc())
+        )
+    ]
     stmt = select(GenerationJob).where(
-        GenerationJob.workspace_id == entity.workspace_id, cast(GenerationJob.request, String).like(needle)
+        GenerationJob.workspace_id == entity.workspace_id,
+        GenerationJob.id.in_(referrers("entity", entity.id, "generation")),
     )
     if visible_sessions is not None:
         stmt = stmt.where(GenerationJob.session_id.is_(None) | GenerationJob.session_id.in_(visible_sessions))
-    generations = [
-        one
-        for one in db.scalars(stmt.order_by(GenerationJob.created_at.desc()).limit(USAGE_GENERATION_LIMIT * 2))
-        if any(isinstance(row, dict) and row.get("id") == entity.id for row in (one.request or {}).get("entities") or [])
-    ][:USAGE_GENERATION_LIMIT]
-    workflows = [
-        flow
-        for flow in db.scalars(
-            select(Workflow).where(Workflow.workspace_id == entity.workspace_id, cast(Workflow.graph, String).like(needle))
-            .order_by(Workflow.updated_at.desc())
+    generations = list(db.scalars(stmt.order_by(GenerationJob.created_at.desc()).limit(USAGE_GENERATION_LIMIT)))
+    workflows = list(
+        db.scalars(
+            select(Workflow).where(
+                Workflow.workspace_id == entity.workspace_id, Workflow.id.in_(referrers("entity", entity.id, "workflow"))
+            ).order_by(Workflow.updated_at.desc())
         )
-        if any(
-            entity.id in _entity_ids_in((node.get("config") or {}).get("entity_ids"))
-            for node in (flow.graph or {}).get("nodes") or []
-            if isinstance(node, dict)
-        )
-    ]
+    )
     return Usage(boards=boards, generations=generations, workflows=workflows)
 
 
-def _entity_ids_in(value: Any) -> list[str]:
-    """工作流节点里 `entity_ids` 的值:一串,或者逗号 / 换行分隔的一段字(可以是 `{{…}}` 引用)。"""
-    return parse_entity_ids(value)
