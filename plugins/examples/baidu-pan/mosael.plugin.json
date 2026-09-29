@@ -6,7 +6,7 @@
     "en": "Baidu Netdisk"
   },
   "default_locale": "zh",
-  "version": "0.7.2",
+  "version": "0.7.3",
   "homepage": "https://pan.baidu.com/union/doc/",
   "author": {
     "name": "Mosael",
@@ -108,6 +108,10 @@
           "type": "object",
           "properties": {
             "path": {
+              "title": {
+                "zh": "网盘路径",
+                "en": "Path"
+              },
               "type": "string",
               "description": {
                 "zh": "网盘路径,如 /我的资源/素材。留空就是网盘根目录 /。",
@@ -115,6 +119,10 @@
               }
             },
             "limit": {
+              "title": {
+                "zh": "最多条数",
+                "en": "Limit"
+              },
               "type": "integer",
               "description": {
                 "zh": "最多返回多少条,默认 100,上限 1000。",
@@ -122,6 +130,10 @@
               }
             },
             "start": {
+              "title": {
+                "zh": "起始位置",
+                "en": "Start at"
+              },
               "type": "integer",
               "x-advanced": true,
               "description": {
@@ -147,6 +159,10 @@
           "type": "object",
           "properties": {
             "keyword": {
+              "title": {
+                "zh": "关键词",
+                "en": "Keyword"
+              },
               "type": "string",
               "description": {
                 "zh": "文件名关键词",
@@ -154,6 +170,10 @@
               }
             },
             "path": {
+              "title": {
+                "zh": "限定目录",
+                "en": "Within folder"
+              },
               "type": "string",
               "description": {
                 "zh": "限定在这个目录下搜,留空搜全盘",
@@ -161,6 +181,10 @@
               }
             },
             "limit": {
+              "title": {
+                "zh": "最多条数",
+                "en": "Limit"
+              },
               "type": "integer",
               "description": {
                 "zh": "最多返回多少条,默认 100,上限 1000。",
@@ -188,6 +212,10 @@
           "type": "object",
           "properties": {
             "fs_id": {
+              "title": {
+                "zh": "文件 fs_id",
+                "en": "File fs_id"
+              },
               "type": "string",
               "format": "external_id",
               "description": {
@@ -222,6 +250,10 @@
           "type": "object",
           "properties": {
             "asset_id": {
+              "title": {
+                "zh": "素材",
+                "en": "Asset"
+              },
               "type": "string",
               "format": "asset",
               "description": {
@@ -230,6 +262,10 @@
               }
             },
             "path": {
+              "title": {
+                "zh": "网盘目标路径",
+                "en": "Destination path"
+              },
               "type": "string",
               "description": {
                 "zh": "网盘上的目标路径,含文件名",
@@ -237,6 +273,10 @@
               }
             },
             "overwrite": {
+              "title": {
+                "zh": "覆盖同名文件",
+                "en": "Overwrite"
+              },
               "type": "boolean",
               "description": {
                 "zh": "同名文件已存在时是否覆盖,默认另存为副本",

@@ -3,7 +3,7 @@
   "manifest_version": 1,
   "name": "Text Toolkit",
   "default_locale": "zh",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "author": {
     "name": "Mosael",
     "url": "https://mosael.com"
@@ -44,6 +44,10 @@
           "type": "object",
           "properties": {
             "text": {
+              "title": {
+                "zh": "文本",
+                "en": "Text"
+              },
               "type": "string"
             }
           },
@@ -102,6 +106,10 @@
           "type": "object",
           "properties": {
             "text": {
+              "title": {
+                "zh": "文本",
+                "en": "Text"
+              },
               "type": "string"
             }
           },

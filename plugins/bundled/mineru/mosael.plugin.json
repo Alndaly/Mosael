@@ -6,7 +6,7 @@
     "en": "MinerU document parsing"
   },
   "default_locale": "zh",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "author": {
     "name": "Mosael",
     "url": "https://mosael.com"
@@ -137,6 +137,10 @@
           "type": "object",
           "properties": {
             "file": {
+              "title": {
+                "zh": "文件",
+                "en": "File"
+              },
               "type": "string",
               "description": {
                 "zh": "要解析的文件(宿主给的本地副本)。",
@@ -144,6 +148,10 @@
               }
             },
             "filename": {
+              "title": {
+                "zh": "原文件名",
+                "en": "Original file name"
+              },
               "type": "string",
               "description": {
                 "zh": "原文件名。",

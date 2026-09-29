@@ -6,7 +6,7 @@
     "en": "Remotion Animation"
   },
   "default_locale": "zh",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "homepage": "https://github.com/Alndaly/Mosael/tree/main/plugins/examples/remotion",
   "author": {
     "name": "Mosael",
@@ -25,7 +25,9 @@
     "network:npm",
     "filesystem:write"
   ],
-  "package_sources": ["npm"],
+  "package_sources": [
+    "npm"
+  ],
   "skills": [
     {
       "id": "remotion",
@@ -88,13 +90,32 @@
           "properties": {}
         },
         "node": {
-          "outputs": ["node", "browser", "summary"],
-          "output_types": {"node": "text", "browser": "text", "summary": "text"},
-          "board_outputs": ["summary"],
+          "outputs": [
+            "node",
+            "browser",
+            "summary"
+          ],
+          "output_types": {
+            "node": "text",
+            "browser": "text",
+            "summary": "text"
+          },
+          "board_outputs": [
+            "summary"
+          ],
           "output_labels": {
-            "node": {"zh": "Node.js 版本", "en": "Node.js version"},
-            "browser": {"zh": "渲染用的浏览器", "en": "Rendering browser"},
-            "summary": {"zh": "一句话", "en": "In one line"}
+            "node": {
+              "zh": "Node.js 版本",
+              "en": "Node.js version"
+            },
+            "browser": {
+              "zh": "渲染用的浏览器",
+              "en": "Rendering browser"
+            },
+            "summary": {
+              "zh": "一句话",
+              "en": "In one line"
+            }
           }
         }
       },
@@ -115,66 +136,215 @@
           "type": "object",
           "properties": {
             "title": {
+              "title": {
+                "zh": "视频标题",
+                "en": "Video title"
+              },
               "type": "string",
-              "description": {"zh": "视频标题,最多 80 字。", "en": "Video title, up to 80 characters."}
+              "description": {
+                "zh": "视频标题,最多 80 字。",
+                "en": "Video title, up to 80 characters."
+              }
             },
             "subtitle": {
+              "title": {
+                "zh": "副标题",
+                "en": "Subtitle"
+              },
               "type": "string",
-              "description": {"zh": "副标题,一句话说清讲什么。", "en": "Subtitle: one line on what it covers."}
+              "description": {
+                "zh": "副标题,一句话说清讲什么。",
+                "en": "Subtitle: one line on what it covers."
+              }
             },
             "label": {
+              "title": {
+                "zh": "小标签",
+                "en": "Label"
+              },
               "type": "string",
-              "description": {"zh": "标题上方的小标签,如「数学 · 第 3 课」。", "en": "Small tag above the title, e.g. \"Maths · Lesson 3\"."}
+              "description": {
+                "zh": "标题上方的小标签,如「数学 · 第 3 课」。",
+                "en": "Small tag above the title, e.g. \"Maths · Lesson 3\"."
+              }
             },
             "sections": {
+              "title": {
+                "zh": "章节",
+                "en": "Sections"
+              },
               "type": "array",
-              "description": {"zh": "一节一节讲的内容,1 到 12 节。", "en": "The sections, 1 to 12."},
+              "description": {
+                "zh": "一节一节讲的内容,1 到 12 节。",
+                "en": "The sections, 1 to 12."
+              },
               "items": {
                 "type": "object",
                 "properties": {
-                  "heading": {"type": "string", "description": {"zh": "这一节的小标题。", "en": "Section heading."}},
-                  "points": {"type": "array", "items": {"type": "string"}, "description": {"zh": "要点,逐条出现,最多 6 条、每条 140 字以内。", "en": "Points shown one by one, up to 6, 140 characters each."}},
-                  "formula": {"type": "string", "description": {"zh": "一条公式,LaTeX 写法(如 a^2 + b^2 = c^2),由 KaTeX 排版。", "en": "One formula in LaTeX (e.g. a^2 + b^2 = c^2), typeset with KaTeX."}},
-                  "code": {"type": "string", "description": {"zh": "一段代码,逐行出现,最多显示 24 行。", "en": "A code snippet shown line by line, up to 24 lines."}},
-                  "note": {"type": "string", "description": {"zh": "一句提示或易错点,放在这一节最后。", "en": "A tip or common pitfall, shown last."}}
+                  "heading": {
+                    "title": {
+                      "zh": "小标题",
+                      "en": "Heading"
+                    },
+                    "type": "string",
+                    "description": {
+                      "zh": "这一节的小标题。",
+                      "en": "Section heading."
+                    }
+                  },
+                  "points": {
+                    "title": {
+                      "zh": "要点",
+                      "en": "Points"
+                    },
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "zh": "要点,逐条出现,最多 6 条、每条 140 字以内。",
+                      "en": "Points shown one by one, up to 6, 140 characters each."
+                    }
+                  },
+                  "formula": {
+                    "title": {
+                      "zh": "公式",
+                      "en": "Formula"
+                    },
+                    "type": "string",
+                    "description": {
+                      "zh": "一条公式,LaTeX 写法(如 a^2 + b^2 = c^2),由 KaTeX 排版。",
+                      "en": "One formula in LaTeX (e.g. a^2 + b^2 = c^2), typeset with KaTeX."
+                    }
+                  },
+                  "code": {
+                    "title": {
+                      "zh": "代码",
+                      "en": "Code"
+                    },
+                    "type": "string",
+                    "description": {
+                      "zh": "一段代码,逐行出现,最多显示 24 行。",
+                      "en": "A code snippet shown line by line, up to 24 lines."
+                    }
+                  },
+                  "note": {
+                    "title": {
+                      "zh": "提示",
+                      "en": "Note"
+                    },
+                    "type": "string",
+                    "description": {
+                      "zh": "一句提示或易错点,放在这一节最后。",
+                      "en": "A tip or common pitfall, shown last."
+                    }
+                  }
                 },
-                "required": ["heading"]
+                "required": [
+                  "heading"
+                ]
               }
             },
             "summary": {
+              "title": {
+                "zh": "要点回顾",
+                "en": "Summary"
+              },
               "type": "array",
-              "items": {"type": "string"},
-              "description": {"zh": "结尾的要点回顾,最多 6 条。", "en": "Key takeaways at the end, up to 6."}
+              "items": {
+                "type": "string"
+              },
+              "description": {
+                "zh": "结尾的要点回顾,最多 6 条。",
+                "en": "Key takeaways at the end, up to 6."
+              }
             },
             "aspect": {
+              "title": {
+                "zh": "画幅",
+                "en": "Aspect ratio"
+              },
               "type": "string",
-              "enum": ["16:9", "9:16", "1:1"],
-              "description": {"zh": "画幅:横屏 16:9(默认)、竖屏 9:16、方形 1:1。", "en": "Aspect: 16:9 (default), 9:16 or 1:1."}
+              "enum": [
+                "16:9",
+                "9:16",
+                "1:1"
+              ],
+              "description": {
+                "zh": "画幅:横屏 16:9(默认)、竖屏 9:16、方形 1:1。",
+                "en": "Aspect: 16:9 (default), 9:16 or 1:1."
+              }
             },
             "theme": {
+              "title": {
+                "zh": "主题",
+                "en": "Theme"
+              },
               "type": "string",
-              "enum": ["dark", "light"],
-              "description": {"zh": "深色(默认)或浅色。", "en": "Dark (default) or light."}
+              "enum": [
+                "dark",
+                "light"
+              ],
+              "description": {
+                "zh": "深色(默认)或浅色。",
+                "en": "Dark (default) or light."
+              }
             },
             "accent": {
+              "title": {
+                "zh": "强调色",
+                "en": "Accent colour"
+              },
               "type": "string",
-              "description": {"zh": "强调色,#RRGGBB。", "en": "Accent colour, #RRGGBB."}
+              "description": {
+                "zh": "强调色,#RRGGBB。",
+                "en": "Accent colour, #RRGGBB."
+              }
             },
             "filename": {
+              "title": {
+                "zh": "文件名",
+                "en": "File name"
+              },
               "type": "string",
-              "description": {"zh": "产出文件名,留空用 explainer.mp4。", "en": "Output file name; explainer.mp4 when empty."}
+              "description": {
+                "zh": "产出文件名,留空用 explainer.mp4。",
+                "en": "Output file name; explainer.mp4 when empty."
+              }
             }
           },
-          "required": ["title", "sections"]
+          "required": [
+            "title",
+            "sections"
+          ]
         },
         "node": {
-          "outputs": ["asset_id", "seconds", "summary"],
-          "output_types": {"asset_id": "asset", "seconds": "number", "summary": "text"},
-          "board_outputs": ["asset_id"],
+          "outputs": [
+            "asset_id",
+            "seconds",
+            "summary"
+          ],
+          "output_types": {
+            "asset_id": "asset",
+            "seconds": "number",
+            "summary": "text"
+          },
+          "board_outputs": [
+            "asset_id"
+          ],
           "output_labels": {
-            "asset_id": {"zh": "视频", "en": "Video"},
-            "seconds": {"zh": "时长(秒)", "en": "Length (s)"},
-            "summary": {"zh": "一句话", "en": "In one line"}
+            "asset_id": {
+              "zh": "视频",
+              "en": "Video"
+            },
+            "seconds": {
+              "zh": "时长(秒)",
+              "en": "Length (s)"
+            },
+            "summary": {
+              "zh": "一句话",
+              "en": "In one line"
+            }
           }
         }
       },
@@ -195,42 +365,115 @@
           "type": "object",
           "properties": {
             "code": {
+              "title": {
+                "zh": "代码",
+                "en": "Code"
+              },
               "type": "string",
-              "description": {"zh": "TSX 模块源码,export default 一个 React 组件。", "en": "TSX module source that export defaults a React component."}
+              "description": {
+                "zh": "TSX 模块源码,export default 一个 React 组件。",
+                "en": "TSX module source that export defaults a React component."
+              }
             },
             "seconds": {
+              "title": {
+                "zh": "时长(秒)",
+                "en": "Duration (s)"
+              },
               "type": "number",
-              "description": {"zh": "时长,0.5 到 120 秒。", "en": "Length, 0.5 to 120 seconds."}
+              "description": {
+                "zh": "时长,0.5 到 120 秒。",
+                "en": "Length, 0.5 to 120 seconds."
+              }
             },
             "aspect": {
+              "title": {
+                "zh": "画幅",
+                "en": "Aspect ratio"
+              },
               "type": "string",
-              "enum": ["16:9", "9:16", "1:1"],
-              "description": {"zh": "画幅,默认 16:9(1920×1080)。", "en": "Aspect, 16:9 by default (1920×1080)."}
+              "enum": [
+                "16:9",
+                "9:16",
+                "1:1"
+              ],
+              "description": {
+                "zh": "画幅,默认 16:9(1920×1080)。",
+                "en": "Aspect, 16:9 by default (1920×1080)."
+              }
             },
             "fps": {
+              "title": {
+                "zh": "帧率",
+                "en": "Frame rate"
+              },
               "type": "integer",
-              "enum": [24, 25, 30, 60],
-              "description": {"zh": "帧率,默认 30。", "en": "Frame rate, 30 by default."}
+              "enum": [
+                24,
+                25,
+                30,
+                60
+              ],
+              "description": {
+                "zh": "帧率,默认 30。",
+                "en": "Frame rate, 30 by default."
+              }
             },
             "data": {
+              "title": {
+                "zh": "数据",
+                "en": "Data"
+              },
               "type": "object",
-              "description": {"zh": "交给组件的数据(组件从 props.data 读)。", "en": "Data passed to the component (read from props.data)."}
+              "description": {
+                "zh": "交给组件的数据(组件从 props.data 读)。",
+                "en": "Data passed to the component (read from props.data)."
+              }
             },
             "filename": {
+              "title": {
+                "zh": "文件名",
+                "en": "File name"
+              },
               "type": "string",
-              "description": {"zh": "产出文件名,留空用 animation.mp4。", "en": "Output file name; animation.mp4 when empty."}
+              "description": {
+                "zh": "产出文件名,留空用 animation.mp4。",
+                "en": "Output file name; animation.mp4 when empty."
+              }
             }
           },
-          "required": ["code", "seconds"]
+          "required": [
+            "code",
+            "seconds"
+          ]
         },
         "node": {
-          "outputs": ["asset_id", "seconds", "summary"],
-          "output_types": {"asset_id": "asset", "seconds": "number", "summary": "text"},
-          "board_outputs": ["asset_id"],
+          "outputs": [
+            "asset_id",
+            "seconds",
+            "summary"
+          ],
+          "output_types": {
+            "asset_id": "asset",
+            "seconds": "number",
+            "summary": "text"
+          },
+          "board_outputs": [
+            "asset_id"
+          ],
           "output_labels": {
-            "asset_id": {"zh": "动画", "en": "Animation"},
-            "seconds": {"zh": "时长(秒)", "en": "Length (s)"},
-            "summary": {"zh": "一句话", "en": "In one line"}
+            "asset_id": {
+              "zh": "动画",
+              "en": "Animation"
+            },
+            "seconds": {
+              "zh": "时长(秒)",
+              "en": "Length (s)"
+            },
+            "summary": {
+              "zh": "一句话",
+              "en": "In one line"
+            }
           }
         }
       }

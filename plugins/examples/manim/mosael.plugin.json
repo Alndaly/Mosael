@@ -6,7 +6,7 @@
     "en": "Manim Teaching Animation"
   },
   "default_locale": "zh",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "homepage": "https://docs.manim.community/",
   "author": {
     "name": "Mosael",
@@ -25,7 +25,9 @@
     "network:pypi",
     "filesystem:write"
   ],
-  "package_sources": ["pypi"],
+  "package_sources": [
+    "pypi"
+  ],
   "skills": [
     {
       "id": "manim",
@@ -91,6 +93,10 @@
           "type": "object",
           "properties": {
             "reinstall": {
+              "title": {
+                "zh": "重新安装",
+                "en": "Reinstall"
+              },
               "type": "boolean",
               "description": {
                 "zh": "删掉插件的环境重新装。一般用不到:插件换了 Manim 版本、Mosael 自带的 Python 换了版本或位置,都会自动处理;只在环境被改坏了时用。",
@@ -101,14 +107,38 @@
           }
         },
         "node": {
-          "outputs": ["ready", "manim", "latex", "summary"],
-          "output_types": {"ready": "json", "manim": "text", "latex": "json", "summary": "text"},
-          "board_outputs": ["summary"],
+          "outputs": [
+            "ready",
+            "manim",
+            "latex",
+            "summary"
+          ],
+          "output_types": {
+            "ready": "json",
+            "manim": "text",
+            "latex": "json",
+            "summary": "text"
+          },
+          "board_outputs": [
+            "summary"
+          ],
           "output_labels": {
-            "ready": {"zh": "就绪", "en": "Ready"},
-            "manim": {"zh": "Manim 版本", "en": "Manim version"},
-            "latex": {"zh": "LaTeX 可用", "en": "LaTeX available"},
-            "summary": {"zh": "一句话", "en": "In one line"}
+            "ready": {
+              "zh": "就绪",
+              "en": "Ready"
+            },
+            "manim": {
+              "zh": "Manim 版本",
+              "en": "Manim version"
+            },
+            "latex": {
+              "zh": "LaTeX 可用",
+              "en": "LaTeX available"
+            },
+            "summary": {
+              "zh": "一句话",
+              "en": "In one line"
+            }
           }
         }
       },
@@ -129,121 +159,452 @@
           "type": "object",
           "properties": {
             "title": {
+              "title": {
+                "zh": "标题",
+                "en": "Title"
+              },
               "type": "string",
-              "description": {"zh": "标题页的大标题,最多 80 字。", "en": "Title-card heading, up to 80 characters."}
+              "description": {
+                "zh": "标题页的大标题,最多 80 字。",
+                "en": "Title-card heading, up to 80 characters."
+              }
             },
             "subtitle": {
+              "title": {
+                "zh": "副标题",
+                "en": "Subtitle"
+              },
               "type": "string",
-              "description": {"zh": "标题页的副标题,一句话说清讲什么。", "en": "Title-card subtitle: one line on what it covers."}
+              "description": {
+                "zh": "标题页的副标题,一句话说清讲什么。",
+                "en": "Title-card subtitle: one line on what it covers."
+              }
             },
             "label": {
+              "title": {
+                "zh": "小标签",
+                "en": "Label"
+              },
               "type": "string",
-              "description": {"zh": "标题上方的小标签,如「数学 · 第 3 课」。", "en": "Small tag above the title, e.g. \"Maths · Lesson 3\"."},
+              "description": {
+                "zh": "标题上方的小标签,如「数学 · 第 3 课」。",
+                "en": "Small tag above the title, e.g. \"Maths · Lesson 3\"."
+              },
               "x-advanced": true
             },
             "steps": {
+              "title": {
+                "zh": "讲解步骤",
+                "en": "Steps"
+              },
               "type": "array",
-              "description": {"zh": "一步一步讲的内容,1 到 20 步。每步的公式、函数图、代码三样最多放一样。", "en": "The steps, 1 to 20. Each step holds at most one of formulas, plot or code."},
+              "description": {
+                "zh": "一步一步讲的内容,1 到 20 步。每步的公式、函数图、代码三样最多放一样。",
+                "en": "The steps, 1 to 20. Each step holds at most one of formulas, plot or code."
+              },
               "items": {
                 "type": "object",
                 "properties": {
-                  "title": {"type": "string", "description": {"zh": "这一步的标题。", "en": "Step title."}},
-                  "narration": {"type": "string", "description": {"zh": "这一步的旁白,显示成底部字幕,也决定这一步多长(最多 600 字)。", "en": "Narration for this step, shown as a caption; it also sets the step's length (up to 600 characters)."}},
-                  "bullets": {"type": "array", "items": {"type": "string"}, "description": {"zh": "要点,随旁白逐条出现,最多 6 条。", "en": "Points revealed along the narration, up to 6."}},
-                  "formulas": {"type": "array", "items": {"type": "string"}, "description": {"zh": "LaTeX 公式,最多 3 条(如 a^2 + b^2 = c^2),逐条书写出来。不能用 \\input、\\def 这类命令。", "en": "LaTeX formulas, up to 3 (e.g. a^2 + b^2 = c^2), written out one by one. Commands such as \\input or \\def are not allowed."}},
-                  "plot": {
-                    "type": "object",
-                    "description": {"zh": "画一条函数曲线。", "en": "Plot a function."},
-                    "properties": {
-                      "expression": {"type": "string", "description": {"zh": "关于 x 的算式,如 sin(x) + x^2/8、exp(-x^2/2)、1/x。能用 sin cos tan exp log sqrt abs 等函数与 pi、e。", "en": "An expression in x, e.g. sin(x) + x^2/8, exp(-x^2/2), 1/x. Functions such as sin cos tan exp log sqrt abs and pi, e are available."}},
-                      "x_min": {"type": "number", "description": {"zh": "默认 -5。", "en": "Default -5."}},
-                      "x_max": {"type": "number", "description": {"zh": "默认 5。", "en": "Default 5."}},
-                      "y_min": {"type": "number", "description": {"zh": "留空按曲线自动定。", "en": "Automatic when empty."}},
-                      "y_max": {"type": "number", "description": {"zh": "留空按曲线自动定。", "en": "Automatic when empty."}},
-                      "label": {"type": "string", "description": {"zh": "曲线旁的文字,默认「y = 算式」。", "en": "Text beside the curve; \"y = expression\" by default."}}
+                  "title": {
+                    "title": {
+                      "zh": "标题",
+                      "en": "Title"
                     },
-                    "required": ["expression"]
+                    "type": "string",
+                    "description": {
+                      "zh": "这一步的标题。",
+                      "en": "Step title."
+                    }
+                  },
+                  "narration": {
+                    "title": {
+                      "zh": "旁白",
+                      "en": "Narration"
+                    },
+                    "type": "string",
+                    "description": {
+                      "zh": "这一步的旁白,显示成底部字幕,也决定这一步多长(最多 600 字)。",
+                      "en": "Narration for this step, shown as a caption; it also sets the step's length (up to 600 characters)."
+                    }
+                  },
+                  "bullets": {
+                    "title": {
+                      "zh": "要点",
+                      "en": "Bullet points"
+                    },
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "zh": "要点,随旁白逐条出现,最多 6 条。",
+                      "en": "Points revealed along the narration, up to 6."
+                    }
+                  },
+                  "formulas": {
+                    "title": {
+                      "zh": "公式",
+                      "en": "Formulas"
+                    },
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "zh": "LaTeX 公式,最多 3 条(如 a^2 + b^2 = c^2),逐条书写出来。不能用 \\input、\\def 这类命令。",
+                      "en": "LaTeX formulas, up to 3 (e.g. a^2 + b^2 = c^2), written out one by one. Commands such as \\input or \\def are not allowed."
+                    }
+                  },
+                  "plot": {
+                    "title": {
+                      "zh": "函数图像",
+                      "en": "Function plot"
+                    },
+                    "type": "object",
+                    "description": {
+                      "zh": "画一条函数曲线。",
+                      "en": "Plot a function."
+                    },
+                    "properties": {
+                      "expression": {
+                        "title": {
+                          "zh": "算式",
+                          "en": "Expression"
+                        },
+                        "type": "string",
+                        "description": {
+                          "zh": "关于 x 的算式,如 sin(x) + x^2/8、exp(-x^2/2)、1/x。能用 sin cos tan exp log sqrt abs 等函数与 pi、e。",
+                          "en": "An expression in x, e.g. sin(x) + x^2/8, exp(-x^2/2), 1/x. Functions such as sin cos tan exp log sqrt abs and pi, e are available."
+                        }
+                      },
+                      "x_min": {
+                        "title": {
+                          "zh": "x 最小值",
+                          "en": "x min"
+                        },
+                        "type": "number",
+                        "description": {
+                          "zh": "默认 -5。",
+                          "en": "Default -5."
+                        }
+                      },
+                      "x_max": {
+                        "title": {
+                          "zh": "x 最大值",
+                          "en": "x max"
+                        },
+                        "type": "number",
+                        "description": {
+                          "zh": "默认 5。",
+                          "en": "Default 5."
+                        }
+                      },
+                      "y_min": {
+                        "title": {
+                          "zh": "y 最小值",
+                          "en": "y min"
+                        },
+                        "type": "number",
+                        "description": {
+                          "zh": "留空按曲线自动定。",
+                          "en": "Automatic when empty."
+                        }
+                      },
+                      "y_max": {
+                        "title": {
+                          "zh": "y 最大值",
+                          "en": "y max"
+                        },
+                        "type": "number",
+                        "description": {
+                          "zh": "留空按曲线自动定。",
+                          "en": "Automatic when empty."
+                        }
+                      },
+                      "label": {
+                        "title": {
+                          "zh": "曲线标注",
+                          "en": "Curve label"
+                        },
+                        "type": "string",
+                        "description": {
+                          "zh": "曲线旁的文字,默认「y = 算式」。",
+                          "en": "Text beside the curve; \"y = expression\" by default."
+                        }
+                      }
+                    },
+                    "required": [
+                      "expression"
+                    ]
                   },
                   "code": {
-                    "type": "object",
-                    "description": {"zh": "一段带语法高亮的代码,最多 30 行。", "en": "A syntax-highlighted snippet, up to 30 lines."},
-                    "properties": {
-                      "code": {"type": "string", "description": {"zh": "代码原文。", "en": "The source."}},
-                      "language": {"type": "string", "description": {"zh": "语言(Pygments 的名字),默认 python。", "en": "Language (a Pygments name), python by default."}},
-                      "highlight": {"type": "array", "items": {"type": ["integer", "string"]}, "description": {"zh": "讲解时依次框住的行:行号或「起-止」,如 [2, \"4-6\", 9]。", "en": "Lines boxed in turn during the step: line numbers or \"start-end\", e.g. [2, \"4-6\", 9]."}}
+                    "title": {
+                      "zh": "代码",
+                      "en": "Code"
                     },
-                    "required": ["code"]
+                    "type": "object",
+                    "description": {
+                      "zh": "一段带语法高亮的代码,最多 30 行。",
+                      "en": "A syntax-highlighted snippet, up to 30 lines."
+                    },
+                    "properties": {
+                      "code": {
+                        "title": {
+                          "zh": "代码原文",
+                          "en": "Source code"
+                        },
+                        "type": "string",
+                        "description": {
+                          "zh": "代码原文。",
+                          "en": "The source."
+                        }
+                      },
+                      "language": {
+                        "title": {
+                          "zh": "语言",
+                          "en": "Language"
+                        },
+                        "type": "string",
+                        "description": {
+                          "zh": "语言(Pygments 的名字),默认 python。",
+                          "en": "Language (a Pygments name), python by default."
+                        }
+                      },
+                      "highlight": {
+                        "title": {
+                          "zh": "高亮的行",
+                          "en": "Highlighted lines"
+                        },
+                        "type": "array",
+                        "items": {
+                          "type": [
+                            "integer",
+                            "string"
+                          ]
+                        },
+                        "description": {
+                          "zh": "讲解时依次框住的行:行号或「起-止」,如 [2, \"4-6\", 9]。",
+                          "en": "Lines boxed in turn during the step: line numbers or \"start-end\", e.g. [2, \"4-6\", 9]."
+                        }
+                      }
+                    },
+                    "required": [
+                      "code"
+                    ]
                   },
-                  "seconds": {"type": "number", "description": {"zh": "这一步的时长(秒)。留空按旁白自动算;给了也不会短于动画本身。", "en": "Step length in seconds. Automatic from the narration when empty; never shorter than the animation itself."}}
+                  "seconds": {
+                    "title": {
+                      "zh": "时长(秒)",
+                      "en": "Duration (s)"
+                    },
+                    "type": "number",
+                    "description": {
+                      "zh": "这一步的时长(秒)。留空按旁白自动算;给了也不会短于动画本身。",
+                      "en": "Step length in seconds. Automatic from the narration when empty; never shorter than the animation itself."
+                    }
+                  }
                 },
-                "required": ["title"]
+                "required": [
+                  "title"
+                ]
               }
             },
             "summary": {
+              "title": {
+                "zh": "要点回顾",
+                "en": "Summary"
+              },
               "type": "array",
-              "items": {"type": "string"},
-              "description": {"zh": "结尾的要点回顾,最多 6 条。", "en": "Key takeaways at the end, up to 6."}
+              "items": {
+                "type": "string"
+              },
+              "description": {
+                "zh": "结尾的要点回顾,最多 6 条。",
+                "en": "Key takeaways at the end, up to 6."
+              }
             },
             "aspect": {
+              "title": {
+                "zh": "画幅",
+                "en": "Aspect ratio"
+              },
               "type": "string",
-              "enum": ["16:9", "9:16", "1:1", "4:3", "3:4"],
-              "description": {"zh": "默认横屏 16:9;竖屏短视频用 9:16。", "en": "16:9 by default; 9:16 for vertical short video."}
+              "enum": [
+                "16:9",
+                "9:16",
+                "1:1",
+                "4:3",
+                "3:4"
+              ],
+              "description": {
+                "zh": "默认横屏 16:9;竖屏短视频用 9:16。",
+                "en": "16:9 by default; 9:16 for vertical short video."
+              }
             },
             "quality": {
+              "title": {
+                "zh": "画质",
+                "en": "Quality"
+              },
               "type": "string",
-              "enum": ["low", "medium", "high", "production", "4k"],
-              "description": {"zh": "短边 480 / 720(默认)/ 1080 / 1440 / 2160 像素。越高渲得越久。", "en": "Short edge 480 / 720 (default) / 1080 / 1440 / 2160 pixels. Higher takes longer."}
+              "enum": [
+                "low",
+                "medium",
+                "high",
+                "production",
+                "4k"
+              ],
+              "description": {
+                "zh": "短边 480 / 720(默认)/ 1080 / 1440 / 2160 像素。越高渲得越久。",
+                "en": "Short edge 480 / 720 (default) / 1080 / 1440 / 2160 pixels. Higher takes longer."
+              }
             },
             "fps": {
+              "title": {
+                "zh": "帧率",
+                "en": "Frame rate"
+              },
               "type": "integer",
-              "enum": [15, 24, 25, 30, 60],
-              "description": {"zh": "默认 30(low 画质 15)。", "en": "30 by default (15 at low quality)."},
+              "enum": [
+                15,
+                24,
+                25,
+                30,
+                60
+              ],
+              "description": {
+                "zh": "默认 30(low 画质 15)。",
+                "en": "30 by default (15 at low quality)."
+              },
               "x-advanced": true
             },
             "theme": {
+              "title": {
+                "zh": "主题",
+                "en": "Theme"
+              },
               "type": "string",
-              "enum": ["dark", "light"],
-              "description": {"zh": "深色(默认)或浅色。", "en": "Dark (default) or light."}
+              "enum": [
+                "dark",
+                "light"
+              ],
+              "description": {
+                "zh": "深色(默认)或浅色。",
+                "en": "Dark (default) or light."
+              }
             },
             "accent": {
+              "title": {
+                "zh": "强调色",
+                "en": "Accent colour"
+              },
               "type": "string",
-              "description": {"zh": "强调色 #RRGGBB。", "en": "Accent colour, #RRGGBB."},
+              "description": {
+                "zh": "强调色 #RRGGBB。",
+                "en": "Accent colour, #RRGGBB."
+              },
               "x-advanced": true
             },
             "font": {
+              "title": {
+                "zh": "字体",
+                "en": "Font"
+              },
               "type": "string",
-              "description": {"zh": "字体名(本机装了的),留空自动挑一款中英文都好看的无衬线体。", "en": "Font family installed on this computer; empty picks a sans-serif that suits Chinese and English."},
+              "description": {
+                "zh": "字体名(本机装了的),留空自动挑一款中英文都好看的无衬线体。",
+                "en": "Font family installed on this computer; empty picks a sans-serif that suits Chinese and English."
+              },
               "x-advanced": true
             },
             "show_narration": {
+              "title": {
+                "zh": "显示旁白字幕",
+                "en": "Show narration captions"
+              },
               "type": "boolean",
-              "description": {"zh": "旁白显示成底部字幕,默认开。另配字幕时关掉。", "en": "Show narration as captions (on by default). Turn off when adding subtitles separately."},
+              "description": {
+                "zh": "旁白显示成底部字幕,默认开。另配字幕时关掉。",
+                "en": "Show narration as captions (on by default). Turn off when adding subtitles separately."
+              },
               "x-advanced": true
             },
             "subtitles": {
+              "title": {
+                "zh": "导出 .srt 字幕",
+                "en": "Export .srt subtitles"
+              },
               "type": "boolean",
-              "description": {"zh": "同时交出一份按旁白切好的 .srt 字幕。", "en": "Also hand back an .srt file cut from the narration."},
+              "description": {
+                "zh": "同时交出一份按旁白切好的 .srt 字幕。",
+                "en": "Also hand back an .srt file cut from the narration."
+              },
               "x-advanced": true
             },
             "filename": {
+              "title": {
+                "zh": "文件名",
+                "en": "File name"
+              },
               "type": "string",
-              "description": {"zh": "产出文件名,留空用 explainer.mp4。", "en": "Output file name; explainer.mp4 when empty."},
+              "description": {
+                "zh": "产出文件名,留空用 explainer.mp4。",
+                "en": "Output file name; explainer.mp4 when empty."
+              },
               "x-advanced": true
             }
           },
-          "required": ["title", "steps"]
+          "required": [
+            "title",
+            "steps"
+          ]
         },
         "node": {
-          "outputs": ["asset_id", "subtitles", "asset_ids", "steps", "seconds", "summary"],
-          "output_types": {"asset_id": "asset", "subtitles": "asset", "asset_ids": "json", "steps": "json", "seconds": "number", "summary": "text"},
-          "board_outputs": ["asset_id", "subtitles"],
+          "outputs": [
+            "asset_id",
+            "subtitles",
+            "asset_ids",
+            "steps",
+            "seconds",
+            "summary"
+          ],
+          "output_types": {
+            "asset_id": "asset",
+            "subtitles": "asset",
+            "asset_ids": "json",
+            "steps": "json",
+            "seconds": "number",
+            "summary": "text"
+          },
+          "board_outputs": [
+            "asset_id",
+            "subtitles"
+          ],
           "output_labels": {
-            "asset_id": {"zh": "视频", "en": "Video"},
-            "subtitles": {"zh": "字幕(.srt)", "en": "Subtitles (.srt)"},
-            "asset_ids": {"zh": "全部产出", "en": "All outputs"},
-            "steps": {"zh": "每步起止时间", "en": "Step timings"},
-            "seconds": {"zh": "时长(秒)", "en": "Length (s)"},
-            "summary": {"zh": "一句话", "en": "In one line"}
+            "asset_id": {
+              "zh": "视频",
+              "en": "Video"
+            },
+            "subtitles": {
+              "zh": "字幕(.srt)",
+              "en": "Subtitles (.srt)"
+            },
+            "asset_ids": {
+              "zh": "全部产出",
+              "en": "All outputs"
+            },
+            "steps": {
+              "zh": "每步起止时间",
+              "en": "Step timings"
+            },
+            "seconds": {
+              "zh": "时长(秒)",
+              "en": "Length (s)"
+            },
+            "summary": {
+              "zh": "一句话",
+              "en": "In one line"
+            }
           }
         }
       },
@@ -264,61 +625,168 @@
           "type": "object",
           "properties": {
             "code": {
+              "title": {
+                "zh": "代码",
+                "en": "Code"
+              },
               "type": "string",
-              "description": {"zh": "Python 源码,至少一个 Scene 子类。", "en": "Python source with at least one Scene subclass."}
+              "description": {
+                "zh": "Python 源码,至少一个 Scene 子类。",
+                "en": "Python source with at least one Scene subclass."
+              }
             },
             "scene": {
+              "title": {
+                "zh": "场景类",
+                "en": "Scene class"
+              },
               "type": "string",
-              "description": {"zh": "渲染哪个场景类;代码里只有一个时可留空。", "en": "Which scene class to render; may be empty when there is only one."}
+              "description": {
+                "zh": "渲染哪个场景类;代码里只有一个时可留空。",
+                "en": "Which scene class to render; may be empty when there is only one."
+              }
             },
             "aspect": {
+              "title": {
+                "zh": "画幅",
+                "en": "Aspect ratio"
+              },
               "type": "string",
-              "enum": ["16:9", "9:16", "1:1", "4:3", "3:4"],
-              "description": {"zh": "默认 16:9。", "en": "16:9 by default."}
+              "enum": [
+                "16:9",
+                "9:16",
+                "1:1",
+                "4:3",
+                "3:4"
+              ],
+              "description": {
+                "zh": "默认 16:9。",
+                "en": "16:9 by default."
+              }
             },
             "quality": {
+              "title": {
+                "zh": "画质",
+                "en": "Quality"
+              },
               "type": "string",
-              "enum": ["low", "medium", "high", "production", "4k"],
-              "description": {"zh": "短边 480 / 720(默认)/ 1080 / 1440 / 2160 像素。", "en": "Short edge 480 / 720 (default) / 1080 / 1440 / 2160 pixels."}
+              "enum": [
+                "low",
+                "medium",
+                "high",
+                "production",
+                "4k"
+              ],
+              "description": {
+                "zh": "短边 480 / 720(默认)/ 1080 / 1440 / 2160 像素。",
+                "en": "Short edge 480 / 720 (default) / 1080 / 1440 / 2160 pixels."
+              }
             },
             "fps": {
+              "title": {
+                "zh": "帧率",
+                "en": "Frame rate"
+              },
               "type": "integer",
-              "enum": [15, 24, 25, 30, 60],
-              "description": {"zh": "默认 30(low 画质 15)。", "en": "30 by default (15 at low quality)."},
+              "enum": [
+                15,
+                24,
+                25,
+                30,
+                60
+              ],
+              "description": {
+                "zh": "默认 30(low 画质 15)。",
+                "en": "30 by default (15 at low quality)."
+              },
               "x-advanced": true
             },
             "format": {
+              "title": {
+                "zh": "格式",
+                "en": "Format"
+              },
               "type": "string",
-              "enum": ["mp4", "webm", "mov", "gif"],
-              "description": {"zh": "默认 mp4。", "en": "mp4 by default."},
+              "enum": [
+                "mp4",
+                "webm",
+                "mov",
+                "gif"
+              ],
+              "description": {
+                "zh": "默认 mp4。",
+                "en": "mp4 by default."
+              },
               "x-advanced": true
             },
             "transparent": {
+              "title": {
+                "zh": "透明背景",
+                "en": "Transparent background"
+              },
               "type": "boolean",
-              "description": {"zh": "透明背景(用于叠加);mp4 会自动改成 mov。", "en": "Transparent background for overlays; mp4 becomes mov."},
+              "description": {
+                "zh": "透明背景(用于叠加);mp4 会自动改成 mov。",
+                "en": "Transparent background for overlays; mp4 becomes mov."
+              },
               "x-advanced": true
             },
             "data": {
+              "title": {
+                "zh": "数据",
+                "en": "Data"
+              },
               "type": "object",
-              "description": {"zh": "交给场景的数据,代码里 `from mosael import DATA`。", "en": "Data for the scene: `from mosael import DATA` in the code."},
+              "description": {
+                "zh": "交给场景的数据,代码里 `from mosael import DATA`。",
+                "en": "Data for the scene: `from mosael import DATA` in the code."
+              },
               "x-advanced": true
             },
             "filename": {
+              "title": {
+                "zh": "文件名",
+                "en": "File name"
+              },
               "type": "string",
-              "description": {"zh": "产出文件名,留空用 animation。", "en": "Output file name; animation when empty."},
+              "description": {
+                "zh": "产出文件名,留空用 animation。",
+                "en": "Output file name; animation when empty."
+              },
               "x-advanced": true
             }
           },
-          "required": ["code"]
+          "required": [
+            "code"
+          ]
         },
         "node": {
-          "outputs": ["asset_id", "seconds", "summary"],
-          "output_types": {"asset_id": "asset", "seconds": "number", "summary": "text"},
-          "board_outputs": ["asset_id"],
+          "outputs": [
+            "asset_id",
+            "seconds",
+            "summary"
+          ],
+          "output_types": {
+            "asset_id": "asset",
+            "seconds": "number",
+            "summary": "text"
+          },
+          "board_outputs": [
+            "asset_id"
+          ],
           "output_labels": {
-            "asset_id": {"zh": "动画", "en": "Animation"},
-            "seconds": {"zh": "时长(秒)", "en": "Length (s)"},
-            "summary": {"zh": "一句话", "en": "In one line"}
+            "asset_id": {
+              "zh": "动画",
+              "en": "Animation"
+            },
+            "seconds": {
+              "zh": "时长(秒)",
+              "en": "Length (s)"
+            },
+            "summary": {
+              "zh": "一句话",
+              "en": "In one line"
+            }
           }
         }
       },
@@ -339,48 +807,125 @@
           "type": "object",
           "properties": {
             "code": {
+              "title": {
+                "zh": "代码",
+                "en": "Code"
+              },
               "type": "string",
-              "description": {"zh": "Python 源码,至少一个 Scene 子类。", "en": "Python source with at least one Scene subclass."}
+              "description": {
+                "zh": "Python 源码,至少一个 Scene 子类。",
+                "en": "Python source with at least one Scene subclass."
+              }
             },
             "scene": {
+              "title": {
+                "zh": "场景类",
+                "en": "Scene class"
+              },
               "type": "string",
-              "description": {"zh": "渲染哪个场景类;只有一个时可留空。", "en": "Which scene class; may be empty when there is only one."}
+              "description": {
+                "zh": "渲染哪个场景类;只有一个时可留空。",
+                "en": "Which scene class; may be empty when there is only one."
+              }
             },
             "aspect": {
+              "title": {
+                "zh": "画幅",
+                "en": "Aspect ratio"
+              },
               "type": "string",
-              "enum": ["16:9", "9:16", "1:1", "4:3", "3:4"],
-              "description": {"zh": "默认 16:9。", "en": "16:9 by default."}
+              "enum": [
+                "16:9",
+                "9:16",
+                "1:1",
+                "4:3",
+                "3:4"
+              ],
+              "description": {
+                "zh": "默认 16:9。",
+                "en": "16:9 by default."
+              }
             },
             "quality": {
+              "title": {
+                "zh": "画质",
+                "en": "Quality"
+              },
               "type": "string",
-              "enum": ["low", "medium", "high", "production", "4k"],
-              "description": {"zh": "短边 480 / 720(默认)/ 1080 / 1440 / 2160 像素。", "en": "Short edge 480 / 720 (default) / 1080 / 1440 / 2160 pixels."}
+              "enum": [
+                "low",
+                "medium",
+                "high",
+                "production",
+                "4k"
+              ],
+              "description": {
+                "zh": "短边 480 / 720(默认)/ 1080 / 1440 / 2160 像素。",
+                "en": "Short edge 480 / 720 (default) / 1080 / 1440 / 2160 pixels."
+              }
             },
             "transparent": {
+              "title": {
+                "zh": "透明背景",
+                "en": "Transparent background"
+              },
               "type": "boolean",
-              "description": {"zh": "透明背景。", "en": "Transparent background."},
+              "description": {
+                "zh": "透明背景。",
+                "en": "Transparent background."
+              },
               "x-advanced": true
             },
             "data": {
+              "title": {
+                "zh": "数据",
+                "en": "Data"
+              },
               "type": "object",
-              "description": {"zh": "交给场景的数据,代码里 `from mosael import DATA`。", "en": "Data for the scene: `from mosael import DATA` in the code."},
+              "description": {
+                "zh": "交给场景的数据,代码里 `from mosael import DATA`。",
+                "en": "Data for the scene: `from mosael import DATA` in the code."
+              },
               "x-advanced": true
             },
             "filename": {
+              "title": {
+                "zh": "文件名",
+                "en": "File name"
+              },
               "type": "string",
-              "description": {"zh": "产出文件名,留空用 frame。", "en": "Output file name; frame when empty."},
+              "description": {
+                "zh": "产出文件名,留空用 frame。",
+                "en": "Output file name; frame when empty."
+              },
               "x-advanced": true
             }
           },
-          "required": ["code"]
+          "required": [
+            "code"
+          ]
         },
         "node": {
-          "outputs": ["asset_id", "summary"],
-          "output_types": {"asset_id": "asset", "summary": "text"},
-          "board_outputs": ["asset_id"],
+          "outputs": [
+            "asset_id",
+            "summary"
+          ],
+          "output_types": {
+            "asset_id": "asset",
+            "summary": "text"
+          },
+          "board_outputs": [
+            "asset_id"
+          ],
           "output_labels": {
-            "asset_id": {"zh": "图片", "en": "Image"},
-            "summary": {"zh": "一句话", "en": "In one line"}
+            "asset_id": {
+              "zh": "图片",
+              "en": "Image"
+            },
+            "summary": {
+              "zh": "一句话",
+              "en": "In one line"
+            }
           }
         }
       }

@@ -81,6 +81,29 @@ def test_仓库里的插件清单全部合格() -> None:
         parse(json.loads(path.read_text(encoding="utf-8")), str(path))
 
 
+def test_仓库里的插件_每个工具参数都有中英文名字() -> None:
+    """工具的参数在插件页「试一下」、工作流节点的表单里显示成一格。没写 `title` 的,宿主只能拿工作流的通用字段名
+    兜底 —— 恰好在通用词表里的(标题、画幅、画质)是中文,别的(Subtitle、Steps、Summary、Theme)露出参数的键名,
+    同一张表单中英混杂(用户截图:Manim 讲解视频)。仓库里的插件是给别人照着写的样板,每一格都写全。"""
+    missing: list[str] = []
+
+    def walk(props: dict, where: str) -> None:
+        for key, spec in (props or {}).items():
+            title = spec.get("title")
+            if not (isinstance(title, dict) and title.get("zh") and title.get("en")):
+                missing.append(f"{where}{key}")
+            if spec.get("type") == "array" and isinstance(spec.get("items"), dict):
+                walk(spec["items"].get("properties") or {}, f"{where}{key}[].")
+            if spec.get("type") == "object":
+                walk(spec.get("properties") or {}, f"{where}{key}.")
+
+    for path in sorted((REPO / "plugins").glob("*/*/mosael.plugin.json")):
+        manifest = json.loads(path.read_text(encoding="utf-8"))
+        for tool in (manifest.get("tools") or {}).get("declare") or []:
+            walk((tool.get("input_schema") or {}).get("properties") or {}, f"{path.parent.name} · {tool['name']}: ")
+    assert missing == [], "这些参数没有按语言写 title:\n" + "\n".join(missing)
+
+
 # ---------------- 版本号 ----------------
 
 
