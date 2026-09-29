@@ -63,7 +63,6 @@ def start_drawing(db: Session, entity: Entity, ability: str, config: dict[str, A
         message=_QUEUED[ability],
         message_params={"name": entity.name},
     )
-    db.commit()
     scope = EntityScope(workspace_id=entity.workspace_id, id=f"entity:{entity.id}", name=entity.name)
     job_id = job.id
     dispatch_job(db, job, lambda: _run(job_id, node_type, scope, settings, ability))
@@ -74,6 +73,7 @@ def _run(job_id: str, node_type: str, scope: EntityScope, config: dict[str, Any]
     """任务线程里跑节点。和画板跑一项能力同一个形状(boards.tools._run_in_job):先拿连接预算再开会话 ——
     节点里等生成时会把预算交还再拿回来。"""
     from app.core.db import SessionLocal
+    from app.core.unit_of_work import unit_of_work
     from app.domain.jobs import run_job_inline
     from app.domain.workflows.engine import NODE_CONNECTIONS
     from app.domain.workflows.executors import get_executor
@@ -81,9 +81,9 @@ def _run(job_id: str, node_type: str, scope: EntityScope, config: dict[str, Any]
     def body() -> dict[str, Any]:
         handler = get_executor(node_type)
         assert handler is not None, node_type
-        with NODE_CONNECTIONS, SessionLocal() as node_db:
+        # 节点跑完就是它的事务边界(同 workflows.engine):正常结束提交,抛出来就回滚。
+        with NODE_CONNECTIONS, unit_of_work() as node_db:
             output = handler(node_db, scope, dict(config))
-            node_db.commit()
         return output
 
     with SessionLocal() as db:

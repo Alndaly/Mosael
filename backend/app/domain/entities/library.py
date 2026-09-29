@@ -270,7 +270,7 @@ def create_entity(
         lost_references=[],
     )
     db.add(entity)
-    db.commit()
+    db.flush()
     db.refresh(entity)
     return entity
 
@@ -304,7 +304,7 @@ def update_entity(
     if cover_asset_id is not _UNSET:
         entity.cover_asset_id = _cover(db, entity, cover_asset_id)
     entity.updated_at = now()
-    db.commit()
+    db.flush()
     db.refresh(entity)
     return entity
 
@@ -337,14 +337,13 @@ def delete_entity(db: Session, entity: Entity, *, with_variants: bool = False) -
     # 先把变体删掉再删母体:同一批 DELETE 里母体的外键级联会抢先带走变体,ORM 就对不上行数。
     db.flush()
     db.delete(entity)
-    db.commit()
     return 1 + len(variants)
 
 
 def clear_lost_references(db: Session, entity: Entity) -> Entity:
     """「少了哪一张」那句提示看过了。"""
     entity.lost_references = []
-    db.commit()
+    db.flush()
     db.refresh(entity)
     return entity
 
@@ -389,7 +388,7 @@ def add_reference(db: Session, entity: Entity, asset_id: str, role: Any = "", *,
             raise EntityDomainError("entityErr_coverNotImage")
         entity.cover_asset_id = asset.id
     entity.updated_at = now()
-    db.commit()
+    db.flush()
     db.refresh(entity)
     return entity
 
@@ -404,7 +403,7 @@ def _reference(db: Session, entity: Entity, asset_id: str) -> EntityReference:
 def set_reference_role(db: Session, entity: Entity, asset_id: str, role: Any) -> Entity:
     _reference(db, entity, asset_id).role = _role(role, entity)
     entity.updated_at = now()
-    db.commit()
+    db.flush()
     db.refresh(entity)
     return entity
 
@@ -415,7 +414,7 @@ def remove_reference(db: Session, entity: Entity, asset_id: str) -> Entity:
     if entity.cover_asset_id == asset_id:
         entity.cover_asset_id = None
     entity.updated_at = now()
-    db.commit()
+    db.flush()
     db.refresh(entity)
     return entity
 
@@ -429,7 +428,7 @@ def reorder_references(db: Session, entity: Entity, asset_ids: list[str]) -> Ent
     for position, asset_id in enumerate(asset_ids, start=1):
         refs[asset_id].position = position
     entity.updated_at = now()
-    db.commit()
+    db.flush()
     db.refresh(entity)
     return entity
 

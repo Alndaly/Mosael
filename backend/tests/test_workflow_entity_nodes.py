@@ -74,6 +74,7 @@ def test_存成资产_新建_再存同名的是合并_不覆盖人手改过的()
             "kind": "character", "name": "阿澄", "prompt": "高个子男生", "asset_ids": ["front", "sheet"],
             "role": "turnaround", "tags": "配角",
         })
+        db.commit()  # 节点的提交归工作流引擎(入口),直接调执行器时测试就是入口
     assert first["created"] == 1 and first["added"] == 2
     entity = client.get(f"/api/entities/{first['entity_id']}").json()
     assert [(r["asset_id"], r["role"]) for r in entity["references"]] == [("front", "turnaround"), ("sheet", "turnaround")]
@@ -85,6 +86,7 @@ def test_存成资产_新建_再存同名的是合并_不覆盖人手改过的()
             "kind": "character", "name": "阿澄", "prompt": "另一段描述", "description": "补上的描述",
             "asset_ids": "sheet, side",
         })
+        db.commit()
     assert again == {"entity_id": first["entity_id"], "created": 0, "added": 1, "name": "阿澄"}
     entity = client.get(f"/api/entities/{first['entity_id']}").json()
     assert entity["prompt"] == "人手改过的描述", "合并不覆盖已经写好的"
