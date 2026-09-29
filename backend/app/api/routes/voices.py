@@ -29,7 +29,8 @@ from app.api.schemas import (
 )
 from app.ai.runtime import tts_daemon, tts_models
 from app.domain.voices import tts_settings, voices
-from app.domain.permissions import ensure_workspace_perm, ensure_deployment_admin, ensure_workspace_access
+from app.domain.permissions import ensure_deployment_admin
+from app.domain.voices import use_cases as voice_uc
 from app.ai.runtime import config as tts_config
 
 logger = logging.getLogger(__name__)
@@ -52,7 +53,7 @@ def _voice_out(voice) -> dict:
 
 @router.get("/voices", response_model=list[VoiceOut])
 def list_voices(workspace_id: str, db: DbSession, user: CurrentUser) -> list[dict]:
-    ensure_workspace_access(db, user, workspace_id)
+    voice_uc.ensure_can_list(db, user, workspace_id)
     return [_voice_out(v) for v in voices.list_voices(db, workspace_id)]
 
 
@@ -67,7 +68,7 @@ def upload_voice(
     consent_kind: str = Form(...),
     file: UploadFile = File(...),
 ) -> dict:
-    ensure_workspace_perm(db, user, workspace_id, "ai")
+    voice_uc.ensure_can_speak(db, user, workspace_id)
     with tempfile.NamedTemporaryFile(delete=False, suffix=Path(file.filename or "ref").suffix) as tmp:
         shutil.copyfileobj(file.file, tmp)
         tmp_path = Path(tmp.name)
@@ -85,12 +86,8 @@ def upload_voice(
 
 @router.post("/voices/from-speaker", response_model=VoiceOut)
 def voice_from_speaker(body: VoiceFromSpeakerRequest, db: DbSession, user: CurrentUser) -> dict:
-    from app.db.models import Asset
 
-    asset = db.get(Asset, body.asset_id)
-    if asset is None:
-        raise HTTPException(status_code=404, detail=tr("routeErr_assetNotFound"))
-    ensure_workspace_perm(db, user, asset.workspace_id, "ai")
+    asset = voice_uc.source_asset(db, user, body.asset_id)
     try:
         voice = voices.create_from_speaker(
             db, workspace_id=asset.workspace_id, asset_id=body.asset_id, speaker=body.speaker, name=body.name,
@@ -103,10 +100,7 @@ def voice_from_speaker(body: VoiceFromSpeakerRequest, db: DbSession, user: Curre
 
 @router.patch("/voices/{voice_id}", response_model=VoiceOut)
 def update_voice(voice_id: str, body: VoiceUpdate, db: DbSession, user: CurrentUser) -> dict:
-    voice = voices.get_voice(db, voice_id)
-    if voice is None:
-        raise HTTPException(status_code=404, detail=tr("routeErr_voiceNotFound"))
-    ensure_workspace_perm(db, user, voice.workspace_id, "ai")
+    voice = voice_uc.usable(db, user, voice_id)
     try:
         return _voice_out(voices.update_voice(db, voice, name=body.name, reference_text=body.reference_text,
                                               consent_kind=body.consent_kind, actor_id=user.id))
@@ -117,10 +111,7 @@ def update_voice(voice_id: str, body: VoiceUpdate, db: DbSession, user: CurrentU
 @router.post("/voices/{voice_id}/recognize-reference", response_model=VoiceOut)
 def recognize_reference(voice_id: str, db: DbSession, user: CurrentUser) -> Voice:
     """转写一遍参考音频(按这个人的转写默认),把参考文本填上。"""
-    voice = voices.get_voice(db, voice_id)
-    if voice is None:
-        raise HTTPException(status_code=404, detail=tr("routeErr_voiceNotFound"))
-    ensure_workspace_perm(db, user, voice.workspace_id, "ai")
+    voice = voice_uc.usable(db, user, voice_id)
     try:
         return voices.recognize_reference_text(db, voice, actor_id=user.id)
     except (voices.VoiceError, ASRError) as exc:
@@ -129,20 +120,14 @@ def recognize_reference(voice_id: str, db: DbSession, user: CurrentUser) -> Voic
 
 @router.delete("/voices/{voice_id}", status_code=204)
 def delete_voice(voice_id: str, db: DbSession, user: CurrentUser) -> Response:
-    voice = voices.get_voice(db, voice_id)
-    if voice is None:
-        raise HTTPException(status_code=404, detail=tr("routeErr_voiceNotFound"))
-    ensure_workspace_perm(db, user, voice.workspace_id, "ai")
+    voice = voice_uc.usable(db, user, voice_id)
     voices.delete_voice(db, voice)
     return Response(status_code=204)
 
 
 @router.get("/voices/{voice_id}/sample")
 def voice_sample(voice_id: str, db: DbSession, user: CurrentUser) -> FileResponse:
-    voice = voices.get_voice(db, voice_id)
-    if voice is None:
-        raise HTTPException(status_code=404, detail=tr("routeErr_voiceNotFound"))
-    ensure_workspace_access(db, user, voice.workspace_id)
+    voice = voice_uc.readable(db, user, voice_id)
     path = voices.reference_path(voice)
     if not path.is_file():
         raise HTTPException(status_code=404, detail=tr("routeErr_referenceAudioMissing"))
@@ -151,10 +136,7 @@ def voice_sample(voice_id: str, db: DbSession, user: CurrentUser) -> FileRespons
 
 @router.post("/voices/{voice_id}/synthesize", response_model=JobOut)
 def synthesize(voice_id: str, body: SynthesizeRequest, db: DbSession, user: CurrentUser):
-    voice = voices.get_voice(db, voice_id)
-    if voice is None:
-        raise HTTPException(status_code=404, detail=tr("routeErr_voiceNotFound"))
-    ensure_workspace_perm(db, user, voice.workspace_id, "ai")
+    voice_uc.usable(db, user, voice_id)
     try:
         return voices.start_synthesis(
             db, voice_id=voice_id, text=body.text, project_id=body.project_id,
@@ -204,7 +186,7 @@ def list_tts_engines(db: DbSession, user: CurrentUser) -> list[dict]:
 @router.post("/tts/podcast", response_model=JobOut)
 def generate_podcast(body: PodcastRequest, db: DbSession, user: CurrentUser) -> Job:
     """Queue a podcast. Same permission as any other AI spend in the workspace."""
-    ensure_workspace_perm(db, user, body.workspace_id, "ai")
+    voice_uc.ensure_can_speak(db, user, body.workspace_id)
     try:
         return voices.start_podcast(
             db,
@@ -242,7 +224,7 @@ def preview_voice(body: VoicePreviewRequest, db: DbSession, user: CurrentUser) -
     from app.domain.voices.speech import CLONE_ENGINE
 
     # 念一句是花钱的(各家 TTS 按字符计费),和配音同一档权限;记账挂在这个工作区上。
-    ensure_workspace_perm(db, user, body.workspace_id, "ai")
+    voice_uc.ensure_can_speak(db, user, body.workspace_id)
     if body.engine == CLONE_ENGINE:
         raise HTTPException(status_code=422, detail=tr("routeErr_previewCloneUsesSample"))
     try:
@@ -277,7 +259,7 @@ def preview_voice(body: VoicePreviewRequest, db: DbSession, user: CurrentUser) -
 def synthesize_with_engine(body: EngineSynthesizeRequest, db: DbSession, user: CurrentUser):
     """Synthesise with a remote engine. Separate from /voices/{id}/synthesize because there is
     no Voice row to hang it off — the engine supplies the voice."""
-    ensure_workspace_perm(db, user, body.workspace_id, "ai")
+    voice_uc.ensure_can_speak(db, user, body.workspace_id)
     try:
         return voices.start_synthesis(
             db,

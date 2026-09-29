@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Response
-from sqlalchemy import select
 
 from app.domain import sharing
 from app.api.deps import CurrentUser, DbSession
@@ -15,8 +14,8 @@ from app.api.schemas import (
     PublishPlatformOut,
     PublishTaskOut,
 )
-from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm
-from app.db.models import Asset, PublishAccount, PublishTask
+from app.domain.publish import use_cases as publish_uc
+from app.db.models import Asset, PublishAccount
 from app.core.i18n import get_current_locale, t
 from app.domain.publish import (
     PUBLISH_PLATFORMS,
@@ -63,19 +62,12 @@ def platforms() -> list[dict]:
 
 @router.get("/publish/accounts", response_model=list[PublishAccountOut])
 def list_accounts(workspace_id: str, db: DbSession, user: CurrentUser) -> list[PublishAccount]:
-    ensure_workspace_access(db, user, workspace_id)
-    return list(
-        db.scalars(
-            select(PublishAccount)
-            .where(PublishAccount.workspace_id == workspace_id, sharing.visible_filter('publish_account', user, workspace_id))
-            .order_by(PublishAccount.created_at)
-        )
-    )
+    return publish_uc.list_accounts(db, user, workspace_id)
 
 
 @router.post("/publish/accounts", response_model=PublishAccountOut)
 def create_account_route(body: PublishAccountCreate, db: DbSession, user: CurrentUser) -> PublishAccount:
-    ensure_workspace_perm(db, user, body.workspace_id, "publish")
+    publish_uc.ensure_can_publish(db, user, body.workspace_id)
     try:
         return create_account(
             db,
@@ -90,17 +82,9 @@ def create_account_route(body: PublishAccountCreate, db: DbSession, user: Curren
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
-def _account(db: DbSession, account_id: str) -> PublishAccount:
-    account = db.get(PublishAccount, account_id)
-    if account is None:
-        raise HTTPException(status_code=404, detail="Account not found")
-    return account
-
-
 @router.patch("/publish/accounts/{account_id}", response_model=PublishAccountOut)
 def update_account_route(account_id: str, body: PublishAccountUpdate, db: DbSession, user: CurrentUser) -> PublishAccount:
-    account = _account(db, account_id)
-    ensure_workspace_perm(db, user, account.workspace_id, "publish")
+    account = publish_uc.manageable_account(db, user, account_id)
     try:
         return update_account(db, account, body.model_dump(exclude_unset=True), actor=user.id)
     except sharing.NotManageableError as exc:
@@ -110,8 +94,7 @@ def update_account_route(account_id: str, body: PublishAccountUpdate, db: DbSess
 @router.post("/publish/accounts/{account_id}/recheck", response_model=PublishAccountOut)
 def recheck_account_route(account_id: str, db: DbSession, user: CurrentUser) -> PublishAccount:
     """把账号标记为待复检:执行器的下一次巡检立刻认领它重测登录态。"""
-    account = _account(db, account_id)
-    ensure_workspace_perm(db, user, account.workspace_id, "publish")
+    account = publish_uc.manageable_account(db, user, account_id)
     try:
         return recheck_account(db, account, actor=user.id)
     except sharing.NotManageableError as exc:
@@ -120,8 +103,7 @@ def recheck_account_route(account_id: str, db: DbSession, user: CurrentUser) -> 
 
 @router.delete("/publish/accounts/{account_id}", status_code=204)
 def delete_account_route(account_id: str, db: DbSession, user: CurrentUser) -> Response:
-    account = _account(db, account_id)
-    ensure_workspace_perm(db, user, account.workspace_id, "publish")
+    account = publish_uc.manageable_account(db, user, account_id)
     try:
         delete_account(db, account, actor=user.id)
     except sharing.NotManageableError as exc:
@@ -131,13 +113,13 @@ def delete_account_route(account_id: str, db: DbSession, user: CurrentUser) -> R
 
 @router.get("/publish/tasks", response_model=list[PublishTaskOut])
 def list_publish_tasks(workspace_id: str, db: DbSession, user: CurrentUser) -> list[dict]:
-    ensure_workspace_access(db, user, workspace_id)
+    publish_uc.ensure_can_browse(db, user, workspace_id)
     return [task_with_status(db, task) for task in list_tasks(db, workspace_id)]
 
 
 @router.post("/publish/tasks", response_model=PublishTaskOut)
 def create_publish_task(body: PublishCreate, db: DbSession, user: CurrentUser) -> dict:
-    ensure_workspace_perm(db, user, body.workspace_id, "publish")
+    publish_uc.ensure_can_publish(db, user, body.workspace_id)
     account = db.get(PublishAccount, body.account_id)
     if account is None or account.workspace_id != body.workspace_id:
         raise HTTPException(status_code=404, detail="Account not found in this workspace")
@@ -167,10 +149,7 @@ def create_publish_task(body: PublishCreate, db: DbSession, user: CurrentUser) -
 
 @router.delete("/publish/tasks/{task_id}", status_code=204)
 def delete_publish_task(task_id: str, db: DbSession, user: CurrentUser) -> Response:
-    task = db.get(PublishTask, task_id)
-    if task is None:
-        raise HTTPException(status_code=404, detail="Publish task not found")
-    ensure_workspace_perm(db, user, task.workspace_id, "publish")
+    task = publish_uc.deletable_task(db, user, task_id)
     db.delete(task)
     db.commit()
     return Response(status_code=204)
@@ -178,7 +157,7 @@ def delete_publish_task(task_id: str, db: DbSession, user: CurrentUser) -> Respo
 
 @router.post("/publish/copy", response_model=PublishCopyResponse)
 def generate_publish_copy(body: PublishCopyRequest, db: DbSession, user: CurrentUser) -> dict:
-    ensure_workspace_perm(db, user, body.workspace_id, "publish")
+    publish_uc.ensure_can_publish(db, user, body.workspace_id)
     from app.domain.publish.copy import generate_copy
 
     try:

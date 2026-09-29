@@ -112,14 +112,11 @@ ROUTE_AUTHORIZATION: dict[str, int] = {
     "app/api/routes/luts.py": 4,
     "app/api/routes/notifications.py": 4,
     "app/api/routes/plugins.py": 1,
-    "app/api/routes/publish.py": 9,
     "app/api/routes/scheduler.py": 7,
     "app/api/routes/sequences.py": 5,
     "app/api/routes/session_groups.py": 5,
     "app/api/routes/settings/provider_pricing.py": 1,
     "app/api/routes/shares.py": 1,
-    "app/api/routes/voices.py": 11,
-    "app/api/routes/workflows.py": 17,
     "app/api/routes/workspaces.py": 6,
 }
 

@@ -28,7 +28,6 @@ from app.api.schemas import (
     WorkflowRunRequest,
     WorkflowUpdate,
 )
-from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm
 from app.domain.scheduler import stop_tasks_bound_to_workflow
 from app.db.models import Job, Workflow, WorkflowRevision
 from app.domain.workflows import (
@@ -43,7 +42,7 @@ from app.domain.workflows.file_export import (
     ascii_file_stem,
     export_payload,
 )
-from app.domain.workflows import use_cases as workflow_reads
+from app.domain.workflows import use_cases as workflow_uc
 from app.domain.workflows.revisions import (
     WorkflowGraphConflict,
     WorkflowRevisionError,
@@ -73,7 +72,7 @@ def node_types(db: DbSession, user: CurrentUser) -> list[dict]:
     """
     #: 语言从 Accept-Language 来,不是从某个全局配置来:这是个多租户、可远程部署的后端,
     #: 没有「服务端语言」这回事。
-    return workflow_reads.node_types(db, user, get_current_locale())
+    return workflow_uc.node_types(db, user, get_current_locale())
 
 
 @router.get("/workflows/templates", response_model=list[WorkflowTemplateOut])
@@ -111,7 +110,7 @@ def workflow_template_checks(workspace_id: str, db: DbSession, user: CurrentUser
     """
     from app.domain.workflows.templates import requirement_statuses
 
-    ensure_workspace_access(db, user, workspace_id)
+    workflow_uc.ensure_can_browse(db, user, workspace_id)
     statuses = requirement_statuses(db, user_id=user.id, workspace_id=workspace_id)
     return [{"check": check, "status": status} for check, status in statuses.items()]
 
@@ -144,7 +143,7 @@ def workflow_field_options(
     """
     from app.domain.workflows.field_options import FieldOptionsError, OptionContext, field_options
 
-    ensure_workspace_access(db, user, workspace_id)
+    workflow_uc.ensure_can_browse(db, user, workspace_id)
     context = OptionContext(
         workspace_id=workspace_id,
         user_id=user.id,
@@ -161,7 +160,7 @@ def workflow_field_options(
 
 @router.get("/workflows", response_model=list[WorkflowOut])
 def list_all(workspace_id: str, db: DbSession, user: CurrentUser) -> list[Workflow]:
-    return workflow_reads.list_workflows(db, user, workspace_id)
+    return workflow_uc.list_workflows(db, user, workspace_id)
 
 
 def _localized(exc: WorkflowDomainError) -> str:
@@ -172,7 +171,7 @@ def _localized(exc: WorkflowDomainError) -> str:
 
 @router.post("/workflows", response_model=WorkflowOut)
 def create(body: WorkflowCreate, db: DbSession, user: CurrentUser) -> Workflow:
-    ensure_workspace_perm(db, user, body.workspace_id, "edit")
+    workflow_uc.ensure_can_edit(db, user, body.workspace_id)
     try:
         graph = body.graph
         if body.template_id:
@@ -203,8 +202,7 @@ def create(body: WorkflowCreate, db: DbSession, user: CurrentUser) -> Workflow:
 
 @router.get("/workflows/{workflow_id}/export")
 def export_one(workflow_id: str, db: DbSession, user: CurrentUser) -> Response:
-    workflow = _get(db, workflow_id)
-    ensure_workspace_access(db, user, workflow.workspace_id)
+    workflow = workflow_uc.readable(db, user, workflow_id)
     payload = export_payload(workflow)
     # ASCII 兜底文件名 + RFC 5987 UTF-8 全名,中文工作流名两头都不乱码。
     ascii_name = ascii_file_stem(workflow.name)
@@ -220,7 +218,7 @@ def export_one(workflow_id: str, db: DbSession, user: CurrentUser) -> Response:
 
 @router.post("/workflows/import", response_model=WorkflowOut)
 def import_one(body: WorkflowImportRequest, db: DbSession, user: CurrentUser) -> Workflow:
-    ensure_workspace_perm(db, user, body.workspace_id, "edit")
+    workflow_uc.ensure_can_edit(db, user, body.workspace_id)
     try:
         envelope = workflow_file.read_workflow_file(body.data)
     except workflow_file.WorkflowFileError as exc:
@@ -253,13 +251,12 @@ def import_one(body: WorkflowImportRequest, db: DbSession, user: CurrentUser) ->
 
 @router.get("/workflows/{workflow_id}", response_model=WorkflowOut)
 def get_one(workflow_id: str, db: DbSession, user: CurrentUser) -> Workflow:
-    return workflow_reads.readable(db, user, workflow_id)
+    return workflow_uc.readable(db, user, workflow_id)
 
 
 @router.patch("/workflows/{workflow_id}", response_model=WorkflowOut)
 def update(workflow_id: str, body: WorkflowUpdate, db: DbSession, user: CurrentUser) -> Workflow:
-    workflow = _get(db, workflow_id)
-    ensure_workspace_perm(db, user, workflow.workspace_id, "edit")
+    workflow = workflow_uc.editable(db, user, workflow_id)
     changes = body.model_dump(exclude_unset=True, exclude={"base_graph_hash"})
     try:
         return update_workflow(
@@ -294,8 +291,7 @@ def _with_vouchers(db, rows: list[WorkflowRevision]) -> list[WorkflowRevision]:
 
 @router.get("/workflows/{workflow_id}/revisions", response_model=list[WorkflowRevisionOut])
 def list_revisions(workflow_id: str, db: DbSession, user: CurrentUser) -> list[WorkflowRevision]:
-    workflow = _get(db, workflow_id)
-    ensure_workspace_access(db, user, workflow.workspace_id)
+    workflow = workflow_uc.readable(db, user, workflow_id)
     return _with_vouchers(db, list_workflow_revisions(db, workflow.id))
 
 
@@ -307,8 +303,7 @@ def attest(workflow_id: str, revision: int, db: DbSession, user: CurrentUser) ->
     认可(见 domain/authority)。认可只对**认可的人自己用得了的东西**有用 —— 所以谁能在这里点都
     无妨,门槛和编辑工作流一样;真正的判断在用的那一刻。
     """
-    workflow = _get(db, workflow_id)
-    ensure_workspace_perm(db, user, workflow.workspace_id, "edit")
+    workflow = workflow_uc.editable(db, user, workflow_id)
     try:
         attested = attest_revision(db, workflow, revision, attested_by=user.id)
     except WorkflowRevisionError as exc:
@@ -318,8 +313,7 @@ def attest(workflow_id: str, revision: int, db: DbSession, user: CurrentUser) ->
 
 @router.get("/workflows/{workflow_id}/revisions/{revision}", response_model=WorkflowRevisionDetailOut)
 def get_revision(workflow_id: str, revision: int, db: DbSession, user: CurrentUser) -> WorkflowRevision:
-    workflow = _get(db, workflow_id)
-    ensure_workspace_access(db, user, workflow.workspace_id)
+    workflow = workflow_uc.readable(db, user, workflow_id)
     item = get_workflow_revision(db, workflow.id, revision)
     if item is None:
         raise HTTPException(status_code=404, detail=tr("routeErr_workflowRevisionNotFound"))
@@ -328,8 +322,7 @@ def get_revision(workflow_id: str, revision: int, db: DbSession, user: CurrentUs
 
 @router.post("/workflows/{workflow_id}/revisions/{revision}/restore", response_model=WorkflowOut)
 def restore_revision(workflow_id: str, revision: int, db: DbSession, user: CurrentUser) -> Workflow:
-    workflow = _get(db, workflow_id)
-    ensure_workspace_perm(db, user, workflow.workspace_id, "edit")
+    workflow = workflow_uc.editable(db, user, workflow_id)
     try:
         restore_workflow_revision(db, workflow, revision, created_by=user.id)
     except WorkflowRevisionError as exc:
@@ -339,8 +332,7 @@ def restore_revision(workflow_id: str, revision: int, db: DbSession, user: Curre
 
 @router.delete("/workflows/{workflow_id}", status_code=204)
 def delete(workflow_id: str, db: DbSession, user: CurrentUser) -> Response:
-    workflow = _get(db, workflow_id)
-    ensure_workspace_perm(db, user, workflow.workspace_id, "edit")
+    workflow = workflow_uc.editable(db, user, workflow_id)
     # 绑着它的定时任务**同一个事务里停用** —— 此前删工作流不管它们:任务仍是启用的,到点照样
     # 触发、照样失败,手动的也照样能点「立即运行」。这一步排在路由这层(和 sharing.forget 一样),
     # 因为定时任务依赖工作流、工作流不能反过来认识定时任务(见 tests/test_import_layering.py)。
@@ -352,8 +344,7 @@ def delete(workflow_id: str, db: DbSession, user: CurrentUser) -> Response:
 
 @router.post("/workflows/{workflow_id}/run", response_model=JobOut)
 def run(workflow_id: str, body: WorkflowRunRequest, db: DbSession, user: CurrentUser) -> Job:
-    workflow = _get(db, workflow_id)
-    ensure_workspace_perm(db, user, workflow.workspace_id, "edit")
+    workflow = workflow_uc.editable(db, user, workflow_id)
     try:
         return start_workflow_job(db, workflow, created_by=user.id, params=body.params)
     except WorkflowDomainError as exc:
@@ -364,8 +355,7 @@ def run(workflow_id: str, body: WorkflowRunRequest, db: DbSession, user: Current
 def list_runs(workflow_id: str, db: DbSession, user: CurrentUser, limit: int = 50) -> list[Job]:
     """Execution history: the workflow's run jobs, newest first. Per-run node steps come from
     the existing GET /jobs/{job_id}/events (workflow.node.* events)."""
-    workflow = _get(db, workflow_id)
-    ensure_workspace_access(db, user, workflow.workspace_id)
+    workflow = workflow_uc.readable(db, user, workflow_id)
     #: **按工作流在库里筛,再取前 N 条。** 此前是先取整个工作区最新的 N 个工作流任务、再在这里
     #: 按 workflow_id 过滤 —— 同一个工作区里别的工作流多跑几次,这个工作流的记录就被挤出前 N 条,
     #: 历史面板随之变空,而它其实跑过很多次。
@@ -383,8 +373,7 @@ def list_runs(workflow_id: str, db: DbSession, user: CurrentUser, limit: int = 5
 
 @router.post("/workflows/{workflow_id}/ai-edit", response_model=WorkflowAiEditResponse)
 def ai_edit(workflow_id: str, body: WorkflowAiEditRequest, db: DbSession, user: CurrentUser) -> dict:
-    workflow = _get(db, workflow_id)
-    ensure_workspace_perm(db, user, workflow.workspace_id, "edit")
+    workflow = workflow_uc.editable(db, user, workflow_id)
     from app.domain.workflows.ai_edit import ai_edit_graph
 
     try:
@@ -409,8 +398,7 @@ def workflow_agent_session(workflow_id: str, db: DbSession, user: CurrentUser) -
     一个工作流可以有多个会话(见下面的 list/create)——这个端点始终返回
     「默认会话」(get-or-create),保持老调用方语义不变。
     """
-    workflow = _get(db, workflow_id)
-    ensure_workspace_perm(db, user, workflow.workspace_id, "edit")
+    workflow = workflow_uc.editable(db, user, workflow_id)
     from app.domain.agent import host
 
     return host.get_or_create_external_session(
@@ -425,8 +413,7 @@ def workflow_agent_session(workflow_id: str, db: DbSession, user: CurrentUser) -
 @router.get("/workflows/{workflow_id}/agent-sessions", response_model=list[AgentSessionOut])
 def list_workflow_agent_sessions(workflow_id: str, db: DbSession, user: CurrentUser) -> list["AgentSession"]:
     """该工作流的全部智能体会话(默认会话 + 手动新建的),新→旧。"""
-    workflow = _get(db, workflow_id)
-    ensure_workspace_access(db, user, workflow.workspace_id)
+    workflow_uc.readable(db, user, workflow_id)
     from sqlalchemy import or_, select
 
     from app.db.models import AgentSession
@@ -448,8 +435,7 @@ def create_workflow_agent_session(workflow_id: str, db: DbSession, user: Current
 
     from app.domain.agent import host
 
-    workflow = _get(db, workflow_id)
-    ensure_workspace_perm(db, user, workflow.workspace_id, "edit")
+    workflow = workflow_uc.editable(db, user, workflow_id)
     return host.create_session(
         db,
         workspace_id=workflow.workspace_id,
@@ -457,10 +443,3 @@ def create_workflow_agent_session(workflow_id: str, db: DbSession, user: Current
         external_key=f"workflow:{workflow_id}:{uuid.uuid4().hex[:8]}",
         title="新对话",
     )
-
-
-def _get(db: DbSession, workflow_id: str) -> Workflow:
-    workflow = db.get(Workflow, workflow_id)
-    if workflow is None:
-        raise HTTPException(status_code=404, detail="Workflow not found")
-    return workflow
