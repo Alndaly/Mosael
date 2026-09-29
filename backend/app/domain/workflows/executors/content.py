@@ -14,7 +14,7 @@ from app.domain.projects import create_project
 from app.domain.sequences import create_sequence_scaffold
 from app.domain.workflows import WorkflowDomainError
 from app.domain.plugins.nodes import PLUGIN_NODE_PREFIX
-from app.domain.workflows.executors import RunScope, register, register_prefix
+from app.domain.workflows.executors.registry import RunScope, register, register_prefix
 from app.domain.workflows.executors.common import id_list, provided
 
 

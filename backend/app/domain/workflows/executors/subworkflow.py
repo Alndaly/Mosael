@@ -14,7 +14,7 @@ from app.db.models import Job, Workflow
 from app.domain.jobs import current_parent_job_id
 from app.domain.workflows import WorkflowDomainError, interpolate
 from app.domain.jobs import current_actor
-from app.domain.workflows.executors import RunScope, register
+from app.domain.workflows.executors.registry import RunScope, register
 from app.domain.workflows.executors.common import run_body, wait_for_job
 
 MAX_NEST_DEPTH = 8

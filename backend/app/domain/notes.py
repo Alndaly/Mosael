@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.core.i18n import LocalizedError
 from app.domain import sharing
-from app.domain.agent.sessions import SHARE_KIND as SESSION_SHARE_KIND
+from app.domain.sharing import AGENT_SESSION_KIND as SESSION_SHARE_KIND
 from app.domain.authority import Actor, ensure
 from app.domain.note_types import NoteContent
 from app.db.models import Asset, AgentMessage, AgentSession, Board, Note, NoteRevision, Project

@@ -48,23 +48,12 @@ from app.domain.plugins import generation as plugin_generation
 from app.domain.plugins.errors import PluginDomainError
 from app.domain.plugins.manifest import GENERATION
 from app.domain.plugins.runtime import PluginCancelled, PluginRuntimeError, StreamHooks
+from app.domain.providers.plugin_vendor import VENDOR_PREFIX, package_of, vendor_for
 
 logger = logging.getLogger(__name__)
 
-#: 插件连接的 vendor 前缀。vendor 绑**包**不绑实例:画板、工作流会被导出到别的机器,实例是本机事实
-#: —— 和工作流节点类型 `plugin.<包id>.<工具>` 是同一个理由(ADR 0005)。
-VENDOR_PREFIX = "plugin:"
 #: 宿主接进选择器的生成种类 —— 就是生成目录认的那几种(图像、视频、音频,见 catalog.GENERATION_KINDS),
 #: 不在这里另抄一份。
-
-
-def vendor_for(package_id: str) -> str:
-    return f"{VENDOR_PREFIX}{package_id}"
-
-
-def package_of(vendor: str) -> str:
-    """`plugin:<包 id>` → 包 id;不是插件 vendor 回空串。"""
-    return vendor[len(VENDOR_PREFIX):] if vendor.startswith(VENDOR_PREFIX) else ""
 
 
 # ---------------------------------------------------------------------------

@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 from app.db.models import Asset, Clip, Sequence, Transcript
 from app.domain.sequences.errors import SequenceDomainError
 from app.domain.workflows import WorkflowDomainError
-from app.domain.workflows.executors import RunScope, register
+from app.domain.workflows.executors.registry import RunScope, register
 from app.domain.jobs import current_actor
 from app.domain.workflows.executors.common import id_list, provided, text_lines, truthy, wait_for_job
 

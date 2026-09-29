@@ -23,7 +23,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.ai.providers.contracts.generation import DRIVING_AUDIO, SOURCE_VIDEO
 from app.domain.workflows import WorkflowDomainError
-from app.domain.workflows.executors import RunScope, register
+from app.domain.workflows.executors.registry import RunScope, register
 from app.media.tempo import atempo_filters
 from app.domain.workflows.executors.talking import VIDEO_LIPSYNC, _generate, _pick_model, _require_consent, _text
 

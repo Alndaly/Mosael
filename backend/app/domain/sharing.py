@@ -38,10 +38,14 @@ from app.db.models import (
 #: **默认值按类别定,而且只在这里定。** 身份与私人对话默认私有;定时任务默认共享 —— 它是团队基建,
 #: 归属是为了可追溯与停摆(主人失去权限时该停),不是为了藏起来。把这一条写成一张表而不是散在各处
 #: 的 if,是因为「这一类默认给谁看」正是最容易在第二个调用点被写反的东西。
+#: 智能体会话在共享记录里的名字。**从这里引**:笔记要判断「这条引用的会话你看不看得到」,
+#: 此前为此 import 了 agent.sessions —— 笔记就此依赖智能体,而智能体经工作流又依赖笔记,三个包成环。
+AGENT_SESSION_KIND = "agent_session"
+
 KINDS: dict[str, tuple[type, bool]] = {
     "publish_account": (PublishAccount, False),
     "browser_profile": (BrowserProfile, False),
-    "agent_session": (AgentSession, False),
+    AGENT_SESSION_KIND: (AgentSession, False),
     "generation_session": (GenerationSession, False),
     "scheduled_task": (ScheduledTask, True),
 }

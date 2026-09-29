@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session
 
 from app.db.models import Scene3D
 from app.domain.workflows import WorkflowDomainError
-from app.domain.workflows.executors import RunScope, register
+from app.domain.workflows.executors.registry import RunScope, register
 from app.domain.workflows.executors.common import id_list
 
 

@@ -15,7 +15,7 @@ from typing import Any, Iterator
 from sqlalchemy.orm import Session
 
 from app.domain.workflows import WorkflowDomainError, interpolate
-from app.domain.workflows.executors import RunScope, register
+from app.domain.workflows.executors.registry import RunScope, register
 from app.domain.workflows.executors.common import run_body, truthy
 
 #: `item` 的"没给"哨兵。loop_while 没有当前项,而 None / "" 都是合法的迭代项,不能拿来当哨兵。

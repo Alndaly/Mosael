@@ -7,7 +7,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.db.models import Sequence
-from app.domain.sequences.undo import undoable
+from app.domain.sequences.undo.registry import undoable
 from app.domain.sequences.undo.rows import (
     delete_clip_row,
     redo_ripple_room,

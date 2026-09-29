@@ -17,9 +17,10 @@ from sqlalchemy.orm import Session
 from app.db.models import AgentSession, User
 from app.domain import sharing
 from app.domain.permissions import NotVisible
+from app.domain.sharing import AGENT_SESSION_KIND
 
 #: 共享记录里这一类叫什么(见 domain/sharing.KINDS)。
-SHARE_KIND = "agent_session"
+SHARE_KIND = AGENT_SESSION_KIND
 
 
 def readable_session(db: Session, user: User, session_id: str) -> AgentSession:

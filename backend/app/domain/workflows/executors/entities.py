@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.domain.jobs import current_actor
 from app.domain.workflows import WorkflowDomainError
-from app.domain.workflows.executors import RunScope, register
+from app.domain.workflows.executors.registry import RunScope, register
 from app.domain.workflows.executors.common import id_list, wait_for_job
 
 #: 取资产时最多交出几张参考图(按挑图的先后)。

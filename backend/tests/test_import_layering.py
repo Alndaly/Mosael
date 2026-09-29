@@ -48,6 +48,29 @@ def _graph(include_lazy: bool = True) -> dict[str, set[str]]:
                 return candidate
         return None
 
+    packages = {name for name, path in mods if path.name == "__init__.py"}
+
+    def targets_of(node: ast.Import | ast.ImportFrom, importer: str) -> list[str]:
+        """一条 import 语句真正拉进来的模块。
+
+        `from app.domain import agent` 拉进来的是 **app.domain.agent** 这个子模块,不是 app.domain 包本身。
+        此前只看 `node.module`,于是这种写法全都记成了对包的依赖 —— 包级的环、跨层的边在这里整类隐身。
+        相对导入(`from . import x`、`from .sub import y`)此前也整个被跳过。
+        """
+        if isinstance(node, ast.Import):
+            return [alias.name for alias in node.names]
+        base = node.module or ""
+        if node.level:
+            anchor = importer if importer in packages else importer.rpartition(".")[0]
+            for _ in range(node.level - 1):
+                anchor = anchor.rpartition(".")[0]
+            base = f"{anchor}.{base}" if base else anchor
+        found = []
+        for alias in node.names:
+            submodule = f"{base}.{alias.name}"
+            found.append(submodule if submodule in known else base)
+        return found
+
     graph: dict[str, set[str]] = collections.defaultdict(set)
     for name, path in mods:
         tree = ast.parse(path.read_text(encoding="utf-8"))
@@ -61,10 +84,7 @@ def _graph(include_lazy: bool = True) -> dict[str, set[str]]:
                 continue
             if not include_lazy and id(node) in inner:
                 continue
-            targets = (
-                [node.module] if isinstance(node, ast.ImportFrom) and node.module else [a.name for a in node.names]
-            )
-            for dotted in targets:
+            for dotted in targets_of(node, name):
                 hit = resolve(dotted or "")
                 if hit and hit != name:
                     graph[name].add(hit)
@@ -193,21 +213,99 @@ def test_top_level_imports_are_acyclic() -> None:
     assert not _cycles(_graph(include_lazy=False))
 
 
+#: 算上函数内延迟导入之后**还在环里的模块**。只减不增的棘轮。
+#:
+#: 这份清单曾经是空的 —— 但那是个假象:`from app.domain.workflows import executors` 这类写法被记成了对**包**的
+#: 依赖,相对导入干脆整个没看,于是包和子模块之间的环、跨子模块的环整类隐身。解析修好之后当场露出十一处;
+#: 顶层导入里的那些已经拆掉(注册表挪进 registry.py,见 workflows/executors 与 sequences/undo),剩下的都是
+#: 函数内的延迟导入,冻结在这里。
+#:
+#: 规则:新模块进环 → 红;有模块出了环 → 也红,把它从这里删掉(不留一扇随时可以走回来的门)。
+LAZY_CYCLE_MODULES = frozenset(
+    {
+        # TTS 引擎目录与语言表互相查。
+        "app.ai.runtime.config", "app.ai.runtime.f5_models", "app.ai.runtime.tts_language", "app.ai.runtime.tts_models",
+        # 插件实例、状态、工具调用、宿主能力通知:实例变了要通知能力表,工具调用又要读实例。
+        "app.domain.plugins.host_capabilities", "app.domain.plugins.instances", "app.domain.plugins.state",
+        "app.domain.plugins.tools",
+        "app.domain.plugins.bundled", "app.domain.plugins.packages",
+        # 生成解析要查供应商模型,供应商模型又要问生成目录「这个模型是哪一类」。
+        "app.domain.generation", "app.domain.generation.operations", "app.domain.generation.resolution",
+        "app.domain.providers.models",
+        # 工作流引擎 ⇄ 执行器:子工作流节点回头调引擎,引擎按注册表找执行器。
+        "app.domain.workflows.engine", "app.domain.workflows.executors", "app.domain.workflows.executors.ai",
+        "app.domain.workflows.executors.basic", "app.domain.workflows.executors.common",
+        "app.domain.workflows.executors.content", "app.domain.workflows.executors.dub_lipsync",
+        "app.domain.workflows.executors.entities", "app.domain.workflows.executors.loops",
+        "app.domain.workflows.executors.scenes", "app.domain.workflows.executors.subjobs",
+        "app.domain.workflows.executors.subworkflow", "app.domain.workflows.executors.talking",
+        "app.domain.workflows.field_options", "app.domain.workflows.templates",
+    }
+)
+
+
 def test_no_cycle_survives_even_lazy_imports() -> None:
-    """把函数内延迟导入也算上,**一个环都不许有**。
+    """把函数内延迟导入也算上,环里的模块**只减不增**(见 LAZY_CYCLE_MODULES)。
 
     这里曾经允许过一个:core.db ⇄ db.models —— Base 定义在 core.db,models 依赖它,而 init_db
     又要回头 import models 才能 create_all,当时判成"SQLAlchemy 的标准形态,无法消除"。
-
     **那个判断是错的**:环的根源不是 Base,是 `core/db.py` 同时当了底座和迁移编排器。迁移搬去
     `app/db/migrations.py` 之后,init_db 不再需要从底座回头引 models,环自己就没了。
-
-    所以白名单清空。留着一个已经不存在的豁免,等于给它留一扇随时可以走回来的门。
     """
-    allowed: set[tuple[str, ...]] = set()
-    actual = {tuple(c) for c in _cycles(_graph(include_lazy=True))}
-    unexpected = actual - allowed
-    assert not unexpected, (
-        "出现了新的循环依赖(通常是某处用函数内 import 绕开了分层):\n  "
-        + "\n  ".join(" ⇄ ".join(c) for c in sorted(unexpected))
+    in_cycles = {module for cycle in _cycles(_graph(include_lazy=True)) for module in cycle}
+    joined = sorted(in_cycles - LAZY_CYCLE_MODULES)
+    assert not joined, (
+        "这些模块新进了循环依赖(通常是某处用函数内 import 绕开了分层):\n  " + "\n  ".join(joined)
     )
+    left = sorted(LAZY_CYCLE_MODULES - in_cycles)
+    assert not left, "这些模块已经不在环里了,把它们从 LAZY_CYCLE_MODULES 里删掉:\n  " + "\n  ".join(left)
+
+
+def _package_of(module: str) -> str:
+    """包级粒度:app.domain.<包>、app.ai.<包>…… 两层以下的模块归到它所在的那个包。"""
+    parts = module.split(".")
+    return ".".join(parts[:3]) if len(parts) >= 3 else module
+
+
+def _package_graph(include_lazy: bool) -> dict[str, set[str]]:
+    graph: dict[str, set[str]] = collections.defaultdict(set)
+    for src, dsts in _graph(include_lazy=include_lazy).items():
+        for dst in dsts:
+            if _package_of(src) != _package_of(dst):
+                graph[_package_of(src)].add(_package_of(dst))
+    return graph
+
+
+def test_packages_do_not_import_each_other_in_a_circle() -> None:
+    """包级:顶层导入里,领域包之间不许成环。
+
+    模块级无环挡不住这一种:providers.connections 为了一个 vendor 前缀在顶层 import 了生成域,而生成域
+    本来就依赖供应商 —— 两个包就此互相认识,只是没有哪两个**模块**恰好首尾相接。同样的还有笔记为了
+    一个共享种类名 import 了智能体(智能体经工作流又依赖笔记)。两处都已拆开:vendor 命名约定挪进
+    providers/plugin_vendor,共享种类名挪进 sharing。
+    """
+    cycles = _cycles(_package_graph(include_lazy=False))
+    assert not cycles, "这些包在顶层互相 import:\n  " + "\n  ".join(" ⇄ ".join(c) for c in cycles)
+
+
+#: 算上延迟导入之后仍在包级环里的领域包。只减不增的棘轮,规则同 LAZY_CYCLE_MODULES。
+#:
+#: 它们大多是**往下**的正常依赖(工作流用账单、用供应商),被少数几条往回走的延迟导入串成了一个环:
+#: 供应商模型回头问生成目录、素材导入回头建资产与文档、资产回头调工作流画图。拆掉那几条回边,
+#: 这个环就散了 —— 在那之前,至少不许有新的包被卷进来。
+LAZY_CYCLE_PACKAGES = frozenset(
+    {
+        "app.domain.ai_chat", "app.domain.analysis", "app.domain.assets", "app.domain.billing",
+        "app.domain.documents", "app.domain.entities", "app.domain.generation", "app.domain.providers",
+        "app.domain.publish", "app.domain.render", "app.domain.scenes", "app.domain.translate",
+        "app.domain.voices", "app.domain.workflows",
+    }
+)
+
+
+def test_the_package_level_cycle_only_shrinks() -> None:
+    in_cycles = {package for cycle in _cycles(_package_graph(include_lazy=True)) for package in cycle}
+    joined = sorted(in_cycles - LAZY_CYCLE_PACKAGES)
+    assert not joined, "这些包新被卷进了包级循环依赖:\n  " + "\n  ".join(joined)
+    left = sorted(LAZY_CYCLE_PACKAGES - in_cycles)
+    assert not left, "这些包已经不在环里了,把它们从 LAZY_CYCLE_PACKAGES 里删掉:\n  " + "\n  ".join(left)

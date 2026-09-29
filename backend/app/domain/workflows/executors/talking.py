@@ -27,7 +27,7 @@ from app.core.config import settings
 from app.ai.providers.contracts.generation import DRIVING_AUDIO, FIRST_FRAME, SOURCE_VIDEO
 from app.domain.jobs import current_actor
 from app.domain.workflows import WorkflowDomainError
-from app.domain.workflows.executors import RunScope, register
+from app.domain.workflows.executors.registry import RunScope, register
 from app.domain.workflows.executors.common import wait_for_job
 
 SPEECH_TO_VIDEO = "speech-to-video"

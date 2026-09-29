@@ -13,7 +13,7 @@ import httpx
 from sqlalchemy.orm import Session
 
 from app.domain.workflows import WorkflowDomainError, as_text
-from app.domain.workflows.executors import RunScope, register
+from app.domain.workflows.executors.registry import RunScope, register
 from app.domain.workflows.executors.common import wait_until
 
 HTTP_NODE_TIMEOUT_SECONDS = 60

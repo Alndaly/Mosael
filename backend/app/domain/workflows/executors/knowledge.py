@@ -6,7 +6,7 @@ from app.domain.note_types import NoteContent
 from app.domain.notes import NoteDomainError, create_note, query_notes, read_reference
 from app.domain.workflows import WorkflowDomainError, field_name
 from app.domain.workflows.authority import current_authority
-from app.domain.workflows.executors import RunScope, register
+from app.domain.workflows.executors.registry import RunScope, register
 
 
 #: 搜索结果每条摘录多长,以及命中处前面留多少上下文。

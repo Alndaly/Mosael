@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.db.models import Clip, Sequence, Track
 from app.domain.sequences.errors import SequenceDomainError
-from app.domain.sequences.undo import undoable
+from app.domain.sequences.undo.registry import undoable
 from app.domain.sequences.undo.rows import delete_clip_row, require_clip_row, restore_clip_row
 
 

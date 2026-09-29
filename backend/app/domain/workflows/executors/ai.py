@@ -16,7 +16,7 @@ from app.domain.billing.usage import billable, once
 from app.domain.providers.selection import require_connection
 from app.domain.workflows import WorkflowDomainError, field_name
 from app.domain.jobs import current_actor
-from app.domain.workflows.executors import RunScope, register
+from app.domain.workflows.executors.registry import RunScope, register
 from app.domain.workflows.executors.common import text_lines
 
 LLM_TIMEOUT_SECONDS = 120

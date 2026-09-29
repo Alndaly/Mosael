@@ -17,7 +17,7 @@ from app.domain.jobs import current_parent_job_id
 from app.domain.permissions import NotVisible
 from app.domain.workflows import WorkflowDomainError
 from app.domain.workflows.authority import current_authority
-from app.domain.workflows.executors import RunScope, register
+from app.domain.workflows.executors.registry import RunScope, register
 
 
 def _session_in(db: Session, scope: RunScope, config: dict[str, Any]) -> str:
