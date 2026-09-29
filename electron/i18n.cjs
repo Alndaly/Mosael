@@ -76,8 +76,13 @@ const MESSAGES = {
   dialog_backupFile: { zh: "Mosael 备份", en: "Mosael backup" },
   backend_stoppedTitle: { zh: "Mosael 后端已停止", en: "Mosael backend stopped" },
   backend_stoppedBody: {
-    zh: "本地后端意外退出(退出码 {code})。请重启 Mosael。",
-    en: "The local backend exited unexpectedly (code {code}). Please restart Mosael.",
+    zh: "本地后端反复意外退出(最后一次退出码 {code}),自动重启没能恢复。请查看 ~/.mosael/logs 后重启 Mosael。",
+    en: "The local backend kept exiting unexpectedly (last code {code}) and automatic restarts did not recover it. Check ~/.mosael/logs and restart Mosael.",
+  },
+  backend_portTakenTitle: { zh: "端口被另一个后端占用", en: "Port taken by another backend" },
+  backend_portTakenBody: {
+    zh: "端口 {port} 上已经有一个后端在跑,但它不是这个版本、这份数据的({reason})。请先退出它(或结束残留的 mosael-backend 进程)再打开 Mosael。",
+    en: "A backend is already running on port {port}, but it does not belong to this version or data folder ({reason}). Quit it (or end the leftover mosael-backend process) and open Mosael again.",
   },
   backend_startFailedTitle: { zh: "Mosael 后端启动失败", en: "Mosael backend failed to start" },
   backend_startFailedBody: {

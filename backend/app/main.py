@@ -144,6 +144,10 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
             logger.info("notified %d feishu chat(s) about a turn interrupted by restart", notified)
 
         autostart_enabled_bots()
+    # 壳交了 pid 就盯着它:壳被强杀时后端不留成孤儿占着端口(见 core/lifeline)。
+    from app.core.lifeline import watch_parent_from_env
+
+    watch_parent_from_env()
     logger.info("Mosael backend ready")
     yield
     logger.info("Mosael backend shutting down")

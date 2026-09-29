@@ -18,6 +18,7 @@ const os = require("node:os");
 const path = require("node:path");
 const { loginShellPath } = require("./login-shell-path.cjs");
 const { resolveMasterKey, shellToken } = require("./master-key.cjs");
+const { createRestartPolicy, reusable } = require("./backend-lifecycle.cjs");
 const { Readable } = require("node:stream");
 const { pipeline } = require("node:stream/promises");
 const {
@@ -249,15 +250,20 @@ function installShellHeader(token) {
   });
 }
 
-async function isHealthy() {
+/** /api/health 的回应体;连不上、不是 JSON 都回 null。它带着版本和数据目录指纹(见 backend-lifecycle.cjs)。 */
+async function probeBackend() {
   try {
     const res = await net.fetch(`${BACKEND_URL}/api/health`, { signal: AbortSignal.timeout(1500) });
-    if (!res.ok) return false;
-    const body = await res.json();
-    return body.status === "ok";
+    if (!res.ok) return null;
+    return await res.json();
   } catch {
-    return false;
+    return null;
   }
+}
+
+async function isHealthy() {
+  const body = await probeBackend();
+  return Boolean(body && body.status === "ok");
 }
 
 async function waitForBackend(timeoutMs) {
@@ -271,8 +277,16 @@ async function waitForBackend(timeoutMs) {
 }
 
 async function ensureBackend() {
-  // Port already serving a healthy Mosael backend (e.g. dev uvicorn) → reuse it.
-  if (await isHealthy()) return true;
+  // 端口上已经有个健康的后端(开发时手动起的 uvicorn、上次没退干净的)→ 对得上才复用。
+  // 打包版要版本、数据目录都一致:上次壳被强杀留下的孤儿可能是旧版本、指着另一份数据。
+  const existing = await probeBackend();
+  if (existing) {
+    const verdict = reusable(existing, { version: app.getVersion(), dataDir: configuredDataDir, strict: !isDev });
+    if (verdict.ok) return true;
+    appendMainLog("backend-not-reusable", verdict.reason);
+    dialog.showErrorBox(t("backend_portTakenTitle"), t("backend_portTakenBody", { port: BACKEND_PORT, reason: verdict.reason }));
+    return false;
+  }
 
   const { command, args, cwd } = backendCommand();
   // 打包版后端日志落盘(userData/logs/backend.log);之前 ignore 导致后端问题完全无迹可查。
@@ -303,6 +317,8 @@ async function ensureBackend() {
     // 冻结二进制,连仓库都不在)。所以由壳传进去 —— 后端自己维护第二个版本号必然漂移,
     // 智能体能力面板此前就一直显示 pyproject 里那个从未更新过的 0.1.0。
     MOSAEL_APP_VERSION: app.getVersion(),
+    // 壳被强杀时不会执行任何清理;后端盯着这个 pid,壳没了就自己收尾退出(backend app/core/lifeline.py)。
+    MOSAEL_PARENT_PID: String(process.pid),
   };
   if (!isDev) {
     // 打包版从 Finder / Dock 启动时 PATH 是 launchd 的最小集,插件找不到 node / uvx(见 login-shell-path)。
@@ -355,15 +371,28 @@ async function ensureBackend() {
   });
   if (masterKey && spawnedBackend.stdin) spawnedBackend.stdin.end(`${masterKey}\n`);
   backend = spawnedBackend;
-  spawnedBackend.on("exit", (code) => {
+  spawnedBackend.on("exit", (code, signal) => {
     if (backend === spawnedBackend) backend = null;
-    if (!quitting && code !== 0 && code !== null) {
-      appendMainLog("backend-exit", `code=${code}`);
-      dialog.showErrorBox(t("backend_stoppedTitle"), t("backend_stoppedBody", { code }));
+    // 退出、恢复备份时 quitting 已经置上;其余的退出都是意外(包括被 OOM 之类的信号杀掉,code 为 null)。
+    if (quitting) return;
+    appendMainLog("backend-exit", `code=${code} signal=${signal}`);
+    const delay = backendRestarts.next();
+    if (delay === null) {
+      dialog.showErrorBox(t("backend_stoppedTitle"), t("backend_stoppedBody", { code: code ?? signal }));
+      return;
     }
+    setTimeout(() => {
+      if (quitting || backend) return;
+      ensureBackend()
+        .then((ok) => appendMainLog("backend-restarted", ok ? "healthy" : "did not become healthy"))
+        .catch((error) => appendMainLog("backend-restart-failed", error));
+    }, delay);
   });
   return waitForBackend(30000);
 }
+
+//: 后端意外退出后的退避重启(见 backend-lifecycle.cjs)。
+const backendRestarts = createRestartPolicy();
 
 function stopBackend() {
   if (backend && !backend.killed) {

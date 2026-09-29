@@ -11,7 +11,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Health */
+        /**
+         * Health
+         * @description 活着,并且说得清自己是谁(见 core/lifeline):壳据此判断端口上那个后端能不能复用。
+         */
         get: operations["health_api_health_get"];
         put?: never;
         post?: never;
