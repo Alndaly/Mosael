@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException
 
 from app.core.i18n import tr
 from app.ai.sidecar.pi_client import SidecarError, refresh_oauth_credential
-from app.api.deps import CurrentUser, DbSession
+from app.api.deps import CurrentUser, DbSession, Tx
 from app.api.schemas import OAuthAnswerIn, OAuthLoginOut, OAuthPromptOut, ProviderModelOut, ProviderProfileOut, ProviderQuotaOut
 from app.core.config import settings as settings_config
 from app.db.models import ProviderProfile, new_id
@@ -167,7 +167,7 @@ def fetch_provider_quota(profile_id: str, db: DbSession, user: CurrentUser) -> P
 
 
 @router.delete("/settings/providers/{profile_id}/oauth", response_model=ProviderProfileOut)
-def logout_oauth_provider(profile_id: str, db: DbSession, user: CurrentUser) -> ProviderProfileOut:
+def logout_oauth_provider(profile_id: str, db: Tx, user: CurrentUser) -> ProviderProfileOut:
     """解除**我自己**在这条连接上的订阅登录。登出是应用侧动作,跑对话的 sidecar 无权做。"""
     profile = _oauth_profile(db, profile_id, user)
     lease = acquire_lease(profile.id, user.id)
@@ -175,7 +175,7 @@ def logout_oauth_provider(profile_id: str, db: DbSession, user: CurrentUser) -> 
     mine = provider_credentials.get(db, profile.id, user.id)
     if mine is not None:
         mine.model_catalog = None
-    db.commit()
+    db.flush()
     db.refresh(profile)
     return profile_out(db, profile, user)
 

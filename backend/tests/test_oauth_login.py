@@ -193,6 +193,7 @@ def test_logout_clears_both_the_credential_and_the_catalog(fake_sidecar, client_
     lease = acquire_lease(profile_id, me)
     with SessionLocal() as db:
         commit_credential(db, profile_id, me, lease, {"type": "oauth", "access": "a", "refresh": "r", "expires": 1})
+        db.commit()  # 测试就是入口:写回凭据只 flush,提交之后才放租约
     assert client.get("/api/settings/providers").json()[0]["oauth_linked"] is True
 
     resp = client.delete(f"/api/settings/providers/{profile_id}/oauth")

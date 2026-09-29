@@ -127,6 +127,7 @@ def test_stale_lease_cannot_overwrite_the_new_holders_credential(client_fixture)
         with pytest.raises(CredentialLeaseError):
             commit_credential(db, profile_id, _me(), stale, {"type": "oauth", "access": "旧的"})
         commit_credential(db, profile_id, _me(), fresh, {"type": "oauth", "access": "新的", "refresh": "r", "expires": 1})
+        db.commit()  # 测试就是入口:写回凭据只 flush,提交之后才放租约
 
 
 def test_credential_round_trips_verbatim(client_fixture) -> None:
@@ -146,6 +147,7 @@ def test_credential_round_trips_verbatim(client_fixture) -> None:
     with SessionLocal() as db:
         profile = commit_credential(db, profile_id, _me(), lease, credential)
         assert read_credential(profile) == credential
+        db.commit()
 
 
 def test_garbage_is_not_stored_as_a_credential(client_fixture) -> None:
@@ -166,6 +168,7 @@ def test_switching_to_api_key_clears_the_oauth_credential(client_fixture) -> Non
     lease = acquire_lease(profile_id, _me())
     with SessionLocal() as db:
         commit_credential(db, profile_id, _me(), lease, {"type": "oauth", "access": "a", "refresh": "r", "expires": 1})
+        db.commit()
     assert client.get("/api/settings/providers").json()[0]["oauth_linked"] is True
 
     resp = client.patch(f"/api/settings/providers/{profile_id}", json={"auth_type": "api_key"})
@@ -182,6 +185,7 @@ def test_the_api_never_hands_back_the_token(client_fixture) -> None:
     lease = acquire_lease(profile_id, _me())
     with SessionLocal() as db:
         commit_credential(db, profile_id, _me(), lease, {"type": "oauth", "access": "机密令牌", "refresh": "r", "expires": 1})
+        db.commit()
     body = client.get("/api/settings/providers").text
     assert "机密令牌" not in body
 
@@ -228,6 +232,7 @@ def test_租约只是自己超时时_照写不误(client_fixture) -> None:
             base_version=base_version,
         )
         assert read_credential(row)["access"] == "刚换出来的", "唯一有效的那份凭据被丢掉了"
+        db.commit()
 
 
 def test_有人在这期间写过就该丢掉自己这份(client_fixture) -> None:
@@ -245,6 +250,7 @@ def test_有人在这期间写过就该丢掉自己这份(client_fixture) -> Non
     fresh = acquire_lease(profile_id, _me())
     with SessionLocal() as db:
         commit_credential(db, profile_id, _me(), fresh, {"type": "oauth", "access": "别人刷的", "refresh": "r3"})
+        db.commit()
 
     with SessionLocal() as db, pytest.raises(CredentialLeaseError):
         commit_credential(

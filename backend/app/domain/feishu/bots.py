@@ -9,7 +9,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.db import SessionLocal
+from app.core.unit_of_work import unit_of_work
 from app.db.models import FeishuBot
 
 
@@ -38,9 +38,8 @@ def delete_bot(db: Session, bot: FeishuBot) -> None:
 
 def write_status(bot_id: str, status: str, detail: str = "") -> None:
     """长连接的状态(connecting / online / offline / error)。自己开会话写:子进程、后台线程里也调它。"""
-    with SessionLocal() as db:
+    with unit_of_work() as db:
         bot = db.get(FeishuBot, bot_id)
         if bot is not None:
             bot.status = status
             bot.status_detail = detail[:400]
-            db.commit()

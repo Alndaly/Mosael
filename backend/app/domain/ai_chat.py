@@ -454,12 +454,11 @@ def _chat_gateway(
             break
     finally:
         if target.gateway_token:
-            from app.core.db import SessionLocal
             from app.core.security import revoke_session
+            from app.core.unit_of_work import unit_of_work
 
-            with SessionLocal() as db:
+            with unit_of_work() as db:
                 revoke_session(db, target.gateway_token)
-                db.commit()
     if call is not None:
         usage = result.usage or {}
         call.meter(

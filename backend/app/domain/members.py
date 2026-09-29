@@ -17,11 +17,15 @@ from sqlalchemy.orm import Session
 
 from app.core.i18n import LocalizedError, tr
 from app.core.security import hash_password
+from app.core.unit_of_work import after_commit
 from app.db.models import RegistrationInvite, User, Workspace, WorkspaceInvitation, WorkspaceMember, now
 from app.domain import deployment
 from app.domain.permissions import PermissionDenied
 from app.domain import notifications as notifications_svc
 
+#: 成员变动的「先查再改」(最后一个所有者、重复邀请、邀请已处理)靠这把锁串行。**锁里的提交是有意的**:
+#: 锁放开之前就得落库 —— 只 flush 的话,下一个拿到锁的请求读到的还是提交前的样子,两人同时降级
+#: 就能把工作区降到一个所有者都没有。
 _lock = threading.RLock()
 
 
@@ -358,5 +362,5 @@ def delete_workspace(db: Session, workspace_id: str) -> None:
     if workspace is None:
         return
     db.delete(workspace)
-    db.commit()
-    delete_workspace_model_files(workspace_id)
+    # 文件在行真的删掉(提交成功)之后再清:回滚了的话工作区还在,它的模型文件不能先没了。
+    after_commit(db, lambda: delete_workspace_model_files(workspace_id))

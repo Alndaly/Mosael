@@ -4,7 +4,7 @@ import logging
 
 from fastapi import APIRouter
 
-from app.api.deps import CurrentUser, DbSession
+from app.api.deps import CurrentUser, DbSession, Tx
 from app.api.schemas import (
     AiRuntimeConfigOut,
     AiRuntimeConfigUpdate,
@@ -62,7 +62,7 @@ def get_ai_runtime(db: DbSession, user: CurrentUser) -> AiRuntimeConfigOut:
 
 
 @router.put("/settings/ai-runtime", response_model=AiRuntimeConfigOut)
-def set_ai_runtime(body: AiRuntimeConfigUpdate, db: DbSession, user: CurrentUser) -> AiRuntimeConfigOut:
+def set_ai_runtime(body: AiRuntimeConfigUpdate, db: Tx, user: CurrentUser) -> AiRuntimeConfigOut:
     """AI 供应商瞬断/限流时的最大重试次数。**对所有 AI 出站调用生效** ——
     对话、生图、生视频、语音、向量化都走同一个带重试的传输层(core/http_retry)。"""
     ensure_deployment_admin(db, user)

@@ -65,6 +65,8 @@ def get_config(db: Session) -> NetworkConfig:
                 db.add(NetworkConfig(id="default", no_proxy=",".join(DEFAULT_BYPASS_HOSTS)))
         except IntegrityError:
             pass
+        # 有意当场提交:这是只读路径上的一次性建行(GET、子进程环境、插件出站都会走到)。只 flush 的话,
+        # 调用方的会话从这一刻起攥着写锁直到它结束 —— 同时起跑的几个插件调用就排在锁上等到 busy_timeout。
         db.commit()
         row = db.get(NetworkConfig, "default", populate_existing=True)
     return row

@@ -181,6 +181,7 @@ def handle_incoming(
         if user is None:
             # An unbound sender may be redeeming a one-time bind code they got in-app.
             redeemed = bindings.redeem_bind_code(db, bot.workspace_id, sender_open_id, text) if sender_open_id else None
+            db.commit()  # 这条消息就是一次用例:兑了码就在回话之前落库
             if redeemed is not None:
                 client.send_text(bot, chat_id, f"绑定成功,你好 {redeemed.username}!之后直接对我说话即可。")
             else:
