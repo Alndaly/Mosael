@@ -55,7 +55,6 @@ def add_track(db: Session, sequence_id: str, op: AddTrack) -> Sequence:
         summary={"operation": "add_track", "track_id": track.id},
         actor_id=op.actor_id,
     )
-    db.commit()
     return sequence
 
 
@@ -82,7 +81,6 @@ def move_track(db: Session, sequence_id: str, op: MoveTrack) -> Sequence:
         summary={"operation": "move_track", "track_id": track.id},
         actor_id=op.actor_id,
     )
-    db.commit()
     return sequence
 
 
@@ -122,7 +120,6 @@ def remove_track(db: Session, sequence_id: str, op: RemoveTrack) -> Sequence:
         },
         actor_id=op.actor_id,
     )
-    db.commit()
     return sequence
 
 
@@ -178,5 +175,4 @@ def set_track_state(db: Session, sequence_id: str, op: SetTrackState) -> Sequenc
         summary={"operation": "set_track_state", "track_id": track.id},
         actor_id=op.actor_id,
     )
-    db.commit()
     return sequence

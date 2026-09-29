@@ -203,7 +203,6 @@ def insert_clip(db: Session, sequence_id: str, op: InsertClip) -> Clip:
         summary={"operation": "insert_clip", "clip_id": clip.id},
         actor_id=op.actor_id,
     )
-    db.commit()
     return clip
 
 
@@ -255,7 +254,6 @@ def move_clip(db: Session, sequence_id: str, op: MoveClip) -> Sequence:
         summary={"operation": "move_clip", "clip_id": clip.id},
         actor_id=op.actor_id,
     )
-    db.commit()
     return sequence
 
 
@@ -302,7 +300,6 @@ def move_clips_batch(db: Session, sequence_id: str, op: MoveClipsBatch) -> Seque
         summary={"operation": "move_clips_batch", "count": len(moved)},
         actor_id=op.actor_id,
     )
-    db.commit()
     return sequence
 
 
@@ -333,7 +330,6 @@ def trim_clip(db: Session, sequence_id: str, op: TrimClip) -> Sequence:
         summary={"operation": "trim_clip", "clip_id": clip.id},
         actor_id=op.actor_id,
     )
-    db.commit()
     return sequence
 
 
@@ -351,7 +347,6 @@ def delete_clip(db: Session, sequence_id: str, op: DeleteClip) -> Sequence:
         summary={"operation": "delete_clip", "clip_id": payload["clip_id"]},
         actor_id=op.actor_id,
     )
-    db.commit()
     return sequence
 
 
@@ -401,7 +396,6 @@ def delete_clips_batch(db: Session, sequence_id: str, op: DeleteClipsBatch) -> S
         summary={"operation": "delete_clips_batch", "count": len(deleted)},
         actor_id=op.actor_id,
     )
-    db.commit()
     return sequence
 
 
@@ -443,7 +437,6 @@ def ripple_delete_clips_batch(db: Session, sequence_id: str, op: RippleDeleteCli
         summary={"operation": "ripple_delete_clips_batch", "count": len(entries)},
         actor_id=op.actor_id,
     )
-    db.commit()
     return sequence
 
 
@@ -475,5 +468,4 @@ def ripple_delete_clip(db: Session, sequence_id: str, op: RippleDeleteClip) -> S
         summary={"operation": "ripple_delete_clip", "clip_id": original["clip_id"], "shifted": len(shifted)},
         actor_id=op.actor_id,
     )
-    db.commit()
     return sequence

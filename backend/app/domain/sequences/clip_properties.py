@@ -42,7 +42,6 @@ def set_clip_speed(db: Session, sequence_id: str, op: SetClipSpeed) -> Sequence:
         summary={"operation": "set_clip_speed", "clip_id": clip.id},
         actor_id=op.actor_id,
     )
-    db.commit()
     return sequence
 
 
@@ -70,7 +69,6 @@ def set_clip_gain(db: Session, sequence_id: str, op: SetClipGain) -> Sequence:
         summary={"operation": "set_clip_gain", "clip_id": clip.id},
         actor_id=op.actor_id,
     )
-    db.commit()
     return sequence
 
 
@@ -167,7 +165,6 @@ def detach_clip_audio(db: Session, sequence_id: str, op: DetachClipAudio) -> Seq
         summary={"operation": "detach_clip_audio", "clip_id": clip.id},
         actor_id=op.actor_id,
     )
-    db.commit()
     return sequence
 
 
@@ -184,7 +181,6 @@ def set_clip_effects(db: Session, sequence_id: str, op: SetClipEffects) -> Seque
         summary={"operation": "set_clip_effect", "clip_id": clip.id},
         actor_id=op.actor_id,
     )
-    db.commit()
     return sequence
 
 
@@ -255,7 +251,6 @@ def set_clip_transform(db: Session, sequence_id: str, op: SetClipTransform) -> S
         summary={"operation": "set_clip_transform", "clip_id": clip.id},
         actor_id=op.actor_id,
     )
-    db.commit()
     return sequence
 
 
@@ -288,5 +283,4 @@ def set_sequence_reframe(db: Session, sequence_id: str, op: SetSequenceReframe) 
         summary={"operation": "set_sequence_reframe"},
         actor_id=op.actor_id,
     )
-    db.commit()
     return sequence

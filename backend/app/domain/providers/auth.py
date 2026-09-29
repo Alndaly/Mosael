@@ -32,6 +32,7 @@ from sqlalchemy.orm import Session
 from app.ai.sidecar.pi_client import SidecarError, refresh_oauth_credential
 from app.core.config import settings
 from app.core.i18n import LocalizedError
+from app.core.unit_of_work import after_commit
 from app.db.models import ProviderCredential, ProviderProfile
 from app.domain.providers import credentials as provider_credentials
 from app.domain.providers.quota import is_expired
@@ -150,7 +151,7 @@ def commit_credential(
     db: Session, profile_id: str, user_id: str, lease_token: str, credential: dict | None,
     *, base_version: int | None = None,
 ) -> ProviderCredential:
-    """持租约写回凭据(credential=None 即登出)。写完即释放。
+    """持租约写回凭据(credential=None 即登出)。入口提交之后释放租约。
 
     凭据**原样**存:各家 OAuth 的附加字段由 pi 解释,这里拆一次就等于把协议复制进 Python。
     只校验最低限度的形状,把明显不是凭据的东西挡在库外。
@@ -193,9 +194,11 @@ def commit_credential(
     row = provider_credentials.upsert(db, profile_id, user_id)
     row.oauth_credential = credential
     row.credential_version = (row.credential_version or 0) + 1
-    db.commit()
+    db.flush()
     db.refresh(row)
-    release_lease(profile_id, user_id, lease_token)
+    # 租约**提交之后**才放:放早了,下一个持有者读到的还是旧版本,拿作废的 refresh token 去换,当场 invalid_grant。
+    # 提交归入口(路由的 Tx);没提交成(回滚)就不放,等 TTL 收回 —— 和此前提交失败时一样。
+    after_commit(db, lambda: release_lease(profile_id, user_id, lease_token))
     return row
 
 

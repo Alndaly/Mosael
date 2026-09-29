@@ -33,7 +33,9 @@ def _scene(ws: str, layout: dict | None = None) -> str:
         #: LAYOUT 的关键帧故意倒着写(那是给「节点负责排好序」的测试用的);直接建场景要先排好。
         one.get("track", []).sort(key=lambda frame: frame["time"])
     with SessionLocal() as db:
-        return create_scene(db, ws, "教室", SceneContent.model_validate(content)).id
+        scene_id = create_scene(db, ws, "教室", SceneContent.model_validate(content)).id
+        db.commit()  # 测试就是入口:建场景只 flush
+        return scene_id
 
 
 def test_渲白模是挂在场景格上的内置产出者_工具格撤下画板() -> None:

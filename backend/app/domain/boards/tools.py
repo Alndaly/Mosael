@@ -394,6 +394,7 @@ def run_node_on_board(
         )
     finally:
         reset_receipt(token)
+    # 有意的提交:占位的合并撞上并发写入时会回滚重来(update_board),不能把刚建的任务一起卷走。
     db.commit()
     placed = _pending(
         db, request.workspace_id, request.slot, actor_id=request.actor_id, kind=request.kind,
@@ -450,6 +451,7 @@ def _run_in_job(job_id: str, node_type: str, meta: dict[str, Any], scope: BoardS
     节点里的等待(wait_for_job(release=db))会把预算交还再拿回来 —— 没先拿的话那一还就多出一份。
     """
     from app.core.db import SessionLocal
+    from app.core.unit_of_work import unit_of_work
     from app.db.models import Job
     from app.domain.jobs import run_job_inline
     from app.domain.workflows import WorkflowDomainError
@@ -460,9 +462,9 @@ def _run_in_job(job_id: str, node_type: str, meta: dict[str, Any], scope: BoardS
         handler = get_executor(node_type)
         if handler is None:
             raise WorkflowDomainError("wfErr_noExecutor", params={"type": node_type})
-        with NODE_CONNECTIONS, SessionLocal() as node_db:
+        # 节点跑完就是它的事务边界(和工作流引擎的 run_node 一样):成功才提交。
+        with NODE_CONNECTIONS, unit_of_work() as node_db:
             output = handler(node_db, scope, dict(config))
-            node_db.commit()
         return {"outputs": board_outputs(meta, output if isinstance(output, dict) else {"output": output})}
 
     with SessionLocal() as db:

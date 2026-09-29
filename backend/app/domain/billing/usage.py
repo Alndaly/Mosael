@@ -451,16 +451,14 @@ def _settle_usage(session: Session, transaction: SessionTransaction) -> None:
     pending = session.info.pop(_UNSETTLED, None)
     if not pending:
         return
-    from app.core.db import SessionLocal
+    from app.core.unit_of_work import unit_of_work
 
-    with SessionLocal() as fresh:
-        try:
+    try:
+        with unit_of_work() as fresh:
             for snapshot in pending:
                 _restore(fresh, snapshot)
-            fresh.commit()
-        except Exception:  # noqa: BLE001 — 记账是旁路,补写失败也不该把调用方带下水
-            fresh.rollback()
-            logger.warning("用量补记失败,已忽略", exc_info=True)
+    except Exception:  # noqa: BLE001 — 记账是旁路,补写失败也不该把调用方带下水(unit_of_work 已回滚)
+        logger.warning("用量补记失败,已忽略", exc_info=True)
 
 
 def _restore(db: Session, snapshot: dict[str, Any]) -> None:

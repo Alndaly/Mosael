@@ -92,7 +92,6 @@ def split_clip(db: Session, sequence_id: str, op: SplitClip) -> Sequence:
         summary={"operation": "split_clip", "clip_id": original["clip_id"]},
         actor_id=op.actor_id,
     )
-    db.commit()
     return sequence
 
 
@@ -164,7 +163,6 @@ def cut_clip_range(db: Session, sequence_id: str, op: CutClipRange) -> Sequence:
         summary={"operation": "apply_transcript_edit", "clip_id": original["clip_id"], "created": len(created)},
         actor_id=op.actor_id,
     )
-    db.commit()
     return sequence
 
 
@@ -212,7 +210,6 @@ def cut_clip_ranges(db: Session, sequence_id: str, op: CutClipRanges) -> Sequenc
         },
         actor_id=op.actor_id,
     )
-    db.commit()
     return sequence
 
 
@@ -230,7 +227,6 @@ def cut_clip_ranges_batch(db: Session, sequence_id: str, op: CutClipRangesBatch)
         summary={"operation": "apply_transcript_edits_batch", "clips": len(edits)},
         actor_id=op.actor_id,
     )
-    db.commit()
     return sequence
 
 
@@ -342,7 +338,6 @@ def split_clip_at_points(db: Session, sequence_id: str, op: SplitClipPoints) -> 
         },
         actor_id=op.actor_id,
     )
-    db.commit()
     return sequence
 
 
@@ -360,7 +355,6 @@ def split_clip_points_batch(db: Session, sequence_id: str, op: SplitClipPointsBa
         summary={"operation": "apply_transcript_edits_batch", "clips": len(edits)},
         actor_id=op.actor_id,
     )
-    db.commit()
     return sequence
 
 

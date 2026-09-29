@@ -81,6 +81,7 @@ def test_handle_incoming_routes_to_agent_and_replies(monkeypatch) -> None:
     with SessionLocal() as db:
         code, _ = bindings.issue_bind_code(db, ws["id"], me["id"])
         assert bindings.redeem_bind_code(db, ws["id"], "ou_sender", code) is not None
+        db.commit()  # 测试就是入口:兑码只改对象
 
     sent: list[tuple[str, str]] = []
     monkeypatch.setattr(host, "run_turn", lambda *a, **k: TurnResult(text="已查看,共 2 个素材"))
@@ -137,6 +138,7 @@ def test_handle_incoming_adapter_error_still_replies(monkeypatch) -> None:
     with SessionLocal() as db:
         code, _ = bindings.issue_bind_code(db, ws["id"], me["id"])
         bindings.redeem_bind_code(db, ws["id"], "ou_sender2", code)
+        db.commit()
 
     monkeypatch.setattr(host, "run_turn", boom)
     monkeypatch.setattr(feishu_client, "send_text", lambda bot, chat_id, text: sent.append(text))
@@ -155,6 +157,7 @@ def _bound_bot(client, monkeypatch, sent: list):
     with SessionLocal() as db:
         code, _ = bindings.issue_bind_code(db, ws["id"], me["id"])
         assert bindings.redeem_bind_code(db, ws["id"], "ou_img", code) is not None
+        db.commit()
     monkeypatch.setattr(feishu_client, "send_text", lambda bot, chat_id, text: sent.append((chat_id, text)))
     return ws, bot
 

@@ -22,7 +22,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from app.core.i18n import tr
-from app.api.deps import CurrentUser, DbSession
+from app.api.deps import CurrentUser, DbSession, Tx
 from app.db.models import ProviderProfile
 from app.domain.providers import credentials as provider_credentials
 from app.domain.providers.auth import (
@@ -80,7 +80,7 @@ def acquire_credential_lease(profile_id: str, db: DbSession, user: CurrentUser) 
 
 
 @router.post("/agent/provider-credentials/{profile_id}/commit", response_model=CommitOut)
-def commit_credential_lease(profile_id: str, body: CommitIn, db: DbSession, user: CurrentUser) -> CommitOut:
+def commit_credential_lease(profile_id: str, body: CommitIn, db: Tx, user: CurrentUser) -> CommitOut:
     """持租约写回刷新结果并释放。租约已超时被顶替时返回 409 —— 此时写回会覆盖别人的新凭据。"""
     _require_owned_profile(db, profile_id, user.id)
     try:

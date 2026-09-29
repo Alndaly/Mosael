@@ -36,7 +36,9 @@ def _run(node: str, ws: str, config: dict) -> dict:
         db.commit()
         handler = get_executor(node)
         assert handler is not None, f"{node} 没有执行器"
-        return handler(db, workflow, config)
+        out = handler(db, workflow, config)
+        db.commit()  # 节点不提交,引擎跑完一个节点才提交(engine.run_node);这里就是那个引擎
+        return out
 
 
 SEGMENTS = [

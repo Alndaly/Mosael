@@ -4,7 +4,7 @@ from fastapi import APIRouter, Query
 from pydantic import BaseModel
 from fastapi.responses import FileResponse
 from sqlalchemy import select
-from app.api.deps import CurrentUser, DbSession
+from app.api.deps import CurrentUser, DbSession, Tx
 from app.core.config import settings
 from app.db.models import PluginInstance
 from app.domain.blender import bridge, use_cases
@@ -30,7 +30,7 @@ def check(instance_id: str, db: DbSession, user: CurrentUser):
 
 
 @router.post('/blender/pull')
-def pull(workspace_id: str, instance_id: str, db: DbSession, user: CurrentUser):
+def pull(workspace_id: str, instance_id: str, db: Tx, user: CurrentUser):
     """把 Blender 里当前打开的场景取成一个新的 Mosael 场景。不要求先发送过。"""
     return use_cases.pull(db, user, workspace_id, instance_id)
 
@@ -55,7 +55,7 @@ def send(scene_id: str, body: BlenderSendRequest, db: DbSession, user: CurrentUs
 
 
 @router.post('/{scene_id}/blender/{transfer_id}/receive')
-def receive(scene_id: str, transfer_id: str, workspace_id: str, db: DbSession, user: CurrentUser,
+def receive(scene_id: str, transfer_id: str, workspace_id: str, db: Tx, user: CurrentUser,
             into_current: bool = False):
     """接回 Blender 的改动。
 
@@ -98,7 +98,7 @@ class BlenderImportRequest(BaseModel):
 
 
 @router.post('/{scene_id}/blender/agent/import')
-def agent_import(scene_id: str, body: BlenderImportRequest, db: DbSession, user: CurrentUser):
+def agent_import(scene_id: str, body: BlenderImportRequest, db: Tx, user: CurrentUser):
     """把 Blender 里做好的东西作为一个模型物体加进这个场景。"""
     return use_cases.import_to_scene(
         db, user, body.workspace_id, scene_id, base_revision=body.base_revision, name=body.name, objects=body.objects,

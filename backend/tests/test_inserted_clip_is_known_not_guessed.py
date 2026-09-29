@@ -46,12 +46,15 @@ def test_并行分支同时往时间线上接_各自拿到自己那一段(monkey
     real_insert = operations.insert_clip
 
     def insert_then_a_sibling_lands(db, seq_id, op):
-        """这一段刚落库,另一条分支(接配音)紧跟着也落了一段 —— 引擎里两条分支本来就并行。"""
+        """这一段刚插上,紧跟着又多了一段更新的(另一条分支接的配音)—— 引擎里两条分支本来就并行。
+
+        剪辑算子不提交(节点跑完才提交),写锁在这个节点手里,别的会话插不进来;所以「更新的那一段」
+        就在同一个事务里插,照样是整条序列里最新的一段 —— 按「最新」去猜的话猜到的就是它。
+        """
         made = real_insert(db, seq_id, op)
-        with SessionLocal() as other:
-            real_insert(other, seq_id, operations.InsertClip(
-                track_id=tracks["audio"], asset_id=voice, timeline_start=0.0, src_in=0.0, src_out=8.0,
-            ))
+        real_insert(db, seq_id, operations.InsertClip(
+            track_id=tracks["audio"], asset_id=voice, timeline_start=0.0, src_in=0.0, src_out=8.0,
+        ))
         return made
 
     monkeypatch.setattr(operations, "insert_clip", insert_then_a_sibling_lands)
@@ -62,6 +65,7 @@ def test_并行分支同时往时间线上接_各自拿到自己那一段(monkey
         out = get_executor("timeline_append")(db, workflow, {
             "sequence_id": sequence_id, "asset_id": video, "max_duration": 8,
         })
+        db.commit()
     with SessionLocal() as db:
         clip = db.get(Clip, out["clip_id"])
         assert (clip.track_id, clip.asset_id) == (tracks["video"], video), "输出的是另一条分支插的那段"

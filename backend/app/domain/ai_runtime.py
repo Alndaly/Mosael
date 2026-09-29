@@ -10,6 +10,7 @@ from __future__ import annotations
 from sqlalchemy.orm import Session
 
 from app.core.http_retry import DEFAULT_MAX_RETRIES, clamp_max_retries, set_max_retries
+from app.core.unit_of_work import after_commit
 from app.db.models import AiRuntimeConfig
 
 SINGLETON_ID = "default"
@@ -22,15 +23,15 @@ def configured_max_retries(db: Session) -> int:
 
 
 def save_max_retries(db: Session, value: int) -> int:
-    """存下来并立即对本进程生效,交回生效的那个值。"""
+    """存下来,**提交之后**对本进程生效,交回生效的那个值。回滚了就不动进程里的那份。"""
     row = db.get(AiRuntimeConfig, SINGLETON_ID)
     if row is None:
         row = AiRuntimeConfig(id=SINGLETON_ID)
         db.add(row)
     row.max_retries = value
-    db.commit()
-    apply_to_process(db)
-    return configured_max_retries(db)
+    effective = clamp_max_retries(value)
+    after_commit(db, lambda: set_max_retries(effective))
+    return effective
 
 
 def apply_to_process(db: Session) -> None:

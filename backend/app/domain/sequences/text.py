@@ -82,7 +82,6 @@ def generate_subtitles(db: Session, sequence_id: str, op: GenerateSubtitles) -> 
         summary={"operation": "insert_clips_batch", "count": len(created)},
         actor_id=op.actor_id,
     )
-    db.commit()
     return sequence
 
 
@@ -120,7 +119,6 @@ def insert_text_clip(db: Session, sequence_id: str, op: InsertTextClip) -> Seque
         summary={"operation": "insert_clip", "clip_id": clip.id, "text": True},
         actor_id=op.actor_id,
     )
-    db.commit()
     return sequence
 
 
@@ -146,7 +144,6 @@ def set_clip_text(db: Session, sequence_id: str, op: SetClipText) -> Sequence:
         summary={"operation": "set_clip_text", "clip_id": clip.id},
         actor_id=op.actor_id,
     )
-    db.commit()
     return sequence
 
 
@@ -182,7 +179,6 @@ def set_clip_texts_batch(db: Session, sequence_id: str, op: SetClipTextsBatch) -
         summary={"operation": "set_clip_texts_batch", "count": len(entries)},
         actor_id=op.actor_id,
     )
-    db.commit()
     return sequence
 
 
@@ -248,5 +244,4 @@ def set_subtitle_style(db: Session, sequence_id: str, op: SetSubtitleStyle) -> S
         summary={"operation": "set_subtitle_style"},
         actor_id=op.actor_id,
     )
-    db.commit()
     return sequence

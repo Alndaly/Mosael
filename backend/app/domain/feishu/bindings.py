@@ -35,7 +35,7 @@ def redeem_bind_code(db: Session, workspace_id: str, open_id: str, text: str) ->
         return None
     db.merge(FeishuBinding(workspace_id=workspace_id, open_id=open_id, user_id=row.user_id))
     db.delete(row)
-    db.commit()
+    db.flush()  # 同一个会话里接着认人(resolve_sender)、再兑同一个码,看到的得是兑过之后的样子
     return db.get(User, row.user_id)
 
 

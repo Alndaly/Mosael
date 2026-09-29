@@ -137,7 +137,6 @@ def rewrite_replaced_tools(db: Session) -> int:
         board.canvas = {**deepcopy(canvas), "items": rewritten_items}
         board.revision = (board.revision or 0) + 1
         changed += 1
-    db.commit()
     if changed:
         logger.info("把 %d 块画板上的老插件节点改写成了取代它的工具", changed)
     return changed
@@ -318,16 +317,20 @@ def rewrite_mirrored_tools(db: Session) -> int:
         board.canvas = {**deepcopy(canvas), "items": rewritten_items}
         board.revision = (board.revision or 0) + 1
         changed += 1
-    db.commit()
     if changed:
         logger.info("把 %d 块画板上被生成取代的插件生成器改挂了生成", changed)
     return changed
 
 
 def reconcile_plugin_tool_cells(db: Session) -> None:
-    """画板上存着的插件节点跟上插件报出的清单:先按 `replaces` 改名,再把被生成取代的生成器改挂生成。"""
+    """画板上存着的插件节点跟上插件报出的清单:先按 `replaces` 改名,再把被生成取代的生成器改挂生成。
+
+    这是一个入口(清单刷新之后的监听、启动时的对账都直接调它,调完不替它提交),所以两步一起在这里提交;
+    上面两个改写函数只改对象。
+    """
     rewrite_replaced_tools(db)
     rewrite_mirrored_tools(db)
+    db.commit()
 
 
 def _after_refresh(db: Session, instance: PluginInstance) -> None:

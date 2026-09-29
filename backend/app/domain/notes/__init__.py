@@ -118,7 +118,7 @@ def create_note(db: Session, workspace_id: str, content: NoteContent, *, actor: 
     db.add(note)
     db.flush()
     db.add(NoteRevision(note_id=note.id, revision=note.revision, snapshot=snapshot(note)))
-    db.commit()
+    db.flush()
     db.refresh(note)
     return note
 
@@ -139,10 +139,12 @@ def save_note(db: Session, workspace_id: str, note_id: str, base_revision: int, 
         **data, revision=base_revision + 1, updated_at=now(),
     ), execution_options={"synchronize_session": False})
     if result.rowcount != 1:
-        db.rollback()
+        # 条件 UPDATE 一行没动,不用回滚(那会把调用方这次用例里别的改动一起丢掉);
+        # 让内存里这份过期,重试(append_note)时读到的是库里最新的一版。
+        db.expire(note)
         raise NoteConflict("noteErr_changedElsewhere")
     db.add(NoteRevision(note_id=note_id, revision=base_revision + 1, snapshot=data))
-    db.commit()
+    db.flush()
     db.refresh(note)
     return note
 
@@ -157,9 +159,7 @@ def purge_note(db: Session, workspace_id: str, note_id: str, base_revision: int)
         Note.id == note_id, Note.workspace_id == workspace_id, Note.trashed.is_(True), Note.revision == base_revision,
     ))
     if result.rowcount != 1:
-        db.rollback()
         raise NoteConflict("noteErr_changedBeforeDelete")
-    db.commit()
 
 
 #: 追加撞上并发写入时重读当前修订再试几次。冲突只可能来自"另一次写入刚落地",
