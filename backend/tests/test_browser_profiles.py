@@ -101,6 +101,7 @@ def test_profile_lease_one_active_session() -> None:
     ws = _ws(client)
     with SessionLocal() as db:
         pid = browser.create_profile(db, workspace_id=ws, name="池号", owner=_me(db)).id
+        db.commit()  # 测试是入口:领域函数不提交
     with SessionLocal() as db:
         s1 = browser.open_session(db, workspace_id=ws, profile_id=pid, owner_kind="agent", owner_id="A", actor=_me(db).id)
         assert s1.kind == "profile" and s1.partition.startswith("persist:pool-")
@@ -120,6 +121,7 @@ def test_workflow_browser_open_pool_mode() -> None:
     ws = _ws(client)
     with SessionLocal() as db:
         pid = browser.create_profile(db, workspace_id=ws, name="流程用池号", owner=_me(db)).id
+        db.commit()  # 测试是入口:领域函数不提交
         wf = create_workflow(db, workspace_id=ws, name="W", graph={"nodes": [], "edges": []}, created_by=user_id())
         wf_id = wf.id
         # 这次运行替谁跑:池档案是某人的登录身份,说不出是谁在用就不能借(见 browser.usable_profile)。
@@ -149,6 +151,7 @@ def test_agent_pool_open_requires_confirmation_naming_identity() -> None:
     ws = _ws(client)
     with SessionLocal() as db:
         pid = browser.create_profile(db, workspace_id=ws, name="采集号", owner=_me(db)).id
+        db.commit()  # 测试是入口:领域函数不提交
     conf = client.post(
         "/api/confirmations",
         json={"workspace_id": ws, "tool": "browser_pool_open", "payload": {"profile_id": pid, "url": ""}},
@@ -194,6 +197,7 @@ def test_cannot_delete_bound_or_busy_profile() -> None:
     # 有活动会话 → 拒删
     with SessionLocal() as db:
         pid = browser.create_profile(db, workspace_id=ws, name="忙", owner=_me(db)).id
+        db.commit()  # 测试是入口:领域函数不提交
         browser.open_session(db, workspace_id=ws, profile_id=pid, owner_kind="agent", owner_id="A", actor=_me(db).id)
         with pytest.raises(browser.BrowserDomainError):
             browser.delete_profile(db, ws, pid, actor=_me(db).id)

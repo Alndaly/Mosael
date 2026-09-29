@@ -45,7 +45,7 @@ DOMAIN_COMMITS: dict[str, int] = {
     "app/domain/boards/timelines.py": 1,
     "app/domain/boards/tools.py": 2,
     "app/domain/boards/trim.py": 3,
-    "app/domain/browser/__init__.py": 14,
+    "app/domain/browser/__init__.py": 3,
     "app/domain/documents/extraction.py": 8,
     "app/domain/entities/drawing.py": 2,
     "app/domain/entities/library.py": 8,
