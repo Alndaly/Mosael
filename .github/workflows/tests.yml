@@ -125,10 +125,38 @@ jobs:
           pnpm --dir website test
           pnpm --dir website build
 
+  # 社区服务眼下不在产品里(桌面端的接入已拿掉,见 2d1378623),代码留在仓库里等以后接回。它的整套测试要起一个
+  # Postgres 容器,没必要每次提交都付这个钱:只在这次改动碰到它自己、它依赖的格式包或这份工作流时跑;发版(打 tag、
+  # 手动触发)和算不出改了什么的时候照跑,宁可多跑不漏跑。ruff 仍由 test job 的 `pnpm lint` 每次都跑。
+  community-changed:
+    runs-on: ubuntu-latest
+    outputs:
+      run: ${{ steps.diff.outputs.run }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - id: diff
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          run=true
+          if [[ ( "$EVENT" == "pull_request" || "$EVENT" == "push" ) && -n "$BASE" && ! "$BASE" =~ ^0+$ && "$GITHUB_REF" != refs/tags/* ]]; then
+            if changed=$(git diff --name-only "$BASE" "$HEAD" 2>/dev/null); then
+              grep -qE '^(community/|packages/mosael-formats/|\.github/workflows/tests\.yml$)' <<<"$changed" || run=false
+            fi
+          fi
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+          echo "community tests: $run"
+
   # 社区服务(ADR 0026):生产跑 PostgreSQL,所以 CI 在 Postgres 服务容器上跑整套测试(本地缺省是 SQLite)。
   # ruff 由上面 test job 里根目录的 `pnpm lint` 跑(和本地提交前那一条是同一条),这里再跑一次是为了
   # 这个 job 单独失败时能直接看到是哪一半。
   community:
+    needs: [community-changed]
+    if: ${{ needs.community-changed.outputs.run == 'true' }}
     runs-on: ubuntu-latest
     defaults:
       run:
