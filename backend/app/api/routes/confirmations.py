@@ -1,20 +1,12 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException
-from sqlalchemy import or_, select
-
 from app.api.deps import CurrentUser, DbSession, PresentedToken
 from app.api.schemas import ConfirmationCreate, ConfirmationOut
-from app.domain.permissions import ensure_workspace_access
-from app.db.models import ToolConfirmation, now
+from app.db.models import ToolConfirmation
 from app.domain.agent import autopilot
-from app.domain.agent.sessions import ensure_reads_for, reads_for_filter
-from app.domain.agent.confirmations import (
-    ConfirmationError,
-    authorize_and_approve,
-    authorize_and_reject,
-    decidable_filter,
-)
+from app.domain.agent import use_cases as agent_use_cases
+from app.domain.agent.confirmations import ConfirmationError, authorize_and_approve, authorize_and_reject
 from app.domain.agent.proposals import propose
 
 router = APIRouter(tags=["confirmations"])
@@ -62,34 +54,14 @@ def list_confirmations(
         他看得见、批不了,那种卡只在聊天里就地摆着等主人,不该在中心里冒成一张点了就 403 的卡。
       - 都不传 —— 他看得见的全部。
     """
-    ensure_workspace_access(db, user, workspace_id)
-    stmt = select(ToolConfirmation).where(
-        ToolConfirmation.workspace_id == workspace_id,
-        reads_for_filter(ToolConfirmation.session_id, user.id, workspace_id),
+    return agent_use_cases.list_confirmations(
+        db, user, workspace_id, status=status, limit=limit, session_id=session_id, unowned=unowned, decidable=decidable
     )
-    if session_id:
-        ensure_reads_for(db, session_id, user.id)
-        stmt = stmt.where(ToolConfirmation.session_id == session_id)
-    elif unowned:
-        stmt = stmt.where(ToolConfirmation.session_id.is_(None))
-    if decidable:
-        stmt = stmt.where(decidable_filter(db, user, workspace_id))
-    if status:
-        stmt = stmt.where(ToolConfirmation.status == status)
-    if status == "pending":
-        # 隔离判断者正在看的卡先不显示:它几秒内多半会自己消失(放行了),让用户看见一张自己出现
-        # 又自己消失的卡只会造成困惑。期限一过它自动回到这里 —— 不需要任何回收动作。
-        stmt = stmt.where(
-            or_(ToolConfirmation.hold_until.is_(None), ToolConfirmation.hold_until <= now())
-        )
-    stmt = stmt.order_by(ToolConfirmation.created_at.desc()).limit(min(limit, 100))
-    return list(db.scalars(stmt))
 
 
 @router.get("/confirmations/{confirmation_id}", response_model=ConfirmationOut)
 def get_confirmation(confirmation_id: str, db: DbSession, user: CurrentUser) -> ToolConfirmation:
-    confirmation = _require(db, user, confirmation_id)
-    return confirmation
+    return agent_use_cases.confirmation(db, user, confirmation_id)
 
 
 # 路由这一层只做两件事:认身份(CurrentUser)、把领域异常翻译成 HTTP 码。
@@ -114,16 +86,9 @@ def reject(confirmation_id: str, db: DbSession, user: CurrentUser) -> ToolConfir
 
 
 def _get_or_404(db: DbSession, confirmation_id: str) -> ToolConfirmation:
-    """只管存在性。归属校验交给调用方 —— 读走 _require,写走 authorize_and_*。"""
+    """只管存在性。归属校验交给调用方 —— 读走 agent/use_cases.confirmation,写走 authorize_and_*。"""
     confirmation = db.get(ToolConfirmation, confirmation_id)
     if confirmation is None:
         raise HTTPException(status_code=404, detail="Not found")
     return confirmation
 
-
-def _require(db: DbSession, user: CurrentUser, confirmation_id: str) -> ToolConfirmation:
-    """他看得见的那一张:工作区的人,且看得见卡挂着的那次对话。看不见和不存在同一个回答(404)。"""
-    confirmation = _get_or_404(db, confirmation_id)
-    ensure_workspace_access(db, user, confirmation.workspace_id)
-    ensure_reads_for(db, confirmation.session_id, user.id)
-    return confirmation

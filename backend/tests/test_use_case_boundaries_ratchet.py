@@ -94,14 +94,6 @@ DOMAIN_COMMITS: dict[str, int] = {
 
 #: app/api 下每个文件里 ensure_workspace_perm / ensure_workspace_access 的调用数。
 ROUTE_AUTHORIZATION: dict[str, int] = {
-    "app/api/routes/agent.py": 3,
-    "app/api/routes/agent_tools.py": 1,
-    "app/api/routes/confirmations.py": 2,
-    "app/api/routes/notifications.py": 4,
-    "app/api/routes/plugins.py": 1,
-    "app/api/routes/settings/provider_pricing.py": 1,
-    "app/api/routes/shares.py": 1,
-    "app/api/routes/workspaces.py": 6,
 }
 
 

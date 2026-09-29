@@ -1,26 +1,54 @@
-"""智能体会话周边的用例:会话列表、任务计划、「带我过去」、问用户、跨会话记忆。
+"""智能体会话周边的用例:会话、任务计划、「带我过去」、问用户、跨会话记忆、确认卡的读、念一句话。
 
 闸在这里(见 CONVENTIONS「一次用例一个事务,授权在领域里」):HTTP 路由和智能体工具调同一个函数。
-对话的读写闸在 agent/sessions(共享来的对话只能看);记忆按工作区的 `ai` 权限。不提交事务。
+对话的读写闸在 agent/sessions(共享来的对话只能看);开对话、记忆、发声按工作区的 `ai` 权限。不提交事务。
 """
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
-from app.db.models import AgentMemory, AgentMessage, AgentQuestion, AgentSession, User
+from app.core.i18n import LocalizedError
+from app.db.models import (
+    AgentMemory,
+    AgentMessage,
+    AgentQuestion,
+    AgentSession,
+    ProviderProfile,
+    ToolConfirmation,
+    User,
+    now,
+)
 from app.domain import sharing
+from app.domain.agent import host
 from app.domain.agent import memory as agent_memory
 from app.domain.agent import plan as agent_plan
 from app.domain.agent import questions as agent_questions
-from app.domain.agent.sessions import SHARE_KIND, readable_session, writable_session
+from app.domain.agent.confirmations import decidable_filter
+from app.domain.agent.sessions import SHARE_KIND, ensure_reads_for, reads_for_filter, readable_session, writable_session
 from app.domain.permissions import NotVisible, ensure_workspace_access, ensure_workspace_perm
+from app.domain.voices import agent_voice
 
 #: 会话列表最多给多少条(最近活跃在前)。
 SESSION_LIST_LIMIT = 50
+#: 确认卡列表一次最多给多少条。
+CONFIRMATION_LIST_LIMIT = 100
+
+
+class UnknownConnection(LocalizedError, ValueError):
+    """会话要钉的那条连接不存在,或者不是他的。api 翻成 422。"""
+
+
+class NothingToSay(LocalizedError, ValueError):
+    """要念的是空串。api 翻成 422。"""
+
+
+class SpeechFailed(LocalizedError, RuntimeError):
+    """合成失败 —— 是结果,不是服务端故障。api 翻成 422。"""
 
 
 # ---------------- 会话 ----------------
@@ -29,6 +57,53 @@ SESSION_LIST_LIMIT = 50
 def annotate(db: Session, user: User, session: AgentSession) -> AgentSession:
     """标上 `is_mine` / `shared` —— 界面据 `is_mine` 决定这条对话给不给写(共享来的只能看)。"""
     return sharing.annotate(db, SHARE_KIND, [session], user, session.workspace_id)[0]
+
+
+def checked_profile_id(db: Session, user: User, profile_id: str | None) -> str | None:
+    """会话钉在哪条连接上。**不存在就当场说不存在,不要留给数据库去炸。**
+
+    provider_profile_id 是外键。给一个不存在的 id(界面开着时被另一处删掉、客户端拿着过期的
+    id、或者有人手抄时截断了),插入会以 FOREIGN KEY constraint failed 结束 —— 接口回的是
+    一个裸 500,既不说是哪个字段,也不说该怎么办,还会在监控里记成服务端故障。
+
+    **不要求它是启用的**:停用只是「暂时别用」,把会话钉在上面仍然合理(运行时 resolve_chat_provider
+    自己会回退到默认连接)。这里挡的只是「指向一条根本不存在、或者不属于你的连接」。
+    """
+    wanted = (profile_id or "").strip()
+    if not wanted:
+        return None
+    profile = db.get(ProviderProfile, wanted)
+    # 连接归人。别人的和不存在的对他是同一件事 —— 分开说等于确认了这个 id 有效。
+    if profile is None or (profile.owner_user_id is not None and profile.owner_user_id != user.id):
+        raise UnknownConnection("routeErr_aiConnectionNotFound")
+    return profile.id
+
+
+def start_session(
+    db: Session,
+    user: User,
+    workspace_id: str,
+    *,
+    title: str,
+    project_id: str | None = None,
+    adapter: str | None = None,
+    provider_profile_id: str | None = None,
+    model: str | None = None,
+) -> AgentSession:
+    """开一次对话要 `ai` 权限。对话是**他的** —— 默认不共享给工作区(见 domain/sharing.KINDS)。"""
+    ensure_workspace_perm(db, user, workspace_id, "ai")
+    session = host.create_session(
+        db,
+        workspace_id=workspace_id,
+        project_id=project_id,
+        title=title,
+        adapter=adapter,
+        provider_profile_id=checked_profile_id(db, user, provider_profile_id),
+        model=model,
+    )
+    sharing.claim(db, SHARE_KIND, session, user)
+    db.flush()
+    return annotate(db, user, session)
 
 
 def list_sessions(db: Session, user: User, workspace_id: str) -> list[AgentSession]:
@@ -167,3 +242,79 @@ def forget(db: Session, user: User, memory_id: str) -> None:
     if row is not None:
         ensure_workspace_perm(db, user, row.workspace_id, "ai")
         agent_memory.forget(db, row)
+
+
+# ---------------- 确认卡(读) ----------------
+#
+# 一张卡跟着发起它的那次对话走:别人没共享的对话里的卡(工具名、参数)他看不到,和那次对话本身一样
+# (判据在 agent/sessions.reads_for_filter)。批 / 拒的闸在 agent/confirmations.authorize_and_*。
+
+
+def list_confirmations(
+    db: Session,
+    user: User,
+    workspace_id: str,
+    *,
+    status: str | None = None,
+    limit: int = 30,
+    session_id: str | None = None,
+    unowned: bool = False,
+    decidable: bool = False,
+) -> list[ToolConfirmation]:
+    ensure_workspace_access(db, user, workspace_id)
+    stmt = select(ToolConfirmation).where(
+        ToolConfirmation.workspace_id == workspace_id,
+        reads_for_filter(ToolConfirmation.session_id, user.id, workspace_id),
+    )
+    if session_id:
+        ensure_reads_for(db, session_id, user.id)
+        stmt = stmt.where(ToolConfirmation.session_id == session_id)
+    elif unowned:
+        stmt = stmt.where(ToolConfirmation.session_id.is_(None))
+    if decidable:
+        stmt = stmt.where(decidable_filter(db, user, workspace_id))
+    if status:
+        stmt = stmt.where(ToolConfirmation.status == status)
+    if status == "pending":
+        # 隔离判断者正在看的卡先不显示:它几秒内多半会自己消失(放行了),让用户看见一张自己出现
+        # 又自己消失的卡只会造成困惑。期限一过它自动回到这里 —— 不需要任何回收动作。
+        stmt = stmt.where(or_(ToolConfirmation.hold_until.is_(None), ToolConfirmation.hold_until <= now()))
+    stmt = stmt.order_by(ToolConfirmation.created_at.desc()).limit(min(limit, CONFIRMATION_LIST_LIMIT))
+    return list(db.scalars(stmt))
+
+
+def confirmation(db: Session, user: User, confirmation_id: str) -> ToolConfirmation:
+    """他看得见的那一张:工作区的人,且看得见卡挂着的那次对话。看不见和不存在同一个回答。"""
+    row = db.get(ToolConfirmation, confirmation_id)
+    if row is None:
+        raise NotVisible("Not found")
+    ensure_workspace_access(db, user, row.workspace_id)
+    ensure_reads_for(db, row.session_id, user.id)
+    return row
+
+
+# ---------------- 念一句话 ----------------
+
+
+def speak_line(db: Session, user: User, workspace_id: str, text: str, *, out_dir: Path, preview: bool = False) -> Path:
+    """用他的对话音色念一句,落到 `out_dir`。
+
+    念一句是**花钱的**(各家 TTS 按字符计费),所以要 `ai` 权限,和对话、生成同一档;试听照样花钱、
+    照样记账。两条路只差取配置的那道闸:真念要「让它出声」开着,试听只要选好了(见 voices/agent_voice)。
+    """
+    ensure_workspace_perm(db, user, workspace_id, "ai")
+    text = text.strip()
+    if not text:
+        raise NothingToSay("routeErr_nothingToRead")
+    pref = (agent_voice.require_ready if preview else agent_voice.require_enabled)(db, user.id)
+    try:
+        return agent_voice.speak(
+            db,
+            pref,
+            text=text,
+            workspace_id=workspace_id,
+            out_dir=out_dir,
+            source_type="agent_voice_preview" if preview else "agent_speech",
+        )
+    except Exception as exc:  # noqa: BLE001 — 合成失败是结果,不是服务端故障
+        raise SpeechFailed(str(exc)[:300]) from exc

@@ -84,7 +84,7 @@ def update(db: Session, user: User, task_id: str, changes: dict[str, Any]) -> Sc
 
 def delete(db: Session, user: User, task_id: str) -> None:
     task = schedulable_task(db, user, task_id)
-    sharing.forget(db, SHARE_KIND, task.id)
+    sharing.forget(db, "scheduled_task", task.id)
     db.delete(task)
 
 

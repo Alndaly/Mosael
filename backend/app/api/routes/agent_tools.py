@@ -32,7 +32,7 @@ from pydantic import BaseModel
 
 from app.core.i18n import tr
 from app.api.deps import CurrentUser, DbSession, PresentedToken
-from app.domain.permissions import ensure_workspace_member, ensure_workspace_perm
+from app.domain.permissions import ensure_workspace_member
 from app.core.security import find_session
 # 清单本身在领域层 —— 上下文水位也要按它算"工具定义占了多少",而那段代码在 api 层之下。
 from app.domain.agent.tool_manifest import PLUGIN_TOOL_PREFIX, ToolSpec, agent_tool_specs, tool_registry
@@ -123,7 +123,7 @@ def _invoke_plugin_tool(
     from app.domain.agent.confirmable.plugin_tools import exposed_tool
     from app.domain.effects import needs_card
     from app.domain.plugins import PluginDomainError
-    from app.domain.plugins.tools import invoke
+    from app.domain.plugins.use_cases import invoke_tool
 
     match = exposed_tool(db, name, user.id)
     if match is None:
@@ -149,13 +149,12 @@ def _invoke_plugin_tool(
             "permission": confirmation.permission,
             "summary": confirmation.summary,
         })}
-    if workspace_id:
-        # 和插件页「试一下」同一道闸:带着工作区跑的插件工具会读它的素材、把产出收进它的素材库。
-        # 此前这里只查「是不是成员」—— 只读成员经 MCP 直连带上工作区 id,就能往里写素材
-        # (effects: none 的工具不开卡,「收进素材库」正是 none)。
-        ensure_workspace_perm(db, user, workspace_id, "edit")
     try:
-        invocation = invoke(db, match["instance_id"], match["name"], body.arguments, workspace_id=workspace_id or None)
+        # 和插件页「试一下」同一个用例、同一道闸:带着工作区跑就要它的 edit。此前这里只查「是不是成员」——
+        # 只读成员经 MCP 直连带上工作区 id,就能往里写素材(effects: none 的工具不开卡,「收进素材库」正是 none)。
+        invocation = invoke_tool(
+            db, user, match["instance_id"], match["name"], body.arguments, workspace_id=workspace_id or None
+        )
     except PluginDomainError as exc:
         return {"error": str(exc)[:500]}
     if invocation.status != "succeeded":

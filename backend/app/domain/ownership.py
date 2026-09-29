@@ -50,7 +50,7 @@ TABLE_OWNERS: dict[str, tuple[str, ...]] = {
     # 任务总线(Job/TaskEvent 只在总线创建;进度/事件请走 jobs.py 的接口)
     "Job": ("app/domain/jobs.py",),
     "TaskEvent": ("app/domain/jobs.py",),
-    "Notification": ("app/domain/notifications.py",),
+    "Notification": ("app/domain/notifications/",),
     "ActivityEvent": ("app/domain/collaboration/",),
     "Comment": ("app/domain/collaboration/",),
     "CommentMention": ("app/domain/collaboration/",),
@@ -58,7 +58,7 @@ TABLE_OWNERS: dict[str, tuple[str, ...]] = {
     # 「谁的」与「共享给谁」是同一张表管的,所以它只归 sharing 域写。
     # 部署级开关只归 deployment 域写 —— 「这台后端怎么对外」只该有一处答案。
     "DeploymentConfig": ("app/domain/deployment.py",),
-    "ResourceShare": ("app/domain/sharing.py",),
+    "ResourceShare": ("app/domain/sharing/",),
     # 钥匙只归 provider_credentials 域写 —— 「谁的钥匙」这个问题只该有一处答案。
     "ProviderCredential": ("app/domain/providers/credentials.py", "app/domain/providers/auth.py"),
     "ScheduledTask": ("app/domain/scheduler/",),

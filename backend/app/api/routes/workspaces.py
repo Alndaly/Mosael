@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException, Query, Response
 from pydantic import BaseModel
 
 from app.core.i18n import tr
-from app.api.deps import CurrentUser, DbSession
+from app.api.deps import CurrentUser, DbSession, Tx
 from app.api.schemas import (
     InviteMemberRequest,
     MembersOut,
@@ -17,21 +17,16 @@ from app.api.schemas import (
     InvitationOut,
     InvitationListOut,
 )
-from app.domain.permissions import PermissionDenied, ensure_deployment_admin, ensure_workspace_access, ensure_workspace_perm, ensure_workspace_role, workspace_role
-from app.db.models import (
-    User,
-    Workspace,
-    WorkspaceMember,
-)
+from app.db.models import User, Workspace
 from app.domain import dashboard, members as members_svc
+from app.domain.workspaces import use_cases as workspaces
 
 router = APIRouter(tags=["workspaces"])
 
 
 @router.post("/workspaces", response_model=WorkspaceOut)
-def create_workspace(body: WorkspaceCreate, db: DbSession, user: CurrentUser) -> WorkspaceOut:
-    workspace = members_svc.create_workspace(db, body.name, user)
-    db.commit()
+def create_workspace(body: WorkspaceCreate, db: Tx, user: CurrentUser) -> WorkspaceOut:
+    workspace = workspaces.create_workspace(db, user, body.name)
     return WorkspaceOut(id=workspace.id, name=workspace.name, role="owner")
 
 
@@ -41,13 +36,8 @@ def list_workspaces(db: DbSession, user: CurrentUser) -> list[WorkspaceOut]:
 
 
 @router.patch("/workspaces/{workspace_id}")
-def rename_workspace(workspace_id: str, body: RenameRequest, db: DbSession, user: CurrentUser) -> dict:
-    ensure_workspace_role(db, user, workspace_id, "admin")
-    workspace = db.get(Workspace, workspace_id)
-    if workspace is None:
-        raise HTTPException(status_code=404, detail="Not found")
-    workspace.name = body.name
-    db.commit()
+def rename_workspace(workspace_id: str, body: RenameRequest, db: Tx, user: CurrentUser) -> dict:
+    workspace = workspaces.rename_workspace(db, user, workspace_id, body.name)
     return {"id": workspace.id, "name": workspace.name}
 
 
@@ -58,58 +48,22 @@ class AutopilotRulesBody(BaseModel):
 @router.get("/workspaces/{workspace_id}/autopilot-rules")
 def get_autopilot_rules(workspace_id: str, db: DbSession, user: CurrentUser) -> dict:
     """auto 档下 `external` 的放行准则(见 domain/agent/rules)。读:工作区成员即可。"""
-    from app.domain.agent import rules as autopilot_rules
-
-    ensure_workspace_access(db, user, workspace_id)
-    workspace = db.get(Workspace, workspace_id)
-    if workspace is None:
-        raise HTTPException(status_code=404, detail="Not found")
-    return {"rules": autopilot_rules.normalize(workspace.autopilot_rules)}
+    return {"rules": workspaces.autopilot_rules_of(db, user, workspace_id)}
 
 
 @router.put("/workspaces/{workspace_id}/autopilot-rules")
-def set_autopilot_rules(
-    workspace_id: str, body: AutopilotRulesBody, db: DbSession, user: CurrentUser
-) -> dict:
+def set_autopilot_rules(workspace_id: str, body: AutopilotRulesBody, db: Tx, user: CurrentUser) -> dict:
     """改准则要 admin。
 
     它决定的是「什么可以不问就发出去」—— 往主机白名单里加一行,等于让智能体从此可以不经确认
     对那个地址发写请求。这和开 bypass 是同一级别的授权动作,不该是每个编辑都能改的。
     """
-    from app.domain.agent import rules as autopilot_rules
-
-    ensure_workspace_role(db, user, workspace_id, "admin")
-    workspace = db.get(Workspace, workspace_id)
-    if workspace is None:
-        raise HTTPException(status_code=404, detail="Not found")
-    incoming = autopilot_rules.normalize(body.rules)
-    # 名单类的东西属于这个工作区(发布账号、浏览器档案本来就挂在它上面),工作区管理员说了算。
-    # 沙箱里跑的 run_code 也是(ADR 0008 D2:代码跑在内核强制的隔离里,写它就是普通的内容编辑)。
-    # **但「在这台电脑上不隔离地跑代码」(run_host_code)不是** —— 它能读写后端能读写的一切,
-    # 承担风险的是机器的主人,和「本机文件归部署主人」同一条(domain/host_files)。所以不再逐次
-    # 问人(交给判断者,或者 always 直接放行),要这个部署的管理员点头。
-    #
-    # 此前这里调的是上面已经过了的同一个 ensure_workspace_role(..., "admin"),这道闸等于不存在;
-    # 而且只拦 judge,比它更宽的 always 从旁边就过去了。
-    current = autopilot_rules.normalize(workspace.autopilot_rules)
-    loosened = incoming["run_host_code"] != "ask" and incoming["run_host_code"] != current["run_host_code"]
-    if loosened:
-        try:
-            ensure_deployment_admin(db, user)
-        except PermissionDenied as exc:
-            raise HTTPException(
-                status_code=403,
-                detail=tr("routeErr_judgeHostCodeNeedsAdmin"),
-            ) from exc
-    workspace.autopilot_rules = incoming
-    db.commit()
-    return {"rules": workspace.autopilot_rules}
+    return {"rules": workspaces.set_autopilot_rules(db, user, workspace_id, body.rules)}
 
 
 @router.delete("/workspaces/{workspace_id}", status_code=204)
-def delete_workspace(workspace_id: str, db: DbSession, user: CurrentUser) -> Response:
-    ensure_workspace_role(db, user, workspace_id, "owner")
-    members_svc.delete_workspace(db, workspace_id)
+def delete_workspace(workspace_id: str, db: Tx, user: CurrentUser) -> Response:
+    workspaces.delete_workspace(db, user, workspace_id)
     return Response(status_code=204)
 
 
@@ -136,9 +90,7 @@ def get_home_poem(user: CurrentUser) -> PoemOut:
 
 @router.get("/workspaces/{workspace_id}/members", response_model=MembersOut)
 def list_members(workspace_id: str, db: DbSession, user: CurrentUser) -> MembersOut:
-    my_role = workspace_role(db, user, workspace_id)
-    if my_role is None:
-        raise HTTPException(status_code=404, detail="Not found")
+    my_role, rows = workspaces.members_of(db, user, workspace_id)
     members = [
         WorkspaceMemberOut(
             user_id=member_user.id,
@@ -147,7 +99,7 @@ def list_members(workspace_id: str, db: DbSession, user: CurrentUser) -> Members
             role=member.role,
             is_self=member_user.id == user.id,
         )
-        for member_user, member in members_svc.list_members(db, workspace_id)
+        for member_user, member in rows
     ]
     return MembersOut(
         members=members,
@@ -156,18 +108,18 @@ def list_members(workspace_id: str, db: DbSession, user: CurrentUser) -> Members
 
 
 @router.post("/workspaces/{workspace_id}/invitations", response_model=InvitationOut)
-def invite_member(workspace_id: str, body: InviteMemberRequest, db: DbSession, user: CurrentUser) -> InvitationOut:
+def invite_member(workspace_id: str, body: InviteMemberRequest, db: Tx, user: CurrentUser) -> InvitationOut:
     """邀请制:只对已注册用户名发邀请,对方在通知里接受后才建成员行。"""
-    ensure_workspace_perm(db, user, workspace_id, "members")
     try:
-        invitee, invitation = members_svc.invite_member(db, workspace_id, user, body.username, body.role)
+        invitee, invitation, workspace_name = workspaces.invite_to_workspace(
+            db, user, workspace_id, body.username, body.role
+        )
     except members_svc.MemberError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
-    workspace = db.get(Workspace, workspace_id)
     return InvitationOut(
         id=invitation.id,
         workspace_id=workspace_id,
-        workspace_name=workspace.name if workspace else workspace_id,
+        workspace_name=workspace_name,
         inviter_name=user.display_name,
         invitee_name=invitee.display_name,
         role=invitation.role,
@@ -226,19 +178,12 @@ def _respond(db, invitation_id: str, user, *, accept: bool) -> InvitationOut:
 
 @router.patch("/workspaces/{workspace_id}/members/{user_id}", response_model=WorkspaceMemberOut)
 def set_member_role(
-    workspace_id: str, user_id: str, body: SetRoleRequest, db: DbSession, user: CurrentUser
+    workspace_id: str, user_id: str, body: SetRoleRequest, db: Tx, user: CurrentUser
 ) -> WorkspaceMemberOut:
-    caller_role = ensure_workspace_role(db, user, workspace_id, "admin")
-    ensure_workspace_perm(db, user, workspace_id, "members")
-    target = db.get(WorkspaceMember, {"workspace_id": workspace_id, "user_id": user_id})
-    if target is None:
-        raise HTTPException(status_code=404, detail="Not found")
-    members_svc.ensure_may_touch_owner(db, workspace_id, user_id, actor_role=caller_role, new_role=body.role)
     try:
-        member = members_svc.set_role(db, workspace_id, user_id, body.role)
+        member, member_user = workspaces.change_member_role(db, user, workspace_id, user_id, body.role)
     except members_svc.MemberError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
-    member_user = db.get(User, user_id)
     return WorkspaceMemberOut(
         user_id=user_id,
         username=member_user.username if member_user else user_id,
@@ -248,19 +193,16 @@ def set_member_role(
 
 
 @router.delete("/workspaces/{workspace_id}/members/{user_id}", status_code=204)
-def remove_member(workspace_id: str, user_id: str, db: DbSession, user: CurrentUser) -> Response:
-    # Self-leave is allowed for any member; removing someone else needs the members perm.
-    if user_id != user.id:
-        ensure_workspace_perm(db, user, workspace_id, "members")
-        members_svc.ensure_may_touch_owner(db, workspace_id, user_id, actor_role=workspace_role(db, user, workspace_id))
-    else:
-        ensure_workspace_access(db, user, workspace_id)
+def remove_member(workspace_id: str, user_id: str, db: Tx, user: CurrentUser) -> Response:
+    # 自己退出是任何成员都能做的事;请别人出去要 members 权限。两件事,两道闸。
     try:
-        members_svc.remove_member(db, workspace_id, user_id)
+        if user_id == user.id:
+            workspaces.leave_workspace(db, user, workspace_id)
+        else:
+            workspaces.remove_other_member(db, user, workspace_id, user_id)
     except members_svc.MemberError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     return Response(status_code=204)
-
 
 
 @router.get("/workspaces/{workspace_id}/summary", response_model=WorkspaceSummaryOut)
@@ -273,5 +215,4 @@ def workspace_summary(
     # 聚合在 domain/dashboard:它回答的是「这个工作区里发生了什么」,和 HTTP 没关系,而且不止
     # 一个入口要问。**路由的 docstring 会原样进 OpenAPI 的 description**,所以这段写成注释。
     """统计页:工作区一屏统计。只读聚合,单请求给全;任务、发布、花费按 `days` 天的窗口算。"""
-    ensure_workspace_access(db, user, workspace_id)
-    return WorkspaceSummaryOut(**dashboard.workspace_summary(db, workspace_id, days=days))
+    return WorkspaceSummaryOut(**workspaces.summary(db, user, workspace_id, days=days))

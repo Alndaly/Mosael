@@ -23,7 +23,7 @@ Accepted — 2026-09-27。按阶段落地,部署由维护者按 [docs/DEPLOY_COM
 - 官网(`website/`,Next.js 16)构建时静态生成全站。插件页、工作流页读的是仓库里的静态索引
   (`public/plugins/registry.json`、`public/workflows/catalog.json`),内容只来自维护者提交的代码。
 - 应用里的插件市场读发版产物里的 `registry.json`;「工作流社区」读的是后端内置模板。
-- 应用里的「共享」只在工作区内部(`domain/sharing.py`),没有对外链接。
+- 应用里的「共享」只在工作区内部(`domain/sharing`),没有对外链接。
 - 没有任何服务器端组件:账号、提交、分享都需要一个真正在跑的服务和数据库。
 
 ## Decision
