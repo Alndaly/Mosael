@@ -69,6 +69,7 @@ import { ItemToolbar, TRIM_PANEL, WRITER_PANEL } from "@/features/boards/BoardIt
 import { BoardCommentLayer, useBoardCommentDraft } from "@/features/boards/BoardCommentLayer";
 import { useBoardDocuments } from "@/features/boards/useBoardDocuments";
 import { useBoardFileImport } from "@/features/boards/useBoardFileImport";
+import { useBoardItemEdits } from "@/features/boards/useBoardItemEdits";
 import { useBoardHistory } from "@/features/boards/useBoardHistory";
 import { useBoardSequenceLinks } from "@/features/boards/useBoardSequenceLinks";
 import { useBoardViewport } from "@/features/boards/useBoardViewport";
@@ -227,59 +228,13 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
   }, [commentMode, setNodes]);
   React.useEffect(() => { setNodes(current => current.map(node => ({ ...node, selected: false }))); }, [markerMode, markersVisible, setNodes]);
 
-  // 文字改动直接落进节点 data —— 走 setNodes 而不是回写上层,理由同上:
-  // 上层一变就重建节点,正在打字的 textarea 会失焦。
-  const setText = React.useCallback((id: string, text: string): void => {
-    setNodes((current: Node[]) =>
-      current.map((node: Node) =>
-        node.id === id
-          ? { ...node, data: { ...node.data, item: { ...(node.data as { item: BoardItem }).item, text } } }
-          : node,
-      ),
-    );
-  }, []);
 
   /**
    * 正在改名的那一格。**两个入口一个状态**:双击节点上方的名字、操作条上的「重命名」。
    * 改好只落一次(见 BoardNodeLabel),于是整个改名是撤销历史里的一步。
    */
   const [renaming, setRenaming] = React.useState<string | null>(null);
-  /** 落下一个名字。空串 = 不要名字了:删掉字段,节点上方退回显示种类名。 */
-  const setTitle = React.useCallback((id: string, title: string): void => {
-    setNodes((current: Node[]) =>
-      current.map((node: Node) => {
-        if (node.id !== id) return node;
-        const { title: _previous, ...rest } = (node.data as { item: BoardItem }).item;
-        return { ...node, data: { ...node.data, item: title ? { ...rest, title } : rest } };
-      }),
-    );
-  }, []);
-
-  /**
-   * 媒体加载出来之后,把节点高度校正成它的**自然宽高比**。
-   *
-   * 不校正的话:一段 16:9 的视频摆在 320×200(1.6:1)的框里,上下各留一条黑边 —— 而画板上
-   * 一眼扫过去看的就是画面本身,黑边等于把每个节点都缩小了一圈。图片同理。
-   *
-   * **只在还没被用户拉过时才校正**:他手动调过尺寸就是他的决定,不该被媒体加载覆盖回去。
-   * 判据是宽高恰好等于默认值 —— 拉过的话至少有一边不是。
-   */
-  // 参数显式标类型:它在 useNodesState 之前定义(初值要用它),不标的话 TS 会绕回自己身上推。
-  const setAspect = React.useCallback((id: string, ratio: number): void => {
-    if (!Number.isFinite(ratio) || ratio <= 0) return;
-    setNodes((current: Node[]) =>
-      current.map((node: Node) => {
-        if (node.id !== id) return node;
-        const item = (node.data as unknown as { item: BoardItem }).item;
-        const preset = DEFAULT_SIZE[item.kind];
-        const width = node.width ?? preset.width;
-        const height = node.height ?? preset.height;
-        if (width !== preset.width || height !== preset.height) return node;
-        const next = Math.round(width / ratio);
-        return next === height ? node : { ...node, height: next };
-      }),
-    );
-  }, [setNodes]);
+  const { setText, setTitle, setAspect, patch } = useBoardItemEdits(setNodes);
 
   const { documents, pickingDocument, setPickingDocument, refreshingDocument, refreshDocument } = useBoardDocuments({ nodes, setNodes, workspaceId });
   //: 选中的那个空槽/生成中的槽 —— 只有一个被选中时才挂面板,多选没有单一的作用对象。
@@ -571,28 +526,6 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
   //: 占位和待定的线**只进画出来的这一份** —— 不进 nodes/edges,于是不会被存、不进撤销历史。
   const display = pending.decorate(baseNodes, baseEdges, edgeShape, LAYERS.pending);
 
-  /** 把某一项就地换成已完成的产出。轮询拿到结果后由上层调。 */
-  /**
-   * 就地改某一项。**画布上的一切改动都走它** —— 填产出、写文字、标记开始生成,此前是三段
-   * 各写一遍的 setNodes,而它们只在「改哪个字段」上不同。
-   *
-   * 值给 undefined 表示**删掉这个字段**；调用方不需要为不同字段各维护一套节点更新逻辑。
-   */
-  const patch = React.useCallback(
-    (itemId: string, next: Partial<BoardItem>) => {
-      setNodes((current) =>
-        current.map((node) => {
-          if (node.id !== itemId) return node;
-          const item = { ...(node.data as unknown as { item: BoardItem }).item, ...next };
-          for (const [key, value] of Object.entries(next)) {
-            if (value === undefined) delete (item as Record<string, unknown>)[key];
-          }
-          return { ...node, data: { ...node.data, item } };
-        }),
-      );
-    },
-    [setNodes],
-  );
 
   const annotating = commentMode || markerMode;
   const { drop, dropAt } = useBoardFileImport({ onDropFiles, setNodes, annotating, add, rf, surface });
