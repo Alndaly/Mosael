@@ -26,6 +26,8 @@ export const boardSequenceKey = (sequenceId: string) => ["sequences", "board-cel
 /** 缩略图条上一秒多宽(像素)。每段至少 44 像素,短镜头也点得中。 */
 const PIXELS_PER_SECOND = 22;
 const MIN_TILE = 44;
+/** 格子窄、放不下时每段最窄压到这么宽(再窄就认不出画面了),还放不下才让条横向滚。 */
+const MIN_FIT_TILE = 14;
 
 const span = (clip: Clip) => (clip.src_out - clip.src_in) / (clip.speed || 1);
 const end = (clip: Clip) => clip.timeline_start + span(clip);
@@ -68,11 +70,18 @@ export function reorderedClips(clips: Clip[], activeId: string, overId: string |
 }
 
 /** 缩略图条上每一段的位置:按先后排,宽度跟时长走(有最小宽度)。播放头和点击都经它换算,不按统一的每秒几像素算 ——
- *  短镜头被撑宽之后,统一换算会让播放头和画面对不上。 */
-export function stripLayout(clips: Clip[]) {
+ *  短镜头被撑宽之后,统一换算会让播放头和画面对不上。
+ *
+ *  `available`:条自己有多宽。按时长排超出了就按比例整体压窄塞进来 —— 此前格子一窄,后面的段和「+」就藏在条的
+ *  右边,只能 Shift + 滚轮去找(用户:「时间线节点偏小的时候 + 会在右侧被挡住,视频段落也是」)。 */
+export function stripLayout(clips: Clip[], available?: number) {
+  const natural = clips.map((clip) => Math.max(MIN_TILE, span(clip) * PIXELS_PER_SECOND));
+  const room = available === undefined ? Infinity : available - 2 * PADDING - GAP * Math.max(0, clips.length - 1);
+  const sum = natural.reduce((total, width) => total + width, 0);
+  const fit = sum > room && room > 0 ? room / sum : 1;
   let x = PADDING;
-  const tiles = clips.map((clip) => {
-    const width = Math.max(MIN_TILE, span(clip) * PIXELS_PER_SECOND);
+  const tiles = clips.map((clip, index) => {
+    const width = fit < 1 ? Math.max(MIN_FIT_TILE, natural[index] * fit) : natural[index];
     const tile = { clip, x, width };
     x += width + GAP;
     return tile;
@@ -105,7 +114,19 @@ export function SequenceCell({ sequenceId }: { sequenceId: string }) {
   const qc = useQueryClient();
   const sequence = useQuery({ queryKey: boardSequenceKey(sequenceId), queryFn: () => getSequence(sequenceId), retry: false });
   const { video, audio } = React.useMemo(() => mainTracks(sequence.data), [sequence.data]);
-  const strip = React.useMemo(() => stripLayout(video), [video]);
+  const stripRef = React.useRef<HTMLDivElement | null>(null);
+  //: 条的宽度(条自己的像素,不受画布缩放影响):格子缩放时段跟着压窄,不藏到右边去。
+  const [stripWidth, setStripWidth] = React.useState<number | undefined>(undefined);
+  React.useLayoutEffect(() => {
+    const element = stripRef.current;
+    if (!element || typeof ResizeObserver === "undefined") return;
+    const measure = () => setStripWidth(element.clientWidth || undefined);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [sequence.isError]);
+  const strip = React.useMemo(() => stripLayout(video, stripWidth), [video, stripWidth]);
   const total = Math.max(0, ...video.map(end), ...audio.map(end));
 
   //: 播放头和选中的那一段和上方操作条共用(剪刀、删除在那儿),见 sequenceCursor。
@@ -118,7 +139,6 @@ export function SequenceCell({ sequenceId }: { sequenceId: string }) {
   const [dragging, setDragging] = React.useState<{ id: string; zoom: number } | null>(null);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: DRAG_THRESHOLD } }));
   const scrubbing = React.useRef(false);
-  const stripRef = React.useRef<HTMLDivElement | null>(null);
 
   //: 播放:按真实时间往前走,走到头停。画面、声音各自按「这一刻该在哪一段的哪一秒」跟上。
   React.useEffect(() => {
@@ -299,7 +319,7 @@ export function SequenceCell({ sequenceId }: { sequenceId: string }) {
         )}
       </div>
 
-      <div className="flex h-[76px] shrink-0 items-stretch border-t border-border p-2">
+      <div className="flex h-[76px] shrink-0 items-stretch gap-1.5 border-t border-border p-2">
         <div
           ref={stripRef}
           data-sequence-strip=""
@@ -346,7 +366,7 @@ export function SequenceCell({ sequenceId }: { sequenceId: string }) {
               onDragCancel={() => setDragging(null)}
             >
               <SortableContext items={video.map((clip) => clip.id)} strategy={horizontalListSortingStrategy}>
-                <div className="relative flex h-full items-center gap-0.5 px-1.5 py-1.5">
+                <div className="relative flex h-full w-max min-w-full items-center gap-0.5 px-1.5 py-1.5">
                   {strip.tiles.map(({ clip, width }) => (
                     <SortableTile
                       key={clip.id}
@@ -361,8 +381,6 @@ export function SequenceCell({ sequenceId }: { sequenceId: string }) {
                       }}
                     />
                   ))}
-                  {/* 「+」不是一段:不进排序,跟在最后一段后面。 */}
-                  {addButton}
                   {!dragging && (
                     //: 播放头:一根贴满条高的线,顶上一个圆点手柄;白描边 + 阴影,压在任何缩略图上都看得见。
                     //: 线两侧各留几像素的抓取区,按住左右拖(按下落到条上,走拖播放头那条路)。
@@ -377,6 +395,8 @@ export function SequenceCell({ sequenceId }: { sequenceId: string }) {
             </DndContext>
           )}
         </div>
+        {/* 「+」不是一段:不进排序,也不进会横向滚的条 —— 钉在条外右侧,格子再窄也看得见。 */}
+        {video.length > 0 && addButton && <div className="flex py-1.5">{addButton}</div>}
       </div>
     </div>
   );

@@ -69,6 +69,16 @@ describe("时间线格", () => {
     expect(layout.toTime(96 + 22)).toBeCloseTo(4.5);
   });
 
+  it("格子窄时段按比例压窄塞进条里,不藏到右边;放得下就按时长排", () => {
+    const clips = [clip("a", 0, 4), clip("b", 4, 1)] as never;
+    //: 按时长排要 6 + 88 + 2 + 44 + 6 = 146 像素;条只有 100。
+    const narrow = stripLayout(clips, 100);
+    const last = narrow.tiles.at(-1)!;
+    expect(last.x + last.width + 6).toBeCloseTo(100);
+    expect(narrow.tiles[0].width / narrow.tiles[1].width).toBeCloseTo(2);
+    expect(stripLayout(clips, 400).tiles.map((one) => one.width)).toEqual([88, 44]);
+  });
+
   it("排好顺序的缩略图;总长算上音频轨;在剪辑里打开点名这一条时间线;格子里不再放工具按钮", async () => {
     mount();
     await waitFor(() => expect(tile("a")).not.toBeNull());
