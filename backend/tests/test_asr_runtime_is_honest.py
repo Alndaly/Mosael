@@ -272,8 +272,10 @@ def test_the_page_copy_does_not_promise_an_automatic_runtime() -> None:
     """
     import pathlib
 
-    messages = (pathlib.Path(__file__).resolve().parents[2] / "frontend/src/app/messages.ts")
-    text = messages.read_text()
+    # 文案表:入口 app/messages.ts,正文按分区放在 app/messages/<语言>/*.ts
+    app = pathlib.Path(__file__).resolve().parents[2] / "frontend/src/app"
+    tables = [app / "messages.ts", *sorted((app / "messages").rglob("*.ts"))]
+    text = "\n".join(path.read_text() for path in tables)
     line = next(l for l in text.splitlines() if "asrModelsDesc" in l and "语音模型" in l)
     assert "运行环境" in line, f"文案没说清运行环境要手动装:{line.strip()}"
 

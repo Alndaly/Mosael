@@ -20,7 +20,8 @@ import { expect, it } from "vitest";
 const REPO = join(import.meta.dirname, "..", "..", "..");
 const ROOTS = ["frontend/src", "electron", "browser-extension/src"];
 const CJK = /[一-鿿]/;
-const SKIP_FILE = /(\.test\.|\.d\.ts$|\.bundle\.cjs$|\/generated\/|app\/messages\.ts$)/;
+// 文案表本身:入口 app/messages.ts 与按分区放的 app/messages/<语言>/*.ts
+const SKIP_FILE = /(\.test\.|\.d\.ts$|\.bundle\.cjs$|\/generated\/|app\/messages\.ts$|app\/messages\/(zh-CN|en-US)\/[^/]+\.ts$)/;
 
 function* files(dir: string): Generator<string> {
   for (const name of readdirSync(dir)) {
