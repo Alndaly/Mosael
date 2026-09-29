@@ -11,7 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.config import settings
-from app.core.db import SessionLocal
+from app.core.unit_of_work import unit_of_work
 from app.core.i18n import tr
 from app.domain.jobs import RENDER_SLOTS, dispatch_job, run_job_guarded, say
 from app.db.models import Asset, Font, Job, Lut, Sequence, Track
@@ -403,15 +403,15 @@ def _export_message(phase: str, prog: RenderProgress | None) -> str:
 
 def _run_export_body(job_id: str, plan: RenderPlan) -> None:
     output_path = settings.data_dir / "exports" / f"{job_id}.mp4"
-    with SessionLocal() as db:
+    with unit_of_work() as db:
         job = db.get(Job, job_id)
         if job is None:
             return
         if not finish_job(db, job, status="running"):
-            db.commit()
             return
         say(job, _export_message(PHASE_PREPARE, None))
         emit_job_event(db, job.id, "job.running", {"render_plan_hash": plan.render_plan_hash})
+        # 「在导出」先落库:编码要几十秒到几分钟,界面要马上看得到;也把 finish_job 拿的写锁放掉。
         db.commit()
         started = time.monotonic()
 
@@ -420,13 +420,12 @@ def _run_export_body(job_id: str, plan: RenderPlan) -> None:
         last_write = 0.0
 
         def write_progress(fraction: float | None, message: str) -> None:
-            with SessionLocal() as progress_db:
+            with unit_of_work() as progress_db:
                 progress_job = progress_db.get(Job, job_id)
                 if progress_job is not None and finish_job(progress_db, progress_job, status="running"):
                     if fraction is not None:
                         progress_job.progress = round(fraction, 4)
                     say(progress_job, message)
-                    progress_db.commit()
 
         def on_phase(name: str) -> None:
             nonlocal phase, last_fraction
@@ -434,13 +433,12 @@ def _run_export_body(job_id: str, plan: RenderPlan) -> None:
             if name == PHASE_FALLBACK:
                 # 软件编码从头再来:进度条明确回退到 0 并说明原因,而不是无声归零让人以为卡死。
                 last_fraction = -1.0
-                with SessionLocal() as fb_db:
+                with unit_of_work() as fb_db:
                     fb_job = fb_db.get(Job, job_id)
                     if fb_job is not None and finish_job(fb_db, fb_job, status="running"):
                         fb_job.progress = 0.0
                         say(fb_job, _export_message(name, None))
                         emit_job_event(fb_db, job_id, "job.encode_fallback", {})
-                        fb_db.commit()
             elif name == PHASE_FINALIZE:
                 # ffmpeg 逐帧进度到不了 100%(末块 out_time ≈ 时长−1帧),封装阶段再顶到 99%,
                 # 让进度条贴近满、配合"封装文件…"文案,避免观感上"卡在 96%"。
@@ -471,9 +469,9 @@ def _run_export_body(job_id: str, plan: RenderPlan) -> None:
             # cancellation landing just as it finished would otherwise be overwritten here, and
             # the export the user stopped would appear in their library as a succeeded job.
             if not finish_job(db, job, status="running"):
-                db.commit()
                 return
             say(job, "jobMsg_renderFinishing")
+            # 「封装 / 入库中」先落库再登记:成片要整个拷进素材库(几百 MB),这期间不攥着写锁。
             db.commit()
             sequence = db.get(Sequence, plan.sequence_id)
             asset = register_file_asset(
@@ -504,7 +502,6 @@ def _run_export_body(job_id: str, plan: RenderPlan) -> None:
             # A cancelled render fails because we killed ffmpeg; finish_job keeps the
             # cancellation's own message rather than relabelling it "导出失败".
             if not finish_job(db, job, status="failed", message="jobMsg_renderFailed", error=_friendly_render_error(exc)):
-                db.commit()
                 unregister_job_child(job_id)
                 return
             emit_job_event(db, job.id, "job.failed", {"stderr_tail": exc.stderr_tail, "render_plan_hash": plan.render_plan_hash})
@@ -520,7 +517,6 @@ def _run_export_body(job_id: str, plan: RenderPlan) -> None:
             # 留着的话,成功的导出在磁盘上存两份,取消的导出留一截永远没人清。
             # 实测某台机器上 ~/.mosael/exports 攒了 66 个文件 445 MB,全是这么来的。
             output_path.unlink(missing_ok=True)
-        db.commit()
 
 
 def _friendly_render_error(exc: RenderExecutionError) -> str:
