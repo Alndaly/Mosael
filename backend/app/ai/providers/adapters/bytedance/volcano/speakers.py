@@ -8,6 +8,9 @@ the account's AK/SK are configured, and falls back to a built-in list when they 
 This endpoint does not accept the speech API Key — it is the account-level OpenAPI, signed
 with AK/SK the same way as the rest of 火山's console APIs. That signature is the only reason
 this module exists; everything else here is a thin wrapper around one Action.
+
+它是「怎么跟火山说话」,所以住在适配器这一层、经公共入口(app.ai.providers)给领域用 —— 此前它在
+integrations/,而领域的引擎目录去引它,是全仓唯一一处领域反向依赖集成层。
 """
 
 from __future__ import annotations
@@ -16,9 +19,8 @@ from app.core.i18n import LocalizedError
 
 import logging
 
-import httpx
-
 from app.ai.providers.adapters.bytedance.volcano.openapi_sign import HOST, signed_headers
+from app.core.http_retry import RetryingClient
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +65,7 @@ def list_speakers(ak: str, sk: str, resource_id: str, *, page_limit: int = 100, 
 
     query = "Action=ListSpeakers&Version=2025-05-20"
     speakers: list[dict] = []
-    with httpx.Client(timeout=TIMEOUT_SECONDS) as client:
+    with RetryingClient(timeout=TIMEOUT_SECONDS) as client:
         for page in range(1, max_pages + 1):
             body = json.dumps({"ResourceIDs": [resource_id], "Page": page, "Limit": page_limit}).encode("utf-8")
             response = client.post(

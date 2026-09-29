@@ -3,7 +3,7 @@
 文档:https://www.volcengine.com/docs/6369/67269。和 AWS SigV4 同一个套路,但**不是**它:
 没有 "AWS4" 前缀,凭据范围以 `/request` 结尾,派生链是 日期 → 地域 → 服务 → "request"。
 
-住在 ai 层而不是 integrations:同一个签名有三个使用者 —— 拉账号可用音色(integrations/volc_openapi,
+住在 ai 层:同一个签名有三个使用者 —— 拉账号可用音色(adapters/bytedance/volcano/speakers,
 服务 `speech_saas_prod`)、音乐生成(adapters/bytedance/volcano/music,服务 `imagination`)和数字人
 (adapters/bytedance/volcano/omnihuman)。下层不能认识上层(tests/test_import_layering),所以它放在
 都够得着的这一层,服务名由调用方给。

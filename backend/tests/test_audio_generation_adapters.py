@@ -347,7 +347,7 @@ def test_火山签名和音色列表用的是同一个实现() -> None:
     import datetime as dt
 
     from app.ai.providers.adapters.bytedance.volcano.openapi_sign import signed_headers
-    from app.integrations import volc_openapi
+    from app.ai.providers.adapters.bytedance.volcano import speakers
 
     moment = dt.datetime(2026, 9, 25, 12, 0, 0, tzinfo=dt.UTC)
     one = signed_headers("AK", "SK", "Action=QuerySong&Version=2024-08-12", b"{}", service="imagination", now=moment)
@@ -355,7 +355,7 @@ def test_火山签名和音色列表用的是同一个实现() -> None:
     assert one["X-Date"] == "20260925T120000Z"
     assert "20260925/cn-beijing/imagination/request" in one["Authorization"]
     assert one["Authorization"] != two["Authorization"], "服务名进签名范围"
-    assert volc_openapi.SERVICE == "speech_saas_prod"
+    assert speakers.SERVICE == "speech_saas_prod"
 
 
 # ── Google · Lyria(同步)───────────────────────────────────────────────────────────────────

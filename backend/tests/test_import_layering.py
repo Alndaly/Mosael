@@ -166,6 +166,25 @@ def test_下层不认识上层() -> None:
     )
 
 
+def test_领域连延迟导入也不认识集成层() -> None:
+    """**这一条连函数内的延迟导入也不放过。**
+
+    上一条允许延迟导入,是因为「运行时才需要上层」有正当的场合(迁移)。领域层对集成层没有:领域要的外部
+    能力经 ai/providers 的公共入口拿,集成层(飞书这类)是**调用领域的一方**。此前唯一的一处是引擎目录
+    延迟 import integrations.volc_openapi 去拉火山账号的音色 —— 那是「怎么跟火山说话」,已经搬进
+    ai/providers/adapters/bytedance/volcano/speakers。
+    """
+    graph = _graph(include_lazy=True)
+    violations = sorted(
+        f"{src} → {dst}"
+        for src, dsts in graph.items()
+        if src.startswith("app.domain")
+        for dst in dsts
+        if dst == "app.integrations" or dst.startswith("app.integrations.")
+    )
+    assert not violations, "领域层 import 了集成层(含函数内的延迟导入):\n  " + "\n  ".join(violations)
+
+
 def test_top_level_imports_are_acyclic() -> None:
     """只看顶层导入(不含函数内延迟导入),依赖图必须无环。
 

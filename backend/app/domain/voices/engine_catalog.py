@@ -253,7 +253,7 @@ def list_engine_voices(db: Session, engine: str, *, user_id: str | None) -> list
     volcano = resolve_connection(db, "volcano", user_id=user_id)
     ak, sk = str((volcano.extra if volcano else {}).get("ak") or ""), str((volcano.extra if volcano else {}).get("sk") or "")
     if ak and sk:
-        from app.integrations.volc_openapi import VolcOpenAPIError, list_all_speakers
+        from app.ai.providers import VolcOpenAPIError, list_all_speakers
 
         try:
             live = list_all_speakers(ak, sk)

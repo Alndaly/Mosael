@@ -17,6 +17,7 @@ from app.ai.providers.adapters.bytedance.volcano.speech import (
     VOLCANO_BUILTIN_VOICES,
     VolcanoSpeechAdapter,
 )
+from app.ai.providers.adapters.bytedance.volcano.speakers import VolcOpenAPIError, list_all_speakers
 from app.ai.providers.adapters.bytedance.volcano.podcast import (
     PodcastAction,
     PodcastSynthesisError,
@@ -119,4 +120,6 @@ __all__ = [
     "synthesize_many",
     "synthesize_volcano_podcast",
     "connection_vendor_for_speech_engine",
+    "VolcOpenAPIError",
+    "list_all_speakers",
 ]
