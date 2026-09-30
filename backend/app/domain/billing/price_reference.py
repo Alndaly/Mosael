@@ -49,6 +49,8 @@
   等对应的适配器接入、预设声明了能力再收(测试盯着「能力必须是这家连接提供的」)。
 - **可灵(Kling)**:按「单位 / 积分」计价,国内 1 积分 = 1 元、国际 1 单位 = $0.14,一家两币;而应用
   判断不出这条连接开的是哪边的账户,又分有声 / 无声、带不带视频输入 —— 不收。
+- **数字人(ADR 0028)没收的**:火山即梦 OmniHuman 1.5 与 HeyGen(Avatar IV、对口型)的官方价目页要登录或靠脚本渲染,
+  取不到原文,只找到第三方汇总;Hedra Character-3 按积分计价;可灵数字人 / 对口型和可灵视频同一个一家两币的问题。
 - **中转站自己的价**(Evolink、147ai 等):不是原厂价目,不在这张表的范围里;中转的目录报了价就用目录的。
   Evolink 上的 Suno(产品页写「8 积分 ≈ $0.118 / 两首」)同理不收。
 - **音频生成(ADR 0022)没收的**:可灵文生音效 / 视频生音效(每次 0.25 单位 / 积分,和可灵视频同一个一家两币的问题);
@@ -446,6 +448,17 @@ _ALIBABA_VIDEO = [
     )
 ]
 
+# 数字人(每秒,按成功生成的视频时长;ADR 0028)。价目表总页里没有这两个,单价写在各自的模型文档页上。
+# 成片时长跟着驱动音频走,计量记的是产出的真实时长(runner._record_generation_usage)。
+_BAILIAN_S2V = "https://help.aliyun.com/zh/model-studio/wan-s2v-api"
+_BAILIAN_RETALK = "https://help.aliyun.com/zh/model-studio/videoretalk/"
+_ALIBABA_DIGITAL_HUMAN = [
+    _p("alibaba", "wan2.2-s2v", "video", "video_second", "0.5", "CNY", _BAILIAN_S2V, region="cn",
+       remark=("480P 的价(应用默认);720P 为 0.9 元/秒;另有 100 秒免费额度", "480P price (the app default); 720P is 0.9 CNY/s; 100 free seconds")),
+    _p("alibaba", "videoretalk", "video", "video_second", "0.08", "CNY", _BAILIAN_RETALK, region="cn",
+       remark=("按生成视频的时长计;另有 1800 秒免费额度", "Billed by the generated video's length; 1,800 free seconds")),
+]
+
 # 语音合成(每万字符)。qwen-tts-flash / -latest 按 token 计价,而语音合成的计量是字符数,
 # 对不上,不收;裸的 `qwen-tts` 这个 id 价目页上没有。
 # 百炼一个汉字按 2 个字符计,而计量记的是 len(text) —— 中文会少算一半,备注里写明。
@@ -718,6 +731,7 @@ LIST_PRICES: tuple[ListPrice, ...] = (
     *_ALIBABA_CHAT,
     *_ALIBABA_IMAGE,
     *_ALIBABA_VIDEO,
+    *_ALIBABA_DIGITAL_HUMAN,
     *_ALIBABA_TTS,
     *_BYTEDANCE_PRICES,
     *_VOLCANO_PRICES,

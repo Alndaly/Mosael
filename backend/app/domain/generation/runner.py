@@ -233,7 +233,7 @@ def _run_generation(generation_id: str, *, resume_from: str = "") -> None:
             job.result = {"asset_ids": asset_ids}
             _record_generation_usage(
                 db, generation, job, request, context, result, started, "succeeded",
-                measured_audio_seconds=_measured_seconds(assets) if generation.kind == "audio" else None,
+                measured_seconds=_measured_seconds(assets) if generation.kind in ("audio", "video") else None,
             )
             emit_job_event(db, job.id, "job.succeeded", {"asset_ids": asset_ids})
             db.commit()
@@ -407,7 +407,7 @@ def _record_generation_usage(
     started: float,
     status: str,
     *,
-    measured_audio_seconds: float | None = None,
+    measured_seconds: float | None = None,
 ) -> None:
     units = dict(result.usage if result is not None else {})
     if "requests" not in units:
@@ -419,7 +419,12 @@ def _record_generation_usage(
             units.setdefault("size", str(request.parameters["size"]).replace("*", "x"))
     if request.kind == "video":
         units.setdefault("videos", 1)
-        units.setdefault("video_seconds", float(request.parameters.get("duration_seconds", 5)))
+        # 请求说了时长的按请求记(供应商按所选时长收费);没说的(数字人:成片跟着驱动音频走)按产出的真实时长。
+        # 两样都没有就不记 —— 按秒计价的规则把它当「没计上」,比记一个猜的 5 秒诚实。
+        if request.parameters.get("duration_seconds") is not None:
+            units.setdefault("video_seconds", float(request.parameters["duration_seconds"]))
+        elif measured_seconds is not None:
+            units.setdefault("video_seconds", measured_seconds)
         units.setdefault("resolution", str(request.parameters.get("resolution", "720p")))
         units.setdefault("aspect_ratio", str(request.parameters.get("aspect_ratio", "")))
         units.setdefault("source_images", len(request.sources))
@@ -431,8 +436,8 @@ def _record_generation_usage(
             # 交回了几首就是几首 —— Adapter 在请求时只知道「这是一次」,不知道对面会交回两首。
             units["audios"] = len(result.output_paths)
         units.setdefault("audios", 1)
-        if measured_audio_seconds is not None:
-            units.setdefault("audio_seconds", measured_audio_seconds)
+        if measured_seconds is not None:
+            units.setdefault("audio_seconds", measured_seconds)
     with billable(
         db,
         capability=generation.kind,

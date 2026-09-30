@@ -303,12 +303,16 @@ def metering_from_request(request: GenerationRequest) -> dict[str, Any]:
         units.update(
             {
                 "videos": 1,
-                "video_seconds": float(request.parameters.get("duration_seconds", 5)),
                 "resolution": str(request.parameters.get("resolution", "720p")),
                 "aspect_ratio": str(request.parameters.get("aspect_ratio", "")),
                 "source_images": len(request.sources),
             }
         )
+        # 秒数只在请求说了时长时才记。数字人(说话照片、改口型)的成片长度跟着驱动音频走,请求里没有时长 ——
+        # 此前一律按 5 秒记,一段 60 秒的口播被记成 5 秒。没说的由运行器按产出的真实时长补
+        # (runner._record_generation_usage,和音频同一条);先记一个猜的值,那一格就改不回真实值了。
+        if request.parameters.get("duration_seconds") is not None:
+            units["video_seconds"] = float(request.parameters["duration_seconds"])
     elif request.kind == "audio":
         # **按条**(每首 / 每段)是请求时就知道的;**按秒**要等产出回来才知道 —— 多数音乐模型的
         # 曲长由歌词决定,请求里的时长(有的话)只是个期望。所以这里不记 `audio_seconds`:
