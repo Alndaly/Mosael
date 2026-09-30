@@ -105,16 +105,23 @@ export function boardItems(nodes: Node[]): BoardItem[] {
  * 复制这一对是想要「同一套再来一份」;线不跟着来的话,副本里的图片槽拿不到那段提示词,
  * 那条线表达的关系就丢了。连着没被选中那项的线不跟着来:那一端没有副本可接。
  *
- * 每一格按 copiedItem 复制(进行中的运行态不带过去)。
+ * 每一格按 copiedItem 复制(进行中的运行态不带过去)。时间线格的副本换上 `sequences` 里给它复制好的那一条
+ * (原件的时间线 id → 副本的):两格共用一条的话,在副本里剪一刀原件跟着变(见 BoardCanvas 的复制)。
  */
-export function copySelected(nodes: Node[], edges: Edge[]): { nodes: Node[]; edges: Edge[] } {
+export function copySelected(
+  nodes: Node[],
+  edges: Edge[],
+  sequences: ReadonlyMap<string, string> = new Map(),
+): { nodes: Node[]; edges: Edge[] } {
   // 标记也可能被选中(它在画布上就是一个节点),但它没有 item —— 而且"复制一枚旗子"
   // 本来也不成立:两枚指着同一处的标记不表达任何东西。
   const picked = nodes.filter((node) => node.selected && node.type !== "marker");
   const renamed = new Map<string, string>();
   const copies = picked.map((node) => {
     const source = (node.data as unknown as { item: BoardItem }).item;
-    const copy = copiedItem(source, `${source.kind}-${Math.random().toString(36).slice(2, 9)}`);
+    const copied = copiedItem(source, `${source.kind}-${Math.random().toString(36).slice(2, 9)}`);
+    const sequence = source.sequence_id ? sequences.get(source.sequence_id) : undefined;
+    const copy = sequence ? { ...copied, sequence_id: sequence } : copied;
     renamed.set(node.id, copy.id);
     return {
       ...node,

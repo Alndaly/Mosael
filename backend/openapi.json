@@ -22597,6 +22597,17 @@
           "workspace_id": {
             "type": "string",
             "title": "Workspace Id"
+          },
+          "copy_of": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Copy Of"
           }
         },
         "type": "object",

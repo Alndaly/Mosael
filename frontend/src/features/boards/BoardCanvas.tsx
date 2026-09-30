@@ -24,7 +24,9 @@ import {
 } from "@xyflow/react";
 import { FileUp, Loader2 } from "lucide-react";
 
-import { type CollaborationComment, type WorkspaceMember } from "@/api/client";
+import { createBoardSequence, type CollaborationComment, type WorkspaceMember } from "@/api/client";
+import { errorText } from "@/api/errorMessage";
+import { toast } from "sonner";
 import { useI18n } from "@/app/preferences";
 import { fitCanvasViewport, type CanvasViewportInsets } from "@/components/app/fitCanvasViewport";
 import { shapeEdges, type EdgeShape } from "@/components/app/canvasEdgeShape";
@@ -366,12 +368,38 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
   });
   useCanvasDeleteKey(surface, deleteKeyTarget);
 
-  /** 复制选中的这几项。节点和线一起换:两个 setter 分开调,理由同 removeSelected。 */
-  const copySelection = React.useCallback(() => {
-    const copied = copySelected(nodes, edges);
+  /**
+   * 复制选中的这几项。节点和线一起换:两个 setter 分开调,理由同 removeNow。
+   *
+   * 时间线格背后是一条服务端的时间线:**副本各自复制一条**(和整板复制同一条规矩),先建好再放格子 ——
+   * 共用一条的话在副本里剪一刀,原件那一格跟着变。等建的那一会儿选中可能变了,所以先记下复制的是哪几格。
+   */
+  const latestGraph = React.useRef({ nodes, edges });
+  latestGraph.current = { nodes, edges };
+  const copySelection = React.useCallback(async () => {
+    const picked = nodes.filter((node) => node.selected && node.type !== "marker");
+    if (picked.length === 0) return;
+    const sequences = new Map<string, string>();
+    try {
+      for (const item of boardItems(picked)) {
+        if (item.kind === "sequence" && item.sequence_id && !sequences.has(item.sequence_id)) {
+          sequences.set(item.sequence_id, (await createBoardSequence(boardId, workspaceId, item.sequence_id)).sequence_id);
+        }
+      }
+    } catch (error) {
+      toast.error(errorText(error));
+      return;
+    }
+    const ids = new Set(picked.map((node) => node.id));
+    const current = latestGraph.current;
+    const copied = copySelected(
+      current.nodes.map((node) => (Boolean(node.selected) === ids.has(node.id) ? node : { ...node, selected: ids.has(node.id) })),
+      current.edges,
+      sequences,
+    );
     setNodes(copied.nodes);
     setEdges(copied.edges);
-  }, [nodes, edges, setNodes, setEdges]);
+  }, [nodes, boardId, workspaceId, setNodes, setEdges]);
 
   /** 一格上在跑(或上一轮跑)的那项能力叫什么:运行态那一条上写它。清单没到、查不到时不写。 */
   const abilityLabel = (item: BoardItem): string | undefined => {

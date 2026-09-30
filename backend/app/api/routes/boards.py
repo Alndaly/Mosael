@@ -69,7 +69,7 @@ def create(body: BoardCreate, db: Tx, user: CurrentUser) -> Board:
 def create_sequence(board_id: str, body: BoardSequenceCreate, db: Tx, user: CurrentUser) -> dict:
     """放一格时间线格之前先建好它那条时间线(放进这张画板的项目,ADR 0030)。"""
     try:
-        sequence = boards.create_timeline(db, user, body.workspace_id, board_id)
+        sequence = boards.create_timeline(db, user, body.workspace_id, board_id, copy_of=body.copy_of)
     except BoardDomainError as exc:
         raise _board_http_error(exc) from exc
     return {"sequence_id": sequence.id, "name": sequence.name}

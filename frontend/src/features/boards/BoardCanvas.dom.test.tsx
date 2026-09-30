@@ -6,6 +6,8 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 
 const editor = vi.hoisted(() => ({ undoSequence: vi.fn(), redoSequence: vi.fn(), appendAssetToSequence: vi.fn(), getSequence: vi.fn() }));
 vi.mock("@/api/domains/editor", async (original) => ({ ...(await original<object>()), ...editor }));
+const boardsApi = vi.hoisted(() => ({ createBoardSequence: vi.fn() }));
+vi.mock("@/api/domains/boards", async (original) => ({ ...(await original<object>()), ...boardsApi }));
 
 vi.mock("@/app/preferences", () => ({
   useI18n: () => (key: string) => key,
@@ -555,6 +557,20 @@ describe("选中之后挂什么", () => {
       ],
       edges: [], markers: [],
     };
+
+    it("复制一格时间线格:副本照原件复制一条时间线 —— 不和原件共用,在副本里剪一刀原件不跟着变", async () => {
+      editor.getSequence.mockResolvedValue(SEQUENCE);
+      boardsApi.createBoardSequence.mockResolvedValue({ sequence_id: "seq-copy", name: "时间线 1" });
+      const view = mount(board, { onRun: vi.fn(async () => undefined), producers: [EXPORT] as never });
+      select("t");
+      await act(async () => {
+        fireEvent.click(screen.getByRole("button", { name: "copy" }));
+        await vi.advanceTimersByTimeAsync(10);
+      });
+      expect(boardsApi.createBoardSequence).toHaveBeenCalledWith("b1", "w1", "seq");
+      const timelines = view.latest().items.filter((one) => one.kind === "sequence");
+      expect(timelines.map((one) => one.sequence_id).sort()).toEqual(["seq", "seq-copy"]);
+    });
 
     it("选中时间线格不弹导出面板;操作条上「导出」才打开,发送起一次导出(只发导出自己的几项)", async () => {
       editor.getSequence.mockResolvedValue(SEQUENCE);

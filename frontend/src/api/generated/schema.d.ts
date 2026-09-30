@@ -7948,6 +7948,8 @@ export interface components {
         BoardSequenceCreate: {
             /** Workspace Id */
             workspace_id: string;
+            /** Copy Of */
+            copy_of?: string | null;
         };
         /** BoardSequenceOut */
         BoardSequenceOut: {

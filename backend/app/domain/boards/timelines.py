@@ -20,12 +20,25 @@ from app.domain.boards.canvas import board_project, get_board
 DEFAULT_WIDTH, DEFAULT_HEIGHT, DEFAULT_FPS = 1920, 1080, 30.0
 
 
-def create_board_sequence(db: Session, workspace_id: str, board_id: str) -> Sequence:
-    """给这张画板建一条新时间线(放进画板的项目),交回它。名字按画板上的第几条起。"""
-    from app.domain.sequences import create_sequence_scaffold
+def create_board_sequence(db: Session, workspace_id: str, board_id: str, *, copy_of: str | None = None) -> Sequence:
+    """给这张画板建一条新时间线(放进画板的项目),交回它。名字按画板上的第几条起。
+
+    `copy_of`:照着这条时间线复制一条(画板上复制一格时间线格)。**副本不和原件共用一条** —— 共用的话在副本里
+    剪一刀,原件那一格跟着变,两边的撤销还会互相撤掉对方的步骤;和整板复制(persistence._copy_timelines)同一条。
+    """
+    from app.domain.boards.errors import BoardDomainError
+    from app.domain.sequences import copy_sequence, create_sequence_scaffold
 
     board = get_board(db, workspace_id, board_id)
     project = board_project(db, board)
+    if copy_of:
+        source = db.get(Sequence, copy_of)
+        if source is None or source.workspace_id != workspace_id:
+            raise BoardDomainError("boardErr_sequenceNotInWorkspace")
+        copy = copy_sequence(db, source, project, name=source.name)
+        db.flush()
+        db.refresh(copy)
+        return copy
     count = sum(1 for _ in project.sequences) if project.sequences is not None else 0
     scaffold = create_sequence_scaffold(db, project, name=f"{board.name} · 时间线 {count + 1}",
                                         width=DEFAULT_WIDTH, height=DEFAULT_HEIGHT, fps=DEFAULT_FPS)

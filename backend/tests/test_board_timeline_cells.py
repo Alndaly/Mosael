@@ -108,6 +108,30 @@ def test_复制画板_时间线格各自复制一条_不和原板共用() -> Non
         assert {track.id for track in copied.tracks}.isdisjoint({track.id for track in original.tracks})
 
 
+def test_画板上复制一格时间线格_照原件复制一条时间线_别处的拒() -> None:
+    """画板上「复制」一格时间线格和整板复制同一条:副本指向自己的那一条,在副本里剪一刀原件不跟着变。"""
+    client, ws, board = _setup()
+    sequence = client.post(f"/api/boards/{board}/sequences", json={"workspace_id": ws}).json()["sequence_id"]
+    _asset(ws, "v1", "video", duration=4.0, width=720, height=1280)
+    client.post(f"/api/sequences/{sequence}/append", json={"asset_id": "v1"})
+
+    made = client.post(f"/api/boards/{board}/sequences", json={"workspace_id": ws, "copy_of": sequence})
+    assert made.status_code == 200, made.text
+    copied_id = made.json()["sequence_id"]
+    assert copied_id != sequence
+    with SessionLocal() as db:
+        original, copied = db.get(Sequence, sequence), db.get(Sequence, copied_id)
+        assert copied.project_id == original.project_id, "同一张画板的项目里"
+        assert [(clip.asset_id, clip.src_out) for track in copied.tracks for clip in track.clips] == [("v1", 4.0)]
+        assert {track.id for track in copied.tracks}.isdisjoint({track.id for track in original.tracks})
+
+    other = client.post("/api/workspaces", json={"name": "别处"}).json()["id"]
+    other_board = client.post("/api/boards", json={"workspace_id": other, "name": "B"}).json()["id"]
+    elsewhere = client.post(f"/api/boards/{other_board}/sequences", json={"workspace_id": other}).json()["sequence_id"]
+    refused = client.post(f"/api/boards/{board}/sequences", json={"workspace_id": ws, "copy_of": elsewhere})
+    assert refused.status_code == 400, refused.text
+
+
 def test_画板上的撤销带着版本号_时间线在别处改过就不撤别人的那一步() -> None:
     client, ws, board = _setup()
     sequence = client.post(f"/api/boards/{board}/sequences", json={"workspace_id": ws}).json()["sequence_id"]

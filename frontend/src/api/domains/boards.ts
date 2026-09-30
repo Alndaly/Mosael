@@ -113,9 +113,16 @@ export function getBoard(boardId: string, workspaceId: string): Promise<Board> {
   return api<Board>(`/api/boards/${boardId}?workspace_id=${encodeURIComponent(workspaceId)}`);
 }
 
-/** 放一格时间线格之前,先给这张画板建好它那条时间线(ADR 0030)。 */
-export function createBoardSequence(boardId: string, workspaceId: string): Promise<{ sequence_id: string; name: string }> {
-  return api(`/api/boards/${boardId}/sequences`, { method: "POST", body: JSON.stringify({ workspace_id: workspaceId }) });
+/** 放一格时间线格之前,先给这张画板建好它那条时间线(ADR 0030)。`copyOf`:复制一格时照原件复制一条(副本不和原件共用)。 */
+export function createBoardSequence(
+  boardId: string,
+  workspaceId: string,
+  copyOf?: string,
+): Promise<{ sequence_id: string; name: string }> {
+  return api(`/api/boards/${boardId}/sequences`, {
+    method: "POST",
+    body: JSON.stringify({ workspace_id: workspaceId, ...(copyOf ? { copy_of: copyOf } : {}) }),
+  });
 }
 
 export function createBoard(body: { workspace_id: string; name?: string }): Promise<Board> {

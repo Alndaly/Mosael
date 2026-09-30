@@ -42,10 +42,10 @@ def create(db: Session, user: User, workspace_id: str, *, name: str, canvas: dic
     return create_board(db, workspace_id=workspace_id, name=name, canvas=canvas, actor_id=user.id)
 
 
-def create_timeline(db: Session, user: User, workspace_id: str, board_id: str) -> Sequence:
-    """放一格时间线格之前先建好它那条时间线(放进这张画板的项目,ADR 0030)。"""
+def create_timeline(db: Session, user: User, workspace_id: str, board_id: str, *, copy_of: str | None = None) -> Sequence:
+    """放一格时间线格之前先建好它那条时间线(放进这张画板的项目,ADR 0030);复制一格时是照原件复制一条。"""
     ensure_workspace_perm(db, user, workspace_id, "edit")
-    return create_board_sequence(db, workspace_id, board_id)
+    return create_board_sequence(db, workspace_id, board_id, copy_of=copy_of)
 
 
 def duplicate(db: Session, user: User, workspace_id: str, board_id: str, *, name: str) -> Board:

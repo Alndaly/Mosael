@@ -28,6 +28,8 @@ class BoardSequenceCreate(ApiModel):
     """给画板建一条时间线(时间线格,ADR 0030)。"""
 
     workspace_id: str
+    #: 照着这条时间线复制一条(画板上复制一格时间线格,副本不和原件共用)。不给就是新建一条空的。
+    copy_of: str | None = None
 
 
 class BoardSequenceOut(ApiModel):
