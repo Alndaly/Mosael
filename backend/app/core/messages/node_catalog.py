@@ -82,8 +82,9 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfNode_notify_body": {"zh": "通知正文", "en": "Notification body"},
     "wfNode_translate": {"zh": "翻译", "en": "Translate"},
     "wfNode_translate_board": {"zh": "把便签或文档里的文字翻成另一种语言", "en": "Translate the text of a note or document into another language."},
-    "wfNode_translate_desc": {"zh": "把文本翻译成目标语言:Google 免费接口(无需 key)或 AI 供应商。", "en": "Translate text into a target language: Google's free endpoint (no key needed) or an AI provider."},
-    "wfNode_translate_engine": {"zh": "翻译引擎(默认 Google 免费)", "en": "Translation engine (Google's free one by default)"},
+    "wfNode_translate_desc": {"zh": "把文本翻译成目标语言:Google 免费翻译(无需 key)、你的对话模型,或装了的翻译插件。", "en": "Translate text into a target language: Google's free translation (no key needed), your chat model, or an installed translation plugin."},
+    #: 留空不是固定走 Google:按运行者在设置「能力提供方」里定的默认翻译挑(capabilities.pick),没定过才是 Google。
+    "wfNode_translate_engine": {"zh": "翻译引擎。留空 = 用运行的人在设置里定的默认翻译(没定过是 Google 免费翻译)", "en": "Translation engine. Empty uses the default translation set in Settings by whoever runs it (Google's free one if none is set)"},
     "wfNode_translate_lines": {"zh": "批量翻译", "en": "Translate lines"},
     "wfNode_separate_audio": {"zh": "分离人声与背景音", "en": "Separate voice and background"},
     "wfField_model_ids": {"zh": "允许用的道具", "en": "Props that may be used"},
