@@ -45,6 +45,8 @@ def stubs(monkeypatch):
         job = create_job(db, workspace_id=asset.workspace_id, kind="transcribe",
                          payload={}, created_by=created_by)
         job.status = "succeeded"
+        #: 和真的转写任务同一个契约:结果里说出是哪一份逐字稿(见 voices.transcription)。
+        job.result = {"transcript_id": transcript.id, "segments": len(SEGMENTS)}
         db.commit()
         return job
 

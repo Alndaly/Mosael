@@ -12,7 +12,6 @@ import math
 from collections.abc import Callable
 from typing import Any, TypeVar
 
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.models import Asset, Clip, Sequence, Transcript
@@ -20,7 +19,7 @@ from app.domain.sequences.errors import SequenceDomainError
 from app.domain.workflows import WorkflowDomainError
 from app.domain.workflows.executors.registry import RunScope, register
 from app.domain.jobs import current_actor
-from app.domain.workflows.executors.common import id_list, provided, text_lines, truthy, wait_for_job
+from app.domain.workflows.executors.common import id_list, provided, text_lines, truthy, wait_for_job, whole_number
 
 logger = logging.getLogger(__name__)
 
@@ -66,13 +65,13 @@ def transcribe_asset(db: Session, scope: RunScope, config: dict[str, Any]) -> di
         created_by=current_actor(db),
         engine=str(config.get("engine") or ""),
     )
-    wait_for_job(child.id, release=db)
-    transcript = db.scalars(
-        select(Transcript).where(Transcript.asset_id == asset_id).order_by(Transcript.created_at.desc())
-    ).first()
+    final = wait_for_job(child.id, release=db)
+    # **取这一单转出来的那份**,不是这份素材最新的那份:同一份素材同时被两处转写(并行分支、另一条
+    # 工作流、剪辑页里点了一下)时,「最新」是谁先写完谁算 —— 拿到的可能是别的引擎、别的语言的那份。
+    transcript_id = str((final.result or {}).get("transcript_id") or "")
+    transcript = db.get(Transcript, transcript_id) if transcript_id else None
     if transcript is None:
         raise WorkflowDomainError("wfErr_transcriptMissing")
-    db.refresh(transcript)
     segments = [
         {
             "start": segment.start_time,
@@ -152,8 +151,8 @@ def document_to_markdown(db: Session, scope: RunScope, config: dict[str, Any]) -
         if extraction is None:
             raise WorkflowDomainError("wfErr_documentNotParsed", params={"name": asset.name})
     total = extraction.sections
-    first = max(1, int(config.get("first") or 1))
-    last = min(total, int(config.get("last") or total))
+    first = max(1, whole_number(config, "first", node_type="document_to_markdown", default=1))
+    last = min(total, whole_number(config, "last", node_type="document_to_markdown", default=total))
     sections = read_sections(extraction, first, last)
     separator = "\n\n---\n\n" if extraction.unit in ("page", "slide") else "\n\n"
     return {
@@ -243,8 +242,8 @@ def video_to_gif(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[s
             db,
             asset=asset,
             created_by=current_actor(db),
-            fps=int(config.get("fps") or 12),
-            width=int(config.get("width") or 720),
+            fps=whole_number(config, "fps", node_type="video_to_gif", default=12),
+            width=whole_number(config, "width", node_type="video_to_gif", default=720),
             start=float(config.get("start") or 0),
             duration=float(config["duration"]) if config.get("duration") not in (None, "") else None,
         )

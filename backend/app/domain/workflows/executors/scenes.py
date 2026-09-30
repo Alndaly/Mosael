@@ -15,12 +15,13 @@ import json
 from typing import Any
 
 from pydantic import ValidationError
+from app.core.i18n import fragment
 from sqlalchemy.orm import Session
 
 from app.db.models import Scene3D
 from app.domain.workflows import WorkflowDomainError
 from app.domain.workflows.executors.registry import RunScope, register
-from app.domain.workflows.executors.common import id_list
+from app.domain.workflows.executors.common import id_list, whole_number
 
 
 def _layout(value: Any) -> dict[str, Any]:
@@ -130,7 +131,8 @@ def scene_create(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[s
     try:
         scene = create_scene(db, scope.workspace_id, name[:160], content)
     except SceneDomainError as exc:
-        raise WorkflowDomainError("wfErr_sceneLayoutInvalid", params={"reason": str(exc)}) from exc
+        # 原因留成 key(fragment),按读的人的语言翻 —— str(exc) 在执行线程里就把它冻成了缺省语言。
+        raise WorkflowDomainError("wfErr_sceneLayoutInvalid", params={"reason": fragment(exc.key, **exc.params)}) from exc
     return {
         "scene_id": scene.id,
         "shot_ids": [shot.id for shot in content.shots],
@@ -153,7 +155,7 @@ def scene_render(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[s
             project_id=str(config.get("project_id") or "").strip() or None,
         )
     except SceneDomainError as exc:
-        raise WorkflowDomainError("wfErr_sceneRenderFailed", params={"reason": str(exc)}) from exc
+        raise WorkflowDomainError("wfErr_sceneRenderFailed", params={"reason": fragment(exc.key, **exc.params)}) from exc
 
 
 #: 「按文字搭 3D 场景」最多几镜(每镜一个布景台、一台相机)、每镜几秒(运镜末档的时间)。
@@ -186,11 +188,11 @@ def scene_from_text(db: Session, scope: RunScope, config: dict[str, Any]) -> dic
     text = str(config.get("text") or "").strip()
     if not text:
         raise WorkflowDomainError("wfErr_sceneTextMissing")
-    try:
-        shots = max(1, min(MAX_TEXT_SHOTS, int(config.get("max_shots") or DEFAULT_TEXT_SHOTS)))
-        clip = max(1, min(30, int(config.get("shot_seconds") or DEFAULT_SHOT_SECONDS)))
-    except (TypeError, ValueError):
-        shots, clip = DEFAULT_TEXT_SHOTS, DEFAULT_SHOT_SECONDS
+    # 填错了就说哪一格,不悄悄换成默认值(此前 "6.0" 这种上游算出来的数也被吞成默认)。
+    shots = max(1, min(MAX_TEXT_SHOTS, whole_number(config, "max_shots", node_type="scene_from_text",
+                                                    default=DEFAULT_TEXT_SHOTS)))
+    clip = max(1, min(30, whole_number(config, "shot_seconds", node_type="scene_from_text",
+                                       default=DEFAULT_SHOT_SECONDS)))
     aspect = str(config.get("aspect") or "16:9")
     if aspect not in SHOT_ASPECTS:
         aspect = "16:9"
