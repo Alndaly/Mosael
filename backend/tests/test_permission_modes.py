@@ -131,6 +131,29 @@ def test_manual_is_the_default() -> None:
     assert card["decision_mode"] == "manual"
 
 
+def test_自动放行的卡执行完了_留痕那一栏照样列得出来() -> None:
+    """对话设置里「哪些是自动放行的」此前按 `status=approved` 取,而那只是认领之后、执行完之前的一瞬 ——
+    放行过的卡几毫秒后就是 executed,那一栏几乎总是空的。按放行方式取(`automatic=true`),不看状态。"""
+    chat = _chat()
+    manual = chat.edit_card()
+    chat.as_person()
+    assert chat.client.post(f"/api/confirmations/{manual['id']}/approve").json()["status"] == "executed"
+    chat.set_mode("auto")
+    chat.as_turn()
+    auto = chat.edit_card()
+    assert auto["status"] == "executed", auto
+
+    chat.as_person()
+    listed = chat.client.get(
+        "/api/confirmations",
+        params={"workspace_id": chat.workspace_id, "session_id": chat.session_id, "automatic": "true"},
+    ).json()
+
+    assert [(one["id"], one["status"], one["decision_mode"]) for one in listed] == [(auto["id"], "executed", "auto")], (
+        "手动批的不算,自动放行的执行完了也要在"
+    )
+
+
 # ---------------- auto ----------------
 
 

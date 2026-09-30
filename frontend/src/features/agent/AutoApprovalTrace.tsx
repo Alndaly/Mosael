@@ -43,14 +43,16 @@ export function AutoApprovalTrace({ workspaceId, sessionId }: { workspaceId: str
   const t = useI18n();
   const { locale } = usePreferences();
 
-  const approved = useQuery({
-    queryKey: confirmationKeys.approved(workspaceId, sessionId),
-    queryFn: () => listConfirmations({ workspaceId, status: "approved", sessionId, limit: 20 }),
+  // **按放行方式取,不按状态取。** 此前问的是 `status=approved`,而那只是认领之后、执行完之前的一瞬 ——
+  // 放行的卡几毫秒后就是 executed / failed,于是这一栏几乎总是空的,正好把它要说的那件事藏了起来。
+  const decided = useQuery({
+    queryKey: confirmationKeys.automatic(workspaceId, sessionId),
+    queryFn: () => listConfirmations({ workspaceId, automatic: true, sessionId, limit: 20 }),
     // 这一栏只在设置弹层打开时看得到,不需要轮询 —— 打开时取一次即可。
     staleTime: 5_000,
   });
 
-  const automatic = (approved.data ?? []).filter(
+  const automatic = (decided.data ?? []).filter(
     (card): card is Confirmation & { decision_mode: keyof typeof GATE_ICON } =>
       card.decision_mode !== "manual" && card.decision_mode in GATE_ICON,
   );

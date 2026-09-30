@@ -40,6 +40,7 @@ def list_confirmations(
     session_id: str | None = None,
     unowned: bool = False,
     decidable: bool = False,
+    automatic: bool = False,
 ) -> list[ToolConfirmation]:
     """他看得见的确认卡。
 
@@ -52,10 +53,13 @@ def list_confirmations(
       - `decidable=true` —— 只要**他能拍板**的:列出来的每一张,批 / 拒都不会被权限挡回(判据与批的那一刻
         同一对,见 domain/agent/confirmations.decidable_filter)。全局确认中心用这个 —— 共享来的对话里的卡
         他看得见、批不了,那种卡只在聊天里就地摆着等主人,不该在中心里冒成一张点了就 403 的卡。
+      - `automatic=true` —— 只要**没问人就放行了**的卡(`decision_mode` 不是 manual),不论后来执行成没成。
+        对话设置里「哪些是自动放行的」用这个:按状态筛取不到 —— `approved` 只是认领之后、执行完之前那一瞬。
       - 都不传 —— 他看得见的全部。
     """
     return agent_use_cases.list_confirmations(
-        db, user, workspace_id, status=status, limit=limit, session_id=session_id, unowned=unowned, decidable=decidable
+        db, user, workspace_id, status=status, limit=limit, session_id=session_id, unowned=unowned, decidable=decidable,
+        automatic=automatic,
     )
 
 

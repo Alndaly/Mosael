@@ -260,6 +260,7 @@ def list_confirmations(
     session_id: str | None = None,
     unowned: bool = False,
     decidable: bool = False,
+    automatic: bool = False,
 ) -> list[ToolConfirmation]:
     ensure_workspace_access(db, user, workspace_id)
     stmt = select(ToolConfirmation).where(
@@ -273,6 +274,9 @@ def list_confirmations(
         stmt = stmt.where(ToolConfirmation.session_id.is_(None))
     if decidable:
         stmt = stmt.where(decidable_filter(db, user, workspace_id))
+    if automatic:
+        # 自动放行在派活之前就把 decision_mode 改掉了;退回给人的那条路会改回 manual(见 autopilot)。
+        stmt = stmt.where(ToolConfirmation.decision_mode != "manual")
     if status:
         stmt = stmt.where(ToolConfirmation.status == status)
     if status == "pending":

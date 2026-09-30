@@ -11,7 +11,7 @@ import { beforeEach, expect, it, vi } from "vitest";
  * `resolved_at` 这半边在界面上根本不存在:用户开了 auto 档之后,智能体每做一次本该问他的
  * 写操作,他看到的只是"它做了这件事",看不到"这件事本来要问你"。
  *
- * 这几条钉的是那一跳:请求真的带 `status=approved`,手动批的不混进来,一条都没有时整块不出现。
+ * 这几条钉的是那一跳:请求按放行方式(`automatic=true`)取、不按状态取,手动批的不混进来,一条都没有时整块不出现。
  */
 
 const listed = vi.fn();
@@ -43,16 +43,29 @@ const card = (id: string, decision_mode: string, summary: string) => ({
 
 beforeEach(() => listed.mockReset());
 
-it("问的是这次会话里**已批准**的卡,而不是待办的", async () => {
+it("问的是这次会话里**没问人就放行了**的卡,不按状态筛", async () => {
   listed.mockResolvedValue([]);
 
   show();
 
   await waitFor(() => expect(listed).toHaveBeenCalled());
-  const path = listed.mock.calls[0][0] as string;
-  expect(path).toContain("status=approved");
-  expect(path).toContain("session_id=s1");
-  expect(path).not.toContain("status=pending");
+  const query = new URL(listed.mock.calls[0][0] as string, "http://x").searchParams;
+  expect(query.get("automatic")).toBe("true");
+  expect(query.get("session_id")).toBe("s1");
+  // `approved` 只是认领之后、执行完之前那一瞬:按它筛,放行过的卡几毫秒后就不在了。
+  expect(query.get("status")).toBeNull();
+});
+
+it("执行完的、执行失败的都列出来 —— 放行这件事已经发生了", async () => {
+  listed.mockResolvedValue([
+    { ...card("a", "session-allow", "删掉两个素材"), status: "executed" },
+    { ...card("b", "bypass", "跑一段代码"), status: "failed" },
+  ]);
+
+  show();
+
+  expect(await screen.findByText("删掉两个素材")).toBeInTheDocument();
+  expect(screen.getByText("跑一段代码")).toBeInTheDocument();
 });
 
 it("列出被哪一档放行的,而不是笼统一句「已批准」", async () => {
