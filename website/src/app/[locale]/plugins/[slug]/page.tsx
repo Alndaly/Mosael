@@ -79,7 +79,7 @@ export default async function PluginDetailPage({
   if (!plugin) notFound();
   const t = getMessages(locale);
 
-  const raw = readPluginDoc(slug);
+  const raw = readPluginDoc(slug, locale);
   const doc = raw
     ? await compileMDX({
         source: rewriteRelativeLinks(unwrapAutolinks(dropLeadingTitle(raw)), plugin.source),

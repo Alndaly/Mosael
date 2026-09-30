@@ -138,14 +138,24 @@ export function findPlugin(slug: string, locale: Locale = DEFAULT_LOCALE): Plugi
 }
 
 /**
- * 插件自己的 README,原样读出来。
+ * 每种语言读哪一份 README。和仓库根目录同一套约定:`README.md` 是英文(GitHub 上默认显示的那份),
+ * `README.zh-CN.md` 是中文。
+ */
+export const README_FILE: Record<Locale, string> = { en: "README.md", zh: "README.zh-CN.md" };
+
+/**
+ * 插件自己的 README,按这一页的语言读,原样读出来。
+ *
+ * **不跨语言回退。** 此前只有一份中英段落交替的 README,两种语言的详情页渲染的都是它 —— 中文页开头
+ * 一段英文、英文页整篇中文。缺哪种语言就按「没有说明」处理,不拿另一种语言顶上;两份都得有由
+ * test/registry.test.mjs 守着。
  *
  * **不是每个插件都有** —— text-toolkit 那种一句话说得清的就没写。没有时返回 null,
  * 详情页照样成立(清单里的信息已经够看了),而不是渲染一块空白。
  */
-export function readPluginDoc(slug: string): string | null {
+export function readPluginDoc(slug: string, locale: Locale = DEFAULT_LOCALE): string | null {
   const found = pluginDirs().find((one) => one.slug === slug);
-  const file = found ? path.join(PLUGINS, found.folder, "README.md") : "";
+  const file = found ? path.join(PLUGINS, found.folder, README_FILE[locale]) : "";
   return file && fs.existsSync(file) ? fs.readFileSync(file, "utf8") : null;
 }
 

@@ -22,7 +22,8 @@ import pytest
 
 EXAMPLES = Path(__file__).resolve().parents[2] / "plugins" / "examples"
 #: 随应用发的插件的 README 一样会被人读(仓库里、插件目录里)。
-READMES = sorted([*EXAMPLES.glob("*/README.md"), *(EXAMPLES.parent / "bundled").glob("*/README.md")])
+#: 中英两份都查(`README.md` 英文、`README.zh-CN.md` 中文,官网按页面语言各读各的)。
+READMES = sorted([*EXAMPLES.glob("*/README*.md"), *(EXAMPLES.parent / "bundled").glob("*/README*.md")])
 
 #: markdown 链接,排除 autolink(`<...>`)与锚点。
 LINK = re.compile(r"\]\((?!https?://|#)([^)]+)\)")

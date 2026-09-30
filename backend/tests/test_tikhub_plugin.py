@@ -31,14 +31,20 @@ def test_平台是配置_端点和鉴权从配置与凭据展开() -> None:
 
 def test_README里的平台取值和清单一致() -> None:
     options = [o["value"] for o in _manifest()["instance"]["config"][0]["options"]]
-    readme = (PLUGIN / "README.md").read_text(encoding="utf-8")
+    readme = (PLUGIN / "README.zh-CN.md").read_text(encoding="utf-8")
     listed = re.search(r"平台取值:(.+?)。", readme, re.S)
     assert listed, "README 里要列出平台取值"
     assert re.findall(r"`([a-z]+)`", listed.group(1)) == options
 
 
+def test_英文README也列全了平台取值() -> None:
+    options = [o["value"] for o in _manifest()["instance"]["config"][0]["options"]]
+    listed = re.findall(r"`([a-z]+)`", (PLUGIN / "README.md").read_text(encoding="utf-8"))
+    assert [value for value in options if value not in listed] == []
+
+
 def test_README不再教人复制目录或把平台填进凭据() -> None:
-    readme = (PLUGIN / "README.md").read_text(encoding="utf-8")
+    readme = (PLUGIN / "README.zh-CN.md").read_text(encoding="utf-8")
     assert "复制一份" not in readme and "改掉 manifest 里的 `id`" not in readme
     assert "插件页 → 凭据,填两项" not in readme
     assert "再建一个连接" in readme

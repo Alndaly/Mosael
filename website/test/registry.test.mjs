@@ -17,7 +17,7 @@ registerHooks({
   },
 });
 
-const { findPlugin, listPlugins, readPluginDoc } = await import("../src/lib/registry.ts");
+const { README_FILE, findPlugin, listPlugins, readPluginDoc } = await import("../src/lib/registry.ts");
 
 const PLUGINS = path.resolve(import.meta.dirname, "..", "..", "plugins");
 const idsIn = (dir) =>
@@ -39,11 +39,65 @@ test("随应用内置的 ComfyUI 找得到,标了内置,源码指向 plugins/bun
   assert.equal(comfy.bundled, true);
   assert.equal(comfy.source, "plugins/bundled/comfyui");
   //: README 从它自己的目录读,不是去 examples 下找一个不存在的。
-  assert.ok(readPluginDoc("comfyui"), "内置插件的 README 没读到");
+  assert.ok(readPluginDoc("comfyui", "zh"), "内置插件的 README 没读到");
 });
 
 test("示例插件不标内置,源码指向 plugins/examples", () => {
   const examples = listPlugins("en").filter((plugin) => !plugin.bundled);
   assert.ok(examples.length >= 3);
   for (const plugin of examples) assert.equal(plugin.source, `plugins/examples/${plugin.slug}`);
+});
+
+//: ---- 详情页的正文按语言分两份 ----
+//: 此前每个插件只有一份中英段落交替的 README,两种语言的详情页渲染的都是它:中文页开头一段英文,
+//: 英文页几乎整篇中文。现在 `README.md` 是英文、`README.zh-CN.md` 是中文(和仓库根目录同一套约定)。
+
+const CJK = /[\u3400-\u9fff\uff00-\uffef\u3000-\u303f]/;
+
+/** 正文里的「文字」:去掉代码块、行内代码、链接地址和 HTML 注释 —— 那些不是给人读的句子。 */
+function proseLines(markdown) {
+  let fenced = false;
+  const lines = [];
+  for (const line of markdown.replace(/<!--[\s\S]*?-->/g, "").split("\n")) {
+    if (/^\s*(```|~~~)/.test(line)) {
+      fenced = !fenced;
+      continue;
+    }
+    if (fenced) continue;
+    lines.push(line.replace(/`[^`]*`/g, "").replace(/\]\([^)]*\)/g, "]").replace(/https?:\/\/\S+/g, ""));
+  }
+  return lines;
+}
+
+const documented = () => listPlugins("en").filter((plugin) => readPluginDoc(plugin.slug, "en") || readPluginDoc(plugin.slug, "zh"));
+
+test("有说明的插件中英两份都有 —— 缺一种就会在那种语言的页面上没有正文", () => {
+  assert.ok(documented().length >= 5, "一份 README 都没读到 —— 扫描本身坏了");
+  for (const plugin of documented()) {
+    for (const locale of ["en", "zh"]) {
+      assert.ok(readPluginDoc(plugin.slug, locale), `${plugin.source}/${README_FILE[locale]} 不存在`);
+    }
+  }
+});
+
+test("英文 README 的正文里没有中文", () => {
+  for (const plugin of documented()) {
+    const offenders = proseLines(readPluginDoc(plugin.slug, "en")).filter((line) => CJK.test(line));
+    assert.deepEqual(offenders, [], `${plugin.source}/README.md 里混着中文(要举界面上的中文原话就放进行内代码)`);
+  }
+});
+
+test("中文 README 里不夹整句英文", () => {
+  for (const plugin of documented()) {
+    const offenders = proseLines(readPluginDoc(plugin.slug, "zh")).filter(
+      (line) => !CJK.test(line) && (line.match(/[A-Za-z]{2,}/g) ?? []).length >= 6,
+    );
+    assert.deepEqual(offenders, [], `${plugin.source}/README.zh-CN.md 里有整句英文`);
+  }
+});
+
+test("两种语言的详情页读的是各自那一份", () => {
+  for (const plugin of documented()) {
+    assert.notEqual(readPluginDoc(plugin.slug, "en"), readPluginDoc(plugin.slug, "zh"), plugin.slug);
+  }
 });

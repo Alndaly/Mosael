@@ -653,4 +653,5 @@ class Test清单:
         assert not any(tool.get("read_only") for tool in tools["declare"])
 
     def test_README里写的版本和锁定的一致(self) -> None:
-        assert f"Manim {manim_env.MANIM_VERSION}" in (PLUGIN / "README.md").read_text(encoding="utf-8")
+        for readme in ("README.md", "README.zh-CN.md"):
+            assert f"Manim {manim_env.MANIM_VERSION}" in (PLUGIN / readme).read_text(encoding="utf-8"), readme

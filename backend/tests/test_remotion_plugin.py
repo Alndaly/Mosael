@@ -153,9 +153,10 @@ class Test清单与依赖:
 
     def test_README里写的版本和锁定的一致(self) -> None:
         deps = json.loads((PLUGIN / "tools" / "project" / "package.json").read_text())["dependencies"]
-        readme = (PLUGIN / "README.md").read_text(encoding="utf-8")
-        for name, label in (("remotion", "Remotion"), ("react", "React"), ("katex", "KaTeX")):
-            assert f"{label} {deps[name]}" in readme, f"README 里的 {label} 版本和 package.json 不一致"
+        for readme_name in ("README.md", "README.zh-CN.md"):
+            readme = (PLUGIN / readme_name).read_text(encoding="utf-8")
+            for name, label in (("remotion", "Remotion"), ("react", "React"), ("katex", "KaTeX")):
+                assert f"{label} {deps[name]}" in readme, f"{readme_name} 里的 {label} 版本和 package.json 不一致"
 
     def test_三个工具都流式_能报进度能取消(self) -> None:
         """此前是一问一答:取消或超时时宿主只杀得掉 Python,npm / Node / Chrome 成了孤儿接着跑。"""
