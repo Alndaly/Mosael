@@ -99,6 +99,8 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfErr_linesSegmentsMismatch": {"zh": "译文有 {lines} 条,逐字稿有 {segments} 段,对不上", "en": "{lines} translated lines against {segments} transcript segments — they do not line up"},
     "wfErr_speechParams": {"zh": "{what}{reason}", "en": "{what}: {reason}"},
     "wfErr_noSuchTrackKind": {"zh": "这条时间线上没有 {kind} 轨道,先加一条", "en": "This timeline has no {kind} track; add one first"},
+    "wfErr_trackKindMismatch": {"zh": "这份素材要放在 {want} 轨道上,选的那条是 {kind} 轨道", "en": "This asset goes on a {want} track; the chosen track is a {kind} track"},
+    "wfErr_trimStartNegative": {"zh": "截取的开始时间不能是负数", "en": "The trim start cannot be negative"},
     "wfErr_operationsNotJson": {"zh": "operations 不是合法 JSON:{reason}", "en": "operations is not valid JSON: {reason}"},
     "wfErr_rangesNotJson": {"zh": "裁切范围不是合法 JSON:{reason}", "en": "The cut ranges are not valid JSON: {reason}"},
     "wfErr_segmentsNotJson": {"zh": "segments 不是合法 JSON:{reason}", "en": "segments is not valid JSON: {reason}"},

@@ -238,8 +238,8 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfNode_loop_foreach_body": {"zh": "循环体子流程(在节点内编辑;子流程节点用 {{loop.item}}/{{loop.index}})", "en": "The loop body sub-flow (edited inside the node; its nodes use {{loop.item}} / {{loop.index}})"},
     "wfNode_loop_foreach_output": {"zh": "每次迭代的输出,引用子流程节点输出(如 {{translate_1.text}});留空则输出整份子上下文", "en": "Each iteration's output, referencing a sub-flow node's output (e.g. {{translate_1.text}}); leave empty to output the whole sub-context"},
     "wfNode_loop_foreach_concurrency": {
-        "zh": "同时跑几项(1–4)。1 = 一项跑完再跑下一项;各项互不依赖时(比如逐镜生成画面)调大能快不少。结果仍按原顺序排,任何一项失败都会停下。",
-        "en": "How many items run at once (1–4). 1 runs them one after another; when items don't depend on each other (such as generating each shot) a higher value is much faster. Results keep their original order, and any failure stops the loop.",
+        "zh": "同时跑几项(1–4)。1 = 一项跑完再跑下一项;各项互不依赖时(比如逐镜生成画面)调大能快不少。结果仍按原顺序排,任何一项失败都会停下。几项同时往同一条时间线上「接到末尾」时,按谁先跑完谁先接排队写入,不按项的顺序;要按顺序排就用 1,或给每项指定落点。",
+        "en": "How many items run at once (1–4). 1 runs them one after another; when items don't depend on each other (such as generating each shot) a higher value is much faster. Results keep their original order, and any failure stops the loop. When several items append to the end of the same timeline at once, they queue up in the order they finish, not in item order; use 1, or give each item its own start point, to keep them in order.",
     },
     "wfNode_loop_while": {"zh": "循环·条件", "en": "Loop · while"},
     "wfNode_loop_while_desc": {"zh": "反复运行内嵌子流程,直到条件不再成立(带最大次数上限防死循环)。子流程内用 {{loop.index}} 拿当前轮次;子流程里放一个「条件」节点,把它的 {{节点id.result}} 填到 condition。", "en": "Run an embedded sub-flow repeatedly until the condition stops holding (with a maximum iteration count to prevent runaway loops). Inside the sub-flow, {{loop.index}} is the current round; put a Condition node in the sub-flow and feed its {{node_id.result}} into condition."},

@@ -9,7 +9,8 @@ from __future__ import annotations
 import json
 import logging
 import math
-from typing import Any
+from collections.abc import Callable
+from typing import Any, TypeVar
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -22,6 +23,8 @@ from app.domain.jobs import current_actor
 from app.domain.workflows.executors.common import id_list, provided, text_lines, truthy, wait_for_job
 
 logger = logging.getLogger(__name__)
+
+T = TypeVar("T")
 
 
 def _compact_timed_text(segments: list[dict[str, Any]]) -> str:
@@ -353,13 +356,15 @@ def edit_timeline(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[
             raise WorkflowDomainError("wfErr_operationsNotJson", params={"reason": exc}) from exc
     if not isinstance(operations, list) or not operations:
         raise WorkflowDomainError("wfErr_operationsEmpty")
-    try:
-        applied = apply_edit_operations(db, sequence_id, operations)
-    except SequenceDomainError as exc:
-        raise WorkflowDomainError.from_error(exc) from exc
-    db.flush()
-    sequence = db.get(Sequence, sequence_id)
-    return {"applied": applied, "sequence_id": sequence_id, "revision": sequence.revision if sequence else 0}
+
+    def edit(sequence: Sequence) -> tuple[int, int]:
+        applied = apply_edit_operations(db, sequence.id, operations)
+        db.flush()
+        db.refresh(sequence)
+        return applied, sequence.revision
+
+    applied, revision = _write_timeline(db, scope, sequence_id, edit)
+    return {"applied": applied, "sequence_id": sequence_id, "revision": revision}
 
 
 @register("inspect_sequence")
@@ -439,8 +444,50 @@ def _sequence_in(db: Session, scope: RunScope, sequence_id: str) -> Sequence:
     return sequence
 
 
-#: 图片进时间线时的默认定格时长。图片没有 duration,不给个默认值的话 src_out 是 0,
-#: 整段会被判为空而拒掉 —— 而"把一张图接到时间线上"是很常见的用法。
+#: 同一条时间线被别的写入方抢先改了一版时,重读重试几次。每一次冲突都意味着别人**已经写成**了一次,
+#: 所以同时往一条时间线上写的有 N 个,最多冲突 N-1 次;并发的循环(4 路)套上并行分支,留足余量。
+_TIMELINE_ATTEMPTS = 10
+
+
+def _write_timeline(db: Session, scope: RunScope, sequence_id: str, write: Callable[[Sequence], T]) -> T:
+    """工作流往一条时间线上写的**唯一形状**:读最新的一版 → 写;版本冲突就回滚、重读、再写。
+
+    时间线的每一次写入按版本号 CAS(见 sequences._timeline._record_operation):读到同一版的两个写入方,
+    后写的那个改 0 行、当场报「版本冲突」。并行的分支(或并发的循环项)同时往同一条时间线上接素材
+    正是这样 —— 各自在自己的会话里读到第 5 版,整条工作流因为一个版本号失败。
+
+    冲突时回滚**这个节点**的改动(它在这一步之前没写过别的)、按库里最新的一版重算再写:「接到末尾」
+    的末尾、新轨道之前有哪些轨,都按别人刚写成的那一版算。提交仍归引擎(节点跑完就是它的事务边界);
+    SQLite 一次只有一个写入方,后来者在写的那一刻等前一个节点提交,然后撞上新版本号、重试。
+
+    时间线域的拒绝转成工作流错误,带着 key 按读的人的语言说 —— 此前接素材、加轨道、清空都没转,
+    用户看到的是 `src_in must be non-negative` 这样的原文。
+    """
+    for attempt in range(_TIMELINE_ATTEMPTS):
+        db.expire_all()  # 读库里最新的那一版,不用会话里攒着的旧快照
+        sequence = _sequence_in(db, scope, sequence_id)
+        try:
+            return write(sequence)
+        except SequenceDomainError as exc:
+            if getattr(exc, "key", "") == "seqErr_revisionConflict" and attempt + 1 < _TIMELINE_ATTEMPTS:
+                db.rollback()
+                continue
+            raise WorkflowDomainError.from_error(exc) from exc
+    raise AssertionError("unreachable")  # pragma: no cover — 最后一次要么返回,要么抛
+
+
+def _seconds(config: dict[str, Any], key: str, node_type: str) -> float | None:
+    """一格秒数:留空是 None;填了就得是有限的数(数字格式已由 check_number_fields 核过,这里挡 inf / nan)。"""
+    from app.domain.workflows import NODE_TYPES, field_name
+
+    raw = config.get(key)
+    if raw in (None, ""):
+        return None
+    value = float(raw)
+    if not math.isfinite(value):
+        spec = NODE_TYPES[node_type]["config"][key]
+        raise WorkflowDomainError("wfErr_mustBeNumber", params={"field": field_name(key, spec)})
+    return value
 
 
 @register("timeline_append")
@@ -454,65 +501,63 @@ def timeline_append(db: Session, scope: RunScope, config: dict[str, Any]) -> dic
     from app.domain.sequences.append import TRACK_FOR_ASSET, asset_span, track_end, track_for_asset
     from app.domain.sequences.operations import InsertClip, SetClipSpeed, insert_clip, set_clip_speed
 
-    sequence = _sequence_in(db, scope, str(config.get("sequence_id", "")).strip())
-    asset_id = str(config.get("asset_id", "")).strip()
-    if not asset_id:
-        raise WorkflowDomainError("wfErr_assetIdMissing")
-    asset = db.get(Asset, asset_id)
-    if asset is None or asset.workspace_id != scope.workspace_id:
-        raise WorkflowDomainError("wfErr_assetNotInWorkspace")
+    sequence_id = _sequence_in(db, scope, str(config.get("sequence_id", "")).strip()).id
+    asset = _asset_in(db, scope, str(config.get("asset_id", "")).strip())
+    want = TRACK_FOR_ASSET.get(asset.kind, "video")
 
-    tracks = list(sequence.tracks or [])
-    track_id = str(config.get("track_id", "")).strip()
-    if track_id:
-        track = next((one for one in tracks if one.id == track_id), None)
-        if track is None:
-            raise WorkflowDomainError("wfErr_trackNotOnSequence")
-    else:
-        # 留空就挑第一条同类轨道 —— 绝大多数时间线只有一条视频轨和一条音频轨,
-        # 逼用户先跑一个「看一眼时间线」把 id 取出来是纯仪式。
-        track = track_for_asset(sequence, asset.kind)
-        if track is None:
-            raise WorkflowDomainError("wfErr_noSuchTrackKind", params={"kind": TRACK_FOR_ASSET.get(asset.kind, "video")})
-
-    # 截取范围:留空就是整段素材。
-    src_in = float(config.get("start") or 0.0)
-    src_out = config.get("end")
-    src_out = float(src_out) if src_out not in (None, "") else asset_span(asset)
+    # 截取范围:留空就是整段素材。有时长的素材(视频、音频)出点夹到素材末尾 —— 超出去的那一截
+    # 渲染时是没有画面也没有声音的空白;图片没有"末尾",定格多久由这里说了算。
+    src_in = _seconds(config, "start", "timeline_append") or 0.0
+    src_out = _seconds(config, "end", "timeline_append")
+    if src_out is None:
+        src_out = asset_span(asset)
+    probed = (asset.media_info or {}).get("duration")
+    if asset.kind in ("video", "audio") and probed:
+        src_out = min(src_out, float(probed))
+    if src_in < 0:
+        raise WorkflowDomainError("wfErr_trimStartNegative")
     if src_out <= src_in:
         raise WorkflowDomainError("wfErr_trimRange")
+    at = _seconds(config, "at", "timeline_append")
+    if at is not None and at < 0:
+        raise WorkflowDomainError("wfErr_startNegative")
+    speed = _fit_speed(src_out - src_in, config.get("max_duration"))
+    track_id = str(config.get("track_id", "")).strip()
 
-    # 落点:给了 `at` 就放在那一秒(口播要对齐它那一镜的画面,而不是接在上一段口播后面);
-    # 没给就接到末尾 —— 这条轨道上最后一个片段的终点,空轨道就是 0。
-    at = config.get("at")
-    if at not in (None, ""):
-        timeline_start = float(at)
-        if timeline_start < 0:
-            raise WorkflowDomainError("wfErr_startNegative")
-    else:
-        timeline_start = track_end(track)
-    clip = insert_clip(
-        db,
-        sequence.id,
-        InsertClip(
-            track_id=track.id,
-            asset_id=asset.id,
-            timeline_start=timeline_start,
-            src_in=src_in,
-            src_out=src_out,
-        ),
-    )
-    span = src_out - src_in
-    speed = _fit_speed(span, config.get("max_duration"))
-    if speed is not None:
-        db.refresh(sequence)  # 版本号以库里为准:并行分支可能刚改过这条时间线
-        set_clip_speed(db, sequence.id, SetClipSpeed(clip_id=clip.id, speed=speed))
-        span = span / speed
+    def append(sequence: Sequence) -> tuple[str, float, float]:
+        tracks = list(sequence.tracks or [])
+        if track_id:
+            track = next((one for one in tracks if one.id == track_id), None)
+            if track is None:
+                raise WorkflowDomainError("wfErr_trackNotOnSequence")
+            # 和剪辑页拖片段(placement.move_clip)同一条规矩:音频进不了视频轨,反之亦然。
+            if track.kind != want:
+                raise WorkflowDomainError("wfErr_trackKindMismatch", params={"want": want, "kind": track.kind})
+        else:
+            # 留空就挑第一条同类轨道 —— 绝大多数时间线只有一条视频轨和一条音频轨,
+            # 逼用户先跑一个「看一眼时间线」把 id 取出来是纯仪式。
+            track = track_for_asset(sequence, asset.kind)
+            if track is None:
+                raise WorkflowDomainError("wfErr_noSuchTrackKind", params={"kind": want})
+        # 落点:给了 `at` 就放在那一秒(口播要对齐它那一镜的画面,而不是接在上一段口播后面);
+        # 没给就接到末尾 —— 这条轨道上最后一个片段的终点,空轨道就是 0。在锁里算:并行分支刚接上去的
+        # 那一段也算在"末尾"里。
+        start = at if at is not None else track_end(track)
+        clip = insert_clip(
+            db,
+            sequence.id,
+            InsertClip(track_id=track.id, asset_id=asset.id, timeline_start=start, src_in=src_in, src_out=src_out),
+        )
+        if speed is not None:
+            set_clip_speed(db, sequence.id, SetClipSpeed(clip_id=clip.id, speed=speed))
+        return clip.id, start, (src_out - src_in) / (speed or 1.0)
+
+    clip_id, timeline_start, span = _write_timeline(db, scope, sequence_id, append)
     return {
-        "clip_id": clip.id,
+        "clip_id": clip_id,
         "timeline_start": timeline_start,
         "timeline_end": timeline_start + span,
-        "sequence_id": sequence.id,
+        "sequence_id": sequence_id,
     }
 
 
@@ -536,14 +581,17 @@ def _fit_speed(span: float, max_duration: Any) -> float | None:
 def timeline_add_track(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
     from app.domain.sequences.operations import AddTrack, add_track
 
-    sequence = _sequence_in(db, scope, str(config.get("sequence_id", "")).strip())
+    sequence_id = _sequence_in(db, scope, str(config.get("sequence_id", "")).strip()).id
     kind = str(config.get("kind", "video")).strip() or "video"
-    before = {one.id for one in (sequence.tracks or [])}
-    add_track(db, sequence.id, AddTrack(kind=kind))
-    db.flush()
-    db.refresh(sequence)
-    created = next((one.id for one in (sequence.tracks or []) if one.id not in before), "")
-    return {"track_id": created, "sequence_id": sequence.id}
+
+    def add(sequence: Sequence) -> str:
+        before = {one.id for one in (sequence.tracks or [])}
+        add_track(db, sequence.id, AddTrack(kind=kind))
+        db.flush()
+        db.refresh(sequence)
+        return next((one.id for one in (sequence.tracks or []) if one.id not in before), "")
+
+    return {"track_id": _write_timeline(db, scope, sequence_id, add), "sequence_id": sequence_id}
 
 
 @register("timeline_clear")
@@ -551,14 +599,21 @@ def timeline_clear(db: Session, scope: RunScope, config: dict[str, Any]) -> dict
     """删掉所有片段,轨道留着。
 
     留着轨道是有意的:重跑一条工作流时,下游的「接素材」还指望那几条轨道在。
-    """
-    from app.domain.sequences.operations import DeleteClip, delete_clip
 
-    sequence = _sequence_in(db, scope, str(config.get("sequence_id", "")).strip())
-    clip_ids = [clip.id for track in (sequence.tracks or []) for clip in (track.clips or [])]
-    for clip_id in clip_ids:
-        delete_clip(db, sequence.id, DeleteClip(clip_id=clip_id))
-    return {"removed": len(clip_ids), "sequence_id": sequence.id}
+    **一次删完,记一条操作**(placement.delete_clips_batch):此前逐条 delete_clip,清掉 40 段就是 40 条
+    撤销记录 —— 想在剪辑页里撤回这一次清空,得按 40 次 ⌘Z。
+    """
+    from app.domain.sequences.operations import DeleteClipsBatch, delete_clips_batch
+
+    sequence_id = _sequence_in(db, scope, str(config.get("sequence_id", "")).strip()).id
+
+    def clear(sequence: Sequence) -> int:
+        clip_ids = [clip.id for track in (sequence.tracks or []) for clip in (track.clips or [])]
+        if clip_ids:
+            delete_clips_batch(db, sequence.id, DeleteClipsBatch(clip_ids=tuple(clip_ids)))
+        return len(clip_ids)
+
+    return {"removed": _write_timeline(db, scope, sequence_id, clear), "sequence_id": sequence_id}
 
 
 @register("timeline_cut_ranges")
@@ -636,17 +691,19 @@ def timeline_cut_ranges(db: Session, scope: RunScope, config: dict[str, Any]) ->
             "wfErr_cleanupTooMuch",
             params={"seconds": f"{removed_seconds:.2f}", "ratio": f"{max_removal_ratio:.0%}"},
         )
-    try:
+
+    def cut(sequence: Sequence) -> int:
         cut_clip_ranges(db, sequence.id, CutClipRanges(clip_id=clip_id, ranges=tuple(ranges)))
-    except SequenceDomainError as exc:
-        raise WorkflowDomainError.from_error(exc) from exc
-    db.refresh(sequence)
+        db.refresh(sequence)
+        return sequence.revision
+
+    revision = _write_timeline(db, scope, sequence.id, cut)
     return {
         "removed": len(ranges),
         "removed_seconds": round(removed_seconds, 3),
         "ranges": normalized,
         "sequence_id": sequence.id,
-        "revision": sequence.revision,
+        "revision": revision,
     }
 
 
@@ -760,9 +817,16 @@ def generate_subtitles(db: Session, scope: RunScope, config: dict[str, Any]) -> 
     text_field = str(config.get("text_field") or "text").strip()
     cues: list[tuple[str, float, float]] = []
     for index, segment in enumerate(segments):
+        # 起止**都**没有:这一段不上屏(整片生成里「这一镜没有口播」就是这样交过来的),跳过。
+        # **只缺一头不是第 0 秒。** 此前空的 start 按 0 算:起点字段写错一个字,每一条字幕都从片头开始、
+        # 一直挂到它的终点,叠成一摞,而节点照样成功。
+        raw_start, raw_end = _field(segment, start_field), _field(segment, end_field)
+        if raw_start in ("", None) and raw_end in ("", None):
+            continue
         try:
-            start = float(_field(segment, start_field) or 0.0)
-            end = float(_field(segment, end_field) or 0.0)
+            if raw_start in ("", None) or raw_end in ("", None):
+                raise ValueError
+            start, end = float(raw_start), float(raw_end)
         except (TypeError, ValueError):
             raise WorkflowDomainError("wfErr_segmentTimecode", params={"index": index + 1}) from None
         original = str(_field(segment, text_field) or "").strip()
@@ -778,24 +842,23 @@ def generate_subtitles(db: Session, scope: RunScope, config: dict[str, Any]) -> 
             return nothing
         raise WorkflowDomainError("wfErr_noUsableSegments")
 
-    track_id = _subtitle_track(db, sequence, str(config.get("track_id", "")).strip())
-    before = {clip.id for track in (sequence.tracks or []) for clip in (track.clips or [])}
-    try:
+    wanted_track = str(config.get("track_id", "")).strip()
+
+    def write(sequence: Sequence) -> tuple[str, list[str]]:
+        track_id = _subtitle_track(db, sequence, wanted_track)
+        before = {clip.id for track in (sequence.tracks or []) for clip in (track.clips or [])}
         generate(db, sequence.id, GenerateSubtitles(track_id=track_id, cues=tuple(cues)))
-    except SequenceDomainError as exc:
-        raise WorkflowDomainError.from_error(exc) from exc
-    db.refresh(sequence)
-    # 新插进去的那些。按落点排序 —— 下游要按时间顺序配音,而库里的返回顺序没有这个保证。
-    created = sorted(
-        (clip for track in (sequence.tracks or []) for clip in (track.clips or []) if clip.id not in before),
-        key=lambda clip: clip.timeline_start,
-    )
-    return {
-        "track_id": track_id,
-        "clip_ids": [clip.id for clip in created],
-        "count": len(created),
-        "sequence_id": sequence.id,
-    }
+        db.refresh(sequence)
+        # 新插进去的那些。按落点排序 —— 下游要按时间顺序配音,而库里的返回顺序没有这个保证。
+        created = sorted(
+            (clip for track in (sequence.tracks or []) for clip in (track.clips or []) if clip.id not in before),
+            key=lambda clip: clip.timeline_start,
+        )
+        return track_id, [clip.id for clip in created]
+
+    sequence_id = sequence.id
+    track_id, clip_ids = _write_timeline(db, scope, sequence_id, write)
+    return {"track_id": track_id, "clip_ids": clip_ids, "count": len(clip_ids), "sequence_id": sequence_id}
 
 
 @register("dub_subtitles")
