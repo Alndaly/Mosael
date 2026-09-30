@@ -21,6 +21,11 @@ def test_成对出现的选择器都声明了依赖() -> None:
         ("ai_generate", "model"): "provider",
         ("plugin_tool", "tool_name"): "plugin_id",
         ("plugin_tool", "instance_id"): "plugin_id",
+        #: 时间线上的片段跟着时间线走:换了时间线还留着旧片段,跑起来才说「片段不在这条时间线上」。
+        ("timeline_cut_ranges", "clip_id"): "sequence_id",
+        ("dub_subtitles", "clip_ids"): "sequence_id",
+        ("dub_lipsync", "clip_id"): "sequence_id",
+        ("dub_lipsync", "track_id"): "sequence_id",
     }
     for (node, key), parent in expected.items():
         spec = NODE_TYPES[node]["config"][key]

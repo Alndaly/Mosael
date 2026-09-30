@@ -700,7 +700,10 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "description": "wfNode_timeline_cut_ranges_desc",
         "config": {
             "sequence_id": {"type": "template", "required": True, "options_from": "sequences"},
-            "clip_id": {"type": "template", "required": True, "description": "wfNode_timeline_cut_ranges_clip_id"},
+            #: 片段属于上面那条时间线:换了时间线,旧片段就该清掉(编辑器按 depends_on 清),否则跑到这一步才说
+            #: 「片段不在这条时间线上」。没有选项源 —— 片段是同一次运行里上游刚放上去的,只该从上游接。
+            "clip_id": {"type": "template", "required": True, "depends_on": "sequence_id",
+                        "description": "wfNode_timeline_cut_ranges_clip_id"},
             "ranges": {
                 "type": "template",
                 "required": True,
@@ -1282,7 +1285,9 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "description": "wfNode_dub_subtitles_desc",
         "config": {
             "sequence_id": {"type": "template", "required": True, "options_from": "sequences", "description": "wfNode_dub_subtitles_sequence_id"},
-            "clip_ids": {"type": "template", "required": True, "description": "wfNode_dub_subtitles_clip_ids"},
+            #: 同上:字幕条属于上面那条时间线,换了时间线就清掉。
+            "clip_ids": {"type": "template", "required": True, "depends_on": "sequence_id",
+                         "description": "wfNode_dub_subtitles_clip_ids"},
             "match_duration": {
                 "type": "string",
                 "default": "yes",
@@ -1562,7 +1567,9 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "description": "wfNode_dub_lipsync_desc",
         "config": {
             "sequence_id": {"type": "template", "required": True, "options_from": "sequences", "description": "wfNode_dub_lipsync_sequence_id"},
-            "clip_id": {"type": "template", "required": True, "description": "wfNode_dub_lipsync_clip_id"},
+            #: 同上:原片那一段属于上面那条时间线,换了时间线就清掉(否则跑起来是 wfErr_dubLipsyncNeedsClip)。
+            "clip_id": {"type": "template", "required": True, "depends_on": "sequence_id",
+                        "description": "wfNode_dub_lipsync_clip_id"},
             "track_id": {"type": "template", "required": True, "depends_on": "sequence_id", "options_from": "sequence_tracks",
                          "description": "wfNode_dub_lipsync_track_id"},
             "model": {"type": "string", "options_from": "lipsync_models", "description": "wfNode_talking_model"},
