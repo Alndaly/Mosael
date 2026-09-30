@@ -20,7 +20,10 @@ from typing import Any, Literal
 #: 能自动查的几样东西。键是接口的一部分(界面按它挑图标和说法),加一个就要在
 #: `templates.requirement_statuses` 里给出查法 —— 测试钉着两边对得上。
 CHAT_MODEL = "chat_model"
+#: 能带一张参考图出图的图像模型(商品图、面料图:每次只带那一张)。
 REFERENCE_IMAGE_MODEL = "reference_image_model"
+#: 能同时带一组参考图出图的图像模型(整片生成的关键帧:白模帧 + 三视图 + 设定图,见 templates_models)。
+MULTI_REFERENCE_IMAGE_MODEL = "multi_reference_image_model"
 REFERENCE_VIDEO_MODEL = "reference_video_model"
 CLONED_VOICE = "cloned_voice"
 TRANSCRIPTION_ENGINE = "transcription_engine"
@@ -33,6 +36,7 @@ LIPSYNC_VIDEO_MODEL = "lipsync_video_model"
 CHECKS: tuple[str, ...] = (
     CHAT_MODEL,
     REFERENCE_IMAGE_MODEL,
+    MULTI_REFERENCE_IMAGE_MODEL,
     REFERENCE_VIDEO_MODEL,
     CLONED_VOICE,
     TRANSCRIPTION_ENGINE,

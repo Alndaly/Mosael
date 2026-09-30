@@ -12,13 +12,13 @@
     "requires": {
       "zh": [
         "AI 对话模型",
-        "能带参考图出图的图像模型（如 Seedream 4）",
+        "能同时带多张参考图出图的图像模型（如 Seedream 4）",
         "支持首帧或参考素材的视频模型（如 Seedance 2.0）",
         "旁白可选：克隆音色"
       ],
       "en": [
         "Chat model",
-        "Image model that takes reference images (e.g. Seedream 4)",
+        "Image model that takes several reference images at once (e.g. Seedream 4)",
         "Video model that takes a first frame or references (e.g. Seedance 2.0)",
         "Optional narration: cloned voice"
       ]

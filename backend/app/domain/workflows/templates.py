@@ -14,6 +14,7 @@ from app.domain.workflows.template_requirements import (
     CHAT_MODEL,
     CLONED_VOICE,
     CheckStatus,
+    MULTI_REFERENCE_IMAGE_MODEL,
     REFERENCE_IMAGE_MODEL,
     REFERENCE_VIDEO_MODEL,
     SEPARATION_ENGINE,
@@ -49,7 +50,8 @@ from app.domain.workflows.templates_models import (
     ImagePlan,  # noqa: F401
     _default_model,  # noqa: F401
     _capabilities,  # noqa: F401
-    REFERENCE_IMAGES_NEEDED,  # noqa: F401
+    REFERENCE_IMAGES_NEEDED,
+    SINGLE_REFERENCE,
     _can_take_references,  # noqa: F401
     _can_shoot_from_references,  # noqa: F401
     _pick,  # noqa: F401
@@ -117,9 +119,9 @@ TEMPLATE_CATALOG: list[dict[str, Any]] = [
         "requires": [
             requirement(CHAT_MODEL, zh="AI 对话模型", en="Chat model"),
             requirement(
-                REFERENCE_IMAGE_MODEL,
-                zh="能带参考图出图的图像模型（如 Seedream 4）",
-                en="Image model that takes reference images (e.g. Seedream 4)",
+                MULTI_REFERENCE_IMAGE_MODEL,
+                zh="能同时带多张参考图出图的图像模型（如 Seedream 4）",
+                en="Image model that takes several reference images at once (e.g. Seedream 4)",
             ),
             requirement(
                 REFERENCE_VIDEO_MODEL,
@@ -265,7 +267,7 @@ def built_in_template_graph(
         return localised_names(locale, full_video_generation_graph(
             chat=chat,
             # 三视图和关键帧都要带一组参考图出图;每一镜都给首帧或参考素材,不只给一段文字。
-            image=_reference_image_model(db, user_id),
+            image=_reference_image_model(db, user_id, needed=REFERENCE_IMAGES_NEEDED),
             video=_shot_video_model(db, user_id),
             # 音色是工作区的(克隆音色存在工作区名下),所以按工作区取,不按人。
             voice_id=_first_voice_id(db, workspace_id),
@@ -284,7 +286,8 @@ def built_in_template_graph(
         return localised_names(locale, product_on_model_graph(
             chat=chat,
             # 商品图要当参考图贯穿每一次出图,所以挑的是"能带参考图出图"的那个,不是随便一个图像模型。
-            image=_reference_image_model(db, user_id),
+            # 每次只带那一张商品图:门槛是 1 张,不是整片生成的 9 张。
+            image=_reference_image_model(db, user_id, needed=SINGLE_REFERENCE),
             # 视频是**可选**的一步:没有合适的视频模型就只出静图,而不是让整条模板用不了。
             video=_shot_video_model(db, user_id),
             # 出图尺寸和视频的时长 / 画幅按模型的参数声明挑(用户自定义的声明也算)。
@@ -293,7 +296,7 @@ def built_in_template_graph(
     if template_id in (PRODUCT_PITCH_SHORT, PRODUCT_PITCH_PRESENTER):
         return localised_names(locale, product_pitch_short_graph(
             chat=chat,
-            image=_reference_image_model(db, user_id),
+            image=_reference_image_model(db, user_id, needed=SINGLE_REFERENCE),
             voice_id=_first_voice_id(db, workspace_id),
             presenter=template_id == PRODUCT_PITCH_PRESENTER,
             db=db,
@@ -307,7 +310,7 @@ def built_in_template_graph(
     if template_id == FABRIC_LOOKBOOK:
         return localised_names(locale, fabric_lookbook_graph(
             chat=chat,
-            image=_reference_image_model(db, user_id),
+            image=_reference_image_model(db, user_id, needed=SINGLE_REFERENCE),
         ))
     raise WorkflowDomainError("wfErr_unknownTemplate", params={"id": template_id})
 
@@ -372,7 +375,9 @@ def requirement_statuses(db: Session, *, user_id: str, workspace_id: str) -> dic
     has_chat = bool(_chat_model(db, user_id).model)
     statuses: dict[str, CheckStatus] = {
         CHAT_MODEL: "met" if has_chat else "missing",
-        REFERENCE_IMAGE_MODEL: "met" if _reference_image_model(db, user_id).model else "missing",
+        REFERENCE_IMAGE_MODEL: "met" if _reference_image_model(db, user_id, needed=SINGLE_REFERENCE).model else "missing",
+        MULTI_REFERENCE_IMAGE_MODEL: "met" if _reference_image_model(db, user_id, needed=REFERENCE_IMAGES_NEEDED).model
+        else "missing",
         REFERENCE_VIDEO_MODEL: "met" if _shot_video_model(db, user_id).model else "missing",
         CLONED_VOICE: "met" if _first_voice_id(db, workspace_id) else "missing",
         TRANSCRIPTION_ENGINE: _plugin_or(db, user_id, transcription.CAPABILITY)

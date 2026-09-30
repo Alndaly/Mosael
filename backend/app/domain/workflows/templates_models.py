@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Any
 
@@ -91,17 +92,22 @@ def _capabilities(db: Session | None, choice: ModelChoice, kind: str) -> dict[st
     return known_capabilities_for(choice.provider, choice.model, kind)
 
 
-#: 关键帧图要同时参考:白模帧 1 张 + 角色三视图最多 4 张 + 场景设定图最多 3 张 + (尾帧时)首帧 1 张。
+#: 整片生成的关键帧图要同时参考:白模帧 1 张 + 角色三视图最多 4 张 + 场景设定图最多 3 张 + (尾帧时)首帧 1 张。
 REFERENCE_IMAGES_NEEDED = 9
+#: 商品图、面料图那几条模板:每次出图只带那一张商品 / 面料图。
+SINGLE_REFERENCE = 1
 
 
-def _can_take_references(db: Session | None, choice: ModelChoice) -> bool:
-    """图像模型能不能带着一组参考图出图。认不出的算能(用户自建的、查不到能力表的)。"""
+def _can_take_references(db: Session | None, choice: ModelChoice, *, needed: int) -> bool:
+    """图像模型能不能带着 `needed` 张参考图出图。认不出的算能(用户自建的、查不到能力表的)。
+
+    `needed` 由模板自己说:此前门槛写死 9 张(整片生成的关键帧),商品图 / 面料图模板复用了它 —— 每次只带一张图,
+    却把只收 3 张的百炼 qwen-image-edit 判成缺。"""
     capabilities = _capabilities(db, choice, "image")
     if capabilities is None:
         return bool(choice.model)
     limit = int((capabilities.get("source_limits") or {}).get(REFERENCE_IMAGE) or 0)
-    return "image-to-image" in (capabilities.get("modes") or ()) and limit >= REFERENCE_IMAGES_NEEDED
+    return "image-to-image" in (capabilities.get("modes") or ()) and limit >= needed
 
 
 def _can_shoot_from_references(db: Session | None, choice: ModelChoice) -> bool:
@@ -137,14 +143,18 @@ def _shot_video_model(db: Session, user_id: str) -> ModelChoice:
     return _pick(db, user_id, "video", _can_shoot_from_references)
 
 
-def _reference_image_model(db: Session, user_id: str) -> ModelChoice:
-    return _pick(db, user_id, "image", _can_take_references)
+def _reference_image_model(db: Session, user_id: str, *, needed: int) -> ModelChoice:
+    """能带 `needed` 张参考图出图的图像模型(整片生成传 REFERENCE_IMAGES_NEEDED,商品 / 面料图传 SINGLE_REFERENCE)。"""
+    return _pick(db, user_id, "image", lambda db_, choice: _can_take_references(db_, choice, needed=needed))
 
 
 def _image_plan(db: Session | None, choice: ModelChoice) -> ImagePlan:
     """从图像模型的尺寸表里挑:关键帧和成片同画幅,三视图取最宽的横幅。认不出就不传尺寸。"""
     capabilities = _capabilities(db, choice, "image")
-    sizes = [str(size).lower().replace("*", "x") for size in (capabilities or {}).get("sizes") or ()]
+    #: 只认「宽x高」的像素尺寸。有的模型尺寸表里列的是画幅比(Evolink 的 gpt-image-1.5 是 "1:1"、"16:9"),
+    #: 此前照样按 x 拆开转整数,建整片模板直接 500。
+    written = (str(size).lower().replace("*", "x") for size in (capabilities or {}).get("sizes") or ())
+    sizes = [size for size in written if re.fullmatch(r"\d+x\d+", size)]
     minimum = int((capabilities or {}).get("min_size_pixels") or 0)
 
     def parsed(size: str) -> tuple[int, int]:

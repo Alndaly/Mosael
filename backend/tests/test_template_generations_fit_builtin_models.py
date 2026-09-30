@@ -24,7 +24,13 @@ from app.domain.workflows.templates_business import (
     product_on_model_graph,
     product_pitch_short_graph,
 )
-from app.domain.workflows.templates_models import _can_shoot_from_references, _can_take_references, _video_plan
+from app.domain.workflows.templates_models import (
+    REFERENCE_IMAGES_NEEDED,
+    SINGLE_REFERENCE,
+    _can_shoot_from_references,
+    _can_take_references,
+    _video_plan,
+)
 
 CHAT = ModelChoice(profile_id="chat", provider="openai", model="chat-model")
 SEEDREAM = ModelChoice(profile_id="image", provider="bytedance", model="doubao-seedream-4-0-250828")
@@ -43,9 +49,6 @@ def _choices(kind: str, usable) -> list[ModelChoice]:
 #: 「改视频」「续写视频」的那些 —— 它们也收首帧或参考图,判据只看收不收,不看是不是在"从图出片"。
 #: 挑模型的判据修好之后,它们不再出现在参数表里,这几行随之失效;在那之前 xfail(strict)记着。
 NOT_A_SHOT_MODEL = {"speech-to-video", "video-lipsync", "video-edit", "video-extend"}
-#: 同一处的另一个问题:evolink 的图像模型尺寸表里混着「1:1」这种比例写法,`_image_plan` 按「宽x高」拆它时抛错,
-#: 用这几个模型建整片 / 带货 / 上身图模板直接失败。
-RATIO_SIZES = {"evolink"}
 #: 出片计划(templates_models._video_plan)按"收不收首帧 / 参考图"开放分镜能选的路,不看模型要求什么、收几张:
 PLAN_OFFERS_A_DEAD_PATH: dict[str, str] = {
     #: 参考那条路一镜要交 8 张参考图(三视图 4 + 设定图 3 + 白模帧 1),它只收 4 张 —— 参考图门槛该按模板传入。
@@ -69,14 +72,10 @@ def _video_params(*, full_video: bool = False) -> list[Any]:
     return out
 
 
-def _image_params() -> list[Any]:
-    out = []
-    for choice in _choices("image", _can_take_references):
-        marks = []
-        if choice.provider in RATIO_SIZES:
-            marks.append(pytest.mark.xfail(strict=True, reason="_image_plan 拆不了「1:1」这种尺寸写法(templates_models)"))
-        out.append(pytest.param(choice, id=f"{choice.provider}/{choice.model}", marks=marks))
-    return out
+def _image_params(needed: int) -> list[Any]:
+    """会被挑中的图像模型。门槛按模板来:商品 / 面料每次只带一张(SINGLE_REFERENCE),整片的关键帧带一组。"""
+    return [pytest.param(choice, id=f"{choice.provider}/{choice.model}")
+            for choice in _choices("image", lambda db, one: _can_take_references(db, one, needed=needed))]
 
 
 class _Anything(dict):
@@ -174,11 +173,14 @@ def test_会被挑中的视频模型_收得下整片生成的每一种走法(vid
         assert _check(_generations(graph, skipped=skipped, item=item), "video") == ["generate_clip"], item
 
 
-@pytest.mark.parametrize("image", _image_params())
+@pytest.mark.parametrize("image", _image_params(SINGLE_REFERENCE))
 def test_会被挑中的图像模型_收得下模板交给它的每一次出图(image: ModelChoice) -> None:
     for template_id, graph in _business(image, SEEDANCE).items():
         assert _check(_generations(graph, skipped=set(), item={}), "image"), template_id
 
+
+@pytest.mark.parametrize("image", _image_params(REFERENCE_IMAGES_NEEDED))
+def test_会被挑中的图像模型_收得下整片生成的每一次出图(image: ModelChoice) -> None:
     graph = full_video_generation_graph(chat=CHAT, image=image, video=SEEDANCE)
     checked = set()
     for skipped, item in _full_video_walks(SEEDANCE):
@@ -189,4 +191,4 @@ def test_会被挑中的图像模型_收得下模板交给它的每一次出图(
 def test_参数表没有缩水() -> None:
     """扫描面自己也要有人看着:判据哪天一个模型都挑不中,上面两条参数化测试一条都不会跑。"""
     assert len(_choices("video", _can_shoot_from_references)) >= 10
-    assert len(_choices("image", _can_take_references)) >= 3
+    assert len(_image_params(SINGLE_REFERENCE)) >= 3

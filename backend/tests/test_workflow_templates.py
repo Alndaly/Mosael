@@ -8,6 +8,7 @@ from typing import Any
 from app.domain.workflows import NODE_TYPES, validate_graph, with_run_params
 from app.domain.workflows.templates import (
     ModelChoice,
+    built_in_template_graph,
     full_video_generation_graph,
     translated_dub_graph,
     transcript_video_cleanup_graph,
@@ -339,10 +340,11 @@ class Test示范工作流要挑得动的模型:
         return row
 
     def test_判断规则(self) -> None:
-        from app.domain.workflows.templates import _can_shoot_from_references, _can_take_references
+        from app.domain.workflows.templates import REFERENCE_IMAGES_NEEDED, _can_shoot_from_references, _can_take_references
 
-        assert _can_take_references(None, SEEDREAM), "Seedream 4 收 14 张参考图"
-        assert not _can_take_references(None, ModelChoice(provider="bytedance", model="doubao-seedream-3-0-t2i-250415")), "只会文生图"
+        assert _can_take_references(None, SEEDREAM, needed=REFERENCE_IMAGES_NEEDED), "Seedream 4 收 14 张参考图"
+        assert not _can_take_references(None, ModelChoice(provider="bytedance", model="doubao-seedream-3-0-t2i-250415"),
+                                        needed=1), "只会文生图"
         assert _can_shoot_from_references(None, SEEDANCE)
         assert not _can_shoot_from_references(None, ModelChoice()), "没有模型不算能"
 
@@ -358,7 +360,7 @@ class Test示范工作流要挑得动的模型:
             i2i = self._model(db, "u1", "bytedance", "doubao-seedream-4-0-250828", "image")
             set_default(db, "image", t2i, owner_user_id="u1")
             db.commit()
-            assert _reference_image_model(db, "u1").model == i2i.model_id
+            assert _reference_image_model(db, "u1", needed=9).model == i2i.model_id
 
     def test_一个合用的都没有就留空(self) -> None:
         from app.core.db import SessionLocal
@@ -369,7 +371,44 @@ class Test示范工作流要挑得动的模型:
         with SessionLocal() as db:
             self._model(db, "u1", "bytedance", "doubao-seedream-3-0-t2i-250415", "image")
             db.commit()
-            assert _reference_image_model(db, "u1").model == ""
+            assert _reference_image_model(db, "u1", needed=1).model == ""
+
+
+    def test_参考图门槛按模板来_商品图带一张就够_整片要一组(self) -> None:
+        """此前门槛写死 9 张(整片生成的关键帧),商品图 / 面料图模板复用它 —— 百炼 qwen-image-edit 只收 3 张,
+        明明够用却被判缺。"""
+        from app.core.db import SessionLocal
+        from app.domain.providers.defaults import set_default
+        from app.domain.workflows.templates import requirement_statuses
+        from tests.util import fresh_client
+
+        fresh_client()
+        with SessionLocal() as db:
+            edit = self._model(db, "u1", "alibaba", "qwen-image-edit", "image")
+            set_default(db, "image", edit, owner_user_id="u1")
+            db.commit()
+            statuses = requirement_statuses(db, user_id="u1", workspace_id="")
+            assert statuses["reference_image_model"] == "met", "商品图、面料图每次只带一张"
+            assert statuses["multi_reference_image_model"] == "missing", "整片的关键帧要同时带一组,3 张不够"
+            for template_id in ("product_on_model", "product_pitch_short", "fabric_lookbook"):
+                graph = built_in_template_graph(db, template_id, user_id="u1", workspace_id="", locale="zh")
+                assert "qwen-image-edit" in json.dumps(graph), template_id
+
+    def test_尺寸表里写的是画幅比的模型_建整片模板不崩(self) -> None:
+        """Evolink 的 gpt-image-1.5 尺寸表是 "1:1"、"16:9" 这种画幅比,此前按 x 拆开转整数,建图 500。"""
+        from app.core.db import SessionLocal
+        from app.domain.providers.defaults import set_default
+        from app.domain.workflows.templates import _image_plan
+        from tests.util import fresh_client
+
+        assert _image_plan(None, ModelChoice(provider="evolink", model="gpt-image-1.5")).frame_sizes.keys() <= {"16:9", "9:16", "1:1"}
+        fresh_client()
+        with SessionLocal() as db:
+            image = self._model(db, "u1", "evolink", "gpt-image-1.5", "image")
+            set_default(db, "image", image, owner_user_id="u1")
+            db.commit()
+            graph = built_in_template_graph(db, "full_video_generation", user_id="u1", workspace_id="", locale="zh")
+            assert "gpt-image-1.5" in json.dumps(graph)
 
 
 class Test分镜写了口播就要真的配上:
