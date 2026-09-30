@@ -644,9 +644,12 @@ describe("AI 工作台的 @ 资产", () => {
     api.listEntities.mockResolvedValue([summary(), summary({ id: "e2", name: "老街", kind: "location" })]);
     const onChange = vi.fn();
     mount(<EntityMentionButton workspaceId="ws" value={[]} onChange={onChange} />);
-    fireEvent.click(screen.getByRole("button", { name: "entityMention" }));
+    const trigger = screen.getByRole("button", { name: "entityMention" });
+    fireEvent.click(trigger);
     fireEvent.click(await screen.findByText("老街"));
     expect(onChange).toHaveBeenCalledWith([expect.objectContaining({ id: "e2" })]);
+    //: 挑中就收起;FocusScope 在卸载后的下一拍才把焦点还给按钮 —— 等它还完,别让那一拍落到环境拆掉之后。
+    await waitFor(() => expect(document.activeElement).toBe(trigger));
 
     const removed = vi.fn();
     const [chip] = entityMentionChips([summary()], removed);
