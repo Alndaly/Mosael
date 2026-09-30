@@ -208,8 +208,6 @@ def _transcode_reference(source: Path, target: Path) -> None:
         raise VoiceError("voiceErr_referenceTranscodeFailed", detail=_ffmpeg_reason(result.stderr))
 
 
-#: 还没声明这把嗓子是谁的(升级前建的音色)。见 Voice.consent_kind。
-UNDECLARED = "undeclared"
 
 
 def _declared(kind: str) -> str:
@@ -220,11 +218,6 @@ def _declared(kind: str) -> str:
     if cleaned not in CONSENT_KINDS:
         raise VoiceError("voiceErr_consentKind", kinds=" / ".join(CONSENT_KINDS))
     return cleaned
-
-
-def usable_for_digital_human(voice: Voice) -> bool:
-    """这把嗓子能不能用于数字人(ADR 0028 §5):声明过是谁的就行(本人、已获同意、虚构都算)。"""
-    return voice.consent_kind != UNDECLARED
 
 
 def create_from_upload(db: Session, *, workspace_id: str, source: Path, name: str, reference_text: str,
@@ -663,6 +656,9 @@ def _run_synthesis_body(
                     name=f"{voice.name} · 配音",
                     source="tts",
                 )
+                #: 记下是哪把克隆嗓子配的:这段音频拿去做数字人时,生成漏斗照它查音色的授权声明
+                #: (generation.operations.check_digital_human_rights)。引擎自带的嗓子不是谁的克隆,不记。
+                asset.media_info = {**(asset.media_info or {}), "voice_id": voice.id}
             job = db.get(Job, job_id)
             job.status = "succeeded"
             job.progress = 1.0

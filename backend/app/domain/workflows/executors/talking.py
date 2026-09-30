@@ -69,7 +69,7 @@ def _require_voice_consent(db: Session, engine: str, voice: str) -> None:
     在花钱之前问 —— 配完音才拒,那段配音就白付了。"""
     from app.db.models import Voice
     from app.domain.voices.speech import CLONE_ENGINE
-    from app.domain.voices.voices import usable_for_digital_human
+    from app.domain.voices.consent import usable_for_digital_human
 
     if (engine or CLONE_ENGINE) != CLONE_ENGINE or not voice:
         return
@@ -285,8 +285,14 @@ def _concat_audio(db: Session, scope: RunScope, assets: list[Any], name: str) ->
                             capture_output=True, text=True, timeout=300, what="口播分段拼接")
         if result.returncode != 0 or not target.exists():
             raise WorkflowDomainError("wfErr_talkingConcatFailed")
-        return register_file_asset(db, workspace_id=scope.workspace_id, project_id=None, source_path=target,
-                                   name=name, source="tts").id
+        joined = register_file_asset(db, workspace_id=scope.workspace_id, project_id=None, source_path=target,
+                                     name=name, source="tts")
+    #: 几句是同一把克隆嗓子配的:拼好的这段也记着它 —— 拿去别处做数字人时,漏斗照它查授权声明
+    #: (generation.operations.check_digital_human_rights)。
+    voices = {str((asset.media_info or {}).get("voice_id") or "") for asset in assets}
+    if len(voices) == 1 and "" not in voices:
+        joined.media_info = {**(joined.media_info or {}), "voice_id": voices.pop()}
+    return joined.id
 
 
 @register("talking_segments")

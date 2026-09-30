@@ -87,12 +87,17 @@ def _summarize_generate_image(db: Session, payload: dict[str, Any]) -> Summary:
     return "confirm_generateImage", {"asked": _asked_for(payload)}
 
 def _validate_generate_video(db: Session, workspace_id: str, payload: dict[str, Any], actor: str | None) -> None:
-    from app.domain.generation.operations import is_digital_human_request
+    from app.domain.generation.operations import GenerationDomainError, check_digital_human_rights, is_digital_human_request
 
-    #: 数字人没声明授权:开卡时就说,不等人批准之后才在漏斗里被拒。
+    #: 数字人没声明授权、音色或人物缺声明:开卡时就说,不等人批准之后才在漏斗里被拒。
     sources = [one for one in payload.get("source_assets") or [] if isinstance(one, dict)]
-    if is_digital_human_request(sources, dict(payload.get("parameters") or {})) and payload.get("digital_human_consent") is not True:
-        raise ConfirmationError("genErr_digitalHumanNeedsConsent")
+    if is_digital_human_request(sources, dict(payload.get("parameters") or {})):
+        if payload.get("digital_human_consent") is not True:
+            raise ConfirmationError("genErr_digitalHumanNeedsConsent")
+        try:
+            check_digital_human_rights(db, workspace_id, sources)
+        except GenerationDomainError as exc:
+            raise ConfirmationError.relay(exc) from exc
     _check_generation_text(db, payload, actor, "video")
 
 def _summarize_generate_video(db: Session, payload: dict[str, Any]) -> Summary:

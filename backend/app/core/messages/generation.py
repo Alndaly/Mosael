@@ -57,6 +57,14 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "这是数字人生成(带驱动音频):先确认已取得画面中人物的授权 —— 本人,或已取得其单独同意",
         "en": "This is a digital-human generation (it has driving audio): confirm you have the pictured person's consent first — it's you, or they agreed separately.",
     },
+    "genErr_voiceConsentMissing": {
+        "zh": "驱动音频是用克隆音色「{name}」配的,而这把嗓子还没声明是谁的 —— 先到配音库里补上声明(本人、已获同意或虚构)",
+        "en": "The driving audio was voiced with the cloned voice “{name}”, which has no consent declaration yet — declare whose voice it is in the voice library first (you, consented, or fictional).",
+    },
+    "genErr_entityConsentMissing": {
+        "zh": "画面里的脸是人物「{name}」的参考图,而他是真人、还没有「本人」或「已获同意」的声明 —— 先在资产详情里补上",
+        "en": "The face is a reference image of “{name}”, a real person with no “myself” or “consented” declaration yet — add it on the asset's page first.",
+    },
     "genErr_sourceGroup": {"zh": "素材分组只能是 {groups}", "en": "The asset group must be one of: {groups}"},
     "genErr_unknownRole": {"zh": "未知的素材角色:{role}", "en": "Unknown asset role: {role}"},
     "genErr_notInteger": {

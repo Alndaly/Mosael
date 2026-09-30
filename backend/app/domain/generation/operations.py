@@ -9,6 +9,7 @@ from dataclasses import dataclass
 
 from typing import Any
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.ai.providers import (
@@ -17,6 +18,7 @@ from app.ai.providers import (
     REFERENCE_AUDIO,
     REFERENCE_IMAGE,
     SOURCE_ROLES,
+    SOURCE_VIDEO,
     allowed_source_url_parameters,
     direct_media_url,
     get_generation_adapter,
@@ -117,6 +119,46 @@ def is_digital_human_request(source_assets: Sequence[dict[str, Any]], parameters
     return bool(str(parameters.get(f"{DRIVING_AUDIO}_url") or "").strip())
 
 
+#: 数字人里「脸」来自这几种素材:说话照片的人像(首帧)、改口型的原片。
+_FACE_ROLES = (FIRST_FRAME, SOURCE_VIDEO)
+
+
+def check_digital_human_rights(db: Session, workspace_id: str, source_assets: Sequence[dict[str, Any]]) -> None:
+    """数字人的两道声明(ADR 0028 §4、§5),**在漏斗里查**:AI 工作台、画板生成格、智能体、工作流、定时任务都过这里。
+
+    此前只有数字人工作流节点查(`executors/talking`),别的入口勾一个「已取得授权」就放行 —— 一段用未声明的克隆音色
+    配的音、一张真人人物资产的参考图,换个入口就能拿去做数字人。
+
+    - **驱动音频**是用克隆音色配出来的(素材上记着 `voice_id`,见 voices 的配音登记):那把嗓子要声明过是谁的;
+    - **脸**(人像、原片)是某个人物资产的参考图:真人要有「本人」或「已获同意」的声明,变体连同它的母体一起看。
+
+    查不到出处的素材(自己上传的音频、不在资产库里的图)不拦:那一格「已取得授权」的确认就是为它们设的。
+    """
+    from app.db.models import Entity, EntityReference, Voice
+    from app.domain.entities.catalog import usable_for_digital_human as entity_usable
+    from app.domain.voices.consent import usable_for_digital_human as voice_usable
+
+    for entry in source_assets:
+        role = str((entry or {}).get("role") or "")
+        asset = db.get(Asset, str((entry or {}).get("asset_id") or ""))
+        if asset is None or asset.workspace_id != workspace_id:
+            continue
+        if role == DRIVING_AUDIO:
+            voice_id = str((asset.media_info or {}).get("voice_id") or "")
+            voice = db.get(Voice, voice_id) if voice_id else None
+            if voice is not None and not voice_usable(voice):
+                raise GenerationDomainError("genErr_voiceConsentMissing", name=voice.name)
+        elif role in _FACE_ROLES:
+            owners = db.scalars(
+                select(Entity).join(EntityReference, EntityReference.entity_id == Entity.id)
+                .where(EntityReference.asset_id == asset.id, Entity.kind == "character")
+            ).all()
+            for entity in owners:
+                chain = [entity, *([db.get(Entity, entity.parent_id)] if entity.parent_id else [])]
+                if any(one is not None and not entity_usable(dict(one.attributes or {})) for one in chain):
+                    raise GenerationDomainError("genErr_entityConsentMissing", name=entity.name)
+
+
 def create_generation_job(db: Session, **request: Any) -> tuple[GenerationJob, Any]:
     """建一次生成(参数见 `_create_generation_job`)。
 
@@ -198,6 +240,8 @@ def _create_generation_job(
     talking = is_digital_human_request(source_assets, parameters)
     if talking and not digital_human_consent:
         raise GenerationDomainError("genErr_digitalHumanNeedsConsent")
+    if talking:
+        check_digital_human_rights(db, workspace_id, source_assets)
     provider = provider.strip()
     model = model.strip()
     if not provider or not model:

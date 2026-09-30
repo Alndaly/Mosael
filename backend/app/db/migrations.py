@@ -1998,6 +1998,43 @@ def _migrate_voices_declare_consent() -> None:
             conn.execute(text("ALTER TABLE voices ADD COLUMN consent_at DATETIME"))
 
 
+def _migrate_cloned_speech_remembers_its_voice() -> None:
+    """克隆音色配出来的音频素材记下是哪把嗓子配的:`assets.media_info.voice_id`。
+
+    数字人生成的漏斗要照它查音色的授权声明(generation.operations.check_digital_human_rights):此前只有数字人工作流
+    节点查,AI 工作台、画板、智能体拿一段用未声明的克隆音色配的音就能做数字人。新配的音登记时就记上(voices 的克隆
+    合成);已有的从当初那一单配音任务补 —— 任务的 payload 记着 `voice_id`,result 记着产出的 `asset_id`。
+    `voice_id` 对得上一行克隆音色才补(引擎自带的嗓子不是谁的克隆)。幂等:已经记着的不动。
+    """
+    tables = set(inspect(engine).get_table_names())
+    if not {"jobs", "assets", "voices"} <= tables:
+        return
+
+    def loaded(raw: Any) -> dict[str, Any]:
+        try:
+            value = json.loads(raw) if isinstance(raw, str) else raw
+        except (TypeError, ValueError):
+            return {}
+        return value if isinstance(value, dict) else {}
+
+    with engine.begin() as conn:
+        voices = set(conn.execute(text("SELECT id FROM voices")).scalars())
+        rows = conn.execute(text("SELECT payload, result FROM jobs WHERE kind = 'tts' AND status = 'succeeded'")).fetchall()
+        for raw_payload, raw_result in rows:
+            voice_id = str(loaded(raw_payload).get("voice_id") or "")
+            asset_id = str(loaded(raw_result).get("asset_id") or "")
+            if voice_id not in voices or not asset_id:
+                continue
+            #: 素材已经删了的:查回 None,UPDATE 也碰不到任何一行。
+            info = loaded(conn.execute(text("SELECT media_info FROM assets WHERE id = :a"), {"a": asset_id}).scalar_one_or_none())
+            if info.get("voice_id"):
+                continue
+            conn.execute(
+                text("UPDATE assets SET media_info = :m WHERE id = :a"),
+                {"m": json.dumps({**info, "voice_id": voice_id}, ensure_ascii=False), "a": asset_id},
+            )
+
+
 def _migrate_board_scene_render_drops_project() -> None:
     """画板 3D 场景格的渲白模不再有「项目」(归档进哪个项目):摘掉存着的 `form.config.project_id`。
 
@@ -5916,6 +5953,7 @@ def migration_plan() -> MigrationPlan:
                 _migrate_transcription_engines_are_providers,
                 _migrate_translation_engines_are_providers,
                 _migrate_speech_engines_are_providers,
+                _migrate_cloned_speech_remembers_its_voice,
                 _migrate_workflow_revisions,
                 _disable_tasks_bound_to_deleted_workflows,
                 # 排在所有会落修订的迁移之后:它们写下的那几版也要有作者。
