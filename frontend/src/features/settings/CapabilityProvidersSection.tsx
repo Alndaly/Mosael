@@ -8,7 +8,7 @@
  * backend/app/domain/capabilities。
  */
 import React from "react";
-import { CircleDashed, Store } from "lucide-react";
+import { CircleDashed, Plug, Store } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { capabilityKeys } from "@/api/queryKeys";
@@ -26,7 +26,10 @@ import {
   SettingsItemState,
   SettingsTag,
 } from "@/components/settings/settings-layout";
+import { PageLoadError } from "@/components/layout/EmptyState";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
 import { findPluginsFor } from "@/lib/deepLink";
 
 const UNSET = "__unset__";
@@ -37,6 +40,12 @@ const NONE_HINT: Record<string, MessageKey> = { public_url: "assetLinkNone" };
 
 export function CapabilityProvidersSection() {
   const state = useQuery({ queryKey: KEY, queryFn: listCapabilityChoices });
+  //: 后端要把每一家「装好了没有」问一遍(本机引擎要起子进程探),刚启动时要几秒。此前那几秒整页一片白、
+  //: 看不出是在加载还是坏了(用户:「很长时间的白屏,也没有 Skeleton 或者 loading」)。
+  if (state.isPending) return <CapabilityGroupsSkeleton />;
+  if (state.isError) {
+    return <PageLoadError size="section" icon={<Plug size={20} />} error={state.error} onRetry={() => void state.refetch()} />;
+  }
   return (
     <>
       {(state.data ?? []).map((choices) =>
@@ -45,6 +54,27 @@ export function CapabilityProvidersSection() {
           : <CapabilityGroup key={choices.capability} choices={choices} />,
       )}
     </>
+  );
+}
+
+/** 加载中:照一组能力的样子(标题、说明、一行选择)占位,几组排下来 —— 数据到了原地换上,页面不跳。 */
+function CapabilityGroupsSkeleton() {
+  return (
+    <div data-capability-loading="" aria-busy="true" className="grid gap-10">
+      {[0, 1, 2, 3].map((index) => (
+        <div key={index} className="grid gap-3 px-0.5">
+          <Skeleton className="h-5 w-32" />
+          <Skeleton className="h-3.5" style={{ width: `${[58, 46, 64, 52][index]}%` }} />
+          <div className="flex items-center justify-between gap-6 border-t border-divider pt-5">
+            <div className="grid flex-1 gap-2">
+              <Skeleton className="h-3.5 w-24" />
+              <Skeleton className="h-3 w-2/5" />
+            </div>
+            <Skeleton className={cn("h-9 rounded-md", SETTINGS_FIELD_WIDTH)} />
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }
 

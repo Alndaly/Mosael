@@ -2,7 +2,7 @@
 import React from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor, within } from "@testing-library/react";
-import { expect, it, vi } from "vitest";
+import { beforeEach, expect, it, vi } from "vitest";
 
 /**
  * 「能力提供方」照后端的能力表列(ADR 0031 §5):一项能力一组。有内置实现的(文档解析)不定就是内置的;
@@ -34,7 +34,8 @@ const listed = [
     used_by: [{ kind: "app", label: "剪辑页字幕:「配音」" }] },
   { capability: "public_url", label: "素材外链", description: "换直链", current: null, automatic: null, options: [] },
 ];
-vi.mock("@/api/domains/capabilities", () => ({ listCapabilityChoices: vi.fn(async () => listed), setCapabilityDefault: vi.fn() }));
+const { listCapabilityChoices } = vi.hoisted(() => ({ listCapabilityChoices: vi.fn() }));
+vi.mock("@/api/domains/capabilities", () => ({ listCapabilityChoices, setCapabilityDefault: vi.fn() }));
 vi.mock("@/app/preferences", () => ({ useI18n: () => (key: string) => key }));
 const { findPluginsFor } = vi.hoisted(() => ({ findPluginsFor: vi.fn() }));
 vi.mock("@/lib/deepLink", () => ({ findPluginsFor }));
@@ -46,6 +47,36 @@ vi.mock("@/components/ui/option-picker", () => ({
 }));
 
 import { CapabilityProvidersSection } from "./CapabilityProvidersSection";
+
+beforeEach(() => {
+  listCapabilityChoices.mockReset();
+  listCapabilityChoices.mockImplementation(async () => listed);
+});
+
+it("后端还在答的那几秒是骨架屏,不是一片白;答了原地换上", async () => {
+  //: 用户:「能力提供方这个页面要加载很久,会有很长时间的白屏,也没有 Skeleton 或者 loading」。
+  let answer!: (value: typeof listed) => void;
+  listCapabilityChoices.mockImplementation(() => new Promise((resolve) => { answer = resolve; }));
+  const { container } = render(
+    <QueryClientProvider client={new QueryClient()}>
+      <CapabilityProvidersSection />
+    </QueryClientProvider>,
+  );
+  expect(container.querySelector("[data-capability-loading]")?.getAttribute("aria-busy")).toBe("true");
+  answer(listed);
+  await waitFor(() => expect(screen.getByText("文档解析")).toBeTruthy());
+  expect(container.querySelector("[data-capability-loading]")).toBeNull();
+});
+
+it("加载失败说出来、能重试,不是一片白", async () => {
+  listCapabilityChoices.mockRejectedValue(new Error("boom"));
+  render(
+    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+      <CapabilityProvidersSection />
+    </QueryClientProvider>,
+  );
+  expect(await screen.findByRole("button", { name: /retry|重试/i })).toBeTruthy();
+});
 
 it("一项能力一组;文档解析不定就是本地解析,外链一家都没有时说去建一个", async () => {
   render(

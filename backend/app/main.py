@@ -131,6 +131,10 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     from app.domain.plugins import catalog_watch
 
     catalog_watch.start_watching()
+    # 本机引擎「装好了没有」要起子进程 import 一遍才知道(funasr、demucs 各一两秒),答案进程内缓存。启动后在后台
+    # 先探一遍:「设置 → 能力提供方」、转写 / 分离的下拉第一次打开时不必现等 —— 开发态每改一次代码后端就重启,
+    # 那一页每次都白屏好几秒(用户:「要加载很久,会有很长时间的白屏」)。
+    _warm_engine_probes()
     if settings.scheduler_enabled:
         start_scheduler_loop()
         logger.info("scheduler loop started")
@@ -162,6 +166,26 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
 
     asr_daemon.shutdown_pool()
     tts_daemon.shutdown_pool()
+
+
+def _warm_engine_probes() -> None:
+    """后台把本机引擎的就绪探测跑一遍,填上各自的缓存(见 lifespan 里那段)。探不出来只记日志:那是「没装」,不是错。"""
+    import threading
+
+    from app.ai.providers.registry import DENOISE_ADAPTERS, SEPARATION_ADAPTERS
+    from app.ai.runtime import asr_models
+    from app.domain.voices.transcription import LOCAL_ENGINES
+
+    def probe() -> None:
+        for engine in LOCAL_ENGINES:
+            asr_models.resolve_engine_python(engine)
+        for adapter in (*DENOISE_ADAPTERS.values(), *SEPARATION_ADAPTERS.values()):
+            try:
+                adapter.runtime_ready()
+            except Exception:  # noqa: BLE001 — 探测失败 = 跑不起来,由用到它的地方说
+                logger.debug("engine probe %s failed", adapter.engine_id, exc_info=True)
+
+    threading.Thread(target=probe, name="engine-probes", daemon=True).start()
 
 
 def _prepare_network() -> None:
