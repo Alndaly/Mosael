@@ -223,7 +223,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfNode_dub_subtitles_desc": {"zh": "把选中的字幕条逐条念出来,落到一条专门的配音轨 —— 原声和原素材一个字不动,不满意整条轨删掉就回到原样。", "en": "Speak the chosen subtitle cues onto a dedicated dub track — the original audio and clips are untouched, so deleting that one track undoes everything."},
     "wfNode_dub_subtitles_sequence_id": {"zh": "配音落到哪条时间线", "en": "The timeline the dub goes onto"},
     "wfNode_dub_subtitles_clip_ids": {"zh": "要配音的字幕条,如 {{生成字幕.clip_ids}};一条都没有时什么都不做(配 0 条、原声不动)", "en": "The subtitle cues to dub, e.g. {{generate_subtitles.clip_ids}}; with none, nothing is dubbed and the original audio is left alone"},
-    "wfNode_dub_subtitles_match_duration": {"zh": "把配音快进/放慢到原段落的长度,好让它对得上画面", "en": "Speed each dubbed line up or down to fill the original segment, so it stays in sync with the picture"},
+    "wfNode_dub_subtitles_match_duration": {"zh": "把配音在 0.9–1.5 倍速之间缩放到原段落的长度,好让它对得上画面;1.5 倍还念不完时先占用到下一句开始之前的空当", "en": "Speed each dubbed line between 0.9× and 1.5× to fill the original segment so it stays in sync; if 1.5× isn't enough it runs on into the gap before the next line"},
     "wfNode_dub_subtitles_line": {
         "zh": "双语字幕包含两行时，选择哪部分交给语音合成；单语字幕选择「完整字幕」即可。",
         "en": "Choose which part of a two-line bilingual cue is sent to speech synthesis. Use Full cue for single-line subtitles.",

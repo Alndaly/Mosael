@@ -36,7 +36,8 @@ def translated_dub_graph(*, chat: ModelChoice | None = None, voice_id: str = "",
 
     **配音靠变速塞回原长度,不是靠裁剪。** 同一句话译成另一种语言,长度天然对不上;裁掉尾巴等于
     把话说一半,留空则对不上口型。变速改的是片段的 speed(渲染时 atempo),无损、可撤销、事后
-    还能在检查器里逐条微调 —— 这是 `dub_subtitles` 的 match_duration。
+    还能在检查器里逐条微调 —— 这是 `dub_subtitles` 的 match_duration。变速只在 0.9–1.5 倍之间
+    (再快就像快进了),1.5 倍还念不完的先占用到下一句开始之前的空当(见 voices/subtitle_dub._speed_for)。
 
     `chat`:翻译用的对话连接与模型(建图时按这个人挑好,见 templates._chat_model);不给就留空,由用户在节点上选。
     """

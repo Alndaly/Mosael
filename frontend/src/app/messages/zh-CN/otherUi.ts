@@ -302,7 +302,7 @@ export const otherUi = {
   subtitleDubLineLast: "第二行",
   subtitleDubApply: "给 {n} 条配音",
   subtitleDubMatch: "缩放到段落长度",
-  subtitleDubMatchHint: "把配音拉伸或压缩到字幕段落的时长。用的是片段自己的倍速,无损、可撤销、事后还能在检查器里微调;超出 ±20% 语速会明显不自然。",
+  subtitleDubMatchHint: "把配音在 0.9–1.5 倍速之间缩放,对齐字幕段落的时长;1.5 倍还念不完时,先占用到下一条字幕开始之前的空当。用的是片段自己的倍速,无损、可撤销、事后还能在检查器里微调。",
   subtitleDubTrackNote: "配音会落到一条单独的配音轨;原声按上面选的处理,都能撤销。",
   subtitleDubOriginal: "原声",
   subtitleDubOriginal_duck: "配音说话时压低",

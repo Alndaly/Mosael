@@ -23,8 +23,9 @@ from tests.util import fresh_client
 #: 两段日文,各 2 秒,中间空半秒。译文比原文长 —— 正是要靠变速压回去的那种情况。
 SEGMENTS = [(0.0, 2.0, "こんにちは"), (2.5, 4.5, "元気ですか")]
 TRANSLATED = {"こんにちは": "你好啊", "元気ですか": "你最近还好吗"}
-#: 合成出来的音频都是 4 秒。段落只有 2 秒,所以每条都该被压成 2.0 倍速。
-SYNTH_SECONDS = 4.0
+#: 合成出来的音频都是 3.5 秒,段落只有 2 秒:要 1.75 倍速才压得回去,念成快进了。第一句后面到下一句还有
+#: 0.5 秒空当,占上它 1.4 倍念完;最后一句后面都是空的,原速念。
+SYNTH_SECONDS = 3.5
 
 
 @pytest.fixture
@@ -156,8 +157,8 @@ def test_整条链路跑完之后时间线上该有什么(stubs) -> None:
         dubbed = sorted((c for c in by_kind["audio"] if c.track_id == dub_track.id),
                         key=lambda c: c.timeline_start)
         assert [c.timeline_start for c in dubbed] == [0.0, 2.5], "每条配音落在自己那条字幕的位置"
-        # 4 秒的音频塞进 2 秒的段落 = 2 倍速。这就是"快进缩放到原音频段落长度"。
-        assert [round(c.speed, 3) for c in dubbed] == [2.0, 2.0]
+        # 压回原段落长度,但不念成快进:先占用到下一句开始之前的空当(见 subtitle_dub._speed_for)。
+        assert [round(c.speed, 3) for c in dubbed] == [1.4, 1.0]
 
         # 原声素材与画面都不删；源片段静音，分离出的背景音在独立音频轨上。
         video_clips = by_kind["video"]

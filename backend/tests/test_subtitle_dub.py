@@ -17,10 +17,19 @@ from tests.util import fresh_client, make_voice
 
 
 def test_speed_matches_audio_to_the_subtitle_slot() -> None:
-    # 6 秒的配音要塞进 3 秒的字幕 → 2 倍速播放,正好占满。
-    assert _speed_for(6.0, 3.0) == 2.0
-    # 反过来,短配音拉长到长段落。
-    assert _speed_for(1.5, 3.0) == 0.5
+    # 4 秒的配音塞进 3 秒的字幕 → 1.33 倍速播放,正好占满。
+    assert _speed_for(4.0, 3.0) == pytest.approx(4 / 3)
+    # 短一点的配音放慢一点点占满;再短就不拖了 —— 0.9 倍以下念出来不像人话。
+    assert _speed_for(2.85, 3.0) == pytest.approx(0.95)
+    assert _speed_for(1.5, 3.0) == 0.9
+
+
+def test_念不完先占用到下一句之前的空当_不念成快进() -> None:
+    """此前夹在 0.25–4 倍:译文长一倍就 2 倍速念。现在先占用下一句开始前的空当,还放不下才按 1.5 倍念。"""
+    assert _speed_for(6.0, 3.0, 5.0) == pytest.approx(1.2), "3 秒的字幕、5 秒后才是下一句:6 秒的配音 1.2 倍念完"
+    assert _speed_for(6.0, 3.0, 3.5) == 1.5, "空当也不够:1.5 倍,尾巴压到下一句上"
+    assert _speed_for(4.0, 2.0, 10.0) == 1.0, "空当很大:原速念,不放慢"
+    assert _speed_for(6.0, 3.0) == 1.0, "最后一句后面都是空的:原速念完"
 
 
 def test_speed_is_unknown_rather_than_zero_when_a_duration_is_missing() -> None:
@@ -31,13 +40,13 @@ def test_speed_is_unknown_rather_than_zero_when_a_duration_is_missing() -> None:
     assert _speed_for(6.0, 0.0) is None
 
 
-def test_speed_is_clamped_to_the_editable_range() -> None:
+def test_speed_is_clamped_to_what_still_sounds_like_speech() -> None:
     """一条字幕的文本长到要 20 倍速才塞得下,那是文本和时长本身不匹配。
 
     夹到边界而不是抛错:整批配音不该因为其中一条而全部失败,而用户在时间线上一眼就能看出
     那一段被压过头了 —— 这比一个 422 更有用。"""
-    assert _speed_for(60.0, 1.0) == 4.0
-    assert _speed_for(1.0, 60.0) == 0.25
+    assert _speed_for(60.0, 1.0, 1.0) == 1.5
+    assert _speed_for(1.0, 60.0) == 0.9
 
 
 def _sequence_with_subtitle(client, text: str = "你好") -> tuple[str, str]:

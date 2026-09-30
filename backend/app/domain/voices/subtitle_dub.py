@@ -40,10 +40,13 @@ logger = logging.getLogger(__name__)
 _CHILD_TIMEOUT_SECONDS = 20 * 60
 _POLL_SECONDS = 0.5
 
-#: 片段变速的合法区间(与 operations.set_clip_speed 一致)。夹住而不是报错:一条字幕的文本
-#: 长到要 5 倍速才塞得进去,那是文本和时长本身不匹配,不该让整批配音失败。
-_MIN_SPEED = 0.25
-_MAX_SPEED = 4.0
+#: 配音「压回原长度」时变速的范围。夹住而不是报错:一条字幕的文本长到要 3 倍速才塞得进去,那是文本和时长
+#: 本身不匹配,不该让整批配音失败。
+#:
+#: **不是片段变速的合法区间(0.25–4)。** 此前夹的就是那个区间:译文长一倍就 2 倍速念、短一半就 0.5 倍速拖着念,
+#: 说话声早就不像人了。念快到 1.5 倍、念慢到 0.9 倍还听得过去;再长的先占用到下一句开始之前的空当(见 _speed_for)。
+_MIN_SPEED = 0.9
+_MAX_SPEED = 1.5
 
 
 class DubError(LocalizedError, RuntimeError):
@@ -179,15 +182,24 @@ def _await_child(job_id: str) -> str:
     raise DubError("dubErr_childTimeout")
 
 
-def _speed_for(audio_seconds: float, slot_seconds: float) -> float | None:
-    """让这段音频正好占满字幕段落所需的播放倍速。
+def _speed_for(audio_seconds: float, slot_seconds: float, room_seconds: float | None = None) -> float | None:
+    """这段配音用多少倍速播放。
 
-    倍速 = 音频时长 / 段落时长:音频 6 秒要塞进 3 秒的段落,就是 2 倍速。两个数里任何一个不是
-    正数,就没有倍速可言 —— 返回 None,让调用方保持原速,而不是拿一个算出来的 0 或 inf 去写库。
+    先按「正好占满这条字幕」算(倍速 = 音频时长 / 段落时长,音频 6 秒塞进 3 秒就是 2 倍速),夹在
+    _MIN_SPEED–_MAX_SPEED 里。要快过 _MAX_SPEED 才塞得进时,**先占用到下一句开始之前的空当**
+    (`room_seconds`:从这条字幕开始到下一条开始;没有下一条是 None,后面都是空的):能在空当里念完就不必念那么快,
+    还是放不下就按 _MAX_SPEED 念,尾巴压到下一句上 —— 比念成快进强。占空当时不放慢(不低于原速)。
+
+    两个时长里任何一个不是正数,就没有倍速可言 —— 返回 None,让调用方保持原速,而不是拿一个算出来的 0 或 inf 去写库。
     """
     if audio_seconds <= 0 or slot_seconds <= 0:
         return None
-    return max(_MIN_SPEED, min(_MAX_SPEED, audio_seconds / slot_seconds))
+    wanted = audio_seconds / slot_seconds
+    if wanted <= _MAX_SPEED:
+        return max(_MIN_SPEED, wanted)
+    if room_seconds is None:
+        return 1.0
+    return min(_MAX_SPEED, max(1.0, audio_seconds / max(room_seconds, slot_seconds)))
 
 
 def _run_dub(job_id: str) -> None:
@@ -205,6 +217,12 @@ def _run_dub(job_id: str) -> None:
         # 现在取出来:commit 之后这些属性会过期,而 job 出了这个 with 就是 detached 的 ——
         # 到下一个 session 里再读 job.created_by 会去刷一个已经关掉的连接。
         created_by = job.created_by
+        #: 每条字幕到下一条开始之前有多少地方(配音念不完时可以占用的空当,见 _speed_for)。clip_ids 已按时间排好。
+        starts = [clip.timeline_start if clip is not None else None for clip in (db.get(Clip, cid) for cid in clip_ids)]
+        rooms = [
+            (following - start) if start is not None and following is not None else None
+            for start, following in zip(starts, [*starts[1:], None])
+        ]
         # 状态一律经 finish_job 写:排队时就被取消的,不能在这里被写回 running。
         if not finish_job(db, job, status="running"):
             return
@@ -277,7 +295,7 @@ def _run_dub(job_id: str) -> None:
                     ),
                 )
                 if match_duration:
-                    speed = _speed_for(audio_seconds, slot_seconds)
+                    speed = _speed_for(audio_seconds, slot_seconds, rooms[index])
                     if speed is not None:
                         set_clip_speed(db, sequence_id, SetClipSpeed(clip_id=new_clip.id, speed=speed))
                 done += 1

@@ -302,7 +302,7 @@ export const otherUi = {
   subtitleDubLineLast: "Second line",
   subtitleDubApply: "Dub {n} cue(s)",
   subtitleDubMatch: "Fit to cue length",
-  subtitleDubMatchHint: "Stretch or squeeze the voiceover to the cue's duration. It uses the clip's own speed — lossless, undoable, and still adjustable in the inspector afterwards; past ±20% the pacing starts to sound off.",
+  subtitleDubMatchHint: "Speed the voiceover between 0.9× and 1.5× to fit the cue's duration; if 1.5× still isn't enough, it runs on into the gap before the next cue. It uses the clip's own speed — lossless, undoable, and still adjustable in the inspector afterwards.",
   subtitleDubTrackNote: "Voiceover lands on its own dub track; the original audio is handled as chosen above, and both can be undone.",
   subtitleDubOriginal: "Original audio",
   subtitleDubOriginal_duck: "Lower while the dub speaks",

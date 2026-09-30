@@ -89,7 +89,7 @@ def test_重配同一条字幕_变速加在新配的这段上(monkeypatch) -> No
     cue_id = next(track["clips"] for track in created["tracks"] if track["id"] == subtitle_track)[0]["id"]
 
     def fake_synthesis(db, *, text, project_id, created_by, **synthesis):
-        audio = Asset(workspace_id=ws, kind="audio", name=text, file_key="media/d.wav", media_info={"duration": 6.0})
+        audio = Asset(workspace_id=ws, kind="audio", name=text, file_key="media/d.wav", media_info={"duration": 4.0})
         db.add(audio)
         db.flush()
         job = create_job(db, workspace_id=ws, kind="tts", payload={}, created_by=None)
@@ -109,5 +109,5 @@ def test_重配同一条字幕_变速加在新配的这段上(monkeypatch) -> No
     with SessionLocal() as db:
         dub = db.scalar(select(Track).where(Track.sequence_id == sequence_id, Track.role == "dub"))
         speeds = sorted((clip.created_at, clip.speed or 1.0) for clip in dub.clips)
-        # 6 秒的配音塞进 3 秒的字幕 → 2 倍速。两次配出来的两段都该是 2 倍速。
-        assert [speed for _, speed in speeds] == [2.0, 2.0], speeds
+        # 4 秒的配音塞进 3 秒的字幕 → 4/3 倍速(在 0.9–1.5 之内,见 subtitle_dub._speed_for)。两次配出来的两段都该是它。
+        assert [round(speed, 3) for _, speed in speeds] == [1.333, 1.333], speeds
