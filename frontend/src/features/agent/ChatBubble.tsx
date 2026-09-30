@@ -1,6 +1,6 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Bot } from "lucide-react";
+import { Bot, ListChecks } from "lucide-react";
 
 import { api } from "@/api/client";
 import type { components } from "@/api/generated/schema";
@@ -55,6 +55,17 @@ function AgentOrigin({ sessionId }: { sessionId: string }) {
   );
 }
 
+/** 回执的来源抬头:「后台任务回执」。任务 id 只放在悬停提示里 —— 那是给查问题的人看的。 */
+function JobOrigin({ jobId }: { jobId: string }) {
+  const t = useI18n();
+  return (
+    <span data-job-receipt="" className="flex items-center gap-1.5 text-ui-2xs text-muted-foreground" title={jobId}>
+      <ListChecks size={12} className="flex-none" />
+      <span className="font-medium">{t("chatFromJob")}</span>
+    </span>
+  );
+}
+
 export function ChatBubble({
   message,
   usageEvents,
@@ -77,6 +88,8 @@ export function ChatBubble({
         body_document?: JSONContent;
         /** notify_agent_session 发来的:发起会话的 id(结构化来源,不靠信封文案)。 */
         from_agent_session?: string;
+        /** 后台任务跑完送回来的回执(后端 agent/receipts):那个任务的 id。 */
+        from_job?: string;
         /** 用户消息:这条是一次**选择的回执**,问的什么、选的哪一项都在里面。 */
         answers?: AnsweredChoice;
       }
@@ -94,6 +107,10 @@ export function ChatBubble({
   // 就把"谁说的"讲清楚了,不必靠正文里一行方括号标签(那行现在只进提示词,见后端
   // host.agent_notice_envelope)。
   const fromAgent = message.role === "user" ? payload?.from_agent_session : undefined;
+  //: 后台任务的回执同理(用户截图:「签章文件.pdf」已完成……摆成了他发的一条,他问「这不是我发送的」)。
+  //: 它借用户的名义进会话,是为了让智能体接着往下做,不是用户说了话。
+  const fromJob = message.role === "user" && !fromAgent ? payload?.from_job : undefined;
+  const inset = Boolean(fromAgent || fromJob);
   // 外层只负责**摆位置**和挂 group,可见的那块(药丸/内嵌卡)在里面 —— 脚注要落在药丸
   // **下方**而不是它的内边距里,所以这两层必须分开。
   return (
@@ -102,7 +119,7 @@ export function ChatBubble({
         "group/bubble",
         message.role === "assistant"
           ? "relative mx-auto w-full max-w-[780px] shrink-0 text-ui-md leading-[1.65] [word-break:break-word]"
-          : fromAgent
+          : inset
             ? "mx-auto w-full max-w-[780px] shrink-0"
             // **items-end,不是 items-stretch。** 这一列里除了气泡还有悬停才显形的脚注(发出的时间 + 复制),
             // 它透明但占宽度;stretch 会把气泡拉到和脚注一样宽 —— 短消息右边平白多一截,而时间是相对的
@@ -131,13 +148,14 @@ export function ChatBubble({
       ) : (
         <div
           className={
-            fromAgent
+            inset
               ? "grid gap-1.5 rounded-lg border border-border border-l-[3px] border-l-muted-foreground/40 bg-panel-subtle px-3 py-2.5 text-ui-md leading-[1.65] [word-break:break-word]"
               : "whitespace-pre-wrap rounded-lg rounded-br-[6px] bg-secondary px-3 py-[9px] text-ui-md leading-[1.65] text-foreground [word-break:break-word]"
           }
         >
           {fromAgent && <AgentOrigin sessionId={fromAgent} />}
-          <div className={fromAgent ? "whitespace-pre-wrap" : undefined}>
+          {fromJob && <JobOrigin jobId={fromJob} />}
+          <div className={inset ? "whitespace-pre-wrap" : undefined}>
             {/* 一次选择在对话里不该退化成一段自述:有结构就照结构画,没有(老消息)才退回正文。 */}
             {payload?.answers ? (
               <AnsweredChoiceCard answers={payload.answers} />

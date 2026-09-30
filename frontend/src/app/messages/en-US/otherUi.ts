@@ -334,6 +334,7 @@ export const otherUi = {
   chatSubagents: "{n} subagents",
   chatSubagentsTitle: "Subagents",
   chatFromAgentSession: "From another agent",
+  chatFromJob: "Background job receipt",
   chatSubagentSteps: "{n} steps",
   chatSubagentRunning: "Investigating…",
   chatSubagentNoTrace: "No trace was recorded (run by an older version)",
