@@ -267,7 +267,15 @@ def project_sequence_create(db: Session, scope: RunScope, config: dict[str, Any]
     if not 1 <= fps <= 240:
         raise WorkflowDomainError("wfErr_fpsRange")
 
-    project = create_project(db, scope.workspace_id, name)
+    #: 给了项目就把这条时间线建在它里面 —— 「一条长视频切十条竖屏」是一个项目十条时间线,不是十个项目。
+    #: 项目 id 常常来自上游节点,所以和别处一样先比对工作区。
+    project_id = str(config.get("project_id") or "").strip()
+    if project_id:
+        project = db.get(Project, project_id)
+        if project is None or project.workspace_id != scope.workspace_id:
+            raise WorkflowDomainError("wfErr_sequenceProjectMissing")
+    else:
+        project = create_project(db, scope.workspace_id, name)
     scaffold = create_sequence_scaffold(
         db,
         project,
@@ -276,7 +284,9 @@ def project_sequence_create(db: Session, scope: RunScope, config: dict[str, Any]
         height=height,
         fps=fps,
     )
-    project.active_sequence_id = scaffold.sequence.id
+    #: 打开项目时停在哪条时间线:新项目停在这一条;已有项目保持它原来那条(没有才用这一条)。
+    if not project.active_sequence_id:
+        project.active_sequence_id = scaffold.sequence.id
     db.flush()
     return {
         "project_id": project.id,

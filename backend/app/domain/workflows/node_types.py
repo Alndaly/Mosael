@@ -1369,9 +1369,12 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "label": "wfNode_entity_get",
         "description": "wfNode_entity_get_desc",
         "config": {
-            "entity_id": {"type": "template", "options_from": "entities", "description": "wfNode_entity_get_entity_id"},
+            #: 点名和按名字找**恰好用一种**(执行体两样都没有就报 wfErr_entityGetNeedsTarget)。写成 one_of,
+            #: 两样都空在运行前就拦住 —— 数字人出镜带货里「挑一位主播」空着的话,此前要等脚本那次对话计完费才失败。
+            "entity_id": {"type": "template", "one_of": "target", "options_from": "entities",
+                          "description": "wfNode_entity_get_entity_id"},
             "kind": {"type": "string", "options": ["character", "location", "prop"], "description": "wfNode_entity_get_kind"},
-            "name": {"type": "template", "description": "wfNode_entity_get_name"},
+            "name": {"type": "template", "one_of": "target", "description": "wfNode_entity_get_name"},
             "limit": {"advanced": True, "type": "number", "description": "wfNode_entity_get_limit"},
         },
         "outputs": ["entity_id", "found", "name", "description", "prompt", "asset_ids", "asset_id", "voice_engine", "voice_id"],
@@ -1548,7 +1551,9 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "config": {
             "text": {"type": "template", "required": True, "description": "wfNode_talking_segments_text"},
             "engine": {"type": "string", "default": "builtin:clone", "options_from": "speech_engines", "description": "wfNode_speech_engine"},
-            "voice": {"type": "string", "depends_on": "engine", "options_from": "speech_voices", "description": "wfNode_speech_voice"},
+            #: 必填,和「语音合成」同一条:执行体空着就报 wfErr_talkingNeedsVoice —— 声明成必填,运行前就拦住。
+            "voice": {"type": "string", "required": True, "depends_on": "engine", "options_from": "speech_voices",
+                      "description": "wfNode_speech_voice"},
             "model": {"type": "string", "options_from": "speech_video_models", "description": "wfNode_talking_segments_model"},
             "max_seconds": {"advanced": True, "type": "number", "description": "wfNode_talking_segments_max_seconds"},
         },
@@ -1604,6 +1609,8 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "description": "wfNode_project_sequence_create_desc",
         "config": {
             "name": {"type": "template", "required": True, "description": "wfNode_project_sequence_create_name"},
+            "project_id": {"advanced": True, "type": "template", "options_from": "projects",
+                           "description": "wfNode_project_sequence_create_project_id"},
             "width": {"type": "number", "description": "wfNode_project_sequence_create_width"},
             "height": {"type": "number", "description": "wfNode_project_sequence_create_height"},
             "fps": {"type": "number", "description": "wfNode_project_sequence_create_fps"},

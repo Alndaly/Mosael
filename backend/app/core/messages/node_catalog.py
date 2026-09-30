@@ -414,6 +414,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfNode_project_sequence_create": {"zh": "新建成片项目", "en": "Create video project"},
     "wfNode_project_sequence_create_desc": {"zh": "一次建立项目、可编辑序列及默认音视频轨,输出序列和轨道 id,供自动编排与导出直接使用。", "en": "Create a project, editable sequence, and default video/audio tracks in one step, exposing their IDs for immediate automated assembly and export."},
     "wfNode_project_sequence_create_name": {"zh": "项目与序列名称", "en": "Project and sequence name"},
+    "wfNode_project_sequence_create_project_id": {"zh": "建在哪个已有项目里(留空 = 新建一个项目)", "en": "Existing project to add it to (blank = create a new project)"},
     "wfNode_project_sequence_create_width": {"zh": "画布宽度(默认 1920)", "en": "Canvas width (1920 by default)"},
     "wfNode_project_sequence_create_height": {"zh": "画布高度(默认 1080)", "en": "Canvas height (1080 by default)"},
     "wfNode_project_sequence_create_fps": {"zh": "帧率(默认 30)", "en": "Frame rate (30 by default)"},
