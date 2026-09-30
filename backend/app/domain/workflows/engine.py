@@ -368,8 +368,9 @@ def execute_graph(
         ntype = node_types[nid]
         with lock:
             snapshot = dict(context)
-        config = apply_data_edges(nid, dict(node.get("config") or {}), edges, snapshot)
-        config = check_number_fields(ntype, interpolate_node_config(ntype, config, snapshot))
+        # **先插值字面量,再覆盖数据边的值** —— 顺序就是这条规矩的全部(见 binding.apply_data_edges)。
+        config = interpolate_node_config(ntype, dict(node.get("config") or {}), snapshot)
+        config = check_number_fields(ntype, apply_data_edges(nid, config, edges, snapshot))
         if ntype == "start":
             merged = dict(config.get("params") or {})
             merged.update(params or {})
