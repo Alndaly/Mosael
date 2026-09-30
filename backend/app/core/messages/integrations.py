@@ -604,6 +604,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfField_end_field": {"zh": "终点字段", "en": "End field"},
     "wfField_text_field": {"zh": "文本字段", "en": "Text field"},
     "wfField_allow_empty": {"zh": "允许为空", "en": "Allow empty"},
+    "wfField_fail_on_error": {"zh": "非 2xx 算失败", "en": "Fail on non-2xx"},
     "wfField_max_duration": {"zh": "最长时长", "en": "Max duration"},
     "wfField_dy": {"zh": "纵向距离", "en": "Vertical distance"},
     "wfField_end": {"zh": "结束位置", "en": "End"},

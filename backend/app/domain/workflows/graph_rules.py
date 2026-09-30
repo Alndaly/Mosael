@@ -554,6 +554,29 @@ def as_text(value: Any) -> str:
     return str(value)
 
 
+def _lookup(ref: str, context: dict[str, dict[str, Any]]) -> Any:
+    """Walk a dotted path: {{node.key}}, and nested {{loop.item.name}} / {{q.assets.0.id}}."""
+    parts = ref.split(".")
+    if parts[0] not in context:
+        # A miss must read as empty, not as the {} sentinel used to walk the path. Returning
+        # the dict meant a typo'd `condition` made _truthy({}) false — so a while loop ran
+        # exactly once and looked deliberate — while a typo'd `left` with op `not_empty`
+        # evaluated TRUE, because str({}) is non-empty. The branch silently inverted.
+        return ""
+    current: Any = context[parts[0]]
+    for part in parts[1:]:
+        if isinstance(current, dict):
+            current = current.get(part, "")
+        elif isinstance(current, list):
+            try:
+                current = current[int(part)]
+            except (ValueError, IndexError):
+                return ""
+        else:
+            return ""
+    return current
+
+
 def interpolate(value: Any, context: dict[str, dict[str, Any]]) -> Any:
     """把字符串里的 {{node.key}} 换成上下文值;整串引用时保留原类型。"""
     if isinstance(value, dict):
@@ -562,30 +585,44 @@ def interpolate(value: Any, context: dict[str, dict[str, Any]]) -> Any:
         return [interpolate(v, context) for v in value]
     if not isinstance(value, str):
         return value
-
-    def lookup(ref: str) -> Any:
-        # Walk a dotted path: {{node.key}}, and nested {{loop.item.name}} / {{q.assets.0.id}}.
-        parts = ref.split(".")
-        if parts[0] not in context:
-            # A miss must read as empty, not as the {} sentinel used to walk the path. Returning
-            # the dict meant a typo'd `condition` made _truthy({}) false — so a while loop ran
-            # exactly once and looked deliberate — while a typo'd `left` with op `not_empty`
-            # evaluated TRUE, because str({}) is non-empty. The branch silently inverted.
-            return ""
-        current: Any = context[parts[0]]
-        for part in parts[1:]:
-            if isinstance(current, dict):
-                current = current.get(part, "")
-            elif isinstance(current, list):
-                try:
-                    current = current[int(part)]
-                except (ValueError, IndexError):
-                    return ""
-            else:
-                return ""
-        return current
-
     whole = VARIABLE_RE.fullmatch(value.strip())
     if whole:
-        return lookup(whole.group(1))
-    return VARIABLE_RE.sub(lambda m: as_text(lookup(m.group(1))), value)
+        return _lookup(whole.group(1), context)
+    return VARIABLE_RE.sub(lambda m: as_text(_lookup(m.group(1), context)), value)
+
+
+def interpolate_json_text(template: str, context: dict[str, dict[str, Any]]) -> Any:
+    """一段**写成 JSON 的模板**(HTTP 请求体)按 JSON 的规矩插值:结果仍是合法的 JSON。
+
+    普通插值把值原样拼进文字 —— `{"prompt": "{{llm.text}}"}` 碰上一段带引号或换行的回答,
+    请求体当场成了坏的 JSON。这里看引用落在哪:
+
+    - 在一对引号**里面**:填转义过的字符串内容(`"` → `\"`、换行 → `\n`);
+    - 在引号**外面**(`"count": {{q.count}}`):填这个值的 JSON 字面量(数字、对象、带引号的字符串)。
+
+    整串引用照旧保留原类型(交出去时 as_text 写成 JSON);不是 JSON 形状的模板(纯文本请求体)按普通插值。
+    """
+    stripped = template.strip()
+    if VARIABLE_RE.fullmatch(stripped) or not stripped.startswith(("{", "[")):
+        return interpolate(template, context)
+    pieces: list[str] = []
+    in_string = escaped = False
+    cursor = 0
+    for match in VARIABLE_RE.finditer(template):
+        segment = template[cursor:match.start()]
+        for char in segment:
+            if escaped:
+                escaped = False
+            elif in_string and char == "\\":
+                escaped = True
+            elif char == '"':
+                in_string = not in_string
+        pieces.append(segment)
+        value = _lookup(match.group(1), context)
+        if in_string:
+            pieces.append(json.dumps(as_text(value), ensure_ascii=False)[1:-1])
+        else:
+            pieces.append(json.dumps(value, ensure_ascii=False, default=str))
+        cursor = match.end()
+    pieces.append(template[cursor:])
+    return "".join(pieces)

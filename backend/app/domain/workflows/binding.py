@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import Any
 
 from app.domain.workflows import NESTED_BODY_RAW_KEYS, NESTED_BODY_TYPES, interpolate
+from app.domain.workflows.graph_rules import interpolate_json_text
 
 # 内嵌子图的节点(循环体、subgraph)的 body/output/condition 引用的是**子作用域 / 子图内部节点**
 # ({{loop.*}}、{{input.*}}、{{body_node.x}}),绝不能在外层作用域解析——它们要留到执行器里对
@@ -74,10 +75,18 @@ def check_number_fields(node_type: str, config: dict[str, Any]) -> dict[str, Any
 def interpolate_node_config(
     node_type: str, config: dict[str, Any], context: dict[str, dict[str, Any]]
 ) -> dict[str, Any]:
-    """按节点类型插值 config:内嵌子图节点(循环体 / subgraph)的 body/output/condition 保留原文,其余全量插值。"""
-    if node_type in NESTED_BODY_TYPES:
-        raw = {key: config.pop(key, None) for key in NESTED_BODY_RAW_KEYS if key in config}
-        config = interpolate(config, context)
-        config.update(raw)
-        return config
-    return interpolate(config, context)
+    """按节点类型插值 config:内嵌子图节点(循环体 / subgraph)的 body/output/condition 保留原文;
+    声明了 `"interpolate": "json"` 的字段按 JSON 的规矩插值(见 interpolate_json_text);其余全量插值。"""
+    from app.domain.workflows import NODE_TYPES
+
+    specs = (NODE_TYPES.get(node_type) or {}).get("config") or {}
+    as_json = {
+        key: config.pop(key)
+        for key, spec in specs.items()
+        if isinstance(spec, dict) and spec.get("interpolate") == "json" and isinstance(config.get(key), str)
+    }
+    raw = {key: config.pop(key, None) for key in NESTED_BODY_RAW_KEYS if key in config} if node_type in NESTED_BODY_TYPES else {}
+    config = interpolate(config, context)
+    config.update(raw)
+    config.update({key: interpolate_json_text(value, context) for key, value in as_json.items()})
+    return config

@@ -153,6 +153,7 @@ _FIELD_LABELS = {
     "exact": "wfField_exact",
     "expression": "wfField_expression",
     "file_path": "wfField_file_path",
+    "fail_on_error": "wfField_fail_on_error",
     "find": "wfField_find",
     "fps": "wfField_fps",
     "frequency_penalty": "wfField_frequency_penalty",
@@ -892,7 +893,17 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
             "method": {"type": "string", "description": "wfNode_http_request_method", "options": ["GET", "POST", "PUT", "DELETE"]},
             "url": {"type": "template", "required": True},
             "headers": {"type": "object"},
-            "body": {"type": "template", "description": "wfNode_http_request_body"},
+            #: `"interpolate": "json"`:请求体是一段 JSON 时,引用按 JSON 的规矩填进去 —— 引号里的
+            #: 转义成字符串内容,引号外的写成 JSON 字面量(见 graph_rules.interpolate_json_text)。
+            #: 此前原样拼接,一段带引号或换行的 LLM 回答就把请求体弄成了坏的 JSON。
+            "body": {"type": "template", "interpolate": "json", "description": "wfNode_http_request_body"},
+            "fail_on_error": {
+                "advanced": True,
+                "type": "string",
+                "default": "yes",
+                "options": ["yes", "no"],
+                "description": "wfNode_http_request_fail_on_error",
+            },
         },
         "outputs": ["status", "text", "json"],
     },

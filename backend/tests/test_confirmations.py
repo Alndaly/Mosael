@@ -476,7 +476,8 @@ def test_http_request_confirmation_goes_through_the_shared_node_implementation(m
     assert approved["status"] == "executed", approved.get("error")
     assert approved["result"] == {"status": 201, "text": '{"ok":true}', "json": {"ok": True}}
     assert seen["method"] == "POST"
-    assert seen["headers"] == {"X-Token": "t"}
+    # 请求体是 JSON、没给 Content-Type:共用的 run_http 替它带上(和工作流节点同一份实现)。
+    assert seen["headers"] == {"X-Token": "t", "Content-Type": "application/json"}
     assert seen["content"] == b'{"hi":1}'
 
 

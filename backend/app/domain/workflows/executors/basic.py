@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.domain.workflows import WorkflowDomainError, as_text
 from app.domain.workflows.executors.registry import RunScope, register
-from app.domain.workflows.executors.common import wait_until
+from app.domain.workflows.executors.common import truthy, wait_until
 
 HTTP_NODE_TIMEOUT_SECONDS = 60
 HTTP_TEXT_CAP = 100_000
@@ -93,9 +93,15 @@ def condition(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str,
 
 def run_http(*, method: str, url: str, headers: dict[str, str], body: str) -> dict[str, Any]:
     """一次外部 HTTP 调用。**工作流节点与智能体工具共用这一个实现** —— 同一个能力在两个界面
-    上应当是同一段代码,否则超时、截断上限这些约定迟早在一边被改、另一边不知道。"""
+    上应当是同一段代码,否则超时、截断上限这些约定迟早在一边被改、另一边不知道。
+
+    请求体是一段 JSON、调用方又没说 Content-Type 时,带上 `application/json`:此前不带,
+    多数 API 把它当表单或纯文本,回一个看不出原因的 400/415。
+    """
     verb = (method or "GET").upper()
     content = None if not body or verb == "GET" else body.encode()
+    if content is not None and not any(key.lower() == "content-type" for key in headers) and _is_json(body):
+        headers = {**headers, "Content-Type": "application/json"}
     response = httpx.request(verb, url, headers=headers, content=content, timeout=HTTP_NODE_TIMEOUT_SECONDS)
     try:
         parsed: Any = response.json()
@@ -104,14 +110,38 @@ def run_http(*, method: str, url: str, headers: dict[str, str], body: str) -> di
     return {"status": response.status_code, "text": response.text[:HTTP_TEXT_CAP], "json": parsed}
 
 
+def _is_json(text: str) -> bool:
+    stripped = text.strip()
+    if not stripped.startswith(("{", "[")):
+        return False
+    try:
+        json.loads(stripped)
+    except ValueError:
+        return False
+    return True
+
+
 @register("http_request")
 def http_request(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
-    return run_http(
+    """**非 2xx 算失败**(高级选项 fail_on_error 可以关掉)。
+
+    此前 404、500 都是"成功":下游拿着一段错误页当数据往下跑,失败出现在隔了几个节点、看不出
+    原因的地方。要自己按状态码分支的,把 fail_on_error 设成 no,读 `status`。
+    """
+    result = run_http(
         method=str(config.get("method") or "GET"),
         url=str(config.get("url", "")),
         headers={str(k): str(v) for k, v in dict(config.get("headers") or {}).items()},
         body=as_text(config.get("body")),
     )
+    fail_on_error = str(config.get("fail_on_error") or "").strip()
+    if not 200 <= result["status"] < 300 and (truthy(fail_on_error) if fail_on_error else True):
+        raise WorkflowDomainError(
+            "wfErr_httpStatus",
+            params={"status": result["status"], "reason": result["text"][:200]},
+            details={"status": result["status"], "text": result["text"][:2000]},
+        )
+    return {"status": result["status"], "text": result["text"], "json": result["json"]}
 
 
 def run_python(code_text: str, inputs: dict[str, Any]) -> dict[str, Any]:
