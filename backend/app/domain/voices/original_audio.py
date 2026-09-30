@@ -21,8 +21,11 @@ class OriginalAudioError(LocalizedError, RuntimeError):
     """用户要求的原声处理方式无法如实执行。带文案 key(`dubErr_*`),按读的人的语言翻。"""
 
 
-def ensure_original_audio_mode(mode: str) -> None:
-    """在排配音任务前验证选择，避免做完配音才发现分离能力不存在。"""
+def ensure_original_audio_mode(mode: str, *, owner_user_id: str | None) -> None:
+    """在排配音任务前验证选择，避免做完配音才发现分离能力不存在。
+
+    `owner_user_id` 是这次配音替谁做的:分离用**他的**默认提供方(他定过的插件连接也算)。此前这里传 None ——
+    没有人就没有插件,定了分离插件的人在这一步被说成「没有分离能力」,而检查页说他齐了。"""
     if mode not in ORIGINAL_AUDIO_MODES:
         raise OriginalAudioError("dubErr_originalAudioMode", modes=" / ".join(ORIGINAL_AUDIO_MODES))
     if mode == "separate":
@@ -30,9 +33,8 @@ def ensure_original_audio_mode(mode: str) -> None:
 
         from app.core.db import SessionLocal
 
-        #: 配音收尾不认得是谁在做:按默认挑(内置的分离引擎),不借用谁的插件连接。
         with SessionLocal() as db:
-            if not available(db, None):
+            if not available(db, owner_user_id):
                 raise OriginalAudioError("dubErr_separationUnavailableForMode")
 
 
@@ -67,7 +69,7 @@ def apply_original_audio(db: Session, sequence_id: str, dub_track_id: str, mode:
     """
     from app.domain.sequences.operations import SetTrackState, set_track_state
 
-    ensure_original_audio_mode(mode)
+    ensure_original_audio_mode(mode, owner_user_id=actor_id)
     if mode == "keep":
         return "keep"
     if mode == "separate":
@@ -117,7 +119,7 @@ def _split_voice_from_music(db: Session, sequence_id: str, dub_track_id: str, *,
     from app.domain.assets.separation import available, separate_asset
     from app.domain.sequences.operations import DetachClipAudio, detach_clip_audio
 
-    if not available(db, None):
+    if not available(db, actor_id):
         raise OriginalAudioError("dubErr_separationUnavailable")
     sequence = db.get(Sequence, sequence_id)
     if sequence is None:
@@ -135,7 +137,7 @@ def _split_voice_from_music(db: Session, sequence_id: str, dub_track_id: str, *,
         if asset is None or asset.kind not in ("audio", "video"):
             continue
         try:
-            backgrounds[asset_id] = separate_asset(db, asset, engine="").background.id
+            backgrounds[asset_id] = separate_asset(db, asset, engine="", owner_user_id=actor_id).background.id
         except SeparationError as exc:
             # 分离那边的原因原样作参数(它若带 key,渲染时按读的人的语言翻)。
             raise OriginalAudioError("dubErr_removeVoiceFailed", detail=exc) from exc

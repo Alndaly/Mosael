@@ -120,7 +120,7 @@ def start_subtitle_dub(
     """给这些字幕条排一次配音。`synthesis` 原样转交 voices.start_synthesis(音色/引擎那一套);
     `original_audio` 是配好之后原声怎么办(见 voices/original_audio)。"""
     try:
-        ensure_original_audio_mode(original_audio)
+        ensure_original_audio_mode(original_audio, owner_user_id=created_by)
     except OriginalAudioError as exc:
         # 传 key 和参数而不是 str(exc):后者会把句子冻成此刻的语言。
         raise DubError(exc.key, **exc.params) from exc

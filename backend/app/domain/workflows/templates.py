@@ -14,6 +14,7 @@ from app.domain.workflows.template_requirements import (
     CHAT_MODEL,
     CLONED_VOICE,
     CheckStatus,
+    DIGITAL_HUMAN_VOICE,
     MULTI_REFERENCE_IMAGE_MODEL,
     REFERENCE_IMAGE_MODEL,
     REFERENCE_VIDEO_MODEL,
@@ -204,11 +205,12 @@ TEMPLATE_CATALOG: list[dict[str, Any]] = [
                 zh="翻译：AI 对话模型（节点上可换成 Google 翻译）",
                 en="Translation: a chat model (switchable to Google Translate on the node)",
             ),
-            #: 克隆音色和引擎自带音色都算数 —— 后一种要逐个引擎去问,这里不查,交给节点上的音色格。
+            #: 配音节点的引擎写的是本机克隆(builtin:clone),所以查的是「有克隆音色、克隆引擎跑得起来」。
+            #: 换成别的引擎的现成音色也行 —— 那要逐个引擎去问,这里不查,句子里说清楚。
             requirement(
-                None,
-                zh="一把嗓子：配音库的克隆音色，或某个引擎的现成音色",
-                en="A voice: a cloned voice, or a built-in voice from any engine",
+                CLONED_VOICE,
+                zh="一把嗓子：配音库的克隆音色（节点上也可换成某个引擎的现成音色）",
+                en="A voice: a cloned voice (switchable on the node to a built-in voice from any engine)",
             ),
             requirement(SEPARATION_ENGINE, zh="人声分离引擎（需提前安装）", en="A voice separation engine installed in advance"),
             requirement(None, zh="有人说话的视频素材", en="A video with speech"),
@@ -242,7 +244,9 @@ TEMPLATE_CATALOG: list[dict[str, Any]] = [
         "requires": [
             requirement(TRANSCRIPTION_ENGINE, zh="可用的转写引擎", en="Available transcription engine"),
             requirement(CHAT_MODEL, zh="翻译:AI 对话模型", en="Translation: a chat model"),
-            requirement(None, zh="一把嗓子:配音库的克隆音色,或某个引擎的现成音色", en="A voice: a cloned voice, or a built-in voice from any engine"),
+            #: 配音要交给改口型:克隆音色得声明过是谁的(ADR 0028 §5)。
+            requirement(DIGITAL_HUMAN_VOICE, zh="一把嗓子:声明过是谁的克隆音色(节点上也可换成某个引擎的现成音色)",
+                        en="A voice: a cloned voice with a consent declaration (switchable on the node to a built-in voice)"),
             requirement(SEPARATION_ENGINE, zh="人声分离引擎(需提前安装)", en="A voice separation engine installed in advance"),
             requirement(LIPSYNC_VIDEO_MODEL, zh="会改口型的视频模型(比如百炼 videoretalk)", en="A lip-sync video model (for example Bailian videoretalk)"),
             requirement(None, zh="单人、正脸清楚的说话视频", en="A video of one person speaking, face clearly visible"),
@@ -277,8 +281,10 @@ def built_in_template_graph(
         return localised_names(locale, transcript_video_cleanup_graph(chat=chat))
     if template_id in (TRANSLATED_DUB, TRANSLATED_DUB_LIPSYNC):
         # 音色和整片生成那条一样按工作区取:克隆音色存在工作区名下,不跟人走。
+        # 改口型那一版的配音要交给数字人:只预填声明过是谁的克隆音色。
+        lipsync = template_id == TRANSLATED_DUB_LIPSYNC
         return localised_names(locale, translated_dub_graph(
-            chat=chat, voice_id=_first_voice_id(db, workspace_id), lipsync=template_id == TRANSLATED_DUB_LIPSYNC))
+            chat=chat, voice_id=_first_voice_id(db, workspace_id, digital_human=lipsync), lipsync=lipsync))
     if template_id == HIGHLIGHT_SHORTS:
         # 不生成画面,所以只要对话模型;转写引擎由节点自己挑。
         return localised_names(locale, highlight_shorts_graph(chat=chat))
@@ -303,7 +309,8 @@ def built_in_template_graph(
         ))
     if template_id == TALKING_SCRIPT_VIDEO:
         # 音色按工作区取(克隆音色存在工作区名下);说话照片模型不在图里写死,节点按描述符挑会的那一个。
-        return localised_names(locale, talking_script_video_graph(voice_id=_first_voice_id(db, workspace_id)))
+        return localised_names(locale, talking_script_video_graph(
+            voice_id=_first_voice_id(db, workspace_id, digital_human=True)))
     if template_id == FOOTAGE_MONTAGE:
         # 不生成画面,所以只要对话模型;音色按工作区取,没有就只出字幕(图里由条件挡掉旁白那两步)。
         return localised_names(locale, footage_montage_graph(chat=chat, voice_id=_first_voice_id(db, workspace_id)))
@@ -332,18 +339,30 @@ def localised_names(locale: str | None, graph: dict[str, Any]) -> dict[str, Any]
     return graph
 
 
-def _first_voice_id(db: Session, workspace_id: str) -> str:
+def _first_voice_id(db: Session, workspace_id: str, *, digital_human: bool = False) -> str:
     """工作区里第一个可用音色,没有就空串。
 
     模板不可能替用户猜一个音色,而语音节点的音色是必填的。有就预填、
     没有就留空并整段跳过 —— 得到的是一部默片,而不是一个跑到第一镜就失败的工作流。
+
+    `digital_human`:这把嗓子要交给数字人(改口型、说话照片)—— 只挑声明过是谁的(ADR 0028 §5)。
+    此前照样预填最早那一把,未声明的克隆音色一进数字人那一步就被拒,而配音的钱已经花了。
     """
+    from app.domain.voices.consent import UNDECLARED
+
     if not workspace_id:
         return ""
-    voice = db.scalars(
-        select(Voice).where(Voice.workspace_id == workspace_id).order_by(Voice.created_at)
-    ).first()
+    query = select(Voice).where(Voice.workspace_id == workspace_id)
+    if digital_human:
+        query = query.where(Voice.consent_kind != UNDECLARED)
+    voice = db.scalars(query.order_by(Voice.created_at)).first()
     return voice.id if voice else ""
+
+
+def _probed(status: tuple[bool, bool]) -> CheckStatus:
+    """(跑得起来吗, 测过了吗) → 状态。没测过就是「还不知道」,不拿未知冒充结论。"""
+    ready, known = status
+    return "met" if ready else ("missing" if known else "unknown")
 
 
 def _engines_status(runtime_status, engines: list[str]) -> CheckStatus:
@@ -360,41 +379,65 @@ def _engines_status(runtime_status, engines: list[str]) -> CheckStatus:
     return "missing" if known_all else "unknown"
 
 
+def _provider_status(db: Session, user_id: str, capability: Any, runtime_status) -> CheckStatus:
+    """这项能力(转写、人声分离)**真跑的时候**用得上吗 —— 和 capabilities.choose 同一个先后,只是不起探测:
+
+    - 他定过默认:就看那一家(插件要配好;本机引擎看探测结果);
+    - 没定:允许自动用的本机引擎;插件只在这项能力许自动(`auto_single`)且只配好一家时才会被用上。
+
+    此前只要有一家插件配好就说齐 —— 而转写、分离都不许自动用插件(声音交给云端必须是他定过的),真跑时照样没得用。
+    """
+    from app.domain import capabilities
+
+    plugins = capabilities.plugin_providers(db, user_id, capability)
+    chosen = capabilities.default_id(db, user_id, capability)
+    plugin = next((one for one in plugins if one.id == chosen), None)
+    if plugin is not None:
+        return "met" if not plugin.missing and plugin.tool else "missing"
+    builtin_ids = {one.id for one in capability.builtins}
+    engines = [chosen] if chosen in builtin_ids else [one.id for one in capability.builtins if one.automatic]
+    status = _engines_status(runtime_status, [engine.removeprefix("builtin:") for engine in engines])
+    if status != "met" and chosen not in builtin_ids and capability.auto_single:
+        if len([one for one in plugins if not one.missing]) == 1:
+            return "met"
+    return status
+
+
+def _cloned_voice_status(db: Session, workspace_id: str, *, digital_human: bool) -> CheckStatus:
+    """模板里配音节点写的是本机克隆引擎:要有一把克隆音色,**而且克隆引擎跑得起来**(此前只看有没有音色行)。
+    数字人用的那把还要声明过是谁的。"""
+    from app.ai.runtime import config as tts_config
+    from app.ai.runtime import tts_models
+
+    if not _first_voice_id(db, workspace_id, digital_human=digital_human):
+        return "missing"
+    return _probed(tts_models.runtime_status(tts_config.get().engine))
+
+
 def requirement_statuses(db: Session, *, user_id: str, workspace_id: str) -> dict[str, CheckStatus]:
     """模板前置条件里**能自动查的那几样**,对这个人、这个工作区各是什么状态。
 
-    判据和「用这个模板建一张图」时挑模型的是**同一套**(`_pick` / `_reference_image_model` /
-    `_shot_video_model` / `_first_voice_id`):这里说齐了,建出来的图上那一格就是填好的;
-    这里说缺,那一格就是空的。两处各写一份判据的话,迟早一处说齐、一处留空。
+    判据和「用这个模板建一张图」时挑模型的是**同一套**(`_chat_model` / `_reference_image_model` /
+    `_shot_video_model` / `_first_voice_id`),引擎和运行时挑提供方同一个先后(`_provider_status`):
+    这里说齐了,建出来的图上那一格就是填好的、跑起来用得上;这里说缺,那一格就是空的。两处各写一份判据的话,
+    迟早一处说齐、一处留空。
     """
     from app.ai.runtime import asr_models, separation_models
     from app.domain import audio_capabilities
     from app.domain.voices import transcription
     from app.domain.workflows.executors.talking import SPEECH_TO_VIDEO, VIDEO_LIPSYNC, talking_models
 
-    has_chat = bool(_chat_model(db, user_id).model)
     statuses: dict[str, CheckStatus] = {
-        CHAT_MODEL: "met" if has_chat else "missing",
+        CHAT_MODEL: "met" if _chat_model(db, user_id).model else "missing",
         REFERENCE_IMAGE_MODEL: "met" if _reference_image_model(db, user_id, needed=SINGLE_REFERENCE).model else "missing",
         MULTI_REFERENCE_IMAGE_MODEL: "met" if _reference_image_model(db, user_id, needed=REFERENCE_IMAGES_NEEDED).model
         else "missing",
         REFERENCE_VIDEO_MODEL: "met" if _shot_video_model(db, user_id).model else "missing",
-        CLONED_VOICE: "met" if _first_voice_id(db, workspace_id) else "missing",
-        TRANSCRIPTION_ENGINE: _plugin_or(db, user_id, transcription.CAPABILITY)
-        or _engines_status(asr_models.runtime_status, list(transcription.LOCAL_ENGINES)),
-        SEPARATION_ENGINE: _plugin_or(db, user_id, audio_capabilities.SEPARATION)
-        or _engines_status(separation_models.runtime_status, list(separation_models.ENGINES)),
+        CLONED_VOICE: _cloned_voice_status(db, workspace_id, digital_human=False),
+        DIGITAL_HUMAN_VOICE: _cloned_voice_status(db, workspace_id, digital_human=True),
+        TRANSCRIPTION_ENGINE: _provider_status(db, user_id, transcription.CAPABILITY, asr_models.runtime_status),
+        SEPARATION_ENGINE: _provider_status(db, user_id, audio_capabilities.SEPARATION, separation_models.runtime_status),
         SPEECH_VIDEO_MODEL: "met" if talking_models(db, SPEECH_TO_VIDEO, user_id) else "missing",
         LIPSYNC_VIDEO_MODEL: "met" if talking_models(db, VIDEO_LIPSYNC, user_id) else "missing",
     }
     return statuses
-
-
-def _plugin_or(db: Session, user_id: str, capability: Any) -> CheckStatus | None:
-    """这项能力有一家配好了的插件连接就算齐了(ADR 0032:插件和本机引擎并列);没有回 None,再去看本机引擎。"""
-    from app.domain import capabilities
-
-    ready = any(not one.missing for one in capabilities.plugin_providers(db, user_id, capability))
-    return "met" if ready else None
-
-

@@ -268,7 +268,9 @@ def providers(db: Session, owner_user_id: str | None, capability: Capability) ->
     return _builtins(db, owner_user_id, capability) + plugin_providers(db, owner_user_id, capability)
 
 
-def _default_id(db: Session, owner_user_id: str | None, capability: Capability) -> str | None:
+def default_id(db: Session, owner_user_id: str | None, capability: Capability) -> str | None:
+    """他在这项能力上定的那一家(提供方 id);没定过是 None。**不起任何探测** —— 模板前置检查按它推
+    「真跑的时候 choose 会用哪一家」,不能为了列一张状态表去起子进程。"""
     from app.domain.plugins import capability_defaults
 
     return capability_defaults.default_of(db, owner_user_id, capability.name) if owner_user_id else None
@@ -287,7 +289,7 @@ def _automatic(capability: Capability, candidates: list[Provider]) -> Provider |
 def choices(db: Session, owner_user_id: str, capability: Capability) -> dict[str, Any]:
     """设置页那一格要画的:候选(配没配好、缺什么)、他定的那家、不定时实际会用哪家。"""
     candidates = providers(db, owner_user_id, capability)
-    chosen = _default_id(db, owner_user_id, capability)
+    chosen = default_id(db, owner_user_id, capability)
     if chosen not in {one.id for one in candidates}:
         chosen = None
     automatic = _automatic(capability, candidates)
@@ -321,7 +323,7 @@ def choose(db: Session, owner_user_id: str | None, capability: Capability, **sub
     """挑出这一次用哪一家;挑不出来时抛 `capability.error`,消息说清下一步。`subject` 进文案(比如素材名)。"""
     sep = tr("punct_listSep")
     candidates = providers(db, owner_user_id, capability)
-    chosen_id = _default_id(db, owner_user_id, capability)
+    chosen_id = default_id(db, owner_user_id, capability)
     chosen = next((one for one in candidates if one.id == chosen_id), None)
     if chosen is None:
         chosen = _automatic(capability, candidates)
@@ -394,6 +396,7 @@ __all__ = [
     "uses_of",
     "vocabulary",
     "choose",
+    "default_id",
     "get",
     "pick",
     "plugin_providers",

@@ -115,14 +115,14 @@
       "zh": [
         "可用的转写引擎",
         "翻译：AI 对话模型（节点上可换成 Google 翻译）",
-        "一把嗓子：配音库的克隆音色，或某个引擎的现成音色",
+        "一把嗓子：配音库的克隆音色（节点上也可换成某个引擎的现成音色）",
         "人声分离引擎（需提前安装）",
         "有人说话的视频素材"
       ],
       "en": [
         "Available transcription engine",
         "Translation: a chat model (switchable to Google Translate on the node)",
-        "A voice: a cloned voice, or a built-in voice from any engine",
+        "A voice: a cloned voice (switchable on the node to a built-in voice from any engine)",
         "A voice separation engine installed in advance",
         "A video with speech"
       ]
@@ -167,7 +167,7 @@
       "zh": [
         "可用的转写引擎",
         "翻译:AI 对话模型",
-        "一把嗓子:配音库的克隆音色,或某个引擎的现成音色",
+        "一把嗓子:声明过是谁的克隆音色(节点上也可换成某个引擎的现成音色)",
         "人声分离引擎(需提前安装)",
         "会改口型的视频模型(比如百炼 videoretalk)",
         "单人、正脸清楚的说话视频"
@@ -175,7 +175,7 @@
       "en": [
         "Available transcription engine",
         "Translation: a chat model",
-        "A voice: a cloned voice, or a built-in voice from any engine",
+        "A voice: a cloned voice with a consent declaration (switchable on the node to a built-in voice)",
         "A voice separation engine installed in advance",
         "A lip-sync video model (for example Bailian videoretalk)",
         "A video of one person speaking, face clearly visible"

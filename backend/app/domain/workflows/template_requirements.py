@@ -25,7 +25,10 @@ REFERENCE_IMAGE_MODEL = "reference_image_model"
 #: 能同时带一组参考图出图的图像模型(整片生成的关键帧:白模帧 + 三视图 + 设定图,见 templates_models)。
 MULTI_REFERENCE_IMAGE_MODEL = "multi_reference_image_model"
 REFERENCE_VIDEO_MODEL = "reference_video_model"
+#: 一把克隆音色,而且本机克隆引擎跑得起来(模板里配音节点的引擎写的是 builtin:clone)。
 CLONED_VOICE = "cloned_voice"
+#: 同上,而且这把嗓子声明过是谁的(数字人用,ADR 0028 §5:未声明的克隆音色不能拿去让一张脸说话)。
+DIGITAL_HUMAN_VOICE = "digital_human_voice"
 TRANSCRIPTION_ENGINE = "transcription_engine"
 SEPARATION_ENGINE = "separation_engine"
 #: 会「说话照片」的视频模型(描述符的 modes 里有 speech-to-video,ADR 0028)。
@@ -39,6 +42,7 @@ CHECKS: tuple[str, ...] = (
     MULTI_REFERENCE_IMAGE_MODEL,
     REFERENCE_VIDEO_MODEL,
     CLONED_VOICE,
+    DIGITAL_HUMAN_VOICE,
     TRANSCRIPTION_ENGINE,
     SEPARATION_ENGINE,
     SPEECH_VIDEO_MODEL,
