@@ -92,21 +92,43 @@ def catalog_files() -> dict[str, str]:
     return files
 
 
+#: 这个目录里由本脚本生成的那几种文件。别的(将来手放的说明、图片)不归它管,不查也不删。
+GENERATED = "*.mosael-workflow.json"
+
+
+def orphans(out: Path, files: dict[str, str]) -> list[str]:
+    """目录里有、这一次却不再生成的下载文件 —— 删掉或改名的模板留下的。它们照样能从官网被下载、被导入。"""
+    return sorted(path.name for path in out.glob(GENERATED) if path.name not in files)
+
+
+def sync(out: Path, files: dict[str, str], *, check: bool) -> None:
+    """把生成的那几份和目录对齐。`check`:只核对,对不上就报(内容过期、缺的、多出来的都算)。
+
+    此前 --check 只看「该有的在不在、对不对」,多出来的孤儿文件发现不了;写入模式也只覆盖不删 ——
+    删掉或改名一个模板,旧的那份下载会一直留在官网上。
+    """
+    orphaned = orphans(out, files) if out.is_dir() else []
+    if check:
+        stale = [name for name, text in files.items()
+                 if not (out / name).exists() or (out / name).read_text(encoding="utf-8") != text]
+        problems = ([f"need regeneration: {', '.join(stale)}"] if stale else []) + \
+            ([f"no longer generated: {', '.join(orphaned)}"] if orphaned else [])
+        if problems:
+            raise SystemExit("Website workflow downloads " + "; ".join(problems))
+        return
+    out.mkdir(parents=True, exist_ok=True)
+    for name, text in files.items():
+        (out / name).write_text(text, encoding="utf-8")
+    for name in orphaned:
+        (out / name).unlink()
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--check", action="store_true")
     args = parser.parse_args()
-    out = ROOT / "website" / "public" / "workflows"
     files = catalog_files()
-    if args.check:
-        stale = [name for name, text in files.items()
-                 if not (out / name).exists() or (out / name).read_text(encoding="utf-8") != text]
-        if stale:
-            raise SystemExit("Website workflow downloads need regeneration: " + ", ".join(stale))
-    else:
-        out.mkdir(parents=True, exist_ok=True)
-        for name, text in files.items():
-            (out / name).write_text(text, encoding="utf-8")
+    sync(ROOT / "website" / "public" / "workflows", files, check=args.check)
     print(f"Verified {len(files) - 1} workflow downloads and their catalog")
 
 
