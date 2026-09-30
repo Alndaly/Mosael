@@ -274,4 +274,30 @@ describe("节点表单", () => {
     const video = document.querySelector<HTMLElement>('[data-field-key="video"]')!;
     await waitFor(() => expect(within(video).getByRole("combobox").textContent).toContain("开场.mp4"));
   });
+
+  it("代码字段不给「接上游」的开关:上游的值会整段变成代码(接到 input 上才对)", () => {
+    const specs = {
+      expression: { type: "code", label: "脚本" },
+      title: { type: "template", label: "标题" },
+    } as unknown as Record<string, ConfigSpec>;
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <TooltipProvider>
+          <NodeConfigForm
+            fields={Object.entries(specs)}
+            config={{}}
+            workspaceId="w1"
+            variables={[]}
+            fieldOptions={{ dynamicOptions: () => null, whyEmpty: () => ({ kind: "none" }) } as never}
+            onSetConfig={vi.fn()}
+            onTypeConfig={vi.fn()}
+            binding={{ isBound: () => false, setBound: vi.fn(), renderBound: () => null }}
+          />
+        </TooltipProvider>
+      </QueryClientProvider>,
+    );
+    const field = (key: string) => document.querySelector<HTMLElement>(`[data-field-key="${key}"]`)!;
+    expect(within(field("expression")).queryByText("wfInputManual")).toBeNull();
+    expect(within(field("title")).getByText("wfInputManual")).toBeTruthy();
+  });
 });

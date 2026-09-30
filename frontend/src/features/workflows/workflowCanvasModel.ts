@@ -216,6 +216,8 @@ export function workflowIssueText(
       return t("wfIssueTypeMismatch")
         .replace("{expected}", workflowDataTypeName(t, issue.expected))
         .replace("{actual}", workflowDataTypeName(t, issue.actual));
+    case "code-template":
+      return t("wfIssueCodeTemplate");
     case "unknown-type":
       return unknownNodeTypeText(t, issue.nodeType, reasons);
     default:

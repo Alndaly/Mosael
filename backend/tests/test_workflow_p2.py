@@ -47,7 +47,7 @@ class TestGraphShape:
 class TestLoopBodyScope:
     def _body(self, template: str) -> dict:
         return {
-            "nodes": [{"id": "n1", "type": "code", "config": {"code": template}}],
+            "nodes": [{"id": "n1", "type": "template", "config": {"template": template}}],
             "edges": [],
         }
 
@@ -60,8 +60,8 @@ class TestLoopBodyScope:
     def test_loop_and_sibling_references_are_allowed(self) -> None:
         body = {
             "nodes": [
-                {"id": "n1", "type": "code", "config": {"code": "x = '{{loop.item}}'"}},
-                {"id": "n2", "type": "code", "config": {"code": "y = '{{n1.output}}'"}},
+                {"id": "n1", "type": "template", "config": {"template": "x = '{{loop.item}}'"}},
+                {"id": "n2", "type": "template", "config": {"template": "y = '{{n1.text}}'"}},
             ],
             "edges": [{"source": "n1", "target": "n2"}],
         }
@@ -78,7 +78,7 @@ def test_foreach_is_capped_like_while() -> None:
     assert LOOP_FOREACH_HARD_CAP == 1000
 
 
-@pytest.mark.parametrize("value", ["{{loop.item}}", "{{n1.output}}", "no templates here"])
+@pytest.mark.parametrize("value", ["{{loop.item}}", "{{n1.text}}", "no templates here"])
 def test_body_validation_accepts_ordinary_templates(value: str) -> None:
-    body = {"nodes": [{"id": "n1", "type": "code", "config": {"code": value}}], "edges": []}
+    body = {"nodes": [{"id": "n1", "type": "template", "config": {"template": value}}], "edges": []}
     assert all("循环外" not in e for e in validate_body_graph(body, "loop_foreach"))

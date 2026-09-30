@@ -87,6 +87,10 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfErr_pluginToolFailed": {"zh": "插件工具失败:{reason}", "en": "The plugin tool failed: {reason}"},
     "wfErr_tagUnknownMode": {"zh": "素材打标签:未知的模式 {mode}", "en": "Tag assets: unknown mode {mode}"},
     "wfErr_pluginNodeType": {"zh": "插件节点类型不合法:{type}", "en": "Invalid plugin node type: {type}"},
+    "wfErr_codeFieldBound": {
+        "zh": "节点 {node} 的代码字段 {field} 不能接上游:上游的值会整段变成代码。把它接到这个节点的 input,代码里读 input",
+        "en": "Node {node}: the code field {field} can't take an upstream value, which would become code wholesale. Wire it into this node's input and read it there",
+    },
     "wfErr_pluginNodeUnusable": {"zh": "节点 {node}:{reason}", "en": "Node {node}: {reason}"},
     "wfErr_pluginNodeUnknownReason": {
         "zh": "它来自插件「{plugin}」的工具 {tool},这里用不了(插件没装、没有可用的连接,或者没勾选这个工具)",

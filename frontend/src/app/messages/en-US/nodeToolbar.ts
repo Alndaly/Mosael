@@ -87,6 +87,7 @@ export const nodeToolbar = {
   wfEdgeFalse: "false",
   wfIssueProviderMissing: "Bound model provider no longer exists",
   wfIssueGenUnconfigured: "Chosen generation provider has no key",
+  wfIssueCodeTemplate: "{{…}} in code is not substituted: wire upstream values into this node's input and read them there",
   wfIssueTypeMismatch: "Type mismatch: expects {expected}, got {actual}",
   wfIssuePluginUnavailable: "Plugin node unavailable ({type}): the plugin that provides it isn't installed, is disabled, or no longer has this tool",
   wfIssuePluginUnusable: "Plugin node unavailable: {reason}",

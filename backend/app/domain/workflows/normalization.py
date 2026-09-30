@@ -121,7 +121,8 @@ def _canonicalize_graph(graph: dict[str, Any], node_types: dict[str, dict[str, A
         inner_scope = NESTED_BODY_RAW_KEYS if metadata.get("body_scope") else ()
         for input_key, value in config.items():
             spec = config_specs.get(input_key)
-            if not isinstance(spec, dict) or spec.get("type") in {"object", "graph"} or input_key in inner_scope:
+            #: 代码字段里的 {{…}} 不是引用(它不插值,见 graph_rules.code_fields),不变成数据边。
+            if not isinstance(spec, dict) or spec.get("type") in {"object", "graph", "code"} or input_key in inner_scope:
                 continue
             if not isinstance(value, str):
                 continue

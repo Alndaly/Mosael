@@ -386,7 +386,9 @@ export function NodeConfigForm({
           const declaredLabel = String((spec as { label?: unknown } | undefined)?.label ?? "").trim();
           // ComfyUI 式:非 object 字段都可切到"连接"(值从上游来,而不是手填)。上游是什么、怎么挑,
           // 由调用方的 binding 说 —— 工作流里是数据边。
-          const canConnect = Boolean(binding) && !isObject && !isAssetList && (binding?.canBind?.(key) ?? true);
+          //: 代码字段不接上游:上游的值会整段变成代码(后端校验同样拦),上游的值接到节点的 input。
+          const canConnect =
+            Boolean(binding) && !isObject && !isAssetList && spec?.type !== "code" && (binding?.canBind?.(key) ?? true);
           const connected = canConnect && Boolean(binding?.isBound(key));
           return (
             <div className={compact ? COMPACT_FIELD_BOX : FIELD_BOX} key={key} data-field-key={key}>

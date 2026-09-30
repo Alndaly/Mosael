@@ -24,6 +24,7 @@ export type IssueCode =
   | "provider-missing" // LLM 绑定的供应商配置已被删
   | "gen-provider-unconfigured" // AI 生成选的服务商下没有可用的生成模型
   | "type-mismatch" // 数据边:上游输出类型与目标输入期望类型不兼容(软提示)
+  | "code-template" // 代码字段里写了 {{…}}:代码不插值,那一段不会被替换(软提示)
   | "unknown-type"; // 节点类型不在目录里:提供它的插件没装 / 停用了 / 工具已不存在
 
 export interface NodeIssue {
@@ -144,6 +145,14 @@ export function bodyScope(registry: RegistryLike, nodeType: string): string[] {
 /** 这些字段属于内嵌图自己的作用域，父图不能拿自己的节点表去判定其中的引用。 */
 export function isNestedScopeConfig(registry: RegistryLike, nodeType: string, configKey: string): boolean {
   return bodyScope(registry, nodeType).length > 0 && NESTED_BODY_RAW_KEYS.has(configKey);
+}
+
+/**
+ * 这一格是不是代码(`"type": "code"`)。代码字段**不插值**(后端 graph_rules.code_fields):里面的 `{{…}}`
+ * 原样留在代码里,不是引用 —— 不算依赖、不查失效,也不能接上游(上游的值要接到节点的 input)。
+ */
+export function isCodeConfig(registry: RegistryLike, nodeType: string, configKey: string): boolean {
+  return (registry.get(nodeType)?.config?.[configKey] as ConfigSpecLike | undefined)?.type === "code";
 }
 
 /** 从任意配置值里抽出 `{{id.output}}` 引用,返回 [{ ref, sourceId }]。 */
@@ -291,6 +300,11 @@ function collect(
         for (const { ref, sourceId } of extractRefs(config[key])) {
           if (!innerNames.has(sourceId)) push("error", "stale-var", { configKey: key, ref });
         }
+        continue;
+      }
+      // 代码字段里的 {{…}} 不是引用:不查失效,只提醒一句它不会被替换(上游的值请接到 input)。
+      if (spec.type === "code") {
+        if (extractRefs(config[key]).length > 0) push("warn", "code-template", { configKey: key });
         continue;
       }
       for (const { ref, sourceId } of extractRefs(config[key])) {

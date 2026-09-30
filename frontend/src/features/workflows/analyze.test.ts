@@ -24,6 +24,7 @@ const registry: RegistryLike = {
       }
     > = {
       start: { config: { params: { type: "object" } } },
+      code: { config: { code: { type: "code", required: true }, input: { type: "object" } }, output_types: { output: "any" } },
       llm: {
         config: {
           prompt: { type: "template", required: true },
@@ -629,5 +630,41 @@ describe("节点类型不在目录里", () => {
   it("目录里有的节点不报", () => {
     const a = analyzeWorkflow(graph([{ id: "start", type: "start", config: {} }]), registry, fullCtx);
     expect(a.issues.filter((i) => i.code === "unknown-type")).toEqual([]);
+  });
+});
+
+describe("代码字段里的 {{…}} 不是引用", () => {
+  //: 代码不插值(后端 graph_rules.code_fields):那一段原样留在代码里。它不该被当成失效引用报错,
+  //: 也不该悄悄放过 —— 提醒一句它不会被替换、上游的值要接到 input。
+  it("提醒不会被替换,不报失效引用", () => {
+    const a = analyzeWorkflow(
+      graph(
+        [
+          { id: "start", type: "start", config: {} },
+          { id: "c1", type: "code", config: { code: "output = '{{gone.text}}'" } },
+        ],
+        [{ id: "e1", source: "start", target: "c1" }],
+      ),
+      registry,
+      fullCtx,
+    );
+    expect(a.issues).toContainEqual(expect.objectContaining({ nodeId: "c1", code: "code-template", severity: "warn", configKey: "code" }));
+    expect(a.issues.filter((i) => i.code === "stale-var")).toEqual([]);
+  });
+
+  it("入参里的引用照常查失效", () => {
+    const a = analyzeWorkflow(
+      graph(
+        [
+          { id: "start", type: "start", config: {} },
+          { id: "c1", type: "code", config: { code: "output = inputs['t']", input: { t: "{{gone.text}}" } } },
+        ],
+        [{ id: "e1", source: "start", target: "c1" }],
+      ),
+      registry,
+      fullCtx,
+    );
+    expect(a.issues).toContainEqual(expect.objectContaining({ nodeId: "c1", code: "stale-var", configKey: "input" }));
+    expect(a.issues.filter((i) => i.code === "code-template")).toEqual([]);
   });
 });

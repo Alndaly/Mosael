@@ -9,12 +9,33 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from app.core.i18n import tr
 from app.domain.workflows.field_activation import config_field_active
 from app.domain.workflows.node_types import (
     NODE_TYPES,
 )
 
 VARIABLE_RE = re.compile(r"\{\{\s*([\w.-]+)\s*\}\}")
+
+
+def code_fields(node_type: str, types: dict[str, dict[str, Any]] | None = None) -> set[str]:
+    """这种节点的哪几格是代码(`"type": "code"`)。
+
+    代码字段**不插值**(见 binding.interpolate_node_config):里面写的 `{{…}}` 原样留在代码里,不是引用 ——
+    不算依赖、不查作用域,也不能接数据边(上游的值整段变成代码,和把 {{}} 拼进去是同一个注入)。上游的值走
+    节点的入参(`input`)。
+    """
+    specs = ((types or NODE_TYPES).get(node_type) or {}).get("config") or {}
+    return {key for key, spec in specs.items() if isinstance(spec, dict) and spec.get("type") == "code"}
+
+
+def _referencing_config(node: dict[str, Any]) -> dict[str, Any]:
+    """这个节点在**这一层**会被插值的那些配置:去掉内嵌子图的 body/output/condition(内层作用域)和代码字段。"""
+    node_type = str(node.get("type") or "")
+    skipped = set(code_fields(node_type))
+    if node_type in NESTED_BODY_TYPES:
+        skipped |= set(NESTED_BODY_RAW_KEYS)
+    return {key: value for key, value in (node.get("config") or {}).items() if key not in skipped}
 
 
 def _plugin_types(db: Session) -> dict[str, dict[str, Any]]:
@@ -139,7 +160,6 @@ def validate_graph(
 
     def _unknown_type_error(node_type: str, node_id: str) -> str:
         # 插件节点在别人机器上会缺:说清楚是"缺哪个插件"、为什么用不了,而不是一句让人无从下手的"未知类型"。
-        from app.core.i18n import tr
         from app.domain.plugins.nodes import parse_node_type
 
         parsed = parse_node_type(node_type)
@@ -174,6 +194,12 @@ def validate_graph(
                     if value in (None, "") and (node_id, key) not in data_bound:
                         errors.append(f"节点 {node_id} 缺少必填配置 {key}")
             errors.extend(_one_of_errors(node_id, node_config, node_specs, data_bound))
+            #: 代码字段不能接上游:上游的值整段变成代码,和把 {{}} 拼进去是同一个注入(见 code_fields)。
+            errors.extend(
+                tr("wfErr_codeFieldBound", node=node_id, field=key)
+                for key in sorted(code_fields(node_type, known_types))
+                if (node_id, key) in data_bound
+            )
             if node_type == "start":
                 errors.extend(_start_param_errors(node_id, node_config))
             #: **运行前的校验要下到内嵌子图里,而且是整份校验。** 体是这张图的一段,它的每一种错
@@ -244,11 +270,9 @@ def validate_graph(
 
 
 def _outer_references(node: dict[str, Any]) -> list[list[str]]:
-    """一个节点的配置里**在这一层解析**的引用(按点号拆开)。容器节点的体内字段不算 —— 它们属于体内作用域。"""
-    config = dict(node.get("config") or {})
-    if node.get("type") in NESTED_BODY_TYPES:
-        for key in NESTED_BODY_RAW_KEYS:
-            config.pop(key, None)
+    """一个节点的配置里**在这一层解析**的引用(按点号拆开)。容器节点的体内字段不算 —— 它们属于体内作用域;
+    代码字段也不算 —— 它不插值(见 code_fields)。"""
+    config = _referencing_config(node)
     return [match.group(1).strip().split(".") for match in VARIABLE_RE.finditer(json.dumps(config, ensure_ascii=False))]
 
 
@@ -409,11 +433,7 @@ def _unresolvable_body_refs(nodes: list[Any], node_type: str) -> list[str]:
     for node in nodes:
         if not isinstance(node, dict):
             continue
-        config = dict(node.get("config") or {})
-        if node.get("type") in NESTED_BODY_TYPES:
-            for key in NESTED_BODY_RAW_KEYS:
-                config.pop(key, None)
-        texts.append(json.dumps(config, ensure_ascii=False))
+        texts.append(json.dumps(_referencing_config(node), ensure_ascii=False))
     unknown, missing = _body_refs(texts, nodes, node_type)
     errors: list[str] = []
     if missing:
@@ -515,10 +535,7 @@ def reference_dependencies(graph: dict[str, Any]) -> dict[str, set[str]]:
     deps: dict[str, set[str]] = {}
     for node in nodes:
         node_id = str(node.get("id", ""))
-        config = dict(node.get("config") or {})
-        if node.get("type") in NESTED_BODY_TYPES:
-            for key in NESTED_BODY_RAW_KEYS:
-                config.pop(key, None)
+        config = _referencing_config(node)
         roots = {match.group(1).strip().split(".")[0] for match in VARIABLE_RE.finditer(json.dumps(config, ensure_ascii=False))}
         deps[node_id] = (roots & ids) - {node_id}
     return deps
