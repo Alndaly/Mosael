@@ -290,7 +290,7 @@ def test_translated_dub_notice_says_what_happened_to_the_original_audio() -> Non
     notice = next(node for node in graph["nodes"] if node["id"] == "done_notice")
     references = json.dumps(notice, ensure_ascii=False) + json.dumps(graph["edges"], ensure_ascii=False)
     assert "original_audio_note" in references
-    assert graph["meta"]["template_version"] == 2
+    assert graph["meta"]["template_version"] == 3
 
 
 def test_data_binding_normalization_is_lossless_and_idempotent() -> None:

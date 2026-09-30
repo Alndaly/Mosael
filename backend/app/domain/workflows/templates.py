@@ -195,8 +195,8 @@ TEMPLATE_CATALOG: list[dict[str, Any]] = [
             "en": "Translated dubbing with subtitles"
         },
         "summary": {
-            "zh": "把一段视频逐句转写、逐句翻译，按原时间码铺上译文字幕，再逐条配音并变速压回原段落长度。原声里的人声拆出去、背景音乐留着；开始前需装好人声分离引擎。",
-            "en": "Transcribe a video sentence by sentence, translate each line, lay translated subtitles on the original timecodes, then dub each line and time-compress it back into its own slot. The original voice is separated out and the background music kept; a voice separation engine must be ready before the workflow starts."
+            "zh": "把一段视频逐句转写、逐句翻译，按原时间码铺上译文字幕，再逐条配音并变速压回原段落长度。目标语言在「逐句翻译」一步上选（默认英文）。原声里的人声拆出去、背景音乐留着；开始前需装好人声分离引擎。",
+            "en": "Transcribe a video sentence by sentence, translate each line, lay translated subtitles on the original timecodes, then dub each line and time-compress it back into its own slot. Pick the target language on the translate step (English by default). The original voice is separated out and the background music kept; a voice separation engine must be ready before the workflow starts."
         },
         "requires": [
             requirement(TRANSCRIPTION_ENGINE, zh="可用的转写引擎", en="Available transcription engine"),
@@ -218,6 +218,7 @@ TEMPLATE_CATALOG: list[dict[str, Any]] = [
         "stages": {
             "zh": [
                 "选择视频",
+                "选择目标语言",
                 "生成带时间码逐字稿",
                 "逐句翻译",
                 "按原时间码铺译文字幕",
@@ -226,6 +227,7 @@ TEMPLATE_CATALOG: list[dict[str, Any]] = [
             ],
             "en": [
                 "Choose a video",
+                "Choose the target language",
                 "Transcribe with timecodes",
                 "Translate line by line",
                 "Lay subtitles on the original timecodes",
@@ -236,14 +238,15 @@ TEMPLATE_CATALOG: list[dict[str, Any]] = [
     },
     {
         "id": TRANSLATED_DUB_LIPSYNC,
-        "name": {"zh": "视频翻译 · 改口型", "en": "Translated dubbing with lip-sync"},
+        "name": {"zh": "视频译配 · 改口型", "en": "Translated dubbing with lip-sync"},
         "summary": {
-            "zh": "在「视频译配」的基础上,配完音再让原片里说话人的嘴对上译文配音:按两句之间的空当把原片切成模型收得下的块,有配音的块改口型,接回整段盖在原片上(原片不动,删掉那条轨就回到原样),导出成片带「AI 生成」标识。运行前在「让原片的嘴对上配音」上确认已取得本人授权。",
-            "en": "Everything in translated dubbing, then re-sync the speaker's lips to the translated dub: cut the source into chunks the model accepts at the gaps between lines, lip-sync the chunks with speech, and lay the joined result over the source (the source is untouched — delete that track to undo). The export carries an \"AI-generated\" label. Confirm the speaker's consent on the lip-sync step before running.",
+            "zh": "在「视频译配 · 字幕与配音」的基础上,配完音再让原片里说话人的嘴对上译文配音:按两句之间的空当把原片切成模型收得下的块,有配音的块改口型,接回整段放在最上面一条视频轨、盖住原片(删掉那条轨就回到改口型之前),导出成片带「AI 生成」标识。目标语言在「逐句翻译」一步上选(默认英文)。运行前在「让原片的嘴对上配音」上确认已取得本人授权。费用量级:改口型按原片时长计费(百炼 videoretalk 挂牌价约 0.08 元/秒,一分钟的片子约 5 元),另加翻译和逐句配音;失败重跑时已改好的块不再重买。",
+            "en": "Everything in translated dubbing with subtitles, then re-sync the speaker's lips to the translated dub: cut the source into chunks the model accepts at the gaps between lines, lip-sync the chunks with speech, and lay the joined result on the top video track over the source (delete that track to undo the lip-sync). The export carries an \"AI-generated\" label. Pick the target language on the translate step (English by default). Confirm the speaker's consent on the lip-sync step before running. Cost: lip-sync is billed by source length (Bailian videoretalk lists about 0.08 CNY per second, so roughly 5 CNY a minute), plus translation and per-line dubbing; a re-run doesn't pay again for chunks already done.",
         },
         "requires": [
             requirement(TRANSCRIPTION_ENGINE, zh="可用的转写引擎", en="Available transcription engine"),
-            requirement(CHAT_MODEL, zh="翻译:AI 对话模型", en="Translation: a chat model"),
+            requirement(CHAT_MODEL, zh="翻译:AI 对话模型(节点上可换成 Google 翻译)",
+                        en="Translation: a chat model (switchable to Google Translate on the node)"),
             #: 配音要交给改口型:克隆音色得声明过是谁的(ADR 0028 §5)。
             requirement(DIGITAL_HUMAN_VOICE, zh="一把嗓子:声明过是谁的克隆音色(节点上也可换成某个引擎的现成音色)",
                         en="A voice: a cloned voice with a consent declaration (switchable on the node to a built-in voice)"),
@@ -252,9 +255,10 @@ TEMPLATE_CATALOG: list[dict[str, Any]] = [
             requirement(None, zh="单人、正脸清楚的说话视频", en="A video of one person speaking, face clearly visible"),
         ],
         "stages": {
-            "zh": ["选择视频", "生成带时间码逐字稿", "逐句翻译", "按原时间码铺译文字幕", "逐条配音并压回原长度", "让原片的嘴对上配音", "导出成片"],
-            "en": ["Choose a video", "Transcribe with timecodes", "Translate line by line", "Lay subtitles on the original timecodes",
-                   "Dub and time-compress", "Re-sync the lips to the dub", "Export"],
+            "zh": ["选择视频", "选择目标语言", "生成带时间码逐字稿", "逐句翻译", "按原时间码铺译文字幕", "逐条配音并压回原长度",
+                   "让原片的嘴对上配音", "导出成片"],
+            "en": ["Choose a video", "Choose the target language", "Transcribe with timecodes", "Translate line by line",
+                   "Lay subtitles on the original timecodes", "Dub and time-compress", "Re-sync the lips to the dub", "Export"],
         },
     },
 ] + BUSINESS_TEMPLATE_CATALOG
@@ -278,13 +282,13 @@ def built_in_template_graph(
             db=db,
         ))
     if template_id == TRANSCRIPT_VIDEO_CLEANUP:
-        return localised_names(locale, transcript_video_cleanup_graph(chat=chat))
+        return localised_names(locale, transcript_video_cleanup_graph(chat=chat, locale=locale))
     if template_id in (TRANSLATED_DUB, TRANSLATED_DUB_LIPSYNC):
         # 音色和整片生成那条一样按工作区取:克隆音色存在工作区名下,不跟人走。
         # 改口型那一版的配音要交给数字人:只预填声明过是谁的克隆音色。
         lipsync = template_id == TRANSLATED_DUB_LIPSYNC
         return localised_names(locale, translated_dub_graph(
-            chat=chat, voice_id=_first_voice_id(db, workspace_id, digital_human=lipsync), lipsync=lipsync))
+            chat=chat, voice_id=_first_voice_id(db, workspace_id, digital_human=lipsync), lipsync=lipsync, locale=locale))
     if template_id == HIGHLIGHT_SHORTS:
         # 不生成画面,所以只要对话模型;转写引擎由节点自己挑。
         return localised_names(locale, highlight_shorts_graph(chat=chat))

@@ -237,7 +237,7 @@ class Test官方工作流:
             (edge["source"], edge["source_output"], edge["target_input"])
             for edge in graph["edges"]
             if edge.get("kind") == "data" and edge["target"] == "translate_lines"
-        } == {("verbatim_transcript", "segments", "texts")}
+        } == {("verbatim_transcript", "segments", "texts"), ("verbatim_transcript", "language", "source_lang")}
         #: 官方模板不把成败押在免费端点上 —— 这条链路本来就在用用户自己的供应商。
         assert nodes["translate_lines"]["config"]["engine"] == "builtin:chat"
 

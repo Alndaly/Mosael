@@ -310,6 +310,7 @@ _FIELD_LABELS = {
     "skipped_ranges": "wfField_skipped_ranges",
     "skipped_note": "wfField_skipped_note",
     "kept_text": "wfField_kept_text",
+    "source_lang": "wfField_source_lang",
     "max_seconds": "wfField_max_seconds",
 }
 
@@ -1059,6 +1060,8 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
                 "required": True,
                 "options": ["en", "zh-CN", "zh-TW", "ja", "ko", "fr", "de", "es", "ru"],
             },
+            #: 原文是什么语言(接转写节点的 language)。和目标语言相同时直接拒:译成同一种语言只是白花钱。空 = 不比。
+            "source_lang": {"advanced": True, "type": "template", "description": "wfNode_translate_lines_source_lang"},
             #: 翻译提供方(ADR 0032):Google 免费、对话模型、插件连接并列;空 = 按运行者的默认。
             "engine": {"type": "string", "description": "wfNode_translate_engine", "options_from": "providers.translation"},
             # 选了 ai 之后「用哪条连接」立刻变成要紧事,所以它不在高级里。
@@ -1208,8 +1211,10 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "external": False,
         "surfaces": ["workflow", "board"],
         "board_outputs": ["asset_id"],
-        #: 视频进视频出;画板上它首先是一个音频工具,格子按音频画。
-        "output_media": {"asset_id": "audio"},
+        #: 进什么出什么:视频进视频出(画面原样、只换声音),音频进音频出。此前声明成只出音频,
+        #: 而整理模板正是拿它的产出(一段视频)放上视频轨。两种都列上;画板上说不清是哪一种时按
+        #: board_group 画(它首先是一个音频工具,格子按音频画,见 boards.transforms.output_kinds)。
+        "output_media": {"asset_id": ["audio", "video"]},
         "board_group": "audio", "board_description": "wfNode_denoise_audio_board",
         "category": "wfCat_audio",
         "label": "wfNode_denoise_audio",

@@ -107,6 +107,26 @@ def language_label(code: str) -> str:
     return _LANG_NAMES.get(code, code)
 
 
+def same_language(source: str, target: str) -> bool:
+    """识别出的原文语言(转写给的,`zh`、`en`、`ja`……)和目标语言(`zh-CN`、`en`……)是不是同一种。
+
+    主语言相同就算同一种;中文另看简繁 —— 简体原文译成繁体(`zh` → `zh-TW`)是一次真的转换。
+    认不出原文语言(空串)就不算,不拦。
+    """
+    def norm(code: str) -> str:
+        return str(code or "").strip().lower().replace("_", "-")
+
+    def traditional(code: str) -> bool:
+        return any(tag in code.split("-") for tag in ("tw", "hk", "mo", "hant"))
+
+    src, dst = norm(source), norm(target)
+    if not src or not dst:
+        return False
+    if src.split("-")[0] != dst.split("-")[0]:
+        return False
+    return src.split("-")[0] != "zh" or traditional(src) == traditional(dst)
+
+
 def resolve_ai_chat_target(
     db, profile_id: str | None, user_id: str | None, model: str = "", *, surface: ChatSurface = "direct"
 ) -> ChatTarget:

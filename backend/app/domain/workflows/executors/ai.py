@@ -466,16 +466,21 @@ def translate_lines(db: Session, scope: RunScope, config: dict[str, Any]) -> dic
     **顺序即对齐**:第 i 条译文配第 i 段的时间码,所以空段落也要占住自己的位置 ——
     translate_many 对空串返回空串,不压缩列表。
     """
-    from app.domain.translate import translate_many
+    from app.domain.translate import language_label, same_language, translate_many
 
     texts = text_lines(config.get("texts"))
     if not texts:
         return {"texts": [], "count": 0}
+    target = str(config.get("target_lang") or "en")
+    #: 原文已经是目标语言:译配成同一种语言就是白花一遍翻译(和后面逐句配音)的钱 —— 花之前说。
+    #: 识别的语言不对时,把 source_lang 清空就不再比。
+    if same_language(str(config.get("source_lang") or ""), target):
+        raise WorkflowDomainError("wfErr_translateSameLanguage", params={"lang": language_label(target)})
     with workspace_scope(getattr(scope, "workspace_id", "") or ""):
         translated = translate_many(
             db,
             texts,
-            str(config.get("target_lang") or "en"),
+            target,
             user_id=current_actor(db),
             engine=str(config.get("engine") or ""),
             profile_id=str(config.get("profile_id") or "") or None,

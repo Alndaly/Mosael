@@ -1,4 +1,4 @@
-"""内置模板「视频翻译」的图(和带改口型的那一版):视频 → 逐字稿 → 逐句翻译 → 译文字幕 → 变速配音 →(改口型)→ 导出。
+"""内置模板「视频译配」的图(和带改口型的那一版):视频 → 逐字稿 → 逐句翻译 → 译文字幕 → 变速配音 →(改口型)→ 导出。
 
 由 templates.py 统一重新导出;调用方照旧从 templates 取。
 """
@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.core.i18n import pick_text
 from app.domain.workflows import NODE_TYPES
 from app.domain.workflows.normalization import normalize_graph
 from app.domain.workflows.templates_models import ModelChoice
@@ -17,10 +18,12 @@ TRANSLATED_DUB = "translated_dub"
 TRANSLATED_DUB_LIPSYNC = "translated_dub_lipsync"
 
 
-def translated_dub_graph(*, chat: ModelChoice | None = None, voice_id: str = "", lipsync: bool = False) -> dict[str, Any]:
+def translated_dub_graph(
+    *, chat: ModelChoice | None = None, voice_id: str = "", lipsync: bool = False, locale: str | None = None,
+) -> dict[str, Any]:
     """视频 → 逐字稿 → 逐句翻译 → 译文字幕 → 变速配音 →(改口型)→ 导出。
 
-    `lipsync`:「视频翻译 · 改口型」(ADR 0028 阶段 3)—— 配完音再让原片的嘴对上配音轨(`dub_lipsync`:按句间空当
+    `lipsync`:「视频译配 · 改口型」(ADR 0028 阶段 3)—— 配完音再让原片的嘴对上配音轨(`dub_lipsync`:按句间空当
     切块改口型,接回整段放到最上面一条新视频轨,原片不动),然后才导出。前面几步一模一样,所以是同一张图多一个节点,
     不另抄一份(抄出来的两份改一处就得改两处)。节点上的授权确认留空,由跑的人确认。
 
@@ -40,8 +43,13 @@ def translated_dub_graph(*, chat: ModelChoice | None = None, voice_id: str = "",
     (再快就像快进了),1.5 倍还念不完的先占用到下一句开始之前的空当(见 voices/subtitle_dub._speed_for)。
 
     `chat`:翻译用的对话连接与模型(建图时按这个人挑好,见 templates._chat_model);不给就留空,由用户在节点上选。
+    `locale`:图里给人看的默认值(新项目的名字、完成通知)在建图这一刻定语言,和节点名同一条。此前写死中文。
     """
     chat = chat or ModelChoice()
+
+    def text(zh: str, en: str) -> str:
+        return pick_text({"zh": zh, "en": en}, locale)
+
     nodes: list[dict[str, Any]] = [
         {
             "id": "start",
@@ -70,7 +78,7 @@ def translated_dub_graph(*, chat: ModelChoice | None = None, voice_id: str = "",
             "name": {"zh": "建立非破坏性配音副本", "en": "Create a non-destructive dubbing copy"},
             "position": {"x": 350, "y": 420},
             "config": {
-                "name": "{{source_video.name}} · 译配版",
+                "name": "{{source_video.name}} · " + text("译配版", "Dubbed"),
                 "width": "{{source_video.width}}",
                 "height": "{{source_video.height}}",
                 "fps": "{{source_video.fps}}",
@@ -104,7 +112,10 @@ def translated_dub_graph(*, chat: ModelChoice | None = None, voice_id: str = "",
             "config": {
                 # 直接收 segments:节点自己从每段里取 text,不需要模板层写 `{{loop.item.text}}`。
                 "texts": "{{verbatim_transcript.segments}}",
+                #: 默认英文;模板说明的步骤里写着「选目标语言」—— 在这个节点上选。
                 "target_lang": "en",
+                #: 识别出的原文语言:和目标语言一样时翻译节点直接拒(译配成同一种语言就是白花一遍翻译和配音的钱)。
+                "source_lang": "{{verbatim_transcript.language}}",
                 # **官方模板不走免费端点。** 它按出口 IP 封禁,而且是持续的 ——
                 # 真机上直接请求拿到的是 Google 的 "Sorry..." 拦截页,重试多少次都一样
                 # (机房、VPN、代理出口尤其容易中)。一条官方模板不能把成败押在这上面。
@@ -166,9 +177,14 @@ def translated_dub_graph(*, chat: ModelChoice | None = None, voice_id: str = "",
             "type": "notify",
             "name": {"zh": "译配完成通知", "en": "Dubbing finished notice"},
             "position": {"x": 2260, "y": 260},
+            #: 不说「整条删掉即可回到原样」:只去掉人声(separate)时原片片段被静音、背景音另放了一条轨 ——
+            #: 删掉配音轨回不到原样。原声实际怎么处理的由 original_audio_note 如实说。
             "config": {
-                "title": "视频译配与字幕已完成",
-                "body": "{{source_video.name}} 已生成 {{dubbing.done}} 条配音(失败 {{dubbing.failed}} 条),配音在单独一条轨上,整条删掉即可回到原样。{{dubbing.original_audio_note}}",
+                "title": text("视频译配与字幕已完成", "Translated dub and subtitles are ready"),
+                "body": "{{source_video.name}} " + text(
+                    "已生成 {{dubbing.done}} 条配音(失败 {{dubbing.failed}} 条),配音在单独一条轨上。",
+                    "got {{dubbing.done}} dubbed lines ({{dubbing.failed}} failed) on a track of their own. ",
+                ) + "{{dubbing.original_audio_note}}",
             },
         },
         {
@@ -210,6 +226,11 @@ def translated_dub_graph(*, chat: ModelChoice | None = None, voice_id: str = "",
                 "consent": "",
             },
         })
+        notice = next(node for node in nodes if node["id"] == "done_notice")
+        notice["config"]["body"] += text(
+            "口型对好的画面在最上面一条视频轨上,盖住原片;删掉那条轨就回到改口型之前。",
+            " The lip-synced picture sits on the top video track over the source; delete that track to undo the lip-sync.",
+        )
         output = next(node for node in nodes if node["id"] == "output")
         output["config"]["values"].update({
             "lipsync_asset_id": "{{lip_sync.asset_id}}",
@@ -233,8 +254,8 @@ def translated_dub_graph(*, chat: ModelChoice | None = None, voice_id: str = "",
         {"id": "notice_output", "source": "done_notice", "target": "output"},
     ]
     graph = {
-        "meta": ({"template_id": TRANSLATED_DUB_LIPSYNC, "template_version": 1, "source": "official"} if lipsync
-                 else {"template_id": TRANSLATED_DUB, "template_version": 2, "source": "official"}),
+        "meta": ({"template_id": TRANSLATED_DUB_LIPSYNC, "template_version": 2, "source": "official"} if lipsync
+                 else {"template_id": TRANSLATED_DUB, "template_version": 3, "source": "official"}),
         "nodes": nodes,
         "edges": edges,
     }

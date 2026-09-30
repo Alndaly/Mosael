@@ -3,12 +3,12 @@
   "version": 1,
   "workflow_revision": 1,
   "name": "Translated dubbing with subtitles",
-  "description": "Transcribe a video sentence by sentence, translate each line, lay translated subtitles on the original timecodes, then dub each line and time-compress it back into its own slot. The original voice is separated out and the background music kept; a voice separation engine must be ready before the workflow starts.",
-  "graph_hash": "4c19c60b005d8c8f3e4ff2bfb16866a100ee2208b33602764701cd6beb66bf4f",
+  "description": "Transcribe a video sentence by sentence, translate each line, lay translated subtitles on the original timecodes, then dub each line and time-compress it back into its own slot. Pick the target language on the translate step (English by default). The original voice is separated out and the background music kept; a voice separation engine must be ready before the workflow starts.",
+  "graph_hash": "5ec65b9b70aa9af377caec6ecc1da0315235b4041f83d699f45f051436dc944c",
   "graph": {
     "meta": {
       "template_id": "translated_dub",
-      "template_version": 2,
+      "template_version": 3,
       "source": "official"
     },
     "nodes": [
@@ -45,7 +45,7 @@
           "y": 420
         },
         "config": {
-          "name": "{{source_video.name}} · 译配版",
+          "name": "{{source_video.name}} · Dubbed",
           "width": "",
           "height": "",
           "fps": ""
@@ -104,12 +104,14 @@
         "config": {
           "texts": "",
           "target_lang": "en",
+          "source_lang": "",
           "engine": "builtin:chat",
           "profile_id": "",
           "model": ""
         },
         "inputs": [
-          "texts"
+          "texts",
+          "source_lang"
         ]
       },
       {
@@ -180,8 +182,8 @@
           "y": 260
         },
         "config": {
-          "title": "视频译配与字幕已完成",
-          "body": "{{source_video.name}} 已生成 {{dubbing.done}} 条配音(失败 {{dubbing.failed}} 条),配音在单独一条轨上,整条删掉即可回到原样。{{dubbing.original_audio_note}}"
+          "title": "Translated dub and subtitles are ready",
+          "body": "{{source_video.name}} got {{dubbing.done}} dubbed lines ({{dubbing.failed}} failed) on a track of their own. {{dubbing.original_audio_note}}"
         }
       },
       {
@@ -303,6 +305,14 @@
         "kind": "data",
         "source_output": "segments",
         "target_input": "texts"
+      },
+      {
+        "id": "d-verbatim_transcript-language-translate_lines-source_lang",
+        "source": "verbatim_transcript",
+        "target": "translate_lines",
+        "kind": "data",
+        "source_output": "language",
+        "target_input": "source_lang"
       },
       {
         "id": "d-dub_project-sequence_id-translated_subtitles-sequence_id",

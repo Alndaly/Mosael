@@ -199,13 +199,21 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "要翻译的一列文本。也可以直接给逐字稿的段落(每段带 text),节点会自己取出正文。",
         "en": "The list of texts to translate. A transcript's segments work too (each carrying `text`) — the node pulls the text out itself.",
     },
+    "wfNode_translate_lines_source_lang": {
+        "zh": "原文是什么语言(通常接转写节点的 language)。和目标语言相同时直接停下,不白花翻译和配音的钱;留空不比",
+        "en": "The source language (usually the transcribe node's language). If it matches the target, the step stops before paying for translation and dubbing; leave empty to skip the check",
+    },
+    "wfErr_translateSameLanguage": {
+        "zh": "识别出的原文已经是{lang}了,译成同一种语言只是白花一遍翻译和配音的钱 —— 在「逐句翻译」节点上换一种目标语言(识别错了的话,清空它的原文语言)",
+        "en": "The source is already in {lang}; translating it into the same language only pays for translation and dubbing twice. Pick another target language on the translate step (or clear its source language if detection got it wrong).",
+    },
     "wfNode_translate_model": {
         "zh": "用这条连接上的哪个模型。留空 = 按这条连接的对话能力解析。",
         "en": "Which model on that connection to use. Empty resolves it from the connection's chat capability.",
     },
     "wfNode_translate_profile_id": {
-        "zh": "引擎选 AI 时用哪条连接。留空 = 用第一条可用的 —— 你有好几条时,那多半不是你想要的那条。",
-        "en": "Which connection to use when the engine is AI. Empty means the first available one \u2014 with several configured, that is rarely the one you meant.",
+        "zh": "引擎选 AI 时用哪条连接。留空 = 用你的默认对话模型所在的那条(没设默认时,用最早接上的、能对话的那条)",
+        "en": "Which connection to use when the engine is AI. Empty uses the one your default chat model is on (or, with no default, the earliest connection that can chat).",
     },
     "wfNode_generate_subtitles": {"zh": "生成字幕", "en": "Generate subtitles"},
     "wfNode_generate_subtitles_desc": {"zh": "把逐字稿段落批量插成时间线上的字幕条;给了译文就用译文,可选同时保留原文两行。", "en": "Turn transcript segments into subtitle cues on the timeline; uses the translated lines when given, optionally keeping the original as a second line."},
@@ -430,6 +438,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfField_skipped_ranges": {"zh": "超出上限没删的范围", "en": "Ranges left over the cap"},
     "wfField_skipped_note": {"zh": "没删的说明", "en": "Note on ranges not removed"},
     "wfField_kept_text": {"zh": "整理后的逐字稿", "en": "Cleaned transcript"},
+    "wfField_source_lang": {"zh": "原文语言", "en": "Source language"},
     "wfNote_cleanupCapped": {"zh": "另有 {count} 处删除超出了 {ratio} 的上限,按置信度留下没删,见方案里的范围,可以手动复核。", "en": "{count} more cuts would have gone over the {ratio} cap; the lower-confidence ones were left in for you to review in the plan."},
     "wfNode_call_workflow": {"zh": "调用工作流", "en": "Call workflow"},
     "wfNode_call_workflow_desc": {"zh": "把另一个已保存的工作流当子流程调用:映射入参 → 跑完取其「输出」节点声明的结果作为本节点输出(引用 {{call_1.output.xxx}})。子流程走完整引擎,自动收纳到本流程下、随本流程取消;防递归、防过深。", "en": "Call another saved workflow as a sub-flow: map the inputs, run it, and take the results declared by its Output node as this node's output (referenced as {{call_1.output.xxx}}). The sub-flow runs through the full engine, is nested under this run and cancels with it; recursion and excessive depth are refused."},

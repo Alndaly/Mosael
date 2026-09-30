@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "Transcript-based video cleanup",
   "description": "Remove background hiss, transcribe the video with timestamps, identify pauses, fillers and repetition, then create a cut plan and a cleaned video while preserving the original. Suited to talks and interviews up to about 30 minutes; split longer footage first.",
-  "graph_hash": "bb57a0be8f41405a5e91a0c5cdb2aa0c0a55ac172bcb2c3ee9607372da05ab57",
+  "graph_hash": "b142d8ca45b4d238f3f0a68e5a99527b8c6469bc7fb7202cc6a41cd157407fcf",
   "graph": {
     "meta": {
       "template_id": "transcript_video_cleanup",
@@ -22,9 +22,9 @@
         },
         "config": {
           "params": {
-            "cleanup_style": "自然紧凑，保留真实语气和必要呼吸",
+            "cleanup_style": "Natural and tight; keep the real tone and the breaths that matter",
             "silence_threshold_seconds": 1.0,
-            "filler_policy": "保守：只删除独立且无语义的口头禅",
+            "filler_policy": "Conservative: only remove standalone fillers that carry no meaning",
             "max_removal_ratio": 0.35
           }
         }
@@ -81,7 +81,7 @@
           "y": 420
         },
         "config": {
-          "name": "{{source_video.name}} · 智能整理",
+          "name": "{{source_video.name}} · Cleaned up",
           "width": "",
           "height": "",
           "fps": ""
@@ -104,14 +104,12 @@
           "sequence_id": "",
           "asset_id": "",
           "track_id": "",
-          "start": 0,
-          "end": ""
+          "start": 0
         },
         "inputs": [
           "sequence_id",
           "asset_id",
-          "track_id",
-          "end"
+          "track_id"
         ]
       },
       {
@@ -318,8 +316,8 @@
           "y": 260
         },
         "config": {
-          "title": "视频逐字稿与智能整理已完成",
-          "body": "{{source_video.name}} 已降噪,并生成逐字稿、问题诊断和非破坏性整理版视频。{{apply_cleanup.skipped_note}}"
+          "title": "Transcript and cleanup are ready",
+          "body": "{{source_video.name}} has been denoised; the transcript, the diagnosis and a non-destructive cleaned-up cut are ready. {{apply_cleanup.skipped_note}}"
         }
       },
       {
@@ -447,14 +445,6 @@
         "kind": "data",
         "source_output": "video_track_id",
         "target_input": "track_id"
-      },
-      {
-        "id": "d-source_video-duration-source_on_timeline-end",
-        "source": "source_video",
-        "target": "source_on_timeline",
-        "kind": "data",
-        "source_output": "duration",
-        "target_input": "end"
       },
       {
         "id": "d-cleanup_project-sequence_id-apply_cleanup-sequence_id",

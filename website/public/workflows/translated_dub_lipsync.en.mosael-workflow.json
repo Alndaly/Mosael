@@ -3,12 +3,12 @@
   "version": 1,
   "workflow_revision": 1,
   "name": "Translated dubbing with lip-sync",
-  "description": "Everything in translated dubbing, then re-sync the speaker's lips to the translated dub: cut the source into chunks the model accepts at the gaps between lines, lip-sync the chunks with speech, and lay the joined result over the source (the source is untouched — delete that track to undo). The export carries an \"AI-generated\" label. Confirm the speaker's consent on the lip-sync step before running.",
-  "graph_hash": "021ccec2e3a7b127d211024d800aa83fce8181d7f1276a4fd8f0eaa714453b6f",
+  "description": "Everything in translated dubbing with subtitles, then re-sync the speaker's lips to the translated dub: cut the source into chunks the model accepts at the gaps between lines, lip-sync the chunks with speech, and lay the joined result on the top video track over the source (delete that track to undo the lip-sync). The export carries an \"AI-generated\" label. Pick the target language on the translate step (English by default). Confirm the speaker's consent on the lip-sync step before running. Cost: lip-sync is billed by source length (Bailian videoretalk lists about 0.08 CNY per second, so roughly 5 CNY a minute), plus translation and per-line dubbing; a re-run doesn't pay again for chunks already done.",
+  "graph_hash": "4b0066a8b349688058f4f2ea7b3cad83bc08c6825620d5ffda4f4d90b3c2a3dc",
   "graph": {
     "meta": {
       "template_id": "translated_dub_lipsync",
-      "template_version": 1,
+      "template_version": 2,
       "source": "official"
     },
     "nodes": [
@@ -45,7 +45,7 @@
           "y": 420
         },
         "config": {
-          "name": "{{source_video.name}} · 译配版",
+          "name": "{{source_video.name}} · Dubbed",
           "width": "",
           "height": "",
           "fps": ""
@@ -104,12 +104,14 @@
         "config": {
           "texts": "",
           "target_lang": "en",
+          "source_lang": "",
           "engine": "builtin:chat",
           "profile_id": "",
           "model": ""
         },
         "inputs": [
-          "texts"
+          "texts",
+          "source_lang"
         ]
       },
       {
@@ -201,8 +203,8 @@
           "y": 260
         },
         "config": {
-          "title": "视频译配与字幕已完成",
-          "body": "{{source_video.name}} 已生成 {{dubbing.done}} 条配音(失败 {{dubbing.failed}} 条),配音在单独一条轨上,整条删掉即可回到原样。{{dubbing.original_audio_note}}"
+          "title": "Translated dub and subtitles are ready",
+          "body": "{{source_video.name}} got {{dubbing.done}} dubbed lines ({{dubbing.failed}} failed) on a track of their own. {{dubbing.original_audio_note}} The lip-synced picture sits on the top video track over the source; delete that track to undo the lip-sync."
         }
       },
       {
@@ -326,6 +328,14 @@
         "kind": "data",
         "source_output": "segments",
         "target_input": "texts"
+      },
+      {
+        "id": "d-verbatim_transcript-language-translate_lines-source_lang",
+        "source": "verbatim_transcript",
+        "target": "translate_lines",
+        "kind": "data",
+        "source_output": "language",
+        "target_input": "source_lang"
       },
       {
         "id": "d-dub_project-sequence_id-translated_subtitles-sequence_id",

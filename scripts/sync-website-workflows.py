@@ -34,17 +34,18 @@ from app.domain.workflows.templates_business import (
 )
 
 
-def catalog_files() -> dict[str, str]:
-    #: 说明只有一份 —— 后端的模板目录(应用里的模板卡片读的也是它)。这里只补"这一份对应哪张图"。
-    graphs = {
+def _graphs(locale: str) -> dict[str, dict]:
+    """每个模板的图。**按这一份的语言建** —— 图里给人看的默认值(新项目的名字、完成通知)在建图时定语言,
+    和节点名同一条(见 domain/workflows/templates 的 transcript_video_cleanup_graph / translated_dub_graph)。"""
+    return {
         #: 视频模型留空 = 按"认不出的模型"出片计划:每镜 5 秒、只走首帧那条路。**首帧是每一个能用的视频模型都收的
         #: 那一条**(参考素材那条只有部分模型收),而导入的人挑哪个模型这里不知道 —— 挑模型时节点参数会清回那个
         #: 模型的默认,不收 5 秒的模型出片更长,上时间线时照样按 5 秒截。
         "full_video_generation": full_video_generation_graph(chat=ModelChoice(), image=ModelChoice(), video=ModelChoice()),
-        "transcript_video_cleanup": transcript_video_cleanup_graph(chat=ModelChoice()),
+        "transcript_video_cleanup": transcript_video_cleanup_graph(chat=ModelChoice(), locale=locale),
         # 音色按工作区取,导出给官网的那份不能带任何本机资源 —— 留空,导入后由用户自己挑。
-        "translated_dub": translated_dub_graph(chat=ModelChoice(), voice_id=""),
-        "translated_dub_lipsync": translated_dub_graph(chat=ModelChoice(), voice_id="", lipsync=True),
+        "translated_dub": translated_dub_graph(chat=ModelChoice(), voice_id="", locale=locale),
+        "translated_dub_lipsync": translated_dub_graph(chat=ModelChoice(), voice_id="", lipsync=True, locale=locale),
         "highlight_shorts": highlight_shorts_graph(chat=ModelChoice()),
         #: 空的 ModelChoice 表示"这台机器上还没选默认模型" —— 官网那份本来就不该带任何本机选择。
         #: 上身图这条按**带视频**导出(`motion=True`),视频模型那一格留空,由导入的人挑;没有视频模型的话,在画布上
@@ -59,11 +60,15 @@ def catalog_files() -> dict[str, str]:
         "footage_montage": footage_montage_graph(chat=ModelChoice(), voice_id=""),
         "talking_script_video": talking_script_video_graph(voice_id=""),
     }
-    templates = [{**template, "graph": graphs[template["id"]]} for template in TEMPLATE_CATALOG]
+
+
+def catalog_files() -> dict[str, str]:
+    #: 说明只有一份 —— 后端的模板目录(应用里的模板卡片读的也是它)。这里只补"这一份对应哪张图"。
+    graphs = {locale: _graphs(locale) for locale in ("zh", "en")}
     files: dict[str, str] = {}
     catalog = []
-    for template in templates:
-        graph = template.pop("graph")
+    for template in TEMPLATE_CATALOG:
+        graph = graphs["zh"][template["id"]]
         entry = {**template, "author": "Mosael", "version": graph["meta"]["template_version"],
                  "nodes": len(graph["nodes"]), "download": {}}
         #: 前置条件在后端是「一条一个对象」(带检查键,给应用里的就绪状态用);官网只展示句子,
@@ -77,7 +82,7 @@ def catalog_files() -> dict[str, str]:
             #: **节点名按这一份的语言定下来。** 图里的名字是语言对象(翻译贴着节点写,见
             #: domain/workflows/templates),而下载下来的这份是要被导入的 —— 导入方拿到的必须是
             #: 一个名字,不是一个待挑的对象。
-            localised = localised_names(locale, copy.deepcopy(graph))
+            localised = localised_names(locale, copy.deepcopy(graphs[locale][template["id"]]))
             payload = {"format": "mosael-workflow", "version": 1, "workflow_revision": 1,
                        "name": template["name"][locale], "description": template["summary"][locale],
                        "graph_hash": graph_digest(localised), "graph": localised}

@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.core.i18n import pick_text
 from app.domain.workflows import NODE_TYPES
 from app.domain.workflows.normalization import normalize_graph
 from app.domain.workflows.templates_models import ModelChoice
@@ -52,14 +53,20 @@ def _cleanup_schema() -> dict[str, Any]:
     return _object(fields, list(fields))
 
 
-def transcript_video_cleanup_graph(*, chat: ModelChoice) -> dict[str, Any]:
+def transcript_video_cleanup_graph(*, chat: ModelChoice, locale: str | None = None) -> dict[str, Any]:
     """视频 → 降噪 → 带时间码逐字稿 → 智能诊断 → 多区间波纹裁切 → 整理版导出。
 
     **先降噪再转写。** 口播、访谈最常见的毛病就是底噪(空调、风扇、电流声),它同时拖累两件事:
     转写认错字(整理方案是照着逐字稿切的),以及成片里一直嗡着。降噪用内置引擎 —— 不用装、
     不动背景音乐;以说话为主、噪声杂的素材,可以在节点上换成 deepfilternet。降噪只换声音,
     时间码不变,所以后面按逐字稿切的每一刀仍然落在原来的位置。
+
+    `locale`:图里**给人看的**默认值(新项目的名字、整理尺度的说明、完成通知)在建图这一刻定语言,和节点名同一条
+    (见 templates.localised_names)。此前写死中文,英文界面建出来的项目叫「… · 智能整理」。
     """
+
+    def text(zh: str, en: str) -> str:
+        return pick_text({"zh": zh, "en": en}, locale)
 
     cleanup_system = """你是一名资深口播、访谈与课程剪辑师。你会收到段落级时间码逐字稿：每段有起止和正文；
 段内的长停顿在 pauses 里给出起止，停顿两边几个词的时间在 tokens 里。任务是在不改写观点、不改变事实、
@@ -79,9 +86,11 @@ issues 和 review_notes，不自动删除。范围必须按 src_start 升序、�
             "position": {"x": 40, "y": 260},
             "config": {
                 "params": {
-                    "cleanup_style": "自然紧凑，保留真实语气和必要呼吸",
+                    "cleanup_style": text("自然紧凑，保留真实语气和必要呼吸",
+                                          "Natural and tight; keep the real tone and the breaths that matter"),
                     "silence_threshold_seconds": 1.0,
-                    "filler_policy": "保守：只删除独立且无语义的口头禅",
+                    "filler_policy": text("保守：只删除独立且无语义的口头禅",
+                                          "Conservative: only remove standalone fillers that carry no meaning"),
                     "max_removal_ratio": 0.35,
                 }
             },
@@ -113,7 +122,7 @@ issues 和 review_notes，不自动删除。范围必须按 src_start 升序、�
             "name": {"zh": "建立非破坏性整理副本", "en": "Create a non-destructive working copy"},
             "position": {"x": 970, "y": 420},
             "config": {
-                "name": "{{source_video.name}} · 智能整理",
+                "name": "{{source_video.name}} · " + text("智能整理", "Cleaned up"),
                 "width": "{{source_video.width}}",
                 "height": "{{source_video.height}}",
                 "fps": "{{source_video.fps}}",
@@ -128,8 +137,9 @@ issues 和 review_notes，不自动删除。范围必须按 src_start 升序、�
                 "sequence_id": "{{cleanup_project.sequence_id}}",
                 "asset_id": "{{clean_audio.asset_id}}",
                 "track_id": "{{cleanup_project.video_track_id}}",
+                #: 不写 end:放上去的是降噪后的那份,整段就是它自己的长度。此前取的是原片的时长,
+                #: 两份差几帧时就截短或越界。
                 "start": 0,
-                "end": "{{source_video.duration}}",
             },
         },
         {
@@ -193,8 +203,11 @@ issues 和 review_notes，不自动删除。范围必须按 src_start 升序、�
             "name": {"zh": "整理完成通知", "en": "Cleanup finished notice"},
             "position": {"x": 2570, "y": 260},
             "config": {
-                "title": "视频逐字稿与智能整理已完成",
-                "body": "{{source_video.name}} 已降噪,并生成逐字稿、问题诊断和非破坏性整理版视频。{{apply_cleanup.skipped_note}}",
+                "title": text("视频逐字稿与智能整理已完成", "Transcript and cleanup are ready"),
+                "body": "{{source_video.name}} " + text(
+                    "已降噪,并生成逐字稿、问题诊断和非破坏性整理版视频。",
+                    "has been denoised; the transcript, the diagnosis and a non-destructive cleaned-up cut are ready. ",
+                ) + "{{apply_cleanup.skipped_note}}",
             },
         },
         {
