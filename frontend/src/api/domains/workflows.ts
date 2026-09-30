@@ -6,10 +6,9 @@ export type Workflow = components["schemas"]["WorkflowOut"];
 export type WorkflowRevision = components["schemas"]["WorkflowRevisionOut"];
 export type WorkflowRevisionDetail = components["schemas"]["WorkflowRevisionDetailOut"];
 export type WorkflowNodeType = components["schemas"]["WorkflowNodeTypeOut"];
-export type WorkflowTemplateId =
-  | "full_video_generation"
-  | "transcript_video_cleanup"
-  | "translated_dub";
+/** 官方模板的 id —— 后端模板目录说了算(生成的类型是确切的联合)。此前这里手抄了 3 个、实际有 11 个,
+ *  调用处靠 `as` 断言盖住了对不上。 */
+export type WorkflowTemplateId = components["schemas"]["WorkflowTemplateOut"]["id"];
 
 export interface WorkflowGraph {
   meta?: {

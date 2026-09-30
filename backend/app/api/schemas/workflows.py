@@ -6,6 +6,11 @@ from typing import Literal
 from pydantic import Field
 
 from app.api.schemas.base import ApiModel, OrmModel
+from app.domain.workflows.templates import TEMPLATE_CATALOG
+
+#: 官方模板的 id:由模板目录说了算,生成的前端类型因此是一个确切的联合。此前前端手抄了一份(3 个,实际 11 个),
+#: 拿 `as` 断言盖住了对不上。
+WorkflowTemplateId = Literal[tuple(template["id"] for template in TEMPLATE_CATALOG)]  # type: ignore[valid-type]
 
 
 class WorkflowCreate(ApiModel):
@@ -132,7 +137,7 @@ class WorkflowTemplateOut(ApiModel):
     """官方模板的说明。文案已按请求方的语言选好(见 domain/workflows/templates.TEMPLATE_CATALOG);
     图标由界面按 id 给,和节点图标、任务种类同一条规矩。"""
 
-    id: str
+    id: WorkflowTemplateId
     name: str
     description: str
     #: 这条流程分几步 —— 卡片上那条竖线。

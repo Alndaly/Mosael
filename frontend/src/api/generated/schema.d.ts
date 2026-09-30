@@ -13663,8 +13663,11 @@ export interface components {
          *     图标由界面按 id 给,和节点图标、任务种类同一条规矩。
          */
         WorkflowTemplateOut: {
-            /** Id */
-            id: string;
+            /**
+             * Id
+             * @enum {string}
+             */
+            id: "full_video_generation" | "transcript_video_cleanup" | "translated_dub" | "translated_dub_lipsync" | "highlight_shorts" | "product_on_model" | "product_pitch_short" | "footage_montage" | "fabric_lookbook" | "talking_script_video" | "product_pitch_presenter";
             /** Name */
             name: string;
             /** Description */

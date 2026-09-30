@@ -213,7 +213,7 @@ export function WorkflowCommunityDialog({
           added={installedCounts.get(template.id) ?? 0}
           statuses={statuses}
           installing={installingId === template.id}
-          onInstall={() => onInstall(template.id as WorkflowTemplateId)}
+          onInstall={() => onInstall(template.id)}
           onOpen={openDetail}
         />
       )}
@@ -226,7 +226,7 @@ export function WorkflowCommunityDialog({
           added={installedCounts.get(template.id) ?? 0}
           statuses={statuses}
           installing={installingId === template.id}
-          onInstall={() => onInstall(template.id as WorkflowTemplateId)}
+          onInstall={() => onInstall(template.id)}
         />
       )}
     />
