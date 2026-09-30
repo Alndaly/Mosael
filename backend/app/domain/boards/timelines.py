@@ -14,7 +14,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.db.models import Sequence
-from app.domain.boards.canvas import board_project, get_board
+from app.domain.boards.persistence import board_project, get_board
 
 #: 新时间线的默认画幅:横屏 1080p、30 帧。第一段接进来时画幅跟着它走(sequences.append)。
 DEFAULT_WIDTH, DEFAULT_HEIGHT, DEFAULT_FPS = 1920, 1080, 30.0

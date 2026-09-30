@@ -13,6 +13,7 @@ from app.db.models import Board, Sequence, User
 from app.domain.boards import producers
 from app.domain.boards.canvas import create_board, delete_board, duplicate_board, get_board, list_boards, update_board
 from app.domain.boards.persistence import board_summary
+from app.domain.boards.receipts import revived_runs, settle_revived_runs
 from app.domain.boards.timelines import create_board_sequence
 from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm, owning_workspace
 
@@ -66,7 +67,8 @@ def update(
     base_revision: int,
 ) -> Board:
     ensure_workspace_perm(db, user, workspace_id, "edit")
-    return update_board(
+    before = get_board(db, workspace_id, board_id).canvas
+    board = update_board(
         db,
         workspace_id=workspace_id,
         board_id=board_id,
@@ -75,6 +77,12 @@ def update(
         base_revision=base_revision,
         actor_id=user.id,
     )
+    #: 客户端带回来的「在跑」(删掉又撤销回来的格子),任务其实已经结束:当场补送回执(见 receipts.settle_revived_runs)。
+    revived = revived_runs(before, board.canvas) if canvas is not None else {}
+    if revived:
+        settle_revived_runs(db, workspace_id, board_id, revived)
+        board = get_board(db, workspace_id, board_id)
+    return board
 
 
 def delete(db: Session, user: User, workspace_id: str, board_id: str) -> None:

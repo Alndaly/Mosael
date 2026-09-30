@@ -227,21 +227,53 @@ def deliver_generated(db: Session, job: Any, receipt: dict[str, Any]) -> None:
 
     merged = _merge_into_latest(db, workspace_id=board.workspace_id, board_id=board.id, merge=merge, actor_id=actor_id)
     if landed["yes"] and job_status == "succeeded":
-        _append_to_connected_timelines(db, merged, item_id)
+        _append_to_connected_timelines(merged, item_id)
     logger.info("board %s item %s -> %s", board_id, item_id,
                 ", ".join(one.get("asset_id") or f"({one['type']})" for one in outputs) or "(failed)")
 
 
-def _append_to_connected_timelines(db: Session, board: Board, item_id: str) -> None:
+def _append_to_connected_timelines(board: Board, item_id: str) -> None:
     """产出落进了连着时间线格的那一格:接到时间线末尾(见 timelines.append_filled_media)。接不上不挡回执。"""
+    from app.core.unit_of_work import unit_of_work
     from app.domain.boards.timelines import append_filled_media
 
     try:
-        if append_filled_media(db, board.workspace_id, board.canvas or {}, item_id):
-            db.commit()
+        #: 回执那一次已经提交了(见 _merge_into_latest);接时间线是自己的一个事务,接不上不影响那一格。
+        with unit_of_work() as tx:
+            append_filled_media(tx, board.workspace_id, board.canvas or {}, item_id)
     except Exception:  # noqa: BLE001 — 回执已经落下;接时间线是顺带的一步
-        db.rollback()
         logger.exception("board %s item %s: could not append the output to its timelines", board.id, item_id)
+
+
+def revived_runs(stored: Any, saved: dict[str, Any]) -> dict[str, str]:
+    """一次客户端保存**带回来**的在跑的格子:`{格子 id: 任务 id}`。库里那一格此前不在跑这个任务(多半是
+    整格不在 —— 删掉之后撤销回来的)。"""
+    before = {str(item.get("id")): live_job(item) for item in ((stored or {}).get("items") or [])}
+    return {
+        str(item["id"]): job
+        for item in saved.get("items") or []
+        if (job := live_job(item)) and before.get(str(item.get("id"))) != job
+    }
+
+
+def settle_revived_runs(db: Session, workspace_id: str, board_id: str, revived: dict[str, str]) -> None:
+    """客户端带回来的在跑的格子,任务其实**已经结束**:当场补送那封回执。
+
+    删掉一格在跑的,任务结束时回执找不到那一格,就丢了(outputs._canvas_with_delivered_result 只收它自己那一轮);
+    之后撤销把那一格带回来,它就永远转圈 —— 没有第二封回执。这里按任务此刻的终态补送:成功的产出落回来,
+    失败 / 取消的写上原因。和 receipts._deliver_if_already_settled(占位落下时任务已经结束)是同一件事。
+    只认这个工作区里的任务:画布是客户端写的,别处任务的产出(一段写出来的字)不能借一个任务号落进来。
+    """
+    from app.db.models import Job
+    from app.domain.jobs import TERMINAL_STATUSES
+
+    jobs = {job.id: job for job in db.scalars(
+        select(Job).where(Job.id.in_(set(revived.values())), Job.workspace_id == workspace_id)
+    )}
+    for item_id, job_id in revived.items():
+        job = jobs.get(job_id)
+        if job is not None and job.status in TERMINAL_STATUSES:
+            deliver_generated(db, job, receipt_to_item(board_id, item_id))
 
 
 def install() -> None:
