@@ -19,7 +19,9 @@ from tests.util import fresh_client
 
 def _one(node_type: str, config: dict) -> list[str]:
     graph = {
-        "nodes": [{"id": "start", "type": "start", "config": {}}, {"id": "n", "type": node_type, "config": config}],
+        # 开始节点声明了 name:运行前校验认「引到开始节点的参数得是它有的」(见 graph_rules)。
+        "nodes": [{"id": "start", "type": "start", "config": {"params": {"name": ""}}},
+                  {"id": "n", "type": node_type, "config": config}],
         "edges": [{"id": "e", "source": "start", "target": "n"}],
     }
     return validate_graph(graph)

@@ -188,6 +188,11 @@ def validate_graph(
     if require_start:
         if start_count > 1 or (start_count == 0 and not allow_missing_start):
             errors.append(f"工作流必须恰好包含 1 个开始节点(当前 {start_count} 个)")
+        #: 顶层的 `{{节点.字段}}` 要指向本图里的节点、`{{开始.参数}}` 要是开始节点有的参数。只在**运行前**
+        #: (require_config)查:保存时删掉一个节点、引用它的那几格还没改,不该连存都存不下(画布会标出
+        #: 失效引用)。体内的引用另有作用域规则(见 validate_body_graph)。
+        if require_config:
+            errors.extend(_unresolved_reference_errors(nodes, edges))
     elif start_count > 0:
         errors.append("循环体子图不能包含开始节点")
 
@@ -226,6 +231,55 @@ def validate_graph(
                 queue.append(nxt)
     if seen_ids and visited != len(seen_ids):
         errors.append("工作流包含环路(连线或 {{节点.…}} 引用绕回了自己),必须是有向无环图")
+    return errors
+
+
+def _outer_references(node: dict[str, Any]) -> list[list[str]]:
+    """一个节点的配置里**在这一层解析**的引用(按点号拆开)。容器节点的体内字段不算 —— 它们属于体内作用域。"""
+    config = dict(node.get("config") or {})
+    if node.get("type") in NESTED_BODY_TYPES:
+        for key in NESTED_BODY_RAW_KEYS:
+            config.pop(key, None)
+    return [match.group(1).strip().split(".") for match in VARIABLE_RE.finditer(json.dumps(config, ensure_ascii=False))]
+
+
+def _unresolved_reference_errors(nodes: list[Any], edges: list[Any]) -> list[str]:
+    """顶层引用解析得到:根是本图里的节点;引到开始节点的,那个参数开始节点有。
+
+    此前后端不查:画布会标出失效引用,可定时任务、智能体、call_workflow 触发的运行不经过画布 ——
+    一个拼错的 `{{scirpt.text}}`、调用方少传的 `{{start.topic}}` 运行时静默插值成空串,下游拿着
+    空提示词去付费生成。
+
+    开始节点"有"哪些参数是**这一次运行**说了算的:运行前校验拿的是 with_run_params 叠过本次参数的图,
+    所以这里只看开始节点 config 里的 params —— 声明了的、这次传进来的都在里面。从开始节点拉出的
+    数据边(`source_output` 就是参数名)同一条规矩。
+    """
+    ids = {str(node.get("id", "")) for node in nodes if isinstance(node, dict)}
+    starts = {
+        str(node.get("id", "")): set((node.get("config") or {}).get("params") or {})
+        for node in nodes
+        if isinstance(node, dict) and node.get("type") == "start"
+    }
+    errors: list[str] = []
+    missing: set[str] = set()
+    for node in nodes:
+        if not isinstance(node, dict):
+            continue
+        references = _outer_references(node)
+        unknown = sorted({parts[0] for parts in references if parts[0] and parts[0] not in ids})
+        if unknown:
+            errors.append(f"节点 {node.get('id')} 引用了不存在的节点:{', '.join(unknown)}")
+        missing |= {
+            f"{parts[0]}.{parts[1]}"
+            for parts in references
+            if parts[0] in starts and len(parts) > 1 and parts[1] not in starts[parts[0]]
+        }
+    for edge in edges:
+        source, output = str(edge.get("source", "")), str(edge.get("source_output", ""))
+        if edge.get("kind") == "data" and source in starts and output and output not in starts[source]:
+            missing.add(f"{source}.{output}")
+    if missing:
+        errors.append(f"开始节点没有这些参数:{', '.join(sorted(missing))};在开始节点里声明它们,或运行时传进来")
     return errors
 
 

@@ -85,7 +85,8 @@ def start_workflow_job(
         revision = current_workflow_revision(db, workflow)
     except WorkflowRevisionError as exc:
         raise WorkflowDomainError.from_error(exc) from exc
-    #: 必填的开始参数按这一次运行的值判(见 graph_rules.with_run_params)。
+    #: 这一次运行看到的图(开始节点叠上本次参数,见 graph_rules.with_run_params):必填的开始参数、
+    #: `{{开始.参数}}` 要的名字,都按这一次给了什么判。
     errors = validate_graph(with_run_params(revision.graph, params), extra_types=plugin_node_types(db))
     if errors:
         raise WorkflowDomainError("；".join(errors))

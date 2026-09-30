@@ -50,7 +50,8 @@ def test_it_can_fan_out_into_parallel_branches() -> None:
 def test_it_can_nest_a_subgraph_with_a_body() -> None:
     """子图的 body 是**嵌套的节点数组** —— 最容易被 config 处理吃掉的那种形状。"""
     graph = _built([
-        {"kind": "add_node", "type": "start", "node_id": "start_1"},
+        # 子图引用了开始节点的 text:开始节点得声明它(运行前校验认「引到的参数得是它有的」)。
+        {"kind": "add_node", "type": "start", "node_id": "start_1", "config": {"params": {"text": ""}}},
         {
             "kind": "add_node",
             "type": "subgraph",
