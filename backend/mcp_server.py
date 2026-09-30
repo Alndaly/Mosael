@@ -2378,9 +2378,16 @@ def get_job(job_id: str) -> dict[str, Any]:
     Returns status/progress/result/error. Use after a tool that returns a job.
     """
     from app.api.schemas import JobOut
+    from app.domain.agent import receipts
     from app.domain.job_center import use_cases
+    from app.domain.jobs import TERMINAL_STATUSES
 
-    return _use_case(use_cases.readable, job_id, out=JobOut)
+    job = _use_case(use_cases.readable, job_id, out=JobOut)
+    # 看到终态了:这个任务发回这次对话的回执就不必再送(见 receipts.acknowledge_seen)。
+    session_id = _SESSION_ID.get()
+    if session_id and job and job.get("status") in TERMINAL_STATUSES:
+        _use_case(receipts.acknowledge_seen, job_id, session_id)
+    return job
 
 
 @tool(effect="writes")

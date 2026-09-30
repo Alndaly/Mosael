@@ -14,11 +14,12 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.models import AgentSession, Job, User
+from app.db.models import AgentMessage, AgentSession, Job, User
 from app.domain.agent import host
-from app.domain.jobs import register_receipt_deliverer
+from app.domain.jobs import TERMINAL_STATUSES, register_receipt_deliverer
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +52,9 @@ def _summarize(job: Job) -> str:
 
 
 def deliver(db: Session, job: Job, receipt: dict[str, Any]) -> None:
+    # 智能体自己已经盯着它跑完了(见 acknowledge_seen):再送一句只会让它多跑一轮去说「收到」。
+    if receipt.get("seen"):
+        return
     session = db.get(AgentSession, str(receipt.get("session_id") or ""))
     if session is None:
         return
@@ -61,6 +65,32 @@ def deliver(db: Session, job: Job, receipt: dict[str, Any]) -> None:
         logger.warning("job %s 的回执没送:任务没有归属人", job.id)
         return
     host.post_user_message(db, session, _summarize(job), owner, origin_job_id=job.id)
+
+
+def acknowledge_seen(db: Session, _user: User, job_id: str, session_id: str) -> None:
+    """智能体在这次对话里**亲眼看到**这个任务到了终态(get_job 查到的):它的回执就不必再送了。
+
+    回执是给「提交之后就断了线索」的那种情况的。智能体一直在轮询、已经拿到结果接着做完了的话,那句回执
+    还是会来 —— 它在这一轮跑着的时候到,进了排队,这一轮结束后又被当成一条新消息跑一轮,智能体回一句
+    「收到,这正是刚才那次解析的回执,不需要再做别的处理」(用户截图:「这种回执本身智能体调用 job 获取结果中
+    就有了的吧,为何还会独立显示」)。
+
+    两个先后都要管:回执已经排上队了 —— 从这次对话的队列里拿掉;还没送 —— 在任务上记一笔,送的时候跳过。
+    只认发给**这次对话**的回执:别的会话起的任务,这里看一眼不代表那边知道了。
+    """
+    job = db.get(Job, job_id)
+    if job is None or job.status not in TERMINAL_STATUSES:
+        return
+    receipt = (job.payload or {}).get("receipt")
+    if not isinstance(receipt, dict) or receipt.get("kind") != RECEIPT_KIND or receipt.get("session_id") != session_id:
+        return
+    if not receipt.get("seen"):
+        job.payload = {**(job.payload or {}), "receipt": {**receipt, "seen": True}}
+    queued = db.scalars(select(AgentMessage).where(AgentMessage.session_id == session_id, AgentMessage.role == "user"))
+    for message in queued:
+        payload = message.payload or {}
+        if payload.get("queued") and payload.get("from_job") == job.id:
+            db.delete(message)
 
 
 def install() -> None:
