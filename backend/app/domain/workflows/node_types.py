@@ -1582,7 +1582,8 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
             "model": {"type": "string", "options_from": "speech_video_models", "description": "wfNode_talking_segments_model"},
             "max_seconds": {"advanced": True, "type": "number", "description": "wfNode_talking_segments_max_seconds"},
         },
-        "outputs": ["segments", "cues", "count", "duration"],
+        #: `model`:按哪个说话照片模型的上限切的段 —— 下游「让它说话」的模型接它,两步用的是同一个。
+        "outputs": ["segments", "cues", "count", "duration", "model"],
         "output_types": {"segments": "json", "cues": "json", "count": "number", "duration": "number"},
     },
     "asset_tag": {

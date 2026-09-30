@@ -77,6 +77,21 @@ def test_按实测时长凑段_字幕时间照配音(voicing) -> None:
     assert (out["count"], out["duration"]) == (2, 30)
 
 
+def test_每段带着起止和挑定的模型_下游字幕和说话照片接得上(voicing) -> None:
+    """此前段落只有 start / duration:「生成字幕」按 start/end 读段落,接它就是 0 条;下游「让它说话」留空模型时
+    自己再挑一次,可能挑到上限不同的另一个 —— 分段是按这个模型的上限切的。"""
+    from app.domain.workflows import NODE_TYPES
+
+    voicing.seconds.update({"甲。": 8, "乙。": 7, "丙。": 6})
+    with SessionLocal() as db:
+        out = talking_segments(db, voicing.scope, {"text": "甲。乙。丙。", "engine": "builtin:edge", "voice": "v"})
+    assert [(one["start"], one["end"]) for one in out["segments"]] == [(0, 15), (15, 21)]
+    assert {one["model"] for one in out["segments"]} == {S2V["id"]} and out["model"] == S2V["id"]
+    declared = NODE_TYPES["talking_segments"]
+    assert declared["config"]["voice"]["required"] is True, "全是逐句配音,没有嗓子什么都做不了"
+    assert "model" in declared["outputs"]
+
+
 def test_一句一段的直接用那一段_上限只能往小里调(voicing) -> None:
     voicing.seconds.update({"甲。": 8, "乙。": 7})
     with SessionLocal() as db:

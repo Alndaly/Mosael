@@ -403,6 +403,10 @@ def talking_segments(db: Session, scope: RunScope, config: dict[str, Any]) -> di
             #: 静音处闭着嘴,比被拒强;时间线上这一段按补过的长度排,后面几段接着往后。
             audio = _pad_audio(db, scope, _asset_in(db, scope, audio), floor, name)
             cursor = start + floor
-        segments.append({"index": index, "audio_asset_id": audio, "start": round(start, 3),
-                         "duration": round(cursor - start, 3), "text": "".join(item[0] for item in group)})
-    return {"segments": segments, "cues": cues, "count": len(segments), "duration": round(cursor, 3)}
+        #: 每段带上 end(字幕、时间线节点按 start/end 读段落)和挑定的模型:下游逐段「让它说话」留空模型时
+        #: 各挑各的,可能挑到上限不同的另一个 —— 分段是按这个模型的上限切的,就该用这个模型说。
+        segments.append({"index": index, "audio_asset_id": audio, "start": round(start, 3), "end": round(cursor, 3),
+                         "duration": round(cursor - start, 3), "text": "".join(item[0] for item in group),
+                         "model": model["id"]})
+    return {"segments": segments, "cues": cues, "count": len(segments), "duration": round(cursor, 3),
+            "model": model["id"]}
