@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { WorkflowGraph } from "@/api/client";
-import { bodyKey, declaredFieldNames, graphAtScope, parseScopeId, scopeId, scopeIds, scopeVariables, withGraphAtScope } from "@/features/workflows/scope";
+import { bodyKey, bodyVariables, declaredFieldNames, graphAtScope, parseScopeId, scopeId, scopeIds, scopeVariables, withGraphAtScope } from "@/features/workflows/scope";
 
 //: 容器由声明认出来:有一个 graph 字段就是容器。类型名故意是假的。
 const registry = new Map<string, { config: Record<string, unknown> }>([
@@ -81,5 +81,19 @@ describe("体里能引用的变量", () => {
   it("declaredFieldNames 与节点输出的 `*params` 是同一种写法", () => {
     expect(declaredFieldNames(["*params", "text"], { params: { topic: 1 } })).toEqual(["topic", "text"]);
     expect(declaredFieldNames(["*params"], { params: "不是对象" })).toEqual([]);
+  });
+
+  it("容器自己的 output 能引用的:体里节点的输出(按声明展开)+ 体的作用域变量,不含容器外面的节点", () => {
+    const withOutputs = new Map<string, { config: Record<string, unknown>; outputs?: string[]; body_scope?: Record<string, string[]> }>([
+      ["sub", { config: { inputs: { type: "object" }, body: { type: "graph" } }, outputs: ["output"], body_scope: { input: ["*inputs"] } }],
+      ["start", { config: {}, outputs: ["*params"] }],
+      ["leaf", { config: {}, outputs: ["text"] }],
+    ]);
+    const container = node("sub-1", "sub", {
+      inputs: { topic: "{{outer.text}}" },
+      body: { nodes: [node("s", "start", { params: { q: "" } }), node("l", "leaf")], edges: [] },
+    });
+    expect(bodyVariables(container, withOutputs)).toEqual(["{{s.q}}", "{{l.text}}", "{{input.topic}}"]);
+    expect(bodyVariables(node("l", "leaf"), withOutputs)).toEqual([]);
   });
 });

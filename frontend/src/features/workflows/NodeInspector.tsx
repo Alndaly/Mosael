@@ -35,7 +35,7 @@ import { GENERATE_SPECIAL_CONFIG_KEYS, generateNodeSection, useGenerateNodeSecti
 import { LLM_SPECIAL_CONFIG_KEYS, llmAdvancedSection, llmPresetSection } from "@/features/workflows/nodeInspectorLlm";
 import { RunOutputs } from "@/features/workflows/RunOutputs";
 import type { Step } from "@/features/workflows/runSteps";
-import { declaredFieldNames } from "@/features/workflows/scope";
+import { bodyKey, bodyVariables, declaredFieldNames } from "@/features/workflows/scope";
 import { workflowNodeVisual } from "@/features/workflows/WorkflowNode";
 import type { SetGraphOptions } from "@/features/workflows/workflowGraphStore";
 import { EMPTY_SCOPE_VARIABLES } from "@/features/workflows/workflowViewShared";
@@ -122,6 +122,15 @@ export function NodeInspector({
     () => Array.from(new Set([...scopeVariables, ...upstreamVariables(graph, node.id, registry)])),
     [graph, node.id, registry, scopeVariables],
   );
+  //: 容器自己的 output / condition 在体跑完之后求值,能插的是体里节点的输出(和体的作用域变量),
+  //: 不是容器外面的上游 —— 列外层变量的话,选进去的引用运行时一律是空的。
+  const fieldVariables = React.useMemo(() => {
+    const inner = bodyVariables(node, registry);
+    const keys = Object.keys(meta?.config ?? {}).filter(
+      (key) => isNestedScopeConfig(registry, node.type, key) && key !== bodyKey(registry, node.type),
+    );
+    return Object.fromEntries(keys.map((key) => [key, inner]));
+  }, [meta, node, registry]);
 
   // 失效引用:本节点配置里引用了图中已不存在的节点(通常是上游被删)。
   const staleRefs = React.useMemo(() => {
@@ -407,6 +416,7 @@ export function NodeInspector({
       config={config}
       workspaceId={workspaceId}
       variables={variables}
+      fieldVariables={fieldVariables}
       fieldOptions={fieldOptions}
       onSetConfig={(key, value) => setConfig(key, value)}
       onTypeConfig={(key, value) => typeConfig(key)(value)}

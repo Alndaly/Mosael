@@ -307,6 +307,7 @@ export function NodeConfigForm({
   config,
   workspaceId,
   variables,
+  fieldVariables,
   fieldOptions,
   onSetConfig,
   onTypeConfig,
@@ -321,6 +322,8 @@ export function NodeConfigForm({
   workspaceId: string;
   /** 模板 / 映射字段里能插的变量(`{{上游.输出}}`)。 */
   variables: string[];
+  /** 个别字段看得见的变量跟整个节点不一样时,按字段给:容器的 output / condition 读的是体内那份上下文。 */
+  fieldVariables?: Partial<Record<string, string[]>>;
   fieldOptions: NodeFieldOptions;
   /** 离散的一步(换下拉、挑素材)。 */
   onSetConfig: (key: string, value: unknown) => void;
@@ -363,6 +366,7 @@ export function NodeConfigForm({
           const own = renderOwnField?.(key, spec);
           if (own) return <React.Fragment key={key}>{own}</React.Fragment>;
           const value = config[key];
+          const insertable = fieldVariables?.[key] ?? variables;
           const isObject = spec?.type === "object";
           const isAssetList = spec?.type === "asset_list";
           const options = spec?.options
@@ -490,7 +494,7 @@ export function NodeConfigForm({
                 ) : (
                   <MapField
                     value={value}
-                    variables={variables}
+                    variables={insertable}
                     onChange={typeConfig(key)}
                   />
                 )
@@ -512,7 +516,7 @@ export function NodeConfigForm({
                   rows={spec?.multiline ? 4 : 2}
                   value={String(value ?? "")}
                   onChange={typeConfig(key)}
-                  variables={variables}
+                  variables={insertable}
                   placeholder={spec?.description ? undefined : t("wfRefEditorHint")}
                 />
               ) : (

@@ -139,3 +139,23 @@ export function scopeVariables(container: WNode | null, registry: ScopeRegistry)
   );
 }
 
+/**
+ * 容器**自己的** output / condition 里能引用的变量:体跑完之后的那份上下文 —— 体里每个节点的输出,
+ * 加上容器播种的作用域变量(执行器拿 `interpolate(output, 体的上下文)` 求值,见后端 executors/loops)。
+ *
+ * 不是容器外面的上游:这两格在体跑完之后才求值,外层节点的输出根本不在那份上下文里。
+ */
+export function bodyVariables(
+  container: WNode,
+  registry: { get(type: string): { config?: Record<string, unknown>; body_scope?: Record<string, string[]>; outputs?: string[] } | undefined },
+): string[] {
+  const key = bodyKey(registry, container.type);
+  if (!key) return [];
+  const inner = bodyOf(container, key).nodes.flatMap((node) =>
+    declaredFieldNames(registry.get(node.type)?.outputs ?? [], node.config as Record<string, unknown> | undefined).map(
+      (output) => `{{${node.id}.${output}}}`,
+    ),
+  );
+  return [...inner, ...scopeVariables(container, registry)];
+}
+
