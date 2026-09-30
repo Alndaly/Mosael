@@ -9,6 +9,7 @@ from typing import Any
 
 from app.domain.workflows import NODE_TYPES
 from app.domain.workflows.normalization import normalize_graph
+from app.domain.workflows.templates_models import ModelChoice
 
 
 TRANSLATED_DUB = "translated_dub"
@@ -16,7 +17,7 @@ TRANSLATED_DUB = "translated_dub"
 TRANSLATED_DUB_LIPSYNC = "translated_dub_lipsync"
 
 
-def translated_dub_graph(*, voice_id: str = "", lipsync: bool = False) -> dict[str, Any]:
+def translated_dub_graph(*, chat: ModelChoice | None = None, voice_id: str = "", lipsync: bool = False) -> dict[str, Any]:
     """视频 → 逐字稿 → 逐句翻译 → 译文字幕 → 变速配音 →(改口型)→ 导出。
 
     `lipsync`:「视频翻译 · 改口型」(ADR 0028 阶段 3)—— 配完音再让原片的嘴对上配音轨(`dub_lipsync`:按句间空当
@@ -36,7 +37,10 @@ def translated_dub_graph(*, voice_id: str = "", lipsync: bool = False) -> dict[s
     **配音靠变速塞回原长度,不是靠裁剪。** 同一句话译成另一种语言,长度天然对不上;裁掉尾巴等于
     把话说一半,留空则对不上口型。变速改的是片段的 speed(渲染时 atempo),无损、可撤销、事后
     还能在检查器里逐条微调 —— 这是 `dub_subtitles` 的 match_duration。
+
+    `chat`:翻译用的对话连接与模型(建图时按这个人挑好,见 templates._chat_model);不给就留空,由用户在节点上选。
     """
+    chat = chat or ModelChoice()
     nodes: list[dict[str, Any]] = [
         {
             "id": "start",
@@ -106,6 +110,10 @@ def translated_dub_graph(*, voice_id: str = "", lipsync: bool = False) -> dict[s
                 # 这条链路本来就在用用户自己的供应商(转写、配音都是),翻译用同一套不是新的
                 # 花费面;而且 LLM 读的是整句,译文比逐词接口好。节点上仍然可以换回 google。
                 "engine": "builtin:chat",
+                #: 用哪条连接、哪个模型写死在节点上(建图时按这个人的对话模型挑,和前置检查同一个)。
+                #: 此前只写了 engine,运行时回退到「最早建的那条连接」,不管它会不会对话。
+                "profile_id": chat.profile_id,
+                "model": chat.model,
             },
         },
         {

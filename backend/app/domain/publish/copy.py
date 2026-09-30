@@ -16,7 +16,7 @@ from app.core.i18n import LocalizedError
 from app.db.models import Asset, Transcript
 from app.domain.ai_chat import AiChatError, ChatTarget, chat, target_for
 from app.domain.billing.usage import BillableCall, billable, once
-from app.domain.providers.selection import require_connection
+from app.domain.providers.chat_connection import require_connection
 from app.domain.publish import PublishDomainError
 
 TIMEOUT_SECONDS = 90

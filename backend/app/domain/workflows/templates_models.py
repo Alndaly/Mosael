@@ -127,6 +127,12 @@ def _pick(db: Session, user_id: str, kind: str, usable) -> ModelChoice:
     return ModelChoice()
 
 
+def _chat_model(db: Session, user_id: str) -> ModelChoice:
+    """模板里要对话的那几步用哪个模型。**建图写在节点上的和前置检查问的是同一个**:此前建图用 `_default_model`
+    (没设默认就留空),检查用 `_pick`(没默认也挑一个配好的)—— 检查说齐了,建出来的节点却是空的。"""
+    return _pick(db, user_id, "chat", lambda _db, choice: bool(choice.model))
+
+
 def _shot_video_model(db: Session, user_id: str) -> ModelChoice:
     return _pick(db, user_id, "video", _can_shoot_from_references)
 

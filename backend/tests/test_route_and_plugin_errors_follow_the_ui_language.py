@@ -93,7 +93,7 @@ def test_ai_call_errors_translate_the_label_too() -> None:
 def test_connection_errors_speak_through_whatever_error_type_the_caller_chose() -> None:
     """require_connection 用调用方给的错误类型报错:带 key 的收 key,别的收一句按当前语言翻好的话。"""
     from app.domain.ai_chat import AiChatError
-    from app.domain.providers.selection import _connection_error
+    from app.domain.providers.chat_connection import _connection_error
 
     set_current_locale("en")
     keyed = _connection_error(AiChatError, "providerErr_noKey", name="Kimi")

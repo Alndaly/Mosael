@@ -24,7 +24,7 @@ from app.domain.billing.usage import BillableCall, billable, once
 from sqlalchemy.orm import Session
 
 from app.domain.providers import models as provider_models
-from app.domain.providers.selection import require_connection
+from app.domain.providers.chat_connection import require_connection
 from app.core.i18n import LocalizedError
 
 _LLM_TIMEOUT_SECONDS = 60.0

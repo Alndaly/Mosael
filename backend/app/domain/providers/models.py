@@ -28,7 +28,7 @@ from app.core.i18n import tr
 from app.db.models import GenerationCapabilityDeclaration, ProviderModel, ProviderProfile
 from app.domain.providers import thinking
 from app.domain.providers.credentials import ResolvedConnection
-from app.domain.providers.selection import capability_ids_for_vendor, normalize_capability_ids
+from app.domain.providers.presets import capability_ids_for_vendor, normalize_capability_ids
 
 #: 模型行上可被用户覆盖的运行时参数。留空表示跟随目录/保守默认 —— 与 False 是两回事。
 RUNTIME_FIELDS = (

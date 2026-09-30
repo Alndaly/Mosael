@@ -69,11 +69,12 @@ CHAT = "builtin:chat"
 
 
 def _chat_ready(db, owner_user_id: str | None) -> tuple[str, ...]:
-    """对话模型那一家要**这个人**有一条启用着的对话连接 —— 钥匙归人。"""
-    from app.domain.providers.selection import first_enabled_connection
+    """对话模型那一家要**这个人**有一个启用着的对话模型 —— 钥匙归人。此前只看「有没有随便一条启用的连接」,
+    只接了生图连接的人也算齐了。用哪一个(点名的,或他的默认)到翻译时再解析(resolve_ai_chat_target)。"""
+    from app.domain.providers.models import models_for_capability
 
     #: 没有主人(系统任务、单元测试)就没有「他的连接」—— 连接归人。
-    if db is None or not owner_user_id or first_enabled_connection(db, owner_user_id=owner_user_id) is None:
+    if db is None or not owner_user_id or not models_for_capability(db, "chat", user_id=owner_user_id):
         return (tr("translateHint_noChatConnection"),)
     return ()
 
@@ -112,12 +113,15 @@ def resolve_ai_chat_target(
     """`surface` 是调用方所在的执行通道(见 ai_chat.target_for):工作流节点是 automation ——
     订阅授权的连接经网关可用,和 LLM 节点一样;界面上的翻译接口是 direct。"""
     from app.domain.providers import credentials as provider_credentials
-    from app.domain.providers.selection import find_enabled_connection, first_enabled_connection
+    from app.domain.providers.chat_connection import default_chat_connection
+    from app.domain.providers.selection import find_enabled_connection
 
+    #: 没点名连接:他的默认对话模型所在的那条(和 LLM 节点同一个挑法,见 default_chat_connection)。此前是
+    #: 最早建的那条启用连接 —— 不管它会不会对话,官方译配模板又没写连接,于是翻译跑到了一条生图连接上。
     profile = (
         find_enabled_connection(db, "", profile_id, owner_user_id=user_id)
         if profile_id
-        else first_enabled_connection(db, owner_user_id=user_id)
+        else default_chat_connection(db, owner_user_id=user_id)
     )
     if profile is None or not profile.enabled:
         raise TranslateError("translateErr_noProvider")

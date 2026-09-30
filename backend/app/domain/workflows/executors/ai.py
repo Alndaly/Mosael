@@ -13,7 +13,7 @@ from app.core.usage_scope import workspace_scope
 from app.domain.ai_runtime import configured_max_retries
 from app.domain.ai_chat import AiChatError, chat, response_format_tier, target_for
 from app.domain.billing.usage import billable, once
-from app.domain.providers.selection import require_connection
+from app.domain.providers.chat_connection import require_connection
 from app.domain.workflows import WorkflowDomainError, field_name
 from app.domain.jobs import current_actor
 from app.domain.workflows.executors.registry import RunScope, register

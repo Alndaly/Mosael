@@ -9,12 +9,13 @@ from __future__ import annotations
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.i18n import LocalizedError, tr
 from app.db.models import ProviderProfile
 from app.domain.providers import credentials as provider_credentials
-from app.domain.providers.presets import (
+from app.domain.providers.presets import (  # noqa: F401 —— 两个 vendor 能力函数在 presets,这里照旧可取
     KNOWN_AUTH_TYPES,
     KNOWN_CAPABILITY_IDS,
+    capability_ids_for_vendor,
+    normalize_capability_ids,
     provider_definition,
 )
 from app.domain.providers.credentials import ResolvedConnection
@@ -47,27 +48,6 @@ def normalize_auth_type(vendor: str, value: str | None) -> str:
 
 # 已知能力全集(建/改档案时校验覆盖值,过滤掉无意义的能力名)。
 ALL_CAPABILITY_IDS = KNOWN_CAPABILITY_IDS
-
-
-def capability_ids_for_vendor(vendor: str) -> list[str]:
-    """Runnable capability ids exposed by one configured profile.
-
-    This is the providers Module's capability Interface: the UI, defaults, and
-    validation all ask here instead of re-reading a free-form capability string.
-    """
-    definition = provider_definition(vendor)
-    return list(definition.capability_ids) if definition else []
-
-
-def normalize_capability_ids(values: list[str] | None) -> list[str] | None:
-    """把用户传入的能力覆盖收敛成"已知能力、去重保序"的列表;None 透传(表示沿用 vendor 默认)。"""
-    if values is None:
-        return None
-    seen: list[str] = []
-    for value in values:
-        if value in ALL_CAPABILITY_IDS and value not in seen:
-            seen.append(value)
-    return seen
 
 
 def supports_capability(vendor: str, capability: str) -> bool:
@@ -175,49 +155,3 @@ def resolve_connection(
         find_enabled_connection(db, vendor, profile_id, owner_user_id=user_id),
         user_id,
     )
-
-
-def first_enabled_connection(
-    db: Session,
-    *,
-    owner_user_id: str | None = None,
-) -> ProviderProfile | None:
-    """第一个启用的连接；给出用户时只在该用户的连接中选择。"""
-    stmt = select(ProviderProfile).where(ProviderProfile.enabled.is_(True))
-    if owner_user_id is not None:
-        stmt = stmt.where(ProviderProfile.owner_user_id == owner_user_id)
-    return db.scalars(stmt.order_by(ProviderProfile.created_at).limit(1)).first()
-
-
-def _connection_error(error: type[Exception], key: str, **params: object) -> Exception:
-    """用调用方给的错误类型说「连接不可用」。
-
-    带文案 key 的错误(LocalizedError)收 key,到展示的时候才按读的人的语言翻;别的错误类型只收
-    一句话,就按**现在**的语言翻好了给它。"""
-    if issubclass(error, LocalizedError):
-        return error(key, **params)
-    return error(tr(key, **params))
-
-
-def require_connection(
-    db: Session, profile_id: str | None = None, *, user_id: str | None, error: type[Exception] = RuntimeError
-) -> ResolvedConnection:
-    """指定 id 时要求该 profile 存在且启用;缺省回退最早启用的一个。
-
-    供应商选取是 providers 领域的事——workflows / publish / agent 各自的调用方只提供
-    要抛的领域错误类型,不再各自复制这段查询(此前同一逻辑存在三份)。
-    """
-    if profile_id:
-        profile = db.get(ProviderProfile, str(profile_id))
-        if profile is None or not profile.enabled or (user_id is not None and profile.owner_user_id != user_id):
-            raise _connection_error(error, "providerErr_connectionMissing")
-    else:
-        profile = first_enabled_connection(db, owner_user_id=user_id)
-        if profile is None:
-            raise _connection_error(error, "providerErr_noConnection")
-    resolved = provider_credentials.resolve_connection(db, profile, user_id)
-    if resolved is None:
-        # 没有可用的钥匙时报出来,而不是找一把能用的顶上 —— 「我以为花的是自己的额度,
-        # 其实花的是别人的钱」是这里最坏的失败方式。
-        raise _connection_error(error, "providerErr_noKey", name=profile.name)
-    return resolved

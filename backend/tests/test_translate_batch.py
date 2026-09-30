@@ -137,7 +137,8 @@ def test_ai_provider_is_read_once_before_the_pool_starts() -> None:
             return None
 
     with pytest.raises(tr.TranslateError):  # no enabled provider
-        tr.translate_many(FakeSession(), ["a", "b", "c"], "en", user_id=None, engine="builtin:chat")
+        #: 点名一条连接:没点名时没有主人就没有「他的连接」,根本不读库,这条断言就测不到什么。
+        tr.translate_many(FakeSession(), ["a", "b", "c"], "en", user_id=None, engine="builtin:chat", profile_id="p")
     assert reads, "provider was never resolved"
     assert all(name == threading.current_thread().name for name in reads), (
         "the DB was read from a worker thread"

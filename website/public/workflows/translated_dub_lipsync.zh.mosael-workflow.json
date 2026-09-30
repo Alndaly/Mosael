@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "视频翻译 · 改口型",
   "description": "在「视频译配」的基础上,配完音再让原片里说话人的嘴对上译文配音:按两句之间的空当把原片切成模型收得下的块,有配音的块改口型,接回整段盖在原片上(原片不动,删掉那条轨就回到原样),导出成片带「AI 生成」标识。运行前在「让原片的嘴对上配音」上确认已取得本人授权。",
-  "graph_hash": "5274ca4b95a67850e8b7d7027bd8b415bf88994662ff3530907723dc6e6ffde3",
+  "graph_hash": "d221e9866a37d259da53cb75e935913cf428873cd8807f0c0ef8439878732044",
   "graph": {
     "meta": {
       "template_id": "translated_dub_lipsync",
@@ -104,7 +104,9 @@
         "config": {
           "texts": "",
           "target_lang": "en",
-          "engine": "builtin:chat"
+          "engine": "builtin:chat",
+          "profile_id": "",
+          "model": ""
         },
         "inputs": [
           "texts"

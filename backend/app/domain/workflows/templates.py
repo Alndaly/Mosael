@@ -47,12 +47,13 @@ from app.domain.workflows.templates_models import (
     ModelChoice,  # noqa: F401
     VideoPlan,  # noqa: F401
     ImagePlan,  # noqa: F401
-    _default_model,
+    _default_model,  # noqa: F401
     _capabilities,  # noqa: F401
     REFERENCE_IMAGES_NEEDED,  # noqa: F401
     _can_take_references,  # noqa: F401
     _can_shoot_from_references,  # noqa: F401
-    _pick,
+    _pick,  # noqa: F401
+    _chat_model,
     _shot_video_model,
     _reference_image_model,
     _image_plan,  # noqa: F401
@@ -259,7 +260,7 @@ def built_in_template_graph(
     """按模板造一张图。**节点名在这一刻定语言** —— 图一落库就是用户的数据(他随时可以改名),
     出口再翻就等于翻用户自己写的字。翻译贴着模板里的节点写(见 core.i18n.pick_text),
     和插件清单同一套。"""
-    chat = _default_model(db, "chat", user_id)
+    chat = _chat_model(db, user_id)
     if template_id == FULL_VIDEO_GENERATION:
         return localised_names(locale, full_video_generation_graph(
             chat=chat,
@@ -275,7 +276,7 @@ def built_in_template_graph(
     if template_id in (TRANSLATED_DUB, TRANSLATED_DUB_LIPSYNC):
         # 音色和整片生成那条一样按工作区取:克隆音色存在工作区名下,不跟人走。
         return localised_names(locale, translated_dub_graph(
-            voice_id=_first_voice_id(db, workspace_id), lipsync=template_id == TRANSLATED_DUB_LIPSYNC))
+            chat=chat, voice_id=_first_voice_id(db, workspace_id), lipsync=template_id == TRANSLATED_DUB_LIPSYNC))
     if template_id == HIGHLIGHT_SHORTS:
         # 不生成画面,所以只要对话模型;转写引擎由节点自己挑。
         return localised_names(locale, highlight_shorts_graph(chat=chat))
@@ -368,7 +369,7 @@ def requirement_statuses(db: Session, *, user_id: str, workspace_id: str) -> dic
     from app.domain.voices import transcription
     from app.domain.workflows.executors.talking import SPEECH_TO_VIDEO, VIDEO_LIPSYNC, talking_models
 
-    has_chat = bool(_pick(db, user_id, "chat", lambda _db, choice: bool(choice.model)).model)
+    has_chat = bool(_chat_model(db, user_id).model)
     statuses: dict[str, CheckStatus] = {
         CHAT_MODEL: "met" if has_chat else "missing",
         REFERENCE_IMAGE_MODEL: "met" if _reference_image_model(db, user_id).model else "missing",

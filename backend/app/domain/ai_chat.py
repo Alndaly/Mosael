@@ -125,7 +125,8 @@ def target_for(
     model 留空时按这条连接的 chat 能力解析;解析不出来当场报错,而不是发一个空 model 让供应商
     回一句看不懂的 400。
     """
-    resolved = model or provider_models.model_id_for(db, profile, "chat")
+    #: 带上钥匙的主人:他的默认对话模型正好在这条连接上就用它,而不是这条连接上随便第一个对话模型。
+    resolved = model or provider_models.model_id_for(db, profile, "chat", profile.owner_user_id)
     if not resolved:
         raise AiChatError("aiChat_noChatModel", name=profile.name)
     if profile.auth_type == "oauth" and surface == "automation":

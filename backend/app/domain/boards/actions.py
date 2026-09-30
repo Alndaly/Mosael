@@ -423,7 +423,7 @@ def write_on_board(
     **也不自己实现「调 LLM」**:供应商解析、调用、计量和工作流的 LLM 节点、智能体是同三样东西。
     """
     from app.domain.ai_chat import AiChatError, chat, target_for
-    from app.domain.providers.selection import require_connection
+    from app.domain.providers.chat_connection import require_connection
     from app.domain.billing.usage import billable, once
 
     prompt = prompt.strip()

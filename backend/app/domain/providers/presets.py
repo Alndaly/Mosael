@@ -640,3 +640,26 @@ def provider_definitions() -> tuple[ProviderDefinition, ...]:
 def provider_definition(vendor: str) -> ProviderDefinition | None:
     """Look up a known Provider without manufacturing metadata for unknown ids."""
     return _PROVIDER_DEFINITIONS_BY_VENDOR.get(vendor)
+
+
+#: 下面两个只读预设(不碰库),providers.models 要用。住在这里而不是 selection:models 只该依赖预设,
+#: 不该为两个纯函数依赖「挑连接」的那一层。
+def capability_ids_for_vendor(vendor: str) -> list[str]:
+    """Runnable capability ids exposed by one configured profile.
+
+    This is the providers Module's capability Interface: the UI, defaults, and
+    validation all ask here instead of re-reading a free-form capability string.
+    """
+    definition = provider_definition(vendor)
+    return list(definition.capability_ids) if definition else []
+
+
+def normalize_capability_ids(values: list[str] | None) -> list[str] | None:
+    """把用户传入的能力覆盖收敛成"已知能力、去重保序"的列表;None 透传(表示沿用 vendor 默认)。"""
+    if values is None:
+        return None
+    seen: list[str] = []
+    for value in values:
+        if value in KNOWN_CAPABILITY_IDS and value not in seen:
+            seen.append(value)
+    return seen
