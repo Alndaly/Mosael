@@ -15,7 +15,7 @@ from app.domain.sequences import create_sequence_scaffold
 from app.domain.workflows import WorkflowDomainError
 from app.domain.plugins.nodes import PLUGIN_NODE_PREFIX
 from app.domain.workflows.executors.registry import RunScope, register, register_prefix
-from app.domain.workflows.executors.common import id_list, provided
+from app.domain.workflows.executors.common import id_list, provided, whole_number
 
 
 def _run_plugin_tool(
@@ -120,13 +120,10 @@ def asset_query(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[st
     """Batch-select workspace assets by filters → {assets, ids, count}. Feeds loop_foreach.items."""
     kind = str(config.get("kind") or "all").strip()
     name_contains = str(config.get("name_contains") or "").strip()
-    tags_raw = str(config.get("tags") or "").strip().replace("，", ",")
-    wanted_tags = {tag.strip() for tag in tags_raw.split(",") if tag.strip()}
-    try:
-        limit = int(config.get("limit") or 50)
-    except (TypeError, ValueError):
-        limit = 50
-    limit = max(1, min(limit, 500))
+    # 和「素材打标签」同一种解析(id_list):手填是逗号分隔的一串,接上游时常常是一个真列表 ——
+    # 此前 `str()` 了它,`['a', 'b']` 被当成一个叫 "['a'" 的标签,什么都筛不出来,也不报错。
+    wanted_tags = set(id_list(config.get("tags")))
+    limit = max(1, min(whole_number(config, "limit", node_type="asset_query", default=50), 500))
 
     stmt = select(Asset).where(Asset.workspace_id == scope.workspace_id)
     if kind and kind != "all":

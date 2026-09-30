@@ -396,7 +396,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfNode_asset_query_desc": {"zh": "按条件批量选出工作区里的素材(类型/名称/标签),输出素材列表 —— 常接「循环·遍历」的 items 逐个处理。", "en": "Select assets in this workspace in bulk (by kind / name / tags) and output the list — usually feeding the items of a “Loop · for each”."},
     "wfNode_asset_query_kind": {"zh": "素材类型", "en": "Asset kind"},
     "wfNode_asset_query_name_contains": {"zh": "留空不筛", "en": "Leave empty to not filter"},
-    "wfNode_asset_query_tags": {"zh": "逗号分隔,命中任一即选;留空不筛", "en": "Comma separated; matching any one selects it. Leave empty to not filter"},
+    "wfNode_asset_query_tags": {"zh": "逗号分隔(或接上游的一个列表),命中任一即选;留空不筛", "en": "Comma separated (or a list from an upstream node); matching any one selects it. Leave empty to not filter"},
     "wfNode_asset_query_limit": {"zh": "最多返回条数(默认 50,上限 500)", "en": "Maximum number returned (50 by default, capped at 500)"},
     "wfNode_asset_tag": {"zh": "素材打标签", "en": "Tag assets"},
     "wfNode_asset_tag_desc": {"zh": "给素材增删标签 —— 常接「素材筛选」或「循环·遍历」,把整理归档做成一步。", "en": "Add or remove tags on assets — usually after “Find assets” or “Loop · for each”, turning filing into a single step."},
