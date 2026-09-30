@@ -5965,6 +5965,81 @@ def _migrate_named_browser_partitions_are_per_workspace() -> None:
                 logger.info("具名浏览器分区 %s 归工作区 %s,放弃工作区 %s 那份", old, winner, workspace_id)
 
 
+def _rewrite_workflow_graphs(rewrite: Any, note: str) -> int:
+    """把每个工作流的当前图过一遍 `rewrite`(连同循环体 / 子图,由 `rewrite` 自己走);变了的追加一版修订。
+
+    修订表建好之后的图迁移都得这么落(`workflows.graph` 是最新修订的投影,只改投影会让两边对不上):
+    作者沿用上一版,认可过上一版的人照样为这一版担保 —— 机械改写不换担保人,也不该让跑得好好的流程停下来等人认可
+    (同 domain/workflows/plugin_references)。
+    """
+    from sqlalchemy import select
+    from sqlalchemy.orm import Session
+
+    from app.db.models import Workflow, WorkflowRevisionAttestation
+    from app.domain.workflows.revisions import commit_graph_revision, current_workflow_revision, revision_vouchers
+
+    changed = 0
+    with Session(engine) as db:
+        for workflow in db.scalars(select(Workflow)).all():
+            if rewrite(json.loads(json.dumps(workflow.graph))) == workflow.graph:
+                continue
+            previous = current_workflow_revision(db, workflow)
+            vouchers = revision_vouchers(db, previous)
+            revision = commit_graph_revision(
+                db, workflow, rewrite, source="migration", created_by=previous.created_by, note=note,
+            )
+            if revision is not None:
+                for user in vouchers - {revision.created_by}:
+                    db.add(WorkflowRevisionAttestation(revision_id=revision.id, user_id=user))
+                changed += 1
+        db.commit()
+    return changed
+
+
+def _walk_graph_nodes(graph: Any, visit: Any) -> Any:
+    """一张图(连同循环体 / 子图体)里的每个节点交给 `visit(node) -> node`,返回新图。不改原图。"""
+    if not isinstance(graph, dict):
+        return graph
+    nodes = []
+    for node in graph.get("nodes") or []:
+        if not isinstance(node, dict):
+            nodes.append(node)
+            continue
+        config = dict(node.get("config") or {})
+        for key, value in config.items():
+            if isinstance(value, dict) and isinstance(value.get("nodes"), list):
+                config[key] = _walk_graph_nodes(value, visit)
+        nodes.append(visit({**node, "config": config}))
+    return {**graph, "nodes": nodes}
+
+
+def _migrate_browser_nodes_fill_one_target() -> None:
+    """「点击」的选择器 / 文字、「等待」的元素 / 网址 / 文字改成只能填一样(`one_of`):两样都填了的老节点,
+    只留执行器此前实际用的那一样。
+
+    执行器一直是按先后取的:点击先认选择器,等待按「元素 → 网址 → 文字」。多填的那几格从来没起过作用,
+    留着只会让运行前校验把这条流程拦下来;清掉它们,流程的行为一点不变。
+    """
+    if not {"workflows", "workflow_revisions"} <= set(inspect(engine).get_table_names()):
+        return
+    precedence = {"browser_click": ("selector", "text"), "browser_wait": ("selector", "url_contains", "text")}
+
+    def visit(node: dict[str, Any]) -> dict[str, Any]:
+        order = precedence.get(str(node.get("type")))
+        config = node["config"]
+        if not order:
+            return node
+        filled = [key for key in order if config.get(key) not in (None, "")]
+        if len(filled) < 2:
+            return node
+        return {**node, "config": {key: value for key, value in config.items() if key not in filled[1:]}}
+
+    _rewrite_workflow_graphs(
+        lambda graph: _walk_graph_nodes(graph, visit),
+        "浏览器节点的点击目标 / 等待条件改成只填一样:清掉执行器此前就没用到的那几格",
+    )
+
+
 def _reindex_record_references() -> None:
     """引用表(record_references)是派生数据:抽取规则一变,整张按新规则重建。"""
     from app.db.references import reindex
@@ -6199,6 +6274,11 @@ def migration_plan() -> MigrationPlan:
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_agent_session_titles_drop_attachment_tokens),
             #: 具名浏览器会话的登录分区按工作区分开:写下搬家单,由 Electron 执行器在磁盘上搬(新表由 SCHEMA 建)。
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_named_browser_partitions_are_per_workspace),
+            #: 这几条都落新修订(commit_graph_revision),所以排在修订迁移之后。
+            *_steps(
+                MigrationPhase.AFTER_SCHEMA,
+                _migrate_browser_nodes_fill_one_target,
+            ),
             #: 生成记录自己存失败原因、会话按种类分页、提示词里拆出画板补的素材对照。回填要读 jobs.error_key ——
             #: 它在很老的库上由上面的 migrate-job-message-i18n 补上,所以排在它后面。
             *_steps(

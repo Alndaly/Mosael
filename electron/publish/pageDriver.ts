@@ -7,6 +7,7 @@
 import type { NativeImage, WebContents } from "electron";
 import { writeFile } from "node:fs/promises";
 
+import { ElementMissingError } from "./errors";
 import { plog } from "./log";
 
 const wait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
@@ -46,6 +47,11 @@ const KEY_MAP: Record<string, string> = {
  */
 /** 单次求值的兜底上限。调用方给了更短的预算就用更短的。 */
 const EVALUATE_TIMEOUT_MS = 20_000;
+
+/** 一次导航的结局。rejected 带着 Chromium 的网络错误码(errno 是负数,code 是 ERR_… 名字)。 */
+export type GotoOutcome =
+  | { outcome: "loaded" | "timeout" }
+  | { outcome: "rejected"; errno?: number; code: string };
 
 export class PageDriver {
   private debuggerAttached = false;
@@ -203,19 +209,33 @@ export class PageDriver {
     });
   }
 
-  async goto(url: string): Promise<void> {
+  /**
+   * 导航。**不抛**,把发生了什么交回去:发布适配器照旧只管往下走(checkLogin 会判页面到没到),
+   * 浏览器自动化的「导航」据此区分「打开了」和「没打开」(见 browserActions)。
+   */
+  async goto(url: string): Promise<GotoOutcome> {
     plog("goto:", url);
     // loadURL 的 promise 等 did-finish-load;B 站等重前端页面可能长期不触发(未登录重定向 +
     // 持续加载),没有超时就会把整条认领链吊死。超时后放行:页面通常已可交互,交给 checkLogin 判断。
-    const timeout = new Promise<"timeout">((resolve) => setTimeout(() => resolve("timeout"), 45_000));
-    const outcome = await Promise.race([
+    const timeout = new Promise<GotoOutcome>((resolve) => setTimeout(() => resolve({ outcome: "timeout" }), 45_000));
+    const result = await Promise.race([
       this.wc.loadURL(url).then(
-        () => "loaded" as const,
-        (error) => (plog("goto rejected:", url, String(error).slice(0, 160)), "rejected" as const),
+        (): GotoOutcome => ({ outcome: "loaded" }),
+        (error: unknown): GotoOutcome => {
+          plog("goto rejected:", url, String(error).slice(0, 160));
+          // Electron 的 loadURL 失败带着 Chromium 的网络错误:errno(-105)和 code(ERR_NAME_NOT_RESOLVED)。
+          const { errno, code } = (error ?? {}) as { errno?: unknown; code?: unknown };
+          return {
+            outcome: "rejected",
+            errno: typeof errno === "number" ? errno : undefined,
+            code: typeof code === "string" ? code : String(error).slice(0, 120),
+          };
+        },
       ),
       timeout,
     ]);
-    plog(`goto ${outcome}:`, this.wc.getURL());
+    plog(`goto ${result.outcome}:`, this.wc.getURL());
+    return result;
   }
 
   async setHtml(html: string): Promise<void> {
@@ -389,7 +409,7 @@ export class PageDriver {
       return true;
     })()`);
     if (!ok) {
-      throw new Error(`fillField: element not found: ${selector}`);
+      throw new ElementMissingError(selector, `fillField: element not found: ${selector}`);
     }
   }
 
@@ -431,7 +451,7 @@ export class PageDriver {
       `(() => { ${this.deepQueryPrelude(selector)} const el = find(document); if (!el) return false; el.click(); return true; })()`,
     );
     if (!ok) {
-      throw new Error(`clickCss: element not found: ${selector}`);
+      throw new ElementMissingError(selector, `clickCss: element not found: ${selector}`);
     }
   }
 
@@ -676,7 +696,7 @@ export class PageDriver {
       return true;
     })()`);
     if (!ok) {
-      throw new Error(`clickByText: no clickable element with text: ${text}`);
+      throw new ElementMissingError(text, `clickByText: no clickable element with text: ${text}`);
     }
   }
 

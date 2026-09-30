@@ -1,4 +1,5 @@
 import type { PageDriver } from "./pageDriver";
+import { ElementMissingError } from "./errors";
 import { t } from "../i18n.cjs";
 
 export interface ActionOutcome {
@@ -12,6 +13,55 @@ const s = (v: unknown): string => (v == null ? "" : String(v));
 const brief = (v: string, max = 80): string => (v.length <= max ? v : `${v.slice(0, max - 1)}…`);
 
 /**
+ * 点击 / 输入之前等元素出现多久(毫秒),调用方没说就用它。页面刚导航完、或者点了一下之后才挂出来的
+ * 按钮,很少在第一拍就在 —— 此前找不到就立刻报错,工作流里得在每个点击前面垫一个「等待」节点。
+ */
+export const ELEMENT_WAIT_MS = 5_000;
+const ELEMENT_POLL_MS = 250;
+
+/**
+ * 导航被放行的那一种失败:ERR_ABORTED(-3)。单页应用在加载途中自己改地址、重定向到登录页时,
+ * 最初那次加载就是这样收场的 —— 页面其实到了。别的失败(域名解析不了、连不上、证书错)都是没打开。
+ */
+const ERR_ABORTED = -3;
+
+/**
+ * 在短等待里反复试一个「找不到元素就抛 ElementMissingError」的动作。等到了就照常返回;
+ * 等满还找不到,报一句按界面语言翻好的话(此前是 `clickCss: element not found: …` 这句英文)。
+ */
+async function untilFound(
+  driver: PageDriver,
+  waitMs: number,
+  what: string,
+  attempt: () => Promise<void>,
+): Promise<void> {
+  const deadline = Date.now() + Math.max(0, waitMs);
+  for (;;) {
+    try {
+      await attempt();
+      return;
+    } catch (error) {
+      if (!(error instanceof ElementMissingError)) throw error;
+      if (Date.now() >= deadline) {
+        throw new Error(
+          t("browserErr_elementMissing", {
+            target: brief(what),
+            seconds: (Math.max(0, waitMs) / 1000).toFixed(1),
+            url: brief(driver.url(), 120),
+          }),
+        );
+      }
+    }
+    await new Promise((resolve) => setTimeout(resolve, Math.min(ELEMENT_POLL_MS, Math.max(0, deadline - Date.now()))));
+  }
+}
+
+const waitMsOf = (args: Record<string, unknown>): number => {
+  const raw = Number(args.wait_ms);
+  return Number.isFinite(raw) && raw >= 0 ? raw : ELEMENT_WAIT_MS;
+};
+
+/**
  * 把一个后端动作分派到 PageDriver:navigate/click/input/upload/press_key/extract/evaluate/wait/
  * scroll/screenshot。upload 经 CDP setFileInputFiles 塞文件(与发布上传同一套 driver.setFiles)。
  */
@@ -22,17 +72,32 @@ export async function executeBrowserAction(
 ): Promise<ActionOutcome> {
   switch (action) {
     case "navigate": {
-      await driver.goto(s(args.url));
-      return { lastUrl: driver.url() };
+      const url = s(args.url);
+      const result = await driver.goto(url);
+      // 没打开就说没打开:此前 loadURL 失败只记一行日志,节点照样「成功」,下一步在一张错误页上找元素。
+      if (result.outcome === "rejected" && result.errno !== ERR_ABORTED) {
+        throw new Error(t("browserErr_navigateFailed", { code: result.code, url: brief(url, 120) }));
+      }
+      const landed = driver.url();
+      if (landed.startsWith("chrome-error://")) {
+        throw new Error(t("browserErr_navigateFailed", { code: "chrome-error", url: brief(url, 120) }));
+      }
+      return { lastUrl: landed };
     }
     case "click": {
-      if (args.selector) await driver.clickCss(s(args.selector));
-      else if (args.text) await driver.clickByText(s(args.text), { exact: Boolean(args.exact) });
-      else throw new Error(t("browserErr_clickNeedsTarget"));
+      const waitMs = waitMsOf(args);
+      if (args.selector) {
+        const selector = s(args.selector);
+        await untilFound(driver, waitMs, selector, () => driver.clickCss(selector));
+      } else if (args.text) {
+        const text = s(args.text);
+        await untilFound(driver, waitMs, text, () => driver.clickByText(text, { exact: Boolean(args.exact) }));
+      } else throw new Error(t("browserErr_clickNeedsTarget"));
       return { lastUrl: driver.url() };
     }
     case "input": {
-      await driver.fillField(s(args.selector), s(args.value));
+      const selector = s(args.selector);
+      await untilFound(driver, waitMsOf(args), selector, () => driver.fillField(selector, s(args.value)));
       return { lastUrl: driver.url() };
     }
     case "upload": {
@@ -54,12 +119,22 @@ export async function executeBrowserAction(
       const selector = s(args.selector);
       const attribute = args.attribute ? s(args.attribute) : null;
       const all = Boolean(args.all);
+      // 找不到时回 undefined(和「找到了、值是 null」分开):选择器写错 / 页面改版时说出来,
+      // 而不是交出一个空值让下游安静地拿着它往下跑。确实可能没有的,由调用方打开 allow_missing。
       const expr = `(() => {
         const els = Array.from(document.querySelectorAll(${JSON.stringify(selector)}));
+        if (!els.length) return { missing: true };
         const get = (el) => ${attribute ? `el.getAttribute(${JSON.stringify(attribute)})` : "((el.innerText || el.textContent || '').trim())"};
-        return ${all ? "els.map(get)" : "(els[0] ? get(els[0]) : null)"};
+        return { value: ${all ? "els.map(get)" : "get(els[0])"} };
       })()`;
-      return { value: await driver.evaluate(expr), lastUrl: driver.url() };
+      const found = await driver.evaluate<{ missing?: boolean; value?: unknown }>(expr);
+      if (found?.missing) {
+        if (!args.allow_missing) {
+          throw new Error(t("browserErr_extractMissing", { selector: brief(selector), url: brief(driver.url(), 120) }));
+        }
+        return { value: all ? [] : null, lastUrl: driver.url() };
+      }
+      return { value: found?.value ?? null, lastUrl: driver.url() };
     }
     case "evaluate": {
       return { value: await driver.evaluate(s(args.expression)), lastUrl: driver.url() };
@@ -94,10 +169,20 @@ export async function executeBrowserAction(
       return { lastUrl: driver.url() };
     }
     case "scroll": {
-      const expr = args.selector
-        ? `(document.querySelector(${JSON.stringify(s(args.selector))}) || {}).scrollIntoView?.({ block: 'center' })`
-        : `window.scrollBy(0, ${Number(args.dy) || 600})`;
-      await driver.evaluate(expr);
+      if (args.selector) {
+        const selector = s(args.selector);
+        const found = await driver.evaluate<boolean>(`(() => {
+          const el = document.querySelector(${JSON.stringify(selector)});
+          if (!el) return false;
+          el.scrollIntoView({ block: 'center' });
+          return true;
+        })()`);
+        if (!found && !args.allow_missing) {
+          throw new Error(t("browserErr_scrollMissing", { selector: brief(selector), url: brief(driver.url(), 120) }));
+        }
+      } else {
+        await driver.evaluate(`window.scrollBy(0, ${Number(args.dy) || 600})`);
+      }
       return { lastUrl: driver.url() };
     }
     case "cookies": {

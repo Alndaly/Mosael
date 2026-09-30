@@ -127,6 +127,7 @@ def config_editor(key: str, spec: dict[str, Any]) -> str:
 _FIELD_LABELS = {
     "account_id": "wfField_account_id",
     "all": "wfField_all",
+    "allow_missing": "wfField_allow_missing",
     "asset_id": "wfField_asset_id",
     "asset_ids": "wfField_asset_ids",
     "attribute": "wfField_attribute",
@@ -238,6 +239,7 @@ _FIELD_LABELS = {
     "value": "wfField_value",
     "values": "wfField_values",
     "voice": "wfField_voice",
+    "wait_ms": "wfField_wait_ms",
     "width": "wfField_width",
     "grid": "wfField_grid",
     "gutter": "wfField_gutter",
@@ -1699,9 +1701,19 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "description": "wfNode_browser_open_desc",
         "config": {
             "url": {"type": "template", "description": "wfNode_browser_open_url"},
-            "session_mode": {"type": "string", "options": ["ephemeral", "named", "pool"], "description": "wfNode_browser_open_session_mode"},
-            "session_name": {"type": "template", "description": "wfNode_browser_open_session_name"},
-            "profile_id": {"type": "string", "description": "wfNode_browser_open_profile_id", "options_from": "browser_profiles"},
+            "session_mode": {
+                "type": "string", "options": ["ephemeral", "named", "pool"], "default": "ephemeral",
+                "description": "wfNode_browser_open_session_mode",
+            },
+            #: 只在对应的模式下出现、也只在那时必填(active_when + required,表单和运行前校验读同一条声明)。
+            "session_name": {
+                "type": "template", "required": True, "active_when": {"session_mode": "named"},
+                "description": "wfNode_browser_open_session_name",
+            },
+            "profile_id": {
+                "type": "string", "required": True, "active_when": {"session_mode": "pool"},
+                "description": "wfNode_browser_open_profile_id", "options_from": "browser_profiles",
+            },
         },
         "outputs": ["session"],
     },
@@ -1723,9 +1735,11 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "description": "wfNode_browser_click_desc",
         "config": {
             "session": {"type": "string", "required": True, "description": "wfNode_browser_click_session"},
-            "selector": {"type": "template", "description": "wfNode_browser_click_selector"},
-            "text": {"type": "template", "description": "wfNode_browser_click_text"},
+            #: 按选择器还是按文字点,恰好一个(one_of):两个都填时执行器只认选择器,文字那格静悄悄地不起作用。
+            "selector": {"type": "template", "one_of": "target", "description": "wfNode_browser_click_selector"},
+            "text": {"type": "template", "one_of": "target", "description": "wfNode_browser_click_text"},
             "exact": {"advanced": True, "type": "string", "options": ["false", "true"], "description": "wfNode_browser_click_exact"},
+            "wait_ms": {"advanced": True, "type": "number", "description": "wfNode_browser_click_wait_ms"},
         },
         "outputs": ["session"],
     },
@@ -1738,6 +1752,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
             "session": {"type": "string", "required": True, "description": "wfNode_browser_input_session"},
             "selector": {"type": "template", "required": True, "description": "wfNode_browser_input_selector"},
             "value": {"type": "template", "description": "wfNode_browser_input_value"},
+            "wait_ms": {"advanced": True, "type": "number", "description": "wfNode_browser_input_wait_ms"},
         },
         "outputs": ["session"],
     },
@@ -1765,6 +1780,10 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
             "selector": {"type": "template", "required": True, "description": "wfNode_browser_extract_selector"},
             "attribute": {"advanced": True, "type": "template", "description": "wfNode_browser_extract_attribute"},
             "all": {"advanced": True, "type": "string", "options": ["false", "true"], "description": "wfNode_browser_extract_all"},
+            "allow_missing": {
+                "advanced": True, "type": "string", "options": ["false", "true"],
+                "description": "wfNode_browser_extract_allow_missing",
+            },
         },
         "outputs": ["session", "value"],
     },
@@ -1775,10 +1794,11 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "description": "wfNode_browser_wait_desc",
         "config": {
             "session": {"type": "string", "required": True, "description": "wfNode_browser_wait_session"},
-            "selector": {"type": "template", "description": "wfNode_browser_wait_selector"},
+            #: 等什么,三选一(one_of),三个都在第一屏:此前网址和文字收在高级里,只看第一屏的人以为只能等元素。
+            "selector": {"type": "template", "one_of": "condition", "description": "wfNode_browser_wait_selector"},
+            "url_contains": {"type": "template", "one_of": "condition", "description": "wfNode_browser_wait_url_contains"},
+            "text": {"type": "template", "one_of": "condition", "description": "wfNode_browser_wait_text"},
             "gone": {"advanced": True, "type": "string", "options": ["false", "true"], "description": "wfNode_browser_wait_gone"},
-            "url_contains": {"advanced": True, "type": "template", "description": "wfNode_browser_wait_url_contains"},
-            "text": {"advanced": True, "type": "template", "description": "wfNode_browser_wait_text"},
             "timeout_ms": {"advanced": True, "type": "number", "description": "wfNode_browser_wait_timeout_ms"},
         },
         "outputs": ["session"],
@@ -1792,6 +1812,10 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
             "session": {"type": "string", "required": True, "description": "wfNode_browser_scroll_session"},
             "selector": {"type": "template", "description": "wfNode_browser_scroll_selector"},
             "dy": {"advanced": True, "type": "number", "description": "wfNode_browser_scroll_dy"},
+            "allow_missing": {
+                "advanced": True, "type": "string", "options": ["false", "true"],
+                "description": "wfNode_browser_scroll_allow_missing",
+            },
         },
         "outputs": ["session"],
     },

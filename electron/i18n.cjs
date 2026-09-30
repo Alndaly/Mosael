@@ -287,6 +287,22 @@ const MESSAGES = {
     en: "Timed out after {seconds}s: {what}; the page is at {url}",
   },
   browserErr_unknownAction: { zh: "未知浏览器动作:{action}", en: "Unknown browser action: {action}" },
+  browserErr_elementMissing: {
+    zh: "等了 {seconds}s 还是找不到要操作的元素:{target};当前停在 {url}",
+    en: "Still couldn't find the element to act on after {seconds}s: {target}; the page is at {url}",
+  },
+  browserErr_navigateFailed: {
+    zh: "网页没有打开({code}):{url}",
+    en: "The page didn't open ({code}): {url}",
+  },
+  browserErr_extractMissing: {
+    zh: "页面上没有匹配的元素可提取:{selector};当前停在 {url}",
+    en: "No element on the page matches, so there is nothing to extract: {selector}; the page is at {url}",
+  },
+  browserErr_scrollMissing: {
+    zh: "页面上没有要滚动到的元素:{selector};当前停在 {url}",
+    en: "The element to scroll to isn't on the page: {selector}; the page is at {url}",
+  },
 };
 
 let current = DEFAULT_LOCALE;

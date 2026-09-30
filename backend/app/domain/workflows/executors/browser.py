@@ -55,6 +55,14 @@ def _int(value: Any, default: int) -> int:
         return default
 
 
+def _element_wait(config: dict[str, Any]) -> dict[str, int]:
+    """点击 / 输入之前等元素出现多久:节点上填了就交给执行器,没填由执行器用它的缺省(5 秒)。"""
+    raw = config.get("wait_ms")
+    if raw in (None, ""):
+        return {}
+    return {"wait_ms": max(0, _int(raw, 0))}
+
+
 #: 失败现场的截图给多大。captureBase64 已经缩到 480 宽,这道闸防的是意外(超大 DPR、
 #: 执行器换实现)——失败记录进的是任务总线的 payload,不该由它把库撑起来。
 _SHOT_MAX_CHARS = 400_000
@@ -176,6 +184,7 @@ def browser_click(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[
         "selector": str(config.get("selector") or ""),
         "text": str(config.get("text") or ""),
         "exact": _truthy(config.get("exact")),
+        **_element_wait(config),
     })
     return {"session": sid}
 
@@ -183,7 +192,11 @@ def browser_click(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[
 @register("browser_input")
 def browser_input(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
     sid = _session_in(db, scope, config)
-    _run(sid, "input", {"selector": str(config.get("selector") or ""), "value": str(config.get("value") or "")})
+    _run(sid, "input", {
+        "selector": str(config.get("selector") or ""),
+        "value": str(config.get("value") or ""),
+        **_element_wait(config),
+    })
     return {"session": sid}
 
 
@@ -223,6 +236,7 @@ def browser_extract(db: Session, scope: RunScope, config: dict[str, Any]) -> dic
         "selector": str(config.get("selector") or ""),
         "attribute": attribute or None,
         "all": _truthy(config.get("all")),
+        "allow_missing": _truthy(config.get("allow_missing")),
     })
     return {"session": sid, "value": out.get("value")}
 
@@ -248,7 +262,11 @@ def browser_wait(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[s
 @register("browser_scroll")
 def browser_scroll(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
     sid = _session_in(db, scope, config)
-    _run(sid, "scroll", {"selector": str(config.get("selector") or ""), "dy": _int(config.get("dy"), 600)})
+    _run(sid, "scroll", {
+        "selector": str(config.get("selector") or ""),
+        "dy": _int(config.get("dy"), 600),
+        "allow_missing": _truthy(config.get("allow_missing")),
+    })
     return {"session": sid}
 
 

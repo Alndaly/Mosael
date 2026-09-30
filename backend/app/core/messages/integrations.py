@@ -579,6 +579,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     #: selector 在六种浏览器节点里是同一个意思。
     "wfField_account_id": {"zh": "发布账号", "en": "Publishing account"},
     "wfField_all": {"zh": "全部", "en": "All"},
+    "wfField_allow_missing": {"zh": "找不到时输出空", "en": "Output empty when missing"},
     "wfField_asset_id": {"zh": "素材", "en": "Asset"},
     "wfField_entity_id": {"zh": "资产", "en": "Asset"},
     "wfField_scope": {"zh": "补哪些", "en": "Which angles"},
@@ -682,6 +683,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfField_template": {"zh": "模板", "en": "Template"},
     "wfField_text": {"zh": "文本", "en": "Text"},
     "wfField_timeout_ms": {"zh": "超时(毫秒)", "en": "Timeout (ms)"},
+    "wfField_wait_ms": {"zh": "等元素出现(毫秒)", "en": "Wait for the element (ms)"},
     "wfField_title": {"zh": "标题", "en": "Title"},
     "wfField_tool_name": {"zh": "工具", "en": "Tool"},
     "wfField_top_p": {"zh": "采样范围", "en": "Top-p"},

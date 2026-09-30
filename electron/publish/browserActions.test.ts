@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 
 import { executeBrowserAction } from "./browserActions";
+import { ElementMissingError } from "./errors";
 import { DEFAULT_LOCALE, setLocale } from "../i18n.cjs";
 import type { PageDriver } from "./pageDriver";
 
@@ -75,5 +76,124 @@ describe("等待超时要说清等的是什么", () => {
     await expect(
       executeBrowserAction(driver, "wait", { selector: "#ok", timeout_ms: 1000 }),
     ).resolves.toEqual({ lastUrl: "https://example.com/done" });
+  });
+});
+
+describe("导航没打开就说没打开", () => {
+  it("loadURL 失败(域名解析不了)报导航失败,带错误码和网址", async () => {
+    // 此前 reject 只记一行日志,节点照样「成功」,下一步在一张错误页上找元素、报「找不到」。
+    const driver = fakeDriver("about:blank", {
+      goto: async () => ({ outcome: "rejected" as const, errno: -105, code: "ERR_NAME_NOT_RESOLVED" }),
+    });
+    setLocale("zh-CN");
+    await expect(executeBrowserAction(driver, "navigate", { url: "https://nope.invalid/" })).rejects.toThrow(
+      /网页没有打开\(ERR_NAME_NOT_RESOLVED\).*https:\/\/nope\.invalid/s,
+    );
+  });
+
+  it("ERR_ABORTED(单页应用加载途中自己跳走)放行", async () => {
+    const driver = fakeDriver("https://example.com/login", {
+      goto: async () => ({ outcome: "rejected" as const, errno: -3, code: "ERR_ABORTED" }),
+    });
+    await expect(executeBrowserAction(driver, "navigate", { url: "https://example.com/" })).resolves.toEqual({
+      lastUrl: "https://example.com/login",
+    });
+  });
+
+  it("最后停在 chrome-error:// 也算没打开", async () => {
+    const driver = fakeDriver("chrome-error://chromewebdata/", { goto: async () => ({ outcome: "loaded" as const }) });
+    setLocale("en-US");
+    await expect(executeBrowserAction(driver, "navigate", { url: "https://example.com/" })).rejects.toThrow(
+      /^The page didn't open \(chrome-error\): https:\/\/example\.com\//,
+    );
+  });
+});
+
+describe("点击和输入先等元素出现", () => {
+  it("元素晚一点才挂出来,点击等到它再点", async () => {
+    let tries = 0;
+    const driver = fakeDriver("https://example.com/", {
+      clickCss: async (selector: string) => {
+        tries += 1;
+        if (tries < 3) throw new ElementMissingError(selector, `clickCss: element not found: ${selector}`);
+      },
+    });
+    await expect(executeBrowserAction(driver, "click", { selector: "#late", wait_ms: 5000 })).resolves.toEqual({
+      lastUrl: "https://example.com/",
+    });
+    expect(tries).toBe(3);
+  });
+
+  it("等满还找不到:报按界面语言翻好的话,不是 clickCss 那句英文", async () => {
+    const driver = fakeDriver("https://example.com/form", {
+      fillField: async (selector: string) => {
+        throw new ElementMissingError(selector, `fillField: element not found: ${selector}`);
+      },
+    });
+    setLocale("zh-CN");
+    const error = await executeBrowserAction(driver, "input", { selector: "#name", value: "x", wait_ms: 0 }).then(
+      () => null,
+      (e: Error) => e,
+    );
+    expect(error?.message).toMatch(/找不到要操作的元素.*#name.*https:\/\/example\.com\/form/s);
+    expect(error?.message).not.toMatch(/element not found/);
+  });
+
+  it("按文字点击同样等", async () => {
+    let tries = 0;
+    const driver = fakeDriver("https://example.com/", {
+      clickByText: async (text: string) => {
+        tries += 1;
+        if (tries < 2) throw new ElementMissingError(text, "missing");
+      },
+    });
+    await executeBrowserAction(driver, "click", { text: "发布", wait_ms: 2000 });
+    expect(tries).toBe(2);
+  });
+
+  it("别的错误不重试,原样抛出", async () => {
+    let tries = 0;
+    const driver = fakeDriver("https://example.com/", {
+      clickCss: async () => {
+        tries += 1;
+        throw new Error("Task was cancelled by user.");
+      },
+    });
+    await expect(executeBrowserAction(driver, "click", { selector: "#x", wait_ms: 2000 })).rejects.toThrow(/cancelled/);
+    expect(tries).toBe(1);
+  });
+});
+
+describe("提取和滚动:选择器没匹配到默认报错", () => {
+  it("提取没匹配:报错(带选择器),不是静默交出 null", async () => {
+    const driver = fakeDriver("https://example.com/list", { evaluate: async () => ({ missing: true }) });
+    setLocale("zh-CN");
+    await expect(executeBrowserAction(driver, "extract", { selector: ".price" })).rejects.toThrow(
+      /没有匹配的元素可提取.*\.price/s,
+    );
+  });
+
+  it("打开「找不到时输出空」:单个给 null,全部给空数组", async () => {
+    const driver = fakeDriver("https://example.com/list", { evaluate: async () => ({ missing: true }) });
+    await expect(executeBrowserAction(driver, "extract", { selector: ".price", allow_missing: true })).resolves.toMatchObject({
+      value: null,
+    });
+    await expect(
+      executeBrowserAction(driver, "extract", { selector: ".price", all: true, allow_missing: true }),
+    ).resolves.toMatchObject({ value: [] });
+  });
+
+  it("匹配到了就交出值(值本身是空串也照交)", async () => {
+    const driver = fakeDriver("https://example.com/list", { evaluate: async () => ({ value: "" }) });
+    await expect(executeBrowserAction(driver, "extract", { selector: ".price" })).resolves.toMatchObject({ value: "" });
+  });
+
+  it("滚动到的元素不存在:报错;打开开关就跳过", async () => {
+    const driver = fakeDriver("https://example.com/", { evaluate: async () => false });
+    setLocale("zh-CN");
+    await expect(executeBrowserAction(driver, "scroll", { selector: "#footer" })).rejects.toThrow(/没有要滚动到的元素.*#footer/s);
+    await expect(executeBrowserAction(driver, "scroll", { selector: "#footer", allow_missing: true })).resolves.toEqual({
+      lastUrl: "https://example.com/",
+    });
   });
 });
