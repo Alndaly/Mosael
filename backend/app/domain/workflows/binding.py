@@ -76,7 +76,12 @@ def interpolate_node_config(
     node_type: str, config: dict[str, Any], context: dict[str, dict[str, Any]]
 ) -> dict[str, Any]:
     """按节点类型插值 config:内嵌子图节点(循环体 / subgraph)的 body/output/condition 保留原文;
-    声明了 `"interpolate": "json"` 的字段按 JSON 的规矩插值(见 interpolate_json_text);其余全量插值。"""
+    **代码字段(`"type": "code"`)也保留原文**;声明了 `"interpolate": "json"` 的字段按 JSON 的规矩插值
+    (见 interpolate_json_text);其余全量插值。
+
+    代码字段不插值:`{{上游.输出}}` 是按文字拼进代码的,上游交来一段带引号的文字就能改写整段脚本
+    (「执行脚本」在用户已登录的网页里跑)。上游的值走节点的入参(`input`),作为数据交进去。
+    """
     from app.domain.workflows import NODE_TYPES
 
     specs = (NODE_TYPES.get(node_type) or {}).get("config") or {}
@@ -85,7 +90,9 @@ def interpolate_node_config(
         for key, spec in specs.items()
         if isinstance(spec, dict) and spec.get("interpolate") == "json" and isinstance(config.get(key), str)
     }
-    raw = {key: config.pop(key, None) for key in NESTED_BODY_RAW_KEYS if key in config} if node_type in NESTED_BODY_TYPES else {}
+    kept = set(NESTED_BODY_RAW_KEYS) if node_type in NESTED_BODY_TYPES else set()
+    kept |= {key for key, spec in specs.items() if isinstance(spec, dict) and spec.get("type") == "code"}
+    raw = {key: config.pop(key) for key in list(config) if key in kept}
     config = interpolate(config, context)
     config.update(raw)
     config.update({key: interpolate_json_text(value, context) for key, value in as_json.items()})

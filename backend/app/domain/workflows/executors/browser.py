@@ -273,7 +273,12 @@ def browser_scroll(db: Session, scope: RunScope, config: dict[str, Any]) -> dict
 @register("browser_evaluate")
 def browser_evaluate(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
     sid = _session_in(db, scope, config)
-    out = _run(sid, "evaluate", {"expression": str(config.get("expression") or "")})
+    #: 脚本原样交出去(它不插值,见 binding),上游的值在 input 里、作为 JSON 数据进脚本(见 electron 的 scriptWithInput)。
+    raw_input = config.get("input")
+    out = _run(sid, "evaluate", {
+        "expression": str(config.get("expression") or ""),
+        "input": raw_input if isinstance(raw_input, dict) else {},
+    })
     return {"session": sid, "value": out.get("value")}
 
 

@@ -62,6 +62,18 @@ const waitMsOf = (args: Record<string, unknown>): number => {
 };
 
 /**
+ * 「执行脚本」的脚本外面包一层,把 `input` 交进去。值只作为 **JSON 数据**进脚本,从不拼进代码 ——
+ * 此前工作流把 `{{上游.输出}}` 直接插进表达式,上游交来一段带引号的文字就能改写整段脚本。
+ *
+ * 包成块语句而不是箭头函数:块的完成值就是最后一条语句的值,和不包时一样 —— 写了好几句、最后一句
+ * 是结果的脚本照样能用;`const` 也只活在这一块里,同一页上跑第二次不会撞「已声明」。
+ */
+export function scriptWithInput(expression: string, input: unknown): string {
+  if (input === undefined) return expression;
+  return `{ const input = ${JSON.stringify(input ?? {})};\n${expression}\n}`;
+}
+
+/**
  * 把一个后端动作分派到 PageDriver:navigate/click/input/upload/press_key/extract/evaluate/wait/
  * scroll/screenshot。upload 经 CDP setFileInputFiles 塞文件(与发布上传同一套 driver.setFiles)。
  */
@@ -137,7 +149,7 @@ export async function executeBrowserAction(
       return { value: found?.value ?? null, lastUrl: driver.url() };
     }
     case "evaluate": {
-      return { value: await driver.evaluate(s(args.expression)), lastUrl: driver.url() };
+      return { value: await driver.evaluate(scriptWithInput(s(args.expression), args.input)), lastUrl: driver.url() };
     }
     case "wait": {
       const timeout = Number(args.timeout_ms) || 15_000;

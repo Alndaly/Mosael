@@ -1826,7 +1826,10 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "description": "wfNode_browser_evaluate_desc",
         "config": {
             "session": {"type": "string", "required": True, "description": "wfNode_browser_evaluate_session"},
+            #: 脚本本身**不插值**(code 字段一律不插,见 binding.interpolate_node_config);要用上游的值放进 input,
+            #: 脚本里按 `input.名字` 读 —— 值作为 JSON 数据交进去,拼不进代码。
             "expression": {"type": "code", "required": True, "description": "wfNode_browser_evaluate_expression"},
+            "input": {"type": "object", "description": "wfNode_browser_evaluate_input"},
         },
         "outputs": ["session", "value"],
     },
