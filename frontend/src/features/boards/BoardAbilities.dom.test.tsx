@@ -242,6 +242,35 @@ describe("一项能力在跑:格子自己的内容照常画,底边挂一条运�
   });
 });
 
+describe("能力绑着的上游文档读不到", () => {
+  it("点开那一项:面板不挂,挂一句「文档读不到」—— 不是点了什么都不出现", () => {
+    const mux = ability("node:plugin.x.mux", "混音", ["audio"], "clip", {
+      config: {
+        clip: { type: "template", required: true, label: "clip", board_sources: ["audio"] },
+        script: { type: "template", required: false, label: "script", board_sources: ["note", "document"] },
+      },
+    });
+    const empty: BoardItem = { id: "d", kind: "document", x: 0, y: 300, width: 320, height: 300 };
+    const host: BoardItem = { ...audio, form: { abilities: { "node:plugin.x.mux": { config: {}, bindings: { script: [{ from: "d" }] } } } } };
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <ImagePreviewProvider>
+          <div style={{ width: 800, height: 600 }}>
+            <BoardCanvas boardId="b1" workspaceId="w1" canvas={{ items: [host, empty], edges: [{ id: "e", source: "d", target: "au" }], markers: [] }}
+                         onChange={() => undefined} onPickAsset={() => undefined} onRun={vi.fn(async () => undefined)}
+                         producers={[...PRODUCERS, mux]} />
+          </div>
+        </ImagePreviewProvider>
+      </QueryClientProvider>,
+    );
+    select("au");
+    act(() => abilityButton("混音").click());
+    expect(composer()).toBeNull();
+    expect(screen.getByRole("alert").textContent).toBe("documentBlocked");
+  });
+});
+
 describe("画板上造不出工具格", () => {
   it("格子只有九种(资产格是 ADR 0027 加的、时间线格是 ADR 0030);拉线菜单、「添加」里都没有工具(见 BoardPendingLink / boardAddCatalog 的测试)", async () => {
     const { BOARD_NODE_TYPES, DEFAULT_SIZE } = await import("@/features/boards/boardNodes");

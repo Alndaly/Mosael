@@ -829,7 +829,8 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
       />
 
       {workspaceId && <NotePickerDialog workspaceId={workspaceId} open={!!pickingDocument} onOpenChange={open => { if (!open) setPickingDocument(null); }} onPick={note => { if (pickingDocument) patch(pickingDocument, {note_id: note.id, note_revision: note.revision, text: note.title}); }}/>}
-      {composerItem && producer && feeding.blocked && <NodeToolbar nodeId={composerItem.id} isVisible position={Position.Bottom} offset={BOARD_NODE_PANEL_OFFSET}><div role={feeding.pending ? "status" : "alert"} className={cn(CANVAS_WINDOW_SURFACE_CLASS, "max-w-sm px-4 py-3 text-ui-sm text-muted-foreground")}>{t(feeding.pending ? "documentLoading" : "documentBlocked")}</div></NodeToolbar>}
+      {/* 吃上游的面板(这一格自己的,或点开的一项能力)被读不到的上游文档拦住:说一声,不留一个点了没反应的按钮。 */}
+      {composerItem && (producer || ability) && feeding.blocked && <NodeToolbar nodeId={composerItem.id} isVisible position={Position.Bottom} offset={BOARD_NODE_PANEL_OFFSET}><div role={feeding.pending ? "status" : "alert"} className={cn(CANVAS_WINDOW_SURFACE_CLASS, "max-w-sm px-4 py-3 text-ui-sm text-muted-foreground")}>{t(feeding.pending ? "documentLoading" : "documentBlocked")}</div></NodeToolbar>}
 
       {/* 剪一段:定起止,产出落到**新节点**上。 */}
       {trimming && onRun && (() => {
