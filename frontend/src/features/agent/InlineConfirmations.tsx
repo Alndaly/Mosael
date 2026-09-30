@@ -1,7 +1,7 @@
 import React from "react";
 import { confirmationKeys } from "@/api/queryKeys";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, CheckCheck, ShieldAlert, X } from "lucide-react";
+import { Check, CheckCheck, X } from "lucide-react";
 
 import {
   approveConfirmation,
@@ -12,10 +12,9 @@ import {
 } from "@/api/client";
 import { invalidateAfterDecision } from "@/features/agent/confirmationCaches";
 import { useI18n } from "@/app/preferences";
-import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
 import { Button } from "@/components/ui/button";
+import { ConfirmationCard, useSettledCards } from "@/features/agent/ConfirmationCard";
 import { registerInlineConfirmSurface } from "@/features/agent/confirmSurface";
-import { PermissionBadge } from "@/features/agent/PermissionBadge";
 
 
 /**
@@ -35,15 +34,17 @@ import { PermissionBadge } from "@/features/agent/PermissionBadge";
 /** 三档动作。顺序固定:允许一次 → 本会话始终允许 → 拒绝,从最小授权到最大再到否。 */
 type Choice = "once" | "session" | "reject";
 
+//: 主按钮只有一个:「允许一次」是最小的授权。「拒绝」推到行尾,和两个「允许」分开 —— 扫一眼就知道
+//: 哪边是放行、哪边是否决;窄对话栏里换行时它也还是独自在右。
 const CHOICES = [
-  { choice: "once", icon: Check, label: "confirmAllowOnce", variant: undefined, className: undefined },
+  { choice: "once", icon: Check, label: "confirmAllowOnce", variant: "default", className: undefined },
   { choice: "session", icon: CheckCheck, label: "confirmAllowSession", variant: "outline", className: undefined },
-  { choice: "reject", icon: X, label: "confirmReject", variant: "outline", className: "text-destructive" },
+  { choice: "reject", icon: X, label: "confirmReject", variant: "ghost", className: "ml-auto text-muted-foreground hover:text-destructive" },
 ] as const satisfies readonly {
   choice: Choice;
   icon: typeof Check;
   label: "confirmAllowOnce" | "confirmAllowSession" | "confirmReject";
-  variant?: "outline";
+  variant: "default" | "outline" | "ghost";
   className?: string;
 }[];
 
@@ -76,6 +77,8 @@ export function InlineConfirmations({
     refetchOnWindowFocus: true,
   });
 
+  const settled = useSettledCards(allowKey);
+
   /**
    * 三档动作走**同一个** mutation —— 因为「谁在转」要由它的变量说了算。
    *
@@ -97,54 +100,59 @@ export function InlineConfirmations({
       }
       return choice === "reject" ? rejectConfirmation(id) : approveConfirmation(id);
     },
-    onSuccess: () => invalidateAfterDecision(qc, workspaceId),
+    onSuccess: (card) => {
+      settled.remember(card);
+      invalidateAfterDecision(qc, workspaceId);
+    },
   });
-
   // 此刻在飞的是哪一张卡的哪一档。没有就是 null。
   const busy = decide.isPending ? decide.variables : null;
 
-  const items = pending.data ?? [];
-  if (items.length === 0) return null;
+  // 刚有结论的卡,在待决列表刷新之前两边都有 —— 以有结论的那份为准。
+  const settledIds = new Set(settled.cards.map((card) => card.id));
+  const items = (pending.data ?? []).filter((item) => !settledIds.has(item.id));
+  if (items.length === 0 && settled.cards.length === 0) return null;
 
   return (
     // 与消息内容列同宽(780px 居中):此前裸 grid 吃满整个滚动区,确认卡横跨全屏。
-    <div className="mx-auto grid w-full max-w-[780px] gap-2" role="region" aria-label={t("confirmTitle")}>
+    <div className="mx-auto grid w-full max-w-[780px] grid-cols-[minmax(0,1fr)] gap-2" role="region" aria-label={t("confirmTitle")}>
       {items.map((item) => (
-        <div className="grid gap-1.5 rounded-lg border border-floating-border border-l-[3px] border-l-primary bg-panel px-3 py-2.5 text-ui-sm" key={item.id}>
-          <div className="flex items-center justify-between gap-2">
-            <span className="inline-flex min-w-0 items-center gap-1.5 font-semibold">
-              <ShieldAlert size={13} /> <InlineMarkdown text={item.summary} />
-            </span>
-            <PermissionBadge permission={item.permission} />
-          </div>
-          {/* 载荷保持展开:这张卡是智能体写操作与执行之间唯一的闸,摘要不足以构成知情同意
-              (例如 add_node 可能藏着一段任意本地 Python)。高度有界,大图滚动而不是把按钮挤走。 */}
-          <details open>
-            <summary className="cursor-pointer select-none text-ui-xs text-muted-foreground">{t("confirmPayload")}</summary>
-            <pre className="mt-1.5 max-h-[220px] overflow-auto whitespace-pre-wrap rounded-md border border-border bg-muted p-2 font-mono text-ui-xs leading-[1.5] [word-break:break-word]">{JSON.stringify(item.payload, null, 2)}</pre>
-          </details>
-          {/* 转的只有被点的那一个;同一张卡的另外两个禁掉(一张卡只能有一个结论),
-              别的卡完全不受影响 —— 它等的不是同一件事。 */}
-          {readOnly ? (
-            <p className="m-0 text-ui-xs text-muted-foreground">{t("agentDecisionOwnerOnly")}</p>
-          ) : (
-            <div className="flex flex-wrap gap-1.5">
-              {CHOICES.map(({ choice, icon: Icon, label, variant, className }) => (
-                <Button
-                  key={choice}
-                  size="sm"
-                  variant={variant}
-                  className={className}
-                  loading={busy?.id === item.id && busy.choice === choice}
-                  disabled={busy?.id === item.id}
-                  onClick={() => decide.mutate({ id: item.id, tool: item.tool, choice })}
-                >
-                  <Icon size={13} /> {t(label)}
-                </Button>
-              ))}
-            </div>
-          )}
-        </div>
+        <ConfirmationCard
+          key={item.id}
+          item={item}
+          eyebrow={t("confirmAgentRequest")}
+          actions={
+            // 转的只有被点的那一个;同一张卡的另外两个禁掉(一张卡只能有一个结论),
+            // 别的卡完全不受影响 —— 它等的不是同一件事。
+            readOnly ? (
+              <p className="m-0 border-t border-divider pt-2.5 text-ui-xs text-muted-foreground">{t("agentDecisionOwnerOnly")}</p>
+            ) : (
+              <div className="flex flex-wrap items-center gap-2 border-t border-divider pt-2.5">
+                {CHOICES.map(({ choice, icon: Icon, label, variant, className }) => (
+                  <Button
+                    key={choice}
+                    size="sm"
+                    variant={variant}
+                    className={className}
+                    loading={busy?.id === item.id && busy.choice === choice}
+                    disabled={busy?.id === item.id}
+                    onClick={() => decide.mutate({ id: item.id, tool: item.tool, choice })}
+                  >
+                    <Icon /> {t(label)}
+                  </Button>
+                ))}
+              </div>
+            )
+          }
+        />
+      ))}
+      {settled.cards.map((card) => (
+        <ConfirmationCard
+          key={card.id}
+          item={card}
+          eyebrow={t("confirmAgentRequest")}
+          onDismiss={() => settled.dismiss(card.id)}
+        />
       ))}
     </div>
   );

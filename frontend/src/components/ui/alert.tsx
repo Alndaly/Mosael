@@ -13,6 +13,10 @@ const alertVariants = cva(
         default: "border-border bg-panel-subtle text-foreground [&>svg]:text-primary",
         destructive:
           "border-[color-mix(in_srgb,var(--destructive)_35%,var(--border))] bg-[color-mix(in_srgb,var(--destructive)_6%,transparent)] text-destructive [&>svg]:text-destructive",
+        // 要人留意、但不是出错:花钱的操作、会占用付费算力。字仍是正文色 —— 黄字在浅色面上读不清,
+        // 颜色交给图标和底色。
+        warning:
+          "border-[color-mix(in_srgb,var(--warning)_40%,var(--border))] bg-[color-mix(in_srgb,var(--warning)_8%,transparent)] text-foreground [&>svg]:text-warning",
       },
     },
     defaultVariants: {

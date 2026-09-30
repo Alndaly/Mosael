@@ -98,3 +98,17 @@ def test_老卡原样返回() -> None:
         "created_at": datetime.now(), "resolved_at": None,
     })
     assert card.summary == "老卡的原话"
+    assert card.headline == "老卡的原话" and card.warning == ""
+
+
+def test_卡上的后果提示是独立的一句_两种语言都是() -> None:
+    """句中那半句带着前导空格、⚠️ 或括号 —— 卡上它自带图标、自成一行,这些装饰要去掉。"""
+    from app.core.i18n import fragment
+    from app.domain.agent.confirmations import card_parts
+
+    params = {"tool": "渲染", "connection": "我的", "args": fragment("confirm_pluginToolArgs", args="`fps=30`"),
+              "warning": fragment("confirm_effectPaid")}
+    headline, warning = card_parts("confirm_runPluginTool", params, "zh")
+    assert warning == "会产生费用或占用付费算力"
+    assert headline == "运行插件工具「渲染」(连接「我的」)"
+    assert card_parts("confirm_runPluginTool", params, "en")[1] == "This costs money or paid compute"

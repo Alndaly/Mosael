@@ -26,9 +26,9 @@ vi.mock("@/app/preferences", () => ({
 vi.mock("@/features/agent/confirmSurface", () => ({ registerInlineConfirmSurface: () => () => {} }));
 
 const pendingCards = [
-  { id: "c1", tool: "edit_timeline", summary: "改时间线", permission: "write", payload: {} },
-  { id: "c2", tool: "render_sequence", summary: "导出", permission: "write", payload: {} },
-  { id: "c3", tool: "run_host_code", summary: "⚠️ **不隔离**,直接在你的电脑上运行", permission: "write", payload: {} },
+  { id: "c1", tool: "edit_timeline", summary: "改时间线", permission: "write", payload: {}, status: "pending" },
+  { id: "c2", tool: "render_sequence", summary: "导出", permission: "write", payload: {}, status: "pending" },
+  { id: "c3", tool: "run_host_code", summary: "⚠️ **不隔离**,直接在你的电脑上运行", permission: "write", payload: {}, status: "pending" },
 ];
 
 /** 决策请求停在这里,好在"正在飞"的那一刻断言。 */
@@ -40,7 +40,7 @@ const api = vi.fn(async (path: string, _init?: unknown) => {
   await new Promise<void>((resolve) => {
     releaseDecision = resolve;
   });
-  return { id: "c1", status: "approved" };
+  return { ...pendingCards[0], status: "failed", error: "磁盘满了" };
 });
 
 vi.mock("@/api/transport", async (importOriginal) => ({
@@ -83,7 +83,7 @@ describe("确认卡的等待状态", () => {
     (await screen.findAllByText("允许一次"))[0].click();
 
     await waitFor(() => expect(busyLabels(container).length).toBe(1));
-    const card = container.querySelectorAll("[role='region'] > div")[0];
+    const card = container.querySelectorAll("article")[0];
     const disabled = [...card.querySelectorAll("button")].filter((node) => node.hasAttribute("disabled"));
     expect(disabled.length).toBe(3);
     releaseDecision();
@@ -94,7 +94,7 @@ describe("确认卡的等待状态", () => {
     (await screen.findAllByText("允许一次"))[0].click();
 
     await waitFor(() => expect(busyLabels(container).length).toBe(1));
-    const second = container.querySelectorAll("[role='region'] > div")[1];
+    const second = container.querySelectorAll("article")[1];
     expect([...second.querySelectorAll("button")].some((node) => node.hasAttribute("disabled"))).toBe(false);
     releaseDecision();
   });
@@ -108,6 +108,22 @@ describe("确认卡的等待状态", () => {
     expect(busyLabels(container)).toEqual(["本会话始终允许"]);
     releaseDecision();
   });
+});
+
+it("有了结论的卡留在原处:按钮换成终态那一行,失败的写明原因", async () => {
+  /* 此前卡一批就从列表里消失 —— 执行失败了,原因只有智能体知道。 */
+  const { container } = renderCards();
+  (await screen.findAllByText("允许一次"))[0].click();
+  await waitFor(() => expect(busyLabels(container).length).toBe(1));
+  releaseDecision();
+
+  await waitFor(() => expect(container.querySelector("article[data-status='failed']")).toBeTruthy());
+  const failed = container.querySelector("article[data-status='failed']")!;
+  expect(failed.textContent).toContain("confirmStatusFailed");
+  expect(failed.textContent).toContain("磁盘满了");
+  expect(failed.textContent).not.toContain("允许一次");
+  //: 待决列表还没刷新时同一张卡两边都有 —— 只留有结论的那份。
+  expect(container.querySelectorAll("article")).toHaveLength(pendingCards.length);
 });
 
 it("权限徽标不跟着长摘要换行 —— 两个字被压成一列竖排就没法读了", async () => {

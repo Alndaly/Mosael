@@ -12,6 +12,7 @@ import { HighlightedCode } from "@/features/agent/HighlightedCode";
 import { Marker, MarkerContent, MarkerIcon } from "@/components/ui/marker";
 import { AGENT_ROW_BODY_CLASS, AGENT_ROW_CLASS, AGENT_ROW_ICON_CLASS, AGENT_ROW_TEXT_CLASS, AGENT_TEXT_BLOCK_CLASS } from "@/features/agent/agentRow";
 import { decodeByteFallback } from "@/features/agent/byteFallback";
+import { NOISE_KEYS } from "@/features/agent/machineFields";
 import { formatElapsedSeconds } from "@/lib/time";
 import { cn } from "@/lib/utils";
 import { ToolResultCard, detectShape, toolResultData } from "./toolResultShapes";
@@ -42,21 +43,6 @@ export type AgentTimelineItem =
   | { type: "thinking"; text: string; done?: boolean; duration_seconds?: number };
 
 /** 取一段短摘要塞进折叠态标题(参考 Claude/Codex:折叠时也能看出这步在干嘛)。 */
-/**
- * 只有机器需要的字段。它们在摘要里毫无意义,在展开的明细里也只是噪音。
- *
- * 折叠行此前显示的是 `browser_open fd8620bd80ec4c88a03d73b8b17b7f6b` —— 那是 workspace_id,
- * 因为老的取法是「对象里第一个字符串值」,而参数里第一个往往就是它。一串 32 位十六进制
- * 占满整行,而真正说明这一步在干什么的 url 被挤掉了。
- */
-const NOISE_KEYS = new Set([
-  "workspace_id",
-  "project_id",
-  "session_id",
-  "confirmation_id",
-  "requested_by",
-  "instance_id",
-]);
 
 /**
  * 摘要**按字段名挑**,不按出现顺序。

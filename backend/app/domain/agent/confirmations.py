@@ -36,6 +36,47 @@ __all__ = [
 ]
 
 
+#: 摘要参数里的两个**约定名**,应用里的确认卡会把它们从那句话里拆出来单独摆:
+#:
+#:   · `warning` —— 点明后果的那半句(domain/effects.warning_key、graphs.external_warning),
+#:     卡上成一条提示,不再拖在标题末尾和徽标、按钮抢一行;
+#:   · `args`    —— 参数的一行摘要(plugin_tools.brief_arguments),卡上已经逐项列出了参数。
+#:
+#: 飞书、MCP 这些**只有一行字**的出口照旧读完整的 `summary`:那里没有别的地方放这两段。
+CARD_WARNING_PARAM = "warning"
+CARD_DETAIL_PARAMS = ("args",)
+
+
+def card_parts(summary_key: str, summary_params: dict[str, Any], locale: str) -> tuple[str, str]:
+    """应用里那张卡的**标题**与**后果提示**,按读的人的语言。
+
+    标题是同一句摘要去掉上面两段;提示是 `warning` 那半句单独渲染出来,去掉它在句中时的
+    装饰(前导空格、⚠️、括号) —— 卡上它自带图标、自成一行。老卡没有 key,标题就是原话。
+    """
+    if not summary_key:
+        return "", ""
+    params = dict(summary_params or {})
+    warning_param = params.get(CARD_WARNING_PARAM)
+    for name in (CARD_WARNING_PARAM, *CARD_DETAIL_PARAMS):
+        if name in params:
+            params[name] = ""
+    headline = render_message(summary_key, locale, params)
+    warning = ""
+    if isinstance(warning_param, dict) and "__key" in warning_param:
+        warning = render_message(str(warning_param["__key"]), locale, warning_param.get("params") or {})
+    return headline, _standalone(warning)
+
+
+def _standalone(clause: str) -> str:
+    """句中的半句 → 独立的一句:「  ⚠️ 会在你的电脑上运行代码」→「会在你的电脑上运行代码」,
+    「 (this costs money or paid compute)」→「This costs money or paid compute」。"""
+    text = clause.strip().removeprefix("⚠️").strip()
+    for opening, closing in (("(", ")"), ("\uff08", "\uff09")):
+        if text.startswith(opening) and text.endswith(closing):
+            text = text[len(opening):-len(closing)].strip()
+    return text[:1].upper() + text[1:]
+
+
 def tool_permission(tool: str) -> str:
     """这个工具的**下限**档位。实际那一档见 effective_permission。"""
     spec = tool_spec(tool)

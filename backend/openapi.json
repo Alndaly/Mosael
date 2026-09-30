@@ -24263,6 +24263,16 @@
               }
             ],
             "title": "Resolved At"
+          },
+          "headline": {
+            "type": "string",
+            "title": "Headline",
+            "default": ""
+          },
+          "warning": {
+            "type": "string",
+            "title": "Warning",
+            "default": ""
           }
         },
         "type": "object",

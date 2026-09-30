@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Any, Literal
-from pydantic import Field, ValidationInfo, field_validator
+from pydantic import Field, ValidationInfo, field_validator, model_validator
 from app.api.schemas.base import ApiModel, OrmModel
 
 class AgentContextPart(ApiModel):
@@ -267,6 +267,22 @@ class ConfirmationOut(OrmModel):
         if not key:
             return value
         return render_message(key, get_current_locale(), data.get("summary_params") or {})
+
+    #: 应用里那张卡的标题:同一句摘要,去掉卡上另有位置摆的两段(后果提示、参数一行摘要)。
+    #: 老卡没有 key 时就是 `summary` 本身。见 domain/agent/confirmations.card_parts。
+    headline: str = ""
+    #: 卡上单独成行的后果提示(「会在你的电脑上运行代码」);没有就是空串。
+    warning: str = ""
+
+    @model_validator(mode="after")
+    def _split_for_the_card(self) -> ConfirmationOut:
+        from app.core.i18n import get_current_locale
+        from app.domain.agent.confirmations import card_parts
+
+        headline, warning = card_parts(self.summary_key, self.summary_params, get_current_locale())
+        self.headline = headline or self.summary
+        self.warning = warning
+        return self
 
 
 class AgentSkillOut(ApiModel):

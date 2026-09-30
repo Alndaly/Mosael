@@ -8598,6 +8598,16 @@ export interface components {
             created_at: string;
             /** Resolved At */
             resolved_at: string | null;
+            /**
+             * Headline
+             * @default
+             */
+            headline: string;
+            /**
+             * Warning
+             * @default
+             */
+            warning: string;
         };
         /**
          * CostAmountOut

@@ -206,6 +206,34 @@ def test_调要确认的插件工具只开卡不跑_批准才跑_跑的是同一
     assert _runs("render") == 1
 
 
+def test_应用里的卡把后果提示和参数摘要从标题里拆出来_按读的人的语言() -> None:
+    """卡上标题、后果、参数各占一处:后果拖在标题末尾时,它和徽标、按钮挤在一行被压成三行。
+
+    完整的 `summary` 不动 —— 飞书、MCP 那些只有一行字的出口还靠它把这三样都说出来。
+    """
+    setup = Setup()
+    setup.as_turn()
+    reply = setup.call("render", {"code": "class Scene: pass\nprint(1)"})["result"]
+    setup.as_person()
+
+    def listed(language: str) -> dict:
+        cards = setup.client.get(
+            "/api/confirmations", params={"workspace_id": setup.workspace_id, "status": "pending"},
+            headers={"Accept-Language": language},
+        ).json()
+        return next(card for card in cards if card["id"] == reply["confirmation_id"])
+
+    chinese = listed("zh-CN")
+    assert "会在你的电脑上运行代码" in chinese["summary"] and "code=" in chinese["summary"]
+    assert chinese["warning"] == "会在你的电脑上运行代码"
+    assert "后果演示" in chinese["headline"]
+    assert "code=" not in chinese["headline"] and "⚠️" not in chinese["headline"]
+
+    english = listed("en-US")
+    assert english["warning"] == "This runs code on your computer"
+    assert english["headline"].startswith("Run the plugin tool") and "with" not in english["headline"]
+
+
 def test_拒了就什么都不跑() -> None:
     setup = Setup()
     setup.as_turn()

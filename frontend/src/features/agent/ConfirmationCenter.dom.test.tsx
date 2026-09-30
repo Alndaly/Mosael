@@ -18,6 +18,7 @@ const cards = [
     requested_by: "mcp",
     session_id: null,
     payload: {},
+    status: "pending",
   },
   {
     id: "c2",
@@ -27,6 +28,7 @@ const cards = [
     requested_by: "agent",
     session_id: "s-mine",
     payload: {},
+    status: "pending",
   },
 ];
 
