@@ -644,6 +644,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfField_output": {"zh": "对外输出", "en": "Output"},
     "wfField_parameters": {"zh": "生成参数", "en": "Generation parameters"},
     "wfField_params": {"zh": "启动参数", "en": "Start parameters"},
+    "wfField_required_params": {"zh": "必填参数", "en": "Required parameters"},
     "wfField_path": {"zh": "路径", "en": "Path"},
     "wfField_plugin_id": {"zh": "插件", "en": "Plugin"},
     "wfField_presence_penalty": {"zh": "话题惩罚", "en": "Presence penalty"},
@@ -775,6 +776,10 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfNode_start": {"zh": "开始", "en": "Start"},
     "wfNode_start_desc": {"zh": "工作流入口,声明输入参数(运行时可覆盖默认值)。", "en": "Workflow entry point; declares input parameters (defaults can be overridden per run)."},
     "wfNode_start_params": {"zh": "输入参数名 → 默认值", "en": "Input parameter name → default value"},
+    "wfNode_start_required_params": {
+        "zh": "跑之前必须有值的参数名,逗号分隔;空着就不让运行",
+        "en": "Parameter names that must have a value before a run, comma-separated; the run is refused while any is blank",
+    },
     "wfNode_llm": {"zh": "LLM 生成", "en": "LLM"},
     "wfNode_llm_desc": {"zh": "调用配置的 AI 供应商生成文本。", "en": "Generate text with the configured AI provider."},
     "wfNode_llm_prompt": {"zh": "这一轮要模型做的事", "en": "What the model should do this turn"},

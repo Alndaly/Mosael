@@ -244,6 +244,24 @@ describe("analyzeWorkflow", () => {
     ]);
   });
 
+  it("开始节点点名为必填的参数空着是阻塞错误,说清是哪一个;数字 0 不算空", () => {
+    const make = (params: Record<string, unknown>) =>
+      graph(
+        [
+          { id: "start", type: "start", config: { params, required_params: "product_name， selling_points, count" } },
+          { id: "llm-1", type: "llm", config: { prompt: "{{start.product_name}}", profile_id: "p1" } },
+        ],
+        [{ id: "e1", source: "start", target: "llm-1" }],
+      );
+    const filled = analyzeWorkflow(make({ product_name: "开衫", selling_points: "不起球", count: 0 }), registry, fullCtx);
+    expect(filled.runnable).toBe(true);
+    const blank = analyzeWorkflow(make({ product_name: "开衫", selling_points: "  ", count: 0 }), registry, fullCtx);
+    expect(blank.runnable).toBe(false);
+    expect(issuesAtLayer(blank.issues, []).get("start")).toEqual([
+      expect.objectContaining({ code: "required-missing", configKey: "selling_points", severity: "error" }),
+    ]);
+  });
+
   it("同组(one_of)恰好填一个:都填了、都没填都是阻塞错误,接了上游也算填了", () => {
     const make = (config: Record<string, unknown>, bound?: string) =>
       graph(

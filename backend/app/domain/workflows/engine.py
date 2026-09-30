@@ -45,6 +45,7 @@ from app.domain.workflows import (
     reference_dependencies,
     topo_order,
     validate_graph,
+    with_run_params,
 )
 from app.domain.workflows.binding import apply_data_edges, check_number_fields, interpolate_node_config
 from app.domain.workflows.executors import get_executor
@@ -79,7 +80,8 @@ def start_workflow_job(
         revision = current_workflow_revision(db, workflow)
     except WorkflowRevisionError as exc:
         raise WorkflowDomainError.from_error(exc) from exc
-    errors = validate_graph(revision.graph, extra_types=plugin_node_types(db))
+    #: 必填的开始参数按这一次运行的值判(见 graph_rules.with_run_params)。
+    errors = validate_graph(with_run_params(revision.graph, params), extra_types=plugin_node_types(db))
     if errors:
         raise WorkflowDomainError("；".join(errors))
     #: 生成节点的文字规矩按**选中的模型**判,在任何节点跑之前 —— 和执行时替同一个人解析同一个模型。

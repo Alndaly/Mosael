@@ -192,6 +192,7 @@ _FIELD_LABELS = {
     "output": "wfField_output",
     "parameters": "wfField_parameters",
     "params": "wfField_params",
+    "required_params": "wfField_required_params",
     "path": "wfField_path",
     "plugin_id": "wfField_plugin_id",
     "presence_penalty": "wfField_presence_penalty",
@@ -495,7 +496,13 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "category": "wfCat_flow",
         "label": "wfNode_start",
         "description": "wfNode_start_desc",
-        "config": {"params": {"type": "object", "description": "wfNode_start_params"}},
+        "config": {
+            "params": {"type": "object", "description": "wfNode_start_params"},
+            #: 哪几个参数**跑之前必须有值**(逗号分隔)。运行前校验按它查(连同这次运行传进来的值,见
+            #: graph_rules.with_run_params):空着就当场拒,说清是哪一个。官方模板里要用户自己填的商品名、卖点、主题
+            #: 都点名在这里 —— 空着跑的话,模型对着空白写脚本,后面的付费生成照样扣费。
+            "required_params": {"type": "template", "description": "wfNode_start_required_params"},
+        },
         "outputs": ["*params"],
     },
     "llm": {

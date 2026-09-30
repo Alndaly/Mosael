@@ -43,6 +43,44 @@ def _one_of_errors(
     return errors
 
 
+def _start_param_errors(node_id: str, config: dict[str, Any]) -> list[str]:
+    """开始节点点名为必填的参数(`required_params`)一个都不能空。
+
+    参数的值常常是模板建好之后才由用户填的(商品名、卖点、主题),而它们被别的节点用 `{{start.x}}` 引用 ——
+    引用本身在必填检查里算"填了",所以此前空着也能启动,要等用到它的那一步才失败,或者更糟:模型对着空白
+    照样写完、后面的付费生成照样扣费。
+    """
+    params = config.get("params") if isinstance(config.get("params"), dict) else {}
+    names = [name.strip() for name in str(config.get("required_params") or "").replace("，", ",").split(",")]
+
+    def blank(value: Any) -> bool:
+        #: 和画布就绪检查(analyze.ts 的 isEmpty)同一个判据:0 和 false 是值,空串、空白、空列表 / 空对象不是。
+        if value is None:
+            return True
+        if isinstance(value, str):
+            return not value.strip()
+        return isinstance(value, (list, dict)) and not value
+
+    return [f"节点 {node_id} 缺少必填配置 params.{name}" for name in names if name and blank(params.get(name))]
+
+
+def with_run_params(graph: dict[str, Any], params: dict[str, Any] | None) -> dict[str, Any]:
+    """这张图**这一次运行**看到的样子:开始节点的参数叠上运行时传进来的值(和执行时 start 节点的合并同一个顺序)。
+
+    运行前校验按它判必填参数 —— 默认值空着、但这次调用(定时任务、子工作流、接口)带了值的,不该被拦。
+    """
+    if not params:
+        return graph
+    nodes = []
+    for node in graph.get("nodes") or []:
+        if isinstance(node, dict) and node.get("type") == "start":
+            config = dict(node.get("config") or {})
+            config["params"] = {**(config.get("params") or {}), **params}
+            node = {**node, "config": config}
+        nodes.append(node)
+    return {**graph, "nodes": nodes}
+
+
 def validate_graph(
     graph: dict[str, Any],
     *,
@@ -128,6 +166,8 @@ def validate_graph(
                     if value in (None, "") and (node_id, key) not in data_bound:
                         errors.append(f"节点 {node_id} 缺少必填配置 {key}")
             errors.extend(_one_of_errors(node_id, node_config, node_specs, data_bound))
+            if node_type == "start":
+                errors.extend(_start_param_errors(node_id, node_config))
             #: **运行前的校验要下到内嵌子图里,而且是整份校验。** 体是这张图的一段,它的每一种错
             #: (缺必填、引用越出作用域、空体、体里有开始节点、环、未知类型)在这里不报,就只能等
             #: 循环真跑到时才由执行器报 —— 那时工作流已经占了一个任务位、把循环之前的步骤全跑完
