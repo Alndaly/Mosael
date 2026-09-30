@@ -384,6 +384,8 @@ export function NoteNode({ data, selected }: NodeProps) {
             json && "font-mono text-ui-xs",
           )}
           value={item.text ?? ""}
+          //: 到上限就打不进去了(粘进来的也截在这儿)—— 放过去的话下一次自动保存整张板被拒。
+          maxLength={BOARD_TEXT_MAX}
           onValueChange={(next) => onText(item.id, next)}
           onBlur={() => setEditing(false)}
         />
@@ -402,6 +404,11 @@ export function NoteNode({ data, selected }: NodeProps) {
         >
           {item.text || <span className="text-muted-foreground">{t("boardNotePlaceholder")}</span>}
         </div>
+      )}
+      {editing && (item.text ?? "").length >= BOARD_TEXT_MAX && (
+        <span role="status" data-note-text-limit="" className="absolute inset-x-2 bottom-1 truncate text-ui-xs text-destructive">
+          {t("boardNoteTextLimit").replace("{n}", String(BOARD_TEXT_MAX))}
+        </span>
       )}
       {/* 让 AI 写的时候整格是占位(和图片格生成一样),停止在占位里。 */}
       {writing && <WritingCover item={item} onStop={stop} data-note-writing="" />}
@@ -1033,6 +1040,10 @@ export function EntityNode({ data, selected }: NodeProps) {
 
 //: **写成 Record<kind, …> 而不是随手一个对象** —— 后端加一种 item kind 时,这里漏登记
 //: 不会报错,只会让那种节点在画布上凭空消失。标上类型,漏一种就编译不过。
+/** 一格正文(便签的字)的上限(后端 shape.MAX_TEXT_CHARS,contracts/shared-constants.json 钉着)。超了整张板存不下:
+ *  便签的输入框按它限长,粘进来的一大段截到这么长(boardPlacement)。 */
+export const BOARD_TEXT_MAX = 20_000;
+
 //:
 //: **每一种都包一层 memo。** 画布每渲染一次(选中一格、打开一块面板、拖动的每一帧)都会把节点列表交给 React Flow;
 //: 节点对象没变(见 BoardCanvas 的 decorate)的那几格不该跟着重画 —— 几百格的画板上,拖一格就是几百个组件重画。

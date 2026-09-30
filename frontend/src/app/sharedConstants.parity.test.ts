@@ -23,6 +23,7 @@ import { NAV_ITEMS } from "@/components/layout/navLabels";
 import { WINDOW_CHROME_HEIGHT } from "@/lib/windowChrome";
 import { PUBLISH_BAR_HEIGHT } from "@/app/App";
 import { BOARD_ITEM_TITLE_MAX } from "@/features/boards/BoardNodeLabel";
+import { BOARD_TEXT_MAX } from "@/features/boards/boardNodes";
 
 type Constant = (typeof contract)["constants"][number];
 
@@ -42,6 +43,10 @@ describe("shared-constants 的前端一侧", () => {
 
   it("画板一格名字的长度上限:改名输入框的 maxLength 等于后端校验的那个数", () => {
     expect(BOARD_ITEM_TITLE_MAX).toBe(constantNamed("board_item_title_max_chars").value);
+  });
+
+  it("画板一格正文的长度上限:便签输入框的 maxLength 等于后端校验的那个数", () => {
+    expect(BOARD_TEXT_MAX).toBe(constantNamed("board_text_max_chars").value);
   });
 
   it("契约点名的前端实现位置都还在", () => {

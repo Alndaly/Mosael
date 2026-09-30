@@ -206,6 +206,8 @@ export const publish = {
   boardToolStop: "Stop",
   boardToolStopFailed: "Could not stop it",
   boardDeleteRunningTitle: "Stop and delete?",
+  boardNoteTextLimit: "Reached the {n}-character limit — more won't save",
+  boardSaveFailedAt: "A cell can't be saved — it's highlighted on the canvas",
   boardDeleteRunningBody: "{n} of these cells are still running. They'll be stopped before deleting — otherwise their results have nowhere to land, and they're still billed.",
   boardDeleteRunningConfirm: "Stop and delete",
   boardToolFailed: "Could not run the tool",

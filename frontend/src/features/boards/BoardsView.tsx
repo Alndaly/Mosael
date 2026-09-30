@@ -480,6 +480,17 @@ function BoardCard({
   );
 }
 
+/** 保存被拒时服务端点名的那一格(回包里的 `item_id`,见后端 routes/boards.update);没点名回 null。 */
+function failedItem(error: unknown): string | null {
+  if (!(error instanceof ApiError) || error.status !== 400) return null;
+  try {
+    const itemId = (JSON.parse(error.body) as { item_id?: unknown }).item_id;
+    return typeof itemId === "string" && itemId ? itemId : null;
+  } catch {
+    return null;
+  }
+}
+
 /** 某个产出者没跑起来时那句提示。按产出者说 —— 「生成失败」挂在一次写字上是错话。 */
 const RUN_FAILED: Record<BuiltinProducer, MessageKey> = {
   generate: "boardsGenerateFailed",
@@ -768,7 +779,16 @@ function BoardDetail({
         .catch(async (error: Error) => {
           //: 撞了版本号:合好的那份已经交给自动保存(adoptServer 里的 setCanvas),它接着带新版本号存。
           if (await recoverConflict(error)) throw error;
-          toast.error(t("boardsSaveFailed"), { description: error.message });
+          //: 存不下是因为某一格(字太长、字段写错):服务端说了是哪一格,跳过去、圈出来 —— 报错那句话里的 id 是内部的,
+          //: 人认不出是哪张便签。
+          const culprit = failedItem(error);
+          if (culprit && localCanvas.current?.items.some((one) => one.id === culprit)) {
+            api?.focusItem(culprit);
+            setSearchHit({ ids: new Set([culprit]), activeId: culprit });
+            toast.error(t("boardSaveFailedAt"), { description: error.message });
+          } else {
+            toast.error(t("boardsSaveFailed"), { description: error.message });
+          }
           // 自动保存只在 Promise 完成后才把这份画布视为已落库。告诉它失败了,
           // 下一次编辑仍会以最后一份真正成功的画布为基准。
           throw error;

@@ -43,7 +43,7 @@ vi.mock("@/features/boards/BoardPlayer", () => ({
   BoardVideo: () => <div data-testid="video-player" />,
 }));
 
-import { BOARD_NODE_TYPES } from "./boardNodes";
+import { BOARD_NODE_TYPES, BOARD_TEXT_MAX } from "./boardNodes";
 
 const STATUS_LABEL = {
   queued: "等待执行",
@@ -420,4 +420,20 @@ it("文档格引用文档素材(ADR 0031):标着是原件、只读,预览解析�
   expect(container.textContent).toContain("documentParsing");
   rerender(<Node {...props({ pending: false, error: "文件坏了" })} />);
   expect(container.querySelector('[role="alert"]')?.textContent).toContain("文件坏了");
+});
+
+it("便签的输入框按正文上限限长;到了上限说一声 —— 超了的话整张板存不下,还不知道是哪一张", () => {
+  const full = renderNode("note", "idle", { text: "字".repeat(BOARD_TEXT_MAX), form: { producer: "write" } });
+  act(() => {
+    fireEvent.doubleClick(full.container.querySelector("[data-board-run-status]")!);
+  });
+  expect(full.container.querySelector("textarea")?.maxLength).toBe(BOARD_TEXT_MAX);
+  expect(full.container.querySelector("[data-note-text-limit]")).not.toBeNull();
+  cleanup();
+
+  const short = renderNode("note", "idle", { text: "短", form: { producer: "write" } });
+  act(() => {
+    fireEvent.doubleClick(short.container.querySelector("[data-board-run-status]")!);
+  });
+  expect(short.container.querySelector("[data-note-text-limit]")).toBeNull();
 });

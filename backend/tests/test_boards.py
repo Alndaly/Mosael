@@ -130,6 +130,22 @@ def test_自动保存和回执不刷屏团队动态_同人同板一段时间只�
     assert len(edits()) == 2, "隔了一阵再编辑,记新的一条"
 
 
+def test_存不下是因为某一格时_回包点名那一格() -> None:
+    """报错那句话里的 id 是内部的,人认不出是哪张便签 —— 回包里另带 `item_id`,界面跳过去、圈出来。"""
+    client = fresh_client()
+    ws = _workspace(client)
+    board_id = client.post("/api/boards", json={"workspace_id": ws}).json()["id"]
+    refused = client.patch(f"/api/boards/{board_id}", json={
+        "workspace_id": ws, "base_revision": board_revision(client, board_id, ws),
+        "canvas": {"items": [{"id": "n-long", "kind": "note", "x": 0, "y": 0, "text": "字" * 20_001}], "edges": []}})
+    assert refused.status_code == 400, refused.text
+    body = refused.json()
+    assert body["item_id"] == "n-long" and "20000" in body["detail"], body
+    #: 不是哪一格的错(版本号不对)照旧是原来的形状。
+    stale = client.patch(f"/api/boards/{board_id}", json={"workspace_id": ws, "base_revision": 999, "canvas": {"items": [], "edges": []}})
+    assert stale.status_code == 409 and "item_id" not in stale.json()
+
+
 def test_identical_canvas_is_not_a_new_revision() -> None:
     client = fresh_client()
     ws = _workspace(client)

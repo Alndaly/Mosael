@@ -289,6 +289,24 @@ describe("画板详情页与服务端的同步", () => {
     expect(adoptedItem("cut")).toMatchObject({ form: retried.form, run: retried.run });
   });
 
+  it("存不下是因为某一格(字太长):跳到那一格、圈出来,提示说的是「有一格存不下」而不是一个内部 id", async () => {
+    const server: BoardCanvas = { items: [{ id: "n-long", kind: "note", x: 0, y: 0, width: 220, height: 140, text: "短" }], edges: [], markers: [] };
+    opens(boardAt(3, server));
+    apiMocks.updateBoard.mockRejectedValue(
+      new ApiError("画板项 n-long 的文字超过 20000 字", 400, JSON.stringify({ detail: "画板项 n-long 的文字超过 20000 字", item_id: "n-long" })),
+    );
+    mount();
+    await vi.waitFor(() => expect(canvasHarness.props).not.toBeNull());
+    act(() => props().onChange({ ...server, items: [{ ...server.items[0], text: "长".repeat(10) }] }));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(700);
+    });
+
+    expect(canvasHarness.api.focusItem).toHaveBeenCalledWith("n-long");
+    expect(toastMocks.error).toHaveBeenCalledWith("boardSaveFailedAt", { description: "画板项 n-long 的文字超过 20000 字" });
+    expect((canvasHarness.props as { searchHighlight?: { ids: Set<string> } }).searchHighlight?.ids.has("n-long")).toBe(true);
+  });
+
   it("删掉那根线之后存回去:服务端摘掉了从那条线来的那份,本地那一格跟着摘,手动挂的照留", async () => {
     // 「从上游来的那份活得和线一样长」只有后端一处规则(canvas._drop_detached_bindings),前端收它存下的。
     const upstream = { id: "A", kind: "image" as const, x: 0, y: 0, width: 260, height: 180, asset_id: "a1" };

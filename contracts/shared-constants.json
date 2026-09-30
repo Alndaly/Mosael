@@ -119,6 +119,23 @@
           "symbol": "BOARD_ITEM_TITLE_MAX"
         }
       ]
+    },
+    {
+      "name": "board_text_max_chars",
+      "value": 20000,
+      "why": "画板上一格正文(便签的字)最长多少字。后端按它校验每一次保存,前端按它给便签的输入框设 maxLength、截粘进来的一大段。前端放得比后端长时输入那一刻不报错,而下一次自动保存整张画板被拒 —— 用户只看到「画板没能保存」,不知道是哪一张便签。",
+      "implementations": [
+        {
+          "runtime": "python",
+          "location": "backend/app/domain/boards/shape.py",
+          "symbol": "MAX_TEXT_CHARS"
+        },
+        {
+          "runtime": "frontend",
+          "location": "frontend/src/features/boards/boardNodes.tsx",
+          "symbol": "BOARD_TEXT_MAX"
+        }
+      ]
     }
   ],
   "budgets": [

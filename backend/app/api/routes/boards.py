@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException
 from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 
 from app.api.deps import CurrentUser, DbSession, Tx
 from app.core.i18n import get_current_locale
@@ -85,7 +86,7 @@ def duplicate(board_id: str, body: BoardDuplicate, db: Tx, user: CurrentUser) ->
 
 
 @router.patch("/boards/{board_id}", response_model=BoardOut)
-def update(board_id: str, body: BoardUpdate, db: Tx, user: CurrentUser) -> Board:
+def update(board_id: str, body: BoardUpdate, db: Tx, user: CurrentUser) -> Board | JSONResponse:
     try:
         return boards.update(
             db,
@@ -97,6 +98,11 @@ def update(board_id: str, body: BoardUpdate, db: Tx, user: CurrentUser) -> Board
             base_revision=body.base_revision,
         )
     except BoardDomainError as exc:
+        #: 存不下是因为**某一格**(字太长、字段写错):回包里带上是哪一格,界面跳过去、圈出来 —— 报错那句话里的 id
+        #: 是内部的,人认不出是哪张便签。`detail` 照旧是那句话。
+        item_id = exc.params.get("item_id") if not isinstance(exc, BoardNotFound) else None
+        if isinstance(item_id, str) and item_id:
+            return JSONResponse(status_code=400, content={"detail": str(exc), "item_id": item_id})
         # 「画板不存在」是 404,「画布不合法」是 400 —— 两者对调用方意味着完全不同的下一步。
         raise _board_http_error(exc) from exc
 

@@ -3,7 +3,7 @@ import type { DocumentText } from "@/api/domains/documents";
 import type { NoteReference } from "@/api/domains/notes";
 import { isImportableFile } from "@/lib/useFileDrop";
 
-import { DEFAULT_SIZE, isMediaKind, type MediaKind } from "./boardNodes";
+import { BOARD_TEXT_MAX, DEFAULT_SIZE, isMediaKind, type MediaKind } from "./boardNodes";
 
 /** 进了素材库、要摆上画板的一份素材:媒体各落成同名的格子,文档(ADR 0031)落成一格文档格。 */
 export interface PlacedAsset {
@@ -52,8 +52,6 @@ export function assetItem(asset: PlacedAsset, at: { x: number; y: number }, inde
   });
 }
 
-/** 便签正文的上限(后端 canvas.MAX_TEXT_CHARS)。粘进来的一大段超了的话,整张板存不下。 */
-const NOTE_TEXT_LIMIT = 20_000;
 
 /**
  * 粘贴板上有什么可以落到画板上:媒体文件(截图、从访达复制的图/视频/音频)→ 先进素材库再各放一格;
@@ -70,5 +68,5 @@ export function clipboardContent(data: Pick<DataTransfer, "files" | "getData"> |
     );
   if (files.length) return { files };
   const text = data.getData("text/plain").trim();
-  return text ? { text: text.slice(0, NOTE_TEXT_LIMIT) } : null;
+  return text ? { text: text.slice(0, BOARD_TEXT_MAX) } : null;
 }
