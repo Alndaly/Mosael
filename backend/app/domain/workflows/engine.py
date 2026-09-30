@@ -545,6 +545,10 @@ def run_workflow(
         return context
 
     # 「输出」节点声明的具名输出:被 call_workflow 调用时,调用方拿的就是这个契约(见 executors/subworkflow)。
+    #: **图里有输出节点,结果里才有 `output` 这一格。** 此前总写一个空字典,于是调用一张没有输出节点
+    #: 的工作流静默拿到 `{}`,call_workflow 那句「加一个输出节点」永远说不出口。有输出节点、这次恰好
+    #: 没走到(条件分支)的,仍是一份空的具名输出 —— 契约成立,只是这次什么都没给。
+    declares_output = "output" in node_types.values()
     output_values: dict[str, Any] = {}
     for nid, out in context.items():
         if node_types.get(nid) == "output" and isinstance(out, dict):
@@ -560,7 +564,7 @@ def run_workflow(
         "workflow_revision": revision.revision,
         "workflow_graph_hash": revision.graph_hash,
         "context": {nid: _trim_outputs(out) for nid, out in context.items()},
-        "output": output_values,
+        **({"output": output_values} if declares_output else {}),
     }
     emit_job_event(
         db,

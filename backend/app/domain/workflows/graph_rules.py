@@ -268,6 +268,10 @@ def validate_body_graph(
     if not isinstance(nodes, list) or not nodes:
         return [f"{label}不能为空,至少要有一个节点"]
     errors = validate_graph(body, require_start=False, extra_types=extra_types)
+    #: 「输出」节点声明的是**整条工作流**交给调用方的东西,只在顶层算数(见 engine.run_workflow)。
+    #: 放在体里它照样跑、产出却没人收 —— 看起来声明了输出,被调用时拿到的还是没有。
+    if any(isinstance(node, dict) and node.get("type") == "output" for node in nodes):
+        errors.append(f"{label}里不能放「输出」节点:工作流的输出只能在最外层声明")
     errors.extend(_unresolvable_body_refs(nodes, node_type))
     return errors
 

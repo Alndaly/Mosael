@@ -26,9 +26,7 @@ from __future__ import annotations
 
 import inspect
 
-import pytest
 
-from app.domain.workflows import WorkflowDomainError
 from app.domain.workflows.executors import subworkflow
 
 
@@ -51,49 +49,88 @@ def test_没有退路了() -> None:
     assert any(isinstance(node.ops[0], ast.NotIn) for node in compares), "不再判「有没有 output」了"
 
 
-def test_空的具名输出仍然是具名输出_不掉进另一种形状(monkeypatch) -> None:
-    """这一条是 `or` 和 `in` 的全部区别:**有**输出节点、这次恰好产出空,契约仍然成立。"""
-    captured: dict = {}
+def _call(child_graph: dict) -> tuple[str, dict, str | None, str | None]:
+    """真跑一遍:父流程 call_workflow 调子流程,**都走真的 run_workflow**。
 
-    class _Job:
-        result = {"output": {}, "context": {"某节点": {"text": "一大段被裁剪过的东西…"}}}
+    此前这两条用例把 wait_for_job / start_workflow_job 打了桩,喂进去一个手造的、缺 `output` 键的结果
+    —— 而真实的 run_workflow **总会**写 `output`,于是「被调图没有输出节点」那句报错永远说不出口,
+    桩把这件事盖住了。
+    """
+    import time
 
-    from app.domain.workflows import engine as wf_engine
+    from app.core.db import SessionLocal
+    from app.db.models import Job, Workflow
+    from app.domain.workflows import create_workflow
+    from app.domain.workflows.engine import start_workflow_job
+    from tests.util import fresh_client, user_id
 
-    monkeypatch.setattr(subworkflow, "wait_for_job", lambda _id, *, release=None: _Job())
-    monkeypatch.setattr(wf_engine, "start_workflow_job",
-                        lambda *a, **k: type("J", (), {"id": "child-1"})())
-    monkeypatch.setattr(subworkflow, "current_actor", lambda _db: "u1")
-    monkeypatch.setattr(subworkflow, "_guard_recursion", lambda *a, **k: None)
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+    with SessionLocal() as db:
+        child = create_workflow(db, workspace_id=ws, name="配音子流程", graph=child_graph, created_by=user_id())
+        db.flush()
+        parent = create_workflow(db, workspace_id=ws, name="父", graph={
+            "nodes": [
+                {"id": "start", "type": "start", "config": {}},
+                {"id": "call", "type": "call_workflow", "config": {"workflow_id": child.id}},
+            ],
+            "edges": [{"id": "e1", "source": "start", "target": "call"}],
+        }, created_by=user_id())
+        db.commit()
+        job = start_workflow_job(db, db.get(Workflow, parent.id), created_by=user_id(), params={})
+        job_id = job.id
+    for _ in range(150):
+        with SessionLocal() as db:
+            job = db.get(Job, job_id)
+            if job.status in ("succeeded", "failed"):
+                return job.status, job.result or {}, job.error, job.error_key
+        time.sleep(0.1)
+    raise AssertionError("工作流没跑完")
 
-    target = type("W", (), {"workspace_id": "ws-1", "name": "子流程", "id": "wf-2"})()
-    db = type("DB", (), {"get": lambda self, model, key: target})()
-    workflow = type("W", (), {"workspace_id": "ws-1", "id": "wf-1"})()
 
-    out = subworkflow.call_workflow(db, workflow, {"workflow_id": "wf-2"})
-    captured.update(out)
-    assert captured == {"output": {}}, "空的具名输出掉进了整份上下文 —— 形状变了"
+def test_空的具名输出仍然是具名输出_不掉进另一种形状() -> None:
+    """这一条是 `or` 和 `in` 的全部区别:**有**输出节点、这次恰好没走到(条件为假),契约仍然成立。"""
+    status, result, error, _ = _call({
+        "nodes": [
+            {"id": "start", "type": "start", "config": {}},
+            {"id": "check", "type": "condition", "config": {"left": "a", "op": "empty"}},
+            {"id": "out", "type": "output", "config": {"values": {"greeting": "你好"}}},
+        ],
+        "edges": [
+            {"id": "e1", "source": "start", "target": "check"},
+            {"id": "e2", "source": "check", "target": "out", "source_handle": "true"},
+        ],
+    })
+    assert status == "succeeded", error
+    assert result["context"]["call"] == {"output": {}}, "空的具名输出掉进了另一种形状"
 
 
-def test_被调图没有输出节点时说得出口(monkeypatch) -> None:
-    """报的是"加一个输出节点",而不是悄悄给一份少了一截的数据。"""
-    from app.domain.workflows import engine as wf_engine
+def test_被调图没有输出节点时说得出口() -> None:
+    """报的是"加一个输出节点",而不是悄悄给一份空的数据。"""
+    status, _, error, error_key = _call({
+        "nodes": [
+            {"id": "start", "type": "start", "config": {}},
+            {"id": "t", "type": "template", "config": {"template": "一段长文案"}},
+        ],
+        "edges": [{"id": "e1", "source": "start", "target": "t"}],
+    })
+    assert status == "failed", "调用一张没有输出节点的工作流,静默拿到了 {}"
+    assert error_key == "wfErr_calledWorkflowHasNoOutput"
+    assert "配音子流程" in (error or ""), "报错里没说是哪一个工作流"
 
-    monkeypatch.setattr(subworkflow, "wait_for_job",
-                        lambda _id, *, release=None: type("J", (), {"result": {"context": {"a": 1}}})())
-    monkeypatch.setattr(wf_engine, "start_workflow_job",
-                        lambda *a, **k: type("J", (), {"id": "child-1"})())
-    monkeypatch.setattr(subworkflow, "current_actor", lambda _db: "u1")
-    monkeypatch.setattr(subworkflow, "_guard_recursion", lambda *a, **k: None)
 
-    target = type("W", (), {"workspace_id": "ws-1", "name": "配音子流程", "id": "wf-2"})()
-    db = type("DB", (), {"get": lambda self, model, key: target})()
-    workflow = type("W", (), {"workspace_id": "ws-1", "id": "wf-1"})()
+def test_输出节点不能放进循环体或子图() -> None:
+    """放在体里它照样跑、产出却没人收 —— 看起来声明了输出,被调用时拿到的还是没有。"""
+    from app.domain.workflows import validate_graph
 
-    with pytest.raises(WorkflowDomainError) as raised:
-        subworkflow.call_workflow(db, workflow, {"workflow_id": "wf-2"})
-    assert raised.value.key == "wfErr_calledWorkflowHasNoOutput"
-    assert (raised.value.params or {}).get("name") == "配音子流程", "报错里没说是哪一个工作流"
+    body = {"nodes": [{"id": "out", "type": "output", "config": {"values": {"x": "1"}}}], "edges": []}
+    for container in ({"type": "subgraph", "config": {"body": body}},
+                      {"type": "loop_foreach", "config": {"items": "a", "body": body}}):
+        errors = validate_graph({
+            "nodes": [{"id": "start", "type": "start", "config": {}}, {"id": "box", **container}],
+            "edges": [{"id": "e1", "source": "start", "target": "box"}],
+        })
+        assert any("输出" in one for one in errors), errors
 
 
 def test_迁移给被调用的旧图补上输出节点() -> None:
