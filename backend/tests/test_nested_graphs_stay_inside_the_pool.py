@@ -62,7 +62,7 @@ def test_等待中的节点会把预算还回去() -> None:
     assert "release=release" in inspect.getsource(common.wait_for_job)
     source = inspect.getsource(common.wait_until)
     assert "release" in source
-    assert "_budget_released" in source
+    assert "connection_handed_back" in source
 
     before = wf_engine.NODE_CONNECTIONS._value
     with common._budget_released(True):
@@ -90,3 +90,62 @@ def test_每一处等待都把自己的会话交了出去() -> None:
     assert not missing, (
         "这几处等待没把自己的会话交出去 —— 等待期间会一直攥着一条连接:\n  " + "\n  ".join(missing)
     )
+
+
+def test_嵌套容器跑体时不占预算_并行的循环套子图跑得完(monkeypatch) -> None:
+    """容器节点(循环 / 子图)跑体期间此前一直攥着预算:3 个并行的遍历循环(每项同时跑 4 个)、
+    每项的体是一个子图,20 秒都不结束 —— 外层攥满了预算,体里的叶子永远拿不到。取消也叫不醒:
+    叶子卡在拿预算上,根本走不到看取消的那一步。
+
+    预算压到 2,让它在小图上就必然复现:遍历循环占 1、第一个子图占 1,子图里的叶子就没得拿了。
+    **有超时保护**:死锁时测试失败而不是挂死整个测试进程。
+    """
+    from app.core.db import SessionLocal
+    from app.db.models import Workflow
+    from tests.util import fresh_client
+
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+    with SessionLocal() as db:
+        workflow = Workflow(workspace_id=ws, name="嵌套", graph={"nodes": [], "edges": []})
+        db.add(workflow)
+        db.commit()
+        wf_id = workflow.id
+
+    budget = threading.Semaphore(2)
+    monkeypatch.setattr(wf_engine, "NODE_CONNECTIONS", budget)
+    leaf = {"nodes": [{"id": "leaf", "type": "template", "config": {"template": "叶子"}}], "edges": []}
+    body = {"nodes": [{"id": "sub", "type": "subgraph", "config": {"inputs": {}, "body": leaf}}], "edges": []}
+    graph = {
+        "nodes": [
+            {"id": "start", "type": "start", "config": {}},
+            *(
+                {"id": f"loop{i}", "type": "loop_foreach",
+                 "config": {"items": [1, 2, 3, 4], "concurrency": 4, "body": body, "output": ""}}
+                for i in range(3)
+            ),
+        ],
+        "edges": [{"id": f"e{i}", "source": "start", "target": f"loop{i}"} for i in range(3)],
+    }
+    outcome: dict = {}
+
+    def run() -> None:
+        try:
+            outcome["context"], outcome["cancelled"] = wf_engine.execute_graph(graph, wf_id=wf_id)
+        except BaseException as exc:  # noqa: BLE001 — 交回主线程断言
+            outcome["error"] = exc
+
+    worker = threading.Thread(target=run, daemon=True)
+    worker.start()
+    worker.join(timeout=30)
+    deadlocked = worker.is_alive()
+    if deadlocked:
+        # 把卡住的叶子放出去,让那几个线程池能收尾 —— 否则进程退出时要 join 它们,整个测试进程挂死。
+        for _ in range(64):
+            budget.release()
+        worker.join(timeout=30)
+    assert not deadlocked, "嵌套容器把预算攥死了:工作流卡住不动"
+    assert "error" not in outcome, outcome.get("error")
+    assert not outcome["cancelled"]
+    assert [one["count"] for key, one in outcome["context"].items() if key.startswith("loop")] == [4, 4, 4]
+    assert budget._value == 2, "跑完预算没还齐"

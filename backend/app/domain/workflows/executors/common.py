@@ -48,11 +48,8 @@ def wait_until(
       (见 wait_for_job 的说明)。
     - `deadline`(time.monotonic 的基准)给了的话,最后一拍只睡到它为止。
     """
-    if release is not None:
-        release.commit()
-        release.close()
     # 等的时候也不占任务名额:一群等子任务的父任务占满名额,子任务就永远排不上(见 jobs.JobRunner)。
-    with _budget_released(release is not None), waiting_on_other_jobs():
+    with connection_handed_back(release), waiting_on_other_jobs():
         while True:
             with SessionLocal() as db:
                 value = check(db)
@@ -116,6 +113,26 @@ def wait_for_job(job_id: str, *, release: "Session | None" = None) -> Job:
             cancel_job_tree(db, job)
 
     return wait_until(settled, release=release, on_stop=abandon)
+
+
+@contextmanager
+def connection_handed_back(session: Session | None):
+    """这一段时间里节点不用数据库:把它的会话连同引擎的连接预算一起交还,出来时再拿回预算。
+
+    两种节点要这样做:**在等的**(wait_until —— 等子任务、等延时)和**容器**(循环 / 子图,见
+    engine.run_node —— 它的活儿全在体里,体里的节点自己拿预算)。不还的话,一群在等或在跑体的
+    外层节点占满预算,而它们等的正是体里那些取不到预算的节点 —— 死锁,表现是"工作流卡住不动"。
+
+    会话 close 之后再用会自动重新取一条连接,所以出来之后调用方照常用它。`session` 为 None
+    (调用方本来就没占)时什么都不做。
+    """
+    if session is None:
+        yield
+        return
+    session.commit()
+    session.close()
+    with _budget_released(True):
+        yield
 
 
 @contextmanager

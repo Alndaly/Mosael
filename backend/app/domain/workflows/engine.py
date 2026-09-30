@@ -40,6 +40,7 @@ from app.domain.jobs import (
 from app.domain.notifications import notify
 from app.domain.workflows import (
     BRANCHING_NODE_TYPES,
+    NESTED_BODY_TYPES,
     WorkflowDomainError,
     available_node_types,
     reference_dependencies,
@@ -49,6 +50,7 @@ from app.domain.workflows import (
 )
 from app.domain.workflows.binding import apply_data_edges, check_number_fields, interpolate_node_config
 from app.domain.workflows.executors import get_executor
+from app.domain.workflows.executors.common import connection_handed_back
 from app.domain.workflows.revisions import WorkflowRevisionError, current_workflow_revision
 from app.domain.workflows.run_outputs import OUTPUT_TEXT_LIMIT, keep_full_texts, long_texts
 from app.domain.workflows.run_scope import halt_scope
@@ -67,6 +69,9 @@ MAX_PARALLEL_NODES = 8
 #:
 #: **嵌套天然被压住**:这是模块级的一个信号量,子图的节点和父图的节点从同一份预算里取,
 #: 所以乘积进不来。数从池子自己算出来(见 core/db.pool_capacity),不另写一个。
+#:
+#: 同一份预算里取,就不能有人攥着它等别人:在等的节点(executors.common.wait_until)和跑体的
+#: 容器节点(循环 / 子图,见 run_node)都把它交还 —— 只有真在用数据库的叶子占着它。
 NODE_CONNECTIONS = threading.Semaphore(max(1, pool_capacity() - POOL_RESERVE))
 
 
@@ -391,7 +396,14 @@ def execute_graph(
                     raise WorkflowDomainError("wfErr_cancelled")
                 # 工作流本身就是节点的运行作用域(RunScope:工作区、id、名字),直接给它。
                 wf = node_db.get(Workflow, wf_id)
-                outputs = handler(node_db, wf, config)
+                if ntype in NESTED_BODY_TYPES:
+                    #: **容器节点跑体的时候不占连接,也不占预算。** 它的活儿全在体里,体里的节点从同一份
+                    #: 预算里自己拿;容器攥着不放,嵌套几层、并行几项就把预算吃光,体里的叶子永远拿不到
+                    #: —— 死锁,取消也叫不醒(叶子卡在拿预算上)。和节点里的「等」同一个做法。
+                    with connection_handed_back(node_db):
+                        outputs = handler(node_db, wf, config)
+                else:
+                    outputs = handler(node_db, wf, config)
                 # **节点跑完就是它的事务边界。** 只在成功时提交:失败节点半途 flush 的东西不该留下。
                 # 账不在此列 —— 付过费的调用在调用方回滚之后由记账那一层补写(见 domain/billing/usage
                 # 的 _settle_usage),这里不用为它破例。
