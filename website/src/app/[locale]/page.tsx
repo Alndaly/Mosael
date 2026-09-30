@@ -9,6 +9,7 @@ import { BrandIcon, BrandWordmark } from "@/components/brand-logo";
 import { GithubMark } from "@/components/icons";
 import { QrCards } from "@/components/qr-cards";
 import { PointerSurface, TiltCard } from "@/components/pointer-motion";
+import { StarField } from "@/components/star-field";
 import { Reveal } from "@/components/reveal";
 import { isLocale, localePath, type Locale } from "@/i18n/config";
 import { DownloadLink } from "@/components/download-link";
@@ -71,11 +72,9 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
     <div className="-mt-20 overflow-hidden bg-paper">
       <PointerSurface as="section" id="product" className="relative isolate px-5 pt-32 pb-16 sm:px-8 sm:pt-36 sm:pb-24 lg:px-12">
         <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(circle_at_12%_18%,rgba(114,87,233,0.26),transparent_36%),radial-gradient(circle_at_84%_12%,rgba(255,139,120,0.25),transparent_32%),linear-gradient(180deg,#f7f3ff_0%,#fff7f5_58%,var(--paper)_100%)] dark:bg-[radial-gradient(circle_at_12%_18%,rgba(114,87,233,0.28),transparent_36%),radial-gradient(circle_at_84%_12%,rgba(255,139,120,0.13),transparent_32%),linear-gradient(180deg,#171322_0%,#19131d_58%,var(--paper)_100%)]" />
-        {/* 两团慢慢漂的光斑,和一圈跟着鼠标走的光晕。都在内容下面一层,不挡点击;减少动效时不动、光晕不出现。 */}
+        {/* 一层星点:慢慢明灭,鼠标附近的几颗亮一点、轻轻让开,划过时偶尔落几颗星屑。在内容下面一层,不挡点击。 */}
         <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
-          <div className="absolute top-[8%] left-[6%] size-[34rem] rounded-full bg-[#7257e9]/18 blur-[110px] motion-safe:animate-drift-a dark:bg-[#7257e9]/22" />
-          <div className="absolute top-[4%] right-[4%] size-[28rem] rounded-full bg-[#ff8b78]/16 blur-[110px] motion-safe:animate-drift-b dark:bg-[#ff8b78]/10" />
-          <div className="absolute inset-0 opacity-0 transition-opacity duration-700 group-data-[pointer=on]/pointer:opacity-100 bg-[radial-gradient(640px_circle_at_var(--pointer-x)_var(--pointer-y),rgba(114,87,233,0.16),transparent_62%)] dark:bg-[radial-gradient(640px_circle_at_var(--pointer-x)_var(--pointer-y),rgba(150,125,255,0.18),transparent_62%)]" />
+          <StarField />
         </div>
         <Reveal className="mx-auto flex max-w-5xl flex-col items-center text-center">
           <p className="m-0 inline-flex items-center gap-2 text-xs font-bold tracking-[0.16em] text-primary uppercase"><span className="size-1.5 rounded-full bg-primary" />{t.eyebrow}</p>
