@@ -48,6 +48,8 @@ describe("一格的能力(boardAbilities)", () => {
     expect(boardAbilities(at("note", { text: "   " }), PRODUCERS)).toEqual([]);
     expect(boardAbilities(at("document"), PRODUCERS)).toEqual([]);
     expect(boardAbilities(at("document", { note_id: "n1", note_revision: 2 }), PRODUCERS).map((one) => one.label)).toEqual(["翻译"]);
+    //: 引用 PDF / PPT 的文档格:给的是解析出的全文,翻译这类文字能力照样列(后端 document_cell 读的就是它)。
+    expect(boardAbilities(at("document", { asset_id: "deck" }), PRODUCERS).map((one) => one.label)).toEqual(["翻译"]);
     expect(boardAbilities(at("audio", { asset_id: "a" }), undefined)).toEqual([]);
     expect(hostHasContent(at("scene", { scene_id: "s" }))).toBe(true);
     expect(hostHasContent(at("frame"))).toBe(false);

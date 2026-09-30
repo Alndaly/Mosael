@@ -45,12 +45,13 @@ export function firstSentence(text: string): string {
 }
 
 /**
- * 这一格**有没有内容可给**:便签要有字,文档要挑了笔记,3D 场景格引用着场景,媒体格要有素材。
- * 能力吃的就是这一样 —— 没有的话操作条上不列能力(后端同样拒:boardErr_abilityNeedsContent)。
+ * 这一格**有没有内容可给**:便签要有字,文档要引用着一篇(笔记,或一份 PDF / PPT 这样的文档素材 —— 给的是解析出的
+ * 全文,ADR 0031),3D 场景格引用着场景,媒体格要有素材。能力吃的就是这一样 —— 没有的话操作条上不列能力(后端同样拒:
+ * boardErr_abilityNeedsContent)。文档素材还没解析好就跑,后端当场说「还没有内容」,不起任务。
  */
 export function hostHasContent(item: BoardItem): boolean {
   if (item.kind === "note") return Boolean(item.text?.trim());
-  if (item.kind === "document") return Boolean(item.note_id);
+  if (item.kind === "document") return Boolean(item.note_id || item.asset_id);
   if (item.kind === "scene") return Boolean(item.scene_id);
   //: 资产格给的是它引用的资产(补全多角度、生成表情吃的就是它,ADR 0027 阶段 4)。
   if (item.kind === "entity") return Boolean(item.entity_id);
