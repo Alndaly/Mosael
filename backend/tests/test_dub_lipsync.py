@@ -2,7 +2,10 @@
 
 - 切块:每块在模型收得下的长度里,切点优先落在两句之间;没有空当才在上限处硬切;最后一块太短就把上一个切点往前挪;
 - 有配音的块交给改口型,一句都没有的块用原片、不花钱;接回整段不带声音,放到最上面一条新视频轨,原片不动;
-- 授权没确认、原片变过速、配音轨上没有话,都在动手之前说。
+- 授权没确认、原片变过速、配音轨上没有话,都在动手之前说;
+- 等改口型时调用方的会话被交还(commit + close):之后铺时间线不能再碰脱离会话的对象 —— 桩走真的 wait_for_job;
+- 配音轨上的克隆音色、原片上的真人人物,在花钱之前按漏斗同一套判据查;
+- 失败重跑不再买已经改好的块;中间素材挂在译配项目下;起点在原片之前的那句台词不往后错。
 """
 
 from __future__ import annotations
@@ -15,13 +18,13 @@ import pytest
 
 from app.core.unit_of_work import unit_of_work
 from app.core.config import settings
-from app.db.models import Clip, Project, Sequence, Track, Workspace
+from app.db.models import Asset, Clip, Entity, EntityReference, Job, Project, Sequence, Track, Voice, Workspace
 from app.domain.assets.importer import register_file_asset
 from app.domain.render import build_plan_for_sequence, digital_human_assets
 from app.domain.workflows import WorkflowDomainError
 from app.domain.workflows.executors import dub_lipsync as module
 from app.domain.workflows.executors.dub_lipsync import dub_lipsync, plan_chunks
-from tests.util import fresh_client
+from tests.util import fresh_client, make_voice
 
 
 def test_切块_切点落在两句之间_没空当才硬切_最后一块太短往前挪() -> None:
@@ -64,11 +67,25 @@ def dubbed(monkeypatch):
             db.add(Clip(workspace_id=ws.id, sequence_id=sequence.id, track_id=dub.id, asset_id=line.id,
                         timeline_start=at, src_in=0, src_out=1))
         db.commit()
-        ids = SimpleNamespace(ws=ws.id, sequence=sequence.id, clip=source.id, dub=dub.id, base=base.id)
+        ids = SimpleNamespace(ws=ws.id, sequence=sequence.id, clip=source.id, dub=dub.id, base=base.id,
+                              project=project.id, video=video.id, line=line.id)
     calls: list = []
-    model = {"id": "p:video:videoretalk", "capabilities": {"source_duration_seconds": {"source_video": [2, 4]}}}
+    model = {"id": "p:video:videoretalk", "provider": "p", "provider_profile_id": "p", "model": "videoretalk",
+             "capabilities": {"source_duration_seconds": {"source_video": [2, 4]}}}
     monkeypatch.setattr(module, "_pick_model", lambda db, choice, mode: model)
-    monkeypatch.setattr(module, "_generate", lambda db, scope, model, sources, parameters=None: calls.append(sources) or [sources[0]["asset_id"]])
+
+    def generation(db, **request):
+        """改口型的供应商:建一条已经成功的子任务,产出就是那一块原片。**不绕过 _generate** —— 它照常提交、
+        起线程(这里什么都不做)、走真的 wait_for_job 把调用方的会话交还(commit + close)。"""
+        calls.append(request)
+        job = Job(workspace_id=request["workspace_id"], kind="generation", status="succeeded", created_by=None,
+                  result={"asset_ids": [request["source_assets"][0]["asset_id"]]})
+        db.add(job)
+        db.flush()
+        return SimpleNamespace(id=job.id), job
+
+    monkeypatch.setattr("app.domain.generation.create_generation_job", generation)
+    monkeypatch.setattr("app.domain.generation.runner.start_generation_thread", lambda generation_id: None)
     return ids, calls
 
 
@@ -82,7 +99,7 @@ def test_整条跑通_切两块都改口型_接回整段放在最上面_原片�
     with unit_of_work() as db:
         out = dub_lipsync(db, scope, _config(ids))
     assert (out["chunk_count"], out["generated_count"]) == (2, 2), "6 秒按 4 秒上限、在两句之间(第 3 秒)切成两块"
-    assert [[one["role"] for one in sources] for sources in calls] == [["source_video", "driving_audio"]] * 2
+    assert [[one["role"] for one in call["source_assets"]] for call in calls] == [["source_video", "driving_audio"]] * 2
     with unit_of_work() as db:
         sequence = db.get(Sequence, ids.sequence)
         top = min(sequence.tracks, key=lambda track: track.position)
@@ -131,3 +148,81 @@ def test_动手之前说清楚(dubbed) -> None:
             dub_lipsync(db, scope, _config(ids))
         assert refused.value.key == "wfErr_dubLipsyncNoSpeech"
     assert calls == []
+
+
+def _run(ids, **extra):
+    scope = SimpleNamespace(workspace_id=ids.ws, id="wf:1", name="译配")
+    with unit_of_work() as db:
+        return dub_lipsync(db, scope, _config(ids, **extra))
+
+
+def test_等改口型时会话被交还_之后照样铺上时间线_中间素材挂在译配项目下(dubbed) -> None:
+    """此前付完钱、改好口型,在读 `sequence.tracks`(之前没加载过)那一行 DetachedInstanceError —— 旧的桩直接
+    返回结果、不交还会话,把它盖住了。"""
+    ids, calls = dubbed
+    out = _run(ids)
+    assert out["generated_count"] == 2 and len(calls) == 2
+    assert {call["project_id"] for call in calls} == {ids.project}, "改口型的产出挂在译配项目下"
+    with unit_of_work() as db:
+        made = [one for one in db.query(Asset).filter(Asset.workspace_id == ids.ws) if one.id not in (ids.video, ids.line)]
+        assert made and {one.project_id for one in made} == {ids.project}, "切出来的块、接回的整段都不散落在「未归属」里"
+        assert db.get(Clip, out["clip_id"]).track_id == out["track_id"]
+
+
+def test_失败重跑不再买已经改好的块(dubbed) -> None:
+    ids, calls = dubbed
+    _run(ids)
+    assert len(calls) == 2
+    again = _run(ids)
+    assert (again["generated_count"], again["reused_count"], len(calls)) == (0, 2, 2), "原片、区间、配音、模型都一样:认出来,不再花钱"
+
+    #: 第二句的配音换了(音量调低),那一块就是新的:切点不变,只重买变了的那一块。
+    with unit_of_work() as db:
+        changed = db.query(Clip).filter(Clip.track_id == ids.dub, Clip.timeline_start == 4).one()
+        changed.gain = 0.5
+        db.commit()
+    third = _run(ids)
+    assert (third["generated_count"], third["reused_count"], len(calls)) == (1, 1, 3)
+
+
+def test_配音轨上是未声明的克隆音色_花钱之前就拒(dubbed) -> None:
+    """配音混成一段新 wav 交给改口型,新素材上不记 voice_id —— 漏斗查不到;得拿配音轨上原来那几句查。"""
+    ids, calls = dubbed
+    voice = make_voice(ids.ws, "老王的嗓子")
+    with unit_of_work() as db:
+        line = db.get(Asset, ids.line)
+        line.media_info = {**(line.media_info or {}), "voice_id": voice}
+        db.commit()
+    with pytest.raises(WorkflowDomainError) as refused:
+        _run(ids)
+    assert refused.value.key == "genErr_voiceConsentMissing" and calls == []
+    with unit_of_work() as db:
+        db.get(Voice, voice).consent_kind = "self"
+        db.commit()
+    assert _run(ids)["generated_count"] == 2
+
+
+def test_原片是真人人物资产的参考图_没有声明就拒(dubbed) -> None:
+    ids, calls = dubbed
+    with unit_of_work() as db:
+        person = Entity(workspace_id=ids.ws, kind="character", name="小李", attributes={"real_person": True})
+        db.add(person)
+        db.flush()
+        db.add(EntityReference(entity_id=person.id, asset_id=ids.video, role="front"))
+        db.commit()
+    with pytest.raises(WorkflowDomainError) as refused:
+        _run(ids)
+    assert refused.value.key == "genErr_entityConsentMissing" and calls == []
+
+
+def test_起点在原片之前的那句_剪掉露在外面的那截_不往后错(monkeypatch) -> None:
+    """配音轨上一句从原片开始前 0.5 秒说起:混音时它应当从这句露在里面的那一截念起、落在 0 秒。此前起点夹到 0,
+    截取却仍从这句的开头算 —— 整句往后错了 0.5 秒。"""
+    import app.domain.workflows.executors.subjobs as subjobs
+
+    monkeypatch.setattr(subjobs, "_asset_in", lambda db, scope, asset_id: SimpleNamespace(id=asset_id, file_key="k"))
+    early = SimpleNamespace(muted=False, asset_id="a", timeline_start=9.5, src_in=0.0, src_out=2.0, speed=2.0, gain=1.0)
+    [line] = module._lines_on(None, SimpleNamespace(workspace_id="w"), SimpleNamespace(clips=[early]),
+                              clip_start=10.0, span=6.0)
+    assert (line.start, line.end) == (0.0, 0.5), "2 倍速:素材 2 秒 = 时间线 1 秒,其中前 0.5 秒露在原片之前"
+    assert line.src_in == pytest.approx(1.0), "时间线上剪掉 0.5 秒 = 素材里 1 秒(2 倍速)"

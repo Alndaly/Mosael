@@ -106,8 +106,11 @@ def _resolution(model: dict[str, Any], config: dict[str, Any]) -> dict[str, Any]
 
 
 def _generate(db: Session, scope: RunScope, model: dict[str, Any], sources: list[dict[str, str]],
-              parameters: dict[str, Any] | None = None) -> list[str]:
-    """一次视频生成,交回出的视频。不收提示词的模型(说话照片、改口型)提示词就空着 —— 描述符说了算。"""
+              parameters: dict[str, Any] | None = None, *, project_id: str | None = None) -> list[str]:
+    """一次视频生成,交回出的视频。不收提示词的模型(说话照片、改口型)提示词就空着 —— 描述符说了算。
+
+    **等生成的时候 `db` 会被交还**(wait_for_job 的 release:commit + close):调用方在这之前取到的 ORM 对象,
+    之后都是脱离会话的,要用就按 id 重新取。`project_id`:产出挂在哪个项目下(译配对口型挂在译配项目里)。"""
     from app.domain.generation import create_generation_job
     from app.domain.generation.operations import GenerationDomainError
     from app.domain.generation.runner import start_generation_thread
@@ -117,7 +120,7 @@ def _generate(db: Session, scope: RunScope, model: dict[str, Any], sources: list
             db,
             workspace_id=scope.workspace_id,
             session_id=None,
-            project_id=None,
+            project_id=project_id,
             created_by=current_actor(db),
             provider=model["provider"],
             provider_profile_id=model["provider_profile_id"],

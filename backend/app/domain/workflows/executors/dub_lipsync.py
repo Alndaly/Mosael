@@ -13,6 +13,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -29,6 +30,8 @@ from app.domain.workflows.executors.talking import VIDEO_LIPSYNC, _generate, _pi
 
 #: 模型没声明时的保守上下限(百炼 videoretalk 的文档值)。
 DEFAULT_LIMITS = (2.0, 120.0)
+#: 改好口型的那一块素材上记着「它是哪一块」(原片、区间、配音、模型的摘要),失败重跑时认得出、不再买一次。
+CHUNK_KEY = "dub_lipsync_chunk"
 
 
 @dataclass(frozen=True)
@@ -41,6 +44,8 @@ class Line:
     src_in: float
     speed: float
     gain: float
+    #: 这一句的音频素材(查它是哪把克隆嗓子配的,见 _require_rights)。
+    asset_id: str
 
 
 def plan_chunks(duration: float, lines: list[tuple[float, float]], low: float, high: float) -> list[tuple[float, float]]:
@@ -108,10 +113,93 @@ def _join(parts: list[Path], width: int, height: int, fps: float, target: Path) 
              "-crf", "18", "-pix_fmt", "yuv420p", str(target)], "接回整段")
 
 
+def _lines_on(db: Session, scope: RunScope, voice_track: Any, clip_start: float, span: float) -> list[Line]:
+    """配音轨上落在原片这一段里的每一句,时间换成原片这一段里的秒数。
+
+    **起点在原片之前的那一句,把头上露在外面的那截剪掉**:混音时 `adelay` 不收负数,此前只是把起点夹到 0,
+    截取却仍从这句的开头算 —— 整句往后错了那一截,越往后嘴越对不上。现在起点落在 0,截取往后挪同样一段
+    (按这句的变速折回素材里的秒数)。
+    """
+    from app.domain.workflows.executors.subjobs import _asset_in
+    from app.media.paths import resolve_key
+
+    lines: list[Line] = []
+    for one in sorted(voice_track.clips, key=lambda item: float(item.timeline_start)):
+        if one.muted or not one.asset_id:
+            continue
+        speed = float(one.speed or 1.0)
+        start = float(one.timeline_start) - clip_start
+        end = start + (float(one.src_out) - float(one.src_in)) / speed
+        if end <= 0 or start >= span:
+            continue
+        src_in = float(one.src_in)
+        if start < 0:
+            src_in -= start * speed
+            start = 0.0
+        source = _asset_in(db, scope, one.asset_id)
+        lines.append(Line(start=start, end=end, path=resolve_key(str(source.file_key)), src_in=src_in,
+                          speed=speed, gain=float(one.gain), asset_id=source.id))
+    return lines
+
+
+def _require_rights(db: Session, workspace_id: str, video_id: str, lines: list[Line]) -> None:
+    """数字人的两道声明,在花第一分钱之前查(ADR 0028 §4、§5)。
+
+    交给改口型的是**切出来的新素材**:混成一段的配音不再记着是哪把克隆嗓子配的,切出来的原片也不再是哪个人物
+    资产的参考图 —— 漏斗里的 check_digital_human_rights 查它们什么都查不到。所以拿**原来的**素材走同一套判据:
+    配音轨上每一句的音频(克隆音色要有授权声明)、原片(真人人物资产要有本人或已获同意的声明)。
+    """
+    from app.domain.generation.operations import GenerationDomainError, check_digital_human_rights
+
+    entries = [{"asset_id": video_id, "role": SOURCE_VIDEO},
+               *({"asset_id": asset_id, "role": DRIVING_AUDIO} for asset_id in dict.fromkeys(line.asset_id for line in lines))]
+    try:
+        check_digital_human_rights(db, workspace_id, entries)
+    except GenerationDomainError as exc:
+        raise WorkflowDomainError.from_error(exc) from exc
+
+
+def _digest(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for block in iter(lambda: handle.read(1 << 20), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def _cached_chunk(db: Session, workspace_id: str, key: str) -> str:
+    """同一块(同一份原片、同一段区间、同一段配音、同一个模型)之前改过口型:交回那一份,不再花一次钱。"""
+    from sqlalchemy import select
+
+    from app.db.models import Asset
+    from app.media.paths import resolve_key
+
+    rows = db.scalars(select(Asset).where(Asset.workspace_id == workspace_id, Asset.kind == "video",
+                                          Asset.media_info[CHUNK_KEY].as_string() == key))
+    return next((row.id for row in rows if row.file_key and resolve_key(str(row.file_key)).is_file()), "")
+
+
+def _remember_chunk(asset_id: str, key: str) -> None:
+    """在改好口型的那一块上记下它是哪一块,**单独一个事务马上落库**:后面哪一块失败、这个节点整体回滚,
+    这一块的钱也不白花 —— 重跑时认得出它(见 _cached_chunk)。"""
+    from app.core.unit_of_work import unit_of_work
+    from app.db.models import Asset
+
+    with unit_of_work() as keeper:
+        made = keeper.get(Asset, asset_id)
+        if made is not None:
+            made.media_info = {**(made.media_info or {}), CHUNK_KEY: key}
+
+
 @register("dub_lipsync")
 def dub_lipsync(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
-    """一条译配好的时间线上,原片那一段的嘴对上配音轨(见模块说明)。"""
-    from app.db.models import Clip, Track
+    """一条译配好的时间线上,原片那一段的嘴对上配音轨(见模块说明)。
+
+    **改口型等子任务时,这个会话会被交还**(`_generate` → wait_for_job 的 release:commit + close)。之后
+    sequence / clip / video 都是脱离会话、属性已过期的对象,再读一个属性就是 DetachedInstanceError —— 付过钱、
+    改好了口型,却在把结果铺上时间线的那一刻崩掉。所以花钱之前把要用的都取成普通值,之后要对象就按 id 重新取。
+    """
+    from app.db.models import Asset, Clip, Sequence, Track
     from app.domain.assets.importer import register_file_asset
     from app.domain.render import DIGITAL_HUMAN_SOURCE
     from app.domain.sequences.operations import AddTrack, InsertClip, MoveTrack, add_track, insert_clip, move_track
@@ -133,70 +221,78 @@ def dub_lipsync(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[st
     limits = ((model.get("capabilities") or {}).get("source_duration_seconds") or {}).get(SOURCE_VIDEO) or DEFAULT_LIMITS
     low, high = float(limits[0]), float(limits[1])
 
-    span = float(clip.src_out) - float(clip.src_in)
-    lines: list[Line] = []
-    for one in sorted(voice_track.clips, key=lambda item: float(item.timeline_start)):
-        if one.muted or not one.asset_id:
-            continue
-        start = float(one.timeline_start) - float(clip.timeline_start)
-        end = start + (float(one.src_out) - float(one.src_in)) / float(one.speed or 1.0)
-        if end <= 0 or start >= span:
-            continue
-        source = _asset_in(db, scope, one.asset_id)
-        lines.append(Line(start=start, end=end, path=resolve_key(str(source.file_key)), src_in=float(one.src_in),
-                          speed=float(one.speed or 1.0), gain=float(one.gain)))
-    if not lines:
-        raise WorkflowDomainError("wfErr_dubLipsyncNoSpeech")
-
-    chunks = plan_chunks(span, [(line.start, line.end) for line in lines], low, high)
+    sequence_id, project_id = sequence.id, sequence.project_id
+    clip_start, src_in = float(clip.timeline_start), float(clip.src_in)
+    span = float(clip.src_out) - src_in
+    video_id, video_name = video.id, video.name
     info = video.media_info or {}
     width, height = int(info.get("width") or sequence.width), int(info.get("height") or sequence.height)
     fps = float(info.get("fps") or sequence.fps or 25)
     source_path = resolve_key(str(video.file_key))
+    lines = _lines_on(db, scope, voice_track, clip_start, span)
+    if not lines:
+        raise WorkflowDomainError("wfErr_dubLipsyncNoSpeech")
+    _require_rights(db, scope.workspace_id, video_id, lines)
+
+    chunks = plan_chunks(span, [(line.start, line.end) for line in lines], low, high)
+    source_digest = _digest(source_path)
     generated = 0
+    reused = 0
     with tempfile.TemporaryDirectory(prefix="mosael-dub-lipsync-") as folder:
         work = Path(folder)
         voice = work / "voice.wav"
         _mix_voice(lines, span, voice)
 
         def keep(path: Path, name: str, source: str = "derived") -> str:
-            return register_file_asset(db, workspace_id=scope.workspace_id, project_id=None, source_path=path,
+            #: 挂在译配那个项目下,不散落在素材库的「未归属」里(此前每块两份中间素材都是 project_id=None)。
+            return register_file_asset(db, workspace_id=scope.workspace_id, project_id=project_id, source_path=path,
                                        name=name, source=source).id
 
         parts: list[Path] = []
         for index, (begin, end) in enumerate(chunks, start=1):
             piece = work / f"video-{index}.mp4"
-            _cut(source_path, float(clip.src_in) + begin, float(clip.src_in) + end, piece, audio=False)
+            _cut(source_path, src_in + begin, src_in + end, piece, audio=False)
             if not any(line.start < end and line.end > begin for line in lines):
                 parts.append(piece)
                 continue
             speech = work / f"voice-{index}.wav"
             _cut(voice, begin, end, speech, audio=True)
-            label = f"{video.name} · 对口型第 {index} 块"
-            results = _generate(db, scope, model, [
-                {"asset_id": keep(piece, f"{label}(原片)"), "role": SOURCE_VIDEO},
-                {"asset_id": keep(speech, f"{label}(配音)"), "role": DRIVING_AUDIO},
-            ])
-            if not results:
-                raise WorkflowDomainError("wfErr_dubLipsyncNoResult", params={"index": index})
-            parts.append(resolve_key(str(_asset_in(db, scope, results[0]).file_key)))
-            generated += 1
+            #: 失败重跑时,已经改好的块不再买一次:原片、区间、这一块的配音、模型都一样,就是同一个结果。
+            key = hashlib.sha256(f"{source_digest}|{src_in + begin:.3f}-{src_in + end:.3f}|{_digest(speech)}|{model['id']}"
+                                 .encode()).hexdigest()
+            done = _cached_chunk(db, scope.workspace_id, key)
+            if done:
+                reused += 1
+            else:
+                label = f"{video_name} · 对口型第 {index} 块"
+                results = _generate(db, scope, model, [
+                    {"asset_id": keep(piece, f"{label}(原片)"), "role": SOURCE_VIDEO},
+                    {"asset_id": keep(speech, f"{label}(配音)"), "role": DRIVING_AUDIO},
+                ], project_id=project_id)
+                if not results:
+                    raise WorkflowDomainError("wfErr_dubLipsyncNoResult", params={"index": index})
+                done = _asset_in(db, scope, results[0]).id
+                _remember_chunk(done, key)
+                generated += 1
+            parts.append(resolve_key(str(_asset_in(db, scope, done).file_key)))
         joined = work / "lipsync.mp4"
         _join(parts, width, height, fps, joined)
         #: 接回的整段不是哪一条生成记录的产出:标上数字人来源,导出时照样加 AI 标识(ADR 0028 §5)。
-        final = keep(joined, f"{video.name} · 对口型", DIGITAL_HUMAN_SOURCE)
+        final = keep(joined, f"{video_name} · 对口型", DIGITAL_HUMAN_SOURCE)
     #: 接回来的整段可能比原片短几帧(各块按帧取整):铺上去的长度取两者较短的那个。
-    length = min(span, float((_asset_in(db, scope, final).media_info or {}).get("duration") or span))
+    length = min(span, float((db.get(Asset, final).media_info or {}).get("duration") or span))
 
     #: 放到最上面一条新的视频轨,盖在原片上。新轨建在最下面(add_track),一格一格挪到顶。
+    sequence = db.get(Sequence, sequence_id)
     before = {one.id for one in sequence.tracks}
-    add_track(db, sequence.id, AddTrack(kind="video"))
+    add_track(db, sequence_id, AddTrack(kind="video"))
     db.refresh(sequence)
     track = next(one for one in sequence.tracks if one.id not in before)
+    track_id = track.id
     for _ in range(len(sequence.tracks)):
-        move_track(db, sequence.id, MoveTrack(track_id=track.id, direction="up"))
+        move_track(db, sequence_id, MoveTrack(track_id=track_id, direction="up"))
     db.flush()
-    placed = insert_clip(db, sequence.id, InsertClip(track_id=track.id, asset_id=final,
-                                                    timeline_start=float(clip.timeline_start), src_in=0.0, src_out=length))
-    return {"asset_id": final, "clip_id": placed.id, "track_id": track.id, "chunk_count": len(chunks),
-            "generated_count": generated}
+    placed = insert_clip(db, sequence_id, InsertClip(track_id=track_id, asset_id=final,
+                                                    timeline_start=clip_start, src_in=0.0, src_out=length))
+    return {"asset_id": final, "clip_id": placed.id, "track_id": track_id, "chunk_count": len(chunks),
+            "generated_count": generated, "reused_count": reused}
