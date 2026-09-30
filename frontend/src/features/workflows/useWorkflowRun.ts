@@ -140,8 +140,15 @@ export function useWorkflowRun({
    */
   const launchingRef = React.useRef(false);
   const [launching, setLaunching] = React.useState(false);
+  //: 就绪清单开没开。有阻断问题时按运行(⌘Enter;运行键这时是灰的)就把清单打开 —— 此前这一下
+  //: 什么都不发生,按的人不知道是没按到、还是有问题、问题在哪。
+  const [checklistOpen, setChecklistOpen] = React.useState(false);
   const startRun = React.useCallback(async () => {
-    if (launchingRef.current || run.isPending || !analysis.runnable) return;
+    if (launchingRef.current || run.isPending) return;
+    if (!analysis.runnable) {
+      setChecklistOpen(true);
+      return;
+    }
     launchingRef.current = true;
     try {
       if (pendingSaveRef.current) {
@@ -181,6 +188,8 @@ export function useWorkflowRun({
     startRun,
     checklistCount,
     checklistLabel,
+    checklistOpen,
+    setChecklistOpen,
   };
 }
 

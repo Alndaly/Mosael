@@ -47,7 +47,7 @@ type SetBoolean = React.Dispatch<React.SetStateAction<boolean>>;
 export interface WorkflowEditorToolbarProps
   extends Pick<
     WorkflowRunState,
-    "analysis" | "checklistCount" | "checklistLabel" | "running" | "stop" | "run" | "launching" | "startRun"
+    "analysis" | "checklistCount" | "checklistLabel" | "checklistOpen" | "setChecklistOpen" | "running" | "stop" | "run" | "launching" | "startRun"
   > {
   t: ReturnType<typeof useI18n>;
   workflow: Workflow;
@@ -112,6 +112,8 @@ export function workflowEditorToolbar({
   analysis,
   checklistCount,
   checklistLabel,
+  checklistOpen,
+  setChecklistOpen,
   scopeKey,
   enterScope,
   focusNode,
@@ -179,7 +181,7 @@ export function workflowEditorToolbar({
             </Button>
           </CanvasToolbarGroup>
           <CanvasToolbarGroup label={t("wfRun")}>
-            <Popover>
+            <Popover open={checklistOpen} onOpenChange={setChecklistOpen}>
               <PopoverTrigger asChild>
                 <button
                   type="button"

@@ -352,6 +352,8 @@ export function WorkflowEditor({
     startRun,
     checklistCount,
     checklistLabel,
+    checklistOpen,
+    setChecklistOpen,
   } = useWorkflowRun({ workflow, qc, t, rootGraph, registry, scopePath, save, pendingSaveRef });
   const selectedNode = graph.nodes.find((node) => node.id === selectedNodeId) ?? null;
 
@@ -463,6 +465,8 @@ export function WorkflowEditor({
           analysis,
           checklistCount,
           checklistLabel,
+          checklistOpen,
+          setChecklistOpen,
           scopeKey,
           enterScope,
           focusNode,

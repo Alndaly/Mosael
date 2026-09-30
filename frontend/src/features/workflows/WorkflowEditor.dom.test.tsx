@@ -402,14 +402,19 @@ describe("⌘Enter 运行", () => {
     expect(apiMocks.runWorkflow).toHaveBeenCalledTimes(1);
   });
 
-  it("有阻断问题时不跑(和运行键同一个判据)", async () => {
+  //: 不跑,但也不能什么都不发生:运行键这时是灰的,按 ⌘Enter 的人不知道是没按到还是有问题。
+  it("有阻断问题时不跑(和运行键同一个判据),而是打开就绪清单说哪儿有问题", async () => {
     const broken = structuredClone(CHAIN);
     broken.nodes[2].config = { template: "" };
     await renderEditor(broken);
     await waitFor(() => nodeEl("llm-1"));
+    expect(screen.queryByText("wfChecklistBlocked")).toBeNull();
     fireEvent.keyDown(document.body, { key: "Enter", metaKey: true });
     await new Promise((resolve) => setTimeout(resolve, 50));
     expect(apiMocks.runWorkflow).not.toHaveBeenCalled();
+    const checklist = await screen.findByRole("dialog");
+    expect(within(checklist).getByText("wfChecklistBlocked")).toBeTruthy();
+    expect(within(checklist).getByText("template")).toBeTruthy();
   });
 });
 
