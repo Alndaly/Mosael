@@ -160,7 +160,7 @@ interface Props {
   onPickAsset: BoardPickAsset;
   /**
    * 在某一格上跑一个产出者(生成、写字、念出来、截一段)。上层拿得到 workspaceId 和接口,画布只
-   * 提供「落在哪一格」和「表单是什么」。写字同步返回,其余摆好占位就回、产出由回执填回来。
+   * 提供「落在哪一格」和「表单是什么」。都是摆好占位就回、产出由回执填回来(写字也是)。
    */
   onRun?: (request: BoardRunRequest) => Promise<unknown>;
   /** 取某一帧,存成一份新素材、落到一个新节点上 —— 原素材不动。 */
