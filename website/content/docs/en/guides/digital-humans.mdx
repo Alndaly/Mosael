@@ -1,0 +1,93 @@
+---
+title: "Digital humans: make a face talk, re-sync a video's lips"
+description: Turn a character asset or a portrait plus a voice-over into a talking video, or make an existing video's lips match new audio; how consent and AI labels work.
+order: 20
+updated: 2026-09-30
+version: 1.8.0
+---
+
+Digital humans aren't a separate area in Mosael — they are **two combinations of inputs inside video generation**:
+
+| | You give it | You get |
+| --- | --- | --- |
+| **Talking photo** | A portrait + a voice-over | A video of that face speaking the voice-over |
+| **Lip-sync** | An existing video + a new voice-over | The same footage with the person's mouth matching the new audio |
+
+The **length follows the voice-over**: these models take no duration setting, and the UI says "duration follows the driving
+audio". If the audio is longer or shorter than the model accepts, you're told when you submit ("the driving audio is 72 s;
+this model takes at most 20 s") instead of a job that is bound to fail.
+
+## Which models
+
+After you [connect a provider](/docs/guides/providers), the models appear in every model picker — only the ones that declare
+talking photo or lip-sync.
+
+| Provider | Model | What it does | Audio length | Needs object storage |
+| --- | --- | --- | --- | --- |
+| Alibaba Bailian | wan2.2-s2v | Talking photo (480P / 720P; checks for a clear frontal face first) | 1–20 s | No |
+| Alibaba Bailian | videoretalk | Lip-sync | 2–120 s | No |
+| Volcengine Jimeng | OmniHuman 1.5 | Talking photo (720p / 1080p; an optional prompt steers motion and camera) | 1–59 s | Yes |
+| Kling | Kling Avatar | Talking photo (optional prompt) | 2–300 s | No |
+| Kling | Kling Lip-sync | Lip-sync (finds the face on screen longest first) | 2–60 s | For the source video |
+| HeyGen | Avatar IV | Talking photo (optional motion prompt) | Up to 10 min | No |
+| HeyGen | Lip-sync | Lip-sync (mp4 / webm source) | — | No |
+| Hedra | Character-3 | Talking photo (aspect ratio picked from the image) | Up to 10 min | No |
+
+The providers that need object storage only accept public links, so local images and audio are uploaded to the
+[object storage you set up in plugins](/docs/guides/plugins) first. All of these were built from the providers' official
+documentation; the first time you use one, keep an eye on the error message — it repeats what the provider said.
+
+## Where to use them
+
+- **Character assets**: "Make it talk" on the asset page — write a script, it is voiced with the character's own voice, and
+  its front view (or the first image in pick order) becomes the talking photo. Character cells on boards have it too.
+- **Boards**: "Make it talk" on image cells (pick a voice in the panel, or wire in an audio cell) and "Lip-sync" on video
+  cells (audio from an upstream audio cell, or voiced from a script on the spot). The panel lets you pick the model;
+  "Resolution" is under advanced options and lists only the tiers the chosen model has.
+- **AI Studio**: pick a talking-photo or lip-sync model and attach the portrait / source video plus a driving audio.
+- **Agent**: it knows how — voice first, then hand the face and that audio to a talking-photo model (`generate_video`).
+- **Workflows**: the "Make it talk" (character / image), "Lip-sync", "Long script to segments" and "Dub lip-sync" nodes.
+
+## Templates
+
+The template library has three ready-made graphs:
+
+- **Script → talking presenter**: one frontal face and a script. The script is voiced sentence by sentence, neighbouring
+  sentences are grouped up to what the model accepts in one go (seams fall between sentences), each group is spoken by the
+  face, the clips are laid end to end on the timeline, captions follow the measured voice-over, and the result is exported.
+  A group shorter than the model's minimum (Kling starts at 2 s, and a lone "OK." can form its own group) is padded with a
+  little silence; later groups shift accordingly.
+- **Video translation · lip-sync**: after transcribing, translating and dubbing sentence by sentence, the speaker's mouth
+  is matched to the translated voice-over. The source is cut into chunks the model accepts, at gaps between sentences;
+  chunks without dubbing reuse the original for free. The fixed footage goes on a new top video track; the source is untouched.
+- **Product → on-camera presenter pitch**: pick a character from the asset library as the host; it opens and closes on
+  camera, with product shots in between.
+
+## Consent
+
+A digital human needs the pictured person's consent. Mosael checks three things, **the same way at every entry point**
+(AI Studio, boards, the agent, workflows, scheduled tasks):
+
+1. **Every generation is confirmed**: any generation with driving audio needs "I have the pictured person's consent" ticked —
+   it's you, or they agreed separately. The agent has to pass that declaration too.
+2. **Character declarations**: when the face is a reference image of a character asset that is a **real person**, it needs
+   "This is me" or "The person has given consent" (fictional characters don't). Add it on the [asset page](/docs/guides/assets).
+3. **Cloned-voice declarations**: when the driving audio was voiced with a cloned voice, that voice must say whose it is
+   (you, consented, or fictional). Voices created before this was asked are "undeclared"; declare them in the voice
+   library before using them for a digital human.
+
+Whatever is missing is named when you submit — which character, which voice. The agent says so when it opens the
+confirmation card, not after you approve it.
+
+## AI-generated label
+
+When an exported video contains digital-human clips, "AI-generated" is shown at the start and in the top-right corner by
+default. You can turn it off in the export dialog, which then states that deep-synthesis and AI-labelling regulations
+require published digital-human content to be clearly labelled and that the publisher is responsible once it's off; the
+next export has it on again. The MP4 always carries an AIGC marker, regardless of the on-screen label.
+
+## Cost
+
+Talking photos and lip-sync are metered by the **actual length** of the output (which is the voice-over's length). Bailian
+wan2.2-s2v (0.5 CNY/s at 480P) and videoretalk (0.08 CNY/s) can be pre-filled from their list prices in Admin → Cost
+rules; the other providers either show prices only after signing in or bill in credits, so enter your account's prices by hand.
