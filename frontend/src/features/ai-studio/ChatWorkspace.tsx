@@ -25,7 +25,7 @@ import { useI18n } from "@/app/preferences";
 import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
 import { toPlainText } from "@/components/markdown/inlineSyntax";
 import { useAgentTurnStream } from "@/features/agent/useAgentTurnStream";
-import { textAttachmentBlock, useComposerAttachments } from "@/features/agent/composerAttachments";
+import { MAX_MESSAGE_CHARS, textAttachmentBlock, useComposerAttachments } from "@/features/agent/composerAttachments";
 import { ComposerChips } from "@/features/agent/ComposerChips";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -237,8 +237,14 @@ export function ChatWorkspace({
     let content = draftText.trim() || attach.files.map((file) => `[${t("chatAttached")} ${file.name}]`).join("\n");
     if (noteAttach.hasNotes) content += `\n${noteAttach.summary}`;
     for (const asset of attach.media) content += attachmentToken(asset);
+    const full = [content.trim(), fileBlock].filter(Boolean).join("\n\n");
+    //: 先在这里说,不等后端回一句英文的「at most 8000 characters」(见 composerAttachments 的 MAX_MESSAGE_CHARS)。
+    if (full.length > MAX_MESSAGE_CHARS) {
+      toast.error(t("composerMessageTooLong"));
+      return;
+    }
     sendMessage.mutate({
-      content: [content.trim(), fileBlock].filter(Boolean).join("\n\n"),
+      content: full,
       references: collectReferences(draft),
       document: draft,
     });

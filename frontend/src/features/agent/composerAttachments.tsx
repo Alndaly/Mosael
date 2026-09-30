@@ -23,16 +23,24 @@ import { toast } from "sonner";
  *   和飞书发来的图片落在同一个地方 —— 一个应用里只该有一条"媒体从外面进来"的路。
  * - **PDF / Word / PPT / Excel / EPUB**(ADR 0031)→ 也进素材库(导入时自动解析),作为附件发过去:短的全文、
  *   长的目录由后端放进上下文,智能体用 read_document 按段读、analyze_document_pages 看版式。
- * - **文本文件**(含 Markdown、CSV)→ 内联成围栏上下文。脚本、字幕、配置就该被读进去,而不是变成一个素材 id。
- *   其中素材库也认得的文字文档(md / txt / csv / html)超过内联上限、或读不出来时,进素材库当文档(见 TEXT_DOCUMENT)。
+ * - **Markdown、TXT、CSV、网页**:素材库认得的文字文档,和 PDF 一样进素材库(见 TEXT_DOCUMENT)。
+ * - **别的文本文件**(脚本、字幕、配置)→ 内联成围栏上下文,一份最多 MAX_INLINE_CHARS 字 —— 它们就该被读进去,
+ *   而不是变成一个素材 id;再长的装不进一条消息。
  * - 其余(压缩包、安装包…)拒绝并说明,不静默丢掉。
  *
  * 三种入口只是「文件从哪来」不同,之后**同一个 accept**:同样的分流、同样的大小上限、同样的报错。
  * 拖放和粘贴另写一套的话,📎 能附上的文件拖进来可能被拒,或者反过来。
  */
 
-/** 内联文本的大小上限。再大应拆分或放到外部文件里按需读取,不能塞满一轮对话上下文。 */
-const MAX_TEXT_BYTES = 200 * 1024;
+/**
+ * 一条消息最多多少字(后端 AgentMessageCreate:正文 `content` 8000、附带上下文 `context` 4000)。内联的文本附件就拼在
+ * 这里面 —— 此前内联上限是 200KB,远大于一条消息装得下的,于是附件条上好好的,一发送就被拒「at most 8000 characters」
+ * (用户截图:一份 70KB 的 Markdown)。
+ */
+export const MAX_MESSAGE_CHARS = 8000;
+export const MAX_CONTEXT_CHARS = 4000;
+/** 一份内联文本最多多少字:两个输入框都装得下(工作流助手把它放在 `context` 里),还给正文留出地方。 */
+const MAX_INLINE_CHARS = 3000;
 
 const MEDIA_TYPE = /^(image|video|audio)\//;
 
@@ -40,9 +48,9 @@ const MEDIA_TYPE = /^(image|video|audio)\//;
 const BINARY_DOCUMENT = /\.(pdf|docx?|pptx?|xlsx?|epub)$/i;
 
 /**
- * 素材库也认得的**文字文档**(后端 media/probe 的 DOCUMENT_EXTENSIONS):短的照旧内联;超过内联上限、或者这里读不出来时,
- * 进素材库当文档 —— 后端解析成按段的全文,智能体用 read_document 一段段读。此前一律「太大了」「读不出来」,一份几百 KB
- * 的整理稿(用户截图:「赛里木湖纪录片全案_整理版.md」读不出来)就附不上。
+ * 素材库也认得的**文字文档**(后端 media/probe 的 DOCUMENT_EXTENSIONS):和 PDF 一样进素材库当文档 —— 后端解析成按段的
+ * 全文,短的整篇放进上下文、长的给目录,智能体用 read_document 一段段读,没有一条消息装不装得下的问题。此前它们被内联进
+ * 消息:大一点的附不上(「太大了」),小于内联上限却大于一条消息的附上了也发不出去。
  */
 const TEXT_DOCUMENT = /\.(md|markdown|txt|csv|html?)$/i;
 
@@ -128,29 +136,24 @@ export function useComposerAttachments(workspaceId: string): ComposerAttachments
       const unreadable = (name: string, error: unknown) =>
         t("composerFileUnreadable").replace("{name}", name).replace("{reason}", readFailure(error, t));
       for (const file of list) {
-        if (MEDIA_TYPE.test(file.type) || BINARY_DOCUMENT.test(file.name)) {
+        if (MEDIA_TYPE.test(file.type) || BINARY_DOCUMENT.test(file.name) || TEXT_DOCUMENT.test(file.name)) {
           await importFile(file);
           continue;
         }
-        const document = TEXT_DOCUMENT.test(file.name);
         // 类型为空的当文本试读:从终端/编辑器拖出来的文件常常没有 MIME。
-        if (file.type && !TEXTUAL_FILE.test(file.type) && !document) {
+        if (file.type && !TEXTUAL_FILE.test(file.type)) {
           toast.error(t("composerFileUnsupported").replace("{name}", file.name));
-          continue;
-        }
-        if (file.size > MAX_TEXT_BYTES) {
-          if (document) await importFile(file);
-          else toast.error(t("composerFileTooBig").replace("{name}", file.name));
           continue;
         }
         let content: string;
         try {
           content = await file.text();
         } catch (error) {
-          //: 这里读不出来(云盘占位文件、正被别的程序写着)时,文字文档再交给素材库试一次:上传走的是另一条读法,
-          //: 读得到就当文档附上;还不行才报,报的是上传那一次的原因。
-          if (document) await importFile(file);
-          else toast.error(unreadable(file.name, error));
+          toast.error(unreadable(file.name, error));
+          continue;
+        }
+        if (content.length > MAX_INLINE_CHARS) {
+          toast.error(t("composerFileTooBig").replace("{name}", file.name).replace("{limit}", String(MAX_INLINE_CHARS)));
           continue;
         }
         added.push({ name: file.name, content });

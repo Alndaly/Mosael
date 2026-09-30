@@ -15,7 +15,12 @@ import {
 import { toast } from "sonner";
 
 import { useAgentTurnStream } from "@/features/agent/useAgentTurnStream";
-import { textAttachmentBlock, useComposerAttachments } from "@/features/agent/composerAttachments";
+import {
+  MAX_CONTEXT_CHARS,
+  MAX_MESSAGE_CHARS,
+  textAttachmentBlock,
+  useComposerAttachments,
+} from "@/features/agent/composerAttachments";
 import { ComposerChips } from "@/features/agent/ComposerChips";
 import { DictateButton } from "@/features/agent/DictateButton";
 
@@ -292,10 +297,15 @@ export function CanvasAgentChat({
       if (noteAttach.hasNotes) visibleContent += `\n${noteAttach.summary}`;
       visibleContent = visibleContent.trim();
       const context = [contextLine, fileBlock, noteAttach.context].filter(Boolean).join("\n\n");
+      //: 先在这里说,不等后端回一句英文的「at most 4000 characters」(见 composerAttachments 的 MAX_*_CHARS)。
+      if (visibleContent.length > MAX_MESSAGE_CHARS || context.length > MAX_CONTEXT_CHARS) {
+        throw new Error(t("composerMessageTooLong"));
+      }
       const targetId = (await current.ensure()).id;
       const message = await sendAgentMessage(targetId, { content: visibleContent, context, references, body_document: document });
       return { message, targetId };
     },
+    onError: (error) => toast.error((error as Error).message),
     onSuccess: ({ targetId }) => {
       setDraft(emptyDocument);
       noteAttach.clear();

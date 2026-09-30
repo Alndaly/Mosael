@@ -54,16 +54,16 @@ describe("附件分流", () => {
     await act(async () => {
       await get().accept([
         new File(["binary"], "shot.png", { type: "image/png" }),
-        new File(["第一幕"], "script.txt", { type: "text/plain" }),
+        new File(["第一幕"], "scene.srt", { type: "text/plain" }),
       ]);
     });
 
     expect(importAsset).toHaveBeenCalledTimes(1);
     expect(get().media.map((a) => a.id)).toEqual(["a1"]);
-    expect(get().files).toEqual([{ name: "script.txt", content: "第一幕" }]);
+    expect(get().files).toEqual([{ name: "scene.srt", content: "第一幕" }]);
     // 两类附件都在同一排小条里,不再是两套长得不一样的东西。
     expect(screen.getByTitle("shot.png")).toBeTruthy();
-    expect(screen.getByTitle("script.txt")).toBeTruthy();
+    expect(screen.getByTitle("scene.srt")).toBeTruthy();
     // 图片带缩略图,点开走全局灯箱;文本附件点开看到的是它真正带上去的那段字。
     expect(screen.getByTitle("shot.png").querySelector("img")).toHaveAttribute("src", "/thumb/a1");
   });
@@ -80,9 +80,9 @@ describe("附件分流", () => {
   it("没有 MIME 的文件按文本试读(从终端拖出来的常常没有)", async () => {
     const get = mount();
     await act(async () => {
-      await get().accept([new File(["a,b"], "data.csv", { type: "" })]);
+      await get().accept([new File(["print(1)"], "run.py", { type: "" })]);
     });
-    expect(get().files).toEqual([{ name: "data.csv", content: "a,b" }]);
+    expect(get().files).toEqual([{ name: "run.py", content: "print(1)" }]);
   });
 
   it("超过上限的文本(素材库不当文档的那种)拒绝", async () => {
@@ -94,6 +94,26 @@ describe("附件分流", () => {
     expect(get().isEmpty).toBe(true);
     expect(importAsset).not.toHaveBeenCalled();
     expect(toastError).toHaveBeenCalledWith(expect.stringContaining("big.json"));
+  });
+
+  it("超过一条消息能带的文本也拒:内联上限和消息上限对得上", async () => {
+    //: 用户截图:附件条上好好的,一发送「String should have at most 8000 characters」。
+    const get = mount();
+    await act(async () => {
+      await get().accept([new File(["x".repeat(3001)], "long.json", { type: "application/json" })]);
+    });
+    expect(get().files).toEqual([]);
+    expect(toastError).toHaveBeenCalledWith(expect.stringContaining("long.json"));
+  });
+
+  it("短的 Markdown 也进素材库当文档,不内联进消息", async () => {
+    importAsset.mockResolvedValue({ id: "d0", name: "提纲.md", kind: "document" });
+    const get = mount();
+    await act(async () => {
+      await get().accept([new File(["# 提纲"], "提纲.md", { type: "text/markdown" })]);
+    });
+    expect(get().media.map((one) => one.id)).toEqual(["d0"]);
+    expect(get().files).toEqual([]);
   });
 
   it("超过上限的 Markdown 进素材库当文档 —— 智能体按段读,不再说「太大了」", async () => {
