@@ -128,6 +128,21 @@ describe("附件分流", () => {
     expect(toastError).toHaveBeenCalledWith(expect.stringMatching(/占位\.md.*磁盘满了/));
   });
 
+  it("文件本身读不出来时,上传失败不说成「后端连不上」", async () => {
+    //: 用户截图:「……整理版(1).md」没附上:http://127.0.0.1:8800 连不上 —— 后端好好的,是系统不让读这个文件
+    //: (从聊天软件里直接拖出来的,在别的应用的沙盒里)。
+    const locked = new File(["# x".repeat(100)], "锁着.md", { type: "text/markdown" });
+    const refuse = () => Promise.reject(new DOMException("could not be read", "NotReadableError"));
+    locked.text = refuse;
+    locked.slice = () => Object.assign(new Blob(), { arrayBuffer: refuse });
+    importAsset.mockRejectedValueOnce(new TypeError("Failed to fetch"));
+    const get = mount();
+    await act(async () => {
+      await get().accept([locked]);
+    });
+    expect(toastError).toHaveBeenCalledWith(expect.stringMatching(/锁着\.md.*composerFileNotReadable/));
+  });
+
   it("读不出来的不是文档类文本:原因说人话,不是一句光秃秃的「读不出来」", async () => {
     const broken = new File(["{}"], "cfg.json", { type: "application/json" });
     broken.text = () => Promise.reject(new DOMException("could not be read", "NotReadableError"));

@@ -79,6 +79,16 @@ export interface ComposerAttachments {
   previewModal: React.ReactNode;
 }
 
+/** 这个文件现在读得出来吗(读一个字节)。 */
+async function readable(file: File): Promise<boolean> {
+  try {
+    await file.slice(0, 1).arrayBuffer();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** 为什么没附上:接口的报错照原话;浏览器读文件失败(NotReadableError)说人话 —— 多半是云盘里还没下载下来的占位文件,
  *  或者正被别的程序写着。 */
 function readFailure(error: unknown, t: (key: MessageKey) => string): string {
@@ -107,7 +117,10 @@ export function useComposerAttachments(workspaceId: string): ComposerAttachments
           const asset = await importAsset({ workspaceId, file });
           setMedia((current) => [...current, asset]);
         } catch (error) {
-          toast.error(unreadable(file.name || t("composerPastedImage"), error));
+          //: 上传失败时先看是不是**文件本身读不出来**:系统不让读的文件(别的应用沙盒里的、云盘占位),上传那一步的
+          //: fetch 只会抛一个网络错误,原样说出来就成了「127.0.0.1:8800 连不上」—— 后端明明好好的(用户截图)。
+          const cause = (await readable(file)) ? error : new DOMException("", "NotReadableError");
+          toast.error(unreadable(file.name || t("composerPastedImage"), cause));
         } finally {
           setUploading(false);
         }
