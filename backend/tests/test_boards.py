@@ -15,7 +15,7 @@ import pytest
 
 from app.domain.boards import BoardDomainError, normalize_canvas
 from tests.media_fixtures import TINY_HEIC
-from tests.util import board_revision, fresh_client, run_on_board
+from tests.util import board_revision, fresh_client, run_on_board, run_on_board_settled
 
 
 HAS_FFMPEG = shutil.which("ffmpeg") is not None
@@ -857,16 +857,54 @@ def test_便签写挂了之后重写_能重新进入写作中() -> None:
     body = {"producer": "write", "item_id": "note-1", "kind": "note", "form": {"prompt": "写一句"}}
 
     with mock_patch("app.domain.ai_chat.chat", side_effect=AiChatError("aiChatErr_failed")):
-        failed = run_on_board(client, board_id, ws, **body)
-    assert failed.status_code == 422, failed.text
-    note = client.get(f"/api/boards/{board_id}", params={"workspace_id": ws}).json()["canvas"]["items"][0]
+        failed = run_on_board_settled(client, board_id, ws, **body)
+    assert failed.status_code == 200, failed.text
+    note = failed.json()["canvas"]["items"][0]
     assert note["run"]["status"] == "failed"
 
     with mock_patch("app.domain.ai_chat.chat", return_value="写好了"):
-        again = run_on_board(client, board_id, ws, **body)
+        again = run_on_board_settled(client, board_id, ws, **body)
     assert again.status_code == 200, again.text
     note = again.json()["canvas"]["items"][0]
     assert (note["text"], note["run"]) == ("写好了", {"status": "succeeded"})
+
+
+def test_让_AI_写不在请求里等模型_格子带着任务号转圈_能停() -> None:
+    """写一整篇文档要两三分钟。此前请求就在那儿等:前端的写队列被占着(期间拖一下都存不上),格子上的运行态
+    没有任务号,也就没有停止按钮。现在摆好占位就回;停下之后这一格收成「已取消」,模型晚到的回答不落进来。"""
+    import threading
+    from unittest.mock import patch as mock_patch
+
+    from app.domain.jobs import wait_for_idle_jobs
+
+    client = fresh_client()
+    ws = _workspace(client)
+    _writable_profile(client)
+    board_id = client.post("/api/boards", json={
+        "workspace_id": ws,
+        "canvas": {"items": [{"id": "n1", "kind": "note", "x": 0, "y": 0, "text": "原来的字"}], "edges": []},
+    }).json()["id"]
+    asked, release = threading.Event(), threading.Event()
+
+    def slow_chat(*_args, **_kwargs):
+        asked.set()
+        release.wait(10)
+        return "晚到的回答"
+
+    with mock_patch("app.domain.ai_chat.chat", side_effect=slow_chat):
+        placed = run_on_board(client, board_id, ws, producer="write", item_id="n1", kind="note", form={"prompt": "改短"})
+        assert placed.status_code == 200, placed.text
+        run = placed.json()["canvas"]["items"][0]["run"]
+        assert run["status"] in ("queued", "running") and run.get("job_id"), "格子上要有任务号 —— 停止按钮认它"
+        assert asked.wait(10), "模型在后台被问到"
+        stopped = client.post(f"/api/jobs/{run['job_id']}/cancel")
+        assert stopped.status_code == 200, stopped.text
+        release.set()
+        assert wait_for_idle_jobs(timeout=30)
+
+    note = client.get(f"/api/boards/{board_id}", params={"workspace_id": ws}).json()["canvas"]["items"][0]
+    assert note["run"]["status"] == "cancelled", note["run"]
+    assert note["text"] == "原来的字", "停下之后的回答不落进来"
 
 
 def test_写字时炸了别的异常_那张便签照样收成失败() -> None:
@@ -877,6 +915,7 @@ def test_写字时炸了别的异常_那张便签照样收成失败() -> None:
     from app.core.db import SessionLocal
     from app.db.models import Job
     from app.domain.boards import producers
+    from app.domain.jobs import wait_for_idle_jobs
 
     client = fresh_client()
     ws = _workspace(client)
@@ -886,14 +925,16 @@ def test_写字时炸了别的异常_那张便签照样收成失败() -> None:
         "canvas": {"items": [{"id": "n1", "kind": "note", "x": 0, "y": 0, "text": "原来的字"}], "edges": []},
     }).json()["id"]
 
-    with SessionLocal() as db, mock_patch(
-        "app.domain.boards.actions.look_at", side_effect=RuntimeError("磁盘读不出来")
-    ), pytest.raises(RuntimeError):
-        producers.run(db, producers.RunRequest(
+    _writable_profile(client)
+
+    with SessionLocal() as db, mock_patch("app.domain.boards.actions.look_at", side_effect=RuntimeError("磁盘读不出来")):
+        placed = producers.run(db, producers.RunRequest(
             workspace_id=ws, board_id=board_id, item_id="n1", kind="note", x=0, y=0,
             base_revision=board_revision(client, board_id, ws), actor_id=user_id, producer="write",
             form={"prompt": "改短", "source_assets": ["a1"]},
         ))
+        assert placed.canvas["items"][0]["run"]["status"] == "running", "先摆「写作中」,写在后台"
+        assert wait_for_idle_jobs(timeout=30)
 
     note = client.get(f"/api/boards/{board_id}", params={"workspace_id": ws}).json()["canvas"]["items"][0]
     assert note["run"]["status"] == "failed", f"便签停在了「写作中」:{note['run']}"
@@ -1100,8 +1141,8 @@ def test_写文案没配模型时给准信而不是五百() -> None:
     assert answer.status_code == 422, answer.text
     assert "供应商" in answer.json()["detail"]
     item = client.get(f"/api/boards/{board_id}", params={"workspace_id": ws}).json()["canvas"]["items"][0]
-    assert item["run"]["status"] == "failed", "同步写作失败也必须结束节点 loading"
-    assert item["run"]["error"], "节点要保留可读错误，不能只在 toast 里闪一下"
+    #: 起任务之前就说了,这一格从没进入「写作中」—— 不会停在转圈上,也没有一个注定失败的任务。
+    assert "run" not in item, item
 
     # 空要求也别发出去 —— 供应商那边回的是一句看不懂的英文 400。
     empty = run_on_board(client, board_id, ws, producer="write", item_id="n1", kind="note", form={"prompt": "   "})
@@ -1152,8 +1193,8 @@ def test_便签上已有内容时是改写而不是重写() -> None:
         return "改过之后的那句话"
 
     with mock_patch("app.domain.ai_chat.chat", side_effect=fake_chat):
-        answer = run_on_board(client, board_id, ws, producer="write", item_id="n1", kind="note",
-                              form={"prompt": "改短一半"})
+        answer = run_on_board_settled(client, board_id, ws, producer="write", item_id="n1", kind="note",
+                                      form={"prompt": "改短一半"})
 
     assert answer.status_code == 200, answer.text
     messages = seen["messages"]
@@ -1202,8 +1243,8 @@ def test_连过来的图片会让模型看着写() -> None:
     seen: dict = {}
 
     with mock_patch("app.domain.ai_chat.chat", side_effect=lambda t, m, **k: seen.setdefault("m", m) and "" or "写好了"):
-        answer = run_on_board(client, board_id, ws, producer="write", item_id="n1", kind="note",
-                              form={"prompt": "照这张图写一句", "source_assets": [image_id]})
+        answer = run_on_board_settled(client, board_id, ws, producer="write", item_id="n1", kind="note",
+                                      form={"prompt": "照这张图写一句", "source_assets": [image_id]})
 
     assert answer.status_code == 200, answer.text
     last = seen["m"][-1]["content"]
@@ -1352,8 +1393,8 @@ def test_上游便签给的材料和要求分开发() -> None:
 
     seen: dict = {}
     with mock_patch("app.domain.ai_chat.chat", side_effect=lambda t, m, **k: seen.setdefault("m", m) and "" or "好"):
-        answer = run_on_board(client, board_id, ws, producer="write", item_id="n1", kind="note",
-                              form={"prompt": "缩成一句"})
+        answer = run_on_board_settled(client, board_id, ws, producer="write", item_id="n1", kind="note",
+                                      form={"prompt": "缩成一句"})
     assert answer.status_code == 200, answer.text
     messages = seen["m"]
     material = next((one for one in messages if "第一段素材" in str(one["content"])), None)

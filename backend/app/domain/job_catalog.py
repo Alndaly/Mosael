@@ -54,7 +54,7 @@ JOB_KINDS: dict[str, JobKind] = {
         # 文档解析(ADR 0031):导入时自动跑本地解析,是没人主动要的维护活 —— 只有失败才说;结果在素材详情里看。
         JobKind("document_parse", "failures", ("assets",), view="media"),
         JobKind("trim", "always", ("assets", "boards"), view="boards"),
-        # 画板上写字:几秒就回,用户就盯着那张便签 —— 结果落在便签上,失败在便签上和提示里都说了。
+        # 画板上写字:结果落在那张便签(文档格)上,在跑时格子上转圈、能停,失败写在格子上 —— 不另弹通知。
         JobKind("board_write", "never", ("boards",), view="boards"),
         # 画板上一格的能力跑一个节点(插件工具、转写、分离……):可能要几分钟,用户多半已经去干别的了。
         # 产出落成画板上的新格子,插件交出的文件还会进素材库。

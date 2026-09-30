@@ -15,7 +15,7 @@ from unittest.mock import patch as mock_patch
 from app.core.db import SessionLocal
 from tests.test_board_generation_documents import _parsed_document
 from tests.test_boards import _workspace, _writable_profile
-from tests.util import fresh_client, run_on_board, seed_assets
+from tests.util import fresh_client, run_on_board_settled, seed_assets
 
 
 class Seen:
@@ -57,7 +57,7 @@ def _person(client, ws: str, name: str, refs: tuple[str, ...]) -> str:
 def _write(client, board_id: str, ws: str, item_id: str, kind: str, seen: Seen, **form):
     with mock_patch("app.domain.ai_chat.chat", side_effect=seen.chat), \
             mock_patch("app.domain.boards.actions.look_at", side_effect=seen.look_at):
-        return run_on_board(client, board_id, ws, producer="write", item_id=item_id, kind=kind,
+        return run_on_board_settled(client, board_id, ws, producer="write", item_id=item_id, kind=kind,
                             form={"prompt": "写一段人物小传", **form})
 
 

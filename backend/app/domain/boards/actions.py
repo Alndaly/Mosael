@@ -13,6 +13,7 @@ boards.trim,写字走 ai_chat —— 描述符校验、计量记账、任务中�
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -32,6 +33,8 @@ from app.domain.jobs import create_job, reset_receipt, run_job_inline, set_recei
 
 if TYPE_CHECKING:
     from app.domain.generation.operations import ReferenceDocument
+
+logger = logging.getLogger(__name__)
 
 
 class BoardInputError(BoardDomainError):
@@ -404,14 +407,16 @@ def write_on_board(
     entity_ids: list[str] | None = None,
     base_revision: int | None = None,
 ) -> Board:
-    """让 AI 往一张便签里写字,或者在文档格上写一篇笔记。模型的错误(AiChatError)在把失败落进那一格之后原样抛出。
+    """让 AI 往一张便签里写字,或者在文档格上写一篇笔记。摆好「写作中」的占位、起好任务就回;写出来的正文(或失败原因)
+    由回执落回那一格 —— 和生成、念、截同一套。
 
-    **同步返回,但照样是一个任务。** 写字几秒就回,调用方等着结果;可「这一格在写」这件事
-    得由任务总线收尾 —— 此前运行态是这里手写的两笔(开始写 running、AiChatError 时写 failed),
-    别的异常(读素材炸了、记账出错、写回撞了什么)一概漏过去,便签在服务端一直停在「写作中」,
-    只等下一次客户端自动保存碰巧把它盖掉。现在和生成/念/截同一套:建任务 → 摆占位 → 跑 →
-    回执把正文(或失败原因)落回这一格。任务在调用方线程里跑完(见 jobs.run_job_inline),
-    任何异常都先落成失败再抛出;进程中途没了,重启时 reconcile 收掉。
+    **异步,不在请求里等模型。** 看着几张图写一整篇文档要两三分钟(见 WRITE_TIMEOUT_SECONDS):此前请求就在这里等,
+    前端的写请求队列被它占着(那几分钟里拖一下、改个字都存不上),格子上的运行态没有任务号,也就没有停止按钮。
+    现在它是一个普通的后台任务:格子上照常转圈、能停(停下时模型那边的回答作废,调用照样计费 —— 和别的
+    停不下远端的产出者一样),回执落终态。进程中途没了,重启时 reconcile 收掉。
+
+    **起任务之前**就把说得清的错说掉(没写要求、没配连接、点名的资产不在这个工作区、连着的文档读不到):
+    当场回错,不起一个注定失败的任务。
 
     **看着什么写**:上游连过来的和正文里 `@` 到的素材(图片、视频给画面,音频给转写,见 look_at)、连进来的便签的字和
     文档的正文(upstream_texts,服务端按连线取,和生成读文档同一份)、以及连进来的和 `@` 到的**资产**(ADR 0027)——
@@ -422,9 +427,9 @@ def write_on_board(
 
     **也不自己实现「调 LLM」**:供应商解析、调用、计量和工作流的 LLM 节点、智能体是同三样东西。
     """
-    from app.domain.ai_chat import AiChatError, chat, target_for
+    from app.domain.ai_chat import AiChatError
+    from app.domain.jobs import dispatch_job
     from app.domain.providers.chat_connection import require_connection
-    from app.domain.billing.usage import billable, once
 
     prompt = prompt.strip()
     if not prompt:
@@ -442,6 +447,8 @@ def write_on_board(
     else:
         existing = str(slot_item.get("text") or "").strip() if kind == "note" else ""
     _ensure_slot_ready(db, workspace_id, Slot(board_id, item_id, 0, 0, base_revision))
+    #: 没配连接当场说(「先去设置里配一个」),不起任务 —— 任务线程里再解析一次(会话是它自己的)。
+    require_connection(db, provider_profile_id or None, user_id=actor_id, error=AiChatError)
     #: 连进来的资产格 + 正文里 @ 到的,和生成同一条路(upstream_entities);连进来的便签和文档给的字(upstream_texts)。
     #: 都在建任务之前取:点名的资产不在这个工作区、连着的文档读不到,就当场说,不起任务。
     board = get_board(db, workspace_id, board_id)
@@ -461,84 +468,124 @@ def write_on_board(
         )
     finally:
         reset_receipt(token)
-    # 有意的提交:任务先落库,再摆占位、再在这个线程里等模型写(几十秒到几分钟)。占位的合并撞上
-    # 并发写入时会回滚重来(update_board),不能把这一行任务一起卷走;等模型的时候也不该攥着写锁。
+    # 有意的提交:占位的合并撞上并发写入时会回滚重来(update_board),不能把刚建的任务一起卷走。
     db.commit()
-    _pending(
+    placed = _pending(
         db, workspace_id, Slot(board_id, item_id, 0, 0), actor_id=actor_id, kind=kind, producer="write", job_id=job.id,
         #: 表单记下**这一轮**用的要求和模型 —— 写挂了回来,面板上原样还在,改一个字就能重来。
         form={**(slot_item.get("form") or {}), "prompt": prompt,
               "provider_profile_id": provider_profile_id, "model": model},
     )
-    target_name = "这篇文档" if kind == "document" else "这张便签"
-
-    def write() -> dict[str, Any]:
+    order = _WriteOrder(
+        workspace_id=workspace_id, board_id=board_id, kind=kind, note_id=note_id, existing=existing, prompt=prompt,
+        provider_profile_id=provider_profile_id, model=model, actor_id=actor_id,
         #: 上游连过来的 + 正文里 @ 到的 + 资产的参考图。图片和视频给画面,音频给转写 —— 见 look_at。
-        seen = list(dict.fromkeys([*source_asset_ids, *entity_pictures]))
-        pictures, from_assets = look_at(db, workspace_id, seen)
-        materials = upstream + entity_texts + from_assets
-        profile = require_connection(db, provider_profile_id or None, user_id=actor_id, error=AiChatError)
-        target = target_for(db, profile, model=model, surface="automation")
-        #: 说清楚产物要直接摆出来 —— 不交代的话模型爱写「好的,这是您要的文案:」,而那句话会原样贴进去。
-        system = (
-            "你在帮用户写一篇文档,它会存成一篇笔记:可以用 Markdown 的标题、列表、表格组织内容。"
-            "直接给正文,不要开场白、不要解释、不要用代码块把整篇包起来。"
-            if kind == "document"
-            else "你在帮用户往一张创意画板的便签上写字。直接给正文,不要开场白、不要解释、不要用 Markdown 代码块包起来。"
-        )
-        if existing:
-            system += f"{target_name}上已经有内容,用户给的是**改法**:照他说的改,没提到的地方保持原样,整篇重写一遍不是他要的。"
-        with billable(
-            db,
-            capability="chat",
-            operation="board_write",
-            idempotency_key=once("board_write"),
-            workspace_id=workspace_id,
-            provider=target.vendor,
-            model=target.model,
-            provider_profile_id=profile.id,
-            source_type="board",
-            source_id=board_id,
-        ) as call:
-            text = chat(
-                target,
-                [
-                    {"role": "system", "content": system},
-                    *(
-                        #: 上游给的材料(便签的字、资产的描述、素材的转写),自成一轮。**和「要求」分开** ——
-                        #: 揉成一段的话,模型分不清哪句是素材、哪句是指令,常见的结果是把材料原样抄一遍。
-                        [
-                            {
-                                "role": "user",
-                                "content": "上游给的材料:\n\n" + "\n\n---\n\n".join(materials),
-                            }
-                        ]
-                        if materials
-                        else []
-                    ),
-                    *(
-                        #: 现有内容单独一轮,和要求分开 —— 揉成一段的话,模型会把「改短一点」
-                        #: 当成正文的一部分写进去。
-                        [{"role": "user", "content": f"{target_name}现在的内容:\n{existing}"}]
-                        if existing
-                        else []
-                    ),
-                    #: 有图就让模型**看着写**。图片和要求放在同一轮里 —— 分开发的话模型
-                    #: 不知道这句话说的是哪张图。
-                    {"role": "user", "content": [{"type": "text", "text": prompt}, *pictures] if pictures else prompt},
-                ],
-                temperature=0.7,
-                call=call,
-                label="画板写文档" if kind == "document" else "画板写文案",
-                timeout=WRITE_TIMEOUT_SECONDS[kind],
-            ).strip()
-        if kind == "document":
-            return {"outputs": [_write_note(db, workspace_id, board, note_id, text, actor_id=actor_id)]}
-        return {"text": text}
+        seen=list(dict.fromkeys([*source_asset_ids, *entity_pictures])),
+        materials=[*upstream, *entity_texts],
+    )
+    job_id = job.id
+    dispatch_job(db, job, lambda: _write_in_job(job_id, order))
+    return placed
 
-    run_job_inline(db, job, write, running="jobMsg_boardWriteRunning", done="jobMsg_boardWriteDone")
-    db.expire_all()
-    return get_board(db, workspace_id, board_id)
+
+@dataclass(frozen=True)
+class _WriteOrder:
+    """一次写字要的全部东西,在请求里定好、交给任务线程。只有值,不带会话里的对象。"""
+
+    workspace_id: str
+    board_id: str
+    kind: str
+    note_id: str
+    existing: str
+    prompt: str
+    provider_profile_id: str
+    model: str
+    actor_id: str
+    seen: list[str]
+    materials: list[str]
+
+
+def _write_in_job(job_id: str, order: _WriteOrder) -> None:
+    """任务线程里写。失败(模型报错、读素材炸了、落笔记出错)由 run_job_inline 落到任务上,回执随之送到那一格。"""
+    from app.core.db import SessionLocal
+    from app.db.models import Job
+
+    with SessionLocal() as db:
+        job = db.get(Job, job_id)
+        if job is None:
+            return
+        try:
+            run_job_inline(db, job, lambda: _write(db, job_id, order),
+                           running="jobMsg_boardWriteRunning", done="jobMsg_boardWriteDone")
+        except Exception:  # noqa: BLE001 — 失败已经落到任务上(见 run_job_inline)
+            logger.info("board_write %s failed", job_id, exc_info=True)
+
+
+def _write(db: Session, job_id: str, order: _WriteOrder) -> dict[str, Any]:
+    """调一次模型把字写出来,交回任务的 result:便签是一段正文,文档格是写成的那篇笔记(那一版)。"""
+    from app.domain.ai_chat import AiChatError, chat, target_for
+    from app.domain.billing.usage import billable
+    from app.domain.providers.chat_connection import require_connection
+
+    kind, existing = order.kind, order.existing
+    target_name = "这篇文档" if kind == "document" else "这张便签"
+    pictures, from_assets = look_at(db, order.workspace_id, order.seen)
+    materials = order.materials + from_assets
+    profile = require_connection(db, order.provider_profile_id or None, user_id=order.actor_id, error=AiChatError)
+    target = target_for(db, profile, model=order.model, surface="automation")
+    #: 说清楚产物要直接摆出来 —— 不交代的话模型爱写「好的,这是您要的文案:」,而那句话会原样贴进去。
+    system = (
+        "你在帮用户写一篇文档,它会存成一篇笔记:可以用 Markdown 的标题、列表、表格组织内容。"
+        "直接给正文,不要开场白、不要解释、不要用代码块把整篇包起来。"
+        if kind == "document"
+        else "你在帮用户往一张创意画板的便签上写字。直接给正文,不要开场白、不要解释、不要用 Markdown 代码块包起来。"
+    )
+    if existing:
+        system += f"{target_name}上已经有内容,用户给的是**改法**:照他说的改,没提到的地方保持原样,整篇重写一遍不是他要的。"
+    with billable(
+        db,
+        capability="chat",
+        operation="board_write",
+        #: 一个任务记一次账:任务是这次调用稳定的工作单元。
+        idempotency_key=f"board_write:{job_id}",
+        workspace_id=order.workspace_id,
+        provider=target.vendor,
+        model=target.model,
+        provider_profile_id=profile.id,
+        source_type="board",
+        source_id=order.board_id,
+    ) as call:
+        text = chat(
+            target,
+            [
+                {"role": "system", "content": system},
+                *(
+                    #: 上游给的材料(便签的字、资产的描述、素材的转写),自成一轮。**和「要求」分开** ——
+                    #: 揉成一段的话,模型分不清哪句是素材、哪句是指令,常见的结果是把材料原样抄一遍。
+                    [{"role": "user", "content": "上游给的材料:\n\n" + "\n\n---\n\n".join(materials)}]
+                    if materials
+                    else []
+                ),
+                *(
+                    #: 现有内容单独一轮,和要求分开 —— 揉成一段的话,模型会把「改短一点」
+                    #: 当成正文的一部分写进去。
+                    [{"role": "user", "content": f"{target_name}现在的内容:\n{existing}"}]
+                    if existing
+                    else []
+                ),
+                #: 有图就让模型**看着写**。图片和要求放在同一轮里 —— 分开发的话模型
+                #: 不知道这句话说的是哪张图。
+                {"role": "user", "content": [{"type": "text", "text": order.prompt}, *pictures] if pictures else order.prompt},
+            ],
+            temperature=0.7,
+            call=call,
+            label="画板写文档" if kind == "document" else "画板写文案",
+            timeout=WRITE_TIMEOUT_SECONDS[kind],
+        ).strip()
+    if kind == "document":
+        board = get_board(db, order.workspace_id, order.board_id)
+        return {"outputs": [_write_note(db, order.workspace_id, board, order.note_id, text, actor_id=order.actor_id)]}
+    return {"text": text}
 
 
 def _note_title(markdown: str) -> str:

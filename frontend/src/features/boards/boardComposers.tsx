@@ -33,9 +33,6 @@ export interface ComposerHost {
   feeding: Upstream;
   documents: Map<string, BoardDocumentState>;
   models: GenerationOption[];
-  /** 这张便签正在写(写字是同步的几秒,期间按钮转圈)。 */
-  writing: boolean;
-  setWriting: (itemId: string | null) => void;
   onFormChange: (form: NonNullable<BoardItem["form"]>) => void;
   onPickAsset: (kind: MediaKind, place: (assetId: string) => void) => void;
   /** 跑这一格的产出者(见 BoardsView.run → runOnBoard)。 */
@@ -54,11 +51,11 @@ export interface ComposerHost {
 export const BUILTIN_COMPOSERS: Record<BuiltinProducer, (host: ComposerHost) => React.ReactNode> = {
   //: 便签:写文案。**和图片/视频不是同一张表** —— 写字没有比例、时长、参考图这些东西,
   //: 硬塞进同一个组件里会长出一堆「文本的时候不显示」的分支。
-  write: ({ item, position, workspaceId, feeding, writing, setWriting, onFormChange, run }) => (
+  write: ({ item, position, workspaceId, feeding, onFormChange, run }) => (
     <NoteComposer
       key={itemFormResetKey(item)}
       item={item}
-      busy={writing}
+      busy={itemIsRunning(item)}
       workspaceId={workspaceId}
       //: 上游连过来的素材,**不只是图**:视频抽帧给它看,音频有转写就当材料 ——
       //: 一段片子连到便签,意思就是「照着这段写」。
@@ -66,17 +63,16 @@ export const BUILTIN_COMPOSERS: Record<BuiltinProducer, (host: ComposerHost) => 
       //: 连进来的资产格:人物、场景、道具 —— 描述和参考图由服务端按连线带上。
       upstreamEntities={feeding.sources.flatMap((one) => (one.kind === "entity" && one.entity_id ? [one.entity_id] : []))}
       onFormChange={onFormChange}
-      onWrite={({ prompt, providerProfileId, model, assets, entityIds }) => {
-        setWriting(item.id);
-        return run({
+      onWrite={({ prompt, providerProfileId, model, assets, entityIds }) =>
+        run({
           producer: "write",
           item_id: item.id,
           kind: item.kind,
           ...position,
           //: 连进来的便签、文档的字不在表单里 —— 服务端按连线取(后端 boards/actions.upstream_texts)。
           form: { prompt, provider_profile_id: providerProfileId, model, source_assets: assets, entity_ids: entityIds },
-        }).finally(() => setWriting(null));
-      }}
+        })
+      }
     />
   ),
 

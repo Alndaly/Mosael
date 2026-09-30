@@ -461,9 +461,6 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
   //: 此刻画布上挂着一块面板(产出者的、一项能力的,或剪一段的)—— 缩略图要让开,见 MiniMap。
   const composerShown = Boolean(trimming) || Boolean(!feeding.blocked && composerItem && (producer || ability) && onRun);
 
-  //: 哪一张便签正在写。写字是同步的几秒,期间按钮转圈 —— 不给反馈的话用户会再点一次。
-  const [writing, setWriting] = React.useState<string | null>(null);
-
   /**
    * 从某一项长出下一项,并连上。
    *
@@ -796,8 +793,6 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
         feeding,
         documents,
         models: models ?? [],
-        writing: writing === composerItem.id,
-        setWriting,
         onFormChange: (form) => patch(composerItem.id, { form: withProducer(form, producer, composerItem.form) }),
         onPickAsset,
         run: onRun,
@@ -811,8 +806,6 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
         feeding,
         documents,
         models: models ?? [],
-        writing: false,
-        setWriting,
         onSave: (setting) => patch(composerItem.id, { form: withAbility(composerItem.form, ability, setting) }),
         onPickAsset,
         run: onRun,

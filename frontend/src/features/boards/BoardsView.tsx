@@ -73,7 +73,6 @@ import { EntityPickerDialog } from "@/features/entities/EntityPickerDialog";
 import { announceEntityReceipt } from "@/features/entities/entityMeta";
 import { boardSettlementPatch, itemIsRunning, prunedLinksPatch, serverOwnedPatch } from "@/features/boards/boardItemState";
 import { rebaseCanvas } from "@/features/boards/boardRebase";
-import { runNoteWrite } from "@/features/boards/noteWriteLifecycle";
 import { createWriteQueue, sameContent } from "@/lib/optimisticWrites";
 import { importEach, importFailureText } from "@/lib/importEach";
 import { assetKeys } from "@/api/queryKeys";
@@ -728,8 +727,8 @@ function BoardDetail({
    * 在画板上跑一次产出者(生成、写字、念出来、截一段)。**画布上的一切产出都从这里发** —— 走同一条
    * runOnBoard,后端按 `producer` 分给注册表里那一个(见后端 boards/producers.py)。
    *
-   * 写字是同步的:请求里就写完了,节点的「写作中 → 写好/写挂」由 runNoteWrite 管。其余是异步的:
-   * 服务端摆好占位、起好任务就回,产出由回执填回画布,这里只负责发起 + 轮询到结果为止。
+   * 全是异步的(写字也是):服务端摆好占位、起好任务就回,产出由回执填回画布,这里只负责发起 + 轮询到结果为止。
+   * 占位带着任务号,格子上转圈、能停。
    */
   const run = React.useCallback(
     async (request: BoardRunRequest) => {
@@ -739,12 +738,8 @@ function BoardDetail({
         serially(() => runOnBoard(board.id, { ...request, workspace_id: workspaceId, base_revision: revision.current }));
       //: 撞了版本号(服务端刚写了一格 —— 别的格子的占位、回执 —— 或智能体改了板):合上最新那一版、把合好的
       //: 存上,再发一次。这一格要跑什么是人刚点的,和服务端那一版推进到哪儿无关;只重来一次,再撞就照常报错。
-      const attempt = async (retried: boolean): Promise<Board | null> => {
+      const attempt = async (retried: boolean): Promise<Board> => {
         try {
-          if (request.producer === "write") {
-            acceptBoard(await runNoteWrite({ run: request, request: send, patch: (itemId, next) => api?.patch(itemId, next) }));
-            return null;
-          }
           return await send();
         } catch (error) {
           if (retried || !(await recoverConflict(error))) throw error;
@@ -752,7 +747,7 @@ function BoardDetail({
           return attempt(true);
         }
       };
-      let placed: Board | null;
+      let placed: Board;
       try {
         placed = await attempt(false);
       } catch (error) {
@@ -761,7 +756,6 @@ function BoardDetail({
         });
         return;
       }
-      if (!placed) return;
       //: **走画布的把手落到本地**(回写这里的 canvas 状态没用 —— 画布的节点只在挂载时从 canvas 建一次)。
       //: 已经在画布上的那一格(在空槽里生成、截挂了就地重截)换上服务端的表单、运行态和产出 —— 马上标成「在跑」,
       //: 不然用户看到的是「点了没反应」,然后再点一次;新的一格(从一段片子上截)加进去。和别的服务端新版一样
@@ -781,7 +775,7 @@ function BoardDetail({
           ));
       if (named && made?.run?.job_id) void announceEntityReceipt(made.run.job_id, t);
     },
-    [board.id, workspaceId, onSaved, api, t, acceptBoard, adoptServer, recoverConflict, save, serially, flushSaves],
+    [board.id, workspaceId, t, adoptServer, recoverConflict, save, serially, flushSaves],
   );
 
   /**

@@ -293,8 +293,6 @@ describe("能力的运行、空格子上的生成器", () => {
     feeding: NO_UPSTREAM,
     documents: new Map(),
     models: [],
-    writing: false,
-    setWriting: () => undefined,
     onFormChange: () => undefined,
     onPickAsset: () => undefined,
     run,

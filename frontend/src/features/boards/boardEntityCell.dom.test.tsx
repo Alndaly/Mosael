@@ -242,8 +242,6 @@ describe("便签、文档格的「让 AI 写」认资产", () => {
       },
       documents: new Map(),
       models: [],
-      writing: false,
-      setWriting: vi.fn(),
       onFormChange: vi.fn(),
       onPickAsset: vi.fn(),
       run,

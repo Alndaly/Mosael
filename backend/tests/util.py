@@ -321,6 +321,21 @@ def run_on_board(client, board_id: str, workspace_id: str, *, producer: str, ite
     return client.post(f"/api/boards/{board_id}/run", json=body, **request)
 
 
+def run_on_board_settled(client, board_id: str, workspace_id: str, **run):
+    """在画板上跑一次、**等它落定**再回:写字、截取、能力都是后台任务,产出(或失败原因)由回执落回那一格。
+
+    起任务之前就被拒的(没写要求、没配连接……)照原样回那一次的回包;起起来了就等进程内的任务跑完,回这张画板
+    此刻的样子(`GET /api/boards/{id}` 的回包,`canvas` 里那一格已经落定)。要在打桩(假模型)的 `with` 里调:
+    任务线程是在这里等完的。"""
+    from app.domain.jobs import wait_for_idle_jobs
+
+    started = run_on_board(client, board_id, workspace_id, **run)
+    if started.status_code != 200:
+        return started
+    assert wait_for_idle_jobs(timeout=60), "画板上跑的任务一直没落定"
+    return client.get(f"/api/boards/{board_id}", params={"workspace_id": workspace_id})
+
+
 def pinned(db, workflow) -> dict:
     """一条工作流 job 的载荷:钉住这条工作流的当前修订,和 engine.start_workflow_job 一样。
 

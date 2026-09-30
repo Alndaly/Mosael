@@ -110,8 +110,6 @@ function Stateful({ initial, run, saved }: { initial: BoardItem; run: (request: 
     feeding: NO_UPSTREAM,
     documents: new Map(),
     models: [],
-    writing: false,
-    setWriting: () => {},
     onFormChange: (form) => {
       saved?.push(form);
       setItem((current) => ({ ...current, form }));

@@ -349,13 +349,12 @@ export function NoteNode({ data, selected }: NodeProps) {
 
   const json = item.text_format === "json";
   const state = useRunState(item);
-  //: 一项能力在跑时停止在那一条运行态上(AbilityRun),这里只管便签自己的写字。
-  //: **在不在写按状态认,不按 job_id** —— 写字是同步请求,本地只打一个没有任务号的「在跑」(见 runNoteWrite);
-  //: 按 itemIsRunning 认的话这一格永远等不到占位。停止要有任务号才能取消,所以另外要求 itemIsRunning。
+  //: 一项能力在跑时停止在那一条运行态上(AbilityRun),这里只管便签自己的写字。写字和生成一样是后台任务,
+  //: 占位带着任务号 —— 在写就能停。
   const status = itemRunStatus(item);
-  const writing = !runningAbility(item) && (status === "queued" || status === "running");
+  const writing = !runningAbility(item) && itemIsRunning(item);
   const writeFailed = !runningAbility(item) && status === "failed";
-  const stop = nodeData.onStop && !commentMode && writing && itemIsRunning(item) ? nodeData.onStop : undefined;
+  const stop = nodeData.onStop && !commentMode && writing ? nodeData.onStop : undefined;
   return (
     <div
       data-board-run-status={state["data-board-run-status"]}
@@ -784,11 +783,11 @@ function DocumentNode({ data, selected }: NodeProps) {
     "nodrag nopan inline-flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground disabled:opacity-40";
   //: 「让 AI 写」在写这一篇(不是跑它的一项能力,那一种挂在底边的运行态上):和空槽生成同一个样子 ——
   //: 排队中、扫光占位 + 「生成中」+ 这次的要求 + 停止。此前文档格照旧显示「还没有内容」,看不出在写。
+  //: 写字是后台任务,占位带着任务号 —— 在写就能停。
   const status = itemRunStatus(item);
-  const writing = !runningAbility(item) && (status === "queued" || status === "running");
+  const writing = !runningAbility(item) && itemIsRunning(item);
   const writeFailed = !runningAbility(item) && status === "failed";
-  //: 写字是同步请求,本地那份「在跑」没有任务号:没有任务号就没有可取消的东西,不给停止。
-  const stop = nodeData.onStop && !commentMode && writing && itemIsRunning(item) ? nodeData.onStop : undefined;
+  const stop = nodeData.onStop && !commentMode && writing ? nodeData.onStop : undefined;
   const state = useRunState(item);
   return (
     //: 选中**不加彩色描边** —— 四角的缩放点已经说明「选中了」(图片、视频、便签都是这一条)。
