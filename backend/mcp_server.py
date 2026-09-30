@@ -58,7 +58,23 @@ def _route(fn, *, out: Any = None, **params: Any) -> Any:
 
 
 def _default_workspace_id() -> str:
-    """没给工作区时用调用人的第一个工作区(和界面上默认选中的是同一个)。"""
+    """没给工作区时用**这次对话所在的那个**;不在对话里(登录令牌直连)才用调用人的第一个工作区。
+
+    此前一律取第一个:用户在第二个工作区里跟智能体说「把这两个素材删掉」,模型没带 workspace_id,
+    列的、删的就都是第一个工作区 —— 而这件事没有任何迹象。对话属于哪个工作区由**令牌**认出来的会话决定
+    (见 calling_as),不由参数转述。
+    """
+    session_id = _SESSION_ID.get()
+    if session_id:
+        from app.db.models import AgentSession
+
+        def of_session(db, user) -> str:
+            session = db.get(AgentSession, session_id)
+            if session is None:
+                raise ValueError("这次对话已经不存在了")
+            return session.workspace_id
+
+        return _use_case(of_session)
     workspaces = _workspaces()
     if not workspaces:
         raise ValueError("No workspace available")
@@ -254,13 +270,9 @@ def list_assets(workspace_id: str = "", kind: str = "", name_contains: str = "")
     file — PDF, Word, PowerPoint, Excel, CSV, Markdown, text, web page, EPUB; it has no
     picture or sound, so it never goes on a timeline or into generation as a reference.
     Do NOT use for knowledge-base notes or workflow nodes (read_note / list_workflows).
-    Leave workspace_id empty to use the first workspace.
+    Leave workspace_id empty to use this conversation's workspace.
     """
-    if not workspace_id:
-        workspaces = _workspaces()
-        if not workspaces:
-            return []
-        workspace_id = workspaces[0]["id"]
+    workspace_id = workspace_id or _default_workspace_id()
     from app.api.schemas import AssetOut
     from app.domain.assets import use_cases
 
@@ -350,11 +362,7 @@ def list_projects(workspace_id: str = "") -> list[dict[str, Any]]:
     or rendering a video timeline. Do NOT use for visual workflow IDs — use
     list_workflows for workflows.
     """
-    if not workspace_id:
-        workspaces = _workspaces()
-        if not workspaces:
-            return []
-        workspace_id = workspaces[0]["id"]
+    workspace_id = workspace_id or _default_workspace_id()
     from app.domain.projects import use_cases
 
     projects = _use_case(use_cases.list_with_stats, workspace_id)
@@ -2959,11 +2967,9 @@ def get_transcript(
 def list_workspaces() -> list[dict[str, Any]]:
     """Read-only: list the workspaces this user has, newest first.
 
-    Every other tool takes an optional workspace_id and falls back to **the first one**.
-    That fallback is invisible: with more than one workspace you can spend a whole
-    conversation operating on the wrong one and never see a sign of it. Use this when the
-    user mentions a workspace by name, or when a listing comes back emptier than expected,
-    then pass the right workspace_id explicitly.
+    Every other tool takes an optional workspace_id and falls back to the workspace this
+    conversation belongs to. Use this when the user mentions ANOTHER workspace by name, then
+    pass that workspace_id explicitly.
     """
     return _workspaces()
 
