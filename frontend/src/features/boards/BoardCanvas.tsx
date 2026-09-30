@@ -78,7 +78,7 @@ import { useBoardFileImport } from "@/features/boards/useBoardFileImport";
 import { useBoardItemEdits } from "@/features/boards/useBoardItemEdits";
 import { useBoardHistory } from "@/features/boards/useBoardHistory";
 import { useBoardSequenceLinks } from "@/features/boards/useBoardSequenceLinks";
-import { batchLinks, linkRefusal, linkSources } from "@/features/boards/boardLinks";
+import { batchLinks, linkRefusal, linkSources, spawnableBefore, spawnableFor } from "@/features/boards/boardLinks";
 import { useBoardViewport } from "@/features/boards/useBoardViewport";
 import { useFrameDrag } from "@/features/boards/useFrameDrag";
 
@@ -644,20 +644,26 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
    * 还能改模型、改比例、再挂张参考图。点一下就把任务发出去的话,这些他一个都来不及说。
    */
   const spawnLinked = React.useCallback(
-    (kind: (typeof SPAWNABLE_KINDS)[number], from: string, at: { x: number; y: number }, fromIsSource = true) => {
+    (
+      kind: (typeof SPAWNABLE_KINDS)[number],
+      from: string,
+      at: { x: number; y: number },
+      fromIsSource = true,
+      //: 从出口拉出来时新的一格连上哪几格:多选时是选中的那一组(见 spawnSources),否则就是拉线的那一格。
+      sources: readonly string[] = [from],
+    ) => {
       //: 摆放规则和拉线松手时的占位是同一个函数 —— 占位在哪,节点就落在哪,选完不跳。
       const { x, y } = ghostRect(at, DEFAULT_SIZE[kind], fromIsSource);
       const item = add(kind, { x, y });
       //: 「生成文案」长出来的便签就是要 AI 写的:写作面板直接打开(整理 · 便签放下的那种等人自己写)。
       if (canAskWriter(item)) setPanel({ itemId: item.id, name: WRITER_PANEL });
-      //: 线的方向照着用户拉的那一头:从 source 拉出来的,新节点是终点;反之是起点。
+      //: 线的方向照着用户拉的那一头:从 source 拉出来的,新节点是终点(选中的几格都连进来);反之是起点。
+      //: 几根线和新的那一格一起落进画布,撤销里是一步。
+      const links = fromIsSource
+        ? sources.map((source) => ({ source, target: item.id }))
+        : [{ source: item.id, target: from }];
       setEdges((current) =>
-        addEdge(
-          fromIsSource
-            ? { source: from, target: item.id, sourceHandle: null, targetHandle: null }
-            : { source: item.id, target: from, sourceHandle: null, targetHandle: null },
-          current,
-        ),
+        links.reduce((all, link) => addEdge({ ...link, sourceHandle: null, targetHandle: null }, all), current),
       );
     },
     [add, setEdges],
@@ -670,7 +676,14 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
    * 单子上**只有格子**:把内容变成新内容的工具是格子自己的能力(选中它,在操作条上点),不是另一格 ——
    * 拉一根线出来只为了长出一格新的内容。
    */
-  const linkChoices = SPAWNABLE_KINDS as readonly string[] as string[];
+  //: 拉出线松手在空白处时,新的一格要连上哪几格:从出口拉、拉线的那一格在一组选中里时是这一组(多张图一起当参考),
+  //: 否则是它自己。开单子那一刻记下 —— 之后选中会变(新的一格落下就选中它)。
+  const [spawnSources, setSpawnSources] = React.useState<{ ids: string[]; fromSource: boolean }>({ ids: [], fromSource: true });
+  const spawnCells = spawnSources.ids.map((id) => cellOf(id)).filter((one): one is NonNullable<typeof one> => Boolean(one));
+  //: 单子上只列**这几格都连得上**的格子(boardLinks 同一条规矩);从入口拉出来的,列连得进它的。
+  const linkChoices = (spawnSources.fromSource
+    ? spawnableFor(spawnCells, SPAWNABLE_KINDS)
+    : spawnCells[0] ? spawnableBefore(spawnCells[0], SPAWNABLE_KINDS) : [...SPAWNABLE_KINDS]) as string[];
   const describeChoice = React.useCallback(
     (choice: string) => {
       const kind = choice as (typeof SPAWNABLE_KINDS)[number];
@@ -683,7 +696,8 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
     ghostSize: PENDING_GHOST_SIZE,
     describe: describeChoice,
     onChoose: (choice, link) =>
-      spawnLinked(choice as (typeof SPAWNABLE_KINDS)[number], link.nodeId, link.at, link.fromSource),
+      spawnLinked(choice as (typeof SPAWNABLE_KINDS)[number], link.nodeId, link.at, link.fromSource,
+        spawnSources.ids.length ? spawnSources.ids : [link.nodeId]),
   });
   const pendingLink = pending.link;
   const cancelPending = pending.cancel;
@@ -795,7 +809,15 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
           const instance = rf.current;
           if (!instance) return;
           const link = pendingLinkFromRelease(event, connection, instance.screenToFlowPosition);
-          if (link) pending.open(link);
+          const from = link ? cellOf(link.nodeId) : undefined;
+          if (!link || !from) return;
+          const cells = nodes.filter((node) => node.type !== "marker").map((node) => cellOf(node.id)!);
+          const sources = link.fromSource ? linkSources(from, cells) : [from];
+          const kinds = link.fromSource ? spawnableFor(sources, SPAWNABLE_KINDS) : spawnableBefore(from, SPAWNABLE_KINDS);
+          //: 一种都连不上(比如选中的里面混着连不出线的):不弹一张空单子。
+          if (kinds.length === 0) return;
+          setSpawnSources({ ids: sources.map((one) => one.id), fromSource: link.fromSource });
+          pending.open(link);
         }}
         onNodeDragStart={(_event, node) => beginFrameDrag(node)}
         onNodeDrag={(_event, node) => dragFrame(node)}
@@ -902,7 +924,9 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
       {/* 从线尾长出下一个节点:占位和待定的线已经画在画布里(见 display),这里是挂在占位旁边的单子。 */}
       {pendingLink && (
         <PendingLinkMenu
-          title={t("boardSpawnTitle")}
+          title={spawnSources.ids.length > 1
+            ? t("boardSpawnTitleMany").replace("{n}", String(spawnSources.ids.length))
+            : t("boardSpawnTitle")}
           kinds={linkChoices}
           describe={describeChoice}
           active={pending.active}

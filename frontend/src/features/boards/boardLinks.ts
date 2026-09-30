@@ -62,6 +62,11 @@ export function batchLinks(
   return { links, refused };
 }
 
+/** 从一格的入口拉出来新建一格:新的一格是它的上游,哪几种格子连得进它。 */
+export function spawnableBefore<K extends BoardItem["kind"]>(target: Cell, kinds: readonly K[]): K[] {
+  return kinds.filter((kind) => linkRefusal({ id: "__new__", kind }, target, []) === null);
+}
+
 /** 从这几格拉出来新建一格:哪几种格子**每一格都连得上**(新的一格是它们共同的下游)。 */
 export function spawnableFor<K extends BoardItem["kind"]>(sources: readonly Cell[], kinds: readonly K[]): K[] {
   const fresh = "__new__";

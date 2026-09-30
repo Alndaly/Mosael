@@ -208,6 +208,7 @@ export const publish = {
   boardDeleteRunningTitle: "Stop and delete?",
   boardNoteTextLimit: "Reached the {n}-character limit — more won't save",
   boardOutputsOffscreen: "{n} new cell(s) landed out of view",
+  boardSpawnTitleMany: "Add a cell linked to the {n} selected",
   boardLinksRefused: "{n} cell(s) weren't linked (groups, already linked, or a timeline only takes video / image / audio)",
   boardShowOutputs: "Show me",
   boardSaveFailedAt: "A cell can't be saved — it's highlighted on the canvas",

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { batchLinks, linkRefusal, linkSources, spawnableFor } from "@/features/boards/boardLinks";
+import { batchLinks, linkRefusal, linkSources, spawnableBefore, spawnableFor } from "@/features/boards/boardLinks";
 import { joinSequenceToCanvas, record, emptyHistory, undo } from "@/features/boards/canvasHistory";
 
 const cell = (id: string, kind: "note" | "image" | "video" | "audio" | "frame" | "sequence" | "document", selected = false) => ({ id, kind, selected });
@@ -49,5 +49,10 @@ describe("多选之后拉出来新建一格", () => {
     expect(spawnableFor([cell("a", "image"), cell("b", "video")], kinds)).toEqual(["image", "video", "sequence"]);
     expect(spawnableFor([cell("a", "image"), cell("n", "note")], kinds)).toEqual(["image", "video"]);
     expect(spawnableFor([cell("f", "frame")], kinds)).toEqual([]);
+  });
+
+  it("从一格的入口拉出来(新的一格是它的上游):时间线格只长得出视频 / 图片 / 音频", () => {
+    expect(spawnableBefore(cell("t", "sequence"), ["image", "video", "audio", "note", "document"] as const)).toEqual(["image", "video", "audio"]);
+    expect(spawnableBefore(cell("i", "image"), ["note", "document"] as const)).toEqual(["note", "document"]);
   });
 });
