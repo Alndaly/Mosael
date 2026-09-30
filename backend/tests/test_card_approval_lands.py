@@ -134,6 +134,45 @@ def test_完全放行档_自动放行的删除真的删了() -> None:
         assert db.get(ToolConfirmation, card_id).decision_mode == "bypass"
 
 
+def test_执行体炸在第二个素材_第一个也回来_文件还在_卡记失败(monkeypatch) -> None:
+    """一张卡要么全做、要么全不做。此前执行体抛错时只把卡标成失败、入口照常提交 —— 删两个素材、第二个炸了,
+    第一个照样删掉(提交之后连文件都清了),卡上却写着失败:用户以为什么都没发生,而这一档撤不回来。"""
+    from app.domain import entities
+    from app.media.paths import resolve_key
+
+    chat = Chat()
+    with SessionLocal() as db:
+        for asset_id in chat.asset_ids:
+            asset = db.get(Asset, asset_id)
+            asset.file_key = f"media/{asset_id}/clip.mp4"
+        db.commit()
+    files = [resolve_key(f"media/{asset_id}/clip.mp4") for asset_id in chat.asset_ids]
+    for path in files:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(b"video")
+    card_id = chat.agent_deletes()
+
+    real_forget = entities.forget_asset
+
+    def forget_then_fail_on_the_second(db, asset):
+        if asset.id == chat.asset_ids[1]:
+            raise RuntimeError("第二个素材删不掉")
+        return real_forget(db, asset)
+
+    monkeypatch.setattr(entities, "forget_asset", forget_then_fail_on_the_second)
+    approved = chat.client.post(f"/api/confirmations/{card_id}/approve")
+
+    assert approved.status_code == 200, approved.text
+    with SessionLocal() as db:
+        card = db.get(ToolConfirmation, card_id)
+        assert card.status == "failed"
+        assert "第二个素材删不掉" in (card.error or "")
+        assert card.resolved_at is not None
+        left = [one for one in chat.asset_ids if db.get(Asset, one) is not None]
+    assert left == chat.asset_ids, "执行体炸了,第一个素材的删除也要撤回来"
+    assert all(path.is_file() for path in files), "行回来了,文件也得在 —— 删文件的钩子不能照样跑"
+
+
 # ---------------- 棘轮:每个批准入口都有一条上面这样的测试 ----------------
 
 #: 批准入口(`authorize_and_approve` 的调用方)→ 钉住它真的提交了的那条测试。

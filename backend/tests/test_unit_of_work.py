@@ -71,6 +71,40 @@ def test_after_commit_also_fires_on_a_legacy_commit(probe) -> None:
     assert seen == ["ran"]
 
 
+def test_回滚到保存点_里面登记的钩子不跑_外面的照跑(probe) -> None:
+    """保存点里登记的钩子(删文件、起线程)跟着保存点一起撤:行回来了,文件不能没。外层的不受牵连 —— 此前清钩子
+    挂在 `after_rollback` 上,SQLAlchemy 回滚保存点也发它,一次被接住的保存点回滚把外层的钩子也清光了。"""
+    seen: list[str] = []
+    with unit_of_work() as db:
+        _write(db, "outer")
+        after_commit(db, lambda: seen.append("outer"))
+        with pytest.raises(RuntimeError), db.begin_nested():
+            _write(db, "inner-undone")
+            after_commit(db, lambda: seen.append("inner-undone"))
+            raise RuntimeError
+        with db.begin_nested():
+            _write(db, "inner-kept")
+            after_commit(db, lambda: seen.append("inner-kept"))
+    assert probe() == ["inner-kept", "outer"]
+    assert seen == ["outer", "inner-kept"]
+
+
+def test_保存点是事务里的第一句时_释放它就是提交(probe) -> None:
+    """为什么批准确认卡不用保存点包执行体(见 domain/agent/confirmations.approve_confirmation)。
+
+    pysqlite 只在第一句写之前自己 BEGIN。事务里还没写过时开保存点,SQLite 把 SAVEPOINT 当成最外层事务的开头,
+    于是 RELEASE 当场提交 —— 外层之后回滚,保存点里写的也收不回来了。钉住这件事:哪天连接设置改了、它不再成立,
+    这条会红,那时才可以改用保存点。
+    """
+    from app.core.db import SessionLocal
+
+    with SessionLocal() as db:
+        with db.begin_nested():
+            _write(db, "released")
+        db.rollback()
+    assert probe() == ["released"]
+
+
 def _app() -> FastAPI:
     app = FastAPI()
 

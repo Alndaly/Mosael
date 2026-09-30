@@ -23,7 +23,7 @@ from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 
 from sqlalchemy import event
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, SessionTransaction
 
 from app.core.db import SessionLocal
 
@@ -37,23 +37,48 @@ def after_commit(db: Session, hook: Callable[[], None]) -> None:
 
     挂在 Session 的事件上而不是只在 unit_of_work 里跑:还没迁完的代码照旧自己 `db.commit()`,
     登记的钩子在那一次提交之后同样会执行 —— 迁移期两种写法并存,不能因为提交的人不同就漏跑。
+
+    登记时记下**是在哪个保存点里登记的**:那个保存点回滚了(`begin_nested` 里抛错被接住),外层照样提交,
+    而它里面登记的钩子(比如删掉刚删的那行素材的文件)不该跟着跑 —— 行回来了,文件没了。
     """
-    db.info.setdefault(_HOOKS, []).append(hook)
+    db.info.setdefault(_HOOKS, []).append((db.get_nested_transaction(), hook))
+
+
+def _inside(owner: SessionTransaction | None, transaction: SessionTransaction) -> bool:
+    """`owner` 是不是 `transaction` 本身或它里面更深的一层。"""
+    while owner is not None:
+        if owner is transaction:
+            return True
+        owner = owner.parent
+    return False
 
 
 @event.listens_for(Session, "after_commit")
 def _run_hooks(db: Session) -> None:
     hooks = db.info.pop(_HOOKS, [])
-    for hook in hooks:
+    for _owner, hook in hooks:
         try:
             hook()
         except Exception:  # noqa: BLE001 —— 事务已经提交了,钩子失败不能让调用方以为没提交
             logger.exception("after_commit hook failed")
 
 
-@event.listens_for(Session, "after_rollback")
-def _drop_hooks(db: Session) -> None:
-    db.info.pop(_HOOKS, None)
+@event.listens_for(Session, "after_soft_rollback")
+def _drop_savepoint_hooks(db: Session, previous_transaction: SessionTransaction) -> None:
+    """回滚到保存点:只摘掉**在它里面**登记的钩子,外层的留着。
+
+    不能挂在 `after_rollback` 上:SQLAlchemy 回滚保存点时也发它,而它不说回滚的是哪一层 —— 此前在那里一把清空,
+    一个被接住的保存点回滚就让外层已经登记的钩子全丢了。
+    """
+    if previous_transaction.nested and _HOOKS in db.info:
+        db.info[_HOOKS] = [(owner, hook) for owner, hook in db.info[_HOOKS] if not _inside(owner, previous_transaction)]
+
+
+@event.listens_for(Session, "after_transaction_end")
+def _drop_hooks(db: Session, transaction: SessionTransaction) -> None:
+    """最外层事务结束了还剩下的钩子(回滚了、会话直接关了)不再跑。提交的那条路在 `_run_hooks` 里已经取走。"""
+    if transaction.parent is None:
+        db.info.pop(_HOOKS, None)
 
 
 @contextmanager
