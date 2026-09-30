@@ -57,7 +57,9 @@ _SCHEMA_TYPES = {
     "integer": "number",
     "boolean": "boolean",
     "object": "object",
-    "array": "object",
+    #: 数组给「一串」编辑器(一行一项),不是「名字 → 值」的映射:此前映到 object,存下去的是 `{"a": …}`,
+    #: 交给插件的就不是数组。素材数组另有 asset_list(见 _config_from_schema)。
+    "array": "list",
 }
 
 
@@ -126,6 +128,9 @@ def _config_from_schema(schema: Any) -> dict[str, dict[str, Any]]:
             items_media = _media(items.get("x-media"))
             if items_media:
                 entry["media"] = items_media
+        elif raw_type == "array" and items.get("type") in ("object", "array"):
+            # 每一项是一块结构(标题 + 正文、一组参数):拍成一行一个值是错的,给写数组的 JSON 框
+            entry["editor"] = "json"
         elif spec.get("format") == EXTERNAL_ID_FORMAT:
             # 另一个系统里的编号(任务号、fs_id、对象路径):工作流里照样能接上游、能手填,画板据此认出
             # 「按编号去外面取东西」的工具(workflows.EXTERNAL_ID、boards.transforms)。
@@ -158,15 +163,28 @@ def _config_from_schema(schema: Any) -> dict[str, dict[str, Any]]:
     return config
 
 
-def _readable(entry: Any) -> dict[str, Any]:
-    """插件自己声明的一条 config,把其中给人看的字段本地化。其余原样透传。"""
+def _readable(entry: Any, from_schema: dict[str, Any] | None) -> dict[str, Any]:
+    """插件自己声明的一条 config,把其中给人看的字段本地化,并**按 input_schema 对齐**「它装的是什么」。其余原样透传。
+
+    是不是素材、是不是一串,**只听 input_schema**(`from_schema` 是同一格从 schema 生成的那条):运行时把素材 id
+    换成本地路径(inputs.asset_fields / materialize)、把表单里的文字转回数组(inputs.coerce)看的都是 schema。
+    此前 node.config 自己说了算 —— 它写了 `format: asset` 而 schema 没写,表单给素材选择器、运行时却把素材 id
+    原样交给插件;反过来 schema 是素材而 node.config 没写,运行时换路径、表单却只给一个文本框。
+    """
     if not isinstance(entry, dict):
         return {}
-    readable = dict(entry)
-    #: 和从 input_schema 生成的那条同一个认法(见 _config_from_schema):`format: asset` 就是素材字段。
-    #: 自己写 node.config 的插件不该因此丢掉素材选择器、画板上接不到上游的图片。
-    if readable.get("format") == ASSET_FORMAT and not readable.get("data_type"):
-        readable["data_type"] = "asset"
+    readable = {key: value for key, value in entry.items() if not (key == "format" and value == ASSET_FORMAT)}
+    if readable.get("data_type") == "asset":
+        readable.pop("data_type")
+    if from_schema is not None:
+        if from_schema.get("data_type") == "asset":
+            readable["data_type"] = "asset"
+            if from_schema.get("media") and not readable.get("media"):
+                readable["media"] = from_schema["media"]
+        if from_schema.get("type") in ("asset_list", "list"):
+            readable["type"] = from_schema["type"]
+            if from_schema.get("editor"):
+                readable["editor"] = from_schema["editor"]
     if readable.get("format") == EXTERNAL_ID_FORMAT and not readable.get("data_type"):
         readable["data_type"] = EXTERNAL_ID_FORMAT
     for field in ("label", "description", "placeholder"):
@@ -181,6 +199,16 @@ def _readable(entry: Any) -> dict[str, Any]:
     return readable
 
 
+def declared_outputs(tool: dict[str, Any]) -> list[str]:
+    """这个工具作为节点有哪些输出口:`node.outputs` 声明了就是它们;没声明是一个装整份返回的 `output`。
+
+    节点元数据、执行器按口取值、改写被取代的工具时核对下游引用(workflows.plugin_references)读的都是这一条。
+    """
+    declared = tool.get("node") if isinstance(tool.get("node"), dict) else {}
+    outputs = declared.get("outputs")
+    return [str(name) for name in outputs] if isinstance(outputs, list) and outputs else ["output"]
+
+
 def node_meta(tool: dict[str, Any]) -> dict[str, Any]:
     """一个插件工具的节点元数据,形状与 NODE_TYPES 的条目完全一致。
 
@@ -189,14 +217,12 @@ def node_meta(tool: dict[str, Any]) -> dict[str, Any]:
     """
     declared = tool.get("node") if isinstance(tool.get("node"), dict) else {}
     config = declared.get("config")
+    from_schema = _config_from_schema(tool.get("input_schema"))
     if isinstance(config, dict) and config:
-        config = {str(key): _readable(entry) for key, entry in config.items()}
+        config = {str(key): _readable(entry, from_schema.get(str(key))) for key, entry in config.items()}
     else:
-        config = _config_from_schema(tool.get("input_schema"))
-    outputs = declared.get("outputs")
-    if not isinstance(outputs, list) or not outputs:
-        # 默认一个口子装整份返回。插件想拆成具名输出就自己声明 outputs。
-        outputs = ["output"]
+        config = from_schema
+    outputs = declared_outputs(tool)
     output_types = declared.get("output_types")
     if not isinstance(output_types, dict):
         output_types = {}
@@ -332,10 +358,10 @@ def resolve_instance(db: Session, package_id: str, tool_name: str, chosen: str, 
     names = [item["name"] for item in available]
     raise PluginDomainError("pluginErr_manyInstances", package=package_id, names=names)
 
-
 __all__ = [
     "PLUGIN_NODE_CATEGORY",
     "PLUGIN_NODE_PREFIX",
+    "declared_outputs",
     "node_meta",
     "node_type_id",
     "parse_node_type",

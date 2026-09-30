@@ -6161,6 +6161,54 @@ def _migrate_code_fields_read_references_from_input() -> None:
     )
 
 
+def _migrate_plugin_array_inputs_are_lists() -> None:
+    """插件节点上声明成数组(非素材)的入参,存成了「名字 → 值」对象的,改成那些值的列表。
+
+    节点表单此前把 JSON Schema 的 array 当 object,给的是映射编辑器,存下去的是 `{"a": "第一段", "b": "第二段"}`
+    —— 交给插件的就不是数组。表单改成一行一项(见 plugins.nodes 的 `_SCHEMA_TYPES`),存着的值在这里跟上:
+    按用户敲进去的顺序取值。哪一格是数组看**插件此刻报的** input_schema(连接的工具清单);认不出工具的节点不动。
+    """
+    if not {"workflows", "workflow_revisions", "plugin_instances"} <= set(inspect(engine).get_table_names()):
+        return
+    from sqlalchemy import select
+    from sqlalchemy.orm import Session
+
+    from app.db.models import PluginInstance
+    from app.domain.plugins.tools import all_tools
+
+    arrays: dict[str, set[str]] = {}
+    with Session(engine) as db:
+        for instance in db.scalars(select(PluginInstance)).all():
+            try:
+                tools = all_tools(db, instance)
+            except ValueError:  # 包记录没了、清单坏了(PluginDomainError / ManifestError 都是 ValueError)
+                continue
+            for tool in tools:
+                properties = (tool.get("input_schema") or {}).get("properties") or {}
+                keys = {
+                    key for key, spec in properties.items()
+                    if isinstance(spec, dict) and spec.get("type") == "array"
+                    and not (isinstance(spec.get("items"), dict) and spec["items"].get("format") == "asset")
+                }
+                if keys:
+                    arrays.setdefault(f"plugin.{instance.package_id}.{tool['name']}", set()).update(keys)
+    if not arrays:
+        return
+
+    def visit(node: dict[str, Any]) -> dict[str, Any]:
+        keys = arrays.get(str(node.get("type")))
+        config = node["config"]
+        stale = [key for key in keys or () if isinstance(config.get(key), dict)]
+        if not stale:
+            return node
+        return {**node, "config": {**config, **{key: list(config[key].values()) for key in stale}}}
+
+    _rewrite_workflow_graphs(
+        lambda graph: _walk_graph_nodes(graph, visit),
+        "插件节点的数组入参改成一行一项:存成「名字 → 值」的,按顺序改成值的列表",
+    )
+
+
 def _reindex_record_references() -> None:
     """引用表(record_references)是派生数据:抽取规则一变,整张按新规则重建。"""
     from app.db.references import reindex
@@ -6400,6 +6448,8 @@ def migration_plan() -> MigrationPlan:
                 MigrationPhase.AFTER_SCHEMA,
                 _migrate_browser_nodes_fill_one_target,
                 _migrate_code_fields_read_references_from_input,
+                # 要读插件报的工具清单:排在装随包插件、改写被取代的工具之后(上面的对账)。
+                _migrate_plugin_array_inputs_are_lists,
             ),
             #: 生成记录自己存失败原因、会话按种类分页、提示词里拆出画板补的素材对照。回填要读 jobs.error_key ——
             #: 它在很老的库上由上面的 migrate-job-message-i18n 补上,所以排在它后面。

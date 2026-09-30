@@ -16,6 +16,7 @@ import { OptionPicker } from "@/components/ui/option-picker";
 import { NoteReferenceField } from "@/features/notes/NotePickerDialog";
 import { fieldDataType } from "@/features/nodeForms/fieldTypes";
 import { isTakenByOneOfPeer, isWorkflowFieldActive } from "@/features/nodeForms/fieldActivation";
+import { ListField } from "@/features/nodeForms/ListField";
 import { MapField, bareRef } from "@/features/nodeForms/MapField";
 import { RefEditor } from "@/features/nodeForms/RefEditor";
 import { ScenePropsField, parseIds } from "@/features/nodeForms/ScenePropsField";
@@ -94,14 +95,23 @@ export function emptyOptionsHint(t: (key: MessageKey) => string, why: EmptyOptio
   return t("wfNoOptions");
 }
 
-/** object(JSON)字段:CodeMirror JSON 编辑,失焦解析回对象;非法给提示不写入。 */
-export function JsonField({ value, onChange }: { value: unknown; onChange: (parsed: unknown) => void }) {
+/** object(JSON)字段:CodeMirror JSON 编辑,失焦解析回对象;非法给提示不写入。
+    `empty` 是还没填时显示的形状:对象字段是 `{}`,一串对象(插件的数组入参)是 `[]`。 */
+export function JsonField({
+  value,
+  onChange,
+  empty = {},
+}: {
+  value: unknown;
+  onChange: (parsed: unknown) => void;
+  empty?: unknown;
+}) {
   const t = useI18n();
-  const [text, setText] = React.useState(() => JSON.stringify(value ?? {}, null, 2));
+  const [text, setText] = React.useState(() => JSON.stringify(value ?? empty, null, 2));
   // 上游(智能体改图)更新时回显,但不打断正在输入:仅当序列化值真变才重置。
   const synced = React.useRef(text);
   React.useEffect(() => {
-    const next = JSON.stringify(value ?? {}, null, 2);
+    const next = JSON.stringify(value ?? empty, null, 2);
     if (next !== synced.current) {
       synced.current = next;
       setText(next);
@@ -116,8 +126,8 @@ export function JsonField({ value, onChange }: { value: unknown; onChange: (pars
       onChange={setText}
       onBlur={() => {
         try {
-          const parsed = JSON.parse(text || "{}");
-          synced.current = JSON.stringify(parsed ?? {}, null, 2);
+          const parsed = text.trim() ? JSON.parse(text) : empty;
+          synced.current = JSON.stringify(parsed ?? empty, null, 2);
           onChange(parsed);
         } catch {
           toast.error(t("wfBadJson"));
@@ -497,6 +507,14 @@ export function NodeConfigForm({
                     variables={insertable}
                     onChange={typeConfig(key)}
                   />
+                )
+              ) : spec?.type === "list" ? (
+                // 一串值(插件的数组入参):每一项一行,能挑上游输出;每一项是对象的,给写数组的 JSON 框。
+                // 哪种由后端的声明说(editor: "json"),见 plugins.nodes 的 _config_from_schema。
+                String((spec as { editor?: unknown } | undefined)?.editor ?? "") === "json" ? (
+                  <JsonField value={value} empty={[]} onChange={(parsed) => setConfig(key, parsed)} />
+                ) : (
+                  <ListField value={value} variables={variables} onChange={(next) => setConfig(key, next)} />
                 )
               ) : spec?.type === "code" ? (
                 <CodeField value={String(value ?? "")} onChange={typeConfig(key)} />

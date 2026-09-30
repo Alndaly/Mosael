@@ -548,6 +548,7 @@ def parse(raw: dict[str, Any], path: str) -> Manifest:
             )
     _check_claimed(package_provides, declared, runtime_of(raw), path)
     _check_audio_prepares(declared, path)
+    _check_node_config_assets(declared, path)
     config = _fields(instance.get("config"), secret=False, pick=pick)
     credentials = _fields(instance.get("credentials"), secret=True, pick=pick)
     _check_field_keys([*config, *credentials], path)
@@ -683,6 +684,31 @@ def _check_audio_prepares(declared: list[dict[str, Any]], path: str) -> None:
             if prepare is not None and prepare not in AUDIO_PREPARES:
                 raise ManifestError("pluginErr_manifestBadAudioPrepare", path=path, tool=str(tool.get("name")), field=key,
                                     value=str(prepare)[:40])
+
+
+def _check_node_config_assets(declared: list[dict[str, Any]], path: str) -> None:
+    """自己写了 `node.config` 的工具:那里标成素材(`format: asset`)的一格,input_schema 里也得是素材。
+
+    「这一格是素材」只有 input_schema 说了算:运行时按它把素材 id 换成本地路径。node.config 另标一份而 schema 没标,
+    表单给了素材选择器,插件收到的却是一串素材 id —— 两边各说各的,装的那一刻就该说出来。
+    """
+    for tool in declared:
+        node = tool.get("node")
+        config = node.get("config") if isinstance(node, dict) else None
+        if not isinstance(config, dict):
+            continue
+        schema = tool.get("input_schema")
+        properties = schema.get("properties") if isinstance(schema, dict) else None
+        properties = properties if isinstance(properties, dict) else {}
+        for key, entry in config.items():
+            if not (isinstance(entry, dict) and entry.get("format") == ASSET_FORMAT):
+                continue
+            spec = properties.get(key)
+            spec = spec if isinstance(spec, dict) else {}
+            items = spec.get("items") if isinstance(spec.get("items"), dict) else {}
+            if spec.get("format") != ASSET_FORMAT and items.get("format") != ASSET_FORMAT:
+                raise ManifestError("pluginErr_manifestNodeAssetNotInSchema", path=path, tool=str(tool.get("name")),
+                                    field=str(key))
 
 
 def _describe_rule(rule: dict[str, Any]) -> str:

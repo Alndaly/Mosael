@@ -1,6 +1,6 @@
 {
   "id": "dev.mosael.comfyui",
-  "manifest_version": 4,
+  "manifest_version": 5,
   "name": "ComfyUI",
   "default_locale": "zh",
   "version": "1.5.4",

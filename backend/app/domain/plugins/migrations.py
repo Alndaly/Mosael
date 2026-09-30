@@ -34,7 +34,7 @@ LEGACY_FILENAMES = ("plugin.json",)
 
 #: 当前清单版本。加一个新的迁移步骤就 +1,并把它加进 _STEPS。装好的包存着的清单也跟着升(见
 #: db/migrations 的 `upgrade-stored-plugin-manifests`),所以**收紧清单规则时,老清单要能被某一步改合格**。
-MANIFEST_VERSION = 4
+MANIFEST_VERSION = 5
 
 
 def _to_runtime_block(raw: dict[str, Any]) -> bool:
@@ -197,6 +197,36 @@ def _capability_inputs_follow_contract(raw: dict[str, Any]) -> bool:
     return changed
 
 
+def _node_config_assets_follow_schema(raw: dict[str, Any]) -> bool:
+    """`node.config` 里标成素材(`format: asset`)、input_schema 里却不是的格子,去掉那个标记。
+
+    是不是素材只听 input_schema(清单规则 `pluginErr_manifestNodeAssetNotInSchema`):运行时一直按它换路径,
+    node.config 那个标记从来没让插件收到过文件,只让表单多给了一个素材选择器。去掉它,插件的行为一点不变。
+    """
+    tools = raw.get("tools")
+    declared = tools.get("declare") if isinstance(tools, dict) else None
+    if not isinstance(declared, list):
+        return False
+    changed = False
+    for tool in declared:
+        node = tool.get("node") if isinstance(tool, dict) else None
+        config = node.get("config") if isinstance(node, dict) else None
+        if not isinstance(config, dict):
+            continue
+        schema = tool.get("input_schema")
+        properties = schema.get("properties") if isinstance(schema, dict) else None
+        properties = properties if isinstance(properties, dict) else {}
+        for key, entry in config.items():
+            if not (isinstance(entry, dict) and entry.get("format") == ASSET_FORMAT):
+                continue
+            spec = properties.get(key) if isinstance(properties.get(key), dict) else {}
+            items = spec.get("items") if isinstance(spec.get("items"), dict) else {}
+            if spec.get("format") != ASSET_FORMAT and items.get("format") != ASSET_FORMAT:
+                entry.pop("format")
+                changed = True
+    return changed
+
+
 #: 按顺序跑。加新步骤往后追加,并把 MANIFEST_VERSION +1。
 _STEPS = (
     _to_runtime_block,
@@ -206,6 +236,7 @@ _STEPS = (
     _package_mirror_fields_to_sources,
     _legacy_mirror_fields_to_sources,
     _capability_inputs_follow_contract,
+    _node_config_assets_follow_schema,
 )
 
 

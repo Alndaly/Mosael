@@ -37,7 +37,7 @@
   "id": "dev.example.text",          // 稳定唯一 id;改了等于换了个插件
   "name": { "zh": "文本工具", "en": "Text Toolkit" },   // 给人看的文字可按语言写,见「多语言」
   "version": "1.0.0",
-  "manifest_version": 4,
+  "manifest_version": 5,
 
   "runtime": { "kind": "process", "entry": "main.py" },
 
@@ -106,7 +106,8 @@ return {"artifact": {
 
 宿主收下之后,`output` 里的 `artifact` 会被**换成** `asset_id` / `asset_name`,调用方拿到的
 就是一个素材 id,和其它产素材的工具一样。暂存目录用完即删,所以那个路径不会传给下游 ——
-它在返回的那一刻就已经失效了。
+它在返回的那一刻就已经失效了。把 `artifact` / `artifacts` 直接声明成节点的输出口也行:工作流按口取值时
+取的是换过的那一格(`asset_id` / `asset_ids`)。
 
 限制:单份 8GB;`url` 只能是 http/https;`path` 必须落在 `MOSAEL_PLUGIN_OUTPUT_DIR`
 里面(插件本来就以你的身份运行、读得到你读得到的一切,这条挡的不是提权,是「随手交出一个
@@ -237,7 +238,7 @@ credential 的进加密凭据库,声明成 config 的进明文配置 —— 令�
   "id": "com.example.thing",
   "name": "示例服务",
   "version": "1.0.0",
-  "manifest_version": 4,
+  "manifest_version": 5,
 
   // 本地进程:spawn 一个子进程
   "runtime": { "kind": "mcp", "transport": "stdio", "command": "npx", "args": ["-y", "@scope/server"] },
@@ -381,6 +382,14 @@ credential 的进加密凭据库,声明成 config 的进明文配置 —— 令�
 
 声明了 `outputs` 就按同名键从返回值里拆开;没声明就把整份返回值装进 `output`。
 
+`node.config` 管的是这一格**长什么样**(标签、说明、选项、是否高级);它**装的是什么**只听 `input_schema`:
+是不是素材(`"format": "asset"`、`x-media`)、是不是一串(`"type": "array"`)—— 运行时就是按 schema 把素材 id
+换成本地路径、把表单里的文字转回数组的,node.config 里不用再写一遍。在 node.config 里把一格标成素材而
+input_schema 没标,装的时候就报错(`pluginErr_manifestNodeAssetNotInSchema`)。
+
+数组入参(非素材)在表单里是一行一项,每一项能挑上游的输出;某一行是一整串引用时,那一串拼进来。每一项是
+对象(`"items": {"type": "object"}`)的给一个写数组的 JSON 框。交给插件的一律是数组。
+
 #### 在画板里长什么样
 
 **画板上没有单独的工具格**(ADR 0025 修订「能力住在内容格上」)。把内容变成新内容的工具
@@ -448,7 +457,7 @@ credential 的进加密凭据库,声明成 config 的进明文配置 —— 令�
 "overrides": {
   "remove_bg": {
     "node": {
-      "config": { "image": { "type": "template", "format": "asset", "required": true, "label": "图片" } },
+      "config": { "image": { "type": "template", "required": true, "label": "图片" } },  // 是不是素材看 input_schema
       "outputs": ["asset_id", "mask_ratio", "engine"],
       "output_types": { "mask_ratio": "number" },
       "board_outputs": ["asset_id"],         // 画板上只落抠好的那张图
@@ -866,7 +875,7 @@ return {"summary": "已导入 3 个文件" if locale.startswith("zh") else "Impo
 | --- | --- |
 | `id` / `name` / `version` | 必填。`id` 是稳定标识,改了等于换了个插件;只能用字母、数字和 `._-`,以字母或数字开头(它就是插件目录名);`name` 可写成按语言分的对象;`version` 按语义化版本写(`1.2.0`、`1.3.0-beta.1`):市场按它比先后决定「有新版」,写不成语义化版本的只能按「不相等」判 |
 | `default_locale` | 可选。你那些裸字符串是用哪种语言写的(见「多语言」),挑不到要的语言时先退到它 |
-| `manifest_version` | 当前是 `4`。老清单扫描时自动迁移并补上;已装的包存着的那份启动时也升 |
+| `manifest_version` | 当前是 `5`。老清单扫描时自动迁移并补上;已装的包存着的那份启动时也升 |
 | `homepage` | **你的文档站**。界面在插件详情页、市场条目、安装确认三处给一个「文档」链接;不写就不画。只认 `http(s)` |
 | `docs` | 在 Mosael 里怎么用的文档,可按语言分;有它时「文档」指向它 |
 | `author` | `{name, url}`,`name` 可按语言分;显示在名字旁边,`url` 可点 |

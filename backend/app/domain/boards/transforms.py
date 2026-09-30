@@ -72,8 +72,9 @@ from app.domain.boards.tools import binding_sink, landing_outputs
 #: 哪一种的。标签是 i18n key `boardToolGroup_<组>`。
 BOARD_GROUPS: tuple[str, ...] = ("new", "image", "video", "audio", "text", "scene", "entity", "asset")
 
-#: 只有搭流程的人看得懂的字段类型:键值映射 / 原始 JSON(object)、代码、子图。
-_WIRING_FIELD_TYPES = frozenset({"object", "code", "graph"})
+#: 只有搭流程的人看得懂的字段类型:键值映射 / 原始 JSON(object)、一串值(list,插件的数组入参 —— 一行一项、
+#: 每项接上游)、代码、子图。
+_WIRING_FIELD_TYPES = frozenset({"object", "list", "code", "graph"})
 
 
 def wiring_field(key: str, spec: Any) -> bool:

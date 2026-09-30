@@ -78,6 +78,11 @@ def test_清单解析按当时的语言挑名字() -> None:
         ({"id": "a", "version": "1", "name": "n", "tools": {"declare": [{"name": "p", "input_schema": {
             "type": "object", "properties": {"f": {"type": "string", "format": "asset", "x-audio": "mp3"}}}}]}},
          "pluginErr_manifestBadAudioPrepare"),
+        # node.config 把一格标成素材,input_schema 里却不是:表单给素材选择器,插件收到的却是素材 id
+        ({"id": "a", "version": "1", "name": "n", "tools": {"declare": [{"name": "p",
+            "input_schema": {"type": "object", "properties": {"img": {"type": "string"}}},
+            "node": {"config": {"img": {"type": "template", "format": "asset"}}}}]}},
+         "pluginErr_manifestNodeAssetNotInSchema"),
     ],
 )
 def test_清单的硬规矩(raw: dict, key: str) -> None:

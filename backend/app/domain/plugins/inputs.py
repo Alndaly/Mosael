@@ -25,6 +25,7 @@ artifact 那条(见 artifacts)是插件交给宿主;这条是反过来。有了�
 
 from __future__ import annotations
 
+import json
 import logging
 import shutil
 from pathlib import Path
@@ -74,6 +75,13 @@ def coerce(tool: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any]:
     out = dict(payload)
     for key, spec in properties.items():
         value = out.get(key)
+        if isinstance(spec, dict) and spec.get("type") == "array" and key in out:
+            listed = _as_list(value, spec.get("items") if isinstance(spec.get("items"), dict) else {})
+            if listed is None:
+                out.pop(key)
+            else:
+                out[key] = listed
+            continue
         if not isinstance(spec, dict) or not isinstance(value, str):
             continue
         kind = spec.get("type")
@@ -93,6 +101,50 @@ def coerce(tool: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any]:
             continue
         out[key] = int(number) if kind == "integer" and number.is_integer() else number
     return out
+
+
+def _as_list(value: Any, items: dict[str, Any]) -> Any:
+    """数组入参交给插件时**是数组**。空的(没填、空串、空列表)回 None = 去掉这一格。
+
+    - 表单里一行一项(见前端 ListField):某一行是一整串引用,插值之后那一行就是一个列表 —— 拼进来(和
+      「行列表」字段同一个规矩),而不是交出一个套着列表的列表;每一项是结构(对象 / 数组)的除外。
+    - 一整格接的是上游:上游交来的已经是列表就照收;是一段 JSON 数组文字就解开;是一个值就当只有这一项。
+    - 数字 / 整数项里的数字文字转成数(同 coerce 对单值的做法)。
+    转不了的原样留着,交给插件去说哪里不对。
+    """
+    if value is None or value == "" or value == []:
+        return None
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return None
+        try:
+            parsed = json.loads(text)
+        except ValueError:
+            parsed = None
+        value = parsed if isinstance(parsed, list) else [value]
+    if not isinstance(value, list):
+        return [value]
+    structured = items.get("type") in ("object", "array")
+    flat: list[Any] = []
+    for one in value:
+        if isinstance(one, list) and not structured:
+            flat.extend(one)
+        elif one not in (None, ""):
+            flat.append(one)
+    if items.get("type") in ("integer", "number"):
+        flat = [_number(one, items["type"]) for one in flat]
+    return flat
+
+
+def _number(value: Any, kind: str) -> Any:
+    if not isinstance(value, str):
+        return value
+    try:
+        number = float(value.strip())
+    except ValueError:
+        return value
+    return int(number) if kind == "integer" and number.is_integer() else number
 
 
 def _media(spec: dict[str, Any]) -> tuple[str, ...]:

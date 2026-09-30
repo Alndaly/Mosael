@@ -1,0 +1,105 @@
+import React from "react";
+import { X } from "lucide-react";
+
+import { useI18n } from "@/app/preferences";
+import { AddRow } from "@/components/ui/add-row";
+import { Button } from "@/components/ui/button";
+import { Combobox } from "@/components/app/combobox";
+import { bareRef } from "@/features/nodeForms/MapField";
+
+/**
+ * 一串值:插件入参里声明成数组(`"type": "array"`)、每一项是字符串或数字的那种。
+ *
+ * 此前这类字段拿到的是「名字 → 值」的映射编辑器(后端把 array 当 object),存下去的是 `{"a": …}`,
+ * 交给插件的就不是数组。一行一项:每一项能从上游输出里挑(`{{llm-1.text}}`),也能手填。
+ * 一行是一整串引用时,运行时把那一串拼进来(见后端 plugins.inputs.coerce)。
+ */
+
+/** 存着的值 → 行。不是数组的(还没填、或是一整串引用 `{{…}}`)给一行。 */
+export function rowsFromList(value: unknown): string[] {
+  if (Array.isArray(value)) return value.map((one) => (typeof one === "string" ? one : JSON.stringify(one)));
+  if (typeof value === "string" && value.trim()) return [value];
+  return [];
+}
+
+/**
+ * 行 → 数组。空行丢掉(它对插件毫无意义);数字、布尔还原成原本的类型;带 {{}} 的一律当字符串 —— 那是模板,
+ * 留给引擎插值。和 MapField 的 objectFromRows 同一个还原规矩。
+ */
+export function listFromRows(rows: string[]): unknown[] {
+  const out: unknown[] = [];
+  for (const text of rows) {
+    const trimmed = text.trim();
+    if (!trimmed) continue;
+    if (text.includes("{{")) out.push(text);
+    else if (trimmed === "true" || trimmed === "false") out.push(trimmed === "true");
+    else if (Number.isFinite(Number(trimmed))) out.push(Number(trimmed));
+    else out.push(text);
+  }
+  return out;
+}
+
+export function ListField({
+  value,
+  onChange,
+  variables,
+}: {
+  value: unknown;
+  onChange: (next: unknown[]) => void;
+  /** 上游能引用的输出,形如 `{{llm-1.text}}`。 */
+  variables: string[];
+}) {
+  const t = useI18n();
+  // 本地保留行:「刚加的一行还空着」在数组里表示不出来,只按数组渲染的话新加的空行会当场消失。
+  const [rows, setRows] = React.useState<string[]>(() => rowsFromList(value));
+  const emitted = React.useRef(JSON.stringify(listFromRows(rowsFromList(value))));
+
+  // 外面改了(撤销、智能体改图)才跟;自己发出去的那一版不跟,否则打字会被回流打断。
+  React.useEffect(() => {
+    const incoming = JSON.stringify(listFromRows(rowsFromList(value)));
+    if (incoming === emitted.current) return;
+    emitted.current = incoming;
+    setRows(rowsFromList(value));
+  }, [value]);
+
+  const push = (next: string[]) => {
+    setRows(next);
+    const list = listFromRows(next);
+    emitted.current = JSON.stringify(list);
+    onChange(list);
+  };
+
+  const options = React.useMemo(
+    () => variables.map((ref) => ({ value: ref, label: bareRef(ref) })),
+    [variables],
+  );
+
+  return (
+    <div className="grid gap-1.5">
+      {rows.map((row, index) => (
+        <div className="grid grid-cols-[minmax(0,1fr)_24px] items-center gap-1" key={index}>
+          <Combobox
+            value={row}
+            options={options}
+            placeholder={t("wfListItem")}
+            emptyText={t("cmdkEmpty")}
+            allowCustomValue
+            size="sm"
+            className="w-full min-w-0 text-ui-xs"
+            onValueChange={(next: string) => push(rows.map((one, i) => (i === index ? next : one)))}
+          />
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-xs"
+            aria-label={t("delete")}
+            onClick={() => push(rows.filter((_, i) => i !== index))}
+          >
+            <X size={12} />
+          </Button>
+        </div>
+      ))}
+      <AddRow dense label={t("wfMapAdd")} onClick={() => setRows([...rows, ""])} />
+    </div>
+  );
+}

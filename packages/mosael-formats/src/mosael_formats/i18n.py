@@ -90,6 +90,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "插件清单 {path}:工具 {tool} 的入参 {field} 写了 x-audio「{value}」,只认 original(原采样率)或 speech(16k 单声道)",
         "en": "In plugin manifest {path}, input {field} of tool {tool} sets x-audio to “{value}”; only original (source sample rate) or speech (16 kHz mono) are allowed.",
     },
+    "pluginErr_manifestNodeAssetNotInSchema": {
+        "zh": "插件清单 {path}:工具 {tool} 的 node.config 把 {field} 标成了素材,input_schema 里它却不是 —— 素材要在 input_schema 里标(\"format\": \"asset\"),运行时只看那里",
+        "en": "In plugin manifest {path}, tool {tool} marks {field} as an asset in node.config but not in input_schema; mark assets in input_schema (\"format\": \"asset\"), which is what the runtime reads.",
+    },
     # ---- 插件包 ----
     "pluginErr_archiveTooLarge": {
         "zh": "插件包超过大小上限",

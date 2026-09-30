@@ -457,6 +457,7 @@ export const publish = {
   wfMapKey: "Name",
   wfMapValue: "Value or upstream output",
   wfMapAdd: "Add",
+  wfListItem: "An item: a value or an upstream output",
   wfRefEditorHint: "Type text, or click a tag below to insert an upstream output",
   wfStepDone: "done",
   wfStepFailed: "failed",

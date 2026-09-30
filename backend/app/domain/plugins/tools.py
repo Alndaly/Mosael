@@ -594,8 +594,8 @@ def _recorded(payload: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
-__all__ = ["all_tools", "exposed", "find", "host_tool", "invoke", "invoke_host", "quiet_hooks", "refresh_tools",
-           "staged_artifact", "staged_output"]
+__all__ = ["COLLECTED_AS", "all_tools", "exposed", "find", "host_tool", "invoke", "invoke_host", "output_port",
+           "quiet_hooks", "refresh_tools", "staged_artifact", "staged_output"]
 
 
 @contextmanager
@@ -624,6 +624,17 @@ MAX_ARTIFACTS = 64
 _ARTIFACT_TRANSPORT_KEYS = frozenset({"path", "url", "headers"})
 #: 一份产出可以说「我是哪个具名输出」(`output`)。键名的样子和工具声明里的输出口一样。
 _OUTPUT_KEY = re.compile(r"^[A-Za-z][A-Za-z0-9_]{0,63}$")
+#: 收产出时**换了名字**的两格(见 _collect_artifact):插件交的 `artifact` 到调用方手里是 `asset_id`,`artifacts`
+#: 是 `asset_ids`。工具把这两个名字声明成节点的输出口时,按口取值要到换过的名字上取 —— 此前按同名键取,
+#: 那个口永远是空的,下游拿着一个空值往下跑。
+COLLECTED_AS = {"artifact": "asset_id", "artifacts": "asset_ids"}
+
+
+def output_port(output: dict[str, Any], name: str) -> Any:
+    """一次调用的返回值里,节点输出口 `name` 的那一格(收产出换过名字的按换过的取)。"""
+    if name in output:
+        return output[name]
+    return output.get(COLLECTED_AS.get(name, name))
 
 
 def _collect_artifact(

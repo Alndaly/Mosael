@@ -1,6 +1,6 @@
 {
   "id": "dev.mosael.mineru",
-  "manifest_version": 4,
+  "manifest_version": 5,
   "name": {
     "zh": "MinerU 文档解析",
     "en": "MinerU document parsing"

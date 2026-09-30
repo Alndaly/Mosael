@@ -96,6 +96,7 @@
   "migrate-node-names-are-not-i18n-keys": "641a99fe980899cf",
   "migrate-official-workflow-data-bindings": "4149f3e6496c5393",
   "migrate-permission-modes": "bbacb632b8f0e565",
+  "migrate-plugin-array-inputs-are-lists": "69ab494d2805bd4b",
   "migrate-plugin-authorization-rejected": "70b766005c22c0e9",
   "migrate-plugin-connections-choose-package-sources": "9f8bffdeef1a7d60",
   "migrate-plugin-connections-choose-their-network": "cc07c696f9df91d0",

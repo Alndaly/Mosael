@@ -1150,14 +1150,20 @@ def test_别的文件落成写着素材名的便签() -> None:
     assert len(merged["edges"]) == 2
 
 
-def test_插件自己写的节点表单里_format_asset_也是素材字段() -> None:
-    """和从 input_schema 生成的那条同一个认法:画板上才接得到上游的图片,工作流里才有素材选择器。"""
+def test_插件自己写的节点表单里_是不是素材字段听input_schema的() -> None:
+    """和从 input_schema 生成的那条同一个认法:画板上才接得到上游的图片,工作流里才有素材选择器。
+
+    **只听 input_schema**:运行时按它把素材 id 换成本地路径。node.config 自己写了 `format: asset` 而 schema 没写的,
+    此前也给素材选择器 —— 插件收到的却是一串素材 id(见 plugins.nodes._readable)。"""
     from app.domain.boards.tools import bindable_kinds
     from app.domain.plugins.nodes import node_meta
 
-    meta = node_meta({"name": "cut", "node": {"config": {"picture": {"type": "template", "format": "asset"}}}})
+    meta = node_meta({"name": "cut", "input_schema": {"properties": {"picture": {"type": "string", "format": "asset"}}},
+                      "node": {"config": {"picture": {"type": "template"}}}})
     assert meta["config"]["picture"]["data_type"] == "asset"
     assert bindable_kinds("picture", meta["config"]["picture"]) == ["image", "video", "audio"]
+    unbacked = node_meta({"name": "cut", "node": {"config": {"picture": {"type": "template", "format": "asset"}}}})
+    assert "data_type" not in unbacked["config"]["picture"]
 
 
 def test_素材字段只接它声明的那几种素材() -> None:

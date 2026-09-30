@@ -459,6 +459,7 @@ export const publish = {
   wfMapKey: "名字",
   wfMapValue: "值或上游输出",
   wfMapAdd: "加一项",
+  wfListItem: "一项:值或上游输出",
   wfRefEditorHint: "输入文字,或点下面的标签插入上游输出",
   wfStepDone: "完成",
   wfStepFailed: "失败",

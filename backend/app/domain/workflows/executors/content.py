@@ -78,8 +78,8 @@ def plugin_node(node_type: str):
     from app.domain.plugins.nodes import parse_node_type
 
     def run(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
-        from app.domain.plugins.nodes import node_meta
-        from app.domain.plugins.tools import find
+        from app.domain.plugins.nodes import declared_outputs
+        from app.domain.plugins.tools import find, output_port
 
         parsed = parse_node_type(node_type)
         if parsed is None:
@@ -90,10 +90,10 @@ def plugin_node(node_type: str):
         output = _run_plugin_tool(db, instance_id, tool_name, payload, workspace_id=scope.workspace_id)
 
         tool = find(db, instance_id, tool_name)
-        outputs = node_meta(tool)["outputs"] if tool else ["output"]
+        outputs = declared_outputs(tool) if tool else ["output"]
         if outputs == ["output"]:
             return {"output": output}
-        return {name: output.get(name) for name in outputs}
+        return {name: output_port(output, name) for name in outputs}
 
     return run
 
