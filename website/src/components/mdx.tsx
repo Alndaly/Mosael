@@ -2,9 +2,11 @@ import { Children, isValidElement } from "react";
 import Link from "next/link";
 import { CircleAlert, Info, Lightbulb, OctagonAlert } from "lucide-react";
 
+import { CodeBlock } from "@/components/code-block";
 import { QrCards } from "@/components/qr-cards";
 import { DownloadChoice } from "@/components/download-link";
 import { localePath, type Locale } from "@/i18n/config";
+import { getMessages } from "@/i18n/messages";
 import { Recording } from "@/components/recording";
 import { Shot } from "@/components/shot";
 import { cn } from "@/lib/utils";
@@ -115,6 +117,8 @@ export function mdxComponents(locale: Locale) {
   DownloadChoice: () => <DownloadChoice locale={locale} />,
   img: MdxImage,
   p: MdxParagraph,
+  // 代码块:顶栏带语言、换行开关和复制(见 CodeBlock)。行内代码不经过 pre,不受影响。
+  pre: (props: React.ComponentProps<"pre">) => <CodeBlock labels={getMessages(locale).docs.code} {...props} />,
   h2: anchored("h2"),
   h3: anchored("h3"),
   /**
