@@ -26,12 +26,22 @@ logger = logging.getLogger(__name__)
 T = TypeVar("T")
 
 
-def _compact_timed_text(segments: list[dict[str, Any]]) -> str:
-    """把完整逐字稿编码成适合 LLM 的紧凑 JSON。
+#: 段内两个词之间空了这么久才算「停顿」,值得把两边的词和它们的时间交给模型(整理模板的长停顿阈值默认 1 秒,
+#: 这里放宽一些:阈值是模型按节点参数自己判的,这里只决定给不给它看)。
+PAUSE_SECONDS = 0.6
+#: 每个停顿前后各带几个词 —— 口头禅、错误起句多半就贴在停顿两边。
+WORDS_AROUND_PAUSE = 2
 
-    段落正文不能省：ASR token 常省略标点，偶尔还会缺少段尾。真正冗余的是每个字都重复一次
-    ``start/end/text`` 字段名，以及每段都写空 speaker。token 改成按文档声明列顺序的短数组，
-    仍保留每个词的精确起止时间和正文，供自动裁切安全定位。
+
+def _compact_timed_text(segments: list[dict[str, Any]]) -> str:
+    """把逐字稿编码成交给 LLM 的紧凑 JSON:**段落级**的起止和正文,词级时间只在停顿附近给。
+
+    此前每个词都带着起止时间整份嵌进提示词:20 分钟的口播约 11 万字,超出多数模型的上下文,整理模板在长素材上
+    直接失败。模型要精确落刀的地方只有停顿(和贴在停顿两边的口头禅、错误起句):段与段之间的停顿从相邻两段的
+    起止就读得出;段内的停顿在 `pauses` 里给出起止,并附上两边各几个词的时间(`tokens`,列顺序见顶层
+    `token_columns`)。别处的重复、跑题按段落定位就够。
+
+    段落正文不能省:ASR token 常省略标点,偶尔还会缺少段尾。每段都写空 speaker 是冗余,省掉。
     """
     compact: list[dict[str, Any]] = []
     for segment in segments:
@@ -42,9 +52,17 @@ def _compact_timed_text(segments: list[dict[str, Any]]) -> str:
         }
         if segment.get("speaker"):
             row["speaker"] = segment["speaker"]
-        tokens = segment.get("tokens")
-        if isinstance(tokens, list) and tokens:
-            row["tokens"] = [[token["start"], token["end"], token["text"]] for token in tokens]
+        tokens = segment.get("tokens") if isinstance(segment.get("tokens"), list) else []
+        pauses: list[list[float]] = []
+        near: set[int] = set()
+        for index in range(1, len(tokens)):
+            gap_start, gap_end = float(tokens[index - 1]["end"]), float(tokens[index]["start"])
+            if gap_end - gap_start >= PAUSE_SECONDS:
+                pauses.append([gap_start, gap_end])
+                near.update(range(max(0, index - WORDS_AROUND_PAUSE), min(len(tokens), index + WORDS_AROUND_PAUSE)))
+        if pauses:
+            row["pauses"] = pauses
+            row["tokens"] = [[tokens[index]["start"], tokens[index]["end"], tokens[index]["text"]] for index in sorted(near)]
         compact.append(row)
     return json.dumps(
         {"token_columns": ["start", "end", "text"], "segments": compact},
@@ -651,6 +669,7 @@ def timeline_cut_ranges(db: Session, scope: RunScope, config: dict[str, Any]) ->
 
     ranges: list[tuple[float, float]] = []
     normalized: list[dict[str, Any]] = []
+    confidences: list[float] = []
     for item in raw_ranges:
         if not isinstance(item, dict):
             continue
@@ -673,23 +692,38 @@ def timeline_cut_ranges(db: Session, scope: RunScope, config: dict[str, Any]) ->
             continue
         ranges.append((start, end))
         normalized.append({**item, "src_start": start, "src_end": end})
+        confidences.append(confidence)
+    segments = _segments_in(config.get("segments")) if config.get("segments") else []
     if not ranges:
         return {
             "removed": 0,
             "removed_seconds": 0.0,
             "ranges": [],
+            "skipped_ranges": [],
+            "skipped_note": "",
+            "kept_text": _kept_text(segments, []),
             "sequence_id": sequence.id,
             "revision": sequence.revision,
         }
 
+    source_seconds = max(clip.src_out - clip.src_in, 0.001)
+    kept, skipped = _within_cap(ranges, confidences, source_seconds * max_removal_ratio)
+    ranges = [ranges[index] for index in kept]
+    skipped_ranges = [normalized[index] for index in skipped]
+    normalized = [normalized[index] for index in kept]
     merged = _merged_ranges(ranges)
     removed_seconds = sum(end - start for start, end in merged)
-    source_seconds = max(clip.src_out - clip.src_in, 0.001)
-    if removed_seconds / source_seconds > max_removal_ratio + 1e-9:
-        raise WorkflowDomainError(
-            "wfErr_cleanupTooMuch",
-            params={"seconds": f"{removed_seconds:.2f}", "ratio": f"{max_removal_ratio:.0%}"},
-        )
+    if not ranges:
+        return {
+            "removed": 0,
+            "removed_seconds": 0.0,
+            "ranges": [],
+            "skipped_ranges": skipped_ranges,
+            "skipped_note": _skipped_note(skipped_ranges, max_removal_ratio),
+            "kept_text": _kept_text(segments, []),
+            "sequence_id": sequence.id,
+            "revision": sequence.revision,
+        }
 
     def cut(sequence: Sequence) -> int:
         cut_clip_ranges(db, sequence.id, CutClipRanges(clip_id=clip_id, ranges=tuple(ranges)))
@@ -701,9 +735,70 @@ def timeline_cut_ranges(db: Session, scope: RunScope, config: dict[str, Any]) ->
         "removed": len(ranges),
         "removed_seconds": round(removed_seconds, 3),
         "ranges": normalized,
+        "skipped_ranges": skipped_ranges,
+        "skipped_note": _skipped_note(skipped_ranges, max_removal_ratio),
+        "kept_text": _kept_text(segments, merged),
         "sequence_id": sequence.id,
         "revision": revision,
     }
+
+
+def _within_cap(ranges: list[tuple[float, float]], confidences: list[float], budget: float) -> tuple[list[int], list[int]]:
+    """删除总时长超过上限时,**按置信度从高到低**收进范围,收到上限为止;放不下的交回去给人复核。
+
+    此前超了上限就整步失败 —— 模型多标了几处低置信度的停顿,一处都不删、连带后面的导出一起没了。
+    重叠的范围按合并之后的长度算,不重复计。返回(保留的下标, 放不下的下标),各按原顺序。
+    """
+    order = sorted(range(len(ranges)), key=lambda index: (-confidences[index], ranges[index][0]))
+    kept: list[int] = []
+    for index in order:
+        trial = _merged_ranges([ranges[one] for one in (*kept, index)])
+        if sum(end - start for start, end in trial) <= budget + 1e-9:
+            kept.append(index)
+    skipped = [index for index in range(len(ranges)) if index not in kept]
+    return sorted(kept), skipped
+
+
+def _skipped_note(skipped: list[dict[str, Any]], ratio: float) -> str:
+    """超出删除上限、没有删的那几处:一句给人看的话(通知里用),没有就是空串。"""
+    from app.core.i18n import get_current_locale, t
+
+    if not skipped:
+        return ""
+    return t("wfNote_cleanupCapped", get_current_locale(), count=len(skipped), ratio=f"{ratio:.0%}")
+
+
+def _kept_text(segments: list[dict[str, Any]], removed: list[tuple[float, float]]) -> str:
+    """删掉这些范围之后,逐字稿还剩下什么 —— 按保留的原话拼出来,一个字不改。
+
+    此前这份「整理后的逐字稿」由模型在方案里全文复述(cleaned_verbatim):长素材上输出一长就被截断,而且复述
+    不保证一字不差。有词级时间的段按词判(词的中点落在删除范围里就去掉),没有的整段判(整段在删除范围里才去掉)。
+    """
+    def gone(start: float, end: float) -> bool:
+        middle = (start + end) / 2
+        return any(cut_start <= middle <= cut_end for cut_start, cut_end in removed)
+
+    lines: list[str] = []
+    for segment in segments:
+        try:
+            start, end = float(segment.get("start") or 0), float(segment.get("end") or 0)
+        except (TypeError, ValueError):
+            continue
+        tokens = [one for one in segment.get("tokens") or [] if isinstance(one, dict)]
+        touched = any(cut_start < end and cut_end > start for cut_start, cut_end in removed)
+        if not touched:
+            text = str(segment.get("text") or "").strip()
+        elif tokens:
+            words = [str(one.get("text") or "") for one in tokens
+                     if not gone(float(one.get("start") or 0), float(one.get("end") or 0))]
+            #: 西文的词之间要空格,中文逐字的 token 不要。
+            joiner = " " if any(word.isascii() and word.strip().isalpha() for word in words) else ""
+            text = joiner.join(word.strip() for word in words if word.strip())
+        else:
+            text = "" if gone(start, end) else str(segment.get("text") or "").strip()
+        if text:
+            lines.append(text)
+    return "\n".join(lines)
 
 
 def _merged_ranges(ranges: list[tuple[float, float]]) -> list[tuple[float, float]]:

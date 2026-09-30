@@ -3,12 +3,12 @@
   "version": 1,
   "workflow_revision": 1,
   "name": "Transcript-based video cleanup",
-  "description": "Remove background hiss, transcribe the video with timestamps, identify pauses, fillers and repetition, then create a cut plan and a cleaned video while preserving the original.",
-  "graph_hash": "8137c8f6f5a87be41fbe4c7432a93537ff23ee8c3f30b3bc89db2a0770376667",
+  "description": "Remove background hiss, transcribe the video with timestamps, identify pauses, fillers and repetition, then create a cut plan and a cleaned video while preserving the original. Suited to talks and interviews up to about 30 minutes; split longer footage first.",
+  "graph_hash": "bb57a0be8f41405a5e91a0c5cdb2aa0c0a55ac172bcb2c3ee9607372da05ab57",
   "graph": {
     "meta": {
       "template_id": "transcript_video_cleanup",
-      "template_version": 4,
+      "template_version": 5,
       "source": "official"
     },
     "nodes": [
@@ -126,8 +126,8 @@
           "profile_id": "",
           "model": "",
           "preset": "precise",
-          "system": "你是一名资深口播、访谈与课程剪辑师。你会收到词级或段级时间码逐字稿，\n任务是在不改写观点、不改变事实、不打乱时间顺序的前提下，让视频更紧凑、清楚、自然。识别长停顿、\n无语义口头禅、重复表达、错误起句后重录、明显跑题和噪声词。只把高置信度且能从时间码精确定位的\n问题放入 remove_ranges；结构跳跃、可能有意的停顿、语气表达或任何含义不确定的内容只写进 issues\n和 review_notes，不自动删除。范围必须按 src_start 升序、互不重叠、src_end 大于 src_start，并在\n素材时长内。删除口头禅时只切独立词；删除停顿时在相邻有效语音两侧各保留约 0.12–0.20 秒自然呼吸。\n若重复录制同一句，保留表达最完整自然的一遍。cleaned_verbatim 只能拼接保留的原话，不得润色或\n新增内容。只输出符合 JSON Schema 的对象。",
-          "prompt": "素材名称：{{source_video.name}}\n素材时长：{{source_video.duration}} 秒\n逐字稿语言：{{verbatim_transcript.language}}\n整理风格：{{start.cleanup_style}}\n长停顿阈值：{{start.silence_threshold_seconds}} 秒\n口头禅策略：{{start.filler_policy}}\n最多删除原时长比例：{{start.max_removal_ratio}}\n\n下面是按原视频源时间记录的紧凑逐字稿 JSON。每段含 start/end/text；tokens 为短数组，列顺序由\n顶层 token_columns 声明（默认是 start/end/text）：\n{{verbatim_transcript.timed_text}}\n\n请逐项诊断并生成安全的 remove_ranges。所有自动删除范围的总时长不得超过规定比例；无法从逐字稿\n确定的画面杂乱、跳剪需求或语义取舍写入 review_notes，不得猜测时间范围。",
+          "system": "你是一名资深口播、访谈与课程剪辑师。你会收到段落级时间码逐字稿：每段有起止和正文；\n段内的长停顿在 pauses 里给出起止，停顿两边几个词的时间在 tokens 里。任务是在不改写观点、不改变事实、\n不打乱时间顺序的前提下，让视频更紧凑、清楚、自然。识别长停顿、无语义口头禅、重复表达、错误起句后重录、\n明显跑题和噪声词。只把高置信度且能从时间码精确定位的问题放入 remove_ranges：段与段之间的停顿按相邻两段\n的起止定位，段内停顿按 pauses 定位，口头禅只在 tokens 给出了它的时间时才切独立词；整句的重复、错误起句、\n跑题按整段的起止切。结构跳跃、可能有意的停顿、语气表达、没有时间可定位的口头禅或任何含义不确定的内容只写进\nissues 和 review_notes，不自动删除。范围必须按 src_start 升序、互不重叠、src_end 大于 src_start，并在\n素材时长内。删除停顿时在相邻有效语音两侧各保留约 0.12–0.20 秒自然呼吸。若重复录制同一句，保留表达最完整\n自然的一遍。只输出符合 JSON Schema 的对象。",
+          "prompt": "素材名称：{{source_video.name}}\n素材时长：{{source_video.duration}} 秒\n逐字稿语言：{{verbatim_transcript.language}}\n整理风格：{{start.cleanup_style}}\n长停顿阈值：{{start.silence_threshold_seconds}} 秒\n口头禅策略：{{start.filler_policy}}\n最多删除原时长比例：{{start.max_removal_ratio}}\n\n下面是按原视频源时间记录的紧凑逐字稿 JSON。每段含 start/end/text；有段内长停顿的段另有 pauses\n（每项是停顿的起止）和 tokens（停顿两边几个词的时间，短数组，列顺序由顶层 token_columns 声明）：\n{{verbatim_transcript.timed_text}}\n\n请逐项诊断并生成安全的 remove_ranges。所有自动删除范围的总时长不得超过规定比例；无法从逐字稿\n确定的画面杂乱、跳剪需求或语义取舍写入 review_notes，不得猜测时间范围。",
           "response_format": "json_schema",
           "json_schema_name": "transcript_video_cleanup_plan",
           "json_schema": {
@@ -246,10 +246,6 @@
                   "additionalProperties": false
                 }
               },
-              "cleaned_verbatim": {
-                "type": "string",
-                "description": "按保留内容重排版的逐字稿，不改写原话"
-              },
               "review_notes": {
                 "type": "array",
                 "items": {
@@ -266,7 +262,6 @@
               "revised_outline",
               "issues",
               "remove_ranges",
-              "cleaned_verbatim",
               "review_notes",
               "estimated_removed_seconds"
             ],
@@ -274,7 +269,7 @@
           },
           "json_schema_strict": "true",
           "temperature": 0.15,
-          "max_tokens": 10000
+          "max_tokens": 16000
         }
       },
       {
@@ -290,11 +285,13 @@
           "clip_id": "",
           "ranges": "{{cleanup_plan.json.remove_ranges}}",
           "min_confidence": 0.8,
-          "max_removal_ratio": "{{start.max_removal_ratio}}"
+          "max_removal_ratio": "{{start.max_removal_ratio}}",
+          "segments": ""
         },
         "inputs": [
           "sequence_id",
-          "clip_id"
+          "clip_id",
+          "segments"
         ]
       },
       {
@@ -322,7 +319,7 @@
         },
         "config": {
           "title": "视频逐字稿与智能整理已完成",
-          "body": "{{source_video.name}} 已降噪,并生成逐字稿、问题诊断和非破坏性整理版视频。"
+          "body": "{{source_video.name}} 已降噪,并生成逐字稿、问题诊断和非破坏性整理版视频。{{apply_cleanup.skipped_note}}"
         }
       },
       {
@@ -340,7 +337,9 @@
             "verbatim_transcript": "{{verbatim_transcript.text}}",
             "timed_transcript": "{{verbatim_transcript.segments}}",
             "cleanup_plan": "{{cleanup_plan.json}}",
+            "cleaned_verbatim": "{{apply_cleanup.kept_text}}",
             "applied_ranges": "{{apply_cleanup.ranges}}",
+            "skipped_ranges": "{{apply_cleanup.skipped_ranges}}",
             "removed_seconds": "{{apply_cleanup.removed_seconds}}",
             "project_id": "{{cleanup_project.project_id}}",
             "sequence_id": "{{cleanup_project.sequence_id}}",
@@ -472,6 +471,14 @@
         "kind": "data",
         "source_output": "clip_id",
         "target_input": "clip_id"
+      },
+      {
+        "id": "d-verbatim_transcript-segments-apply_cleanup-segments",
+        "source": "verbatim_transcript",
+        "target": "apply_cleanup",
+        "kind": "data",
+        "source_output": "segments",
+        "target_input": "segments"
       },
       {
         "id": "d-cleanup_project-sequence_id-export_clean_video-sequence_id",

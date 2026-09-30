@@ -114,7 +114,6 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfErr_nodeIdExists": {"zh": "节点 id 已存在:{id}", "en": "A node with id {id} already exists"},
     "wfErr_unknownGraphOp": {"zh": "不支持的图操作:{kind}", "en": "Unsupported graph operation: {kind}"},
     "wfErr_unknownTemplate": {"zh": "未知的内置工作流模板:{id}", "en": "Unknown built-in workflow template: {id}"},
-    "wfErr_cleanupTooMuch": {"zh": "整理方案准备删除 {seconds} 秒,超过允许的 {ratio};请收紧整理尺度或检查方案", "en": "The cleanup plan would remove {seconds}s, over the {ratio} cap; tighten the thresholds or review the plan"},
     "wfErr_jsonSchemaMismatch": {"zh": "模型返回的 JSON 不符合 Schema:{reason}", "en": "The model's JSON does not match the schema: {reason}"},
     # ---- 工作流节点的下拉选项(wfOpt_<字段>_<值>;wfOpt__<值> 是各字段通用的是/否) ----
     "wfOpt__true": {"zh": "是", "en": "Yes"},

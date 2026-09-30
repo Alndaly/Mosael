@@ -306,6 +306,10 @@ _FIELD_LABELS = {
     "cues": "wfField_cues",
     "chunk_count": "wfField_chunk_count",
     "generated_count": "wfField_generated_count",
+    "reused_count": "wfField_reused_count",
+    "skipped_ranges": "wfField_skipped_ranges",
+    "skipped_note": "wfField_skipped_note",
+    "kept_text": "wfField_kept_text",
     "max_seconds": "wfField_max_seconds",
 }
 
@@ -711,9 +715,17 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
                 "type": "number",
                 "description": "wfNode_timeline_cut_ranges_max_removal_ratio",
             },
+            #: 给了逐字稿段落(转写节点的 segments),就顺手交出删完之后剩下的原话(kept_text)。
+            "segments": {
+                "advanced": True,
+                "type": "template",
+                "description": "wfNode_timeline_cut_ranges_segments",
+            },
         },
-        "outputs": ["removed", "removed_seconds", "ranges", "sequence_id", "revision"],
-        "output_types": {"removed": "number", "removed_seconds": "number", "ranges": "json", "revision": "number"},
+        "outputs": ["removed", "removed_seconds", "ranges", "skipped_ranges", "skipped_note", "kept_text",
+                    "sequence_id", "revision"],
+        "output_types": {"removed": "number", "removed_seconds": "number", "ranges": "json", "skipped_ranges": "json",
+                         "revision": "number"},
     },
     "edit_timeline": {
         "external": False,
@@ -1551,8 +1563,8 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
             "model": {"type": "string", "options_from": "lipsync_models", "description": "wfNode_talking_model"},
             "consent": {"type": "string", "required": True, "options": ["yes"], "description": "wfNode_talking_consent"},
         },
-        "outputs": ["asset_id", "clip_id", "track_id", "chunk_count", "generated_count"],
-        "output_types": {"chunk_count": "number", "generated_count": "number"},
+        "outputs": ["asset_id", "clip_id", "track_id", "chunk_count", "generated_count", "reused_count"],
+        "output_types": {"chunk_count": "number", "generated_count": "number", "reused_count": "number"},
     },
     "talking_segments": {
         "external": False,

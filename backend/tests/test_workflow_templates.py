@@ -229,7 +229,7 @@ def test_transcript_cleanup_template_has_valid_refs_and_provenance() -> None:
     assert _invalid_references(graph) == []
     assert graph["meta"] == {
         "template_id": "transcript_video_cleanup",
-        "template_version": 4,
+        "template_version": 5,
         "source": "official",
     }
 

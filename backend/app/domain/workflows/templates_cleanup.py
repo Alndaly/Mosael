@@ -46,7 +46,6 @@ def _cleanup_schema() -> dict[str, Any]:
         "revised_outline": {"type": "array", "items": {"type": "string"}},
         "issues": {"type": "array", "items": _object(issue_fields, list(issue_fields))},
         "remove_ranges": {"type": "array", "items": _object(range_fields, list(range_fields))},
-        "cleaned_verbatim": {"type": "string", "description": "按保留内容重排版的逐字稿，不改写原话"},
         "review_notes": {"type": "array", "items": {"type": "string"}},
         "estimated_removed_seconds": {"type": "number", "minimum": 0},
     }
@@ -62,14 +61,15 @@ def transcript_video_cleanup_graph(*, chat: ModelChoice) -> dict[str, Any]:
     时间码不变,所以后面按逐字稿切的每一刀仍然落在原来的位置。
     """
 
-    cleanup_system = """你是一名资深口播、访谈与课程剪辑师。你会收到词级或段级时间码逐字稿，
-任务是在不改写观点、不改变事实、不打乱时间顺序的前提下，让视频更紧凑、清楚、自然。识别长停顿、
-无语义口头禅、重复表达、错误起句后重录、明显跑题和噪声词。只把高置信度且能从时间码精确定位的
-问题放入 remove_ranges；结构跳跃、可能有意的停顿、语气表达或任何含义不确定的内容只写进 issues
-和 review_notes，不自动删除。范围必须按 src_start 升序、互不重叠、src_end 大于 src_start，并在
-素材时长内。删除口头禅时只切独立词；删除停顿时在相邻有效语音两侧各保留约 0.12–0.20 秒自然呼吸。
-若重复录制同一句，保留表达最完整自然的一遍。cleaned_verbatim 只能拼接保留的原话，不得润色或
-新增内容。只输出符合 JSON Schema 的对象。"""
+    cleanup_system = """你是一名资深口播、访谈与课程剪辑师。你会收到段落级时间码逐字稿：每段有起止和正文；
+段内的长停顿在 pauses 里给出起止，停顿两边几个词的时间在 tokens 里。任务是在不改写观点、不改变事实、
+不打乱时间顺序的前提下，让视频更紧凑、清楚、自然。识别长停顿、无语义口头禅、重复表达、错误起句后重录、
+明显跑题和噪声词。只把高置信度且能从时间码精确定位的问题放入 remove_ranges：段与段之间的停顿按相邻两段
+的起止定位，段内停顿按 pauses 定位，口头禅只在 tokens 给出了它的时间时才切独立词；整句的重复、错误起句、
+跑题按整段的起止切。结构跳跃、可能有意的停顿、语气表达、没有时间可定位的口头禅或任何含义不确定的内容只写进
+issues 和 review_notes，不自动删除。范围必须按 src_start 升序、互不重叠、src_end 大于 src_start，并在
+素材时长内。删除停顿时在相邻有效语音两侧各保留约 0.12–0.20 秒自然呼吸。若重复录制同一句，保留表达最完整
+自然的一遍。只输出符合 JSON Schema 的对象。"""
 
     nodes: list[dict[str, Any]] = [
         {
@@ -150,8 +150,8 @@ def transcript_video_cleanup_graph(*, chat: ModelChoice) -> dict[str, Any]:
 口头禅策略：{{start.filler_policy}}
 最多删除原时长比例：{{start.max_removal_ratio}}
 
-下面是按原视频源时间记录的紧凑逐字稿 JSON。每段含 start/end/text；tokens 为短数组，列顺序由
-顶层 token_columns 声明（默认是 start/end/text）：
+下面是按原视频源时间记录的紧凑逐字稿 JSON。每段含 start/end/text；有段内长停顿的段另有 pauses
+（每项是停顿的起止）和 tokens（停顿两边几个词的时间，短数组，列顺序由顶层 token_columns 声明）：
 {{verbatim_transcript.timed_text}}
 
 请逐项诊断并生成安全的 remove_ranges。所有自动删除范围的总时长不得超过规定比例；无法从逐字稿
@@ -161,7 +161,7 @@ def transcript_video_cleanup_graph(*, chat: ModelChoice) -> dict[str, Any]:
                 "json_schema": _cleanup_schema(),
                 "json_schema_strict": "true",
                 "temperature": 0.15,
-                "max_tokens": 10000,
+                "max_tokens": 16000,
             },
         },
         {
@@ -174,7 +174,10 @@ def transcript_video_cleanup_graph(*, chat: ModelChoice) -> dict[str, Any]:
                 "clip_id": "{{source_on_timeline.clip_id}}",
                 "ranges": "{{cleanup_plan.json.remove_ranges}}",
                 "min_confidence": 0.8,
+                #: 超出上限时按置信度删到上限,其余交出来给人复核(skipped_ranges / skipped_note),不再整步失败。
                 "max_removal_ratio": "{{start.max_removal_ratio}}",
+                #: 整理后的逐字稿在本地由逐字稿减去删除范围拼出来(kept_text),不再让模型全文复述。
+                "segments": "{{verbatim_transcript.segments}}",
             },
         },
         {
@@ -191,7 +194,7 @@ def transcript_video_cleanup_graph(*, chat: ModelChoice) -> dict[str, Any]:
             "position": {"x": 2570, "y": 260},
             "config": {
                 "title": "视频逐字稿与智能整理已完成",
-                "body": "{{source_video.name}} 已降噪,并生成逐字稿、问题诊断和非破坏性整理版视频。",
+                "body": "{{source_video.name}} 已降噪,并生成逐字稿、问题诊断和非破坏性整理版视频。{{apply_cleanup.skipped_note}}",
             },
         },
         {
@@ -206,7 +209,9 @@ def transcript_video_cleanup_graph(*, chat: ModelChoice) -> dict[str, Any]:
                     "verbatim_transcript": "{{verbatim_transcript.text}}",
                     "timed_transcript": "{{verbatim_transcript.segments}}",
                     "cleanup_plan": "{{cleanup_plan.json}}",
+                    "cleaned_verbatim": "{{apply_cleanup.kept_text}}",
                     "applied_ranges": "{{apply_cleanup.ranges}}",
+                    "skipped_ranges": "{{apply_cleanup.skipped_ranges}}",
                     "removed_seconds": "{{apply_cleanup.removed_seconds}}",
                     "project_id": "{{cleanup_project.project_id}}",
                     "sequence_id": "{{cleanup_project.sequence_id}}",
@@ -230,7 +235,7 @@ def transcript_video_cleanup_graph(*, chat: ModelChoice) -> dict[str, Any]:
         {"id": "notice_output", "source": "done_notice", "target": "output"},
     ]
     graph = {
-        "meta": {"template_id": TRANSCRIPT_VIDEO_CLEANUP, "template_version": 4, "source": "official"},
+        "meta": {"template_id": TRANSCRIPT_VIDEO_CLEANUP, "template_version": 5, "source": "official"},
         "nodes": nodes,
         "edges": edges,
     }

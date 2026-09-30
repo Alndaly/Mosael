@@ -161,8 +161,8 @@ TEMPLATE_CATALOG: list[dict[str, Any]] = [
             "en": "Transcript-based video cleanup"
         },
         "summary": {
-            "zh": "先去除底噪，再将视频转为带时间码的逐字稿，识别停顿、口头禅与重复内容，生成裁切方案和整理版视频。保留原素材。",
-            "en": "Remove background hiss, transcribe the video with timestamps, identify pauses, fillers and repetition, then create a cut plan and a cleaned video while preserving the original."
+            "zh": "先去除底噪，再将视频转为带时间码的逐字稿，识别停顿、口头禅与重复内容，生成裁切方案和整理版视频。保留原素材。适合 30 分钟以内的口播、访谈；更长的素材先分段再整理。",
+            "en": "Remove background hiss, transcribe the video with timestamps, identify pauses, fillers and repetition, then create a cut plan and a cleaned video while preserving the original. Suited to talks and interviews up to about 30 minutes; split longer footage first."
         },
         "requires": [
             requirement(CHAT_MODEL, zh="AI 对话模型", en="Chat model"),
