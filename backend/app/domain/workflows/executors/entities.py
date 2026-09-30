@@ -225,15 +225,29 @@ def takes_reference_images(option: dict[str, Any]) -> bool:
         and bool((capabilities.get("source_limits") or {}).get(REFERENCE_ROLE))
 
 
+def automatic_reference_model(options: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """没点名时用哪个图片模型:他设的默认图片模型正好收参考图就用它,否则用第一个收参考图的。
+
+    和说话照片 / 改口型挑模型同一个先后(talking._pick_model)。此前这里只认默认:默认的图片模型只会文生图时,
+    下拉里明明列着能用的,留空却报「不收参考图」。模型下拉标「默认」的也是这一个(field_options)。
+    """
+    usable = [one for one in options if takes_reference_images(one)]
+    return next((one for one in usable if one.get("is_default")), None) or (usable[0] if usable else None)
+
+
 def _reference_model(db: Session, choice: str, actor_id: str | None) -> dict[str, Any]:
-    """用哪个图片模型:点名的那一个(`reference_image_models` 的选项 id),没点名是这个人设的默认图片模型。"""
+    """用哪个图片模型:点名的那一个(`reference_image_models` 的选项 id),没点名见 automatic_reference_model。"""
     from app.domain.generation.resolution import generation_options
 
     options = generation_options(db, "image", user_id=actor_id)
-    picked = next((one for one in options if one["id"] == choice), None) if choice else \
-        next((one for one in options if one["is_default"]), None)
+    if not choice:
+        picked = automatic_reference_model(options)
+        if picked is None:
+            raise WorkflowDomainError("wfErr_entityModelNone")
+        return picked
+    picked = next((one for one in options if one["id"] == choice), None)
     if picked is None:
-        raise WorkflowDomainError("wfErr_entityModelMissing" if choice else "wfErr_entityModelNoDefault")
+        raise WorkflowDomainError("wfErr_entityModelMissing")
     if not takes_reference_images(picked):
         raise WorkflowDomainError("wfErr_entityModelNoReferences", params={"model": picked["label"]})
     return picked
@@ -333,16 +347,20 @@ def draw_and_attach(db: Session, scope: RunScope, drawing: Drawing) -> dict[str,
 
     drawn: list[tuple[str, str]] = []
     errors: list[WorkflowDomainError] = []
-    for role, _generation, child_id in started:
-        try:
-            final = wait_for_job(child_id, release=db)
-        except WorkflowDomainError as exc:
-            #: 这一轮在停(取消)不是「这一张没画成」—— 照原样往外抛,别的几张由 wait 的收尾一并取消。
-            if exc.key == "wfErr_cancelled":
-                raise
-            errors.append(exc)
-            continue
-        drawn.extend((role, str(one)) for one in (final.result or {}).get("asset_ids") or [] if one)
+    try:
+        for role, _generation, child_id in started:
+            try:
+                final = wait_for_job(child_id, release=db)
+            except WorkflowDomainError as exc:
+                #: 这一轮在停(取消、同一张图里别的节点失败了)不是「这一张没画成」—— 照原样往外抛。
+                if exc.key == "wfErr_cancelled":
+                    raise
+                errors.append(exc)
+                continue
+            drawn.extend((role, str(one)) for one in (final.result or {}).get("asset_ids") or [] if one)
+    except BaseException:
+        _abandon([child_id for _role, _generation, child_id in started])
+        raise
     if not drawn:
         raise errors[0] if errors else WorkflowDomainError("wfErr_entityNothingDrawn")
     try:
@@ -354,6 +372,20 @@ def draw_and_attach(db: Session, scope: RunScope, drawing: Drawing) -> dict[str,
     asset_ids = [asset_id for _role, asset_id in drawn]
     return {"asset_ids": asset_ids, "asset_id": asset_ids[0], "entity_id": drawing.entity_id,
             "added": len(asset_ids), "failed": len(errors)}
+
+
+def _abandon(child_ids: list[str]) -> None:
+    """不再等的那几张一并取消。wait_for_job 停下时只取消**它正在等的那一张**,几张一起起的另外几张照样在生成、
+    照样扣费,做完了没人要。已经落了终态的不动(cancel_job_tree 自己认)。"""
+    from app.core.unit_of_work import unit_of_work
+    from app.db.models import Job
+    from app.domain.jobs import cancel_job_tree
+
+    with unit_of_work() as cleanup:
+        for child_id in child_ids:
+            job = cleanup.get(Job, child_id)
+            if job is not None:
+                cancel_job_tree(cleanup, job)
 
 
 @register("entity_angles")

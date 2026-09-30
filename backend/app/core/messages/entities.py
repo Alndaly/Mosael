@@ -106,9 +106,9 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "选的图片模型已经不在了,换一个收参考图的模型",
         "en": "The chosen image model is no longer available; pick one that takes reference images.",
     },
-    "wfErr_entityModelNoDefault": {
-        "zh": "还没有默认的图片模型 —— 选一个收参考图的模型,或者在设置里设一个默认的",
-        "en": "There's no default image model — pick one that takes reference images, or set a default in Settings.",
+    "wfErr_entityModelNone": {
+        "zh": "还没有收参考图的图片模型 —— 在设置里接一个能改图的模型(比如 Seedream 4、通义万相图像编辑)",
+        "en": "No image model that takes reference images yet — connect an image-editing model in Settings (e.g. Seedream 4).",
     },
     "wfErr_entityModelNoReferences": {
         "zh": "「{model}」不收参考图,只看文字画不出同一个 —— 换一个收参考图的模型",

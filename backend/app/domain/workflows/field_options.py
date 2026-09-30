@@ -336,13 +336,16 @@ def _entity_roles(db: Session, ctx: OptionContext) -> list[Option]:
 
 def _reference_image_models(db: Session, ctx: OptionContext) -> list[Option]:
     """收参考图的图片模型(资产格的「补全多角度」「生成表情」用):只看得到文字的模型画不出「同一个」。
-    和生成页同一份清单(generation_options),他设的默认那一个标出来 —— 留空用的就是它。"""
+    和生成页同一份清单(generation_options);留空时用的那一个标「默认」—— 和节点跑的时候同一个挑法
+    (executors.entities.automatic_reference_model)。"""
     from app.domain.generation.resolution import generation_options
-    from app.domain.workflows.executors.entities import takes_reference_images
+    from app.domain.workflows.executors.entities import automatic_reference_model, takes_reference_images
 
+    options = generation_options(db, "image", user_id=ctx.user_id)
+    automatic = automatic_reference_model(options)
     return [
-        {"value": one["id"], "label": f"{one['label']} · {t('wfOpt_defaultModel', ctx.locale)}" if one["is_default"] else one["label"]}
-        for one in generation_options(db, "image", user_id=ctx.user_id)
+        {"value": one["id"], "label": f"{one['label']} · {t('wfOpt_defaultModel', ctx.locale)}" if one is automatic else one["label"]}
+        for one in options
         if takes_reference_images(one)
     ]
 

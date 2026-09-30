@@ -235,3 +235,56 @@ def test_资产格不是一个样子_生成表情只挂在人物上_场景点了
             _check_entity_kind(db, ws, place, meta, "生成表情")
         assert caught.value.key == "boardErr_abilityNotForEntityKind"
         _check_entity_kind(db, ws, person, meta, "生成表情")
+
+
+def test_默认图片模型不收参考图_留空时用第一个收参考图的_下拉标的也是它(setup, monkeypatch) -> None:
+    """此前留空只认默认:默认的图片模型只会文生图时,下拉里明明列着能用的,留空却报「不收参考图」。
+    现在和说话照片、改口型同一个先后:默认合用就用它,否则第一个合用的。"""
+    from app.domain.generation import resolution
+
+    client, ws, fake = setup
+    options = [{**one, "is_default": one["id"] == "p1:image:t2i"} for one in OPTIONS]
+    monkeypatch.setattr(resolution, "generation_options", lambda db, kind, user_id=None: list(options))
+    entity_id = _entity(client, ws)
+    with unit_of_work() as db:
+        executors.entity_angles(db, _scope(ws), {"entity_id": entity_id})
+    assert {call["provider_profile_id"] for call in fake.calls} == {"p1"} and fake.calls[0]["model"] == "edit"
+    with unit_of_work() as db:
+        listed = field_options(db, "reference_image_models", OptionContext(workspace_id=ws, user_id=None, parent="", locale="zh"))
+    assert [one["label"] for one in listed] == ["连接 · 能改图 · 默认", "另一家 · 能改图"]
+
+    monkeypatch.setattr(resolution, "generation_options",
+                        lambda db, kind, user_id=None: [one for one in options if one["id"] == "p1:image:t2i"])
+    with unit_of_work() as db, pytest.raises(WorkflowDomainError) as caught:
+        executors.entity_angles(db, _scope(ws), {"entity_id": entity_id, "scope": "all"})
+    assert caught.value.key == "wfErr_entityModelNone"
+
+
+def test_这一轮在停_几张一起起的都取消_不只是正在等的那一张(setup, monkeypatch) -> None:
+    """wait_for_job 停下时只取消它正在等的那一张;另外几张照样在生成、照样扣费。等的是真的 wait_for_job。"""
+    from app.db.models import Job
+    from app.domain.generation import runner
+    from app.domain.workflows.executors.common import wait_for_job
+    from app.domain.workflows.run_scope import halt_scope
+
+    client, ws, _fake = setup
+    monkeypatch.setattr(executors, "wait_for_job", wait_for_job)
+    children: list[str] = []
+
+    def create(db, **kwargs):
+        job = Job(workspace_id=ws, kind="generation", status="running", created_by=None)
+        db.add(job)
+        db.flush()
+        children.append(job.id)
+        return SimpleNamespace(id=f"gen-{len(children)}"), job
+
+    monkeypatch.setattr("app.domain.generation.create_generation_job", create)
+    monkeypatch.setattr(runner, "start_generation_thread", lambda generation_id: None)
+    entity_id = _entity(client, ws)
+    with halt_scope() as halt, unit_of_work() as db:
+        halt.set()
+        with pytest.raises(WorkflowDomainError) as caught:
+            executors.entity_angles(db, _scope(ws), {"entity_id": entity_id})
+    assert caught.value.key == "wfErr_cancelled" and len(children) == 3
+    with unit_of_work() as db:
+        assert [(db.get(Job, one).status, db.get(Job, one).error_key) for one in children] == [("failed", "jobErr_cancelled")] * 3
