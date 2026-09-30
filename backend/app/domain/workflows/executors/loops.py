@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from app.domain.workflows import WorkflowDomainError, interpolate
 from app.domain.workflows.executors.registry import RunScope, register
 from app.domain.workflows.executors.common import run_body, truthy
+from app.domain.workflows.run_scope import halted
 
 #: `item` 的"没给"哨兵。loop_while 没有当前项,而 None / "" 都是合法的迭代项,不能拿来当哨兵。
 _NO_ITEM = object()
@@ -91,7 +92,10 @@ def loop_foreach(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[s
         return {nid: out for nid, out in ctx.items() if nid != "input"}
 
     if concurrency == 1 or total <= 1:
-        results = [iterate(index, item) for index, item in enumerate(items)]
+        results = []
+        for index, item in enumerate(items):
+            _stop_if_halted()
+            results.append(iterate(index, item))
     else:
         results = _iterate_concurrently(iterate, items, concurrency)
     return {"results": results, "count": len(results)}
@@ -105,8 +109,18 @@ def _concurrency(raw: Any) -> int:
     return max(1, min(value, LOOP_FOREACH_MAX_CONCURRENCY))
 
 
+def _stop_if_halted() -> None:
+    """这一轮在停(同一张图里别的节点失败了、外层被取消了),下一项就不开始。
+
+    此前循环只认**自己**的失败:兄弟节点 0.3 秒就失败了,整条工作流已经判了失败,循环照样把
+    20 项一项一项跑完、一项一项计费。停的信号由引擎立(见 workflows.run_scope)。
+    """
+    if halted():
+        raise WorkflowDomainError("wfErr_cancelled")
+
+
 class _NotStarted(Exception):
-    """前面已经有一项失败,这一项就不开始了。"""
+    """前面已经有一项失败(或这一轮在停),这一项就不开始了。"""
 
 
 def _iterate_concurrently(iterate, items: list[Any], concurrency: int) -> list[Any]:
@@ -128,7 +142,7 @@ def _iterate_concurrently(iterate, items: list[Any], concurrency: int) -> list[A
     stop = threading.Event()
 
     def guarded(index: int, item: Any) -> Any:
-        if stop.is_set():
+        if stop.is_set() or halted():
             raise _NotStarted()
         try:
             return iterate(index, item)
@@ -149,9 +163,12 @@ def _iterate_concurrently(iterate, items: list[Any], concurrency: int) -> list[A
         for future, index in futures.items()
         if future.exception() is not None and not isinstance(future.exception(), _NotStarted)
     )
+    skipped = sum(1 for future in futures if isinstance(future.exception(), _NotStarted))
     if failures:
-        skipped = sum(1 for future in futures if isinstance(future.exception(), _NotStarted))
         raise _all_failures(failures, total=len(items), skipped=skipped)
+    if skipped:
+        # 没有一项失败,却有没开始的:是这一轮在停。不能交出一份缺了几项的结果。
+        raise WorkflowDomainError("wfErr_cancelled")
     for future, index in futures.items():
         results[index] = future.result()
     return results
@@ -190,6 +207,7 @@ def loop_while(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str
     index = 0
     # Do-while: the condition references body outputs, so it can only be evaluated after a run.
     while index < max_iter:
+        _stop_if_halted()
         with _blame_iteration(index, max_iter):
             ctx = run_body("loop_while", body, {"loop": {"index": index}}, workflow_id=scope.id)
         if output_tpl:

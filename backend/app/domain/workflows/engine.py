@@ -53,7 +53,7 @@ from app.domain.workflows.executors import get_executor
 from app.domain.workflows.executors.common import connection_handed_back
 from app.domain.workflows.revisions import WorkflowRevisionError, current_workflow_revision
 from app.domain.workflows.run_outputs import OUTPUT_TEXT_LIMIT, keep_full_texts, long_texts
-from app.domain.workflows.run_scope import halt_scope
+from app.domain.workflows.run_scope import halt_scope, halted
 
 logger = logging.getLogger(__name__)
 
@@ -369,6 +369,9 @@ def execute_graph(
         return False
 
     def run_node(nid: str) -> dict[str, Any]:
+        # 排队到这一刻,这一轮(或外面哪一层)已经在停了:不开始(见 stopping)。
+        if halted():
+            raise WorkflowDomainError("wfErr_cancelled")
         node = nodes_by_id[nid]
         ntype = node_types[nid]
         with lock:
@@ -439,9 +442,17 @@ def execute_graph(
     with halt_scope() as halt, ThreadPoolExecutor(max_workers=min(MAX_PARALLEL_NODES, total)) as pool:
         futures: dict[Any, str] = {}
 
+        def stopping() -> bool:
+            """这一轮该不该再往下调度:外层工作流落了终态,或者**哪一层图立了停的信号**。
+
+            后者此前只有节点里的「等」看(common.wait_until):循环体、子图的这一层调度只看外层任务的
+            状态,于是兄弟节点失败、整条工作流已经失败之后,循环照样一项一项跑完 —— 每一项都在花钱。
+            """
+            return halted() or is_cancelled()
+
         def schedule_ready() -> None:
             nonlocal processed, cancelled
-            if is_cancelled():
+            if stopping():
                 cancelled = True
                 return
             for nid in order_ids:
@@ -464,7 +475,7 @@ def execute_graph(
 
         schedule_ready()
         while futures and error is None and not cancelled:
-            if is_cancelled():
+            if stopping():
                 cancelled = True
                 break
             completed, _ = wait(list(futures.keys()), timeout=0.5, return_when=FIRST_COMPLETED)
