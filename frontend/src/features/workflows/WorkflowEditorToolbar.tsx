@@ -85,7 +85,9 @@ export interface WorkflowEditorToolbarProps
   markers: CanvasMarker[];
   jumpToMarker: (marker: CanvasMarker) => void;
   searchEntries: CanvasSearchEntry[];
-  selectedNodeId: string | null;
+  /** 查找节点里挑中一条:跳过去(在别的层就先换层)。 */
+  jumpToSearchEntry: (entryId: string) => void;
+  selectedSearchEntry: string | null;
   setSearchHit: (hit: CanvasSearchHighlight | null) => void;
   edgeShape: EdgeShape;
   setEdgeShape: (shape: EdgeShape) => void;
@@ -149,7 +151,8 @@ export function workflowEditorToolbar({
   markers,
   jumpToMarker,
   searchEntries,
-  selectedNodeId,
+  jumpToSearchEntry,
+  selectedSearchEntry,
   setSearchHit,
   edgeShape,
   setEdgeShape,
@@ -426,8 +429,8 @@ export function workflowEditorToolbar({
       <CanvasToolbarGroup label={t("canvasViewTools")}>
         <CanvasNodeSearch
           entries={searchEntries}
-          selectedId={selectedNodeId}
-          onFocus={focusNode}
+          selectedId={selectedSearchEntry}
+          onFocus={jumpToSearchEntry}
           onHighlight={setSearchHit}
         />
         <EdgeShapeToggle value={edgeShape} onChange={setEdgeShape} />

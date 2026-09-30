@@ -487,6 +487,23 @@ describe("循环体里的就绪问题", () => {
   }, SLOW_TEST);
 });
 
+describe("查找节点", () => {
+  //: 此前只搜画布正在显示的那一层,也不认节点 id —— 站在主流程上找不到循环体里的节点,
+  //: 而运行报错、就绪清单说的恰恰是 id。
+  it("站在主流程上按 id 搜到循环体里的节点;点它进到循环体并选中它", async () => {
+    await renderEditor(LOOPED);
+    await waitFor(() => nodeEl("loop-1"));
+    fireEvent.click(screen.getByRole("button", { name: "wfNodeSearch" }));
+    fireEvent.change(await screen.findByRole("textbox", { name: "wfNodeSearch" }), { target: { value: "template-1" } });
+    const hit = await screen.findByText("体内");
+    expect(hit.closest("button")!.textContent).toContain("loop");
+    fireEvent.click(hit.closest("button")!);
+    const trail = screen.getByRole("navigation", { name: "page-trail" });
+    await waitFor(() => expect(within(trail).getByText("loop · wfLoopBody").getAttribute("aria-current")).toBe("page"), SLOW);
+    await waitFor(() => expect(nodeEl("template-1").className).toContain("selected"), SLOW);
+  }, SLOW_TEST);
+});
+
 describe("工作流列表", () => {
   const PLAIN: WorkflowGraph = {
     nodes: [

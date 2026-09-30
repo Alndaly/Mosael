@@ -38,7 +38,8 @@ import { CollaborationSheet } from "@/features/collaboration/CollaborationSheet"
 import { MarkerEditorProvider } from "@/features/markers/MarkerEditorProvider";
 import { useNodePicker } from "@/features/nodeForms/nodePicker";
 import { NodeInspector } from "@/features/workflows/NodeInspector";
-import { bodyKey, scopeContainer } from "@/features/workflows/scope";
+import { highlightAtLayer, nodeSearchEntryId, nodeSearchTargets } from "@/features/workflows/nodeSearch";
+import { bodyKey, scopeContainer, scopeId } from "@/features/workflows/scope";
 import { useCanvasPosture } from "@/features/workflows/useCanvasPosture";
 import { useWorkflowCanvasEdits } from "@/features/workflows/useWorkflowCanvasEdits";
 import { useWorkflowDisplayEdges, useWorkflowDisplayNodes } from "@/features/workflows/useWorkflowDisplayElements";
@@ -253,14 +254,29 @@ export function WorkflowEditor({
     },
     [graph.nodes, focusPosition, selectInspectorNode],
   );
-  //: 查找节点搜的是:改过的名字、类型的显示名、类型的原始值(按 `llm` 也能找到「大模型」)。
+  //: 查找节点搜整张图(每个循环体 / 子图里的也算,见 nodeSearch),搜的是:改过的名字、类型的显示名、
+  //: 类型的原始值(按 `llm` 也能找到「大模型」)、节点 id(报错和就绪清单说的就是它)。
   const searchEntries = React.useMemo(
-    () =>
-      graph.nodes.map((node) => {
-        const label = registry.get(node.type)?.label ?? node.type;
-        return { id: node.id, title: node.name || label, subtitle: label, text: [node.type] };
-      }),
-    [graph.nodes, registry],
+    () => nodeSearchTargets(rootGraph, registry, scopePath),
+    [rootGraph, registry, scopePath],
+  );
+  /** 跳到搜到的那个节点:在别的层就先换过去,等那一层的画布挂好再聚焦(同就绪清单那条)。 */
+  const jumpToSearchEntry = React.useCallback(
+    (entryId: string) => {
+      const target = searchEntries.find((one) => one.id === entryId);
+      if (!target) return;
+      if (scopeId(target.path) === scopeKey) {
+        focusNode(target.nodeId);
+        return;
+      }
+      pendingFocusRef.current = { scope: scopeId(target.path), nodeId: target.nodeId };
+      enterScope(target.path);
+    },
+    [searchEntries, scopeKey, focusNode, enterScope],
+  );
+  const layerSearchHit = React.useMemo(
+    () => highlightAtLayer(searchHit, searchEntries, scopePath),
+    [searchHit, searchEntries, scopePath],
   );
 
   const {
@@ -423,7 +439,7 @@ export function WorkflowEditor({
     markerMode,
     markersVisible,
     annotationMode,
-    searchHit,
+    searchHit: layerSearchHit,
     atRoot,
   });
 
@@ -502,7 +518,8 @@ export function WorkflowEditor({
           markers,
           jumpToMarker,
           searchEntries,
-          selectedNodeId,
+          jumpToSearchEntry,
+          selectedSearchEntry: selectedNodeId ? nodeSearchEntryId(scopePath, selectedNodeId) : null,
           setSearchHit,
           edgeShape,
           setEdgeShape,
