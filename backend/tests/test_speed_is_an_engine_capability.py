@@ -40,6 +40,7 @@ def test_speed_rides_along_to_the_worker(monkeypatch) -> None:
 
     from app.ai.runtime import tts_daemon
     from app.domain.voices import voices
+    from app.domain.voices.speech import CLONE_ENGINE
     from app.core.db import SessionLocal
     from tests.util import fresh_client
 
@@ -73,7 +74,9 @@ def test_speed_rides_along_to_the_worker(monkeypatch) -> None:
         voices._run_synthesis_body(
             voices.start_synthesis(db, text="你好", project_id=None, created_by=None,
                                    voice_id=voice["id"], clone_engine="f5-tts", speed=1.5).id,
-            voice["id"], "你好", None, engine="clone", speed=1.5, clone_engine="f5-tts",
+            #: 引擎 id 带前缀(`builtin:clone`)。写成裸名 "clone" 时这一句根本走不到 pool,断言只能靠
+            #: start_synthesis 起的后台线程赶在它之前填上 `sent` —— 整套里偶尔赶不上,测试就时红时绿。
+            voice["id"], "你好", None, engine=CLONE_ENGINE, speed=1.5, clone_engine="f5-tts",
         )
 
     assert sent.get("speed") == 1.5, sent
