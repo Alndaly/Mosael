@@ -26,6 +26,15 @@ describe("节点自己报的进度", () => {
     expect(finished[0].status).toBe("done");
     expect(finished[0].message).toBe("采样 10/20");
   });
+
+  it("跑完的那一步带着截断说明和它属于哪一次运行 —— 全文按这两样去取", () => {
+    const [step] = toSteps([
+      event("e1", "workflow.node.started", "2026-09-25T08:00:00Z", { node_id: "n1", name: "写稿" }),
+      event("e2", "workflow.node.finished", "2026-09-25T08:00:03Z", { node_id: "n1", outputs: { text: "开头…" }, truncated: { text: 3200 } }),
+    ]);
+    expect(step.truncated).toEqual({ text: 3200 });
+    expect(step.jobId).toBe("j1");
+  });
 });
 
 describe("工作流失败步骤", () => {
@@ -82,6 +91,7 @@ describe("工作流失败步骤", () => {
         name: "复制原视频",
         status: "done",
         outputs: { sequence_id: "s1" },
+        jobId: "j1",
       },
     ]);
   });

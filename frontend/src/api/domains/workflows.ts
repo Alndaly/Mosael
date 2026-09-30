@@ -115,6 +115,14 @@ export function listWorkflowRuns(workflowId: string): Promise<Job[]> {
   return api<Job[]>(`/api/workflows/${workflowId}/runs`);
 }
 
+export type WorkflowRunOutput = components["schemas"]["WorkflowRunOutputOut"];
+
+/** 一次运行里某个节点某个输出的全文。事件快照里长文字只留了开头(事件的 `truncated` 说截了哪几个)。 */
+export function getWorkflowRunOutput(jobId: string, nodeId: string, key: string): Promise<WorkflowRunOutput> {
+  const path = [jobId, "outputs", nodeId, key].map(encodeURIComponent).join("/");
+  return api<WorkflowRunOutput>(`/api/workflows/runs/${path}`);
+}
+
 /** 不可变工作流修订，最新版本在前。 */
 export function listWorkflowRevisions(workflowId: string): Promise<WorkflowRevision[]> {
   return api<WorkflowRevision[]>(`/api/workflows/${workflowId}/revisions`);

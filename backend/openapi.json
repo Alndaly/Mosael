@@ -12182,6 +12182,67 @@
         }
       }
     },
+    "/api/workflows/runs/{job_id}/outputs/{node_id}/{key}": {
+      "get": {
+        "tags": [
+          "workflows"
+        ],
+        "summary": "Run Output",
+        "description": "某次运行里某个节点某个输出的**全文**。事件快照里长文字只留了开头(见 domain/workflows/run_outputs),\n「本次产出」的复制 / 下载来这里取完整的那一份。",
+        "operationId": "run_output_api_workflows_runs__job_id__outputs__node_id___key__get",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          },
+          {
+            "name": "node_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Node Id"
+            }
+          },
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowRunOutputOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/workflows/{workflow_id}/ai-edit": {
       "post": {
         "tags": [
@@ -35115,6 +35176,20 @@
           "created_at"
         ],
         "title": "WorkflowRevisionOut"
+      },
+      "WorkflowRunOutputOut": {
+        "properties": {
+          "value": {
+            "type": "string",
+            "title": "Value"
+          }
+        },
+        "type": "object",
+        "required": [
+          "value"
+        ],
+        "title": "WorkflowRunOutputOut",
+        "description": "一次运行里某个节点某个输出的全文(事件快照里截断了的那一段)。"
       },
       "WorkflowRunRequest": {
         "properties": {

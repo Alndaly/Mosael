@@ -1,16 +1,20 @@
 import React from "react";
-import { Check, ChevronRight, Copy } from "lucide-react";
+import { Check, ChevronRight, Copy, Download } from "lucide-react";
+import { toast } from "sonner";
 
+import { getWorkflowRunOutput } from "@/api/client";
+import { errorText } from "@/api/errorMessage";
 import { useI18n } from "@/app/preferences";
 import type { RegistryLike } from "@/features/workflows/analyze";
 import { OutputAssets } from "@/features/workflows/OutputAssets";
 import { assetOutputs, outputRows, STEP_STATUS_LABELS, type OutputRow, type Step } from "@/features/workflows/runSteps";
 import { WorkflowFailureDetails } from "@/components/app/FailureDetails";
+import { saveBlobToDisk } from "@/lib/download";
 
 /**
  * 一次运行里,某个节点**真正产出了什么**。
  *
- * 这份数据一直都在(`workflow.node.finished` 事件带着完整的 outputs),但画布只从里面挖素材 id,
+ * 这份数据一直都在(`workflow.node.finished` 事件带着 outputs;长文字只留开头,全文另取),但画布只从里面挖素材 id,
  * 别的一概丢掉。于是 LLM 出的那段文案、json_extract 抽出来的值、模板拼好的字符串 —— 跑完了
  * 也看不见,想知道它到底给了什么,只能在下一个节点上再接一个"通知"把它打出来。
  *
@@ -21,7 +25,8 @@ import { WorkflowFailureDetails } from "@/components/app/FailureDetails";
 /** 值太长就先折起来:一段两千字的模型回复会把检查器顶成一条竖着的绳子。 */
 const INLINE_LIMIT = 240;
 
-function CopyButton({ value }: { value: string }) {
+/** 复制:值在手里就直接给;被截断的那种给一个「去取全文」的动作 —— 复制到的得是全文,不是开头。 */
+function CopyButton({ value }: { value: string | (() => Promise<string>) }) {
   const t = useI18n();
   const [done, setDone] = React.useState(false);
   return (
@@ -29,8 +34,13 @@ function CopyButton({ value }: { value: string }) {
       type="button"
       className="shrink-0 cursor-pointer rounded-md border-0 bg-transparent p-1 text-muted-foreground transition-colors hover:text-foreground"
       title={t("copy")}
-      onClick={() => {
-        void navigator.clipboard.writeText(value);
+      onClick={async () => {
+        try {
+          await navigator.clipboard.writeText(typeof value === "string" ? value : await value());
+        } catch (error) {
+          toast.error(t("wfOutputFullFailed"), { description: errorText(error) });
+          return;
+        }
         setDone(true);
         window.setTimeout(() => setDone(false), 1200);
       }}
@@ -70,7 +80,14 @@ export function outputSummary(
   return null;
 }
 
-function ValueRow({ row }: { row: OutputRow }) {
+/** 快照里截断了的那一格:全文多少字,和去取全文的动作。 */
+interface FullText {
+  chars: number;
+  load: () => Promise<string>;
+}
+
+function ValueRow({ row, full }: { row: OutputRow; full?: FullText }) {
+  const t = useI18n();
   const text = outputText(row.value);
   const long = text.length > INLINE_LIMIT;
   return (
@@ -83,8 +100,31 @@ function ValueRow({ row }: { row: OutputRow }) {
           <span className="shrink-0 font-mono text-ui-2xs text-muted-foreground">{row.key}</span>
         )}
         <span className="ml-auto" />
-        <CopyButton value={text} />
+        {full && (
+          <button
+            type="button"
+            className="shrink-0 cursor-pointer rounded-md border-0 bg-transparent p-1 text-muted-foreground transition-colors hover:text-foreground"
+            title={t("wfOutputDownload")}
+            aria-label={t("wfOutputDownload")}
+            onClick={async () => {
+              try {
+                saveBlobToDisk(new Blob([await full.load()], { type: "text/plain;charset=utf-8" }), `${row.key}.txt`);
+              } catch (error) {
+                toast.error(t("wfOutputFullFailed"), { description: errorText(error) });
+              }
+            }}
+          >
+            <Download size={11} />
+          </button>
+        )}
+        <CopyButton value={full ? full.load : text} />
       </div>
+      {full && (
+        //: 事件里只存了开头(见后端 run_outputs):不说的话,用户以为看到的、复制到的就是全部。
+        <span className="text-ui-2xs text-warning" data-output-truncated="">
+          {t("wfOutputTruncated").replace("{n}", String(full.chars))}
+        </span>
+      )}
       {long ? (
         // 折起来的那一份仍然要能一眼看见开头 —— 只给个"展开"按钮的话,用户得点开才知道
         // 值不值得点开。
@@ -128,9 +168,15 @@ export function RunOutputs({ registry, nodeType, step }: { registry: RegistryLik
       )}
       <WorkflowFailureDetails details={step.details} />
       {assets.length > 0 && <OutputAssets items={assets} density="panel" className="gap-2" />}
-      {scalars.map((row) => (
-        <ValueRow key={row.key} row={row} />
-      ))}
+      {scalars.map((row) => {
+        const chars = step.truncated?.[row.key];
+        const jobId = step.jobId;
+        const full =
+          chars != null && jobId
+            ? { chars, load: async () => (await getWorkflowRunOutput(jobId, step.nid, row.key)).value }
+            : undefined;
+        return <ValueRow key={row.key} row={row} full={full} />;
+      })}
       {assets.length === 0 && scalars.length === 0 && !step.error && (
         <span className="text-ui-xs font-normal text-muted-foreground">{t("wfRunNoOutputs")}</span>
       )}

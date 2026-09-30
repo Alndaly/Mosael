@@ -4153,6 +4153,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/workflows/runs/{job_id}/outputs/{node_id}/{key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Run Output
+         * @description 某次运行里某个节点某个输出的**全文**。事件快照里长文字只留了开头(见 domain/workflows/run_outputs),
+         *     「本次产出」的复制 / 下载来这里取完整的那一份。
+         */
+        get: operations["run_output_api_workflows_runs__job_id__outputs__node_id___key__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/workflows/{workflow_id}/ai-edit": {
         parameters: {
             query?: never;
@@ -13608,6 +13629,14 @@ export interface components {
              */
             created_at: string;
         };
+        /**
+         * WorkflowRunOutputOut
+         * @description 一次运行里某个节点某个输出的全文(事件快照里截断了的那一段)。
+         */
+        WorkflowRunOutputOut: {
+            /** Value */
+            value: string;
+        };
         /** WorkflowRunRequest */
         WorkflowRunRequest: {
             /** Params */
@@ -22238,6 +22267,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["JobOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    run_output_api_workflows_runs__job_id__outputs__node_id___key__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+                node_id: string;
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowRunOutputOut"];
                 };
             };
             /** @description Validation Error */

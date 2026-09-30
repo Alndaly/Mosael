@@ -68,6 +68,12 @@ class WorkflowRunRequest(ApiModel):
     params: dict = Field(default_factory=dict)
 
 
+class WorkflowRunOutputOut(ApiModel):
+    """一次运行里某个节点某个输出的全文(事件快照里截断了的那一段)。"""
+
+    value: str
+
+
 class WorkflowFieldOptionOut(ApiModel):
     """节点字段的一个动态选项。"""
 

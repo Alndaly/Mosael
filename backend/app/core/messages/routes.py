@@ -386,6 +386,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "工作流修订不存在",
         "en": "Workflow revision not found.",
     },
+    "routeErr_workflowRunOutputNotFound": {
+        "zh": "这次运行没有存下这个输出的全文",
+        "en": "This run has no full text stored for that output.",
+    },
     "routeErr_judgeHostCodeNeedsAdmin": {
         "zh": "把「本机执行代码」交给判断者需要这台机器的管理员权限 —— 代码在本机不隔离地跑,承担风险的是这台机器的主人",
         "en": "Letting the judge approve \"run code on this machine\" requires admin rights on this machine — the code runs unsandboxed here, and the risk falls on the machine's owner.",

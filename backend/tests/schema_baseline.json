@@ -821,6 +821,14 @@
     "source",
     "workflow_id"
   ],
+  "workflow_run_outputs": [
+    "created_at",
+    "id",
+    "job_id",
+    "node_id",
+    "output_key",
+    "value"
+  ],
   "workflows": [
     "created_at",
     "description",

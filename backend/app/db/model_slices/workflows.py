@@ -68,3 +68,25 @@ class WorkflowRevisionAttestation(Base):
     revision_id: Mapped[str] = mapped_column(ForeignKey("workflow_revisions.id", ondelete="CASCADE"), nullable=False, index=True)
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
+
+
+class WorkflowRunOutput(Base):
+    """一次运行里某个节点某个输出的**全文** —— 只存事件快照截断了的那些长文字。
+
+    `workflow.node.finished` 事件和 `job.result` 里存的是有界快照(长文字只留开头):它们随运行列表、
+    事件流一起反复下发,不能无界。但用户要复制 / 下载的是那段模型回复本身,不是它的开头。全文单独
+    一张表,界面按需取一段(见 routes/workflows 的 run_output),不拖着别的列表一起变重。
+    随任务一起删(外键级联)。
+    """
+
+    __tablename__ = "workflow_run_outputs"
+    __table_args__ = (
+        UniqueConstraint("job_id", "node_id", "output_key", name="uq_workflow_run_outputs_job_node_key"),
+    )
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    job_id: Mapped[str] = mapped_column(ForeignKey("jobs.id", ondelete="CASCADE"), nullable=False, index=True)
+    node_id: Mapped[str] = mapped_column(String(120), nullable=False)
+    output_key: Mapped[str] = mapped_column(String(120), nullable=False)
+    value: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)

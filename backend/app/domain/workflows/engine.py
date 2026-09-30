@@ -49,6 +49,7 @@ from app.domain.workflows import (
 from app.domain.workflows.binding import apply_data_edges, check_number_fields, interpolate_node_config
 from app.domain.workflows.executors import get_executor
 from app.domain.workflows.revisions import WorkflowRevisionError, current_workflow_revision
+from app.domain.workflows.run_outputs import OUTPUT_TEXT_LIMIT, keep_full_texts, long_texts
 from app.domain.workflows.run_scope import halt_scope
 
 logger = logging.getLogger(__name__)
@@ -320,6 +321,15 @@ def execute_graph(
         if has_job:
             event(kind, {"node_id": nid, "name": node_label(nid), "name_key": node_label_key(nid), **fields})
 
+    def node_finished(nid: str, outputs: dict[str, Any]) -> None:
+        """节点跑完:事件里是有界的快照。被截断的长文字另存全文(见 run_outputs),事件里的
+        `truncated` 说哪几个被截了、全文多少字 —— 界面据此标明「已截断」,复制 / 下载去取全文。"""
+        texts = long_texts(outputs)
+        if has_job and texts:
+            keep_full_texts(db, job.id, nid, texts)
+        truncated = {"truncated": {key: len(value) for key, value in texts.items()}} if texts else {}
+        node_event("workflow.node.finished", nid, outputs=_trim_outputs(outputs), **truncated)
+
     def is_entry(nid: str) -> bool:
         # start 类型永远是入口;子图里无入边的根也是入口。
         if node_types.get(nid) == "start":
@@ -459,7 +469,7 @@ def execute_graph(
                     executed.add(nid)
                     done.add(nid)
                 processed += 1
-                node_event("workflow.node.finished", nid, outputs=_trim_outputs(outputs))
+                node_finished(nid, outputs)
                 if has_job:
                     job.progress = processed / total
                     db.commit()
@@ -480,7 +490,7 @@ def execute_graph(
                 if failure is not None:
                     node_event("workflow.node.failed", pending_nid, **_failure_payload(failure))
                 else:
-                    node_event("workflow.node.finished", pending_nid, outputs=_trim_outputs(future.result()))
+                    node_finished(pending_nid, future.result())
 
     cancelled = cancelled or is_cancelled()
     if error is not None and not cancelled:
@@ -548,7 +558,7 @@ def _trim_output_value(value: Any, *, depth: int = 0) -> Any:
     的真实元素，并递归限制字符串、对象宽度和深度；体积仍有上限，检查器也终于能逐项展开。
     """
     if isinstance(value, str):
-        limit = 2000 if depth == 0 else 500
+        limit = OUTPUT_TEXT_LIMIT if depth == 0 else 500
         return value if len(value) <= limit else value[:limit] + "…"
     if isinstance(value, (int, float, bool)) or value is None:
         return value

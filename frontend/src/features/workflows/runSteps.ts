@@ -20,6 +20,10 @@ export type Step = {
   ms?: number;
   startAt?: number;
   outputs?: Record<string, unknown>;
+  /** 快照里截断了的输出 → 全文多少字。全文按 `jobId` 去取(见 getWorkflowRunOutput)。 */
+  truncated?: Record<string, number>;
+  /** 这一步属于哪一次运行。 */
+  jobId?: string;
   error?: string;
   details?: Record<string, unknown>;
   /** 跑着的时候节点自己报的进度(插件跑一张 ComfyUI 工作流:「采样 12/20」)。跑完就不再显示。 */
@@ -63,6 +67,7 @@ export function toSteps(events: TaskEvent[]): Step[] {
       node_id?: string;
       name?: string;
       outputs?: Record<string, unknown>;
+      truncated?: Record<string, number>;
       error?: string;
       details?: Record<string, unknown>;
       progress?: number;
@@ -82,6 +87,8 @@ export function toSteps(events: TaskEvent[]): Step[] {
       }
       s.status = "done";
       s.outputs = p.outputs;
+      s.truncated = p.truncated;
+      s.jobId = e.job_id;
       if (s.startAt != null && e.created_at) s.ms = Math.max(0, parseServerTime(e.created_at).getTime() - s.startAt);
     } else if (e.type === "workflow.node.failed") {
       let s = byNode.get(nid);
