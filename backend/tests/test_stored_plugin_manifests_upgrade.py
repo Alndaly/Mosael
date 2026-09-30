@@ -61,6 +61,41 @@ def test_存着老清单的包_启动对一遍之后插件页打得开_镜像配
     assert "dev.mosael.manim" in {one["id"] for one in response.json()}
 
 
+#: Remotion 0.2.0 的清单:镜像是插件自己起名的 `NPM_REGISTRY`,不是宿主占着的名字,所以解析得过 ——
+#: 但连接里填的值已经搬成连接自己的下载源,这一格留着就是同一个设置的第二处,还显示成空的。
+REMOTION_0_2 = {
+    "id": "dev.mosael.remotion",
+    "manifest_version": 2,
+    "name": "Remotion",
+    "version": "0.2.0",
+    "runtime": {"kind": "process", "entry": ["python3", "tools/main.py"]},
+    "instance": {"config": [
+        {"key": "NPM_REGISTRY", "label": "npm 镜像", "type": "string"},
+        {"key": "BROWSER_EXECUTABLE", "label": "浏览器路径", "type": "string"},
+    ]},
+}
+
+
+def test_Remotion老版的npm镜像框换成下载源_别的包里同名的键不碰() -> None:
+    fresh_client()
+    other = {**REMOTION_0_2, "id": "dev.example.other", "name": "Other"}
+    with SessionLocal() as db:
+        db.add(PluginPackage(id="dev.mosael.remotion", name="Remotion", version="0.2.0",
+                             manifest={**REMOTION_0_2, PATH_KEY: "/plugins/dev.mosael.remotion"}))
+        db.add(PluginPackage(id="dev.example.other", name="Other", version="0.2.0", manifest={**other, PATH_KEY: "/o"}))
+        db.commit()
+
+    reconcile()
+
+    with SessionLocal() as db:
+        remotion = manifest_of(db.get(PluginPackage, "dev.mosael.remotion"))
+        untouched = manifest_of(db.get(PluginPackage, "dev.example.other"))
+    assert remotion.package_sources == ["npm"]
+    assert [field.key for field in remotion.config] == ["BROWSER_EXECUTABLE"]
+    assert untouched.package_sources == []
+    assert [field.key for field in untouched.config] == ["NPM_REGISTRY", "BROWSER_EXECUTABLE"]
+
+
 def test_当前版本的记录不动() -> None:
     fresh_client()
     current = {**MANIM_0_2, "manifest_version": MANIFEST_VERSION, "instance": {}, PATH_KEY: "/x"}

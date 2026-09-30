@@ -16,6 +16,7 @@ from __future__ import annotations
 import json
 import logging
 import shutil
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -33,7 +34,7 @@ LEGACY_FILENAMES = ("plugin.json",)
 
 #: 当前清单版本。加一个新的迁移步骤就 +1,并把它加进 _STEPS。装好的包存着的清单也跟着升(见
 #: db/migrations 的 `upgrade-stored-plugin-manifests`),所以**收紧清单规则时,老清单要能被某一步改合格**。
-MANIFEST_VERSION = 2
+MANIFEST_VERSION = 3
 
 
 def _to_runtime_block(raw: dict[str, Any]) -> bool:
@@ -116,6 +117,28 @@ def _package_mirror_fields_to_sources(raw: dict[str, Any]) -> bool:
     的库,插件页、智能体会话一打开就报「会盖掉宿主给插件的环境变量」。删掉这一格、声明它要的那种源,
     插件读到的还是同一个变量,只是值由宿主给。连接里填过的地址由数据库迁移搬成连接自己的覆盖。
     """
+    return _fields_to_sources(
+        raw, lambda key: next((name for name, keys in PACKAGE_SOURCE_ENV.items() if key.upper() in keys), None)
+    )
+
+
+#: 老版官方插件自带的镜像配置项:键不是宿主占着的名字(上一步认不出),意思却一样。连接里填过的值已由
+#: 数据库迁移 `migrate-plugin-connections-choose-package-sources` 搬成连接自己的下载源 —— 清单里这一格
+#: 不删,同一个设置就有两处,旧的那格还显示成空的(用户截图:Remotion 0.2.0 的「npm 镜像」还要手填)。
+#: **写死包 id 与键**:和那条数据库迁移一样,是历史的快照。
+_LEGACY_MIRROR_FIELDS = {("dev.mosael.remotion", "NPM_REGISTRY"): "npm"}
+
+
+def _legacy_mirror_fields_to_sources(raw: dict[str, Any]) -> bool:
+    """Remotion 0.2 的 `NPM_REGISTRY` 配置项 → `package_sources: ["npm"]`。
+
+    老代码只在 `NPM_REGISTRY` 非空时才加 `--registry`;这一格没了,npm 自己认宿主注入的 `npm_config_registry`。"""
+    package_id = str(raw.get("id") or "")
+    return _fields_to_sources(raw, lambda key: _LEGACY_MIRROR_FIELDS.get((package_id, key)))
+
+
+def _fields_to_sources(raw: dict[str, Any], source_of: Callable[[str], str | None]) -> bool:
+    """配置 / 凭据里 `source_of(键)` 认得出的格子删掉,改声明它们要的那几种源。→ 是否改动过。"""
     instance = raw.get("instance")
     if not isinstance(instance, dict):
         return False
@@ -126,8 +149,7 @@ def _package_mirror_fields_to_sources(raw: dict[str, Any]) -> bool:
             continue
         kept = []
         for spec in fields:
-            key = str(spec.get("key") or "").upper() if isinstance(spec, dict) else ""
-            source = next((name for name, keys in PACKAGE_SOURCE_ENV.items() if key in keys), None)
+            source = source_of(str(spec.get("key") or "")) if isinstance(spec, dict) else None
             if source is None:
                 kept.append(spec)
             elif source not in wanted:
@@ -149,6 +171,7 @@ _STEPS = (
     _to_tools_object,
     _drop_runtime_cache,
     _package_mirror_fields_to_sources,
+    _legacy_mirror_fields_to_sources,
 )
 
 
