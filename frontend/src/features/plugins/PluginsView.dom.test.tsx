@@ -12,21 +12,17 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 //: 路径在 api/domains/plugins 里,界面调的是**有名字的函数** —— 所以这里打桩的也是它们,
 //: 断言的是"带着哪个连接、哪个工具、哪些参数",而不是一串拼出来的 URL。
-const { listPluginCredentials, savePluginCredentials, invokePluginTool, listAssets, parseDocument } = vi.hoisted(() => ({
+const { listPluginCredentials, savePluginCredentials, invokePluginTool, listAssets } = vi.hoisted(() => ({
   listPluginCredentials: vi.fn(),
   savePluginCredentials: vi.fn(),
   invokePluginTool: vi.fn(),
   listAssets: vi.fn(),
-  parseDocument: vi.fn(),
 }));
 vi.mock("@/api/client", () => ({
   listPluginCredentials,
   savePluginCredentials,
   invokePluginTool,
   listAssets,
-  parseDocument,
-  denoiseAsset: vi.fn(),
-  separateAssetAudio: vi.fn(),
   fetchWorkflowFieldOptions: vi.fn().mockResolvedValue([]),
   startPluginOauth: vi.fn(),
   finishPluginOauth: vi.fn(),
@@ -76,8 +72,6 @@ beforeEach(() => {
     { id: "vid-1", name: "成片.mp4", original_filename: "c.mp4", kind: "video" },
     { id: "doc-1", name: "协议.pdf", original_filename: "d.pdf", kind: "document" },
   ]);
-  parseDocument.mockReset();
-  parseDocument.mockResolvedValue({ status: "parsing" });
   savePluginCredentials.mockReset();
   invokePluginTool.mockReset();
   listPluginCredentials.mockResolvedValue([
@@ -460,13 +454,14 @@ describe("清单里的说明带 markdown", () => {
   });
 });
 
-describe("只替宿主做事的插件", () => {
-  //: MinerU 这类插件认领「文档解析」,那个工具只给宿主在解析任务里调,不进工具表。此前卡片上写着
-  //: 「已开启 0 / 0 个工具」「启用并授权插件后会显示可调用工具」—— 插件明明启用、授权了,读起来像坏了。
+describe("认领了宿主能力的工具", () => {
+  //: ADR 0033:MinerU 的「用 MinerU 解析文档」是一个普通工具 —— 在工具表里、能勾、智能体和工作流点得到;
+  //: 它认领「文档解析」只是加在它上面的一份契约。此前它是一张「由 Mosael 调用」的卡片,勾不了(用户:「这类工具
+  //: 本身是要在智能体和工作流的工具表里开放的」)。
   const pkg = {
     id: "dev.mosael.mineru",
     name: "MinerU 文档解析",
-    version: "1.1.0",
+    version: "1.3.0",
     kind: "process",
     multiple: false,
     permissions: [],
@@ -484,9 +479,10 @@ describe("只替宿主做事的插件", () => {
     config: {},
     blocked_reason: "",
     authorization: "",
-    tools: [],
-    host_tools: [{
-      name: "mineru_parse", label: "用 MinerU 解析文档", description: "把一份文档交给 MinerU 解析成 Markdown", provides: ["document_parse"],
+    tools: [{
+      name: "mineru_parse", label: "用 MinerU 解析文档", description: "把一份文档交给 MinerU 解析成 Markdown",
+      read_only: false, effects: "external", exposed: false, provides: ["document_parse"],
+      form: { file: { type: "template", data_type: "asset", media: "document", label: "文档", required: true } },
       //: 「用在哪」是后端从能力表现算的(ADR 0032 §4),界面照着列,不自己写一句。
       used_by: [
         { capability: "document_parse", kind: "app", label: "文档详情 → 重新解析" },
@@ -495,71 +491,26 @@ describe("只替宿主做事的插件", () => {
       ],
     }],
     capability_status: {},
-  } as PluginInstance;
+  } as unknown as PluginInstance;
 
-  it("说它替宿主做什么,不摆一张空的勾选表;只给 Mosael 调的工具照样列出来、写着在哪用", () => {
+  it("在工具表里,和别的工具一样能勾;行上标着它认领的能力", () => {
     wrap(<ConnectionCard pkg={pkg} instance={instance} workspaceId="w1" />);
-    expect(screen.getByText("pluginHostCapabilityDesc")).toBeTruthy();
-    expect(screen.queryByText("pluginExposedCount")).toBeNull();
-    expect(screen.queryByText("pluginToolsNotFetched")).toBeNull();
-    //: 用户截图:「mineru 这里为何还是没有工具列表」—— 它唯一的工具只给宿主调,此前整块不显示。
-    const row = expandHostTool("mineru_parse");
-    expect(row.textContent).toContain("用 MinerU 解析文档");
-    //: 用户问「为何这个列表不是动态的」:用在哪按接口给的逐条列,页面、工作流、智能体各一条。
-    const uses = [...row.querySelectorAll<HTMLElement>("[data-capability-use]")];
+    expect(screen.getByText("pluginExposedCount")).toBeTruthy();
+    expect(screen.queryByText("pluginHostCapabilityDesc")).toBeNull();
+    const toggle = screen.getByRole("button", { name: /用 MinerU 解析文档/ });
+    expect(screen.getByRole("checkbox", { name: "mineru_parse" })).toBeTruthy();
+    expect(toggle.querySelector("[data-tool-capability='document_parse']")).toBeTruthy();
+  });
+
+  it("展开是「用在哪」和试跑表单 —— 宿主的那些入口调的也是它", () => {
+    wrap(<ConnectionCard pkg={pkg} instance={instance} workspaceId="w1" />);
+    expect(document.querySelector("[data-capability-use]")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /用 MinerU 解析文档/ }));
+    const uses = [...document.querySelectorAll<HTMLElement>("[data-capability-use]")];
     expect(uses.map((one) => one.dataset.capabilityUse)).toEqual(["app", "workflow", "agent"]);
     expect(uses[1].textContent).toContain("文档转 Markdown");
-    expect(row.querySelector("[data-host-tool-unused]")).toBeNull();
+    expect(screen.getByRole("button", { name: /运行|runTool/ })).toBeTruthy();
   });
-
-  it("接口说没有地方用到时直说,不留一块空白", () => {
-    const unused = { ...instance, host_tools: [{ ...instance.host_tools![0], used_by: [] }] };
-    wrap(<ConnectionCard pkg={pkg} instance={unused as PluginInstance} workspaceId="w1" />);
-    expect(expandHostTool("mineru_parse").querySelector("[data-host-tool-unused]")?.textContent).toBe("pluginHostToolUnused");
-  });
-
-  it("插件页就能试一下:只列文档,走的是文档重新解析那一条路、点名这个连接", async () => {
-    wrap(<ConnectionCard pkg={pkg} instance={instance} workspaceId="w1" />);
-    const trial = expandHostTool("mineru_parse").querySelector<HTMLElement>("[data-host-tool-try='document_parse']")!;
-    fireEvent.click(within(trial).getByRole("button", { name: /pluginHostTryPick/ }));
-    expect(await screen.findByRole("option", { name: "协议.pdf" })).toBeTruthy();
-    expect(screen.queryByRole("option", { name: "海边.png" })).toBeNull();
-    fireEvent.click(screen.getByRole("option", { name: "协议.pdf" }));
-    fireEvent.click(within(trial).getByRole("button", { name: /pluginHostTry$/ }));
-    await waitFor(() => expect(parseDocument).toHaveBeenCalledWith("doc-1", "m1"));
-    expect(await within(trial).findByText("pluginHostTryParsing")).toBeTruthy();
-    expect(within(trial).getByRole("button", { name: "pluginHostTryOpen" })).toBeTruthy();
-  });
-
-  it("连接还用不了时不给「试一下」—— 原因卡片抬头已经说了", () => {
-    const blocked = { ...instance, blocked_reason: "还没填 MinerU 的 Token" };
-    wrap(<ConnectionCard pkg={pkg} instance={blocked as PluginInstance} workspaceId="w1" />);
-    //: 展开了再看:收着的行里本来就没有「试一下」,不展开这条断言什么也没验。
-    const row = expandHostTool("mineru_parse");
-    expect(row.querySelector("[data-capability-use]")).toBeTruthy();
-    expect(row.querySelector("[data-host-tool-try]")).toBeNull();
-  });
-
-  it("和开放的工具同一种行:收着时一行名字 + 说明,左边一把锁代替勾,点开才是用在哪和试一下", () => {
-    //: 用户截图:「mineru 插件的这个工具的样式为何和别的插件的工具不一样」—— 此前是一张常开的卡片,
-    //: 还露着裸的工具键名。
-    wrap(<ConnectionCard pkg={pkg} instance={instance} workspaceId="w1" />);
-    const row = document.querySelector<HTMLElement>("[data-host-tool='mineru_parse']")!;
-    const toggle = within(row).getByRole("button", { expanded: false });
-    expect(toggle.textContent).toContain("用 MinerU 解析文档");
-    expect(toggle.textContent).toContain("pluginHostToolBadge");
-    expect(row.textContent).not.toContain("mineru_parse");
-    expect(within(row).queryByRole("checkbox")).toBeNull();
-    expect(row.querySelector("[data-capability-use]")).toBeNull();
-    fireEvent.click(toggle);
-    expect(row.querySelector("[data-capability-use]")).toBeTruthy();
-  });
-
-  function expandHostTool(name: string): HTMLElement {
-    const row = document.querySelector<HTMLElement>(`[data-host-tool='${name}']`)!;
-    fireEvent.click(within(row).getByRole("button", { expanded: false }));
-    return row;
-  }
 });
 
 describe("MCP 连接的工具表是空的", () => {

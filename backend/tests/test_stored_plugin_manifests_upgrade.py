@@ -116,3 +116,27 @@ def test_磁盘上的老清单扫描时走同一串步骤(tmp_path: Path) -> Non
     assert raw["package_sources"] == ["pypi"]
     assert [one["key"] for one in raw["instance"]["config"]] == ["UNRESTRICTED_CODE"]
     assert raw["manifest_version"] == MANIFEST_VERSION
+
+
+def test_认领调用类能力的工具_素材入参补成契约的形状() -> None:
+    """ADR 0033:这些工具此前只经宿主调,宿主把副本路径直接塞进 `file`,入参上用不着标记;现在它们是普通工具,
+    智能体、工作流按 `format: asset` 才知道那一格交一份素材。已装的老清单在启动时补上,不然解析不过。"""
+    fresh_client()
+    old = {
+        "id": "dev.example.asr", "manifest_version": 3, "name": "ASR", "version": "0.1.0",
+        "provides": ["transcription"], "runtime": {"kind": "process", "entry": ["python3", "main.py"]},
+        "tools": {"declare": [{"name": "hear", "provides": ["transcription"], "input_schema": {
+            "type": "object", "properties": {"file": {"type": "string", "x-media": "audio"}, "language": {"type": "string"}}}}]},
+    }
+    with SessionLocal() as db:
+        db.add(PluginPackage(id="dev.example.asr", name="ASR", version="0.1.0", manifest={**old, PATH_KEY: "/a"}))
+        db.commit()
+    with SessionLocal() as db, pytest.raises(ManifestError):
+        manifest_of(db.get(PluginPackage, "dev.example.asr"))
+
+    reconcile()
+
+    with SessionLocal() as db:
+        manifest = manifest_of(db.get(PluginPackage, "dev.example.asr"))
+    file = manifest.declared_tools[0]["input_schema"]["properties"]["file"]
+    assert file == {"type": "string", "format": "asset", "x-media": ["audio", "video"], "x-audio": "speech"}

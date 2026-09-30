@@ -66,6 +66,18 @@ def test_清单解析按当时的语言挑名字() -> None:
          "pluginErr_manifestReservedKey"),
         ({"id": "a", "version": "1", "name": "n", "tools": {"declare": [{"name": "a.b"}]}},
          "pluginErr_manifestBadToolName"),
+        # 认领调用类能力的工具是普通工具(ADR 0033):素材入参要按契约写,智能体、工作流才知道那一格交一份素材。
+        ({"id": "a", "version": "1", "name": "n", "provides": ["document_parse"], "runtime": {"kind": "process", "entry": "m.py"},
+          "tools": {"declare": [{"name": "p", "provides": ["document_parse"],
+                                 "input_schema": {"type": "object", "properties": {"file": {"type": "string"}}}}]}},
+         "pluginErr_manifestCapabilityContract"),
+        ({"id": "a", "version": "1", "name": "n", "provides": ["transcription"], "runtime": {"kind": "process", "entry": "m.py"},
+          "tools": {"declare": [{"name": "p", "provides": ["transcription"], "input_schema": {"type": "object", "properties": {
+              "file": {"type": "string", "format": "asset", "x-media": ["audio", "video"], "x-audio": "original"}}}}]}},
+         "pluginErr_manifestCapabilityContract"),
+        ({"id": "a", "version": "1", "name": "n", "tools": {"declare": [{"name": "p", "input_schema": {
+            "type": "object", "properties": {"f": {"type": "string", "format": "asset", "x-audio": "mp3"}}}}]}},
+         "pluginErr_manifestBadAudioPrepare"),
     ],
 )
 def test_清单的硬规矩(raw: dict, key: str) -> None:

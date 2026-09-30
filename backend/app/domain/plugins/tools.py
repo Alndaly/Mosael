@@ -11,25 +11,33 @@ import re
 import time
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.i18n import tr
+from app.core.i18n import LocalizedError, tr
 from app.db.models import PluginInstance, PluginInvocation, PluginPackage
 from app.domain.effects import plugin_tool_effects
 from app.domain.jobs import PLUGIN_SLOTS, report_progress
 from app.domain.plugins import artifacts, egress as plugin_egress, inputs as plugin_inputs, instances as inst, state as plugin_state
 from app.domain.plugins.artifacts import ArtifactError, cleanup_scratch_dir, make_scratch_dir
 from app.domain.plugins.errors import PluginDomainError
-from app.domain.plugins.manifest import GENERATION, HOST_ONLY_CAPABILITIES, Manifest, localized_tool, text_of, tool_label
+from app.domain.plugins.manifest import (
+    CALL_CAPABILITIES,
+    CATALOG_CAPABILITIES,
+    GENERATION,
+    Manifest,
+    localized_tool,
+    text_of,
+    tool_label,
+)
 from app.domain.plugins.mcp_bridge import McpBridgeError, call_tool as mcp_call, discover_tools
 from app.domain.plugins.runtime import (
     PluginRuntimeError,
     StreamHooks,
-    ToolResult,
     check_required_input,
     data_dir_for,
     execute_tool,
@@ -130,9 +138,9 @@ def all_tools(db: Session, instance: PluginInstance) -> list[dict[str, Any]]:
                     default=manifest.default_effects or None,
                 ),
                 "node": node,
-                # 只给宿主调的:清单上标了 internal 的,和认领了「只给宿主」那类能力的(生成)——
-                # 后者说的是一套流式协议,智能体和工作流调不了、也不该调(见 manifest.HOST_ONLY_CAPABILITIES)。
-                "internal": bool((override and override.internal) or (_claims(tool) & HOST_ONLY_CAPABILITIES)),
+                # 只给宿主调的:清单上标了 internal 的,和认领了**目录类**能力(生成、工具清单)的 —— 它们回答「有哪些
+                # 模型 / 工具」,本身不是一次能交给人的调用。认领调用类能力(文档解析、降噪……)的是普通工具(ADR 0033)。
+                "internal": bool((override and override.internal) or (_claims(tool) & CATALOG_CAPABILITIES)),
                 "provides": sorted(_claims(tool)),
                 # MCP 的清单是对方服务给的,那里没有这个字段 —— 只认进程插件自己声明的。
                 "timeout_seconds": None if manifest.is_mcp else _declared_timeout(tool),
@@ -252,7 +260,7 @@ def invoke(
     """跑一次工具。**插件唯一的执行路径。**
 
     `host=True` 只给**宿主自己的适配层**(Blender 互通):只有这时,标了 `internal` 的工具(以及认领了
-    只给宿主那类能力的,见 manifest.HOST_ONLY_CAPABILITIES)才跑得起来。别的入口 —— 智能体、工作流、
+    目录类能力的,见 manifest.CATALOG_CAPABILITIES)才跑得起来。别的入口 —— 智能体、工作流、
     画板、插件页 —— 一律不行,这道门收在这一处:此前是各入口自己挡(工作流执行器判一次、智能体和画板
     靠 `exposed` 过滤),插件页的「试一下」那条路由谁都没挡,一个 POST 就能直接跑 Blender 的原始
     代码执行入口、绕开生成任务直接调生成协议。
@@ -265,6 +273,9 @@ def invoke(
     给了 workspace_id 的话,插件交出的文件产出会在这里收进素材库(见 artifacts):
     输出里的 `artifact` 换成 `asset_id`,调用方拿到的就是一个素材 id,和其它产素材的
     工具一样。没给 workspace_id 就不收 —— 一份素材总得属于某个工作区。
+
+    认领了调用类能力的工具(文档解析、降噪……)产出按那项能力登记的收尾交给调用方(ADR 0033 §3):
+    文档解析存成那份文档的一次新解析;没登记收尾的按上面的通用规矩。
     """
     instance = db.get(PluginInstance, instance_id)
     if instance is None:
@@ -291,7 +302,7 @@ def invoke(
     egress = plugin_egress.resolve(db, instance, manifest)
     scratch: Path | None = None
     # 进程隔离:插件崩了、超时了、吐了非 JSON —— 失败的是这次调用记录,不是应用。
-    baseline: dict[str, str] | None = None
+    injected = _Injected()
     try:
         payload = plugin_inputs.coerce(tool, payload)
         check_required_input(tool, payload)
@@ -314,39 +325,32 @@ def invoke(
                 )
         else:
             scratch = make_scratch_dir()
-            # 声明为素材的输入换成插件看得见的本地路径(见 plugins/inputs)。
-            # 在这里而不是让插件自己取:它的环境里没有数据库、没有令牌、没有媒体目录,
-            # 那是隔离边界的一部分。
-            resolved = plugin_inputs.materialize(db, tool, payload, scratch, workspace_id=workspace_id)
-            #: 这次注入的那一份:写回 state 时按它做比较交换(见 plugins/state.persist)。
-            baseline = inst.secrets_for(db, instance)
-            env = inst.process_env(db, instance)
-            data_dir = _ensure_data_dir(manifest.id)
-            budget = {"timeout": timeout} if timeout is not None else {}
-            with _plugin_slot(db):
-                if tool["stream"]:
-                    result = stream_tool(
-                        Path(manifest.path), manifest.runtime.entry, tool_name, resolved, env,
-                        hooks=_tool_hooks(), scratch_dir=scratch, data_dir=data_dir, egress=egress, **budget,
-                    )
-                else:
-                    result = execute_tool(
-                        Path(manifest.path), manifest.runtime.entry, tool_name, resolved, env,
-                        scratch_dir=scratch, data_dir=data_dir, egress=egress, **budget,
-                    )
-            output = result.output
-            # 先落状态再收产出:刷新出来的令牌得先存住。反过来的话,收产出那一步出任何岔子
+            # 先落状态再收产出(_run_process 里):刷新出来的令牌得先存住。反过来的话,收产出那一步出任何岔子
             # (下载失败、磁盘满),这次刷新就白做了 —— 而旧令牌已经被百度那边作废了。
-            plugin_state.persist(db, instance, result.state, baseline=baseline)
-        output = _collect_artifact(
-            db, output, scratch, workspace_id=workspace_id, project_id=project_id, fallback_name=tool_name,
-            egress=egress,
-        )
+            output = _run_process(
+                db, instance, manifest, tool, payload, scratch, injected, egress=egress, workspace_id=workspace_id,
+                hooks=_tool_hooks() if tool["stream"] else None, timeout=timeout, take_slot=True, notify=True,
+            )
+        finish = None if manifest.is_mcp else _finisher(tool)
+        if finish is not None and scratch is not None:
+            # 认领了调用类能力的工具:产出按那项能力收尾(文档解析 → 存成那份文档的解析),谁调都一样(ADR 0033 §3)。
+            from app.domain.plugins.host_capabilities import CapabilityCall
+
+            output = finish(db, CapabilityCall(
+                instance=instance, tool=tool, payload=payload, output=output, scratch=scratch,
+                workspace_id=workspace_id, project_id=project_id,
+            ))
+        else:
+            output = _collect_artifact(
+                db, output, scratch, workspace_id=workspace_id, project_id=project_id, fallback_name=tool_name,
+                egress=egress,
+            )
         invocation.status, invocation.output = "succeeded", output
         inst.note_authorization(db, instance, rejected=False)
-    except (PluginRuntimeError, McpBridgeError, ArtifactError, PluginDomainError) as exc:
+    except (PluginRuntimeError, McpBridgeError, ArtifactError, PluginDomainError, LocalizedError) as exc:
+        # LocalizedError:能力的收尾说得出的失败(「这不是一份文档」「插件交回的东西不对」);收尾自己的半截东西由它自己收拾。
         invocation.status, invocation.error = "failed", str(exc)
-        _persist_failed_state(db, instance, exc, baseline=baseline)
+        _persist_failed_state(db, instance, exc, baseline=injected.baseline)
         _note_rejected_authorization(db, instance, exc)
     except Exception as exc:  # noqa: BLE001 — runtime must never bubble
         invocation.status, invocation.error = "failed", tr("pluginErr_runtimeCrashed", detail=str(exc))
@@ -389,18 +393,6 @@ def host_tool(db: Session, instance: PluginInstance, capability: str) -> dict[st
     return tool
 
 
-def stage_input(scratch: Path, source: Path) -> Path:
-    """把宿主的一份文件拷进暂存目录交给插件(`invoke_host` 的 `prepare` 里用)。**给副本不给原件**(和 `format: "asset"`
-    同一个规矩):插件改坏了、删掉了都伤不到素材库里那一份。"""
-    import shutil
-
-    inbox = scratch / "_input"
-    inbox.mkdir(parents=True, exist_ok=True)
-    copy = inbox / f"source{source.suffix.lower()}"
-    shutil.copyfile(source, copy)
-    return copy
-
-
 def staged_output(scratch: Path, relative: Any) -> Path | None:
     """插件交回的相对路径 → 暂存目录里那份文件(`collect` 里用)。落在暂存目录外面、或者不存在 → None ——
     不能借它读走别处的文件;调用方用自己领域的错误说「插件交回的东西不对」。"""
@@ -410,10 +402,80 @@ def staged_output(scratch: Path, relative: Any) -> Path | None:
     return target if target.is_relative_to(scratch.resolve()) and target.is_file() else None
 
 
+def staged_artifact(scratch: Path, spec: Any) -> Path | None:
+    """一份 `artifact`(`{"path": …}`)→ 暂存目录里那份文件。宿主的入口在暂存目录删之前自己取走(`collect`),
+    不进素材库 —— 那是入口自己的落点(降噪完放回视频、配音贴到时间线)。只认交在暂存目录里的:入口要的是
+    手上马上有的一份,不替它去下一个地址。"""
+    return staged_output(scratch, spec.get("path")) if isinstance(spec, dict) else None
+
+
 def quiet_hooks() -> StreamHooks:
     """走流式协议(取消文件、进度行)但宿主不看进度的那种调用:降噪、分离、转写这类一段音频进、一段结果出。"""
     return StreamHooks(on_progress=lambda _fraction, _message: None, on_task=lambda _receipt: None,
                        is_cancelled=lambda: False)
+
+
+@dataclass
+class _Injected:
+    """这次注入的配置与凭据:写回 state 时按它做比较交换(见 plugins/state.persist),失败时也用它。
+    还没走到注入那一步就失败的,它是 None —— 插件根本没跑,没有状态可落。"""
+
+    baseline: dict[str, str] | None = None
+
+
+def _run_process(
+    db: Session,
+    instance: PluginInstance,
+    manifest: Manifest,
+    tool: dict[str, Any],
+    payload: dict[str, Any],
+    scratch: Path,
+    injected: _Injected,
+    *,
+    egress: plugin_egress.Egress,
+    workspace_id: str | None,
+    files: dict[str, Path] | None = None,
+    hooks: StreamHooks | None,
+    timeout: float | None,
+    take_slot: bool,
+    notify: bool,
+) -> dict[str, Any]:
+    """进程插件跑一次:素材换成暂存目录里的副本、注入这个连接的配置与凭据、跑子进程(给了 `hooks` 就走流式)、落 state。
+
+    **两条入口共用这一段**(ADR 0033 §3):智能体、工作流、插件页走 `invoke`,宿主自己的入口走 `invoke_host`。
+    素材也只有一道暂存(`inputs.materialize`):调用方给的素材 id,和宿主入口手上的文件(`files`)。此前宿主那条
+    自己拷文件、自己把路径塞进 payload,插件工具因此分成了两种。
+    """
+    # 在这里换而不是让插件自己取:它的环境里没有数据库、没有令牌、没有媒体目录,那是隔离边界的一部分。
+    resolved = plugin_inputs.materialize(db, tool, payload, scratch, workspace_id=workspace_id, files=files)
+    injected.baseline = inst.secrets_for(db, instance)
+    env = inst.process_env(db, instance)
+    run_kwargs: dict[str, Any] = {
+        "scratch_dir": scratch,
+        "data_dir": _ensure_data_dir(manifest.id),
+        "egress": egress,
+        **({"timeout": timeout} if timeout is not None else {}),
+    }
+    with _plugin_slot(db, take=take_slot):
+        if hooks is not None:
+            result = stream_tool(
+                Path(manifest.path), manifest.runtime.entry, tool["name"], resolved, env, hooks=hooks, **run_kwargs,
+            )
+        else:
+            result = execute_tool(Path(manifest.path), manifest.runtime.entry, tool["name"], resolved, env, **run_kwargs)
+    plugin_state.persist(db, instance, result.state, baseline=injected.baseline, notify=notify)
+    return result.output
+
+
+def _finisher(tool: dict[str, Any]) -> Any:
+    """这个工具认领的调用类能力登记的收尾(见 host_capabilities.finisher);没有就是 None,产出按通用规矩收。"""
+    from app.domain.plugins import host_capabilities
+
+    for capability in sorted(_claims(tool) & CALL_CAPABILITIES):
+        finish = host_capabilities.finisher(capability)
+        if finish is not None:
+            return finish
+    return None
 
 
 def invoke_host(
@@ -422,22 +484,24 @@ def invoke_host(
     capability: str,
     payload: dict[str, Any],
     *,
+    files: dict[str, Path] | None = None,
     prepare: Callable[[Path], dict[str, Any]] | None = None,
     collect: Callable[[dict[str, Any], Path], dict[str, Any]] | None = None,
     hooks: StreamHooks | None = None,
     timeout: float | None = None,
     record: bool = True,
 ) -> dict[str, Any]:
-    """**宿主**替自己调一次插件(它声明能做的那件事)。和 `invoke` 走同一道门:
+    """**宿主自己的入口**调一次认领了 `capability` 的那个工具。和 `invoke` 跑的是同一段(`_run_process`):
 
     可用性判定(启用 / 配置 / 凭据 / 授权)、只注入这个实例自己的配置与凭据、留一条调用记录、
-    状态落库 —— 这些一样不少。不同的只有三处,都是因为调用方是宿主而不是智能体:
+    状态落库 —— 这些一样不少。不同的只有几处,都是因为调用方是宿主的一个入口:
 
-    - **失败抛异常**,不是回一条失败记录:宿主要据此决定下一步(生成任务失败、目录刷新记下原因);
-    - `prepare(暂存目录)` 让宿主在进程起来之前把文件拷进去,返回真正发给插件的 payload
-      (生成的输入素材;和 `format: "asset"` 那条同一个规矩:给副本不给原件);
-    - `collect(output, 暂存目录)` 在暂存目录被删**之前**让宿主把产出拿走,返回留进调用记录的那一份;
-    - 给了 `hooks` 就走流式协议(进度、回执、取消,见 runtime.stream_tool)。
+    - **失败抛异常**,不是回一条失败记录:入口要据此决定下一步(解析任务失败、目录刷新记下原因);
+    - `files`:入口手上的文件(转写前抽好的音轨、解析任务里的原件)交给工具的素材入参 —— 和素材 id 同一道暂存;
+    - `collect(output, 暂存目录)` 在暂存目录被删**之前**让入口把产出拿走(它有自己的落点:那一行解析、那条字幕轨),
+      返回留进调用记录的那一份;不走通用的「文件进素材库」;
+    - 给了 `hooks` 就走流式协议(进度、回执、取消,见 runtime.stream_tool);
+    - `prepare(暂存目录)` **只给目录类能力**(生成):它的输入是一串带角色的文件,不是工具入参里的素材格子。
 
     `timeout` 不给就用工具自己声明的预算。
 
@@ -460,33 +524,16 @@ def invoke_host(
         db.add(invocation)
         db.commit()
     scratch = make_scratch_dir()
-    baseline: dict[str, str] | None = None
+    injected = _Injected()
     try:
         sent = prepare(scratch) if prepare is not None else payload
-        run_kwargs: dict[str, Any] = {
-            "scratch_dir": scratch,
-            "data_dir": _ensure_data_dir(manifest.id),
-            "egress": plugin_egress.resolve(db, instance, manifest),
-            **({"timeout": budget} if budget is not None else {}),
-        }
-        #: 这次注入的那一份:写回 state 时按它做比较交换(见 plugins/state.persist)。
-        baseline = inst.secrets_for(db, instance)
-        env = inst.process_env(db, instance)
-        result: ToolResult
         # 一问一答(问目录)和别的工具调用一样占一个插件名额(jobs.PLUGIN_SLOTS)。流式的那条
-        # 不占:它是一次生成,跑在生成任务里,受任务派发的上限约束(jobs.MAX_ACTIVE_JOBS)—— 一段跑
+        # 不占:它是一次生成 / 一次解析,跑在任务里,受任务派发的上限约束(jobs.MAX_ACTIVE_JOBS)—— 一段跑
         # 一小时的视频占着插件名额,别的插件调用就得陪它等一小时。**两条都先交还连接**(见 _plugin_slot)。
-        with _plugin_slot(db, take=hooks is None):
-            if hooks is not None:
-                result = stream_tool(
-                    Path(manifest.path), manifest.runtime.entry, tool["name"], sent, env, hooks=hooks, **run_kwargs,
-                )
-            else:
-                result = execute_tool(
-                    Path(manifest.path), manifest.runtime.entry, tool["name"], sent, env, **run_kwargs,
-                )
-        plugin_state.persist(db, instance, result.state, baseline=baseline, notify=False)
-        output = result.output
+        output = _run_process(
+            db, instance, manifest, tool, sent, scratch, injected, egress=plugin_egress.resolve(db, instance, manifest),
+            workspace_id=None, files=files, hooks=hooks, timeout=budget, take_slot=hooks is None, notify=False,
+        )
         recorded = collect(output, scratch) if collect is not None else output
         invocation.status, invocation.output = "succeeded", recorded
         inst.note_authorization(db, instance, rejected=False)
@@ -498,7 +545,7 @@ def invoke_host(
         invocation.error = str(exc) if isinstance(exc, (PluginRuntimeError, PluginDomainError, ArtifactError)) else tr(
             "pluginErr_runtimeCrashed", detail=str(exc)
         )
-        _persist_failed_state(db, instance, exc, baseline=baseline, notify=False)
+        _persist_failed_state(db, instance, exc, baseline=injected.baseline, notify=False)
         _note_rejected_authorization(db, instance, exc)
         db.commit()
         raise
@@ -547,8 +594,8 @@ def _recorded(payload: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
-__all__ = ["all_tools", "exposed", "find", "host_tool", "invoke", "invoke_host", "quiet_hooks", "refresh_tools", "stage_input",
-           "staged_output"]
+__all__ = ["all_tools", "exposed", "find", "host_tool", "invoke", "invoke_host", "quiet_hooks", "refresh_tools",
+           "staged_artifact", "staged_output"]
 
 
 @contextmanager

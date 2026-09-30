@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import Any
 
 from mosael_formats.plugin_env import PACKAGE_SOURCE_ENV
-from mosael_formats.plugin_manifest import MANIFEST_FILENAME
+from mosael_formats.plugin_manifest import ASSET_FORMAT, CALL_CONTRACTS, MANIFEST_FILENAME
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +34,7 @@ LEGACY_FILENAMES = ("plugin.json",)
 
 #: 当前清单版本。加一个新的迁移步骤就 +1,并把它加进 _STEPS。装好的包存着的清单也跟着升(见
 #: db/migrations 的 `upgrade-stored-plugin-manifests`),所以**收紧清单规则时,老清单要能被某一步改合格**。
-MANIFEST_VERSION = 3
+MANIFEST_VERSION = 4
 
 
 def _to_runtime_block(raw: dict[str, Any]) -> bool:
@@ -164,6 +164,39 @@ def _fields_to_sources(raw: dict[str, Any], source_of: Callable[[str], str | Non
     return True
 
 
+def _capability_inputs_follow_contract(raw: dict[str, Any]) -> bool:
+    """认领调用类能力的工具,素材入参补成契约的形状(ADR 0033):`format: asset`、`x-media`、`x-audio`。
+
+    此前这些工具只经宿主调,宿主把副本的路径直接塞进 `file`,入参上用不着任何标记;现在它们是普通工具,
+    智能体、工作流按 `format: asset` 才知道那一格要交一份素材。只补素材那几格 —— 别的(`texts`、`op`)
+    从来就是这个形状。出参的变化(降噪、分离、配音改交 `artifact`)在插件代码里,清单改不了,插件要发新版。
+    """
+    tools = raw.get("tools")
+    declared = tools.get("declare") if isinstance(tools, dict) else None
+    if not isinstance(declared, list):
+        return False
+    changed = False
+    for tool in declared:
+        claims = tool.get("provides") if isinstance(tool, dict) else None
+        schema = tool.get("input_schema") if isinstance(tool, dict) else None
+        properties = schema.get("properties") if isinstance(schema, dict) else None
+        if not isinstance(claims, list) or not isinstance(properties, dict):
+            continue
+        for capability in claims:
+            for key, rule in CALL_CONTRACTS.get(str(capability), {}).items():
+                spec = properties.get(key)
+                if "asset" not in rule or not isinstance(spec, dict):
+                    continue
+                media = spec.get("x-media")
+                media = [media] if isinstance(media, str) else list(media) if isinstance(media, list) else []
+                wanted = {"format": ASSET_FORMAT, "x-media": [*media, *(one for one in rule["asset"] if one not in media)],
+                          **({"x-audio": rule["audio"]} if "audio" in rule else {})}
+                if any(spec.get(name) != value for name, value in wanted.items()):
+                    spec.update(wanted)
+                    changed = True
+    return changed
+
+
 #: 按顺序跑。加新步骤往后追加,并把 MANIFEST_VERSION +1。
 _STEPS = (
     _to_runtime_block,
@@ -172,6 +205,7 @@ _STEPS = (
     _drop_runtime_cache,
     _package_mirror_fields_to_sources,
     _legacy_mirror_fields_to_sources,
+    _capability_inputs_follow_contract,
 )
 
 

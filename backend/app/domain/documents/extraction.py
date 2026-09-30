@@ -35,11 +35,13 @@ __all__ = [
     "DocumentParseError",
     "DocumentParserUnavailable",
     "extraction_dir",
+    "finish_plugin_call",
     "latest_extraction",
     "read_markdown",
     "read_sections",
     "reconcile_orphaned_extractions",
     "start_parse",
+    "write_parsed",
 ]
 
 
@@ -146,7 +148,7 @@ def _body(job_id: str, extraction_id: str, builtin: bool) -> None:
                 parsed = _parse_with_plugin(db, extraction, asset, source, target, progress)
                 #: 页面图由宿主照原件渲,哪一家解析的都一样。
                 attach_page_images(source, target, parsed, progress)
-            _write(db, extraction, asset, parsed, target)
+            write_parsed(db, extraction, asset, parsed, target)
         except Exception as exc:
             db.rollback()
             stopped = isinstance(exc, ParseStopped) or _job_cancelled(db, job_id)
@@ -175,7 +177,7 @@ def _parse_with_plugin(db: Session, extraction: AssetExtraction, asset: Asset, s
     return parse_with_plugin(db, extraction, asset, source, target, progress)
 
 
-def _write(db: Session, extraction: AssetExtraction, asset: Asset, parsed: Parsed, target: Path) -> None:
+def write_parsed(db: Session, extraction: AssetExtraction, asset: Asset, parsed: Parsed, target: Path) -> None:
     """全文写成 full.md,每段的标题、页面图、在全文里的起止记进行上;第一页的页面图当素材封面。"""
     outline: list[dict[str, Any]] = []
     chunks: list[str] = []
@@ -237,3 +239,35 @@ def read_sections(extraction: AssetExtraction, first: int, last: int) -> list[di
         if first <= int(entry["index"]) <= last:
             picked.append({**entry, "markdown": full[int(entry["start"]):int(entry["end"])]})
     return picked
+
+
+def finish_plugin_call(db: Session, call: Any) -> dict[str, Any]:
+    """文档解析这项能力的收尾(ADR 0033 §3,组装根登记):智能体、工作流、插件页直接调了认领它的工具,产出存成那份文档的
+    **一次新解析** —— 和「用 ×× 重新解析」落到同一个地方,读的人(阅读器、智能体的 read_document)拿到的就是它。
+
+    `call` 是 plugins.host_capabilities.CapabilityCall;`payload["file"]` 是调用方给的素材 id。不提交:调用那一头
+    (tools.invoke)连同调用记录一起提交;失败时这一行记成失败,同样随调用记录落库。
+    """
+    from app.domain.documents.plugin_parse import parsed_from_output
+
+    asset = db.get(Asset, str(call.payload.get("file") or ""))
+    if asset is None or asset.kind != "document":
+        raise DocumentParseError("docErr_notDocument", name=str(call.payload.get("file") or ""))
+    extraction = AssetExtraction(asset_id=asset.id, workspace_id=asset.workspace_id, parser=call.instance.id,
+                                 parser_name=call.instance.name or "", status="running")
+    db.add(extraction)
+    db.flush()
+    target = extraction_dir(extraction)
+    shutil.rmtree(target, ignore_errors=True)
+    target.mkdir(parents=True, exist_ok=True)
+    try:
+        parsed = parsed_from_output(call.output, call.scratch, target)
+        attach_page_images(resolve_key(asset.file_key), target, parsed, lambda _fraction, _message: None)
+        write_parsed(db, extraction, asset, parsed, target)
+    except Exception as exc:
+        extraction.status, extraction.finished_at, extraction.error = "failed", now(), str(exc)[:2000]
+        db.flush()
+        shutil.rmtree(target, ignore_errors=True)
+        raise
+    return {"asset_id": asset.id, "extraction_id": extraction.id, "unit": extraction.unit,
+            "sections": extraction.sections, "chars": extraction.chars}

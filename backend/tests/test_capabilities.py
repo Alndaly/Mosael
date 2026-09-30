@@ -21,7 +21,8 @@ PARSER = {
     "provides": ["document_parse"],
     "runtime": {"kind": "process", "entry": "main.py"},
     "instance": {"credentials": [{"key": "TOKEN", "label": "Token", "required": True}]},
-    "tools": {"declare": [{"name": "parse", "provides": ["document_parse"]}]},
+    "tools": {"declare": [{"name": "parse", "provides": ["document_parse"], "input_schema": {
+        "type": "object", "properties": {"file": {"type": "string", "format": "asset", "x-media": "document"}}}}]},
 }
 
 

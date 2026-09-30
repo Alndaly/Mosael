@@ -32,6 +32,11 @@ class PluginFieldOut(ApiModel):
     language: str = ""
 
 
+class PluginCapabilityUseOut(CapabilityUseOut):
+    #: 插件工具可以认领几项能力,每条标明是哪一项。
+    capability: str
+
+
 class PluginToolStateOut(ApiModel):
     name: str
     label: str = ""
@@ -45,23 +50,10 @@ class PluginToolStateOut(ApiModel):
     exposed: bool = False
     #: 试跑表单的字段:和这个工具当工作流节点时同一份声明(节点目录的形状,已按语言翻好)。
     form: dict = Field(default_factory=dict)
-
-
-class PluginCapabilityUseOut(CapabilityUseOut):
-    #: 插件工具可以认领几项能力,每条标明是哪一项。
-    capability: str
-
-
-class PluginHostToolOut(ApiModel):
-    """只给 Mosael 调用的工具(认领了宿主能力:文档解析、生成……)。不进勾选表 —— 勾了也不会给智能体和工作流 ——
-    但插件页要列出来:MinerU 这类插件只有这样的工具,不列的话那一块是空的,看不出它能做什么(用户截图)。"""
-
-    name: str
-    label: str = ""
-    description: str = ""
-    #: 它替宿主做的是哪几件事(`document_parse` / `audio_denoise` / `generation` ……)。
+    #: 它认领的调用类能力(`document_parse`、`audio_denoise` ……):它是一个普通工具,能力是加在它上面的一份契约
+    #: (ADR 0033)。插件页据此标一枚能力徽标。
     provides: list[str] = Field(default_factory=list)
-    #: 这些能力在 Mosael 里用在哪 —— 能力表现算的(ADR 0032 §4),不是手写的一句话。空 = 这个版本还用不到它。
+    #: 这些能力在 Mosael 里还用在哪 —— 能力表现算的(ADR 0032 §4)。宿主的这些入口调的也是这个工具。
     used_by: list[PluginCapabilityUseOut] = Field(default_factory=list)
 
 
@@ -147,7 +139,6 @@ class PluginInstanceOut(ApiModel):
     #: 没声明 oauth 的是空串。只按授权写的那几格**填没填**算,令牌不出后端。
     authorization: Literal["", "unauthorized", "authorized", "rejected"] = ""
     tools: list[PluginToolStateOut] = Field(default_factory=list)
-    host_tools: list[PluginHostToolOut] = Field(default_factory=list)
     #: 它替宿主做的那些事上一次做得怎么样,按能力分(今天只有 generation)。
     capability_status: dict[str, PluginCapabilityStatusOut] = Field(default_factory=dict)
     network: PluginNetworkOut = Field(default_factory=PluginNetworkOut)

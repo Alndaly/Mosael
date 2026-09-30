@@ -9,7 +9,7 @@ import { Bot, LayoutGrid, Workflow } from "lucide-react";
 
 import type { components } from "@/api/generated/schema";
 
-type CapabilityUse = components["schemas"]["CapabilityUseOut"];
+export type CapabilityUse = components["schemas"]["CapabilityUseOut"];
 
 const USE_ICON = { app: LayoutGrid, workflow: Workflow, agent: Bot } as const;
 

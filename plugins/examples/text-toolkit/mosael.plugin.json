@@ -1,6 +1,6 @@
 {
   "id": "dev.mosael.text-toolkit",
-  "manifest_version": 3,
+  "manifest_version": 4,
   "name": "Text Toolkit",
   "default_locale": "zh",
   "version": "0.3.0",

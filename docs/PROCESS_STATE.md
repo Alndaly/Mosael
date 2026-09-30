@@ -124,6 +124,8 @@
   登记,运行时只读;挑哪一家读的是库里的默认,不在这里。
 - `app/domain/capabilities/__init__.py:_uses`、`app/domain/capabilities/__init__.py:_use_finders` — 一项能力「用在哪」
   (ADR 0032 §4):宿主界面入口登记的那几条,和现扫工作流节点、智能体工具的函数。组装根在导入期登记,运行时只读。
+- `app/domain/capabilities/__init__.py:_finishers` — 调用类能力的收尾(ADR 0033 §3):智能体、工作流直接调了认领它的
+  插件工具之后产出落到哪(文档解析 → 那份文档的一次解析)。组装根在导入期登记,运行时只读。
 - `app/domain/plugins/host_capabilities.py:_lookup` — 插件实例变了,去哪查宿主那一侧的对齐钩子:组装根交给它
   `capabilities.instance_hooks`。钩子本身登记在能力表 `_registry` 里(生成:实例 → 连接 + 模型行,见 ADR 0020;
   工具清单:重问插件报了哪些工具),这里不另存一张表(ADR 0032 §1)。

@@ -76,9 +76,31 @@ TRANSLATION = "translation"
 #: `speech`:用一个音色把一段文字念出来(ADR 0032 第四步)。认领的工具按 `op` 回答两件事:有哪些音色、念一句;
 #: 登记成素材、贴到时间线、字幕逐句配音的对齐都是宿主的事。
 SPEECH = "speech"
-HOST_ONLY_CAPABILITIES = frozenset(
-    {GENERATION, TOOLS, DOCUMENT_PARSE, AUDIO_DENOISE, AUDIO_SEPARATION, TRANSCRIPTION, TRANSLATION, SPEECH}
-)
+#: **目录类能力**(ADR 0033 §1):认领它们的工具回答「这个连接有哪些模型 / 哪些工具」,本身不是一次能交给人的调用 ——
+#: 模型和工具各自出现在该出现的地方。只有它们的工具不进工具表。
+CATALOG_CAPABILITIES = frozenset({GENERATION, TOOLS})
+#: **调用类能力**:认领它们的工具是一个普通工具,智能体、工作流、画板照样点得到;能力只是加在它上面的一份契约
+#: (`CALL_CONTRACTS`),宿主自己的入口(文档「重新解析」、降噪按钮……)调的也是它。
+CALL_CAPABILITIES = frozenset({DOCUMENT_PARSE, AUDIO_DENOISE, AUDIO_SEPARATION, TRANSCRIPTION, TRANSLATION, SPEECH})
+#: 由某一个工具认领的能力(两类合起来):只能是进程插件、恰好一个工具认领。
+CLAIMED_CAPABILITIES = CATALOG_CAPABILITIES | CALL_CAPABILITIES
+
+#: 素材入参的 `format`(宿主把素材换成暂存目录里的一份副本交给插件,见 backend 的 plugins/inputs)。
+ASSET_FORMAT = "asset"
+#: 素材入参上可选的 `x-audio`:宿主先把声音抽成 wav 再给 —— `original` 保留原采样率和声道(要进成片的:降噪、分离),
+#: `speech` 是 16k 单声道(识别模型的输入)。
+AUDIO_PREPARES = frozenset({"original", "speech"})
+
+#: 调用类能力的契约:认领它的工具**必须**有的入参。`asset` 的还要标 `format: asset` 与 `x-media`(至少含这几种);
+#: 有 `x-audio` 的要写成这一种。其余入参随插件,出参见 docs/PLUGIN_MANIFEST.md 的「能力」一节。
+CALL_CONTRACTS: dict[str, dict[str, dict[str, Any]]] = {
+    DOCUMENT_PARSE: {"file": {"asset": ("document",)}},
+    AUDIO_DENOISE: {"file": {"asset": ("audio", "video"), "audio": "original"}},
+    AUDIO_SEPARATION: {"file": {"asset": ("audio", "video"), "audio": "original"}},
+    TRANSCRIPTION: {"file": {"asset": ("audio", "video"), "audio": "speech"}},
+    TRANSLATION: {"texts": {"type": "array"}, "target": {"type": "string"}},
+    SPEECH: {"op": {"type": "string"}},
+}
 
 
 def text_of(value: Any, locale: str | None = None, *, author_locale: str = "") -> str:
@@ -524,7 +546,8 @@ def parse(raw: dict[str, Any], path: str) -> Manifest:
             raise ManifestError(
                 "pluginErr_manifestToolExtraCapability", path=path, tool=tool.get("name"), capabilities=", ".join(sorted(extra))
             )
-    _check_host_only(package_provides, declared, runtime_of(raw), path)
+    _check_claimed(package_provides, declared, runtime_of(raw), path)
+    _check_audio_prepares(declared, path)
     config = _fields(instance.get("config"), secret=False, pick=pick)
     credentials = _fields(instance.get("credentials"), secret=True, pick=pick)
     _check_field_keys([*config, *credentials], path)
@@ -599,28 +622,77 @@ def _check_field_keys(fields: list[Field], path: str) -> None:
         seen[upper] = spec.key
 
 
-def _check_host_only(
+def _check_claimed(
     package_provides: set[str], declared: list[dict[str, Any]], runtime: Runtime, path: str
 ) -> None:
-    """只给宿主调的能力(`generation`、`tools`、`document_parse`)比 `public_url` 多三条硬规矩,**装的那一刻就说清楚**。
+    """由某个工具认领的能力比 `public_url` 多几条硬规矩,**装的那一刻就说清楚**:进程插件、恰好一个工具认领;
+    调用类的还要按契约写入参(`CALL_CONTRACTS`)。
 
     `public_url` 那边「包上声明了、没有工具认领」是一个老版本,生成时再让用户去更新;这里不留那个口子:
-    生成能力是新的,没有老版本要照顾,而一个认领不清的生成插件会在选择器里长出一排点了必然失败的模型。
+    一个认领不清的生成插件会在选择器里长出一排点了必然失败的模型。
     """
-    for capability in sorted(package_provides & HOST_ONLY_CAPABILITIES):
+    for capability in sorted(package_provides & CLAIMED_CAPABILITIES):
         # MCP 是别人的协议,我们不往里加字段(和 artifact / state 同一条)。
         if runtime.kind != "process":
             raise ManifestError("pluginErr_manifestCapabilityNeedsProcess", path=path, capability=capability)
         owners = [
-            str(tool.get("name")) for tool in declared
+            tool for tool in declared
             if isinstance(tool.get("provides"), list) and capability in tool["provides"]
         ]
         if not owners:
             raise ManifestError("pluginErr_manifestCapabilityUnclaimed", path=path, capability=capability)
         if len(owners) > 1:
             raise ManifestError(
-                "pluginErr_manifestCapabilityClaimedTwice", path=path, capability=capability, tools=", ".join(owners)
+                "pluginErr_manifestCapabilityClaimedTwice", path=path, capability=capability,
+                tools=", ".join(str(tool.get("name")) for tool in owners),
             )
+        _check_contract(capability, owners[0], path)
+
+
+def _check_contract(capability: str, tool: dict[str, Any], path: str) -> None:
+    """认领调用类能力的工具,入参要按契约写 —— 宿主的入口和智能体、工作流调的是同一个工具,形状只有一种。"""
+    schema = tool.get("input_schema")
+    properties = schema.get("properties") if isinstance(schema, dict) else None
+    properties = properties if isinstance(properties, dict) else {}
+    for key, rule in CALL_CONTRACTS.get(capability, {}).items():
+        spec = properties.get(key)
+        spec = spec if isinstance(spec, dict) else None
+        wrong = spec is None
+        if not wrong and "asset" in rule:
+            media = spec.get("x-media")
+            media = [media] if isinstance(media, str) else media if isinstance(media, list) else []
+            wrong = spec.get("format") != ASSET_FORMAT or not set(rule["asset"]) <= set(media)
+            if not wrong and "audio" in rule:
+                wrong = spec.get("x-audio") != rule["audio"]
+        if not wrong and "type" in rule:
+            wrong = spec.get("type") != rule["type"]
+        if wrong:
+            raise ManifestError(
+                "pluginErr_manifestCapabilityContract", path=path, capability=capability, tool=str(tool.get("name")),
+                field=key, expected=_describe_rule(rule),
+            )
+
+
+def _check_audio_prepares(declared: list[dict[str, Any]], path: str) -> None:
+    """素材入参的 `x-audio` 只认 original / speech。任何工具都能用它(不只是认领了能力的),所以每个工具都查。"""
+    for tool in declared:
+        schema = tool.get("input_schema")
+        properties = schema.get("properties") if isinstance(schema, dict) else None
+        for key, spec in (properties.items() if isinstance(properties, dict) else ()):
+            prepare = spec.get("x-audio") if isinstance(spec, dict) else None
+            if prepare is not None and prepare not in AUDIO_PREPARES:
+                raise ManifestError("pluginErr_manifestBadAudioPrepare", path=path, tool=str(tool.get("name")), field=key,
+                                    value=str(prepare)[:40])
+
+
+def _describe_rule(rule: dict[str, Any]) -> str:
+    """契约里的一格写成清单里的样子,报错时照抄就能改对。"""
+    if "asset" in rule:
+        media = rule["asset"]
+        shown = f'"{media[0]}"' if len(media) == 1 else "[" + ", ".join(f'"{one}"' for one in media) + "]"
+        audio = f', "x-audio": "{rule["audio"]}"' if "audio" in rule else ""
+        return f'{{"type": "string", "format": "asset", "x-media": {shown}{audio}}}'
+    return f'{{"type": "{rule["type"]}"}}'
 
 
 def _author(raw: object, pick: Callable[[Any], str] = text_of) -> Author:
@@ -689,7 +761,12 @@ __all__ = [
     "AUDIO_SEPARATION",
     "DOCUMENT_PARSE",
     "GENERATION",
-    "HOST_ONLY_CAPABILITIES",
+    "ASSET_FORMAT",
+    "AUDIO_PREPARES",
+    "CALL_CAPABILITIES",
+    "CALL_CONTRACTS",
+    "CATALOG_CAPABILITIES",
+    "CLAIMED_CAPABILITIES",
     "KEY_RE",
     "TRANSCRIPTION",
     "TRANSLATION",

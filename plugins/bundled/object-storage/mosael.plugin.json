@@ -1,6 +1,6 @@
 {
   "id": "dev.mosael.object-storage",
-  "manifest_version": 3,
+  "manifest_version": 4,
   "name": {
     "zh": "对象存储",
     "en": "Object Storage"

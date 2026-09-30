@@ -56,9 +56,9 @@ import { ConnectionNetwork } from "@/features/plugins/ConnectionNetwork";
 import { ConnectionPackageSources } from "@/features/plugins/ConnectionPackageSources";
 import { GroupActions } from "@/features/plugins/GroupActions";
 import { invalidatePluginDependents } from "@/features/plugins/pluginCaches";
-import { HostToolList } from "@/features/plugins/HostTools";
 import { ToolRowFrame } from "@/features/plugins/ToolRowFrame";
 import { useCapabilityTerms } from "@/features/plugins/capabilityTerms";
+import { CapabilityUseList, type CapabilityUse } from "@/components/settings/CapabilityUseList";
 import { cn } from "@/lib/utils";
 import { NodeConfigForm, nodeConfigTiers, useNodeFieldOptions, type ConfigSpec } from "@/features/nodeForms/NodeConfigForm";
 
@@ -595,8 +595,8 @@ export function ConnectionCard({ pkg, instance, workspaceId }: { pkg: PluginPack
   //: 替宿主做生成的插件(ComfyUI 这类)把模型交给选择器,而不是把工具交给智能体 —— 它的
   //: 「刷新」刷的是模型清单,卡片上该说的是「几个模型」而不是「开放了 0 / 0 个工具」。
   const generates = (pkg.provides ?? []).includes("generation");
-  //: 只替宿主做事的插件(MinerU 解析文档、对象存储给链接):认领能力的那个工具只给宿主调,不进工具表。
-  //: 这时说它做什么、去哪用;显示「已开启 0 / 0 个工具」「启用并授权后会显示可调用工具」只会让人以为它坏了。
+  //: 只替宿主做事、自己不报工具的插件(只认领目录类能力的那种):说它做什么、去哪用;显示「已开启 0 / 0 个工具」
+  //: 「启用并授权后会显示可调用工具」只会让人以为它坏了。认领调用类能力的(MinerU)是普通工具,在工具表里(ADR 0033)。
   const hostCapabilities = (pkg.provides ?? []).filter((one) => one !== "generation");
   const { labelOf } = useCapabilityTerms();
   const hostOnly = !generates && tools.length === 0 && hostCapabilities.length > 0;
@@ -746,15 +746,6 @@ export function ConnectionCard({ pkg, instance, workspaceId }: { pkg: PluginPack
           emptyText={noToolsText}
           onToggle={(choices) => setCapabilities.mutate(choices)}
           pending={setCapabilities.isPending}
-        />
-      )}
-
-      {(instance.host_tools ?? []).length > 0 && (
-        <HostToolList
-          tools={instance.host_tools ?? []}
-          instanceId={instance.id}
-          workspaceId={workspaceId}
-          blocked={Boolean(instance.blocked_reason)}
         />
       )}
 
@@ -955,6 +946,10 @@ interface ToolState {
   exposed: boolean;
   /** 试跑表单的字段:和这个工具当工作流节点时**同一份声明**(后端节点目录的形状,已按语言翻好)。 */
   form?: { [key: string]: unknown };
+  /** 它认领的调用类能力(文档解析、降噪……):它照样是一个普通工具,能力是加在它上面的一份契约(ADR 0033)。 */
+  provides?: string[];
+  /** 这些能力在 Mosael 里还用在哪(能力表现算的)—— 那些入口调的也是这个工具。 */
+  used_by?: CapabilityUse[];
 }
 
 /** 表单里的一格有没有填。素材列表空着、字符串空着都算没填(不发出去)。 */
@@ -985,6 +980,7 @@ export const ToolRow = React.memo(function ToolRow({
 }) {
   const t = useI18n();
   const qc = useQueryClient();
+  const { labelOf } = useCapabilityTerms();
   const [open, setOpen] = React.useState(false);
   const [result, setResult] = React.useState<PluginInvocation | null>(null);
 
@@ -1011,6 +1007,13 @@ export const ToolRow = React.memo(function ToolRow({
       label={tool.label || tool.name}
       description={tool.description}
       badges={<>
+        {/* 认领了宿主能力的,标一枚能力徽标:MinerU 的解析同时是文档「重新解析」背后那一家。 */}
+        {(tool.provides ?? []).map((capability) => (
+          <small key={capability} data-tool-capability={capability}
+            className="whitespace-nowrap rounded-full bg-accent px-1.5 py-px text-ui-2xs text-primary">
+            {labelOf(capability)}
+          </small>
+        ))}
         {tool.read_only && (
           <small className="whitespace-nowrap rounded-full bg-secondary px-1.5 py-px text-ui-2xs text-muted-foreground">
             {t("pluginToolReadOnly")}
@@ -1021,6 +1024,7 @@ export const ToolRow = React.memo(function ToolRow({
       open={open}
       onOpenChange={setOpen}
     >
+      {(tool.used_by ?? []).length > 0 && <CapabilityUseList uses={tool.used_by ?? []} label={t("capabilityUsedBy")} />}
       <ToolTryForm
         tool={tool}
         workspaceId={workspaceId}

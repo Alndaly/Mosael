@@ -10,12 +10,14 @@ engine_catalog 里,voices 要用就得回头 import 它,而 engine_catalog 又�
 (`builtin:clone`、`builtin:edge`……),认领 `speech` 的插件连接和它们并列。和别的能力不同,**配音没有默认**:
 引擎和音色是成对选的(克隆音色的 id 换到 Edge 上就是错的),每个入口都点名(`defaultable=False`)。
 
-**插件协议**(只经宿主调,普通工具,按 `op` 分两件事):
+**契约**(认领 `speech` 的工具是一个普通工具,ADR 0033;按 `op` 分两件事):
 
 - `{"op": "voices"}` → `{"voices": [{"id": "…", "name": "…"}]}`:这个连接能念的音色,界面的音色下拉照它列;
-- `{"op": "speak", "text": "…", "voice": <音色 id>, "speed": 1.0}` → `{"audio": <暂存目录里一份音频的相对路径>}`。
+- `{"op": "speak", "text": "…", "voice": <音色 id>, "speed": 1.0}` → `{"artifact": {"path": <暂存目录里一份音频>}}`
+  —— 和别的工具交文件同一个写法。
 
-登记成素材、记出处、贴到时间线都是宿主的事。
+宿主的入口(配音、字幕逐句配音)调它时,音频在暂存目录删之前由入口取走,登记成素材、记出处、贴到时间线是入口的事;
+智能体、工作流直接调它时,音频按通用规矩进素材库。
 """
 
 from __future__ import annotations

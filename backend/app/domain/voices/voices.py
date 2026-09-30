@@ -789,7 +789,7 @@ def _speak_with_plugin(db, engine: str, *, text: str, voice: str, speed: float, 
 
     from app.domain.plugins.errors import PluginDomainError
     from app.domain.plugins.runtime import PluginRuntimeError
-    from app.domain.plugins.tools import invoke_host, staged_output
+    from app.domain.plugins.tools import invoke_host, staged_artifact
     from app.db.models import PluginInstance
 
     instance = db.get(PluginInstance, engine)
@@ -797,14 +797,14 @@ def _speak_with_plugin(db, engine: str, *, text: str, voice: str, speed: float, 
     made: list[Path] = []
 
     def collect(output: dict, scratch: Path) -> dict:
-        produced = staged_output(scratch, output.get("audio"))
+        produced = staged_artifact(scratch, output.get("artifact"))
         if produced is None:
-            raise VoiceError("voiceErr_pluginBadOutput", plugin=name, detail=str(output.get("audio"))[:200])
+            raise VoiceError("voiceErr_pluginBadOutput", plugin=name, detail=str(output.get("artifact"))[:200])
         out_dir.mkdir(parents=True, exist_ok=True)
         target = out_dir / f"speech{produced.suffix.lower() or '.wav'}"
         shutil.copyfile(produced, target)
         made.append(target)
-        return {"audio": str(output.get("audio"))}
+        return {"artifact": produced.name}
 
     #: 可用性(启用、配置、凭据、授权)由 invoke_host 判,不在这里再判一遍。
     try:

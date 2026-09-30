@@ -192,11 +192,16 @@ class Test顺序:
     def test_先落状态再收产出(self) -> None:
         """反过来的话,收产出那一步出任何岔子(下载失败、磁盘满),这次刷新就白做了 ——
         而旧令牌已经被百度那边作废了,下一次调用会拿着它去撞一个查不出原因的失败。"""
-        source = Path(__file__).resolve().parents[1] / "app" / "domain" / "plugins" / "tools.py"
-        code = source.read_text(encoding="utf-8")
-        persist_at = code.index("plugin_state.persist(")
-        collect_at = code.index("output = _collect_artifact(")
-        assert persist_at < collect_at, "收产出排在了落状态前面"
+        import inspect
+
+        from app.domain.plugins import tools
+
+        #: 落状态在跑插件的那一段里(_run_process),它返回之后才轮到收产出 —— 通用的(进素材库)和能力的收尾都是。
+        run = inspect.getsource(tools._run_process)
+        assert run.index("plugin_state.persist(") < run.index("return result.output"), "跑完没先落状态就交回了"
+        invoke = inspect.getsource(tools.invoke)
+        ran_at = invoke.index("_run_process(")
+        assert ran_at < invoke.index("_collect_artifact(") and ran_at < invoke.index("finish(db,"), "收产出排在了落状态前面"
 
 
 class Test失败时交回的状态也要记住:

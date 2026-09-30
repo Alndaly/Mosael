@@ -304,12 +304,10 @@ def _instance(db: DbSession, instance) -> dict:
         "config": instance.config or {},
         "blocked_reason": inst.blocked_reason(db, instance),
         "authorization": inst.authorization_state(db, instance),
-        # internal 的工具只给宿主适配层用,勾选列表里不出现 —— 勾上也不会暴露,列出来只会让人以为能。
-        "tools": [{**tool, "exposed": tool["name"] in chosen, "form": _tool_form(tool)}
+        # internal 的工具只给宿主适配层用,勾选列表里不出现 —— 勾上也不会暴露,列出来只会让人以为能。认领调用类能力的
+        # (MinerU 的解析)是普通工具,在这张表里,带着能力和「也用在」(ADR 0033)。
+        "tools": [{**tool, "exposed": tool["name"] in chosen, "form": _tool_form(tool), "used_by": _used_by(tool["provides"])}
                   for tool in tools if not tool["internal"]],
-        "host_tools": [{**{key: tool[key] for key in ("name", "label", "description", "provides")},
-                        "used_by": _used_by(tool["provides"])}
-                       for tool in tools if tool["internal"] and tool["provides"]],
         "capability_status": {
             capability: _capability_status(status)
             for capability, status in (instance.capability_status or {}).items()

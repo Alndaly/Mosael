@@ -8,9 +8,10 @@
 素材库、剪辑页、工作流节点、听写点名的是提供方 id;不点名按这个人的默认,没定默认用第一个装好了运行环境的本机引擎。
 此前引擎只能在部署配置 `asr_provider` 和节点里写死的 `auto / funasr / whisperx` 之间挑,插件插不进来。
 
-**插件协议**(只经宿主调):
+**契约**(认领 `transcription` 的工具是一个普通工具,ADR 0033;智能体、工作流也能直接调它):
 
-- 入:`{"file": <暂存目录里一份 16k 单声道 wav>, "filename": <原素材名>, "language": <语言代码,空 = 自己判>}`;
+- 入:`file` 是一段声音(`format: asset`,`x-media` 含 audio 与 video,`x-audio: speech` —— 宿主先抽成 16k 单声道 wav
+  再给),可选 `filename`(原素材名)、`language`(语言代码,空 = 自己判);
 - 出:`{"language": "zh", "segments": [{"start": 秒, "end": 秒, "text": "…", "speaker": 可选,
   "words": 可选 [{"start", "end", "word"}]}]}`;
 - 进度、取消和别的流式工具同一套。
@@ -122,12 +123,9 @@ class PluginTranscriber:
     def transcribe(self, wav: Path, language: str = "") -> dict:
         from app.domain.plugins.errors import PluginDomainError
         from app.domain.plugins.runtime import PluginRuntimeError
-        from app.domain.plugins.tools import invoke_host, quiet_hooks, stage_input
+        from app.domain.plugins.tools import invoke_host, quiet_hooks
 
         heard: dict[str, Any] = {}
-
-        def prepare(scratch: Path) -> dict[str, Any]:
-            return {"file": str(stage_input(scratch, wav)), "filename": wav.name, "language": language}
 
         def collect(output: dict[str, Any], _scratch: Path) -> dict[str, Any]:
             segments = output.get("segments")
@@ -142,8 +140,8 @@ class PluginTranscriber:
 
         try:
             with unit_of_work() as db:
-                invoke_host(db, self._provider.id, TRANSCRIPTION, {}, prepare=prepare, collect=collect,
-                            hooks=quiet_hooks())
+                invoke_host(db, self._provider.id, TRANSCRIPTION, {"filename": wav.name, "language": language},
+                            files={"file": wav}, collect=collect, hooks=quiet_hooks())
         except (PluginDomainError, PluginRuntimeError) as exc:
             raise ASRError("asrErr_pluginFailed", plugin=self.name, detail=str(exc)[:500]) from exc
         return heard

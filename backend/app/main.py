@@ -334,6 +334,10 @@ def _wire_seams() -> None:
         on_instance_change=dynamic_tools.refresh,
     ))
     host_capabilities.use_table(capabilities.instance_hooks)
+    # 调用类能力的收尾(ADR 0033 §3):智能体、工作流直接调了认领文档解析的工具,结果存成那份文档的一次解析。
+    from app.domain.documents import extraction as document_extraction
+
+    capabilities.register_finish(documents.DOCUMENT_PARSE, document_extraction.finish_plugin_call)
     # 「用在哪」(ADR 0032 §4):宿主界面入口各自登记;工作流节点、智能体工具现扫各自的注册表。
     documents.register_uses()
     public_links.register_uses()

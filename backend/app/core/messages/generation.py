@@ -429,6 +429,11 @@ MESSAGES: dict[str, dict[str, str]] = {
     "docErr_parserOutdated": {"zh": "文档解析用的「{plugin}」版本太旧,请到插件页更新", "en": "“{plugin}”, set for document parsing, is out of date; update it on the Plugins page."},
     "assetErr_unsupportedFileType": {"zh": "素材库不收「{name}」这种文件:能导入的是图片、视频、音频,和 PDF、Word、PPT、Excel、CSV、Markdown、TXT、网页、EPUB 文档", "en": "The library can't take “{name}”: you can import images, video, audio, and PDF, Word, PowerPoint, Excel, CSV, Markdown, text, web page and EPUB documents."},
     "assetErr_otherWorkspace": {"zh": "这份素材不属于当前工作区", "en": "This asset doesn't belong to the current workspace."},
+    "assetErr_wrongKindForPlugin": {"zh": "「{name}」不是这里要的素材:要{kinds}", "en": "“{name}” isn't the kind of asset needed here: expected {kinds}."},
+    "assetKind_image": {"zh": "图片", "en": "an image"},
+    "assetKind_video": {"zh": "视频", "en": "a video"},
+    "assetKind_audio": {"zh": "音频", "en": "audio"},
+    "assetKind_document": {"zh": "文档", "en": "a document"},
     "assetErr_noFileYet": {
         "zh": "素材 {name} 还没有文件(可能仍在生成中)",
         "en": "Asset {name} has no file yet (it may still be generating).",

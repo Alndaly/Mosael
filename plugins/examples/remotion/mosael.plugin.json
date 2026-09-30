@@ -1,5 +1,5 @@
 {
-  "manifest_version": 3,
+  "manifest_version": 4,
   "id": "dev.mosael.remotion",
   "name": {
     "zh": "Remotion 动画",

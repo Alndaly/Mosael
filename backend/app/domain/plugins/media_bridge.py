@@ -33,9 +33,12 @@ class Sink(Protocol):
 
 
 class Source(Protocol):
-    """引用 → 文件。把它落到 `into` 那个目录里,返回落好的路径。"""
+    """引用 → 文件。把它落到 `into` 那个目录里,返回落好的路径。`media` 不空时只收这几种素材(入参的 `x-media`),
+    别的当场说清 —— 交给文档解析的是一张图片,插件那头只会报一句看不懂的错。"""
 
-    def __call__(self, db: Session, ref: str, *, into: Path, workspace_id: str) -> Path: ...
+    def __call__(
+        self, db: Session, ref: str, *, into: Path, workspace_id: str, media: tuple[str, ...] = ()
+    ) -> Path: ...
 
 
 _sink: Sink | None = None

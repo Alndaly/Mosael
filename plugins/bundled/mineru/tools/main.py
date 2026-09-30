@@ -7,9 +7,9 @@ Mosael 自带的本地解析只读文档里**已经有的文字**:原生的 Word
 
 ## 协议(宿主 → 插件)
 
-宿主在文档解析任务里调 `mineru_parse`(它认领了 `document_parse`,只给宿主调):
+`mineru_parse` 认领了 `document_parse`:宿主的解析任务、智能体、工作流都调它(ADR 0033),入参和产出只有一种:
 
-- 入:`{"file": <原件副本的本地路径>, "filename": <原文件名>}`;
+- 入:`{"file": <原件副本的本地路径>, "filename": <原文件名,可省>}`;
 - 进度:stdout 的 NDJSON 进度行;宿主建了取消文件就停下来退出;
 - 出:`{"markdown": "document.md"}` —— 写在 `MOSAEL_PLUGIN_OUTPUT_DIR` 里,每一页前一个 `<!-- page: N -->`,
   插图在同一目录的 `images/` 下、正文里用相对路径引用。

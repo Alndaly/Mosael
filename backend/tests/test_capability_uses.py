@@ -55,12 +55,12 @@ def test_通用选项来源_认得登记过的能力_认不出的说清楚() -> 
 def test_插件能写的每一项能力都叫得出名字_说得出用在哪() -> None:
     """插件市场按能力筛、插件页说它替宿主做什么,都照这一份词表 —— 此前前端手写了两项(素材外链、文档解析),
     别的能力在市场里只显示原词。"""
-    from app.domain.plugins.manifest import HOST_ONLY_CAPABILITIES
+    from app.domain.plugins.manifest import CLAIMED_CAPABILITIES
     from tests.util import fresh_client
 
     client = fresh_client()
     terms = {one["name"]: one for one in client.get("/api/plugins/capabilities").json()}
-    assert set(HOST_ONLY_CAPABILITIES) | {"public_url"} <= set(terms), "清单里能写的词,每一个都要在词表里"
+    assert set(CLAIMED_CAPABILITIES) | {"public_url"} <= set(terms), "清单里能写的词,每一个都要在词表里"
     for name, term in terms.items():
         assert term["label"] and term["label"] != name, f"{name} 没有给人看的名字"
         assert term["used_by"], f"{name} 说不出装上之后用在哪"

@@ -1,6 +1,6 @@
 {
   "id": "dev.mosael.tikhub",
-  "manifest_version": 3,
+  "manifest_version": 4,
   "name": "TikHub",
   "default_locale": "zh",
   "version": "1.0.4",

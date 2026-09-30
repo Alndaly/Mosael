@@ -27976,44 +27976,6 @@
         "title": "PluginFieldOut",
         "description": "一个配置项或凭据项。凭据只是 secret=True 的配置 —— 差别在控件和回显,不在语义。"
       },
-      "PluginHostToolOut": {
-        "properties": {
-          "name": {
-            "type": "string",
-            "title": "Name"
-          },
-          "label": {
-            "type": "string",
-            "title": "Label",
-            "default": ""
-          },
-          "description": {
-            "type": "string",
-            "title": "Description",
-            "default": ""
-          },
-          "provides": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Provides"
-          },
-          "used_by": {
-            "items": {
-              "$ref": "#/components/schemas/PluginCapabilityUseOut"
-            },
-            "type": "array",
-            "title": "Used By"
-          }
-        },
-        "type": "object",
-        "required": [
-          "name"
-        ],
-        "title": "PluginHostToolOut",
-        "description": "只给 Mosael 调用的工具(认领了宿主能力:文档解析、生成……)。不进勾选表 —— 勾了也不会给智能体和工作流 ——\n但插件页要列出来:MinerU 这类插件只有这样的工具,不列的话那一块是空的,看不出它能做什么(用户截图)。"
-      },
       "PluginInstallPreview": {
         "properties": {
           "id": {
@@ -28185,13 +28147,6 @@
             },
             "type": "array",
             "title": "Tools"
-          },
-          "host_tools": {
-            "items": {
-              "$ref": "#/components/schemas/PluginHostToolOut"
-            },
-            "type": "array",
-            "title": "Host Tools"
           },
           "capability_status": {
             "additionalProperties": {
@@ -28990,6 +28945,20 @@
             "additionalProperties": true,
             "type": "object",
             "title": "Form"
+          },
+          "provides": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Provides"
+          },
+          "used_by": {
+            "items": {
+              "$ref": "#/components/schemas/PluginCapabilityUseOut"
+            },
+            "type": "array",
+            "title": "Used By"
           }
         },
         "type": "object",

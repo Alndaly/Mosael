@@ -1,13 +1,19 @@
-"""交给声明了 `document_parse` 的插件解析(ADR 0031 §3,MinerU 是第一家)。
+"""认领了 `document_parse` 的插件工具(ADR 0031 §3,MinerU 是第一家)。
 
-**协议**(只给宿主调的能力,走 plugins.tools.invoke_host 的流式那条):
+**契约**(ADR 0033 §3:它是一个普通工具,能力是加在它上面的一份契约):
 
-- 入:`{"file": <原件副本的本地路径>, "filename": <原文件名>}`。宿主在进程起来之前把副本放进这次的暂存目录
-  (`MOSAEL_PLUGIN_OUTPUT_DIR`,插件也往这里写产出);
+- 入:`file` 是一份文档(`format: asset`,`x-media` 含 `document`),宿主交的是原件副本的本地路径;可选 `filename`
+  (原文件名;没给就是副本的文件名,它和原件同名);
 - 进度:NDJSON 的 `{"event": "progress", ...}` 行,取消看 `MOSAEL_PLUGIN_CANCEL_FILE`(和别的流式工具同一套);
 - 出:`{"markdown": <暂存目录里一份 Markdown 的相对路径>}`。正文里用 `<!-- page: N -->`(或 slide / sheet /
   section)标出每一段从哪开始 —— 没标就按标题切;插图写在暂存目录的 `images/` 下,正文里用相对路径引用。
   正文里内嵌的 HTML 表格(MinerU 就是这样交表格的)由宿主转成 Markdown 表格。
+
+两条路调它,产出落到同一个地方 —— 那份文档的一次解析:
+
+- 宿主的解析任务(文档详情「重新解析」、导入后的解析、工作流「文档转 Markdown」):`parse_with_plugin`,
+  解析那一行在任务开始时就建好了,进度写在任务上;
+- 智能体、工作流里的这个插件节点、插件页「试一下」直接调工具:能力的收尾(extraction.finish_plugin_call)新建一行解析存进去。
 
 页面图**不归插件管**:宿主照原件自己渲(local.attach_page_images),哪一家解析的都一样。
 """
@@ -68,31 +74,33 @@ def _cancelled(job_id: str | None) -> bool:
         return job is not None and was_cancelled(job)
 
 
+def parsed_from_output(output: dict[str, Any], scratch: Path, target: Path) -> Parsed:
+    """插件交回的产出(暂存目录被删之前)→ 切好段的解析;插图搬进解析目录。两条路共用。"""
+    relative = str(output.get("markdown") or "")
+    if not relative:
+        raise DocumentParseError("docErr_pluginBadOutput", detail="no markdown")
+    markdown = _inside(scratch, relative).read_text(encoding="utf-8", errors="replace")
+    images = scratch / "images"
+    if images.is_dir():
+        shutil.copytree(images, target / "images", dirs_exist_ok=True)
+    unit, sections = sections_from_markdown(markdown)
+    kept = sorted(f"images/{one.relative_to(images).as_posix()}" for one in images.rglob("*") if one.is_file()) \
+        if images.is_dir() else []
+    return Parsed(unit=unit, sections=sections, images=kept)
+
+
 def parse_with_plugin(db: Session, extraction: AssetExtraction, asset: Asset, source: Path, target: Path, progress) -> Parsed:
+    """解析任务里交给插件:原件经工具的 `file` 入参交(和素材 id 同一道暂存),产出在暂存目录删之前切好段。"""
     from app.domain.plugins.errors import PluginDomainError
     from app.domain.plugins.runtime import PluginRuntimeError, StreamHooks
-    from app.domain.plugins.tools import invoke_host, stage_input
+    from app.domain.plugins.tools import invoke_host
 
-    filename = asset.original_filename or source.name
     parsed: dict[str, Parsed] = {}
 
-    def prepare(scratch: Path) -> dict[str, Any]:
-        return {"file": str(stage_input(scratch, source)), "filename": filename}
-
     def collect(output: dict[str, Any], scratch: Path) -> dict[str, Any]:
-        """暂存目录被删之前:正文读出来切段,插图搬进解析目录。"""
-        relative = str(output.get("markdown") or "")
-        if not relative:
-            raise DocumentParseError("docErr_pluginBadOutput", detail="no markdown")
-        markdown = _inside(scratch, relative).read_text(encoding="utf-8", errors="replace")
-        images = scratch / "images"
-        if images.is_dir():
-            shutil.copytree(images, target / "images", dirs_exist_ok=True)
-        unit, sections = sections_from_markdown(markdown)
-        kept = sorted(f"images/{one.relative_to(images).as_posix()}" for one in images.rglob("*") if one.is_file()) \
-            if images.is_dir() else []
-        parsed["result"] = Parsed(unit=unit, sections=sections, images=kept)
-        return {"markdown": relative, "sections": len(sections), "images": len(kept)}
+        parsed["result"] = parsed_from_output(output, scratch, target)
+        return {"markdown": str(output.get("markdown")), "sections": len(parsed["result"].sections),
+                "images": len(parsed["result"].images)}
 
     hooks = StreamHooks(
         on_progress=lambda fraction, message: progress(0.05 + 0.85 * fraction, message or "docProgress_readPages"),
@@ -101,7 +109,8 @@ def parse_with_plugin(db: Session, extraction: AssetExtraction, asset: Asset, so
         is_cancelled=lambda: _cancelled(extraction.job_id),
     )
     try:
-        invoke_host(db, extraction.parser, DOCUMENT_PARSE, {}, prepare=prepare, collect=collect, hooks=hooks)
+        invoke_host(db, extraction.parser, DOCUMENT_PARSE, {"filename": asset.original_filename or source.name},
+                    files={"file": source}, collect=collect, hooks=hooks)
     except (PluginDomainError, PluginRuntimeError) as exc:
         raise DocumentParseError("docErr_pluginFailed", plugin=extraction.parser_name, detail=str(exc)[:500]) from exc
     if "result" not in parsed:

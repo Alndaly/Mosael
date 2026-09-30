@@ -82,6 +82,14 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "插件清单 {path}:能力 {capability} 被多个工具同时认领({tools}),只能有一个",
         "en": "In plugin manifest {path}, the {capability} capability is claimed by several tools ({tools}); only one may claim it.",
     },
+    "pluginErr_manifestCapabilityContract": {
+        "zh": "插件清单 {path}:工具 {tool} 认领了能力 {capability},入参 {field} 要写成 {expected} —— 宿主的入口和智能体、工作流调的是同一个工具,形状只有一种",
+        "en": "In plugin manifest {path}, tool {tool} claims the {capability} capability, so its input {field} must be {expected}; the host's own entry points and agents or workflows call the same tool with the same shape.",
+    },
+    "pluginErr_manifestBadAudioPrepare": {
+        "zh": "插件清单 {path}:工具 {tool} 的入参 {field} 写了 x-audio「{value}」,只认 original(原采样率)或 speech(16k 单声道)",
+        "en": "In plugin manifest {path}, input {field} of tool {tool} sets x-audio to “{value}”; only original (source sample rate) or speech (16 kHz mono) are allowed.",
+    },
     # ---- 插件包 ----
     "pluginErr_archiveTooLarge": {
         "zh": "插件包超过大小上限",

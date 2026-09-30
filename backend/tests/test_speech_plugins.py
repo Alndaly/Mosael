@@ -14,7 +14,8 @@ from app.db.models import PluginInstance, User
 TTS_PLUGIN = {
     "id": "dev.test.faketts", "manifest_version": 1, "name": "假配音", "version": "1",
     "provides": ["speech"], "runtime": {"kind": "process", "entry": "main.py"},
-    "tools": {"declare": [{"name": "voice", "provides": ["speech"], "timeout_seconds": 30}]},
+    "tools": {"declare": [{"name": "voice", "provides": ["speech"], "timeout_seconds": 30,
+                           "input_schema": {"type": "object", "properties": {"op": {"type": "string"}}}}]},
 }
 TTS_ENTRY = textwrap.dedent('''
     import json, os, sys, wave
@@ -26,7 +27,7 @@ TTS_ENTRY = textwrap.dedent('''
         out = os.path.join(os.environ["MOSAEL_PLUGIN_OUTPUT_DIR"], "said.wav")
         with wave.open(out, "wb") as w:
             w.setnchannels(1); w.setsampwidth(2); w.setframerate(16000); w.writeframes(b"\\0\\0" * 1600)
-        print(json.dumps({"ok": True, "output": {"audio": "said.wav"}}))
+        print(json.dumps({"ok": True, "output": {"artifact": {"path": "said.wav"}}}))
 ''')
 
 

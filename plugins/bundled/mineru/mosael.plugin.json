@@ -1,12 +1,12 @@
 {
   "id": "dev.mosael.mineru",
-  "manifest_version": 3,
+  "manifest_version": 4,
   "name": {
     "zh": "MinerU 文档解析",
     "en": "MinerU document parsing"
   },
   "default_locale": "zh",
-  "version": "1.2.1",
+  "version": "1.3.0",
   "author": {
     "name": "Mosael",
     "url": "https://mosael.com"
@@ -126,8 +126,8 @@
           "en": "Parse a document with MinerU"
         },
         "description": {
-          "zh": "把一份文档交给 MinerU 解析成 Markdown(按页标出,表格、公式、插图都保留)。宿主在解析任务里调它,不单独出现在工具表里。",
-          "en": "Parse a document into Markdown with MinerU (marked page by page, keeping tables, formulas and images). The host calls it inside a parse job; it isn't listed as a standalone tool."
+          "zh": "把一份文档交给 MinerU 解析成 Markdown(按页标出,表格、公式、插图都保留),结果存成这份文档的一次解析 —— 阅读器、智能体读文档读到的就是它。",
+          "en": "Parse a document into Markdown with MinerU (marked page by page, keeping tables, formulas and images); the result is saved as a parse of that document, which the reader and the agent then read."
         },
         "effects": "external",
         "provides": [
@@ -138,13 +138,15 @@
           "properties": {
             "file": {
               "title": {
-                "zh": "文件",
-                "en": "File"
+                "zh": "文档",
+                "en": "Document"
               },
               "type": "string",
+              "format": "asset",
+              "x-media": "document",
               "description": {
-                "zh": "要解析的文件(宿主给的本地副本)。",
-                "en": "The file to parse (a local copy from the host)."
+                "zh": "要解析的文档:PDF、Word、PPT、图片。",
+                "en": "The document to parse: PDF, Word, PowerPoint or an image."
               }
             },
             "filename": {
@@ -154,8 +156,8 @@
               },
               "type": "string",
               "description": {
-                "zh": "原文件名。",
-                "en": "The original file name."
+                "zh": "原文件名;留空用这份文档自己的名字。",
+                "en": "The original file name; leave empty to use the document's own name."
               }
             }
           },

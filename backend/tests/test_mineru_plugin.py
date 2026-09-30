@@ -192,14 +192,18 @@ def test_清单_只给宿主调_认领文档解析() -> None:
 FAKE_PARSER = {
     "id": "dev.test.fakeparser", "manifest_version": 1, "name": "假解析", "version": "1",
     "provides": ["document_parse"], "runtime": {"kind": "process", "entry": "main.py"},
-    "tools": {"declare": [{"name": "parse", "provides": ["document_parse"], "stream": True, "timeout_seconds": 60}]},
+    "tools": {"declare": [{"name": "parse", "provides": ["document_parse"], "stream": True, "timeout_seconds": 60,
+                           "input_schema": {"type": "object", "properties": {
+                               "file": {"type": "string", "format": "asset", "x-media": "document"},
+                               "filename": {"type": "string"}}}}]},
 }
 FAKE_ENTRY = textwrap.dedent('''
     import json, os, sys, base64
     request = json.loads(sys.stdin.read())
     payload = request["input"]
     out = os.environ["MOSAEL_PLUGIN_OUTPUT_DIR"]
-    assert os.path.isfile(payload["file"]) and payload["filename"] == "brief.pdf"
+    #: 宿主的解析任务给原文件名;直接调工具时没给,副本和原件同名。
+    assert os.path.isfile(payload["file"]) and (payload.get("filename") or os.path.basename(payload["file"])) == "brief.pdf"
     print(json.dumps({"event": "progress", "progress": 0.5, "message": "解析中"}), flush=True)
     os.makedirs(os.path.join(out, "images"), exist_ok=True)
     open(os.path.join(out, "images", "fig.png"), "wb").write(base64.b64decode(%r))
@@ -254,12 +258,14 @@ def test_宿主_点名插件解析_按页切段_表格转成_Markdown_插图搬�
     #: 读的时候用最新成功的那一份 —— 智能体读到的就是插件解析的。
     assert client.get(f"/api/assets/{made['id']}/document").json()["parser"] == "假解析"
 
-    #: 插件页:只给宿主调的那个工具也列出来(写着它替 Mosael 做什么),不再是一片空白(用户截图)。
+    #: 插件页:认领了文档解析的工具是一个普通工具(ADR 0033),在工具表里、带着它认领的能力 —— 此前是一张
+    #: 「由 Mosael 调用」的卡片,智能体和工作流都点不到它(用户:「这类工具本身是要开放的」)。
     package = next(one for one in client.get("/api/plugins").json() if one["id"] == FAKE_PARSER["id"])
     instance = package["instances"][0]
-    assert instance["tools"] == [] and [tool["provides"] for tool in instance["host_tools"]] == [["document_parse"]]
+    assert [(tool["name"], tool["provides"]) for tool in instance["tools"]] == [("parse", ["document_parse"])]
+    assert "host_tools" not in instance
     #: 「用在哪」是能力表现算的(ADR 0032 §4):设置默认、文档详情、工作流节点、智能体工具都在,不是手写的一句话。
-    used = {(one["kind"], one["label"]) for one in instance["host_tools"][0]["used_by"]}
+    used = {(one["kind"], one["label"]) for one in instance["tools"][0]["used_by"]}
     assert {kind for kind, _ in used} == {"app", "workflow", "agent"}
     assert any(kind == "workflow" and "文档转 Markdown" in label for kind, label in used)
     assert any(kind == "agent" and "reparse_document" in label for kind, label in used)
@@ -293,3 +299,50 @@ def test_宿主_点名插件解析_按页切段_表格转成_Markdown_插图搬�
         spec.validate(db, ws, {"asset_id": made["id"], "parser": "假解析"}, owner)
         started = spec.execute(db, SimpleNamespace(payload={"asset_id": made["id"], "parser": "假解析"}, workspace_id=ws), owner)
     assert started["parser"] == "假解析" and settled(started["extraction_id"])["status"] == "succeeded"
+
+
+def test_直接调认领了文档解析的工具_结果存成那份文档的一次新解析(monkeypatch) -> None:
+    """ADR 0033 §3:智能体、工作流、插件页「试一下」调的是同一个工具,产出按能力收尾 —— 存成那份文档的解析,
+    和「用 ×× 重新解析」落到同一个地方;不是交回一个指向已经删掉的暂存目录的 `doc.md`。"""
+    import base64
+
+    from app.core.db import SessionLocal
+    from app.domain.documents import office
+    from app.db.models import PluginInstance
+    from tests.test_plugins import install
+
+    monkeypatch.setattr(office, "find_soffice", lambda: None)
+    client = install(FAKE_PARSER, entry=FAKE_ENTRY % base64.b64encode(png_bytes()).decode())
+    with SessionLocal() as db:
+        instance = db.query(PluginInstance).filter_by(package_id=FAKE_PARSER["id"]).first()
+        instance.enabled = True
+        instance_id = instance.id
+        db.commit()
+    ws = client.get("/api/workspaces").json()[0]["id"]
+    made = client.post("/api/assets/import", data={"workspace_id": ws},
+                       files={"file": ("brief.pdf", pdf_bytes(["Cover", "Table page"]), "application/pdf")}).json()
+
+    res = client.post(f"/api/plugins/instances/{instance_id}/tools/parse/invoke",
+                      json={"input": {"file": made["id"]}, "workspace_id": ws})
+    assert res.status_code == 200, res.text
+    call = res.json()
+    assert call["status"] == "succeeded", call
+    assert call["output"]["asset_id"] == made["id"] and call["output"]["sections"] == 2
+    latest = client.get(f"/api/assets/{made['id']}/document").json()
+    assert latest["parser"] == "假解析", "读的人拿到的是插件这一次的解析"
+    extraction = next(one for one in client.get(f"/api/assets/{made['id']}/extractions").json()
+                      if one["id"] == call["output"]["extraction_id"])
+    assert extraction["status"] == "succeeded" and extraction["page_images"] == ["pages/001.png", "pages/002.png"]
+
+    #: 勾上就是一个智能体、工作流看得到的工具(ADR 0033 §1)—— 此前认领了能力的工具勾不了,也不在这张表里。
+    ticked = client.patch(f"/api/plugins/instances/{instance_id}/capabilities", json={"tools": {"parse": True}})
+    assert ticked.status_code == 200, ticked.text
+    exposed = [(one["instance_id"], one["name"]) for one in client.get("/api/plugins/tools").json()]
+    assert (instance_id, "parse") in exposed
+
+    #: 交给它一张图片:入参的 `x-media` 只收文档,当场说清,不交给插件去报一句看不懂的错。
+    image = client.post("/api/assets/import", data={"workspace_id": ws},
+                        files={"file": ("a.png", png_bytes(), "image/png")}).json()
+    wrong = client.post(f"/api/plugins/instances/{instance_id}/tools/parse/invoke",
+                        json={"input": {"file": image["id"]}, "workspace_id": ws}).json()
+    assert wrong["status"] == "failed" and "a.png" in wrong["error"]

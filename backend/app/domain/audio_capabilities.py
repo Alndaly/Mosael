@@ -6,11 +6,14 @@
 - **挑哪一家**走能力表那一份挑法(`capabilities.pick`):节点、画板、智能体、素材库点名的是提供方 id(内置的是
   `builtin:<引擎>`,插件的是连接 id);不点名按这个人的默认,没定默认用第一个允许自动、跑得起来的内置引擎 ——
   降噪里会顺手去掉配乐的语音模型不自动用;
-- **插件协议**(认领 `audio_denoise` / `audio_separation` 的工具,只经宿主调):
-  - 入:`{"file": <暂存目录里一份 wav 的路径>, "filename": <原素材名>}`,降噪多一个 `"strength": light|medium|strong`;
-  - 出:降噪 `{"audio": <暂存目录里的相对路径>}`,分离 `{"vocals": …, "background": …}`;
+- **契约**(认领 `audio_denoise` / `audio_separation` 的工具是一个普通工具,ADR 0033):
+  - 入:`file` 是一段声音(`format: asset`,`x-media` 含 audio 与 video,`x-audio: original` —— 宿主先抽成原采样率的
+    wav 再给);可选 `filename`(原素材名),降噪多一个 `strength`:light|medium|strong;
+  - 出:降噪 `{"artifact": {"path": …}}`,分离 `{"artifacts": [{"path": …, "output": "vocals"}, {…, "output": "background"}]}`
+    —— 和别的工具交文件同一个写法;
   - 进度、取消和别的流式工具同一套(NDJSON 进度行、`MOSAEL_PLUGIN_CANCEL_FILE`)。
-  抽音轨、放回视频、登记成新素材都是宿主的事(domain/assets/denoise、domain/assets/separation),插件只处理一段音频。
+  宿主的入口(素材库的降噪 / 分离、节点、画板)调它时,产出在暂存目录删之前由入口取走,放回视频、登记成新素材都是
+  入口的事(domain/assets/denoise、domain/assets/separation);智能体、工作流直接调它时,产出按通用规矩进素材库。
 """
 
 from __future__ import annotations
@@ -80,12 +83,13 @@ SEPARATION = Capability(
 )
 
 
-def _inside(scratch: Path, relative: Any, error: type[Exception], key: str) -> Path:
-    from app.domain.plugins.tools import staged_output
+def _produced(scratch: Path, spec: Any, error: type[Exception], key: str) -> Path:
+    """插件交回的一份 `artifact` → 暂存目录里那份文件;没交、交在外面都说清楚。"""
+    from app.domain.plugins.tools import staged_artifact
 
-    found = staged_output(scratch, relative)
+    found = staged_artifact(scratch, spec)
     if found is None:
-        raise error(key, detail=str(relative)[:200])
+        raise error(key, detail=str(spec)[:200])
     return found
 
 
@@ -109,21 +113,19 @@ class PluginDenoiseAdapter:
         from app.core.db import SessionLocal
         from app.domain.plugins.errors import PluginDomainError
         from app.domain.plugins.runtime import PluginRuntimeError
-        from app.domain.plugins.tools import invoke_host, quiet_hooks, stage_input
-
-        def prepare(scratch: Path) -> dict[str, Any]:
-            return {"file": str(stage_input(scratch, request.audio_path)), "filename": request.audio_path.name,
-                    "strength": request.strength}
+        from app.domain.plugins.tools import invoke_host, quiet_hooks
 
         def collect(output: dict[str, Any], scratch: Path) -> dict[str, Any]:
-            produced = _inside(scratch, output.get("audio"), DenoiseError, "denoiseErr_pluginBadOutput")
+            produced = _produced(scratch, output.get("artifact"), DenoiseError, "denoiseErr_pluginBadOutput")
             out_path.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(produced, out_path)
-            return {"audio": str(output.get("audio"))}
+            return {"artifact": produced.name}
 
         try:
             with SessionLocal() as db:
-                invoke_host(db, self._provider.id, AUDIO_DENOISE, {}, prepare=prepare, collect=collect, hooks=quiet_hooks())
+                invoke_host(db, self._provider.id, AUDIO_DENOISE,
+                            {"filename": request.audio_path.name, "strength": request.strength},
+                            files={"file": request.audio_path}, collect=collect, hooks=quiet_hooks())
         except (PluginDomainError, PluginRuntimeError) as exc:
             raise DenoiseError("denoiseErr_pluginFailed", plugin=self._provider.name, detail=str(exc)[:500]) from exc
         return out_path
@@ -147,26 +149,25 @@ class PluginSeparationAdapter:
         from app.core.db import SessionLocal
         from app.domain.plugins.errors import PluginDomainError
         from app.domain.plugins.runtime import PluginRuntimeError
-        from app.domain.plugins.tools import invoke_host, quiet_hooks, stage_input
+        from app.domain.plugins.tools import invoke_host, quiet_hooks
 
         made: dict[str, Path] = {}
 
-        def prepare(scratch: Path) -> dict[str, Any]:
-            return {"file": str(stage_input(scratch, request.audio_path)), "filename": request.audio_path.name}
-
         def collect(output: dict[str, Any], scratch: Path) -> dict[str, Any]:
             out_dir.mkdir(parents=True, exist_ok=True)
+            specs = output.get("artifacts") if isinstance(output.get("artifacts"), list) else []
             for stem in (VOCALS, BACKGROUND):
-                produced = _inside(scratch, output.get(stem), SeparationError, "separationErr_pluginBadOutput")
+                spec = next((one for one in specs if isinstance(one, dict) and one.get("output") == stem), None)
+                produced = _produced(scratch, spec, SeparationError, "separationErr_pluginBadOutput")
                 target = out_dir / f"{stem}{produced.suffix or '.wav'}"
                 shutil.copyfile(produced, target)
                 made[stem] = target
-            return {stem: str(output.get(stem)) for stem in (VOCALS, BACKGROUND)}
+            return {stem: made[stem].name for stem in (VOCALS, BACKGROUND)}
 
         try:
             with SessionLocal() as db:
-                invoke_host(db, self._provider.id, AUDIO_SEPARATION, {}, prepare=prepare, collect=collect,
-                            hooks=quiet_hooks())
+                invoke_host(db, self._provider.id, AUDIO_SEPARATION, {"filename": request.audio_path.name},
+                            files={"file": request.audio_path}, collect=collect, hooks=quiet_hooks())
         except (PluginDomainError, PluginRuntimeError) as exc:
             raise SeparationError("separationErr_pluginFailed", plugin=self._provider.name, detail=str(exc)[:500]) from exc
         return made

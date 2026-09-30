@@ -36,6 +36,21 @@ def extract_audio(source: Path, target: Path) -> Path:
     return target
 
 
+def extract_speech(source: Path, target: Path) -> Path:
+    """把 source 里的声音存成 target(wav,16 kHz 单声道)—— 识别模型的输入格式(转写)。"""
+    result = run_logged(
+        [settings.ffmpeg, "-y", "-v", "error", "-i", str(source), "-vn", "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le",
+         "-f", "wav", str(target)],
+        capture_output=True,
+        text=True,
+        timeout=900,
+        what="抽取音轨",
+    )
+    if result.returncode != 0 or not target.is_file():
+        raise AudioIOError("audioErr_extract", detail=blame_line(result.stderr, fallback="") or tr("audioErr_ffmpegNoReason"))
+    return target
+
+
 def as_audio(source: Path, work: Path) -> Path:
     """本来就是音频的原样用;视频先抽一条 wav 到 work 下。"""
     if source.suffix.lower() in AUDIO_SUFFIXES:

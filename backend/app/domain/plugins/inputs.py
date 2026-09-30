@@ -26,6 +26,7 @@ artifact 那条(见 artifacts)是插件交给宿主;这条是反过来。有了�
 from __future__ import annotations
 
 import logging
+import shutil
 from pathlib import Path
 from typing import Any
 
@@ -94,6 +95,33 @@ def coerce(tool: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+def _media(spec: dict[str, Any]) -> tuple[str, ...]:
+    """入参的 `x-media`:只收这几种素材。和节点上的素材选择器同一个读法(media_kinds.declared_media)。"""
+    from app.domain.media_kinds import declared_media
+
+    return declared_media(spec.get("x-media"))
+
+
+def _prepared(spec: dict[str, Any], path: Path) -> Path:
+    """`x-audio`:先把声音抽成 wav 再交(`original` 原采样率,`speech` 16k 单声道),插件不必自己带 ffmpeg。"""
+    from app.media.audio_io import extract_audio, extract_speech
+
+    prepare = spec.get("x-audio")
+    if prepare not in ("original", "speech"):
+        return path
+    target = path.with_name(f"{path.stem}.audio.wav")
+    return (extract_speech if prepare == "speech" else extract_audio)(path, target)
+
+
+def _spec_of(tool: dict[str, Any], key: str) -> dict[str, Any]:
+    schema = tool.get("input_schema")
+    properties = schema.get("properties") if isinstance(schema, dict) else None
+    spec = properties.get(key) if isinstance(properties, dict) else None
+    if isinstance(spec, dict) and spec.get("type") == "array" and isinstance(spec.get("items"), dict):
+        return spec["items"]
+    return spec if isinstance(spec, dict) else {}
+
+
 def materialize(
     db: Session,
     tool: dict[str, Any],
@@ -101,29 +129,42 @@ def materialize(
     scratch: Path | None,
     *,
     workspace_id: str | None,
+    files: dict[str, Path] | None = None,
 ) -> dict[str, Any]:
     """把 payload 里声明为素材的字段换成插件看得见的**本地路径**(数组就是一串路径)。
 
+    素材来自两处,落到暂存目录的是同一种副本:调用方传的素材 id(智能体、工作流、画板、插件页),和宿主自己的入口
+    手上的文件(`files`:转写前抽好的音轨、解析任务里的原件 —— 它们不一定在素材库里)。前者按入参的 `x-media`
+    核对类型、按 `x-audio` 先抽好声音;后者由宿主的入口自己备好,原样拷一份。
+
     没有这类字段就原样返回 —— 绝大多数工具走这条,不该为此付出任何代价。
     """
-    fields = [key for key in asset_fields(tool) if payload.get(key)]
-    if not fields:
+    given = {key: path for key, path in (files or {}).items() if key in asset_fields(tool)}
+    fields = [key for key in asset_fields(tool) if payload.get(key) and key not in given]
+    if not fields and not given:
         return payload
     if scratch is None:
         raise PluginDomainError("pluginErr_mcpNoAssetChannel")
-    if workspace_id is None:
-        raise PluginDomainError("pluginErr_assetNeedsWorkspace")
-
     resolved = dict(payload)
+    for key, path in given.items():
+        into = scratch / "inputs" / f"{key}-1"
+        into.mkdir(parents=True, exist_ok=True)
+        copy = into / path.name
+        shutil.copyfile(path, copy)
+        resolved[key] = str(copy)
+    if fields and workspace_id is None:
+        raise PluginDomainError("pluginErr_assetNeedsWorkspace")
     for key in fields:
         value = payload[key]
+        spec = _spec_of(tool, key)
         refs = [str(one) for one in value if one] if isinstance(value, list) else [str(value)]
         paths = []
         for ref in refs:
             # 每一份落进自己的子目录:两份素材同名(都叫 image.png)时不互相覆盖
             into = scratch / "inputs" / f"{key}-{len(paths) + 1}"
             into.mkdir(parents=True, exist_ok=True)
-            path = media_bridge.source()(db, ref, into=into, workspace_id=workspace_id)
+            path = media_bridge.source()(db, ref, into=into, workspace_id=workspace_id, media=_media(spec))
+            path = _prepared(spec, path)
             logger.info("插件输入 %s: %s → %s", key, ref, path.name)
             # 给的是**绝对路径**:插件的 cwd 是它自己的目录,相对路径会指到别处去。
             paths.append(str(path))

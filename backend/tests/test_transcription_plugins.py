@@ -15,17 +15,23 @@ from app.db.models import PluginInstance, User
 ASR_PLUGIN = {
     "id": "dev.test.fakeasr", "manifest_version": 1, "name": "假转写", "version": "1",
     "provides": ["transcription"], "runtime": {"kind": "process", "entry": "main.py"},
-    "tools": {"declare": [{"name": "hear", "provides": ["transcription"], "stream": True, "timeout_seconds": 60}]},
+    "tools": {"declare": [{"name": "hear", "provides": ["transcription"], "stream": True, "timeout_seconds": 60,
+                           "input_schema": {"type": "object", "properties": {
+                               "file": {"type": "string", "format": "asset", "x-media": ["audio", "video"],
+                                        "x-audio": "speech"}}}}]},
 }
 ASR_ENTRY = textwrap.dedent('''
-    import json, os, sys
+    import json, os, sys, wave
     request = json.loads(sys.stdin.read())
     payload = request["input"]
     assert os.path.isfile(payload["file"]) and payload["file"].endswith(".wav")
-    if payload["language"] == "bad":
+    with wave.open(payload["file"]) as heard:
+        rate, channels = heard.getframerate(), heard.getnchannels()
+    if payload.get("language") == "bad":
         print(json.dumps({"ok": True, "output": {"segments": "不是列表"}}))
     else:
-        print(json.dumps({"ok": True, "output": {"language": payload["language"] or "zh", "segments": [
+        print(json.dumps({"ok": True, "output": {"rate": rate, "channels": channels,
+                                                 "language": payload.get("language") or "zh", "segments": [
             {"start": 0.0, "end": 0.4, "text": "你好", "speaker": "A",
              "words": [{"start": 0.0, "end": 0.2, "word": "你"}, {"start": 0.2, "end": 0.4, "word": "好"}]},
             {"start": 0.4, "end": 0.9, "text": "世界"},
@@ -90,3 +96,20 @@ def test_交回的形状不对_当场说清是哪一家(tmp_path) -> None:
         chosen.transcribe(wav, "bad")
     assert raised.value.key in {"asrErr_pluginBadOutput", "asrErr_pluginFailed"}
     assert "假转写" in str(raised.value)
+
+
+def test_智能体和工作流直接调这个工具_交一份视频也行_插件拿到的是16k单声道wav(tmp_path) -> None:
+    """ADR 0033:认领了转写的工具是一个普通工具。入参 `x-audio: speech` —— 宿主先把声音抽成识别模型要的 16k 单声道
+    wav 再给,插件不必自己带 ffmpeg;交回的分段原样给调用方。"""
+    client, ws, _me, plugin, _wav = _setup(tmp_path)
+    clip = tmp_path / "talk.mp4"
+    subprocess.run([settings.ffmpeg, "-y", "-v", "error", "-f", "lavfi", "-i", "color=c=black:s=64x64:d=1",
+                    "-f", "lavfi", "-i", "sine=frequency=300:duration=1:sample_rate=44100", "-ac", "2",
+                    "-shortest", "-c:v", "libx264", "-c:a", "aac", str(clip)], check=True, capture_output=True)
+    made = client.post("/api/assets/import", data={"workspace_id": ws},
+                       files={"file": ("talk.mp4", clip.read_bytes(), "video/mp4")}).json()
+    call = client.post(f"/api/plugins/instances/{plugin}/tools/hear/invoke",
+                       json={"input": {"file": made["id"]}, "workspace_id": ws}).json()
+    assert call["status"] == "succeeded", call
+    assert (call["output"]["rate"], call["output"]["channels"]) == (16000, 1)
+    assert [one["text"] for one in call["output"]["segments"]] == ["你好", "世界"]

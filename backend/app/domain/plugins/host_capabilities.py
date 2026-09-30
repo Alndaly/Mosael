@@ -17,6 +17,8 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
+from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -25,15 +27,33 @@ from app.db.models import PluginInstance
 
 logger = logging.getLogger(__name__)
 
+@dataclass(frozen=True)
+class CapabilityCall:
+    """智能体、工作流、插件页调了一次认领调用类能力的工具,交给那项能力收尾的全部东西(ADR 0033 §3)。
+
+    `payload` 是调用方给的原样(素材入参里是素材 id,不是暂存路径);`scratch` 在收尾返回之后才删。
+    """
+
+    instance: PluginInstance
+    tool: dict[str, Any]
+    payload: dict[str, Any]
+    output: dict[str, Any]
+    scratch: Path
+    workspace_id: str | None
+    project_id: str | None
+
+
 Handler = Callable[[Session, PluginInstance, bool], None]
 #: 这个实例替宿主做出来的**东西**(生成能力就是它提供的那些模型),给插件页列出来。
 Listing = Callable[[Session, PluginInstance], list[dict[str, Any]]]
-#: 能力名 → (对齐钩子, 列清单钩子)。由组装根给(见 `use_table`)。
-Lookup = Callable[[str], tuple[Handler | None, Listing | None]]
+#: 调用类能力的收尾:插件交回的产出 → 交给调用方的那一份(文档解析 → 存成那份文档的解析)。
+Finish = Callable[[Session, CapabilityCall], dict[str, Any]]
+#: 能力名 → (对齐钩子, 列清单钩子, 收尾)。由组装根给(见 `use_table`)。
+Lookup = Callable[[str], tuple[Handler | None, Listing | None, Finish | None]]
 
 
-def _nothing(_capability: str) -> tuple[Handler | None, Listing | None]:
-    return None, None
+def _nothing(_capability: str) -> tuple[Handler | None, Listing | None, Finish | None]:
+    return None, None, None
 
 
 _lookup: Lookup = _nothing
@@ -55,6 +75,11 @@ def refresh(db: Session, instance: PluginInstance, capability: str) -> None:
     handler = _lookup(capability)[0]
     if handler is not None:
         handler(db, instance, True)
+
+
+def finisher(capability: str) -> Finish | None:
+    """这项调用类能力登记的收尾;没登记(产出按通用规矩收:文件进素材库、别的原样交回)是 None。"""
+    return _lookup(capability)[2]
 
 
 def listing(db: Session, instance: PluginInstance, capability: str) -> list[dict[str, Any]] | None:
@@ -87,4 +112,5 @@ def notify(db: Session, instance: PluginInstance, *, refresh: bool) -> None:
             logger.exception("插件实例 %s 的「%s」宿主侧没能对齐", instance.id, capability)
 
 
-__all__ = ["Handler", "Listing", "Lookup", "handles", "listing", "notify", "refresh", "use_table"]
+__all__ = ["CapabilityCall", "Finish", "Handler", "Listing", "Lookup", "finisher", "handles", "listing", "notify", "refresh",
+           "use_table"]

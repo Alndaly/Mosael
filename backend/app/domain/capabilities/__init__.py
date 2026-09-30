@@ -112,6 +112,13 @@ class Provider:
 
 
 _registry: dict[str, Capability] = {}
+#: 调用类能力的收尾(ADR 0033 §3):智能体、工作流、插件页调了认领它的工具之后,插件交回的产出怎么交给调用方
+#: (文档解析 → 存成那份文档的一次解析)。没登记 = 按通用规矩收(文件进素材库、别的原样交回)。宿主自己的入口
+#: 有自己的落点,不走它。`(db, plugins.host_capabilities.CapabilityCall) -> dict`。
+#:
+#: 不是 `Capability` 上的一格:收尾要读写宿主数据(文档的解析行),住在那一侧的深处;契约本身(documents/__init__)
+#: 被那一侧 import,反过来指着它就是一个环。所以和「用在哪」一样,由组装根登记。
+_finishers: dict[str, Callable[[Session, Any], dict[str, Any]]] = {}
 
 
 def register(capability: Capability) -> None:
@@ -119,6 +126,13 @@ def register(capability: Capability) -> None:
     if capability.name in _registry and _registry[capability.name] is not capability:
         raise RuntimeError(f"capability {capability.name!r} registered twice")
     _registry[capability.name] = capability
+
+
+def register_finish(name: str, finish: Callable[[Session, Any], dict[str, Any]]) -> None:
+    """某项调用类能力登记它的收尾(组装根调)。"""
+    if name in _finishers and _finishers[name] is not finish:
+        raise RuntimeError(f"capability {name!r} finish registered twice")
+    _finishers[name] = finish
 
 
 def get(name: str) -> Capability | None:
@@ -132,11 +146,11 @@ def registered() -> list[Capability]:
     return [_registry[name] for name in sorted(_registry) if _registry[name].pickable]
 
 
-def instance_hooks(name: str) -> tuple[Callable[[Session, Any, bool], None] | None, Callable[[Session, Any], list[dict[str, Any]]] | None]:
-    """这项能力在插件实例变动时的两个钩子(对齐、列清单);没登记这项能力或没有钩子时是 None。
+def instance_hooks(name: str) -> tuple[Any, Any, Any]:
+    """这项能力插到插件域的三个钩子:实例变动时的对齐、列清单,调用之后的收尾;没登记这项能力或没有钩子时是 None。
     组装根把它交给 plugins/host_capabilities 查 —— 插件域不 import 这里。"""
     found = _registry.get(name)
-    return (found.on_instance_change, found.listing) if found is not None else (None, None)
+    return (found.on_instance_change if found else None, found.listing if found else None, _finishers.get(name))
 
 
 def _missing(db: Session, instance: Any) -> tuple[str, ...]:
@@ -385,6 +399,7 @@ __all__ = [
     "plugin_providers",
     "providers",
     "register",
+    "register_finish",
     "registered",
     "set_default",
 ]

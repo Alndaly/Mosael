@@ -14,8 +14,10 @@ AUDIO_PLUGIN = {
     "id": "dev.test.fakeaudio", "manifest_version": 1, "name": "假音频", "version": "1",
     "provides": ["audio_denoise", "audio_separation"], "runtime": {"kind": "process", "entry": "main.py"},
     "tools": {"declare": [
-        {"name": "clean", "provides": ["audio_denoise"], "stream": True, "timeout_seconds": 60},
-        {"name": "split", "provides": ["audio_separation"], "stream": True, "timeout_seconds": 60},
+        {"name": "clean", "provides": ["audio_denoise"], "stream": True, "timeout_seconds": 60,
+         "input_schema": {"type": "object", "properties": {"file": {"type": "string", "format": "asset", "x-media": ["audio", "video"], "x-audio": "original"}}}},
+        {"name": "split", "provides": ["audio_separation"], "stream": True, "timeout_seconds": 60,
+         "input_schema": {"type": "object", "properties": {"file": {"type": "string", "format": "asset", "x-media": ["audio", "video"], "x-audio": "original"}}}},
     ]},
 }
 AUDIO_ENTRY = textwrap.dedent('''
@@ -27,11 +29,12 @@ AUDIO_ENTRY = textwrap.dedent('''
     if request["tool"] == "clean":
         assert payload["strength"] in ("light", "medium", "strong")
         shutil.copyfile(payload["file"], os.path.join(out, "clean.wav"))
-        print(json.dumps({"ok": True, "output": {"audio": "clean.wav"}}))
+        print(json.dumps({"ok": True, "output": {"artifact": {"path": "clean.wav"}}}))
     else:
         shutil.copyfile(payload["file"], os.path.join(out, "v.wav"))
         shutil.copyfile(payload["file"], os.path.join(out, "b.wav"))
-        print(json.dumps({"ok": True, "output": {"vocals": "v.wav", "background": "b.wav"}}))
+        print(json.dumps({"ok": True, "output": {"artifacts": [{"path": "v.wav", "output": "vocals"},
+                                                               {"path": "b.wav", "output": "background"}]}}))
 ''')
 
 

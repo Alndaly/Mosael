@@ -16,7 +16,7 @@ from pathlib import Path
 
 from sqlalchemy.orm import Session
 
-from app.core.i18n import LocalizedError
+from app.core.i18n import LocalizedError, tr
 from app.db.models import Asset
 from app.domain.plugins import media_bridge
 from app.domain.plugins.errors import PluginDomainError
@@ -44,7 +44,7 @@ def _take(
     return asset.id, asset.name
 
 
-def _give(db: Session, ref: str, *, into: Path, workspace_id: str) -> Path:
+def _give(db: Session, ref: str, *, into: Path, workspace_id: str, media: tuple[str, ...] = ()) -> Path:
     """素材库 → 插件。**拷一份**到暂存目录,不给原件。
 
     给原件的话,插件改坏了或删掉了,用户丢的是库里那一份 —— 而插件是第三方代码。
@@ -57,6 +57,9 @@ def _give(db: Session, ref: str, *, into: Path, workspace_id: str) -> Path:
     # 这一条挡的是"用 A 工作区的连接把 B 工作区的素材传出去"。
     if asset.workspace_id != workspace_id:
         raise AssetBridgeError("assetErr_otherWorkspace")
+    if media and asset.kind not in media:
+        raise AssetBridgeError("assetErr_wrongKindForPlugin", name=asset.name,
+                               kinds=tr("punct_listSep").join(tr(f"assetKind_{one}") for one in media))
     if not asset.file_key:
         raise AssetBridgeError("assetErr_noFileYet", name=asset.name)
     origin = resolve_key(asset.file_key)

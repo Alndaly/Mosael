@@ -13,7 +13,9 @@ from app.db.models import PluginInstance, User
 MT_PLUGIN = {
     "id": "dev.test.fakemt", "manifest_version": 1, "name": "假翻译", "version": "1",
     "provides": ["translation"], "runtime": {"kind": "process", "entry": "main.py"},
-    "tools": {"declare": [{"name": "render", "provides": ["translation"], "timeout_seconds": 30}]},
+    "tools": {"declare": [{"name": "render", "provides": ["translation"], "timeout_seconds": 30,
+                           "input_schema": {"type": "object", "properties": {
+                               "texts": {"type": "array", "items": {"type": "string"}}, "target": {"type": "string"}}}}]},
 }
 MT_ENTRY = textwrap.dedent('''
     import json, sys
