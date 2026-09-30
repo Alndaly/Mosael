@@ -43,7 +43,9 @@ def test_partition_isolation_from_publish() -> None:
         assert not eph.partition.startswith("persist:")  # 临时=内存态,关闭即清
 
         named = browser.open_session(db, workspace_id=ws, kind="named", name="My Profile!", actor=None)
-        assert named.partition == "persist:rpa-My-Profile"  # 名字清洗进 rpa 命名空间
+        assert named.partition == browser.named_partition(ws, "My Profile!")  # 进 rpa 命名空间
+        assert named.partition.startswith(f"persist:rpa-{ws}-")
+        assert named.name == "My Profile!"  # 原名留着给人看
         # 绝不撞发布账号的登录分区。前缀取自 PARTITION_PREFIX,不要写死——写死的话前缀一改,
         # 这个断言就悄悄变成在防一个已经不存在的名字,而真正的碰撞面无人看守。
         assert not named.partition.startswith(f"persist:{PARTITION_PREFIX}-")
@@ -52,10 +54,10 @@ def test_partition_isolation_from_publish() -> None:
         again = browser.open_session(db, workspace_id=ws, kind="named", name="My Profile!", actor=None)
         assert again.id == named.id
 
-    # 恶意名字也进不了发布命名空间。
+    # 恶意名字也进不了发布命名空间:名字只进哈希,不进分区名。
     with SessionLocal() as db:
         evil = browser.open_session(db, workspace_id=ws, kind="named", name=f"{PARTITION_PREFIX}-someaccount", actor=None)
-        assert evil.partition == f"persist:rpa-{PARTITION_PREFIX}-someaccount"
+        assert evil.partition.startswith("persist:rpa-")
         assert not evil.partition.startswith(f"persist:{PARTITION_PREFIX}-")
 
 

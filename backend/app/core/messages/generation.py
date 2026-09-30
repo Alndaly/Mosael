@@ -353,8 +353,12 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "This profile is linked to a publishing account. Unlink or delete that account on the Publish page first.",
     },
     "browserErr_invalidSessionName": {
-        "zh": "具名会话需要合法名称(字母/数字/-/_)",
-        "en": "A named session needs a valid name (letters, digits, - or _).",
+        "zh": "具名会话要有一个名字(不超过 {max} 个字)",
+        "en": "A named session needs a name (at most {max} characters).",
+    },
+    "browserErr_sessionBusy": {
+        "zh": "具名会话「{name}」正被另一次运行占用(同一份登录同一时刻只给一个),等它结束再试",
+        "en": "The named session “{name}” is in use by another run (one sign-in serves one run at a time). Try again when it finishes.",
     },
     "browserErr_profileDisabled": {"zh": "该浏览器档案已停用", "en": "This browser profile is disabled."},
     "browserErr_profileBusy": {
@@ -369,8 +373,16 @@ MESSAGES: dict[str, dict[str, str]] = {
     "browserErr_actionFailed": {"zh": "浏览器动作失败", "en": "The browser action failed."},
     "browserErr_actionFailedDetail": {"zh": "浏览器动作失败:{detail}", "en": "The browser action failed: {detail}"},
     "browserErr_actionTimeout": {
-        "zh": "浏览器动作超时(执行器未响应)",
-        "en": "The browser action timed out (the executor didn't respond).",
+        "zh": "浏览器动作执行超时:执行器领走之后一直没做完",
+        "en": "The browser action timed out: the executor took it but never finished it.",
+    },
+    "browserErr_actionNotClaimed": {
+        "zh": "浏览器动作一直没被领走:桌面端没开,或者浏览器执行器没在运行",
+        "en": "Nobody picked up the browser action: the desktop app isn't open, or its browser executor isn't running.",
+    },
+    "browserErr_actionHalted": {
+        "zh": "这次运行已经停下(别的节点失败了),浏览器动作不再等",
+        "en": "This run has stopped (another node failed), so the browser action is no longer awaited.",
     },
     "browserErr_invalidActionStatus": {"zh": "非法动作状态", "en": "Invalid action status."},
     "browserErr_actionNotFound": {"zh": "动作不存在", "en": "Action not found."},

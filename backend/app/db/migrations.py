@@ -5863,6 +5863,108 @@ def _drop_plugin_packages_that_break_the_manifest_rules() -> None:
                 conn.execute(text("DELETE FROM plugin_packages WHERE id = :id"), {"id": package_id})
 
 
+def _migrate_named_browser_partitions_are_per_workspace() -> None:
+    """具名浏览器会话的登录分区从 `persist:rpa-<清洗后的名字>` 改成 `persist:rpa-<工作区>-<原名哈希>`:
+    写下每个旧分区该搬到哪(`browser_partition_moves`),由 Electron 执行器在磁盘上搬。
+
+    旧名字跨工作区共用、非 ASCII 名字清洗后撞成一个(「xhs-主号」「xhs-副号」都是 `xhs`)。登录数据在
+    Electron 的 `userData/Partitions/` 里,后端不知道那个目录在哪 —— 所以这里只算「谁搬到哪」,搬由执行器
+    启动时做(electron/publish/partitionMoves.ts),搬完回报。
+
+    一个旧分区只能归一处:
+    - **用过它的工作区里最早的那个**(按那个工作区第一次开这个会话的时间)。别的工作区记一条 abandoned,写明原因 ——
+      它们此前用的其实是同一份登录,那份登录归不了两家;
+    - 名字:清洗把原名弄丢了(库里存的是清洗后的),从那个工作区的工作流里找「打开浏览器」节点写的原名
+      (清洗后对得上的那些,按工作流创建先后);找不到(智能体开的、名字是引用)就用库里那个名字 —— 纯 ASCII
+      的名字清洗前后本来就一样。对得上好几个原名(它们此前共用这一份登录)时归最早的那个,其余记 abandoned。
+
+    清洗和新分区的算法都写死在这里:迁移是历史的快照,不跟着以后还会变的领域实现走。
+    """
+    tables = set(inspect(engine).get_table_names())
+    if not {"browser_sessions", "browser_partition_moves", "workflows"} <= tables:
+        return
+
+    def old_clean(name: str) -> str:
+        return re.sub(r"[^A-Za-z0-9_-]", "-", (name or "").strip())[:64].strip("-")
+
+    def new_partition(workspace_id: str, name: str) -> str:
+        return f"persist:rpa-{workspace_id}-{hashlib.sha256(name.encode('utf-8')).hexdigest()[:16]}"
+
+    def named_openers(graph: Any) -> list[str]:
+        """图里(连同循环体 / 子图)「打开浏览器」节点写的具名会话名,只要字面量。"""
+        found: list[str] = []
+        if not isinstance(graph, dict):
+            return found
+        for node in graph.get("nodes") or []:
+            if not isinstance(node, dict):
+                continue
+            config = node.get("config") if isinstance(node.get("config"), dict) else {}
+            name = config.get("session_name")
+            if (node.get("type") == "browser_open" and config.get("session_mode") == "named"
+                    and isinstance(name, str) and name.strip() and "{{" not in name):
+                found.append(name.strip())
+            for value in config.values():
+                if isinstance(value, dict) and isinstance(value.get("nodes"), list):
+                    found.extend(named_openers(value))
+        return found
+
+    stamp = datetime.now(UTC).replace(tzinfo=None)
+    with engine.begin() as conn:
+        if conn.execute(text("SELECT COUNT(*) FROM browser_partition_moves")).scalar_one():
+            return
+        rows = conn.execute(
+            text(
+                "SELECT workspace_id, name, partition, created_at FROM browser_sessions "
+                "WHERE kind = 'named' ORDER BY created_at"
+            )
+        ).mappings().all()
+        #: 旧分区(按 Electron 落盘的样子:转小写)→ 工作区 → (第一次用的时间, 库里存的名字)
+        groups: dict[str, dict[str, tuple[Any, str]]] = {}
+        for row in rows:
+            stored = str(row["name"] or "")
+            partition = str(row["partition"] or "")
+            if not stored or partition != f"persist:rpa-{stored}":
+                continue  # 已经是新形状的,或者不是这条规则造出来的
+            per_workspace = groups.setdefault(partition.lower(), {})
+            if row["workspace_id"] not in per_workspace:
+                per_workspace[row["workspace_id"]] = (row["created_at"], stored)
+        if not groups:
+            return
+        graphs: dict[str, list[str]] = {}
+        for row in conn.execute(text("SELECT workspace_id, graph FROM workflows ORDER BY created_at")).mappings():
+            try:
+                graph = json.loads(row["graph"]) if isinstance(row["graph"], str) else row["graph"]
+            except (TypeError, ValueError):
+                continue
+            graphs.setdefault(row["workspace_id"], []).extend(named_openers(graph))
+
+        def record(old: str, new: str, workspace_id: str, name: str, status: str, reason: str) -> None:
+            conn.execute(
+                text(
+                    "INSERT INTO browser_partition_moves "
+                    "(id, old_partition, new_partition, workspace_id, session_name, status, reason, created_at, updated_at) "
+                    "VALUES (:id, :old, :new, :ws, :name, :status, :reason, :now, :now)"
+                ),
+                {"id": uuid.uuid4().hex, "old": old, "new": new, "ws": workspace_id, "name": name[:80],
+                 "status": status, "reason": reason, "now": stamp},
+            )
+
+        for old, per_workspace in groups.items():
+            ordered = sorted(per_workspace.items(), key=lambda item: str(item[1][0]))
+            winner, (_, stored) = ordered[0]
+            key = old[len("persist:rpa-"):]
+            names = list(dict.fromkeys(name for name in graphs.get(winner, []) if old_clean(name).lower() == key))
+            chosen = names[0] if names else stored
+            record(old, new_partition(winner, chosen), winner, chosen, "pending", "")
+            for other in names[1:]:
+                record(old, new_partition(winner, other), winner, other, "abandoned",
+                       f"旧分区 {old} 同时被「{chosen}」和「{other}」用着(清洗后撞名),登录数据归了先出现的「{chosen}」")
+            for workspace_id, (_, name) in ordered[1:]:
+                record(old, "", workspace_id, name, "abandoned",
+                       f"旧分区 {old} 也被工作区 {winner} 用过、而且更早,登录数据归了它;这个工作区的「{name}」要重新登录")
+                logger.info("具名浏览器分区 %s 归工作区 %s,放弃工作区 %s 那份", old, winner, workspace_id)
+
+
 def _reindex_record_references() -> None:
     """引用表(record_references)是派生数据:抽取规则一变,整张按新规则重建。"""
     from app.db.references import reindex
@@ -6095,6 +6197,8 @@ def migration_plan() -> MigrationPlan:
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_board_scene_render_drops_project),
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_board_sequence_cells_name_their_producer),
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_agent_session_titles_drop_attachment_tokens),
+            #: 具名浏览器会话的登录分区按工作区分开:写下搬家单,由 Electron 执行器在磁盘上搬(新表由 SCHEMA 建)。
+            *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_named_browser_partitions_are_per_workspace),
             #: 生成记录自己存失败原因、会话按种类分页、提示词里拆出画板补的素材对照。回填要读 jobs.error_key ——
             #: 它在很老的库上由上面的 migrate-job-message-i18n 补上,所以排在它后面。
             *_steps(

@@ -80,6 +80,7 @@ TABLE_OWNERS: dict[str, tuple[str, ...]] = {
     "BrowserProfile": ("app/domain/browser/",),
     "BrowserSession": ("app/domain/browser/",),
     "BrowserAction": ("app/domain/browser/",),
+    "BrowserPartitionMove": ("app/domain/browser/",),
     # 配置
     #: 用户自己配的连接在 provider_connections 建;插件实例对应的那条(只是生成领域指向实例的把手,
     #: ADR 0020)在 providers.adopt_plugin_connection 建。

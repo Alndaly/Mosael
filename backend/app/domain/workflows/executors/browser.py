@@ -7,7 +7,7 @@ session → 关闭。会话与发布登录物理隔离(分区命名空间不同)
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, NoReturn
 
 from sqlalchemy.orm import Session
 
@@ -18,6 +18,7 @@ from app.domain.permissions import NotVisible
 from app.domain.workflows import WorkflowDomainError
 from app.domain.workflows.authority import current_authority
 from app.domain.workflows.executors.registry import RunScope, register
+from app.domain.workflows.run_scope import halted
 
 
 def _session_in(db: Session, scope: RunScope, config: dict[str, Any]) -> str:
@@ -90,12 +91,21 @@ def _failure_scene(session_id: str, action: str, args: dict[str, Any]) -> dict[s
 
 
 def _run(session_id: str, action: str, args: dict[str, Any], *, timeout: float | None = None) -> dict[str, Any]:
+    """跑一个动作。**这一轮停了就不再等**(workflows.run_scope:同一张图里别的节点失败了):此前在飞的
+    动作只认自己的超时,兄弟节点早已失败,它还要陪着等满两分钟。"""
     try:
         if timeout is None:
-            return browser.run_action(session_id, action, args)
-        return browser.run_action(session_id, action, args, timeout=timeout)
+            return browser.run_action(session_id, action, args, should_stop=halted)
+        return browser.run_action(session_id, action, args, timeout=timeout, should_stop=halted)
     except browser.BrowserDomainError as exc:
-        raise WorkflowDomainError.from_error(exc, details=_failure_scene(session_id, action, args)) from exc
+        _raise_failure(exc, session_id, action, args)
+
+
+def _raise_failure(exc: browser.BrowserDomainError, session_id: str, action: str, args: dict[str, Any]) -> NoReturn:
+    """这一步失败了:带上失败现场抛出。这一轮已经停了的话不取证 —— 没人看这一步的结果了,截一张图只是再等几秒。"""
+    if halted():
+        raise WorkflowDomainError("wfErr_cancelled") from exc
+    raise WorkflowDomainError.from_error(exc, details=_failure_scene(session_id, action, args)) from exc
 
 
 def _run_owner(db: Session) -> str | None:
@@ -199,11 +209,9 @@ def browser_upload(db: Session, scope: RunScope, config: dict[str, Any]) -> dict
     timeout_ms = _int(config.get("timeout_ms"), 15_000)
     selector = str(config.get("selector") or "").strip()
     try:
-        browser.upload_file(sid, file, selector=selector, timeout_ms=timeout_ms)
+        browser.upload_file(sid, file, selector=selector, timeout_ms=timeout_ms, should_stop=halted)
     except browser.BrowserDomainError as exc:
-        raise WorkflowDomainError.from_error(
-            exc, details=_failure_scene(sid, "upload", {"selector": selector})
-        ) from exc
+        _raise_failure(exc, sid, "upload", {"selector": selector})
     return {"session": sid}
 
 

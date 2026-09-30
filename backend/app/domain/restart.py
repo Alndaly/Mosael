@@ -34,6 +34,10 @@ NOT_ORPHANED_BY_RESTART: dict[str, str] = {
         "当场判 failed 可重试(见 test_orphaned_running_task_is_reclaimed_on_fresh_claim)。"
         "放在认领那一刻而不是启动那一刻,是因为执行器是另一个进程,它和后端不同生共死。"
     ),
+    "browser_partition_moves": (
+        "在等**桌面端的浏览器执行器**在磁盘上搬登录分区,不在等后端进程:它启动时领走还没搬的、搬完回报。"
+        "后端重启不改变「还没搬」这件事。"
+    ),
     "scheduled_task_runs": (
         "它是**派生**的:运行记录跟着它派出去的那个 job 走。job 在启动时被收尾,"
         "`scheduler/executors.sync_run_states` 随后把终态抄过来。"

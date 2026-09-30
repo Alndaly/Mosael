@@ -4,7 +4,7 @@
 调用方 open_session → run_action(入队一条 BrowserAction 并阻塞轮询到终态)→ close_session;
 Electron 的浏览器 worker 认领 queued 动作 → 用 PageDriver 在会话分区的视图上执行 → 回报结果。
 
-会话分区(见 models.BrowserSession):临时 `ephemeral-<id>`(内存态)、具名 `persist:rpa-<name>`、
+会话分区(见 models.BrowserSession):临时 `ephemeral-<id>`(内存态)、具名 `persist:rpa-<工作区>-<名字哈希>`、
 池档案会话用其档案分区(BrowserProfile.partition,可为发布登录的 `persist:mosael-<accountId>`)。
 「浏览器池」把持久登录身份统一成 BrowserProfile(不再只服务发布);池档案会话受**租约**(一档案
 一时刻一会话)约束,接入智能体时再叠**显式授权**闸——见 open_session / _open_profile_session。
@@ -14,9 +14,11 @@ Electron 的浏览器 worker 认领 queued 动作 → 用 PageDriver 在会话�
 
 from __future__ import annotations
 
+import hashlib
 import re
 import time
 import uuid
+from collections.abc import Callable
 from datetime import timedelta
 
 from sqlalchemy import select, update
@@ -28,12 +30,26 @@ from app.core.i18n import LocalizedError, is_message_key
 from app.domain import sharing
 from app.domain.authority import Actor
 from app.domain.host_files import HostFile
-from app.db.models import BrowserAction, BrowserProfile, BrowserSession, Job, PublishAccount, User, now
+from app.db.models import (
+    BrowserAction,
+    BrowserPartitionMove,
+    BrowserProfile,
+    BrowserSession,
+    Job,
+    PublishAccount,
+    User,
+    now,
+)
 
 _UNSET = object()  # update_profile 里区分「不改」与「置空」
 
 # 动作默认超时:navigate 到重前端页可能慢(pageDriver.goto 自身 45s),给足余量;调用方可覆盖。
+#: **从执行器认领那一刻算**,不含排队 —— 排队那段有自己的上限(下一条)。此前截止从入队算:
+#: 前面一条长等待占着执行器时,后面那条还没开始跑就已经把自己的时间耗光了。
 ACTION_TIMEOUT_SECONDS = 120.0
+#: 一条动作最多等多久被执行器领走。领不走说的是另一件事:桌面端没开、浏览器执行器没在跑 ——
+#: 和「领走了却一直没做完」分开报,人才知道该去看哪儿。
+QUEUE_TIMEOUT_SECONDS = 60.0
 _ACTION_POLL_SECONDS = 0.2
 # worker 回报间隔外的兜底:running 动作超过这个时长没落终态,视为执行器掉线,回收。
 STALE_ACTION_SECONDS = 5 * 60
@@ -61,15 +77,28 @@ class BrowserReportError(BrowserDomainError, ValueError):
     """执行器回报被拒(状态不对、动作不存在、租约不归你)。继承 ValueError:回报接口按它回 422。"""
 
 
-def _safe_name(name: str) -> str:
-    """具名会话名 → 分区安全片段:只留 [A-Za-z0-9_-],限长。空则非法。"""
-    return re.sub(r"[^A-Za-z0-9_-]", "-", (name or "").strip())[:64].strip("-")
+#: 具名会话名字的上限(和 BrowserSession.name 那一列一样长)。
+SESSION_NAME_MAX = 80
 
 
-def _partition_for(session: BrowserSession) -> str:
-    if session.kind == "named":
-        return f"persist:rpa-{_safe_name(session.name)}"
-    return f"ephemeral-{session.id}"
+def named_partition(workspace_id: str, name: str) -> str:
+    """具名会话的登录分区:**工作区 + 原名的哈希**。名字本身只用来显示。
+
+    此前是 `persist:rpa-<清洗后的名字>`:没有工作区,A 工作区的「xhs」和 B 工作区的「xhs」是同一份
+    登录;清洗把非 ASCII 换成 `-` 再去掉,于是「xhs-主号」「xhs-副号」都成了 `xhs`,「小红书2」「抖音2」
+    都成了 `2`,「小红书」干脆是空串。哈希原名就没有这两类碰撞;全是小写十六进制,也躲开了 Electron
+    把分区名转小写落盘那一层(`XHS` 和 `xhs` 在磁盘上本来就是同一个目录)。
+    """
+    digest = hashlib.sha256(name.encode("utf-8")).hexdigest()[:16]
+    return f"persist:rpa-{workspace_id}-{digest}"
+
+
+def _session_name(name: str) -> str:
+    """具名会话的名字:去掉首尾空白,非空、不超长。不合规直接拒 —— 不替人改名,改了就不是他说的那一份登录。"""
+    cleaned = (name or "").strip()
+    if not cleaned or len(cleaned) > SESSION_NAME_MAX:
+        raise BrowserDomainError("browserErr_invalidSessionName", max=SESSION_NAME_MAX)
+    return cleaned
 
 
 # ---------- 浏览器池:档案(持久身份)CRUD ----------
@@ -175,8 +204,9 @@ def open_session(
     owner_id: str | None = None,
     actor: Actor,
 ) -> BrowserSession:
-    """新建(或复用)浏览器会话。临时会话每次都是新隔离上下文;具名会话跨次复用;池档案会话在
-    档案分区上开,受**租约**约束(一个档案同一时刻一个活动会话:同 owner 复用、异 owner 拒绝)。
+    """新建(或复用)浏览器会话。临时会话每次都是新隔离上下文;具名会话的登录跨次保留(分区按工作区 +
+    名字定,见 named_partition);池档案会话在档案分区上开。具名和池档案都受**租约**约束(一份登录同一
+    时刻一个活动会话:同 owner 复用、异 owner 拒绝)。
 
     `actor` 是**谁在用**(用户 id):工作流里是这次运行的操作人,确认卡是批准它的人。**必填、
     没有默认值** —— 池档案是某人的登录身份,别人的私有档案在这里被拒(见 `usable_profile`)。
@@ -184,34 +214,33 @@ def open_session(
     """
     if profile_id:
         return _open_profile_session(db, workspace_id, profile_id, owner_kind, owner_id, actor)
-    kind = "named" if kind == "named" else "ephemeral"
-    safe = ""
+    owner_kind = owner_kind if owner_kind in ("agent", "workflow", "manual") else "manual"
     if kind == "named":
-        safe = _safe_name(name)
-        if not safe:
-            raise BrowserDomainError("browserErr_invalidSessionName")
+        session_name = _session_name(name)
+        partition = named_partition(workspace_id, session_name)
+        #: 和池档案同一条租约:一份登录同一时刻只归一个 owner。同 owner(同一次运行里第二个「打开浏览器」)
+        #: 复用;别人正开着就拒。此前不看 owner 就复用 —— 两次运行共用一个视图互相点、互相导航,
+        #: 先跑完的那次收尾时把会话关掉,另一次做到一半的动作全部落空。
         existing = db.scalar(
-            select(BrowserSession).where(
-                BrowserSession.workspace_id == workspace_id,
-                BrowserSession.kind == "named",
-                BrowserSession.name == safe,
-                BrowserSession.status == "open",
-            )
+            select(BrowserSession).where(BrowserSession.partition == partition, BrowserSession.status == "open")
         )
         if existing is not None:
-            return existing  # 复用:具名会话就是要跨次保留
-
-    session = BrowserSession(
-        workspace_id=workspace_id,
-        kind=kind,
-        name=safe,
-        owner_kind=owner_kind if owner_kind in ("agent", "workflow", "manual") else "manual",
-        owner_id=owner_id,
-        status="open",
-    )
-    db.add(session)
-    db.flush()
-    session.partition = _partition_for(session)  # 依赖 id(临时会话),故 flush 后再算
+            if existing.owner_kind == owner_kind and (existing.owner_id or "") == (owner_id or ""):
+                return existing
+            raise BrowserDomainError("browserErr_sessionBusy", name=session_name)
+        session = BrowserSession(
+            workspace_id=workspace_id, kind="named", name=session_name, partition=partition,
+            owner_kind=owner_kind, owner_id=owner_id, status="open",
+        )
+        db.add(session)
+    else:
+        session = BrowserSession(
+            workspace_id=workspace_id, kind="ephemeral", name="", owner_kind=owner_kind, owner_id=owner_id,
+            status="open",
+        )
+        db.add(session)
+        db.flush()
+        session.partition = f"ephemeral-{session.id}"  # 依赖 id,故 flush 后再算
     # 这里仍提交:调用方紧接着就 run_action —— 入队和轮询各开自己的会话,执行器在另一个进程里,
     # 都得先看得见这个会话。
     db.commit()
@@ -330,16 +359,23 @@ def install() -> None:
 _NAVIGABLE = re.compile(r"^(https?://|about:blank$)", re.I)
 
 
+#: 调用方说「这一轮已经不要结果了」的那个问题(工作流:同一张图里别的节点失败了)。浏览器域不认识
+#: 工作流,由调用方把问题交进来,每一拍问一次。
+StopCheck = Callable[[], bool]
+
+
 def run_action(
     session_id: str,
     action: str,
     args: dict | None = None,
     *,
     timeout: float = ACTION_TIMEOUT_SECONDS,
+    should_stop: StopCheck | None = None,
 ) -> dict:
     """在会话上跑一个动作:入队 → 阻塞轮询到终态 → 返回 result(失败/超时抛 BrowserDomainError)。
 
     用独立短会话轮询(照 wait_for_job),既避免长事务,又能看到 worker 在另一连接里的提交。
+    `timeout` 是**执行**的上限,从执行器认领那一刻算;排队另有 QUEUE_TIMEOUT_SECONDS。
 
     两类动作在这里就挡下:`upload` 只能经 `upload_file`(它只收放行过的 `HostFile`),导航只认
     http(s) —— 两者都是「读这台电脑上的文件」的门,见 domain/host_files。
@@ -350,7 +386,7 @@ def run_action(
         url = str((args or {}).get("url") or "").strip()
         if url and not _NAVIGABLE.match(url):
             raise BrowserDomainError("browserErr_navigateScheme")
-    return _enqueue(session_id, action, args, timeout=timeout)
+    return _enqueue(session_id, action, args, timeout=timeout, should_stop=should_stop)
 
 
 def upload_file(
@@ -359,6 +395,7 @@ def upload_file(
     *,
     selector: str = "",
     timeout_ms: int = 15_000,
+    should_stop: StopCheck | None = None,
 ) -> dict:
     """往会话页面的 `<input type=file>` 塞一个本机文件。
 
@@ -373,10 +410,13 @@ def upload_file(
         "upload",
         {"selector": (selector or "").strip(), "path": str(file.path), "timeout_ms": timeout_ms},
         timeout=timeout_ms / 1000 + 20,
+        should_stop=should_stop,
     )
 
 
-def _enqueue(session_id: str, action: str, args: dict | None, *, timeout: float) -> dict:
+def _enqueue(
+    session_id: str, action: str, args: dict | None, *, timeout: float, should_stop: StopCheck | None
+) -> dict:
     # 入队是自己的一次用例:提交之后执行器(另一个进程)和下面的轮询才看得见它。
     with unit_of_work() as db:
         session = db.get(BrowserSession, session_id)
@@ -393,31 +433,58 @@ def _enqueue(session_id: str, action: str, args: dict | None, *, timeout: float)
         db.flush()
         action_id = act.id
 
-    deadline = time.monotonic() + timeout
-    while time.monotonic() < deadline:
+    #: 两段各算各的:排队从入队算,执行从**看见它被认领**那一拍算(轮询间隔 0.2 秒,误差就这么多)。
+    queue_deadline = time.monotonic() + QUEUE_TIMEOUT_SECONDS
+    run_deadline: float | None = None
+    while True:
         time.sleep(_ACTION_POLL_SECONDS)
         with SessionLocal() as db:
             act = db.get(BrowserAction, action_id)
             if act is None:
                 raise BrowserDomainError("browserErr_actionLost")
-            if act.status == "done":
-                return dict(act.result or {})
-            if act.status == "failed":
-                #: `error` 是「key 或一句话」(同 jobs.say):后端自己记的原因(租约到期、重启、超时)
-                #: 存 key,按读的人的语言翻;执行器给的原话(页面找不到元素之类)不翻,放进翻好的句子里。
-                if is_message_key(act.error or ""):
-                    raise BrowserDomainError(act.error)
-                if act.error:
-                    raise BrowserDomainError("browserErr_actionFailedDetail", detail=act.error)
-                raise BrowserDomainError("browserErr_actionFailed")
+            outcome = _settled(act)
+            if outcome is not None:
+                return outcome
+            if act.status == "running" and run_deadline is None:
+                run_deadline = time.monotonic() + timeout
+        if should_stop is not None and should_stop():
+            return _give_up(action_id, "browserErr_actionHalted")
+        if run_deadline is None and time.monotonic() >= queue_deadline:
+            return _give_up(action_id, "browserErr_actionNotClaimed")
+        if run_deadline is not None and time.monotonic() >= run_deadline:
+            return _give_up(action_id, "browserErr_actionTimeout")
 
-    # 超时:把动作落 failed(未被 worker 认领/执行器无响应),再抛。
+
+def _settled(act: BrowserAction) -> dict | None:
+    """动作落了终态:done 交回结果,failed 抛出原因;还没落就是 None。"""
+    if act.status == "done":
+        return dict(act.result or {})
+    if act.status == "failed":
+        #: `error` 是「key 或一句话」(同 jobs.say):后端自己记的原因(租约到期、重启、超时)
+        #: 存 key,按读的人的语言翻;执行器给的原话(页面找不到元素之类)不翻,放进翻好的句子里。
+        if is_message_key(act.error or ""):
+            raise BrowserDomainError(act.error)
+        if act.error:
+            raise BrowserDomainError("browserErr_actionFailedDetail", detail=act.error)
+        raise BrowserDomainError("browserErr_actionFailed")
+    return None
+
+
+def _give_up(action_id: str, reason: str) -> dict:
+    """不等了:把还没落终态的动作落 failed(执行器下次心跳就知道这条不归它了,会停手),再抛 `reason`。
+
+    放手的那一拍它可能刚好做完 —— 那就照做完的算,不拿一个已经有的结果去报失败。
+    """
     with unit_of_work() as db:
         act = db.get(BrowserAction, action_id)
         if act is not None and act.status in ("queued", "running"):
             act.status = "failed"
-            act.error = "browserErr_actionTimeout"
-    raise BrowserDomainError("browserErr_actionTimeout")
+            act.error = reason
+        elif act is not None:
+            outcome = _settled(act)
+            if outcome is not None:
+                return outcome
+    raise BrowserDomainError(reason)
 
 
 # ---------- worker 侧:claim / report ----------
@@ -480,9 +547,16 @@ def claim_next_action(db: Session, *, worker: str = "") -> dict | None:
     """
     # 先把上一个执行器丢下的收掉:它们本该被这一次认领接走,而不是一直占着 running。
     expire_action_leases(db)
+    #: **同一个会话串行,不同会话并发。** 执行器一次领多条、各自跑(见 electron/publish/browserWorker);
+    #: 一个会话上还有一条在跑,它后面的就先不发 —— 同一个视图上两个动作交错着点、导航,谁也做不对。
+    #: 在这里挡而不是在执行器里排队:领走即开始计执行时间(run_action),排在执行器里的那段不该算进去。
+    busy_sessions = select(BrowserAction.session_id).where(BrowserAction.status == "running")
     while True:
         act = db.scalars(
-            select(BrowserAction).where(BrowserAction.status == "queued").order_by(BrowserAction.created_at).limit(1)
+            select(BrowserAction)
+            .where(BrowserAction.status == "queued", BrowserAction.session_id.not_in(busy_sessions))
+            .order_by(BrowserAction.created_at)
+            .limit(1)
         ).first()
         if act is None:
             return None
@@ -548,6 +622,30 @@ def report_action(
     db.flush()
     db.refresh(act)
     return act
+
+
+#: 执行器搬完一条分区后能回报的结果(见 BrowserPartitionMove)。
+PARTITION_MOVE_OUTCOMES = ("done", "skipped")
+
+
+def pending_partition_moves(db: Session) -> list[dict[str, str]]:
+    """还等着执行器在磁盘上搬的登录分区(迁移写下的,见 BrowserPartitionMove)。"""
+    moves = db.scalars(
+        select(BrowserPartitionMove).where(BrowserPartitionMove.status == "pending").order_by(BrowserPartitionMove.created_at)
+    ).all()
+    return [{"id": move.id, "old_partition": move.old_partition, "new_partition": move.new_partition} for move in moves]
+
+
+def settle_partition_move(db: Session, move_id: str, *, status: str, reason: str = "") -> None:
+    """执行器回报一条搬家单:搬了(done),或者没法搬(skipped,原因写进 reason)。只收 pending 的那些。"""
+    if status not in PARTITION_MOVE_OUTCOMES:
+        raise BrowserReportError("browserErr_invalidActionStatus")
+    move = db.get(BrowserPartitionMove, move_id)
+    if move is None or move.status != "pending":
+        return
+    move.status = status
+    move.reason = reason[:2000]
+    db.flush()
 
 
 def reconcile_browser_state() -> int:

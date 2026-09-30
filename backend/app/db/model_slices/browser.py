@@ -82,3 +82,28 @@ class BrowserAction(Base):
     lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
+
+
+class BrowserPartitionMove(Base):
+    """一条登录分区的**搬家单**:后端算出来,Electron 在磁盘上执行。
+
+    具名会话的分区名改过一次形状(旧:`persist:rpa-<清洗后的名字>`,跨工作区共用、非 ASCII 名字撞成一个;
+    新:`persist:rpa-<工作区>-<名字哈希>`)。已经登录过的数据在 Electron 的 `userData/Partitions/<分区名>`
+    目录里,后端既不知道那个目录在哪,也不该去碰它 —— 所以迁移只写下「谁搬到哪」,执行器启动时领走、
+    搬完回报(见 electron/publish/partitionMoves.ts)。
+
+    `status`:pending(等执行器搬)/ done(搬了)/ skipped(执行器那边没法搬:旧目录不存在、新目录已占用……)/
+    abandoned(迁移时就决定不搬:这个旧分区也被别的工作区、别的名字用过,只归最早的那一个)。原因都写在 `reason`。
+    """
+
+    __tablename__ = "browser_partition_moves"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    old_partition: Mapped[str] = mapped_column(String(120), nullable=False)
+    new_partition: Mapped[str] = mapped_column(String(120), nullable=False, default="")
+    workspace_id: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    session_name: Mapped[str] = mapped_column(String(80), nullable=False, default="")
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending")
+    reason: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)

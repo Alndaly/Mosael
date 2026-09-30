@@ -21,7 +21,13 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from app.api.deps import Tx
-from app.domain.browser import claim_next_action, renew_action_leases, report_action
+from app.domain.browser import (
+    claim_next_action,
+    pending_partition_moves,
+    renew_action_leases,
+    report_action,
+    settle_partition_move,
+)
 
 router = APIRouter(tags=["browser-worker"])
 
@@ -89,3 +95,24 @@ def heartbeat(body: HeartbeatRequest, db: Tx) -> dict[str, Any]:
     """
     renewed = renew_action_leases(db, worker=body.worker, claims=[one.model_dump() for one in body.claims])
     return {"ok": True, "renewed": renewed}
+
+
+class PartitionMoveReport(BaseModel):
+    status: str
+    reason: str = Field(default="", max_length=2000)
+
+
+@router.get("/browser/worker/partition-moves")
+def partition_moves(db: Tx) -> dict[str, Any]:
+    """还没搬的登录分区(见 BrowserPartitionMove)。执行器启动时先搬完这些,再开始认领动作 —— 反过来的话,
+    一条动作先在新分区上建出一个空目录,旧的登录就再也搬不过去了。"""
+    return {"moves": pending_partition_moves(db)}
+
+
+@router.post("/browser/worker/partition-moves/{move_id}")
+def settle_move(move_id: str, body: PartitionMoveReport, db: Tx) -> dict[str, Any]:
+    try:
+        settle_partition_move(db, move_id, status=body.status, reason=body.reason)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {"ok": True}

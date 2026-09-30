@@ -6,6 +6,8 @@ import { join } from "node:path";
 
 import { net } from "electron";
 
+import type { PartitionMove, PartitionMoveOutcome } from "./partitionMoves";
+
 const BASE =
   process.env.MOSAEL_BACKEND_URL || `http://127.0.0.1:${process.env.MOSAEL_BACKEND_PORT || 8800}`;
 
@@ -43,7 +45,7 @@ export interface ClaimedAction {
   id: string;
   session_id: string;
   partition: string;
-  kind: string; // 会话类型 ephemeral | named
+  kind: string; // 会话类型 ephemeral | named | profile
   action: string;
   args: Record<string, unknown>;
   /** 这一次认领的凭据(ADR-0002)。回报和心跳都要原样带回。 */
@@ -113,4 +115,9 @@ export const browserBackend = {
     for (const id of lost) holding.delete(id);
     return lost;
   },
+  /** 后端迁移写下、还没搬的登录分区(见 partitionMoves.ts)。 */
+  partitionMoves: () =>
+    req<{ moves?: PartitionMove[] }>("/worker/partition-moves").then((r) => r.moves ?? []),
+  settlePartitionMove: (moveId: string, outcome: PartitionMoveOutcome) =>
+    req(`/worker/partition-moves/${encodeURIComponent(moveId)}`, "POST", outcome),
 };

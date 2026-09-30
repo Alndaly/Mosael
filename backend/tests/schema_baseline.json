@@ -140,6 +140,17 @@
     "updated_at",
     "workspace_id"
   ],
+  "browser_partition_moves": [
+    "created_at",
+    "id",
+    "new_partition",
+    "old_partition",
+    "reason",
+    "session_name",
+    "status",
+    "updated_at",
+    "workspace_id"
+  ],
   "browser_profiles": [
     "created_at",
     "enabled",

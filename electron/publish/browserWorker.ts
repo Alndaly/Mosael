@@ -7,10 +7,17 @@
 // 画面是真实渲染的(不必截帧),而且视图参与合成之后**可信指针输入可用**,智能体的点击不再只有
 // isTrusted=false 那一条路。分区照旧严格隔离:ephemeral-*(内存态)/ persist:rpa-* 与发布的
 // persist:mosael-* 互不相干。
+//
+// **不同会话并发,同一会话串行。** 此前一次只跑一个动作:一个会话上「等 60 秒出现登录框」,别的会话
+// 上的点击全部干等,而且等的时间都算进了它们自己的超时。现在一次最多领 MAX_INFLIGHT 条、各跑各的;
+// 同一会话的串行由后端认领时保证(它不发一个还有动作在跑的会话上的下一条),这里再按会话排一次队兜底。
+import { app } from "electron";
+
 import { sharedViews } from "./accountViews";
 import { executeBrowserAction } from "./browserActions";
 import { browserBackend, type ClaimedAction } from "./browserBackend";
 import { plog } from "./log";
+import { applyPartitionMove } from "./partitionMoves";
 
 const IDLE_MS = 1200;
 /**
@@ -20,17 +27,31 @@ const IDLE_MS = 1200;
  */
 const PANEL_IDLE_MS = 90_000;
 const BUSY_MS = 150;
+/** 同时在跑的动作上限。每条都挂一个视图面板,再多屏幕上也看不过来。 */
+const MAX_INFLIGHT = 4;
+/**
+ * 心跳间隔。ADR-0002 的契约是「至少每 20 秒一次」,租约 60 秒。**心跳自己一条循环**,不夹在动作之间:
+ * 此前它在认领循环里、动作之间才发,一个跑了 70 秒的等待就让自己的租约过期、被后端判成执行器失联。
+ */
+const HEARTBEAT_MS = 20_000;
 const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
 let generation = 0; // 递增即令旧 loop 自然退出
 // 本 worker 挂过面板的会话,停机时要撤干净(视图本身归共享管理器,不在这里销毁)。
 const panelled = new Set<string>();
+/** 在跑的动作 → 它的中止开关。心跳说这条已经不归我了(后端放弃了它、租约被判过期),就中止它。 */
+const running = new Map<string, AbortController>();
+/** 每个会话上最后一条动作的尾巴:同一会话的下一条接在它后面。 */
+const sessionTails = new Map<string, Promise<void>>();
+/** 这个进程用过的分区。搬分区目录要避开它们(见 partitionMoves)。 */
+const usedPartitions = new Set<string>();
 
 export function startBrowserWorker(): void {
   stopBrowserWorker();
   const gen = ++generation;
   plog("browser worker started, generation", gen);
   void loop(gen);
+  void heartbeatLoop(gen);
 }
 
 export function stopBrowserWorker(): void {
@@ -38,20 +59,24 @@ export function stopBrowserWorker(): void {
   const views = sharedViews();
   for (const sessionId of panelled) views?.panelDetach(sessionId);
   panelled.clear();
+  for (const controller of running.values()) controller.abort();
+  running.clear();
+  sessionTails.clear();
 }
 
 async function loop(gen: number): Promise<void> {
+  let moved = false;
   while (gen === generation) {
     let didWork = false;
     try {
-      // 心跳带着手上那些动作去续约,并把**没续上**的还回来 —— 那几条已经不归我了
-      // (被判过期、或被别的执行器接走),接着干只会盖掉别人正在干的那一份。
-      const lost = await browserBackend.heartbeat();
-      for (const id of lost) plog("browser lease lost, abandoning action:", id);
-      const action = await browserBackend.claim();
-      if (action && gen === generation) {
-        didWork = true;
-        await handleAction(action);
+      // 先搬完登录分区,再开始认领:反过来的话,一条动作先在新分区上建出空目录,旧登录就搬不过去了。
+      if (!moved) moved = await movePartitions();
+      if (moved && running.size < MAX_INFLIGHT) {
+        const action = await browserBackend.claim();
+        if (action && gen === generation) {
+          didWork = true;
+          schedule(action);
+        }
       }
     } catch (error) {
       plog("browser worker loop error:", error instanceof Error ? error.message : String(error));
@@ -60,7 +85,50 @@ async function loop(gen: number): Promise<void> {
   }
 }
 
-async function handleAction(action: ClaimedAction): Promise<void> {
+async function heartbeatLoop(gen: number): Promise<void> {
+  while (gen === generation) {
+    try {
+      // 心跳带着手上那些动作去续约,并把**没续上**的还回来 —— 那几条已经不归我了
+      // (被判过期、被后端放弃、或被别的执行器接走),接着干只会盖掉别人正在干的那一份:中止它们。
+      const lost = await browserBackend.heartbeat();
+      for (const id of lost) {
+        plog("browser lease lost, abandoning action:", id);
+        running.get(id)?.abort();
+      }
+    } catch (error) {
+      plog("browser heartbeat error:", error instanceof Error ? error.message : String(error));
+    }
+    await delay(HEARTBEAT_MS);
+  }
+}
+
+/** 接到这个会话的队尾,不等它跑完 —— 认领循环接着去领别的会话的动作。 */
+function schedule(action: ClaimedAction): void {
+  const controller = new AbortController();
+  running.set(action.id, controller);
+  const previous = sessionTails.get(action.session_id) ?? Promise.resolve();
+  const tail = previous
+    .then(() => handleAction(action, controller.signal))
+    .finally(() => {
+      running.delete(action.id);
+      if (sessionTails.get(action.session_id) === tail) sessionTails.delete(action.session_id);
+    });
+  sessionTails.set(action.session_id, tail);
+}
+
+async function movePartitions(): Promise<boolean> {
+  const moves = await browserBackend.partitionMoves();
+  const userData = app.getPath("userData");
+  for (const move of moves) {
+    const outcome = applyPartitionMove(userData, move, (partition) => usedPartitions.has(partition));
+    if (!outcome) continue;
+    plog("browser partition move:", move.old_partition, "→", move.new_partition, outcome.status, outcome.reason);
+    await browserBackend.settlePartitionMove(move.id, outcome);
+  }
+  return true;
+}
+
+async function handleAction(action: ClaimedAction, signal: AbortSignal): Promise<void> {
   const views = sharedViews();
   if (!views) {
     // 共享视图管理器由发布执行器创建(startPublishWorker)。它没起来说明宿主窗口还没就绪,
@@ -70,6 +138,7 @@ async function handleAction(action: ClaimedAction): Promise<void> {
       .catch(() => undefined);
     return;
   }
+  if (signal.aborted) return;
   try {
     if (action.action === "close") {
       views.panelDetach(action.session_id);
@@ -79,6 +148,7 @@ async function handleAction(action: ClaimedAction): Promise<void> {
       return;
     }
 
+    usedPartitions.add(action.partition);
     const driver = views.registerSession(action.session_id, action.partition);
     // 挂成右下角面板:用户能看见智能体在做什么,同时视图获得真实布局与命中测试(可信输入的前提)。
     // 挂不上(面板已达上限 / 宿主窗口没了)不影响执行 —— RPA 动作走的是 DOM 事件,不依赖布局。
@@ -88,13 +158,18 @@ async function handleAction(action: ClaimedAction): Promise<void> {
     }
     views.touchPanel(action.session_id); // 刷新空闲计时
 
-
-    const outcome = await executeBrowserAction(driver, action.action, action.args);
-    await browserBackend.report(action.id, {
-      status: "done",
-      result: outcome.value !== undefined ? { value: outcome.value } : {},
-      last_url: outcome.lastUrl,
-    });
+    // 同一会话串行,所以这个会话的 driver 此刻只服务这一条:中止开关挂上去,跑完摘掉。
+    driver.setAbortSignal(signal);
+    try {
+      const outcome = await executeBrowserAction(driver, action.action, action.args);
+      await browserBackend.report(action.id, {
+        status: "done",
+        result: outcome.value !== undefined ? { value: outcome.value } : {},
+        last_url: outcome.lastUrl,
+      });
+    } finally {
+      driver.setAbortSignal(null);
+    }
     plog("browser action done:", action.action, action.session_id);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

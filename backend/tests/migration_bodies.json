@@ -90,6 +90,7 @@
   "migrate-loop-scopes-are-not-outer-data-edges": "c83e1df59b5463e5",
   "migrate-model-structured-output": "1ace9375f453b53b",
   "migrate-mov-videos-become-mp4": "6d1b2a8be0f80c80",
+  "migrate-named-browser-partitions-are-per-workspace": "21fd23af420b5b36",
   "migrate-node-names-are-not-i18n-keys": "641a99fe980899cf",
   "migrate-official-workflow-data-bindings": "4149f3e6496c5393",
   "migrate-permission-modes": "bbacb632b8f0e565",
