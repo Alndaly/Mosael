@@ -208,6 +208,70 @@ def test_画板_文档格引用文档素材_存得下_种类不对或和笔记�
     assert text["status"] == "ready" and text["title"] == "brief" and "今天发布。" in text["markdown"]
 
 
+def test_画板_文档格转为笔记之后_连着保存两次都存得下_原件不被补回来() -> None:
+    """「转为笔记」:界面把这一格换成引用新存的笔记、去掉 asset_id,再照常自动保存。此前保存时「产出归服务端」
+    把库里的 asset_id 补了回来,不再校验就落库 —— 笔记和原件同时在,这张板从第二次保存起一律 400。"""
+    from tests.util import board_revision
+
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+    doc = _import(client, ws, "brief.md", "# 简报\n今天发布。".encode())
+    board = client.post("/api/boards", json={"workspace_id": ws, "name": "B"}).json()["id"]
+
+    def save(items):
+        return client.patch(f"/api/boards/{board}", json={"workspace_id": ws, "base_revision": board_revision(client, board, ws),
+                                                          "canvas": {"items": items, "edges": []}})
+
+    assert save([{"id": "d", "kind": "document", "x": 0, "y": 0, "asset_id": doc, "text": "brief"}]).status_code == 200
+    made = client.post(f"/api/assets/{doc}/note")
+    assert made.status_code == 200, made.text
+    note = {"id": "d", "kind": "document", "x": 0, "y": 0, "note_id": made.json()["note_id"], "note_revision": 1,
+            "text": made.json()["title"], "form": {"producer": "write"}}
+
+    first = save([note])
+    assert first.status_code == 200, first.text
+    cell = first.json()["canvas"]["items"][0]
+    assert cell["note_id"] == made.json()["note_id"] and "asset_id" not in cell, cell
+    moved = save([{**cell, "x": 40}])
+    assert moved.status_code == 200, moved.text
+    assert "asset_id" not in moved.json()["canvas"]["items"][0]
+
+
+def test_迁移_笔记和原件同时在的文档格留笔记() -> None:
+    from app.db.migrations import _migrate_board_documents_keep_the_note_they_became, migration_plan
+    from app.db.models import Board
+
+    assert "migrate-board-documents-keep-the-note-they-became" in {step.name for step in migration_plan().steps}
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+    with SessionLocal() as db:
+        #: 直接写行,绕过保存入口 —— 模拟被补坏之后落库的画布。
+        broken = Board(workspace_id=ws, name="坏板", revision=5, canvas={"items": [
+            {"id": "d", "kind": "document", "x": 0, "y": 0, "note_id": "n1", "note_revision": 1, "asset_id": "doc",
+             "run": {"status": "succeeded"}, "form": {"producer": "write"}},
+            {"id": "r", "kind": "document", "x": 0, "y": 0, "asset_id": "doc"},
+        ], "edges": []})
+        fine = Board(workspace_id=ws, name="好板", revision=2, canvas={"items": [
+            {"id": "r", "kind": "document", "x": 0, "y": 0, "asset_id": "doc"}], "edges": []})
+        db.add_all([broken, fine])
+        db.commit()
+        broken_id, fine_id = broken.id, fine.id
+
+    def canvas(board_id: str) -> tuple[dict, int]:
+        with SessionLocal() as db:
+            row = db.get(Board, board_id)
+            return row.canvas, row.revision
+
+    _migrate_board_documents_keep_the_note_they_became()
+    once = canvas(broken_id)
+    _migrate_board_documents_keep_the_note_they_became()
+    assert canvas(broken_id) == once and once[1] == 6, "再跑一次不该再动"
+    items = {item["id"]: item for item in once[0]["items"]}
+    assert items["d"]["note_id"] == "n1" and "asset_id" not in items["d"]
+    assert items["r"]["asset_id"] == "doc", "只引用原件的那一格不动"
+    assert canvas(fine_id)[1] == 2
+
+
 def test_画板_节点从文档格取文字_取到的是解析出的全文() -> None:
     from app.domain.boards.tools import _value_of
 

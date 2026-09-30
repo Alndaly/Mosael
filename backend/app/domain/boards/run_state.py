@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from app.domain.boards.producer_ids import derives_outputs
+from app.domain.boards.shape import _MEDIA_KINDS
 
 
 def live_job(item: dict[str, Any] | None) -> str | None:
@@ -31,6 +32,9 @@ def _keep_server_owned_state(stored: Any, incoming: dict[str, Any]) -> dict[str,
     所以一项在库里已经有了产出或终态,而传来的那份还是占位,保留库里那个;一项在库里正跑着
     任务,传来的那份不是这一轮,保留这一轮。别的字段(位置、表单、文字)照客户端的来。
     客户端下一次拉到的就是服务端这份。
+
+    **只有「一次运行交回的产出」归服务端**(见 _run_output_kept):用户手动放进去的素材、文档格引用的
+    那份原件,是用户自己的编辑 —— 撤销「替换素材」、把文档格「转为笔记」都得撤得掉、换得掉。
     """
     by_id = {str(item.get("id")): item for item in ((stored or {}).get("items") or [])}
     if not by_id:
@@ -49,7 +53,7 @@ def _keep_server_owned_state(stored: Any, incoming: dict[str, Any]) -> dict[str,
             if not derived:
                 kept.pop("asset_id", None)
             items.append(kept)
-        elif settled and not derived and not item.get("asset_id") and settled.get("asset_id"):
+        elif settled and not derived and not item.get("asset_id") and _run_output_kept(settled, item):
             items.append({**item, "asset_id": settled["asset_id"], "run": settled.get("run", {"status": "succeeded"})})
         elif settled and incoming_running and settled_run.get("status") in ("succeeded", "failed", "cancelled"):
             # 任务结束后的下一次自动保存，客户端手里往往还是提交前的 running 快照。终态必须
@@ -64,3 +68,20 @@ def _keep_server_owned_state(stored: Any, incoming: dict[str, Any]) -> dict[str,
         else:
             items.append(item)
     return {**incoming, "items": items}
+
+
+def _run_output_kept(settled: dict[str, Any], incoming: dict[str, Any]) -> bool:
+    """库里这一格的 asset_id 是不是**一次运行交回、客户端还不知道**的产出 —— 是才替客户端补回来。
+
+    两种:传来的那份还是占位(等着这一轮的产出,而库里已经收到了),或库里的产出就是一次运行成功落下的
+    (`run.succeeded`,回执写的;撤销到生成之前那一步,撤不掉花了钱的结果)。
+
+    别的 asset_id 归客户端:
+    · 手动换上的素材(操作条「替换素材」把运行态写回 idle)—— 撤销它就是要回到空槽;
+    · 文档格引用的文档原件 —— 它不是产出,「转为笔记」正是把它换成笔记(note_id 和 asset_id 二选一,
+      补回来的话这一格从此每次保存都被 normalize 拒掉)。只有图片 / 视频 / 音频格的 asset_id 是产出。
+    """
+    if settled.get("kind") not in _MEDIA_KINDS or not settled.get("asset_id"):
+        return False
+    waiting = ((incoming.get("run") or {}).get("status")) in ("queued", "running")
+    return waiting or ((settled.get("run") or {}).get("status")) == "succeeded"

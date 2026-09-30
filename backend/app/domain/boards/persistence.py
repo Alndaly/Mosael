@@ -178,7 +178,9 @@ def update_board(
         next_name = cleaned
     if canvas is not None:
         normalized = normalize_canvas(canvas)
-        next_canvas = normalized if server_write else _keep_server_owned_state(board.canvas, normalized)
+        #: 替客户端补回服务端归属的字段之后**再过一遍形状**:补回来的东西和客户端这一份拼在一起,也得是一份
+        #: 合法的画布 —— 否则落了库,这张板以后每一次保存都被 normalize 拒掉,用户什么都存不下。
+        next_canvas = normalized if server_write else normalize_canvas(_keep_server_owned_state(board.canvas, normalized))
         _validate_references(db, workspace_id, next_canvas, board.canvas, assets=not server_write)
     if next_name == board.name and next_canvas == board.canvas:
         return board

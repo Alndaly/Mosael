@@ -33,6 +33,7 @@
   "migrate-blender-models-are-named-after-their-scene": "ee053c404b92f0c2",
   "migrate-board-canvas-state": "2504b622f26face3",
   "migrate-board-documents-can-be-written": "c4ea6816844853f0",
+  "migrate-board-documents-keep-the-note-they-became": "8259804276ef4146",
   "migrate-board-empty-slots-name-their-producer": "b9cc7e7996232046",
   "migrate-board-forms-name-their-producer": "0322eafe1d3782b0",
   "migrate-board-frame-names-become-titles": "fdcb55e819e4d4f8",

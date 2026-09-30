@@ -632,6 +632,34 @@ def test_客户端不会覆盖它还不知道的产出() -> None:
     assert "job_id" not in item.get("run", {})
 
 
+def test_空槽手动换上素材之后撤销_撤得回空槽() -> None:
+    """「替换素材」是用户的编辑(运行态写回 idle),不是一次运行交回的产出 —— 撤销它,服务端不能再把素材补回来。
+    一次运行成功落下的产出照旧补回:撤销到生成之前那一步,撤不掉花了钱的结果。"""
+    from tests.util import seed_assets
+
+    client = fresh_client()
+    ws = _workspace(client)
+    seed_assets(ws, {"pic": "image", "made": "image"})
+    board_id = client.post("/api/boards", json={"workspace_id": ws}).json()["id"]
+
+    def save(*items: dict) -> dict:
+        got = client.patch(f"/api/boards/{board_id}", json={
+            "workspace_id": ws, "base_revision": board_revision(client, board_id, ws),
+            "canvas": {"items": list(items), "edges": []}})
+        assert got.status_code == 200, got.text
+        return {item["id"]: item for item in got.json()["canvas"]["items"]}
+
+    slot = {"id": "i", "kind": "image", "x": 0, "y": 0, "form": {"producer": "generate", "prompt": "猫"}}
+    save(slot)
+    assert save({**slot, "asset_id": "pic", "run": {"status": "idle"}})["i"]["asset_id"] == "pic"
+    undone = save(slot)["i"]
+    assert "asset_id" not in undone, undone
+
+    generated = {**slot, "asset_id": "made", "run": {"status": "succeeded"}}
+    save(generated)
+    assert save(slot)["i"]["asset_id"] == "made", "撤销不撤回一次运行交回的产出"
+
+
 def test_客户端不会把已经失败的节点重新写成_loading() -> None:
     """失败回执与自动保存竞态时，服务端终态必须赢。"""
     from types import SimpleNamespace

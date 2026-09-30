@@ -1711,6 +1711,35 @@ def _migrate_boards_remember_their_project() -> None:
         conn.execute(text("ALTER TABLE boards ADD COLUMN project_id VARCHAR(64)"))
 
 
+def _migrate_board_documents_keep_the_note_they_became() -> None:
+    """「转为笔记」之后又被补回原件的文档格:留着笔记(`note_id`),摘掉 `asset_id`。
+
+    文档格引用一篇笔记**或**一份文档素材,二选一(normalize 的 boardErr_documentNoteOrAsset)。此前保存时
+    「运行态和产出归服务端」把客户端去掉的 `asset_id` 又补了回来,不再校验就落了库 —— 这张板从此每一次保存
+    都被拒。用户最后一步做的是「转为笔记」,所以留笔记。改到的板版本号 +1。
+    """
+    if "boards" not in set(inspect(engine).get_table_names()):
+        return
+    with engine.begin() as conn:
+        for board_id, raw, revision in conn.execute(text("SELECT id, canvas, revision FROM boards")).fetchall():
+            try:
+                canvas = json.loads(raw) if isinstance(raw, str) else raw
+            except (TypeError, ValueError):
+                continue
+            if not isinstance(canvas, dict) or not isinstance(canvas.get("items"), list):
+                continue
+            changed = False
+            for item in canvas["items"]:
+                if isinstance(item, dict) and item.get("kind") == "document" and item.get("note_id") and "asset_id" in item:
+                    del item["asset_id"]
+                    changed = True
+            if changed:
+                conn.execute(
+                    text("UPDATE boards SET canvas = :canvas, revision = :revision WHERE id = :id"),
+                    {"canvas": json.dumps(canvas, ensure_ascii=False), "revision": int(revision or 0) + 1, "id": board_id},
+                )
+
+
 def _migrate_board_sequence_cells_name_their_producer() -> None:
     """时间线格挂导出(ADR 0030 §4,`sequence_export`):已经放下的时间线格写明它的产出者,面板照它挂。
 
@@ -6517,6 +6546,7 @@ def migration_plan() -> MigrationPlan:
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_board_scene_cells_hold_no_image),
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_board_scene_render_drops_project),
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_board_sequence_cells_name_their_producer),
+            *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_board_documents_keep_the_note_they_became),
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_agent_session_titles_drop_attachment_tokens),
             #: 具名浏览器会话的登录分区按工作区分开:写下搬家单,由 Electron 执行器在磁盘上搬(新表由 SCHEMA 建)。
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_named_browser_partitions_are_per_workspace),
