@@ -288,6 +288,7 @@ export const plugins = {
   composerFileTooBig: "“{name}” is too large — trim text over 200KB down to the part you need",
   composerFileUnreadable: "“{name}” could not be read",
   composerFileUnsupported: "“{name}” is not a file I can read; images, audio, video and PDF / Word / PowerPoint / Excel go to the asset library, text files are inlined",
+  composerDropHint: "Drop to add to the chat",
   wfNodeGroupOther: "Other",
   scanningPlugins: "Scanning…",
   pluginUninstall: "Uninstall",

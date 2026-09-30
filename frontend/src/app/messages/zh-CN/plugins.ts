@@ -294,6 +294,7 @@ export const plugins = {
   composerFileTooBig: "「{name}」太大了 —— 超过 200KB 的文本请先自行截取需要的部分",
   composerFileUnreadable: "「{name}」读不出来",
   composerFileUnsupported: "「{name}」这种文件我读不了;图片、音视频和 PDF / Word / PPT / Excel 会进素材库,文本文件会被读进上下文",
+  composerDropHint: "松手添加到对话",
   wfNodeGroupOther: "其它",
   scanningPlugins: "扫描中…",
   pluginUninstall: "卸载",

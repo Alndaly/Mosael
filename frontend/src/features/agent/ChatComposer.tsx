@@ -223,6 +223,10 @@ export function ChatComposer({
         ),
       },
       handlePaste: (_view, event) => (onPaste ? onPaste(event as unknown as React.ClipboardEvent) : false),
+      //: 从系统拖进来的文件不归编辑器:拖拽里常附带一段文字(文件路径、网页图片的链接),ProseMirror
+      //: 会把它当正文插进来。认领下来(它只 preventDefault、不拦冒泡),文件交给外面整块对话区上的
+      //: 附件拖放(见 composerAttachments)。编辑器里自己挪一段字(moved)照旧归它。
+      handleDrop: (_view, event, _slice, moved) => !moved && Array.from(event.dataTransfer?.types ?? []).includes("Files"),
       handleKeyDown: (_view, event) => {
         if (!sendsOnEnter(event, menuOpenRef.current)) return false;
         event.preventDefault();

@@ -1,11 +1,12 @@
 import React from "react";
-import { FileText, Music } from "lucide-react";
+import { FileText, FileUp, Music } from "lucide-react";
 
 import { assetFileUrl, assetThumbnailUrl, importAsset, type Asset } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { useImagePreview, type ImagePreviewItem } from "@/components/app/image-preview";
 import { useAssetPreviewModal } from "@/features/media/AssetPreviewModalById";
 import type { ComposerChip } from "@/lib/composerChip";
+import { useFileDrop, type FileDrop } from "@/lib/useFileDrop";
 import { toast } from "sonner";
 
 /**
@@ -22,6 +23,9 @@ import { toast } from "sonner";
  *   长的目录由后端放进上下文,智能体用 read_document 按段读、analyze_document_pages 看版式。
  * - **文本文件**(含 Markdown、CSV)→ 内联成围栏上下文。脚本、字幕、配置就该被读进去,而不是变成一个素材 id。
  * - 其余(压缩包、安装包…)拒绝并说明,不静默丢掉。
+ *
+ * 三种入口只是「文件从哪来」不同,之后**同一个 accept**:同样的分流、同样的大小上限、同样的报错。
+ * 拖放和粘贴另写一套的话,📎 能附上的文件拖进来可能被拒,或者反过来。
  */
 
 /** 内联文本的大小上限。再大应拆分或放到外部文件里按需读取,不能塞满一轮对话上下文。 */
@@ -50,6 +54,12 @@ export interface ComposerAttachments {
   accept: (files: Iterable<File> | FileList | null) => Promise<void>;
   /** 贴到输入框上的粘贴处理器;剪贴板里没有文件时返回 false,让浏览器照常粘文字。 */
   onPaste: (event: React.ClipboardEvent) => boolean;
+  /**
+   * 从访达 / 桌面把文件拖进来。`handlers` 摊到**整块对话区**上(不只是输入框 —— 输入框只有两行高,
+   * 瞄准它松手太难),`overlay` 挂在同一块里,那块要是定位容器(relative / fixed)。
+   * 只认真带文件的拖拽(见 useFileDrop):拖选一段字、编辑器里挪一个引用胶囊都不会亮提示。
+   */
+  drop: { handlers: FileDrop["handlers"]; overlay: React.ReactNode };
   removeMedia: (index: number) => void;
   removeFile: (index: number) => void;
   clear: () => void;
@@ -119,6 +129,19 @@ export function useComposerAttachments(workspaceId: string): ComposerAttachments
     [accept],
   );
 
+  //: 不在这里按类型筛:收不了的文件也交给 accept,由它报出是哪一个、为什么 —— 和 📎 选到同一个文件时一样。
+  //: 在这里筛掉的话,拖进一个压缩包松手后什么都不发生,用户不知道是没拖中还是不支持。
+  const fileDrop = useFileDrop((dropped) => void accept(dropped));
+  //: inset-0 一点不留、盖过输入卡和消息:落点是整块对话区,不是某个方框(素材库、工作流画布同款)。
+  const dropOverlay = fileDrop.active ? (
+    <div className="pointer-events-none absolute inset-0 z-40 grid place-items-center bg-[color-mix(in_oklab,var(--primary)_10%,var(--background))]">
+      <span className="grid justify-items-center gap-2 rounded-lg border-2 border-dashed border-primary px-6 py-4 text-ui-md font-semibold text-primary">
+        <FileUp size={20} />
+        {t("composerDropHint")}
+      </span>
+    </div>
+  ) : null;
+
   const removeMedia = React.useCallback((index: number) => setMedia((c) => c.filter((_, i) => i !== index)), []);
   const removeFile = React.useCallback((index: number) => setFiles((c) => c.filter((_, i) => i !== index)), []);
 
@@ -167,6 +190,7 @@ export function useComposerAttachments(workspaceId: string): ComposerAttachments
     isEmpty: media.length === 0 && files.length === 0,
     accept,
     onPaste,
+    drop: { handlers: fileDrop.handlers, overlay: dropOverlay },
     removeMedia,
     removeFile,
     chips,

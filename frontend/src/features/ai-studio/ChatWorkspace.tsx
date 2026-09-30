@@ -276,6 +276,8 @@ export function ChatWorkspace({
     () => (viewingSubagentId ? collectSubagentRuns(subagentSourceTimeline).find((run) => run.call.id === viewingSubagentId) ?? null : null),
     [viewingSubagentId, subagentSourceTimeline],
   );
+  //: 有输入框的时候才收拖进来的文件(见下面 section 上那段说明)。
+  const acceptsFiles = !readOnly && !viewingSubagent;
 
   //: 会话统计用的轮次结构。和轨迹视图同一个构建函数 —— 两处各写一套的话,
   //: 底下报的「3 轮 · 23 步」和轨迹里数出来的迟早对不上。
@@ -395,7 +397,13 @@ export function ChatWorkspace({
         />
       </StudioIndex>
 
-      <section className="min-h-0 overflow-hidden bg-workspace-panel grid grid-rows-[auto_minmax(0,1fr)_auto]">
+      {/* 文件拖到整块对话区上都算数(输入框只有两行高,瞄准它松手太难)。只读、看子代理时没有输入框,
+          也就没有附件可加 —— 那时不接拖放,不亮一个松手后什么都不会发生的提示。 */}
+      <section
+        className="relative min-h-0 overflow-hidden bg-workspace-panel grid grid-rows-[auto_minmax(0,1fr)_auto]"
+        {...(acceptsFiles ? attach.drop.handlers : {})}
+      >
+        {acceptsFiles && attach.drop.overlay}
         {/* min-w-0:这行是 grid 子项,默认 min-width:auto —— 面包屑里的长任务名会把它撑到
             section 的 overflow-hidden 上被硬裁,而不是走内部的 truncate 省略号。 */}
         <div ref={toolbarRef} className="flex min-h-14 min-w-0 flex-wrap items-center gap-2 border-b border-divider px-4 py-1.5 max-[821px]:pl-14">

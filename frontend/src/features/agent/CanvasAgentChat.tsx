@@ -343,8 +343,12 @@ export function CanvasAgentChat({
       {...focusProps}
       role={isFloating ? "dialog" : "complementary"}
       aria-label={t("wfAgentTitle")}
+      //: 文件拖到整个面板上都算数,不只是输入卡;只读时没有输入卡,也就不接(和 AI 工作台同一条)。
+      //: 覆盖层靠这个 aside 定位:停靠时它是 relative,悬浮时是 fixed。
+      {...(readOnly ? {} : attach.drop.handlers)}
     >
       {handles}
+      {!readOnly && attach.drop.overlay}
       <div className={cn(PANEL_HEADER_CLASS, isFloating && "cursor-move")} onPointerDown={startDrag}>
         {/* h2 会吃满按钮以外的剩余标题栏，悬浮时这整段都是拖动命中区。会话标题本身仍是
             button，useFloatingPanel 会排除它，所以单击切会话与拖窗口不会互相抢事件。此前把

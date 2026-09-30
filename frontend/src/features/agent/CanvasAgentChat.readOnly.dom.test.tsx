@@ -48,6 +48,7 @@ vi.mock("@/features/agent/composerAttachments", () => ({
     uploading: false,
     previewModal: null,
     onPaste() {},
+    drop: { handlers: {}, overlay: null },
     accept() {},
     clear() {},
   }),
