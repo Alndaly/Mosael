@@ -72,6 +72,7 @@ import { ScenePickerDialog } from "@/features/scenes/ScenePickerDialog";
 import { EntityPickerDialog } from "@/features/entities/EntityPickerDialog";
 import { announceEntityReceipt } from "@/features/entities/entityMeta";
 import { boardSettlementPatch, itemIsRunning, prunedLinksPatch, serverOwnedPatch } from "@/features/boards/boardItemState";
+import { rebaseCanvas } from "@/features/boards/boardRebase";
 import { runNoteWrite } from "@/features/boards/noteWriteLifecycle";
 import { createWriteQueue, sameContent } from "@/lib/optimisticWrites";
 import { importEach, importFailureText } from "@/lib/importEach";
@@ -599,19 +600,38 @@ function BoardDetail({
     },
     [onSaved],
   );
+  /**
+   * 采用服务端更新的一版:本地没存上的改动按格子重放到它上面(boardRebase),撤销历史照留(画布的 adopt)。
+   *
+   * 服务端那一版前进了,原因多半是服务端自己写的一格 —— 生成的占位、回执落下的产出 —— 或智能体改板批准后
+   * 的那一步,不是「别处」。此前本地一有没存的改动就不采用,下一次保存必撞 409,撞了就把本地整份换掉:刚拖的、
+   * 刚敲的一起没了。合好的那份交给自动保存,带着新的版本号存回去。
+   *
+   * 回「有没有两边改了同一格同一字段」—— 有才值得打断人说一声。不比当前新的(比如保存已经把版本推过去了)不采用。
+   */
+  const adoptServer = React.useCallback(
+    (fresh: Board): { adopted: boolean; conflicted: boolean } => {
+      if (fresh.revision <= revision.current) return { adopted: false, conflicted: false };
+      const base = confirmedCanvas.current;
+      const { canvas: merged, conflicted } = rebaseCanvas(base, localCanvas.current ?? base, fresh.canvas);
+      revision.current = fresh.revision;
+      confirmedCanvas.current = fresh.canvas;
+      api?.adopt(merged, (snapshot) => rebaseCanvas(base, snapshot, fresh.canvas).canvas);
+      localCanvas.current = merged;
+      setCanvas(merged);
+      onSaved();
+      return { adopted: true, conflicted };
+    },
+    [api, onSaved],
+  );
   const recoverConflict = React.useCallback(
     async (error: unknown): Promise<boolean> => {
       if (!(error instanceof ApiError) || error.status !== 409) return false;
-      const fresh = await getBoard(board.id, workspaceId);
-      revision.current = fresh.revision;
-      confirmedCanvas.current = fresh.canvas;
-      api?.replace(fresh.canvas);
-      setCanvas(fresh.canvas);
-      onSaved();
-      toast.error(t("boardsCanvasConflict"), { description: t("boardsCanvasConflictDetail") });
+      const { conflicted } = adoptServer(await getBoard(board.id, workspaceId));
+      if (conflicted) toast.error(t("boardsCanvasConflict"), { description: t("boardsCanvasConflictDetail") });
       return true;
     },
-    [api, board.id, workspaceId, onSaved, t],
+    [adoptServer, board.id, workspaceId, t],
   );
 
   //: 这个人在画板上能用的产出者:一格的能力(操作条上那一排和它们的面板)、空槽的产出者切换都照它。
@@ -657,9 +677,14 @@ function BoardDetail({
   );
 
   const save = React.useCallback(
-    (next: Canvas) =>
-      //: 轮到它时再比、再读版本号:排在它前面的写请求可能刚把画布推进到这一份。
-      serially(async () => {
+    (latest: Canvas) => {
+      //: 这一份是在哪个底子上改出来的。排队期间服务端那一版可能被采用了(轮询、别的写请求撞了版本号):
+      //: 轮到它时底子变了,就把它的改动重放到新的底子上再发 —— 原样发的话,它会把刚采用的那几格(回执落下的
+      //: 产出、派生出来的几格)当成「本地删掉的」存没。
+      const base = confirmedCanvas.current;
+      return serially(async () => {
+        const next = confirmedCanvas.current === base ? latest : rebaseCanvas(base, latest, confirmedCanvas.current).canvas;
+        //: 轮到它时再比、再读版本号:排在它前面的写请求可能刚把画布推进到这一份。
         if (sameContent(next, confirmedCanvas.current)) return;
         const fresh = acceptBoard(await updateBoard(board.id, { workspace_id: workspaceId, base_revision: revision.current, canvas: next }));
         //: 服务端没收下的运行态/产出,本地跟着回来(见 serverOwnedPatch);服务端摘掉的、线已经
@@ -678,12 +703,14 @@ function BoardDetail({
       })
         // 存不上必须说 —— 画板是攒想法的地方,默默丢掉是最糟的失败方式。
         .catch(async (error: Error) => {
+          //: 撞了版本号:合好的那份已经交给自动保存(adoptServer 里的 setCanvas),它接着带新版本号存。
           if (await recoverConflict(error)) throw error;
           toast.error(t("boardsSaveFailed"), { description: error.message });
           // 自动保存只在 Promise 完成后才把这份画布视为已落库。告诉它失败了,
           // 下一次编辑仍会以最后一份真正成功的画布为基准。
           throw error;
-        }),
+        });
+    },
     [board.id, workspaceId, t, api, acceptBoard, recoverConflict, serially],
   );
   // **不显示"已保存"。** 自动保存做对了就该是无声的:一个常驻的「已保存」既不能让人放心
@@ -710,32 +737,37 @@ function BoardDetail({
       //: 版本号**轮到它时再读** —— 排在它前面的写请求可能刚把画布推进到下一版。
       const send = () =>
         serially(() => runOnBoard(board.id, { ...request, workspace_id: workspaceId, base_revision: revision.current }));
-      let placed: Board;
-      try {
-        if (request.producer === "write") {
-          acceptBoard(await runNoteWrite({ run: request, request: send, patch: (itemId, next) => api?.patch(itemId, next) }));
-          return;
+      //: 撞了版本号(服务端刚写了一格 —— 别的格子的占位、回执 —— 或智能体改了板):合上最新那一版、把合好的
+      //: 存上,再发一次。这一格要跑什么是人刚点的,和服务端那一版推进到哪儿无关;只重来一次,再撞就照常报错。
+      const attempt = async (retried: boolean): Promise<Board | null> => {
+        try {
+          if (request.producer === "write") {
+            acceptBoard(await runNoteWrite({ run: request, request: send, patch: (itemId, next) => api?.patch(itemId, next) }));
+            return null;
+          }
+          return await send();
+        } catch (error) {
+          if (retried || !(await recoverConflict(error))) throw error;
+          await save(localCanvas.current ?? confirmedCanvas.current);
+          return attempt(true);
         }
-        placed = await send();
+      };
+      let placed: Board | null;
+      try {
+        placed = await attempt(false);
       } catch (error) {
-        if (await recoverConflict(error)) return;
         toast.error(t(isNodeProducer(request.producer) ? "boardToolFailed" : RUN_FAILED[request.producer]), {
           description: (error as Error).message,
         });
         return;
       }
-      acceptBoard(placed);
-      //: **走画布的把手落到本地。** 回写这里的 canvas 状态是没用的 —— 画布的节点只在挂载时从
-      //: canvas 建一次。已经在画布上的那一格(在空槽里生成、截挂了就地重截)只换表单、运行态和产出
-      //: —— 马上标成「在跑」,不然用户看到的是「点了没反应」,然后再点一次;上一次的报错一起让位。
-      //: 新的一格(从一段片子上截)加进去。和服务端 place_pending 同一条:有就地改、没有才加。
+      if (!placed) return;
+      //: **走画布的把手落到本地**(回写这里的 canvas 状态没用 —— 画布的节点只在挂载时从 canvas 建一次)。
+      //: 已经在画布上的那一格(在空槽里生成、截挂了就地重截)换上服务端的表单、运行态和产出 —— 马上标成「在跑」,
+      //: 不然用户看到的是「点了没反应」,然后再点一次;新的一格(从一段片子上截)加进去。和别的服务端新版一样
+      //: 按格子合进本地:请求在路上时人又拖了、又敲了的照留。
+      adoptServer(placed);
       const made = placed.canvas.items.find((one) => one.id === request.item_id);
-      if (made && localCanvas.current?.items.some((one) => one.id === made.id)) {
-        api?.patch(made.id, { form: made.form, run: made.run, asset_id: made.asset_id });
-      } else if (made) {
-        api?.add(made.kind, made);
-      }
-      onSaved();
       setRunning((current) => (current.includes(request.item_id) ? current : [...current, request.item_id]));
       //: `@` 到的资产(或连进来的资产格)挂不全参考图时说一声(ADR 0027):挂了几张、没挂上的为什么。
       //: 只在这一次真的点名了资产时去问(正文里 @ 的,或者连进来的资产格)。
@@ -749,7 +781,7 @@ function BoardDetail({
           ));
       if (named && made?.run?.job_id) void announceEntityReceipt(made.run.job_id, t);
     },
-    [board.id, workspaceId, onSaved, api, t, acceptBoard, recoverConflict, serially, flushSaves],
+    [board.id, workspaceId, onSaved, api, t, acceptBoard, adoptServer, recoverConflict, save, serially, flushSaves],
   );
 
   /**
@@ -803,18 +835,12 @@ function BoardDetail({
     const timer = setInterval(async () => {
       const fresh = await getBoard(board.id, workspaceId).catch(() => null);
       if (!fresh) return;
-      const local = localCanvas.current ?? confirmedCanvas.current;
-      //: 按内容比,不按字段顺序(见 sameContent)—— 否则本地永远「有改动」,回执落地时不采用。
-      const hasLocalChanges = !sameContent(local, confirmedCanvas.current);
-      // When the local projection is clean, adopt the complete server projection (including extra
-      // multi-image results) and its token together. With local edits pending, show settled states
-      // below but keep the old token so the next save correctly conflicts instead of overwriting.
-      if (!hasLocalChanges && fresh.revision !== revision.current) {
-        revision.current = fresh.revision;
-        confirmedCanvas.current = fresh.canvas;
-        api?.replace(fresh.canvas);
-        setCanvas(fresh.canvas);
-      }
+      //: 服务端那一版(连同一次多张的其余几张、派生出来的几格)和它的版本号一起采用,本地没存的改动合在上面
+      //: (见 adoptServer)—— 不再因为本地有改动就不采用,那样下一次保存必撞 409。排进写队列:和在路上的保存
+      //: 按先后来,保存先回来把版本推过去的话,这份旧的就不采用了。
+      await serially(async () => {
+        adoptServer(fresh);
+      });
       const settled: string[] = [];
       for (const id of running) {
         const item = fresh.canvas.items.find((one) => one.id === id);
@@ -834,7 +860,7 @@ function BoardDetail({
       if (settled.length) setRunning((current) => current.filter((id) => !settled.includes(id)));
     }, 2500);
     return () => clearInterval(timer);
-  }, [running, board.id, workspaceId, api]);
+  }, [running, board.id, workspaceId, api, adoptServer, serially]);
 
   /**
    * ⌘/Ctrl+N 打开「添加」弹层 —— 和工作流详情页同键同义(那边是 ⌘N 添加节点)。

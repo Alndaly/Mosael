@@ -10,7 +10,7 @@ import type { BoardCanvas as Canvas } from "@/api/client";
 import { errorText } from "@/api/errorMessage";
 import { redoSequence, undoSequence } from "@/api/domains/editor";
 import { boardSequenceKey } from "@/features/boards/SequenceCell";
-import { dropSequenceStep, emptyHistory, record, recordSequence, redo, retagSequenceStep, undo, type SequenceStep } from "@/features/boards/canvasHistory";
+import { dropSequenceStep, emptyHistory, record, recordSequence, redo, retagSequenceStep, undo, type SequenceStep, type Step } from "@/features/boards/canvasHistory";
 import { onSequenceEdit } from "@/features/boards/sequenceCursor";
 import { LAYERS, toCanvas, toNodes } from "@/features/boards/boardCanvasModel";
 import { toMarkerNodes } from "@/features/markers/markers";
@@ -29,6 +29,9 @@ export function useBoardHistory({
   onChange: (canvas: Canvas) => void;
 }) {
   const queryClient = useQueryClient();
+  //: 采用服务端那一版时要按 id 找回节点此刻的选中态(见 adopt);回调里读最新的,不进依赖。
+  const nodesRef = React.useRef(nodes);
+  nodesRef.current = nodes;
   // 每次画布变了就汇一份给上层去存。**用 JSON 比对而不是引用比对** —— React Flow 每次
   // 拖动都换新对象,引用比对等于每帧都报"变了"。
   const serialized = React.useMemo(() => JSON.stringify(toCanvas(nodes, edges)), [nodes, edges]);
@@ -65,18 +68,30 @@ export function useBoardHistory({
   );
 
   /**
-   * 换成服务端那份(冲突之后、或回执落地时采用服务端画布)。**历史从这一份重新开始。**
+   * 采用服务端的新一版(回执落地、智能体改了板、保存撞了版本号之后合好的那份),**撤销历史不清空**。
    *
-   * 之前那摞快照都建立在一份已经不成立的画布上:撤一步装回去的是「别人改之前」的样子 ——
-   * 智能体刚加的便签、别处刚落回的产出一起消失,下一次自动保存再带着新版本号把它们存没了。
+   * `canvas` 是已经把本地改动重放上去的那份(boardRebase);`rebase` 把一份旧快照按同一个底子也合一遍 ——
+   * 撤销栈里每一份都补上服务端刚落下的格子和运行态,撤一步回到的样子里照样有刚出的图,撤销也不会把在跑的一格
+   * 撤成空槽。此前每出一次结果历史就被清空(replace),人刚做的几步一下子都撤不回去了。
+   *
+   * 节点按 id 就地换:选中、量出来的尺寸留着 —— 回执每落一次选中的那一格就被取消选中,面板就收起来了。
    */
-  const replace = React.useCallback(
-    (canvas: Canvas) => {
-      const snapshot = load(canvas);
+  const adopt = React.useCallback(
+    (canvas: Canvas, rebase: (snapshot: Canvas) => Canvas) => {
+      const before = new Map(nodesRef.current.map((node) => [node.id, node]));
+      const nextNodes = [...toNodes(canvas.items), ...toMarkerNodes(canvas.markers ?? [], LAYERS.marker)].map((node) => {
+        const old = before.get(node.id);
+        return old ? { ...node, selected: old.selected, measured: old.measured } : node;
+      });
+      const nextEdges = canvas.edges.map((edge) => ({ id: edge.id, source: edge.source, target: edge.target }));
+      setNodes(nextNodes);
+      setEdges(nextEdges);
+      const snapshot = JSON.stringify(toCanvas(nextNodes, nextEdges));
       restoring.current = snapshot;
-      setHistory(emptyHistory(snapshot));
+      const rewrite = (step: Step): Step => (typeof step === "string" ? JSON.stringify(rebase(JSON.parse(step) as Canvas)) : step);
+      setHistory((current) => ({ past: current.past.map(rewrite), future: current.future.map(rewrite), present: snapshot }));
     },
-    [load],
+    [setNodes, setEdges],
   );
 
   React.useEffect(() => {
@@ -138,5 +153,5 @@ export function useBoardHistory({
     else restore(next.present);
   }, [restore, replaySequence]);
 
-  return { history, replace, stepBack, stepForward };
+  return { history, adopt, stepBack, stepForward };
 }

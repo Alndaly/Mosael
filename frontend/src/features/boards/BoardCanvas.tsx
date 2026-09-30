@@ -113,9 +113,9 @@ export interface BoardCanvasApi {
    *  从 canvas 建一次,回写上层的 canvas 状态它看不见,用户会以为「点了没反应」。
    *  值给 undefined 表示删掉那个字段。 */
   patch: (itemId: string, next: Partial<BoardItem>) => void;
-  /** Replace the local projection after a server conflict. This is intentionally explicit: normal
-   *  prop changes must not interrupt an in-progress drag or text edit. */
-  replace: (canvas: Canvas) => void;
+  /** 采用服务端更新的一版(本地没存的改动已经合在上面,见 boardRebase)。显式调用 —— 平常的 prop 变化不能打断
+   *  正在拖、正在敲的那一下。节点按 id 就地换,撤销历史不清空:每一份快照按 `rebase` 合一遍(见 useBoardHistory.adopt)。 */
+  adopt: (canvas: Canvas, rebase: (snapshot: Canvas) => Canvas) => void;
   fitView: () => void;
   focusComment: (comment: CollaborationComment) => void;
   /** 查找节点跳到某一项:把它摆到看得见的那块正中,放得下的话拉近到看得清。不改选中态。 */
@@ -367,7 +367,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
     selectable: !commentMode && !markerMode,
   }));
 
-  const { history, replace, stepBack, stepForward } = useBoardHistory({ nodes, edges, setNodes, setEdges, onChange });
+  const { history, adopt, stepBack, stepForward } = useBoardHistory({ nodes, edges, setNodes, setEdges, onChange });
 
   /**
    * 把选中的这几项圈成一组:算出它们的外接矩形,四周留一点余量,摆一个分组框。
@@ -534,7 +534,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
     onReady?.({
       add,
       patch,
-      replace,
+      adopt,
       fitView: () => {
         if (rf.current && surface.current) {
           void fitCanvasViewport(rf.current, surface.current, insetsOf(surface.current));
@@ -554,7 +554,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
       canUndo: canUndo(history),
       canRedo: canRedo(history),
     });
-  }, [add, patch, replace, onReady, insetsOf, centerOn, focusItem, stepBack, stepForward, history, markers, addMarker, jumpToMarker]);
+  }, [add, patch, adopt, onReady, insetsOf, centerOn, focusItem, stepBack, stepForward, history, markers, addMarker, jumpToMarker]);
 
   return (
     // 详情页本身就是画布边界:四边满铺,不再套第二层卡片边框或圆角。

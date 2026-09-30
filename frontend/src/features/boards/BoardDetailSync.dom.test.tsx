@@ -28,7 +28,7 @@ const canvasHarness = vi.hoisted(() => ({
   api: {
     add: vi.fn(),
     patch: vi.fn(),
-    replace: vi.fn(),
+    adopt: vi.fn(),
     fitView: vi.fn(),
     focusComment: vi.fn(),
     focusItem: vi.fn(),
@@ -72,7 +72,7 @@ vi.mock("@/features/boards/BoardCanvas", () => ({
   },
 }));
 
-import type { Board, BoardCanvas, Workspace } from "@/api/client";
+import { ApiError, type Board, type BoardCanvas, type Workspace } from "@/api/client";
 import { BoardsView } from "@/features/boards/BoardsView";
 
 const workspace = { id: "w1", name: "W" } as Workspace;
@@ -105,6 +105,10 @@ function mount() {
     </QueryClientProvider>,
   );
 }
+
+/** 画布最后一次被交过去采用的那份(合好本地改动的服务端新版,见 BoardsView.adoptServer)。 */
+const adopted = (): BoardCanvas | undefined => canvasHarness.api.adopt.mock.calls.at(-1)?.[0] as BoardCanvas | undefined;
+const adoptedItem = (id: string) => adopted()?.items.find((one) => one.id === id);
 
 const props = () => canvasHarness.props as {
   onChange: (canvas: BoardCanvas) => void;
@@ -168,7 +172,7 @@ describe("画板详情页与服务端的同步", () => {
     });
 
     expect(apiMocks.getBoard).toHaveBeenCalled();
-    expect(canvasHarness.api.replace).toHaveBeenCalledWith(settled);
+    expect(adopted()).toEqual(settled);
     expect(toastMocks.error).not.toHaveBeenCalled();
   });
 
@@ -268,7 +272,8 @@ describe("画板详情页与服务端的同步", () => {
 
     expect(apiMocks.runOnBoard.mock.calls[0][1]).toMatchObject({ item_id: "cut", producer: "trim", form: { asset_id: "src", start: 0.5 } });
     expect(canvasHarness.api.add).not.toHaveBeenCalled();
-    expect(canvasHarness.api.patch).toHaveBeenCalledWith("cut", expect.objectContaining({ form: retried.form, run: retried.run }));
+    expect(adopted()?.items.filter((one) => one.id === "cut")).toHaveLength(1);
+    expect(adoptedItem("cut")).toMatchObject({ form: retried.form, run: retried.run });
   });
 
   it("删掉那根线之后存回去:服务端摘掉了从那条线来的那份,本地那一格跟着摘,手动挂的照留", async () => {
@@ -333,6 +338,114 @@ describe("画板详情页与服务端的同步", () => {
   });
 });
 
+/**
+ * 一台**认版本号**的假服务端:保存、在画板上跑带的 base_revision 不是当前那一版就 409 —— 和后端 update_board /
+ * ensure_revision 一样。`serverWrite` 是服务端自己写的一格(回执落下产出、别的格子的占位):版本号 +1。
+ * 此前的桩不看版本号,「回执一落、下一次编辑就撞 409、本地被整份换掉」这件事测不出来。
+ */
+function strictServer(initial: BoardCanvas) {
+  const state = { canvas: initial, revision: 3 };
+  const conflict = () => new ApiError("revision conflict", 409, "{}");
+  apiMocks.listBoards.mockImplementation(async () => [boardAt(state.revision, state.canvas)]);
+  apiMocks.getBoard.mockImplementation(async () => boardAt(state.revision, state.canvas));
+  apiMocks.updateBoard.mockImplementation(async (_id: string, body: { base_revision: number; canvas: BoardCanvas }) => {
+    if (body.base_revision !== state.revision) throw conflict();
+    state.canvas = body.canvas;
+    state.revision += 1;
+    return boardAt(state.revision, state.canvas);
+  });
+  return {
+    state,
+    conflict,
+    serverWrite(change: (canvas: BoardCanvas) => BoardCanvas) {
+      state.canvas = change(state.canvas);
+      state.revision += 1;
+    },
+  };
+}
+
+describe("服务端那一版前进了(回执、占位、智能体),本地手上还有没存的改动", () => {
+  const running = { id: "img", kind: "image" as const, x: 0, y: 0, width: 260, height: 180, run: { status: "running" as const, job_id: "job-1" } };
+  const note = { id: "n1", kind: "note" as const, x: 400, y: 0, width: 220, height: 140, text: "一只猫" };
+
+  it("产出刚落下时拖了一格:保存撞了版本号就合上最新那一版再存 —— 拖的位置和产出都在,不提示冲突", async () => {
+    const server = strictServer({ items: [running, note], edges: [], markers: [] });
+    mount();
+    await vi.waitFor(() => expect(canvasHarness.props).not.toBeNull());
+
+    //: 回执落下(服务端写的,版本 +1),同一刻人把便签拖开了 —— 本地还不知道有新的一版。
+    server.serverWrite((canvas) => ({ ...canvas, items: [{ ...running, asset_id: "a1", run: { status: "succeeded" } }, note] }));
+    act(() => props().onChange({ items: [running, { ...note, x: 520 }], edges: [], markers: [] }));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1500);
+    });
+
+    expect(apiMocks.updateBoard.mock.calls.length, "撞了一次,合好之后又存了一次").toBe(2);
+    const stored = new Map(server.state.canvas.items.map((one) => [one.id, one]));
+    expect(stored.get("n1")?.x, "拖的位置存上了").toBe(520);
+    expect(stored.get("img")).toMatchObject({ asset_id: "a1", run: { status: "succeeded" } });
+    expect(adoptedItem("n1")?.x, "本地那份没被整份换掉").toBe(520);
+    expect(adoptedItem("img")?.asset_id).toBe("a1");
+    expect(toastMocks.error, "自己的生成落地不是冲突").not.toHaveBeenCalled();
+  });
+
+  it("有没存的改动时轮询到产出:照样采用那一版、改动合在上面,接着带新版本号存 —— 一次 409 都不撞", async () => {
+    const server = strictServer({ items: [running, note], edges: [], markers: [] });
+    mount();
+    await vi.waitFor(() => expect(canvasHarness.props).not.toBeNull());
+    server.serverWrite((canvas) => ({ ...canvas, items: [{ ...running, asset_id: "a1", run: { status: "succeeded" } }, note] }));
+    //: 画布桩照真的那样:采用了哪一份,之后的编辑就从那一份接着改。
+    let local: BoardCanvas = { items: [running, note], edges: [], markers: [] };
+    canvasHarness.api.adopt.mockImplementation((canvas: BoardCanvas) => {
+      local = canvas;
+    });
+    //: 人一直在拖(每 0.5 秒一下),自动保存一直等不到,轮询先到。
+    for (let step = 1; step <= 6; step += 1) {
+      local = { ...local, items: local.items.map((one) => (one.id === "n1" ? { ...one, x: 400 + step * 10 } : one)) };
+      const next = local;
+      act(() => props().onChange(next));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(500);
+      });
+    }
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000);
+    });
+
+    expect(canvasHarness.api.adopt).toHaveBeenCalled();
+    expect(apiMocks.updateBoard.mock.results.every((one) => one.type === "return")).toBe(true);
+    const stored = new Map(server.state.canvas.items.map((one) => [one.id, one]));
+    expect(stored.get("n1")?.x).toBe(460);
+    expect(stored.get("img")?.asset_id).toBe("a1");
+  });
+
+  it("点生成时别的格子的回执刚落下:合上最新那一版再发一次,不报「生成失败」", async () => {
+    const slot = { id: "slot", kind: "image" as const, x: 0, y: 300, width: 260, height: 180, form: { producer: "generate" as const } };
+    const server = strictServer({ items: [running, slot], edges: [], markers: [] });
+    apiMocks.runOnBoard.mockImplementation(async (_id: string, body: { base_revision: number; item_id: string }) => {
+      if (body.base_revision !== server.state.revision) throw server.conflict();
+      server.serverWrite((canvas) => ({
+        ...canvas,
+        items: canvas.items.map((one) => (one.id === body.item_id ? { ...one, run: { status: "running", job_id: "job-2" } } : one)),
+      }));
+      return boardAt(server.state.revision, server.state.canvas);
+    });
+    mount();
+    await vi.waitFor(() => expect(canvasHarness.props).not.toBeNull());
+    server.serverWrite((canvas) => ({ ...canvas, items: [{ ...running, asset_id: "a1", run: { status: "succeeded" } }, slot] }));
+
+    await act(async () => {
+      await props().onRun({ producer: "generate", item_id: "slot", kind: "image", x: 0, y: 300, form: { prompt: "一只猫" } });
+    });
+
+    expect(apiMocks.runOnBoard).toHaveBeenCalledTimes(2);
+    expect(apiMocks.runOnBoard.mock.calls[1][1]).toMatchObject({ base_revision: 4, item_id: "slot" });
+    expect(toastMocks.error).not.toHaveBeenCalled();
+    expect(adoptedItem("slot")?.run).toEqual({ status: "running", job_id: "job-2" });
+    expect(adoptedItem("img")?.asset_id).toBe("a1");
+  });
+});
+
 describe("一格的能力(把它的内容变成新内容)", () => {
   const TOOL = {
     id: "node:translate", type: "translate", label: "翻译", description: "把文本翻译成目标语言:Google 免费接口或 AI 供应商。",
@@ -392,7 +505,7 @@ describe("一格的能力(把它的内容变成新内容)", () => {
       producer: "node:translate", item_id: "n1", kind: "note", form: { config: { target_lang: "en" }, bindings: {} },
     });
     //: 宿主那一格就地换上服务端的表单和运行态(能力的设置、这一轮是哪一项)。
-    expect(canvasHarness.api.patch).toHaveBeenCalledWith("n1", expect.objectContaining({ run: running.run, form: running.form }));
+    expect(adoptedItem("n1")).toMatchObject({ run: running.run, form: running.form });
 
     act(() => props().onChange({ ...server, items: [running] }));
     await act(async () => {
@@ -403,7 +516,7 @@ describe("一格的能力(把它的内容变成新内容)", () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(3000);
     });
-    expect(canvasHarness.api.replace).toHaveBeenCalledWith(settled);
+    expect(adopted()).toEqual(settled);
   });
 
   it("能力跑不起来(比如没有这个插件的连接):提示说的是工具,不是「生成失败」", async () => {

@@ -15,6 +15,7 @@ vi.mock("@/app/preferences", () => ({
 import type { BoardCanvas as Canvas } from "@/api/client";
 import { ImagePreviewProvider } from "@/components/app/image-preview";
 import { BoardCanvas, type BoardCanvasApi } from "@/features/boards/BoardCanvas";
+import { rebaseCanvas } from "@/features/boards/boardRebase";
 import { noteSequenceEdit } from "@/features/boards/sequenceCursor";
 
 beforeAll(() => {
@@ -58,28 +59,36 @@ function mount(canvas: Canvas, extra: Partial<React.ComponentProps<typeof BoardC
 const note = (id: string, text: string) => ({ id, kind: "note" as const, x: 0, y: 0, width: 220, height: 140, color: "yellow" as const, text });
 
 describe("画板的撤销与服务端那份", () => {
-  it("冲突后换成服务端那份,撤销不会把别人刚做的改动一起撤掉", async () => {
-    const view = mount({ items: [note("n1", "")], edges: [], markers: [] });
-    // 本地写了一句,攒够一步进历史。
+  it("采用服务端的新一版之后撤销历史还在:撤一步撤的是自己刚做的,服务端刚落下的格子和产出照留", async () => {
+    const view = mount({ items: [note("n1", ""), { id: "img", kind: "image", x: 300, y: 0, width: 260, height: 180, run: { status: "running", job_id: "j" } }], edges: [], markers: [] });
+    // 本地写了一句,攒够一步进历史;这一句已经存上(服务端那份里就有)。
     act(() => view.api().patch("n1", { text: "我写的" }));
     await act(async () => {
       await vi.advanceTimersByTimeAsync(500);
     });
-    expect(view.api().canUndo).toBe(true);
+    const saved = view.latest();
 
-    // 保存撞了冲突:别处(智能体)刚在板上加了一张便签,本地换成服务端那份。
-    const server: Canvas = { items: [note("n1", "我写的"), note("agent", "智能体加的")], edges: [], markers: [] };
-    act(() => view.api().replace(server));
+    // 服务端又推进了一版:那张图出来了,智能体加了一张便签。
+    const server: Canvas = {
+      items: [saved.items[0], { ...saved.items[1], asset_id: "a1", run: { status: "succeeded" } }, note("agent", "智能体加的")],
+      edges: [],
+      markers: [],
+    };
+    act(() => view.api().adopt(rebaseCanvas(saved, view.latest(), server).canvas, (snapshot) => rebaseCanvas(saved, snapshot, server).canvas));
     await act(async () => {
       await vi.advanceTimersByTimeAsync(500);
     });
+    expect(view.api().canUndo, "回执落地不清空撤销历史").toBe(true);
 
     act(() => view.api().undo());
     await act(async () => {
       await vi.advanceTimersByTimeAsync(500);
     });
 
-    expect(view.latest().items.map((one) => one.id)).toContain("agent");
+    const undone = view.latest();
+    expect(undone.items.find((one) => one.id === "n1")?.text, "撤的是自己写的那句").toBe("");
+    expect(undone.items.map((one) => one.id)).toContain("agent");
+    expect(undone.items.find((one) => one.id === "img")?.asset_id, "撤销不撤回刚落下的产出").toBe("a1");
   });
 
   it("时间线格里剪的一刀也在画板的撤销里:按做的先后退,退到它时调那条时间线的撤销、画布不动;重做同理", async () => {
