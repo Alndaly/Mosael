@@ -120,6 +120,20 @@ export function useBoardViewport({
     );
   }, [insetsOf]);
 
+  /** 这一块(流坐标)有没有哪怕一部分落在**看得见的那块**里(除去被右栏盖住的)。量不了的时候当它看得见。 */
+  const isInView = React.useCallback((rect: { x: number; y: number; width: number; height: number }): boolean => {
+    const instance = rf.current;
+    const pane = surface.current;
+    if (!instance || !pane || !pane.clientWidth) return true;
+    const { x, y, zoom } = instance.getViewport();
+    const insets = insetsOf(pane);
+    const left = ((insets.left ?? 0) - x) / zoom;
+    const top = ((insets.top ?? 0) - y) / zoom;
+    const right = (pane.clientWidth - (insets.right ?? 0) - x) / zoom;
+    const bottom = (pane.clientHeight - (insets.bottom ?? 0) - y) / zoom;
+    return rect.x < right && rect.x + rect.width > left && rect.y < bottom && rect.y + rect.height > top;
+  }, [insetsOf]);
+
   /** 在当前视口中心放一枚标记。放在**看得见的地方**:标记标的是"我现在在看的这块地方"。 */
   const addMarker = React.useCallback((point?: { x: number; y: number }) => {
     const instance = rf.current;
@@ -150,5 +164,5 @@ export function useBoardViewport({
     if (!placed) toast.error(t("markerLimit").replace("{n}", String(MAX_MARKERS)));
   }, [setNodes, t, insetsOf]);
 
-  return { markers, patchMarker, deleteMarker, insetsOf, centerOn, jumpToMarker, focusItem, addMarker };
+  return { markers, patchMarker, deleteMarker, insetsOf, centerOn, jumpToMarker, focusItem, isInView, addMarker };
 }

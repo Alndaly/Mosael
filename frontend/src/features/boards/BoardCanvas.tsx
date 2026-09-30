@@ -129,6 +129,8 @@ export interface BoardCanvasApi {
   focusComment: (comment: CollaborationComment) => void;
   /** 查找节点跳到某一项:把它摆到看得见的那块正中,放得下的话拉近到看得清。不改选中态。 */
   focusItem: (itemId: string) => void;
+  /** 这一块(流坐标)此刻看不看得见(除去被右栏盖住的)。新落下的格子在视野外时,上层提示一句「去看看」。 */
+  isInView: (rect: { x: number; y: number; width: number; height: number }) => boolean;
   /** 位置书签。清单挂在工具条上,而它读的是画布这一份(事实来源在 React Flow 的节点里)。 */
   markers: CanvasMarker[];
   addMarker: () => void;
@@ -308,7 +310,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
   const { beginFrameDrag, dragFrame, endFrameDrag } = useFrameDrag({ nodes, setNodes });
 
   // ── 标记(位置书签)与视口:见 useBoardViewport ──────────────────────────────
-  const { markers, patchMarker, deleteMarker, insetsOf, centerOn, jumpToMarker, focusItem, addMarker } = useBoardViewport({
+  const { markers, patchMarker, deleteMarker, insetsOf, centerOn, jumpToMarker, focusItem, isInView, addMarker } = useBoardViewport({
     nodes,
     setNodes,
     rf,
@@ -684,6 +686,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
         }
       },
       focusItem,
+      isInView,
       focusComment: (comment) => {
         const x = comment.anchor?.x;
         const y = comment.anchor?.y;
@@ -697,7 +700,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
       canUndo: canUndo(history),
       canRedo: canRedo(history),
     });
-  }, [add, patch, adopt, flush, onReady, insetsOf, centerOn, focusItem, stepBack, stepForward, history, markers, addMarker, jumpToMarker]);
+  }, [add, patch, adopt, flush, onReady, insetsOf, centerOn, focusItem, isInView, stepBack, stepForward, history, markers, addMarker, jumpToMarker]);
 
   return (
     // 详情页本身就是画布边界:四边满铺,不再套第二层卡片边框或圆角。

@@ -33,6 +33,7 @@ const canvasHarness = vi.hoisted(() => ({
     fitView: vi.fn(),
     focusComment: vi.fn(),
     focusItem: vi.fn(),
+    isInView: vi.fn(),
     markers: [],
     addMarker: vi.fn(),
     jumpToMarker: vi.fn(),
@@ -140,6 +141,9 @@ beforeEach(() => {
   Object.values(apiMocks).forEach((mock) => mock.mockReset());
   Object.values(canvasHarness.api).forEach((one) => typeof one === "function" && (one as ReturnType<typeof vi.fn>).mockReset());
   toastMocks.error.mockReset();
+  toastMocks.success.mockReset();
+  //: 画布桩:新落下的格子默认都看得见(不提示「去看看」)。
+  canvasHarness.api.isInView.mockReturnValue(true);
   apiMocks.listComments.mockResolvedValue([]);
   apiMocks.listMembers.mockResolvedValue({ members: [] });
   apiMocks.api.mockResolvedValue([]);
@@ -495,6 +499,34 @@ describe("服务端那一版前进了(回执、占位、智能体),本地手上�
     expect(toastMocks.error).not.toHaveBeenCalled();
     expect(adoptedItem("slot")?.run).toEqual({ status: "running", job_id: "job-2" });
     expect(adoptedItem("img")?.asset_id).toBe("a1");
+  });
+});
+
+describe("能力的产出落在视野外", () => {
+  it("新落下的几格全看不见:说一声、带「去看看」,点了跳过去 —— 不自己把视野拽走", async () => {
+    const note = { id: "n1", kind: "note" as const, x: 0, y: 0, width: 220, height: 140, text: "hello",
+                   run: { status: "running" as const, job_id: "job-9", ability: "node:translate" as const } };
+    const derived = { id: "n1-out-1", kind: "note" as const, x: 3000, y: 0, width: 220, height: 140, text: "HELLO" };
+    opens(boardAt(3, { items: [note], edges: [], markers: [] }));
+    apiMocks.getBoard.mockResolvedValue(boardAt(4, {
+      items: [{ ...note, run: { status: "succeeded", ability: "node:translate" } }, derived],
+      edges: [{ id: "n1->n1-out-1", source: "n1", target: "n1-out-1" }],
+      markers: [],
+    }));
+    canvasHarness.api.isInView.mockReturnValue(false);
+    mount();
+    await vi.waitFor(() => expect(canvasHarness.props).not.toBeNull());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3000);
+    });
+
+    expect(canvasHarness.api.isInView).toHaveBeenCalledWith({ x: 3000, y: 0, width: 220, height: 140 });
+    const [text, options] = toastMocks.success.mock.calls.at(-1) as [string, { action: { label: string; onClick: () => void } }];
+    expect(text).toBe("boardOutputsOffscreen");
+    expect(options.action.label).toBe("boardShowOutputs");
+    expect(canvasHarness.api.focusItem, "不自己把视野挪过去").not.toHaveBeenCalled();
+    options.action.onClick();
+    expect(canvasHarness.api.focusItem).toHaveBeenCalledWith("n1-out-1");
   });
 });
 

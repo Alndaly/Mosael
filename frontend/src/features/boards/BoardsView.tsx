@@ -675,6 +675,27 @@ function BoardDetail({
    *
    * 回「有没有两边改了同一格同一字段」—— 有才值得打断人说一声。不比当前新的(比如保存已经把版本推过去了)不采用。
    */
+  /**
+   * 服务端刚落下的格子(一项能力的产出、一次多张的其余几张)**全在视野外**时说一声,带一个「去看看」。
+   * 不自己把视野挪过去:人这会儿可能正在别处干活,落下一格就被拽走比看不见更糟。
+   */
+  //: 文案函数经 ref 读:这个回调在 adoptServer 的依赖里,而 adoptServer 在轮询定时器的依赖里 —— 它一换,定时器就重来。
+  const tRef = React.useRef(t);
+  tRef.current = t;
+  const announceOffscreen = React.useCallback(
+    (base: Canvas, merged: Canvas, fresh: Canvas) => {
+      const t = tRef.current;
+      const known = new Set([...base.items, ...(localCanvas.current?.items ?? [])].map((item) => item.id));
+      const landed = fresh.items.filter((item) => !known.has(item.id) && merged.items.some((one) => one.id === item.id));
+      if (landed.length === 0 || !api) return;
+      const rect = (item: BoardItem) => ({ x: item.x, y: item.y, width: item.width ?? 200, height: item.height ?? 120 });
+      if (landed.some((item) => api.isInView(rect(item)))) return;
+      toast.success(t("boardOutputsOffscreen").replace("{n}", String(landed.length)), {
+        action: { label: t("boardShowOutputs"), onClick: () => api.focusItem(landed[0].id) },
+      });
+    },
+    [api],
+  );
   const adoptServer = React.useCallback(
     (fresh: Board): { adopted: boolean; conflicted: boolean } => {
       if (fresh.revision <= revision.current) return { adopted: false, conflicted: false };
@@ -688,12 +709,13 @@ function BoardDetail({
         void queryClient.invalidateQueries({ queryKey: boardSequenceKey(sequenceId) });
       }
       api?.adopt(merged, (snapshot) => rebaseCanvas(base, snapshot, fresh.canvas).canvas);
+      announceOffscreen(base, merged, fresh.canvas);
       localCanvas.current = merged;
       setCanvas(merged);
       onSaved(fresh);
       return { adopted: true, conflicted };
     },
-    [api, onSaved, queryClient, detailKey],
+    [api, onSaved, queryClient, detailKey, announceOffscreen],
   );
   //: 详情缓存里来了更新的一版(智能体改板批准之后、任务做完之后的重取):排进写队列合进本地。
   //: 在路上的保存先回来把版本推过去的话,这一份就不比手上的新,adoptServer 不采用。

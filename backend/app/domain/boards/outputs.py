@@ -142,9 +142,12 @@ def _derive(
     """宿主(跑了一项能力的内容格、3D 场景格,或空格子就地填完之后多出来的那几份)这一轮的产出 →
     新建的几格和连向它们的线。
 
-    **每一轮都是新的一列,不覆盖上一轮。** 摆在宿主右边、再往右避开它连出去的那几格;一列里
-    从上往下排。上一轮的产出是用户可能已经拿去用的东西(连到了别处、改过字),重跑把它们换掉的话,
-    下游悄悄变了。
+    **每一轮都是新的一列,不覆盖上一轮。** 摆在宿主右边、再往右避开**它此前派生出来的**那几格(`{宿主}-out-N`,
+    见下面起 id 的那一段);一列里从上往下排。上一轮的产出是用户可能已经拿去用的东西(连到了别处、改过字),重跑把它们
+    换掉的话,下游悄悄变了。
+
+    只避开派生出来的,不避开宿主连出去的每一格:人自己连到远处的一格(比如画板另一头的一张便签)也算的话,新的一列
+    会落到视野外面老远的地方,看着像什么都没出来。
 
     产出里带着 `layout`(节点声明了 `board_columns`,见 boards.tools.board_outputs)时按那么多列排成一片:
     九宫格切出的九张摆回 3×3,一眼对得上原图里的位置。
@@ -164,8 +167,10 @@ def _derive(
 
     host_id = str(host["id"])
     by_id = {str(one.get("id")): one for one in items}
+    derived_prefix = f"{host_id}-out-"
     earlier = [by_id[str(edge.get("target"))] for edge in edges
-               if edge.get("source") == host_id and str(edge.get("target")) in by_id]
+               if edge.get("source") == host_id and str(edge.get("target")) in by_id
+               and str(edge.get("target")).startswith(derived_prefix)]
     right = max(
         [float(host.get("x") or 0) + float(host.get("width") or DEFAULT_SIZE.get(str(host.get("kind")), (0, 0))[0])]
         + [float(one.get("x") or 0) + float(one.get("width") or DEFAULT_SIZE.get(str(one.get("kind")), (0, 0))[0])

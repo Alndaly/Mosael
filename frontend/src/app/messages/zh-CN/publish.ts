@@ -209,6 +209,8 @@ export const publish = {
   boardToolStopFailed: "没能停下",
   boardDeleteRunningTitle: "停下并删除?",
   boardNoteTextLimit: "已到 {n} 字上限,再多存不下",
+  boardOutputsOffscreen: "新出了 {n} 格,在视野外",
+  boardShowOutputs: "去看看",
   boardSaveFailedAt: "有一格存不下,已在画布上圈出来",
   boardDeleteRunningBody: "有 {n} 格还在跑。删掉之前先把它们停下 —— 不停的话结果落不回来,钱照花。",
   boardDeleteRunningConfirm: "停下并删除",

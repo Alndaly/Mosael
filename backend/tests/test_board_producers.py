@@ -538,6 +538,20 @@ def _settled(client, board_id: str, ws: str, timeout: float = 20.0) -> dict:
     raise AssertionError("a1 一直没跑完")
 
 
+def test_新的一列只避开上一轮的产出_不避开宿主连到远处的格子() -> None:
+    """宿主连到画板另一头的一格(人自己连的)不算上一轮的产出:新的一列摆在上一轮那一列右边,不落到视野外老远的地方。"""
+    from app.domain.boards.outputs import _derive
+
+    host = {"id": "h", "kind": "note", "x": 0, "y": 0, "width": 200, "height": 100}
+    earlier = {"id": "h-out-1", "kind": "note", "x": 280, "y": 0, "width": 220, "height": 140}
+    far = {"id": "far", "kind": "note", "x": 5000, "y": 0, "width": 220, "height": 140}
+    items = [host, earlier, far]
+    edges = [{"id": "h->h-out-1", "source": "h", "target": "h-out-1"}, {"id": "e", "source": "h", "target": "far"}]
+    made, links = _derive(host, [{"type": "text", "text": "第二轮"}], {}, items, edges)
+    assert [(one["id"], one["x"]) for one in made] == [("h-out-2", 580.0)]
+    assert links == [{"id": "h->h-out-2", "source": "h", "target": "h-out-2"}]
+
+
 def _derived(canvas: dict) -> list[dict]:
     """`a1` 派生出去的那几格(id 是 `a1-out-…`),按摆放的先后(从左往右、从上往下)。"""
     return sorted((one for one in canvas["items"] if one["id"].startswith("a1-out-")), key=lambda one: (one["x"], one["y"]))
