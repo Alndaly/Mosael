@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from app.db import references
 from app.db.models import Board, now
 from app.domain.boards.errors import BoardDomainError, BoardNotFound, BoardRevisionConflict
-from app.domain.boards.run_state import _keep_server_owned_state
+from app.domain.boards.run_state import _keep_server_owned_state, live_job
 from app.domain.boards.shape import normalize_canvas
 from app.domain.boards.validation import _validate_references, check_canvas
 
@@ -184,6 +184,7 @@ def update_board(
         _validate_references(db, workspace_id, next_canvas, board.canvas, assets=not server_write)
     if next_name == board.name and next_canvas == board.canvas:
         return board
+    revived = {} if server_write or canvas is None else _revived_runs(board.canvas, next_canvas)
     result = db.execute(
         update(Board)
         .where(
@@ -216,7 +217,41 @@ def update_board(
     # (jobs._after_jobs_settled → deliver_generated)调完不替送信方提交 —— 两处都靠这里落库。
     db.commit()
     db.expire_all()
+    if revived:
+        _settle_revived_runs(db, workspace_id, board_id, revived)
     return get_board(db, workspace_id, board_id)
+
+
+def _revived_runs(stored: Any, saved: dict[str, Any]) -> dict[str, str]:
+    """这一次保存**由客户端带回来**的在跑的格子:`{格子 id: 任务 id}`。库里那一格此前不在跑这个任务(多半是
+    整格不在 —— 删掉之后撤销回来的)。"""
+    before = {str(item.get("id")): live_job(item) for item in ((stored or {}).get("items") or [])}
+    return {
+        str(item["id"]): job
+        for item in saved.get("items") or []
+        if (job := live_job(item)) and before.get(str(item.get("id"))) != job
+    }
+
+
+def _settle_revived_runs(db: Session, workspace_id: str, board_id: str, revived: dict[str, str]) -> None:
+    """客户端带回来的在跑的格子,任务其实**已经结束**:当场补送那封回执。
+
+    删掉一格在跑的,任务结束时回执找不到那一格,就丢了(outputs._canvas_with_delivered_result 只收它自己那一轮);
+    之后撤销把那一格带回来,它就永远转圈 —— 没有第二封回执。这里按任务此刻的终态补送:成功的产出落回来,
+    失败 / 取消的写上原因。和 receipts._deliver_if_already_settled(占位落下时任务已经结束)是同一件事。
+    只认这个工作区里的任务:画布是客户端写的,别处任务的产出(一段写出来的字)不能借一个任务号落进来。
+    """
+    from app.db.models import Job
+    from app.domain.boards.receipts import deliver_generated, receipt_to_item
+    from app.domain.jobs import TERMINAL_STATUSES
+
+    jobs = {job.id: job for job in db.scalars(
+        select(Job).where(Job.id.in_(set(revived.values())), Job.workspace_id == workspace_id)
+    )}
+    for item_id, job_id in revived.items():
+        job = jobs.get(job_id)
+        if job is not None and job.status in TERMINAL_STATUSES:
+            deliver_generated(db, job, receipt_to_item(board_id, item_id))
 
 
 def delete_board(db: Session, workspace_id: str, board_id: str, *, actor_id: str | None = None) -> None:

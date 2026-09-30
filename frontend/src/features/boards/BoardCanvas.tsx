@@ -48,7 +48,8 @@ import { SequenceAddContext } from "@/features/boards/sequenceCursor";
 import { TrimComposer } from "@/features/boards/TrimComposer";
 import { canAskWriter, canOpenOnDemand, composerOnDemand, renderAbility, renderComposer } from "@/features/boards/boardComposers";
 import { BOARD_NODE_TYPES, DEFAULT_SIZE, kindIcon, kindText, SPAWNABLE_KINDS } from "@/features/boards/boardNodes";
-import { composerView, newSlotForm, producerOf, runningAbility, withAbility, withProducer } from "@/features/boards/boardItemState";
+import { composerView, itemIsRunning, newSlotForm, producerOf, runningAbility, withAbility, withProducer } from "@/features/boards/boardItemState";
+import { ConfirmDialog } from "@/components/app/modals";
 import { BOARD_NODE_PANEL_OFFSET } from "@/features/boards/boardLayout";
 import { type PlacedAsset } from "@/features/boards/boardPlacement";
 import { useCanvasDeleteKey } from "@/components/app/useCanvasDeleteKey";
@@ -212,7 +213,6 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
   const flow = useReactFlow();
   const flowRef = React.useRef(flow);
   flowRef.current = flow;
-  useCanvasDeleteKey(surface, flowRef);
   const viewport = usePersistentViewport(`board:${boardId}`);
   const [ready, setReady] = React.useState(false);
   const { draftAnchor, setDraftAnchor, suppressPaneClick, paneHandlers } = useBoardCommentDraft({ commentMode, activeCommentId, onSelectComment });
@@ -320,14 +320,51 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
    * 键盘删除(Delete/Backspace)走的是 React Flow 自己的 deleteElements,它一直是连线一起删的
    * —— 所以这个毛病只在工具条那颗垃圾桶上,也因此更难被发现。
    */
+  const removeNow = React.useCallback(
+    (nodeIds: Set<string>, edgeIds: Set<string>) => {
+      // 两个 setter 分开调,不在 setNodes 的更新函数里顺手改 edges —— 那个函数在 StrictMode 下
+      // 会被调用两次,把副作用放进去就是跑两遍。
+      setNodes((current) => current.filter((node) => !nodeIds.has(node.id)));
+      setEdges((current) =>
+        current.filter((edge) => !edgeIds.has(edge.id) && !nodeIds.has(edge.source) && !nodeIds.has(edge.target)),
+      );
+    },
+    [setNodes, setEdges],
+  );
+
+  /**
+   * **删掉在跑的格子要先停**(ADR 0025「撤销 / 重做与 CAS」)。不停的话任务照跑、钱照花,回执回来找不到那一格,
+   * 结果就丢了。要删的里面有在跑的,先问一句「停下并删除?」,确认后给每一格的任务发取消再删。
+   * 工具条的垃圾桶和删除键走同一处。
+   */
+  const [stopping, setStopping] = React.useState<{ nodeIds: Set<string>; edgeIds: Set<string>; running: string[] } | null>(null);
+  const requestRemove = React.useCallback(
+    (nodeIds: Set<string>, edgeIds: Set<string>) => {
+      const running = boardItems(nodes.filter((node) => nodeIds.has(node.id)))
+        .filter(itemIsRunning)
+        .map((item) => item.id);
+      if (running.length && onStop) {
+        setStopping({ nodeIds, edgeIds, running });
+        return;
+      }
+      removeNow(nodeIds, edgeIds);
+    },
+    [nodes, onStop, removeNow],
+  );
   const removeSelected = React.useCallback(() => {
-    // 两个 setter 分开调,不在 setNodes 的更新函数里顺手改 edges —— 那个函数在 StrictMode 下
-    // 会被调用两次,把副作用放进去就是跑两遍。
     const gone = new Set(nodes.filter((node) => node.selected).map((node) => node.id));
-    if (gone.size === 0) return;
-    setNodes((current) => current.filter((node) => !gone.has(node.id)));
-    setEdges((current) => current.filter((edge) => !gone.has(edge.source) && !gone.has(edge.target)));
-  }, [nodes, setNodes, setEdges]);
+    if (gone.size) requestRemove(gone, new Set());
+  }, [nodes, requestRemove]);
+  //: 删除键判「这一下算不算」照旧交给 useCanvasDeleteKey,删的时候走上面那一处(先停在跑的)。
+  const requestRemoveRef = React.useRef(requestRemove);
+  requestRemoveRef.current = requestRemove;
+  const deleteKeyTarget = React.useRef({
+    getNodes: () => flowRef.current.getNodes(),
+    getEdges: () => flowRef.current.getEdges(),
+    deleteElements: ({ nodes: doomed, edges: cut }: { nodes: Node[]; edges: Edge[] }) =>
+      requestRemoveRef.current(new Set(doomed.map((node) => node.id)), new Set(cut.map((edge) => edge.id))),
+  });
+  useCanvasDeleteKey(surface, deleteKeyTarget);
 
   /** 复制选中的这几项。节点和线一起换:两个 setter 分开调,理由同 removeSelected。 */
   const copySelection = React.useCallback(() => {
@@ -746,6 +783,21 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
         producers={producers}
         panel={panel}
         onPanel={onRun && !commentMode && !markerMode ? togglePanel : undefined}
+      />
+
+      <ConfirmDialog
+        open={stopping !== null}
+        title={t("boardDeleteRunningTitle")}
+        body={t("boardDeleteRunningBody").replace("{n}", String(stopping?.running.length ?? 0))}
+        confirmLabel={t("boardDeleteRunningConfirm")}
+        pending={false}
+        onCancel={() => setStopping(null)}
+        onConfirm={() => {
+          if (!stopping) return;
+          stopping.running.forEach((id) => onStop?.(id));
+          removeNow(stopping.nodeIds, stopping.edgeIds);
+          setStopping(null);
+        }}
       />
 
       {workspaceId && <NotePickerDialog workspaceId={workspaceId} open={!!pickingDocument} onOpenChange={open => { if (!open) setPickingDocument(null); }} onPick={note => { if (pickingDocument) patch(pickingDocument, {note_id: note.id, note_revision: note.revision, text: note.title}); }}/>}

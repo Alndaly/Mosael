@@ -254,6 +254,49 @@ describe("删除键只认冲着画布来的那一下", () => {
   });
 });
 
+describe("删掉在跑的格子要先停", () => {
+  const running = { ...note("n1", "在写"), form: { producer: "write" as const }, run: { status: "running" as const, job_id: "job-1" } };
+  const board: Canvas = { items: [running, note("n2", "闲着")], edges: [], markers: [] };
+
+  async function pressDelete(id: string) {
+    const node = document.querySelector(`[data-id="${id}"]`) as HTMLElement;
+    act(() => {
+      node.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    act(() => {
+      node.focus();
+      node.dispatchEvent(new KeyboardEvent("keydown", { key: "Delete", bubbles: true }));
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10);
+    });
+  }
+
+  it("先问「停下并删除?」;确认后停掉那一轮再删 —— 不停的话结果落不回来,钱照花", async () => {
+    const onStop = vi.fn();
+    const view = mount(board, { onStop });
+    await pressDelete("n1");
+    expect(screen.getByText("boardDeleteRunningTitle")).toBeTruthy();
+    expect(view.latest()?.items.map((one) => one.id) ?? ["n1", "n2"], "问完之前不删").toEqual(["n1", "n2"]);
+
+    fireEvent.click(screen.getByRole("button", { name: "boardDeleteRunningConfirm" }));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10);
+    });
+    expect(onStop).toHaveBeenCalledWith("n1");
+    expect(view.latest().items.map((one) => one.id)).toEqual(["n2"]);
+  });
+
+  it("不在跑的照常直接删,不多问一句", async () => {
+    const onStop = vi.fn();
+    const view = mount(board, { onStop });
+    await pressDelete("n2");
+    expect(screen.queryByText("boardDeleteRunningTitle")).toBeNull();
+    expect(view.latest().items.map((one) => one.id)).toEqual(["n1"]);
+    expect(onStop).not.toHaveBeenCalled();
+  });
+});
+
 describe("跳到标记", () => {
   it("快捷键跳过去和清单里点一样,先把藏起来的标记显示出来", async () => {
     const onRevealMarkers = vi.fn();

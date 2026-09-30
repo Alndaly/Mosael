@@ -660,6 +660,55 @@ def test_空槽手动换上素材之后撤销_撤得回空槽() -> None:
     assert save(slot)["i"]["asset_id"] == "made", "撤销不撤回一次运行交回的产出"
 
 
+def test_删掉在跑的格子后撤销_任务已经结束的话当场补上那封回执_不永远转圈() -> None:
+    """删掉一格在跑的,任务结束时回执找不到那一格就丢了;撤销把它带回来,它带着任务号一直转圈 —— 没有第二封回执。
+    服务端收下客户端带回来的「在跑」时查一眼那个任务:结束了就按终态补送。别的工作区的任务号不认。"""
+    from app.core.db import SessionLocal
+    from app.db.models import Job
+    from app.domain.boards import deliver_generated, receipt_to_item
+    from tests.util import seed_assets
+
+    client = fresh_client()
+    ws, other = _workspace(client), _workspace(client)
+    seed_assets(ws, {"made": "image"})
+    with SessionLocal() as db:
+        done = Job(workspace_id=ws, kind="ai_generation", status="running", payload={})
+        failed = Job(workspace_id=ws, kind="ai_generation", status="running", payload={})
+        theirs = Job(workspace_id=other, kind="board_write", status="succeeded", payload={}, result={"text": "别人的字"})
+        db.add_all([done, failed, theirs])
+        db.commit()
+        done_id, failed_id, theirs_id = done.id, failed.id, theirs.id
+
+    def cell(item_id: str, job_id: str, kind: str = "image") -> dict:
+        return {"id": item_id, "kind": kind, "x": 0, "y": 0, "run": {"status": "running", "job_id": job_id},
+                "form": {"producer": "write" if kind == "note" else "generate"}}
+
+    running = [cell("img", done_id), cell("bad", failed_id), cell("n", theirs_id, "note")]
+    board_id = client.post("/api/boards", json={"workspace_id": ws, "canvas": {"items": running, "edges": []}}).json()["id"]
+
+    def save(items: list[dict]) -> dict:
+        got = client.patch(f"/api/boards/{board_id}", json={
+            "workspace_id": ws, "base_revision": board_revision(client, board_id, ws), "canvas": {"items": items, "edges": []}})
+        assert got.status_code == 200, got.text
+        return {item["id"]: item for item in got.json()["canvas"]["items"]}
+
+    assert save([]) == {}, "人把它们删了"
+    with SessionLocal() as db:
+        for job_id, fields in ((done_id, {"status": "succeeded", "result": {"asset_ids": ["made"]}}),
+                               (failed_id, {"status": "failed", "error": "上游拒绝了"})):
+            job = db.get(Job, job_id)
+            for key, value in fields.items():
+                setattr(job, key, value)
+            db.commit()
+            #: 任务结束时回执照常送来 —— 那一格不在,什么都没落下。
+            deliver_generated(db, job, receipt_to_item(board_id, "img" if job_id == done_id else "bad"))
+
+    undone = save(running)
+    assert undone["img"]["asset_id"] == "made" and undone["img"]["run"] == {"status": "succeeded"}, undone["img"]
+    assert undone["bad"]["run"] == {"status": "failed", "error": "上游拒绝了"}, undone["bad"]
+    assert undone["n"]["run"]["status"] == "running" and "text" not in undone["n"], "别的工作区的任务不认"
+
+
 def test_客户端不会把已经失败的节点重新写成_loading() -> None:
     """失败回执与自动保存竞态时，服务端终态必须赢。"""
     from types import SimpleNamespace
