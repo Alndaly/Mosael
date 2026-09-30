@@ -93,3 +93,18 @@ def test_译配模板的嗓子那一条有检查键() -> None:
     cards = {card["id"]: card for card in TEMPLATE_CATALOG}
     assert "cloned_voice" in {one["check"] for one in cards["translated_dub"]["requires"]}
     assert "digital_human_voice" in {one["check"] for one in cards["translated_dub_lipsync"]["requires"]}
+
+
+def test_口播模板_逐段说话用分段时挑定的模型_嗓子要声明过是谁的() -> None:
+    """分段按说话照片模型的音频上限切;下游「让它说话」留空模型会再挑一次,可能挑到上限更短的另一个。
+    嗓子要交给数字人,前置条件查的是声明过的克隆音色,不只是「有一把克隆音色」。"""
+    from app.domain.workflows.templates import TEMPLATE_CATALOG
+    from app.domain.workflows.templates_business import talking_script_video_graph
+
+    graph = talking_script_video_graph(voice_id="")
+    loop = next(one for one in graph["nodes"] if one["id"] == "speak_segments")
+    speak = next(one for one in loop["config"]["body"]["nodes"] if one["id"] == "speak")
+    assert speak["config"]["model"] == "{{loop.item.model}}"
+    card = next(one for one in TEMPLATE_CATALOG if one["id"] == "talking_script_video")
+    checks = {one["check"] for one in card["requires"]}
+    assert "digital_human_voice" in checks and "cloned_voice" not in checks

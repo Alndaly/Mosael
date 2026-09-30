@@ -4,11 +4,11 @@
   "workflow_revision": 1,
   "name": "Script into a talking-head video",
   "description": "A portrait and a script: voice it sentence by sentence, group the sentences into segments the speaking-photo model accepts, make the face speak each one, lay them end to end on the timeline, caption from the real voicing times, and export. The export carries an \"AI-generated\" label. Confirm consent on \"Make it speak\" before running.",
-  "graph_hash": "8443c48d1c0d20455974264d779819b0c6d1edaa5df5f2d13a10e658d2324915",
+  "graph_hash": "2e7aab6f7f29891feb96c913a948a95ca106925dbf574f568374ce213c99a798",
   "graph": {
     "meta": {
       "template_id": "talking_script_video",
-      "template_version": 2,
+      "template_version": 3,
       "source": "official"
     },
     "nodes": [
@@ -99,7 +99,7 @@
                 "config": {
                   "asset_id": "{{input.face_asset_id}}",
                   "audio_asset_id": "{{loop.item.audio_asset_id}}",
-                  "model": "",
+                  "model": "{{loop.item.model}}",
                   "consent": ""
                 }
               },

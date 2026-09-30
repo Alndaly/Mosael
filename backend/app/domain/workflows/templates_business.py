@@ -26,6 +26,7 @@ from app.domain.workflows.templates_models import ModelChoice, _capabilities, _i
 from app.domain.workflows.template_requirements import (
     CHAT_MODEL,
     CLONED_VOICE,
+    DIGITAL_HUMAN_VOICE,
     REFERENCE_IMAGE_MODEL,
     REFERENCE_VIDEO_MODEL,
     TRANSCRIPTION_ENGINE,
@@ -1321,7 +1322,9 @@ def talking_script_video_graph(*, voice_id: str = "") -> dict[str, Any]:
                             "config": {
                                 "asset_id": "{{input.face_asset_id}}",
                                 "audio_asset_id": "{{loop.item.audio_asset_id}}",
-                                "model": "",
+                                #: 用分段时挑定的那个模型:段是按它的音频上限切的。留空的话这里再挑一次,
+                                #: 可能挑到上限更短的另一个,整段被拒。
+                                "model": "{{loop.item.model}}",
                                 #: 留空:授权要跑的人自己确认(见函数说明)。
                                 "consent": "",
                             },
@@ -1392,7 +1395,7 @@ def talking_script_video_graph(*, voice_id: str = "") -> dict[str, Any]:
     ]
     return normalize_graph(
         {
-            "meta": {"template_id": TALKING_SCRIPT_VIDEO, "template_version": 2, "source": "official"},
+            "meta": {"template_id": TALKING_SCRIPT_VIDEO, "template_version": 3, "source": "official"},
             "nodes": nodes,
             "edges": edges,
         },
@@ -1605,7 +1608,8 @@ BUSINESS_TEMPLATE_CATALOG: list[dict[str, Any]] = [
         },
         "requires": [
             requirement(SPEECH_VIDEO_MODEL, zh="会「说话照片」的视频模型", en="A speaking-photo video model"),
-            requirement(CLONED_VOICE, zh="一把嗓子:配音库的克隆音色(要声明是谁的)", en="A voice: a cloned voice with a consent declaration"),
+            requirement(DIGITAL_HUMAN_VOICE, zh="一把嗓子:配音库的克隆音色(要声明是谁的)",
+                        en="A voice: a cloned voice with a consent declaration"),
             requirement(None, zh="一张清晰的单人正脸", en="A clear, single-person portrait"),
         ],
         "stages": {
