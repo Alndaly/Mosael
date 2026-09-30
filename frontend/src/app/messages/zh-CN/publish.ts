@@ -210,6 +210,7 @@ export const publish = {
   boardDeleteRunningTitle: "停下并删除?",
   boardNoteTextLimit: "已到 {n} 字上限,再多存不下",
   boardOutputsOffscreen: "新出了 {n} 格,在视野外",
+  boardLinksRefused: "有 {n} 格没连上(分组框、已经连着的,或时间线格只收视频 / 图片 / 音频)",
   boardShowOutputs: "去看看",
   boardSaveFailedAt: "有一格存不下,已在画布上圈出来",
   boardDeleteRunningBody: "有 {n} 格还在跑。删掉之前先把它们停下 —— 不停的话结果落不回来,钱照花。",

@@ -4,13 +4,13 @@
 import React from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import type { Connection, ReactFlowInstance } from "@xyflow/react";
+import type { ReactFlowInstance } from "@xyflow/react";
 
 import type { BoardCanvas, BoardItem } from "@/api/client";
 import { errorText } from "@/api/errorMessage";
 import { appendAssetToSequence } from "@/api/domains/editor";
 import { boardSequenceKey } from "@/features/boards/SequenceCell";
-import { noteSequenceEdit } from "@/features/boards/sequenceCursor";
+import { noteSequenceEdit, type SequenceEditLink } from "@/features/boards/sequenceCursor";
 import { isMediaKind } from "@/features/boards/boardNodes";
 import type { BoardPickAsset } from "@/features/boards/boardCanvasModel";
 
@@ -24,23 +24,37 @@ export function useBoardSequenceLinks({
   const queryClient = useQueryClient();
 
   /** 一份素材接到时间线末尾(视频、图片进主视频轨,音频进音频轨),格子读的缓存换成回来的那条,记进撤销。 */
-  const appendToSequence = React.useCallback((sequenceId: string, assetId: string, link?: { source: string; target: string }) => {
-    void appendAssetToSequence(sequenceId, assetId)
-      .then((next) => {
-        queryClient.setQueryData(boardSequenceKey(sequenceId), next);
-        noteSequenceEdit(sequenceId, next.revision, link);
-      })
-      .catch((error: unknown) => toast.error(errorText(error)));
+  const appendToSequence = React.useCallback(async (sequenceId: string, assetId: string, link?: SequenceEditLink) => {
+    try {
+      const next = await appendAssetToSequence(sequenceId, assetId);
+      queryClient.setQueryData(boardSequenceKey(sequenceId), next);
+      noteSequenceEdit(sequenceId, next.revision, link);
+    } catch (error) {
+      toast.error(errorText(error));
+    }
   }, [queryClient]);
-  /** 连进时间线格(ADR 0030)= 把那一格的素材接到这条时间线的末尾。连线本身照常留着;断开**不**从时间线上删 ——
-   *  那一段可能已经被切过、排过,自动删会丢掉这些手工。 */
-  const appendOnConnect = React.useCallback((connection: Connection) => {
-    const itemOf = (id: string | null) => (id ? (rf.current?.getNode(id)?.data as { item?: BoardItem } | undefined)?.item : undefined);
-    const source = itemOf(connection.source);
-    const target = itemOf(connection.target);
-    if (target?.kind !== "sequence" || !target.sequence_id || !source?.asset_id) return;
-    if (!["video", "image", "audio"].includes(source.kind)) return;
-    appendToSequence(target.sequence_id, source.asset_id, { source: source.id, target: target.id });
+  /**
+   * 连进时间线格(ADR 0030)= 把那一格的素材接到这条时间线的末尾。连线本身照常留着;断开**不**从时间线上删 ——
+   * 那一段可能已经被切过、排过,自动删会丢掉这些手工。
+   *
+   * 一次连好几根(多选几格连到一格上):**按先后一段一段接**(并发接的话几段抢同一个版本号),带着同一个批次,
+   * 撤销里和画布上那几根线并成一步(见 canvasHistory.joinSequenceToCanvas)。还是空槽的那几格现在不接 ——
+   * 产出落下时服务端补接。
+   */
+  const appendLinks = React.useCallback((links: readonly { source: string; target: string }[]) => {
+    const itemOf = (id: string) => (rf.current?.getNode(id)?.data as { item?: BoardItem } | undefined)?.item;
+    const batch = links.length > 1 ? `links-${Date.now().toString(36)}` : undefined;
+    const pending = links.flatMap((link) => {
+      const source = itemOf(link.source);
+      const target = itemOf(link.target);
+      if (target?.kind !== "sequence" || !target.sequence_id || !source?.asset_id) return [];
+      if (!["video", "image", "audio"].includes(source.kind)) return [];
+      return [{ sequence: target.sequence_id, asset: source.asset_id, link: { ...link, ...(batch ? { batch } : {}) } }];
+    });
+    if (pending.length === 0) return;
+    void (async () => {
+      for (const one of pending) await appendToSequence(one.sequence, one.asset, one.link);
+    })();
   }, [appendToSequence]);
   /** 时间线格上的「+」:挑一份素材(这张画板上已有的,或素材库里的)接到末尾,和连线进来同一件事。 */
   const pickForSequence = React.useCallback((sequenceId: string) => {
@@ -48,10 +62,10 @@ export function useBoardSequenceLinks({
       .map((node) => (node.data as { item?: BoardItem }).item)
       .filter((one): one is BoardItem => Boolean(one?.asset_id && isMediaKind(one.kind)))
       .map((one) => one.asset_id as string))];
-    onPickAsset("media", (assetId) => appendToSequence(sequenceId, assetId), { onBoard });
+    onPickAsset("media", (assetId) => void appendToSequence(sequenceId, assetId), { onBoard });
   }, [appendToSequence, onPickAsset]);
 
-  return { appendOnConnect, pickForSequence };
+  return { appendLinks, pickForSequence };
 }
 
 /**

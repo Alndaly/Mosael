@@ -162,7 +162,17 @@ export function useBoardHistory({
   const replaySequence = React.useCallback((step: SequenceStep, direction: "undo" | "redo") => {
     //: 撤销之后这一步挪进了重做的开头,重做之后回到了撤销的末尾。
     const where = direction === "undo" ? "future" : "past";
-    void (direction === "undo" ? undoSequence(step.sequence, step.revision) : redoSequence(step.sequence, step.revision))
+    //: 一步里连着几次操作(一次批量连进来接了几段):一次接一次地撤 / 重做,每次带上上一次回来的版本号。
+    const replay = async () => {
+      let revision = step.revision;
+      let next = null as Awaited<ReturnType<typeof undoSequence>> | null;
+      for (let time = 0; time < (step.count ?? 1); time += 1) {
+        next = await (direction === "undo" ? undoSequence(step.sequence, revision) : redoSequence(step.sequence, revision));
+        revision = next.revision;
+      }
+      return next as Awaited<ReturnType<typeof undoSequence>>;
+    };
+    void replay()
       .then((next) => {
         queryClient.setQueryData(boardSequenceKey(step.sequence), next);
         setHistory((current) => retagSequenceStep(current, where, next.revision));

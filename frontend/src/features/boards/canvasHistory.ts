@@ -29,7 +29,15 @@
  * `canvas`:这一步**同时改了画布**(把一格连进时间线格:画布上多一根线,时间线上多一段)—— 撤 / 重做它时画布也回到
  * 这一份。人做的是一件事,撤一下就该都回去;此前线是画布的一步、片段是时间线的一步,要按两下撤销。
  */
-export type SequenceStep = { sequence: string; revision: number; canvas?: string };
+export type SequenceStep = {
+  sequence: string;
+  revision: number;
+  canvas?: string;
+  /** 这一步在时间线上是连着的几次操作(多选几格一次连进时间线格:接了几段)。撤 / 重做时照这个数连着撤几次。 */
+  count?: number;
+  /** 是哪一次批量连线(见 joinSequenceToCanvas):同一批接上的几段并进同一步。 */
+  batch?: string;
+};
 /** 一步:画布的一份快照(字符串),或者时间线的一步。 */
 export type Step = string | SequenceStep;
 
@@ -122,19 +130,26 @@ export function dropSequenceStep(history: History, where: "past" | "future"): Hi
 /**
  * 把画布上刚记下的那一步(连了一根线进时间线格)和时间线上随之做成的那一步并成一步(见 SequenceStep.canvas)。
  * 只在对得上时并:眼前的画布有这根线、上一份没有 —— 中间人又做了别的,就不并,各记各的。并不上回 null。
+ *
+ * 多选几格一次连进时间线格(`link.batch`):接上的第一段和画布那一步并,之后同一批的几段接着并进这一步(`count`),
+ * 撤一下全回去。
  */
 export function joinSequenceToCanvas(
   history: History,
   sequenceId: string,
   revision: number,
-  link: { source: string; target: string },
+  link: { source: string; target: string; batch?: string },
 ): History | null {
   const last = history.past.at(-1);
+  if (typeof last === "object" && link.batch && last.batch === link.batch && last.sequence === sequenceId) {
+    return { ...history, past: [...history.past.slice(0, -1), { ...last, revision, count: (last.count ?? 1) + 1 }] };
+  }
   if (typeof last !== "string") return null;
   const linked = (snapshot: string) =>
     (JSON.parse(snapshot) as { edges?: { source: string; target: string }[] }).edges?.some(
       (edge) => edge.source === link.source && edge.target === link.target,
     ) ?? false;
   if (!linked(history.present) || linked(last)) return null;
-  return { ...history, past: [...history.past.slice(0, -1), { sequence: sequenceId, revision, canvas: last }] };
+  const step: SequenceStep = { sequence: sequenceId, revision, canvas: last, ...(link.batch ? { batch: link.batch } : {}) };
+  return { ...history, past: [...history.past.slice(0, -1), step] };
 }

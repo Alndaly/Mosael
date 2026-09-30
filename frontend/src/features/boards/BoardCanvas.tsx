@@ -78,6 +78,7 @@ import { useBoardFileImport } from "@/features/boards/useBoardFileImport";
 import { useBoardItemEdits } from "@/features/boards/useBoardItemEdits";
 import { useBoardHistory } from "@/features/boards/useBoardHistory";
 import { useBoardSequenceLinks } from "@/features/boards/useBoardSequenceLinks";
+import { batchLinks, linkRefusal, linkSources } from "@/features/boards/boardLinks";
 import { useBoardViewport } from "@/features/boards/useBoardViewport";
 import { useFrameDrag } from "@/features/boards/useFrameDrag";
 
@@ -216,7 +217,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
   const t = useI18n();
   const rf = React.useRef<ReactFlowInstance | null>(null);
 
-  const { appendOnConnect, pickForSequence } = useBoardSequenceLinks({ rf, onPickAsset });
+  const { appendLinks, pickForSequence } = useBoardSequenceLinks({ rf, onPickAsset });
   const surface = React.useRef<HTMLDivElement | null>(null);
   //: Backspace / Delete 只删冲着画布来的那一下 —— 和工作流编辑器同一个钩子。实例从 Provider 取,
   //: 不等 onInit:删除键在画布挂上的那一刻就该认。
@@ -514,6 +515,33 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
     selectable: !commentMode && !markerMode,
   }));
 
+  /** 画布上的一格(连线的规矩看种类、选没选中);标记和不在的回 undefined。 */
+  const cellOf = (id: string | null | undefined): (Pick<BoardItem, "id" | "kind"> & { selected?: boolean }) | undefined => {
+    const node = id ? nodes.find((one) => one.id === id) : undefined;
+    if (!node || node.type === "marker") return undefined;
+    return { id: node.id, kind: (node.data as unknown as { item: BoardItem }).item.kind, selected: node.selected };
+  };
+  /**
+   * 连一根线。**拉线的那一格在一组选中的格子里时,这一组都连过去**(TapNow 那样:框选几张图,从其中一张拉到生成格,
+   * 几张一起当参考)。每一根按单格同一条规矩判(boardLinks),连不上的跳过、说一声几条没连上。所有线一次落进画布,
+   * 撤销里是一步;连进时间线格的接到末尾,也并进这一步(见 appendLinks)。
+   */
+  const connectCells = (sourceId: string, targetId: string) => {
+    const from = cellOf(sourceId);
+    const target = cellOf(targetId);
+    if (!from || !target) return;
+    const cells = nodes.filter((node) => node.type !== "marker").map((node) => cellOf(node.id)!);
+    const sources = linkSources(from, cells);
+    const { links, refused } = batchLinks(sources, target, edges);
+    if (links.length) {
+      setEdges((current) =>
+        links.reduce((all, link) => addEdge({ ...link, sourceHandle: null, targetHandle: null }, all), current),
+      );
+      appendLinks(links);
+    }
+    if (sources.length > 1 && refused) toast.error(t("boardLinksRefused").replace("{n}", String(refused)));
+  };
+
   const { history, adopt, flush, stepBack, stepForward } = useBoardHistory({ nodes, edges, setNodes, setEdges, onChange });
 
   /**
@@ -747,10 +775,15 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
           const point = rf.current.screenToFlowPosition({ x: event.clientX, y: event.clientY });
           setDraftAnchor({ kind: "canvas", x: point.x, y: point.y });
         }}
+        //: 能不能连只看 boardLinks 一处(拉线时判,连不上的接点不亮);已有这根线交给 onConnect 去跳过。
+        isValidConnection={(connection) => {
+          const source = cellOf(connection.source);
+          const target = cellOf(connection.target);
+          return Boolean(source && target && linkRefusal(source, target, []) === null);
+        }}
         onConnect={(connection: Connection) => {
           if (commentMode || markerMode) return;
-          setEdges((current) => addEdge(connection, current));
-          appendOnConnect(connection);
+          connectCells(connection.source, connection.target);
         }}
         // 可见的 + 在边界外，而真实锚点贴在边界上。扩大屏幕命中半径后，拖到 + 上即可
         // 自动吸附，不必再精确瞄准那个透明的 8px handle。

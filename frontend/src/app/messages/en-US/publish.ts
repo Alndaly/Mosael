@@ -208,6 +208,7 @@ export const publish = {
   boardDeleteRunningTitle: "Stop and delete?",
   boardNoteTextLimit: "Reached the {n}-character limit — more won't save",
   boardOutputsOffscreen: "{n} new cell(s) landed out of view",
+  boardLinksRefused: "{n} cell(s) weren't linked (groups, already linked, or a timeline only takes video / image / audio)",
   boardShowOutputs: "Show me",
   boardSaveFailedAt: "A cell can't be saved — it's highlighted on the canvas",
   boardDeleteRunningBody: "{n} of these cells are still running. They'll be stopped before deleting — otherwise their results have nowhere to land, and they're still billed.",
