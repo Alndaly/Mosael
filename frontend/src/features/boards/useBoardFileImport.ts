@@ -17,6 +17,7 @@ export function useBoardFileImport({
   add,
   rf,
   surface,
+  pasteCells,
 }: {
   onDropFiles?: (files: File[]) => Promise<PlacedAsset[]>;
   setNodes: React.Dispatch<React.SetStateAction<Node[]>>;
@@ -25,6 +26,8 @@ export function useBoardFileImport({
   add: (kind: BoardItem["kind"], extra?: Partial<BoardItem>) => BoardItem;
   rf: React.RefObject<ReactFlowInstance | null>;
   surface: React.RefObject<HTMLDivElement | null>;
+  /** 剪贴板里是画板上的几格(⌘C 复制的格子):贴格子,回 true;不是回 false,照旧贴文件 / 文字。 */
+  pasteCells?: (clipboard: DataTransfer | null) => boolean;
 }) {
   /**
    * 从系统里拖文件进来 —— 传进素材库,再就地摆到落点上。
@@ -68,6 +71,10 @@ export function useBoardFileImport({
     const onPaste = (event: ClipboardEvent) => {
       if (event.defaultPrevented || annotating) return;
       if (!isCanvasKeyTarget(event.target, surface.current)) return;
+      if (pasteCells?.(event.clipboardData)) {
+        event.preventDefault();
+        return;
+      }
       const content = clipboardContent(event.clipboardData);
       if (!content) return;
       event.preventDefault();
@@ -85,7 +92,7 @@ export function useBoardFileImport({
     };
     document.addEventListener("paste", onPaste);
     return () => document.removeEventListener("paste", onPaste);
-  }, [add, importAndPlace, annotating]);
+  }, [add, importAndPlace, annotating, pasteCells]);
 
   return { drop, dropAt };
 }

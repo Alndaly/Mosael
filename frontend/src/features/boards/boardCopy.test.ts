@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import type { BoardItem } from "@/api/client";
 import { copySelected } from "./BoardCanvas";
+import { copyCells } from "./boardCanvasModel";
 
 const node = (item: BoardItem, selected = true): Node => ({
   id: item.id,
@@ -108,5 +109,21 @@ describe("复制选中的几项", () => {
     expect(copy.form?.abilities?.["node:plugin.x.mux"]).toEqual({ config: { level: "high" }, bindings: { voice: [{ from: newNote }] } });
     expect(copied.edges.some((one) => one.source === newNote && one.target === copy.id), "那根线也复制了").toBe(true);
     expect(itemOf(audio).form?.bindings?.script, "原件不动").toEqual([{ from: "N" }]);
+  });
+
+  it("⌘C / ⌘V 贴一对连着的格子:按剪贴板里那份换新 id、错开放,线和绑定接在新的那两格上", () => {
+    const pasted = copyCells(
+      [
+        { id: "n1", kind: "note", x: 0, y: 0, text: "开场" },
+        { id: "img", kind: "image", x: 300, y: 0, form: { producer: "node:plugin.x.gen", bindings: { prompt: [{ from: "n1" }] } } },
+      ],
+      [{ id: "e1", source: "n1", target: "img" }],
+      { offset: 48 },
+    );
+    const [note, image] = pasted.items;
+    expect([note.x, note.y, image.x]).toEqual([48, 48, 348]);
+    expect(note.id).not.toBe("n1");
+    expect(image.form?.bindings).toEqual({ prompt: [{ from: note.id }] });
+    expect(pasted.edges).toEqual([{ id: `e1-${note.id}-${image.id}`, source: note.id, target: image.id }]);
   });
 });

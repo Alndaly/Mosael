@@ -342,6 +342,65 @@ describe("跳到标记", () => {
   });
 });
 
+describe("⌘C / ⌘V 复制粘贴格子", () => {
+  //: 一块假的系统剪贴板:copy 事件往里写,paste 事件从里读(浏览器里是同一块)。
+  const clipboard = new Map<string, string>();
+  function fire(type: "copy" | "paste", target: HTMLElement) {
+    const event = new Event(type, { bubbles: true, cancelable: true });
+    Object.defineProperty(event, "clipboardData", {
+      value: { files: [], getData: (kind: string) => clipboard.get(kind) ?? "", setData: (kind: string, value: string) => clipboard.set(kind, value) },
+    });
+    act(() => {
+      target.focus();
+      target.dispatchEvent(event);
+    });
+    return event;
+  }
+  async function settle() {
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500);
+    });
+  }
+  const board: Canvas = {
+    items: [note("n1", "开场"), { id: "img", kind: "image", x: 300, y: 0, width: 260, height: 180, form: { producer: "node:plugin.x.gen", bindings: { prompt: [{ from: "n1" }] } } }],
+    edges: [{ id: "e1", source: "n1", target: "img" }],
+    markers: [],
+  };
+
+  it("选中一格 ⌘C 再 ⌘V:贴出一格新的(字和表单照带);再贴一次往右下再错开,不叠在一起", async () => {
+    clipboard.clear();
+    const view = mount(board);
+    act(() => {
+      document.querySelector('[data-id="n1"]')!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    const copied = fire("copy", document.body);
+    expect(copied.defaultPrevented).toBe(true);
+    expect(clipboard.get("text/plain"), "贴到别处时是格子上的字").toBe("开场");
+
+    expect(fire("paste", document.body).defaultPrevented).toBe(true);
+    await settle();
+    await settle();
+    const notes = () => view.latest().items.filter((one) => one.kind === "note");
+    expect(notes().map((one) => [one.text, one.x, one.y])).toEqual([["开场", 0, 0], ["开场", 24, 24]]);
+    expect(notes()[1].id).not.toBe("n1");
+
+    fire("paste", document.body);
+    await settle();
+    await settle();
+    expect(notes().map((one) => one.x)).toEqual([0, 24, 48]);
+  });
+
+  it("剪贴板里不是格子(之后在别处复制了一段字):⌘V 照旧贴成一张便签", async () => {
+    clipboard.clear();
+    clipboard.set("text/plain", "别处复制的一段字");
+    const view = mount(board);
+    fire("paste", document.body);
+    await settle();
+    await settle();
+    expect(view.latest().items.find((one) => one.id !== "n1" && one.id !== "img")).toMatchObject({ kind: "note", text: "别处复制的一段字" });
+  });
+});
+
 describe("往画布上粘贴", () => {
   //: 粘贴冲着画布来才接(和删除键同一条判据,isCanvasKeyTarget):在输入框、编辑器里粘贴是往那儿贴字。
   function paste(target: HTMLElement, data: { text?: string; files?: File[] }) {

@@ -44,7 +44,7 @@ import { searchHighlightClass, type CanvasSearchHighlight } from "@/components/a
 import { type BoardCanvas as Canvas, type BoardItem, type BoardProducer, type BoardProducerInfo, type BoardRunRequest, type GenerationOption } from "@/api/client";
 import { usePersistentViewport } from "@/lib/usePersistentTab";
 import { cn } from "@/lib/utils";
-import { listenKeys } from "@/lib/shortcuts";
+import { isCanvasKeyTarget, leaveClipboardToSystem, listenKeys } from "@/lib/shortcuts";
 import { canRedo, canUndo } from "@/features/boards/canvasHistory";
 import { SequenceAddContext } from "@/features/boards/sequenceCursor";
 import { TrimComposer } from "@/features/boards/TrimComposer";
@@ -60,10 +60,13 @@ import { MarkerPin } from "@/features/markers/MarkerPin";
 import { MarkerEditorProvider } from "@/features/markers/MarkerEditorProvider";
 import { toMarkerNodes, type CanvasMarker } from "@/features/markers/markers";
 import {
+  BOARD_CELLS_MIME,
   LAYERS,
   boardItems,
   canPlaceCommentDraft,
+  copyCells,
   copySelected,
+  toCanvas,
   focusBoardNode,
   toNodes,
   type BoardPickAsset,
@@ -379,20 +382,29 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
    */
   const latestGraph = React.useRef({ nodes, edges });
   latestGraph.current = { nodes, edges };
+  /** 这几格里的时间线格各自复制一条时间线,回「原件的 → 副本的」;建不成(别的工作区的、已经不在了)说一声、回 null。 */
+  const copyTimelines = React.useCallback(
+    async (items: BoardItem[]): Promise<Map<string, string> | null> => {
+      const sequences = new Map<string, string>();
+      try {
+        for (const item of items) {
+          if (item.kind === "sequence" && item.sequence_id && !sequences.has(item.sequence_id)) {
+            sequences.set(item.sequence_id, (await createBoardSequence(boardId, workspaceId, item.sequence_id)).sequence_id);
+          }
+        }
+      } catch (error) {
+        toast.error(errorText(error));
+        return null;
+      }
+      return sequences;
+    },
+    [boardId, workspaceId],
+  );
   const copySelection = React.useCallback(async () => {
     const picked = nodes.filter((node) => node.selected && node.type !== "marker");
     if (picked.length === 0) return;
-    const sequences = new Map<string, string>();
-    try {
-      for (const item of boardItems(picked)) {
-        if (item.kind === "sequence" && item.sequence_id && !sequences.has(item.sequence_id)) {
-          sequences.set(item.sequence_id, (await createBoardSequence(boardId, workspaceId, item.sequence_id)).sequence_id);
-        }
-      }
-    } catch (error) {
-      toast.error(errorText(error));
-      return;
-    }
+    const sequences = await copyTimelines(boardItems(picked));
+    if (!sequences) return;
     const ids = new Set(picked.map((node) => node.id));
     const current = latestGraph.current;
     const copied = copySelected(
@@ -402,7 +414,57 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
     );
     setNodes(copied.nodes);
     setEdges(copied.edges);
-  }, [nodes, boardId, workspaceId, setNodes, setEdges]);
+  }, [nodes, copyTimelines, setNodes, setEdges]);
+
+  /**
+   * ⌘C / ⌘V 复制粘贴格子(和工作流的节点同一个手感)。选中几格按 ⌘C:剪贴板里放一份这几格和它们之间的线
+   * (应用内的格式 BOARD_CELLS_MIME,另放一份字,贴到别处时不是空白);⌘V 时剪贴板里是格子就贴格子 —— 连着按
+   * 几次一次比一次往右下错开,不叠在一起 —— 否则照旧贴系统剪贴板里的东西(截图、文字,见 useBoardFileImport)。
+   * 放在系统剪贴板里而不是一个变量里:之后在别处复制了一段字,⌘V 贴的就是那段字。
+   *
+   * 选中了文字(便签里、面板里)按 ⌘C 是复制文字,不接管;评论 / 标记模式下不接。
+   */
+  const pasteRound = React.useRef({ payload: "", times: 0 });
+  React.useEffect(() => {
+    const onCopy = (event: ClipboardEvent) => {
+      if (event.defaultPrevented || commentMode || markerMode || !event.clipboardData) return;
+      if (!isCanvasKeyTarget(event.target, surface.current) || leaveClipboardToSystem(event)) return;
+      const picked = latestGraph.current.nodes.filter((node) => node.selected && node.type !== "marker");
+      if (picked.length === 0) return;
+      const cells = toCanvas(picked, latestGraph.current.edges);
+      event.clipboardData.setData(BOARD_CELLS_MIME, JSON.stringify({ items: cells.items, edges: cells.edges }));
+      event.clipboardData.setData("text/plain", cells.items.map((item) => item.text || item.title || "").filter(Boolean).join("\n\n"));
+      event.preventDefault();
+    };
+    document.addEventListener("copy", onCopy);
+    return () => document.removeEventListener("copy", onCopy);
+  }, [commentMode, markerMode]);
+  const pasteCells = React.useCallback(
+    (clipboard: DataTransfer | null): boolean => {
+      const payload = clipboard?.getData(BOARD_CELLS_MIME) ?? "";
+      let cells: { items?: BoardItem[]; edges?: Edge[] } | null = null;
+      try {
+        cells = payload ? (JSON.parse(payload) as { items?: BoardItem[]; edges?: Edge[] }) : null;
+      } catch {
+        cells = null;
+      }
+      if (!cells?.items?.length) return false;
+      const times = pasteRound.current.payload === payload ? pasteRound.current.times + 1 : 1;
+      pasteRound.current = { payload, times };
+      const { items, edges: links = [] } = cells;
+      void copyTimelines(items).then((sequences) => {
+        if (!sequences) return;
+        const pasted = copyCells(items, links, { offset: 24 * times, sequences });
+        setNodes((current) => [
+          ...current.map((node) => (node.selected ? { ...node, selected: false } : node)),
+          ...toNodes(pasted.items).map((node) => ({ ...node, selected: true })),
+        ]);
+        setEdges((current) => [...current, ...pasted.edges]);
+      });
+      return true;
+    },
+    [copyTimelines, setNodes, setEdges],
+  );
 
   /** 一格上在跑(或上一轮跑)的那项能力叫什么:运行态那一条上写它。清单没到、查不到时不写。 */
   const abilityLabel = (item: BoardItem): string | undefined => {
@@ -608,7 +670,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
 
 
   const annotating = commentMode || markerMode;
-  const { drop, dropAt } = useBoardFileImport({ onDropFiles, setNodes, annotating, add, rf, surface });
+  const { drop, dropAt } = useBoardFileImport({ onDropFiles, setNodes, annotating, add, rf, surface, pasteCells });
 
   React.useEffect(() => {
     onReady?.({

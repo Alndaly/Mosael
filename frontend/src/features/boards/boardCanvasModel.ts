@@ -9,6 +9,9 @@ import { DEFAULT_SIZE, type MediaKind } from "@/features/boards/boardNodes";
 import { copiedItem } from "@/features/boards/boardItemState";
 import type { CanvasMarker } from "@/features/markers/markers";
 
+/** 剪贴板里「画板上的几格」那一份的格式(应用内的 MIME):⌘C 复制格子时写,⌘V 时认它(见 BoardCanvas)。 */
+export const BOARD_CELLS_MIME = "application/x-mosael-board-cells";
+
 /** 让上层开素材选择器(见 BoardCanvas 的 Props.onPickAsset)。画布和操作条共用这一个形状。 */
 export type BoardPickAsset = (kind: MediaKind | "media", place: (assetId: string) => void, options?: { onBoard?: string[] }) => void;
 
@@ -116,35 +119,50 @@ export function copySelected(
   // 标记也可能被选中(它在画布上就是一个节点),但它没有 item —— 而且"复制一枚旗子"
   // 本来也不成立:两枚指着同一处的标记不表达任何东西。
   const picked = nodes.filter((node) => node.selected && node.type !== "marker");
+  const copied = copyCells(
+    picked.map((node) => ({ ...(node.data as unknown as { item: BoardItem }).item, x: node.position.x, y: node.position.y })),
+    edges,
+    { sequences },
+  );
+  const copies = picked.map((node, index) => {
+    const item = copied.items[index];
+    return { ...node, id: item.id, position: { x: item.x, y: item.y }, selected: true, data: { ...node.data, item } };
+  });
+  return {
+    nodes: [...nodes.map((node) => ({ ...node, selected: false })), ...copies],
+    edges: [...edges, ...copied.edges],
+  };
+}
+
+/**
+ * 一组格子的副本:换新 id,错开 `offset` 放(不然正好盖在原件上,看着像什么都没发生);**它们之间的线跟着复制**,
+ * 两端接到新的那几格上(连着没一起复制的那一格的线不跟着来 —— 那一端没有副本可接);表单里顺着线接上的东西改记成
+ * 新的那一格(见 rewiredForm);时间线格换上 `sequences` 里给它复制好的那一条。每一格按 copiedItem 复制(进行中的
+ * 运行态不带过去)。画布上的「复制」和 ⌘C / ⌘V 粘贴都经这里。
+ */
+export function copyCells(
+  items: BoardItem[],
+  edges: { id: string; source: string; target: string }[],
+  { offset = 24, sequences = new Map<string, string>() }: { offset?: number; sequences?: ReadonlyMap<string, string> } = {},
+): { items: BoardItem[]; edges: { id: string; source: string; target: string }[] } {
   const renamed = new Map<string, string>();
-  const copies = picked.map((node) => {
-    const source = (node.data as unknown as { item: BoardItem }).item;
+  const copies = items.map((source) => {
     const copied = copiedItem(source, `${source.kind}-${Math.random().toString(36).slice(2, 9)}`);
     const sequence = source.sequence_id ? sequences.get(source.sequence_id) : undefined;
-    const copy = sequence ? { ...copied, sequence_id: sequence } : copied;
-    renamed.set(node.id, copy.id);
-    return {
-      ...node,
-      id: copy.id,
-      // 错开一点放,不然复制出来的正好盖在原件上,看着像什么都没发生。
-      position: { x: node.position.x + 24, y: node.position.y + 24 },
-      selected: true,
-      data: { ...node.data, item: copy },
-    };
+    renamed.set(source.id, copied.id);
+    return { ...copied, ...(sequence ? { sequence_id: sequence } : {}), x: source.x + offset, y: source.y + offset };
   });
   const copiedEdges = edges.flatMap((edge) => {
     const source = renamed.get(edge.source);
     const target = renamed.get(edge.target);
     return source && target ? [{ id: `${edge.id}-${source}-${target}`, source, target }] : [];
   });
-  const rewired = copies.map((node) => {
-    const item = (node.data as unknown as { item: BoardItem }).item;
-    const form = rewiredForm(item.form, renamed);
-    return form === item.form ? node : { ...node, data: { ...node.data, item: { ...item, form } } };
-  });
   return {
-    nodes: [...nodes.map((node) => ({ ...node, selected: false })), ...rewired],
-    edges: [...edges, ...copiedEdges],
+    items: copies.map((item) => {
+      const form = rewiredForm(item.form, renamed);
+      return form === item.form ? item : { ...item, form };
+    }),
+    edges: copiedEdges,
   };
 }
 

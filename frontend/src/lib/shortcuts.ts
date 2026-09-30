@@ -242,7 +242,7 @@ export function reservedOwner(combo: Combo): MessageKey | null {
  * 选中一段输出、按 ⌘C,复制走的是画布上还选着的那个节点,文字复制不下来(真机)。
  * 用户选中了文字,就是在说「我要复制这段字」:这时候谁都不该截。
  */
-export function leaveClipboardToSystem(event: KeyboardEvent): boolean {
+export function leaveClipboardToSystem(event: Pick<Event, "target">): boolean {
   const target = event.target as HTMLElement | null;
   if (
     target &&
