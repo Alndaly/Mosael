@@ -91,6 +91,16 @@ export const capabilityKeys = {
  * 确认卡(见 `api/domains/confirmations`)。取数按状态、按会话细分;批准 / 拒绝之后失效用
  * `.all(ws)` —— 待批的那几份和「自动放行留痕」那一栏都在它下面。
  */
+/**
+ * 画板。**第一段都是 "boards"**:任务做完(`affects: boards`)、确认卡批准之后按这一段整片作废,打开着的那张板
+ * 的详情跟着重取、合进本地(BoardsView 的 adoptServer)。
+ */
+export const boardKeys = {
+  everywhere: () => ["boards"] as const,
+  list: (workspaceId: string) => ["boards", workspaceId] as const,
+  detail: (workspaceId: string, boardId: string) => ["boards", workspaceId, "detail", boardId] as const,
+};
+
 export const confirmationKeys = {
   all: (workspaceId: string) => ["confirmations", workspaceId] as const,
   /** 那次对话里等人拍板的卡(聊天里就地的那一叠)。 */

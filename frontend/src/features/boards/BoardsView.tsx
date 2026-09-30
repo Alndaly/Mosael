@@ -75,7 +75,7 @@ import { boardSettlementPatch, itemIsRunning, prunedLinksPatch, serverOwnedPatch
 import { rebaseCanvas } from "@/features/boards/boardRebase";
 import { createWriteQueue, sameContent } from "@/lib/optimisticWrites";
 import { importEach, importFailureText } from "@/lib/importEach";
-import { assetKeys } from "@/api/queryKeys";
+import { assetKeys, boardKeys } from "@/api/queryKeys";
 import { CollaborationSheet } from "@/features/collaboration/CollaborationSheet";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { SelectionCheck } from "@/components/app/SelectionCheck";
@@ -99,7 +99,7 @@ export function BoardsView({ workspace }: { workspace: Workspace }) {
   const queryClient = useQueryClient();
 
   const boards = useQuery({
-    queryKey: ["boards", workspace.id],
+    queryKey: boardKeys.list(workspace.id),
     queryFn: () => listBoards(workspace.id),
   });
   const list = React.useMemo(() => boards.data ?? [], [boards.data]);
@@ -201,7 +201,8 @@ export function BoardsView({ workspace }: { workspace: Workspace }) {
         board={open}
         workspaceId={workspace.id}
         onBack={() => setOpenId(null)}
-        onSaved={() => void queryClient.invalidateQueries({ queryKey: ["boards", workspace.id] })}
+        //: 只刷新清单这一条(卡片上的格子数、「最近编辑」);打开着的这张板的详情由它自己的缓存管(见 BoardDetail)。
+        onSaved={() => void queryClient.invalidateQueries({ queryKey: boardKeys.list(workspace.id), exact: true })}
       />
     );
   }
@@ -590,14 +591,24 @@ function BoardDetail({
   //: 这张板上的写请求(自动保存、改名、生成、写字、念、截)排成一队,各自轮到时才读版本号 ——
   //: 见 lib/optimisticWrites.createWriteQueue。
   const [serially] = React.useState(createWriteQueue);
+  //: 这张板的详情缓存:自己写回来的每一版放进去;别处让它作废(任务做完、智能体改板批准之后)时重取,
+  //: 比手上的新就合进本地(见下面采用它的那个 effect)。
+  const detailKey = React.useMemo(() => boardKeys.detail(workspaceId, board.id), [workspaceId, board.id]);
+  const detail = useQuery({
+    queryKey: detailKey,
+    queryFn: () => getBoard(board.id, workspaceId),
+    initialData: board,
+    staleTime: Infinity,
+  });
   const acceptBoard = React.useCallback(
     (fresh: Board) => {
       revision.current = fresh.revision;
       confirmedCanvas.current = fresh.canvas;
+      queryClient.setQueryData(detailKey, fresh);
       onSaved();
       return fresh;
     },
-    [onSaved],
+    [onSaved, queryClient, detailKey],
   );
   /**
    * 采用服务端更新的一版:本地没存上的改动按格子重放到它上面(boardRebase),撤销历史照留(画布的 adopt)。
@@ -615,14 +626,24 @@ function BoardDetail({
       const { canvas: merged, conflicted } = rebaseCanvas(base, localCanvas.current ?? base, fresh.canvas);
       revision.current = fresh.revision;
       confirmedCanvas.current = fresh.canvas;
+      queryClient.setQueryData(detailKey, fresh);
       api?.adopt(merged, (snapshot) => rebaseCanvas(base, snapshot, fresh.canvas).canvas);
       localCanvas.current = merged;
       setCanvas(merged);
       onSaved();
       return { adopted: true, conflicted };
     },
-    [api, onSaved],
+    [api, onSaved, queryClient, detailKey],
   );
+  //: 详情缓存里来了更新的一版(智能体改板批准之后、任务做完之后的重取):排进写队列合进本地。
+  //: 在路上的保存先回来把版本推过去的话,这一份就不比手上的新,adoptServer 不采用。
+  const latest = detail.data;
+  React.useEffect(() => {
+    if (!api || latest.revision <= revision.current) return;
+    void serially(async () => {
+      adoptServer(latest);
+    });
+  }, [api, latest, adoptServer, serially]);
   const recoverConflict = React.useCallback(
     async (error: unknown): Promise<boolean> => {
       if (!(error instanceof ApiError) || error.status !== 409) return false;

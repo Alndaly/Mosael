@@ -74,6 +74,7 @@ vi.mock("@/features/boards/BoardCanvas", () => ({
 
 import { ApiError, type Board, type BoardCanvas, type Workspace } from "@/api/client";
 import { BoardsView } from "@/features/boards/BoardsView";
+import { invalidateAfterDecision } from "@/features/agent/confirmationCaches";
 
 const workspace = { id: "w1", name: "W" } as Workspace;
 
@@ -97,8 +98,11 @@ function deferred<T>() {
   return { promise, resolve };
 }
 
+let queryClient: QueryClient;
+
 function mount() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  queryClient = client;
   return render(
     <QueryClientProvider client={client}>
       <BoardsView workspace={workspace} />
@@ -417,6 +421,27 @@ describe("服务端那一版前进了(回执、占位、智能体),本地手上�
     const stored = new Map(server.state.canvas.items.map((one) => [one.id, one]));
     expect(stored.get("n1")?.x).toBe(460);
     expect(stored.get("img")?.asset_id).toBe("a1");
+  });
+
+  it("智能体改板批准之后,打开着的画板合上那一版 —— 本地没存的改动照留,不等下一次保存撞版本号", async () => {
+    const server = strictServer({ items: [note], edges: [], markers: [] });
+    mount();
+    await vi.waitFor(() => expect(canvasHarness.props).not.toBeNull());
+    act(() => props().onChange({ items: [{ ...note, text: "我刚改的" }], edges: [], markers: [] }));
+    //: 智能体加了一张便签(确认卡批准、服务端执行),确认卡那边照例作废缓存。
+    server.serverWrite((canvas) => ({ ...canvas, items: [...canvas.items, { id: "agent", kind: "note", x: 0, y: 300, text: "智能体加的" }] }));
+    await act(async () => {
+      invalidateAfterDecision(queryClient, "w1");
+      await vi.advanceTimersByTimeAsync(10);
+    });
+
+    expect(adopted()?.items.map((one) => one.id)).toEqual(["n1", "agent"]);
+    expect(adoptedItem("n1")?.text, "本地没存的那句照留").toBe("我刚改的");
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000);
+    });
+    expect(apiMocks.updateBoard.mock.results.every((one) => one.type === "return"), "一次 409 都不撞").toBe(true);
+    expect(server.state.canvas.items.map((one) => [one.id, one.text])).toEqual([["n1", "我刚改的"], ["agent", "智能体加的"]]);
   });
 
   it("点生成时别的格子的回执刚落下:合上最新那一版再发一次,不报「生成失败」", async () => {
