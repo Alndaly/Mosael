@@ -3,12 +3,12 @@
   "version": 1,
   "workflow_revision": 1,
   "name": "Long video into vertical clips",
-  "description": "Transcribe a talk, interview or stream recording, pick the passages that stand on their own, then give each one its own vertical timeline, take that range from the source, lay rewritten short captions on it and export. No image or video generation, so nothing is billed beyond the transcription and one chat call.",
-  "graph_hash": "fceb244e57b550d43a80a7e518d652eba798b0d5ad50f93d6576366e3d62970d",
+  "description": "Transcribe a talk, interview or stream recording, pick the passages that stand on their own (up to 12), then give each one its own vertical timeline in a single project, take that range from the source, lay rewritten short captions on it and export. No image or video generation, so nothing is billed beyond the transcription and one chat call.",
+  "graph_hash": "1e6284b8c4381b1c256e45984c1f6cd51089cfe201ca55914d41a01d92a2292c",
   "graph": {
     "meta": {
       "template_id": "highlight_shorts",
-      "template_version": 1,
+      "template_version": 2,
       "source": "official"
     },
     "nodes": [
@@ -71,7 +71,7 @@
           "profile_id": "",
           "model": "",
           "preset": "precise",
-          "system": "你是短视频运营和剪辑师。你会收到一条长视频(口播、访谈或直播回放)的带时间码逐字稿，\n任务是从里面挑出能**独立成立**的片段：不依赖前文也听得懂、有一个完整的观点或故事、开头三秒就有\n抓人的理由。\n\n硬性要求：\n- 每条片段的时长必须在给定的上下限之间；片段之间不得重叠；起止时间必须落在素材时长内。\n- 起止时间要卡在**句子边界**上，不要从半句话开始或结束。\n- 只挑真的够格的。素材里没有那么多高光时，宁可少给几条，并在 skipped_reason 里说明——\n  凑数的片段发出去是在消耗账号。\n- captions 是**重写过的短句**：每句不超过 18 个字，去掉口头禅和重复，保留原意和原话的语气；\n  时间码相对这一条片段的开头（第一句从 0 附近开始），不是原片时间。\n- 不要编造素材里没有的内容。\n\n只输出符合 JSON Schema 的对象。",
+          "system": "你是短视频运营和剪辑师。你会收到一条长视频(口播、访谈或直播回放)的带时间码逐字稿，\n任务是从里面挑出能**独立成立**的片段：不依赖前文也听得懂、有一个完整的观点或故事、开头三秒就有\n抓人的理由。\n\n硬性要求：\n- 每条片段的时长必须在给定的上下限之间；片段之间不得重叠；起止时间必须落在素材时长内。\n- 起止时间要卡在**句子边界**上，不要从半句话开始或结束。\n- 只挑真的够格的。素材里没有那么多高光时，宁可少给几条，并在 skipped_reason 里说明——\n  凑数的片段发出去是在消耗账号。最多 12 条。\n- captions 是**重写过的短句**：每句不超过 18 个字，去掉口头禅和重复，保留原意和原话的语气；\n  时间码相对这一条片段的开头（第一句从 0 附近开始），不是原片时间。\n- 不要编造素材里没有的内容。\n\n只输出符合 JSON Schema 的对象。",
           "prompt": "素材名称：{{source_video.name}}\n素材时长：{{source_video.duration}} 秒\n目标观众：{{start.audience}}\n想要几条：{{start.target_count}}\n每条时长：不短于 {{start.min_seconds}} 秒，不长于 {{start.max_seconds}} 秒\n\n下面是按原视频源时间记录的逐字稿 JSON，每段含 start/end/text：\n{{transcript.timed_text}}\n\n请挑出片段并按要求输出。再强调一次：captions 的时间码是**相对每条片段自己的开头**。",
           "response_format": "json_schema",
           "json_schema_name": "highlight_clips",
@@ -144,7 +144,8 @@
                   ],
                   "additionalProperties": false
                 },
-                "minItems": 1
+                "minItems": 1,
+                "maxItems": 12
               },
               "skipped_reason": {
                 "type": "string",
@@ -163,6 +164,18 @@
         }
       },
       {
+        "id": "clips_project",
+        "type": "project_create",
+        "name": "Create one project for the clips",
+        "position": {
+          "x": 970,
+          "y": 460
+        },
+        "config": {
+          "name": "{{source_video.name}} · 竖屏切片"
+        }
+      },
+      {
         "id": "cut_clips",
         "type": "loop_foreach",
         "name": "Cut each one into a vertical export",
@@ -173,6 +186,7 @@
         "config": {
           "items": "{{highlights.json.clips}}",
           "inputs": {
+            "project_id": "{{clips_project.project_id}}",
             "source_asset_id": "{{source_video.asset_id}}",
             "width": "{{start.width}}",
             "height": "{{start.height}}",
@@ -190,6 +204,7 @@
                 },
                 "config": {
                   "name": "{{loop.item.title}}",
+                  "project_id": "{{input.project_id}}",
                   "width": "{{input.width}}",
                   "height": "{{input.height}}",
                   "fps": "{{input.fps}}"
@@ -321,6 +336,7 @@
         "config": {
           "values": {
             "source_asset_id": "{{source_video.asset_id}}",
+            "project_id": "{{clips_project.project_id}}",
             "clip_asset_ids": "{{cut_clips.results}}",
             "clip_count": "{{cut_clips.count}}",
             "plan": "{{highlights.json}}",
@@ -343,6 +359,16 @@
       {
         "id": "highlights_cut",
         "source": "highlights",
+        "target": "cut_clips"
+      },
+      {
+        "id": "source_project",
+        "source": "source_video",
+        "target": "clips_project"
+      },
+      {
+        "id": "project_cut",
+        "source": "clips_project",
         "target": "cut_clips"
       },
       {

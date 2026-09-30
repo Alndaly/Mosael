@@ -3,12 +3,12 @@
   "version": 1,
   "workflow_revision": 1,
   "name": "Product photo into on-model shots",
-  "description": "From one flat-lay or fabric photo, plan a few sellable scenes and shoot an on-model image for each; where a video model is available, put every scene in motion too. The product photo is carried into every generation — cut, colour, texture and logo come from it, not from a description. The copy lines are saved as a note.",
-  "graph_hash": "205b3d70656e3eef5c122b16939fca5ffb7b4842758caea0a080b5ce7a62b0ca",
+  "description": "From one flat-lay or fabric photo, plan a few sellable scenes (up to 12) and shoot a portrait on-model image for each; where a video model is available, put every scene in motion with that image as its first frame. The product photo is carried into every generation — cut, colour, texture and logo come from it, not from a description. Images and clips are filed into one project and the copy lines are saved as a note. Each scene is one paid image generation (plus one video generation with motion).",
+  "graph_hash": "3acbe2cc0afd27a623ee6c255d58c789d686424dd91c552bfb3b0370db7ac2be",
   "graph": {
     "meta": {
       "template_id": "product_on_model",
-      "template_version": 1,
+      "template_version": 2,
       "source": "official"
     },
     "nodes": [
@@ -23,12 +23,13 @@
         "config": {
           "params": {
             "product_name": "",
-            "product_brief": "品类、颜色、材质、版型,一两句话",
+            "product_brief": "",
             "audience": "25-35 岁都市通勤女性",
             "season": "春秋",
             "brand_tone": "简洁、克制、质感",
             "scene_count": 4
-          }
+          },
+          "required_params": "product_name, product_brief"
         }
       },
       {
@@ -45,17 +46,14 @@
       },
       {
         "id": "shoot_project",
-        "type": "project_sequence_create",
+        "type": "project_create",
         "name": "Create a project for this shoot",
         "position": {
           "x": 650,
           "y": 420
         },
         "config": {
-          "name": "{{start.product_name}} · 上身图",
-          "width": 1080,
-          "height": 1920,
-          "fps": 30
+          "name": "{{start.product_name}} · 上身图"
         }
       },
       {
@@ -70,7 +68,7 @@
           "profile_id": "",
           "model": "",
           "preset": "creative",
-          "system": "你是服装 / 面料品牌的视觉企划和电商内容负责人。用户会给你一件商品的基本信息和目标人群，\n你要规划几组**能直接投放**的模特上身场景。\n\n硬性要求：\n- 每一组是一个真实存在的穿着场合，彼此要拉开差别（场合、光线、季节感、构图各不相同），\n  不要只换背景色。\n- image_prompt 用英文完整描述画面：模特、姿态、取景、环境、光线、氛围。**不要写机位参数**，\n  也不要在画面里生成文字、logo 水印或 UI。\n- 你**看不到**那张商品图，所以不要描述商品本身的细节——那由参考图保证。你只描述\"穿着它的人\n  在什么场合、怎么站、光怎么打\"。提到商品时用 the product / the garment 指代。\n- copy_lines 是中文卖点短句，可以直接配在图上或发在详情页，不要写成广告腔的空话。\n\n只输出符合 JSON Schema 的对象。",
+          "system": "你是服装 / 面料品牌的视觉企划和电商内容负责人。用户会给你一件商品的基本信息和目标人群，\n你要规划几组**能直接投放**的模特上身场景。\n\n硬性要求：\n- 每一组是一个真实存在的穿着场合，彼此要拉开差别（场合、光线、季节感、构图各不相同），\n  不要只换背景色。最多 12 组。\n- image_prompt 用英文完整描述画面：模特、姿态、取景、环境、光线、氛围。**不要写机位参数**，\n  也不要在画面里生成文字、logo 水印或 UI。\n- 你**看不到**那张商品图，所以不要描述商品本身的细节——那由参考图保证。你只描述\"穿着它的人\n  在什么场合、怎么站、光怎么打\"。提到商品时用 the product / the garment 指代。\n- copy_markdown 是中文卖点短句，可以直接配在图上或发在详情页，不要写成广告腔的空话；\n  只从用户给的商品信息里提炼，不要编造面料成分、功能或数据。\n\n只输出符合 JSON Schema 的对象。",
           "prompt": "商品名称：{{start.product_name}}\n商品信息：{{start.product_brief}}\n目标人群：{{start.audience}}\n季节：{{start.season}}\n品牌调性：{{start.brand_tone}}\n要几组场景：{{start.scene_count}}\n\n请规划这几组场景并输出。记住：你看不到商品图，不要描述商品本身。",
           "response_format": "json_schema",
           "json_schema_name": "product_lookbook_plan",
@@ -121,21 +119,23 @@
                   ],
                   "additionalProperties": false
                 },
-                "minItems": 1
-              },
-              "copy_lines": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                },
                 "minItems": 1,
-                "description": "可直接用的中文卖点短句,每条不超过 20 字"
+                "maxItems": 12
+              },
+              "copy_markdown": {
+                "type": "string",
+                "description": "可直接用的中文卖点短句,Markdown 无序列表,一行一条(以「- 」开头),每条不超过 20 字"
+              },
+              "scenes_markdown": {
+                "type": "string",
+                "description": "给人看的拍摄清单,Markdown 无序列表,每组一行:「- **场合名**:一句中文说明(人物、场景、光线)」"
               }
             },
             "required": [
               "product_summary",
               "scenes",
-              "copy_lines"
+              "copy_markdown",
+              "scenes_markdown"
             ],
             "additionalProperties": false
           },
@@ -157,7 +157,9 @@
           "inputs": {
             "product_asset_id": "{{product_photo.asset_id}}",
             "product_name": "{{start.product_name}}",
-            "project_id": "{{shoot_project.project_id}}"
+            "project_id": "{{shoot_project.project_id}}",
+            "aspect_ratio": "9:16",
+            "resolution": "720p"
           },
           "body": {
             "nodes": [
@@ -174,7 +176,7 @@
                   "provider_profile_id": "",
                   "model": "",
                   "kind": "image",
-                  "prompt": "{{loop.item.image_prompt}} Model: {{loop.item.model_brief}}. Setting: {{loop.item.setting}}. Pose and framing: {{loop.item.pose}}. The product in the reference image must be reproduced EXACTLY: identical cut, silhouette, colour, fabric texture, weave, print scale and placement, stitching, buttons, trims and any logo or label. Do not redesign, restyle, recolour, resize the print, add or remove details. Only the wearer, pose, setting and lighting may change. The reference image is the product itself, photographed flat. Photorealistic commercial fashion photography, no text, no watermark.",
+                  "prompt": "{{loop.item.image_prompt}} Model: {{loop.item.model_brief}}. Setting: {{loop.item.setting}}. Pose and framing: {{loop.item.pose}}. The product in the reference image must be reproduced EXACTLY: identical cut, silhouette, colour, fabric texture, weave, print scale and placement, stitching, buttons, trims and any logo or label. Do not redesign, restyle, recolour, resize the print, add or remove details. Only the wearer, pose, setting and lighting may change. The reference image is the product itself, photographed flat. Vertical full-length composition for a phone screen. Photorealistic commercial fashion photography, no text, no watermark.",
                   "negative_prompt": "different garment, altered pattern, changed colour, distorted print, redesigned collar or sleeves, extra logos, text, watermark, deformed hands, extra limbs",
                   "parameters": {},
                   "source_assets": [
@@ -210,7 +212,7 @@
                 "config": {
                   "provider": "",
                   "provider_profile_id": "",
-                  "model": "placeholder",
+                  "model": "",
                   "kind": "video",
                   "prompt": "{{loop.item.video_prompt}} The product in the reference image must be reproduced EXACTLY: identical cut, silhouette, colour, fabric texture, weave, print scale and placement, stitching, buttons, trims and any logo or label. Do not redesign, restyle, recolour, resize the print, add or remove details. Only the wearer, pose, setting and lighting may change. Subtle, natural motion only; the garment must stay readable throughout.",
                   "negative_prompt": "different garment, altered pattern, changed colour, distorted print, redesigned collar or sleeves, extra logos, text, watermark, deformed hands, extra limbs",
@@ -218,15 +220,31 @@
                     "duration_seconds": 5
                   },
                   "source_assets": [
-                    "{{on_model.asset_id}}:first_frame",
-                    "{{input.product_asset_id}}:reference_image"
+                    "{{on_model.asset_id}}:first_frame"
                   ]
                 }
+              },
+              {
+                "id": "file_clip",
+                "type": "asset_update",
+                "name": "File this scene's clip",
+                "position": {
+                  "x": 1040,
+                  "y": 140
+                },
+                "config": {
+                  "asset_ids": "",
+                  "name": "{{input.product_name}} · {{loop.item.scene_label}} · 视频",
+                  "project_id": "{{input.project_id}}"
+                },
+                "inputs": [
+                  "asset_ids"
+                ]
               }
             ],
             "edges": [
               {
-                "id": "file_clip",
+                "id": "file_clip_gen",
                 "source": "file_image",
                 "target": "on_model_clip"
               },
@@ -237,10 +255,18 @@
                 "kind": "data",
                 "source_output": "asset_id",
                 "target_input": "asset_ids"
+              },
+              {
+                "id": "d-on_model_clip-asset_id-file_clip-asset_ids",
+                "source": "on_model_clip",
+                "target": "file_clip",
+                "kind": "data",
+                "source_output": "asset_id",
+                "target_input": "asset_ids"
               }
             ]
           },
-          "output": "{{on_model_clip.asset_id}}",
+          "output": "{{on_model.asset_id}}",
           "concurrency": 2
         }
       },
@@ -254,7 +280,7 @@
         },
         "config": {
           "title": "{{start.product_name}} · 卖点与场景",
-          "markdown": "## 商品\n\n{{lookbook_plan.json.product_summary}}\n\n## 卖点短句\n\n{{lookbook_plan.json.copy_lines}}\n\n## 拍摄场景\n\n{{lookbook_plan.json.scenes}}\n",
+          "markdown": "## 商品\n\n{{lookbook_plan.json.product_summary}}\n\n## 卖点短句\n\n{{lookbook_plan.json.copy_markdown}}\n\n## 拍摄场景\n\n{{lookbook_plan.json.scenes_markdown}}\n",
           "tags": "商品素材"
         }
       },
@@ -268,7 +294,7 @@
         },
         "config": {
           "title": "模特上身图已生成",
-          "body": "{{start.product_name}} 已出 {{shoot_scenes.count}} 组,卖点文案已存进笔记。"
+          "body": "{{start.product_name}} 已出 {{shoot_scenes.count}} 组,图和视频都归进了项目,卖点文案已存进笔记。"
         }
       },
       {
@@ -282,7 +308,7 @@
         "config": {
           "values": {
             "product_asset_id": "{{product_photo.asset_id}}",
-            "generated_asset_ids": "{{shoot_scenes.results}}",
+            "image_asset_ids": "{{shoot_scenes.results}}",
             "scene_count": "{{shoot_scenes.count}}",
             "plan": "{{lookbook_plan.json}}",
             "copy_note_id": "{{copy_note.note_id}}",

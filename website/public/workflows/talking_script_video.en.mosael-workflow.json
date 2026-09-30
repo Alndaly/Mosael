@@ -4,11 +4,11 @@
   "workflow_revision": 1,
   "name": "Script into a talking-head video",
   "description": "A portrait and a script: voice it sentence by sentence, group the sentences into segments the speaking-photo model accepts, make the face speak each one, lay them end to end on the timeline, caption from the real voicing times, and export. The export carries an \"AI-generated\" label. Confirm consent on \"Make it speak\" before running.",
-  "graph_hash": "942483bea092e95f6a11584e18c33ceb63679d0807c912e0873aff8b22480a04",
+  "graph_hash": "8443c48d1c0d20455974264d779819b0c6d1edaa5df5f2d13a10e658d2324915",
   "graph": {
     "meta": {
       "template_id": "talking_script_video",
-      "template_version": 1,
+      "template_version": 2,
       "source": "official"
     },
     "nodes": [
@@ -23,8 +23,6 @@
         "config": {
           "params": {
             "title": "数字人口播",
-            "script": "把要说的话贴在这里;按句子断开配音,每句不要太长",
-            "voice_id": "",
             "width": 1080,
             "height": 1920,
             "fps": 25
@@ -52,9 +50,9 @@
           "y": 400
         },
         "config": {
-          "text": "{{start.script}}",
+          "text": "",
           "engine": "builtin:clone",
-          "voice": "{{start.voice_id}}",
+          "voice": "",
           "model": ""
         }
       },

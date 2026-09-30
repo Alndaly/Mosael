@@ -286,6 +286,8 @@ def built_in_template_graph(
             image=_reference_image_model(db, user_id),
             # 视频是**可选**的一步:没有合适的视频模型就只出静图,而不是让整条模板用不了。
             video=_shot_video_model(db, user_id),
+            # 出图尺寸和视频的时长 / 画幅按模型的参数声明挑(用户自定义的声明也算)。
+            db=db,
         ))
     if template_id in (PRODUCT_PITCH_SHORT, PRODUCT_PITCH_PRESENTER):
         return localised_names(locale, product_pitch_short_graph(
@@ -293,6 +295,7 @@ def built_in_template_graph(
             image=_reference_image_model(db, user_id),
             voice_id=_first_voice_id(db, workspace_id),
             presenter=template_id == PRODUCT_PITCH_PRESENTER,
+            db=db,
         ))
     if template_id == TALKING_SCRIPT_VIDEO:
         # 音色按工作区取(克隆音色存在工作区名下);说话照片模型不在图里写死,节点按描述符挑会的那一个。

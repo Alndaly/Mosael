@@ -3,12 +3,12 @@
   "version": 1,
   "workflow_revision": 1,
   "name": "自有素材混剪 · 配音与字幕",
-  "description": "按标签取出你已经拍好的一批素材,让模型排出叙事顺序、定每段用哪条素材和留多久、写好旁白,然后按顺序接上时间线,逐段配音并铺字幕,导出成片。不生成任何画面 —— 画面就是你自己的素材;没有配音音色时自动只出字幕。",
-  "graph_hash": "8b3d53d210747ce1cabf6ce2d80d24144cb40641ef90242a6dc0cb7ddac1ddce",
+  "description": "按标签取出你已经拍好的一批素材,让模型排出叙事顺序、定每段用哪条素材的哪一截、写好旁白,然后按顺序接上时间线,逐段配音(有旁白的那段把原声压低)并铺字幕,导出成片。不生成任何画面 —— 画面就是你自己的素材;没有配音音色时自动只出字幕。标签没填或这个标签下没有视频时,停下并告诉你。",
+  "graph_hash": "39b9a1ca933abe64dc92d9442ba249f30296180347dc54c7d83a6635bb0c8b6c",
   "graph": {
     "meta": {
       "template_id": "footage_montage",
-      "template_version": 1,
+      "template_version": 2,
       "source": "official"
     },
     "nodes": [
@@ -22,8 +22,8 @@
         },
         "config": {
           "params": {
-            "topic": "请把这里改成这条片子要讲的事",
-            "footage_tag": "给要混剪的素材打上同一个标签,把它写在这里",
+            "topic": "",
+            "footage_tag": "",
             "audience": "潜在客户与合作方",
             "tone": "专业、克制、可信",
             "target_duration_seconds": 60,
@@ -31,7 +31,8 @@
             "width": 1920,
             "height": 1080,
             "fps": 30
-          }
+          },
+          "required_params": "topic, footage_tag"
         }
       },
       {
@@ -49,18 +50,48 @@
         }
       },
       {
+        "id": "has_footage",
+        "type": "condition",
+        "name": "取到素材了吗",
+        "position": {
+          "x": 650,
+          "y": 260
+        },
+        "config": {
+          "left": "",
+          "op": "gt",
+          "right": "0"
+        },
+        "inputs": [
+          "left"
+        ]
+      },
+      {
+        "id": "no_footage_notice",
+        "type": "notify",
+        "name": "没有可混剪的素材",
+        "position": {
+          "x": 1290,
+          "y": 520
+        },
+        "config": {
+          "title": "混剪没有开始:没取到素材",
+          "body": "标签「{{start.footage_tag}}」下没有视频素材。给要混剪的视频打上同一个标签,把这个标签填进开始节点的 footage_tag,再运行一次。"
+        }
+      },
+      {
         "id": "montage_plan",
         "type": "llm",
         "name": "排出叙事顺序与旁白",
         "position": {
-          "x": 650,
+          "x": 1290,
           "y": 260
         },
         "config": {
           "profile_id": "",
           "model": "",
           "preset": "precise",
-          "system": "你是企业宣传片的编导。用户会给你一批**已经拍好**的素材(每条有名字和时长)和一个主题，\n你要把它们排成一条讲得通的片子。\n\n硬性要求：\n- asset_id 必须**原样抄自素材清单**。不要改写、不要缩短、更不要编一个出来——抄错这一段就是空的。\n- 每一段的 seconds 不能超过那条素材从 src_start 起的剩余时长。\n- 顺序要有叙事:开头给出观看理由,中段按因果或流程推进,结尾落到一个明确的信息或行动。\n  不要按素材的文件名顺序排。\n- narration 念出来不能超过这一段的 seconds:中文按每秒约 4 个字估，宁短勿长；\n  这一段不需要旁白就写空字符串。\n- captions 的时间码**相对这一段自己的开头**，不是成片时间。\n- 只描述素材里真的有的东西。不要编造产能、资质、检测结论、客户名称或任何数字——\n  没有依据的话一句都不要写。\n- 素材不够讲完这个主题时，宁可做短一点，并在 unused_note 里说明缺什么。\n\n只输出符合 JSON Schema 的对象。",
+          "system": "你是企业宣传片的编导。用户会给你一批**已经拍好**的素材(每条有名字和时长)和一个主题，\n你要把它们排成一条讲得通的片子。\n\n硬性要求：\n- asset_id 必须**原样抄自素材清单**。不要改写、不要缩短、更不要编一个出来——抄错这一段就是空的。\n- 每一段从这条素材的 src_start 取到 src_end：src_end 不能超过那条素材的时长；seconds 就是 src_end − src_start。\n- 顺序要有叙事:开头给出观看理由,中段按因果或流程推进,结尾落到一个明确的信息或行动。\n  不要按素材的文件名顺序排。\n- narration 念出来不能超过这一段的 seconds:中文按每秒约 4 个字估，宁短勿长；\n  这一段不需要旁白就写空字符串。\n- captions 的时间码**相对这一段自己的开头**，不是成片时间。\n- 只描述素材里真的有的东西。不要编造产能、资质、检测结论、客户名称或任何数字——\n  没有依据的话一句都不要写。\n- 素材不够讲完这个主题时，宁可做短一点，并在 unused_note 里说明缺什么。\n\n只输出符合 JSON Schema 的对象。",
           "prompt": "这条片子要讲的事：{{start.topic}}\n目标观众：{{start.audience}}\n语气：{{start.tone}}\n成片目标时长：{{start.target_duration_seconds}} 秒\n\n可用素材清单（共 {{footage.count}} 条，含 id、名字与时长）：\n{{footage.assets}}\n\n请把它们排成一条讲得通的片子。再强调一次：asset_id 必须原样抄清单里的 id；\ncaptions 的时间码相对每一段自己的开头。",
           "response_format": "json_schema",
           "json_schema_name": "footage_montage_plan",
@@ -93,11 +124,16 @@
                       "minimum": 0,
                       "description": "从这条素材的第几秒开始取"
                     },
+                    "src_end": {
+                      "type": "number",
+                      "minimum": 0,
+                      "description": "取到这条素材的第几秒为止;不能超过它的时长"
+                    },
                     "seconds": {
                       "type": "number",
                       "minimum": 1.5,
                       "maximum": 20,
-                      "description": "这一段用多长"
+                      "description": "这一段在成片里多长,必须等于 src_end − src_start;旁白按它压"
                     },
                     "narration": {
                       "type": "string",
@@ -141,6 +177,7 @@
                     "asset_id",
                     "source_name",
                     "src_start",
+                    "src_end",
                     "seconds",
                     "narration",
                     "captions",
@@ -173,7 +210,7 @@
         "type": "project_sequence_create",
         "name": "建立成片时间线",
         "position": {
-          "x": 650,
+          "x": 1290,
           "y": 460
         },
         "config": {
@@ -188,7 +225,7 @@
         "type": "loop_foreach",
         "name": "按顺序接上时间线并配音配字幕",
         "position": {
-          "x": 970,
+          "x": 1610,
           "y": 260
         },
         "config": {
@@ -214,7 +251,7 @@
                   "asset_id": "{{loop.item.asset_id}}",
                   "track_id": "{{input.video_track_id}}",
                   "start": "{{loop.item.src_start}}",
-                  "max_duration": "{{loop.item.seconds}}"
+                  "end": "{{loop.item.src_end}}"
                 }
               },
               {
@@ -269,12 +306,26 @@
                   "sequence_id": "{{input.sequence_id}}",
                   "asset_id": "",
                   "track_id": "{{input.audio_track_id}}",
-                  "at": ""
+                  "at": "",
+                  "max_duration": "{{loop.item.seconds}}"
                 },
                 "inputs": [
                   "asset_id",
                   "at"
                 ]
+              },
+              {
+                "id": "duck_source",
+                "type": "edit_timeline",
+                "name": "旁白底下压低原声",
+                "position": {
+                  "x": 1680,
+                  "y": 300
+                },
+                "config": {
+                  "sequence_id": "{{input.sequence_id}}",
+                  "operations": "[{\"kind\": \"set_clip_gain\", \"clip_id\": \"{{place_shot.clip_id}}\", \"gain\": 0.2, \"muted\": false}]"
+                }
               },
               {
                 "id": "caption_shot",
@@ -297,19 +348,32 @@
             ],
             "edges": [
               {
-                "id": "shot_voice",
-                "source": "place_shot",
+                "id": "caption_voice",
+                "source": "caption_shot",
                 "target": "has_voice"
               },
               {
                 "id": "voice_narration",
                 "source": "has_voice",
-                "target": "has_narration"
+                "target": "has_narration",
+                "source_handle": "true"
               },
               {
                 "id": "narration_speak",
                 "source": "has_narration",
-                "target": "narrate"
+                "target": "narrate",
+                "source_handle": "true"
+              },
+              {
+                "id": "narration_place",
+                "source": "has_narration",
+                "target": "place_voice",
+                "source_handle": "true"
+              },
+              {
+                "id": "place_duck",
+                "source": "place_voice",
+                "target": "duck_source"
               },
               {
                 "id": "d-narrate-asset_id-place_voice-asset_id",
@@ -346,7 +410,7 @@
         "type": "export_sequence",
         "name": "导出混剪成片",
         "position": {
-          "x": 1290,
+          "x": 1930,
           "y": 260
         },
         "config": {
@@ -361,7 +425,7 @@
         "type": "notify",
         "name": "混剪完成通知",
         "position": {
-          "x": 1610,
+          "x": 2250,
           "y": 260
         },
         "config": {
@@ -374,7 +438,7 @@
         "type": "output",
         "name": "交付成片与剪辑方案",
         "position": {
-          "x": 1930,
+          "x": 2570,
           "y": 260
         },
         "config": {
@@ -397,14 +461,22 @@
         "target": "footage"
       },
       {
-        "id": "start_project",
-        "source": "start",
-        "target": "montage_project"
+        "id": "no_footage",
+        "source": "has_footage",
+        "target": "no_footage_notice",
+        "source_handle": "false"
       },
       {
         "id": "footage_plan",
-        "source": "footage",
-        "target": "montage_plan"
+        "source": "has_footage",
+        "target": "montage_plan",
+        "source_handle": "true"
+      },
+      {
+        "id": "footage_project",
+        "source": "has_footage",
+        "target": "montage_project",
+        "source_handle": "true"
       },
       {
         "id": "plan_lay",
@@ -430,6 +502,14 @@
         "id": "notice_output",
         "source": "done_notice",
         "target": "output"
+      },
+      {
+        "id": "d-footage-count-has_footage-left",
+        "source": "footage",
+        "target": "has_footage",
+        "kind": "data",
+        "source_output": "count",
+        "target_input": "left"
       },
       {
         "id": "d-montage_project-sequence_id-export_montage-sequence_id",

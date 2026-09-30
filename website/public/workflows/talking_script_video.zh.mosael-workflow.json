@@ -4,11 +4,11 @@
   "workflow_revision": 1,
   "name": "稿子 → 数字人口播",
   "description": "一张正脸加一段稿子:逐句配音,按说话照片模型一次能收的长度分段,每段让这张脸说出来,首尾相接铺上时间线,字幕按配音的实际时长铺好,导出成片。成片带「AI 生成」标识。运行前在「让它说话」上确认已取得授权。",
-  "graph_hash": "9376b816f4bc7ff30e7dcebff6dae751262b4a24a54201f8a7df9930f3d9c2a4",
+  "graph_hash": "0db27edc728dbc2da005867d1f3581caa0c7e9f604d15c4a7cc620ac405f6cb1",
   "graph": {
     "meta": {
       "template_id": "talking_script_video",
-      "template_version": 1,
+      "template_version": 2,
       "source": "official"
     },
     "nodes": [
@@ -23,8 +23,6 @@
         "config": {
           "params": {
             "title": "数字人口播",
-            "script": "把要说的话贴在这里;按句子断开配音,每句不要太长",
-            "voice_id": "",
             "width": 1080,
             "height": 1920,
             "fps": 25
@@ -52,9 +50,9 @@
           "y": 400
         },
         "config": {
-          "text": "{{start.script}}",
+          "text": "",
           "engine": "builtin:clone",
-          "voice": "{{start.voice_id}}",
+          "voice": "",
           "model": ""
         }
       },

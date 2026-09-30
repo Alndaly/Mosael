@@ -2,13 +2,13 @@
   "format": "mosael-workflow",
   "version": 1,
   "workflow_revision": 1,
-  "name": "Product into a talking-head short",
-  "description": "From a product photo and a few selling points, write a beat-by-beat script, paint one frame per beat with the product in it, lay each on the timeline for that beat's length, add the voice-over and on-screen lines, and export a vertical short. Only the selling points you provide are used — no invented claims or figures.",
-  "graph_hash": "6d44f7bfe0ae6ee398c1229d4faf488cb6f3d6331c818ab739e0401d4148051f",
+  "name": "Product into a narrated short",
+  "description": "From a product photo and a few selling points, write a beat-by-beat script (the first beat is the hook, the last the call to action, up to 12 beats), paint one portrait frame per beat with the product in it, lay each on the timeline for that beat's length, voice each beat in your cloned voice lined up with its start, add the on-screen lines, and export a vertical short. Nobody appears on camera. Only the selling points you provide are used — no invented claims or figures.",
+  "graph_hash": "adca7a8dbd44d248d9a5094207f677405e10c17fca47abe34511ebf85eda17fc",
   "graph": {
     "meta": {
       "template_id": "product_pitch_short",
-      "template_version": 1,
+      "template_version": 2,
       "source": "official"
     },
     "nodes": [
@@ -23,14 +23,14 @@
         "config": {
           "params": {
             "product_name": "",
-            "selling_points": "一行一条,只写你能负责的卖点",
+            "selling_points": "",
             "audience": "刷竖屏短视频的年轻观众",
             "target_duration_seconds": 30,
-            "voice_id": "",
             "width": 1080,
             "height": 1920,
             "fps": 30
-          }
+          },
+          "required_params": "product_name, selling_points"
         }
       },
       {
@@ -57,17 +57,13 @@
           "profile_id": "",
           "model": "",
           "preset": "creative",
-          "system": "你是带货短视频的编导。用户给你一件商品和几条卖点，你要写一条 20-45 秒、能直接拍的\n口播脚本，按\"拍\"拆开。\n\n硬性要求：\n- 前三秒必须给出观看理由，不要从\"大家好\"开始。\n- 每一拍的 narration 念出来不能超过这一拍的 seconds：中文按每秒约 4 个字估，宁短勿长。\n- visual_prompt 用英文写这一拍的画面，**商品必须出现在画面里**；不要写机位参数，不要在画面里\n  生成文字、logo 或水印。\n- 卖点只能来自用户给的那几条，不要编造功效、成分、资质或数据。\n- caption 是屏幕上的短句，不是把 narration 原样抄一遍。\n\n只输出符合 JSON Schema 的对象。",
-          "prompt": "商品名称：{{start.product_name}}\n卖点（只能用这些）：\n{{start.selling_points}}\n目标观众：{{start.audience}}\n成片目标时长：{{start.target_duration_seconds}} 秒\n\n请写出分拍脚本。各拍 seconds 之和要接近目标时长。",
+          "system": "你是带货短视频的编导。用户给你一件商品和几条卖点，你要写一条 20-45 秒、能直接拍的\n口播脚本，按\"拍\"拆开。\n\n硬性要求：\n- 前三秒必须给出观看理由，不要从\"大家好\"开始。\n- 每一拍的 narration 念出来不能超过这一拍的 seconds：中文按每秒约 4 个字估，宁短勿长。\n- visual_prompt 用英文写这一拍的画面，**商品必须出现在画面里**；不要写机位参数，不要在画面里\n  生成文字、logo 或水印。\n- 卖点只能来自用户给的那几条，不要编造功效、成分、资质或数据。\n- caption 是屏幕上的短句，不是把 narration 原样抄一遍。\n- 最多 12 拍：每一拍都要出一张画面。\n\n只输出符合 JSON Schema 的对象。\n\n这一条没有人出镜:第一拍的 narration 就是开场钩子,最后一拍的 narration 是行动号召 —— 整条片子就是这几拍,\n首尾不另加。",
+          "prompt": "商品名称：{{start.product_name}}\n卖点（只能用这些）：\n{{start.selling_points}}\n目标观众：{{start.audience}}\n成片目标时长：{{start.target_duration_seconds}} 秒\n\n请写出分拍脚本。各拍 seconds 之和就是成片时长，要接近目标时长。",
           "response_format": "json_schema",
           "json_schema_name": "product_pitch_script",
           "json_schema": {
             "type": "object",
             "properties": {
-              "hook_line": {
-                "type": "string",
-                "description": "前三秒的钩子,中文"
-              },
               "beats": {
                 "type": "array",
                 "items": {
@@ -100,17 +96,13 @@
                   ],
                   "additionalProperties": false
                 },
-                "minItems": 2
-              },
-              "call_to_action": {
-                "type": "string",
-                "description": "结尾行动号召,中文"
+                "minItems": 2,
+                "maxItems": 12,
+                "description": "按时间顺序的各拍:第一拍的 narration 就是前三秒的钩子,最后一拍的 narration 是行动号召"
               }
             },
             "required": [
-              "hook_line",
-              "beats",
-              "call_to_action"
+              "beats"
             ],
             "additionalProperties": false
           },
@@ -137,7 +129,7 @@
       {
         "id": "shoot_beats",
         "type": "loop_foreach",
-        "name": "Shoot each beat onto the timeline",
+        "name": "Paint, voice and place each beat",
         "position": {
           "x": 970,
           "y": 260
@@ -148,7 +140,7 @@
             "product_asset_id": "{{product_photo.asset_id}}",
             "sequence_id": "{{pitch_project.sequence_id}}",
             "video_track_id": "{{pitch_project.video_track_id}}",
-            "project_id": "{{pitch_project.project_id}}"
+            "audio_track_id": "{{pitch_project.audio_track_id}}"
           },
           "body": {
             "nodes": [
@@ -185,10 +177,45 @@
                   "sequence_id": "{{input.sequence_id}}",
                   "asset_id": "",
                   "track_id": "{{input.video_track_id}}",
-                  "max_duration": "{{loop.item.seconds}}"
+                  "start": 0,
+                  "end": "{{loop.item.seconds}}"
                 },
                 "inputs": [
                   "asset_id"
+                ]
+              },
+              {
+                "id": "beat_voice",
+                "type": "synthesize_speech",
+                "name": "Voice this beat",
+                "position": {
+                  "x": 400,
+                  "y": 320
+                },
+                "config": {
+                  "text": "{{loop.item.narration}}",
+                  "engine": "builtin:clone",
+                  "voice": ""
+                }
+              },
+              {
+                "id": "beat_voice_place",
+                "type": "timeline_append",
+                "name": "Line the voice up with the beat",
+                "position": {
+                  "x": 720,
+                  "y": 320
+                },
+                "config": {
+                  "sequence_id": "{{input.sequence_id}}",
+                  "asset_id": "",
+                  "track_id": "{{input.audio_track_id}}",
+                  "at": "",
+                  "max_duration": "{{loop.item.seconds}}"
+                },
+                "inputs": [
+                  "asset_id",
+                  "at"
                 ]
               }
             ],
@@ -200,45 +227,47 @@
                 "kind": "data",
                 "source_output": "asset_id",
                 "target_input": "asset_id"
+              },
+              {
+                "id": "d-beat_voice-asset_id-beat_voice_place-asset_id",
+                "source": "beat_voice",
+                "target": "beat_voice_place",
+                "kind": "data",
+                "source_output": "asset_id",
+                "target_input": "asset_id"
+              },
+              {
+                "id": "d-beat_on_timeline-timeline_start-beat_voice_place-at",
+                "source": "beat_on_timeline",
+                "target": "beat_voice_place",
+                "kind": "data",
+                "source_output": "timeline_start",
+                "target_input": "at"
               }
             ]
           },
           "concurrency": 1,
-          "output": "{{beat_on_timeline.clip_id}}"
+          "output": ""
         }
       },
       {
-        "id": "voice_over",
-        "type": "synthesize_speech",
-        "name": "Synthesize the voice-over",
-        "position": {
-          "x": 970,
-          "y": 480
-        },
-        "config": {
-          "text": "{{pitch_script.json.hook_line}}\n{{pitch_script.json.call_to_action}}",
-          "engine": "builtin:clone",
-          "voice": "{{start.voice_id}}"
-        }
-      },
-      {
-        "id": "voice_on_timeline",
-        "type": "timeline_append",
-        "name": "Put the voice-over on the audio track",
+        "id": "beat_captions",
+        "type": "generate_subtitles",
+        "name": "Lay each beat's on-screen line",
         "position": {
           "x": 1290,
-          "y": 480
+          "y": 260
         },
         "config": {
           "sequence_id": "",
-          "asset_id": "",
-          "track_id": "",
-          "at": 0
+          "segments": "",
+          "start_field": "beat_on_timeline.timeline_start",
+          "end_field": "beat_on_timeline.timeline_end",
+          "text_field": "loop.item.caption"
         },
         "inputs": [
           "sequence_id",
-          "asset_id",
-          "track_id"
+          "segments"
         ]
       },
       {
@@ -281,8 +310,8 @@
           "values": {
             "final_asset_id": "{{export_short.asset_id}}",
             "script": "{{pitch_script.json}}",
-            "beat_clip_ids": "{{shoot_beats.results}}",
-            "voice_asset_id": "{{voice_over.asset_id}}",
+            "beat_count": "{{shoot_beats.count}}",
+            "caption_count": "{{beat_captions.count}}",
             "sequence_id": "{{pitch_project.sequence_id}}"
           }
         }
@@ -320,18 +349,8 @@
         "target": "shoot_beats"
       },
       {
-        "id": "script_voice",
-        "source": "pitch_script",
-        "target": "voice_over"
-      },
-      {
-        "id": "shoot_export",
-        "source": "shoot_beats",
-        "target": "export_short"
-      },
-      {
-        "id": "voice_export",
-        "source": "voice_on_timeline",
+        "id": "captions_export",
+        "source": "beat_captions",
         "target": "export_short"
       },
       {
@@ -345,28 +364,20 @@
         "target": "output"
       },
       {
-        "id": "d-pitch_project-sequence_id-voice_on_timeline-sequence_id",
+        "id": "d-pitch_project-sequence_id-beat_captions-sequence_id",
         "source": "pitch_project",
-        "target": "voice_on_timeline",
+        "target": "beat_captions",
         "kind": "data",
         "source_output": "sequence_id",
         "target_input": "sequence_id"
       },
       {
-        "id": "d-voice_over-asset_id-voice_on_timeline-asset_id",
-        "source": "voice_over",
-        "target": "voice_on_timeline",
+        "id": "d-shoot_beats-results-beat_captions-segments",
+        "source": "shoot_beats",
+        "target": "beat_captions",
         "kind": "data",
-        "source_output": "asset_id",
-        "target_input": "asset_id"
-      },
-      {
-        "id": "d-pitch_project-audio_track_id-voice_on_timeline-track_id",
-        "source": "pitch_project",
-        "target": "voice_on_timeline",
-        "kind": "data",
-        "source_output": "audio_track_id",
-        "target_input": "track_id"
+        "source_output": "results",
+        "target_input": "segments"
       },
       {
         "id": "d-pitch_project-sequence_id-export_short-sequence_id",

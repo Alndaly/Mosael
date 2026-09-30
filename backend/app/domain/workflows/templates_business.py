@@ -17,9 +17,12 @@ from __future__ import annotations
 
 from typing import Any
 
+from sqlalchemy.orm import Session
+
 from app.ai.providers import FIRST_FRAME, REFERENCE_IMAGE
 from app.domain.workflows import NODE_TYPES
 from app.domain.workflows.normalization import normalize_graph
+from app.domain.workflows.templates_models import ModelChoice, _capabilities, _image_plan, _video_plan
 from app.domain.workflows.template_requirements import (
     CHAT_MODEL,
     CLONED_VOICE,
@@ -44,6 +47,66 @@ VERTICAL = {"width": 1080, "height": 1920}
 #: 生成类模板一次最多做多少组。**不是性能上限,是钱的上限**:每一组都是一次付费生成,而跑之前
 #: 用户看不到账单。给一个明确的上限,比事后解释为什么扣了这么多好。
 MAX_VARIANTS = 12
+
+#: 竖屏在图像 / 视频模型上的画幅写法。
+VERTICAL_ASPECT = "9:16"
+
+
+def _vertical_image_parameters(db: Session | None, image: ModelChoice) -> dict[str, Any]:
+    """竖屏成片里的画面按模型尺寸表里 9:16 那一档出。
+
+    不传尺寸的话模型按自己的默认出 —— Seedream 4 是 2048 的方图,铺进竖屏时间线时两侧被裁掉,商品常常就在被裁的
+    那一边。认不出的模型(没有尺寸表)不传,交给它自己。
+    """
+    size = _image_plan(db, image).frame_sizes.get(VERTICAL_ASPECT, "")
+    return {"size": size} if size else {}
+
+
+def _portrait_size(sizes: list[str]) -> str:
+    """按「宽x高 / 宽*高」写的尺寸表里最大的那一档竖屏(约 9:16);没有就空串。"""
+    best, best_area = "", 0
+    for size in sizes:
+        parts = str(size).lower().replace("*", "x").split("x")
+        try:
+            width, height = int(parts[0]), int(parts[1])
+        except (IndexError, ValueError):
+            continue
+        if height > width and abs(width / height - 9 / 16) < 0.03 and width * height > best_area:
+            best, best_area = str(size), width * height
+    return best
+
+
+def _vertical_clip(db: Session | None, video: ModelChoice) -> tuple[int, dict[str, Any], dict[str, str], str]:
+    """「把上身图动起来」那一步的时长、参数、循环要给它的两格输入(画幅、分辨率),以及上身图以什么角色交给它。
+
+    都从视频模型的能力表里取:写死 5 秒的话 Veo(只收 4 / 6 / 8)必败;画幅优先竖屏,模型不收竖屏就用它自己的
+    默认(或它唯一收的那一档)。时长和参数键和整片生成同一个出处(templates_models._video_plan)。
+    """
+    plan = _video_plan(db, video)
+    capabilities = _capabilities(db, video, "video") or {}
+    ratios = [str(one) for one in capabilities.get("aspect_ratios") or ()]
+    if not ratios or VERTICAL_ASPECT in ratios:
+        aspect = VERTICAL_ASPECT
+    else:
+        aspect = plan.aspect_ratio if plan.aspect_ratio in ratios else ratios[0]
+    parameters = dict(plan.parameters or {})
+    if "size" in parameters:
+        parameters["size"] = _portrait_size(list(capabilities.get("sizes") or ())) or parameters["size"]
+    return plan.clip_seconds, parameters, {"aspect_ratio": aspect, "resolution": plan.resolution}, _still_role(capabilities)
+
+
+def _still_role(capabilities: dict[str, Any]) -> str:
+    """上身图交给视频模型时当什么:能从首帧出片就当首帧(构图、衣服、人都锁死);只会"照参考出片"的模型
+    (Seedance 参考生视频、万相 r2v —— 它们不收首帧,或者必须给参考)就当参考图。认不出的模型按首帧,最通用的那条。"""
+    keys = set(capabilities.get("parameter_keys") or ())
+    required = [set(group) for group in capabilities.get("requires_source") or ()]
+
+    def enough(role: str) -> bool:
+        return role in keys and all(role in group for group in required)
+
+    if not keys or enough(FIRST_FRAME):
+        return FIRST_FRAME
+    return REFERENCE_IMAGE if enough(REFERENCE_IMAGE) else FIRST_FRAME
 
 
 def _object(properties: dict[str, Any], required: list[str]) -> dict[str, Any]:
@@ -87,7 +150,8 @@ def _highlights_schema() -> dict[str, Any]:
     )
     return _object(
         {
-            "clips": {"type": "array", "items": clip, "minItems": 1},
+            #: 切片不花生成费,但每一条是一次本机导出;上限和生成类模板同一个数。
+            "clips": {"type": "array", "items": clip, "minItems": 1, "maxItems": MAX_VARIANTS},
             "skipped_reason": _str("素材里可用高光不足时,说明原因;够用就写空字符串"),
         },
         ["clips", "skipped_reason"],
@@ -103,10 +167,10 @@ def highlight_shorts_graph(*, chat: Any) -> dict[str, Any]:
 
     - **字幕由模型重写,不是照抄逐字稿。** 竖屏切片的字幕是给静音刷的人看的,逐字稿那种带口头禅
       的长句在小屏上读不完。所以让它顺手输出短句,时间码**相对切片开头**,序列从 0 开始,直接对得上。
-    - **每条切片自己一条序列。** 不是在一条时间线上切十刀 —— 那样十条片子共用一个导出,拿不到
-      十个文件。循环体里各建各的,导出也各是各的。
+    - **每条切片自己一条序列,都在同一个项目里。** 不是在一条时间线上切十刀 —— 那样十条片子共用一个导出,拿不到
+      十个文件;也不是十个项目 —— 同一条长视频切出来的东西该放在一处。循环体里各建各的时间线,导出也各是各的。
     """
-    system = """你是短视频运营和剪辑师。你会收到一条长视频(口播、访谈或直播回放)的带时间码逐字稿，
+    system = f"""你是短视频运营和剪辑师。你会收到一条长视频(口播、访谈或直播回放)的带时间码逐字稿，
 任务是从里面挑出能**独立成立**的片段：不依赖前文也听得懂、有一个完整的观点或故事、开头三秒就有
 抓人的理由。
 
@@ -114,7 +178,7 @@ def highlight_shorts_graph(*, chat: Any) -> dict[str, Any]:
 - 每条片段的时长必须在给定的上下限之间；片段之间不得重叠；起止时间必须落在素材时长内。
 - 起止时间要卡在**句子边界**上，不要从半句话开始或结束。
 - 只挑真的够格的。素材里没有那么多高光时，宁可少给几条，并在 skipped_reason 里说明——
-  凑数的片段发出去是在消耗账号。
+  凑数的片段发出去是在消耗账号。最多 {MAX_VARIANTS} 条。
 - captions 是**重写过的短句**：每句不超过 18 个字，去掉口头禅和重复，保留原意和原话的语气；
   时间码相对这一条片段的开头（第一句从 0 附近开始），不是原片时间。
 - 不要编造素材里没有的内容。
@@ -182,6 +246,13 @@ def highlight_shorts_graph(*, chat: Any) -> dict[str, Any]:
             },
         },
         {
+            "id": "clips_project",
+            "type": "project_create",
+            "name": {"zh": "为这批切片建一个项目", "en": "Create one project for the clips"},
+            "position": {"x": 970, "y": 460},
+            "config": {"name": "{{source_video.name}} · 竖屏切片"},
+        },
+        {
             "id": "cut_clips",
             "type": "loop_foreach",
             "name": {"zh": "逐条切成竖屏成片", "en": "Cut each one into a vertical export"},
@@ -189,6 +260,7 @@ def highlight_shorts_graph(*, chat: Any) -> dict[str, Any]:
             "config": {
                 "items": "{{highlights.json.clips}}",
                 "inputs": {
+                    "project_id": "{{clips_project.project_id}}",
                     "source_asset_id": "{{source_video.asset_id}}",
                     "width": "{{start.width}}",
                     "height": "{{start.height}}",
@@ -203,6 +275,7 @@ def highlight_shorts_graph(*, chat: Any) -> dict[str, Any]:
                             "position": {"x": 80, "y": 140},
                             "config": {
                                 "name": "{{loop.item.title}}",
+                                "project_id": "{{input.project_id}}",
                                 "width": "{{input.width}}",
                                 "height": "{{input.height}}",
                                 "fps": "{{input.fps}}",
@@ -270,6 +343,7 @@ def highlight_shorts_graph(*, chat: Any) -> dict[str, Any]:
             "config": {
                 "values": {
                     "source_asset_id": "{{source_video.asset_id}}",
+                    "project_id": "{{clips_project.project_id}}",
                     "clip_asset_ids": "{{cut_clips.results}}",
                     "clip_count": "{{cut_clips.count}}",
                     "plan": "{{highlights.json}}",
@@ -283,12 +357,14 @@ def highlight_shorts_graph(*, chat: Any) -> dict[str, Any]:
         {"id": "source_transcript", "source": "source_video", "target": "transcript"},
         {"id": "transcript_highlights", "source": "transcript", "target": "highlights"},
         {"id": "highlights_cut", "source": "highlights", "target": "cut_clips"},
+        {"id": "source_project", "source": "source_video", "target": "clips_project"},
+        {"id": "project_cut", "source": "clips_project", "target": "cut_clips"},
         {"id": "cut_notice", "source": "cut_clips", "target": "done_notice"},
         {"id": "notice_output", "source": "done_notice", "target": "output"},
     ]
     return normalize_graph(
         {
-            "meta": {"template_id": HIGHLIGHT_SHORTS, "template_version": 1, "source": "official"},
+            "meta": {"template_id": HIGHLIGHT_SHORTS, "template_version": 2, "source": "official"},
             "nodes": nodes,
             "edges": edges,
         },
@@ -315,7 +391,8 @@ _NEGATIVE_PRODUCT = (
 )
 
 
-def _lookbook_schema(*, wants_video: bool) -> dict[str, Any]:
+def _lookbook_schema(*, clip_seconds: int | None) -> dict[str, Any]:
+    """`clip_seconds` 是视频那一步每段多长;不出视频时为 None,计划里也就不要视频提示词。"""
     properties: dict[str, Any] = {
         "scene_label": _str("这组图的场合名,给人看的,如「通勤 · 清晨街头」"),
         "model_brief": _str("模特设定,英文:年龄段、体型、发型、妆容、神态"),
@@ -324,47 +401,61 @@ def _lookbook_schema(*, wants_video: bool) -> dict[str, Any]:
         "image_prompt": _str("完整出图提示词,英文,不含机位参数"),
     }
     required = ["scene_label", "model_brief", "setting", "pose", "image_prompt"]
-    if wants_video:
-        properties["video_prompt"] = _str("这组的 5 秒视频提示词,英文:模特的动作节拍与轻微运镜")
+    if clip_seconds is not None:
+        properties["video_prompt"] = _str(f"这组的 {clip_seconds} 秒视频提示词,英文:模特的动作节拍与轻微运镜")
         required.append("video_prompt")
     scene = _object(properties, required)
     return _object(
         {
             "product_summary": _str("用一句话复述这件商品的可见特征,证明你看懂了参数"),
-            "scenes": {"type": "array", "items": scene, "minItems": 1},
-            "copy_lines": {
-                "type": "array",
-                "items": _str(),
-                "minItems": 1,
-                "description": "可直接用的中文卖点短句,每条不超过 20 字",
-            },
+            #: 每一组是一次付费出图(带视频时再加一次视频),上限就是钱的上限(见 MAX_VARIANTS)。
+            "scenes": {"type": "array", "items": scene, "minItems": 1, "maxItems": MAX_VARIANTS},
+            #: 这两段是**直接进笔记的正文**。此前笔记里插的是数组本身,插值把它写成 JSON 原文 ——
+            #: 用户打开笔记看到的是一串带引号和方括号的东西。
+            "copy_markdown": _str(
+                "可直接用的中文卖点短句,Markdown 无序列表,一行一条(以「- 」开头),每条不超过 20 字"
+            ),
+            "scenes_markdown": _str(
+                "给人看的拍摄清单,Markdown 无序列表,每组一行:「- **场合名**:一句中文说明(人物、场景、光线)」"
+            ),
         },
-        ["product_summary", "scenes", "copy_lines"],
+        ["product_summary", "scenes", "copy_markdown", "scenes_markdown"],
     )
 
 
-def product_on_model_graph(*, chat: Any, image: Any, video: Any) -> dict[str, Any]:
+def product_on_model_graph(
+    *, chat: Any, image: Any, video: Any, motion: bool | None = None, db: Session | None = None
+) -> dict[str, Any]:
     """一张商品图(平铺图 / 面料图)→ 规划 N 组场景 → 每组出一张模特上身图 →(可选)出一段短视频。
 
-    **商品图贯穿每一次生成**,不是只喂第一次:每一组场景的出图都把它作为 `reference_image` 带上,
-    视频那一步再把刚生成的上身图作为 `first_frame` 带上。这样"这件衣服"在整条链路上只有一个来源。
+    **商品图贯穿每一次生成**,不是只喂第一次:每一组场景的出图都把它作为 `reference_image` 带上;
+    视频那一步只给刚生成的上身图(一般作为 `first_frame`;只会照参考出片的模型作为参考图,见 _still_role)——
+    商品就在这张图上,所以"这件衣服"在整条链路上仍然只有一个来源。视频那一步**不再另挂商品图作参考**:同一次生成里首帧和参考图并用,Seedance 2 /
+    MiniMax 两组互斥当场拒,Wan / Kling / Seedance 1.x 根本不收参考图 —— 内置视频模型没有一个接得住。
 
     不让模型"看"商品图去写文案 —— `llm` 节点发不出图片。商品的品类、颜色、材质由用户在参数里写一句,
     模型据此规划场景;像不像由参考图保证,不是由描述保证。
-    """
-    wants_video = bool(getattr(video, "model", ""))
 
-    system = """你是服装 / 面料品牌的视觉企划和电商内容负责人。用户会给你一件商品的基本信息和目标人群，
+    `motion`:要不要"动起来"那一步。缺省跟着有没有视频模型走;官网那份导出时写 True 而模型留空,由导入的人挑。
+    `db` 让视频的时长 / 画幅和出图尺寸读到用户对这个模型的参数声明;没有库的上下文退回内置目录。
+    """
+    wants_video = bool(getattr(video, "model", "")) if motion is None else motion
+    clip_seconds, clip_parameters, clip_inputs, still_role = (
+        _vertical_clip(db, video) if wants_video else (None, {}, {}, FIRST_FRAME)
+    )
+
+    system = f"""你是服装 / 面料品牌的视觉企划和电商内容负责人。用户会给你一件商品的基本信息和目标人群，
 你要规划几组**能直接投放**的模特上身场景。
 
 硬性要求：
 - 每一组是一个真实存在的穿着场合，彼此要拉开差别（场合、光线、季节感、构图各不相同），
-  不要只换背景色。
+  不要只换背景色。最多 {MAX_VARIANTS} 组。
 - image_prompt 用英文完整描述画面：模特、姿态、取景、环境、光线、氛围。**不要写机位参数**，
   也不要在画面里生成文字、logo 水印或 UI。
 - 你**看不到**那张商品图，所以不要描述商品本身的细节——那由参考图保证。你只描述"穿着它的人
   在什么场合、怎么站、光怎么打"。提到商品时用 the product / the garment 指代。
-- copy_lines 是中文卖点短句，可以直接配在图上或发在详情页，不要写成广告腔的空话。
+- copy_markdown 是中文卖点短句，可以直接配在图上或发在详情页，不要写成广告腔的空话；
+  只从用户给的商品信息里提炼，不要编造面料成分、功能或数据。
 
 只输出符合 JSON Schema 的对象。"""
 
@@ -384,10 +475,11 @@ def product_on_model_graph(*, chat: Any, image: Any, video: Any) -> dict[str, An
                     "Setting: {{loop.item.setting}}. Pose and framing: {{loop.item.pose}}. "
                     f"{_KEEP_PRODUCT} "
                     "The reference image is the product itself, photographed flat. "
+                    "Vertical full-length composition for a phone screen. "
                     "Photorealistic commercial fashion photography, no text, no watermark."
                 ),
                 "negative_prompt": _NEGATIVE_PRODUCT,
-                "parameters": {},
+                "parameters": _vertical_image_parameters(db, image),
                 "source_assets": [f"{{{{input.product_asset_id}}}}:{REFERENCE_IMAGE}"],
             },
         },
@@ -404,10 +496,15 @@ def product_on_model_graph(*, chat: Any, image: Any, video: Any) -> dict[str, An
         },
     ]
     body_edges = [{"id": "gen_file", "source": "on_model", "target": "file_image"}]
-    loop_output = "{{on_model.asset_id}}"
+    inputs: dict[str, Any] = {
+        "product_asset_id": "{{product_photo.asset_id}}",
+        "product_name": "{{start.product_name}}",
+        "project_id": "{{shoot_project.project_id}}",
+    }
 
     if wants_video:
-        body_nodes.append(
+        inputs.update(clip_inputs)
+        body_nodes += [
             {
                 "id": "on_model_clip",
                 "type": "ai_generate",
@@ -424,17 +521,28 @@ def product_on_model_graph(*, chat: Any, image: Any, video: Any) -> dict[str, An
                         "Subtle, natural motion only; the garment must stay readable throughout."
                     ),
                     "negative_prompt": _NEGATIVE_PRODUCT,
-                    "parameters": {"duration_seconds": 5},
-                    # 首帧就是刚出的那张上身图 —— 视频和静图因此必然是同一套衣服、同一个人。
-                    "source_assets": [
-                        f"{{{{on_model.asset_id}}}}:{FIRST_FRAME}",
-                        f"{{{{input.product_asset_id}}}}:{REFERENCE_IMAGE}",
-                    ],
+                    #: 时长、画幅、分辨率按这个视频模型的能力表挑(见 _vertical_clip),不写死。
+                    "parameters": clip_parameters,
+                    #: 只给刚出的那张上身图(一般当首帧)—— 视频和静图因此必然是同一套衣服、同一个人。见函数说明。
+                    "source_assets": [f"{{{{on_model.asset_id}}}}:{still_role}"],
                 },
-            }
-        )
-        body_edges.append({"id": "file_clip", "source": "file_image", "target": "on_model_clip"})
-        loop_output = "{{on_model_clip.asset_id}}"
+            },
+            {
+                "id": "file_clip",
+                "type": "asset_update",
+                "name": {"zh": "归档这一组的视频", "en": "File this scene's clip"},
+                "position": {"x": 1040, "y": 140},
+                "config": {
+                    "asset_ids": "{{on_model_clip.asset_id}}",
+                    "name": "{{input.product_name}} · {{loop.item.scene_label}} · 视频",
+                    "project_id": "{{input.project_id}}",
+                },
+            },
+        ]
+        body_edges += [
+            {"id": "file_clip_gen", "source": "file_image", "target": "on_model_clip"},
+            {"id": "clip_file", "source": "on_model_clip", "target": "file_clip"},
+        ]
 
     nodes: list[dict[str, Any]] = [
         {
@@ -445,12 +553,15 @@ def product_on_model_graph(*, chat: Any, image: Any, video: Any) -> dict[str, An
             "config": {
                 "params": {
                     "product_name": "",
-                    "product_brief": "品类、颜色、材质、版型,一两句话",
+                    #: 留空,不放示例:此前这里写着「品类、颜色、材质、版型,一两句话」,没改就跑的话这句提示
+                    #: 原样进了提示词,被当成商品信息。要填什么写在模板卡片的第一步上。
+                    "product_brief": "",
                     "audience": "25-35 岁都市通勤女性",
                     "season": "春秋",
                     "brand_tone": "简洁、克制、质感",
                     "scene_count": 4,
-                }
+                },
+                "required_params": "product_name, product_brief",
             },
         },
         {
@@ -461,16 +572,12 @@ def product_on_model_graph(*, chat: Any, image: Any, video: Any) -> dict[str, An
             "config": {"asset_id": ""},
         },
         {
+            #: 只建项目,不建时间线:这个模板交付的是素材(图和视频),不剪片子 —— 此前建的那条空竖屏时间线没人用。
             "id": "shoot_project",
-            "type": "project_sequence_create",
+            "type": "project_create",
             "name": {"zh": "建立这次拍摄的项目", "en": "Create a project for this shoot"},
             "position": {"x": 650, "y": 420},
-            "config": {
-                "name": "{{start.product_name}} · 上身图",
-                "width": VERTICAL["width"],
-                "height": VERTICAL["height"],
-                "fps": 30,
-            },
+            "config": {"name": "{{start.product_name}} · 上身图"},
         },
         {
             "id": "lookbook_plan",
@@ -492,7 +599,7 @@ def product_on_model_graph(*, chat: Any, image: Any, video: Any) -> dict[str, An
 请规划这几组场景并输出。记住：你看不到商品图，不要描述商品本身。""",
                 "response_format": "json_schema",
                 "json_schema_name": "product_lookbook_plan",
-                "json_schema": _lookbook_schema(wants_video=wants_video),
+                "json_schema": _lookbook_schema(clip_seconds=clip_seconds),
                 "json_schema_strict": "true",
                 "temperature": 0.7,
                 "max_tokens": 8000,
@@ -505,13 +612,11 @@ def product_on_model_graph(*, chat: Any, image: Any, video: Any) -> dict[str, An
             "position": {"x": 970, "y": 260},
             "config": {
                 "items": "{{lookbook_plan.json.scenes}}",
-                "inputs": {
-                    "product_asset_id": "{{product_photo.asset_id}}",
-                    "product_name": "{{start.product_name}}",
-                    "project_id": "{{shoot_project.project_id}}",
-                },
+                "inputs": inputs,
                 "body": {"nodes": body_nodes, "edges": body_edges},
-                "output": loop_output,
+                #: 交出的是每一组的**上身图**,带不带视频都一样 —— 此前带视频时只交视频,图反倒不在结果里;
+                #: 视频和图一起归进了这次拍摄的项目。循环的交付也就不依赖视频那个节点(删掉它照样成立)。
+                "output": "{{on_model.asset_id}}",
                 "concurrency": 2,
             },
         },
@@ -528,11 +633,11 @@ def product_on_model_graph(*, chat: Any, image: Any, video: Any) -> dict[str, An
 
 ## 卖点短句
 
-{{lookbook_plan.json.copy_lines}}
+{{lookbook_plan.json.copy_markdown}}
 
 ## 拍摄场景
 
-{{lookbook_plan.json.scenes}}
+{{lookbook_plan.json.scenes_markdown}}
 """,
                 "tags": "商品素材",
             },
@@ -544,7 +649,7 @@ def product_on_model_graph(*, chat: Any, image: Any, video: Any) -> dict[str, An
             "position": {"x": 1290, "y": 120},
             "config": {
                 "title": "模特上身图已生成",
-                "body": "{{start.product_name}} 已出 {{shoot_scenes.count}} 组,卖点文案已存进笔记。",
+                "body": "{{start.product_name}} 已出 {{shoot_scenes.count}} 组,图和视频都归进了项目,卖点文案已存进笔记。",
             },
         },
         {
@@ -555,10 +660,11 @@ def product_on_model_graph(*, chat: Any, image: Any, video: Any) -> dict[str, An
             "config": {
                 "values": {
                     "product_asset_id": "{{product_photo.asset_id}}",
-                    "generated_asset_ids": "{{shoot_scenes.results}}",
+                    "image_asset_ids": "{{shoot_scenes.results}}",
                     "scene_count": "{{shoot_scenes.count}}",
                     "plan": "{{lookbook_plan.json}}",
                     "copy_note_id": "{{copy_note.note_id}}",
+                    #: 视频(有的话)和图都在这个项目里。
                     "project_id": "{{shoot_project.project_id}}",
                 }
             },
@@ -578,7 +684,7 @@ def product_on_model_graph(*, chat: Any, image: Any, video: Any) -> dict[str, An
     ]
     return normalize_graph(
         {
-            "meta": {"template_id": PRODUCT_ON_MODEL, "template_version": 1, "source": "official"},
+            "meta": {"template_id": PRODUCT_ON_MODEL, "template_version": 2, "source": "official"},
             "nodes": nodes,
             "edges": edges,
         },
@@ -591,7 +697,9 @@ def product_on_model_graph(*, chat: Any, image: Any, video: Any) -> dict[str, An
 # --------------------------------------------------------------------------------------
 
 
-def _pitch_schema() -> dict[str, Any]:
+def _pitch_schema(*, presenter: bool) -> dict[str, Any]:
+    """分拍脚本。不出镜的那条**钩子和号召就是首尾两拍**(各有一张画面、一段画外音);出镜的那条由主播另外说,
+    所以多两段 `hook_line` / `call_to_action`。不出镜时不要这两段 —— 要了就是让模型白写两句没人念的话。"""
     beat = _object(
         {
             "narration": _str("这一拍要念的口播原文,中文;念出来不超过本拍时长"),
@@ -601,29 +709,115 @@ def _pitch_schema() -> dict[str, Any]:
         },
         ["narration", "seconds", "visual_prompt", "caption"],
     )
+    #: 每一拍是一次付费出图,上限就是钱的上限(见 MAX_VARIANTS)。
+    beats: dict[str, Any] = {"type": "array", "items": beat, "minItems": 2, "maxItems": MAX_VARIANTS}
+    if not presenter:
+        beats["description"] = "按时间顺序的各拍:第一拍的 narration 就是前三秒的钩子,最后一拍的 narration 是行动号召"
+        return _object({"beats": beats}, ["beats"])
     return _object(
         {
-            "hook_line": _str("前三秒的钩子,中文"),
-            "beats": {"type": "array", "items": beat, "minItems": 2},
-            "call_to_action": _str("结尾行动号召,中文"),
+            "hook_line": _str("主播出镜说的开场钩子,中文,念出来不超过 8 秒"),
+            "beats": beats,
+            "call_to_action": _str("主播出镜说的结尾行动号召,中文,念出来不超过 8 秒"),
         },
         ["hook_line", "beats", "call_to_action"],
     )
 
 
-def product_pitch_short_graph(*, chat: Any, image: Any, voice_id: str = "", presenter: bool = False) -> dict[str, Any]:
-    """商品图 + 几条卖点 → 口播脚本(分拍)→ 每拍出一张画面 + 配一段音 → 组装 → 字幕 → 导出。
+def _beat_body(db: Session | None, image: Any, *, engine: str, voice: str) -> dict[str, Any]:
+    """逐拍的循环体:出这一拍的画面 → 按脚本给的时长铺上视频轨;同时合成这一拍的画外音 → 放在这一拍的开头。
+
+    - 画面是一张图,**用 `end` 定长**(从 0 截到这一拍的 seconds)。此前写的是 `max_duration`,那只会加速、不会
+      拉长,而图片进时间线的默认定格是 5 秒 —— 于是每一拍都是 5 秒,和脚本、和画外音都对不上。
+    - 画外音落在这一拍**实际**的起点(`beat_on_timeline.timeline_start`,运行时回报),`max_duration` 是这一拍的
+      时长:念得比这一拍长就加速塞进去(最多 1.5 倍),不会压到下一拍的话上。
+    """
+    return {
+        "nodes": [
+            {
+                "id": "beat_frame",
+                "type": "ai_generate",
+                "name": {"zh": "出这一拍的画面", "en": "Paint this beat"},
+                "position": {"x": 80, "y": 140},
+                "config": {
+                    "provider": getattr(image, "provider", ""),
+                    "provider_profile_id": getattr(image, "profile_id", ""),
+                    "model": getattr(image, "model", ""),
+                    "kind": "image",
+                    "prompt": (
+                        "{{loop.item.visual_prompt}} "
+                        f"{_KEEP_PRODUCT} "
+                        "Vertical composition for a phone screen, photorealistic, "
+                        "no text, no logo overlay, no watermark."
+                    ),
+                    "negative_prompt": _NEGATIVE_PRODUCT,
+                    "parameters": _vertical_image_parameters(db, image),
+                    "source_assets": [f"{{{{input.product_asset_id}}}}:{REFERENCE_IMAGE}"],
+                },
+            },
+            {
+                "id": "beat_on_timeline",
+                "type": "timeline_append",
+                "name": {"zh": "按这一拍的时长铺上去", "en": "Lay it down for this beat's length"},
+                "position": {"x": 400, "y": 140},
+                "config": {
+                    "sequence_id": "{{input.sequence_id}}",
+                    "asset_id": "{{beat_frame.asset_id}}",
+                    "track_id": "{{input.video_track_id}}",
+                    "start": 0,
+                    "end": "{{loop.item.seconds}}",
+                },
+            },
+            {
+                "id": "beat_voice",
+                "type": "synthesize_speech",
+                "name": {"zh": "念这一拍的画外音", "en": "Voice this beat"},
+                "position": {"x": 400, "y": 320},
+                "config": {"text": "{{loop.item.narration}}", "engine": engine, "voice": voice},
+            },
+            {
+                "id": "beat_voice_place",
+                "type": "timeline_append",
+                "name": {"zh": "画外音对齐这一拍开头", "en": "Line the voice up with the beat"},
+                "position": {"x": 720, "y": 320},
+                "config": {
+                    "sequence_id": "{{input.sequence_id}}",
+                    "asset_id": "{{beat_voice.asset_id}}",
+                    "track_id": "{{input.audio_track_id}}",
+                    "at": "{{beat_on_timeline.timeline_start}}",
+                    "max_duration": "{{loop.item.seconds}}",
+                },
+            },
+        ],
+        "edges": [
+            {"id": "frame_place", "source": "beat_frame", "target": "beat_on_timeline"},
+            {"id": "place_voice", "source": "beat_on_timeline", "target": "beat_voice_place"},
+            {"id": "voice_voice_place", "source": "beat_voice", "target": "beat_voice_place"},
+        ],
+    }
+
+
+def product_pitch_short_graph(
+    *, chat: Any, image: Any, voice_id: str = "", presenter: bool = False, db: Session | None = None
+) -> dict[str, Any]:
+    """商品图 + 几条卖点 → 分拍口播脚本 → 每拍出一张画面、配一段画外音 → 组装 → 字幕 → 导出。
 
     和「模特上身图」的分别:那个交付的是**素材**(图和视频,你拿去自己用),这个交付的是**一条成片**。
 
-    口播和画面按"拍"对齐:每一拍自己的时长由脚本给出,画面按这个时长铺在时间线上,配音也按拍合成。
-    这样画面切换和话说到哪儿是对得上的 —— 而不是先出一段音再让画面自己猜。
+    口播和画面按"拍"对齐:每一拍自己的时长由脚本给出,画面按这个时长铺在时间线上,画外音落在这一拍的开头,
+    字幕用这一拍在时间线上的实际起止。不出镜时钩子和号召就是首尾两拍 —— 此前另合成一段「钩子 + 号召」放在 0 秒,
+    中间各拍的旁白一句没念、也没有字幕。
+
+    音色直接写在「念这一拍的画外音」上(不经开始节点转一手):那一格是必填的,空着运行前就拦住,而且那里有音色选择器;
+    写成 `{{start.voice_id}}` 的话,引用本身算"填了",要等画面都出完、念第一拍时才失败。
 
     `presenter`:「数字人出镜」(ADR 0028 阶段 3「带货口播升级」)—— 开场钩子和收尾号召换成资产库里的人物**出镜说**
     (`entity_speak`:脸、嗓子、授权声明都是那个人物资产的,没声明的真人当场拒),中间每一拍仍是商品画面,这一拍的口播
-    用同一个人物的嗓子念、放在这一拍开头。前面几步和不出镜的一样,所以是同一张图换掉口播那一段,不另抄一份。
+    用同一个人物的嗓子念。**先取主播、再写脚本**:主播没挑(运行前拦)或挑的那个已经不在,都在任何一次付费调用之前说清。
+
+    `db` 让出图尺寸读到用户对这个模型的参数声明;没有库的上下文退回内置目录。
     """
-    system = """你是带货短视频的编导。用户给你一件商品和几条卖点，你要写一条 20-45 秒、能直接拍的
+    system = f"""你是带货短视频的编导。用户给你一件商品和几条卖点，你要写一条 20-45 秒、能直接拍的
 口播脚本，按"拍"拆开。
 
 硬性要求：
@@ -633,13 +827,33 @@ def product_pitch_short_graph(*, chat: Any, image: Any, voice_id: str = "", pres
   生成文字、logo 或水印。
 - 卖点只能来自用户给的那几条，不要编造功效、成分、资质或数据。
 - caption 是屏幕上的短句，不是把 narration 原样抄一遍。
+- 最多 {MAX_VARIANTS} 拍：每一拍都要出一张画面。
 
 只输出符合 JSON Schema 的对象。"""
     if presenter:
         system += """
 
 这一条由一位主播**出镜**说开场钩子(hook_line)和结尾号召(call_to_action):这两句是对着镜头说的话,
-口语、自然,各自念出来不超过 8 秒;中间的每一拍是商品画面,narration 是画外音。"""
+口语、自然,各自念出来不超过 8 秒;它们**也算在成片时长里**。中间的每一拍是商品画面,narration 是画外音。"""
+        timing = "各拍 seconds 之和，加上开场钩子和结尾号召念出来的时长（中文每秒约 4 个字），要接近目标时长。"
+    else:
+        system += """
+
+这一条没有人出镜:第一拍的 narration 就是开场钩子,最后一拍的 narration 是行动号召 —— 整条片子就是这几拍,
+首尾不另加。"""
+        timing = "各拍 seconds 之和就是成片时长，要接近目标时长。"
+
+    shoot_inputs: dict[str, Any] = {
+        "product_asset_id": "{{product_photo.asset_id}}",
+        "sequence_id": "{{pitch_project.sequence_id}}",
+        "video_track_id": "{{pitch_project.video_track_id}}",
+        "audio_track_id": "{{pitch_project.audio_track_id}}",
+    }
+    if presenter:
+        shoot_inputs.update({"voice_engine": "{{presenter.voice_engine}}", "voice_id": "{{presenter.voice_id}}"})
+        body = _beat_body(db, image, engine="{{input.voice_engine}}", voice="{{input.voice_id}}")
+    else:
+        body = _beat_body(db, image, engine="builtin:clone", voice=voice_id)
 
     nodes: list[dict[str, Any]] = [
         {
@@ -650,14 +864,16 @@ def product_pitch_short_graph(*, chat: Any, image: Any, voice_id: str = "", pres
             "config": {
                 "params": {
                     "product_name": "",
-                    "selling_points": "一行一条,只写你能负责的卖点",
+                    #: 留空,不放示例:此前这里写着「一行一条,只写你能负责的卖点」,没改就跑的话这句提示被当成
+                    #: 卖点进了脚本。要填什么写在模板卡片的第一步上。
+                    "selling_points": "",
                     "audience": "刷竖屏短视频的年轻观众",
                     "target_duration_seconds": 30,
-                    "voice_id": voice_id,
                     "width": VERTICAL["width"],
                     "height": VERTICAL["height"],
                     "fps": 30,
-                }
+                },
+                "required_params": "product_name, selling_points",
             },
         },
         {
@@ -677,16 +893,16 @@ def product_pitch_short_graph(*, chat: Any, image: Any, voice_id: str = "", pres
                 "model": getattr(chat, "model", ""),
                 "preset": "creative",
                 "system": system,
-                "prompt": """商品名称：{{start.product_name}}
+                "prompt": f"""商品名称：{{{{start.product_name}}}}
 卖点（只能用这些）：
-{{start.selling_points}}
-目标观众：{{start.audience}}
-成片目标时长：{{start.target_duration_seconds}} 秒
+{{{{start.selling_points}}}}
+目标观众：{{{{start.audience}}}}
+成片目标时长：{{{{start.target_duration_seconds}}}} 秒
 
-请写出分拍脚本。各拍 seconds 之和要接近目标时长。""",
+请写出分拍脚本。{timing}""",
                 "response_format": "json_schema",
                 "json_schema_name": "product_pitch_script",
-                "json_schema": _pitch_schema(),
+                "json_schema": _pitch_schema(presenter=presenter),
                 "json_schema_strict": "true",
                 "temperature": 0.6,
                 "max_tokens": 6000,
@@ -707,80 +923,33 @@ def product_pitch_short_graph(*, chat: Any, image: Any, voice_id: str = "", pres
         {
             "id": "shoot_beats",
             "type": "loop_foreach",
-            "name": {"zh": "逐拍出画面并上时间线", "en": "Shoot each beat onto the timeline"},
+            "name": (
+                {"zh": "逐拍出画面、配画外音并上时间线", "en": "Paint, voice and place each beat"}
+                if presenter
+                else {"zh": "逐拍出画面、配音并上时间线", "en": "Paint, voice and place each beat"}
+            ),
             "position": {"x": 970, "y": 260},
             "config": {
                 "items": "{{pitch_script.json.beats}}",
-                "inputs": {
-                    "product_asset_id": "{{product_photo.asset_id}}",
-                    "sequence_id": "{{pitch_project.sequence_id}}",
-                    "video_track_id": "{{pitch_project.video_track_id}}",
-                    "project_id": "{{pitch_project.project_id}}",
-                },
-                "body": {
-                    "nodes": [
-                        {
-                            "id": "beat_frame",
-                            "type": "ai_generate",
-                            "name": {"zh": "出这一拍的画面", "en": "Paint this beat"},
-                            "position": {"x": 80, "y": 140},
-                            "config": {
-                                "provider": getattr(image, "provider", ""),
-                                "provider_profile_id": getattr(image, "profile_id", ""),
-                                "model": getattr(image, "model", ""),
-                                "kind": "image",
-                                "prompt": (
-                                    "{{loop.item.visual_prompt}} "
-                                    f"{_KEEP_PRODUCT} "
-                                    "Vertical composition for a phone screen, photorealistic, "
-                                    "no text, no logo overlay, no watermark."
-                                ),
-                                "negative_prompt": _NEGATIVE_PRODUCT,
-                                "parameters": {},
-                                "source_assets": [f"{{{{input.product_asset_id}}}}:{REFERENCE_IMAGE}"],
-                            },
-                        },
-                        {
-                            "id": "beat_on_timeline",
-                            "type": "timeline_append",
-                            "name": {"zh": "按这一拍的时长铺上去", "en": "Lay it down for this beat's length"},
-                            "position": {"x": 400, "y": 140},
-                            "config": {
-                                "sequence_id": "{{input.sequence_id}}",
-                                "asset_id": "{{beat_frame.asset_id}}",
-                                "track_id": "{{input.video_track_id}}",
-                                "max_duration": "{{loop.item.seconds}}",
-                            },
-                        },
-                    ],
-                    "edges": [{"id": "frame_place", "source": "beat_frame", "target": "beat_on_timeline"}],
-                },
+                "inputs": shoot_inputs,
+                "body": body,
                 # 画面要按拍的顺序首尾相接,所以**不能并发** —— 并发的落位顺序是谁先回来谁在前。
                 "concurrency": 1,
-                "output": "{{beat_on_timeline.clip_id}}",
+                #: 不写 output:每一项交出这一拍的全部产物连同这一拍本身,下一步按它的落点和屏幕短句铺字幕。
+                "output": "",
             },
         },
         {
-            "id": "voice_over",
-            "type": "synthesize_speech",
-            "name": {"zh": "合成整条口播", "en": "Synthesize the voice-over"},
-            "position": {"x": 970, "y": 480},
-            "config": {
-                "text": "{{pitch_script.json.hook_line}}\n{{pitch_script.json.call_to_action}}",
-                "engine": "builtin:clone",
-                "voice": "{{start.voice_id}}",
-            },
-        },
-        {
-            "id": "voice_on_timeline",
-            "type": "timeline_append",
-            "name": {"zh": "把口播放到音频轨", "en": "Put the voice-over on the audio track"},
-            "position": {"x": 1290, "y": 480},
+            "id": "beat_captions",
+            "type": "generate_subtitles",
+            "name": {"zh": "按每一拍的落点铺屏幕短句", "en": "Lay each beat's on-screen line"},
+            "position": {"x": 1290, "y": 260},
             "config": {
                 "sequence_id": "{{pitch_project.sequence_id}}",
-                "asset_id": "{{voice_over.asset_id}}",
-                "track_id": "{{pitch_project.audio_track_id}}",
-                "at": 0,
+                "segments": "{{shoot_beats.results}}",
+                "start_field": "beat_on_timeline.timeline_start",
+                "end_field": "beat_on_timeline.timeline_end",
+                "text_field": "loop.item.caption",
             },
         },
         {
@@ -809,38 +978,35 @@ def product_pitch_short_graph(*, chat: Any, image: Any, voice_id: str = "", pres
                 "values": {
                     "final_asset_id": "{{export_short.asset_id}}",
                     "script": "{{pitch_script.json}}",
-                    "beat_clip_ids": "{{shoot_beats.results}}",
-                    "voice_asset_id": "{{voice_over.asset_id}}",
+                    "beat_count": "{{shoot_beats.count}}",
+                    "caption_count": "{{beat_captions.count}}",
                     "sequence_id": "{{pitch_project.sequence_id}}",
                 }
             },
         },
     ]
-    if presenter:
-        return _with_presenter(nodes)
-    edges = [
-        {"id": "start_photo", "source": "start", "target": "product_photo"},
-        {"id": "start_script", "source": "start", "target": "pitch_script"},
-        {"id": "start_project", "source": "start", "target": "pitch_project"},
-        {"id": "script_shoot", "source": "pitch_script", "target": "shoot_beats"},
-        {"id": "project_shoot", "source": "pitch_project", "target": "shoot_beats"},
-        {"id": "photo_shoot", "source": "product_photo", "target": "shoot_beats"},
-        {"id": "script_voice", "source": "pitch_script", "target": "voice_over"},
-        {"id": "voice_place", "source": "voice_over", "target": "voice_on_timeline"},
-        {"id": "project_voice_place", "source": "pitch_project", "target": "voice_on_timeline"},
-        {"id": "shoot_export", "source": "shoot_beats", "target": "export_short"},
-        {"id": "voice_export", "source": "voice_on_timeline", "target": "export_short"},
-        {"id": "export_notice", "source": "export_short", "target": "done_notice"},
-        {"id": "notice_output", "source": "done_notice", "target": "output"},
-    ]
-    return normalize_graph(
-        {
-            "meta": {"template_id": PRODUCT_PITCH_SHORT, "template_version": 1, "source": "official"},
-            "nodes": nodes,
-            "edges": edges,
-        },
-        node_types=NODE_TYPES,
-    )
+    if not presenter:
+        edges = [
+            {"id": "start_photo", "source": "start", "target": "product_photo"},
+            {"id": "start_script", "source": "start", "target": "pitch_script"},
+            {"id": "start_project", "source": "start", "target": "pitch_project"},
+            {"id": "script_shoot", "source": "pitch_script", "target": "shoot_beats"},
+            {"id": "project_shoot", "source": "pitch_project", "target": "shoot_beats"},
+            {"id": "photo_shoot", "source": "product_photo", "target": "shoot_beats"},
+            {"id": "shoot_captions", "source": "shoot_beats", "target": "beat_captions"},
+            {"id": "captions_export", "source": "beat_captions", "target": "export_short"},
+            {"id": "export_notice", "source": "export_short", "target": "done_notice"},
+            {"id": "notice_output", "source": "done_notice", "target": "output"},
+        ]
+        return normalize_graph(
+            {
+                "meta": {"template_id": PRODUCT_PITCH_SHORT, "template_version": 2, "source": "official"},
+                "nodes": nodes,
+                "edges": edges,
+            },
+            node_types=NODE_TYPES,
+        )
+    return _with_presenter(nodes)
 
 
 # --------------------------------------------------------------------------------------
@@ -860,10 +1026,16 @@ def _fabric_schema() -> dict[str, Any]:
     return _object(
         {
             "spec_markdown": _str("规格卡正文,Markdown,中文;只写用户给出的参数,不要编造"),
-            "applications": {"type": "array", "items": application, "minItems": 1},
+            #: 每一种是一次付费出图,上限就是钱的上限(见 MAX_VARIANTS)。
+            "applications": {"type": "array", "items": application, "minItems": 1, "maxItems": MAX_VARIANTS},
+            #: 规格页「适合做什么」那一节的正文。此前插的是 applications 数组本身,插值把它写成 JSON 原文 ——
+            #: 发给客户的那一页上是一串带引号和方括号的东西。
+            "applications_markdown": _str(
+                "给客户看的应用清单,Markdown 无序列表,每种一行:「- **做成什么**:为什么这块料适合做它」"
+            ),
             "care_notes": _str("养护与工艺提示,中文;不确定的写「需与工厂确认」"),
         },
-        ["spec_markdown", "applications", "care_notes"],
+        ["spec_markdown", "applications", "applications_markdown", "care_notes"],
     )
 
 
@@ -876,9 +1048,10 @@ def fabric_lookbook_graph(*, chat: Any, image: Any) -> dict[str, Any]:
     规格卡**只复述用户给的参数**。成分、克重、幅宽、缩率这些是要负责任的数字,编一个出来比不写更糟 ——
     提示词里写死了这一条,拿不准的一律写「需与工厂确认」。
     """
-    system = """你是面料商的技术销售和陈列企划。客户给你一块面料的参数，你要做两件事：
+    system = f"""你是面料商的技术销售和陈列企划。客户给你一块面料的参数，你要做两件事：
 
-1. 规划几种这块料**真的适合**的应用（家纺、服装、软装等），每种给一张成品效果图的英文提示词。
+1. 规划几种这块料**真的适合**的应用（家纺、服装、软装等），每种给一张成品效果图的英文提示词，
+   最多 {MAX_VARIANTS} 种。
    效果图要把成品放在真实空间里，让人一眼看出垂坠感、厚度和纹理，不是平铺特写。
 2. 写一页规格卡。
 
@@ -899,14 +1072,17 @@ def fabric_lookbook_graph(*, chat: Any, image: Any) -> dict[str, Any]:
             "position": {"x": 40, "y": 260},
             "config": {
                 "params": {
+                    #: 参数全部留空,不放示例:此前成分一格写着「成分,如 60% 棉 40% 亚麻」,没改就跑的话规格卡上
+                    #: 就印着 60% 棉 —— 而规格卡是「只复述用户给的参数」的那一页。没填的由提示词落成「需与工厂确认」。
                     "fabric_name": "",
-                    "composition": "成分,如 60% 棉 40% 亚麻",
+                    "composition": "",
                     "weight_gsm": "",
                     "width_cm": "",
-                    "hand_feel": "手感与垂坠,一句话",
+                    "hand_feel": "",
                     "target_client": "家纺采购 / 服装品牌",
                     "application_count": 4,
-                }
+                },
+                "required_params": "fabric_name",
             },
         },
         {
@@ -1011,7 +1187,7 @@ def fabric_lookbook_graph(*, chat: Any, image: Any) -> dict[str, Any]:
 
 ## 适合做什么
 
-{{fabric_plan.json.applications}}
+{{fabric_plan.json.applications_markdown}}
 
 ## 养护与工艺
 
@@ -1062,7 +1238,7 @@ def fabric_lookbook_graph(*, chat: Any, image: Any) -> dict[str, Any]:
     ]
     return normalize_graph(
         {
-            "meta": {"template_id": FABRIC_LOOKBOOK, "template_version": 1, "source": "official"},
+            "meta": {"template_id": FABRIC_LOOKBOOK, "template_version": 2, "source": "official"},
             "nodes": nodes,
             "edges": edges,
         },
@@ -1076,6 +1252,10 @@ def talking_script_video_graph(*, voice_id: str = "") -> dict[str, Any]:
     说话照片一次只收一小段音频(wan2.2-s2v 20 秒),长稿由「长稿分段配音」按句切、按实测时长分组;每段都从同一张脸
     开始,接缝在句子之间。字幕用稿子加配音的实测时长,不再转写。**「让它说话」上的授权确认留空** —— 这张脸是谁的、
     是否取得同意,由跑的人自己选,模板不替他选。
+
+    **稿子和音色直接写在「长稿分段配音」上**,不经开始节点转一手:那两格是必填的,空着运行前就拦住(音色那格还有
+    选择器)。此前稿子是开始节点里的一句「把要说的话贴在这里…」—— 没改就跑,这句提示被当成稿子念了出来;音色写成
+    `{{start.voice_id}}`,引用本身算"填了",空着也要等跑起来才失败。
     """
     nodes: list[dict[str, Any]] = [
         {
@@ -1086,8 +1266,6 @@ def talking_script_video_graph(*, voice_id: str = "") -> dict[str, Any]:
             "config": {
                 "params": {
                     "title": "数字人口播",
-                    "script": "把要说的话贴在这里;按句子断开配音,每句不要太长",
-                    "voice_id": voice_id,
                     "width": VERTICAL["width"],
                     "height": VERTICAL["height"],
                     "fps": 25,
@@ -1106,7 +1284,8 @@ def talking_script_video_graph(*, voice_id: str = "") -> dict[str, Any]:
             "type": "talking_segments",
             "name": {"zh": "长稿分段配音", "en": "Voice the script in segments"},
             "position": {"x": 330, "y": 400},
-            "config": {"text": "{{start.script}}", "engine": "builtin:clone", "voice": "{{start.voice_id}}", "model": ""},
+            #: 稿子留空,由跑的人贴进来;音色预填工作区里第一个克隆音色(没有就空着,运行前拦住)。
+            "config": {"text": "", "engine": "builtin:clone", "voice": voice_id, "model": ""},
         },
         {
             "id": "project",
@@ -1213,7 +1392,7 @@ def talking_script_video_graph(*, voice_id: str = "") -> dict[str, Any]:
     ]
     return normalize_graph(
         {
-            "meta": {"template_id": TALKING_SCRIPT_VIDEO, "template_version": 1, "source": "official"},
+            "meta": {"template_id": TALKING_SCRIPT_VIDEO, "template_version": 2, "source": "official"},
             "nodes": nodes,
             "edges": edges,
         },
@@ -1222,47 +1401,15 @@ def talking_script_video_graph(*, voice_id: str = "") -> dict[str, Any]:
 
 
 def _with_presenter(nodes: list[dict[str, Any]]) -> dict[str, Any]:
-    """带货口播换成「数字人出镜」(见 product_pitch_short_graph 的 `presenter`):去掉整条合成的旁白,
-    加一个挑主播的节点、开场和收尾两段出镜说话,逐拍的循环里给每一拍配这位主播的嗓子。
+    """带货口播换成「数字人出镜」(见 product_pitch_short_graph 的 `presenter`):加一个挑主播的节点、开场和收尾两段
+    出镜说话;逐拍的循环体已经按主播的嗓子配好(见 _beat_body)。
 
     时间线上的顺序是**开场 → 各拍 → 收尾**,靠连线定先后(接到时间线是往轨尾接的)。出镜那两段自带声音;
     每一拍的画外音放在音频轨上、对齐这一拍的开头。
+
+    **脚本和项目都挂在主播之后**:「挑一位主播」是运行前必填的(entity_get 的点名 / 按名字找二选一),而挑的那个
+    人物要是已经删了,取主播这一步就失败 —— 在写脚本那次计费的对话之前,也不会留下一个空项目。
     """
-    by_id = {node["id"]: node for node in nodes}
-    kept = [node for node in nodes if node["id"] not in ("voice_over", "voice_on_timeline")]
-    shoot = by_id["shoot_beats"]
-    shoot["name"] = {"zh": "逐拍出画面、配画外音并上时间线", "en": "Paint, voice and place each beat"}
-    shoot["config"]["inputs"].update({
-        "audio_track_id": "{{pitch_project.audio_track_id}}",
-        "voice_engine": "{{presenter.voice_engine}}",
-        "voice_id": "{{presenter.voice_id}}",
-    })
-    body = shoot["config"]["body"]
-    body["nodes"] += [
-        {
-            "id": "beat_voice",
-            "type": "synthesize_speech",
-            "name": {"zh": "用主播的嗓子念这一拍", "en": "Voice this beat in the presenter's voice"},
-            "position": {"x": 400, "y": 320},
-            "config": {"text": "{{loop.item.narration}}", "engine": "{{input.voice_engine}}", "voice": "{{input.voice_id}}"},
-        },
-        {
-            "id": "beat_voice_place",
-            "type": "timeline_append",
-            "name": {"zh": "画外音对齐这一拍开头", "en": "Line the voice up with the beat"},
-            "position": {"x": 720, "y": 320},
-            "config": {
-                "sequence_id": "{{input.sequence_id}}",
-                "asset_id": "{{beat_voice.asset_id}}",
-                "track_id": "{{input.audio_track_id}}",
-                "at": "{{beat_on_timeline.timeline_start}}",
-            },
-        },
-    ]
-    body["edges"] += [
-        {"id": "place_voice", "source": "beat_on_timeline", "target": "beat_voice_place"},
-        {"id": "voice_voice_place", "source": "beat_voice", "target": "beat_voice_place"},
-    ]
     talk = [
         {
             "id": "presenter",
@@ -1303,15 +1450,17 @@ def _with_presenter(nodes: list[dict[str, Any]]) -> dict[str, Any]:
                        "track_id": "{{pitch_project.video_track_id}}"},
         },
     ]
+    shoot = next(node for node in nodes if node["id"] == "shoot_beats")
+    kept = list(nodes)
     kept[kept.index(shoot):kept.index(shoot)] = talk
     output = next(node for node in kept if node["id"] == "output")
-    output["config"]["values"].pop("voice_asset_id", None)
     output["config"]["values"].update({"hook_asset_id": "{{hook_talk.asset_id}}", "cta_asset_id": "{{cta_talk.asset_id}}"})
     edges = [
         {"id": "start_photo", "source": "start", "target": "product_photo"},
-        {"id": "start_script", "source": "start", "target": "pitch_script"},
-        {"id": "start_project", "source": "start", "target": "pitch_project"},
         {"id": "start_presenter", "source": "start", "target": "presenter"},
+        #: 先有主播,再写脚本、建项目(见函数说明)。
+        {"id": "presenter_script", "source": "presenter", "target": "pitch_script"},
+        {"id": "presenter_project", "source": "presenter", "target": "pitch_project"},
         {"id": "presenter_hook", "source": "presenter", "target": "hook_talk"},
         {"id": "script_hook", "source": "pitch_script", "target": "hook_talk"},
         {"id": "presenter_cta", "source": "presenter", "target": "cta_talk"},
@@ -1325,13 +1474,16 @@ def _with_presenter(nodes: list[dict[str, Any]]) -> dict[str, Any]:
         {"id": "presenter_shoot", "source": "presenter", "target": "shoot_beats"},
         {"id": "beats_then_cta", "source": "shoot_beats", "target": "cta_place"},
         {"id": "cta_place_edge", "source": "cta_talk", "target": "cta_place"},
-        {"id": "cta_export", "source": "cta_place", "target": "export_short"},
+        #: 字幕排在收尾接上**之后**:两步改的是同一条时间线,同时提交时后到的那个撞上版本号。
+        {"id": "cta_captions", "source": "cta_place", "target": "beat_captions"},
+        {"id": "shoot_captions", "source": "shoot_beats", "target": "beat_captions"},
+        {"id": "captions_export", "source": "beat_captions", "target": "export_short"},
         {"id": "export_notice", "source": "export_short", "target": "done_notice"},
         {"id": "notice_output", "source": "done_notice", "target": "output"},
     ]
     return normalize_graph(
         {
-            "meta": {"template_id": PRODUCT_PITCH_PRESENTER, "template_version": 1, "source": "official"},
+            "meta": {"template_id": PRODUCT_PITCH_PRESENTER, "template_version": 2, "source": "official"},
             "nodes": kept,
             "edges": edges,
         },
@@ -1346,8 +1498,8 @@ BUSINESS_TEMPLATE_CATALOG: list[dict[str, Any]] = [
         "id": HIGHLIGHT_SHORTS,
         "name": {"zh": "长视频切多条竖屏", "en": "Long video into vertical clips"},
         "summary": {
-            "zh": "把一条口播、访谈或直播回放转成逐字稿,挑出能独立成立的片段,每条各建一条竖屏时间线、截取原片那一段、配上重写过的短句字幕并导出。不生成任何画面,所以除了转写和一次对话之外不花生成费用。",
-            "en": "Transcribe a talk, interview or stream recording, pick the passages that stand on their own, then give each one its own vertical timeline, take that range from the source, lay rewritten short captions on it and export. No image or video generation, so nothing is billed beyond the transcription and one chat call.",
+            "zh": "把一条口播、访谈或直播回放转成逐字稿,挑出能独立成立的片段(最多 12 条),每条在同一个项目里各建一条竖屏时间线、截取原片那一段、配上重写过的短句字幕并导出。不生成任何画面,所以除了转写和一次对话之外不花生成费用。",
+            "en": "Transcribe a talk, interview or stream recording, pick the passages that stand on their own (up to 12), then give each one its own vertical timeline in a single project, take that range from the source, lay rewritten short captions on it and export. No image or video generation, so nothing is billed beyond the transcription and one chat call.",
         },
         "requires": [
             requirement(TRANSCRIPTION_ENGINE, zh="可用的转写引擎", en="Available transcription engine"),
@@ -1363,8 +1515,8 @@ BUSINESS_TEMPLATE_CATALOG: list[dict[str, Any]] = [
         "id": PRODUCT_ON_MODEL,
         "name": {"zh": "商品图 → 模特上身图与短视频", "en": "Product photo into on-model shots"},
         "summary": {
-            "zh": "给一张平铺图或面料图,规划几组投放场景,每组出一张模特上身图;视频模型可用时再把每一组动起来。商品图贯穿每一次生成 —— 版型、颜色、纹理、logo 都以它为准,不是照描述重画。卖点文案一并存成笔记。",
-            "en": "From one flat-lay or fabric photo, plan a few sellable scenes and shoot an on-model image for each; where a video model is available, put every scene in motion too. The product photo is carried into every generation — cut, colour, texture and logo come from it, not from a description. The copy lines are saved as a note.",
+            "zh": "给一张平铺图或面料图,规划几组投放场景(最多 12 组),每组出一张竖幅模特上身图;视频模型可用时再以这张图为首帧把每一组动起来。商品图贯穿每一次生成 —— 版型、颜色、纹理、logo 都以它为准,不是照描述重画。图和视频都归进一个项目,卖点文案一并存成笔记。每一组是一次付费出图(带视频再加一次视频生成)。",
+            "en": "From one flat-lay or fabric photo, plan a few sellable scenes (up to 12) and shoot a portrait on-model image for each; where a video model is available, put every scene in motion with that image as its first frame. The product photo is carried into every generation — cut, colour, texture and logo come from it, not from a description. Images and clips are filed into one project and the copy lines are saved as a note. Each scene is one paid image generation (plus one video generation with motion).",
         },
         "requires": [
             requirement(CHAT_MODEL, zh="AI 对话模型", en="Chat model"),
@@ -1382,16 +1534,17 @@ BUSINESS_TEMPLATE_CATALOG: list[dict[str, Any]] = [
             ),
         ],
         "stages": {
-            "zh": ["描述商品与人群", "选择商品图", "规划几组投放场景", "逐组出模特上身图", "可选:逐组出短视频", "卖点文案存成笔记"],
-            "en": ["Describe the product and audience", "Pick the product photo", "Plan the scenes", "Shoot each scene on a model", "Optional: put each scene in motion", "Save the copy as a note"],
+            "zh": ["描述商品与人群(商品名和一两句商品信息:品类、颜色、材质、版型)", "选择商品图", "规划几组投放场景", "逐组出模特上身图", "可选:逐组出短视频", "卖点文案存成笔记"],
+            "en": ["Describe the product and audience (its name, plus a line or two on category, colour, material and cut)", "Pick the product photo",
+                   "Plan the scenes", "Shoot each scene on a model", "Optional: put each scene in motion", "Save the copy as a note"],
         },
     },
     {
         "id": PRODUCT_PITCH_SHORT,
-        "name": {"zh": "商品 → 带货口播短视频", "en": "Product into a talking-head short"},
+        "name": {"zh": "商品 → 带货口播短视频", "en": "Product into a narrated short"},
         "summary": {
-            "zh": "给一张商品图和几条卖点,写一条分拍的口播脚本,每一拍出一张带商品的画面、按这一拍的时长铺上时间线,配上口播与屏幕短句,导出竖屏成片。卖点只用你给的那几条,不编功效和数据。",
-            "en": "From a product photo and a few selling points, write a beat-by-beat script, paint one frame per beat with the product in it, lay each on the timeline for that beat's length, add the voice-over and on-screen lines, and export a vertical short. Only the selling points you provide are used — no invented claims or figures.",
+            "zh": "给一张商品图和几条卖点,写一条分拍的口播脚本(第一拍是钩子、最后一拍是行动号召,最多 12 拍),每一拍出一张带商品的竖幅画面、按这一拍的时长铺上时间线,用你的克隆音色念这一拍的画外音、对齐这一拍的开头,再铺上屏幕短句,导出竖屏成片。没有人出镜。卖点只用你给的那几条,不编功效和数据。",
+            "en": "From a product photo and a few selling points, write a beat-by-beat script (the first beat is the hook, the last the call to action, up to 12 beats), paint one portrait frame per beat with the product in it, lay each on the timeline for that beat's length, voice each beat in your cloned voice lined up with its start, add the on-screen lines, and export a vertical short. Nobody appears on camera. Only the selling points you provide are used — no invented claims or figures.",
         },
         "requires": [
             requirement(CHAT_MODEL, zh="AI 对话模型", en="Chat model"),
@@ -1400,16 +1553,17 @@ BUSINESS_TEMPLATE_CATALOG: list[dict[str, Any]] = [
             requirement(None, zh="一张商品图", en="A product photo"),
         ],
         "stages": {
-            "zh": ["填商品与卖点", "写分拍口播脚本", "逐拍出画面并铺上时间线", "合成口播", "导出竖屏成片"],
-            "en": ["Product and selling points", "Write the beat-by-beat script", "Paint each beat onto the timeline", "Synthesize the voice-over", "Export the vertical short"],
+            "zh": ["填商品名与卖点(一行一条,只写你能负责的)", "写分拍口播脚本", "逐拍出画面、配画外音并铺上时间线", "按每拍的落点铺屏幕短句", "导出竖屏成片"],
+            "en": ["Product name and selling points (one per line, only claims you can stand behind)", "Write the beat-by-beat script",
+                   "Paint and voice each beat onto the timeline", "Lay each beat's on-screen line", "Export the vertical short"],
         },
     },
     {
         "id": FOOTAGE_MONTAGE,
         "name": {"zh": "自有素材混剪 · 配音与字幕", "en": "Montage from your own footage"},
         "summary": {
-            "zh": "按标签取出你已经拍好的一批素材,让模型排出叙事顺序、定每段用哪条素材和留多久、写好旁白,然后按顺序接上时间线,逐段配音并铺字幕,导出成片。不生成任何画面 —— 画面就是你自己的素材;没有配音音色时自动只出字幕。",
-            "en": "Pull a tagged batch of footage you already shot, let the model order the story, decide which clip each beat uses and how long it runs, and write the narration; then lay every segment on the timeline in order, speak and caption each one, and export. Nothing is generated — the picture is your own footage, and without a configured voice it falls back to captions only.",
+            "zh": "按标签取出你已经拍好的一批素材,让模型排出叙事顺序、定每段用哪条素材的哪一截、写好旁白,然后按顺序接上时间线,逐段配音(有旁白的那段把原声压低)并铺字幕,导出成片。不生成任何画面 —— 画面就是你自己的素材;没有配音音色时自动只出字幕。标签没填或这个标签下没有视频时,停下并告诉你。",
+            "en": "Pull a tagged batch of footage you already shot, let the model order the story, decide which part of which clip each beat uses, and write the narration; then lay every segment on the timeline in order, speak and caption each one (ducking the footage's own sound under the narration), and export. Nothing is generated — the picture is your own footage, and without a configured voice it falls back to captions only. If the tag is blank or has no videos, it stops and tells you.",
         },
         "requires": [
             requirement(CHAT_MODEL, zh="AI 对话模型", en="Chat model"),
@@ -1419,16 +1573,17 @@ BUSINESS_TEMPLATE_CATALOG: list[dict[str, Any]] = [
             ),
         ],
         "stages": {
-            "zh": ["填主题与素材标签", "按标签取出素材", "排出叙事顺序与旁白", "按顺序接上时间线", "逐段配音并铺字幕", "导出成片"],
-            "en": ["Topic and footage tag", "Fetch the footage by tag", "Order the story and write the narration", "Lay the segments in order", "Speak and caption each one", "Export"],
+            "zh": ["填主题与素材标签(先给要混剪的视频打上同一个标签)", "按标签取出素材", "排出叙事顺序与旁白", "按顺序接上时间线", "逐段配音并铺字幕", "导出成片"],
+            "en": ["Topic and footage tag (tag the videos to cut with one shared tag first)", "Fetch the footage by tag",
+                   "Order the story and write the narration", "Lay the segments in order", "Speak and caption each one", "Export"],
         },
     },
     {
         "id": FABRIC_LOOKBOOK,
         "name": {"zh": "面料 → 应用效果图与规格页", "en": "Fabric into applications and a spec sheet"},
         "summary": {
-            "zh": "给一块面料的实拍图和参数,规划它真正适合做的几种成品,每种出一张放在真实空间里的效果图,并生成一页可直接发客户的规格与应用提案。规格只复述你给出的参数,没给的写「需与工厂确认」。",
-            "en": "From one fabric photo and its specs, plan the products it genuinely suits, render each one in a real space, and produce a one-page proposal you can send to a client. The spec sheet only restates the numbers you provide; anything missing is marked as needing mill confirmation.",
+            "zh": "给一块面料的实拍图和参数,规划它真正适合做的几种成品(最多 12 种),每种出一张放在真实空间里的效果图,并生成一页可直接发客户的规格与应用提案。规格只复述你给出的参数,没给的写「需与工厂确认」。每一种是一次付费出图。",
+            "en": "From one fabric photo and its specs, plan the products it genuinely suits (up to 12), render each one in a real space, and produce a one-page proposal you can send to a client. The spec sheet only restates the numbers you provide; anything missing is marked as needing mill confirmation. Each application is one paid image generation.",
         },
         "requires": [
             requirement(CHAT_MODEL, zh="AI 对话模型", en="Chat model"),
@@ -1436,8 +1591,9 @@ BUSINESS_TEMPLATE_CATALOG: list[dict[str, Any]] = [
             requirement(None, zh="一张面料实拍图", en="A photo of the actual fabric"),
         ],
         "stages": {
-            "zh": ["填面料参数", "选择面料图", "规划应用与规格卡", "逐种出成品效果图", "生成可发客户的规格页"],
-            "en": ["Fabric specs", "Pick the fabric photo", "Plan applications and the spec sheet", "Render each application", "Write the spec sheet to send"],
+            "zh": ["填面料参数(名称、成分、克重、幅宽、手感;没有的留空)", "选择面料图", "规划应用与规格卡", "逐种出成品效果图", "生成可发客户的规格页"],
+            "en": ["Fabric specs (name, composition, weight, width, hand feel; leave unknowns blank)", "Pick the fabric photo",
+                   "Plan applications and the spec sheet", "Render each application", "Write the spec sheet to send"],
         },
     },
     {
@@ -1453,16 +1609,17 @@ BUSINESS_TEMPLATE_CATALOG: list[dict[str, Any]] = [
             requirement(None, zh="一张清晰的单人正脸", en="A clear, single-person portrait"),
         ],
         "stages": {
-            "zh": ["填稿子", "选一张正脸", "长稿分段配音", "逐段让它说话并接上时间线", "按配音时间铺字幕", "导出成片"],
-            "en": ["The script", "Pick a portrait", "Voice the script in segments", "Make each segment speak onto the timeline", "Caption from the voicing times", "Export the video"],
+            "zh": ["选一张正脸", "在「长稿分段配音」里贴稿子、挑音色", "长稿分段配音", "逐段让它说话并接上时间线", "按配音时间铺字幕", "导出成片"],
+            "en": ["Pick a portrait", "Paste the script and pick the voice on “Voice the script in segments”", "Voice the script in segments",
+                   "Make each segment speak onto the timeline", "Caption from the voicing times", "Export the video"],
         },
     },
     {
         "id": PRODUCT_PITCH_PRESENTER,
         "name": {"zh": "商品 → 数字人出镜带货口播", "en": "Product into a presenter-led short"},
         "summary": {
-            "zh": "在「带货口播短视频」的基础上,开场钩子和收尾号召换成资产库里的一位人物出镜说出来(用它的脸和嗓子),中间每一拍仍是带商品的画面,口播用同一个嗓子念、对齐每一拍的开头,导出竖屏成片(带「AI 生成」标识)。人物要先在资产库里有正面图和音色;真人要有授权声明,克隆音色也要声明是谁的。",
-            "en": "Everything in the talking-head short, but a character from your asset library speaks the hook and the call to action on camera (with its own face and voice), while each beat in between stays a product shot voiced in the same voice and lined up with the beat, exported as a vertical short with an \"AI-generated\" label. The character needs a front image and a voice in the asset library; real people need a consent declaration, and a cloned voice needs one too.",
+            "zh": "在「带货口播短视频」的基础上,开场钩子和收尾号召换成资产库里的一位人物出镜说出来(用它的脸和嗓子),中间每一拍仍是带商品的画面,口播用同一个嗓子念、对齐每一拍的开头,每拍铺上屏幕短句,导出竖屏成片(带「AI 生成」标识)。运行前在「挑一位主播」上选好人物;人物要先在资产库里有正面图和音色;真人要有授权声明,克隆音色也要声明是谁的。",
+            "en": "Everything in the narrated short, but a character from your asset library speaks the hook and the call to action on camera (with its own face and voice), while each beat in between stays a product shot voiced in the same voice, lined up with the beat and captioned, exported as a vertical short with an \"AI-generated\" label. Pick the character on “Pick the presenter” before running; it needs a front image and a voice in the asset library; real people need a consent declaration, and a cloned voice needs one too.",
         },
         "requires": [
             requirement(CHAT_MODEL, zh="AI 对话模型", en="Chat model"),
@@ -1472,8 +1629,9 @@ BUSINESS_TEMPLATE_CATALOG: list[dict[str, Any]] = [
             requirement(None, zh="一张商品图", en="A product photo"),
         ],
         "stages": {
-            "zh": ["填商品与卖点", "写分拍口播脚本", "挑一位主播", "主播出镜说开场", "逐拍出画面、配画外音", "主播出镜说收尾", "导出竖屏成片"],
-            "en": ["Product and selling points", "Write the beat-by-beat script", "Pick the presenter", "Presenter speaks the hook",
+            "zh": ["填商品名与卖点(一行一条,只写你能负责的)", "挑一位主播", "写分拍口播脚本", "主播出镜说开场", "逐拍出画面、配画外音", "主播出镜说收尾", "导出竖屏成片"],
+            "en": ["Product name and selling points (one per line, only claims you can stand behind)", "Pick the presenter",
+                   "Write the beat-by-beat script", "Presenter speaks the hook",
                    "Paint and voice each beat", "Presenter speaks the call to action", "Export the vertical short"],
         },
     },
@@ -1502,12 +1660,18 @@ def _montage_schema() -> dict[str, Any]:
             "asset_id": _str("用素材清单里的哪一条,**原样抄它的 id**,不要改写、不要编"),
             "source_name": _str("那条素材的名字,抄一遍,方便人核对选得对不对"),
             "src_start": {"type": "number", "minimum": 0, "description": "从这条素材的第几秒开始取"},
-            "seconds": {"type": "number", "minimum": 1.5, "maximum": 20, "description": "这一段用多长"},
+            #: **给终点,不给"取多长"。** 此前只有 src_start + seconds,而「接到时间线」没有终点就取到素材末尾 ——
+            #: 每一段都是从起点一直到那条素材结束,然后被加速塞进 seconds(最多 1.5 倍,再长就超出去)。
+            "src_end": {"type": "number", "minimum": 0, "description": "取到这条素材的第几秒为止;不能超过它的时长"},
+            "seconds": {
+                "type": "number", "minimum": 1.5, "maximum": 20,
+                "description": "这一段在成片里多长,必须等于 src_end − src_start;旁白按它压",
+            },
             "narration": _str("这一段的口播原文,中文;念出来不超过本段时长,没有旁白就写空字符串"),
             "captions": {"type": "array", "items": caption, "minItems": 1},
             "why": _str("为什么这一段放在这个位置"),
         },
-        ["segment_title", "asset_id", "source_name", "src_start", "seconds", "narration", "captions", "why"],
+        ["segment_title", "asset_id", "source_name", "src_start", "src_end", "seconds", "narration", "captions", "why"],
     )
     return _object(
         {
@@ -1517,6 +1681,11 @@ def _montage_schema() -> dict[str, Any]:
         },
         ["storyline", "segments", "unused_note"],
     )
+
+
+#: 有旁白的那一段,素材自带的原声压到多少(线性增益,1 = 原样)。不静音:现场声压低了垫在旁白底下,
+#: 比一段死寂的画面自然;但也不能和旁白一样响,否则两个声音打架,旁白听不清。
+DUCKED_SOURCE_GAIN = 0.2
 
 
 def footage_montage_graph(*, chat: Any, voice_id: str = "") -> dict[str, Any]:
@@ -1529,20 +1698,21 @@ def footage_montage_graph(*, chat: Any, voice_id: str = "") -> dict[str, Any]:
     和别的模板的三处不同:
 
     - **起点是一批素材,不是一条。** 用 `asset_query` 按标签批量取,这是所有模板里第一个这么做的。
-      素材清单(名字 + 时长)交给模型去排顺序,而不是让用户自己拖时间线。
+      素材清单(名字 + 时长)交给模型去排顺序,而不是让用户自己拖时间线。**标签是必填的开始参数**(空着取到的
+      是整个素材库);这个标签下一条视频都没有,就停在这里并说清楚,而不是让模型对着空清单编 id。
     - **不生成任何画面。** 和「长视频切多条竖屏」一样,除了配音没有生成开销。
     - **口播按段对齐,不是一条音轨铺到底。** 每一段的旁白单独合成,落在**这一段自己的起点**上
       —— 起点由 `timeline_append` 运行时回报(`timeline_start`),所以不管前面几段实际多长,
-      音画都不会越走越偏。字幕同理,用同一个起点做偏移。
+      音画都不会越走越偏。字幕同理,用同一个起点做偏移。有旁白的那一段,素材原声压低垫在底下。
 
-    没有配音音色时整条仍然可用:旁白那两步被条件挡掉,字幕照出 —— 很多企业片本来就是纯字幕。
+    没有配音音色时整条仍然可用:旁白那几步被条件挡掉,字幕照出 —— 很多企业片本来就是纯字幕。
     """
     system = """你是企业宣传片的编导。用户会给你一批**已经拍好**的素材(每条有名字和时长)和一个主题，
 你要把它们排成一条讲得通的片子。
 
 硬性要求：
 - asset_id 必须**原样抄自素材清单**。不要改写、不要缩短、更不要编一个出来——抄错这一段就是空的。
-- 每一段的 seconds 不能超过那条素材从 src_start 起的剩余时长。
+- 每一段从这条素材的 src_start 取到 src_end：src_end 不能超过那条素材的时长；seconds 就是 src_end − src_start。
 - 顺序要有叙事:开头给出观看理由,中段按因果或流程推进,结尾落到一个明确的信息或行动。
   不要按素材的文件名顺序排。
 - narration 念出来不能超过这一段的 seconds:中文按每秒约 4 个字估，宁短勿长；
@@ -1565,7 +1735,7 @@ def footage_montage_graph(*, chat: Any, voice_id: str = "") -> dict[str, Any]:
                 "asset_id": "{{loop.item.asset_id}}",
                 "track_id": "{{input.video_track_id}}",
                 "start": "{{loop.item.src_start}}",
-                "max_duration": "{{loop.item.seconds}}",
+                "end": "{{loop.item.src_end}}",
             },
         },
         {
@@ -1601,6 +1771,22 @@ def footage_montage_graph(*, chat: Any, voice_id: str = "") -> dict[str, Any]:
                 # **起点由上面那一步运行时回报**,不是算出来的。前面几段实际多长不重要,
                 # 音画都落在同一个数上,不会越走越偏。
                 "at": "{{place_shot.timeline_start}}",
+                #: 念得比这一段长就加速塞进去(最多 1.5 倍),不压到下一段的旁白上。
+                "max_duration": "{{loop.item.seconds}}",
+            },
+        },
+        {
+            "id": "duck_source",
+            "type": "edit_timeline",
+            "name": {"zh": "旁白底下压低原声", "en": "Duck the footage's own sound under the narration"},
+            "position": {"x": 1680, "y": 300},
+            "config": {
+                "sequence_id": "{{input.sequence_id}}",
+                #: 基底视频轨的原声默认是混进成片的;不压的话现场声和旁白一样响,旁白听不清。
+                "operations": (
+                    '[{"kind": "set_clip_gain", "clip_id": "{{place_shot.clip_id}}", '
+                    f'"gain": {DUCKED_SOURCE_GAIN}, "muted": false}}]'
+                ),
             },
         },
         {
@@ -1619,10 +1805,17 @@ def footage_montage_graph(*, chat: Any, voice_id: str = "") -> dict[str, Any]:
     ]
     body_edges = [
         {"id": "shot_caption", "source": "place_shot", "target": "caption_shot"},
-        {"id": "shot_voice", "source": "place_shot", "target": "has_voice"},
-        {"id": "voice_narration", "source": "has_voice", "target": "has_narration"},
-        {"id": "narration_speak", "source": "has_narration", "target": "narrate"},
+        #: 旁白那一串排在字幕**之后**,不和它同时跑:两边改的是同一条时间线,同时提交时后到的那个撞上版本号
+        #: (「这个序列刚被改过」),整条混剪失败。字幕不挂在条件后面,有没有旁白都照出。
+        {"id": "caption_voice", "source": "caption_shot", "target": "has_voice"},
+        {"id": "voice_narration", "source": "has_voice", "target": "has_narration", "source_handle": "true"},
+        {"id": "narration_speak", "source": "has_narration", "target": "narrate", "source_handle": "true"},
         {"id": "speak_place", "source": "narrate", "target": "place_voice"},
+        #: **这一条不能省。** 「念旁白 → 放旁白」同一对节点间还有一条数据边(asset_id),规范化时无 handle 的控制边
+        #: 会被折进数据边;而只剩数据边时,任一上游跑过就算激活 —— 「接上这一段」总是跑过的,于是这一段没有旁白
+        #: (或者根本没配音色)时「放旁白」拿着空素材照跑,整条混剪失败。带 handle 的边有路由语义,不会被折掉。
+        {"id": "narration_place", "source": "has_narration", "target": "place_voice", "source_handle": "true"},
+        {"id": "place_duck", "source": "place_voice", "target": "duck_source"},
     ]
 
     nodes: list[dict[str, Any]] = [
@@ -1633,8 +1826,11 @@ def footage_montage_graph(*, chat: Any, voice_id: str = "") -> dict[str, Any]:
             "position": {"x": 40, "y": 260},
             "config": {
                 "params": {
-                    "topic": "请把这里改成这条片子要讲的事",
-                    "footage_tag": "给要混剪的素材打上同一个标签,把它写在这里",
+                    #: 这两格留空,不放说明文字:此前 footage_tag 写着「给要混剪的素材打上同一个标签,把它写在这里」,
+                    #: 没改就跑的话按这句话去查标签,一条都取不到,模型对着空清单编了 id。要填什么写在模板卡片上;
+                    #: 空着运行前就拦(required_params)。
+                    "topic": "",
+                    "footage_tag": "",
                     "audience": "潜在客户与合作方",
                     "tone": "专业、克制、可信",
                     "target_duration_seconds": 60,
@@ -1642,7 +1838,9 @@ def footage_montage_graph(*, chat: Any, voice_id: str = "") -> dict[str, Any]:
                     "width": 1920,
                     "height": 1080,
                     "fps": 30,
-                }
+                },
+                #: 标签空着的话「按标签取」取到的是整个素材库 —— 那不是用户要混剪的那一批,所以运行前就拦。
+                "required_params": "topic, footage_tag",
             },
         },
         {
@@ -1653,10 +1851,29 @@ def footage_montage_graph(*, chat: Any, voice_id: str = "") -> dict[str, Any]:
             "config": {"kind": "video", "tags": "{{start.footage_tag}}", "limit": 60},
         },
         {
+            "id": "has_footage",
+            "type": "condition",
+            "name": {"zh": "取到素材了吗", "en": "Was any footage found?"},
+            "position": {"x": 650, "y": 260},
+            #: 按条数判(数值比较),不按清单空不空判。
+            "config": {"left": "{{footage.count}}", "op": "gt", "right": "0"},
+        },
+        {
+            "id": "no_footage_notice",
+            "type": "notify",
+            "name": {"zh": "没有可混剪的素材", "en": "No footage to cut"},
+            "position": {"x": 1290, "y": 520},
+            "config": {
+                "title": "混剪没有开始:没取到素材",
+                "body": "标签「{{start.footage_tag}}」下没有视频素材。给要混剪的视频打上同一个标签,"
+                        "把这个标签填进开始节点的 footage_tag,再运行一次。",
+            },
+        },
+        {
             "id": "montage_plan",
             "type": "llm",
             "name": {"zh": "排出叙事顺序与旁白", "en": "Order the story and write the narration"},
-            "position": {"x": 650, "y": 260},
+            "position": {"x": 1290, "y": 260},
             "config": {
                 "profile_id": getattr(chat, "profile_id", ""),
                 "model": getattr(chat, "model", ""),
@@ -1684,7 +1901,7 @@ captions 的时间码相对每一段自己的开头。""",
             "id": "montage_project",
             "type": "project_sequence_create",
             "name": {"zh": "建立成片时间线", "en": "Create the timeline"},
-            "position": {"x": 650, "y": 460},
+            "position": {"x": 1290, "y": 460},
             "config": {
                 "name": "{{start.topic}} · 混剪",
                 "width": "{{start.width}}",
@@ -1696,7 +1913,7 @@ captions 的时间码相对每一段自己的开头。""",
             "id": "lay_segments",
             "type": "loop_foreach",
             "name": {"zh": "按顺序接上时间线并配音配字幕", "en": "Lay every segment, with narration and captions"},
-            "position": {"x": 970, "y": 260},
+            "position": {"x": 1610, "y": 260},
             "config": {
                 "items": "{{montage_plan.json.segments}}",
                 "inputs": {
@@ -1715,14 +1932,14 @@ captions 的时间码相对每一段自己的开头。""",
             "id": "export_montage",
             "type": "export_sequence",
             "name": {"zh": "导出混剪成片", "en": "Export the montage"},
-            "position": {"x": 1290, "y": 260},
+            "position": {"x": 1930, "y": 260},
             "config": {"sequence_id": "{{montage_project.sequence_id}}"},
         },
         {
             "id": "done_notice",
             "type": "notify",
             "name": {"zh": "混剪完成通知", "en": "Montage ready"},
-            "position": {"x": 1610, "y": 260},
+            "position": {"x": 2250, "y": 260},
             "config": {
                 "title": "混剪成片已导出",
                 "body": "{{start.topic}} 已用 {{lay_segments.count}} 段素材完成混剪。",
@@ -1732,7 +1949,7 @@ captions 的时间码相对每一段自己的开头。""",
             "id": "output",
             "type": "output",
             "name": {"zh": "交付成片与剪辑方案", "en": "Hand over the cut and the plan"},
-            "position": {"x": 1930, "y": 260},
+            "position": {"x": 2570, "y": 260},
             "config": {
                 "values": {
                     "final_asset_id": "{{export_montage.asset_id}}",
@@ -1748,8 +1965,11 @@ captions 的时间码相对每一段自己的开头。""",
     ]
     edges = [
         {"id": "start_footage", "source": "start", "target": "footage"},
-        {"id": "start_project", "source": "start", "target": "montage_project"},
-        {"id": "footage_plan", "source": "footage", "target": "montage_plan"},
+        {"id": "footage_check", "source": "footage", "target": "has_footage"},
+        #: 这个标签下一条视频都没有,就停在这里说清楚 —— 之后的对话(计费)和建项目都不跑,模型也不会对着空清单编 id。
+        {"id": "no_footage", "source": "has_footage", "target": "no_footage_notice", "source_handle": "false"},
+        {"id": "footage_plan", "source": "has_footage", "target": "montage_plan", "source_handle": "true"},
+        {"id": "footage_project", "source": "has_footage", "target": "montage_project", "source_handle": "true"},
         {"id": "plan_lay", "source": "montage_plan", "target": "lay_segments"},
         {"id": "project_lay", "source": "montage_project", "target": "lay_segments"},
         {"id": "lay_export", "source": "lay_segments", "target": "export_montage"},
@@ -1758,7 +1978,7 @@ captions 的时间码相对每一段自己的开头。""",
     ]
     return normalize_graph(
         {
-            "meta": {"template_id": FOOTAGE_MONTAGE, "template_version": 1, "source": "official"},
+            "meta": {"template_id": FOOTAGE_MONTAGE, "template_version": 2, "source": "official"},
             "nodes": nodes,
             "edges": edges,
         },

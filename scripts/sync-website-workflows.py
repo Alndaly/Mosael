@@ -37,6 +37,9 @@ from app.domain.workflows.templates_business import (
 def catalog_files() -> dict[str, str]:
     #: 说明只有一份 —— 后端的模板目录(应用里的模板卡片读的也是它)。这里只补"这一份对应哪张图"。
     graphs = {
+        #: 视频模型留空 = 按"认不出的模型"出片计划:每镜 5 秒、只走首帧那条路。**首帧是每一个能用的视频模型都收的
+        #: 那一条**(参考素材那条只有部分模型收),而导入的人挑哪个模型这里不知道 —— 挑模型时节点参数会清回那个
+        #: 模型的默认,不收 5 秒的模型出片更长,上时间线时照样按 5 秒截。
         "full_video_generation": full_video_generation_graph(chat=ModelChoice(), image=ModelChoice(), video=ModelChoice()),
         "transcript_video_cleanup": transcript_video_cleanup_graph(chat=ModelChoice()),
         # 音色按工作区取,导出给官网的那份不能带任何本机资源 —— 留空,导入后由用户自己挑。
@@ -44,10 +47,11 @@ def catalog_files() -> dict[str, str]:
         "translated_dub_lipsync": translated_dub_graph(voice_id="", lipsync=True),
         "highlight_shorts": highlight_shorts_graph(chat=ModelChoice()),
         #: 空的 ModelChoice 表示"这台机器上还没选默认模型" —— 官网那份本来就不该带任何本机选择。
-        #: 上身图这条因此按**带视频**导出:图里多一个节点,用户没有视频模型时在画布上删掉它即可;
+        #: 上身图这条按**带视频**导出(`motion=True`),视频模型那一格留空,由导入的人挑;没有视频模型的话,在画布上
+        #: 删掉「把这一组动起来」和「归档这一组的视频」两个节点即可 —— 循环交出的是上身图,不依赖它们。
         #: 反过来(导成不带视频)则是有视频模型的人看不到那一步,而他不会知道本来有。
         "product_on_model": product_on_model_graph(
-            chat=ModelChoice(), image=ModelChoice(), video=ModelChoice(model="placeholder"),
+            chat=ModelChoice(), image=ModelChoice(), video=ModelChoice(), motion=True,
         ),
         "product_pitch_short": product_pitch_short_graph(chat=ModelChoice(), image=ModelChoice(), voice_id=""),
         "product_pitch_presenter": product_pitch_short_graph(chat=ModelChoice(), image=ModelChoice(), voice_id="", presenter=True),

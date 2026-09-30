@@ -3,12 +3,12 @@
   "version": 1,
   "workflow_revision": 1,
   "name": "商品 → 数字人出镜带货口播",
-  "description": "在「带货口播短视频」的基础上,开场钩子和收尾号召换成资产库里的一位人物出镜说出来(用它的脸和嗓子),中间每一拍仍是带商品的画面,口播用同一个嗓子念、对齐每一拍的开头,导出竖屏成片(带「AI 生成」标识)。人物要先在资产库里有正面图和音色;真人要有授权声明,克隆音色也要声明是谁的。",
-  "graph_hash": "d00555f753475a9888454248fa932d291f4d87adb84498d5c3f194fb12b49eb9",
+  "description": "在「带货口播短视频」的基础上,开场钩子和收尾号召换成资产库里的一位人物出镜说出来(用它的脸和嗓子),中间每一拍仍是带商品的画面,口播用同一个嗓子念、对齐每一拍的开头,每拍铺上屏幕短句,导出竖屏成片(带「AI 生成」标识)。运行前在「挑一位主播」上选好人物;人物要先在资产库里有正面图和音色;真人要有授权声明,克隆音色也要声明是谁的。",
+  "graph_hash": "bc196c814cc0e77bd65f62d00f6f0cb646a148a239ab53928c30aa293322094a",
   "graph": {
     "meta": {
       "template_id": "product_pitch_presenter",
-      "template_version": 1,
+      "template_version": 2,
       "source": "official"
     },
     "nodes": [
@@ -23,14 +23,14 @@
         "config": {
           "params": {
             "product_name": "",
-            "selling_points": "一行一条,只写你能负责的卖点",
+            "selling_points": "",
             "audience": "刷竖屏短视频的年轻观众",
             "target_duration_seconds": 30,
-            "voice_id": "",
             "width": 1080,
             "height": 1920,
             "fps": 30
-          }
+          },
+          "required_params": "product_name, selling_points"
         }
       },
       {
@@ -57,8 +57,8 @@
           "profile_id": "",
           "model": "",
           "preset": "creative",
-          "system": "你是带货短视频的编导。用户给你一件商品和几条卖点，你要写一条 20-45 秒、能直接拍的\n口播脚本，按\"拍\"拆开。\n\n硬性要求：\n- 前三秒必须给出观看理由，不要从\"大家好\"开始。\n- 每一拍的 narration 念出来不能超过这一拍的 seconds：中文按每秒约 4 个字估，宁短勿长。\n- visual_prompt 用英文写这一拍的画面，**商品必须出现在画面里**；不要写机位参数，不要在画面里\n  生成文字、logo 或水印。\n- 卖点只能来自用户给的那几条，不要编造功效、成分、资质或数据。\n- caption 是屏幕上的短句，不是把 narration 原样抄一遍。\n\n只输出符合 JSON Schema 的对象。\n\n这一条由一位主播**出镜**说开场钩子(hook_line)和结尾号召(call_to_action):这两句是对着镜头说的话,\n口语、自然,各自念出来不超过 8 秒;中间的每一拍是商品画面,narration 是画外音。",
-          "prompt": "商品名称：{{start.product_name}}\n卖点（只能用这些）：\n{{start.selling_points}}\n目标观众：{{start.audience}}\n成片目标时长：{{start.target_duration_seconds}} 秒\n\n请写出分拍脚本。各拍 seconds 之和要接近目标时长。",
+          "system": "你是带货短视频的编导。用户给你一件商品和几条卖点，你要写一条 20-45 秒、能直接拍的\n口播脚本，按\"拍\"拆开。\n\n硬性要求：\n- 前三秒必须给出观看理由，不要从\"大家好\"开始。\n- 每一拍的 narration 念出来不能超过这一拍的 seconds：中文按每秒约 4 个字估，宁短勿长。\n- visual_prompt 用英文写这一拍的画面，**商品必须出现在画面里**；不要写机位参数，不要在画面里\n  生成文字、logo 或水印。\n- 卖点只能来自用户给的那几条，不要编造功效、成分、资质或数据。\n- caption 是屏幕上的短句，不是把 narration 原样抄一遍。\n- 最多 12 拍：每一拍都要出一张画面。\n\n只输出符合 JSON Schema 的对象。\n\n这一条由一位主播**出镜**说开场钩子(hook_line)和结尾号召(call_to_action):这两句是对着镜头说的话,\n口语、自然,各自念出来不超过 8 秒;它们**也算在成片时长里**。中间的每一拍是商品画面,narration 是画外音。",
+          "prompt": "商品名称：{{start.product_name}}\n卖点（只能用这些）：\n{{start.selling_points}}\n目标观众：{{start.audience}}\n成片目标时长：{{start.target_duration_seconds}} 秒\n\n请写出分拍脚本。各拍 seconds 之和，加上开场钩子和结尾号召念出来的时长（中文每秒约 4 个字），要接近目标时长。",
           "response_format": "json_schema",
           "json_schema_name": "product_pitch_script",
           "json_schema": {
@@ -66,7 +66,7 @@
             "properties": {
               "hook_line": {
                 "type": "string",
-                "description": "前三秒的钩子,中文"
+                "description": "主播出镜说的开场钩子,中文,念出来不超过 8 秒"
               },
               "beats": {
                 "type": "array",
@@ -100,11 +100,12 @@
                   ],
                   "additionalProperties": false
                 },
-                "minItems": 2
+                "minItems": 2,
+                "maxItems": 12
               },
               "call_to_action": {
                 "type": "string",
-                "description": "结尾行动号召,中文"
+                "description": "主播出镜说的结尾行动号召,中文,念出来不超过 8 秒"
               }
             },
             "required": [
@@ -233,7 +234,6 @@
             "product_asset_id": "{{product_photo.asset_id}}",
             "sequence_id": "{{pitch_project.sequence_id}}",
             "video_track_id": "{{pitch_project.video_track_id}}",
-            "project_id": "{{pitch_project.project_id}}",
             "audio_track_id": "{{pitch_project.audio_track_id}}",
             "voice_engine": "{{presenter.voice_engine}}",
             "voice_id": "{{presenter.voice_id}}"
@@ -273,7 +273,8 @@
                   "sequence_id": "{{input.sequence_id}}",
                   "asset_id": "",
                   "track_id": "{{input.video_track_id}}",
-                  "max_duration": "{{loop.item.seconds}}"
+                  "start": 0,
+                  "end": "{{loop.item.seconds}}"
                 },
                 "inputs": [
                   "asset_id"
@@ -282,7 +283,7 @@
               {
                 "id": "beat_voice",
                 "type": "synthesize_speech",
-                "name": "用主播的嗓子念这一拍",
+                "name": "念这一拍的画外音",
                 "position": {
                   "x": 400,
                   "y": 320
@@ -305,7 +306,8 @@
                   "sequence_id": "{{input.sequence_id}}",
                   "asset_id": "",
                   "track_id": "{{input.audio_track_id}}",
-                  "at": ""
+                  "at": "",
+                  "max_duration": "{{loop.item.seconds}}"
                 },
                 "inputs": [
                   "asset_id",
@@ -341,8 +343,28 @@
             ]
           },
           "concurrency": 1,
-          "output": "{{beat_on_timeline.clip_id}}"
+          "output": ""
         }
+      },
+      {
+        "id": "beat_captions",
+        "type": "generate_subtitles",
+        "name": "按每一拍的落点铺屏幕短句",
+        "position": {
+          "x": 1290,
+          "y": 260
+        },
+        "config": {
+          "sequence_id": "",
+          "segments": "",
+          "start_field": "beat_on_timeline.timeline_start",
+          "end_field": "beat_on_timeline.timeline_end",
+          "text_field": "loop.item.caption"
+        },
+        "inputs": [
+          "sequence_id",
+          "segments"
+        ]
       },
       {
         "id": "export_short",
@@ -384,7 +406,8 @@
           "values": {
             "final_asset_id": "{{export_short.asset_id}}",
             "script": "{{pitch_script.json}}",
-            "beat_clip_ids": "{{shoot_beats.results}}",
+            "beat_count": "{{shoot_beats.count}}",
+            "caption_count": "{{beat_captions.count}}",
             "sequence_id": "{{pitch_project.sequence_id}}",
             "hook_asset_id": "{{hook_talk.asset_id}}",
             "cta_asset_id": "{{cta_talk.asset_id}}"
@@ -399,19 +422,19 @@
         "target": "product_photo"
       },
       {
-        "id": "start_script",
-        "source": "start",
-        "target": "pitch_script"
-      },
-      {
-        "id": "start_project",
-        "source": "start",
-        "target": "pitch_project"
-      },
-      {
         "id": "start_presenter",
         "source": "start",
         "target": "presenter"
+      },
+      {
+        "id": "presenter_script",
+        "source": "presenter",
+        "target": "pitch_script"
+      },
+      {
+        "id": "presenter_project",
+        "source": "presenter",
+        "target": "pitch_project"
       },
       {
         "id": "script_hook",
@@ -449,8 +472,13 @@
         "target": "cta_place"
       },
       {
-        "id": "cta_export",
+        "id": "cta_captions",
         "source": "cta_place",
+        "target": "beat_captions"
+      },
+      {
+        "id": "captions_export",
+        "source": "beat_captions",
         "target": "export_short"
       },
       {
@@ -526,6 +554,22 @@
         "kind": "data",
         "source_output": "video_track_id",
         "target_input": "track_id"
+      },
+      {
+        "id": "d-pitch_project-sequence_id-beat_captions-sequence_id",
+        "source": "pitch_project",
+        "target": "beat_captions",
+        "kind": "data",
+        "source_output": "sequence_id",
+        "target_input": "sequence_id"
+      },
+      {
+        "id": "d-shoot_beats-results-beat_captions-segments",
+        "source": "shoot_beats",
+        "target": "beat_captions",
+        "kind": "data",
+        "source_output": "results",
+        "target_input": "segments"
       },
       {
         "id": "d-pitch_project-sequence_id-export_short-sequence_id",

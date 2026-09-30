@@ -584,8 +584,10 @@ def test_切片的字幕时间码相对自己那一条() -> None:
 def test_商品图贯穿每一次生成() -> None:
     """这几个模板的全部要点:生成的是「这件东西在别处」,不是「一件像它的东西」。
 
-    商品图**每一次生成都要带上**,不是只喂第一次;视频那一步还要把刚出的上身图当首帧,
-    否则动起来的那个人可能换了一身衣服。
+    商品图**每一次出图都要带上**,不是只喂第一次;视频那一步把刚出的上身图当首帧,否则动起来的那个人可能换了
+    一身衣服。视频那一步**只**给这张首帧:此前这里还断言它另挂商品图作参考 —— 同一次生成里首帧加参考图,
+    Seedance 2 / MiniMax 两组互斥,Wan / Kling / Seedance 1.x 根本不收参考图,内置视频模型没有一个接得住
+    (对每个内置模型的逐一校验见 test_template_generations_fit_builtin_models)。
     """
     graph = product_on_model_graph(chat=CHAT, image=SEEDREAM, video=SEEDANCE)
     body = _node(graph, "shoot_scenes")["config"]["body"]["nodes"]
@@ -595,8 +597,7 @@ def test_商品图贯穿每一次生成() -> None:
     assert image_node["config"]["negative_prompt"]
 
     clip = next(one for one in body if one["id"] == "on_model_clip")
-    assert "{{on_model.asset_id}}:first_frame" in clip["config"]["source_assets"]
-    assert "{{input.product_asset_id}}:reference_image" in clip["config"]["source_assets"]
+    assert clip["config"]["source_assets"] == ["{{on_model.asset_id}}:first_frame"]
 
 
 def test_没有视频模型时上身图模板仍然可用() -> None:
@@ -788,7 +789,9 @@ def test_稿子到数字人口播_分段配音逐段说话_授权留给跑的人
     graph = talking_script_video_graph(voice_id="v1")
     assert validate_graph(graph, require_config=False) == []
     voicing = _node(graph, "voicing")
-    assert voicing["type"] == "talking_segments" and voicing["config"]["voice"] == "{{start.voice_id}}"
+    #: 稿子和音色直接写在分段配音上(两格都是必填,空着运行前拦住);不经开始节点转一手。
+    assert voicing["type"] == "talking_segments" and voicing["config"]["voice"] == "v1" and voicing["config"]["text"] == ""
+    assert not {"script", "voice_id"} & set(_node(graph, "start")["config"]["params"])
     wires = {(edge["source"], edge.get("source_output"), edge["target"], edge.get("target_input")) for edge in graph["edges"]}
     assert ("voicing", "segments", "speak_segments", "items") in wires, "逐段循环吃的是分好的段"
     assert ("voicing", "cues", "captions", "segments") in wires, "字幕用配音的实测时长"

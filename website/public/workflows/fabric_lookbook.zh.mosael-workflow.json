@@ -3,12 +3,12 @@
   "version": 1,
   "workflow_revision": 1,
   "name": "面料 → 应用效果图与规格页",
-  "description": "给一块面料的实拍图和参数,规划它真正适合做的几种成品,每种出一张放在真实空间里的效果图,并生成一页可直接发客户的规格与应用提案。规格只复述你给出的参数,没给的写「需与工厂确认」。",
-  "graph_hash": "70b0e4e7872ab42736ecb23e357a532ca2a6e54371d1b2d71e963288b667d0a5",
+  "description": "给一块面料的实拍图和参数,规划它真正适合做的几种成品(最多 12 种),每种出一张放在真实空间里的效果图,并生成一页可直接发客户的规格与应用提案。规格只复述你给出的参数,没给的写「需与工厂确认」。每一种是一次付费出图。",
+  "graph_hash": "f41559ada58ad506671a01c8e8773919bc850fdc698f962cb4c3b604ebf3dcd5",
   "graph": {
     "meta": {
       "template_id": "fabric_lookbook",
-      "template_version": 1,
+      "template_version": 2,
       "source": "official"
     },
     "nodes": [
@@ -23,13 +23,14 @@
         "config": {
           "params": {
             "fabric_name": "",
-            "composition": "成分,如 60% 棉 40% 亚麻",
+            "composition": "",
             "weight_gsm": "",
             "width_cm": "",
-            "hand_feel": "手感与垂坠,一句话",
+            "hand_feel": "",
             "target_client": "家纺采购 / 服装品牌",
             "application_count": 4
-          }
+          },
+          "required_params": "fabric_name"
         }
       },
       {
@@ -56,7 +57,7 @@
           "profile_id": "",
           "model": "",
           "preset": "precise",
-          "system": "你是面料商的技术销售和陈列企划。客户给你一块面料的参数，你要做两件事：\n\n1. 规划几种这块料**真的适合**的应用（家纺、服装、软装等），每种给一张成品效果图的英文提示词。\n   效果图要把成品放在真实空间里，让人一眼看出垂坠感、厚度和纹理，不是平铺特写。\n2. 写一页规格卡。\n\n硬性要求：\n- 规格卡**只能复述用户给出的参数**。成分、克重、幅宽、缩率、色牢度这些是要负责任的数字，\n  用户没给就不要写；确实需要但没有的，写「需与工厂确认」。\n- 不要承诺任何认证、检测结论或环保资质。\n- image_prompt 用英文，不要写机位参数，不要在画面里生成文字或水印。\n- 你**看不到**那块面料的图，所以不要描述它的花型和颜色细节——那由参考图保证。\n\n只输出符合 JSON Schema 的对象。",
+          "system": "你是面料商的技术销售和陈列企划。客户给你一块面料的参数，你要做两件事：\n\n1. 规划几种这块料**真的适合**的应用（家纺、服装、软装等），每种给一张成品效果图的英文提示词，\n   最多 12 种。\n   效果图要把成品放在真实空间里，让人一眼看出垂坠感、厚度和纹理，不是平铺特写。\n2. 写一页规格卡。\n\n硬性要求：\n- 规格卡**只能复述用户给出的参数**。成分、克重、幅宽、缩率、色牢度这些是要负责任的数字，\n  用户没给就不要写；确实需要但没有的，写「需与工厂确认」。\n- 不要承诺任何认证、检测结论或环保资质。\n- image_prompt 用英文，不要写机位参数，不要在画面里生成文字或水印。\n- 你**看不到**那块面料的图，所以不要描述它的花型和颜色细节——那由参考图保证。\n\n只输出符合 JSON Schema 的对象。",
           "prompt": "面料名称：{{start.fabric_name}}\n成分：{{start.composition}}\n克重：{{start.weight_gsm}}\n幅宽：{{start.width_cm}}\n手感与垂坠：{{start.hand_feel}}\n客户类型：{{start.target_client}}\n要几种应用：{{start.application_count}}\n\n请输出应用规划与规格卡。没给的参数不要编。",
           "response_format": "json_schema",
           "json_schema_name": "fabric_lookbook_plan",
@@ -92,7 +93,12 @@
                   ],
                   "additionalProperties": false
                 },
-                "minItems": 1
+                "minItems": 1,
+                "maxItems": 12
+              },
+              "applications_markdown": {
+                "type": "string",
+                "description": "给客户看的应用清单,Markdown 无序列表,每种一行:「- **做成什么**:为什么这块料适合做它」"
               },
               "care_notes": {
                 "type": "string",
@@ -102,6 +108,7 @@
             "required": [
               "spec_markdown",
               "applications",
+              "applications_markdown",
               "care_notes"
             ],
             "additionalProperties": false
@@ -191,7 +198,7 @@
         },
         "config": {
           "title": "{{start.fabric_name}} · 规格与应用提案",
-          "markdown": "{{fabric_plan.json.spec_markdown}}\n\n## 适合做什么\n\n{{fabric_plan.json.applications}}\n\n## 养护与工艺\n\n{{fabric_plan.json.care_notes}}\n\n---\n\n效果图为 AI 依据本面料实拍图生成,用于沟通版型与观感;**成分、克重、幅宽、色牢度以工厂实测为准**。\n",
+          "markdown": "{{fabric_plan.json.spec_markdown}}\n\n## 适合做什么\n\n{{fabric_plan.json.applications_markdown}}\n\n## 养护与工艺\n\n{{fabric_plan.json.care_notes}}\n\n---\n\n效果图为 AI 依据本面料实拍图生成,用于沟通版型与观感;**成分、克重、幅宽、色牢度以工厂实测为准**。\n",
           "tags": "面料提案"
         }
       },
