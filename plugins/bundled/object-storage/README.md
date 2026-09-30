@@ -1,77 +1,93 @@
-# 对象存储
+# Object Storage
 
-把素材库里的文件传到**你自己的桶**里,换回一条公网直链;也能列出桶里的对象、给已有对象签直链、把对象拉回素材库。
-**随应用内置**,装好就在插件页里。
+Uploads files from the asset library to **your own bucket** and hands back a public direct link; it can also list the
+objects in a bucket, sign direct links for existing objects, and pull objects back into the asset library.
+**Built into the app**: once Mosael is installed it is already on the Plugins page.
 
-一个连接对一个桶,服务商是连接的一项配置:
+One connection is one bucket, and the provider is a setting of the connection:
 
-| 服务商 | 接入点留空时 | 签名 | 预签名最长 |
+| Provider | When the endpoint is empty | Signature | Longest presign |
 | --- | --- | --- | --- |
-| 阿里云 OSS | `oss-<地域>.aliyuncs.com` | 原生 V4(`OSS4-HMAC-SHA256`) | 7 天 |
-| 腾讯云 COS | `cos.<地域>.myqcloud.com` | 原生 `q-sign-algorithm=sha1` | 不限 |
-| 火山引擎 TOS | `tos-<地域>.volces.com` | `TOS4-HMAC-SHA256` | 7 天 |
-| Amazon S3 | `s3.<地域>.amazonaws.com` | SigV4 | 7 天 |
-| S3 兼容服务 | 必填(如 `http://localhost:9000`) | SigV4,路径式寻址 | 7 天 |
+| Alibaba Cloud OSS | `oss-<region>.aliyuncs.com` | Native V4 (`OSS4-HMAC-SHA256`) | 7 days |
+| Tencent Cloud COS | `cos.<region>.myqcloud.com` | Native `q-sign-algorithm=sha1` | Unlimited |
+| Volcengine TOS | `tos-<region>.volces.com` | `TOS4-HMAC-SHA256` | 7 days |
+| Amazon S3 | `s3.<region>.amazonaws.com` | SigV4 | 7 days |
+| S3-compatible service | Required (e.g. `http://localhost:9000`) | SigV4, path-style addressing | 7 days |
 
-腾讯云的桶名要填**带 APPID 的全名**,如 `examplebucket-1250000000`。S3 兼容服务(MinIO、Cloudflare R2……)
-走路径式寻址(`<接入点>/<桶>/<对象>`)—— 自建服务多半没给每个桶配泛域名;接入点可以写 `http://`。
-Cloudflare R2 的地域填 `auto`。
+For Tencent Cloud, enter the **full bucket name with the APPID**, e.g. `examplebucket-1250000000`. S3-compatible
+services (MinIO, Cloudflare R2…) use path-style addressing (`<endpoint>/<bucket>/<object>`), since self-hosted services
+usually don't have a wildcard domain set up for each bucket; the endpoint may use `http://`.
+For Cloudflare R2, set the region to `auto`.
 
-## 它解决的那个具体问题
+## The specific problem it solves
 
-Mosael 是**本地优先**的:素材库里的文件在你自己的盘上,没有公网地址。而有些供应商只收链接 ——
-火山方舟 Seedance 的参考视频就是一例。官方文档写得很清楚:
+Mosael is **local-first**: the files in your asset library live on your own disk and have no public address. Some
+providers, however, only accept links; the reference video for Volcengine Ark's Seedance is one example. Its official
+documentation is explicit (translated):
 
-> 请确保 URL 是公网可公开访问的链接(建议存放在 TOS 对象存储服务中,并配置为公共读)
+> Make sure the URL is a publicly accessible link (we recommend storing it in the TOS object storage service and
+> configuring it as public-read)
 
-而且它**明确不收 Base64**:参考**图**可以走 data URL,参考**视频**不行。
+And it **explicitly does not accept Base64**: a reference **image** can be sent as a data URL, a reference **video**
+cannot.
 
-`storage_upload` 就是那座桥:把素材传上去,交回一条**限时直链**。签名在查询串里,所以
-**桶不必设成公共读** —— 那条地址谁拿到谁能下,但过期就失效。它在清单里声明了 `public_url`,
-生成时遇到只收链接的那一格而你给的是本地素材,宿主会**自动**调它(配了几个桶就在「设置 → 能力提供方 → 素材外链」里
-选默认用哪一个),同一份素材在链接过期之前复用,不重复上传。
+`storage_upload` is the bridge: it uploads the asset and hands back a **time-limited direct link**. The signature is in
+the query string, so **the bucket doesn't need to be public-read**: anyone who has the link can download it, but it
+stops working once it expires. It declares `public_url` in its manifest, so when a generation has a slot that only
+accepts links and you gave it a local asset, the host calls it **automatically** (if you have several buckets, choose
+the default one under "Settings → Capability providers → Asset links"), and reuses the link for the same asset until it
+expires instead of uploading it again.
 
-## 四个工具
+## Four tools
 
-| 工具 | 名字 | 干什么 |
+| Tool | Name | What it does |
 | --- | --- | --- |
-| `storage_upload` | 上传到对象存储 | 传一份素材上去,交回限时直链 + 公共读地址。**流式**:大文件分片上传、边传边报进度,取消时停在片与片之间并清掉已传的分片 |
-| `storage_presign` | 签一条限时直链 | 给桶里已有的对象签一条限时直链 |
-| `storage_fetch` | 从对象存储取回 | 把桶里的对象拉回素材库(**交地址,由宿主搬字节** —— 进度、取消、重试都归它)。对象路径声明成 `format: "external_id"`:按桶里的地址取回是导入,不是内容变换,工作流和对话里用,不上画板 |
-| `storage_list` | 列出桶里的对象 | 列出某个前缀下的对象,一页最多 1000 条,还有下一页时交回 `next_cursor` |
+| `storage_upload` | Upload to object storage | Uploads an asset and returns a time-limited direct link plus the public-read address. **Streaming**: large files are uploaded in parts with progress reported along the way; cancelling stops between parts and cleans up the parts already uploaded |
+| `storage_presign` | Sign a direct link | Signs a time-limited direct link for an object already in the bucket |
+| `storage_fetch` | Fetch from object storage | Pulls an object from the bucket back into the asset library (**it hands over an address and the host moves the bytes**, so progress, cancelling and retries are all the host's job). The object key is declared as `format: "external_id"`: fetching by an address in the bucket is an import, not a content transformation, so it is used in workflows and chat and not on boards |
+| `storage_list` | List bucket objects | Lists the objects under a prefix, up to 1000 per page, and returns `next_cursor` when there is another page |
 
-默认对象键是 `mosael/<内容指纹>/<原文件名>`:两份都叫 `image.png` 的素材不会互相覆盖,
-同样的内容重传落在同一个键上。
+The default object key is `mosael/<content hash>/<original file name>`: two assets both named `image.png` don't
+overwrite each other, and re-uploading the same content lands on the same key.
 
-上传超过 64MB 走分片(Initiate → UploadPart × N → Complete,四家同一套),每片单独重试
-(限流、服务端临时错误、网络断开),失败或取消就 Abort —— 分片留在桶里是要收存储费的,而且在控制台里看不见。
+Uploads larger than 64 MB go in parts (Initiate → UploadPart × N → Complete, the same flow for all four providers), and
+each part is retried on its own (rate limiting, temporary server errors, dropped connections); on failure or cancel the
+upload is aborted, because parts left in the bucket are billed for storage and are invisible in the console.
 
-失败按原因说人话:桶在别的地域时点名该填哪个地域、密钥不对、没权限、时钟偏差、桶不存在……并带上原始错误码。
+Failures are explained by cause in plain words: when the bucket is in another region it names the region to enter, and
+it also recognises a wrong key, missing permission, clock skew, a bucket that doesn't exist and so on, always with the
+original error code.
 
-## 为什么不用官方 SDK
+## Why not the official SDKs
 
-插件进程是按 stdio 协议跑的短命脚本。装一整个 SDK 只为签几种请求,代价是安装体积、版本冲突,
-以及一条我们控制不了的供应链。签名本身是一页纸的算法,纯 `hmac` + `hashlib`:
+A plugin process is a short-lived script speaking the stdio protocol. Installing a whole SDK just to sign a few kinds of
+requests costs install size, version conflicts, and a supply chain we don't control. The signing itself is a one-page
+algorithm, pure `hmac` + `hashlib`:
 
-- `tools/sigv4.py` —— SigV4 系三家(S3 / TOS / OSS)**同源但不同字**:算法名、日期头、scope 结尾、
-  密钥派生链的第一步、预签名的参数名各不相同;阿里云 V4 的结构也不同(只签默认那几类头、
-  `AdditionalHeaders` 那一行、没有值的查询参数只写名字)。
-- `tools/qsign.py` —— 腾讯云 COS 的原生签名,和 SigV4 不是一系。
+- `tools/sigv4.py`: the three SigV4-family providers (S3 / TOS / OSS) are **the same algorithm with different words**:
+  the algorithm name, the date header, the end of the scope, the first step of the key derivation chain and the presign
+  parameter names all differ; Alibaba Cloud V4 is also structured differently (it signs only the default kinds of
+  headers, has the `AdditionalHeaders` line, and writes query parameters without a value as just their name).
+- `tools/qsign.py`: Tencent Cloud COS's native signature, which is not part of the SigV4 family.
 
-每一种签名(包括分片上传的四种请求)都拿官方 SDK 在同样输入下算出的向量对过
-(`backend/tests/test_*_signature_matches_the_sdk.py`、`test_object_storage_multipart_matches_the_sdk.py`)。
+Every kind of signature (including the four requests of a multipart upload) is checked against vectors computed by the
+official SDKs from the same inputs (`backend/tests/test_*_signature_matches_the_sdk.py`,
+`test_object_storage_multipart_matches_the_sdk.py`).
 
-## 一个插件,不是五个
+## One plugin, not five
 
-此前是四个插件包(阿里云 OSS / 腾讯云 COS / 火山引擎 TOS / Amazon S3),上传、列目录这些主体在包之间
-逐字节拷贝、靠一条测试钉着不漂。而它们之间的差异只有 `tools/providers.py` 那一张表 ——
-签名方言、默认接入点、预签名上限、寻址方式。现在主体(`tools/storage.py`)一行都不认识「阿里云」,
-加一家就是往表里加一行。
+This used to be four plugin packages (Alibaba Cloud OSS / Tencent Cloud COS / Volcengine TOS / Amazon S3), with the
+main body (uploading, listing and so on) copied byte for byte between the packages and a test pinning them so they
+didn't drift apart. Yet the only differences between them fit in one table in `tools/providers.py`: signature dialect,
+default endpoint, presign limit and addressing style. Now the main body (`tools/storage.py`) doesn't know a single
+thing about "Alibaba Cloud", and adding a provider means adding a row to the table.
 
-升级时老的四个插件由迁移 `merge-object-storage-plugins` 原地合进来:连接 id 不变,配置、密钥(不解密,
-只改键名)、授权、工具开关、「素材外链」的默认、直链缓存、工作流和画板上的节点都跟着搬,老包的文件夹删掉。
+On upgrade, the old four plugins are merged in place by the `merge-object-storage-plugins` migration: connection ids
+stay the same, and the config, keys (not decrypted, only renamed), grants, tool switches, the "Asset links" default,
+the direct link cache, and nodes in workflows and on boards all move over; the old packages' folders are deleted.
 
-## 权限与密钥
+## Permissions and keys
 
-建一个**只对这一个桶有读写权限**的子用户 / RAM 用户,别用主账号密钥。插件读得到的只有这个连接的
-配置和那一对密钥 —— 它没有数据库、没有 API 令牌、没有媒体目录(那是隔离边界的一部分)。
+Create a sub-user / RAM user that **can only read and write this one bucket**; don't use the root account's keys. The
+only things the plugin can read are this connection's config and that pair of keys: it has no database, no API token
+and no media directory (that is part of the isolation boundary).

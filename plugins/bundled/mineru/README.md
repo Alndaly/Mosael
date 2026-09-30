@@ -1,38 +1,50 @@
-# MinerU 文档解析
+# MinerU document parsing
 
-把 PDF、Word、PPT、Excel 和图片交给 [MinerU](https://mineru.net) 解析成 Markdown:版面分析、OCR、表格和公式识别。
-扫描件、图片版 PDF、多栏排版、带公式和复杂表格的文档,比 Mosael 自带的本地解析好得多。
+Sends PDF, Word, PowerPoint, Excel and image files to [MinerU](https://mineru.net) to be parsed into Markdown: layout
+analysis, OCR, and table and formula recognition. For scans, image-only PDFs, multi-column layouts, and documents with
+formulas and complex tables, it does far better than Mosael's built-in local parsing.
 
-## 怎么用
+## How to use it
 
-1. 在 mineru.net 的「API 管理」里建一个 API Token。
-2. 在 Mosael 的「插件」页启用 MinerU,填上 Token。可以选模型(VLM 推荐)、文档语言、要不要强制 OCR。
-3. 几种用法:
-   - **某一份文档**:打开素材详情,「重新解析 → 用 MinerU 解析」;
-   - **以后都用它**:「设置 → 能力提供方 → 文档解析」选 MinerU,点「重新解析」时默认用它;
-   - **让智能体、工作流用它**:插件页上「用 MinerU 解析文档」这个工具默认是勾上的 —— 智能体可以直接调它,工作流里
-     有同名的节点;挑一份文档交给它,结果存成这份文档的一次解析。
+1. Create an API token under API management on mineru.net.
+2. On Mosael's Plugins page, enable MinerU and enter the token. You can choose the model (VLM recommended), the document
+   language, and whether to force OCR.
+3. Ways to use it:
+   - **For one document**: open the asset details and choose "Parse again" → "Parse with MinerU";
+   - **As the default from now on**: pick MinerU under "Settings → Capability providers → Document parsing", and
+     "Parse again" uses it by default;
+   - **For the agent and workflows**: the "Parse a document with MinerU" tool on the Plugins page is enabled by default,
+     so the agent can call it directly and workflows have a node of the same name; give it a document and the result is
+     saved as a parse of that document.
 
-导入文档时 Mosael 总是先用本地解析解一遍(不出本机、不花钱);交给 MinerU 必须是你点名的 —— 文档会上传到 MinerU。
+When a document is imported, Mosael always parses it locally first (nothing leaves your machine and it costs nothing);
+sending it to MinerU only happens when you ask for it explicitly, because the document is uploaded to MinerU.
 
-## 网络(境外 / 开着全局代理时看这里)
+## Network (read this if you're abroad or running a global proxy)
 
-MinerU 只在中国大陆区域提供服务。插件页上这个连接的「网络」一项(Mosael 给每个插件连接都有这一项):
+MinerU only serves the mainland China region. On the Plugins page this connection has a "Network" setting (Mosael gives
+every plugin connection one):
 
-- **跟随 Mosael**(默认):和 Mosael 自己的出站一样 —— 设置里配了出站代理就走它;没配时用系统代理;
-- **直连**:人在境内、但 Mosael 或系统开着代理把流量送到境外时选它;
-- **走指定代理**:人在境外时选它,填一个进大陆的 HTTP 代理,例如 `http://127.0.0.1:7890`(这个插件不支持 SOCKS)。
+- **Follow Mosael** (default): the same as Mosael's own outbound traffic: it uses the outbound proxy if one is set in
+  Settings, otherwise the system proxy;
+- **Direct (no proxy)**: choose this when you're in mainland China but Mosael or the system has a proxy on that sends
+  traffic abroad;
+- **Use a proxy**: choose this when you're abroad, and enter an HTTP proxy into mainland China, e.g.
+  `http://127.0.0.1:7890` (this plugin does not support SOCKS).
 
-上传或调用被拒(403)、连不上时,错误信息里会提示这一项。
+When an upload or call is refused (403) or can't connect, the error message points to this setting.
 
-## 解析出什么
+## What it produces
 
-- 按页标出的 Markdown:标题、段落、列表、公式(LaTeX)、表格(转成 Markdown 表格)、插图;
-- 每一页的页面图由 Mosael 照原件自己渲(PDF 总有;Word / PPT 要本机装了 LibreOffice)。
+- Markdown marked page by page: headings, paragraphs, lists, formulas (LaTeX), tables (converted to Markdown tables) and
+  figures;
+- The page image for each page is rendered by Mosael itself from the original (always for PDF; Word / PowerPoint need
+  LibreOffice installed on this machine).
 
-智能体读这份文档时,读到的就是 MinerU 解析的这一份(同一份文档有几次解析时,用最新成功的那一次)。
+When the agent reads the document, it reads this MinerU parse (when a document has several parses, the latest
+successful one is used).
 
-## 限制
+## Limits
 
-- 单个文件最多 200MB、200 页;免费额度每天有页数上限(以 mineru.net 为准)。
-- 目前接的是 MinerU 云端 API。自己部署的 MinerU 服务(`mineru-kit api-server`)还没接。
+- Up to 200 MB and 200 pages per file; the free tier has a daily page quota (see mineru.net for the current numbers).
+- It currently uses MinerU's cloud API. A self-hosted MinerU service (`mineru-kit api-server`) isn't supported yet.

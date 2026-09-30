@@ -305,6 +305,27 @@
     line-height: 1.6;
   }
 
+  /* 代码高亮(构建期 Shiki,见 lib/mdx-options):每个 token 同时带浅色、深色两个颜色变量,
+     这里按站点的主题开关二选一。代码框本身的底色、边框仍用上面那套,不用主题自带的。 */
+  .docs-body pre code {
+    display: grid;
+    background: transparent;
+    padding: 0;
+    font-size: inherit;
+  }
+  .docs-body [data-rehype-pretty-code-figure] {
+    margin: 1.5rem 0;
+  }
+  .docs-body [data-rehype-pretty-code-figure] pre {
+    margin: 0;
+  }
+  .docs-body pre span[style*="--shiki-light"] {
+    color: var(--shiki-light);
+  }
+  .dark .docs-body pre span[style*="--shiki-dark"] {
+    color: var(--shiki-dark);
+  }
+
   /* 表格。整张表能横向滚,窄屏上不会把版心撑破。 */
   .docs-body table {
     display: block;

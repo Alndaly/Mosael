@@ -1,92 +1,107 @@
-# 百度网盘
+# Baidu Netdisk
 
-在百度网盘和素材库之间搬文件:把网盘里的素材拉进来,也把成片存回去。
+Moves files between Baidu Netdisk and the asset library: pull footage in from the netdisk, and save finished videos back
+to it.
 
-## 能做什么
+## What it can do
 
-| 工具 | 名字 | 干什么 |
+| Tool | Name | What it does |
 | --- | --- | --- |
-| `pan_list` | 列出网盘目录 | 列一个目录下的文件和子目录,给出 `fs_id`;没列完时交回 `has_more` 和 `next_start` |
-| `pan_search` | 搜索网盘文件 | 按文件名搜(递归),找不准路径时用它;命中比 `limit` 多时 `has_more` 为真 |
-| `pan_import` | 从百度网盘导入 | 按 `fs_id` 把文件拉进素材库,返回 `asset_id`。`fs_id` 声明成 `format: "external_id"`(网盘里的编号):工作流和对话里用,不上画板 |
-| `pan_upload` | 上传到百度网盘 | 把素材库里的一个文件传到网盘,返回 `fs_id`;边传边报进度,可取消,最长 30 分钟 |
+| `pan_list` | List a Netdisk folder | Lists the files and sub-directories in a directory with their `fs_id`; returns `has_more` and `next_start` when the listing isn't finished |
+| `pan_search` | Search Baidu Netdisk | Searches by file name (recursively), for when you don't know the exact path; `has_more` is true when there are more hits than `limit` |
+| `pan_import` | Import from Baidu Netdisk | Pulls a file into the asset library by `fs_id` and returns an `asset_id`. `fs_id` is declared as `format: "external_id"` (an id inside the netdisk): used in workflows and chat, not on boards |
+| `pan_upload` | Upload to Baidu Netdisk | Uploads one file from the asset library to the netdisk and returns its `fs_id`; reports progress as it goes, can be cancelled, runs up to 30 minutes |
 
-拿到 `asset_id` 之后它就是一份普通素材:插时间线、当生成的首帧、拿去发布,都一样。
-`pan_import` 和 `pan_upload` 也都是工作流节点(「从百度网盘导入」/「上传到百度网盘」)。
+Once you have an `asset_id`, it is an ordinary asset: put it on the timeline, use it as the first frame of a generation,
+publish it; it all works the same.
+`pan_import` and `pan_upload` are also workflow nodes ("Import from Baidu Netdisk" / "Upload to Baidu Netdisk").
 
-## 上传是怎么走的
+## How uploading works
 
-百度的上传协议本身就是三步,不是这里绕远:
+Baidu's upload protocol itself has three steps; this is not a detour on our side:
 
-1. **precreate** —— 报上文件大小和每个分片的 md5,拿一个 uploadid。
-   **秒传在这一步发生**:百度认得这些 md5 就直接给结果,一个字节都不用传。
-2. **superfile2** —— 逐片传。分片固定 4MB(百度规定的,不是可调参数 —— 换个数字
-   precreate 报的 md5 清单就对不上)。
-3. **create** —— 报上 uploadid 和分片清单,文件才算落地。
+1. **precreate**: report the file size and the md5 of every part, and get an uploadid.
+   **Instant upload happens at this step**: if Baidu recognises those md5s it returns the result directly and not a
+   single byte has to be sent.
+2. **superfile2**: upload part by part. Parts are fixed at 4 MB (Baidu's rule, not a tunable parameter; with any other
+   size the md5 list reported in precreate won't match).
+3. **create**: report the uploadid and the part list; only then does the file actually exist.
 
-少一步都不行:只传不 create 的话,文件在网盘上根本不存在,而 superfile2 全都返回成功。
+No step can be skipped: if you upload without create, the file simply doesn't exist on the netdisk, even though every
+superfile2 call returned success.
 
-**默认不覆盖** —— 同名文件已存在时另存为副本。传错一次就把人家网盘上的东西冲掉,
-这个代价比多一个副本大得多。要覆盖就显式传 `overwrite: true`。
+**It doesn't overwrite by default**: when a file with the same name exists, it saves a copy. Wiping out something on
+someone's netdisk with one wrong upload costs far more than an extra copy. To overwrite, pass `overwrite: true`
+explicitly.
 
-md5 是流式算的,不整个载进内存 —— 上传的常常是几个 G 的成片。
+The md5 is computed as a stream, without loading the whole file into memory, since uploads are often finished videos of
+several GB.
 
-上传是**流式工具**:每传完一片报一次进度(工作流节点上看得到「已上传 12.0 / 96.0 MB」),
-取消时停在片与片之间;清单给它声明了 30 分钟的预算(`timeout_seconds`),默认的 60 秒装不下几百 MB 的成片。
-网盘路径没写开头的 `/` 也认。
+Uploading is a **streaming tool**: it reports progress after every part (the workflow node shows something like
+"Uploaded 12.0 / 96.0 MB"), and cancelling stops between parts; the manifest gives it a 30-minute budget
+(`timeout_seconds`), since the default 60 seconds isn't enough for a finished video of several hundred MB.
+A netdisk path without the leading `/` is accepted too.
 
-## 插件怎么拿到那个文件
+## How the plugin gets the file
 
-`pan_upload` 的 `asset_id` 在清单里标了 `"format": "asset"`,所以**宿主交过来的已经是一个
-本地路径**(见 [PLUGIN_MANIFEST.md](../../../docs/PLUGIN_MANIFEST.md) 的「要收一个文件」)。
-插件这一侧不知道素材库存在,也不需要知道。
+`asset_id` in `pan_upload` is marked `"format": "asset"` in the manifest, so **what the host hands over is already a
+local path** (see "Receiving a file" in [PLUGIN_MANIFEST.md](../../../docs/PLUGIN_MANIFEST.md)).
+The plugin side doesn't know the asset library exists, and doesn't need to.
 
-给的是副本不是原件,调用结束即删。
+It gets a copy, not the original, and the copy is deleted when the call ends.
 
-## 配置
+## Setup
 
-1. 去 [百度网盘开放平台](https://pan.baidu.com/union) 注册一个应用,拿到 AppKey / SecretKey
-2. 在 Mosael 的插件页接入这个包,填上 AppKey 和 SecretKey
-3. 点连接第一行「授权」右边的**去授权**:在打开的百度页面登录、同意,把它显示的授权码贴回来
+1. Register an app on the [Baidu Netdisk Open Platform](https://pan.baidu.com/union) to get an AppKey / SecretKey
+2. Add this package on Mosael's Plugins page and fill in the AppKey and SecretKey
+3. Click **Authorize** to the right of "Authorization" on the first row of the connection: log in and agree on the Baidu
+   page that opens, then paste the authorization code it shows back in
 
-换回来的 `refresh_token`(有效期 10 年)和 `access_token` 自动存进这个连接,那条「授权」变成**已授权**。
-这两格不和 AppKey 摆在一起;手里已经有 refresh_token 的话,点「授权」那一行的「手动填写令牌」展开自己填,
-Access Token 那一格**留空即可** —— 插件会用 refresh_token 自己换。
+The `refresh_token` (valid for 10 years) and `access_token` you get back are stored in this connection automatically,
+and the "Authorization" row changes to **Authorized**. These two fields aren't shown next to the AppKey; if you already
+have a refresh_token, click "Enter tokens manually" on the "Authorization" row to expand them and fill it in yourself,
+and **just leave** the Access Token field **empty**: the plugin exchanges the refresh_token for one on its own.
 
-百度不再接受已存的令牌时(refresh_token 被作废、续过一次还是说过期),插件在失败响应里带上
-`reauthorize: true`,连接会标成**需要重新授权** —— 点「重新授权」走一遍就好。
+When Baidu stops accepting the stored tokens (the refresh_token was revoked, or it still says expired after one
+renewal), the plugin includes `reauthorize: true` in the failure response and the connection is marked **Needs
+re-authorization**; click "Re-authorize" and go through it once more.
 
 
-### token 自己续
+### Tokens renew themselves
 
-百度的 `access_token` 三十天到期。插件撞上「过期」那个 errno 就换一个新的、原样重试一次,
-并把换来的 token 交回宿主记住(靠 [`state` 通道](../../../docs/PLUGIN_MANIFEST.md))。
-你填一次 refresh_token 就不用再管。
+Baidu's `access_token` expires after thirty days. When the plugin hits the "expired" errno, it gets a new one, retries
+once unchanged, and hands the new token back to the host to remember (through the
+[`state` channel](../../../docs/PLUGIN_MANIFEST.md)). Fill in the refresh_token once and you never have to think about
+it again.
 
-**access_token 和 refresh_token 都会被记住** —— 百度换 token 时会连 refresh_token 一起
-轮换,只存前者的话,三十天后拿着一个已经作废的去换,得到的是一个查不出原因的失败。
+**Both access_token and refresh_token are remembered**: Baidu rotates the refresh_token along with it when it issues a
+new token, so if only the former were stored, thirty days later you'd be exchanging one that has already been revoked
+and get a failure with no visible cause.
 
-续了一次还是过期,说明问题不在有效期上(AppKey 不对、应用被停用),这时才会报到界面上,
-并且**只重试一次** —— 再试就是拿同一个错误刷接口。
+If it is still expired after one renewal, the problem isn't the expiry (wrong AppKey, app suspended), and only then is
+it reported in the interface, **retrying only once**: trying again would just hammer the API with the same error.
 
-**每一条接口都走同一个续期口子**,上传的 precreate / create 也不例外;同一次调用里续第二次时用的是
-刚轮换出来的那个 refresh_token。续完之后这次调用**失败了**(比如文件不存在),新令牌也照样交回去记住 ——
-旧的那个已经被百度作废了。
+**Every endpoint goes through the same renewal path**, including precreate / create during uploads; a second renewal
+within the same call uses the refresh_token that was just rotated. If the call **fails** after renewing (for example the
+file doesn't exist), the new tokens are still handed back to be remembered, because Baidu has already revoked the old
+ones.
 
-## 它为什么不自己下载文件
+## Why it doesn't download files itself
 
-`pan_import` 只换到 dlink 就交给宿主(见 [PLUGIN_MANIFEST.md](../../../docs/PLUGIN_MANIFEST.md)
-的 artifact 那节)。理由不是省事:
+`pan_import` only gets as far as a dlink and hands that to the host (see the artifact section of
+[PLUGIN_MANIFEST.md](../../../docs/PLUGIN_MANIFEST.md)). The reason isn't convenience:
 
-- 插件这一侧只有**一次短命的 stdio 调用** —— 自己下一个 2GB 的文件必然超时
-- 就算不超时,用户看不到任何进度,按取消也停不下来
-- 进度、重试、大小上限、失败隔离,宿主的任务机制里全都有
+- The plugin side only gets **one short-lived stdio call**; downloading a 2 GB file itself would certainly time out
+- Even if it didn't time out, the user would see no progress, and pressing cancel wouldn't stop it
+- Progress, retries, size limits and failure isolation are all already in the host's job system
 
-dlink 恰好是**必须带凭据才能下**的那种地址:不带 `User-Agent: pan.baidu.com` 直接 403,
-还要把 `access_token` 拼在 url 上。所以交出去的不只是 url,还有那组请求头 —— 这也正是
-artifact 通道支持 `headers` 的原因。
+A dlink happens to be the kind of address that **can only be downloaded with credentials**: without
+`User-Agent: pan.baidu.com` it returns 403 outright, and the `access_token` has to be appended to the url too. So
+what's handed over is not just the url but also that set of request headers, which is exactly why the artifact channel
+supports `headers`.
 
-## 状态
+## Status
 
-接口形状按开放平台文档写,离线部分(参数拼装、分页、errno 翻译、artifact 交接)有测试覆盖。
-**尚未对着真实账号跑过** —— 第一次接上真号时请核对一遍 `pan_list` / `filemetas` 的返回字段。
+The API shapes follow the Open Platform documentation, and the offline parts (building parameters, pagination, errno
+translation, the artifact hand-off) are covered by tests. **It has not yet been run against a real account**: the
+first time it is connected to a real one, please check the fields returned by `pan_list` / `filemetas`.

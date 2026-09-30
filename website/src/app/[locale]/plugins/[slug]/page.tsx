@@ -2,8 +2,6 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { compileMDX } from "next-mdx-remote/rsc";
 import { ArrowUpRight, Code2, KeyRound, Shield } from "lucide-react";
-import rehypeSlug from "rehype-slug";
-import remarkGfm from "remark-gfm";
 
 import { PluginCard } from "@/components/community/browse";
 import { ActionLink, DetailBody, DetailHeader, InfoList, Section, SideCard, Steps } from "@/components/community/detail";
@@ -12,6 +10,7 @@ import { mdxComponents } from "@/components/mdx";
 import { LOCALES, isLocale, localePath } from "@/i18n/config";
 import { getMessages } from "@/i18n/messages";
 import { InlineMarkdown, toPlainText } from "@/lib/inline-markdown";
+import { mdxOptions } from "@/lib/mdx-options";
 import { findPlugin, listPlugins, readPluginDoc } from "@/lib/registry";
 import { SITE } from "@/lib/site";
 
@@ -84,7 +83,7 @@ export default async function PluginDetailPage({
     ? await compileMDX({
         source: rewriteRelativeLinks(unwrapAutolinks(dropLeadingTitle(raw)), plugin.source),
         components: mdxComponents(locale),
-        options: { mdxOptions: { remarkPlugins: [remarkGfm], rehypePlugins: [rehypeSlug] } },
+        options: { mdxOptions },
       })
     : null;
   // 同一类的排前面(同是对象存储、同是 MCP 接入),凑满三个。

@@ -3,8 +3,6 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { compileMDX } from "next-mdx-remote/rsc";
 import { ArrowLeft, ArrowRight } from "lucide-react";
-import rehypeSlug from "rehype-slug";
-import remarkGfm from "remark-gfm";
 
 import { DocsSidebar, type SidebarGroup } from "@/components/docs-sidebar";
 import { DocsMobileNav } from "@/components/docs-mobile-nav";
@@ -15,6 +13,7 @@ import { LOCALES, isLocale, type Locale } from "@/i18n/config";
 import { getMessages } from "@/i18n/messages";
 import { docHref, listDocs, readDoc } from "@/lib/docs";
 import { InlineMarkdown, toPlainText } from "@/lib/inline-markdown";
+import { mdxOptions } from "@/lib/mdx-options";
 import { SITE } from "@/lib/site";
 import { tableOfContents } from "@/lib/toc";
 
@@ -50,14 +49,7 @@ export default async function DocPage({ params }: { params: Params }) {
   const { content } = await compileMDX({
     source: doc.body,
     components: mdxComponents(locale),
-    options: {
-      mdxOptions: {
-        // gfm:表格和删除线,文档里两样都在用。
-        remarkPlugins: [remarkGfm],
-        // 标题带 id,才能从别处链到某一节。
-        rehypePlugins: [rehypeSlug],
-      },
-    },
+    options: { mdxOptions },
   });
 
   const all = listDocs(locale);

@@ -1,44 +1,42 @@
-# Manim Teaching Animation for Mosael
+# Manim Teaching Animation
 
-Teaching animations with [Manim Community](https://docs.manim.community/) — the community edition of the engine behind 3Blue1Brown's maths videos. Derivations, geometry, function plots, algorithm steps, code walk-throughs and physics diagrams, rendered on your computer with no video generation model and no per-video cost.
+Teaching animations with [Manim Community](https://docs.manim.community/) — the community edition of the engine behind 3Blue1Brown's maths videos: derivations, geometry, function plots, algorithm steps, code walk-throughs and physics diagrams. Rendered on your computer, with no video generation model and no per-video cost.
 
-用 [Manim 社区版](https://docs.manim.community/)(3Blue1Brown 数学动画的那套引擎)做教学动画:公式推导、几何关系、函数图像、算法步骤、代码讲解、物理示意。在本机渲染,不调用视频生成模型,不按条计费。
+## When to use it
 
-## 什么时候用它
+- **Content that has to "change step by step" and must be correct** (formulas, plots, steps, code) → use this.
+- **Realistic footage** (people, places, a live-action feel) → use a video generation model.
+- **Polished text-and-image cards, data charts** → the [Remotion plugin](https://mosael.com/en/plugins/remotion) also fits; when both are installed, prefer Manim for maths, geometry and algorithms.
 
-- **要「一步一步地变」、而且必须讲对的内容**(公式、图像、步骤、代码)→ 用它。
-- **要真实画面**(人物、场景、实拍感)→ 用视频生成模型。
-- **排版精致的图文卡片、数据图表** → [Remotion 插件](https://mosael.com/zh/plugins/remotion)也合适;两者都装着时,讲数学、几何、算法优先 Manim。
+## Four tools
 
-## 四个工具
-
-| 工具 | 做什么 | 默认开放 |
+| Tool | What it does | Enabled by default |
 | --- | --- | --- |
-| 准备 Manim 环境 `manim_setup` | 建 Python 环境、装 Manim、查 LaTeX、试渲一帧;缺什么逐条说怎么装 | 是 |
-| Manim 讲解视频 `manim_explainer` | 给结构化内容出讲解视频,不写代码 | 是 |
-| Manim 自定义动画 `manim_animation` | 给一段 Manim 场景代码,画什么都行 | **否** |
-| Manim 静帧 `manim_still` | 同上,只要最后一帧(PNG) | **否** |
+| Prepare Manim `manim_setup` | Creates the Python environment, installs Manim, checks for LaTeX, test-renders a frame; tells you item by item how to install anything missing | Yes |
+| Manim explainer `manim_explainer` | Makes an explainer video from structured content, no code needed | Yes |
+| Manim custom animation `manim_animation` | Takes a piece of Manim scene code; draw anything | **No** |
+| Manim still `manim_still` | Same as above, but only the last frame (PNG) | **No** |
 
-四个工具都会边跑边报进度(工作流执行面板里看得到「第 2/5 段:勾股定理」);在工作流或任务里取消时,Manim 连同它起的 LaTeX 进程一起停下。
+All four tools report progress as they run (the workflow run panel shows something like "Part 2/5: Pythagorean theorem"); when you cancel from a workflow or task, Manim stops together with the LaTeX processes it started.
 
-**第一次请在插件页先运行一次「准备 Manim 环境」。** 渲染工具不会顺手装环境:装一次要一到几分钟,而渲染工具的预算是按「智能体一次最多等 180 秒」定的。
+**The first time, run "Prepare Manim" once from the plugin page.** The rendering tools do not install the environment on the side: an install takes one to several minutes, while the rendering tools are budgeted around "an agent waits at most 180 seconds per call".
 
-### 讲解视频
+### Explainer videos
 
-标题页 → 一步一步讲 → 要点回顾。每一步可以有:
+Title page → step-by-step explanation → key takeaways. Each step can have:
 
-- **标题**、**旁白**(显示成底部字幕,也决定这一步多长 —— 按朗读速度算,中文每秒约 4.5 字)、**要点**(随旁白逐条出现);
-- 再配**一样**视觉:**LaTeX 公式**(最多 3 条,逐条书写)、**函数图像**(`sin(x) + x^2/8` 这样的算式,自动定坐标范围,渐近线处断开)、或**代码**(语法高亮,按 `[2, "4-6", 9]` 依次框住讲解的行)。
+- a **title**, **narration** (shown as subtitles at the bottom; it also sets how long the step lasts — based on reading speed, about 150 words per minute in English or about 4.5 characters per second in Chinese) and **key points** (appearing one by one along with the narration);
+- plus **one** visual: **LaTeX formulas** (up to 3, written out one after another), a **function plot** (an expression like `sin(x) + x^2/8`, with the axis ranges chosen automatically and breaks at asymptotes), or **code** (syntax highlighted, boxing the lines being explained in order, e.g. `[2, "4-6", 9]`).
 
-画幅 16:9 / 9:16 / 1:1 / 4:3 / 3:4,画质 480p–4K,深色 / 浅色主题,自定强调色与字体。返回值里的 `steps` 是每一步**实际渲出来**的起止时间;打开 `subtitles` 还会同时交出一份按句切好的 `.srt` —— 给旁白配音、对字幕都用得上。
+Aspect ratios 16:9 / 9:16 / 1:1 / 4:3 / 3:4, quality 480p–4K, dark / light theme, custom accent color and font. The `steps` in the result are the start and end times each step **actually rendered** at; turning on `subtitles` also returns an `.srt` split by sentence — handy for voicing the narration or syncing subtitles.
 
-内容**从不拼进代码**:场景是插件自带的一份固定文件,内容经 JSON 交给它;文字进 `Text`(纯文本),公式先挡掉 `\input`、`\write18`、`\def` 这类读写文件、定义命令的写法,函数算式用语法树求值(不经 `eval`,只认数字、`x`、四则运算与白名单里的函数)。
+Content is **never spliced into code**: the scene is a fixed file shipped with the plugin, and the content is handed to it as JSON. Text goes into `Text` (plain text); formulas first have constructs that read or write files or define commands, such as `\input`, `\write18` and `\def`, blocked; function expressions are evaluated from a syntax tree (not via `eval`; only numbers, `x`, arithmetic and whitelisted functions are accepted).
 
-### 自定义动画怎么写
+### Writing a custom animation
 
 ```python
 from manim import *
-from mosael import DATA   # 调用时传的 data
+from mosael import DATA   # the data passed with the call
 
 
 class Sorting(Scene):
@@ -51,47 +49,47 @@ class Sorting(Scene):
         self.wait()
 ```
 
-代码里只有一个场景类时 `scene` 可留空。格式 mp4 / webm / mov / gif,可透明背景(mp4 会改成 mov)。报错会指出**第几行哪一句**(`第 12 行 self.play(Swapp(a, b)):NameError: …`),改了再调即可;语法错误在起 Manim 之前就说。
+When the code contains only one scene class, `scene` can be left empty. Formats are mp4 / webm / mov / gif, with optional transparent background (mp4 is switched to mov). Errors point to **which statement on which line** (`Line 12 self.play(Swapp(a, b)): NameError: …`), so fix it and call again; syntax errors are reported before Manim is even started.
 
-## 安全:自定义动画会在本机执行 Python
+## Security: custom animations run Python on your computer
 
-自定义动画和静帧执行的是**任意 Python 代码**,以你的身份在这台电脑上运行。所以:
+Custom animations and stills execute **arbitrary Python code**, running on this computer as you. So:
 
-- 这两个工具**默认不开放**,要在插件页的工具列表里自己勾上;
-- 开放之后,智能体每次调用它们都**先出一张确认卡**(清单里声明为 `"effects": "local-code"`),写明
-  「会在你的电脑上运行代码」和代码开头,你批准了才跑;插件页里它们旁边标着「需确认」;
-- 默认有一道**护栏**:只准 import 画图用得到的模块(manim、math、numpy、scipy、networkx、random …),不准用 `open`、`exec`、`__import__`,不准碰 `os.system`、`np.save` 之类,也不准不经 `open` 把本机文件读进画面(`SVGMobject` / `ImageMobject` 按路径读、`Code(code_file=…)`、公式里的 `\input`)。护栏挡的是随手写出、或被一段网页诱导写出的越界代码,**它不是沙箱**;
-- 确实需要别的库时,在插件配置里打开「不限制自定义代码」,后果自负。
+- these two tools are **not enabled by default**; you have to tick them yourself in the tool list on the plugin page;
+- once enabled, every time the agent calls them it **shows an approval card first** (declared as `"effects": "local-code"` in the manifest), stating
+  "This runs code on your computer" along with the start of the code, and it only runs once you approve; on the plugin page they are marked "Asks first";
+- by default there is a **guardrail**: only modules useful for drawing may be imported (manim, math, numpy, scipy, networkx, random …); `open`, `exec` and `__import__` are not allowed, nor are things like `os.system` or `np.save`, nor reading local files into the picture without `open` (`SVGMobject` / `ImageMobject` reading by path, `Code(code_file=…)`, `\input` in formulas). The guardrail stops out-of-bounds code written carelessly or induced by a web page; **it is not a sandbox**;
+- if you really need other libraries, turn on "Unrestricted custom code" in the plugin configuration, at your own risk.
 
-讲解视频不执行你给的任何代码,默认开放。
+Explainer videos do not execute any code you give them, and are enabled by default.
 
-## 要求与安装
+## Requirements and installation
 
-Manim 需要 Python 3.11+(插件用随 Mosael 发的那个 Python,不用你装),以及:
+Manim needs Python 3.11+ (the plugin uses the Python that ships with Mosael, so you don't install it), plus:
 
-| 系统 | 装 Manim 之前要有 | LaTeX(可选,公式排版用) |
+| System | Needed before installing Manim | LaTeX (optional, for typesetting formulas) |
 | --- | --- | --- |
-| **Windows** | 什么都不用 —— 依赖都有现成的二进制包 | [MiKTeX](https://miktex.org/download),安装时允许自动安装缺的宏包 |
-| **macOS** | `brew install cairo pkg-config`(pycairo 没有 macOS 的二进制包,要编译),以及 `xcode-select --install` | [MacTeX](https://www.tug.org/mactex/),或 `brew install --cask mactex-no-gui` |
-| **Linux** | Debian/Ubuntu:`sudo apt install build-essential pkg-config libcairo2-dev libpango1.0-dev`;Fedora:`sudo dnf install gcc pkg-config cairo-devel pango-devel` | `sudo apt install texlive texlive-latex-extra dvisvgm` |
+| **Windows** | Nothing — all dependencies have prebuilt binary packages | [MiKTeX](https://miktex.org/download); allow it to install missing packages automatically during setup |
+| **macOS** | `brew install cairo pkg-config` (pycairo has no macOS binary package and must be compiled), plus `xcode-select --install` | [MacTeX](https://www.tug.org/mactex/), or `brew install --cask mactex-no-gui` |
+| **Linux** | Debian/Ubuntu: `sudo apt install build-essential pkg-config libcairo2-dev libpango1.0-dev`; Fedora: `sudo dnf install gcc pkg-config cairo-devel pango-devel` | `sudo apt install texlive texlive-latex-extra dvisvgm` |
 
-- **不需要 ffmpeg**:Manim 0.19 起用 PyAV 编码,PyAV 的二进制包里自带 FFmpeg 的库。
-- **LaTeX 是可选的**:没有它,讲解视频把公式写成一行 Unicode(`a² + b² = c²`、`(-b ± √(b²-4ac))/(2a)`)照样出片,结果里会说明;自定义动画里的 `MathTex` / `Tex` 用不了,会得到一句「没装 LaTeX」和装法。想用精简的 TinyTeX,Manim 文档列了要装的宏包。
-- 约 **350 MB** 磁盘空间,装在 Mosael 数据目录的 `plugin-data/dev.mosael.manim` 下。插件更新不会重装;卸载插件时一起删掉。Mosael 升级后自带的 Python 挪了位置,环境自动接过去;换了次版本(比如 3.13 → 3.14),渲染工具会说清楚,再运行一次「准备 Manim 环境」按新版重建。
-- 「准备 Manim 环境」装之前先查系统依赖,缺什么直接说装哪几个,不让你对着一屏编译报错猜。
+- **No ffmpeg needed**: since Manim 0.19, encoding uses PyAV, whose binary packages bundle the FFmpeg libraries.
+- **LaTeX is optional**: without it, explainer videos write formulas as a single line of Unicode (`a² + b² = c²`, `(-b ± √(b²-4ac))/(2a)`) and still produce the video, noting this in the result; `MathTex` / `Tex` in custom animations will not work, and you get a "LaTeX is not installed" message with install instructions. If you want the slimmed-down TinyTeX, the Manim docs list the packages to install.
+- About **350 MB** of disk space, installed under `plugin-data/dev.mosael.manim` in the Mosael data directory. Plugin updates do not reinstall it; uninstalling the plugin deletes it too. When a Mosael upgrade moves its bundled Python, the environment is taken over automatically; if the minor version changes (e.g. 3.13 → 3.14), the rendering tools say so clearly — run "Prepare Manim" again to rebuild for the new version.
+- "Prepare Manim" checks system dependencies before installing and tells you exactly which ones are missing, instead of leaving you to guess from a screen of compiler errors.
 
-### 插件配置
+### Plugin configuration
 
-- **PyPI 镜像**:在这个连接的设置里选(清华 / 阿里 / 腾讯 / 自定义),默认跟随「管理 → 下载源」。
-- **已装 Manim 的 Python**:已经用 conda / uv 装好 Manim 的,填那个环境里 python 的完整路径,就不再装一份。
-- **不限制自定义代码**:见上面「安全」。
+- **PyPI mirror**: choose it in this connection's settings (Tsinghua / Alibaba / Tencent / custom); by default it follows Admin → Download sources.
+- **Python with Manim**: if you already installed Manim with conda / uv, enter the full path of that environment's python, and no second copy is installed.
+- **Unrestricted custom code**: see "Security" above.
 
-## 权限
+## Permissions
 
-- `process:spawn`:启动 Python / Manim / LaTeX,以及执行自定义动画的代码。
-- `network:pypi`:准备环境时从 PyPI 安装 Manim。渲染本身不联网(已关掉 Manim 渲完后查新版本的那次请求)。
-- `filesystem:write`:写插件自己的数据目录。
+- `process:spawn`: starts Python / Manim / LaTeX, and executes custom animation code.
+- `network:pypi`: installs Manim from PyPI when preparing the environment. Rendering itself does not go online (the request Manim makes after rendering to check for new versions is turned off).
+- `filesystem:write`: writes to the plugin's own data directory.
 
-## 版本与许可
+## Version and license
 
-Manim 0.21.0(锁定精确版本;插件升级换了版本时,渲染工具会提醒再运行一次「准备 Manim 环境」,它按新版本重装)。Manim 社区版是 [MIT 许可](https://github.com/ManimCommunity/manim/blob/main/LICENSE.md);插件不分发 Manim 的代码,而是在你的电脑上从 PyPI 安装。
+Manim 0.21.0 (pinned to the exact version; when a plugin upgrade changes the version, the rendering tools remind you to run "Prepare Manim" again, which reinstalls the new version). Manim Community is [MIT licensed](https://github.com/ManimCommunity/manim/blob/main/LICENSE.md); the plugin does not distribute Manim's code but installs it from PyPI on your computer.
