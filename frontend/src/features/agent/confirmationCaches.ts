@@ -44,7 +44,13 @@ export function useRefreshWhenCardsLand(workspaceId: string): void {
   const landed = useQuery({
     queryKey: confirmationKeys.executed(workspaceId),
     queryFn: () => listConfirmations({ workspaceId, status: "executed", limit: LANDED_WINDOW }),
+    // **轮询,而且只在窗口看得见时。** 仓库里没有工作区级的推送通道(唯一的 SSE 是某一轮对话的流,只在那一轮
+    // 跑着、面板开着时才连),为这一件事开一条长连接不划算。窗口藏起来时停下(`refetchIntervalInBackground`
+    // 显式写成 false —— 它是 React Query 的默认,写出来免得哪天被当成可以打开的开关);回到前台当场查一次,
+    // 不等下一个三秒(全局关了获焦重拉,这里单独开)。
     refetchInterval: 3000,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: true,
     staleTime: 0,
   });
   // 按工作区记:切了工作区,另一个工作区的那批不是「新落地的」。

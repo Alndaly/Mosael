@@ -1,5 +1,5 @@
 /** @vitest-environment jsdom */
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, focusManager } from "@tanstack/react-query";
 import { act, render, waitFor } from "@testing-library/react";
 import React from "react";
 import { afterEach, expect, it, vi } from "vitest";
@@ -65,4 +65,25 @@ it("打开时已经执行完的那批不算新落地", async () => {
   await poll();
 
   expect(invalidatedAssets()).toBe(false);
+});
+
+it("窗口藏起来时不轮询,回到前台当场查一次", async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  try {
+    const { loaded } = mount();
+    await loaded();
+    const before = api.mock.calls.length;
+
+    act(() => focusManager.setFocused(false));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10_000);
+    });
+    expect(api.mock.calls.length).toBe(before);
+
+    act(() => focusManager.setFocused(true));
+    await waitFor(() => expect(api.mock.calls.length).toBeGreaterThan(before));
+  } finally {
+    focusManager.setFocused(undefined);
+    vi.useRealTimers();
+  }
 });
