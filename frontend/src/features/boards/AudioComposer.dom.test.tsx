@@ -65,3 +65,10 @@ it("克隆库空着又没挑别的引擎时,提交键是禁用的 —— 而不�
   render(<AudioComposer item={item} busy={false} workspaceId="w" onSpeak={vi.fn()} onFormChange={vi.fn()} />);
   expect(screen.getByRole("button", { name: "boardSpeak" })).toBeDisabled();
 });
+
+it("上游便签改了字,重新选中这一格:念的字跟着换(还是自动填的那段时);记在表单上,面板新挂也认得出", async () => {
+  const onFormChange = vi.fn();
+  const slot = { id: "audio", kind: "audio", form: { prompt: "旧台词", prefilled: "旧台词", engine: "builtin:edge" } } as BoardItem;
+  render(<AudioComposer item={slot} busy={false} workspaceId="w" upstreamText="新台词" onSpeak={vi.fn()} onFormChange={onFormChange} />);
+  await waitFor(() => expect(onFormChange).toHaveBeenLastCalledWith(expect.objectContaining({ prompt: "新台词", prefilled: "新台词" })));
+});

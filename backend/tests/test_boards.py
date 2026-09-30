@@ -820,6 +820,22 @@ def test_媒体节点的原始表单和运行态各自存放() -> None:
     assert "text" not in item, "运行时提示词不应覆盖用户表单"
 
 
+def test_表单记着上次自动填进提示词的那段_出了结果一起用掉() -> None:
+    """面板照 `form.prefilled` 认「提示词还是自动填的」(上游改了字就跟着换);它是一段字,出了结果和提示词一起清掉。"""
+    from app.domain.boards.outputs import _canvas_with_delivered_result
+
+    item = {"id": "i", "kind": "image", "x": 0, "y": 0, "run": {"status": "running", "job_id": "j"},
+            "form": {"prompt": "一只猫", "prefilled": "一只猫", "producer": "generate"}}
+    assert normalize_canvas({"items": [item]})["items"][0]["form"]["prefilled"] == "一只猫"
+    with pytest.raises(BoardDomainError):
+        normalize_canvas({"items": [{**item, "form": {"prefilled": 3}}]})
+    done = _canvas_with_delivered_result({"items": [item], "edges": []}, item_id="i", job_id="j",
+                                         outputs=[{"type": "asset", "asset_id": "a"}], reason="", cancelled=False,
+                                         succeeded=True)
+    form = done["items"][0]["form"]
+    assert form["prompt"] == "" and "prefilled" not in form, form
+
+
 def test_提示词文档必须是_tiptap_doc() -> None:
     """任意对象存进 form 会在下次打开时交给 TipTap；形状不对必须在保存时拒绝。"""
     with pytest.raises(BoardDomainError, match="prompt_document"):

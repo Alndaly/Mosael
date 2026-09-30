@@ -31,6 +31,9 @@ export interface BoardItem {
   note_revision?: number;
   form?: {
     prompt?: string;
+    /** 上一次自动填进提示词的那段上游文字(便签连进生成、念的格子)。提示词还是它,上游改了就跟着换;
+     *  人改过就不再动。存在表单上:重新选中时面板是新挂的,记在面板里一挂就忘了。 */
+    prefilled?: string;
     provider?: string;
     provider_profile_id?: string;
     model?: string;

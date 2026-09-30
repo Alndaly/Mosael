@@ -49,3 +49,23 @@ it("连着文档:提交的只是框里写的那句,文档正文由服务端按�
   expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ prompt: "照这份脚本画第一幕" }));
   expect(screen.getByText(/脚本 · v2/)).toBeTruthy();
 });
+
+it("上游便签改了字,重新选中下游:自动填的那段跟着换;人改过的不动 —— 上次填了什么记在表单上,不在面板里", async () => {
+  const onFormChange = vi.fn();
+  //: 面板第一次挂上:便签的字填进来,表单记下填的是哪段。
+  const first = { id: "image", kind: "image", form: { prompt: "" } } as unknown as BoardItem;
+  const props = { models: [model], busy: false, workspaceId: "w", onPickAsset: vi.fn(), onSubmit: vi.fn() };
+  render(<NodeComposer {...props} item={first} onFormChange={onFormChange} upstreamTexts={[{ itemId: "n1", text: "旧的那段" }]} />);
+  await waitFor(() => expect(onFormChange).toHaveBeenLastCalledWith(expect.objectContaining({ prompt: "旧的那段", prefilled: "旧的那段" })));
+  const stored = onFormChange.mock.calls.at(-1)![0];
+  cleanup();
+
+  //: 取消选中、改了上游便签的字、再选中:面板是新挂的,拿的是存下的表单。
+  render(<NodeComposer {...props} item={{ ...first, form: stored }} onFormChange={vi.fn()} upstreamTexts={[{ itemId: "n1", text: "新的那段" }]} />);
+  await waitFor(() => expect(document.querySelector(".ProseMirror")?.textContent).toBe("新的那段"));
+  cleanup();
+
+  render(<NodeComposer {...props} item={{ ...first, form: { ...stored, prompt: "我自己改的", prompt_document: undefined } }} onFormChange={vi.fn()}
+                       upstreamTexts={[{ itemId: "n1", text: "新的那段" }]} />);
+  await waitFor(() => expect(document.querySelector(".ProseMirror")?.textContent).toBe("我自己改的"));
+});

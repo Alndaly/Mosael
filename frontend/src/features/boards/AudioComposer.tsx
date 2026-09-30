@@ -80,14 +80,17 @@ export function AudioComposer({
   const [engine, setEngine] = React.useState(item.form?.engine ?? "");
   const [engineVoice, setEngineVoice] = React.useState(item.form?.engine_voice ?? "");
 
-  //: 上游的字变了就跟着换 —— 但不覆盖用户自己改过的(和便签那条同一个道理)。
-  const filled = React.useRef(upstreamText ?? "");
+  //: 上游的字变了就跟着换 —— 但不覆盖用户自己改过的(和便签那条同一个道理)。上一次自动填进来的那段存在表单上
+  //: (`form.prefilled`),重新选中这一格、面板新挂时还认得出「这还是自动填的」。
+  const [prefilled, setPrefilled] = React.useState(
+    item.form?.prompt === undefined ? (upstreamText ?? "") : (item.form?.prefilled ?? ""),
+  );
   React.useEffect(() => {
     const next = upstreamText ?? "";
-    if (!next || next === filled.current) return;
-    setText((current) => (current.trim() === "" || current === filled.current ? next : current));
-    filled.current = next;
-  }, [upstreamText]);
+    if (!next || next === prefilled) return;
+    setText((current) => (current.trim() === "" || current === prefilled ? next : current));
+    setPrefilled(next);
+  }, [upstreamText, prefilled]);
 
   const engines = useQuery({ queryKey: ["tts-engines"], queryFn: listTtsEngines, staleTime: 30_000 });
   //: 这一行只有一个下拉,所以只摆报得出音色清单的引擎 —— 理由见 compactSpeechEngineChoices。
@@ -114,6 +117,7 @@ export function AudioComposer({
 
   const serializedForm = JSON.stringify({
     prompt: text,
+    ...(prefilled ? { prefilled } : {}),
     voice_id: usingClone ? (current?.id ?? item.form?.voice_id ?? "") : "",
     engine: usingClone ? "" : (activeEngine?.id ?? ""),
     engine_voice: usingClone ? "" : (activeEngineVoice?.value ?? ""),

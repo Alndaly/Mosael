@@ -305,6 +305,8 @@ def _canvas_with_delivered_result(
             if form.get("mentioned_entity_ids"):
                 form["mentioned_entity_ids"] = []
             form.pop("prompt_document", None)
+            #: 自动填进来的那段也一起用掉了:下一轮面板照上游重新填。
+            form.pop("prefilled", None)
             settled["form"] = form
         settled["run"] = {"status": "succeeded"}
         if text is not None:

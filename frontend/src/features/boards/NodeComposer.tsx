@@ -561,20 +561,24 @@ export function NodeComposer({
   //:
   //: **正文和文档一起换。** 提示词框照文档画(document 优先于 value):只换 prompt 的话,框里
   //: 还是旧的那份文档(比如删空之后留下的空段落),填进去的字看不见,提交出去的却是它。
+  //: **上一次自动填进去的那段存在表单上**(`form.prefilled`),不记在面板里:重新选中这一格时面板是新挂的,记在
+  //: 面板里的话一挂就忘了 —— 上游改了字,重新选中下游,提示词还停在旧的那段。
   const textKey = texts.map((one) => `${one.itemId}:${one.text}`).join("|");
-  const filled = React.useRef("");
+  const [prefilled, setPrefilled] = React.useState(saved.prefilled ?? "");
   const promptNow = React.useRef(prompt);
   promptNow.current = prompt;
+  const prefilledNow = React.useRef(prefilled);
+  prefilledNow.current = prefilled;
   React.useEffect(() => {
     const joined = texts.map((one) => one.text).join("\n\n");
-    if (!joined || joined === filled.current) return;
+    if (!joined || joined === prefilledNow.current) return;
     const current = promptNow.current;
-    if (current.trim() === "" || current === filled.current) {
+    if (current.trim() === "" || current === prefilledNow.current) {
       setPrompt(joined);
       setPromptDocument(textDocument(joined));
       setMentioned([]);
     }
-    filled.current = joined;
+    setPrefilled(joined);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [textKey]);
 
@@ -671,6 +675,7 @@ export function NodeComposer({
     () => ({
       prompt,
       prompt_document: promptDocument,
+      ...(prefilled ? { prefilled } : {}),
       provider: current?.provider ?? saved.provider,
       provider_profile_id: current?.provider_profile_id ?? saved.provider_profile_id,
       model: current?.model ?? saved.model,
@@ -681,7 +686,7 @@ export function NodeComposer({
       ...(mentionedEntities.length > 0 || saved.mentioned_entity_ids ? { mentioned_entity_ids: mentionedEntities } : {}),
       ...(upstreamScene || saved.scene_reference ? { scene_reference: sceneReference } : {}),
     }),
-    [prompt, promptDocument, current, saved.provider, saved.provider_profile_id, saved.model, activeMode, mode, formParameters, sources, mentioned, mentionedEntities, saved.mentioned_entity_ids, upstreamScene, saved.scene_reference, sceneReference],
+    [prompt, promptDocument, prefilled, current, saved.provider, saved.provider_profile_id, saved.model, activeMode, mode, formParameters, sources, mentioned, mentionedEntities, saved.mentioned_entity_ids, upstreamScene, saved.scene_reference, sceneReference],
   );
   const serializedForm = React.useMemo(() => JSON.stringify(editableForm), [editableForm]);
   const lastSavedForm = React.useRef(JSON.stringify(item.form ?? {}));

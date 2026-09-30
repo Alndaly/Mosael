@@ -108,6 +108,14 @@ def _normalize_form(value: Any, item_id: str) -> dict[str, Any] | None:
             raise BoardDomainError("boardErr_itemFieldNotString", item_id=item_id, field="form.prompt")
         if len(prompt) > MAX_TEXT_CHARS:
             raise BoardDomainError("boardErr_promptTooLong", item_id=item_id, limit=MAX_TEXT_CHARS)
+    #: 上一次自动填进提示词的那段上游文字(面板照它认「提示词还是自动填的,上游改了就跟着换」)。
+    #: 存在表单上而不是面板里:重新选中这一格时面板是新挂的,记在面板里的话一挂就忘了。
+    prefilled = form.get("prefilled")
+    if prefilled is not None:
+        if not isinstance(prefilled, str):
+            raise BoardDomainError("boardErr_itemFieldNotString", item_id=item_id, field="form.prefilled")
+        if len(prefilled) > MAX_TEXT_CHARS:
+            raise BoardDomainError("boardErr_promptTooLong", item_id=item_id, limit=MAX_TEXT_CHARS)
     for field in ("provider", "provider_profile_id", "model", "mode", "voice_id"):
         if form.get(field) is not None and not isinstance(form[field], str):
             raise BoardDomainError("boardErr_itemFieldNotString", item_id=item_id, field=f"form.{field}")
