@@ -278,8 +278,12 @@ def board_outputs(meta: dict[str, Any], output: dict[str, Any]) -> list[dict[str
 
     collected = {str(one) for one in output.get("asset_ids") or () if isinstance(one, str)}
     produced: list[dict[str, Any]] = []
+    from app.domain.plugins.tools import output_port
+
     for name in landing_outputs(meta):
-        value = output.get(name)
+        #: 按口取值走 output_port:插件把 `artifact` / `artifacts` 声明成输出口时,收产出已把它们换成了
+        #: `asset_id` / `asset_ids`(和工作流的插件节点同一条)。
+        value = output_port(output, name)
         if _empty(value):
             continue
         data_type = output_data_type(name, meta)
