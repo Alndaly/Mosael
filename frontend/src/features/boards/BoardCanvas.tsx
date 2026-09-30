@@ -119,6 +119,9 @@ export interface BoardCanvasApi {
   /** 采用服务端更新的一版(本地没存的改动已经合在上面,见 boardRebase)。显式调用 —— 平常的 prop 变化不能打断
    *  正在拖、正在敲的那一下。节点按 id 就地换,撤销历史不清空:每一份快照按 `rebase` 合一遍(见 useBoardHistory.adopt)。 */
   adopt: (canvas: Canvas, rebase: (snapshot: Canvas) => Canvas) => void;
+  /** 画布的变化攒到停手才汇给 `onChange`(见 useBoardHistory);要服务端照着画布去做的动作等不了,先调它拿现在这一份
+   *  (同时也汇出去)。 */
+  flush: () => Canvas;
   fitView: () => void;
   focusComment: (comment: CollaborationComment) => void;
   /** 查找节点跳到某一项:把它摆到看得见的那块正中,放得下的话拉近到看得清。不改选中态。 */
@@ -407,23 +410,38 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
     return running ? producers?.find((one) => one.id === running)?.label : undefined;
   };
 
-  //: 渲染用的节点 = 数据 + 这一轮的回调。**每轮重新贴** —— 回调闭包着最新的 setNodes,
-  //: 而把它们存进节点数据会让节点的初值反过来依赖 setNodes,那个循环绕不开。
-  const baseNodes: Node[] = nodes.map((node) =>
-    node.type === "marker"
-      ? { ...node, hidden: !markersVisible, focusable: markerMode, draggable: markerMode, selectable: markerMode, selected: markerMode && node.selected,
-          style: { ...node.style, pointerEvents: markerMode ? "auto" : "none" },
-          data: { ...node.data, markers, editable: markerMode, onChange: patchMarker, onDelete: deleteMarker } }
-      : {
-          ...node,
-          className: searchHighlightClass(searchHighlight, node.id),
-          draggable: !commentMode && !markerMode, selectable: !commentMode && !markerMode,
-          data: { ...node.data, onText: setText, onAspect: setAspect, renaming: renaming === node.id, onRenaming: setRenaming, onRename: setTitle, commentMode: commentMode || markerMode, workspaceId, document: documents.get(node.id), onPickDocument: setPickingDocument, onRefreshDocument: refreshDocument, refreshingDocument: refreshingDocument === node.id,
-            //: 停止属于运行态的外壳:每一种在跑的格子都有(生成、念、写、截、能力)。
-            onStop,
-            abilityLabel: abilityLabel((node.data as unknown as { item: BoardItem }).item) },
-        },
-  );
+  //: 渲染用的节点 = 数据 + 回调和这一格的显示状态。回调不存进节点数据本身:它们闭包着 setNodes,而节点的初值
+  //: 反过来要用到它们,那个循环绕不开。
+  //:
+  //: **按节点缓存。** 此前每一轮给每一格新建一份 data,画布每渲染一次(选中、打开面板、拖动的每一帧)所有节点都重画。
+  //: 现在节点对象没换、贴上去的东西也都没变,就交回上一次那一份 —— React Flow 和 memo 过的节点组件都认得出没变。
+  const decorated = React.useRef(new WeakMap<Node, { key: unknown[]; node: Node }>());
+  const baseNodes: Node[] = nodes.map((node) => {
+    if (node.type === "marker") {
+      return { ...node, hidden: !markersVisible, focusable: markerMode, draggable: markerMode, selectable: markerMode, selected: markerMode && node.selected,
+               style: { ...node.style, pointerEvents: markerMode ? "auto" : "none" },
+               data: { ...node.data, markers, editable: markerMode, onChange: patchMarker, onDelete: deleteMarker } };
+    }
+    const item = (node.data as unknown as { item: BoardItem }).item;
+    const document = documents.get(node.id);
+    const key = [
+      searchHighlightClass(searchHighlight, node.id), commentMode, markerMode, workspaceId, renaming === node.id,
+      document?.reference, document?.pending, document?.error, refreshingDocument === node.id, onStop, abilityLabel(item),
+    ];
+    const hit = decorated.current.get(node);
+    if (hit && hit.key.length === key.length && hit.key.every((value, index) => Object.is(value, key[index]))) return hit.node;
+    const shown: Node = {
+      ...node,
+      className: searchHighlightClass(searchHighlight, node.id),
+      draggable: !commentMode && !markerMode, selectable: !commentMode && !markerMode,
+      data: { ...node.data, onText: setText, onAspect: setAspect, renaming: renaming === node.id, onRenaming: setRenaming, onRename: setTitle, commentMode: commentMode || markerMode, workspaceId, document, onPickDocument: setPickingDocument, onRefreshDocument: refreshDocument, refreshingDocument: refreshingDocument === node.id,
+        //: 停止属于运行态的外壳:每一种在跑的格子都有(生成、念、写、截、能力)。
+        onStop,
+        abilityLabel: abilityLabel(item) },
+    };
+    decorated.current.set(node, { key, node: shown });
+    return shown;
+  });
   //: 箭头、命中宽度、层次都是**画出来的那一份**才有的东西,不进画布数据(toCanvas 只存 id 和两头)。
   const baseEdges: Edge[] = shapeEdges(edges, edgeShape).map((edge) => ({
     ...edge,
@@ -432,7 +450,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
     selectable: !commentMode && !markerMode,
   }));
 
-  const { history, adopt, stepBack, stepForward } = useBoardHistory({ nodes, edges, setNodes, setEdges, onChange });
+  const { history, adopt, flush, stepBack, stepForward } = useBoardHistory({ nodes, edges, setNodes, setEdges, onChange });
 
   /**
    * 把选中的这几项圈成一组:算出它们的外接矩形,四周留一点余量,摆一个分组框。
@@ -597,6 +615,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
       add,
       patch,
       adopt,
+      flush,
       fitView: () => {
         if (rf.current && surface.current) {
           void fitCanvasViewport(rf.current, surface.current, insetsOf(surface.current));
@@ -616,7 +635,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
       canUndo: canUndo(history),
       canRedo: canRedo(history),
     });
-  }, [add, patch, adopt, onReady, insetsOf, centerOn, focusItem, stepBack, stepForward, history, markers, addMarker, jumpToMarker]);
+  }, [add, patch, adopt, flush, onReady, insetsOf, centerOn, focusItem, stepBack, stepForward, history, markers, addMarker, jumpToMarker]);
 
   return (
     // 详情页本身就是画布边界:四边满铺,不再套第二层卡片边框或圆角。

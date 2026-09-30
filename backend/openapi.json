@@ -12560,6 +12560,7 @@
           "boards"
         ],
         "summary": "List All",
+        "description": "清单:每张板一份摘要(缩略图用的画布),不带整份画布 —— 打开一张板时由 `/boards/{board_id}` 给。",
         "operationId": "list_all_api_boards_get",
         "parameters": [
           {
@@ -12580,7 +12581,7 @@
                 "schema": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/BoardOut"
+                    "$ref": "#/components/schemas/BoardSummaryOut"
                   },
                   "title": "Response List All Api Boards Get"
                 }
@@ -22391,6 +22392,132 @@
         ],
         "title": "BoardOut"
       },
+      "BoardPreview": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/BoardPreviewItem"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "edges": {
+            "items": {
+              "$ref": "#/components/schemas/BoardPreviewEdge"
+            },
+            "type": "array",
+            "title": "Edges"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "edges"
+        ],
+        "title": "BoardPreview"
+      },
+      "BoardPreviewEdge": {
+        "properties": {
+          "source": {
+            "type": "string",
+            "title": "Source"
+          },
+          "target": {
+            "type": "string",
+            "title": "Target"
+          }
+        },
+        "type": "object",
+        "required": [
+          "source",
+          "target"
+        ],
+        "title": "BoardPreviewEdge"
+      },
+      "BoardPreviewItem": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "x": {
+            "type": "number",
+            "title": "X"
+          },
+          "y": {
+            "type": "number",
+            "title": "Y"
+          },
+          "width": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Width"
+          },
+          "height": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Height"
+          },
+          "asset_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Asset Id"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "x",
+          "y"
+        ],
+        "title": "BoardPreviewItem",
+        "description": "清单缩略图上的一格:位置、大小、素材(画缩略图)、名字和一行字(没素材时画这行字)。"
+      },
       "BoardProducerOut": {
         "properties": {
           "type": {
@@ -22634,6 +22761,56 @@
           "name"
         ],
         "title": "BoardSequenceOut"
+      },
+      "BoardSummaryOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "workspace_id": {
+            "type": "string",
+            "title": "Workspace Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "revision": {
+            "type": "integer",
+            "title": "Revision"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          },
+          "item_count": {
+            "type": "integer",
+            "title": "Item Count"
+          },
+          "preview": {
+            "$ref": "#/components/schemas/BoardPreview"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "workspace_id",
+          "name",
+          "revision",
+          "created_at",
+          "updated_at",
+          "item_count",
+          "preview"
+        ],
+        "title": "BoardSummaryOut",
+        "description": "画板清单上的一张:不带整份画布(表单、运行态、提示词文档),只带缩略图要的那一份。"
       },
       "BoardUpdate": {
         "properties": {

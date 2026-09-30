@@ -4307,7 +4307,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List All */
+        /**
+         * List All
+         * @description 清单:每张板一份摘要(缩略图用的画布),不带整份画布 —— 打开一张板时由 `/boards/{board_id}` 给。
+         */
         get: operations["list_all_api_boards_get"];
         put?: never;
         /** Create */
@@ -7813,6 +7816,44 @@ export interface components {
              */
             updated_at: string;
         };
+        /** BoardPreview */
+        BoardPreview: {
+            /** Items */
+            items: components["schemas"]["BoardPreviewItem"][];
+            /** Edges */
+            edges: components["schemas"]["BoardPreviewEdge"][];
+        };
+        /** BoardPreviewEdge */
+        BoardPreviewEdge: {
+            /** Source */
+            source: string;
+            /** Target */
+            target: string;
+        };
+        /**
+         * BoardPreviewItem
+         * @description 清单缩略图上的一格:位置、大小、素材(画缩略图)、名字和一行字(没素材时画这行字)。
+         */
+        BoardPreviewItem: {
+            /** Id */
+            id: string;
+            /** Kind */
+            kind: string;
+            /** X */
+            x: number;
+            /** Y */
+            y: number;
+            /** Width */
+            width?: number | null;
+            /** Height */
+            height?: number | null;
+            /** Asset Id */
+            asset_id?: string | null;
+            /** Title */
+            title?: string | null;
+            /** Text */
+            text?: string | null;
+        };
         /**
          * BoardProducerOut
          * @description 画板上的一个产出者:节点描述(和工作流节点面板同一份)+ 画板自己的几样(见 boards.producers.describe)。
@@ -7957,6 +7998,33 @@ export interface components {
             sequence_id: string;
             /** Name */
             name: string;
+        };
+        /**
+         * BoardSummaryOut
+         * @description 画板清单上的一张:不带整份画布(表单、运行态、提示词文档),只带缩略图要的那一份。
+         */
+        BoardSummaryOut: {
+            /** Id */
+            id: string;
+            /** Workspace Id */
+            workspace_id: string;
+            /** Name */
+            name: string;
+            /** Revision */
+            revision: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Item Count */
+            item_count: number;
+            preview: components["schemas"]["BoardPreview"];
         };
         /** BoardUpdate */
         BoardUpdate: {
@@ -22635,7 +22703,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["BoardOut"][];
+                    "application/json": components["schemas"]["BoardSummaryOut"][];
                 };
             };
             /** @description Validation Error */

@@ -108,8 +108,11 @@ export interface Board {
   updated_at: string;
 }
 
-export function listBoards(workspaceId: string): Promise<Board[]> {
-  return api<Board[]>(`/api/boards?workspace_id=${encodeURIComponent(workspaceId)}`);
+/** 清单上的一张:不带整份画布,只带缩略图要的那一份(`preview`)—— 整份画布打开时由 getBoard 给。 */
+export type BoardSummary = components["schemas"]["BoardSummaryOut"];
+
+export function listBoards(workspaceId: string): Promise<BoardSummary[]> {
+  return api<BoardSummary[]>(`/api/boards?workspace_id=${encodeURIComponent(workspaceId)}`);
 }
 
 export function getBoard(boardId: string, workspaceId: string): Promise<Board> {

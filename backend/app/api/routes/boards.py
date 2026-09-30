@@ -7,7 +7,7 @@ from fastapi.exceptions import RequestValidationError
 
 from app.api.deps import CurrentUser, DbSession, Tx
 from app.core.i18n import get_current_locale
-from app.api.schemas import BoardCreate, BoardDuplicate, BoardOut, BoardProducerOut, BoardRun, BoardSequenceCreate, BoardSequenceOut, BoardUpdate
+from app.api.schemas import BoardCreate, BoardDuplicate, BoardOut, BoardProducerOut, BoardRun, BoardSequenceCreate, BoardSequenceOut, BoardSummaryOut, BoardUpdate
 from app.db.models import Board
 from app.domain.boards import BoardDomainError, BoardNotFound, BoardRevisionConflict, producers
 from app.domain.boards import use_cases as boards
@@ -33,8 +33,9 @@ def _board_http_error(exc: BoardDomainError) -> HTTPException:
     return HTTPException(status_code=404 if isinstance(exc, BoardNotFound) else 400, detail=str(exc))
 
 
-@router.get("/boards", response_model=list[BoardOut])
-def list_all(workspace_id: str, db: DbSession, user: CurrentUser) -> list[Board]:
+@router.get("/boards", response_model=list[BoardSummaryOut])
+def list_all(workspace_id: str, db: DbSession, user: CurrentUser) -> list[dict]:
+    """清单:每张板一份摘要(缩略图用的画布),不带整份画布 —— 打开一张板时由 `/boards/{board_id}` 给。"""
     return boards.list_all(db, user, workspace_id)
 
 

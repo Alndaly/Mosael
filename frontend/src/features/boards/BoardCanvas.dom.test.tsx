@@ -55,10 +55,36 @@ function mount(canvas: Canvas, extra: Partial<React.ComponentProps<typeof BoardC
       </ImagePreviewProvider>
     </QueryClientProvider>,
   );
-  return { api: () => api as unknown as BoardCanvasApi, latest: () => changes[changes.length - 1] };
+  //: 画布的变化攒到停手(400ms)才汇上来;还没汇过就是挂上时那一份。
+  return { api: () => api as unknown as BoardCanvasApi, latest: () => changes[changes.length - 1] ?? canvas, changes };
 }
 
 const note = (id: string, text: string) => ({ id, kind: "note" as const, x: 0, y: 0, width: 220, height: 140, color: "yellow" as const, text });
+
+describe("画布的变化汇给上层", () => {
+  it("一串连续的改动攒到停手才序列化、汇一次 —— 不是每一帧都把整张画布 stringify 再 parse 一遍", async () => {
+    const view = mount({ items: [note("n1", "")], edges: [], markers: [] });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500);
+    });
+    expect(view.changes, "挂上时那一份不算编辑,不汇").toHaveLength(0);
+    for (const text of ["一", "一只", "一只猫", "一只猫在", "一只猫在睡"]) {
+      act(() => view.api().patch("n1", { text }));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(50);
+      });
+    }
+    expect(view.changes).toHaveLength(0);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500);
+    });
+    expect(view.changes.map((one) => one.items[0].text)).toEqual(["一只猫在睡"]);
+    //: 等不了的动作(生成、写字)先 flush:当场拿到、当场汇出去。
+    act(() => view.api().patch("n1", { text: "改了" }));
+    expect(view.api().flush().items[0].text).toBe("改了");
+    expect(view.changes.at(-1)?.items[0].text).toBe("改了");
+  });
+});
 
 describe("画板的撤销与服务端那份", () => {
   it("采用服务端的新一版之后撤销历史还在:撤一步撤的是自己刚做的,服务端刚落下的格子和产出照留", async () => {
@@ -221,7 +247,7 @@ describe("删除键只认冲着画布来的那一下", () => {
       target.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true }));
     });
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(10);
+      await vi.advanceTimersByTimeAsync(500);
     });
   }
 
@@ -270,7 +296,7 @@ describe("删掉在跑的格子要先停", () => {
       node.dispatchEvent(new KeyboardEvent("keydown", { key: "Delete", bubbles: true }));
     });
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(10);
+      await vi.advanceTimersByTimeAsync(500);
     });
   }
 
@@ -283,7 +309,7 @@ describe("删掉在跑的格子要先停", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "boardDeleteRunningConfirm" }));
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(10);
+      await vi.advanceTimersByTimeAsync(500);
     });
     expect(onStop).toHaveBeenCalledWith("n1");
     expect(view.latest().items.map((one) => one.id)).toEqual(["n2"]);
@@ -351,6 +377,8 @@ describe("往画布上粘贴", () => {
     );
     const view = mount({ items: [note("n1", "原来的")], edges: [], markers: [] }, { onDropFiles });
     paste(document.body, { files: [new File([new Uint8Array([1])], "", { type: "image/png" })], text: "<img>" });
+    //: 传完才放格子,放下之后画布再攒 400ms 才汇上来。
+    await settle();
     await settle();
     expect(onDropFiles).toHaveBeenCalledTimes(1);
     const added = view.latest().items.find((one) => one.id !== "n1");
@@ -565,7 +593,7 @@ describe("选中之后挂什么", () => {
       select("t");
       await act(async () => {
         fireEvent.click(screen.getByRole("button", { name: "copy" }));
-        await vi.advanceTimersByTimeAsync(10);
+        await vi.advanceTimersByTimeAsync(500);
       });
       expect(boardsApi.createBoardSequence).toHaveBeenCalledWith("b1", "w1", "seq");
       const timelines = view.latest().items.filter((one) => one.kind === "sequence");

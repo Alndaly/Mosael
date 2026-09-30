@@ -31,6 +31,8 @@ import {
   listBoards,
   updateBoard,
   type Board,
+  type BoardItem,
+  type BoardSummary,
   type BoardCanvas as Canvas,
   type BuiltinProducer,
   type BoardRunRequest,
@@ -125,11 +127,11 @@ export function BoardsView({ workspace }: { workspace: Workspace }) {
     onError: (error: Error) => toast.error(error.message),
   });
 
-  const refreshList = () => void queryClient.invalidateQueries({ queryKey: ["boards", workspace.id] });
+  const refreshList = () => void queryClient.invalidateQueries({ queryKey: boardKeys.list(workspace.id), exact: true });
 
   //: 卡片上的单条动作(「⋯」菜单与右键菜单共用):打开、重命名、创建副本、删除。
-  const [menuRenaming, setMenuRenaming] = React.useState<Board | null>(null);
-  const [menuDeleting, setMenuDeleting] = React.useState<Board | null>(null);
+  const [menuRenaming, setMenuRenaming] = React.useState<BoardSummary | null>(null);
+  const [menuDeleting, setMenuDeleting] = React.useState<BoardSummary | null>(null);
   const remove = useMutation({
     mutationFn: (boardId: string) => deleteBoard(boardId, workspace.id),
     onSuccess: () => {
@@ -142,7 +144,7 @@ export function BoardsView({ workspace }: { workspace: Workspace }) {
   const rename = useMutation({
     //: 带着列表里那份 revision 去改:画板开在别处、刚被改过的话,这次改名会撞上 409,
     //: 而不是把别处的新画布悄悄盖掉(改名和存画布走的是同一个 CAS 口子)。
-    mutationFn: ({ board, name }: { board: Board; name: string }) =>
+    mutationFn: ({ board, name }: { board: BoardSummary; name: string }) =>
       updateBoard(board.id, { workspace_id: workspace.id, base_revision: board.revision, name }),
     onSuccess: () => {
       setMenuRenaming(null);
@@ -155,7 +157,7 @@ export function BoardsView({ workspace }: { workspace: Workspace }) {
   });
   const duplicate = useMutation({
     //: 「× 副本」是界面语言里的一句话,在这里按当前语言拼好再交给后端。
-    mutationFn: (board: Board) =>
+    mutationFn: (board: BoardSummary) =>
       duplicateBoard(board.id, { workspace_id: workspace.id, name: t("boardsCopyName").replace("{name}", board.name) }),
     onSuccess: (made) => {
       refreshList();
@@ -196,13 +198,26 @@ export function BoardsView({ workspace }: { workspace: Workspace }) {
 
   if (open) {
     return (
-      <BoardDetail
+      <OpenBoard
         key={open.id}
-        board={open}
+        boardId={open.id}
         workspaceId={workspace.id}
-        onBack={() => setOpenId(null)}
-        //: 只刷新清单这一条(卡片上的格子数、「最近编辑」);打开着的这张板的详情由它自己的缓存管(见 BoardDetail)。
-        onSaved={() => void queryClient.invalidateQueries({ queryKey: boardKeys.list(workspace.id), exact: true })}
+        onBack={() => {
+          setOpenId(null);
+          //: 回到清单时再取一遍摘要(缩略图):打开着的时候只改了清单里这一张的版本号和时间,没重取。
+          refreshList();
+        }}
+        //: **只改清单里这一张**(名字、版本号、「最近编辑」、格子数)—— 不重取整张清单:打开着一张板时每存一次都会走到这。
+        //: 版本号要跟上:清单上的「重命名」带着它去比较并交换。
+        onSaved={(fresh) =>
+          queryClient.setQueryData<BoardSummary[]>(boardKeys.list(workspace.id), (current) =>
+            current?.map((one) =>
+              one.id === fresh.id
+                ? { ...one, name: fresh.name, revision: fresh.revision, updated_at: fresh.updated_at, item_count: fresh.canvas.items.length }
+                : one,
+            ),
+          )
+        }
       />
     );
   }
@@ -333,7 +348,34 @@ export function BoardsView({ workspace }: { workspace: Workspace }) {
 }
 
 /** useMultiSelect 的 id 取法要是稳定引用 —— 它拿这个函数做依赖,就地写的箭头函数每次渲染都是新的。 */
-const boardIdOf = (board: Board) => board.id;
+const boardIdOf = (board: BoardSummary) => board.id;
+
+/**
+ * 打开的那一张:清单只有摘要,整份画布从详情接口取,取到了才挂画布(画布的节点、版本号、撤销历史都只在挂上
+ * 那一刻从这一份建一次)。之后这份缓存由画布自己写回的每一版更新(见 BoardDetail 的 acceptBoard / adoptServer)。
+ */
+function OpenBoard({
+  boardId,
+  workspaceId,
+  onBack,
+  onSaved,
+}: {
+  boardId: string;
+  workspaceId: string;
+  onBack: () => void;
+  onSaved: (fresh: Board) => void;
+}) {
+  const detail = useQuery({
+    queryKey: boardKeys.detail(workspaceId, boardId),
+    queryFn: () => getBoard(boardId, workspaceId),
+    staleTime: Infinity,
+  });
+  if (detail.isPending) return <CanvasDetailLoading testId="boards-detail-loading" />;
+  if (detail.isError) {
+    return <PageLoadError icon={<LayoutGrid size={22} />} error={detail.error} onRetry={() => void detail.refetch()} />;
+  }
+  return <BoardDetail board={detail.data} workspaceId={workspaceId} onBack={onBack} onSaved={onSaved} />;
+}
 
 /**
  * 画板卡片。**整张卡**是一个按钮:平时点它打开,选择模式下点它勾选。
@@ -353,7 +395,7 @@ function BoardCard({
   duplicating,
   onDelete,
 }: {
-  board: Board;
+  board: BoardSummary;
   selecting: boolean;
   selected: boolean;
   onOpen: () => void;
@@ -365,7 +407,7 @@ function BoardCard({
 }) {
   const t = useI18n();
   const { locale } = usePreferences();
-  const count = board.canvas?.items?.length ?? 0;
+  const count = board.item_count;
   const marked = selecting && selected;
 
   return (
@@ -385,8 +427,14 @@ function BoardCard({
               <CanvasPreview
                 className={marked ? "border-primary ring-1 ring-inset ring-primary" : undefined}
                 //: 缩略图上每一格写一行字:起了名写名字,没起名写正文(便签那句话、文档标题),都没有写种类名。
-                items={(board.canvas?.items ?? []).map(item => ({ ...item, assetId: item.asset_id, label: item.title?.trim() || item.text || itemName(t, item) }))}
-                edges={board.canvas?.edges}
+                items={board.preview.items.map((item) => ({
+                  ...item,
+                  width: item.width ?? undefined,
+                  height: item.height ?? undefined,
+                  assetId: item.asset_id ?? undefined,
+                  label: item.title?.trim() || item.text || itemName(t, item as Pick<BoardItem, "kind" | "title">),
+                }))}
+                edges={board.preview.edges}
               />
               {selecting && <SelectionCheck selected={selected} />}
             </span>
@@ -451,7 +499,8 @@ function BoardDetail({
   board: Board;
   workspaceId: string;
   onBack: () => void;
-  onSaved: () => void;
+  /** 这张板有了服务端的新一版(自己存的、合进来的):清单里这一张跟着改。 */
+  onSaved: (fresh: Board) => void;
 }) {
   const t = useI18n();
   const queryClient = useQueryClient();
@@ -591,21 +640,15 @@ function BoardDetail({
   //: 这张板上的写请求(自动保存、改名、生成、写字、念、截)排成一队,各自轮到时才读版本号 ——
   //: 见 lib/optimisticWrites.createWriteQueue。
   const [serially] = React.useState(createWriteQueue);
-  //: 这张板的详情缓存:自己写回来的每一版放进去;别处让它作废(任务做完、智能体改板批准之后)时重取,
-  //: 比手上的新就合进本地(见下面采用它的那个 effect)。
+  //: 这张板的详情缓存(OpenBoard 取的那一份,`board` 就是它):自己写回来的每一版放进去;别处让它作废(任务做完、
+  //: 智能体改板批准之后)时重取,比手上的新就合进本地(见下面采用它的那个 effect)。
   const detailKey = React.useMemo(() => boardKeys.detail(workspaceId, board.id), [workspaceId, board.id]);
-  const detail = useQuery({
-    queryKey: detailKey,
-    queryFn: () => getBoard(board.id, workspaceId),
-    initialData: board,
-    staleTime: Infinity,
-  });
   const acceptBoard = React.useCallback(
     (fresh: Board) => {
       revision.current = fresh.revision;
       confirmedCanvas.current = fresh.canvas;
       queryClient.setQueryData(detailKey, fresh);
-      onSaved();
+      onSaved(fresh);
       return fresh;
     },
     [onSaved, queryClient, detailKey],
@@ -630,14 +673,14 @@ function BoardDetail({
       api?.adopt(merged, (snapshot) => rebaseCanvas(base, snapshot, fresh.canvas).canvas);
       localCanvas.current = merged;
       setCanvas(merged);
-      onSaved();
+      onSaved(fresh);
       return { adopted: true, conflicted };
     },
     [api, onSaved, queryClient, detailKey],
   );
   //: 详情缓存里来了更新的一版(智能体改板批准之后、任务做完之后的重取):排进写队列合进本地。
   //: 在路上的保存先回来把版本推过去的话,这一份就不比手上的新,adoptServer 不采用。
-  const latest = detail.data;
+  const latest = board;
   React.useEffect(() => {
     if (!api || latest.revision <= revision.current) return;
     void serially(async () => {
@@ -743,6 +786,11 @@ function BoardDetail({
    * 动作就不发。
    */
   const { flush: flushSaves } = useAutosave(canvas, save);
+  //: 画布汇上来的新一份。本地那份的引用**当场**换上:动作(生成、写字)和轮询读的是它,不等下一次渲染。
+  const onCanvasChange = React.useCallback((next: Canvas) => {
+    localCanvas.current = next;
+    setCanvas(next);
+  }, []);
 
   /**
    * 在画板上跑一次产出者(生成、写字、念出来、截一段)。**画布上的一切产出都从这里发** —— 走同一条
@@ -753,6 +801,9 @@ function BoardDetail({
    */
   const run = React.useCallback(
     async (request: BoardRunRequest) => {
+      //: 画布的变化攒到停手才汇上来(见 useBoardHistory):先把现在这一份拿出来存上,再等在路上的保存都落地。
+      const latest = api?.flush();
+      if (latest && !(await save(latest).then(() => true, () => false))) return;
       if (!(await flushSaves())) return;
       //: 版本号**轮到它时再读** —— 排在它前面的写请求可能刚把画布推进到下一版。
       const send = () =>
@@ -796,7 +847,7 @@ function BoardDetail({
           ));
       if (named && made?.run?.job_id) void announceEntityReceipt(made.run.job_id, t);
     },
-    [board.id, workspaceId, t, adoptServer, recoverConflict, save, serially, flushSaves],
+    [api, board.id, workspaceId, t, adoptServer, recoverConflict, save, serially, flushSaves],
   );
 
   /**
@@ -825,12 +876,11 @@ function BoardDetail({
         const made = await grabAssetFrame(input.assetId, input.at);
         //: 直接就有 asset_id —— 取帧是同步的一次 ffmpeg,没有「生成中」这个状态。
         api?.add("image", { asset_id: made.id, x: input.x, y: input.y });
-        onSaved();
       } catch (error) {
         toast.error(t("boardGrabFrameFailed"), { description: (error as Error).message });
       }
     },
-    [api, onSaved, t],
+    [api, t],
   );
 
   //: 还在跑的那几格。**轮询而不是等** —— 生成要几十秒,而用户这期间还在画布上干别的。
@@ -1136,7 +1186,7 @@ function BoardDetail({
         workspaceId={workspaceId}
         canvas={board.canvas ?? { items: [], edges: [] }}
         getInsets={getCanvasInsets}
-        onChange={setCanvas}
+        onChange={onCanvasChange}
         onPickAsset={(kind, place, options) => setPicking({ kind, place: (asset) => place(asset.id), onBoard: options?.onBoard })}
         onRun={run}
         onGrabFrame={grabFrame}
@@ -1209,7 +1259,6 @@ function BoardDetail({
           void deleteBoard(board.id, workspaceId)
             .then(() => {
               setConfirmingDelete(false);
-              onSaved();
               onBack();
             })
             .catch((error: Error) => toast.error(error.message))

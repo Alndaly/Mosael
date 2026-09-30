@@ -12,13 +12,15 @@ from sqlalchemy.orm import Session
 from app.db.models import Board, Sequence, User
 from app.domain.boards import producers
 from app.domain.boards.canvas import create_board, delete_board, duplicate_board, get_board, list_boards, update_board
+from app.domain.boards.persistence import board_summary
 from app.domain.boards.timelines import create_board_sequence
 from app.domain.permissions import ensure_workspace_access, ensure_workspace_perm, owning_workspace
 
 
-def list_all(db: Session, user: User, workspace_id: str) -> list[Board]:
+def list_all(db: Session, user: User, workspace_id: str) -> list[dict[str, Any]]:
+    """清单:每张板一份摘要(见 board_summary),整份画布打开时由详情接口给。"""
     ensure_workspace_access(db, user, workspace_id)
-    return list_boards(db, workspace_id)
+    return [board_summary(board) for board in list_boards(db, workspace_id)]
 
 
 def read(db: Session, user: User, board_id: str, workspace_id: str | None = None) -> Board:

@@ -24,6 +24,39 @@ def list_boards(db: Session, workspace_id: str) -> list[Board]:
     )
 
 
+#: 清单卡片上每一格写的那行字最多几个字(缩略图上只画得下十几个)。
+_PREVIEW_TEXT_CHARS = 40
+
+
+def board_summary(board: Board) -> dict[str, Any]:
+    """画板清单上一张卡片要的东西:名字、版本、时间、格子数和一份**缩略图用的**画布(每一格的位置、大小、
+    素材、一行字;线的两头)。
+
+    清单此前每张板都带着整份画布 —— 表单、提示词文档、运行态全在里面;打开着一张板时每存一次就重取一遍整张清单。
+    缩略图用不上这些,打开一张板时它的整份画布由详情接口给。"""
+    canvas = board.canvas or {}
+    items = [one for one in canvas.get("items") or [] if isinstance(one, dict)]
+    preview = []
+    for item in items:
+        cell: dict[str, Any] = {key: item[key] for key in ("id", "kind", "x", "y", "width", "height", "asset_id", "title")
+                                if item.get(key) is not None}
+        if isinstance(item.get("text"), str) and item["text"]:
+            cell["text"] = item["text"][:_PREVIEW_TEXT_CHARS]
+        preview.append(cell)
+    edges = [{"source": str(edge.get("source")), "target": str(edge.get("target"))}
+             for edge in canvas.get("edges") or [] if isinstance(edge, dict)]
+    return {
+        "id": board.id,
+        "workspace_id": board.workspace_id,
+        "name": board.name,
+        "revision": board.revision,
+        "created_at": board.created_at,
+        "updated_at": board.updated_at,
+        "item_count": len(items),
+        "preview": {"items": preview, "edges": edges},
+    }
+
+
 def get_board(db: Session, workspace_id: str, board_id: str) -> Board:
     board = db.get(Board, board_id)
     # 按工作区再验一次:拿到别的工作区的 id 也不该读得出来。

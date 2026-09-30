@@ -38,7 +38,8 @@ function mount(items: BoardItem[]) {
   const emitted: Canvas[] = [];
   let api: BoardCanvasApi | null = null;
   function Harness() {
-    const [canvas, setCanvas] = React.useState<Canvas | null>(null);
+    //: 和 BoardsView 一样,自动保存从挂上时那一份画布起算(画布的变化攒到停手才汇上来,挂上时不汇)。
+    const [canvas, setCanvas] = React.useState<Canvas | null>({ items, edges: [], markers: [] });
     useAutosave(canvas, (next) => {
       saved.push(next);
     });
@@ -91,6 +92,8 @@ describe("便签里用拼音打中文", () => {
     expect(writes).toEqual([]);
     expect(box.value).toBe("你好");
     expect(document.querySelector('[data-id="n1"] textarea')).toBe(box);
+    //: 画布攒到停手 400ms 才汇上来,自动保存在那之后再攒 600ms —— 两步各等一轮。
+    await settle();
     await settle();
 
     expect(view.textOf(view.emitted.at(-1), "n1")).toBe("你好");

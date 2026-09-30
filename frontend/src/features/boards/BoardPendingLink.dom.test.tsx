@@ -417,8 +417,8 @@ describe("画板连线的层次与外观", () => {
     expect(edge.interactionWidth).toBe(CANVAS_EDGE_OPTIONS.interactionWidth);
     //: 画板的线就是「引用」那一种:不挂任何变体类,颜色吃容器上的默认线色。
     expect(edge.className).toBeUndefined();
-    await settle(10);
-    expect(view.latest()?.edges).toEqual([{ id: "e1", source: "n1", target: "n2" }]);
+    //: 存下来的那一份(画布此刻汇出去的样子)只有 id 和两头。
+    expect(view.api().flush().edges).toEqual([{ id: "e1", source: "n1", target: "n2" }]);
   });
 });
 

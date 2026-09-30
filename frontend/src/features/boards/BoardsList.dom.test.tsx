@@ -26,24 +26,26 @@ vi.mock("@/app/preferences", () => ({
   usePreferences: () => ({ locale: "zh-CN", t: (key: MessageKey) => zh[key] }),
 }));
 
-import type { Board, Workspace } from "@/api/client";
+import type { BoardSummary, Workspace } from "@/api/client";
 import { BoardsView } from "@/features/boards/BoardsView";
 
 const workspace = { id: "w1", name: "测试工作区" } as Workspace;
 
-function board(id: string, name: string): Board {
+//: 清单接口给的是摘要:没有整份画布,只有缩略图要的那一份。
+function board(id: string, name: string): BoardSummary {
   return {
     id,
     workspace_id: "w1",
     name,
-    canvas: { items: [], edges: [] },
     revision: 3,
+    item_count: 0,
+    preview: { items: [], edges: [] },
     created_at: "2026-09-20T00:00:00",
     updated_at: "2026-09-20T00:00:00",
-  } as Board;
+  };
 }
 
-let boards: Board[] = [];
+let boards: BoardSummary[] = [];
 
 function mount() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });

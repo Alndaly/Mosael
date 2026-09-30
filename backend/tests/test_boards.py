@@ -47,6 +47,11 @@ def test_建改读删一条龙() -> None:
 
     listed = client.get("/api/boards", params={"workspace_id": ws}).json()
     assert [item["name"] for item in listed] == ["灵感"]
+    #: 清单只带缩略图要的那一份:打开着一张板时每存一次都要重取清单,整份画布(表单、运行态)不该跟着走。
+    [card] = listed
+    assert "canvas" not in card and card["item_count"] == 2 and card["revision"] == saved.json()["revision"]
+    assert card["preview"]["edges"] == [{"source": "n1", "target": "n2"}]
+    assert {key for one in card["preview"]["items"] for key in one} <= {"id", "kind", "x", "y", "width", "height", "asset_id", "title", "text"}
 
     assert client.delete(f"/api/boards/{board_id}", params={"workspace_id": ws}).status_code == 200
     assert client.get("/api/boards", params={"workspace_id": ws}).json() == []

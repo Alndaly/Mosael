@@ -18,6 +18,43 @@ class BoardOut(OrmModel):
     updated_at: datetime
 
 
+class BoardPreviewItem(ApiModel):
+    """清单缩略图上的一格:位置、大小、素材(画缩略图)、名字和一行字(没素材时画这行字)。"""
+
+    id: str
+    kind: str
+    x: float
+    y: float
+    width: float | None = None
+    height: float | None = None
+    asset_id: str | None = None
+    title: str | None = None
+    text: str | None = None
+
+
+class BoardPreviewEdge(ApiModel):
+    source: str
+    target: str
+
+
+class BoardPreview(ApiModel):
+    items: list[BoardPreviewItem]
+    edges: list[BoardPreviewEdge]
+
+
+class BoardSummaryOut(ApiModel):
+    """画板清单上的一张:不带整份画布(表单、运行态、提示词文档),只带缩略图要的那一份。"""
+
+    id: str
+    workspace_id: str
+    name: str
+    revision: int
+    created_at: datetime
+    updated_at: datetime
+    item_count: int
+    preview: BoardPreview
+
+
 class BoardCreate(ApiModel):
     workspace_id: str
     name: str = ""

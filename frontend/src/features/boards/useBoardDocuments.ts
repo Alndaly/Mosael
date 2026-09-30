@@ -52,7 +52,8 @@ export function useBoardDocuments({
       error: noteQueries[index].error?.message,
     }];
   }));
-  const refreshDocument = async (id: string) => {
+  //: 交出去的是一个稳定的函数(它进每一格节点的数据,换一次就是整张画布的节点都重画一遍),里面读最新的那份。
+  const refreshNow = async (id: string) => {
     const item = documentItems.find(item => item.id === id);
     if (!item?.note_id || !workspaceId) return;
     setRefreshingDocument(id);
@@ -66,6 +67,10 @@ export function useBoardDocuments({
     } catch (error) { toast.error(errorText(error)); }
     finally { setRefreshingDocument(null); }
   };
+
+  const refreshImpl = React.useRef(refreshNow);
+  refreshImpl.current = refreshNow;
+  const refreshDocument = React.useCallback((id: string) => refreshImpl.current(id), []);
 
   return { documents, pickingDocument, setPickingDocument, refreshingDocument, refreshDocument };
 }

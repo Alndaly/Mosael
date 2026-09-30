@@ -32,23 +32,70 @@ export function useBoardHistory({
   //: 采用服务端那一版时要按 id 找回节点此刻的选中态(见 adopt);回调里读最新的,不进依赖。
   const nodesRef = React.useRef(nodes);
   nodesRef.current = nodes;
-  // 每次画布变了就汇一份给上层去存。**用 JSON 比对而不是引用比对** —— React Flow 每次
-  // 拖动都换新对象,引用比对等于每帧都报"变了"。
-  const serialized = React.useMemo(() => JSON.stringify(toCanvas(nodes, edges)), [nodes, edges]);
-  React.useEffect(() => {
-    onChange(JSON.parse(serialized) as Canvas);
-  }, [serialized, onChange]);
+  const graph = React.useRef({ nodes, edges });
+  graph.current = { nodes, edges };
+  const onChangeRef = React.useRef(onChange);
+  onChangeRef.current = onChange;
 
   /**
    * 撤销/重做。存的是**整份画布的快照** —— 画板的事实来源是 React Flow 的 nodes/edges,
    * 撤销就是把某一份装回去(工作流那边挂在 zundo 上,因为它的事实来源是 store 里的 graph)。
    */
-  const [history, setHistory] = React.useState(() => emptyHistory(serialized));
+  const [history, setHistory] = React.useState(() => emptyHistory(JSON.stringify(toCanvas(nodes, edges))));
+  //: 上一次汇给上层的那一份(和历史里存的是同一种写法)。挂上时就是这一份 —— 加载进来不是编辑,不汇。
+  const emitted = React.useRef(history.present);
   //: 正在装回去的那一份 —— 它引发的这一轮变化**不能再进历史**,否则撤一步会立刻被记成
   //: 一次新编辑,重做就永远回不去了(表现是「撤销键按一下就灰了」)。
   const restoring = React.useRef<string | null>(null);
 
-  /** 把一份画布装进 React Flow,回它装进去之后序列化出来的样子(和 `serialized` 同一种写法)。 */
+  /**
+   * 画布变了:**攒一下再序列化一次**,汇给上层(自动保存、查找)和记进撤销历史的是同一份。
+   *
+   * 此前每一帧都 JSON.stringify 整张画布、再 JSON.parse 一遍交给上层 —— 拖一格,大画板上每帧几毫秒到几十毫秒,
+   * 上层还跟着每帧重渲染一次。现在攒到停手 400ms(和撤销的并步是同一个窗口:拖一下是一步)再做一次。
+   * **按 JSON 比对**:React Flow 每次拖动都换新对象,选中一格也换 —— 内容没变就不汇、不记。
+   * 要服务端照着画布去做的动作(生成、写字)等不了这 400ms,先 `flush()` 拿现在这一份(见 BoardsView.run)。
+   */
+  const settle = React.useCallback((): Canvas => {
+    const canvas = toCanvas(graph.current.nodes, graph.current.edges);
+    const snapshot = JSON.stringify(canvas);
+    if (snapshot !== emitted.current) {
+      emitted.current = snapshot;
+      onChangeRef.current(canvas);
+    }
+    const restored = restoring.current === snapshot;
+    restoring.current = null;
+    if (!restored) setHistory((current) => record(current, snapshot));
+    return canvas;
+  }, []);
+  const pending = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  React.useEffect(() => {
+    if (pending.current) clearTimeout(pending.current);
+    pending.current = setTimeout(() => {
+      pending.current = null;
+      settle();
+    }, 400);
+  }, [nodes, edges, settle]);
+  React.useEffect(
+    () => () => {
+      //: 卸载时把攒着的那一次汇出去 —— 拖完最后一下就切走,自动保存还要把它补上。
+      if (pending.current) {
+        clearTimeout(pending.current);
+        settle();
+      }
+    },
+    [settle],
+  );
+  /** 不等攒够,现在就把画布汇出去,回这一份。 */
+  const flush = React.useCallback((): Canvas => {
+    if (pending.current) {
+      clearTimeout(pending.current);
+      pending.current = null;
+    }
+    return settle();
+  }, [settle]);
+
+  /** 把一份画布装进 React Flow,回它装进去之后序列化出来的样子(和 settle 同一种写法)。 */
   const load = React.useCallback(
     (canvas: Canvas): string => {
       const nextNodes = [...toNodes(canvas.items), ...toMarkerNodes(canvas.markers ?? [], LAYERS.marker)];
@@ -93,17 +140,6 @@ export function useBoardHistory({
     },
     [setNodes, setEdges],
   );
-
-  React.useEffect(() => {
-    if (restoring.current === serialized) {
-      restoring.current = null;
-      return;
-    }
-    //: **攒一下再记。** 拖一个节点会发几十次位置更新,一次一步的话用户得按几十下撤销
-    //: 才回得到上一个状态。
-    const timer = setTimeout(() => setHistory((current) => record(current, serialized)), 400);
-    return () => clearTimeout(timer);
-  }, [serialized]);
 
   //: 时间线格里做成的一步记进这摞(见 canvasHistory 的「时间线的一步」)。
   React.useEffect(
@@ -153,5 +189,5 @@ export function useBoardHistory({
     else restore(next.present);
   }, [restore, replaySequence]);
 
-  return { history, adopt, stepBack, stepForward };
+  return { history, adopt, flush, stepBack, stepForward };
 }

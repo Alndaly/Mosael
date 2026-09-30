@@ -29,6 +29,7 @@ const canvasHarness = vi.hoisted(() => ({
     add: vi.fn(),
     patch: vi.fn(),
     adopt: vi.fn(),
+    flush: vi.fn(),
     fitView: vi.fn(),
     focusComment: vi.fn(),
     focusItem: vi.fn(),
@@ -88,6 +89,14 @@ function boardAt(revision: number, canvas: BoardCanvas): Board {
     created_at: "2026-09-20T00:00:00",
     updated_at: "2026-09-20T00:00:00",
   } as Board;
+}
+
+/**
+ * 打开这一张:清单给摘要,画布由详情接口给(第一次 getBoard)。之后测试自己给的 getBoard 是轮询 / 重取拿到的。
+ */
+function opens(board: Board) {
+  apiMocks.listBoards.mockResolvedValue([board]);
+  apiMocks.getBoard.mockResolvedValueOnce(board);
 }
 
 function deferred<T>() {
@@ -164,7 +173,7 @@ describe("画板详情页与服务端的同步", () => {
       ...server,
       items: [server.items[0], { ...server.items[1], asset_id: "a1", run: { status: "succeeded" } }],
     };
-    apiMocks.listBoards.mockResolvedValue([boardAt(3, server)]);
+    opens(boardAt(3, server));
     apiMocks.updateBoard.mockResolvedValue(boardAt(3, server));
     apiMocks.getBoard.mockResolvedValue(boardAt(4, settled));
 
@@ -186,7 +195,7 @@ describe("画板详情页与服务端的同步", () => {
     const running = { id: "img", kind: "image" as const, x: 0, y: 0, width: 260, height: 180, run: { status: "running" as const, job_id: "job-1" } };
     const server: BoardCanvas = { items: [running], edges: [], markers: [] };
     const undone: BoardCanvas = { items: [{ id: "img", kind: "image", x: 40, y: 0, width: 260, height: 180 }], edges: [], markers: [] };
-    apiMocks.listBoards.mockResolvedValue([boardAt(3, server)]);
+    opens(boardAt(3, server));
     apiMocks.updateBoard.mockResolvedValue(boardAt(4, { ...server, items: [{ ...running, x: 40 }] }));
     apiMocks.getBoard.mockReturnValue(new Promise(() => undefined));
 
@@ -206,7 +215,7 @@ describe("画板详情页与服务端的同步", () => {
     const note = { id: "n1", kind: "note" as const, x: 400, y: 0, width: 220, height: 140, text: "拖着我" };
     const server: BoardCanvas = { items: [running, note], edges: [], markers: [] };
     const settled = { ...running, asset_id: "a1", run: { status: "succeeded" as const } };
-    apiMocks.listBoards.mockResolvedValue([boardAt(3, server)]);
+    opens(boardAt(3, server));
     apiMocks.updateBoard.mockImplementation(async (_id: string, body: { canvas: BoardCanvas }) => boardAt(4, body.canvas));
     apiMocks.getBoard.mockResolvedValue(boardAt(5, { ...server, items: [settled, note] }));
 
@@ -233,7 +242,7 @@ describe("画板详情页与服务端的同步", () => {
     };
     const typed: BoardCanvas = { ...server, items: [{ ...server.items[0], text: "刚敲完的这段" }] };
     const order: string[] = [];
-    apiMocks.listBoards.mockResolvedValue([boardAt(3, server)]);
+    opens(boardAt(3, server));
     apiMocks.updateBoard.mockImplementation(async (_id: string, body: { canvas: BoardCanvas }) => {
       order.push(`save:${body.canvas.items[0].text}`);
       return boardAt(4, body.canvas);
@@ -261,7 +270,7 @@ describe("画板详情页与服务端的同步", () => {
     const failed = { id: "cut", kind: "video" as const, x: 0, y: 300, width: 320, height: 200, form: { trim }, run: { status: "failed" as const, error: "截取失败" } };
     const server: BoardCanvas = { items: [failed], edges: [], markers: [] };
     const retried = { ...failed, form: { trim: { ...trim, start: 0.5 } }, run: { status: "running" as const, job_id: "job-2" } };
-    apiMocks.listBoards.mockResolvedValue([boardAt(3, server)]);
+    opens(boardAt(3, server));
     apiMocks.runOnBoard.mockResolvedValue(boardAt(4, { ...server, items: [retried] }));
     apiMocks.getBoard.mockReturnValue(new Promise(() => undefined));
 
@@ -289,7 +298,7 @@ describe("画板详情页与服务端的同步", () => {
     const server: BoardCanvas = { items: [upstream, video], edges: [{ id: "e1", source: "A", target: "V" }], markers: [] };
     const unwired: BoardCanvas = { ...server, edges: [] };
     const stored: BoardCanvas = { ...unwired, items: [upstream, { ...video, form: { prompt: "动起来", source_assets: [manual] } }] };
-    apiMocks.listBoards.mockResolvedValue([boardAt(3, server)]);
+    opens(boardAt(3, server));
     apiMocks.updateBoard.mockResolvedValue(boardAt(4, stored));
 
     mount();
@@ -310,7 +319,7 @@ describe("画板详情页与服务端的同步", () => {
     };
     const moved: BoardCanvas = { ...server, items: [{ ...server.items[0], x: 40 }] };
     const save = deferred<Board>();
-    apiMocks.listBoards.mockResolvedValue([boardAt(3, server)]);
+    opens(boardAt(3, server));
     apiMocks.updateBoard.mockReturnValue(save.promise);
     apiMocks.runOnBoard.mockResolvedValue(
       boardAt(5, { ...moved, items: [{ ...moved.items[0], run: { status: "running", job_id: "job-1" } }] }),
@@ -482,7 +491,7 @@ describe("一格的能力(把它的内容变成新内容)", () => {
 
   it("工具条「添加」里只有格子,按动词分组(新建 / 从库里放 / 整理);没有工具那一组", async () => {
     Object.assign(Element.prototype, { scrollIntoView: () => {}, hasPointerCapture: () => false, releasePointerCapture: () => {} });
-    apiMocks.listBoards.mockResolvedValue([boardAt(3, { items: [], edges: [], markers: [] })]);
+    opens(boardAt(3, { items: [], edges: [], markers: [] }));
     apiMocks.listBoardProducers.mockResolvedValue([TOOL]);
 
     const view = mount();
@@ -515,7 +524,7 @@ describe("一格的能力(把它的内容变成新内容)", () => {
       edges: [{ id: "n1->n1-out-1", source: "n1", target: "n1-out-1" }],
       markers: [],
     };
-    apiMocks.listBoards.mockResolvedValue([boardAt(3, server)]);
+    opens(boardAt(3, server));
     apiMocks.runOnBoard.mockResolvedValue(boardAt(4, { ...server, items: [running] }));
     apiMocks.getBoard.mockResolvedValue(boardAt(5, settled));
     apiMocks.cancelJob.mockResolvedValue({ id: "job-9" });
@@ -545,7 +554,7 @@ describe("一格的能力(把它的内容变成新内容)", () => {
   });
 
   it("能力跑不起来(比如没有这个插件的连接):提示说的是工具,不是「生成失败」", async () => {
-    apiMocks.listBoards.mockResolvedValue([boardAt(3, { items: [], edges: [], markers: [] })]);
+    opens(boardAt(3, { items: [], edges: [], markers: [] }));
     apiMocks.runOnBoard.mockRejectedValue(new Error("你还没有能跑「去背景」的「抠图」连接"));
     mount();
     await vi.waitFor(() => expect(canvasHarness.props).not.toBeNull());
@@ -556,7 +565,7 @@ describe("一格的能力(把它的内容变成新内容)", () => {
   });
 
   it("拖进来一批文件,中间一个传不上:传上的照样上画板、素材库照样刷新,最后说清几个没进来", async () => {
-    apiMocks.listBoards.mockResolvedValue([boardAt(3, { items: [], edges: [], markers: [] })]);
+    opens(boardAt(3, { items: [], edges: [], markers: [] }));
     apiMocks.importAsset
       .mockResolvedValueOnce({ id: "a1", name: "一.png", kind: "image" })
       .mockRejectedValueOnce(new Error("格式不支持"))
@@ -581,7 +590,7 @@ describe("一格的能力(把它的内容变成新内容)", () => {
 
   it("「添加 → 素材」放下的一格和拖进来的写同样的字段:素材 + 它的名字", async () => {
     Object.assign(Element.prototype, { scrollIntoView: () => {}, hasPointerCapture: () => false, releasePointerCapture: () => {} });
-    apiMocks.listBoards.mockResolvedValue([boardAt(3, { items: [], edges: [], markers: [] })]);
+    opens(boardAt(3, { items: [], edges: [], markers: [] }));
     const view = mount();
     await vi.waitFor(() => expect(canvasHarness.props).not.toBeNull());
     act(() => {
