@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from datetime import timedelta
 from typing import Any
 
 from sqlalchemy import select, update
@@ -26,6 +27,10 @@ def list_boards(db: Session, workspace_id: str) -> list[Board]:
 
 #: 清单卡片上每一格写的那行字最多几个字(缩略图上只画得下十几个)。
 _PREVIEW_TEXT_CHARS = 40
+
+
+#: 同一个人对同一张板的编辑,这么久之内只记一条活动(见 update_board)。
+EDIT_ACTIVITY_WINDOW = timedelta(minutes=10)
 
 
 def board_summary(board: Board) -> dict[str, Any]:
@@ -233,19 +238,23 @@ def update_board(
         current = get_board(db, workspace_id, board_id)
         raise BoardRevisionConflict(expected, current.revision)
     references.resync(db, "board", board_id)
-    from app.domain.collaboration import record_activity
+    #: 服务端自己对一格的合并(摆占位、回执落下产出)不是谁「编辑了画板」,不记活动;人的自动保存一次编辑就是
+    #: 几十次,同一个人同一张板一段时间里只记一条(见 record_activity 的 coalesce_within)。
+    if not server_write:
+        from app.domain.collaboration import record_activity
 
-    action = "board.renamed" if name is not None and canvas is None else "board.updated"
-    record_activity(
-        db,
-        workspace_id=workspace_id,
-        actor_id=actor_id,
-        action=action,
-        subject_type="board",
-        subject_id=board_id,
-        summary="重命名了无限画布" if action == "board.renamed" else "编辑了无限画布",
-        payload={"base_revision": expected, "revision": expected + 1},
-    )
+        action = "board.renamed" if name is not None and canvas is None else "board.updated"
+        record_activity(
+            db,
+            workspace_id=workspace_id,
+            actor_id=actor_id,
+            action=action,
+            subject_type="board",
+            subject_id=board_id,
+            summary="重命名了无限画布" if action == "board.renamed" else "编辑了无限画布",
+            payload={"base_revision": expected, "revision": expected + 1},
+            coalesce_within=None if action == "board.renamed" else EDIT_ACTIVITY_WINDOW,
+        )
     # 这一次提交暂时留着:比较并交换撞车时上面要 rollback 重读,而任务总线送画板回执
     # (jobs._after_jobs_settled → deliver_generated)调完不替送信方提交 —— 两处都靠这里落库。
     db.commit()

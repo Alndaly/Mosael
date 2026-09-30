@@ -93,6 +93,43 @@ def test_base_revision_detects_stale_canvas_without_overwriting() -> None:
     assert current["canvas"]["items"][0]["id"] == "a"
 
 
+def test_自动保存和回执不刷屏团队动态_同人同板一段时间只记一条() -> None:
+    """画板自动保存,一次编辑就是几十次保存;每落一次产出还有一封回执。团队动态里此前是一串「编辑了无限画布」。
+    服务端自己的写入(占位、回执)不记;人的编辑同一张板十分钟内只记一条,过了再编辑记新的。"""
+    from datetime import timedelta
+    from types import SimpleNamespace
+
+    from app.core.db import SessionLocal
+    from app.db.models import ActivityEvent
+    from app.domain.boards import deliver_generated, receipt_to_item
+
+    client = fresh_client()
+    ws = _workspace(client)
+    board_id, item_id = _pending_board(client, ws)
+
+    def edits() -> list[ActivityEvent]:
+        with SessionLocal() as db:
+            return db.query(ActivityEvent).filter(ActivityEvent.subject_id == board_id,
+                                                  ActivityEvent.action == "board.updated").all()
+
+    for x in (10, 20, 30):
+        canvas = client.get(f"/api/boards/{board_id}", params={"workspace_id": ws}).json()["canvas"]
+        canvas["items"][0]["x"] = x
+        client.patch(f"/api/boards/{board_id}", json={"workspace_id": ws, "base_revision": board_revision(client, board_id, ws), "canvas": canvas})
+    with SessionLocal() as db:
+        deliver_generated(db, SimpleNamespace(id="job-x", status="succeeded", result={"asset_ids": ["a"]}), receipt_to_item(board_id, item_id))
+    assert len(edits()) == 1, [one.payload for one in edits()]
+
+    with SessionLocal() as db:
+        event = db.get(ActivityEvent, edits()[0].id)
+        event.created_at = event.created_at - timedelta(minutes=11)
+        db.commit()
+    canvas = client.get(f"/api/boards/{board_id}", params={"workspace_id": ws}).json()["canvas"]
+    canvas["items"][0]["x"] = 99
+    client.patch(f"/api/boards/{board_id}", json={"workspace_id": ws, "base_revision": board_revision(client, board_id, ws), "canvas": canvas})
+    assert len(edits()) == 2, "隔了一阵再编辑,记新的一条"
+
+
 def test_identical_canvas_is_not_a_new_revision() -> None:
     client = fresh_client()
     ws = _workspace(client)

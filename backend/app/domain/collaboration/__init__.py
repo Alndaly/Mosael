@@ -7,6 +7,7 @@ workspace/subject identity. Notifications remain delivery, never the source of c
 from __future__ import annotations
 
 import re
+from datetime import timedelta
 from typing import Any
 
 from sqlalchemy import select
@@ -67,7 +68,32 @@ def record_activity(
     payload: dict[str, Any] | None = None,
     source_type: str | None = None,
     source_id: str | None = None,
+    coalesce_within: timedelta | None = None,
 ) -> ActivityEvent:
+    """记一条活动。
+
+    `coalesce_within`:同一个人对同一样东西做同一件事,这段时间里已经记过一条就不再记 —— 画板自动保存,
+    一次编辑就是几十次保存,团队动态里不该是一串「编辑了无限画布」。活动一经记下不改(不回去改那一条的时间),
+    所以「合并」就是这段时间里只留第一条;过了这段时间再编辑,记新的一条。
+    """
+    if coalesce_within is not None:
+        from app.db.models import now
+
+        recent = db.scalars(
+            select(ActivityEvent)
+            .where(
+                ActivityEvent.workspace_id == workspace_id,
+                ActivityEvent.actor_id == actor_id,
+                ActivityEvent.action == action,
+                ActivityEvent.subject_type == subject_type,
+                ActivityEvent.subject_id == subject_id,
+                ActivityEvent.created_at >= now() - coalesce_within,
+            )
+            .order_by(ActivityEvent.created_at.desc())
+            .limit(1)
+        ).first()
+        if recent is not None:
+            return recent
     event = ActivityEvent(
         workspace_id=workspace_id,
         actor_id=actor_id,
