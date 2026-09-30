@@ -259,6 +259,16 @@ function collect(
     // 先在清单里说,别等前面几步跑完、花了钱才知道;画布上它也只剩一个裸的 `plugin.包.工具`。
     if (!meta) push("error", "unknown-type");
 
+    // 容器节点自己的 output / condition 在**体内**作用域里解析:看得见的是体里的节点和声明的作用域名。
+    const bodyField = bodyKey(registry, node.type);
+    const innerGraph = bodyField ? config[bodyField] : undefined;
+    const innerNames = new Set([
+      ...(innerGraph && typeof innerGraph === "object" && Array.isArray((innerGraph as WorkflowGraph).nodes)
+        ? (innerGraph as WorkflowGraph).nodes.map((inner) => inner.id)
+        : []),
+      ...bodyScope(registry, node.type),
+    ]);
+
     // 必填字段 + 失效引用(逐字段)
     const fieldSpecs = (meta?.config ?? {}) as Record<string, ConfigSpecLike>;
     for (const [key, rawSpec] of Object.entries(fieldSpecs)) {
@@ -273,8 +283,16 @@ function collect(
           push("error", "required-missing", { configKey: key });
         }
       }
-      // 子图/循环体的 body/output/condition 引用子作用域或内部节点,顶层不做失效检查(否则误报)。
-      if (isNestedScopeConfig(registry, node.type, key)) continue;
+      // 子图/循环体的 body/output/condition 引用子作用域或内部节点,不拿这一层的节点表判(否则误报)。
+      // 但 output / condition 也不是不判:按体内节点 + 声明的作用域名判(与后端 validate_body_graph 的
+      // container 同一条)。此前直接跳过,条件循环的条件写错一个节点名,运行时是空串,循环只跑一轮。
+      if (isNestedScopeConfig(registry, node.type, key)) {
+        if (key === bodyField) continue;
+        for (const { ref, sourceId } of extractRefs(config[key])) {
+          if (!innerNames.has(sourceId)) push("error", "stale-var", { configKey: key, ref });
+        }
+        continue;
+      }
       for (const { ref, sourceId } of extractRefs(config[key])) {
         // start 的 *params 通配前缀不算节点 id;引用不存在的节点即失效。
         if (!nodeIds.has(sourceId)) push("error", "stale-var", { configKey: key, ref });

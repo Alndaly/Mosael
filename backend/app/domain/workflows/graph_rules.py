@@ -181,7 +181,9 @@ def validate_graph(
                 where = f"节点 {node_id} 的{_body_label(node_type)}里:"
                 errors.extend(
                     where + one
-                    for one in validate_body_graph(node_config.get("body"), node_type, extra_types=extra_types)
+                    for one in validate_body_graph(
+                        node_config.get("body"), node_type, extra_types=extra_types, container=node_config
+                    )
                 )
     if require_start:
         if start_count > 1 or (start_count == 0 and not allow_missing_start):
@@ -257,10 +259,18 @@ def _body_label(node_type: str) -> str:
 
 
 def validate_body_graph(
-    body: Any, node_type: str, *, extra_types: dict[str, dict[str, Any]] | None = None
+    body: Any,
+    node_type: str,
+    *,
+    extra_types: dict[str, dict[str, Any]] | None = None,
+    container: dict[str, Any] | None = None,
 ) -> list[str]:
     """内嵌子图(循环体 / subgraph)校验:必须非空、无 start 节点、其余同 validate_graph;
     再查引用是否越出 `node_type` 声明的作用域(`body_scope`)。
+
+    `container` 是容器节点自己的配置:它的 output / condition(见 NESTED_BODY_RAW_KEYS)也在体内
+    作用域里解析,一并按同一份作用域查。此前只扫体里的节点,这两格前后端都不看 —— 条件循环的条件
+    写错一个节点名,运行时插值成空串,循环安静地只跑一轮。
 
     `extra_types` 和外层那次校验是同一份 —— 体里的插件节点和顶层的一样认得出来。"""
     label = _body_label(node_type)
@@ -273,7 +283,42 @@ def validate_body_graph(
     if any(isinstance(node, dict) and node.get("type") == "output" for node in nodes):
         errors.append(f"{label}里不能放「输出」节点:工作流的输出只能在最外层声明")
     errors.extend(_unresolvable_body_refs(nodes, node_type))
+    if container:
+        inner = {key: container[key] for key in NESTED_BODY_RAW_KEYS if key != "body" and key in container}
+        errors.extend(_unresolvable_container_refs(inner, nodes, node_type))
     return errors
+
+
+def _body_refs(texts: list[str], nodes: list[Any], node_type: str) -> tuple[set[str], set[str]]:
+    """这几段文字里,体内作用域解析不了的引用:(不认识的根, 固定作用域里没有的字段)。
+
+    体内看得见的只有节点类型声明的作用域名(`body_scope`)和体里自己的节点。字段是固定几个的
+    作用域(`loop`),字段也要对得上;字段来自配置的(`*inputs`)只有运行时知道。
+    """
+    declared: dict[str, list[str]] = NODE_TYPES[node_type]["body_scope"]
+    body_ids = {str(node.get("id", "")) for node in nodes if isinstance(node, dict)}
+    known = set(declared) | body_ids
+    fixed = {root: set(fields) for root, fields in declared.items() if not any(one.startswith("*") for one in fields)}
+    unknown: set[str] = set()
+    missing: set[str] = set()
+    for text in texts:
+        for match in VARIABLE_RE.finditer(text):
+            parts = match.group(1).strip().split(".")
+            root = parts[0]
+            if root and root not in known:
+                unknown.add(root)
+            elif root in fixed and root not in body_ids and len(parts) > 1 and parts[1] not in fixed[root]:
+                missing.add(f"{root}.{parts[1]}")
+    return unknown, missing
+
+
+def _missing_fields_error(missing: set[str], node_type: str) -> str:
+    fixed = {
+        root: fields for root, fields in NODE_TYPES[node_type]["body_scope"].items()
+        if not any(one.startswith("*") for one in fields)
+    }
+    provided = "、".join(f"{root}.{field}" for root, fields in fixed.items() for field in sorted(fields))
+    return f"{_body_label(node_type)}里没有 {', '.join(sorted(missing))};这里只提供 {provided}"
 
 
 def _unresolvable_body_refs(nodes: list[Any], node_type: str) -> list[str]:
@@ -294,14 +339,7 @@ def _unresolvable_body_refs(nodes: list[Any], node_type: str) -> list[str]:
     body/output/condition belong to *its* inner scope and validate_graph checks them against that
     scope. Its `inputs`/`items` (outer-facing) are still scanned, since those resolve in *this* scope.
     """
-    declared: dict[str, list[str]] = NODE_TYPES[node_type]["body_scope"]
-    scope = list(declared)
-    body_ids = {str(node.get("id", "")) for node in nodes if isinstance(node, dict)}
-    known = set(scope) | body_ids
-    #: 字段是固定几个的作用域(`loop`),字段也要对得上;字段来自配置的(`*inputs`)只有运行时知道。
-    fixed = {root: set(fields) for root, fields in declared.items() if not any(one.startswith("*") for one in fields)}
-    unknown: set[str] = set()
-    missing: set[str] = set()
+    texts: list[str] = []
     for node in nodes:
         if not isinstance(node, dict):
             continue
@@ -309,23 +347,33 @@ def _unresolvable_body_refs(nodes: list[Any], node_type: str) -> list[str]:
         if node.get("type") in NESTED_BODY_TYPES:
             for key in NESTED_BODY_RAW_KEYS:
                 config.pop(key, None)
-        for match in VARIABLE_RE.finditer(json.dumps(config, ensure_ascii=False)):
-            parts = match.group(1).strip().split(".")
-            root = parts[0]
-            if root and root not in known:
-                unknown.add(root)
-            elif root in fixed and root not in body_ids and len(parts) > 1 and parts[1] not in fixed[root]:
-                missing.add(f"{root}.{parts[1]}")
+        texts.append(json.dumps(config, ensure_ascii=False))
+    unknown, missing = _body_refs(texts, nodes, node_type)
     errors: list[str] = []
     if missing:
-        provided = "、".join(f"{root}.{field}" for root, fields in fixed.items() for field in sorted(fields))
-        errors.append(f"{_body_label(node_type)}里没有 {', '.join(sorted(missing))};这里只提供 {provided}")
+        errors.append(_missing_fields_error(missing, node_type))
     if not unknown:
         return errors
-    allowed = "、".join(scope)
-    if "loop" in scope:
+    allowed = "、".join(NODE_TYPES[node_type]["body_scope"])
+    if "loop" in NODE_TYPES[node_type]["body_scope"]:
         return [*errors, f"循环体引用了循环外的节点:{', '.join(sorted(unknown))};循环体只能引用 {allowed} 与体内节点"]
     return [*errors, f"子图引用了作用域外的节点:{', '.join(sorted(unknown))};子图只能引用 {allowed} 与体内节点"]
+
+
+def _unresolvable_container_refs(inner: dict[str, Any], nodes: list[Any], node_type: str) -> list[str]:
+    """容器节点自己的 output / condition 在体内作用域里解析 —— 和体里的节点同一份作用域。"""
+    label = _body_label(node_type)
+    errors: list[str] = []
+    for key, value in inner.items():
+        unknown, missing = _body_refs([json.dumps(value, ensure_ascii=False)], nodes, node_type)
+        if missing:
+            errors.append(_missing_fields_error(missing, node_type))
+        if unknown:
+            allowed = "、".join(NODE_TYPES[node_type]["body_scope"])
+            errors.append(
+                f"{key} 引用了{label}里没有的节点:{', '.join(sorted(unknown))};只能引用 {allowed} 与{label}里的节点"
+            )
+    return errors
 
 
 #: 后果**落在这个应用之外**的节点:发出去的帖子、别人服务器上的改动、本机跑过的代码、

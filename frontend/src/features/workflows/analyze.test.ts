@@ -187,6 +187,30 @@ describe("analyzeWorkflow", () => {
     expect((issuesAtLayer(a.issues, []).get("sg") ?? []).filter((i) => i.code === "stale-var")).toEqual([]);
   });
 
+  it("flags a loop output / loop_while condition that references nothing inside the body", () => {
+    // 这两格在体内作用域里解析 —— 此前直接跳过,写错一个节点名运行时就是空串、条件循环只跑一轮。
+    const body = { nodes: [{ id: "t", type: "template", config: { template: "{{loop.index}}" } }], edges: [] };
+    const g = graph(
+      [
+        { id: "start", type: "start", config: {} },
+        // 引用外层的 start、或体里没有的节点:都解析不了。
+        { id: "each", type: "loop_foreach", config: { items: "a", body, output: "{{start.q}}" } },
+        { id: "again", type: "loop_while", config: { body, condition: "{{ghost.text}}", output: "{{t.text}}" } },
+      ],
+      [
+        { id: "e1", source: "start", target: "each" },
+        { id: "e2", source: "start", target: "again" },
+      ],
+    );
+    const a = analyzeWorkflow(g, registry, fullCtx);
+    const stale = (id: string) =>
+      (issuesAtLayer(a.issues, []).get(id) ?? []).filter((i) => i.code === "stale-var").map((i) => [i.configKey, i.ref]);
+    expect(stale("each")).toEqual([["output", "{{start.q}}"]]);
+    // output 引用体里的 t、作用域名 loop 都合法;只有条件里的 ghost 不在。
+    expect(stale("again")).toEqual([["condition", "{{ghost.text}}"]]);
+    expect(a.runnable).toBe(false);
+  });
+
   it("does not warn when an asset output feeds an asset slot", () => {
     const g = graph(
       [
