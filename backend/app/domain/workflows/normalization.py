@@ -12,6 +12,8 @@ from copy import deepcopy
 import re
 from typing import Any
 
+from app.domain.workflows.graph_rules import NESTED_BODY_RAW_KEYS
+
 PURE_REFERENCE_RE = re.compile(r"\{\{\s*([\w.-]+)\s*\}\}")
 
 
@@ -112,9 +114,14 @@ def _canonicalize_graph(graph: dict[str, Any], node_types: dict[str, dict[str, A
         for input_key in inputs_by_target.get(target_id, []):
             if input_key not in connected_inputs:
                 connected_inputs.append(input_key)
+        #: 内嵌子图节点的 body/output/condition 属于**体内**作用域(见 NESTED_BODY_RAW_KEYS):
+        #: `{{llm-1.text}}` 指的是体里的 llm-1,不是外层那个。节点 id 只在当前这一层唯一,外层与体内
+        #: 同名是常态 —— 此前这里把它升级成一条**来自外层**的数据边,output 被清空、loop_while 的
+        #: 条件绑到了外层的值上。和 reference_dependencies、画布的 isNestedScopeConfig 同一条界线。
+        inner_scope = NESTED_BODY_RAW_KEYS if metadata.get("body_scope") else ()
         for input_key, value in config.items():
             spec = config_specs.get(input_key)
-            if not isinstance(spec, dict) or spec.get("type") in {"object", "graph"}:
+            if not isinstance(spec, dict) or spec.get("type") in {"object", "graph"} or input_key in inner_scope:
                 continue
             if not isinstance(value, str):
                 continue

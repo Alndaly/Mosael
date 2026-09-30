@@ -5544,6 +5544,93 @@ def _migrate_condition_edges_use_source_handle() -> None:
     _migrate_workflow_revisions()
 
 
+def _migrate_loop_scopes_are_not_outer_data_edges() -> None:
+    """把规范化错接成外层数据边的循环 / 子图 `output`、条件循环 `condition` 改回体内引用。
+
+    规范化此前只跳过 object / graph 类型的字段,没排除内嵌子图节点的 output / condition —— 那两格
+    属于**体内**作用域。节点 id 只在当前这一层唯一,外层和体内同名(`llm-1`)是常态,于是体内引用
+    `{{llm-1.text}}` 被升级成一条**来自外层 llm-1** 的数据边、output 清空:遍历循环交出的是外层那
+    一个值,条件循环的条件绑到了外层的布尔值上。
+
+    被改写过的签名:目标是循环 / 子图、`target_input` 是它那一格体内字段的数据边。这种边不会是
+    用户有意接的(外层一个值当每一轮的输出模板没有意义),一律删掉;那一格还是空的就恢复成
+    `{{来源.输出}}`(规范化清空之前的原文),已经重填过的不动。节点的 `inputs` 端口列表里那一项一并摘掉。
+    规范化折边时会把同一对节点间无 handle 的控制边当多余的折掉:删边后这一对之间什么边都不剩时,
+    补回一条控制边 —— 保住它眼下的先后,和被折掉的那条正是同一条。循环体 / 子图体里的一并改。
+
+    只改 `workflows.graph`;修订是不可变快照,改完调修订迁移把这次改动记成新的一版(和
+    _migrate_condition_edges_use_source_handle 同一个理由)。规则抄在这里,迁移不跟着领域代码变。
+    """
+    if "workflows" not in set(inspect(engine).get_table_names()):
+        return
+    inner_keys = {"loop_foreach": ("output",), "loop_while": ("output", "condition"), "subgraph": ("output",)}
+
+    def rewrite(graph: Any) -> Any:
+        if not isinstance(graph, dict):
+            return graph
+        nodes = [dict(node) if isinstance(node, dict) else node for node in graph.get("nodes") or []]
+        by_id = {str(node.get("id")): node for node in nodes if isinstance(node, dict)}
+        edges: list[Any] = []
+        restored: list[tuple[str, str]] = []
+        for edge in graph.get("edges") or []:
+            target = by_id.get(str(edge.get("target"))) if isinstance(edge, dict) else None
+            key = str(edge.get("target_input") or "") if isinstance(edge, dict) else ""
+            if (
+                target is None
+                or edge.get("kind") != "data"
+                or key not in inner_keys.get(str(target.get("type")), ())
+            ):
+                edges.append(edge)
+                continue
+            config = dict(target.get("config") or {})
+            if config.get(key) in (None, ""):
+                config[key] = f"{{{{{edge.get('source')}.{edge.get('source_output')}}}}}"
+            target["config"] = config
+            if isinstance(target.get("inputs"), list):
+                target["inputs"] = [one for one in target["inputs"] if one != key]
+            restored.append((str(edge.get("source")), str(edge.get("target"))))
+        used = {str(edge.get("id")) for edge in edges if isinstance(edge, dict)}
+        for source, target_id in restored:
+            if any(
+                isinstance(edge, dict) and str(edge.get("source")) == source and str(edge.get("target")) == target_id
+                for edge in edges
+            ):
+                continue
+            edge_id, suffix = f"c-{source}-{target_id}", 2
+            while edge_id in used:
+                edge_id, suffix = f"c-{source}-{target_id}-{suffix}", suffix + 1
+            used.add(edge_id)
+            edges.append({"id": edge_id, "source": source, "target": target_id})
+        for node in nodes:
+            if not isinstance(node, dict):
+                continue
+            config = dict(node.get("config") or {})
+            for key, value in config.items():
+                if isinstance(value, dict) and isinstance(value.get("nodes"), list):
+                    config[key] = rewrite(value)
+            if config != (node.get("config") or {}):
+                node["config"] = config
+        return {**graph, "nodes": nodes, "edges": edges}
+
+    with engine.begin() as conn:
+        rows = conn.execute(text("SELECT id, graph FROM workflows")).mappings().all()
+        for row in rows:
+            raw_graph = row["graph"]
+            try:
+                graph = json.loads(raw_graph) if isinstance(raw_graph, str) else raw_graph
+            except (TypeError, ValueError):
+                continue
+            if not isinstance(graph, dict):
+                continue
+            rewritten = rewrite(graph)
+            if rewritten != graph:
+                conn.execute(
+                    text("UPDATE workflows SET graph = :graph WHERE id = :id"),
+                    {"graph": json.dumps(rewritten, ensure_ascii=False), "id": row["id"]},
+                )
+    _migrate_workflow_revisions()
+
+
 def _disable_tasks_bound_to_deleted_workflows() -> None:
     """绑着一张**已经删掉**的工作流、却还是「启用」的定时任务,停用。
 
@@ -5954,6 +6041,7 @@ def migration_plan() -> MigrationPlan:
                 _migrate_translation_engines_are_providers,
                 _migrate_speech_engines_are_providers,
                 _migrate_cloned_speech_remembers_its_voice,
+                _migrate_loop_scopes_are_not_outer_data_edges,
                 _migrate_workflow_revisions,
                 _disable_tasks_bound_to_deleted_workflows,
                 # 排在所有会落修订的迁移之后:它们写下的那几版也要有作者。
