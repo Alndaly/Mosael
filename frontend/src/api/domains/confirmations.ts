@@ -6,7 +6,7 @@ import type { components } from "@/api/generated/schema";
 import { api } from "@/api/transport";
 
 export type Confirmation = components["schemas"]["ConfirmationOut"];
-export type ConfirmationStatus = "pending" | "approved" | "rejected";
+export type ConfirmationStatus = "pending" | "approved" | "executed" | "rejected";
 
 /**
  * 一个工作区里某种状态的卡;带会话 id 就只要那次对话的。

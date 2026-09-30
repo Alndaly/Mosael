@@ -108,6 +108,8 @@ export const confirmationKeys = {
   /** 这个工作区里**我能拍板**、还在等的卡(全局确认中心)。 */
   toDecide: (workspaceId: string) => ["confirmations", workspaceId, "to-decide"] as const,
   approved: (workspaceId: string, sessionId: string) => ["confirmations", workspaceId, "approved", sessionId] as const,
+  /** 这个工作区里最近执行完的卡 —— 不管是谁批的,落地了就刷缓存(见 features/agent/confirmationCaches)。 */
+  executed: (workspaceId: string) => ["confirmations", workspaceId, "executed"] as const,
 };
 
 /**

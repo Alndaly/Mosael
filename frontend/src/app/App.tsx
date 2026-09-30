@@ -45,6 +45,7 @@ import { PAGE_RENDERERS } from "@/app/pages";
 import { CommandPalette } from "@/components/layout/CommandPalette";
 import { LoadingState } from "@/components/layout/LoadingState";
 import { ConfirmationCenter } from "@/features/agent/ConfirmationCenter";
+import { useRefreshWhenCardsLand } from "@/features/agent/confirmationCaches";
 import { VoiceDock } from "@/features/agent/VoiceDock";
 import { useAgentNavigation } from "@/features/agent/useAgentNavigation";
 import { PlugZap } from "lucide-react";
@@ -407,6 +408,8 @@ function Studio({
   const { voiceDock, setVoiceDock } = usePreferences();
   const t = useI18n();
   const qc = useQueryClient();
+  // 自动放行、飞书、别的设备批掉的卡执行完了,这边的素材库 / 时间线也要跟着刷(见 confirmationCaches)。
+  useRefreshWhenCardsLand(workspace.id);
   const initial = React.useMemo(readHash, []);
   const [view, setView] = React.useState<StudioView>(initial.view);
   const [projectId, setProjectId] = React.useState<string | null>(
