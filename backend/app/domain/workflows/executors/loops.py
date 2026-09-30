@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import contextvars
+import json
 import threading
 from concurrent.futures import ThreadPoolExecutor, wait
 from contextlib import contextmanager
@@ -16,13 +17,15 @@ from sqlalchemy.orm import Session
 
 from app.domain.workflows import WorkflowDomainError, interpolate
 from app.domain.workflows.executors.registry import RunScope, register
-from app.domain.workflows.executors.common import run_body, truthy
+from app.domain.workflows.executors.common import at_least, run_body, truthy, whole_number
 from app.domain.workflows.run_scope import halted
 
 #: `item` 的"没给"哨兵。loop_while 没有当前项,而 None / "" 都是合法的迭代项,不能拿来当哨兵。
 _NO_ITEM = object()
 
 LOOP_WHILE_HARD_CAP = 1000
+#: 条件循环没填最多几轮时跑几轮。
+LOOP_WHILE_DEFAULT_ITERATIONS = 50
 # foreach had no cap at all, while `while` was clamped — an asymmetry that mattered because
 # `items` can come from a code, http_request or json_extract node, i.e. from remote data. Every
 # iteration also accumulates its result (the whole sub-context when `output` is blank), so an
@@ -63,7 +66,7 @@ def _brief(item: Any) -> str:
 def loop_foreach(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
     items = config.get("items")
     if isinstance(items, str):
-        items = [line.strip() for line in items.splitlines() if line.strip()]
+        items = _items_from_text(items)
     if not isinstance(items, list):
         raise WorkflowDomainError("wfErr_loopItems")
     body = config.get("body") or {"nodes": [], "edges": []}
@@ -99,6 +102,23 @@ def loop_foreach(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[s
     else:
         results = _iterate_concurrently(iterate, items, concurrency)
     return {"results": results, "count": len(results)}
+
+
+def _items_from_text(text: str) -> list[Any]:
+    """一段文字当遍历的列表:**先当 JSON 数组**(接 LLM 的 text 输出),不是 JSON 再按行拆(手填)。
+
+    和 common.text_lines 同一个顺序。此前只按行拆:LLM 交出一段排好版的 JSON 数组,被拆成
+    `[`、`  "第一镜",`、`]` 这样的几项,每一项都去跑了一遍循环体。一个 JSON 对象不是列表,报错。
+    """
+    try:
+        parsed = json.loads(text)
+    except json.JSONDecodeError:
+        parsed = None
+    if isinstance(parsed, list):
+        return parsed
+    if isinstance(parsed, dict):
+        raise WorkflowDomainError("wfErr_loopItems")
+    return [line.strip() for line in text.splitlines() if line.strip()]
 
 
 def _concurrency(raw: Any) -> int:
@@ -198,11 +218,9 @@ def loop_while(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str
     body = config.get("body") or {"nodes": [], "edges": []}
     condition_tpl = str(config.get("condition") or "")
     output_tpl = config.get("output", "")
-    try:
-        max_iter = int(config.get("max_iterations") or 50)
-    except (TypeError, ValueError):
-        max_iter = 50
-    max_iter = max(1, min(max_iter, LOOP_WHILE_HARD_CAP))
+    # 按数解析,不合法就报错:此前填 0(`or 50`)或 "10.0"(int() 抛错被吞)都悄悄变成 50 轮。
+    max_iter = whole_number(config, "max_iterations", node_type="loop_while", default=LOOP_WHILE_DEFAULT_ITERATIONS)
+    max_iter = min(at_least(max_iter, 1, key="max_iterations", node_type="loop_while"), LOOP_WHILE_HARD_CAP)
     results: list[Any] = []
     index = 0
     # Do-while: the condition references body outputs, so it can only be evaluated after a run.

@@ -233,7 +233,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     },
     "wfNode_loop_foreach": {"zh": "循环·遍历", "en": "Loop · for each"},
     "wfNode_loop_foreach_desc": {"zh": "对一个列表逐项运行内嵌子流程,汇总每次迭代的输出为列表。子流程内用 {{loop.item}} / {{loop.index}} 读取当前元素与序号,用 {{input.名}} 读取显式传入的外层值。", "en": "Run an embedded sub-flow once per item of a list and collect each iteration's output into a list. Inside it, {{loop.item}} / {{loop.index}} read the current item and index, while {{input.name}} reads explicitly passed outer values."},
-    "wfNode_loop_foreach_items": {"zh": "如 {{split_1.results}};也接受多行文本,按行拆分", "en": "e.g. {{split_1.results}}; multi-line text is also accepted and split by line"},
+    "wfNode_loop_foreach_items": {"zh": "如 {{split_1.results}};也接受一段 JSON 数组文本(如 LLM 的回答),或多行文本(按行拆分)", "en": "e.g. {{split_1.results}}; a JSON array as text (such as an LLM reply) or multi-line text (split by line) is also accepted"},
     "wfNode_loop_foreach_inputs": {"zh": "传入循环体的共享值 {名: 值/引用};循环体内用 {{input.名}} 读取", "en": "Shared values passed into the loop body as {name: value/reference}; read them inside as {{input.name}}"},
     "wfNode_loop_foreach_body": {"zh": "循环体子流程(在节点内编辑;子流程节点用 {{loop.item}}/{{loop.index}})", "en": "The loop body sub-flow (edited inside the node; its nodes use {{loop.item}} / {{loop.index}})"},
     "wfNode_loop_foreach_output": {"zh": "每次迭代的输出,引用子流程节点输出(如 {{translate_1.text}});留空则输出整份子上下文", "en": "Each iteration's output, referencing a sub-flow node's output (e.g. {{translate_1.text}}); leave empty to output the whole sub-context"},
