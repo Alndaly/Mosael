@@ -21,6 +21,9 @@ ComfyUI 插件就是这样:以前一个 `run_workflow` + `workflow: "portrait.js
   老节点,也不丢用户填的值;**已经不在了**(插件删掉了它),老节点本来就跑不起来,那就改过去、把没有位置的几格
   丢掉,并记进这一版修订的说明里(上一版修订原样留着,丢的值在历史里查得到);
 - 连到这个节点的数据边(`target_input`)按同一张表改名;对不上的一条同上:老工具还在就不改,不在了就拆掉;
+- **下游对它输出的引用**(从它连出去的数据边 `source_output`、别的节点里的 `{{节点.输出…}}`)也要对得上:新工具有同名的
+  输出口,或者 `replaces.outputs` 里写了改成哪个(`{"assets": "asset_ids"}`)。对不上的同上:老工具还在就不改;
+  不在了就改过去,连出去的那条数据边拆掉、模板引用原样留着(它会取到空),都记进修订说明;
 - 节点上选了连接(`instance_id`)的,按那个连接报的清单改;没选的,只有所有连接给出同一个答案时才改;
 - 改过的工作流追加一版修订(`source = "migration"`),作者沿用上一版 —— 机械改写不换担保人。
 
@@ -36,6 +39,7 @@ ComfyUI 插件就是这样:以前一个 `run_workflow` + `workflow: "portrait.js
 from __future__ import annotations
 
 import logging
+import re
 from copy import deepcopy
 from typing import Any
 
@@ -43,7 +47,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.models import PluginInstance, Workflow, WorkflowRevisionAttestation
-from app.domain.plugins.nodes import PLUGIN_NODE_PREFIX, parse_node_type
+from app.domain.plugins.nodes import PLUGIN_NODE_PREFIX, declared_outputs, parse_node_type
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +56,7 @@ MISSING = object()
 
 class Replacement:
     def __init__(self, package_id: str, instance_id: str, new_tool: str, spec: dict[str, Any], properties: set[str],
-                 *, retired: bool = False):
+                 *, retired: bool = False, outputs: list[str] | None = None):
         self.package_id = package_id
         self.instance_id = instance_id
         self.new_tool = new_tool
@@ -60,7 +64,11 @@ class Replacement:
         self.match = spec.get("match") if isinstance(spec.get("match"), dict) else {}
         self.rename = spec.get("rename") if isinstance(spec.get("rename"), dict) else {}
         self.drop_if = spec.get("drop_if") if isinstance(spec.get("drop_if"), dict) else {}
+        #: 老工具的输出口 → 新工具的哪个口(`replaces.outputs`)。没写的按同名接。
+        self.output_rename = spec.get("outputs") if isinstance(spec.get("outputs"), dict) else {}
         self.properties = properties
+        #: 新工具作为节点有哪些输出口(plugins.nodes.declared_outputs)。
+        self.outputs = set(outputs or ["output"])
         #: 老工具在这个连接上**已经不在了**:对不上的格子丢掉,而不是留下一个跑不起来的节点。
         self.retired = retired
 
@@ -68,6 +76,13 @@ class Replacement:
         if path in self.rename:
             return self.rename[path] if isinstance(self.rename[path], str) and self.rename[path] else MISSING
         return path if path in self.properties else MISSING
+
+    def output(self, name: str) -> Any:
+        """下游引用的老输出口 `name` 在新工具上叫什么;没有这个口是 MISSING。"""
+        renamed = self.output_rename.get(name)
+        if isinstance(renamed, str) and renamed:
+            return renamed if renamed in self.outputs else MISSING
+        return name if name in self.outputs else MISSING
 
 
 def _current_tools(db: Session, instance: PluginInstance) -> set[str] | None:
@@ -102,7 +117,8 @@ def replacements(db: Session) -> list[Replacement]:
             properties = set((schema.get("properties") or {}).keys())
             found.extend(
                 Replacement(instance.package_id, instance.id, str(tool["name"]), spec, properties,
-                            retired=current is not None and str(spec.get("tool") or "") not in current)
+                            retired=current is not None and str(spec.get("tool") or "") not in current,
+                            outputs=declared_outputs(tool))
                 for spec in specs
             )
     return [one for one in found if one.old_tool]
@@ -186,15 +202,69 @@ def _data_edge_into(edge: Any, node_id: Any) -> bool:
             and bool(edge.get("target_input")))
 
 
-def rewrite_graph(graph: dict[str, Any], found: list[Replacement], dropped: list[str] | None = None) -> dict[str, Any]:
-    """一张图(连同循环体 / 子图)里能改的节点都改掉;连到它们的数据边跟着改名。
+_REFERENCE = re.compile(r"\{\{\s*([\w.-]+)\s*\}\}")
 
-    老工具已经不在了时,没有位置的格子和数据边丢掉;给了 `dropped` 就把它们记成 `节点 id.格子` /
-    `节点 id.格子(连线)`。
+
+def _references_to(value: Any, node_id: str) -> set[str]:
+    """一格配置(连同里面的字典、列表,不进嵌套的子图)里引用了 `node_id` 的哪几个输出口。"""
+    found: set[str] = set()
+    if isinstance(value, str):
+        for match in _REFERENCE.finditer(value):
+            parts = match.group(1).split(".")
+            if len(parts) >= 2 and parts[0] == node_id:
+                found.add(parts[1])
+    elif isinstance(value, dict) and not isinstance(value.get("nodes"), list):
+        for one in value.values():
+            found |= _references_to(one, node_id)
+    elif isinstance(value, list):
+        for one in value:
+            found |= _references_to(one, node_id)
+    return found
+
+
+def _rename_references(value: Any, node_id: str, renames: dict[str, str]) -> Any:
+    """把 `{{node_id.老口…}}` 改成 `{{node_id.新口…}}`(不进嵌套的子图)。"""
+    if isinstance(value, str):
+        def swap(match: re.Match[str]) -> str:
+            parts = match.group(1).split(".")
+            if len(parts) >= 2 and parts[0] == node_id and parts[1] in renames:
+                return "{{" + ".".join([node_id, renames[parts[1]], *parts[2:]]) + "}}"
+            return match.group(0)
+
+        return _REFERENCE.sub(swap, value)
+    if isinstance(value, dict) and not isinstance(value.get("nodes"), list):
+        return {key: _rename_references(one, node_id, renames) for key, one in value.items()}
+    if isinstance(value, list):
+        return [_rename_references(one, node_id, renames) for one in value]
+    return value
+
+
+def _used_outputs(graph: dict[str, Any], node_id: str) -> tuple[set[str], set[str]]:
+    """下游用了这个节点的哪几个输出口:(从它连出去的数据边, 别的节点里的模板引用)。"""
+    by_edge = {
+        str(edge.get("source_output") or "") for edge in graph.get("edges") or []
+        if isinstance(edge, dict) and edge.get("source") == node_id and edge.get("kind") == "data"
+        and edge.get("source_output")
+    }
+    by_template: set[str] = set()
+    for other in graph.get("nodes") or []:
+        if isinstance(other, dict) and other.get("id") != node_id:
+            by_template |= _references_to(other.get("config") or {}, node_id)
+    return by_edge, by_template
+
+
+def rewrite_graph(graph: dict[str, Any], found: list[Replacement], dropped: list[str] | None = None) -> dict[str, Any]:
+    """一张图(连同循环体 / 子图)里能改的节点都改掉;连进来的数据边跟着改入参名,下游对它输出的引用跟着改口名。
+
+    老工具已经不在了时,没有位置的格子、数据边和下游引用丢掉;给了 `dropped` 就把它们记成 `节点 id.格子` /
+    `节点 id.格子(连线)` / `节点 id.输出(下游连线)` / `节点 id.输出(下游引用)`。
     """
     if not isinstance(graph, dict):
         return graph
     renamed: dict[str, Replacement] = {}
+    #: 改过的节点 → 它的输出口改名(老 → 新),和对不上、要拆掉的那几条连出去的数据边的口名
+    output_renames: dict[str, dict[str, str]] = {}
+    loose_outputs: dict[str, set[str]] = {}
     nodes: list[Any] = []
     for node in graph.get("nodes") or []:
         if not isinstance(node, dict):
@@ -210,16 +280,33 @@ def rewrite_graph(graph: dict[str, Any], found: list[Replacement], dropped: list
             nodes.append({**node, "config": config} if config != (node.get("config") or {}) else node)
             continue
         new_type, converted, replacement = result
+        node_id = str(node.get("id"))
         loose = [str(edge["target_input"]) for edge in graph.get("edges") or []
                  if _data_edge_into(edge, node.get("id")) and replacement.target(str(edge["target_input"])) is MISSING]
-        if loose and not replacement.retired:
+        by_edge, by_template = _used_outputs(graph, node_id)
+        unmatched = {name for name in by_edge | by_template if replacement.output(name) is MISSING}
+        if (loose or unmatched) and not replacement.retired:
             nodes.append({**node, "config": config})
             continue
-        renamed[str(node.get("id"))] = replacement
+        renamed[node_id] = replacement
+        output_renames[node_id] = {
+            name: replacement.output(name) for name in (by_edge | by_template) - unmatched
+            if replacement.output(name) != name
+        }
+        loose_outputs[node_id] = unmatched & by_edge
         if dropped is not None:
-            dropped.extend(f"{node.get('id')}.{path}" for path in unplaced)
-            dropped.extend(f"{node.get('id')}.{field}(连线)" for field in loose)
+            dropped.extend(f"{node_id}.{path}" for path in unplaced)
+            dropped.extend(f"{node_id}.{field}(连线)" for field in loose)
+            dropped.extend(f"{node_id}.{name}(下游连线)" for name in sorted(unmatched & by_edge))
+            dropped.extend(f"{node_id}.{name}(下游引用)" for name in sorted(unmatched & by_template))
         nodes.append({**node, "type": new_type, "config": converted})
+    for node_id, renames in output_renames.items():
+        if renames:
+            nodes = [
+                {**one, "config": _rename_references(one.get("config") or {}, node_id, renames)}
+                if isinstance(one, dict) and one.get("id") != node_id else one
+                for one in nodes
+            ]
     edges = []
     for edge in graph.get("edges") or []:
         replacement = renamed.get(str(edge.get("target"))) if isinstance(edge, dict) else None
@@ -228,6 +315,12 @@ def rewrite_graph(graph: dict[str, Any], found: list[Replacement], dropped: list
             if target is MISSING:
                 continue  # 老工具已经不在了,这一路在新工具上没有接口
             edge = {**edge, "target_input": target}
+        source = str(edge.get("source")) if isinstance(edge, dict) else ""
+        if source in renamed and edge.get("kind") == "data" and edge.get("source_output"):
+            output = str(edge["source_output"])
+            if output in loose_outputs[source]:
+                continue  # 新工具上没有这个输出口,这条连出去的线接不上了
+            edge = {**edge, "source_output": output_renames[source].get(output, output)}
         edges.append(edge)
     return {**graph, "nodes": nodes, "edges": edges} if "edges" in graph else {**graph, "nodes": nodes}
 
@@ -253,7 +346,7 @@ def rewrite_replaced_tools(db: Session) -> int:
         note = "插件工具换了新写法:改用取代它的那个工具"
         if dropped:
             # 丢了什么要说出来:老工具已经不在了,这几格在新工具上没有位置(上一版修订里还看得到原值)
-            note += "。老工具已经没有了,这几格在新工具里没有位置、没带过去:" + "、".join(dropped)
+            note += "。老工具已经没有了,这些在新工具上对不上(格子、连线、下游对它输出的引用),没带过去:" + "、".join(dropped)
             logger.info("工作流 %s 改写插件节点时丢掉了 %s", workflow.id, dropped)
         revision = commit_graph_revision(
             db, workflow, lambda graph: rewrite_graph(graph, found), source="migration", created_by=previous.created_by,
