@@ -323,6 +323,13 @@ export function NodeInspector({
 
   // 面板真正要渲染的字段:llm / ai_generate 的那几项由各自的专区管,不走通用列表。
   // 顺序就是后端声明的顺序;基础 / 高级的分档规则在表单那一层(nodeConfigTiers)。
+  //: 挂了驱动音频(说话照片、对口型,即数字人):授权确认是这一次跑不跑得了的前提 —— 生成漏斗没它当场拒
+  //: (genErr_digitalHumanNeedsConsent)。声明里它收在高级(别的生成用不上),这时就不能还藏在那儿:
+  //: 提到第一屏、标成必填。判据和后端 is_digital_human_request 同一条:按素材角色认,或直接给了驱动音频链接。
+  const drivesDigitalHuman =
+    node.type === "ai_generate" &&
+    (gen.genSourceLines.some((line) => line.role === "driving_audio") ||
+      Boolean(String(gen.genParams.driving_audio_url ?? "").trim()));
   const panelSpecs =
     node.type === "ai_generate" && allSpecs.prompt
       ? {
@@ -331,6 +338,9 @@ export function NodeInspector({
             genPromptMode === "optional"
               ? { ...allSpecs.prompt, description: t("wfGenPromptOptional") }
               : { ...allSpecs.prompt, required: genPromptMode === "required" },
+          ...(drivesDigitalHuman && allSpecs.consent
+            ? { consent: { ...allSpecs.consent, advanced: false, required: true } }
+            : {}),
         }
       : allSpecs;
   const { basic: basicSpecs, advanced: advancedSpecs } = nodeConfigTiers(

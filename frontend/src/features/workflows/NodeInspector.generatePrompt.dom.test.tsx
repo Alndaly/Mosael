@@ -56,6 +56,7 @@ const META = {
     prompt: { type: "template", label: "提示词" },
     parameters: { type: "object" },
     source_assets: { type: "template", lines: true },
+    consent: { advanced: true, type: "string", options: ["yes"], label: "授权确认" },
   },
   outputs: ["asset_id"],
   output_types: {},
@@ -181,5 +182,30 @@ describe("AI 生成节点的输入素材", () => {
     await waitFor(() => expect(askedPaths.some((path) => path.endsWith("/generation/options"))).toBe(true));
     await new Promise((resolve) => setTimeout(resolve, 50));
     expect(askedPaths).not.toContain("/api/assets");
+  });
+});
+
+//: 数字人(挂了驱动音频)的授权确认是这一次跑不跑得了的前提 —— 生成漏斗没它当场拒。它在声明里收在高级
+//: (别的生成用不上),挂了驱动音频时就得在第一屏、标必填,而不是等运行失败了才去高级里翻。
+describe("AI 生成节点的数字人授权确认", () => {
+  const consentField = () => document.querySelector<HTMLElement>('[data-field-key="consent"]');
+  const base = { provider_profile_id: "p1", provider: "plugin:dev.mosael.comfyui", model: "upscale.json", kind: "image", prompt: "" };
+
+  it("挂了驱动音频:授权确认在第一屏,标必填", async () => {
+    renderInspector({ parameter_keys: ["driving_audio"] }, { config: { ...base, source_assets: ["a1:first_frame", "a2:driving_audio"] } });
+    await waitFor(() => expect(consentField()).not.toBeNull());
+    expect(consentField()!.querySelector("em")?.textContent).toBe("*");
+  });
+
+  it("直接给了驱动音频链接也算", async () => {
+    renderInspector({ parameter_keys: ["driving_audio"] }, { config: { ...base, parameters: { driving_audio_url: "https://x/a.mp3" } } });
+    await waitFor(() => expect(consentField()).not.toBeNull());
+  });
+
+  it("没挂驱动音频:仍收在高级里,不占第一屏", async () => {
+    renderInspector({ parameter_keys: ["reference_image"] }, { config: { ...base, source_assets: ["a1:reference_image"] } });
+    await waitFor(() => expect(askedPaths.some((path) => path.endsWith("/generation/options"))).toBe(true));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(consentField()).toBeNull();
   });
 });
