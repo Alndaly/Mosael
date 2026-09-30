@@ -665,7 +665,8 @@ def test_text_transform_node() -> None:
     assert text_transform(None, None, {"text": "abc", "op": "upper"})["text"] == "ABC"
     assert text_transform(None, None, {"text": "a-b-c", "op": "replace", "find": "-", "replace": "_"})["text"] == "a_b_c"
     assert text_transform(None, None, {"text": "id=42 x", "op": "regex_extract", "find": r"id=(\d+)"})["text"] == "42"
-    assert text_transform(None, None, {"text": "hello", "op": "length"}) == {"text": "5", "length": 1}
+    # length 输出是原文长度,不是结果串 "5" 的长度。
+    assert text_transform(None, None, {"text": "hello", "op": "length"}) == {"text": "5", "length": 5}
 
 
 def test_delay_node_clamps(monkeypatch) -> None:

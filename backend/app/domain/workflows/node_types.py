@@ -939,8 +939,10 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
                 "description": "wfNode_text_transform_op",
                 "options": ["trim", "upper", "lower", "replace", "regex_extract", "length"],
             },
-            "find": {"type": "template", "description": "wfNode_text_transform_find"},
-            "replace": {"type": "template", "description": "wfNode_text_transform_replace"},
+            # 查找串为空时 replace 会在每个字符之间插一遍替换串 —— 只在用得上它的两种处理里出现、必填。
+            "find": {"type": "template", "required": True, "active_when": {"op": ["replace", "regex_extract"]},
+                     "description": "wfNode_text_transform_find"},
+            "replace": {"type": "template", "active_when": {"op": "replace"}, "description": "wfNode_text_transform_replace"},
         },
         "outputs": ["text", "length"],
     },

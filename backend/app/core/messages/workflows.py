@@ -78,6 +78,8 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfErr_mustBeInteger": {"zh": "{field} 必须是整数", "en": "{field} must be a whole number"},
     "wfErr_schemaInvalid": {"zh": "JSON Schema 无效:{reason}", "en": "The JSON Schema is invalid: {reason}"},
     "wfErr_unknownTextOp": {"zh": "未知的文本处理方式:{op}", "en": "Unknown text operation: {op}"},
+    "wfErr_textFindEmpty": {"zh": "替换和正则提取要先填「查找」:空的查找串会在每个字符之间都插一遍", "en": "Replace and regex extract need something to find: an empty search string matches between every character"},
+    "wfErr_textRegexInvalid": {"zh": "正则写得不对:{pattern}(第 {position} 个字符附近)", "en": "The regular expression is invalid: {pattern} (near character {position})"},
     "wfErr_unknownConditionOp": {"zh": "未知的比较方式:{op}", "en": "Unknown comparison: {op}"},
     "wfErr_conditionNeedsNumbers": {"zh": "比较方式「{op}」要的是数字,拿到的是 {left} / {right}", "en": "The “{op}” comparison needs numbers; got {left} / {right}"},
     "wfErr_childFailed": {"zh": "子任务失败:{reason}", "en": "The sub-task failed: {reason}"},

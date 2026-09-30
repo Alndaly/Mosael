@@ -214,9 +214,18 @@ def json_extract(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[s
 
 @register("text_transform")
 def text_transform(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
+    """`length` 输出是**这一步处理的那段文字**有多长。
+
+    此前一律取结果串的长度:op=length 时结果是 "12" 这串数字,length 就成了 2。其余几种处理,
+    结果串就是那段文字,取它的长度。
+    """
     text = as_text(config.get("text"))
     op = str(config.get("op", "trim"))
-    find = str(config.get("find", ""))
+    find = as_text(config.get("find"))
+    # 查找串为空:replace 会在**每个字符之间**插一遍替换串("ab" → "XaXbX"),正则则永远匹配空串 ——
+    # 两种都不是任何人想要的结果。声明里标了必填(active_when),这里兜住引用落空成空串的那种。
+    if op in ("replace", "regex_extract") and not find:
+        raise WorkflowDomainError("wfErr_textFindEmpty")
     if op == "trim":
         out = text.strip()
     elif op == "upper":
@@ -224,12 +233,18 @@ def text_transform(db: Session, scope: RunScope, config: dict[str, Any]) -> dict
     elif op == "lower":
         out = text.lower()
     elif op == "replace":
-        out = text.replace(find, str(config.get("replace", "")))
+        out = text.replace(find, as_text(config.get("replace")))
     elif op == "regex_extract":
-        match = re.search(find, text) if find else None
+        try:
+            match = re.search(find, text)
+        except re.error as exc:
+            # re 的报错是英文原话(`missing ), unterminated subpattern`),只说出是哪个正则、错在第几个字符。
+            raise WorkflowDomainError(
+                "wfErr_textRegexInvalid", params={"pattern": find, "position": (exc.pos or 0) + 1}
+            ) from exc
         out = "" if match is None else (match.group(1) if match.groups() else match.group(0))
     elif op == "length":
-        out = str(len(text))
+        return {"text": str(len(text)), "length": len(text)}
     else:
         raise WorkflowDomainError("wfErr_unknownTextOp", params={"op": op})
     return {"text": out, "length": len(out)}
