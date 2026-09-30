@@ -18,7 +18,14 @@ export type ShowcaseWindow = {
 
 const icons = { boards: PanelsTopLeft, editor: Scissors, scenes: Box };
 
-/** Real screenshots stay intact; only the surrounding window layout changes. */
+/**
+ * Real screenshots stay intact; only the surrounding window layout changes.
+ *
+ * 跟着鼠标的视差:指针变量(`--tilt-x/y`,-1…1)由首页头部那块 PointerSurface 写,这里只读。
+ * 整组随指针轻微倾斜;前面那张顺着指针方向挪、后面两张反着挪,三层之间就有了纵深。
+ * 位移刻意很小(十几像素)—— 截图是要读的。没有精确指针或开了减少动效时变量恒为 0,什么都不动。
+ */
+const DEPTH = { front: 12, left: -12, right: -7 } as const;
 export function HomeShowcase({ windows, label, explore }: {
   windows: ShowcaseWindow[];
   label: string;
@@ -43,12 +50,15 @@ export function HomeShowcase({ windows, label, explore }: {
           );
         })}
       </fieldset>
-      <div className="relative aspect-[1440/940] sm:aspect-[1.52]" data-showcase-stage>
+      <div className="[perspective:1800px]">
+      <div className="relative aspect-[1440/940] transition-transform duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] [transform:rotateX(calc(var(--tilt-y,0)*-2deg))_rotateY(calc(var(--tilt-x,0)*3deg))] sm:aspect-[1.52]" data-showcase-stage>
         {windows.map((window) => {
           const front = window.id === active;
           const left = back[0]?.id === window.id;
+          const depth = DEPTH[front ? "front" : left ? "left" : "right"];
           return (
             <button key={window.id} type="button" onClick={() => setActive(window.id)}
+              style={{ transform: `translate3d(calc(var(--tilt-x, 0) * ${depth}px), calc(var(--tilt-y, 0) * ${depth * 0.6}px), 0)` }}
               aria-label={window.label} aria-pressed={front} tabIndex={-1}
               className={cn("absolute overflow-hidden rounded-lg border border-black/8 bg-card shadow-[0_18px_50px_-16px_rgba(26,17,48,0.4)] transition-[left,top,width,transform] duration-500 motion-reduce:transition-none sm:rounded-xl dark:border-white/10 dark:shadow-[0_18px_50px_-16px_rgba(0,0,0,0.8)]",
                 front ? "inset-x-0 top-0 z-30 w-full cursor-default sm:top-[25%] sm:left-[17%] sm:w-[70%]" :
@@ -61,6 +71,7 @@ export function HomeShowcase({ windows, label, explore }: {
             </button>
           );
         })}
+      </div>
       </div>
       <div className="mx-auto mt-6 flex max-w-3xl flex-col items-center gap-3 text-center text-sm sm:mt-8">
         <p className="m-0 leading-6 text-muted-foreground" aria-live="polite">{current.description}</p>

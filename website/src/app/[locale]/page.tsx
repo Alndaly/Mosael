@@ -8,6 +8,7 @@ import { ArrowRight, Download } from "lucide-react";
 import { BrandIcon, BrandWordmark } from "@/components/brand-logo";
 import { GithubMark } from "@/components/icons";
 import { QrCards } from "@/components/qr-cards";
+import { PointerSurface, TiltCard } from "@/components/pointer-motion";
 import { Reveal } from "@/components/reveal";
 import { isLocale, localePath, type Locale } from "@/i18n/config";
 import { DownloadLink } from "@/components/download-link";
@@ -34,7 +35,11 @@ const CHAPTER_TONES = [
 ] as const;
 
 function ProductShot({ src, alt, priority = false }: { src: string; alt: string; width?: number; height?: number; priority?: boolean }) {
-  return <Shot src={src} alt={alt} priority={priority} framed />;
+  return (
+    <TiltCard>
+      <Shot src={src} alt={alt} priority={priority} framed />
+    </TiltCard>
+  );
 }
 
 function PrimaryActions({ locale, download, source, inverted = false }: { locale: Locale; download: string; source: string; inverted?: boolean }) {
@@ -64,11 +69,17 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
 
   return (
     <div className="-mt-20 overflow-hidden bg-paper">
-      <section id="product" className="relative isolate px-5 pt-32 pb-16 sm:px-8 sm:pt-36 sm:pb-24 lg:px-12">
+      <PointerSurface as="section" id="product" className="relative isolate px-5 pt-32 pb-16 sm:px-8 sm:pt-36 sm:pb-24 lg:px-12">
         <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(circle_at_12%_18%,rgba(114,87,233,0.26),transparent_36%),radial-gradient(circle_at_84%_12%,rgba(255,139,120,0.25),transparent_32%),linear-gradient(180deg,#f7f3ff_0%,#fff7f5_58%,var(--paper)_100%)] dark:bg-[radial-gradient(circle_at_12%_18%,rgba(114,87,233,0.28),transparent_36%),radial-gradient(circle_at_84%_12%,rgba(255,139,120,0.13),transparent_32%),linear-gradient(180deg,#171322_0%,#19131d_58%,var(--paper)_100%)]" />
+        {/* 两团慢慢漂的光斑,和一圈跟着鼠标走的光晕。都在内容下面一层,不挡点击;减少动效时不动、光晕不出现。 */}
+        <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
+          <div className="absolute top-[8%] left-[6%] size-[34rem] rounded-full bg-[#7257e9]/18 blur-[110px] motion-safe:animate-drift-a dark:bg-[#7257e9]/22" />
+          <div className="absolute top-[4%] right-[4%] size-[28rem] rounded-full bg-[#ff8b78]/16 blur-[110px] motion-safe:animate-drift-b dark:bg-[#ff8b78]/10" />
+          <div className="absolute inset-0 opacity-0 transition-opacity duration-700 group-data-[pointer=on]/pointer:opacity-100 bg-[radial-gradient(640px_circle_at_var(--pointer-x)_var(--pointer-y),rgba(114,87,233,0.16),transparent_62%)] dark:bg-[radial-gradient(640px_circle_at_var(--pointer-x)_var(--pointer-y),rgba(150,125,255,0.18),transparent_62%)]" />
+        </div>
         <Reveal className="mx-auto flex max-w-5xl flex-col items-center text-center">
           <p className="m-0 inline-flex items-center gap-2 text-xs font-bold tracking-[0.16em] text-primary uppercase"><span className="size-1.5 rounded-full bg-primary" />{t.eyebrow}</p>
-          <h1 className="mt-7 mb-0 max-w-[16ch] font-display text-[clamp(3.4rem,7.5vw,6.8rem)] leading-[0.88] font-[720] tracking-[-0.065em] text-balance">{t.titleLead} <span className="bg-gradient-to-r from-[#5a43ea] via-[#a74fec] to-[#ff8b78] bg-clip-text text-transparent">{t.titleAccent}</span></h1>
+          <h1 className="mt-7 mb-0 max-w-[16ch] font-display text-[clamp(3.4rem,7.5vw,6.8rem)] leading-[0.88] font-[720] tracking-[-0.065em] text-balance">{t.titleLead} <span className="bg-gradient-to-r from-[#5a43ea] via-[#a74fec] via-60% to-[#ff8b78] bg-[length:200%_auto] bg-clip-text text-transparent motion-safe:animate-gradient-pan">{t.titleAccent}</span></h1>
           <p className="mt-8 mb-0 max-w-2xl text-base leading-7 text-muted-foreground sm:text-lg sm:leading-8">{t.lede}</p>
           <div className="mt-9"><PrimaryActions locale={locale} download={t.ctaDownload} source={t.ctaSource} /></div>
           <p className="mt-5 mb-0 text-xs leading-5 text-muted-foreground">{t.platforms}</p>
@@ -77,7 +88,7 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
           <div className="pointer-events-none absolute -inset-x-20 top-1/4 bottom-0 -z-10 bg-[radial-gradient(ellipse_at_center,rgba(114,87,233,0.2),rgba(255,161,190,0.12)_44%,transparent_72%)]" />
           <HomeShowcase windows={windows} label={t.showcaseLabel} explore={t.showcaseExplore} />
         </Reveal>
-      </section>
+      </PointerSurface>
 
       <section className="px-5 py-24 sm:px-8 sm:py-32 lg:px-12">
         <Reveal className="mx-auto grid max-w-[84rem] gap-10 lg:grid-cols-12 lg:items-end">
@@ -93,7 +104,7 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
           const reverse = index % 2 === 1;
           return (
             <article id={config.id} key={config.id} className={cn("relative overflow-hidden py-20 sm:py-28", CHAPTER_TONES[index])}>
-              <span className={cn("pointer-events-none absolute -top-10 right-4 font-display text-[clamp(11rem,24vw,22rem)] leading-none font-bold tracking-[-0.09em]", dark ? "text-white/[0.035]" : "text-current/[0.035]")}>{String(index + 1).padStart(2, "0")}</span>
+              <span className={cn("pointer-events-none absolute -top-10 right-4 font-display motion-safe:animate-[number-drift_linear_both] motion-safe:[animation-range:entry_0%_exit_100%] motion-safe:[animation-timeline:view()] text-[clamp(11rem,24vw,22rem)] leading-none font-bold tracking-[-0.09em]", dark ? "text-white/[0.035]" : "text-current/[0.035]")}>{String(index + 1).padStart(2, "0")}</span>
               <Reveal className="relative mx-auto grid max-w-[88rem] gap-12 px-5 sm:px-8 lg:grid-cols-12 lg:items-center lg:px-12">
                 <div className={cn("lg:col-span-5", reverse && "lg:order-2 lg:pl-8")}>
                   <p className={cn("m-0 text-xs font-bold tracking-[0.16em] uppercase", dark ? "text-[#b9a9ff]" : "text-primary")}>{String(index + 1).padStart(2, "0")} / {chapter.label}</p>

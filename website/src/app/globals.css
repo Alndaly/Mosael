@@ -69,6 +69,42 @@
     }
   }
 
+  /* 首页标题里那段渐变字:底图拉到两倍宽,来回平移,颜色像在缓缓流动。 */
+  --animate-gradient-pan: gradient-pan 9s ease-in-out infinite alternate;
+  @keyframes gradient-pan {
+    from {
+      background-position: 0% 50%;
+    }
+    to {
+      background-position: 100% 50%;
+    }
+  }
+
+  /* 首页头部背后两团慢慢漂的光斑。周期错开(23s / 31s),两团永远不会同步成一个节奏。 */
+  --animate-drift-a: drift-a 23s ease-in-out infinite alternate;
+  --animate-drift-b: drift-b 31s ease-in-out infinite alternate;
+  @keyframes drift-a {
+    to {
+      transform: translate3d(8vw, 6vh, 0) scale(1.15);
+    }
+  }
+  @keyframes drift-b {
+    to {
+      transform: translate3d(-10vw, 4vh, 0) scale(0.9);
+    }
+  }
+
+  /* 章节背景里的大号序号随滚动缓缓上移(配 animation-timeline: view(),见首页),比正文慢半拍,
+     读起来像是在更远的一层。不支持滚动时间轴的浏览器里它就是静止的,不影响阅读。 */
+  @keyframes number-drift {
+    from {
+      transform: translateY(18%);
+    }
+    to {
+      transform: translateY(-18%);
+    }
+  }
+
   /* 文档页侧栏粘住的位置 = 悬浮站头占位约 4.25rem + 正文区 3rem 的上留白。 */
   --spacing-sticky: 7.25rem;
 
