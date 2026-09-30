@@ -55,7 +55,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfNode_http_request_method": {"zh": "默认 GET", "en": "GET by default"},
     "wfNode_http_request_body": {"zh": "请求体(POST/PUT),JSON 或纯文本", "en": "Request body (POST/PUT), JSON or plain text"},
     "wfNode_code": {"zh": "代码", "en": "Code"},
-    "wfNode_code_desc": {"zh": "运行一段 Python:inputs 为入参 dict,把结果赋给 output 变量。与插件同级的本地信任沙箱。", "en": "Run a piece of Python: inputs is the argument dict, and whatever you assign to output becomes the result. A locally trusted sandbox, at the same level as plugins."},
+    "wfNode_code_desc": {"zh": "运行一段 Python:inputs 为入参 dict,把结果赋给 output 变量。代码在一个隔离的 Docker 容器里跑:没有网络、看不到本机文件和应用的密钥,有时间和内存上限;本机要装好 Docker。", "en": "Run a piece of Python: inputs is the argument dict, and whatever you assign to output becomes the result. The code runs in an isolated Docker container with no network, no access to this machine's files or the app's keys, and limits on time and memory; Docker must be installed."},
     "wfNode_code_code": {"zh": "如:output = len(inputs['text'])", "en": "e.g. output = len(inputs['text'])"},
     "wfNode_template": {"zh": "文本模板", "en": "Text template"},
     "wfNode_template_desc": {"zh": "把多个上游变量拼装成一段文本。", "en": "Assemble several upstream variables into one piece of text."},

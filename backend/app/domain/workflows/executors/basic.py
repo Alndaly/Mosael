@@ -4,9 +4,7 @@ from __future__ import annotations
 
 import json
 import math
-import os
 import re
-import sys
 import time
 from typing import Any
 
@@ -20,17 +18,7 @@ from app.domain.workflows.executors.common import wait_until
 HTTP_NODE_TIMEOUT_SECONDS = 60
 HTTP_TEXT_CAP = 100_000
 CODE_TIMEOUT_SECONDS = 20
-CODE_OUTPUT_CAP = 256 * 1024
 DELAY_MAX_SECONDS = 300
-
-# 与插件运行时同一信任级别:本地用户自己写的代码,进程隔离 + 超时 + 输出上限。
-_CODE_WRAPPER = """\
-import json, sys
-payload = json.load(sys.stdin)
-scope = {"inputs": payload.get("inputs") or {}}
-exec(payload["code"], scope)
-print(json.dumps({"output": scope.get("output")}, ensure_ascii=False, default=str))
-"""
 
 
 @register("start")
@@ -124,32 +112,6 @@ def http_request(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[s
         headers={str(k): str(v) for k, v in dict(config.get("headers") or {}).items()},
         body=as_text(config.get("body")),
     )
-
-
-def _code_node_env() -> dict[str, str]:
-    """代码节点子进程的最小环境。
-
-    刻意**不继承**父进程的 env:后端进程里有各家模型的 API key,用户代码不该看得到。
-
-    但「最小」得按平台给。原来写死的 `{"PATH": "/usr/bin:/bin"}` 在 Windows 上是双重失效:
-    那两个目录根本不存在,更要命的是 CPython 在 Windows 上启动阶段要读 SystemRoot 去定位
-    系统 DLL 并初始化随机源——env 里没有它,解释器自己就起不来,代码节点直接失败。
-    所以两边各给各的最小集,Windows 侧的 system32 就是 /usr/bin 的对应物。
-    """
-    if sys.platform == "win32":
-        system_root = os.environ.get("SystemRoot", r"C:\Windows")
-        env = {
-            "SystemRoot": system_root,
-            "SystemDrive": os.environ.get("SystemDrive", "C:"),
-            "PATH": os.pathsep.join([os.path.join(system_root, "system32"), system_root]),
-            "PATHEXT": os.environ.get("PATHEXT", ".COM;.EXE;.BAT;.CMD"),
-        }
-        # 临时目录:标准库好几处(tempfile、部分 import)会去要,缺了会以很难懂的方式报错。
-        for key in ("TEMP", "TMP"):
-            if key in os.environ:
-                env[key] = os.environ[key]
-        return env
-    return {"PATH": "/usr/bin:/bin"}
 
 
 def run_python(code_text: str, inputs: dict[str, Any]) -> dict[str, Any]:
