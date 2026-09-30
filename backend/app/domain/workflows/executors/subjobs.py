@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 from app.db.models import Asset, Clip, Sequence, Transcript
 from app.domain.sequences.errors import SequenceDomainError
 from app.domain.workflows import WorkflowDomainError
-from app.domain.workflows.executors.registry import RunScope, register
+from app.domain.workflows.executors.registry import RunScope, register, register_preflight
 from app.domain.jobs import current_actor
 from app.domain.workflows.executors.common import id_list, provided, text_lines, truthy, wait_for_job, whole_number
 
@@ -913,6 +913,22 @@ def dub_subtitles(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[
         "original_audio": applied,
         "original_audio_note": t(f"dubOriginalAudio_{applied}", get_current_locale()),
     }
+
+
+@register_preflight("dub_subtitles")
+def dub_subtitles_preflight(db: Session, config: dict[str, Any], actor: str | None) -> None:
+    """选了「只去掉人声」就先问有没有分离能力 —— 在转写、付费翻译、逐句配音之前。
+
+    此前这句只在配音节点开始时问(start_subtitle_dub):译配模板里它排在翻译之后,翻译的钱花完才说做不了。
+    判据和配音那一步同一个(ensure_original_audio_mode,按跑的人挑提供方)。
+    """
+    from app.domain.voices.original_audio import DEFAULT_ORIGINAL_AUDIO, OriginalAudioError, ensure_original_audio_mode
+
+    mode = str(config.get("original_audio") or DEFAULT_ORIGINAL_AUDIO).strip().lower()
+    try:
+        ensure_original_audio_mode(mode, owner_user_id=actor)
+    except OriginalAudioError as exc:
+        raise WorkflowDomainError.from_error(exc) from exc
 
 
 @register("separate_audio")

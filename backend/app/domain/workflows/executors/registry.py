@@ -85,3 +85,49 @@ def get_executor(node_type: str) -> Handler | None:
 def registered_types() -> frozenset[str]:
     return frozenset(_REGISTRY)
 
+
+
+#: **运行前检查**:不花钱、不写东西,在建工作流任务之前问一遍。有的节点「跑到它才发现做不了」,而排在它前面的节点
+#: 已经花了钱 —— 译配选了「只去掉人声」却没有分离能力,要等转写、付费翻译、逐句配音全做完才被问到。登记一个
+#: preflight,引擎在任何节点跑之前对图里每个这种节点(循环体、子图里的也算)用它的**字面量**配置问一遍:
+#: 引用(`{{…}}`)和数据边供的值要到运行时才知道,不在这里判,执行时照样会判。
+#: 签名:preflight(db, 字面量配置, 跑的人)。说不通就抛 WorkflowDomainError。
+Preflight = Callable[[Session, dict[str, Any], "str | None"], None]
+
+_PREFLIGHTS: dict[str, Preflight] = {}
+
+
+def register_preflight(node_type: str) -> Callable[[Preflight], Preflight]:
+    def _decorator(check: Preflight) -> Preflight:
+        if node_type in _PREFLIGHTS:
+            raise RuntimeError(f"preflight for node type {node_type!r} registered twice")
+        _PREFLIGHTS[node_type] = check
+        return check
+
+    return _decorator
+
+
+def run_preflights(db: Session, graph: Any, actor: str | None) -> None:
+    """对图里每个登记了 preflight 的节点问一遍(见 register_preflight)。"""
+    if not isinstance(graph, dict):
+        return
+    edges = graph.get("edges") if isinstance(graph.get("edges"), list) else []
+    bound = {
+        (str(edge.get("target")), str(edge.get("target_input")))
+        for edge in edges
+        if isinstance(edge, dict) and edge.get("kind") == "data" and edge.get("target_input")
+    }
+    for node in graph.get("nodes") or []:
+        if not isinstance(node, dict):
+            continue
+        config = node.get("config") if isinstance(node.get("config"), dict) else {}
+        for value in config.values():
+            if isinstance(value, dict) and isinstance(value.get("nodes"), list):
+                run_preflights(db, value, actor)
+        check = _PREFLIGHTS.get(str(node.get("type") or ""))
+        if check is None:
+            continue
+        node_id = str(node.get("id") or "")
+        literal = {key: value for key, value in config.items()
+                   if (node_id, key) not in bound and not (isinstance(value, str) and "{{" in value)}
+        check(db, literal, actor)

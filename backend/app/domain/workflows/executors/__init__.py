@@ -22,6 +22,8 @@ from app.domain.workflows.executors.registry import (  # noqa: F401 —— 包�
     register,
     register_prefix,
     registered_types,
+    register_preflight,
+    run_preflights,
 )
 
 # 导入即注册:各模块只认 registry,不回头 import 这个包 —— 包和它的子模块之间就没有环了。
