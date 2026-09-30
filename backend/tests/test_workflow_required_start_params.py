@@ -8,7 +8,7 @@
 from __future__ import annotations
 
 from app.domain.workflows import validate_graph, with_run_params
-from app.domain.workflows.templates import TEMPLATE_CATALOG, ModelChoice
+from app.domain.workflows.templates import TEMPLATE_CATALOG, ModelChoice, full_video_generation_graph
 from app.domain.workflows.templates_business import (
     fabric_lookbook_graph,
     footage_montage_graph,
@@ -46,6 +46,7 @@ def test_这一次运行带了值就不拦() -> None:
 def test_官方模板把要用户填的那几格都点名了_而且默认是空的() -> None:
     chat, image, video = ModelChoice(model="c"), ModelChoice(model="i"), ModelChoice()
     expected = {
+        "full_video_generation": (full_video_generation_graph(chat=chat, image=image, video=video), {"topic"}),
         "product_on_model": (product_on_model_graph(chat=chat, image=image, video=video), {"product_name", "product_brief"}),
         "product_pitch_short": (product_pitch_short_graph(chat=chat, image=image, voice_id="v"), {"product_name", "selling_points"}),
         "product_pitch_presenter": (product_pitch_short_graph(chat=chat, image=image, presenter=True),

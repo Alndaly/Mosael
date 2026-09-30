@@ -16,6 +16,7 @@
 from __future__ import annotations
 
 import json
+import re
 from collections import defaultdict
 from typing import Any
 
@@ -28,7 +29,7 @@ from app.domain.generation.operations import keep_source_group, parse_source_ass
 from app.domain.workflows import WorkflowDomainError, validate_graph, with_run_params
 from app.domain.workflows import executors as registry
 from app.domain.workflows.engine import execute_graph
-from app.domain.workflows.templates import ModelChoice
+from app.domain.workflows.templates import ModelChoice, full_video_generation_graph
 from app.domain.workflows.templates_business import (
     DUCKED_SOURCE_GAIN,
     fabric_lookbook_graph,
@@ -481,3 +482,106 @@ class Test稿子口播真跑:
         assert any("voicing" in one and "text" in one for one in errors), errors
         assert any("voicing" in one and "voice" in one for one in errors), errors
 
+
+# --------------------------------------------------------------------------------------
+# 从主题到完整视频
+# --------------------------------------------------------------------------------------
+
+
+def _sample(schema: dict[str, Any]) -> Any:
+    """按 JSON Schema 造一份最小的合法回答;要紧的字段由测试自己覆盖。"""
+    if "enum" in schema:
+        return schema["enum"][0]
+    kind = schema.get("type")
+    if kind == "object":
+        return {key: _sample(value) for key, value in (schema.get("properties") or {}).items()}
+    if kind == "array":
+        return [_sample(schema["items"]) for _ in range(max(1, int(schema.get("minItems") or 1)))]
+    if kind in ("number", "integer"):
+        if "exclusiveMinimum" in schema:
+            return schema["exclusiveMinimum"] + 1
+        return schema.get("minimum", 1)
+    if kind == "boolean":
+        return False
+    pattern = schema.get("pattern")
+    if not pattern:
+        return "x"
+    return next(one for one in ("a", "#20242c") if re.search(pattern, one))
+
+
+class Test整片真跑:
+    def test_角色有的沿用没有的画_每一镜三种走法都交得出_有口播的镜头配音配字幕(self, monkeypatch) -> None:
+        ws = _workspace()
+        graph = full_video_generation_graph(chat=CHAT, image=SEEDREAM, video=SEEDANCE)
+        schemas = {
+            node["config"]["json_schema_name"]: node["config"]["json_schema"]
+            for node in graph["nodes"] if node["type"] == "llm"
+        }
+        bible = _sample(schemas["professional_video_visual_bible"])
+        character = bible["characters"][0]
+        bible["characters"] = [{**character, "id": "zhou", "name": "老周"}, {**character, "id": "lin", "name": "小林"}]
+        storyboard = _sample(schemas["professional_timed_storyboard"])
+        shot = storyboard["shots"][0]
+        storyboard["shots"] = [
+            #: 走首帧,还要尾帧;有口播。
+            {**shot, "shot_number": 1, "reference_mode": "keyframes", "last_frame_prompt": "ends on a close-up",
+             "narration": "第一镜的口播", "generation_prompt": "p1"},
+            #: 走首帧,不要尾帧;没有口播。
+            {**shot, "shot_number": 2, "reference_mode": "keyframes", "last_frame_prompt": "", "narration": "",
+             "generation_prompt": "p2"},
+            #: 走参考;有口播。
+            {**shot, "shot_number": 3, "reference_mode": "references", "last_frame_prompt": "", "narration": "第三镜",
+             "generation_prompt": "p3"},
+        ]
+        plans = {name: _sample(schema) for name, schema in schemas.items()}
+        plans.update({"professional_video_visual_bible": bible, "professional_timed_storyboard": storyboard})
+        studio = Studio(monkeypatch, ws, plans)
+        library = _asset(ws, "image", "老周三视图")
+        saved: list[dict[str, Any]] = []
+
+        def entity_get(db, scope, config):
+            known = config.get("name") == "老周"
+            return {"entity_id": "e-zhou" if known else "", "found": int(known), "name": config.get("name"),
+                    "description": "", "prompt": "", "asset_ids": [library] if known else [], "asset_id": "",
+                    "voice_engine": "", "voice_id": ""}
+
+        def entity_save(db, scope, config):
+            saved.append(config)
+            return {"entity_id": "e", "created": 1, "added": 1, "name": ""}
+
+        def scene_render(db, scope, config):
+            shot_id = config["shot_id"]
+            return {"first_frame_asset_id": f"blockout-first-{shot_id}", "last_frame_asset_id": f"blockout-last-{shot_id}",
+                    "video_asset_id": f"blockout-move-{shot_id}", "camera_move": "static", "skipped_models": 0}
+
+        fakes = {
+            "entity_get": entity_get,
+            "entity_list": lambda db, scope, config: {"entities": [], "count": 0, "text": ""},
+            "entity_save": entity_save,
+            "scene_props": lambda db, scope, config: {"catalog": "", "model_ids": [], "count": 0},
+            "scene_create": lambda db, scope, config: {"scene_id": "scene-1", "shot_ids": [], "shot_count": 3},
+            "scene_render": scene_render,
+        }
+        for node_type, handler in fakes.items():
+            monkeypatch.setitem(registry._REGISTRY, node_type, handler)
+
+        context = _run(ws, graph, topic="一家老面馆", voice_id="voice-1")
+
+        #: 老周库里有图,不再画;小林没有,画一张三视图并存进资产库。场景同样是新的。
+        sheets = [one for one in studio.calls["ai_generate"] if one["prompt"].startswith("Character turnaround")]
+        assert len(sheets) == 1 and "小林" in sheets[0]["prompt"]
+        assert sorted(one["kind"] for one in saved) == ["character", "location"]
+        assert context["character_sheets"]["results"][0] == f"{library}:reference_image"
+
+        clips = sorted((one for one in studio.calls["ai_generate"] if one["kind"] == "video"), key=lambda one: one["prompt"])
+        roles = [sorted({source["role"] for source in one["sources"]}) for one in clips]
+        assert roles == [["first_frame", "last_frame"], ["first_frame"], ["reference_image", "reference_video"]]
+        references = [source for source in clips[2]["sources"] if source["role"] == "reference_image"]
+        assert len(references) == 4, "两张三视图 + 一张设定图 + 白模帧"
+
+        sequence_id = context["video_project"]["sequence_id"]
+        assert [clip.timeline_start for clip in _clips(sequence_id, "video")] == [0.0, 5.0, 10.0]
+        assert [clip.timeline_start for clip in _clips(sequence_id, "audio")] == [0.0, 10.0]
+        assert [(clip.timeline_start, clip.text_override) for clip in _clips(sequence_id, "subtitle")] == [
+            (0.0, "第一镜的口播"), (10.0, "第三镜")]
+        assert context["output"]["output"]["final_asset_id"] == f"export-of-{sequence_id}"

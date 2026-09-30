@@ -18,13 +18,13 @@ import pytest
 from app.domain.generation.descriptors.builtin import BUILTIN_MODELS
 from app.domain.generation.operations import keep_source_group, parse_source_assets, validate_against_capabilities
 from app.domain.workflows.graph_rules import interpolate
-from app.domain.workflows.templates import ModelChoice
+from app.domain.workflows.templates import ModelChoice, full_video_generation_graph
 from app.domain.workflows.templates_business import (
     fabric_lookbook_graph,
     product_on_model_graph,
     product_pitch_short_graph,
 )
-from app.domain.workflows.templates_models import _can_shoot_from_references, _can_take_references
+from app.domain.workflows.templates_models import _can_shoot_from_references, _can_take_references, _video_plan
 
 CHAT = ModelChoice(profile_id="chat", provider="openai", model="chat-model")
 SEEDREAM = ModelChoice(profile_id="image", provider="bytedance", model="doubao-seedream-4-0-250828")
@@ -46,9 +46,16 @@ NOT_A_SHOT_MODEL = {"speech-to-video", "video-lipsync", "video-edit", "video-ext
 #: 同一处的另一个问题:evolink 的图像模型尺寸表里混着「1:1」这种比例写法,`_image_plan` 按「宽x高」拆它时抛错,
 #: 用这几个模型建整片 / 带货 / 上身图模板直接失败。
 RATIO_SIZES = {"evolink"}
+#: 出片计划(templates_models._video_plan)按"收不收首帧 / 参考图"开放分镜能选的路,不看模型要求什么、收几张:
+PLAN_OFFERS_A_DEAD_PATH: dict[str, str] = {
+    #: 参考那条路一镜要交 8 张参考图(三视图 4 + 设定图 3 + 白模帧 1),它只收 4 张 —— 参考图门槛该按模板传入。
+    "kling-v3-omni": "出片计划对参考那条路不看参考图张数上限(templates_models)",
+    #: 它收首帧,但**必须**给参考图或参考视频 —— 首帧那条路对它是死路。
+    "wan2.7-r2v": "出片计划对首帧那条路不看 requires_source(templates_models)",
+}
 
 
-def _video_params() -> list[Any]:
+def _video_params(*, full_video: bool = False) -> list[Any]:
     out = []
     for choice in _choices("video", _can_shoot_from_references):
         spec = next(one for one in BUILTIN_MODELS if one["model"] == choice.model and one["provider"] == choice.provider)
@@ -56,6 +63,8 @@ def _video_params() -> list[Any]:
         marks = []
         if modes and modes <= NOT_A_SHOT_MODEL:
             marks.append(pytest.mark.xfail(strict=True, reason="挑模型的判据把不能出一镜的模型也挑了进来(templates_models)"))
+        elif full_video and choice.model in PLAN_OFFERS_A_DEAD_PATH:
+            marks.append(pytest.mark.xfail(strict=True, reason=PLAN_OFFERS_A_DEAD_PATH[choice.model]))
         out.append(pytest.param(choice, id=f"{choice.provider}/{choice.model}", marks=marks))
     return out
 
@@ -137,16 +146,44 @@ def _business(image: ModelChoice, video: ModelChoice) -> dict[str, dict[str, Any
     }
 
 
+def _full_video_walks(video: ModelChoice) -> list[tuple[set[str], dict[str, Any]]]:
+    """整片生成一镜的几种走法:走首帧(有 / 没有尾帧),或走参考 —— 只列这个视频模型让分镜选得到的那几种。"""
+    plan = _video_plan(None, video)
+    walks: list[tuple[set[str], dict[str, Any]]] = []
+    if "keyframes" in plan.modes:
+        walks.append(({"paint_last_frame"}, {"reference_mode": "keyframes"}))
+        if plan.last_frame:
+            walks.append((set(), {"reference_mode": "keyframes"}))
+    if "references" in plan.modes:
+        walks.append(({"paint_first_frame", "paint_last_frame"}, {"reference_mode": "references"}))
+    return walks
+
+
 @pytest.mark.parametrize("video", _video_params())
 def test_会被挑中的视频模型_收得下上身图动起来那一步(video: ModelChoice) -> None:
     on_model = _business(SEEDREAM, video)["product_on_model"]
     assert _check(_generations(on_model, skipped=set(), item={}), "video") == ["on_model_clip"]
 
 
+@pytest.mark.parametrize("video", _video_params(full_video=True))
+def test_会被挑中的视频模型_收得下整片生成的每一种走法(video: ModelChoice) -> None:
+    graph = full_video_generation_graph(chat=CHAT, image=SEEDREAM, video=video)
+    walks = _full_video_walks(video)
+    assert walks, "这个模型一条路都走不了,却被挑来拍整片"
+    for skipped, item in walks:
+        assert _check(_generations(graph, skipped=skipped, item=item), "video") == ["generate_clip"], item
+
+
 @pytest.mark.parametrize("image", _image_params())
 def test_会被挑中的图像模型_收得下模板交给它的每一次出图(image: ModelChoice) -> None:
     for template_id, graph in _business(image, SEEDANCE).items():
         assert _check(_generations(graph, skipped=set(), item={}), "image"), template_id
+
+    graph = full_video_generation_graph(chat=CHAT, image=image, video=SEEDANCE)
+    checked = set()
+    for skipped, item in _full_video_walks(SEEDANCE):
+        checked |= set(_check(_generations(graph, skipped=skipped, item=item), "image"))
+    assert checked == {"paint_first_frame", "paint_last_frame", "sheet", "art"}
 
 
 def test_参数表没有缩水() -> None:

@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.domain.workflows import NODE_TYPES
 from app.domain.workflows.normalization import normalize_graph
-from app.domain.workflows.templates_models import ModelChoice, _image_plan, _video_plan
+from app.domain.workflows.templates_models import ModelChoice, _capabilities, _image_plan, _video_plan
 from app.domain.workflows.templates_schemas import (
     _creative_brief_schema,
     _narrative_script_schema,
@@ -74,7 +74,7 @@ position 写 [0,0,0],parent_id 写空字符串;这一台里的**每一个**物�
 坐标"照旧成立。没有组的话,八个台摊平就是七十多条重名的平铺列表。
 
 每个布景台：
-- 一个 room(parameters.width/depth/height 取{source}里这个场景的尺寸，position 为 [n*40,0,0]，
+- 一个 room(parameters.width/depth/height 取{source}里这个场景的尺寸，position 为 [n*D,0,0]，
   门洞在前后墙正中；没有天花板)。室外场景用一块 plane 当地面、几块 box 当远景体块。
 - 关键陈设用 box / cylinder / table / stairs 概括(桌椅、柜子、门、树……)，尺寸按真实比例。
 - 这一镜出镜的每个角色一个 figure:parameters.height = 角色身高,width 0.4~0.5(肩宽),depth 0.22~0.28;
@@ -145,6 +145,12 @@ def full_video_generation_graph(
     clip = video_plan.clip_seconds
     aspect = video_plan.aspect_ratio if video_plan.aspect_ratio in ("16:9", "9:16", "1:1") else "16:9"
     frame_size = image_plan.frame_sizes.get(aspect, "")
+    video_parameters = dict(video_plan.parameters or {})
+    ratios = [str(one) for one in (_capabilities(db, video, "video") or {}).get("aspect_ratios") or ()]
+    if "aspect_ratio" in video_parameters and ratios and aspect not in ratios:
+        #: 这个模型不收白模那三种画幅里的任何一种(比如只收 adaptive,画幅跟着首帧走):视频那一步交它认的那一档,
+        #: 白模、关键帧和时间线照旧按 `aspect`。
+        video_parameters["aspect_ratio"] = video_plan.aspect_ratio if video_plan.aspect_ratio in ratios else ratios[0]
     image_parameters = {"size": "{{input.frame_size}}"} if frame_size else {}
     sheet_parameters = {"size": image_plan.sheet_size} if image_plan.sheet_size else {}
     modes_text = " / ".join(video_plan.modes)
@@ -279,7 +285,7 @@ JSON Schema 的对象。"""
                     "prompt": "{{loop.item.generation_prompt}} Camera: {{render_blockout.camera_move}}. "
                               "Keep every character exactly as in the references. {{input.style}}",
                     "negative_prompt": "{{loop.item.negative_prompt}}",
-                    "parameters": video_plan.parameters or {},
+                    "parameters": video_parameters,
                     #: 两组都接上,由 source_group 逐镜选一组(Seedance 上两组互斥)。没跑的首尾帧是空行,
                     #: 自然消失;`{{input.sheets}}` 这样的整组引用在运行时摊平。
                     "source_assets": [
@@ -288,7 +294,8 @@ JSON Schema 的对象。"""
                         "{{input.sheets}}",
                         "{{input.locations}}",
                         "{{render_blockout.first_frame_asset_id}}:reference_image",
-                        "{{render_blockout.video_asset_id}}:reference_video",
+                        #: 白模运镜视频只交给收参考视频的模型(可灵 v3 omni 收参考图、不收参考视频,给了当场拒)。
+                        *(["{{render_blockout.video_asset_id}}:reference_video"] if video_plan.reference_video else []),
                     ],
                     "source_group": "{{loop.item.reference_mode}}",
                 },
@@ -496,7 +503,9 @@ JSON Schema 的对象。"""
             "position": {"x": 40, "y": 300},
             "config": {
                 "params": {
-                    "topic": "请把这里改成你的视频主题",
+                    #: 留空,运行前必填(required_params)。此前写着「请把这里改成你的视频主题」,没改就跑的话这句话被当成主题,
+                    #: 整条最贵的流程对着它跑完。
+                    "topic": "",
                     "target_duration_seconds": 30,
                     #: 这一次最多做几镜。**它是成本的闸门**:每一镜都是一次付费的视频生成,
                     #: 而镜头数此前完全由模型按时长算,跑之前看不到要花多少。
@@ -504,8 +513,11 @@ JSON Schema 的对象。"""
                     "audience": "对该主题感兴趣的大众观众",
                     "tone": "专业、清晰、克制且有电影感",
                     "language": "简体中文",
-                    #: 画幅只能是 16:9 / 9:16 / 1:1(3D 白模的镜头只有这三种)。改画幅时把
-                    #: frame_size(关键帧图的尺寸)也改成同比例的一档。
+                    #: 画幅只能是 16:9 / 9:16 / 1:1(3D 白模的镜头只有这三种)。**改画幅要一起改四处**,它们都是按
+                    #: 模板建出来那一刻的画幅从模型能力表里算好的,彼此推不出来(模板里没有算术):
+                    #: aspect_ratio;frame_size(关键帧图的尺寸,换成图像模型尺寸表里同比例的一档);
+                    #: width / height(成片时间线的画布,宽高对调);resolution 一般不用动(它说的是清晰度档位)。
+                    #: 漏改 width/height 的话,竖屏的镜头会被裁进横屏画布。
                     "aspect_ratio": aspect,
                     "frame_size": frame_size,
                     "resolution": video_plan.resolution,
@@ -514,7 +526,8 @@ JSON Schema 的对象。"""
                     "fps": 30,
                     # 配音音色。**留空 = 不配音**(成片只有画面),而不是跑到一半失败。
                     "voice_id": voice_id,
-                }
+                },
+                "required_params": "topic",
             },
         },
         {
@@ -859,7 +872,7 @@ JSON Schema 的对象。"""
         {"id": "export_output", "source": "export_final", "target": "output"},
     ]
     graph = {
-        "meta": {"template_id": FULL_VIDEO_GENERATION, "template_version": 9, "source": "official"},
+        "meta": {"template_id": FULL_VIDEO_GENERATION, "template_version": 10, "source": "official"},
         "nodes": nodes,
         "edges": edges,
     }

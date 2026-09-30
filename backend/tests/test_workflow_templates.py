@@ -5,7 +5,7 @@ import re
 from collections.abc import Iterator
 from typing import Any
 
-from app.domain.workflows import NODE_TYPES, validate_graph
+from app.domain.workflows import NODE_TYPES, validate_graph, with_run_params
 from app.domain.workflows.templates import (
     ModelChoice,
     full_video_generation_graph,
@@ -78,11 +78,13 @@ def _node(graph: dict[str, Any], node_id: str) -> dict[str, Any]:
 def test_full_video_template_has_valid_refs_and_parallel_planning() -> None:
     graph = _full_video()
 
-    assert validate_graph(graph) == []
+    #: 主题是必填的开始参数(模板里空着,运行时由用户填),其余都已配好。
+    assert validate_graph(graph) == ["节点 start 缺少必填配置 params.topic"]
+    assert validate_graph(with_run_params(graph, {"topic": "一家老面馆"})) == []
     assert _invalid_references(graph) == []
     assert graph["meta"] == {
         "template_id": "full_video_generation",
-        "template_version": 9,
+        "template_version": 10,
         "source": "official",
     }
 
@@ -748,7 +750,9 @@ def test_白模的台距由布景尺寸算出来_而不是写死() -> None:
     这个常数本来就是为了"互不干扰"存在的,结果两头都不成立。
     """
     system = _node(_full_video(), "set_design")["config"]["system"]
-    assert "x = n*40" not in system
+    #: 任何一处 n*40 都不许有 —— 此前台距那一段改成了 D,布景台里 room 的 position 却还写着 [n*40,0,0]。
+    assert "n*40" not in system
+    assert "[n*D,0,0]" in system
     assert "不要用固定的 40 米" in system
     #: 台距要从视觉圣经里的场景尺寸推出来。
     assert "width_m" in system and "台距" in system
