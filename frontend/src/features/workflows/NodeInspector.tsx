@@ -19,7 +19,7 @@ import { ACTION_MENU, MODAL_SURFACE } from "@/components/ui/floating";
 import { OptionPicker } from "@/components/ui/option-picker";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { withDependentsCleared } from "@/features/nodeForms/dependents";
+import { dependentsCleared, withDependentsCleared } from "@/features/nodeForms/dependents";
 import {
   FIELD_BOX,
   NodeConfigForm,
@@ -30,6 +30,7 @@ import {
 } from "@/features/nodeForms/NodeConfigForm";
 import { bodyScope, extractRefs, isNestedScopeConfig } from "@/features/workflows/analyze";
 import { chatProfileIds, generationVendors } from "@/features/workflows/bindingReadiness";
+import { withDataInputBound } from "@/features/workflows/connections";
 import { GENERATE_SPECIAL_CONFIG_KEYS, generateNodeSection, useGenerateNodeSection } from "@/features/workflows/nodeInspectorGenerate";
 import { LLM_SPECIAL_CONFIG_KEYS, llmAdvancedSection, llmPresetSection } from "@/features/workflows/nodeInspectorLlm";
 import { RunOutputs } from "@/features/workflows/RunOutputs";
@@ -277,7 +278,9 @@ export function NodeInspector({
     graph.edges.find((edge) => edge.kind === "data" && edge.target === node.id && edge.target_input === key) ?? null;
 
   // 切换字段的连接态:连接=进 inputs;断开=移出 inputs 并删对应数据边。
+  //: 两个方向都换了这一格的值从哪来(上游输出 ↔ 手填),依赖它的字段(轨道跟着时间线)一并清掉。
   const setConnected = (key: string, connected: boolean) => {
+    if (connectedInputs.includes(key) === connected) return;
     const inputs = new Set(connectedInputs);
     if (connected) inputs.add(key);
     else inputs.delete(key);
@@ -288,25 +291,15 @@ export function NodeInspector({
         : graph.edges.filter(
             (edge) => !(edge.kind === "data" && edge.target === node.id && edge.target_input === key),
           ),
-      nodes: graph.nodes.map((n) => (n.id === node.id ? { ...n, inputs: [...inputs] } : n)),
+      nodes: graph.nodes.map((n) =>
+        n.id === node.id ? { ...n, inputs: [...inputs], config: dependentsCleared(n.config ?? {}, key, allSpecs) } : n,
+      ),
     });
   };
 
-  // 绑定输入到某上游输出:建/换数据边,清字面量交给数据边供值。
+  // 绑定输入到某上游输出:建/换数据边,清字面量交给数据边供值(依赖它的字段一并清掉,见 withDataInputBound)。
   const bindInput = (key: string, sourceId: string, output: string) => {
-    const id = `d-${sourceId}-${output}-${node.id}-${key}`;
-    onApplyGraph({
-      ...graph,
-      edges: [
-        ...graph.edges.filter((edge) => !(edge.kind === "data" && edge.target === node.id && edge.target_input === key)),
-        { id, source: sourceId, target: node.id, kind: "data" as const, source_output: output, target_input: key },
-      ],
-      nodes: graph.nodes.map((n) =>
-        n.id === node.id
-          ? { ...n, inputs: [...new Set([...connectedInputs, key])], config: { ...(n.config ?? {}), [key]: "" } }
-          : n,
-      ),
-    });
+    onApplyGraph(withDataInputBound(graph, { targetId: node.id, key, sourceId, output }, allSpecs));
   };
 
   // ── AI 生成节点:所选模型 + 它声明支持的参数 ────────────────────────────────

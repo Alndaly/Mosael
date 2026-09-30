@@ -4,6 +4,7 @@
  *  值为空;若查重时不分种类,它就会和「无 handle 的控制边」撞车,导致「先连属性再连顺序」
  *  时把已有数据边误判成重复、把控制边拒掉。 */
 import type { WorkflowGraph } from "../../api/client";
+import { dependentsCleared, type DependencySpec } from "../nodeForms/dependents";
 
 type WEdge = WorkflowGraph["edges"][number];
 
@@ -30,4 +31,37 @@ export function isDuplicateControlEdge(
       edge.target === target &&
       (edge.source_handle ?? undefined) === (srcHandle ?? undefined),
   );
+}
+
+/**
+ * 把 `targetId` 节点的输入 `key` 接到 `sourceId` 的 `output`:建 / 换那条数据边、`key` 进连接态、
+ * 字面量清空交给数据边供值。
+ *
+ * **依赖 `key` 的字段一并清掉**(声明里的 `depends_on`):换接了另一条时间线,手里那条轨道 id 就不在
+ * 新时间线上了 —— 两格各自都有值、界面看着正常,跑起来才报「这条时间线上没有那条轨道」。
+ * 画布上拖线和检查器里挑来源是同一件事,两处都走这里。
+ */
+export function withDataInputBound(
+  graph: WorkflowGraph,
+  binding: { targetId: string; key: string; sourceId: string; output: string },
+  specs: Record<string, DependencySpec | undefined>,
+): WorkflowGraph {
+  const { targetId, key, sourceId, output } = binding;
+  const id = `d-${sourceId}-${output}-${targetId}-${key}`;
+  return {
+    ...graph,
+    edges: [
+      ...graph.edges.filter((edge) => !(edge.kind === "data" && edge.target === targetId && edge.target_input === key)),
+      { id, source: sourceId, target: targetId, kind: "data", source_output: output, target_input: key },
+    ],
+    nodes: graph.nodes.map((node) =>
+      node.id === targetId
+        ? {
+            ...node,
+            inputs: [...new Set([...(node.inputs ?? []), key])],
+            config: dependentsCleared({ ...(node.config ?? {}), [key]: "" }, key, specs),
+          }
+        : node,
+    ),
+  };
 }

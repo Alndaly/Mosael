@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { isDataConnection, isDuplicateControlEdge } from "./connections";
+import { isDataConnection, isDuplicateControlEdge, withDataInputBound } from "./connections";
 import type { WorkflowGraph } from "@/api/client";
 
 type WEdge = WorkflowGraph["edges"][number];
@@ -45,5 +45,32 @@ describe("isDuplicateControlEdge", () => {
     // 数据边由 isDataConnection 判定后跳过控制边查重,这里仅确认反向:控制边在场时
     // 新控制边仍按同类比较(数据边不干扰)。
     expect(isDuplicateControlEdge([data("a", "b"), control("a", "c")], "a", "b", undefined)).toBe(false);
+  });
+});
+
+describe("withDataInputBound", () => {
+  const specs = { sequence_id: {}, track_id: { depends_on: "sequence_id" }, start: {} };
+  const graph = {
+    nodes: [
+      { id: "tl", type: "timeline_create", config: {} },
+      { id: "append", type: "timeline_append", config: { sequence_id: "seq-old", track_id: "trk-old", start: 3 } },
+    ],
+    edges: [],
+  } as WorkflowGraph;
+
+  it("接上游:建数据边、进连接态、字面量清空,依赖它的轨道一并清掉(旧轨道不在新时间线上)", () => {
+    const next = withDataInputBound(graph, { targetId: "append", key: "sequence_id", sourceId: "tl", output: "sequence_id" }, specs);
+    const target = next.nodes.find((node) => node.id === "append")!;
+    expect(target.inputs).toEqual(["sequence_id"]);
+    expect(target.config).toEqual({ sequence_id: "", track_id: "", start: 3 });
+    expect(next.edges).toEqual([
+      { id: "d-tl-sequence_id-append-sequence_id", source: "tl", target: "append", kind: "data", source_output: "sequence_id", target_input: "sequence_id" },
+    ]);
+  });
+
+  it("换接另一条:旧的那条数据边换掉,不留两条", () => {
+    const once = withDataInputBound(graph, { targetId: "append", key: "sequence_id", sourceId: "tl", output: "sequence_id" }, specs);
+    const twice = withDataInputBound(once, { targetId: "append", key: "sequence_id", sourceId: "tl", output: "other" }, specs);
+    expect(twice.edges.map((edge) => edge.source_output)).toEqual(["other"]);
   });
 });

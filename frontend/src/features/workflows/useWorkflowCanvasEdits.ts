@@ -11,7 +11,8 @@ import { MARKER_PREFIX, MAX_MARKERS, newMarkerId, nextMarkerName, type CanvasMar
 import { useMarkerShortcuts } from "@/features/markers/useMarkerShortcuts";
 import { pasteNodes, type NodeClip } from "@/features/workflows/clipboard";
 import { collapseToSubgraph } from "@/features/workflows/collapse";
-import { isDataConnection, isDuplicateControlEdge } from "@/features/workflows/connections";
+import type { DependencySpec } from "@/features/nodeForms/dependents";
+import { isDataConnection, isDuplicateControlEdge, withDataInputBound } from "@/features/workflows/connections";
 import type { WorkflowGraphState } from "@/features/workflows/useWorkflowGraph";
 import { toWorkflowFlowEdges, toWorkflowFlowNodes } from "@/features/workflows/workflowCanvasModel";
 import { isMarkerNode } from "@/features/workflows/workflowViewShared";
@@ -272,34 +273,13 @@ export function useWorkflowCanvasEdits({
       if (srcHandle?.startsWith("out:") && tgtHandle?.startsWith("in:")) {
         const output = srcHandle.slice(4);
         const targetInput = tgtHandle.slice(3);
-        const id = `d-${connection.source}-${output}-${connection.target}-${targetInput}`;
         setGraph((current) => {
-          const kept = current.edges.filter(
-            (edge) => !(edge.kind === "data" && edge.target === connection.target && edge.target_input === targetInput),
+          const targetType = current.nodes.find((node) => node.id === connection.target)?.type ?? "";
+          const next = withDataInputBound(
+            current,
+            { targetId: connection.target!, key: targetInput, sourceId: connection.source!, output },
+            (registry.get(targetType)?.config ?? {}) as Record<string, DependencySpec>,
           );
-          const next: WorkflowGraph = {
-            ...current,
-            edges: [
-              ...kept,
-              {
-                id,
-                source: connection.source!,
-                target: connection.target!,
-                kind: "data",
-                source_output: output,
-                target_input: targetInput,
-              },
-            ],
-            nodes: current.nodes.map((node) =>
-              node.id === connection.target
-                ? {
-                    ...node,
-                    inputs: Array.from(new Set([...(node.inputs ?? []), targetInput])),
-                    config: { ...(node.config ?? {}), [targetInput]: "" },
-                  }
-                : node,
-            ),
-          };
           setNodes(toWorkflowFlowNodes(next, registry));
           setEdges(toWorkflowFlowEdges(next, t, registry));
           return next;

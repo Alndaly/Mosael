@@ -1,0 +1,95 @@
+/** @vitest-environment jsdom */
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { fireEvent, render } from "@testing-library/react";
+import React from "react";
+import { beforeAll, expect, it, vi } from "vitest";
+
+/**
+ * 一格换了值从哪来(手填 ↔ 接上游),依赖它的字段就失效了:换接了另一条时间线,手里那条轨道 id
+ * 不在新时间线上 —— 两格各自有值、界面看着正常,跑起来才报「这条时间线上没有那条轨道」。
+ */
+
+vi.mock("@xyflow/react", async (original) => ({
+  ...(await original<typeof import("@xyflow/react")>()),
+  NodeToolbar: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+}));
+vi.mock("@/app/preferences", () => ({
+  useI18n: () => (key: string) => key,
+  usePreferences: () => ({ locale: "zh-CN" }),
+}));
+
+import { ReactFlowProvider } from "@xyflow/react";
+
+import type { WorkflowGraph, WorkflowNodeType } from "@/api/client";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { NodeInspector } from "@/features/workflows/WorkflowsView";
+
+beforeAll(() => {
+  vi.stubGlobal("ResizeObserver", class { observe() {} unobserve() {} disconnect() {} });
+  vi.stubGlobal("fetch", async () => new Response("[]", { status: 200, headers: { "content-type": "application/json" } }));
+});
+
+const META = {
+  type: "append_to_timeline",
+  label: "放进时间线",
+  description: "",
+  category: "",
+  config: {
+    sequence_id: { type: "template", label: "时间线" },
+    track_id: { type: "template", label: "轨道", depends_on: "sequence_id" },
+    at: { type: "number", label: "位置" },
+  },
+  outputs: [],
+  output_types: {},
+  output_labels: {},
+} as unknown as WorkflowNodeType;
+
+function renderInspector(node: WorkflowGraph["nodes"][number]) {
+  const onApplyGraph = vi.fn();
+  const graph = { nodes: [node], edges: [] } as WorkflowGraph;
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <TooltipProvider>
+        <ReactFlowProvider>
+          <NodeInspector
+            node={node}
+            meta={META}
+            graph={graph}
+            registry={new Map([[META.type, META]])}
+            workspaceId="w1"
+            onChange={vi.fn()}
+            onApplyGraph={onApplyGraph}
+          />
+        </ReactFlowProvider>
+      </TooltipProvider>
+    </QueryClientProvider>,
+  );
+  const modeToggle = (key: string) =>
+    document.querySelector<HTMLButtonElement>(`[data-field-key="${key}"] button[title="wfInputModeHint"]`)!;
+  const applied = () => (onApplyGraph.mock.calls.at(-1)![0] as WorkflowGraph).nodes[0];
+  return { onApplyGraph, modeToggle, applied };
+}
+
+it("时间线从手填改成接上游:依赖它的轨道清掉,不相干的字段不动", () => {
+  const { modeToggle, applied } = renderInspector({
+    id: "n1",
+    type: META.type,
+    config: { sequence_id: "seq-old", track_id: "trk-old", at: 2 },
+  });
+  fireEvent.click(modeToggle("sequence_id"));
+  expect(applied().inputs).toEqual(["sequence_id"]);
+  expect(applied().config).toEqual({ sequence_id: "seq-old", track_id: "", at: 2 });
+});
+
+it("时间线从接上游改回手填:依赖它的轨道也清掉,数据边一并删掉", () => {
+  const { modeToggle, onApplyGraph, applied } = renderInspector({
+    id: "n1",
+    type: META.type,
+    inputs: ["sequence_id"],
+    config: { sequence_id: "", track_id: "trk-old" },
+  });
+  fireEvent.click(modeToggle("sequence_id"));
+  expect(applied().inputs).toEqual([]);
+  expect(applied().config).toEqual({ sequence_id: "", track_id: "" });
+  expect((onApplyGraph.mock.calls.at(-1)![0] as WorkflowGraph).edges).toEqual([]);
+});
