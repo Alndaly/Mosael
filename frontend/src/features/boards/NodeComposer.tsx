@@ -412,7 +412,8 @@ export function NodeComposer({
     /** 挂了驱动音频(数字人)时,本人勾上的「已取得画面中人物的授权」。 */
     digitalHumanConsent: boolean;
     form: NonNullable<BoardItem["form"]>;
-  }) => void;
+    //: 交回请求的 Promise:按钮转到它落地为止(见 useSubmitting),连点只发一次。
+  }) => Promise<unknown>;
   /** 每一次编辑都写回节点，而不是留在面板组件的临时 state 里。 */
   onFormChange: (form: NonNullable<BoardItem["form"]>) => void;
   /** 挂输入素材时开选择器 —— 和画布上「换一份」用的是同一个。 */

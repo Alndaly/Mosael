@@ -87,7 +87,7 @@ export const BUILTIN_COMPOSERS: Record<BuiltinProducer, (host: ComposerHost) => 
       upstreamText={feeding.texts.map((one) => one.text).join("\n\n")}
       onFormChange={onFormChange}
       onSpeak={({ text, voiceId, engine, engineVoice }) =>
-        void run({
+        run({
           producer: "speak",
           item_id: item.id,
           kind: item.kind,
@@ -112,7 +112,7 @@ export const BUILTIN_COMPOSERS: Record<BuiltinProducer, (host: ComposerHost) => 
         workspaceId={workspaceId}
         busy={itemIsRunning(item)}
         onTrim={({ start, end, mute }) =>
-          void run({
+          run({
             producer: "trim",
             item_id: item.id,
             kind,
@@ -168,7 +168,7 @@ export const BUILTIN_COMPOSERS: Record<BuiltinProducer, (host: ComposerHost) => 
       upstreamScene={feeding.sources.find((one) => one.kind === "scene" && one.scene_id)?.scene_id}
       onFormChange={onFormChange}
       onSubmit={({ prompt, provider, providerProfileId, model, parameters, sourceAssets, entityIds, sceneReference, digitalHumanConsent, form }) =>
-        void run({
+        run({
           producer: "generate",
           item_id: item.id,
           kind: item.kind,

@@ -69,7 +69,8 @@ export function AudioComposer({
   workspaceId: string;
   /** 上游便签给的文字 —— 念的就是它。 */
   upstreamText?: string;
-  onSpeak: (input: { text: string; voiceId: string; engine: string; engineVoice: string }) => void;
+  /** 交回请求的 Promise:按钮转到它落地为止(见 useSubmitting),连点只发一次。 */
+  onSpeak: (input: { text: string; voiceId: string; engine: string; engineVoice: string }) => Promise<unknown>;
   onFormChange: (form: NonNullable<BoardItem["form"]>) => void;
 }) {
   const t = useI18n();

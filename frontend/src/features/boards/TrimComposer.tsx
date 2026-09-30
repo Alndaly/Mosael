@@ -52,9 +52,10 @@ export function TrimComposer({
   initial?: { start: number; end: number; mute: boolean };
   workspaceId: string;
   busy: boolean;
-  onTrim: (input: { start: number; end: number; mute: boolean }) => void;
+  /** 交回请求的 Promise:按钮转到它落地为止(见 useSubmitting),连点只发一次。 */
+  onTrim: (input: { start: number; end: number; mute: boolean }) => Promise<unknown>;
   /** 取起点那一帧,存成一份新素材。视频才有 —— 音频没有画面。 */
-  onGrabFrame?: (at: number) => void;
+  onGrabFrame?: (at: number) => Promise<unknown>;
 }) {
   const t = useI18n();
   const controls = TRIM_CONTROLS[item.kind];

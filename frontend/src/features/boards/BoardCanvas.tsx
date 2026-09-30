@@ -762,16 +762,17 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
             item={{ ...item, kind: item.kind }}
             assetId={item.asset_id as string}
             workspaceId={workspaceId}
+            //: 剪一段、取一帧落的都是**新的一格**,原件不在跑;按钮转到请求落地为止由面板自己管(useSubmitting)。
             busy={false}
             //: 取一帧和剪一段都产出**新的一格** —— 摆在原件下面,原件不动。
-            onGrabFrame={onGrabFrame ? (at) => void onGrabFrame({
+            onGrabFrame={onGrabFrame ? (at) => onGrabFrame({
               assetId: item.asset_id as string,
               at,
               x: node.position.x,
               y: node.position.y + (node.height ?? 200) + 60,
             }) : undefined}
-            onTrim={({ start, end, mute }) => {
-              void onRun({
+            onTrim={({ start, end, mute }) =>
+              onRun({
                 producer: "trim",
                 //: 产出落到**新的一格**,摆在原件下面 —— 覆盖原件的话,上一版就没了。
                 item_id: `${item.kind}-${Date.now().toString(36)}`,
@@ -779,8 +780,8 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
                 x: node.position.x,
                 y: node.position.y + (node.height ?? 200) + 60,
                 form: { asset_id: item.asset_id as string, start, end, mute },
-              }).finally(() => setPanel(null));
-            }}
+              }).finally(() => setPanel(null))
+            }
           />
         );
       })()}
