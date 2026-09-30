@@ -68,7 +68,7 @@ def dubbed(monkeypatch):
     calls: list = []
     model = {"id": "p:video:videoretalk", "capabilities": {"source_duration_seconds": {"source_video": [2, 4]}}}
     monkeypatch.setattr(module, "_pick_model", lambda db, choice, mode: model)
-    monkeypatch.setattr(module, "_generate", lambda db, scope, model, sources: calls.append(sources) or [sources[0]["asset_id"]])
+    monkeypatch.setattr(module, "_generate", lambda db, scope, model, sources, parameters=None: calls.append(sources) or [sources[0]["asset_id"]])
     return ids, calls
 
 

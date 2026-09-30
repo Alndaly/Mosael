@@ -90,7 +90,23 @@ def _speak(db: Session, scope: RunScope, text: str, engine: str, voice: str) -> 
     return synthesize_speech(db, scope, {"text": text, "engine": engine, "voice": voice})["asset_id"]
 
 
-def _generate(db: Session, scope: RunScope, model: dict[str, Any], sources: list[dict[str, str]]) -> list[str]:
+def _resolution(model: dict[str, Any], config: dict[str, Any]) -> dict[str, Any]:
+    """节点上挑的分辨率 → 这次生成的参数。只收这个模型描述符里列的档(`resolutions`);空着用模型的默认档。
+    此前节点不给这一项、一律 `parameters={}`:百炼说话照片永远是 480P,想要 720P 只能去 AI 工作台。"""
+    chosen = _text(config.get("resolution"))
+    if not chosen:
+        return {}
+    offered = [str(one) for one in ((model.get("capabilities") or {}).get("resolutions") or [])]
+    if chosen not in offered:
+        raise WorkflowDomainError("wfErr_talkingResolution", params={
+            "value": chosen, "model": str(model.get("label") or model.get("model") or ""),
+            "options": " / ".join(offered) or "—",
+        })
+    return {"resolution": chosen}
+
+
+def _generate(db: Session, scope: RunScope, model: dict[str, Any], sources: list[dict[str, str]],
+              parameters: dict[str, Any] | None = None) -> list[str]:
     """一次视频生成,交回出的视频。不收提示词的模型(说话照片、改口型)提示词就空着 —— 描述符说了算。"""
     from app.domain.generation import create_generation_job
     from app.domain.generation.operations import GenerationDomainError
@@ -109,7 +125,7 @@ def _generate(db: Session, scope: RunScope, model: dict[str, Any], sources: list
             kind="video",
             prompt="",
             negative_prompt="",
-            parameters={},
+            parameters=dict(parameters or {}),
             source_assets=sources,
             #: 授权在这一层查过了:人物资产的声明(check_entity_speak)或面板上的确认(_require_consent)。
             digital_human_consent=True,
@@ -173,7 +189,8 @@ def check_entity_speak(db: Session, workspace_id: str, config: dict[str, Any], a
              else next((one for one in options if one.get("is_default")), None) or (options[0] if options else None))
     if model is None:
         raise WorkflowDomainError("wfErr_talkingModelMissing" if choice else "wfErr_talkingNoModel")
-    return {"face": _portrait(db, entity), "engine": _text(attributes.get("voice_engine")), "voice": voice, "model": model}
+    return {"face": _portrait(db, entity), "engine": _text(attributes.get("voice_engine")), "voice": voice, "model": model,
+            "parameters": _resolution(model, config)}
 
 
 @register("entity_speak")
@@ -182,7 +199,7 @@ def entity_speak(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[s
     plan = check_entity_speak(db, scope.workspace_id, config, current_actor(db))
     audio = _speak(db, scope, _text(config.get("text")), plan["engine"], plan["voice"])
     videos = _generate(db, scope, plan["model"], [{"asset_id": plan["face"], "role": FIRST_FRAME},
-                                                   {"asset_id": audio, "role": DRIVING_AUDIO}])
+                                                   {"asset_id": audio, "role": DRIVING_AUDIO}], plan["parameters"])
     return {"asset_id": videos[0] if videos else "", "asset_ids": videos, "audio_asset_id": audio}
 
 
@@ -198,11 +215,13 @@ def image_speak(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[st
     #: 收进本工作区:别处的 id 不能借这一步被拿去生成。
     face = _asset_in(db, scope, face).id
     model = _pick_model(db, _text(config.get("model")), SPEECH_TO_VIDEO)
+    parameters = _resolution(model, config)
     given = _text(config.get("audio_asset_id"))
     if given:
         given = _asset_in(db, scope, given).id
     audio = given or _speak(db, scope, _text(config.get("text")), _text(config.get("engine")), _text(config.get("voice")))
-    videos = _generate(db, scope, model, [{"asset_id": face, "role": FIRST_FRAME}, {"asset_id": audio, "role": DRIVING_AUDIO}])
+    videos = _generate(db, scope, model, [{"asset_id": face, "role": FIRST_FRAME}, {"asset_id": audio, "role": DRIVING_AUDIO}],
+                       parameters)
     #: 用的是上游现成的音频时不交回它(和对口型同一条)。
     return {"asset_id": videos[0] if videos else "", "asset_ids": videos, "audio_asset_id": "" if given else audio}
 
@@ -295,6 +314,29 @@ def _concat_audio(db: Session, scope: RunScope, assets: list[Any], name: str) ->
     return joined.id
 
 
+def _pad_audio(db: Session, scope: RunScope, asset: Any, seconds: float, name: str) -> str:
+    """一段配音末尾补静音到 `seconds`,登记成新的一段(原来那段不动)。克隆嗓子的出处照带(见 _concat_audio)。"""
+    import tempfile
+
+    from app.core.child_process import run_logged
+    from app.domain.assets.importer import register_file_asset
+    from app.media.paths import resolve_key
+
+    with tempfile.TemporaryDirectory(prefix="mosael-talking-") as folder:
+        target = Path(folder) / "segment.wav"
+        result = run_logged([settings.ffmpeg, "-y", "-v", "error", "-i", str(resolve_key(str(asset.file_key))),
+                             "-af", f"apad=whole_dur={seconds:g}", "-ac", "1", "-ar", "24000", str(target)],
+                            capture_output=True, text=True, timeout=300, what="口播分段补静音")
+        if result.returncode != 0 or not target.exists():
+            raise WorkflowDomainError("wfErr_talkingConcatFailed")
+        padded = register_file_asset(db, workspace_id=scope.workspace_id, project_id=None, source_path=target,
+                                     name=name, source="tts")
+    voice = str((asset.media_info or {}).get("voice_id") or "")
+    if voice:
+        padded.media_info = {**(padded.media_info or {}), "voice_id": voice}
+    return padded.id
+
+
 @register("talking_segments")
 def talking_segments(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
     """长稿分段配音(ADR 0028 阶段 3「稿子 → 数字人口播」):一段稿子 → 一组组**说话照片接得住**的音频 + 字幕时间。
@@ -316,7 +358,7 @@ def talking_segments(db: Session, scope: RunScope, config: dict[str, Any]) -> di
     _require_voice_consent(db, engine, voice)
     model = _pick_model(db, _text(config.get("model")), SPEECH_TO_VIDEO)
     limits = ((model.get("capabilities") or {}).get("source_duration_seconds") or {}).get(DRIVING_AUDIO) or [1, 20]
-    ceiling = float(limits[1])
+    floor, ceiling = float(limits[0]), float(limits[1])
     try:
         wanted = float(config.get("max_seconds") or 0)
     except (TypeError, ValueError):
@@ -345,12 +387,19 @@ def talking_segments(db: Session, scope: RunScope, config: dict[str, Any]) -> di
     cues: list[dict[str, Any]] = []
     cursor = 0.0
     for index, group in enumerate(groups, start=1):
-        audio = str(group[0][1].id) if len(group) == 1 else _concat_audio(
-            db, scope, [item[1] for item in group], f"{scope.name} · 口播第 {index} 段")
+        name = f"{scope.name} · 口播第 {index} 段"
+        audio = str(group[0][1].id) if len(group) == 1 else _concat_audio(db, scope, [item[1] for item in group], name)
         start = cursor
         for sentence, _asset, seconds in group:
             cues.append({"start": round(cursor, 3), "end": round(cursor + seconds, 3), "text": sentence})
             cursor += seconds
+        spoken = cursor - start
+        if spoken < floor:
+            #: 不够模型的下限(可灵数字人 2 秒起):末尾补静音补到下限。此前分组只看上限,一句「好的。」单独成段,
+            #: 到提交时才被拒。并进邻居是做不到的 —— 分组是贪心的,一组收尾正是因为下一句放不进去。说话照片在
+            #: 静音处闭着嘴,比被拒强;时间线上这一段按补过的长度排,后面几段接着往后。
+            audio = _pad_audio(db, scope, _asset_in(db, scope, audio), floor, name)
+            cursor = start + floor
         segments.append({"index": index, "audio_asset_id": audio, "start": round(start, 3),
                          "duration": round(cursor - start, 3), "text": "".join(item[0] for item in group)})
     return {"segments": segments, "cues": cues, "count": len(segments), "duration": round(cursor, 3)}

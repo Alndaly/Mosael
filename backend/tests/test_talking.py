@@ -152,3 +152,29 @@ def test_详情页上让真人说话_没声明就当场_422_不起任务(setup) 
     with SessionLocal() as db:
         assert db.query(Job).filter(Job.kind == "entity_draw").count() == 0
     assert fakes.spoken == []
+
+
+def test_节点上挑分辨率_只收这个模型有的档_不对的在配音之前就说(setup, monkeypatch) -> None:
+    """此前节点不给分辨率、一律 parameters={}:百炼说话照片永远是 480P。"""
+    from app.domain.generation import resolution
+    from app.domain.workflows.field_options import OptionContext, field_options
+
+    tiered = {**S2V, "capabilities": {"modes": ["speech-to-video"], "resolutions": ["480P", "720P"], "default_resolution": "480P"}}
+    monkeypatch.setattr(resolution, "generation_options", lambda db, kind, user_id=None: [SEEDANCE, tiered, RETALK])
+    _client, ws, fakes = setup
+    base = {"asset_id": "face", "text": "你好", "engine": "builtin:edge", "voice": "v", "consent": "yes"}
+    with SessionLocal() as db:
+        talking.image_speak(db, _scope(ws), {**base, "resolution": "720P"})
+        assert fakes.generated[-1]["parameters"] == {"resolution": "720P"}
+        talking.image_speak(db, _scope(ws), base)
+        assert fakes.generated[-1]["parameters"] == {}, "空着用模型的默认档"
+        spoken = len(fakes.spoken)
+        with pytest.raises(WorkflowDomainError) as refused:
+            talking.image_speak(db, _scope(ws), {**base, "resolution": "1080P"})
+        assert refused.value.key == "wfErr_talkingResolution" and len(fakes.spoken) == spoken, "配音之前就说,不白付一次配音"
+
+        ctx = OptionContext(workspace_id=ws, user_id=None, parent="", locale="zh")
+        assert [one["value"] for one in field_options(db, "speech_video_resolutions", ctx)] == ["480P", "720P"]
+    for node in ("entity_speak", "image_speak"):
+        field = NODE_TYPES[node]["config"]["resolution"]
+        assert (field["depends_on"], field["options_from"]) == ("model", "speech_video_resolutions")

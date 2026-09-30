@@ -343,6 +343,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     },
     "wfErr_talkingConcatFailed": {"zh": "把几句配音接成一段时失败了", "en": "Joining the voiced sentences into one segment failed"},
     "wfNode_talking_text": {"zh": "要说的话;画板上可以连一张便签或文档进来", "en": "What to say; on a board you can connect a note or document"},
+    "wfNode_talking_resolution": {"zh": "出片分辨率;只列所选模型有的档,留空用模型的默认档(按秒计价的档位越高越贵)", "en": "Output resolution; only the chosen model's tiers are listed, empty uses its default (higher tiers cost more per second)"},
     "wfNode_talking_model": {"zh": "用哪个视频模型;只列会这一种的,留空用默认或第一个", "en": "Which video model; only ones that can do this are listed, empty picks the default or the first"},
     "wfNode_talking_consent": {
         "zh": "确认:画面里的人是我本人,或已取得本人的单独同意(《深度合成管理规定》第十四条)",

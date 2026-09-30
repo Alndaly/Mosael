@@ -69,6 +69,10 @@ MESSAGES: dict[str, dict[str, str]] = {
     },
     "wfErr_entityNeedsTarget": {"zh": "先点名一个资产", "en": "Pick an asset first."},
     "wfErr_talkingModelMissing": {"zh": "选的视频模型已经不在了,换一个", "en": "The chosen video model is no longer available; pick another."},
+    "wfErr_talkingResolution": {
+        "zh": "分辨率「{value}」{model} 不支持,它能出 {options}",
+        "en": "{model} can't output “{value}”; it offers {options}",
+    },
     "wfErr_talkingNoModel": {
         "zh": "还没有会「说话照片」的视频模型 —— 在设置里接一个(如百炼 wan2.2-s2v)",
         "en": "No video model can do talking photos yet — add one in Settings (e.g. Bailian wan2.2-s2v).",

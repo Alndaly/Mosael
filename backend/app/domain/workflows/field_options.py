@@ -358,6 +358,25 @@ def _talking_models(mode: str) -> Source:
     return list_them
 
 
+def _talking_resolutions(mode: str) -> Source:
+    """挑中的那个说话照片 / 改口型模型有哪几档分辨率(描述符的 `resolutions`)。模型空着 = 节点会用的那一个(他的默认视频
+    模型会这一种就是它,否则第一个会的),列它的档;第一项是模型的默认档。"""
+
+    def list_them(db: Session, ctx: OptionContext) -> list[Option]:
+        from app.domain.workflows.executors.talking import talking_models
+
+        models = talking_models(db, mode, ctx.user_id)
+        model = next((one for one in models if one["id"] == ctx.parent), None) if ctx.parent else (
+            next((one for one in models if one.get("is_default")), None) or (models[0] if models else None))
+        capabilities = (model or {}).get("capabilities") or {}
+        offered = [str(one) for one in capabilities.get("resolutions") or []]
+        default = str(capabilities.get("default_resolution") or "")
+        ordered = [default, *(one for one in offered if one != default)] if default in offered else offered
+        return [{"value": one, "label": one} for one in ordered]
+
+    return list_them
+
+
 def _capability_providers(capability_name: str) -> Source | None:
     """`providers.<能力>`:这项宿主能力此刻能用的提供方 —— 内置的,和这个人配好了的插件连接(ADR 0032 §3)。
     一个通用来源,不再每项能力写一个;缺配置、缺凭据、跑不起来的不列。认不出的能力回 None。"""
@@ -396,6 +415,7 @@ SOURCES: dict[str, Source] = {
     "automation_chat_models": _automation_chat_models,
     "speech_video_models": _talking_models("speech-to-video"),
     "lipsync_models": _talking_models("video-lipsync"),
+    "speech_video_resolutions": _talking_resolutions("speech-to-video"),
     "entities": _entities,
     "reference_image_models": _reference_image_models,
     "entities.character": lambda db, ctx: _entities(db, ctx, "character"),

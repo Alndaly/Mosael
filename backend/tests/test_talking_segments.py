@@ -112,7 +112,7 @@ def test_让它说话接上游的一段音频_不再配音(monkeypatch) -> None:
     sources: list = []
     monkeypatch.setattr(subjobs, "synthesize_speech", lambda db, scope, config: spoken.append(config) or {"asset_id": "x"})
     monkeypatch.setattr(talking, "_pick_model", lambda db, choice, mode: S2V)
-    monkeypatch.setattr(talking, "_generate", lambda db, scope, model, src: sources.append(src) or ["talk"])
+    monkeypatch.setattr(talking, "_generate", lambda db, scope, model, src, parameters=None: sources.append(src) or ["talk"])
     scope = SimpleNamespace(workspace_id=ws, id="wf:1", name="口播")
     with SessionLocal() as db:
         out = talking.image_speak(db, scope, {"asset_id": "face", "audio_asset_id": "seg", "consent": "yes"})
@@ -138,3 +138,36 @@ def test_拼接真的把几段接成一段() -> None:
         made = db.get(Asset, joined)
         assert made.workspace_id == ws and made.kind == "audio"
         assert abs(float(made.media_info["duration"]) - 2.0) < 0.1
+
+
+KLING = {**S2V, "id": "k:video:kling-avatar", "model": "kling-avatar",
+         "capabilities": {"modes": ["speech-to-video"], "source_duration_seconds": {"driving_audio": [2, 10]}}}
+
+
+def test_整篇就一句短的_补静音到下限_不交一段注定被拒的音频(voicing, monkeypatch) -> None:
+    """此前分组只看上限:一句「好的。」单独成段,到提交时才被可灵(2 秒起)拒。"""
+    monkeypatch.setattr(talking, "_pick_model", lambda db, choice, mode: KLING)
+    padded: list[tuple[str, float]] = []
+    monkeypatch.setattr(talking, "_pad_audio",
+                        lambda db, scope, asset, seconds, name: padded.append((asset.name, seconds)) or "padded-1")
+    voicing.seconds.update({"好的。": 1})
+    with SessionLocal() as db:
+        out = talking_segments(db, voicing.scope, {"text": "好的。", "engine": "builtin:edge", "voice": "v"})
+    assert padded == [("好的。", 2.0)]
+    assert [(one["audio_asset_id"], one["duration"]) for one in out["segments"]] == [("padded-1", 2.0)]
+
+
+def test_夹在两段长的中间的短句_补静音到下限_后面的段往后排(voicing, monkeypatch) -> None:
+    monkeypatch.setattr(talking, "_pick_model", lambda db, choice, mode: KLING)
+    padded: list[tuple[str, float]] = []
+    monkeypatch.setattr(talking, "_pad_audio",
+                        lambda db, scope, asset, seconds, name: padded.append((asset.name, seconds)) or "padded-1")
+    voicing.seconds.update({"甲。": 9.5, "嗯。": 1, "乙。": 9.5})
+    with SessionLocal() as db:
+        out = talking_segments(db, voicing.scope, {"text": "甲。嗯。乙。", "engine": "builtin:edge", "voice": "v"})
+    assert padded == [("嗯。", 2.0)], "9.5+1 超了 10 秒,前后都并不进,只能补到 2 秒"
+    assert [(one["audio_asset_id"], one["start"], one["duration"]) for one in out["segments"]][1:] == [
+        ("padded-1", 9.5, 2.0), (out["segments"][2]["audio_asset_id"], 11.5, 9.5)]
+    #: 字幕照配音的实测时长,补的静音不算字幕。
+    assert out["cues"][1] == {"start": 9.5, "end": 10.5, "text": "嗯。"}
+    assert out["duration"] == 21
