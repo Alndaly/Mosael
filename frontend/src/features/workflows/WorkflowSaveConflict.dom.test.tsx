@@ -91,6 +91,7 @@ async function renderEditor() {
     </QueryClientProvider>,
   );
   await screen.findByRole("group", { name: "canvasTools" }, { timeout: 10000 });
+  return client;
 }
 
 function nodeEl(id: string): HTMLElement {
@@ -166,4 +167,33 @@ it("撞 409:载入服务端那份、撤销历史清空、告诉用户,而不是�
   await renameLlm("再改");
   await waitFor(() => expect(bodies().at(-1)?.graph.nodes[1].name).toBe("再改"), { timeout: 3000 });
   expect(bodies().at(-1)?.base_graph_hash).toBe("h9");
+});
+
+it("跟进服务端新版本(智能体改了图):撤销历史清空,按撤销不会把旧图带着新底子存回去", async () => {
+  apiMocks.updateWorkflow.mockImplementation(async (_id: string, body: SaveBody) => {
+    const saved = workflowWith(body.graph, "h1", "2026-09-20T00:00:01");
+    // 服务端此后就是自己存的这一版:自动保存后的那次重新拉取会带回它。
+    apiMocks.listWorkflows.mockResolvedValue([saved]);
+    return saved;
+  });
+  const client = await renderEditor();
+  // 本地先改一处并存上:撤销历史里有了一条。
+  await renameLlm("我改的");
+  await waitFor(() => expect(bodies()).toHaveLength(1), { timeout: 3000 });
+  await waitFor(() => expect(apiMocks.listWorkflows.mock.results.length).toBeGreaterThan(1));
+  await new Promise((resolve) => setTimeout(resolve, 100));
+
+  // 智能体经确认卡改了图:服务端有了新的一版,画布无本地改动,跟进。
+  const theirs = structuredClone(bodies()[0].graph);
+  theirs.nodes[1].name = "智能体改的";
+  apiMocks.listWorkflows.mockResolvedValue([workflowWith(theirs, "h-agent", "2026-09-20T00:00:30")]);
+  await client.invalidateQueries({ queryKey: ["workflows", "w1"] });
+  await waitFor(() => expect(nodeEl("llm-1").textContent).toContain("智能体改的"), { timeout: 3000 });
+
+  const undo = screen.getAllByRole("button", { name: "undo" }).at(-1) as HTMLButtonElement;
+  expect(undo.disabled).toBe(true);
+  fireEvent.keyDown(window, { key: "z", metaKey: true });
+  await new Promise((resolve) => setTimeout(resolve, 900));
+  expect(nodeEl("llm-1").textContent).toContain("智能体改的");
+  expect(bodies()).toHaveLength(1);
 });

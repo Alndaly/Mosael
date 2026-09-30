@@ -74,6 +74,9 @@ export function useWorkflowSave({
     const scoped = graphAtScope(next, scopeRef.current, registry) ?? next;
     rebuildNodes(scoped);
     setEdges(toWorkflowFlowEdges(scoped, t, registry));
+    //: 撤销历史一并清掉,理由同 adoptServerWorkflow:历史里记的是跟进之前那份本地图,按一下撤销
+    //: 就把它写回画布,而自动保存会带着刚换上的新底子通过 CAS —— 智能体的改动被静默盖掉。
+    graphStore.temporal.getState().clear();
   }, [workflow.updated_at, workflow.graph, dirty, rebuildNodes]);
 
   /**
