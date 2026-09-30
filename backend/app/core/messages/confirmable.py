@@ -95,9 +95,9 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "浏览器只能打开 http(s) 网址",
         "en": "The browser can only open http(s) URLs.",
     },
-    "confirmErr_noTtsProvider": {
-        "zh": "没有配置可用于语音生成的真实供应商",
-        "en": "No provider is set up for speech generation.",
+    "confirmErr_speechNeedsText": {
+        "zh": "配音要有一段要念的文字(text)",
+        "en": "Speech needs some text to read (text).",
     },
     "confirmErr_badLine": {
         "zh": "line 只能是 all / first / last",

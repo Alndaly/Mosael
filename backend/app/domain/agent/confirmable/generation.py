@@ -111,40 +111,53 @@ def _summarize_generate_sound(db: Session, payload: dict[str, Any]) -> Summary:
     return "confirm_generateSound", {"asked": asked}
 
 def _validate_generate_audio(db: Session, workspace_id: str, payload: dict[str, Any], actor: str | None) -> None:
-    if not str(payload.get("prompt") or payload.get("text") or "").strip():
-        raise ConfirmationError("Generation requires a prompt")
+    """引擎和音色在**开卡时**就定成确定的一对,写回卡上 —— 用户批的就是卡上那一对,执行时不再猜。
+
+    配音没有默认:此前这里留空引擎就去查「语音合成的默认模型」,而那一格按设计不存在(`defaultable=False`),
+    于是只给音色的调用总是在批准之后才失败,报「没有配置真实供应商」—— 智能体据此让用户去设置里给 Edge 配一个
+    引擎,而 Edge 是内置的、免费的、什么都不用配。怎么认见 engine_catalog.pick_speech。
+    """
+    from app.domain.voices.engine_catalog import pick_speech
+    from app.domain.voices.speech import SpeechProviderUnavailable
+    from app.domain.voices.voices import VoiceError
+
+    if not str(payload.get("text") or "").strip():
+        raise ConfirmationError("confirmErr_speechNeedsText")
+    try:
+        payload["engine"], payload["voice"] = pick_speech(
+            db,
+            engine=str(payload.get("engine") or ""),
+            voice=str(payload.get("voice") or ""),
+            user_id=actor,
+            workspace_id=workspace_id,
+        )
+    except (SpeechProviderUnavailable, VoiceError) as exc:
+        raise ConfirmationError.relay(exc) from exc
 
 def _summarize_generate_audio(db: Session, payload: dict[str, Any]) -> Summary:
     return "confirm_generateAudio", {"asked": _asked_for(payload)}
 
 def _execute_generate_audio(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
+    """念卡上定好的那一对。参数经 synthesis_params 拼,和工作流、画板、字幕配音同一条路。"""
     payload = confirmation.payload
+    from app.domain.voices.engine_catalog import synthesis_params
     from app.domain.voices.voices import start_synthesis
-    from app.domain.providers import models as provider_models
 
-    profile_id = str(payload.get("provider_profile_id") or "").strip()
-    engine = str(payload.get("engine") or payload.get("provider") or "").strip()
-    model = str(payload.get("model") or "").strip()
-    if not engine:
-        default = provider_models.resolve_default(db, "tts", actor)
-        if default is not None:
-            profile_id = default.provider_profile_id
-            engine = default.profile.vendor
-            model = model or default.model_id
-    if not engine:
-        raise ConfirmationError("confirmErr_noTtsProvider")
+    params = synthesis_params(
+        db,
+        engine=str(payload.get("engine") or ""),
+        voice=str(payload.get("voice") or ""),
+        speed=float(payload.get("speed") or 1.0),
+        user_id=actor,
+        workspace_id=confirmation.workspace_id,
+        engine_model=str(payload.get("model") or "").strip(),
+    )
     job = start_synthesis(
         db,
-        text=str(payload.get("text") or payload.get("prompt") or ""),
+        text=str(payload.get("text") or ""),
         project_id=payload.get("project_id"),
         created_by=actor,
-        workspace_id=confirmation.workspace_id,
-        engine=engine,
-        engine_voice=str(payload.get("voice") or payload.get("engine_voice") or ""),
-        engine_voice_resource=str(payload.get("voice_resource") or payload.get("engine_voice_resource") or ""),
-        speed=float(payload.get("speed") or 1.0),
-        provider_profile_id=profile_id or None,
-        engine_model=model,
+        **params,
     )
     return {"job_id": job.id}
 

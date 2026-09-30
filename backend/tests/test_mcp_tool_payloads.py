@@ -72,6 +72,7 @@ ARGS: dict[str, dict[str, Any]] = {
     },
     "get_answer": {"question_id": "does-not-exist"},
     "list_generation_models": {},
+    "list_speech_engines": {},
     # 空参 = 全部能力、全部执行面。真正会 422 的是 surface,而它在工具里就地校验了。
     "list_provider_models": {},
     # 没有界面上下文时它自己回一句"跳不了" —— 冒烟正好走那条路,不发请求。

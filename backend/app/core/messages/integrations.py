@@ -377,6 +377,26 @@ MESSAGES: dict[str, dict[str, str]] = {
     },
     "speechErr_unknownEngine": {"zh": "没有这个配音引擎:{name}", "en": "No such speech engine: {name}"},
     "speechErr_engineNotReady": {"zh": "「{plugin}」还用不了:{missing}", "en": "“{plugin}” can't be used yet: {missing}"},
+    "speechErr_unknownEngineChoose": {
+        "zh": "没有叫「{name}」的配音引擎。能用的引擎(写它的 id):{choices}",
+        "en": "There is no speech engine called “{name}”. Engines you can use (give the id): {choices}",
+    },
+    "speechErr_pickEngineAndVoice": {
+        "zh": "配音要点名引擎和音色(两者成对)。能用的引擎:{choices}。免费、不用配置的:{free}",
+        "en": "Speech needs an engine and a voice (they go together). Engines you can use: {choices}. Free, nothing to set up: {free}",
+    },
+    "speechErr_pickVoice": {
+        "zh": "「{engine}」要点名一个音色,比如:{voices}",
+        "en": "“{engine}” needs a voice, for example: {voices}",
+    },
+    "speechErr_voiceWithoutEngine": {
+        "zh": "认不出音色「{voice}」是哪个引擎的,请连同引擎一起点名。能用的引擎:{choices}",
+        "en": "Can't tell which engine the voice “{voice}” belongs to; name the engine with it. Engines you can use: {choices}",
+    },
+    "speechErr_voiceInSeveralEngines": {
+        "zh": "音色「{voice}」好几个引擎都有,请点名其中一个:{choices}",
+        "en": "Several engines have the voice “{voice}”; name one of them: {choices}",
+    },
     "speechHint_noConnection": {"zh": "还没配好这家的连接 —— 去「设置 → AI 音频」", "en": "This provider's connection isn't set up yet — see Settings → AI audio"},
     "voiceErr_pluginFailed": {"zh": "「{plugin}」没念成:{detail}", "en": "“{plugin}” couldn't read it: {detail}"},
     "voiceErr_pluginBadOutput": {

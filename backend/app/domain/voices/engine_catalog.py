@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 from sqlalchemy.orm import Session
 
@@ -21,6 +22,7 @@ from app.domain.voices.speech import (
     CLONE_ENGINE,
     PODCAST_ENGINE,
     SPEECH,
+    SpeechProviderUnavailable,
     adapter_id,
     engine_ready,
     is_plugin,
@@ -286,6 +288,90 @@ def voice_resource_for(db: Session, engine: str, voice: str, *, user_id: str | N
         if item.get("value") == voice:
             return str(item.get("resource_id") or "")
     return ""
+
+
+def speaking_engines(db: Session, user_id: str | None, workspace_id: str) -> list[dict[str, Any]]:
+    """念一句话能用的引擎,各带着自己的音色(id + 名字)—— 给**不看界面的那一方**(智能体)挑引擎用。
+
+    和界面那份目录(describe_engines)同一个产地,只是换成读得懂的形状:名字、说明翻好,音色带上名字,克隆那一项
+    的音色是**这个工作区**音色库里的(界面上那一项的音色另有一个下拉)。播客不在其中 —— 它不念一句话。
+    """
+    from app.core.i18n import tr
+    from app.domain.voices.voices import list_voices
+
+    labels = {**dict(EDGE_BUILTIN_VOICES), **dict(VOLCANO_BUILTIN_VOICES)}
+    found: list[dict[str, Any]] = []
+    for engine in describe_engines(db, user_id):
+        if engine["id"] == PODCAST_ENGINE:
+            continue
+        if engine["id"] == CLONE_ENGINE:
+            voices = [{"id": voice.id, "name": voice.name} for voice in list_voices(db, workspace_id)]
+        else:
+            voices = [{"id": str(voice), "name": labels.get(str(voice), str(voice))} for voice in engine["voices"]]
+        plugin = bool(engine.get("plugin"))
+        found.append({
+            "id": engine["id"],
+            # 插件连接的名字是用户起的,不是文案 key。
+            "name": str(engine["label"]) if plugin else tr(str(engine["label"])),
+            "ready": bool(engine["ready"]),
+            #: 不花钱、不用配钥匙(Edge、本机克隆)。
+            "free": not engine["needs_key"] and not plugin,
+            "note": tr(str(engine["note"])) if engine.get("note") else "",
+            "voices": voices,
+        })
+    return found
+
+
+def _engine_list(engines: list[dict[str, Any]]) -> str:
+    from app.core.i18n import tr
+
+    return tr("punct_listSep").join(f"{one['id']} ({one['name']})" for one in engines) or "—"
+
+
+def pick_speech(db: Session, *, engine: str, voice: str, user_id: str | None, workspace_id: str) -> tuple[str, str]:
+    """「引擎 + 音色」定成确定的一对 `(引擎 id, 音色)`,给**点名不全**的一方(智能体)用。
+
+    配音没有默认(`defaultable=False`),所以这里从不替人挑引擎 —— 挑中一个要钥匙的就是替他花钱。能做的只有两件:
+
+    - 引擎按名字或 id 认(和字幕配音同一个认法,`capabilities.resolve_named`),认不出就把能用的 id 都列出来 ——
+      模型写成 `edge-tts` 时,下一次就能写对,而不是被一句「没有这个引擎」打发走,转头让用户去设置里配一个
+      根本不用配的东西(真机反馈);
+    - 只给了音色时按音色认出引擎:音色是某一家的(Edge 的 `zh-CN-XiaoxiaoNeural`、这个工作区克隆出来的音色),
+      引擎就是那一家。认不出、或者好几家都有,就说出来让他点名。
+
+    点名的引擎得**现在**就能用(没配连接、克隆没装都在这里说),而不是等人批准之后任务才失败。
+    """
+    from app.domain import capabilities
+    from app.domain.voices.voices import VoiceError
+
+    engine, voice = (engine or "").strip(), (voice or "").strip()
+    engines = speaking_engines(db, user_id, workspace_id)
+    voices_of = {one["id"]: [listed["id"] for listed in one["voices"]] for one in engines}
+    usable = [one for one in engines if one["ready"]]
+    if engine:
+        named = capabilities.resolve_named(db, user_id, CAPABILITY, engine)
+        if named is None:
+            raise SpeechProviderUnavailable("speechErr_unknownEngineChoose", name=engine, choices=_engine_list(usable))
+        capabilities.pick(db, user_id, CAPABILITY, named.id)  # 缺什么(连接、本机引擎)当场说
+        if not voice:
+            sample = ", ".join(voices_of.get(named.id, [])[:6]) or "—"
+            raise SpeechProviderUnavailable("speechErr_pickVoice", engine=named.id, voices=sample)
+        # 克隆音色是这个工作区音色库里的一行;别家的音色是开放的(百炼认不出的模型退回填 id),合成时再说。
+        if named.id == CLONE_ENGINE and voice not in voices_of[CLONE_ENGINE]:
+            raise VoiceError("voiceErr_voiceNotInWorkspace")
+        return named.id, voice
+    if not voice:
+        free = [one for one in usable if one["free"]]
+        raise SpeechProviderUnavailable("speechErr_pickEngineAndVoice", choices=_engine_list(usable), free=_engine_list(free))
+    owners = [one for one in engines if voice in voices_of[one["id"]]]
+    if not owners:
+        raise SpeechProviderUnavailable("speechErr_voiceWithoutEngine", voice=voice, choices=_engine_list(usable))
+    ready_owners = [one for one in owners if one["ready"]]
+    if len(ready_owners) > 1:
+        raise SpeechProviderUnavailable("speechErr_voiceInSeveralEngines", voice=voice, choices=_engine_list(ready_owners))
+    owner = (ready_owners or owners)[0]
+    capabilities.pick(db, user_id, CAPABILITY, owner["id"])  # 认出来的那一家还用不了:说缺什么
+    return owner["id"], voice
 
 
 #: 只属于某一条路的附加项。另一条路收到它们会报"没有这个参数",所以按引擎挑着带。

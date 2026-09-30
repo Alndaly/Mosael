@@ -11,7 +11,7 @@
 
 <!-- BEGIN generated: tools -->
 
-共 **98** 个工具,其中 **28** 个走确认卡、**1** 个停下来等用户作答。
+共 **99** 个工具,其中 **28** 个走确认卡、**1** 个停下来等用户作答。
 
 | 工具 | 门控 | 说明 |
 | --- | --- | --- |
@@ -84,6 +84,7 @@
 | `list_publish_tasks` | 直接执行 | Read-only: recent publish tasks, newest first, with what was published where. |
 | `list_scene_models` | 直接执行 | Read-only: the imported 3D models available in this workspace, with id, name, format and size. |
 | `list_scenes` | 直接执行 | List persistent 3D scenes in the workspace, with object and shot counts. |
+| `list_speech_engines` | 直接执行 | Read-only: the speech engines generate_audio / dub_subtitles can speak with, and their voices. |
 | `list_workflow_node_types` | 直接执行 | Read-only: list allowed workflow node types, or inspect one type in full. |
 | `list_workflows` | 直接执行 | Read-only: list VISUAL WORKFLOWS in a workspace. |
 | `list_workspaces` | 直接执行 | Read-only: list the workspaces this user has, newest first. |

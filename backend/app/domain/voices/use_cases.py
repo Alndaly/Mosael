@@ -43,6 +43,15 @@ def ensure_can_list(db: Session, user: User, workspace_id: str) -> None:
     ensure_workspace_access(db, user, workspace_id)
 
 
+def speaking_engines(db: Session, user: User, workspace_id: str) -> list[dict]:
+    """念一句话能用的引擎和各自的音色(见 engine_catalog.speaking_engines)。克隆那一项列的是这个工作区的音色库,
+    所以和列音色同一道闸:是成员就看得到。"""
+    from app.domain.voices.engine_catalog import speaking_engines as listed
+
+    ensure_can_list(db, user, workspace_id)
+    return listed(db, user.id, workspace_id)
+
+
 def ensure_can_speak(db: Session, user: User, workspace_id: str) -> None:
     """在这个工作区里建音色、合成、做播客。"""
     ensure_workspace_perm(db, user, workspace_id, "ai")

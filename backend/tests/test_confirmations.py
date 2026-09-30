@@ -268,7 +268,10 @@ def test_generate_image_confirmation_carries_ai_cost_permission(monkeypatch) -> 
     assert job["status"] == "queued"
 
 
-def test_generate_audio_confirmation_uses_tts_default(monkeypatch) -> None:
+def test_配音按音色认出配好了的云端引擎_不看语音合成默认模型(monkeypatch) -> None:
+    """配音没有默认(引擎和音色成对选):此前留空引擎就去查「语音合成的默认模型」,把连接的 vendor(`openai`)
+    当引擎 id 传下去 —— 合成那一步不认它,而界面上根本设不了那一格。现在按音色认:`nova` 是 OpenAI 的。
+    合成本身会联网,这里只截住任务的起点,看它拿到的是不是一对认得出的 (引擎 id, 音色)。"""
     captured: dict = {}
 
     def fake_start_synthesis(**kwargs):
@@ -295,13 +298,13 @@ def test_generate_audio_confirmation_uses_tts_default(monkeypatch) -> None:
         },
     ).json()
     assert data["permission"] == "ai-cost"
+    assert data["payload"]["engine"] == "builtin:openai"
     approved = client.post(f"/api/confirmations/{data['id']}/approve").json()
     assert approved["status"] == "executed", approved.get("error")
     assert approved["result"]["job_id"] == "tts-job-1"
-    assert captured["engine"] == "openai"  # 语音引擎 id 已并成 openai
-    assert captured["provider_profile_id"] == profile["id"]
-    assert captured["engine_model"] == "tts-model"
+    assert captured["engine"] == "builtin:openai"
     assert captured["engine_voice"] == "nova"
+    assert "engine_model" not in captured, "没点名模型就用连接自己的,不去套「默认模型」那一格"
 
 
 def test_invalid_payloads_rejected() -> None:

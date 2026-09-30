@@ -998,10 +998,19 @@ def generate_audio(
 
     Use when the user asks for narration, voiceover, TTS, or other single-speaker
     generated audio. Requires the user's approval because it may spend AI
-    budget; once approved the generated audio appears in the media pool. Leave engine/model empty only
-    when the configured speech default should be used. Do NOT use for two-host podcast/dialogue
-    audio — use generate_podcast for that. Do NOT use for music, songs, background music or
-    sound effects — use generate_sound. Do NOT use for
+    budget; once approved the generated audio appears in the media pool.
+
+    engine and voice go together — there is no default speech engine. engine is an id from
+    list_speech_engines such as "builtin:edge" (free, built in, nothing to configure — NOT
+    "edge-tts"), "builtin:clone" (a cloned voice from the workspace's voice library), or a cloud
+    engine the user has connected; voice is one of that engine's voices (e.g. "zh-CN-XiaoxiaoNeural"
+    for Edge, a voice id from the library for clone). Giving only voice works when the voice
+    belongs to exactly one engine. If the user named no engine, prefer builtin:edge. model is
+    only for cloud engines with several models. Call list_speech_engines when unsure which
+    engines are ready — never tell the user to "configure" Edge.
+
+    Do NOT use for two-host podcast/dialogue audio — use generate_podcast for that. Do NOT use
+    for music, songs, background music or sound effects — use generate_sound. Do NOT use for
     analyzing existing audio/video assets — use analyze_asset.
     """
     confirmation = _open_card(
@@ -1013,6 +1022,21 @@ def generate_audio(
         },
     )
     return _confirmation_reply(confirmation)
+
+
+@tool(effect="reads")
+def list_speech_engines(workspace_id: str = "") -> list[dict[str, Any]]:
+    """Read-only: the speech engines generate_audio / dub_subtitles can speak with, and their voices.
+
+    Each entry: id (what to pass as `engine`, e.g. "builtin:edge"), name, ready (usable right
+    now for this user), free (no key, costs nothing — Edge is always ready and free), note, and
+    voices [{id, name}] (pass an id as `voice`). builtin:clone lists the cloned voices in this
+    workspace's voice library. Call before generate_audio when the user did not name an engine
+    and voice, or when a card was refused over the engine.
+    """
+    from app.domain.voices import use_cases
+
+    return _use_case(use_cases.speaking_engines, workspace_id or _default_workspace_id())
 
 
 @tool(effect="confirms")
@@ -2342,7 +2366,8 @@ def dub_subtitles(
     match_duration speeds each spoken line up or down so it fills the original cue's
     slot and stays in sync with the picture. `line` picks which line of a bilingual
     cue to speak: all / first / last. Voice: either voice_id (a cloned voice from the
-    user's voice library) or engine + engine_voice (a stock voice). The dub lands on
+    user's voice library) or engine + engine_voice (a stock voice; list_speech_engines gives the
+    engine ids, e.g. "builtin:edge", and their voices). The dub lands on
     its own audio track, so the user undoes the whole thing by deleting that one track.
     original_audio says what happens to the existing sound once the dub is in: duck (lowered
     while the dub speaks — narration over ambience), mute (translated dubbing: two voices at
