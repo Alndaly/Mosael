@@ -220,7 +220,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfNode_generate_subtitles_sequence_id": {"zh": "字幕落到哪条时间线", "en": "The timeline the subtitles go onto"},
     "wfNode_generate_subtitles_segments": {"zh": "逐字稿段落,如 {{转写.segments}} —— 时间码从这里来", "en": "Transcript segments, e.g. {{transcribe.segments}} — the timecodes come from here"},
     "wfNode_generate_subtitles_texts": {"zh": "逐条替换的文本(通常是译文),条数要和段落一致;留空就用原话", "en": "One replacement line per segment (usually the translation); the counts must match. Leave empty to keep the original wording"},
-    "wfNode_generate_subtitles_keep_original": {"zh": "双语字幕:原文在上、译文在下", "en": "Bilingual cues: the original on top, the translation below"},
+    "wfNode_generate_subtitles_keep_original": {"zh": "双语字幕:原文在上、译文在下。下游配音要把「念哪一行」改成最后一行,否则两种语言都会念出来", "en": "Bilingual cues: the original on top, the translation below. Set the dubbing step to read the last line only, or it will speak both languages"},
     "wfNode_generate_subtitles_start_field": {"zh": "每一段的起点在哪个字段,可以用点号取嵌套字段(如 append.timeline_start);默认 start", "en": "Which field holds each segment's start; dots reach nested fields (e.g. append.timeline_start). start by default"},
     "wfNode_generate_subtitles_end_field": {"zh": "每一段的终点在哪个字段;默认 end", "en": "Which field holds each segment's end. end by default"},
     "wfNode_generate_subtitles_text_field": {"zh": "每一段的文本在哪个字段;默认 text。起止或文本为空的段落会被跳过", "en": "Which field holds each segment's text. text by default. Segments with an empty start, end or text are skipped"},
