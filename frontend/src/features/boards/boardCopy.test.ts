@@ -83,4 +83,30 @@ describe("复制选中的几项", () => {
     const copy = itemOf(alone.nodes.find((one) => one.selected)!);
     expect(copy.form?.source_assets?.[0]).toEqual({ asset_id: "a1", role: "first_frame", from: "A" });
   });
+
+  it("字段绑定和每一项能力的绑定也跟着线走:上游一起复制了的改记成新的那一格,没一起复制的原样交给服务端去摘", () => {
+    const note = node({ id: "N", kind: "note", x: 0, y: 0, text: "台词" });
+    const other = node({ id: "O", kind: "note", x: 0, y: 300, text: "别的" }, false);
+    const audio = node({
+      id: "A",
+      kind: "audio",
+      x: 300,
+      y: 0,
+      form: {
+        producer: "node:plugin.x.gen",
+        bindings: { script: [{ from: "N" }], extra: [{ from: "O" }] },
+        abilities: { "node:plugin.x.mux": { config: { level: "high" }, bindings: { voice: [{ from: "N" }] } } },
+      },
+    });
+    const edges: Edge[] = [{ id: "e1", source: "N", target: "A" }, { id: "e2", source: "O", target: "A" }];
+
+    const copied = copySelected([note, other, audio], edges);
+    const fresh = copied.nodes.filter((one) => one.selected);
+    const newNote = fresh.find((one) => itemOf(one).kind === "note")!.id;
+    const copy = itemOf(fresh.find((one) => itemOf(one).kind === "audio")!);
+    expect(copy.form?.bindings).toEqual({ script: [{ from: newNote }], extra: [{ from: "O" }] });
+    expect(copy.form?.abilities?.["node:plugin.x.mux"]).toEqual({ config: { level: "high" }, bindings: { voice: [{ from: newNote }] } });
+    expect(copied.edges.some((one) => one.source === newNote && one.target === copy.id), "那根线也复制了").toBe(true);
+    expect(itemOf(audio).form?.bindings?.script, "原件不动").toEqual([{ from: "N" }]);
+  });
 });

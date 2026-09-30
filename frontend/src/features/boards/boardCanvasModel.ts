@@ -130,21 +130,61 @@ export function copySelected(nodes: Node[], edges: Edge[]): { nodes: Node[]; edg
     const target = renamed.get(edge.target);
     return source && target ? [{ id: `${edge.id}-${source}-${target}`, source, target }] : [];
   });
-  //: 槽位里顺着线挂上的那几份跟着线走:上游也一起复制了的,出处改记成新的那一格(线也复制了);
-  //: 没一起复制的,副本上没有那根线,存的时候服务端把它摘掉 —— 和删掉那根线是同一条规则。
   const rewired = copies.map((node) => {
     const item = (node.data as unknown as { item: BoardItem }).item;
-    const sources = item.form?.source_assets;
-    if (!sources?.some((one) => one.from && renamed.has(one.from))) return node;
-    const source_assets = sources.map((one) =>
-      one.from && renamed.has(one.from) ? { ...one, from: renamed.get(one.from) } : one,
-    );
-    return { ...node, data: { ...node.data, item: { ...item, form: { ...item.form, source_assets } } } };
+    const form = rewiredForm(item.form, renamed);
+    return form === item.form ? node : { ...node, data: { ...node.data, item: { ...item, form } } };
   });
   return {
     nodes: [...nodes.map((node) => ({ ...node, selected: false })), ...rewired],
     edges: [...edges, ...copiedEdges],
   };
+}
+
+/**
+ * 副本的表单里「顺着线接上的东西」跟着线走:上游也一起复制了的,出处改记成新的那一格(线也复制了)。
+ * **三处用同一张改名表**:槽位里挂的素材(`source_assets[].from`)、这一格自己的产出者的字段绑定(`bindings`)、
+ * 每一项能力的绑定(`abilities[*].bindings`)。此前只改了第一处,一对连着的格子复制出来,副本的字段还绑着原件 ——
+ * 副本上没有那根线,存的时候服务端把绑定摘掉,副本就不再从它的上游取值了。
+ *
+ * 没一起复制的上游原样留着,副本上没有那根线,存的时候服务端摘掉(canvas._drop_detached_bindings)——
+ * 和删掉那根线是同一条规则。什么都没改就回原来那一份。
+ */
+export function rewiredForm(form: BoardItem["form"], renamed: ReadonlyMap<string, string>): BoardItem["form"] {
+  if (!form) return form;
+  const moves = (from: string | undefined) => Boolean(from && renamed.has(from));
+  type Bindings = NonNullable<NonNullable<BoardItem["form"]>["bindings"]>;
+  const rebind = (bindings: Bindings | undefined): Bindings | undefined =>
+    bindings && Object.values(bindings).some((refs) => refs.some((ref) => moves(ref.from)))
+      ? Object.fromEntries(
+          Object.entries(bindings).map(([field, refs]) => [
+            field,
+            refs.map((ref) => (moves(ref.from) ? { ...ref, from: renamed.get(ref.from) as string } : ref)),
+          ]),
+        )
+      : bindings;
+  let next = form;
+  if (form.source_assets?.some((one) => moves(one.from))) {
+    next = {
+      ...next,
+      source_assets: form.source_assets.map((one) => (moves(one.from) ? { ...one, from: renamed.get(one.from as string) } : one)),
+    };
+  }
+  const bindings = rebind(form.bindings);
+  if (bindings !== form.bindings) next = { ...next, bindings };
+  if (form.abilities) {
+    let changed = false;
+    const abilities = Object.fromEntries(
+      Object.entries(form.abilities).map(([producer, setting]) => {
+        const moved = rebind(setting.bindings);
+        if (moved === setting.bindings) return [producer, setting];
+        changed = true;
+        return [producer, { ...setting, bindings: moved }];
+      }),
+    );
+    if (changed) next = { ...next, abilities };
+  }
+  return next;
 }
 
 /** 一次普通点击的选择结果。显式收口，避免 React Flow 的内部选择事件与受控 nodes 回写竞态。 */
