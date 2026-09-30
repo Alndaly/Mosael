@@ -17,7 +17,7 @@ vi.mock("@/api/client", () => ({
 const openImagePreview = vi.fn();
 vi.mock("@/components/app/image-preview", () => ({ useImagePreview: () => ({ openImagePreview }) }));
 // 文案里带上 {name} 占位符:被拒绝的文件必须报出是哪一个,只说"读不了"等于没说。
-vi.mock("@/app/preferences", () => ({ useI18n: () => (key: string) => `${key}:{name}` }));
+vi.mock("@/app/preferences", () => ({ useI18n: () => (key: string) => `${key}:{name}|{reason}` }));
 const toastError = vi.fn();
 vi.mock("sonner", () => ({ toast: { error: (...args: unknown[]) => toastError(...args) } }));
 
@@ -85,14 +85,58 @@ describe("附件分流", () => {
     expect(get().files).toEqual([{ name: "data.csv", content: "a,b" }]);
   });
 
-  it("超过上限的文本拒绝 —— 那么大该进知识库", async () => {
+  it("超过上限的文本(素材库不当文档的那种)拒绝", async () => {
     const get = mount();
-    const huge = new File(["x".repeat(200 * 1024 + 1)], "big.txt", { type: "text/plain" });
+    const huge = new File(["x".repeat(200 * 1024 + 1)], "big.json", { type: "application/json" });
     await act(async () => {
       await get().accept([huge]);
     });
     expect(get().isEmpty).toBe(true);
-    expect(toastError).toHaveBeenCalledWith(expect.stringContaining("big.txt"));
+    expect(importAsset).not.toHaveBeenCalled();
+    expect(toastError).toHaveBeenCalledWith(expect.stringContaining("big.json"));
+  });
+
+  it("超过上限的 Markdown 进素材库当文档 —— 智能体按段读,不再说「太大了」", async () => {
+    //: 用户截图:「赛里木湖纪录片全案_整理版(1).md」附不上。
+    importAsset.mockResolvedValue({ id: "d1", name: "全案.md", kind: "document" });
+    const get = mount();
+    const huge = new File(["# 全案\n" + "字".repeat(80 * 1024)], "全案.md", { type: "text/markdown" });
+    await act(async () => {
+      await get().accept([huge]);
+    });
+    expect(importAsset).toHaveBeenCalledTimes(1);
+    expect(get().media.map((one) => one.id)).toEqual(["d1"]);
+    expect(get().files).toEqual([]);
+    expect(toastError).not.toHaveBeenCalled();
+  });
+
+  it("这里读不出来的 Markdown 交给素材库再试一次;还不行,说清是哪一个、为什么", async () => {
+    const broken = new File(["# x"], "占位.md", { type: "text/markdown" });
+    broken.text = () => Promise.reject(new DOMException("could not be read", "NotReadableError"));
+    importAsset.mockResolvedValueOnce({ id: "d2", name: "占位.md", kind: "document" });
+    const get = mount();
+    await act(async () => {
+      await get().accept([broken]);
+    });
+    expect(get().media.map((one) => one.id)).toEqual(["d2"]);
+    expect(toastError).not.toHaveBeenCalled();
+
+    importAsset.mockRejectedValueOnce(new Error("上传被拒:磁盘满了"));
+    await act(async () => {
+      await get().accept([broken]);
+    });
+    expect(toastError).toHaveBeenCalledWith(expect.stringMatching(/占位\.md.*磁盘满了/));
+  });
+
+  it("读不出来的不是文档类文本:原因说人话,不是一句光秃秃的「读不出来」", async () => {
+    const broken = new File(["{}"], "cfg.json", { type: "application/json" });
+    broken.text = () => Promise.reject(new DOMException("could not be read", "NotReadableError"));
+    const get = mount();
+    await act(async () => {
+      await get().accept([broken]);
+    });
+    expect(importAsset).not.toHaveBeenCalled();
+    expect(toastError).toHaveBeenCalledWith(expect.stringMatching(/cfg\.json.*composerFileNotReadable/));
   });
 });
 

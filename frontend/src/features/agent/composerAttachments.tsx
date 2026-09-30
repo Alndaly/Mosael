@@ -2,6 +2,8 @@ import React from "react";
 import { FileText, FileUp, Music } from "lucide-react";
 
 import { assetFileUrl, assetThumbnailUrl, importAsset, type Asset } from "@/api/client";
+import { errorText } from "@/api/errorMessage";
+import type { MessageKey } from "@/app/messages";
 import { useI18n } from "@/app/preferences";
 import { useImagePreview, type ImagePreviewItem } from "@/components/app/image-preview";
 import { useAssetPreviewModal } from "@/features/media/AssetPreviewModalById";
@@ -22,6 +24,7 @@ import { toast } from "sonner";
  * - **PDF / Word / PPT / Excel / EPUB**(ADR 0031)→ 也进素材库(导入时自动解析),作为附件发过去:短的全文、
  *   长的目录由后端放进上下文,智能体用 read_document 按段读、analyze_document_pages 看版式。
  * - **文本文件**(含 Markdown、CSV)→ 内联成围栏上下文。脚本、字幕、配置就该被读进去,而不是变成一个素材 id。
+ *   其中素材库也认得的文字文档(md / txt / csv / html)超过内联上限、或读不出来时,进素材库当文档(见 TEXT_DOCUMENT)。
  * - 其余(压缩包、安装包…)拒绝并说明,不静默丢掉。
  *
  * 三种入口只是「文件从哪来」不同,之后**同一个 accept**:同样的分流、同样的大小上限、同样的报错。
@@ -35,6 +38,13 @@ const MEDIA_TYPE = /^(image|video|audio)\//;
 
 /** 读不成文字的文档:进素材库、解析之后给智能体读(纯文本类的 md / txt / csv 照旧内联)。 */
 const BINARY_DOCUMENT = /\.(pdf|docx?|pptx?|xlsx?|epub)$/i;
+
+/**
+ * 素材库也认得的**文字文档**(后端 media/probe 的 DOCUMENT_EXTENSIONS):短的照旧内联;超过内联上限、或者这里读不出来时,
+ * 进素材库当文档 —— 后端解析成按段的全文,智能体用 read_document 一段段读。此前一律「太大了」「读不出来」,一份几百 KB
+ * 的整理稿(用户截图:「赛里木湖纪录片全案_整理版.md」读不出来)就附不上。
+ */
+const TEXT_DOCUMENT = /\.(md|markdown|txt|csv|html?)$/i;
 
 /** 粘贴板里当成文本文件读的类型。text/plain 不在其中 —— 那是普通粘贴,交给输入框自己。 */
 const TEXTUAL_FILE = /^(text\/|application\/(json|xml|x-yaml|yaml|javascript|typescript))/;
@@ -69,6 +79,15 @@ export interface ComposerAttachments {
   previewModal: React.ReactNode;
 }
 
+/** 为什么没附上:接口的报错照原话;浏览器读文件失败(NotReadableError)说人话 —— 多半是云盘里还没下载下来的占位文件,
+ *  或者正被别的程序写着。 */
+function readFailure(error: unknown, t: (key: MessageKey) => string): string {
+  if (error instanceof DOMException && (error.name === "NotReadableError" || error.name === "NotFoundError")) {
+    return t("composerFileNotReadable");
+  }
+  return errorText(error);
+}
+
 export function useComposerAttachments(workspaceId: string): ComposerAttachments {
   const t = useI18n();
   const [media, setMedia] = React.useState<Asset[]>([]);
@@ -81,33 +100,47 @@ export function useComposerAttachments(workspaceId: string): ComposerAttachments
       const list = Array.from(incoming as Iterable<File>);
       if (!list.length) return;
       const added: TextAttachment[] = [];
+      /** 进素材库。失败时报出是哪一个、**为什么**(只说「读不出来」等于没说)。 */
+      const importFile = async (file: File) => {
+        setUploading(true);
+        try {
+          const asset = await importAsset({ workspaceId, file });
+          setMedia((current) => [...current, asset]);
+        } catch (error) {
+          toast.error(unreadable(file.name || t("composerPastedImage"), error));
+        } finally {
+          setUploading(false);
+        }
+      };
+      const unreadable = (name: string, error: unknown) =>
+        t("composerFileUnreadable").replace("{name}", name).replace("{reason}", readFailure(error, t));
       for (const file of list) {
         if (MEDIA_TYPE.test(file.type) || BINARY_DOCUMENT.test(file.name)) {
-          setUploading(true);
-          try {
-            const asset = await importAsset({ workspaceId, file });
-            setMedia((current) => [...current, asset]);
-          } catch {
-            toast.error(t("composerFileUnreadable").replace("{name}", file.name || t("composerPastedImage")));
-          } finally {
-            setUploading(false);
-          }
+          await importFile(file);
           continue;
         }
+        const document = TEXT_DOCUMENT.test(file.name);
         // 类型为空的当文本试读:从终端/编辑器拖出来的文件常常没有 MIME。
-        if (file.type && !TEXTUAL_FILE.test(file.type)) {
+        if (file.type && !TEXTUAL_FILE.test(file.type) && !document) {
           toast.error(t("composerFileUnsupported").replace("{name}", file.name));
           continue;
         }
         if (file.size > MAX_TEXT_BYTES) {
-          toast.error(t("composerFileTooBig").replace("{name}", file.name));
+          if (document) await importFile(file);
+          else toast.error(t("composerFileTooBig").replace("{name}", file.name));
           continue;
         }
+        let content: string;
         try {
-          added.push({ name: file.name, content: await file.text() });
-        } catch {
-          toast.error(t("composerFileUnreadable").replace("{name}", file.name));
+          content = await file.text();
+        } catch (error) {
+          //: 这里读不出来(云盘占位文件、正被别的程序写着)时,文字文档再交给素材库试一次:上传走的是另一条读法,
+          //: 读得到就当文档附上;还不行才报,报的是上传那一次的原因。
+          if (document) await importFile(file);
+          else toast.error(unreadable(file.name, error));
+          continue;
         }
+        added.push({ name: file.name, content });
       }
       if (added.length) setFiles((current) => [...current, ...added]);
     },
