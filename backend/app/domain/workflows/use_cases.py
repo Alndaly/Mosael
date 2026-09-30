@@ -51,3 +51,19 @@ def list_workflows(db: Session, user: User, workspace_id: str) -> list[Workflow]
 def node_types(db: Session, user: User, locale: str) -> list[dict[str, Any]]:
     """这个人能用的节点类型(内置 + 他接的插件),按面板分组排好、按 `locale` 翻好。"""
     return describe_node_types(available_node_types(db, user_id=user.id), locale)
+
+
+#: 一次最多问多少个类型。一张图里认不出的插件节点就那么几种。
+MAX_UNUSABLE_QUERY = 100
+
+
+def unusable_node_types(db: Session, user: User, types: list[str]) -> list[dict[str, str]]:
+    """这些节点类型里他用不了的插件节点,各自为什么(见 plugins.nodes.why_unusable)。按请求方的语言说。"""
+    from app.domain.plugins.nodes import why_unusable
+
+    out: list[dict[str, str]] = []
+    for node_type in dict.fromkeys(types[:MAX_UNUSABLE_QUERY]):
+        reason = why_unusable(db, node_type, user.id)
+        if reason is not None:
+            out.append({"type": node_type, "reason": str(reason)})
+    return out

@@ -86,6 +86,13 @@ class WorkflowFieldOptionOut(ApiModel):
     label: str
 
 
+class WorkflowUnusableNodeOut(ApiModel):
+    """图里一个**这个人**用不了的插件节点类型,和为什么(插件没装、没接连接、连接停用 / 缺凭据、工具没勾选……)。"""
+
+    type: str
+    reason: str
+
+
 class WorkflowNodeTypeOut(ApiModel):
     type: str
     label: str

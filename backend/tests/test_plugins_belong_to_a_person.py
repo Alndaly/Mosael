@@ -137,10 +137,11 @@ def test_my_workflow_cannot_run_on_someone_elses_instance() -> None:
         with acting_as(db, mate_id):
             with pytest.raises(WorkflowDomainError) as auto:
                 run(db, workflow, {"text": "hi"})
-            assert auto.value.key == "pluginErr_noInstance"
+            # 他自己没接这个插件:按真实原因说「你还没有接」(plugins.nodes.why_unusable),别人那条不提
+            assert auto.value.key == "pluginErr_nodeNoConnection"
             with pytest.raises(WorkflowDomainError) as named:
                 run(db, workflow, {"text": "hi", "instance_id": theirs})
-            assert named.value.key == "pluginErr_instanceGone"
+            assert named.value.key == "pluginErr_nodeNoConnection"
         # 对照:接了它的人自己跑,照常自动选中他那唯一一条。
         with acting_as(db, None):
             assert run(db, workflow, {"text": "hi"})["output"]["loud"] == "HI"
@@ -166,9 +167,10 @@ def test_选连接只在执行者自己的连接里找() -> None:
         owner_id = db.get(PluginInstance, theirs).owner_user_id
         with pytest.raises(PluginDomainError) as named:
             resolve_instance(db, "dev.simple", "shout", theirs, mate_id)
-        assert named.value.key == "pluginErr_instanceGone"
+        # 选的是别人的连接、他自己一条都没有:说「你还没有接」,不细说别人的连接
+        assert named.value.key == "pluginErr_nodeNoConnection"
         with pytest.raises(PluginDomainError) as auto:
             resolve_instance(db, "dev.simple", "shout", "", mate_id)
-        assert auto.value.key == "pluginErr_noInstance"
+        assert auto.value.key == "pluginErr_nodeNoConnection"
         assert resolve_instance(db, "dev.simple", "shout", theirs, owner_id) == theirs
         assert resolve_instance(db, "dev.simple", "shout", "", owner_id) == theirs

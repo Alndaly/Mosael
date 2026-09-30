@@ -87,7 +87,14 @@ def start_workflow_job(
         raise WorkflowDomainError.from_error(exc) from exc
     #: 这一次运行看到的图(开始节点叠上本次参数,见 graph_rules.with_run_params):必填的开始参数、
     #: `{{开始.参数}}` 要的名字,都按这一次给了什么判。
-    errors = validate_graph(with_run_params(revision.graph, params), extra_types=plugin_node_types(db))
+    #: 插件节点按**跑这次的人**能用的来判(执行时 resolve_instance 也只在他自己的连接里挑):此前这里用的是
+    #: 所有人的插件清单,别人接了、他没接的节点在这里放行,跑到那一步才失败。用不了的说清为什么。
+    actor = job.created_by if job is not None else created_by
+    errors = validate_graph(
+        with_run_params(revision.graph, params),
+        extra_types=plugin_node_types(db, actor),
+        explain_plugin_node=lambda node_type: _why_plugin_node_unusable(db, node_type, actor),
+    )
     if errors:
         raise WorkflowDomainError("；".join(errors))
     #: 生成节点的文字规矩按**选中的模型**判,在任何节点跑之前 —— 和执行时替同一个人解析同一个模型。
@@ -123,6 +130,13 @@ def start_workflow_job(
     # 由 tests/test_jobs_are_dispatched_by_the_bus.py 守着。)
     dispatch_job(db, job, lambda: _run_workflow_thread(workflow.id, revision.id, job.id, params or {}))
     return job
+
+
+def _why_plugin_node_unusable(db: Session, node_type: str, actor: str | None) -> str | None:
+    from app.domain.plugins.nodes import why_unusable
+
+    reason = why_unusable(db, node_type, actor)
+    return str(reason) if reason is not None else None
 
 
 def _templated(value: Any) -> bool:

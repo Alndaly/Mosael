@@ -339,6 +339,32 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "有多个「{package}」连接({names}),请选一个",
         "en": "Several “{package}” connections exist ({names}); pick one",
     },
+    #: 插件节点为什么用不了(见 plugins.nodes.why_unusable)。按真实原因说,读的人才知道该去哪儿。
+    "pluginErr_nodePluginMissing": {
+        "zh": "这个节点来自插件「{plugin}」,这里没有装这个插件(或者已经删掉了)",
+        "en": "This node comes from the plugin “{plugin}”, which isn't installed here (or has been removed)",
+    },
+    "pluginErr_nodeNoConnection": {
+        "zh": "你还没有接「{plugin}」:在插件页新建并启用一个连接",
+        "en": "You haven't connected “{plugin}” yet: create and enable a connection on the Plugins page",
+    },
+    "pluginErr_nodeUnusable": {
+        "zh": "「{plugin}」的「{tool}」用不了:{details}",
+        "en": "“{tool}” from “{plugin}” can't be used: {details}",
+    },
+    "pluginWhy_connection": {"zh": "连接「{name}」{reason}", "en": "connection “{name}”: {reason}"},
+    "pluginWhy_toolGone": {
+        "zh": "上已经没有这个工具了(插件更新后去掉了它)",
+        "en": "no longer has this tool (the plugin dropped it in an update)",
+    },
+    "pluginWhy_toolInternal": {
+        "zh": "上这个工具只给应用自己调,不能放进工作流",
+        "en": "only lets the app itself call this tool; it can't go in a workflow",
+    },
+    "pluginWhy_toolNotExposed": {
+        "zh": "没有勾选这个工具:在插件页的工具列表里勾上它",
+        "en": "doesn't have this tool enabled: tick it in the tool list on the Plugins page",
+    },
     "pluginErr_cancelled": {
         "zh": "任务已取消,插件调用被中止",
         "en": "The task was cancelled, so the plugin call was stopped.",

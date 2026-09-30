@@ -87,6 +87,11 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfErr_pluginToolFailed": {"zh": "插件工具失败:{reason}", "en": "The plugin tool failed: {reason}"},
     "wfErr_tagUnknownMode": {"zh": "素材打标签:未知的模式 {mode}", "en": "Tag assets: unknown mode {mode}"},
     "wfErr_pluginNodeType": {"zh": "插件节点类型不合法:{type}", "en": "Invalid plugin node type: {type}"},
+    "wfErr_pluginNodeUnusable": {"zh": "节点 {node}:{reason}", "en": "Node {node}: {reason}"},
+    "wfErr_pluginNodeUnknownReason": {
+        "zh": "它来自插件「{plugin}」的工具 {tool},这里用不了(插件没装、没有可用的连接,或者没勾选这个工具)",
+        "en": "it comes from the tool {tool} of the plugin “{plugin}”, which can't be used here (the plugin isn't installed, has no usable connection, or doesn't have this tool enabled)",
+    },
     "wfErr_integerRange": {"zh": "{field}必须是 {min} 到 {max} 之间的整数", "en": "{field} must be a whole number between {min} and {max}"},
     "wfErr_loopTooMany": {"zh": "循环·遍历拿到 {count} 项,超过上限 {cap};请先筛选或分批", "en": "The for-each got {count} items, over the {cap} cap; filter or split them first"},
     "wfErr_loopIterationsFailed": {

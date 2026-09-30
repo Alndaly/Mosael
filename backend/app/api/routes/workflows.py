@@ -3,13 +3,13 @@ from __future__ import annotations
 import json
 from urllib.parse import quote
 
-from fastapi import APIRouter, HTTPException, Response
+from fastapi import APIRouter, HTTPException, Query, Response
 from mosael_formats import workflow_file
 from sqlalchemy import select
 
 from app.api.deps import CurrentUser, DbSession, Tx
 from app.core.i18n import get_current_locale, render_message, tr
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Annotated
 
 from app.api.schemas import (
     AgentSessionOut,
@@ -27,6 +27,7 @@ from app.api.schemas import (
     WorkflowRevisionOut,
     WorkflowRunOutputOut,
     WorkflowRunRequest,
+    WorkflowUnusableNodeOut,
     WorkflowUpdate,
 )
 from app.domain.scheduler import stop_tasks_bound_to_workflow
@@ -76,6 +77,17 @@ def node_types(db: DbSession, user: CurrentUser) -> list[dict]:
     #: 语言从 Accept-Language 来,不是从某个全局配置来:这是个多租户、可远程部署的后端,
     #: 没有「服务端语言」这回事。
     return workflow_uc.node_types(db, user, get_current_locale())
+
+
+@router.get("/workflows/node-types/unusable", response_model=list[WorkflowUnusableNodeOut])
+def unusable_node_types(db: DbSession, user: CurrentUser, types: Annotated[list[str], Query()]) -> list[dict]:
+    """图里这些节点类型里,**这个人**用不了的那些插件节点,各自为什么。
+
+    节点面板只列他能用的插件节点(`/workflows/node-types`),于是图里一个用不了的插件节点在画布上只能说
+    「未知」—— 可原因有好几种,该去的地方各不相同。编辑器的就绪清单拿图里认不出的那几个类型来问这里。
+    用得了的、不是插件节点的不回。
+    """
+    return workflow_uc.unusable_node_types(db, user, types)
 
 
 @router.get("/workflows/templates", response_model=list[WorkflowTemplateOut])

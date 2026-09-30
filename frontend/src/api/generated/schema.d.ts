@@ -656,6 +656,44 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/browser/worker/partition-moves": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Partition Moves
+         * @description 还没搬的登录分区(见 BrowserPartitionMove)。执行器启动时先搬完这些,再开始认领动作 —— 反过来的话,
+         *     一条动作先在新分区上建出一个空目录,旧的登录就再也搬不过去了。
+         */
+        get: operations["partition_moves_api_browser_worker_partition_moves_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/browser/worker/partition-moves/{move_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Settle Move */
+        post: operations["settle_move_api_browser_worker_partition_moves__move_id__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/projects": {
         parameters: {
             query?: never;
@@ -3891,6 +3929,30 @@ export interface paths {
          *     只有内置节点的,于是模型不知道插件节点存在,而校验又把图里原样留着的插件节点判成未知类型。
          */
         get: operations["node_types_api_workflows_node_types_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/workflows/node-types/unusable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Unusable Node Types
+         * @description 图里这些节点类型里,**这个人**用不了的那些插件节点,各自为什么。
+         *
+         *     节点面板只列他能用的插件节点(`/workflows/node-types`),于是图里一个用不了的插件节点在画布上只能说
+         *     「未知」—— 可原因有好几种,该去的地方各不相同。编辑器的就绪清单拿图里认不出的那几个类型来问这里。
+         *     用得了的、不是插件节点的不回。
+         */
+        get: operations["unusable_node_types_api_workflows_node_types_unusable_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -10131,6 +10193,16 @@ export interface components {
              */
             url: string;
         };
+        /** PartitionMoveReport */
+        PartitionMoveReport: {
+            /** Status */
+            status: string;
+            /**
+             * Reason
+             * @default
+             */
+            reason: string;
+        };
         /** PasswordUpdate */
         PasswordUpdate: {
             /** Current Password */
@@ -13695,6 +13767,16 @@ export interface components {
              */
             optional: boolean;
         };
+        /**
+         * WorkflowUnusableNodeOut
+         * @description 图里一个**这个人**用不了的插件节点类型,和为什么(插件没装、没接连接、连接停用 / 缺凭据、工具没勾选……)。
+         */
+        WorkflowUnusableNodeOut: {
+            /** Type */
+            type: string;
+            /** Reason */
+            reason: string;
+        };
         /** WorkflowUpdate */
         WorkflowUpdate: {
             /** Name */
@@ -15074,6 +15156,65 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["app__api__routes__browser_worker__HeartbeatRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    partition_moves_api_browser_worker_partition_moves_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    settle_move_api_browser_worker_partition_moves__move_id__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                move_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PartitionMoveReport"];
             };
         };
         responses: {
@@ -21757,6 +21898,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkflowNodeTypeOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unusable_node_types_api_workflows_node_types_unusable_get: {
+        parameters: {
+            query: {
+                types: string[];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowUnusableNodeOut"][];
                 };
             };
             /** @description Validation Error */

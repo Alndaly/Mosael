@@ -1479,6 +1479,84 @@
         }
       }
     },
+    "/api/browser/worker/partition-moves": {
+      "get": {
+        "tags": [
+          "browser-worker"
+        ],
+        "summary": "Partition Moves",
+        "description": "还没搬的登录分区(见 BrowserPartitionMove)。执行器启动时先搬完这些,再开始认领动作 —— 反过来的话,\n一条动作先在新分区上建出一个空目录,旧的登录就再也搬不过去了。",
+        "operationId": "partition_moves_api_browser_worker_partition_moves_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Partition Moves Api Browser Worker Partition Moves Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/browser/worker/partition-moves/{move_id}": {
+      "post": {
+        "tags": [
+          "browser-worker"
+        ],
+        "summary": "Settle Move",
+        "operationId": "settle_move_api_browser_worker_partition_moves__move_id__post",
+        "parameters": [
+          {
+            "name": "move_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Move Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PartitionMoveReport"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Settle Move Api Browser Worker Partition Moves  Move Id  Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/projects": {
       "post": {
         "tags": [
@@ -11396,6 +11474,56 @@
                   },
                   "type": "array",
                   "title": "Response Node Types Api Workflows Node Types Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/workflows/node-types/unusable": {
+      "get": {
+        "tags": [
+          "workflows"
+        ],
+        "summary": "Unusable Node Types",
+        "description": "图里这些节点类型里,**这个人**用不了的那些插件节点,各自为什么。\n\n节点面板只列他能用的插件节点(`/workflows/node-types`),于是图里一个用不了的插件节点在画布上只能说\n「未知」—— 可原因有好几种,该去的地方各不相同。编辑器的就绪清单拿图里认不出的那几个类型来问这里。\n用得了的、不是插件节点的不回。",
+        "operationId": "unusable_node_types_api_workflows_node_types_unusable_get",
+        "parameters": [
+          {
+            "name": "types",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "title": "Types"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/WorkflowUnusableNodeOut"
+                  },
+                  "title": "Response Unusable Node Types Api Workflows Node Types Unusable Get"
                 }
               }
             }
@@ -27815,6 +27943,25 @@
         "title": "PackageSourcePresetOut",
         "description": "一个预设镜像:key、名字、地址(官方源的地址是空串)。"
       },
+      "PartitionMoveReport": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 2000,
+            "title": "Reason",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "PartitionMoveReport"
+      },
       "PasswordUpdate": {
         "properties": {
           "current_password": {
@@ -35300,6 +35447,25 @@
         ],
         "title": "WorkflowTemplateRequirementOut",
         "description": "模板的一条前置条件(见 domain/workflows/template_requirements)。"
+      },
+      "WorkflowUnusableNodeOut": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "title": "Type"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "reason"
+        ],
+        "title": "WorkflowUnusableNodeOut",
+        "description": "图里一个**这个人**用不了的插件节点类型,和为什么(插件没装、没接连接、连接停用 / 缺凭据、工具没勾选……)。"
       },
       "WorkflowUpdate": {
         "properties": {

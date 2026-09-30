@@ -47,6 +47,9 @@ NOT_FOR_THE_SCREEN: dict[str, str] = {
     "SessionGroupOut.owner_user_id": "归属由后端判,界面拿到的已经是自己的那些",
     "SessionGroupOut.sort_order": "读者是后端的 ORDER BY:界面**设**它(见 SessionGroupUpdate),拿回来的列表已经排好了",
     "WorkflowRevisionOut.created_by": "留痕:这一版是谁存的",
+    # —— 插件节点用不了的原因:编辑器的就绪清单(「插件节点不可用」)正在接它,接上之后删掉这两条
+    "WorkflowUnusableNodeOut.type": "编辑器就绪清单接入中(/workflows/node-types/unusable)",
+    "WorkflowUnusableNodeOut.reason": "编辑器就绪清单接入中(/workflows/node-types/unusable)",
     "WorkflowRevisionDetailOut.created_by": "留痕:这一版是谁存的",
     "AgentQuestionOut.answered_at": "留痕:什么时候答的",
     "ProviderQuotaOut.fetched_at": "留痕:这份额度是什么时候取的",

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Callable
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -88,8 +89,12 @@ def validate_graph(
     require_config: bool = True,
     allow_missing_start: bool = False,
     extra_types: dict[str, dict[str, Any]] | None = None,
+    explain_plugin_node: Callable[[str], str | None] | None = None,
 ) -> list[str]:
     """结构校验:返回错误列表(空表 = 合法)。
+
+    explain_plugin_node:图里的插件节点不在 extra_types 里时,**为什么**(没装、没接连接、连接停用、工具没勾选……)。
+    和 extra_types 一样由知道「谁在跑」的调用方给(见 engine.start_workflow_job);不给就只说是哪个插件的节点用不了。
 
     extra_types 是**动态**的节点类型(目前只有插件节点,见 domain/plugins/nodes.py):形状与
     NODE_TYPES 的条目一致,合并进来后校验、必填检查一视同仁。之所以从参数进来而不是在这里
@@ -133,12 +138,15 @@ def validate_graph(
     known_types = {**NODE_TYPES, **(extra_types or {})}
 
     def _unknown_type_error(node_type: str, node_id: str) -> str:
-        # 插件节点在别人机器上会缺:说清楚是"缺哪个插件",而不是一句让人无从下手的"未知类型"。
+        # 插件节点在别人机器上会缺:说清楚是"缺哪个插件"、为什么用不了,而不是一句让人无从下手的"未知类型"。
+        from app.core.i18n import tr
         from app.domain.plugins.nodes import parse_node_type
 
         parsed = parse_node_type(node_type)
         if parsed:
-            return f"节点 {node_id} 来自插件「{parsed[0]}」的工具 {parsed[1]},该插件未安装或未启用"
+            why = explain_plugin_node(node_type) if explain_plugin_node is not None else None
+            return tr("wfErr_pluginNodeUnusable", node=node_id, reason=why or tr("wfErr_pluginNodeUnknownReason",
+                                                                                  plugin=parsed[0], tool=parsed[1]))
         return f"未知节点类型: {node_type} ({node_id})"
 
     seen_ids: set[str] = set()
@@ -182,7 +190,8 @@ def validate_graph(
                 errors.extend(
                     where + one
                     for one in validate_body_graph(
-                        node_config.get("body"), node_type, extra_types=extra_types, container=node_config
+                        node_config.get("body"), node_type, extra_types=extra_types, container=node_config,
+                        explain_plugin_node=explain_plugin_node,
                     )
                 )
     if require_start:
@@ -318,6 +327,7 @@ def validate_body_graph(
     *,
     extra_types: dict[str, dict[str, Any]] | None = None,
     container: dict[str, Any] | None = None,
+    explain_plugin_node: Callable[[str], str | None] | None = None,
 ) -> list[str]:
     """内嵌子图(循环体 / subgraph)校验:必须非空、无 start 节点、其余同 validate_graph;
     再查引用是否越出 `node_type` 声明的作用域(`body_scope`)。
@@ -331,7 +341,9 @@ def validate_body_graph(
     nodes = body.get("nodes") if isinstance(body, dict) else None
     if not isinstance(nodes, list) or not nodes:
         return [f"{label}不能为空,至少要有一个节点"]
-    errors = validate_graph(body, require_start=False, extra_types=extra_types)
+    errors = validate_graph(
+        body, require_start=False, extra_types=extra_types, explain_plugin_node=explain_plugin_node
+    )
     #: 「输出」节点声明的是**整条工作流**交给调用方的东西,只在顶层算数(见 engine.run_workflow)。
     #: 放在体里它照样跑、产出却没人收 —— 看起来声明了输出,被调用时拿到的还是没有。
     if any(isinstance(node, dict) and node.get("type") == "output" for node in nodes):

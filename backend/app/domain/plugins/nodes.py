@@ -34,6 +34,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.i18n import is_message_key, tr
@@ -336,6 +337,58 @@ def instances_for_node(db: Session, node_type: str, user_id: str | None) -> list
     ]
 
 
+def why_unusable(db: Session, node_type: str, user_id: str | None) -> PluginDomainError | None:
+    """这个插件节点**这个人**为什么用不了;用得了回 None。
+
+    `exposed` 把用不了的连接、没勾选的工具一律滤掉,于是此前所有情况只剩一句「没有可用的连接」(还报的是
+    包 id):插件被删了、连接停用了、凭据过期了、工具没勾选、插件升级后这个工具没了 —— 该去的地方各不相同。
+    这里按真实原因说:插件不在 → 没装;没有他的连接 → 去接一个;有连接 → 逐条说每个连接卡在哪。
+    """
+    from app.db.models import PluginInstance, PluginPackage
+    from app.domain.plugins import instances as inst
+    from app.domain.plugins.manifest import manifest_of
+    from app.domain.plugins.tools import all_tools
+
+    parsed = parse_node_type(node_type)
+    if parsed is None:
+        return None
+    package_id, tool_name = parsed
+    package = db.get(PluginPackage, package_id)
+    if package is None:
+        return PluginDomainError("pluginErr_nodePluginMissing", plugin=package_id)
+    try:
+        plugin = manifest_of(package).name or package_id
+    except ValueError:  # 清单坏了(ManifestError):照包 id 说
+        plugin = package_id
+    stmt = select(PluginInstance).where(PluginInstance.package_id == package_id)
+    if user_id is not None:
+        stmt = stmt.where(PluginInstance.owner_user_id == user_id)
+    connections = list(db.scalars(stmt))
+    if not connections:
+        return PluginDomainError("pluginErr_nodeNoConnection", plugin=plugin)
+    tool_shown = tool_name
+    details: list[str] = []
+    for instance in connections:
+        blocked = inst.blocked_reason(db, instance)
+        if blocked:
+            details.append(tr("pluginWhy_connection", name=instance.name, reason=blocked))
+            continue
+        tool = next((one for one in all_tools(db, instance) if one["name"] == tool_name), None)
+        if tool is None:
+            details.append(tr("pluginWhy_connection", name=instance.name, reason=tr("pluginWhy_toolGone")))
+            continue
+        tool_shown = tool_label(tool) or tool_name
+        if tool["internal"]:
+            details.append(tr("pluginWhy_connection", name=instance.name, reason=tr("pluginWhy_toolInternal")))
+        elif tool_name not in inst.exposed_tools(db, instance.id):
+            details.append(tr("pluginWhy_connection", name=instance.name, reason=tr("pluginWhy_toolNotExposed")))
+        else:
+            return None
+    return PluginDomainError(
+        "pluginErr_nodeUnusable", plugin=plugin, tool=tool_shown, details=tr("punct_listSep").join(details)
+    )
+
+
 def resolve_instance(db: Session, package_id: str, tool_name: str, chosen: str, actor: str | None) -> str:
     """跑这个工具用哪个连接:选了就用选的;没选而只有一个可用连接时自动用它。
 
@@ -346,17 +399,35 @@ def resolve_instance(db: Session, package_id: str, tool_name: str, chosen: str, 
     选的那条不是他的,就当它不可用 —— 共享的工作流、共享的画板上存着别人选的连接 id,
     照着跑就是拿别人的密钥花别人的额度。工作流节点和画板上的工具走的都是这一条。
     """
-    available = instances_for_node(db, node_type_id(package_id, tool_name), actor)
+    node_type = node_type_id(package_id, tool_name)
+    available = instances_for_node(db, node_type, actor)
     if chosen:
         if any(item["id"] == chosen for item in available):
             return chosen
-        raise PluginDomainError("pluginErr_instanceGone", package=package_id)
+        if available:
+            # 选的那条不能用,但他还有能用的:让他换一条(选的那条是别人的、或者删了,都不细说别人的连接)
+            raise PluginDomainError("pluginErr_instanceGone", package=_plugin_name(db, package_id))
     if len(available) == 1:
         return available[0]["id"]
     if not available:
-        raise PluginDomainError("pluginErr_noInstance", package=package_id)
+        raise why_unusable(db, node_type, actor) or PluginDomainError(
+            "pluginErr_noInstance", package=_plugin_name(db, package_id)
+        )
     names = [item["name"] for item in available]
-    raise PluginDomainError("pluginErr_manyInstances", package=package_id, names=names)
+    raise PluginDomainError("pluginErr_manyInstances", package=_plugin_name(db, package_id), names=names)
+
+
+def _plugin_name(db: Session, package_id: str) -> str:
+    """报错里说插件叫什么(清单上的名字,按此刻的语言);包没了或清单坏了就说包 id。"""
+    from app.db.models import PluginPackage
+    from app.domain.plugins.manifest import manifest_of
+
+    package = db.get(PluginPackage, package_id)
+    try:
+        return (manifest_of(package).name if package is not None else "") or package_id
+    except ValueError:
+        return package_id
+
 
 __all__ = [
     "PLUGIN_NODE_CATEGORY",
@@ -367,4 +438,5 @@ __all__ = [
     "parse_node_type",
     "plugin_node_types",
     "resolve_instance",
+    "why_unusable",
 ]
