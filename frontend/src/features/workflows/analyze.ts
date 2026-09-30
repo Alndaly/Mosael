@@ -23,7 +23,8 @@ export type IssueCode =
   | "no-providers" // LLM 节点但一个供应商都没配
   | "provider-missing" // LLM 绑定的供应商配置已被删
   | "gen-provider-unconfigured" // AI 生成选的服务商下没有可用的生成模型
-  | "type-mismatch"; // 数据边:上游输出类型与目标输入期望类型不兼容(软提示)
+  | "type-mismatch" // 数据边:上游输出类型与目标输入期望类型不兼容(软提示)
+  | "unknown-type"; // 节点类型不在目录里:提供它的插件没装 / 停用了 / 工具已不存在
 
 export interface NodeIssue {
   /** 问题所在的那个节点 —— **在它自己那一层里**的 id(体里的 id 和主流程是两套命名空间)。 */
@@ -254,6 +255,9 @@ function collect(
         code,
         ...extra,
       });
+    // 节点类型不在目录里(目录由后端按已装、已启用的插件给)。后端跑到它直接报「未知的节点类型」——
+    // 先在清单里说,别等前面几步跑完、花了钱才知道;画布上它也只剩一个裸的 `plugin.包.工具`。
+    if (!meta) push("error", "unknown-type");
 
     // 必填字段 + 失效引用(逐字段)
     const fieldSpecs = (meta?.config ?? {}) as Record<string, ConfigSpecLike>;

@@ -171,6 +171,11 @@ function fieldLabels(issue: NodeIssue, registry: NodeRegistry): string {
 }
 
 /** Structured readiness issue → localized text for badges and the checklist. */
+/** 节点类型不在目录里时怎么说。插件节点说清是插件的事(没装、停用、工具没了),别的就是认不出的类型。 */
+export function unknownNodeTypeText(t: Translate, nodeType: string): string {
+  return t(nodeType.startsWith("plugin.") ? "wfIssuePluginUnavailable" : "wfIssueUnknownType").replace("{type}", nodeType);
+}
+
 export function workflowIssueText(t: Translate, issue: NodeIssue, registry: NodeRegistry): string {
   switch (issue.code) {
     case "missing-start":
@@ -200,6 +205,8 @@ export function workflowIssueText(t: Translate, issue: NodeIssue, registry: Node
       return t("wfIssueTypeMismatch")
         .replace("{expected}", workflowDataTypeName(t, issue.expected))
         .replace("{actual}", workflowDataTypeName(t, issue.actual));
+    case "unknown-type":
+      return unknownNodeTypeText(t, issue.nodeType);
     default:
       return issue.code;
   }

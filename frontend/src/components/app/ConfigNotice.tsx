@@ -47,6 +47,11 @@ function NoticeShell({
 const ACTION_CLASS =
   "inline-flex flex-none cursor-pointer items-center gap-0.5 whitespace-nowrap border-0 bg-transparent p-0 text-ui-xs font-semibold text-primary hover:underline";
 
+/** 只说清楚、没有设置分区可去的提示条(工作流里节点类型已不在目录里:原因在插件那边,不在设置里)。 */
+export function Notice(look: NoticeLook) {
+  return <NoticeShell {...look} />;
+}
+
 /** 「某项没配置 / 引用失效」的统一提示条:一句提醒 + 一个直达设置分区的配置入口。
  *  用在工作流节点、AI Studio 等任何依赖模型/服务但可能没配好的地方。 */
 export function ConfigNotice({

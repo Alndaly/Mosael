@@ -564,3 +564,28 @@ describe("循环体和子图里的节点", () => {
     expect(a.issues.filter((i) => i.code === "missing-start")).toEqual([]);
   });
 });
+
+describe("节点类型不在目录里", () => {
+  //: 插件没装、停用了、或工具没了,目录里就没有这种节点。后端跑到它报「未知的节点类型」——
+  //: 此前清单全绿、画布上只剩一个裸的 `plugin.包.工具`,点了运行才知道。
+  it("插件节点不可用是阻断问题,记在它自己那个节点上", () => {
+    const a = analyzeWorkflow(
+      graph(
+        [
+          { id: "start", type: "start", config: {} },
+          { id: "p1", type: "plugin.comfy.upscale", config: {} },
+        ],
+        [{ id: "e1", source: "start", target: "p1" }],
+      ),
+      registry,
+      fullCtx,
+    );
+    expect(a.issues).toContainEqual(expect.objectContaining({ nodeId: "p1", code: "unknown-type", severity: "error", nodeType: "plugin.comfy.upscale" }));
+    expect(a.runnable).toBe(false);
+  });
+
+  it("目录里有的节点不报", () => {
+    const a = analyzeWorkflow(graph([{ id: "start", type: "start", config: {} }]), registry, fullCtx);
+    expect(a.issues.filter((i) => i.code === "unknown-type")).toEqual([]);
+  });
+});

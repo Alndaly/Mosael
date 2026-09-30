@@ -13,7 +13,7 @@ import {
 import { providerKeys } from "@/api/queryKeys";
 import type { MessageKey } from "@/app/messages";
 import { useI18n } from "@/app/preferences";
-import { ConfigNotice } from "@/components/app/ConfigNotice";
+import { ConfigNotice, Notice } from "@/components/app/ConfigNotice";
 import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
 import { ACTION_MENU, MODAL_SURFACE } from "@/components/ui/floating";
 import { OptionPicker } from "@/components/ui/option-picker";
@@ -37,6 +37,7 @@ import { RunOutputs } from "@/features/workflows/RunOutputs";
 import type { Step } from "@/features/workflows/runSteps";
 import { bodyKey, bodyVariables, declaredFieldNames } from "@/features/workflows/scope";
 import { workflowNodeVisual } from "@/features/workflows/WorkflowNode";
+import { unknownNodeTypeText } from "@/features/workflows/workflowCanvasModel";
 import type { SetGraphOptions } from "@/features/workflows/workflowGraphStore";
 import { EMPTY_SCOPE_VARIABLES } from "@/features/workflows/workflowViewShared";
 import { GENERATION_KINDS, type GenerationKind } from "@/lib/generationCapabilities";
@@ -567,6 +568,8 @@ export function NodeInspector({
             tone={bindingNotice.error ? "error" : "warn"}
           />
         )}
+        {/* 节点类型不在目录里:下面一个字段都画不出来,得说为什么(就绪清单里是同一句)。 */}
+        {!meta && <Notice tone="error" message={unknownNodeTypeText(t, node.type)} />}
         {staleRefs.length > 0 && (
           <div className="flex flex-col gap-1.5 rounded-md border border-[color-mix(in_srgb,var(--destructive)_40%,var(--border))] bg-[color-mix(in_srgb,var(--destructive)_6%,transparent)] px-2.5 py-2">
             <span className="flex items-center gap-[5px] text-ui-xs font-semibold text-destructive">

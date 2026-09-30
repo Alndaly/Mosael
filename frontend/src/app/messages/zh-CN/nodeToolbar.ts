@@ -98,6 +98,8 @@ export const nodeToolbar = {
   wfIssueProviderMissing: "绑定的模型服务已失效",
   wfIssueGenUnconfigured: "所选生成服务商未配密钥",
   wfIssueTypeMismatch: "类型不匹配:需要{expected},接的是{actual}",
+  wfIssuePluginUnavailable: "插件节点不可用({type}):提供它的插件没装、已停用,或这个工具已经不在了",
+  wfIssueUnknownType: "未知的节点类型:{type}",
   wfType_text: "文本",
   wfType_asset: "素材",
   wfType_sequence: "时间线",
