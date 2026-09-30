@@ -65,6 +65,7 @@ import { saveJsonToDisk } from "@/lib/download";
 import { ROW_HANDLE_CLASS, handleOffset, useResizableRow, useResizableSidebar } from "@/lib/useResizableSidebar";
 import { usePersistentTab, usePersistentViewport } from "@/lib/usePersistentTab";
 import { cn } from "@/lib/utils";
+import { useUnusableNodeReasons } from "@/features/workflows/useUnusableNodeReasons";
 
 /**
  * 工作流的详情页:整页一块画布。图、保存、运行、画布上的编辑动作各在一个 hook 里
@@ -371,6 +372,13 @@ export function WorkflowEditor({
     checklistOpen,
     setChecklistOpen,
   } = useWorkflowRun({ workflow, qc, t, rootGraph, registry, scopePath, save, pendingSaveRef });
+  //: 就绪清单里认不出的插件节点为什么用不了(后端的真实原因;画布角标、检查器问的是同一份缓存)。
+  const unusableReasons = useUnusableNodeReasons(
+    React.useMemo(
+      () => analysis.issues.filter((issue) => issue.code === "unknown-type").map((issue) => issue.nodeType),
+      [analysis.issues],
+    ),
+  );
   const selectedNode = graph.nodes.find((node) => node.id === selectedNodeId) ?? null;
 
   // 角标信息塞进节点 data(不动 nodes 状态本身,避免打断拖拽)。
@@ -475,6 +483,7 @@ export function WorkflowEditor({
           t,
           workflow,
           registry,
+          unusableReasons,
           agentOpen,
           setAgentOpen,
           setAgentMode,

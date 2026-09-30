@@ -172,11 +172,22 @@ function fieldLabels(issue: NodeIssue, registry: NodeRegistry): string {
 
 /** Structured readiness issue → localized text for badges and the checklist. */
 /** 节点类型不在目录里时怎么说。插件节点说清是插件的事(没装、停用、工具没了),别的就是认不出的类型。 */
-export function unknownNodeTypeText(t: Translate, nodeType: string): string {
+/**
+ * 节点类型不在目录里时说什么。插件节点有后端给的真实原因(`reasons`,见 useUnusableNodeReasons)就说它 ——
+ * 没装、没接、连接停用、工具没勾选,该去的地方各不相同;还没问到才退回那句笼统的话。
+ */
+export function unknownNodeTypeText(t: Translate, nodeType: string, reasons?: ReadonlyMap<string, string>): string {
+  const reason = reasons?.get(nodeType);
+  if (reason) return t("wfIssuePluginUnusable").replace("{reason}", reason);
   return t(nodeType.startsWith("plugin.") ? "wfIssuePluginUnavailable" : "wfIssueUnknownType").replace("{type}", nodeType);
 }
 
-export function workflowIssueText(t: Translate, issue: NodeIssue, registry: NodeRegistry): string {
+export function workflowIssueText(
+  t: Translate,
+  issue: NodeIssue,
+  registry: NodeRegistry,
+  reasons?: ReadonlyMap<string, string>,
+): string {
   switch (issue.code) {
     case "missing-start":
       return t("wfIssueMissingStart");
@@ -206,7 +217,7 @@ export function workflowIssueText(t: Translate, issue: NodeIssue, registry: Node
         .replace("{expected}", workflowDataTypeName(t, issue.expected))
         .replace("{actual}", workflowDataTypeName(t, issue.actual));
     case "unknown-type":
-      return unknownNodeTypeText(t, issue.nodeType);
+      return unknownNodeTypeText(t, issue.nodeType, reasons);
     default:
       return issue.code;
   }

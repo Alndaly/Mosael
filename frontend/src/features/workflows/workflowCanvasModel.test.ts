@@ -110,6 +110,16 @@ describe("workflow canvas model", () => {
     expect(workflowIssueText(translate, issue, registry)).toBe("缺少 输入素材");
   });
 
+  it("插件节点用不了:有后端给的原因就说原因,还没问到才退回笼统的那句", () => {
+    const issue: NodeIssue = {
+      nodeId: "p1", path: [], nodeName: "放大", nodeType: "plugin.comfy.upscale", severity: "error", code: "unknown-type",
+    };
+    const say = ((key: MessageKey) => (key === "wfIssuePluginUnusable" ? "不可用:{reason}" : key)) as (key: MessageKey) => string;
+    const reasons = new Map([["plugin.comfy.upscale", "你还没有接「ComfyUI」"]]);
+    expect(workflowIssueText(say, issue, new Map(), reasons)).toBe("不可用:你还没有接「ComfyUI」");
+    expect(workflowIssueText(say, issue, new Map())).toBe("wfIssuePluginUnavailable");
+  });
+
   it("keeps stable port keys while projecting localized labels for both sides", () => {
     const registry = new Map([
       [

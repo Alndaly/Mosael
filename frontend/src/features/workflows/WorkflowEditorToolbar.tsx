@@ -52,6 +52,8 @@ export interface WorkflowEditorToolbarProps
   t: ReturnType<typeof useI18n>;
   workflow: Workflow;
   registry: Map<string, WorkflowNodeType>;
+  /** 认不出的插件节点为什么用不了(见 useUnusableNodeReasons)。 */
+  unusableReasons: ReadonlyMap<string, string>;
   agentOpen: boolean;
   setAgentOpen: SetBoolean;
   setAgentMode: (mode: "docked" | "floating") => void;
@@ -108,6 +110,7 @@ export function workflowEditorToolbar({
   t,
   workflow,
   registry,
+  unusableReasons,
   agentOpen,
   setAgentOpen,
   setAgentMode,
@@ -248,7 +251,7 @@ export function workflowEditorToolbar({
                             <AlertTriangle size={12} />
                             <span className="whitespace-nowrap text-xs font-semibold">{issue.nodeName}</span>
                             <span className="truncate text-ui-xs text-muted-foreground">
-                              {workflowIssueText(t, issue, registry)}
+                              {workflowIssueText(t, issue, registry, unusableReasons)}
                             </span>
                           </button>
                         ))}

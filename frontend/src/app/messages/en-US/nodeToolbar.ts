@@ -89,6 +89,7 @@ export const nodeToolbar = {
   wfIssueGenUnconfigured: "Chosen generation provider has no key",
   wfIssueTypeMismatch: "Type mismatch: expects {expected}, got {actual}",
   wfIssuePluginUnavailable: "Plugin node unavailable ({type}): the plugin that provides it isn't installed, is disabled, or no longer has this tool",
+  wfIssuePluginUnusable: "Plugin node unavailable: {reason}",
   wfIssueUnknownType: "Unknown node type: {type}",
   wfType_text: "text",
   wfType_asset: "asset",

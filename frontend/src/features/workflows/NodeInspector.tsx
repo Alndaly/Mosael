@@ -37,6 +37,7 @@ import { RunOutputs } from "@/features/workflows/RunOutputs";
 import type { Step } from "@/features/workflows/runSteps";
 import { bodyKey, bodyVariables, declaredFieldNames } from "@/features/workflows/scope";
 import { workflowNodeVisual } from "@/features/workflows/WorkflowNode";
+import { useUnusableNodeReasons } from "@/features/workflows/useUnusableNodeReasons";
 import { unknownNodeTypeText } from "@/features/workflows/workflowCanvasModel";
 import type { SetGraphOptions } from "@/features/workflows/workflowGraphStore";
 import { EMPTY_SCOPE_VARIABLES } from "@/features/workflows/workflowViewShared";
@@ -115,6 +116,8 @@ export function NodeInspector({
   onClose?: () => void;
 }) {
   const t = useI18n();
+  //: 节点类型不在目录里:问后端为什么(就绪清单、画布角标问的是同一份,按类型缓存)。
+  const unusableReasons = useUnusableNodeReasons(meta ? [] : [node.type]);
   const nodeVisual = workflowNodeVisual(node.type);
   const config = (node.config ?? {}) as Record<string, unknown>;
   const allSpecs = (meta?.config ?? {}) as Record<string, ConfigSpec>;
@@ -579,7 +582,7 @@ export function NodeInspector({
           />
         )}
         {/* 节点类型不在目录里:下面一个字段都画不出来,得说为什么(就绪清单里是同一句)。 */}
-        {!meta && <Notice tone="error" message={unknownNodeTypeText(t, node.type)} />}
+        {!meta && <Notice tone="error" message={unknownNodeTypeText(t, node.type, unusableReasons)} />}
         {staleRefs.length > 0 && (
           <div className="flex flex-col gap-1.5 rounded-md border border-[color-mix(in_srgb,var(--destructive)_40%,var(--border))] bg-[color-mix(in_srgb,var(--destructive)_6%,transparent)] px-2.5 py-2">
             <span className="flex items-center gap-[5px] text-ui-xs font-semibold text-destructive">

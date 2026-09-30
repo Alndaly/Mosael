@@ -109,6 +109,18 @@ export function fetchWorkflowNodeTypes(): Promise<WorkflowNodeType[]> {
   return api<WorkflowNodeType[]>("/api/workflows/node-types");
 }
 
+export type WorkflowUnusableNode = components["schemas"]["WorkflowUnusableNodeOut"];
+
+/**
+ * 图里这些节点类型里,**我**用不了的插件节点各自为什么(没装、没接、连接停用 / 缺凭据、工具没勾选……)。
+ * 用得了的、不是插件节点的不回。原因按请求方的语言说。
+ */
+export function fetchUnusableNodeTypes(types: string[]): Promise<WorkflowUnusableNode[]> {
+  const params = new URLSearchParams();
+  for (const type of types) params.append("types", type);
+  return api<WorkflowUnusableNode[]>(`/api/workflows/node-types/unusable?${params.toString()}`);
+}
+
 /** Execution history — this workflow's run jobs, newest first. */
 export function listWorkflowRuns(workflowId: string): Promise<Job[]> {
   return api<Job[]>(`/api/workflows/${workflowId}/runs`);
