@@ -4,7 +4,8 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { canRedo, canUndo, dropSequenceStep, emptyHistory, record, recordSequence, redo, retagSequenceStep, sequenceOf, undo } from "./canvasHistory";
+import { canRedo, canUndo, dropSequenceStep, emptyHistory, joinSequenceToCanvas, record, recordSequence, redo, retagSequenceStep, sequenceOf, undo } from "./canvasHistory";
+import { sequencesFilledFrom } from "./useBoardSequenceLinks";
 
 describe("画布历史", () => {
   it("记一步、退一步、再回来", () => {
@@ -92,5 +93,58 @@ describe("画布历史", () => {
     h = recordSequence(h, "seq", 3);
     expect(canRedo(h)).toBe(false);
     expect(h.present).toBe("B");
+  });
+});
+
+describe("连一格进时间线格:画布上的线和时间线上的那一段是一步", () => {
+  const plain = JSON.stringify({ items: [], edges: [] });
+  const linked = JSON.stringify({ items: [], edges: [{ id: "e", source: "v", target: "t" }] });
+  const link = { source: "v", target: "t" };
+
+  it("并成一步:撤一下画布回到没连的样子、时间线也撤;重做一下两样都回来", () => {
+    let h = record(emptyHistory(plain), linked);
+    h = joinSequenceToCanvas(h, "seq", 3, link)!;
+    expect(h.past).toEqual([{ sequence: "seq", revision: 3, canvas: plain }]);
+
+    h = undo(h)!;
+    expect(h.present, "画布回到没连的样子").toBe(plain);
+    expect(h.future[0]).toEqual({ sequence: "seq", revision: 3, canvas: linked });
+    h = redo(h)!;
+    expect(h.present).toBe(linked);
+    expect(h.past).toEqual([{ sequence: "seq", revision: 3, canvas: plain }]);
+  });
+
+  it("对不上就不并:上一步里已经有这根线(中间人又做了别的)", () => {
+    const other = JSON.stringify({ items: [{ id: "n" }], edges: [{ id: "e", source: "v", target: "t" }] });
+    const h = record(record(emptyHistory(plain), linked), other);
+    expect(joinSequenceToCanvas(h, "seq", 3, link)).toBeNull();
+  });
+
+  it("时间线那一半撤不了:只拿掉时间线那一半,画布那一步还在", () => {
+    let h = joinSequenceToCanvas(record(emptyHistory(plain), linked), "seq", 3, link)!;
+    h = undo(h)!;
+    h = dropSequenceStep(h, "future");
+    expect(h.future).toEqual([linked]);
+    expect(redo(h)!.present).toBe(linked);
+  });
+});
+
+describe("服务端新的一版里产出刚落进连着时间线格的那一格", () => {
+  it("说得出是哪几条时间线要刷新;本来就有产出的、没连时间线的不算", () => {
+    const before = {
+      items: [
+        { id: "v", kind: "video" as const, x: 0, y: 0 },
+        { id: "w", kind: "video" as const, x: 0, y: 0, asset_id: "old" },
+        { id: "i", kind: "image" as const, x: 0, y: 0 },
+        { id: "t", kind: "sequence" as const, x: 0, y: 0, sequence_id: "seq" },
+      ],
+      edges: [{ id: "a", source: "v", target: "t" }, { id: "b", source: "w", target: "t" }],
+    };
+    const after = {
+      ...before,
+      items: before.items.map((one) => (one.id === "v" || one.id === "i" ? { ...one, asset_id: "made" } : one.id === "w" ? { ...one, asset_id: "new" } : one)),
+    };
+    expect(sequencesFilledFrom(before, after)).toEqual(["seq"]);
+    expect(sequencesFilledFrom(before, { ...after, edges: [] })).toEqual([]);
   });
 });

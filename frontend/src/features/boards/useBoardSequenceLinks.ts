@@ -6,7 +6,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import type { Connection, ReactFlowInstance } from "@xyflow/react";
 
-import type { BoardItem } from "@/api/client";
+import type { BoardCanvas, BoardItem } from "@/api/client";
 import { errorText } from "@/api/errorMessage";
 import { appendAssetToSequence } from "@/api/domains/editor";
 import { boardSequenceKey } from "@/features/boards/SequenceCell";
@@ -24,11 +24,11 @@ export function useBoardSequenceLinks({
   const queryClient = useQueryClient();
 
   /** 一份素材接到时间线末尾(视频、图片进主视频轨,音频进音频轨),格子读的缓存换成回来的那条,记进撤销。 */
-  const appendToSequence = React.useCallback((sequenceId: string, assetId: string) => {
+  const appendToSequence = React.useCallback((sequenceId: string, assetId: string, link?: { source: string; target: string }) => {
     void appendAssetToSequence(sequenceId, assetId)
       .then((next) => {
         queryClient.setQueryData(boardSequenceKey(sequenceId), next);
-        noteSequenceEdit(sequenceId, next.revision);
+        noteSequenceEdit(sequenceId, next.revision, link);
       })
       .catch((error: unknown) => toast.error(errorText(error)));
   }, [queryClient]);
@@ -40,7 +40,7 @@ export function useBoardSequenceLinks({
     const target = itemOf(connection.target);
     if (target?.kind !== "sequence" || !target.sequence_id || !source?.asset_id) return;
     if (!["video", "image", "audio"].includes(source.kind)) return;
-    appendToSequence(target.sequence_id, source.asset_id);
+    appendToSequence(target.sequence_id, source.asset_id, { source: source.id, target: target.id });
   }, [appendToSequence]);
   /** 时间线格上的「+」:挑一份素材(这张画板上已有的,或素材库里的)接到末尾,和连线进来同一件事。 */
   const pickForSequence = React.useCallback((sequenceId: string) => {
@@ -52,4 +52,20 @@ export function useBoardSequenceLinks({
   }, [appendToSequence, onPickAsset]);
 
   return { appendOnConnect, pickForSequence };
+}
+
+/**
+ * 服务端新的一版里**产出刚落进来**、又连着时间线格的那几格,喂的是哪几条时间线:服务端落回执时已经把产出接到了
+ * 这些时间线末尾(后端 timelines.append_filled_media),格子读的缓存要跟着刷新。
+ */
+export function sequencesFilledFrom(before: BoardCanvas, after: BoardCanvas): string[] {
+  const had = new Map(before.items.map((item) => [item.id, item.asset_id]));
+  const filled = new Set(after.items.filter((item) => item.asset_id && !had.get(item.id)).map((item) => item.id));
+  if (filled.size === 0) return [];
+  const byId = new Map(after.items.map((item) => [item.id, item]));
+  return [...new Set(after.edges
+    .filter((edge) => filled.has(edge.source))
+    .map((edge) => byId.get(edge.target))
+    .filter((item): item is BoardItem => item?.kind === "sequence" && Boolean(item.sequence_id))
+    .map((item) => item.sequence_id as string))];
 }

@@ -34,14 +34,16 @@ export function useSequenceCursor(sequenceId: string): SequenceCursor {
  * 格子里在时间线上做成了一步(剪刀、删除、拖动排序、连线加片段):告诉画布,记进画板的撤销栈(canvasHistory 的
  * 「时间线的一步」)。格子和画布之间只隔这一条通知,格子不必知道画布的撤销栈长什么样。
  */
-const editListeners = new Set<(sequenceId: string, revision: number) => void>();
+type SequenceEditListener = (sequenceId: string, revision: number, link?: { source: string; target: string }) => void;
+const editListeners = new Set<SequenceEditListener>();
 
-/** `revision`:这一步做完之后时间线停在第几版。撤销时带上它 —— 时间线在别处又改过的话,服务端不撤别人的那一步。 */
-export function noteSequenceEdit(sequenceId: string, revision: number): void {
-  for (const listener of editListeners) listener(sequenceId, revision);
+/** `revision`:这一步做完之后时间线停在第几版。撤销时带上它 —— 时间线在别处又改过的话,服务端不撤别人的那一步。
+ *  `link`:这一步是连了一根线引起的(画布上那根线和时间线上这一段并成撤销里的一步)。 */
+export function noteSequenceEdit(sequenceId: string, revision: number, link?: { source: string; target: string }): void {
+  for (const listener of editListeners) listener(sequenceId, revision, link);
 }
 
-export function onSequenceEdit(listener: (sequenceId: string, revision: number) => void): () => void {
+export function onSequenceEdit(listener: SequenceEditListener): () => void {
   editListeners.add(listener);
   return () => editListeners.delete(listener);
 }

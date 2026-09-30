@@ -10,7 +10,7 @@ import type { BoardCanvas as Canvas } from "@/api/client";
 import { errorText } from "@/api/errorMessage";
 import { redoSequence, undoSequence } from "@/api/domains/editor";
 import { boardSequenceKey } from "@/features/boards/SequenceCell";
-import { dropSequenceStep, emptyHistory, record, recordSequence, redo, retagSequenceStep, undo, type SequenceStep, type Step } from "@/features/boards/canvasHistory";
+import { dropSequenceStep, emptyHistory, joinSequenceToCanvas, record, recordSequence, redo, retagSequenceStep, undo, type SequenceStep, type Step } from "@/features/boards/canvasHistory";
 import { onSequenceEdit } from "@/features/boards/sequenceCursor";
 import { LAYERS, toCanvas, toNodes } from "@/features/boards/boardCanvasModel";
 import { toMarkerNodes } from "@/features/markers/markers";
@@ -135,16 +135,26 @@ export function useBoardHistory({
       setEdges(nextEdges);
       const snapshot = JSON.stringify(toCanvas(nextNodes, nextEdges));
       restoring.current = snapshot;
-      const rewrite = (step: Step): Step => (typeof step === "string" ? JSON.stringify(rebase(JSON.parse(step) as Canvas)) : step);
+      const rebased = (snapshot: string) => JSON.stringify(rebase(JSON.parse(snapshot) as Canvas));
+      const rewrite = (step: Step): Step =>
+        typeof step === "string" ? rebased(step) : step.canvas === undefined ? step : { ...step, canvas: rebased(step.canvas) };
       setHistory((current) => ({ past: current.past.map(rewrite), future: current.future.map(rewrite), present: snapshot }));
     },
     [setNodes, setEdges],
   );
 
-  //: 时间线格里做成的一步记进这摞(见 canvasHistory 的「时间线的一步」)。
+  //: 时间线格里做成的一步记进这摞(见 canvasHistory 的「时间线的一步」)。连一根线进时间线格引起的那一步,和画布上
+  //: 那根线并成一步:先把攒着的画布变化记下(线已经在画布上了),再把两步并起来。
   React.useEffect(
-    () => onSequenceEdit((sequenceId, revision) => setHistory((current) => recordSequence(current, sequenceId, revision))),
-    [],
+    () =>
+      onSequenceEdit((sequenceId, revision, link) => {
+        if (link) flush();
+        setHistory(
+          (current) =>
+            (link && joinSequenceToCanvas(current, sequenceId, revision, link)) || recordSequence(current, sequenceId, revision),
+        );
+      }),
+    [flush],
   );
 
   /** 撤 / 重做时间线格的一步:带着这一步记的版本号调那条时间线自己的撤销 / 重做(时间线在别处又改过就被拒,
@@ -174,8 +184,9 @@ export function useBoardHistory({
     historyRef.current = next;
     setHistory(next);
     const step = current.past.at(-1);
+    //: 连着画布的那一步:画布回去,时间线也撤。
+    if (typeof step !== "object" || step.canvas !== undefined) restore(next.present);
     if (typeof step === "object") replaySequence(step, "undo");
-    else restore(next.present);
   }, [restore, replaySequence]);
 
   const stepForward = React.useCallback(() => {
@@ -185,8 +196,8 @@ export function useBoardHistory({
     historyRef.current = next;
     setHistory(next);
     const step = current.future[0];
+    if (typeof step !== "object" || step.canvas !== undefined) restore(next.present);
     if (typeof step === "object") replaySequence(step, "redo");
-    else restore(next.present);
   }, [restore, replaySequence]);
 
   return { history, adopt, flush, stepBack, stepForward };

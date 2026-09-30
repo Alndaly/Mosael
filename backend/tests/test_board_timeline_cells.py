@@ -132,6 +132,33 @@ def test_画板上复制一格时间线格_照原件复制一条时间线_别处
     assert refused.status_code == 400, refused.text
 
 
+def test_空槽连进时间线格_生成出来之后接到末尾_只接一次() -> None:
+    """连线那一刻它还是空槽,没什么可接;产出落下时补接 —— 线在它就在。同一封回执送两次(占位落下时的补送和正常的
+    那封撞在一起)只接一次;没连着时间线的格子照旧。"""
+    from types import SimpleNamespace
+
+    from app.domain.boards import deliver_generated, receipt_to_item
+
+    client, ws, board = _setup()
+    sequence = client.post(f"/api/boards/{board}/sequences", json={"workspace_id": ws}).json()["sequence_id"]
+    _asset(ws, "made", "video", duration=3.0, width=720, height=1280)
+    slot = {"id": "v", "kind": "video", "x": 0, "y": 0, "run": {"status": "running", "job_id": "job-v"},
+            "form": {"producer": "generate", "prompt": "海浪"}}
+    saved = client.patch(f"/api/boards/{board}", json={
+        "workspace_id": ws, "base_revision": board_revision(client, board, ws),
+        "canvas": {"items": [slot, {"id": "t", "kind": "sequence", "x": 400, "y": 0, "sequence_id": sequence}],
+                   "edges": [{"id": "e", "source": "v", "target": "t"}]}})
+    assert saved.status_code == 200, saved.text
+
+    job = SimpleNamespace(id="job-v", status="succeeded", result={"asset_ids": ["made"]}, created_by=None)
+    with SessionLocal() as db:
+        deliver_generated(db, job, receipt_to_item(board, "v"))
+        deliver_generated(db, job, receipt_to_item(board, "v"))
+    with SessionLocal() as db:
+        clips = [(clip.asset_id, clip.src_out) for track in db.get(Sequence, sequence).tracks for clip in track.clips]
+    assert clips == [("made", 3.0)], clips
+
+
 def test_画板上的撤销带着版本号_时间线在别处改过就不撤别人的那一步() -> None:
     client, ws, board = _setup()
     sequence = client.post(f"/api/boards/{board}/sequences", json={"workspace_id": ws}).json()["sequence_id"]

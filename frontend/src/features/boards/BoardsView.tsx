@@ -75,6 +75,8 @@ import { EntityPickerDialog } from "@/features/entities/EntityPickerDialog";
 import { announceEntityReceipt } from "@/features/entities/entityMeta";
 import { boardSettlementPatch, itemIsRunning, prunedLinksPatch, serverOwnedPatch } from "@/features/boards/boardItemState";
 import { rebaseCanvas } from "@/features/boards/boardRebase";
+import { sequencesFilledFrom } from "@/features/boards/useBoardSequenceLinks";
+import { boardSequenceKey } from "@/features/boards/SequenceCell";
 import { createWriteQueue, sameContent } from "@/lib/optimisticWrites";
 import { importEach, importFailureText } from "@/lib/importEach";
 import { assetKeys, boardKeys } from "@/api/queryKeys";
@@ -681,6 +683,10 @@ function BoardDetail({
       revision.current = fresh.revision;
       confirmedCanvas.current = fresh.canvas;
       queryClient.setQueryData(detailKey, fresh);
+      //: 产出刚落进连着时间线格的那一格:服务端已经把它接到时间线末尾,格子读的那条跟着刷新。
+      for (const sequenceId of sequencesFilledFrom(base, fresh.canvas)) {
+        void queryClient.invalidateQueries({ queryKey: boardSequenceKey(sequenceId) });
+      }
       api?.adopt(merged, (snapshot) => rebaseCanvas(base, snapshot, fresh.canvas).canvas);
       localCanvas.current = merged;
       setCanvas(merged);

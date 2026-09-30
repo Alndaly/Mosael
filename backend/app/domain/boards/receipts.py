@@ -214,18 +214,34 @@ def deliver_generated(db: Session, job: Any, receipt: dict[str, Any]) -> None:
     if board is None:
         return
     assets = _asset_facts(db, board.workspace_id, outputs)
-    _merge_into_latest(
-        db,
-        workspace_id=board.workspace_id,
-        board_id=board.id,
-        merge=lambda canvas: _canvas_with_delivered_result(
+    #: 这封回执有没有落到那一格(那一格此刻跑的是这个任务)。合并撞车会重来,以最后落库的那一次为准。
+    landed = {"yes": False}
+
+    def merge(canvas: dict[str, Any]) -> dict[str, Any]:
+        item = next((one for one in canvas.get("items") or [] if one.get("id") == item_id), None)
+        landed["yes"] = live_job(item) == str(job.id)
+        return _canvas_with_delivered_result(
             canvas, item_id=item_id, job_id=str(job.id), outputs=outputs, reason=reason,
             cancelled=was_cancelled(job), succeeded=job_status == "succeeded", assets=assets,
-        ),
-        actor_id=actor_id,
-    )
+        )
+
+    merged = _merge_into_latest(db, workspace_id=board.workspace_id, board_id=board.id, merge=merge, actor_id=actor_id)
+    if landed["yes"] and job_status == "succeeded":
+        _append_to_connected_timelines(db, merged, item_id)
     logger.info("board %s item %s -> %s", board_id, item_id,
                 ", ".join(one.get("asset_id") or f"({one['type']})" for one in outputs) or "(failed)")
+
+
+def _append_to_connected_timelines(db: Session, board: Board, item_id: str) -> None:
+    """产出落进了连着时间线格的那一格:接到时间线末尾(见 timelines.append_filled_media)。接不上不挡回执。"""
+    from app.domain.boards.timelines import append_filled_media
+
+    try:
+        if append_filled_media(db, board.workspace_id, board.canvas or {}, item_id):
+            db.commit()
+    except Exception:  # noqa: BLE001 — 回执已经落下;接时间线是顺带的一步
+        db.rollback()
+        logger.exception("board %s item %s: could not append the output to its timelines", board.id, item_id)
 
 
 def install() -> None:

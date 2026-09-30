@@ -23,8 +23,13 @@
  * 撤 / 重做成功后,这一步的版本号换成服务端回来的那一版(`retagSequenceStep`),下一次重做 / 撤销照它比。
  */
 
-/** 时间线格里做的一步:撤销 / 重做它就是那条时间线自己的撤销 / 重做。 */
-export type SequenceStep = { sequence: string; revision: number };
+/**
+ * 时间线格里做的一步:撤销 / 重做它就是那条时间线自己的撤销 / 重做。
+ *
+ * `canvas`:这一步**同时改了画布**(把一格连进时间线格:画布上多一根线,时间线上多一段)—— 撤 / 重做它时画布也回到
+ * 这一份。人做的是一件事,撤一下就该都回去;此前线是画布的一步、片段是时间线的一步,要按两下撤销。
+ */
+export type SequenceStep = { sequence: string; revision: number; canvas?: string };
 /** 一步:画布的一份快照(字符串),或者时间线的一步。 */
 export type Step = string | SequenceStep;
 
@@ -74,15 +79,21 @@ export function undo(history: History): History | null {
   if (history.past.length === 0) return null;
   const past = history.past.slice(0, -1);
   const step = history.past[history.past.length - 1];
-  //: 时间线的一步:画布停在原处,这一步挪进重做。
-  if (typeof step === "object") return { past, future: [step, ...history.future], present: history.present };
+  //: 时间线的一步:画布停在原处,这一步挪进重做。连着画布的:画布回到那一份,重做时回到现在这一份。
+  if (typeof step === "object") {
+    if (step.canvas === undefined) return { past, future: [step, ...history.future], present: history.present };
+    return { past, future: [{ ...step, canvas: history.present }, ...history.future], present: step.canvas };
+  }
   return { past, future: [history.present, ...history.future], present: step };
 }
 
 export function redo(history: History): History | null {
   if (history.future.length === 0) return null;
   const [step, ...future] = history.future;
-  if (typeof step === "object") return { past: [...history.past, step], future, present: history.present };
+  if (typeof step === "object") {
+    if (step.canvas === undefined) return { past: [...history.past, step], future, present: history.present };
+    return { past: [...history.past, { ...step, canvas: history.present }], future, present: step.canvas };
+  }
   return { past: [...history.past, history.present], future, present: step };
 }
 
@@ -97,11 +108,33 @@ export function retagSequenceStep(history: History, where: "past" | "future", re
   return where === "past" ? { ...history, past: next } : { ...history, future: next };
 }
 
-/** 这一步时间线撤 / 重做不成(在别处改过、撤不了):从摞里拿掉,免得下一次 ⌘Z 又撞上它。 */
+/** 这一步时间线撤 / 重做不成(在别处改过、撤不了):从摞里拿掉,免得下一次 ⌘Z 又撞上它。连着画布的那一步只拿掉时间线
+ *  那一半 —— 画布已经回去了,它退回成画布的一步,还撤得回、重做得回。 */
 export function dropSequenceStep(history: History, where: "past" | "future"): History {
   const list = where === "past" ? history.past : history.future;
   const index = where === "past" ? list.length - 1 : 0;
-  if (typeof list[index] !== "object") return history;
-  const next = list.filter((_, at) => at !== index);
+  const step = list[index];
+  if (typeof step !== "object") return history;
+  const next = step.canvas === undefined ? list.filter((_, at) => at !== index) : list.map((one, at) => (at === index ? (step.canvas as string) : one));
   return where === "past" ? { ...history, past: next } : { ...history, future: next };
+}
+
+/**
+ * 把画布上刚记下的那一步(连了一根线进时间线格)和时间线上随之做成的那一步并成一步(见 SequenceStep.canvas)。
+ * 只在对得上时并:眼前的画布有这根线、上一份没有 —— 中间人又做了别的,就不并,各记各的。并不上回 null。
+ */
+export function joinSequenceToCanvas(
+  history: History,
+  sequenceId: string,
+  revision: number,
+  link: { source: string; target: string },
+): History | null {
+  const last = history.past.at(-1);
+  if (typeof last !== "string") return null;
+  const linked = (snapshot: string) =>
+    (JSON.parse(snapshot) as { edges?: { source: string; target: string }[] }).edges?.some(
+      (edge) => edge.source === link.source && edge.target === link.target,
+    ) ?? false;
+  if (!linked(history.present) || linked(last)) return null;
+  return { ...history, past: [...history.past.slice(0, -1), { sequence: sequenceId, revision, canvas: last }] };
 }

@@ -79,6 +79,34 @@ def without_pending_sequences(canvas: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def append_filled_media(db: Session, workspace_id: str, canvas: dict[str, Any], item_id: str) -> list[str]:
+    """一格连着时间线格、它的产出**刚落进来**(空槽生成出来、念出来、截出来):接到那几条时间线的末尾。
+
+    连线那一刻它还是空槽,没什么可接(append_connected_media 跳过空槽);线在它就在 —— 产出落下时补接,和连一格
+    有素材的进来是同一件事(ADR 0030 §3)。接不上的(素材没有时长……)跳过,不挡回执。交回接上的片段 id。
+    """
+    from app.domain.sequences.append import append_asset
+    from app.domain.sequences.errors import SequenceDomainError
+
+    by_id = {str(item.get("id")): item for item in canvas.get("items") or []}
+    source = by_id.get(item_id)
+    if not source or source.get("kind") not in ("video", "image", "audio") or not source.get("asset_id"):
+        return []
+    placed: list[str] = []
+    for edge in canvas.get("edges") or []:
+        target = by_id.get(str(edge.get("target"))) if str(edge.get("source")) == item_id else None
+        if not target or target.get("kind") != "sequence" or not target.get("sequence_id"):
+            continue
+        sequence = db.get(Sequence, str(target["sequence_id"]))
+        if sequence is None or sequence.workspace_id != workspace_id:
+            continue
+        try:
+            placed.append(append_asset(db, sequence.id, str(source["asset_id"])).id)
+        except SequenceDomainError:
+            continue
+    return placed
+
+
 def append_connected_media(db: Session, workspace_id: str, before: dict[str, Any], after: dict[str, Any]) -> list[str]:
     """新连进时间线格的视频 / 图片 / 音频格:把它的素材接到那条时间线末尾 —— 和界面上拉一根线同一件事(ADR 0030 §3)。
     原来就连着的不再接一遍;空槽(还没有素材)没什么可接。交回接上的片段 id。"""
