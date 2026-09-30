@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 import re
 import sys
@@ -39,6 +40,32 @@ def start(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any
     return dict(config.get("params") or {})
 
 
+def _is_empty(value: Any) -> bool:
+    """「空」按值的样子判:没有值、空列表、空对象、只有空白的文字。
+
+    此前先 `as_text` 再判 —— 而 as_text 把 `[]` / `{}` 写成 JSON 的 `"[]"` / `"{}"`,两个字符,
+    不空:「查询结果为空就走另一支」永远走不到,正好判反。
+    """
+    if value is None:
+        return True
+    if isinstance(value, (list, tuple, dict)):
+        return len(value) == 0
+    if isinstance(value, str):
+        return not value.strip()
+    return False
+
+
+def _as_number(value: Any) -> float | None:
+    """当数用时是几;不是有限的数就是 None。布尔不算数(`true` 和 `1` 不是一回事)。"""
+    if isinstance(value, bool):
+        return None
+    try:
+        number = float(str(value).strip())
+    except (TypeError, ValueError):
+        return None
+    return number if math.isfinite(number) else None
+
+
 @register("condition")
 def condition(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
     left = config.get("left")
@@ -47,26 +74,27 @@ def condition(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str,
     left_text = as_text(left)
     right_text = as_text(right)
 
-    def as_number(value: Any) -> float | None:
-        try:
-            return float(str(value).strip())
-        except (TypeError, ValueError):
-            return None
+    def same() -> bool:
+        # 两边都是数就按数比:上游算出来的 30.0 和手填的 30 是同一个数,按文字比永远不等。
+        left_num, right_num = _as_number(left), _as_number(right)
+        if left_num is not None and right_num is not None:
+            return left_num == right_num
+        return left_text == right_text
 
     if op == "equals":
-        result = left_text == right_text
+        result = same()
     elif op == "not_equals":
-        result = left_text != right_text
+        result = not same()
     elif op == "contains":
         result = right_text in left_text
     elif op == "not_contains":
         result = right_text not in left_text
     elif op == "empty":
-        result = not left_text.strip()
+        result = _is_empty(left)
     elif op == "not_empty":
-        result = bool(left_text.strip())
+        result = not _is_empty(left)
     elif op in ("gt", "lt"):
-        left_num, right_num = as_number(left), as_number(right)
+        left_num, right_num = _as_number(left), _as_number(right)
         if left_num is None or right_num is None:
             raise WorkflowDomainError("wfErr_conditionNeedsNumbers", params={"op": op, "left": left_text, "right": right_text})
         result = left_num > right_num if op == "gt" else left_num < right_num
