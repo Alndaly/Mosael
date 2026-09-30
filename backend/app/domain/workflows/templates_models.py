@@ -171,6 +171,22 @@ def _image_plan(db: Session | None, choice: ModelChoice) -> ImagePlan:
     return ImagePlan(frame_sizes={aspect: size for aspect, size in frames.items() if size}, sheet_size=best(16 / 9, largest=True))
 
 
+#: 整片生成「参考」那条路一镜交几张参考图:角色三视图最多 4 张 + 场景设定图最多 3 张 + 白模帧 1 张。
+SHOT_REFERENCE_IMAGES = 8
+#: 能从零拍出一镜的模式。说话照片、改口型、改视频、续写视频也收首帧或参考素材,但它们拍不了一镜:
+#: 要的是一段现成的音频 / 视频。此前只看参数键,挑中过说话照片模型当镜头模型。
+_SHOT_MODES = frozenset({"text-to-video", "image-to-video", "keyframes-to-video", "reference-to-video"})
+#: 首尾帧那条路、参考那条路各交哪几种素材。
+_KEYFRAME_SOURCES = frozenset({FIRST_FRAME, LAST_FRAME})
+_REFERENCE_SOURCES = frozenset({REFERENCE_IMAGE, REFERENCE_VIDEO})
+
+
+def _route_allowed(capabilities: dict[str, Any], sources: frozenset[str]) -> bool:
+    """这条路交的素材满不满足模型的 `requires_source`(每一组里至少给一种)。万相 wan2.7-r2v 要求参考图或参考视频
+    至少一种:走首尾帧那条路注定被漏斗拒 —— 此前照样把它算成能走首帧。"""
+    return all(set(group) & sources for group in capabilities.get("requires_source") or () if group)
+
+
 def _video_plan(db: Session | None, choice: ModelChoice) -> VideoPlan:
     """从模型能力目录挑一组肯定合法的默认值；未知模型只给生成契约的通用时长。"""
     capabilities = _capabilities(db, choice, "video")
@@ -213,6 +229,11 @@ def _video_plan(db: Session | None, choice: ModelChoice) -> VideoPlan:
             "3:4": (1080, 1440),
         }
         size_width, size_height = ratio_dimensions.get(aspect_ratio, (1920, 1080))
+    modes = set(capabilities.get("modes") or ())
+    #: 声明了模式、却一种能拍一镜的都没有(说话照片、改口型、改视频……):哪条路都不走。没声明模式的(用户自建、
+    #: 查不全的)只看参数键。
+    shoots = not modes or bool(modes & _SHOT_MODES)
+    reference_limit = int((capabilities.get("source_limits") or {}).get(REFERENCE_IMAGE) or 0)
     return VideoPlan(
         clip_seconds=clip_seconds,
         aspect_ratio=aspect_ratio,
@@ -220,8 +241,11 @@ def _video_plan(db: Session | None, choice: ModelChoice) -> VideoPlan:
         width=size_width,
         height=size_height,
         parameters=parameters,
-        keyframes=FIRST_FRAME in keys,
-        last_frame=LAST_FRAME in keys,
-        references=REFERENCE_IMAGE in keys,
+        keyframes=shoots and FIRST_FRAME in keys and _route_allowed(capabilities, _KEYFRAME_SOURCES),
+        last_frame=shoots and LAST_FRAME in keys,
+        #: 参考那条路一镜交 SHOT_REFERENCE_IMAGES 张:收不下的(可灵 kling-v3-omni 只收 4 张)不走这条路。
+        #: 没写上限的按收得下算(和图像模型那边「认不出的算能」同一条)。
+        references=shoots and REFERENCE_IMAGE in keys and _route_allowed(capabilities, _REFERENCE_SOURCES)
+        and (reference_limit == 0 or reference_limit >= SHOT_REFERENCE_IMAGES),
         reference_video=REFERENCE_VIDEO in keys,
     )

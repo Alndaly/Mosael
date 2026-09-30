@@ -45,31 +45,12 @@ def _choices(kind: str, usable) -> list[ModelChoice]:
     ]
 
 
-#: 挑模型那一步(templates_models,不归模板管)眼下会挑中、而它们根本拍不了一镜的模型:会「说话照片」「改口型」
-#: 「改视频」「续写视频」的那些 —— 它们也收首帧或参考图,判据只看收不收,不看是不是在"从图出片"。
-#: 挑模型的判据修好之后,它们不再出现在参数表里,这几行随之失效;在那之前 xfail(strict)记着。
-NOT_A_SHOT_MODEL = {"speech-to-video", "video-lipsync", "video-edit", "video-extend"}
-#: 出片计划(templates_models._video_plan)按"收不收首帧 / 参考图"开放分镜能选的路,不看模型要求什么、收几张:
-PLAN_OFFERS_A_DEAD_PATH: dict[str, str] = {
-    #: 参考那条路一镜要交 8 张参考图(三视图 4 + 设定图 3 + 白模帧 1),它只收 4 张 —— 参考图门槛该按模板传入。
-    "kling-v3-omni": "出片计划对参考那条路不看参考图张数上限(templates_models)",
-    #: 它收首帧,但**必须**给参考图或参考视频 —— 首帧那条路对它是死路。
-    "wan2.7-r2v": "出片计划对首帧那条路不看 requires_source(templates_models)",
-}
-
-
-def _video_params(*, full_video: bool = False) -> list[Any]:
-    out = []
-    for choice in _choices("video", _can_shoot_from_references):
-        spec = next(one for one in BUILTIN_MODELS if one["model"] == choice.model and one["provider"] == choice.provider)
-        modes = set(spec["capabilities"].get("modes") or ())
-        marks = []
-        if modes and modes <= NOT_A_SHOT_MODEL:
-            marks.append(pytest.mark.xfail(strict=True, reason="挑模型的判据把不能出一镜的模型也挑了进来(templates_models)"))
-        elif full_video and choice.model in PLAN_OFFERS_A_DEAD_PATH:
-            marks.append(pytest.mark.xfail(strict=True, reason=PLAN_OFFERS_A_DEAD_PATH[choice.model]))
-        out.append(pytest.param(choice, id=f"{choice.provider}/{choice.model}", marks=marks))
-    return out
+#: 挑模型的判据(templates_models)排掉了拍不了一镜的模型(说话照片、改口型、改视频、续写视频)、参考图收不下一整组的
+#: (kling-v3-omni 只收 4 张)、首帧那条路注定被 requires_source 拒的(wan2.7-r2v),`_image_plan` 也认得「1:1」这种
+#: 尺寸写法了 —— 此前这几处在这里挂着 strict xfail,现在每个会被挑中的模型都该真的通过。
+def _video_params() -> list[Any]:
+    return [pytest.param(choice, id=f"{choice.provider}/{choice.model}")
+            for choice in _choices("video", _can_shoot_from_references)]
 
 
 def _image_params(needed: int) -> list[Any]:
@@ -164,7 +145,7 @@ def test_会被挑中的视频模型_收得下上身图动起来那一步(video:
     assert _check(_generations(on_model, skipped=set(), item={}), "video") == ["on_model_clip"]
 
 
-@pytest.mark.parametrize("video", _video_params(full_video=True))
+@pytest.mark.parametrize("video", _video_params())
 def test_会被挑中的视频模型_收得下整片生成的每一种走法(video: ModelChoice) -> None:
     graph = full_video_generation_graph(chat=CHAT, image=SEEDREAM, video=video)
     walks = _full_video_walks(video)
