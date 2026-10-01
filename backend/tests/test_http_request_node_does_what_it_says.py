@@ -99,6 +99,14 @@ def test_纯文本请求体照普通插值_不强加_Content_Type(server: _Serve
     assert server.received[0]["type"] != "application/json"
 
 
+@pytest.mark.parametrize("body", ["{{start.text}}\n\n来自 Mosael", "[告警] {{start.text}}", "{{start.text}} {结尾}"])
+def test_开头像_JSON_的纯文本请求体_照普通插值(server: _Server, body: str) -> None:
+    """此前只看开头是不是 `{` / `[`:这几种纯文本也被当成 JSON,引用被填成带引号、换行转义过的 JSON 字面量。"""
+    text = '他说:"好"\n第二行'
+    _node("http_request", {"method": "POST", "url": server.url + "/ok", "body": body}, params={"text": text})
+    assert server.received[0]["body"] == body.replace("{{start.text}}", text)
+
+
 def test_非_2xx_算失败(server: _Server) -> None:
     with pytest.raises(WorkflowDomainError) as caught:
         _node("http_request", {"method": "POST", "url": server.url + "/missing", "body": "x"})

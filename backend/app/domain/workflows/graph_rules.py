@@ -663,10 +663,14 @@ def interpolate_json_text(template: str, context: dict[str, dict[str, Any]]) -> 
     - 在一对引号**里面**:填转义过的字符串内容(`"` → `\"`、换行 → `\n`);
     - 在引号**外面**(`"count": {{q.count}}`):填这个值的 JSON 字面量(数字、对象、带引号的字符串)。
 
-    整串引用照旧保留原类型(交出去时 as_text 写成 JSON);不是 JSON 形状的模板(纯文本请求体)按普通插值。
+    整串引用照旧保留原类型(交出去时 as_text 写成 JSON);不是 JSON 的模板(纯文本请求体)按普通插值。
+
+    「是不是 JSON」看**把引用换成占位之后解不解析得了**,不看开头是不是 `{` / `[`:此前
+    `{{llm.text}}\n\n来自 Mosael`、`[告警] {{msg}}` 这样的纯文本请求体也被当成 JSON,引用被填成带引号的
+    JSON 字面量,发出去的文字多了一对引号、换行成了 `\n`。
     """
     stripped = template.strip()
-    if VARIABLE_RE.fullmatch(stripped) or not stripped.startswith(("{", "[")):
+    if VARIABLE_RE.fullmatch(stripped) or not _is_json_template(stripped):
         return interpolate(template, context)
     pieces: list[str] = []
     in_string = escaped = False
@@ -689,3 +693,12 @@ def interpolate_json_text(template: str, context: dict[str, dict[str, Any]]) -> 
         cursor = match.end()
     pieces.append(template[cursor:])
     return "".join(pieces)
+
+
+def _is_json_template(template: str) -> bool:
+    """引用换成一个数字占位之后是一段合法的 JSON 吗。引用在引号里外都成立(`"0"` / `0`)。"""
+    try:
+        json.loads(VARIABLE_RE.sub("0", template))
+    except ValueError:
+        return False
+    return True
