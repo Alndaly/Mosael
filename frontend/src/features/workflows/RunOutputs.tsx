@@ -80,13 +80,42 @@ export function outputSummary(
   return null;
 }
 
+/** 下载全文:被截断的那种去取回来再存。 */
+function DownloadButton({ name, load }: { name: string; load: () => Promise<string> }) {
+  const t = useI18n();
+  return (
+    <button
+      type="button"
+      className="shrink-0 cursor-pointer rounded-md border-0 bg-transparent p-1 text-muted-foreground transition-colors hover:text-foreground"
+      title={t("wfOutputDownload")}
+      aria-label={t("wfOutputDownload")}
+      onClick={async () => {
+        try {
+          saveBlobToDisk(new Blob([await load()], { type: "text/plain;charset=utf-8" }), `${name}.txt`);
+        } catch (error) {
+          toast.error(t("wfOutputFullFailed"), { description: errorText(error) });
+        }
+      }}
+    >
+      <Download size={11} />
+    </button>
+  );
+}
+
 /** 快照里截断了的那一格:全文多少字,和去取全文的动作。 */
 interface FullText {
   chars: number;
   load: () => Promise<string>;
 }
 
-function ValueRow({ row, full, inside = [] }: { row: OutputRow; full?: FullText; inside?: Array<{ path: string; chars: number }> }) {
+/** 输出里面被截断的一处:路径(取全文的 key)、全文多少字、去取全文的动作(不知道是哪次运行时没有)。 */
+interface InsideText {
+  path: string;
+  chars: number;
+  load?: () => Promise<string>;
+}
+
+function ValueRow({ row, full, inside = [] }: { row: OutputRow; full?: FullText; inside?: InsideText[] }) {
   const t = useI18n();
   const text = outputText(row.value);
   const long = text.length > INLINE_LIMIT;
@@ -100,23 +129,7 @@ function ValueRow({ row, full, inside = [] }: { row: OutputRow; full?: FullText;
           <span className="shrink-0 font-mono text-ui-2xs text-muted-foreground">{row.key}</span>
         )}
         <span className="ml-auto" />
-        {full && (
-          <button
-            type="button"
-            className="shrink-0 cursor-pointer rounded-md border-0 bg-transparent p-1 text-muted-foreground transition-colors hover:text-foreground"
-            title={t("wfOutputDownload")}
-            aria-label={t("wfOutputDownload")}
-            onClick={async () => {
-              try {
-                saveBlobToDisk(new Blob([await full.load()], { type: "text/plain;charset=utf-8" }), `${row.key}.txt`);
-              } catch (error) {
-                toast.error(t("wfOutputFullFailed"), { description: errorText(error) });
-              }
-            }}
-          >
-            <Download size={11} />
-          </button>
-        )}
+        {full && <DownloadButton name={row.key} load={full.load} />}
         <CopyButton value={full ? full.load : text} />
       </div>
       {full && (
@@ -126,14 +139,17 @@ function ValueRow({ row, full, inside = [] }: { row: OutputRow; full?: FullText;
         </span>
       )}
       {inside.length > 0 && (
-        //: 里面(循环每一项、子图的产出)的长文字也只留了开头。按路径取全文还没有接口,这里不假装能取:
-        //: 说清哪几处被截了、全文多长,复制拿到的是快照。
+        //: 里面(循环每一项、子图的产出)的长文字也只留了开头:说清哪几处被截了、全文多长,每一处单独
+        //: 复制 / 下载 —— 按路径去取全文(整格的复制给的仍是快照,它里面那几段是开头)。
         <div className="grid gap-0.5 text-ui-2xs text-warning" data-output-truncated="">
           <span>{t("wfOutputNestedTruncated")}</span>
-          {inside.map(({ path, chars }) => (
-            <span key={path} className="flex min-w-0 items-baseline gap-1.5">
+          {inside.map(({ path, chars, load }) => (
+            <span key={path} className="flex min-w-0 items-center gap-1.5" data-truncated-path={path}>
               <code className="truncate font-mono">{path}</code>
               <span className="shrink-0">{t("wfOutputNestedChars").replace("{n}", String(chars))}</span>
+              <span className="ml-auto" />
+              {load && <DownloadButton name={path} load={load} />}
+              {load && <CopyButton value={load} />}
             </span>
           ))}
         </div>
@@ -188,7 +204,12 @@ export function RunOutputs({ registry, nodeType, step }: { registry: RegistryLik
           chars != null && jobId
             ? { chars, load: async () => (await getWorkflowRunOutput(jobId, step.nid, row.key)).value }
             : undefined;
-        return <ValueRow key={row.key} row={row} full={full} inside={truncatedInside(step.truncated, row.key)} />;
+        const inside = truncatedInside(step.truncated, row.key).map(({ path, chars }) => ({
+          path,
+          chars,
+          load: jobId ? async () => (await getWorkflowRunOutput(jobId, step.nid, path)).value : undefined,
+        }));
+        return <ValueRow key={row.key} row={row} full={full} inside={inside} />;
       })}
       {assets.length === 0 && scalars.length === 0 && !step.error && (
         <span className="text-ui-xs font-normal text-muted-foreground">{t("wfRunNoOutputs")}</span>
