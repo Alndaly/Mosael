@@ -21,7 +21,7 @@ describe("useAutosave", () => {
 
   it("值稳定下来之后才发一次", () => {
     const save = vi.fn();
-    const { rerender } = renderHook(({ value }) => useAutosave(value, save, 500), {
+    const { rerender } = renderHook(({ value }) => useAutosave(value, save, { delay: 500 }), {
       initialProps: { value: "载入的那份" as string | null },
     });
 
@@ -38,7 +38,7 @@ describe("useAutosave", () => {
     // 不拦的话,每次打开画板都会立刻存一次 —— 服务端多一次无谓的写,而 updated_at 变了
     // 会让「最近编辑」乱掉:用户只是看了一眼,那张板就跳到最前面。
     const save = vi.fn();
-    const { rerender } = renderHook(({ value }) => useAutosave(value, save, 500), {
+    const { rerender } = renderHook(({ value }) => useAutosave(value, save, { delay: 500 }), {
       initialProps: { value: null as string | null },
     });
     rerender({ value: "服务端那份" });
@@ -49,7 +49,7 @@ describe("useAutosave", () => {
 
   it("值没变就不发", () => {
     const save = vi.fn();
-    const { rerender } = renderHook(({ value }) => useAutosave(value, save, 500), {
+    const { rerender } = renderHook(({ value }) => useAutosave(value, save, { delay: 500 }), {
       initialProps: { value: "a" as string | null },
     });
     rerender({ value: "a" });
@@ -60,7 +60,7 @@ describe("useAutosave", () => {
   it("卸载时把欠着的那次补上", () => {
     // 用户拖完最后一下就切走,防抖窗口还没到 —— 不补的话那一下就丢了。
     const save = vi.fn();
-    const { rerender, unmount } = renderHook(({ value }) => useAutosave(value, save, 500), {
+    const { rerender, unmount } = renderHook(({ value }) => useAutosave(value, save, { delay: 500 }), {
       initialProps: { value: "载入的那份" as string | null },
     });
     rerender({ value: "最后一下" });
@@ -70,10 +70,38 @@ describe("useAutosave", () => {
     expect(save).toHaveBeenCalledWith("最后一下");
   });
 
+  it("值还攒在上游、没交过来(画布的并步窗口)时卸载:补存的是 latest 交出来的那一份", () => {
+    // 画板上 BoardDetail 的自动保存先卸载、画布后卸载:画布攒着的最后一下等它汇上来时,这里早就停了。
+    const save = vi.fn();
+    let upstream = "载入的那份";
+    const { unmount } = renderHook(({ value }) => useAutosave(value, save, { delay: 500, latest: () => upstream }), {
+      initialProps: { value: "载入的那份" as string | null },
+    });
+    upstream = "还攒在画布上的最后一下";
+    unmount();
+
+    expect(save).toHaveBeenCalledTimes(1);
+    expect(save).toHaveBeenCalledWith("还攒在画布上的最后一下");
+  });
+
+  it("页面要关了(pagehide):不等防抖,把欠着的连同上游还攒着的那份当场存掉", () => {
+    const save = vi.fn();
+    let upstream = "a";
+    const { rerender } = renderHook(({ value }) => useAutosave(value, save, { delay: 500, latest: () => upstream }), {
+      initialProps: { value: "a" as string | null },
+    });
+    rerender({ value: "b" });
+    upstream = "c";
+    act(() => void window.dispatchEvent(new Event("pagehide")));
+
+    expect(save).toHaveBeenCalledTimes(1);
+    expect(save).toHaveBeenCalledWith("c");
+  });
+
   it("存完之后再改同一个值还会再存", () => {
     // confirmedValue 只是"上次落定的那份";用户撤销回到旧值也是一次真实编辑。
     const save = vi.fn();
-    const { rerender } = renderHook(({ value }) => useAutosave(value, save, 500), {
+    const { rerender } = renderHook(({ value }) => useAutosave(value, save, { delay: 500 }), {
       initialProps: { value: "a" as string | null },
     });
     rerender({ value: "b" });
@@ -86,7 +114,7 @@ describe("useAutosave", () => {
 
   it("pending 在攒着的时候为真,发出去之后为假", () => {
     const save = vi.fn();
-    const { result, rerender } = renderHook(({ value }) => useAutosave(value, save, 500), {
+    const { result, rerender } = renderHook(({ value }) => useAutosave(value, save, { delay: 500 }), {
       initialProps: { value: "a" as string | null },
     });
     expect(result.current.pending).toBe(false);
@@ -101,7 +129,7 @@ describe("useAutosave", () => {
   it("服务端真正确认后才把这份内容视为已保存", async () => {
     const first = deferred();
     const save = vi.fn(() => first.promise);
-    const { result, rerender } = renderHook(({ value }) => useAutosave(value, save, 500), {
+    const { result, rerender } = renderHook(({ value }) => useAutosave(value, save, { delay: 500 }), {
       initialProps: { value: "a" as string | null },
     });
 
@@ -121,7 +149,7 @@ describe("useAutosave", () => {
     const save = vi.fn()
       .mockImplementationOnce(() => first.promise)
       .mockImplementationOnce(() => latest.promise);
-    const { result, rerender } = renderHook(({ value }) => useAutosave(value, save, 500), {
+    const { result, rerender } = renderHook(({ value }) => useAutosave(value, save, { delay: 500 }), {
       initialProps: { value: "a" as string | null },
     });
 
@@ -144,7 +172,7 @@ describe("useAutosave", () => {
     const save = vi.fn()
       .mockRejectedValueOnce(new Error("offline"))
       .mockResolvedValueOnce(undefined);
-    const { result, rerender } = renderHook(({ value }) => useAutosave(value, save, 500), {
+    const { result, rerender } = renderHook(({ value }) => useAutosave(value, save, { delay: 500 }), {
       initialProps: { value: "a" as string | null },
     });
 
@@ -165,7 +193,7 @@ describe("useAutosave", () => {
 
   it("在 StrictMode 重新执行 effect 后仍能回报保存完成", async () => {
     const saving = deferred();
-    const { result, rerender } = renderHook(({ value }) => useAutosave(value, () => saving.promise, 500), {
+    const { result, rerender } = renderHook(({ value }) => useAutosave(value, () => saving.promise, { delay: 500 }), {
       initialProps: { value: "a" as string | null },
       wrapper: React.StrictMode,
     });
@@ -183,7 +211,7 @@ describe("useAutosave", () => {
     const save = vi.fn()
       .mockImplementationOnce(() => first.promise)
       .mockResolvedValueOnce(undefined);
-    const { rerender, unmount } = renderHook(({ value }) => useAutosave(value, save, 500), {
+    const { rerender, unmount } = renderHook(({ value }) => useAutosave(value, save, { delay: 500 }), {
       initialProps: { value: "a" as string | null },
     });
 
@@ -199,7 +227,7 @@ describe("useAutosave", () => {
   it("flush 不等防抖,现在就存掉欠着的那份,存完才回", async () => {
     const saving = deferred();
     const save = vi.fn(() => saving.promise);
-    const { result, rerender } = renderHook(({ value }) => useAutosave(value, save, 500), {
+    const { result, rerender } = renderHook(({ value }) => useAutosave(value, save, { delay: 500 }), {
       initialProps: { value: "a" as string | null },
     });
 
@@ -220,7 +248,7 @@ describe("useAutosave", () => {
     const first = deferred();
     const second = deferred();
     const save = vi.fn().mockImplementationOnce(() => first.promise).mockImplementationOnce(() => second.promise);
-    const { result, rerender } = renderHook(({ value }) => useAutosave(value, save, 500), {
+    const { result, rerender } = renderHook(({ value }) => useAutosave(value, save, { delay: 500 }), {
       initialProps: { value: "a" as string | null },
     });
 
@@ -240,7 +268,7 @@ describe("useAutosave", () => {
 
   it("没有欠着的,flush 立刻回", async () => {
     const save = vi.fn();
-    const { result } = renderHook(({ value }) => useAutosave(value, save, 500), {
+    const { result } = renderHook(({ value }) => useAutosave(value, save, { delay: 500 }), {
       initialProps: { value: "a" as string | null },
     });
     await expect(result.current.flush()).resolves.toBe(true);

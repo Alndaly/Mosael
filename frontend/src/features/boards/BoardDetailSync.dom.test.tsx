@@ -237,6 +237,25 @@ describe("画板详情页与服务端的同步", () => {
     expect(canvasHarness.api.patch).toHaveBeenCalledWith("img", expect.objectContaining({ asset_id: "a1" }));
   });
 
+  it("拖完最后一下就离开画板(画布还攒着没汇上来):那一下照样存上", async () => {
+    const note = { id: "n1", kind: "note" as const, x: 0, y: 0, width: 220, height: 140, text: "a" };
+    const server: BoardCanvas = { items: [note], edges: [], markers: [] };
+    opens(boardAt(3, server));
+    apiMocks.updateBoard.mockImplementation(async (_id: string, body: { canvas: BoardCanvas }) => boardAt(4, body.canvas));
+
+    const view = mount();
+    await vi.waitFor(() => expect(canvasHarness.props).not.toBeNull());
+    //: 画布此刻:便签拖到了 500,还没到 400ms 的并步,没汇给上层。卸载时上层先停、画布后停。
+    canvasHarness.api.flush.mockImplementation(() => ({ ...server, items: [{ ...note, x: 500 }] }));
+    view.unmount();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10);
+    });
+
+    expect(apiMocks.updateBoard).toHaveBeenCalledTimes(1);
+    expect((apiMocks.updateBoard.mock.calls[0][1] as { canvas: BoardCanvas }).canvas.items[0].x).toBe(500);
+  });
+
   it("刚在便签上敲完字就点「改写」:先把这段字存上,改写照着眼前这段来", async () => {
     // 服务端从它那份画布上读便签现在的字。自动保存还在 600ms 防抖里时就发改写,读到的是上一版。
     const server: BoardCanvas = {

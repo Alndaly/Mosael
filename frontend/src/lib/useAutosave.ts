@@ -17,13 +17,20 @@ import React from "react";
  *  · **卸载时把欠着的那次补上。** 用户拖完最后一下就切走,防抖窗口还没到 —— 不补的话
  *    那一下就丢了,而他看到的是"我明明拖过"。
  *
+ *  · **页面要关了也补上**(pagehide / beforeunload):关窗口、刷新不走卸载,防抖窗口里的那一下
+ *    同样会丢。和工作流编辑器(useWorkflowSave)同一条。
+ *
+ * `latest`:上游此刻**还攒着没交过来**的那一份(画板的画布攒到停手 400ms 才汇给上层)。卸载和关页面
+ * 时先问它要 —— 画板上自动保存住在详情页,画布是它的子组件:卸载时父组件的清理先跑,画布攒着的那一下
+ * 等它汇上来时这里早就停了。
+ *
  * `flush()`:不等防抖,现在就把欠着的存掉,回「存上了没有」。给**要服务端照着画布去做的动作**
  * 用 —— 用户刚敲完字就点「改写」,防抖窗口还没到,服务端读到的还是上一版(见画板的写字)。
  */
 export function useAutosave<T>(
   value: T | null,
   save: (value: T) => void | Promise<void>,
-  delay = 600,
+  { delay = 600, latest }: { delay?: number; latest?: () => T | null | undefined } = {},
 ): { pending: boolean; flush: () => Promise<boolean> } {
   const [pending, setPending] = React.useState(false);
   //: 上一次**已被服务端确认**的值。请求只是发出去还不算落定。
@@ -120,16 +127,39 @@ export function useAutosave<T>(
     }, delay);
   }, [value, delay]);
 
+  //: 上游还攒着的那一份收进待存的队列(和 value 变了是同一件事,只是不等防抖)。
+  const latestRef = React.useRef(latest);
+  latestRef.current = latest;
+  const takeLatest = () => {
+    const next = latestRef.current?.();
+    if (next === null || next === undefined || confirmedValue.current === null) return;
+    const known = queuedValue.current ?? inFlightValue.current ?? confirmedValue.current;
+    if (!Object.is(next, known)) queuedValue.current = next;
+  };
+  //: 不等防抖、现在就存掉欠着的(连上游还攒着的)。已经在路上的请求结束后会自行接着存最新那份。
+  const saveNowRef = React.useRef(() => undefined as void);
+  saveNowRef.current = () => {
+    if (timer.current) {
+      clearTimeout(timer.current);
+      timer.current = null;
+    }
+    takeLatest();
+    if (!inFlight.current) flushLatestRef.current();
+  };
+
   React.useEffect(() => {
     // React StrictMode 在开发环境会执行 setup → cleanup → setup。每次 setup 都必须
     // 重新声明当前实例可以更新状态,不能让第一次演练性 cleanup 永久关掉它。
     mounted.current = true;
+    const onLeave = () => saveNowRef.current();
+    window.addEventListener("pagehide", onLeave);
+    window.addEventListener("beforeunload", onLeave);
     return () => {
+      window.removeEventListener("pagehide", onLeave);
+      window.removeEventListener("beforeunload", onLeave);
       mounted.current = false;
-      if (timer.current) clearTimeout(timer.current);
       // 卸载时把欠着的补上 —— 拖完最后一下就切走的那一次不能丢。
-      // 已经在路上的请求结束后会自行继续刷新值;没在路上则现在就发。
-      if (!inFlight.current) flushLatestRef.current();
+      saveNowRef.current();
     };
   }, []);
 

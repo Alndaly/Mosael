@@ -588,6 +588,9 @@ function BoardDetail({
   //: 画布交出来的把手。顶栏那组按钮要和身份胶囊并排,而它们依赖画布内部状态。
   //: **类型从画布导出**,别在这儿再抄一份 —— 抄的那份少一个动作不会报错,只会让按钮点了没反应。
   const [api, setApi] = React.useState<BoardCanvasApi | null>(null);
+  //: 画布的把手的最新一份,给卸载、关页面、定时器读。
+  const apiRef = React.useRef(api);
+  apiRef.current = api;
   const commentsKey = ["comments", board.workspace_id, "board", board.id] as const;
   const comments = useQuery({
     queryKey: commentsKey,
@@ -837,7 +840,8 @@ function BoardDetail({
    * 字就点「改写」,服务端读到的还是上一版,改写的对象不是他眼前那一段。存不上时(已经提示过了)
    * 动作就不发。
    */
-  const { flush: flushSaves } = useAutosave(canvas, save);
+  //: `latest`:离开画板、关页面时,画布还攒着没汇上来的那一下(并步窗口)也得存上 —— 卸载时这里的清理比画布的先跑。
+  const { flush: flushSaves } = useAutosave(canvas, save, { latest: () => apiRef.current?.flush() });
   //: 画布汇上来的新一份。本地那份的引用**当场**换上:动作(生成、写字)和轮询读的是它,不等下一次渲染。
   const onCanvasChange = React.useCallback((next: Canvas) => {
     localCanvas.current = next;
