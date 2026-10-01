@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, JSON, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, JSON, String, Text, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
@@ -37,6 +37,16 @@ class BrowserSession(Base):
     """One isolated browser automation session."""
 
     __tablename__ = "browser_sessions"
+    #: 一份登录(分区)同一时刻最多一个开着的具名 / 池档案会话 —— 租约落在库里,而不是只靠「先查后建」:
+    #: 同一拍的两次打开都查到「没有」,各建一个(见 domain/browser 的 _lease_login)。临时会话各有各的分区,不在其列。
+    __table_args__ = (
+        Index(
+            "uq_browser_sessions_open_login",
+            "partition",
+            unique=True,
+            sqlite_where=text("status = 'open' AND kind IN ('named', 'profile')"),
+        ),
+    )
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
     workspace_id: Mapped[str] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False)

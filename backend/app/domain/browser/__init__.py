@@ -22,6 +22,7 @@ from collections.abc import Callable
 from datetime import datetime, timedelta
 
 from sqlalchemy import func, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -224,18 +225,14 @@ def open_session(
         #: 先跑完的那次收尾时把会话关掉,另一次做到一半的动作全部落空。
         #: 占着它的那个要是早就没人用了(智能体没关、运行异常退出),先收回来再看。
         reclaim_idle_sessions(db, partition=partition)
-        existing = db.scalar(
-            select(BrowserSession).where(BrowserSession.partition == partition, BrowserSession.status == "open")
+        session = _lease_login(
+            db,
+            BrowserSession(
+                workspace_id=workspace_id, kind="named", name=session_name, partition=partition,
+                owner_kind=owner_kind, owner_id=owner_id, status="open",
+            ),
+            busy=lambda: BrowserDomainError("browserErr_sessionBusy", name=session_name),
         )
-        if existing is not None:
-            if existing.owner_kind == owner_kind and (existing.owner_id or "") == (owner_id or ""):
-                return existing
-            raise BrowserDomainError("browserErr_sessionBusy", name=session_name)
-        session = BrowserSession(
-            workspace_id=workspace_id, kind="named", name=session_name, partition=partition,
-            owner_kind=owner_kind, owner_id=owner_id, status="open",
-        )
-        db.add(session)
     else:
         session = BrowserSession(
             workspace_id=workspace_id, kind="ephemeral", name="", owner_kind=owner_kind, owner_id=owner_id,
@@ -258,29 +255,57 @@ def _open_profile_session(
     if not prof.enabled:
         raise BrowserDomainError("browserErr_profileDisabled")
     # 租约:一个档案同一时刻只允许一个活动会话。占着它的那个早就没人用了的话先收回来(见 reclaim_idle_sessions)。
-    reclaim_idle_sessions(db, profile_id=profile_id)
-    existing = db.scalar(
-        select(BrowserSession).where(BrowserSession.profile_id == profile_id, BrowserSession.status == "open")
+    reclaim_idle_sessions(db, partition=prof.partition)
+    session = _lease_login(
+        db,
+        BrowserSession(
+            workspace_id=workspace_id,
+            kind="profile",
+            name=(prof.name or "")[:80],
+            partition=prof.partition,
+            profile_id=profile_id,
+            owner_kind=owner_kind if owner_kind in ("agent", "workflow", "manual") else "manual",
+            owner_id=owner_id,
+            status="open",
+        ),
+        busy=lambda: BrowserDomainError("browserErr_profileBusy"),
     )
-    if existing is not None:
-        if existing.owner_kind == owner_kind and (existing.owner_id or "") == (owner_id or ""):
-            return existing  # 同一 owner 复用
-        raise BrowserDomainError("browserErr_profileBusy")
-    session = BrowserSession(
-        workspace_id=workspace_id,
-        kind="profile",
-        name=(prof.name or "")[:80],
-        partition=prof.partition,
-        profile_id=profile_id,
-        owner_kind=owner_kind if owner_kind in ("agent", "workflow", "manual") else "manual",
-        owner_id=owner_id,
-        status="open",
-    )
-    db.add(session)
     prof.last_used_at = now()
     db.commit()  # 同 open_session:紧接着的动作在别的会话里读它
     db.refresh(session)
     return session
+
+
+def _lease_login(db: Session, wanted: BrowserSession, *, busy: Callable[[], BrowserDomainError]) -> BrowserSession:
+    """具名 / 池档案会话的租约:这份登录(分区)上已经开着的那个归同一个 owner 就复用,归别人就拒;没有就开 `wanted`。
+
+    **「先查后建」挡不住同一拍的两次打开**:两边都查到「没有」、各建一个,同一份登录上就开着两个会话
+    (实测过)。挡它的是库里的局部唯一索引(一个分区上最多一个开着的具名 / 池档案会话,见
+    BrowserSession.__table_args__):后到的那个插入撞上索引,只回滚这一小步,再按此刻占着它的是谁判一次。
+    """
+
+    def holder() -> BrowserSession | None:
+        return db.scalar(
+            select(BrowserSession).where(BrowserSession.partition == wanted.partition, BrowserSession.status == "open")
+        )
+
+    def reuse_or_refuse(existing: BrowserSession) -> BrowserSession:
+        if existing.owner_kind == wanted.owner_kind and (existing.owner_id or "") == (wanted.owner_id or ""):
+            return existing
+        raise busy()
+
+    existing = holder()
+    if existing is not None:
+        return reuse_or_refuse(existing)
+    try:
+        with db.begin_nested():
+            db.add(wanted)
+    except IntegrityError:
+        existing = holder()
+        if existing is None:
+            raise
+        return reuse_or_refuse(existing)
+    return wanted
 
 
 def attach_session(db: Session, session_id: str, *, workspace_id: str, actor: Actor) -> BrowserSession | None:
@@ -338,7 +363,7 @@ def _idle_cutoff() -> datetime | None:
     return now() - timedelta(minutes=minutes) if minutes > 0 else None
 
 
-def _reclaimable_sessions(db: Session, *, partition: str | None = None, profile_id: str | None = None) -> list[BrowserSession]:
+def _reclaimable_sessions(db: Session, *, partition: str | None = None) -> list[BrowserSession]:
     """空着太久、该收回的开着的会话。
 
     **空闲按最后一次动作算**(没有动作就按打开的时间),还有动作在排、在跑的不算空闲。工作流开的会话
@@ -364,8 +389,6 @@ def _reclaimable_sessions(db: Session, *, partition: str | None = None, profile_
     )
     if partition is not None:
         query = query.where(BrowserSession.partition == partition)
-    if profile_id is not None:
-        query = query.where(BrowserSession.profile_id == profile_id)
     from app.domain.jobs import TERMINAL_STATUSES  # 同 install():导入期不依赖任务总线
 
     idle = []
@@ -378,14 +401,14 @@ def _reclaimable_sessions(db: Session, *, partition: str | None = None, profile_
     return idle
 
 
-def reclaim_idle_sessions(db: Session, *, partition: str | None = None, profile_id: str | None = None) -> int:
+def reclaim_idle_sessions(db: Session, *, partition: str | None = None) -> int:
     """把空着太久的会话关掉(不提交,跟着调用方的事务走)。返回关了几个。
 
     智能体用完浏览器多半不发「关闭」就去干别的了;工作流进程异常退出时,它开的会话也没人关。
     具名 / 池档案会话一时刻只归一个 owner —— 没人收的那一个会让之后每一次同名打开都报「被占用」。
     执行器每次认领都扫一遍,打开会话撞上占用时再就地扫一次那一份登录。
     """
-    idle = _reclaimable_sessions(db, partition=partition, profile_id=profile_id)
+    idle = _reclaimable_sessions(db, partition=partition)
     for session in idle:
         _mark_closed(db, session)
     return len(idle)

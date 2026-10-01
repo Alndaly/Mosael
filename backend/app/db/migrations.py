@@ -5994,6 +5994,43 @@ def _migrate_named_browser_partitions_are_per_workspace() -> None:
                 logger.info("具名浏览器分区 %s 归工作区 %s,放弃工作区 %s 那份", old, winner, workspace_id)
 
 
+def _migrate_browser_sessions_one_open_per_login() -> None:
+    """一份登录(分区)上最多一个开着的具名 / 池档案会话:建局部唯一索引 `uq_browser_sessions_open_login`。
+
+    租约此前只靠「先查后建」,同一拍的两次打开各建一个,同一份登录上开着两个会话(两次运行互相点、互相导航)。
+    建索引之前先把已经撞上的收掉:每个分区留最早开的那个,其余落 closed、没跑完的动作落 failed ——
+    不先收,建索引本身就会因为重复而失败。全新安装由 create_all 按模型建好,这里 IF NOT EXISTS 什么也不做。
+    """
+    if "browser_sessions" not in set(inspect(engine).get_table_names()):
+        return
+    login = "status = 'open' AND kind IN ('named', 'profile')"
+    with engine.begin() as conn:
+        rows = conn.execute(
+            text(f"SELECT id, partition FROM browser_sessions WHERE {login} ORDER BY created_at, id")
+        ).all()
+        kept: set[str] = set()
+        extras: list[str] = []
+        for session_id, partition in rows:
+            if partition in kept:
+                extras.append(session_id)
+            else:
+                kept.add(partition)
+        for session_id in extras:
+            conn.execute(text("UPDATE browser_sessions SET status = 'closed' WHERE id = :id"), {"id": session_id})
+            conn.execute(
+                text(
+                    "UPDATE browser_actions SET status = 'failed', error = 'browserErr_sessionClosed' "
+                    "WHERE session_id = :id AND status IN ('queued', 'running')"
+                ),
+                {"id": session_id},
+            )
+        if extras:
+            logger.info("同一份登录上开着多个浏览器会话,收掉后开的 %d 个", len(extras))
+        conn.execute(
+            text(f"CREATE UNIQUE INDEX IF NOT EXISTS uq_browser_sessions_open_login ON browser_sessions (partition) WHERE {login}")
+        )
+
+
 def _rewrite_workflow_graphs(rewrite: Any, note: str) -> int:
     """把每个工作流的当前图过一遍 `rewrite`(连同循环体 / 子图,由 `rewrite` 自己走);变了的追加一版修订。
 
@@ -6689,6 +6726,8 @@ def migration_plan() -> MigrationPlan:
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_agent_session_titles_drop_attachment_tokens),
             #: 具名浏览器会话的登录分区按工作区分开:写下搬家单,由 Electron 执行器在磁盘上搬(新表由 SCHEMA 建)。
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_named_browser_partitions_are_per_workspace),
+            #: 具名 / 池档案会话的租约落进库里(局部唯一索引);建之前先收掉已经撞上的。
+            *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_browser_sessions_one_open_per_login),
             #: 这几条都落新修订(commit_graph_revision),所以排在修订迁移之后。
             *_steps(
                 MigrationPhase.AFTER_SCHEMA,

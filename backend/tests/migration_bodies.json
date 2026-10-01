@@ -54,6 +54,7 @@
   "migrate-browser-nodes-fill-one-target": "40795fe69abb014d",
   "migrate-browser-pool": "ba842907261bd6f7",
   "migrate-browser-profile-start-url": "06bb87ab55e17075",
+  "migrate-browser-sessions-one-open-per-login": "f410690e2dd0cdd4",
   "migrate-called-workflows-declare-their-output": "6a833294a868356a",
   "migrate-capability-defaults-name-builtins": "a70a60c557a22c68",
   "migrate-client-surface": "086834ef6ae8661e",
