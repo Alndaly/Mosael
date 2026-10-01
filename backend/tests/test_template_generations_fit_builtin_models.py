@@ -147,7 +147,23 @@ def _full_video_walks(video: ModelChoice) -> list[tuple[set[str], dict[str, Any]
     return walks
 
 
-@pytest.mark.parametrize("video", _video_params())
+def _on_model_video_params() -> list[Any]:
+    """上身图动起来那一步会挑中的视频模型:参考那条路只交那一张上身图,门槛是 1 张(和建图时同一个判据)。"""
+    def usable(db: Any, one: ModelChoice) -> bool:
+        return _can_shoot_from_references(db, one, references=SINGLE_REFERENCE)
+
+    return [pytest.param(choice, id=f"{choice.provider}/{choice.model}") for choice in _choices("video", usable)]
+
+
+def test_只收几张参考图又必须给参考的视频模型_上身图那一步挑得中() -> None:
+    """万相 wan2.7-r2v 只收 5 张参考、必须给参考:整片一镜要一整组,它不行;上身图只交一张,它行。
+    此前门槛写死整片那一组,它在哪个模板里都挑不中。"""
+    r2v = ModelChoice(provider="alibaba", model="wan2.7-r2v")
+    assert not _can_shoot_from_references(None, r2v)
+    assert _can_shoot_from_references(None, r2v, references=SINGLE_REFERENCE)
+
+
+@pytest.mark.parametrize("video", _on_model_video_params())
 def test_会被挑中的视频模型_收得下上身图动起来那一步(video: ModelChoice) -> None:
     on_model = _business(SEEDREAM, video)["product_on_model"]
     assert _check(_generations(on_model, skipped=set(), item={}), "video") == ["on_model_clip"]

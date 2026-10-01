@@ -113,9 +113,12 @@ def _can_take_references(db: Session | None, choice: ModelChoice, *, needed: int
     return "image-to-image" in (capabilities.get("modes") or ()) and limit >= needed
 
 
-def _can_shoot_from_references(db: Session | None, choice: ModelChoice) -> bool:
-    """视频模型能不能从首帧或参考素材出片 —— 这条流程每一镜都给其中之一,从不只给一段文字。"""
-    plan = _video_plan(db, choice)
+def _can_shoot_from_references(db: Session | None, choice: ModelChoice, *, references: int | None = None) -> bool:
+    """视频模型能不能从首帧或参考素材出片 —— 这条流程每一镜都给其中之一,从不只给一段文字。
+
+    `references` 是参考那条路一次交几张图,由模板自己说:整片一镜交一整组(SHOT_REFERENCE_IMAGES),上身图动起来
+    只交那一张上身图。此前门槛写死整片那一组 —— 只收 5 张、又必须给参考的万相 wan2.7-r2v 永远挑不中。"""
+    plan = _video_plan(db, choice, references=references)
     return bool(choice.model) and (plan.keyframes or plan.references)
 
 
@@ -142,8 +145,8 @@ def _chat_model(db: Session, user_id: str) -> ModelChoice:
     return _pick(db, user_id, "chat", lambda _db, choice: bool(choice.model))
 
 
-def _shot_video_model(db: Session, user_id: str) -> ModelChoice:
-    return _pick(db, user_id, "video", _can_shoot_from_references)
+def _shot_video_model(db: Session, user_id: str, *, references: int | None = None) -> ModelChoice:
+    return _pick(db, user_id, "video", lambda db_, choice: _can_shoot_from_references(db_, choice, references=references))
 
 
 def _reference_image_model(db: Session, user_id: str, *, needed: int) -> ModelChoice:
@@ -221,8 +224,11 @@ def _route_allowed(capabilities: dict[str, Any], sources: frozenset[str]) -> boo
     return all(set(group) & sources for group in capabilities.get("requires_source") or () if group)
 
 
-def _video_plan(db: Session | None, choice: ModelChoice) -> VideoPlan:
-    """从模型能力目录挑一组肯定合法的默认值；未知模型只给生成契约的通用时长。"""
+def _video_plan(db: Session | None, choice: ModelChoice, *, references: int | None = None) -> VideoPlan:
+    """从模型能力目录挑一组肯定合法的默认值；未知模型只给生成契约的通用时长。
+
+    `references`:参考那条路一次交几张图(缺省是整片一镜的 SHOT_REFERENCE_IMAGES),收不下的不走这条路。"""
+    needed = SHOT_REFERENCE_IMAGES if references is None else references
     capabilities = _capabilities(db, choice, "video")
     if capabilities is None:
         #: 认不出的模型只按最通用的那条走:首帧生视频。不猜它收参考素材。
@@ -290,9 +296,9 @@ def _video_plan(db: Session | None, choice: ModelChoice) -> VideoPlan:
         sizes=sizes or None,
         keyframes=shoots and FIRST_FRAME in keys and _route_allowed(capabilities, _KEYFRAME_SOURCES),
         last_frame=shoots and LAST_FRAME in keys,
-        #: 参考那条路一镜交 SHOT_REFERENCE_IMAGES 张:收不下的(可灵 kling-v3-omni 只收 4 张)不走这条路。
+        #: 参考那条路一次交 `needed` 张:收不下的(整片一镜 8 张,可灵 kling-v3-omni 只收 4 张)不走这条路。
         #: 没写上限的按收得下算(和图像模型那边「认不出的算能」同一条)。
         references=shoots and REFERENCE_IMAGE in keys and _route_allowed(capabilities, _REFERENCE_SOURCES)
-        and (reference_limit == 0 or reference_limit >= SHOT_REFERENCE_IMAGES),
+        and (reference_limit == 0 or reference_limit >= needed),
         reference_video=REFERENCE_VIDEO in keys,
     )

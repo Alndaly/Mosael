@@ -299,7 +299,8 @@ def built_in_template_graph(
             # 每次只带那一张商品图:门槛是 1 张,不是整片生成的 9 张。
             image=_reference_image_model(db, user_id, needed=SINGLE_REFERENCE),
             # 视频是**可选**的一步:没有合适的视频模型就只出静图,而不是让整条模板用不了。
-            video=_shot_video_model(db, user_id),
+            # 动起来那一步只交那一张上身图:参考那条路的门槛是 1 张,不是整片一镜的一整组。
+            video=_shot_video_model(db, user_id, references=SINGLE_REFERENCE),
             # 出图尺寸和视频的时长 / 画幅按模型的参数声明挑(用户自定义的声明也算)。
             db=db,
         ))
