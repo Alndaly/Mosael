@@ -23,6 +23,7 @@ import { itemError, itemIsRunning, itemJobId, itemRunStatus, runningAbility, typ
 import { SceneOverview } from "@/features/boards/SceneOverview";
 import { SequenceCell } from "@/features/boards/SequenceCell";
 import { BoardNodeLabel } from "@/features/boards/BoardNodeLabel";
+import { QuietPortsContext } from "@/features/boards/boardPorts";
 
 /**
  * 画板上的格子:便签、图片 / 视频 / 音频、文档、3D 场景、分组框。把内容变成新内容的工具不是单独的格子 ——
@@ -87,6 +88,7 @@ export type BoardNodeData = {
  * 一个 `+` 把这件事说清楚了,而它同时仍是 React Flow 的 Handle —— 拖它就是连线。
  *
  * 默认透明是因为想法之间的关系是次要信息:一上来每个节点四周都挂着圆圈,画布看着像电路图。
+ * 选中了两格以上时,选中的格子也照这个来(只在悬停时显形)—— 见 QuietPortsContext。
  */
 function Ports({ visible, disabled = false }: { visible?: boolean; disabled?: boolean }) {
   //: **handle 元素自己要小、要贴着边**,因为连线的锚点是从它的矩形算出来的 —— 把它做大
@@ -109,7 +111,8 @@ function Ports({ visible, disabled = false }: { visible?: boolean; disabled?: bo
   const anchor = "!h-2 !w-2 !rounded-none !border-0 !bg-transparent !p-0 transition-opacity";
   const dot =
     "grid h-6 w-6 place-items-center rounded-full border border-border-strong bg-panel text-muted-foreground transition-colors hover:border-primary hover:text-primary";
-  const shown = disabled ? "!opacity-0 !pointer-events-none" : visible ? "opacity-100" : "opacity-0 group-hover:opacity-100";
+  const quiet = React.useContext(QuietPortsContext);
+  const shown = disabled ? "!opacity-0 !pointer-events-none" : visible && !quiet ? "opacity-100" : "opacity-0 group-hover:opacity-100";
   const scaled = (offset: number, origin: string) => ({
     transform: `scale(${1 / zoom}) translateX(${offset}px)`,
     transformOrigin: origin,

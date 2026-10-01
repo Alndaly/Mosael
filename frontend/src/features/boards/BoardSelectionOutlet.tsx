@@ -21,12 +21,21 @@ import { selectionDraft, type PlacedCell, type Rect, type SelectionDraft, type X
  * 而这里要从好几格同时画、按每一根判;框也一样 —— 它自带的 NodesSelection 只在框选之后出现,按住 ⇧ 点选的没有。
  * 这一层叠在画布上面,在屏幕坐标里摆框和 `+`(边框和按钮不跟着缩放,和格子的 `+` 一样永远这么大),预览线在流坐标里画
  * (线宽跟着缩放,和真线一样)。
+ *
+ * **多选时格子自己的 `+` 收起来,悬停那一格才露出**(QuietPortsContext):不然一组格子四周挂满 `+`,框得放宽把它们圈进去,
+ * 框上的出口还会和最右那一格的 `+` 挤在一起 —— 两个长得差不多的东西挨着,分不清拖的是哪一个。
  */
 
-/** 框离格子多远(屏幕 px)。左右要把选中格子自己露出来的 `+`(贴边 10px 外一个 24px 的圆)圈在框里,框上的统一出口
- *  (28px 的圆骑在框线上)和最右那一格的 `+` 之间还留出一截 —— 一行格子时两者正好同高,挨着就分不清拖的是哪一个。
- *  上面让开格子的类型标签,又不碰到操作条(BOARD_NODE_PANEL_OFFSET = 24)。 */
-const PAD = { x: 56, top: 22, bottom: 14 } as const;
+/** 框离格子多远(屏幕 px):贴着格子,上面让开格子的类型标签,又不碰到操作条(BOARD_NODE_PANEL_OFFSET = 24)。 */
+const PAD = { x: 24, top: 22, bottom: 16 } as const;
+/**
+ * 统一出口离框线多远(屏幕 px):浮在框外,像格子的 `+` 浮在格子边外那样。
+ *
+ * 这个距离保证悬停最右那一格、它自己的 `+` 露出来时,两个圆之间还隔着一截:格子的 `+` 伸到格子边外 10 + 24 = 34px,
+ * 统一出口的圆从格子边外 PAD.x + OUTLET_GAP = 40px 才开始。
+ */
+const OUTLET_GAP = 16;
+const OUTLET_SIZE = 28;
 
 /** 悬在一格上时,那一格外面的那一圈(和查找节点的圈同一个手法)。连得上是主色,一根都连不上是警示色的虚线。 */
 export const LINK_TARGET_CLASS = {
@@ -198,12 +207,12 @@ export function BoardSelectionOutlet({
           title={label}
           onPointerDown={begin}
           className={cn(
-            "nodrag nopan pointer-events-auto absolute grid h-7 w-7 -translate-x-1/2 -translate-y-1/2 cursor-crosshair place-items-center rounded-full border shadow-sm transition-colors",
+            "nodrag nopan pointer-events-auto absolute grid size-7 -translate-x-1/2 -translate-y-1/2 cursor-crosshair place-items-center rounded-full border shadow-sm transition-colors",
             point
               ? "border-primary bg-primary text-primary-foreground"
               : "border-primary/70 bg-panel text-primary hover:border-primary hover:bg-primary hover:text-primary-foreground",
           )}
-          style={{ left: left + width, top: top + height / 2 }}
+          style={{ left: left + width + OUTLET_GAP + OUTLET_SIZE / 2, top: top + height / 2 }}
         >
           <Plus size={15} strokeWidth={2.25} />
           {/* 这一根会连出去几格 —— 和格子自己那个只连一格的 `+` 区分开。 */}

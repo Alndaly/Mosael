@@ -47,6 +47,7 @@ import { cn } from "@/lib/utils";
 import { isCanvasKeyTarget, leaveClipboardToSystem, listenKeys } from "@/lib/shortcuts";
 import { canRedo, canUndo } from "@/features/boards/canvasHistory";
 import { SequenceAddContext } from "@/features/boards/sequenceCursor";
+import { QuietPortsContext } from "@/features/boards/boardPorts";
 import { TrimComposer } from "@/features/boards/TrimComposer";
 import { canAskWriter, canOpenOnDemand, composerOnDemand, renderAbility, renderComposer } from "@/features/boards/boardComposers";
 import { BOARD_NODE_TYPES, DEFAULT_SIZE, kindIcon, kindText, SPAWNABLE_KINDS } from "@/features/boards/boardNodes";
@@ -793,6 +794,8 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
     >
       <MarkerEditorProvider enabled={markerMode && markersVisible}>
       <SequenceAddContext.Provider value={pickForSequence}>
+      {/* 选中两格以上:选中格子自己的 `+` 只在悬停时露出,批量连线走选区框的统一出口。 */}
+      <QuietPortsContext.Provider value={selectedCells.length > 1}>
       <ReactFlow
         nodes={display.nodes}
         edges={display.edges}
@@ -946,6 +949,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
           nodeStrokeColor="transparent"
         />}
       </ReactFlow>
+      </QuietPortsContext.Provider>
       </SequenceAddContext.Provider>
       </MarkerEditorProvider>
 

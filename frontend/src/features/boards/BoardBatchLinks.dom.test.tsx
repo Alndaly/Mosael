@@ -258,6 +258,43 @@ describe("选区框的统一出口", () => {
   });
 });
 
+/** 这一格自己的出入口 `+`(React Flow 的接点)此刻的显隐类。 */
+const ports = (id: string) => [...document.querySelectorAll<HTMLElement>(`.react-flow__node[data-id="${id}"] .react-flow__handle`)];
+function unpick(...ids: string[]) {
+  act(() => {
+    flow.props!.onNodesChange!(ids.map((id) => ({ id, type: "select", selected: false })));
+  });
+}
+
+describe("多选时格子自己的 `+` 只在悬停时露出", () => {
+  it("只选一格:它的出入口一直露着(和原来一样)", async () => {
+    await mount({ items: [image("i1", 0), image("i2", 300)], edges: [], markers: [] });
+    pick("i1");
+    expect(ports("i1")).toHaveLength(2);
+    for (const port of ports("i1")) {
+      expect(port.classList.contains("opacity-100"), "选中的那一格:+ 露着").toBe(true);
+      expect(port.classList.contains("opacity-0")).toBe(false);
+    }
+  });
+
+  it("选中两格以上:选中格子的 + 默认收起,悬停那一格时露出;退回只选一格又一直露着", async () => {
+    await mount({ items: [image("i1", 0), image("i2", 300), image("i3", 600)], edges: [], markers: [] });
+    pick("i1", "i2");
+    for (const id of ["i1", "i2"]) {
+      expect(ports(id)).toHaveLength(2);
+      for (const port of ports(id)) {
+        expect(port.classList.contains("opacity-0"), `${id}:默认收起`).toBe(true);
+        expect(port.classList.contains("opacity-100")).toBe(false);
+        //: 悬停露出靠的是格子外壳上的 group —— 和没选中的格子同一个机制。
+        expect(port.classList.contains("group-hover:opacity-100"), `${id}:悬停那一格时露出`).toBe(true);
+        expect(port.closest(".group"), `${id}:接点在格子的 group 里`).not.toBeNull();
+      }
+    }
+    unpick("i2");
+    for (const port of ports("i1")) expect(port.classList.contains("opacity-100"), "退回单选").toBe(true);
+  });
+});
+
 describe("格子自己的出口只连它自己", () => {
   it("哪怕它在一组选中的格子里:拉到生成格只连这一格", async () => {
     const view = await mount({ items: [image("i1", 0), image("i2", 300), image("i3", 600), slot], edges: [], markers: [] });
