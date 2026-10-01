@@ -14,11 +14,14 @@ export function AssetListField({
   value,
   options,
   onChange,
+  addLabel,
 }: {
   value: unknown;
   /** 可挑的素材(已按字段声明的素材种类筛过)。 */
   options: Array<{ value: string; label: string }>;
   onChange: (next: string[]) => void;
+  /** 「再加一份」那个选择器的占位;挑的不是素材时(固定的几个值)换一句。 */
+  addLabel?: string;
 }) {
   const t = useI18n();
   const picked = Array.isArray(value) ? value.map(String).filter(Boolean) : [];
@@ -49,7 +52,7 @@ export function AssetListField({
       <Combobox
         value=""
         options={remaining}
-        placeholder={t("wfAssetListAdd")}
+        placeholder={addLabel ?? t("wfAssetListAdd")}
         emptyText={t("cmdkEmpty")}
         className="w-full"
         onValueChange={(next) => next && onChange([...picked, next])}

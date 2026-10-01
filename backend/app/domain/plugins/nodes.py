@@ -142,6 +142,9 @@ def _config_from_schema(schema: Any) -> dict[str, dict[str, Any]]:
         enum = spec.get("enum")
         if isinstance(enum, list) and enum:
             entry["options"] = [str(value) for value in enum]
+        elif entry["type"] == "list" and isinstance(items.get("enum"), list) and items["enum"]:
+            # 一串、每一项只能是这几个值之一:表单给多选(挑出来的一排),不是让人一行一行手写还写错
+            entry["options"] = [str(value) for value in items["enum"]]
         elif raw_type == "boolean":
             # 开关给「是 / 否」下拉(选项名由节点目录按语言翻);留空 = 不设
             entry["options"] = ["true", "false"]

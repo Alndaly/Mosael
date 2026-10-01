@@ -470,6 +470,7 @@ export const publish = {
   wfMapValue: "值或上游输出",
   wfMapAdd: "加一项",
   wfListItem: "一项:值或上游输出",
+  wfListPickMore: "再选一项",
   wfListGotMapping: "这一格存的是旧写法(「名字 → 值」的映射),运行时会报错:请重新填,一行一项",
   wfRefEditorHint: "输入文字,或点下面的标签插入上游输出",
   wfStepDone: "完成",

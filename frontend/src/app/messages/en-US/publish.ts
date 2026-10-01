@@ -468,6 +468,7 @@ export const publish = {
   wfMapValue: "Value or upstream output",
   wfMapAdd: "Add",
   wfListItem: "An item: a value or an upstream output",
+  wfListPickMore: "Pick another",
   wfListGotMapping: "This field holds the old format (a name → value mapping) and will fail when run: refill it, one item per row",
   wfRefEditorHint: "Type text, or click a tag below to insert an upstream output",
   wfStepDone: "done",

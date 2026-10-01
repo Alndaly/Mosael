@@ -60,6 +60,7 @@ TOOLS = [
             "flags": {"type": "array", "items": {"type": "boolean"}},
             "nums": {"type": "array", "items": {"type": "number"}},
             "words": {"type": "array", "items": {"type": "string"}},
+            "scales": {"type": "array", "items": {"type": "integer", "enum": [1, 2, 4]}},
             "objs": {"type": "array", "items": {"type": "object"}},
         }},
         "node": {"outputs": ["got"]},
@@ -203,6 +204,17 @@ def test_数组入参的边界_一行JSON数组文字拼进来_逗号不拆_nan�
     }), params={"obj": '{"k": 3}'})
     assert status == "succeeded", error
     assert result["context"]["e"]["got"]["objs"] == [{"k": 3}], "整格接一段 JSON 对象文字:就是那一项"
+
+
+def test_每一项只能是几个值之一的数组_表单给多选_交给插件的按类型转(tmp_path) -> None:
+    """`items.enum`:表单给多选(选项就是那几个值),存下的是文字,交给插件之前按 items.type 转。"""
+    scales = node_meta(TOOLS[1])["config"]["scales"]
+    assert scales["type"] == "list" and scales["options"] == ["1", "2", "4"]
+    ws = fresh_client().post("/api/workspaces", json={"name": "W"}).json()["id"]
+    _install(tmp_path, user_id())
+    status, result, error = _run(ws, _graph({"id": "e", "type": f"plugin.{PACKAGE}.echo", "config": {"scales": ["1", "4"]}}))
+    assert status == "succeeded", error
+    assert result["context"]["e"]["got"] == {"scales": [1, 4]}
 
 
 # ---------- node.config 与 input_schema ----------

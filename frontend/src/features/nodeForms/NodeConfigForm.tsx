@@ -438,6 +438,14 @@ export function NodeConfigForm({
               ) : isAssetList ? (
                 // 一串素材:挑出来的一排标签 + 再加一份,不是一个写着 `[]` 的 JSON 框
                 <AssetListField value={value} options={options ?? []} onChange={(next) => setConfig(key, next)} />
+              ) : spec?.type === "list" && spec.options && options ? (
+                // 一串、每一项只能是这几个值之一(插件数组的 items.enum):多选 —— 挑出来的一排,同一个控件
+                <AssetListField
+                  value={value}
+                  options={options}
+                  addLabel={t("wfListPickMore")}
+                  onChange={(next) => setConfig(key, next)}
+                />
               ) : spec?.options && options ? (
                 // 固定选项:闭集给纯下拉;声明了 allow_custom 的(逐镜决定的 source_group / render ——
                 // 值常是上游的 `{{…}}`)走可手填的那一版,否则引用在纯下拉里显示成空白,也填不回去。

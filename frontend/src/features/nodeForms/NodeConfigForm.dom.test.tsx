@@ -119,6 +119,35 @@ describe("节点表单", () => {
     expect(document.body.textContent).not.toContain("wfInputManual");
   });
 
+  it("一串、每一项只能是那几个值之一(插件数组的 items.enum):多选,挑出来的一排 —— 不是单选下拉,也不是逐行手写", () => {
+    const specs = {
+      modes: { type: "list", label: "模式", options: ["fast", "slow", "hq"], option_labels: { hq: "高质量" } },
+    } as unknown as Record<string, ConfigSpec>;
+    const onSet = vi.fn();
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <TooltipProvider>
+          <NodeConfigForm
+            fields={Object.entries(specs)}
+            config={{ modes: ["fast", "hq"] }}
+            workspaceId="w1"
+            variables={[]}
+            fieldOptions={{ dynamicOptions: () => null, whyEmpty: () => ({ kind: "none" }), assets: [] }}
+            onSetConfig={onSet}
+            onTypeConfig={vi.fn()}
+          />
+        </TooltipProvider>
+      </QueryClientProvider>,
+    );
+    const picked = document.querySelector("[data-slot='asset-list']");
+    expect(picked, "多选控件").not.toBeNull();
+    expect(within(picked as HTMLElement).getByText("高质量")).toBeTruthy();
+    expect(within(picked as HTMLElement).getByText("fast")).toBeTruthy();
+    expect(screen.queryByPlaceholderText("wfListItem")).toBeNull();
+    fireEvent.click(screen.getAllByRole("button", { name: "wfAssetListRemove" })[0]);
+    expect(onSet).toHaveBeenCalledWith("modes", ["hq"]);
+  });
+
   it("text 字段就是一段字:一个普通的文本框,`{{…}}` 原样是字,不变成引用标签(画板上的模板字段)", () => {
     const specs = { caption: { type: "text", label: "文案", multiline: true } } as unknown as Record<string, ConfigSpec>;
     const onType = vi.fn();
