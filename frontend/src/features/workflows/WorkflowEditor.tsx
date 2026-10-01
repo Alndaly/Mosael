@@ -258,8 +258,8 @@ export function WorkflowEditor({
   //: 查找节点搜整张图(每个循环体 / 子图里的也算,见 nodeSearch),搜的是:改过的名字、类型的显示名、
   //: 类型的原始值(按 `llm` 也能找到「大模型」)、节点 id(报错和就绪清单说的就是它)。
   const searchEntries = React.useMemo(
-    () => nodeSearchTargets(rootGraph, registry, scopePath),
-    [rootGraph, registry, scopePath],
+    () => nodeSearchTargets(rootGraph, registry),
+    [rootGraph, registry],
   );
   /** 跳到搜到的那个节点:在别的层就先换过去,等那一层的画布挂好再聚焦(同就绪清单那条)。 */
   const jumpToSearchEntry = React.useCallback(

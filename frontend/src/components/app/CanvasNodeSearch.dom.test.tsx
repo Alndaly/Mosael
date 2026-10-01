@@ -109,6 +109,27 @@ describe("查找节点", () => {
     expect(screen.getByRole("button", { name: /结尾/ })).toHaveAttribute("aria-current", "true");
   });
 
+  it("条目换了顺序(跳到另一层后画布重排),游标还停在刚跳到的那一个上", async () => {
+    //: 此前游标记的是下标:工作流跨层跳过去之后条目按新的一层重排,同一个下标指到了别的节点 ——
+    //: 计数显示错了,再按 Enter 跳到的也不是「下一个」。
+    const { input, onFocus, lastHighlight, rerender, onHighlight } = mount();
+    await pressFind();
+    fireEvent.change(input(), { target: { value: "猫" } });
+    fireEvent.keyDown(input(), { key: "Enter" });
+    expect(onFocus).toHaveBeenLastCalledWith("i1");
+
+    rerender(
+      <div>
+        <textarea aria-label="便签正文" />
+        <CanvasNodeSearch entries={[...entries].reverse()} onFocus={onFocus} onHighlight={onHighlight} />
+      </div>,
+    );
+    expect(lastHighlight()?.activeId).toBe("i1");
+    expect(screen.getByText("2/2")).toBeInTheDocument();
+    fireEvent.keyDown(input(), { key: "Enter" });
+    expect(onFocus).toHaveBeenLastCalledWith("n2");
+  });
+
   it("输入法组词时的 Enter 是上屏,不跳", async () => {
     const { input, onFocus } = mount();
     await pressFind();

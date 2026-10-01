@@ -94,18 +94,20 @@ export function CanvasNodeSearch({
   const t = useI18n();
   const [open, setOpen] = React.useState(false);
   const [query, setQuery] = React.useState("");
-  const [active, setActive] = React.useState<number | null>(null);
+  //: 游标记**条目 id**,不记下标:条目会重排(工作流跳到另一层后),同一个下标就指到别的节点上了。
+  const [activeEntry, setActiveEntry] = React.useState<string | null>(null);
   const input = React.useRef<HTMLInputElement | null>(null);
   const list = React.useRef<HTMLDivElement | null>(null);
 
   const matches = React.useMemo(() => matchCanvasEntries(entries, query), [entries, query]);
-  // 结果集变短时游标可能越界 —— 越界就当作"还没跳"。
-  const current = active !== null && active < matches.length ? active : null;
+  // 游标指的那一个不在结果里了(被删了、改名不再命中)—— 当作"还没跳"。
+  const found = activeEntry === null ? -1 : matches.findIndex((entry) => entry.id === activeEntry);
+  const current = found >= 0 ? found : null;
   const activeId = current === null ? null : matches[current]!.id;
   const searching = open && query.trim() !== "";
 
   // 换了查询词,游标回到"还没跳":上一轮的第 3 个和这一轮的第 3 个不是同一个东西。
-  React.useEffect(() => setActive(null), [query]);
+  React.useEffect(() => setActiveEntry(null), [query]);
 
   // 高亮交回画布。按 id 串比较而不是按数组引用:entries 每次画布变动都是新数组,
   // 不这样的话拖一下节点就要让整块画布重画一遍高亮。
@@ -155,7 +157,7 @@ export function CanvasNodeSearch({
   const step = (direction: 1 | -1) => {
     const next = stepCanvasMatch(current, matches.length, direction);
     if (next === null) return;
-    setActive(next);
+    setActiveEntry(matches[next]!.id);
     onFocus(matches[next]!.id);
   };
 

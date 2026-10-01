@@ -10,6 +10,9 @@ import { bodyKey, scopeId, type ScopePath, type ScopeRegistry } from "@/features
  *
  * 体里的 id 和主流程是两套命名空间(见 scope.ts),同一个 id 可以在两层各有一个,所以条目的 id
  * 是「层 + 节点」一起编出来的;画布上的高亮只认当前这一层的节点 id,由 highlightAtLayer 换回去。
+ *
+ * **顺序是图序,和画布停在哪一层无关。** 此前当前这一层排最前:按 Enter 跳到别的层,条目当场按
+ * 新的一层重排,而游标还记着下标 —— 指到了别的节点上,计数也错了,下一下 Enter 不是「下一个」。
  */
 export interface NodeSearchTarget extends CanvasSearchEntry {
   path: ScopePath;
@@ -24,8 +27,8 @@ export function nodeSearchEntryId(path: ScopePath, nodeId: string): string {
   return scopeId([...path, nodeId]);
 }
 
-/** 整张图里可搜的节点。当前这一层排最前 —— 空查询时先列出眼前的这些,和此前一致。 */
-export function nodeSearchTargets(root: WorkflowGraph, registry: Registry, current: ScopePath): NodeSearchTarget[] {
+/** 整张图里可搜的节点,按图序:每个节点后面紧跟着它体里的那些(深度优先)。 */
+export function nodeSearchTargets(root: WorkflowGraph, registry: Registry): NodeSearchTarget[] {
   const out: NodeSearchTarget[] = [];
   const walk = (graph: WorkflowGraph, path: string[], inside: string) => {
     for (const node of graph.nodes) {
@@ -48,20 +51,32 @@ export function nodeSearchTargets(root: WorkflowGraph, registry: Registry, curre
     }
   };
   walk(root, [], "");
-  const here = scopeId(current);
-  return [...out.filter((one) => scopeId(one.path) === here), ...out.filter((one) => scopeId(one.path) !== here)];
+  return out;
 }
 
-/** 命中集换成当前这一层画布上的节点 id:别的层里的命中这一层画不出来。 */
+/** `path` 是不是 `layer` 本身或它里面的某一层。 */
+function isWithin(path: ScopePath, layer: ScopePath): boolean {
+  return path.length >= layer.length && layer.every((id, index) => path[index] === id);
+}
+
+/**
+ * 命中集换成当前这一层画布上的节点 id。这一层的命中圈它自己;**更深处的命中圈在通往它的那个容器上**
+ * (同 analyze.issuesAtLayer 的折法)—— 站在主流程上搜体里的节点,画布上总得看出「在这个循环里」。
+ * 更外层、别的分支里的命中这一层画不出来,在列表里。
+ */
 export function highlightAtLayer(
   hit: CanvasSearchHighlight | null,
   targets: readonly NodeSearchTarget[],
   current: ScopePath,
 ): CanvasSearchHighlight | null {
   if (!hit) return null;
-  const here = scopeId(current);
-  const onLayer = targets.filter((one) => scopeId(one.path) === here);
-  const ids = new Set(onLayer.filter((one) => hit.ids.has(one.id)).map((one) => one.nodeId));
-  const active = onLayer.find((one) => one.id === hit.activeId);
-  return { ids, activeId: active?.nodeId ?? null };
+  const ids = new Set<string>();
+  let activeId: string | null = null;
+  for (const one of targets) {
+    if (!hit.ids.has(one.id) || !isWithin(one.path, current)) continue;
+    const here = one.path.length === current.length;
+    ids.add(here ? one.nodeId : one.path[current.length]!);
+    if (here && one.id === hit.activeId) activeId = one.nodeId;
+  }
+  return { ids, activeId };
 }
