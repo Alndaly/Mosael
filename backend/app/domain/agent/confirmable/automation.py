@@ -35,12 +35,21 @@ def _check_graph(db: Session, graph: object) -> None:
     **`extra_types` 必须带上。** 智能体完全可以用插件节点搭图(它们和内置节点在画布上没有
     区别,`plugin_node_types` 存在的全部意义就是这个)。不带的话,那个节点被判成未知类型,
     卡上报出「该插件未安装或未启用」—— 插件明明装着、开着,而用户会照着这句话去插件页找问题。
+
+    **`explain_plugin_node` 也要带上。** 插件节点真用不了的时候(没装、连接停用、工具没勾选……),不带它
+    就只剩一句「某插件的节点用不了」,该去哪儿修全靠猜。和 extra_types 同一份口径(所有人的连接),
+    原因由 plugins.why_unusable 按真实情况说 —— 和开跑前那一道(engine.start_workflow_job)同一个函数。
     """
-    from app.domain.plugins.nodes import plugin_node_types
+    from app.domain.plugins.nodes import plugin_node_types, why_unusable
     from app.domain.workflows import validate_graph
 
+    def explain(node_type: str) -> str | None:
+        reason = why_unusable(db, node_type, None)
+        return str(reason) if reason is not None else None
+
     errors = validate_graph(
-        graph, require_config=False, allow_missing_start=True, extra_types=plugin_node_types(db)
+        graph, require_config=False, allow_missing_start=True, extra_types=plugin_node_types(db),
+        explain_plugin_node=explain,
     )
     if errors:
         raise ConfirmationError("；".join(errors))
