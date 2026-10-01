@@ -147,12 +147,12 @@ def _validate_edit_workflow(db: Session, workspace_id: str, payload: dict[str, A
 def _summarize_edit_workflow(db: Session, payload: dict[str, Any]) -> Summary:
     ops = [op for op in payload.get("operations", []) if isinstance(op, dict)]
     kinds = [op.get("kind", "?") for op in ops]
-    # A `code` node runs arbitrary local Python when the workflow is later run, so say so
-    # here rather than leaving it to be noticed in the payload.
+    # 代码节点运行时跑的是一段任意 Python(在隔离的 Docker 容器里,见 domain/sandbox):卡上点名,
+    # 不留给用户自己去载荷里发现。
     adds_code = any(
         op.get("kind") == "add_node" and str(op.get("node_type") or op.get("type")) == "code" for op in ops
     )
-    # code 那句更具体(点名"运行时执行本地 Python"),留着;其余外部节点走通用那句。
+    # code 那句更具体(点名它在哪儿跑、隔离到什么程度),留着;其余外部节点走通用那句。
     warning = (fragment("confirm_editWorkflowCode") if adds_code
                else external_warning(external_nodes_in_graph(graph_under_review(db, "edit_workflow", payload))))
     return "confirm_editWorkflow", {

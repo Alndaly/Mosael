@@ -29,7 +29,7 @@ def _summarize(tool: str, payload: dict, locale: str = "zh") -> str:
 
 
 def test_a_code_node_is_called_out_in_the_summary() -> None:
-    """A `code` node runs arbitrary local Python when the workflow is later run. The summary
+    """A `code` node runs arbitrary Python (in the Docker sandbox) when the workflow is later run. The summary
     used to render op kinds only — "1 个工作流编辑: add_node" — so the card disclosed nothing
     about the most dangerous thing it could be authorising."""
     summary = _summarize(
@@ -37,7 +37,7 @@ def test_a_code_node_is_called_out_in_the_summary() -> None:
         {"operations": [{"kind": "add_node", "node_type": "code", "config": {"code": "import os"}}]},
     )
     assert "add_node" in summary
-    assert "代码节点" in summary, "approving this runs local Python; the card has to say so"
+    assert "代码节点" in summary, "approving this lets the workflow run code; the card has to say so"
 
 
 def test_an_ordinary_edit_is_not_dressed_up_as_dangerous() -> None:

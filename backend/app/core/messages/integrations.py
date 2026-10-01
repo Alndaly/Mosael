@@ -454,7 +454,10 @@ MESSAGES: dict[str, dict[str, str]] = {
     "confirm_updateWorkflow": {"zh": "修改工作流({nodes} 个节点){warning}", "en": "Update workflow ({nodes} nodes){warning}"},
     "confirm_updateWorkflowPlain": {"zh": "修改工作流{warning}", "en": "Update workflow{warning}"},
     "confirm_editWorkflow": {"zh": "{count} 个工作流编辑: {kinds}{warning}", "en": "{count} workflow edits: {kinds}{warning}"},
-    "confirm_editWorkflowCode": {"zh": "  ⚠️ 含代码节点(运行时执行本地 Python)", "en": "  ⚠️ Includes a code node (runs local Python when the workflow runs)"},
+    "confirm_editWorkflowCode": {
+        "zh": "  ⚠️ 含代码节点(运行时在隔离的 Docker 容器里跑 Python:没有网络、看不到本机文件和应用的密钥)",
+        "en": "  ⚠️ Includes a code node (runs Python in an isolated Docker container when the workflow runs: no network, no access to this machine's files or the app's keys)",
+    },
     "confirm_runWorkflow": {"zh": "运行工作流{named}(可能产生 AI/渲染消耗){warning}", "en": "Run workflow{named} (may incur AI/render cost){warning}"},
     "confirm_workflowNamed": {"zh": "「{name}」", "en": " \u300c{name}\u300d"},
     "confirm_editBoard": {"zh": "{count} 个画板编辑: {kinds}", "en": "{count} board edits: {kinds}"},
