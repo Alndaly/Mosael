@@ -17,6 +17,8 @@ export const PLUGIN_DEPENDENT_KEYS = [
   ["plugin-models"],
   // 工作流 / 画板:插件工具是节点和格子的能力;「用哪个连接」的下拉从插件连接列出。
   ["workflow-node-types"],
+  // 插件节点为什么用不了(没接、停用、工具没勾选):连接一变原因就变,不该等 30 秒的 staleTime。
+  ["workflow-node-unusable"],
   ["workflow-field-options"],
   ["board-producers"],
   // 生成:插件生成连接是一家供应商,模型行是插件目录的缓存(ADR 0020)。

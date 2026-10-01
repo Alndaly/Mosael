@@ -16,6 +16,7 @@ describe("插件连接变了,跟着它走的缓存一起失效", () => {
       ["capability-models", "image"],
       ["board-producers", "ws-1"],
       ["workflow-node-types"],
+      ["workflow-node-unusable", "plugin.dev.x.go"],
       ["workflow-field-options", "plugin_instances", "ws-1", "", "plugin.dev.x.go", "", "instance_id"],
       ["plugins"],
       ["plugin-models", "i-1"],
