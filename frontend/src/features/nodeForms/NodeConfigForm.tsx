@@ -1,7 +1,6 @@
 import React from "react";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { Link2, PenLine, Unlink } from "lucide-react";
-import { toast } from "sonner";
 
 import { fetchWorkflowFieldOptions, listAssets, type Asset } from "@/api/client";
 import { useI18n } from "@/app/preferences";
@@ -16,6 +15,8 @@ import { OptionPicker } from "@/components/ui/option-picker";
 import { NoteReferenceField } from "@/features/notes/NotePickerDialog";
 import { fieldDataType } from "@/features/nodeForms/fieldTypes";
 import { isTakenByOneOfPeer, isWorkflowFieldActive } from "@/features/nodeForms/fieldActivation";
+import { ItemsField, itemsFromValue } from "@/features/nodeForms/ItemsField";
+import { JsonField } from "@/features/nodeForms/JsonField";
 import { ListField } from "@/features/nodeForms/ListField";
 import { MapField, bareRef } from "@/features/nodeForms/MapField";
 import { RefEditor } from "@/features/nodeForms/RefEditor";
@@ -65,6 +66,13 @@ export interface ConfigSpec {
   sole_option_default?: boolean;
   /** 界面上叫什么(后端按语言翻好)。 */
   label?: string;
+  /** 专用控件(后端 config_editor / 插件的 _config_from_schema 点名):map / json / items / fields / note_ref …… */
+  editor?: string;
+  /** 一串结构里每一项、一个对象里有哪几格(`editor: "items"` / `"fields"`,见 ItemsField)。 */
+  fields?: Record<string, ConfigSpec>;
+  /** 一串最少 / 最多几项(插件数组的 minItems / maxItems)。 */
+  min_items?: number;
+  max_items?: number;
 }
 
 // Nested controls (such as MapField rows) own their dimensions and field styling.
@@ -93,48 +101,6 @@ export function emptyOptionsHint(t: (key: MessageKey) => string, why: EmptyOptio
   if (why.kind === "parent") return t("wfPickParentFirst").replace("{field}", why.parent);
   if (why.kind === "upstream") return t("wfParentFromUpstream").replace("{field}", why.parent);
   return t("wfNoOptions");
-}
-
-/** object(JSON)字段:CodeMirror JSON 编辑,失焦解析回对象;非法给提示不写入。
-    `empty` 是还没填时显示的形状:对象字段是 `{}`,一串对象(插件的数组入参)是 `[]`。 */
-export function JsonField({
-  value,
-  onChange,
-  empty = {},
-}: {
-  value: unknown;
-  onChange: (parsed: unknown) => void;
-  empty?: unknown;
-}) {
-  const t = useI18n();
-  const [text, setText] = React.useState(() => JSON.stringify(value ?? empty, null, 2));
-  // 上游(智能体改图)更新时回显,但不打断正在输入:仅当序列化值真变才重置。
-  const synced = React.useRef(text);
-  React.useEffect(() => {
-    const next = JSON.stringify(value ?? empty, null, 2);
-    if (next !== synced.current) {
-      synced.current = next;
-      setText(next);
-    }
-  }, [value]);
-  return (
-    <CodeEditor
-      value={text}
-      language="json"
-      minHeight={34}
-      gutter={false}
-      onChange={setText}
-      onBlur={() => {
-        try {
-          const parsed = text.trim() ? JSON.parse(text) : empty;
-          synced.current = JSON.stringify(parsed ?? empty, null, 2);
-          onChange(parsed);
-        } catch {
-          toast.error(t("wfBadJson"));
-        }
-      }}
-    />
-  );
 }
 
 /** code 字段保持纯编辑器；上游变量不再作为整片提示标签铺在表单下面。 */
@@ -522,12 +488,30 @@ export function NodeConfigForm({
                   />
                 )
               ) : spec?.type === "list" ? (
-                // 一串值(插件的数组入参):每一项一行,能挑上游输出;每一项是对象的,给写数组的 JSON 框。
-                // 哪种由后端的声明说(editor: "json"),见 plugins.nodes 的 _config_from_schema。
-                String((spec as { editor?: unknown } | undefined)?.editor ?? "") === "json" ? (
+                // 一串值(插件的数组入参):每一项一行,能挑上游输出;每一项是一块结构的,一项一张卡、按声明的几格填;
+                // 说不清每一项有哪几格的才给写数组的 JSON 框。哪种由后端的声明说(editor),见 plugins.nodes 的
+                // _config_from_schema。整格是一段 `{{…}}` 引用的(智能体写的、手填的)照旧显示那段引用 —— 卡片摆不出它。
+                (spec.editor === "items" || spec.editor === "json") && typeof value === "string" && hasReference(value) ? (
+                  <RefEditor rows={1} value={value} onChange={typeConfig(key)} variables={insertable} />
+                ) : spec.editor === "items" && spec.fields && itemsFromValue(value) ? (
+                  <ItemsField
+                    value={value}
+                    fields={spec.fields}
+                    minItems={spec.min_items}
+                    maxItems={spec.max_items}
+                    variables={insertable}
+                    onChange={(next) => setConfig(key, next)}
+                  />
+                ) : spec.editor === "items" || spec.editor === "json" ? (
+                  // 存着的不是「一串对象」(形状写错了):原样摆进 JSON 框改,不在卡片里把它丢掉
                   <JsonField value={value} empty={[]} onChange={(parsed) => setConfig(key, parsed)} />
                 ) : (
-                  <ListField value={value} variables={variables} onChange={(next) => setConfig(key, next)} />
+                  <ListField
+                    value={value}
+                    variables={variables}
+                    maxItems={spec.max_items}
+                    onChange={(next) => setConfig(key, next)}
+                  />
                 )
               ) : spec?.type === "code" ? (
                 <>

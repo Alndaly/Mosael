@@ -45,11 +45,14 @@ export function ListField({
   value,
   onChange,
   variables,
+  maxItems,
 }: {
   value: unknown;
   onChange: (next: string[]) => void;
   /** 上游能引用的输出,形如 `{{llm-1.text}}`。 */
   variables: string[];
+  /** 最多几项(插件数组的 maxItems):到了就不再给「加一项」。 */
+  maxItems?: number;
 }) {
   const t = useI18n();
   // 本地保留行:「刚加的一行还空着」在数组里表示不出来,只按数组渲染的话新加的空行会当场消失。
@@ -106,7 +109,13 @@ export function ListField({
           </Button>
         </div>
       ))}
-      <AddRow dense label={t("wfMapAdd")} onClick={() => setRows([...rows, ""])} />
+      {maxItems !== undefined && rows.length >= maxItems ? (
+        <p className="m-0 text-ui-xs text-muted-foreground" role="note">
+          {t("wfItemsFull").replace("{n}", String(maxItems))}
+        </p>
+      ) : (
+        <AddRow dense label={t("wfMapAdd")} onClick={() => setRows([...rows, ""])} />
+      )}
     </div>
   );
 }

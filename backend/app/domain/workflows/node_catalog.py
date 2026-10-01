@@ -119,6 +119,13 @@ def translated_spec(key: str, spec: dict, locale: str) -> dict:
     #: (插件节点的选项没有登记处,照原样显示)。
     if isinstance(out.get("options"), list):
         out["option_labels"] = {str(option): option_label(key, str(option), locale) for option in out["options"]}
+    #: 一项一张卡(插件数组里每一项是一块结构)的那几格也是给人看的:名字、下拉同一套规矩,一层层往里翻。
+    if isinstance(out.get("fields"), dict):
+        out["fields"] = {
+            str(name): translated_spec(str(name), {**sub, "label": config_label(str(name), sub)}, locale)
+            for name, sub in out["fields"].items()
+            if isinstance(sub, dict)
+        }
     return out
 
 

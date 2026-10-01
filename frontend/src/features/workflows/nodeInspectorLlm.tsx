@@ -3,7 +3,8 @@ import type React from "react";
 import type { useI18n } from "@/app/preferences";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { FIELD_BOX, JsonField } from "@/features/nodeForms/NodeConfigForm";
+import { JsonField } from "@/features/nodeForms/JsonField";
+import { FIELD_BOX } from "@/features/nodeForms/NodeConfigForm";
 import { RefEditor } from "@/features/nodeForms/RefEditor";
 import type { SetGraphOptions } from "@/features/workflows/workflowGraphStore";
 

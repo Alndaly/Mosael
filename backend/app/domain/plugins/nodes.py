@@ -128,8 +128,10 @@ def _config_from_schema(schema: Any) -> dict[str, dict[str, Any]]:
             if items_media:
                 entry["media"] = items_media
         elif raw_type == "array" and schema_type(items) in ("object", "array"):
-            # 每一项是一块结构(标题 + 正文、一组参数):拍成一行一个值是错的,给写数组的 JSON 框
-            entry["editor"] = "json"
+            # 每一项是一块结构(标题 + 正文、一组参数):拍成一行一个值是错的。每一项声明了有哪几格的,
+            # 一项一张卡、按那几格填(_structure_fields);说不出有哪几格的,才退回写数组的 JSON 框。
+            fields = _structure_fields(items, depth=1)
+            entry.update({"editor": "items", "fields": fields} if fields else {"editor": "json"})
         elif spec.get("format") == EXTERNAL_ID_FORMAT:
             # 另一个系统里的编号(任务号、fs_id、对象路径):工作流里照样能接上游、能手填,画板据此认出
             # 「按编号去外面取东西」的工具(workflows.EXTERNAL_ID、boards.transforms)。
@@ -156,6 +158,8 @@ def _config_from_schema(schema: Any) -> dict[str, dict[str, Any]]:
             entry["default"] = str(default)
         if spec.get("x-multiline") is True and entry["type"] == "template":
             entry["multiline"] = True
+        if entry["type"] in ("list", "asset_list"):
+            entry.update(_item_bounds(spec))
         # 「留空也能跑的专业旋钮」收进高级区,和内置节点同一套语义(NODE_TYPES 的 advanced)。
         # JSON Schema 没有这个概念,所以认 `x-advanced` 这个扩展键;直接写 `advanced` 也认 ——
         # 插件作者八成会先试后者,为一个拼写把人挡在门外不值得。
@@ -163,6 +167,78 @@ def _config_from_schema(schema: Any) -> dict[str, dict[str, Any]]:
             entry["advanced"] = True
         config[key] = entry
     return config
+
+
+def _item_bounds(spec: dict[str, Any]) -> dict[str, int]:
+    """数组的 `minItems` / `maxItems` → 表单上的 `min_items` / `max_items`:删到下限就不让删,加到上限就不再给「加一项」。"""
+    bounds: dict[str, int] = {}
+    for source, target in (("minItems", "min_items"), ("maxItems", "max_items")):
+        value = spec.get(source)
+        if isinstance(value, int) and not isinstance(value, bool) and value >= 0:
+            bounds[target] = value
+    return bounds
+
+
+#: 结构化编辑器往里展开几层。讲解步骤(第 1 层)里的函数图(第 2 层)还摊成几格;再往里就是一块自由结构,
+#: 给一个 JSON 小框 —— 卡片套卡片套卡片,侧栏那点宽度里已经读不出谁是谁的哪一格了。
+_STRUCTURE_DEPTH = 2
+
+
+def _structure_fields(schema: dict[str, Any], *, depth: int) -> dict[str, dict[str, Any]]:
+    """一块结构(数组里的一项、一个对象)有哪几格,每一格怎么填。说不出有哪几格的(没写 `properties`)回空。
+
+    和顶层字段同一套读法(title / description 按语言、enum 给下拉、`x-multiline` 给多行),但词汇更小:
+    这些格子不接上游、不进高级区,值存的是文字 —— 按声明转回数、布尔的是运行时那一处(inputs.coerce)。
+    """
+    properties = schema.get("properties")
+    if not isinstance(properties, dict) or not properties:
+        return {}
+    required = {key for key in (schema.get("required") or []) if isinstance(key, str)}
+    return {
+        str(key): _structure_field(spec if isinstance(spec, dict) else {}, required=key in required, depth=depth)
+        for key, spec in properties.items()
+    }
+
+
+def _structure_field(spec: dict[str, Any], *, required: bool, depth: int) -> dict[str, Any]:
+    """结构里的一格 → 表单声明。`type`:text / number / boolean / list / object;一串结构、一个对象再往里说不清
+    (没写 properties,或已经到了 _STRUCTURE_DEPTH)的,和顶层同一个写法:`editor: "json"`。"""
+    kind = schema_type(spec)
+    items = spec.get("items") if isinstance(spec.get("items"), dict) else {}
+    entry: dict[str, Any]
+    if kind in ("integer", "number"):
+        entry = {"type": "number"}
+    elif kind == "boolean":
+        entry = {"type": "boolean", "options": ["true", "false"]}
+    elif kind == "array" and schema_type(items) not in ("object", "array"):
+        entry = {"type": "list", **_item_bounds(spec)}
+        if isinstance(items.get("enum"), list) and items["enum"]:
+            entry["options"] = [str(value) for value in items["enum"]]
+    elif kind == "array":
+        fields = _structure_fields(items, depth=depth + 1) if depth < _STRUCTURE_DEPTH else {}
+        entry = {"type": "list", "editor": "items", "fields": fields} if fields else {"type": "list", "editor": "json"}
+        entry.update(_item_bounds(spec))
+    elif kind == "object":
+        fields = _structure_fields(spec, depth=depth + 1) if depth < _STRUCTURE_DEPTH else {}
+        entry = {"type": "object", "editor": "fields", "fields": fields} if fields else {"type": "object", "editor": "json"}
+    else:
+        entry = {"type": "text"}
+        if spec.get("x-multiline") is True:
+            entry["multiline"] = True
+    if entry["type"] in ("text", "number") and isinstance(spec.get("enum"), list) and spec["enum"]:
+        entry["options"] = [str(value) for value in spec["enum"]]
+    if required:
+        entry["required"] = True
+    if spec.get("title"):
+        entry["label"] = text_of(spec["title"])
+    if spec.get("description"):
+        entry["description"] = text_of(spec["description"])
+    default = spec.get("default")
+    if isinstance(default, bool):
+        entry["default"] = "true" if default else "false"
+    elif isinstance(default, (str, int, float)) and str(default) != "":
+        entry["default"] = str(default)
+    return entry
 
 
 def _readable(entry: Any, from_schema: dict[str, Any] | None) -> dict[str, Any]:
@@ -185,13 +261,16 @@ def _readable(entry: Any, from_schema: dict[str, Any] | None) -> dict[str, Any]:
                 readable["media"] = from_schema["media"]
         if from_schema.get("type") in ("asset_list", "list"):
             readable["type"] = from_schema["type"]
-            if from_schema.get("editor"):
-                readable["editor"] = from_schema["editor"]
+            # 每一项长什么样(有哪几格、几项起几项止)也只有 schema 说得准:运行时按它转值
+            for key in ("editor", "fields", "min_items", "max_items"):
+                if key in from_schema:
+                    readable[key] = from_schema[key]
     if readable.get("type") in ("asset_list", "list") and (from_schema or {}).get("type") not in ("asset_list", "list"):
         # node.config 自己说「一串」而 schema 不是数组:运行时不会把它转成数组(inputs.coerce 只听 schema),
         # 表单却存下一个列表交给插件。降回 schema 那一格的样子(schema 里没有这一格就是一段文字)。
         readable["type"] = (from_schema or {}).get("type") or "template"
-        readable.pop("editor", None)
+        for key in ("editor", "fields", "min_items", "max_items"):
+            readable.pop(key, None)
     if readable.get("format") == EXTERNAL_ID_FORMAT and not readable.get("data_type"):
         readable["data_type"] = EXTERNAL_ID_FORMAT
     for field in ("label", "description", "placeholder"):

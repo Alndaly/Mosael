@@ -143,12 +143,44 @@ def _scalar(value: Any, kind: Any) -> Any:
     return int(number) if kind == "integer" and number.is_integer() else number
 
 
-def _item(value: Any, kind: Any) -> Any:
-    """数组里的一项按 `items.type` 归位。字符串项收到数 / 布尔(上游交来的、旧版表单存下的)写回文字:
-    插件声明了要字符串,`"007"`、一串长 id 就得原样是字符串。"""
+def _item(value: Any, items: dict[str, Any]) -> Any:
+    """数组里的一项按 `items` 归位。字符串项收到数 / 布尔(上游交来的、旧版表单存下的)写回文字:
+    插件声明了要字符串,`"007"`、一串长 id 就得原样是字符串。每一项是一块结构的,按它的几格逐格归位。"""
+    kind = schema_type(items)
+    if kind == "object":
+        return _structure(value, items)
     if kind == "string" and isinstance(value, (bool, int, float)):
         return json.dumps(value)
     return _scalar(value, kind)
+
+
+def _structure(value: Any, schema: dict[str, Any]) -> Any:
+    """一块结构(数组里的一项、项里的一个对象)按 `properties` 逐格归位 —— 和顶层的 coerce 同一个规矩。
+
+    节点表单上一项一张卡(前端 ItemsField),每一格**只存文字**:数、布尔在这里按声明转回来,数 / 布尔格的空文字
+    当没填(去掉这一格),一串值的格子走 _as_list(空的去掉),再往里一层的对象照样逐格归位。没声明的格子原样留着。
+    """
+    properties = schema.get("properties")
+    if not isinstance(value, dict) or not isinstance(properties, dict):
+        return value
+    out: dict[str, Any] = {}
+    for key, one in value.items():
+        spec = properties.get(key)
+        kind = schema_type(spec)
+        if not isinstance(spec, dict) or kind is None:
+            out[key] = one
+        elif kind == "array":
+            listed = _as_list(text_of(spec.get("title")) or key, one,
+                              spec.get("items") if isinstance(spec.get("items"), dict) else {})
+            if listed is not None:
+                out[key] = listed
+        elif kind == "object":
+            out[key] = _structure(one, spec)
+        elif kind in ("integer", "number", "boolean") and isinstance(one, str) and not one.strip():
+            continue
+        else:
+            out[key] = _scalar(one, kind)
+    return out
 
 
 def _as_list(field: str, value: Any, items: dict[str, Any]) -> Any:
@@ -194,7 +226,7 @@ def _as_list(field: str, value: Any, items: dict[str, Any]) -> Any:
             flat.extend(one)
         elif one not in (None, ""):
             flat.append(one)
-    return [_item(one, kind) for one in flat]
+    return [_item(one, items) for one in flat]
 
 
 def _json_text(text: str) -> Any:
