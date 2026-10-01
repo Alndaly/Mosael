@@ -1,7 +1,7 @@
 """画板上跑插件工具,和工作流里的插件节点同一条规矩。
 
 - 输出口叫 `artifact` / `artifacts` 的:收产出时换成了 `asset_id` / `asset_ids`,落板时按换过的名字取 ——
-  此前按同名键取,那一口什么都落不下来。
+  此前按同名键取,那一口什么都落不下来;没声明类型时它们是素材,不是写着素材 id 的便签。
 - 格子上存着的设置里,数组入参(非素材)存成了「名字 → 值」对象的,迁移成值的列表。
 
 (`replaces` 改写之后的**下游输出引用**画板上没有:格子之间的绑定指向上游那一格(`{"from": 格子 id}`),
@@ -23,11 +23,54 @@ from tests.util import fresh_client, user_id
 PACKAGE = "dev.test.boardlister"
 
 
-def test_输出口叫artifact的_落板落的是收进素材库的那一份() -> None:
-    meta = {"outputs": ["artifact", "caption"], "output_types": {"caption": "text"}}
-    produced = board_outputs(meta, {"asset_id": "a1", "asset_name": "x.png", "asset_ids": ["a1"], "caption": "说明"})
-    assert {"type": "asset", "asset_id": "a1"} in produced
-    assert {"type": "text", "text": "说明"} in produced
+MAKER = "dev.test.boardmaker"
+
+
+def test_输出口叫artifact和artifacts的_落板落的是收进素材库的那几份_不是写着id的便签(tmp_path) -> None:
+    """真插件交出文件、真执行器按口取值、真 node_meta,和画板跑一格(boards.tools._run_in_job)同一条组合。
+
+    此前这条测试的输出是手工拼的(带着执行器根本不交的 asset_ids):两个口没声明类型时是 any,`artifacts` 那一串
+    素材 id 被当文字落成便签,`artifact` 那一份也只在恰好出现在 asset_ids 里时才认得出。
+    """
+    from types import SimpleNamespace
+
+    from app.domain.plugins.nodes import node_meta
+    from app.domain.plugins.tools import find
+    from app.domain.workflows.executors import get_executor
+    from tests.util import acting_as
+
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+    plugin_dir = tmp_path / "maker"
+    plugin_dir.mkdir()
+    (plugin_dir / "main.py").write_text(textwrap.dedent("""
+        import json, os, sys
+        out = os.environ["MOSAEL_PLUGIN_OUTPUT_DIR"]
+        for name in ("one.txt", "a.txt", "b.txt"):
+            open(os.path.join(out, name), "w").write(name)
+        print(json.dumps({"ok": True, "output": {
+            "artifact": {"path": "one.txt"}, "artifacts": [{"path": "a.txt"}, {"path": "b.txt"}], "caption": "说明"}}))
+    """), encoding="utf-8")
+    tool = {"name": "make", "input_schema": {"type": "object", "properties": {}},
+            "node": {"outputs": ["artifacts", "artifact", "caption"], "output_types": {"caption": "text"}}}
+    manifest = {"id": MAKER, "name": "产出", "version": "0.1.0", "runtime": {"kind": "process", "entry": "main.py"},
+                "tools": {"expose": "all", "declare": [tool]}, "_path": str(plugin_dir)}
+    with SessionLocal() as db:
+        db.add(PluginPackage(id=MAKER, name="产出", version="0.1.0", manifest=manifest))
+        db.flush()
+        instance = PluginInstance(package_id=MAKER, name="我的", enabled=True, owner_user_id=user_id())
+        db.add(instance)
+        db.commit()
+        refresh_tools(db, instance, notify=False)
+        db.commit()
+        meta = node_meta(find(db, instance.id, "make"))
+        with acting_as(db, user_id()):
+            output = get_executor(f"plugin.{MAKER}.make")(db, SimpleNamespace(workspace_id=ws, id="b1", name="画板"), {})
+
+    produced = board_outputs(meta, output)
+    assets = [one for one in produced if one["type"] == "asset"]
+    assert len(assets) == 3 and {one["asset_id"] for one in assets} == {output["artifact"], *output["artifacts"]}
+    assert [one for one in produced if one["type"] != "asset"] == [{"type": "text", "text": "说明"}]
 
 
 def _install(tmp_path: Path) -> None:

@@ -221,10 +221,16 @@ def node_meta(tool: dict[str, Any]) -> dict[str, Any]:
         config = {str(key): _readable(entry, from_schema.get(str(key))) for key, entry in config.items()}
     else:
         config = from_schema
+    from app.domain.plugins.tools import COLLECTED_AS
+
     outputs = declared_outputs(tool)
     output_types = declared.get("output_types")
-    if not isinstance(output_types, dict):
-        output_types = {}
+    output_types = dict(output_types) if isinstance(output_types, dict) else {}
+    #: 输出口叫 `artifact` / `artifacts` 的就是插件交出的文件(收产出时换成了素材 id,见 tools.COLLECTED_AS):
+    #: 没声明类型时它们是素材 —— 否则按 any 处理,画板把一串素材 id 落成写着 id 的便签,工作流连线也认不出它是素材。
+    for name in outputs:
+        if name in COLLECTED_AS and name not in output_types:
+            output_types[name] = "asset"
     output_labels = declared.get("output_labels")
     if not isinstance(output_labels, dict):
         output_labels = {}

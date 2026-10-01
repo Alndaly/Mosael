@@ -276,7 +276,8 @@ def board_outputs(meta: dict[str, Any], output: dict[str, Any]) -> list[dict[str
     """
     from app.domain.workflows import output_data_type
 
-    collected = {str(one) for one in output.get("asset_ids") or () if isinstance(one, str)}
+    #: 这一轮收进素材库的文件:一串(asset_ids)和单独交的那一份(asset_id —— 只交了一份 `artifact` 时没有 asset_ids)。
+    collected = {str(one) for one in [*(output.get("asset_ids") or ()), output.get("asset_id")] if isinstance(one, str)}
     produced: list[dict[str, Any]] = []
     from app.domain.plugins.tools import output_port
 
