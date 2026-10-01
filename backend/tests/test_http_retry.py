@@ -332,3 +332,51 @@ def test_订阅连接的报错按请求方语言翻译() -> None:
 
     assert "订阅授权" in t("aiChat_agentOnly", "zh", name="X")
     assert "subscription" in t("aiChat_agentOnly", "en", name="X")
+
+
+def test_读超时不重发付费的_POST_连不上照旧重发_GET_读超时也照旧重发(monkeypatch):
+    """读超时 = 请求已经送到、对方在做。重发一次大 JSON 的对话就是再付一次全价 —— 此前最多再发 3 次。"""
+    calls: list[str] = []
+
+    def handler(request):
+        calls.append(request.method)
+        raise httpx.ReadTimeout("slow", request=request)
+
+    _install(monkeypatch, handler)
+    with pytest.raises(AiChatError):
+        chat(_target(), [{"role": "user", "content": "hi"}], max_retries=3)
+    assert calls == ["POST"], "读超时的 POST 被重发了"
+
+    calls.clear()
+    with http_retry.RetryingClient(max_retries=2) as client, pytest.raises(httpx.ReadTimeout):
+        client.get("https://provider.test/models")
+    assert calls == ["GET"] * 3, "幂等的 GET 读超时照旧重发"
+    #: 请求根本没出门(连不上)的照旧重发 —— 见 test_gives_up_after_max_retries。
+
+
+def test_要一大份_JSON_的对话节点按_max_tokens_放宽等待_读超时只付一次(monkeypatch):
+    from app.db.models import Workflow
+    from app.domain.workflows import WorkflowDomainError
+    from app.domain.workflows.executors import ai as ai_nodes
+    from tests.util import acting_as, add_provider
+
+    client = fresh_client()
+    workspace_id = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+    waited: list[float] = []
+
+    def handler(request):
+        waited.append(request.extensions["timeout"]["read"])
+        raise httpx.ReadTimeout("still writing", request=request)
+
+    _install(monkeypatch, handler)
+    with SessionLocal() as db:
+        profile = add_provider(db, name="P", vendor="openai", base_url="https://example.test/v1", api_key="sk",
+                               model="m", capability_ids=["chat"])
+        workflow = Workflow(workspace_id=workspace_id, name="W", graph={"nodes": [], "edges": []})
+        db.add(workflow)
+        db.flush()
+        with acting_as(db), pytest.raises(WorkflowDomainError):
+            ai_nodes.llm(db, workflow, {"profile_id": profile.id, "prompt": "分镜", "max_tokens": "16000"})
+    assert len(waited) == 1, "读超时之后又付了一次"
+    assert waited[0] >= 16000 / ai_nodes.LLM_SLOW_TOKENS_PER_SECOND, "一份 16000 token 的回答,120 秒写不完"
+

@@ -20,6 +20,18 @@ from app.domain.workflows.executors.registry import RunScope, register
 from app.domain.workflows.executors.common import stopping, text_lines
 
 LLM_TIMEOUT_SECONDS = 120
+#: 按要的输出长度放宽等待:按慢端点的出字速度(每秒约 25 个 token)算完 max_tokens 要多久,再加一段排队 / 首字的
+#: 余量。此前一律 120 秒:要一份 16000 token 的分镜 / 布景 JSON 的那几步,慢一点的端点还没写完就被判超时 ——
+#: 而那一次对方照样做完、照样计费(读超时也不再自动重发,见 core/http_retry.resend_is_safe)。
+LLM_SLOW_TOKENS_PER_SECOND = 25
+LLM_TIMEOUT_CAP_SECONDS = 900
+
+
+def llm_timeout(max_tokens: int | None) -> float:
+    """这一次对话最多等多久:没给 max_tokens 就是 LLM_TIMEOUT_SECONDS;给了按出字速度放宽,封顶 15 分钟。"""
+    if not max_tokens:
+        return LLM_TIMEOUT_SECONDS
+    return min(LLM_TIMEOUT_CAP_SECONDS, max(LLM_TIMEOUT_SECONDS, 60 + max_tokens / LLM_SLOW_TOKENS_PER_SECOND))
 
 # 供应商偶发瞬断(Server disconnected / 连接或读超时 / 429 限流 / 5xx 过载)是常态,让整条工作流
 # 一次就挂太脆。重试与退避统一在 core/http_retry 的传输层做,**所有 AI 出站调用共用**;
@@ -415,7 +427,7 @@ def llm(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
                     target,
                     turn,
                     temperature=float(payload.get("temperature", 0.4)),
-                    timeout=LLM_TIMEOUT_SECONDS,
+                    timeout=llm_timeout(payload.get("max_tokens")),
                     extra={key: value for key, value in payload.items() if key != "temperature"},
                     max_retries=configured_max_retries(db),
                     call=call,

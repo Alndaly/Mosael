@@ -70,6 +70,23 @@ def is_retryable_status(status: int) -> bool:
     return status == 429 or 500 <= status < 600
 
 
+#: 重发不会多做一遍的方法(HTTP 语义上幂等)。
+_IDEMPOTENT_METHODS = frozenset({"GET", "HEAD", "OPTIONS", "PUT", "DELETE"})
+
+
+def resend_is_safe(request: httpx.Request, exc: httpx.RequestError) -> bool:
+    """这次失败之后再发一遍,会不会让供应商多做(多收)一次。
+
+    **读超时不重发非幂等请求。** 读超时的意思是请求已经送到、对方在做,只是没在我们等的时间里答完 ——
+    一次大 JSON 的对话、一次生成提交,对方多半照样做完并计费。此前一律重发(最多再 3 次),于是一次慢回答
+    变成四次全价的调用,而用户只看到一个超时。连不上、连接池等不到这类**请求根本没出门**的失败,重发是安全的;
+    GET 这类幂等请求读超时也照旧重发。
+    """
+    if request.method.upper() in _IDEMPOTENT_METHODS:
+        return True
+    return not isinstance(exc, httpx.ReadTimeout)
+
+
 def backoff_seconds(attempt: int) -> float:
     """指数退避 + 少量抖动。抖动是为了让同时失败的多个请求不要在同一刻一起重击供应商。"""
     return min(_BASE_SECONDS * 2**attempt, _MAX_SLEEP_SECONDS) + random.uniform(0, 0.4)
@@ -97,9 +114,9 @@ class RetryingClient(httpx.Client):
             last = attempt == attempts - 1
             try:
                 response = super().send(request, **kwargs)
-            except httpx.RequestError:
+            except httpx.RequestError as exc:
                 # 连接断开 / 超时 / DNS:末次才抛,其余退避后再来。
-                if last:
+                if last or not resend_is_safe(request, exc):
                     raise
             else:
                 if last or not is_retryable_status(response.status_code):
