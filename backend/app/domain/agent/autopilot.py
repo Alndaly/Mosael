@@ -39,6 +39,18 @@ COST_AUTO_LIMIT = 5
 
 COST_PERMISSIONS = frozenset({"ai-cost", "render-cost"})
 
+#: 「本会话始终允许」能记、能放行的几档,**由轻到重**。
+#:
+#: 白名单此前只记工具名,而同一个工具的档位是**按这一次的参数**升的(ConfirmableTool.escalate):点过一张 ai-cost 的
+#: run_workflow「始终允许」,之后带 HTTP / 发布 / 代码节点(external)的 run_workflow 也直接放行 —— 用户放开的是
+#: 「跑一张只花钱的图」,放出去的是「往外发请求」。所以记的是 (工具, 当时那一档),只放行**不高于**那一档的卡。
+#:
+#: 撤不回的两档(external / destroy)**不在这里**:同一个工具名下,这两档的每一张卡后果各不相同(发到哪、删什么、
+#: 跑哪张图),点一次就放开的是以后所有的。自动模式对它们也是「没有可枚举的判据,一律回到人」;要持续放行其中
+#: 有判据的那几类,走工作区的放行准则(rules,见 judge / always),要整个放开走 bypass —— 都是比一个按钮更明确的口子。
+#: ai-cost 排在 render-cost 之后:花钱比占本机时间重。
+SESSION_ALLOWABLE = ("edit", "render-cost", "ai-cost")
+
 #: 自动放行的执行线程。起名字是为了让测试能在重建 schema 前排空它 —— 不然就是那种「看机器速度
 #: 和用例顺序随机红」的失败。
 AUTOPILOT_THREAD_NAME = "confirmation-autopilot"
@@ -95,10 +107,15 @@ def decide(db: Session, user: User, confirmation: ToolConfirmation) -> Decision:
         return Decision(approve=False, detail={"reason": "mode-set-by-someone-else"})
 
     permission = confirmation.permission
-    if confirmation.tool in (session.auto_allow_tools or []):
-        # 用户在一张读过的卡上点了「本会话始终允许」—— 逐个工具、他自己点的,与档位是两回事,
-        # 所以留痕也分开记。
-        return Decision(approve=True, mode="session-allow", detail={"tool": confirmation.tool})
+    allowed_up_to = session_allowance(session, confirmation.tool)
+    if allowed_up_to and _within(permission, allowed_up_to):
+        # 用户在一张读过的卡上点了「本会话始终允许」—— 逐个工具、他自己点的,和模式放行是两回事,
+        # 所以留痕也分开记。只放行**不高于他当时那一档**的卡(见 SESSION_ALLOWABLE)。
+        return Decision(
+            approve=True,
+            mode="session-allow",
+            detail={"tool": confirmation.tool, "permission": permission, "allowed_up_to": allowed_up_to},
+        )
 
     mode = session.permission_mode
     if mode == "bypass":
@@ -125,6 +142,47 @@ def decide(db: Session, user: User, confirmation: ToolConfirmation) -> Decision:
     if ruling.denied:
         return Decision(approve=False, detail=detail)
     return Decision(approve=False, needs_judge=True, mode="auto", detail=detail)
+
+
+def _within(permission: str, ceiling: str) -> bool:
+    """这一档在不在 `ceiling` 及以下。撤不回的两档(和不认识的档)永远不在 —— 它们不进 SESSION_ALLOWABLE。"""
+    if permission not in SESSION_ALLOWABLE or ceiling not in SESSION_ALLOWABLE:
+        return False
+    return SESSION_ALLOWABLE.index(permission) <= SESSION_ALLOWABLE.index(ceiling)
+
+
+def session_allowance(session: AgentSession, tool: str) -> str:
+    """这次对话里,这个工具「始终允许」到哪一档;没允许过回空串。"""
+    for entry in session.auto_allow_tools or []:
+        if isinstance(entry, dict) and entry.get("tool") == tool:
+            return str(entry.get("permission") or "")
+    return ""
+
+
+def set_session_allowances(db: Session, user: User, session: AgentSession, entries: list[tuple[str, str]]) -> None:
+    """整份替换「本会话始终允许」的清单 —— 它就是用户在卡上点出来的那份。
+
+    - 每一条是 (工具, 档位)。档位只能是 SESSION_ALLOWABLE 里的:撤不回的两档不给这个口子(理由见那里)。
+    - 同一个工具出现多次取**最高**那一档:用户先在一张 edit 卡、后在一张 ai-cost 卡上点过,后者已经覆盖前者。
+    - 工具得是认得的确认卡工具(插件工具按族认),否则这一条放不行任何东西,只是一条脏数据。
+    - 记下**是谁定的**:与模式同一条规则 —— 授权只对做出授权的那个人生效(见 decide)。
+    """
+    from app.domain.agent.confirmable import tool_spec
+
+    merged: dict[str, str] = {}
+    for tool, permission in entries:
+        if permission not in SESSION_ALLOWABLE:
+            raise PermissionModeError(
+                "agentErr_sessionAllowTier", tool=tool, permission=permission, allowed="/".join(SESSION_ALLOWABLE)
+            )
+        if tool_spec(tool) is None:
+            raise PermissionModeError("agentErr_sessionAllowUnknownTool", tool=tool)
+        if tool not in merged or _within(merged[tool], permission):
+            merged[tool] = permission
+    session.auto_allow_tools = [{"tool": tool, "permission": permission} for tool, permission in merged.items()][:40]
+    session.mode_set_by = user.id
+    if session.mode_set_at is None:
+        session.mode_set_at = now()
 
 
 def _rules_for(db: Session, confirmation: ToolConfirmation) -> dict:
@@ -295,9 +353,12 @@ __all__ = [
     "AUTOPILOT_THREAD_NAME",
     "COST_AUTO_LIMIT",
     "Decision",
+    "SESSION_ALLOWABLE",
     "consider",
     "decide",
+    "session_allowance",
     "session_for_token",
+    "set_session_allowances",
     "wait_for_idle_autopilot",
 ]
 
@@ -307,7 +368,7 @@ PERMISSION_MODES = ("manual", "auto", "bypass")
 
 
 class PermissionModeError(LocalizedError, ValueError):
-    """不是认得的权限模式。api 回 422。"""
+    """不是认得的权限模式 /「始终允许」里不能放的那一条。api 回 422。"""
 
 
 def set_permission_mode(db: Session, user: User, session: AgentSession, mode: str) -> None:

@@ -40,7 +40,7 @@ from app.api.schemas import (
     ProviderUsageEventOut,
 )
 from app.core.config import app_version
-from app.db.models import AgentMessage, AgentQuestion, AgentSession, ProviderUsageEvent, now
+from app.db.models import AgentMessage, AgentQuestion, AgentSession, ProviderUsageEvent
 from app.domain.agent import list_agent_skills
 from app.domain import session_groups
 from app.domain.agent import questions as agent_questions
@@ -210,11 +210,12 @@ def update_agent_session(session_id: str, body: AgentSessionUpdate, db: DbSessio
     if body.group_id is not None:
         session_groups.move_into(db, session, body.group_id, kind="agent")
     if body.auto_allow_tools is not None:
-        # 记下是谁定的:与模式同一条规则 —— 授权只对做出授权的那个人生效(见 domain/agent/autopilot)。
-        session.auto_allow_tools = [str(name) for name in body.auto_allow_tools][:40]
-        session.mode_set_by = user.id
-        if session.mode_set_at is None:
-            session.mode_set_at = now()
+        try:
+            autopilot.set_session_allowances(
+                db, user, session, [(entry.tool, entry.permission) for entry in body.auto_allow_tools]
+            )
+        except autopilot.PermissionModeError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
     db.commit()
     if organising_only:
         session_groups.restore_updated_at(db, session, kept_updated_at)

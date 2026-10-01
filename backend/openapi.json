@@ -21267,7 +21267,7 @@
           },
           "auto_allow_tools": {
             "items": {
-              "type": "string"
+              "$ref": "#/components/schemas/SessionAllowance"
             },
             "type": "array",
             "title": "Auto Allow Tools",
@@ -21439,9 +21439,10 @@
             "anyOf": [
               {
                 "items": {
-                  "type": "string"
+                  "$ref": "#/components/schemas/SessionAllowance"
                 },
-                "type": "array"
+                "type": "array",
+                "maxItems": 40
               },
               {
                 "type": "null"
@@ -33056,6 +33057,29 @@
           "revision"
         ],
         "title": "SequenceOut"
+      },
+      "SessionAllowance": {
+        "properties": {
+          "tool": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Tool"
+          },
+          "permission": {
+            "type": "string",
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Permission"
+          }
+        },
+        "type": "object",
+        "required": [
+          "tool",
+          "permission"
+        ],
+        "title": "SessionAllowance",
+        "description": "「本会话始终允许」的一条:这个工具,不高于这一档的卡不再问(见 domain/agent/autopilot.SESSION_ALLOWABLE)。"
       },
       "SessionGroupCreate": {
         "properties": {

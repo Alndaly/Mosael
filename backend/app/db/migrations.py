@@ -6403,6 +6403,57 @@ def _migrate_plugin_union_array_inputs_are_lists() -> None:
         db.commit()
 
 
+def _migrate_session_allow_remembers_the_tier() -> None:
+    """「本会话始终允许」的清单从工具名改成 (工具, 档位)(见 domain/agent/autopilot.SESSION_ALLOWABLE)。
+
+    只记工具名时,点过一张 ai-cost 的 run_workflow,之后带 HTTP / 发布 / 代码节点(external)的 run_workflow 也
+    直接放行。现在每条记的是当时那一档,只放行不高于它的卡。
+
+    存着的那些条目**当时是哪一档已经不可知**,保守地取这个工具声明的下限档(静态表抄在这里,迁移不跟着领域
+    代码变;插件工具一族的下限是 edit)。下限是撤不回的两档(external / destroy)的、认不出的工具,直接去掉 ——
+    这两档不再给「始终允许」,留着也放行不了任何东西。用户要的话,在下一张卡上再点一次。
+    已经是新形状的条目原样留着:幂等。
+    """
+    if "agent_sessions" not in set(inspect(engine).get_table_names()):
+        return
+    floors = {
+        "browser_open": "edit", "create_workflow": "edit", "edit_board": "edit", "edit_timeline": "edit",
+        "edit_workflow": "edit", "reparse_document": "edit", "run_board_item": "edit", "split_image_grid": "edit",
+        "update_workflow": "edit",
+        "convert_video_to_gif": "render-cost", "denoise_audio": "render-cost", "render_sequence": "render-cost",
+        "separate_audio": "render-cost",
+        "dub_subtitles": "ai-cost", "generate_audio": "ai-cost", "generate_image": "ai-cost",
+        "generate_podcast": "ai-cost", "generate_sound": "ai-cost", "generate_video": "ai-cost",
+        "run_workflow": "ai-cost",
+    }
+
+    def floor(name: str) -> str:
+        if name.startswith("plugin__") and len(name) > len("plugin__"):
+            return "edit"
+        return floors.get(name, "")
+
+    with engine.begin() as conn:
+        for row in conn.execute(text("SELECT id, auto_allow_tools FROM agent_sessions")).mappings().all():
+            raw = row["auto_allow_tools"]
+            try:
+                allowed = json.loads(raw) if isinstance(raw, str) else raw
+            except ValueError:
+                allowed = []
+            if not isinstance(allowed, list):
+                allowed = []
+            converted = []
+            for entry in allowed:
+                if isinstance(entry, dict):
+                    converted.append(entry)
+                elif isinstance(entry, str) and floor(entry):
+                    converted.append({"tool": entry, "permission": floor(entry)})
+            if converted != allowed:
+                conn.execute(
+                    text("UPDATE agent_sessions SET auto_allow_tools = :v WHERE id = :id"),
+                    {"v": json.dumps(converted, ensure_ascii=False), "id": row["id"]},
+                )
+
+
 def _reindex_record_references() -> None:
     """引用表(record_references)是派生数据:抽取规则一变,整张按新规则重建。"""
     from app.db.references import reindex
@@ -6658,6 +6709,9 @@ def migration_plan() -> MigrationPlan:
                 #: 排在素材对照那一步之后:对照后面跟着的文档已被它整段挪走,这一步只切还留在提示词里的。
                 _migrate_generation_prompts_drop_the_reference_documents,
             ),
+            #: 「本会话始终允许」记成 (工具, 档位)。排在所有改写这份清单(工具改名、去掉退役工具)的迁移之后 ——
+            #: 它们认的是旧的工具名列表。
+            *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_session_allow_remembers_the_tier),
             #: 对账:引用表按当前抽取规则建(见 db/references)。排在所有改写 JSON 的迁移之后 —— 那些是原生 SQL,
             #: 不经过 flush 时的维护;抽取规则的版本号变了才整张重建,平常是一次查询。
             *_recurring(MigrationPhase.AFTER_SCHEMA, _reindex_record_references),

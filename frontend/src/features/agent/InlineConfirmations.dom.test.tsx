@@ -26,9 +26,9 @@ vi.mock("@/app/preferences", () => ({
 vi.mock("@/features/agent/confirmSurface", () => ({ registerInlineConfirmSurface: () => () => {} }));
 
 const pendingCards = [
-  { id: "c1", tool: "edit_timeline", summary: "改时间线", permission: "write", payload: {}, status: "pending" },
-  { id: "c2", tool: "render_sequence", summary: "导出", permission: "write", payload: {}, status: "pending" },
-  { id: "c3", tool: "run_host_code", summary: "⚠️ **不隔离**,直接在你的电脑上运行", permission: "write", payload: {}, status: "pending" },
+  { id: "c1", tool: "edit_timeline", summary: "改时间线", permission: "edit", payload: {}, status: "pending" },
+  { id: "c2", tool: "render_sequence", summary: "导出", permission: "render-cost", payload: {}, status: "pending" },
+  { id: "c3", tool: "run_host_code", summary: "⚠️ **不隔离**,直接在你的电脑上运行", permission: "external", payload: {}, status: "pending" },
 ];
 
 /** 决策请求停在这里,好在"正在飞"的那一刻断言。 */
@@ -85,7 +85,7 @@ describe("确认卡的等待状态", () => {
     await waitFor(() => expect(busyLabels(container).length).toBe(1));
     const card = container.querySelectorAll("article")[0];
     const disabled = [...card.querySelectorAll("button")].filter((node) => node.hasAttribute("disabled"));
-    expect(disabled.length).toBe(3);
+    expect(disabled.length).toBe(3); //: 第一张是 edit,三档都在
     releaseDecision();
   });
 
@@ -107,6 +107,32 @@ describe("确认卡的等待状态", () => {
     await waitFor(() => expect(busyLabels(container).length).toBe(1));
     expect(busyLabels(container)).toEqual(["本会话始终允许"]);
     releaseDecision();
+  });
+
+  it("「本会话始终允许」记下的是(工具, 这张卡的档位),不只是工具名", async () => {
+    /* 只记工具名时,点过一张 ai-cost 的 run_workflow,之后带 HTTP / 发布节点(external)的 run_workflow 也直接放行。 */
+    renderCards();
+    (await screen.findAllByText("本会话始终允许"))[1].click();
+    await waitFor(() =>
+      expect(api.mock.calls.some(([path, init]) => path === "/api/agent/sessions/s1" && (init as RequestInit)?.method === "PATCH")).toBe(true),
+    );
+    const [, init] = api.mock.calls.find(([path, init]) => path === "/api/agent/sessions/s1" && (init as RequestInit)?.method === "PATCH")!;
+    expect(JSON.parse(String((init as RequestInit).body))).toEqual({
+      auto_allow_tools: [{ tool: "render_sequence", permission: "render-cost" }],
+    });
+    releaseDecision();
+  });
+
+  it("撤不回的那一档不给「本会话始终允许」,并说一句为什么", async () => {
+    const { container } = renderCards();
+    await screen.findAllByText("允许一次");
+    const external = container.querySelectorAll("article")[2];
+    expect(external.textContent).not.toContain("本会话始终允许");
+    expect(external.textContent).toContain("confirmAsksEveryTime");
+    expect(external.textContent).toContain("允许一次");
+    const edit = container.querySelectorAll("article")[0];
+    expect(edit.textContent).toContain("本会话始终允许");
+    expect(edit.textContent).not.toContain("confirmAsksEveryTime");
   });
 });
 
@@ -131,7 +157,7 @@ it("权限徽标不跟着长摘要换行 —— 两个字被压成一列竖排�
      它和徽标同在一个 flex 行里。两边都可缩时,浏览器挑徽标下手:「编辑」竖排成两行。
      jsdom 没有排版,能钉的是那两个决定它不被挤的类落在了徽标自己身上。 */
   renderCards();
-  const badge = (await screen.findAllByText("write"))[0]; //: 这份夹具的档次是 write,没有文案,原样透出
+  const badge = (await screen.findAllByText("permEdit"))[0]; //: 这份夹具的 i18n 原样吐 key
   expect(badge.className).toContain("shrink-0");
   expect(badge.className).toContain("whitespace-nowrap");
 });

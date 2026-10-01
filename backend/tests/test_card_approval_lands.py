@@ -106,19 +106,21 @@ def test_在飞书卡片上点批准_素材真的删了() -> None:
     chat.assert_deleted(card_id)
 
 
-def test_本会话始终允许_自动放行的删除真的删了() -> None:
-    """用户在上一张删除卡上点了「本会话始终允许」,这一张由自动放行的线程批 —— 截图里最可能的那一条路。"""
+def test_删除卡不给本会话始终允许_仍然每次问人() -> None:
+    """删素材是撤不回的那一档(destroy):「本会话始终允许」不给这个口子(见 autopilot.SESSION_ALLOWABLE),
+    自动放行的那条路由 bypass 那一条测试走到。"""
     chat = Chat()
-    patched = chat.client.patch(
-        f"/api/agent/sessions/{chat.session_id}", json={"auto_allow_tools": ["delete_assets"]}
+    refused = chat.client.patch(
+        f"/api/agent/sessions/{chat.session_id}",
+        json={"auto_allow_tools": [{"tool": "delete_assets", "permission": "destroy"}]},
     )
-    assert patched.status_code == 200, patched.text
+    assert refused.status_code == 422, refused.text
 
     card_id = chat.agent_deletes()
 
-    chat.assert_deleted(card_id)
+    wait_for_idle_autopilot()
     with SessionLocal() as db:
-        assert db.get(ToolConfirmation, card_id).decision_mode == "session-allow"
+        assert db.get(ToolConfirmation, card_id).status == "pending"
 
 
 def test_完全放行档_自动放行的删除真的删了() -> None:
@@ -179,7 +181,7 @@ def test_执行体炸在第二个素材_第一个也回来_文件还在_卡记�
 ENTRIES = {
     ("app/api/routes/confirmations.py", "approve"): test_在对话里点批准_素材真的删了,
     ("app/integrations/feishu/approvals.py", "handle_card_action"): test_在飞书卡片上点批准_素材真的删了,
-    ("app/domain/agent/autopilot.py", "_execute_thread"): test_本会话始终允许_自动放行的删除真的删了,
+    ("app/domain/agent/autopilot.py", "_execute_thread"): test_完全放行档_自动放行的删除真的删了,
 }
 
 

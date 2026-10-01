@@ -315,7 +315,7 @@ def test_session_allow_list_is_server_side_and_recorded_as_such() -> None:
     chat = _chat()
     chat.as_person()
     chat.client.patch(
-        f"/api/agent/sessions/{chat.session_id}", json={"auto_allow_tools": ["edit_timeline"]}
+        f"/api/agent/sessions/{chat.session_id}", json={"auto_allow_tools": [{"tool": "edit_timeline", "permission": "edit"}]}
     )
     chat.as_turn()
 

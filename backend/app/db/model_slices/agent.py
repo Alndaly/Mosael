@@ -84,9 +84,10 @@ class AgentSession(Base):
     mode_set_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
     #: 开启时刻。计费卡「连续自动放行几张」从这里起算。
     mode_set_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    #: 「本会话始终允许」的工具名。此前是浏览器 localStorage 里的一份自动批准 —— 聊天面板一关
-    #: 组件就卸载,而 turn 还在跑,同一个"授权"的行为取决于某个 React 组件在不在。
-    auto_allow_tools: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list, server_default="[]")
+    #: 「本会话始终允许」的清单,每条 `{"tool", "permission"}`:这个工具不高于这一档的卡不再问(只记工具名时,
+    #: 档位按参数升上去的卡也一并放行了,见 domain/agent/autopilot.SESSION_ALLOWABLE)。此前是浏览器 localStorage
+    #: 里的一份自动批准 —— 聊天面板一关组件就卸载,而 turn 还在跑,同一个"授权"的行为取决于某个 React 组件在不在。
+    auto_allow_tools: Mapped[list[dict[str, str]]] = mapped_column(JSON, nullable=False, default=list, server_default="[]")
     #: 思考档位(off/low/medium/high)。挂在**会话**上而不是模型上:同一个模型有时要深想、
     #: 有时要快答,它是每次对话的选择。off 时 pi 根本不向供应商要思考。
     thinking_level: Mapped[str] = mapped_column(String(10), nullable=False, default="off")

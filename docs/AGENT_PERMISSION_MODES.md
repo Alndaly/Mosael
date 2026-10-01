@@ -281,6 +281,12 @@ JSON 列 `auto_allow_tools`,和模式在**同一个判定函数**里求值:先�
 不新增表,不新增第二个判定点。语义保持不变(它是用户读过卡之后逐个点的),但留痕里标成
 `session-allow`,与 `auto` 区分开 —— 两者不是一回事。
 
+**记的是 (工具, 档位),不只是工具名。** 同一个工具的档位按这一次的参数升(`escalate`):在一张只花钱的
+`run_workflow` 卡上点过「始终允许」,不能连带放行之后带 HTTP / 发布 / 代码节点(external)的那张。所以每条
+记下点它时那张卡的档位,只放行**不高于**它的卡(edit < render-cost < ai-cost)。撤不回的两档(external /
+destroy)**不提供**这个按钮:同一个工具名下,这两档的每一张卡后果各不相同(发到哪、删什么、跑哪张图),点一次
+就放开的是以后所有的;要持续放行其中有判据的那几类,走 §4.7 的放行准则,要整个放开走 bypass。
+
 ### 4.11 这一次本就不用问人(`no-card`)
 
 有的工具**同一个名字、后果因参数而异**,其中一部分根本不该问人:智能体替人跑画板上一格的能力
@@ -302,7 +308,7 @@ JSON 列 `auto_allow_tools`,和模式在**同一个判定函数**里求值:先�
 
 卡**以具体的工具名开**(确认内核按前缀认领这一族,见 `confirmable/registry.confirmable_family`),所以:
 
-- 「本会话始终允许」按这一个工具记 —— 允许了 Manim 渲染,不连带放开往云盘传文件;
+- 「本会话始终允许」按这一个工具(和这一档)记 —— 允许了按次计费的那个工具,不连带放开往云盘传文件;`external` / `local-code` 的工具开的是撤不回的那一档,不给这个按钮(§4.10);
 - auto 档下 `external` / `local-code` 没有可枚举的准则(`rules.evaluate` 查不到 gate),一律回到人;
   `paid` 按计费档放行,受 `COST_AUTO_LIMIT` 约束;bypass 放行;
 - 后果由开卡这一刻的工具说了算(validate 覆盖写回 payload),调用方自带的 `effects` 不算数;
@@ -319,7 +325,7 @@ agent_sessions
   + permission_mode   TEXT NOT NULL DEFAULT 'manual'   -- manual | auto | bypass
   + mode_set_by       TEXT NULL                        -- user_id
   + mode_set_at       DATETIME NULL                    -- 计数的起点
-  + auto_allow_tools  JSON NOT NULL DEFAULT '[]'
+  + auto_allow_tools  JSON NOT NULL DEFAULT '[]'          -- [{tool, permission}]
 
 tool_confirmations
   + decision_mode     TEXT NOT NULL DEFAULT 'manual'

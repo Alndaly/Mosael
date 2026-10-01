@@ -7269,7 +7269,7 @@ export interface components {
              * Auto Allow Tools
              * @default []
              */
-            auto_allow_tools: string[];
+            auto_allow_tools: components["schemas"]["SessionAllowance"][];
             /** Provider Profile Id */
             provider_profile_id?: string | null;
             /** Model */
@@ -7322,7 +7322,7 @@ export interface components {
             /** Permission Mode */
             permission_mode?: string | null;
             /** Auto Allow Tools */
-            auto_allow_tools?: string[] | null;
+            auto_allow_tools?: components["schemas"]["SessionAllowance"][] | null;
             /** Group Id */
             group_id?: string | null;
         };
@@ -12544,6 +12544,16 @@ export interface components {
             can_redo: boolean;
             /** Tracks */
             tracks?: components["schemas"]["TrackOut"][];
+        };
+        /**
+         * SessionAllowance
+         * @description 「本会话始终允许」的一条:这个工具,不高于这一档的卡不再问(见 domain/agent/autopilot.SESSION_ALLOWABLE)。
+         */
+        SessionAllowance: {
+            /** Tool */
+            tool: string;
+            /** Permission */
+            permission: string;
         };
         /** SessionGroupCreate */
         SessionGroupCreate: {

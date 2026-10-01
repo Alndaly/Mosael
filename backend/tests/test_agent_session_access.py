@@ -69,7 +69,7 @@ WRITES: list[tuple[str, str, dict | None]] = [
     ("patch", "/api/agent/sessions/{sid}", {"thinking_level": "high"}),
     ("patch", "/api/agent/sessions/{sid}", {"analysis_video_mode": "frames"}),
     ("patch", "/api/agent/sessions/{sid}", {"permission_mode": "auto"}),
-    ("patch", "/api/agent/sessions/{sid}", {"auto_allow_tools": ["browser_open"]}),
+    ("patch", "/api/agent/sessions/{sid}", {"auto_allow_tools": [{"tool": "browser_open", "permission": "edit"}]}),
     ("post", "/api/agent/sessions/{sid}/messages", {"content": "我替你说一句"}),
     ("post", "/api/agent/sessions/{sid}/compact", None),
     ("post", "/api/agent/sessions/{sid}/queue/{mid}/steer", None),

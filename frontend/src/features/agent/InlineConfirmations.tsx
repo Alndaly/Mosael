@@ -19,7 +19,7 @@ import { registerInlineConfirmSurface } from "@/features/agent/confirmSurface";
 
 /**
  * 聊天流里的确认卡(Claude Code / Codex 式):智能体提出的写操作在对话里就地决策,
- * 三档动作——允许一次 / 本会话始终允许(按工具记忆)/ 拒绝。
+ * 三档动作——允许一次 / 本会话始终允许(按工具和档位记忆,撤不回的两档不提供)/ 拒绝。
  *
  * 此前确认只存在于右上角的全局 ConfirmationCenter,而它 z-index 低于 AI 助手浮窗,
  * 会被整块盖住——模型说"等待您的确认",用户却什么都看不到。现在:聊天面板打开时
@@ -28,7 +28,7 @@ import { registerInlineConfirmSurface } from "@/features/agent/confirmSurface";
  *
  * **「本会话始终允许」是服务端策略**,不是这里的一段自动批准。它此前记在 localStorage 里、
  * 由本组件挂载期间轮询自动批 —— 于是聊天面板一关组件就卸载,而 turn 还在跑:同一个"授权"的
- * 行为取决于某个 React 组件在不在,飞书和 MCP 那两条入口更是完全够不着。现在点它只是把工具名
+ * 行为取决于某个 React 组件在不在,飞书和 MCP 那两条入口更是完全够不着。现在点它只是把(工具, 档位)
  * 写进会话的白名单,放行由后端在开卡的那一刻判定(domain/agent/autopilot)。
  */
 /** 三档动作。顺序固定:允许一次 → 本会话始终允许 → 拒绝,从最小授权到最大再到否。 */
@@ -47,6 +47,18 @@ const CHOICES = [
   variant: "default" | "outline" | "ghost";
   className?: string;
 }[];
+
+/**
+ * 「本会话始终允许」只给这几档(与后端 `autopilot.SESSION_ALLOWABLE` 同一份):最坏撤得回的(edit)和只花时间、
+ * 花钱的(render-cost / ai-cost)。撤不回的两档(external / destroy)不给 —— 同一个工具名下,这两档的每一张卡
+ * 后果各不相同(发到哪、删什么、跑哪张图),点一次就放开的是以后所有的;要持续放行这一类,走自动模式里的
+ * 放行准则。不认识的档也不给:授权界面上认不出来不等于没事。
+ */
+const SESSION_ALLOWABLE = new Set(["edit", "render-cost", "ai-cost"]);
+
+function offersSessionAllow(permission: string): boolean {
+  return SESSION_ALLOWABLE.has(permission);
+}
 
 /**
  * `allowKey` 就是**会话 id**:既是白名单挂靠的会话,也是确认卡的归属筛选键。
@@ -90,11 +102,12 @@ export function InlineConfirmations({
    * 就该从头到尾转同一个按钮 —— 拆成两个 mutation 时,第二步一起手,转的会变成隔壁那个。
    */
   const decide = useMutation({
-    mutationFn: async ({ id, tool, choice }: { id: string; tool: string; choice: Choice }) => {
+    mutationFn: async ({ id, tool, permission, choice }: { id: string; tool: string; permission: string; choice: Choice }) => {
       if (choice === "session") {
         // 先写白名单再批准:反过来的话,同一工具的下一张卡可能赶在白名单落库前就被判成手动。
+        // 记的是**(工具, 这张卡的档位)**:以后同一工具不高于这一档的卡才放行(同一工具取最高的那条由后端归并)。
         const session = await getAgentSession(allowKey);
-        const next = Array.from(new Set([...(session.auto_allow_tools ?? []), tool]));
+        const next = [...(session.auto_allow_tools ?? []), { tool, permission }];
         await updateAgentSession(allowKey, { auto_allow_tools: next });
         void qc.invalidateQueries({ queryKey: ["agent-session", allowKey] });
       }
@@ -128,19 +141,24 @@ export function InlineConfirmations({
               <p className="m-0 border-t border-divider pt-2.5 text-ui-xs text-muted-foreground">{t("agentDecisionOwnerOnly")}</p>
             ) : (
               <div className="flex flex-wrap items-center gap-2 border-t border-divider pt-2.5">
-                {CHOICES.map(({ choice, icon: Icon, label, variant, className }) => (
-                  <Button
-                    key={choice}
-                    size="sm"
-                    variant={variant}
-                    className={className}
-                    loading={busy?.id === item.id && busy.choice === choice}
-                    disabled={busy?.id === item.id}
-                    onClick={() => decide.mutate({ id: item.id, tool: item.tool, choice })}
-                  >
-                    <Icon /> {t(label)}
-                  </Button>
-                ))}
+                {CHOICES.filter(({ choice }) => choice !== "session" || offersSessionAllow(item.permission)).map(
+                  ({ choice, icon: Icon, label, variant, className }) => (
+                    <Button
+                      key={choice}
+                      size="sm"
+                      variant={variant}
+                      className={className}
+                      loading={busy?.id === item.id && busy.choice === choice}
+                      disabled={busy?.id === item.id}
+                      onClick={() => decide.mutate({ id: item.id, tool: item.tool, permission: item.permission, choice })}
+                    >
+                      <Icon /> {t(label)}
+                    </Button>
+                  ),
+                )}
+                {offersSessionAllow(item.permission) ? null : (
+                  <span className="text-ui-2xs text-muted-foreground">{t("confirmAsksEveryTime")}</span>
+                )}
               </div>
             )
           }

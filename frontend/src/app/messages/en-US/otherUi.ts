@@ -183,6 +183,7 @@ export const otherUi = {
   askMultiHint: "Pick any",
   confirmAllowOnce: "Allow once",
   confirmAllowSession: "Always allow this session",
+  confirmAsksEveryTime: "Irreversible actions ask every time",
   confirmReject: "Reject",
   permEdit: "Edit",
   permDestroy: "Permanent delete",

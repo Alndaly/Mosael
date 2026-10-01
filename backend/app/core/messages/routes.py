@@ -31,6 +31,14 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "分组不存在",
         "en": "Group not found.",
     },
+    "agentErr_sessionAllowTier": {
+        "zh": "「{tool}」的「{permission}」这一档不能设成本会话始终允许 —— 只有 {allowed} 这几档可以;撤不回的操作每次都要人确认",
+        "en": "“{tool}” at the “{permission}” tier cannot be always-allowed for this session — only {allowed} can; irreversible actions ask every time.",
+    },
+    "agentErr_sessionAllowUnknownTool": {
+        "zh": "没有需要确认的工具叫「{tool}」,不能加进本会话始终允许",
+        "en": "There is no confirmation tool called “{tool}” to always allow.",
+    },
     "agentErr_badPermissionMode": {
         "zh": "permission_mode 只能是 {modes}",
         "en": "permission_mode must be one of {modes}.",

@@ -316,12 +316,24 @@ def test_auto_档_花钱的放行_对外的和跑代码的回到人() -> None:
 def test_本会话始终允许按工具名记_不连带别的插件工具() -> None:
     setup = Setup()
     setup.as_person()
-    setup.client.patch(f"/api/agent/sessions/{setup.session_id}", json={"auto_allow_tools": [setup.name("render")]})
+    allowed_list = [{"tool": setup.name("bill"), "permission": "ai-cost"}]
+    setup.client.patch(f"/api/agent/sessions/{setup.session_id}", json={"auto_allow_tools": allowed_list})
     setup.as_turn()
-    allowed = _card(setup.call("render", {"code": "x"})["result"]["confirmation_id"])
+    allowed = _card(setup.call("bill", {"text": "x"})["result"]["confirmation_id"])
     assert allowed.status == "executed" and allowed.decision_mode == "session-allow"
     other = _card(setup.call("upload", {"text": "x"})["result"]["confirmation_id"])
-    assert other.status == "pending", "允许了 Manim 渲染,却连带放开了上传"
+    assert other.status == "pending", "允许了按次计费的那个工具,却连带放开了上传"
+
+
+def test_本地跑代码的插件工具_不能设成本会话始终允许() -> None:
+    """local-code / external 的插件工具开的是 external 卡:撤不回的那一档不给「始终允许」(见 autopilot.SESSION_ALLOWABLE)。"""
+    setup = Setup()
+    setup.as_person()
+    refused = setup.client.patch(
+        f"/api/agent/sessions/{setup.session_id}",
+        json={"auto_allow_tools": [{"tool": setup.name("render"), "permission": "external"}]},
+    )
+    assert refused.status_code == 422, refused.text
 
 
 # ── 运行时报出的工具、画板、MCP ─────────────────────────────────────────────

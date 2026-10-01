@@ -116,6 +116,13 @@ class SessionGroupOut(OrmModel):
     updated_at: datetime
 
 
+class SessionAllowance(ApiModel):
+    """「本会话始终允许」的一条:这个工具,不高于这一档的卡不再问(见 domain/agent/autopilot.SESSION_ALLOWABLE)。"""
+
+    tool: str = Field(min_length=1, max_length=200)
+    permission: str = Field(min_length=1, max_length=40)
+
+
 class AgentSessionUpdate(ApiModel):
     title: str | None = Field(default=None, min_length=1, max_length=200)
     provider_profile_id: str | None = None
@@ -125,8 +132,8 @@ class AgentSessionUpdate(ApiModel):
     thinking_level: str | None = None
     #: 权限模式:manual / auto / bypass。切到 bypass 另需 admin(见路由)。
     permission_mode: str | None = None
-    #: 「本会话始终允许」的工具名单。整份替换 —— 它就是用户在卡上点出来的那份清单。
-    auto_allow_tools: list[str] | None = None
+    #: 「本会话始终允许」的清单,每条是 (工具, 档位)。整份替换 —— 它就是用户在卡上点出来的那份清单。
+    auto_allow_tools: list[SessionAllowance] | None = Field(default=None, max_length=40)
     #: 收进哪个分组。**空串 = 移出分组**(与 provider_profile_id 同一套约定):这套 schema 用
     #: None 表示"这次没改",所以"改成没有"必须另有说法。
     group_id: str | None = Field(default=None, max_length=64)
@@ -146,7 +153,7 @@ class AgentSessionOut(OrmModel):
     adapter: str
     permission_mode: str = "manual"
     mode_set_by: str | None = None
-    auto_allow_tools: list[str] = []
+    auto_allow_tools: list[SessionAllowance] = []
     provider_profile_id: str | None = None
     model: str | None = None
     analysis_video_mode: str = "auto"
