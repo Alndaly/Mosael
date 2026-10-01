@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   analyzeWorkflow,
+  drivesDigitalHuman,
   extractRefs,
   isNestedScopeConfig,
   issuesAtLayer,
@@ -34,7 +35,7 @@ const registry: RegistryLike = {
       },
       // 提示词不在声明里标必填:要不要写由选中的模型说(见 AnalyzeContext.generationPromptMode)。
       ai_generate: {
-        config: { provider: { type: "string", required: true }, prompt: { type: "template" } },
+        config: { provider: { type: "string", required: true }, prompt: { type: "template" }, consent: { type: "string" } },
         output_types: { asset_id: "asset", generation_id: "text" },
       },
       // `data_type` 由后端按字段名推出来(见 domain/workflows.config_data_type),随节点声明
@@ -666,5 +667,50 @@ describe("代码字段里的 {{…}} 不是引用", () => {
     );
     expect(a.issues).toContainEqual(expect.objectContaining({ nodeId: "c1", code: "stale-var", configKey: "input" }));
     expect(a.issues.filter((i) => i.code === "code-template")).toEqual([]);
+  });
+});
+
+describe("数字人生成的授权确认", () => {
+  //: 挂了驱动音频(说话照片、对口型)就是数字人:生成漏斗没有「已取得授权」当场拒(genErr_digitalHumanNeedsConsent)。
+  //: 此前检查器把这一格提成必填,就绪清单却全绿 —— 前面几步跑完、花了钱,才在这一步被拒。
+  const genGraph = (config: Record<string, unknown>, edges: WorkflowGraph["edges"] = []) =>
+    graph(
+      [
+        { id: "start", type: "start", config: {} },
+        { id: "gen", type: "ai_generate", config: { provider: "alibaba", model: "talk", prompt: "hi", ...config } },
+      ],
+      [{ id: "e1", source: "start", target: "gen" }, ...edges],
+    );
+  const consentMissing = (g: WorkflowGraph) =>
+    analyzeWorkflow(g, registry, fullCtx).issues.some(
+      (i) => i.nodeId === "gen" && i.code === "required-missing" && i.configKey === "consent" && i.severity === "error",
+    );
+
+  it("素材里挂了驱动音频、没确认授权:阻断", () => {
+    expect(consentMissing(genGraph({ source_assets: ["a1:first_frame", "{{tts.asset_id}}:driving_audio"] }))).toBe(true);
+  });
+
+  it("直接给了驱动音频链接也算数字人", () => {
+    expect(consentMissing(genGraph({ parameters: { driving_audio_url: "https://x/a.mp3" } }))).toBe(true);
+  });
+
+  it("确认过了、或者授权接了上游,不报", () => {
+    expect(consentMissing(genGraph({ source_assets: ["a2:driving_audio"], consent: "yes" }))).toBe(false);
+    expect(
+      consentMissing(
+        genGraph({ source_assets: ["a2:driving_audio"] }, [
+          { id: "d1", source: "start", target: "gen", kind: "data", source_output: "ok", target_input: "consent" },
+        ]),
+      ),
+    ).toBe(false);
+  });
+
+  it("不是数字人(没有驱动音频)不要求授权", () => {
+    expect(consentMissing(genGraph({ source_assets: ["a1:first_frame"], parameters: { driving_audio_url: "  " } }))).toBe(false);
+  });
+
+  it("判据是一个纯函数,检查器和就绪清单同一份", () => {
+    expect(drivesDigitalHuman("ai_generate", { source_assets: ["x:driving_audio"] })).toBe(true);
+    expect(drivesDigitalHuman("llm", { source_assets: ["x:driving_audio"] })).toBe(false);
   });
 });

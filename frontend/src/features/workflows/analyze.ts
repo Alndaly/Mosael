@@ -4,6 +4,7 @@ import { isWorkflowFieldActive, oneOfGroups } from "@/features/nodeForms/fieldAc
 import { fieldDataType, normalizeDataType, type DataType } from "@/features/nodeForms/fieldTypes";
 import type { PromptMode } from "@/lib/generationCapabilities";
 import { bodyKey, type ScopePath } from "@/features/workflows/scope";
+import { readSourceAssets } from "@/features/workflows/sourceAssetLines";
 
 /**
  * 工作流"就绪度"分析:纯函数,单一事实来源,同时喂给画布告警角标、
@@ -153,6 +154,21 @@ export function isNestedScopeConfig(registry: RegistryLike, nodeType: string, co
  */
 export function isCodeConfig(registry: RegistryLike, nodeType: string, configKey: string): boolean {
   return (registry.get(nodeType)?.config?.[configKey] as ConfigSpecLike | undefined)?.type === "code";
+}
+
+/**
+ * 这个生成节点是不是数字人(说话照片、对口型):挂了一段驱动音频。授权确认是它跑不跑得了的前提 ——
+ * 生成漏斗没它当场拒(genErr_digitalHumanNeedsConsent)。
+ *
+ * 判据和后端 generation.operations.is_digital_human_request 同一条:按素材角色认,或直接给了驱动音频链接。
+ * 检查器(把授权提到第一屏、标必填)和就绪清单(空着就阻断)读的都是这一个函数 —— 此前只有检查器在判,
+ * 清单全绿,前面几步跑完、花了钱才在这一步被拒。
+ */
+export function drivesDigitalHuman(nodeType: string, config: Record<string, unknown>): boolean {
+  if (nodeType !== "ai_generate") return false;
+  if (readSourceAssets(config.source_assets).some((line) => line.role === "driving_audio")) return true;
+  const parameters = (config.parameters ?? {}) as Record<string, unknown>;
+  return Boolean(String(parameters.driving_audio_url ?? "").trim());
 }
 
 /** 从任意配置值里抽出 `{{id.output}}` 引用,返回 [{ ref, sourceId }]。 */
@@ -357,6 +373,9 @@ function collect(
       const mode = ctx.generationPromptMode?.(config) ?? "required";
       if (mode === "required" && isEmpty(config.prompt) && !dataBound.has(`${node.id}:prompt`)) {
         push("error", "required-missing", { configKey: "prompt" });
+      }
+      if (drivesDigitalHuman(node.type, config) && isEmpty(config.consent) && !dataBound.has(`${node.id}:consent`)) {
+        push("error", "required-missing", { configKey: "consent" });
       }
       const provider = config.provider;
       if (
