@@ -35,6 +35,17 @@ def halt_scope() -> Iterator[threading.Event]:
         _HALTS.reset(token)
 
 
+@contextmanager
+def shared_halt(halt: threading.Event) -> Iterator[None]:
+    """把一个**已有的**「停」信号压进当前上下文:几路并行的工作共用它,一路失败立起来,其余各路里
+    还在跑的节点都看得见(见 executors.loops 的并发遍历)。"""
+    token = _HALTS.set((*_HALTS.get(), halt))
+    try:
+        yield
+    finally:
+        _HALTS.reset(token)
+
+
 def halted() -> bool:
     """当前这一轮(或它外面任何一层)有没有立起停的信号。"""
     return any(halt.is_set() for halt in _HALTS.get())

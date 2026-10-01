@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+import threading
 import time
 
 import pytest
@@ -72,3 +73,43 @@ def test_循环被别的节点失败叫停时_报的是已取消_不是第几次
     assert len(failed) == 1
     assert failed[0]["error_key"] == "wfErr_cancelled", failed[0]
     assert "迭代" not in failed[0]["error"]
+
+
+def test_并发遍历一项失败_其余在跑的项不再开始下一个节点(monkeypatch) -> None:
+    paid: list[object] = []
+    lock = threading.Lock()
+
+    def first(db, scope, config):
+        # 第一项很快失败;其余几项的第一个节点还在跑 —— 它们跑完之后,下一个(付费)节点不该再开始。
+        if config.get("item") == 0:
+            time.sleep(0.05)
+            raise WorkflowDomainError("第一项失败")
+        time.sleep(0.4)
+        return {"text": "ok"}
+
+    def pay(db, scope, config):
+        with lock:
+            paid.append(config.get("item"))
+        return {"text": "paid"}
+
+    _fakes(monkeypatch, {"x_first": first, "x_pay": pay})
+    workflow_id, _job_id = _workflow_and_job()
+    body = {
+        "nodes": [
+            {"id": "a", "type": "x_first", "config": {"item": "{{loop.item}}"}},
+            {"id": "b", "type": "x_pay", "config": {"item": "{{loop.item}}"}},
+        ],
+        "edges": [{"id": "e", "source": "a", "target": "b"}],
+    }
+    graph = {
+        "nodes": [
+            {"id": "start", "type": "start", "config": {}},
+            {"id": "L", "type": "loop_foreach", "config": {"items": [0, 1, 2, 3], "concurrency": 4, "body": body}},
+        ],
+        "edges": [{"id": "e1", "source": "start", "target": "L"}],
+    }
+    with pytest.raises(WorkflowDomainError) as raised:
+        wf_engine.execute_graph(graph, wf_id=workflow_id)
+    assert not paid, f"第一项失败之后其余几项照样开了付费节点:{paid}"
+    assert raised.value.key == "wfErr_loopIterationsFailed"
+    assert "4 次迭代里第 1 次失败,另有 3 次因此停下" in str(raised.value)

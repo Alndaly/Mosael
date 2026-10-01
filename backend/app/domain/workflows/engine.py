@@ -472,7 +472,10 @@ def execute_graph(
         def schedule_ready() -> None:
             nonlocal processed, cancelled
             if stopping():
-                cancelled = True
+                # 每个节点都已落定的图不算被叫停:它已经跑完了。并发遍历里别的项失败的那一刻,
+                # 恰好跑完最后一个节点的这一项是完整的,不该被记成「没跑完」。
+                if len(done) < len(order_ids):
+                    cancelled = True
                 return
             for nid in order_ids:
                 if nid in scheduled:

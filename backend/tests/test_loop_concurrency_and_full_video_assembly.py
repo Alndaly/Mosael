@@ -86,6 +86,8 @@ class Test循环并发:
 
         def boom(db, workflow, config):
             if config["item"] == "c":
+                # 等另外两项跑完再炸:还在跑的会被一起叫停(那时报的是几项的汇总),这里只看一项失败的说法。
+                time.sleep(0.3)
                 raise WorkflowDomainError("炸在 c")
             return {"text": config["item"]}
 

@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session
 from app.domain.workflows import WorkflowDomainError, interpolate
 from app.domain.workflows.executors.registry import RunScope, register
 from app.domain.workflows.executors.common import at_least, run_body, truthy, whole_number
-from app.domain.workflows.run_scope import halted
+from app.domain.workflows.run_scope import halted, shared_halt
 
 #: `item` 的"没给"哨兵。loop_while 没有当前项,而 None / "" 都是合法的迭代项,不能拿来当哨兵。
 _NO_ITEM = object()
@@ -199,9 +199,13 @@ def _iterate_concurrently(
 ) -> tuple[list[Any], list[tuple[int, BaseException]]]:
     """几项同时跑,结果**按原顺序**交出(连同 `skip` 时跳过的那几项)。
 
-    默认 fail-fast:一项失败,还没开始的不再开始(已经在跑的跑完 —— 半截的供应商调用中途
-    扔下只会留下孤儿任务)。`skip` 时一项失败不拦别的项,失败的那几项记下交回去;这一轮在停(取消、
+    默认 fail-fast:一项失败,还没开始的不再开始;已经在跑的,**下一个节点不再开始**、正在等的
+    子任务由等的一方取消(见 common.wait_until)。正在跑的那一个节点本身跑完 —— 半截的供应商调用
+    中途扔下只会留下孤儿任务。`skip` 时一项失败不拦别的项,失败的那几项记下交回去;这一轮在停(取消、
     别的节点失败)时照旧不再开始。
+
+    「停」是**同一个**信号,压进每一项自己那一层图(见 workflows.run_scope.shared_halt)。此前它只在
+    这一层,各项的图看不见:一项失败之后,别的在跑的项照样一个节点一个节点往下跑,付费节点照开。
 
     **"不再开始"要由每一项自己在开头检查,不能靠事后 cancel。** 此前是 `wait(FIRST_EXCEPTION)`
     返回之后再逐个 `future.cancel()` —— 而失败那一项的线程一空出来,线程池立刻就把排队的下一项
@@ -216,14 +220,19 @@ def _iterate_concurrently(
     stop = threading.Event()
 
     def guarded(index: int, item: Any) -> Any:
-        if stop.is_set() or halted():
-            raise _NotStarted()
-        try:
-            return iterate(index, item)
-        except BaseException:
-            if not skip:
-                stop.set()
-            raise
+        with shared_halt(stop):
+            if halted():
+                raise _NotStarted()
+            try:
+                return iterate(index, item)
+            except BaseException as exc:
+                #: 这一轮真在停(别的项立了信号、外层被叫停)时的取消,是被叫停的,不是这一项失败了 —— 也不去立信号。
+                if isinstance(exc, WorkflowDomainError) and exc.key == "wfErr_cancelled" and halted():
+                    raise _Stopped() from exc
+                # 自己失败了才立停的信号(skip 时不立:一项失败不拦别的项)。
+                if not skip:
+                    stop.set()
+                raise
 
     with ThreadPoolExecutor(max_workers=concurrency) as pool:
         # 线程池里的线程不继承 contextvar:每一项带着当前上下文进去(外层任务的归属、取消边界,
