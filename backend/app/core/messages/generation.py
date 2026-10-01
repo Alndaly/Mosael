@@ -360,6 +360,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "具名会话「{name}」正被另一次运行占用(同一份登录同一时刻只给一个),等它结束再试",
         "en": "The named session “{name}” is in use by another run (one sign-in serves one run at a time). Try again when it finishes.",
     },
+    "browserNotice_loginNotCarriedOver": {
+        "zh": "具名会话「{name}」没有沿用升级前的登录,需要重新登录一次。原因:{detail}",
+        "en": "The named session “{name}” didn't keep its sign-in from before the upgrade; sign in again once. Reason: {detail}",
+    },
     "browserErr_profileDisabled": {"zh": "该浏览器档案已停用", "en": "This browser profile is disabled."},
     "browserErr_profileBusy": {
         "zh": "该档案正被占用(同一时刻只允许一个会话),请稍后再试",

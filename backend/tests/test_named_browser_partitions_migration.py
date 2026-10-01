@@ -154,3 +154,57 @@ def test_新规则建的会话不算旧分区() -> None:
         browser.open_session(db, workspace_id=ws, kind="named", name="xhs", actor=None)
     _migrate_named_browser_partitions_are_per_workspace()
     assert _moves() == []
+
+
+def _open_named(ws: str, name: str) -> dict:
+    """真走「打开浏览器」节点(具名模式,不导航)。"""
+    import types
+
+    from app.domain.workflows.executors import browser as executor
+
+    with SessionLocal() as db:
+        return executor.browser_open(
+            db, types.SimpleNamespace(workspace_id=ws, id="wf-test", name="RPA"),
+            {"session_mode": "named", "session_name": name},
+        )
+
+
+def test_被挤掉的那个工作区第一次打开同名会话_节点交出原因_之后不再说() -> None:
+    _, (ws_a, ws_b) = _client_and_workspaces(2)
+    _old_session(ws_a, "xhs", "2026-01-01 00:00:00")
+    _old_session(ws_b, "xhs", "2026-01-02 00:00:00")  # B 晚一步,登录归 A
+    _migrate_named_browser_partitions_are_per_workspace()
+
+    first = _open_named(ws_b, "xhs")
+    assert "xhs" in first["notice"] and ws_a in first["notice"]  # 原因里点名归了谁
+    with SessionLocal() as db:
+        browser.close_session(db, first["session"])
+    assert _open_named(ws_b, "xhs")["notice"] == ""  # 第二次不再说
+    assert _open_named(ws_a, "xhs")["notice"] == ""  # 拿到登录的那一边没什么要说的
+
+
+def test_清洗后撞名被挤掉的那个原名_第一次打开时说清登录归了谁() -> None:
+    client, (ws,) = _client_and_workspaces(1)
+    _workflow(client, ws, _opener("xhs-主号"))
+    _workflow(client, ws, _opener("xhs-副号"))
+    _old_session(ws, "xhs", "2026-01-01 00:00:00")
+    _migrate_named_browser_partitions_are_per_workspace()
+
+    notice = _open_named(ws, "xhs-副号")["notice"]
+    assert "xhs-副号" in notice and "xhs-主号" in notice
+    assert _open_named(ws, "xhs-主号")["notice"] == ""
+
+
+def test_智能体打开被挤掉的具名会话_确认卡的结果里带着原因() -> None:
+    client, (ws_a, ws_b) = _client_and_workspaces(2)
+    _old_session(ws_a, "xhs", "2026-01-01 00:00:00")
+    _old_session(ws_b, "xhs", "2026-01-02 00:00:00")
+    _migrate_named_browser_partitions_are_per_workspace()
+
+    card = client.post("/api/confirmations", json={
+        "workspace_id": ws_b, "tool": "browser_open",
+        "payload": {"url": "", "session_mode": "named", "session_name": "xhs"},
+    }).json()
+    done = client.post(f"/api/confirmations/{card['id']}/approve").json()
+    assert done["status"] == "executed"
+    assert ws_a in done["result"]["notice"]

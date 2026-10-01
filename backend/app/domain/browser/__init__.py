@@ -28,7 +28,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.db import SessionLocal
 from app.core.unit_of_work import unit_of_work
-from app.core.i18n import LocalizedError, is_message_key
+from app.core.i18n import LocalizedError, is_message_key, tr
 from app.domain import sharing
 from app.domain.authority import Actor
 from app.domain.host_files import HostFile
@@ -275,6 +275,43 @@ def _open_profile_session(
     db.commit()  # 同 open_session:紧接着的动作在别的会话里读它
     db.refresh(session)
     return session
+
+
+def login_notice(db: Session, session: BrowserSession) -> str:
+    """这个具名会话**第一次**打开时,它的登录没能从升级前带过来的话,说一声为什么(按当前语言);否则空串。
+
+    具名会话的分区按工作区分开那次(迁移 named-browser-partitions-are-per-workspace),一份旧登录只归一处:
+    也被别的工作区、别的名字用过的那几份记成 abandoned,原因写在 BrowserPartitionMove.reason。此前那句原因
+    只躺在库里 —— 用户只看到「登录没了」。第一次 = 这个分区上还没有更早的会话(会话行从不删)。
+    """
+    if session.kind != "named":
+        return ""
+    earlier = db.scalar(
+        select(BrowserSession.id).where(
+            BrowserSession.partition == session.partition,
+            BrowserSession.id != session.id,
+            BrowserSession.created_at <= session.created_at,
+        ).limit(1)
+    )
+    if earlier is not None:
+        return ""
+    move = db.scalar(
+        select(BrowserPartitionMove)
+        .where(
+            BrowserPartitionMove.status == "abandoned",
+            #: 另一个名字被挤掉:新分区记着;别的工作区被挤掉:新分区是空的,按工作区 + 名字认
+            (BrowserPartitionMove.new_partition == session.partition)
+            | (
+                (BrowserPartitionMove.workspace_id == session.workspace_id)
+                & (BrowserPartitionMove.session_name == session.name)
+            ),
+        )
+        .order_by(BrowserPartitionMove.created_at)
+        .limit(1)
+    )
+    if move is None:
+        return ""
+    return tr("browserNotice_loginNotCarriedOver", name=session.name, detail=move.reason)
 
 
 def _lease_login(db: Session, wanted: BrowserSession, *, busy: Callable[[], BrowserDomainError]) -> BrowserSession:

@@ -162,6 +162,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfOut_graybox_video": {"zh": "白模运镜视频", "en": "Blockout camera move"},
     "wfOut_camera_move": {"zh": "镜头语言", "en": "Camera language"},
     "wfOut_skipped_models": {"zh": "未渲染的导入模型", "en": "Imported models not rendered"},
+    "wfOut_browser_open_notice": {"zh": "提示(如升级后这份登录要重新登录)", "en": "Notice (e.g. this sign-in must be redone after an upgrade)"},
     "wfOut_model_warnings": {"zh": "没渲进去的是哪几件、为什么", "en": "Which models were left out, and why"},
     #: 1.5 倍速、占满空当还念不完的那几句(见 voices/subtitle_dub._speed_for)。都放得下时这句是空的。
     "dubOverlapNote": {

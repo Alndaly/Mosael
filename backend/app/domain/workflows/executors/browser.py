@@ -164,10 +164,12 @@ def browser_open(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[s
             )
     except (browser.BrowserDomainError, sharing.NotUsableError) as exc:
         raise WorkflowDomainError.from_error(exc) from exc
+    #: 具名会话第一次打开、而升级时它的旧登录没能带过来:原因交在 notice 上(否则人只看到「登录没了」)
+    notice = browser.login_notice(db, session)
     url = str(config.get("url") or "").strip()
     if url:
         _run(session.id, "navigate", {"url": url})
-    return {"session": session.id}
+    return {"session": session.id, "notice": notice}
 
 
 @register("browser_navigate")

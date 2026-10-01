@@ -159,10 +159,11 @@ def _execute_browser_open(db: Session, confirmation: Any, actor: str | None) -> 
         owner_id=_agent_owner(confirmation),
         actor=actor,
     )
+    notice = browser_domain.login_notice(db, session)
     url = str(payload.get("url") or "").strip()
     if url:
         browser_domain.run_action(session.id, "navigate", {"url": url})
-    return {"session_id": session.id, "url": url}
+    return {"session_id": session.id, "url": url, **({"notice": notice} if notice else {})}
 
 def _validate_browser_pool_open(db: Session, workspace_id: str, payload: dict[str, Any], actor: str | None) -> None:
     from app.domain import browser as browser_domain

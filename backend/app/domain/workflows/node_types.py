@@ -1725,7 +1725,8 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
                 "description": "wfNode_browser_open_profile_id", "options_from": "browser_profiles",
             },
         },
-        "outputs": ["session"],
+        "outputs": ["session", "notice"],
+        "output_labels": {"notice": "wfOut_browser_open_notice"},
     },
     "browser_navigate": {
         "external": True,
