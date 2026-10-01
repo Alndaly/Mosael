@@ -426,6 +426,34 @@ def check_text_inputs(
     )
 
 
+def check_parameters(
+    db: Session,
+    *,
+    user_id: str | None,
+    kind: str,
+    provider: str,
+    model: str,
+    parameters: dict[str, Any],
+    provider_profile_id: str | None = None,
+) -> None:
+    """按**选中的那个模型**判一遍参数(validate_parameters),不建任务、不看素材。和 check_text_inputs 同一种解析:
+    模型本身解析不出来不在这里说,那由执行时的漏斗说清楚 —— 这里只管参数。"""
+    provider = provider.strip()
+    model = model.strip()
+    try:
+        if not provider or not model:
+            provider, model, provider_profile_id = _default_model(db, kind, user_id)
+        resolved = resolve_generation_model(
+            db, user_id=user_id, provider=provider, model=model, kind=kind, provider_profile_id=provider_profile_id,
+        )
+    except (GenerationDomainError, GenerationResolutionError):
+        return
+    validate_parameters(
+        resolved.provider, model, kind, parameters,
+        capabilities=resolved.capabilities if resolved.capabilities_known else None,
+    )
+
+
 def _default_model(db: Session, kind: str, user_id: str | None) -> tuple[str, str, str | None]:
     """没点名模型时用**这个人**在这种能力上的默认 —— 画板、定时任务、智能体都可能不点名。
 
@@ -737,6 +765,36 @@ def validate_against_capabilities(
     """
     if capabilities is _UNSET_CAPABILITIES:
         capabilities = known_capabilities_for(provider, model, kind)
+    if capabilities is None or not capabilities.get("parameter_keys"):
+        return
+    validate_parameters(provider, model, kind, parameters, capabilities=capabilities)
+    keys = capabilities["parameter_keys"]
+    allowed = allowed_parameter_keys(capabilities, kind)
+    counts: Counter[str] = Counter()
+    for entry in source_assets:
+        role = entry.get("role") or ""
+        if role not in allowed:
+            supported = [one for one in keys if one in SOURCE_ROLES]
+            raise GenerationDomainError(
+                "genErr_roleUnsupported", provider=provider, model=model, role=role,
+                supported=_join(supported) if supported else tr("genErr_none"),
+            )
+        counts[role] += 1
+    # 外链与素材库同权:`<role>_url` 供的角色也计入 —— 只数 source_assets 的话,
+    # 粘链接(不选素材)的用户会被 requires_source 误拦在「必须给一份首帧」上。
+    counts.update(roles_supplied_via_url(parameters, kind))
+    _check_source_counts(provider, model, capabilities, counts, source_assets)
+    _check_conditional_duration(provider, model, capabilities, counts, parameters)
+
+
+def validate_parameters(
+    provider: str, model: str, kind: str, parameters: dict[str, Any], *, capabilities: dict[str, Any] | None,
+) -> None:
+    """validate_against_capabilities 里**只看参数**的那一半(这个模型认不认这些键、这些值),不看素材。
+
+    给「素材要到运行时才有、参数跑之前就知道」的入口用:工作流的运行前检查拿开始参数插好的画幅、尺寸、时长
+    先问一遍 —— 此前整片改成 1:1 交给 Veo,要等关键帧都付完钱、生成视频那一步才被拒。
+    """
     if capabilities is None:
         return
     keys = capabilities.get("parameter_keys")
@@ -806,21 +864,6 @@ def validate_against_capabilities(
                 "genErr_durationForResolution", provider=provider, model=model,
                 resolution=resolution, choices=_join(resolution_durations),
             )
-    counts: Counter[str] = Counter()
-    for entry in source_assets:
-        role = entry.get("role") or ""
-        if role not in allowed:
-            supported = [one for one in keys if one in SOURCE_ROLES]
-            raise GenerationDomainError(
-                "genErr_roleUnsupported", provider=provider, model=model, role=role,
-                supported=_join(supported) if supported else tr("genErr_none"),
-            )
-        counts[role] += 1
-    # 外链与素材库同权:`<role>_url` 供的角色也计入 —— 只数 source_assets 的话,
-    # 粘链接(不选素材)的用户会被 requires_source 误拦在「必须给一份首帧」上。
-    counts.update(roles_supplied_via_url(parameters, kind))
-    _check_source_counts(provider, model, capabilities, counts, source_assets)
-    _check_conditional_duration(provider, model, capabilities, counts, parameters)
 
 
 def validate_text_inputs(

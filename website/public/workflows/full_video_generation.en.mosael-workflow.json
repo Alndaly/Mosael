@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "Topic to finished video",
   "description": "Turn a topic into a creative brief, script and visual bible; characters and locations already in the asset library are reused with their references, and only new ones get a turnaround sheet or concept art — saved to the library — auto-build a 3D blockout with each shot's camera position and move, then generate each shot from a first frame (and a last frame where needed) painted on the blockout — or straight from the turnarounds and the blockout camera move — and assemble, caption and export the video. Cost: by default up to 8 shots, each one video generation plus one or two keyframe images, on top of up to 7 turnaround and location images (none for those already in the library), 5 chat calls and per-shot narration — the most expensive template here; max_shots on the start node caps the shot count.",
-  "graph_hash": "b27f4518cd39dfcf9f30172acdc8aec92c48bbfa06eae91b8d34a8cb62e2f481",
+  "graph_hash": "261f41cb71061990082fbf9fab762f89a5f454b056cfa28c4d7ddb77d1ec9d80",
   "graph": {
     "meta": {
       "template_id": "full_video_generation",
@@ -29,14 +29,24 @@
             "tone": "专业、清晰、克制且有电影感",
             "language": "简体中文",
             "aspect_ratio": "16:9",
-            "frame_size": "",
             "resolution": "720p",
-            "width": 1920,
-            "height": 1080,
             "fps": 30,
             "voice_id": ""
           },
           "required_params": "topic"
+        }
+      },
+      {
+        "id": "frame_plan",
+        "type": "json_extract",
+        "name": "Pick the sizes for the aspect ratio",
+        "position": {
+          "x": 340,
+          "y": 460
+        },
+        "config": {
+          "source": "{\"16:9\": {\"frame_size\": \"\", \"video_size\": \"\", \"width\": 1920, \"height\": 1080}, \"9:16\": {\"frame_size\": \"\", \"video_size\": \"\", \"width\": 1080, \"height\": 1920}, \"1:1\": {\"frame_size\": \"\", \"video_size\": \"\", \"width\": 1080, \"height\": 1080}}",
+          "path": "{{start.aspect_ratio}}"
         }
       },
       {
@@ -393,8 +403,8 @@
         },
         "config": {
           "name": "{{creative_brief.json.title}} · 自动成片",
-          "width": "{{start.width}}",
-          "height": "{{start.height}}",
+          "width": "{{frame_plan.value.width}}",
+          "height": "{{frame_plan.value.height}}",
           "fps": "{{start.fps}}"
         }
       },
@@ -1170,7 +1180,8 @@
             "locations": "{{location_art.results}}",
             "style": "{{visual_bible.json.style_prompt}}",
             "legend": "{{visual_bible.json.blockout_legend}}",
-            "frame_size": "{{start.frame_size}}",
+            "frame_size": "{{frame_plan.value.frame_size}}",
+            "video_size": "{{frame_plan.value.video_size}}",
             "aspect_ratio": "{{start.aspect_ratio}}",
             "resolution": "{{start.resolution}}"
           },
@@ -1606,6 +1617,21 @@
         "id": "start_brief",
         "source": "start",
         "target": "creative_brief"
+      },
+      {
+        "id": "start_frame_plan",
+        "source": "start",
+        "target": "frame_plan"
+      },
+      {
+        "id": "frame_plan_project",
+        "source": "frame_plan",
+        "target": "video_project"
+      },
+      {
+        "id": "frame_plan_generate",
+        "source": "frame_plan",
+        "target": "generate_shots"
       },
       {
         "id": "brief_narrative",

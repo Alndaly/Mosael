@@ -63,22 +63,9 @@ def _vertical_image_parameters(db: Session | None, image: ModelChoice) -> dict[s
     return {"size": size} if size else {}
 
 
-def _portrait_size(sizes: list[str]) -> str:
-    """按「宽x高 / 宽*高」写的尺寸表里最大的那一档竖屏(约 9:16);没有就空串。"""
-    best, best_area = "", 0
-    for size in sizes:
-        parts = str(size).lower().replace("*", "x").split("x")
-        try:
-            width, height = int(parts[0]), int(parts[1])
-        except (IndexError, ValueError):
-            continue
-        if height > width and abs(width / height - 9 / 16) < 0.03 and width * height > best_area:
-            best, best_area = str(size), width * height
-    return best
-
-
 def _vertical_clip(db: Session | None, video: ModelChoice) -> tuple[int, dict[str, Any], dict[str, str], str]:
-    """「把上身图动起来」那一步的时长、参数、循环要给它的两格输入(画幅、分辨率),以及上身图以什么角色交给它。
+    """「把上身图动起来」那一步的时长、参数、循环要给它的几格输入(画幅、分辨率,按尺寸定画幅的模型还有尺寸),
+    以及上身图以什么角色交给它。
 
     都从视频模型的能力表里取:写死 5 秒的话 Veo(只收 4 / 6 / 8)必败;画幅优先竖屏,模型不收竖屏就用它自己的
     默认(或它唯一收的那一档)。时长和参数键和整片生成同一个出处(templates_models._video_plan)。
@@ -90,10 +77,11 @@ def _vertical_clip(db: Session | None, video: ModelChoice) -> tuple[int, dict[st
         aspect = VERTICAL_ASPECT
     else:
         aspect = plan.aspect_ratio if plan.aspect_ratio in ratios else ratios[0]
-    parameters = dict(plan.parameters or {})
-    if "size" in parameters:
-        parameters["size"] = _portrait_size(list(capabilities.get("sizes") or ())) or parameters["size"]
-    return plan.clip_seconds, parameters, {"aspect_ratio": aspect, "resolution": plan.resolution}, _still_role(capabilities)
+    inputs = {"aspect_ratio": aspect, "resolution": plan.resolution}
+    if plan.sizes:
+        #: 按像素尺寸定画幅的模型(万相):尺寸表里竖屏那一档,没有就它自己的默认画幅那一档。
+        inputs["video_size"] = plan.sizes.get(VERTICAL_ASPECT) or next(iter(plan.sizes.values()))
+    return plan.clip_seconds, dict(plan.parameters or {}), inputs, _still_role(capabilities)
 
 
 def _still_role(capabilities: dict[str, Any]) -> str:

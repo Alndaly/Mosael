@@ -19,6 +19,7 @@ import pytest
 from app.domain.generation.catalog import known_capabilities_for
 from app.domain.generation.descriptors.builtin import BUILTIN_MODELS
 from app.domain.generation.operations import keep_source_group, parse_source_assets, validate_against_capabilities
+from app.domain.workflows.executors.basic import json_extract
 from app.domain.workflows.graph_rules import interpolate
 from app.domain.workflows.templates import ModelChoice, full_video_generation_graph
 from app.domain.workflows.templates_business import (
@@ -27,6 +28,7 @@ from app.domain.workflows.templates_business import (
     product_pitch_short_graph,
 )
 from app.domain.workflows.templates_models import (
+    FRAME_ASPECTS,
     REFERENCE_IMAGES_NEEDED,
     SINGLE_REFERENCE,
     _can_shoot_from_references,
@@ -86,6 +88,10 @@ def _generations(graph: dict[str, Any], *, skipped: set[str], item: dict[str, An
     top = {node["id"]: _Anything(node["id"], results=FULL_RESULTS.get(node["id"], 0)) for node in graph["nodes"]}
     start = next(node for node in graph["nodes"] if node["type"] == "start")
     top["start"] = dict(start["config"]["params"])
+    #: 「按画幅取尺寸」只读开始参数,不花钱 —— 真跑一遍,下游拿到的就是运行时那一组尺寸。
+    for node in graph["nodes"]:
+        if node["type"] == "json_extract":
+            top[node["id"]] = json_extract(None, None, interpolate(node["config"], top))
     found: list[tuple[str, dict[str, Any]]] = []
 
     def visit(nodes: list[dict[str, Any]], context: dict[str, Any]) -> None:
@@ -171,10 +177,39 @@ def test_会被挑中的图像模型_收得下整片生成的每一次出图(ima
     assert checked == {"paint_first_frame", "paint_last_frame", "sheet", "art"}
 
 
+def _with_aspect(graph: dict[str, Any], aspect: str) -> dict[str, Any]:
+    next(node for node in graph["nodes"] if node["type"] == "start")["config"]["params"]["aspect_ratio"] = aspect
+    return graph
+
+
 def _orientation(size: str) -> str:
     text = size.replace("*", "x").replace(":", "x")
     width, height = (int(one) for one in text.split("x", 1))
     return "portrait" if height > width else "landscape" if width > height else "square"
+
+
+ASPECT_ORIENTATION = {"16:9": "landscape", "9:16": "portrait", "1:1": "square"}
+
+
+@pytest.mark.parametrize("video", _video_params())
+def test_整片改画幅_视频的尺寸跟着画幅走_收不下的画幅只能是模型本来就不收的(video: ModelChoice) -> None:
+    """改的只有开始节点的 aspect_ratio 一格。此前万相视频的 size 写死 832*480,改成竖屏照样出横屏;
+    模型本来就不收的画幅(Veo 不收 1:1)由运行前检查拦(见下一条),不在这里算失败。"""
+    ratios = [str(one) for one in (known_capabilities_for(video.provider, video.model, "video") or {}).get("aspect_ratios") or ()]
+    for aspect in FRAME_ASPECTS:
+        graph = _with_aspect(full_video_generation_graph(chat=CHAT, image=SEEDREAM, video=video), aspect)
+        for skipped, item in _full_video_walks(video):
+            generations = _generations(graph, skipped=skipped, item=item)
+            clip = next(config for node_id, config in generations if node_id == "generate_clip")
+            size = str(clip["parameters"].get("size") or "")
+            if size:
+                assert _orientation(size) == ASPECT_ORIENTATION[aspect], (aspect, size)
+            if clip["parameters"].get("aspect_ratio") == aspect and ratios and aspect not in ratios:
+                continue
+            _check(generations, "video")
+            frames = [config for node_id, config in generations if node_id == "paint_first_frame"]
+            assert all(_orientation(str(one["parameters"]["size"])) == ASPECT_ORIENTATION[aspect]
+                       for one in frames if one["parameters"].get("size")), aspect
 
 
 @pytest.mark.parametrize("image", _image_params(SINGLE_REFERENCE))

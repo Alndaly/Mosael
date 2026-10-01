@@ -8,13 +8,14 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from sqlalchemy.orm import Session
 
 from app.domain.workflows import NODE_TYPES
 from app.domain.workflows.normalization import normalize_graph
-from app.domain.workflows.templates_models import ModelChoice, _capabilities, _image_plan, _video_plan
+from app.domain.workflows.templates_models import FRAME_ASPECTS, ModelChoice, _capabilities, _image_plan, _video_plan
 from app.domain.workflows.templates_schemas import (
     _creative_brief_schema,
     _narrative_script_schema,
@@ -144,14 +145,25 @@ def full_video_generation_graph(
     image_plan = _image_plan(db, image)
     clip = video_plan.clip_seconds
     aspect = video_plan.aspect_ratio if video_plan.aspect_ratio in ("16:9", "9:16", "1:1") else "16:9"
-    frame_size = image_plan.frame_sizes.get(aspect, "")
     video_parameters = dict(video_plan.parameters or {})
     ratios = [str(one) for one in (_capabilities(db, video, "video") or {}).get("aspect_ratios") or ()]
     if "aspect_ratio" in video_parameters and ratios and aspect not in ratios:
         #: 这个模型不收白模那三种画幅里的任何一种(比如只收 adaptive,画幅跟着首帧走):视频那一步交它认的那一档,
         #: 白模、关键帧和时间线照旧按 `aspect`。
         video_parameters["aspect_ratio"] = video_plan.aspect_ratio if video_plan.aspect_ratio in ratios else ratios[0]
-    image_parameters = {"size": "{{input.frame_size}}"} if frame_size else {}
+    #: 每种画幅下关键帧图的尺寸、视频的尺寸(按尺寸定画幅的模型)、成片画布 —— 建图时按两个模型的能力表一次算好,
+    #: 跑的时候按开始节点的 aspect_ratio 取一组(「按画幅取尺寸」)。此前开始节点里摆着四格要一起改,漏改 frame_size
+    #: 或 width / height 的话竖屏的镜头被裁进横屏画布;万相视频的 size 更是写死 832*480,改了画幅照样出横屏。
+    frame_table = {
+        one: {
+            "frame_size": image_plan.frame_sizes.get(one, ""),
+            "video_size": (video_plan.sizes or {}).get(one, ""),
+            "width": width,
+            "height": height,
+        }
+        for one, (width, height) in FRAME_ASPECTS.items()
+    }
+    image_parameters = {"size": "{{input.frame_size}}"} if image_plan.frame_sizes else {}
     sheet_parameters = {"size": image_plan.sheet_size} if image_plan.sheet_size else {}
     modes_text = " / ".join(video_plan.modes)
 
@@ -514,22 +526,24 @@ JSON Schema 的对象。"""
                     "audience": "对该主题感兴趣的大众观众",
                     "tone": "专业、清晰、克制且有电影感",
                     "language": "简体中文",
-                    #: 画幅只能是 16:9 / 9:16 / 1:1(3D 白模的镜头只有这三种)。**改画幅要一起改四处**,它们都是按
-                    #: 模板建出来那一刻的画幅从模型能力表里算好的,彼此推不出来(模板里没有算术):
-                    #: aspect_ratio;frame_size(关键帧图的尺寸,换成图像模型尺寸表里同比例的一档);
-                    #: width / height(成片时间线的画布,宽高对调);resolution 一般不用动(它说的是清晰度档位)。
-                    #: 漏改 width/height 的话,竖屏的镜头会被裁进横屏画布。
+                    #: 画幅只能是 16:9 / 9:16 / 1:1(3D 白模的镜头只有这三种)。**只改这一格**:关键帧尺寸、视频尺寸、
+                    #: 成片画布由「按画幅取尺寸」按它取(见 frame_table)。视频模型不收这个画幅时(Veo 不收 1:1),
+                    #: 运行前就拦,不等关键帧付完钱。resolution 是清晰度档位,一般不用动。
                     "aspect_ratio": aspect,
-                    "frame_size": frame_size,
                     "resolution": video_plan.resolution,
-                    "width": video_plan.width,
-                    "height": video_plan.height,
                     "fps": 30,
                     # 配音音色。**留空 = 不配音**(成片只有画面),而不是跑到一半失败。
                     "voice_id": voice_id,
                 },
                 "required_params": "topic",
             },
+        },
+        {
+            "id": "frame_plan",
+            "type": "json_extract",
+            "name": {"zh": "按画幅取尺寸", "en": "Pick the sizes for the aspect ratio"},
+            "position": {"x": 340, "y": 460},
+            "config": {"source": json.dumps(frame_table, ensure_ascii=False), "path": "{{start.aspect_ratio}}"},
         },
         {
             "id": "creative_brief",
@@ -631,8 +645,8 @@ JSON Schema 的对象。"""
             "position": {"x": 680, "y": 300},
             "config": {
                 "name": "{{creative_brief.json.title}} · 自动成片",
-                "width": "{{start.width}}",
-                "height": "{{start.height}}",
+                "width": "{{frame_plan.value.width}}",
+                "height": "{{frame_plan.value.height}}",
                 "fps": "{{start.fps}}",
             },
         },
@@ -759,7 +773,8 @@ JSON Schema 的对象。"""
                     "locations": "{{location_art.results}}",
                     "style": "{{visual_bible.json.style_prompt}}",
                     "legend": "{{visual_bible.json.blockout_legend}}",
-                    "frame_size": "{{start.frame_size}}",
+                    "frame_size": "{{frame_plan.value.frame_size}}",
+                    "video_size": "{{frame_plan.value.video_size}}",
                     "aspect_ratio": "{{start.aspect_ratio}}",
                     "resolution": "{{start.resolution}}",
                 },
@@ -848,6 +863,9 @@ JSON Schema 的对象。"""
     ]
     edges = [
         {"id": "start_brief", "source": "start", "target": "creative_brief"},
+        {"id": "start_frame_plan", "source": "start", "target": "frame_plan"},
+        {"id": "frame_plan_project", "source": "frame_plan", "target": "video_project"},
+        {"id": "frame_plan_generate", "source": "frame_plan", "target": "generate_shots"},
         {"id": "brief_narrative", "source": "creative_brief", "target": "narrative_script"},
         {"id": "brief_visual", "source": "creative_brief", "target": "visual_bible"},
         #: 定角色之前先看资产库里有谁、有哪些地方 —— 故事里要的就是库里那一个时原名沿用,下游才认得出它。

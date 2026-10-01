@@ -182,8 +182,7 @@ def document_to_markdown(db: Session, scope: RunScope, config: dict[str, Any]) -
     }
 
 
-@register_preflight("ai_generate")
-def ai_generate_preflight(db: Session, config: dict[str, Any], actor: str | None, place: PreflightNode) -> None:
+def _digital_human_needs_consent(config: dict[str, Any], place: PreflightNode) -> None:
     """挂了驱动音频(说话照片、对口型,即数字人)就要勾「已取得授权」—— 在任何节点花钱之前说,判据和生成漏斗同一个
     (is_digital_human_request)。素材常是引用(`{{配音.asset_id}}:driving_audio`),角色写在模板里,所以按原始配置认。"""
     from app.domain.generation.operations import is_digital_human_request, parse_source_assets
@@ -261,6 +260,43 @@ def ai_generate(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[st
         "asset_ids": asset_ids,
         "generation_id": generation.id,
     }
+
+
+@register_preflight("ai_generate")
+def ai_generate_preflight(db: Session, config: dict[str, Any], actor: str | None, place: PreflightNode) -> None:
+    """生成节点的运行前检查,两样:挂了驱动音频要勾授权(_digital_human_needs_consent);跑之前就知道的参数合不合模型
+    (_parameters_fit_the_model)。同一种节点只能登记一个 preflight,所以在这里合起来。"""
+    _digital_human_needs_consent(config, place)
+    _parameters_fit_the_model(db, config, actor)
+
+
+def _parameters_fit_the_model(db: Session, config: dict[str, Any], actor: str | None) -> None:
+    """跑之前就知道的参数(字面量、开始参数插好的画幅 / 尺寸 / 时长)先按选中的模型问一遍,不建任务、不看素材。
+
+    此前整片改成 1:1 交给 Veo(只收 16:9 / 9:16),要等前面五次对话、几张三视图和关键帧都付完钱,生成视频那一步
+    才被拒。模型选择本身是引用的、或者参数全是运行时才知道的,不在这里判;模型解析不出来也不在这里说(漏斗会说)。
+    """
+    from app.domain.generation.operations import GenerationDomainError, check_parameters
+
+    choice = ("provider", "provider_profile_id", "model", "kind")
+    parameters = config.get("parameters")
+    if any(key not in config for key in choice) or not isinstance(parameters, dict):
+        return
+    known = provided(dict(parameters))
+    if not known:
+        return
+    try:
+        check_parameters(
+            db,
+            user_id=actor,
+            kind=str(config.get("kind") or "image").strip() or "image",
+            provider=str(config.get("provider") or ""),
+            model=str(config.get("model") or ""),
+            parameters=known,
+            provider_profile_id=str(config.get("provider_profile_id") or "").strip() or None,
+        )
+    except GenerationDomainError as exc:
+        raise WorkflowDomainError.from_error(exc) from exc
 
 
 @register("video_to_gif")

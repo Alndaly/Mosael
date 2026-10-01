@@ -766,3 +766,34 @@ class Test克隆引擎没装:
                 start_workflow_job(db, workflow, created_by=user_id(), params={"topic": "面馆", "voice_id": voice})
             assert refused.value.key == "voiceErr_noRuntime"
             assert list(db.scalars(select(Job).where(Job.workspace_id == ws))) == [], "一个节点都没排"
+
+
+class Test整片改画幅:
+    def test_视频模型不收这个画幅_运行前就拦_一个节点都不排(self) -> None:
+        """Veo 只收 16:9 / 9:16。此前改成 1:1 要等五次对话、三视图和关键帧都付完钱,生成视频那一步才被拒。"""
+        from sqlalchemy import select
+
+        from app.core.db import SessionLocal
+        from app.db.models import Job
+        from app.domain.generation.operations import GenerationDomainError
+        from app.domain.workflows import create_workflow
+        from app.domain.workflows.engine import start_workflow_job
+        from tests.util import add_provider, user_id
+
+        ws = _workspace()
+        with SessionLocal() as db:
+            #: 真的一条 Veo 连接:运行前检查按跑的人解析模型,和执行时漏斗同一种解析。
+            profile = add_provider(db, name="Google", vendor="google", api_key="k", model="veo", capability_ids=["video"])
+            db.commit()
+            veo = ModelChoice(profile_id=profile.id, provider="google", model="veo")
+        graph = full_video_generation_graph(chat=CHAT, image=SEEDREAM, video=veo)
+        with SessionLocal() as db:
+            workflow = create_workflow(db, workspace_id=ws, name="整片", graph=graph, created_by=user_id())
+            db.commit()
+            with pytest.raises((WorkflowDomainError, GenerationDomainError)) as refused:
+                start_workflow_job(db, workflow, created_by=user_id(), params={"topic": "面馆", "aspect_ratio": "1:1"})
+            assert refused.value.key == "genErr_choiceOnly"
+            assert list(db.scalars(select(Job).where(Job.workspace_id == ws))) == []
+            #: 它收的画幅照常放行。
+            start_workflow_job(db, workflow, created_by=user_id(), params={"topic": "面馆", "aspect_ratio": "9:16"})
+

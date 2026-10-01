@@ -223,7 +223,8 @@ def _middle_of_full_video(fake_node, *, shots, voice_id, project) -> tuple[dict[
     fixtures = {
         "storyboard": {"json": {"shots": shots}},
         "video_project": project,
-        "start": {"voice_id": voice_id, "frame_size": "", "aspect_ratio": "16:9", "resolution": "720p"},
+        "start": {"voice_id": voice_id, "aspect_ratio": "16:9", "resolution": "720p"},
+        "frame_plan": {"value": {"frame_size": "", "video_size": "", "width": 1920, "height": 1080}},
         "build_set": {"scene_id": "scene-1"},
         "character_sheets": {"results": []},
         "location_art": {"results": []},

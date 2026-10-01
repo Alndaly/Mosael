@@ -38,6 +38,9 @@ class VideoPlan:
     width: int = 1920
     height: int = 1080
     parameters: dict[str, Any] | None = None
+    #: 按像素尺寸定画幅的模型(万相 2.2 / 2.5 / 2.6 收 `size`、不收 `aspect_ratio`):每种画幅用尺寸表里哪一档。
+    #: 有它时参数里的 size 是 `{{input.video_size}}`,跟着画幅走 —— 此前写死默认的 832*480,改成竖屏照样出横屏。
+    sizes: dict[str, str] | None = None
     #: 这个视频模型收哪几种参考(见 _video_plan)。决定分镜里每一镜**能选**哪条路:
     #: 首帧(+尾帧)锁构图,或者参考图/参考视频锁人物与运镜。
     keyframes: bool = True
@@ -244,10 +247,6 @@ def _video_plan(db: Session | None, choice: ModelChoice) -> VideoPlan:
         parameters["aspect_ratio"] = "{{input.aspect_ratio}}"
     if "resolution" in keys:
         parameters["resolution"] = "{{input.resolution}}"
-    if "size" in keys:
-        default_size = capabilities.get("default_size")
-        if default_size:
-            parameters["size"] = str(default_size)
     size_text = str(capabilities.get("default_size") or "").lower().replace("*", "x")
     try:
         size_width, size_height = (int(value) for value in size_text.split("x", 1))
@@ -258,6 +257,18 @@ def _video_plan(db: Session | None, choice: ModelChoice) -> VideoPlan:
             "3:4": (1080, 1440),
         }
         size_width, size_height = ratio_dimensions.get(aspect_ratio, (1920, 1080))
+    sizes: dict[str, str] = {}
+    if "size" in keys:
+        #: 每种画幅挑和默认那一档清晰度最接近的(832*480 → 480*832 / 624*624),不顺手升到 1080p 多花钱。
+        default_area = size_width * size_height
+        for aspect in FRAME_ASPECTS:
+            found = size_for_aspect(capabilities.get("sizes"), aspect, pick="near", near_area=default_area)
+            if found:
+                sizes[aspect] = found
+        if sizes:
+            parameters["size"] = "{{input.video_size}}"
+        elif capabilities.get("default_size"):
+            parameters["size"] = str(capabilities["default_size"])
     modes = set(capabilities.get("modes") or ())
     #: 声明了模式、却一种能拍一镜的都没有(说话照片、改口型、改视频……):哪条路都不走。没声明模式的(用户自建、
     #: 查不全的)只看参数键。
@@ -270,6 +281,7 @@ def _video_plan(db: Session | None, choice: ModelChoice) -> VideoPlan:
         width=size_width,
         height=size_height,
         parameters=parameters,
+        sizes=sizes or None,
         keyframes=shoots and FIRST_FRAME in keys and _route_allowed(capabilities, _KEYFRAME_SOURCES),
         last_frame=shoots and LAST_FRAME in keys,
         #: 参考那条路一镜交 SHOT_REFERENCE_IMAGES 张:收不下的(可灵 kling-v3-omni 只收 4 张)不走这条路。
