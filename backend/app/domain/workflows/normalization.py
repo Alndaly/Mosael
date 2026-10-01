@@ -182,11 +182,12 @@ def _canonicalize_graph(graph: dict[str, Any], node_types: dict[str, dict[str, A
         if isinstance(body, dict) and isinstance(body.get("nodes"), list):
             _canonicalize_graph(body, node_types)
 
-    connected_pairs = {
-        (str(edge.get("source", "")), str(edge.get("target", "")))
-        for edge in edges
-        if edge.get("kind") == "data"
-    } | {(source, target) for source, _, target, _ in new_bindings}
+    data_sources: dict[str, set[str]] = {}
+    for edge in edges:
+        if edge.get("kind") == "data":
+            data_sources.setdefault(str(edge.get("target", "")), set()).add(str(edge.get("source", "")))
+    for source_id, _, target_id, _ in new_bindings:
+        data_sources.setdefault(target_id, set()).add(source_id)
 
     def routes(edge: dict[str, Any]) -> bool:
         """这条控制边带路由语义吗:从会分支的节点出发的,没写 handle 也是「真」那一支。"""
@@ -194,19 +195,39 @@ def _canonicalize_graph(graph: dict[str, Any], node_types: dict[str, dict[str, A
         source_type = str(source.get("type", "")) if source else ""
         return bool((node_types.get(source_type) or {}).get("branches"))
 
-    if connected_pairs:
-        # 同一对节点间已有数据边时,无 handle 的控制边只剩"排先后"一个作用,而数据边本身就排先后
-        # —— 可以折掉。带路由语义的不行:折掉它等于把"只在真时跑"改成"总是跑"。
-        edges[:] = [
-            edge
-            for edge in edges
-            if not (
-                edge.get("kind", "control") == "control"
-                and not edge.get("source_handle")
-                and not routes(edge)
-                and (str(edge.get("source", "")), str(edge.get("target", ""))) in connected_pairs
-            )
-        ]
+    def ordering_only(edge: dict[str, Any]) -> bool:
+        """只排先后的控制边:没写 handle、不从会分支的节点出发、同一对节点间另有数据边(数据边本身就排先后)。"""
+        return (
+            edge.get("kind", "control") == "control"
+            and not edge.get("source_handle")
+            and not routes(edge)
+            and str(edge.get("source", "")) in data_sources.get(str(edge.get("target", "")), set())
+        )
+
+    control_into: dict[str, list[dict[str, Any]]] = {}
+    for edge in edges:
+        if edge.get("kind", "control") == "control":
+            control_into.setdefault(str(edge.get("target", "")), []).append(edge)
+
+    def foldable_into(target: str) -> bool:
+        """T 的那几条只排先后的控制边能不能折掉 —— 折掉之后「T 该不该跑」得还是作者画的那个意思。
+
+        引擎的判法(engine.incoming_active):有控制边只看控制边,任一条来源跑了就跑;一条控制边都没有时看数据边。
+        - T 另有**带路由语义**的控制边(条件的「真」出口):那几条只排先后的边折掉,T 由那条路由边说了算 —— 作者
+          画它们就是为了排先后(官方模板里「这一拍有画外音才放音轨」就靠这个)。
+        - T 的控制边全是只排先后的:折掉之后 T 改由数据边判,所以只在数据边的来源恰好就是这几条控制边的来源时折。
+          此前不看这一条:T 的控制边只来自条件分支里的 A、另有一条数据边来自分支外的 B,折掉 A→T 就把「A 跑了才跑」
+          改成了「A 或 B 跑了就跑」,A 被跳过、T 照样拿着空值跑。
+        """
+        control = control_into.get(target, [])
+        if any(not ordering_only(edge) for edge in control):
+            return True
+        return {str(edge.get("source", "")) for edge in control} == data_sources.get(target, set())
+
+    def redundant(edge: dict[str, Any]) -> bool:
+        return ordering_only(edge) and foldable_into(str(edge.get("target", "")))
+
+    edges[:] = [edge for edge in edges if not redundant(edge)]
 
     used_ids = {str(edge.get("id", "")) for edge in edges}
     for source_id, source_output, target_id, target_input in new_bindings:

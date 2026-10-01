@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "视频译配 · 改口型",
   "description": "在「视频译配 · 字幕与配音」的基础上,配完音再让原片里说话人的嘴对上译文配音:按两句之间的空当把原片切成模型收得下的块,有配音的块改口型,接回整段放在最上面一条视频轨、盖住原片(删掉那条轨就回到改口型之前),导出成片带「AI 生成」标识。目标语言在「逐句翻译」一步上选(默认英文)。运行前在「让原片的嘴对上配音」上确认已取得本人授权。费用量级:改口型按原片时长计费(百炼 videoretalk 挂牌价约 0.08 元/秒,一分钟的片子约 5 元),另加翻译和逐句配音;重跑时,译文、音色和时间都没变的块不再重买(改了哪句译文,那一块重买)。",
-  "graph_hash": "15479708823d6a188dfaf579297e3a06522610ce7f623d3304f09c6cdecbc9b2",
+  "graph_hash": "bf8433613f157da88bf6ed5134adf98eb0cf973dca2f9a6b7985594ea7c93763",
   "graph": {
     "meta": {
       "template_id": "translated_dub_lipsync",
@@ -247,6 +247,26 @@
         "id": "transcript_project",
         "source": "verbatim_transcript",
         "target": "dub_project"
+      },
+      {
+        "id": "translate_subtitles",
+        "source": "translate_lines",
+        "target": "translated_subtitles"
+      },
+      {
+        "id": "append_subtitles",
+        "source": "video_on_timeline",
+        "target": "translated_subtitles"
+      },
+      {
+        "id": "subtitles_dub",
+        "source": "translated_subtitles",
+        "target": "dubbing"
+      },
+      {
+        "id": "dub_lipsync",
+        "source": "dubbing",
+        "target": "lip_sync"
       },
       {
         "id": "lipsync_export",

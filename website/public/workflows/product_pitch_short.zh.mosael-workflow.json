@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "商品 → 带货口播短视频",
   "description": "给一张商品图和几条卖点,写一条分拍的口播脚本(第一拍是钩子、最后一拍是行动号召,最多 12 拍),每一拍出一张带商品的竖幅画面、按这一拍的时长铺上时间线,用你的克隆音色念这一拍的画外音、对齐这一拍的开头,再铺上屏幕短句,导出竖屏成片。没有人出镜。卖点只用你给的那几条,不编功效和数据。",
-  "graph_hash": "b6f6ef5e7cc089d3fb32329c682ad9312bcbf73f9d8af30e99b7b16973637fbf",
+  "graph_hash": "c6b0952d3922620f66fea7c90d569ba94e0c124cd9a917e6cf19d3764c3c96ca",
   "graph": {
     "meta": {
       "template_id": "product_pitch_short",
@@ -453,6 +453,11 @@
         "id": "photo_shoot",
         "source": "product_photo",
         "target": "shoot_beats"
+      },
+      {
+        "id": "shoot_captions",
+        "source": "shoot_beats",
+        "target": "beat_captions"
       },
       {
         "id": "captions_export",

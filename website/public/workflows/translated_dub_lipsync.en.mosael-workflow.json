@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "Translated dubbing with lip-sync",
   "description": "Everything in translated dubbing with subtitles, then re-sync the speaker's lips to the translated dub: cut the source into chunks the model accepts at the gaps between lines, lip-sync the chunks with speech, and lay the joined result on the top video track over the source (delete that track to undo the lip-sync). The export carries an \"AI-generated\" label. Pick the target language on the translate step (English by default). Confirm the speaker's consent on the lip-sync step before running. Cost: lip-sync is billed by source length (Bailian videoretalk lists about 0.08 CNY per second, so roughly 5 CNY a minute), plus translation and per-line dubbing; a re-run doesn't pay again for chunks whose translation, voice and timing are unchanged (a reworded line re-buys its chunk).",
-  "graph_hash": "8456bc4e3fb32eb234bee6ceac1bb55e022cd8c7613d68292ae969db9f5a7c98",
+  "graph_hash": "b20f7445d561938dadf80e8a165eaab035d050e6a90a2f15f9f05e1272e66d75",
   "graph": {
     "meta": {
       "template_id": "translated_dub_lipsync",
@@ -247,6 +247,26 @@
         "id": "transcript_project",
         "source": "verbatim_transcript",
         "target": "dub_project"
+      },
+      {
+        "id": "translate_subtitles",
+        "source": "translate_lines",
+        "target": "translated_subtitles"
+      },
+      {
+        "id": "append_subtitles",
+        "source": "video_on_timeline",
+        "target": "translated_subtitles"
+      },
+      {
+        "id": "subtitles_dub",
+        "source": "translated_subtitles",
+        "target": "dubbing"
+      },
+      {
+        "id": "dub_lipsync",
+        "source": "dubbing",
+        "target": "lip_sync"
       },
       {
         "id": "lipsync_export",

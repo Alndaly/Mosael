@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "自媒体账号运营诊断",
   "description": "贴一个抖音、小红书或 B站账号的主页链接,取账号资料和最近 30 条作品(发布时间、文案、时长、播放 / 点赞 / 评论 / 收藏 / 转发),由代码算出发布频率、发布时段分布、互动率、头部作品和「最近一半对之前一半」的增长 / 衰退信号,再写一份运营诊断(现状、内容支柱、做得好的、问题、可执行建议)存成笔记,附关键数据表。数据来源二选一:TikHub(每次运行 2 次请求,每次约 0.001 美元起,以 TikHub 账单为准)或内嵌浏览器(不花钱,小红书 / 抖音要登录,其他平台也能用)。另有 1–2 次 AI 对话(浏览器那一路多一次整理页面)。",
-  "graph_hash": "79d670c533a2f3b03257c5640eaa2f9aa1e6c4b3e44f8c926ad7c25e3408b69b",
+  "graph_hash": "6c7ac276804dfb07570810ac37129150f3a35d681bfc71c71d703df97f08085b",
   "graph": {
     "meta": {
       "template_id": "account_analysis",
@@ -667,6 +667,11 @@
         "target": "dy_posts"
       },
       {
+        "id": "dy_posts__dy_metrics",
+        "source": "dy_posts",
+        "target": "dy_metrics"
+      },
+      {
         "id": "tk_is_dy__tk_is_xhs__false",
         "source": "tk_is_dy",
         "target": "tk_is_xhs",
@@ -684,6 +689,11 @@
         "target": "xhs_posts"
       },
       {
+        "id": "xhs_posts__xhs_metrics",
+        "source": "xhs_posts",
+        "target": "xhs_metrics"
+      },
+      {
         "id": "tk_is_xhs__tk_is_bili__false",
         "source": "tk_is_xhs",
         "target": "tk_is_bili",
@@ -699,6 +709,11 @@
         "id": "bili_profile__bili_posts",
         "source": "bili_profile",
         "target": "bili_posts"
+      },
+      {
+        "id": "bili_posts__bili_metrics",
+        "source": "bili_posts",
+        "target": "bili_metrics"
       },
       {
         "id": "tk_is_bili__tk_unsupported__false",
