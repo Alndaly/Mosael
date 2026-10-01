@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "Product into a narrated short",
   "description": "From a product photo and a few selling points, write a beat-by-beat script (the first beat is the hook, the last the call to action, up to 12 beats), paint one portrait frame per beat with the product in it, lay each on the timeline for that beat's length, voice each beat in your cloned voice lined up with its start, add the on-screen lines, and export a vertical short. Nobody appears on camera. Only the selling points you provide are used — no invented claims or figures.",
-  "graph_hash": "adca7a8dbd44d248d9a5094207f677405e10c17fca47abe34511ebf85eda17fc",
+  "graph_hash": "7bb2747f0ab5b6a84cf31fc55d4a8f6bbf5bc13466c7a9b38f291fb14c9f23de",
   "graph": {
     "meta": {
       "template_id": "product_pitch_short",
@@ -185,6 +185,19 @@
                 ]
               },
               {
+                "id": "has_narration",
+                "type": "condition",
+                "name": "Does this beat have narration?",
+                "position": {
+                  "x": 80,
+                  "y": 320
+                },
+                "config": {
+                  "left": "{{loop.item.narration}}",
+                  "op": "not_empty"
+                }
+              },
+              {
                 "id": "beat_voice",
                 "type": "synthesize_speech",
                 "name": "Voice this beat",
@@ -220,6 +233,18 @@
               }
             ],
             "edges": [
+              {
+                "id": "narration_voice",
+                "source": "has_narration",
+                "target": "beat_voice",
+                "source_handle": "true"
+              },
+              {
+                "id": "narration_voice_place",
+                "source": "has_narration",
+                "target": "beat_voice_place",
+                "source_handle": "true"
+              },
               {
                 "id": "d-beat_frame-asset_id-beat_on_timeline-asset_id",
                 "source": "beat_frame",

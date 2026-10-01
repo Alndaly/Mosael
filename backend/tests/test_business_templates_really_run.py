@@ -337,6 +337,48 @@ class Test带货口播真跑:
         assert [clip.timeline_start for clip in _clips(sequence_id, "audio")] == [6.0, 9.0, 13.0]
         assert [clip.timeline_start for clip in _clips(sequence_id, "subtitle")] == [6.0, 9.0, 13.0]
 
+    def test_某一拍没有画外音_这一拍只铺画面_整条照样成片(self, monkeypatch) -> None:
+        from app.domain.workflows.executors.subjobs import synthesize_speech as real_speak
+
+        ws = _workspace()
+        beats = [dict(BEATS[0]), {**BEATS[1], "narration": ""}, dict(BEATS[2])]
+        studio = Studio(monkeypatch, ws, {"product_pitch_script": {"beats": beats}})
+
+        def speak(db, scope, config):
+            #: 空文本交给真的合成节点 —— 它当场拒(「合成文本不能为空」),就是此前整条失败的那一下。
+            return real_speak(db, scope, config) if not config["text"].strip() else studio.speak(db, scope, config)
+
+        monkeypatch.setitem(registry._REGISTRY, "synthesize_speech", speak)
+        graph = _pick(product_pitch_short_graph(chat=CHAT, image=SEEDREAM, voice_id="voice-1"),
+                      "product_photo", asset_id=_asset(ws, "image", "毛衣"))
+        context = _run(ws, graph, product_name="羊毛衫", selling_points="不起球")
+        sequence_id = context["pitch_project"]["sequence_id"]
+        assert [clip.timeline_start for clip in _clips(sequence_id, "video")] == [0.0, 3.0, 7.0]
+        assert [one["text"] for one in studio.calls["synthesize_speech"]] == [BEATS[0]["narration"], BEATS[2]["narration"]]
+        assert [clip.timeline_start for clip in _clips(sequence_id, "audio")] == [0.0, 7.0]
+        assert len(_clips(sequence_id, "subtitle")) == 3, "没有画外音的那一拍,屏幕短句照铺"
+
+    @pytest.mark.parametrize("empty", ["hook_line", "call_to_action"])
+    def test_出镜版_开场或收尾那句是空的_那一段跳过_其余照样成片(self, monkeypatch, empty: str) -> None:
+        ws = _workspace()
+        script = {"hook_line": "你家毛衣是不是一洗就起球", "beats": BEATS, "call_to_action": "现在下单", empty: ""}
+        studio = Studio(monkeypatch, ws, {"product_pitch_script": script})
+        speak_on_camera = studio.video_node("entity_speak")
+
+        def entity_speak(db, scope, config):
+            if not str(config.get("text") or "").strip():
+                raise WorkflowDomainError("wfErr_emptyText")  # 真节点对空稿子同样当场拒
+            return speak_on_camera(db, scope, config)
+
+        monkeypatch.setitem(registry._REGISTRY, "entity_speak", entity_speak)
+        graph = product_pitch_short_graph(chat=CHAT, image=SEEDREAM, presenter=True)
+        _pick(graph, "product_photo", asset_id=_asset(ws, "image", "毛衣"))
+        _pick(graph, "presenter", entity_id="presenter-1")
+        context = _run(ws, graph, product_name="羊毛衫", selling_points="不起球")
+        video = [clip.timeline_start for clip in _clips(context["pitch_project"]["sequence_id"], "video")]
+        assert [one["text"] for one in studio.calls["entity_speak"]] == [script["hook_line"] or script["call_to_action"]]
+        assert video == ([0.0, 3.0, 7.0, 10.0] if empty == "hook_line" else [0.0, 6.0, 9.0, 13.0])
+
     def test_出镜版_主播取不到时_脚本那次对话一次都不花(self, monkeypatch) -> None:
         ws = _workspace()
         studio = Studio(monkeypatch, ws, {"product_pitch_script": {"hook_line": "", "beats": BEATS, "call_to_action": ""}})

@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "商品 → 数字人出镜带货口播",
   "description": "在「带货口播短视频」的基础上,开场钩子和收尾号召换成资产库里的一位人物出镜说出来(用它的脸和嗓子),中间每一拍仍是带商品的画面,口播用同一个嗓子念、对齐每一拍的开头,每拍铺上屏幕短句,导出竖屏成片(带「AI 生成」标识)。运行前在「挑一位主播」上选好人物;人物要先在资产库里有正面图和音色;真人要有授权声明,克隆音色也要声明是谁的。",
-  "graph_hash": "bc196c814cc0e77bd65f62d00f6f0cb646a148a239ab53928c30aa293322094a",
+  "graph_hash": "f981d187359c22bb2d0c73706cade634f8c55bee0998e836171a23bf74ba6291",
   "graph": {
     "meta": {
       "template_id": "product_pitch_presenter",
@@ -149,6 +149,19 @@
         }
       },
       {
+        "id": "has_hook",
+        "type": "condition",
+        "name": "开场有话要说吗",
+        "position": {
+          "x": 650,
+          "y": 520
+        },
+        "config": {
+          "left": "{{pitch_script.json.hook_line}}",
+          "op": "not_empty"
+        }
+      },
+      {
         "id": "hook_talk",
         "type": "entity_speak",
         "name": "主播出镜说开场",
@@ -185,6 +198,19 @@
         ]
       },
       {
+        "id": "has_cta",
+        "type": "condition",
+        "name": "收尾有话要说吗",
+        "position": {
+          "x": 650,
+          "y": 720
+        },
+        "config": {
+          "left": "{{pitch_script.json.call_to_action}}",
+          "op": "not_empty"
+        }
+      },
+      {
         "id": "cta_talk",
         "type": "entity_speak",
         "name": "主播出镜说收尾",
@@ -199,6 +225,22 @@
         },
         "inputs": [
           "entity_id"
+        ]
+      },
+      {
+        "id": "cta_spoken",
+        "type": "condition",
+        "name": "收尾那段出来了吗",
+        "position": {
+          "x": 970,
+          "y": 800
+        },
+        "config": {
+          "left": "",
+          "op": "not_empty"
+        },
+        "inputs": [
+          "left"
         ]
       },
       {
@@ -281,6 +323,19 @@
                 ]
               },
               {
+                "id": "has_narration",
+                "type": "condition",
+                "name": "这一拍有画外音吗",
+                "position": {
+                  "x": 80,
+                  "y": 320
+                },
+                "config": {
+                  "left": "{{loop.item.narration}}",
+                  "op": "not_empty"
+                }
+              },
+              {
                 "id": "beat_voice",
                 "type": "synthesize_speech",
                 "name": "念这一拍的画外音",
@@ -316,6 +371,18 @@
               }
             ],
             "edges": [
+              {
+                "id": "narration_voice",
+                "source": "has_narration",
+                "target": "beat_voice",
+                "source_handle": "true"
+              },
+              {
+                "id": "narration_voice_place",
+                "source": "has_narration",
+                "target": "beat_voice_place",
+                "source_handle": "true"
+              },
               {
                 "id": "d-beat_frame-asset_id-beat_on_timeline-asset_id",
                 "source": "beat_frame",
@@ -437,14 +504,32 @@
         "target": "pitch_project"
       },
       {
-        "id": "script_hook",
+        "id": "script_has_hook",
         "source": "pitch_script",
-        "target": "hook_talk"
+        "target": "has_hook"
       },
       {
-        "id": "script_cta",
+        "id": "hook_said",
+        "source": "has_hook",
+        "target": "hook_talk",
+        "source_handle": "true"
+      },
+      {
+        "id": "script_has_cta",
         "source": "pitch_script",
-        "target": "cta_talk"
+        "target": "has_cta"
+      },
+      {
+        "id": "cta_said",
+        "source": "has_cta",
+        "target": "cta_talk",
+        "source_handle": "true"
+      },
+      {
+        "id": "hook_place_gate",
+        "source": "has_hook",
+        "target": "hook_place",
+        "source_handle": "true"
       },
       {
         "id": "hook_then_beats",
@@ -469,7 +554,13 @@
       {
         "id": "beats_then_cta",
         "source": "shoot_beats",
-        "target": "cta_place"
+        "target": "cta_spoken"
+      },
+      {
+        "id": "cta_place_gate",
+        "source": "cta_spoken",
+        "target": "cta_place",
+        "source_handle": "true"
       },
       {
         "id": "cta_captions",
@@ -530,6 +621,14 @@
         "kind": "data",
         "source_output": "entity_id",
         "target_input": "entity_id"
+      },
+      {
+        "id": "d-cta_talk-asset_id-cta_spoken-left",
+        "source": "cta_talk",
+        "target": "cta_spoken",
+        "kind": "data",
+        "source_output": "asset_id",
+        "target_input": "left"
       },
       {
         "id": "d-pitch_project-sequence_id-cta_place-sequence_id",

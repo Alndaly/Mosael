@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "商品 → 带货口播短视频",
   "description": "给一张商品图和几条卖点,写一条分拍的口播脚本(第一拍是钩子、最后一拍是行动号召,最多 12 拍),每一拍出一张带商品的竖幅画面、按这一拍的时长铺上时间线,用你的克隆音色念这一拍的画外音、对齐这一拍的开头,再铺上屏幕短句,导出竖屏成片。没有人出镜。卖点只用你给的那几条,不编功效和数据。",
-  "graph_hash": "dec57dc04dbbdbe4ddb68dc1d16eb3abbfece8c4b85c2dab34e03aeabd7336c0",
+  "graph_hash": "789921674ea0eb5f623a3ce56ad842fe52c19bb8f605d37e00e9485bbd88ea8a",
   "graph": {
     "meta": {
       "template_id": "product_pitch_short",
@@ -185,6 +185,19 @@
                 ]
               },
               {
+                "id": "has_narration",
+                "type": "condition",
+                "name": "这一拍有画外音吗",
+                "position": {
+                  "x": 80,
+                  "y": 320
+                },
+                "config": {
+                  "left": "{{loop.item.narration}}",
+                  "op": "not_empty"
+                }
+              },
+              {
                 "id": "beat_voice",
                 "type": "synthesize_speech",
                 "name": "念这一拍的画外音",
@@ -220,6 +233,18 @@
               }
             ],
             "edges": [
+              {
+                "id": "narration_voice",
+                "source": "has_narration",
+                "target": "beat_voice",
+                "source_handle": "true"
+              },
+              {
+                "id": "narration_voice_place",
+                "source": "has_narration",
+                "target": "beat_voice_place",
+                "source_handle": "true"
+              },
               {
                 "id": "d-beat_frame-asset_id-beat_on_timeline-asset_id",
                 "source": "beat_frame",

@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "Product into a presenter-led short",
   "description": "Everything in the narrated short, but a character from your asset library speaks the hook and the call to action on camera (with its own face and voice), while each beat in between stays a product shot voiced in the same voice, lined up with the beat and captioned, exported as a vertical short with an \"AI-generated\" label. Pick the character on “Pick the presenter” before running; it needs a front image and a voice in the asset library; real people need a consent declaration, and a cloned voice needs one too.",
-  "graph_hash": "04d1ab7e20d5b3ccd6944bec9e5c9ab2c30ed4d0739a53801a827207b7981d75",
+  "graph_hash": "52f5ec5188f9d77ab68bf4e12f46dd1d964b3ccd28d65947b3c2c53c4ee14a9c",
   "graph": {
     "meta": {
       "template_id": "product_pitch_presenter",
@@ -149,6 +149,19 @@
         }
       },
       {
+        "id": "has_hook",
+        "type": "condition",
+        "name": "Is there a hook line?",
+        "position": {
+          "x": 650,
+          "y": 520
+        },
+        "config": {
+          "left": "{{pitch_script.json.hook_line}}",
+          "op": "not_empty"
+        }
+      },
+      {
         "id": "hook_talk",
         "type": "entity_speak",
         "name": "Presenter speaks the hook",
@@ -185,6 +198,19 @@
         ]
       },
       {
+        "id": "has_cta",
+        "type": "condition",
+        "name": "Is there a call to action?",
+        "position": {
+          "x": 650,
+          "y": 720
+        },
+        "config": {
+          "left": "{{pitch_script.json.call_to_action}}",
+          "op": "not_empty"
+        }
+      },
+      {
         "id": "cta_talk",
         "type": "entity_speak",
         "name": "Presenter speaks the call to action",
@@ -199,6 +225,22 @@
         },
         "inputs": [
           "entity_id"
+        ]
+      },
+      {
+        "id": "cta_spoken",
+        "type": "condition",
+        "name": "Did the call to action come out?",
+        "position": {
+          "x": 970,
+          "y": 800
+        },
+        "config": {
+          "left": "",
+          "op": "not_empty"
+        },
+        "inputs": [
+          "left"
         ]
       },
       {
@@ -281,6 +323,19 @@
                 ]
               },
               {
+                "id": "has_narration",
+                "type": "condition",
+                "name": "Does this beat have narration?",
+                "position": {
+                  "x": 80,
+                  "y": 320
+                },
+                "config": {
+                  "left": "{{loop.item.narration}}",
+                  "op": "not_empty"
+                }
+              },
+              {
                 "id": "beat_voice",
                 "type": "synthesize_speech",
                 "name": "Voice this beat",
@@ -316,6 +371,18 @@
               }
             ],
             "edges": [
+              {
+                "id": "narration_voice",
+                "source": "has_narration",
+                "target": "beat_voice",
+                "source_handle": "true"
+              },
+              {
+                "id": "narration_voice_place",
+                "source": "has_narration",
+                "target": "beat_voice_place",
+                "source_handle": "true"
+              },
               {
                 "id": "d-beat_frame-asset_id-beat_on_timeline-asset_id",
                 "source": "beat_frame",
@@ -437,14 +504,32 @@
         "target": "pitch_project"
       },
       {
-        "id": "script_hook",
+        "id": "script_has_hook",
         "source": "pitch_script",
-        "target": "hook_talk"
+        "target": "has_hook"
       },
       {
-        "id": "script_cta",
+        "id": "hook_said",
+        "source": "has_hook",
+        "target": "hook_talk",
+        "source_handle": "true"
+      },
+      {
+        "id": "script_has_cta",
         "source": "pitch_script",
-        "target": "cta_talk"
+        "target": "has_cta"
+      },
+      {
+        "id": "cta_said",
+        "source": "has_cta",
+        "target": "cta_talk",
+        "source_handle": "true"
+      },
+      {
+        "id": "hook_place_gate",
+        "source": "has_hook",
+        "target": "hook_place",
+        "source_handle": "true"
       },
       {
         "id": "hook_then_beats",
@@ -469,7 +554,13 @@
       {
         "id": "beats_then_cta",
         "source": "shoot_beats",
-        "target": "cta_place"
+        "target": "cta_spoken"
+      },
+      {
+        "id": "cta_place_gate",
+        "source": "cta_spoken",
+        "target": "cta_place",
+        "source_handle": "true"
       },
       {
         "id": "cta_captions",
@@ -530,6 +621,14 @@
         "kind": "data",
         "source_output": "entity_id",
         "target_input": "entity_id"
+      },
+      {
+        "id": "d-cta_talk-asset_id-cta_spoken-left",
+        "source": "cta_talk",
+        "target": "cta_spoken",
+        "kind": "data",
+        "source_output": "asset_id",
+        "target_input": "left"
       },
       {
         "id": "d-pitch_project-sequence_id-cta_place-sequence_id",

@@ -770,6 +770,13 @@ def _beat_body(db: Session | None, image: Any, *, engine: str, voice: str) -> di
                 },
             },
             {
+                "id": "has_narration",
+                "type": "condition",
+                "name": {"zh": "这一拍有画外音吗", "en": "Does this beat have narration?"},
+                "position": {"x": 80, "y": 320},
+                "config": {"left": "{{loop.item.narration}}", "op": "not_empty"},
+            },
+            {
                 "id": "beat_voice",
                 "type": "synthesize_speech",
                 "name": {"zh": "念这一拍的画外音", "en": "Voice this beat"},
@@ -794,6 +801,12 @@ def _beat_body(db: Session | None, image: Any, *, engine: str, voice: str) -> di
             {"id": "frame_place", "source": "beat_frame", "target": "beat_on_timeline"},
             {"id": "place_voice", "source": "beat_on_timeline", "target": "beat_voice_place"},
             {"id": "voice_voice_place", "source": "beat_voice", "target": "beat_voice_place"},
+            #: 脚本里某一拍的 narration 是空串(只给画面的一拍)时,画外音那两步整段跳过 —— 此前照样去合成,
+            #: 「合成文本不能为空」让整条失败,前面几拍的出图钱白花。
+            {"id": "narration_voice", "source": "has_narration", "target": "beat_voice", "source_handle": "true"},
+            #: **这一条不能省**(和混剪的 narration_place 同一个道理):「放画外音」的两条入边都是数据边,只剩数据边时
+            #: 任一上游跑过就算激活 —— 「铺这一拍」总是跑过的,于是没有画外音时它拿着空素材照跑。带 handle 的边有路由语义。
+            {"id": "narration_voice_place", "source": "has_narration", "target": "beat_voice_place", "source_handle": "true"},
         ],
     }
 
@@ -1423,6 +1436,13 @@ def _with_presenter(nodes: list[dict[str, Any]]) -> dict[str, Any]:
             "config": {"entity_id": "", "kind": "character"},
         },
         {
+            "id": "has_hook",
+            "type": "condition",
+            "name": {"zh": "开场有话要说吗", "en": "Is there a hook line?"},
+            "position": {"x": 650, "y": 520},
+            "config": {"left": "{{pitch_script.json.hook_line}}", "op": "not_empty"},
+        },
+        {
             "id": "hook_talk",
             "type": "entity_speak",
             "name": {"zh": "主播出镜说开场", "en": "Presenter speaks the hook"},
@@ -1438,11 +1458,27 @@ def _with_presenter(nodes: list[dict[str, Any]]) -> dict[str, Any]:
                        "track_id": "{{pitch_project.video_track_id}}"},
         },
         {
+            "id": "has_cta",
+            "type": "condition",
+            "name": {"zh": "收尾有话要说吗", "en": "Is there a call to action?"},
+            "position": {"x": 650, "y": 720},
+            "config": {"left": "{{pitch_script.json.call_to_action}}", "op": "not_empty"},
+        },
+        {
             "id": "cta_talk",
             "type": "entity_speak",
             "name": {"zh": "主播出镜说收尾", "en": "Presenter speaks the call to action"},
             "position": {"x": 650, "y": 800},
             "config": {"entity_id": "{{presenter.entity_id}}", "text": "{{pitch_script.json.call_to_action}}", "model": ""},
+        },
+        {
+            #: 收尾那段要接在各拍**之后**,而「排在各拍之后」的那条边没有路由语义 —— 直接连到「收尾接在最后」的话,
+            #: 各拍一跑完它就算激活,没有收尾那段时拿着空素材照跑。所以先在各拍之后问一句「收尾那段出来了吗」。
+            "id": "cta_spoken",
+            "type": "condition",
+            "name": {"zh": "收尾那段出来了吗", "en": "Did the call to action come out?"},
+            "position": {"x": 970, "y": 800},
+            "config": {"left": "{{cta_talk.asset_id}}", "op": "not_empty"},
         },
         {
             "id": "cta_place",
@@ -1464,19 +1500,26 @@ def _with_presenter(nodes: list[dict[str, Any]]) -> dict[str, Any]:
         #: 先有主播,再写脚本、建项目(见函数说明)。
         {"id": "presenter_script", "source": "presenter", "target": "pitch_script"},
         {"id": "presenter_project", "source": "presenter", "target": "pitch_project"},
+        #: 开场 / 收尾那句是空串时,出镜那两步整段跳过(此前照样去生成,空稿子当场被拒,出图的钱白花)。
+        #: 「说话」和「接上时间线」**都**挂在条件的「真」出口上:它们其余的入边都是数据边,只剩数据边时任一上游跑过
+        #: 就算激活 —— 建项目那一步总是跑过的。
         {"id": "presenter_hook", "source": "presenter", "target": "hook_talk"},
-        {"id": "script_hook", "source": "pitch_script", "target": "hook_talk"},
+        {"id": "script_has_hook", "source": "pitch_script", "target": "has_hook"},
+        {"id": "hook_said", "source": "has_hook", "target": "hook_talk", "source_handle": "true"},
         {"id": "presenter_cta", "source": "presenter", "target": "cta_talk"},
-        {"id": "script_cta", "source": "pitch_script", "target": "cta_talk"},
+        {"id": "script_has_cta", "source": "pitch_script", "target": "has_cta"},
+        {"id": "cta_said", "source": "has_cta", "target": "cta_talk", "source_handle": "true"},
         #: 先后:开场接上 → 各拍 → 收尾(都是往视频轨尾接)。
         {"id": "hook_place_edge", "source": "hook_talk", "target": "hook_place"},
         {"id": "project_hook", "source": "pitch_project", "target": "hook_place"},
+        {"id": "hook_place_gate", "source": "has_hook", "target": "hook_place", "source_handle": "true"},
         {"id": "hook_then_beats", "source": "hook_place", "target": "shoot_beats"},
         {"id": "script_shoot", "source": "pitch_script", "target": "shoot_beats"},
         {"id": "photo_shoot", "source": "product_photo", "target": "shoot_beats"},
         {"id": "presenter_shoot", "source": "presenter", "target": "shoot_beats"},
-        {"id": "beats_then_cta", "source": "shoot_beats", "target": "cta_place"},
+        {"id": "beats_then_cta", "source": "shoot_beats", "target": "cta_spoken"},
         {"id": "cta_place_edge", "source": "cta_talk", "target": "cta_place"},
+        {"id": "cta_place_gate", "source": "cta_spoken", "target": "cta_place", "source_handle": "true"},
         #: 字幕排在收尾接上**之后**:两步改的是同一条时间线,同时提交时后到的那个撞上版本号。
         {"id": "cta_captions", "source": "cta_place", "target": "beat_captions"},
         {"id": "shoot_captions", "source": "shoot_beats", "target": "beat_captions"},
