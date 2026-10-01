@@ -375,10 +375,35 @@ describe("删掉在跑的格子要先停", () => {
     expect(view.latest()?.items.map((one) => one.id) ?? ["n1", "n2"], "问完之前不删").toEqual(["n1", "n2"]);
 
     fireEvent.click(screen.getByRole("button", { name: "boardDeleteRunningConfirm" }));
+    //: 停的请求回来(这里当场就回)之后才删,删完再攒够一步。
+    for (let round = 0; round < 2; round += 1) {
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(500);
+      });
+    }
+    expect(onStop).toHaveBeenCalledWith("n1");
+    expect(view.latest().items.map((one) => one.id)).toEqual(["n2"]);
+  });
+
+  it("停下那一下回来之后才删:删掉的那份存回去时任务已经停了 —— 服务端对还活着的在跑的格子不让删", async () => {
+    let stopped!: () => void;
+    const onStop = vi.fn(() => new Promise<void>((resolve) => (stopped = resolve)));
+    const view = mount(board, { onStop });
+    await pressDelete("n1");
+    fireEvent.click(screen.getByRole("button", { name: "boardDeleteRunningConfirm" }));
     await act(async () => {
       await vi.advanceTimersByTimeAsync(500);
     });
     expect(onStop).toHaveBeenCalledWith("n1");
+    expect(view.latest()?.items.map((one) => one.id) ?? ["n1", "n2"], "停的请求还在路上").toEqual(["n1", "n2"]);
+
+    await act(async () => {
+      stopped();
+      await vi.advanceTimersByTimeAsync(500);
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500);
+    });
     expect(view.latest().items.map((one) => one.id)).toEqual(["n2"]);
   });
 

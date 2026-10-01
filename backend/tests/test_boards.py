@@ -750,7 +750,8 @@ def test_删掉在跑的格子后撤销_任务已经结束的话当场补上那�
         assert got.status_code == 200, got.text
         return {item["id"]: item for item in got.json()["canvas"]["items"]}
 
-    assert save([]) == {}, "人把它们删了"
+    #: 任务刚结束、回执还没送到时人把它们删了(任务还活着的在跑的格子删不掉,得先停 —— 见
+    #: test_board_receipts_and_copies 的「任务还活着就不删它」)。
     with SessionLocal() as db:
         for job_id, fields in ((done_id, {"status": "succeeded", "result": {"asset_ids": ["made"]}}),
                                (failed_id, {"status": "failed", "error": "上游拒绝了"})):
@@ -758,8 +759,11 @@ def test_删掉在跑的格子后撤销_任务已经结束的话当场补上那�
             for key, value in fields.items():
                 setattr(job, key, value)
             db.commit()
-            #: 任务结束时回执照常送来 —— 那一格不在,什么都没落下。
-            deliver_generated(db, job, receipt_to_item(board_id, "img" if job_id == done_id else "bad"))
+    assert save([]) == {}, "人把它们删了"
+    with SessionLocal() as db:
+        for job_id in (done_id, failed_id):
+            #: 回执这才送到 —— 那一格不在,什么都没落下。
+            deliver_generated(db, db.get(Job, job_id), receipt_to_item(board_id, "img" if job_id == done_id else "bad"))
 
     undone = save(running)
     assert undone["img"]["asset_id"] == "made" and undone["img"]["run"] == {"status": "succeeded"}, undone["img"]

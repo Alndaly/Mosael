@@ -70,6 +70,29 @@ def _keep_server_owned_state(stored: Any, incoming: dict[str, Any]) -> dict[str,
     return {**incoming, "items": items}
 
 
+def _keep_running_cells(stored: Any, incoming: dict[str, Any], active_jobs: set[str]) -> dict[str, Any]:
+    """客户端的快照里**整格都没有**的在跑的格子,任务还活着(`active_jobs`:库里还在排队 / 运行的任务)就照留。
+
+    _keep_server_owned_state 只看传进来的那几格 —— 撤销到放下那一格之前,快照里压根没有它,存回来它就连同在跑的
+    任务一起没了:任务照跑、钱照花,回执回来找不到那一格。删一格在跑的得先停(界面上「停下并删除」先取消任务,
+    任务落了终态再存那份没有它的画布),所以这里只认还活着的任务。连着它的线(两头都还在的)一起留。
+    界面那一侧同一条规矩在撤销时就补回去了(前端 boardServerOwned);这里兜住别的客户端、旧快照。
+    """
+    present = {str(item.get("id")) for item in incoming.get("items") or []}
+    kept = [item for item in ((stored or {}).get("items") or [])
+            if str(item.get("id")) not in present and live_job(item) in active_jobs]
+    if not kept:
+        return incoming
+    alive = present | {str(item.get("id")) for item in kept}
+    returned = {str(item.get("id")) for item in kept}
+    edge_ids = {str(edge.get("id")) for edge in incoming.get("edges") or []}
+    edges = [edge for edge in (stored or {}).get("edges") or []
+             if str(edge.get("id")) not in edge_ids
+             and (str(edge.get("source")) in returned or str(edge.get("target")) in returned)
+             and str(edge.get("source")) in alive and str(edge.get("target")) in alive]
+    return {**incoming, "items": [*incoming["items"], *kept], "edges": [*(incoming.get("edges") or []), *edges]}
+
+
 def _run_output_kept(settled: dict[str, Any], incoming: dict[str, Any]) -> bool:
     """库里这一格的 asset_id 是不是**一次运行交回、客户端还不知道**的产出 —— 是才替客户端补回来。
 

@@ -176,7 +176,7 @@ interface Props {
    *  空槽在几个产出者之间的切换都照它。还没到是 undefined。 */
   producers?: BoardProducerInfo[];
   /** 停下某一格正在跑的任务(运行态外壳上的停止按钮)。 */
-  onStop?: (itemId: string) => void;
+  onStop?: (itemId: string) => void | Promise<unknown>;
   /** 全览开着没有。占右下角一块不小的地方,图小的时候纯属挡视线。 */
   showMinimap?: boolean;
   /** 连线的走线方式。是看图习惯(存在本地偏好里),不写进画布 —— 见 components/app/canvasEdgeShape。 */
@@ -1012,9 +1012,11 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
         onCancel={() => setStopping(null)}
         onConfirm={() => {
           if (!stopping) return;
-          stopping.running.forEach((id) => onStop?.(id));
-          removeNow(stopping.nodeIds, stopping.edgeIds);
+          const { nodeIds, edgeIds, running } = stopping;
           setStopping(null);
+          //: 停的请求回来了再删:删掉的那份存回去时任务得已经停了 —— 服务端对任务还活着的在跑的格子不让删
+          //: (persistence._keep_running_cells,撤销到放下它之前的那份快照同样删不掉它)。
+          void Promise.all(running.map((id) => onStop?.(id))).then(() => removeNow(nodeIds, edgeIds));
         }}
       />
 

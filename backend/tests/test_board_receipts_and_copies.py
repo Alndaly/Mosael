@@ -445,3 +445,63 @@ def test_成功结束却没交回产出_失败原因不是任务状态() -> None
     assert run["status"] == "failed"
     assert run.get("error") == t("boardErr_noOutput"), run
 
+
+def _board_with_live_job(client, ws: str) -> tuple[str, str]:
+    """一张板:便签 n1 连进 img,img 正跑着一个库里真有的任务(排队中)。回 (板, 任务)。"""
+    from app.core.db import SessionLocal
+    from app.domain.boards import place_pending
+    from app.domain.jobs import create_job
+
+    board_id = _board(client, ws, {"items": [
+        {"id": "n1", "kind": "note", "x": 0, "y": 0, "text": "一只猫"},
+        {"id": "img", "kind": "image", "x": 300, "y": 0, "form": {"prompt": "一只猫"}},
+    ], "edges": [{"id": "e1", "source": "n1", "target": "img"}]})
+    with SessionLocal() as db:
+        job = create_job(db, workspace_id=ws, kind="generation", payload={}, created_by=None)
+        db.commit()
+        job_id = job.id
+        place_pending(db, workspace_id=ws, board_id=board_id, item={
+            "id": "img", "kind": "image", "x": 300, "y": 0, "form": {"prompt": "一只猫"},
+            "run": {"status": "running", "job_id": job_id},
+        })
+    return board_id, job_id
+
+
+def test_客户端存回来的快照里少了一格在跑的_任务还活着就不删它() -> None:
+    """撤销到放下那一格之前:快照里整格都没有。存回来的话那一格连同在跑的任务一起没了(钱照花、回执落不回来)。
+    在跑的格子要删得先停(界面上「停下并删除」先取消任务);任务还活着就照留,连着它的线也照留。"""
+    client = fresh_client()
+    ws = _workspace(client)
+    board_id, job_id = _board_with_live_job(client, ws)
+
+    undone = {"items": [{"id": "n1", "kind": "note", "x": 10, "y": 0, "text": "一只猫"}], "edges": []}
+    saved = client.patch(f"/api/boards/{board_id}", json={
+        "workspace_id": ws, "base_revision": board_revision(client, board_id, ws), "canvas": undone})
+
+    assert saved.status_code == 200, saved.text
+    items = {one["id"]: one for one in saved.json()["canvas"]["items"]}
+    assert items["img"]["run"] == {"status": "running", "job_id": job_id}, "快照里少了在跑的那一格,服务端就把它删了"
+    assert items["n1"]["x"] == 10, "用户那一侧的改动照常生效"
+    assert [one["id"] for one in saved.json()["canvas"]["edges"]] == ["e1"]
+
+
+def test_停下之后再删在跑的那一格_照常删得掉() -> None:
+    """「停下并删除」:任务先取消,再存一份没有那一格的画布 —— 这回是真删。"""
+    from app.core.db import SessionLocal
+    from app.db.models import Job
+    from app.domain.jobs import cancel_job
+
+    client = fresh_client()
+    ws = _workspace(client)
+    board_id, job_id = _board_with_live_job(client, ws)
+    with SessionLocal() as db:
+        cancel_job(db, db.get(Job, job_id))
+        db.commit()
+
+    gone = {"items": [{"id": "n1", "kind": "note", "x": 0, "y": 0, "text": "一只猫"}], "edges": []}
+    saved = client.patch(f"/api/boards/{board_id}", json={
+        "workspace_id": ws, "base_revision": board_revision(client, board_id, ws), "canvas": gone})
+
+    assert saved.status_code == 200, saved.text
+    assert [one["id"] for one in saved.json()["canvas"]["items"]] == ["n1"]
+

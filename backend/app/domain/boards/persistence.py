@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from app.db import references
 from app.db.models import Board, now
 from app.domain.boards.errors import BoardDomainError, BoardNotFound, BoardRevisionConflict
-from app.domain.boards.run_state import _keep_server_owned_state
+from app.domain.boards.run_state import _keep_running_cells, _keep_server_owned_state, live_job
 from app.domain.boards.shape import normalize_canvas
 from app.domain.boards.validation import _validate_references, check_canvas
 
@@ -181,6 +181,21 @@ def duplicate_board(
     return board
 
 
+def _active_jobs(db: Session, workspace_id: str, stored: Any, incoming: dict[str, Any]) -> set[str]:
+    """库里这一格在跑、客户端这一份里整格都没有的那几格:它们的任务里**还活着**的(排队 / 运行中)。
+    见 run_state._keep_running_cells。"""
+    from app.db.models import Job
+
+    present = {str(item.get("id")) for item in incoming.get("items") or []}
+    candidates = {job for item in ((stored or {}).get("items") or [])
+                  if str(item.get("id")) not in present and (job := live_job(item))}
+    if not candidates:
+        return set()
+    return set(db.scalars(select(Job.id).where(
+        Job.id.in_(candidates), Job.workspace_id == workspace_id, Job.status.in_(("queued", "running")),
+    )))
+
+
 def update_board(
     db: Session,
     *,
@@ -218,7 +233,11 @@ def update_board(
         normalized = normalize_canvas(canvas)
         #: 替客户端补回服务端归属的字段之后**再过一遍形状**:补回来的东西和客户端这一份拼在一起,也得是一份
         #: 合法的画布 —— 否则落了库,这张板以后每一次保存都被 normalize 拒掉,用户什么都存不下。
-        next_canvas = normalized if server_write else normalize_canvas(_keep_server_owned_state(board.canvas, normalized))
+        if server_write:
+            next_canvas = normalized
+        else:
+            kept = _keep_server_owned_state(board.canvas, normalized)
+            next_canvas = normalize_canvas(_keep_running_cells(board.canvas, kept, _active_jobs(db, workspace_id, board.canvas, kept)))
         _validate_references(db, workspace_id, next_canvas, board.canvas, assets=not server_write)
     if next_name == board.name and next_canvas == board.canvas:
         return board
