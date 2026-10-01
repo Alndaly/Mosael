@@ -1479,6 +1479,50 @@
         }
       }
     },
+    "/api/browser/worker/abandoned": {
+      "post": {
+        "tags": [
+          "browser-worker"
+        ],
+        "summary": "Abandoned",
+        "description": "手上那些动作里已经不归你了的(调用方放弃了、过期了、被别人接走了):停手。只读,不续约 ——\n认领循环每一拍顺带问一次,不用等 20 秒一次的心跳。",
+        "operationId": "abandoned_api_browser_worker_abandoned_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/app__api__routes__browser_worker__HeartbeatRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Abandoned Api Browser Worker Abandoned Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/browser/worker/partition-moves": {
       "get": {
         "tags": [

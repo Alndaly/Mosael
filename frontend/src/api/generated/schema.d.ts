@@ -656,6 +656,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/browser/worker/abandoned": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Abandoned
+         * @description 手上那些动作里已经不归你了的(调用方放弃了、过期了、被别人接走了):停手。只读,不续约 ——
+         *     认领循环每一拍顺带问一次,不用等 20 秒一次的心跳。
+         */
+        post: operations["abandoned_api_browser_worker_abandoned_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/browser/worker/partition-moves": {
         parameters: {
             query?: never;
@@ -15241,6 +15262,41 @@ export interface operations {
         };
     };
     heartbeat_api_browser_worker_heartbeat_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["app__api__routes__browser_worker__HeartbeatRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    abandoned_api_browser_worker_abandoned_post: {
         parameters: {
             query?: never;
             header?: never;

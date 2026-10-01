@@ -77,6 +77,9 @@ async function loop(gen: number): Promise<void> {
     try {
       // 先搬完登录分区,再开始认领:反过来的话,一条动作先在新分区上建出空目录,旧登录就搬不过去了。
       if (!moved) moved = await movePartitions();
+      // 调用方不等了的那些(运行停下、超时):这一拍就停手。只靠心跳要等最多 20 秒 —— 那段时间里它还在页面上
+      // 接着点、接着等,而失败现场的截图排在同一会话上它的后面。
+      if (running.size) abandon(await browserBackend.abandoned(), "abandoned by the backend");
       if (moved && running.size < MAX_INFLIGHT) {
         const action = await browserBackend.claim();
         if (action && gen === generation) {
@@ -96,15 +99,18 @@ async function heartbeatLoop(gen: number): Promise<void> {
     try {
       // 心跳带着手上那些动作去续约,并把**没续上**的还回来 —— 那几条已经不归我了
       // (被判过期、被后端放弃、或被别的执行器接走),接着干只会盖掉别人正在干的那一份:中止它们。
-      const lost = await browserBackend.heartbeat();
-      for (const id of lost) {
-        plog("browser lease lost, abandoning action:", id);
-        running.get(id)?.abort();
-      }
+      abandon(await browserBackend.heartbeat(), "lease lost");
     } catch (error) {
       plog("browser heartbeat error:", error instanceof Error ? error.message : String(error));
     }
     await delay(HEARTBEAT_MS);
+  }
+}
+
+function abandon(ids: string[], why: string): void {
+  for (const id of ids) {
+    plog(`browser action ${why}, stopping:`, id);
+    running.get(id)?.abort();
   }
 }
 

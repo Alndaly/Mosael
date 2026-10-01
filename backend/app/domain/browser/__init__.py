@@ -682,6 +682,25 @@ def renew_action_leases(db: Session, *, worker: str, claims: list[dict[str, str]
     return renewed
 
 
+def abandoned_actions(db: Session, *, worker: str, claims: list[dict[str, str]]) -> list[str]:
+    """执行器手上那些动作里,**已经不归它了**的那些 id(调用方放弃了、被判过期、被别人接走)。只读,不续约。
+
+    心跳 20 秒一次,只靠它的话,调用方不等了(运行停下、超时)之后执行器还要在那条动作上接着干最多 20 秒 ——
+    接着点、接着等,而失败现场的截图排在它后面。认领循环每一拍顺带问一次,一拍之内就停手。
+    """
+    gone: list[str] = []
+    for claim in claims:
+        act = db.get(BrowserAction, str(claim.get("action_id") or ""))
+        if (
+            act is None
+            or act.status != "running"
+            or act.lease_worker != worker
+            or act.lease_token != claim.get("lease_token")
+        ):
+            gone.append(str(claim.get("action_id")))
+    return gone
+
+
 def claim_next_action(db: Session, *, worker: str = "") -> dict | None:
     """认领最老的 queued 动作,CAS 翻 running,带上会话分区信息返回给执行器。
 

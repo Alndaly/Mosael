@@ -32,13 +32,18 @@ const mocks = vi.hoisted(() => {
     claim: vi.fn(),
     report: vi.fn(async () => ({})),
     heartbeat: vi.fn(async (): Promise<string[]> => []),
+    abandoned: vi.fn(async (): Promise<string[]> => []),
     partitionMoves: vi.fn(async () => [] as unknown[]),
     settlePartitionMove: vi.fn(async () => ({})),
   };
   const pending = new Map<string, () => void>();
+  //: 和真的 PageDriver 一样:中止开关一拨,手上的动作就抛出来
   const execute = vi.fn(
-    (_driver: unknown, _action: string, args: Record<string, unknown>) =>
-      new Promise<{ lastUrl: string }>((resolve) => pending.set(String(args.tag), () => resolve({ lastUrl: "https://x.test/" }))),
+    (driver: { signal: AbortSignal | null }, _action: string, args: Record<string, unknown>) =>
+      new Promise<{ lastUrl: string }>((resolve, reject) => {
+        pending.set(String(args.tag), () => resolve({ lastUrl: "https://x.test/" }));
+        driver.signal?.addEventListener("abort", () => reject(new Error("aborted")));
+      }),
   );
   const paths = { userData: "" };
   return { drivers, views, backend, pending, execute, paths };
@@ -65,6 +70,7 @@ beforeEach(() => {
   mocks.drivers.clear();
   mocks.backend.claim.mockResolvedValue(null);
   mocks.backend.heartbeat.mockResolvedValue([]);
+  mocks.backend.abandoned.mockResolvedValue([]);
   mocks.backend.partitionMoves.mockResolvedValue([]);
 });
 
@@ -111,6 +117,30 @@ it("心跳说这条已经不归我了(后端不等了):中止它", async () => {
   mocks.backend.heartbeat.mockResolvedValueOnce(["a1"]);
   await vi.advanceTimersByTimeAsync(20_000);
   expect(signal.aborted).toBe(true);
+});
+
+it("后端放弃了这条(运行停下、超时):认领循环下一拍就中止它,不等 20 秒一次的心跳", async () => {
+  mocks.backend.claim.mockResolvedValueOnce(action("a1", "s1", "long"));
+  startBrowserWorker();
+  await vi.advanceTimersByTimeAsync(1_000);
+  const signal = mocks.drivers.get("s1")!.signal!;
+  mocks.backend.abandoned.mockResolvedValueOnce(["a1"]);
+  await vi.advanceTimersByTimeAsync(1_500);
+  expect(signal.aborted).toBe(true);
+  expect(mocks.backend.heartbeat.mock.calls.length).toBeLessThanOrEqual(1); // 不是心跳发现的
+});
+
+it("被放弃的那条一停,同一会话上排在它后面的失败现场截图马上开始", async () => {
+  mocks.backend.claim
+    .mockResolvedValueOnce(action("a1", "s1", "long"))
+    .mockResolvedValueOnce({ ...action("a2", "s1", "shot"), action: "screenshot" });
+  startBrowserWorker();
+  await vi.advanceTimersByTimeAsync(1_000);
+  expect(mocks.execute).toHaveBeenCalledTimes(1); // 截图排在 a1 后面
+  mocks.backend.abandoned.mockResolvedValueOnce(["a1"]);
+  await vi.advanceTimersByTimeAsync(1_500);
+  expect(mocks.execute).toHaveBeenCalledTimes(2);
+  expect(mocks.execute.mock.calls[1][1]).toBe("screenshot");
 });
 
 it("先搬完登录分区,再开始认领", async () => {

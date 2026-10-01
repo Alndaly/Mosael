@@ -22,6 +22,7 @@ from pydantic import BaseModel, Field
 
 from app.api.deps import Tx
 from app.domain.browser import (
+    abandoned_actions,
     claim_next_action,
     pending_partition_moves,
     renew_action_leases,
@@ -95,6 +96,13 @@ def heartbeat(body: HeartbeatRequest, db: Tx) -> dict[str, Any]:
     """
     renewed = renew_action_leases(db, worker=body.worker, claims=[one.model_dump() for one in body.claims])
     return {"ok": True, "renewed": renewed}
+
+
+@router.post("/browser/worker/abandoned")
+def abandoned(body: HeartbeatRequest, db: Tx) -> dict[str, Any]:
+    """手上那些动作里已经不归你了的(调用方放弃了、过期了、被别人接走了):停手。只读,不续约 ——
+    认领循环每一拍顺带问一次,不用等 20 秒一次的心跳。"""
+    return {"abandoned": abandoned_actions(db, worker=body.worker, claims=[one.model_dump() for one in body.claims])}
 
 
 class PartitionMoveReport(BaseModel):

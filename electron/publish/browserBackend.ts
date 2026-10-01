@@ -115,6 +115,18 @@ export const browserBackend = {
     for (const id of lost) holding.delete(id);
     return lost;
   },
+  /**
+   * 手上那些动作里已经不归我的(调用方不等了、过期了、被别人接走了)。只问不续约 —— 认领循环每一拍问一次,
+   * 调用方放弃之后一拍之内就停手,而不是等下一次心跳(最多 20 秒)。
+   */
+  abandoned: async (): Promise<string[]> => {
+    const claims = [...holding].map(([action_id, lease_token]) => ({ action_id, lease_token }));
+    if (!claims.length) return [];
+    const answer = await req<{ abandoned?: string[] }>("/worker/abandoned", "POST", { worker: readWorkerId(), claims });
+    const gone = answer.abandoned ?? [];
+    for (const id of gone) holding.delete(id);
+    return gone;
+  },
   /** 后端迁移写下、**这台电脑**还没回过话的登录分区搬家单(见 partitionMoves.ts)。 */
   partitionMoves: () =>
     req<{ moves?: PartitionMove[] }>(`/worker/partition-moves?worker=${encodeURIComponent(readWorkerId())}`).then(
