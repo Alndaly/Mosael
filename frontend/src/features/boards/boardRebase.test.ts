@@ -26,9 +26,19 @@ describe("本地没存的改动重放到服务端最新那一版上", () => {
       [{ id: "a->b", source: "a", target: "b" }, { id: "a->theirs", source: "a", target: "theirs" }],
     );
     const { canvas: merged } = rebaseCanvas(base, mine, theirs);
-    expect(merged.items.map((one) => one.id)).toEqual(["a", "mine", "theirs"]);
+    //: 服务端新加的按它在服务端那份里的位置插(接在它前面、本地也在的那一格后面),本地新加的照本地的位置。
+    expect(merged.items.map((one) => one.id)).toEqual(["a", "theirs", "mine"]);
     //: c 被服务端删了,连着它的那根本地新线没有一头可接。
     expect(merged.edges.map((one) => one.id)).toEqual(["a->theirs"]);
+  });
+
+  it("服务端插在宿主后面的几格(一次多张的其余几张):合好的顺序和服务端一样 —— 只是顺序不同不算本地改动,不多存一次", () => {
+    const base = canvas([note("a"), note("img"), note("z")]);
+    const theirs = canvas([note("a"), note("img"), note("img-2"), note("img-3"), note("z")]);
+    expect(rebaseCanvas(base, base, theirs).canvas).toEqual(theirs);
+    //: 本地拖了一格:顺序照样跟着服务端,只多那一处改动。
+    const moved = rebaseCanvas(base, canvas([note("a"), note("img"), note("z", { x: 40 })]), theirs).canvas;
+    expect(moved.items.map((one) => one.id)).toEqual(["a", "img", "img-2", "img-3", "z"]);
   });
 
   it("两边改了同一格的同一处、改得不一样:用本地的,并说一声", () => {

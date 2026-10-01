@@ -43,7 +43,11 @@ function mergeOne<T extends Keyed>(was: T, mine: T, now: T, onConflict: () => vo
   return out as T;
 }
 
-/** 一张按 id 认的清单三方合并。顺序照本地的,服务端新加的接在后面。 */
+/**
+ * 一张按 id 认的清单三方合并。顺序照本地的;服务端新加的**按它在服务端那份里的位置插**:接在它前面、合好的这份里
+ * 也在的那一格后面(前面一格都没有就放最前)。回执把一次多张的其余几张插在宿主后面 —— 此前接在末尾,合好的那份
+ * 和服务端只差顺序,每落一次多张就白存一次。
+ */
 function mergeList<T extends Keyed>(base: T[], mine: T[], theirs: T[], onConflict: () => void): T[] {
   const was = new Map(base.map((one) => [one.id, one]));
   const now = new Map(theirs.map((one) => [one.id, one]));
@@ -64,9 +68,18 @@ function mergeList<T extends Keyed>(base: T[], mine: T[], theirs: T[], onConflic
     }
     out.push(mergeOne(before, one, current, onConflict));
   }
+  const kept = new Set(out.map((one) => one.id));
+  let after: string | null = null;
   for (const one of theirs) {
-    if (local.has(one.id) || was.has(one.id)) continue;
-    out.push(one);
+    if (local.has(one.id) || was.has(one.id)) {
+      if (kept.has(one.id)) after = one.id;
+      continue;
+    }
+    //: 只在插的时候找位置 —— 服务端新加的一次就几格,不按整张清单的长度平方去扫。
+    const at = after === null ? 0 : out.findIndex((other) => other.id === after) + 1;
+    out.splice(at, 0, one);
+    kept.add(one.id);
+    after = one.id;
   }
   return out;
 }
