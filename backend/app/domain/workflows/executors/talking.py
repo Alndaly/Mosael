@@ -296,6 +296,8 @@ def image_speak(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[st
         raise WorkflowDomainError("wfErr_talkingNeedsFace")
     #: 收进本工作区:别处的 id 不能借这一步被拿去生成。
     face = _asset_in(db, scope, face).id
+    #: 脸是没声明的真人人物资产:在配音之前拒(漏斗要到提交生成时才查,那时配音的钱已经花了)。
+    _require_face_rights(db, scope.workspace_id, face, FIRST_FRAME)
     model = _pick_model(db, _text(config.get("model")), SPEECH_TO_VIDEO)
     parameters = _resolution(model, config)
     given = _text(config.get("audio_asset_id"))
@@ -318,6 +320,8 @@ def video_lipsync(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[
     if not video:
         raise WorkflowDomainError("wfErr_talkingNeedsVideo")
     video = _asset_in(db, scope, video).id
+    #: 同上:原片里的人是没声明的真人人物资产,在配音之前拒。
+    _require_face_rights(db, scope.workspace_id, video, SOURCE_VIDEO)
     model = _pick_model(db, _text(config.get("model")), VIDEO_LIPSYNC)
     given = _text(config.get("audio_asset_id"))
     if given:

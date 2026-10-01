@@ -178,3 +178,18 @@ def test_节点上挑分辨率_只收这个模型有的档_不对的在配音之
     for node in ("entity_speak", "image_speak"):
         field = NODE_TYPES[node]["config"]["resolution"]
         assert (field["depends_on"], field["options_from"]) == ("model", "speech_video_resolutions")
+
+
+@pytest.mark.parametrize(("node", "role"), [("image_speak", "front"), ("video_lipsync", "front")])
+def test_脸是没声明的真人人物资产_在配音之前拒_不白付配音的钱(setup, node, role) -> None:
+    """此前漏斗要到提交生成时才查脸的授权 —— 那时稿子已经配成了音,配音的钱白付了。"""
+    client, ws, fakes = setup
+    made = client.post("/api/entities", json={"workspace_id": ws, "kind": "character", "name": "小李",
+                                              "attributes": {"real_person": True}}).json()
+    face = "face" if node == "image_speak" else "clip"
+    client.post(f"/api/entities/{made['id']}/references", json={"asset_id": face, "role": role})
+    with SessionLocal() as db, pytest.raises(WorkflowDomainError) as refused:
+        getattr(talking, node)(db, _scope(ws), {"asset_id": face, "text": "你好", "engine": "builtin:edge", "voice": "v",
+                                                "consent": "yes"})
+    assert refused.value.key == "genErr_entityConsentMissing"
+    assert fakes.spoken == [] and fakes.generated == [], "配音、生成都没起"
