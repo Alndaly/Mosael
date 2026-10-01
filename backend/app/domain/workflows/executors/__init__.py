@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from app.domain.workflows.executors.registry import (  # noqa: F401 —— 包的公开面不变
     Handler,
+    PreflightNode,
     PrefixFactory,
     RunScope,
     _PREFIX_REGISTRY,

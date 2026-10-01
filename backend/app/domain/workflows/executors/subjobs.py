@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 from app.db.models import Asset, Clip, Sequence, Transcript
 from app.domain.sequences.errors import SequenceDomainError
 from app.domain.workflows import WorkflowDomainError
-from app.domain.workflows.executors.registry import RunScope, register, register_preflight
+from app.domain.workflows.executors.registry import PreflightNode, RunScope, register, register_preflight
 from app.domain.jobs import current_actor
 from app.domain.workflows.executors.common import id_list, provided, text_lines, truthy, wait_for_job, whole_number
 
@@ -180,6 +180,21 @@ def document_to_markdown(db: Session, scope: RunScope, config: dict[str, Any]) -
         "total": total,
         "unit": extraction.unit,
     }
+
+
+@register_preflight("ai_generate")
+def ai_generate_preflight(db: Session, config: dict[str, Any], actor: str | None, place: PreflightNode) -> None:
+    """挂了驱动音频(说话照片、对口型,即数字人)就要勾「已取得授权」—— 在任何节点花钱之前说,判据和生成漏斗同一个
+    (is_digital_human_request)。素材常是引用(`{{配音.asset_id}}:driving_audio`),角色写在模板里,所以按原始配置认。"""
+    from app.domain.generation.operations import is_digital_human_request, parse_source_assets
+
+    raw = place.node.get("config") or {}
+    kind = str(raw.get("kind") or "image").strip() or "image"
+    parameters = raw.get("parameters") if isinstance(raw.get("parameters"), dict) else {}
+    if not is_digital_human_request(parse_source_assets(raw.get("source_assets"), kind=kind), parameters):
+        return
+    if not place.deferred("consent") and str(config.get("consent") or "").strip() != "yes":
+        raise WorkflowDomainError("wfErr_talkingNeedsConsent")
 
 
 @register("export_sequence")
@@ -1021,7 +1036,7 @@ def dub_subtitles(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[
 
 
 @register_preflight("dub_subtitles")
-def dub_subtitles_preflight(db: Session, config: dict[str, Any], actor: str | None) -> None:
+def dub_subtitles_preflight(db: Session, config: dict[str, Any], actor: str | None, _node: PreflightNode) -> None:
     """选了「只去掉人声」就先问有没有分离能力 —— 在转写、付费翻译、逐句配音之前。
 
     此前这句只在配音节点开始时问(start_subtitle_dub):译配模板里它排在翻译之后,翻译的钱花完才说做不了。

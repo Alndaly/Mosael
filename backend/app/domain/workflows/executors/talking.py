@@ -28,7 +28,7 @@ from app.ai.providers.contracts.generation import DRIVING_AUDIO, FIRST_FRAME, SO
 from app.domain.assets.media_info import patch_media_info
 from app.domain.jobs import current_actor
 from app.domain.workflows import WorkflowDomainError
-from app.domain.workflows.executors.registry import RunScope, register
+from app.domain.workflows.executors.registry import PreflightNode, RunScope, register, register_preflight
 from app.domain.workflows.executors.common import wait_for_job
 
 SPEECH_TO_VIDEO = "speech-to-video"
@@ -52,7 +52,11 @@ def talking_models(db: Session, mode: str, actor_id: str | None) -> list[dict[st
 
 
 def _pick_model(db: Session, choice: str, mode: str) -> dict[str, Any]:
-    options = talking_models(db, mode, current_actor(db))
+    return _choose_model(talking_models(db, mode, current_actor(db)), choice, mode)
+
+
+def _choose_model(options: list[dict[str, Any]], choice: str, mode: str) -> dict[str, Any]:
+    """从这个人能用的那几个里挑:点了名就要那一个,没点名见下。运行前检查和执行同一个挑法。"""
     if choice:
         picked = next((one for one in options if one["id"] == choice), None)
         if picked is None:
@@ -163,13 +167,11 @@ def _portrait(db: Session, entity: Any) -> str:
     return images[0]
 
 
-def check_entity_speak(db: Session, workspace_id: str, config: dict[str, Any], actor_id: str | None) -> dict[str, Any]:
-    """人物说话之前的全部检查,**不花钱、不写东西**:是人物、真人有授权声明、有音色、有图、有会说话照片的模型、有稿子。
-    节点跑的时候先过它;资产详情页点「让它说话」时也先过它(domain/entities/drawing),说不通的当场说。"""
+def _speaking_entity(db: Session, workspace_id: str, entity_id: str) -> tuple[Any, str, str]:
+    """要说话的人物资产,和它的(引擎, 音色):是人物、真人有授权声明、有音色、克隆音色有授权声明。不花钱、不写东西。"""
     from app.domain.entities import EntityDomainError, get_entity
     from app.domain.entities.catalog import usable_for_digital_human
 
-    entity_id = _text(config.get("entity_id"))
     if not entity_id:
         raise WorkflowDomainError("wfErr_entityNeedsTarget")
     try:
@@ -184,17 +186,93 @@ def check_entity_speak(db: Session, workspace_id: str, config: dict[str, Any], a
     voice = _text(attributes.get("voice_id"))
     if not voice:
         raise WorkflowDomainError("wfErr_entitySpeakNoVoice", params={"name": entity.name})
-    _require_voice_consent(db, _text(attributes.get("voice_engine")), voice)
+    engine = _text(attributes.get("voice_engine"))
+    _require_voice_consent(db, engine, voice)
+    return entity, engine, voice
+
+
+def check_entity_speak(db: Session, workspace_id: str, config: dict[str, Any], actor_id: str | None) -> dict[str, Any]:
+    """人物说话之前的全部检查,**不花钱、不写东西**:是人物、真人有授权声明、有音色、有图、有会说话照片的模型、有稿子。
+    节点跑的时候先过它;资产详情页点「让它说话」时也先过它(domain/entities/drawing),说不通的当场说。"""
+    entity, engine, voice = _speaking_entity(db, workspace_id, _text(config.get("entity_id")))
     if not _text(config.get("text")):
         raise WorkflowDomainError("wfErr_talkingNeedsText")
-    options = talking_models(db, SPEECH_TO_VIDEO, actor_id)
-    choice = _text(config.get("model"))
-    model = (next((one for one in options if one["id"] == choice), None) if choice
-             else next((one for one in options if one.get("is_default")), None) or (options[0] if options else None))
-    if model is None:
-        raise WorkflowDomainError("wfErr_talkingModelMissing" if choice else "wfErr_talkingNoModel")
-    return {"face": _portrait(db, entity), "engine": _text(attributes.get("voice_engine")), "voice": voice, "model": model,
+    model = _choose_model(talking_models(db, SPEECH_TO_VIDEO, actor_id), _text(config.get("model")), SPEECH_TO_VIDEO)
+    return {"face": _portrait(db, entity), "engine": engine, "voice": voice, "model": model,
             "parameters": _resolution(model, config)}
+
+
+def _require_face_rights(db: Session, workspace_id: str, asset_id: str, role: str) -> None:
+    """这张脸(人像、原片)是某个真人人物资产的参考图时,要有本人或已获同意的声明 —— 和生成漏斗同一个判据
+    (check_digital_human_rights)。在配音**之前**问:漏斗要到提交生成时才查,那时配音的钱已经花了。"""
+    from app.domain.generation.operations import GenerationDomainError, check_digital_human_rights
+
+    try:
+        check_digital_human_rights(db, workspace_id, [{"asset_id": asset_id, "role": role}])
+    except GenerationDomainError as exc:
+        raise WorkflowDomainError.from_error(exc) from exc
+
+
+# ---- 运行前检查(见 executors.register_preflight):做不了的事在任何节点花钱之前说,判据和执行时是同一套。----
+
+
+def preflight_model(db: Session, config: dict[str, Any], place: PreflightNode, mode: str, actor: str | None) -> None:
+    """点了名的模型他用得上,或者没点名时挑得到一个。模型是引用时运行时再判。"""
+    if not place.deferred("model"):
+        _choose_model(talking_models(db, mode, actor), _text(config.get("model")), mode)
+
+
+def preflight_consent(config: dict[str, Any], place: PreflightNode) -> None:
+    """面板上那一格「已取得授权」勾了。是引用时运行时再判 —— 而没填和引用在字面量配置里看起来一样,所以问 place。"""
+    if not place.deferred("consent"):
+        _require_consent(config)
+
+
+def _preflight_spoken_voice(db: Session, config: dict[str, Any], place: PreflightNode) -> None:
+    """要当场配音时(没接现成的音频):字面量的克隆音色要有授权声明。"""
+    if place.deferred("audio_asset_id") or _text(config.get("audio_asset_id")):
+        return
+    if place.deferred("engine") or place.deferred("voice"):
+        return
+    _require_voice_consent(db, _text(config.get("engine")), _text(config.get("voice")))
+
+
+def _preflight_face(db: Session, config: dict[str, Any], place: PreflightNode, role: str) -> None:
+    face = _text(config.get("asset_id"))
+    if face and not place.deferred("asset_id"):
+        _require_face_rights(db, place.workspace_id, face, role)
+
+
+@register_preflight("image_speak")
+def image_speak_preflight(db: Session, config: dict[str, Any], actor: str | None, place: PreflightNode) -> None:
+    preflight_consent(config, place)
+    _preflight_face(db, config, place, FIRST_FRAME)
+    _preflight_spoken_voice(db, config, place)
+    preflight_model(db, config, place, SPEECH_TO_VIDEO, actor)
+
+
+@register_preflight("video_lipsync")
+def video_lipsync_preflight(db: Session, config: dict[str, Any], actor: str | None, place: PreflightNode) -> None:
+    preflight_consent(config, place)
+    _preflight_face(db, config, place, SOURCE_VIDEO)
+    _preflight_spoken_voice(db, config, place)
+    preflight_model(db, config, place, VIDEO_LIPSYNC, actor)
+
+
+@register_preflight("entity_speak")
+def entity_speak_preflight(db: Session, config: dict[str, Any], actor: str | None, place: PreflightNode) -> None:
+    """人物是字面量时:是人物、真人有声明、有音色、克隆音色有声明(稿子常是引用,留给执行时)。"""
+    if not place.deferred("entity_id"):
+        _speaking_entity(db, place.workspace_id, _text(config.get("entity_id")))
+    preflight_model(db, config, place, SPEECH_TO_VIDEO, actor)
+
+
+@register_preflight("talking_segments")
+def talking_segments_preflight(db: Session, config: dict[str, Any], actor: str | None, place: PreflightNode) -> None:
+    """这些段都要交给数字人:字面量的克隆音色要有授权声明,会说话照片的模型挑得到。"""
+    if not place.deferred("engine") and not place.deferred("voice"):
+        _require_voice_consent(db, _text(config.get("engine")), _text(config.get("voice")))
+    preflight_model(db, config, place, SPEECH_TO_VIDEO, actor)
 
 
 @register("entity_speak")

@@ -74,10 +74,10 @@ def test_原声处理是引用或不是只去掉人声_预检不拦(monkeypatch:
         graph = _ready_graph()
         next(one for one in graph["nodes"] if one["id"] == "dubbing")["config"]["original_audio"] = mode
         with SessionLocal() as db:
-            run_preflights(db, graph, None)
+            run_preflights(db, graph, None, workspace_id="")
 
     #: 循环体里的配音节点也查。
     body = _ready_graph()
     wrapper = {"nodes": [{"id": "loop", "type": "loop_foreach", "config": {"body": body}}], "edges": []}
     with SessionLocal() as db, pytest.raises(WorkflowDomainError):
-        run_preflights(db, wrapper, None)
+        run_preflights(db, wrapper, None, workspace_id="")

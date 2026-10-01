@@ -100,7 +100,7 @@ def start_workflow_job(
     #: 生成节点的文字规矩按**选中的模型**判,在任何节点跑之前 —— 和执行时替同一个人解析同一个模型。
     _check_generation_text(db, revision.graph, job.created_by if job is not None else created_by)
     #: 节点自己登记的运行前检查(不花钱):做不了的事在任何节点花钱之前说(见 executors.register_preflight)。
-    run_preflights(db, revision.graph, job.created_by if job is not None else created_by)
+    run_preflights(db, revision.graph, job.created_by if job is not None else created_by, workspace_id=workflow.workspace_id)
     pinned_payload = {
         "workflow_id": workflow.id,
         "workflow_revision_id": revision.id,

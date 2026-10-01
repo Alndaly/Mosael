@@ -26,9 +26,18 @@ from app.core.config import settings
 from app.ai.providers.contracts.generation import DRIVING_AUDIO, SOURCE_VIDEO
 from app.domain.voices.subtitle_dub import DUB_LINE_KEY
 from app.domain.workflows import WorkflowDomainError
-from app.domain.workflows.executors.registry import RunScope, register
+from app.domain.workflows.executors.registry import PreflightNode, RunScope, register, register_preflight
 from app.media.tempo import atempo_filters
-from app.domain.workflows.executors.talking import VIDEO_LIPSYNC, _generate, _pick_model, _require_consent, _text
+from app.domain.workflows.executors.talking import (
+    VIDEO_LIPSYNC,
+    _generate,
+    _pick_model,
+    _require_consent,
+    _require_voice_consent,
+    _text,
+    preflight_consent,
+    preflight_model,
+)
 
 #: 模型没声明时的保守上下限(百炼 videoretalk 的文档值)。
 DEFAULT_LIMITS = (2.0, 120.0)
@@ -210,6 +219,20 @@ def _remember_chunk(asset_id: str, key: str) -> None:
     #: 只补这一个键:这块素材刚登记,代理转码正在别的线程里改它的 media_info(见 assets/media_info)。
     with unit_of_work() as keeper:
         patch_media_info(keeper, asset_id, {CHUNK_KEY: key})
+
+
+@register_preflight("dub_lipsync")
+def dub_lipsync_preflight(db: Session, config: dict[str, Any], actor: str | None, place: PreflightNode) -> None:
+    """改口型排在转写、翻译、逐句配音之后:授权没确认、没有会改口型的模型、上游配音用的是没声明的克隆音色,
+    都要在那几步花钱之前说。配音的嗓子在**上游**配音节点上(这个节点只接它配好的那条轨),顺着图往上找。"""
+    preflight_consent(config, place)
+    preflight_model(db, config, place, VIDEO_LIPSYNC, actor)
+    for dubbing in place.upstream("dub_subtitles"):
+        upstream = PreflightNode(workspace_id=place.workspace_id, graph=place.graph, node=dubbing)
+        if upstream.deferred("engine") or upstream.deferred("voice"):
+            continue
+        voice_config = dubbing.get("config") or {}
+        _require_voice_consent(db, _text(voice_config.get("engine")), _text(voice_config.get("voice")))
 
 
 @register("dub_lipsync")

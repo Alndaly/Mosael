@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any, Callable, Protocol
 
 from sqlalchemy.orm import Session
@@ -91,8 +92,47 @@ def registered_types() -> frozenset[str]:
 #: 已经花了钱 —— 译配选了「只去掉人声」却没有分离能力,要等转写、付费翻译、逐句配音全做完才被问到。登记一个
 #: preflight,引擎在任何节点跑之前对图里每个这种节点(循环体、子图里的也算)用它的**字面量**配置问一遍:
 #: 引用(`{{…}}`)和数据边供的值要到运行时才知道,不在这里判,执行时照样会判。
-#: 签名:preflight(db, 字面量配置, 跑的人)。说不通就抛 WorkflowDomainError。
-Preflight = Callable[[Session, dict[str, Any], "str | None"], None]
+#: 签名:preflight(db, 字面量配置, 跑的人, 节点所在处)。说不通就抛 WorkflowDomainError。
+@dataclass(frozen=True)
+class PreflightNode:
+    """运行前检查看得到的、字面量配置之外的东西:这个节点在哪个工作区、哪一层图里。
+
+    有的检查只看自己那几格不够:改口型交给模型的配音是**上游**配音节点配的,那把嗓子有没有授权声明要顺着图往上找;
+    授权确认那一格是引用时(运行时才知道),和「压根没填」在字面量配置里看起来一样,得回到原始配置分清。
+    """
+
+    workspace_id: str
+    #: 节点所在的那一层图(子图、循环体里的节点就是那一层)。
+    graph: dict[str, Any]
+    node: dict[str, Any]
+
+    def deferred(self, key: str) -> bool:
+        """这一格的值运行时才知道:接了数据边,或者写的是引用。"""
+        node_id = str(self.node.get("id") or "")
+        edges = self.graph.get("edges") if isinstance(self.graph.get("edges"), list) else []
+        if any(isinstance(edge, dict) and edge.get("kind") == "data" and str(edge.get("target")) == node_id
+               and str(edge.get("target_input")) == key for edge in edges):
+            return True
+        value = (self.node.get("config") or {}).get(key)
+        return isinstance(value, str) and "{{" in value
+
+    def upstream(self, node_type: str) -> list[dict[str, Any]]:
+        """同一层图里沿着边往上游能走到的、这种类型的节点(不分控制边和数据边)。"""
+        nodes = {str(one.get("id")): one for one in self.graph.get("nodes") or [] if isinstance(one, dict)}
+        edges = [edge for edge in self.graph.get("edges") or [] if isinstance(edge, dict)]
+        seen: set[str] = set()
+        frontier = [str(self.node.get("id") or "")]
+        while frontier:
+            target = frontier.pop()
+            for edge in edges:
+                source = str(edge.get("source"))
+                if str(edge.get("target")) == target and source not in seen:
+                    seen.add(source)
+                    frontier.append(source)
+        return [nodes[one] for one in sorted(seen) if one in nodes and nodes[one].get("type") == node_type]
+
+
+Preflight = Callable[[Session, dict[str, Any], "str | None", PreflightNode], None]
 
 _PREFLIGHTS: dict[str, Preflight] = {}
 
@@ -134,27 +174,26 @@ def _preflight_for(node_type: str) -> Preflight | None:
     return None
 
 
-def run_preflights(db: Session, graph: Any, actor: str | None) -> None:
-    """对图里每个登记了 preflight 的节点问一遍(见 register_preflight)。"""
+def literal_config(node: dict[str, Any], graph: dict[str, Any]) -> dict[str, Any]:
+    """节点配置里**字面量**的那几格:去掉引用和接了数据边的。"""
+    place = PreflightNode(workspace_id="", graph=graph, node=node)
+    config = node.get("config") if isinstance(node.get("config"), dict) else {}
+    return {key: value for key, value in config.items() if not place.deferred(key)}
+
+
+def run_preflights(db: Session, graph: Any, actor: str | None, *, workspace_id: str) -> None:
+    """对图里每个登记了 preflight 的节点问一遍(按类型登记的,和按前缀登记的一族动态类型,见 register_preflight /
+    register_prefix_preflight)。`workspace_id`:这张图在哪个工作区跑。"""
     if not isinstance(graph, dict):
         return
-    edges = graph.get("edges") if isinstance(graph.get("edges"), list) else []
-    bound = {
-        (str(edge.get("target")), str(edge.get("target_input")))
-        for edge in edges
-        if isinstance(edge, dict) and edge.get("kind") == "data" and edge.get("target_input")
-    }
     for node in graph.get("nodes") or []:
         if not isinstance(node, dict):
             continue
         config = node.get("config") if isinstance(node.get("config"), dict) else {}
         for value in config.values():
             if isinstance(value, dict) and isinstance(value.get("nodes"), list):
-                run_preflights(db, value, actor)
+                run_preflights(db, value, actor, workspace_id=workspace_id)
         check = _preflight_for(str(node.get("type") or ""))
         if check is None:
             continue
-        node_id = str(node.get("id") or "")
-        literal = {key: value for key, value in config.items()
-                   if (node_id, key) not in bound and not (isinstance(value, str) and "{{" in value)}
-        check(db, literal, actor)
+        check(db, literal_config(node, graph), actor, PreflightNode(workspace_id=workspace_id, graph=graph, node=node))
