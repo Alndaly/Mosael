@@ -15,6 +15,7 @@ from pathlib import Path
 
 import pytest
 
+
 from app.core.db import SessionLocal
 from app.db.models import Job, PluginInstance, PluginPackage
 from app.domain.plugins.nodes import node_meta
@@ -93,10 +94,23 @@ def _install(tmp_path: Path, owner: str) -> str:
         return instance.id
 
 
-def _run(ws: str, graph: dict, params: dict | None = None) -> tuple[str, dict, str | None]:
+def _run(ws: str, graph: dict, params: dict | None = None, *, stored: dict | None = None) -> tuple[str, dict, str | None]:
+    """建一张工作流跑一次。`stored`:库里存着的是这一份(老版本存下、没被迁移到的旧形状 —— 现在的保存会把它规范化掉)。"""
     with SessionLocal() as db:
         workflow = create_workflow(db, workspace_id=ws, name="插件", graph=graph, created_by=user_id())
         db.commit()
+        if stored is not None:
+            import json
+
+            from sqlalchemy import text
+
+            from app.domain.workflows.revisions import graph_digest
+
+            for table, column in (("workflows", "id"), ("workflow_revisions", "workflow_id")):
+                db.execute(text(f"UPDATE {table} SET graph = :g, graph_hash = :h WHERE {column} = :id"),
+                           {"g": json.dumps(stored, ensure_ascii=False), "h": graph_digest(stored), "id": workflow.id})
+            db.commit()
+            db.refresh(workflow)
         job_id = start_workflow_job(db, workflow, created_by=user_id(), params=params).id
         db.commit()  # 测试是入口:任务在提交之后才派发(jobs.dispatch_job)
     for _ in range(200):
@@ -166,9 +180,8 @@ def test_数组入参收到名字到值的映射_报清楚是哪一格_不包成
     会在拼字符串时炸成一句 Python 原话)。现在交之前就说是哪一格、怎么改。"""
     ws = fresh_client().post("/api/workspaces", json={"name": "W"}).json()["id"]
     _install(tmp_path, user_id())
-    status, _, error = _run(ws, _graph({
-        "id": "j", "type": f"plugin.{PACKAGE}.join", "config": {"items": {"a": "第一段", "b": "第二段"}},
-    }))
+    node = {"id": "j", "type": f"plugin.{PACKAGE}.join", "config": {"items": {"a": "第一段", "b": "第二段"}}}
+    status, _, error = _run(ws, _graph({**node, "config": {}}), stored=_graph(node))
     assert status == "failed"
     assert "「几段」要的是一串值,收到的却是「名字 → 值」的映射" in (error or ""), error
 
@@ -281,15 +294,28 @@ def test_存成映射的数组入参_迁移成按顺序的值列表(tmp_path) ->
     from app.db.migrations import _migrate_plugin_array_inputs_are_lists
     from app.db.models import Workflow
 
+    import json
+
+    from sqlalchemy import text
+
+    from app.core.db import engine
+    from app.domain.workflows.revisions import graph_digest
+
     ws = fresh_client().post("/api/workspaces", json={"name": "W"}).json()["id"]
     _install(tmp_path, user_id())
     with SessionLocal() as db:
         workflow = create_workflow(db, workspace_id=ws, name="老流程", graph=_graph({
-            "id": "j", "type": f"plugin.{PACKAGE}.join",
-            "config": {"items": {"a": "第一段", "b": "{{start.x}}"}, "sizes": [1]},
+            "id": "j", "type": f"plugin.{PACKAGE}.join", "config": {},
         }), created_by=user_id())
         db.commit()
         workflow_id = workflow.id
+    #: 老版本存下的样子(现在的保存会把它规范化成列表):当前图和修订都是映射。
+    old = _graph({"id": "j", "type": f"plugin.{PACKAGE}.join",
+                  "config": {"items": {"a": "第一段", "b": "{{start.x}}"}, "sizes": [1]}})
+    with engine.begin() as connection:
+        for table, column in (("workflows", "id"), ("workflow_revisions", "workflow_id")):
+            connection.execute(text(f"UPDATE {table} SET graph = :g, graph_hash = :h WHERE {column} = :id"),
+                               {"g": json.dumps(old, ensure_ascii=False), "h": graph_digest(old), "id": workflow_id})
 
     _migrate_plugin_array_inputs_are_lists()
     _migrate_plugin_array_inputs_are_lists()  # 再跑什么都不改

@@ -20,11 +20,40 @@ PURE_REFERENCE_RE = re.compile(r"\{\{\s*([\w.-]+)\s*\}\}")
 def normalize_graph(graph: dict[str, Any], *, node_types: dict[str, dict[str, Any]]) -> dict[str, Any]:
     """**图的规范形状**:保存、导入、官方模板、迁移都经过这一个入口。
 
-    两件事:声明为「行列表」的字段统一成列表(见 canonicalize_line_fields),精确的
-    `{{节点.输出}}` 升级成数据边(见 canonicalize_data_bindings)。库里只存规范形状,
-    读取端和编辑器因此只认一种。
+    三件事:声明为「行列表」的字段统一成列表(见 canonicalize_line_fields),声明为「一串」的字段
+    存成「名字 → 值」对象的改成值的列表(见 canonicalize_list_fields),精确的 `{{节点.输出}}` 升级成
+    数据边(见 canonicalize_data_bindings)。库里只存规范形状,读取端和编辑器因此只认一种。
     """
-    return canonicalize_data_bindings(canonicalize_line_fields(graph, node_types=node_types), node_types=node_types)
+    lists = canonicalize_list_fields(canonicalize_line_fields(graph, node_types=node_types), node_types=node_types)
+    return canonicalize_data_bindings(lists, node_types=node_types)
+
+
+def canonicalize_list_fields(graph: dict[str, Any], *, node_types: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    """声明为「一串」(`"type": "list"`,插件节点的 JSON Schema 数组)的字段,存成了「名字 → 值」对象的,改成那些值的列表。
+
+    节点表单此前把数组当对象,给的是映射编辑器,存下去的是 `{"a": "第一段", "b": "第二段"}` —— 交给插件的就
+    不是数组。迁移只改得了它那一刻认得出的(要读插件报的工具清单),认不出的、导入的老文件、恢复的老修订还会
+    带着它回来,所以这一步在规范化里:保存、导入、模板都走这里。
+
+    哪一格是数组**看节点类型的声明**;声明拿不到(插件没装、工具没报出来)的节点原样不动,不猜。
+    """
+    normalized = deepcopy(graph)
+    _lists_in(normalized, node_types)
+    return normalized
+
+
+def _lists_in(graph: dict[str, Any], node_types: dict[str, dict[str, Any]]) -> None:
+    for node in graph.get("nodes") or []:
+        if not isinstance(node, dict) or not isinstance(node.get("config"), dict):
+            continue
+        config = node["config"]
+        specs = (node_types.get(str(node.get("type", ""))) or {}).get("config") or {}
+        for key, spec in specs.items():
+            if isinstance(spec, dict) and spec.get("type") == "list" and isinstance(config.get(key), dict):
+                config[key] = list(config[key].values())
+        body = config.get("body")
+        if isinstance(body, dict) and isinstance(body.get("nodes"), list):
+            _lists_in(body, node_types)
 
 
 def canonicalize_line_fields(graph: dict[str, Any], *, node_types: dict[str, dict[str, Any]]) -> dict[str, Any]:

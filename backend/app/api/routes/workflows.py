@@ -40,6 +40,7 @@ from app.domain.workflows import (
 )
 from app.domain.job_center import use_cases as job_center
 from app.domain.workflows.engine import start_workflow_job
+from app.domain.workflows.graph_upgrade import upgrade_graph
 from app.domain.workflows.run_outputs import full_text
 from app.domain.workflows.file_export import (
     WORKFLOW_FILE_SUFFIX,
@@ -292,7 +293,10 @@ def import_one(body: WorkflowImportRequest, db: Tx, user: CurrentUser) -> Workfl
             workspace_id=body.workspace_id,
             name=candidate,
             description=envelope.description,
-            graph=envelope.graph,
+            #: 老版本导出的文件带着旧形状(代码字段里的 {{…}}、错接成外层数据边的循环 output):先升级,
+            #: 和迁移改库里的图是同一份规则(见 domain/workflows/graph_upgrade)。插件数组的旧形状由
+            #: create_workflow 的规范化改。
+            graph=upgrade_graph(envelope.graph),
             source="import",
             created_by=user.id,
             revision_note=f"file:v{version}",

@@ -306,7 +306,13 @@ def restore_workflow_revision(
     if target is None:
         raise WorkflowRevisionError("wfErr_revisionNotFound", revision=target_revision)
     #: 恢复是「回到那一版」这个明确的意图,不是拿着旧底子的快照:落到最新那份上就是替换它。
-    snapshot = deepcopy(target.graph)
+    #: 那一版可能早于某次形状升级(迁移改的是库里当时的图,改不到历史修订):恢复的那份先升级、再规范化,
+    #: 和保存落的是同一种形状 —— 否则迁移修好的旧形状借着恢复又回来(见 graph_upgrade)。
+    from app.domain.workflows.graph_upgrade import upgrade_graph
+    from app.domain.workflows.node_types import available_node_types
+    from app.domain.workflows.normalization import normalize_graph
+
+    snapshot = normalize_graph(upgrade_graph(deepcopy(target.graph)), node_types=available_node_types(db))
     restored = commit_graph_revision(
         db,
         workflow,

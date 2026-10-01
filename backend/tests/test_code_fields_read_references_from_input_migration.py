@@ -42,6 +42,8 @@ def test_执行脚本里的引用挪进入参_脚本读入参() -> None:
     graph = {
         "nodes": [
             {"id": "start", "type": "start", "config": {}},
+            {"id": "llm-1", "type": "template", "config": {"template": "#app"}},
+            {"id": "n", "type": "template", "config": {"template": "x"}},
             {"id": "js", "type": "browser_evaluate", "config": {
                 "session": "s",
                 "expression": 'document.querySelector("{{llm-1.text}}").value + {{n.count}}',
@@ -49,6 +51,8 @@ def test_执行脚本里的引用挪进入参_脚本读入参() -> None:
             }},
             {"id": "py", "type": "code", "config": {"code": 'output = "hi {{n.name}}" + str({{n.count}})'}},
             {"id": "plain", "type": "code", "config": {"code": "output = 1"}},
+            #: 根指不到东西的 `{{…}}` 是字面量(比如在拼一段 Mustache 模板),不改。
+            {"id": "mustache", "type": "code", "config": {"code": 'output = "{{name}} / {{n.name}}"'}},
         ],
         "edges": [],
     }
@@ -64,6 +68,9 @@ def test_执行脚本里的引用挪进入参_脚本读入参() -> None:
     assert py["code"] == f'output = "hi " + {PY_AS_TEXT}(inputs["n_name"]) + "" + str(inputs["n_count"])'
     assert py["input"] == {"n_name": "{{n.name}}", "n_count": "{{n.count}}"}
     assert _config(after, "plain") == {"code": "output = 1"}
+    mustache = _config(after, "mustache")
+    assert mustache["code"] == f'output = "{{{{name}}}} / " + {PY_AS_TEXT}(inputs["n_name"]) + ""'
+    assert mustache["input"] == {"n_name": "{{n.name}}"}
 
 
 def test_入参里已有同名的键_加序号_同一个引用只占一个键() -> None:

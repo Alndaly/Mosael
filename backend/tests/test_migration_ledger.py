@@ -81,6 +81,8 @@ def test_真实计划里_只有对账那几步是每次都跑的() -> None:
         "drop-venvs-built-on-another-python", "install-bundled-plugins", "rewrite-replaced-plugin-tools",
         # 引用表是派生数据:抽取规则的版本号变了就整张重建(见 db/references),平常是一次查询。
         "reindex-record-references",
+        # 插件数组入参的映射→列表看插件**当时**报的声明;清单晚到的,下次启动再补(见 normalization.canonicalize_list_fields)。
+        "plugin-array-inputs-follow-their-declarations",
         # 清单版本随哪一版应用都可能 +1,包记录里存着的那份每次启动对一遍(见 domain/plugins/migrations)。
         "upgrade-stored-plugin-manifests",
     }

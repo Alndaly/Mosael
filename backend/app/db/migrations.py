@@ -5589,60 +5589,14 @@ def _migrate_loop_scopes_are_not_outer_data_edges() -> None:
 
     经 `_rewrite_workflow_graphs` 落成新的一版修订:作者沿用上一版、认可过上一版的人照样担保。此前是只改
     `workflows.graph` 再调修订迁移补一版 —— 那一版没有作者,带发布账号 / 浏览器档案 / 本机文件节点的工作流
-    升级后跑到那一步就报「这一版没人担保」。规则抄在这里,迁移不跟着领域代码变。
+    升级后跑到那一步就报「这一版没人担保」。改写规则在领域层的图升级里(graph_upgrade),导入旧文件、
+    恢复旧修订用的是同一份。
     """
     if not {"workflows", "workflow_revisions"} <= set(inspect(engine).get_table_names()):
         return
-    inner_keys = {"loop_foreach": ("output",), "loop_while": ("output", "condition"), "subgraph": ("output",)}
+    from app.domain.workflows.graph_upgrade import inner_scope_fields_come_back
 
-    def rewrite(graph: Any) -> Any:
-        if not isinstance(graph, dict):
-            return graph
-        nodes = [dict(node) if isinstance(node, dict) else node for node in graph.get("nodes") or []]
-        by_id = {str(node.get("id")): node for node in nodes if isinstance(node, dict)}
-        edges: list[Any] = []
-        restored: list[tuple[str, str]] = []
-        for edge in graph.get("edges") or []:
-            target = by_id.get(str(edge.get("target"))) if isinstance(edge, dict) else None
-            key = str(edge.get("target_input") or "") if isinstance(edge, dict) else ""
-            if (
-                target is None
-                or edge.get("kind") != "data"
-                or key not in inner_keys.get(str(target.get("type")), ())
-            ):
-                edges.append(edge)
-                continue
-            config = dict(target.get("config") or {})
-            if config.get(key) in (None, ""):
-                config[key] = f"{{{{{edge.get('source')}.{edge.get('source_output')}}}}}"
-            target["config"] = config
-            if isinstance(target.get("inputs"), list):
-                target["inputs"] = [one for one in target["inputs"] if one != key]
-            restored.append((str(edge.get("source")), str(edge.get("target"))))
-        used = {str(edge.get("id")) for edge in edges if isinstance(edge, dict)}
-        for source, target_id in restored:
-            if any(
-                isinstance(edge, dict) and str(edge.get("source")) == source and str(edge.get("target")) == target_id
-                for edge in edges
-            ):
-                continue
-            edge_id, suffix = f"c-{source}-{target_id}", 2
-            while edge_id in used:
-                edge_id, suffix = f"c-{source}-{target_id}-{suffix}", suffix + 1
-            used.add(edge_id)
-            edges.append({"id": edge_id, "source": source, "target": target_id})
-        for node in nodes:
-            if not isinstance(node, dict):
-                continue
-            config = dict(node.get("config") or {})
-            for key, value in config.items():
-                if isinstance(value, dict) and isinstance(value.get("nodes"), list):
-                    config[key] = rewrite(value)
-            if config != (node.get("config") or {}):
-                node["config"] = config
-        return {**graph, "nodes": nodes, "edges": edges}
-
-    _rewrite_workflow_graphs(rewrite, "循环 / 子图的体内 output、condition 被错接成了外层数据边:改回体内引用")
+    _rewrite_workflow_graphs(inner_scope_fields_come_back, "循环 / 子图的体内 output、condition 被错接成了外层数据边:改回体内引用")
 
 
 def _disable_tasks_bound_to_deleted_workflows() -> None:
@@ -6174,40 +6128,14 @@ def _migrate_code_fields_read_references_from_input() -> None:
     插值此前是按文字拼进代码的 —— 上游交来一段带引号的文字就能改写整段脚本,而「执行脚本」跑在用户已登录的
     网页里。现在代码原样执行,上游的值作为数据交进去(见 workflows.binding、electron 的 scriptWithInput)。
     入参里的键由引用路径起名(`llm-1.text` → `llm_1_text`),和已有的键撞了就加序号;同一个引用只占一个键。
-    改写规则见 domain/workflows/code_references(字符串里的引用读成和插值同义的文字)。
+    改写规则在领域层的图升级里(graph_upgrade.code_references_read_input;字符串里的引用读成和插值同义的
+    文字,只改根指得到东西的引用),导入旧文件、恢复旧修订用的是同一份。
     """
     if not {"workflows", "workflow_revisions"} <= set(inspect(engine).get_table_names()):
         return
-    from app.domain.workflows.code_references import REFERENCE, references_become_input
+    from app.domain.workflows.graph_upgrade import code_references_read_input
 
-    fields = {"browser_evaluate": ("expression", "js"), "code": ("code", "python")}
-
-    def visit(node: dict[str, Any]) -> dict[str, Any]:
-        spec = fields.get(str(node.get("type")))
-        config = node["config"]
-        if not spec or not isinstance(config.get(spec[0]), str) or not REFERENCE.search(config[spec[0]]):
-            return node
-        field, language = spec
-        given = config.get("input") if isinstance(config.get("input"), dict) else {}
-        inputs = dict(given)
-
-        def key_of(path: str) -> str:
-            reference = "{{" + path + "}}"
-            for key, value in inputs.items():
-                if value == reference:
-                    return key
-            base = re.sub(r"\W", "_", path)
-            base = base if base and not base[0].isdigit() else f"v_{base}"
-            key, n = base, 2
-            while key in inputs:
-                key, n = f"{base}_{n}", n + 1
-            inputs[key] = reference
-            return key
-
-        code = references_become_input(config[field], language, key_of)
-        return {**node, "config": {**config, field: code, "input": inputs}}
-
-    _rewrite_workflow_graphs(lambda graph: _walk_graph_nodes(graph, visit), _CODE_FIELDS_NOTE)
+    _rewrite_workflow_graphs(code_references_read_input, _CODE_FIELDS_NOTE)
 
 
 #: 代码字段迁移落的那一版修订的说明 —— 修正迁移据此认出哪些工作流被它改写过。
@@ -6301,6 +6229,35 @@ def _migrate_plugin_array_inputs_are_lists() -> None:
 
     _rewrite_workflow_graphs(
         lambda graph: _walk_graph_nodes(graph, visit),
+        "插件节点的数组入参改成一行一项:存成「名字 → 值」的,按顺序改成值的列表",
+    )
+
+
+def _plugin_array_inputs_follow_their_declarations() -> None:
+    """对账:插件节点的数组入参还存成「名字 → 值」对象的,按插件**此刻**报出的声明改成值的列表。
+
+    一次性的那条(migrate-plugin-array-inputs-are-lists)只改得了它跑的那一刻认得出的 —— 那一刻连接停着、
+    工具清单还没报上来的,节点原样留下,跑的时候交给插件的还是一个对象。清单会变,所以这是对账:每次启动按
+    当前的声明(plugins.nodes 的节点类型,数组是 `"type": "list"`)走一遍规范化里的同一步
+    (normalization.canonicalize_list_fields);没有可改的就什么都不做。改了的落一版修订,作者和担保人沿用上一版。
+    """
+    if not {"workflows", "workflow_revisions", "plugin_instances"} <= set(inspect(engine).get_table_names()):
+        return
+    from sqlalchemy.orm import Session
+
+    from app.domain.plugins.nodes import plugin_node_types
+    from app.domain.workflows.normalization import canonicalize_list_fields
+
+    with Session(engine) as db:
+        types = plugin_node_types(db)
+    if not any(
+        isinstance(spec, dict) and spec.get("type") == "list"
+        for declared in types.values()
+        for spec in (declared.get("config") or {}).values()
+    ):
+        return
+    _rewrite_workflow_graphs(
+        lambda graph: canonicalize_list_fields(graph, node_types=types),
         "插件节点的数组入参改成一行一项:存成「名字 → 值」的,按顺序改成值的列表",
     )
 
@@ -6775,6 +6732,8 @@ def migration_plan() -> MigrationPlan:
                 _migrate_board_plugin_array_inputs_are_lists,
                 _migrate_plugin_union_array_inputs_are_lists,
             ),
+            #: 对账:上面那条只改得了它那一刻认得出的;工具清单后来才报上来的,每次启动按当时的声明补改。
+            *_recurring(MigrationPhase.AFTER_SCHEMA, _plugin_array_inputs_follow_their_declarations),
             #: 生成记录自己存失败原因、会话按种类分页、提示词里拆出画板补的素材对照。回填要读 jobs.error_key ——
             #: 它在很老的库上由上面的 migrate-job-message-i18n 补上,所以排在它后面。
             *_steps(
