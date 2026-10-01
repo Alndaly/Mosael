@@ -136,6 +136,16 @@ def _summarize_browser_open(db: Session, payload: dict[str, Any]) -> Summary:
         "target": fragment("confirm_browserTarget", url=url) if url else "",
     }
 
+def _agent_owner(confirmation: Any) -> str:
+    """智能体开的浏览器会话归**哪次对话**:同一次对话里再开同名会话是复用,别的对话、别的人开就是「被占用」。
+
+    此前 owner 一律是 ("agent", ""):所有人、所有对话共用同一个具名会话 —— A 的对话登录好的视图,B 的对话
+    接着在上面点。外部智能体(MCP / 飞书)的卡没有对话,就归这张卡自己。没人关的会话按空闲收回
+    (见 browser.reclaim_idle_sessions)。
+    """
+    return str(confirmation.session_id or confirmation.id)
+
+
 def _execute_browser_open(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
     payload = confirmation.payload
     from app.domain import browser as browser_domain
@@ -146,6 +156,7 @@ def _execute_browser_open(db: Session, confirmation: Any, actor: str | None) -> 
         kind="named" if str(payload.get("session_mode")) == "named" else "ephemeral",
         name=str(payload.get("session_name") or ""),
         owner_kind="agent",
+        owner_id=_agent_owner(confirmation),
         actor=actor,
     )
     url = str(payload.get("url") or "").strip()
@@ -190,6 +201,7 @@ def _execute_browser_pool_open(db: Session, confirmation: Any, actor: str | None
         workspace_id=confirmation.workspace_id,
         profile_id=str(payload.get("profile_id") or ""),
         owner_kind="agent",
+        owner_id=_agent_owner(confirmation),
         actor=actor,
     )
     url = str(payload.get("url") or "").strip()

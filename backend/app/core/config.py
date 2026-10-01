@@ -82,6 +82,10 @@ class Settings(BaseSettings):
     # 只有这里列出的反向代理地址才允许用 X-Forwarded-For 作为客户端身份，避免伪造头绕过限流。
     rate_limit_trusted_proxies: str = ""
 
+    #: 浏览器会话最后一次动作之后空着多少分钟就自动关掉(MOSAEL_BROWSER_SESSION_IDLE_MINUTES,≤0 不关)。
+    #: 智能体用完多半不发「关闭」;具名 / 池档案会话一时刻只归一个 owner,没人关的那个会一直占着那份登录。
+    browser_session_idle_minutes: int = 15
+
     # ffmpeg/ffprobe binaries. Default to PATH; override (MOSAEL_FFMPEG / MOSAEL_FFPROBE) to
     # point at a full build — Homebrew's core `ffmpeg` is slim (no libass/freetype), so
     # subtitle burn-in needs e.g. /opt/homebrew/opt/ffmpeg-full/bin/ffmpeg.

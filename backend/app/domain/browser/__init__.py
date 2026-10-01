@@ -19,11 +19,12 @@ import re
 import time
 import uuid
 from collections.abc import Callable
-from datetime import timedelta
+from datetime import datetime, timedelta
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.db import SessionLocal
 from app.core.unit_of_work import unit_of_work
 from app.core.i18n import LocalizedError, is_message_key
@@ -221,6 +222,8 @@ def open_session(
         #: 和池档案同一条租约:一份登录同一时刻只归一个 owner。同 owner(同一次运行里第二个「打开浏览器」)
         #: 复用;别人正开着就拒。此前不看 owner 就复用 —— 两次运行共用一个视图互相点、互相导航,
         #: 先跑完的那次收尾时把会话关掉,另一次做到一半的动作全部落空。
+        #: 占着它的那个要是早就没人用了(智能体没关、运行异常退出),先收回来再看。
+        reclaim_idle_sessions(db, partition=partition)
         existing = db.scalar(
             select(BrowserSession).where(BrowserSession.partition == partition, BrowserSession.status == "open")
         )
@@ -254,7 +257,8 @@ def _open_profile_session(
     prof = usable_profile(db, workspace_id, profile_id, actor=actor)
     if not prof.enabled:
         raise BrowserDomainError("browserErr_profileDisabled")
-    # 租约:一个档案同一时刻只允许一个活动会话。
+    # 租约:一个档案同一时刻只允许一个活动会话。占着它的那个早就没人用了的话先收回来(见 reclaim_idle_sessions)。
+    reclaim_idle_sessions(db, profile_id=profile_id)
     existing = db.scalar(
         select(BrowserSession).where(BrowserSession.profile_id == profile_id, BrowserSession.status == "open")
     )
@@ -306,20 +310,85 @@ def close_session(db: Session, session_id: str) -> None:
     session = db.get(BrowserSession, session_id)
     if session is None or session.status != "open":
         return
+    _mark_closed(db, session)
+    # 这里仍提交:关会话多半是收尾(下载失败的 finally、运行落终态后的收拾),调用方随后可能回滚,
+    # 关掉这件事不能跟着回滚 —— 否则执行器那边的视图和排着的动作就没人收了。
+    db.commit()
+
+
+def _mark_closed(db: Session, session: BrowserSession) -> None:
+    """关会话本身(不提交):落 closed、没跑完的动作落 failed、给执行器排一条 close 拆视图。"""
     session.status = "closed"
     db.execute(
         update(BrowserAction)
-        .where(BrowserAction.session_id == session_id, BrowserAction.status.in_(("queued", "running")))
+        .where(BrowserAction.session_id == session.id, BrowserAction.status.in_(("queued", "running")))
         .values(status="failed", error="browserErr_sessionClosed")
     )
     db.add(
         BrowserAction(
-            session_id=session_id, workspace_id=session.workspace_id, action="close", args={}, status="queued"
+            session_id=session.id, workspace_id=session.workspace_id, action="close", args={}, status="queued"
         )
     )
-    # 这里仍提交:关会话多半是收尾(下载失败的 finally、运行落终态后的收拾),调用方随后可能回滚,
-    # 关掉这件事不能跟着回滚 —— 否则执行器那边的视图和排着的动作就没人收了。
-    db.commit()
+    db.flush()
+
+
+def _idle_cutoff() -> datetime | None:
+    """最后一次动作早于这一刻的会话算空闲。≤0 分钟表示不收。"""
+    minutes = settings.browser_session_idle_minutes
+    return now() - timedelta(minutes=minutes) if minutes > 0 else None
+
+
+def _reclaimable_sessions(db: Session, *, partition: str | None = None, profile_id: str | None = None) -> list[BrowserSession]:
+    """空着太久、该收回的开着的会话。
+
+    **空闲按最后一次动作算**(没有动作就按打开的时间),还有动作在排、在跑的不算空闲。工作流开的会话
+    在那次运行还没落终态时不收:节点之间隔着一段很长的生成很正常,那段时间它没有动作,却还要接着用。
+    """
+    cutoff = _idle_cutoff()
+    if cutoff is None:
+        return []
+    last_action = (
+        select(func.max(BrowserAction.updated_at))
+        .where(BrowserAction.session_id == BrowserSession.id)
+        .correlate(BrowserSession)
+        .scalar_subquery()
+    )
+    pending = (
+        select(BrowserAction.id)
+        .where(BrowserAction.session_id == BrowserSession.id, BrowserAction.status.in_(("queued", "running")))
+        .correlate(BrowserSession)
+        .exists()
+    )
+    query = select(BrowserSession).where(
+        BrowserSession.status == "open", func.coalesce(last_action, BrowserSession.created_at) < cutoff, ~pending
+    )
+    if partition is not None:
+        query = query.where(BrowserSession.partition == partition)
+    if profile_id is not None:
+        query = query.where(BrowserSession.profile_id == profile_id)
+    from app.domain.jobs import TERMINAL_STATUSES  # 同 install():导入期不依赖任务总线
+
+    idle = []
+    for session in db.scalars(query).all():
+        if session.owner_kind == "workflow" and session.owner_id:
+            run = db.get(Job, session.owner_id)
+            if run is not None and run.status not in TERMINAL_STATUSES:
+                continue
+        idle.append(session)
+    return idle
+
+
+def reclaim_idle_sessions(db: Session, *, partition: str | None = None, profile_id: str | None = None) -> int:
+    """把空着太久的会话关掉(不提交,跟着调用方的事务走)。返回关了几个。
+
+    智能体用完浏览器多半不发「关闭」就去干别的了;工作流进程异常退出时,它开的会话也没人关。
+    具名 / 池档案会话一时刻只归一个 owner —— 没人收的那一个会让之后每一次同名打开都报「被占用」。
+    执行器每次认领都扫一遍,打开会话撞上占用时再就地扫一次那一份登录。
+    """
+    idle = _reclaimable_sessions(db, partition=partition, profile_id=profile_id)
+    for session in idle:
+        _mark_closed(db, session)
+    return len(idle)
 
 
 def close_sessions_owned_by(db: Session, *, owner_kind: str, owner_id: str) -> int:
@@ -547,6 +616,9 @@ def claim_next_action(db: Session, *, worker: str = "") -> dict | None:
     """
     # 先把上一个执行器丢下的收掉:它们本该被这一次认领接走,而不是一直占着 running。
     expire_action_leases(db)
+    #: 空着太久的会话也在这里收:执行器在线就一直在认领,这是后端唯一一条按时到来的路;收掉时排的
+    #: close 动作也正好由这一拍领走,把视图拆了。
+    reclaim_idle_sessions(db)
     #: **同一个会话串行,不同会话并发。** 执行器一次领多条、各自跑(见 electron/publish/browserWorker);
     #: 一个会话上还有一条在跑,它后面的就先不发 —— 同一个视图上两个动作交错着点、导航,谁也做不对。
     #: 在这里挡而不是在执行器里排队:领走即开始计执行时间(run_action),排在执行器里的那段不该算进去。
