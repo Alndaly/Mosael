@@ -40,7 +40,7 @@ from sqlalchemy.orm import Session
 from app.core.i18n import is_message_key, tr
 from app.domain.media_kinds import MEDIA_KINDS
 from app.domain.plugins.errors import PluginDomainError
-from app.domain.plugins.inputs import ASSET_FORMAT, EXTERNAL_ID_FORMAT
+from app.domain.plugins.inputs import ASSET_FORMAT, EXTERNAL_ID_FORMAT, schema_type
 from app.domain.plugins.manifest import text_of, tool_label
 
 PLUGIN_NODE_PREFIX = "plugin."
@@ -106,10 +106,8 @@ def _config_from_schema(schema: Any) -> dict[str, dict[str, Any]]:
         if not isinstance(key, str):
             continue
         spec = spec if isinstance(spec, dict) else {}
-        # 联合类型(["string","null"])取第一个非 null 的分支 —— 表单只能长一个样子。
-        raw_type = spec.get("type")
-        if isinstance(raw_type, list):
-            raw_type = next((t for t in raw_type if t != "null"), "string")
+        # 联合类型(["string","null"])取第一个非 null 的分支 —— 表单只能长一个样子(和运行时同一条 schema_type)。
+        raw_type = schema_type(spec)
         entry: dict[str, Any] = {"type": _SCHEMA_TYPES.get(str(raw_type), "template")}
         if key in required:
             entry["required"] = True
@@ -129,7 +127,7 @@ def _config_from_schema(schema: Any) -> dict[str, dict[str, Any]]:
             items_media = _media(items.get("x-media"))
             if items_media:
                 entry["media"] = items_media
-        elif raw_type == "array" and items.get("type") in ("object", "array"):
+        elif raw_type == "array" and schema_type(items) in ("object", "array"):
             # 每一项是一块结构(标题 + 正文、一组参数):拍成一行一个值是错的,给写数组的 JSON 框
             entry["editor"] = "json"
         elif spec.get("format") == EXTERNAL_ID_FORMAT:

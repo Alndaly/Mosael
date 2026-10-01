@@ -46,6 +46,22 @@ ASSET_FORMAT = "asset"
 EXTERNAL_ID_FORMAT = "external_id"
 
 
+def schema_type(spec: Any) -> str | None:
+    """一格 JSON Schema 声明的类型。联合类型(`["array", "null"]` —— 可以不填的数组)取第一个不是 null 的分支:
+    表单只能长一个样子,运行时也只能按一种转。没写类型回 None。
+
+    表单(plugins.nodes)、运行时(coerce / asset_fields / materialize)、存量数据的迁移读的都是这一条。此前表单
+    认联合类型、其余只认 `== "array"`:表单给了一行一项的编辑器,交给插件的却是没转过的原样;素材数组表单给了
+    素材选择器,运行时却把素材 id 原样交出去。
+    """
+    if not isinstance(spec, dict):
+        return None
+    kind = spec.get("type")
+    if isinstance(kind, list):
+        kind = next((one for one in kind if one != "null"), None)
+    return kind if isinstance(kind, str) else None
+
+
 def _is_asset(spec: Any) -> bool:
     return isinstance(spec, dict) and spec.get("format") == ASSET_FORMAT
 
@@ -59,7 +75,7 @@ def asset_fields(tool: dict[str, Any]) -> list[str]:
     return [
         key
         for key, spec in properties.items()
-        if _is_asset(spec) or (isinstance(spec, dict) and spec.get("type") == "array" and _is_asset(spec.get("items")))
+        if _is_asset(spec) or (schema_type(spec) == "array" and _is_asset(spec.get("items")))
     ]
 
 
@@ -76,7 +92,7 @@ def coerce(tool: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any]:
     out = dict(payload)
     for key, spec in properties.items():
         value = out.get(key)
-        if isinstance(spec, dict) and spec.get("type") == "array" and key in out:
+        if schema_type(spec) == "array" and key in out:
             listed = _as_list(text_of(spec.get("title")) or key, value,
                               spec.get("items") if isinstance(spec.get("items"), dict) else {})
             if listed is None:
@@ -86,7 +102,7 @@ def coerce(tool: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any]:
             continue
         if not isinstance(spec, dict) or not isinstance(value, str):
             continue
-        kind = spec.get("type")
+        kind = schema_type(spec)
         if kind not in ("integer", "number", "boolean"):
             continue
         if not value.strip():
@@ -147,8 +163,9 @@ def _as_list(field: str, value: Any, items: dict[str, Any]) -> Any:
     """
     if value is None or value == "" or value == []:
         return None
+    kind = schema_type(items)
     if isinstance(value, dict):
-        if items.get("type") == "object":
+        if kind == "object":
             return [value]
         raise PluginDomainError("pluginErr_listGotMapping", field=field)
     if isinstance(value, str):
@@ -162,14 +179,14 @@ def _as_list(field: str, value: Any, items: dict[str, Any]) -> Any:
         value = parsed if isinstance(parsed, list) else [value]
     if not isinstance(value, list):
         return [value]
-    structured = items.get("type") in ("object", "array")
+    structured = kind in ("object", "array")
     flat: list[Any] = []
     for one in value:
         if isinstance(one, list) and not structured:
             flat.extend(one)
         elif one not in (None, ""):
             flat.append(one)
-    return [_item(one, items.get("type")) for one in flat]
+    return [_item(one, kind) for one in flat]
 
 
 def _media(spec: dict[str, Any]) -> tuple[str, ...]:
@@ -194,7 +211,7 @@ def _spec_of(tool: dict[str, Any], key: str) -> dict[str, Any]:
     schema = tool.get("input_schema")
     properties = schema.get("properties") if isinstance(schema, dict) else None
     spec = properties.get(key) if isinstance(properties, dict) else None
-    if isinstance(spec, dict) and spec.get("type") == "array" and isinstance(spec.get("items"), dict):
+    if schema_type(spec) == "array" and isinstance(spec.get("items"), dict):
         return spec["items"]
     return spec if isinstance(spec, dict) else {}
 
@@ -249,4 +266,4 @@ def materialize(
     return resolved
 
 
-__all__ = ["ASSET_FORMAT", "EXTERNAL_ID_FORMAT", "asset_fields", "coerce", "materialize"]
+__all__ = ["ASSET_FORMAT", "EXTERNAL_ID_FORMAT", "asset_fields", "coerce", "materialize", "schema_type"]

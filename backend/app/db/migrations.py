@@ -6315,6 +6315,94 @@ def _migrate_board_plugin_array_inputs_are_lists() -> None:
         db.commit()
 
 
+def _migrate_plugin_union_array_inputs_are_lists() -> None:
+    """插件节点上声明成**联合类型数组**(`"type": ["array", "null"]`,可以不填的数组)的入参,存成「名字 → 值」
+    对象的,改成那些值的列表 —— 工作流(连同循环体 / 子图)和画板格子上的设置都改。
+
+    前两条数组迁移(`migrate-plugin-array-inputs-are-lists`、`migrate-board-plugin-array-inputs-are-lists`)判
+    「是不是数组」只认 `type == "array"`,联合类型的那几格没迁到:表单把它当一串编辑器(空白),运行时报「要的是
+    一串值」。这一条按 plugins.inputs.schema_type 判(表单、运行时读的同一条),已经是列表的不动,重复跑是安全的。
+    """
+    tables = set(inspect(engine).get_table_names())
+    if "plugin_instances" not in tables:
+        return
+    from sqlalchemy import select
+    from sqlalchemy.orm import Session
+
+    from app.db.models import Board, PluginInstance
+    from app.domain.plugins.inputs import schema_type
+    from app.domain.plugins.tools import all_tools
+
+    arrays: dict[str, set[str]] = {}
+    with Session(engine) as db:
+        for instance in db.scalars(select(PluginInstance)).all():
+            try:
+                tools = all_tools(db, instance)
+            except ValueError:  # 包记录没了、清单坏了(PluginDomainError / ManifestError 都是 ValueError)
+                continue
+            for tool in tools:
+                properties = (tool.get("input_schema") or {}).get("properties") or {}
+                keys = {
+                    key for key, spec in properties.items()
+                    if schema_type(spec) == "array"
+                    and not (isinstance(spec.get("items"), dict) and spec["items"].get("format") == "asset")
+                }
+                if keys:
+                    arrays.setdefault(f"plugin.{instance.package_id}.{tool['name']}", set()).update(keys)
+    if not arrays:
+        return
+
+    def fixed(node_type: Any, config: Any) -> Any:
+        """一份配置改好的样子;不用改回 None。"""
+        keys = arrays.get(str(node_type or ""))
+        if not keys or not isinstance(config, dict):
+            return None
+        stale = [key for key in keys if isinstance(config.get(key), dict)]
+        if not stale:
+            return None
+        return {**config, **{key: list(config[key].values()) for key in stale}}
+
+    if {"workflows", "workflow_revisions"} <= tables:
+        def visit(node: dict[str, Any]) -> dict[str, Any]:
+            config = fixed(node.get("type"), node["config"])
+            return node if config is None else {**node, "config": config}
+
+        _rewrite_workflow_graphs(
+            lambda graph: _walk_graph_nodes(graph, visit),
+            "插件节点的数组入参(可以不填的那种)改成一行一项:存成「名字 → 值」的,按顺序改成值的列表",
+        )
+    if "boards" not in tables:
+        return
+    #: 画板上存设置的地方:空格子的生成器(`form.producer` = `node:plugin.…`,设置在 `form.config`)和内容格的
+    #: 能力(`form.abilities["node:plugin.…"].config`)。
+    with Session(engine) as db:
+        for board in db.scalars(select(Board)).all():
+            canvas = board.canvas if isinstance(board.canvas, dict) else {}
+            items = canvas.get("items") if isinstance(canvas.get("items"), list) else []
+            new_items = []
+            for item in items:
+                form = item.get("form") if isinstance(item, dict) and isinstance(item.get("form"), dict) else None
+                if form is None:
+                    new_items.append(item)
+                    continue
+                new_form = dict(form)
+                own = fixed(str(form.get("producer") or "").removeprefix("node:"), form.get("config"))
+                if own is not None:
+                    new_form["config"] = own
+                abilities = form.get("abilities") if isinstance(form.get("abilities"), dict) else {}
+                new_abilities = {}
+                for producer, setting in abilities.items():
+                    config = fixed(producer.removeprefix("node:"), setting.get("config") if isinstance(setting, dict) else None)
+                    new_abilities[producer] = setting if config is None else {**setting, "config": config}
+                if new_abilities != abilities:
+                    new_form["abilities"] = new_abilities
+                new_items.append({**item, "form": new_form} if new_form != form else item)
+            if new_items != items:
+                board.canvas = {**json.loads(json.dumps(canvas)), "items": new_items}
+                board.revision = (board.revision or 0) + 1
+        db.commit()
+
+
 def _reindex_record_references() -> None:
     """引用表(record_references)是派生数据:抽取规则一变,整张按新规则重建。"""
     from app.db.references import reindex
@@ -6558,6 +6646,7 @@ def migration_plan() -> MigrationPlan:
                 # 要读插件报的工具清单:排在装随包插件、改写被取代的工具之后(上面的对账)。
                 _migrate_plugin_array_inputs_are_lists,
                 _migrate_board_plugin_array_inputs_are_lists,
+                _migrate_plugin_union_array_inputs_are_lists,
             ),
             #: 生成记录自己存失败原因、会话按种类分页、提示词里拆出画板补的素材对照。回填要读 jobs.error_key ——
             #: 它在很老的库上由上面的 migrate-job-message-i18n 补上,所以排在它后面。

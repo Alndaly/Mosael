@@ -106,6 +106,7 @@
   "migrate-plugin-instances": "b334be866194ded2",
   "migrate-plugin-instances-get-an-owner": "7ea9716a35ff0dbf",
   "migrate-plugin-registry-url": "ea65d9e176535f45",
+  "migrate-plugin-union-array-inputs-are-lists": "f4e2736b44927206",
   "migrate-prepared-publish-tasks": "e7458dde5ee5ff42",
   "migrate-pricing-time-prices": "98e02b3582792dc3",
   "migrate-prompt-requirement-becomes-one-field": "013dfb49e737ba8d",
