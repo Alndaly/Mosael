@@ -96,6 +96,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "节点 {node} 的代码字段 {field} 不能接上游:上游的值会整段变成代码。把它接到这个节点的 input,代码里读 input",
         "en": "Node {node}: the code field {field} can't take an upstream value, which would become code wholesale. Wire it into this node's input and read it there",
     },
+    "wfErr_tagConflict": {
+        "zh": "这份素材的标签同时被好几处改,重试几次都没写上 —— 稍后再跑一次",
+        "en": "This asset's tags were being changed in several places at once and the write kept losing — run it again shortly",
+    },
     "wfErr_codeFieldReference": {
         # 带参数的文案按 str.format 渲染:字面的花括号写成两个。
         "zh": "节点 {node} 的代码字段 {field} 里写了 {{{{…}}}}:代码不替换引用,它会原样留在代码里。把上游的值放进这个节点的 input(键随你起,值写 {{{{节点.输出}}}}),代码里读 input.键(Python 是 inputs[\"键\"])",

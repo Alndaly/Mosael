@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import String, select, type_coerce, update
 from sqlalchemy.orm import Session
 
 from app.db.models import Asset, Project
@@ -185,6 +186,13 @@ def asset_tag(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str,
     if not tags and mode != "replace":
         raise WorkflowDomainError("wfErr_tagsEmpty")
 
+    def change(current: list[Any]) -> list[Any]:
+        if mode == "add":
+            return current + [tag for tag in tags if tag not in current]
+        if mode == "remove":
+            return [tag for tag in current if tag not in tags]
+        return list(tags)
+
     updated: list[dict[str, Any]] = []
     for asset_id in asset_ids:
         asset = db.get(Asset, asset_id)
@@ -192,18 +200,40 @@ def asset_tag(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str,
         # produce them, and one fed by hand should not be able to reach another workspace.
         if asset is None or asset.workspace_id != scope.workspace_id:
             continue
-        current = list(asset.tags or [])
-        if mode == "add":
-            merged = current + [tag for tag in tags if tag not in current]
-        elif mode == "remove":
-            merged = [tag for tag in current if tag not in tags]
-        else:
-            merged = list(tags)
-        # Assigning a new list matters: mutating asset.tags in place leaves the JSON column
-        # unchanged as far as SQLAlchemy is concerned, and the write silently does nothing.
-        asset.tags = merged
+        merged = _retag(db, asset, change)
         updated.append({"id": asset.id, "name": asset.name, "tags": merged})
     return {"updated": updated, "count": len(updated)}
+
+
+#: 一份素材的标签被同时改时,最多重读几次。
+_TAG_ATTEMPTS = 8
+
+
+def _retag(db: Session, asset: Asset, change: Any) -> list[Any]:
+    """读这份素材**库里最新**的标签 → 改 → 只在库里还是读到的那一份时写回;被别人抢先就重读再改。
+
+    并行的两个「打标签」(两条分支、并发的循环项)各在自己的会话里读到同一份标签、各自合并、整列写回
+    —— 后写的那个把先写的那个加的标签盖掉。素材没有版本号,比的是库里存的**那一段原文**(读出来、写回去
+    都按原文比,不经 JSON 转换 —— 同一份标签有不同写法时也不会误判)。SQLite 一次只有一个写入方:后来者
+    在写的那一刻等前一个节点提交,然后撞上新标签、重试。
+    """
+    stored = type_coerce(Asset.tags, String)
+    for _attempt in range(_TAG_ATTEMPTS):
+        raw = db.scalar(select(stored).where(Asset.id == asset.id))
+        current = list(json.loads(raw) or []) if raw else []
+        merged = change(current)
+        if merged == current:
+            return merged
+        written = db.execute(
+            update(Asset)
+            .where(Asset.id == asset.id, stored == raw if raw is not None else Asset.tags.is_(None))
+            .values(tags=merged)
+            .execution_options(synchronize_session=False)
+        ).rowcount
+        if written:
+            db.refresh(asset)
+            return merged
+    raise WorkflowDomainError("wfErr_tagConflict")
 
 
 @register("asset_update")
