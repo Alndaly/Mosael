@@ -6,7 +6,7 @@
     "en": "Manim Teaching Animation"
   },
   "default_locale": "zh",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "homepage": "https://docs.manim.community/",
   "author": {
     "name": "Mosael",
@@ -198,6 +198,8 @@
                 "en": "Steps"
               },
               "type": "array",
+              "minItems": 1,
+              "maxItems": 20,
               "description": {
                 "zh": "一步一步讲的内容,1 到 20 步。每步的公式、函数图、代码三样最多放一样。",
                 "en": "The steps, 1 to 20. Each step holds at most one of formulas, plot or code."
@@ -222,6 +224,7 @@
                       "en": "Narration"
                     },
                     "type": "string",
+                    "x-multiline": true,
                     "description": {
                       "zh": "这一步的旁白,显示成底部字幕,也决定这一步多长(最多 600 字)。",
                       "en": "Narration for this step, shown as a caption; it also sets the step's length (up to 600 characters)."
@@ -236,6 +239,7 @@
                     "items": {
                       "type": "string"
                     },
+                    "maxItems": 6,
                     "description": {
                       "zh": "要点,随旁白逐条出现,最多 6 条。",
                       "en": "Points revealed along the narration, up to 6."
@@ -250,6 +254,7 @@
                     "items": {
                       "type": "string"
                     },
+                    "maxItems": 3,
                     "description": {
                       "zh": "LaTeX 公式,最多 3 条(如 a^2 + b^2 = c^2),逐条书写出来。不能用 \\input、\\def 这类命令。",
                       "en": "LaTeX formulas, up to 3 (e.g. a^2 + b^2 = c^2), written out one by one. Commands such as \\input or \\def are not allowed."
@@ -354,6 +359,7 @@
                           "en": "Source code"
                         },
                         "type": "string",
+                        "x-multiline": true,
                         "description": {
                           "zh": "代码原文。",
                           "en": "The source."
@@ -418,6 +424,7 @@
               "items": {
                 "type": "string"
               },
+              "maxItems": 6,
               "description": {
                 "zh": "结尾的要点回顾,最多 6 条。",
                 "en": "Key takeaways at the end, up to 6."
