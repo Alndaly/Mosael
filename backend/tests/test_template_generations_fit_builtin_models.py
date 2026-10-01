@@ -266,6 +266,25 @@ def test_还没挑模型的副本_出图出视频的画幅尺寸照样接在开�
     assert body(custom, "generate_shots", "generate_clip") == {"duration_seconds": 5}
 
 
+@pytest.mark.parametrize("image", _image_params(REFERENCE_IMAGES_NEEDED))
+def test_分镜写满上限时_整条首帧尾帧提示词仍在图像模型收得下的字数里(image: ModelChoice) -> None:
+    """首帧那条固定的白模说明就有近 500 字,Evolink 的图像模型只收 2000 字:分镜里模型写的那段要按余量封顶。"""
+    limit = int((known_capabilities_for(image.provider, image.model, "image") or {}).get("max_prompt_chars") or 0)
+    graph = full_video_generation_graph(chat=CHAT, image=image, video=SEEDANCE)
+    storyboard = next(node for node in graph["nodes"] if node["id"] == "storyboard")
+    shot = storyboard["config"]["json_schema"]["properties"]["shots"]["items"]["properties"]
+    if not limit:
+        assert "maxLength" not in shot["first_frame_prompt"]
+        return
+    item = {"reference_mode": "keyframes", "first_frame_prompt": "f" * shot["first_frame_prompt"]["maxLength"],
+            "last_frame_prompt": "e" * shot.get("last_frame_prompt", {}).get("maxLength", 1)}
+    generations = dict(_generations(graph, skipped=set(), item=item))
+    #: 这里画风、白模图例插出来是空的(上游是假的):按一段常见的长度(各 250 字)补上再比。
+    for node_id in ("paint_first_frame", "paint_last_frame"):
+        if node_id in generations:
+            assert len(generations[node_id]["prompt"]) + 2 * 250 <= limit, (node_id, limit)
+
+
 def test_参数表没有缩水() -> None:
     """扫描面自己也要有人看着:判据哪天一个模型都挑不中,上面两条参数化测试一条都不会跑。"""
     assert len(_choices("video", _can_shoot_from_references)) >= 10

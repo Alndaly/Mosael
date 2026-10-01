@@ -27,6 +27,11 @@ from app.domain.workflows.templates_schemas import (
 
 FULL_VIDEO_GENERATION = "full_video_generation"
 
+#: 运行时才插进提示词的那几段(画风一句、白模图例、白模算出来的运镜)预留多少字。
+RUNTIME_PROMPT_HEADROOM = 600
+#: 模型写的那段至少给多少字:上限再紧也得写得下一句完整的画面描述。
+PROMPT_FLOOR_CHARS = 300
+
 
 #: 两种搭法共用的几段规矩:坐标约定、真道具、相机与运镜 / 镜头 / 打光。**一份文字两处读** —— 改了焦段换算的那一份
 #: 和没改的那一份会搭出两种机位。
@@ -360,6 +365,20 @@ JSON Schema 的对象。"""
             {"id": "shot_narration_speak", "source": "has_narration", "target": "narrate", "source_handle": "true"},
         ],
     }
+    #: 分镜里模型写的那几段提示词各自最多多少字:所选模型的提示词上限,减去模板固定拼上的那几句(白模说明、
+    #: 「保持角色一致」……),再给运行时才插进来的画风、白模图例、运镜各留一段余量。此前不限:首帧那条固定的
+    #: 白模说明就有近 500 字,Evolink 的图像模型只收 2000 字,模型写长一点整条提示词就超了。模型没声明上限的不限。
+    prompt_limits: dict[str, int] = {}
+    for key, node_id, kind, choice in (
+        ("first_frame_prompt", "paint_first_frame", "image", image),
+        ("last_frame_prompt", "paint_last_frame", "image", image),
+        ("generation_prompt", "generate_clip", "video", video),
+    ):
+        limit = int((_capabilities(db, choice, kind) or {}).get("max_prompt_chars") or 0)
+        if limit:
+            prompt = next(node for node in generate_body["nodes"] if node["id"] == node_id)["config"]["prompt"]
+            fixed = len(prompt.replace(f"{{{{loop.item.{key}}}}}", ""))
+            prompt_limits[key] = max(PROMPT_FLOOR_CHARS, limit - fixed - RUNTIME_PROMPT_HEADROOM)
     # 这一段遍历的是上一段的**结果**:每一项是那一镜的全部产物,连同那一镜的分镜本身
     # (`loop.item.loop.item` —— 外面那层 loop 是这一轮,里面那层是生成那一轮)。
     assemble_body = {
@@ -706,7 +725,7 @@ JSON Schema 的对象。"""
 **不要**为了凑满时长而缩短单镜时长——单镜时长是固定的 {clip} 秒。时间码从 0 开始连续编号。""",
                 "response_format": "json_schema",
                 "json_schema_name": "professional_timed_storyboard",
-                "json_schema": _storyboard_schema(video_plan),
+                "json_schema": _storyboard_schema(video_plan, prompt_limits),
                 "json_schema_strict": "true",
                 "temperature": 0.65,
                 "max_tokens": 12000,

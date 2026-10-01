@@ -112,8 +112,18 @@ CAMERA_ANGLES = ["eye level", "high angle", "low angle", "overhead", "dutch angl
 CAMERA_MOVES = ["static", "dolly in", "dolly out", "pan", "tilt", "tracking", "orbit", "crane up", "crane down"]
 
 
-def _shot_schema(plan: VideoPlan) -> dict[str, Any]:
+def _shot_schema(plan: VideoPlan, prompt_limits: dict[str, int] | None = None) -> dict[str, Any]:
+    """`prompt_limits`:模型写的那几段提示词各自最多多少字(按所选图像 / 视频模型的提示词上限、减去模板固定拼上的
+    那几句算出来,见 full_video_generation_graph);模型没声明上限的那段不限。"""
     clip = plan.clip_seconds
+    limits = prompt_limits or {}
+
+    def capped(field: dict[str, Any], key: str) -> dict[str, Any]:
+        limit = limits.get(key)
+        if not limit:
+            return field
+        return {**field, "maxLength": limit, "description": f"{field['description']}。不超过 {limit} 个字符"}
+
     fields: dict[str, Any] = {
         "shot_number": {"type": "integer", "minimum": 1},
         "start_seconds": {"type": "number", "minimum": 0},
@@ -143,22 +153,22 @@ def _shot_schema(plan: VideoPlan) -> dict[str, Any]:
             "description": "这一镜用哪条路出片:keyframes = 先按白模机位画首帧(需要时加尾帧)再生成视频,构图最稳;"
                            "references = 直接把角色三视图、场景设定图和白模运镜视频交给视频模型,适合复杂运镜",
         },
-        "first_frame_prompt": {
+        "first_frame_prompt": capped({
             "type": "string",
             "description": "英文,这一镜第一帧画面的完整描述(人物、动作、表情、环境、光线、画风),交给图像模型画首帧",
-        },
-        "generation_prompt": {
+        }, "first_frame_prompt"),
+        "generation_prompt": capped({
             "type": "string",
             "description": f"英文,交给视频模型:主体动作节拍(须能在 {clip} 秒内完成)、表演、环境变化、光影;"
                            "不要写机位参数(会从白模自动补上),不要要求字幕、UI、Logo 或水印",
-        },
+        }, "generation_prompt"),
         "negative_prompt": {"type": "string"},
     }
     if plan.last_frame:
-        fields["last_frame_prompt"] = {
+        fields["last_frame_prompt"] = capped({
             "type": "string",
             "description": "英文,这一镜最后一帧的完整描述;只在结束构图必须精确(大幅运镜、落版、衔接下一镜)时写,否则写空字符串",
-        }
+        }, "last_frame_prompt")
     return _object(fields, list(fields))
 
 
@@ -173,12 +183,12 @@ def _shot_schema(plan: VideoPlan) -> dict[str, Any]:
 MAX_SHOTS_CEILING = 24
 
 
-def _storyboard_schema(plan: VideoPlan) -> dict[str, Any]:
+def _storyboard_schema(plan: VideoPlan, prompt_limits: dict[str, int] | None = None) -> dict[str, Any]:
     fields = {
         "total_duration_seconds": {"type": "number", "minimum": plan.clip_seconds},
         "timeline_summary": {"type": "string"},
         "continuity_bible": {"type": "string", "description": "所有镜头共享的人物、场景、风格连续性约束"},
-        "shots": {"type": "array", "minItems": 1, "maxItems": MAX_SHOTS_CEILING, "items": _shot_schema(plan)},
+        "shots": {"type": "array", "minItems": 1, "maxItems": MAX_SHOTS_CEILING, "items": _shot_schema(plan, prompt_limits)},
     }
     return _object(fields, list(fields))
 
