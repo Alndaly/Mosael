@@ -22,12 +22,12 @@ from collections.abc import Callable
 from datetime import datetime, timedelta
 
 from sqlalchemy import func, select, update
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.db import SessionLocal
-from app.core.unit_of_work import unit_of_work
+from app.core.unit_of_work import immediate_unit_of_work, unit_of_work
 from app.core.i18n import LocalizedError, is_message_key, tr
 from app.domain import sharing
 from app.domain.authority import Actor
@@ -224,9 +224,7 @@ def open_session(
         #: 和池档案同一条租约:一份登录同一时刻只归一个 owner。同 owner(同一次运行里第二个「打开浏览器」)
         #: 复用;别人正开着就拒。此前不看 owner 就复用 —— 两次运行共用一个视图互相点、互相导航,
         #: 先跑完的那次收尾时把会话关掉,另一次做到一半的动作全部落空。
-        #: 占着它的那个要是早就没人用了(智能体没关、运行异常退出),先收回来再看。
-        reclaim_idle_sessions(db, partition=partition)
-        session = _lease_login(
+        return _lease_login(
             db,
             BrowserSession(
                 workspace_id=workspace_id, kind="named", name=session_name, partition=partition,
@@ -234,14 +232,13 @@ def open_session(
             ),
             busy=lambda: BrowserDomainError("browserErr_sessionBusy", name=session_name),
         )
-    else:
-        session = BrowserSession(
-            workspace_id=workspace_id, kind="ephemeral", name="", owner_kind=owner_kind, owner_id=owner_id,
-            status="open",
-        )
-        db.add(session)
-        db.flush()
-        session.partition = f"ephemeral-{session.id}"  # 依赖 id,故 flush 后再算
+    session = BrowserSession(
+        workspace_id=workspace_id, kind="ephemeral", name="", owner_kind=owner_kind, owner_id=owner_id,
+        status="open",
+    )
+    db.add(session)
+    db.flush()
+    session.partition = f"ephemeral-{session.id}"  # 依赖 id,故 flush 后再算
     # 这里仍提交:调用方紧接着就 run_action —— 入队和轮询各开自己的会话,执行器在另一个进程里,
     # 都得先看得见这个会话。
     db.commit()
@@ -255,9 +252,8 @@ def _open_profile_session(
     prof = usable_profile(db, workspace_id, profile_id, actor=actor)
     if not prof.enabled:
         raise BrowserDomainError("browserErr_profileDisabled")
-    # 租约:一个档案同一时刻只允许一个活动会话。占着它的那个早就没人用了的话先收回来(见 reclaim_idle_sessions)。
-    reclaim_idle_sessions(db, partition=prof.partition)
-    session = _lease_login(
+    # 租约:一个档案同一时刻只允许一个活动会话(见 _lease_login)。
+    return _lease_login(
         db,
         BrowserSession(
             workspace_id=workspace_id,
@@ -271,10 +267,6 @@ def _open_profile_session(
         ),
         busy=lambda: BrowserDomainError("browserErr_profileBusy"),
     )
-    prof.last_used_at = now()
-    db.commit()  # 同 open_session:紧接着的动作在别的会话里读它
-    db.refresh(session)
-    return session
 
 
 def login_notice(db: Session, session: BrowserSession) -> str:
@@ -314,36 +306,61 @@ def login_notice(db: Session, session: BrowserSession) -> str:
     return tr("browserNotice_loginNotCarriedOver", name=session.name, detail=move.reason)
 
 
+#: 拿租约时库被别的写事务占着(每次最多等 busy_timeout 5 秒),最多试几次;都没拿到就按「被占用」报。
+LEASE_ATTEMPTS = 3
+
+
 def _lease_login(db: Session, wanted: BrowserSession, *, busy: Callable[[], BrowserDomainError]) -> BrowserSession:
     """具名 / 池档案会话的租约:这份登录(分区)上已经开着的那个归同一个 owner 就复用,归别人就拒;没有就开 `wanted`。
+    占着它的那个早就没人用了(智能体没关、运行异常退出)的话先收回来再判(见 reclaim_idle_sessions)。
 
-    **「先查后建」挡不住同一拍的两次打开**:两边都查到「没有」、各建一个,同一份登录上就开着两个会话
-    (实测过)。挡它的是库里的局部唯一索引(一个分区上最多一个开着的具名 / 池档案会话,见
-    BrowserSession.__table_args__):后到的那个插入撞上索引,只回滚这一小步,再按此刻占着它的是谁判一次。
+    **判和建在同一个 IMMEDIATE 短事务里**(core.unit_of_work.immediate_unit_of_work):一开头就拿写锁,同一拍的
+    另一次打开排在锁上,轮到它时看到的已经是前一个建好的那一行。此前是「先查后建」—— 两边都查到「没有」、各建
+    一个(实测过);改成在调用方的事务里插、撞索引再判之后,SQLite WAL 下读过的事务等到写锁时快照已旧,直接报
+    database is locked,满负载下复现过。索引仍在,兜的是绕开这里的写入。
+
+    这里提交调用方的会话(open_session 一直会提交它:紧接着的动作在别的连接里读这个会话),只是挪到了租约之前 ——
+    它要是攥着写锁,租约那个连接就会排在它自己身后等满超时。
     """
+    db.commit()
+    for attempt in range(LEASE_ATTEMPTS):
+        try:
+            session_id = _lease_once(wanted, busy)
+            break
+        except OperationalError as exc:
+            if "database is locked" not in str(exc):
+                raise
+            if attempt == LEASE_ATTEMPTS - 1:
+                raise busy() from exc
+    session = db.get(BrowserSession, session_id)
+    assert session is not None  # 刚在租约的事务里提交过
+    return session
 
-    def holder() -> BrowserSession | None:
-        return db.scalar(
+
+def _lease_once(wanted: BrowserSession, busy: Callable[[], BrowserDomainError]) -> str:
+    """判一次:返回复用的或新开的会话 id,归别人就抛 `busy()`。池档案顺带记下用过的时间。"""
+    with immediate_unit_of_work() as lease:
+        reclaim_idle_sessions(lease, partition=wanted.partition)
+        existing = lease.scalar(
             select(BrowserSession).where(BrowserSession.partition == wanted.partition, BrowserSession.status == "open")
         )
-
-    def reuse_or_refuse(existing: BrowserSession) -> BrowserSession:
-        if existing.owner_kind == wanted.owner_kind and (existing.owner_id or "") == (wanted.owner_id or ""):
-            return existing
-        raise busy()
-
-    existing = holder()
-    if existing is not None:
-        return reuse_or_refuse(existing)
-    try:
-        with db.begin_nested():
-            db.add(wanted)
-    except IntegrityError:
-        existing = holder()
-        if existing is None:
-            raise
-        return reuse_or_refuse(existing)
-    return wanted
+        if existing is not None and (
+            existing.owner_kind != wanted.owner_kind or (existing.owner_id or "") != (wanted.owner_id or "")
+        ):
+            raise busy()
+        if wanted.profile_id:
+            profile = lease.get(BrowserProfile, wanted.profile_id)
+            if profile is not None:
+                profile.last_used_at = now()
+        if existing is not None:
+            return existing.id
+        fresh = BrowserSession(
+            workspace_id=wanted.workspace_id, kind=wanted.kind, name=wanted.name, partition=wanted.partition,
+            profile_id=wanted.profile_id, owner_kind=wanted.owner_kind, owner_id=wanted.owner_id, status="open",
+        )
+        lease.add(fresh)
+        lease.flush()
+        return fresh.id
 
 
 def attach_session(db: Session, session_id: str, *, workspace_id: str, actor: Actor) -> BrowserSession | None:

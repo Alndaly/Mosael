@@ -25,7 +25,7 @@ from contextlib import contextmanager
 from sqlalchemy import event
 from sqlalchemy.orm import Session, SessionTransaction
 
-from app.core.db import SessionLocal
+from app.core.db import SessionLocal, engine
 
 logger = logging.getLogger(__name__)
 
@@ -93,3 +93,28 @@ def unit_of_work() -> Iterator[Session]:
         raise
     finally:
         db.close()
+
+
+@contextmanager
+def immediate_unit_of_work() -> Iterator[Session]:
+    """在**自己的连接**上开一次短写事务,一开头就拿写锁(SQLite 的 `BEGIN IMMEDIATE`):正常结束提交,抛异常回滚。
+
+    给「先判再写、判和写之间不许别人插进来」的那几处用(浏览器会话的租约)。普通的 `unit_of_work` 是延迟事务:
+    先读后写的话,SQLite WAL 下读过的事务等到写锁时快照已经旧了,直接报 database is locked —— busy_timeout
+    只对还没读过的事务起作用。IMMEDIATE 在读之前拿锁,等锁走 busy_timeout,拿到之后读到的就是最新的。
+
+    写锁一直攥到块结束,块里只做那几步判和写。调用方自己的会话要是攥着写锁(有没提交的写),这里会排在它身后
+    等满超时 —— 调用方得先提交。提交不经 `Session.commit`,所以块里不要登记 after_commit。
+    """
+    with engine.connect() as conn:
+        conn.exec_driver_sql("BEGIN IMMEDIATE")
+        db = Session(bind=conn, autoflush=False, expire_on_commit=False)
+        try:
+            yield db
+            db.flush()
+            conn.commit()
+        except BaseException:
+            conn.rollback()
+            raise
+        finally:
+            db.close()
