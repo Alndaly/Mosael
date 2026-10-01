@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import type { BoardItem } from "@/api/client";
 import { copySelected } from "./BoardCanvas";
-import { copyCells } from "./boardCanvasModel";
+import { copyCells, pasteOffset } from "./boardCanvasModel";
 
 const node = (item: BoardItem, selected = true): Node => ({
   id: item.id,
@@ -111,6 +111,19 @@ describe("复制选中的几项", () => {
     expect(itemOf(audio).form?.bindings?.script, "原件不动").toEqual([{ from: "N" }]);
   });
 
+  it("⌘V 时原件那块看不见(粘到别的画板、平移走了):整组摆在看得见的那块正中,连着粘照样错开;看得见就挨着原件错开", () => {
+    const far = [
+      { id: "a", kind: "note" as const, x: 5000, y: 5000, width: 220, height: 140 },
+      { id: "b", kind: "note" as const, x: 5300, y: 5000, width: 220, height: 140 },
+    ];
+    const offscreen = { isInView: () => false, center: () => ({ x: 400, y: 300 }) };
+    //: 整组 5000…5520 × 5000…5140,正中 (5260, 5070) 挪到 (400, 300)。
+    expect(pasteOffset(far, 1, offscreen)).toEqual({ x: -4860, y: -4770 });
+    expect(pasteOffset(far, 2, offscreen)).toEqual({ x: -4836, y: -4746 });
+    expect(pasteOffset(far, 2, { isInView: () => true, center: () => ({ x: 400, y: 300 }) })).toEqual({ x: 48, y: 48 });
+    expect(pasteOffset(far, 1, { isInView: () => false, center: () => null }), "量不了视野时照挨着原件那样").toEqual({ x: 24, y: 24 });
+  });
+
   it("⌘C / ⌘V 贴一对连着的格子:按剪贴板里那份换新 id、错开放,线和绑定接在新的那两格上", () => {
     const pasted = copyCells(
       [
@@ -118,7 +131,7 @@ describe("复制选中的几项", () => {
         { id: "img", kind: "image", x: 300, y: 0, form: { producer: "node:plugin.x.gen", bindings: { prompt: [{ from: "n1" }] } } },
       ],
       [{ id: "e1", source: "n1", target: "img" }],
-      { offset: 48 },
+      { offset: { x: 48, y: 48 } },
     );
     const [note, image] = pasted.items;
     expect([note.x, note.y, image.x]).toEqual([48, 48, 348]);

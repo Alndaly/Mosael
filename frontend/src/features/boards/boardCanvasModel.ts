@@ -135,6 +135,26 @@ export function copySelected(
 }
 
 /**
+ * ⌘V 贴一组格子时整组挪多少。原件那块还看得见(同一张板、没挪走)就挨着它往右下错开 24·第几次;看不见(粘到别的
+ * 画板、复制完平移到了别处)就把整组摆在看得见的那块正中(`center`),连着粘几次照样错开 —— 照原来的坐标贴的话,
+ * 新的几格落在视野外,看着像「粘了没反应」。`center` 量不了(画布还没挂好)时照挨着原件那样错开。
+ */
+export function pasteOffset(
+  items: BoardItem[],
+  times: number,
+  view: { isInView: (rect: { x: number; y: number; width: number; height: number }) => boolean; center: () => { x: number; y: number } | null },
+): { x: number; y: number } {
+  const left = Math.min(...items.map((one) => one.x));
+  const top = Math.min(...items.map((one) => one.y));
+  const right = Math.max(...items.map((one) => one.x + (one.width ?? DEFAULT_SIZE[one.kind].width)));
+  const bottom = Math.max(...items.map((one) => one.y + (one.height ?? DEFAULT_SIZE[one.kind].height)));
+  const center = view.isInView({ x: left, y: top, width: right - left, height: bottom - top }) ? null : view.center();
+  if (!center) return { x: 24 * times, y: 24 * times };
+  const step = 24 * (times - 1);
+  return { x: Math.round(center.x - (left + right) / 2) + step, y: Math.round(center.y - (top + bottom) / 2) + step };
+}
+
+/**
  * 一组格子的副本:换新 id,错开 `offset` 放(不然正好盖在原件上,看着像什么都没发生);**它们之间的线跟着复制**,
  * 两端接到新的那几格上(连着没一起复制的那一格的线不跟着来 —— 那一端没有副本可接);表单里顺着线接上的东西改记成
  * 新的那一格(见 rewiredForm);时间线格换上 `sequences` 里给它复制好的那一条。每一格按 copiedItem 复制(进行中的
@@ -143,14 +163,17 @@ export function copySelected(
 export function copyCells(
   items: BoardItem[],
   edges: { id: string; source: string; target: string }[],
-  { offset = 24, sequences = new Map<string, string>() }: { offset?: number; sequences?: ReadonlyMap<string, string> } = {},
+  {
+    offset = { x: 24, y: 24 },
+    sequences = new Map<string, string>(),
+  }: { offset?: { x: number; y: number }; sequences?: ReadonlyMap<string, string> } = {},
 ): { items: BoardItem[]; edges: { id: string; source: string; target: string }[] } {
   const renamed = new Map<string, string>();
   const copies = items.map((source) => {
     const copied = copiedItem(source, `${source.kind}-${Math.random().toString(36).slice(2, 9)}`);
     const sequence = source.sequence_id ? sequences.get(source.sequence_id) : undefined;
     renamed.set(source.id, copied.id);
-    return { ...copied, ...(sequence ? { sequence_id: sequence } : {}), x: source.x + offset, y: source.y + offset };
+    return { ...copied, ...(sequence ? { sequence_id: sequence } : {}), x: source.x + offset.x, y: source.y + offset.y };
   });
   const copiedEdges = edges.flatMap((edge) => {
     const source = renamed.get(edge.source);

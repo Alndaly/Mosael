@@ -134,6 +134,19 @@ export function useBoardViewport({
     return rect.x < right && rect.x + rect.width > left && rect.y < bottom && rect.y + rect.height > top;
   }, [insetsOf]);
 
+  /** 看得见的那块(除去被右栏盖住的)正中,流坐标。量不了回 null。 */
+  const visibleCenter = React.useCallback((): { x: number; y: number } | null => {
+    const instance = rf.current;
+    const pane = surface.current;
+    if (!instance || !pane) return null;
+    const rect = pane.getBoundingClientRect();
+    const visible = visibleCanvasSize(pane.clientWidth, pane.clientHeight, insetsOf(pane));
+    return instance.screenToFlowPosition({
+      x: rect.left + visible.left + visible.width / 2,
+      y: rect.top + visible.top + visible.height / 2,
+    });
+  }, [insetsOf]);
+
   /** 在当前视口中心放一枚标记。放在**看得见的地方**:标记标的是"我现在在看的这块地方"。 */
   const addMarker = React.useCallback((point?: { x: number; y: number }) => {
     const instance = rf.current;
@@ -146,12 +159,7 @@ export function useBoardViewport({
         .map((node) => (node.data as unknown as { marker: CanvasMarker }).marker);
       if (existing.length >= MAX_MARKERS) return current;
       // 同样避开右栏:一枚落在智能体底下的标记,加完就看不见。
-      const rect = pane.getBoundingClientRect();
-      const visible = visibleCanvasSize(pane.clientWidth, pane.clientHeight, insetsOf(pane));
-      const center = point ?? instance.screenToFlowPosition({
-        x: rect.left + visible.left + visible.width / 2,
-        y: rect.top + visible.top + visible.height / 2,
-      });
+      const center = point ?? visibleCenter() ?? { x: 0, y: 0 };
       const marker: CanvasMarker = {
         id: newMarkerId(existing),
         name: nextMarkerName(t("markers"), existing),
@@ -162,7 +170,7 @@ export function useBoardViewport({
       return [...current.map((node) => ({ ...node, selected: false })), ...toMarkerNodes([marker], LAYERS.marker).map((node) => ({ ...node, selected: true }))];
     });
     if (!placed) toast.error(t("markerLimit").replace("{n}", String(MAX_MARKERS)));
-  }, [setNodes, t, insetsOf]);
+  }, [setNodes, t, visibleCenter]);
 
-  return { markers, patchMarker, deleteMarker, insetsOf, centerOn, jumpToMarker, focusItem, isInView, addMarker };
+  return { markers, patchMarker, deleteMarker, insetsOf, centerOn, jumpToMarker, focusItem, isInView, visibleCenter, addMarker };
 }

@@ -66,6 +66,7 @@ import {
   boardItems,
   canPlaceCommentDraft,
   copyCells,
+  pasteOffset,
   copySelected,
   toCanvas,
   focusBoardNode,
@@ -317,7 +318,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
   const { beginFrameDrag, dragFrame, endFrameDrag } = useFrameDrag({ nodes, setNodes });
 
   // ── 标记(位置书签)与视口:见 useBoardViewport ──────────────────────────────
-  const { markers, patchMarker, deleteMarker, insetsOf, centerOn, jumpToMarker, focusItem, isInView, addMarker } = useBoardViewport({
+  const { markers, patchMarker, deleteMarker, insetsOf, centerOn, jumpToMarker, focusItem, isInView, visibleCenter, addMarker } = useBoardViewport({
     nodes,
     setNodes,
     rf,
@@ -461,9 +462,11 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
       const times = pasteRound.current.payload === payload ? pasteRound.current.times + 1 : 1;
       pasteRound.current = { payload, times };
       const { items, edges: links = [] } = cells;
+      //: 原件那块看不见(粘到别的画板、平移走了)就落在看得见的那块正中(见 pasteOffset)。
+      const offset = pasteOffset(items, times, { isInView, center: visibleCenter });
       void copyTimelines(items).then((sequences) => {
         if (!sequences) return;
-        const pasted = copyCells(items, links, { offset: 24 * times, sequences });
+        const pasted = copyCells(items, links, { offset, sequences });
         setNodes((current) => [
           ...current.map((node) => (node.selected ? { ...node, selected: false } : node)),
           ...toNodes(pasted.items).map((node) => ({ ...node, selected: true })),
@@ -472,7 +475,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
       });
       return true;
     },
-    [copyTimelines, setNodes, setEdges],
+    [copyTimelines, setNodes, setEdges, isInView, visibleCenter],
   );
 
   /** 一格上在跑(或上一轮跑)的那项能力叫什么:运行态那一条上写它。清单没到、查不到时不写。 */
