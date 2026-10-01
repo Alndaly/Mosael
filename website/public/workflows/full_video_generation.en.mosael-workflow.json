@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "Topic to finished video",
   "description": "Turn a topic into a creative brief, script and visual bible; characters and locations already in the asset library are reused with their references, and only new ones get a turnaround sheet or concept art — saved to the library — auto-build a 3D blockout with each shot's camera position and move, then generate each shot from a first frame (and a last frame where needed) painted on the blockout — or straight from the turnarounds and the blockout camera move — and assemble, caption and export the video. Cost: by default up to 8 shots, each one video generation plus one or two keyframe images, on top of up to 7 turnaround and location images (none for those already in the library), 5 chat calls and per-shot narration — the most expensive template here; max_shots on the start node caps the shot count.",
-  "graph_hash": "6e9c2b7b11d7400b5a6823d77bfa9d89449067073a777aaababee2e112ea5e14",
+  "graph_hash": "802de5cb7ce2831eeb8c04643356f5faa7114024f0162a46d958f1046d77ec9d",
   "graph": {
     "meta": {
       "template_id": "full_video_generation",
@@ -1230,7 +1230,9 @@
                   "model": "",
                   "kind": "image",
                   "prompt": "{{loop.item.first_frame_prompt}} Reference images: the first one is a grey 3D blockout of this exact shot — match its camera angle, lens, framing, horizon line and the placement of the coloured mannequins exactly ({{input.legend}}); the mannequins are stand-ins, render them as the real characters. The character turnaround sheets fix each character's face, hair, outfit and proportions; the location concept art fixes the set. Only the characters described above appear. {{input.style}}",
-                  "parameters": {},
+                  "parameters": {
+                    "size": "{{input.frame_size}}"
+                  },
                   "source_assets": [
                     "{{render_blockout.first_frame_asset_id}}:reference_image",
                     "{{input.sheets}}",
@@ -1265,7 +1267,9 @@
                   "model": "",
                   "kind": "image",
                   "prompt": "{{loop.item.last_frame_prompt}} This is the last frame of the same shot whose first frame is the second reference image — keep characters, wardrobe, lighting and set continuous. Reference images: the first one is a grey 3D blockout of this exact shot — match its camera angle, lens, framing, horizon line and the placement of the coloured mannequins exactly ({{input.legend}}); the mannequins are stand-ins, render them as the real characters. The character turnaround sheets fix each character's face, hair, outfit and proportions; the location concept art fixes the set. Only the characters described above appear. {{input.style}}",
-                  "parameters": {},
+                  "parameters": {
+                    "size": "{{input.frame_size}}"
+                  },
                   "source_assets": [
                     "{{render_blockout.last_frame_asset_id}}:reference_image",
                     "{{paint_first_frame.asset_id}}:reference_image",
@@ -1290,7 +1294,9 @@
                   "prompt": "{{loop.item.generation_prompt}} Camera: {{render_blockout.camera_move}}. Keep every character exactly as in the references. {{input.style}}",
                   "negative_prompt": "{{loop.item.negative_prompt}}",
                   "parameters": {
-                    "duration_seconds": 5
+                    "duration_seconds": 5,
+                    "aspect_ratio": "{{input.aspect_ratio}}",
+                    "resolution": "{{input.resolution}}"
                   },
                   "source_assets": [
                     "{{paint_first_frame.asset_id}}:first_frame",

@@ -38,9 +38,10 @@ def _graphs(locale: str) -> dict[str, dict]:
     """每个模板的图。**按这一份的语言建** —— 图里给人看的默认值(新项目的名字、完成通知)在建图时定语言,
     和节点名同一条(见 domain/workflows/templates 的 transcript_video_cleanup_graph / translated_dub_graph)。"""
     return {
-        #: 视频模型留空 = 按"认不出的模型"出片计划:每镜 5 秒、只走首帧那条路。**首帧是每一个能用的视频模型都收的
-        #: 那一条**(参考素材那条只有部分模型收),而导入的人挑哪个模型这里不知道 —— 挑模型时节点参数会清回那个
-        #: 模型的默认,不收 5 秒的模型出片更长,上时间线时照样按 5 秒截。
+        #: 视频模型留空 = 按"还没挑模型"出片计划:每镜 5 秒、只走首帧那条路。**首帧是每一个能用的视频模型都收的
+        #: 那一条**(参考素材那条只有部分模型收),而导入的人挑哪个模型这里不知道。出图 / 视频的画幅、尺寸、分辨率
+        #: 照样接到开始参数(templates_models._video_plan):挑模型时编辑器只留新模型仍收的绑定和值(前端
+        #: carriedParameters),不收 5 秒的模型由运行前检查在花钱之前说清。
         "full_video_generation": full_video_generation_graph(chat=ModelChoice(), image=ModelChoice(), video=ModelChoice()),
         "transcript_video_cleanup": transcript_video_cleanup_graph(chat=ModelChoice(), locale=locale),
         # 音色按工作区取,导出给官网的那份不能带任何本机资源 —— 留空,导入后由用户自己挑。

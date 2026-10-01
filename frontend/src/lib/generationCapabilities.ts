@@ -367,3 +367,38 @@ export function parseGenerationParameterInput(value: string): string | number | 
 export function maxImages(model: GenerationOption | null): number {
   return capabilityNumber(model, "max_num_images", 4);
 }
+
+/**
+ * 换模型时参数里**留下哪几项**:新模型仍收的键里,`{{…}}` 绑定原样留着(值要到运行时才知道,能不能收由
+ * 运行前检查按新模型判),写死的值只在新模型的可选值里还有它时才留 —— 不在的(Veo 不收 5 秒)丢掉,
+ * 交给新模型的默认。
+ *
+ * 此前换模型一律清空:官方模板按开始参数接好的画幅 / 尺寸 / 分辨率绑定(`{{input.aspect_ratio}}`)
+ * 一换模型全没了,改开始节点的画幅从此不起作用,出来的片子按新模型的默认画幅。
+ */
+export function carriedParameters(
+  previous: Record<string, unknown>,
+  model: GenerationOption | null,
+): Record<string, unknown> {
+  const resolution = typeof previous.resolution === "string" ? previous.resolution : "";
+  const choicesFor = (key: string): string[] | null => {
+    if (key === "aspect_ratio") return aspectRatioOptions(model);
+    if (key === "size") return sizeOptions(model);
+    if (key === "resolution") return videoResolutionOptions(model);
+    if (key === "duration_seconds") return durationChoices(model, resolution).map(String);
+    const declared = parameterChoiceEntries(model).find(([name]) => name === key);
+    return declared ? declared[1] : null;
+  };
+  const kept: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(previous)) {
+    if (!supportsParameter(model, key)) continue;
+    if (typeof value === "string" && value.includes("{{")) {
+      kept[key] = value;
+      continue;
+    }
+    const choices = choicesFor(key);
+    if (choices && choices.length > 0 && !choices.includes(String(value))) continue;
+    kept[key] = value;
+  }
+  return kept;
+}

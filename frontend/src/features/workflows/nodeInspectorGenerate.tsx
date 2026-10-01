@@ -28,6 +28,7 @@ import {
   durationRange,
   aspectRatioOptions,
   booleanParameterKeys,
+  carriedParameters,
   declaredParameters,
   declaredParameterValue,
   durationChoices,
@@ -370,7 +371,9 @@ export function generateNodeSection({
             const model = (generationModels.options).find((item) => item.id === id);
             if (!model) return;
             // 三者一起写:分开填就会出现「图像模型 + 类型 video」这种自相矛盾的组合。
-            // 换模型时清空参数 —— 上一个模型的比例/时长在新模型上未必存在。
+            // 参数只留新模型仍收的:`{{…}}` 绑定照留(模板按开始参数接好的画幅、尺寸),写死的值新模型
+            // 不收就丢 —— 上一个模型的比例 / 时长在新模型上未必存在(见 carriedParameters)。换了种类
+            // (图像换成视频)就全清:那是另一种生成。
             onChange({
               config: {
                 ...config,
@@ -378,7 +381,7 @@ export function generateNodeSection({
                 provider: model.provider,
                 model: model.model,
                 kind: model.kind,
-                parameters: {},
+                parameters: model.kind === config.kind ? carriedParameters(genParams, model) : {},
               },
             });
             setGenCustom(false);

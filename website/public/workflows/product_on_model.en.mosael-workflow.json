@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "Product photo into on-model shots",
   "description": "From one flat-lay or fabric photo, plan a few sellable scenes (up to 12) and shoot a portrait on-model image for each; where a video model is available, put every scene in motion with that image as its first frame. The product photo is carried into every generation — cut, colour, texture and logo come from it, not from a description. Images and clips are filed into one project and the copy lines are saved as a note. Each scene is one paid image generation (plus one video generation with motion).",
-  "graph_hash": "ce7561cbfaa8fde0eb9d7eac1f9ab3cff1f3df61adc17e6b82ac8075b8a77e63",
+  "graph_hash": "9e2f5981ea834a00b187117b38fab76239568176dac15f41286faa2442de309a",
   "graph": {
     "meta": {
       "template_id": "product_on_model",
@@ -217,7 +217,9 @@
                   "prompt": "{{loop.item.video_prompt}} The product in the reference image must be reproduced EXACTLY: identical cut, silhouette, colour, fabric texture, weave, print scale and placement, stitching, buttons, trims and any logo or label. Do not redesign, restyle, recolour, resize the print, add or remove details. Only the wearer, pose, setting and lighting may change. Subtle, natural motion only; the garment must stay readable throughout.",
                   "negative_prompt": "different garment, altered pattern, changed colour, distorted print, redesigned collar or sleeves, extra logos, text, watermark, deformed hands, extra limbs",
                   "parameters": {
-                    "duration_seconds": 5
+                    "duration_seconds": 5,
+                    "aspect_ratio": "{{input.aspect_ratio}}",
+                    "resolution": "{{input.resolution}}"
                   },
                   "source_assets": [
                     "{{on_model.asset_id}}:first_frame"

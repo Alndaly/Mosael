@@ -230,6 +230,26 @@ def _ratio_of(size: str) -> float:
     return width / height
 
 
+def test_还没挑模型的副本_出图出视频的画幅尺寸照样接在开始参数上() -> None:
+    """官网副本(模型留空,由导入的人挑):挑模型时编辑器只留新模型仍收的绑定(前端 carriedParameters)。
+    此前这里只有时长 —— 挑了模型之后改开始节点的画幅不起作用,片子按模型的默认画幅出。"""
+
+    def body(graph: dict[str, Any], loop_id: str, node_id: str) -> dict[str, Any]:
+        loop = next(node for node in graph["nodes"] if node["id"] == loop_id)
+        return next(node for node in loop["config"]["body"]["nodes"] if node["id"] == node_id)["config"]["parameters"]
+
+    blank = ModelChoice()
+    full = full_video_generation_graph(chat=blank, image=blank, video=blank)
+    assert body(full, "generate_shots", "generate_clip") == {
+        "duration_seconds": 5, "aspect_ratio": "{{input.aspect_ratio}}", "resolution": "{{input.resolution}}"}
+    assert body(full, "generate_shots", "paint_first_frame") == {"size": "{{input.frame_size}}"}
+    on_model = product_on_model_graph(chat=blank, image=blank, video=blank, motion=True)
+    assert body(on_model, "shoot_scenes", "on_model_clip")["aspect_ratio"] == "{{input.aspect_ratio}}"
+    #: 认得出名字、查不到能力表的模型(用户自建的)不猜它收画幅。
+    custom = full_video_generation_graph(chat=blank, image=blank, video=ModelChoice(provider="x", model="my-model"))
+    assert body(custom, "generate_shots", "generate_clip") == {"duration_seconds": 5}
+
+
 def test_参数表没有缩水() -> None:
     """扫描面自己也要有人看着:判据哪天一个模型都挑不中,上面两条参数化测试一条都不会跑。"""
     assert len(_choices("video", _can_shoot_from_references)) >= 10

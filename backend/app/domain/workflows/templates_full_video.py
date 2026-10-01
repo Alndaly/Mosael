@@ -163,7 +163,8 @@ def full_video_generation_graph(
         }
         for one, (width, height) in FRAME_ASPECTS.items()
     }
-    image_parameters = {"size": "{{input.frame_size}}"} if image_plan.frame_sizes else {}
+    #: 还没挑图像模型时(官网副本)也接上:挑了模型之后,编辑器留下这个绑定(见前端 carriedParameters)。
+    image_parameters = {"size": "{{input.frame_size}}"} if image_plan.frame_sizes or not image.model else {}
     sheet_parameters = {"size": image_plan.sheet_size} if image_plan.sheet_size else {}
     modes_text = " / ".join(video_plan.modes)
 

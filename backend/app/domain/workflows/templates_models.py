@@ -226,7 +226,13 @@ def _video_plan(db: Session | None, choice: ModelChoice) -> VideoPlan:
     capabilities = _capabilities(db, choice, "video")
     if capabilities is None:
         #: 认不出的模型只按最通用的那条走:首帧生视频。不猜它收参考素材。
-        return VideoPlan(parameters={"duration_seconds": 5})
+        parameters: dict[str, Any] = {"duration_seconds": 5}
+        if not choice.model:
+            #: 还没挑模型(官网副本、这台机器上还没配视频模型):把画幅、分辨率接到开始参数上。挑模型时编辑器
+            #: 留下新模型仍收的那几个绑定(见前端 carriedParameters)—— 此前这里只有时长,挑了模型之后改开始
+            #: 节点的画幅不起作用,片子按模型的默认画幅出。
+            parameters.update({"aspect_ratio": "{{input.aspect_ratio}}", "resolution": "{{input.resolution}}"})
+        return VideoPlan(parameters=parameters)
 
     keys = set(capabilities.get("parameter_keys") or ())
     durations = [int(value) for value in capabilities.get("duration_seconds") or ()]
