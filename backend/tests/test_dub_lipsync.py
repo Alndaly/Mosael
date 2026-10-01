@@ -238,3 +238,55 @@ def test_起点在原片之前的那句_剪掉露在外面的那截_不往后错
                               clip_start=10.0, span=6.0)
     assert (line.start, line.end) == (0.0, 0.5), "2 倍速:素材 2 秒 = 时间线 1 秒,其中前 0.5 秒露在原片之前"
     assert line.src_in == pytest.approx(1.0), "时间线上剪掉 0.5 秒 = 素材里 1 秒(2 倍速)"
+
+
+@pytest.mark.parametrize("rate", ["30000/1001", "24000/1001"])
+def test_帧率不是整数的原片_切出来的每块都在模型收的长度里(monkeypatch, rate) -> None:
+    """切块要重新编码,时长按帧取整:29.97 fps 下正好在上限处硬切,出来比上限多 0.02 秒,漏斗按「超过上限」拒掉。
+    走真的切块和 ffmpeg,改口型的桩里用漏斗**同一个**时长判据(generation.operations._check_source_duration)查每一块。"""
+    from app.domain.generation import operations
+
+    fresh_client()
+    _media("ntsc.mp4", ["-f", "lavfi", "-i", f"testsrc=size=160x120:rate={rate}:duration=25", "-c:v", "libx264",
+                        "-preset", "ultrafast", "-pix_fmt", "yuv420p"])
+    _media("talk.wav", ["-f", "lavfi", "-i", "sine=frequency=500:duration=25"])
+    with unit_of_work() as db:
+        ws = Workspace(name="W")
+        db.add(ws)
+        db.flush()
+        video = register_file_asset(db, workspace_id=ws.id, project_id=None, source_path=settings.data_dir / "ntsc.mp4", name="原片")
+        talk = register_file_asset(db, workspace_id=ws.id, project_id=None, source_path=settings.data_dir / "talk.wav", name="一直在说")
+        project = Project(workspace_id=ws.id, name="P")
+        db.add(project)
+        db.flush()
+        sequence = Sequence(workspace_id=ws.id, project_id=project.id, name="译配版", width=160, height=120, fps=30)
+        base = Track(sequence=sequence, kind="video", name="V1", position=0)
+        dub = Track(sequence=sequence, kind="audio", name="A1", position=1)
+        db.add_all([sequence, base, dub])
+        db.flush()
+        span = float(video.media_info["duration"])
+        source = Clip(workspace_id=ws.id, sequence_id=sequence.id, track_id=base.id, asset_id=video.id,
+                      timeline_start=0, src_in=0, src_out=span)
+        #: 从头说到尾,没有空当可切:只能在上限处硬切 —— 正是按帧取整会冒出上限的那种切法。
+        db.add_all([source, Clip(workspace_id=ws.id, sequence_id=sequence.id, track_id=dub.id, asset_id=talk.id,
+                                 timeline_start=0, src_in=0, src_out=span)])
+        db.commit()
+        ids = SimpleNamespace(ws=ws.id, sequence=sequence.id, clip=source.id, dub=dub.id)
+    limits = [2, 10]
+    model = {"id": "p:video:videoretalk", "provider": "p", "provider_profile_id": "p", "model": "videoretalk",
+             "capabilities": {"source_duration_seconds": {"source_video": limits}}}
+    monkeypatch.setattr(module, "_pick_model", lambda db, choice, mode: model)
+
+    def generation(db, **request):
+        piece = db.get(Asset, request["source_assets"][0]["asset_id"])
+        operations._check_source_duration(piece, "source_video", limits)
+        job = Job(workspace_id=request["workspace_id"], kind="generation", status="succeeded", created_by=None,
+                  result={"asset_ids": [piece.id]})
+        db.add(job)
+        db.flush()
+        return SimpleNamespace(id=job.id), job
+
+    monkeypatch.setattr("app.domain.generation.create_generation_job", generation)
+    monkeypatch.setattr("app.domain.generation.runner.start_generation_thread", lambda generation_id: None)
+    out = _run(ids)
+    assert out["chunk_count"] == out["generated_count"] == 3, "25 秒按 10 秒上限硬切成三块,每块都被收下"

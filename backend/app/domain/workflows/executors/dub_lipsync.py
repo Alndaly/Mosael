@@ -255,7 +255,10 @@ def dub_lipsync(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[st
         raise WorkflowDomainError("wfErr_dubLipsyncNoSpeech")
     _require_rights(db, scope.workspace_id, video_id, lines)
 
-    chunks = plan_chunks(span, [(line.start, line.end) for line in lines], low, high)
+    #: 切出来的每一块要重新编码,时长按帧取整:29.97 fps 下正好切 120 秒,出来是 3597 帧 = 120.02 秒,漏斗按
+    #: 「超过 120 秒」拒掉(下限同理,可能少半帧)。规划时上下限各让出两帧(按原片的帧率)。
+    margin = 2 / fps
+    chunks = plan_chunks(span, [(line.start, line.end) for line in lines], low + margin, high - margin)
     source_digest = _digest(source_path)
     generated = 0
     reused = 0
