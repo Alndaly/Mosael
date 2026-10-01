@@ -66,11 +66,23 @@ const waitMsOf = (args: Record<string, unknown>): number => {
  * 此前工作流把 `{{上游.输出}}` 直接插进表达式,上游交来一段带引号的文字就能改写整段脚本。
  *
  * 包成块语句而不是箭头函数:块的完成值就是最后一条语句的值,和不包时一样 —— 写了好几句、最后一句
- * 是结果的脚本照样能用;`const` 也只活在这一块里,同一页上跑第二次不会撞「已声明」。
+ * 是结果的脚本照样能用;`const` 也只活在这一块里,同一页上(循环里)跑第二次不会撞「已声明」。
+ *
+ * `input` 由 `with` 一个**无原型**的对象交进去,而不是在外层 `const input`:`input` 是网页脚本里最常见的
+ * 变量名之一(`const input = document.querySelector("input")`),此前包成 `const` 之后,自己声明了 `input`
+ * 的老脚本(const / let / var / function 哪种都算)整段 SyntaxError。`with` 的作用域在脚本自己的声明**外面**:
+ * 脚本自己声明了就用它自己的(块里的 const / let / class / function 遮住它,`var input = …` 的赋值也
+ * 落到这一格上,读回来就是它刚写的),没声明才读到交进来的数据。只有一处看得出差别:只写 `var input;`
+ * 不赋值,读到的是交进来的数据而不是 undefined。无原型是为了只拦 `input` 这一个名字 ——
+ * 普通对象会把 `toString`、`constructor` 这些全局名字也拦成 Object.prototype 上的那几个。
+ *
+ * 没给入参(空对象)就不引入 `input` 这个名字,只包块;`undefined`(智能体直接跑的脚本)原样执行。
  */
 export function scriptWithInput(expression: string, input: unknown): string {
   if (input === undefined) return expression;
-  return `{ const input = ${JSON.stringify(input ?? {})};\n${expression}\n}`;
+  const given = input !== null && typeof input === "object" && Object.keys(input).length > 0;
+  if (!given) return `{\n${expression}\n}`;
+  return `with (Object.assign(Object.create(null), { input: ${JSON.stringify(input)} })) {\n${expression}\n}`;
 }
 
 /**
