@@ -23,6 +23,14 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "「{item_id}」上没有能替人跑的这一项:智能体能跑的是一格的能力(带上 producer,见 list_board_producers 里 role 为 ability 的)、空格子上的生成器和 3D 场景格的渲白模;内置的生成、写字、配音由用户在面板上发起",
         "en": "“{item_id}” has nothing the agent can run this way. The agent can run an item's abilities (pass producer; see the role \"ability\" entries of list_board_producers), a generator set on an empty slot, and a 3D scene item's render; built-in generate, write and voice-over are started by the user from their panel.",
     },
+    "confirmErr_workflowChangedSinceCard": {
+        "zh": "开卡之后工作流「{name}」被改过(开卡时是第 {opened} 版,现在是第 {now} 版),这张卡批准的不是现在这张图,没有运行 —— 请重新发起",
+        "en": "Workflow “{name}” was changed after this card was opened (it was revision {opened}, now {now}), so the card does not cover the current graph and nothing was run. Please ask again.",
+    },
+    "confirmErr_workflowGone": {
+        "zh": "这张卡要运行的工作流已经被删除了",
+        "en": "The workflow this card would run has been deleted.",
+    },
     "confirmErr_boardItemChanged": {
         "zh": "开卡之后「{item_id}」换了产出方式,这张卡批准的不是现在这一个 —— 请重新发起",
         "en": "“{item_id}” switched to a different producer after this card was opened, so the card no longer covers it. Please ask again.",

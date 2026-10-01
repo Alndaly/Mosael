@@ -195,6 +195,9 @@ def _validate_run_workflow(db: Session, workspace_id: str, payload: dict[str, An
     #: 卡上点名跑的是哪一张:**覆盖**,不由调用方自己说。MCP 那条路只带 workflow_id,卡标题于是是一串 uuid;
     #: 反过来,调用方自带的 name 也不能信 —— 卡上写「日更」、跑的却是另一张,授权界面就说了谎。
     payload["name"] = workflow.name
+    #: 卡是对着**开卡这一刻**的那一版审的:档位(图里有没有对外的节点)、卡上的后果说明都按它算。钉住它,
+    #: 批准时跑的必须还是这一版 —— 中间被改过(加了一个发布节点)的话,用户批的就不是要跑的那张图。
+    payload["workflow_revision"] = int(workflow.revision or 0)
 
 
 def _summarize_run_workflow(db: Session, payload: dict[str, Any]) -> Summary:
@@ -211,9 +214,17 @@ def _execute_run_workflow(db: Session, confirmation: Any, actor: str | None) -> 
     from app.domain.workflows.engine import start_workflow_job
 
     workflow = db.get(Workflow, str(payload["workflow_id"]))
-    assert workflow is not None
+    if workflow is None:
+        raise ConfirmationError("confirmErr_workflowGone")
+    #: 跑的是开卡时钉住的那一版(start_workflow_job 跑当前那一版,所以两者必须是同一版)。读修订号和起任务在
+    #: 同一个事务里,中间插不进别人的提交。
+    if int(workflow.revision or 0) != int(payload["workflow_revision"]):
+        raise ConfirmationError(
+            "confirmErr_workflowChangedSinceCard",
+            name=workflow.name, opened=payload["workflow_revision"], now=workflow.revision,
+        )
     job = start_workflow_job(db, workflow, created_by=actor, params=dict(payload.get("params") or {}))
-    return {"job_id": job.id}
+    return {"job_id": job.id, "workflow_revision": int(workflow.revision or 0)}
 
 
 def _board_in(db: Session, workspace_id: str, payload: dict[str, Any]):
