@@ -293,7 +293,8 @@ export function NodeInspector({
   // 切换字段的连接态:连接=进 inputs;断开=移出 inputs 并删对应数据边。
   //: 两个方向都换了这一格的值从哪来(上游输出 ↔ 手填),依赖它的字段(轨道跟着时间线)一并清掉。
   const setConnected = (key: string, connected: boolean) => {
-    if (connectedInputs.includes(key) === connected) return;
+    //: 断开时连「只有数据边、不在 inputs 里」的也要断得开(智能体改的、旧图):后端认的是那条边。
+    if (connected ? connectedInputs.includes(key) : !connectedInputs.includes(key) && !dataEdgeFor(key)) return;
     const inputs = new Set(connectedInputs);
     if (connected) inputs.add(key);
     else inputs.delete(key);
@@ -380,7 +381,8 @@ export function NodeInspector({
 
   /** 字段接上游 = 数据边(ComfyUI 式:暴露输入接点,再从画布拖数据边或下拉选源)。 */
   const binding: FieldBinding = {
-    isBound: (key) => connectedInputs.includes(key),
+    //: 接没接上看两样:连接态(inputs)或者真有一条数据边喂它 —— 后者才是后端认的。
+    isBound: (key) => connectedInputs.includes(key) || dataEdgeFor(key) !== null,
     setBound: setConnected,
     renderBound: (key) => {
       const boundEdge = dataEdgeFor(key);

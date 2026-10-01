@@ -218,6 +218,8 @@ export function workflowIssueText(
         .replace("{actual}", workflowDataTypeName(t, issue.actual));
     case "code-template":
       return t("wfIssueCodeTemplate");
+    case "code-field-bound":
+      return t("wfIssueCodeFieldBound");
     case "unknown-type":
       return unknownNodeTypeText(t, issue.nodeType, reasons);
     default:

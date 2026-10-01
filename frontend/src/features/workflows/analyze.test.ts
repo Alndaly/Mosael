@@ -714,3 +714,48 @@ describe("数字人生成的授权确认", () => {
     expect(drivesDigitalHuman("llm", { source_assets: ["x:driving_audio"] })).toBe(false);
   });
 });
+
+describe("代码字段接了上游", () => {
+  //: 后端运行前拦(wfErr_codeFieldBound):上游的值整段变成代码,和把 {{}} 拼进去是同一个注入。
+  //: 此前就绪清单全绿,点了运行才 422。
+  it("代码字段被数据边喂是阻断问题,指向那一格", () => {
+    const a = analyzeWorkflow(
+      graph(
+        [
+          { id: "start", type: "start", config: {} },
+          { id: "llm-1", type: "llm", config: { prompt: "写段代码" } },
+          { id: "c1", type: "code", inputs: ["code"], config: { code: "" } },
+        ],
+        [
+          { id: "e1", source: "start", target: "llm-1" },
+          { id: "d1", source: "llm-1", target: "c1", kind: "data", source_output: "text", target_input: "code" },
+        ],
+      ),
+      registry,
+      fullCtx,
+    );
+    expect(a.issues).toContainEqual(
+      expect.objectContaining({ nodeId: "c1", code: "code-field-bound", severity: "error", configKey: "code" }),
+    );
+    expect(a.runnable).toBe(false);
+  });
+
+  it("上游接到 input 不报", () => {
+    const a = analyzeWorkflow(
+      graph(
+        [
+          { id: "start", type: "start", config: {} },
+          { id: "llm-1", type: "llm", config: { prompt: "hi" } },
+          { id: "c1", type: "code", inputs: ["input"], config: { code: "output = input" } },
+        ],
+        [
+          { id: "e1", source: "start", target: "llm-1" },
+          { id: "d1", source: "llm-1", target: "c1", kind: "data", source_output: "text", target_input: "input" },
+        ],
+      ),
+      registry,
+      fullCtx,
+    );
+    expect(a.issues.filter((i) => i.code === "code-field-bound")).toEqual([]);
+  });
+});

@@ -26,6 +26,7 @@ export type IssueCode =
   | "gen-provider-unconfigured" // AI 生成选的服务商下没有可用的生成模型
   | "type-mismatch" // 数据边:上游输出类型与目标输入期望类型不兼容(软提示)
   | "code-template" // 代码字段里写了 {{…}}:代码不插值,那一段不会被替换(软提示)
+  | "code-field-bound" // 代码字段接了数据边:上游的值整段变成代码,后端运行前拒(wfErr_codeFieldBound)
   | "unknown-type"; // 节点类型不在目录里:提供它的插件没装 / 停用了 / 工具已不存在
 
 export interface NodeIssue {
@@ -319,7 +320,9 @@ function collect(
         continue;
       }
       // 代码字段里的 {{…}} 不是引用:不查失效,只提醒一句它不会被替换(上游的值请接到 input)。
+      // 接了数据边就不只是提醒:上游的值整段当成代码跑,后端运行前拒(wfErr_codeFieldBound),这里同一条。
       if (spec.type === "code") {
+        if (dataBound.has(`${node.id}:${key}`)) push("error", "code-field-bound", { configKey: key });
         if (extractRefs(config[key]).length > 0) push("warn", "code-template", { configKey: key });
         continue;
       }

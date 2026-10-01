@@ -93,3 +93,47 @@ it("时间线从接上游改回手填:依赖它的轨道也清掉,数据边一�
   expect(applied().config).toEqual({ sequence_id: "", track_id: "" });
   expect((onApplyGraph.mock.calls.at(-1)![0] as WorkflowGraph).edges).toEqual([]);
 });
+
+const CODE_META = {
+  type: "code",
+  label: "代码",
+  description: "",
+  category: "",
+  config: { code: { type: "code", label: "代码", required: true }, input: { type: "template", label: "入参" } },
+  outputs: ["output"],
+  output_types: {},
+  output_labels: {},
+} as unknown as WorkflowNodeType;
+
+it("代码字段接了上游(后端拒跑):检查器给一个断开的入口,点了删掉那条数据边", () => {
+  //: 代码字段不给「接上游」开关(上游的值会整段变成代码),于是已经接上的(智能体改的、旧图)连断都断不开。
+  const node = { id: "c1", type: "code", inputs: ["code"], config: { code: "" } };
+  const graph = {
+    nodes: [{ id: "llm-1", type: "llm", config: {} }, node],
+    edges: [{ id: "d1", source: "llm-1", target: "c1", kind: "data", source_output: "text", target_input: "code" }],
+  } as WorkflowGraph;
+  const onApplyGraph = vi.fn();
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <TooltipProvider>
+        <ReactFlowProvider>
+          <NodeInspector
+            node={node}
+            meta={CODE_META}
+            graph={graph}
+            registry={new Map([[CODE_META.type, CODE_META]])}
+            workspaceId="w1"
+            onChange={vi.fn()}
+            onApplyGraph={onApplyGraph}
+          />
+        </ReactFlowProvider>
+      </TooltipProvider>
+    </QueryClientProvider>,
+  );
+  const unbind = document.querySelector<HTMLButtonElement>('[data-field-key="code"] [data-code-bound]');
+  expect(unbind?.textContent).toContain("wfCodeFieldBoundUnbind");
+  fireEvent.click(unbind!);
+  const next = onApplyGraph.mock.calls.at(-1)![0] as WorkflowGraph;
+  expect(next.edges).toEqual([]);
+  expect(next.nodes.find((one) => one.id === "c1")!.inputs).toEqual([]);
+});

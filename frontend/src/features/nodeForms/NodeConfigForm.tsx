@@ -1,6 +1,6 @@
 import React from "react";
 import { useQueries, useQuery } from "@tanstack/react-query";
-import { Link2, PenLine } from "lucide-react";
+import { Link2, PenLine, Unlink } from "lucide-react";
 import { toast } from "sonner";
 
 import { fetchWorkflowFieldOptions, listAssets, type Asset } from "@/api/client";
@@ -390,6 +390,9 @@ export function NodeConfigForm({
           const canConnect =
             Boolean(binding) && !isObject && !isAssetList && spec?.type !== "code" && (binding?.canBind?.(key) ?? true);
           const connected = canConnect && Boolean(binding?.isBound(key));
+          //: 代码字段**已经**接上了(智能体改的、旧图):后端运行前拒(wfErr_codeFieldBound)。开关是收着的,
+          //: 不给个断开的入口的话,这一格就再也解不开 —— 就绪清单指过来,人在这里却无事可做。
+          const codeBound = spec?.type === "code" && Boolean(binding?.isBound(key));
           return (
             <div className={compact ? COMPACT_FIELD_BOX : FIELD_BOX} key={key} data-field-key={key}>
               <span title={compact && spec?.description ? toPlainText(spec.description) : undefined}>
@@ -519,7 +522,20 @@ export function NodeConfigForm({
                   <ListField value={value} variables={variables} onChange={(next) => setConfig(key, next)} />
                 )
               ) : spec?.type === "code" ? (
-                <CodeField value={String(value ?? "")} onChange={typeConfig(key)} />
+                <>
+                  {codeBound && (
+                    <button
+                      type="button"
+                      data-code-bound=""
+                      className="inline-flex cursor-pointer items-center gap-1 self-start rounded-md border border-destructive/40 bg-destructive/10 px-1.5 py-0.5 text-left text-ui-2xs text-destructive transition-colors hover:bg-destructive/15"
+                      onClick={() => binding?.setBound(key, false)}
+                    >
+                      <Unlink size={11} className="shrink-0" />
+                      {t("wfCodeFieldBoundUnbind")}
+                    </button>
+                  )}
+                  <CodeField value={String(value ?? "")} onChange={typeConfig(key)} />
+                </>
               ) : spec?.type === "text" ? (
                 // 一段字,没有引用:创意画板上的模板字段就是这一种(后端 boards.transforms.board_config_view)——
                 // 画板上没有「上游的输出」可引用,上游是连进来的格子,`{{…}}` 不该出现在创作者面前。

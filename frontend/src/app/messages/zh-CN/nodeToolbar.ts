@@ -98,6 +98,8 @@ export const nodeToolbar = {
   wfIssueProviderMissing: "绑定的模型服务已失效",
   wfIssueGenUnconfigured: "所选生成服务商未配密钥",
   wfIssueCodeTemplate: "代码里的 {{…}} 不会被替换:上游的值请接到这个节点的 input,代码里读 input",
+  wfIssueCodeFieldBound: "代码字段接了上游:上游的值会整段当成代码跑,运行前会被拒。把上游接到这个节点的 input,代码里读 input",
+  wfCodeFieldBoundUnbind: "已接上游(代码字段不能接),点此断开",
   wfIssueTypeMismatch: "类型不匹配:需要{expected},接的是{actual}",
   wfIssuePluginUnavailable: "插件节点不可用({type}):提供它的插件没装、已停用,或这个工具已经不在了",
   wfIssuePluginUnusable: "插件节点不可用:{reason}",
