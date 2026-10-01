@@ -291,10 +291,13 @@ export function NodeInspector({
     graph.edges.find((edge) => edge.kind === "data" && edge.target === node.id && edge.target_input === key) ?? null;
 
   // 切换字段的连接态:连接=进 inputs;断开=移出 inputs 并删对应数据边。
-  //: 两个方向都换了这一格的值从哪来(上游输出 ↔ 手填),依赖它的字段(轨道跟着时间线)一并清掉。
+  //: 依赖它的字段(轨道跟着时间线)只在**值从哪来真的换了**时清:断开一条确实存在的数据边。
+  //: 拨到「接上游」那一下还没有边,运行时用的仍是手填的值;接哪条边由 bindInput 定,清在那里。
   const setConnected = (key: string, connected: boolean) => {
+    const edge = dataEdgeFor(key);
     //: 断开时连「只有数据边、不在 inputs 里」的也要断得开(智能体改的、旧图):后端认的是那条边。
-    if (connected ? connectedInputs.includes(key) : !connectedInputs.includes(key) && !dataEdgeFor(key)) return;
+    if (connected ? connectedInputs.includes(key) : !connectedInputs.includes(key) && !edge) return;
+    const unbindsEdge = !connected && edge !== null;
     const inputs = new Set(connectedInputs);
     if (connected) inputs.add(key);
     else inputs.delete(key);
@@ -306,7 +309,9 @@ export function NodeInspector({
             (edge) => !(edge.kind === "data" && edge.target === node.id && edge.target_input === key),
           ),
       nodes: graph.nodes.map((n) =>
-        n.id === node.id ? { ...n, inputs: [...inputs], config: dependentsCleared(n.config ?? {}, key, allSpecs) } : n,
+        n.id === node.id
+          ? { ...n, inputs: [...inputs], config: unbindsEdge ? dependentsCleared(n.config ?? {}, key, allSpecs) : n.config }
+          : n,
       ),
     });
   };

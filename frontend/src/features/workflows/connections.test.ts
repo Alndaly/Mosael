@@ -73,4 +73,15 @@ describe("withDataInputBound", () => {
     const twice = withDataInputBound(once, { targetId: "append", key: "sequence_id", sourceId: "tl", output: "other" }, specs);
     expect(twice.edges.map((edge) => edge.source_output)).toEqual(["other"]);
   });
+
+  it("来源和输出都没变(下拉里重选同一项、画布上重拖同一条):原样返回,接好之后填的轨道不清", () => {
+    //: 此前不比新旧,重选一次同一个来源,轨道就被清空 —— 而值从哪来根本没变。
+    const once = withDataInputBound(graph, { targetId: "append", key: "sequence_id", sourceId: "tl", output: "sequence_id" }, specs);
+    const filled = {
+      ...once,
+      nodes: once.nodes.map((node) => (node.id === "append" ? { ...node, config: { ...node.config, track_id: "trk-new" } } : node)),
+    };
+    const again = withDataInputBound(filled, { targetId: "append", key: "sequence_id", sourceId: "tl", output: "sequence_id" }, specs);
+    expect(again).toBe(filled);
+  });
 });

@@ -44,9 +44,9 @@ const META = {
   output_labels: {},
 } as unknown as WorkflowNodeType;
 
-function renderInspector(node: WorkflowGraph["nodes"][number]) {
+function renderInspector(node: WorkflowGraph["nodes"][number], edges: WorkflowGraph["edges"] = []) {
   const onApplyGraph = vi.fn();
-  const graph = { nodes: [node], edges: [] } as WorkflowGraph;
+  const graph = { nodes: [{ id: "tl", type: "timeline_create", config: {} }, node], edges } as WorkflowGraph;
   render(
     <QueryClientProvider client={new QueryClient()}>
       <TooltipProvider>
@@ -66,11 +66,12 @@ function renderInspector(node: WorkflowGraph["nodes"][number]) {
   );
   const modeToggle = (key: string) =>
     document.querySelector<HTMLButtonElement>(`[data-field-key="${key}"] button[title="wfInputModeHint"]`)!;
-  const applied = () => (onApplyGraph.mock.calls.at(-1)![0] as WorkflowGraph).nodes[0];
+  const applied = () => (onApplyGraph.mock.calls.at(-1)![0] as WorkflowGraph).nodes.find((one) => one.id === node.id)!;
   return { onApplyGraph, modeToggle, applied };
 }
 
-it("时间线从手填改成接上游:依赖它的轨道清掉,不相干的字段不动", () => {
+it("时间线拨到「接上游」、还没挑来源:值还是手填的那个,轨道不清", () => {
+  //: 此前一拨开关就清:可这时还没有数据边,运行时用的仍是手填的时间线,那条轨道仍然对。
   const { modeToggle, applied } = renderInspector({
     id: "n1",
     type: META.type,
@@ -78,20 +79,30 @@ it("时间线从手填改成接上游:依赖它的轨道清掉,不相干的字�
   });
   fireEvent.click(modeToggle("sequence_id"));
   expect(applied().inputs).toEqual(["sequence_id"]);
-  expect(applied().config).toEqual({ sequence_id: "seq-old", track_id: "", at: 2 });
+  expect(applied().config).toEqual({ sequence_id: "seq-old", track_id: "trk-old", at: 2 });
 });
 
-it("时间线从接上游改回手填:依赖它的轨道也清掉,数据边一并删掉", () => {
-  const { modeToggle, onApplyGraph, applied } = renderInspector({
-    id: "n1",
-    type: META.type,
-    inputs: ["sequence_id"],
-    config: { sequence_id: "", track_id: "trk-old" },
-  });
+it("时间线从接着上游改回手填:数据边删掉,依赖它的轨道也清掉(值从哪来真的换了)", () => {
+  const { modeToggle, onApplyGraph, applied } = renderInspector(
+    { id: "n1", type: META.type, inputs: ["sequence_id"], config: { sequence_id: "", track_id: "trk-old" } },
+    [{ id: "d1", source: "tl", target: "n1", kind: "data", source_output: "sequence_id", target_input: "sequence_id" }],
+  );
   fireEvent.click(modeToggle("sequence_id"));
   expect(applied().inputs).toEqual([]);
   expect(applied().config).toEqual({ sequence_id: "", track_id: "" });
   expect((onApplyGraph.mock.calls.at(-1)![0] as WorkflowGraph).edges).toEqual([]);
+});
+
+it("拨回手填时本来就没接上数据边:只是收起开关,轨道不清", () => {
+  const { modeToggle, applied } = renderInspector({
+    id: "n1",
+    type: META.type,
+    inputs: ["sequence_id"],
+    config: { sequence_id: "seq-old", track_id: "trk-old" },
+  });
+  fireEvent.click(modeToggle("sequence_id"));
+  expect(applied().inputs).toEqual([]);
+  expect(applied().config).toEqual({ sequence_id: "seq-old", track_id: "trk-old" });
 });
 
 const CODE_META = {

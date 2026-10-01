@@ -40,6 +40,9 @@ export function isDuplicateControlEdge(
  * **依赖 `key` 的字段一并清掉**(声明里的 `depends_on`):换接了另一条时间线,手里那条轨道 id 就不在
  * 新时间线上了 —— 两格各自都有值、界面看着正常,跑起来才报「这条时间线上没有那条轨道」。
  * 画布上拖线和检查器里挑来源是同一件事,两处都走这里。
+ *
+ * **来源和输出都没变就原样返回**(下拉里重选同一项、画布上把同一条线重拖一遍):值从哪来没换,
+ * 接好之后才填的轨道不该被清掉。
  */
 export function withDataInputBound(
   graph: WorkflowGraph,
@@ -47,6 +50,15 @@ export function withDataInputBound(
   specs: Record<string, DependencySpec | undefined>,
 ): WorkflowGraph {
   const { targetId, key, sourceId, output } = binding;
+  const same = graph.edges.some(
+    (edge) =>
+      edge.kind === "data" &&
+      edge.target === targetId &&
+      edge.target_input === key &&
+      edge.source === sourceId &&
+      edge.source_output === output,
+  );
+  if (same) return graph;
   const id = `d-${sourceId}-${output}-${targetId}-${key}`;
   return {
     ...graph,
