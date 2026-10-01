@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.unit_of_work import unit_of_work
 from app.db.models import Asset, Job
+from app.domain.assets.media_info import patch_media_info
 from app.domain.jobs import create_job, dispatch_job, emit_job_event, run_job_guarded, say
 from app.media.paths import resolve_key
 from app.media.proxy import PROXY_NAME, TRANSCODE_SLOTS, build_proxy, proxy_path
@@ -33,17 +34,18 @@ def proxy_status(asset: Asset) -> str:
 
 
 def _set_proxy_meta(db: Session, asset_id: str, status: str, *, key: str | None = None) -> None:
-    """Reassign media_info (a plain JSON column) so SQLAlchemy tracks the change."""
-    asset = db.get(Asset, asset_id)
-    if asset is None:
-        return
-    info = dict(asset.media_info or {})
-    info["proxy_status"] = status
+    """只改代理自己那两个键(proxy_status / proxy_key),别的键不碰。
+
+    转码线程在转码**之前**就读出了这份素材,转码一跑几十秒,这期间别人往 media_info 里补写的键
+    (改口型记的块、配音记的音色)它手上的那份都没有 —— 此前拿它整份写回,把那些键全抹了
+    (改口型的块缓存因此从来不命中)。见 assets/media_info。
+    """
     if key is not None:
-        info["proxy_key"] = key
+        patch_media_info(db, asset_id, {"proxy_status": status, "proxy_key": key})
     elif status != "ready":
-        info.pop("proxy_key", None)
-    asset.media_info = info
+        patch_media_info(db, asset_id, {"proxy_status": status}, drop=["proxy_key"])
+    else:
+        patch_media_info(db, asset_id, {"proxy_status": status})
 
 
 def proxies_possible(asset: Asset) -> bool:

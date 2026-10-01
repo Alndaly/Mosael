@@ -22,6 +22,7 @@ from app.domain.jobs import TTS_SLOTS, blame, run_job_guarded, say
 from app.db.models import Asset, Job, Voice
 from app.db.model_base import now
 from app.domain.assets.importer import register_file_asset
+from app.domain.assets.media_info import patch_media_info
 from app.domain.jobs import create_job, dispatch_job, emit_job_event
 from app.media.paths import resolve_key, voice_dir, voice_key
 from app.media.probe import probe_media
@@ -658,7 +659,7 @@ def _run_synthesis_body(
                 )
                 #: 记下是哪把克隆嗓子配的:这段音频拿去做数字人时,生成漏斗照它查音色的授权声明
                 #: (generation.operations.check_digital_human_rights)。引擎自带的嗓子不是谁的克隆,不记。
-                asset.media_info = {**(asset.media_info or {}), "voice_id": voice.id}
+                patch_media_info(db, asset.id, {"voice_id": voice.id})
             job = db.get(Job, job_id)
             job.status = "succeeded"
             job.progress = 1.0

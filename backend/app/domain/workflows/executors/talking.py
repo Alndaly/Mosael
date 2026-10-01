@@ -25,6 +25,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.ai.providers.contracts.generation import DRIVING_AUDIO, FIRST_FRAME, SOURCE_VIDEO
+from app.domain.assets.media_info import patch_media_info
 from app.domain.jobs import current_actor
 from app.domain.workflows import WorkflowDomainError
 from app.domain.workflows.executors.registry import RunScope, register
@@ -313,7 +314,7 @@ def _concat_audio(db: Session, scope: RunScope, assets: list[Any], name: str) ->
     #: (generation.operations.check_digital_human_rights)。
     voices = {str((asset.media_info or {}).get("voice_id") or "") for asset in assets}
     if len(voices) == 1 and "" not in voices:
-        joined.media_info = {**(joined.media_info or {}), "voice_id": voices.pop()}
+        patch_media_info(db, joined.id, {"voice_id": voices.pop()})
     return joined.id
 
 
@@ -336,7 +337,7 @@ def _pad_audio(db: Session, scope: RunScope, asset: Any, seconds: float, name: s
                                      name=name, source="tts")
     voice = str((asset.media_info or {}).get("voice_id") or "")
     if voice:
-        padded.media_info = {**(padded.media_info or {}), "voice_id": voice}
+        patch_media_info(db, padded.id, {"voice_id": voice})
     return padded.id
 
 

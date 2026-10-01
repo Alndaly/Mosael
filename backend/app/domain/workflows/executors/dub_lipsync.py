@@ -183,12 +183,11 @@ def _remember_chunk(asset_id: str, key: str) -> None:
     """在改好口型的那一块上记下它是哪一块,**单独一个事务马上落库**:后面哪一块失败、这个节点整体回滚,
     这一块的钱也不白花 —— 重跑时认得出它(见 _cached_chunk)。"""
     from app.core.unit_of_work import unit_of_work
-    from app.db.models import Asset
+    from app.domain.assets.media_info import patch_media_info
 
+    #: 只补这一个键:这块素材刚登记,代理转码正在别的线程里改它的 media_info(见 assets/media_info)。
     with unit_of_work() as keeper:
-        made = keeper.get(Asset, asset_id)
-        if made is not None:
-            made.media_info = {**(made.media_info or {}), CHUNK_KEY: key}
+        patch_media_info(keeper, asset_id, {CHUNK_KEY: key})
 
 
 @register("dub_lipsync")
