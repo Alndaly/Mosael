@@ -87,20 +87,46 @@ def coerce(tool: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any]:
         kind = spec.get("type")
         if kind not in ("integer", "number", "boolean"):
             continue
-        text = value.strip()
-        if not text:
+        if not value.strip():
             out.pop(key)
             continue
-        if kind == "boolean":
-            if text.lower() in ("true", "false", "1", "0", "yes", "no"):
-                out[key] = text.lower() in ("true", "1", "yes")
-            continue
-        try:
-            number = float(text)
-        except ValueError:
-            continue
-        out[key] = int(number) if kind == "integer" and number.is_integer() else number
+        out[key] = _scalar(value, kind)
     return out
+
+
+_TRUE = frozenset({"true", "1", "yes"})
+_FALSE = frozenset({"false", "0", "no"})
+
+
+def _scalar(value: Any, kind: Any) -> Any:
+    """一格文字按声明的类型转回来:`integer` / `number` 转成数,`boolean` 转成布尔。转不了的、不是文字的原样留着。
+
+    整数先按整数读:`"7342567890123457123"` 绕一道 float 就成了 …024 —— 长 id 声明成 integer 时照样不丢位。
+    """
+    if not isinstance(value, str) or kind not in ("integer", "number", "boolean"):
+        return value
+    text = value.strip()
+    if kind == "boolean":
+        lowered = text.lower()
+        return lowered in _TRUE if lowered in _TRUE | _FALSE else value
+    if kind == "integer":
+        try:
+            return int(text)
+        except ValueError:
+            pass
+    try:
+        number = float(text)
+    except ValueError:
+        return value
+    return int(number) if kind == "integer" and number.is_integer() else number
+
+
+def _item(value: Any, kind: Any) -> Any:
+    """数组里的一项按 `items.type` 归位。字符串项收到数 / 布尔(上游交来的、旧版表单存下的)写回文字:
+    插件声明了要字符串,`"007"`、一串长 id 就得原样是字符串。"""
+    if kind == "string" and isinstance(value, (bool, int, float)):
+        return json.dumps(value)
+    return _scalar(value, kind)
 
 
 def _as_list(value: Any, items: dict[str, Any]) -> Any:
@@ -109,7 +135,9 @@ def _as_list(value: Any, items: dict[str, Any]) -> Any:
     - 表单里一行一项(见前端 ListField):某一行是一整串引用,插值之后那一行就是一个列表 —— 拼进来(和
       「行列表」字段同一个规矩),而不是交出一个套着列表的列表;每一项是结构(对象 / 数组)的除外。
     - 一整格接的是上游:上游交来的已经是列表就照收;是一段 JSON 数组文字就解开;是一个值就当只有这一项。
-    - 数字 / 整数项里的数字文字转成数(同 coerce 对单值的做法)。
+    - 每一项按 `items.type` 归位(同 coerce 对单值的做法):数字 / 整数项的数字文字转成数,布尔项的 true / false
+      转成布尔,字符串项收到的数 / 布尔写回文字。表单只存文字(见前端 ListField),类型只在这里按声明转一次 ——
+      前端不看声明一律把「像数的」转成数,`"007"` 成了 7、一串长 id 丢了末几位。
     转不了的原样留着,交给插件去说哪里不对。
     """
     if value is None or value == "" or value == []:
@@ -132,19 +160,7 @@ def _as_list(value: Any, items: dict[str, Any]) -> Any:
             flat.extend(one)
         elif one not in (None, ""):
             flat.append(one)
-    if items.get("type") in ("integer", "number"):
-        flat = [_number(one, items["type"]) for one in flat]
-    return flat
-
-
-def _number(value: Any, kind: str) -> Any:
-    if not isinstance(value, str):
-        return value
-    try:
-        number = float(value.strip())
-    except ValueError:
-        return value
-    return int(number) if kind == "integer" and number.is_integer() else number
+    return [_item(one, items.get("type")) for one in flat]
 
 
 def _media(spec: dict[str, Any]) -> tuple[str, ...]:

@@ -32,6 +32,8 @@ ENTRY = """
             "kinds": [type(one).__name__ for one in (given.get("sizes") or [])],
             "total": sum(given.get("sizes") or []),
         }}))
+    elif tool == "echo":
+        print(json.dumps({"ok": True, "output": {"got": given}}))
     else:
         open(os.path.join(os.environ["MOSAEL_PLUGIN_OUTPUT_DIR"], "out.txt"), "w").write("产出")
         print(json.dumps({"ok": True, "output": {"artifact": {"path": "out.txt"}, "caption": "一份产出"}}))
@@ -48,6 +50,16 @@ TOOLS = [
         "node": {"outputs": ["joined", "kinds", "total"]},
     },
     {
+        "name": "echo",
+        "label": "原样交回",
+        "input_schema": {"type": "object", "properties": {
+            "codes": {"type": "array", "items": {"type": "string"}},
+            "ids": {"type": "array", "items": {"type": "integer"}},
+            "flags": {"type": "array", "items": {"type": "boolean"}},
+        }},
+        "node": {"outputs": ["got"]},
+    },
+    {
         "name": "render",
         "label": "出一份",
         "input_schema": {"type": "object", "properties": {"img": {"type": "string", "format": "asset", "x-media": "image"}}},
@@ -55,6 +67,7 @@ TOOLS = [
         "node": {"config": {"img": {"type": "template", "label": "参考图"}}, "outputs": ["artifact", "caption"]},
     },
 ]
+RENDER = TOOLS[2]
 
 
 def _install(tmp_path: Path, owner: str) -> str:
@@ -123,11 +136,29 @@ def test_整格接上游的一段JSON数组文字也解开(tmp_path) -> None:
     assert result["context"]["j"]["joined"] == "x|y"
 
 
+def test_数组每一项按声明的类型交给插件_字符串项不改形(tmp_path) -> None:
+    """表单只存文字(前端 ListField),类型由这里按 items.type 转:字符串项的 "007"、十九位 id 原样是字符串;
+    整数项的长 id 不绕浮点数;布尔项的 true / false 是布尔。旧版表单存下的数(7)交给字符串项时写回文字。"""
+    ws = fresh_client().post("/api/workspaces", json={"name": "W"}).json()["id"]
+    _install(tmp_path, user_id())
+    status, result, error = _run(ws, _graph({
+        "id": "e", "type": f"plugin.{PACKAGE}.echo",
+        "config": {"codes": ["007", "7342567890123457123", 7, True],
+                   "ids": ["7342567890123457123", "2"], "flags": ["true", "false", " yes "]},
+    }))
+    assert status == "succeeded", error
+    assert result["context"]["e"]["got"] == {
+        "codes": ["007", "7342567890123457123", "7", "true"],
+        "ids": [7342567890123457123, 2],
+        "flags": [True, False, True],
+    }
+
+
 # ---------- node.config 与 input_schema ----------
 
 
 def test_自己写的node_config没标素材_照input_schema给素材选择器() -> None:
-    img = node_meta(TOOLS[1])["config"]["img"]
+    img = node_meta(RENDER)["config"]["img"]
     assert img["data_type"] == "asset" and img["media"] == "image"
     assert img["label"] == "参考图"  # 自己写的标签照留
 

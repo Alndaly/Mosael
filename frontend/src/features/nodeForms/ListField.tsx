@@ -23,20 +23,14 @@ export function rowsFromList(value: unknown): string[] {
 }
 
 /**
- * 行 → 数组。空行丢掉(它对插件毫无意义);数字、布尔还原成原本的类型;带 {{}} 的一律当字符串 —— 那是模板,
- * 留给引擎插值。和 MapField 的 objectFromRows 同一个还原规矩。
+ * 行 → 数组。空行丢掉(它对插件毫无意义);其余**一律存文字**,不在这里猜类型。
+ *
+ * 这一格装的是数、布尔还是字符串,只有 input_schema 的 `items.type` 说得准,而后端交给插件前正是按它转的
+ * (plugins.inputs._as_list)。此前这里把「像数的」一律转成数:声明成字符串的 `"007"` 存成了 7,
+ * 一串十九位的 id 存成浮点数丢了末几位 —— 存下去就回不来了。
  */
-export function listFromRows(rows: string[]): unknown[] {
-  const out: unknown[] = [];
-  for (const text of rows) {
-    const trimmed = text.trim();
-    if (!trimmed) continue;
-    if (text.includes("{{")) out.push(text);
-    else if (trimmed === "true" || trimmed === "false") out.push(trimmed === "true");
-    else if (Number.isFinite(Number(trimmed))) out.push(Number(trimmed));
-    else out.push(text);
-  }
-  return out;
+export function listFromRows(rows: string[]): string[] {
+  return rows.filter((text) => text.trim());
 }
 
 export function ListField({
@@ -45,7 +39,7 @@ export function ListField({
   variables,
 }: {
   value: unknown;
-  onChange: (next: unknown[]) => void;
+  onChange: (next: string[]) => void;
   /** 上游能引用的输出,形如 `{{llm-1.text}}`。 */
   variables: string[];
 }) {
