@@ -70,6 +70,9 @@ def test_克隆音色要克隆引擎跑得起来_数字人用的还要声明过�
     monkeypatch.setattr(tts_models, "runtime_status", lambda engine: (False, False))
     assert _statuses(me, ws)["cloned_voice"] == "unknown", "还没测出来就说不知道"
     monkeypatch.setattr(tts_models, "runtime_status", lambda engine: (True, True))
+    monkeypatch.setattr(tts_models, "is_installed", lambda engine: False)
+    assert _statuses(me, ws)["cloned_voice"] == "missing", "跑得起来、权重没下:合成那一步照样拒(voiceErr_noWeights)"
+    monkeypatch.setattr(tts_models, "is_installed", lambda engine: True)
     statuses = _statuses(me, ws)
     assert statuses["cloned_voice"] == "met"
     assert statuses["digital_human_voice"] == "missing", "未声明的克隆音色不能交给数字人"

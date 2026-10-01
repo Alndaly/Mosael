@@ -585,3 +585,87 @@ class Test整片真跑:
         assert [(clip.timeline_start, clip.text_override) for clip in _clips(sequence_id, "subtitle")] == [
             (0.0, "第一镜的口播"), (10.0, "第三镜")]
         assert context["output"]["output"]["final_asset_id"] == f"export-of-{sequence_id}"
+
+
+# --------------------------------------------------------------------------------------
+# 克隆引擎跑不起来:预填音色和前置检查同一个判据,运行前就拦
+# --------------------------------------------------------------------------------------
+
+
+def _clone_engine(monkeypatch, *, ready: bool) -> None:
+    """克隆引擎的探测结果(真机上要起子进程 import torch):已知跑得起来 / 已知跑不起来。"""
+    from app.ai.runtime import tts_models
+
+    monkeypatch.setattr(tts_models, "runtime_status", lambda engine: (ready, True))
+    monkeypatch.setattr(tts_models, "is_installed", lambda engine: True)
+
+
+def _template_client() -> tuple[Any, str]:
+    client = fresh_client()
+    return client, client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+
+
+def _template_workflow(client: Any, ws: str, template_id: str) -> dict[str, Any]:
+    response = client.post("/api/workflows", json={"workspace_id": ws, "name": template_id, "template_id": template_id})
+    assert response.status_code == 200, response.text
+    return response.json()
+
+
+def _voices_in(graph: dict[str, Any]) -> list[str]:
+    """图里(连同循环体)所有填了音色的地方:开始参数 voice_id、配音节点的 voice。"""
+    found: list[str] = []
+    for node in graph["nodes"]:
+        config = node.get("config") or {}
+        if node["type"] == "start":
+            found.append(str((config.get("params") or {}).get("voice_id", "")))
+        if "voice" in config and "{{" not in str(config["voice"]):
+            found.append(str(config["voice"]))
+        if isinstance(config.get("body"), dict):
+            found += _voices_in(config["body"])
+    return [one for one in found if one]
+
+
+class Test克隆引擎没装:
+    @pytest.mark.parametrize("template_id", ["full_video_generation", "footage_montage", "translated_dub",
+                                             "product_pitch_short"])
+    def test_前置检查说缺_建出来的图里也不填音色(self, monkeypatch, template_id: str) -> None:
+        from app.core.db import SessionLocal
+        from app.domain.workflows.templates import requirement_statuses
+        from tests.util import make_voice, user_id
+
+        client, ws = _template_client()
+        make_voice(ws, "嗓子")
+        _clone_engine(monkeypatch, ready=False)
+        with SessionLocal() as db:
+            assert requirement_statuses(db, user_id=user_id(), workspace_id=ws)["cloned_voice"] == "missing"
+        assert _voices_in(_template_workflow(client, ws, template_id)["graph"]) == [], "卡片上说缺,图里却填着音色"
+
+    def test_引擎跑得起来时照旧预填(self, monkeypatch) -> None:
+        from tests.util import make_voice
+
+        client, ws = _template_client()
+        voice = make_voice(ws, "嗓子")
+        _clone_engine(monkeypatch, ready=True)
+        assert _voices_in(_template_workflow(client, ws, "footage_montage")["graph"]) == [voice]
+
+    def test_开始参数里填了音色而引擎跑不起来_运行前就拦_一次对话都不花(self, monkeypatch) -> None:
+        """音色是开始参数经循环的 inputs 转进「念旁白」的 —— 运行前检查要认得这条路,不只看字面量。"""
+        from sqlalchemy import select
+
+        from app.core.db import SessionLocal
+        from app.db.models import Job
+        from app.domain.workflows import create_workflow
+        from app.domain.workflows.engine import start_workflow_job
+        from tests.util import make_voice, user_id
+
+        ws = _workspace()
+        voice = make_voice(ws, "嗓子")
+        _clone_engine(monkeypatch, ready=False)
+        graph = full_video_generation_graph(chat=CHAT, image=SEEDREAM, video=SEEDANCE)
+        with SessionLocal() as db:
+            workflow = create_workflow(db, workspace_id=ws, name="整片", graph=graph, created_by=user_id())
+            db.commit()
+            with pytest.raises(WorkflowDomainError) as refused:
+                start_workflow_job(db, workflow, created_by=user_id(), params={"topic": "面馆", "voice_id": voice})
+            assert refused.value.key == "voiceErr_noRuntime"
+            assert list(db.scalars(select(Job).where(Job.workspace_id == ws))) == [], "一个节点都没排"

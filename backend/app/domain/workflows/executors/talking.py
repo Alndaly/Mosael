@@ -269,7 +269,11 @@ def entity_speak_preflight(db: Session, config: dict[str, Any], actor: str | Non
 
 @register_preflight("talking_segments")
 def talking_segments_preflight(db: Session, config: dict[str, Any], actor: str | None, place: PreflightNode) -> None:
-    """这些段都要交给数字人:字面量的克隆音色要有授权声明,会说话照片的模型挑得到。"""
+    """这些段都要交给数字人:字面量的克隆音色要有授权声明,会说话照片的模型挑得到;用配音库的音色时克隆引擎得跑得起来
+    (和 synthesize_speech 同一个判据,见 subjobs.clone_engine_must_run)。"""
+    from app.domain.workflows.executors.subjobs import clone_engine_must_run
+
+    clone_engine_must_run(config)
     if not place.deferred("engine") and not place.deferred("voice"):
         _require_voice_consent(db, _text(config.get("engine")), _text(config.get("voice")))
     preflight_model(db, config, place, SPEECH_TO_VIDEO, actor)

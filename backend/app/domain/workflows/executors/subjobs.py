@@ -326,6 +326,49 @@ def synthesize_speech(db: Session, scope: RunScope, config: dict[str, Any]) -> d
     return {"asset_id": str((final.result or {}).get("asset_id", ""))}
 
 
+def clone_engine_problem() -> WorkflowDomainError | None:
+    """本机克隆引擎(配音库的音色走它)**已知**跑不起来时的那句原因;跑得起来或还没测过就是 None。
+
+    模板预填音色、前置检查和下面的运行前检查用的是这一个判据(见 templates._cloned_voice_status)。只读已经
+    测过的结果,不在请求里起探测(起子进程 import torch,要十几秒)—— 没测过的交给合成那一步再判。
+    """
+    from app.ai.runtime import config as tts_config
+    from app.ai.runtime import tts_models
+    from app.domain.voices.voices import VoiceError
+
+    engine = tts_config.get().engine
+    label = next((item.label for item in tts_models.CATALOG if item.id == engine), engine)
+    ready, known = tts_models.runtime_status(engine)
+    if known and not ready:
+        return WorkflowDomainError.from_error(VoiceError("voiceErr_noRuntime", label=label))
+    if ready and not tts_models.is_installed(engine):
+        return WorkflowDomainError.from_error(VoiceError("voiceErr_noWeights", label=label))
+    return None
+
+
+def clone_engine_must_run(config: dict[str, Any]) -> None:
+    """用配音库的音色念(引擎是本机克隆、音色这一格跑之前就知道且不空)时,克隆引擎得跑得起来。
+
+    此前要等前面的对话、出图、出视频都付完钱,念第一句时才说「F5-TTS 还没有运行环境」。音色是引用别的节点的、
+    或者空着(整片 / 混剪不配音时就是空的,那一步整段跳过)都不在这里判。
+    """
+    from app.domain.voices.speech import CLONE_ENGINE
+
+    if "engine" not in config or "voice" not in config:
+        return
+    engine = str(config.get("engine") or "").strip() or CLONE_ENGINE
+    if engine != CLONE_ENGINE or not str(config.get("voice") or "").strip():
+        return
+    problem = clone_engine_problem()
+    if problem is not None:
+        raise problem
+
+
+@register_preflight("synthesize_speech")
+def synthesize_speech_preflight(db: Session, config: dict[str, Any], actor: str | None, place: PreflightNode) -> None:
+    clone_engine_must_run(config)
+
+
 @register("publish")
 def publish(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
     from app.db.models import Asset, PublishAccount

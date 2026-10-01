@@ -90,29 +90,39 @@ def registered_types() -> frozenset[str]:
 
 #: **运行前检查**:不花钱、不写东西,在建工作流任务之前问一遍。有的节点「跑到它才发现做不了」,而排在它前面的节点
 #: 已经花了钱 —— 译配选了「只去掉人声」却没有分离能力,要等转写、付费翻译、逐句配音全做完才被问到。登记一个
-#: preflight,引擎在任何节点跑之前对图里每个这种节点(循环体、子图里的也算)用它的**字面量**配置问一遍:
-#: 引用(`{{…}}`)和数据边供的值要到运行时才知道,不在这里判,执行时照样会判。
-#: 签名:preflight(db, 字面量配置, 跑的人, 节点所在处)。说不通就抛 WorkflowDomainError。
+#: preflight,引擎在任何节点跑之前对图里每个这种节点(循环体、子图里的也算)用它**跑之前就知道的**配置问一遍:
+#: 字面量,以及只引用开始参数的那几格(`{{start.x}}`;循环体里经循环的 inputs 转一手的 `{{input.x}}` 也算)——
+#: 它们的值在建任务那一刻就定了,run_preflights 先按这一次的开始参数插好再交出去。引用别的节点的(`{{llm.json}}`)
+#: 和数据边供的值要到运行时才知道,不在这里判,执行时照样会判。
+#: 签名:preflight(db, 跑之前就知道的配置, 跑的人, 节点所在处)。说不通就抛 WorkflowDomainError。
 @dataclass(frozen=True)
 class PreflightNode:
-    """运行前检查看得到的、字面量配置之外的东西:这个节点在哪个工作区、哪一层图里。
+    """运行前检查看得到的、配置之外的东西:这个节点在哪个工作区、哪一层图里。
 
     有的检查只看自己那几格不够:改口型交给模型的配音是**上游**配音节点配的,那把嗓子有没有授权声明要顺着图往上找;
-    授权确认那一格是引用时(运行时才知道),和「压根没填」在字面量配置里看起来一样,得回到原始配置分清。
+    授权确认那一格是引用时(运行时才知道),和「压根没填」在交出来的配置里看起来一样,得回到原始配置分清。
     """
 
     workspace_id: str
     #: 节点所在的那一层图(子图、循环体里的节点就是那一层)。
     graph: dict[str, Any]
     node: dict[str, Any]
+    #: 写的是引用、但在跑之前就插好了值的那几格(只引用开始参数):它们**不算**运行时才知道。
+    known: frozenset[str] = frozenset()
 
-    def deferred(self, key: str) -> bool:
-        """这一格的值运行时才知道:接了数据边,或者写的是引用。"""
+    def bound(self, key: str) -> bool:
+        """这一格接了数据边(值由上游节点运行时供)。"""
         node_id = str(self.node.get("id") or "")
         edges = self.graph.get("edges") if isinstance(self.graph.get("edges"), list) else []
-        if any(isinstance(edge, dict) and edge.get("kind") == "data" and str(edge.get("target")) == node_id
-               and str(edge.get("target_input")) == key for edge in edges):
+        return any(isinstance(edge, dict) and edge.get("kind") == "data" and str(edge.get("target")) == node_id
+                   and str(edge.get("target_input")) == key for edge in edges)
+
+    def deferred(self, key: str) -> bool:
+        """这一格的值运行时才知道:接了数据边,或者写的是引用(只引用开始参数、已经插好的不算)。"""
+        if self.bound(key):
             return True
+        if key in self.known:
+            return False
         value = (self.node.get("config") or {}).get(key)
         return isinstance(value, str) and "{{" in value
 
@@ -174,26 +184,76 @@ def _preflight_for(node_type: str) -> Preflight | None:
     return None
 
 
-def literal_config(node: dict[str, Any], graph: dict[str, Any]) -> dict[str, Any]:
-    """节点配置里**字面量**的那几格:去掉引用和接了数据边的。"""
-    place = PreflightNode(workspace_id="", graph=graph, node=node)
-    config = node.get("config") if isinstance(node.get("config"), dict) else {}
-    return {key: value for key, value in config.items() if not place.deferred(key)}
-
-
-def run_preflights(db: Session, graph: Any, actor: str | None, *, workspace_id: str) -> None:
+def run_preflights(
+    db: Session, graph: Any, actor: str | None, *, workspace_id: str, params: dict[str, Any] | None = None
+) -> None:
     """对图里每个登记了 preflight 的节点问一遍(按类型登记的,和按前缀登记的一族动态类型,见 register_preflight /
-    register_prefix_preflight)。`workspace_id`:这张图在哪个工作区跑。"""
+    register_prefix_preflight)。`workspace_id`:这张图在哪个工作区跑;`params`:这一次运行带的开始参数。"""
     if not isinstance(graph, dict):
         return
+    known: dict[str, dict[str, Any]] = {}
+    for node in graph.get("nodes") or []:
+        if isinstance(node, dict) and node.get("type") == "start":
+            config = node.get("config") if isinstance(node.get("config"), dict) else {}
+            known[str(node.get("id") or "")] = {**(config.get("params") or {}), **(params or {})}
+    _preflight_graph(db, graph, actor, workspace_id, known)
+
+
+#: 「没法在跑之前知道」的哨兵。None / "" 都是合法的已知值,不能拿来当它。
+_UNKNOWN = object()
+
+
+def _known_value(value: Any, known: dict[str, dict[str, Any]]) -> Any:
+    """这个值在跑之前能知道吗:能就交出插值好的值,不能就是 _UNKNOWN。对象 / 列表里认不出的那几项丢掉。
+
+    认得出的引用:根是 `known` 里的一个名字,而且下一段是它真有的那一格 —— 开始参数里没有、这一次也没带的那一格
+    不在这里猜(引用的意思是「运行时给」);`input` 里没登记的键在运行时是另一个节点的产物,不能当成空串。
+    """
+    from app.domain.workflows.graph_rules import VARIABLE_RE, interpolate
+
+    if isinstance(value, dict):
+        resolved = {key: _known_value(one, known) for key, one in value.items()}
+        return {key: one for key, one in resolved.items() if one is not _UNKNOWN}
+    if isinstance(value, list):
+        return [one for one in (_known_value(item, known) for item in value) if one is not _UNKNOWN]
+    if not isinstance(value, str):
+        return value
+    for ref in VARIABLE_RE.findall(value):
+        root, _, rest = ref.partition(".")
+        if root not in known or rest.split(".")[0] not in known[root]:
+            return _UNKNOWN
+    return interpolate(value, known)
+
+
+def _preflight_graph(
+    db: Session, graph: dict[str, Any], actor: str | None, workspace_id: str, known: dict[str, dict[str, Any]]
+) -> None:
     for node in graph.get("nodes") or []:
         if not isinstance(node, dict):
             continue
         config = node.get("config") if isinstance(node.get("config"), dict) else {}
+        bare = PreflightNode(workspace_id=workspace_id, graph=graph, node=node)
         for value in config.values():
             if isinstance(value, dict) and isinstance(value.get("nodes"), list):
-                run_preflights(db, value, actor, workspace_id=workspace_id)
+                #: 体内只看得见执行器给它播的种(见 node_types 的 body_scope):外层节点的名字在体内不存在,
+                #: 开始参数要经 inputs 转进来才认得。
+                inputs = config.get("inputs") if isinstance(config.get("inputs"), dict) and not bare.bound("inputs") else {}
+                passed = {key: _known_value(one, known) for key, one in inputs.items()}
+                inner = {"input": {key: one for key, one in passed.items() if one is not _UNKNOWN}}
+                _preflight_graph(db, value, actor, workspace_id, inner)
         check = _preflight_for(str(node.get("type") or ""))
         if check is None:
             continue
-        check(db, literal_config(node, graph), actor, PreflightNode(workspace_id=workspace_id, graph=graph, node=node))
+        given: dict[str, Any] = {}
+        resolved_refs: set[str] = set()
+        for key, value in config.items():
+            if bare.bound(key):
+                continue
+            one = _known_value(value, known)
+            if one is _UNKNOWN:
+                continue
+            given[key] = one
+            if isinstance(value, str) and "{{" in value:
+                resolved_refs.add(key)
+        check(db, given, actor, PreflightNode(workspace_id=workspace_id, graph=graph, node=node,
+                                              known=frozenset(resolved_refs)))

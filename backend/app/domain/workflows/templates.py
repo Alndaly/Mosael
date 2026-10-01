@@ -278,7 +278,7 @@ def built_in_template_graph(
             image=_reference_image_model(db, user_id, needed=REFERENCE_IMAGES_NEEDED),
             video=_shot_video_model(db, user_id),
             # 音色是工作区的(克隆音色存在工作区名下),所以按工作区取,不按人。
-            voice_id=_first_voice_id(db, workspace_id),
+            voice_id=_prefilled_voice_id(db, workspace_id),
             db=db,
         ))
     if template_id == TRANSCRIPT_VIDEO_CLEANUP:
@@ -288,7 +288,7 @@ def built_in_template_graph(
         # 改口型那一版的配音要交给数字人:只预填声明过是谁的克隆音色。
         lipsync = template_id == TRANSLATED_DUB_LIPSYNC
         return localised_names(locale, translated_dub_graph(
-            chat=chat, voice_id=_first_voice_id(db, workspace_id, digital_human=lipsync), lipsync=lipsync, locale=locale))
+            chat=chat, voice_id=_prefilled_voice_id(db, workspace_id, digital_human=lipsync), lipsync=lipsync, locale=locale))
     if template_id == HIGHLIGHT_SHORTS:
         # 不生成画面,所以只要对话模型;转写引擎由节点自己挑。
         return localised_names(locale, highlight_shorts_graph(chat=chat))
@@ -307,17 +307,17 @@ def built_in_template_graph(
         return localised_names(locale, product_pitch_short_graph(
             chat=chat,
             image=_reference_image_model(db, user_id, needed=SINGLE_REFERENCE),
-            voice_id=_first_voice_id(db, workspace_id),
+            voice_id=_prefilled_voice_id(db, workspace_id),
             presenter=template_id == PRODUCT_PITCH_PRESENTER,
             db=db,
         ))
     if template_id == TALKING_SCRIPT_VIDEO:
         # 音色按工作区取(克隆音色存在工作区名下);说话照片模型不在图里写死,节点按描述符挑会的那一个。
         return localised_names(locale, talking_script_video_graph(
-            voice_id=_first_voice_id(db, workspace_id, digital_human=True)))
+            voice_id=_prefilled_voice_id(db, workspace_id, digital_human=True)))
     if template_id == FOOTAGE_MONTAGE:
         # 不生成画面,所以只要对话模型;音色按工作区取,没有就只出字幕(图里由条件挡掉旁白那两步)。
-        return localised_names(locale, footage_montage_graph(chat=chat, voice_id=_first_voice_id(db, workspace_id)))
+        return localised_names(locale, footage_montage_graph(chat=chat, voice_id=_prefilled_voice_id(db, workspace_id)))
     if template_id == FABRIC_LOOKBOOK:
         return localised_names(locale, fabric_lookbook_graph(
             chat=chat,
@@ -344,10 +344,10 @@ def localised_names(locale: str | None, graph: dict[str, Any]) -> dict[str, Any]
 
 
 def _first_voice_id(db: Session, workspace_id: str, *, digital_human: bool = False) -> str:
-    """工作区里第一个可用音色,没有就空串。
+    """工作区里第一个音色(只看有没有这一行),没有就空串。建图时预填哪一把见 `_prefilled_voice_id`。
 
-    模板不可能替用户猜一个音色,而语音节点的音色是必填的。有就预填、
-    没有就留空并整段跳过 —— 得到的是一部默片,而不是一个跑到第一镜就失败的工作流。
+    模板不可能替用户猜一个音色,而语音节点的音色是必填的。齐了就预填、
+    没齐就留空并整段跳过 —— 得到的是一部默片,而不是一个跑到第一镜就失败的工作流。
 
     `digital_human`:这把嗓子要交给数字人(改口型、说话照片)—— 只挑声明过是谁的(ADR 0028 §5)。
     此前照样预填最早那一把,未声明的克隆音色一进数字人那一步就被拒,而配音的钱已经花了。
@@ -409,20 +409,35 @@ def _provider_status(db: Session, user_id: str, capability: Any, runtime_status)
 
 def _cloned_voice_status(db: Session, workspace_id: str, *, digital_human: bool) -> CheckStatus:
     """模板里配音节点写的是本机克隆引擎:要有一把克隆音色,**而且克隆引擎跑得起来**(此前只看有没有音色行)。
-    数字人用的那把还要声明过是谁的。"""
+    数字人用的那把还要声明过是谁的。引擎的判据和运行前检查同一个(executors.subjobs.clone_engine_problem)。"""
     from app.ai.runtime import config as tts_config
     from app.ai.runtime import tts_models
+    from app.domain.workflows.executors.subjobs import clone_engine_problem
 
     if not _first_voice_id(db, workspace_id, digital_human=digital_human):
         return "missing"
+    if clone_engine_problem() is not None:
+        return "missing"
     return _probed(tts_models.runtime_status(tts_config.get().engine))
+
+
+def _prefilled_voice_id(db: Session, workspace_id: str, *, digital_human: bool = False) -> str:
+    """建图时预填进配音节点的音色:**只在前置检查说齐了的时候填**(和模板卡片上那一格同一个判据)。
+
+    此前只看有没有音色行(`_first_voice_id`):克隆引擎没装时,卡片上那一格写着缺(用户以为出来的是默片),
+    图里却填着音色 —— 整片付完 5 次对话、5 张图、2 段视频,念第一句时才失败。现在没齐就留空:能不配音的模板
+    整段跳过旁白,非配不可的(带货口播、稿子口播)运行前就拦在那一格上。
+    """
+    if _cloned_voice_status(db, workspace_id, digital_human=digital_human) != "met":
+        return ""
+    return _first_voice_id(db, workspace_id, digital_human=digital_human)
 
 
 def requirement_statuses(db: Session, *, user_id: str, workspace_id: str) -> dict[str, CheckStatus]:
     """模板前置条件里**能自动查的那几样**,对这个人、这个工作区各是什么状态。
 
     判据和「用这个模板建一张图」时挑模型的是**同一套**(`_chat_model` / `_reference_image_model` /
-    `_shot_video_model` / `_first_voice_id`),引擎和运行时挑提供方同一个先后(`_provider_status`):
+    `_shot_video_model` / `_prefilled_voice_id`),引擎和运行时挑提供方同一个先后(`_provider_status`):
     这里说齐了,建出来的图上那一格就是填好的、跑起来用得上;这里说缺,那一格就是空的。两处各写一份判据的话,
     迟早一处说齐、一处留空。
     """
