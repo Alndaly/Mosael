@@ -102,3 +102,18 @@ def test_整理后的逐字稿按保留的原话在本地拼出来() -> None:
                                               "segments": segments})
     assert out["kept_text"] == "大家好\n开始", "整段删掉的不留;按词删的只去掉那几个字;一个字不改"
     assert out["skipped_note"] == ""
+
+
+def test_中文段里夹着英文词_字之间不插空格_英文词之间照样空() -> None:
+    """此前按整段判:中文段里只要有一个英文词,整段每个字之间都插了空格(「今 天 我 们 用 AI」)。"""
+    ids = _clip(10.0)
+    words = ["今", "天", "我", "们", "用", "AI", "做", "Hello", "world", ",", "OK", "嗯"]
+    tokens = [{"text": word, "start": 0.2 * index, "end": 0.2 * index + 0.2} for index, word in enumerate(words)]
+    segments = [{"start": 0.0, "end": 2.4, "text": "".join(words), "tokens": tokens}]
+    #: 删掉最后那个「嗯」,这一段就按词拼回来。
+    ranges = [{"src_start": 2.2, "src_end": 2.4, "confidence": 1}]
+    scope = SimpleNamespace(workspace_id=ids.workspace, id="wf:1", name="整理")
+    with unit_of_work() as db:
+        out = timeline_cut_ranges(db, scope, {"sequence_id": ids.sequence, "clip_id": ids.clip, "ranges": ranges,
+                                              "segments": segments})
+    assert out["kept_text"] == "今天我们用AI做Hello world, OK"

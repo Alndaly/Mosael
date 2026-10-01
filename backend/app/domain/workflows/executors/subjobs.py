@@ -806,14 +806,27 @@ def _kept_text(segments: list[dict[str, Any]], removed: list[tuple[float, float]
         elif tokens:
             words = [str(one.get("text") or "") for one in tokens
                      if not gone(float(one.get("start") or 0), float(one.get("end") or 0))]
-            #: 西文的词之间要空格,中文逐字的 token 不要。
-            joiner = " " if any(word.isascii() and word.strip().isalpha() for word in words) else ""
-            text = joiner.join(word.strip() for word in words if word.strip())
+            text = _join_words([word.strip() for word in words if word.strip()])
         else:
             text = "" if gone(start, end) else str(segment.get("text") or "").strip()
         if text:
             lines.append(text)
     return "\n".join(lines)
+
+
+def _join_words(words: list[str]) -> str:
+    """词级 token 拼回一句:**按相邻两个 token 判**要不要空格 —— 前一个以西文字母、数字或西文标点收尾,后一个以
+    西文字母或数字开头,中间才空一格(`hello world`、`AI, right`);中文逐字的 token 之间、中英交界处都不空。
+
+    此前按整段判:中文段里只要夹着一个英文词,整段每个字之间都插了空格(「今 天 我 们 用 AI」)。
+    """
+    out = ""
+    for word in words:
+        if out and out[-1].isascii() and not out[-1].isspace() and out[-1] not in "([{'\"" \
+                and word[0].isascii() and word[0].isalnum():
+            out += " "
+        out += word
+    return out
 
 
 def _merged_ranges(ranges: list[tuple[float, float]]) -> list[tuple[float, float]]:
