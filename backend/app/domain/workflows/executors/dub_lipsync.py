@@ -14,6 +14,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -23,6 +24,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.ai.providers.contracts.generation import DRIVING_AUDIO, SOURCE_VIDEO
+from app.domain.voices.subtitle_dub import DUB_LINE_KEY
 from app.domain.workflows import WorkflowDomainError
 from app.domain.workflows.executors.registry import RunScope, register
 from app.media.tempo import atempo_filters
@@ -30,7 +32,8 @@ from app.domain.workflows.executors.talking import VIDEO_LIPSYNC, _generate, _pi
 
 #: 模型没声明时的保守上下限(百炼 videoretalk 的文档值)。
 DEFAULT_LIMITS = (2.0, 120.0)
-#: 改好口型的那一块素材上记着「它是哪一块」(原片、区间、配音、模型的摘要),失败重跑时认得出、不再买一次。
+#: 改好口型的那一块素材上记着「它是哪一块」(原片、区间、这块里每句念的什么/谁念的/从哪一秒起、模型的摘要),
+#: 重跑时认得出、不再买一次(见 _chunk_key)。
 CHUNK_KEY = "dub_lipsync_chunk"
 
 
@@ -46,6 +49,9 @@ class Line:
     gain: float
     #: 这一句的音频素材(查它是哪把克隆嗓子配的,见 _require_rights)。
     asset_id: str
+    #: 这一句「说的是什么」:字幕配音记在音频上的那句话和那把嗓子(voices/subtitle_dub.DUB_LINE_KEY)。
+    #: 不是字幕配音配出来的(自己摆上去的一段音频):那段音频本身就是它说的内容,记素材 id。
+    said: str
 
 
 def plan_chunks(duration: float, lines: list[tuple[float, float]], low: float, high: float) -> list[tuple[float, float]]:
@@ -137,8 +143,10 @@ def _lines_on(db: Session, scope: RunScope, voice_track: Any, clip_start: float,
             src_in -= start * speed
             start = 0.0
         source = _asset_in(db, scope, one.asset_id)
+        dubbed = (source.media_info or {}).get(DUB_LINE_KEY)
+        said = json.dumps(dubbed, ensure_ascii=False, sort_keys=True) if dubbed else f"asset:{source.id}"
         lines.append(Line(start=start, end=end, path=resolve_key(str(source.file_key)), src_in=src_in,
-                          speed=speed, gain=float(one.gain), asset_id=source.id))
+                          speed=speed, gain=float(one.gain), asset_id=source.id, said=said))
     return lines
 
 
@@ -167,8 +175,22 @@ def _digest(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _chunk_key(source_digest: str, src_in: float, begin: float, end: float, lines: list[Line], model_id: str) -> str:
+    """这一块是不是「同一块」:原片(字节摘要)、区间、这块里每一句(念的字、哪把嗓子、从原片第几秒起)、模型。
+
+    **配音的音频字节不进键。** 整图重跑时翻译和合成都会重来一遍,同一句话同一把嗓子,合成出来的字节每次都可能
+    差一点 —— 按字节认,重跑时一块都认不出来,每块再买一次(此前就是这样)。代价也如实:命中时用的是上次那一份
+    口型,这次重新合成的那几句如果念得长短略有不同,嘴和声音会差那么一点;译文改了一个字、换了嗓子、挪了时间,
+    那一块就是新的,重买。
+    """
+    #: 时间一律按原片里的秒数记(`src_in` 是原片在时间线上那一段的截取起点):同一段原片换个地方摆,还是同一块。
+    said = sorted(f"{src_in + line.start:.3f}|{line.said}" for line in lines if line.start < end and line.end > begin)
+    return hashlib.sha256(json.dumps([source_digest, f"{src_in + begin:.3f}-{src_in + end:.3f}", said, model_id],
+                                     ensure_ascii=False).encode()).hexdigest()
+
+
 def _cached_chunk(db: Session, workspace_id: str, key: str) -> str:
-    """同一块(同一份原片、同一段区间、同一段配音、同一个模型)之前改过口型:交回那一份,不再花一次钱。"""
+    """同一块(见 _chunk_key)之前改过口型:交回那一份,不再花一次钱。"""
     from sqlalchemy import select
 
     from app.db.models import Asset
@@ -256,9 +278,8 @@ def dub_lipsync(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[st
                 continue
             speech = work / f"voice-{index}.wav"
             _cut(voice, begin, end, speech, audio=True)
-            #: 失败重跑时,已经改好的块不再买一次:原片、区间、这一块的配音、模型都一样,就是同一个结果。
-            key = hashlib.sha256(f"{source_digest}|{src_in + begin:.3f}-{src_in + end:.3f}|{_digest(speech)}|{model['id']}"
-                                 .encode()).hexdigest()
+            #: 重跑时,已经改好的块不再买一次(什么算「同一块」见 _chunk_key)。
+            key = _chunk_key(source_digest, src_in, begin, end, lines, str(model["id"]))
             done = _cached_chunk(db, scope.workspace_id, key)
             if done:
                 reused += 1

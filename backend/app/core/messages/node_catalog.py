@@ -308,8 +308,8 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfNode_image_speak_text": {"zh": "稿子(没接音频时用它配音)", "en": "Script (voiced when no audio is connected)"},
     "wfNode_dub_lipsync": {"zh": "译配对口型", "en": "Lip-sync a dubbed timeline"},
     "wfNode_dub_lipsync_desc": {
-        "zh": "译配好的时间线上,让原片的嘴对上配音轨:配音混成一段,原片按模型收得下的长度切块(切点落在两句之间),有配音的块改口型,接回整段放到最上面一条新视频轨,原片不动。",
-        "en": "On a dubbed timeline, re-sync the source's lips to the dub track: mix the dub into one audio, cut the source into chunks the model accepts (between lines), lip-sync the chunks with speech, and put the joined result on a new top video track, leaving the source untouched.",
+        "zh": "译配好的时间线上,让原片的嘴对上配音轨:配音混成一段,原片按模型收得下的长度切块(切点落在两句之间),有配音的块改口型,接回整段放到最上面一条新视频轨,原片不动。重跑时,原片、切块区间、块里每句的译文、音色和起点、模型都没变的块直接用上次的结果、不再花钱(配音音频本身不比 —— 同一句话重新合成一遍照样认得出);改了哪句译文、换了音色、挪了时间,那一块就重买。",
+        "en": "On a dubbed timeline, re-sync the source's lips to the dub track: mix the dub into one audio, cut the source into chunks the model accepts (between lines), lip-sync the chunks with speech, and put the joined result on a new top video track, leaving the source untouched. On a re-run, a chunk whose source, range, model and every line's translation, voice and start time are unchanged reuses the previous result at no cost (the dub audio itself isn't compared, so a line re-synthesized the same way still matches); change a line's translation, voice or timing and that chunk is bought again.",
     },
     "wfNode_dub_lipsync_sequence_id": {"zh": "译配好的那条时间线", "en": "The dubbed timeline"},
     "wfNode_dub_lipsync_clip_id": {"zh": "时间线上的原片那一段(原速)", "en": "The source clip on the timeline (at normal speed)"},

@@ -176,13 +176,25 @@ def test_失败重跑不再买已经改好的块(dubbed) -> None:
     again = _run(ids)
     assert (again["generated_count"], again["reused_count"], len(calls)) == (0, 2, 2), "原片、区间、配音、模型都一样:认出来,不再花钱"
 
-    #: 第二句的配音换了(音量调低),那一块就是新的:切点不变,只重买变了的那一块。
+    #: 第二句换成另一段音频(字幕配音配出来的、念的是另一句话),那一块就是新的:切点不变,只重买变了的那一块。
+    #: 认句子按配音记在音频上的那句话和那把嗓子,不按字节(整图重跑时见 test_dub_lipsync_rerun_cache)。
+    _media("other.wav", ["-f", "lavfi", "-i", "sine=frequency=440:duration=1"])
     with unit_of_work() as db:
+        other = register_file_asset(db, workspace_id=ids.ws, project_id=None, source_path=settings.data_dir / "other.wav",
+                                    name="另一句")
+        other.media_info = {**other.media_info, "dub_line": {"text": "另一句话", "voice": "engine=builtin:volcano"}}
         changed = db.query(Clip).filter(Clip.track_id == ids.dub, Clip.timeline_start == 4).one()
-        changed.gain = 0.5
+        changed.asset_id = other.id
         db.commit()
     third = _run(ids)
     assert (third["generated_count"], third["reused_count"], len(calls)) == (1, 1, 3)
+
+    #: 只调音量不改说的话:嘴型不变,不重买。
+    with unit_of_work() as db:
+        db.query(Clip).filter(Clip.track_id == ids.dub, Clip.timeline_start == 4).one().gain = 0.5
+        db.commit()
+    fourth = _run(ids)
+    assert (fourth["generated_count"], len(calls)) == (0, 3)
 
 
 def test_配音轨上是未声明的克隆音色_花钱之前就拒(dubbed) -> None:
@@ -220,7 +232,7 @@ def test_起点在原片之前的那句_剪掉露在外面的那截_不往后错
     截取却仍从这句的开头算 —— 整句往后错了 0.5 秒。"""
     import app.domain.workflows.executors.subjobs as subjobs
 
-    monkeypatch.setattr(subjobs, "_asset_in", lambda db, scope, asset_id: SimpleNamespace(id=asset_id, file_key="k"))
+    monkeypatch.setattr(subjobs, "_asset_in", lambda db, scope, asset_id: SimpleNamespace(id=asset_id, file_key="k", media_info={}))
     early = SimpleNamespace(muted=False, asset_id="a", timeline_start=9.5, src_in=0.0, src_out=2.0, speed=2.0, gain=1.0)
     [line] = module._lines_on(None, SimpleNamespace(workspace_id="w"), SimpleNamespace(clips=[early]),
                               clip_start=10.0, span=6.0)

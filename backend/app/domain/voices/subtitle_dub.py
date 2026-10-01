@@ -24,6 +24,7 @@ from app.core.db import SessionLocal
 from app.core.unit_of_work import unit_of_work
 from app.core.i18n import DEFAULT_LOCALE, LocalizedError, t
 from app.db.models import Asset, Clip, Job, Sequence, Track
+from app.domain.assets.media_info import patch_media_info
 from app.domain.jobs import JobError, blame, create_job, dispatch_job, emit_job_event, finish_job, say
 from app.domain.sequences.operations import AddTrack, InsertClip, SetClipSpeed, add_track, insert_clip, set_clip_speed
 from app.domain.voices.original_audio import (
@@ -47,6 +48,20 @@ _POLL_SECONDS = 0.5
 #: 说话声早就不像人了。念快到 1.5 倍、念慢到 0.9 倍还听得过去;再长的先占用到下一句开始之前的空当(见 _speed_for)。
 _MIN_SPEED = 0.9
 _MAX_SPEED = 1.5
+
+
+#: 配好的那段音频上记着「这是哪一句、用哪把嗓子念的」:{"text": 念的字, "voice": voice_identity(...)}。
+#: 改口型的块缓存按它认句子(见 workflows/executors/dub_lipsync),不按音频字节 —— 同一句话、同一把嗓子
+#: 重新合成一遍,字节每次都可能不一样,按字节认的话整图重跑时每一块都认不出来、再买一次。
+DUB_LINE_KEY = "dub_line"
+#: 合成参数里决定「是哪把嗓子、念多快」的那几项。连接(provider_profile_id)、工作区这些不算 —— 换个人跑、
+#: 用他自己的连接调同一个音色,念出来还是同一把嗓子。
+_VOICE_FIELDS = ("engine", "voice_id", "engine_voice", "engine_model", "clone_engine", "clone_model", "speed")
+
+
+def voice_identity(synthesis: dict) -> str:
+    """一组合成参数说的是哪把嗓子(见 DUB_LINE_KEY)。"""
+    return "|".join(f"{field}={synthesis[field]}" for field in _VOICE_FIELDS if synthesis.get(field) not in (None, ""))
 
 
 class DubError(LocalizedError, RuntimeError):
@@ -281,6 +296,7 @@ def _run_dub(job_id: str) -> None:
                 # 而且只在**第一条音频真的要落地的这一刻**才建。建在合成之前的话,一次全军覆没的
                 # 配音会留下一条空轨 —— 空轨看起来和「配音没生成」一模一样,用户先怀疑的是功能坏了,
                 # 不是那次失败(这条 bug 就是这么被报上来的)。
+                patch_media_info(db, asset_id, {DUB_LINE_KEY: {"text": text, "voice": voice_identity(synthesis)}})
                 if not track_id:
                     track_id = _dub_track(db, sequence_id, created_by)
                 new_clip = insert_clip(
