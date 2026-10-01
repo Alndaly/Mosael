@@ -52,7 +52,7 @@ from app.domain.workflows.binding import apply_data_edges, check_number_fields, 
 from app.domain.workflows.executors import get_executor, run_preflights
 from app.domain.workflows.executors.common import connection_handed_back
 from app.domain.workflows.revisions import WorkflowRevisionError, current_workflow_revision
-from app.domain.workflows.run_outputs import OUTPUT_TEXT_LIMIT, keep_full_texts, long_texts
+from app.domain.workflows.run_outputs import keep_full_texts, snapshot
 from app.domain.workflows.run_scope import halt_scope, halted
 
 logger = logging.getLogger(__name__)
@@ -470,13 +470,14 @@ def execute_graph(
             event(kind, {"node_id": nid, "name": node_label(nid), "name_key": node_label_key(nid), **fields})
 
     def node_finished(nid: str, outputs: dict[str, Any]) -> None:
-        """节点跑完:事件里是有界的快照。被截断的长文字另存全文(见 run_outputs),事件里的
-        `truncated` 说哪几个被截了、全文多少字 —— 界面据此标明「已截断」,复制 / 下载去取全文。"""
-        texts = long_texts(outputs)
+        """节点跑完:事件里是有界的快照。被截断的文字(顶层的、嵌在列表 / 对象里的)另存全文(见
+        run_outputs.snapshot),事件里的 `truncated` 说哪几处被截了(从输出名开始的点号路径)、全文多少字
+        —— 界面据此标明「已截断」,复制 / 下载按路径去取全文。"""
+        shown, texts = snapshot(outputs)
         if has_job and texts:
             keep_full_texts(db, job.id, nid, texts)
         truncated = {"truncated": {key: len(value) for key, value in texts.items()}} if texts else {}
-        node_event("workflow.node.finished", nid, outputs=_trim_outputs(outputs), **truncated)
+        node_event("workflow.node.finished", nid, outputs=shown, **truncated)
 
     def is_entry(nid: str) -> bool:
         # start 类型永远是入口;子图里无入边的根也是入口。
@@ -707,7 +708,7 @@ def run_workflow(
         "workflow_revision_id": revision.id,
         "workflow_revision": revision.revision,
         "workflow_graph_hash": revision.graph_hash,
-        "context": {nid: _trim_outputs(out) for nid, out in context.items()},
+        "context": {nid: snapshot(out)[0] for nid, out in context.items()},
         **({"output": output_values} if declares_output else {}),
     }
     emit_job_event(
@@ -718,47 +719,3 @@ def run_workflow(
     )
     db.commit()
     return context
-
-
-_OUTPUT_LIST_LIMIT = 200
-_OUTPUT_OBJECT_LIMIT = 100
-
-
-def _trim_output_value(value: Any, *, depth: int = 0) -> Any:
-    """把运行产出收敛成有界、但仍可检查的 JSON。
-
-    旧实现把**所有数组**直接改成 ``"[124 items]"``。这控制了事件体积，却也把调试工作流最
-    需要的内容永久丢掉了：用户知道生成了 124 个片段，却一个 id 都看不到。这里保留有限数量
-    的真实元素，并递归限制字符串、对象宽度和深度；体积仍有上限，检查器也终于能逐项展开。
-    """
-    if isinstance(value, str):
-        limit = OUTPUT_TEXT_LIMIT if depth == 0 else 500
-        return value if len(value) <= limit else value[:limit] + "…"
-    if isinstance(value, (int, float, bool)) or value is None:
-        return value
-    if depth >= 4:
-        if isinstance(value, list):
-            return f"[{len(value)} items]"
-        if isinstance(value, dict):
-            return f"[{len(value)} fields]"
-        return str(value)[:500]
-    if isinstance(value, list):
-        shown = [_trim_output_value(item, depth=depth + 1) for item in value[:_OUTPUT_LIST_LIMIT]]
-        if len(value) > _OUTPUT_LIST_LIMIT:
-            shown.append(f"… {len(value) - _OUTPUT_LIST_LIMIT} more items")
-        return shown
-    if isinstance(value, dict):
-        pairs = list(value.items())
-        shown = {
-            str(key): _trim_output_value(item, depth=depth + 1)
-            for key, item in pairs[:_OUTPUT_OBJECT_LIMIT]
-        }
-        if len(pairs) > _OUTPUT_OBJECT_LIMIT:
-            shown["…"] = f"{len(pairs) - _OUTPUT_OBJECT_LIMIT} more fields"
-        return shown
-    return str(value)[:500]
-
-
-def _trim_outputs(outputs: dict[str, Any]) -> dict[str, Any]:
-    """事件/结果里存有界的可读快照；数组与对象保留可检查的内容。"""
-    return {key: _trim_output_value(value) for key, value in outputs.items()}

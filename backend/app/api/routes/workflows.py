@@ -429,8 +429,11 @@ def list_runs(workflow_id: str, db: DbSession, user: CurrentUser, limit: int = 5
 
 @router.get("/workflows/runs/{job_id}/outputs/{node_id}/{key}", response_model=WorkflowRunOutputOut)
 def run_output(job_id: str, node_id: str, key: str, db: DbSession, user: CurrentUser) -> dict:
-    """某次运行里某个节点某个输出的**全文**。事件快照里长文字只留了开头(见 domain/workflows/run_outputs),
-    「本次产出」的复制 / 下载来这里取完整的那一份。"""
+    """某次运行里某个节点某一处被截断的文字的**全文**。事件快照里长文字只留了开头(见 domain/workflows/run_outputs),
+    「本次产出」的复制 / 下载来这里取完整的那一份。
+
+    `key` 是事件 `truncated` 里的那个键:从输出名开始的点号路径 —— 顶层的 `text`,嵌在里面的 `results.3.text`
+    (列表按下标、对象按键)。"""
     job_center.readable(db, user, job_id)
     value = full_text(db, job_id, node_id, key)
     if value is None:

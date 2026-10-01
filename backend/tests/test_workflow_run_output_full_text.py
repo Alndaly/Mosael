@@ -79,3 +79,37 @@ def test_别人看不见的运行取不到全文() -> None:
 
     outsider = second_client()
     assert outsider.get(f"/api/workflows/runs/{job['id']}/outputs/long/text").status_code == 404
+
+
+def test_嵌在循环结果里的长文字也标截断_按路径取得到全文() -> None:
+    """此前只有顶层的长文字另存全文:循环交出的 results 里每一项被截到 500 字、不标,复制到的是半截。"""
+    from app.domain.workflows.run_outputs import NESTED_TEXT_LIMIT
+
+    client = fresh_client()
+    item = "段" * (NESTED_TEXT_LIMIT + 50)
+    graph = {
+        "nodes": [
+            {"id": "start", "type": "start", "config": {"params": {}}},
+            {"id": "each", "type": "loop_foreach", "config": {
+                "items": ["a", "b"],
+                "body": {"nodes": [{"id": "t", "type": "template", "config": {"template": item + "{{loop.item}}"}}],
+                         "edges": []},
+            }},
+        ],
+        "edges": [{"id": "e1", "source": "start", "target": "each"}],
+    }
+    job = _run(client, graph)
+    assert job["status"] == "succeeded", job
+
+    with SessionLocal() as db:
+        finished = next(
+            event.payload for event in db.query(TaskEvent).filter(
+                TaskEvent.job_id == job["id"], TaskEvent.type == "workflow.node.finished"
+            ) if event.payload["node_id"] == "each"
+        )
+    assert finished["truncated"] == {"results.0.t.text": len(item) + 1, "results.1.t.text": len(item) + 1}
+    assert len(finished["outputs"]["results"][1]["t"]["text"]) == NESTED_TEXT_LIMIT + 1
+
+    full = client.get(f"/api/workflows/runs/{job['id']}/outputs/each/results.1.t.text")
+    assert full.status_code == 200, full.text
+    assert full.json() == {"value": item + "b"}

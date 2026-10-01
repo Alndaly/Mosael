@@ -4267,8 +4267,11 @@ export interface paths {
         };
         /**
          * Run Output
-         * @description 某次运行里某个节点某个输出的**全文**。事件快照里长文字只留了开头(见 domain/workflows/run_outputs),
+         * @description 某次运行里某个节点某一处被截断的文字的**全文**。事件快照里长文字只留了开头(见 domain/workflows/run_outputs),
          *     「本次产出」的复制 / 下载来这里取完整的那一份。
+         *
+         *     `key` 是事件 `truncated` 里的那个键:从输出名开始的点号路径 —— 顶层的 `text`,嵌在里面的 `results.3.text`
+         *     (列表按下标、对象按键)。
          */
         get: operations["run_output_api_workflows_runs__job_id__outputs__node_id___key__get"];
         put?: never;

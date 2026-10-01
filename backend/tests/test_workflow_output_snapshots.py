@@ -1,6 +1,11 @@
 """工作流执行记录保留可检查的输出，同时对体积设硬上限。"""
 
-from app.domain.workflows.engine import _OUTPUT_LIST_LIMIT, _trim_outputs
+from app.domain.workflows.run_outputs import OUTPUT_LIST_LIMIT as _OUTPUT_LIST_LIMIT
+from app.domain.workflows.run_outputs import snapshot
+
+
+def _trim_outputs(outputs: dict) -> dict:
+    return snapshot(outputs)[0]
 
 
 def test_片段列表保留每个值而不是只剩数量() -> None:
