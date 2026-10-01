@@ -37,14 +37,16 @@ def create_scheduled_task(
     timezone: str,
     enabled: bool,
     payload: dict[str, Any],
+    owner: str | None,
 ) -> ScheduledTask:
+    """`owner` 是挂它的那个人 —— 定时执行替他跑;启用着建,就要替他跑得起来。归属由调用方记(sharing.claim)。"""
     from app.domain.scheduler.executors import SCHEDULED_EXECUTORS
 
     if kind not in SCHEDULED_EXECUTORS:
         # 此前什么都收:认不出的种类建得出来,到点排一个任务,然后永远停在"排队中"。
         raise SchedulerDomainError("schedErr_badKind", kinds=" / ".join(SCHEDULED_EXECUTORS))
     if enabled:
-        ensure_runnable(db, kind=kind, workspace_id=workspace_id, payload=payload)
+        ensure_runnable(db, kind=kind, workspace_id=workspace_id, payload=payload, owner=owner)
     if trigger_type == "webhook" and not payload.get("webhook_secret"):
         # 外部触发路由不走登录态,按任务级密钥鉴权。
         payload = {**payload, "webhook_secret": secrets.token_urlsafe(24)}
@@ -76,7 +78,7 @@ def update_scheduled_task(db: Session, task: ScheduledTask, changes: dict[str, A
         changes = {**changes, "payload": _keep_secret(task.payload, changes["payload"])}
     payload = task.payload if changes.get("payload") is None else changes["payload"]
     if enabled:
-        ensure_runnable(db, kind=task.kind, workspace_id=task.workspace_id, payload=payload)
+        ensure_runnable(db, kind=task.kind, workspace_id=task.workspace_id, payload=payload, owner=task.owner_user_id)
     for key, value in changes.items():
         if value is not None:
             setattr(task, key, value)
@@ -119,7 +121,7 @@ def trigger_scheduled_task(db: Session, task: ScheduledTask) -> tuple[ScheduledT
 
     # 事前就知道跑不起来的,不开运行记录 —— 此前绑的工作流被删了照样能点「立即运行」,
     # 每点一次多一条 0.0 秒的失败。
-    ensure_runnable(db, kind=task.kind, workspace_id=task.workspace_id, payload=task.payload)
+    ensure_runnable(db, kind=task.kind, workspace_id=task.workspace_id, payload=task.payload, owner=task.owner_user_id)
     if has_active_run(db, task.id):
         raise SchedulerBusy("schedErr_busy")
     run, job = _open_run(db, task)
@@ -134,8 +136,10 @@ def trigger_scheduled_task(db: Session, task: ScheduledTask) -> tuple[ScheduledT
     return run, job
 
 
-def ensure_runnable(db: Session, *, kind: str, workspace_id: str, payload: dict[str, Any] | None) -> None:
-    """这种任务、带着这份 payload,现在跑得起来吗?跑不起来就说为什么(见 SCHEDULED_READINESS)。
+def ensure_runnable(
+    db: Session, *, kind: str, workspace_id: str, payload: dict[str, Any] | None, owner: str | None
+) -> None:
+    """这种任务、带着这份 payload、替 `owner`(任务的主人)跑,现在跑得起来吗?跑不起来就说为什么(见 SCHEDULED_READINESS)。
 
     **不变式:启用着的任务一定跑得起来。** 建任务、打开开关、三个触发入口都经这里;
     而让它跑不起来的那件事(删工作流)在发生的那一刻就把任务停掉(stop_tasks_bound_to_workflow)。
@@ -143,9 +147,9 @@ def ensure_runnable(db: Session, *, kind: str, workspace_id: str, payload: dict[
     from app.domain.scheduler.executors import SCHEDULED_READINESS
 
     check = SCHEDULED_READINESS.get(kind)
-    problem = check(db, workspace_id, payload or {}) if check else None
-    if problem:
-        raise SchedulerDomainError(problem)
+    problem = check(db, workspace_id, payload or {}, owner) if check else None
+    if problem is not None:
+        raise SchedulerDomainError.relay(problem)
 
 
 def stop_tasks_bound_to_workflow(db: Session, workflow: Workflow) -> list[ScheduledTask]:

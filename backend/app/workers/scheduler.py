@@ -11,7 +11,7 @@ from app.core.db import SessionLocal
 from app.db.models import ScheduledTask, now
 from app.domain.jobs import expire_worker_leases, prune_task_events
 from app.domain.scheduler import SchedulerBusy, SchedulerDomainError, trigger_scheduled_task
-from app.domain.scheduler.executors import sync_run_states
+from app.domain.scheduler.executors import notify_run_failed, sync_run_states
 from app.domain.scheduler.operations import compute_next_run_at
 
 """
@@ -94,6 +94,8 @@ def tick(db: Session) -> list[str]:
             db.rollback()
             task.enabled = False
             task.next_run_at = None
+            #: 到点的那一刻没人看着:停用要说一声,说清为什么(改好工作流再把它打开)。
+            notify_run_failed(db, task, None, str(exc), disabled=True)
             db.commit()
             continue
         db.commit()

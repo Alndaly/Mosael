@@ -472,6 +472,15 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "任务绑定的工作流不存在",
         "en": "The workflow bound to this task doesn't exist.",
     },
+    "schedErr_workflowNotRunnable": {
+        "zh": "绑定的工作流「{name}」带着这个任务的参数跑不起来:{reason}",
+        "en": "The bound workflow “{name}” can't run with this task's parameters: {reason}",
+    },
+    "schedNotice_runFailed": {"zh": "定时任务没跑起来:{name}", "en": "Scheduled task didn't start: {name}"},
+    "schedNotice_disabled": {
+        "zh": "定时任务跑不起来,已停用:{name}",
+        "en": "Scheduled task can't run and was turned off: {name}",
+    },
     "schedErr_workflowGone": {
         "zh": "绑定的工作流已删除,这个任务不能启用或运行。删掉它,或新建一个绑到现有工作流上的任务",
         "en": "The workflow bound to this task was deleted, so it can't be enabled or run. Delete it, or create a new task bound to an existing workflow.",

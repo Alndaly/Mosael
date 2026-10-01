@@ -79,30 +79,13 @@ def start_workflow_job(
     db: Session, workflow: Workflow, *, created_by: str | None, params: dict[str, Any] | None = None, job: Job | None = None
 ) -> Job:
     """创建(或复用)workflow job，并把它固定到启动瞬间的不可变修订。"""
-    from app.domain.plugins.nodes import plugin_node_types
-
     try:
         revision = current_workflow_revision(db, workflow)
     except WorkflowRevisionError as exc:
         raise WorkflowDomainError.from_error(exc) from exc
-    #: 这一次运行看到的图(开始节点叠上本次参数,见 graph_rules.with_run_params):必填的开始参数、
-    #: `{{开始.参数}}` 要的名字,都按这一次给了什么判。
-    #: 插件节点按**跑这次的人**能用的来判(执行时 resolve_instance 也只在他自己的连接里挑):此前这里用的是
-    #: 所有人的插件清单,别人接了、他没接的节点在这里放行,跑到那一步才失败。用不了的说清为什么。
-    actor = job.created_by if job is not None else created_by
-    errors = validate_graph(
-        with_run_params(revision.graph, params),
-        extra_types=plugin_node_types(db, actor),
-        explain_plugin_node=lambda node_type: _why_plugin_node_unusable(db, node_type, actor),
-    )
-    if errors:
-        raise WorkflowDomainError("；".join(errors))
-    #: 生成节点的文字规矩按**选中的模型**判,在任何节点跑之前 —— 和执行时替同一个人解析同一个模型。
-    _check_generation_text(db, revision.graph, job.created_by if job is not None else created_by)
-    #: 节点自己登记的运行前检查(不花钱):做不了的事在任何节点花钱之前说(见 executors.register_preflight)。
-    #: 带上这一次的开始参数:只引用开始参数的配置(音色、画幅……)在这里就有值(见 run_preflights)。
-    run_preflights(db, revision.graph, job.created_by if job is not None else created_by,
-                   workspace_id=workflow.workspace_id, params=params)
+    #: 开跑前的那一套检查(结构、必填、插件按跑的人、生成节点的文字、节点的运行前检查、字面量指定的
+    #: 子工作流)只在 check_runnable 一处 —— 智能体开卡、定时任务启用与触发问的是同一个函数。
+    check_runnable(db, workflow, params, job.created_by if job is not None else created_by)
     pinned_payload = {
         "workflow_id": workflow.id,
         "workflow_revision_id": revision.id,
@@ -134,6 +117,87 @@ def start_workflow_job(
     return job
 
 
+# ---------------- 开跑之前:这张图现在跑得起来吗 ----------------
+#
+# **这张图现在跑得起来吗** —— 开跑之前的那一套检查,只在这一处。
+#
+# 此前这套检查只写在 engine.start_workflow_job 里:点「运行」走得到它,别的入口走不到 ——
+# 智能体的「运行工作流」卡开卡时只看工作流在不在,用户批准之后才在建任务时报缺参数;定时任务启用、
+# 触发时只看工作流在不在,到点才失败;`call_workflow` 调的子工作流缺什么,要等父工作流前面的付费
+# 节点全跑完、轮到它时才说。
+#
+# 检查不花钱、不写东西,任何一项不过就抛 WorkflowDomainError(说清是哪一项):
+#
+# 1. 结构与必填(validate_graph,开始节点叠上这一次的参数,见 with_run_params);插件节点按**跑的人**
+#    能用的来判,用不了的说清为什么;
+# 2. 「AI 生成素材」节点的提示词按选中的模型判(_check_generation_text);
+# 3. 节点自己登记的运行前检查(executors.register_preflight / register_prefix_preflight)—— 插件节点选的连接
+#    这个人用不用得了也在这里(和执行时 resolve_instance 同一条规矩);
+# 4. 字面量指定的 `call_workflow` 子工作流:它那一版、带着这里交给它的入参,把同一套检查再走一遍。
+#
+# 写在引擎里而不是单独一个模块:它要用执行器登记的运行前检查(executors.run_preflights),而执行器
+# 回头调引擎(call_workflow)—— 单独拎出去就是又一个进环的模块(见 tests/test_import_layering)。
+
+
+#: 子工作流最多往下查几层 —— 和执行时 call_workflow 的嵌套上限同一个数(见 executors.subworkflow)。
+_MAX_CALL_DEPTH = 8
+
+
+def check_runnable(
+    db: Session,
+    target: Workflow | dict[str, Any],
+    params: dict[str, Any] | None,
+    actor: str | None,
+    *,
+    workspace_id: str | None = None,
+) -> None:
+    """`target` 是一张工作流(查它**当前那一版**)或一张图;`params` 是这一次运行的参数;`actor` 是跑的人。
+
+    给的是图时,`workspace_id` 必须说它在哪个工作区:节点的运行前检查按工作区判,字面量指定的子工作流也要
+    在同一个工作区里才查得下去。
+    """
+    if isinstance(target, Workflow):
+        _check_graph_runnable(db, _revision_graph(db, target), target.workspace_id, params, actor, seen=frozenset({target.id}))
+        return
+    if workspace_id is None:
+        raise ValueError("check_runnable(graph) needs workspace_id")
+    _check_graph_runnable(db, target, workspace_id, params, actor, seen=frozenset())
+
+
+def _revision_graph(db: Session, workflow: Workflow) -> dict[str, Any]:
+    try:
+        return current_workflow_revision(db, workflow).graph
+    except WorkflowRevisionError as exc:
+        raise WorkflowDomainError.from_error(exc) from exc
+
+
+def _check_graph_runnable(
+    db: Session,
+    graph: dict[str, Any],
+    workspace_id: str,
+    params: dict[str, Any] | None,
+    actor: str | None,
+    *,
+    seen: frozenset[str],
+) -> None:
+    from app.domain.plugins.nodes import plugin_node_types
+
+    extra_types = plugin_node_types(db, actor)
+    errors = validate_graph(
+        with_run_params(graph, params),
+        extra_types=extra_types,
+        explain_plugin_node=lambda node_type: _why_plugin_node_unusable(db, node_type, actor),
+    )
+    if errors:
+        raise WorkflowDomainError("；".join(errors))
+    _check_generation_text(db, graph, actor)
+    #: 节点登记的运行前检查,连同插件节点「轮到它时落得到一条连接吗」(按前缀登记的那一族,见 executors.content)。
+    #: 带上这一次的开始参数:只引用开始参数的配置(音色、画幅……)在这里就有值(见 run_preflights)。
+    run_preflights(db, graph, actor, workspace_id=workspace_id, params=params)
+    if len(seen) <= _MAX_CALL_DEPTH:
+        _check_called_workflows(db, graph, workspace_id, actor, seen=seen)
+
+
 def _why_plugin_node_unusable(db: Session, node_type: str, actor: str | None) -> str | None:
     from app.domain.plugins.nodes import why_unusable
 
@@ -143,6 +207,69 @@ def _why_plugin_node_unusable(db: Session, node_type: str, actor: str | None) ->
 
 def _templated(value: Any) -> bool:
     return isinstance(value, str) and "{{" in value
+
+
+def _bound(graph: dict[str, Any]) -> set[tuple[str, str]]:
+    """哪些 (节点, 字段) 由数据边供值 —— 它们的值要到运行时才知道。"""
+    edges = graph.get("edges") if isinstance(graph.get("edges"), list) else []
+    return {
+        (str(edge.get("target")), str(edge.get("target_input")))
+        for edge in edges
+        if isinstance(edge, dict) and edge.get("kind") == "data" and edge.get("target_input")
+    }
+
+
+def _nodes(graph: Any):
+    """这张图里的节点,连同循环体 / 子图体里的,带着它所在那一层的图(数据边按层算)。"""
+    if not isinstance(graph, dict):
+        return
+    for node in graph.get("nodes") or []:
+        if not isinstance(node, dict):
+            continue
+        yield graph, node
+        config = node.get("config") if isinstance(node.get("config"), dict) else {}
+        if str(node.get("type") or "") in NESTED_BODY_TYPES:
+            yield from _nodes(config.get("body"))
+
+
+def _check_called_workflows(
+    db: Session, graph: dict[str, Any], workspace_id: str, actor: str | None, *, seen: frozenset[str]
+) -> None:
+    """字面量指定的子工作流,带着这里交给它的入参,把同一套检查再走一遍;不过就说是调哪一张时不过。
+
+    子工作流的名字是引用、由数据边供、入参整格是引用或由数据边供的,到运行时才知道,不在这里判。
+    已经在这条调用链上的(自己调自己、互相调)不再往下查 —— 那是执行时防递归的事。
+    """
+    for layer, node in _nodes(graph):
+        if node.get("type") != "call_workflow":
+            continue
+        node_id = str(node.get("id") or "")
+        config = node.get("config") if isinstance(node.get("config"), dict) else {}
+        bound = _bound(layer)
+        target_id = config.get("workflow_id")
+        inputs = config.get("inputs")
+        if (
+            not isinstance(target_id, str)
+            or not target_id.strip()
+            or _templated(target_id)
+            or (node_id, "workflow_id") in bound
+            or (node_id, "inputs") in bound
+            or not isinstance(inputs if inputs is not None else {}, dict)
+        ):
+            continue
+        child = db.get(Workflow, target_id.strip())
+        if child is None or child.workspace_id != workspace_id:
+            raise WorkflowDomainError(
+                "wfErr_callNodeNotRunnable", params={"node": node_id, "reason": WorkflowDomainError("wfErr_calledWorkflowMissing")}
+            )
+        if child.id in seen:
+            continue
+        try:
+            _check_graph_runnable(db, _revision_graph(db, child), child.workspace_id, dict(inputs or {}), actor, seen=seen | {child.id})
+        except WorkflowDomainError as exc:
+            raise WorkflowDomainError(
+                "wfErr_calledWorkflowNotRunnable", params={"node": node_id, "name": child.name, "reason": exc}
+            ) from exc
 
 
 def _check_generation_text(db: Session, graph: Any, actor: str | None) -> None:
@@ -163,12 +290,7 @@ def _check_generation_text(db: Session, graph: Any, actor: str | None) -> None:
 
     if not isinstance(graph, dict):
         return
-    edges = graph.get("edges") if isinstance(graph.get("edges"), list) else []
-    bound = {
-        (str(edge.get("target")), str(edge.get("target_input")))
-        for edge in edges
-        if isinstance(edge, dict) and edge.get("kind") == "data" and edge.get("target_input")
-    }
+    bound = _bound(graph)
     for node in graph.get("nodes") or []:
         if not isinstance(node, dict):
             continue

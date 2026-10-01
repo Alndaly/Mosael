@@ -191,6 +191,15 @@ def _execute_edit_workflow(db: Session, confirmation: Any, actor: str | None) ->
 
 
 def _validate_run_workflow(db: Session, workspace_id: str, payload: dict[str, Any], actor: str | None) -> None:
+    """开卡之前先钉住要跑的那一版,再按**那一版**问「现在跑得起来吗」—— 和点运行、定时任务同一套检查
+    (workflows.engine.check_runnable)。
+
+    此前只看工作流在不在:缺一个必填的开始参数、插件节点这个人用不了,都要等用户批准之后、建任务时才报 ——
+    用户点了同意,看到的是一句失败。跑不起来就不开卡,原因原样交给智能体,它能照着补参数或换做法。
+    """
+    from app.domain.workflows import WorkflowDomainError
+    from app.domain.workflows.engine import check_runnable
+
     workflow = _workflow_in(db, workspace_id, payload)
     #: 卡上点名跑的是哪一张:**覆盖**,不由调用方自己说。MCP 那条路只带 workflow_id,卡标题于是是一串 uuid;
     #: 反过来,调用方自带的 name 也不能信 —— 卡上写「日更」、跑的却是另一张,授权界面就说了谎。
@@ -198,6 +207,12 @@ def _validate_run_workflow(db: Session, workspace_id: str, payload: dict[str, An
     #: 卡是对着**开卡这一刻**的那一版审的:档位(图里有没有对外的节点)、卡上的后果说明都按它算。钉住它,
     #: 批准时跑的必须还是这一版 —— 中间被改过(加了一个发布节点)的话,用户批的就不是要跑的那张图。
     payload["workflow_revision"] = int(workflow.revision or 0)
+    #: 运行前检查查的是工作流的当前版 —— 也就是上面刚钉住的那一版。
+    params = payload.get("params")
+    try:
+        check_runnable(db, workflow, dict(params) if isinstance(params, dict) else {}, actor)
+    except WorkflowDomainError as exc:
+        raise ConfirmationError.relay(exc) from exc
 
 
 def _summarize_run_workflow(db: Session, payload: dict[str, Any]) -> Summary:

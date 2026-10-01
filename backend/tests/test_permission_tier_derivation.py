@@ -22,7 +22,8 @@ from tests.util import fresh_client
 START = {"id": "start_1", "type": "start", "config": {}}
 CODE = {"id": "code_1", "type": "code", "config": {"code": "output = 1"}}
 PUBLISH = {"id": "pub_1", "type": "publish", "config": {}}
-LLM = {"id": "llm_1", "type": "llm", "config": {}}
+#: 配齐必填:开「运行工作流」卡之前要过开跑前的检查(engine.check_runnable)。
+LLM = {"id": "llm_1", "type": "llm", "config": {"prompt": "写一句"}}
 
 
 def _graph(*nodes) -> dict:

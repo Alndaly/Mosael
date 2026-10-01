@@ -18,6 +18,11 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfErr_recursiveCall": {"zh": "工作流递归调用(直接或间接调用了自身),已阻止", "en": "Blocked: the workflow calls itself, directly or indirectly"},
     "wfErr_pickWorkflow": {"zh": "请选择要调用的工作流", "en": "Pick the workflow to call"},
     "wfErr_calledWorkflowMissing": {"zh": "被调用的工作流不存在", "en": "The workflow being called does not exist"},
+    "wfErr_callNodeNotRunnable": {"zh": "节点 {node}:{reason}", "en": "Node {node}: {reason}"},
+    "wfErr_calledWorkflowNotRunnable": {
+        "zh": "节点 {node} 调用的工作流「{name}」现在跑不起来:{reason}",
+        "en": "The workflow “{name}” called by node {node} can't run right now: {reason}",
+    },
     "wfErr_calledWorkflowHasNoOutput": {
         "zh": "被调用的工作流「{name}」没有「输出」节点 —— 加一个,并在里面声明要交给调用方的那几个值",
         "en": "The called workflow \u300c{name}\u300d has no Output node — add one and declare the values it hands back",

@@ -72,7 +72,7 @@ def list_runs(db: Session, user: User, task_id: str) -> list[ScheduledTaskRun]:
 def create(db: Session, user: User, workspace_id: str, **fields: Any) -> ScheduledTask:
     """记下**它替谁跑**:定时执行没有「当时的操作人」,事后要知道这段自动化是谁挂上去的。"""
     ensure_workspace_perm(db, user, workspace_id, "schedule")
-    task = ops.create_scheduled_task(db, workspace_id=workspace_id, **fields)
+    task = ops.create_scheduled_task(db, workspace_id=workspace_id, owner=user.id, **fields)
     sharing.claim(db, SHARE_KIND, task, user)
     db.flush()
     return annotate(db, user, task)

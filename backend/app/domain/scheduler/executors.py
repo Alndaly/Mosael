@@ -115,17 +115,30 @@ SCHEDULED_EXECUTORS: dict[str, Executor] = {
 }
 
 
-#: 一种任务**现在跑得起来吗**:跑不起来时给出文案 key,跑得起来给 None。
+#: 一种任务**现在跑得起来吗**:跑不起来时给出原因(带文案 key 的错误),跑得起来给 None。
+#: 参数:会话、工作区、任务的 payload、替谁跑(任务的主人)。
 #:
 #: 它和执行体是两件事:执行体在派发的那一刻才发现问题,那时运行记录和任务都已经建好了,只能
-#: 记一条失败。而「绑的工作流被删了」是一个**事前就知道**的状态 —— 此前它照样能启用、能点
+#: 记一条失败。而「绑的工作流被删了」「缺一个必填参数」是**事前就知道**的状态 —— 此前它照样能启用、能点
 #: 「立即运行」,每点一次就多一条 0.0 秒的失败记录。启用、建任务、三个触发入口都先问这里
 #: (operations.ensure_runnable)。没登记的种类没有事前条件。
-Readiness = Callable[[Session, str, dict[str, Any]], str | None]
+Readiness = Callable[[Session, str, dict[str, Any], "str | None"], LocalizedError | None]
 
 
-def _workflow_ready(db: Session, workspace_id: str, payload: dict[str, Any]) -> str | None:
-    return None if bound_workflow(db, workspace_id=workspace_id, payload=payload) else "schedErr_workflowGone"
+def _workflow_ready(db: Session, workspace_id: str, payload: dict[str, Any], owner: str | None) -> LocalizedError | None:
+    """绑的工作流在,而且**带着任务的参数、替任务的主人**跑得起来 —— 和点运行同一套检查(workflows.engine.check_runnable)。"""
+    from app.domain.workflows import WorkflowDomainError
+    from app.domain.workflows.engine import check_runnable
+
+    workflow = bound_workflow(db, workspace_id=workspace_id, payload=payload)
+    if workflow is None:
+        return ScheduledRunError("schedErr_workflowGone")
+    params = payload.get("params")
+    try:
+        check_runnable(db, workflow, dict(params) if isinstance(params, dict) else {}, owner)
+    except WorkflowDomainError as exc:
+        return ScheduledRunError("schedErr_workflowNotRunnable", name=workflow.name, reason=str(exc))
+    return None
 
 
 SCHEDULED_READINESS: dict[str, Readiness] = {
@@ -151,8 +164,28 @@ def dispatch_scheduled_job(db: Session, task: ScheduledTask, run: ScheduledTaskR
         run.status = "failed"
         run.error = str(exc)[:500]
         run.finished_at = now()
+        #: 到点跑的那一刻没人看着:派不出去要说一声(工作流跑起来之后的失败由引擎通知,这里是还没跑起来的那一种)。
+        notify_run_failed(db, task, job, str(exc))
     finally:
         reset_parent_job(token)
+
+
+def notify_run_failed(
+    db: Session, task: ScheduledTask, job: Job | None, reason: str, *, disabled: bool = False
+) -> None:
+    """定时任务这一次没跑起来(`disabled`:而且因此停用了):通知工作区。链接指向定时任务页,载荷里带着这一次的任务。"""
+    from app.core.i18n import DEFAULT_LOCALE, t
+    from app.domain.notifications import notify
+
+    notify(
+        db,
+        task.workspace_id,
+        type="system",
+        title=t("schedNotice_disabled" if disabled else "schedNotice_runFailed", DEFAULT_LOCALE, name=task.name),
+        body=reason,
+        link="#/scheduler",
+        payload={"scheduled_task_id": task.id, **({"job_id": job.id} if job is not None else {})},
+    )
 
 
 def has_active_run(db: Session, task_id: str) -> bool:
