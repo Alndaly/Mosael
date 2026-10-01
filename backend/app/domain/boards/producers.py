@@ -867,6 +867,10 @@ def _admit(db: Session, request: RunRequest) -> tuple[Producer, BaseModel]:
     if request.kind not in producer.hosts:
         raise BoardInputError("boardErr_producerCannotHost", producer=producer.id, kind=request.kind)
     cell = _board_cell(db, request)
+    #: 格子是什么种类由画布说了算,请求里的 kind 只是调用方以为的:对不上就拒 —— 照请求摆占位的话,一次运行就把
+    #: 便签改成了图片格。
+    if cell is not None and cell.get("kind") != request.kind:
+        raise BoardInputError("boardErr_kindMismatch", item_id=request.item_id, kind=cell.get("kind"), requested=request.kind)
     if cell is not None and producer.admits is not None:
         producer.admits(cell)
     try:

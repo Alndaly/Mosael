@@ -190,6 +190,33 @@ def test_未知的产出者和挂错地方的产出者都拒() -> None:
     assert ["body", "form", "prompt"] in [one["loc"] for one in incomplete.json()["detail"]]
 
 
+def test_请求里写的种类和那一格对不上_拒_不让一次运行改掉格子的种类() -> None:
+    """格子是什么种类由画布说了算。此前 _admit 只拿请求里的 kind 去问 hosts,一张便签上发一次「图片格生成」,
+    占位就照请求把它摆成了图片格 —— 便签的字没了。跑和干跑(智能体开卡)走同一处,都拒。"""
+    from app.core.db import SessionLocal
+    from app.core.i18n import t
+    from app.domain.boards import producers
+
+    client = fresh_client()
+    ws = _workspace(client)
+    user_id = client.get("/api/auth/me").json()["id"]
+    board_id = _board(client, ws, [{"id": "n1", "kind": "note", "x": 0, "y": 0, "text": "一只猫"}])
+    request = producers.RunRequest(
+        workspace_id=ws, board_id=board_id, item_id="n1", kind="image", x=0, y=0,
+        base_revision=board_revision(client, board_id, ws), actor_id=user_id, producer="generate",
+        form={"prompt": "一只猫", "provider": "p", "provider_profile_id": "pp", "model": "m"},
+    )
+
+    with SessionLocal() as db, pytest.raises(BoardDomainError) as refused:
+        producers.dry_run(db, request)
+    assert str(refused.value) == t("boardErr_kindMismatch", item_id="n1", kind="note", requested="image")
+
+    via_route = run_on_board(client, board_id, ws, producer="generate", item_id="n1", kind="image",
+                             form={"prompt": "一只猫", "provider": "p", "provider_profile_id": "pp", "model": "m"})
+    assert via_route.status_code == 400, via_route.text
+    assert client.get(f"/api/boards/{board_id}", params={"workspace_id": ws}).json()["canvas"]["items"][0]["kind"] == "note"
+
+
 def test_运行要带版本号_旧版本起不了任务() -> None:
     client = fresh_client()
     ws = _workspace(client)

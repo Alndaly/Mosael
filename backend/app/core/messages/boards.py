@@ -126,6 +126,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "boardErr_upstreamDocumentUnreadable": {"zh": "连进来的文档「{name}」还读不到(还没挑文档,或还在解析、解析没成):等它好了再试,或断开这根线", "en": "The connected document “{name}” can't be read yet (none picked, or it's still being parsed or parsing failed). Wait until it's ready, or disconnect it, then try again."},
     "boardErr_unknownProducer": {"zh": "画板上没有「{producer}」这种产出方式(可用:{producers})", "en": "Boards have no producer called \"{producer}\" (available: {producers})."},
     "boardErr_producerFormInvalid": {"zh": "「{producer}」的表单里 {field} 不合法:{detail}", "en": "The \"{producer}\" form has an invalid {field}: {detail}"},
+    "boardErr_kindMismatch": {"zh": "画板项 {item_id} 是{kind}格,不是{requested}格 —— 照它现在的样子再跑一次", "en": "Item {item_id} is a {kind} item, not a {requested} item — run it again as it is now."},
     "boardErr_writeOnFileDocument": {"zh": "这一格引用的是一份文件,写不进去 —— 先「转为笔记」,再让 AI 写", "en": "This item points to a file, which can't be written into — convert it to a note first, then ask AI to write."},
     "boardErr_producerCannotHost": {"zh": "「{producer}」不能挂在{kind}这种格子上", "en": "The \"{producer}\" producer can't sit on a {kind} item."},
     "trimErr_unsupportedKind": {"zh": "只能截取视频或音频", "en": "Only video or audio can be trimmed."},
