@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import shutil
 from pathlib import Path
 from typing import Any
@@ -136,6 +137,9 @@ def _scalar(value: Any, kind: Any) -> Any:
         number = float(text)
     except ValueError:
         return value
+    if not math.isfinite(number):
+        # "nan" / "inf" / "1e999" float() 都认,可那不是谁填的数:原样留着,交给插件去说哪里不对
+        return value
     return int(number) if kind == "integer" and number.is_integer() else number
 
 
@@ -151,8 +155,12 @@ def _as_list(field: str, value: Any, items: dict[str, Any]) -> Any:
     """数组入参交给插件时**是数组**。空的(没填、空串、空列表)回 None = 去掉这一格。
 
     - 表单里一行一项(见前端 ListField):某一行是一整串引用,插值之后那一行就是一个列表 —— 拼进来(和
-      「行列表」字段同一个规矩),而不是交出一个套着列表的列表;每一项是结构(对象 / 数组)的除外。
-    - 一整格接的是上游:上游交来的已经是列表就照收;是一段 JSON 数组文字就解开;是一个值就当只有这一项。
+      「行列表」字段同一个规矩),而不是交出一个套着列表的列表;那一行拿到的是一段 JSON 数组文字(大模型交来的)
+      也一样拼进来,和整格接上游同一个认法。每一项是结构(对象 / 数组)的除外:那一行是一段 JSON 对象(数组)
+      文字时解开成那一项。
+    - 一整格接的是上游:上游交来的已经是列表就照收;是一段 JSON 数组文字就解开(每一项是对象的,一段 JSON 对象
+      文字就是那一项);是一个值就当只有这一项。**逗号分隔的文字不拆**:`"a, b"` 就是一项 —— 逗号可能本来就是
+      值的一部分(一句话、一个地址),拆错了没人看得出;要几项就一行一项,或接一个数组。
     - 每一项按 `items.type` 归位(同 coerce 对单值的做法):数字 / 整数项的数字文字转成数,布尔项的 true / false
       转成布尔,字符串项收到的数 / 布尔写回文字。表单只存文字(见前端 ListField),类型只在这里按声明转一次 ——
       前端不看声明一律把「像数的」转成数,`"007"` 成了 7、一串长 id 丢了末几位。
@@ -164,29 +172,41 @@ def _as_list(field: str, value: Any, items: dict[str, Any]) -> Any:
     if value is None or value == "" or value == []:
         return None
     kind = schema_type(items)
+    if isinstance(value, str):
+        if not value.strip():
+            return None
+        parsed = _json_text(value)
+        value = parsed if isinstance(parsed, list) or (kind == "object" and isinstance(parsed, dict)) else [value]
     if isinstance(value, dict):
         if kind == "object":
             return [value]
         raise PluginDomainError("pluginErr_listGotMapping", field=field)
-    if isinstance(value, str):
-        text = value.strip()
-        if not text:
-            return None
-        try:
-            parsed = json.loads(text)
-        except ValueError:
-            parsed = None
-        value = parsed if isinstance(parsed, list) else [value]
     if not isinstance(value, list):
         return [value]
     structured = kind in ("object", "array")
     flat: list[Any] = []
     for one in value:
+        if isinstance(one, str):
+            parsed = _json_text(one)
+            if isinstance(parsed, list) or (kind == "object" and isinstance(parsed, dict)):
+                one = parsed
         if isinstance(one, list) and not structured:
             flat.extend(one)
         elif one not in (None, ""):
             flat.append(one)
     return [_item(one, kind) for one in flat]
+
+
+def _json_text(text: str) -> Any:
+    """一段 JSON 数组 / 对象文字解开;不是(或解不开)回 None。只认 `[` / `{` 开头的 —— `"123"`、`"true"` 是一项文字,
+    不是 JSON。"""
+    stripped = text.strip()
+    if not stripped.startswith(("[", "{")):
+        return None
+    try:
+        return json.loads(stripped)
+    except ValueError:
+        return None
 
 
 def _media(spec: dict[str, Any]) -> tuple[str, ...]:

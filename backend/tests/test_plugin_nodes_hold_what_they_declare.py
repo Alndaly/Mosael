@@ -58,6 +58,9 @@ TOOLS = [
             "codes": {"type": "array", "items": {"type": "string"}},
             "ids": {"type": "array", "items": {"type": "integer"}},
             "flags": {"type": "array", "items": {"type": "boolean"}},
+            "nums": {"type": "array", "items": {"type": "number"}},
+            "words": {"type": "array", "items": {"type": "string"}},
+            "objs": {"type": "array", "items": {"type": "object"}},
         }},
         "node": {"outputs": ["got"]},
     },
@@ -179,6 +182,27 @@ def test_必填的数组入参填了空列表_运行前就拦() -> None:
     graph = _graph({"id": "p", "type": "plugin.pkg.t", "config": {"items": []}})
     errors = validate_graph(graph, extra_types={"plugin.pkg.t": node_meta(tool)})
     assert any("items" in one for one in errors), errors
+
+
+def test_数组入参的边界_一行JSON数组文字拼进来_逗号不拆_nan不转_对象文字解开(tmp_path) -> None:
+    ws = fresh_client().post("/api/workspaces", json={"name": "W"}).json()["id"]
+    _install(tmp_path, user_id())
+    status, result, error = _run(ws, _graph({
+        "id": "e", "type": f"plugin.{PACKAGE}.echo",
+        "config": {"codes": ["{{start.llm}}", "c"], "words": "a, b", "nums": ["nan", "inf", "1.5"],
+                   "objs": ['{"k": 1}', "{{start.obj}}"]},
+    }), params={"llm": '["a", "b"]', "obj": {"k": 2}})
+    assert status == "succeeded", error
+    got = result["context"]["e"]["got"]
+    assert got["codes"] == ["a", "b", "c"], "一行拿到的 JSON 数组文字和整格一样拼进来"
+    assert got["words"] == ["a, b"], "逗号分隔的文字不拆"
+    assert got["nums"] == ["nan", "inf", 1.5], "nan / inf 不是谁填的数"
+    assert got["objs"] == [{"k": 1}, {"k": 2}], "每一项是对象的,JSON 对象文字解开成那一项"
+    status, result, error = _run(ws, _graph({
+        "id": "e", "type": f"plugin.{PACKAGE}.echo", "config": {"objs": "{{start.obj}}"},
+    }), params={"obj": '{"k": 3}'})
+    assert status == "succeeded", error
+    assert result["context"]["e"]["got"]["objs"] == [{"k": 3}], "整格接一段 JSON 对象文字:就是那一项"
 
 
 # ---------- node.config 与 input_schema ----------
