@@ -583,6 +583,14 @@ def _write(db: Session, job_id: str, order: _WriteOrder) -> dict[str, Any]:
             timeout=WRITE_TIMEOUT_SECONDS[kind],
         ).strip()
     if kind == "document":
+        from app.db.models import Job
+        from app.domain.jobs import lock_active_job
+
+        #: 模型写的那一会儿人可能点了停止:那一格已经落成「已取消」,笔记就不能再新建、再改成新一版 —— 停下的活儿
+        #: 不留副作用。拿到写锁再看(lock_active_job),看完到落笔记之间取消插不进来;停了就交回空结果(作废)。
+        job = db.get(Job, job_id)
+        if job is None or not lock_active_job(db, job):
+            return {}
         board = get_board(db, order.workspace_id, order.board_id)
         return {"outputs": [_write_note(db, order.workspace_id, board, order.note_id, text, actor_id=order.actor_id)]}
     return {"text": text}

@@ -180,6 +180,44 @@ def test_引用着笔记的文档格_照原文改_写成那篇的新一版() -> 
     assert latest["markdown"] == "改过的正文" and latest["title"] == "企划", "标题等别的都不动"
 
 
+def test_写的时候被停下_笔记不新建也不改写() -> None:
+    """模型写的那一会儿人点了停止:那一格落成已取消,而笔记照样新建了一篇(或把引用着的那篇改成新一版)——
+    停下的活儿留下了副作用。落笔记之前查一眼任务还活着没有。"""
+    from sqlalchemy import select
+
+    from app.db.models import Job, Note
+    from app.domain.jobs import cancel_job
+
+    client = fresh_client()
+    ws = _workspace(client)
+    _writable_profile(client)
+    note = client.post("/api/notes", json={"workspace_id": ws, "title": "企划", "markdown": "第一版正文"}).json()
+    board_id = _board(client, ws, [
+        {"id": "doc", "kind": "document", "x": 0, "y": 0, "note_id": note["id"], "note_revision": note["revision"], "text": "企划"},
+        {"id": "blank", "kind": "document", "x": 0, "y": 300},
+    ])
+
+    class StoppedWhileWriting(Seen):
+        def chat(self, target, messages, **kwargs):
+            with SessionLocal() as db:
+                job = db.scalars(select(Job).where(Job.kind == "board_write", Job.status == "running")).one()
+                cancel_job(db, job)
+                db.commit()
+            return super().chat(target, messages, **kwargs)
+
+    for item_id in ("doc", "blank"):
+        done = _write(client, board_id, ws, item_id, "document", StoppedWhileWriting("停下之后写出来的"), prompt="改短一点")
+        assert done.status_code == 200, done.text
+        cell = next(one for one in done.json()["canvas"]["items"] if one["id"] == item_id)
+        assert cell["run"]["status"] == "cancelled", cell["run"]
+
+    with SessionLocal() as db:
+        notes = db.scalars(select(Note).where(Note.workspace_id == ws)).all()
+    assert [one.id for one in notes] == [note["id"]], "停下之后照样新建了一篇笔记"
+    latest = client.get(f"/api/notes/{note['id']}", params={"workspace_id": ws}).json()
+    assert (latest["revision"], latest["markdown"]) == (note["revision"], "第一版正文"), "停下之后照样改写了引用着的那篇"
+
+
 def test_老画板上的文档格补上写字() -> None:
     import json
 
