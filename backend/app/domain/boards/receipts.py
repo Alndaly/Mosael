@@ -214,19 +214,26 @@ def deliver_generated(db: Session, job: Any, receipt: dict[str, Any]) -> None:
     if board is None:
         return
     assets = _asset_facts(db, board.workspace_id, outputs)
-    #: 这封回执有没有落到那一格(那一格此刻跑的是这个任务)。合并撞车会重来,以最后落库的那一次为准。
-    landed = {"yes": False}
+    #: 这封回执有没有**把一份素材填进那一格**(那一格此刻跑的是这个任务、不是派生落点的宿主、asset_id 换了)。
+    #: 合并撞车会重来,以最后落库的那一次为准。派生落点的宿主(跑一项能力的媒体格)自己的素材不是这一轮的产出,
+    #: 不接 —— 此前照「成功了」就接,每跑一次转写,时间线上就多一段同样的音频。
+    filled = {"yes": False}
 
     def merge(canvas: dict[str, Any]) -> dict[str, Any]:
         item = next((one for one in canvas.get("items") or [] if one.get("id") == item_id), None)
-        landed["yes"] = live_job(item) == str(job.id)
-        return _canvas_with_delivered_result(
+        merged = _canvas_with_delivered_result(
             canvas, item_id=item_id, job_id=str(job.id), outputs=outputs, reason=reason,
             cancelled=was_cancelled(job), succeeded=job_status == "succeeded", assets=assets,
         )
+        after = next((one for one in merged.get("items") or [] if one.get("id") == item_id), None)
+        filled["yes"] = (
+            live_job(item) == str(job.id) and not derives_outputs(item or {})
+            and bool((after or {}).get("asset_id")) and (after or {}).get("asset_id") != (item or {}).get("asset_id")
+        )
+        return merged
 
     merged = _merge_into_latest(db, workspace_id=board.workspace_id, board_id=board.id, merge=merge, actor_id=actor_id)
-    if landed["yes"] and job_status == "succeeded":
+    if filled["yes"] and job_status == "succeeded":
         _append_to_connected_timelines(merged, item_id)
     logger.info("board %s item %s -> %s", board_id, item_id,
                 ", ".join(one.get("asset_id") or f"({one['type']})" for one in outputs) or "(failed)")

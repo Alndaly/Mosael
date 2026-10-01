@@ -159,6 +159,41 @@ def test_空槽连进时间线格_生成出来之后接到末尾_只接一次() 
     assert clips == [("made", 3.0)], clips
 
 
+def test_连着时间线格的媒体格跑完一项能力_宿主自己的素材不再被接一遍() -> None:
+    """音频格上跑转写:产出新建在右边,宿主那段音频没变。此前回执一成功就照「产出刚落进来」把宿主的素材接到
+    时间线末尾 —— 每跑一次能力,时间线上就多一段同样的音频。只有这一轮把素材填进宿主时才接。"""
+    from types import SimpleNamespace
+
+    from app.domain.boards import deliver_generated, receipt_to_item
+
+    client, ws, board = _setup()
+    sequence = client.post(f"/api/boards/{board}/sequences", json={"workspace_id": ws}).json()["sequence_id"]
+    _asset(ws, "aud", "audio", duration=4.0)
+    host = {"id": "a", "kind": "audio", "x": 0, "y": 0, "asset_id": "aud",
+            "run": {"status": "running", "job_id": "job-t", "ability": "node:transcribe"},
+            "form": {"producer": "speak"}}
+    saved = client.patch(f"/api/boards/{board}", json={
+        "workspace_id": ws, "base_revision": board_revision(client, board, ws),
+        "canvas": {"items": [host, {"id": "t", "kind": "sequence", "x": 400, "y": 0, "sequence_id": sequence}],
+                   "edges": [{"id": "e", "source": "a", "target": "t"}]}})
+    assert saved.status_code == 200, saved.text
+
+    def clips() -> list[str]:
+        with SessionLocal() as db:
+            return [clip.asset_id for track in db.get(Sequence, sequence).tracks for clip in track.clips]
+
+    before = clips()
+    job = SimpleNamespace(id="job-t", status="succeeded", result={"outputs": [{"type": "text", "text": "hello"}]},
+                          created_by=None, error=None)
+    with SessionLocal() as db:
+        deliver_generated(db, job, receipt_to_item(board, "a"))
+
+    assert clips() == before, "跑完一项能力,宿主那段音频又被接到了时间线末尾"
+    with SessionLocal() as db:
+        items = db.get(Board, board).canvas["items"]
+    assert any(one["id"] != "a" and one["id"] != "t" for one in items), "能力的产出落在右边"
+
+
 def test_画板上的撤销带着版本号_时间线在别处改过就不撤别人的那一步() -> None:
     client, ws, board = _setup()
     sequence = client.post(f"/api/boards/{board}/sequences", json={"workspace_id": ws}).json()["sequence_id"]
