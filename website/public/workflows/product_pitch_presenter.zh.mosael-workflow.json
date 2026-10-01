@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "商品 → 数字人出镜带货口播",
   "description": "在「带货口播短视频」的基础上,开场钩子和收尾号召换成资产库里的一位人物出镜说出来(用它的脸和嗓子),中间每一拍仍是带商品的画面,口播用同一个嗓子念、对齐每一拍的开头,每拍铺上屏幕短句,导出竖屏成片(带「AI 生成」标识)。运行前在「挑一位主播」上选好人物;人物要先在资产库里有正面图和音色;真人要有授权声明,克隆音色也要声明是谁的。",
-  "graph_hash": "ffd9c0e38c09407dc935bc8d8db09b0d855fa42e031787eeaea45e8e31610b1b",
+  "graph_hash": "c80b056ac1f8ac685bdcb5b043ac4a942c04e7b98352419a607e57d8f9143070",
   "graph": {
     "meta": {
       "template_id": "product_pitch_presenter",
@@ -226,6 +226,64 @@
         "inputs": [
           "entity_id"
         ]
+      },
+      {
+        "id": "presenter_has_voice",
+        "type": "condition",
+        "name": "主播有音色吗",
+        "position": {
+          "x": 330,
+          "y": 700
+        },
+        "config": {
+          "left": "",
+          "op": "not_empty"
+        },
+        "inputs": [
+          "left"
+        ]
+      },
+      {
+        "id": "presenter_has_face",
+        "type": "condition",
+        "name": "主播有图吗",
+        "position": {
+          "x": 330,
+          "y": 860
+        },
+        "config": {
+          "left": "",
+          "op": "not_empty"
+        },
+        "inputs": [
+          "left"
+        ]
+      },
+      {
+        "id": "presenter_voice_notice",
+        "type": "notify",
+        "name": "主播还没有音色",
+        "position": {
+          "x": 40,
+          "y": 860
+        },
+        "config": {
+          "title": "带货短片没有开始:主播还没有音色",
+          "body": "「{{presenter.name}}」还没有配音色。在资产库里给它配一把(克隆音色要声明是谁的),再运行一次。还没花任何钱。"
+        }
+      },
+      {
+        "id": "presenter_face_notice",
+        "type": "notify",
+        "name": "主播还没有图",
+        "position": {
+          "x": 40,
+          "y": 1020
+        },
+        "config": {
+          "title": "带货短片没有开始:主播还没有图",
+          "body": "「{{presenter.name}}」还没有一张正面图。在资产库里给它加一张(或先画一张),再运行一次。还没花任何钱。"
+        }
       },
       {
         "id": "cta_spoken",
@@ -548,13 +606,32 @@
         "target": "presenter"
       },
       {
-        "id": "presenter_script",
-        "source": "presenter",
-        "target": "pitch_script"
+        "id": "presenter_voice_ok",
+        "source": "presenter_has_voice",
+        "target": "presenter_has_face",
+        "source_handle": "true"
       },
       {
-        "id": "presenter_project",
-        "source": "presenter",
+        "id": "presenter_voice_missing",
+        "source": "presenter_has_voice",
+        "target": "presenter_voice_notice",
+        "source_handle": "false"
+      },
+      {
+        "id": "presenter_face_missing",
+        "source": "presenter_has_face",
+        "target": "presenter_face_notice",
+        "source_handle": "false"
+      },
+      {
+        "id": "presenter_script",
+        "source": "presenter_has_face",
+        "target": "pitch_script",
+        "source_handle": "true"
+      },
+      {
+        "id": "script_project",
+        "source": "pitch_script",
         "target": "pitch_project"
       },
       {
@@ -593,16 +670,6 @@
       {
         "id": "script_shoot",
         "source": "pitch_script",
-        "target": "shoot_beats"
-      },
-      {
-        "id": "photo_shoot",
-        "source": "product_photo",
-        "target": "shoot_beats"
-      },
-      {
-        "id": "presenter_shoot",
-        "source": "presenter",
         "target": "shoot_beats"
       },
       {
@@ -675,6 +742,22 @@
         "kind": "data",
         "source_output": "entity_id",
         "target_input": "entity_id"
+      },
+      {
+        "id": "d-presenter-voice_id-presenter_has_voice-left",
+        "source": "presenter",
+        "target": "presenter_has_voice",
+        "kind": "data",
+        "source_output": "voice_id",
+        "target_input": "left"
+      },
+      {
+        "id": "d-presenter-asset_ids-presenter_has_face-left",
+        "source": "presenter",
+        "target": "presenter_has_face",
+        "kind": "data",
+        "source_output": "asset_ids",
+        "target_input": "left"
       },
       {
         "id": "d-cta_talk-asset_id-cta_spoken-left",

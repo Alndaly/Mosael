@@ -1501,6 +1501,43 @@ def _with_presenter(nodes: list[dict[str, Any]]) -> dict[str, Any]:
             "config": {"entity_id": "{{presenter.entity_id}}", "text": "{{pitch_script.json.call_to_action}}", "model": ""},
         },
         {
+            #: 主播能不能出镜,在写脚本那次计费的对话**之前**问:没有音色、没有图的话,开场那一段要等脚本写完、
+            #: 画面出完才被拒(entity_speak 里的检查)。这两样从取主播那一步的产物里就看得出来,不花钱。
+            "id": "presenter_has_voice",
+            "type": "condition",
+            "name": {"zh": "主播有音色吗", "en": "Does the presenter have a voice?"},
+            "position": {"x": 330, "y": 700},
+            "config": {"left": "{{presenter.voice_id}}", "op": "not_empty"},
+        },
+        {
+            "id": "presenter_has_face",
+            "type": "condition",
+            "name": {"zh": "主播有图吗", "en": "Does the presenter have an image?"},
+            "position": {"x": 330, "y": 860},
+            "config": {"left": "{{presenter.asset_ids}}", "op": "not_empty"},
+        },
+        {
+            "id": "presenter_voice_notice",
+            "type": "notify",
+            "name": {"zh": "主播还没有音色", "en": "The presenter has no voice yet"},
+            "position": {"x": 40, "y": 860},
+            "config": {
+                "title": "带货短片没有开始:主播还没有音色",
+                "body": "「{{presenter.name}}」还没有配音色。在资产库里给它配一把(克隆音色要声明是谁的),再运行一次。"
+                        "还没花任何钱。",
+            },
+        },
+        {
+            "id": "presenter_face_notice",
+            "type": "notify",
+            "name": {"zh": "主播还没有图", "en": "The presenter has no image yet"},
+            "position": {"x": 40, "y": 1020},
+            "config": {
+                "title": "带货短片没有开始:主播还没有图",
+                "body": "「{{presenter.name}}」还没有一张正面图。在资产库里给它加一张(或先画一张),再运行一次。还没花任何钱。",
+            },
+        },
+        {
             #: 收尾那段要接在各拍**之后**,而「排在各拍之后」的那条边没有路由语义 —— 直接连到「收尾接在最后」的话,
             #: 各拍一跑完它就算激活,没有收尾那段时拿着空素材照跑。所以先在各拍之后问一句「收尾那段出来了吗」。
             "id": "cta_spoken",
@@ -1527,8 +1564,15 @@ def _with_presenter(nodes: list[dict[str, Any]]) -> dict[str, Any]:
         {"id": "start_photo", "source": "start", "target": "product_photo"},
         {"id": "start_presenter", "source": "start", "target": "presenter"},
         #: 先有主播,再写脚本、建项目(见函数说明)。
-        {"id": "presenter_script", "source": "presenter", "target": "pitch_script"},
-        {"id": "presenter_project", "source": "presenter", "target": "pitch_project"},
+        #: 主播有音色、有图,才写脚本(脚本写出来才建项目);缺哪样就发一条通知停在这里(一分钱没花)。
+        {"id": "presenter_voice_check", "source": "presenter", "target": "presenter_has_voice"},
+        {"id": "presenter_voice_ok", "source": "presenter_has_voice", "target": "presenter_has_face", "source_handle": "true"},
+        {"id": "presenter_voice_missing", "source": "presenter_has_voice", "target": "presenter_voice_notice",
+         "source_handle": "false"},
+        {"id": "presenter_face_missing", "source": "presenter_has_face", "target": "presenter_face_notice",
+         "source_handle": "false"},
+        {"id": "presenter_script", "source": "presenter_has_face", "target": "pitch_script", "source_handle": "true"},
+        {"id": "script_project", "source": "pitch_script", "target": "pitch_project"},
         #: 开场 / 收尾那句是空串时,出镜那两步整段跳过(此前照样去生成,空稿子当场被拒,出图的钱白花)。
         #: 「说话」和「接上时间线」**都**挂在条件的「真」出口上:它们其余的入边都是数据边,只剩数据边时任一上游跑过
         #: 就算激活 —— 建项目那一步总是跑过的。
@@ -1543,9 +1587,9 @@ def _with_presenter(nodes: list[dict[str, Any]]) -> dict[str, Any]:
         {"id": "project_hook", "source": "pitch_project", "target": "hook_place"},
         {"id": "hook_place_gate", "source": "has_hook", "target": "hook_place", "source_handle": "true"},
         {"id": "hook_then_beats", "source": "hook_place", "target": "shoot_beats"},
+        #: 逐拍只挂在脚本(和开场)之后:商品图、主播是它引用的值(引用即依赖,照样等它们),但不能让它们
+        #: 把逐拍激活 —— 主播缺音色停下时,脚本没写,逐拍也不该跑。
         {"id": "script_shoot", "source": "pitch_script", "target": "shoot_beats"},
-        {"id": "photo_shoot", "source": "product_photo", "target": "shoot_beats"},
-        {"id": "presenter_shoot", "source": "presenter", "target": "shoot_beats"},
         {"id": "beats_then_cta", "source": "shoot_beats", "target": "cta_spoken"},
         {"id": "cta_place_edge", "source": "cta_talk", "target": "cta_place"},
         {"id": "cta_place_gate", "source": "cta_spoken", "target": "cta_place", "source_handle": "true"},

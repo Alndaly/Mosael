@@ -39,7 +39,7 @@ from app.domain.workflows.templates_business import (
     product_pitch_short_graph,
     talking_script_video_graph,
 )
-from tests.util import fresh_client
+from tests.util import fresh_client, make_voice
 
 CHAT = ModelChoice(profile_id="chat", provider="openai", model="chat-model")
 SEEDREAM = ModelChoice(profile_id="image", provider="bytedance", model="doubao-seedream-4-0-250828")
@@ -56,7 +56,7 @@ class Studio:
         self.calls: dict[str, list[dict[str, Any]]] = defaultdict(list)
         self.speech_seconds: dict[str, float] = {}
         self.presenter: dict[str, Any] = {"entity_id": "presenter-1", "found": 1, "voice_engine": "builtin:clone",
-                                          "voice_id": "voice-of-presenter"}
+                                          "voice_id": "voice-of-presenter", "asset_ids": ["presenter-face"]}
         for node_type, handler in {
             "llm": self.llm,
             "ai_generate": self.generate,
@@ -124,7 +124,7 @@ class Studio:
         self.calls["entity_get"].append(config)
         if not str(config.get("entity_id") or "").strip():
             raise WorkflowDomainError("wfErr_entityGetNeedsTarget")
-        return {**self.presenter, "name": "主播", "description": "", "prompt": "", "asset_ids": [], "asset_id": ""}
+        return {"name": "主播", "description": "", "prompt": "", "asset_ids": [], "asset_id": "", **self.presenter}
 
     def transcribe(self, db, scope, config):
         self.calls["transcribe_asset"].append(config)
@@ -459,6 +459,32 @@ class Test带货口播真跑:
         assert studio.calls["llm"] == []
         with unit_of_work() as db:
             assert db.query(Project).filter(Project.workspace_id == ws).count() == 0
+
+    @pytest.mark.parametrize("missing", ["voice", "image"])
+    def test_出镜版_主播没有音色或没有图_写脚本之前就停下_一分钱不花(self, monkeypatch, missing: str) -> None:
+        from app.db.models import Notification
+        from app.domain.entities.library import create_entity
+        from app.domain.workflows.executors.entities import entity_get as real_entity_get
+
+        ws = _workspace()
+        voice = make_voice(ws, "主播的嗓子")
+        attributes = {"real_person": False, **({} if missing == "voice" else {"voice_engine": "builtin:clone", "voice_id": voice})}
+        with unit_of_work() as db:
+            entity = create_entity(db, workspace_id=ws, kind="character", name="小美", attributes=attributes)
+            db.commit()
+            entity_id = entity.id
+        studio = Studio(monkeypatch, ws, {"product_pitch_script": {"hook_line": "h", "beats": BEATS, "call_to_action": "c"}})
+        #: 取主播用真的节点:音色、图都从资产库里的这个人物来。
+        monkeypatch.setitem(registry._REGISTRY, "entity_get", real_entity_get)
+        graph = product_pitch_short_graph(chat=CHAT, image=SEEDREAM, presenter=True)
+        _pick(graph, "product_photo", asset_id=_asset(ws, "image", "毛衣"))
+        _pick(graph, "presenter", entity_id=entity_id)
+        _run(ws, graph, product_name="羊毛衫", selling_points="不起球")
+        assert studio.calls["llm"] == [] and studio.calls["ai_generate"] == [], "写脚本、出图之前就该停"
+        with unit_of_work() as db:
+            assert db.query(Project).filter(Project.workspace_id == ws).count() == 0
+            titles = [one.title for one in db.query(Notification).filter(Notification.workspace_id == ws)]
+        assert any(("音色" if missing == "voice" else "图") in one for one in titles), titles
 
     def test_出镜版_主播没挑时运行前就拦住(self) -> None:
         graph = product_pitch_short_graph(chat=CHAT, image=SEEDREAM, presenter=True)

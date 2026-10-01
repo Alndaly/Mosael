@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "Product into a presenter-led short",
   "description": "Everything in the narrated short, but a character from your asset library speaks the hook and the call to action on camera (with its own face and voice), while each beat in between stays a product shot voiced in the same voice, lined up with the beat and captioned, exported as a vertical short with an \"AI-generated\" label. Pick the character on “Pick the presenter” before running; it needs a front image and a voice in the asset library; real people need a consent declaration, and a cloned voice needs one too.",
-  "graph_hash": "ed8febe6bfa942c4aeb96b52d9429db8dfc22a02a9535825e4084f0d584f0c3b",
+  "graph_hash": "a27af4a030b7e2f8b6d61bdda1141ec09f9f38fe78e0345e0c7e86edded5a87d",
   "graph": {
     "meta": {
       "template_id": "product_pitch_presenter",
@@ -226,6 +226,64 @@
         "inputs": [
           "entity_id"
         ]
+      },
+      {
+        "id": "presenter_has_voice",
+        "type": "condition",
+        "name": "Does the presenter have a voice?",
+        "position": {
+          "x": 330,
+          "y": 700
+        },
+        "config": {
+          "left": "",
+          "op": "not_empty"
+        },
+        "inputs": [
+          "left"
+        ]
+      },
+      {
+        "id": "presenter_has_face",
+        "type": "condition",
+        "name": "Does the presenter have an image?",
+        "position": {
+          "x": 330,
+          "y": 860
+        },
+        "config": {
+          "left": "",
+          "op": "not_empty"
+        },
+        "inputs": [
+          "left"
+        ]
+      },
+      {
+        "id": "presenter_voice_notice",
+        "type": "notify",
+        "name": "The presenter has no voice yet",
+        "position": {
+          "x": 40,
+          "y": 860
+        },
+        "config": {
+          "title": "带货短片没有开始:主播还没有音色",
+          "body": "「{{presenter.name}}」还没有配音色。在资产库里给它配一把(克隆音色要声明是谁的),再运行一次。还没花任何钱。"
+        }
+      },
+      {
+        "id": "presenter_face_notice",
+        "type": "notify",
+        "name": "The presenter has no image yet",
+        "position": {
+          "x": 40,
+          "y": 1020
+        },
+        "config": {
+          "title": "带货短片没有开始:主播还没有图",
+          "body": "「{{presenter.name}}」还没有一张正面图。在资产库里给它加一张(或先画一张),再运行一次。还没花任何钱。"
+        }
       },
       {
         "id": "cta_spoken",
@@ -548,13 +606,32 @@
         "target": "presenter"
       },
       {
-        "id": "presenter_script",
-        "source": "presenter",
-        "target": "pitch_script"
+        "id": "presenter_voice_ok",
+        "source": "presenter_has_voice",
+        "target": "presenter_has_face",
+        "source_handle": "true"
       },
       {
-        "id": "presenter_project",
-        "source": "presenter",
+        "id": "presenter_voice_missing",
+        "source": "presenter_has_voice",
+        "target": "presenter_voice_notice",
+        "source_handle": "false"
+      },
+      {
+        "id": "presenter_face_missing",
+        "source": "presenter_has_face",
+        "target": "presenter_face_notice",
+        "source_handle": "false"
+      },
+      {
+        "id": "presenter_script",
+        "source": "presenter_has_face",
+        "target": "pitch_script",
+        "source_handle": "true"
+      },
+      {
+        "id": "script_project",
+        "source": "pitch_script",
         "target": "pitch_project"
       },
       {
@@ -593,16 +670,6 @@
       {
         "id": "script_shoot",
         "source": "pitch_script",
-        "target": "shoot_beats"
-      },
-      {
-        "id": "photo_shoot",
-        "source": "product_photo",
-        "target": "shoot_beats"
-      },
-      {
-        "id": "presenter_shoot",
-        "source": "presenter",
         "target": "shoot_beats"
       },
       {
@@ -675,6 +742,22 @@
         "kind": "data",
         "source_output": "entity_id",
         "target_input": "entity_id"
+      },
+      {
+        "id": "d-presenter-voice_id-presenter_has_voice-left",
+        "source": "presenter",
+        "target": "presenter_has_voice",
+        "kind": "data",
+        "source_output": "voice_id",
+        "target_input": "left"
+      },
+      {
+        "id": "d-presenter-asset_ids-presenter_has_face-left",
+        "source": "presenter",
+        "target": "presenter_has_face",
+        "kind": "data",
+        "source_output": "asset_ids",
+        "target_input": "left"
       },
       {
         "id": "d-cta_talk-asset_id-cta_spoken-left",
