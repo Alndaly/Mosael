@@ -124,8 +124,9 @@ export interface BoardCanvasApi {
    *  值给 undefined 表示删掉那个字段。 */
   patch: (itemId: string, next: Partial<BoardItem>) => void;
   /** 采用服务端更新的一版(本地没存的改动已经合在上面,见 boardRebase)。显式调用 —— 平常的 prop 变化不能打断
-   *  正在拖、正在敲的那一下。节点按 id 就地换,撤销历史不清空:每一份快照按 `rebase` 合一遍(见 useBoardHistory.adopt)。 */
-  adopt: (canvas: Canvas, rebase: (snapshot: Canvas) => Canvas) => void;
+   *  正在拖、正在敲的那一下。节点按 id 就地换,撤销历史不清空也不改写:撤到更早的一份时服务端落下的东西在那一刻补回去
+   *  (见 useBoardHistory.adopt / boardServerOwned)。 */
+  adopt: (canvas: Canvas) => void;
   /** 画布的变化攒到停手才汇给 `onChange`(见 useBoardHistory);要服务端照着画布去做的动作等不了,先调它拿现在这一份
    *  (同时也汇出去)。 */
   flush: () => Canvas;

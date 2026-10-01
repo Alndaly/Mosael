@@ -715,7 +715,7 @@ function BoardDetail({
       for (const sequenceId of sequencesFilledFrom(base, fresh.canvas)) {
         void queryClient.invalidateQueries({ queryKey: boardSequenceKey(sequenceId) });
       }
-      api?.adopt(merged, (snapshot) => rebaseCanvas(base, snapshot, fresh.canvas).canvas);
+      api?.adopt(merged);
       announceOffscreen(base, merged, fresh.canvas);
       localCanvas.current = merged;
       setCanvas(merged);

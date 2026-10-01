@@ -14,8 +14,8 @@
  * · 两边改了**同一格的同一个字段**、改得还不一样,才算冲突:用本地的(那是人眼前刚做的),并报告出来,
  *   让界面说一声。运行态和产出即便这里用了本地的,服务端保存时照样按它自己的规矩留(_keep_server_owned_state)。
  *
- * 纯函数,不碰 React。撤销栈里的每一份快照也按同一个 base / theirs 合一遍(见 useBoardHistory.adopt):
- * 撤一步回到的样子里照样有刚落下的产出。
+ * 纯函数,不碰 React。撤销栈里的快照**不**按它合:撤到更早的一份时,服务端落下的东西在应用那一份时补回去
+ * (见 boardServerOwned)。
  */
 import type { BoardCanvas as Canvas } from "@/api/client";
 import { sameContent } from "@/lib/optimisticWrites";

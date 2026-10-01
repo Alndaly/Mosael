@@ -102,7 +102,7 @@ describe("画板的撤销与服务端那份", () => {
       edges: [],
       markers: [],
     };
-    act(() => view.api().adopt(rebaseCanvas(saved, view.latest(), server).canvas, (snapshot) => rebaseCanvas(saved, snapshot, server).canvas));
+    act(() => view.api().adopt(rebaseCanvas(saved, view.latest(), server).canvas));
     await act(async () => {
       await vi.advanceTimersByTimeAsync(500);
     });
@@ -117,6 +117,73 @@ describe("画板的撤销与服务端那份", () => {
     expect(undone.items.find((one) => one.id === "n1")?.text, "撤的是自己写的那句").toBe("");
     expect(undone.items.map((one) => one.id)).toContain("agent");
     expect(undone.items.find((one) => one.id === "img")?.asset_id, "撤销不撤回刚落下的产出").toBe("a1");
+  });
+
+  const settle = () => act(async () => {
+    await vi.advanceTimersByTimeAsync(500);
+  });
+
+  it("本地新放的一格开跑之后连撤几步:在跑的那一格撤不没,撤到放下它之前也还在(ADR 0025)", async () => {
+    const view = mount({ items: [note("n1", "")], edges: [], markers: [] });
+    act(() => void view.api().add("image", { id: "slot", x: 300, y: 0 }));
+    await settle();
+    act(() => view.api().patch("slot", { form: { prompt: "一只猫", producer: "generate" } }));
+    await settle();
+    //: 点了生成:服务端摆好占位(这一格在跑),画布采用那一版。
+    const saved = view.latest();
+    const server: Canvas = { ...saved, items: saved.items.map((one) => (one.id === "slot" ? { ...one, run: { status: "running", job_id: "job-1" } } : one)) };
+    act(() => view.api().adopt(rebaseCanvas(saved, saved, server).canvas));
+    await settle();
+
+    act(() => view.api().undo());
+    await settle();
+    act(() => view.api().undo());
+    await settle();
+
+    const slot = view.latest().items.find((one) => one.id === "slot");
+    expect(slot, "撤到放下它之前,在跑的那一格还在").toBeTruthy();
+    expect(slot?.run).toEqual({ status: "running", job_id: "job-1" });
+    expect(view.api().canUndo, "撤销历史里那几份快照原样留着").toBe(false);
+  });
+
+  it("服务端落下的格子撤不没;人自己删了它,撤销回来、再重做,删掉的照样删掉", async () => {
+    const view = mount({ items: [note("n1", "")], edges: [], markers: [] });
+    act(() => view.api().patch("n1", { text: "我写的" }));
+    await settle();
+    const saved = view.latest();
+    //: 一项能力的产出落在右边(服务端新建的一格 + 来历线)。
+    const server: Canvas = {
+      items: [...saved.items, note("n1-out-1", "HELLO")],
+      edges: [{ id: "n1->n1-out-1", source: "n1", target: "n1-out-1" }],
+      markers: [],
+    };
+    act(() => view.api().adopt(rebaseCanvas(saved, saved, server).canvas));
+    await settle();
+
+    act(() => view.api().undo());
+    await settle();
+    expect(view.latest().items.find((one) => one.id === "n1")?.text, "撤的是自己写的那句").toBe("");
+    expect(view.latest().items.map((one) => one.id), "服务端落下的那一格还在").toContain("n1-out-1");
+    expect(view.latest().edges.map((one) => one.id), "连它的来历线也在").toContain("n1->n1-out-1");
+
+    act(() => view.api().redo());
+    await settle();
+    act(() => view.api().patch("n1", { text: "再改" }));
+    await settle();
+    //: 人自己删掉那一格(这是人的编辑)。
+    const out = document.querySelector('[data-id="n1-out-1"]') as HTMLElement;
+    act(() => void out.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+    act(() => {
+      out.focus();
+      out.dispatchEvent(new KeyboardEvent("keydown", { key: "Backspace", bubbles: true }));
+    });
+    await settle();
+    expect(view.latest().items.map((one) => one.id)).not.toContain("n1-out-1");
+    act(() => view.api().undo());
+    await settle();
+    act(() => view.api().redo());
+    await settle();
+    expect(view.latest().items.map((one) => one.id), "重做回到删掉之后").not.toContain("n1-out-1");
   });
 
   it("时间线格里剪的一刀也在画板的撤销里:按做的先后退,退到它时调那条时间线的撤销、画布不动;重做同理", async () => {
