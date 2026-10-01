@@ -314,6 +314,8 @@ def highlight_shorts_graph(*, chat: Any) -> dict[str, Any]:
                 "output": "{{export_clip.asset_id}}",
                 # 导出是本机 ffmpeg,并发开太高只会互相抢 CPU。
                 "concurrency": 2,
+                #: 「想要几条」不只写进提示词:模型多挑了几条,也只切前这么多条。
+                "max_items": "{{start.target_count}}",
             },
         },
         {
@@ -609,6 +611,8 @@ def product_on_model_graph(
                 #: 视频和图一起归进了这次拍摄的项目。循环的交付也就不依赖视频那个节点(删掉它照样成立)。
                 "output": "{{on_model.asset_id}}",
                 "concurrency": 2,
+                #: 「要几组」是钱的闸门,不只是提示词:模型多规划了几组,也只出前这么多组。
+                "max_items": "{{start.scene_count}}",
             },
         },
         {
@@ -1202,6 +1206,8 @@ def fabric_lookbook_graph(*, chat: Any, image: Any) -> dict[str, Any]:
                 },
                 "output": "{{application_shot.asset_id}}",
                 "concurrency": 2,
+                #: 「要几种应用」是钱的闸门:模型多规划了几种,也只出前这么多张。
+                "max_items": "{{start.application_count}}",
             },
         },
         {

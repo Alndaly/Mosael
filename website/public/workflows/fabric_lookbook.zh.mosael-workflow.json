@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "面料 → 应用效果图与规格页",
   "description": "给一块面料的实拍图和参数,规划它真正适合做的几种成品(最多 12 种),每种出一张放在真实空间里的效果图,并生成一页可直接发客户的规格与应用提案。规格只复述你给出的参数,没给的写「需与工厂确认」。每一种是一次付费出图。",
-  "graph_hash": "f41559ada58ad506671a01c8e8773919bc850fdc698f962cb4c3b604ebf3dcd5",
+  "graph_hash": "a32d79f28f181941f696fe785fcca80e07588a5c87b0b1477e02506708f67fab",
   "graph": {
     "meta": {
       "template_id": "fabric_lookbook",
@@ -185,7 +185,8 @@
             ]
           },
           "output": "{{application_shot.asset_id}}",
-          "concurrency": 2
+          "concurrency": 2,
+          "max_items": "{{start.application_count}}"
         }
       },
       {

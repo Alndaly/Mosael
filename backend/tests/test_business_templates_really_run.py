@@ -489,6 +489,17 @@ class Test上身图真跑:
             assert "- 软糯不扎" in note.markdown and "**周末**" in note.markdown
             assert '["' not in note.markdown and '{"' not in note.markdown, "笔记里插的是 JSON 原文"
 
+    def test_模型多规划了几组_也只出开始参数要的那几组(self, monkeypatch) -> None:
+        ws = _workspace()
+        plan = _lookbook(motion=False)
+        plan["scenes"] = plan["scenes"] * 6  # 12 组,开始参数只要 2 组
+        studio = Studio(monkeypatch, ws, {"product_lookbook_plan": plan})
+        graph = _pick(product_on_model_graph(chat=CHAT, image=SEEDREAM, video=ModelChoice()), "product_photo",
+                      asset_id=_asset(ws, "image", "开衫平铺"))
+        context = _run(ws, graph, product_name="开衫", product_brief="米色针织开衫", scene_count=2)
+        assert len(studio.calls["ai_generate"]) == 2, "「要几组」只写进了提示词,模型多给几组就多付几次钱"
+        assert context["shoot_scenes"]["dropped"] == 10
+
     def test_没有视频模型时只出图(self, monkeypatch) -> None:
         ws = _workspace()
         studio = Studio(monkeypatch, ws, {"product_lookbook_plan": _lookbook(motion=False)})

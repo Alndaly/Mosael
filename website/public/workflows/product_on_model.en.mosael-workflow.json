@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "Product photo into on-model shots",
   "description": "From one flat-lay or fabric photo, plan a few sellable scenes (up to 12) and shoot a portrait on-model image for each; where a video model is available, put every scene in motion with that image as its first frame. The product photo is carried into every generation — cut, colour, texture and logo come from it, not from a description. Images and clips are filed into one project and the copy lines are saved as a note. Each scene is one paid image generation (plus one video generation with motion).",
-  "graph_hash": "3acbe2cc0afd27a623ee6c255d58c789d686424dd91c552bfb3b0370db7ac2be",
+  "graph_hash": "2b9ff7d4248fe5534498a3342f21a61b2032777418f7dbccf878f1f53d440749",
   "graph": {
     "meta": {
       "template_id": "product_on_model",
@@ -267,7 +267,8 @@
             ]
           },
           "output": "{{on_model.asset_id}}",
-          "concurrency": 2
+          "concurrency": 2,
+          "max_items": "{{start.scene_count}}"
         }
       },
       {

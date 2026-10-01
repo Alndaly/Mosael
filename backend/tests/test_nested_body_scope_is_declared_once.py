@@ -107,7 +107,7 @@ def test_空的循环体在启动前就被拒() -> None:
     ("container", "body_template", "config", "expected"),
     [
         ("loop_foreach", "{{loop.index}}:{{loop.item}}/{{input.tag}}", {"items": ["a", "b"], "inputs": {"tag": "T"}, "output": "{{say.text}}"},
-         {"results": ["0:a/T", "1:b/T"], "count": 2}),
+         {"results": ["0:a/T", "1:b/T"], "count": 2, "dropped": 0}),
         ("loop_while", "第{{loop.index}}轮", {"output": "{{say.text}}"}, {"results": ["第0轮"], "count": 1, "iterations": 1}),
         ("subgraph", "你好 {{input.who}}", {"inputs": {"who": "世界"}, "output": "{{say.text}}"}, {"output": "你好 世界"}),
     ],

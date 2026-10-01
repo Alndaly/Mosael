@@ -73,6 +73,14 @@ def loop_foreach(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[s
     output_tpl = config.get("output", "")
     inputs = config.get("inputs")
     shared_inputs = dict(inputs) if isinstance(inputs, dict) else {}
+    #: 最多取前几项。模板里接开始参数(`{{start.max_shots}}`):「要几组」此前只写进提示词,模型多给几组就多付几次钱。
+    #: 留空不限;多出来的那几项不跑,条数交在 dropped。
+    limit = whole_number(config, "max_items", node_type="loop_foreach")
+    dropped = 0
+    if limit is not None:
+        limit = at_least(limit, 1, key="max_items", node_type="loop_foreach")
+        dropped = max(0, len(items) - limit)
+        items = items[:limit]
     if len(items) > LOOP_FOREACH_HARD_CAP:
         raise WorkflowDomainError(
             "wfErr_loopTooMany", params={"count": len(items), "cap": LOOP_FOREACH_HARD_CAP}
@@ -101,7 +109,7 @@ def loop_foreach(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[s
             results.append(iterate(index, item))
     else:
         results = _iterate_concurrently(iterate, items, concurrency)
-    return {"results": results, "count": len(results)}
+    return {"results": results, "count": len(results), "dropped": dropped}
 
 
 def _items_from_text(text: str) -> list[Any]:

@@ -767,6 +767,8 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfField_timeline_end": {"zh": "时间线结束位置", "en": "Timeline end"},
     "wfField_timeline_start": {"zh": "时间线起始位置", "en": "Timeline start"},
     "wfField_trimmed": {"zh": "裁掉的秒数", "en": "Trimmed seconds"},
+    "wfField_max_items": {"zh": "最多取前几项", "en": "Max items"},
+    "wfField_dropped": {"zh": "没跑的项数", "en": "Items not run"},
     "wfField_trim_overflow": {"zh": "放不下就裁掉尾巴", "en": "Trim what doesn't fit"},
     "wfField_until": {"zh": "最晚到第几秒", "en": "Until (seconds)"},
     "wfField_tracks": {"zh": "轨道列表", "en": "Tracks"},

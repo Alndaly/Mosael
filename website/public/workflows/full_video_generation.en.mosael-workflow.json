@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "Topic to finished video",
   "description": "Turn a topic into a creative brief, script and visual bible; characters and locations already in the asset library are reused with their references, and only new ones get a turnaround sheet or concept art — saved to the library — auto-build a 3D blockout with each shot's camera position and move, then generate each shot from a first frame (and a last frame where needed) painted on the blockout — or straight from the turnarounds and the blockout camera move — and assemble, caption and export the video. Cost: by default up to 8 shots, each one video generation plus one or two keyframe images, on top of up to 7 turnaround and location images (none for those already in the library), 5 chat calls and per-shot narration — the most expensive template here; max_shots on the start node caps the shot count.",
-  "graph_hash": "261f41cb71061990082fbf9fab762f89a5f454b056cfa28c4d7ddb77d1ec9d80",
+  "graph_hash": "6e9c2b7b11d7400b5a6823d77bfa9d89449067073a777aaababee2e112ea5e14",
   "graph": {
     "meta": {
       "template_id": "full_video_generation",
@@ -1411,7 +1411,8 @@
             ]
           },
           "output": "",
-          "concurrency": 3
+          "concurrency": 3,
+          "max_items": "{{start.max_shots}}"
         }
       },
       {
