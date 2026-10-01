@@ -19,12 +19,12 @@ from collections.abc import Callable
 from typing import Any
 
 from mosael_formats.plugin_env import PACKAGE_SOURCE_ENV
-from mosael_formats.plugin_manifest import ASSET_FORMAT, CALL_CONTRACTS
+from mosael_formats.plugin_manifest import ASSET_FORMAT, CALL_CONTRACTS, unbacked_asset_fields
 
 #: 当前清单版本。加一个新的迁移步骤就 +1,并把它加进 _STEPS。装好的包存着的清单也跟着升(见后端
 #: db/migrations 的 `upgrade-stored-plugin-manifests`)、装包时也先升(plugin_archive),所以**收紧清单规则时,
 #: 老清单要能被某一步改合格**。
-MANIFEST_VERSION = 5
+MANIFEST_VERSION = 6
 
 
 def _to_runtime_block(raw: dict[str, Any]) -> bool:
@@ -200,21 +200,38 @@ def _node_config_assets_follow_schema(raw: dict[str, Any]) -> bool:
     changed = False
     for tool in declared:
         node = tool.get("node") if isinstance(tool, dict) else None
-        config = node.get("config") if isinstance(node, dict) else None
-        if not isinstance(config, dict):
-            continue
-        schema = tool.get("input_schema")
-        properties = schema.get("properties") if isinstance(schema, dict) else None
-        properties = properties if isinstance(properties, dict) else {}
-        for key, entry in config.items():
-            if not (isinstance(entry, dict) and entry.get("format") == ASSET_FORMAT):
-                continue
-            spec = properties.get(key) if isinstance(properties.get(key), dict) else {}
-            items = spec.get("items") if isinstance(spec.get("items"), dict) else {}
-            if spec.get("format") != ASSET_FORMAT and items.get("format") != ASSET_FORMAT:
-                entry.pop("format")
-                changed = True
+        changed |= _strip_unbacked_assets(node, tool.get("input_schema") if isinstance(tool, dict) else None)
     return changed
+
+
+def _override_node_config_assets_follow_schema(raw: dict[str, Any]) -> bool:
+    """`tools.overrides` 里给声明过的工具换的 `node` 块,同上一步:标成素材而 input_schema 不是的格子去掉那个标记。
+
+    清单规则此前只查 declare 里的 node 块,overrides 里同样的写法装得上;现在一并查,装着的老清单由这一步改合格。
+    MCP 插件的覆盖层没有 declare 可对照,不动。
+    """
+    tools = raw.get("tools")
+    if not isinstance(tools, dict):
+        return False
+    declared = tools.get("declare") if isinstance(tools.get("declare"), list) else []
+    overrides = tools.get("overrides") if isinstance(tools.get("overrides"), dict) else {}
+    schemas = {tool.get("name"): tool.get("input_schema") for tool in declared if isinstance(tool, dict)}
+    changed = False
+    for name, spec in overrides.items():
+        if name in schemas and isinstance(spec, dict):
+            changed |= _strip_unbacked_assets(spec.get("node"), schemas[name])
+    return changed
+
+
+def _strip_unbacked_assets(node: Any, schema: Any) -> bool:
+    """一个 node 块里标成素材、input_schema 里却不是的格子,去掉 `format` 标记。→ 是否改动过。"""
+    config = node.get("config") if isinstance(node, dict) else None
+    if not isinstance(config, dict):
+        return False
+    fields = unbacked_asset_fields(config, schema)
+    for key in fields:
+        config[key].pop("format")
+    return bool(fields)
 
 
 #: 按顺序跑。加新步骤往后追加,并把 MANIFEST_VERSION +1。
@@ -227,6 +244,7 @@ _STEPS = (
     _legacy_mirror_fields_to_sources,
     _capability_inputs_follow_contract,
     _node_config_assets_follow_schema,
+    _override_node_config_assets_follow_schema,
 )
 
 

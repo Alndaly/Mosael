@@ -83,6 +83,11 @@ def test_清单解析按当时的语言挑名字() -> None:
             "input_schema": {"type": "object", "properties": {"img": {"type": "string"}}},
             "node": {"config": {"img": {"type": "template", "format": "asset"}}}}]}},
          "pluginErr_manifestNodeAssetNotInSchema"),
+        # overrides 给声明过的工具换的 node 块是同一件事(它整块顶替工具自己的 node)
+        ({"id": "a", "version": "1", "name": "n", "tools": {
+            "declare": [{"name": "p", "input_schema": {"type": "object", "properties": {"img": {"type": "string"}}}}],
+            "overrides": {"p": {"node": {"config": {"img": {"type": "template", "format": "asset"}}}}}}},
+         "pluginErr_manifestNodeAssetNotInSchema"),
     ],
 )
 def test_清单的硬规矩(raw: dict, key: str) -> None:
@@ -246,3 +251,21 @@ def test_格子数上限() -> None:
     with pytest.raises(board_snapshot.SnapshotError) as caught:
         board_snapshot.validate_snapshot(snapshot(items=items, edges=[]), max_items=4)
     assert caught.value.key == "snapshotErr_tooManyItems"
+
+
+def test_overrides里多标的素材_升级时去掉_升完解析得过() -> None:
+    """规则收紧到 overrides 之后,装着的 v5 清单(那时 overrides 不查)要能被升级链改合格,否则读它就抛。"""
+    from mosael_formats.plugin_manifest_upgrade import MANIFEST_VERSION, upgrade
+
+    raw = {"id": "a", "version": "1", "name": "n", "manifest_version": 5, "runtime": {"kind": "process", "entry": "m.py"},
+           "tools": {"declare": [{"name": "p", "input_schema": {"type": "object", "properties": {
+               "img": {"type": "string"}, "ok": {"type": "array", "items": {"type": "string", "format": "asset"}}}}}],
+               "overrides": {"p": {"node": {"config": {"img": {"type": "template", "format": "asset"},
+                                                       "ok": {"format": "asset"}}}},
+                             "mcp_only": {"node": {"config": {"x": {"format": "asset"}}}}}}}
+    assert upgrade(raw) and raw["manifest_version"] == MANIFEST_VERSION
+    overrides = raw["tools"]["overrides"]
+    assert "format" not in overrides["p"]["node"]["config"]["img"]
+    assert overrides["p"]["node"]["config"]["ok"]["format"] == "asset", "两边一致的不动"
+    assert overrides["mcp_only"]["node"]["config"]["x"]["format"] == "asset", "没有声明可对照的不动"
+    parse(raw, "x")
