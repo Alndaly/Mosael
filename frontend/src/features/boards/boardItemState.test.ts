@@ -37,13 +37,25 @@ describe("画布节点状态", () => {
 });
 
 describe("终态轮询补丁", () => {
-  it("成功时同步服务端清空后的表单，而不是只换 asset_id", () => {
+  it("成功时只补运行态和产出:表单、正文由合并管 —— 补丁不盖掉刚合好的本地改动", () => {
+    //: 服务端清空表单这件事由轮询采用那一版时的三方合并落到本地(BoardsView.adoptServer);收尾补丁再写一遍表单,
+    //: 就把人在跑的这段时间里改的提示词盖回去了。
     const item = image({
       asset_id: "asset-1",
       form: { prompt: "", provider: "evolink", model: "m", source_assets: [], mentioned_asset_ids: [] },
       run: { status: "succeeded" },
     });
-    expect(boardSettlementPatch(item)).toMatchObject({ asset_id: "asset-1", form: item.form });
+    expect(boardSettlementPatch(item)).toEqual({ asset_id: "asset-1", run: { status: "succeeded" } });
+  });
+
+  it("派生宿主跑完一项能力:只补运行态 —— 它自己的正文、表单、素材都是人的", () => {
+    const host: BoardItem = {
+      id: "a", kind: "audio", x: 0, y: 0, asset_id: "own", text: "人刚改的名字", form: { producer: "speak", abilities: {} },
+      run: { status: "succeeded", ability: "node:transcribe" },
+    };
+    expect(boardSettlementPatch(host)).toEqual({ run: { status: "succeeded", ability: "node:transcribe" } });
+    const note: BoardItem = { id: "n", kind: "note", x: 0, y: 0, text: "人刚改的", run: { status: "succeeded", ability: "node:translate" } };
+    expect(boardSettlementPatch(note)).toEqual({ run: { status: "succeeded", ability: "node:translate" } });
   });
 
   it("按状态认「跑完了」:没留下原因的失败、被取消,同样落回画布", () => {
@@ -52,9 +64,9 @@ describe("终态轮询补丁", () => {
     expect(boardSettlementPatch(image({ run: { status: "cancelled" } }))).toEqual({ run: { status: "cancelled" } });
   });
 
-  it("便签写成了:补丁带回的是正文,不是 asset_id", () => {
+  it("便签写成了:补丁只补运行态 —— 写出来的正文由合并落到本地,不带 asset_id", () => {
     const note: BoardItem = { id: "n1", kind: "note", x: 0, y: 0, text: "写好的", form: { prompt: "" }, run: { status: "succeeded" } };
-    expect(boardSettlementPatch(note)).toEqual({ text: "写好的", form: { prompt: "" }, run: { status: "succeeded" } });
+    expect(boardSettlementPatch(note)).toEqual({ run: { status: "succeeded" } });
   });
 
   it("还在跑的那一格不出补丁", () => {

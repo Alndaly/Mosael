@@ -492,6 +492,28 @@ describe("服务端那一版前进了(回执、占位、智能体),本地手上�
     expect(server.state.canvas.items.find((one) => one.id === "n1")?.text, "存回去的也是它").toBe("刚敲的");
   });
 
+  it("便签上跑的翻译落下时人正在改这张便签:收尾只补运行态,不拿服务端那份正文盖掉刚合好的", async () => {
+    const host = { ...note, form: { producer: "write" as const }, run: { status: "running" as const, job_id: "job-9", ability: "node:translate" as const } };
+    const server = strictServer({ items: [host], edges: [], markers: [] });
+    mount();
+    await vi.waitFor(() => expect(canvasHarness.props).not.toBeNull());
+    //: 翻译的产出落在右边(服务端写的,版本 +1),同一刻人在这张便签上改了字。
+    server.serverWrite((canvas) => ({
+      ...canvas,
+      items: [{ ...host, run: { status: "succeeded", ability: "node:translate" } }, { id: "n1-out-1", kind: "note", x: 700, y: 0, text: "A cat" }],
+      edges: [{ id: "n1->n1-out-1", source: "n1", target: "n1-out-1" }],
+    }));
+    act(() => props().onChange({ items: [{ ...host, text: "一只橘猫" }], edges: [], markers: [] }));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(6000);
+    });
+
+    expect(adoptedItem("n1")?.text, "合并留着人刚改的").toBe("一只橘猫");
+    const patches = canvasHarness.api.patch.mock.calls.filter(([id]) => id === "n1").map(([, patch]) => patch as Record<string, unknown>);
+    expect(patches.some((one) => "run" in one), "运行态收了尾").toBe(true);
+    expect(patches.filter((one) => "text" in one || "form" in one), "收尾补丁不写正文、表单").toEqual([]);
+  });
+
   it("智能体改板批准之后,打开着的画板合上那一版 —— 本地没存的改动照留,不等下一次保存撞版本号", async () => {
     const server = strictServer({ items: [note], edges: [], markers: [] });
     mount();

@@ -175,7 +175,12 @@ export function prunedLinksPatch(sent: BoardItem, stored: BoardItem, local: Boar
   return form ? { form } : null;
 }
 /**
- * 服务端轮询到的这一格已经不在跑了:写回本地节点的补丁。成功必须连同服务端已重置的 form 一起落下。
+ * 服务端轮询到的这一格已经不在跑了:写回本地节点的补丁。**只补运行态和产出**(媒体格这一轮填进来的 asset_id)。
+ *
+ * 正文、表单(写字落下的字、成功后清空的提示词)不在这里写:轮询采用那一版时已经按格子三方合并进本地
+ * (BoardsView.adoptServer)—— 人在跑的这段时间里改的字照留、没改的跟着服务端。此前这里把服务端那份
+ * {text, form} 再整个写一遍,刚合好的本地改动就被盖掉了(派生宿主上跑翻译时人在改这张便签,改的字没了)。
+ * 派生落点的宿主(跑一项能力的格子)自己的 asset_id 也是人的,不补。
  *
  * **按状态认「跑完了」,不按有没有失败原因。** 原因可以没有(任务失败时没留下话、被取消),
  * 此前按原因认,服务端只好拿状态名顶一个原因上去,格子上的失败原因于是写着「succeeded」。
@@ -184,12 +189,10 @@ export function prunedLinksPatch(sent: BoardItem, stored: BoardItem, local: Boar
 export function boardSettlementPatch(item: BoardItem): Partial<BoardItem> | null {
   if (itemIsRunning(item)) return null;
   if (item.asset_id || itemRunStatus(item) === "succeeded") {
-    return {
-      //: 产出:媒体是 asset_id,便签是正文(写字的回执把它写进 text)。
-      ...(item.kind === "note" ? { text: item.text } : { asset_id: item.asset_id }),
-      form: item.form,
-      run: item.run ?? { status: "succeeded" },
-    };
+    const run = item.run ?? { status: "succeeded" as const };
+    const derived = Boolean(item.run?.ability) || derivesOutputs(item.form?.producer);
+    //: 产出:媒体格是这一轮填进来的 asset_id;便签的产出是正文(合并已经落下了)。
+    return item.kind === "note" || derived ? { run } : { asset_id: item.asset_id, run };
   }
   return { run: item.run };
 }
