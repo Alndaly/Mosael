@@ -135,9 +135,11 @@ def resolve_ai_chat_target(
     """`surface` 是调用方所在的执行通道(见 ai_chat.target_for):工作流节点是 automation ——
     订阅授权的连接经网关可用,和 LLM 节点一样;界面上的翻译接口是 direct。"""
     from app.domain.providers import credentials as provider_credentials
-    from app.domain.providers.chat_connection import default_chat_connection
+    from app.domain.providers.chat_connection import default_chat_connection, runner_choice
     from app.domain.providers.selection import find_enabled_connection
 
+    #: 钉着的是别人的连接(别的成员建的图):换成他自己的默认,见 runner_choice。
+    profile_id, model, pinned_by_other = runner_choice(db, profile_id, model, user_id=user_id)
     #: 没点名连接:他的默认对话模型所在的那条(和 LLM 节点同一个挑法,见 default_chat_connection)。此前是
     #: 最早建的那条启用连接 —— 不管它会不会对话,官方译配模板又没写连接,于是翻译跑到了一条生图连接上。
     profile = (
@@ -146,7 +148,7 @@ def resolve_ai_chat_target(
         else default_chat_connection(db, owner_user_id=user_id)
     )
     if profile is None or not profile.enabled:
-        raise TranslateError("translateErr_noProvider")
+        raise TranslateError("translateErr_pinnedNotYours" if pinned_by_other else "translateErr_noProvider")
     resolved = provider_credentials.resolve_connection(db, profile, user_id)
     if resolved is None:
         raise TranslateError("translateErr_noCredential", name=profile.name)

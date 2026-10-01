@@ -333,6 +333,11 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "没有可用的 AI 供应商,请先在设置里添加",
         "en": "No AI provider is available — add one in Settings first",
     },
+    #: 翻译节点上钉着建图人的连接,跑的人自己又没有能对话的连接(见 providers/chat_connection.runner_choice)。
+    "translateErr_pinnedNotYours": {
+        "zh": "翻译节点上选的 AI 连接属于建这张图的成员,你用不了;你自己还没有能对话的连接 —— 先在设置里接一条,或在节点上换成你自己的(也可以换成 Google 翻译)",
+        "en": "The AI connection picked on the translate step belongs to the member who built the workflow, so you can't use it, and you don't have a chat connection of your own yet. Add one in Settings, or pick one of yours on the node (or switch to Google Translate).",
+    },
     "translateErr_noCredential": {
         "zh": "供应商「{name}」还没有配置你的密钥,请先在设置里填写",
         "en": "Provider \u300c{name}\u300d has no key of yours yet — set it in Settings first",

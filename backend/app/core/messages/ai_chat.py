@@ -51,6 +51,11 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "没有可用的 AI 供应商连接,请先在设置里添加并配置",
         "en": "No AI provider connection is available. Add and configure one in Settings first.",
     },
+    #: 节点上钉着建图人的连接,跑的人自己又没有能对话的连接(见 providers/chat_connection.runner_choice)。
+    "providerErr_pinnedNotYours": {
+        "zh": "节点上选的 AI 连接属于建这张图的成员,你用不了;你自己还没有能对话的连接 —— 先在设置里接一条,或在节点上换成你自己的",
+        "en": "The AI connection picked on this node belongs to the member who built the workflow, so you can't use it, and you don't have a chat connection of your own yet. Add one in Settings, or pick one of yours on the node.",
+    },
     "providerErr_noKey": {
         "zh": "供应商「{name}」还没有配置你的密钥,请先在设置里填写",
         "en": "Provider \"{name}\" doesn't have your key yet. Add it in Settings first.",

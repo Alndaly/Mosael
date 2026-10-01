@@ -303,5 +303,9 @@ def test_模型一路传到调用目标(monkeypatch) -> None:
         "app.domain.providers.credentials.resolve_connection", lambda *a, **k: object(), raising=False
     )
 
-    assert tr.resolve_ai_chat_target(None, "p1", "u1", "kimi-k3") == "target"
+    #: 点名的连接是他自己的(别人的连接会换成他自己的默认,见 providers/chat_connection.runner_choice)。
+    from types import SimpleNamespace
+
+    own = SimpleNamespace(get=lambda _model, _id: SimpleNamespace(owner_user_id="u1"))
+    assert tr.resolve_ai_chat_target(own, "p1", "u1", "kimi-k3") == "target"
     assert seen["model"] == "kimi-k3"

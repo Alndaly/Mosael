@@ -36,6 +36,24 @@ def default_chat_connection(db: Session, *, owner_user_id: str | None) -> Provid
     return min(usable, key=lambda profile: profile.created_at, default=None)
 
 
+def runner_choice(db: Session, profile_id: str | None, model: str, *, user_id: str | None) -> tuple[str | None, str, bool]:
+    """节点上钉着的「连接 + 模型」,换成**跑的人**用得上的那一对:`(连接 id 或 None, 模型, 是否换过)`。
+
+    工作流图是整个工作区共用的,而建图时按建图的人挑好的连接钉在了节点上(官方模板就是这样建的)。别的成员
+    跑这张图,那条连接不是他的 —— 用不了(连接按人隔离),也不该用(花的是建图人的钱)。此前直接报「没有可用的
+    AI 供应商」,他根本看不出是哪里不对。
+
+    连接属于别人:换成他自己的默认对话连接(返回 None = 不点名,按他的默认挑),模型跟着清空 —— 那个模型名是
+    那条连接上的。连接是他自己的、已经不在了、或者说不清跑的人是谁,原样交回,由后面报它该报的错。
+    """
+    if not profile_id or user_id is None:
+        return profile_id or None, model, False
+    profile = db.get(ProviderProfile, str(profile_id))
+    if profile is None or profile.owner_user_id == user_id:
+        return str(profile_id), model, False
+    return None, "", True
+
+
 def _connection_error(error: type[Exception], key: str, **params: object) -> Exception:
     """用调用方给的错误类型说「连接不可用」。
 
@@ -47,12 +65,20 @@ def _connection_error(error: type[Exception], key: str, **params: object) -> Exc
 
 
 def require_connection(
-    db: Session, profile_id: str | None = None, *, user_id: str | None, error: type[Exception] = RuntimeError
+    db: Session,
+    profile_id: str | None = None,
+    *,
+    user_id: str | None,
+    error: type[Exception] = RuntimeError,
+    pinned_by_other: bool = False,
 ) -> ResolvedConnection:
     """指定 id 时要求该 profile 存在且启用;缺省用他的默认对话连接(见 default_chat_connection)。
 
     调用方(LLM 节点、工作流 AI 改图、发布文案、画板、提示词优化)要的都是**对话**,所以缺省按对话能力挑,
     不是「最早建的那条」(见 default_chat_connection)。
+
+    `pinned_by_other`:节点上原本钉着别人的连接、已经换成按他的默认挑(见 runner_choice)。他自己也没有
+    能对话的连接时,说清楚是「那条连接是别人的」,而不是一句笼统的「没有可用的连接」。
 
     供应商选取是 providers 领域的事——workflows / publish / agent 各自的调用方只提供
     要抛的领域错误类型,不再各自复制这段查询(此前同一逻辑存在三份)。
@@ -64,7 +90,7 @@ def require_connection(
     else:
         profile = default_chat_connection(db, owner_user_id=user_id)
         if profile is None:
-            raise _connection_error(error, "providerErr_noConnection")
+            raise _connection_error(error, "providerErr_pinnedNotYours" if pinned_by_other else "providerErr_noConnection")
     resolved = provider_credentials.resolve_connection(db, profile, user_id)
     if resolved is None:
         # 没有可用的钥匙时报出来,而不是找一把能用的顶上 —— 「我以为花的是自己的额度,

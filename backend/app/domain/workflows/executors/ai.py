@@ -13,7 +13,7 @@ from app.core.usage_scope import workspace_scope
 from app.domain.ai_runtime import configured_max_retries
 from app.domain.ai_chat import AiChatError, chat, response_format_tier, target_for
 from app.domain.billing.usage import billable, once
-from app.domain.providers.chat_connection import require_connection
+from app.domain.providers.chat_connection import require_connection, runner_choice
 from app.domain.workflows import WorkflowDomainError, field_name
 from app.domain.jobs import current_actor
 from app.domain.workflows.executors.registry import RunScope, register
@@ -344,7 +344,11 @@ def _json_result(
 
 @register("llm")
 def llm(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
-    profile = require_connection(db, config.get("profile_id"), user_id=current_actor(db), error=WorkflowDomainError)
+    actor = current_actor(db)
+    #: 节点上钉的是建图那位成员的连接时,换成跑的人自己的默认(模型跟着清空),见 runner_choice。
+    profile_id, model, pinned_by_other = runner_choice(db, config.get("profile_id"), str(config.get("model") or ""),
+                                                       user_id=actor)
+    profile = require_connection(db, profile_id, user_id=actor, error=WorkflowDomainError, pinned_by_other=pinned_by_other)
     messages: list[dict[str, Any]] = []
     if config.get("system"):
         messages.append({"role": "system", "content": str(config["system"])})
@@ -368,7 +372,7 @@ def llm(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
         messages.append({"role": "user", "content": schema_text})
     wants_json = str(config.get("response_format") or "text") in {"json_object", "json_schema"}
     try:
-        target = target_for(db, profile, model=str(config.get("model") or ""), surface="automation")
+        target = target_for(db, profile, model=model, surface="automation")
         requested = _request_payload(config, target.model, messages)
         payload = _honour_structured_output(requested, target.structured_output)
         allow_response_format_fallback = "response_format" in payload
