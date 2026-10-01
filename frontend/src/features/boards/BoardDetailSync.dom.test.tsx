@@ -256,6 +256,26 @@ describe("画板详情页与服务端的同步", () => {
     expect((apiMocks.updateBoard.mock.calls[0][1] as { canvas: BoardCanvas }).canvas.items[0].x).toBe(500);
   });
 
+  it("一直在操作、画布的把手每一步都换一份新的:轮询照样按时,不被一次次重置", async () => {
+    //: 撤销历史每变一次,画布就交上来一份新的把手(canUndo 变了);此前轮询的定时器依赖它,一直在操作就一直轮询不到。
+    const running = { id: "img", kind: "image" as const, x: 0, y: 0, width: 260, height: 180, run: { status: "running" as const, job_id: "job-1" } };
+    const server: BoardCanvas = { items: [running], edges: [], markers: [] };
+    opens(boardAt(3, server));
+    apiMocks.getBoard.mockResolvedValue(boardAt(4, { ...server, items: [{ ...running, asset_id: "a1", run: { status: "succeeded" } }] }));
+
+    mount();
+    await vi.waitFor(() => expect(canvasHarness.props).not.toBeNull());
+    for (let step = 1; step <= 8; step += 1) {
+      act(() => (canvasHarness.props!.onReady as (api: unknown) => void)({ ...canvasHarness.api, canUndo: step % 2 === 0 }));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(500);
+      });
+    }
+
+    expect(apiMocks.getBoard.mock.calls.length, "4 秒里至少轮询过一次").toBeGreaterThan(1);
+    expect(canvasHarness.api.patch).toHaveBeenCalledWith("img", expect.objectContaining({ asset_id: "a1" }));
+  });
+
   it("刚在便签上敲完字就点「改写」:先把这段字存上,改写照着眼前这段来", async () => {
     // 服务端从它那份画布上读便签现在的字。自动保存还在 600ms 防抖里时就发改写,读到的是上一版。
     const server: BoardCanvas = {

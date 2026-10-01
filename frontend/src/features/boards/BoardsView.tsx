@@ -588,7 +588,8 @@ function BoardDetail({
   //: 画布交出来的把手。顶栏那组按钮要和身份胶囊并排,而它们依赖画布内部状态。
   //: **类型从画布导出**,别在这儿再抄一份 —— 抄的那份少一个动作不会报错,只会让按钮点了没反应。
   const [api, setApi] = React.useState<BoardCanvasApi | null>(null);
-  //: 画布的把手的最新一份,给卸载、关页面、定时器读。
+  //: 画布的把手的最新一份,给卸载、关页面、轮询读。**轮询和采用服务端那一版的回调不依赖 `api`**:撤销历史每变一次
+  //: 画布就交上来一份新把手(canUndo 变了),进了依赖的话一直在操作,轮询的定时器就一直被重置,产出要停手 2.5 秒才出现。
   const apiRef = React.useRef(api);
   apiRef.current = api;
   const commentsKey = ["comments", board.workspace_id, "board", board.id] as const;
@@ -682,7 +683,7 @@ function BoardDetail({
    * 服务端刚落下的格子(一项能力的产出、一次多张的其余几张)**全在视野外**时说一声,带一个「去看看」。
    * 不自己把视野挪过去:人这会儿可能正在别处干活,落下一格就被拽走比看不见更糟。
    */
-  //: 文案函数经 ref 读:这个回调在 adoptServer 的依赖里,而 adoptServer 在轮询定时器的依赖里 —— 它一换,定时器就重来。
+  //: 文案函数、画布把手经 ref 读:这个回调在 adoptServer 的依赖里,它们一换 adoptServer 就跟着换(详情缓存那个 effect 跟着重跑)。
   const tRef = React.useRef(t);
   tRef.current = t;
   const announceOffscreen = React.useCallback(
@@ -690,6 +691,7 @@ function BoardDetail({
       const t = tRef.current;
       const known = new Set([...base.items, ...(localCanvas.current?.items ?? [])].map((item) => item.id));
       const landed = fresh.items.filter((item) => !known.has(item.id) && merged.items.some((one) => one.id === item.id));
+      const api = apiRef.current;
       if (landed.length === 0 || !api) return;
       const rect = (item: BoardItem) => ({ x: item.x, y: item.y, width: item.width ?? 200, height: item.height ?? 120 });
       if (landed.some((item) => api.isInView(rect(item)))) return;
@@ -697,7 +699,7 @@ function BoardDetail({
         action: { label: t("boardShowOutputs"), onClick: () => api.focusItem(landed[0].id) },
       });
     },
-    [api],
+    [],
   );
   const adoptServer = React.useCallback(
     (fresh: Board): { adopted: boolean; conflicted: boolean } => {
@@ -706,6 +708,7 @@ function BoardDetail({
       //: 「本地」是画布**此刻**的样子,不是上一次汇上来的那份:画布的变化攒到停手 400ms 才汇(useBoardHistory),
       //: 窗口里刚敲的字、刚按的 ⌘Z 只在画布上。拿汇上来的那份去合,装回画布时就把它们冲掉了。先 flush 拿现在这一份
       //: (它也同时汇上来、记进撤销);flush 和下面装回去在同一段同步代码里,中间插不进新的编辑。
+      const api = apiRef.current;
       const mine = api?.flush() ?? localCanvas.current ?? base;
       const { canvas: merged, conflicted } = rebaseCanvas(base, mine, fresh.canvas);
       revision.current = fresh.revision;
@@ -722,7 +725,7 @@ function BoardDetail({
       onSaved(fresh);
       return { adopted: true, conflicted };
     },
-    [api, onSaved, queryClient, detailKey, announceOffscreen],
+    [onSaved, queryClient, detailKey, announceOffscreen],
   );
   //: 详情缓存里来了更新的一版(智能体改板批准之后、任务做完之后的重取):排进写队列合进本地。
   //: 在路上的保存先回来把版本推过去的话,这一份就不比手上的新,adoptServer 不采用。
@@ -951,6 +954,10 @@ function BoardDetail({
       return joined.length ? [...current, ...joined] : current;
     });
   }, [board.id, board.canvas.items, canvas]);
+  //: 定时器经 ref 读采用服务端那一版的回调:它依赖清单那一层交下来的 onSaved(每存一次就换一份),进了定时器的
+  //: 依赖,一直在存就一直轮询不到。
+  const adoptServerRef = React.useRef(adoptServer);
+  adoptServerRef.current = adoptServer;
   React.useEffect(() => {
     if (running.length === 0) return;
     const timer = setInterval(async () => {
@@ -960,7 +967,7 @@ function BoardDetail({
       //: (见 adoptServer)—— 不再因为本地有改动就不采用,那样下一次保存必撞 409。排进写队列:和在路上的保存
       //: 按先后来,保存先回来把版本推过去的话,这份旧的就不采用了。
       await serially(async () => {
-        adoptServer(fresh);
+        adoptServerRef.current(fresh);
       });
       const settled: string[] = [];
       for (const id of running) {
@@ -975,13 +982,13 @@ function BoardDetail({
         //: 框里持续转圈,底下那个提交按钮也一直按不动。
         const patch = boardSettlementPatch(item);
         if (!patch) continue;
-        api?.patch(id, patch);
+        apiRef.current?.patch(id, patch);
         settled.push(id);
       }
       if (settled.length) setRunning((current) => current.filter((id) => !settled.includes(id)));
     }, 2500);
     return () => clearInterval(timer);
-  }, [running, board.id, workspaceId, api, adoptServer, serially]);
+  }, [running, board.id, workspaceId, serially]);
 
   /**
    * ⌘/Ctrl+N 打开「添加」弹层 —— 和工作流详情页同键同义(那边是 ⌘N 添加节点)。
