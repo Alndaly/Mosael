@@ -173,10 +173,10 @@ def run_funasr(request: dict[str, Any]) -> dict[str, Any]:
         }]
     # **不硬写 "zh"**:此前无论请求什么语言,这里都把结果标成中文 —— 于是英文素材转出来的字幕
     # 带着 language=zh,下游(字幕对齐、翻译、导出)都按中文处理。我们装的预设确实是中文的
-    # (paraformer-zh),但"用的是中文模型"和"这段音频是中文"是两件事;请求里说了什么就报什么,
-    # 没说才回落到预设的语言。
-    # 语种优先取**模型检测出来的那个**(SenseVoice 以 <|zh|> 这类标记给出),其次用请求指定的,
-    # 最后才回落。此前这里硬写 "zh":英文素材转出来的字幕也标成中文,下游全按中文处理。
+    # (paraformer-zh),但"用的是中文模型"和"这段音频是中文"是两件事。
+    # 语种优先取**模型检测出来的那个**(SenseVoice 以 <|zh|> 这类标记给出),其次用请求指定的;
+    # 两样都没有就报空(认不出),**不回落成 "zh"** —— 回落的 "zh" 和真检测出来的 "zh" 下游分不清:
+    # 英文片子被记成中文,译成中文时被「原文已经是目标语言」拦下。空串下游一律当「不知道」,不比。
     detected = ""
     for sentence in sentences:
         _text, lang = strip_funasr_tags(sentence.get("sentence") or sentence.get("text") or "")
@@ -184,7 +184,7 @@ def run_funasr(request: dict[str, Any]) -> dict[str, Any]:
             detected = lang
             break
     return {
-        "language": detected or request.get("language") or "zh",
+        "language": detected or request.get("language") or "",
         "segments": funasr_sentences_to_segments(sentences),
     }
 

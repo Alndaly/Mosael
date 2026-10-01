@@ -407,7 +407,8 @@ def _run_transcription_body(job_id: str, asset_id: str) -> None:
             transcript = attach_transcript(
                 db,
                 asset_id=asset_id,
-                language=str(output.get("language") or "zh"),
+                #: 引擎没报语种:有请求指定的就用它,否则记空(认不出)—— 不回落成 "zh"(见 workers/asr 的说明)。
+                language=str(output.get("language") or language or ""),
                 segments=segments,
                 source=f"asr:{engine_id}",
             )
