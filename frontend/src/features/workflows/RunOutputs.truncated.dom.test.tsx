@@ -17,7 +17,7 @@ import type { RegistryLike } from "@/features/workflows/analyze";
 import { RunOutputs } from "@/features/workflows/RunOutputs";
 import type { Step } from "@/features/workflows/runSteps";
 
-const registry: RegistryLike = { get: () => ({ output_types: { text: "text" } }) };
+const registry: RegistryLike = { get: () => ({ output_types: { text: "text", results: "list" } }) };
 const FULL = "长".repeat(2600);
 const writeText = vi.fn(async () => undefined);
 
@@ -56,5 +56,26 @@ it("没截断的输出:不说截断,复制直接给值,不去取", async () => {
   expect(screen.queryByLabelText("wfOutputDownload")).toBeNull();
   fireEvent.click(screen.getByTitle("copy"));
   await waitFor(() => expect(writeText).toHaveBeenCalledWith("短的"));
+  expect(transport.api).not.toHaveBeenCalled();
+});
+
+it("嵌套里的长文字被截了(循环 results、子图 output 里的):这一格标明里面有截断,说清是哪几处", async () => {
+  //: 此前只认顶层那一层的截断:循环每一项里的长文案在快照里只剩开头,界面上照样看不出来。
+  const head = `${FULL.slice(0, 2000)}…`;
+  mount({
+    nid: "loop-1",
+    name: "逐镜",
+    status: "done",
+    jobId: "job-9",
+    outputs: { results: [{ text: head }, { text: "短的" }] },
+    truncated: { "results.0.text": FULL.length },
+  });
+  const notes = [...document.querySelectorAll("[data-output-truncated]")];
+  expect(notes).toHaveLength(1);
+  expect(notes[0].textContent).toContain("wfOutputNestedTruncated");
+  expect(notes[0].textContent).toContain("results.0.text");
+  //: 按路径取全文的接口还没定,这一格不假装能取:复制给的是快照,不去请求。
+  fireEvent.click(screen.getByTitle("copy"));
+  await waitFor(() => expect(writeText).toHaveBeenCalled());
   expect(transport.api).not.toHaveBeenCalled();
 });

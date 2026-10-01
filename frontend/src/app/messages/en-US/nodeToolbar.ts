@@ -5,6 +5,8 @@ export const nodeToolbar = {
   wfaEnterSubgraph: "Open subgraph",
   wfRunNoOutputs: "This step produced nothing",
   wfOutputTruncated: "Only the beginning is shown here — {n} characters in full; copy and download get the full text",
+  wfOutputNestedTruncated: "Some long text inside was cut to its beginning — what's shown and copied here isn't the full text:",
+  wfOutputNestedChars: "{n} characters in full",
   wfOutputDownload: "Download full text",
   wfOutputFullFailed: "Couldn't fetch the full text",
   wfSaveFailed: "Save failed",

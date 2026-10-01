@@ -5,6 +5,8 @@ export const nodeToolbar = {
   wfaEnterSubgraph: "进入子图",
   wfRunNoOutputs: "这一步没有产出",
   wfOutputTruncated: "这里只显示了开头,全文共 {n} 字;复制和下载拿到的是全文",
+  wfOutputNestedTruncated: "里面有几段长文字只留了开头,这里显示的、复制到的都不是全文:",
+  wfOutputNestedChars: "全文 {n} 字",
   wfOutputDownload: "下载全文",
   wfOutputFullFailed: "没取到全文",
   wfSaveFailed: "保存失败",

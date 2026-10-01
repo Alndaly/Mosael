@@ -7,7 +7,7 @@ import { errorText } from "@/api/errorMessage";
 import { useI18n } from "@/app/preferences";
 import type { RegistryLike } from "@/features/workflows/analyze";
 import { OutputAssets } from "@/features/workflows/OutputAssets";
-import { assetOutputs, outputRows, STEP_STATUS_LABELS, type OutputRow, type Step } from "@/features/workflows/runSteps";
+import { assetOutputs, outputRows, STEP_STATUS_LABELS, truncatedInside, type OutputRow, type Step } from "@/features/workflows/runSteps";
 import { WorkflowFailureDetails } from "@/components/app/FailureDetails";
 import { saveBlobToDisk } from "@/lib/download";
 
@@ -86,7 +86,7 @@ interface FullText {
   load: () => Promise<string>;
 }
 
-function ValueRow({ row, full }: { row: OutputRow; full?: FullText }) {
+function ValueRow({ row, full, inside = [] }: { row: OutputRow; full?: FullText; inside?: Array<{ path: string; chars: number }> }) {
   const t = useI18n();
   const text = outputText(row.value);
   const long = text.length > INLINE_LIMIT;
@@ -124,6 +124,19 @@ function ValueRow({ row, full }: { row: OutputRow; full?: FullText }) {
         <span className="text-ui-2xs text-warning" data-output-truncated="">
           {t("wfOutputTruncated").replace("{n}", String(full.chars))}
         </span>
+      )}
+      {inside.length > 0 && (
+        //: 里面(循环每一项、子图的产出)的长文字也只留了开头。按路径取全文还没有接口,这里不假装能取:
+        //: 说清哪几处被截了、全文多长,复制拿到的是快照。
+        <div className="grid gap-0.5 text-ui-2xs text-warning" data-output-truncated="">
+          <span>{t("wfOutputNestedTruncated")}</span>
+          {inside.map(({ path, chars }) => (
+            <span key={path} className="flex min-w-0 items-baseline gap-1.5">
+              <code className="truncate font-mono">{path}</code>
+              <span className="shrink-0">{t("wfOutputNestedChars").replace("{n}", String(chars))}</span>
+            </span>
+          ))}
+        </div>
       )}
       {long ? (
         // 折起来的那一份仍然要能一眼看见开头 —— 只给个"展开"按钮的话,用户得点开才知道
@@ -175,7 +188,7 @@ export function RunOutputs({ registry, nodeType, step }: { registry: RegistryLik
           chars != null && jobId
             ? { chars, load: async () => (await getWorkflowRunOutput(jobId, step.nid, row.key)).value }
             : undefined;
-        return <ValueRow key={row.key} row={row} full={full} />;
+        return <ValueRow key={row.key} row={row} full={full} inside={truncatedInside(step.truncated, row.key)} />;
       })}
       {assets.length === 0 && scalars.length === 0 && !step.error && (
         <span className="text-ui-xs font-normal text-muted-foreground">{t("wfRunNoOutputs")}</span>

@@ -162,6 +162,19 @@ export function outputRows(
   }));
 }
 
+/**
+ * 某个输出**里面**被截断的那几处:`truncated` 的键是路径(`results.0.text`、`output[2].text`),
+ * 值是全文字数。顶层那一格自己被截(键就是输出名)不算在这里 —— 那种有全文可取(见 RunOutputs)。
+ *
+ * 循环的 results、子图的 output 里也会有长文字;快照同样只留开头。路径怎么写由后端定,这里只认
+ * 「以输出名开头、后面跟 `.` 或 `[`」。
+ */
+export function truncatedInside(truncated: Record<string, number> | undefined, key: string): Array<{ path: string; chars: number }> {
+  return Object.entries(truncated ?? {})
+    .filter(([path]) => path.startsWith(`${key}.`) || path.startsWith(`${key}[`))
+    .map(([path, chars]) => ({ path, chars }));
+}
+
 /** 一份产出素材:名字跟着 id 一起走,到哪儿都还认得出它是哪一个输出。 */
 export interface AssetOutput {
   key: string;
