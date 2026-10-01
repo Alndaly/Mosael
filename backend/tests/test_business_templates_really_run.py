@@ -418,6 +418,22 @@ class Test带货口播真跑:
         assert [one["text"] for one in studio.calls["entity_speak"]] == [script["hook_line"] or script["call_to_action"]]
         assert video == ([0.0, 3.0, 7.0, 10.0] if empty == "hook_line" else [0.0, 6.0, 9.0, 13.0])
 
+    def test_脚本的目标时长跟着开始参数走_不是写死的一个区间(self, monkeypatch) -> None:
+        ws = _workspace()
+        captured: list[str] = []
+        studio = Studio(monkeypatch, ws, {"product_pitch_script": {"beats": BEATS}})
+        answer = studio.llm
+
+        def llm(db, scope, config):
+            captured.append(config["system"])
+            return answer(db, scope, config)
+
+        monkeypatch.setitem(registry._REGISTRY, "llm", llm)
+        graph = _pick(product_pitch_short_graph(chat=CHAT, image=SEEDREAM, voice_id="voice-1"),
+                      "product_photo", asset_id=_asset(ws, "image", "毛衣"))
+        _run(ws, graph, product_name="羊毛衫", selling_points="不起球", target_duration_seconds=60)
+        assert "约 60 秒" in captured[0] and "20-45" not in captured[0]
+
     def test_出镜版_主播取不到时_脚本那次对话一次都不花(self, monkeypatch) -> None:
         ws = _workspace()
         studio = Studio(monkeypatch, ws, {"product_pitch_script": {"hook_line": "", "beats": BEATS, "call_to_action": ""}})

@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "Product into a narrated short",
   "description": "From a product photo and a few selling points, write a beat-by-beat script (the first beat is the hook, the last the call to action, up to 12 beats), paint one portrait frame per beat with the product in it, lay each on the timeline for that beat's length, voice each beat in your cloned voice lined up with its start, add the on-screen lines, and export a vertical short. Nobody appears on camera. Only the selling points you provide are used — no invented claims or figures.",
-  "graph_hash": "804c5faffd3aa3762d63724bf5ef4e82e338cb988d9e4097b9785281a745a788",
+  "graph_hash": "61814317bb694c169264648a30510b1761b93a0881d325e0fa62d9377f474bc8",
   "graph": {
     "meta": {
       "template_id": "product_pitch_short",
@@ -57,7 +57,7 @@
           "profile_id": "",
           "model": "",
           "preset": "creative",
-          "system": "你是带货短视频的编导。用户给你一件商品和几条卖点，你要写一条 20-45 秒、能直接拍的\n口播脚本，按\"拍\"拆开。\n\n硬性要求：\n- 前三秒必须给出观看理由，不要从\"大家好\"开始。\n- 每一拍的 narration 念出来不能超过这一拍的 seconds：中文按每秒约 4 个字估，宁短勿长。\n- visual_prompt 用英文写这一拍的画面，**商品必须出现在画面里**；不要写机位参数，不要在画面里\n  生成文字、logo 或水印。\n- 卖点只能来自用户给的那几条，不要编造功效、成分、资质或数据。\n- caption 是屏幕上的短句，不是把 narration 原样抄一遍。\n- 最多 12 拍：每一拍都要出一张画面。\n\n只输出符合 JSON Schema 的对象。\n\n这一条没有人出镜:第一拍的 narration 就是开场钩子,最后一拍的 narration 是行动号召 —— 整条片子就是这几拍,\n首尾不另加。",
+          "system": "你是带货短视频的编导。用户给你一件商品和几条卖点，你要写一条约 {{start.target_duration_seconds}} 秒、\n能直接拍的口播脚本，按\"拍\"拆开。\n\n硬性要求：\n- 前三秒必须给出观看理由，不要从\"大家好\"开始。\n- 每一拍的 narration 念出来不能超过这一拍的 seconds：中文按每秒约 4 个字估，宁短勿长。\n- visual_prompt 用英文写这一拍的画面，**商品必须出现在画面里**；不要写机位参数，不要在画面里\n  生成文字、logo 或水印。\n- 卖点只能来自用户给的那几条，不要编造功效、成分、资质或数据。\n- caption 是屏幕上的短句，不是把 narration 原样抄一遍。\n- 最多 12 拍：每一拍都要出一张画面。\n\n只输出符合 JSON Schema 的对象。\n\n这一条没有人出镜:第一拍的 narration 就是开场钩子,最后一拍的 narration 是行动号召 —— 整条片子就是这几拍,\n首尾不另加。",
           "prompt": "商品名称：{{start.product_name}}\n卖点（只能用这些）：\n{{start.selling_points}}\n目标观众：{{start.audience}}\n成片目标时长：{{start.target_duration_seconds}} 秒\n\n请写出分拍脚本。各拍 seconds 之和就是成片时长，要接近目标时长。",
           "response_format": "json_schema",
           "json_schema_name": "product_pitch_script",

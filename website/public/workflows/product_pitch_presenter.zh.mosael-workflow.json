@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "商品 → 数字人出镜带货口播",
   "description": "在「带货口播短视频」的基础上,开场钩子和收尾号召换成资产库里的一位人物出镜说出来(用它的脸和嗓子),中间每一拍仍是带商品的画面,口播用同一个嗓子念、对齐每一拍的开头,每拍铺上屏幕短句,导出竖屏成片(带「AI 生成」标识)。运行前在「挑一位主播」上选好人物;人物要先在资产库里有正面图和音色;真人要有授权声明,克隆音色也要声明是谁的。",
-  "graph_hash": "b6f7a5b8a996fb5bc198684bd1a568a3abcf6eed90c4ec79d58de317b14611b0",
+  "graph_hash": "ffd9c0e38c09407dc935bc8d8db09b0d855fa42e031787eeaea45e8e31610b1b",
   "graph": {
     "meta": {
       "template_id": "product_pitch_presenter",
@@ -57,7 +57,7 @@
           "profile_id": "",
           "model": "",
           "preset": "creative",
-          "system": "你是带货短视频的编导。用户给你一件商品和几条卖点，你要写一条 20-45 秒、能直接拍的\n口播脚本，按\"拍\"拆开。\n\n硬性要求：\n- 前三秒必须给出观看理由，不要从\"大家好\"开始。\n- 每一拍的 narration 念出来不能超过这一拍的 seconds：中文按每秒约 4 个字估，宁短勿长。\n- visual_prompt 用英文写这一拍的画面，**商品必须出现在画面里**；不要写机位参数，不要在画面里\n  生成文字、logo 或水印。\n- 卖点只能来自用户给的那几条，不要编造功效、成分、资质或数据。\n- caption 是屏幕上的短句，不是把 narration 原样抄一遍。\n- 最多 12 拍：每一拍都要出一张画面。\n\n只输出符合 JSON Schema 的对象。\n\n这一条由一位主播**出镜**说开场钩子(hook_line)和结尾号召(call_to_action):这两句是对着镜头说的话,\n口语、自然,各自念出来不超过 8 秒;它们**也算在成片时长里**。中间的每一拍是商品画面,narration 是画外音。",
+          "system": "你是带货短视频的编导。用户给你一件商品和几条卖点，你要写一条约 {{start.target_duration_seconds}} 秒、\n能直接拍的口播脚本，按\"拍\"拆开。\n\n硬性要求：\n- 前三秒必须给出观看理由，不要从\"大家好\"开始。\n- 每一拍的 narration 念出来不能超过这一拍的 seconds：中文按每秒约 4 个字估，宁短勿长。\n- visual_prompt 用英文写这一拍的画面，**商品必须出现在画面里**；不要写机位参数，不要在画面里\n  生成文字、logo 或水印。\n- 卖点只能来自用户给的那几条，不要编造功效、成分、资质或数据。\n- caption 是屏幕上的短句，不是把 narration 原样抄一遍。\n- 最多 12 拍：每一拍都要出一张画面。\n\n只输出符合 JSON Schema 的对象。\n\n这一条由一位主播**出镜**说开场钩子(hook_line)和结尾号召(call_to_action):这两句是对着镜头说的话,\n口语、自然,各自念出来不超过 8 秒;它们**也算在成片时长里**。中间的每一拍是商品画面,narration 是画外音。",
           "prompt": "商品名称：{{start.product_name}}\n卖点（只能用这些）：\n{{start.selling_points}}\n目标观众：{{start.audience}}\n成片目标时长：{{start.target_duration_seconds}} 秒\n\n请写出分拍脚本。各拍 seconds 之和，加上开场钩子和结尾号召念出来的时长（中文每秒约 4 个字），要接近目标时长。",
           "response_format": "json_schema",
           "json_schema_name": "product_pitch_script",
