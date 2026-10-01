@@ -191,12 +191,14 @@ def _execute_edit_workflow(db: Session, confirmation: Any, actor: str | None) ->
 
 
 def _validate_run_workflow(db: Session, workspace_id: str, payload: dict[str, Any], actor: str | None) -> None:
-    _workflow_in(db, workspace_id, payload)
-
+    workflow = _workflow_in(db, workspace_id, payload)
+    #: 卡上点名跑的是哪一张:**覆盖**,不由调用方自己说。MCP 那条路只带 workflow_id,卡标题于是是一串 uuid;
+    #: 反过来,调用方自带的 name 也不能信 —— 卡上写「日更」、跑的却是另一张,授权界面就说了谎。
+    payload["name"] = workflow.name
 
 
 def _summarize_run_workflow(db: Session, payload: dict[str, Any]) -> Summary:
-    name = str(payload.get("name") or payload.get("workflow_id") or "")
+    name = str(payload.get("name") or "")
     return "confirm_runWorkflow", {
         "named": fragment("confirm_workflowNamed", name=name) if name else "",
         "warning": external_warning(external_nodes_in_graph(graph_under_review(db, "run_workflow", payload))),

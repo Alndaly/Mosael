@@ -46,9 +46,8 @@ def test_an_ordinary_edit_is_not_dressed_up_as_dangerous() -> None:
 
 
 def test_run_workflow_names_the_workflow() -> None:
+    # 名字由开卡时的 validate 从库里查出来写回(调用方只给 id),见 test_run_workflow_card_names_the_workflow。
     assert "「日更」" in _summarize("run_workflow", {"name": "日更"})
-    # Falling back to the id is still better than the bare "运行工作流" it used to render.
-    assert "wf-123" in _summarize("run_workflow", {"workflow_id": "wf-123"})
 
 
 def test_同一张卡英文用户也读得懂() -> None:
