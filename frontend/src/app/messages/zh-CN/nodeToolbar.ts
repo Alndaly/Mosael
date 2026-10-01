@@ -79,6 +79,7 @@ export const nodeToolbar = {
   wfIssueOneOfMissing: "{k} 要填一个",
   wfIssueMissingStart: "缺少开始节点,无法运行",
   wfIssueStaleVar: "引用了已删除的节点:{ref}",
+  wfIssueStartParamMissing: "开始节点没有这个参数:{ref}。在开始节点的参数里声明它 —— 在这里运行不会另外传参数",
   wfIssueDisconnected: "未连接到流程,不会被执行",
   wfIssueNoProviders: "未配置模型服务",
   // 条件节点引出的两条边,画布上就标这两个字。

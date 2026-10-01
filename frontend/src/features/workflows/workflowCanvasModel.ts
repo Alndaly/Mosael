@@ -204,6 +204,8 @@ export function workflowIssueText(
       return t("wfIssueOneOfMissing").replace("{k}", fieldLabels(issue, registry));
     case "stale-var":
       return t("wfIssueStaleVar").replace("{ref}", issue.ref ?? "");
+    case "start-param-missing":
+      return t("wfIssueStartParamMissing").replace("{ref}", issue.ref ?? "");
     case "disconnected":
       return t("wfIssueDisconnected");
     case "no-providers":

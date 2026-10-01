@@ -484,7 +484,7 @@ describe("语音节点的音色", () => {
       ],
       [
         { id: "e1", source: "start", target: "sp" },
-        { id: "d1", source: "start", target: "sp", kind: "data", source_output: "params", target_input: "voice" },
+        { id: "d1", source: "start", target: "sp", kind: "data", source_output: "voice", target_input: "voice" },
       ],
     );
     const missing = (issuesAtLayer(analyzeWorkflow(g, registry, fullCtx).issues, []).get("sp") ?? []).filter(
@@ -505,12 +505,12 @@ describe("循环体和子图里的节点", () => {
   const withBody = (inner: Record<string, unknown>[]) =>
     graph(
       [
-        { id: "start", type: "start", config: {} },
+        { id: "start", type: "start", config: { params: { shots: "[]" } } },
         {
           id: "loop",
           type: "loop_foreach",
           name: "逐镜生成",
-          config: { items: "{{start.params}}", body: { nodes: inner, edges: [] } },
+          config: { items: "{{start.shots}}", body: { nodes: inner, edges: [] } },
         },
       ],
       [{ id: "e1", source: "start", target: "loop" }],
@@ -757,5 +757,50 @@ describe("代码字段接了上游", () => {
       fullCtx,
     );
     expect(a.issues.filter((i) => i.code === "code-field-bound")).toEqual([]);
+  });
+});
+
+describe("引到开始节点的参数", () => {
+  //: 后端运行前查(graph_rules._unresolved_reference_errors):`{{start.x}}` 和从开始节点拉出的数据边,
+  //: 那个参数要在开始节点的 params 里。编辑器里的运行不带参数,所以没声明的就是一个运行时的空串 ——
+  //: 下游拿着空提示词去付费生成。此前画布全绿。
+  const make = (startConfig: Record<string, unknown>, prompt: string, edges: WorkflowGraph["edges"] = []) =>
+    graph(
+      [
+        { id: "start", type: "start", config: startConfig },
+        { id: "llm-1", type: "llm", config: { prompt, profile_id: "p1" } },
+      ],
+      [{ id: "e1", source: "start", target: "llm-1" }, ...edges],
+    );
+  const missing = (g: WorkflowGraph) =>
+    analyzeWorkflow(g, registry, fullCtx)
+      .issues.filter((i) => i.code === "start-param-missing")
+      .map((i) => [i.nodeId, i.configKey, i.ref, i.severity]);
+
+  it("引用了开始节点没声明的参数:阻断,说清是哪一个", () => {
+    expect(missing(make({ params: { topic: "" } }, "写 {{start.topic}} 和 {{start.tone}}"))).toEqual([
+      ["llm-1", "prompt", "{{start.tone}}", "error"],
+    ]);
+  });
+
+  it("从开始节点拉出的数据边,参数没声明也报在接它的那一格上", () => {
+    expect(
+      missing(
+        make({ params: {} }, "", [
+          { id: "d1", source: "start", target: "llm-1", kind: "data", source_output: "topic", target_input: "prompt" },
+        ]),
+      ),
+    ).toEqual([["llm-1", "prompt", "{{start.topic}}", "error"]]);
+  });
+
+  it("点名为必填、但 params 里没有的参数照样报:编辑器里的运行不带参数", () => {
+    expect(missing(make({ params: {}, required_params: "topic" }, "{{start.topic}}"))).toEqual([
+      ["llm-1", "prompt", "{{start.topic}}", "error"],
+    ]);
+  });
+
+  it("声明了的(哪怕值是空的)不报;不是开始节点的引用不归这条管", () => {
+    expect(missing(make({ params: { topic: "" } }, "{{start.topic}}"))).toEqual([]);
+    expect(missing(make({ params: {} }, "{{gone.text}}"))).toEqual([]);
   });
 });

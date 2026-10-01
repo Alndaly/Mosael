@@ -3,7 +3,7 @@ import type { WorkflowGraph } from "@/api/client";
 import { isWorkflowFieldActive, oneOfGroups } from "@/features/nodeForms/fieldActivation";
 import { fieldDataType, normalizeDataType, type DataType } from "@/features/nodeForms/fieldTypes";
 import type { PromptMode } from "@/lib/generationCapabilities";
-import { bodyKey, type ScopePath } from "@/features/workflows/scope";
+import { bodyKey, declaredFieldNames, type ScopePath } from "@/features/workflows/scope";
 import { readSourceAssets } from "@/features/workflows/sourceAssetLines";
 
 /**
@@ -21,6 +21,7 @@ export type IssueCode =
   | "one-of-missing" // 同组(one_of)的字段一个都没填
   | "disconnected" // 非 start 节点无法从 start 到达
   | "stale-var" // 配置里引用了已删除的节点
+  | "start-param-missing" // 引到开始节点的参数({{start.x}} 或从它拉出的数据边),开始节点没声明
   | "no-providers" // LLM 节点但一个供应商都没配
   | "provider-missing" // LLM 绑定的供应商配置已被删
   | "gen-provider-unconfigured" // AI 生成选的服务商下没有可用的生成模型
@@ -186,6 +187,11 @@ export function extractRefs(value: unknown): Array<{ ref: string; sourceId: stri
   return out;
 }
 
+/** 引用里节点后面那一段(`{{loop.item.x}}` → `item`);只有根就是空串。 */
+function refField(ref: string): string {
+  return ref.slice(2, -2).trim().split(".")[1] ?? "";
+}
+
 function isEmpty(value: unknown): boolean {
   if (value === null || value === undefined) return true;
   if (typeof value === "string") return value.trim() === "";
@@ -260,6 +266,18 @@ function collect(
       code: "missing-start",
     });
   }
+  // 开始节点有哪些参数:声明在它 params 里的那几个(`*params`,同它的输出声明)。编辑器里的运行不带参数
+  // (runWorkflow 只给 id),所以没声明的运行时就是空串 —— 与后端 _unresolved_reference_errors 同一条。
+  // 体里没有开始节点,体内引到外层的另由失效引用报。
+  const startParams = new Map(
+    graph.nodes
+      .filter((n) => n.type === "start")
+      .map((n) => [n.id, new Set(declaredFieldNames(["*params"], n.config as Record<string, unknown> | undefined))]),
+  );
+  const startParamMissing = (sourceId: string, field: string) => {
+    const params = startParams.get(sourceId);
+    return Boolean(params && field && !params.has(field));
+  };
   // 被数据边喂的输入,即便字面量为空也算已满足(与后端 validate_graph 同源)。
   const dataBound = new Set(
     graph.edges
@@ -329,6 +347,7 @@ function collect(
       for (const { ref, sourceId } of extractRefs(config[key])) {
         // start 的 *params 通配前缀不算节点 id;引用不存在的节点即失效。
         if (!nodeIds.has(sourceId)) push("error", "stale-var", { configKey: key, ref });
+        else if (startParamMissing(sourceId, refField(ref))) push("error", "start-param-missing", { configKey: key, ref });
       }
     }
 
@@ -401,15 +420,27 @@ function collect(
     const source = nodeById.get(edge.source);
     const target = nodeById.get(edge.target);
     if (!source || !target) continue;
+    const targetName = insideName ? `${insideName} › ${target.name || target.type}` : target.name || target.type;
+    // 从开始节点拉出的数据边:`source_output` 就是参数名,同上面 {{start.x}} 那一条。
+    if (startParamMissing(source.id, edge.source_output)) {
+      issues.push({
+        nodeId: target.id,
+        path,
+        nodeName: targetName,
+        nodeType: target.type,
+        severity: "error",
+        code: "start-param-missing",
+        configKey: edge.target_input,
+        ref: `{{${source.id}.${edge.source_output}}}`,
+      });
+    }
     const actual = outputType(registry, source.type, edge.source_output);
     const expected = inputType(registry, target.type, edge.target_input);
     if (!typesCompatible(actual, expected)) {
       issues.push({
         nodeId: target.id,
         path,
-        nodeName: insideName
-          ? `${insideName} › ${target.name || target.type}`
-          : target.name || target.type,
+        nodeName: targetName,
         nodeType: target.type,
         severity: "warn",
         code: "type-mismatch",

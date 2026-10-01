@@ -70,6 +70,7 @@ export const nodeToolbar = {
   wfIssueOneOfMissing: "Fill in one of {k}",
   wfIssueMissingStart: "Missing start node — cannot run",
   wfIssueStaleVar: "References a deleted node: {ref}",
+  wfIssueStartParamMissing: "The start node has no such parameter: {ref}. Declare it in the start node's parameters — running from here passes none",
   wfIssueDisconnected: "Not connected to the flow — it won't run",
   wfIssueNoProviders: "No model provider configured",
   customCssTitle: "Custom CSS",

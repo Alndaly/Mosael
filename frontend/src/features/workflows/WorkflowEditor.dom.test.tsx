@@ -116,7 +116,7 @@ async function selectNodes(ids: string[]) {
 
 const CHAIN: WorkflowGraph = {
   nodes: [
-    { id: "start", type: "start", position: { x: 0, y: 0 }, config: {} },
+    { id: "start", type: "start", position: { x: 0, y: 0 }, config: { params: { topic: "" } } },
     { id: "llm-1", type: "llm", position: { x: 200, y: 0 }, config: { prompt: "hi" } },
     { id: "template-1", type: "template", position: { x: 400, y: 0 }, config: { template: "前缀 {{llm-1.text}} / {{start.topic}}" } },
   ],
@@ -158,7 +158,7 @@ it("复制粘贴一组节点:组内的 {{引用}} 跟着换成新节点,组外�
 
 const LOOPED: WorkflowGraph = {
   nodes: [
-    { id: "start", type: "start", position: { x: 0, y: 0 }, config: {} },
+    { id: "start", type: "start", position: { x: 0, y: 0 }, config: { params: { list: "[]" } } },
     {
       id: "loop-1",
       type: "loop_foreach",
