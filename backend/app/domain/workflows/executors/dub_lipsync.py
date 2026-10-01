@@ -26,6 +26,7 @@ from app.core.config import settings
 from app.ai.providers.contracts.generation import DRIVING_AUDIO, SOURCE_VIDEO
 from app.domain.voices.subtitle_dub import DUB_LINE_KEY
 from app.domain.workflows import WorkflowDomainError
+from app.domain.workflows.executors.common import stop_if_stopping
 from app.domain.workflows.executors.registry import PreflightNode, RunScope, register, register_preflight
 from app.media.tempo import atempo_filters
 from app.domain.workflows.executors.talking import (
@@ -310,6 +311,8 @@ def dub_lipsync(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[st
             if done:
                 reused += 1
             else:
+                #: 每一块都是一次付费改口型:这一轮在停(取消了、别的节点失败了)就不再提交下一块。
+                stop_if_stopping(db)
                 label = f"{video_name} · 对口型第 {index} 块"
                 results = _generate(db, scope, model, [
                     {"asset_id": keep(piece, f"{label}(原片)"), "role": SOURCE_VIDEO},

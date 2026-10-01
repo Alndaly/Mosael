@@ -186,3 +186,21 @@ def test_夹在两段长的中间的短句_补静音到下限_后面的段往后
     #: 字幕照配音的实测时长,补的静音不算字幕。
     assert out["cues"][1] == {"start": 9.5, "end": 10.5, "text": "嗯。"}
     assert out["duration"] == 21
+
+
+def test_这一轮在停_不再配下一句(voicing, monkeypatch) -> None:
+    from app.domain.workflows.executors import subjobs
+    from app.domain.workflows.run_scope import halt_scope
+
+    voicing.seconds.update({"甲。": 3, "乙。": 3, "丙。": 3})
+    speak = subjobs.synthesize_speech
+    with halt_scope() as halt:
+        def speak_then_stop(db, scope, config):
+            out = speak(db, scope, config)
+            halt.set()
+            return out
+
+        monkeypatch.setattr(subjobs, "synthesize_speech", speak_then_stop)
+        with SessionLocal() as db, pytest.raises(WorkflowDomainError) as stopped:
+            talking_segments(db, voicing.scope, {"text": "甲。乙。丙。", "engine": "builtin:edge", "voice": "v"})
+    assert stopped.value.key == "wfErr_cancelled" and voicing.spoken == ["甲。"], "配完第一句就停,后两句不再付费"

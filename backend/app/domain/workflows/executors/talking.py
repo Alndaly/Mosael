@@ -29,7 +29,7 @@ from app.domain.assets.media_info import patch_media_info
 from app.domain.jobs import current_actor
 from app.domain.workflows import WorkflowDomainError
 from app.domain.workflows.executors.registry import PreflightNode, RunScope, register, register_preflight
-from app.domain.workflows.executors.common import wait_for_job
+from app.domain.workflows.executors.common import stop_if_stopping, wait_for_job
 
 SPEECH_TO_VIDEO = "speech-to-video"
 VIDEO_LIPSYNC = "video-lipsync"
@@ -454,6 +454,8 @@ def talking_segments(db: Session, scope: RunScope, config: dict[str, Any]) -> di
 
     voiced: list[tuple[str, Any, float]] = []
     for sentence in split_script(text, ceiling):
+        #: 每一句都是一次付费配音:这一轮在停就不再提交下一句。
+        stop_if_stopping(db)
         asset = _asset_in(db, scope, synthesize_speech(db, scope, {"text": sentence, "engine": engine, "voice": voice})["asset_id"])
         seconds = _duration(asset)
         if seconds > ceiling:

@@ -290,3 +290,23 @@ def test_帧率不是整数的原片_切出来的每块都在模型收的长度�
     monkeypatch.setattr("app.domain.generation.runner.start_generation_thread", lambda generation_id: None)
     out = _run(ids)
     assert out["chunk_count"] == out["generated_count"] == 3, "25 秒按 10 秒上限硬切成三块,每块都被收下"
+
+
+def test_这一轮在停_不再提交下一块改口型(dubbed, monkeypatch) -> None:
+    """改好第一块之后,用户取消了(或同一张图里别的节点失败了):第二块不再提交、不再计费。等子任务时认停的信号,
+    而两块之间此前没人问。"""
+    from app.domain.workflows.run_scope import halt_scope
+
+    ids, calls = dubbed
+    real = module._generate
+
+    with halt_scope() as halt:
+        def generate_then_stop(*args, **kwargs):
+            out = real(*args, **kwargs)
+            halt.set()
+            return out
+
+        monkeypatch.setattr(module, "_generate", generate_then_stop)
+        with pytest.raises(WorkflowDomainError) as stopped:
+            _run(ids)
+    assert stopped.value.key == "wfErr_cancelled" and len(calls) == 1

@@ -33,6 +33,16 @@ def _stopping(db: Session) -> bool:
     return parent is None or parent.status not in ("queued", "running")
 
 
+def stop_if_stopping(db: Session) -> None:
+    """这一轮在停就别再起下一件**要花钱**的事。
+
+    一个节点里逐个提交付费任务(改口型逐块、长稿逐句配音)时,在每次提交之前问一句:等子任务的时候
+    (wait_until)会认停的信号,而两次提交之间没人问 —— 用户取消了、同一张图里别的节点失败了,
+    下一块照样提交、照样计费。"""
+    if _stopping(db):
+        raise WorkflowDomainError("wfErr_cancelled")
+
+
 def wait_until(
     check: Callable[[Session], T | None],
     *,
