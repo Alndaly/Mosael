@@ -46,9 +46,20 @@ def _blame_iteration(index: int, total: int, *, item: Any = _NO_ITEM) -> Iterato
     唯一能让人动手去查的信息。
 
     只加定位,不改语义:异常照样往上抛,原异常挂在 __cause__ 上,栈也完整。
+
+    **被叫停不是这一项失败了**:用户取消、同一张图里别的节点失败时,这一项抛的是 wfErr_cancelled ——
+    原样交出去。此前它也被包成「第 3/20 次迭代失败:已取消」,读起来像第 3 项自己出了错。只认**这一轮真在停**
+    时的取消:这一轮没在停、这一项里的子任务自己被取消了(供应商那边撤了单),那是这一项失败。
     """
     try:
         yield
+    except WorkflowDomainError as exc:
+        if exc.key == "wfErr_cancelled" and halted():
+            raise
+        where = f"第 {index + 1}/{total} 次迭代"
+        if item is not _NO_ITEM:
+            where += f"({_brief(item)})"
+        raise WorkflowDomainError("wfErr_loopIterationFailed", params={"where": where, "reason": exc}) from exc
     except Exception as exc:  # noqa: BLE001 — 只加定位再原样抛出,不吞任何一种失败
         where = f"第 {index + 1}/{total} 次迭代"
         if item is not _NO_ITEM:
@@ -174,6 +185,15 @@ class _NotStarted(Exception):
     """前面已经有一项失败(或这一轮在停),这一项就不开始了。"""
 
 
+class _Stopped(Exception):
+    """这一项开始了,跑到一半这一轮在停(别的项失败了、外层被叫停)被叫停 —— 不是自己失败的。"""
+
+
+def _stopped(exc: BaseException | None) -> bool:
+    """这一项是被叫停的(没开始,或跑到一半这一轮在停),不是自己失败的。"""
+    return isinstance(exc, (_NotStarted, _Stopped))
+
+
 def _iterate_concurrently(
     iterate, items: list[Any], concurrency: int, *, skip: bool = False
 ) -> tuple[list[Any], list[tuple[int, BaseException]]]:
@@ -216,13 +236,13 @@ def _iterate_concurrently(
     failures = sorted(
         (index, future.exception())
         for future, index in futures.items()
-        if future.exception() is not None and not isinstance(future.exception(), _NotStarted)
+        if future.exception() is not None and not _stopped(future.exception())
     )
-    skipped = sum(1 for future in futures if isinstance(future.exception(), _NotStarted))
+    skipped = sum(1 for future in futures if _stopped(future.exception()))
     if failures and not (skip and not skipped and not halted()):
         raise _all_failures(failures, total=len(items), skipped=skipped)
     if skipped:
-        # 没有一项失败,却有没开始的:是这一轮在停。不能交出一份缺了几项的结果。
+        # 没有一项失败,却有被叫停的:是这一轮在停。不能交出一份缺了几项的结果。
         raise WorkflowDomainError("wfErr_cancelled")
     failed = {index for index, _ in failures}
     for future, index in futures.items():

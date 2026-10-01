@@ -118,7 +118,7 @@ class Test循环并发:
         assert sorted(started) == ["1", "2", "3"], f"失败之后又开始了付费的调用:{started}"
         message = str(caught.value)
         assert "1、2、3" in message, f"三项都失败了,却只报了一部分:{message}"
-        assert "3 次因此没有开始" in message
+        assert "3 次因此停下" in message
 
     def test_并发数有上限_写错就说(self, fake_node) -> None:
         ws = _workspace()

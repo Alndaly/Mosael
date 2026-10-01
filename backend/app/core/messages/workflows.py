@@ -100,8 +100,8 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfErr_loopTooMany": {"zh": "循环·遍历拿到 {count} 项,超过上限 {cap};请先筛选或分批", "en": "The for-each got {count} items, over the {cap} cap; filter or split them first"},
     "wfErr_loopIterationsFailed": {
         # 几项一起失败时**全部**说出来:只报第一项,用户会以为其余的都好 —— 而每一项都可能是一笔花出去的钱。
-        "zh": "{total} 次迭代里第 {which} 次失败,另有 {skipped} 次因此没有开始。第一个原因:{reason}",
-        "en": "Iterations {which} of {total} failed, and {skipped} more were not started because of it. First reason: {reason}",
+        "zh": "{total} 次迭代里第 {which} 次失败,另有 {skipped} 次因此停下(没开始或没跑完)。第一个原因:{reason}",
+        "en": "Iterations {which} of {total} failed, and {skipped} more were stopped because of it (not started or not finished). First reason: {reason}",
     },
     "wfErr_loopIterationFailed": {"zh": "{where}失败:{reason}", "en": "{where} failed: {reason}"},
     "wfErr_llmNoChatConnection": {
