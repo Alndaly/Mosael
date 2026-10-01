@@ -239,6 +239,23 @@ def _rename_references(value: Any, node_id: str, renames: dict[str, str]) -> Any
     return value
 
 
+def _deep_references(value: Any, node_id: str, outputs: set[str]) -> set[str]:
+    """一格配置里对 `node_id` 的 `outputs` 这几个口、**带子路径**的引用(`n.assets.0.asset_id`),不进嵌套的子图。"""
+    found: set[str] = set()
+    if isinstance(value, str):
+        for match in _REFERENCE.finditer(value):
+            parts = match.group(1).split(".")
+            if len(parts) > 2 and parts[0] == node_id and parts[1] in outputs:
+                found.add(match.group(1))
+    elif isinstance(value, dict) and not isinstance(value.get("nodes"), list):
+        for one in value.values():
+            found |= _deep_references(one, node_id, outputs)
+    elif isinstance(value, list):
+        for one in value:
+            found |= _deep_references(one, node_id, outputs)
+    return found
+
+
 def _inner_keys(node: dict[str, Any]) -> tuple[str, ...]:
     """容器节点(循环 / 子图)配置里属于**体内**作用域的几格(NESTED_BODY_RAW_KEYS):`output` / `condition` 里的
     `{{p1.x}}` 指的是体里的 p1,不是这一层同名的那个。和 normalization、reference_dependencies 同一条界线。"""
@@ -271,17 +288,25 @@ def _used_outputs(graph: dict[str, Any], node_id: str, outside: dict[str, Any]) 
     return by_edge, by_template
 
 
-def rewrite_graph(graph: dict[str, Any], found: list[Replacement], dropped: list[str] | None = None) -> dict[str, Any]:
+def rewrite_graph(
+    graph: dict[str, Any], found: list[Replacement], dropped: list[str] | None = None,
+    unchecked: list[str] | None = None,
+) -> dict[str, Any]:
     """一张图(连同循环体 / 子图)里能改的节点都改掉;连进来的数据边跟着改入参名,下游对它输出的引用跟着改口名。
 
     老工具已经不在了时,没有位置的格子、数据边和下游引用丢掉;给了 `dropped` 就把它们记成 `节点 id.格子` /
     `节点 id.格子(连线)` / `节点 id.输出(下游连线)` / `节点 id.输出(下游引用)`。
+
+    改了口名、引用又带着子路径的(`{{n.assets.0.asset_id}}` → `{{n.asset_ids.0.asset_id}}`):新口的值不一定是
+    同一个形状(老口是一串对象,新口是一串 id),子路径对不上时取到的是空 —— 改写看不出来,给了 `unchecked`
+    就记成 `老引用 → 新引用`,让人核对。
     """
-    return _rewrite_scope(graph, found, dropped, {})[0]
+    return _rewrite_scope(graph, found, dropped, {}, unchecked)[0]
 
 
 def _rewrite_scope(
     graph: dict[str, Any], found: list[Replacement], dropped: list[str] | None, outside: dict[str, Any],
+    unchecked: list[str] | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """改一层作用域。`outside` 是这一层作为容器的体时、容器自己那几格体内作用域的配置(output / condition):
     它们是体里节点的下游,改口名时一起改,改过的跟着返回。"""
@@ -302,7 +327,7 @@ def _rewrite_scope(
             if isinstance(value, dict) and isinstance(value.get("nodes"), list):
                 # 容器自己的 output / condition 和体里的节点同一个作用域:体里的口改了名,它们跟着改
                 inner = {one: config[one] for one in inner_keys if one != key and one in config} if key == "body" else {}
-                config[key], inner = _rewrite_scope(value, found, dropped, inner)
+                config[key], inner = _rewrite_scope(value, found, dropped, inner, unchecked)
                 config.update(inner)
         unplaced: list[str] = []
         result = rewrite_node(str(node.get("type") or ""), config, found, unplaced)
@@ -331,6 +356,12 @@ def _rewrite_scope(
             dropped.extend(f"{node_id}.{name}(下游引用)" for name in sorted(unmatched & by_template))
         nodes.append({**node, "type": new_type, "config": converted})
     for node_id, renames in output_renames.items():
+        if renames and unchecked is not None:
+            scopes = [outside, *(_this_scope(one) for one in nodes if isinstance(one, dict) and one.get("id") != node_id)]
+            deep = set().union(*(_deep_references(one, node_id, set(renames)) for one in scopes))
+            for path in sorted(deep):
+                reference = "{{" + path + "}}"
+                unchecked.append(f"{reference} → {_rename_references(reference, node_id, renames)}")
         if renames:
             nodes = [
                 {**one, "config": {**(one.get("config") or {}), **_rename_references(_this_scope(one), node_id, renames)}}
@@ -370,7 +401,8 @@ def rewrite_replaced_tools(db: Session) -> int:
         if not any(old in str(workflow.graph) for old in old_types):
             continue
         dropped: list[str] = []
-        rewritten = rewrite_graph(deepcopy(workflow.graph), found, dropped)
+        unchecked: list[str] = []
+        rewritten = rewrite_graph(deepcopy(workflow.graph), found, dropped, unchecked)
         if rewritten == workflow.graph:
             continue
         previous = current_workflow_revision(db, workflow)
@@ -380,6 +412,9 @@ def rewrite_replaced_tools(db: Session) -> int:
             # 丢了什么要说出来:老工具已经不在了,这几格在新工具上没有位置(上一版修订里还看得到原值)
             note += "。老工具已经没有了,这些在新工具上对不上(格子、连线、下游对它输出的引用),没带过去:" + "、".join(dropped)
             logger.info("工作流 %s 改写插件节点时丢掉了 %s", workflow.id, dropped)
+        if unchecked:
+            # 口改了名,引用带着子路径:新口的值形状可能不一样,取到空也不会报错 —— 说出来让人核对
+            note += "。这些下游引用跟着输出口改了名,但带着子路径(新口的值未必是同一个形状,对不上会取到空),请核对:" + "、".join(unchecked)
         revision = commit_graph_revision(
             db, workflow, lambda graph: rewrite_graph(graph, found), source="migration", created_by=previous.created_by,
             note=note[:2000],

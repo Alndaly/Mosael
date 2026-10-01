@@ -58,6 +58,55 @@ def test_replaces写了输出改名_下游引用和连线跟着改() -> None:
     assert dropped == []
 
 
+def test_改了口名的引用带子路径_记进待核对清单() -> None:
+    """`{{n.assets.0.asset_id}}` → `{{n.asset_ids.0.asset_id}}`:老口是一串对象、新口是一串 id,子路径对不上时
+    取到的是空 —— 改写本身看不出来,此前一个字都不记。"""
+    dropped: list[str] = []
+    unchecked: list[str] = []
+    rewrite_graph(_graph(), [_replacement(retired=True, outputs={"assets": "asset_ids", "list": "asset_ids"})],
+                  dropped, unchecked)
+    assert unchecked == ["{{n.assets.0.asset_id}} → {{n.asset_ids.0.asset_id}}"]
+    assert dropped == []
+
+
+def test_改写落修订时_带子路径的改名写进修订说明(tmp_path) -> None:
+    """真库、真对账函数(rewrite_replaced_tools):修订说明里看得到哪几处要核对。"""
+    from app.core.db import SessionLocal
+    from app.db.models import PluginInstance, PluginPackage, WorkflowRevision
+    from app.domain.workflows import create_workflow
+    from app.domain.workflows.plugin_references import rewrite_replaced_tools
+    from app.domain.workflows.revisions import current_workflow_revision, graph_digest
+    from tests.util import fresh_client, user_id
+
+    ws = fresh_client().post("/api/workspaces", json={"name": "W"}).json()["id"]
+    manifest = {"id": "dev.test.p", "name": "P", "version": "1", "runtime": {"kind": "process", "entry": "m.py"},
+                "tools": {"expose": "all", "declare": [{"name": "old"}]}, "_path": str(tmp_path)}
+    new_tool = {"name": "new", "input_schema": {"type": "object", "properties": {"prompt": {"type": "string"}}},
+                "node": {"outputs": ["asset_ids", "summary"]},
+                "replaces": {"tool": "old", "rename": {"q": "prompt"}, "outputs": {"assets": "asset_ids"}}}
+    with SessionLocal() as db:
+        db.add(PluginPackage(id="dev.test.p", name="P", version="1", manifest=manifest))
+        db.flush()
+        db.add(PluginInstance(package_id="dev.test.p", name="我的", enabled=True, owner_user_id=user_id(),
+                              discovered_tools=[new_tool]))
+        graph = {"nodes": [{"id": "start", "type": "start", "config": {}},
+                           {"id": "n", "type": OLD, "config": {"q": "猫"}},
+                           {"id": "use", "type": "template", "config": {"template": "{{n.assets.0.asset_id}}"}}],
+                 "edges": [{"id": "e1", "source": "start", "target": "n"}]}
+        # 老工具已经不是一个可用的节点了,建图的校验不认它:先建空图,再把老形状写进图和修订快照(同升级前存下的库)
+        workflow = create_workflow(db, workspace_id=ws, name="老流程", created_by=user_id())
+        db.commit()
+        revision = current_workflow_revision(db, workflow)
+        workflow.graph, revision.graph = graph, graph
+        workflow.graph_hash = revision.graph_hash = graph_digest(graph)
+        workflow_id = workflow.id
+        db.commit()
+        assert rewrite_replaced_tools(db) == 1
+        note = db.query(WorkflowRevision).filter(WorkflowRevision.workflow_id == workflow_id).order_by(
+            WorkflowRevision.revision.desc()).first().note
+    assert "请核对" in note and "{{n.assets.0.asset_id}} → {{n.asset_ids.0.asset_id}}" in note, note
+
+
 def test_老工具还在_下游对不上就不改这个节点() -> None:
     graph = _graph()
     rewritten = rewrite_graph(graph, [_replacement(retired=False)], [])
