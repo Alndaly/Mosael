@@ -46,8 +46,8 @@ export function useWorkflowSave({
   // 智能体经确认卡改图后 updated_at 变化:画布无本地改动时自动跟进服务端版本。
   const lastSyncedRef = React.useRef(workflow.updated_at);
   // 自己保存引发的那次 refetch 不能重建画布(重建会丢掉 React Flow 的实测尺寸、造成闪烁与
-  // 拖拽中断)。不靠比对 updated_at 字符串——两端序列化只要差一点就会误判。
-  const selfSaveRef = React.useRef(false);
+  // 拖拽中断)。认的是**图的摘要**(见 serverSync 的 ours):智能体在保存回来之前改的那一版不是我们的。
+  const selfSaveRef = React.useRef<readonly string[]>([]);
   /**
    * 服务端确认过的那一份,和它的摘要(下一次保存的底子)。**两者是一个单位**:只换其一的话,
    * 一份旧画布会拿着新底子通过 CAS,把别人的改动静默盖掉 —— 和画板的 revision + confirmedCanvas
@@ -62,7 +62,7 @@ export function useWorkflowSave({
   React.useEffect(() => {
     const { action, next: synced } = syncFromServer(
       { accounted: lastSyncedRef.current, ours: selfSaveRef.current },
-      { updatedAt: workflow.updated_at, dirty },
+      { updatedAt: workflow.updated_at, graphHash: workflow.graph_hash, dirty },
     );
     lastSyncedRef.current = synced.accounted;
     selfSaveRef.current = synced.ours;
@@ -77,7 +77,7 @@ export function useWorkflowSave({
     //: 撤销历史一并清掉,理由同 adoptServerWorkflow:历史里记的是跟进之前那份本地图,按一下撤销
     //: 就把它写回画布,而自动保存会带着刚换上的新底子通过 CAS —— 智能体的改动被静默盖掉。
     graphStore.temporal.getState().clear();
-  }, [workflow.updated_at, workflow.graph, dirty, rebuildNodes]);
+  }, [workflow.updated_at, workflow.graph, workflow.graph_hash, dirty, rebuildNodes]);
 
   /**
    * 换成服务端的这一份:版本历史里恢复了一版,或者保存撞了 409。
@@ -97,8 +97,8 @@ export function useWorkflowSave({
       selectInspectorNode(null);
       //: 这一版已经铺在画布上了:它随 props 到达时认下、不再重建。**不提前写 lastSyncedRef** ——
       //: props 这会儿还是旧的,写了的话紧接着那一轮会把旧 props 当成「服务端又变了」铺回来
-      //: (同自动保存那条,见 serverSync)。
-      selfSaveRef.current = true;
+      //: (同自动保存那条,见 serverSync)。认的是这一份的摘要;之前自己存的那几版已经被它越过了。
+      selfSaveRef.current = [saved.graph_hash];
       pendingSaveRef.current = false;
       setDirty(false);
       //: 列表缓存(这个编辑器的 props 从那来)当场换成这一份。只等下一次轮询的话,紧接着那一轮
@@ -143,7 +143,9 @@ export function useWorkflowSave({
       // **这里不写 lastSyncedRef。** 它的含义是「我们在 props 上见过的那一版」,而 props 这会儿
       // 还是旧的。提前写成 saved.updated_at 会让紧接着那一轮(setDirty 引起的重渲染)看到
       // 「旧 ≠ 新」,把这张底牌当场用掉 —— 等真正的新版本回来时已经没人挡着了。见 serverSync。
-      selfSaveRef.current = true;
+      //
+      // 记的是这一版的摘要,不是「下一版是我们的」:保存回来之前智能体改了图的话,先到的是它那一版。
+      selfSaveRef.current = [...selfSaveRef.current, saved.graph_hash];
       void qc.invalidateQueries({ queryKey: ["workflows", workspaceId] });
       // 纯布局保存不会成版，也不需要重拉历史；执行语义变化时才同步版本面板。
       if (saved.revision !== workflow.revision) {

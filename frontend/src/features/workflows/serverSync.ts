@@ -12,8 +12,15 @@
 export interface SyncState {
   /** 我们已经认过的那一版(用服务端的 updated_at 表示)。 */
   accounted: string;
-  /** 下一版是我们自己刚存上去的。两端 updated_at 序列化可能不一致,所以除了比对还留这个兜底。 */
-  ours: boolean;
+  /**
+   * 我们自己存上去(或刚换上画布)、还没在 props 上见到的那几版,记的是**图的摘要**(graph_hash),
+   * 按存的先后。
+   *
+   * 此前是一个布尔「下一版是我们的」:保存刚成功、它还没回来时,智能体经确认卡改了图 —— 先到的
+   * 是智能体那一版,却被当成自己的认下、不重建,画布停在旧图上。比摘要才认得出到底是谁的。
+   * 是一串而不是一个:连存两次,两版可能先后回来,也可能只回来后一版。
+   */
+  ours: readonly string[];
 }
 
 export type SyncAction =
@@ -26,13 +33,16 @@ export type SyncAction =
 
 export function syncFromServer(
   state: SyncState,
-  incoming: { updatedAt: string; dirty: boolean },
+  incoming: { updatedAt: string; graphHash: string; dirty: boolean },
 ): { action: SyncAction; next: SyncState } {
   // 已经认过的那一版 —— effect 因为别的原因重跑时走这里,不该被当成"服务端又变了"。
   if (incoming.updatedAt === state.accounted) return { action: "skip", next: state };
-  if (state.ours) return { action: "accept-ours", next: { accounted: incoming.updatedAt, ours: false } };
+  // 回来的是自己存的某一版:认下,不重建。它之前存的那几版不会再回来了(服务端已经越过它们)。
+  const mine = state.ours.indexOf(incoming.graphHash);
+  if (mine >= 0) return { action: "accept-ours", next: { accounted: incoming.updatedAt, ours: state.ours.slice(mine + 1) } };
   // 画布上还有没存的改动:先不盖。**也不认** —— 认了就再也不会应用它,
   // 而本地这次存完之后它才该轮到(见 dirty 变回 false 时的那一轮)。
   if (incoming.dirty) return { action: "skip", next: state };
-  return { action: "apply", next: { accounted: incoming.updatedAt, ours: false } };
+  // 别处的改动盖上来了,我们手里等着的那几版就不会再回来。
+  return { action: "apply", next: { accounted: incoming.updatedAt, ours: [] } };
 }
