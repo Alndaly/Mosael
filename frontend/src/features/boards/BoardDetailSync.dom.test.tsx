@@ -110,9 +110,10 @@ function deferred<T>() {
 
 let queryClient: QueryClient;
 
-function mount() {
+function mount(prepare?: (client: QueryClient) => void) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   queryClient = client;
+  prepare?.(client);
   return render(
     <QueryClientProvider client={client}>
       <BoardsView workspace={workspace} />
@@ -274,6 +275,19 @@ describe("画板详情页与服务端的同步", () => {
 
     expect(apiMocks.getBoard.mock.calls.length, "4 秒里至少轮询过一次").toBeGreaterThan(1);
     expect(canvasHarness.api.patch).toHaveBeenCalledWith("img", expect.objectContaining({ asset_id: "a1" }));
+  });
+
+  it("重进一张关着时被改过的画板:缓存里那份落后于清单上的版本号 —— 重取,不先挂一份旧画布", async () => {
+    const old: BoardCanvas = { items: [{ id: "n1", kind: "note", x: 0, y: 0, width: 220, height: 140, text: "上次看到的" }], edges: [], markers: [] };
+    const now: BoardCanvas = { items: [{ ...old.items[0], text: "关着的时候智能体改的" }], edges: [], markers: [] };
+    apiMocks.listBoards.mockResolvedValue([boardAt(5, now)]);
+    apiMocks.getBoard.mockResolvedValue(boardAt(5, now));
+
+    mount((client) => client.setQueryData(["boards", "w1", "detail", "b1"], boardAt(3, old)));
+    await vi.waitFor(() => expect(canvasHarness.props).not.toBeNull());
+
+    expect(apiMocks.getBoard).toHaveBeenCalled();
+    expect((canvasHarness.props!.canvas as BoardCanvas).items[0].text, "挂上的就是最新那份").toBe("关着的时候智能体改的");
   });
 
   it("刚在便签上敲完字就点「改写」:先把这段字存上,改写照着眼前这段来", async () => {

@@ -203,6 +203,7 @@ export function BoardsView({ workspace }: { workspace: Workspace }) {
       <OpenBoard
         key={open.id}
         boardId={open.id}
+        revision={open.revision}
         workspaceId={workspace.id}
         onBack={() => {
           setOpenId(null);
@@ -355,14 +356,21 @@ const boardIdOf = (board: BoardSummary) => board.id;
 /**
  * 打开的那一张:清单只有摘要,整份画布从详情接口取,取到了才挂画布(画布的节点、版本号、撤销历史都只在挂上
  * 那一刻从这一份建一次)。之后这份缓存由画布自己写回的每一版更新(见 BoardDetail 的 acceptBoard / adoptServer)。
+ *
+ * 缓存不过期(打开着的时候它就是画布自己写回的那份);**挂上之前**和清单上这一张的版本号(`revision`)比一下:
+ * 关着的时候回执落下、智能体改了、别处存了,缓存里那份就落后了 —— 重取,取到了再挂,不先挂一份旧画布让人在上面改。
+ * 挂上之后不再比:那之后的新版由画布自己合进来(详情缓存一更新,BoardDetail 就采用)。
  */
 function OpenBoard({
   boardId,
+  revision,
   workspaceId,
   onBack,
   onSaved,
 }: {
   boardId: string;
+  /** 清单上这一张的版本号。 */
+  revision: number;
   workspaceId: string;
   onBack: () => void;
   onSaved: (fresh: Board) => void;
@@ -372,10 +380,20 @@ function OpenBoard({
     queryFn: () => getBoard(boardId, workspaceId),
     staleTime: Infinity,
   });
+  const mounted = React.useRef(false);
+  //: 重取过一次就挂(取回来的仍不比清单新也挂 —— 不能卡在加载上)。
+  const [refetched, setRefetched] = React.useState(false);
+  const behind = !mounted.current && !refetched && detail.data !== undefined && detail.data.revision < revision;
+  const refetch = detail.refetch;
+  React.useEffect(() => {
+    if (behind) void refetch().finally(() => setRefetched(true));
+  }, [behind, refetch]);
   if (detail.isPending) return <CanvasDetailLoading testId="boards-detail-loading" />;
   if (detail.isError) {
     return <PageLoadError icon={<LayoutGrid size={22} />} error={detail.error} onRetry={() => void detail.refetch()} />;
   }
+  if (behind) return <CanvasDetailLoading testId="boards-detail-loading" />;
+  mounted.current = true;
   return <BoardDetail board={detail.data} workspaceId={workspaceId} onBack={onBack} onSaved={onSaved} />;
 }
 
