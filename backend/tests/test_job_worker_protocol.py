@@ -3,7 +3,7 @@
 发布器验证过的拉取模式推广给所有 external kind。这里守住的语义:
 
 - in_process 是默认;publish 由自己的领域注册为 external。
-- dispatch_job:in_process 立刻起线程,external 留在 queued 等认领。
+- dispatch_job:in_process 在提交之后起线程,external 留在 queued 等认领。
 - claim 只允许 external kind、按创建序、CAS 原子、认领即 running。
 - report:running 推进度;终态(含用户取消)不给后到的回报复活。
 - reconcile 只孤儿化 in_process kind。
@@ -67,6 +67,7 @@ class TestExecutionModes:
         with SessionLocal() as db:
             job = create_job(db, created_by=None, workspace_id=workspace_id, kind="demo", payload={})
             started = dispatch_job(db, job, ran.set)
+            db.commit()  # 测试是入口:任务在提交之后才派发(jobs.dispatch_job)
         assert started is True
         assert ran.wait(timeout=5)
 
@@ -75,6 +76,7 @@ class TestExecutionModes:
         with SessionLocal() as db:
             job = create_job(db, created_by=None, workspace_id=workspace_id, kind="demo", payload={})
             started = dispatch_job(db, job, lambda: pytest.fail("external kind 不该起线程"))
+            db.commit()  # 测试是入口:任务在提交之后才派发(jobs.dispatch_job)
             assert started is False
             db.refresh(job)
             assert job.status == "queued"
@@ -214,6 +216,7 @@ class TestDispatchWiring:
             db.add(asset)
             db.commit()
             job = start_transcription(db, asset.id, created_by=None)
+            db.commit()  # 测试是入口:任务在提交之后才派发(jobs.dispatch_job)
             db.refresh(job)
             assert job.status == "queued" and job.message == "等待执行器认领"
             assert claim_next_job(db, kinds=["transcribe"]).id == job.id
@@ -227,6 +230,7 @@ class TestDispatchWiring:
             job = start_synthesis(
             db,
             created_by=None, text="你好", project_id=None, workspace_id=workspace_id, engine="builtin:edge")
+            db.commit()  # 测试是入口:任务在提交之后才派发(jobs.dispatch_job)
             db.refresh(job)
             assert job.status == "queued"
             assert claim_next_job(db, kinds=["tts"]).id == job.id

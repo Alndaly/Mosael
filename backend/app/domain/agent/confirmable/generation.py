@@ -27,6 +27,7 @@ def _execute_generation(db: Session, confirmation: Any, actor: str | None) -> di
     payload = confirmation.payload
     from app.domain.generation import create_generation_job
     from app.domain.generation.operations import parse_source_assets
+    from app.core.unit_of_work import after_commit
     from app.domain.generation.runner import start_generation_thread
     from app.domain.entities import parse_entity_ids
     kind = _GENERATION_KIND_BY_TOOL[confirmation.tool]
@@ -48,7 +49,9 @@ def _execute_generation(db: Session, confirmation: Any, actor: str | None) -> di
         #: 智能体声明的授权(generate_video 的 digital_human_consent);卡片由人批准时一并过目。
         digital_human_consent=payload.get("digital_human_consent") is True,
     )
-    start_generation_thread(generation.id)
+    # 生成线程重开会话去读刚建的行 —— 等入口提交之后再起;执行体后面炸了、整个回滚,它就不起。
+    generation_id = generation.id
+    after_commit(db, lambda: start_generation_thread(generation_id))
     result: dict[str, Any] = {"job_id": job.id, "generation_id": generation.id}
     #: `@` 到的资产挂了哪几张参考图、哪几张没挂上(ADR 0027)—— 模型据此如实告诉用户,而不是以为全挂上了。
     if generation.request.get("entities"):

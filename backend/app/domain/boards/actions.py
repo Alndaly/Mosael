@@ -239,6 +239,7 @@ def generate_on_board(
     还不存在的地方。生成的错误(GenerationDomainError)原样抛出。
     """
     from app.domain.generation import create_generation_job
+    from app.core.unit_of_work import after_commit
     from app.domain.generation.operations import parse_source_assets
     from app.domain.generation.runner import start_generation_thread
 
@@ -293,7 +294,9 @@ def generate_on_board(
                if form.get("mentioned_entity_ids") or entity_ids else {}),
         },
     )
-    start_generation_thread(generation.id)
+    # 生成线程重开会话去读刚建的行(和这一格的占位):等入口提交之后再起。
+    generation_id = generation.id
+    after_commit(db, lambda: start_generation_thread(generation_id))
     return board
 
 

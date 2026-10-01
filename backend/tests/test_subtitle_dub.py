@@ -354,6 +354,7 @@ class Test原声处理归配音本身:
                 synthesis={"engine": "builtin:volcano", "engine_voice": "v", "workspace_id": "w"},
                 original_audio="mute",
             ).id
+            db.commit()  # 测试是入口:任务在提交之后才派发(jobs.dispatch_job)
         assert wait_for_idle_jobs(10)
         with SessionLocal() as db:
             job = db.get(Job, job_id)

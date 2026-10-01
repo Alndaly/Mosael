@@ -98,6 +98,7 @@ def _run(ws: str, graph: dict, params: dict | None = None) -> tuple[str, dict, s
         workflow = create_workflow(db, workspace_id=ws, name="插件", graph=graph, created_by=user_id())
         db.commit()
         job_id = start_workflow_job(db, workflow, created_by=user_id(), params=params).id
+        db.commit()  # 测试是入口:任务在提交之后才派发(jobs.dispatch_job)
     for _ in range(200):
         with SessionLocal() as db:
             job = db.get(Job, job_id)

@@ -143,6 +143,7 @@ def _generate(ws: str, profile: str, scene_id: str, **extra):
             negative_prompt="", parameters=extra.pop("parameters", {}), source_assets=[],
             scene_reference={"scene_id": scene_id, "shot_id": "", "use": "composition"}, **extra,
         )
+        db.commit()  # 测试是入口:create_generation_job 不提交
         return generation.request
 
 

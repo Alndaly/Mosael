@@ -104,6 +104,7 @@ def test_重配同一条字幕_变速加在新配的这段上(monkeypatch) -> No
                 db, sequence_id=sequence_id, clip_ids=[cue_id], match_duration=True, created_by=None,
                 synthesis={"engine": "volcano", "engine_voice": "v", "workspace_id": ws}, original_audio="keep",
             )
+            db.commit()  # 测试是入口:任务在提交之后才派发(jobs.dispatch_job)
         assert wait_for_idle_jobs(10)
 
     with SessionLocal() as db:

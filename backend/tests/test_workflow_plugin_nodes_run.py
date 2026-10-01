@@ -49,6 +49,7 @@ def _run(graph: dict) -> tuple[str, dict, str | None, str]:
         workflow = create_workflow(db, workspace_id=ws, name="插件节点", graph=graph, created_by=user_id())
         db.commit()  # 测试是入口:领域函数不提交
         job_id = start_workflow_job(db, workflow, created_by=None).id
+        db.commit()  # 测试是入口:任务在提交之后才派发(jobs.dispatch_job)
     for _ in range(100):
         with SessionLocal() as db:
             job = db.get(Job, job_id)

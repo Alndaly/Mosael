@@ -1060,6 +1060,7 @@ def test_写字时炸了别的异常_那张便签照样收成失败() -> None:
             base_revision=board_revision(client, board_id, ws), actor_id=user_id, producer="write",
             form={"prompt": "改短", "source_assets": ["a1"]},
         ))
+        db.commit()  # 测试是入口:任务在提交之后才派发(jobs.dispatch_job)
         assert placed.canvas["items"][0]["run"]["status"] == "running", "先摆「写作中」,写在后台"
         assert wait_for_idle_jobs(timeout=30)
 

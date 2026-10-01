@@ -16,9 +16,10 @@ router = APIRouter(tags=["documents"])
 
 
 @router.get("/assets/{asset_id}/extractions", response_model=list[AssetExtractionOut])
-def list_extractions(asset_id: str, db: DbSession, user: CurrentUser) -> list[AssetExtraction]:
+def list_extractions(asset_id: str, db: Tx, user: CurrentUser) -> list[AssetExtraction]:
     """这份文档的每一次解析,新的在前。一次都没有过的(升级改回来的那批)在这里补上本地解析 —— 阅读器打开就看到
     「解析中」,而不是一句「还没解析」(见 documents.extraction.ensure_parsed)。"""
+    #: 读着读着会**建**一次解析任务,所以是 Tx:任务在这次请求提交之后才开跑(jobs.dispatch_job)。
     return documents.list_extractions(db, user, asset_id)
 
 
@@ -58,8 +59,9 @@ def read_document(asset_id: str, db: DbSession, user: CurrentUser,
 
 
 @router.get("/assets/{asset_id}/document/text", response_model=DocumentTextOut)
-def document_full_text(asset_id: str, db: DbSession, user: CurrentUser) -> dict:
+def document_full_text(asset_id: str, db: Tx, user: CurrentUser) -> dict:
     """画板上的文档格:解析出的全文(不带段标记)和解析的状态。连进写作 / 生成格时喂的就是它。"""
+    #: 从没解析过的会在这里补一次本地解析(见 document_text),所以是 Tx:提交之后解析任务才开跑。
     from app.domain.documents.extraction import latest_extraction
     from app.domain.documents.reading import document_text
 

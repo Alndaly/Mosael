@@ -183,6 +183,7 @@ def test_工作流节点里的进度成了节点事件(monkeypatch) -> None:
         workflow = create_workflow(db, workspace_id=ws, name="进度", graph=graph, created_by=user_id())
         db.commit()  # 测试是入口:领域函数不提交
         job_id = start_workflow_job(db, workflow, created_by=None).id
+        db.commit()  # 测试是入口:任务在提交之后才派发(jobs.dispatch_job)
     for _ in range(100):
         with SessionLocal() as db:
             if db.get(Job, job_id).status in ("succeeded", "failed"):

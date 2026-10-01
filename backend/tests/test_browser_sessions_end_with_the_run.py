@@ -47,7 +47,9 @@ def _start(ws: str, graph: dict) -> str:
     with SessionLocal() as db:
         workflow = create_workflow(db, workspace_id=ws, name="RPA", graph=graph, created_by=user_id())
         db.commit()  # 测试是入口:领域函数不提交
-        return start_workflow_job(db, workflow, created_by=None).id
+        started = start_workflow_job(db, workflow, created_by=None).id
+        db.commit()  # 测试是入口:任务在提交之后才派发(jobs.dispatch_job)
+        return started
 
 
 def _settle(job_id: str) -> str:

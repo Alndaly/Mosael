@@ -135,7 +135,7 @@ def voice_sample(voice_id: str, db: DbSession, user: CurrentUser) -> FileRespons
 
 
 @router.post("/voices/{voice_id}/synthesize", response_model=JobOut)
-def synthesize(voice_id: str, body: SynthesizeRequest, db: DbSession, user: CurrentUser):
+def synthesize(voice_id: str, body: SynthesizeRequest, db: Tx, user: CurrentUser):
     voice_uc.usable(db, user, voice_id)
     try:
         return voices.start_synthesis(
@@ -184,7 +184,7 @@ def list_tts_engines(db: DbSession, user: CurrentUser) -> list[dict]:
 
 
 @router.post("/tts/podcast", response_model=JobOut)
-def generate_podcast(body: PodcastRequest, db: DbSession, user: CurrentUser) -> Job:
+def generate_podcast(body: PodcastRequest, db: Tx, user: CurrentUser) -> Job:
     """Queue a podcast. Same permission as any other AI spend in the workspace."""
     voice_uc.ensure_can_speak(db, user, body.workspace_id)
     try:
@@ -256,7 +256,7 @@ def preview_voice(body: VoicePreviewRequest, db: DbSession, user: CurrentUser) -
 
 
 @router.post("/tts/synthesize", response_model=JobOut)
-def synthesize_with_engine(body: EngineSynthesizeRequest, db: DbSession, user: CurrentUser):
+def synthesize_with_engine(body: EngineSynthesizeRequest, db: Tx, user: CurrentUser):
     """Synthesise with a remote engine. Separate from /voices/{id}/synthesize because there is
     no Voice row to hang it off — the engine supplies the voice."""
     voice_uc.ensure_can_speak(db, user, body.workspace_id)

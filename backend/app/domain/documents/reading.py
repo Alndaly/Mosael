@@ -43,8 +43,15 @@ def _document(db: Session, workspace_id: str, asset_id: str) -> Asset:
 
 def _ready(db: Session, asset: Asset, *, wait: bool) -> AssetExtraction:
     """最新成功的那份解析;还在解析就等一会儿(wait),失败 / 没有就说清楚。"""
+    from app.core.unit_of_work import unit_of_work
+
     deadline = time.monotonic() + (WAIT_SECONDS if wait else 0)
-    ensure_parsed(db, asset)
+    #: 补一次解析是**它自己的一个用例**,自己提交:解析任务在提交之后才开跑(jobs.dispatch_job),而下面要在这里
+    #: 等它 —— 跟着读的这一笔一起提交的话,等到时限也等不到,读的人一报错回滚,连这次解析也没了。读的这一侧
+    #: 此前没写过东西,另开一个会话不会撞上写锁。
+    if latest_extraction(db, asset.id, succeeded=False) is None:
+        with unit_of_work() as own:
+            ensure_parsed(own, own.get(Asset, asset.id))
     while True:
         done = latest_extraction(db, asset.id)
         if done is not None:

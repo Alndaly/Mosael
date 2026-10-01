@@ -33,6 +33,7 @@ def _run(graph: dict) -> tuple[dict, dict]:
         db.commit()  # 测试是入口:领域函数不提交
         saved = workflow.graph
         job_id = start_workflow_job(db, db.get(Workflow, workflow.id), created_by=None).id
+        db.commit()  # 测试是入口:任务在提交之后才派发(jobs.dispatch_job)
     for _ in range(100):
         with SessionLocal() as db:
             job = db.get(Job, job_id)

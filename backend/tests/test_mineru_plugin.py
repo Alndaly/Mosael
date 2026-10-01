@@ -298,6 +298,7 @@ def test_宿主_点名插件解析_按页切段_表格转成_Markdown_插图搬�
         assert unknown.value.key == "confirmErr_unknownProvider" and "假解析" in str(unknown.value)
         spec.validate(db, ws, {"asset_id": made["id"], "parser": "假解析"}, owner)
         started = spec.execute(db, SimpleNamespace(payload={"asset_id": made["id"], "parser": "假解析"}, workspace_id=ws), owner)
+        db.commit()  # 测试是入口:任务在提交之后才派发(jobs.dispatch_job)
     assert started["parser"] == "假解析" and settled(started["extraction_id"])["status"] == "succeeded"
 
 

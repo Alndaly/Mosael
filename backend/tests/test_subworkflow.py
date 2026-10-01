@@ -22,6 +22,7 @@ def _run(wf_id: str, params: dict | None = None) -> tuple[str, dict, str | None,
     with SessionLocal() as db:
         wf = db.get(Workflow, wf_id)
         job = start_workflow_job(db, wf, created_by=None, params=params or {})
+        db.commit()  # 测试是入口:任务在提交之后才派发(jobs.dispatch_job)
         jid = job.id
     for _ in range(150):
         with SessionLocal() as db:

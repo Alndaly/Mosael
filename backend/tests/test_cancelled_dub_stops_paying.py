@@ -67,6 +67,7 @@ def test_取消之后剩下的句子不再合成_任务也不会被写回完成(
             db, sequence_id=sequence_id, clip_ids=cue_ids, match_duration=False, created_by=None,
             synthesis={"engine": "volcano", "engine_voice": "v", "workspace_id": ws}, original_audio="keep",
         ).id
+        db.commit()  # 测试是入口:任务在提交之后才派发(jobs.dispatch_job)
     assert wait_for_idle_jobs(10)
 
     assert len(synthesized) == 1, f"取消之后又合成了 {len(synthesized) - 1} 句"

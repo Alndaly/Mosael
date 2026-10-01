@@ -384,7 +384,9 @@ def _create_generation_job(
     )
     session.updated_at = now()
     db.add(generation)
-    db.commit()
+    #: 不提交:提交归入口(core/unit_of_work)。此前这里自己提交,于是确认卡的执行体在这之后炸了也撤不回这次
+    #: 生成 —— 它已经落库、紧接着就派发了。派发由调用方在**提交之后**做(after_commit → start_generation_thread)。
+    db.flush()
     db.refresh(generation)
     db.refresh(job)
     return generation, job

@@ -29,6 +29,7 @@ from app.ai.providers.contracts.generation import direct_media_url, sanitize_ada
 from sqlalchemy import select
 
 from app.core.db import SessionLocal
+from app.core.unit_of_work import unit_of_work
 from app.core.i18n import LocalizedError, tr
 from app.db.models import Asset, GeneratedAsset, GenerationJob, Job
 from app.domain.providers import models as provider_models
@@ -63,8 +64,10 @@ def start_generation_thread(generation_id: str) -> None:
     """按 ai_generation 的执行模式派发(名字保留:四个调用方不需要知道派发细节)。
 
     调用方先 create_generation_job + commit 再调这里,所以能安全地重开会话取 job;
-    external 模式下 dispatch 只把 job 标成等待认领,不起线程。"""
-    with SessionLocal() as db:
+    external 模式下 dispatch 只把 job 标成等待认领,不起线程。
+
+    自己开的会话,自己就是入口:用 unit_of_work 包住,提交之后 dispatch_job 登记的线程才起来。"""
+    with unit_of_work() as db:
         generation = db.get(GenerationJob, generation_id)
         job = db.get(Job, generation.job_id) if generation is not None and generation.job_id else None
         if job is None:
@@ -99,7 +102,7 @@ def resume_generation(job_id: str) -> bool:
     重来就是再付一次,第一次那条成片永远没人去取。开发时尤其要命:`--reload` 每改一行代码就
     重启一次。
     """
-    with SessionLocal() as db:
+    with unit_of_work() as db:
         job = db.get(Job, job_id)
         if job is None or not can_resume(db, job):
             return False

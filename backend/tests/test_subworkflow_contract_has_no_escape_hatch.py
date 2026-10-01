@@ -78,6 +78,7 @@ def _call(child_graph: dict) -> tuple[str, dict, str | None, str | None]:
         }, created_by=user_id())
         db.commit()
         job = start_workflow_job(db, db.get(Workflow, parent.id), created_by=user_id(), params={})
+        db.commit()  # 测试是入口:任务在提交之后才派发(jobs.dispatch_job)
         job_id = job.id
     for _ in range(150):
         with SessionLocal() as db:

@@ -361,6 +361,7 @@ def test_queued_run_executes_the_revision_pinned_at_enqueue(monkeypatch) -> None
         workflow = create_workflow(db, workspace_id=ws["id"], name="固定修订", graph=before, created_by=user_id())
         db.commit()  # 测试是入口:领域函数不提交
         job = workflow_engine.start_workflow_job(db, workflow, created_by=None)
+        db.commit()  # 测试是入口:任务在提交之后才派发(jobs.dispatch_job)
         job_id = job.id
         monkeypatch.setattr(workflow_engine.threading, "Thread", real_thread)
 

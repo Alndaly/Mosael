@@ -803,13 +803,15 @@ def _drain_queue_locked(session_id: str) -> None:
             session.status = "idle"
             db.commit()
             return
-        db.commit()
         token = _mint_service_token(db, owner, session_id)
         payload = message.payload or {}
         content = user_prompt(message.content, payload, db=db, workspace_id=session.workspace_id)
         # 排队那条也要补信封:它和直发走的是同一件事,只是晚一点跑。漏在这儿的话,
         # 「对方正忙」时收到的消息,模型就不知道它是谁发的。
         content = with_origin_envelope(content, payload)
+        # 提交排在拼完提示词之后:拼的时候可能为挂着的文档补起一次解析(documents.reading.attachment_context),
+        # 解析任务在提交之后才开跑(jobs.dispatch_job)。
+        db.commit()
     _start_turn(session_id, content, token, actor_id=owner.id)
 
 

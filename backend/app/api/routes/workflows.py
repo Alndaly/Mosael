@@ -357,7 +357,7 @@ def delete(workflow_id: str, db: Tx, user: CurrentUser) -> Response:
 
 
 @router.post("/workflows/{workflow_id}/run", response_model=JobOut)
-def run(workflow_id: str, body: WorkflowRunRequest, db: DbSession, user: CurrentUser) -> Job:
+def run(workflow_id: str, body: WorkflowRunRequest, db: Tx, user: CurrentUser) -> Job:
     workflow = workflow_uc.editable(db, user, workflow_id)
     try:
         return start_workflow_job(db, workflow, created_by=user.id, params=body.params)

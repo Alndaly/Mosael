@@ -152,6 +152,7 @@ def _dispatch_and_wait(ws: str, body) -> str:
                 done.set()
 
         dispatch_job(db, parent, target)
+        db.commit()  # 测试是入口:任务在提交之后才派发(jobs.dispatch_job)
     assert done.wait(10)
     return parent_id
 

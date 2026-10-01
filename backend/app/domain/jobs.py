@@ -637,19 +637,24 @@ def wait_for_idle_jobs(timeout: float = 5.0) -> bool:
 def dispatch_job(db: Session, job: Job, thread_target: Callable[[], None]) -> bool:
     """按 kind 的执行模式派发一个刚创建的 job。
 
-    in_process → 立刻 spawn 守护线程(现状不变);external → 什么都不做,留在
-    queued 等外部 worker 认领。领域模块只描述「怎么跑」(thread_target),
-    「由谁跑」是总线的决定——这样把一个 kind 挪到外部 worker 不需要改领域代码。
-    Returns True when a thread was started in-process.
+    in_process → 这次事务**提交之后**起线程;external → 什么都不做,留在 queued 等外部 worker 认领。
+    领域模块只描述「怎么跑」(thread_target),「由谁跑」是总线的决定——这样把一个 kind 挪到外部
+    worker 不需要改领域代码。Returns True when the job will run in-process.
+
+    **这里不提交,起线程登记成 after_commit。** 此前这里先 `db.commit()` 再起线程:调用方事务里**在它之前**
+    做的一切跟着落了库,任务线程也已经跑起来了 —— 而调用方可能还没做完。确认卡的执行体是一个用例一个
+    事务、炸了整个回滚(见 agent.confirmations.approve_confirmation),对「起任务」的卡这句话就不成立:
+    派发处已经替它提交了一半。提交归入口(core/unit_of_work 的约定);入口提交了,线程才起来(它要读刚写的
+    行);入口回滚了,任务连同它的线程都不存在。调用方要保证这次事务之后会提交 —— 等子任务的节点在
+    wait_for_job(release=db) 里交还会话时提交。
     """
     if execution_mode(job.kind) == "external":
         say(job, "jobMsg_waitingWorker")
         db.add(TaskEvent(job_id=job.id, type="job.awaiting_worker", payload={}))
-        db.commit()
         logger.info("job %s [%s] queued for external worker", job.id, job.kind)
         return False
-    db.commit()
     job_id = job.id
+    kind = job.kind
 
     def run_as_job() -> None:
         # 执行体里建出来的任务都归这个任务(ADR-0018)。新线程不继承 contextvar ——
@@ -660,8 +665,11 @@ def dispatch_job(db: Session, job: Job, thread_target: Callable[[], None]) -> bo
         finally:
             reset_parent_job(token)
 
-    _runner.submit(job_id, run_as_job)
-    logger.info("job %s [%s] dispatched in-process", job.id, job.kind)
+    def submit() -> None:
+        _runner.submit(job_id, run_as_job)
+        logger.info("job %s [%s] dispatched in-process", job_id, kind)
+
+    after_commit(db, submit)
     return True
 
 

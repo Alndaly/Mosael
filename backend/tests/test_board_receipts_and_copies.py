@@ -139,6 +139,7 @@ def test_起任务后才撞上并发保存_占位照样落下_任务照样起(mo
             "prompt": "一只猫", "provider": "p", "provider_profile_id": "pp", "model": "m",
             "item_form": {"prompt": "一只猫"},
         }))
+        db.commit()  # 测试是入口:生成线程在提交之后才起(after_commit)
 
     assert started == ["gen-1"], "任务建了却没起 —— 任务中心里永远排着一条"
     items = {one["id"]: one for one in _canvas(client, ws, board_id)["items"]}
