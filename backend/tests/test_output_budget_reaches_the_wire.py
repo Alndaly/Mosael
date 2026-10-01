@@ -60,7 +60,7 @@ def test_解析出来的输出上限真的发出去了(monkeypatch) -> None:
 
 def test_节点上那一格更具体_它先说了算(monkeypatch) -> None:
     """工作流 LLM 节点把 max_tokens 开放给了用户,那是**这一次调用**的意图,
-    比模型上的默认值更具体。所以是 setdefault 而不是覆盖。"""
+    比模型上的默认值更具体 —— 只要不超过模型的输出上限(见下一条)。"""
     seen: list[dict] = []
     _install(monkeypatch, seen)
     target = ChatTarget(base_url="https://provider.test", api_key="k", model="m", max_output_tokens=384_000)
@@ -68,6 +68,17 @@ def test_节点上那一格更具体_它先说了算(monkeypatch) -> None:
     chat(target, [{"role": "user", "content": "hi"}], extra={"max_tokens": 1024})
 
     assert seen[0].get("max_tokens") == 1024
+
+
+def test_节点上那一格超过模型的输出上限_按上限发(monkeypatch) -> None:
+    """整理模板的 LLM 节点写死 max_tokens=16000;模型输出上限只有 8K 时,原样发出去供应商直接 400。"""
+    seen: list[dict] = []
+    _install(monkeypatch, seen)
+    target = ChatTarget(base_url="https://provider.test", api_key="k", model="m", max_output_tokens=8192)
+
+    chat(target, [{"role": "user", "content": "hi"}], extra={"max_tokens": 16000})
+
+    assert seen[0].get("max_tokens") == 8192
 
 
 def test_解析不出上限时不瞎发(monkeypatch) -> None:

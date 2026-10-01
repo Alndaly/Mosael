@@ -257,10 +257,13 @@ def chat(
         and payload["response_format"].get("type") in {"json_schema", "json_object"}
     ):
         payload.setdefault("thinking", {"type": "disabled"})
-    # **`setdefault`**:工作流 LLM 节点上那一格(executors/ai.py)是更具体的意图,它先说了算;
-    # 没人说过时,才用模型设置里那个数 —— 而不是让供应商拿它自己的默认值(通常小得多)决定。
+    # 工作流 LLM 节点上那一格(executors/ai.py)是更具体的意图,但**不能超过这个模型的输出上限**:此前节点优先
+    # (setdefault),整理模板写死的 16000 原样发给输出上限 8K 的模型,供应商直接 400(「max_tokens 超出范围」)。
+    # 所以取两者较小的那个;没人说过时用模型设置里那个数 —— 而不是让供应商拿它自己的默认值(通常小得多)决定。
     if target.max_output_tokens:
-        payload.setdefault("max_tokens", target.max_output_tokens)
+        asked = payload.get("max_tokens")
+        payload["max_tokens"] = (min(asked, target.max_output_tokens) if isinstance(asked, int) and asked > 0
+                                 else target.max_output_tokens)
     payload["messages"] = _satisfy_json_mode(payload.get("messages") or [], payload.get("response_format"))
     if target.execution_surface == "gateway":
         return _chat_gateway(
