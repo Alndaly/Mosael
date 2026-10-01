@@ -83,14 +83,14 @@ def _plugin_types(db: Session) -> dict[str, dict[str, Any]]:
 def _one_of_errors(
     node_id: str, config: dict[str, Any], specs: dict[str, Any], data_bound: set[tuple[str, str]]
 ) -> list[str]:
-    """声明了 `one_of` 的每一组字段恰好填一个(见 NODE_TYPES 前的说明)。"""
+    """声明了 `one_of` 的每一组字段恰好填一个(见 NODE_TYPES 前的说明)。「填了」按 blank 判,和必填同一个判据。"""
     groups: dict[str, list[str]] = {}
     for key, spec in specs.items():
         if isinstance(spec, dict) and spec.get("one_of"):
             groups.setdefault(str(spec["one_of"]), []).append(key)
     errors = []
     for keys in groups.values():
-        filled = [key for key in keys if config.get(key) not in (None, "") or (node_id, key) in data_bound]
+        filled = [key for key in keys if not blank(config.get(key)) or (node_id, key) in data_bound]
         names = " / ".join(keys)
         if len(filled) > 1:
             errors.append(f"节点 {node_id} 的 {names} 只能填一个")
@@ -245,7 +245,8 @@ def validate_graph(
             for key, spec in node_specs.items():
                 if isinstance(spec, dict) and spec.get("required") and config_field_active(spec, node_config, node_specs):
                     value = node_config.get(key)
-                    if value in (None, "") and (node_id, key) not in data_bound:
+                    #: 「空着」和画布的就绪检查同一个判据(blank):空白、空列表、空对象也是没填。
+                    if blank(value) and (node_id, key) not in data_bound:
                         errors.append(f"节点 {node_id} 缺少必填配置 {key}")
             errors.extend(_one_of_errors(node_id, node_config, node_specs, data_bound))
             #: 代码字段不能接上游:上游的值整段变成代码,和把 {{}} 拼进去是同一个注入(见 code_fields)。
