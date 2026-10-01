@@ -17,7 +17,7 @@ from sqlalchemy import delete, event, inspect, select
 from sqlalchemy.orm import Session
 
 from app.core.db import SessionLocal
-from app.core.unit_of_work import unit_of_work
+from app.core.unit_of_work import after_commit, unit_of_work
 from app.core.i18n import DEFAULT_LOCALE, LocalizedError, t
 from app.db.models import Job, TaskEvent
 from app.db.models import now as models_now
@@ -402,14 +402,9 @@ def register_settle_listener(name: str, listener: Callable[[Session, Job], None]
     _SETTLE_LISTENERS[name] = listener
 
 
-#: 这次事务里刚落终态的 job id(等着收拾、送回执)。挂在 session.info 上而不是模块级 ——
-#: 后台线程各有各的 session,模块级变量会让两个线程的回执串到一起。
-_PENDING_SETTLED = "mosael_pending_settled_jobs"
-
-
 @event.listens_for(Session, "after_flush")
 def _note_settled_jobs(session: Session, _flush_context: Any) -> None:
-    """记下这次 flush 里**刚进终态**的任务。
+    """记下这次 flush 里**刚进终态**的任务,登记成「提交之后再收拾、再送回执」。
 
     **挂在状态变化上,不挂在某个函数上。** 回执最初挂在 finish_job 里,而全仓库只有
     render.py 走它 —— 生成、发布、配音、代理、从链接导入全是直接 `job.status = ...`。
@@ -417,7 +412,13 @@ def _note_settled_jobs(session: Session, _flush_context: Any) -> None:
 
     只认「**从非终态进终态**」这一次跳变:一个已经 failed 的行再被写一次别的字段,
     不该再发一封。
+
+    **登记走 unit_of_work.after_commit,不自己记一份清单。** 此前这里往 session.info 里记 id、提交时取走,而回滚
+    不清它:确认卡的执行体把一个任务写成终态、随后炸了,approve_confirmation 回滚掉执行体的改动(那个终态也一起
+    没了),紧接着记「卡失败」的那次提交却把这份陈旧的清单取走 —— 对一个根本没落终态的任务跑收拾、送「已结束」
+    的回执。after_commit 的钩子回滚就丢、保存点回滚只丢它里面登记的,正是这里要的语义。
     """
+    settled = []
     for obj in session.dirty:
         if not isinstance(obj, Job):
             continue
@@ -426,19 +427,17 @@ def _note_settled_jobs(session: Session, _flush_context: Any) -> None:
             continue
         was = history.deleted[0] if history.deleted else None
         if obj.status in TERMINAL_STATUSES and was not in TERMINAL_STATUSES:
-            session.info.setdefault(_PENDING_SETTLED, []).append(obj.id)
+            settled.append(obj.id)
+    if settled:
+        after_commit(session, lambda: _after_jobs_settled(settled))
 
 
-@event.listens_for(Session, "after_commit")
-def _after_jobs_settled(session: Session) -> None:
+def _after_jobs_settled(job_ids: list[str]) -> None:
     """提交之后才收拾、才送。
 
     送信会写库(往对话里放一条消息)、还会叫醒一个智能体回合 —— 在 flush 里做的话,
     它看到的是一份还没提交的任务状态,而万一外层回滚,消息已经发出去了。收拾同理。
     """
-    job_ids = session.info.pop(_PENDING_SETTLED, None)
-    if not job_ids:
-        return
     # 用**新的** session:调用方那个刚提交完,在它上面接着写会把这次送信卷进调用方的
     # 下一个事务里 —— 而调用方随时可能回滚。
     from app.core.db import SessionLocal

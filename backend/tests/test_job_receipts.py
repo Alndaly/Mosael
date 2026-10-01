@@ -241,6 +241,65 @@ class Test上下文变量把回执传下去:
             assert "receipt" not in job.payload
 
 
+class Test回滚掉的终态不送:
+    """记下「刚落终态」的那份清单,回滚时要跟着丢。
+
+    此前清单挂在 session.info 上、只在提交时取走,回滚不清它。确认卡正好走出这条路:执行体把一个任务写成终态
+    (flush 了),随后炸了 → approve_confirmation 回滚执行体的改动(终态一起没了)→ 入口提交「卡失败」→ 这次
+    提交把陈旧的清单取走,对一个仍在排队的任务跑收拾、送「已结束」的回执。
+    """
+
+    def test_卡的执行体落了终态又炸了_回执不送_任务还在排队(self, spy, monkeypatch) -> None:
+        import dataclasses
+
+        from app.domain.agent.confirmable import registry
+        from app.domain.agent.errors import ConfirmationError
+
+        client = fresh_client()
+        ws = _workspace(client)
+        wf = client.post("/api/workflows", json={"workspace_id": ws, "name": "流", "graph": {
+            "nodes": [{"id": "start", "type": "start", "config": {"params": {}}}], "edges": []}}).json()["id"]
+        with SessionLocal() as db:
+            job_id = _job(db, ws, receipt={"kind": "spy"}).id
+            db.commit()
+
+        def settles_then_fails(db, confirmation, actor):
+            db.get(Job, job_id).status = "failed"
+            db.flush()
+            raise ConfirmationError("执行到一半炸了")
+
+        spec = registry._TOOLS["run_workflow"]
+        monkeypatch.setitem(registry._TOOLS, "run_workflow", dataclasses.replace(spec, execute=settles_then_fails))
+        card = client.post("/api/confirmations", json={
+            "workspace_id": ws, "tool": "run_workflow", "requested_by": "pi",
+            "payload": {"workflow_id": wf, "params": {}},
+        }).json()
+
+        settled = client.post(f"/api/confirmations/{card['id']}/approve").json()
+
+        assert settled["status"] == "failed"
+        with SessionLocal() as db:
+            assert db.get(Job, job_id).status == "queued"
+        assert spy == [], "回滚掉的终态被当成真的,送出了「已结束」的回执"
+
+    def test_保存点里回滚的不送_外层提交的照送(self, spy) -> None:
+        client = fresh_client()
+        ws = _workspace(client)
+        with SessionLocal() as db:
+            kept = _job(db, ws, receipt={"kind": "spy"})
+            dropped = _job(db, ws, receipt={"kind": "spy"})
+            db.commit()
+            kept.status = "succeeded"
+            db.flush()
+            with pytest.raises(RuntimeError):
+                with db.begin_nested():
+                    dropped.status = "failed"
+                    db.flush()
+                    raise RuntimeError("这一段撤掉")
+            db.commit()
+        assert [job_id for job_id, _receipt in spy] == [kept.id]
+
+
 class Test方向是反的:
     def test_任务域不认识智能体(self) -> None:
         """domain/jobs 里出现 `domain.agent` 就说明依赖反了 —— 那一刻起,发布和导出也
