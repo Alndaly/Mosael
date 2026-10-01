@@ -214,6 +214,15 @@ MESSAGES: dict[str, dict[str, str]] = {
     "jobMsg_dubDone": {"zh": "字幕配音完成:{done} 条", "en": "Dubbed {done} subtitle(s)"},
     # 部分失败单独一句:把「10 条里成了 9 条」说成「配音完成」,用户要到时间线上一段段找才发现少了一条。
     "jobMsg_dubPartial": {"zh": "字幕配音完成:{done} 条成功,{failed} 条失败", "en": "Dubbed {done} subtitle(s), {failed} failed"},
+    # 1.5 倍、占满空当还是念不完的那几句压到了下一句上:说出来,不让人在成片里自己听出来。
+    "jobMsg_dubDoneOverlap": {
+        "zh": "字幕配音完成:{done} 条;{overlaps} 条 1.5 倍速也念不完,共压到下一句上 {seconds} 秒",
+        "en": "Dubbed {done} subtitle(s); {overlaps} ran over into the next line even at 1.5×, {seconds}s in total",
+    },
+    "jobMsg_dubPartialOverlap": {
+        "zh": "字幕配音完成:{done} 条成功,{failed} 条失败;{overlaps} 条 1.5 倍速也念不完,共压到下一句上 {seconds} 秒",
+        "en": "Dubbed {done} subtitle(s), {failed} failed; {overlaps} ran over into the next line even at 1.5×, {seconds}s in total",
+    },
     "jobMsg_dubFailed": {"zh": "字幕配音失败", "en": "Subtitle dubbing failed"},
     "jobMsg_urlImportRunning": {"zh": "从链接下载({done}/{total})", "en": "Downloading from links ({done}/{total})"},
     "jobMsg_urlImportItem": {

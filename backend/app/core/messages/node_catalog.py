@@ -163,6 +163,14 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfOut_camera_move": {"zh": "镜头语言", "en": "Camera language"},
     "wfOut_skipped_models": {"zh": "未渲染的导入模型", "en": "Imported models not rendered"},
     "wfOut_model_warnings": {"zh": "没渲进去的是哪几件、为什么", "en": "Which models were left out, and why"},
+    #: 1.5 倍速、占满空当还念不完的那几句(见 voices/subtitle_dub._speed_for)。都放得下时这句是空的。
+    "dubOverlapNote": {
+        "zh": " 有 {overlaps} 条配音 1.5 倍速也念不完,共压到下一句上 {seconds} 秒,可在时间线上调整或改短译文。",
+        "en": " {overlaps} dubbed line(s) ran over into the next one even at 1.5×, {seconds}s in total; adjust them on the timeline or shorten the translation.",
+    },
+    "wfOut_overlaps": {"zh": "压到下一句上的条数", "en": "Lines running into the next"},
+    "wfOut_overlap_seconds": {"zh": "压到下一句上的秒数", "en": "Seconds running into the next line"},
+    "wfOut_overlap_note": {"zh": "念不完的说明", "en": "Overrun note"},
     "dubOriginalAudio_keep": {"zh": "原声保留原样。", "en": "The original audio was left as it was."},
     "dubOriginalAudio_duck": {"zh": "配音说话时原声被压低。", "en": "The original audio is lowered while the dub speaks."},
     "dubOriginalAudio_mute": {"zh": "原声整轨静音。", "en": "The original audio track is muted."},
@@ -231,7 +239,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfNode_dub_subtitles_desc": {"zh": "把选中的字幕条逐条念出来,落到一条专门的配音轨 —— 原声和原素材一个字不动,不满意整条轨删掉就回到原样。", "en": "Speak the chosen subtitle cues onto a dedicated dub track — the original audio and clips are untouched, so deleting that one track undoes everything."},
     "wfNode_dub_subtitles_sequence_id": {"zh": "配音落到哪条时间线", "en": "The timeline the dub goes onto"},
     "wfNode_dub_subtitles_clip_ids": {"zh": "要配音的字幕条,如 {{生成字幕.clip_ids}};一条都没有时什么都不做(配 0 条、原声不动)", "en": "The subtitle cues to dub, e.g. {{generate_subtitles.clip_ids}}; with none, nothing is dubbed and the original audio is left alone"},
-    "wfNode_dub_subtitles_match_duration": {"zh": "把配音在 0.9–1.5 倍速之间缩放到原段落的长度,好让它对得上画面;1.5 倍还念不完时先占用到下一句开始之前的空当", "en": "Speed each dubbed line between 0.9× and 1.5× to fill the original segment so it stays in sync; if 1.5× isn't enough it runs on into the gap before the next line"},
+    "wfNode_dub_subtitles_match_duration": {"zh": "把配音在 0.9–1.5 倍速之间缩放到原段落的长度,好让它对得上画面;1.5 倍还念不完时先占用到同一条字幕轨上下一句开始之前的空当(最后一句到原片结束为止);还放不下的条数和秒数在结果和完成通知里报出来", "en": "Speed each dubbed line between 0.9× and 1.5× to fill the original segment so it stays in sync; if 1.5× isn't enough it runs on into the gap before the next subtitle on the track (up to the end of the source for the last one); lines that still don't fit are counted in the result and the completion notice"},
     "wfNode_dub_subtitles_line": {
         "zh": "双语字幕包含两行时，选择哪部分交给语音合成；单语字幕选择「完整字幕」即可。",
         "en": "Choose which part of a two-line bilingual cue is sent to speech synthesis. Use Full cue for single-line subtitles.",

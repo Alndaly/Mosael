@@ -184,7 +184,7 @@ def translated_dub_graph(
                 "body": "{{source_video.name}} " + text(
                     "已生成 {{dubbing.done}} 条配音(失败 {{dubbing.failed}} 条),配音在单独一条轨上。",
                     "got {{dubbing.done}} dubbed lines ({{dubbing.failed}} failed) on a track of their own. ",
-                ) + "{{dubbing.original_audio_note}}",
+                ) + "{{dubbing.original_audio_note}}{{dubbing.overlap_note}}",
             },
         },
         {

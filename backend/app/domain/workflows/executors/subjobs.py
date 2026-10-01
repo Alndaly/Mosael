@@ -980,6 +980,9 @@ def dub_subtitles(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[
             "failed": 0,
             "original_audio": "keep",
             "original_audio_note": t("dubOriginalAudio_keep", get_current_locale()),
+            "overlaps": 0,
+            "overlap_seconds": 0.0,
+            "overlap_note": "",
         }
 
     synthesis = _speech_params(db, scope, config)
@@ -1001,12 +1004,19 @@ def dub_subtitles(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[
     #: **实际**对原声做了什么(配音任务收尾时处理,见 voices/original_audio)。历史任务可能留有
     #: mute_fallback；新任务对用户明确选择的 separate 不再静默降级。
     applied = str(result.get("original_audio") or "keep")
+    #: 1.5 倍速也念不完、压到下一句上的那几句(见 voices/subtitle_dub):完成通知里如实说,不让人在成片里自己听出来。
+    overlaps = int(result.get("overlaps") or 0)
+    overlap_seconds = float(result.get("overlap_seconds") or 0.0)
     return {
         "track_id": str(result.get("track_id") or ""),
         "done": int(result.get("done") or 0),
         "failed": int(result.get("failed") or 0),
         "original_audio": applied,
         "original_audio_note": t(f"dubOriginalAudio_{applied}", get_current_locale()),
+        "overlaps": overlaps,
+        "overlap_seconds": overlap_seconds,
+        "overlap_note": t("dubOverlapNote", get_current_locale(), overlaps=overlaps, seconds=f"{overlap_seconds:.1f}")
+        if overlaps else "",
     }
 
 

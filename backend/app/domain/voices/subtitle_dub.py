@@ -202,8 +202,9 @@ def _speed_for(audio_seconds: float, slot_seconds: float, room_seconds: float | 
 
     先按「正好占满这条字幕」算(倍速 = 音频时长 / 段落时长,音频 6 秒塞进 3 秒就是 2 倍速),夹在
     _MIN_SPEED–_MAX_SPEED 里。要快过 _MAX_SPEED 才塞得进时,**先占用到下一句开始之前的空当**
-    (`room_seconds`:从这条字幕开始到下一条开始;没有下一条是 None,后面都是空的):能在空当里念完就不必念那么快,
-    还是放不下就按 _MAX_SPEED 念,尾巴压到下一句上 —— 比念成快进强。占空当时不放慢(不低于原速)。
+    (`room_seconds`,见 _room_for:同一条字幕轨上的下一条,后面没有字幕了就到原片结束):能在空当里念完就不必念那么快,
+    还是放不下就按 _MAX_SPEED 念,尾巴压到下一句上(这样的条数和秒数在结果里报出来,见 _run_dub)。占空当时不放慢
+    (不低于原速)。不知道空当(None)就只按这条字幕自己的长度算。
 
     两个时长里任何一个不是正数,就没有倍速可言 —— 返回 None,让调用方保持原速,而不是拿一个算出来的 0 或 inf 去写库。
     """
@@ -212,9 +213,34 @@ def _speed_for(audio_seconds: float, slot_seconds: float, room_seconds: float | 
     wanted = audio_seconds / slot_seconds
     if wanted <= _MAX_SPEED:
         return max(_MIN_SPEED, wanted)
-    if room_seconds is None:
-        return 1.0
-    return min(_MAX_SPEED, max(1.0, audio_seconds / max(room_seconds, slot_seconds)))
+    return min(_MAX_SPEED, max(1.0, audio_seconds / max(room_seconds or 0.0, slot_seconds)))
+
+
+def _room_for(db: Session, clip: Clip | None) -> float | None:
+    """这条字幕的配音念不完时,最多能占用到哪(从这条开始算的秒数)。
+
+    **按整条字幕轨算,不按这一批。** 剪辑台上只配选中的那几句时,没选的那几句照样在轨上、照样有人念(或者原声在说);
+    只看这一批的话,选中的最后一句会以为后面全是空的,一路念到别人那句上。此前就是这样,而且「后面没有了」
+    时直接原速念完 —— 可能一路念过片尾。
+
+    后面没有字幕了:到原片(时间线上除字幕轨、配音轨之外的内容)结束为止。
+    """
+    from app.domain.sequences.append import track_end
+
+    if clip is None:
+        return None
+    following = [one.timeline_start for one in db.scalars(select(Clip).where(Clip.track_id == clip.track_id))
+                 if one.timeline_start > clip.timeline_start + 1e-6]
+    if following:
+        return min(following) - clip.timeline_start
+    sequence = db.get(Sequence, clip.sequence_id)
+    end = max((track_end(track) for track in (sequence.tracks if sequence else [])
+               if track.kind != "subtitle" and track.role != "dub"), default=0.0)
+    return max(0.0, end - clip.timeline_start)
+
+
+#: 念出界不到这么多不算压到下一句(浮点和取整的误差)。
+_OVERLAP_TOLERANCE = 0.05
 
 
 def _run_dub(job_id: str) -> None:
@@ -232,12 +258,8 @@ def _run_dub(job_id: str) -> None:
         # 现在取出来:commit 之后这些属性会过期,而 job 出了这个 with 就是 detached 的 ——
         # 到下一个 session 里再读 job.created_by 会去刷一个已经关掉的连接。
         created_by = job.created_by
-        #: 每条字幕到下一条开始之前有多少地方(配音念不完时可以占用的空当,见 _speed_for)。clip_ids 已按时间排好。
-        starts = [clip.timeline_start if clip is not None else None for clip in (db.get(Clip, cid) for cid in clip_ids)]
-        rooms = [
-            (following - start) if start is not None and following is not None else None
-            for start, following in zip(starts, [*starts[1:], None])
-        ]
+        #: 每条字幕念不完时最多能占用到哪(见 _room_for)。按任务开始这一刻的时间线算。
+        rooms = [_room_for(db, db.get(Clip, cid)) for cid in clip_ids]
         # 状态一律经 finish_job 写:排队时就被取消的,不能在这里被写回 running。
         if not finish_job(db, job, status="running"):
             return
@@ -247,6 +269,10 @@ def _run_dub(job_id: str) -> None:
 
     done = 0
     failed = 0
+    #: 1.5 倍、占满空当还是念不完,压到下一句(或念过片尾)的条数和秒数 —— 如实报出来,不静默叠着念。
+    #: 不顺延后一句:顺延会把后面每一句都推离它自己的字幕和画面,错得更多、也更难找。
+    overlaps = 0
+    overlap_seconds = 0.0
     track_id = ""
     total = len(clip_ids)
     try:
@@ -310,10 +336,14 @@ def _run_dub(job_id: str) -> None:
                         src_out=audio_seconds,
                     ),
                 )
-                if match_duration:
-                    speed = _speed_for(audio_seconds, slot_seconds, rooms[index])
-                    if speed is not None:
-                        set_clip_speed(db, sequence_id, SetClipSpeed(clip_id=new_clip.id, speed=speed))
+                speed = _speed_for(audio_seconds, slot_seconds, rooms[index]) if match_duration else None
+                if speed is not None:
+                    set_clip_speed(db, sequence_id, SetClipSpeed(clip_id=new_clip.id, speed=speed))
+                if rooms[index] is not None:
+                    over = audio_seconds / (speed or 1.0) - max(rooms[index], slot_seconds)
+                    if over > _OVERLAP_TOLERANCE:
+                        overlaps += 1
+                        overlap_seconds += over
                 done += 1
                 job = db.get(Job, job_id)
                 if not finish_job(db, job, status="running", progress=(index + 1) / max(1, total)):
@@ -346,10 +376,16 @@ def _run_dub(job_id: str) -> None:
                 job = db.get(Job, job_id)
                 # 部分失败也是成功的一种:配好的那些是真的配好了。但**不能都说成「完成」** ——
                 # 「10 条里成了 9 条」说成「配音完成」,用户要到时间线上一段段找才发现少了一条。
-                result = {"track_id": track_id, "done": done, "failed": failed, "original_audio": applied}
+                result = {"track_id": track_id, "done": done, "failed": failed, "original_audio": applied,
+                          "overlaps": overlaps, "overlap_seconds": round(overlap_seconds, 1)}
                 if finish_job(db, job, status="succeeded", progress=1.0, result=result):
-                    if failed:
+                    seconds = f"{overlap_seconds:.1f}"
+                    if failed and overlaps:
+                        say(job, "jobMsg_dubPartialOverlap", done=done, failed=failed, overlaps=overlaps, seconds=seconds)
+                    elif failed:
                         say(job, "jobMsg_dubPartial", done=done, failed=failed)
+                    elif overlaps:
+                        say(job, "jobMsg_dubDoneOverlap", done=done, overlaps=overlaps, seconds=seconds)
                     else:
                         say(job, "jobMsg_dubDone", done=done)
                     emit_job_event(db, job.id, "job.succeeded", {"track_id": track_id})

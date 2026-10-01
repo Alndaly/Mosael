@@ -25,11 +25,12 @@ def test_speed_matches_audio_to_the_subtitle_slot() -> None:
 
 
 def test_念不完先占用到下一句之前的空当_不念成快进() -> None:
-    """此前夹在 0.25–4 倍:译文长一倍就 2 倍速念。现在先占用下一句开始前的空当,还放不下才按 1.5 倍念。"""
+    """此前夹在 0.25–4 倍:译文长一倍就 2 倍速念。现在先占用下一句开始前的空当,还放不下才按 1.5 倍念。
+    空当怎么算(整条字幕轨、原片终点)见 test_dub_fits_by_the_whole_track。"""
     assert _speed_for(6.0, 3.0, 5.0) == pytest.approx(1.2), "3 秒的字幕、5 秒后才是下一句:6 秒的配音 1.2 倍念完"
     assert _speed_for(6.0, 3.0, 3.5) == 1.5, "空当也不够:1.5 倍,尾巴压到下一句上"
     assert _speed_for(4.0, 2.0, 10.0) == 1.0, "空当很大:原速念,不放慢"
-    assert _speed_for(6.0, 3.0) == 1.0, "最后一句后面都是空的:原速念完"
+    assert _speed_for(6.0, 3.0) == 1.5, "不知道空当:只按这条自己的长度算,夹到 1.5 倍(不再原速一路念下去)"
 
 
 def test_speed_is_unknown_rather_than_zero_when_a_duration_is_missing() -> None:

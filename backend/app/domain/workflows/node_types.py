@@ -1330,12 +1330,16 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
             },
             "speed": {"advanced": True, "type": "number", "description": "wfNode_synthesize_speech_speed"},
         },
-        "outputs": ["track_id", "done", "failed", "original_audio", "original_audio_note"],
+        "outputs": ["track_id", "done", "failed", "original_audio", "original_audio_note", "overlaps", "overlap_seconds",
+                    "overlap_note"],
         "output_labels": {
             "original_audio": "wfOut_original_audio",
             "original_audio_note": "wfOut_original_audio_note",
+            "overlaps": "wfOut_overlaps",
+            "overlap_seconds": "wfOut_overlap_seconds",
+            "overlap_note": "wfOut_overlap_note",
         },
-        "output_types": {"done": "number", "failed": "number"},
+        "output_types": {"done": "number", "failed": "number", "overlaps": "number", "overlap_seconds": "number"},
     },
     "loop_foreach": {
         "external": False,

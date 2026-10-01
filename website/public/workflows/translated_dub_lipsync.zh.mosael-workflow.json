@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "视频译配 · 改口型",
   "description": "在「视频译配 · 字幕与配音」的基础上,配完音再让原片里说话人的嘴对上译文配音:按两句之间的空当把原片切成模型收得下的块,有配音的块改口型,接回整段放在最上面一条视频轨、盖住原片(删掉那条轨就回到改口型之前),导出成片带「AI 生成」标识。目标语言在「逐句翻译」一步上选(默认英文)。运行前在「让原片的嘴对上配音」上确认已取得本人授权。费用量级:改口型按原片时长计费(百炼 videoretalk 挂牌价约 0.08 元/秒,一分钟的片子约 5 元),另加翻译和逐句配音;重跑时,译文、音色和时间都没变的块不再重买(改了哪句译文,那一块重买)。",
-  "graph_hash": "3659256321dccff2647ab746dcb74a12e8919c2339cfad5e83065a103b8c46e5",
+  "graph_hash": "d7ad263b1da833405ef4af6852eb00112870427cd76671cb7439e299198d6bdf",
   "graph": {
     "meta": {
       "template_id": "translated_dub_lipsync",
@@ -204,7 +204,7 @@
         },
         "config": {
           "title": "视频译配与字幕已完成",
-          "body": "{{source_video.name}} 已生成 {{dubbing.done}} 条配音(失败 {{dubbing.failed}} 条),配音在单独一条轨上。{{dubbing.original_audio_note}}口型对好的画面在最上面一条视频轨上,盖住原片;删掉那条轨就回到改口型之前。"
+          "body": "{{source_video.name}} 已生成 {{dubbing.done}} 条配音(失败 {{dubbing.failed}} 条),配音在单独一条轨上。{{dubbing.original_audio_note}}{{dubbing.overlap_note}}口型对好的画面在最上面一条视频轨上,盖住原片;删掉那条轨就回到改口型之前。"
         }
       },
       {

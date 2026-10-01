@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "Translated dubbing with subtitles",
   "description": "Transcribe a video sentence by sentence, translate each line, lay translated subtitles on the original timecodes, then dub each line and time-compress it back into its own slot. Pick the target language on the translate step (English by default). The original voice is separated out and the background music kept; a voice separation engine must be ready before the workflow starts.",
-  "graph_hash": "5ec65b9b70aa9af377caec6ecc1da0315235b4041f83d699f45f051436dc944c",
+  "graph_hash": "83dcc125baa923b3ceb7878cb5790187f5a9cb5169881f89fb76415ec69535f8",
   "graph": {
     "meta": {
       "template_id": "translated_dub",
@@ -183,7 +183,7 @@
         },
         "config": {
           "title": "Translated dub and subtitles are ready",
-          "body": "{{source_video.name}} got {{dubbing.done}} dubbed lines ({{dubbing.failed}} failed) on a track of their own. {{dubbing.original_audio_note}}"
+          "body": "{{source_video.name}} got {{dubbing.done}} dubbed lines ({{dubbing.failed}} failed) on a track of their own. {{dubbing.original_audio_note}}{{dubbing.overlap_note}}"
         }
       },
       {

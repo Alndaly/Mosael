@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "视频译配 · 字幕与配音",
   "description": "把一段视频逐句转写、逐句翻译，按原时间码铺上译文字幕，再逐条配音并变速压回原段落长度。目标语言在「逐句翻译」一步上选（默认英文）。原声里的人声拆出去、背景音乐留着；开始前需装好人声分离引擎。",
-  "graph_hash": "a76c4523baba672d49f7005d2a80432653ec6aaebaa7ced8bb63cb4ba49284df",
+  "graph_hash": "c1e9099ae2afa499740af59b38020872e36fe59fec97b2c1295d3cdc849d5137",
   "graph": {
     "meta": {
       "template_id": "translated_dub",
@@ -183,7 +183,7 @@
         },
         "config": {
           "title": "视频译配与字幕已完成",
-          "body": "{{source_video.name}} 已生成 {{dubbing.done}} 条配音(失败 {{dubbing.failed}} 条),配音在单独一条轨上。{{dubbing.original_audio_note}}"
+          "body": "{{source_video.name}} 已生成 {{dubbing.done}} 条配音(失败 {{dubbing.failed}} 条),配音在单独一条轨上。{{dubbing.original_audio_note}}{{dubbing.overlap_note}}"
         }
       },
       {
