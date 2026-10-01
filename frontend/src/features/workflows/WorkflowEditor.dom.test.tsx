@@ -402,6 +402,20 @@ describe("⌘Enter 运行", () => {
     expect(apiMocks.runWorkflow).toHaveBeenCalledTimes(1);
   });
 
+  //: 运行中工具栏上的运行键换成了停止键,⌘Enter 此前却不看这个:再按一下就再排一次付费运行。
+  it("正在运行时按 ⌘Enter 不再起一次,提示正在运行", async () => {
+    apiMocks.listWorkflowRuns.mockResolvedValue([
+      { id: "job-0", kind: "workflow", status: "running", message: "", created_at: "2026-09-20T02:00:00", updated_at: "2026-09-20T02:00:01", payload: {} },
+    ]);
+    await renderEditor(CHAIN);
+    await waitFor(() => nodeEl("llm-1"));
+    await screen.findByRole("button", { name: "wfStop" }, SLOW);
+    fireEvent.keyDown(document.body, { key: "Enter", metaKey: true });
+    await waitFor(() => expect(toastMocks.info).toHaveBeenCalledWith("wfRunAlreadyRunning"));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(apiMocks.runWorkflow).not.toHaveBeenCalled();
+  });
+
   //: 不跑,但也不能什么都不发生:运行键这时是灰的,按 ⌘Enter 的人不知道是没按到还是有问题。
   it("有阻断问题时不跑(和运行键同一个判据),而是打开就绪清单说哪儿有问题", async () => {
     const broken = structuredClone(CHAIN);

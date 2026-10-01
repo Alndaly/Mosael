@@ -137,6 +137,9 @@ export function useWorkflowRun({
    *
    * 重入闸是 ref,不是 state:同一帧里连按两次 ⌘Enter,两次闭包读到的 state(和 run.isPending)
    * 都还是旧值,会排两次运行。ref 从进门一直关到「排进队列」这一步落定;`launching` 只管按钮转圈。
+   *
+   * 绑定的那次**还在跑**时也不起:工具栏这时把运行键换成了停止键,⌘Enter 此前却不看这一条 ——
+   * 再按一下就再排一次付费运行。说一声正在运行,别让按的人以为没按到。
    */
   const launchingRef = React.useRef(false);
   const [launching, setLaunching] = React.useState(false);
@@ -145,6 +148,10 @@ export function useWorkflowRun({
   const [checklistOpen, setChecklistOpen] = React.useState(false);
   const startRun = React.useCallback(async () => {
     if (launchingRef.current || run.isPending) return;
+    if (running) {
+      toast.info(t("wfRunAlreadyRunning"));
+      return;
+    }
     if (!analysis.runnable) {
       setChecklistOpen(true);
       return;
@@ -166,7 +173,7 @@ export function useWorkflowRun({
     } finally {
       launchingRef.current = false;
     }
-  }, [run, save, analysis.runnable]);
+  }, [run, save, analysis.runnable, running, t]);
   const checklistCount = analysis.errorCount + analysis.warnCount;
   const checklistLabel = analysis.errorCount
     ? t("wfChecklistBlocked").replace("{n}", String(analysis.errorCount))
