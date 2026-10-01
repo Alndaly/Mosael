@@ -37,6 +37,28 @@ export function oneOfGroups(specs: Record<string, ActivatableFieldSpec | null | 
   return [...groups.values()];
 }
 
+/** 整格就是一条引用(`{{上游.输出}}`),没有别的字:运行时它的值全看上游,可能是空的。 */
+export function isPureReference(value: unknown): boolean {
+  return typeof value === "string" && /^\s*\{\{\s*[\w.-]+\s*\}\}\s*$/.test(value);
+}
+
+/**
+ * 同组(`one_of`)填了的那几格(按声明顺序)算不算「填了不止一个」。
+ *
+ * 运行时按声明顺序取**第一个非空值**(与后端 graph_rules._one_of_errors 同一条)。所以前面填了的
+ * 都只是一条引用、或接了数据边时,它们在运行时可能是空的 —— 最后那格是兜底,不是冲突:点击节点的
+ * 选择器接上游、文字写死一个按钮名,上游没给选择器就按文字点。前面有一格是字面量(或引用里夹着别的字)
+ * 才是真的两个都填了,运行时后面那格永远用不上。
+ */
+export function oneOfOverfilled(
+  filled: readonly string[],
+  config: Record<string, unknown>,
+  isBound: (key: string) => boolean = () => false,
+): boolean {
+  if (filled.length < 2) return false;
+  return !filled.slice(0, -1).every((key) => isBound(key) || isPureReference(config[key]));
+}
+
 /**
  * 同组(`one_of`)里别的字段已经填了、这一格还空着:表单把它收起来,从源头上填不出两个。
  *

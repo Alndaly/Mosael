@@ -63,6 +63,13 @@ const registry: RegistryLike = {
           file_path: { type: "template", one_of: "source" },
         },
       },
+      // 选择器和文字恰好填一个 —— 除非前面填了的都只是引用 / 接了上游(运行时空了就取下一个,作兜底)。
+      browser_click: {
+        config: {
+          selector: { type: "template", one_of: "target" },
+          text: { type: "template", one_of: "target" },
+        },
+      },
       // 体内看得见哪些作用域名,由后端随节点声明发下来(NODE_TYPES 的 body_scope)。
       subgraph: {
         config: { inputs: { type: "object" }, body: { type: "graph" }, output: { type: "template" } },
@@ -288,7 +295,7 @@ describe("analyzeWorkflow", () => {
     ]);
   });
 
-  it("同组(one_of)恰好填一个:都填了、都没填都是阻塞错误,接了上游也算填了", () => {
+  it("同组(one_of)恰好填一个:都填了、都没填都是阻塞错误,接了上游也算填了;前面只是上游、后面写死的是兜底", () => {
     const make = (config: Record<string, unknown>, bound?: string) =>
       graph(
         [
@@ -308,7 +315,10 @@ describe("analyzeWorkflow", () => {
     expect(issuesOf(make({ asset_id: "a1", file_path: "/tmp/x.mp4" }))).toEqual([
       expect.objectContaining({ code: "one-of-both", severity: "error", group: ["asset_id", "file_path"] }),
     ]);
-    expect(issuesOf(make({ file_path: "/tmp/x.mp4" }, "asset_id"))).toEqual([
+    // 素材接上游、本机路径写死:前者运行时可能是空的,后者是兜底 —— 不算两个(见下面 one_of 兜底那一组)。
+    expect(issuesOf(make({ file_path: "/tmp/x.mp4" }, "asset_id"))).toEqual([]);
+    // 反过来(路径接上游、素材写死):前面那格是字面量,后面那格永远用不上 —— 是两个。
+    expect(issuesOf(make({ asset_id: "a1" }, "file_path"))).toEqual([
       expect.objectContaining({ code: "one-of-both" }),
     ]);
     expect(issuesOf(make({}))).toEqual([
@@ -861,5 +871,44 @@ describe("循环体 / 子图本身的几条规矩(与后端 validate_body_graph 
         }),
       ).filter((i) => i.code === "scope-field-missing"),
     ).toEqual([]);
+  });
+});
+
+describe("one_of 里前面的是引用、最后一个是字面量:兜底,不算填了两个", () => {
+  //: 运行时按声明顺序取第一个非空值(与后端 _one_of_errors 同一条):上游给了选择器就用它,
+  //: 给的是空就退到文字。前面那格只是一条引用 / 一条数据边时,它在运行时可能是空的 —— 后面的字面量是兜底。
+  const click = (config: Record<string, unknown>, bound?: string) =>
+    graph(
+      [
+        { id: "start", type: "start", config: {} },
+        { id: "up", type: "llm", config: { prompt: "hi", profile_id: "p1" } },
+        { id: "click", type: "browser_click", config },
+      ],
+      [
+        { id: "e1", source: "start", target: "up" },
+        { id: "e2", source: "up", target: "click" },
+        ...(bound ? [{ id: "d", source: "up", target: "click", kind: "data", source_output: "text", target_input: bound }] : []),
+      ] as WorkflowGraph["edges"],
+    );
+  const both = (g: WorkflowGraph) =>
+    analyzeWorkflow(g, registry, fullCtx).issues.filter((i) => i.nodeId === "click" && i.code === "one-of-both");
+
+  it("选择器是 {{x.sel}}、文字是字面量:不报", () => {
+    expect(both(click({ selector: "{{up.sel}}", text: "提交" }))).toEqual([]);
+  });
+
+  it("两个都是字面量:报", () => {
+    expect(both(click({ selector: "#submit", text: "提交" }))).toEqual([
+      expect.objectContaining({ severity: "error", group: ["selector", "text"] }),
+    ]);
+  });
+
+  it("选择器接了数据边、文字是字面量:不报", () => {
+    expect(both(click({ text: "提交" }, "selector"))).toEqual([]);
+  });
+
+  it("引用里夹着别的字、或者字面量在前引用在后:照样报", () => {
+    expect(both(click({ selector: "#{{up.sel}}", text: "提交" }))).toHaveLength(1);
+    expect(both(click({ selector: "#submit", text: "{{up.text}}" }))).toHaveLength(1);
   });
 });
