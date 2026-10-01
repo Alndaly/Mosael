@@ -112,6 +112,22 @@ def _corrupted() -> dict:
     return graph
 
 
+def _as_saved_by_1_8_0(workflow_id: str, graph: dict) -> None:
+    """1.8.0 存下的样子:当前图和最新那一版修订都是被改写过的那份(那时的保存就是这么落的)。"""
+    from app.domain.workflows.revisions import graph_digest
+
+    stored, digest = json.dumps(graph, ensure_ascii=False), graph_digest(graph)
+    with engine.begin() as connection:
+        connection.execute(
+            text("UPDATE workflows SET graph = :graph, graph_hash = :hash WHERE id = :id"),
+            {"graph": stored, "hash": digest, "id": workflow_id},
+        )
+        connection.execute(
+            text("UPDATE workflow_revisions SET graph = :graph, graph_hash = :hash WHERE workflow_id = :id"),
+            {"graph": stored, "hash": digest, "id": workflow_id},
+        )
+
+
 def _stored(workflow_id: str) -> dict:
     with engine.begin() as connection:
         return json.loads(
@@ -124,11 +140,7 @@ def test_迁移把错接的数据边改回体内引用_补回被折掉的控制�
     ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
     workflow_id = client.post("/api/workflows", json={"workspace_id": ws, "name": "被改写过"}).json()["id"]
     untouched_id = client.post("/api/workflows", json={"workspace_id": ws, "name": "没事的"}).json()["id"]
-    with engine.begin() as connection:
-        connection.execute(
-            text("UPDATE workflows SET graph = :graph WHERE id = :id"),
-            {"graph": json.dumps(_corrupted(), ensure_ascii=False), "id": workflow_id},
-        )
+    _as_saved_by_1_8_0(workflow_id, _corrupted())
     untouched = _stored(untouched_id)
 
     _migrate_loop_scopes_are_not_outer_data_edges()

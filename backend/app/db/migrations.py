@@ -5587,10 +5587,11 @@ def _migrate_loop_scopes_are_not_outer_data_edges() -> None:
     规范化折边时会把同一对节点间无 handle 的控制边当多余的折掉:删边后这一对之间什么边都不剩时,
     补回一条控制边 —— 保住它眼下的先后,和被折掉的那条正是同一条。循环体 / 子图体里的一并改。
 
-    只改 `workflows.graph`;修订是不可变快照,改完调修订迁移把这次改动记成新的一版(和
-    _migrate_condition_edges_use_source_handle 同一个理由)。规则抄在这里,迁移不跟着领域代码变。
+    经 `_rewrite_workflow_graphs` 落成新的一版修订:作者沿用上一版、认可过上一版的人照样担保。此前是只改
+    `workflows.graph` 再调修订迁移补一版 —— 那一版没有作者,带发布账号 / 浏览器档案 / 本机文件节点的工作流
+    升级后跑到那一步就报「这一版没人担保」。规则抄在这里,迁移不跟着领域代码变。
     """
-    if "workflows" not in set(inspect(engine).get_table_names()):
+    if not {"workflows", "workflow_revisions"} <= set(inspect(engine).get_table_names()):
         return
     inner_keys = {"loop_foreach": ("output",), "loop_while": ("output", "condition"), "subgraph": ("output",)}
 
@@ -5641,23 +5642,7 @@ def _migrate_loop_scopes_are_not_outer_data_edges() -> None:
                 node["config"] = config
         return {**graph, "nodes": nodes, "edges": edges}
 
-    with engine.begin() as conn:
-        rows = conn.execute(text("SELECT id, graph FROM workflows")).mappings().all()
-        for row in rows:
-            raw_graph = row["graph"]
-            try:
-                graph = json.loads(raw_graph) if isinstance(raw_graph, str) else raw_graph
-            except (TypeError, ValueError):
-                continue
-            if not isinstance(graph, dict):
-                continue
-            rewritten = rewrite(graph)
-            if rewritten != graph:
-                conn.execute(
-                    text("UPDATE workflows SET graph = :graph WHERE id = :id"),
-                    {"graph": json.dumps(rewritten, ensure_ascii=False), "id": row["id"]},
-                )
-    _migrate_workflow_revisions()
+    _rewrite_workflow_graphs(rewrite, "循环 / 子图的体内 output、condition 被错接成了外层数据边:改回体内引用")
 
 
 def _disable_tasks_bound_to_deleted_workflows() -> None:
@@ -6076,6 +6061,49 @@ def _rewrite_workflow_graphs(rewrite: Any, note: str) -> int:
                 changed += 1
         db.commit()
     return changed
+
+
+def _migrate_migration_revisions_keep_their_vouchers() -> None:
+    """迁移落下的、没有作者的修订,补上上一版的作者,认可过上一版的人照样为它担保。
+
+    1.8.1 的循环作用域迁移(和更早的条件边迁移)只改 `workflows.graph`,再由修订迁移把改动记成新的一版 ——
+    那一版 `created_by` 为空、也不带认可。一次运行要用私有发布账号 / 浏览器档案 / 本机文件时,被执行那一版
+    得有人担保(见 domain/authority),于是这些工作流升级之后一跑到那一步就失败,而用户什么都没改过。
+
+    机械改写不换担保人(和 `_rewrite_workflow_graphs` 同一条):作者取紧挨着的上一版的作者,认可照抄。
+    按版本号从小到大补,连着几版都是迁移落的,也一版一版接上。没有上一版的(老数据的第一版)不动 ——
+    那些由 `_backfill_workflow_revision_authors` 管。重跑时没有可补的,什么都不做。
+    """
+    if not {"workflow_revisions", "workflow_revision_attestations"} <= set(inspect(engine).get_table_names()):
+        return
+    from sqlalchemy import select
+    from sqlalchemy.orm import Session
+
+    from app.db.models import WorkflowRevision, WorkflowRevisionAttestation
+    from app.domain.workflows.revisions import revision_vouchers
+
+    with Session(engine) as db:
+        orphans = db.scalars(
+            select(WorkflowRevision)
+            .where(WorkflowRevision.source == "migration", WorkflowRevision.created_by.is_(None))
+            .order_by(WorkflowRevision.workflow_id, WorkflowRevision.revision)
+        ).all()
+        for revision in orphans:
+            previous = db.scalar(
+                select(WorkflowRevision)
+                .where(WorkflowRevision.workflow_id == revision.workflow_id, WorkflowRevision.revision < revision.revision)
+                .order_by(WorkflowRevision.revision.desc())
+                .limit(1)
+            )
+            if previous is None:
+                continue
+            vouchers = revision_vouchers(db, previous)
+            revision.created_by = previous.created_by
+            for user in vouchers - revision_vouchers(db, revision) - {previous.created_by}:
+                db.add(WorkflowRevisionAttestation(revision_id=revision.id, user_id=user))
+            # 下一版若也是迁移落的,它的「上一版」就是这一版:先落下,查得到。
+            db.flush()
+        db.commit()
 
 
 def _walk_graph_nodes(graph: Any, visit: Any) -> Any:
@@ -6696,7 +6724,6 @@ def migration_plan() -> MigrationPlan:
                 _migrate_translation_engines_are_providers,
                 _migrate_speech_engines_are_providers,
                 _migrate_cloned_speech_remembers_its_voice,
-                _migrate_loop_scopes_are_not_outer_data_edges,
                 _migrate_workflow_revisions,
                 _disable_tasks_bound_to_deleted_workflows,
                 # 排在所有会落修订的迁移之后:它们写下的那几版也要有作者。
@@ -6760,6 +6787,10 @@ def migration_plan() -> MigrationPlan:
             #: 这几条都落新修订(commit_graph_revision),所以排在修订迁移之后。
             *_steps(
                 MigrationPhase.AFTER_SCHEMA,
+                # 改走 commit_graph_revision 之后它要现成的修订(老库的第一版由修订迁移补上),从上面挪到这里。
+                _migrate_loop_scopes_are_not_outer_data_edges,
+                # 1.8.1 里上面这条(和条件边那条)经修订迁移落的那一版没有作者:补上一版的作者和认可。
+                _migrate_migration_revisions_keep_their_vouchers,
                 _migrate_browser_nodes_fill_one_target_keeping_reference_fallbacks,
                 _migrate_code_fields_read_references_from_input,
                 # 要读插件报的工具清单:排在装随包插件、改写被取代的工具之后(上面的对账)。
