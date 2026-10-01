@@ -9,11 +9,11 @@ from sqlalchemy import String, select, type_coerce, update
 from sqlalchemy.orm import Session
 
 from app.db.models import Asset, Project
-from app.domain.jobs import current_actor
+from app.domain.jobs import current_actor, current_parent_job_id
 from app.domain.notifications import notify
 from app.domain.projects import create_project
 from app.domain.sequences import create_sequence_scaffold
-from app.domain.workflows import WorkflowDomainError
+from app.domain.workflows import WorkflowDomainError, as_text
 from app.domain.plugins.nodes import PLUGIN_NODE_PREFIX
 from app.domain.workflows.executors.registry import (
     Preflight,
@@ -123,17 +123,20 @@ def plugin_node_preflight(node_type: str) -> Preflight:
 
 @register("notify")
 def send_notify(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
-    title = str(config.get("title", "")).strip()
+    """发一条站内通知。标题、正文**当文字用**,走 as_text(和插值同一种写法):整格引用一个对象 / 布尔时,
+    此前 `str()` 写成 Python 的 `{'ok': True}` / `True`。载荷里带着这一次运行(job_id),点通知能找到是哪一次。"""
+    title = as_text(config.get("title")).strip()
     if not title:
         raise WorkflowDomainError("wfErr_notifyTitleEmpty")
+    run_id = current_parent_job_id()
     notify(
         db,
         scope.workspace_id,
         type="workflow",
         title=title,
-        body=str(config.get("body", "")),
+        body=as_text(config.get("body")),
         link="#/workflows",
-        payload={"workflow_id": scope.id},
+        payload={"workflow_id": scope.id, **({"job_id": run_id} if run_id else {})},
     )
     return {"sent": True}
 
