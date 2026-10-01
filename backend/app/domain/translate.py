@@ -152,7 +152,7 @@ def resolve_ai_chat_target(
     profile = (
         find_enabled_connection(db, "", profile_id, owner_user_id=user_id)
         if profile_id
-        else default_chat_connection(db, owner_user_id=user_id)
+        else default_chat_connection(db, owner_user_id=user_id, surface=surface)
     )
     if profile is None or not profile.enabled:
         raise TranslateError("translateErr_pinnedNotYours" if pinned_by_other else "translateErr_noProvider")

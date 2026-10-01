@@ -41,7 +41,7 @@ def generate_copy(
     brief: str = "",
     profile_id: str | None = None,
 ) -> dict[str, Any]:
-    profile = require_connection(db, profile_id, user_id=user_id, error=PublishDomainError)
+    profile = require_connection(db, profile_id, user_id=user_id, error=PublishDomainError, surface="direct")
     parts: list[str] = []
     if brief.strip():
         parts.append(f"创作者要求:{brief.strip()}")

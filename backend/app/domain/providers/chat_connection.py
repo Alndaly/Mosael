@@ -9,6 +9,8 @@ LLM 节点、工作流 AI 改图、发布文案、画板、提示词优化、翻
 
 from __future__ import annotations
 
+from typing import Literal
+
 from sqlalchemy.orm import Session
 
 from app.core.i18n import LocalizedError, tr
@@ -17,22 +19,37 @@ from app.domain.providers import credentials as provider_credentials
 from app.domain.providers import models as provider_models
 from app.domain.providers.credentials import ResolvedConnection
 
+#: 调用方在哪条通道上发对话请求(和 ai_chat.target_for 的 `surface` 同一个意思)。
+ChatSurface = Literal["direct", "automation"]
 
-def default_chat_connection(db: Session, *, owner_user_id: str | None) -> ProviderProfile | None:
+
+def reachable_on(profile: ProviderProfile, surface: ChatSurface) -> bool:
+    """这条连接在这个调用通道上调不调得通 —— 和 ai_chat.target_for 的判据是同一个。
+
+    订阅授权(OAuth,Kimi Code 这类)的连接没有服务地址,只能经网关(automation:工作流节点、画板)调;
+    直连(direct:界面上的翻译、发布文案、提示词优化)发不出去,target_for 报「只能给智能体用」。
+    """
+    return surface == "automation" or not (profile.auth_type == "oauth" and not (profile.base_url or "").strip())
+
+
+def default_chat_connection(db: Session, *, owner_user_id: str | None, surface: ChatSurface) -> ProviderProfile | None:
     """没点名连接时拿哪一条去**对话**:他设的默认对话模型所在的那条;没设(或它已停用)就是他最早接上的、
     挂着启用对话模型的那一条 —— 和模板预填对话模型同一个先后(workflows.templates_models._pick)。
 
     此前是「最早建的那条启用连接」,不管它会不会对话:先接了一条生图连接的人,翻译、LLM 节点都拿它去发对话请求。
     没设默认时仍然给一条会对话的,而不是像智能体那样直接拒:建连接不会顺手设默认,这些节点一直在「没设默认也能跑」
     上被用着。
+
+    `surface`:调用方在哪条通道上调(见 reachable_on)。他设的默认、或最早那条是订阅授权的连接,而调用方是直连时,
+    挑它就是必然失败(「只能给智能体用」)—— 跳过它,挑下一条直连调得通的。
     """
     chosen = provider_models.resolve_default(db, "chat", owner_user_id)
-    if chosen is not None:
+    if chosen is not None and reachable_on(chosen.profile, surface):
         return chosen.profile
     if owner_user_id is None:
         return None
     usable = [model.profile for model in provider_models.models_for_capability(db, "chat", user_id=owner_user_id)
-              if model.profile is not None]
+              if model.profile is not None and reachable_on(model.profile, surface)]
     return min(usable, key=lambda profile: profile.created_at, default=None)
 
 
@@ -70,12 +87,15 @@ def require_connection(
     *,
     user_id: str | None,
     error: type[Exception] = RuntimeError,
+    surface: ChatSurface,
     pinned_by_other: bool = False,
 ) -> ResolvedConnection:
     """指定 id 时要求该 profile 存在且启用;缺省用他的默认对话连接(见 default_chat_connection)。
 
     调用方(LLM 节点、工作流 AI 改图、发布文案、画板、提示词优化)要的都是**对话**,所以缺省按对话能力挑,
     不是「最早建的那条」(见 default_chat_connection)。
+
+    `surface`:调用方之后在哪条通道上调这条连接(见 reachable_on),没点名时只挑这条通道上调得通的。
 
     `pinned_by_other`:节点上原本钉着别人的连接、已经换成按他的默认挑(见 runner_choice)。他自己也没有
     能对话的连接时,说清楚是「那条连接是别人的」,而不是一句笼统的「没有可用的连接」。
@@ -88,7 +108,7 @@ def require_connection(
         if profile is None or not profile.enabled or (user_id is not None and profile.owner_user_id != user_id):
             raise _connection_error(error, "providerErr_connectionMissing")
     else:
-        profile = default_chat_connection(db, owner_user_id=user_id)
+        profile = default_chat_connection(db, owner_user_id=user_id, surface=surface)
         if profile is None:
             raise _connection_error(error, "providerErr_pinnedNotYours" if pinned_by_other else "providerErr_noConnection")
     resolved = provider_credentials.resolve_connection(db, profile, user_id)

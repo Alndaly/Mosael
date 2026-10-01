@@ -451,7 +451,7 @@ def write_on_board(
         existing = str(slot_item.get("text") or "").strip() if kind == "note" else ""
     _ensure_slot_ready(db, workspace_id, Slot(board_id, item_id, 0, 0, base_revision))
     #: 没配连接当场说(「先去设置里配一个」),不起任务 —— 任务线程里再解析一次(会话是它自己的)。
-    require_connection(db, provider_profile_id or None, user_id=actor_id, error=AiChatError)
+    require_connection(db, provider_profile_id or None, user_id=actor_id, error=AiChatError, surface="automation")
     #: 连进来的资产格 + 正文里 @ 到的,和生成同一条路(upstream_entities);连进来的便签和文档给的字(upstream_texts)。
     #: 都在建任务之前取:点名的资产不在这个工作区、连着的文档读不到,就当场说,不起任务。
     board = get_board(db, workspace_id, board_id)
@@ -534,7 +534,8 @@ def _write(db: Session, job_id: str, order: _WriteOrder) -> dict[str, Any]:
     target_name = "这篇文档" if kind == "document" else "这张便签"
     pictures, from_assets = look_at(db, order.workspace_id, order.seen)
     materials = order.materials + from_assets
-    profile = require_connection(db, order.provider_profile_id or None, user_id=order.actor_id, error=AiChatError)
+    profile = require_connection(db, order.provider_profile_id or None, user_id=order.actor_id, error=AiChatError,
+                                 surface="automation")
     target = target_for(db, profile, model=order.model, surface="automation")
     #: 说清楚产物要直接摆出来 —— 不交代的话模型爱写「好的,这是您要的文案:」,而那句话会原样贴进去。
     system = (

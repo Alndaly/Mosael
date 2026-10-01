@@ -348,7 +348,8 @@ def llm(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
     #: 节点上钉的是建图那位成员的连接时,换成跑的人自己的默认(模型跟着清空),见 runner_choice。
     profile_id, model, pinned_by_other = runner_choice(db, config.get("profile_id"), str(config.get("model") or ""),
                                                        user_id=actor)
-    profile = require_connection(db, profile_id, user_id=actor, error=WorkflowDomainError, pinned_by_other=pinned_by_other)
+    profile = require_connection(db, profile_id, user_id=actor, error=WorkflowDomainError, surface="automation",
+                                 pinned_by_other=pinned_by_other)
     messages: list[dict[str, Any]] = []
     if config.get("system"):
         messages.append({"role": "system", "content": str(config["system"])})

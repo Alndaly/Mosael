@@ -52,7 +52,7 @@ def ai_edit_graph(
     workflow_id: str = "",
     user_id: str | None = None,
 ) -> tuple[dict[str, Any], str]:
-    profile = require_connection(db, profile_id, user_id=user_id, error=WorkflowDomainError)
+    profile = require_connection(db, profile_id, user_id=user_id, error=WorkflowDomainError, surface="automation")
     try:
         target = target_for(db, profile, surface="automation")
     except AiChatError as exc:

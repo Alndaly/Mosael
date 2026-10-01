@@ -218,7 +218,7 @@ def optimize_image_prompt(
     )
     chat_model = default.model_id if default is not None else ""
     if chat_profile is None:
-        chat_profile = require_connection(db, profile_id, user_id=user_id, error=PromptOptimizeError)
+        chat_profile = require_connection(db, profile_id, user_id=user_id, error=PromptOptimizeError, surface="direct")
     if not chat_model:
         chat_model = provider_models.model_id_for(db, chat_profile, "chat")
     if not chat_model:
