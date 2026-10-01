@@ -305,9 +305,11 @@ def project_sequence_create(db: Session, scope: RunScope, config: dict[str, Any]
     name = str(config.get("name") or "").strip()
     if not name:
         raise WorkflowDomainError("wfErr_sequenceProjectNameEmpty")
+    #: 宽高是整数格,和别的整数格同一个判法(common.whole_number):`"1920.0"` 是 1920,`"1920.5"` 报哪一格不是整数。
+    #: 此前 `int(… or 1920)`:"1920.0" 报一句笼统的「必须是数字」,填 0 悄悄换成 1920。
+    width = whole_number(config, "width", node_type="project_sequence_create", default=1920)
+    height = whole_number(config, "height", node_type="project_sequence_create", default=1080)
     try:
-        width = int(config.get("width") or 1920)
-        height = int(config.get("height") or 1080)
         fps = float(config.get("fps") or 30)
     except (TypeError, ValueError) as exc:
         raise WorkflowDomainError("wfErr_canvasNumbers") from exc

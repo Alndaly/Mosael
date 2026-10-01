@@ -37,7 +37,6 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfErr_pickPoolProfile": {"zh": "请选择浏览器池档案(session_mode=pool)", "en": "Pick a browser-pool profile (session_mode=pool)"},
     "wfErr_waitNeedsCondition": {"zh": "等待节点需要 selector / url_contains / text 之一", "en": "The wait node needs one of selector, url_contains or text"},
     "wfErr_loopItems": {"zh": "循环·遍历的 items 必须是列表(或 JSON 数组文本、多行文本)", "en": "For-each items must be a list (or a JSON array as text, or multi-line text)"},
-    "wfErr_concurrencyInteger": {"zh": "同时跑几项(concurrency)要是一个整数", "en": "Concurrency must be an integer"},
     "wfErr_notifyTitleEmpty": {"zh": "通知标题不能为空", "en": "The notification title cannot be empty"},
     "wfErr_tagNoAssets": {"zh": "素材打标签:没有可处理的素材 id", "en": "Tag assets: no asset ids to work on"},
     "wfErr_tagsEmpty": {"zh": "素材打标签:标签不能为空", "en": "Tag assets: the tags cannot be empty"},

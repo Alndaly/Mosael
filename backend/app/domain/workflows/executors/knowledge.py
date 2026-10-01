@@ -4,8 +4,9 @@ from sqlalchemy.orm import Session
 
 from app.domain.note_types import NoteContent
 from app.domain.notes import NoteDomainError, create_note, query_notes, read_reference
-from app.domain.workflows import WorkflowDomainError, field_name
+from app.domain.workflows import NODE_TYPES, WorkflowDomainError, field_name
 from app.domain.workflows.authority import current_authority
+from app.domain.workflows.executors.numbers import whole_number
 from app.domain.workflows.executors.registry import RunScope, register
 
 
@@ -14,18 +15,16 @@ _EXCERPT_CHARS = 1000
 _EXCERPT_LEAD = 160
 
 
-def _integer(value, default, minimum, maximum, key):
-    if value in (None, ""):
-        return default
-    try:
-        number = int(value)
-        if isinstance(value, bool) or float(value) != number or not minimum <= number <= maximum:
-            raise ValueError()
-        return number
-    except (ValueError, TypeError, OverflowError) as exc:
+def _integer(config: dict, key: str, node_type: str, default: int | None, minimum: int, maximum: int) -> int | None:
+    """一格有范围的整数。「是不是整数」和别的整数格同一个判法(common.whole_number:`"10.0"` 是 10、
+    `"10.5"` 不是);此前这里自己写一份,`"10.0"` 被判成不是整数。"""
+    number = whole_number(config, key, node_type=node_type, default=default)
+    if number is not None and not minimum <= number <= maximum:
+        spec = ((NODE_TYPES.get(node_type) or {}).get("config") or {}).get(key)
         raise WorkflowDomainError(
-            "wfErr_integerRange", params={"field": field_name(key), "min": minimum, "max": maximum}
-        ) from exc
+            "wfErr_integerRange", params={"field": field_name(key, spec), "min": minimum, "max": maximum}
+        )
+    return number
 
 
 @register("note_search")
@@ -33,8 +32,8 @@ def note_search(db: Session, scope: RunScope, config: dict) -> dict:
     query = str(config.get("query") or "").strip()
     if len(query) > 300:
         raise WorkflowDomainError("wfErr_queryTooLong")
-    limit = _integer(config.get("limit"), 10, 1, 50, "limit")
-    offset = _integer(config.get("offset"), 0, 0, 1000000, "offset")
+    limit = _integer(config, "limit", "note_search", 10, 1, 50)
+    offset = _integer(config, "offset", "note_search", 0, 0, 1000000)
     rows = query_notes(db, scope.workspace_id, query, limit=limit + 1, offset=offset)
     matches = []
     for note in rows[:limit]:
@@ -54,7 +53,7 @@ def note_search(db: Session, scope: RunScope, config: dict) -> dict:
 
 @register("note_read")
 def note_read(db: Session, scope: RunScope, config: dict) -> dict:
-    revision = _integer(config.get("revision"), None, 1, 1000000000, "revision")
+    revision = _integer(config, "revision", "note_read", None, 1, 1000000000)
     try:
         ref = read_reference(db, scope.workspace_id, str(config.get("note_id") or ""), revision)
     except NoteDomainError as exc:

@@ -96,7 +96,7 @@ def loop_foreach(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[s
         raise WorkflowDomainError(
             "wfErr_loopTooMany", params={"count": len(items), "cap": LOOP_FOREACH_HARD_CAP}
         )
-    concurrency = _concurrency(config.get("concurrency"))
+    concurrency = _concurrency(config)
     #: 一项失败怎么办:stop(默认)整条循环失败;skip 记下这一项、接着跑别的 —— 各项彼此独立时(每条切片、
     #: 每组上身图、每种面料效果图)一项失败不该让已经付了钱的其余几项白做。跳过的那几项不进 results。
     skip = str(config.get("on_item_error") or "stop").strip().lower() == "skip"
@@ -163,11 +163,10 @@ def _items_from_text(text: str) -> list[Any]:
     return [line.strip() for line in text.splitlines() if line.strip()]
 
 
-def _concurrency(raw: Any) -> int:
-    try:
-        value = int(float(raw)) if raw not in (None, "") else 1
-    except (TypeError, ValueError):
-        raise WorkflowDomainError("wfErr_concurrencyInteger") from None
+def _concurrency(config: dict[str, Any]) -> int:
+    """同时跑几项。和别的整数格同一个判法(common.whole_number):`"2.0"` 是 2,`"2.5"` 报「必须是整数」——
+    此前 `int(float(…))` 把 2.5 悄悄截成 2。"""
+    value = whole_number(config, "concurrency", node_type="loop_foreach", default=1)
     return max(1, min(value, LOOP_FOREACH_MAX_CONCURRENCY))
 
 

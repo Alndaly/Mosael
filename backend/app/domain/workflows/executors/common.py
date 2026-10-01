@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import math
 import time
 from collections.abc import Callable
 from contextlib import contextmanager
@@ -14,6 +13,8 @@ from app.db.models import Job
 from app.domain.jobs import cancel_job_tree, current_parent_job_id, waiting_on_other_jobs
 from app.domain.workflows import NODE_TYPES, WorkflowDomainError
 from app.domain.workflows.run_scope import halted
+#: 整数格的解析在 numbers 里(它不碰引擎,不进 engine⇄executors 那个环);执行器照旧从这里取。
+from app.domain.workflows.executors.numbers import at_least, whole_number  # noqa: F401
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
@@ -237,39 +238,6 @@ def text_lines(value: Any) -> list[str]:
         str(item.get("text", "")) if isinstance(item, dict) else str(item if item is not None else "")
         for item in value
     ]
-
-
-def whole_number(config: dict[str, Any], key: str, *, node_type: str, default: int | None = None) -> int | None:
-    """一格整数:留空是 `default`;`10`、`"10"`、`"10.0"`、`10.0` 都是 10;`"10.5"`、`"很多"` 报「必须是整数」,说是哪一格。
-
-    数字格插值、绑定之后常常是 `"10.0"`(上游算出来的数、JSON 里的浮点)。此前各执行体各写一句
-    `int(config.get(...))`:`"10.0"` 抛一句英文的 `invalid literal for int()`、不说是哪一格;有的
-    干脆 except 掉,悄悄换成默认值 —— 填了 0 或 "10.0" 的人以为自己设了,其实跑的是 50。
-    """
-    from app.domain.workflows import field_name
-
-    raw = config.get(key)
-    if raw is None or (isinstance(raw, str) and not raw.strip()):
-        return default
-    number: float | None
-    try:
-        number = None if isinstance(raw, bool) else float(str(raw).strip())
-    except ValueError:
-        number = None
-    if number is None or not math.isfinite(number) or not number.is_integer():
-        spec = ((NODE_TYPES.get(node_type) or {}).get("config") or {}).get(key)
-        raise WorkflowDomainError("wfErr_mustBeInteger", params={"field": field_name(key, spec)})
-    return int(number)
-
-
-def at_least(value: int, minimum: int, *, key: str, node_type: str) -> int:
-    """整数格的下限:不够就说是哪一格、最少多少(而不是悄悄换成默认值)。"""
-    from app.domain.workflows import field_name
-
-    if value < minimum:
-        spec = ((NODE_TYPES.get(node_type) or {}).get("config") or {}).get(key)
-        raise WorkflowDomainError("wfErr_belowMin", params={"field": field_name(key, spec), "min": minimum})
-    return value
 
 
 def truthy(value: Any) -> bool:
