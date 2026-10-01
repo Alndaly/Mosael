@@ -6095,16 +6095,24 @@ def _walk_graph_nodes(graph: Any, visit: Any) -> Any:
     return {**graph, "nodes": nodes}
 
 
-def _migrate_browser_nodes_fill_one_target() -> None:
+def _migrate_browser_nodes_fill_one_target_keeping_reference_fallbacks() -> None:
     """「点击」的选择器 / 文字、「等待」的元素 / 网址 / 文字改成只能填一样(`one_of`):两样都填了的老节点,
-    只留执行器此前实际用的那一样。
+    只留执行器此前实际用的那一样 —— **除非前面那一样是纯引用**(只有 `{{…}}`、没有字面文字)。
 
-    执行器一直是按先后取的:点击先认选择器,等待按「元素 → 网址 → 文字」。多填的那几格从来没起过作用,
-    留着只会让运行前校验把这条流程拦下来;清掉它们,流程的行为一点不变。
+    执行器一直是按先后取的:点击先认选择器,等待按「元素 → 网址 → 文字」,取的是**插值之后**第一个非空的。
+    前面那格是字面量时,后面那几格从来没起过作用,清掉它们行为不变。前面那格是纯引用时就不是了:引用在运行时
+    取到空,执行器落到后面那一格 —— 那是一个真在起作用的兜底。
+
+    此前的那一步(migrate-browser-nodes-fill-one-target)按字面量判「填了」,把这种兜底也删了:引用取空的那次
+    运行,行为悄悄变了。这一步取代它:还没升级过的库只删真正不起作用的那几格;纯引用 + 兜底的节点原样留着,
+    运行前检查会说「只能填一个」,由人决定,而不是替人删掉。已经被那一步删掉的兜底不在这里恢复(见提交说明)。
     """
     if not {"workflows", "workflow_revisions"} <= set(inspect(engine).get_table_names()):
         return
     precedence = {"browser_click": ("selector", "text"), "browser_wait": ("selector", "url_contains", "text")}
+
+    def reference_only(value: Any) -> bool:
+        return isinstance(value, str) and bool(_CODE_REFERENCE.search(value)) and not _CODE_REFERENCE.sub("", value).strip()
 
     def visit(node: dict[str, Any]) -> dict[str, Any]:
         order = precedence.get(str(node.get("type")))
@@ -6112,13 +6120,16 @@ def _migrate_browser_nodes_fill_one_target() -> None:
         if not order:
             return node
         filled = [key for key in order if config.get(key) not in (None, "")]
-        if len(filled) < 2:
+        #: 执行器用得到的:从头数到第一个字面量为止(含);它后面的那几格永远轮不到
+        used = next((i for i, key in enumerate(filled) if not reference_only(config[key])), len(filled) - 1)
+        unused = filled[used + 1:]
+        if not unused:
             return node
-        return {**node, "config": {key: value for key, value in config.items() if key not in filled[1:]}}
+        return {**node, "config": {key: value for key, value in config.items() if key not in unused}}
 
     _rewrite_workflow_graphs(
         lambda graph: _walk_graph_nodes(graph, visit),
-        "浏览器节点的点击目标 / 等待条件改成只填一样:清掉执行器此前就没用到的那几格",
+        "浏览器节点的点击目标 / 等待条件改成只填一样:清掉执行器此前就没用到的那几格(纯引用后面的兜底留着)",
     )
 
 
@@ -6749,7 +6760,7 @@ def migration_plan() -> MigrationPlan:
             #: 这几条都落新修订(commit_graph_revision),所以排在修订迁移之后。
             *_steps(
                 MigrationPhase.AFTER_SCHEMA,
-                _migrate_browser_nodes_fill_one_target,
+                _migrate_browser_nodes_fill_one_target_keeping_reference_fallbacks,
                 _migrate_code_fields_read_references_from_input,
                 # 要读插件报的工具清单:排在装随包插件、改写被取代的工具之后(上面的对账)。
                 _migrate_plugin_array_inputs_are_lists,

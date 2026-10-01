@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from app.core.db import SessionLocal
-from app.db.migrations import _migrate_browser_nodes_fill_one_target
+from app.db.migrations import _migrate_browser_nodes_fill_one_target_keeping_reference_fallbacks
 from app.db.models import Workflow, WorkflowRevision
 from tests.util import fresh_client
 
@@ -51,7 +51,7 @@ def test_多填的点击目标和等待条件_只留执行器此前实际用的�
     }
     workflow_id = _workflow(client, ws, graph)
 
-    _migrate_browser_nodes_fill_one_target()
+    _migrate_browser_nodes_fill_one_target_keeping_reference_fallbacks()
 
     after = _graph_of(workflow_id)
     assert _config(after, "c") == {"session": "s", "selector": "#go"}
@@ -62,6 +62,33 @@ def test_多填的点击目标和等待条件_只留执行器此前实际用的�
         latest = db.query(WorkflowRevision).filter_by(workflow_id=workflow_id).order_by(WorkflowRevision.revision.desc()).first()
         assert latest.revision == 2 and latest.source == "migration"
 
-    _migrate_browser_nodes_fill_one_target()  # 再跑什么都不改
+    _migrate_browser_nodes_fill_one_target_keeping_reference_fallbacks()  # 再跑什么都不改
     with SessionLocal() as db:
         assert db.query(WorkflowRevision).filter_by(workflow_id=workflow_id).count() == 2
+
+
+def test_前面那格是纯引用_后面那格是真在起作用的兜底_不删() -> None:
+    """引用在运行时取到空,执行器落到后面那一格 —— 此前按字面量判「填了」,把这种兜底也删了,行为悄悄变了。"""
+    client, (ws,) = _client_and_workspaces(1)
+    graph = {
+        "nodes": [
+            {"id": "start", "type": "start", "config": {}},
+            #: 嵌套路径的引用存在 config 里(只有「节点.输出」两段的精确引用才升级成数据边)
+            {"id": "c", "type": "browser_click", "config": {"session": "s", "selector": "{{start.json.sel}}", "text": "去"}},
+            #: 引用 → 字面量 → 字面量:前两格都可能用到,最后一格永远轮不到
+            {"id": "w", "type": "browser_wait", "config": {
+                "session": "s", "selector": " {{start.json.a}}{{start.json.b}} ", "url_contains": "/done", "text": "完成",
+            }},
+            #: 引用拼了字面文字:永远不空,后面那格从来没起过作用
+            {"id": "mixed", "type": "browser_click", "config": {"session": "s", "selector": "#{{start.json.id}}", "text": "去"}},
+        ],
+        "edges": [],
+    }
+    workflow_id = _workflow(client, ws, graph)
+
+    _migrate_browser_nodes_fill_one_target_keeping_reference_fallbacks()
+
+    after = _graph_of(workflow_id)
+    assert _config(after, "c") == {"session": "s", "selector": "{{start.json.sel}}", "text": "去"}
+    assert _config(after, "w") == {"session": "s", "selector": " {{start.json.a}}{{start.json.b}} ", "url_contains": "/done"}
+    assert _config(after, "mixed") == {"session": "s", "selector": "#{{start.json.id}}"}
