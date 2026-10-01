@@ -22,6 +22,7 @@ import { MarkerType } from "@xyflow/react";
 import { describe, expect, it } from "vitest";
 
 import {
+  CANVAS_DRAFT_LINE_CLASS,
   CANVAS_EDGE_CLASS,
   CANVAS_EDGE_MARKER,
   CANVAS_EDGE_OPTIONS,
@@ -177,6 +178,17 @@ describe("共用的连线外观", () => {
     expect(declared(String.raw`&_.react-flow\_\_connection-path`, "stroke-dasharray")).toBe(pending);
     expect(declared(String.raw`&_.react-flow\_\_edge-path`, "stroke-linecap")).toBe("round");
     expect(declared(String.raw`&_.react-flow\_\_edge-path`, "stroke-linejoin")).toBe("round");
+  });
+
+  it("统一出口的预览线:没悬在格子上时和拖线途中同一个样子;连得上的换实线、取悬停那一档;连不上的不用主色", () => {
+    const dash = (classes: string) => classes.match(/\[stroke-dasharray:([^\]]+)\]/)?.[1];
+    const width = (classes: string) => classes.match(/\[stroke-width:([^\]]+)\]/)?.[1];
+    expect(dash(CANVAS_DRAFT_LINE_CLASS.draft)).toBe(declared(String.raw`&_.react-flow\_\_connection-path`, "stroke-dasharray"));
+    expect(width(CANVAS_DRAFT_LINE_CLASS.draft)).toBe(String(CANVAS_EDGE_WIDTH.rest));
+    expect(CANVAS_DRAFT_LINE_CLASS.draft).toContain("stroke-primary");
+    expect(dash(CANVAS_DRAFT_LINE_CLASS.link)).toBeUndefined();
+    expect(width(CANVAS_DRAFT_LINE_CLASS.link)).toBe(String(CANVAS_EDGE_WIDTH.hover));
+    expect(CANVAS_DRAFT_LINE_CLASS.refused).not.toContain("stroke-primary");
   });
 
   it("canvasEdgeClass:引用那种不挂类;颜色和流动虚线分开给", () => {

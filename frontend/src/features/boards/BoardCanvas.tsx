@@ -78,7 +78,9 @@ import { useBoardFileImport } from "@/features/boards/useBoardFileImport";
 import { useBoardItemEdits } from "@/features/boards/useBoardItemEdits";
 import { useBoardHistory } from "@/features/boards/useBoardHistory";
 import { useBoardSequenceLinks } from "@/features/boards/useBoardSequenceLinks";
-import { batchLinks, linkRefusal, linkSources, spawnableBefore, spawnableFor } from "@/features/boards/boardLinks";
+import { batchLinks, linkRefusal, selectionSources, spawnableBefore, spawnableFor } from "@/features/boards/boardLinks";
+import { BOARD_SELECTION_SKIN, BoardSelectionOutlet, LINK_TARGET_CLASS } from "@/features/boards/BoardSelectionOutlet";
+import { boundsOf, type PlacedCell, type XY } from "@/features/boards/selectionLink";
 import { useBoardViewport } from "@/features/boards/useBoardViewport";
 import { useFrameDrag } from "@/features/boards/useFrameDrag";
 
@@ -245,6 +247,8 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
    * 改好只落一次(见 BoardNodeLabel),于是整个改名是撤销历史里的一步。
    */
   const [renaming, setRenaming] = React.useState<string | null>(null);
+  /** 拖着选区框的统一出口、悬在哪一格上(那一格外面画一圈:连得上 / 一根都连不上)。一时的界面状态,不进画布。 */
+  const [linkHover, setLinkHover] = React.useState<{ id: string; verdict: "link" | "refused" } | null>(null);
   const { setText, setTitle, setAspect, patch } = useBoardItemEdits(setNodes);
 
   const { documents, pickingDocument, setPickingDocument, refreshingDocument, refreshDocument } = useBoardDocuments({ nodes, setNodes, workspaceId });
@@ -489,15 +493,16 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
     }
     const item = (node.data as unknown as { item: BoardItem }).item;
     const document = documents.get(node.id);
+    const className = cn(searchHighlightClass(searchHighlight, node.id), linkHover?.id === node.id && LINK_TARGET_CLASS[linkHover.verdict]) || undefined;
     const key = [
-      searchHighlightClass(searchHighlight, node.id), commentMode, markerMode, workspaceId, renaming === node.id,
+      className, commentMode, markerMode, workspaceId, renaming === node.id,
       document?.reference, document?.pending, document?.error, refreshingDocument === node.id, onStop, abilityLabel(item),
     ];
     const hit = decorated.current.get(node);
     if (hit && hit.key.length === key.length && hit.key.every((value, index) => Object.is(value, key[index]))) return hit.node;
     const shown: Node = {
       ...node,
-      className: searchHighlightClass(searchHighlight, node.id),
+      className,
       draggable: !commentMode && !markerMode, selectable: !commentMode && !markerMode,
       data: { ...node.data, onText: setText, onAspect: setAspect, renaming: renaming === node.id, onRenaming: setRenaming, onRename: setTitle, commentMode: commentMode || markerMode, workspaceId, document, onPickDocument: setPickingDocument, onRefreshDocument: refreshDocument, refreshingDocument: refreshingDocument === node.id,
         //: 停止属于运行态的外壳:每一种在跑的格子都有(生成、念、写、截、能力)。
@@ -515,23 +520,41 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
     selectable: !commentMode && !markerMode,
   }));
 
-  /** 画布上的一格(连线的规矩看种类、选没选中);标记和不在的回 undefined。 */
-  const cellOf = (id: string | null | undefined): (Pick<BoardItem, "id" | "kind"> & { selected?: boolean }) | undefined => {
+  /** 画布上的一格(连线的规矩看种类);标记和不在的回 undefined。 */
+  const cellOf = (id: string | null | undefined): Pick<BoardItem, "id" | "kind"> | undefined => {
     const node = id ? nodes.find((one) => one.id === id) : undefined;
     if (!node || node.type === "marker") return undefined;
-    return { id: node.id, kind: (node.data as unknown as { item: BoardItem }).item.kind, selected: node.selected };
+    return { id: node.id, kind: (node.data as unknown as { item: BoardItem }).item.kind };
   };
+  /** 画布上的格子连同它占的那块地方、选没选中:选区框、统一出口、拖线时找指针底下那一格都读它。 */
+  const placedCells = React.useMemo(
+    () =>
+      nodes
+        .filter((node) => node.type !== "marker")
+        .map((node): PlacedCell & { selected: boolean } => ({
+          id: node.id,
+          kind: (node.data as unknown as { item: BoardItem }).item.kind,
+          x: node.position.x,
+          y: node.position.y,
+          width: node.width ?? node.measured?.width ?? 0,
+          height: node.height ?? node.measured?.height ?? 0,
+          selected: Boolean(node.selected),
+        })),
+    [nodes],
+  );
+  /** 选区框:选中两格以上时整组外面那一圈;统一出口连出去的是其中连得出线的几格(从左到右)。评论、标记模式下没有。 */
+  const selectedCells = placedCells.filter((cell) => cell.selected);
+  const selectionFrame = !commentMode && !markerMode && selectedCells.length > 1 ? boundsOf(selectedCells) : null;
+  const outletSources = React.useMemo(() => selectionSources(placedCells), [placedCells]);
   /**
-   * 连一根线。**拉线的那一格在一组选中的格子里时,这一组都连过去**(TapNow 那样:框选几张图,从其中一张拉到生成格,
-   * 几张一起当参考)。每一根按单格同一条规矩判(boardLinks),连不上的跳过、说一声几条没连上。所有线一次落进画布,
-   * 撤销里是一步;连进时间线格的接到末尾,也并进这一步(见 appendLinks)。
+   * 把这几格连到 `targetId` 那一格。每一根按单格同一条规矩判(boardLinks),连不上的跳过、说一声几格没连上(已经连着的
+   * 不算没连上)。所有线一次落进画布,撤销里是一步;连进时间线格的按 `sources` 的先后接到末尾,也并进这一步(见 appendLinks)。
+   *
+   * 格子自己的出口拉到一格上(onConnect)只连它自己;选区框的统一出口拉到一格上,连选中的那几格 —— 两条路都走这里。
    */
-  const connectCells = (sourceId: string, targetId: string) => {
-    const from = cellOf(sourceId);
+  const linkCells = (sources: readonly Pick<BoardItem, "id" | "kind">[], targetId: string) => {
     const target = cellOf(targetId);
-    if (!from || !target) return;
-    const cells = nodes.filter((node) => node.type !== "marker").map((node) => cellOf(node.id)!);
-    const sources = linkSources(from, cells);
+    if (!target || sources.length === 0) return;
     const { links, refused } = batchLinks(sources, target, edges);
     if (links.length) {
       setEdges((current) =>
@@ -539,7 +562,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
       );
       appendLinks(links);
     }
-    if (sources.length > 1 && refused) toast.error(t("boardLinksRefused").replace("{n}", String(refused)));
+    if (refused) toast.error(t("boardLinksRefused").replace("{n}", String(refused)));
   };
 
   const { history, adopt, flush, stepBack, stepForward } = useBoardHistory({ nodes, edges, setNodes, setEdges, onChange });
@@ -649,7 +672,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
       from: string,
       at: { x: number; y: number },
       fromIsSource = true,
-      //: 从出口拉出来时新的一格连上哪几格:多选时是选中的那一组(见 spawnSources),否则就是拉线的那一格。
+      //: 从出口拉出来时新的一格连上哪几格:选区框的统一出口拉出来的是选中的那几格(见 releaseSelectionLink),否则就是拉线的那一格。
       sources: readonly string[] = [from],
     ) => {
       //: 摆放规则和拉线松手时的占位是同一个函数 —— 占位在哪,节点就落在哪,选完不跳。
@@ -676,14 +699,10 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
    * 单子上**只有格子**:把内容变成新内容的工具是格子自己的能力(选中它,在操作条上点),不是另一格 ——
    * 拉一根线出来只为了长出一格新的内容。
    */
-  //: 拉出线松手在空白处时,新的一格要连上哪几格:从出口拉、拉线的那一格在一组选中里时是这一组(多张图一起当参考),
-  //: 否则是它自己。开单子那一刻记下 —— 之后选中会变(新的一格落下就选中它)。
-  const [spawnSources, setSpawnSources] = React.useState<{ ids: string[]; fromSource: boolean }>({ ids: [], fromSource: true });
-  const spawnCells = spawnSources.ids.map((id) => cellOf(id)).filter((one): one is NonNullable<typeof one> => Boolean(one));
-  //: 单子上只列**这几格都连得上**的格子(boardLinks 同一条规矩);从入口拉出来的,列连得进它的。
-  const linkChoices = (spawnSources.fromSource
-    ? spawnableFor(spawnCells, SPAWNABLE_KINDS)
-    : spawnCells[0] ? spawnableBefore(spawnCells[0], SPAWNABLE_KINDS) : [...SPAWNABLE_KINDS]) as string[];
+  //: 单子上列哪几种:开单子那一刻按规矩算好记下(boardLinks:从出口拉出来的列这几格都连得上的,从入口拉出来的列连得进它的)。
+  //: 新的一格要连上哪几格跟着待定的线走(`link.sources`)。
+  //: 初值是全部几种 —— 占位那一格照高亮的一种取图标,没开单子时也得有一种可取。
+  const [linkChoices, setLinkChoices] = React.useState<string[]>([...SPAWNABLE_KINDS]);
   const describeChoice = React.useCallback(
     (choice: string) => {
       const kind = choice as (typeof SPAWNABLE_KINDS)[number];
@@ -696,11 +715,25 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
     ghostSize: PENDING_GHOST_SIZE,
     describe: describeChoice,
     onChoose: (choice, link) =>
-      spawnLinked(choice as (typeof SPAWNABLE_KINDS)[number], link.nodeId, link.at, link.fromSource,
-        spawnSources.ids.length ? spawnSources.ids : [link.nodeId]),
+      spawnLinked(choice as (typeof SPAWNABLE_KINDS)[number], link.nodeId, link.at, link.fromSource, link.sources ?? [link.nodeId]),
   });
   const pendingLink = pending.link;
   const cancelPending = pending.cancel;
+  /**
+   * 从选区框的统一出口拉线松手:落在一格上,选中的那几格都连过去;落在空白处,弹「新建一格,连上选中的 N 格」
+   * (单子上只列这几格都连得上的;一种都没有就不弹空单子)。连哪几格在松手那一刻定下 —— 新的一格落下就选中它,选中会变。
+   */
+  const releaseSelectionLink = (targetId: string | null, at: XY) => {
+    setLinkHover(null);
+    if (targetId) {
+      linkCells(outletSources, targetId);
+      return;
+    }
+    const kinds = spawnableFor(outletSources, SPAWNABLE_KINDS);
+    if (kinds.length === 0 || outletSources.length === 0) return;
+    setLinkChoices(kinds);
+    pending.open({ nodeId: outletSources[0].id, handleId: null, fromSource: true, at, sources: outletSources.map((one) => one.id) });
+  };
   //: 起手那一格没了(撤销、服务端那份换进来、别处删掉),待定的线就没有一头可接 —— 一并取消。
   React.useEffect(() => {
     if (pendingLink && !nodes.some((node) => node.id === pendingLink.nodeId)) cancelPending();
@@ -748,7 +781,7 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
     // 详情页本身就是画布边界:四边满铺,不再套第二层卡片边框或圆角。
     <div
       ref={surface}
-      className={cn("relative h-full w-full overflow-hidden bg-background", CANVAS_EDGE_CLASS)}
+      className={cn("relative h-full w-full overflow-hidden bg-background", CANVAS_EDGE_CLASS, BOARD_SELECTION_SKIN)}
       {...drop.handlers}
       // 坐标换算要在 drop 那一刻做 —— 这里把鼠标位置存下来给上面的回调用。
       onDragOver={(event) => {
@@ -795,9 +828,11 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
           const target = cellOf(connection.target);
           return Boolean(source && target && linkRefusal(source, target, []) === null);
         }}
+        //: 格子自己的出口**只连它自己** —— 哪怕它在一组选中的格子里;一次连好几格走选区框的统一出口(BoardSelectionOutlet)。
         onConnect={(connection: Connection) => {
           if (commentMode || markerMode) return;
-          connectCells(connection.source, connection.target);
+          const source = cellOf(connection.source);
+          if (source) linkCells([source], connection.target);
         }}
         // 可见的 + 在边界外，而真实锚点贴在边界上。扩大屏幕命中半径后，拖到 + 上即可
         // 自动吸附，不必再精确瞄准那个透明的 8px handle。
@@ -811,12 +846,10 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
           const link = pendingLinkFromRelease(event, connection, instance.screenToFlowPosition);
           const from = link ? cellOf(link.nodeId) : undefined;
           if (!link || !from) return;
-          const cells = nodes.filter((node) => node.type !== "marker").map((node) => cellOf(node.id)!);
-          const sources = link.fromSource ? linkSources(from, cells) : [from];
-          const kinds = link.fromSource ? spawnableFor(sources, SPAWNABLE_KINDS) : spawnableBefore(from, SPAWNABLE_KINDS);
-          //: 一种都连不上(比如选中的里面混着连不出线的):不弹一张空单子。
+          const kinds = link.fromSource ? spawnableFor([from], SPAWNABLE_KINDS) : spawnableBefore(from, SPAWNABLE_KINDS);
+          //: 一种都连不上:不弹一张空单子。
           if (kinds.length === 0) return;
-          setSpawnSources({ ids: sources.map((one) => one.id), fromSource: link.fromSource });
+          setLinkChoices(kinds);
           pending.open(link);
         }}
         onNodeDragStart={(_event, node) => beginFrameDrag(node)}
@@ -868,6 +901,17 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
         elementsSelectable={!commentMode}
       >
         <Background variant={BackgroundVariant.Dots} gap={20} size={1.2} />
+        {selectionFrame && (
+          <BoardSelectionOutlet
+            frame={selectionFrame}
+            sources={outletSources}
+            cells={placedCells}
+            edges={edges}
+            shape={edgeShape}
+            onHover={setLinkHover}
+            onRelease={releaseSelectionLink}
+          />
+        )}
         <BoardCommentLayer
           visible={commentsVisible}
           rf={rf}
@@ -924,8 +968,8 @@ function Inner({ boardId, workspaceId, canvas, onChange, onPickAsset, onRun, onG
       {/* 从线尾长出下一个节点:占位和待定的线已经画在画布里(见 display),这里是挂在占位旁边的单子。 */}
       {pendingLink && (
         <PendingLinkMenu
-          title={spawnSources.ids.length > 1
-            ? t("boardSpawnTitleMany").replace("{n}", String(spawnSources.ids.length))
+          title={(pendingLink.sources?.length ?? 1) > 1
+            ? t("boardSpawnTitleMany").replace("{n}", String(pendingLink.sources?.length))
             : t("boardSpawnTitle")}
           kinds={linkChoices}
           describe={describeChoice}

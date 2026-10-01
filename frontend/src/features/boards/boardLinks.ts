@@ -1,6 +1,6 @@
 /**
- * 画板上「一根线能不能连」的规矩,**只此一处**:单格拉线(React Flow 的 isValidConnection)、多选之后一次连到一格、
- * 多选之后拉出来新建一格,读的都是这一份。各写一份的话,单格连得上的一对,批量里却被跳过(或反过来)。
+ * 画板上「一根线能不能连」的规矩,**只此一处**:单格拉线(React Flow 的 isValidConnection)、从选区框的统一出口一次
+ * 连到一格、从统一出口拉出来新建一格,读的都是这一份。各写一份的话,单格连得上的一对,批量里却被跳过(或反过来)。
  *
  * 规矩只管**建线的那一刻**:存下来的线不因规则而失效(ADR 0025 决定 4)。线连上之后「它给下游什么」—— 槽位里挂
  * 哪份素材(`source_assets[].from`)、哪个字段绑哪一格(`bindings`)—— 照旧由面板照上游写、服务端按线摘
@@ -27,25 +27,32 @@ const TIMELINE_SOURCES: ReadonlySet<BoardItem["kind"]> = new Set(["video", "imag
 /** 从 `source` 连一根线到 `target` 行不行;行回 null。 */
 export function linkRefusal(source: Cell, target: Cell, edges: readonly Link[]): LinkRefusal | null {
   if (source.id === target.id) return "self";
-  if (source.kind === "frame" || target.kind === "frame") return "notLinkable";
+  if (!canLink(source) || !canLink(target)) return "notLinkable";
   if (edges.some((edge) => edge.source === source.id && edge.target === target.id)) return "duplicate";
   if (target.kind === "sequence" && !TIMELINE_SOURCES.has(source.kind)) return "timelineTakesMedia";
   return null;
 }
 
-/**
- * 拉线的那一格要带上哪几格一起连:它在一组选中的格子里(选中了两格以上)就是这一组,否则就是它自己。
- * 分组框不算 —— 框选时常常把框也框进来,它本来就连不了线。
- */
-export function linkSources(from: Cell & { selected?: boolean }, cells: readonly (Cell & { selected?: boolean })[]): Cell[] {
-  const picked = cells.filter((cell) => cell.selected && cell.kind !== "frame");
-  if (!from.selected || picked.length < 2) return [from];
-  return picked;
+/** 分组框只是圈东西的框,不进也不出线。 */
+export function canLink(cell: Cell): boolean {
+  return cell.kind !== "frame";
 }
 
 /**
- * 这几格一次都连到 `target`:按单格同一条规矩逐根判,连得上的交回,连不上的数一数(界面说「几条没连上」)。
- * `target` 自己在这几格里(从选中的一格拉到选中的另一格)不算没连上 —— 它就是终点。
+ * 选区框的统一出口从哪几格连出去:选中了两格以上时,其中连得出线的那几格(分组框不算 —— 框选时常常把框也框进来);
+ * 不到两格回空(单格用它自己的出口)。**按从左到右排**(x 相同再按 y):连进时间线格时一段一段照这个顺序接到末尾,
+ * 和画面上的先后一致 —— 照节点数组的顺序接的话,先放上画布的那张排在前面,和人看到的对不上。
+ */
+export function selectionSources<C extends Cell & { x: number; y: number; selected?: boolean }>(cells: readonly C[]): C[] {
+  const picked = cells.filter((cell) => cell.selected);
+  if (picked.length < 2) return [];
+  return picked.filter(canLink).sort((a, b) => a.x - b.x || a.y - b.y);
+}
+
+/**
+ * 这几格一次都连到 `target`:按单格同一条规矩逐根判,连得上的按 `sources` 的顺序交回。
+ * `refused` 只数**真没连上**的(分组框、时间线格不收的);已经连着的不算 —— 线本来就在,结果就是用户要的。
+ * `target` 自己在这几格里(拖到选中的另一格上)也不算没连上 —— 它就是终点。
  */
 export function batchLinks(
   sources: readonly Cell[],
@@ -55,9 +62,9 @@ export function batchLinks(
   const links: Link[] = [];
   let refused = 0;
   for (const source of sources) {
-    if (source.id === target.id) continue;
-    if (linkRefusal(source, target, [...edges, ...links])) refused += 1;
-    else links.push({ source: source.id, target: target.id });
+    const why = linkRefusal(source, target, [...edges, ...links]);
+    if (why === null) links.push({ source: source.id, target: target.id });
+    else if (why !== "self" && why !== "duplicate") refused += 1;
   }
   return { links, refused };
 }

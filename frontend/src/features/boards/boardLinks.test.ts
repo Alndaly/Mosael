@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { batchLinks, linkRefusal, linkSources, spawnableBefore, spawnableFor } from "@/features/boards/boardLinks";
+import { batchLinks, linkRefusal, selectionSources, spawnableBefore, spawnableFor } from "@/features/boards/boardLinks";
 import { joinSequenceToCanvas, record, emptyHistory, undo } from "@/features/boards/canvasHistory";
 
 const cell = (id: string, kind: "note" | "image" | "video" | "audio" | "frame" | "sequence" | "document", selected = false) => ({ id, kind, selected });
@@ -17,19 +17,26 @@ describe("一根线能不能连(单格和批量同一条规矩)", () => {
   });
 });
 
-describe("多选之后一次连到一格", () => {
-  it("拉线的那一格在一组选中里:这一组都连过去(分组框不算);没选中就只有它自己", () => {
-    const cells = [cell("a", "image", true), cell("b", "image", true), cell("f", "frame", true), cell("c", "image")];
-    expect(linkSources(cells[0], cells).map((one) => one.id)).toEqual(["a", "b"]);
-    expect(linkSources(cells[3], cells).map((one) => one.id), "从没选中的那一格拉:就它自己").toEqual(["c"]);
-    expect(linkSources(cell("a", "image", true), [cell("a", "image", true)]).map((one) => one.id), "只选了一格").toEqual(["a"]);
+describe("选区框的统一出口一次连到一格", () => {
+  const at = (id: string, kind: Parameters<typeof cell>[1], x: number, y: number, selected = true) => ({ ...cell(id, kind, selected), x, y });
+
+  it("选中两格以上才有:连出去的是其中连得出线的几格(分组框不算);只选一格没有(它用自己的出口)", () => {
+    const cells = [at("a", "image", 0, 0), at("b", "image", 300, 0), at("f", "frame", -40, -40), at("c", "image", 600, 0, false)];
+    expect(selectionSources(cells).map((one) => one.id)).toEqual(["a", "b"]);
+    expect(selectionSources([at("a", "image", 0, 0), at("b", "image", 300, 0, false)]), "只选了一格").toEqual([]);
+    expect(selectionSources([at("f", "frame", 0, 0), at("g", "frame", 300, 0)]), "选的全是分组框:一格都连不出").toEqual([]);
   });
 
-  it("逐根按规矩判:连得上的交回,连不上的数一数;终点自己在选中里不算没连上", () => {
+  it("从左到右排(x 相同再按 y)—— 连进时间线格时照这个顺序一段一段接,不照节点数组的先后", () => {
+    const cells = [at("right", "image", 600, 0), at("lower", "image", 0, 300), at("upper", "image", 0, 0), at("middle", "video", 300, 50)];
+    expect(selectionSources(cells).map((one) => one.id)).toEqual(["upper", "lower", "middle", "right"]);
+  });
+
+  it("逐根按规矩判:连得上的照顺序交回;没连上的只数真连不上的 —— 已经连着的、终点自己都不算", () => {
     const sources = [cell("v", "video"), cell("n", "note"), cell("i", "image"), cell("t", "sequence")];
     const got = batchLinks(sources, cell("t", "sequence"), [{ source: "i", target: "t" }]);
     expect(got.links).toEqual([{ source: "v", target: "t" }]);
-    expect(got.refused, "便签进不了时间线格,那张图已经连着").toBe(2);
+    expect(got.refused, "只有便签进不了时间线格;那张图已经连着,不算").toBe(1);
   });
 
   it("批量接进同一条时间线的几段,和画布上那几根线并成撤销里的一步", () => {

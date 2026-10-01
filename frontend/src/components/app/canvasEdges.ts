@@ -117,6 +117,23 @@ export const CANVAS_EDGE_CLASS = [
 ].join(" ");
 
 /**
+ * 一次从好几格各拉一根的**预览线**(画板选区框的统一出口)。它们不是 React Flow 的边、也不是它那根 connection line ——
+ * xyflow 一次只拖一根 —— 是画布上自己画的一层 SVG 路径(在流坐标里画,线宽跟着缩放,和真线一样)。
+ *
+ *  · `draft`:还没悬在哪一格上 —— 和「拖线途中」同一个样子(主色、2px、`4 6` 的静止虚线)。
+ *  · `link`:悬在一格上、这一根连得上 —— 换成实线、取悬停那一档线宽,松手就是它。
+ *  · `refused`:这一根连不上(分组框、时间线格不收)—— 退成前景色的淡虚线,一眼看得出哪几根会被跳过。
+ *
+ * 和上面那张表一样走令牌,亮暗两套主题自己跟着变;数字和 `CANVAS_EDGE_WIDTH`、待定虚线对不对得上由测试核对。
+ */
+export const CANVAS_DRAFT_LINE_CLASS = {
+  draft: "fill-none stroke-primary [stroke-width:2] [stroke-dasharray:4_6] [stroke-linecap:round] [stroke-linejoin:round]",
+  link: "fill-none stroke-primary [stroke-width:2.5] [stroke-linecap:round] [stroke-linejoin:round]",
+  refused:
+    "fill-none stroke-muted-foreground/45 [stroke-width:2] [stroke-dasharray:2_6] [stroke-linecap:round] [stroke-linejoin:round]",
+} as const;
+
+/**
  * 连线末端的闭合箭头:方向一目了然(上游 → 下游)。**所有带箭头的边共用这一个。**
  *
  *  · **颜色是 `context-stroke`**:箭头取「引用它的那条线」此刻的描边色。于是悬停变深、选中变

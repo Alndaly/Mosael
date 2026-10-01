@@ -61,6 +61,11 @@ export interface PendingLink {
   fromSource: boolean;
   /** 松手点,流坐标。 */
   at: XYPosition;
+  /**
+   * 新的一格要接上的**好几格**(画板选区框的统一出口:选中的几格一起当上游)。不给就是 `nodeId` 那一格。
+   * 只对从出口拉出来的有意义;每一格各画一根待定的线到占位上。
+   */
+  sources?: readonly string[];
 }
 
 export interface Size {
@@ -196,10 +201,13 @@ export function decoratePendingLink<N extends Node, E extends Edge>(
     deletable: false,
     zIndex: ghost.zIndex,
   } as unknown as N;
-  const edge = {
-    id: PENDING_EDGE_ID,
+  //: 统一出口拉出来的,每一格各一根(还在画布上的那几格);第一根沿用 PENDING_EDGE_ID。
+  const alive = new Set(nodes.map((node) => node.id));
+  const sources = link.fromSource ? (link.sources ?? [link.nodeId]).filter((id) => alive.has(id)) : [link.nodeId];
+  const pendingEdges = sources.map((source, index) => ({
+    id: index === 0 ? PENDING_EDGE_ID : `${PENDING_EDGE_ID}-${index}`,
     ...(link.fromSource
-      ? { source: link.nodeId, sourceHandle: link.handleId, target: PENDING_GHOST_ID, targetHandle: null }
+      ? { source, sourceHandle: source === link.nodeId ? link.handleId : null, target: PENDING_GHOST_ID, targetHandle: null }
       : { source: PENDING_GHOST_ID, sourceHandle: null, target: link.nodeId, targetHandle: link.handleId }),
     type: ghost.shape,
     selectable: false,
@@ -211,8 +219,8 @@ export function decoratePendingLink<N extends Node, E extends Edge>(
     className: canvasEdgeClass("pending"),
     zIndex: ghost.zIndex,
     data: { pending: true },
-  } as unknown as E;
-  return { nodes: [...nodes, ghostNode], edges: [...edges, edge] };
+  }) as unknown as E);
+  return { nodes: [...nodes, ghostNode], edges: [...edges, ...pendingEdges] };
 }
 
 /**
