@@ -159,4 +159,14 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "GIF 参数超出允许范围",
         "en": "The GIF parameters are out of range.",
     },
+    "confirm_importFromUrl": {
+        "zh": "从这个链接下载{kind}进素材库{login}:{url}",
+        "en": "Download {kind} from this link into the media library{login}: {url}",
+    },
+    "confirm_importVideo": {"zh": "视频", "en": "the video"},
+    "confirm_importAudio": {"zh": "音频", "en": "the audio"},
+    "confirm_importWithProfile": {
+        "zh": ",借用浏览器档案「{name}」的登录态",
+        "en": ", borrowing the signed-in session of browser profile \u201c{name}\u201d",
+    },
 }

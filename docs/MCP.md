@@ -11,7 +11,7 @@
 
 <!-- BEGIN generated: tools -->
 
-共 **99** 个工具,其中 **28** 个走确认卡、**1** 个停下来等用户作答。
+共 **100** 个工具,其中 **29** 个走确认卡、**1** 个停下来等用户作答。
 
 | 工具 | 门控 | 说明 |
 | --- | --- | --- |
@@ -68,6 +68,7 @@
 | `get_transcript` | 直接执行 | Read-only: read the transcript/subtitles of an asset — timed segments with speakers. |
 | `get_workflow` | 直接执行 | Read-only: inspect one VISUAL WORKFLOW graph in full. |
 | `http_request` | 确认卡 | Confirmation required: call an external HTTP API (POST/PUT/PATCH/DELETE). |
+| `import_from_url` | 确认卡 | Confirmation required: download a video (kind=audio: its audio) from a web link into the media library. |
 | `import_media_from_url` | 直接执行 | Runs directly: download a video or audio from a link into the asset library. |
 | `inspect_sequence` | 直接执行 | Read-only: inspect a VIDEO TIMELINE sequence — format, revision, duration, tracks, clips. |
 | `list_agent_sessions` | 直接执行 | Runs directly: list the agent sessions in this workspace (id, title, status). |

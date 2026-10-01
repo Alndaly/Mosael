@@ -1,4 +1,4 @@
-"""素材和时间线上的确认卡工具:改时间线、导出、字幕配音、分离、降噪、转 GIF。
+"""素材和时间线上的确认卡工具:改时间线、导出、字幕配音、分离、降噪、转 GIF、从链接下载。
 
 这几件事的共同点是**要么改用户的片子、要么让这台机器忙很久**,所以都得先开卡。"""
 
@@ -473,6 +473,65 @@ confirmable_tool(ConfirmableTool(
     summarize=_summarize_denoise_audio,
     execute=_execute_denoise_audio,
     validate=_validate_denoise_audio,
+))
+
+
+def _validate_import_from_url(db: Session, workspace_id: str, payload: dict[str, Any], actor: str | None) -> None:
+    from app.domain import browser as browser_domain
+
+    url = str(payload.get("url") or "").strip()
+    if not (url.startswith("http://") or url.startswith("https://")):
+        raise ConfirmationError("confirmErr_browserHttpOnly")
+    if str(payload.get("kind") or "video") not in ("video", "audio"):
+        raise ConfirmationError("urlImportErr_badKind")
+    profile_id = str(payload.get("profile_id") or "").strip()
+    if profile_id:
+        try:
+            profile = browser_domain.get_profile(db, workspace_id, profile_id)
+        except browser_domain.BrowserDomainError as exc:
+            raise ConfirmationError(str(exc)) from exc
+        # 卡上要点名借的是哪个登录身份(摘要拿不到库里的名字)。
+        payload["profile_name"] = profile.name
+
+
+def _summarize_import_from_url(db: Session, payload: dict[str, Any]) -> Summary:
+    name = str(payload.get("profile_name") or payload.get("profile_id") or "").strip()
+    return "confirm_importFromUrl", {
+        "url": str(payload.get("url") or ""),
+        "kind": fragment("confirm_importAudio" if payload.get("kind") == "audio" else "confirm_importVideo"),
+        "login": fragment("confirm_importWithProfile", name=name) if name else "",
+    }
+
+
+def _execute_import_from_url(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
+    from app.domain import sharing
+    from app.domain.assets.from_url import UrlImportError, start_url_import
+
+    payload = confirmation.payload
+    profile_id = str(payload.get("profile_id") or "").strip()
+    try:
+        # 借登录态是用档案主人的身份:批准的人自己得能用这个档案,别人的私有档案在这里被拒(见 browser.usable_profile)。
+        job = start_url_import(
+            db,
+            workspace_id=confirmation.workspace_id,
+            project_id=None,
+            items=[{"url": str(payload["url"]), "title": ""}],
+            kind=str(payload.get("kind") or "video"),
+            created_by=actor,
+            profile_id=profile_id or None,
+        )
+    except (UrlImportError, sharing.NotUsableError) as exc:
+        raise ConfirmationError(str(exc)) from exc
+    return {"job_id": job.id}
+
+
+confirmable_tool(ConfirmableTool(
+    name="import_from_url",
+    permission="external",
+    cost="none",
+    summarize=_summarize_import_from_url,
+    execute=_execute_import_from_url,
+    validate=_validate_import_from_url,
 ))
 
 

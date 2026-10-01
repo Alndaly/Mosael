@@ -20,6 +20,7 @@ import {
   Braces,
   Captions,
   CaseSensitive,
+  ChartColumn,
   Clapperboard,
   Code2,
   Download,
@@ -33,10 +34,12 @@ import {
   FolderPlus,
   GitBranch,
   Globe,
+  HardDriveDownload,
   Hourglass,
   Image as ImageIcon,
   Keyboard,
   Languages,
+  Link2,
   List as ListIcon,
   ListPlus,
   Mic,
@@ -153,6 +156,10 @@ const NODE_ICONS: Record<string, LucideIcon> = {
   inspect_sequence: Search,
   video_to_gif: FileVideo,
   image_grid_split: Grid3x3,
+  //: 自媒体分析:认链接、整理数据算指标、从链接下载(和「导出」的下载箭头区分开)。
+  social_link: Link2,
+  social_metrics: ChartColumn,
+  import_url: HardDriveDownload,
   asset: ImageIcon,
 };
 

@@ -325,6 +325,54 @@ def video_to_gif(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[s
     }
 
 
+@register("import_url")
+def import_url(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
+    """从链接下载一条进素材库:排一次「从链接导入」任务(和素材库那个按钮同一个任务),等它落定。
+
+    `fail_on_error = no` 时下载失败不算这一步失败,交出空的 asset_id 和原因 —— 分析类模板里视频只是材料之一,
+    下不到(要登录、被限流)时数据和评论照样分析,报告里说明少了口播这一块;而不是把前面已经付过钱的取数一起作废。
+    取消照样往上抛:那不是下载失败。
+    """
+    from app.domain import browser, sharing
+    from app.domain.assets.from_url import UrlImportError, start_url_import
+    from app.domain.workflows import as_text
+    from app.domain.workflows.authority import current_authority
+
+    url = as_text(config.get("url")).strip()
+    if not url:
+        raise WorkflowDomainError("wfErr_importUrlEmpty")
+    kind = str(config.get("kind") or "video")
+    profile_id = str(config.get("profile_id") or "").strip()
+    must_succeed = truthy(config.get("fail_on_error") if config.get("fail_on_error") not in (None, "") else "yes")
+    try:
+        if profile_id:
+            #: 借的是档案主人的登录态:跑的人和被执行那一版图的担保人都要过得了闸(见 workflows.authority)。
+            #: 任务自己跑的时候还会按发起人再查一次。
+            browser.usable_profile(db, scope.workspace_id, profile_id, actor=current_authority(db))
+        child = start_url_import(
+            db,
+            workspace_id=scope.workspace_id,
+            project_id=None,
+            items=[{"url": url, "title": ""}],
+            kind=kind,
+            created_by=current_actor(db),
+            profile_id=profile_id or None,
+            max_height=whole_number(config, "max_height", node_type="import_url", default=1080),
+        )
+        final = wait_for_job(child.id, release=db)
+    except (UrlImportError, sharing.NotUsableError, browser.BrowserDomainError) as exc:
+        if must_succeed:
+            raise WorkflowDomainError.from_error(exc) from exc
+        return {"asset_id": "", "name": "", "error": str(exc)}
+    except WorkflowDomainError as exc:
+        if must_succeed or exc.key != "wfErr_childFailed":
+            raise
+        return {"asset_id": "", "name": "", "error": str(exc.params.get("reason") or exc)}
+    asset_ids = [str(one) for one in (final.result or {}).get("asset_ids") or []]
+    asset = db.get(Asset, asset_ids[0]) if asset_ids else None
+    return {"asset_id": asset.id if asset else "", "name": asset.name if asset else "", "error": ""}
+
+
 def _speech_params(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
     """「引擎 + 音色」两格 → 合成要的那组参数(见 voices.engine_catalog.synthesis_params)。
 

@@ -48,6 +48,11 @@ NODE_TO_TOOL: dict[str, str] = {
     "document_to_markdown": "read_document",
     "video_to_gif": "convert_video_to_gif",
     "image_grid_split": "split_image_grid",
+    #: 和素材库「从链接导入」同一个任务(assets.from_url)。
+    "import_url": "import_from_url",
+    #: 整理作品 / 评论、算发布频率和互动率:智能体读一份 JSON 自己会整理,真要算数(中位数、按小时分布)
+    #: 就写一段代码算 —— 同一个目标,算术交给代码而不是心算。
+    "social_metrics": "run_code",
     "ai_generate": "generate_image",  # 与 generate_video 同一节点的两种 kind
     "publish": "publish_asset",
     "http_request": "http_request",
@@ -117,6 +122,7 @@ NOT_A_TOOL: dict[str, str] = {
     "text_transform": "去空白/大小写/正则。模型自己会做。",
     "llm": "调模型生成文本 —— 智能体本身就是那个模型,再给它一个调模型的工具是套娃。",
     "plugin_tool": "插件工具已展开成一等公民(plugin__<连接>__<工具>),不是固定的一个工具名。",
+    "social_link": "从链接、分享口令里认出平台和编号。模型自己会读链接。",
 }
 
 

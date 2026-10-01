@@ -276,6 +276,7 @@ const TOOL_LABELS: Record<string, string> = {
   render_sequence: "导出时间线",
   convert_video_to_gif: "视频转 GIF",
   split_image_grid: "宫格切分",
+  import_from_url: "从链接下载",
   reparse_document: "重新解析文档",
   separate_audio: "分离人声与背景音",
   denoise_audio: "降噪",

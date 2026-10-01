@@ -322,6 +322,21 @@ _FIELD_LABELS = {
     "kept_text": "wfField_kept_text",
     "source_lang": "wfField_source_lang",
     "max_seconds": "wfField_max_seconds",
+    # 自媒体分析的几个节点。
+    "link": "wfField_link",
+    "platform": "wfField_platform",
+    "expect": "wfField_expect",
+    "data": "wfField_data",
+    "profile": "wfField_profile",
+    "duration_unit": "wfField_duration_unit",
+    "utc_offset": "wfField_utc_offset",
+    "max_height": "wfField_max_height",
+    "error": "wfField_error",
+    "id": "wfField_id",
+    "account": "wfField_account",
+    "stats": "wfField_stats",
+    "summary": "wfField_summary",
+    "table": "wfField_table",
 }
 
 
@@ -657,6 +672,26 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "config": {"asset_id": {"type": "template", "required": True}},
         "outputs": ["asset_id", "name", "kind", "duration", "width", "height", "fps"],
         "output_types": {"duration": "number", "width": "number", "height": "number", "fps": "number"},
+    },
+    #: 从链接下载一条视频 / 音频进素材库 —— 和素材库「从链接导入」同一个任务(assets.from_url,yt-dlp)。
+    #: 需要登录才下得到的(抖音、会员视频)借浏览器池档案的登录态;只借这一次,下完就关。
+    "import_url": {
+        "external": True,
+        "category": "wfCat_asset",
+        "label": "wfNode_import_url",
+        "description": "wfNode_import_url_desc",
+        "config": {
+            "url": {"type": "template", "required": True, "description": "wfNode_import_url_url"},
+            "kind": {"type": "string", "options": ["video", "audio"], "default": "video",
+                     "description": "wfNode_import_url_kind"},
+            "profile_id": {"type": "string", "options_from": "browser_profiles", "label": "wfField_browser_profile",
+                           "description": "wfNode_import_url_profile_id"},
+            "max_height": {"advanced": True, "type": "number", "default": 1080, "description": "wfNode_import_url_max_height"},
+            "fail_on_error": {"advanced": True, "type": "string", "options": ["yes", "no"], "default": "yes",
+                              "description": "wfNode_import_url_fail_on_error"},
+        },
+        "outputs": ["asset_id", "name", "error"],
+        "output_types": {"name": "text", "error": "text"},
     },
     "inspect_sequence": {
         "external": False,
@@ -996,6 +1031,44 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
             "replace": {"type": "template", "active_when": {"op": "replace"}, "description": "wfNode_text_transform_replace"},
         },
         "outputs": ["text", "length"],
+    },
+    #: 自媒体分析(见 domain/social_media、templates_analysis):认链接、把作品 / 评论整理成同一个形状并算指标。
+    #: 不取数 —— 取数是 TikHub 插件节点、浏览器节点的事;这两个节点让两条取数路交出同一份东西。
+    #: 认链接要跟短链的跳转(v.douyin.com、xhslink.com、b23.tv),所以算外部节点。
+    "social_link": {
+        "external": True,
+        "category": "wfCat_data",
+        "label": "wfNode_social_link",
+        "description": "wfNode_social_link_desc",
+        "config": {
+            "link": {"type": "template", "required": True, "description": "wfNode_social_link_link"},
+            "platform": {"type": "template", "description": "wfNode_social_link_platform"},
+            "expect": {"type": "string", "options": ["account", "video"], "default": "account",
+                       "description": "wfNode_social_link_expect"},
+        },
+        "outputs": ["platform", "kind", "id", "url"],
+        "output_types": {"platform": "text", "kind": "text", "id": "text", "url": "text"},
+    },
+    "social_metrics": {
+        "external": False,
+        "category": "wfCat_data",
+        "label": "wfNode_social_metrics",
+        "description": "wfNode_social_metrics_desc",
+        "config": {
+            "data": {"type": "template", "required": True, "description": "wfNode_social_metrics_data"},
+            "kind": {"type": "string", "options": ["posts", "comments"], "default": "posts",
+                     "description": "wfNode_social_metrics_kind"},
+            "profile": {"type": "template", "active_when": {"kind": "posts"},
+                        "description": "wfNode_social_metrics_profile"},
+            "limit": {"type": "number", "default": 30, "description": "wfNode_social_metrics_limit"},
+            "duration_unit": {"advanced": True, "type": "string", "options": ["auto", "seconds", "milliseconds"],
+                              "default": "auto", "active_when": {"kind": "posts"},
+                              "description": "wfNode_social_metrics_duration_unit"},
+            "utc_offset": {"advanced": True, "type": "number", "default": 8, "description": "wfNode_social_metrics_utc_offset"},
+        },
+        "outputs": ["items", "count", "account", "stats", "summary", "table"],
+        "output_types": {"items": "json", "count": "number", "account": "json", "stats": "json",
+                         "summary": "text", "table": "text"},
     },
     "delay": {
         "external": False,
@@ -1754,6 +1827,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
             },
             "profile_id": {
                 "type": "string", "required": True, "active_when": {"session_mode": "pool"},
+                "label": "wfField_browser_profile",
                 "description": "wfNode_browser_open_profile_id", "options_from": "browser_profiles",
             },
         },

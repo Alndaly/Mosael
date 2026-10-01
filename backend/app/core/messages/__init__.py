@@ -20,12 +20,13 @@ from app.core.messages import (
     node_catalog,
     plugins,
     routes,
+    social,
     workflows,
 )
 
 PARTS = (
     plugins, routes, confirmable, ai_chat, domain, integrations, ai_runtime, node_catalog, workflows,
-    boards, audio, generation, agent, entities,
+    boards, audio, generation, agent, entities, social,
 )
 
 

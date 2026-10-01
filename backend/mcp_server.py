@@ -536,6 +536,26 @@ def convert_video_to_gif(
 
 
 @tool(effect="confirms")
+def import_from_url(
+    url: str,
+    kind: str = "video",
+    profile_id: str = "",
+    workspace_id: str = "",
+) -> dict[str, Any]:
+    """Confirmation required: download a video (kind=audio: its audio) from a web link into the media library.
+    profile_id: signed-in browser-pool profile whose cookies to borrow (Douyin needs one)."""
+    confirmation = _open_card(
+        {
+            "workspace_id": workspace_id or _default_workspace_id(),
+            "tool": "import_from_url",
+            "requested_by": _REQUESTED_BY.get(),
+            "payload": {"url": url, "kind": kind, "profile_id": profile_id},
+        },
+    )
+    return _confirmation_reply(confirmation)
+
+
+@tool(effect="confirms")
 def split_image_grid(
     asset_id: str,
     grid: str = "3x3",
