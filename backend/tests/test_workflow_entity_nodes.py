@@ -161,10 +161,12 @@ def test_整片模板的角色循环_库里有的直接用_没有的画完存成
     loop = next(node for node in template["nodes"] if node["id"] == "character_sheets")
     characters = [{"name": "林小满", "appearance": "short hair", "role": "主角"},
                   {"name": "阿澄", "appearance": "tall boy", "role": "同学"}]
+    #: 新画的三视图归进成片项目(循环的 project_id 输入,模板里接的是成片项目)。
+    project = client.post("/api/projects", json={"workspace_id": ws, "name": "成片"}).json()["id"]
     graph = {
         "nodes": [
             {"id": "start", "type": "start", "config": {"params": {}}},
-            {**loop, "config": {**loop["config"], "items": characters, "inputs": {"style": "anime"}}},
+            {**loop, "config": {**loop["config"], "items": characters, "inputs": {"style": "anime", "project_id": project}}},
         ],
         "edges": [{"id": "e1", "source": "start", "target": "character_sheets"}],
     }

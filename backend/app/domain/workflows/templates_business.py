@@ -139,8 +139,9 @@ def _highlights_schema() -> dict[str, Any]:
     )
     return _object(
         {
-            #: 切片不花生成费,但每一条是一次本机导出;上限和生成类模板同一个数。
-            "clips": {"type": "array", "items": clip, "minItems": 1, "maxItems": MAX_VARIANTS},
+            #: 切片不花生成费,但每一条是一次本机导出;上限和生成类模板同一个数。可以是 0 条:素材里没有够格的高光时,
+            #: 提示词要它「宁可少给」并在 skipped_reason 里说明 —— 此前 minItems 是 1,它只能凑一条出来。
+            "clips": {"type": "array", "items": clip, "maxItems": MAX_VARIANTS},
             "skipped_reason": _str("素材里可用高光不足时,说明原因;够用就写空字符串"),
         },
         ["clips", "skipped_reason"],
@@ -232,6 +233,23 @@ def highlight_shorts_graph(*, chat: Any) -> dict[str, Any]:
                 "json_schema_strict": "true",
                 "temperature": 0.3,
                 "max_tokens": 16000,
+            },
+        },
+        {
+            "id": "has_clips",
+            "type": "condition",
+            "name": {"zh": "挑出片段了吗", "en": "Were any clips picked?"},
+            "position": {"x": 970, "y": 60},
+            "config": {"left": "{{highlights.json.clips}}", "op": "not_empty"},
+        },
+        {
+            "id": "no_clips_notice",
+            "type": "notify",
+            "name": {"zh": "没有能独立成立的片段", "en": "No clip stands on its own"},
+            "position": {"x": 1290, "y": 60},
+            "config": {
+                "title": "竖屏切片没有切:没挑出够格的片段",
+                "body": "{{source_video.name}} 里没有挑出能独立成立的片段。模型的说明:{{highlights.json.skipped_reason}}",
             },
         },
         {
@@ -351,8 +369,12 @@ def highlight_shorts_graph(*, chat: Any) -> dict[str, Any]:
         {"id": "start_source", "source": "start", "target": "source_video"},
         {"id": "source_transcript", "source": "source_video", "target": "transcript"},
         {"id": "transcript_highlights", "source": "transcript", "target": "highlights"},
-        {"id": "highlights_cut", "source": "highlights", "target": "cut_clips"},
-        {"id": "source_project", "source": "source_video", "target": "clips_project"},
+        #: 一条都没挑出来就停在这里说清楚(模型的 skipped_reason 写进通知),不建项目。项目在**挑出片段之后**才建:
+        #: 此前它和转写并行,转写或那次对话失败时留下一个空项目。
+        {"id": "highlights_check", "source": "highlights", "target": "has_clips"},
+        {"id": "no_clips", "source": "has_clips", "target": "no_clips_notice", "source_handle": "false"},
+        {"id": "highlights_cut", "source": "has_clips", "target": "cut_clips", "source_handle": "true"},
+        {"id": "clips_to_project", "source": "has_clips", "target": "clips_project", "source_handle": "true"},
         {"id": "project_cut", "source": "clips_project", "target": "cut_clips"},
         {"id": "cut_notice", "source": "cut_clips", "target": "done_notice"},
         {"id": "notice_output", "source": "done_notice", "target": "output"},
@@ -673,7 +695,8 @@ def product_on_model_graph(
     edges = [
         {"id": "start_photo", "source": "start", "target": "product_photo"},
         {"id": "start_plan", "source": "start", "target": "lookbook_plan"},
-        {"id": "photo_project", "source": "product_photo", "target": "shoot_project"},
+        #: 项目在规划出来之后才建:此前和那次对话并行,对话失败时留下一个空项目。
+        {"id": "plan_project", "source": "lookbook_plan", "target": "shoot_project"},
         {"id": "plan_shoot", "source": "lookbook_plan", "target": "shoot_scenes"},
         {"id": "photo_shoot", "source": "product_photo", "target": "shoot_scenes"},
         {"id": "project_shoot", "source": "shoot_project", "target": "shoot_scenes"},
@@ -757,6 +780,18 @@ def _beat_body(db: Session | None, image: Any, *, engine: str, voice: str) -> di
                 },
             },
             {
+                #: 每一拍的画面都是付过钱的素材:归进这条短片的项目(此前只铺上时间线,素材库里散着、不在项目里)。
+                "id": "file_frame",
+                "type": "asset_update",
+                "name": {"zh": "归档这一拍的画面", "en": "File this beat's frame"},
+                "position": {"x": 400, "y": 0},
+                "config": {
+                    "asset_ids": "{{beat_frame.asset_id}}",
+                    "name": "{{input.product_name}} · {{loop.item.caption}}",
+                    "project_id": "{{input.project_id}}",
+                },
+            },
+            {
                 "id": "beat_on_timeline",
                 "type": "timeline_append",
                 "name": {"zh": "按这一拍的时长铺上去", "en": "Lay it down for this beat's length"},
@@ -820,6 +855,7 @@ def _beat_body(db: Session | None, image: Any, *, engine: str, voice: str) -> di
         ],
         "edges": [
             {"id": "frame_place", "source": "beat_frame", "target": "beat_on_timeline"},
+            {"id": "frame_file", "source": "beat_frame", "target": "file_frame"},
             {"id": "place_voice", "source": "beat_on_timeline", "target": "beat_voice_place"},
             {"id": "voice_voice_place", "source": "beat_voice", "target": "beat_voice_place"},
             #: 脚本里某一拍的 narration 是空串(只给画面的一拍)时,画外音那两步整段跳过 —— 此前照样去合成,
@@ -883,6 +919,8 @@ def product_pitch_short_graph(
 
     shoot_inputs: dict[str, Any] = {
         "product_asset_id": "{{product_photo.asset_id}}",
+        "product_name": "{{start.product_name}}",
+        "project_id": "{{pitch_project.project_id}}",
         "sequence_id": "{{pitch_project.sequence_id}}",
         "video_track_id": "{{pitch_project.video_track_id}}",
         "audio_track_id": "{{pitch_project.audio_track_id}}",
@@ -1027,7 +1065,8 @@ def product_pitch_short_graph(
         edges = [
             {"id": "start_photo", "source": "start", "target": "product_photo"},
             {"id": "start_script", "source": "start", "target": "pitch_script"},
-            {"id": "start_project", "source": "start", "target": "pitch_project"},
+            #: 时间线在脚本写出来之后才建:此前和那次对话并行,对话失败时留下一个空项目。
+            {"id": "script_project", "source": "pitch_script", "target": "pitch_project"},
             {"id": "script_shoot", "source": "pitch_script", "target": "shoot_beats"},
             {"id": "project_shoot", "source": "pitch_project", "target": "shoot_beats"},
             {"id": "photo_shoot", "source": "product_photo", "target": "shoot_beats"},
@@ -2118,7 +2157,8 @@ captions 的时间码相对每一段自己的开头。""",
         #: 这个标签下一条视频都没有,就停在这里说清楚 —— 之后的对话(计费)和建项目都不跑,模型也不会对着空清单编 id。
         {"id": "no_footage", "source": "has_footage", "target": "no_footage_notice", "source_handle": "false"},
         {"id": "footage_plan", "source": "has_footage", "target": "montage_plan", "source_handle": "true"},
-        {"id": "footage_project", "source": "has_footage", "target": "montage_project", "source_handle": "true"},
+        #: 时间线在排好叙事之后才建:此前和那次对话并行,对话失败时留下一个空项目。
+        {"id": "plan_project", "source": "montage_plan", "target": "montage_project"},
         {"id": "plan_lay", "source": "montage_plan", "target": "lay_segments"},
         {"id": "project_lay", "source": "montage_project", "target": "lay_segments"},
         {"id": "lay_export", "source": "lay_segments", "target": "export_montage"},

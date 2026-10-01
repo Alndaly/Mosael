@@ -92,9 +92,10 @@ def test_full_video_template_has_valid_refs_and_parallel_planning() -> None:
     successors: dict[str, set[str]] = {}
     for edge in graph["edges"]:
         successors.setdefault(edge["source"], set()).add(edge["target"])
-    assert successors["creative_brief"] == {"narrative_script", "visual_bible", "video_project"}
-    #: 角色三视图、场景设定图和分镜都从视觉圣经出发,三视图与设定图并行画。
-    assert successors["visual_bible"] == {"character_sheets", "location_art", "storyboard"}
+    assert successors["creative_brief"] == {"narrative_script", "visual_bible"}
+    #: 角色三视图、场景设定图和分镜都从视觉圣经出发,三视图与设定图并行画。项目在视觉圣经定下来之后才建
+    #: (三视图一画出来就归进去),不和第一次对话并行 —— 后面几次对话失败时不留空项目。
+    assert successors["visual_bible"] == {"character_sheets", "location_art", "storyboard", "video_project"}
     assert successors["storyboard"] == {"set_design"}
     assert successors["set_design"] == {"build_set"}
     assert successors["export_final"] == {"done_notice", "output"}
@@ -164,8 +165,8 @@ class Test每一镜都有实物参考:
             assert nodes["find"]["config"] == {"kind": kind, "name": "{{loop.item.name}}", "limit": 1}
             assert nodes["has_art"]["config"] == {"left": "{{find.asset_ids.0}}", "op": "not_empty"}
             edges = {(one["source"], one["target"], one.get("source_handle")) for one in body["edges"]}
-            assert edges == {("find", "has_art", None), ("has_art", drawer, "false"), (drawer, "save", None)}, \
-                "只有库里没有它的图时才画;画完就存"
+            assert edges == {("find", "has_art", None), ("has_art", drawer, "false"), (drawer, "save", None),
+                             (drawer, "file_art", None)}, "只有库里没有它的图时才画;画完就存,并归进成片项目"
             #: 存的就是刚画的那张(模板规范化把整串引用改成了一根数据线)。
             wire = next(one for one in body["edges"] if one["target"] == "save")
             assert (wire.get("source_output"), wire.get("target_input")) == ("asset_id", "asset_ids")

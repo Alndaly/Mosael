@@ -353,6 +353,11 @@ class Test带货口播真跑:
             (0.0, "不起球"), (3.0, "细密针织"), (7.0, "链接在下面")]
         #: 竖屏成片的画面按竖屏那一档出图 —— 不传尺寸时 Seedream 出 2048 的方图,两侧被裁掉。
         assert {one["parameters"].get("size") for one in studio.calls["ai_generate"]} == {"720x1280"}
+        #: 每一拍的画面都是付过钱的素材,归进这条短片的项目。
+        with unit_of_work() as db:
+            filed = db.query(Asset).filter(Asset.project_id == context["pitch_project"]["project_id"],
+                                           Asset.kind == "image").count()
+        assert filed == 3
 
     def test_最后一拍念不完_裁到这一拍的末尾_成片尾不留黑(self, monkeypatch) -> None:
         ws = _workspace()
@@ -648,6 +653,36 @@ class Test独立的几项_一项失败不拖垮其余:
         assert filed == 4 + 3, "四组的图都归档了,三段视频也归档了"
 
 
+class Test长视频切片_没挑出片段:
+    def test_一条都没挑出来_停下说清楚_不建项目不导出(self, monkeypatch) -> None:
+        from app.db.models import Notification
+
+        ws = _workspace()
+        studio = Studio(monkeypatch, ws, {"highlight_clips": {"clips": [], "skipped_reason": "全程在念说明书"}})
+        graph = _pick(highlight_shorts_graph(chat=CHAT), "source_video", asset_id=_asset(ws, "video", "访谈", duration=600.0))
+        _run(ws, graph)
+        assert studio.calls["export_sequence"] == []
+        with unit_of_work() as db:
+            assert db.query(Project).filter(Project.workspace_id == ws).count() == 0, "没切出东西,不该留下一个空项目"
+            bodies = [one.body for one in db.query(Notification).filter(Notification.workspace_id == ws)]
+        assert any("全程在念说明书" in one for one in bodies)
+
+    def test_转写失败时不留下空项目(self, monkeypatch) -> None:
+        ws = _workspace()
+        studio = Studio(monkeypatch, ws, {})
+
+        def broken(db, scope, config):
+            raise WorkflowDomainError("wfErr_cancelled")
+
+        monkeypatch.setitem(registry._REGISTRY, "transcribe_asset", broken)
+        graph = _pick(highlight_shorts_graph(chat=CHAT), "source_video", asset_id=_asset(ws, "video", "访谈", duration=600.0))
+        with pytest.raises(WorkflowDomainError):
+            _run(ws, graph)
+        assert studio.calls["llm"] == []
+        with unit_of_work() as db:
+            assert db.query(Project).filter(Project.workspace_id == ws).count() == 0
+
+
 class Test长视频切片_终点超出原片:
     def test_截取夹到原片末尾_字幕也裁到这一条的终点(self, monkeypatch) -> None:
         ws = _workspace()
@@ -789,6 +824,20 @@ class Test整片真跑:
         assert [(clip.timeline_start, clip.text_override) for clip in _clips(sequence_id, "subtitle")] == [
             (0.0, "第一镜的口播"), (10.0, "第三镜")]
         assert context["output"]["output"]["final_asset_id"] == f"export-of-{sequence_id}"
+        #: 新画的三视图、设定图和每一镜的关键帧都归进成片项目(库里认出来的那张不动)。
+        with unit_of_work() as db:
+            filed = {asset.name for asset in db.query(Asset).filter(Asset.project_id == context["video_project"]["project_id"])}
+        assert {"镜头 1 · 关键帧 1", "镜头 1 · 关键帧 2", "镜头 2 · 关键帧"} <= filed
+        assert library not in {asset.id for asset in _assets_in_project(context["video_project"]["project_id"])}
+        assert len([one for one in _assets_in_project(context["video_project"]["project_id"]) if one.name == "gen-image"]) == 2
+
+
+def _assets_in_project(project_id: str) -> list[Asset]:
+    with unit_of_work() as db:
+        assets = db.query(Asset).filter(Asset.project_id == project_id).all()
+        for asset in assets:
+            db.expunge(asset)
+        return assets
 
 
 # --------------------------------------------------------------------------------------

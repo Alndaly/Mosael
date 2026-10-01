@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "商品 → 数字人出镜带货口播",
   "description": "在「带货口播短视频」的基础上,开场钩子和收尾号召换成资产库里的一位人物出镜说出来(用它的脸和嗓子),中间每一拍仍是带商品的画面,口播用同一个嗓子念、对齐每一拍的开头,每拍铺上屏幕短句,导出竖屏成片(带「AI 生成」标识)。运行前在「挑一位主播」上选好人物;人物要先在资产库里有正面图和音色;真人要有授权声明,克隆音色也要声明是谁的。",
-  "graph_hash": "c80b056ac1f8ac685bdcb5b043ac4a942c04e7b98352419a607e57d8f9143070",
+  "graph_hash": "6908e4f78e767598d8a311cffb99cc48a059d61bee5bc06d098321b11ec15776",
   "graph": {
     "meta": {
       "template_id": "product_pitch_presenter",
@@ -332,6 +332,8 @@
           "items": "{{pitch_script.json.beats}}",
           "inputs": {
             "product_asset_id": "{{product_photo.asset_id}}",
+            "product_name": "{{start.product_name}}",
+            "project_id": "{{pitch_project.project_id}}",
             "sequence_id": "{{pitch_project.sequence_id}}",
             "video_track_id": "{{pitch_project.video_track_id}}",
             "audio_track_id": "{{pitch_project.audio_track_id}}",
@@ -360,6 +362,23 @@
                     "{{input.product_asset_id}}:reference_image"
                   ]
                 }
+              },
+              {
+                "id": "file_frame",
+                "type": "asset_update",
+                "name": "归档这一拍的画面",
+                "position": {
+                  "x": 400,
+                  "y": 0
+                },
+                "config": {
+                  "asset_ids": "",
+                  "name": "{{input.product_name}} · {{loop.item.caption}}",
+                  "project_id": "{{input.project_id}}"
+                },
+                "inputs": [
+                  "asset_ids"
+                ]
               },
               {
                 "id": "beat_on_timeline",
@@ -478,6 +497,14 @@
                 "source": "voice_overflow",
                 "target": "overflow_notice",
                 "source_handle": "true"
+              },
+              {
+                "id": "d-beat_frame-asset_id-file_frame-asset_ids",
+                "source": "beat_frame",
+                "target": "file_frame",
+                "kind": "data",
+                "source_output": "asset_id",
+                "target_input": "asset_ids"
               },
               {
                 "id": "d-beat_frame-asset_id-beat_on_timeline-asset_id",

@@ -255,7 +255,7 @@
     },
     "author": "Mosael",
     "version": 2,
-    "nodes": 8,
+    "nodes": 10,
     "download": {
       "zh": "/workflows/highlight_shorts.zh.mosael-workflow.json",
       "en": "/workflows/highlight_shorts.en.mosael-workflow.json"

@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "Topic to finished video",
   "description": "Turn a topic into a creative brief, script and visual bible; characters and locations already in the asset library are reused with their references, and only new ones get a turnaround sheet or concept art — saved to the library — auto-build a 3D blockout with each shot's camera position and move, then generate each shot from a first frame (and a last frame where needed) painted on the blockout — or straight from the turnarounds and the blockout camera move — and assemble, caption and export the video. Cost: by default up to 8 shots, each one video generation plus one or two keyframe images, on top of up to 7 turnaround and location images (none for those already in the library), 5 chat calls and per-shot narration — the most expensive template here; max_shots on the start node caps the shot count.",
-  "graph_hash": "802de5cb7ce2831eeb8c04643356f5faa7114024f0162a46d958f1046d77ec9d",
+  "graph_hash": "93e0df31a8479b0521f72a9ee03e2443435963b31b68a77825d8478f5dea500d",
   "graph": {
     "meta": {
       "template_id": "full_video_generation",
@@ -419,7 +419,8 @@
         "config": {
           "items": "{{visual_bible.json.characters}}",
           "inputs": {
-            "style": "{{visual_bible.json.style_prompt}}"
+            "style": "{{visual_bible.json.style_prompt}}",
+            "project_id": "{{video_project.project_id}}"
           },
           "body": {
             "nodes": [
@@ -486,6 +487,22 @@
                 "inputs": [
                   "asset_ids"
                 ]
+              },
+              {
+                "id": "file_art",
+                "type": "asset_update",
+                "name": "File it into the project",
+                "position": {
+                  "x": 980,
+                  "y": 400
+                },
+                "config": {
+                  "asset_ids": "",
+                  "project_id": "{{input.project_id}}"
+                },
+                "inputs": [
+                  "asset_ids"
+                ]
               }
             ],
             "edges": [
@@ -507,6 +524,14 @@
                 "kind": "data",
                 "source_output": "asset_id",
                 "target_input": "asset_ids"
+              },
+              {
+                "id": "d-sheet-asset_id-file_art-asset_ids",
+                "source": "sheet",
+                "target": "file_art",
+                "kind": "data",
+                "source_output": "asset_id",
+                "target_input": "asset_ids"
               }
             ]
           },
@@ -525,7 +550,8 @@
         "config": {
           "items": "{{visual_bible.json.locations}}",
           "inputs": {
-            "style": "{{visual_bible.json.style_prompt}}"
+            "style": "{{visual_bible.json.style_prompt}}",
+            "project_id": "{{video_project.project_id}}"
           },
           "body": {
             "nodes": [
@@ -591,6 +617,22 @@
                 "inputs": [
                   "asset_ids"
                 ]
+              },
+              {
+                "id": "file_art",
+                "type": "asset_update",
+                "name": "File it into the project",
+                "position": {
+                  "x": 980,
+                  "y": 400
+                },
+                "config": {
+                  "asset_ids": "",
+                  "project_id": "{{input.project_id}}"
+                },
+                "inputs": [
+                  "asset_ids"
+                ]
               }
             ],
             "edges": [
@@ -609,6 +651,14 @@
                 "id": "d-art-asset_id-save-asset_ids",
                 "source": "art",
                 "target": "save",
+                "kind": "data",
+                "source_output": "asset_id",
+                "target_input": "asset_ids"
+              },
+              {
+                "id": "d-art-asset_id-file_art-asset_ids",
+                "source": "art",
+                "target": "file_art",
                 "kind": "data",
                 "source_output": "asset_id",
                 "target_input": "asset_ids"
@@ -1241,6 +1291,20 @@
                 }
               },
               {
+                "id": "file_keyframes",
+                "type": "asset_update",
+                "name": "File this shot's keyframes",
+                "position": {
+                  "x": 1010,
+                  "y": -100
+                },
+                "config": {
+                  "asset_ids": "{{paint_first_frame.asset_id}},{{paint_last_frame.asset_id}}",
+                  "name": "镜头 {{loop.item.shot_number}} · 关键帧",
+                  "project_id": "{{input.project_id}}"
+                }
+              },
+              {
                 "id": "needs_last_frame",
                 "type": "condition",
                 "name": "Does this shot need a last frame?",
@@ -1382,6 +1446,11 @@
                 "id": "shot_first_needs_last",
                 "source": "paint_first_frame",
                 "target": "needs_last_frame"
+              },
+              {
+                "id": "shot_first_file",
+                "source": "paint_first_frame",
+                "target": "file_keyframes"
               },
               {
                 "id": "shot_needs_last",
@@ -1631,11 +1700,6 @@
         "target": "frame_plan"
       },
       {
-        "id": "frame_plan_project",
-        "source": "frame_plan",
-        "target": "video_project"
-      },
-      {
         "id": "frame_plan_generate",
         "source": "frame_plan",
         "target": "generate_shots"
@@ -1671,8 +1735,8 @@
         "target": "visual_bible"
       },
       {
-        "id": "brief_project",
-        "source": "creative_brief",
+        "id": "visual_project",
+        "source": "visual_bible",
         "target": "video_project"
       },
       {

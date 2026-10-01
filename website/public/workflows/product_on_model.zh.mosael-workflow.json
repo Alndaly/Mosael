@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "商品图 → 模特上身图与短视频",
   "description": "给一张平铺图或面料图,规划几组投放场景(最多 12 组),每组出一张竖幅模特上身图;视频模型可用时再以这张图为首帧把每一组动起来。商品图贯穿每一次生成 —— 版型、颜色、纹理、logo 都以它为准,不是照描述重画。图和视频都归进一个项目,卖点文案一并存成笔记。每一组是一次付费出图(带视频再加一次视频生成)。",
-  "graph_hash": "7facf7a03d992ca4701cf06317f67af4c14a689ff6f42dff45a816a29adaa4ee",
+  "graph_hash": "4d600a8e5fbb472c6e1ef6a409e13de0905c288fe086478822b3fc5d9aa80cc1",
   "graph": {
     "meta": {
       "template_id": "product_on_model",
@@ -333,8 +333,8 @@
         "target": "lookbook_plan"
       },
       {
-        "id": "photo_project",
-        "source": "product_photo",
+        "id": "plan_project",
+        "source": "lookbook_plan",
         "target": "shoot_project"
       },
       {

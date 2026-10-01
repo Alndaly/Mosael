@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "Product into a presenter-led short",
   "description": "Everything in the narrated short, but a character from your asset library speaks the hook and the call to action on camera (with its own face and voice), while each beat in between stays a product shot voiced in the same voice, lined up with the beat and captioned, exported as a vertical short with an \"AI-generated\" label. Pick the character on “Pick the presenter” before running; it needs a front image and a voice in the asset library; real people need a consent declaration, and a cloned voice needs one too.",
-  "graph_hash": "a27af4a030b7e2f8b6d61bdda1141ec09f9f38fe78e0345e0c7e86edded5a87d",
+  "graph_hash": "a9cc82cd18a368e3e053732682a52ddbae0ac898927c4077e0f095c489ec56f3",
   "graph": {
     "meta": {
       "template_id": "product_pitch_presenter",
@@ -332,6 +332,8 @@
           "items": "{{pitch_script.json.beats}}",
           "inputs": {
             "product_asset_id": "{{product_photo.asset_id}}",
+            "product_name": "{{start.product_name}}",
+            "project_id": "{{pitch_project.project_id}}",
             "sequence_id": "{{pitch_project.sequence_id}}",
             "video_track_id": "{{pitch_project.video_track_id}}",
             "audio_track_id": "{{pitch_project.audio_track_id}}",
@@ -360,6 +362,23 @@
                     "{{input.product_asset_id}}:reference_image"
                   ]
                 }
+              },
+              {
+                "id": "file_frame",
+                "type": "asset_update",
+                "name": "File this beat's frame",
+                "position": {
+                  "x": 400,
+                  "y": 0
+                },
+                "config": {
+                  "asset_ids": "",
+                  "name": "{{input.product_name}} · {{loop.item.caption}}",
+                  "project_id": "{{input.project_id}}"
+                },
+                "inputs": [
+                  "asset_ids"
+                ]
               },
               {
                 "id": "beat_on_timeline",
@@ -478,6 +497,14 @@
                 "source": "voice_overflow",
                 "target": "overflow_notice",
                 "source_handle": "true"
+              },
+              {
+                "id": "d-beat_frame-asset_id-file_frame-asset_ids",
+                "source": "beat_frame",
+                "target": "file_frame",
+                "kind": "data",
+                "source_output": "asset_id",
+                "target_input": "asset_ids"
               },
               {
                 "id": "d-beat_frame-asset_id-beat_on_timeline-asset_id",

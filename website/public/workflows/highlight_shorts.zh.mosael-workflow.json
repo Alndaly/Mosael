@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "长视频切多条竖屏",
   "description": "把一条口播、访谈或直播回放转成逐字稿,挑出能独立成立的片段(最多 12 条),每条在同一个项目里各建一条竖屏时间线、截取原片那一段、配上重写过的短句字幕并导出。不生成任何画面,所以除了转写和一次对话之外不花生成费用。",
-  "graph_hash": "90e09d7f6e4154f65bb15f65d6b474da0f1c2c20d0b9725799c41842aad8e442",
+  "graph_hash": "ff5f4465f0e03051a192f487ec3e27dc3409fc7d11a8aed8ab7e2990808131bb",
   "graph": {
     "meta": {
       "template_id": "highlight_shorts",
@@ -144,7 +144,6 @@
                   ],
                   "additionalProperties": false
                 },
-                "minItems": 1,
                 "maxItems": 12
               },
               "skipped_reason": {
@@ -161,6 +160,32 @@
           "json_schema_strict": "true",
           "temperature": 0.3,
           "max_tokens": 16000
+        }
+      },
+      {
+        "id": "has_clips",
+        "type": "condition",
+        "name": "挑出片段了吗",
+        "position": {
+          "x": 970,
+          "y": 60
+        },
+        "config": {
+          "left": "{{highlights.json.clips}}",
+          "op": "not_empty"
+        }
+      },
+      {
+        "id": "no_clips_notice",
+        "type": "notify",
+        "name": "没有能独立成立的片段",
+        "position": {
+          "x": 1290,
+          "y": 60
+        },
+        "config": {
+          "title": "竖屏切片没有切:没挑出够格的片段",
+          "body": "{{source_video.name}} 里没有挑出能独立成立的片段。模型的说明:{{highlights.json.skipped_reason}}"
         }
       },
       {
@@ -364,14 +389,27 @@
         "target": "highlights"
       },
       {
-        "id": "highlights_cut",
+        "id": "highlights_check",
         "source": "highlights",
-        "target": "cut_clips"
+        "target": "has_clips"
       },
       {
-        "id": "source_project",
-        "source": "source_video",
-        "target": "clips_project"
+        "id": "no_clips",
+        "source": "has_clips",
+        "target": "no_clips_notice",
+        "source_handle": "false"
+      },
+      {
+        "id": "highlights_cut",
+        "source": "has_clips",
+        "target": "cut_clips",
+        "source_handle": "true"
+      },
+      {
+        "id": "clips_to_project",
+        "source": "has_clips",
+        "target": "clips_project",
+        "source_handle": "true"
       },
       {
         "id": "project_cut",

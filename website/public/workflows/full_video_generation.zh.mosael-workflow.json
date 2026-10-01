@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "从主题到完整视频",
   "description": "输入一个主题，生成创意主旨、脚本和视觉圣经；角色和场景先到资产库里认，已有的直接用它的参考图，新出现的才画三视图 / 设定图并存成资产，按分镜自动搭 3D 白模并摆好每一镜的机位与运镜；再逐镜按白模画首帧（需要时加尾帧）或直接用三视图与白模运镜视频做参考生成视频，按顺序组装、配上口播字幕并导出。花费量级：默认最多 8 镜，每镜一次视频生成外加 1~2 张关键帧，另有最多 7 张角色三视图与场景设定图（库里已有的不再画）、5 次对话和逐镜配音——是所有模板里最贵的一条，开始节点的 max_shots 就是镜头数的上限。",
-  "graph_hash": "62391f7f8001cf059b6f2c6ebaae34d837a00b1b4e059cbecc65e2772755b483",
+  "graph_hash": "c01295618e7f9cde9dfbe49696851aead3aa87bf8d638faf6deee8de125e7369",
   "graph": {
     "meta": {
       "template_id": "full_video_generation",
@@ -419,7 +419,8 @@
         "config": {
           "items": "{{visual_bible.json.characters}}",
           "inputs": {
-            "style": "{{visual_bible.json.style_prompt}}"
+            "style": "{{visual_bible.json.style_prompt}}",
+            "project_id": "{{video_project.project_id}}"
           },
           "body": {
             "nodes": [
@@ -486,6 +487,22 @@
                 "inputs": [
                   "asset_ids"
                 ]
+              },
+              {
+                "id": "file_art",
+                "type": "asset_update",
+                "name": "归档进成片项目",
+                "position": {
+                  "x": 980,
+                  "y": 400
+                },
+                "config": {
+                  "asset_ids": "",
+                  "project_id": "{{input.project_id}}"
+                },
+                "inputs": [
+                  "asset_ids"
+                ]
               }
             ],
             "edges": [
@@ -507,6 +524,14 @@
                 "kind": "data",
                 "source_output": "asset_id",
                 "target_input": "asset_ids"
+              },
+              {
+                "id": "d-sheet-asset_id-file_art-asset_ids",
+                "source": "sheet",
+                "target": "file_art",
+                "kind": "data",
+                "source_output": "asset_id",
+                "target_input": "asset_ids"
               }
             ]
           },
@@ -525,7 +550,8 @@
         "config": {
           "items": "{{visual_bible.json.locations}}",
           "inputs": {
-            "style": "{{visual_bible.json.style_prompt}}"
+            "style": "{{visual_bible.json.style_prompt}}",
+            "project_id": "{{video_project.project_id}}"
           },
           "body": {
             "nodes": [
@@ -591,6 +617,22 @@
                 "inputs": [
                   "asset_ids"
                 ]
+              },
+              {
+                "id": "file_art",
+                "type": "asset_update",
+                "name": "归档进成片项目",
+                "position": {
+                  "x": 980,
+                  "y": 400
+                },
+                "config": {
+                  "asset_ids": "",
+                  "project_id": "{{input.project_id}}"
+                },
+                "inputs": [
+                  "asset_ids"
+                ]
               }
             ],
             "edges": [
@@ -609,6 +651,14 @@
                 "id": "d-art-asset_id-save-asset_ids",
                 "source": "art",
                 "target": "save",
+                "kind": "data",
+                "source_output": "asset_id",
+                "target_input": "asset_ids"
+              },
+              {
+                "id": "d-art-asset_id-file_art-asset_ids",
+                "source": "art",
+                "target": "file_art",
                 "kind": "data",
                 "source_output": "asset_id",
                 "target_input": "asset_ids"
@@ -1241,6 +1291,20 @@
                 }
               },
               {
+                "id": "file_keyframes",
+                "type": "asset_update",
+                "name": "归档本镜关键帧",
+                "position": {
+                  "x": 1010,
+                  "y": -100
+                },
+                "config": {
+                  "asset_ids": "{{paint_first_frame.asset_id}},{{paint_last_frame.asset_id}}",
+                  "name": "镜头 {{loop.item.shot_number}} · 关键帧",
+                  "project_id": "{{input.project_id}}"
+                }
+              },
+              {
                 "id": "needs_last_frame",
                 "type": "condition",
                 "name": "这一镜要尾帧吗",
@@ -1382,6 +1446,11 @@
                 "id": "shot_first_needs_last",
                 "source": "paint_first_frame",
                 "target": "needs_last_frame"
+              },
+              {
+                "id": "shot_first_file",
+                "source": "paint_first_frame",
+                "target": "file_keyframes"
               },
               {
                 "id": "shot_needs_last",
@@ -1631,11 +1700,6 @@
         "target": "frame_plan"
       },
       {
-        "id": "frame_plan_project",
-        "source": "frame_plan",
-        "target": "video_project"
-      },
-      {
         "id": "frame_plan_generate",
         "source": "frame_plan",
         "target": "generate_shots"
@@ -1671,8 +1735,8 @@
         "target": "visual_bible"
       },
       {
-        "id": "brief_project",
-        "source": "creative_brief",
+        "id": "visual_project",
+        "source": "visual_bible",
         "target": "video_project"
       },
       {

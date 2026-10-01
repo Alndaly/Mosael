@@ -262,6 +262,19 @@ JSON Schema 的对象。"""
                 },
             },
             {
+                #: 关键帧是付过钱的素材:归进成片项目(此前只交给视频那一步,素材库里散着、不在项目里)。只挂在首帧
+                #: 之后 —— 走参考那条路时首帧没画,这一步整段跳过;尾帧有就一起归(引用即依赖,会等它落定)。
+                "id": "file_keyframes",
+                "type": "asset_update",
+                "name": {"zh": "归档本镜关键帧", "en": "File this shot's keyframes"},
+                "position": {"x": 1010, "y": -100},
+                "config": {
+                    "asset_ids": "{{paint_first_frame.asset_id}},{{paint_last_frame.asset_id}}",
+                    "name": "镜头 {{loop.item.shot_number}} · 关键帧",
+                    "project_id": "{{input.project_id}}",
+                },
+            },
+            {
                 "id": "needs_last_frame",
                 "type": "condition",
                 "name": {"zh": "这一镜要尾帧吗", "en": "Does this shot need a last frame?"},
@@ -356,6 +369,7 @@ JSON Schema 的对象。"""
             {"id": "shot_blockout_mode", "source": "render_blockout", "target": "is_keyframes"},
             {"id": "shot_mode_first", "source": "is_keyframes", "target": "paint_first_frame", "source_handle": "true"},
             {"id": "shot_first_needs_last", "source": "paint_first_frame", "target": "needs_last_frame"},
+            {"id": "shot_first_file", "source": "paint_first_frame", "target": "file_keyframes"},
             {"id": "shot_needs_last", "source": "needs_last_frame", "target": "paint_last_frame", "source_handle": "true"},
             #: 生成视频只挂在白模之后:首尾帧那两个节点在参考那条路上会被跳过,而它们被引用 ——
             #: 引用即依赖,生成会等它们落定(跑完或被跳过)再开始。
@@ -456,11 +470,20 @@ JSON Schema 的对象。"""
                 },
                 {**drawer, "position": {"x": 680, "y": 240}},
                 {**save, "position": {"x": 980, "y": 240}},
+                {
+                    #: 新画的这张也归进成片项目(此前只存成人物 / 场景资产,不在项目里)。库里认出来的那张不动。
+                    "id": "file_art",
+                    "type": "asset_update",
+                    "name": {"zh": "归档进成片项目", "en": "File it into the project"},
+                    "position": {"x": 980, "y": 400},
+                    "config": {"asset_ids": f"{{{{{drawer['id']}.asset_id}}}}", "project_id": "{{input.project_id}}"},
+                },
             ],
             "edges": [
                 {"id": "find_check", "source": "find", "target": "has_art"},
                 {"id": "missing_draw", "source": "has_art", "target": drawer["id"], "source_handle": "false"},
                 {"id": "draw_save", "source": drawer["id"], "target": save["id"]},
+                {"id": "draw_file", "source": drawer["id"], "target": "file_art"},
             ],
         }
 
@@ -677,7 +700,7 @@ JSON Schema 的对象。"""
             "position": {"x": 1040, "y": 620},
             "config": {
                 "items": "{{visual_bible.json.characters}}",
-                "inputs": {"style": "{{visual_bible.json.style_prompt}}"},
+                "inputs": {"style": "{{visual_bible.json.style_prompt}}", "project_id": "{{video_project.project_id}}"},
                 "body": sheet_body,
                 #: 每项交出一行 `素材:reference_image` —— 下游把整组一次接进参考图。
                 #: 认出来的那张,或新画的那张(另一支没跑,引用出来是空串)。
@@ -692,7 +715,7 @@ JSON Schema 的对象。"""
             "position": {"x": 1040, "y": 820},
             "config": {
                 "items": "{{visual_bible.json.locations}}",
-                "inputs": {"style": "{{visual_bible.json.style_prompt}}"},
+                "inputs": {"style": "{{visual_bible.json.style_prompt}}", "project_id": "{{video_project.project_id}}"},
                 "body": location_body,
                 "output": "{{find.asset_ids.0}}{{art.asset_id}}:reference_image",
                 "concurrency": 3,
@@ -886,7 +909,6 @@ JSON Schema 的对象。"""
     edges = [
         {"id": "start_brief", "source": "start", "target": "creative_brief"},
         {"id": "start_frame_plan", "source": "start", "target": "frame_plan"},
-        {"id": "frame_plan_project", "source": "frame_plan", "target": "video_project"},
         {"id": "frame_plan_generate", "source": "frame_plan", "target": "generate_shots"},
         {"id": "brief_narrative", "source": "creative_brief", "target": "narrative_script"},
         {"id": "brief_visual", "source": "creative_brief", "target": "visual_bible"},
@@ -895,7 +917,9 @@ JSON Schema 的对象。"""
         {"id": "start_library_locations", "source": "start", "target": "library_locations"},
         {"id": "library_characters_visual", "source": "library_characters", "target": "visual_bible"},
         {"id": "library_locations_visual", "source": "library_locations", "target": "visual_bible"},
-        {"id": "brief_project", "source": "creative_brief", "target": "video_project"},
+        #: 项目在视觉圣经定下来之后才建(三视图、设定图一画出来就归进去):此前紧跟着第一次对话,后面几次对话
+        #: 失败时留下一个空项目。画布尺寸按「按画幅取尺寸」那一组(引用即依赖,会等它)。
+        {"id": "visual_project", "source": "visual_bible", "target": "video_project"},
         {"id": "visual_sheets", "source": "visual_bible", "target": "character_sheets"},
         {"id": "visual_locations", "source": "visual_bible", "target": "location_art"},
         {"id": "narrative_storyboard", "source": "narrative_script", "target": "storyboard"},

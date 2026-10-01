@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "Product into a narrated short",
   "description": "From a product photo and a few selling points, write a beat-by-beat script (the first beat is the hook, the last the call to action, up to 12 beats), paint one portrait frame per beat with the product in it, lay each on the timeline for that beat's length, voice each beat in your cloned voice lined up with its start, add the on-screen lines, and export a vertical short. Nobody appears on camera. Only the selling points you provide are used — no invented claims or figures.",
-  "graph_hash": "61814317bb694c169264648a30510b1761b93a0881d325e0fa62d9377f474bc8",
+  "graph_hash": "18432be3289cc4c9920698d7ea0310cd43f8d0825277222215722d5c6e7a1c9d",
   "graph": {
     "meta": {
       "template_id": "product_pitch_short",
@@ -138,6 +138,8 @@
           "items": "{{pitch_script.json.beats}}",
           "inputs": {
             "product_asset_id": "{{product_photo.asset_id}}",
+            "product_name": "{{start.product_name}}",
+            "project_id": "{{pitch_project.project_id}}",
             "sequence_id": "{{pitch_project.sequence_id}}",
             "video_track_id": "{{pitch_project.video_track_id}}",
             "audio_track_id": "{{pitch_project.audio_track_id}}"
@@ -164,6 +166,23 @@
                     "{{input.product_asset_id}}:reference_image"
                   ]
                 }
+              },
+              {
+                "id": "file_frame",
+                "type": "asset_update",
+                "name": "File this beat's frame",
+                "position": {
+                  "x": 400,
+                  "y": 0
+                },
+                "config": {
+                  "asset_ids": "",
+                  "name": "{{input.product_name}} · {{loop.item.caption}}",
+                  "project_id": "{{input.project_id}}"
+                },
+                "inputs": [
+                  "asset_ids"
+                ]
               },
               {
                 "id": "beat_on_timeline",
@@ -282,6 +301,14 @@
                 "source": "voice_overflow",
                 "target": "overflow_notice",
                 "source_handle": "true"
+              },
+              {
+                "id": "d-beat_frame-asset_id-file_frame-asset_ids",
+                "source": "beat_frame",
+                "target": "file_frame",
+                "kind": "data",
+                "source_output": "asset_id",
+                "target_input": "asset_ids"
               },
               {
                 "id": "d-beat_frame-asset_id-beat_on_timeline-asset_id",
@@ -408,8 +435,8 @@
         "target": "pitch_script"
       },
       {
-        "id": "start_project",
-        "source": "start",
+        "id": "script_project",
+        "source": "pitch_script",
         "target": "pitch_project"
       },
       {

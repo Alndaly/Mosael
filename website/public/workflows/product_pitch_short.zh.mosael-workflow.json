@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "商品 → 带货口播短视频",
   "description": "给一张商品图和几条卖点,写一条分拍的口播脚本(第一拍是钩子、最后一拍是行动号召,最多 12 拍),每一拍出一张带商品的竖幅画面、按这一拍的时长铺上时间线,用你的克隆音色念这一拍的画外音、对齐这一拍的开头,再铺上屏幕短句,导出竖屏成片。没有人出镜。卖点只用你给的那几条,不编功效和数据。",
-  "graph_hash": "4573d528967570cb088f823c7e1bc05de6a88cbce93273eb716b1feffabfc92a",
+  "graph_hash": "a7eb99e30eb9ec1dfd4dca07136b63e12f2180de263dac58131b7997e7724cba",
   "graph": {
     "meta": {
       "template_id": "product_pitch_short",
@@ -138,6 +138,8 @@
           "items": "{{pitch_script.json.beats}}",
           "inputs": {
             "product_asset_id": "{{product_photo.asset_id}}",
+            "product_name": "{{start.product_name}}",
+            "project_id": "{{pitch_project.project_id}}",
             "sequence_id": "{{pitch_project.sequence_id}}",
             "video_track_id": "{{pitch_project.video_track_id}}",
             "audio_track_id": "{{pitch_project.audio_track_id}}"
@@ -164,6 +166,23 @@
                     "{{input.product_asset_id}}:reference_image"
                   ]
                 }
+              },
+              {
+                "id": "file_frame",
+                "type": "asset_update",
+                "name": "归档这一拍的画面",
+                "position": {
+                  "x": 400,
+                  "y": 0
+                },
+                "config": {
+                  "asset_ids": "",
+                  "name": "{{input.product_name}} · {{loop.item.caption}}",
+                  "project_id": "{{input.project_id}}"
+                },
+                "inputs": [
+                  "asset_ids"
+                ]
               },
               {
                 "id": "beat_on_timeline",
@@ -282,6 +301,14 @@
                 "source": "voice_overflow",
                 "target": "overflow_notice",
                 "source_handle": "true"
+              },
+              {
+                "id": "d-beat_frame-asset_id-file_frame-asset_ids",
+                "source": "beat_frame",
+                "target": "file_frame",
+                "kind": "data",
+                "source_output": "asset_id",
+                "target_input": "asset_ids"
               },
               {
                 "id": "d-beat_frame-asset_id-beat_on_timeline-asset_id",
@@ -408,8 +435,8 @@
         "target": "pitch_script"
       },
       {
-        "id": "start_project",
-        "source": "start",
+        "id": "script_project",
+        "source": "pitch_script",
         "target": "pitch_project"
       },
       {
