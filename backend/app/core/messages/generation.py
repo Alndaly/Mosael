@@ -380,6 +380,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "浏览器动作一直没被领走:桌面端没开,或者浏览器执行器没在运行",
         "en": "Nobody picked up the browser action: the desktop app isn't open, or its browser executor isn't running.",
     },
+    "browserErr_actionQueueTimeout": {
+        "zh": "浏览器动作排队超过 {seconds} 秒还没轮到:执行器在线,但前面还有 {ahead} 条动作在排或在跑",
+        "en": "The browser action waited over {seconds} seconds in the queue: the executor is online, but {ahead} actions ahead of it are queued or running.",
+    },
     "browserErr_actionHalted": {
         "zh": "这次运行已经停下(别的节点失败了),浏览器动作不再等",
         "en": "This run has stopped (another node failed), so the browser action is no longer awaited.",

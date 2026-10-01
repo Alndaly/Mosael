@@ -525,8 +525,14 @@ def _enqueue(
         db.flush()
         action_id = act.id
 
-    #: 两段各算各的:排队从入队算,执行从**看见它被认领**那一拍算(轮询间隔 0.2 秒,误差就这么多)。
-    queue_deadline = time.monotonic() + QUEUE_TIMEOUT_SECONDS
+    #: 两段各算各的:排队按「本可以被领走却没被领走」的时间累计,执行从**看见它被认领**那一拍算
+    #: (轮询间隔 0.2 秒,误差就这么多)。
+    #:
+    #: **排在同一会话前一条后面的那段不算排队**:同一会话串行(见 claim_next_action),前一条是一次
+    #: 60 秒的等待,这一条就得等它 —— 此前排队计时照走,同一次运行里另一条分支在同一个具名会话上的
+    #: 动作,前面那条还没做完它就被报成「桌面端没开」。前面那条自己有执行上限,这里不会无限等。
+    queued_for = 0.0
+    tick = time.monotonic()
     run_deadline: float | None = None
     while True:
         time.sleep(_ACTION_POLL_SECONDS)
@@ -539,12 +545,39 @@ def _enqueue(
                 return outcome
             if act.status == "running" and run_deadline is None:
                 run_deadline = time.monotonic() + timeout
+            behind_own_session = act.status == "queued" and _session_running(db, act.session_id)
+        elapsed, tick = time.monotonic() - tick, time.monotonic()
+        if run_deadline is None and not behind_own_session:
+            queued_for += elapsed
         if should_stop is not None and should_stop():
             return _give_up(action_id, "browserErr_actionHalted")
-        if run_deadline is None and time.monotonic() >= queue_deadline:
-            return _give_up(action_id, "browserErr_actionNotClaimed")
+        if run_deadline is None and queued_for >= QUEUE_TIMEOUT_SECONDS:
+            return _give_up_unclaimed(action_id)
         if run_deadline is not None and time.monotonic() >= run_deadline:
             return _give_up(action_id, "browserErr_actionTimeout")
+
+
+def _session_running(db: Session, session_id: str) -> bool:
+    return db.scalar(
+        select(BrowserAction.id).where(BrowserAction.session_id == session_id, BrowserAction.status == "running").limit(1)
+    ) is not None
+
+
+def _give_up_unclaimed(action_id: str) -> dict:
+    """排队排到了上限。执行器还在(刚认领过、刚心跳过)就说是排队太久、前面有几条;不在才说桌面端没开 ——
+    此前一律报后者,执行器明明开着、只是手上满了,人却被打发去检查桌面端。"""
+    if not executor_online():
+        return _give_up(action_id, "browserErr_actionNotClaimed")
+    with SessionLocal() as db:
+        mine = db.get(BrowserAction, action_id)
+        ahead = db.scalar(
+            select(func.count()).select_from(BrowserAction).where(
+                BrowserAction.status.in_(("queued", "running")),
+                BrowserAction.created_at < mine.created_at,
+                BrowserAction.id != action_id,
+            )
+        ) if mine is not None else 0
+    return _give_up(action_id, "browserErr_actionQueueTimeout", seconds=int(QUEUE_TIMEOUT_SECONDS), ahead=ahead or 0)
 
 
 def _settled(act: BrowserAction) -> dict | None:
@@ -562,7 +595,7 @@ def _settled(act: BrowserAction) -> dict | None:
     return None
 
 
-def _give_up(action_id: str, reason: str) -> dict:
+def _give_up(action_id: str, reason: str, **params: object) -> dict:
     """不等了:把还没落终态的动作落 failed(执行器下次心跳就知道这条不归它了,会停手),再抛 `reason`。
 
     放手的那一拍它可能刚好做完 —— 那就照做完的算,不拿一个已经有的结果去报失败。
@@ -576,10 +609,27 @@ def _give_up(action_id: str, reason: str) -> dict:
             outcome = _settled(act)
             if outcome is not None:
                 return outcome
-    raise BrowserDomainError(reason)
+    raise BrowserDomainError(reason, **params)
 
 
 # ---------- worker 侧:claim / report ----------
+
+#: 执行器多久没来(认领或心跳)就不算在线。它空闲时约每秒认领一次,手上满了只每 20 秒心跳一次 ——
+#: 给两次心跳的余量。
+EXECUTOR_FRESH_SECONDS = 45.0
+#: 最近一次有执行器来认领 / 心跳的时刻(monotonic)。**进程内**:后端是单进程(见 core/config 限流那段),
+#: 这个问题(「此刻有没有执行器在拉」)也只对这个进程里在等的调用方有意义;重启后归零,第一拍认领就补上。
+_executor_contact: float | None = None
+
+
+def _note_executor_contact() -> None:
+    global _executor_contact
+    _executor_contact = time.monotonic()
+
+
+def executor_online() -> bool:
+    """最近 EXECUTOR_FRESH_SECONDS 秒里有执行器来认领或心跳过。"""
+    return _executor_contact is not None and time.monotonic() - _executor_contact < EXECUTOR_FRESH_SECONDS
 
 
 def expire_action_leases(db: Session) -> int:
@@ -610,6 +660,7 @@ def renew_action_leases(db: Session, *, worker: str, claims: list[dict[str, str]
     续不上只有三种可能:这条不是你认领的、令牌不对、或者它已经被判过期了。三种都不该让那个
     执行器继续在一个别人正在干的动作上写结果。
     """
+    _note_executor_contact()
     expire_action_leases(db)
     stamp = now()
     renewed: list[str] = []
@@ -637,6 +688,7 @@ def claim_next_action(db: Session, *, worker: str = "") -> dict | None:
     参数收下了却一次都没用过,表里也没有对应的列 —— 于是"这个执行器还在吗""这条回报是不是
     它自己领的那条"在这条通道上都没有答案。
     """
+    _note_executor_contact()
     # 先把上一个执行器丢下的收掉:它们本该被这一次认领接走,而不是一直占着 running。
     expire_action_leases(db)
     #: 空着太久的会话也在这里收:执行器在线就一直在认领,这是后端唯一一条按时到来的路;收掉时排的

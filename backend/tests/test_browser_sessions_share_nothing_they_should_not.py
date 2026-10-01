@@ -147,6 +147,7 @@ def _call(sid: str, **kwargs) -> dict:
 
 def test_一直没人领_报没被领走_不是执行超时(monkeypatch) -> None:
     monkeypatch.setattr(browser, "QUEUE_TIMEOUT_SECONDS", 0.5)
+    monkeypatch.setattr(browser, "_executor_contact", None)  # 没有执行器来过(前面的测试认领过,进程内记着)
     [ws] = _workspaces()
     with SessionLocal() as db:
         sid = browser.open_session(db, workspace_id=ws, actor=None).id

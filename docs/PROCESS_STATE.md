@@ -52,6 +52,7 @@
 | `app/integrations/feishu/connections.py:_processes` | 每个机器人一个子进程 | 独立进程是 lark SDK 的硬约束(它的 ws 客户端共享模块级事件循环)。第二个后端会**再拉一份**,同一条消息被处理两次。 |
 | `app/integrations/feishu/connections.py:_pumps` | 还活着的泵线程(读 worker 输出、写最后一次状态) | 和 `_processes` 同属一个进程。子进程自己退出时连接先从表里摘掉、泵还在写,停机要等的是它们全部 —— 不等就会在库关掉之后才写(测试里写进下一条用例清过的库)。重启时随进程一起没了,不需要恢复。 |
 | `app/ai/sidecar/pi_client.py:_LIVE` | 正在跑的 sidecar 轮次 | 同 `_streams`。 |
+| `app/domain/browser/__init__.py:_executor_contact` | 最近一次浏览器执行器来认领 / 心跳的时刻 | 只用来把排队超时说清楚(执行器在线 → 「排队太久、前面有几条」,不在 → 「桌面端没开」)。重启后归零,执行器下一拍认领就补上;第二个进程收不到另一边的认领,会把「排队太久」错说成「桌面端没开」—— 错的只是那句话,动作照样按超时收尾。 |
 | `app/workers/scheduler.py:_stop_event` | 定时任务线程的停止信号 | 每个进程一个调度线程 —— 多进程下同一条定时任务会被触发多次。 |
 | `app/domain/plugins/catalog_watch.py:_watch_stop`、`app/domain/plugins/catalog_watch.py:_watch_thread` | 插件目录的巡检线程(启动时把每个实例替宿主做的事刷一遍 —— 生成模型、运行时报出的工具 —— 之后每分钟问一次指纹,变了才重新拉) | 重启后重新刷一遍,不丢东西(目录缓存在模型行和 `discovered_tools` 上)。第二个进程会**再巡检一份**:每分钟多问一次 ComfyUI,结果一样,只是多一倍请求。 |
 
