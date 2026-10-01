@@ -93,6 +93,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "boardErr_documentNeedsRevision": {"zh": "文档节点需要有效的引用版本", "en": "A document item needs a valid note revision to reference."},
     "boardErr_sceneNeedsId": {"zh": "3D 场景节点需要 scene_id", "en": "A 3D scene item needs a scene_id."},
     "boardErr_sequenceNeedsId": {"zh": "时间线格要带着它那条时间线的 sequence_id", "en": "A timeline item needs its sequence_id."},
+    "boardSequenceCopyName": {"zh": "{name} 副本", "en": "{name} copy"},
     "boardErr_sequenceNotInWorkspace": {"zh": "时间线格引用的时间线不在这个工作区", "en": "The timeline item points to a timeline outside this workspace."},
     "seqErr_assetNotMedia": {"zh": "「{name}」是文档,放不上时间线:时间线上只放图片、视频和音频", "en": "“{name}” is a document and can't go on a timeline: timelines take images, video and audio."},
     "seqErr_sequenceNotFound": {"zh": "找不到这条时间线", "en": "Timeline not found"},

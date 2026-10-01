@@ -13,6 +13,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from app.core.i18n import tr
 from app.db.models import Sequence
 from app.domain.boards.persistence import board_project, get_board
 
@@ -35,7 +36,9 @@ def create_board_sequence(db: Session, workspace_id: str, board_id: str, *, copy
         source = db.get(Sequence, copy_of)
         if source is None or source.workspace_id != workspace_id:
             raise BoardDomainError("boardErr_sequenceNotInWorkspace")
-        copy = copy_sequence(db, source, project, name=source.name)
+        #: 名字标明是副本:复制完又撤销,这一条留在项目里没有格子指着它 —— 和原件同名的话剪辑页里分不出哪条是
+        #: 没用上的那条。不替人删:重做会把那一格带回来,指着一条删掉的时间线就存不下了。
+        copy = copy_sequence(db, source, project, name=tr("boardSequenceCopyName", name=source.name))
         db.flush()
         db.refresh(copy)
         return copy

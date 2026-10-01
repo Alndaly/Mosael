@@ -122,6 +122,9 @@ def test_画板上复制一格时间线格_照原件复制一条时间线_别处
     with SessionLocal() as db:
         original, copied = db.get(Sequence, sequence), db.get(Sequence, copied_id)
         assert copied.project_id == original.project_id, "同一张画板的项目里"
+        #: 复制完又撤销,这一条就留在项目里没有格子指着它:名字上标明是副本,剪辑页里认得出、删得掉,
+        #: 不和原件同名混在一起(不能替人删:重做会把那一格带回来,指着一条已经删掉的时间线就存不下了)。
+        assert copied.name == f"{original.name} 副本", copied.name
         assert [(clip.asset_id, clip.src_out) for track in copied.tracks for clip in track.clips] == [("v1", 4.0)]
         assert {track.id for track in copied.tracks}.isdisjoint({track.id for track in original.tracks})
 
