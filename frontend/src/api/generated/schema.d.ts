@@ -13876,7 +13876,7 @@ export interface components {
              * Id
              * @enum {string}
              */
-            id: "full_video_generation" | "transcript_video_cleanup" | "translated_dub" | "translated_dub_lipsync" | "highlight_shorts" | "product_on_model" | "product_pitch_short" | "footage_montage" | "fabric_lookbook" | "talking_script_video" | "product_pitch_presenter";
+            id: "full_video_generation" | "transcript_video_cleanup" | "translated_dub" | "translated_dub_lipsync" | "highlight_shorts" | "product_on_model" | "product_pitch_short" | "footage_montage" | "fabric_lookbook" | "talking_script_video" | "product_pitch_presenter" | "account_analysis" | "viral_video_breakdown" | "comment_insights";
             /** Name */
             name: string;
             /** Description */
@@ -13905,6 +13905,11 @@ export interface components {
              * @default false
              */
             optional: boolean;
+            /**
+             * Group
+             * @default
+             */
+            group: string;
         };
         /**
          * WorkflowUnusableNodeOut

@@ -110,7 +110,8 @@ def workflow_templates() -> list[dict]:
             "version": versions[str(template["id"])],
             "stages": [pick_text(stage, locale) for stage in _by_locale(template["stages"], locale)],
             "requirements": [
-                {"text": pick_text(one["text"], locale), "check": one["check"], "optional": one["optional"]}
+                {"text": pick_text(one["text"], locale), "check": one["check"], "optional": one["optional"],
+                 "group": one["group"]}
                 for one in template["requires"]
             ],
         }

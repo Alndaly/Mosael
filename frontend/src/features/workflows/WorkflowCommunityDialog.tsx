@@ -1,15 +1,18 @@
 import React from "react";
 import {
   AlertCircle,
+  ChartColumn,
   CheckCircle2,
   Circle,
   Clapperboard,
   Film,
+  Flame,
   FolderInput,
   Languages,
   ListOrdered,
   Loader2,
   Megaphone,
+  MessageSquareText,
   Palette,
   Plus,
   Scissors,
@@ -62,6 +65,9 @@ const TEMPLATE_ICONS: Record<string, typeof Film> = {
   footage_montage: Clapperboard,
   fabric_lookbook: Palette,
   talking_script_video: UserRound,
+  account_analysis: ChartColumn,
+  viral_video_breakdown: Flame,
+  comment_insights: MessageSquareText,
 };
 
 type Filter = "all" | "added" | "ready";
@@ -76,14 +82,16 @@ export function useWorkflowTemplates() {
 }
 
 /**
- * 一条前置条件此刻的样子。五种,不是两种:
+ * 一条前置条件此刻的样子。六种,不是两种:
  *
  * - met / missing:查过了,齐 / 不齐;
  * - optional:查过了、不齐,但缺了也能跑(旁白之类)—— 说「可选」,不报警;
+ * - alternative:几选一的组里(分析类模板的数据来源:TikHub 或内嵌浏览器)另一条已经能用,这一条没备好也能跑 ——
+ *   说「另一种方式可用」,不报警,也不算这个模板缺东西;
  * - unknown:本地引擎还在后台探测,或者状态还没拉回来 —— **不拿未知冒充结论**;
  * - runtime:跑的时候才由用户给的素材,现在查不了,也不该查。
  */
-type RequirementState = "met" | "missing" | "optional" | "unknown" | "runtime";
+type RequirementState = "met" | "missing" | "optional" | "alternative" | "unknown" | "runtime";
 
 function stateOf(requirement: WorkflowTemplateRequirement, statuses: Map<string, WorkflowTemplateCheck["status"]> | null): RequirementState {
   if (!requirement.check) return "runtime";
@@ -93,9 +101,23 @@ function stateOf(requirement: WorkflowTemplateRequirement, statuses: Map<string,
   return requirement.optional ? "optional" : "missing";
 }
 
+/** 每一条的状态,**按组判**:组里有一条齐了(或者是运行时才给、查不了也不缺的那种),同组没齐的那几条就是「另一种方式可用」。
+ *  和后端同一个意思(见 domain/workflows/template_requirements 的 group)。 */
+function statesOf(template: WorkflowTemplate, statuses: Map<string, WorkflowTemplateCheck["status"]> | null): RequirementState[] {
+  const requirements = template.requirements ?? [];
+  const own = requirements.map((one) => stateOf(one, statuses));
+  const covered = new Set(
+    requirements.filter((one, index) => one.group && (own[index] === "met" || own[index] === "runtime")).map((one) => one.group),
+  );
+  return own.map((state, index) => {
+    const group = requirements[index].group;
+    return group && covered.has(group) && (state === "missing" || state === "unknown") ? "alternative" : state;
+  });
+}
+
 /** 这个模板现在能不能直接跑:缺几项必需的、还有几项没测出来。 */
 function readinessOf(template: WorkflowTemplate, statuses: Map<string, WorkflowTemplateCheck["status"]> | null) {
-  const states = (template.requirements ?? []).map((one) => stateOf(one, statuses));
+  const states = statesOf(template, statuses);
   const missing = states.filter((one) => one === "missing").length;
   const unknown = states.filter((one) => one === "unknown").length;
   return { missing, unknown, ready: missing === 0 && unknown === 0 };
@@ -315,6 +337,7 @@ const REQUIREMENT_LOOK: Record<RequirementState, { icon: typeof Circle; tone: st
   met: { icon: CheckCircle2, tone: "text-success", label: "wfReqStatusMet" },
   missing: { icon: AlertCircle, tone: "text-warning", label: "wfReqStatusMissing" },
   optional: { icon: Circle, tone: "text-muted-foreground", label: "wfReqStatusOptional" },
+  alternative: { icon: Circle, tone: "text-muted-foreground", label: "wfReqStatusAlternative" },
   unknown: { icon: Loader2, tone: "text-muted-foreground", label: "wfReqStatusUnknown" },
   runtime: { icon: FolderInput, tone: "text-muted-foreground", label: "wfReqStatusRuntime" },
 };
@@ -325,10 +348,11 @@ const REQUIREMENT_LOOK: Record<RequirementState, { icon: typeof Circle; tone: st
  */
 function RequirementList({ template, statuses }: { template: WorkflowTemplate; statuses: Map<string, WorkflowTemplateCheck["status"]> | null }) {
   const t = useI18n();
+  const states = statesOf(template, statuses);
   return (
     <ul className="m-0 grid list-none gap-2.5 p-0">
-      {(template.requirements ?? []).map((requirement) => {
-        const state = stateOf(requirement, statuses);
+      {(template.requirements ?? []).map((requirement, index) => {
+        const state = states[index];
         const look = REQUIREMENT_LOOK[state];
         const Icon = look.icon;
         return (

@@ -419,6 +419,7 @@ export const publish = {
   wfReqStatusMet: "已就绪",
   wfReqStatusMissing: "未配置",
   wfReqStatusOptional: "可选 · 未配置",
+  wfReqStatusAlternative: "另一种方式可用",
   wfReqStatusUnknown: "正在检测",
   wfReqStatusRuntime: "运行时选择",
   wfReqLegend: "按这台设备和当前工作区检测;素材在运行时再选。",

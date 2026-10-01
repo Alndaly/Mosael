@@ -35737,7 +35737,10 @@
               "footage_montage",
               "fabric_lookbook",
               "talking_script_video",
-              "product_pitch_presenter"
+              "product_pitch_presenter",
+              "account_analysis",
+              "viral_video_breakdown",
+              "comment_insights"
             ],
             "title": "Id"
           },
@@ -35793,6 +35796,11 @@
             "type": "boolean",
             "title": "Optional",
             "default": false
+          },
+          "group": {
+            "type": "string",
+            "title": "Group",
+            "default": ""
           }
         },
         "type": "object",

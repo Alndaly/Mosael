@@ -35,6 +35,11 @@ SEPARATION_ENGINE = "separation_engine"
 SPEECH_VIDEO_MODEL = "speech_video_model"
 #: 会「改口型」的视频模型(modes 里有 video-lipsync)。
 LIPSYNC_VIDEO_MODEL = "lipsync_video_model"
+#: 分析类模板的 TikHub 那一路:至少一个平台,要用的几个工具都落在一条可用连接上(见 templates_analysis.tikhub_status)。
+#: 三个模板用的工具不同,所以是三个键。
+TIKHUB_ACCOUNT = "tikhub_account"
+TIKHUB_VIDEO = "tikhub_video"
+TIKHUB_COMMENTS = "tikhub_comments"
 
 CHECKS: tuple[str, ...] = (
     CHAT_MODEL,
@@ -47,17 +52,28 @@ CHECKS: tuple[str, ...] = (
     SEPARATION_ENGINE,
     SPEECH_VIDEO_MODEL,
     LIPSYNC_VIDEO_MODEL,
+    TIKHUB_ACCOUNT,
+    TIKHUB_VIDEO,
+    TIKHUB_COMMENTS,
 )
 
 #: met = 齐了;missing = 没有;unknown = 还没测出来(引擎探测在后台跑,**不拿未知冒充结论**)。
 CheckStatus = Literal["met", "missing", "unknown"]
 
 
-def requirement(check: str | None, *, zh: str, en: str, optional: bool = False) -> dict[str, Any]:
+def requirement(
+    check: str | None, *, zh: str, en: str, optional: bool = False, group: str = ""
+) -> dict[str, Any]:
     """一条前置条件。`check=None` 表示运行时由用户自己给(素材),查不了。
 
     `optional` 的那条缺了也能跑(比如旁白),界面据此把「缺」说成「可选」而不是报警。
+
+    `group`:同一组的几条是**几选一** —— 分析类模板的数据来源,TikHub 和内嵌浏览器满足一条就能跑。组里有一条齐了
+    (或者是运行时才给的那种,查不了也不缺),这一组就算齐;别的那条缺了只是「这条路没备好」,不算这个模板缺东西。
+    和运行时同一个意思:图里两条路由开始节点的一个参数选,哪条备好了就选哪条。
     """
     if check is not None and check not in CHECKS:
         raise ValueError(f"unknown requirement check: {check!r}")
-    return {"check": check or "", "optional": optional, "text": {"zh": zh, "en": en}}
+    if optional and group:
+        raise ValueError("a requirement is either optional or one of a group, not both")
+    return {"check": check or "", "optional": optional, "group": group, "text": {"zh": zh, "en": en}}

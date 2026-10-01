@@ -417,6 +417,7 @@ export const publish = {
   wfReqStatusMet: "Ready",
   wfReqStatusMissing: "Not set up",
   wfReqStatusOptional: "Optional · not set up",
+  wfReqStatusAlternative: "Covered by the other option",
   wfReqStatusUnknown: "Checking",
   wfReqStatusRuntime: "Chosen when you run",
   wfReqLegend: "Checked against this device and workspace; media is picked when you run it.",

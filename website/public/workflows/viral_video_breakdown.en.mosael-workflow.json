@@ -1,0 +1,1093 @@
+{
+  "format": "mosael-workflow",
+  "version": 1,
+  "workflow_revision": 1,
+  "name": "Why a video went viral",
+  "description": "Paste a Douyin, Xiaohongshu or Bilibili video link to fetch its numbers and most-liked comments, download it and transcribe the speech with timecodes, then break down why it worked (topic, the first-three-second hook, structure and pacing, emotional beats, title and cover, comment feedback, reusable patterns) and outline a script to make one the same way, saved as a note. Pick one data source: TikHub (2 calls per run, from about $0.001 each) or the built-in browser (free; pick a signed-in profile where needed). The download uses the library's Import from link (Douyin usually needs a signed-in browser profile on the download step); if it fails, the breakdown still runs on the numbers and comments. Transcription runs locally; plus one or two AI chat calls. Frames are not looked at yet.",
+  "graph_hash": "adf34782d4fe5007bd7f173c8f7780b1201c0ec425c7370c2d3ca8d3ef7c129f",
+  "graph": {
+    "meta": {
+      "template_id": "viral_video_breakdown",
+      "template_version": 1,
+      "source": "official"
+    },
+    "nodes": [
+      {
+        "id": "start",
+        "type": "start",
+        "name": "Video and data source",
+        "position": {
+          "x": 40,
+          "y": 535
+        },
+        "config": {
+          "params": {
+            "video_link": "",
+            "data_source": "",
+            "platform": "",
+            "comment_count": 30,
+            "download_video": "yes",
+            "my_topic": "",
+            "report_language": "English"
+          },
+          "required_params": "video_link, data_source"
+        }
+      },
+      {
+        "id": "link",
+        "type": "social_link",
+        "name": "Work out the platform and id",
+        "position": {
+          "x": 360,
+          "y": 535
+        },
+        "config": {
+          "link": "{{start.video_link}}",
+          "platform": "{{start.platform}}",
+          "expect": "video"
+        }
+      },
+      {
+        "id": "source_mode",
+        "type": "text_transform",
+        "name": "Lower-case the data source",
+        "position": {
+          "x": 680,
+          "y": 535
+        },
+        "config": {
+          "text": "{{start.data_source}}",
+          "op": "lower"
+        }
+      },
+      {
+        "id": "use_tikhub",
+        "type": "condition",
+        "name": "Fetch with TikHub?",
+        "position": {
+          "x": 1000,
+          "y": 535
+        },
+        "config": {
+          "left": "",
+          "op": "contains",
+          "right": "tikhub"
+        },
+        "inputs": [
+          "left"
+        ]
+      },
+      {
+        "id": "tk_is_dy",
+        "type": "condition",
+        "name": "Is it Douyin?",
+        "position": {
+          "x": 1320,
+          "y": 60
+        },
+        "config": {
+          "left": "",
+          "op": "equals",
+          "right": "douyin"
+        },
+        "inputs": [
+          "left"
+        ]
+      },
+      {
+        "id": "dy_video",
+        "type": "plugin_tool",
+        "name": "TikHub: Douyin video details",
+        "position": {
+          "x": 1640,
+          "y": 60
+        },
+        "config": {
+          "plugin_id": "dev.mosael.tikhub",
+          "tool_name": "douyin_web_fetch_one_video",
+          "instance_id": "",
+          "input": {
+            "aweme_id": "{{link.id}}"
+          }
+        }
+      },
+      {
+        "id": "dy_comments",
+        "type": "plugin_tool",
+        "name": "TikHub: Douyin comments",
+        "position": {
+          "x": 1640,
+          "y": 145
+        },
+        "config": {
+          "plugin_id": "dev.mosael.tikhub",
+          "tool_name": "douyin_web_fetch_video_comments",
+          "instance_id": "",
+          "input": {
+            "aweme_id": "{{link.id}}",
+            "count": "{{start.comment_count}}"
+          }
+        }
+      },
+      {
+        "id": "dy_video_m",
+        "type": "social_metrics",
+        "name": "Tidy the video's numbers",
+        "position": {
+          "x": 1960,
+          "y": 60
+        },
+        "config": {
+          "data": "",
+          "kind": "posts",
+          "limit": 1,
+          "duration_unit": "milliseconds"
+        },
+        "inputs": [
+          "data"
+        ]
+      },
+      {
+        "id": "dy_comments_m",
+        "type": "social_metrics",
+        "name": "Rank the comments",
+        "position": {
+          "x": 1960,
+          "y": 145
+        },
+        "config": {
+          "data": "",
+          "kind": "comments",
+          "limit": "{{start.comment_count}}"
+        },
+        "inputs": [
+          "data"
+        ]
+      },
+      {
+        "id": "tk_is_xhs",
+        "type": "condition",
+        "name": "Is it Xiaohongshu?",
+        "position": {
+          "x": 1320,
+          "y": 250
+        },
+        "config": {
+          "left": "",
+          "op": "equals",
+          "right": "xiaohongshu"
+        },
+        "inputs": [
+          "left"
+        ]
+      },
+      {
+        "id": "xhs_video",
+        "type": "plugin_tool",
+        "name": "TikHub: Xiaohongshu video details",
+        "position": {
+          "x": 1640,
+          "y": 250
+        },
+        "config": {
+          "plugin_id": "dev.mosael.tikhub",
+          "tool_name": "xiaohongshu_app_v2_get_video_note_detail",
+          "instance_id": "",
+          "input": {
+            "note_id": "{{link.id}}",
+            "share_text": "{{link.url}}"
+          }
+        }
+      },
+      {
+        "id": "xhs_comments",
+        "type": "plugin_tool",
+        "name": "TikHub: Xiaohongshu comments",
+        "position": {
+          "x": 1640,
+          "y": 335
+        },
+        "config": {
+          "plugin_id": "dev.mosael.tikhub",
+          "tool_name": "xiaohongshu_app_v2_get_note_comments",
+          "instance_id": "",
+          "input": {
+            "note_id": "{{link.id}}",
+            "share_text": "{{link.url}}"
+          }
+        }
+      },
+      {
+        "id": "xhs_video_m",
+        "type": "social_metrics",
+        "name": "Tidy the video's numbers",
+        "position": {
+          "x": 1960,
+          "y": 250
+        },
+        "config": {
+          "data": "",
+          "kind": "posts",
+          "limit": 1,
+          "duration_unit": "auto"
+        },
+        "inputs": [
+          "data"
+        ]
+      },
+      {
+        "id": "xhs_comments_m",
+        "type": "social_metrics",
+        "name": "Rank the comments",
+        "position": {
+          "x": 1960,
+          "y": 335
+        },
+        "config": {
+          "data": "",
+          "kind": "comments",
+          "limit": "{{start.comment_count}}"
+        },
+        "inputs": [
+          "data"
+        ]
+      },
+      {
+        "id": "tk_is_bili",
+        "type": "condition",
+        "name": "Is it Bilibili?",
+        "position": {
+          "x": 1320,
+          "y": 440
+        },
+        "config": {
+          "left": "",
+          "op": "equals",
+          "right": "bilibili"
+        },
+        "inputs": [
+          "left"
+        ]
+      },
+      {
+        "id": "bili_video",
+        "type": "plugin_tool",
+        "name": "TikHub: Bilibili video details",
+        "position": {
+          "x": 1640,
+          "y": 440
+        },
+        "config": {
+          "plugin_id": "dev.mosael.tikhub",
+          "tool_name": "bilibili_web_fetch_one_video",
+          "instance_id": "",
+          "input": {
+            "bv_id": "{{link.id}}"
+          }
+        }
+      },
+      {
+        "id": "bili_comments",
+        "type": "plugin_tool",
+        "name": "TikHub: Bilibili comments",
+        "position": {
+          "x": 1640,
+          "y": 525
+        },
+        "config": {
+          "plugin_id": "dev.mosael.tikhub",
+          "tool_name": "bilibili_web_fetch_video_comments",
+          "instance_id": "",
+          "input": {
+            "bv_id": "{{link.id}}",
+            "pn": "1"
+          }
+        }
+      },
+      {
+        "id": "bili_video_m",
+        "type": "social_metrics",
+        "name": "Tidy the video's numbers",
+        "position": {
+          "x": 1960,
+          "y": 440
+        },
+        "config": {
+          "data": "",
+          "kind": "posts",
+          "limit": 1,
+          "duration_unit": "auto"
+        },
+        "inputs": [
+          "data"
+        ]
+      },
+      {
+        "id": "bili_comments_m",
+        "type": "social_metrics",
+        "name": "Rank the comments",
+        "position": {
+          "x": 1960,
+          "y": 525
+        },
+        "config": {
+          "data": "",
+          "kind": "comments",
+          "limit": "{{start.comment_count}}"
+        },
+        "inputs": [
+          "data"
+        ]
+      },
+      {
+        "id": "tk_unsupported",
+        "type": "notify",
+        "name": "TikHub route can't take this platform",
+        "position": {
+          "x": 1640,
+          "y": 630
+        },
+        "config": {
+          "title": "Analysis not started: the TikHub route doesn't cover this platform",
+          "body": "The platform was read as “{{link.platform}}”. The TikHub route covers Douyin, Xiaohongshu and Bilibili; for anything else set data_source on the start node to browser and run again. If the platform was misread, name it in the start node's platform."
+        }
+      },
+      {
+        "id": "web_open",
+        "type": "browser_open",
+        "name": "Open in the built-in browser",
+        "position": {
+          "x": 1320,
+          "y": 858
+        },
+        "config": {
+          "url": "",
+          "session_mode": "named",
+          "session_name": "Social analysis"
+        },
+        "inputs": [
+          "url"
+        ]
+      },
+      {
+        "id": "web_read",
+        "type": "browser_evaluate",
+        "name": "Scroll and read the page text",
+        "position": {
+          "x": 1640,
+          "y": 858
+        },
+        "config": {
+          "session": "",
+          "expression": "(async () => {\n  const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));\n  await wait(Number(input.settle_ms) || 2500);\n  const rounds = Math.min(Number(input.scrolls) || 0, 10);\n  for (let i = 0; i < rounds; i += 1) {\n    window.scrollBy(0, Math.max(window.innerHeight, 800));\n    await wait(Number(input.pause_ms) || 1200);\n  }\n  const parts = [(document.body && document.body.innerText) || \"\"];\n  const visit = (root) => {\n    root.querySelectorAll(\"*\").forEach((el) => {\n      if (!el.shadowRoot) return;\n      const text = Array.from(el.shadowRoot.children).map((one) => one.innerText || \"\").join(\"\\n\").trim();\n      if (text) parts.push(text);\n      visit(el.shadowRoot);\n    });\n  };\n  visit(document);\n  const limit = Number(input.max_chars) || 30000;\n  return { url: location.href, title: document.title, now: new Date().toISOString(), text: parts.join(\"\\n\\n\").slice(0, limit) };\n})()",
+          "input": {
+            "settle_ms": 2500,
+            "scrolls": 8,
+            "pause_ms": 1200,
+            "max_chars": 40000
+          }
+        },
+        "inputs": [
+          "session"
+        ]
+      },
+      {
+        "id": "web_close",
+        "type": "browser_close",
+        "name": "Close the browser",
+        "position": {
+          "x": 1960,
+          "y": 1010
+        },
+        "config": {
+          "session": ""
+        },
+        "inputs": [
+          "session"
+        ]
+      },
+      {
+        "id": "web_struct",
+        "type": "llm",
+        "name": "Turn the page text into video data and comments",
+        "position": {
+          "x": 1960,
+          "y": 858
+        },
+        "config": {
+          "profile_id": "",
+          "model": "",
+          "preset": "precise",
+          "system": "你会收到内嵌浏览器打开一条自媒体视频 / 笔记后读到的页面文字(往下滚过,评论区可能在里面)。把这条视频的数据和页面上能看到的评论整理出来(评论原文一字不改,最多 80 条,赞多的优先)。\n规则:\n- 只抄页面上真有的,不编、不补、不估;页面上没有的字段写空字符串。\n- 数字照页面原样抄(1.2万、3.4w、10万+ 都原样写),不要自己换算。\n- 发布时间:能确定就写成 YYYY-MM-DD(有钟点就 YYYY-MM-DD HH:MM);写的是相对时间(3天前、昨天、2小时前)就按\n  「读取时间」换算成日期;只写了月-日(09-21)就补上读取时间那一年;实在看不出就空字符串。\n- 页面主要是登录框、验证码、「登录后查看更多」时 login_wall = true,并在 notes 里说清看到了什么;\n  这时宁可少抄,不要把推荐位、广告、别人的作品当成这个账号的。\n只输出符合 JSON Schema 的对象。",
+          "prompt": "平台(可能为空):{{link.platform}}\n视频:{{link.url}}\n读取时间:{{web_read.value.now}}\n页面标题:{{web_read.value.title}}\n\n页面文字:\n{{web_read.value.text}}",
+          "response_format": "json_schema",
+          "json_schema_name": "video_page",
+          "json_schema": {
+            "type": "object",
+            "properties": {
+              "video": {
+                "type": "object",
+                "properties": {
+                  "title": {
+                    "type": "string",
+                    "description": "标题或文案的开头"
+                  },
+                  "published_at": {
+                    "type": "string",
+                    "description": "发布时间,写成 YYYY-MM-DD 或 YYYY-MM-DD HH:MM;看不出就空字符串"
+                  },
+                  "duration": {
+                    "type": "string",
+                    "description": "时长,写成 mm:ss 或秒数;没有就空字符串"
+                  },
+                  "views": {
+                    "type": "string",
+                    "description": "照页面原样抄(如 1.2万、3456、10万+);页面上没有就空字符串"
+                  },
+                  "likes": {
+                    "type": "string",
+                    "description": "照页面原样抄(如 1.2万、3456、10万+);页面上没有就空字符串"
+                  },
+                  "comments": {
+                    "type": "string",
+                    "description": "照页面原样抄(如 1.2万、3456、10万+);页面上没有就空字符串"
+                  },
+                  "collects": {
+                    "type": "string",
+                    "description": "照页面原样抄(如 1.2万、3456、10万+);页面上没有就空字符串"
+                  },
+                  "shares": {
+                    "type": "string",
+                    "description": "照页面原样抄(如 1.2万、3456、10万+);页面上没有就空字符串"
+                  },
+                  "author": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string",
+                    "description": "简介 / 文案 / 话题标签"
+                  }
+                },
+                "required": [
+                  "title",
+                  "published_at",
+                  "duration",
+                  "views",
+                  "likes",
+                  "comments",
+                  "collects",
+                  "shares",
+                  "author",
+                  "description"
+                ],
+                "additionalProperties": false
+              },
+              "comments": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "text": {
+                      "type": "string",
+                      "description": "评论原文,一字不改"
+                    },
+                    "likes": {
+                      "type": "string",
+                      "description": "照页面原样抄(如 1.2万、3456、10万+);页面上没有就空字符串"
+                    },
+                    "author": {
+                      "type": "string"
+                    },
+                    "published_at": {
+                      "type": "string",
+                      "description": "能看出就写 YYYY-MM-DD,否则空字符串"
+                    }
+                  },
+                  "required": [
+                    "text",
+                    "likes",
+                    "author",
+                    "published_at"
+                  ],
+                  "additionalProperties": false
+                },
+                "maxItems": 80
+              },
+              "login_wall": {
+                "type": "boolean"
+              },
+              "notes": {
+                "type": "string",
+                "description": "页面上异常的地方;没有就空字符串"
+              }
+            },
+            "required": [
+              "video",
+              "comments",
+              "login_wall",
+              "notes"
+            ],
+            "additionalProperties": false
+          },
+          "json_schema_strict": "true",
+          "temperature": 0.1,
+          "max_tokens": 12000
+        }
+      },
+      {
+        "id": "web_video_m",
+        "type": "social_metrics",
+        "name": "Tidy the video's numbers",
+        "position": {
+          "x": 2280,
+          "y": 858
+        },
+        "config": {
+          "data": "{{web_struct.json.video}}",
+          "kind": "posts",
+          "limit": 1
+        }
+      },
+      {
+        "id": "web_comments_m",
+        "type": "social_metrics",
+        "name": "Rank the comments",
+        "position": {
+          "x": 2280,
+          "y": 943
+        },
+        "config": {
+          "data": "{{web_struct.json.comments}}",
+          "kind": "comments",
+          "limit": "{{start.comment_count}}"
+        }
+      },
+      {
+        "id": "data_block",
+        "type": "template",
+        "name": "Collect the data from whichever route ran",
+        "position": {
+          "x": 2600,
+          "y": 535
+        },
+        "config": {
+          "template": "{{dy_video_m.summary}}{{xhs_video_m.summary}}{{bili_video_m.summary}}{{web_video_m.summary}}\n\n### Video\n\n{{dy_video_m.table}}{{xhs_video_m.table}}{{bili_video_m.table}}{{web_video_m.table}}\n\n{{dy_comments_m.summary}}{{xhs_comments_m.summary}}{{bili_comments_m.summary}}{{web_comments_m.summary}}\n\n{{dy_comments_m.table}}{{xhs_comments_m.table}}{{bili_comments_m.table}}{{web_comments_m.table}}"
+        }
+      },
+      {
+        "id": "has_video",
+        "type": "condition",
+        "name": "Was the video found?",
+        "position": {
+          "x": 2920,
+          "y": 535
+        },
+        "config": {
+          "left": "{{dy_video_m.count}}{{xhs_video_m.count}}{{bili_video_m.count}}{{web_video_m.count}}",
+          "op": "gt",
+          "right": "0"
+        }
+      },
+      {
+        "id": "no_video_notice",
+        "type": "notify",
+        "name": "Video not found",
+        "position": {
+          "x": 3240,
+          "y": 858
+        },
+        "config": {
+          "title": "Breakdown stopped: the video's data couldn't be fetched",
+          "body": "No data came back for {{link.url}}. Usual causes: it needs a sign-in (switch “Open in the built-in browser” to a signed-in browser-pool profile); the link isn't a single post; the TikHub tools aren't enabled or the quota ran out. {{web_struct.json.notes}}"
+        }
+      },
+      {
+        "id": "want_download",
+        "type": "condition",
+        "name": "Download and transcribe?",
+        "position": {
+          "x": 3240,
+          "y": 307
+        },
+        "config": {
+          "left": "{{start.download_video}}",
+          "op": "not_equals",
+          "right": "no"
+        }
+      },
+      {
+        "id": "download",
+        "type": "import_url",
+        "name": "Download the video",
+        "position": {
+          "x": 3560,
+          "y": 307
+        },
+        "config": {
+          "url": "",
+          "kind": "video",
+          "profile_id": "",
+          "max_height": 720,
+          "fail_on_error": "no"
+        },
+        "inputs": [
+          "url"
+        ]
+      },
+      {
+        "id": "got_video",
+        "type": "condition",
+        "name": "Downloaded?",
+        "position": {
+          "x": 3880,
+          "y": 307
+        },
+        "config": {
+          "left": "",
+          "op": "not_empty"
+        },
+        "inputs": [
+          "left"
+        ]
+      },
+      {
+        "id": "transcript",
+        "type": "transcribe_asset",
+        "name": "Transcribe the speech with timecodes",
+        "position": {
+          "x": 4200,
+          "y": 307
+        },
+        "config": {
+          "asset_id": ""
+        },
+        "inputs": [
+          "asset_id"
+        ]
+      },
+      {
+        "id": "transcript_section",
+        "type": "template",
+        "name": "Attach the transcript",
+        "position": {
+          "x": 4520,
+          "y": 307
+        },
+        "config": {
+          "template": "## Transcript\n\n{{transcript.text}}"
+        }
+      },
+      {
+        "id": "breakdown",
+        "type": "llm",
+        "name": "Break down why it worked and outline a script",
+        "position": {
+          "x": 4520,
+          "y": 535
+        },
+        "config": {
+          "profile_id": "",
+          "model": "",
+          "preset": "precise",
+          "system": "你是短视频爆款拆解专家。你会收到一条视频的数据(代码算好的)、赞最多的评论,以及带时间码的口播逐字稿\n(下载或转写不成功时为空)。拆解它为什么火,再给一份照这个套路做一条的脚本提纲。\n\n- verdict:一句话说清它火的核心原因。\n- report_markdown 用二级标题分成这几节:\n  1. 数据表现:互动率、收藏 / 转发 / 评论各占多少,说明了什么(收藏多 = 有用,转发多 = 社交货币,评论多 = 争议或共鸣);\n  2. 选题:为什么这个题有人看,击中了谁的什么需求;\n  3. 钩子(前 3 秒):引用逐字稿开头的原话分析;没有逐字稿就根据标题、简介和评论推断,并写明是推断;\n  4. 结构与节奏:按时间段拆,每段起什么作用、在哪里转折;\n  5. 情绪点:哪些地方让人想点赞、评论、转发,用评论原文佐证;\n  6. 标题与封面文案:用了什么手法;\n  7. 评论区反馈:大家在夸什么、问什么、争什么;\n  8. 可复用的套路:3–5 条,写成可以照做的规则;\n  9. 不能照搬的部分与风险(账号势能、时效、平台规则)。\n- script_outline_markdown:照这个套路做一条新的,主题围绕「{{start.my_topic}}」(为空就挑同领域的一个题):\n  3 个标题备选、前 3 秒钩子台词、分段脚本(时间 / 画面 / 台词)、结尾引导。\n- 只根据给到的材料下结论;没给的数据不要编。\n- 用{{start.report_language}}写。\n只输出符合 JSON Schema 的对象。",
+          "prompt": "视频:{{link.url}}\n平台:{{link.platform}}\n数据来源:{{start.data_source}}\n\n{{data_block.text}}\n\n口播逐字稿(带时间码 JSON,可能为空):\n{{transcript.timed_text}}\n\n没有逐字稿的原因(可能为空):{{download.error}}",
+          "response_format": "json_schema",
+          "json_schema_name": "viral_breakdown",
+          "json_schema": {
+            "type": "object",
+            "properties": {
+              "title": {
+                "type": "string",
+                "description": "笔记标题:带上视频标题和「爆款拆解」"
+              },
+              "verdict": {
+                "type": "string",
+                "description": "一句话:它火的核心原因"
+              },
+              "report_markdown": {
+                "type": "string",
+                "description": "完整拆解,Markdown"
+              },
+              "script_outline_markdown": {
+                "type": "string",
+                "description": "照这个套路做一条的脚本提纲,Markdown"
+              }
+            },
+            "required": [
+              "title",
+              "verdict",
+              "report_markdown",
+              "script_outline_markdown"
+            ],
+            "additionalProperties": false
+          },
+          "json_schema_strict": "true",
+          "temperature": 0.4,
+          "max_tokens": 12000
+        }
+      },
+      {
+        "id": "save_note",
+        "type": "note_create",
+        "name": "Save as a note",
+        "position": {
+          "x": 4840,
+          "y": 535
+        },
+        "config": {
+          "title": "{{breakdown.json.title}}",
+          "markdown": "> {{breakdown.json.verdict}}\n\n{{breakdown.json.report_markdown}}\n\n## Make one the same way\n\n{{breakdown.json.script_outline_markdown}}\n\n---\n\n## Appendix: the numbers\n\n{{data_block.text}}\n\n{{transcript_section.text}}",
+          "tags": "viral breakdown"
+        }
+      },
+      {
+        "id": "done_notice",
+        "type": "notify",
+        "name": "Breakdown ready",
+        "position": {
+          "x": 5160,
+          "y": 535
+        },
+        "config": {
+          "title": "The breakdown is saved as a note",
+          "body": "{{breakdown.json.verdict}}"
+        }
+      },
+      {
+        "id": "output",
+        "type": "output",
+        "name": "Hand over the breakdown and outline",
+        "position": {
+          "x": 5480,
+          "y": 535
+        },
+        "config": {
+          "values": {
+            "note_id": "{{save_note.note_id}}",
+            "verdict": "{{breakdown.json.verdict}}",
+            "report": "{{breakdown.json.report_markdown}}",
+            "script_outline": "{{breakdown.json.script_outline_markdown}}",
+            "video_asset_id": "{{download.asset_id}}",
+            "transcript": "{{transcript.text}}"
+          }
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "start__link",
+        "source": "start",
+        "target": "link"
+      },
+      {
+        "id": "link__source_mode",
+        "source": "link",
+        "target": "source_mode"
+      },
+      {
+        "id": "use_tikhub__tk_is_dy__true",
+        "source": "use_tikhub",
+        "target": "tk_is_dy",
+        "source_handle": "true"
+      },
+      {
+        "id": "tk_is_dy__dy_video__true",
+        "source": "tk_is_dy",
+        "target": "dy_video",
+        "source_handle": "true"
+      },
+      {
+        "id": "tk_is_dy__dy_comments__true",
+        "source": "tk_is_dy",
+        "target": "dy_comments",
+        "source_handle": "true"
+      },
+      {
+        "id": "tk_is_dy__tk_is_xhs__false",
+        "source": "tk_is_dy",
+        "target": "tk_is_xhs",
+        "source_handle": "false"
+      },
+      {
+        "id": "tk_is_xhs__xhs_video__true",
+        "source": "tk_is_xhs",
+        "target": "xhs_video",
+        "source_handle": "true"
+      },
+      {
+        "id": "tk_is_xhs__xhs_comments__true",
+        "source": "tk_is_xhs",
+        "target": "xhs_comments",
+        "source_handle": "true"
+      },
+      {
+        "id": "tk_is_xhs__tk_is_bili__false",
+        "source": "tk_is_xhs",
+        "target": "tk_is_bili",
+        "source_handle": "false"
+      },
+      {
+        "id": "tk_is_bili__bili_video__true",
+        "source": "tk_is_bili",
+        "target": "bili_video",
+        "source_handle": "true"
+      },
+      {
+        "id": "tk_is_bili__bili_comments__true",
+        "source": "tk_is_bili",
+        "target": "bili_comments",
+        "source_handle": "true"
+      },
+      {
+        "id": "tk_is_bili__tk_unsupported__false",
+        "source": "tk_is_bili",
+        "target": "tk_unsupported",
+        "source_handle": "false"
+      },
+      {
+        "id": "use_tikhub__web_open__false",
+        "source": "use_tikhub",
+        "target": "web_open",
+        "source_handle": "false"
+      },
+      {
+        "id": "web_read__web_struct",
+        "source": "web_read",
+        "target": "web_struct"
+      },
+      {
+        "id": "web_struct__web_video_m",
+        "source": "web_struct",
+        "target": "web_video_m"
+      },
+      {
+        "id": "web_struct__web_comments_m",
+        "source": "web_struct",
+        "target": "web_comments_m"
+      },
+      {
+        "id": "dy_video_m__data_block",
+        "source": "dy_video_m",
+        "target": "data_block"
+      },
+      {
+        "id": "xhs_video_m__data_block",
+        "source": "xhs_video_m",
+        "target": "data_block"
+      },
+      {
+        "id": "bili_video_m__data_block",
+        "source": "bili_video_m",
+        "target": "data_block"
+      },
+      {
+        "id": "web_video_m__data_block",
+        "source": "web_video_m",
+        "target": "data_block"
+      },
+      {
+        "id": "dy_comments_m__data_block",
+        "source": "dy_comments_m",
+        "target": "data_block"
+      },
+      {
+        "id": "xhs_comments_m__data_block",
+        "source": "xhs_comments_m",
+        "target": "data_block"
+      },
+      {
+        "id": "bili_comments_m__data_block",
+        "source": "bili_comments_m",
+        "target": "data_block"
+      },
+      {
+        "id": "web_comments_m__data_block",
+        "source": "web_comments_m",
+        "target": "data_block"
+      },
+      {
+        "id": "data_block__has_video",
+        "source": "data_block",
+        "target": "has_video"
+      },
+      {
+        "id": "has_video__no_video_notice__false",
+        "source": "has_video",
+        "target": "no_video_notice",
+        "source_handle": "false"
+      },
+      {
+        "id": "has_video__want_download__true",
+        "source": "has_video",
+        "target": "want_download",
+        "source_handle": "true"
+      },
+      {
+        "id": "want_download__download__true",
+        "source": "want_download",
+        "target": "download",
+        "source_handle": "true"
+      },
+      {
+        "id": "got_video__transcript__true",
+        "source": "got_video",
+        "target": "transcript",
+        "source_handle": "true"
+      },
+      {
+        "id": "transcript__transcript_section",
+        "source": "transcript",
+        "target": "transcript_section"
+      },
+      {
+        "id": "has_video__breakdown__true",
+        "source": "has_video",
+        "target": "breakdown",
+        "source_handle": "true"
+      },
+      {
+        "id": "breakdown__save_note",
+        "source": "breakdown",
+        "target": "save_note"
+      },
+      {
+        "id": "save_note__done_notice",
+        "source": "save_note",
+        "target": "done_notice"
+      },
+      {
+        "id": "done_notice__output",
+        "source": "done_notice",
+        "target": "output"
+      },
+      {
+        "id": "d-source_mode-text-use_tikhub-left",
+        "source": "source_mode",
+        "target": "use_tikhub",
+        "kind": "data",
+        "source_output": "text",
+        "target_input": "left"
+      },
+      {
+        "id": "d-link-platform-tk_is_dy-left",
+        "source": "link",
+        "target": "tk_is_dy",
+        "kind": "data",
+        "source_output": "platform",
+        "target_input": "left"
+      },
+      {
+        "id": "d-dy_video-output-dy_video_m-data",
+        "source": "dy_video",
+        "target": "dy_video_m",
+        "kind": "data",
+        "source_output": "output",
+        "target_input": "data"
+      },
+      {
+        "id": "d-dy_comments-output-dy_comments_m-data",
+        "source": "dy_comments",
+        "target": "dy_comments_m",
+        "kind": "data",
+        "source_output": "output",
+        "target_input": "data"
+      },
+      {
+        "id": "d-link-platform-tk_is_xhs-left",
+        "source": "link",
+        "target": "tk_is_xhs",
+        "kind": "data",
+        "source_output": "platform",
+        "target_input": "left"
+      },
+      {
+        "id": "d-xhs_video-output-xhs_video_m-data",
+        "source": "xhs_video",
+        "target": "xhs_video_m",
+        "kind": "data",
+        "source_output": "output",
+        "target_input": "data"
+      },
+      {
+        "id": "d-xhs_comments-output-xhs_comments_m-data",
+        "source": "xhs_comments",
+        "target": "xhs_comments_m",
+        "kind": "data",
+        "source_output": "output",
+        "target_input": "data"
+      },
+      {
+        "id": "d-link-platform-tk_is_bili-left",
+        "source": "link",
+        "target": "tk_is_bili",
+        "kind": "data",
+        "source_output": "platform",
+        "target_input": "left"
+      },
+      {
+        "id": "d-bili_video-output-bili_video_m-data",
+        "source": "bili_video",
+        "target": "bili_video_m",
+        "kind": "data",
+        "source_output": "output",
+        "target_input": "data"
+      },
+      {
+        "id": "d-bili_comments-output-bili_comments_m-data",
+        "source": "bili_comments",
+        "target": "bili_comments_m",
+        "kind": "data",
+        "source_output": "output",
+        "target_input": "data"
+      },
+      {
+        "id": "d-link-url-web_open-url",
+        "source": "link",
+        "target": "web_open",
+        "kind": "data",
+        "source_output": "url",
+        "target_input": "url"
+      },
+      {
+        "id": "d-web_open-session-web_read-session",
+        "source": "web_open",
+        "target": "web_read",
+        "kind": "data",
+        "source_output": "session",
+        "target_input": "session"
+      },
+      {
+        "id": "d-web_read-session-web_close-session",
+        "source": "web_read",
+        "target": "web_close",
+        "kind": "data",
+        "source_output": "session",
+        "target_input": "session"
+      },
+      {
+        "id": "d-link-url-download-url",
+        "source": "link",
+        "target": "download",
+        "kind": "data",
+        "source_output": "url",
+        "target_input": "url"
+      },
+      {
+        "id": "d-download-asset_id-got_video-left",
+        "source": "download",
+        "target": "got_video",
+        "kind": "data",
+        "source_output": "asset_id",
+        "target_input": "left"
+      },
+      {
+        "id": "d-download-asset_id-transcript-asset_id",
+        "source": "download",
+        "target": "transcript",
+        "kind": "data",
+        "source_output": "asset_id",
+        "target_input": "asset_id"
+      }
+    ]
+  }
+}

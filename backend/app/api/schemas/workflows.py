@@ -130,6 +130,8 @@ class WorkflowTemplateRequirementOut(ApiModel):
     check: str = ""
     #: 缺了也能跑(旁白之类)。界面把「缺」说成「可选」,不报警。
     optional: bool = False
+    #: 几选一的组名(分析类模板的数据来源:TikHub 或内嵌浏览器)。同组有一条齐了这一组就齐;空 = 不在组里。
+    group: str = ""
 
 
 class WorkflowTemplateCheckOut(ApiModel):

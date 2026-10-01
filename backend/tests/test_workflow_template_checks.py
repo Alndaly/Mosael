@@ -30,11 +30,27 @@ def test_未知的检查键在写目录时就挡住() -> None:
         req.requirement("gpu", zh="显卡", en="GPU")
 
 
+def test_几选一的组里不能再有可选项() -> None:
+    """「可选」是缺了也能跑,「几选一」是组里满足一条就能跑 —— 两种说法叠在一条上,界面不知道该怎么说它。"""
+    with pytest.raises(ValueError):
+        req.requirement(req.TIKHUB_ACCOUNT, zh="TikHub", en="TikHub", optional=True, group="data_source")
+
+
+def test_每个组都不止一条() -> None:
+    """一组只有一条就不是「几选一」,是写错了组名。"""
+    for card in TEMPLATE_CATALOG:
+        groups: dict[str, int] = {}
+        for one in card["requires"]:
+            if one["group"]:
+                groups[one["group"]] = groups.get(one["group"], 0) + 1
+        assert all(count >= 2 for count in groups.values()), f"{card['id']}: {groups}"
+
+
 def test_目录接口把检查键和可选标记一起发下去() -> None:
     client = fresh_client()
     templates = client.get("/api/workflows/templates").json()
     full = next(one for one in templates if one["id"] == "full_video_generation")
-    assert full["requirements"][0] == {"text": "AI 对话模型", "check": "chat_model", "optional": False}
+    assert full["requirements"][0] == {"text": "AI 对话模型", "check": "chat_model", "optional": False, "group": ""}
     narration = full["requirements"][-1]
     assert narration["check"] == "cloned_voice" and narration["optional"] is True
     cleanup = next(one for one in templates if one["id"] == "transcript_video_cleanup")

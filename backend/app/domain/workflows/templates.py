@@ -23,6 +23,9 @@ from app.domain.workflows.template_requirements import (
     SEPARATION_ENGINE,
     LIPSYNC_VIDEO_MODEL,
     SPEECH_VIDEO_MODEL,
+    TIKHUB_ACCOUNT,
+    TIKHUB_COMMENTS,
+    TIKHUB_VIDEO,
     TRANSCRIPTION_ENGINE,
     requirement,
 )
@@ -41,6 +44,16 @@ from app.domain.workflows.templates_business import (
     product_on_model_graph,
     product_pitch_short_graph,
     talking_script_video_graph,
+)
+from app.domain.workflows.templates_analysis import (
+    ACCOUNT_ANALYSIS,
+    ANALYSIS_TEMPLATE_CATALOG,
+    COMMENT_INSIGHTS,
+    VIRAL_VIDEO_BREAKDOWN,
+    account_analysis_graph,
+    comment_insights_graph,
+    tikhub_status,
+    viral_video_breakdown_graph,
 )
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -107,7 +120,8 @@ from app.domain.workflows.templates_full_video import (
 #: (同步脚本里另写一份)、以及这里的图。三套各写各的,改一处不会让另外两处报错,只会让同一个
 #: 模板在三个地方讲三种话。现在应用和官网都读这一份。
 #: 模板库里的卡片。前三条是"无中生有"和"一进一出";后四条(templates_business)是**起点为用户
-#: 手里已有的东西** —— 一条长视频、一张商品图。拼在一起是因为模板库只有一份清单。
+#: 手里已有的东西** —— 一条长视频、一张商品图;最后是分析类(templates_analysis),产出的是一份分析笔记。
+#: 拼在一起是因为模板库只有一份清单。
 TEMPLATE_CATALOG: list[dict[str, Any]] = [
     {
         "id": "full_video_generation",
@@ -263,7 +277,7 @@ TEMPLATE_CATALOG: list[dict[str, Any]] = [
                    "Lay subtitles on the original timecodes", "Dub and time-compress", "Re-sync the lips to the dub", "Export"],
         },
     },
-] + BUSINESS_TEMPLATE_CATALOG
+] + BUSINESS_TEMPLATE_CATALOG + ANALYSIS_TEMPLATE_CATALOG
 
 
 def built_in_template_graph(
@@ -326,6 +340,13 @@ def built_in_template_graph(
             chat=chat,
             image=_reference_image_model(db, user_id, needed=SINGLE_REFERENCE),
         ))
+    #: 分析类:只要对话模型;取数走 TikHub 插件或内嵌浏览器,由开始节点的 data_source 选(见 templates_analysis)。
+    if template_id == ACCOUNT_ANALYSIS:
+        return localised_names(locale, account_analysis_graph(chat=chat, locale=locale))
+    if template_id == VIRAL_VIDEO_BREAKDOWN:
+        return localised_names(locale, viral_video_breakdown_graph(chat=chat, locale=locale))
+    if template_id == COMMENT_INSIGHTS:
+        return localised_names(locale, comment_insights_graph(chat=chat, locale=locale))
     raise WorkflowDomainError("wfErr_unknownTemplate", params={"id": template_id})
 
 
@@ -357,6 +378,10 @@ def blank_template_graphs(locale: str) -> dict[str, dict[str, Any]]:
         FABRIC_LOOKBOOK: fabric_lookbook_graph(chat=blank, image=blank),
         FOOTAGE_MONTAGE: footage_montage_graph(chat=blank, voice_id=""),
         TALKING_SCRIPT_VIDEO: talking_script_video_graph(voice_id=""),
+        #: 分析类只有对话模型那一格(留空);TikHub 的连接、浏览器的登录档案都是用的人在本机选的。
+        ACCOUNT_ANALYSIS: account_analysis_graph(chat=blank, locale=locale),
+        VIRAL_VIDEO_BREAKDOWN: viral_video_breakdown_graph(chat=blank, locale=locale),
+        COMMENT_INSIGHTS: comment_insights_graph(chat=blank, locale=locale),
     }
 
 
@@ -543,5 +568,8 @@ def requirement_statuses(db: Session, *, user_id: str, workspace_id: str) -> dic
         SEPARATION_ENGINE: _provider_status(db, user_id, audio_capabilities.SEPARATION, separation_models.runtime_status),
         SPEECH_VIDEO_MODEL: "met" if talking_models(db, SPEECH_TO_VIDEO, user_id) else "missing",
         LIPSYNC_VIDEO_MODEL: "met" if talking_models(db, VIDEO_LIPSYNC, user_id) else "missing",
+        TIKHUB_ACCOUNT: tikhub_status(db, user_id, TIKHUB_ACCOUNT),
+        TIKHUB_VIDEO: tikhub_status(db, user_id, TIKHUB_VIDEO),
+        TIKHUB_COMMENTS: tikhub_status(db, user_id, TIKHUB_COMMENTS),
     }
     return statuses
