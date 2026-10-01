@@ -804,3 +804,62 @@ describe("引到开始节点的参数", () => {
     expect(missing(make({ params: {} }, "{{gone.text}}"))).toEqual([]);
   });
 });
+
+describe("循环体 / 子图本身的几条规矩(与后端 validate_body_graph 同一份)", () => {
+  const boxed = (type: string, config: Record<string, unknown>) =>
+    graph(
+      [
+        { id: "start", type: "start", config: {} },
+        { id: "box", type, name: "逐镜", config },
+      ],
+      [{ id: "e1", source: "start", target: "box" }],
+    );
+  const issuesOf = (g: WorkflowGraph) => analyzeWorkflow(g, registry, fullCtx).issues;
+
+  it("体是空的(没建、或一个节点都没有):阻断,记在容器自己身上", () => {
+    //: 后端运行前拒「循环体不能为空」。刚拖出来的循环节点就是这样 —— 此前清单全绿。
+    for (const config of [{ items: "a" }, { items: "a", body: { nodes: [], edges: [] } }]) {
+      expect(issuesOf(boxed("loop_foreach", config))).toContainEqual(
+        expect.objectContaining({ nodeId: "box", path: [], code: "body-empty", severity: "error", configKey: "body" }),
+      );
+    }
+    expect(
+      issuesOf(boxed("loop_foreach", { items: "a", body: { nodes: [{ id: "t", type: "template", config: { template: "x" } }], edges: [] } }))
+        .filter((i) => i.code === "body-empty"),
+    ).toEqual([]);
+  });
+
+  it("体里放「输出」节点:阻断 —— 工作流的输出只在最外层算数", () => {
+    const a = issuesOf(
+      boxed("subgraph", { body: { nodes: [{ id: "out", type: "output", config: {} }], edges: [] } }),
+    );
+    expect(a).toContainEqual(expect.objectContaining({ nodeId: "out", path: ["box"], code: "output-in-body", severity: "error" }));
+    // 最外层的输出节点不归这条管
+    expect(issuesOf(graph([{ id: "start", type: "start", config: {} }, { id: "out", type: "output", config: {} }])).filter((i) => i.code === "output-in-body")).toEqual([]);
+  });
+
+  it("{{loop.不存在}}:作用域名对了、字段不在它提供的那几个里,阻断并说清有哪些", () => {
+    const a = issuesOf(
+      boxed("loop_foreach", {
+        items: "a",
+        body: { nodes: [{ id: "t", type: "template", config: { template: "{{loop.item.x}} {{loop.itme}}" } }], edges: [] },
+        output: "{{loop.idx}}",
+      }),
+    );
+    const missing = a.filter((i) => i.code === "scope-field-missing");
+    expect(missing).toHaveLength(2);
+    expect(missing).toContainEqual(
+      expect.objectContaining({ nodeId: "t", path: ["box"], configKey: "template", ref: "{{loop.itme}}", available: ["loop.item", "loop.index"] }),
+    );
+    expect(missing).toContainEqual(expect.objectContaining({ nodeId: "box", path: [], configKey: "output", ref: "{{loop.idx}}" }));
+    // 字段来自配置的作用域(`*inputs`)只有运行时知道,不判;体里恰好有个节点叫 loop 时它就是那个节点。
+    expect(
+      issuesOf(
+        boxed("loop_foreach", {
+          items: "a",
+          body: { nodes: [{ id: "t", type: "template", config: { template: "{{input.whatever}}" } }], edges: [] },
+        }),
+      ).filter((i) => i.code === "scope-field-missing"),
+    ).toEqual([]);
+  });
+});

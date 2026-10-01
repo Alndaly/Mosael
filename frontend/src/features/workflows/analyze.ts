@@ -28,6 +28,9 @@ export type IssueCode =
   | "type-mismatch" // 数据边:上游输出类型与目标输入期望类型不兼容(软提示)
   | "code-template" // 代码字段里写了 {{…}}:代码不插值,那一段不会被替换(软提示)
   | "code-field-bound" // 代码字段接了数据边:上游的值整段变成代码,后端运行前拒(wfErr_codeFieldBound)
+  | "body-empty" // 循环体 / 子图里一个节点都没有(后端 validate_body_graph 拒)
+  | "output-in-body" // 「输出」节点放在体里:工作流的输出只在最外层算数
+  | "scope-field-missing" // 体内引用了作用域没有的字段,如 {{loop.不存在}}(作用域只提供固定几个)
   | "unknown-type"; // 节点类型不在目录里:提供它的插件没装 / 停用了 / 工具已不存在
 
 export interface NodeIssue {
@@ -46,6 +49,8 @@ export interface NodeIssue {
   group?: string[];
   /** stale-var:失效的完整引用,如 "{{llm-1.text}}"。 */
   ref?: string;
+  /** scope-field-missing:这个作用域实际提供的那几个(`loop.item`、`loop.index`),拼进文案。 */
+  available?: string[];
   /** type-mismatch:期望/实际类型,拼进文案。 */
   expected?: DataType;
   actual?: DataType;
@@ -187,6 +192,27 @@ export function extractRefs(value: unknown): Array<{ ref: string; sourceId: stri
   return out;
 }
 
+/**
+ * 体内引用到作用域名上、而那个字段作用域根本不提供:`{{loop.itme}}`。返回作用域实际提供的那几个(拼进文案);
+ * 没问题返回 null。
+ *
+ * 只判字段固定的作用域(`loop` 的 item / index);字段来自配置的(`*inputs`)只有运行时那份配置知道,不判。
+ * 体里恰好有个节点和作用域同名时,引用的是那个节点。与后端 graph_rules._body_refs 同一条。
+ */
+function missingScopeField(
+  scope: Readonly<Record<string, string[]>>,
+  bodyIds: ReadonlySet<string>,
+  sourceId: string,
+  field: string,
+): string[] | null {
+  const fields = scope[sourceId];
+  if (!fields || fields.some((one) => one.startsWith("*")) || bodyIds.has(sourceId) || !field) return null;
+  if (fields.includes(field)) return null;
+  return Object.entries(scope)
+    .filter(([, names]) => !names.some((one) => one.startsWith("*")))
+    .flatMap(([root, names]) => names.map((name) => `${root}.${name}`));
+}
+
 /** 引用里节点后面那一段(`{{loop.item.x}}` → `item`);只有根就是空串。 */
 function refField(ref: string): string {
   return ref.slice(2, -2).trim().split(".")[1] ?? "";
@@ -234,9 +260,10 @@ export interface Analysis {
  * 从没被检查过 —— 而最贵的那几步恰恰住在里面(示范模板的整个"逐镜生成"都在循环体里)。
  * 表现是画布全绿、点了运行、前面几步跑完花了钱,才在循环里第一镜上失败。
  *
- * `scopeExtras` 是这一层**注入的变量名**:体内的 `{{loop.item.x}}` 和 `{{input.y}}` 引用的
- * 不是节点,是作用域给的东西。不把它们算进来的话,递归下去会把每一条正常引用都报成失效;
- * 多算一个的话,引用了一个运行时根本不存在的名字也会被放行。所以只认节点声明的那几个。
+ * `scope` 是这一层**注入的变量**(容器声明的 body_scope:作用域名 → 字段):体内的 `{{loop.item.x}}`
+ * 和 `{{input.y}}` 引用的不是节点,是作用域给的东西。不把它们算进来的话,递归下去会把每一条正常
+ * 引用都报成失效;多算一个的话,引用了一个运行时根本不存在的名字也会被放行。所以只认节点声明的那几个;
+ * 字段固定的作用域(`loop`)连字段也核对。
  *
  * 每条问题记的是**它真正所在的那一层和那个节点**(`path` + `nodeId`)。画布在哪一层,就由
  * issuesAtLayer 把问题折到那一层看得见的节点上:体里的问题在主流程上挂在容器头上,钻进去
@@ -248,11 +275,12 @@ function collect(
   registry: RegistryLike,
   ctx: AnalyzeContext,
   issues: NodeIssue[],
-  scopeExtras: ReadonlySet<string> = new Set(),
+  scope: Readonly<Record<string, string[]>> = {},
   path: ScopePath = [],
   insideName = "",
 ): void {
-  const nodeIds = new Set([...graph.nodes.map((n) => n.id), ...scopeExtras]);
+  const layerIds = new Set(graph.nodes.map((n) => n.id));
+  const nodeIds = new Set([...layerIds, ...Object.keys(scope)]);
   const reachable = reachableFromStart(graph);
   // 「没有开始节点」只对顶层成立 —— 循环体本来就没有 start,它由外层驱动。
   const hasStart = graph.nodes.some((n) => n.type === "start");
@@ -299,6 +327,8 @@ function collect(
         code,
         ...extra,
       });
+    // 「输出」节点声明的是整条工作流交给调用方的东西,只在最外层算数:放在体里照样跑,产出却没人收。
+    if (path.length > 0 && node.type === "output") push("error", "output-in-body");
     // 节点类型不在目录里(目录由后端按已装、已启用的插件给)。后端跑到它直接报「未知的节点类型」——
     // 先在清单里说,别等前面几步跑完、花了钱才知道;画布上它也只剩一个裸的 `plugin.包.工具`。
     if (!meta) push("error", "unknown-type");
@@ -306,12 +336,15 @@ function collect(
     // 容器节点自己的 output / condition 在**体内**作用域里解析:看得见的是体里的节点和声明的作用域名。
     const bodyField = bodyKey(registry, node.type);
     const innerGraph = bodyField ? config[bodyField] : undefined;
-    const innerNames = new Set([
-      ...(innerGraph && typeof innerGraph === "object" && Array.isArray((innerGraph as WorkflowGraph).nodes)
+    const innerIds = new Set(
+      innerGraph && typeof innerGraph === "object" && Array.isArray((innerGraph as WorkflowGraph).nodes)
         ? (innerGraph as WorkflowGraph).nodes.map((inner) => inner.id)
-        : []),
-      ...bodyScope(registry, node.type),
-    ]);
+        : [],
+    );
+    const innerScope = meta?.body_scope ?? {};
+    const innerNames = new Set([...innerIds, ...bodyScope(registry, node.type)]);
+    // 体是空的(还没建、或一个节点都没有):后端运行前拒。刚拖出来的循环节点就是这样。
+    if (bodyField && innerIds.size === 0) push("error", "body-empty", { configKey: bodyField });
 
     // 必填字段 + 失效引用(逐字段)
     const fieldSpecs = (meta?.config ?? {}) as Record<string, ConfigSpecLike>;
@@ -334,6 +367,8 @@ function collect(
         if (key === bodyField) continue;
         for (const { ref, sourceId } of extractRefs(config[key])) {
           if (!innerNames.has(sourceId)) push("error", "stale-var", { configKey: key, ref });
+          const available = missingScopeField(innerScope, innerIds, sourceId, refField(ref));
+          if (available) push("error", "scope-field-missing", { configKey: key, ref, available });
         }
         continue;
       }
@@ -348,6 +383,8 @@ function collect(
         // start 的 *params 通配前缀不算节点 id;引用不存在的节点即失效。
         if (!nodeIds.has(sourceId)) push("error", "stale-var", { configKey: key, ref });
         else if (startParamMissing(sourceId, refField(ref))) push("error", "start-param-missing", { configKey: key, ref });
+        const available = missingScopeField(scope, layerIds, sourceId, refField(ref));
+        if (available) push("error", "scope-field-missing", { configKey: key, ref, available });
       }
     }
 
@@ -378,7 +415,7 @@ function collect(
         registry,
         ctx,
         issues,
-        new Set(bodyScope(registry, node.type)),
+        innerScope,
         [...path, node.id],
         insideName ? `${insideName} › ${nodeName}` : nodeName,
       );

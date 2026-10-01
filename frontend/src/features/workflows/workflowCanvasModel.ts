@@ -206,6 +206,14 @@ export function workflowIssueText(
       return t("wfIssueStaleVar").replace("{ref}", issue.ref ?? "");
     case "start-param-missing":
       return t("wfIssueStartParamMissing").replace("{ref}", issue.ref ?? "");
+    case "body-empty":
+      return t("wfIssueBodyEmpty");
+    case "output-in-body":
+      return t("wfIssueOutputInBody");
+    case "scope-field-missing":
+      return t("wfIssueScopeFieldMissing")
+        .replace("{ref}", issue.ref ?? "")
+        .replace("{available}", (issue.available ?? []).join(" / "));
     case "disconnected":
       return t("wfIssueDisconnected");
     case "no-providers":
