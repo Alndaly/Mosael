@@ -288,3 +288,29 @@ def test_这一轮在停_几张一起起的都取消_不只是正在等的那一
     assert caught.value.key == "wfErr_cancelled" and len(children) == 3
     with unit_of_work() as db:
         assert [(db.get(Job, one).status, db.get(Job, one).error_key) for one in children] == [("failed", "jobErr_cancelled")] * 3
+
+
+def test_第三张被拒_前两张已经建好的任务一并取消_不停在排队(setup, monkeypatch) -> None:
+    """漏斗每建一张就提交一次;第 N 张被拒时,前面几张已经落库却还没起线程 —— 此前它们永远停在 queued。"""
+    from app.db.models import Job
+    from app.domain.generation.operations import GenerationDomainError
+    from app.domain.jobs import create_job
+
+    client, ws, _fake = setup
+    children: list[str] = []
+
+    def create(db, **kwargs):
+        if len(children) == 2:
+            raise GenerationDomainError("genErr_noDefaultModel")
+        job = create_job(db, workspace_id=ws, kind="ai_generation", payload={}, created_by=None)
+        db.commit()  # 和真的漏斗一样:每建一张就提交
+        children.append(job.id)
+        return SimpleNamespace(id=f"gen-{len(children)}"), job
+
+    monkeypatch.setattr("app.domain.generation.create_generation_job", create)
+    entity_id = _entity(client, ws)
+    with unit_of_work() as db, pytest.raises(WorkflowDomainError) as refused:
+        executors.entity_angles(db, _scope(ws), {"entity_id": entity_id})
+    assert refused.value.key == "genErr_noDefaultModel" and len(children) == 2
+    with unit_of_work() as db:
+        assert [(db.get(Job, one).status, db.get(Job, one).error_key) for one in children] == [("failed", "jobErr_cancelled")] * 2

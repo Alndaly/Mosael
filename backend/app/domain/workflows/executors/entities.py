@@ -339,8 +339,14 @@ def draw_and_attach(db: Session, scope: RunScope, drawing: Drawing) -> dict[str,
                 entity_ids=[drawing.entity_id],
             )
             started.append((role, generation.id, child.id))
-    except GenerationDomainError as exc:
-        raise WorkflowDomainError.from_error(exc) from exc
+    except BaseException as exc:
+        #: 第 N 张被拒(模型不收、额度不够……)时,前面几张漏斗已经建好、提交了,却还没起线程 —— 不收拾的话,
+        #: 就是一排永远停在 queued 的任务。先放掉这个会话手里半截的写,再把它们取消。
+        db.rollback()
+        _abandon([child_id for _role, _generation, child_id in started])
+        if isinstance(exc, GenerationDomainError):
+            raise WorkflowDomainError.from_error(exc) from exc
+        raise
     db.commit()
     for _role, generation_id, _child in started:
         start_generation_thread(generation_id)
