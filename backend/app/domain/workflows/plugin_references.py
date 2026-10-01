@@ -239,17 +239,35 @@ def _rename_references(value: Any, node_id: str, renames: dict[str, str]) -> Any
     return value
 
 
-def _used_outputs(graph: dict[str, Any], node_id: str) -> tuple[set[str], set[str]]:
-    """下游用了这个节点的哪几个输出口:(从它连出去的数据边, 别的节点里的模板引用)。"""
+def _inner_keys(node: dict[str, Any]) -> tuple[str, ...]:
+    """容器节点(循环 / 子图)配置里属于**体内**作用域的几格(NESTED_BODY_RAW_KEYS):`output` / `condition` 里的
+    `{{p1.x}}` 指的是体里的 p1,不是这一层同名的那个。和 normalization、reference_dependencies 同一条界线。"""
+    from app.domain.workflows import NESTED_BODY_RAW_KEYS, NESTED_BODY_TYPES
+
+    return NESTED_BODY_RAW_KEYS if str(node.get("type") or "") in NESTED_BODY_TYPES else ()
+
+
+def _this_scope(node: dict[str, Any]) -> dict[str, Any]:
+    """一个节点的配置里**属于这一层**的那几格(去掉容器的体内作用域)。"""
+    inner = _inner_keys(node)
+    return {key: value for key, value in (node.get("config") or {}).items() if key not in inner}
+
+
+def _used_outputs(graph: dict[str, Any], node_id: str, outside: dict[str, Any]) -> tuple[set[str], set[str]]:
+    """下游用了这个节点的哪几个输出口:(从它连出去的数据边, 别的节点里的模板引用)。
+
+    模板引用只算**同一个作用域**里的:这一层别的节点(容器的体内那几格不算 —— 那是体里的作用域),加上
+    `outside` —— 这一层是一个容器的体时,容器自己的 output / condition 就是体内的下游。
+    """
     by_edge = {
         str(edge.get("source_output") or "") for edge in graph.get("edges") or []
         if isinstance(edge, dict) and edge.get("source") == node_id and edge.get("kind") == "data"
         and edge.get("source_output")
     }
-    by_template: set[str] = set()
+    by_template = _references_to(outside, node_id)
     for other in graph.get("nodes") or []:
         if isinstance(other, dict) and other.get("id") != node_id:
-            by_template |= _references_to(other.get("config") or {}, node_id)
+            by_template |= _references_to(_this_scope(other), node_id)
     return by_edge, by_template
 
 
@@ -259,8 +277,16 @@ def rewrite_graph(graph: dict[str, Any], found: list[Replacement], dropped: list
     老工具已经不在了时,没有位置的格子、数据边和下游引用丢掉;给了 `dropped` 就把它们记成 `节点 id.格子` /
     `节点 id.格子(连线)` / `节点 id.输出(下游连线)` / `节点 id.输出(下游引用)`。
     """
+    return _rewrite_scope(graph, found, dropped, {})[0]
+
+
+def _rewrite_scope(
+    graph: dict[str, Any], found: list[Replacement], dropped: list[str] | None, outside: dict[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """改一层作用域。`outside` 是这一层作为容器的体时、容器自己那几格体内作用域的配置(output / condition):
+    它们是体里节点的下游,改口名时一起改,改过的跟着返回。"""
     if not isinstance(graph, dict):
-        return graph
+        return graph, outside
     renamed: dict[str, Replacement] = {}
     #: 改过的节点 → 它的输出口改名(老 → 新),和对不上、要拆掉的那几条连出去的数据边的口名
     output_renames: dict[str, dict[str, str]] = {}
@@ -271,9 +297,13 @@ def rewrite_graph(graph: dict[str, Any], found: list[Replacement], dropped: list
             nodes.append(node)
             continue
         config = dict(node.get("config") or {})
-        for key, value in config.items():
+        inner_keys = _inner_keys(node)
+        for key, value in list(config.items()):
             if isinstance(value, dict) and isinstance(value.get("nodes"), list):
-                config[key] = rewrite_graph(value, found, dropped)
+                # 容器自己的 output / condition 和体里的节点同一个作用域:体里的口改了名,它们跟着改
+                inner = {one: config[one] for one in inner_keys if one != key and one in config} if key == "body" else {}
+                config[key], inner = _rewrite_scope(value, found, dropped, inner)
+                config.update(inner)
         unplaced: list[str] = []
         result = rewrite_node(str(node.get("type") or ""), config, found, unplaced)
         if result is None:
@@ -283,7 +313,7 @@ def rewrite_graph(graph: dict[str, Any], found: list[Replacement], dropped: list
         node_id = str(node.get("id"))
         loose = [str(edge["target_input"]) for edge in graph.get("edges") or []
                  if _data_edge_into(edge, node.get("id")) and replacement.target(str(edge["target_input"])) is MISSING]
-        by_edge, by_template = _used_outputs(graph, node_id)
+        by_edge, by_template = _used_outputs(graph, node_id, outside)
         unmatched = {name for name in by_edge | by_template if replacement.output(name) is MISSING}
         if (loose or unmatched) and not replacement.retired:
             nodes.append({**node, "config": config})
@@ -303,10 +333,11 @@ def rewrite_graph(graph: dict[str, Any], found: list[Replacement], dropped: list
     for node_id, renames in output_renames.items():
         if renames:
             nodes = [
-                {**one, "config": _rename_references(one.get("config") or {}, node_id, renames)}
+                {**one, "config": {**(one.get("config") or {}), **_rename_references(_this_scope(one), node_id, renames)}}
                 if isinstance(one, dict) and one.get("id") != node_id else one
                 for one in nodes
             ]
+            outside = _rename_references(outside, node_id, renames)
     edges = []
     for edge in graph.get("edges") or []:
         replacement = renamed.get(str(edge.get("target"))) if isinstance(edge, dict) else None
@@ -322,7 +353,8 @@ def rewrite_graph(graph: dict[str, Any], found: list[Replacement], dropped: list
                 continue  # 新工具上没有这个输出口,这条连出去的线接不上了
             edge = {**edge, "source_output": output_renames[source].get(output, output)}
         edges.append(edge)
-    return {**graph, "nodes": nodes, "edges": edges} if "edges" in graph else {**graph, "nodes": nodes}
+    rewritten = {**graph, "nodes": nodes, "edges": edges} if "edges" in graph else {**graph, "nodes": nodes}
+    return rewritten, outside
 
 
 def rewrite_replaced_tools(db: Session) -> int:

@@ -71,3 +71,46 @@ def test_下游都对得上时_老工具还在也照改() -> None:
     graph["edges"] = [graph["edges"][1]]
     rewritten = rewrite_graph(graph, [_replacement(retired=False)], [])
     assert rewritten["nodes"][0]["type"] == "plugin.dev.test.p.new"
+
+
+# ---------- 作用域:容器的 output / condition 属于体内 ----------
+
+
+def test_体里的节点改了口名_容器自己的output和condition跟着改() -> None:
+    """循环体里的老节点被改写时,父容器的 output / condition 是体内的下游(它们在体内作用域里插值):
+    此前递归进体时只扫体里的节点,看不到这两格 —— 口改了名,`{{n.assets}}` 留着取空。"""
+    body = {"nodes": [{"id": "n", "type": OLD, "config": {"q": "猫"}}], "edges": []}
+    graph = {"nodes": [{"id": "loop", "type": "loop_while", "config": {
+        "body": body, "output": "{{n.assets}}", "condition": "{{n.assets}}", "max_iterations": "3"}}], "edges": []}
+    dropped: list[str] = []
+    rewritten = rewrite_graph(graph, [_replacement(retired=True, outputs={"assets": "asset_ids"})], dropped)
+    loop = rewritten["nodes"][0]["config"]
+    assert loop["body"]["nodes"][0]["type"] == "plugin.dev.test.p.new"
+    assert loop["output"] == "{{n.asset_ids}}" and loop["condition"] == "{{n.asset_ids}}"
+    assert dropped == []
+
+
+def test_体里的节点_容器output引用了新工具没有的口_老工具还在就不改() -> None:
+    body = {"nodes": [{"id": "n", "type": OLD, "config": {"q": "猫"}}], "edges": []}
+    graph = {"nodes": [{"id": "loop", "type": "loop_foreach", "config": {
+        "items": "[1]", "body": body, "output": "{{n.list}}"}}], "edges": []}
+    rewritten = rewrite_graph(graph, [_replacement(retired=False)], [])
+    assert rewritten["nodes"][0]["config"]["body"]["nodes"][0]["type"] == OLD, "output 要的口新工具没有:不改"
+
+
+def test_外层同名节点_不把容器体内的output当成自己的下游() -> None:
+    """外层的 n 和体里的 n 同名是常态(节点 id 只在一层里唯一)。容器的 output 指的是体里那个:
+    此前外层扫描把它算成外层 n 的下游 —— 要么因为「对不上」不改外层节点,要么把体内的引用改了名。"""
+    body = {"nodes": [{"id": "n", "type": "llm", "config": {"prompt": "hi"}}], "edges": []}
+    graph = {"nodes": [
+        {"id": "n", "type": OLD, "config": {"q": "猫"}},
+        {"id": "use", "type": "template", "config": {"template": "{{n.assets}}"}},
+        {"id": "loop", "type": "loop_foreach", "config": {"items": "[1]", "body": body, "output": "{{n.text}} {{n.assets}}"}},
+    ], "edges": []}
+    dropped: list[str] = []
+    rewritten = rewrite_graph(graph, [_replacement(retired=False, outputs={"assets": "asset_ids"})], dropped)
+    nodes = {node["id"]: node for node in rewritten["nodes"]}
+    assert nodes["n"]["type"] == "plugin.dev.test.p.new", "体内的 {{n.text}} 不是外层 n 的下游"
+    assert nodes["use"]["config"]["template"] == "{{n.asset_ids}}"
+    assert nodes["loop"]["config"]["output"] == "{{n.text}} {{n.assets}}", "体内的引用不跟着外层改名"
+    assert dropped == []
