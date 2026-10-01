@@ -13,6 +13,8 @@ import textwrap
 import time
 from pathlib import Path
 
+import pytest
+
 from app.core.db import SessionLocal
 from app.db.models import Job, PluginInstance, PluginPackage
 from app.domain.plugins.nodes import node_meta
@@ -164,6 +166,19 @@ def test_数组入参收到名字到值的映射_报清楚是哪一格_不包成
     }))
     assert status == "failed"
     assert "「几段」要的是一串值,收到的却是「名字 → 值」的映射" in (error or ""), error
+
+
+@pytest.mark.xfail(strict=True, reason="必填的空值判据统一在 graph_rules(引擎那一轮修);合进来之后这条转绿,去掉这个标记")
+def test_必填的数组入参填了空列表_运行前就拦() -> None:
+    """插件的 list 字段和别的必填字段走同一个空值判据:`[]` 和没填一样。此前 graph_rules 只认 None / "",
+    表单上一行都没填的必填数组放行,插件收到的是没有这一格(_as_list 把空列表去掉)。"""
+    from app.domain.workflows.graph_rules import validate_graph
+
+    tool = {"name": "t", "input_schema": {"type": "object", "required": ["items"], "properties": {
+        "items": {"type": "array", "items": {"type": "string"}}}}}
+    graph = _graph({"id": "p", "type": "plugin.pkg.t", "config": {"items": []}})
+    errors = validate_graph(graph, extra_types={"plugin.pkg.t": node_meta(tool)})
+    assert any("items" in one for one in errors), errors
 
 
 # ---------- node.config 与 input_schema ----------
