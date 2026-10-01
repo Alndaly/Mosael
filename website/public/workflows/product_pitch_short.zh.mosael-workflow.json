@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "商品 → 带货口播短视频",
   "description": "给一张商品图和几条卖点,写一条分拍的口播脚本(第一拍是钩子、最后一拍是行动号召,最多 12 拍),每一拍出一张带商品的竖幅画面、按这一拍的时长铺上时间线,用你的克隆音色念这一拍的画外音、对齐这一拍的开头,再铺上屏幕短句,导出竖屏成片。没有人出镜。卖点只用你给的那几条,不编功效和数据。",
-  "graph_hash": "789921674ea0eb5f623a3ce56ad842fe52c19bb8f605d37e00e9485bbd88ea8a",
+  "graph_hash": "2dc632984a0449b3593e823678e75961646c25b3532b467cd8bec95c7b1f24ff",
   "graph": {
     "meta": {
       "template_id": "product_pitch_short",
@@ -224,12 +224,44 @@
                   "asset_id": "",
                   "track_id": "{{input.audio_track_id}}",
                   "at": "",
-                  "max_duration": "{{loop.item.seconds}}"
+                  "max_duration": "",
+                  "trim_overflow": "yes"
                 },
                 "inputs": [
                   "asset_id",
-                  "at"
+                  "at",
+                  "max_duration"
                 ]
+              },
+              {
+                "id": "voice_overflow",
+                "type": "condition",
+                "name": "画外音裁掉了尾巴吗",
+                "position": {
+                  "x": 1040,
+                  "y": 320
+                },
+                "config": {
+                  "left": "",
+                  "op": "gt",
+                  "right": "0"
+                },
+                "inputs": [
+                  "left"
+                ]
+              },
+              {
+                "id": "overflow_notice",
+                "type": "notify",
+                "name": "说一声画外音被裁了",
+                "position": {
+                  "x": 1360,
+                  "y": 320
+                },
+                "config": {
+                  "title": "带货短片:有一拍的画外音念不完",
+                  "body": "「{{loop.item.caption}}」那一拍的画外音加速到 1.5 倍仍比画面长 {{beat_voice_place.trimmed}} 秒,超出的部分已裁掉。想保住整句,把这一拍的口播改短或把这一拍的时长加长再运行一次。"
+                }
               }
             ],
             "edges": [
@@ -243,6 +275,12 @@
                 "id": "narration_voice_place",
                 "source": "has_narration",
                 "target": "beat_voice_place",
+                "source_handle": "true"
+              },
+              {
+                "id": "overflow_notify",
+                "source": "voice_overflow",
+                "target": "overflow_notice",
                 "source_handle": "true"
               },
               {
@@ -268,6 +306,22 @@
                 "kind": "data",
                 "source_output": "timeline_start",
                 "target_input": "at"
+              },
+              {
+                "id": "d-beat_on_timeline-duration-beat_voice_place-max_duration",
+                "source": "beat_on_timeline",
+                "target": "beat_voice_place",
+                "kind": "data",
+                "source_output": "duration",
+                "target_input": "max_duration"
+              },
+              {
+                "id": "d-beat_voice_place-trimmed-voice_overflow-left",
+                "source": "beat_voice_place",
+                "target": "voice_overflow",
+                "kind": "data",
+                "source_output": "trimmed",
+                "target_input": "left"
               }
             ]
           },

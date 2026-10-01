@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "Montage from your own footage",
   "description": "Pull a tagged batch of footage you already shot, let the model order the story, decide which part of which clip each beat uses, and write the narration; then lay every segment on the timeline in order, speak and caption each one (ducking the footage's own sound under the narration), and export. Nothing is generated — the picture is your own footage, and without a configured voice it falls back to captions only. If the tag is blank or has no videos, it stops and tells you.",
-  "graph_hash": "439880bfdd279597e661103b08567a07d843e7f0748f8b296b7a974019a6a632",
+  "graph_hash": "d8876b7d7eddd36fb9094fb1f85fdafe711e4eee7b27589f714abc3f40e595c8",
   "graph": {
     "meta": {
       "template_id": "footage_montage",
@@ -307,12 +307,44 @@
                   "asset_id": "",
                   "track_id": "{{input.audio_track_id}}",
                   "at": "",
-                  "max_duration": "{{loop.item.seconds}}"
+                  "max_duration": "",
+                  "trim_overflow": "yes"
                 },
                 "inputs": [
                   "asset_id",
-                  "at"
+                  "at",
+                  "max_duration"
                 ]
+              },
+              {
+                "id": "voice_overflow",
+                "type": "condition",
+                "name": "Was the narration cut short?",
+                "position": {
+                  "x": 1680,
+                  "y": 480
+                },
+                "config": {
+                  "left": "",
+                  "op": "gt",
+                  "right": "0"
+                },
+                "inputs": [
+                  "left"
+                ]
+              },
+              {
+                "id": "overflow_notice",
+                "type": "notify",
+                "name": "Say the narration was cut",
+                "position": {
+                  "x": 2000,
+                  "y": 480
+                },
+                "config": {
+                  "title": "混剪:有一段旁白念不完",
+                  "body": "「{{loop.item.segment_title}}」这一段的旁白加速到 1.5 倍仍比画面长 {{place_voice.trimmed}} 秒,超出的部分已裁掉。想保住整句,把这一段的旁白改短,或把这一段的素材取长一点再运行一次。"
+                }
               },
               {
                 "id": "duck_source",
@@ -339,10 +371,12 @@
                   "sequence_id": "{{input.sequence_id}}",
                   "segments": "{{loop.item.captions}}",
                   "offset": "",
+                  "until": "",
                   "allow_empty": "yes"
                 },
                 "inputs": [
-                  "offset"
+                  "offset",
+                  "until"
                 ]
               }
             ],
@@ -376,6 +410,12 @@
                 "target": "duck_source"
               },
               {
+                "id": "overflow_notify",
+                "source": "voice_overflow",
+                "target": "overflow_notice",
+                "source_handle": "true"
+              },
+              {
                 "id": "d-narrate-asset_id-place_voice-asset_id",
                 "source": "narrate",
                 "target": "place_voice",
@@ -392,12 +432,36 @@
                 "target_input": "at"
               },
               {
+                "id": "d-place_shot-duration-place_voice-max_duration",
+                "source": "place_shot",
+                "target": "place_voice",
+                "kind": "data",
+                "source_output": "duration",
+                "target_input": "max_duration"
+              },
+              {
+                "id": "d-place_voice-trimmed-voice_overflow-left",
+                "source": "place_voice",
+                "target": "voice_overflow",
+                "kind": "data",
+                "source_output": "trimmed",
+                "target_input": "left"
+              },
+              {
                 "id": "d-place_shot-timeline_start-caption_shot-offset",
                 "source": "place_shot",
                 "target": "caption_shot",
                 "kind": "data",
                 "source_output": "timeline_start",
                 "target_input": "offset"
+              },
+              {
+                "id": "d-place_shot-timeline_end-caption_shot-until",
+                "source": "place_shot",
+                "target": "caption_shot",
+                "kind": "data",
+                "source_output": "timeline_end",
+                "target_input": "until"
               }
             ]
           },

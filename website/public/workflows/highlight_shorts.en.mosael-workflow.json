@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "Long video into vertical clips",
   "description": "Transcribe a talk, interview or stream recording, pick the passages that stand on their own (up to 12), then give each one its own vertical timeline in a single project, take that range from the source, lay rewritten short captions on it and export. No image or video generation, so nothing is billed beyond the transcription and one chat call.",
-  "graph_hash": "1e6284b8c4381b1c256e45984c1f6cd51089cfe201ca55914d41a01d92a2292c",
+  "graph_hash": "fbee7fb2b4ebb1cea04d34fb92aba099684537f279c2006e3fbd18469978cac9",
   "graph": {
     "meta": {
       "template_id": "highlight_shorts",
@@ -241,10 +241,12 @@
                 "config": {
                   "sequence_id": "",
                   "segments": "{{loop.item.captions}}",
-                  "offset": 0
+                  "offset": 0,
+                  "until": ""
                 },
                 "inputs": [
-                  "sequence_id"
+                  "sequence_id",
+                  "until"
                 ]
               },
               {
@@ -264,11 +266,6 @@
               }
             ],
             "edges": [
-              {
-                "id": "place_caption",
-                "source": "place_range",
-                "target": "burn_captions"
-              },
               {
                 "id": "caption_export",
                 "source": "burn_captions",
@@ -297,6 +294,14 @@
                 "kind": "data",
                 "source_output": "sequence_id",
                 "target_input": "sequence_id"
+              },
+              {
+                "id": "d-place_range-timeline_end-burn_captions-until",
+                "source": "place_range",
+                "target": "burn_captions",
+                "kind": "data",
+                "source_output": "timeline_end",
+                "target_input": "until"
               },
               {
                 "id": "d-clip_sequence-sequence_id-export_clip-sequence_id",

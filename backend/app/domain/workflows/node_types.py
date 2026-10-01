@@ -150,6 +150,8 @@ _FIELD_LABELS = {
     "allow_empty": "wfField_allow_empty",
     "at": "wfField_at",
     "max_duration": "wfField_max_duration",
+    "trim_overflow": "wfField_trim_overflow",
+    "until": "wfField_until",
     "strength": "wfField_strength",
     "exact": "wfField_exact",
     "expression": "wfField_expression",
@@ -271,6 +273,7 @@ _FIELD_LABELS = {
     "timed_text": "wfField_timed_text",
     "timeline_end": "wfField_timeline_end",
     "timeline_start": "wfField_timeline_start",
+    "trimmed": "wfField_trimmed",
     "tracks": "wfField_tracks",
     "transcript_id": "wfField_transcript_id",
     "updated": "wfField_updated",
@@ -446,6 +449,7 @@ _OUTPUT_DATA_TYPES = {
     "text": "text",
     "timeline_end": "number",
     "timeline_start": "number",
+    "trimmed": "number",
     "waited": "number",
 }
 #: `scene`:一个 3D 场景的 id(「按文字搭 3D 场景」交出的那个)—— 画板据此把它落成一格 3D 场景格。
@@ -671,8 +675,18 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
             "end": {"advanced": True, "type": "number", "description": "wfNode_timeline_append_end"},
             "at": {"advanced": True, "type": "number", "description": "wfNode_timeline_append_at"},
             "max_duration": {"advanced": True, "type": "number", "description": "wfNode_timeline_append_max_duration"},
+            #: 加速到上限仍放不下时:默认让它超出去(超出多少看 timeline_end);选 yes 就把尾巴裁掉,裁了几秒交在 trimmed。
+            "trim_overflow": {
+                "advanced": True,
+                "type": "string",
+                "default": "no",
+                "options": ["yes", "no"],
+                "description": "wfNode_timeline_append_trim_overflow",
+            },
         },
-        "outputs": ["clip_id", "timeline_start", "timeline_end", "sequence_id"],
+        #: duration 是这一段在时间线上**实际**占几秒(timeline_end − timeline_start):素材比截取范围短时出点被夹到
+        #: 素材末尾,比计划的短 —— 下游按它定旁白最长多久、字幕裁到哪,不按计划里写的秒数。
+        "outputs": ["clip_id", "timeline_start", "timeline_end", "duration", "trimmed", "sequence_id"],
     },
     "timeline_add_track": {
         "external": False,
@@ -1267,6 +1281,9 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
                 "description": "wfNode_generate_subtitles_keep_original",
             },
             "offset": {"advanced": True, "type": "number", "description": "wfNode_generate_subtitles_offset"},
+            #: 字幕最晚到时间线上的第几秒(一般接上游那一段的 timeline_end):超出的那一截裁掉、整条落在它之后的不上屏 ——
+            #: 素材比计划短时,字幕不会盖到下一段上。
+            "until": {"advanced": True, "type": "number", "description": "wfNode_generate_subtitles_until"},
             "track_id": {"advanced": True, "type": "template", "depends_on": "sequence_id", "options_from": "sequence_tracks",
                          "description": "wfNode_generate_subtitles_track_id"},
             # 段落不是逐字稿、而是别的对象列表时(比如循环每一项的产物),起止和文本各在哪个字段。

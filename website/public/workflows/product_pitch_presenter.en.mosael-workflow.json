@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "Product into a presenter-led short",
   "description": "Everything in the narrated short, but a character from your asset library speaks the hook and the call to action on camera (with its own face and voice), while each beat in between stays a product shot voiced in the same voice, lined up with the beat and captioned, exported as a vertical short with an \"AI-generated\" label. Pick the character on “Pick the presenter” before running; it needs a front image and a voice in the asset library; real people need a consent declaration, and a cloned voice needs one too.",
-  "graph_hash": "52f5ec5188f9d77ab68bf4e12f46dd1d964b3ccd28d65947b3c2c53c4ee14a9c",
+  "graph_hash": "c14ee6f69dba9b66a7e420f3ea9d35c9535c9ebf46a11feda01a5f92f01d9568",
   "graph": {
     "meta": {
       "template_id": "product_pitch_presenter",
@@ -362,12 +362,44 @@
                   "asset_id": "",
                   "track_id": "{{input.audio_track_id}}",
                   "at": "",
-                  "max_duration": "{{loop.item.seconds}}"
+                  "max_duration": "",
+                  "trim_overflow": "yes"
                 },
                 "inputs": [
                   "asset_id",
-                  "at"
+                  "at",
+                  "max_duration"
                 ]
+              },
+              {
+                "id": "voice_overflow",
+                "type": "condition",
+                "name": "Was the voice-over cut short?",
+                "position": {
+                  "x": 1040,
+                  "y": 320
+                },
+                "config": {
+                  "left": "",
+                  "op": "gt",
+                  "right": "0"
+                },
+                "inputs": [
+                  "left"
+                ]
+              },
+              {
+                "id": "overflow_notice",
+                "type": "notify",
+                "name": "Say the voice-over was cut",
+                "position": {
+                  "x": 1360,
+                  "y": 320
+                },
+                "config": {
+                  "title": "带货短片:有一拍的画外音念不完",
+                  "body": "「{{loop.item.caption}}」那一拍的画外音加速到 1.5 倍仍比画面长 {{beat_voice_place.trimmed}} 秒,超出的部分已裁掉。想保住整句,把这一拍的口播改短或把这一拍的时长加长再运行一次。"
+                }
               }
             ],
             "edges": [
@@ -381,6 +413,12 @@
                 "id": "narration_voice_place",
                 "source": "has_narration",
                 "target": "beat_voice_place",
+                "source_handle": "true"
+              },
+              {
+                "id": "overflow_notify",
+                "source": "voice_overflow",
+                "target": "overflow_notice",
                 "source_handle": "true"
               },
               {
@@ -406,6 +444,22 @@
                 "kind": "data",
                 "source_output": "timeline_start",
                 "target_input": "at"
+              },
+              {
+                "id": "d-beat_on_timeline-duration-beat_voice_place-max_duration",
+                "source": "beat_on_timeline",
+                "target": "beat_voice_place",
+                "kind": "data",
+                "source_output": "duration",
+                "target_input": "max_duration"
+              },
+              {
+                "id": "d-beat_voice_place-trimmed-voice_overflow-left",
+                "source": "beat_voice_place",
+                "target": "voice_overflow",
+                "kind": "data",
+                "source_output": "trimmed",
+                "target_input": "left"
               }
             ]
           },

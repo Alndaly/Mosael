@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "自有素材混剪 · 配音与字幕",
   "description": "按标签取出你已经拍好的一批素材,让模型排出叙事顺序、定每段用哪条素材的哪一截、写好旁白,然后按顺序接上时间线,逐段配音(有旁白的那段把原声压低)并铺字幕,导出成片。不生成任何画面 —— 画面就是你自己的素材;没有配音音色时自动只出字幕。标签没填或这个标签下没有视频时,停下并告诉你。",
-  "graph_hash": "39b9a1ca933abe64dc92d9442ba249f30296180347dc54c7d83a6635bb0c8b6c",
+  "graph_hash": "adb6376b989008c25eb27842118c0009abb6ec257158d99179a1c7677f08ebb6",
   "graph": {
     "meta": {
       "template_id": "footage_montage",
@@ -307,12 +307,44 @@
                   "asset_id": "",
                   "track_id": "{{input.audio_track_id}}",
                   "at": "",
-                  "max_duration": "{{loop.item.seconds}}"
+                  "max_duration": "",
+                  "trim_overflow": "yes"
                 },
                 "inputs": [
                   "asset_id",
-                  "at"
+                  "at",
+                  "max_duration"
                 ]
+              },
+              {
+                "id": "voice_overflow",
+                "type": "condition",
+                "name": "旁白裁掉了尾巴吗",
+                "position": {
+                  "x": 1680,
+                  "y": 480
+                },
+                "config": {
+                  "left": "",
+                  "op": "gt",
+                  "right": "0"
+                },
+                "inputs": [
+                  "left"
+                ]
+              },
+              {
+                "id": "overflow_notice",
+                "type": "notify",
+                "name": "说一声旁白被裁了",
+                "position": {
+                  "x": 2000,
+                  "y": 480
+                },
+                "config": {
+                  "title": "混剪:有一段旁白念不完",
+                  "body": "「{{loop.item.segment_title}}」这一段的旁白加速到 1.5 倍仍比画面长 {{place_voice.trimmed}} 秒,超出的部分已裁掉。想保住整句,把这一段的旁白改短,或把这一段的素材取长一点再运行一次。"
+                }
               },
               {
                 "id": "duck_source",
@@ -339,10 +371,12 @@
                   "sequence_id": "{{input.sequence_id}}",
                   "segments": "{{loop.item.captions}}",
                   "offset": "",
+                  "until": "",
                   "allow_empty": "yes"
                 },
                 "inputs": [
-                  "offset"
+                  "offset",
+                  "until"
                 ]
               }
             ],
@@ -376,6 +410,12 @@
                 "target": "duck_source"
               },
               {
+                "id": "overflow_notify",
+                "source": "voice_overflow",
+                "target": "overflow_notice",
+                "source_handle": "true"
+              },
+              {
                 "id": "d-narrate-asset_id-place_voice-asset_id",
                 "source": "narrate",
                 "target": "place_voice",
@@ -392,12 +432,36 @@
                 "target_input": "at"
               },
               {
+                "id": "d-place_shot-duration-place_voice-max_duration",
+                "source": "place_shot",
+                "target": "place_voice",
+                "kind": "data",
+                "source_output": "duration",
+                "target_input": "max_duration"
+              },
+              {
+                "id": "d-place_voice-trimmed-voice_overflow-left",
+                "source": "place_voice",
+                "target": "voice_overflow",
+                "kind": "data",
+                "source_output": "trimmed",
+                "target_input": "left"
+              },
+              {
                 "id": "d-place_shot-timeline_start-caption_shot-offset",
                 "source": "place_shot",
                 "target": "caption_shot",
                 "kind": "data",
                 "source_output": "timeline_start",
                 "target_input": "offset"
+              },
+              {
+                "id": "d-place_shot-timeline_end-caption_shot-until",
+                "source": "place_shot",
+                "target": "caption_shot",
+                "kind": "data",
+                "source_output": "timeline_end",
+                "target_input": "until"
               }
             ]
           },

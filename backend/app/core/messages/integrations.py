@@ -766,6 +766,9 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfField_timed_text": {"zh": "带时间码文本", "en": "Timed text"},
     "wfField_timeline_end": {"zh": "时间线结束位置", "en": "Timeline end"},
     "wfField_timeline_start": {"zh": "时间线起始位置", "en": "Timeline start"},
+    "wfField_trimmed": {"zh": "裁掉的秒数", "en": "Trimmed seconds"},
+    "wfField_trim_overflow": {"zh": "放不下就裁掉尾巴", "en": "Trim what doesn't fit"},
+    "wfField_until": {"zh": "最晚到第几秒", "en": "Until (seconds)"},
     "wfField_tracks": {"zh": "轨道列表", "en": "Tracks"},
     "wfField_transcript_id": {"zh": "逐字稿", "en": "Transcript"},
     "wfField_updated": {"zh": "更新数量", "en": "Updated"},
@@ -901,6 +904,10 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfNode_timeline_append_start": {"zh": "从第几秒开始截。留空从头", "en": "Trim in-point in seconds. Leave empty to start at the beginning"},
     "wfNode_timeline_append_end": {"zh": "截到第几秒。留空到尾", "en": "Trim out-point in seconds. Leave empty to run to the end"},
     "wfNode_timeline_append_at": {"zh": "放在时间线的第几秒。留空就接在这条轨道的末尾", "en": "Where on the timeline to place it, in seconds. Leave empty to append after the last clip on the track"},
+    "wfNode_timeline_append_trim_overflow": {
+        "zh": "加速到 1.5 倍仍比「最长占几秒」长时,要不要把尾巴裁掉。默认不裁、让它超出去;口播不能压到下一段、成片尾不能留黑时选「是」,裁了几秒交在「裁掉的秒数」里",
+        "en": "Whether to cut the tail when the clip is still longer than the maximum duration after a 1.5× speed-up. By default it is left to run over; choose yes when narration must not spill into the next segment or past the end, and the cut length is reported as Trimmed seconds",
+    },
     "wfNode_timeline_append_max_duration": {
         "zh": "最长占几秒。比这长就加速塞进去(最多 1.5 倍,再快就听不清了);留空不限。适合让一段口播不压到下一镜",
         "en": "The longest it may run, in seconds. Longer clips are sped up to fit (at most 1.5×, beyond that speech becomes hard to follow); leave empty for no limit. Useful to keep narration from running into the next shot",

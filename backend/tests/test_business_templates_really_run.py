@@ -244,6 +244,32 @@ class Test混剪真跑:
         assert [(clip.timeline_start, clip.text_override) for clip in subtitles] == [(0.0, "车间"), (6.0, "产线"), (11.0, "出发")]
         assert context["output"]["output"]["final_asset_id"] == f"export-of-{sequence_id}"
 
+    def test_素材比截取短_旁白和字幕都按实际长度收住_念不完的裁掉并通知(self, monkeypatch) -> None:
+        from app.db.models import Notification
+
+        ws = _workspace()
+        short = _tagged_video(ws, "短素材", 8.0, "厂区")
+        long_ = _tagged_video(ws, "长素材", 30.0, "厂区")
+        #: 计划从第 4 秒取到第 12 秒,素材只有 8 秒:这一段实际只有 4 秒。旁白念 8 秒,加速 1.5 倍也要 5.3 秒。
+        first = _segment(short, 4.0, 12.0, "这一段旁白写得比素材长", "短")
+        first["captions"] = [{"start": 0, "end": 4, "text": "前半"}, {"start": 4, "end": 8, "text": "后半"}]
+        plan = {"storyline": "", "segments": [first, _segment(long_, 0.0, 6.0, "第二段", "长")], "unused_note": ""}
+        studio = Studio(monkeypatch, ws, {"footage_montage_plan": plan})
+        studio.speech_seconds[first["narration"]] = 8.0
+        context = _run(ws, footage_montage_graph(chat=CHAT, voice_id="voice-1"), topic="工厂介绍", footage_tag="厂区")
+
+        sequence_id = context["montage_project"]["sequence_id"]
+        assert [(clip.timeline_start, _span(clip)) for clip in _clips(sequence_id, "video")] == [(0.0, 4.0), (4.0, 6.0)]
+        audio = _clips(sequence_id, "audio")
+        assert [clip.timeline_start for clip in audio] == [0.0, 4.0]
+        assert _span(audio[0]) == pytest.approx(4.0), "旁白最长就是这一段实际的 4 秒,不是计划的 8 秒 —— 不盖到下一段"
+        subtitles = [(clip.timeline_start, clip.timeline_start + _span(clip), clip.text_override)
+                     for clip in _clips(sequence_id, "subtitle")]
+        assert subtitles == [(0.0, 4.0, "前半"), (4.0, 10.0, "长")], "落在这一段之后的字幕不上屏"
+        with unit_of_work() as db:
+            notices = [one.title for one in db.query(Notification).filter(Notification.workspace_id == ws)]
+        assert "混剪:有一段旁白念不完" in notices
+
     def test_没有音色时整条只出字幕(self, monkeypatch) -> None:
         ws = _workspace()
         plan, _ = self._plan(ws)
@@ -318,6 +344,19 @@ class Test带货口播真跑:
             (0.0, "不起球"), (3.0, "细密针织"), (7.0, "链接在下面")]
         #: 竖屏成片的画面按竖屏那一档出图 —— 不传尺寸时 Seedream 出 2048 的方图,两侧被裁掉。
         assert {one["parameters"].get("size") for one in studio.calls["ai_generate"]} == {"720x1280"}
+
+    def test_最后一拍念不完_裁到这一拍的末尾_成片尾不留黑(self, monkeypatch) -> None:
+        ws = _workspace()
+        beats = [dict(BEATS[0]), dict(BEATS[1]), {**BEATS[2], "narration": "号" * 40, "seconds": 2.5}]
+        Studio(monkeypatch, ws, {"product_pitch_script": {"beats": beats}})
+        graph = _pick(product_pitch_short_graph(chat=CHAT, image=SEEDREAM, voice_id="voice-1"),
+                      "product_photo", asset_id=_asset(ws, "image", "毛衣"))
+        context = _run(ws, graph, product_name="羊毛衫", selling_points="不起球")
+        sequence_id = context["pitch_project"]["sequence_id"]
+        video_end = max(clip.timeline_start + _span(clip) for clip in _clips(sequence_id, "video"))
+        audio_end = max(clip.timeline_start + _span(clip) for clip in _clips(sequence_id, "audio"))
+        assert video_end == pytest.approx(9.5)
+        assert audio_end <= video_end + 1e-6, "画外音比画面长,成片尾是一截黑屏"
 
     def test_出镜版_开场各拍收尾依次接上_每拍用主播的嗓子_也有字幕(self, monkeypatch) -> None:
         ws = _workspace()
@@ -500,6 +539,22 @@ class Test长视频切片真跑:
             sequences = db.query(Sequence).filter(Sequence.project_id == project_id).all()
             assert sorted(one.name for one in sequences) == ["第一条", "第二条"]
         assert len(context["output"]["output"]["clip_asset_ids"]) == 2
+
+
+class Test长视频切片_终点超出原片:
+    def test_截取夹到原片末尾_字幕也裁到这一条的终点(self, monkeypatch) -> None:
+        ws = _workspace()
+        clip = {"title": "尾巴", "hook": "", "start_seconds": 590, "end_seconds": 640, "why": "",
+                "captions": [{"start": 0, "end": 5, "text": "开头"}, {"start": 8, "end": 15, "text": "跨过终点"},
+                             {"start": 40, "end": 50, "text": "原片之外"}]}
+        Studio(monkeypatch, ws, {"highlight_clips": {"clips": [clip], "skipped_reason": ""}})
+        graph = _pick(highlight_shorts_graph(chat=CHAT), "source_video", asset_id=_asset(ws, "video", "访谈", duration=600.0))
+        _run(ws, graph)
+        with unit_of_work() as db:
+            sequence_id = db.query(Sequence).filter(Sequence.workspace_id == ws).one().id
+        assert [_span(one) for one in _clips(sequence_id, "video")] == [10.0]
+        assert [(one.timeline_start, one.timeline_start + _span(one), one.text_override)
+                for one in _clips(sequence_id, "subtitle")] == [(0.0, 5.0, "开头"), (8.0, 10.0, "跨过终点")]
 
 
 class Test稿子口播真跑:

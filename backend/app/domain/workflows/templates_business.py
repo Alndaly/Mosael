@@ -305,6 +305,8 @@ def highlight_shorts_graph(*, chat: Any) -> dict[str, Any]:
                                 "segments": "{{loop.item.captions}}",
                                 # 时间码已经是相对切片开头的,所以不偏移。
                                 "offset": 0,
+                                #: 裁到这一条**实际**的终点:终点超出原片时截取被夹到原片末尾,超出去的字幕不该挂在黑屏上。
+                                "until": "{{place_range.timeline_end}}",
                             },
                         },
                         {
@@ -730,8 +732,9 @@ def _beat_body(db: Session | None, image: Any, *, engine: str, voice: str) -> di
 
     - 画面是一张图,**用 `end` 定长**(从 0 截到这一拍的 seconds)。此前写的是 `max_duration`,那只会加速、不会
       拉长,而图片进时间线的默认定格是 5 秒 —— 于是每一拍都是 5 秒,和脚本、和画外音都对不上。
-    - 画外音落在这一拍**实际**的起点(`beat_on_timeline.timeline_start`,运行时回报),`max_duration` 是这一拍的
-      时长:念得比这一拍长就加速塞进去(最多 1.5 倍),不会压到下一拍的话上。
+    - 画外音落在这一拍**实际**的起点(`beat_on_timeline.timeline_start`,运行时回报),`max_duration` 是这一拍
+      实际占的秒数:念得比这一拍长就加速塞进去(最多 1.5 倍),还放不下就裁掉尾巴并发一条通知 —— 不压到下一拍的
+      话上,最后一拍也不在成片尾留黑。
     """
     return {
         "nodes": [
@@ -793,7 +796,28 @@ def _beat_body(db: Session | None, image: Any, *, engine: str, voice: str) -> di
                     "asset_id": "{{beat_voice.asset_id}}",
                     "track_id": "{{input.audio_track_id}}",
                     "at": "{{beat_on_timeline.timeline_start}}",
-                    "max_duration": "{{loop.item.seconds}}",
+                    #: 最长就是这一拍画面实际占的秒数;加速到 1.5 倍仍放不下就裁掉尾巴 —— 不压到下一拍,
+                    #: 最后一拍也不在成片尾留一截黑屏。
+                    "max_duration": "{{beat_on_timeline.duration}}",
+                    "trim_overflow": "yes",
+                },
+            },
+            {
+                "id": "voice_overflow",
+                "type": "condition",
+                "name": {"zh": "画外音裁掉了尾巴吗", "en": "Was the voice-over cut short?"},
+                "position": {"x": 1040, "y": 320},
+                "config": {"left": "{{beat_voice_place.trimmed}}", "op": "gt", "right": "0"},
+            },
+            {
+                "id": "overflow_notice",
+                "type": "notify",
+                "name": {"zh": "说一声画外音被裁了", "en": "Say the voice-over was cut"},
+                "position": {"x": 1360, "y": 320},
+                "config": {
+                    "title": "带货短片:有一拍的画外音念不完",
+                    "body": "「{{loop.item.caption}}」那一拍的画外音加速到 1.5 倍仍比画面长 {{beat_voice_place.trimmed}} 秒,"
+                            "超出的部分已裁掉。想保住整句,把这一拍的口播改短或把这一拍的时长加长再运行一次。",
                 },
             },
         ],
@@ -807,6 +831,8 @@ def _beat_body(db: Session | None, image: Any, *, engine: str, voice: str) -> di
             #: **这一条不能省**(和混剪的 narration_place 同一个道理):「放画外音」的两条入边都是数据边,只剩数据边时
             #: 任一上游跑过就算激活 —— 「铺这一拍」总是跑过的,于是没有画外音时它拿着空素材照跑。带 handle 的边有路由语义。
             {"id": "narration_voice_place", "source": "has_narration", "target": "beat_voice_place", "source_handle": "true"},
+            {"id": "voice_overflow_check", "source": "beat_voice_place", "target": "voice_overflow"},
+            {"id": "overflow_notify", "source": "voice_overflow", "target": "overflow_notice", "source_handle": "true"},
         ],
     }
 
@@ -1818,8 +1844,28 @@ def footage_montage_graph(*, chat: Any, voice_id: str = "") -> dict[str, Any]:
                 # **起点由上面那一步运行时回报**,不是算出来的。前面几段实际多长不重要,
                 # 音画都落在同一个数上,不会越走越偏。
                 "at": "{{place_shot.timeline_start}}",
-                #: 念得比这一段长就加速塞进去(最多 1.5 倍),不压到下一段的旁白上。
-                "max_duration": "{{loop.item.seconds}}",
+                #: 最长就是这一段画面**实际**占的秒数(素材比计划短时出点被夹到素材末尾,比 seconds 短)。
+                #: 念得比它长就加速塞进去(最多 1.5 倍);还放不下就裁掉尾巴 —— 不压到下一段,成片尾也不留黑。
+                "max_duration": "{{place_shot.duration}}",
+                "trim_overflow": "yes",
+            },
+        },
+        {
+            "id": "voice_overflow",
+            "type": "condition",
+            "name": {"zh": "旁白裁掉了尾巴吗", "en": "Was the narration cut short?"},
+            "position": {"x": 1680, "y": 480},
+            "config": {"left": "{{place_voice.trimmed}}", "op": "gt", "right": "0"},
+        },
+        {
+            "id": "overflow_notice",
+            "type": "notify",
+            "name": {"zh": "说一声旁白被裁了", "en": "Say the narration was cut"},
+            "position": {"x": 2000, "y": 480},
+            "config": {
+                "title": "混剪:有一段旁白念不完",
+                "body": "「{{loop.item.segment_title}}」这一段的旁白加速到 1.5 倍仍比画面长 {{place_voice.trimmed}} 秒,"
+                        "超出的部分已裁掉。想保住整句,把这一段的旁白改短,或把这一段的素材取长一点再运行一次。",
             },
         },
         {
@@ -1846,6 +1892,8 @@ def footage_montage_graph(*, chat: Any, voice_id: str = "") -> dict[str, Any]:
                 "segments": "{{loop.item.captions}}",
                 # 同一个起点。字幕轨第一段建出来,后面几段自动落到同一条上(见 _subtitle_track)。
                 "offset": "{{place_shot.timeline_start}}",
+                #: 裁到这一段**实际**的终点:素材比计划短时,模型按计划写的字幕不盖到下一段上。
+                "until": "{{place_shot.timeline_end}}",
                 "allow_empty": "yes",
             },
         },
@@ -1863,6 +1911,8 @@ def footage_montage_graph(*, chat: Any, voice_id: str = "") -> dict[str, Any]:
         #: (或者根本没配音色)时「放旁白」拿着空素材照跑,整条混剪失败。带 handle 的边有路由语义,不会被折掉。
         {"id": "narration_place", "source": "has_narration", "target": "place_voice", "source_handle": "true"},
         {"id": "place_duck", "source": "place_voice", "target": "duck_source"},
+        {"id": "place_overflow", "source": "place_voice", "target": "voice_overflow"},
+        {"id": "overflow_notify", "source": "voice_overflow", "target": "overflow_notice", "source_handle": "true"},
     ]
 
     nodes: list[dict[str, Any]] = [

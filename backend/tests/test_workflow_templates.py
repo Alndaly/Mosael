@@ -278,8 +278,9 @@ def test_full_video_narration_lands_on_its_own_shot() -> None:
     clip = next(node for node in body["nodes"] if node["id"] == "append_clip")
     at = next(edge for edge in body["edges"] if edge.get("target") == "append_narration" and edge.get("target_input") == "at")
     assert (at["source"], at["source_output"]) == ("append_clip", "timeline_start")
-    #: 比镜头长就压进去(兜底);镜头多长就是画面片段截的那一段。
-    assert narration["config"]["max_duration"] == clip["config"]["end"]
+    #: 比镜头长就压进去(兜底);最长就是画面片段在时间线上**实际**占的那一段(模型交回的视频比计划短时更短)。
+    limit = next(edge for edge in body["edges"] if edge.get("target") == narration["id"] and edge.get("target_input") == "max_duration")
+    assert (limit["source"], limit["source_output"]) == (clip["id"], "duration")
     storyboard = next(node for node in graph["nodes"] if node["id"] == "storyboard")
     assert "每秒约 4 字" in storyboard["config"]["system"]
 
@@ -452,7 +453,8 @@ class Test分镜写了口播就要真的配上:
         _, assemble = self._loops()
         nodes = {n["id"]: n for n in assemble["body"]["nodes"]}
         assert "end" not in nodes["append_narration"]["config"]
-        assert nodes["append_narration"]["config"]["max_duration"]
+        assert "max_duration" in nodes["append_narration"]["inputs"], "最长多久由这一镜画面实际的长度供"
+        assert nodes["append_narration"]["config"].get("trim_overflow") in (None, "", "no")
 
     def test_没选音色时整段跳过而不是失败(self) -> None:
         """voice_id 是 synthesize_speech 的必填项,模板不可能替用户猜一个。空着要得到
@@ -888,7 +890,7 @@ def test_数字人出镜带货_开场收尾由资产人物说_每拍用它的嗓
     assert "出镜" in _node(graph, "pitch_script")["config"]["system"]
     wires = {(edge["source"], edge.get("source_output"), edge["target"], edge.get("target_input")) for edge in graph["edges"]}
     assert ("presenter", "entity_id", "hook_talk", "entity_id") in wires and ("presenter", "entity_id", "cta_talk", "entity_id") in wires
-    assert ("hook_place", None, "shoot_beats", None) in wires and ("shoot_beats", None, "cta_place", None) in wires, "开场 → 各拍 → 收尾"
+    assert ("hook_place", None, "shoot_beats", None) in wires and ("shoot_beats", None, "cta_spoken", None) in wires, "开场 → 各拍 → 收尾"
     body = _node(graph, "shoot_beats")["config"]["body"]
     voice = next(node for node in body["nodes"] if node["id"] == "beat_voice")
     assert voice["config"]["text"] == "{{loop.item.narration}}" and voice["config"]["voice"] == "{{input.voice_id}}"

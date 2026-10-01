@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "Product into a narrated short",
   "description": "From a product photo and a few selling points, write a beat-by-beat script (the first beat is the hook, the last the call to action, up to 12 beats), paint one portrait frame per beat with the product in it, lay each on the timeline for that beat's length, voice each beat in your cloned voice lined up with its start, add the on-screen lines, and export a vertical short. Nobody appears on camera. Only the selling points you provide are used — no invented claims or figures.",
-  "graph_hash": "7bb2747f0ab5b6a84cf31fc55d4a8f6bbf5bc13466c7a9b38f291fb14c9f23de",
+  "graph_hash": "804c5faffd3aa3762d63724bf5ef4e82e338cb988d9e4097b9785281a745a788",
   "graph": {
     "meta": {
       "template_id": "product_pitch_short",
@@ -224,12 +224,44 @@
                   "asset_id": "",
                   "track_id": "{{input.audio_track_id}}",
                   "at": "",
-                  "max_duration": "{{loop.item.seconds}}"
+                  "max_duration": "",
+                  "trim_overflow": "yes"
                 },
                 "inputs": [
                   "asset_id",
-                  "at"
+                  "at",
+                  "max_duration"
                 ]
+              },
+              {
+                "id": "voice_overflow",
+                "type": "condition",
+                "name": "Was the voice-over cut short?",
+                "position": {
+                  "x": 1040,
+                  "y": 320
+                },
+                "config": {
+                  "left": "",
+                  "op": "gt",
+                  "right": "0"
+                },
+                "inputs": [
+                  "left"
+                ]
+              },
+              {
+                "id": "overflow_notice",
+                "type": "notify",
+                "name": "Say the voice-over was cut",
+                "position": {
+                  "x": 1360,
+                  "y": 320
+                },
+                "config": {
+                  "title": "带货短片:有一拍的画外音念不完",
+                  "body": "「{{loop.item.caption}}」那一拍的画外音加速到 1.5 倍仍比画面长 {{beat_voice_place.trimmed}} 秒,超出的部分已裁掉。想保住整句,把这一拍的口播改短或把这一拍的时长加长再运行一次。"
+                }
               }
             ],
             "edges": [
@@ -243,6 +275,12 @@
                 "id": "narration_voice_place",
                 "source": "has_narration",
                 "target": "beat_voice_place",
+                "source_handle": "true"
+              },
+              {
+                "id": "overflow_notify",
+                "source": "voice_overflow",
+                "target": "overflow_notice",
                 "source_handle": "true"
               },
               {
@@ -268,6 +306,22 @@
                 "kind": "data",
                 "source_output": "timeline_start",
                 "target_input": "at"
+              },
+              {
+                "id": "d-beat_on_timeline-duration-beat_voice_place-max_duration",
+                "source": "beat_on_timeline",
+                "target": "beat_voice_place",
+                "kind": "data",
+                "source_output": "duration",
+                "target_input": "max_duration"
+              },
+              {
+                "id": "d-beat_voice_place-trimmed-voice_overflow-left",
+                "source": "beat_voice_place",
+                "target": "voice_overflow",
+                "kind": "data",
+                "source_output": "trimmed",
+                "target_input": "left"
               }
             ]
           },

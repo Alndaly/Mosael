@@ -597,6 +597,14 @@ def timeline_append(db: Session, scope: RunScope, config: dict[str, Any]) -> dic
     if at is not None and at < 0:
         raise WorkflowDomainError("wfErr_startNegative")
     speed = _fit_speed(src_out - src_in, config.get("max_duration"))
+    #: 加速到上限仍放不下、又要求不许超出去(口播不能压到下一段、成片尾不能留黑):把尾巴裁到正好放下。
+    trimmed = 0.0
+    limit = _seconds(config, "max_duration", "timeline_append")
+    if _yes_no(config, "trim_overflow", default=False) and limit is not None and limit > 0:
+        overflow = (src_out - src_in) / (speed or 1.0) - limit
+        if overflow > 1e-6:
+            trimmed = overflow
+            src_out = src_in + limit * (speed or 1.0)
     track_id = str(config.get("track_id", "")).strip()
 
     def append(sequence: Sequence) -> tuple[str, float, float]:
@@ -632,6 +640,9 @@ def timeline_append(db: Session, scope: RunScope, config: dict[str, Any]) -> dic
         "clip_id": clip_id,
         "timeline_start": timeline_start,
         "timeline_end": timeline_start + span,
+        #: **实际**占了几秒。出点被夹到素材末尾时比计划的短 —— 下游(旁白最长多久、字幕裁到哪)按它,不按计划。
+        "duration": span,
+        "trimmed": round(trimmed, 3),
         "sequence_id": sequence_id,
     }
 
@@ -976,6 +987,9 @@ def generate_subtitles(db: Session, scope: RunScope, config: dict[str, Any]) -> 
         offset = float(config.get("offset") or 0.0)
     except (TypeError, ValueError):
         raise WorkflowDomainError("wfErr_offsetSeconds") from None
+    #: 字幕最晚到哪一秒(一般是这一段在时间线上的终点):素材比计划短、模型写的时间码超出这一段时,
+    #: 不让字幕盖到下一段上。
+    until = _seconds(config, "until", "generate_subtitles")
 
     start_field = str(config.get("start_field") or "start").strip()
     end_field = str(config.get("end_field") or "end").strip()
@@ -999,8 +1013,11 @@ def generate_subtitles(db: Session, scope: RunScope, config: dict[str, Any]) -> 
         if keep_original and lines and original and original != text:
             # 原文在上、译文在下 —— 和「字幕配音」的 line=last 正好配套:看两行,只念译文。
             text = f"{original}\n{text}"
-        if text and end > start:
-            cues.append((text, start + offset, end - start))
+        begin, finish = start + offset, end + offset
+        if until is not None:
+            finish = min(finish, until)
+        if text and finish > begin:
+            cues.append((text, begin, finish - begin))
     if not cues:
         if allow_empty:
             # 提前返回:连字幕轨都不建 —— 一条空轨挂在时间线上只会让人以为字幕丢了。
