@@ -218,6 +218,54 @@ def test_写的时候被停下_笔记不新建也不改写() -> None:
     assert (latest["revision"], latest["markdown"]) == (note["revision"], "第一版正文"), "停下之后照样改写了引用着的那篇"
 
 
+def test_引用一份文件的文档格_让AI写当场拒_不起一个永远转圈的任务() -> None:
+    """文档格引用的是一份 PDF(asset_id),不是笔记:写出来的笔记钉不上去(note_id 和 asset_id 二选一),回执被
+    normalize 拒掉,那一格永远在跑。开跑前就说清楚:先转为笔记。"""
+    client = fresh_client()
+    ws = _workspace(client)
+    _writable_profile(client)
+    seed_assets(ws, {"pdf": "document"})
+    board_id = _board(client, ws, [{"id": "doc", "kind": "document", "x": 0, "y": 0, "asset_id": "pdf", "text": "a.pdf"}])
+
+    seen = Seen("不该写出来")
+    done = _write(client, board_id, ws, "doc", "document", seen, prompt="总结一下")
+
+    from app.core.i18n import t
+
+    assert done.status_code == 400, done.text
+    assert done.json()["detail"] == t("boardErr_writeOnFileDocument"), done.json()
+    assert seen.messages == [], "拒了还调了模型"
+
+
+def test_回执把笔记填进引用着文件的文档格_文件那一份摘掉_不卡在跑() -> None:
+    """开跑之后那一格才换成一份文件(别处存的快照):回执填笔记时把 asset_id 摘掉,而不是整封被 normalize 拒掉。"""
+    from types import SimpleNamespace
+
+    from app.db.models import Board
+    from app.domain.boards import deliver_generated, receipt_to_item
+    from tests.util import board_revision
+
+    client = fresh_client()
+    ws = _workspace(client)
+    seed_assets(ws, {"pdf": "document"})
+    note = client.post("/api/notes", json={"workspace_id": ws, "title": "总结", "markdown": "正文"}).json()
+    board_id = _board(client, ws, [])
+    cell = {"id": "d", "kind": "document", "x": 0, "y": 0, "asset_id": "pdf",
+            "run": {"status": "running", "job_id": "job-w"}, "form": {"producer": "write", "prompt": "总结"}}
+    saved = client.patch(f"/api/boards/{board_id}", json={
+        "workspace_id": ws, "base_revision": board_revision(client, board_id, ws), "canvas": {"items": [cell], "edges": []}})
+    assert saved.status_code == 200, saved.text
+
+    job = SimpleNamespace(id="job-w", status="succeeded", created_by=None, error=None,
+                          result={"outputs": [{"type": "note", "note_id": note["id"], "revision": 1, "title": "总结"}]})
+    with SessionLocal() as db:
+        deliver_generated(db, job, receipt_to_item(board_id, "d"))
+    with SessionLocal() as db:
+        item = db.get(Board, board_id).canvas["items"][0]
+    assert item["run"]["status"] == "succeeded", item
+    assert item["note_id"] == note["id"] and "asset_id" not in item, item
+
+
 def test_老画板上的文档格补上写字() -> None:
     import json
 

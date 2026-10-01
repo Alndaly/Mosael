@@ -129,6 +129,15 @@ class Producer:
     #: 起任务之前的那几样检查,**不写任何东西**(见 dry_run);返回给确认卡看的事实(用哪条连接)。
     #: 没有就只做注册表那几样(认产出者、问宿主、校验表单)。
     preflight: Callable[[Session, RunRequest, Any], dict[str, Any]] | None = None
+    #: 画布上那一格**此刻的样子**跑不跑得了它(`hosts` 只问种类);跑不了抛 BoardInputError。跑和干跑都问(见 _admit)。
+    admits: Callable[[dict[str, Any]], None] | None = None
+
+
+def _admits_write(cell: dict[str, Any]) -> None:
+    """文档格写出来的是一篇笔记,钉在 `note_id` 上;引用着一份文件(`asset_id`,PDF 之类)的文档格钉不上去 —— note_id
+    和 asset_id 二选一,回执会被 normalize 拒掉,那一格永远在跑。先「转为笔记」。"""
+    if cell.get("kind") == "document" and cell.get("asset_id"):
+        raise BoardInputError("boardErr_writeOnFileDocument")
 
 
 class _Form(BaseModel):
@@ -498,6 +507,7 @@ def _builtins() -> dict[str, Producer]:
                 effects="paid",
                 form=WriteForm,
                 start=_start_write,
+                admits=_admits_write,
                 failures=(AiChatError,),
                 failure_status=422,
             ),
@@ -856,11 +866,22 @@ def _admit(db: Session, request: RunRequest) -> tuple[Producer, BaseModel]:
     producer = get_producer(db, request.producer, request.actor_id)
     if request.kind not in producer.hosts:
         raise BoardInputError("boardErr_producerCannotHost", producer=producer.id, kind=request.kind)
+    cell = _board_cell(db, request)
+    if cell is not None and producer.admits is not None:
+        producer.admits(cell)
     try:
         form = producer.form.model_validate(request.form)
     except ValidationError as exc:
         raise ProducerFormInvalid(producer.id, exc.errors(include_url=False, include_context=False)) from exc
     return producer, form
+
+
+def _board_cell(db: Session, request: RunRequest) -> dict[str, Any] | None:
+    """请求落在的那一格此刻在画布上的样子;还不在画布上(新放下的一格由占位摆上)回 None。"""
+    from app.domain.boards.persistence import get_board
+
+    board = get_board(db, request.workspace_id, request.board_id)
+    return next((one for one in (board.canvas or {}).get("items") or [] if one.get("id") == request.item_id), None)
 
 
 def _failed(producer: Producer, exc: Exception) -> ProducerFailed:

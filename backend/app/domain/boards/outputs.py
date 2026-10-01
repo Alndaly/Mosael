@@ -283,6 +283,8 @@ def _canvas_with_delivered_result(
             if fit is not None and fit.get("type") == "asset":
                 filled["asset_id"] = str(fit["asset_id"])
             elif fit is not None and fit.get("type") == "note":
+                #: 文档格钉到笔记上,引用着的那份文件摘掉(note_id 和 asset_id 二选一,两样都有整封回执被拒)。
+                filled.pop("asset_id", None)
                 filled.update(note_id=str(fit["note_id"]), note_revision=fit.get("revision"), text=str(fit.get("title") or ""))
             elif fit is not None and fit.get("type") == "scene":
                 #: 按剧本搭出的是一个**新场景**,换进这一格;原来那个还在「3D 场景」里。渲白模上挑过的镜头是旧场景的,
@@ -317,6 +319,9 @@ def _canvas_with_delivered_result(
         if text is not None:
             settled["text"] = text
         if note is not None and settled.get("kind") == "document":
+            #: 文档格钉到写出来的那篇笔记上,引用着的那份文件摘掉:note_id 和 asset_id 二选一,两样都有的话整封回执被
+            #: normalize 拒掉,那一格永远在跑(开跑前 producers._admits_write 已经拒了这种格子,这里兜住开跑之后才换上的)。
+            settled.pop("asset_id", None)
             settled["note_id"], settled["note_revision"] = str(note["note_id"]), note.get("revision")
         if not asset_ids:
             kept.append(settled)
