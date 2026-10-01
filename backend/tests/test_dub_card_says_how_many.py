@@ -39,6 +39,8 @@ def _sequence_with_cues(client, texts: list[str]) -> tuple[str, str, str]:
 
 def _card(db, workspace_id: str, payload: dict) -> str:
     user = db.scalars(__import__("sqlalchemy").select(User)).first()
+    #: 引擎和音色成对点名(开卡时就定下,见 test_dub_card_picks_the_voice_when_opened)。
+    payload = {"engine": "builtin:edge", "engine_voice": "zh-CN-XiaoxiaoNeural", **payload}
     return request_confirmation(
         db, workspace_id=workspace_id, tool="dub_subtitles", payload=payload, actor_id=user.id, requested_by=user.id
     ).summary

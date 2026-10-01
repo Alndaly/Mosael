@@ -430,9 +430,13 @@ class Test原声处理归配音本身:
         )
         assert response.status_code == 422 and "配音库里没有这个音色" in response.text
 
-    def test_智能体的确认卡把选项交下去_卡上写清原声会怎样(self, captured) -> None:
+    def test_智能体的确认卡把选项交下去_卡上写清原声会怎样(self, captured, monkeypatch) -> None:
+        from app.ai.runtime import tts_models
         from app.db.models import ToolConfirmation
         from app.domain.agent import confirmations
+
+        #: 开卡时就认引擎能不能用(engine_catalog.pick_speech):这里要的是装好了克隆引擎的那种机器。
+        monkeypatch.setattr(tts_models, "runtime_status", lambda engine: (True, True))
 
         client = fresh_client()
         sequence_id, clip_id = _sequence_with_subtitle(client)

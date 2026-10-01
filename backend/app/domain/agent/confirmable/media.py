@@ -114,12 +114,25 @@ def _validate_dub_subtitles(db: Session, workspace_id: str, payload: dict[str, A
 
     if str(payload.get("original_audio") or DEFAULT_ORIGINAL_AUDIO) not in ORIGINAL_AUDIO_MODES:
         raise ConfirmationError("confirmErr_badOriginalAudio", modes=" / ".join(ORIGINAL_AUDIO_MODES))
-    #: 智能体说的是引擎的名字(「Edge」「火山」)或 id,认出来换成 id;没说就是克隆音色(ADR 0032 第四步)。
-    from app.domain.voices.speech import CAPABILITY as SPEECH
+    #: 引擎和音色在**开卡时**就定成确定的一对、写回卡上,和 generate_audio 同一个认法(engine_catalog.pick_speech):
+    #: 引擎按名字或 id 认,只给了音色就按音色认出是哪一家,点名的引擎现在就得用得上、克隆音色得在这个工作区。
+    #: 此前这里只认引擎、不看音色:一个不存在的音色(或别的工作区的克隆音色)照样开卡,用户批了之后每一句都合成失败。
+    from app.domain.voices.engine_catalog import pick_speech
+    from app.domain.voices.speech import CLONE_ENGINE, SpeechProviderUnavailable
+    from app.domain.voices.voices import VoiceError
 
-    named = str(payload.get("engine") or "").strip()
-    if named:
-        payload["engine"] = _named_provider(db, actor, SPEECH, named).id
+    try:
+        engine, voice = pick_speech(
+            db,
+            engine=str(payload.get("engine") or ""),
+            voice=str(payload.get("engine_voice") or payload.get("voice_id") or ""),
+            user_id=actor,
+            workspace_id=workspace_id,
+        )
+    except (SpeechProviderUnavailable, VoiceError) as exc:
+        raise ConfirmationError.relay(exc) from exc
+    clone = engine == CLONE_ENGINE
+    payload.update(engine=engine, voice_id=voice if clone else "", engine_voice="" if clone else voice)
 
 
 def _summarize_dub_subtitles(db: Session, payload: dict[str, Any]) -> str:
