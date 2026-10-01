@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, fireEvent, render } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import React from "react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -54,6 +54,13 @@ vi.mock("@/app/preferences", () => ({
   usePreferences: () => ({ locale: "zh-CN", t: (key: string) => key }),
 }));
 vi.mock("@/app/auth", () => ({ useAuth: () => ({ user: { id: "u1" } }) }));
+//: 顶栏路径上的「改名」:测试里直接拿它的回调点开改名框。
+const trailHarness = vi.hoisted(() => ({ rename: null as null | (() => void) }));
+vi.mock("@/components/layout/pageTrail", () => ({
+  usePageTrail: (trail: { segments?: { onRename?: () => void }[] } | null) => {
+    trailHarness.rename = trail?.segments?.[0]?.onRename ?? null;
+  },
+}));
 vi.mock("@/features/collaboration/CollaborationSheet", () => ({ CollaborationSheet: () => null }));
 vi.mock("@/features/scenes/ScenePickerDialog", () => ({ ScenePickerDialog: () => null }));
 const pickerHarness = vi.hoisted(() => ({ props: null as null | Record<string, unknown> }));
@@ -593,6 +600,36 @@ describe("服务端那一版前进了(回执、占位、智能体),本地手上�
     expect(toastMocks.error).not.toHaveBeenCalled();
     expect(adoptedItem("slot")?.run).toEqual({ status: "running", job_id: "job-2" });
     expect(adoptedItem("img")?.asset_id).toBe("a1");
+  });
+});
+
+describe("在画板里改名", () => {
+  it("画布刚被服务端推进了一版(回执落下):改名撞 409 合上那一版、再发一次,改名框关上 —— 不是默默停在那儿", async () => {
+    const note = { id: "n1", kind: "note" as const, x: 0, y: 0, width: 220, height: 140, text: "一只猫" };
+    const server = strictServer({ items: [note], edges: [], markers: [] });
+    apiMocks.updateBoard.mockImplementation(async (_id: string, body: { base_revision: number; name?: string; canvas?: BoardCanvas }) => {
+      if (body.base_revision !== server.state.revision) throw server.conflict();
+      if (body.canvas) server.state.canvas = body.canvas;
+      server.state.revision += 1;
+      return { ...boardAt(server.state.revision, server.state.canvas), name: body.name ?? "灵感" };
+    });
+    mount();
+    await vi.waitFor(() => expect(canvasHarness.props).not.toBeNull());
+    server.serverWrite((canvas) => ({ ...canvas, items: [...canvas.items, { id: "out", kind: "note", x: 300, y: 0, text: "产出" }] }));
+
+    act(() => trailHarness.rename!());
+    const input = await vi.waitFor(() => screen.getByDisplayValue("灵感"));
+    fireEvent.change(input, { target: { value: "灵感二稿" } });
+    await act(async () => {
+      fireEvent.submit(input.closest("form")!);
+      await vi.advanceTimersByTimeAsync(10);
+    });
+
+    const renames = apiMocks.updateBoard.mock.calls.filter(([, body]) => (body as { name?: string }).name === "灵感二稿");
+    expect(renames.length, "撞了一次,合好之后又发了一次").toBe(2);
+    expect(apiMocks.updateBoard.mock.results.at(-1)?.type).toBe("return");
+    expect(screen.queryByDisplayValue("灵感二稿"), "改名框关上了").toBeNull();
+    expect(toastMocks.error).not.toHaveBeenCalled();
   });
 });
 

@@ -11,6 +11,7 @@ const apiMocks = vi.hoisted(() => ({
   deleteBoard: vi.fn(),
   duplicateBoard: vi.fn(),
   updateBoard: vi.fn(),
+  getBoard: vi.fn(),
 }));
 const toastMocks = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
 
@@ -26,7 +27,7 @@ vi.mock("@/app/preferences", () => ({
   usePreferences: () => ({ locale: "zh-CN", t: (key: MessageKey) => zh[key] }),
 }));
 
-import type { BoardSummary, Workspace } from "@/api/client";
+import { ApiError, type BoardSummary, type Workspace } from "@/api/client";
 import { BoardsView } from "@/features/boards/BoardsView";
 
 const workspace = { id: "w1", name: "测试工作区" } as Workspace;
@@ -168,6 +169,26 @@ describe("画板卡片的右键菜单", () => {
       expect(apiMocks.updateBoard).toHaveBeenCalledWith("b2", { workspace_id: "w1", base_revision: 3, name: "分镜二稿" }),
     );
     expect(await screen.findByText("分镜二稿")).toBeInTheDocument();
+  });
+
+  it("清单里那份版本号落后(画板在别处刚存过):改名撞 409 就拿最新的版本号再发一次,不白报一句冲突", async () => {
+    //: 改名只发名字、不碰画布 —— 版本号对不上只是画布在别处又存过,和这次改名不冲突。
+    apiMocks.updateBoard.mockImplementation(async (id: string, body: { base_revision: number; name: string }) => {
+      if (body.base_revision !== 5) throw new ApiError("revision conflict", 409, "{}");
+      boards = boards.map((one) => (one.id === id ? { ...one, name: body.name, revision: 6 } : one));
+      return boards.find((one) => one.id === id);
+    });
+    apiMocks.getBoard.mockImplementation(async (id: string) => ({ ...boards.find((one) => one.id === id), revision: 5, canvas: { items: [], edges: [] } }));
+    mount();
+    fireEvent.contextMenu(await screen.findByText("分镜"), { clientX: 10, clientY: 10 });
+    fireEvent.click(screen.getByRole("menuitem", { name: zh.rename }));
+    const input = await screen.findByDisplayValue("分镜");
+    fireEvent.change(input, { target: { value: "分镜二稿" } });
+    fireEvent.submit(input.closest("form")!);
+
+    expect(await screen.findByText("分镜二稿")).toBeInTheDocument();
+    expect(apiMocks.updateBoard).toHaveBeenLastCalledWith("b2", { workspace_id: "w1", base_revision: 5, name: "分镜二稿" });
+    expect(toastMocks.error).not.toHaveBeenCalled();
   });
 
   it("删除要先确认,确认后才发请求", async () => {

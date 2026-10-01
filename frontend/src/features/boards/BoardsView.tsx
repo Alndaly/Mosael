@@ -146,8 +146,17 @@ export function BoardsView({ workspace }: { workspace: Workspace }) {
   const rename = useMutation({
     //: 带着列表里那份 revision 去改:画板开在别处、刚被改过的话,这次改名会撞上 409,
     //: 而不是把别处的新画布悄悄盖掉(改名和存画布走的是同一个 CAS 口子)。
-    mutationFn: ({ board, name }: { board: BoardSummary; name: string }) =>
-      updateBoard(board.id, { workspace_id: workspace.id, base_revision: board.revision, name }),
+    //: 撞了 409 就拿最新的版本号**再发一次**:改名只发名字、不碰画布,版本号对不上只是画布在别处(回执、智能体、
+    //: 打开着它的另一个窗口)又存过一版,和这次改名不冲突;此前直接报一句「冲突」,人只好再改一遍。
+    mutationFn: async ({ board, name }: { board: BoardSummary; name: string }) => {
+      try {
+        return await updateBoard(board.id, { workspace_id: workspace.id, base_revision: board.revision, name });
+      } catch (error) {
+        if (!(error instanceof ApiError && error.status === 409)) throw error;
+        const fresh = await getBoard(board.id, workspace.id);
+        return updateBoard(board.id, { workspace_id: workspace.id, base_revision: fresh.revision, name });
+      }
+    },
     onSuccess: () => {
       setMenuRenaming(null);
       refreshList();
@@ -1045,14 +1054,19 @@ function BoardDetail({
     }
     // 存完再关:进行中确认键转圈(见 RenameDialog 的 pending)。
     setSavingName(true);
-    serially(() => updateBoard(board.id, { workspace_id: workspaceId, base_revision: revision.current, name: next }))
+    const send = () => serially(() => updateBoard(board.id, { workspace_id: workspaceId, base_revision: revision.current, name: next }));
+    //: 撞了 409(服务端刚推进了一版:回执落下、智能体改了):合上那一版,**再发一次** —— 改名只发名字,和画布那一版不冲突。
+    //: 此前合完就停了:改名框开着、没提示,人以为点了没反应。只重来一次,再撞就照常报错。
+    send()
+      .catch(async (error: Error) => {
+        if (!(await recoverConflict(error))) throw error;
+        return send();
+      })
       .then((fresh) => {
         acceptBoard(fresh);
         setRenaming(false);
       })
-      .catch(async (error: Error) => {
-        if (!(await recoverConflict(error))) toast.error(error.message);
-      })
+      .catch((error: Error) => toast.error(error.message))
       .finally(() => setSavingName(false));
   };
 
