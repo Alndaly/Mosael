@@ -31,6 +31,9 @@ def echo_plugin(monkeypatch):
 
     meta = node_meta({"name": "echo", "label": "回声", "input_schema": {"properties": {"q": {"type": "string"}}}})
     monkeypatch.setattr("app.domain.plugins.nodes.plugin_node_types", lambda db, user_id=None: {ECHO: meta})
+    # 没装真插件,也就没有连接:开跑前「落得到连接吗」那一问(content.plugin_node_preflight)跟着一起换掉 ——
+    # 它由 test_plugin_node_connection_checked_before_run 用真插件钉着。
+    monkeypatch.setattr("app.domain.plugins.nodes.check_plugin_node_instance", lambda db, node, actor: None)
 
     def echo(db, workflow, config):
         return {"output": f"echo {config.get('q')}"}

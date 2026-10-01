@@ -434,17 +434,15 @@ def _check_plugin_connection(db: Session, node_type: str, config: dict[str, Any]
     """插件工具:点运行的人得有自己的连接。**起任务之前就问** —— 没有的话说清楚是哪个插件、去哪儿建,
     而不是起一个任务再让它失败。解析出来的连接不写回表单:下一个人点运行,用的是他自己的。
     """
-    from app.domain.plugins.nodes import instances_for_node, parse_node_type, resolve_instance
+    from app.domain.plugins.nodes import parse_node_type, resolve_instance
 
     parsed = parse_node_type(node_type)
     if parsed is None:
         return
     package_id, tool_name = parsed
-    #: 表单上选的连接**只在是他自己的时候**才算数。共享画板上那一格存着别人选的连接 id —— 那不是
-    #: 「他选错了」,是「他没选」:按他自己的连接解析(只有一条就用它),而不是报「选的连接不可用」。
-    chosen = str(config.get("instance_id") or "")
-    mine = {one["id"] for one in instances_for_node(db, node_type, actor_id)}
-    config["instance_id"] = resolve_instance(db, package_id, tool_name, chosen if chosen in mine else "", actor_id)
+    #: 共享画板上那一格存着别人选的连接 id —— 那不是「他选错了」,是「他没选」:resolve_instance 按他自己的
+    #: 连接解析(只有一条就用它),和工作流节点同一条。
+    config["instance_id"] = resolve_instance(db, package_id, tool_name, str(config.get("instance_id") or ""), actor_id)
 
 
 def _run_in_job(job_id: str, node_type: str, meta: dict[str, Any], scope: BoardScope, config: dict[str, Any],

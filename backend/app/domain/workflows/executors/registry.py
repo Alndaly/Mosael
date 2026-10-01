@@ -107,6 +107,33 @@ def register_preflight(node_type: str) -> Callable[[Preflight], Preflight]:
     return _decorator
 
 
+#: 前缀 preflight:一族动态节点类型(插件节点)共用的运行前检查,和前缀执行器同一个道理 —— 登记的是**工厂**,
+#: 拿到具体的 node_type 返回一个绑好它的 preflight。
+PrefixPreflight = Callable[[str], Preflight]
+
+_PREFIX_PREFLIGHTS: dict[str, PrefixPreflight] = {}
+
+
+def register_prefix_preflight(prefix: str) -> Callable[[PrefixPreflight], PrefixPreflight]:
+    def _decorator(factory: PrefixPreflight) -> PrefixPreflight:
+        if prefix in _PREFIX_PREFLIGHTS:
+            raise RuntimeError(f"preflight for node prefix {prefix!r} registered twice")
+        _PREFIX_PREFLIGHTS[prefix] = factory
+        return factory
+
+    return _decorator
+
+
+def _preflight_for(node_type: str) -> Preflight | None:
+    check = _PREFLIGHTS.get(node_type)
+    if check is not None:
+        return check
+    for prefix, factory in _PREFIX_PREFLIGHTS.items():
+        if node_type.startswith(prefix):
+            return factory(node_type)
+    return None
+
+
 def run_preflights(db: Session, graph: Any, actor: str | None) -> None:
     """对图里每个登记了 preflight 的节点问一遍(见 register_preflight)。"""
     if not isinstance(graph, dict):
@@ -124,7 +151,7 @@ def run_preflights(db: Session, graph: Any, actor: str | None) -> None:
         for value in config.values():
             if isinstance(value, dict) and isinstance(value.get("nodes"), list):
                 run_preflights(db, value, actor)
-        check = _PREFLIGHTS.get(str(node.get("type") or ""))
+        check = _preflight_for(str(node.get("type") or ""))
         if check is None:
             continue
         node_id = str(node.get("id") or "")

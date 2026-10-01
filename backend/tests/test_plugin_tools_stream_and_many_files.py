@@ -168,6 +168,7 @@ def test_工作流节点里的进度成了节点事件(monkeypatch) -> None:
     kind = "plugin.demo.slowpoke"
     meta = node_meta({"name": "slowpoke", "label": "慢", "input_schema": {"properties": {}}})
     monkeypatch.setattr("app.domain.plugins.nodes.plugin_node_types", lambda db, user_id=None: {kind: meta})
+    monkeypatch.setattr("app.domain.plugins.nodes.check_plugin_node_instance", lambda db, node, actor: None)  # 没有真连接
 
     def slowpoke(db, workflow, config):
         report_progress(0.25, "采样 5/20")

@@ -23,6 +23,7 @@ from app.domain.workflows.executors.registry import (  # noqa: F401 —— 包�
     register_prefix,
     registered_types,
     register_preflight,
+    register_prefix_preflight,
     run_preflights,
 )
 

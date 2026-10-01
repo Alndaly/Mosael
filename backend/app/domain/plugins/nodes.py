@@ -396,16 +396,20 @@ def resolve_instance(db: Session, package_id: str, tool_name: str, chosen: str, 
     但有多个时**不猜** —— 从 B 站取和从抖音取是两件事,替用户选错比报错更糟。
 
     候选只有**执行者**(`actor`)自己接的连接:接入归人,别人那条带着别人的密钥和额度。
-    选的那条不是他的,就当它不可用 —— 共享的工作流、共享的画板上存着别人选的连接 id,
-    照着跑就是拿别人的密钥花别人的额度。工作流节点和画板上的工具走的都是这一条。
+    选的那条不在他能用的连接里时分两种:
+    - 是**他自己的**(停用了、凭据过期了):他点名要的就是那一条,替他换成别的就是替他选 —— 报「选的连接不可用」;
+    - 是别人的、或者已经删了:那不是他的选择,是共享的工作流 / 画板上存着别人选的连接,或一个不存在的 id ——
+      当作没选,按他自己的连接挑(只有一条就用它),别人的连接一句不提。
+    此前工作流节点在后一种情况也报「选的连接已不可用」,而开跑前的检查只看节点类型,于是放行之后跑到这一步才失败;
+    画板上的工具一直是「当作没选」。现在工作流节点、画板上的工具和开跑前的检查(check_plugin_node_instance)
+    走的都是这一条。
     """
     node_type = node_type_id(package_id, tool_name)
     available = instances_for_node(db, node_type, actor)
     if chosen:
         if any(item["id"] == chosen for item in available):
             return chosen
-        if available:
-            # 选的那条不能用,但他还有能用的:让他换一条(选的那条是别人的、或者删了,都不细说别人的连接)
+        if available and _owned_by(db, chosen, actor):
             raise PluginDomainError("pluginErr_instanceGone", package=_plugin_name(db, package_id))
     if len(available) == 1:
         return available[0]["id"]
@@ -415,6 +419,35 @@ def resolve_instance(db: Session, package_id: str, tool_name: str, chosen: str, 
         )
     names = [item["name"] for item in available]
     raise PluginDomainError("pluginErr_manyInstances", package=_plugin_name(db, package_id), names=names)
+
+
+def _owned_by(db: Session, instance_id: str, actor: str | None) -> bool:
+    """这条连接还在、而且是 `actor` 自己接的(没有执行者 = 不按人分,和 instances_for_node 一样)。"""
+    from app.db.models import PluginInstance
+
+    instance = db.get(PluginInstance, instance_id)
+    return instance is not None and (actor is None or instance.owner_user_id == actor)
+
+
+def check_plugin_node_instance(db: Session, node: dict[str, Any], actor: str | None) -> PluginDomainError | None:
+    """开跑前问一遍:这个插件节点轮到它时,`actor` 落得到一条连接吗?落得到回 None,落不到回那句报错。
+
+    和执行时是**同一条**规矩(resolve_instance):有几条可挑、选的那条是不是他的,判法一字不差 —— 否则开跑前
+    放行的,跑到这一步照样失败(前面的节点钱已经花了)。连接选的是一段引用(`{{…}}`)时值要到运行时才知道,不判。
+    不是插件节点回 None。
+    """
+    parsed = parse_node_type(str(node.get("type") or ""))
+    if parsed is None:
+        return None
+    config = node.get("config") if isinstance(node.get("config"), dict) else {}
+    chosen = config.get("instance_id")
+    if isinstance(chosen, str) and "{{" in chosen:
+        return None
+    try:
+        resolve_instance(db, parsed[0], parsed[1], str(chosen or ""), actor)
+    except PluginDomainError as exc:
+        return exc
+    return None
 
 
 def _plugin_name(db: Session, package_id: str) -> str:
@@ -432,6 +465,7 @@ def _plugin_name(db: Session, package_id: str) -> str:
 __all__ = [
     "PLUGIN_NODE_CATEGORY",
     "PLUGIN_NODE_PREFIX",
+    "check_plugin_node_instance",
     "declared_outputs",
     "node_meta",
     "node_type_id",

@@ -118,7 +118,8 @@
 - `app/domain/sequences/undo/registry.py:_REGISTRY`
 - `app/domain/workflows/executors/registry.py:_REGISTRY`、
   `app/domain/workflows/executors/registry.py:_PREFIX_REGISTRY`、
-  `app/domain/workflows/executors/registry.py:_PREFLIGHTS`(节点的运行前检查,import 时登记)
+  `app/domain/workflows/executors/registry.py:_PREFLIGHTS`、
+  `app/domain/workflows/executors/registry.py:_PREFIX_PREFLIGHTS`(节点的运行前检查,import 时登记)
 - `app/domain/agent/origins.py:_origins`(外部渠道登记的系统提示补充与 turn 收尾回送;飞书在 import 时登记)
 - `app/domain/plugins/media_bridge.py:_sink`、`app/domain/plugins/media_bridge.py:_source`
 - `app/domain/capabilities/__init__.py:_registry` — 宿主能力的契约表(素材外链、文档解析……,ADR 0031 §5):组装根在导入期

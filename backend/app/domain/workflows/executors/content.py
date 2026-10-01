@@ -14,7 +14,7 @@ from app.domain.projects import create_project
 from app.domain.sequences import create_sequence_scaffold
 from app.domain.workflows import WorkflowDomainError
 from app.domain.plugins.nodes import PLUGIN_NODE_PREFIX
-from app.domain.workflows.executors.registry import RunScope, register, register_prefix
+from app.domain.workflows.executors.registry import Preflight, RunScope, register, register_prefix, register_prefix_preflight
 from app.domain.workflows.executors.common import id_list, provided, whole_number
 
 
@@ -96,6 +96,21 @@ def plugin_node(node_type: str):
         return {name: output_port(output, name) for name in outputs}
 
     return run
+
+
+@register_prefix_preflight(PLUGIN_NODE_PREFIX)
+def plugin_node_preflight(node_type: str) -> Preflight:
+    """插件节点开跑前先问「轮到它时落得到一条连接吗」:选的连接停用了、有好几条却没选 —— 此前开跑前只看节点类型,
+    放行之后要等前面的节点跑完(钱花完)才在这一步失败。判法和执行时同一条(plugins.nodes.check_plugin_node_instance)。"""
+
+    def check(db: Session, config: dict[str, Any], actor: str | None) -> None:
+        from app.domain.plugins.nodes import check_plugin_node_instance
+
+        problem = check_plugin_node_instance(db, {"type": node_type, "config": config}, actor)
+        if problem is not None:
+            raise WorkflowDomainError.from_error(problem)
+
+    return check
 
 
 @register("notify")
