@@ -11,10 +11,12 @@ MiniMax 两组互斥,Wan / Kling / Seedance 1.x 不收参考图,Veo 不收 5 秒
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 import pytest
 
+from app.domain.generation.catalog import known_capabilities_for
 from app.domain.generation.descriptors.builtin import BUILTIN_MODELS
 from app.domain.generation.operations import keep_source_group, parse_source_assets, validate_against_capabilities
 from app.domain.workflows.graph_rules import interpolate
@@ -167,6 +169,30 @@ def test_会被挑中的图像模型_收得下整片生成的每一次出图(ima
     for skipped, item in _full_video_walks(SEEDANCE):
         checked |= set(_check(_generations(graph, skipped=skipped, item=item), "image"))
     assert checked == {"paint_first_frame", "paint_last_frame", "sheet", "art"}
+
+
+def _orientation(size: str) -> str:
+    text = size.replace("*", "x").replace(":", "x")
+    width, height = (int(one) for one in text.split("x", 1))
+    return "portrait" if height > width else "landscape" if width > height else "square"
+
+
+@pytest.mark.parametrize("image", _image_params(SINGLE_REFERENCE))
+def test_竖屏成片的出图_尺寸表里有竖屏那一档就用它_不论写成像素还是画幅比(image: ModelChoice) -> None:
+    capabilities = known_capabilities_for(image.provider, image.model, "image") or {}
+    offers = "size" in (capabilities.get("parameter_keys") or ()) and any(
+        _orientation(str(one)) == "portrait" for one in capabilities.get("sizes") or ()
+        if re.fullmatch(r"\d+[x*:]\d+", str(one)) and abs(_ratio_of(str(one)) - 9 / 16) < 0.05
+    )
+    graph = product_pitch_short_graph(chat=CHAT, image=image, voice_id="voice-1")
+    frame = next(config for node_id, config in _generations(graph, skipped=set(), item={}) if node_id == "beat_frame")
+    size = str(frame["parameters"].get("size") or "")
+    assert (_orientation(size) == "portrait") if offers else size == "", (image.model, size)
+
+
+def _ratio_of(size: str) -> float:
+    width, height = (int(one) for one in re.split(r"[x*:]", size, maxsplit=1))
+    return width / height
 
 
 def test_参数表没有缩水() -> None:

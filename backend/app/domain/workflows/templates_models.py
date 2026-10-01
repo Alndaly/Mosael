@@ -148,27 +148,58 @@ def _reference_image_model(db: Session, user_id: str, *, needed: int) -> ModelCh
     return _pick(db, user_id, "image", lambda db_, choice: _can_take_references(db_, choice, needed=needed))
 
 
+#: 白模 / 时间线认得的三种画幅,以及每一种的成片画布。
+FRAME_ASPECTS: dict[str, tuple[int, int]] = {"16:9": (1920, 1080), "9:16": (1080, 1920), "1:1": (1080, 1080)}
+
+#: 一档尺寸算不算这个画幅:宽高比差多少以内。万相视频的 832*480 是 1.733,和 16:9 的 1.778 差 0.044。
+_RATIO_TOLERANCE = 0.05
+
+
+def _ratio(aspect: str) -> float:
+    width, _, height = aspect.partition(":")
+    return int(width) / int(height)
+
+
+def size_for_aspect(sizes: Any, aspect: str, *, pick: str = "smallest", near_area: int = 0, minimum: int = 0) -> str:
+    """尺寸表里和这个画幅同比例的那一档,**原样**交出(`832*480` 就是 `832*480`);没有就空串。
+
+    像素写法(`宽x高` / `宽*高`)优先,在同比例的几档里按 `pick` 挑:smallest / largest 按面积,near 挑面积最接近
+    `near_area` 的(视频按默认那一档的清晰度挑,不顺手升到 1080p 多花钱)。`minimum` 是模型要求的最小像素数。
+    没有像素写法、但表里列着同一个比例的**画幅比写法**(Evolink 的 `9:16`)时,直接交它 —— 此前只认像素写法,
+    这类模型的竖屏 / 横屏那一档一律被丢掉,按模型默认出方图。
+    """
+    target = _ratio(aspect)
+    pixel: list[tuple[int, str]] = []
+    for raw in sizes or ():
+        text = str(raw).strip().lower().replace("*", "x")
+        if not re.fullmatch(r"\d+x\d+", text):
+            continue
+        width, height = (int(value) for value in text.split("x", 1))
+        if height and abs(width / height - target) < _RATIO_TOLERANCE and width * height >= minimum:
+            pixel.append((width * height, str(raw).strip()))
+    if pixel:
+        if pick == "near":
+            return min(pixel, key=lambda one: abs(one[0] - near_area))[1]
+        return sorted(pixel, reverse=pick == "largest")[0][1]
+    for raw in sizes or ():
+        written = re.fullmatch(r"(\d+):(\d+)", str(raw).strip())
+        if written and int(written.group(2)) and abs(int(written.group(1)) / int(written.group(2)) - target) < 0.02:
+            return str(raw).strip()
+    return ""
+
+
 def _image_plan(db: Session | None, choice: ModelChoice) -> ImagePlan:
-    """从图像模型的尺寸表里挑:关键帧和成片同画幅,三视图取最宽的横幅。认不出就不传尺寸。"""
-    capabilities = _capabilities(db, choice, "image")
-    #: 只认「宽x高」的像素尺寸。有的模型尺寸表里列的是画幅比(Evolink 的 gpt-image-1.5 是 "1:1"、"16:9"),
-    #: 此前照样按 x 拆开转整数,建整片模板直接 500。
-    written = (str(size).lower().replace("*", "x") for size in (capabilities or {}).get("sizes") or ())
-    sizes = [size for size in written if re.fullmatch(r"\d+x\d+", size)]
-    minimum = int((capabilities or {}).get("min_size_pixels") or 0)
-
-    def parsed(size: str) -> tuple[int, int]:
-        width, height = (int(value) for value in size.split("x", 1))
-        return width, height
-
-    def best(ratio: float, *, largest: bool) -> str:
-        fitting = [s for s in sizes if abs(parsed(s)[0] / parsed(s)[1] - ratio) < 0.02 and parsed(s)[0] * parsed(s)[1] >= minimum]
-        if not fitting:
-            return ""
-        return sorted(fitting, key=lambda s: parsed(s)[0] * parsed(s)[1], reverse=largest)[0]
-
-    frames = {aspect: best(ratio, largest=False) for aspect, ratio in (("16:9", 16 / 9), ("9:16", 9 / 16), ("1:1", 1.0))}
-    return ImagePlan(frame_sizes={aspect: size for aspect, size in frames.items() if size}, sheet_size=best(16 / 9, largest=True))
+    """从图像模型的尺寸表里挑:关键帧和成片同画幅,三视图取最宽的横幅。认不出、或不收 `size` 的不传尺寸。"""
+    capabilities = _capabilities(db, choice, "image") or {}
+    keys = capabilities.get("parameter_keys")
+    #: 声明了参数却不收 size 的(百炼 qwen-image-edit 只收参考图,出图跟着参考图的比例):尺寸表再全也不传。
+    sizes = capabilities.get("sizes") if not keys or "size" in keys else ()
+    minimum = int(capabilities.get("min_size_pixels") or 0)
+    frames = {aspect: size_for_aspect(sizes, aspect, minimum=minimum) for aspect in FRAME_ASPECTS}
+    return ImagePlan(
+        frame_sizes={aspect: size for aspect, size in frames.items() if size},
+        sheet_size=size_for_aspect(sizes, "16:9", pick="largest", minimum=minimum),
+    )
 
 
 #: 整片生成「参考」那条路一镜交几张参考图:角色三视图最多 4 张 + 场景设定图最多 3 张 + 白模帧 1 张。
@@ -222,9 +253,7 @@ def _video_plan(db: Session | None, choice: ModelChoice) -> VideoPlan:
         size_width, size_height = (int(value) for value in size_text.split("x", 1))
     except (TypeError, ValueError):
         ratio_dimensions = {
-            "16:9": (1920, 1080),
-            "9:16": (1080, 1920),
-            "1:1": (1080, 1080),
+            **FRAME_ASPECTS,
             "4:3": (1440, 1080),
             "3:4": (1080, 1440),
         }
