@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from app.core.db import SessionLocal
-from app.db.migrations import _code_references_become_input, _migrate_code_fields_read_references_from_input
+from app.db.migrations import _migrate_code_fields_read_references_from_input
+from app.domain.workflows.code_references import JS_AS_TEXT, PY_AS_TEXT
+from app.domain.workflows.code_references import references_become_input as _code_references_become_input
 from app.db.models import Workflow
 from tests.util import fresh_client
 
@@ -56,10 +58,10 @@ def test_执行脚本里的引用挪进入参_脚本读入参() -> None:
 
     after = _graph_of(workflow_id)
     js = _config(after, "js")
-    assert js["expression"] == 'document.querySelector("" + String(input.llm_1_text) + "").value + input.n_count'
+    assert js["expression"] == f'document.querySelector("" + {JS_AS_TEXT}(input.llm_1_text) + "").value + input.n_count'
     assert js["input"] == {"keep": "1", "llm_1_text": "{{llm-1.text}}", "n_count": "{{n.count}}"}
     py = _config(after, "py")
-    assert py["code"] == 'output = "hi " + str(inputs["n_name"]) + "" + str(inputs["n_count"])'
+    assert py["code"] == f'output = "hi " + {PY_AS_TEXT}(inputs["n_name"]) + "" + str(inputs["n_count"])'
     assert py["input"] == {"n_name": "{{n.name}}", "n_count": "{{n.count}}"}
     assert _config(after, "plain") == {"code": "output = 1"}
 
@@ -85,13 +87,15 @@ def test_入参里已有同名的键_加序号_同一个引用只占一个键() 
 
 def test_JS模板字符串和转义引号_按上下文改() -> None:
     same = lambda path: path.replace(".", "_")  # noqa: E731
-    assert _code_references_become_input("`a ${x} {{n.t}}`", "js", same) == "`a ${x} ${input.n_t}`"
-    assert _code_references_become_input("'it\\'s {{n.t}}'", "js", same) == "'it\\'s ' + String(input.n_t) + ''"
+    assert _code_references_become_input("`a ${x} {{n.t}}`", "js", same) == "`a ${x} ${" + JS_AS_TEXT + "(input.n_t)}`"
+    assert _code_references_become_input("'it\\'s {{n.t}}'", "js", same) == f"'it\\'s ' + {JS_AS_TEXT}(input.n_t) + ''"
+    #: 模板字符串 `${…}` 里是代码:按代码处改。
+    assert _code_references_become_input("`a ${ {{n.t}} * 2 }`", "js", same) == "`a ${ input.n_t * 2 }`"
 
 
 def test_Python的f字符串断开后接回同样的前缀() -> None:
     same = lambda path: path.replace(".", "_")  # noqa: E731
     assert (
         _code_references_become_input('f"{a} {{n.t}}!"', "python", same)
-        == 'f"{a} " + str(inputs["n_t"]) + f"!"'
+        == f'f"{{a}} " + {PY_AS_TEXT}(inputs["n_t"]) + f"!"'
     )

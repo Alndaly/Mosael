@@ -6032,12 +6032,12 @@ def _migrate_partition_moves_are_settled_per_executor() -> None:
         )
 
 
-def _rewrite_workflow_graphs(rewrite: Any, note: str) -> int:
+def _rewrite_workflow_graphs(rewrite: Any, note: str, *, only: Any = None) -> int:
     """把每个工作流的当前图过一遍 `rewrite`(连同循环体 / 子图,由 `rewrite` 自己走);变了的追加一版修订。
 
     修订表建好之后的图迁移都得这么落(`workflows.graph` 是最新修订的投影,只改投影会让两边对不上):
     作者沿用上一版,认可过上一版的人照样为这一版担保 —— 机械改写不换担保人,也不该让跑得好好的流程停下来等人认可
-    (同 domain/workflows/plugin_references)。
+    (同 domain/workflows/plugin_references)。`only(workflow)` 给了的话,只看它说是的那些。
     """
     from sqlalchemy import select
     from sqlalchemy.orm import Session
@@ -6048,6 +6048,8 @@ def _rewrite_workflow_graphs(rewrite: Any, note: str) -> int:
     changed = 0
     with Session(engine) as db:
         for workflow in db.scalars(select(Workflow)).all():
+            if only is not None and not only(workflow):
+                continue
             if rewrite(json.loads(json.dumps(workflow.graph))) == workflow.graph:
                 continue
             previous = current_workflow_revision(db, workflow)
@@ -6123,6 +6125,10 @@ def _walk_graph_nodes(graph: Any, visit: Any) -> Any:
     return {**graph, "nodes": nodes}
 
 
+#: 一段引用。和 workflows.VARIABLE_RE 同一个写法,写死在这里:迁移是历史的快照。
+_CODE_REFERENCE = re.compile(r"\{\{\s*([\w.-]+)\s*\}\}")
+
+
 def _migrate_browser_nodes_fill_one_target_keeping_reference_fallbacks() -> None:
     """「点击」的选择器 / 文字、「等待」的元素 / 网址 / 文字改成只能填一样(`one_of`):两样都填了的老节点,
     只留执行器此前实际用的那一样 —— **除非前面那一样是纯引用**(只有 `{{…}}`、没有字面文字)。
@@ -6161,83 +6167,6 @@ def _migrate_browser_nodes_fill_one_target_keeping_reference_fallbacks() -> None
     )
 
 
-#: 代码字段里的引用。和 workflows.VARIABLE_RE 同一个写法,写死在这里:迁移是历史的快照。
-_CODE_REFERENCE = re.compile(r"\{\{\s*([\w.-]+)\s*\}\}")
-
-
-def _code_references_become_input(code: str, language: str, key_of: Any) -> str:
-    """把代码里的 `{{a.b}}` 改成读入参:代码处 → `input.k`(JS)/ `inputs["k"]`(Python);字符串里 → 断开字符串
-    拼上它的文字(`"前" + String(input.k) + "后"`);JS 的模板字符串里 → `${input.k}`;注释里照代码处写。
-
-    插值此前是**按文字拼进代码**,改成读入参之后,字符串里的那些语义不变(拼出来的仍是那段文字);代码处的
-    那些从「把上游的文字当代码执行」变成「上游的值」—— 数字、布尔一样,一段文字就不再被当成代码。
-
-    这是一个只认字符串、注释、JS 模板字符串的小扫描器:正则字面量、f-string 花括号里再套引号这类写法
-    认不出,那几处按代码处改(`input.k`),结果仍是一段合法、不执行上游文字的代码。
-    """
-    as_code = (lambda key: f"input.{key}") if language == "js" else (lambda key: f'inputs["{key}"]')
-    as_text = (lambda key: f"String(input.{key})") if language == "js" else (lambda key: f'str(inputs["{key}"])')
-    out: list[str] = []
-    i = 0
-    #: 当前在哪:None = 代码;("str", 开头, 结尾) = 字符串(开头含前缀,如 f");("tpl",) = JS 模板字符串;
-    #: ("line",) / ("block",) = 注释。
-    state: tuple[str, ...] | None = None
-    while i < len(code):
-        ref = _CODE_REFERENCE.match(code, i)
-        if ref:
-            key = key_of(ref.group(1))
-            if state is not None and state[0] == "str":
-                out.append(f"{state[2]} + {as_text(key)} + {state[1]}")
-            elif state is not None and state[0] == "tpl":
-                out.append("${" + as_code(key) + "}")
-            else:
-                out.append(as_code(key))
-            i = ref.end()
-            continue
-        ch = code[i]
-        if state is None:
-            if language == "js" and code.startswith("//", i):
-                state = ("line",)
-            elif language == "js" and code.startswith("/*", i):
-                state = ("block",)
-            elif language == "python" and ch == "#":
-                state = ("line",)
-            elif language == "js" and ch == "`":
-                state = ("tpl",)
-            elif ch in "'\"":
-                quote = code[i:i + 3] if language == "python" and code.startswith(ch * 3, i) else ch
-                #: Python 字符串的前缀(f / r / b / rb …)已经作为代码写出去了;断开之后接上的那一段要带同样的前缀
-                start = i
-                while language == "python" and start > 0 and i - start < 2 and code[start - 1] in "rRbBuUfF":
-                    start -= 1
-                prefix = code[start:i] if start == 0 or not (code[start - 1].isalnum() or code[start - 1] == "_") else ""
-                state = ("str", prefix + quote, quote)
-                out.append(quote)
-                i += len(quote)
-                continue
-        elif state[0] == "line" and ch == "\n":
-            state = None
-        elif state[0] == "block" and code.startswith("*/", i):
-            out.append("*/")
-            i += 2
-            state = None
-            continue
-        elif state[0] in ("str", "tpl"):
-            if ch == "\\" and i + 1 < len(code):
-                out.append(code[i:i + 2])
-                i += 2
-                continue
-            closing = state[2] if state[0] == "str" else "`"
-            if code.startswith(closing, i):
-                out.append(closing)
-                i += len(closing)
-                state = None
-                continue
-        out.append(ch)
-        i += 1
-    return "".join(out)
-
-
 def _migrate_code_fields_read_references_from_input() -> None:
     """代码字段(「执行脚本」的 expression、「代码」节点的 code)不再插值 `{{…}}`:里面已有的引用挪进节点的入参
     (`input`),代码改成读入参。
@@ -6245,16 +6174,18 @@ def _migrate_code_fields_read_references_from_input() -> None:
     插值此前是按文字拼进代码的 —— 上游交来一段带引号的文字就能改写整段脚本,而「执行脚本」跑在用户已登录的
     网页里。现在代码原样执行,上游的值作为数据交进去(见 workflows.binding、electron 的 scriptWithInput)。
     入参里的键由引用路径起名(`llm-1.text` → `llm_1_text`),和已有的键撞了就加序号;同一个引用只占一个键。
-    改写规则见 `_code_references_become_input`。
+    改写规则见 domain/workflows/code_references(字符串里的引用读成和插值同义的文字)。
     """
     if not {"workflows", "workflow_revisions"} <= set(inspect(engine).get_table_names()):
         return
+    from app.domain.workflows.code_references import REFERENCE, references_become_input
+
     fields = {"browser_evaluate": ("expression", "js"), "code": ("code", "python")}
 
     def visit(node: dict[str, Any]) -> dict[str, Any]:
         spec = fields.get(str(node.get("type")))
         config = node["config"]
-        if not spec or not isinstance(config.get(spec[0]), str) or not _CODE_REFERENCE.search(config[spec[0]]):
+        if not spec or not isinstance(config.get(spec[0]), str) or not REFERENCE.search(config[spec[0]]):
             return node
         field, language = spec
         given = config.get("input") if isinstance(config.get("input"), dict) else {}
@@ -6273,12 +6204,56 @@ def _migrate_code_fields_read_references_from_input() -> None:
             inputs[key] = reference
             return key
 
-        code = _code_references_become_input(config[field], language, key_of)
+        code = references_become_input(config[field], language, key_of)
         return {**node, "config": {**config, field: code, "input": inputs}}
+
+    _rewrite_workflow_graphs(lambda graph: _walk_graph_nodes(graph, visit), _CODE_FIELDS_NOTE)
+
+
+#: 代码字段迁移落的那一版修订的说明 —— 修正迁移据此认出哪些工作流被它改写过。
+_CODE_FIELDS_NOTE = "代码字段不再替换 {{…}}:代码里的引用挪进入参(input),代码改成读入参"
+
+
+def _migrate_code_string_reads_keep_their_text() -> None:
+    """1.8.1 的代码字段迁移把字符串里的引用改成了 `str(inputs["k"])` / `String(input.k)`,意思变了:改回同义的写法。
+
+    插值把值写成文字走的是 workflows.as_text(对象 / 列表 / 布尔写成 JSON、None 写成空串),`str()` / `String()`
+    不是 —— 迁过的老代码里 `json.loads('{{llm.obj}}')` 拿到 Python 的 repr 当场崩、`'{{c.result}}' == 'true'`
+    永远是假;JS 模板字符串里的 `${ {{a.n}} * 2 }` 被改成了 `${ ${input.a_n} * 2 }`,语法错误。
+
+    只动**那次迁移改写过的工作流**(有一版修订的说明是它的那句)里、**它起的入参**(值是一整个 `{{…}}`)、
+    **它产出的精确形态**(见 code_references.string_reads_keep_their_text);改过的不再是那几种形态,重跑不动。
+    作者和担保人沿用上一版(_rewrite_workflow_graphs)。
+    """
+    if not {"workflows", "workflow_revisions"} <= set(inspect(engine).get_table_names()):
+        return
+    from app.domain.workflows.code_references import REFERENCE, string_reads_keep_their_text
+
+    with engine.begin() as conn:
+        touched = {
+            row[0] for row in conn.execute(
+                text("SELECT DISTINCT workflow_id FROM workflow_revisions WHERE source = 'migration' AND note = :note"),
+                {"note": _CODE_FIELDS_NOTE},
+            )
+        }
+    if not touched:
+        return
+    fields = {"browser_evaluate": ("expression", "js"), "code": ("code", "python")}
+
+    def visit(node: dict[str, Any]) -> dict[str, Any]:
+        spec = fields.get(str(node.get("type")))
+        config = node["config"]
+        given = config.get("input") if isinstance(config.get("input"), dict) else {}
+        keys = {key for key, value in given.items() if isinstance(value, str) and REFERENCE.fullmatch(value)}
+        if not spec or not keys or not isinstance(config.get(spec[0]), str):
+            return node
+        code = string_reads_keep_their_text(config[spec[0]], spec[1], keys)
+        return node if code == config[spec[0]] else {**node, "config": {**config, spec[0]: code}}
 
     _rewrite_workflow_graphs(
         lambda graph: _walk_graph_nodes(graph, visit),
-        "代码字段不再替换 {{…}}:代码里的引用挪进入参(input),代码改成读入参",
+        "代码字段里字符串处的引用读回和插值同义的文字(对象 / 列表 / 布尔写成 JSON、空值是空串)",
+        only=lambda workflow: workflow.id in touched,
     )
 
 
@@ -6793,6 +6768,8 @@ def migration_plan() -> MigrationPlan:
                 _migrate_migration_revisions_keep_their_vouchers,
                 _migrate_browser_nodes_fill_one_target_keeping_reference_fallbacks,
                 _migrate_code_fields_read_references_from_input,
+                # 1.8.1 那版代码字段迁移在字符串里留下的 str() / String() 读法改回和插值同义的写法。
+                _migrate_code_string_reads_keep_their_text,
                 # 要读插件报的工具清单:排在装随包插件、改写被取代的工具之后(上面的对账)。
                 _migrate_plugin_array_inputs_are_lists,
                 _migrate_board_plugin_array_inputs_are_lists,
