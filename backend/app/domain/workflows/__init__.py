@@ -35,7 +35,7 @@ from app.domain.workflows.graph_rules import (  # noqa: F401
     _body_label,
     _is_external,
     _nodes_of_types,
-    _one_of_errors,
+    one_of_errors,
     _plugin_types,
     _unresolvable_body_refs,
     as_text,

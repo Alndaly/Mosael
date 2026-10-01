@@ -6121,6 +6121,123 @@ def _migrate_browser_nodes_fill_one_target_keeping_reference_fallbacks() -> None
     )
 
 
+#: 1.8.1 那条浏览器「只填一样」迁移(migrate-browser-nodes-fill-one-target,已被上面那条取代)落的修订说明 ——
+#: 它把纯引用后面的兜底也删了;恢复兜底的迁移据此找到它删掉了什么。
+_BROWSER_ONE_TARGET_NOTE = "浏览器节点的点击目标 / 等待条件改成只填一样:清掉执行器此前就没用到的那几格"
+
+
+def _nodes_by_path(graph: Any, prefix: tuple[str, ...] = ()) -> dict[tuple[str, ...], dict[str, Any]]:
+    """一张图(连同循环体 / 子图体)里的节点,按「容器 id … 节点 id」的路径索引 —— 节点 id 只在一层里唯一。"""
+    found: dict[tuple[str, ...], dict[str, Any]] = {}
+    if not isinstance(graph, dict):
+        return found
+    for node in graph.get("nodes") or []:
+        if not isinstance(node, dict):
+            continue
+        path = (*prefix, str(node.get("id")))
+        found[path] = node
+        for value in (node.get("config") or {}).values():
+            if isinstance(value, dict) and isinstance(value.get("nodes"), list):
+                found.update(_nodes_by_path(value, path))
+    return found
+
+
+def _bound_by_path(graph: Any, prefix: tuple[str, ...] = ()) -> set[tuple[tuple[str, ...], str]]:
+    """哪些 (节点路径, 字段) 接了数据边 —— 和 `_nodes_by_path` 同一种路径。"""
+    bound: set[tuple[tuple[str, ...], str]] = set()
+    if not isinstance(graph, dict):
+        return bound
+    for edge in graph.get("edges") or []:
+        if isinstance(edge, dict) and edge.get("kind") == "data" and edge.get("target_input"):
+            bound.add(((*prefix, str(edge.get("target"))), str(edge["target_input"])))
+    for node in graph.get("nodes") or []:
+        if isinstance(node, dict):
+            for value in (node.get("config") or {}).values():
+                if isinstance(value, dict) and isinstance(value.get("nodes"), list):
+                    bound |= _bound_by_path(value, (*prefix, str(node.get("id"))))
+    return bound
+
+
+def _migrate_browser_fallback_targets_come_back() -> None:
+    """浏览器「只填一样」那条迁移删掉的**兜底**,从修订历史里找回来。
+
+    那条迁移把点击 / 等待里多填的格子一律清掉,只留执行器先认的那一格 —— 可「选择器写 `{{上游.选择器}}`、
+    文字填一个兜底」是有意的:上游给空时执行器按顺序落到文字那格。one_of 现在认这种写法(见
+    graph_rules.one_of_errors),被删的兜底在这里补回去。
+
+    原值在那条迁移那一版的**前一版**修订里。只补「当前图里那个节点还在(按容器 … 节点的路径认)、那一格现在
+    空着、前一版里有值」的,而且补上之后那一组得是合法的「引用在前、兜底在后」—— 两格都是字面量的,执行器
+    本来就只认第一格,补回去只会让运行前校验报「只能填一个」。补过的不再空着,重跑不动。作者和担保人沿用上一版。
+    """
+    if not {"workflows", "workflow_revisions"} <= set(inspect(engine).get_table_names()):
+        return
+    from sqlalchemy import select
+    from sqlalchemy.orm import Session
+
+    from app.db.models import WorkflowRevision
+    from app.domain.workflows import NODE_TYPES, one_of_errors
+    from app.domain.workflows.graph_rules import blank
+
+    fields = {"browser_click": ("selector", "text"), "browser_wait": ("selector", "url_contains", "text")}
+    lost: dict[str, dict[tuple[str, ...], dict[str, Any]]] = {}
+    with Session(engine) as db:
+        stripped = db.scalars(
+            select(WorkflowRevision).where(
+                WorkflowRevision.source == "migration", WorkflowRevision.note == _BROWSER_ONE_TARGET_NOTE
+            )
+        ).all()
+        for revision in stripped:
+            previous = db.scalar(
+                select(WorkflowRevision)
+                .where(WorkflowRevision.workflow_id == revision.workflow_id, WorkflowRevision.revision < revision.revision)
+                .order_by(WorkflowRevision.revision.desc())
+                .limit(1)
+            )
+            if previous is None:
+                continue
+            before, after = _nodes_by_path(previous.graph), _nodes_by_path(revision.graph)
+            for path, node in after.items():
+                keys = fields.get(str(node.get("type")))
+                old = before.get(path)
+                if not keys or old is None or old.get("type") != node.get("type"):
+                    continue
+                removed = {
+                    key: (old.get("config") or {})[key] for key in keys
+                    if not blank((old.get("config") or {}).get(key)) and blank((node.get("config") or {}).get(key))
+                }
+                if removed:
+                    lost.setdefault(revision.workflow_id, {}).setdefault(path, {}).update(removed)
+
+    def restore(found: dict[tuple[str, ...], dict[str, Any]]) -> Any:
+        def rewrite(graph: Any) -> Any:
+            graph = json.loads(json.dumps(graph))
+            nodes, bound = _nodes_by_path(graph), _bound_by_path(graph)
+            for path, values in found.items():
+                node = nodes.get(path)
+                if node is None or not isinstance(node.get("config"), dict):
+                    continue
+                config = node["config"]
+                wired = {(path[-1], key) for (where, key) in bound if where == path}
+                candidate = {
+                    **config,
+                    **{key: value for key, value in values.items()
+                       if blank(config.get(key)) and (path[-1], key) not in wired},
+                }
+                specs = NODE_TYPES[str(node.get("type"))]["config"]
+                if candidate != config and not one_of_errors(path[-1], candidate, specs, wired):
+                    node["config"] = candidate
+            return graph
+
+        return rewrite
+
+    for workflow_id, found in lost.items():
+        _rewrite_workflow_graphs(
+            restore(found),
+            "浏览器节点「引用在前、兜底在后」的兜底找回来(只填一样那次迁移删掉的)",
+            only=lambda workflow, wanted=workflow_id: workflow.id == wanted,
+        )
+
+
 def _migrate_code_fields_read_references_from_input() -> None:
     """代码字段(「执行脚本」的 expression、「代码」节点的 code)不再插值 `{{…}}`:里面已有的引用挪进节点的入参
     (`input`),代码改成读入参。
@@ -6724,6 +6841,8 @@ def migration_plan() -> MigrationPlan:
                 # 1.8.1 里上面这条(和条件边那条)经修订迁移落的那一版没有作者:补上一版的作者和认可。
                 _migrate_migration_revisions_keep_their_vouchers,
                 _migrate_browser_nodes_fill_one_target_keeping_reference_fallbacks,
+                # 1.8.1 那条「只填一样」(上面这条取代了它)删掉的「引用在前、兜底在后」的兜底,从它前一版修订里找回来。
+                _migrate_browser_fallback_targets_come_back,
                 _migrate_code_fields_read_references_from_input,
                 # 1.8.1 那版代码字段迁移在字符串里留下的 str() / String() 读法改回和插值同义的写法。
                 _migrate_code_string_reads_keep_their_text,

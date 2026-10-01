@@ -51,6 +51,7 @@
   "migrate-boards-remember-their-project": "ee4b2d5172e5319d",
   "migrate-browser-action-leases": "db82d8419ae90156",
   "migrate-browser-boolean-options": "8656267a8529d045",
+  "migrate-browser-fallback-targets-come-back": "c82c2f5c7fab007b",
   "migrate-browser-nodes-fill-one-target-keeping-reference-fallbacks": "12f33e511543297a",
   "migrate-browser-pool": "ba842907261bd6f7",
   "migrate-browser-profile-start-url": "06bb87ab55e17075",

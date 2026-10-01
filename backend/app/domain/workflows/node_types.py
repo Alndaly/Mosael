@@ -523,6 +523,11 @@ def output_data_type(key: str, node_spec: dict[str, Any]) -> str:
 #: `"one_of": "<组名>"`:**同组的字段恰好填一个**(浏览器上传的素材 / 本机路径)。运行前校验在这里报
 #: 「都填了」和「都没填」;表单里一格填了,同组其余的就收起来,从源头上填不出两个;就绪检查同一条规矩
 #: (见 nodeForms/fieldActivation)。接了上游(数据边)或写了 `{{…}}` 引用都算填了。
+#:
+#: **前面是引用、后面是兜底**可以:同组按声明的顺序,最后一个填了的之前,填了的每一格都是整格一条引用
+#: (`{{上游.值}}`)或接了数据边 —— 运行时按顺序取第一个非空的值(点击、等待、按名字找资产的执行器都这么取),
+#: 上游给空就落到兜底那一格。执行器不按顺序取、两样都给就报错的组(浏览器上传的素材 / 路径,见
+#: host_files.upload_source)在字段上写 `"one_of_strict": True`:那一组照旧恰好填一个。
 NODE_TYPES: dict[str, dict[str, Any]] = {
     "start": {
         "external": False,
@@ -1881,8 +1886,11 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "config": {
             "session": {"type": "string", "required": True, "description": "wfNode_browser_upload_session"},
             "selector": {"advanced": True, "type": "template", "description": "wfNode_browser_upload_selector"},
-            "asset_id": {"type": "template", "one_of": "source", "description": "wfNode_browser_upload_asset_id"},
-            "file_path": {"type": "template", "one_of": "source", "description": "wfNode_browser_upload_file_path"},
+            #: 两样都给时上传会报错(不替人挑,见 host_files.upload_source),所以没有「引用在前、兜底在后」。
+            "asset_id": {"type": "template", "one_of": "source", "one_of_strict": True,
+                         "description": "wfNode_browser_upload_asset_id"},
+            "file_path": {"type": "template", "one_of": "source", "one_of_strict": True,
+                          "description": "wfNode_browser_upload_file_path"},
             "timeout_ms": {"advanced": True, "type": "number", "description": "wfNode_browser_upload_timeout_ms"},
         },
         "outputs": ["session"],

@@ -80,19 +80,34 @@ def _plugin_types(db: Session) -> dict[str, dict[str, Any]]:
     return plugin_node_types(db)
 
 
-def _one_of_errors(
+#: 整格只有一条引用(和前端 analyze 的同一个写法):one_of 的「引用在前、兜底在后」只认这种。
+PURE_REFERENCE_RE = re.compile(r"^\s*\{\{\s*[\w.-]+\s*\}\}\s*$")
+
+
+def one_of_errors(
     node_id: str, config: dict[str, Any], specs: dict[str, Any], data_bound: set[tuple[str, str]]
 ) -> list[str]:
-    """声明了 `one_of` 的每一组字段恰好填一个(见 NODE_TYPES 前的说明)。「填了」按 blank 判,和必填同一个判据。"""
+    """声明了 `one_of` 的每一组字段恰好填一个(见 NODE_TYPES 前的说明)。「填了」按 blank 判,和必填同一个判据。
+
+    **引用在前、兜底在后**也行:按声明的顺序,最后一个填了的之前,填了的都是整格一条引用或接了数据边 ——
+    运行时按顺序取第一个非空的,上游给空就落到后面那格。此前这种写法被判成「只能填一个」,而浏览器节点的
+    迁移照这条规矩删掉了用户留的兜底。组里的字段写了 `one_of_strict` 的(执行器两样都给就报错)不算。
+    """
     groups: dict[str, list[str]] = {}
     for key, spec in specs.items():
         if isinstance(spec, dict) and spec.get("one_of"):
             groups.setdefault(str(spec["one_of"]), []).append(key)
     errors = []
     for keys in groups.values():
-        filled = [key for key in keys if not blank(config.get(key)) or (node_id, key) in data_bound]
+        bound = {key for key in keys if (node_id, key) in data_bound}
+        filled = [key for key in keys if not blank(config.get(key)) or key in bound]
         names = " / ".join(keys)
-        if len(filled) > 1:
+        strict = any(specs[key].get("one_of_strict") for key in keys)
+        fallback = not strict and all(
+            key in bound or (isinstance(config.get(key), str) and PURE_REFERENCE_RE.match(config[key]))
+            for key in filled[:-1]
+        )
+        if len(filled) > 1 and not fallback:
             errors.append(f"节点 {node_id} 的 {names} 只能填一个")
         elif not filled:
             errors.append(f"节点 {node_id} 的 {names} 要填一个")
@@ -248,7 +263,7 @@ def validate_graph(
                     #: 「空着」和画布的就绪检查同一个判据(blank):空白、空列表、空对象也是没填。
                     if blank(value) and (node_id, key) not in data_bound:
                         errors.append(f"节点 {node_id} 缺少必填配置 {key}")
-            errors.extend(_one_of_errors(node_id, node_config, node_specs, data_bound))
+            errors.extend(one_of_errors(node_id, node_config, node_specs, data_bound))
             #: 代码字段不能接上游:上游的值整段变成代码,和把 {{}} 拼进去是同一个注入(见 code_fields)。
             errors.extend(
                 tr("wfErr_codeFieldBound", node=node_id, field=key)
