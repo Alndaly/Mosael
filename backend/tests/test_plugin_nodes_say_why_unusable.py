@@ -52,6 +52,32 @@ def test_连接停用_工具没勾选_逐条说(tmp_path) -> None:
         assert why_unusable(db, f"plugin.{PACKAGE}.render", user_id()) is not None
 
 
+def test_被挡的连接也说工具叫什么_不露调用名(tmp_path) -> None:
+    """此前连接被挡就直接跳过,没认出工具叫什么 —— 报错里露的是调用名(ComfyUI 的 `wf_<哈希>`)。"""
+    fresh_client()
+    instance_id = _install(tmp_path, user_id())
+    with SessionLocal() as db:
+        db.get(PluginInstance, instance_id).enabled = False
+        db.commit()
+        reason = str(why_unusable(db, f"plugin.{PACKAGE}.join", user_id()))
+    assert "拼起来" in reason and "「join」" not in reason, reason
+
+
+def test_工具清单没拉下来_说那个原因_不说插件更新去掉了它(tmp_path) -> None:
+    """清单上没有这个工具,是因为清单上一次没刷出来(服务没开)时,该去的是把服务开起来,不是换一个工具。"""
+    fresh_client()
+    instance_id = _install(tmp_path, user_id())
+    with SessionLocal() as db:
+        instance = db.get(PluginInstance, instance_id)
+        inst.record_tool_list_failure(db, instance, RuntimeError("连不上 127.0.0.1:8188"))
+        reason = str(why_unusable(db, f"plugin.{PACKAGE}.wf_0a1b2c", user_id()))
+        assert "工具清单没拉下来" in reason and "连不上 127.0.0.1:8188" in reason, reason
+        assert "插件更新后去掉了它" not in reason
+        # 清单刷成功过(错清掉了):那就真是没有这个工具了
+        inst.record_tool_list(db, instance, 3)
+        assert "插件更新后去掉了它" in str(why_unusable(db, f"plugin.{PACKAGE}.wf_0a1b2c", user_id()))
+
+
 def test_开跑前按跑的人的插件判_别人接的不算_说清原因(tmp_path) -> None:
     ws = fresh_client().post("/api/workspaces", json={"name": "W"}).json()["id"]
     second_client()

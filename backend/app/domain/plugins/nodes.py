@@ -41,7 +41,7 @@ from app.core.i18n import is_message_key, tr
 from app.domain.media_kinds import MEDIA_KINDS
 from app.domain.plugins.errors import PluginDomainError
 from app.domain.plugins.inputs import ASSET_FORMAT, EXTERNAL_ID_FORMAT, schema_type
-from app.domain.plugins.manifest import text_of, tool_label
+from app.domain.plugins.manifest import TOOLS, text_of, tool_label
 
 PLUGIN_NODE_PREFIX = "plugin."
 
@@ -383,15 +383,22 @@ def why_unusable(db: Session, node_type: str, user_id: str | None) -> PluginDoma
     tool_shown = tool_name
     details: list[str] = []
     for instance in connections:
+        # 先认出工具叫什么,再看连接卡在哪:被挡的连接缓存着的清单里也有它的名字 —— 此前被挡就直接跳过,
+        # 报错里露的是调用名(ComfyUI 每张工作流一个的 `wf_<哈希>`),用户认不出是哪个。
+        tool = next((one for one in _tools_of(db, instance, all_tools) if one["name"] == tool_name), None)
+        if tool is not None:
+            tool_shown = tool_label(tool) or tool_name
         blocked = inst.blocked_reason(db, instance)
         if blocked:
             details.append(tr("pluginWhy_connection", name=instance.name, reason=blocked))
             continue
-        tool = next((one for one in all_tools(db, instance) if one["name"] == tool_name), None)
         if tool is None:
-            details.append(tr("pluginWhy_connection", name=instance.name, reason=tr("pluginWhy_toolGone")))
+            # 清单上没有它:清单上一次没拉下来时说那个原因(服务没开、超时)—— 那时说「插件更新后去掉了它」是错的,
+            # 该去的地方是把服务开起来、再刷新一次,不是换一个工具。
+            failed = _tool_list_failure(instance)
+            reason = tr("pluginWhy_toolListFailed", reason=failed) if failed else tr("pluginWhy_toolGone")
+            details.append(tr("pluginWhy_connection", name=instance.name, reason=reason))
             continue
-        tool_shown = tool_label(tool) or tool_name
         if tool["internal"]:
             details.append(tr("pluginWhy_connection", name=instance.name, reason=tr("pluginWhy_toolInternal")))
         elif tool_name not in inst.exposed_tools(db, instance.id):
@@ -401,6 +408,26 @@ def why_unusable(db: Session, node_type: str, user_id: str | None) -> PluginDoma
     return PluginDomainError(
         "pluginErr_nodeUnusable", plugin=plugin, tool=tool_shown, details=tr("punct_listSep").join(details)
     )
+
+
+def _tools_of(db: Session, instance: Any, all_tools: Any) -> list[dict[str, Any]]:
+    """这条连接此刻的工具清单;读不出来(包记录的清单坏了)当它没有。"""
+    try:
+        return all_tools(db, instance)
+    except ValueError:  # PluginDomainError / ManifestError 都是 ValueError
+        return []
+
+
+def _tool_list_failure(instance: Any) -> str:
+    """这条连接的工具清单上一次没刷出来的原因(instances.record_tool_list_failure 记的);刷成功过就是空串。
+    按读的人的语言说(落库的是文案 key + 参数,和插件页同一个读法)。"""
+    from app.core.i18n import get_current_locale, render_message
+
+    status = (instance.capability_status or {}).get(TOOLS) or {}
+    key = str(status.get("error_key") or "")
+    if key:
+        return render_message(key, get_current_locale(), status.get("error_params") or {})
+    return str(status.get("error") or "")
 
 
 def resolve_instance(db: Session, package_id: str, tool_name: str, chosen: str, actor: str | None) -> str:

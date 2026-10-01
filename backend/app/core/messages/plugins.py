@@ -364,6 +364,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "上已经没有这个工具了(插件更新后去掉了它)",
         "en": "no longer has this tool (the plugin dropped it in an update)",
     },
+    "pluginWhy_toolListFailed": {
+        "zh": "的工具清单没拉下来({reason}):把它连的服务开起来,再在插件页刷新一次",
+        "en": "couldn't fetch its tool list ({reason}): start the service it connects to, then refresh it on the Plugins page",
+    },
     "pluginWhy_toolInternal": {
         "zh": "上这个工具只给应用自己调,不能放进工作流",
         "en": "only lets the app itself call this tool; it can't go in a workflow",
