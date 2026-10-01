@@ -184,6 +184,11 @@ def _readable(entry: Any, from_schema: dict[str, Any] | None) -> dict[str, Any]:
             readable["type"] = from_schema["type"]
             if from_schema.get("editor"):
                 readable["editor"] = from_schema["editor"]
+    if readable.get("type") in ("asset_list", "list") and (from_schema or {}).get("type") not in ("asset_list", "list"):
+        # node.config 自己说「一串」而 schema 不是数组:运行时不会把它转成数组(inputs.coerce 只听 schema),
+        # 表单却存下一个列表交给插件。降回 schema 那一格的样子(schema 里没有这一格就是一段文字)。
+        readable["type"] = (from_schema or {}).get("type") or "template"
+        readable.pop("editor", None)
     if readable.get("format") == EXTERNAL_ID_FORMAT and not readable.get("data_type"):
         readable["data_type"] = EXTERNAL_ID_FORMAT
     for field in ("label", "description", "placeholder"):
@@ -221,6 +226,11 @@ def node_meta(tool: dict[str, Any]) -> dict[str, Any]:
         config = {str(key): _readable(entry, from_schema.get(str(key))) for key, entry in config.items()}
     else:
         config = from_schema
+    #: 字段装的是什么只听 schema 的 format(素材 / 外部编号)。内置节点那套按名字推(`asset_id` → 素材,
+    #: workflows.config_data_type)是写给内置节点作者的约定;插件的 `asset_id` 可能是另一个系统里的编号 ——
+    #: 按名字推成素材,表单给素材选择器、画板接媒体格,运行时却不换路径(inputs.asset_fields 只听 format)。
+    #: 没说的显式写成 any,名字推断就不再起作用。
+    config = {key: {**entry, "data_type": entry.get("data_type") or "any"} for key, entry in config.items()}
     from app.domain.plugins.tools import COLLECTED_AS
 
     outputs = declared_outputs(tool)

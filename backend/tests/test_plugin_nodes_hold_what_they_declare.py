@@ -193,7 +193,38 @@ def test_自己写的node_config没标素材_照input_schema给素材选择器()
 def test_node_config标了素材而input_schema没标_不给素材选择器() -> None:
     tool = {"name": "t", "input_schema": {"properties": {"img": {"type": "string"}}},
             "node": {"config": {"img": {"type": "template", "format": "asset", "data_type": "asset"}}}}
-    assert "data_type" not in node_meta(tool)["config"]["img"]
+    assert node_meta(tool)["config"]["img"]["data_type"] == "any"
+
+
+def test_插件字段叫asset_id也不按名字推成素材_只听schema的format() -> None:
+    """内置节点那套「asset_id → 素材」的命名约定不套到插件上:插件的 `asset_id` 可能是别的系统里的编号。
+    此前按名字推成素材 —— 表单给素材选择器、画板只接媒体格,运行时却不换路径(asset_fields 只听 format)。"""
+    from app.domain.boards.tools import bindable_kinds
+    from app.domain.plugins.inputs import asset_fields
+    from app.domain.workflows.node_catalog import with_data_type
+
+    tool = {"name": "t", "input_schema": {"type": "object", "properties": {
+        "asset_id": {"type": "string", "description": "远端系统里的编号"},
+        "ref_asset_ids": {"type": "array", "items": {"type": "string"}},
+        "real": {"type": "string", "format": "asset"}}}}
+    config = node_meta(tool)["config"]
+    assert asset_fields(tool) == ["real"]
+    for key in ("asset_id", "ref_asset_ids"):
+        assert with_data_type(key, config[key])["data_type"] == "any", key
+        assert "image" not in bindable_kinds(key, config[key]), key
+    assert with_data_type("real", config["real"])["data_type"] == "asset"
+
+
+def test_node_config说一串而schema不是数组_降回schema那一格的样子() -> None:
+    """运行时只按 schema 把文字转成数组(inputs.coerce);node.config 自己写 list / asset_list 而 schema 是字符串,
+    表单存下一个列表、插件收到的也是列表 —— 和它声明的字符串对不上。"""
+    tool = {"name": "t", "input_schema": {"type": "object", "properties": {"x": {"type": "string"}, "n": {"type": "integer"}}},
+            "node": {"config": {"x": {"type": "asset_list", "label": "X"}, "n": {"type": "list", "editor": "json"},
+                                "ghost": {"type": "list"}}}}
+    config = node_meta(tool)["config"]
+    assert config["x"]["type"] == "template" and config["x"]["label"] == "X"
+    assert config["n"]["type"] == "number" and "editor" not in config["n"]
+    assert config["ghost"]["type"] == "template", "schema 里没有这一格:一段文字"
 
 
 # ---------- artifact 输出口 ----------

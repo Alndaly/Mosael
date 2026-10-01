@@ -1204,7 +1204,7 @@ def test_插件自己写的节点表单里_是不是素材字段听input_schema�
     assert meta["config"]["picture"]["data_type"] == "asset"
     assert bindable_kinds("picture", meta["config"]["picture"]) == ["image", "video", "audio"]
     unbacked = node_meta({"name": "cut", "node": {"config": {"picture": {"type": "template", "format": "asset"}}}})
-    assert "data_type" not in unbacked["config"]["picture"]
+    assert unbacked["config"]["picture"]["data_type"] == "any"
 
 
 def test_素材字段只接它声明的那几种素材() -> None:
