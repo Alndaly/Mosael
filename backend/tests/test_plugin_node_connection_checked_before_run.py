@@ -66,7 +66,10 @@ def _start(ws: str, instance_id: str, *, in_loop: bool = False) -> str:
     with SessionLocal() as db:
         workflow = create_workflow(db, workspace_id=ws, name="回声", graph=graph, created_by=user_id())
         db.commit()
-        return start_workflow_job(db, workflow, created_by=user_id()).id
+        job = start_workflow_job(db, workflow, created_by=user_id())
+        #: 测试就是入口:任务在起它的那次事务提交之后才派发(jobs.dispatch_job)。
+        db.commit()
+        return job.id
 
 
 def _settled(job_id: str) -> Job:
