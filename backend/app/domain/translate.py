@@ -10,7 +10,8 @@
 """
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor
+from collections.abc import Callable
+from concurrent.futures import FIRST_EXCEPTION, ThreadPoolExecutor, wait
 import time
 from typing import Literal
 
@@ -32,6 +33,8 @@ _GOOGLE_URL = "https://translate.googleapis.com/translate_a/single"
 _TIMEOUT = 30
 # AI 供应商的字幕请求有限并发；Google 免费端点走下面的单通道节流。
 _MAX_PARALLEL = 8
+#: 并发翻译时,多久问一次调用方「还要不要」。
+_STOP_POLL_SECONDS = 0.5
 # 免费端点会按客户端标识、出口或突发频率拒绝请求。请求本身通常比这个间隔慢，但本地代理
 # 命中快速链路时仍要把起始时间摊开；它不是供应商 API，不能把并发当成稳定能力。
 _GOOGLE_MIN_INTERVAL_SECONDS = 0.35
@@ -58,6 +61,10 @@ class TranslateError(LocalizedError, RuntimeError):
     `TranslateError.relay` 转述,**带着它的 key 和参数** —— 此前是 `TranslateError(str(exc))`,
     上游那句话在转述那一刻就翻成了缺省语言的字。
     """
+
+
+class TranslationStopped(TranslateError):
+    """调用方说这一批不要了(见 translate_many 的 `stop`)。不是翻译出了错 —— 调用方据此按「在停」处理。"""
 
 
 class TranslateProviderUnavailable(CapabilityUnavailable, TranslateError):
@@ -260,8 +267,12 @@ def translate_many(
     profile_id: str | None = None,
     model: str = "",
     surface: ChatSurface = "direct",
+    stop: Callable[[], bool] | None = None,
 ) -> list[str]:
     """Translate a batch, running the round-trips concurrently.
+
+    `stop`:调用方「这一批还要不要」的判据(工作流:这一轮在停 —— 取消了,或同一张图里别的节点失败了)。
+    在**调用方的线程**里问(它的上下文才看得到停的信号),说停就不再起新的句子,抛 TranslationStopped。
 
     AI 供应商的各句调用可以并行。Google 免费端点则必须串行并限制请求起始频率：它会按客户
     端标识、出口或突发流量拒绝请求，8 路并发可能把本来可用的路径打进
@@ -288,11 +299,35 @@ def translate_many(
     workers = min(_MAX_PARALLEL, len(indexed))
 
     def run(translate_one) -> None:
+        """一条失败整批就失败(调用方本来就是整批应用的),而且**剩下还没开始的句子不再翻**。
+
+        此前用 pool.map:第一条异常要等消费到它才抛,而线程池收尾时会把已经排进去的每一句都跑完 ——
+        一句失败了,其余几百句照样一句句付费翻完、再一起扔掉。现在一有句子失败、或者调用方说停,就把还没开始的
+        撤掉;已经在跑的(至多 `workers` 句)跑完为止。
+        """
         # run_in_scope:contextvars 不会自动跨进工作线程,而记账归属就在里面。
-        # map() 在消费时抛出第一个异常,所以一条失败仍然让整批失败 —— 调用方本来就是整批应用的。
         with ThreadPoolExecutor(max_workers=workers) as pool:
-            for index, translated in pool.map(run_in_scope(translate_one), indexed):
-                results[index] = translated
+            futures = [pool.submit(run_in_scope(translate_one), item) for item in indexed]
+            pending = set(futures)
+            stopped = False
+            while pending:
+                done, pending = wait(pending, timeout=_STOP_POLL_SECONDS, return_when=FIRST_EXCEPTION)
+                if any(not one.cancelled() and one.exception() is not None for one in done):
+                    break
+                if stop is not None and stop():
+                    stopped = True
+                    break
+            for one in pending:
+                one.cancel()
+        #: 按句子的顺序报第一条真的失败;撤掉的那些不算。
+        for one in futures:
+            if not one.cancelled() and one.exception() is not None:
+                raise one.exception()  # type: ignore[misc]
+        if stopped:
+            raise TranslationStopped("translateErr_stopped")
+        for one in futures:
+            index, translated = one.result()
+            results[index] = translated
 
     if chat_target is None:  # google:免费端点,不产生供应商用量,不开记账
         # 429 后立刻停：通用 RetryingClient 的指数重试适合有正式配额的供应商 API，但 Google
@@ -300,9 +335,9 @@ def translate_many(
         with http_retry.RetryingClient(timeout=_TIMEOUT * 2, max_retries=0) as client:
             last_started = 0.0
             for index, text in indexed:
-                wait = _GOOGLE_MIN_INTERVAL_SECONDS - (time.monotonic() - last_started)
-                if wait > 0:
-                    time.sleep(wait)
+                pause = _GOOGLE_MIN_INTERVAL_SECONDS - (time.monotonic() - last_started)
+                if pause > 0:
+                    time.sleep(pause)
                 last_started = time.monotonic()
                 results[index] = google_translate(text, target, client=client)
         return results

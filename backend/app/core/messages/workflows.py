@@ -338,6 +338,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "翻译节点上选的 AI 连接属于建这张图的成员,你用不了;你自己还没有能对话的连接 —— 先在设置里接一条,或在节点上换成你自己的(也可以换成 Google 翻译)",
         "en": "The AI connection picked on the translate step belongs to the member who built the workflow, so you can't use it, and you don't have a chat connection of your own yet. Add one in Settings, or pick one of yours on the node (or switch to Google Translate).",
     },
+    "translateErr_stopped": {
+        "zh": "翻译停下了:这一轮在停(取消了,或者别的步骤失败了)",
+        "en": "Translation stopped: this run is stopping (it was cancelled, or another step failed)",
+    },
     "translateErr_noCredential": {
         "zh": "供应商「{name}」还没有配置你的密钥,请先在设置里填写",
         "en": "Provider \u300c{name}\u300d has no key of yours yet — set it in Settings first",

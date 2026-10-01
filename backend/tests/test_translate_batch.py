@@ -143,3 +143,68 @@ def test_ai_provider_is_read_once_before_the_pool_starts() -> None:
     assert all(name == threading.current_thread().name for name in reads), (
         "the DB was read from a worker thread"
     )
+
+
+def _ai_batch(monkeypatch, fake_ai) -> None:
+    from types import SimpleNamespace
+
+    class Billing:
+        def __enter__(self): return None
+        def __exit__(self, *_args): return False
+
+    monkeypatch.setattr(tr, "resolve_ai_chat_target", lambda *args, **kwargs: SimpleNamespace(execution_surface="direct"))
+    monkeypatch.setattr(tr, "ai_translate_with", fake_ai)
+    monkeypatch.setattr(tr, "billable", lambda *args, **kwargs: Billing())
+
+
+def test_一句失败_还没开始的句子不再翻(monkeypatch) -> None:
+    """此前 pool.map 要把排进去的每一句都跑完才抛 —— 一句失败,其余几百句照样一句句付费翻完、再一起扔掉。"""
+    called: list[str] = []
+    lock = threading.Lock()
+
+    def fake_ai(chat_target, text, target, client=None, call=None):
+        with lock:
+            called.append(text)
+        if text == "c0":
+            raise tr.TranslateError("translateErr_noProvider")
+        time.sleep(0.05)
+        return text
+
+    _ai_batch(monkeypatch, fake_ai)
+    with pytest.raises(tr.TranslateError) as failed:
+        tr.translate_many(None, [f"c{i}" for i in range(64)], "en", user_id=None, engine="builtin:chat")
+    assert failed.value.key == "translateErr_noProvider", "报的是那一句真的失败"
+    assert len(called) <= 2 * tr._MAX_PARALLEL, f"失败之后又翻了 {len(called)} 句"
+
+
+def test_调用方说停_不再起新的句子(monkeypatch) -> None:
+    """工作流里同一张图别的节点失败了(或这一轮被取消):翻译节点不该把剩下的句子一句句付费翻完。"""
+    called: list[str] = []
+    lock = threading.Lock()
+
+    def fake_ai(chat_target, text, target, client=None, call=None):
+        with lock:
+            called.append(text)
+        time.sleep(0.05)
+        return text
+
+    _ai_batch(monkeypatch, fake_ai)
+    stop = threading.Event()
+    threading.Timer(0.1, stop.set).start()
+    with pytest.raises(tr.TranslationStopped):
+        tr.translate_many(None, [f"c{i}" for i in range(400)], "en", user_id=None, engine="builtin:chat", stop=stop.is_set)
+    assert len(called) < 100, f"说停之后还翻了 {len(called)} 句"
+
+
+def test_逐句翻译节点_这一轮在停就停下_说的是在停(monkeypatch) -> None:
+    from app.domain.workflows import WorkflowDomainError
+    from app.domain.workflows.executors.ai import translate_lines
+    from app.domain.workflows.run_scope import halt_scope
+
+    called: list[str] = []
+    _ai_batch(monkeypatch, lambda chat_target, text, target, client=None, call=None: called.append(text) or time.sleep(0.05) or text)
+    with halt_scope() as halt:
+        threading.Timer(0.1, halt.set).start()
+        with pytest.raises(WorkflowDomainError) as stopped:
+            translate_lines(None, None, {"texts": [f"c{i}" for i in range(400)], "target_lang": "en", "engine": "builtin:chat"})
+    assert stopped.value.key == "wfErr_cancelled" and len(called) < 100

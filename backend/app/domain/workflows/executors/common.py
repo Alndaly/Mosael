@@ -22,7 +22,7 @@ CHILD_POLL_SECONDS = 2.0
 
 T = TypeVar("T")
 
-def _stopping(db: Session) -> bool:
+def stopping(db: Session) -> bool:
     """这一轮是不是正在停:哪一层图立了停的信号,或者外层工作流已经落了终态。"""
     if halted():
         return True
@@ -39,7 +39,7 @@ def stop_if_stopping(db: Session) -> None:
     一个节点里逐个提交付费任务(改口型逐块、长稿逐句配音)时,在每次提交之前问一句:等子任务的时候
     (wait_until)会认停的信号,而两次提交之间没人问 —— 用户取消了、同一张图里别的节点失败了,
     下一块照样提交、照样计费。"""
-    if _stopping(db):
+    if stopping(db):
         raise WorkflowDomainError("wfErr_cancelled")
 
 
@@ -66,7 +66,7 @@ def wait_until(
                 value = check(db)
                 if value is not None:
                     return value
-                if _stopping(db):
+                if stopping(db):
                     if on_stop is not None:
                         on_stop(db)
                         db.commit()

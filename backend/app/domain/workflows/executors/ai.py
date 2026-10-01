@@ -17,7 +17,7 @@ from app.domain.providers.chat_connection import require_connection, runner_choi
 from app.domain.workflows import WorkflowDomainError, field_name
 from app.domain.jobs import current_actor
 from app.domain.workflows.executors.registry import RunScope, register
-from app.domain.workflows.executors.common import text_lines
+from app.domain.workflows.executors.common import stopping, text_lines
 
 LLM_TIMEOUT_SECONDS = 120
 
@@ -470,7 +470,7 @@ def translate_lines(db: Session, scope: RunScope, config: dict[str, Any]) -> dic
     **顺序即对齐**:第 i 条译文配第 i 段的时间码,所以空段落也要占住自己的位置 ——
     translate_many 对空串返回空串,不压缩列表。
     """
-    from app.domain.translate import language_label, same_language, translate_many
+    from app.domain.translate import TranslationStopped, language_label, same_language, translate_many
 
     texts = text_lines(config.get("texts"))
     if not texts:
@@ -483,16 +483,21 @@ def translate_lines(db: Session, scope: RunScope, config: dict[str, Any]) -> dic
     if same_language(str(config.get("source_lang") or ""), target, spoken=spoken):
         raise WorkflowDomainError("wfErr_translateSameLanguage", params={"lang": language_label(target)})
     with workspace_scope(getattr(scope, "workspace_id", "") or ""):
-        translated = translate_many(
-            db,
-            texts,
-            target,
-            user_id=current_actor(db),
-            engine=str(config.get("engine") or ""),
-            profile_id=str(config.get("profile_id") or "") or None,
-            model=str(config.get("model") or ""),
-            surface="automation",
-        )
+        try:
+            translated = translate_many(
+                db,
+                texts,
+                target,
+                user_id=current_actor(db),
+                engine=str(config.get("engine") or ""),
+                profile_id=str(config.get("profile_id") or "") or None,
+                model=str(config.get("model") or ""),
+                surface="automation",
+                #: 这一轮在停(取消了、同一张图里别的节点失败了)就不再起新的句子 —— 每一句都是一次付费调用。
+                stop=lambda: stopping(db),
+            )
+        except TranslationStopped as exc:
+            raise WorkflowDomainError("wfErr_cancelled") from exc
     return {"texts": translated, "count": len(translated)}
 
 
