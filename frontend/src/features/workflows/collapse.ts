@@ -63,7 +63,8 @@ export function rewriteRefs(value: unknown, remap: (leadingId: string) => string
   return value;
 }
 
-/** 只改写**这一层作用域**里的引用:内嵌子图节点的 body/output/condition 属于体自己,原样保留。 */
+/** 只改写**这一层作用域**里的引用:内嵌子图节点的 body/output/condition 属于体自己,原样保留;
+ *  代码字段也原样保留 —— 代码不插值,里面的 `{{…}}` 是字面文字(和 outerRefSources 同一口径)。 */
 function rewriteOuterRefs(
   node: WNode,
   registry: RegistryLike,
@@ -71,7 +72,10 @@ function rewriteOuterRefs(
 ): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(node.config ?? {})) {
-    out[key] = isNestedScopeConfig(registry, node.type, key) ? value : rewriteRefs(value, remap);
+    out[key] =
+      isNestedScopeConfig(registry, node.type, key) || isCodeConfig(registry, node.type, key)
+        ? value
+        : rewriteRefs(value, remap);
   }
   return out;
 }

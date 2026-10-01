@@ -148,3 +148,28 @@ it("代码字段接了上游(后端拒跑):检查器给一个断开的入口,点
   expect(next.edges).toEqual([]);
   expect(next.nodes.find((one) => one.id === "c1")!.inputs).toEqual([]);
 });
+
+it("失效引用不查代码字段:代码里的 {{…}} 是字面文字;入参里的照查", () => {
+  //: 代码不插值(后端 code_fields)。此前检查器把代码里的 {{…}} 当引用,报「引用了已删除的节点」,
+  //: 还给一个「重新指向」去改写用户的代码 —— 就绪清单却(正确地)不报,两处说的不是一件事。
+  const node = { id: "c1", type: "code", config: { code: "print('{{gone.code}}')", input: "{{gone.input}}" } };
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <TooltipProvider>
+        <ReactFlowProvider>
+          <NodeInspector
+            node={node}
+            meta={CODE_META}
+            graph={{ nodes: [node], edges: [] } as WorkflowGraph}
+            registry={new Map([[CODE_META.type, CODE_META]])}
+            workspaceId="w1"
+            onChange={vi.fn()}
+            onApplyGraph={vi.fn()}
+          />
+        </ReactFlowProvider>
+      </TooltipProvider>
+    </QueryClientProvider>,
+  );
+  const stale = [...document.querySelectorAll("code.line-through")].map((one) => one.textContent);
+  expect(stale).toEqual(["{{gone.input}}"]);
+});

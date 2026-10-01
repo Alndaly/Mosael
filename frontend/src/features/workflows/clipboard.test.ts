@@ -7,10 +7,11 @@ import { pasteNodes } from "@/features/workflows/clipboard";
 /** 只有「哪些节点带内嵌子图」和粘贴有关 —— 后端随节点声明发下来的 body_scope。 */
 const registry: RegistryLike = {
   get: (type) =>
-    ({ loop_foreach: { body_scope: { loop: ["item", "index"], input: ["*inputs"] } }, subgraph: { body_scope: { input: ["*inputs"] } } } as Record<
-      string,
-      { body_scope: Record<string, string[]> }
-    >)[type],
+    ({
+      loop_foreach: { body_scope: { loop: ["item", "index"], input: ["*inputs"] } },
+      subgraph: { body_scope: { input: ["*inputs"] } },
+      code: { config: { code: { type: "code" }, input: { type: "object" } } },
+    } as Record<string, { body_scope?: Record<string, string[]>; config?: Record<string, unknown> }>)[type],
 };
 
 const node = (id: string, type: string, config: Record<string, unknown> = {}) =>
@@ -45,5 +46,19 @@ describe("粘贴一组节点", () => {
   it("start 不复制;只剩 start 时什么都不粘", () => {
     const graph = { nodes: [node("start", "start")], edges: [] } as WorkflowGraph;
     expect(pasteNodes(graph, { nodes: [node("start", "start")], edges: [] }, registry)).toBeNull();
+  });
+
+  it("代码字段里的 {{…}} 不是引用,原样粘过去;入参里的照常换", () => {
+    //: 代码不插值(后端 code_fields):那一段是代码里的字面文字。改写它等于悄悄改了用户的代码。
+    const graph = { nodes: [node("llm-1", "llm")], edges: [] } as WorkflowGraph;
+    const clip = {
+      nodes: [
+        node("llm-1", "llm"),
+        node("code-1", "code", { code: "print('{{llm-1.text}}')", input: { t: "{{llm-1.text}}" } }),
+      ],
+      edges: [],
+    };
+    const copy = pasteNodes(graph, clip, registry)!.graph.nodes.find((one) => one.id === "code-1")!;
+    expect(copy.config).toEqual({ code: "print('{{llm-1.text}}')", input: { t: "{{llm-2.text}}" } });
   });
 });

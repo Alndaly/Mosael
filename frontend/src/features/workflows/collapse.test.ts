@@ -7,10 +7,11 @@ import type { WorkflowGraph } from "@/api/client";
 /** 只有「哪些节点带内嵌子图」这一格和折叠有关 —— 后端随节点声明发下来的 body_scope。 */
 const registry: RegistryLike = {
   get: (type) =>
-    ({ loop_foreach: { body_scope: { loop: ["item", "index"], input: ["*inputs"] } }, subgraph: { body_scope: { input: ["*inputs"] } } } as Record<
-      string,
-      { body_scope: Record<string, string[]> }
-    >)[type],
+    ({
+      loop_foreach: { body_scope: { loop: ["item", "index"], input: ["*inputs"] } },
+      subgraph: { body_scope: { input: ["*inputs"] } },
+      code: { config: { code: { type: "code" }, input: { type: "object" } } },
+    } as Record<string, { body_scope?: Record<string, string[]>; config?: Record<string, unknown> }>)[type],
 };
 
 /** start → a → b → out,a/b 都用 {{}} 串引用;折叠 {a,b}。 */
@@ -59,6 +60,18 @@ describe("collapseToSubgraph", () => {
     // 边收缩:start→sg、sg→out
     const pairs = graph.edges.map((e) => `${e.source}->${e.target}`).sort();
     expect(pairs).toEqual(["sg->out", "start->sg"]);
+  });
+
+  it("代码字段里的 {{…}} 是代码的字面文字,收进子图时不改写", () => {
+    //: 同一个外部节点被别的字段正经引用时,它进了子图的 input;代码里那段同名文字此前也被一起改成
+    //: {{input.start.topic}} —— 等于悄悄改了用户的代码。
+    const g = linearGraph();
+    g.nodes[2] = { id: "b", type: "code", config: { code: "x = '{{start.topic}}'", input: { t: "{{a.text}}" } }, position: { x: 200, y: 0 } };
+    const res = collapseToSubgraph(g, ["a", "b"], registry, { name: "Subgraph", id: "sg" });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    const body = res.graph.nodes.find((n) => n.id === "sg")!.config?.body as WorkflowGraph;
+    expect(body.nodes.find((n) => n.id === "b")!.config).toEqual({ code: "x = '{{start.topic}}'", input: { t: "{{a.text}}" } });
   });
 
   it("转换跨边界的数据边为 {{input.*}} / {{sg.output.*}} 模板", () => {

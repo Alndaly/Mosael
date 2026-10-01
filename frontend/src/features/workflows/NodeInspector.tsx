@@ -28,7 +28,7 @@ import {
   type ConfigSpec,
   type FieldBinding,
 } from "@/features/nodeForms/NodeConfigForm";
-import { bodyScope, drivesDigitalHuman, extractRefs, isNestedScopeConfig } from "@/features/workflows/analyze";
+import { bodyScope, drivesDigitalHuman, extractRefs, isCodeConfig, isNestedScopeConfig } from "@/features/workflows/analyze";
 import { chatProfileIds, generationVendors } from "@/features/workflows/bindingReadiness";
 import { withDataInputBound } from "@/features/workflows/connections";
 import { GENERATE_SPECIAL_CONFIG_KEYS, generateNodeSection, useGenerateNodeSection } from "@/features/workflows/nodeInspectorGenerate";
@@ -137,12 +137,14 @@ export function NodeInspector({
   }, [meta, node, registry]);
 
   // 失效引用:本节点配置里引用了图中已不存在的节点(通常是上游被删)。
+  //: 代码字段不查:代码不插值,里面的 {{…}} 是字面文字(就绪清单同一条,见 analyze.isCodeConfig)——
+  //: 此前这里照查,报「引用了已删除的节点」,还给一个「重新指向」去改写用户的代码。
   const staleRefs = React.useMemo(() => {
     const ids = new Set(graph.nodes.map((n) => n.id));
     const scopeRoots = new Set(scopeVariables.flatMap((value) => extractRefs(value).map(({ sourceId }) => sourceId)));
     const found: Array<{ key: string; ref: string }> = [];
     for (const [key, val] of Object.entries(node.config ?? {})) {
-      if (isNestedScopeConfig(registry, node.type, key)) continue;
+      if (isNestedScopeConfig(registry, node.type, key) || isCodeConfig(registry, node.type, key)) continue;
       for (const { ref, sourceId } of extractRefs(val)) {
         if (!ids.has(sourceId) && !scopeRoots.has(sourceId) && !found.some((f) => f.key === key && f.ref === ref)) {
           found.push({ key, ref });

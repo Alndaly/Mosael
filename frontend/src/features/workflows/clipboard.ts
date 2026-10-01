@@ -8,10 +8,11 @@
  *
  * 组外的引用(`{{start.topic}}`)原样保留:那是这组节点对外部的依赖,复制不改变它。
  * 内嵌子图的作用域(循环体 / 子图体 / 它们的 output)里的引用指向**体内**的节点,
- * 和外层 id 是两套命名空间,不能拿外层的换名表去改。
+ * 和外层 id 是两套命名空间,不能拿外层的换名表去改。代码字段也不改:代码不插值,里面的
+ * `{{…}}` 是代码的字面文字,不是引用(见 analyze.isCodeConfig)—— 改了等于悄悄改了用户的代码。
  */
 import type { WorkflowGraph } from "@/api/client";
-import { isNestedScopeConfig, type RegistryLike } from "@/features/workflows/analyze";
+import { isCodeConfig, isNestedScopeConfig, type RegistryLike } from "@/features/workflows/analyze";
 import { rewriteRefs } from "@/features/workflows/collapse";
 
 type WNode = WorkflowGraph["nodes"][number];
@@ -44,7 +45,9 @@ function remapConfig(node: WNode, idMap: Map<string, string>, registry: Registry
   return Object.fromEntries(
     Object.entries(config).map(([key, value]) => [
       key,
-      isNestedScopeConfig(registry, node.type, key) ? value : rewriteRefs(value, (source) => idMap.get(source) ?? null),
+      isNestedScopeConfig(registry, node.type, key) || isCodeConfig(registry, node.type, key)
+        ? value
+        : rewriteRefs(value, (source) => idMap.get(source) ?? null),
     ]),
   );
 }
