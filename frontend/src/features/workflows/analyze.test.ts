@@ -19,7 +19,7 @@ const registry: RegistryLike = {
     const table: Record<
       string,
       {
-        config?: Record<string, { type?: string; required?: boolean; data_type?: string; default?: string; depends_on?: string; active_when?: Record<string, unknown>; one_of?: string }>;
+        config?: Record<string, { type?: string; required?: boolean; data_type?: string; default?: string; depends_on?: string; active_when?: Record<string, unknown>; one_of?: string; one_of_strict?: boolean }>;
         output_types?: Record<string, string>;
         body_scope?: Record<string, string[]>;
       }
@@ -57,10 +57,11 @@ const registry: RegistryLike = {
         },
       },
       // 素材和本机路径恰好填一个(NODE_TYPES 的 one_of)。
+      // 执行器两样都给就报错、不按顺序取(后端 one_of_strict):这一组照旧恰好一个,没有兜底。
       browser_upload: {
         config: {
-          asset_id: { type: "template", one_of: "source" },
-          file_path: { type: "template", one_of: "source" },
+          asset_id: { type: "template", one_of: "source", one_of_strict: true },
+          file_path: { type: "template", one_of: "source", one_of_strict: true },
         },
       },
       // 选择器和文字恰好填一个 —— 除非前面填了的都只是引用 / 接了上游(运行时空了就取下一个,作兜底)。
@@ -295,7 +296,7 @@ describe("analyzeWorkflow", () => {
     ]);
   });
 
-  it("同组(one_of)恰好填一个:都填了、都没填都是阻塞错误,接了上游也算填了;前面只是上游、后面写死的是兜底", () => {
+  it("同组(one_of)恰好填一个:都填了、都没填都是阻塞错误,接了上游也算填了", () => {
     const make = (config: Record<string, unknown>, bound?: string) =>
       graph(
         [
@@ -315,9 +316,14 @@ describe("analyzeWorkflow", () => {
     expect(issuesOf(make({ asset_id: "a1", file_path: "/tmp/x.mp4" }))).toEqual([
       expect.objectContaining({ code: "one-of-both", severity: "error", group: ["asset_id", "file_path"] }),
     ]);
-    // 素材接上游、本机路径写死:前者运行时可能是空的,后者是兜底 —— 不算两个(见下面 one_of 兜底那一组)。
-    expect(issuesOf(make({ file_path: "/tmp/x.mp4" }, "asset_id"))).toEqual([]);
-    // 反过来(路径接上游、素材写死):前面那格是字面量,后面那格永远用不上 —— 是两个。
+    // 上传的素材 / 路径是 strict 组(后端 one_of_strict:两样都给上传就报错):前面接上游、后面写死也是两个,
+    // 不放宽成兜底(放宽的那种见下面 one_of 兜底那一组)。
+    expect(issuesOf(make({ file_path: "/tmp/x.mp4" }, "asset_id"))).toEqual([
+      expect.objectContaining({ code: "one-of-both" }),
+    ]);
+    expect(issuesOf(make({ asset_id: "{{start.asset}}", file_path: "/tmp/x.mp4" })).filter((i) => i.code.startsWith("one-of"))).toEqual([
+      expect.objectContaining({ code: "one-of-both" }),
+    ]);
     expect(issuesOf(make({ asset_id: "a1" }, "file_path"))).toEqual([
       expect.objectContaining({ code: "one-of-both" }),
     ]);
@@ -875,7 +881,7 @@ describe("循环体 / 子图本身的几条规矩(与后端 validate_body_graph 
 });
 
 describe("one_of 里前面的是引用、最后一个是字面量:兜底,不算填了两个", () => {
-  //: 运行时按声明顺序取第一个非空值(与后端 _one_of_errors 同一条):上游给了选择器就用它,
+  //: 运行时按声明顺序取第一个非空值(与后端 graph_rules.one_of_errors 同一条):上游给了选择器就用它,
   //: 给的是空就退到文字。前面那格只是一条引用 / 一条数据边时,它在运行时可能是空的 —— 后面的字面量是兜底。
   const click = (config: Record<string, unknown>, bound?: string) =>
     graph(

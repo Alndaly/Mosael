@@ -1,6 +1,6 @@
 import type { WorkflowGraph } from "@/api/client";
 
-import { isWorkflowFieldActive, oneOfGroups, oneOfOverfilled } from "@/features/nodeForms/fieldActivation";
+import { isStrictOneOf, isWorkflowFieldActive, oneOfGroups, oneOfOverfilled } from "@/features/nodeForms/fieldActivation";
 import { fieldDataType, normalizeDataType, type DataType } from "@/features/nodeForms/fieldTypes";
 import type { PromptMode } from "@/lib/generationCapabilities";
 import { bodyKey, declaredFieldNames, type ScopePath } from "@/features/workflows/scope";
@@ -398,12 +398,12 @@ function collect(
       }
     }
 
-    // 同组(one_of)恰好填一个 —— 与后端 validate_graph 的 _one_of_errors 同一条规矩。前面填的都只是
-    // 引用 / 数据边、最后一格作兜底的,不算两个(见 oneOfOverfilled)。
+    // 同组(one_of)恰好填一个 —— 与后端 graph_rules.one_of_errors 同一条规矩。前面填的都只是
+    // 引用 / 数据边、最后一格作兜底的,不算两个(见 oneOfOverfilled);strict 组(one_of_strict)不放宽。
     for (const group of oneOfGroups(fieldSpecs)) {
       const bound = (key: string) => dataBound.has(`${node.id}:${key}`);
       const filled = group.filter((key) => !isEmpty(config[key]) || bound(key));
-      if (oneOfOverfilled(filled, config, bound)) push("error", "one-of-both", { configKey: filled[0], group });
+      if (oneOfOverfilled(filled, config, bound, isStrictOneOf(group, fieldSpecs))) push("error", "one-of-both", { configKey: filled[0], group });
       if (filled.length === 0) push("error", "one-of-missing", { configKey: group[0], group });
     }
 

@@ -2,7 +2,14 @@ import { describe, expect, it } from "vitest";
 
 import contract from "../../../../contracts/workflow-field-activation.json";
 
-import { isOneOfFallback, isPureReference, isTakenByOneOfPeer, isWorkflowFieldActive, oneOfGroups } from "@/features/nodeForms/fieldActivation";
+import {
+  isOneOfFallback,
+  isPureReference,
+  isTakenByOneOfPeer,
+  isWorkflowFieldActive,
+  oneOfGroups,
+  oneOfOverfilled,
+} from "@/features/nodeForms/fieldActivation";
 
 describe("isWorkflowFieldActive", () => {
   const specs = {
@@ -86,5 +93,22 @@ describe("one_of:同组恰好填一个", () => {
     const both = { asset_id: "a1", file_path: "/tmp/x.mp4" };
     expect(isTakenByOneOfPeer("asset_id", specs, both)).toBe(false);
     expect(isTakenByOneOfPeer("file_path", specs, both)).toBe(false);
+  });
+
+  describe("strict 组(one_of_strict:执行器两样都给就报错)照旧恰好一个", () => {
+    const strict = {
+      asset_id: { one_of: "source", one_of_strict: true },
+      file_path: { one_of: "source", one_of_strict: true },
+    };
+    it("前面接了上游 / 是引用,后面那格照样收起,也不标兜底", () => {
+      expect(isTakenByOneOfPeer("file_path", strict, {}, (key) => key === "asset_id")).toBe(true);
+      expect(isTakenByOneOfPeer("file_path", strict, { asset_id: "{{up.asset_id}}" })).toBe(true);
+      expect(isTakenByOneOfPeer("asset_id", strict, { file_path: "/tmp/x.mp4" })).toBe(true);
+      expect(isOneOfFallback("file_path", strict, { asset_id: "{{up.asset_id}}" })).toBe(false);
+    });
+    it("引用在前、字面量在后也算填了两个", () => {
+      expect(oneOfOverfilled(["asset_id", "file_path"], { asset_id: "{{up.asset_id}}", file_path: "/x" }, () => false, true)).toBe(true);
+      expect(oneOfOverfilled(["asset_id", "file_path"], { asset_id: "{{up.asset_id}}", file_path: "/x" })).toBe(false);
+    });
   });
 });

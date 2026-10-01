@@ -10,6 +10,8 @@ export interface ActivatableFieldSpec {
   active_when?: Record<string, unknown | unknown[]>;
   /** 同组的字段恰好填一个(值是组名,后端 NODE_TYPES 的 `one_of`)。 */
   one_of?: string;
+  /** 这一组没有「引用在前、兜底在后」:执行器两样都给就报错、不按顺序取(浏览器上传的素材 / 路径)。 */
+  one_of_strict?: boolean;
 }
 
 export function isWorkflowFieldActive(
@@ -37,6 +39,11 @@ export function oneOfGroups(specs: Record<string, ActivatableFieldSpec | null | 
   return [...groups.values()];
 }
 
+/** 这一组是不是 strict(组里有一格声明了 `one_of_strict`,和后端 graph_rules.one_of_errors 同一个判法)。 */
+export function isStrictOneOf(group: readonly string[], specs: Record<string, ActivatableFieldSpec | null | undefined>): boolean {
+  return group.some((key) => Boolean(specs[key]?.one_of_strict));
+}
+
 /** 整格就是一条引用(`{{上游.输出}}`),没有别的字:运行时它的值全看上游,可能是空的。 */
 export function isPureReference(value: unknown): boolean {
   return typeof value === "string" && /^\s*\{\{\s*[\w.-]+\s*\}\}\s*$/.test(value);
@@ -45,17 +52,21 @@ export function isPureReference(value: unknown): boolean {
 /**
  * 同组(`one_of`)填了的那几格(按声明顺序)算不算「填了不止一个」。
  *
- * 运行时按声明顺序取**第一个非空值**(与后端 graph_rules._one_of_errors 同一条)。所以前面填了的
+ * 运行时按声明顺序取**第一个非空值**(与后端 graph_rules.one_of_errors 同一条)。所以前面填了的
  * 都只是一条引用、或接了数据边时,它们在运行时可能是空的 —— 最后那格是兜底,不是冲突:点击节点的
  * 选择器接上游、文字写死一个按钮名,上游没给选择器就按文字点。前面有一格是字面量(或引用里夹着别的字)
  * 才是真的两个都填了,运行时后面那格永远用不上。
+ *
+ * `strict` 组(isStrictOneOf)不放宽:执行器两样都给就报错,填了两格就是两格。
  */
 export function oneOfOverfilled(
   filled: readonly string[],
   config: Record<string, unknown>,
   isBound: (key: string) => boolean = () => false,
+  strict = false,
 ): boolean {
   if (filled.length < 2) return false;
+  if (strict) return true;
   return !filled.slice(0, -1).every((key) => isBound(key) || isPureReference(config[key]));
 }
 
@@ -65,11 +76,11 @@ function filledBefore(
   specs: Record<string, ActivatableFieldSpec | null | undefined>,
   config: Record<string, unknown>,
   isBound: (key: string) => boolean,
-): { group: string[]; before: string[] } | null {
+): { group: string[]; strict: boolean; filled: (one: string) => boolean; before: string[] } | null {
   const group = oneOfGroups(specs).find((keys) => keys.includes(key));
   if (!group) return null;
   const filled = (one: string) => isBound(one) || String(config[one] ?? "").trim() !== "";
-  return { group, before: group.slice(0, group.indexOf(key)).filter(filled) };
+  return { group, strict: isStrictOneOf(group, specs), filled, before: group.slice(0, group.indexOf(key)).filter(filled) };
 }
 
 /**
@@ -80,6 +91,8 @@ function filledBefore(
  * 填了字面量也不收前面这格:前面这格还可以接上游,把后面那格当兜底。
  *
  * 这一格自己已经填了就**留着** —— 藏起来的话人既看不见也清不掉;真冲突了就绪检查会报。
+ *
+ * `strict` 组没有兜底:同组别的格(前后、引用还是上游都算)填了,这一格就收起。
  */
 export function isTakenByOneOfPeer(
   key: string,
@@ -88,8 +101,8 @@ export function isTakenByOneOfPeer(
   isBound: (key: string) => boolean = () => false,
 ): boolean {
   const found = filledBefore(key, specs, config, isBound);
-  if (!found) return false;
-  if (isBound(key) || String(config[key] ?? "").trim() !== "") return false;
+  if (!found || found.filled(key)) return false;
+  if (found.strict) return found.group.some((one) => one !== key && found.filled(one));
   return found.before.some((one) => !isBound(one) && !isPureReference(config[one]));
 }
 
@@ -104,6 +117,6 @@ export function isOneOfFallback(
   isBound: (key: string) => boolean = () => false,
 ): boolean {
   const found = filledBefore(key, specs, config, isBound);
-  if (!found || found.before.length === 0) return false;
+  if (!found || found.strict || found.before.length === 0) return false;
   return found.before.every((one) => isBound(one) || isPureReference(config[one]));
 }
