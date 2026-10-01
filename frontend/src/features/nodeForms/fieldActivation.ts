@@ -59,11 +59,27 @@ export function oneOfOverfilled(
   return !filled.slice(0, -1).every((key) => isBound(key) || isPureReference(config[key]));
 }
 
+/** 同组里排在 `key` 前面、已经填了的那几格(声明顺序)。接了上游(`isBound`)也算填了。 */
+function filledBefore(
+  key: string,
+  specs: Record<string, ActivatableFieldSpec | null | undefined>,
+  config: Record<string, unknown>,
+  isBound: (key: string) => boolean,
+): { group: string[]; before: string[] } | null {
+  const group = oneOfGroups(specs).find((keys) => keys.includes(key));
+  if (!group) return null;
+  const filled = (one: string) => isBound(one) || String(config[one] ?? "").trim() !== "";
+  return { group, before: group.slice(0, group.indexOf(key)).filter(filled) };
+}
+
 /**
- * 同组(`one_of`)里别的字段已经填了、这一格还空着:表单把它收起来,从源头上填不出两个。
+ * 同组(`one_of`)里**排在前面**的一格已经填了字面量、这一格还空着:表单把它收起来,从源头上填不出两个。
  *
- * 两格都已经填了(改规矩之前存下的节点)就**都留着** —— 藏起来的话人既看不见也清不掉;
- * 就绪检查会把它报出来。接了上游(`isBound`)也算填了。
+ * 只看前面、只看字面量,和就绪检查同一条规矩(oneOfOverfilled):运行时按声明顺序取第一个非空值,
+ * 前面那格只是一条引用或接了上游时,它的值全看上游、可能是空的 —— 后面这格是兜底,得能填。后面那格
+ * 填了字面量也不收前面这格:前面这格还可以接上游,把后面那格当兜底。
+ *
+ * 这一格自己已经填了就**留着** —— 藏起来的话人既看不见也清不掉;真冲突了就绪检查会报。
  */
 export function isTakenByOneOfPeer(
   key: string,
@@ -71,8 +87,23 @@ export function isTakenByOneOfPeer(
   config: Record<string, unknown>,
   isBound: (key: string) => boolean = () => false,
 ): boolean {
-  const group = oneOfGroups(specs).find((keys) => keys.includes(key));
-  if (!group) return false;
-  const filled = (one: string) => isBound(one) || String(config[one] ?? "").trim() !== "";
-  return !filled(key) && group.some((one) => one !== key && filled(one));
+  const found = filledBefore(key, specs, config, isBound);
+  if (!found) return false;
+  if (isBound(key) || String(config[key] ?? "").trim() !== "") return false;
+  return found.before.some((one) => !isBound(one) && !isPureReference(config[one]));
+}
+
+/**
+ * 这一格是同组的兜底:前面已经填了几格,而且都只是引用或接了上游 —— 上游给了值就用前面的,
+ * 为空时才轮到这一格。表单在这格下面说一句,免得人以为两格会一起生效。
+ */
+export function isOneOfFallback(
+  key: string,
+  specs: Record<string, ActivatableFieldSpec | null | undefined>,
+  config: Record<string, unknown>,
+  isBound: (key: string) => boolean = () => false,
+): boolean {
+  const found = filledBefore(key, specs, config, isBound);
+  if (!found || found.before.length === 0) return false;
+  return found.before.every((one) => isBound(one) || isPureReference(config[one]));
 }

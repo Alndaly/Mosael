@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import contract from "../../../../contracts/workflow-field-activation.json";
 
-import { isTakenByOneOfPeer, isWorkflowFieldActive, oneOfGroups } from "@/features/nodeForms/fieldActivation";
+import { isOneOfFallback, isPureReference, isTakenByOneOfPeer, isWorkflowFieldActive, oneOfGroups } from "@/features/nodeForms/fieldActivation";
 
 describe("isWorkflowFieldActive", () => {
   const specs = {
@@ -52,8 +52,34 @@ describe("one_of:同组恰好填一个", () => {
     expect(isTakenByOneOfPeer("session", specs, { asset_id: "a1" })).toBe(false);
   });
 
-  it("接了上游也算填了", () => {
-    expect(isTakenByOneOfPeer("file_path", specs, {}, (key) => key === "asset_id")).toBe(true);
+  it("只看排在前面的那几格:后面那格填了字面量,前面这格照样在(可以接上游,把它当兜底)", () => {
+    expect(isTakenByOneOfPeer("asset_id", specs, { file_path: "/tmp/x.mp4" })).toBe(false);
+  });
+
+  it("前面那格只是引用或接了上游:后面这格照常显示,运行时上游为空就用它", () => {
+    //: 运行时同组按声明顺序取第一个非空值。前面那格的值全看上游、可能是空的,后面写死的一格是兜底 ——
+    //: 此前接了上游也算「填了」,兜底那格被收起来,这种写法在表单里根本填不出来。
+    expect(isTakenByOneOfPeer("file_path", specs, {}, (key) => key === "asset_id")).toBe(false);
+    expect(isTakenByOneOfPeer("file_path", specs, { asset_id: "{{up.asset_id}}" })).toBe(false);
+    //: 引用里夹着别的字就是字面量:它总有值,后面那格永远用不上。
+    expect(isTakenByOneOfPeer("file_path", specs, { asset_id: "a-{{up.asset_id}}" })).toBe(true);
+  });
+
+  it("兜底那格标出来:前面填了的都只是引用 / 接了上游,这一格才是兜底", () => {
+    expect(isOneOfFallback("file_path", specs, { asset_id: "{{up.asset_id}}" })).toBe(true);
+    expect(isOneOfFallback("file_path", specs, {}, (key) => key === "asset_id")).toBe(true);
+    expect(isOneOfFallback("file_path", specs, {})).toBe(false);
+    expect(isOneOfFallback("file_path", specs, { asset_id: "a1", file_path: "/x" })).toBe(false);
+    expect(isOneOfFallback("asset_id", specs, { file_path: "{{up.path}}" })).toBe(false);
+    expect(isOneOfFallback("session", specs, { asset_id: "{{up.asset_id}}" })).toBe(false);
+  });
+
+  it("纯引用:整格只有一条 {{…}}", () => {
+    expect(isPureReference("{{up.sel}}")).toBe(true);
+    expect(isPureReference("  {{ up.sel }} ")).toBe(true);
+    expect(isPureReference("#{{up.sel}}")).toBe(false);
+    expect(isPureReference("{{a.x}}{{b.y}}")).toBe(false);
+    expect(isPureReference("")).toBe(false);
   });
 
   it("两格都已经填了就都留着 —— 藏起来就既看不见也清不掉", () => {

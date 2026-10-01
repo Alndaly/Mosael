@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { OptionPicker } from "@/components/ui/option-picker";
 import { NoteReferenceField } from "@/features/notes/NotePickerDialog";
 import { fieldDataType } from "@/features/nodeForms/fieldTypes";
-import { isTakenByOneOfPeer, isWorkflowFieldActive } from "@/features/nodeForms/fieldActivation";
+import { isOneOfFallback, isTakenByOneOfPeer, isWorkflowFieldActive } from "@/features/nodeForms/fieldActivation";
 import { ItemsField, itemsFromValue } from "@/features/nodeForms/ItemsField";
 import { JsonField } from "@/features/nodeForms/JsonField";
 import { ListField } from "@/features/nodeForms/ListField";
@@ -336,6 +336,10 @@ export function NodeConfigForm({
   /** 现查的清单是空的:占位里说为什么(还在查 / 先填哪一格 / 那一格接的是上游 / 真的没有)。 */
   const emptyHint = (key: string): string => emptyOptionsHint(t, fieldOptions.whyEmpty(key));
 
+  //: 同组(one_of)的兜底那一格要认出来:按这一档要渲染的字段找同组。前面那格只是引用 / 接了上游时它才露出来,
+  //: 而露出来的同组格和它在同一份声明里。
+  const fieldSpecs = Object.fromEntries(fields);
+
   /** 一个配置字段的渲染。 */
   const renderField = ([key, spec]: [string, ConfigSpec]) => {
           // 调用方自己渲染的字段(工作流的循环体 / 子图概览):表单不认识它们是什么。
@@ -567,6 +571,11 @@ export function NodeConfigForm({
                 <small>
                   <InlineMarkdown text={spec.description} />
                 </small>
+              )}
+              {isOneOfFallback(key, fieldSpecs, config, (one) => Boolean(binding?.isBound(one))) && (
+                //: 运行时同组按顺序取第一个非空值:前面那格接的是上游,这一格只在上游为空时生效。
+                //: 不说的话,人会以为两格一起起作用(先按选择器、再按文字)。
+                <small data-one-of-fallback="">{t("wfOneOfFallbackHint")}</small>
               )}
             </div>
           );

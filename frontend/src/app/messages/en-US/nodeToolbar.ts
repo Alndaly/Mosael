@@ -115,6 +115,7 @@ export const nodeToolbar = {
   wfRepoint: "Re-point",
   wfRemoveRef: "Remove reference",
   wfInputManual: "Manual",
+  wfOneOfFallbackHint: "Used when the upstream value above is empty",
   wfInputRef: "Linked",
   wfInputModeHint: "Switch input: manual entry / connect an upstream output",
   wfPickUpstream: "Pick an upstream output",

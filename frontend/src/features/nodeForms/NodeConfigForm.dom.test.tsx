@@ -100,7 +100,7 @@ describe("节点表单", () => {
     expect(nodeConfigTiers(SPECS, {}, (key) => key === "video").basic.map(([key]) => key)).toEqual(["platform"]);
   });
 
-  it("同组(one_of)一格填了或接了上游,另一格不出现;两格都填了的旧节点两格都留着", () => {
+  it("同组(one_of)前面一格填了字面量,后面那格不出现;前面只是引用 / 接了上游,后面那格留着作兜底", () => {
     const specs: Record<string, ConfigSpec> = {
       asset_id: { type: "template", one_of: "source" },
       file_path: { type: "template", one_of: "source" },
@@ -108,9 +108,43 @@ describe("节点表单", () => {
     const keys = (config: Record<string, unknown>, isBound?: (key: string) => boolean) =>
       nodeConfigTiers(specs, config, undefined, isBound).basic.map(([key]) => key);
     expect(keys({})).toEqual(["asset_id", "file_path"]);
-    expect(keys({ file_path: "/tmp/x.mp4" })).toEqual(["file_path"]);
-    expect(keys({}, (key) => key === "asset_id")).toEqual(["asset_id"]);
+    expect(keys({ asset_id: "a1" })).toEqual(["asset_id"]);
+    //: 后面那格填了字面量:前面这格还能接上游、把后面那格当兜底,不收。
+    expect(keys({ file_path: "/tmp/x.mp4" })).toEqual(["asset_id", "file_path"]);
+    expect(keys({}, (key) => key === "asset_id")).toEqual(["asset_id", "file_path"]);
+    expect(keys({ asset_id: "{{up.asset_id}}" })).toEqual(["asset_id", "file_path"]);
     expect(keys({ asset_id: "a1", file_path: "/tmp/x.mp4" })).toEqual(["asset_id", "file_path"]);
+  });
+
+  it("兜底那格下面说一句:上游为空时才用它", () => {
+    globalThis.fetch = vi.fn(async () => new Response("[]", { headers: { "content-type": "application/json" } })) as typeof fetch;
+    const specs: Record<string, ConfigSpec> = {
+      asset_id: { type: "template", one_of: "source" },
+      file_path: { type: "template", one_of: "source" },
+    };
+    function OneOfHost({ config }: { config: Record<string, unknown> }) {
+      const fieldOptions = useNodeFieldOptions({ specs, config, workspaceId: "w1", nodeType: "plugin.any.tool" });
+      return (
+        <NodeConfigForm
+          fields={nodeConfigTiers(specs, config).basic}
+          config={config}
+          workspaceId="w1"
+          variables={[]}
+          fieldOptions={fieldOptions}
+          onSetConfig={vi.fn()}
+          onTypeConfig={vi.fn()}
+        />
+      );
+    }
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <TooltipProvider>
+          <OneOfHost config={{ asset_id: "{{up.asset_id}}" }} />
+        </TooltipProvider>
+      </QueryClientProvider>,
+    );
+    expect(document.querySelector('[data-field-key="file_path"] [data-one-of-fallback]')?.textContent).toBe("wfOneOfFallbackHint");
+    expect(document.querySelector('[data-field-key="asset_id"] [data-one-of-fallback]')).toBeNull();
   });
 
   it("没有宿主的连线时,字段只有手填 / 下拉,不给「接上游」的开关", async () => {

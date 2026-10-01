@@ -127,6 +127,7 @@ export const nodeToolbar = {
   wfRemoveRef: "移除该引用",
   // 输入方式切换(ComfyUI 式:连接点 ⇄ 手动)
   wfInputManual: "手动",
+  wfOneOfFallbackHint: "上游为空时用这一格",
   wfInputRef: "连接",
   wfInputModeHint: "切换输入方式:手动填写 / 连接上游输出",
   wfPickUpstream: "选择上游输出",
