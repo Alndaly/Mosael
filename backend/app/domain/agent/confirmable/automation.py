@@ -29,7 +29,7 @@ def _workflow_in(db: Session, workspace_id: str, payload: dict[str, Any]):
 
 
 
-def _check_graph(db: Session, graph: object) -> None:
+def _check_graph(db: Session, graph: object, before: object = None) -> None:
     """校验模型提出的这张图。
 
     **`extra_types` 必须带上。** 智能体完全可以用插件节点搭图(它们和内置节点在画布上没有
@@ -39,6 +39,11 @@ def _check_graph(db: Session, graph: object) -> None:
     **`explain_plugin_node` 也要带上。** 插件节点真用不了的时候(没装、连接停用、工具没勾选……),不带它
     就只剩一句「某插件的节点用不了」,该去哪儿修全靠猜。和 extra_types 同一份口径(所有人的连接),
     原因由 plugins.why_unusable 按真实情况说 —— 和开跑前那一道(engine.start_workflow_job)同一个函数。
+
+    **代码字段另有一道**(graph_rules.code_field_problems):智能体照着「字符串都能写 {{node.output}}」的习惯
+    往代码里写引用、或者把数据边接到代码字段上 —— 代码不插值,用户批准之后才发现没接上。开卡时就拒,
+    原因里说清改用 input;执行时落到最新那份图上再查一遍(见 _execute_edit_workflow)。只拒**这次新出现的**
+    (`before` 是改之前的图):人手写在代码里的 `{{…}}` 可以是字面量,不该让智能体之后的每一次改动都过不去。
     """
     from app.domain.plugins.nodes import plugin_node_types, why_unusable
     from app.domain.workflows import validate_graph
@@ -51,9 +56,17 @@ def _check_graph(db: Session, graph: object) -> None:
         graph, require_config=False, allow_missing_start=True, extra_types=plugin_node_types(db),
         explain_plugin_node=explain,
     )
+    errors.extend(_new_code_field_problems(graph, before))
     if errors:
         raise ConfirmationError("；".join(errors))
 
+
+
+def _new_code_field_problems(after: object, before: object) -> list[str]:
+    from app.domain.workflows.graph_rules import code_field_problems
+
+    existing = set(code_field_problems(before))
+    return [problem for problem in code_field_problems(after) if problem not in existing]
 
 
 def _escalate_graph(db: Session, tool: str, payload: dict[str, Any]) -> str | None:
@@ -101,7 +114,7 @@ def _execute_create_workflow(db: Session, confirmation: Any, actor: str | None) 
 def _validate_update_workflow(db: Session, workspace_id: str, payload: dict[str, Any], actor: str | None) -> None:
     workflow = _workflow_in(db, workspace_id, payload)
     if payload.get("graph") is not None:
-        _check_graph(db, payload["graph"])
+        _check_graph(db, payload["graph"], workflow.graph)
         # 整份图是对着**开卡这一刻**的图审的:记下它的底子。批准之前用户又改过的话,执行时撞冲突,
         # 而不是拿这份整图把用户刚做的改动静默盖掉(和界面自动保存同一道,见 update_workflow)。
         payload["base_graph_hash"] = workflow.graph_hash
@@ -150,7 +163,7 @@ def _validate_edit_workflow(db: Session, workspace_id: str, payload: dict[str, A
         preview = apply_graph_ops(workflow.graph or {}, operations)
     except WorkflowDomainError as exc:
         raise ConfirmationError(str(exc)) from exc
-    _check_graph(db, preview)
+    _check_graph(db, preview, workflow.graph)
 
 
 def _summarize_edit_workflow(db: Session, payload: dict[str, Any]) -> Summary:
@@ -180,13 +193,15 @@ def _execute_edit_workflow(db: Session, confirmation: Any, actor: str | None) ->
     workflow = db.get(Workflow, str(payload["workflow_id"]))
     assert workflow is not None
     # 算子落在**最新那份图**上(不是开卡时的快照),撞上并发写入就在新图上重做 —— 见 edit_workflow_graph。
-    edit_workflow_graph(
-        db,
-        workflow,
-        lambda current: apply_graph_ops(current or {}, payload["operations"]),
-        source="agent",
-        created_by=actor,
-    )
+    # 落上去的结果再过一遍代码字段那道:开卡之后别人改过图,同一组算子落出来的未必还是审过的那样。
+    def change(current: dict[str, Any]) -> dict[str, Any]:
+        edited = apply_graph_ops(current or {}, payload["operations"])
+        problems = _new_code_field_problems(edited, current)
+        if problems:
+            raise ConfirmationError("；".join(problems))
+        return edited
+
+    edit_workflow_graph(db, workflow, change, source="agent", created_by=actor)
     return {"workflow_id": workflow.id, "nodes": len((workflow.graph or {}).get("nodes", []))}
 
 

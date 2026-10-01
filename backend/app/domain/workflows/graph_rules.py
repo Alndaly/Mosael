@@ -29,6 +29,40 @@ def code_fields(node_type: str, types: dict[str, dict[str, Any]] | None = None) 
     return {key for key, spec in specs.items() if isinstance(spec, dict) and spec.get("type") == "code"}
 
 
+def code_field_problems(graph: Any, types: dict[str, dict[str, Any]] | None = None) -> list[str]:
+    """代码字段里写了 `{{…}}`、或者接了上游的数据边 —— 两样都是想把上游的值拼进代码(连同循环体 / 子图体里的)。
+
+    代码字段不插值(见 code_fields):`{{…}}` 原样留在代码里,不会被换成上游的值 —— 写的人以为接上了,跑起来
+    读到的是一串字面量;接数据边则是上游的值整段变成代码。上游的值走节点的入参(`input`)。
+
+    保存不拦人手写的(`{{…}}` 在现在的代码里可以是字面量,比如在拼一段 Mustache 模板);**智能体**写图时
+    拦 —— 它照着「字符串都能写 {{node.output}}」的习惯写进代码字段,用户批准之后才发现没接上。
+    """
+    if not isinstance(graph, dict):
+        return []
+    known = types or NODE_TYPES
+    edges = graph.get("edges") if isinstance(graph.get("edges"), list) else []
+    bound = {
+        (str(edge.get("target", "")), str(edge.get("target_input", "")))
+        for edge in edges
+        if isinstance(edge, dict) and str(edge.get("kind", "")) == "data" and edge.get("target_input")
+    }
+    problems: list[str] = []
+    for node in graph.get("nodes") or []:
+        if not isinstance(node, dict):
+            continue
+        node_id, node_type = str(node.get("id", "")), str(node.get("type", ""))
+        config = node.get("config") if isinstance(node.get("config"), dict) else {}
+        for key in sorted(code_fields(node_type, known)):
+            if (node_id, key) in bound:
+                problems.append(tr("wfErr_codeFieldBound", node=node_id, field=key))
+            elif isinstance(config.get(key), str) and VARIABLE_RE.search(config[key]):
+                problems.append(tr("wfErr_codeFieldReference", node=node_id, field=key))
+        if node_type in NESTED_BODY_TYPES:
+            problems.extend(code_field_problems(config.get("body"), types))
+    return problems
+
+
 def _referencing_config(node: dict[str, Any]) -> dict[str, Any]:
     """这个节点在**这一层**会被插值的那些配置:去掉内嵌子图的 body/output/condition(内层作用域)和代码字段。"""
     node_type = str(node.get("type") or "")

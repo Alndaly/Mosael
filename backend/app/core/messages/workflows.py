@@ -96,6 +96,11 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "节点 {node} 的代码字段 {field} 不能接上游:上游的值会整段变成代码。把它接到这个节点的 input,代码里读 input",
         "en": "Node {node}: the code field {field} can't take an upstream value, which would become code wholesale. Wire it into this node's input and read it there",
     },
+    "wfErr_codeFieldReference": {
+        # 带参数的文案按 str.format 渲染:字面的花括号写成两个。
+        "zh": "节点 {node} 的代码字段 {field} 里写了 {{{{…}}}}:代码不替换引用,它会原样留在代码里。把上游的值放进这个节点的 input(键随你起,值写 {{{{节点.输出}}}}),代码里读 input.键(Python 是 inputs[\"键\"])",
+        "en": "Node {node}: the code field {field} contains {{{{…}}}}. Code isn't interpolated, so it stays in the code as-is. Put the upstream value into this node's input (any key, value {{{{node.output}}}}) and read input.key in the code (inputs[\"key\"] in Python)",
+    },
     "wfErr_pluginNodeUnusable": {"zh": "节点 {node}:{reason}", "en": "Node {node}: {reason}"},
     "wfErr_pluginNodeUnknownReason": {
         "zh": "它来自插件「{plugin}」的工具 {tool},这里用不了(插件没装、没有可用的连接,或者没勾选这个工具)",

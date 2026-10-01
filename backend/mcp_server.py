@@ -1995,7 +1995,7 @@ def edit_workflow(workflow_id: str, operations: list[dict[str, Any]], workspace_
       {"kind":"set_node_name","node_id":"llm_1","name":"新名字"}
       {"kind":"remove_node","node_id":"llm_1"}                                     (drops its edges too)
       {"kind":"remove_edge","edge_id":"e-start-llm_1"}
-    Config string values may reference upstream outputs as {{node_id.output}}.
+    Strings may use {{node_id.output}}; code fields read the node's `input` instead.
 
     形状(默认画一条直线是最常见的浪费):
       并排 —— 同一个 source 连出多条边就是并发执行,总时长按最慢的那支算:
