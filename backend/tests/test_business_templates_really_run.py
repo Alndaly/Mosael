@@ -290,6 +290,15 @@ class Test混剪真跑:
         prompt = studio.calls["llm"][0]["prompt"]
         assert all(one in prompt for one in ids) and "别的片子" not in prompt
 
+    def test_标签下的素材超过六十条_照样都交给模型(self, monkeypatch) -> None:
+        ws = _workspace()
+        plan, ids = self._plan(ws)
+        more = [_tagged_video(ws, f"补拍 {index}", 10.0, "厂区") for index in range(70)]
+        studio = Studio(monkeypatch, ws, {"footage_montage_plan": plan})
+        context = _run(ws, footage_montage_graph(chat=CHAT, voice_id=""), topic="工厂介绍", footage_tag="厂区")
+        assert context["footage"]["count"] == 72, "此前只取 60 条,多出来的悄悄不进清单"
+        assert more[-1] in studio.calls["llm"][0]["prompt"]
+
     def test_标签没填运行前就拦住(self) -> None:
         #: 标签空着的话「按标签取」取到的是整个素材库。
         errors = validate_graph(footage_montage_graph(chat=CHAT, voice_id="voice-1"))

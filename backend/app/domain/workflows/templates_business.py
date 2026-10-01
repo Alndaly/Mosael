@@ -1637,8 +1637,8 @@ BUSINESS_TEMPLATE_CATALOG: list[dict[str, Any]] = [
         "id": FOOTAGE_MONTAGE,
         "name": {"zh": "自有素材混剪 · 配音与字幕", "en": "Montage from your own footage"},
         "summary": {
-            "zh": "按标签取出你已经拍好的一批素材,让模型排出叙事顺序、定每段用哪条素材的哪一截、写好旁白,然后按顺序接上时间线,逐段配音(有旁白的那段把原声压低)并铺字幕,导出成片。不生成任何画面 —— 画面就是你自己的素材;没有配音音色时自动只出字幕。标签没填或这个标签下没有视频时,停下并告诉你。",
-            "en": "Pull a tagged batch of footage you already shot, let the model order the story, decide which part of which clip each beat uses, and write the narration; then lay every segment on the timeline in order, speak and caption each one (ducking the footage's own sound under the narration), and export. Nothing is generated — the picture is your own footage, and without a configured voice it falls back to captions only. If the tag is blank or has no videos, it stops and tells you.",
+            "zh": "按标签取出你已经拍好的一批素材,让模型排出叙事顺序、定每段用哪条素材的哪一截、写好旁白,然后按顺序接上时间线,逐段配音(有旁白的那段把原声压低)并铺字幕,导出成片。不生成任何画面 —— 画面就是你自己的素材;没有配音音色时自动只出字幕。标签没填或这个标签下没有视频时,停下并告诉你。一次最多取这个标签下的 200 条视频,更多的先按更细的标签分批。",
+            "en": "Pull a tagged batch of footage you already shot, let the model order the story, decide which part of which clip each beat uses, and write the narration; then lay every segment on the timeline in order, speak and caption each one (ducking the footage's own sound under the narration), and export. Nothing is generated — the picture is your own footage, and without a configured voice it falls back to captions only. If the tag is blank or has no videos, it stops and tells you. Up to 200 videos under the tag are used at a time; split larger batches with finer tags first.",
         },
         "requires": [
             requirement(CHAT_MODEL, zh="AI 对话模型", en="Chat model"),
@@ -1758,6 +1758,9 @@ def _montage_schema() -> dict[str, Any]:
         ["storyline", "segments", "unused_note"],
     )
 
+
+#: 混剪一次最多从这个标签下取几条视频交给模型排。
+MONTAGE_FOOTAGE_LIMIT = 200
 
 #: 有旁白的那一段,素材自带的原声压到多少(线性增益,1 = 原样)。不静音:现场声压低了垫在旁白底下,
 #: 比一段死寂的画面自然;但也不能和旁白一样响,否则两个声音打架,旁白听不清。
@@ -1948,7 +1951,9 @@ def footage_montage_graph(*, chat: Any, voice_id: str = "") -> dict[str, Any]:
             "type": "asset_query",
             "name": {"zh": "按标签取出这批素材", "en": "Fetch the footage by tag"},
             "position": {"x": 330, "y": 260},
-            "config": {"kind": "video", "tags": "{{start.footage_tag}}", "limit": 60},
+            #: 一次最多取 200 条(模板卡片上写明了)。此前是 60 条:一个展会、一条产线的素材常常不止这些,多出来的
+            #: 悄悄不进清单,模型也就不知道它们存在。再多就该先按更细的标签分批。
+            "config": {"kind": "video", "tags": "{{start.footage_tag}}", "limit": MONTAGE_FOOTAGE_LIMIT},
         },
         {
             "id": "has_footage",

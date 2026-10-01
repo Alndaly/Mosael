@@ -3,8 +3,8 @@
   "version": 1,
   "workflow_revision": 1,
   "name": "Montage from your own footage",
-  "description": "Pull a tagged batch of footage you already shot, let the model order the story, decide which part of which clip each beat uses, and write the narration; then lay every segment on the timeline in order, speak and caption each one (ducking the footage's own sound under the narration), and export. Nothing is generated — the picture is your own footage, and without a configured voice it falls back to captions only. If the tag is blank or has no videos, it stops and tells you.",
-  "graph_hash": "d8876b7d7eddd36fb9094fb1f85fdafe711e4eee7b27589f714abc3f40e595c8",
+  "description": "Pull a tagged batch of footage you already shot, let the model order the story, decide which part of which clip each beat uses, and write the narration; then lay every segment on the timeline in order, speak and caption each one (ducking the footage's own sound under the narration), and export. Nothing is generated — the picture is your own footage, and without a configured voice it falls back to captions only. If the tag is blank or has no videos, it stops and tells you. Up to 200 videos under the tag are used at a time; split larger batches with finer tags first.",
+  "graph_hash": "53b14dbb78a95a3af76ba71effc5bd5ba72b6733094865c4d6c048519c6e02ee",
   "graph": {
     "meta": {
       "template_id": "footage_montage",
@@ -46,7 +46,7 @@
         "config": {
           "kind": "video",
           "tags": "{{start.footage_tag}}",
-          "limit": 60
+          "limit": 200
         }
       },
       {
