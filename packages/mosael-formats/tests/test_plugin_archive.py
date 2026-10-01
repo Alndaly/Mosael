@@ -151,3 +151,13 @@ def test_safe_extract_自己也查一遍(tmp_path: Path) -> None:
     with open_archive(data) as archive, pytest.raises(ArchiveError):
         safe_extract(archive, tmp_path / "inside")
     assert not (tmp_path / "escape.txt").exists()
+
+
+def test_老写法的清单先升级再解析() -> None:
+    """规则收紧(node.config 标了素材,input_schema 里也得是)之后,老包要能被升级链改合格,而不是装不上。"""
+    old = {**MANIFEST, "manifest_version": 4, "tools": {"declare": [{
+        "name": "t", "input_schema": {"type": "object", "properties": {"img": {"type": "string"}}},
+        "node": {"config": {"img": {"type": "template", "format": "asset"}}}}]}}
+    package = read_plugin_archive(make_zip({"mosael.plugin.json": json.dumps(old), "main.py": "x"}))
+    assert "format" not in package.raw["tools"]["declare"][0]["node"]["config"]["img"]
+    assert package.manifest.declared_tools[0]["name"] == "t"

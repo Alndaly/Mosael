@@ -4613,7 +4613,7 @@ def _merge_object_storage_plugins() -> None:
 
 
 def _upgrade_stored_plugin_manifests() -> None:
-    """包记录里存着的清单跟着清单迁移链(domain/plugins/migrations)升到当前版本。
+    """包记录里存着的清单跟着清单迁移链(mosael_formats.plugin_manifest_upgrade)升到当前版本。
 
     **对账,不是迁移**:清单版本随哪一版应用都可能 +1。磁盘上的清单只在扫描时升,而扫描要人点「扫描插件」
     或装包才跑;在那之前读的一直是记录里存的那份。清单规则收紧时(Manim 0.2 的 `PIP_INDEX_URL` 配置项成了

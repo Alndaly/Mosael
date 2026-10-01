@@ -22,6 +22,7 @@ from typing import Any
 
 from mosael_formats.i18n import FormatError
 from mosael_formats.plugin_manifest import MANIFEST_FILENAME, Manifest, ManifestError, parse
+from mosael_formats.plugin_manifest_upgrade import upgrade
 
 #: 压缩包最大多少。插件是脚本和清单,正常几十 KB 到几 MB。给上限是挡解压炸弹 ——
 #: 一个 1MB 的 zip 能解出几十 GB。
@@ -150,6 +151,9 @@ def read_plugin_archive(
             raw = json.loads(archive.read(member).decode("utf-8"))
             if not isinstance(raw, dict):
                 raise ValueError("manifest is not a JSON object")
+            # 先升再解析:老写法的包(早就发布的、用户手上的 zip)由升级链改合格,而不是被收紧过的规则挡在门外。
+            # 包里的文件不动 —— 装好之后扫描插件目录时,磁盘上那份按同一串升级、写回。
+            upgrade(raw)
             manifest = parse(raw, member)
         except (ManifestError, ValueError, UnicodeDecodeError) as exc:
             raise ArchiveError("pluginErr_manifestInvalid", detail=str(exc)) from exc

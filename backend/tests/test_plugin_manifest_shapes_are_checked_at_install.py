@@ -98,3 +98,30 @@ def test_仓库里的每个插件清单都过得了这几条() -> None:
     assert manifests
     for path in manifests:
         parse(json.loads(path.read_text(encoding="utf-8")), str(path))
+
+
+def test_老写法的包照样装得上_装的时候先按升级链改合格(tmp_path) -> None:
+    """清单规则收紧之后,磁盘上、库里的老清单都有升级链改合格;装包 / 更新包此前却直接 parse —— 一个早就发布的
+    老写法包(node.config 多标了素材)被 pluginErr_manifestNodeAssetNotInSchema 挡在门外。"""
+    from app.domain.plugins.migrations import MANIFEST_VERSION, migrate_directory
+
+    old = {**BASE, "manifest_version": 4, "tools": {"declare": [{
+        "name": "t", "input_schema": {"type": "object", "properties": {"img": {"type": "string"}}},
+        "node": {"config": {"img": {"type": "template", "format": "asset"}}}}]}}
+    plugins_dir = tmp_path / "plugins"
+    raw = market.install_archive(_zip(old), plugins_dir)
+    assert raw["manifest_version"] == MANIFEST_VERSION
+    assert "format" not in raw["tools"]["declare"][0]["node"]["config"]["img"]
+    # 装好的目录里还是包里那份,扫描插件目录时按同一串升级、写回(之后读它不再抛)
+    migrated = json.loads(migrate_directory(plugins_dir / BASE["id"]).read_text(encoding="utf-8"))
+    parse(migrated, "x")
+    assert migrated["manifest_version"] == MANIFEST_VERSION
+
+
+def test_最老的写法也装得上(tmp_path) -> None:
+    """顶层 kind / entry、数组形态的 tools:升级链第一步就认得,装包不该比扫描目录更严。"""
+    legacy = {"id": "dev.test.legacy", "name": "老", "version": "0.1.0", "kind": "process", "entry": "main.py",
+              "tools": [{"name": "say", "input_schema": {"type": "object", "properties": {}}}]}
+    raw = market.install_archive(_zip(legacy), tmp_path / "plugins")
+    assert raw["runtime"] == {"kind": "process", "entry": "main.py"}
+    assert raw["tools"]["declare"][0]["name"] == "say"
