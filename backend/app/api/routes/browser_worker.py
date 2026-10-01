@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from app.api.deps import Tx
@@ -98,21 +98,23 @@ def heartbeat(body: HeartbeatRequest, db: Tx) -> dict[str, Any]:
 
 
 class PartitionMoveReport(BaseModel):
+    #: 哪台电脑(执行器身份,同 claim 的 worker)。搬没搬是各台自己的事,见 BrowserPartitionMoveReceipt。
+    worker: str = Field(min_length=1, max_length=64)
     status: str
     reason: str = Field(default="", max_length=2000)
 
 
 @router.get("/browser/worker/partition-moves")
-def partition_moves(db: Tx) -> dict[str, Any]:
-    """还没搬的登录分区(见 BrowserPartitionMove)。执行器启动时先搬完这些,再开始认领动作 —— 反过来的话,
-    一条动作先在新分区上建出一个空目录,旧的登录就再也搬不过去了。"""
-    return {"moves": pending_partition_moves(db)}
+def partition_moves(db: Tx, worker: str = Query(min_length=1, max_length=64)) -> dict[str, Any]:
+    """这台电脑还没回过话的登录分区搬家单(见 BrowserPartitionMove)。执行器启动时先搬完这些,再开始认领动作 ——
+    反过来的话,一条动作先在新分区上建出一个空目录,旧的登录就再也搬不过去了。"""
+    return {"moves": pending_partition_moves(db, worker=worker)}
 
 
 @router.post("/browser/worker/partition-moves/{move_id}")
 def settle_move(move_id: str, body: PartitionMoveReport, db: Tx) -> dict[str, Any]:
     try:
-        settle_partition_move(db, move_id, status=body.status, reason=body.reason)
+        settle_partition_move(db, move_id, worker=body.worker, status=body.status, reason=body.reason)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return {"ok": True}

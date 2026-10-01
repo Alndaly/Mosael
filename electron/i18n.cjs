@@ -291,6 +291,10 @@ const MESSAGES = {
     zh: "等了 {seconds}s 还是找不到要操作的元素:{target};当前停在 {url}",
     en: "Still couldn't find the element to act on after {seconds}s: {target}; the page is at {url}",
   },
+  browserErr_partitionAwaitingMove: {
+    zh: "这个具名会话的登录数据还等着搬到新位置(升级时改了存放方式),重启桌面端之后再用",
+    en: "This named session's sign-in data is still waiting to move to its new location (the storage layout changed in an upgrade). Restart the desktop app before using it.",
+  },
   browserErr_navigateFailed: {
     zh: "网页没有打开({code}):{url}",
     en: "The page didn't open ({code}): {url}",

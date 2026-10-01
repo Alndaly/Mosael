@@ -151,6 +151,14 @@
     "updated_at",
     "workspace_id"
   ],
+  "browser_partition_move_receipts": [
+    "created_at",
+    "id",
+    "move_id",
+    "reason",
+    "status",
+    "worker"
+  ],
   "browser_profiles": [
     "created_at",
     "enabled",

@@ -115,9 +115,11 @@ export const browserBackend = {
     for (const id of lost) holding.delete(id);
     return lost;
   },
-  /** 后端迁移写下、还没搬的登录分区(见 partitionMoves.ts)。 */
+  /** 后端迁移写下、**这台电脑**还没回过话的登录分区搬家单(见 partitionMoves.ts)。 */
   partitionMoves: () =>
-    req<{ moves?: PartitionMove[] }>("/worker/partition-moves").then((r) => r.moves ?? []),
+    req<{ moves?: PartitionMove[] }>(`/worker/partition-moves?worker=${encodeURIComponent(readWorkerId())}`).then(
+      (r) => r.moves ?? [],
+    ),
   settlePartitionMove: (moveId: string, outcome: PartitionMoveOutcome) =>
-    req(`/worker/partition-moves/${encodeURIComponent(moveId)}`, "POST", outcome),
+    req(`/worker/partition-moves/${encodeURIComponent(moveId)}`, "POST", { worker: readWorkerId(), ...outcome }),
 };

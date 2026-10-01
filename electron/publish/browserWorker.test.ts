@@ -4,6 +4,10 @@
  * 真跑 browserWorker 的循环,只把它够不着的外部换掉:后端(browserBackend)、视图宿主(accountViews)、
  * 动作本身(executeBrowserAction —— 用一个能控制何时结束的假动作,调度才看得见)。
  */
+import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => {
@@ -36,10 +40,11 @@ const mocks = vi.hoisted(() => {
     (_driver: unknown, _action: string, args: Record<string, unknown>) =>
       new Promise<{ lastUrl: string }>((resolve) => pending.set(String(args.tag), () => resolve({ lastUrl: "https://x.test/" }))),
   );
-  return { drivers, views, backend, pending, execute };
+  const paths = { userData: "" };
+  return { drivers, views, backend, pending, execute, paths };
 });
 
-vi.mock("electron", () => ({ app: { getPath: () => "/tmp/mosael-test-user-data" } }));
+vi.mock("electron", () => ({ app: { getPath: () => mocks.paths.userData } }));
 vi.mock("./accountViews", () => ({ sharedViews: () => mocks.views }));
 vi.mock("./browserBackend", () => ({ browserBackend: mocks.backend }));
 vi.mock("./browserActions", () => ({ executeBrowserAction: mocks.execute }));
@@ -53,6 +58,7 @@ const action = (id: string, session: string, tag: string) => ({
 });
 
 beforeEach(() => {
+  mocks.paths.userData = mkdtempSync(join(tmpdir(), "mosael-worker-"));
   vi.useFakeTimers();
   vi.clearAllMocks();
   mocks.pending.clear();
@@ -66,7 +72,11 @@ afterEach(() => {
   stopBrowserWorker();
   vi.clearAllTimers();
   vi.useRealTimers();
+  rmSync(mocks.paths.userData, { recursive: true, force: true });
 });
+
+/** 这台电脑上有那份旧登录。 */
+const seedOldLogin = (dir: string) => mkdirSync(join(mocks.paths.userData, "Partitions", dir), { recursive: true });
 
 it("一个会话上的长等待不挡别的会话:另一个会话的动作照样领、照样做完", async () => {
   mocks.backend.claim
@@ -104,6 +114,7 @@ it("心跳说这条已经不归我了(后端不等了):中止它", async () => {
 });
 
 it("先搬完登录分区,再开始认领", async () => {
+  seedOldLogin("rpa-xhs");
   const order: string[] = [];
   mocks.backend.partitionMoves.mockImplementation(async () => {
     order.push("moves");
@@ -120,7 +131,39 @@ it("先搬完登录分区,再开始认领", async () => {
   startBrowserWorker();
   await vi.advanceTimersByTimeAsync(3_000);
   expect(order.slice(0, 3)).toEqual(["moves", "settle", "claim"]);
-  // 旧目录在测试机上不存在:记成 skipped 回报,而不是一直挂着
-  expect(mocks.backend.settlePartitionMove).toHaveBeenCalledWith("m1", expect.objectContaining({ status: "skipped" }));
+  expect(mocks.backend.settlePartitionMove).toHaveBeenCalledWith("m1", { status: "done", reason: "" });
   expect(mocks.backend.partitionMoves).toHaveBeenCalledTimes(1);
+});
+
+it("旧目录不在这台电脑上:不回话(别的电脑还要搬),照常开始认领", async () => {
+  mocks.backend.partitionMoves.mockResolvedValue([
+    { id: "m1", old_partition: "persist:rpa-nothere", new_partition: "persist:rpa-ws-0123456789abcdef" },
+  ]);
+  startBrowserWorker();
+  await vi.advanceTimersByTimeAsync(3_000);
+  expect(mocks.backend.settlePartitionMove).not.toHaveBeenCalled();
+  expect(mocks.backend.claim).toHaveBeenCalled();
+});
+
+it("搬家因为分区正被用着推迟了:搬成之前不在新分区上开视图,动作报失败说清原因", async () => {
+  //: 同一进程里执行器重启过:上一轮用过旧分区,这一轮后端刚写下搬家单
+  seedOldLogin("rpa-xhs");
+  mocks.backend.claim.mockResolvedValueOnce({ ...action("a0", "s0", "warm"), partition: "persist:rpa-xhs" });
+  startBrowserWorker();
+  await vi.advanceTimersByTimeAsync(1_500);
+  mocks.pending.get("warm")!();
+  await vi.advanceTimersByTimeAsync(10);
+  stopBrowserWorker();
+
+  mocks.backend.partitionMoves.mockResolvedValue([
+    { id: "m1", old_partition: "persist:rpa-xhs", new_partition: "persist:rpa-ws-0123456789abcdef" },
+  ]);
+  mocks.backend.claim.mockResolvedValueOnce({ ...action("a1", "s1", "x"), partition: "persist:rpa-ws-0123456789abcdef" });
+  mocks.views.registerSession.mockClear();
+  startBrowserWorker();
+  await vi.advanceTimersByTimeAsync(3_000);
+
+  expect(mocks.backend.settlePartitionMove).not.toHaveBeenCalled();
+  expect(mocks.views.registerSession).not.toHaveBeenCalled();
+  expect(mocks.backend.report).toHaveBeenCalledWith("a1", expect.objectContaining({ status: "failed" }));
 });

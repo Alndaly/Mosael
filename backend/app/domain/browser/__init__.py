@@ -35,6 +35,7 @@ from app.domain.host_files import HostFile
 from app.db.models import (
     BrowserAction,
     BrowserPartitionMove,
+    BrowserPartitionMoveReceipt,
     BrowserProfile,
     BrowserSession,
     Job,
@@ -771,28 +772,44 @@ def report_action(
     return act
 
 
-#: 执行器搬完一条分区后能回报的结果(见 BrowserPartitionMove)。
+#: 执行器对一条搬家单能回报的结果(见 BrowserPartitionMoveReceipt)。
 PARTITION_MOVE_OUTCOMES = ("done", "skipped")
 
 
-def pending_partition_moves(db: Session) -> list[dict[str, str]]:
-    """还等着执行器在磁盘上搬的登录分区(迁移写下的,见 BrowserPartitionMove)。"""
+def pending_partition_moves(db: Session, *, worker: str) -> list[dict[str, str]]:
+    """这台电脑(执行器 `worker`)还没回过话的搬家单(迁移写下的,见 BrowserPartitionMove)。
+
+    按执行器分:登录数据在各自的磁盘上,一台搬完不等于别的也搬完了。
+    """
+    answered = select(BrowserPartitionMoveReceipt.id).where(
+        BrowserPartitionMoveReceipt.move_id == BrowserPartitionMove.id, BrowserPartitionMoveReceipt.worker == worker
+    )
     moves = db.scalars(
-        select(BrowserPartitionMove).where(BrowserPartitionMove.status == "pending").order_by(BrowserPartitionMove.created_at)
+        select(BrowserPartitionMove)
+        .where(BrowserPartitionMove.status == "pending", ~answered.exists())
+        .order_by(BrowserPartitionMove.created_at)
     ).all()
     return [{"id": move.id, "old_partition": move.old_partition, "new_partition": move.new_partition} for move in moves]
 
 
-def settle_partition_move(db: Session, move_id: str, *, status: str, reason: str = "") -> None:
-    """执行器回报一条搬家单:搬了(done),或者没法搬(skipped,原因写进 reason)。只收 pending 的那些。"""
+def settle_partition_move(db: Session, move_id: str, *, worker: str, status: str, reason: str = "") -> None:
+    """执行器回报它那台电脑上的这条搬家单:搬了(done),或者没法搬(skipped,原因写进 reason)。
+
+    只收 pending 的单;同一台回过一次就不再改(回执是它那一刻磁盘上的事实)。
+    """
     if status not in PARTITION_MOVE_OUTCOMES:
         raise BrowserReportError("browserErr_invalidActionStatus")
     move = db.get(BrowserPartitionMove, move_id)
     if move is None or move.status != "pending":
         return
-    move.status = status
-    move.reason = reason[:2000]
-    db.flush()
+    already = db.scalar(
+        select(BrowserPartitionMoveReceipt.id).where(
+            BrowserPartitionMoveReceipt.move_id == move_id, BrowserPartitionMoveReceipt.worker == worker
+        )
+    )
+    if already is None:
+        db.add(BrowserPartitionMoveReceipt(move_id=move_id, worker=worker, status=status, reason=reason[:2000]))
+        db.flush()
 
 
 def reconcile_browser_state() -> int:

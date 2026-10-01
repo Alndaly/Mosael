@@ -1485,17 +1485,40 @@
           "browser-worker"
         ],
         "summary": "Partition Moves",
-        "description": "还没搬的登录分区(见 BrowserPartitionMove)。执行器启动时先搬完这些,再开始认领动作 —— 反过来的话,\n一条动作先在新分区上建出一个空目录,旧的登录就再也搬不过去了。",
+        "description": "这台电脑还没回过话的登录分区搬家单(见 BrowserPartitionMove)。执行器启动时先搬完这些,再开始认领动作 ——\n反过来的话,一条动作先在新分区上建出一个空目录,旧的登录就再也搬不过去了。",
         "operationId": "partition_moves_api_browser_worker_partition_moves_get",
+        "parameters": [
+          {
+            "name": "worker",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "title": "Worker"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
                   "type": "object",
+                  "additionalProperties": true,
                   "title": "Response Partition Moves Api Browser Worker Partition Moves Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -28154,6 +28177,12 @@
       },
       "PartitionMoveReport": {
         "properties": {
+          "worker": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Worker"
+          },
           "status": {
             "type": "string",
             "title": "Status"
@@ -28167,6 +28196,7 @@
         },
         "type": "object",
         "required": [
+          "worker",
           "status"
         ],
         "title": "PartitionMoveReport"

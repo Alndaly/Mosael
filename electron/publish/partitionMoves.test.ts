@@ -39,26 +39,26 @@ describe("登录分区搬家", () => {
   it("新目录已经在了就不搬:那是一份更新的登录,不拿旧的盖它", () => {
     seed("rpa-xhs", "old");
     seed("rpa-ws1-0123456789abcdef", "newer");
-    expect(applyPartitionMove(userData, move)?.status).toBe("skipped");
+    expect(applyPartitionMove(userData, move).status).toBe("skipped");
     expect(readFileSync(join(userData, "Partitions", "rpa-ws1-0123456789abcdef", "Cookies"), "utf8")).toBe("newer");
     expect(existsSync(join(userData, "Partitions", "rpa-xhs"))).toBe(true);
   });
 
-  it("旧目录不在(这台电脑上没登录过)记成 skipped,说清原因", () => {
-    const outcome = applyPartitionMove(userData, move);
-    expect(outcome?.status).toBe("skipped");
-    expect(outcome?.reason).toMatch(/nothing on disk/);
+  it("旧目录不在这台电脑上:absent,不回话(那份登录可能在另一台电脑上,它还要搬)", () => {
+    expect(applyPartitionMove(userData, move)).toEqual({ status: "absent" });
   });
 
-  it("这个进程正用着其中一个分区就先不搬,下次启动再说", () => {
+  it("这个进程正用着其中一个分区就先不搬:deferred,下次启动再说", () => {
     seed("rpa-xhs", "logged-in");
-    expect(applyPartitionMove(userData, move, (partition) => partition === move.old_partition)).toBeNull();
+    expect(applyPartitionMove(userData, move, (partition) => partition === move.old_partition)).toEqual({
+      status: "deferred",
+    });
     expect(existsSync(join(userData, "Partitions", "rpa-xhs"))).toBe(true);
   });
 
   it("不是这两条规则造出来的分区名不碰", () => {
     expect(partitionDir(userData, "ephemeral-abc")).toBeNull();
     expect(partitionDir(userData, "persist:../../etc")).toBeNull();
-    expect(applyPartitionMove(userData, { ...move, new_partition: "persist:../escape" })?.status).toBe("skipped");
+    expect(applyPartitionMove(userData, { ...move, new_partition: "persist:../escape" }).status).toBe("skipped");
   });
 });

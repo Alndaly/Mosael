@@ -102,8 +102,9 @@ class BrowserPartitionMove(Base):
     目录里,后端既不知道那个目录在哪,也不该去碰它 —— 所以迁移只写下「谁搬到哪」,执行器启动时领走、
     搬完回报(见 electron/publish/partitionMoves.ts)。
 
-    `status`:pending(等执行器搬)/ done(搬了)/ skipped(执行器那边没法搬:旧目录不存在、新目录已占用……)/
-    abandoned(迁移时就决定不搬:这个旧分区也被别的工作区、别的名字用过,只归最早的那一个)。原因都写在 `reason`。
+    `status` 是迁移时定下的:pending(要搬)/ abandoned(不搬:这个旧分区也被别的工作区、别的名字用过,只归最早的
+    那一个,原因写在 `reason`)。**搬没搬是每台电脑自己的事**,记在 BrowserPartitionMoveReceipt 上 —— 登录数据在
+    各自的磁盘上,一台搬了不等于另一台也搬了。
     """
 
     __tablename__ = "browser_partition_moves"
@@ -117,3 +118,25 @@ class BrowserPartitionMove(Base):
     reason: Mapped[str] = mapped_column(Text, nullable=False, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
+
+
+class BrowserPartitionMoveReceipt(Base):
+    """一台电脑(执行器)对一条搬家单的回执:在它的磁盘上搬了(done),或者没法搬(skipped,原因写在 `reason`)。
+
+    此前搬家单只有一个全局状态,第一个连上来的执行器领走就落终态:旧目录不在它那台电脑上,就记一笔 skipped,
+    真正有那份登录的另一台电脑再也领不到。现在每台各记各的;没有回执的那台下次启动接着看(旧目录不在、
+    改名失败都不记回执 —— 前者以后可能从备份里回来,后者可能只是一时被占着)。
+    """
+
+    __tablename__ = "browser_partition_move_receipts"
+    __table_args__ = (Index("uq_browser_partition_move_receipts", "move_id", "worker", unique=True),)
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=new_id)
+    move_id: Mapped[str] = mapped_column(
+        ForeignKey("browser_partition_moves.id", ondelete="CASCADE"), nullable=False
+    )
+    #: 执行器的身份(跨重启稳定,每台电脑一个,同 BrowserAction.lease_worker)。
+    worker: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    reason: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)

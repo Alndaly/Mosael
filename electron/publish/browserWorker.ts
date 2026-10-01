@@ -17,6 +17,7 @@ import { sharedViews } from "./accountViews";
 import { executeBrowserAction } from "./browserActions";
 import { browserBackend, type ClaimedAction } from "./browserBackend";
 import { plog } from "./log";
+import { t } from "../i18n.cjs";
 import { applyPartitionMove } from "./partitionMoves";
 
 const IDLE_MS = 1200;
@@ -45,6 +46,11 @@ const running = new Map<string, AbortController>();
 const sessionTails = new Map<string, Promise<void>>();
 /** 这个进程用过的分区。搬分区目录要避开它们(见 partitionMoves)。 */
 const usedPartitions = new Set<string>();
+/**
+ * 这台电脑上还等着搬进来的新分区(搬家单因为分区正被这个进程用着而推迟了)。搬成之前不在它上面开视图:
+ * 一开就建出空目录,旧登录再也搬不过去。只在同一进程里重启执行器、后端又刚写下搬家单时才会有。
+ */
+const awaitingMove = new Set<string>();
 
 export function startBrowserWorker(): void {
   stopBrowserWorker();
@@ -120,10 +126,16 @@ async function movePartitions(): Promise<boolean> {
   const moves = await browserBackend.partitionMoves();
   const userData = app.getPath("userData");
   for (const move of moves) {
-    const outcome = applyPartitionMove(userData, move, (partition) => usedPartitions.has(partition));
-    if (!outcome) continue;
-    plog("browser partition move:", move.old_partition, "→", move.new_partition, outcome.status, outcome.reason);
-    await browserBackend.settlePartitionMove(move.id, outcome);
+    const result = applyPartitionMove(userData, move, (partition) => usedPartitions.has(partition));
+    if (result.status === "absent") continue; // 这台电脑上没有那份登录:不回话,别的电脑还要搬它
+    if (result.status === "deferred") {
+      awaitingMove.add(move.new_partition);
+      plog("browser partition move deferred (in use):", move.old_partition, "→", move.new_partition);
+      continue;
+    }
+    awaitingMove.delete(move.new_partition);
+    plog("browser partition move:", move.old_partition, "→", move.new_partition, result.status, result.reason);
+    await browserBackend.settlePartitionMove(move.id, result);
   }
   return true;
 }
@@ -148,6 +160,10 @@ async function handleAction(action: ClaimedAction, signal: AbortSignal): Promise
       return;
     }
 
+    if (awaitingMove.has(action.partition)) {
+      await browserBackend.report(action.id, { status: "failed", error: t("browserErr_partitionAwaitingMove") });
+      return;
+    }
     usedPartitions.add(action.partition);
     const driver = views.registerSession(action.session_id, action.partition);
     // 挂成右下角面板:用户能看见智能体在做什么,同时视图获得真实布局与命中测试(可信输入的前提)。

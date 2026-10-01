@@ -665,8 +665,8 @@ export interface paths {
         };
         /**
          * Partition Moves
-         * @description 还没搬的登录分区(见 BrowserPartitionMove)。执行器启动时先搬完这些,再开始认领动作 —— 反过来的话,
-         *     一条动作先在新分区上建出一个空目录,旧的登录就再也搬不过去了。
+         * @description 这台电脑还没回过话的登录分区搬家单(见 BrowserPartitionMove)。执行器启动时先搬完这些,再开始认领动作 ——
+         *     反过来的话,一条动作先在新分区上建出一个空目录,旧的登录就再也搬不过去了。
          */
         get: operations["partition_moves_api_browser_worker_partition_moves_get"];
         put?: never;
@@ -10277,6 +10277,8 @@ export interface components {
         };
         /** PartitionMoveReport */
         PartitionMoveReport: {
+            /** Worker */
+            worker: string;
             /** Status */
             status: string;
             /**
@@ -15275,7 +15277,9 @@ export interface operations {
     };
     partition_moves_api_browser_worker_partition_moves_get: {
         parameters: {
-            query?: never;
+            query: {
+                worker: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -15291,6 +15295,15 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

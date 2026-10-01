@@ -6031,6 +6031,22 @@ def _migrate_browser_sessions_one_open_per_login() -> None:
         )
 
 
+def _migrate_partition_moves_are_settled_per_executor() -> None:
+    """登录分区搬家单的「搬没搬」改成每台电脑各记各的(`browser_partition_move_receipts`):已经落了 done / skipped
+    的单回到 pending。
+
+    此前一条单只有一个全局状态,第一个连上来的执行器领走就落终态 —— 旧目录不在它那台电脑上就记 skipped,
+    真正有那份登录的电脑再也领不到。回到 pending 是安全的:搬过的那台再看一眼,旧目录已经不在,什么也不做;
+    别的电脑上旧目录还在的,这回轮得到它们搬。abandoned 是迁移时的决定,不动。
+    """
+    if "browser_partition_moves" not in set(inspect(engine).get_table_names()):
+        return
+    with engine.begin() as conn:
+        conn.execute(
+            text("UPDATE browser_partition_moves SET status = 'pending', reason = '' WHERE status IN ('done', 'skipped')")
+        )
+
+
 def _rewrite_workflow_graphs(rewrite: Any, note: str) -> int:
     """把每个工作流的当前图过一遍 `rewrite`(连同循环体 / 子图,由 `rewrite` 自己走);变了的追加一版修订。
 
@@ -6728,6 +6744,8 @@ def migration_plan() -> MigrationPlan:
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_named_browser_partitions_are_per_workspace),
             #: 具名 / 池档案会话的租约落进库里(局部唯一索引);建之前先收掉已经撞上的。
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_browser_sessions_one_open_per_login),
+            #: 搬家单的「搬没搬」改成每台电脑一张回执(回执表由 SCHEMA 建):全局落了终态的单回到 pending。
+            *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_partition_moves_are_settled_per_executor),
             #: 这几条都落新修订(commit_graph_revision),所以排在修订迁移之后。
             *_steps(
                 MigrationPhase.AFTER_SCHEMA,

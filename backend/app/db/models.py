@@ -23,7 +23,13 @@ from app.db.model_slices.boards import Board  # noqa: E402,F401
 from app.db.model_slices.notes import Note, NoteRevision  # noqa: E402,F401
 from app.db.model_slices.collaboration import ActivityEvent, Comment, CommentMention  # noqa: E402,F401
 from app.db.model_slices.publish import PublishAccount, PublishTask  # noqa: E402,F401
-from app.db.model_slices.browser import BrowserAction, BrowserPartitionMove, BrowserProfile, BrowserSession  # noqa: E402,F401
+from app.db.model_slices.browser import (  # noqa: E402,F401
+    BrowserAction,
+    BrowserPartitionMove,
+    BrowserPartitionMoveReceipt,
+    BrowserProfile,
+    BrowserSession,
+)
 from app.db.model_slices.scenes import Scene3D, Scene3DRevision, Scene3DModel  # noqa: E402,F401
 from app.db.model_slices.identity import AuthSession, OAuthIdentity, RegistrationInvite, User, Workspace, WorkspaceInvitation, WorkspaceMember  # noqa: E402,F401
 from app.db.model_slices.sharing import ResourceShare  # noqa: E402,F401

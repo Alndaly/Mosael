@@ -12,10 +12,21 @@ export interface PartitionMove {
   new_partition: string;
 }
 
+/** 回给后端的那两种:这台电脑上搬了,或者这台电脑上没法搬(原因写进 reason)。后端按执行器记回执。 */
 export interface PartitionMoveOutcome {
   status: "done" | "skipped";
   reason: string;
 }
+
+/**
+ * 在这台电脑上看一条搬家单的结果。只有 `done` / `skipped` 回给后端;另外两种不回话,下次启动再看:
+ *
+ * - `absent`:旧目录不在**这台**电脑上。此前记成 skipped 终态 —— 搬家单是全局的,第一个连上来的执行器
+ *   领走就记死了,真正有那份登录的另一台电脑再也领不到;
+ * - `deferred`:这个进程正用着其中一个分区(目录里有打开的数据库文件,挪走之后 Chromium 还往旧句柄里写)。
+ *   调用方在它搬成之前不该开新分区 —— 一开就建出空目录,旧登录再也搬不过去。
+ */
+export type PartitionMoveResult = PartitionMoveOutcome | { status: "absent" } | { status: "deferred" };
 
 /**
  * `persist:<名字>` 在磁盘上的目录:`<userData>/Partitions/<名字转小写>`(Electron 的 MakePartitionName
@@ -28,19 +39,19 @@ export function partitionDir(userData: string, partition: string): string | null
 }
 
 /**
- * 搬一条。**只在这个进程还没用过这两个分区时搬**(`inUse`):用着的分区目录里有打开的数据库文件,
- * 挪走之后 Chromium 还往旧句柄里写。新目录已经在了也不搬 —— 那是一份更新的登录,不拿旧的盖它。
+ * 搬一条。**只在这个进程还没用过这两个分区时搬**(`inUse`)。新目录已经在了也不搬 —— 那是一份更新的登录,
+ * 不拿旧的盖它。
  */
 export function applyPartitionMove(
   userData: string,
   move: PartitionMove,
   inUse: (partition: string) => boolean = () => false,
-): PartitionMoveOutcome | null {
+): PartitionMoveResult {
   const from = partitionDir(userData, move.old_partition);
   const to = partitionDir(userData, move.new_partition);
   if (!from || !to) return { status: "skipped", reason: `unexpected partition name: ${move.old_partition} → ${move.new_partition}` };
-  if (inUse(move.old_partition) || inUse(move.new_partition)) return null; // 下次启动再搬
-  if (!existsSync(from)) return { status: "skipped", reason: `nothing on disk at ${from}` };
+  if (!existsSync(from)) return { status: "absent" };
+  if (inUse(move.old_partition) || inUse(move.new_partition)) return { status: "deferred" };
   if (existsSync(to)) return { status: "skipped", reason: `target already exists: ${to}` };
   try {
     mkdirSync(join(userData, "Partitions"), { recursive: true });
