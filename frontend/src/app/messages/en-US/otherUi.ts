@@ -170,6 +170,7 @@ export const otherUi = {
   confirmLineCount: "{n} lines",
   confirmShowAll: "Show all {n} lines",
   confirmCollapse: "Collapse",
+  confirmErrorShowAll: "Show the full reason",
   confirmStatusApproved: "Approved, running",
   confirmStatusExecuted: "Done",
   confirmStatusRejected: "Rejected",

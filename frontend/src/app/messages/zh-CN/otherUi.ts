@@ -170,6 +170,7 @@ export const otherUi = {
   confirmLineCount: "{n} 行",
   confirmShowAll: "展开全部 {n} 行",
   confirmCollapse: "收起",
+  confirmErrorShowAll: "展开完整原因",
   confirmStatusApproved: "已批准,正在执行",
   confirmStatusExecuted: "已执行",
   confirmStatusRejected: "已拒绝",

@@ -91,9 +91,7 @@ function SettledLine({ item, onDismiss }: { item: Confirmation; onDismiss?: () =
       <Icon size={14} className={cn("mt-[2px] shrink-0", className, item.status === "approved" && "animate-spin")} aria-hidden />
       <div className="grid min-w-0 flex-1 gap-0.5">
         <span className={cn("font-medium", className)}>{t(label)}</span>
-        {item.error ? (
-          <span className="whitespace-pre-wrap text-muted-foreground [overflow-wrap:anywhere]">{item.error}</span>
-        ) : null}
+        {item.error ? <FailureReason text={item.error} /> : null}
       </div>
       {onDismiss ? (
         <Button variant="ghost" size="icon-xs" className="-my-1 shrink-0" aria-label={t("confirmDismiss")} onClick={onDismiss}>
@@ -101,6 +99,38 @@ function SettledLine({ item, onDismiss }: { item: Confirmation; onDismiss?: () =
         </Button>
       ) : null}
     </div>
+  );
+}
+
+/** 失败原因折叠时露出的行数与字数。够读出「哪儿出了问题」,又不至于一大段把对话栏撑满。 */
+export const REASON_PREVIEW_LINES = 4;
+const REASON_PREVIEW_CHARS = 280;
+
+/**
+ * 失败原因:**后端整句存下**(不再按第 500 个字截成半句),长短在这里排 —— 长的先露前几行,点开看全文。
+ * 截在前面的只是显示,不是数据:「展开」之后读到的就是后端存的那一整句。
+ */
+function FailureReason({ text }: { text: string }) {
+  const t = useI18n();
+  const [open, setOpen] = React.useState(false);
+  const preview = text.split("\n").slice(0, REASON_PREVIEW_LINES).join("\n").slice(0, REASON_PREVIEW_CHARS);
+  const folded = preview.length < text.length;
+  return (
+    <>
+      <span className="whitespace-pre-wrap text-muted-foreground [overflow-wrap:anywhere]">
+        {open || !folded ? text : `${preview}…`}
+      </span>
+      {folded ? (
+        <button
+          type="button"
+          aria-expanded={open}
+          className="w-fit cursor-pointer border-0 bg-transparent p-0 text-ui-xs text-primary hover:underline"
+          onClick={() => setOpen((value) => !value)}
+        >
+          {open ? t("confirmCollapse") : t("confirmErrorShowAll")}
+        </button>
+      ) : null}
+    </>
   );
 }
 

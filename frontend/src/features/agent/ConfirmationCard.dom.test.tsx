@@ -150,6 +150,24 @@ describe("终态", () => {
     fireEvent.click(screen.getByRole("button", { name: "confirmDismiss" }));
     expect(dismiss).toHaveBeenCalledOnce();
   });
+
+  it("长原因先折起来,点开读到的是整句 —— 后端不再截成半句,排版归这里", () => {
+    const reason = Array.from({ length: 30 }, (_, index) => `节点 n${index} 缺少必填项「提示词」`).join(";") + "。最后一句才说怎么修。";
+    renderCard(card({ status: "failed", error: reason }));
+    const line = screen.getByRole("status");
+    expect(line.textContent).not.toContain("最后一句才说怎么修");
+    const toggle = screen.getByRole("button", { name: "confirmErrorShowAll" });
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(toggle);
+    expect(line.textContent).toContain(reason);
+    fireEvent.click(screen.getByRole("button", { name: "confirmCollapse" }));
+    expect(line.textContent).not.toContain("最后一句才说怎么修");
+  });
+
+  it("短原因不折,也没有展开按钮", () => {
+    renderCard(card({ status: "failed", error: "manim 没装" }));
+    expect(screen.queryByRole("button", { name: "confirmErrorShowAll" })).toBeNull();
+  });
 });
 
 describe("风险徽标按档位取色", () => {

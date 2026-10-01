@@ -235,7 +235,10 @@ def approve_confirmation(db: Session, confirmation: ToolConfirmation) -> ToolCon
         # 执行成功时的 RELEASE 会当场提交执行体的改动,早于卡的状态(tests/test_unit_of_work 钉着这件事)。
         db.rollback()
         confirmation.status = "failed"
-        confirmation.error = str(exc)[:500]
+        #: **整句存下,不按位置截**(与 jobs.blame 同一条):`error` 是 Text 列,长短是界面排版的事 —— 卡上过长的
+        #: 原因折起来显示(ConfirmationCard)。此前的 `[:500]` 把长一点的原因切成半句,切掉的恰好是后半截,
+        #: 而原因往往就写在后半截;智能体经 get_confirmation 读到的也是那半句。
+        confirmation.error = str(exc)
     confirmation.resolved_at = now()
     # 不提交:批准的入口(路由、飞书回调、自动放行的线程)提交。认领那一笔已经在 _claim 里落了。
     db.flush()
