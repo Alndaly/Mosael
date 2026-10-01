@@ -11862,6 +11862,49 @@
         }
       }
     },
+    "/api/workflows/{workflow_id}/rebuild-from-template": {
+      "post": {
+        "tags": [
+          "workflows"
+        ],
+        "summary": "Rebuild From Template",
+        "description": "按**现行**官方模板给这张从旧版模板建出来的图重建一张(开始参数、挑过的素材等带过去),旧图原样保留。\n\n旧版模板建的图不迁移 —— 图一落库就是用户的数据,他可能改过,不替他悄悄改写(见 templates.rebuilt_from_template)。",
+        "operationId": "rebuild_from_template_api_workflows__workflow_id__rebuild_from_template_post",
+        "parameters": [
+          {
+            "name": "workflow_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Workflow Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/workflows/{workflow_id}/export": {
       "get": {
         "tags": [
@@ -35706,6 +35749,10 @@
             "type": "string",
             "title": "Description"
           },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
           "stages": {
             "items": {
               "type": "string"
@@ -35725,7 +35772,8 @@
         "required": [
           "id",
           "name",
-          "description"
+          "description",
+          "version"
         ],
         "title": "WorkflowTemplateOut",
         "description": "官方模板的说明。文案已按请求方的语言选好(见 domain/workflows/templates.TEMPLATE_CATALOG);\n图标由界面按 id 给,和节点图标、任务种类同一条规矩。"

@@ -98,14 +98,16 @@ def workflow_templates() -> list[dict]:
     读的是同一份 —— 此前是三套各写各的。图标留在前端(和节点图标、任务种类同一条规矩)。
     """
     from app.core.i18n import pick_text
-    from app.domain.workflows.templates import TEMPLATE_CATALOG
+    from app.domain.workflows.templates import TEMPLATE_CATALOG, current_template_versions
 
     locale = get_current_locale()
+    versions = current_template_versions()
     return [
         {
             "id": str(template["id"]),
             "name": pick_text(template["name"], locale),
             "description": pick_text(template["summary"], locale),
+            "version": versions[str(template["id"])],
             "stages": [pick_text(stage, locale) for stage in _by_locale(template["stages"], locale)],
             "requirements": [
                 {"text": pick_text(one["text"], locale), "check": one["check"], "optional": one["optional"]}
@@ -206,6 +208,41 @@ def create(body: WorkflowCreate, db: Tx, user: CurrentUser) -> Workflow:
             source="template" if body.template_id else "create",
             created_by=user.id,
             revision_note=f"template:{body.template_id}" if body.template_id else "",
+        )
+    except WorkflowDomainError as exc:
+        raise HTTPException(status_code=422, detail=_localized(exc)) from exc
+
+
+@router.post("/workflows/{workflow_id}/rebuild-from-template", response_model=WorkflowOut)
+def rebuild_from_template(workflow_id: str, db: Tx, user: CurrentUser) -> Workflow:
+    """按**现行**官方模板给这张从旧版模板建出来的图重建一张(开始参数、挑过的素材等带过去),旧图原样保留。
+
+    旧版模板建的图不迁移 —— 图一落库就是用户的数据,他可能改过,不替他悄悄改写(见 templates.rebuilt_from_template)。
+    """
+    from app.domain.workflows.templates import rebuilt_from_template
+
+    workflow = workflow_uc.readable(db, user, workflow_id)
+    workflow_uc.ensure_can_edit(db, user, workflow.workspace_id)
+    try:
+        graph = rebuilt_from_template(
+            db, dict(workflow.graph or {}), user_id=user.id, workspace_id=workflow.workspace_id, locale=get_current_locale(),
+        )
+        template_id = str(graph["meta"]["template_id"])
+        name = render_message("wfTemplateRebuiltName", get_current_locale(), {"name": workflow.name})
+        existing = {one.name for one in list_workflows(db, workflow.workspace_id)}
+        candidate, counter = name, 2
+        while candidate in existing:
+            candidate = f"{name} ({counter})"
+            counter += 1
+        return create_workflow(
+            db,
+            workspace_id=workflow.workspace_id,
+            name=candidate,
+            description=workflow.description,
+            graph=graph,
+            source="template",
+            created_by=user.id,
+            revision_note=f"template:{template_id}",
         )
     except WorkflowDomainError as exc:
         raise HTTPException(status_code=422, detail=_localized(exc)) from exc

@@ -4,11 +4,11 @@
   "workflow_revision": 1,
   "name": "自有素材混剪 · 配音与字幕",
   "description": "按标签取出你已经拍好的一批素材,让模型排出叙事顺序、定每段用哪条素材的哪一截、写好旁白,然后按顺序接上时间线,逐段配音(有旁白的那段把原声压低)并铺字幕,导出成片。不生成任何画面 —— 画面就是你自己的素材;没有配音音色时自动只出字幕。标签没填或这个标签下没有视频时,停下并告诉你。一次最多取这个标签下的 200 条视频,更多的先按更细的标签分批。",
-  "graph_hash": "bedc4109ff4c8fe8cf3fc8873eb0f478e6333203d28384ab8fcd096496045095",
+  "graph_hash": "32decce77883bc0120c8dbfdcfce76bab0d48616fabb761ef2b847a56715f0c4",
   "graph": {
     "meta": {
       "template_id": "footage_montage",
-      "template_version": 2,
+      "template_version": 3,
       "source": "official"
     },
     "nodes": [

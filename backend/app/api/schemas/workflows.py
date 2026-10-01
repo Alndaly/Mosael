@@ -147,6 +147,8 @@ class WorkflowTemplateOut(ApiModel):
     id: WorkflowTemplateId
     name: str
     description: str
+    #: 现行第几版(图上的 meta.template_version)。编辑器拿它和图上的比:从旧版建出来的图在顶上提示按新版重建。
+    version: int
     #: 这条流程分几步 —— 卡片上那条竖线。
     stages: list[str] = Field(default_factory=list)
     #: 跑之前要备好什么(模型、引擎、素材)。每条带一个检查键,状态另走 /workflows/templates/checks。

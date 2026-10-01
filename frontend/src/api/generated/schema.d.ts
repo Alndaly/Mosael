@@ -4070,6 +4070,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/workflows/{workflow_id}/rebuild-from-template": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Rebuild From Template
+         * @description 按**现行**官方模板给这张从旧版模板建出来的图重建一张(开始参数、挑过的素材等带过去),旧图原样保留。
+         *
+         *     旧版模板建的图不迁移 —— 图一落库就是用户的数据,他可能改过,不替他悄悄改写(见 templates.rebuilt_from_template)。
+         */
+        post: operations["rebuild_from_template_api_workflows__workflow_id__rebuild_from_template_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/workflows/{workflow_id}/export": {
         parameters: {
             query?: never;
@@ -13859,6 +13881,8 @@ export interface components {
             name: string;
             /** Description */
             description: string;
+            /** Version */
+            version: number;
             /** Stages */
             stages?: string[];
             /** Requirements */
@@ -22241,6 +22265,37 @@ export interface operations {
                 "application/json": components["schemas"]["WorkflowCreate"];
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rebuild_from_template_api_workflows__workflow_id__rebuild_from_template_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workflow_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {

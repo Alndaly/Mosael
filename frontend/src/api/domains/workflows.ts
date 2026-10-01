@@ -67,6 +67,11 @@ export function updateWorkflow(
   return api<Workflow>(`/api/workflows/${workflowId}`, { method: "PATCH", body: JSON.stringify(body) });
 }
 
+/** 按**现行**官方模板给这张从旧版模板建出来的图重建一张(开始参数、挑过的素材带过去);旧图原样保留。 */
+export function rebuildWorkflowFromTemplate(workflowId: string): Promise<Workflow> {
+  return api<Workflow>(`/api/workflows/${workflowId}/rebuild-from-template`, { method: "POST" });
+}
+
 export function deleteWorkflow(workflowId: string): Promise<void> {
   return api<void>(`/api/workflows/${workflowId}`, { method: "DELETE" });
 }

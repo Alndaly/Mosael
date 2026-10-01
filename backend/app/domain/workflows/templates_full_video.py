@@ -937,7 +937,7 @@ JSON Schema 的对象。"""
         {"id": "export_output", "source": "export_final", "target": "output"},
     ]
     graph = {
-        "meta": {"template_id": FULL_VIDEO_GENERATION, "template_version": 10, "source": "official"},
+        "meta": {"template_id": FULL_VIDEO_GENERATION, "template_version": 11, "source": "official"},
         "nodes": nodes,
         "edges": edges,
     }

@@ -46,7 +46,7 @@
       ]
     },
     "author": "Mosael",
-    "version": 10,
+    "version": 11,
     "nodes": 20,
     "download": {
       "zh": "/workflows/full_video_generation.zh.mosael-workflow.json",
@@ -254,7 +254,7 @@
       ]
     },
     "author": "Mosael",
-    "version": 2,
+    "version": 3,
     "nodes": 10,
     "download": {
       "zh": "/workflows/highlight_shorts.zh.mosael-workflow.json",
@@ -304,7 +304,7 @@
       ]
     },
     "author": "Mosael",
-    "version": 2,
+    "version": 3,
     "nodes": 8,
     "download": {
       "zh": "/workflows/product_on_model.zh.mosael-workflow.json",
@@ -352,7 +352,7 @@
       ]
     },
     "author": "Mosael",
-    "version": 2,
+    "version": 3,
     "nodes": 9,
     "download": {
       "zh": "/workflows/product_pitch_short.zh.mosael-workflow.json",
@@ -400,7 +400,7 @@
       ]
     },
     "author": "Mosael",
-    "version": 2,
+    "version": 3,
     "nodes": 10,
     "download": {
       "zh": "/workflows/footage_montage.zh.mosael-workflow.json",
@@ -446,7 +446,7 @@
       ]
     },
     "author": "Mosael",
-    "version": 2,
+    "version": 3,
     "nodes": 7,
     "download": {
       "zh": "/workflows/fabric_lookbook.zh.mosael-workflow.json",
@@ -548,7 +548,7 @@
       ]
     },
     "author": "Mosael",
-    "version": 2,
+    "version": 3,
     "nodes": 21,
     "download": {
       "zh": "/workflows/product_pitch_presenter.zh.mosael-workflow.json",

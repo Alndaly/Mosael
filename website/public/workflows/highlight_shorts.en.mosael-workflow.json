@@ -4,11 +4,11 @@
   "workflow_revision": 1,
   "name": "Long video into vertical clips",
   "description": "Transcribe a talk, interview or stream recording, pick the passages that stand on their own (up to 12), then give each one its own vertical timeline in a single project, take that range from the source, lay rewritten short captions on it and export. No image or video generation, so nothing is billed beyond the transcription and one chat call.",
-  "graph_hash": "7f7234e1afc0c561dfc2b796bbf436776ded6184c266ca4545fcdc9519152a90",
+  "graph_hash": "9ffe8b8bff673893dc0a1d1f0acdff10c1178ab053411c56f1baab74ce4f41d9",
   "graph": {
     "meta": {
       "template_id": "highlight_shorts",
-      "template_version": 2,
+      "template_version": 3,
       "source": "official"
     },
     "nodes": [

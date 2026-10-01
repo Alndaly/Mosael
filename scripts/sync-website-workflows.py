@@ -16,56 +16,13 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "backend"))
 
 from app.domain.workflows.revisions import graph_digest
-from app.domain.workflows.templates import (
-    TEMPLATE_CATALOG,
-    ModelChoice,
-    full_video_generation_graph,
-    localised_names,
-    transcript_video_cleanup_graph,
-    translated_dub_graph,
-)
-from app.domain.workflows.templates_business import (
-    fabric_lookbook_graph,
-    footage_montage_graph,
-    highlight_shorts_graph,
-    product_on_model_graph,
-    product_pitch_short_graph,
-    talking_script_video_graph,
-)
-
-
-def _graphs(locale: str) -> dict[str, dict]:
-    """每个模板的图。**按这一份的语言建** —— 图里给人看的默认值(新项目的名字、完成通知)在建图时定语言,
-    和节点名同一条(见 domain/workflows/templates 的 transcript_video_cleanup_graph / translated_dub_graph)。"""
-    return {
-        #: 视频模型留空 = 按"还没挑模型"出片计划:每镜 5 秒、只走首帧那条路。**首帧是每一个能用的视频模型都收的
-        #: 那一条**(参考素材那条只有部分模型收),而导入的人挑哪个模型这里不知道。出图 / 视频的画幅、尺寸、分辨率
-        #: 照样接到开始参数(templates_models._video_plan):挑模型时编辑器只留新模型仍收的绑定和值(前端
-        #: carriedParameters),不收 5 秒的模型由运行前检查在花钱之前说清。
-        "full_video_generation": full_video_generation_graph(chat=ModelChoice(), image=ModelChoice(), video=ModelChoice()),
-        "transcript_video_cleanup": transcript_video_cleanup_graph(chat=ModelChoice(), locale=locale),
-        # 音色按工作区取,导出给官网的那份不能带任何本机资源 —— 留空,导入后由用户自己挑。
-        "translated_dub": translated_dub_graph(chat=ModelChoice(), voice_id="", locale=locale),
-        "translated_dub_lipsync": translated_dub_graph(chat=ModelChoice(), voice_id="", lipsync=True, locale=locale),
-        "highlight_shorts": highlight_shorts_graph(chat=ModelChoice()),
-        #: 空的 ModelChoice 表示"这台机器上还没选默认模型" —— 官网那份本来就不该带任何本机选择。
-        #: 上身图这条按**带视频**导出(`motion=True`),视频模型那一格留空,由导入的人挑;没有视频模型的话,在画布上
-        #: 删掉「把这一组动起来」和「归档这一组的视频」两个节点即可 —— 循环交出的是上身图,不依赖它们。
-        #: 反过来(导成不带视频)则是有视频模型的人看不到那一步,而他不会知道本来有。
-        "product_on_model": product_on_model_graph(
-            chat=ModelChoice(), image=ModelChoice(), video=ModelChoice(), motion=True,
-        ),
-        "product_pitch_short": product_pitch_short_graph(chat=ModelChoice(), image=ModelChoice(), voice_id=""),
-        "product_pitch_presenter": product_pitch_short_graph(chat=ModelChoice(), image=ModelChoice(), voice_id="", presenter=True),
-        "fabric_lookbook": fabric_lookbook_graph(chat=ModelChoice(), image=ModelChoice()),
-        "footage_montage": footage_montage_graph(chat=ModelChoice(), voice_id=""),
-        "talking_script_video": talking_script_video_graph(voice_id=""),
-    }
+from app.domain.workflows.templates import TEMPLATE_CATALOG, blank_template_graphs, localised_names
 
 
 def catalog_files() -> dict[str, str]:
     #: 说明只有一份 —— 后端的模板目录(应用里的模板卡片读的也是它)。这里只补"这一份对应哪张图"。
-    graphs = {locale: _graphs(locale) for locale in ("zh", "en")}
+    #: 每个模板不带任何本机选择的那一份(模型、音色留空,由导入的人挑),见 templates.blank_template_graphs。
+    graphs = {locale: blank_template_graphs(locale) for locale in ("zh", "en")}
     files: dict[str, str] = {}
     catalog = []
     for template in TEMPLATE_CATALOG:

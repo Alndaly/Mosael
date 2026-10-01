@@ -49,6 +49,7 @@ import { useWorkflowRun } from "@/features/workflows/useWorkflowRun";
 import { useWorkflowSave } from "@/features/workflows/useWorkflowSave";
 import { useWorkflowComments } from "./WorkflowComments";
 import { workflowEditorToolbar } from "@/features/workflows/WorkflowEditorToolbar";
+import { TemplateUpgradeNotice } from "@/features/workflows/TemplateUpgradeNotice";
 import { WorkflowRevisionHistory } from "@/features/workflows/WorkflowRevisionHistory";
 import { WorkflowRunHistory } from "@/features/workflows/WorkflowRunHistory";
 import { withSingleNodeSelected } from "@/features/workflows/workflowCanvasModel";
@@ -466,6 +467,8 @@ export function WorkflowEditor({
             components/layout/pageTrail),画布上只浮着操作这一组。保存状态没有单独的指示:失败弹 toast,运行键的 title 说「保存中」/「上次保存失败」。 */}
         {/* 正停在一次较早的运行上:画布、检查器、历史三处都在说那一次,得有一个一眼看得到的出口回到最新。
             挂在画布上而不是历史面板里 —— 面板关了,画布照样停在那一次。 */}
+        {/* 从旧版官方模板建的图:说一声,点一下按新版重建(旧图保留)。见 TemplateUpgradeNotice。 */}
+        <TemplateUpgradeNotice workflowId={workflow.id} meta={rootGraph?.meta} />
         {viewedRun !== runJobId && (
           <div
             role="status"

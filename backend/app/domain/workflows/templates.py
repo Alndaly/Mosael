@@ -6,6 +6,8 @@
 
 from __future__ import annotations
 
+import copy
+from functools import lru_cache
 from typing import Any
 
 from app.db.models import Voice
@@ -325,6 +327,88 @@ def built_in_template_graph(
             image=_reference_image_model(db, user_id, needed=SINGLE_REFERENCE),
         ))
     raise WorkflowDomainError("wfErr_unknownTemplate", params={"id": template_id})
+
+
+def blank_template_graphs(locale: str) -> dict[str, dict[str, Any]]:
+    """每个官方模板**不带任何本机选择**的那一份:模型、音色留空,由用的人挑。官网下载的就是它
+    (scripts/sync-website-workflows.py);现行模板的版本号也从它读(current_template_versions)。
+
+    **按这一份的语言建** —— 图里给人看的默认值(新项目的名字、完成通知)在建图时定语言,和节点名同一条
+    (见 transcript_video_cleanup_graph / translated_dub_graph)。
+    """
+    blank = ModelChoice()
+    return {
+        #: 视频模型留空 = 按"还没挑模型"出片计划:每镜 5 秒、只走首帧那条路。**首帧是每一个能用的视频模型都收的
+        #: 那一条**(参考素材那条只有部分模型收),而导入的人挑哪个模型这里不知道。出图 / 视频的画幅、尺寸、分辨率
+        #: 照样接到开始参数(templates_models._video_plan):挑模型时编辑器只留新模型仍收的绑定和值(前端
+        #: carriedParameters),不收 5 秒的模型由运行前检查在花钱之前说清。
+        FULL_VIDEO_GENERATION: full_video_generation_graph(chat=blank, image=blank, video=blank),
+        TRANSCRIPT_VIDEO_CLEANUP: transcript_video_cleanup_graph(chat=blank, locale=locale),
+        # 音色按工作区取,不带任何本机资源的那份留空,由用的人自己挑。
+        TRANSLATED_DUB: translated_dub_graph(chat=blank, voice_id="", locale=locale),
+        TRANSLATED_DUB_LIPSYNC: translated_dub_graph(chat=blank, voice_id="", lipsync=True, locale=locale),
+        HIGHLIGHT_SHORTS: highlight_shorts_graph(chat=blank),
+        #: 上身图这条按**带视频**导出(`motion=True`),视频模型那一格留空,由导入的人挑;没有视频模型的话,在画布上
+        #: 删掉「把这一组动起来」和「归档这一组的视频」两个节点即可(卡片的 download_note 说给下载的人听)——
+        #: 循环交出的是上身图,不依赖它们。反过来(导成不带视频)则是有视频模型的人看不到那一步,而他不会知道本来有。
+        PRODUCT_ON_MODEL: product_on_model_graph(chat=blank, image=blank, video=blank, motion=True),
+        PRODUCT_PITCH_SHORT: product_pitch_short_graph(chat=blank, image=blank, voice_id=""),
+        PRODUCT_PITCH_PRESENTER: product_pitch_short_graph(chat=blank, image=blank, voice_id="", presenter=True),
+        FABRIC_LOOKBOOK: fabric_lookbook_graph(chat=blank, image=blank),
+        FOOTAGE_MONTAGE: footage_montage_graph(chat=blank, voice_id=""),
+        TALKING_SCRIPT_VIDEO: talking_script_video_graph(voice_id=""),
+    }
+
+
+@lru_cache(maxsize=1)
+def current_template_versions() -> dict[str, int]:
+    """每个官方模板现在是第几版(图上的 meta.template_version)。模板改了会让旧图失败的地方就加一版:
+    从旧版建出来的图在编辑器顶上提示「按新版重建」(见 rebuilt_from_template)。"""
+    return {template_id: int(graph["meta"]["template_version"]) for template_id, graph in blank_template_graphs("zh").items()}
+
+
+def rebuilt_from_template(
+    db: Session, graph: dict[str, Any], *, user_id: str, workspace_id: str, locale: str | None
+) -> dict[str, Any]:
+    """按**现行**模板给这张从官方模板建出来的图重建一张,带上用户填过的东西。
+
+    1.8.0 时从模板建的图没有迁移:上身图动起来必败、混剪没有旁白的那段必败、带货只念钩子……而图一落库就是用户的
+    数据(他可能改过),不能替他悄悄改写。所以不迁移,而是在编辑器顶上提示,由他点一下按新版重建一张(旧图保留)。
+
+    带过去的:开始参数里新版还有的那几格(填过的值),以及节点 id 和类型都没变的节点上、新版留空而旧图填过的
+    字面量(挑的素材、主播、贴的稿子、授权确认……,循环体里的也算)。模型按现在的设置重新挑,新版填了的格子不覆盖。
+    """
+    meta = graph.get("meta") if isinstance(graph.get("meta"), dict) else {}
+    template_id = str(meta.get("template_id") or "")
+    if meta.get("source") != "official" or template_id not in current_template_versions():
+        raise WorkflowDomainError("wfErr_notFromTemplate")
+    fresh = built_in_template_graph(db, template_id, user_id=user_id, workspace_id=workspace_id, locale=locale)
+    _carry_picks(fresh, graph)
+    return fresh
+
+
+def _carry_picks(fresh: dict[str, Any], old: dict[str, Any]) -> None:
+    previous = {str(node.get("id")): node for node in old.get("nodes") or [] if isinstance(node, dict)}
+    for node in fresh.get("nodes") or []:
+        before = previous.get(str(node.get("id")))
+        if before is None or before.get("type") != node.get("type"):
+            continue
+        config, old_config = node.get("config") or {}, before.get("config") or {}
+        if node.get("type") == "start":
+            params, old_params = config.get("params") or {}, old_config.get("params") or {}
+            for key in params:
+                if old_params.get(key) not in (None, ""):
+                    params[key] = copy.deepcopy(old_params[key])
+            continue
+        bound = set(node.get("inputs") or [])
+        for key, value in config.items():
+            if isinstance(value, dict) and isinstance(old_config.get(key), dict) and isinstance(value.get("nodes"), list):
+                _carry_picks(value, old_config[key])
+                continue
+            kept = old_config.get(key)
+            if value in (None, "") and key not in bound and isinstance(kept, (str, int, float)) and kept != "" \
+                    and "{{" not in str(kept):
+                config[key] = kept
 
 
 def localised_names(locale: str | None, graph: dict[str, Any]) -> dict[str, Any]:

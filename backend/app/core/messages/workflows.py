@@ -112,6 +112,11 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "对话节点没选模型,而连接「{name}」上没有可用的对话模型:在设置里给它启用一个对话模型(或在节点上选一个),再运行",
         "en": "A chat step has no model picked, and the connection “{name}” has no usable chat model: enable one in Settings (or pick one on the step), then run again",
     },
+    "wfErr_notFromTemplate": {
+        "zh": "这张图不是从官方模板建的(或那个模板已经没有了),没法按新版重建",
+        "en": "This workflow wasn't created from an official template (or that template no longer exists), so it can't be rebuilt from the new version",
+    },
+    "wfTemplateRebuiltName": {"zh": "{name}(新版模板)", "en": "{name} (new template)"},
     "wfLoop_itemSkipped": {"zh": "第 {index} 项没做成,已跳过:{reason}", "en": "Item {index} failed and was skipped: {reason}"},
     "wfErr_sceneLayoutMissing": {"zh": "没有给布景", "en": "No layout was given"},
     "wfErr_sceneLayoutInvalid": {"zh": "布景不是一个有效的 3D 场景:{reason}", "en": "The layout is not a valid 3D scene: {reason}"},

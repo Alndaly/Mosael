@@ -85,7 +85,7 @@ def test_full_video_template_has_valid_refs_and_parallel_planning() -> None:
     assert _invalid_references(graph) == []
     assert graph["meta"] == {
         "template_id": "full_video_generation",
-        "template_version": 10,
+        "template_version": 11,
         "source": "official",
     }
 
@@ -900,3 +900,54 @@ def test_数字人出镜带货_开场收尾由资产人物说_每拍用它的嗓
 
     plain = product_pitch_short_graph(chat=CHAT, image=SEEDREAM)
     assert "presenter" not in {node["id"] for node in plain["nodes"]} and plain["meta"]["template_id"] == "product_pitch_short"
+
+
+class Test旧版模板建的图:
+    """1.8.0 时从模板建的图没有迁移(图是用户的数据,不替他悄悄改写):编辑器拿图上的版本和模板目录里的现行版本比,
+    低了就提示「按新版重建」—— 这里是后端那一半:目录交出现行版本,重建一张、带上用户填过的,旧图不动。"""
+
+    def test_模板目录交出现行版本_和建出来的图上的一致(self) -> None:
+        from tests.util import fresh_client
+
+        client = fresh_client()
+        workspace = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+        catalog = {one["id"]: one["version"] for one in client.get("/api/workflows/templates").json()}
+        for template_id in ("highlight_shorts", "full_video_generation", "footage_montage"):
+            created = client.post("/api/workflows", json={"workspace_id": workspace, "name": template_id,
+                                                          "template_id": template_id}).json()
+            assert created["graph"]["meta"]["template_version"] == catalog[template_id]
+
+    def test_按新版重建一张_开始参数和挑过的素材带过去_旧图原样保留(self) -> None:
+        from tests.util import fresh_client
+
+        client = fresh_client()
+        workspace = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+        old = client.post("/api/workflows", json={"workspace_id": workspace, "name": "访谈切片",
+                                                   "template_id": "highlight_shorts"}).json()
+        graph = old["graph"]
+        current = graph["meta"]["template_version"]
+        graph["meta"]["template_version"] = 2
+        next(node for node in graph["nodes"] if node["id"] == "start")["config"]["params"]["target_count"] = 3
+        next(node for node in graph["nodes"] if node["id"] == "source_video")["config"]["asset_id"] = "访谈那条"
+        old = client.post("/api/workflows", json={"workspace_id": workspace, "name": "访谈切片(旧)", "graph": graph}).json()
+
+        response = client.post(f"/api/workflows/{old['id']}/rebuild-from-template")
+        assert response.status_code == 200, response.text
+        rebuilt = response.json()
+        assert rebuilt["id"] != old["id"] and rebuilt["name"] == "访谈切片(旧)(新版模板)"
+        assert rebuilt["graph"]["meta"]["template_version"] == current
+        nodes = {node["id"]: node for node in rebuilt["graph"]["nodes"]}
+        assert nodes["start"]["config"]["params"]["target_count"] == 3, "开始参数里填过的带过去"
+        assert nodes["source_video"]["config"]["asset_id"] == "访谈那条", "挑过的素材带过去"
+        assert any(node["id"] == "has_clips" for node in rebuilt["graph"]["nodes"]), "是新版的图"
+        kept = client.get(f"/api/workflows/{old['id']}").json()
+        assert kept["graph"]["meta"]["template_version"] == 2, "旧图原样保留"
+
+    def test_不是从官方模板建的图_不重建(self) -> None:
+        from tests.util import fresh_client
+
+        client = fresh_client()
+        workspace = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+        mine = client.post("/api/workflows", json={"workspace_id": workspace, "name": "自己搭的",
+                                                    "graph": {"nodes": [], "edges": []}}).json()
+        assert client.post(f"/api/workflows/{mine['id']}/rebuild-from-template").status_code == 422

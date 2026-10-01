@@ -4,11 +4,11 @@
   "workflow_revision": 1,
   "name": "Fabric into applications and a spec sheet",
   "description": "From one fabric photo and its specs, plan the products it genuinely suits (up to 12), render each one in a real space, and produce a one-page proposal you can send to a client. The spec sheet only restates the numbers you provide; anything missing is marked as needing mill confirmation. Each application is one paid image generation.",
-  "graph_hash": "63bdd75a76ab746a73073977f80561a75e9a8ff05993c5b84e911984e65f9fa2",
+  "graph_hash": "6608faf9afeaebde52272a8ab8a77b4b43f24491072626c7de75049a0a7dd692",
   "graph": {
     "meta": {
       "template_id": "fabric_lookbook",
-      "template_version": 2,
+      "template_version": 3,
       "source": "official"
     },
     "nodes": [

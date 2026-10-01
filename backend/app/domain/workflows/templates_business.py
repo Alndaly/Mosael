@@ -381,7 +381,7 @@ def highlight_shorts_graph(*, chat: Any) -> dict[str, Any]:
     ]
     return normalize_graph(
         {
-            "meta": {"template_id": HIGHLIGHT_SHORTS, "template_version": 2, "source": "official"},
+            "meta": {"template_id": HIGHLIGHT_SHORTS, "template_version": 3, "source": "official"},
             "nodes": nodes,
             "edges": edges,
         },
@@ -707,7 +707,7 @@ def product_on_model_graph(
     ]
     return normalize_graph(
         {
-            "meta": {"template_id": PRODUCT_ON_MODEL, "template_version": 2, "source": "official"},
+            "meta": {"template_id": PRODUCT_ON_MODEL, "template_version": 3, "source": "official"},
             "nodes": nodes,
             "edges": edges,
         },
@@ -1077,7 +1077,7 @@ def product_pitch_short_graph(
         ]
         return normalize_graph(
             {
-                "meta": {"template_id": PRODUCT_PITCH_SHORT, "template_version": 2, "source": "official"},
+                "meta": {"template_id": PRODUCT_PITCH_SHORT, "template_version": 3, "source": "official"},
                 "nodes": nodes,
                 "edges": edges,
             },
@@ -1320,7 +1320,7 @@ def fabric_lookbook_graph(*, chat: Any, image: Any) -> dict[str, Any]:
     ]
     return normalize_graph(
         {
-            "meta": {"template_id": FABRIC_LOOKBOOK, "template_version": 2, "source": "official"},
+            "meta": {"template_id": FABRIC_LOOKBOOK, "template_version": 3, "source": "official"},
             "nodes": nodes,
             "edges": edges,
         },
@@ -1641,7 +1641,7 @@ def _with_presenter(nodes: list[dict[str, Any]]) -> dict[str, Any]:
     ]
     return normalize_graph(
         {
-            "meta": {"template_id": PRODUCT_PITCH_PRESENTER, "template_version": 2, "source": "official"},
+            "meta": {"template_id": PRODUCT_PITCH_PRESENTER, "template_version": 3, "source": "official"},
             "nodes": kept,
             "edges": edges,
         },
@@ -2176,7 +2176,7 @@ captions 的时间码相对每一段自己的开头。""",
     ]
     return normalize_graph(
         {
-            "meta": {"template_id": FOOTAGE_MONTAGE, "template_version": 2, "source": "official"},
+            "meta": {"template_id": FOOTAGE_MONTAGE, "template_version": 3, "source": "official"},
             "nodes": nodes,
             "edges": edges,
         },
