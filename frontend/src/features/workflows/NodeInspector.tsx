@@ -388,6 +388,8 @@ export function NodeInspector({
 
   /** 字段接上游 = 数据边(ComfyUI 式:暴露输入接点,再从画布拖数据边或下拉选源)。 */
   const binding: FieldBinding = {
+    //: 开始节点是入口,前面什么都没有(画布上它连控制入口都没有,见 WorkflowNode)。
+    canBind: () => node.type !== "start",
     //: 接没接上看两样:连接态(inputs)或者真有一条数据边喂它 —— 后者才是后端认的。
     isBound: (key) => connectedInputs.includes(key) || dataEdgeFor(key) !== null,
     setBound: setConnected,

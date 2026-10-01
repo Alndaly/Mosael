@@ -75,3 +75,13 @@ def test_按下运行时空着拦下_带着参数跑就过了这一关() -> None
                         json={"params": {"product_name": "开衫", "selling_points": "不起球"}})
     #: 商品图还没挑,照样拦 —— 但不再是因为这两个参数。
     assert given.status_code == 422 and "params." not in given.json()["detail"], given.text
+
+
+def test_必填参数这一格是一串参数名_不是能插值能接上游的模板() -> None:
+    """它装的是开始节点**自己的**参数名(逗号分隔),运行前校验按字面读。
+
+    此前声明成 `template`:检查器给它变量插入器(插进去的 `{{llm.text}}` 被当成一个叫这个名字的参数)
+    和「接上游」开关(开始节点前面什么都没有)。两样都是这一格用不上、用了就坏的东西。"""
+    client = fresh_client()
+    types = {one["type"]: one for one in client.get("/api/workflows/node-types").json()}
+    assert types["start"]["config"]["required_params"]["type"] == "string"

@@ -173,3 +173,38 @@ it("失效引用不查代码字段:代码里的 {{…}} 是字面文字;入参�
   const stale = [...document.querySelectorAll("code.line-through")].map((one) => one.textContent);
   expect(stale).toEqual(["{{gone.input}}"]);
 });
+
+it("开始节点的字段不给「接上游」:它是入口,前面什么都没有", () => {
+  //: 此前「必填参数」声明成模板,检查器给它变量插入器和「接上游」开关 —— 接上一条数据边,
+  //: 入口就成了别人的下游。画布上开始节点连控制入口都没有(WorkflowNode),检查器不该另开一个。
+  const START_META = {
+    type: "start",
+    label: "开始",
+    description: "",
+    category: "",
+    config: { params: { type: "object", label: "参数" }, required_params: { type: "string", label: "必填参数" } },
+    outputs: ["*params"],
+    output_types: {},
+    output_labels: {},
+  } as unknown as WorkflowNodeType;
+  const node = { id: "start", type: "start", config: { params: { topic: "" }, required_params: "topic" } };
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <TooltipProvider>
+        <ReactFlowProvider>
+          <NodeInspector
+            node={node}
+            meta={START_META}
+            graph={{ nodes: [node, { id: "llm-1", type: "llm", config: {} }], edges: [] } as WorkflowGraph}
+            registry={new Map([[START_META.type, START_META]])}
+            workspaceId="w1"
+            onChange={vi.fn()}
+            onApplyGraph={vi.fn()}
+          />
+        </ReactFlowProvider>
+      </TooltipProvider>
+    </QueryClientProvider>,
+  );
+  expect(document.querySelector('[data-field-key="required_params"]')).not.toBeNull();
+  expect(document.querySelector('[data-field-key="required_params"] button[title="wfInputModeHint"]')).toBeNull();
+});

@@ -12,12 +12,15 @@ browser_extract.attribute、llm.json_schema_name。它们的共同点是**都是
 
 ## 剩下的 string 是什么
 
-两类,都不是自由文本:
+三类,都不是自由文本:
 
   · 带 `options` 的枚举 —— 界面渲染成下拉,`@` 无从谈起;
   · **选择器背书的 id** —— 模型、档案、会话、账号这些,值从接口拉一张列表来选。
     界面的分支顺序是 options 优先于 type,所以把它们改成 template 也不会变成文本框,
-    改了等于白改。它们在下面的 `_PICKER_KEYS` 里。
+    改了等于白改。它们在下面的 `_PICKER_KEYS` 里;
+  · **本节点自己东西的名字清单** —— 开始节点的 `required_params` 是它自己几个参数的名字,
+    运行前校验按字面读。声明成 template 时检查器给它变量插入器和「接上游」:插进去的
+    `{{llm.text}}` 被当成一个叫这个名字的参数,而开始节点前面什么都没有。在 `_NAME_LIST_KEYS` 里。
 
 那张名单按**键名**列,不是逐节点列:`session` 在九个浏览器节点里是同一个意思,逐节点写
 就是又抄了一张表。名单只减不增 —— 加一条意味着又多了一个"用户以为能填变量、实际给了个
@@ -45,6 +48,10 @@ _PICKER_KEYS = {
 }
 
 
+#: 值是**本节点自己**某几样东西的名字(逗号分隔),按字面读,不插值、不接上游。**只减不增。**
+_NAME_LIST_KEYS = {"required_params"}
+
+
 def test_自由文本字段都声明成了template() -> None:
     from app.domain.workflows import NODE_TYPES
 
@@ -58,6 +65,7 @@ def test_自由文本字段都声明成了template() -> None:
         # 这条声明比下面按键名列的名单更直接,新的选择器应该走这里。
         and not (meta or {}).get("options_from")
         and key not in _PICKER_KEYS
+        and key not in _NAME_LIST_KEYS
     ]
     assert not offenders, (
         "这些是自由文本字段,却声明成 string —— 引擎对它们本来就做 {{}} 替换,"
@@ -85,5 +93,5 @@ def test_选择器名单里没有过期的条目() -> None:
     from app.domain.workflows import NODE_TYPES
 
     used = {key for spec in NODE_TYPES.values() for key in (spec.get("config") or {})}
-    stale = sorted(_PICKER_KEYS - used)
+    stale = sorted((_PICKER_KEYS | _NAME_LIST_KEYS) - used)
     assert not stale, f"这些键已经没有节点在用了,从 _PICKER_KEYS 里删掉:{stale}"

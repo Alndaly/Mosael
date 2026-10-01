@@ -509,7 +509,9 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
             #: 哪几个参数**跑之前必须有值**(逗号分隔)。运行前校验按它查(连同这次运行传进来的值,见
             #: graph_rules.with_run_params):空着就当场拒,说清是哪一个。官方模板里要用户自己填的商品名、卖点、主题
             #: 都点名在这里 —— 空着跑的话,模型对着空白写脚本,后面的付费生成照样扣费。
-            "required_params": {"type": "template", "description": "wfNode_start_required_params"},
+            #: 是一串**参数名**,按字面读:声明成 template 的话检查器会给它变量插入器和「接上游」,
+            #: 插进去的 `{{llm.text}}` 被当成一个叫这个名字的参数。
+            "required_params": {"type": "string", "description": "wfNode_start_required_params"},
         },
         "outputs": ["*params"],
     },
