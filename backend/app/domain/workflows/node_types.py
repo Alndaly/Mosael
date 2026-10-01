@@ -296,6 +296,7 @@ _FIELD_LABELS = {
     "tag": "wfField_tag",
     "expressions": "wfField_expressions",
     "consent": "wfField_consent",
+    "for_speech": "wfField_for_speech",
     "audio_asset_id": "wfField_audio_asset_id",
     "scope": "wfField_scope",
     "found": "wfField_found",
@@ -1069,6 +1070,9 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
             },
             #: 原文是什么语言(接转写节点的 language)。和目标语言相同时直接拒:译成同一种语言只是白花钱。空 = 不比。
             "source_lang": {"advanced": True, "type": "template", "description": "wfNode_translate_lines_source_lang"},
+            #: 译文是不是要拿去配音:是的话简繁算同一种语言(念出来一样),原文中文时译成另一种中文字形也拦。
+            "for_speech": {"advanced": True, "type": "string", "default": "no", "options": ["yes", "no"],
+                           "description": "wfNode_translate_lines_for_speech"},
             #: 翻译提供方(ADR 0032):Google 免费、对话模型、插件连接并列;空 = 按运行者的默认。
             "engine": {"type": "string", "description": "wfNode_translate_engine", "options_from": "providers.translation"},
             # 选了 ai 之后「用哪条连接」立刻变成要紧事,所以它不在高级里。

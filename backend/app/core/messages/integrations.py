@@ -705,6 +705,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfField_tags": {"zh": "标签", "en": "Tags"},
     "wfField_tag": {"zh": "标签", "en": "Tag"},
     "wfField_consent": {"zh": "授权确认", "en": "Consent"},
+    "wfField_for_speech": {"zh": "译文要配音", "en": "For dubbing"},
     "wfField_audio_asset_id": {"zh": "音频", "en": "Audio"},
     "wfField_max_shots": {"zh": "最多几镜", "en": "Max shots"},
     "wfField_shot_seconds": {"zh": "每镜秒数", "en": "Seconds per shot"},

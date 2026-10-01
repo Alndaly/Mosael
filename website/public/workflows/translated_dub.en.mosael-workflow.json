@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "Translated dubbing with subtitles",
   "description": "Transcribe a video sentence by sentence, translate each line, lay translated subtitles on the original timecodes, then dub each line and time-compress it back into its own slot. Pick the target language on the translate step (English by default). The original voice is separated out and the background music kept; a voice separation engine must be ready before the workflow starts.",
-  "graph_hash": "83dcc125baa923b3ceb7878cb5790187f5a9cb5169881f89fb76415ec69535f8",
+  "graph_hash": "1deb5d25e43afb51b4713adc64ad48cc05079c3e966897f9fd9344c6adf9eea5",
   "graph": {
     "meta": {
       "template_id": "translated_dub",
@@ -105,6 +105,7 @@
           "texts": "",
           "target_lang": "en",
           "source_lang": "",
+          "for_speech": "yes",
           "engine": "builtin:chat",
           "profile_id": "",
           "model": ""

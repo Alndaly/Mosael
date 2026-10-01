@@ -107,10 +107,12 @@ def language_label(code: str) -> str:
     return _LANG_NAMES.get(code, code)
 
 
-def same_language(source: str, target: str) -> bool:
+def same_language(source: str, target: str, *, spoken: bool = False) -> bool:
     """识别出的原文语言(转写给的,`zh`、`en`、`ja`……)和目标语言(`zh-CN`、`en`……)是不是同一种。
 
-    主语言相同就算同一种;中文另看简繁 —— 简体原文译成繁体(`zh` → `zh-TW`)是一次真的转换。
+    主语言相同就算同一种;中文另看简繁 —— 简体原文译成繁体(`zh` → `zh-TW`)是一次真的转换,**只做字幕时**不拦。
+    `spoken`:译文是要念出来的(译配)。简繁念出来是同一种话,换一遍字再逐句配音,配出来的和原声说的一样 ——
+    白花翻译和配音的钱,所以算同一种。
     认不出原文语言(空串)就不算,不拦。
     """
     def norm(code: str) -> str:
@@ -124,7 +126,7 @@ def same_language(source: str, target: str) -> bool:
         return False
     if src.split("-")[0] != dst.split("-")[0]:
         return False
-    return src.split("-")[0] != "zh" or traditional(src) == traditional(dst)
+    return spoken or src.split("-")[0] != "zh" or traditional(src) == traditional(dst)
 
 
 def resolve_ai_chat_target(

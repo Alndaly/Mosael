@@ -211,6 +211,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "原文是什么语言(通常接转写节点的 language)。和目标语言相同时直接停下,不白花翻译和配音的钱;留空不比",
         "en": "The source language (usually the transcribe node's language). If it matches the target, the step stops before paying for translation and dubbing; leave empty to skip the check",
     },
+    "wfNode_translate_lines_for_speech": {
+        "zh": "译文是否要拿去配音。是的话,原文中文时译成简体或繁体都算同一种语言、直接停下(念出来一样,换一遍字形再配音只是白花钱);只做字幕时选否,简繁转换照常",
+        "en": "Whether the translation will be voiced. If yes, Simplified and Traditional Chinese count as the same language and the step stops (they sound the same, so converting the script and dubbing again only costs money); choose no for subtitles only, where script conversion runs as usual",
+    },
     "wfErr_translateSameLanguage": {
         "zh": "识别出的原文已经是{lang}了,译成同一种语言只是白花一遍翻译和配音的钱 —— 在「逐句翻译」节点上换一种目标语言(识别错了的话,清空它的原文语言)",
         "en": "The source is already in {lang}; translating it into the same language only pays for translation and dubbing twice. Pick another target language on the translate step (or clear its source language if detection got it wrong).",

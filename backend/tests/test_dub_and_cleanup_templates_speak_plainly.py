@@ -88,3 +88,23 @@ def test_原文已经是目标语言_翻译节点在花钱之前就拒(monkeypat
     assert refused.value.key == "wfErr_translateSameLanguage" and called == []
     assert "source_lang" in _node(translated_dub_graph(voice_id=""), "translate_lines")["inputs"], \
         "模板把识别出的语言接到翻译节点上"
+
+
+def test_要配音时简繁算同一种语言_只做字幕时不拦(monkeypatch: pytest.MonkeyPatch) -> None:
+    """原文中文,译配成繁体:换一遍字形再逐句配音,念出来和原声一样 —— 白花翻译和配音的钱。只做字幕时简繁转换是真的转换。"""
+    from app.domain import translate as translate_domain
+    from app.domain.translate import same_language
+    from app.domain.workflows.executors.ai import translate_lines
+
+    assert same_language("zh", "zh-TW", spoken=True) and same_language("zh-TW", "zh-CN", spoken=True)
+    assert not same_language("zh", "zh-TW") and not same_language("ja", "zh-TW", spoken=True)
+
+    called: list = []
+    monkeypatch.setattr(translate_domain, "translate_many", lambda db, texts, *a, **k: called.append(texts) or ["你好"])
+    scope = SimpleNamespace(workspace_id="", id="wf", name="译配")
+    with pytest.raises(WorkflowDomainError) as refused:
+        translate_lines(None, scope, {"texts": ["你好"], "target_lang": "zh-TW", "source_lang": "zh", "for_speech": "yes"})
+    assert refused.value.key == "wfErr_translateSameLanguage" and called == []
+    assert translate_lines(None, scope, {"texts": ["你好"], "target_lang": "zh-TW", "source_lang": "zh"})["count"] == 1, \
+        "只做字幕:简体转繁体照常翻"
+    assert _node(translated_dub_graph(voice_id=""), "translate_lines")["config"]["for_speech"] == "yes", "译配模板的译文要配音"

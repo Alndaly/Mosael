@@ -474,7 +474,9 @@ def translate_lines(db: Session, scope: RunScope, config: dict[str, Any]) -> dic
     target = str(config.get("target_lang") or "en")
     #: 原文已经是目标语言:译配成同一种语言就是白花一遍翻译(和后面逐句配音)的钱 —— 花之前说。
     #: 识别的语言不对时,把 source_lang 清空就不再比。
-    if same_language(str(config.get("source_lang") or ""), target):
+    #: 译文要拿去配音(for_speech)时,简繁也算同一种 —— 念出来一样(见 same_language)。
+    spoken = str(config.get("for_speech") or "").strip().lower() in ("yes", "true", "1")
+    if same_language(str(config.get("source_lang") or ""), target, spoken=spoken):
         raise WorkflowDomainError("wfErr_translateSameLanguage", params={"lang": language_label(target)})
     with workspace_scope(getattr(scope, "workspace_id", "") or ""):
         translated = translate_many(
