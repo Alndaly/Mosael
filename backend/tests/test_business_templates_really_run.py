@@ -878,3 +878,28 @@ class Test整片改画幅:
             #: 它收的画幅照常放行。
             start_workflow_job(db, workflow, created_by=user_id(), params={"topic": "面馆", "aspect_ratio": "9:16"})
 
+    def test_对话节点连接模型都留空_跑的人又没有对话模型_运行前就拦(self) -> None:
+        """整片建图时这台机器上还没配对话模型:五次对话都留空,此前照样能按下运行,轮到第一次对话才失败。"""
+        from sqlalchemy import select
+
+        from app.core.db import SessionLocal
+        from app.db.models import Job
+        from app.domain.workflows import create_workflow
+        from app.domain.workflows.engine import start_workflow_job
+        from tests.util import add_provider, user_id
+
+        ws = _workspace()
+        graph = full_video_generation_graph(chat=ModelChoice(), image=SEEDREAM, video=SEEDANCE)
+        with SessionLocal() as db:
+            workflow = create_workflow(db, workspace_id=ws, name="整片", graph=graph, created_by=user_id())
+            db.commit()
+            with pytest.raises(WorkflowDomainError) as refused:
+                start_workflow_job(db, workflow, created_by=user_id(), params={"topic": "面馆"})
+            assert refused.value.key == "wfErr_llmNoChatConnection"
+            assert list(db.scalars(select(Job).where(Job.workspace_id == ws))) == []
+            #: 配上一条会对话的连接,留空的节点就用它 —— 不再拦。
+            add_provider(db, name="P", vendor="openai", base_url="https://example.test/v1", api_key="k",
+                         model="chat-model", capability_ids=["chat"])
+            db.commit()
+            start_workflow_job(db, workflow, created_by=user_id(), params={"topic": "面馆"})
+

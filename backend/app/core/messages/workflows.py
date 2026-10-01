@@ -104,6 +104,14 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Iterations {which} of {total} failed, and {skipped} more were not started because of it. First reason: {reason}",
     },
     "wfErr_loopIterationFailed": {"zh": "{where}失败:{reason}", "en": "{where} failed: {reason}"},
+    "wfErr_llmNoChatConnection": {
+        "zh": "对话节点没选连接和模型,而你还没有能对话的连接:先在设置里接一个对话模型(或在节点上选一个),再运行",
+        "en": "A chat step has no connection or model picked, and you have no chat-capable connection yet: connect a chat model in Settings (or pick one on the step), then run again",
+    },
+    "wfErr_llmNoChatModel": {
+        "zh": "对话节点没选模型,而连接「{name}」上没有可用的对话模型:在设置里给它启用一个对话模型(或在节点上选一个),再运行",
+        "en": "A chat step has no model picked, and the connection “{name}” has no usable chat model: enable one in Settings (or pick one on the step), then run again",
+    },
     "wfLoop_itemSkipped": {"zh": "第 {index} 项没做成,已跳过:{reason}", "en": "Item {index} failed and was skipped: {reason}"},
     "wfErr_sceneLayoutMissing": {"zh": "没有给布景", "en": "No layout was given"},
     "wfErr_sceneLayoutInvalid": {"zh": "布景不是一个有效的 3D 场景:{reason}", "en": "The layout is not a valid 3D scene: {reason}"},

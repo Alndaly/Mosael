@@ -16,7 +16,7 @@ from app.domain.billing.usage import billable, once
 from app.domain.providers.chat_connection import require_connection, runner_choice
 from app.domain.workflows import WorkflowDomainError, field_name
 from app.domain.jobs import current_actor
-from app.domain.workflows.executors.registry import RunScope, register
+from app.domain.workflows.executors.registry import PreflightNode, RunScope, register, register_preflight
 from app.domain.workflows.executors.common import stopping, text_lines
 
 LLM_TIMEOUT_SECONDS = 120
@@ -465,6 +465,28 @@ def llm(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
     # 由 test_executor_outputs_are_declared 强制两边对齐。
     result["response_format_used"] = used_tier
     return result
+
+
+@register_preflight("llm")
+def llm_preflight(db: Session, config: dict[str, Any], actor: str | None, place: PreflightNode) -> None:
+    """连接、模型都留空的对话节点,运行前先问一句「跑的这个人有没有默认对话模型」。
+
+    此前要等前面的节点跑完、轮到它时才说「没有可用的对话连接」—— 整片模板的五次对话都留空(建图时这台机器上
+    还没配对话模型)也照样能按下运行。和执行时同一个解析(require_connection 缺省时取的 default_chat_connection,
+    再按那条连接取对话模型)。连接或模型是引用的、或者点了名的,不在这里判(点了名的那条执行时照样会判)。
+    """
+    from app.domain.providers import models as provider_models
+    from app.domain.providers.chat_connection import default_chat_connection
+
+    if "profile_id" not in config or "model" not in config:
+        return
+    if str(config.get("profile_id") or "").strip() or str(config.get("model") or "").strip():
+        return
+    profile = default_chat_connection(db, owner_user_id=actor, surface="automation")
+    if profile is None:
+        raise WorkflowDomainError("wfErr_llmNoChatConnection")
+    if not provider_models.model_id_for(db, profile, "chat", profile.owner_user_id):
+        raise WorkflowDomainError("wfErr_llmNoChatModel", params={"name": profile.name})
 
 
 @register("translate_lines")
