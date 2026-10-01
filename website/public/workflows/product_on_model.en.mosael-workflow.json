@@ -3,7 +3,7 @@
   "version": 1,
   "workflow_revision": 1,
   "name": "Product photo into on-model shots",
-  "description": "From one flat-lay or fabric photo, plan a few sellable scenes (up to 12) and shoot a portrait on-model image for each; where a video model is available, put every scene in motion with that image as its first frame. The product photo is carried into every generation — cut, colour, texture and logo come from it, not from a description. Images and clips are filed into one project and the copy lines are saved as a note. Each scene is one paid image generation (plus one video generation with motion).",
+  "description": "From one flat-lay or fabric photo, plan a few sellable scenes (up to 12) and shoot a portrait on-model image for each; where a video model is available, put every scene in motion with that image as its first frame. The product photo is carried into every generation — cut, colour, texture and logo come from it, not from a description. Images and clips are filed into one project and the copy lines are saved as a note. Each scene is one paid image generation (plus one video generation with motion). This copy includes “Put this scene in motion”. Without a video model, delete “Put this scene in motion” and “File this scene's clip” on the canvas after importing and it shoots stills only — the loop hands over the on-model images and doesn't depend on those two.",
   "graph_hash": "99eabb4d5f4148aad635561e4a84e28debb063e572ab7d4a39fd23afe29b556e",
   "graph": {
     "meta": {

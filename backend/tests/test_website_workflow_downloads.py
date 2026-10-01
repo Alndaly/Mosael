@@ -46,3 +46,19 @@ def test_删掉或改名的模板_旧下载查得出来_同步时删掉(tmp_path
 def test_官网目录里没有孤儿下载():
     script = runpy.run_path(str(ROOT / "scripts/sync-website-workflows.py"))
     assert script["orphans"](ROOT / "website/public/workflows", script["catalog_files"]()) == []
+
+
+def test_上身图的官网副本告诉没有视频模型的人删掉哪两个节点_应用里的卡片不说():
+    """官网那份按「带视频」导出、模型留空;没有视频模型的人导入后不知道该删哪两步。应用里建的那份按有没有视频模型
+    自动取舍,用不着这句。"""
+    generated = runpy.run_path(str(ROOT / "scripts/sync-website-workflows.py"))["catalog_files"]()
+    envelope = json.loads(generated["product_on_model.zh.mosael-workflow.json"])
+    assert "「把这一组动起来」和「归档这一组的视频」" in envelope["description"]
+    names: set[str] = set()
+    for node in envelope["graph"]["nodes"]:
+        body = (node.get("config") or {}).get("body")
+        if isinstance(body, dict):
+            names |= {one["name"] for one in body["nodes"]}
+    assert {"把这一组动起来", "归档这一组的视频"} <= names, "说明里点名的两个节点得真叫这个名字"
+    catalog = {one["id"]: one for one in fresh_client().get("/api/workflows/templates").json()}
+    assert "归档这一组的视频" not in catalog["product_on_model"]["description"]

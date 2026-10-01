@@ -1696,6 +1696,15 @@ BUSINESS_TEMPLATE_CATALOG: list[dict[str, Any]] = [
             "en": ["Describe the product and audience (its name, plus a line or two on category, colour, material and cut)", "Pick the product photo",
                    "Plan the scenes", "Shoot each scene on a model", "Optional: put each scene in motion", "Save the copy as a note"],
         },
+        #: 只给官网下载的那一份(见 scripts/sync-website-workflows.py):它按「带视频」导出、模型留空,应用里建的这一份
+        #: 会按有没有视频模型自动取舍,用不着这句。
+        "download_note": {
+            "zh": "这一份带着「把这一组动起来」:没有视频模型的话,导入后在画布上删掉「把这一组动起来」和「归档这一组的视频」"
+                  "两个节点就只出图 —— 循环交出的是上身图,不依赖它们。",
+            "en": " This copy includes “Put this scene in motion”. Without a video model, delete “Put this scene in motion” and "
+                  "“File this scene's clip” on the canvas after importing and it shoots stills only — the loop hands over the "
+                  "on-model images and doesn't depend on those two.",
+        },
     },
     {
         "id": PRODUCT_PITCH_SHORT,

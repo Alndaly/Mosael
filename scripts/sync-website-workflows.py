@@ -70,6 +70,11 @@ def catalog_files() -> dict[str, str]:
     catalog = []
     for template in TEMPLATE_CATALOG:
         graph = graphs["zh"][template["id"]]
+        template = dict(template)
+        #: 只说给下载这一份的人听的话(上身图那份带着视频那一步、模型留空):接在说明后面,官网和下载下来的文件里都有。
+        note = template.pop("download_note", None)
+        if note:
+            template["summary"] = {locale: f'{template["summary"][locale]}{note[locale]}' for locale in ("zh", "en")}
         entry = {**template, "author": "Mosael", "version": graph["meta"]["template_version"],
                  "nodes": len(graph["nodes"]), "download": {}}
         #: 前置条件在后端是「一条一个对象」(带检查键,给应用里的就绪状态用);官网只展示句子,
