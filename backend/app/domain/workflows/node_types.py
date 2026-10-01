@@ -151,6 +151,8 @@ _FIELD_LABELS = {
     "at": "wfField_at",
     "max_duration": "wfField_max_duration",
     "max_items": "wfField_max_items",
+    "on_item_error": "wfField_on_item_error",
+    "failure_note": "wfField_failure_note",
     "dropped": "wfField_dropped",
     "trim_overflow": "wfField_trim_overflow",
     "until": "wfField_until",
@@ -1392,8 +1394,17 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
                 "description": "wfNode_loop_foreach_concurrency",
             },
             "max_items": {"advanced": True, "type": "number", "description": "wfNode_loop_foreach_max_items"},
+            "on_item_error": {
+                "advanced": True,
+                "type": "string",
+                "default": "stop",
+                "options": ["stop", "skip"],
+                "description": "wfNode_loop_foreach_on_item_error",
+            },
         },
-        "outputs": ["results", "count", "dropped"],
+        "outputs": ["results", "count", "dropped", "failed", "failure_note"],
+        "output_types": {"failed": "json", "failure_note": "text"},
+        "output_labels": {"failed": "wfOut_loop_failed"},
         #: 体内看得见什么 —— 执行器给体播种的正是这些(见 executors/loops)。
         #: 校验、画布就绪检查、引用选择器都读这一格,见 NESTED_BODY_TYPES 上那段。
         "body_scope": {"loop": ["item", "index"], "input": ["*inputs"]},

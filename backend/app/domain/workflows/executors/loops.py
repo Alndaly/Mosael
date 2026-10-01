@@ -86,6 +86,9 @@ def loop_foreach(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[s
             "wfErr_loopTooMany", params={"count": len(items), "cap": LOOP_FOREACH_HARD_CAP}
         )
     concurrency = _concurrency(config.get("concurrency"))
+    #: 一项失败怎么办:stop(默认)整条循环失败;skip 记下这一项、接着跑别的 —— 各项彼此独立时(每条切片、
+    #: 每组上身图、每种面料效果图)一项失败不该让已经付了钱的其余几项白做。跳过的那几项不进 results。
+    skip = str(config.get("on_item_error") or "stop").strip().lower() == "skip"
     total = len(items)
 
     def iterate(index: int, item: Any) -> Any:
@@ -102,14 +105,34 @@ def loop_foreach(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[s
         # 下游再遍历这份结果时,常常还要用到当初那一项的数据。共享输入每项都一样,不重复带。
         return {nid: out for nid, out in ctx.items() if nid != "input"}
 
+    failures: list[tuple[int, BaseException]] = []
     if concurrency == 1 or total <= 1:
         results = []
         for index, item in enumerate(items):
             _stop_if_halted()
-            results.append(iterate(index, item))
+            try:
+                results.append(iterate(index, item))
+            except Exception as exc:  # noqa: BLE001 — 只有 skip 时才记下继续,其余原样抛出
+                if not skip or halted():
+                    raise
+                failures.append((index, exc))
     else:
-        results = _iterate_concurrently(iterate, items, concurrency)
-    return {"results": results, "count": len(results), "dropped": dropped}
+        results, failures = _iterate_concurrently(iterate, items, concurrency, skip=skip)
+    return {
+        "results": results,
+        "count": len(results),
+        "dropped": dropped,
+        #: 跳过的那几项是第几项(从 1 数),和给人看的一句话(一项一行;没有就是空串,可以直接拼进通知)。
+        "failed": [index + 1 for index, _ in failures],
+        "failure_note": "\n".join(_skipped_line(index, exc) for index, exc in failures),
+    }
+
+
+def _skipped_line(index: int, exc: BaseException) -> str:
+    from app.core.i18n import tr
+
+    reason = getattr(exc, "params", {}).get("reason") or exc
+    return tr("wfLoop_itemSkipped", index=index + 1, reason=str(reason))
 
 
 def _items_from_text(text: str) -> list[Any]:
@@ -151,11 +174,14 @@ class _NotStarted(Exception):
     """前面已经有一项失败(或这一轮在停),这一项就不开始了。"""
 
 
-def _iterate_concurrently(iterate, items: list[Any], concurrency: int) -> list[Any]:
-    """几项同时跑,结果**按原顺序**交出。
+def _iterate_concurrently(
+    iterate, items: list[Any], concurrency: int, *, skip: bool = False
+) -> tuple[list[Any], list[tuple[int, BaseException]]]:
+    """几项同时跑,结果**按原顺序**交出(连同 `skip` 时跳过的那几项)。
 
-    仍然 fail-fast:一项失败,还没开始的不再开始(已经在跑的跑完 —— 半截的供应商调用中途
-    扔下只会留下孤儿任务)。
+    默认 fail-fast:一项失败,还没开始的不再开始(已经在跑的跑完 —— 半截的供应商调用中途
+    扔下只会留下孤儿任务)。`skip` 时一项失败不拦别的项,失败的那几项记下交回去;这一轮在停(取消、
+    别的节点失败)时照旧不再开始。
 
     **"不再开始"要由每一项自己在开头检查,不能靠事后 cancel。** 此前是 `wait(FIRST_EXCEPTION)`
     返回之后再逐个 `future.cancel()` —— 而失败那一项的线程一空出来,线程池立刻就把排队的下一项
@@ -175,7 +201,8 @@ def _iterate_concurrently(iterate, items: list[Any], concurrency: int) -> list[A
         try:
             return iterate(index, item)
         except BaseException:
-            stop.set()
+            if not skip:
+                stop.set()
             raise
 
     with ThreadPoolExecutor(max_workers=concurrency) as pool:
@@ -192,14 +219,16 @@ def _iterate_concurrently(iterate, items: list[Any], concurrency: int) -> list[A
         if future.exception() is not None and not isinstance(future.exception(), _NotStarted)
     )
     skipped = sum(1 for future in futures if isinstance(future.exception(), _NotStarted))
-    if failures:
+    if failures and not (skip and not skipped and not halted()):
         raise _all_failures(failures, total=len(items), skipped=skipped)
     if skipped:
         # 没有一项失败,却有没开始的:是这一轮在停。不能交出一份缺了几项的结果。
         raise WorkflowDomainError("wfErr_cancelled")
+    failed = {index for index, _ in failures}
     for future, index in futures.items():
-        results[index] = future.result()
-    return results
+        if index not in failed:
+            results[index] = future.result()
+    return [one for index, one in enumerate(results) if index not in failed], failures
 
 
 def _all_failures(failures: list[tuple[int, BaseException]], *, total: int, skipped: int) -> BaseException:

@@ -552,6 +552,51 @@ class Test长视频切片真跑:
         assert len(context["output"]["output"]["clip_asset_ids"]) == 2
 
 
+class Test独立的几项_一项失败不拖垮其余:
+    def test_切片里有一条起止时间不对_其余照切照导出_通知里说清是哪一条(self, monkeypatch) -> None:
+        from app.db.models import Notification
+
+        ws = _workspace()
+        good = {"title": "好的", "hook": "", "start_seconds": 10, "end_seconds": 40, "why": "",
+                "captions": [{"start": 0, "end": 3, "text": "开场"}]}
+        bad = {**good, "title": "原片之外", "start_seconds": 700, "end_seconds": 720}
+        studio = Studio(monkeypatch, ws, {"highlight_clips": {"clips": [good, good, bad, good], "skipped_reason": ""}})
+        graph = _pick(highlight_shorts_graph(chat=CHAT), "source_video", asset_id=_asset(ws, "video", "访谈", duration=600.0))
+        context = _run(ws, graph)
+        assert len(studio.calls["export_sequence"]) == 3
+        assert context["cut_clips"]["failed"] == [3]
+        assert len(context["output"]["output"]["clip_asset_ids"]) == 3
+        with unit_of_work() as db:
+            body = next(one.body for one in db.query(Notification).filter(Notification.workspace_id == ws)
+                        if one.title == "竖屏切片已导出")
+        assert "已切出 3 条" in body and "第 3 项没做成" in body
+
+    def test_上身图有一组视频没出来_其余几组的图和视频照样交付归档(self, monkeypatch) -> None:
+        ws = _workspace()
+        plan = _lookbook(motion=True)
+        plan["scenes"] = plan["scenes"] * 2
+        studio = Studio(monkeypatch, ws, {"product_lookbook_plan": plan})
+        generate = studio.generate
+        videos = {"n": 0}
+
+        def flaky(db, scope, config):
+            if config["kind"] == "video":
+                videos["n"] += 1
+                if videos["n"] == 2:
+                    raise WorkflowDomainError("wfErr_cancelled")
+            return generate(db, scope, config)
+
+        monkeypatch.setitem(registry._REGISTRY, "ai_generate", flaky)
+        graph = _pick(product_on_model_graph(chat=CHAT, image=SEEDREAM, video=SEEDANCE), "product_photo",
+                      asset_id=_asset(ws, "image", "开衫平铺"))
+        context = _run(ws, graph, product_name="开衫", product_brief="米色针织开衫")
+        assert len(context["shoot_scenes"]["failed"]) == 1
+        assert context["output"]["output"]["scene_count"] == 3
+        with unit_of_work() as db:
+            filed = db.query(Asset).filter(Asset.project_id == context["output"]["output"]["project_id"]).count()
+        assert filed == 4 + 3, "四组的图都归档了,三段视频也归档了"
+
+
 class Test长视频切片_终点超出原片:
     def test_截取夹到原片末尾_字幕也裁到这一条的终点(self, monkeypatch) -> None:
         ws = _workspace()

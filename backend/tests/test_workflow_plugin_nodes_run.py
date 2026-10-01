@@ -108,4 +108,4 @@ def test_循环体和子图里的插件节点照样能跑(echo_plugin, container
     )
     assert status == "succeeded", error
     produced = result["context"]["box"]
-    assert produced == ({"results": ["echo a", "echo b"], "count": 2, "dropped": 0} if container == "loop_foreach" else {"output": "echo 内"})
+    assert produced == ({"results": ["echo a", "echo b"], "count": 2, "dropped": 0, "failed": [], "failure_note": ""} if container == "loop_foreach" else {"output": "echo 内"})

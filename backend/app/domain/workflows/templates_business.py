@@ -316,6 +316,8 @@ def highlight_shorts_graph(*, chat: Any) -> dict[str, Any]:
                 "concurrency": 2,
                 #: 「想要几条」不只写进提示词:模型多挑了几条,也只切前这么多条。
                 "max_items": "{{start.target_count}}",
+                #: 每一条彼此独立:一条的起止时间不对、导出失败,不该让其余几条白切。失败的那几条写进完成通知。
+                "on_item_error": "skip",
             },
         },
         {
@@ -325,7 +327,7 @@ def highlight_shorts_graph(*, chat: Any) -> dict[str, Any]:
             "position": {"x": 1610, "y": 260},
             "config": {
                 "title": "竖屏切片已导出",
-                "body": "{{source_video.name}} 已切出 {{cut_clips.count}} 条竖屏成片,均带字幕。",
+                "body": "{{source_video.name}} 已切出 {{cut_clips.count}} 条竖屏成片,均带字幕。\n{{cut_clips.failure_note}}",
             },
         },
         {
@@ -613,6 +615,8 @@ def product_on_model_graph(
                 "concurrency": 2,
                 #: 「要几组」是钱的闸门,不只是提示词:模型多规划了几组,也只出前这么多组。
                 "max_items": "{{start.scene_count}}",
+                #: 每一组彼此独立:一组的视频没出来,其余几组已经付过钱的图和视频照样交付、归档。
+                "on_item_error": "skip",
             },
         },
         {
@@ -644,7 +648,8 @@ def product_on_model_graph(
             "position": {"x": 1290, "y": 120},
             "config": {
                 "title": "模特上身图已生成",
-                "body": "{{start.product_name}} 已出 {{shoot_scenes.count}} 组,图和视频都归进了项目,卖点文案已存进笔记。",
+                "body": "{{start.product_name}} 已出 {{shoot_scenes.count}} 组,图和视频都归进了项目,卖点文案已存进笔记。"
+                        "\n{{shoot_scenes.failure_note}}",
             },
         },
         {
@@ -1208,6 +1213,8 @@ def fabric_lookbook_graph(*, chat: Any, image: Any) -> dict[str, Any]:
                 "concurrency": 2,
                 #: 「要几种应用」是钱的闸门:模型多规划了几种,也只出前这么多张。
                 "max_items": "{{start.application_count}}",
+                #: 每一种彼此独立:一张没出来,其余几张照样进提案。
+                "on_item_error": "skip",
             },
         },
         {
@@ -1241,7 +1248,8 @@ def fabric_lookbook_graph(*, chat: Any, image: Any) -> dict[str, Any]:
             "position": {"x": 1610, "y": 260},
             "config": {
                 "title": "面料提案已生成",
-                "body": "{{start.fabric_name}} 已出 {{render_applications.count}} 张应用效果图,规格页已存进笔记。",
+                "body": "{{start.fabric_name}} 已出 {{render_applications.count}} 张应用效果图,规格页已存进笔记。"
+                        "\n{{render_applications.failure_note}}",
             },
         },
         {

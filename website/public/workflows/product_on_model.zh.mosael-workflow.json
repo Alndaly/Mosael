@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "商品图 → 模特上身图与短视频",
   "description": "给一张平铺图或面料图,规划几组投放场景(最多 12 组),每组出一张竖幅模特上身图;视频模型可用时再以这张图为首帧把每一组动起来。商品图贯穿每一次生成 —— 版型、颜色、纹理、logo 都以它为准,不是照描述重画。图和视频都归进一个项目,卖点文案一并存成笔记。每一组是一次付费出图(带视频再加一次视频生成)。",
-  "graph_hash": "9f107afe2a635c3f9bd260226df3dce8ad3246fb79f2f6489895a5c23ea45aa5",
+  "graph_hash": "cc9359fc88f648b734a661ed32f44458484cc298f995eed0c9ae37022d15373f",
   "graph": {
     "meta": {
       "template_id": "product_on_model",
@@ -268,7 +268,8 @@
           },
           "output": "{{on_model.asset_id}}",
           "concurrency": 2,
-          "max_items": "{{start.scene_count}}"
+          "max_items": "{{start.scene_count}}",
+          "on_item_error": "skip"
         }
       },
       {
@@ -295,7 +296,7 @@
         },
         "config": {
           "title": "模特上身图已生成",
-          "body": "{{start.product_name}} 已出 {{shoot_scenes.count}} 组,图和视频都归进了项目,卖点文案已存进笔记。"
+          "body": "{{start.product_name}} 已出 {{shoot_scenes.count}} 组,图和视频都归进了项目,卖点文案已存进笔记。\n{{shoot_scenes.failure_note}}"
         }
       },
       {

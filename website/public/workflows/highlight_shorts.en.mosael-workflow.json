@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "Long video into vertical clips",
   "description": "Transcribe a talk, interview or stream recording, pick the passages that stand on their own (up to 12), then give each one its own vertical timeline in a single project, take that range from the source, lay rewritten short captions on it and export. No image or video generation, so nothing is billed beyond the transcription and one chat call.",
-  "graph_hash": "6e997bc9607c1a28df40d0142eeb41c72bf2929e3d85ecb319e49f8ec1b67812",
+  "graph_hash": "9a8ab0de3ff442e6ecf1719b45f2a9cc0c82e56197a6e29ed846c6a49bba6a3e",
   "graph": {
     "meta": {
       "template_id": "highlight_shorts",
@@ -315,7 +315,8 @@
           },
           "output": "{{export_clip.asset_id}}",
           "concurrency": 2,
-          "max_items": "{{start.target_count}}"
+          "max_items": "{{start.target_count}}",
+          "on_item_error": "skip"
         }
       },
       {
@@ -328,7 +329,7 @@
         },
         "config": {
           "title": "竖屏切片已导出",
-          "body": "{{source_video.name}} 已切出 {{cut_clips.count}} 条竖屏成片,均带字幕。"
+          "body": "{{source_video.name}} 已切出 {{cut_clips.count}} 条竖屏成片,均带字幕。\n{{cut_clips.failure_note}}"
         }
       },
       {

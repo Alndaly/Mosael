@@ -382,3 +382,34 @@ class Test数据边不决定该不该跑:
         }
         context, _ = execute_graph(graph, wf_id=_workflow(ws).id, entry_is_root=True)
         assert context["sink"] == {"value": 1}
+
+
+@pytest.mark.parametrize("concurrency", [1, 3])
+def test_一项失败时选跳过_其余照跑_失败的那几项连同原因交出来_最多取前几项(concurrency: int) -> None:
+    """逐项比大小:不是数的那一项让「条件」当场报错。选 skip 时它被记下、其余几项照跑;多出来的项不跑。"""
+    from app.domain.workflows.engine import execute_graph
+
+    ws = _workspace()
+    loop = {
+        "id": "each", "type": "loop_foreach",
+        "config": {
+            "items": ["1", "不是数", "3", "4", "5"],
+            "max_items": 4,
+            "on_item_error": "skip",
+            "concurrency": concurrency,
+            "body": {"nodes": [{"id": "big", "type": "condition",
+                                "config": {"left": "{{loop.item}}", "op": "gt", "right": "2"}}], "edges": []},
+            "output": "{{loop.item}}",
+        },
+    }
+    context, cancelled = execute_graph({"nodes": [loop], "edges": []}, wf_id=_workflow(ws).id, entry_is_root=True)
+    assert not cancelled
+    out = context["each"]
+    assert out["results"] == ["1", "3", "4"] and out["count"] == 3
+    assert out["dropped"] == 1, "第 5 项超过了最多取的 4 项"
+    assert out["failed"] == [2] and "第 2 项" in out["failure_note"]
+
+    loop["config"]["on_item_error"] = "stop"
+    with pytest.raises(WorkflowDomainError):
+        execute_graph({"nodes": [loop], "edges": []}, wf_id=_workflow(ws).id, entry_is_root=True)
+
