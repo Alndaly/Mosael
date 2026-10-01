@@ -25,7 +25,7 @@ from app.core.unit_of_work import unit_of_work
 from app.core.i18n import DEFAULT_LOCALE, LocalizedError, t
 from app.db.models import Asset, Clip, Job, Sequence, Track
 from app.domain.assets.media_info import patch_media_info
-from app.domain.jobs import JobError, blame, create_job, dispatch_job, emit_job_event, finish_job, say
+from app.domain.jobs import JobError, blame, cancel_job_tree, create_job, dispatch_job, emit_job_event, finish_job, say
 from app.domain.sequences.operations import AddTrack, InsertClip, SetClipSpeed, add_track, insert_clip, set_clip_speed
 from app.domain.voices.original_audio import (
     DEFAULT_ORIGINAL_AUDIO,
@@ -194,6 +194,12 @@ def _await_child(job_id: str) -> str:
                     raise DubError(child.error_key, **(child.error_params or {}))
                 raise DubError(child.error or "dubErr_childFailed")
         time.sleep(_POLL_SECONDS)
+    #: 不等了就把它取消掉:它还排着或还在跑,不取消的话它照样合成完(照样计费)、落一段没人用的音频,
+    #: 而这一句已经按失败记了。
+    with unit_of_work() as db:
+        child = db.get(Job, job_id)
+        if child is not None:
+            cancel_job_tree(db, child)
     raise DubError("dubErr_childTimeout")
 
 

@@ -76,3 +76,33 @@ def test_取消之后剩下的句子不再合成_任务也不会被写回完成(
         assert job.status == "failed" and job.error_key == "jobErr_cancelled", (job.status, job.error_key)
         dub_track = db.scalar(select(Track).where(Track.sequence_id == sequence_id, Track.role == "dub"))
         assert dub_track is None or not dub_track.clips, "取消之后还往时间线上落了配音"
+
+
+def test_等一句合成等到超时_放弃时把那条合成任务取消掉(monkeypatch) -> None:
+    """此前等满 20 分钟就记这一句失败、接着配下一句,那条合成任务却留在那儿:排着的照样会被执行(照样计费),
+    落一段没人用的音频。"""
+    import app.domain.voices.subtitle_dub as subtitle_dub
+    import app.domain.voices.voices as voices_module
+    from app.domain.voices.subtitle_dub import start_subtitle_dub
+
+    ws, sequence_id, cue_ids = _sequence_with_cues(1)
+    stuck: list[str] = []
+
+    def never_finishes(db, *, text, project_id, created_by, **synthesis):
+        job = create_job(db, workspace_id=ws, kind="tts", payload={}, created_by=None)
+        stuck.append(job.id)
+        return job
+
+    monkeypatch.setattr(voices_module, "start_synthesis", never_finishes)
+    monkeypatch.setattr(subtitle_dub, "_CHILD_TIMEOUT_SECONDS", 0.3)
+    with SessionLocal() as db:
+        dub_id = start_subtitle_dub(
+            db, sequence_id=sequence_id, clip_ids=cue_ids, match_duration=False, created_by=None,
+            synthesis={"engine": "volcano", "engine_voice": "v", "workspace_id": ws}, original_audio="keep",
+        ).id
+    assert wait_for_idle_jobs(10)
+    with SessionLocal() as db:
+        assert db.get(Job, dub_id).error_key == "jobErr_noDubSucceeded"
+        child = db.get(Job, stuck[0])
+        assert child.status not in ("queued", "running"), "放弃等的那条合成任务被取消了,不会再被执行、再计费"
+        assert child.error_key == "jobErr_cancelled"
