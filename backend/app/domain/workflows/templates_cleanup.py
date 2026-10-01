@@ -237,7 +237,8 @@ issues 和 review_notes，不自动删除。范围必须按 src_start 升序、�
         {"id": "start_source", "source": "start", "target": "source_video"},
         {"id": "source_denoise", "source": "source_video", "target": "clean_audio"},
         {"id": "denoise_transcript", "source": "clean_audio", "target": "verbatim_transcript"},
-        {"id": "source_project", "source": "source_video", "target": "cleanup_project"},
+        #: 转写成功之后才建「· 智能整理」项目(同译配模板):并行建的话,转写一失败就留下一个空项目。
+        {"id": "transcript_project", "source": "verbatim_transcript", "target": "cleanup_project"},
         {"id": "denoise_append", "source": "clean_audio", "target": "source_on_timeline"},
         {"id": "project_append", "source": "cleanup_project", "target": "source_on_timeline"},
         {"id": "transcript_plan", "source": "verbatim_transcript", "target": "cleanup_plan"},

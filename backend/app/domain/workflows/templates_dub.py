@@ -241,7 +241,8 @@ def translated_dub_graph(
     edges = [
         {"id": "start_source", "source": "start", "target": "source_video"},
         {"id": "source_transcript", "source": "source_video", "target": "verbatim_transcript"},
-        {"id": "source_project", "source": "source_video", "target": "dub_project"},
+        #: 转写成功之后才建「· 译配版」项目:并行建的话,转写一失败(没有音轨、识别不出字)就留下一个空项目。
+        {"id": "transcript_project", "source": "verbatim_transcript", "target": "dub_project"},
         {"id": "project_append", "source": "dub_project", "target": "video_on_timeline"},
         {"id": "source_append", "source": "source_video", "target": "video_on_timeline"},
         {"id": "transcript_translate", "source": "verbatim_transcript", "target": "translate_lines"},
