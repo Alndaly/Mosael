@@ -70,6 +70,26 @@ def references_become_input(code: str, language: str, key_of: Callable[[str], st
     return scan(code, language, hook)
 
 
+#: 脚本**自己**声明了一个叫 input 的东西:变量、函数、类、解构出来的名字、参数(箭头函数、function、catch)。
+#: 「执行脚本」是包在 `with ({input: …}) { 脚本 }` 里跑的(electron 的 scriptWithInput):脚本自己的 input
+#: 盖住交进来的那个,改写成 `input.k` 读到的是脚本自己的变量 —— 静默取空。
+_DECLARES_INPUT = re.compile(
+    r"""
+    \b(?:const|let|var|function|class)\s+input\b
+    | \b(?:const|let|var)\s*[\[{][^=;]*\binput\b
+    | \binput\s*=>
+    | \(\s*(?:[^()]*?,\s*)?input\s*(?:=[^,()]*)?(?:,[^()]*)?\)\s*(?:=>|\{)
+    | \bcatch\s*\(\s*input\s*\)
+    """,
+    re.VERBOSE,
+)
+
+
+def declares_input(code: str) -> bool:
+    """这段 JS 自己声明了 `input` 吗(见 _DECLARES_INPUT)。是的话不能改写成读 `input.k`。"""
+    return bool(_DECLARES_INPUT.search(code))
+
+
 #: 1.8.1 那版改写在字符串里留下的读法:`"前" + String(input.k) + "后"` / `"前" + str(inputs["k"]) + "后"`。
 _JS_STRING_READ = re.compile(r"""(?<=['"] \+ )String\(input\.(\w+)\)(?= \+ ['"])""")
 _PY_STRING_READ = re.compile(r"""(?<=['"] \+ )str\(inputs\["(\w+)"\]\)(?= \+ [rRbBuUfF]{0,2}['"])""")

@@ -5986,12 +5986,13 @@ def _migrate_partition_moves_are_settled_per_executor() -> None:
         )
 
 
-def _rewrite_workflow_graphs(rewrite: Any, note: str, *, only: Any = None) -> int:
+def _rewrite_workflow_graphs(rewrite: Any, note: Any, *, only: Any = None) -> int:
     """把每个工作流的当前图过一遍 `rewrite`(连同循环体 / 子图,由 `rewrite` 自己走);变了的追加一版修订。
 
     修订表建好之后的图迁移都得这么落(`workflows.graph` 是最新修订的投影,只改投影会让两边对不上):
     作者沿用上一版,认可过上一版的人照样为这一版担保 —— 机械改写不换担保人,也不该让跑得好好的流程停下来等人认可
-    (同 domain/workflows/plugin_references)。`only(workflow)` 给了的话,只看它说是的那些。
+    (同 domain/workflows/plugin_references)。`only(workflow)` 给了的话,只看它说是的那些。`note` 可以是一个函数
+    (改写前的图 → 说明),说明里要点名这一张图里的哪几个节点时用。
     """
     from sqlalchemy import select
     from sqlalchemy.orm import Session
@@ -6009,7 +6010,8 @@ def _rewrite_workflow_graphs(rewrite: Any, note: str, *, only: Any = None) -> in
             previous = current_workflow_revision(db, workflow)
             vouchers = revision_vouchers(db, previous)
             revision = commit_graph_revision(
-                db, workflow, rewrite, source="migration", created_by=previous.created_by, note=note,
+                db, workflow, rewrite, source="migration", created_by=previous.created_by,
+                note=note(workflow.graph) if callable(note) else note,
             )
             if revision is not None:
                 for user in vouchers - {revision.created_by}:
@@ -6252,11 +6254,91 @@ def _migrate_code_fields_read_references_from_input() -> None:
         return
     from app.domain.workflows.graph_upgrade import code_references_read_input
 
-    _rewrite_workflow_graphs(code_references_read_input, _CODE_FIELDS_NOTE)
+    def note(graph: Any) -> str:
+        skipped: list[str] = []
+        code_references_read_input(graph, skipped=skipped)
+        if not skipped:
+            return _CODE_FIELDS_NOTE
+        return f"{_CODE_FIELDS_NOTE}。{_SCRIPT_DECLARES_INPUT_NOTE}" + "、".join(skipped)
+
+    _rewrite_workflow_graphs(code_references_read_input, note)
 
 
-#: 代码字段迁移落的那一版修订的说明 —— 修正迁移据此认出哪些工作流被它改写过。
+#: 代码字段迁移落的那一版修订的说明(开头)—— 修正迁移据此认出哪些工作流被它改写过。
 _CODE_FIELDS_NOTE = "代码字段不再替换 {{…}}:代码里的引用挪进入参(input),代码改成读入参"
+#: 自己声明了 input 的「执行脚本」没改(改了读到的是脚本自己的变量),说明里点名它们。
+_SCRIPT_DECLARES_INPUT_NOTE = (
+    "这些「执行脚本」自己声明了 input,改成读入参会读到脚本自己的变量,所以没改 —— 里面的 {{…}} 不会被替换,"
+    "请把脚本里的 input 改个名字、再从 input 读上游的值:"
+)
+
+
+def _migrate_scripts_declaring_input_go_back() -> None:
+    """1.8.1 的代码字段迁移把**自己声明了 input** 的「执行脚本」也改成了读 `input.k`:改回迁移之前的样子,并说出来。
+
+    「执行脚本」包在 `with ({input: …}) { 脚本 }` 里跑,脚本自己的 `const input = …`(或叫 input 的参数)盖住
+    交进来的那个,`input.k` 读到的是脚本自己的变量 —— 静默取空,而且看不出来。那次改写之后的代码在这种脚本里
+    没有一处是对的;改回迁移前的原文(连同入参),修订说明里点名这几个节点,让人去改名。
+
+    只改「迁移之后没人动过」的:当前图里那个节点(按容器 … 节点的路径认)的脚本和入参还是迁移那一版的样子。
+    改回去之后不再是那一版的样子,重跑不动。作者和担保人沿用上一版。
+    """
+    if not {"workflows", "workflow_revisions"} <= set(inspect(engine).get_table_names()):
+        return
+    from sqlalchemy import select
+    from sqlalchemy.orm import Session
+
+    from app.db.models import WorkflowRevision
+    from app.domain.workflows.code_references import declares_input
+
+    originals: dict[str, dict[tuple[str, ...], tuple[dict[str, Any], dict[str, Any]]]] = {}
+    with Session(engine) as db:
+        migrated = db.scalars(
+            select(WorkflowRevision).where(
+                WorkflowRevision.source == "migration", WorkflowRevision.note.startswith(_CODE_FIELDS_NOTE)
+            )
+        ).all()
+        for revision in migrated:
+            previous = db.scalar(
+                select(WorkflowRevision)
+                .where(WorkflowRevision.workflow_id == revision.workflow_id, WorkflowRevision.revision < revision.revision)
+                .order_by(WorkflowRevision.revision.desc())
+                .limit(1)
+            )
+            if previous is None:
+                continue
+            before = _nodes_by_path(previous.graph)
+            for path, node in _nodes_by_path(revision.graph).items():
+                old = before.get(path)
+                if node.get("type") != "browser_evaluate" or old is None or old.get("type") != "browser_evaluate":
+                    continue
+                old_config, new_config = old.get("config") or {}, node.get("config") or {}
+                script = old_config.get("expression")
+                if isinstance(script, str) and declares_input(script) and new_config != old_config:
+                    originals.setdefault(revision.workflow_id, {})[path] = (old_config, new_config)
+
+    def go_back(found: dict[tuple[str, ...], tuple[dict[str, Any], dict[str, Any]]]) -> Any:
+        def rewrite(graph: Any) -> Any:
+            graph = json.loads(json.dumps(graph))
+            nodes = _nodes_by_path(graph)
+            for path, (before, after) in found.items():
+                node = nodes.get(path)
+                config = node.get("config") if node is not None else None
+                if not isinstance(config, dict) or any(config.get(key) != after.get(key) for key in ("expression", "input")):
+                    continue
+                restored = {key: value for key, value in config.items() if key not in ("expression", "input")}
+                restored.update({key: before[key] for key in ("expression", "input") if key in before})
+                node["config"] = restored
+            return graph
+
+        return rewrite
+
+    for workflow_id, found in originals.items():
+        _rewrite_workflow_graphs(
+            go_back(found),
+            _SCRIPT_DECLARES_INPUT_NOTE + "、".join(path[-1] for path in found),
+            only=lambda workflow, wanted=workflow_id: workflow.id == wanted,
+        )
 
 
 def _migrate_code_string_reads_keep_their_text() -> None:
@@ -6272,13 +6354,13 @@ def _migrate_code_string_reads_keep_their_text() -> None:
     """
     if not {"workflows", "workflow_revisions"} <= set(inspect(engine).get_table_names()):
         return
-    from app.domain.workflows.code_references import REFERENCE, string_reads_keep_their_text
+    from app.domain.workflows.code_references import REFERENCE, declares_input, string_reads_keep_their_text
 
     with engine.begin() as conn:
         touched = {
             row[0] for row in conn.execute(
-                text("SELECT DISTINCT workflow_id FROM workflow_revisions WHERE source = 'migration' AND note = :note"),
-                {"note": _CODE_FIELDS_NOTE},
+                text("SELECT DISTINCT workflow_id FROM workflow_revisions WHERE source = 'migration' AND note LIKE :note"),
+                {"note": _CODE_FIELDS_NOTE + "%"},
             )
         }
     if not touched:
@@ -6292,6 +6374,8 @@ def _migrate_code_string_reads_keep_their_text() -> None:
         keys = {key for key, value in given.items() if isinstance(value, str) and REFERENCE.fullmatch(value)}
         if not spec or not keys or not isinstance(config.get(spec[0]), str):
             return node
+        if spec[1] == "js" and declares_input(config[spec[0]]):
+            return node  # 读 input.k 本身就是错的,由 migrate-scripts-declaring-input-go-back 改回原文
         code = string_reads_keep_their_text(config[spec[0]], spec[1], keys)
         return node if code == config[spec[0]] else {**node, "config": {**config, spec[0]: code}}
 
@@ -6844,6 +6928,8 @@ def migration_plan() -> MigrationPlan:
                 # 1.8.1 那条「只填一样」(上面这条取代了它)删掉的「引用在前、兜底在后」的兜底,从它前一版修订里找回来。
                 _migrate_browser_fallback_targets_come_back,
                 _migrate_code_fields_read_references_from_input,
+                # 1.8.1 那版代码字段迁移把自己声明了 input 的执行脚本也改成了读 input.k:改回原文、点名。
+                _migrate_scripts_declaring_input_go_back,
                 # 1.8.1 那版代码字段迁移在字符串里留下的 str() / String() 读法改回和插值同义的写法。
                 _migrate_code_string_reads_keep_their_text,
                 # 要读插件报的工具清单:排在装随包插件、改写被取代的工具之后(上面的对账)。

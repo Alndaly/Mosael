@@ -18,7 +18,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from app.domain.workflows.code_references import REFERENCE, references_become_input
+from app.domain.workflows.code_references import REFERENCE, declares_input, references_become_input
 from app.domain.workflows.graph_rules import NESTED_BODY_TYPES
 from app.domain.workflows.node_types import NODE_TYPES
 
@@ -88,7 +88,9 @@ def inner_scope_fields_come_back(graph: Any) -> Any:
     return {**graph, "nodes": nodes, "edges": edges}
 
 
-def code_references_read_input(graph: Any, *, scope: frozenset[str] = frozenset()) -> Any:
+def code_references_read_input(
+    graph: Any, *, scope: frozenset[str] = frozenset(), skipped: list[str] | None = None
+) -> Any:
     """代码字段里**指得到东西**的 `{{…}}` 挪进节点的入参(`input`),代码改成读入参(改写规则见 code_references)。
 
     老版本按文字把 `{{…}}` 插进代码;现在代码原样执行,上游的值作为数据从入参进。只改根指得到东西的引用 ——
@@ -97,6 +99,9 @@ def code_references_read_input(graph: Any, *, scope: frozenset[str] = frozenset(
 
     入参的键由引用路径起名(`llm-1.text` → `llm_1_text`),和已有的键撞了就加序号;同一个引用只占一个键;
     入参里已经有这个引用的,直接用那个键。`scope` 是外层给体内带进来的作用域名。
+
+    「执行脚本」**自己声明了 input** 的(见 code_references.declares_input)不改:改成 `input.k` 读到的是脚本
+    自己的变量,静默取空。这种节点的 id 记进 `skipped`(给了的话),由调用方说出来(迁移记进修订说明)。
     """
     if not isinstance(graph, dict) or not isinstance(graph.get("nodes"), list):
         return graph
@@ -110,10 +115,14 @@ def code_references_read_input(graph: Any, *, scope: frozenset[str] = frozenset(
         node_type = str(node.get("type") or "")
         if node_type in NESTED_BODY_TYPES and isinstance(config.get("body"), dict):
             inner = frozenset(NODE_TYPES[node_type].get("body_scope") or {})
-            config["body"] = code_references_read_input(config["body"], scope=inner)
+            config["body"] = code_references_read_input(config["body"], scope=inner, skipped=skipped)
         field = CODE_FIELDS.get(node_type)
         if field is not None and isinstance(config.get(field[0]), str):
-            config = _read_input(config, *field, roots)
+            if field[1] == "js" and declares_input(config[field[0]]):
+                if skipped is not None and REFERENCE.search(config[field[0]]):
+                    skipped.append(str(node.get("id")))
+            else:
+                config = _read_input(config, *field, roots)
         nodes.append({**node, "config": config} if config != (node.get("config") or {}) else node)
     return {**graph, "nodes": nodes}
 
