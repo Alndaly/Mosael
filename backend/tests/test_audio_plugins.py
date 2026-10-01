@@ -6,6 +6,8 @@ from __future__ import annotations
 import subprocess
 import textwrap
 
+import pytest
+
 from app.core.config import settings
 from app.core.db import SessionLocal
 from app.db.models import Asset, PluginInstance, User
@@ -91,3 +93,19 @@ def test_别人的插件连接点不到_不借用别人的密钥(tmp_path) -> No
     _client, _ws, _me, plugin, _asset = _setup(tmp_path)
     with SessionLocal() as db, pytest.raises(DenoiseProviderUnavailable):
         ready_adapter(db, "someone-else", plugin)
+
+
+def test_接了分离插件没定成默认_本机引擎又没装_说去设置里定默认(tmp_path, monkeypatch) -> None:
+    """没定默认时按本机引擎挑(声音交给插件必须是他自己定过的)。本机引擎没装时,此前一律说「请管理员装引擎」——
+    他明明接了一家现成能用的。"""
+    from app.core.i18n import t
+    from app.domain import audio_capabilities
+    from app.domain.voices.original_audio import OriginalAudioError, ensure_original_audio_mode
+
+    _client, _ws, me, _plugin, _asset_id = _setup(tmp_path)
+    for adapter in audio_capabilities.SEPARATION_ADAPTERS.values():
+        monkeypatch.setattr(adapter, "runtime_ready", lambda: False)
+    with pytest.raises(OriginalAudioError) as refused:
+        ensure_original_audio_mode("separate", owner_user_id=me)
+    assert refused.value.key == "dubErr_separationPluginNotDefault"
+    assert "假音频" in t(refused.value.key, "zh", **refused.value.params)

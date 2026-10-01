@@ -29,12 +29,19 @@ def ensure_original_audio_mode(mode: str, *, owner_user_id: str | None) -> None:
     if mode not in ORIGINAL_AUDIO_MODES:
         raise OriginalAudioError("dubErr_originalAudioMode", modes=" / ".join(ORIGINAL_AUDIO_MODES))
     if mode == "separate":
+        from app.domain import capabilities
         from app.domain.assets.separation import available
+        from app.domain.audio_capabilities import SEPARATION
 
         from app.core.db import SessionLocal
 
         with SessionLocal() as db:
             if not available(db, owner_user_id):
+                #: 他接了分离插件、只是没定成默认:没定时按本机引擎挑(声音交给插件必须是他自己定过的),本机引擎又没装。
+                #: 此前一律说「请管理员装引擎」—— 他明明有一家现成能用的,该说的是去设置里把它定成默认。
+                ready = [one.name for one in capabilities.plugin_providers(db, owner_user_id, SEPARATION) if not one.missing]
+                if ready:
+                    raise OriginalAudioError("dubErr_separationPluginNotDefault", names="、".join(ready))
                 raise OriginalAudioError("dubErr_separationUnavailableForMode")
 
 

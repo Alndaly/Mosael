@@ -124,6 +124,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "选择了「只去掉人声」，但音频分离引擎尚不可用；请部署管理员先在「管理 → 引擎」里安装，或明确改选「静音」",
         "en": "You chose \"Remove voice only\", but no audio separation engine is available yet. Have a deployment admin install one under Admin → Engines first, or choose \"Mute\" instead.",
     },
+    "dubErr_separationPluginNotDefault": {
+        "zh": "选择了「只去掉人声」,本机的分离引擎没装;你接了分离插件({names}),但还没把它定成默认 —— 到「设置 → 能力提供方」的音频分离里选它,或明确改选「静音」",
+        "en": "You chose \"Remove voice only\" and the on-device separation engine isn't installed. You have a separation plugin ({names}) but haven't made it the default — pick it for audio separation under Settings → Capability providers, or choose \"Mute\" instead.",
+    },
     "dubErr_separationUnavailable": {
         "zh": "音频分离引擎尚不可用；请部署管理员先在「管理 → 引擎」里安装",
         "en": "No audio separation engine is available yet — a deployment admin installs one under Admin → Engines first.",
