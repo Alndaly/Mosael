@@ -108,20 +108,40 @@ def _start_param_errors(node_id: str, config: dict[str, Any]) -> list[str]:
     """
     params = config.get("params") if isinstance(config.get("params"), dict) else {}
     names = [name.strip() for name in str(config.get("required_params") or "").replace("，", ",").split(",")]
-
-    def blank(value: Any) -> bool:
-        #: 和画布就绪检查(analyze.ts 的 isEmpty)同一个判据:0 和 false 是值,空串、空白、空列表 / 空对象不是。
-        if value is None:
-            return True
-        if isinstance(value, str):
-            return not value.strip()
-        return isinstance(value, (list, dict)) and not value
-
     return [f"节点 {node_id} 缺少必填配置 params.{name}" for name in names if name and blank(params.get(name))]
 
 
+def blank(value: Any) -> bool:
+    """一格**算不算空着**。必填、只能填一个(one_of)、运行参数盖不盖默认值,都按这一个判。
+
+    和画布就绪检查(analyze.ts 的 isEmpty)同一个判据:0 和 false 是值,None、空串、空白、空列表 / 空对象不是。
+    """
+    if value is None:
+        return True
+    if isinstance(value, str):
+        return not value.strip()
+    return isinstance(value, (list, dict)) and not value
+
+
+def run_params(defaults: dict[str, Any] | None, params: dict[str, Any] | None) -> dict[str, Any]:
+    """开始节点这一次的参数:声明的默认值,叠上这一次传进来的值。**传了个空的不算传了** —— 默认值照旧。
+
+    表单、定时任务、子工作流的入参常常把没填的格子交成空串;此前它照样盖掉开始节点里写好的默认值,
+    必填检查(按 blank 判)接着就说缺参数 —— 用户明明在开始节点里填过。没声明默认值的参数传空的,照旧
+    留着那个空值(引用它的地方解析得到)。运行前校验(with_run_params)和执行(engine 的 start 节点)
+    都经这里,不会一边判有、一边跑空。
+    """
+    merged = dict(defaults or {})
+    for key, value in (params or {}).items():
+        if blank(value) and key in merged:
+            continue
+        merged[key] = value
+    return merged
+
+
 def with_run_params(graph: dict[str, Any], params: dict[str, Any] | None) -> dict[str, Any]:
-    """这张图**这一次运行**看到的样子:开始节点的参数叠上运行时传进来的值(和执行时 start 节点的合并同一个顺序)。
+    """这张图**这一次运行**看到的样子:开始节点的参数叠上运行时传进来的值(和执行时 start 节点的合并同一份规矩,
+    见 run_params)。
 
     运行前校验按它判必填参数 —— 默认值空着、但这次调用(定时任务、子工作流、接口)带了值的,不该被拦。
     """
@@ -131,7 +151,7 @@ def with_run_params(graph: dict[str, Any], params: dict[str, Any] | None) -> dic
     for node in graph.get("nodes") or []:
         if isinstance(node, dict) and node.get("type") == "start":
             config = dict(node.get("config") or {})
-            config["params"] = {**(config.get("params") or {}), **params}
+            config["params"] = run_params(config.get("params"), params)
             node = {**node, "config": config}
         nodes.append(node)
     return {**graph, "nodes": nodes}

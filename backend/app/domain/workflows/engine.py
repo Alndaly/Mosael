@@ -48,6 +48,7 @@ from app.domain.workflows import (
     validate_graph,
     with_run_params,
 )
+from app.domain.workflows.graph_rules import run_params
 from app.domain.workflows.binding import apply_data_edges, check_number_fields, interpolate_node_config
 from app.domain.workflows.executors import get_executor, run_preflights
 from app.domain.workflows.executors.common import connection_handed_back
@@ -522,9 +523,7 @@ def execute_graph(
         config = interpolate_node_config(ntype, dict(node.get("config") or {}), snapshot)
         config = check_number_fields(ntype, apply_data_edges(nid, config, edges, snapshot))
         if ntype == "start":
-            merged = dict(config.get("params") or {})
-            merged.update(params or {})
-            return merged
+            return run_params(config.get("params"), params)
         handler = get_executor(ntype)
         if handler is None:
             raise WorkflowDomainError("wfErr_noExecutor", params={"type": ntype})
