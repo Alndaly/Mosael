@@ -35,6 +35,7 @@ from sqlalchemy.orm import Session
 
 from app.domain.plugins import media_bridge
 from app.domain.plugins.errors import PluginDomainError
+from app.domain.plugins.manifest import text_of
 
 logger = logging.getLogger(__name__)
 
@@ -76,7 +77,8 @@ def coerce(tool: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any]:
     for key, spec in properties.items():
         value = out.get(key)
         if isinstance(spec, dict) and spec.get("type") == "array" and key in out:
-            listed = _as_list(value, spec.get("items") if isinstance(spec.get("items"), dict) else {})
+            listed = _as_list(text_of(spec.get("title")) or key, value,
+                              spec.get("items") if isinstance(spec.get("items"), dict) else {})
             if listed is None:
                 out.pop(key)
             else:
@@ -129,7 +131,7 @@ def _item(value: Any, kind: Any) -> Any:
     return _scalar(value, kind)
 
 
-def _as_list(value: Any, items: dict[str, Any]) -> Any:
+def _as_list(field: str, value: Any, items: dict[str, Any]) -> Any:
     """数组入参交给插件时**是数组**。空的(没填、空串、空列表)回 None = 去掉这一格。
 
     - 表单里一行一项(见前端 ListField):某一行是一整串引用,插值之后那一行就是一个列表 —— 拼进来(和
@@ -138,10 +140,17 @@ def _as_list(value: Any, items: dict[str, Any]) -> Any:
     - 每一项按 `items.type` 归位(同 coerce 对单值的做法):数字 / 整数项的数字文字转成数,布尔项的 true / false
       转成布尔,字符串项收到的数 / 布尔写回文字。表单只存文字(见前端 ListField),类型只在这里按声明转一次 ——
       前端不看声明一律把「像数的」转成数,`"007"` 成了 7、一串长 id 丢了末几位。
+    - 收到一个对象:每一项本来就是对象(`items.type: object`)的,它就是那一项;否则是「名字 → 值」的映射 ——
+      旧版表单把数组当映射存下的写法(没被迁移到的),或上游交错了形状。报清楚,不再静默包成 `[{…}]` 交出去:
+      插件收到一个装着映射的数组,只会在它自己那边莫名其妙地失败。
     转不了的原样留着,交给插件去说哪里不对。
     """
     if value is None or value == "" or value == []:
         return None
+    if isinstance(value, dict):
+        if items.get("type") == "object":
+            return [value]
+        raise PluginDomainError("pluginErr_listGotMapping", field=field)
     if isinstance(value, str):
         text = value.strip()
         if not text:

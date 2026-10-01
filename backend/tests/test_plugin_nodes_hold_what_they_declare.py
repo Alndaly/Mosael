@@ -154,6 +154,18 @@ def test_数组每一项按声明的类型交给插件_字符串项不改形(tmp
     }
 
 
+def test_数组入参收到名字到值的映射_报清楚是哪一格_不包成一项交给插件(tmp_path) -> None:
+    """没被迁移到的旧写法 `{"a": …}`:此前被包成 `[{"a": …}]` 交给插件,插件那边莫名其妙地失败(这里的 join
+    会在拼字符串时炸成一句 Python 原话)。现在交之前就说是哪一格、怎么改。"""
+    ws = fresh_client().post("/api/workspaces", json={"name": "W"}).json()["id"]
+    _install(tmp_path, user_id())
+    status, _, error = _run(ws, _graph({
+        "id": "j", "type": f"plugin.{PACKAGE}.join", "config": {"items": {"a": "第一段", "b": "第二段"}},
+    }))
+    assert status == "failed"
+    assert "「几段」要的是一串值,收到的却是「名字 → 值」的映射" in (error or ""), error
+
+
 # ---------- node.config 与 input_schema ----------
 
 

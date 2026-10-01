@@ -33,6 +33,14 @@ export function listFromRows(rows: string[]): string[] {
   return rows.filter((text) => text.trim());
 }
 
+/**
+ * 存着的是「名字 → 值」的映射:旧版表单把数组当映射存下的写法(没被图升级迁移到的),或智能体写错了形状。
+ * 按行渲染只会是一片空白,像没填 —— 运行时却会报「要的是一串值」。所以说出来,让人重新填一遍。
+ */
+export function isMapping(value: unknown): boolean {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 export function ListField({
   value,
   onChange,
@@ -70,6 +78,11 @@ export function ListField({
 
   return (
     <div className="grid gap-1.5">
+      {isMapping(value) && rows.length === 0 && (
+        <p className="m-0 text-ui-xs text-warning" role="note">
+          {t("wfListGotMapping")}
+        </p>
+      )}
       {rows.map((row, index) => (
         <div className="grid grid-cols-[minmax(0,1fr)_24px] items-center gap-1" key={index}>
           <Combobox

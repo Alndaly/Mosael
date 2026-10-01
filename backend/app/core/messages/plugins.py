@@ -49,6 +49,13 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "这个工具要收一份素材,但 MCP 形态没有交接文件的通道",
         "en": "This tool takes an asset, but MCP plugins have no channel for handing over files.",
     },
+    #: 数组入参收到「名字 → 值」的映射(见 plugins.inputs._as_list):旧版表单的写法,或上游交错了形状。
+    "pluginErr_listGotMapping": {
+        "zh": "「{field}」要的是一串值,收到的却是「名字 → 值」的映射(旧版表单的写法,或上游交来的形状不对):"
+              "请在节点上把它重新填成一行一项",
+        "en": "“{field}” takes a list of values but got a name → value mapping (the old form's format, or an upstream "
+              "output of the wrong shape): refill it on the node, one item per row",
+    },
     "pluginErr_assetNeedsWorkspace": {
         "zh": "这个工具要收一份素材,但这次调用没有归属工作区",
         "en": "This tool takes an asset, but this call doesn't belong to a workspace.",
