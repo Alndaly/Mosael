@@ -700,7 +700,11 @@ function BoardDetail({
     (fresh: Board): { adopted: boolean; conflicted: boolean } => {
       if (fresh.revision <= revision.current) return { adopted: false, conflicted: false };
       const base = confirmedCanvas.current;
-      const { canvas: merged, conflicted } = rebaseCanvas(base, localCanvas.current ?? base, fresh.canvas);
+      //: 「本地」是画布**此刻**的样子,不是上一次汇上来的那份:画布的变化攒到停手 400ms 才汇(useBoardHistory),
+      //: 窗口里刚敲的字、刚按的 ⌘Z 只在画布上。拿汇上来的那份去合,装回画布时就把它们冲掉了。先 flush 拿现在这一份
+      //: (它也同时汇上来、记进撤销);flush 和下面装回去在同一段同步代码里,中间插不进新的编辑。
+      const mine = api?.flush() ?? localCanvas.current ?? base;
+      const { canvas: merged, conflicted } = rebaseCanvas(base, mine, fresh.canvas);
       revision.current = fresh.revision;
       confirmedCanvas.current = fresh.canvas;
       queryClient.setQueryData(detailKey, fresh);

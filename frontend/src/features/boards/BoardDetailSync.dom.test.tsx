@@ -454,6 +454,25 @@ describe("服务端那一版前进了(回执、占位、智能体),本地手上�
     expect(stored.get("img")?.asset_id).toBe("a1");
   });
 
+  it("刚敲的字、刚按的撤销还攒在画布的并步窗口里时轮询到产出:合在画布此刻那一份上,不被上一次汇出的那份冲掉", async () => {
+    const server = strictServer({ items: [running, note], edges: [], markers: [] });
+    mount();
+    await vi.waitFor(() => expect(canvasHarness.props).not.toBeNull());
+    //: 画布此刻的样子(还没到 400ms,没汇给上层):便签上刚敲了字。上层手上那份还是打开时的。
+    canvasHarness.api.flush.mockImplementation(() => ({ items: [running, { ...note, text: "刚敲的" }], edges: [], markers: [] }));
+    server.serverWrite((canvas) => ({ ...canvas, items: [{ ...running, asset_id: "a1", run: { status: "succeeded" } }, note] }));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2600);
+    });
+
+    expect(adoptedItem("n1")?.text, "刚敲的字留着").toBe("刚敲的");
+    expect(adoptedItem("img")?.asset_id).toBe("a1");
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000);
+    });
+    expect(server.state.canvas.items.find((one) => one.id === "n1")?.text, "存回去的也是它").toBe("刚敲的");
+  });
+
   it("智能体改板批准之后,打开着的画板合上那一版 —— 本地没存的改动照留,不等下一次保存撞版本号", async () => {
     const server = strictServer({ items: [note], edges: [], markers: [] });
     mount();
