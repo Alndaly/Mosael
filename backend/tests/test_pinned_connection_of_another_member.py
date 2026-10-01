@@ -60,6 +60,7 @@ def team(monkeypatch):
     def run_as_member() -> Job:
         with SessionLocal() as db:
             job_id = start_workflow_job(db, db.get(Workflow, workflow_id), created_by=user_id("other")).id
+            db.commit()  # 测试是入口:任务在起它的那次事务提交之后才派发
         for _ in range(200):
             with SessionLocal() as db:
                 job = db.get(Job, job_id)

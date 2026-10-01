@@ -100,6 +100,7 @@ def test_等一句合成等到超时_放弃时把那条合成任务取消掉(mon
             db, sequence_id=sequence_id, clip_ids=cue_ids, match_duration=False, created_by=None,
             synthesis={"engine": "volcano", "engine_voice": "v", "workspace_id": ws}, original_audio="keep",
         ).id
+        db.commit()  # 测试是入口:任务在起它的那次事务提交之后才派发
     assert wait_for_idle_jobs(10)
     with SessionLocal() as db:
         assert db.get(Job, dub_id).error_key == "jobErr_noDubSucceeded"

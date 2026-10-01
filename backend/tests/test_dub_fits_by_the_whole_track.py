@@ -63,6 +63,7 @@ def timeline(monkeypatch):
                 db, sequence_id=sequence_id, clip_ids=[cues[text] for text in texts], match_duration=True, created_by=None,
                 synthesis={"engine": "builtin:volcano", "engine_voice": "v", "workspace_id": ws}, original_audio="keep",
             ).id
+            db.commit()  # 测试是入口:任务在起它的那次事务提交之后才派发
         assert wait_for_idle_jobs(10)
         with SessionLocal() as db:
             return db.get(Job, job_id)
