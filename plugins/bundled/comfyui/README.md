@@ -21,16 +21,17 @@ For several servers, create several connections; each brings its own set of mode
 
 | In the workflow | In Mosael |
 | --- | --- |
-| Nodes upstream of a sampler / guider that encode a prompt (CLIPTextEncode and its Flux and SDXL variants) | Prompt and negative prompt |
+| Nodes upstream of a sampler / guider that encode a prompt (CLIPTextEncode and its Flux and SDXL variants, conditioning nodes that carry the prompt on their own `prompt` like MiniMax H3, a text node wired into one of those) | Prompt and negative prompt |
+| Without a sampler ComfyUI knows (partner API nodes: MiniMax / Hailuo, Kling, Veo…; packs with their own sampler such as WanVideoWrapper): a **multiline** `prompt` / `prompt_text` / `positive_prompt` on a node wired into an output (1.6.0) | Prompt; a `negative_prompt` on the same node is the negative prompt |
 | The sampler's seed, RandomNoise's noise_seed | "Seed" (random on every run when left empty) |
 | Width and height of the node that creates the canvas (EmptyLatentImage, the Wan / Hunyuan video latent nodes…) | "Size" (the workflow's own size when not set) |
 | The canvas node's batch_size | "Image count" (up to 4); every image is returned |
 | Any other tunable literal input | An entry in the parameter form: known inputs get plain names (`labels.py`: sampler, steps, LoRA…), and only on a name clash do they carry the node title or "KSampler #2"; the common ones come first and the rest go under "Advanced"; the raw "node · input name" is in the description |
-| LoadImage nodes | Reference images; in a video graph, the ones wired to `start_image` / `end_image` are the first / last frame |
+| LoadImage nodes | Reference images; in a video graph, the ones wired to `start_image` / `first_frame` / `start_frame` / `first_frame_image`… are the first frame, `end_image` / `last_frame` / `end_frame`… the last frame |
 | LoadImageMask, or a LoadImage whose mask output is the only one used | Mask (`mask`) |
-| LoadVideo / VHS_LoadVideo | The video to edit (`source_video`, mode `video-edit`) |
-| LoadAudio / VHS_LoadAudioUpload | Driving audio (video graphs) / reference audio |
-| A video output node (VHS_VideoCombine, SaveVideo…) | This is a video model |
+| LoadVideo / VHS_LoadVideo | The video to edit (`source_video`, mode `video-edit`); one wired to a **reference** input such as `ref_videos.*` is a reference video |
+| LoadAudio / VHS_LoadAudioUpload | Driving audio (video graphs) / reference audio; one wired to a reference input is reference audio |
+| A video output node (VHS_VideoCombine, SaveVideo…; CreateVideo only assembles frames for the next node and doesn't count) | This is a video model |
 
 A graph with neither a prompt nor a canvas (upscaling, background removal): an image is required and the only mode is
 `image-to-image`. Inputs that belong to the ComfyUI side, such as the file name prefix, are not listed.

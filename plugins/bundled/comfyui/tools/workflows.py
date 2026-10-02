@@ -75,7 +75,7 @@ def inspect(model_id: str, label: str, api: dict[str, Any], object_info: dict[st
             titles: dict[str, str], locale: str) -> dict[str, Any]:
     kind = graph.kind_of(api)
     found_slots = graph.slots(api, kind, titles)
-    roles = graph.text_roles(api)
+    roles = set(graph.text_slots(api, object_info).values())
     size_node = graph.size_node(api)
     size = ""
     if size_node is not None:
@@ -98,9 +98,9 @@ def inspect(model_id: str, label: str, api: dict[str, Any], object_info: dict[st
         "id": model_id,
         "label": label,
         "kind": kind,
-        "features": graph.features(api, found_slots),
-        "prompt": "prompt" in roles.values(),
-        "negative_prompt": "negative" in roles.values(),
+        "features": graph.features(api, found_slots, object_info),
+        "prompt": "prompt" in roles,
+        "negative_prompt": "negative" in roles,
         "size": size,
         "inputs": [
             {"node": slot["node"], "title": slot["title"], "class_type": slot["class_type"],

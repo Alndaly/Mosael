@@ -421,7 +421,7 @@ def generate(request: dict[str, Any], comfy: Comfy, locale: str, emit: Emit) -> 
         parameters = request.get("parameters") or {}
         # 提示词空着 = 用这张图自己存着的那句(模型声明了 `prompt: optional`,见 graph.prompt_requirement)
         values = values_from(request.get("prompt"), request.get("negative_prompt"), parameters, defaults)
-        prompt = graph.fill(api, values, overrides_from(parameters))
+        prompt = graph.fill(api, values, overrides_from(parameters), object_info)
         uploaded = upload(comfy, request.get("inputs") or [])
         if uploaded:
             prompt = graph.wire_inputs(prompt, graph.kind_of(prompt), uploaded)

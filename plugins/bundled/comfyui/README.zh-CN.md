@@ -17,16 +17,17 @@
 
 | 工作流里的东西 | 在 Mosael 里 |
 | --- | --- |
-| 采样器 / 引导器上游写提示词的节点(CLIPTextEncode 及 Flux、SDXL 的变体) | 主提示词、反向提示词 |
+| 采样器 / 引导器上游写提示词的节点(CLIPTextEncode 及 Flux、SDXL 的变体,MiniMax H3 这类把提示词放在条件节点 `prompt` 上的,连进来的一段文字节点) | 主提示词、反向提示词 |
+| 没有认得的采样器时(合作方 API 节点:MiniMax / 海螺、Kling、Veo…,WanVideoWrapper 这类自带采样器的包):接到产出上的节点里**多行**的 `prompt` / `prompt_text` / `positive_prompt`(1.6.0) | 主提示词;同一个节点上的 `negative_prompt` 是反向提示词 |
 | 采样器的 seed、RandomNoise 的 noise_seed | 「随机种子」(不填每次随机) |
 | 生成画布的节点(EmptyLatentImage、Wan / Hunyuan 的视频潜空间节点…)的宽高 | 「尺寸」(不选就用工作流自己的) |
 | 画布节点的 batch_size | 「张数」(最多 4),几张全部交回 |
 | 其余可调的字面量输入 | 参数表里的一项:认得的输入用人话起名(`labels.py`:采样器、步数、LoRA…),撞名才带上节点标题或「第 2 个 KSampler」;常用的在前,其余收进「高级」;原始的「节点 · 输入名」在说明里 |
-| LoadImage 节点 | 参考图;视频图里接到 `start_image` / `end_image` 的是首帧 / 尾帧 |
+| LoadImage 节点 | 参考图;视频图里接到 `start_image` / `first_frame` / `start_frame` / `first_frame_image`…的是首帧,`end_image` / `last_frame` / `end_frame`…的是尾帧 |
 | LoadImageMask,或只用了 LoadImage 蒙版那一路的 | 蒙版(`mask`) |
-| LoadVideo / VHS_LoadVideo | 待编辑的视频(`source_video`,模式 `video-edit`) |
-| LoadAudio / VHS_LoadAudioUpload | 驱动音频(视频图)/ 参考音频 |
-| 视频输出节点(VHS_VideoCombine、SaveVideo…) | 这是一个视频模型 |
+| LoadVideo / VHS_LoadVideo | 待编辑的视频(`source_video`,模式 `video-edit`);接在 `ref_videos.*` 这类**参考**口上的是参考视频 |
+| LoadAudio / VHS_LoadAudioUpload | 驱动音频(视频图)/ 参考音频;接在参考口上的是参考音频 |
+| 视频输出节点(VHS_VideoCombine、SaveVideo…;CreateVideo 只是把帧合成一段交下去,不算) | 这是一个视频模型 |
 
 没有提示词、也没有画布的图(放大、抠图):图是必须给的,模式只有 `image-to-image`。文件名前缀这类
 ComfyUI 那一侧的输入不列出来。

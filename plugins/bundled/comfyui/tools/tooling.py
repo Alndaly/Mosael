@@ -52,6 +52,7 @@ _ROLE_LABELS = {
     "last_frame": ("尾帧", "Last frame"),
     "mask": ("蒙版", "Mask"),
     "source_video": ("视频", "Video"),
+    "reference_video": ("参考视频", "Reference video"),
     "driving_audio": ("驱动音频", "Driving audio"),
     "reference_audio": ("音频", "Audio"),
 }
@@ -152,7 +153,7 @@ def shape_of(entry: models.Entry, object_info: dict[str, Any]) -> Shape:
     api, titles = entry.api, entry.titles
     shape = Shape()
     kind = graph.kind_of(api)
-    roles = graph.text_roles(api)
+    roles = set(graph.text_slots(api, object_info).values())
     placeholders = graph._placeholders_in(api)  # noqa: SLF001 — 同一个插件里的模块
     found = graph.slots(api, kind, titles)
     described = graph.describe(entry.id, entry.label, api, object_info, titles)
@@ -166,7 +167,7 @@ def shape_of(entry: models.Entry, object_info: dict[str, Any]) -> Shape:
         if title and title not in api and list(titles.values()).count(title) == 1:
             shape.rename[f"values.{title}.{name}"] = key
 
-    if "prompt" in roles.values() or "prompt" in placeholders:
+    if "prompt" in roles or "prompt" in placeholders:
         shape.properties["prompt"] = {
             "type": "string", "x-multiline": True, "title": _pair("提示词", "Prompt"),
             "description": _pair("留空就用工作流里写好的那一句", "Leave empty to keep the workflow's own"),
@@ -212,7 +213,7 @@ def shape_of(entry: models.Entry, object_info: dict[str, Any]) -> Shape:
         shape.bindings["mask"] = ("alpha_mask",)
         shape.rename["mask"] = "mask"
 
-    if "negative" in roles.values() or "negative" in placeholders:
+    if "negative" in roles or "negative" in placeholders:
         shape.properties["negative_prompt"] = {
             "type": "string", "x-multiline": True, "x-advanced": True, "title": _pair("反向提示词", "Negative prompt"),
             "description": _pair("留空就用工作流里写好的那一句", "Leave empty to keep the workflow's own"),
@@ -355,7 +356,7 @@ def tool_for(entry: models.Entry, name: str, object_info: dict[str, Any]) -> dic
     shape = shape_of(entry, object_info)
     label = entry.label if isinstance(entry.label, str) else entry.label.get("en", entry.id)
     label_zh = entry.label if isinstance(entry.label, str) else entry.label.get("zh", label)
-    tags = [tag for tag in graph.features(entry.api) if tag in _FEATURE_LABELS]
+    tags = [tag for tag in graph.features(entry.api, object_info=object_info) if tag in _FEATURE_LABELS]
     what_zh = "、".join(_FEATURE_LABELS[tag][0] for tag in tags)
     what_en = ", ".join(_FEATURE_LABELS[tag][1] for tag in tags)
     outputs = shape.output_nodes
@@ -518,7 +519,7 @@ def run_tool(name: str, payload: dict[str, Any], comfy: Comfy, locale: str, emit
 
     # 跑一张存好的工作流:种子没给就用它存着的;内置图和模板的种子是占位符,照旧每次随机
     values = run.values_from(texts.get("prompt"), texts.get("negative"), parameters, defaults, keep_seed=not defaults)
-    prompt = graph.fill(api, values, overrides)
+    prompt = graph.fill(api, values, overrides, object_info)
 
     uploads = run.upload(comfy, [{"role": f"slot:{node}", "path": path} for node, path in slots.items()]
                          + ([{"role": "mask", "path": alpha_mask}] if alpha_mask else []))

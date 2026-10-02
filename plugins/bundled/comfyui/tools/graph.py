@@ -29,21 +29,30 @@ def _input_defs(object_info: dict[str, Any], class_type: str) -> dict[str, Any]:
 _SAMPLER_TYPES = frozenset({"KSampler", "KSamplerAdvanced", "SamplerCustom", "SamplerCustomAdvanced"})
 _GUIDER_MARK = "Guider"  # CFGGuider / BasicGuider / DualCFGGuider … Flux 那一路的提示词从这里进去
 #: 写提示词的节点上,文字放在哪几个输入里。CLIPTextEncodeFlux 分成 clip_l / t5xxl 两格,SDXL 的
-#: CLIPTextEncodeSDXL 分成 text_g / text_l —— 同一句话写进每一格。
-_TEXT_INPUTS = ("text", "clip_l", "t5xxl", "text_g", "text_l")
+#: CLIPTextEncodeSDXL 分成 text_g / text_l —— 同一句话写进每一格。没有 CLIP 编码节点的那几类,提示词是生成节点
+#: 自己的一格:MiniMax H3 / ByteDance / Kling / Veo 的 `prompt`,MiniMax / 海螺 API 节点的 `prompt_text`,
+#: WanVideoWrapper 的 WanVideoTextEncode 的 `positive_prompt`。
+_TEXT_INPUTS = ("text", "clip_l", "t5xxl", "text_g", "text_l", "prompt", "prompt_text", "positive_prompt")
+#: 反向提示词和正向的写在**同一个节点**上时(Kling、Veo 的 API 节点,WanVideoTextEncode)叫这几个名字。
+_NEGATIVE_INPUTS = ("negative_prompt", "negative_prompt_text")
 #: 后端的「一段文字」节点:提示词常常写在它身上,再连进 CLIPTextEncode 的 text(新版的模板就这么排)。
 _STRING_SOURCES = frozenset({"PrimitiveString", "PrimitiveStringMultiline"})
+#: 一个节点**整个就是一段字**(连进提示词那一格的上游)时,字放在哪几格:后端的 PrimitiveString 是 `value`,
+#: 各家自定义的「Text」「String」节点多半是 `text` / `string`。
+_STRING_FIELDS = ("value", "text", "string")
 #: 这些节点**生成画布**:宽高写在它们身上就是成片的尺寸。
 _SIZE_NODE_TYPES = frozenset(
     {"WanImageToVideo", "WanFirstLastFrameToVideo", "WanVaceToVideo", "HunyuanImageToVideo", "LTXVImgToVideo",
      "CosmosImageToVideoLatent", "Wan22ImageToVideoLatent"}
 )
-#: 这些输入名说明参考图是**首帧**(视频从它开始动)/**尾帧**。
-_FIRST_FRAME_INPUTS = frozenset({"start_image", "first_frame", "init_image"})
-_LAST_FRAME_INPUTS = frozenset({"end_image", "last_frame"})
-#: 输出节点 → 这张图产出什么。
-_VIDEO_OUTPUT_TYPES = frozenset({"VHS_VideoCombine", "SaveVideo", "SaveWEBM", "CreateVideo", "SaveAnimatedWEBP",
-                                 "SaveAnimatedPNG"})
+#: 这些输入名说明参考图是**首帧**(视频从它开始动)/**尾帧**。合作方 API 节点各叫各的:海螺 `first_frame_image`,
+#: Kling、Runway `start_frame` / `end_frame`,Luma `first_image` / `last_image`。
+_FIRST_FRAME_INPUTS = frozenset({"start_image", "first_frame", "init_image", "first_frame_image", "start_frame",
+                                 "first_image"})
+_LAST_FRAME_INPUTS = frozenset({"end_image", "last_frame", "end_frame", "last_frame_image", "last_image"})
+#: 输出节点 → 这张图产出什么。CreateVideo **不是**输出节点:它把帧和声音合成一段视频交给下游(SaveVideo 才存),
+#: 算进来的话一张「CreateVideo → SaveVideo」的图就成了两个视频产出。
+_VIDEO_OUTPUT_TYPES = frozenset({"VHS_VideoCombine", "SaveVideo", "SaveWEBM", "SaveAnimatedWEBP", "SaveAnimatedPNG"})
 _AUDIO_OUTPUT_TYPES = frozenset({"SaveAudio", "SaveAudioMP3", "SaveAudioOpus", "PreviewAudio"})
 _IMAGE_OUTPUT_TYPES = frozenset({"SaveImage", "PreviewImage", "Image Save", "SaveImageWebsocket"})
 #: 把文字显示出来的输出节点(描述图片、反推提示词这一类工作流的产出就是一段字)。
@@ -83,14 +92,35 @@ def _literal(value: Any) -> bool:
 
 
 def text_fields(node: dict[str, Any]) -> list[str]:
-    """这个节点上存着提示词文字的那几格(字面量字符串)。"""
+    """这个节点上存着提示词文字的那几格(字面量字符串):正向的和同一个节点上的反向的。"""
     inputs = node.get("inputs") or {}
-    names = ("value",) if str(node.get("class_type", "")) in _STRING_SOURCES else _TEXT_INPUTS
+    names = ("value",) if str(node.get("class_type", "")) in _STRING_SOURCES else (*_TEXT_INPUTS, *_NEGATIVE_INPUTS)
     return [name for name in names if name in inputs and _literal(inputs[name]) and isinstance(inputs[name], str)]
 
 
-def _trace_text_node(api: dict[str, Any], ref: Any, prefer: str, seen: set[str]) -> str | None:
-    """从 [节点, 槽位] 往上游追到写提示词的节点,穿过 ControlNetApply、FluxGuidance 这类条件处理节点。"""
+def _string_fields(node: dict[str, Any]) -> list[str]:
+    """一个**连进提示词那一格**的上游节点上存着那段字的几格(它整个就是一段字:PrimitiveString、自定义的 Text…)。"""
+    inputs = node.get("inputs") or {}
+    return [name for name in (*_STRING_FIELDS, *_TEXT_INPUTS)
+            if name in inputs and _literal(inputs[name]) and isinstance(inputs[name], str)]
+
+
+def _multiline_text(object_info: dict[str, Any] | None, class_type: str, name: str) -> bool:
+    """ComfyUI 说这一格是**多行的字符串**(提示词框)。不认识这个节点(自定义节点没装在给的 object_info 里)就不拦,
+    按名字认 —— 名字本身就在提示词那几个里。"""
+    defs = _input_defs(object_info or {}, class_type)
+    if not defs or name not in defs:
+        return True
+    definition = defs[name]
+    if not isinstance(definition, list) or not definition or definition[0] != "STRING":
+        return False
+    options = definition[1] if len(definition) > 1 and isinstance(definition[1], dict) else {}
+    return options.get("multiline") is True
+
+
+def _trace_text_node(api: dict[str, Any], ref: Any, prefer: str, seen: set[str]) -> tuple[str, list[str]] | None:
+    """从 [节点, 槽位] 往上游追到写提示词的节点,穿过 ControlNetApply、FluxGuidance 这类条件处理节点。
+    交回 (节点, 字写在哪几格)。"""
     if not isinstance(ref, list) or not ref:
         return None
     node_id = str(ref[0])
@@ -101,14 +131,15 @@ def _trace_text_node(api: dict[str, Any], ref: Any, prefer: str, seen: set[str])
     if not isinstance(node, dict):
         return None
     inputs = node.get("inputs") or {}
-    if text_fields(node):
-        return node_id
+    fields = text_fields(node)
+    if fields:
+        return node_id, fields
     for key in _TEXT_INPUTS:
-        # 文字从一个「一段文字」节点连进来:提示词写在那个节点上
+        # 文字从一个「一段文字」节点连进来:提示词写在那个节点上(后端的 PrimitiveString、自定义的 Text 节点…)
         source = inputs.get(key)
         upstream = api.get(str(source[0])) if isinstance(source, list) and source else None
-        if isinstance(upstream, dict) and str(upstream.get("class_type", "")) in _STRING_SOURCES and text_fields(upstream):
-            return str(source[0])
+        if isinstance(upstream, dict) and _string_fields(upstream):
+            return str(source[0]), _string_fields(upstream)
     for key in (prefer, "conditioning", "positive", "negative"):  # 优先同名槽,正负不混
         found = _trace_text_node(api, inputs.get(key), prefer, seen)
         if found is not None:
@@ -116,45 +147,97 @@ def _trace_text_node(api: dict[str, Any], ref: Any, prefer: str, seen: set[str])
     return None
 
 
-def text_roles(api: dict[str, Any]) -> dict[str, str]:
-    """写提示词的节点 → "prompt" / "negative"。从采样器和引导器往上游追。"""
-    roles: dict[str, str] = {}
+def _role_of(field: str, role: str) -> str:
+    return "negative" if field in _NEGATIVE_INPUTS else role
+
+
+def text_slots(api: dict[str, Any], object_info: dict[str, Any] | None = None) -> dict[tuple[str, str], str]:
+    """写提示词的那几格:`(节点, 输入名)` → "prompt" / "negative"。
+
+    先从采样器和引导器的 positive / conditioning / negative 往上游追(KSampler、Flux 的 BasicGuider、MiniMax H3 的
+    BasicGuider → MiniMaxH3ImageToVideo)。那一路**一句正向的都没找到**(没有 ComfyUI 认得的采样器:合作方 API 节点、
+    WanVideoWrapper 这类自带采样器的包),就从产出节点往上游找:接到产出上的节点里,名字是提示词的、ComfyUI 说是
+    多行字符串的字面量就是提示词(见 `_upstream_texts`)。同一个节点上叫 `negative_prompt` 的那格是反向提示词。
+    """
+    slots: dict[tuple[str, str], str] = {}
     for node in api.values():
         class_type = str(node.get("class_type", ""))
         inputs = node.get("inputs") or {}
         if class_type in _SAMPLER_TYPES or _GUIDER_MARK in class_type:
             for slot, role in (("positive", "prompt"), ("conditioning", "prompt"), ("negative", "negative")):
-                target = _trace_text_node(api, inputs.get(slot), slot, set())
-                if target is not None:
-                    roles.setdefault(target, role)
-    return roles
+                found = _trace_text_node(api, inputs.get(slot), slot, set())
+                if found is None:
+                    continue
+                target, fields = found
+                for field in fields:
+                    slots.setdefault((target, field), _role_of(field, role))
+    if "prompt" not in slots.values():
+        for key, role in _upstream_texts(api, object_info).items():
+            slots.setdefault(key, role)
+    return slots
 
 
-def prompt_requirement(api: dict[str, Any], roles: dict[str, str] | None = None,
-                       placeholders: set[str] | None = None) -> str:
+def _upstream_texts(api: dict[str, Any], object_info: dict[str, Any] | None) -> dict[tuple[str, str], str]:
+    """从交出文件的产出节点往上游走,写在路过的节点上的提示词(按节点顺序)。
+
+    认的是**名字**(提示词那几格:`prompt`、`prompt_text`、`positive_prompt`、`text`…)加上 **ComfyUI 说的类型**
+    (多行字符串,见 `_multiline_text`)—— 一格单行的 `prompt`(id、文件名前缀)不算。只走接到产出上的节点:
+    一个没接上的文字节点什么都不影响。连进提示词那一格的上游(一个整个就是一段字的节点)也算,字写在它身上。
+    """
+    outputs = [node["node"] for node in output_nodes(api, object_info) if node["media"] != "text"]
+    #: (节点, 这一路是正向还是反向):顺着 `negative` 那一格走上去的整条支路都是反向的(自定义采样器的
+    #: positive / negative 各接一个 CLIPTextEncode,两个都只叫 `text`)。
+    queue: list[tuple[str, str]] = [(node_id, "prompt") for node_id in outputs]
+    seen: set[tuple[str, str]] = set()
+    found: dict[tuple[str, str], str] = {}
+    while queue:
+        node_id, branch = queue.pop(0)
+        if (node_id, branch) in seen or not isinstance(api.get(node_id), dict):
+            continue
+        seen.add((node_id, branch))
+        node = api[node_id]
+        class_type = str(node.get("class_type", ""))
+        for name, value in (node.get("inputs") or {}).items():
+            named = name in _TEXT_INPUTS or name in _NEGATIVE_INPUTS
+            role = "negative" if branch == "negative" or name in _NEGATIVE_INPUTS else "prompt"
+            if isinstance(value, list) and value:
+                upstream_id = str(value[0])
+                upstream = api.get(upstream_id)
+                if named and isinstance(upstream, dict) and _string_fields(upstream):
+                    for field in _string_fields(upstream):
+                        found.setdefault((upstream_id, field), role)
+                queue.append((upstream_id, "negative" if name.startswith("negative") else branch))
+            elif named and isinstance(value, str) and _multiline_text(object_info, class_type, name):
+                found.setdefault((node_id, name), role)
+    return dict(sorted(found.items(), key=lambda pair: _node_order(pair[0][0])))
+
+
+def prompt_requirement(api: dict[str, Any], slots: dict[tuple[str, str], str] | None = None,
+                       placeholders: set[str] | None = None, *, object_info: dict[str, Any] | None = None) -> str:
     """这张图对提示词的要求(宿主描述符的 `prompt`,见 docs/PLUGIN_MANIFEST 的「替宿主做生成」):
 
-    - `required`:模板里有 `{{prompt}}` 占位符(没有默认值,不填就是一句字面的占位符),或者喂给采样器的
-      提示词节点里有一个存着的是空串 —— 不写的话那张图拿空话去跑;
-    - `optional`:有喂给采样器的提示词节点,而且**每一个都存着一句话** —— 不写就用这张图自己那句,
-      写了就换成你的;
-    - `none`:没有任何文字喂进采样器(放大、抠图、修脸、补帧这类「处理一份素材」的图)。宿主不摆
-      提示词框,也不逼人敲一句没用的话。
+    - `required`:模板里有 `{{prompt}}` 占位符(没有默认值,不填就是一句字面的占位符),或者写提示词的节点里有一个
+      存着的是空串 —— 不写的话那张图拿空话去跑;
+    - `optional`:有写提示词的节点,而且**每一个都存着一句话** —— 不写就用这张图自己那句,写了就换成你的;
+    - `none`:没有任何提示词(放大、抠图、修脸、补帧这类「处理一份素材」的图)。宿主不摆提示词框,
+      也不逼人敲一句没用的话。
 
-    判的是**喂进采样器 / 引导器的**文字(见 text_roles),不是图里有没有 CLIPTextEncode:一个没接上的
-    文字节点什么都不影响。反向提示词不算 —— 它有自己的控件。
+    判的是**真的喂进生成的**文字(见 text_slots),不是图里有没有 CLIPTextEncode:一个没接上的文字节点什么都
+    不影响。反向提示词不算 —— 它有自己的控件。
     """
     placeholders = _placeholders_in(api) if placeholders is None else placeholders
     if "prompt" in placeholders:
         return "required"
-    roles = text_roles(api) if roles is None else roles
-    positive = [node_id for node_id, role in roles.items() if role == "prompt"]
+    slots = text_slots(api, object_info) if slots is None else slots
+    positive: dict[str, list[str]] = {}
+    for (node_id, field), role in slots.items():
+        if role == "prompt":
+            positive.setdefault(node_id, []).append(field)
     if not positive:
         return "none"
-    for node_id in positive:
+    for node_id, fields in positive.items():
         inputs = api[node_id].get("inputs") or {}
-        saved = [inputs[name] for name in text_fields(api[node_id])]
-        if not any(text.strip() for text in saved):
+        if not any(str(inputs.get(name) or "").strip() for name in fields):
             return "required"
     return "optional"
 
@@ -225,6 +308,10 @@ def _consumers(api: dict[str, Any]) -> dict[str, list[tuple[str, str, int]]]:
     return consumers
 
 
+#: 一格输入的名字说明接进来的是**参考**:`ref_images.ref_image_0`、`ref_videos.*`、`reference_video`、`ref_audio`…
+_REFERENCE_INPUT = re.compile(r"^(ref|reference)(_|s?\.|$)", re.IGNORECASE)
+
+
 def slots(api: dict[str, Any], kind: str, titles: dict[str, str] | None = None) -> list[dict[str, str]]:
     """读素材的节点 → 输入槽位 `{node, class_type, title, media, field, role}`,按节点顺序。
 
@@ -234,7 +321,10 @@ def slots(api: dict[str, Any], kind: str, titles: dict[str, str] | None = None) 
       只用了 LoadImage 的第二个输出(alpha 当蒙版)的,是蒙版;
     - LoadImageMask:蒙版;
     - 视频(LoadVideo / VHS_LoadVideo):被改的那一段(源视频);
-    - 音频:视频图里是驱动音频(口型、卡点),别的图里是参考音频。
+    - 音频:视频图里是驱动音频(口型、卡点),别的图里是参考音频;
+    - 接在**参考**那几格上的(MiniMax H3 多参考生视频的 `ref_images.*` / `ref_videos.*` / `ref_audios.*`,
+      `reference_video` 这类)就是参考:参考视频不是要改的那一段(那是必给的),参考音频也不是驱动口型的音频
+      (那要数字人授权)。
     """
     titles = titles or {}
     consumers = _consumers(api)
@@ -248,6 +338,7 @@ def slots(api: dict[str, Any], kind: str, titles: dict[str, str] | None = None) 
         media, field_name = loader
         used = consumers.get(node_id, [])
         role = "reference_image"
+        referenced = any(_REFERENCE_INPUT.match(name) for _, name, _ in used)
         if media == "image":
             outputs_used = {slot for _, _, slot in used}
             if outputs_used == {1}:
@@ -265,9 +356,9 @@ def slots(api: dict[str, Any], kind: str, titles: dict[str, str] | None = None) 
         elif media == "mask":
             role = "mask"
         elif media == "video":
-            role = "source_video"
+            role = "reference_video" if referenced else "source_video"
         elif media == "audio":
-            role = "driving_audio" if kind == "video" else "reference_audio"
+            role = "driving_audio" if kind == "video" and not referenced else "reference_audio"
         found.append({
             "node": node_id,
             "class_type": class_type,
@@ -279,7 +370,8 @@ def slots(api: dict[str, Any], kind: str, titles: dict[str, str] | None = None) 
     return found
 
 
-def features(api: dict[str, Any], found_slots: list[dict[str, str]] | None = None) -> list[str]:
+def features(api: dict[str, Any], found_slots: list[dict[str, str]] | None = None,
+             object_info: dict[str, Any] | None = None) -> list[str]:
     """这张图在做什么(给人和智能体挑工作流用):upscale / inpaint / img2img / remove-background / …"""
     types = [str(node.get("class_type", "")) for node in api.values()]
     tags: list[str] = []
@@ -291,7 +383,7 @@ def features(api: dict[str, Any], found_slots: list[dict[str, str]] | None = Non
         tags.append("inpaint")
     if "VAEEncode" in types and any(slot["media"] == "image" for slot in found_slots):
         tags.append("img2img")
-    if text_roles(api):
+    if text_slots(api, object_info):
         tags.append("prompt")
     return tags
 
@@ -300,15 +392,17 @@ def output_nodes(api: dict[str, Any], object_info: dict[str, Any] | None = None,
                  titles: dict[str, str] | None = None) -> list[dict[str, str]]:
     """会交出东西的节点 `{node, class_type, title, media}`。
 
-    ComfyUI 在 object_info 里给每个输出节点标了 `output_node: true` —— 有它就信它(自定义节点也认得出),
-    再按已知的几类说它交出的是图、视频、音频还是一段字。
+    ComfyUI 在 object_info 里给每个节点标了是不是输出节点(`output_node`)—— 标了就信它(自定义节点也认得出,
+    标着 false 的也不算);没标的(没给 object_info、没装的节点)按已知的几类认。再按已知的几类说它交出的是图、
+    视频、音频还是一段字。
     """
     titles = titles or {}
     object_info = object_info or {}
     found: list[dict[str, str]] = []
     for node_id in sorted(api, key=_node_order):
         class_type = str(api[node_id].get("class_type", ""))
-        if class_type not in _KNOWN_OUTPUT_TYPES and not (object_info.get(class_type) or {}).get("output_node"):
+        info = object_info.get(class_type) if isinstance(object_info.get(class_type), dict) else {}
+        if not (info["output_node"] is True if "output_node" in info else class_type in _KNOWN_OUTPUT_TYPES):
             continue
         found.append({"node": node_id, "class_type": class_type, "title": titles.get(node_id) or class_type,
                       "media": output_media(class_type)})
@@ -451,7 +545,7 @@ def tunable(
     都不在这里。名字是人话(见 labels),原始的「节点 · 输入名」在 description 里。
     """
     titles = titles or {}
-    roles = text_roles(api)
+    prompts = text_slots(api, object_info)
     seeds = set(seed_inputs(api))
     sized = size_node(api)
     slot_fields = {(slot["node"], slot["field"]) for slot in slots(api, kind_of(api))}
@@ -468,7 +562,7 @@ def tunable(
                 continue
             if isinstance(value, str) and _PLACEHOLDER.search(value):
                 continue  # 占位符由宿主的主控件填,不再单独列
-            if node_id in roles and name in text_fields(node):
+            if (node_id, name) in prompts:
                 continue  # 提示词 / 反向提示词
             if (node_id, name) in seeds:
                 continue
@@ -507,14 +601,14 @@ def describe(
     """
     titles = titles or {}
     kind = kind_of(api)
-    roles = text_roles(api)
+    prompts = text_slots(api, object_info)
     seeds = set(seed_inputs(api))
     sized = size_node(api)
     placeholders = _placeholders_in(api)
     found_slots = slots(api, kind, titles)
 
     parameters: dict[str, dict[str, Any]] = {}
-    if "negative" in roles.values() or "negative" in placeholders:
+    if "negative" in prompts.values() or "negative" in placeholders:
         parameters["negative_prompt"] = {"type": "string"}
     if seeds or "seed" in placeholders:
         parameters["seed"] = {"type": "integer", "minimum": 0}
@@ -547,7 +641,7 @@ def describe(
     counts: dict[str, int] = {}
     for slot in found_slots:
         counts[slot["role"]] = counts.get(slot["role"], 0) + 1
-    prompted = bool(roles) or "prompt" in placeholders
+    prompted = bool(prompts) or "prompt" in placeholders
     image_roles = ("reference_image", "first_frame", "last_frame")
     # 没有提示词、也没有自己的画布(放大、抠图、修脸这类「处理一张图」的工作流):那张图是必须给的 ——
     # 否则 ComfyUI 会拿工作流里存着的那张示例图跑一遍,用户拿回来的不是自己的图。
@@ -571,7 +665,8 @@ def describe(
         elif "first_frame" in counts:
             modes = ["image-to-video"]
         else:
-            modes = ["text-to-video"] + (["reference-to-video"] if "reference_image" in counts else [])
+            modes = ["text-to-video"] + (
+                ["reference-to-video"] if "reference_image" in counts or "reference_video" in counts else [])
     elif kind == "audio":
         # 音乐 / 音效 / 配音(ADR 0022):宿主的音频模式里通用的那一个
         modes = ["text-to-audio"]
@@ -589,7 +684,7 @@ def describe(
         "inputs": inputs,
         "max_outputs": max_outputs,
         # 提示词要不要写:从图里读(见 prompt_requirement)。放大这类图是 none —— 宿主不再逼人敲一句没用的话。
-        "prompt": prompt_requirement(api, roles, placeholders),
+        "prompt": prompt_requirement(api, prompts, placeholders),
     }
     types = {str(node.get("class_type", "")) for node in api.values()}
     # 提示词写法:SD 1.5 / SDXL 那一路(CheckpointLoaderSimple)吃逗号分隔的标签;Flux 这类走 UNETLoader
@@ -627,23 +722,22 @@ def substitute_placeholders(graph: dict[str, Any], values: dict[str, Any]) -> di
     return fill(copy.deepcopy(graph))
 
 
-def fill(api: dict[str, Any], values: dict[str, Any], overrides: dict[str, Any]) -> dict[str, Any]:
+def fill(api: dict[str, Any], values: dict[str, Any], overrides: dict[str, Any],
+         object_info: dict[str, Any] | None = None) -> dict[str, Any]:
     """把一次请求写进 API 图(返回新图,不改入参)。
 
     `values`:提示词 / 反向 / 种子 / 宽高 / 一次几张(`batch`)—— 宿主的主控件。**只写给了的**:用户没选尺寸,
     这张图就用它自己的尺寸,而不是被一个默认的 1024 盖掉。
     `overrides`:`<节点 id>.<输入名>` → 值,用户在参数表里动过的那些。只改字面量输入;节点或输入
     已经不在了就跳过(工作流可能在 ComfyUI 里改过了,不该为此报错)。
+    `object_info`:认提示词写在哪几格(见 text_slots)—— 和描述这张图时给的是同一份,目录说「收提示词」的图,
+    写进去的就是那几格。
     """
     graph = copy.deepcopy(api)
-    roles = text_roles(graph)
-    for node_id, role in roles.items():
+    for (node_id, name), role in text_slots(graph, object_info).items():
         text = values.get(role)
-        if text is None:
-            continue
-        inputs = graph[node_id]["inputs"]
-        for name in text_fields(graph[node_id]):
-            inputs[name] = text
+        if text is not None:
+            graph[node_id]["inputs"][name] = text
     for node_id, name in seed_inputs(graph):
         if values.get("seed") is not None:
             graph[node_id]["inputs"][name] = values["seed"]

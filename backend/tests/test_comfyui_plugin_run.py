@@ -20,7 +20,7 @@ from typing import Any
 import pytest
 
 from app.domain.plugins import runtime
-from tests.fake_comfyui import PNG, FakeComfyUI
+from tests.fake_comfyui import MINIMAX_T2V_API, PNG, VIDEO_NODE_INFO, FakeComfyUI, minimax_h3_ui
 
 PLUGIN = Path(__file__).resolve().parents[2] / "plugins" / "bundled" / "comfyui"
 ENTRY = "tools/main.py"
@@ -213,6 +213,29 @@ def test_视频图取回的是合成的视频_首帧接到start_image(comfy, tmp
     [produced] = output["outputs"]
     assert produced["path"].endswith(".mp4") and (scratch / produced["path"]).read_bytes() == b"mp4-bytes"
     assert output["usage"] == {"videos": 1}
+
+
+def test_没有认得的采样器的视频图_提示词照样写进去(comfy, tmp_path: Path) -> None:
+    """用户在视频格选 MiniMax 的视频工作流,面板说「这个模型不收提示词」。API 节点的提示词是它自己的 `prompt_text`;
+    本地 MiniMax H3 的提示词在子图里的 MiniMaxH3ImageToVideo 上 —— 目录说可以写,写了就写进那一格。"""
+    comfy.state.object_info.update(json.loads(json.dumps(VIDEO_NODE_INFO)))
+    comfy.state.workflows["video/minimax.json"] = MINIMAX_T2V_API
+    comfy.state.workflows["video_minimax_h3_t2v.json"] = minimax_h3_ui()
+    models = {one["id"]: one for one in _models(comfy.url)}
+    assert models["video/minimax.json"]["prompt"] == "optional"
+    assert models["video_minimax_h3_t2v.json"]["prompt"] == "optional"
+    assert models["video_minimax_h3_t2v.json"]["kind"] == "video"
+
+    comfy.state.outputs = {"90": {"images": [{"filename": "goldfish.mp4", "subfolder": "video", "type": "output"}]}}
+    output, _, _ = _generate(comfy.url, tmp_path, {"model": "video/minimax.json", "kind": "video", "prompt": "一条金鱼"})
+    assert comfy.posted("/prompt")[0]["prompt"]["1"]["inputs"]["prompt_text"] == "一条金鱼"
+    assert output["usage"] == {"videos": 1}
+
+    comfy.state.outputs = {"92": {"images": [{"filename": "h3.mp4", "subfolder": "video", "type": "output"}]}}
+    output, _, _ = _generate(comfy.url, tmp_path, {"model": "video_minimax_h3_t2v.json", "kind": "video",
+                                                   "prompt": "一条金鱼"})
+    assert comfy.posted("/prompt")[1]["prompt"]["105:104"]["inputs"]["prompt"] == "一条金鱼"
+    assert len(output["outputs"]) == 1, "CreateVideo 合成、SaveVideo 存下来:交回一段"
 
 
 def test_取消只停这一个任务(comfy, tmp_path: Path) -> None:

@@ -13,7 +13,23 @@ from pathlib import Path
 
 import pytest
 
-from tests.fake_comfyui import OBJECT_INFO, PORTRAIT_UI, UPSCALE_API, WAN_API, conn, widget
+from tests.fake_comfyui import (
+    HAILUO_API,
+    KLING_I2V_API,
+    MINIMAX_H3_REFERENCE_API,
+    MINIMAX_I2V_API,
+    MINIMAX_T2V_API,
+    OBJECT_INFO,
+    PORTRAIT_UI,
+    UPSCALE_API,
+    VEO_FLF_API,
+    VIDEO_NODE_INFO,
+    WAN_API,
+    WAN_WRAPPER_API,
+    conn,
+    minimax_h3_ui,
+    widget,
+)
 
 TOOLS = Path(__file__).resolve().parents[2] / "plugins" / "bundled" / "comfyui" / "tools"
 _MODULES = ("graph", "convert", "labels", "models", "run", "lines", "ws", "comfy_http", "main", "server", "workflows",
@@ -551,7 +567,7 @@ def test_提示词写在后端的一段文字节点上_连进CLIPTextEncode(grap
         "7": {"class_type": "CLIPTextEncode", "inputs": {"text": "bad", "clip": ["4", 1]}},
         "30": {"class_type": "PrimitiveStringMultiline", "inputs": {"value": "a red fox"}},
     }
-    assert graph.text_roles(api) == {"30": "prompt", "7": "negative"}
+    assert graph.text_slots(api) == {("30", "value"): "prompt", ("7", "text"): "negative"}
     assert graph.prompt_requirement(api) == "optional"
     assert graph.fill(api, {"prompt": "a cat"}, {})["30"]["inputs"]["value"] == "a cat"
     assert "30.value" not in graph.tunable(api, {"PrimitiveStringMultiline": {"input": {"required": {
@@ -704,3 +720,112 @@ def test_校验错误和执行错误说得出是哪个节点(graph) -> None:
     assert "Prompt outputs failed validation" in said and "#4 Value not in list: ckpt_name" in said
     status = {"messages": [["execution_error", {"node_type": "KSampler", "exception_message": "CUDA out of memory"}]]}
     assert graph.execution_error(status) == "KSampler: CUDA out of memory"
+
+
+# --- 没有 ComfyUI 认得的采样器的视频图:提示词写在生成节点自己身上 -------------------------------
+#
+# 用户在视频格选了「video_minimax_h3_t2v.json」和「…MiniMax+H3-多参考生视频…」,面板说「这个模型不收提示词」:
+# 此前只从 KSampler / 引导器的 positive、conditioning 往上追到 CLIPTextEncode 这一类(`text` / `clip_l` …),
+# 而 API 节点(MiniMax、海螺、Kling、Veo…)没有采样器,提示词是节点自己的 `prompt_text` / `prompt`;MiniMax H3
+# 的引导器追到的 MiniMaxH3ImageToVideo 把提示词放在 `prompt` 上;WanVideoWrapper 的采样器不在认得的那几个里。
+
+VIDEO_INFO = {**OBJECT_INFO, **VIDEO_NODE_INFO}
+
+
+def test_API节点的文生视频_提示词是它自己的prompt_text(graph) -> None:
+    model = graph.describe("minimax_t2v.json", "t2v", MINIMAX_T2V_API, VIDEO_INFO)
+    assert model["kind"] == "video" and model["modes"] == ["text-to-video"]
+    assert model["prompt"] == "optional", "存着一句话:不写就用它,写了换成你的"
+    assert "1.prompt_text" not in model["parameters"], "提示词由宿主的主控件填,不再单列成参数"
+    assert model["parameters"]["seed"] == {"type": "integer", "minimum": 0}
+    filled = graph.fill(MINIMAX_T2V_API, {"prompt": "a koi"}, {}, VIDEO_INFO)
+    assert filled["1"]["inputs"]["prompt_text"] == "a koi"
+    empty = {**MINIMAX_T2V_API, "1": {**MINIMAX_T2V_API["1"], "inputs": {**MINIMAX_T2V_API["1"]["inputs"], "prompt_text": ""}}}
+    assert graph.prompt_requirement(empty, object_info=VIDEO_INFO) == "required"
+
+
+def test_API节点的图生视频_接到image和first_frame_image上的是首帧(graph) -> None:
+    for api in (MINIMAX_I2V_API, HAILUO_API):
+        model = graph.describe("i2v.json", "i2v", api, VIDEO_INFO)
+        assert model["inputs"] == [{"role": "first_frame", "max": 1}], api["1"]["class_type"]
+        assert model["modes"] == ["image-to-video"]
+    assert graph.describe("hailuo.json", "h", HAILUO_API, VIDEO_INFO)["prompt"] == "required", "存的是空串:要写"
+    assert graph.fill(HAILUO_API, {"prompt": "P"}, {}, VIDEO_INFO)["1"]["inputs"]["prompt_text"] == "P"
+
+
+def test_正反两句在同一个节点上_各归各的(graph) -> None:
+    """Kling、Veo 的 API 节点,WanVideoWrapper 的 WanVideoTextEncode:正向和反向提示词是同一个节点的两格。"""
+    slots = graph.text_slots(KLING_I2V_API, VIDEO_INFO)
+    assert slots == {("1", "prompt"): "prompt", ("1", "negative_prompt"): "negative"}
+    model = graph.describe("kling.json", "kling", KLING_I2V_API, VIDEO_INFO)
+    assert model["prompt"] == "optional" and "negative_prompt" in model["parameters"]
+    assert model["inputs"] == [{"role": "first_frame", "max": 1}], "Kling 的首帧叫 start_frame"
+    assert not {"1.prompt", "1.negative_prompt"} & set(model["parameters"])
+    filled = graph.fill(KLING_I2V_API, {"prompt": "P", "negative": "N"}, {}, VIDEO_INFO)
+    assert (filled["1"]["inputs"]["prompt"], filled["1"]["inputs"]["negative_prompt"]) == ("P", "N")
+
+    veo = graph.describe("veo.json", "veo", VEO_FLF_API, VIDEO_INFO)
+    assert veo["modes"] == ["keyframes-to-video"]
+    assert {(one["role"], one["max"]) for one in veo["inputs"]} == {("first_frame", 1), ("last_frame", 1)}
+    assert veo["prompt"] == "optional"
+
+    wan = graph.describe("wan_wrapper.json", "wan", WAN_WRAPPER_API, VIDEO_INFO)
+    assert wan["prompt"] == "optional" and "negative_prompt" in wan["parameters"]
+    assert wan["inputs"] == [{"role": "first_frame", "max": 1}] and wan["modes"] == ["image-to-video"]
+    filled = graph.fill(WAN_WRAPPER_API, {"prompt": "P", "negative": "N"}, {}, VIDEO_INFO)
+    assert filled["11"]["inputs"] == {"positive_prompt": "P", "negative_prompt": "N"}
+
+
+def test_不是多行文字的同名输入不当提示词(graph) -> None:
+    """判的是 ComfyUI 说的输入类型(多行的 STRING),不只看名字:一格单行的 `prompt`(比如一个文件名前缀、一个 id)不是提示词。"""
+    api = _api_video_with("1", "SomeVideoNode", {"prompt": "x_", "description": "y"})
+    info = {**VIDEO_INFO, "SomeVideoNode": {"input": {"required": {"prompt": ["STRING", {"multiline": False}],
+                                                                    "description": ["STRING", {"multiline": True}]}},
+                                            "output": ["VIDEO"]}}
+    assert graph.text_slots(api, info) == {}
+    assert graph.prompt_requirement(api, object_info=info) == "none"
+
+
+def _api_video_with(node: str, class_type: str, inputs: dict) -> dict:
+    return {node: {"class_type": class_type, "inputs": inputs},
+            "90": {"class_type": "SaveVideo", "inputs": {"video": [node, 0], "filename_prefix": "video/out"}}}
+
+
+def test_MiniMax_H3_子图里的提示词_展开之后写进里面那个节点(graph, convert) -> None:
+    api = convert.to_api(minimax_h3_ui(), VIDEO_INFO)
+    assert api["105:104"]["inputs"]["prompt"] == "Realistic live-action cinematic look", "子图节点上提升出来的那一格"
+    assert graph.text_slots(api, VIDEO_INFO) == {("105:104", "prompt"): "prompt"}
+    model = graph.describe("video_minimax_h3_t2v.json", "h3", api, VIDEO_INFO, convert.titles_of(api))
+    assert model["kind"] == "video" and model["prompt"] == "optional" and model["modes"] == ["text-to-video"]
+    assert "105:104.prompt" not in model["parameters"]
+    assert graph.fill(api, {"prompt": "a goldfish"}, {}, VIDEO_INFO)["105:104"]["inputs"]["prompt"] == "a goldfish"
+    #: CreateVideo 只是把帧合成一段视频交下去,存下来的是 SaveVideo —— 一次交回一段,不是两段。
+    assert [one["node"] for one in graph.output_nodes(api, VIDEO_INFO)] == ["92"]
+    assert [one["node"] for one in graph.generation_nodes(api, "video", VIDEO_INFO)] == ["92"]
+
+    framed = convert.to_api(minimax_h3_ui(frames=True), VIDEO_INFO)
+    roles = {slot["node"]: slot["role"] for slot in graph.slots(framed, "video")}
+    assert roles == {"201": "first_frame", "202": "last_frame"}, "外面接进子图首帧 / 尾帧口的图"
+    assert graph.describe("h3_flf.json", "h3", framed, VIDEO_INFO)["modes"] == ["keyframes-to-video"]
+
+
+def test_多参考生视频_提示词写在连进来的文字节点上(graph) -> None:
+    """「…MiniMax+H3-多参考生视频…」:提示词在一个自定义的 `Text` 节点上(ComfyUI 不认识它的类型,按名字认),
+    连进 MiniMaxH3ReferenceToVideo 的 `prompt`。只存下来一个 VHS 合成(另一个关了 save_output)。"""
+    api = MINIMAX_H3_REFERENCE_API
+    assert graph.text_slots(api, VIDEO_INFO) == {("263", "text"): "prompt"}
+    model = graph.describe("reference.json", "ref", api, VIDEO_INFO)
+    assert model["prompt"] == "optional"
+    #: 接在 `ref_*` 上的是参考:参考视频不是「要改的那段视频」(那是必给的),参考音频也不是驱动口型的音频
+    #: (那要数字人授权)。有提示词:都可给可不给。
+    assert model["inputs"] == [{"role": "reference_video", "max": 1}, {"role": "reference_audio", "max": 1},
+                               {"role": "reference_image", "max": 1}]
+    assert model["modes"] == ["text-to-video", "reference-to-video"]
+    assert graph.fill(api, {"prompt": "P"}, {}, VIDEO_INFO)["263"]["inputs"]["text"] == "P"
+    assert [one["node"] for one in graph.generation_nodes(api, "video", VIDEO_INFO)] == ["214"]
+
+
+def test_认得的采样器那一路照旧_没接上的文字节点不算(graph) -> None:
+    """往上游找只在采样器那一路什么都没找到时才找,也只找**接到产出节点上**的。"""
+    api = {**MINIMAX_T2V_API, "50": {"class_type": "MinimaxTextToVideoNode", "inputs": {"prompt_text": "孤零零的一句"}}}
+    assert graph.text_slots(api, VIDEO_INFO) == {("1", "prompt_text"): "prompt"}

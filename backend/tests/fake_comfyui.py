@@ -157,6 +157,244 @@ CONTROLNET_API: dict[str, Any] = {
                                                        "image": ["12", 0], "strength": 1.0}},
 }
 
+def _ml() -> list[Any]:
+    return ["STRING", {"multiline": True}]
+
+
+#: 没有 ComfyUI 认得的采样器的那几类视频图用到的节点(子集),输入名、类型照真实的 /object_info:
+#:
+#: - ComfyUI 自带的**合作方 API 节点**(comfy_api_nodes):提示词是节点自己的一格多行字符串 —— MiniMax / 海螺叫
+#:   `prompt_text`,Kling、Veo 叫 `prompt`,反向提示词 `negative_prompt` 和它在同一个节点上;首帧叫
+#:   `first_frame_image`(海螺)、`start_frame`(Kling)、`first_frame` / `last_frame`(Veo)、`image`(MiniMax 图生视频);
+#: - kijai 的 **WanVideoWrapper**:采样器是 WanVideoSampler,正反两句都写在 WanVideoTextEncode 上;
+#: - 本地的 **MiniMax H3**:BasicGuider 的条件来自 MiniMaxH3ImageToVideo,提示词是它的 `prompt`;
+#: - **CreateVideo** 只是把帧和声音合成一段视频交给下游,不是输出节点 —— 存下来的是后面的 SaveVideo。
+VIDEO_NODE_INFO: dict[str, Any] = {
+    "MinimaxTextToVideoNode": {"input": {"required": {"prompt_text": _ml(), "model": [["T2V-01", "T2V-01-Director"]]},
+                                         "optional": {"seed": ["INT", {"default": 0, "min": 0}]}},
+                               "output": ["VIDEO"]},
+    "MinimaxImageToVideoNode": {"input": {"required": {"image": ["IMAGE"], "prompt_text": _ml(),
+                                                       "model": [["I2V-01", "I2V-01-live"]]},
+                                          "optional": {"seed": ["INT", {"default": 0, "min": 0}]}},
+                                "output": ["VIDEO"]},
+    "MinimaxHailuoVideoNode": {"input": {"required": {"prompt_text": _ml()},
+                                         "optional": {"seed": ["INT", {"default": 0, "min": 0}],
+                                                      "first_frame_image": ["IMAGE"],
+                                                      "prompt_optimizer": ["BOOLEAN", {"default": True}],
+                                                      "duration": [[6, 10]], "resolution": [["768P", "1080P"]]}},
+                               "output": ["VIDEO"]},
+    "KlingImage2VideoNode": {"input": {"required": {
+        "start_frame": ["IMAGE"], "prompt": _ml(), "negative_prompt": _ml(), "model_name": [["kling-v2-1", "kling-v1-6"]],
+        "cfg_scale": ["FLOAT", {"default": 0.8, "min": 0.0, "max": 1.0}], "mode": [["std", "pro"]],
+        "aspect_ratio": [["16:9", "9:16", "1:1"]], "duration": [["5", "10"]]}}, "output": ["VIDEO", "STRING", "STRING"]},
+    "Veo3FirstLastFrameNode": {"input": {"required": {
+        "prompt": _ml(), "negative_prompt": _ml(), "resolution": [["720p", "1080p"]], "aspect_ratio": [["16:9", "9:16"]],
+        "duration": ["INT", {"default": 8, "min": 4, "max": 8}], "seed": ["INT", {"default": 0, "min": 0}],
+        "first_frame": ["IMAGE"], "last_frame": ["IMAGE"], "model": [["veo-3.1-generate", "veo-3.1-fast-generate"]],
+        "generate_audio": ["BOOLEAN", {"default": True}]}}, "output": ["VIDEO"]},
+    "SaveVideo": {"input": {"required": {"video": ["VIDEO"], "filename_prefix": ["STRING", {"default": "video/ComfyUI"}],
+                                         "format": [["auto", "mp4"]], "codec": [["auto", "h264"]]}},
+                  "output_node": True, "output": ["VIDEO"]},
+    "CreateVideo": {"input": {"required": {"images": ["IMAGE"], "fps": ["FLOAT", {"default": 30.0}]},
+                              "optional": {"audio": ["AUDIO"]}},
+                    "output_node": False, "output": ["VIDEO"]},
+    "WanVideoTextEncode": {"input": {"required": {"positive_prompt": _ml(), "negative_prompt": _ml()},
+                                     "optional": {"t5": ["WANTEXTENCODER"]}}, "output": ["WANVIDEOTEXTEMBEDS"]},
+    "WanVideoImageToVideoEncode": {"input": {"required": {
+        "width": ["INT", {"default": 832, "min": 64}], "height": ["INT", {"default": 480, "min": 64}],
+        "num_frames": ["INT", {"default": 81, "min": 1}]},
+        "optional": {"vae": ["WANVAE"], "start_image": ["IMAGE"], "end_image": ["IMAGE"]}}, "output": ["WANVIDIMAGE_EMBEDS"]},
+    "WanVideoSampler": {"input": {"required": {
+        "model": ["WANVIDEOMODEL"], "image_embeds": ["WANVIDIMAGE_EMBEDS"], "steps": ["INT", {"default": 30, "min": 1}],
+        "cfg": ["FLOAT", {"default": 6.0, "min": 0.0, "max": 30.0}], "seed": ["INT", {"default": 0, "min": 0}]},
+        "optional": {"text_embeds": ["WANVIDEOTEXTEMBEDS"]}}, "output": ["LATENT", "LATENT"]},
+    "WanVideoDecode": {"input": {"required": {"vae": ["WANVAE"], "samples": ["LATENT"]}}, "output": ["IMAGE"]},
+    "MiniMaxH3ImageToVideo": {"input": {"required": {
+        "clip": ["CLIP"], "vae": ["VAE"], "prompt": ["STRING", {"multiline": True, "dynamicPrompts": True}],
+        "width": ["INT", {"default": 1344, "min": 32, "step": 32}], "height": ["INT", {"default": 768, "min": 32, "step": 32}],
+        "length": ["INT", {"default": 124, "min": 5, "step": 17}]},
+        "optional": {"first_frame": ["IMAGE"], "last_frame": ["IMAGE"]}}, "output": ["CONDITIONING", "LATENT"]},
+    "MiniMaxH3ReferenceToVideo": {"input": {"required": {
+        "clip": ["CLIP"], "prompt": _ml(), "width": ["INT", {"default": 1344}], "height": ["INT", {"default": 768}],
+        "length": ["INT", {"default": 124}]}}, "output": ["CONDITIONING", "LATENT"]},
+    "UNETLoader": {"input": {"required": {"unet_name": [["minimax_h3.safetensors"]], "weight_dtype": [["default", "fp8"]]}}},
+    "CLIPLoader": {"input": {"required": {"clip_name": [["qwen3vl.safetensors"]], "type": [["minimax", "wan"]]}}},
+    "VAELoader": {"input": {"required": {"vae_name": [["minimax_h3_vae.safetensors"]]}}},
+    "BasicGuider": {"input": {"required": {"model": ["MODEL"], "conditioning": ["CONDITIONING"]}}},
+    "RandomNoise": {"input": {"required": {"noise_seed": ["INT", {"default": 0, "min": 0,
+                                                                  "control_after_generate": True}]}}},
+    "KSamplerSelect": {"input": {"required": {"sampler_name": [["euler", "res_multistep"]]}}},
+    "BasicScheduler": {"input": {"required": {"model": ["MODEL"], "scheduler": [["simple", "beta"]],
+                                              "steps": ["INT", {"default": 20, "min": 1}],
+                                              "denoise": ["FLOAT", {"default": 1.0, "min": 0.0, "max": 1.0}]}}},
+    "SamplerCustomAdvanced": {"input": {"required": {"noise": ["NOISE"], "guider": ["GUIDER"], "sampler": ["SAMPLER"],
+                                                     "sigmas": ["SIGMAS"], "latent_image": ["LATENT"]}}},
+}
+
+
+def _api_video(node: str, class_type: str, inputs: dict[str, Any]) -> dict[str, Any]:
+    """一张最小的视频 API 图:`node` 交出一段视频,SaveVideo 存下来。"""
+    return {node: {"class_type": class_type, "inputs": inputs},
+            "90": {"class_type": "SaveVideo", "inputs": {"video": [node, 0], "filename_prefix": "video/out"}}}
+
+
+#: MiniMax 文生视频(API 节点):提示词是 `prompt_text`。
+MINIMAX_T2V_API = _api_video("1", "MinimaxTextToVideoNode", {"prompt_text": "a goldfish", "model": "T2V-01", "seed": 3})
+#: MiniMax 图生视频(API 节点):读一张图接到 `image` 上 —— 首帧。
+MINIMAX_I2V_API = {
+    **_api_video("1", "MinimaxImageToVideoNode", {"image": ["5", 0], "prompt_text": "it swims", "model": "I2V-01"}),
+    "5": {"class_type": "LoadImage", "inputs": {"image": "fish.png"}},
+}
+#: 海螺:首帧叫 `first_frame_image`。
+HAILUO_API = {
+    **_api_video("1", "MinimaxHailuoVideoNode", {"prompt_text": "", "first_frame_image": ["5", 0], "duration": 6}),
+    "5": {"class_type": "LoadImage", "inputs": {"image": "start.png"}},
+}
+#: Kling 图生视频:正反两句在同一个节点上,首帧叫 `start_frame`。
+KLING_I2V_API = {
+    **_api_video("1", "KlingImage2VideoNode", {"start_frame": ["5", 0], "prompt": "a dancer", "negative_prompt": "blur",
+                                                "model_name": "kling-v2-1", "cfg_scale": 0.8, "mode": "std",
+                                                "aspect_ratio": "16:9", "duration": "5"}),
+    "5": {"class_type": "LoadImage", "inputs": {"image": "dancer.png"}},
+}
+#: Veo 首尾帧。
+VEO_FLF_API = {
+    **_api_video("1", "Veo3FirstLastFrameNode", {"prompt": "sunrise", "negative_prompt": "", "resolution": "720p",
+                                                  "aspect_ratio": "16:9", "duration": 8, "seed": 1,
+                                                  "first_frame": ["5", 0], "last_frame": ["6", 0],
+                                                  "model": "veo-3.1-generate", "generate_audio": True}),
+    "5": {"class_type": "LoadImage", "inputs": {"image": "a.png"}},
+    "6": {"class_type": "LoadImage", "inputs": {"image": "b.png"}},
+}
+#: WanVideoWrapper 图生视频:WanVideoTextEncode(正反两句)→ WanVideoSampler → WanVideoDecode → VHS 合成。
+WAN_WRAPPER_API: dict[str, Any] = {
+    "11": {"class_type": "WanVideoTextEncode", "inputs": {"positive_prompt": "a koi pond", "negative_prompt": "ugly"}},
+    "12": {"class_type": "LoadImage", "inputs": {"image": "pond.png"}},
+    "13": {"class_type": "WanVideoImageToVideoEncode", "inputs": {"width": 832, "height": 480, "num_frames": 81,
+                                                                  "start_image": ["12", 0]}},
+    "14": {"class_type": "WanVideoSampler", "inputs": {"model": ["20", 0], "image_embeds": ["13", 0], "steps": 30,
+                                                       "cfg": 6.0, "seed": 7, "text_embeds": ["11", 0]}},
+    "15": {"class_type": "WanVideoDecode", "inputs": {"vae": ["21", 0], "samples": ["14", 0]}},
+    "16": {"class_type": "VHS_VideoCombine", "inputs": {"images": ["15", 0], "frame_rate": 16}},
+}
+
+#: 本地 MiniMax H3 文生视频的那张图(照用户 ComfyUI 里的「video_minimax_h3_t2v.json」缩出来的):整条流程包在**子图**
+#: 「Image to Video (MiniMax H3)」里,提示词是子图节点上提升出来的一格;子图里 BasicGuider 的条件来自
+#: MiniMaxH3ImageToVideo(提示词就是它的 `prompt`),帧和声音由 CreateVideo 合成交出子图,外面的 SaveVideo 存下来。
+#: 首帧 / 尾帧是子图的两个输入口,文生视频时空着。
+MINIMAX_H3_SUBGRAPH = "4c314f31-ecda-4b08-ae98-faaba1bf613f"
+
+
+def minimax_h3_ui(*, frames: bool = False) -> dict[str, Any]:
+    """`frames`:外面接两张 LoadImage 到子图的首帧 / 尾帧口(图生视频的用法)。"""
+
+    def sub_link(link_id: int, origin: int, origin_slot: int, target: int, target_slot: int, kind: str) -> dict[str, Any]:
+        return {"id": link_id, "origin_id": origin, "origin_slot": origin_slot, "target_id": target,
+                "target_slot": target_slot, "type": kind}
+
+    loaders = [
+        {"id": 201, "type": "LoadImage", "widgets_values": ["first.png", "image"], "inputs": [widget("image")],
+         "outputs": [{"name": "IMAGE", "type": "IMAGE", "links": [301]}]},
+        {"id": 202, "type": "LoadImage", "widgets_values": ["last.png", "image"], "inputs": [widget("image")],
+         "outputs": [{"name": "IMAGE", "type": "IMAGE", "links": [302]}]},
+    ] if frames else []
+    return {
+        "id": "8f6b0a52-6a0b-4c1e-9d55-1b2c3d4e5f60",
+        "nodes": [
+            {"id": 92, "type": "SaveVideo", "widgets_values": ["video/MiniMax_H3", "auto", "auto"],
+             "inputs": [{"name": "video", "type": "VIDEO", "link": 194}, widget("filename_prefix"), widget("format"),
+                        widget("codec")]},
+            {"id": 105, "type": MINIMAX_H3_SUBGRAPH,
+             "inputs": [{"name": "first_frame", "type": "IMAGE", "link": 301 if frames else None},
+                        {"name": "last_frame", "type": "IMAGE", "link": 302 if frames else None},
+                        {"name": "prompt", "type": "STRING", "widget": {"name": "prompt"}, "link": None},
+                        {"name": "width", "type": "INT", "widget": {"name": "width"}, "link": None},
+                        {"name": "height", "type": "INT", "widget": {"name": "height"}, "link": None},
+                        {"name": "noise_seed", "type": "INT", "widget": {"name": "noise_seed"}, "link": None}],
+             "outputs": [{"name": "VIDEO", "type": "VIDEO", "links": [194]}],
+             "widgets_values": ["Realistic live-action cinematic look", 1344, 768, 556589502035082]},
+            {"id": 116, "type": "MarkdownNote", "widgets_values": ["## MiniMax H3"], "inputs": []},
+            *loaders,
+        ],
+        "links": [[194, 105, 0, 92, 0, "VIDEO"],
+                  *([[301, 201, 0, 105, 0, "IMAGE"], [302, 202, 0, 105, 1, "IMAGE"]] if frames else [])],
+        "definitions": {"subgraphs": [{
+            "id": MINIMAX_H3_SUBGRAPH, "name": "Image to Video (MiniMax H3)",
+            "inputNode": {"id": -10, "bounding": [0, 0, 1, 1]}, "outputNode": {"id": -20, "bounding": [0, 0, 1, 1]},
+            "inputs": [{"id": "i0", "name": "first_frame", "type": "IMAGE", "linkIds": [195]},
+                       {"id": "i1", "name": "last_frame", "type": "IMAGE", "linkIds": [196]},
+                       {"id": "i2", "name": "prompt", "type": "STRING", "linkIds": [197]},
+                       {"id": "i3", "name": "width", "type": "INT", "linkIds": [200]},
+                       {"id": "i4", "name": "height", "type": "INT", "linkIds": [201]},
+                       {"id": "i5", "name": "noise_seed", "type": "INT", "linkIds": [207]}],
+            "outputs": [{"id": "o0", "name": "VIDEO", "type": "VIDEO", "linkIds": [168]}],
+            "nodes": [
+                {"id": 6, "type": "UNETLoader", "widgets_values": ["minimax_h3.safetensors", "default"],
+                 "inputs": [widget("unet_name"), widget("weight_dtype")]},
+                {"id": 11, "type": "VAELoader", "widgets_values": ["minimax_h3_vae.safetensors"],
+                 "inputs": [widget("vae_name")]},
+                {"id": 13, "type": "CLIPLoader", "widgets_values": ["qwen3vl.safetensors", "minimax"],
+                 "inputs": [widget("clip_name"), widget("type")]},
+                {"id": 104, "type": "MiniMaxH3ImageToVideo", "widgets_values": ["Vaporwave title sequence", 1344, 768, 124],
+                 "inputs": [{"name": "clip", "type": "CLIP", "link": 189}, {"name": "vae", "type": "VAE", "link": 190},
+                            {"name": "first_frame", "type": "IMAGE", "link": 195},
+                            {"name": "last_frame", "type": "IMAGE", "link": 196},
+                            {"name": "prompt", "type": "STRING", "widget": {"name": "prompt"}, "link": 197},
+                            {"name": "width", "type": "INT", "widget": {"name": "width"}, "link": 200},
+                            {"name": "height", "type": "INT", "widget": {"name": "height"}, "link": 201},
+                            {"name": "length", "type": "INT", "widget": {"name": "length"}, "link": None}]},
+                {"id": 15, "type": "RandomNoise", "widgets_values": [1, "randomize"],
+                 "inputs": [{"name": "noise_seed", "type": "INT", "widget": {"name": "noise_seed"}, "link": 207}]},
+                {"id": 16, "type": "BasicGuider", "inputs": [{"name": "model", "type": "MODEL", "link": 193},
+                                                             {"name": "conditioning", "type": "CONDITIONING", "link": 187}]},
+                {"id": 17, "type": "KSamplerSelect", "widgets_values": ["res_multistep"], "inputs": [widget("sampler_name")]},
+                {"id": 9, "type": "BasicScheduler", "widgets_values": ["simple", 20, 1],
+                 "inputs": [{"name": "model", "type": "MODEL", "link": 5}, widget("scheduler"), widget("steps"),
+                            widget("denoise")]},
+                {"id": 14, "type": "SamplerCustomAdvanced",
+                 "inputs": [{"name": "noise", "type": "NOISE", "link": 40}, {"name": "guider", "type": "GUIDER", "link": 12},
+                            {"name": "sampler", "type": "SAMPLER", "link": 16}, {"name": "sigmas", "type": "SIGMAS", "link": 18},
+                            {"name": "latent_image", "type": "LATENT", "link": 188}]},
+                {"id": 10, "type": "VAEDecode", "inputs": [{"name": "samples", "type": "LATENT", "link": 225},
+                                                           {"name": "vae", "type": "VAE", "link": 8}]},
+                {"id": 91, "type": "CreateVideo", "widgets_values": [24],
+                 "inputs": [{"name": "images", "type": "IMAGE", "link": 167}, widget("fps")]},
+            ],
+            "links": [
+                sub_link(5, 6, 0, 9, 0, "MODEL"), sub_link(8, 11, 0, 10, 1, "VAE"), sub_link(12, 16, 0, 14, 1, "GUIDER"),
+                sub_link(16, 17, 0, 14, 2, "SAMPLER"), sub_link(18, 9, 0, 14, 3, "SIGMAS"), sub_link(40, 15, 0, 14, 0, "NOISE"),
+                sub_link(167, 10, 0, 91, 0, "IMAGE"), sub_link(168, 91, 0, -20, 0, "VIDEO"),
+                sub_link(187, 104, 0, 16, 1, "CONDITIONING"), sub_link(188, 104, 1, 14, 4, "LATENT"),
+                sub_link(189, 13, 0, 104, 0, "CLIP"), sub_link(190, 11, 0, 104, 1, "VAE"),
+                sub_link(193, 6, 0, 16, 0, "MODEL"), sub_link(195, -10, 0, 104, 2, "IMAGE"),
+                sub_link(196, -10, 1, 104, 3, "IMAGE"), sub_link(197, -10, 2, 104, 4, "STRING"),
+                sub_link(200, -10, 3, 104, 5, "INT"), sub_link(201, -10, 4, 104, 6, "INT"),
+                sub_link(207, -10, 5, 15, 0, "INT"), sub_link(225, 14, 0, 10, 0, "LATENT"),
+            ],
+        }]},
+    }
+
+
+#: 「多参考生视频」那张(照「YZ金鱼-MiniMax+H3-多参考生视频」缩出来的):提示词写在一个自定义的 `Text` 节点上,
+#: 连进 MiniMaxH3ReferenceToVideo 的 `prompt`;参考图、参考视频、参考音频接在 `ref_images.*` / `ref_videos.*` /
+#: `ref_audios.*` 上;存下来的是 VHS 合成,另一个关了 save_output 的合成只是预览。
+MINIMAX_H3_REFERENCE_API: dict[str, Any] = {
+    "16": {"class_type": "BasicGuider", "inputs": {"model": ["6", 0], "conditioning": ["265", 0]}},
+    "14": {"class_type": "SamplerCustomAdvanced", "inputs": {"guider": ["16", 0], "latent_image": ["265", 1]}},
+    "6": {"class_type": "UNETLoader", "inputs": {"unet_name": "minimax_h3.safetensors", "weight_dtype": "default"}},
+    "263": {"class_type": "Text", "inputs": {"text": "<Subject 1> walks into the clinic"}},
+    "265": {"class_type": "MiniMaxH3ReferenceToVideo", "inputs": {"prompt": ["263", 0], "width": 1344, "height": 768,
+                                                                  "length": 124, "ref_images.ref_image_0": ["51", 0],
+                                                                  "ref_videos.ref_video_0": ["27", 0],
+                                                                  "ref_audios.ref_audio_0": ["48", 0]}},
+    "51": {"class_type": "LoadImage", "inputs": {"image": "doctor.png"}},
+    "27": {"class_type": "VHS_LoadVideo", "inputs": {"video": "", "force_rate": 0}},
+    "48": {"class_type": "LoadAudio", "inputs": {"audio": "voice.wav"}},
+    "116": {"class_type": "VAEDecode", "inputs": {"samples": ["14", 0]}},
+    "214": {"class_type": "VHS_VideoCombine", "inputs": {"images": ["116", 0], "frame_rate": 24, "save_output": True}},
+    "264": {"class_type": "VHS_VideoCombine", "inputs": {"images": ["116", 0], "frame_rate": 24, "save_output": False}},
+}
+
 #: 模型目录(`/models` 与 `/models/<目录>`)。
 MODEL_FOLDERS: dict[str, list[str]] = {
     "checkpoints": ["sd_xl_base.safetensors", "v1-5.ckpt"],
