@@ -7,6 +7,10 @@ from __future__ import annotations
 
 MESSAGES: dict[str, dict[str, str]] = {
     # ---- B1 · 03_confirmable ----
+    "confirmErr_timelineOpFails": {
+        "zh": "第 {index} 条时间线操作({kind})照现在的时间线做不了:{reason}。没有开卡,改好这一条再提交",
+        "en": "Timeline operation #{index} ({kind}) can't be done on the timeline as it is now: {reason}. No card was opened; fix it and send again.",
+    },
     "confirmErr_boardNotInWorkspace": {
         "zh": "这个工作区里没有这张画板",
         "en": "This workspace has no such board.",

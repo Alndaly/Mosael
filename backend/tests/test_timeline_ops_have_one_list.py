@@ -39,10 +39,14 @@ def test_清单从派发表算出来_不是第二份手写() -> None:
     assert 'elif kind == "' not in source, "派发又长回一串 if/elif 了 —— 那就是第二份清单"
 
 
-def test_每一项都指向真的函数和真的请求体() -> None:
-    for kind, (request, handler) in ops._EDIT_OPS.items():
+def test_每一项都指向真的函数_入参模型造得出真的请求体() -> None:
+    from app.domain.sequences.op_args import OpArgs
+
+    for kind, (model, handler) in ops._EDIT_OPS.items():
         assert callable(handler), f"{kind} 的处理函数不可调用"
-        assert hasattr(request, "__dataclass_fields__"), f"{kind} 的请求体不是 dataclass"
+        assert issubclass(model, OpArgs), f"{kind} 的入参不是 OpArgs 模型"
+        built = inspect.get_annotations(model.to_request, eval_str=True)["return"]
+        assert hasattr(built, "__dataclass_fields__"), f"{kind} 的入参模型造出来的不是领域的请求体"
 
 
 def test_那几个曾经做不到的事现在做得到() -> None:

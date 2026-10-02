@@ -49,7 +49,7 @@
 | `dub_subtitles` | 确认卡 | Confirmation required: speak subtitle cues aloud onto a new dub track. |
 | `edit_board` | 确认卡 | Confirmation required: edit an EXISTING CREATIVE BOARD with granular canvas ops. |
 | `edit_scene` | 直接执行 | Edit an actual 3D scene atomically, with undoable immutable revisions. Read get_scene first. |
-| `edit_timeline` | 确认卡 | Confirmation required: propose edits to a VIDEO TIMELINE sequence. |
+| `edit_timeline` | 确认卡 | Confirmation required: propose edits to a VIDEO TIMELINE (ids from inspect_sequence). |
 | `edit_workflow` | 确认卡 | Confirmation required: edit an EXISTING VISUAL WORKFLOW with granular graph ops. |
 | `fetch_url` | 直接执行 | Read-only: fetch one public web page as readable text. |
 | `forget` | 直接执行 | Runs directly: delete one memory entry. |
@@ -224,9 +224,29 @@ plain-text notice that says which switches to flip — it does not fail silently
 
 <!-- BEGIN generated: timeline-ops -->
 
-`edit_timeline` 认 **19** 种算子:`insert_clip`、`move_clip`、`move_clips_batch`、`trim_clip`、`split_clip`、`delete_clip`、`ripple_delete_clip`、`cut_clip_range`、`add_track`、`remove_track`、`set_clip_effects`、`set_clip_transform`、`set_clip_speed`、`set_clip_gain`、`detach_clip_audio`、`insert_text_clip`、`set_clip_text`、`set_subtitle_style`、`set_sequence_reframe`。
+`edit_timeline` 认 **19** 种算子(`?` 是可选参数;`*` 是默认带上同一链接组的片段,`linked: false` 只动点名的这一段):
 
-这一份从 `domain/sequences/operations` 的派发表生成 —— 那张表是唯一那份数据,`EDIT_OP_KINDS` 和派发都从它算出来(见 test_timeline_ops_have_one_list)。
+- `insert_clip(track_id, asset_id, timeline_start, src_out, src_in?, ripple?, speed?)`
+- `move_clip*(clip_id, timeline_start, track_id?, ripple?)`
+- `move_clips_batch*(moves:[{clip_id, timeline_start, track_id?}])`
+- `trim_clip*(clip_id, timeline_start, src_in, src_out)`
+- `split_clip*(clip_id, src_time)`
+- `delete_clip*(clip_id)`
+- `ripple_delete_clip*(clip_id, all_tracks?) — later clips slide left; all_tracks: on every unlocked track`
+- `cut_clip_range*(clip_id, src_start, src_end) — removes it, the rest closes up`
+- `add_track(track_kind?:video|audio|subtitle)`
+- `remove_track(track_id, with_clips?)`
+- `detach_clip_audio(clip_id)`
+- `set_clip_effects(clip_id, effects)`
+- `set_clip_transform(clip_id, transform) — scale/x/y/rotation/opacity`
+- `set_clip_speed*(clip_id, speed, ripple?) — 0.25–4; ripple: later clips follow`
+- `set_clip_gain(clip_id, gain?, muted?) — gain 0–4; omitted = unchanged`
+- `set_sequence_reframe(width, height, fill_mode?:cover|contain|blur)`
+- `insert_text_clip(track_id, text, timeline_start, duration) — one cue on a subtitle track`
+- `set_clip_text(clip_id, text)`
+- `set_subtitle_style(style) — font_size/color/bg_color/bg_opacity/position`
+
+这一份从 `domain/sequences/op_args` 的入参模型生成 —— 智能体看到的说明、开卡时的参数校验都是它(见 test_timeline_ops_have_one_list、test_edit_timeline_args)。
 
 <!-- END generated: timeline-ops -->
 

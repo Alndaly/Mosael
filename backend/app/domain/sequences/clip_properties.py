@@ -92,8 +92,9 @@ def _respeed(journal: Journal, clip: Clip, speed: float, *, ripple: bool) -> Non
 @dataclass(frozen=True)
 class SetClipGain:
     clip_id: str
-    gain: float
-    muted: bool
+    #: None = 这一项不变。「把这段静音」只说了 muted —— 顺手把音量改回 1 不是用户要的。
+    gain: float | None = None
+    muted: bool | None = None
     actor_id: str | None = None
 
 
@@ -101,15 +102,16 @@ def set_clip_gain(db: Session, sequence_id: str, op: SetClipGain) -> Sequence:
     """A clip's own audio level/mute (a video clip carries its audio, like PR/DaVinci)."""
     sequence = _require_sequence(db, sequence_id)
     clip = _require_clip(db, sequence_id, op.clip_id)
-    gain = max(0.0, min(4.0, float(op.gain)))
+    gain = clip.gain if op.gain is None else max(0.0, min(4.0, float(op.gain)))
+    muted = clip.muted if op.muted is None else bool(op.muted)
     previous = {"gain": clip.gain, "muted": clip.muted}
     clip.gain = gain
-    clip.muted = bool(op.muted)
+    clip.muted = muted
     _record_operation(
         db,
         sequence,
         kind="set_clip_gain",
-        payload={"clip_id": clip.id, "gain": gain, "muted": bool(op.muted), "previous": previous},
+        payload={"clip_id": clip.id, "gain": gain, "muted": muted, "previous": previous},
         summary={"operation": "set_clip_gain", "clip_id": clip.id},
         actor_id=op.actor_id,
     )

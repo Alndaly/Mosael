@@ -65,17 +65,20 @@ def render() -> str:
 
 
 def render_ops() -> str:
-    """`edit_timeline` 认的那些算子 —— 从 `EDIT_OP_KINDS` 生成,它自己又是派发表算出来的。"""
+    """`edit_timeline` 认的那些算子和各自的参数 —— 从入参模型生成(domain/sequences/op_args),
+    和工具说明、开卡校验是同一份。"""
     sys.path.insert(0, str(ROOT / "backend"))
-    from app.domain.sequences.operations import EDIT_OP_KINDS
+    from app.domain.sequences.operations import EDIT_OP_KINDS, edit_operation_usage
 
-    listed = "、".join(f"`{kind}`" for kind in EDIT_OP_KINDS)
     return "\n".join([
         OPS_BEGIN, "",
-        f"`edit_timeline` 认 **{len(EDIT_OP_KINDS)}** 种算子:{listed}。",
+        f"`edit_timeline` 认 **{len(EDIT_OP_KINDS)}** 种算子(`?` 是可选参数;`*` 是默认带上同一链接组的片段,"
+        "`linked: false` 只动点名的这一段):",
         "",
-        "这一份从 `domain/sequences/operations` 的派发表生成 —— 那张表是唯一那份数据,"
-        "`EDIT_OP_KINDS` 和派发都从它算出来(见 test_timeline_ops_have_one_list)。",
+        *(f"- `{line}`" for line in edit_operation_usage()),
+        "",
+        "这一份从 `domain/sequences/op_args` 的入参模型生成 —— 智能体看到的说明、开卡时的参数校验都是它"
+        "(见 test_timeline_ops_have_one_list、test_edit_timeline_args)。",
         "", OPS_END,
     ])
 

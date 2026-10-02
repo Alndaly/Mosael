@@ -142,6 +142,15 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "慢放后这一段会盖住同轨的下一段。打开「推开后面的片段」,或先给它腾出地方",
         "en": "At this speed the clip would run into the next clip on its track. Let it push the following clips, or make room first.",
     },
+    "seqErr_badOpArgs": {
+        "zh": "时间线操作 {kind} 的参数不对:{problems}。正确写法:{usage}",
+        "en": "Wrong arguments for timeline operation {kind}: {problems}. Usage: {usage}",
+    },
+    "seqErr_opsEmpty": {"zh": "没有要做的时间线操作(operations 是空的)", "en": "No timeline operations were given (operations is empty)."},
+    "seqErr_opNotObject": {
+        "zh": "每条时间线操作都得是一个 {kind, ...参数} 对象",
+        "en": "Each timeline operation must be an object of the form {kind, ...args}.",
+    },
     # 工作流:选项来源、修订、AI 编排、JSON 校验
     "wfErr_unknownOptionSource": {"zh": "未知的选项来源:{source}", "en": "Unknown option source: {source}"},
     "wfErr_graphConflict": {

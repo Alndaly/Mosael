@@ -149,8 +149,11 @@ _TOOL_EFFECTS: dict[str, str] = {}
 _AWAITS_ANSWER: set[str] = set()
 
 
-def tool(*, effect: str, awaits_answer: bool = False):
-    """登记一个工具,连同它做了什么(见上)。`effect` 没有默认值 —— 漏写是 TypeError。"""
+def tool(*, effect: str, awaits_answer: bool = False, description: str | None = None):
+    """登记一个工具,连同它做了什么(见上)。`effect` 没有默认值 —— 漏写是 TypeError。
+
+    `description` 给了就用它代替 docstring:说明要从别处**生成**的工具用(edit_timeline 的算子清单从入参模型生成)。
+    """
     if effect not in _EFFECTS:
         raise ValueError(f"effect must be one of {sorted(_EFFECTS)}, got {effect!r}")
 
@@ -158,7 +161,7 @@ def tool(*, effect: str, awaits_answer: bool = False):
         _TOOL_EFFECTS[fn.__name__] = effect
         if awaits_answer:
             _AWAITS_ANSWER.add(fn.__name__)
-        return mcp.tool()(fn)
+        return mcp.tool(description=description)(fn)
 
     return register
 
@@ -372,44 +375,25 @@ def list_projects(workspace_id: str = "") -> list[dict[str, Any]]:
     ]
 
 
-@tool(effect="confirms")
+def _edit_timeline_description() -> str:
+    """edit_timeline 的说明:算子清单从入参模型生成(domain/sequences/op_args)—— 校验的和写给模型看的是同一份,
+    参数名不会再对不上(审查实测:说明写 split_clip 的 `at`、改画幅的 `fit`,真实参数是 src_time、fill_mode)。
+
+    写得很紧:工具定义每轮请求都重发,本机模型的兜底窗口里它是最大的一块。"""
+    from app.domain.sequences.op_args import LINKED_MARK
+    from app.domain.sequences.operations import edit_operation_usage
+
+    return "\n".join([
+        "Confirmation required: propose edits to a VIDEO TIMELINE (ids from inspect_sequence).",
+        "Do NOT use for workflow nodes/edges — use edit_workflow. Times in seconds; src_* = source-media time.",
+        "operations: [{kind, ...args}], applied in order, all or nothing; arg? = optional;",
+        f"kind{LINKED_MARK} also edits clips in the same link_group (linked:false = only this clip):",
+        *edit_operation_usage(),
+    ])
+
+
+@tool(effect="confirms", description=_edit_timeline_description())
 def edit_timeline(sequence_id: str, operations: list[dict[str, Any]], workspace_id: str = "") -> dict[str, Any]:
-    """Confirmation required: propose edits to a VIDEO TIMELINE sequence.
-
-    Use ONLY for clips/tracks/cuts/trims/effects on a sequence_id after
-    inspect_sequence. Requires the user's approval; no edit is applied unless
-    they approve it in Mosael.
-    Do NOT use for workflow canvas nodes/edges such as add_node, connect,
-    set_node_config, remove_node, or remove_edge — use edit_workflow for those.
-
-    operations: list of {kind, ...args}. Supported kinds:
-
-    Place and move — insert_clip (track_id, asset_id, timeline_start, src_in,
-    src_out), move_clip (clip_id, timeline_start), move_clips_batch (moves: a
-    list of {clip_id, timeline_start}, applied all-or-nothing).
-
-    Cut and trim — trim_clip (clip_id, timeline_start, src_in, src_out),
-    split_clip (clip_id, at), delete_clip (clip_id), ripple_delete_clip
-    (clip_id — later clips slide left to close the gap), cut_clip_range
-    (clip_id, src_start, src_end).
-
-    Tracks — add_track (track_kind), remove_track (track_id),
-    detach_clip_audio (clip_id — moves a video clip's audio onto its own track).
-
-    Look and sound — set_clip_effects (clip_id, effects), set_clip_transform
-    (clip_id, transform: scale / position / rotation / opacity — reframe, pan,
-    zoom or fade one clip), set_clip_speed (clip_id, speed — 1.5 is 1.5x),
-    set_clip_gain (clip_id, gain / muted), set_sequence_reframe (width, height,
-    fit — e.g. turn a landscape sequence portrait).
-
-    Subtitles — insert_text_clip (track_id of a SUBTITLE track, text,
-    timeline_start, duration) — one subtitle cue; send one operation per cue to
-    caption a video. set_clip_text (clip_id, text) edits one cue;
-    set_subtitle_style (style) sets size / colour / background / position for
-    the whole sequence.
-
-    Every applied edit is undoable by the user.
-    """
     if _looks_like_workflow_graph_ops(operations):
         raise ValueError(
             "Workflow graph operations were sent to edit_timeline. "

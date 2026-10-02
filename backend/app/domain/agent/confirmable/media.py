@@ -13,6 +13,7 @@ from app.domain.agent.confirmable.registry import ConfirmableTool, Summary, conf
 from app.domain.agent.errors import ConfirmationError
 from app.db.models import Sequence
 from app.domain.sequences import operations as seq_ops
+from app.domain.sequences.errors import SequenceDomainError
 
 #: 时间线操作的种类由**序列域**说了算 —— 那是「能对时间线做什么」的清单,不是智能体这一个入口的清单。
 EDIT_OP_KINDS = seq_ops.EDIT_OP_KINDS
@@ -59,15 +60,38 @@ def _subtitle_cue_count(db: Session, payload: dict[str, Any]) -> int | None:
 
 
 def _validate_edit_timeline(db: Session, workspace_id: str, payload: dict[str, Any], actor: str | None) -> None:
-    _sequence_in(db, workspace_id, payload)
+    """开卡前把这组操作**完整地认一遍、真做一遍**:参数按每种操作的模型认(写错的参数名、缺的必填、不是数的数,
+    报错里带着正确写法),再在一个保存点里照着现在的时间线做一遍然后撤掉 —— 片段不存在、轨道类型不对、
+    切点越界这类只有做的时候才知道的错,在这里就告诉智能体,而不是等用户批准之后才失败。
 
-    operations = payload.get("operations")
-    if not isinstance(operations, list) or not operations:
-        raise ConfirmationError("edit_timeline requires a non-empty operations list")
-    for operation in operations:
-        kind = operation.get("kind") if isinstance(operation, dict) else None
-        if kind not in EDIT_OP_KINDS:
-            raise ConfirmationError(f"Unsupported timeline operation: {kind}")
+    卡上存的是认过之后的那一份(补齐了缺省值):卡上写的、批准后做的,就是校验过的那一份。
+    """
+    _sequence_in(db, workspace_id, payload)
+    try:
+        payload["operations"] = seq_ops.normalized_edit_operations(payload.get("operations"))
+    except SequenceDomainError as exc:
+        raise ConfirmationError.relay(exc) from exc
+    _rehearse_edit_timeline(db, str(payload["sequence_id"]), payload["operations"], actor)
+
+
+def _rehearse_edit_timeline(db: Session, sequence_id: str, operations: list[dict[str, Any]], actor: str | None) -> None:
+    """在保存点里逐条做一遍,做完(或做不下去)都回滚。逐条做是为了说清**第几条**做不了。"""
+    savepoint = db.begin_nested()
+    try:
+        for index, operation in enumerate(operations, start=1):
+            try:
+                seq_ops.apply_edit_operations(db, sequence_id, [operation], actor_id=actor)
+            except SequenceDomainError as exc:
+                raise ConfirmationError(
+                    "confirmErr_timelineOpFails", index=index, kind=operation["kind"], reason=str(exc)
+                ) from exc
+    finally:
+        savepoint.rollback()
+        # 版本号是用条件 UPDATE 改的(见 _record_operation),会话里那条序列的 revision 跟着变了,
+        # 回滚保存点不一定把它带回来 —— 让它下次读的时候重新取。
+        sequence = db.get(Sequence, sequence_id)
+        if sequence is not None:
+            db.expire(sequence)
 
 
 def _summarize_edit_timeline(db: Session, payload: dict[str, Any]) -> Summary:
@@ -81,7 +105,7 @@ def _summarize_edit_timeline(db: Session, payload: dict[str, Any]) -> Summary:
 def _execute_edit_timeline(db: Session, confirmation: Any, actor: str | None) -> dict[str, Any]:
     payload = confirmation.payload
     sequence_id = str(payload["sequence_id"])
-    applied = seq_ops.apply_edit_operations(db, sequence_id, payload["operations"])
+    applied = seq_ops.apply_edit_operations(db, sequence_id, payload["operations"], actor_id=actor)
     sequence = db.get(Sequence, sequence_id)
     return {"applied_operations": applied, "sequence_revision": sequence.revision if sequence else None}
 
