@@ -2008,14 +2008,14 @@ def list_boards(workspace_id: str = "") -> list[dict[str, Any]]:
     frames that the user brainstorms on — NOT a visual workflow and NOT a video
     timeline. Use this to find a board_id before get_board/edit_board.
     """
-    from app.api.schemas import BoardOut
+    from app.api.schemas import BoardSummaryOut
     from app.domain.boards import use_cases
 
-    boards = _use_case(use_cases.list_all, workspace_id or _default_workspace_id(), out=BoardOut)
-    return [
-        {"id": b["id"], "name": b["name"], "items": len((b.get("canvas") or {}).get("items", []))}
-        for b in boards
-    ]
+    # 清单给的是**摘要**(board_summary:格子数 + 缩略图那一份),不带整份 canvas —— 按摘要的形状校验。
+    # 此前拿详情的 BoardOut 去校验,工作区里只要有一张板就报「canvas Field required」(用户会话里连报三次,
+    # 模型以为是数据坏了);空工作区一行都没有,所以冒烟测试一直是绿的(见 tests/test_mcp_read_tools_with_data)。
+    boards = _use_case(use_cases.list_all, workspace_id or _default_workspace_id(), out=BoardSummaryOut)
+    return [{"id": b["id"], "name": b["name"], "items": b["item_count"]} for b in boards]
 
 
 @tool(effect="reads")
