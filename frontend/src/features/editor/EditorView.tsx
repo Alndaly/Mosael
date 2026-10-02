@@ -176,9 +176,11 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
   // 入口(项目切换器 / 首页 / 命令面板 / 深链),而不是只在某个按钮的回调里补一手。
   React.useEffect(() => {
     if (!sequence?.id) return;
-    const { setPlaying, setPlayhead } = useEditorStore.getState();
+    const { setPlaying, setPlayhead, clearMarks } = useEditorStore.getState();
     setPlaying(false);
     setPlayhead(0);
+    // 入出点属于这一条时间线:换了时间线还留着,导出时就会按上一条的区间去切。
+    clearMarks();
   }, [sequence?.id]);
 
   // Uploaded subtitle fonts are workspace-level, like assets and LUTs.

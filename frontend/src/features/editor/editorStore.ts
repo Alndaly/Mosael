@@ -60,6 +60,9 @@ interface EditorState {
   clipboard: ClipClipboard | null;
   tool: ToolMode;
   editMode: EditMode;
+  /** 入点 / 出点(I / O,秒)。只打了一个时另一端取时间线的头 / 尾,见 markedRange。 */
+  markIn: number | null;
+  markOut: number | null;
   setPlayhead: (time: number) => void;
   setPlaying: (playing: boolean) => void;
   togglePlaying: () => void;
@@ -80,6 +83,9 @@ interface EditorState {
   setTool: (tool: ToolMode) => void;
   setEditMode: (mode: EditMode) => void;
   toggleEditMode: () => void;
+  setMarkIn: (time: number) => void;
+  setMarkOut: (time: number) => void;
+  clearMarks: () => void;
 }
 
 const PLAYBACK_RATES = [0.5, 1, 1.5, 2];
@@ -105,6 +111,8 @@ export const useEditorStore = create<EditorState>((set) => ({
   clipboard: null,
   tool: "select",
   editMode: "overwrite",
+  markIn: null,
+  markOut: null,
   setPlayhead: (time) => set({ playhead: Math.max(0, time) }),
   setPlaying: (playing) => set({ playing }),
   togglePlaying: () =>
@@ -146,7 +154,27 @@ export const useEditorStore = create<EditorState>((set) => ({
   setTool: (tool) => set({ tool }),
   setEditMode: (editMode) => set({ editMode }),
   toggleEditMode: () => set((state) => ({ editMode: state.editMode === "insert" ? "overwrite" : "insert" })),
+  // 新的一端越过了旧的另一端:旧的那端作废,不留一个倒着的区间。
+  setMarkIn: (time) =>
+    set((state) => ({ markIn: Math.max(0, time), markOut: state.markOut !== null && state.markOut <= time ? null : state.markOut })),
+  setMarkOut: (time) =>
+    set((state) => ({ markOut: Math.max(0, time), markIn: state.markIn !== null && state.markIn >= time ? null : state.markIn })),
+  clearMarks: () => set({ markIn: null, markOut: null }),
 }));
+
+/**
+ * 入出点圈出的选区(按入出点导出、播放选区等读它)。一个点都没打 → null;只打了入点 → 入点到
+ * 时间线结尾;只打了出点 → 开头到出点。
+ */
+export function markedRange(
+  state: Pick<EditorState, "markIn" | "markOut">,
+  duration: number,
+): { start: number; end: number } | null {
+  if (state.markIn === null && state.markOut === null) return null;
+  const start = state.markIn ?? 0;
+  const end = state.markOut ?? duration;
+  return end > start ? { start, end } : null;
+}
 
 /**
  * 当前"那一个"选中的片段 —— 属性面板、右键菜单、单片段快捷键读的都是它。

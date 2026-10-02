@@ -1,7 +1,7 @@
 import React from "react";
 
 import type { Sequence } from "@/api/client";
-import { frameAt, frameTime, sequenceDuration } from "@/domain/timeline/geometry";
+import { frameAt, frameTime, sequenceDuration, snapToFrame } from "@/domain/timeline/geometry";
 import { isEditorKeyTarget } from "@/features/editor/editorKeys";
 import { useEditorStore } from "@/features/editor/editorStore";
 import { leaveClipboardToSystem, listenKeys } from "@/lib/shortcuts";
@@ -79,6 +79,15 @@ export function useEditorShortcuts(
         const total = current ? sequenceDuration((current.tracks ?? []).flatMap((track) => track.clips ?? [])) : 0;
         if (!store.playing && total > 0 && store.playhead >= total - 1e-6) store.setPlayhead(0);
         store.togglePlaying();
+      } else if (!mod && !event.altKey && (key === "i" || key === "o")) {
+        // 入点 / 出点打在播放头所在的那一帧上。
+        const at = snapToFrame(store.playhead, current?.fps ?? 30);
+        if (key === "i") store.setMarkIn(at);
+        else store.setMarkOut(at);
+      } else if (!mod && event.altKey && event.code === "KeyX") {
+        // ⌥X 清掉入出点(macOS 上 ⌥X 的 key 是 "≈",认物理键)。
+        event.preventDefault();
+        store.clearMarks();
       } else if (!mod && (key === "j" || key === "k" || key === "l")) {
         event.preventDefault();
         store.shuttle(key === "j" ? -1 : key === "l" ? 1 : 0);

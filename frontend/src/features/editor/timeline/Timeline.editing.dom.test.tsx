@@ -114,3 +114,17 @@ describe("复制与剪切的标记", () => {
     expect(screen.getByTestId("clip-c2")).not.toHaveAttribute("data-cut");
   });
 });
+
+describe("入出点在标尺上", () => {
+  it("入点到出点之间画一条选区带", () => {
+    renderTimeline([track("V1", "video", 0, [clip("c1", "V1", 0, 0, 10)])]);
+    expect(screen.queryByTestId("timeline-marked-range")).toBeNull();
+    act(() => {
+      useEditorStore.getState().setMarkIn(2.5);
+      useEditorStore.getState().setMarkOut(6);
+    });
+    const band = screen.getByTestId("timeline-marked-range");
+    expect(band.style.left).toBe("100px");
+    expect(band.style.width).toBe("140px");
+  });
+});

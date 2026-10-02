@@ -439,3 +439,24 @@ describe("播放:J / K / L 与空格", () => {
     expect(useEditorStore.getState()).toMatchObject({ playing: true, playhead: 0 });
   });
 });
+
+describe("入点 / 出点", () => {
+  it("I / O 在播放头处(吸到帧)打点,⌥X 清掉", async () => {
+    renderEditor(sequenceWith([track("v1", "video", 0, [clip("c1", "v1", 0, 0, 10)])]));
+    await ready();
+    act(() => useEditorStore.getState().setPlayhead(2.51));
+    press("i");
+    act(() => useEditorStore.getState().setPlayhead(6));
+    press("o");
+    expect(useEditorStore.getState()).toMatchObject({ markIn: 2.5, markOut: 6 });
+    press("≈", { code: "KeyX", altKey: true });
+    expect(useEditorStore.getState()).toMatchObject({ markIn: null, markOut: null });
+  });
+
+  it("换一条时间线:上一条的入出点不跟过来", async () => {
+    useEditorStore.setState({ markIn: 1, markOut: 2 });
+    renderEditor(sequenceWith([track("v1", "video", 0, [clip("c1", "v1", 0, 0, 10)])]));
+    await ready();
+    expect(useEditorStore.getState()).toMatchObject({ markIn: null, markOut: null });
+  });
+});

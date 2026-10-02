@@ -27,7 +27,7 @@ import {
   trackEdgeTimes,
 } from "@/domain/timeline/geometry";
 import { downsamplePeaks, slicePeaks } from "@/domain/timeline/waveform";
-import { MIN_PX_PER_SECOND, useEditorStore } from "@/features/editor/editorStore";
+import { MIN_PX_PER_SECOND, markedRange, useEditorStore } from "@/features/editor/editorStore";
 import { livePlayhead } from "@/features/editor/playback/playbackClock";
 import { TimelineClip } from "./TimelineClip";
 import { kindHasSound } from "@/lib/assetKinds";
@@ -1059,6 +1059,7 @@ export function Timeline({
                   {tick.major && <span className="timecode">{formatRulerLabel(tick.time, tickStep)}</span>}
                 </div>
               ))}
+              <MarkedRangeBand pxPerSecond={pxPerSecond} duration={sequenceDuration(allClips)} />
             </div>
             {newLayerDrag && (
               <div className="pointer-events-none absolute inset-x-0 z-[4] flex h-[22px] items-center justify-center gap-[5px] border-y-[1.5px] border-dashed border-primary bg-[color-mix(in_srgb,var(--primary)_16%,transparent)] text-ui-xs font-semibold text-primary" style={{ top: RULER_HEIGHT }}>
@@ -1390,6 +1391,21 @@ function TimelinePlayhead({ pxPerSecond, children }: { pxPerSecond: number; chil
       />
       {children}
     </div>
+  );
+}
+
+/** 入出点之间的选区带(画在标尺上)。只订阅入出点,不让整条时间线跟着它重渲。 */
+function MarkedRangeBand({ pxPerSecond, duration }: { pxPerSecond: number; duration: number }) {
+  const markIn = useEditorStore((state) => state.markIn);
+  const markOut = useEditorStore((state) => state.markOut);
+  const range = markedRange({ markIn, markOut }, duration);
+  if (!range) return null;
+  return (
+    <div
+      data-testid="timeline-marked-range"
+      className="pointer-events-none absolute inset-y-0 border-x-2 border-primary bg-[color-mix(in_srgb,var(--primary)_22%,transparent)]"
+      style={{ left: timeToPx(range.start, pxPerSecond), width: timeToPx(range.end - range.start, pxPerSecond) }}
+    />
   );
 }
 

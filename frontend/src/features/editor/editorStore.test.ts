@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { selectedClipId, useEditorStore } from "@/features/editor/editorStore";
+import { markedRange, selectedClipId, useEditorStore } from "@/features/editor/editorStore";
 
 /**
  * 「当前那一个选中的片段」是**派生值**,不是第二份状态。
@@ -108,5 +108,33 @@ describe("J / K / L 变速穿梭", () => {
     store.togglePlaying();
     store.togglePlaying();
     expect(useEditorStore.getState()).toMatchObject({ playing: true, playbackRate: 1 });
+  });
+});
+
+describe("入点 / 出点", () => {
+  beforeEach(() => {
+    useEditorStore.getState().clearMarks();
+  });
+
+  it("只打了入点:选区从入点到结尾;只打了出点:从头到出点", () => {
+    useEditorStore.getState().setMarkIn(2);
+    expect(markedRange(useEditorStore.getState(), 10)).toEqual({ start: 2, end: 10 });
+    useEditorStore.getState().clearMarks();
+    useEditorStore.getState().setMarkOut(4);
+    expect(markedRange(useEditorStore.getState(), 10)).toEqual({ start: 0, end: 4 });
+  });
+
+  it("入点打到出点后面:旧出点作废,不留一个倒着的区间", () => {
+    const store = useEditorStore.getState();
+    store.setMarkIn(2);
+    store.setMarkOut(5);
+    store.setMarkIn(6);
+    expect(useEditorStore.getState()).toMatchObject({ markIn: 6, markOut: null });
+    store.setMarkOut(3);
+    expect(useEditorStore.getState()).toMatchObject({ markIn: null, markOut: 3 });
+  });
+
+  it("没打点就没有选区", () => {
+    expect(markedRange(useEditorStore.getState(), 10)).toBeNull();
   });
 });
