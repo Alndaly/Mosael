@@ -48,16 +48,22 @@ export const CHARS_PER_TOKEN = 3.5;
 
 /** 端点没告诉我们上下文窗口时的回退。
  *
- * 云端与本地不能共用一个猜测:云端按当代常见的 128K，本机/LAN 服务按 32K。真实值仍由
+ * 云端与本地不能共用一个猜测:云端按当代常见的 128K，本机/LAN 服务按 64K。真实值仍由
  * 供应商 /models 目录或用户覆盖优先；这里仅处理两者都缺失的连接。
  *
- * **和后端 `ai/agent/host` 的两个 fallback 常量是同一套规则**,由
+ * **和后端 `domain/providers/model_limits` 的两个 fallback 常量是同一套规则**,由
  * `contracts/context-meter-cases.json` 钉住:运行时压缩用这个数,界面显示另一个数,
  * 水位就会和实际行为对不上。 */
 /** 未知云模型的默认窗口。2026 年主流云端模型普遍至少 128K；继续按 32K 会主动浪费容量。 */
 export const FALLBACK_CONTEXT_WINDOW = 128000;
-/** 本机/LAN 推理服务仍保守：它们最可能运行用户自选的小窗口模型。 */
-export const LOCAL_FALLBACK_CONTEXT_WINDOW = 32000;
+/** 本机/LAN 推理服务:**智能体还转得动的最小窗口**,不是「最常见的小窗口」。
+ *
+ * 曾是 32K,而每轮重发的固定开销(工具定义 + 系统提示)本身就 ≈32.5K —— 按 32K 算,第一次工具调用
+ * 之后 pi 把 max_tokens 夹到 1,轮前压缩每轮触发又压不下去。真只有 32K 的模型在哪个回退值下都装不下
+ * 这套工具,要靠用户在模型设置里填真实窗口;64K 是装得下固定开销、还给对话与输出留出空间的最小一档。
+ * 理由的全文在后端 `model_limits.LOCAL_FALLBACK_CONTEXT_WINDOW`,预算由那边的
+ * tests/test_tool_definitions_budget.py 盯着。 */
+export const LOCAL_FALLBACK_CONTEXT_WINDOW = 64000;
 
 export function fallbackContextWindow(baseUrl: string): number {
   if (!baseUrl) return FALLBACK_CONTEXT_WINDOW;

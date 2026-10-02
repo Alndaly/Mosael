@@ -291,8 +291,8 @@ pi-ai 0.82 重排模块后,`api/*.lazy` 入口一旦被 esbuild 打进单文件,
 ## 12. 同一个常量在 sidecar 和后端各写了一份 — ✅ 已由契约钉住
 
 四个回退常量在 `agent-sidecar/src/{pi,compaction}.ts` 与 `backend/app/domain/providers/model_limits.py`
-各有一份:`FALLBACK_CONTEXT_WINDOW = 128000`、`LOCAL_FALLBACK_CONTEXT_WINDOW = 32000`
-(本机/LAN 端点)、`FALLBACK_MAX_OUTPUT_TOKENS = 4096`、`FALLBACK_REASONING_MAX_OUTPUT_TOKENS = 32768`,
+各有一份:`FALLBACK_CONTEXT_WINDOW = 128000`、`LOCAL_FALLBACK_CONTEXT_WINDOW = 64000`
+(本机/LAN 端点;它是智能体固定开销装得下的最小窗口,别往回调 —— 见 `test_tool_definitions_budget`)、`FALLBACK_MAX_OUTPUT_TOKENS = 4096`、`FALLBACK_REASONING_MAX_OUTPUT_TOKENS = 32768`,
 以及 `CHARS_PER_TOKEN = 3.5`(`compaction.ts` ↔ `domain/context_meter.py`)。
 
 不是疏忽:整理决策必须在 sidecar 里做(它才拿得到消息与 usage),而水位显示必须在后端算(前端只认

@@ -13,6 +13,7 @@ from app.domain.providers import model_limits
 from app.domain.providers.model_limits import (
     FALLBACK_CONTEXT_WINDOW,
     KNOWN_LIMITS,
+    LOCAL_FALLBACK_CONTEXT_WINDOW,
     OUTPUT_BUDGET_CAP,
     known_limits,
 )
@@ -124,8 +125,10 @@ def test_local_endpoint_still_gets_the_conservative_window() -> None:
     resolved = model_limits.resolve(
         model_id="some-local-gguf", base_url="http://127.0.0.1:11434/v1", vendor="openai-compatible"
     )
-    assert resolved.effective_context_window == 32_000
+    assert resolved.effective_context_window == LOCAL_FALLBACK_CONTEXT_WINDOW
     assert resolved.context_window_source == "fallback"
+    # 本机仍比云端保守:推理服务那一侧的设置(num_ctx、加载长度)常比模型的训练窗口小。
+    assert LOCAL_FALLBACK_CONTEXT_WINDOW < FALLBACK_CONTEXT_WINDOW
 
 
 def test_unknown_cloud_model_keeps_the_conservative_fallback() -> None:

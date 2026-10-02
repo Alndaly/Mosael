@@ -46,10 +46,22 @@ from urllib.parse import urlparse
 from app.domain.providers import thinking
 
 #: 目录查不到、也没手动设时的窗口。**必须与 sidecar 的两个 fallback 常量一致** ——
-#: 云端按 128K、本机/LAN 按 32K;界面与运行时用不同值会让水位和压缩行为对不上。
+#: 云端按 128K、本机/LAN 按 64K;界面与运行时用不同值会让水位和压缩行为对不上。
 #: 由 contracts/context-meter-cases.json 钉住,两侧测试跑同一份语料。
 FALLBACK_CONTEXT_WINDOW = 128000
-LOCAL_FALLBACK_CONTEXT_WINDOW = 32000
+#: **本机回退是「智能体还转得动的最小窗口」,不是「最常见的小窗口」。**
+#:
+#: 它曾是 32K,看着像个保守值,实际是必坏的值:智能体每轮重发的固定开销(工具定义 + 系统提示)
+#: 按 Qwen3 的分词器实数是 ≈32.5K(按 chars/3.5 估 ≈33.8K)—— 一个字没说就已经超过 32K。
+#: 于是查不到窗口的本机端点上,第一次工具调用之后 pi 按「窗口 − 已用 − 4096」夹 max_tokens,
+#: 夹到 1,用户看到「我」「抱歉」这种碎片;轮前压缩也每轮都触发而压不下去(工具定义压不掉)。
+#: 真只有 32K 的本机模型在哪个回退值下都跑不了这套工具 —— 回退值保护不了它,它要的是在模型
+#: 设置里填真实窗口。而近两年的本机模型(Llama 3.1+、Qwen3、Gemma)训练窗口都 ≥128K,本机
+#: 真正的上限是推理服务那一侧的设置(Ollama num_ctx、LM Studio 加载长度、vLLM --max-model-len)。
+#:
+#: 64K = 固定开销装得下、还给对话和输出留出空间的最小一档(按「宁可报小」向下取整到整千)。
+#: 工具定义加系统提示不得超过它的六成,由 tests/test_tool_definitions_budget.py 盯着(理由写在那里)。
+LOCAL_FALLBACK_CONTEXT_WINDOW = 64000
 #: 连这张表都没有这个模型时的输出额度。同样由那份语料钉住(max_output_cases)。
 FALLBACK_MAX_OUTPUT_TOKENS = 4096
 #: 思考模型的那一档。思考 token 和正文共用输出额度,4K 很容易全花在思考上。

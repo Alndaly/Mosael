@@ -193,7 +193,8 @@ _Avoid_: 按工具名硬编码确认逻辑
 
 **上下文预算**:
 一次对话还能塞多少 token,由**模型的上下文窗口**决定(模型行的 `context_window` → 目录 → 双档回退:
-云端 128K,本机/LAN 32K,由 `fallback_context_window` 按 base_url 判定)。
+云端 128K,本机/LAN 64K,由 `fallback_context_window` 按 base_url 判定)。本机那一档是**智能体还转得动的最小窗口**:
+每轮重发的工具定义加系统提示本身就 ≈32.5K,它们合计不得超过本机回退窗口的六成(`test_tool_definitions_budget`)。
 估算锚定在**最后一条带 usage 的助手消息**(供应商回的真实 input+output),此后的新消息按
 `CHARS_PER_TOKEN = 3.5` 估。sidecar(`compaction.ts`)与后端(`domain/context_meter.py`)各有一份实现,
 **回退值与估算规则必须逐字一致**——不一致时用户看到的水位和真正触发压缩的时机会对不上。

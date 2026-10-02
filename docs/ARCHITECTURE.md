@@ -495,7 +495,10 @@ Gateway 的边界与安全不变量见
 ## 智能体的上下文:预算与整理
 
 **窗口来自模型**:模型行的 `context_window` → 供应商目录 → **内置查证表** → 双档回退:云端 **128K**,
-本机/LAN **32K**(按 base_url 判定)。四层合并**只在 `backend/app/domain/providers/model_limits.py` 的 `resolve()`
+本机/LAN **64K**(按 base_url 判定)。本机那一档不是「最常见的小窗口」,而是**智能体还转得动的最小窗口**:工具定义加
+系统提示每轮重发、压不掉,本身就 ≈32.5K;按 32K 回退时第一次工具调用之后 max_tokens 被夹到 1。这块固定开销不得
+超过本机回退窗口的六成,由 `backend/tests/test_tool_definitions_budget.py` 盯着。本机端点里只有 vLLM 的 `/v1/models`
+报得出服务端真实窗口(`max_model_len`),目录会认它;Ollama / LM Studio 的 OpenAI 兼容目录只给 id。四层合并**只在 `backend/app/domain/providers/model_limits.py` 的 `resolve()`
 一处发生**,**三条执行通道**都经过它:智能体那条(`domain/providers/runtime`)、直连 HTTP 那条
 (`domain/ai_chat.target_for`,翻译/素材分析/工作流 LLM/AI 编排/发布文案/提示词优化/画板写作/放行判断
 八个调用点)、以及设置页的回显 —— 界面显示的数和请求真正带的数必须是同一个。

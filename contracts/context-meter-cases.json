@@ -1,18 +1,19 @@
 {
   "contract": "context-meter",
-  "version": 4,
+  "version": 5,
   "readme": "contracts/README.md",
   "description": "上下文水位:一组 pi 消息占了多少 token。sidecar 用它决定**压不压**,后端用它在界面上显示**还能聊多久**。两边算出不同的数,就会出现「水位显示 90% 而压缩迟迟不触发」。后端 backend/tests/test_context_meter_parity.py 与 sidecar test/context-meter.parity.test.mjs 跑同一份语料。同一份语料还钉住**模型的两个运行时上限**:上下文窗口和单次输出额度 —— 它们一起决定「能聊多久」和「一次能说多长」,而且都在目录查不到模型时要各自回退。",
   "notes": [
     "锚点规则:从后往前找**最近一条带 usage 的 assistant 消息**;它的 usage 就是供应商上次实际看到的量,锚之后的消息才需要估算;一条 usage 都没有就整段估算。",
     "usage 里 input/output 都为空(或都是 0)的不算锚 —— 那种消息说明不了供应商看到了多少。",
     "语料里的文本刻意只用 BMP 字符(ASCII 与常用汉字):Python 的 len() 数码点、JS 的 .length 数 UTF-16 码元,两者只在非 BMP(emoji、罕用字)上分叉。那是一个估算器可以接受的近似,写进契约只会逼两侧互相迁就,所以不放进来 —— 与 ADR-0004 把调色留在契约之外是同一类取舍。",
+    "本机/LAN 回退是**智能体还转得动的最小窗口**(64K),不是最常见的小窗口:每轮重发的工具定义加系统提示本身就 ≈32.5K,按 32K 回退时 pi 在第一次工具调用之后就把 max_tokens 夹到 1。真只有 32K 的本机模型要在模型设置里填真实窗口 —— 理由全文在 backend/app/domain/providers/model_limits.py,预算由 backend/tests/test_tool_definitions_budget.py 盯着。",
     "`max_output_cases` 是**回退中的回退**:目录、用户设置、以及后端内置的查证表(backend/app/domain/providers/model_limits.py)都没有这个模型时才走到这里。回退的形状要两侧一致,否则界面上显示的额度和请求真正带的 max_tokens 不是一个数。内置表只在后端,sidecar 拿到的是后端算好的数 —— 表不进契约,回退进。"
   ],
   "constants": {
     "chars_per_token": 3.5,
     "fallback_context_window": 128000,
-    "local_fallback_context_window": 32000,
+    "local_fallback_context_window": 64000,
     "fallback_max_output_tokens": 4096,
     "fallback_reasoning_max_output_tokens": 32768
   },
@@ -27,15 +28,15 @@
     },
     {
       "base_url": "http://127.0.0.1:11434/v1",
-      "context_window": 32000
+      "context_window": 64000
     },
     {
       "base_url": "http://localhost:1234/v1",
-      "context_window": 32000
+      "context_window": 64000
     },
     {
       "base_url": "http://192.168.1.20:8000/v1",
-      "context_window": 32000
+      "context_window": 64000
     }
   ],
   "cases": [
@@ -195,6 +196,13 @@
       "context_window": 128000,
       "thinking": true,
       "max_output_tokens": 32000
+    },
+    {
+      "name": "reasoning-local-fallback-window",
+      "why": "查不到窗口的本机推理模型按 64K 回退:输出给 16K;加上 ≈34K 的固定开销和 pi 留的 4K 安全余量,还剩近一万给对话。",
+      "context_window": 64000,
+      "thinking": true,
+      "max_output_tokens": 16000
     },
     {
       "name": "reasoning-small-window",
