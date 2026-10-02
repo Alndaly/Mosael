@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import Any
 
@@ -12,6 +13,7 @@ from app.domain.sequences._timeline import (
     _record_operation,
     _require_clip,
     _require_sequence,
+    finite_number,
     require_speed,
     timeline_span,
 )
@@ -19,7 +21,7 @@ from app.domain.sequences.coverage import EPS, clip_end, clips_on_track, shift
 from app.domain.sequences.errors import SequenceDomainError, SequenceNotFound
 from app.domain.sequences.journal import Journal
 from app.domain.sequences.links import new_link_group, with_links
-from app.media.render_plan import TRANSFORM_BOUNDS, TRANSFORM_DEFAULTS
+from app.media.render_plan import FILTER_PRESETS, GRADE_FIELDS, TRANSFORM_BOUNDS, TRANSFORM_DEFAULTS
 
 
 @dataclass(frozen=True)
@@ -102,7 +104,8 @@ def set_clip_gain(db: Session, sequence_id: str, op: SetClipGain) -> Sequence:
     """A clip's own audio level/mute (a video clip carries its audio, like PR/DaVinci)."""
     sequence = _require_sequence(db, sequence_id)
     clip = _require_clip(db, sequence_id, op.clip_id)
-    gain = clip.gain if op.gain is None else max(0.0, min(4.0, float(op.gain)))
+    # 先问有限再钳:NaN 过 min/max 会被钳成 4.0 —— 一次除以零,片段就被推到最大音量。
+    gain = clip.gain if op.gain is None else max(0.0, min(4.0, finite_number("gain", op.gain)))
     muted = clip.muted if op.muted is None else bool(op.muted)
     previous = {"gain": clip.gain, "muted": clip.muted}
     clip.gain = gain
@@ -209,16 +212,137 @@ def detach_clip_audio(db: Session, sequence_id: str, op: DetachClipAudio) -> Seq
     return sequence
 
 
+def _effect_number(key: str, value: Any, lo: float, hi: float) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+        raise SequenceDomainError("seqErr_effectBadValue", effect=key)
+    return max(lo, min(hi, float(value)))
+
+
+def _effect_dict(key: str, value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise SequenceDomainError("seqErr_effectBadValue", effect=key)
+    return value
+
+
+def _finite_leaves(key: str, value: Any) -> Any:
+    """一棵 JSON 里的每个数都得是有限的。存下的 NaN 序列化出来不是合法 JSON(见 finite_number)。"""
+    if isinstance(value, float) and not math.isfinite(value):
+        raise SequenceDomainError("seqErr_effectBadValue", effect=key)
+    if isinstance(value, dict):
+        return {k: _finite_leaves(key, v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_finite_leaves(key, v) for v in value]
+    return value
+
+
+def _clean_fade(key: str, value: Any) -> float:
+    #: 淡变长度(秒)。超过片段长度的由渲染端按比例收(render_plan._fades),这里只挡负数和非数。
+    return _effect_number(key, value, 0.0, 3600.0)
+
+
+def _clean_filter(key: str, value: Any) -> str:
+    if not isinstance(value, str) or (value and value not in FILTER_PRESETS):
+        raise SequenceDomainError("seqErr_effectBadValue", effect=key)
+    return value
+
+
+def _clean_curve(key: str, points: Any) -> list[list[float]]:
+    if not isinstance(points, list):
+        raise SequenceDomainError("seqErr_effectBadValue", effect=key)
+    cleaned: list[list[float]] = []
+    for point in points:
+        if not isinstance(point, (list, tuple)) or len(point) != 2:
+            raise SequenceDomainError("seqErr_effectBadValue", effect=key)
+        cleaned.append([_effect_number(key, point[0], 0.0, 1.0), _effect_number(key, point[1], 0.0, 1.0)])
+    return cleaned
+
+
+def _clean_color(key: str, value: Any) -> dict[str, Any]:
+    """调色:滑杆值归一化到 [-1, 1](与 render_plan._grade_value 同一范围),LUT 是 id,曲线每通道一串 [x, y]。"""
+    raw = _effect_dict(key, value)
+    out: dict[str, Any] = {}
+    for name in GRADE_FIELDS:
+        if raw.get(name) is not None:
+            out[name] = _effect_number(f"{key}.{name}", raw[name], -1.0, 1.0)
+    if raw.get("lut"):
+        if not isinstance(raw["lut"], str):
+            raise SequenceDomainError("seqErr_effectBadValue", effect=f"{key}.lut")
+        out["lut"] = raw["lut"][:64]
+    if raw.get("curves") is not None:
+        curves = _effect_dict(f"{key}.curves", raw["curves"])
+        out["curves"] = {
+            channel: _clean_curve(f"{key}.curves.{channel}", curves[channel])
+            for channel in ("luma", "r", "g", "b")
+            if curves.get(channel) is not None
+        }
+    return out
+
+
+def _clean_gain_keyframes(key: str, value: Any) -> list[dict[str, float]]:
+    """音量关键帧 [{t, gain}]:t 是片段内进度 [0, 1],gain 与片段音量同一范围 [0, 4]。"""
+    if not isinstance(value, list):
+        raise SequenceDomainError("seqErr_effectBadValue", effect=key)
+    points = []
+    for point in value:
+        if not isinstance(point, dict):
+            raise SequenceDomainError("seqErr_effectBadValue", effect=key)
+        points.append({"t": _effect_number(key, point.get("t"), 0.0, 1.0),
+                       "gain": _effect_number(key, point.get("gain"), 0.0, 4.0)})
+    return sorted(points, key=lambda point: point["t"])
+
+
+def _clean_nested_style(key: str, value: Any) -> dict[str, Any]:
+    """花字样式与外观(遮罩 / 阴影):两端的读取器逐字段回落默认值、各自钳范围(render_plan 的
+    _read_text_style / _read_appearance 与前端的同名函数,由契约语料钉住)—— 这里不再抄一份范围,
+    只挡住它们读不了的:不是对象、带着非有限的数。"""
+    return _finite_leaves(key, _effect_dict(key, value))
+
+
+#: effects 里**认得的键** → 怎么清洗。渲染端(render_plan)和预览读的就是这些。
+_EFFECT_CLEANERS: dict[str, Any] = {
+    "filter": _clean_filter,
+    "color": _clean_color,
+    "fade_in": _clean_fade,
+    "fade_out": _clean_fade,
+    "video_fade_in": _clean_fade,
+    "video_fade_out": _clean_fade,
+    "gain_keyframes": _clean_gain_keyframes,
+    "text_style": _clean_nested_style,
+    "appearance": _clean_nested_style,
+}
+
+
+def clean_effects(raw: Any) -> dict[str, Any]:
+    """收进来的 effects 清洗成渲染端读得了的样子;读不了的值**拒**,而不是存下来。
+
+    此前 set_clip_effects 原样存:`{"fade_in": "abc"}`、`{"color": [1, 2]}`、嵌套的 NaN 全都收,
+    而它们要到**导出**时才炸 —— 渲染计划里 float("abc") / list.get 抛出来,是一个 500,
+    离用户填错的那一刻已经隔了很久,也说不清是哪一段的哪个值。
+
+    **不认得的键丢掉,不拒。** 渲染和预览都不读它们,而编辑器改特效时是把整份 effects 展开、
+    改一处再发回来的 —— 拒收的话,一个片段身上残留的老键(早年的 pip、video_fade)会让它的
+    特效从此一个都改不动。null 视同没有这个键。
+    """
+    if not isinstance(raw, dict):
+        raise SequenceDomainError("seqErr_effectsNotObject")
+    return {
+        key: _EFFECT_CLEANERS[key](key, value)
+        for key, value in raw.items()
+        if key in _EFFECT_CLEANERS and value is not None
+    }
+
+
 def set_clip_effects(db: Session, sequence_id: str, op: SetClipEffects) -> Sequence:
     sequence = _require_sequence(db, sequence_id)
     clip = _require_clip(db, sequence_id, op.clip_id)
+    effects = clean_effects(op.effects)
     previous = dict(clip.effects or {})
-    clip.effects = op.effects
+    clip.effects = effects
     _record_operation(
         db,
         sequence,
         kind="set_clip_effect",
-        payload={"clip_id": clip.id, "effects": op.effects, "previous": previous},
+        payload={"clip_id": clip.id, "effects": effects, "previous": previous},
         summary={"operation": "set_clip_effect", "clip_id": clip.id},
         actor_id=op.actor_id,
     )
@@ -241,6 +365,8 @@ def _clean_keyframes(raw: Any) -> list[dict[str, float]]:
             t = float(item["t"])
         except (KeyError, TypeError, ValueError):
             continue
+        if not math.isfinite(t):
+            raise SequenceDomainError("seqErr_notFiniteNumber", name="transform.keyframes.t")
         point: dict[str, float] = {"t": max(0.0, min(1.0, t))}
         for key, (lo, hi) in TRANSFORM_BOUNDS.items():
             if key not in item:
@@ -249,6 +375,8 @@ def _clean_keyframes(raw: Any) -> list[dict[str, float]]:
                 value = float(item[key])
             except (TypeError, ValueError):
                 continue
+            if not math.isfinite(value):
+                raise SequenceDomainError("seqErr_notFiniteNumber", name=f"transform.keyframes.{key}")
             point[key] = max(lo, min(hi, value))
         if len(point) > 1:  # 除 t 外至少携带一个属性,才是有效关键帧
             cleaned.append(point)
@@ -263,7 +391,9 @@ def clean_transform(raw: dict[str, Any]) -> dict[str, Any]:
         try:
             value = float(raw.get(key, default))
         except (TypeError, ValueError) as exc:
-            raise SequenceDomainError("seqErr_transformNotNumber", key=key) from exc
+            raise SequenceDomainError("seqErr_transformNotNumber", field=key) from exc
+        if not math.isfinite(value):  # NaN 过 min/max 会被钳成上限
+            raise SequenceDomainError("seqErr_notFiniteNumber", name=f"transform.{key}")
         lo, hi = TRANSFORM_BOUNDS[key]
         out[key] = max(lo, min(hi, value))
     keyframes = _clean_keyframes(raw.get("keyframes"))

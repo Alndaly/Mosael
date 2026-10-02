@@ -16,6 +16,7 @@ from app.domain.sequences._timeline import (
     _require_clip,
     _require_sequence,
     _sliced_inherited,
+    finite_number,
 )
 from app.domain.sequences.errors import SequenceDomainError
 from app.domain.sequences.coverage import EPS, clip_end, remove_time_ranges
@@ -53,10 +54,11 @@ class SplitClip:
 def split_clip(db: Session, sequence_id: str, op: SplitClip) -> Sequence:
     sequence = _require_sequence(db, sequence_id)
     clip = _require_clip(db, sequence_id, op.clip_id)
-    if not (clip.src_in + MIN_CUT_REMAINDER < op.src_time < clip.src_out - MIN_CUT_REMAINDER):
+    src_time = finite_number("src_time", op.src_time)
+    if not (clip.src_in + MIN_CUT_REMAINDER < src_time < clip.src_out - MIN_CUT_REMAINDER):
         raise SequenceDomainError("Split point must fall inside the clip")
     journal = Journal(db, sequence)
-    _split_linked(journal, clip, [op.src_time], linked=op.linked)
+    _split_linked(journal, clip, [src_time], linked=op.linked)
     _record_operation(
         db,
         sequence,
@@ -143,10 +145,12 @@ def _split_into_pieces(
 def cut_clip_range(db: Session, sequence_id: str, op: CutClipRange) -> Sequence:
     sequence = _require_sequence(db, sequence_id)
     clip = _require_clip(db, sequence_id, op.clip_id)
-    if min(op.src_end, clip.src_out) <= max(op.src_start, clip.src_in):
+    # 先要求有限:NaN 起点过 max/min 会被当成「和片段不相交」,或者整段剪没。
+    src_start, src_end = finite_number("src_start", op.src_start), finite_number("src_end", op.src_end)
+    if min(src_end, clip.src_out) <= max(src_start, clip.src_in):
         raise SequenceDomainError("Cut range does not intersect the clip")
     journal = Journal(db, sequence)
-    _ripple_cut(journal, [(clip.id, ((op.src_start, op.src_end),))], linked=op.linked)
+    _ripple_cut(journal, [(clip.id, ((src_start, src_end),))], linked=op.linked)
     _record_operation(
         db,
         sequence,
@@ -262,10 +266,11 @@ def _ripple_cut(
 def _removed_source(clip: Clip, ranges: tuple[tuple[float, float], ...]) -> list[tuple[float, float]]:
     """要拿掉的源时间区间:夹进片段、合并相邻;两段之间(或贴着片段两头)剩不到最小余量的碎片一并拿掉 ——
     留下一截不到一帧的画面,只会在成片里闪一下。"""
+    finite = [(finite_number("src_start", start), finite_number("src_end", end)) for start, end in ranges]
     clamped = sorted(
-        (max(float(start), clip.src_in), min(float(end), clip.src_out))
-        for start, end in ranges
-        if min(float(end), clip.src_out) > max(float(start), clip.src_in)
+        (max(start, clip.src_in), min(end, clip.src_out))
+        for start, end in finite
+        if min(end, clip.src_out) > max(start, clip.src_in)
     )
     if not clamped:
         raise SequenceDomainError("No cut range intersects the clip")
@@ -354,7 +359,7 @@ def _apply_clip_point_splits(journal: Journal, clip_id: str, src_times: tuple[fl
     # Interior points only, sorted; drop any too close to a neighbour or to the clip ends.
     points: list[float] = []
     cursor = clip.src_in
-    for value in sorted({float(point) for point in src_times}):
+    for value in sorted({finite_number("src_time", point) for point in src_times}):
         if value - cursor > MIN_CUT_REMAINDER and clip.src_out - value > MIN_CUT_REMAINDER:
             points.append(value)
             cursor = value

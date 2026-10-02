@@ -16,6 +16,7 @@ from app.domain.sequences._timeline import (
     _require_clip,
     _require_sequence,
     _validate_clip_range,
+    finite_number,
     require_speed,
     timeline_span,
 )
@@ -181,12 +182,13 @@ def _target_track(db: Session, sequence_id: str, clip: Clip, track_id: str | Non
 def move_clip(db: Session, sequence_id: str, op: MoveClip) -> Sequence:
     sequence = _require_sequence(db, sequence_id)
     clip = _require_clip(db, sequence_id, op.clip_id)
-    if op.timeline_start < 0:
+    timeline_start = finite_number("timeline_start", op.timeline_start)
+    if timeline_start < 0:
         raise SequenceDomainError("timeline_start must be non-negative")
     target_track_id = _target_track(db, sequence_id, clip, op.track_id)
 
     journal = Journal(db, sequence)
-    moved = _move_with_links(journal, [(clip, float(op.timeline_start), target_track_id)], linked=op.linked)
+    moved = _move_with_links(journal, [(clip, timeline_start, target_track_id)], linked=op.linked)
     _land(journal, moved, ripple=op.ripple)
     _record_operation(
         db,
@@ -207,10 +209,11 @@ def move_clips_batch(db: Session, sequence_id: str, op: MoveClipsBatch) -> Seque
 
     planned: list[tuple[Clip, float, str]] = []
     for move in op.moves:
-        if move.timeline_start < 0:
+        start = finite_number("timeline_start", move.timeline_start)
+        if start < 0:
             raise SequenceDomainError("timeline_start must be non-negative")
         clip = _require_clip(db, sequence_id, move.clip_id)
-        planned.append((clip, float(move.timeline_start), _target_track(db, sequence_id, clip, move.track_id)))
+        planned.append((clip, start, _target_track(db, sequence_id, clip, move.track_id)))
 
     journal = Journal(db, sequence)
     moved = _move_with_links(journal, planned, linked=op.linked)

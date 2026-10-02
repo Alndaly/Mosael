@@ -268,10 +268,10 @@ def test_set_clip_effects_undoable() -> None:
 
     updated = client.patch(
         f"/api/sequences/{sequence['id']}/clips/{clip['id']}/effects",
-        json={"effects": {"pip": {"x": 0.05, "y": 0.05, "scale": 0.5}}},
+        json={"effects": {"video_fade_in": 0.5}},
     ).json()
     updated_clip = next(t for t in updated["tracks"] if t["kind"] == "video")["clips"][0]
-    assert updated_clip["effects"]["pip"]["scale"] == 0.5
+    assert updated_clip["effects"]["video_fade_in"] == 0.5
 
     undone = client.post(f"/api/sequences/{sequence['id']}/undo").json()
     undone_clip = next(t for t in undone["tracks"] if t["kind"] == "video")["clips"][0]

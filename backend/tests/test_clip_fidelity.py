@@ -83,7 +83,7 @@ def _dress(client, seq_id: str, clip_id: str) -> None:
     )
     assert (
         client.patch(
-            f"/api/sequences/{seq_id}/clips/{clip_id}/effects", json={"effects": {"video_fade": 1.5}}
+            f"/api/sequences/{seq_id}/clips/{clip_id}/effects", json={"effects": {"filter": "bw"}}
         ).status_code
         == 200
     )
@@ -158,7 +158,7 @@ def test_cutting_a_range_preserves_speed_gain_and_effects(editor) -> None:
     for piece in pieces:
         assert piece["speed"] == 2.0, "the transcript-edit path reset the clip to 1x"
         assert piece["gain"] == 0.3
-        assert piece["effects"] == {"video_fade": 1.5}
+        assert piece["effects"] == {"filter": "bw"}
 
 
 # --------------------------------------------------------------------------------------

@@ -170,12 +170,15 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "That audio doesn't cover the part of the source this clip uses.",
     },
     "seqErr_clipNoAudioSource": {"zh": "该片段没有音频源", "en": "This clip has no audio source."},
-    "seqErr_transformNotNumber": {"zh": "transform.{key} 必须是数字", "en": "transform.{key} must be a number."},
+    "seqErr_transformNotNumber": {"zh": "transform.{field} 必须是数字", "en": "transform.{field} must be a number."},
     "seqErr_canvasSizeRange": {"zh": "画幅尺寸需在 16–8192 之间", "en": "The frame size must be between 16 and 8192."},
     "seqErr_revisionConflict": {
         "zh": "这条时间线刚被改过;已换成最新的一版,请在它上面再做一次",
         "en": "This timeline was just changed. It now shows the latest version — please do it again there.",
     },
+    "seqErr_notFiniteNumber": {"zh": "{name} 必须是一个有限的数字", "en": "{name} must be a finite number."},
+    "seqErr_effectBadValue": {"zh": "特效 {effect} 的值不对", "en": "The effect {effect} has an invalid value."},
+    "seqErr_effectsNotObject": {"zh": "特效必须是一个对象", "en": "Effects must be an object."},
     "seqErr_unknownOp": {"zh": "不认识的时间线操作: {kind}", "en": "Unknown timeline operation: {kind}"},
     "seqErr_trimNoRoom": {
         "zh": "这里没有地方放下这一段:修剪会让它短到没有,或者两边都贴着别的片段",

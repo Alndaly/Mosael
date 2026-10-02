@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import Any
 
@@ -13,6 +14,7 @@ from app.domain.sequences._timeline import (
     _require_clip,
     _require_sequence,
     _validate_clip_range,
+    finite_number,
 )
 from app.domain.sequences.coverage import clear_range, clip_end, clips_on_track
 from app.domain.sequences.errors import SequenceDomainError, SequenceNotFound
@@ -148,7 +150,7 @@ def insert_text_clip(db: Session, sequence_id: str, op: InsertTextClip) -> Seque
         raise SequenceDomainError("Text clips can only be placed on subtitle or video tracks")
     if not op.text.strip():
         raise SequenceDomainError("Text must not be empty")
-    if op.duration <= 0:
+    if finite_number("duration", op.duration) <= 0:
         raise SequenceDomainError("Duration must be positive")
     _validate_clip_range(op.timeline_start, 0, op.duration)
 
@@ -259,9 +261,11 @@ def clean_subtitle_style(raw: dict[str, Any]) -> dict[str, Any]:
 
     def num(key: str, lo: float, hi: float) -> float:
         try:
-            return max(lo, min(hi, float(raw.get(key, _SUBTITLE_DEFAULTS[key]))))
+            value = float(raw.get(key, _SUBTITLE_DEFAULTS[key]))
         except (TypeError, ValueError):
             return float(_SUBTITLE_DEFAULTS[key])
+        # NaN 过 min/max 会被钳成上限;非有限的和非数字一样回落默认。
+        return max(lo, min(hi, value)) if math.isfinite(value) else float(_SUBTITLE_DEFAULTS[key])
 
     position = raw.get("position", "bottom")
     return {
