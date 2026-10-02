@@ -206,6 +206,10 @@ export function workflowIssueText(
       return t("wfIssueStaleVar").replace("{ref}", issue.ref ?? "");
     case "start-param-missing":
       return t("wfIssueStartParamMissing").replace("{ref}", issue.ref ?? "");
+    case "start-param-not-an-option":
+      return t("wfIssueStartParamNotAnOption")
+        .replace("{k}", issue.configKey ?? "")
+        .replace("{available}", (issue.available ?? []).join(" / "));
     case "body-empty":
       return t("wfIssueBodyEmpty");
     case "output-in-body":

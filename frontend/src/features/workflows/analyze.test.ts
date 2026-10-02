@@ -296,6 +296,28 @@ describe("analyzeWorkflow", () => {
     ]);
   });
 
+  it("开始节点的选项参数:值不在选项里是阻塞错误,说出能选哪几个;空着的不归这条管", () => {
+    //: 与后端 graph_rules._start_option_errors 同一条:分析类模板的「数据来源」此前手填,打错字静默走浏览器。
+    const make = (source: unknown) =>
+      graph([
+        {
+          id: "start",
+          type: "start",
+          config: {
+            params: { data_source: source },
+            param_options: { data_source: [{ value: "browser", label: "内嵌浏览器" }, { value: "tikhub", label: "TikHub" }] },
+          },
+        },
+      ]);
+    const typo = analyzeWorkflow(make("TikHub"), registry, fullCtx);
+    expect(typo.runnable).toBe(false);
+    expect(issuesAtLayer(typo.issues, []).get("start")).toEqual([
+      expect.objectContaining({ code: "start-param-not-an-option", configKey: "data_source", available: ["browser", "tikhub"] }),
+    ]);
+    expect(analyzeWorkflow(make("tikhub"), registry, fullCtx).issues).toEqual([]);
+    expect(analyzeWorkflow(make(""), registry, fullCtx).issues).toEqual([]);
+  });
+
   it("同组(one_of)恰好填一个:都填了、都没填都是阻塞错误,接了上游也算填了", () => {
     const make = (config: Record<string, unknown>, bound?: string) =>
       graph(

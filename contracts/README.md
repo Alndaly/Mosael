@@ -270,6 +270,20 @@ v6 补上 `cacheWrite`:pi 上报的 `input` / `cacheRead` / `cacheWrite` 是提�
 清单永远是空的。引擎判「该不该跑」时有控制边只看控制边 —— 画布那条「走得到」比引擎宽,两边说的
 从来不是同一件事。
 
+### `workflow-start-option-cases.json` —— 开始节点的选项参数
+
+「开始节点上哪几个选项参数的值不在选项里。」一个启动参数可以声明一组选项(`param_options`:值、标签、一句说明,
+可带前置条件),面板上那一行是下拉;值不在选项里,后端运行前拦,画布就绪检查标 error。
+
+| 实现 | 位置 | 测试 |
+| --- | --- | --- |
+| 运行前检查(后端) | `backend/app/domain/workflows/graph_rules.py` 的 `start_option_violations`(经 `validate_graph`) | `backend/tests/test_workflow_start_option_parity.py` |
+| 画布就绪检查(前端) | `frontend/src/features/workflows/analyze.ts` 的 `startOptionViolations` | `startOptions.parity.test.ts` |
+
+**建立契约之前**:分析类模板的「数据来源」是手填的一格,图里先转小写再判「包含 tikhub」—— 打错一个字静默走了
+浏览器,画布上什么都不说。语料钉住的几件不显眼的事:空着的不归这条管(必填的由必填说);值按文字比(默认值敲 3
+存成数字 3,和选项的值 `"3"` 是同一个)。
+
 ### `shared-constants.json` —— 共享常量
 
 几个「两个运行时都要认、而谁也不拥有」的值。不一致时**都不会报错**,只会悄悄错开:发布账号的

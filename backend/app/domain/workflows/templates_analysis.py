@@ -23,7 +23,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.core.i18n import pick_text
+from app.core.i18n import pick_text, tr
 from app.domain.workflows import NODE_TYPES
 from app.domain.workflows.normalization import normalize_graph
 from app.domain.workflows.template_requirements import (
@@ -103,6 +103,43 @@ def tikhub_status(db: Session, user_id: str, check: str) -> CheckStatus:
         if all(len(instances_for_node(db, node_type_id(TIKHUB_PLUGIN, tool), user_id)) == 1 for tool in tools):
             return "met"
     return "missing"
+
+
+def tikhub_problem(db: Session, user_id: str, check: str) -> str | None:
+    """TikHub 那一路此刻**缺什么**(一句话);跑得起来(tikhub_status 说齐)回 None。
+
+    按要做的那一步说:没装插件 → 去装;没接 → 去接(一个平台一条、填密钥、启用);接了的连接逐条说卡在哪 ——
+    停用、缺配置、缺密钥、权限没给(plugins.instances.blocked_reason,插件页同一句),或者这几个工具没勾;
+    都好好的却还是不齐,是同一个平台接了两条(运行时不猜)。
+    """
+    if tikhub_status(db, user_id, check) == "met":
+        return None
+    from sqlalchemy import select
+
+    from app.db.models import PluginInstance, PluginPackage
+    from app.domain.plugins import instances as inst
+
+    if db.get(PluginPackage, TIKHUB_PLUGIN) is None:
+        return tr("wfWhy_tikhubNotInstalled")
+    connections = list(db.scalars(select(PluginInstance).where(
+        PluginInstance.package_id == TIKHUB_PLUGIN, PluginInstance.owner_user_id == user_id,
+    )))
+    if not connections:
+        return tr("wfWhy_tikhubNoConnection")
+    reasons: list[str] = []
+    for instance in connections:
+        blocked = inst.blocked_reason(db, instance)
+        if blocked:
+            reasons.append(tr("pluginWhy_connection", name=instance.name, reason=blocked))
+            continue
+        platform = str((instance.config or {}).get("TIKHUB_PLATFORM") or "")
+        if platform not in TIKHUB_CALLS:
+            continue
+        exposed = inst.exposed_tools(db, instance.id)
+        off = [TIKHUB_CALLS[platform][need][0] for need in TIKHUB_NEEDS[check] if TIKHUB_CALLS[platform][need][0] not in exposed]
+        if off:
+            reasons.append(tr("wfWhy_tikhubToolsOff", name=instance.name, tools=tr("punct_listSep").join(off)))
+    return tr("punct_listSep").join(reasons) if reasons else tr("wfWhy_tikhubAmbiguous")
 
 
 def _tool_list(check: str) -> str:

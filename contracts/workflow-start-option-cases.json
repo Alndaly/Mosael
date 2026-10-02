@@ -1,0 +1,54 @@
+{
+  "why": "开始节点的选项参数(param_options):值不在选项里,后端运行前拦(graph_rules.start_option_violations,经 validate_graph),画布就绪检查标 error(analyze.ts 的 startOptionViolations)。分析类模板的「数据来源」此前是手填的一格,打错一个字静默走了浏览器。两侧各一份实现,跑这同一份语料。",
+  "rules": [
+    "只看声明了选项(非空列表)的参数;没声明的参数照旧自由输入。",
+    "空着的(null、空串、空白)不归这条管:必填的由必填说,不必填的引用出来是空串。",
+    "值按文字比:默认值敲 3 存成数字 3,和选项的值 \"3\" 是同一个;布尔写成 true / false。"
+  ],
+  "cases": [
+    {
+      "name": "值在选项里",
+      "config": { "params": { "data_source": "tikhub" }, "param_options": { "data_source": [{ "value": "browser", "label": "内嵌浏览器" }, { "value": "tikhub", "label": "TikHub" }] } },
+      "violations": []
+    },
+    {
+      "name": "大小写不同就是不在选项里",
+      "why": "此前手填的一格先转小写再判「包含 tikhub」;现在只认选项的值本身。",
+      "config": { "params": { "data_source": "TikHub" }, "param_options": { "data_source": [{ "value": "browser", "label": "内嵌浏览器" }, { "value": "tikhub", "label": "TikHub" }] } },
+      "violations": ["data_source"]
+    },
+    {
+      "name": "空着、空白、null 都不归这条管",
+      "config": {
+        "params": { "a": "", "b": "   ", "c": null },
+        "param_options": { "a": [{ "value": "x", "label": "X" }], "b": [{ "value": "x", "label": "X" }], "c": [{ "value": "x", "label": "X" }] }
+      },
+      "violations": []
+    },
+    {
+      "name": "数字和布尔按文字比",
+      "config": {
+        "params": { "count": 3, "flag": true, "other": 4 },
+        "param_options": {
+          "count": [{ "value": "3", "label": "三" }],
+          "flag": [{ "value": "true", "label": "是" }],
+          "other": [{ "value": "3", "label": "三" }]
+        }
+      },
+      "violations": ["other"]
+    },
+    {
+      "name": "没声明选项的参数自由输入;选项是空列表的不算声明",
+      "config": { "params": { "topic": "什么都行", "mode": "什么都行" }, "param_options": { "mode": [] } },
+      "violations": []
+    },
+    {
+      "name": "几个参数一起查,按参数的顺序报",
+      "config": {
+        "params": { "first": "z", "second": "y" },
+        "param_options": { "second": [{ "value": "x", "label": "X" }], "first": [{ "value": "x", "label": "X" }] }
+      },
+      "violations": ["first", "second"]
+    }
+  ]
+}

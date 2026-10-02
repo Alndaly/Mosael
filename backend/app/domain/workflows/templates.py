@@ -7,9 +7,11 @@
 from __future__ import annotations
 
 import copy
+from collections.abc import Callable
 from functools import lru_cache
 from typing import Any
 
+from app.core.i18n import tr
 from app.db.models import Voice
 from app.domain.workflows import WorkflowDomainError
 from app.domain.workflows.template_requirements import (
@@ -52,6 +54,7 @@ from app.domain.workflows.templates_analysis import (
     VIRAL_VIDEO_BREAKDOWN,
     account_analysis_graph,
     comment_insights_graph,
+    tikhub_problem,
     tikhub_status,
     viral_video_breakdown_graph,
 )
@@ -551,25 +554,49 @@ def requirement_statuses(db: Session, *, user_id: str, workspace_id: str) -> dic
     这里说齐了,建出来的图上那一格就是填好的、跑起来用得上;这里说缺,那一格就是空的。两处各写一份判据的话,
     迟早一处说齐、一处留空。
     """
+    return {check: status() for check, status in _status_checks(db, user_id=user_id, workspace_id=workspace_id).items()}
+
+
+def requirement_status(db: Session, *, user_id: str, workspace_id: str, check: str) -> CheckStatus:
+    """只查一项(运行前查选中的那个选项要什么时用,见 engine._check_chosen_options)。判据同 requirement_statuses。"""
+    return _status_checks(db, user_id=user_id, workspace_id=workspace_id)[check]()
+
+
+def requirement_problem(db: Session, *, user_id: str, workspace_id: str, check: str) -> str | None:
+    """这一项前置条件此刻**缺什么**,一句给人看的话;齐了(或者还没测出来)回 None。
+
+    TikHub 那几项说得出具体缺哪一步(没装、没接、连接卡在哪、工具没勾,见 templates_analysis.tikhub_problem);
+    别的检查只有齐 / 不齐,就说那一项没备好。
+    """
+    if check in (TIKHUB_ACCOUNT, TIKHUB_VIDEO, TIKHUB_COMMENTS):
+        return tikhub_problem(db, user_id, check)
+    if requirement_status(db, user_id=user_id, workspace_id=workspace_id, check=check) != "missing":
+        return None
+    return tr("wfWhy_requirementNotMet", check=check)
+
+
+def _status_checks(db: Session, *, user_id: str, workspace_id: str) -> dict[str, Callable[[], CheckStatus]]:
+    """每一项怎么查(到真问的时候才查:运行前只问选中的那一项,不该把引擎探测、音色清单全跑一遍)。"""
     from app.ai.runtime import asr_models, separation_models
     from app.domain import audio_capabilities
     from app.domain.voices import transcription
     from app.domain.workflows.executors.talking import SPEECH_TO_VIDEO, VIDEO_LIPSYNC, talking_models
 
-    statuses: dict[str, CheckStatus] = {
-        CHAT_MODEL: "met" if _chat_model(db, user_id).model else "missing",
-        REFERENCE_IMAGE_MODEL: "met" if _reference_image_model(db, user_id, needed=SINGLE_REFERENCE).model else "missing",
-        MULTI_REFERENCE_IMAGE_MODEL: "met" if _reference_image_model(db, user_id, needed=REFERENCE_IMAGES_NEEDED).model
-        else "missing",
-        REFERENCE_VIDEO_MODEL: "met" if _shot_video_model(db, user_id).model else "missing",
-        CLONED_VOICE: _cloned_voice_status(db, workspace_id, digital_human=False),
-        DIGITAL_HUMAN_VOICE: _cloned_voice_status(db, workspace_id, digital_human=True),
-        TRANSCRIPTION_ENGINE: _provider_status(db, user_id, transcription.CAPABILITY, asr_models.runtime_status),
-        SEPARATION_ENGINE: _provider_status(db, user_id, audio_capabilities.SEPARATION, separation_models.runtime_status),
-        SPEECH_VIDEO_MODEL: "met" if talking_models(db, SPEECH_TO_VIDEO, user_id) else "missing",
-        LIPSYNC_VIDEO_MODEL: "met" if talking_models(db, VIDEO_LIPSYNC, user_id) else "missing",
-        TIKHUB_ACCOUNT: tikhub_status(db, user_id, TIKHUB_ACCOUNT),
-        TIKHUB_VIDEO: tikhub_status(db, user_id, TIKHUB_VIDEO),
-        TIKHUB_COMMENTS: tikhub_status(db, user_id, TIKHUB_COMMENTS),
+    def met(found: Any) -> CheckStatus:
+        return "met" if found else "missing"
+
+    return {
+        CHAT_MODEL: lambda: met(_chat_model(db, user_id).model),
+        REFERENCE_IMAGE_MODEL: lambda: met(_reference_image_model(db, user_id, needed=SINGLE_REFERENCE).model),
+        MULTI_REFERENCE_IMAGE_MODEL: lambda: met(_reference_image_model(db, user_id, needed=REFERENCE_IMAGES_NEEDED).model),
+        REFERENCE_VIDEO_MODEL: lambda: met(_shot_video_model(db, user_id).model),
+        CLONED_VOICE: lambda: _cloned_voice_status(db, workspace_id, digital_human=False),
+        DIGITAL_HUMAN_VOICE: lambda: _cloned_voice_status(db, workspace_id, digital_human=True),
+        TRANSCRIPTION_ENGINE: lambda: _provider_status(db, user_id, transcription.CAPABILITY, asr_models.runtime_status),
+        SEPARATION_ENGINE: lambda: _provider_status(db, user_id, audio_capabilities.SEPARATION, separation_models.runtime_status),
+        SPEECH_VIDEO_MODEL: lambda: met(talking_models(db, SPEECH_TO_VIDEO, user_id)),
+        LIPSYNC_VIDEO_MODEL: lambda: met(talking_models(db, VIDEO_LIPSYNC, user_id)),
+        TIKHUB_ACCOUNT: lambda: tikhub_status(db, user_id, TIKHUB_ACCOUNT),
+        TIKHUB_VIDEO: lambda: tikhub_status(db, user_id, TIKHUB_VIDEO),
+        TIKHUB_COMMENTS: lambda: tikhub_status(db, user_id, TIKHUB_COMMENTS),
     }
-    return statuses

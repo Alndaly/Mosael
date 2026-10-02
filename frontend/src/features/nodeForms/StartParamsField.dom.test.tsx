@@ -8,7 +8,8 @@
  * 走真的宿主(节点检查器)—— 它把改动交成一个 `config` 补丁,和存进图里的是同一份。
  */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import React from "react";
 import { beforeAll, expect, it, vi } from "vitest";
 
@@ -38,8 +39,11 @@ const START = {
   description: "",
   category: "",
   config: {
-    params: { type: "object", label: "启动参数", editor: "start_params", required_list: "required_params" },
+    params: {
+      type: "object", label: "启动参数", editor: "start_params", required_list: "required_params", options_map: "param_options",
+    },
     required_params: { type: "list", label: "必填参数", edited_by: "params" },
+    param_options: { type: "object", label: "选项", edited_by: "params" },
   },
   outputs: ["*params"],
   output_types: {},
@@ -144,4 +148,76 @@ it("名字空着、和前面重名的行就地提示,都不存", () => {
   expect(within(row(1)).getByRole("textbox", { name: "wfStartParamName" }).getAttribute("aria-invalid")).toBe("true");
   //: 同名时先出现的那行算数:存下去的还是第一行。
   expect(last()).toEqual({ params: { topic: "" }, required_params: ["topic"] });
+});
+
+
+// ---- 选项参数:只能从几项里选的那一行,默认值栏是下拉 ----
+
+const SOURCES = [
+  { value: "browser", label: "内嵌浏览器", description: "不用配置" },
+  { value: "tikhub", label: "TikHub", description: "需安装 TikHub 插件并配置密钥", requires: "tikhub_account" },
+];
+
+/** 模板前置条件的状态:TikHub 这一项此刻缺。别的请求照旧回空清单。 */
+function tikhubMissing() {
+  vi.stubGlobal("fetch", async (url: string) =>
+    new Response(
+      JSON.stringify(String(url).includes("/templates/checks") ? [{ check: "tikhub_account", status: "missing" }] : []),
+      { status: 200, headers: { "content-type": "application/json" } },
+    ),
+  );
+}
+
+it("选项参数:默认值栏是下拉(不是文本框);选一项存成那个值,选中那一项的说明写在下面", async () => {
+  const { row, last } = renderStart({
+    params: { account_link: "", data_source: "" }, required_params: ["data_source"], param_options: { data_source: SOURCES },
+  });
+  expect(within(row(1)).queryByRole("textbox", { name: "wfStartParamDefaultOf" })).toBeNull();
+  const user = userEvent.setup();
+  await user.click(within(row(1)).getByRole("combobox", { name: "wfStartParamDefaultOf" }));
+  await user.click(await screen.findByRole("option", { name: /内嵌浏览器/ }));
+  expect(last()).toEqual({
+    params: { account_link: "", data_source: "browser" }, required_params: ["data_source"], param_options: { data_source: SOURCES },
+  });
+  expect(row(1).querySelector("[data-start-param-option-note]")?.textContent).toBe("不用配置");
+});
+
+it("必填、还没选:那一行标「必填,还没选」", () => {
+  const { row } = renderStart({ params: { data_source: "" }, required_params: ["data_source"], param_options: { data_source: SOURCES } });
+  expect(row(0).querySelector("[data-start-param-notice]")?.textContent).toBe("wfStartParamPickRequired");
+});
+
+it("要的东西没备好的那一项在下拉里标「未就绪」但照样能选;选中它那一行说清运行前会被拦", async () => {
+  tikhubMissing();
+  try {
+    const { row, last } = renderStart({ params: { data_source: "" }, required_params: [], param_options: { data_source: SOURCES } });
+    const user = userEvent.setup();
+    await user.click(within(row(0)).getByRole("combobox", { name: "wfStartParamDefaultOf" }));
+    const tikhub = await screen.findByRole("option", { name: /TikHub · wfStartParamOptionNotReady/ });
+    expect(screen.getByRole("option", { name: /内嵌浏览器/ }).textContent).not.toContain("wfStartParamOptionNotReady");
+    await user.click(tikhub);
+    expect((last().params as Config).data_source).toBe("tikhub");
+    await waitFor(() =>
+      expect(row(0).querySelector("[data-start-param-notice]")?.textContent).toBe("wfStartParamOptionUnavailable"),
+    );
+  } finally {
+    vi.stubGlobal("fetch", async () => new Response("[]", { status: 200, headers: { "content-type": "application/json" } }));
+  }
+});
+
+it("值不在选项里(旧图手填的「TikHub」):就地说,运行前会被拦", () => {
+  const { row } = renderStart({ params: { data_source: "TikHub" }, required_params: [], param_options: { data_source: SOURCES } });
+  expect(row(0).querySelector("[data-start-param-notice]")?.getAttribute("data-start-param-notice")).toBe("not-an-option");
+});
+
+it("改名:选项跟着那一行走;删行:选项一起没了", () => {
+  const { row, last } = renderStart({
+    params: { source: "browser", tone: "" }, required_params: ["source"], param_options: { source: SOURCES },
+  });
+  act(() => fireEvent.change(within(row(0)).getByRole("textbox", { name: "wfStartParamName" }), { target: { value: "data_source" } }));
+  expect(last()).toEqual({
+    params: { data_source: "browser", tone: "" }, required_params: ["data_source"], param_options: { data_source: SOURCES },
+  });
+  act(() => fireEvent.click(within(row(0)).getByRole("button", { name: "wfStartParamRemove" })));
+  expect(last()).toEqual({ params: { tone: "" }, required_params: [], param_options: {} });
 });

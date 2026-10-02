@@ -134,7 +134,8 @@ def start_workflow_job(
 # 2. 「AI 生成素材」节点的提示词按选中的模型判(_check_generation_text);
 # 3. 节点自己登记的运行前检查(executors.register_preflight / register_prefix_preflight)—— 插件节点选的连接
 #    这个人用不用得了也在这里(和执行时 resolve_instance 同一条规矩);
-# 4. 字面量指定的 `call_workflow` 子工作流:它那一版、带着这里交给它的入参,把同一套检查再走一遍。
+# 4. 字面量指定的 `call_workflow` 子工作流:它那一版、带着这里交给它的入参,把同一套检查再走一遍;
+# 5. 开始节点的选项参数选中的那一项要的前置条件(选项的 `requires`,见 _check_chosen_options)。
 #
 # 写在引擎里而不是单独一个模块:它要用执行器登记的运行前检查(executors.run_preflights),而执行器
 # 回头调引擎(call_workflow)—— 单独拎出去就是又一个进环的模块(见 tests/test_import_layering)。
@@ -191,12 +192,46 @@ def _check_graph_runnable(
     )
     if errors:
         raise WorkflowDomainError("；".join(errors))
+    _check_chosen_options(db, with_run_params(graph, params), workspace_id, actor)
     _check_generation_text(db, graph, actor)
     #: 节点登记的运行前检查,连同插件节点「轮到它时落得到一条连接吗」(按前缀登记的那一族,见 executors.content)。
     #: 带上这一次的开始参数:只引用开始参数的配置(音色、画幅……)在这里就有值(见 run_preflights)。
     run_preflights(db, graph, actor, workspace_id=workspace_id, params=params)
     if len(seen) <= _MAX_CALL_DEPTH:
         _check_called_workflows(db, graph, workspace_id, actor, seen=seen)
+
+
+def _check_chosen_options(db: Session, graph: dict[str, Any], workspace_id: str, actor: str | None) -> None:
+    """开始节点的选项参数(`param_options`)**选中的那一项**要的东西,此刻备齐了吗。
+
+    选项可以声明它要什么(`requires`,模板前置条件的检查键):分析类模板的「数据来源」选了 TikHub,就得装了插件、
+    接了连接、勾了工具。此前要等认完链接、跑到 TikHub 那一步才失败。只查**选中的**那一项 —— 选浏览器的人不该被
+    TikHub 没配好拦住(图里 TikHub 那几个节点是通用插件节点,本来就没有运行前检查)。判据和模板库的前置条件同一个
+    (templates.requirement_problem)。`graph` 是叠过这一次参数的(with_run_params);值不在选项里的已由校验拦下。
+    """
+    from app.core.i18n import tr
+    from app.domain.workflows.templates import requirement_problem
+
+    for node in graph.get("nodes") or []:
+        if not isinstance(node, dict) or node.get("type") != "start":
+            continue
+        config = node.get("config") if isinstance(node.get("config"), dict) else {}
+        params = config.get("params") if isinstance(config.get("params"), dict) else {}
+        declared = config.get("param_options") if isinstance(config.get("param_options"), dict) else {}
+        for name, options in declared.items():
+            chosen = next((one for one in options if isinstance(one, dict) and one.get("value") == params.get(name)), None)
+            if chosen is None or not chosen.get("requires"):
+                continue
+            problem = requirement_problem(db, user_id=actor or "", workspace_id=workspace_id, check=str(chosen["requires"]))
+            if problem is None:
+                continue
+            others = tr("punct_listSep").join(
+                str(one.get("label") or one.get("value")) for one in options if isinstance(one, dict) and one is not chosen
+            )
+            raise WorkflowDomainError(
+                "wfErr_startOptionUnavailable",
+                params={"param": name, "choice": chosen.get("label") or chosen.get("value"), "reason": problem, "others": others},
+            )
 
 
 def _why_plugin_node_unusable(db: Session, node_type: str, actor: str | None) -> str | None:

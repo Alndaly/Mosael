@@ -691,6 +691,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfField_parameters": {"zh": "生成参数", "en": "Generation parameters"},
     "wfField_params": {"zh": "启动参数", "en": "Start parameters"},
     "wfField_required_params": {"zh": "必填参数", "en": "Required parameters"},
+    "wfField_param_options": {"zh": "参数选项", "en": "Parameter options"},
     "wfField_path": {"zh": "路径", "en": "Path"},
     "wfField_plugin_id": {"zh": "插件", "en": "Plugin"},
     "wfField_presence_penalty": {"zh": "话题惩罚", "en": "Presence penalty"},
@@ -834,6 +835,10 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfNode_start_params": {
         "zh": "一行一个启动参数:名字和默认值。勾了「必填」的,跑之前必须有值(默认值或这次运行传进来的),空着就不让运行",
         "en": "One start parameter per row: a name and a default value. A row marked Required must have a value before a run (its default or one passed in for the run); the run is refused while it is blank",
+    },
+    "wfNode_start_param_options": {
+        "zh": "只能从几项里选的参数:参数名 → 选项列表,每一项是 {\"value\", \"label\", \"description\"},选它要备好什么写在 \"requires\"(模板前置条件的检查键)",
+        "en": "Parameters that can only take one of a few values: parameter name → a list of options, each {\"value\", \"label\", \"description\"}, with what it needs in \"requires\" (a template requirement check key)",
     },
     "wfNode_start_required_params": {
         "zh": "跑之前必须有值的参数:params 里参数名的列表,例如 [\"topic\"]",

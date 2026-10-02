@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.core.i18n import tr
 from app.domain.workflows.field_activation import config_field_active
+from app.domain.workflows.template_requirements import CHECKS
 from app.domain.workflows.node_types import (
     NODE_TYPES,
 )
@@ -124,6 +125,71 @@ def _start_param_errors(node_id: str, config: dict[str, Any]) -> list[str]:
     params = config.get("params") if isinstance(config.get("params"), dict) else {}
     names = config.get("required_params") if isinstance(config.get("required_params"), list) else []
     return [f"节点 {node_id} 缺少必填配置 params.{name}" for name in names if isinstance(name, str) and blank(params.get(name))]
+
+
+def _param_options(config: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
+    """开始节点的选项参数(`param_options`):参数名 → 选项列表。形状不对的那几格不算(由 _param_options_shape_errors 报)。"""
+    declared = config.get("param_options")
+    if not isinstance(declared, dict):
+        return {}
+    return {
+        name: options for name, options in declared.items()
+        if isinstance(options, list) and options and all(isinstance(one, dict) for one in options)
+    }
+
+
+def _param_options_shape_errors(node_id: str, config: dict[str, Any]) -> list[str]:
+    """`param_options` 的形状:参数名 → 非空的选项列表,每一项有不重复的 value(非空字符串)、一个 label(字符串),
+    可选 description(字符串),`requires` 只能是模板前置条件的检查键(运行前按它查,见 engine._check_chosen_options)。"""
+    declared = config.get("param_options")
+    if declared is None:
+        return []
+    if not isinstance(declared, dict):
+        return [tr("wfErr_paramOptionsShape", node=node_id, param="—")]
+    errors: list[str] = []
+    for name, options in declared.items():
+        values = [one.get("value") for one in options] if isinstance(options, list) and all(
+            isinstance(one, dict) for one in options) else []
+        good = (
+            bool(values)
+            and all(isinstance(value, str) and value.strip() for value in values)
+            and len(set(values)) == len(values)
+            and all(isinstance(one.get("label"), str) for one in options)
+            and all(isinstance(one.get("description", ""), str) for one in options)
+            and all(one.get("requires") in (None, "") or one.get("requires") in CHECKS for one in options)
+        )
+        if not good:
+            errors.append(tr("wfErr_paramOptionsShape", node=node_id, param=name))
+    return errors
+
+
+def start_option_violations(config: dict[str, Any]) -> list[str]:
+    """开始节点上**值不在选项里**的选项参数(按参数的顺序)。和画布的 analyze.ts startOptionViolations 跑同一份语料
+    contracts/workflow-start-option-cases.json。
+
+    空着的不归这条管:必填的由必填说,不必填的引用出来是空串(和自由输入的参数一样)。值按文字比(as_text:默认值敲 3
+    存成数字,和选项的值 "3" 是同一个)。"""
+    params = config.get("params") if isinstance(config.get("params"), dict) else {}
+    options = _param_options(config)
+    return [
+        name for name, value in params.items()
+        if name in options and not blank(value) and as_text(value) not in {str(one.get("value")) for one in options[name]}
+    ]
+
+
+def _start_option_errors(node_id: str, config: dict[str, Any]) -> list[str]:
+    """选项参数的值(默认值叠上这一次带的,见 with_run_params)不在选项里就拦,点名参数和可选的值。"""
+    params = config.get("params") if isinstance(config.get("params"), dict) else {}
+    errors: list[str] = []
+    for name in start_option_violations(config):
+        value, options = params.get(name), _param_options(config)[name]
+        choices = tr("punct_listSep").join(
+            tr("wfOptionChoice", value=one.get("value"), label=one.get("label"))
+            if one.get("label") and one.get("label") != one.get("value") else str(one.get("value"))
+            for one in options
+        )
+        errors.append(tr("wfErr_startParamNotAnOption", node=node_id, param=name, value=as_text(value), choices=choices))
+    return errors
 
 
 def _required_params_shape_errors(node_id: str, config: dict[str, Any]) -> list[str]:
@@ -264,6 +330,7 @@ def validate_graph(
         if node_type == "start":
             start_count += 1
             errors.extend(_required_params_shape_errors(node_id, node.get("config") or {}))
+            errors.extend(_param_options_shape_errors(node_id, node.get("config") or {}))
         if require_config:
             node_config = node.get("config") or {}
             node_specs = known_types[node_type]["config"]
@@ -282,6 +349,7 @@ def validate_graph(
             )
             if node_type == "start":
                 errors.extend(_start_param_errors(node_id, node_config))
+                errors.extend(_start_option_errors(node_id, node_config))
             #: **运行前的校验要下到内嵌子图里,而且是整份校验。** 体是这张图的一段,它的每一种错
             #: (缺必填、引用越出作用域、空体、体里有开始节点、环、未知类型)在这里不报,就只能等
             #: 循环真跑到时才由执行器报 —— 那时工作流已经占了一个任务位、把循环之前的步骤全跑完

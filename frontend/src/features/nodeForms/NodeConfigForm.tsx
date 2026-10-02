@@ -76,6 +76,8 @@ export interface ConfigSpec {
   max_items?: number;
   /** 这一格的控件顺带编辑的另一格:存「哪几行必填」的那一格(开始节点的参数,`editor: "start_params"`)。 */
   required_list?: string;
+  /** 同上,存「哪几行只能从几项里选、选项是什么」的那一格(开始节点的 param_options)。 */
+  options_map?: string;
   /** 这一格不单独出现:它由那一格的控件一起编辑(开始节点的 required_params 跟着参数的每一行走)。 */
   edited_by?: string;
 }
@@ -402,13 +404,26 @@ export function NodeConfigForm({
                   {binding?.renderBound(key)}
                 </div>
               ) : spec?.editor === "start_params" && spec.required_list ? (
-                // 开始节点的启动参数:一行一个(名字、默认值、必填)。必填存在声明点名的那一格里,和这一格一起交出去 ——
-                // 改名、删行时必填跟着那一行走。值那格只是默认值:开始节点是入口,没有上游可接。
+                // 开始节点的启动参数:一行一个(名字、默认值、必填)。必填、选项存在声明点名的那几格里,和这一格一起交出去 ——
+                // 改名、删行时跟着那一行走。值那格只是默认值(声明了选项的是下拉):开始节点是入口,没有上游可接。
                 <StartParamsField
                   params={value}
                   required={config[spec.required_list]}
+                  options={spec.options_map ? config[spec.options_map] : undefined}
+                  workspaceId={workspaceId}
                   onChange={(next, typing) =>
-                    onPatchConfig(key, { [key]: next.params, [String(spec.required_list)]: next.required }, typing)
+                    onPatchConfig(
+                      key,
+                      {
+                        [key]: next.params,
+                        [String(spec.required_list)]: next.required,
+                        //: 选项那一格没声明过、这次也没有的,不凭空写一个空对象进去。
+                        ...(spec.options_map && (spec.options_map in config || Object.keys(next.options).length > 0)
+                          ? { [spec.options_map]: next.options }
+                          : {}),
+                      },
+                      typing,
+                    )
                   }
                 />
               ) : String((spec as { editor?: unknown } | undefined)?.editor ?? "") === "note_ref" ? (

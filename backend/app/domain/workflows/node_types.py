@@ -201,6 +201,7 @@ _FIELD_LABELS = {
     "parameters": "wfField_parameters",
     "params": "wfField_params",
     "required_params": "wfField_required_params",
+    "param_options": "wfField_param_options",
     "path": "wfField_path",
     "plugin_id": "wfField_plugin_id",
     "presence_penalty": "wfField_presence_penalty",
@@ -542,6 +543,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
                 "type": "object",
                 "editor": "start_params",
                 "required_list": "required_params",
+                "options_map": "param_options",
                 "description": "wfNode_start_params",
             },
             #: 哪几个参数**跑之前必须有值**:params 里参数名的**列表**,按参数的顺序(保存时规范化,见
@@ -551,6 +553,10 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
             #: 此前是一格逗号分隔的字:同一个名字写两遍,参数改名、删行之后它不跟着变。旧形状由迁移和图升级改成列表
             #: (graph_upgrade.start_required_params_become_a_list)。`edited_by`:不单独出一格,由参数那一格的控件编辑。
             "required_params": {"type": "list", "edited_by": "params", "description": "wfNode_start_required_params"},
+            #: 哪几个参数**只能从几项里选**:参数名 → 选项列表(值、标签、一句说明;选它要什么前置条件 `requires`,
+            #: 和模板库前置条件同一个检查键,见 template_requirements.CHECKS)。面板上那一行的默认值栏是下拉;
+            #: 运行前值不在选项里就拦,选中的那一项没备好也拦(engine._check_chosen_options)。没声明的参数照旧自由输入。
+            "param_options": {"type": "object", "edited_by": "params", "description": "wfNode_start_param_options"},
         },
         "outputs": ["*params"],
     },

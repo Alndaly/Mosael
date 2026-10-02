@@ -40,8 +40,22 @@ def canonicalize_start_params(graph: dict[str, Any]) -> dict[str, Any]:
     normalized = deepcopy(graph)
     for node in normalized.get("nodes") or []:
         if isinstance(node, dict) and node.get("type") == "start" and isinstance(node.get("config"), dict):
-            node["config"] = required_params_as_rows(node["config"])
+            node["config"] = param_options_as_rows(required_params_as_rows(node["config"]))
     return normalized
+
+
+def param_options_as_rows(config: dict[str, Any]) -> dict[str, Any]:
+    """选项参数(`param_options`)点名了却没有那一行的,补一行(默认空着)—— 和必填清单同一条:写的人要的是「这个参数
+    只能从几项里选」,补一行之后面板上看得见、运行前照样按选项查。选项本身的形状由校验说(graph_rules)。"""
+    declared = config.get("param_options")
+    params = config.get("params")
+    if not isinstance(declared, dict) or not isinstance(params, (dict, type(None))):
+        return config
+    rows = dict(params or {})
+    for name in declared:
+        if isinstance(name, str) and name.strip():
+            rows.setdefault(name, "")
+    return {**config, "params": rows}
 
 
 def required_params_as_rows(config: dict[str, Any]) -> dict[str, Any]:

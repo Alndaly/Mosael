@@ -129,6 +129,36 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "节点 {node} 的 required_params 要是参数名的列表(params 里的名字),例如 [\"topic\"] —— 不是一串逗号分隔的字",
         "en": "Node {node}: required_params must be a list of parameter names from params, e.g. [\"topic\"] — not a comma-separated string",
     },
+    "wfErr_paramOptionsShape": {
+        "zh": "节点 {node} 的 param_options 里,参数 {param} 的选项写得不对:要是一个非空的列表,每一项有不重复的 value、一个 label,可选 description,requires 只能是模板前置条件的检查键",
+        "en": "Node {node}: the param_options for parameter {param} are malformed — they must be a non-empty list whose items each have a unique value and a label, optionally a description, and a requires that names a template requirement check",
+    },
+    "wfErr_startParamNotAnOption": {
+        "zh": "节点 {node} 的参数 {param} 是「{value}」,只能选:{choices}",
+        "en": "Node {node}: parameter {param} is “{value}”, but it can only be one of: {choices}",
+    },
+    "wfOptionChoice": {"zh": "{value}({label})", "en": "{value} ({label})"},
+    "wfErr_startOptionUnavailable": {
+        "zh": "开始节点的参数 {param} 选的是「{choice}」,可它现在用不了:{reason}。备好它再运行,或者改选:{others}",
+        "en": "The start parameter {param} is set to “{choice}”, which can't be used right now: {reason}. Set it up and run again, or choose {others} instead",
+    },
+    "wfWhy_requirementNotMet": {"zh": "前置条件「{check}」还没备好", "en": "the requirement “{check}” isn't met yet"},
+    "wfWhy_tikhubNotInstalled": {
+        "zh": "没装 TikHub 插件 —— 在插件页安装它,新建一个连接(一个平台一条)、填上 TikHub 的 API 密钥并启用",
+        "en": "the TikHub plugin isn't installed — install it on the Plugins page, then create a connection (one per platform), enter your TikHub API key and enable it",
+    },
+    "wfWhy_tikhubNoConnection": {
+        "zh": "还没接 TikHub —— 在插件页新建一个连接(一个平台一条)、填上 TikHub 的 API 密钥并启用",
+        "en": "TikHub isn't connected yet — on the Plugins page create a connection (one per platform), enter your TikHub API key and enable it",
+    },
+    "wfWhy_tikhubToolsOff": {
+        "zh": "连接「{name}」没有勾选这几个工具:{tools}(在插件页的工具列表里勾上)",
+        "en": "connection “{name}” doesn't have these tools enabled: {tools} (tick them in the tool list on the Plugins page)",
+    },
+    "wfWhy_tikhubAmbiguous": {
+        "zh": "同一个平台接了不止一条可用的 TikHub 连接,运行时不知道用哪一条 —— 停用多余的那条",
+        "en": "more than one usable TikHub connection serves the same platform, so a run can't tell which to use — disable the extra one",
+    },
     "wfErr_referencesNeverRunNode": {
         # 一个会跑的节点引用了一定不会跑(没接进流程)的节点 —— 见 graph_rules.never_run_references。
         "zh": "节点 {nodes} 引用了 {refs},可节点 {source} 没接进流程(没有一条会让它运行的入边),永远不会运行 —— 这个引用跑起来只会是空的。把 {source} 连进流程;图是从官方模板建的,可以点画布顶上的「按新版重建」",

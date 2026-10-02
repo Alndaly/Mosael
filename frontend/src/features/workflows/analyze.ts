@@ -23,6 +23,7 @@ export type IssueCode =
   | "unwired-referenced" // 一定不会被执行,却被会跑的节点引用(`{{…}}` 或数据边):后端运行前拒(wfErr_referencesNeverRunNode)
   | "stale-var" // 配置里引用了已删除的节点
   | "start-param-missing" // 引到开始节点的参数({{start.x}} 或从它拉出的数据边),开始节点没声明
+  | "start-param-not-an-option" // 开始节点的选项参数(param_options),值不在选项里:后端运行前拒(wfErr_startParamNotAnOption)
   | "no-providers" // LLM 节点但一个供应商都没配
   | "provider-missing" // LLM 绑定的供应商配置已被删
   | "gen-provider-unconfigured" // AI 生成选的服务商下没有可用的生成模型
@@ -284,6 +285,27 @@ export function neverRunNodes(graph: WorkflowGraph, { entryIsRoot }: { entryIsRo
   return new Set([...ids].filter((id) => !mayRun.has(id)));
 }
 
+/**
+ * 开始节点上**值不在选项里**的选项参数(`param_options`,按参数的顺序)。和后端 graph_rules.start_option_violations
+ * 跑同一份语料 contracts/workflow-start-option-cases.json。空着的不归这条管(必填的由必填说);值按文字比 ——
+ * 默认值敲 3 存成数字,和选项的值 "3" 是同一个(后端 as_text 同一个写法)。
+ */
+export function startOptionViolations(config: Record<string, unknown>): string[] {
+  const params = (config.params && typeof config.params === "object" ? config.params : {}) as Record<string, unknown>;
+  const declared = (config.param_options && typeof config.param_options === "object" ? config.param_options : {}) as Record<
+    string,
+    unknown
+  >;
+  return Object.entries(params)
+    .filter(([name, value]) => {
+      const options = declared[name];
+      if (!Array.isArray(options) || options.length === 0 || isEmpty(value)) return false;
+      if (!options.every((one) => one && typeof one === "object")) return false;
+      return !options.map((one) => String((one as { value?: unknown }).value ?? "")).includes(String(value));
+    })
+    .map(([name]) => name);
+}
+
 /** 一个一定不会跑的节点,被哪些会跑的节点、以哪几种写法引用了。 */
 export interface NeverRunReference {
   source: string;
@@ -495,6 +517,11 @@ function collect(
       const required = Array.isArray(config.required_params) ? config.required_params : [];
       for (const name of required) {
         if (typeof name === "string" && isEmpty(params[name])) push("error", "required-missing", { configKey: name });
+      }
+      // 只能从几项里选的参数(param_options),值不在选项里 —— 后端运行前拒(wfErr_startParamNotAnOption)。
+      for (const name of startOptionViolations(config)) {
+        const options = (config.param_options as Record<string, Array<{ value?: unknown }>>)[name];
+        push("error", "start-param-not-an-option", { configKey: name, available: options.map((one) => String(one?.value ?? "")) });
       }
     }
 
