@@ -229,6 +229,25 @@ export interface TrimResult {
 }
 
 export const MIN_CLIP_DURATION = 0.05;
+/** 切开 / 挖掉之后剩下的一截短于这么多**源秒**就不留(和后端 _timeline.MIN_CUT_REMAINDER 同值)。 */
+export const MIN_CUT_REMAINDER = 0.05;
+
+/** 修剪能到的时间线范围:头边不越过左邻居的尾巴,尾边不越过右邻居的头(同轨不重叠,后端同样夹住)。 */
+export interface TrimLimits {
+  min: number;
+  max: number;
+}
+
+export function trimLimits(trackClips: ClipLike[], clip: ClipLike): TrimLimits {
+  let min = 0;
+  let max = Number.POSITIVE_INFINITY;
+  for (const other of trackClips) {
+    if (other.id === clip.id) continue;
+    if (clipEnd(other) <= clip.timeline_start + 1e-9) min = Math.max(min, clipEnd(other));
+    else if (other.timeline_start >= clipEnd(clip) - 1e-9) max = Math.min(max, other.timeline_start);
+  }
+  return { min, max };
+}
 
 /**
  * Trim one edge of a clip to a new timeline time, keeping source material
@@ -244,11 +263,12 @@ export function resolveTrim(
   rawTime: number,
   assetDuration: number | null = null,
   minDuration: number = MIN_CLIP_DURATION,
+  limits: TrimLimits = { min: 0, max: Number.POSITIVE_INFINITY },
 ): TrimResult {
   if (edge === "start") {
     const maxStart = clipEnd(clip) - minDuration;
-    // 源 0 点在时间线上的位置:头边最多退到这里(也不能退到时间线 0 之前)。
-    const minStart = Math.max(0, srcToTimeline(clip, 0));
+    // 源 0 点在时间线上的位置:头边最多退到这里(也不能退到时间线 0 之前、左邻居的尾巴之前)。
+    const minStart = Math.max(0, limits.min, srcToTimeline(clip, 0));
     const start = Math.min(Math.max(rawTime, minStart), maxStart);
     return {
       timeline_start: start,
@@ -257,7 +277,7 @@ export function resolveTrim(
     };
   }
   const minEnd = clip.timeline_start + minDuration;
-  const maxEnd = assetDuration != null ? srcToTimeline(clip, assetDuration) : Number.POSITIVE_INFINITY;
+  const maxEnd = Math.min(limits.max, assetDuration != null ? srcToTimeline(clip, assetDuration) : Number.POSITIVE_INFINITY);
   const end = Math.min(Math.max(rawTime, minEnd), maxEnd);
   return {
     timeline_start: clip.timeline_start,
@@ -267,6 +287,30 @@ export function resolveTrim(
 }
 
 /* ---------- Overlap ---------- */
+
+/**
+ * 覆盖放下时,一段片段被 spans 盖住之后还露在外面的几截(时间线区间)。和后端 coverage.carve 同一口径:
+ * 整段被盖住就没了;露出头 / 尾的各留一截;中间被盖住切成两截;剩下不到 MIN_CUT_REMAINDER 源秒的碎片不留。
+ * 拖动预览靠它把「松手之后下层会被挖掉」提前画出来 —— 不然拖着看是叠在上面,松手才发现下面那段没了一块。
+ */
+export function uncoveredPieces(clip: ClipLike, spans: Array<{ start: number; end: number }>): Array<{ start: number; end: number }> {
+  const speed = clip.speed || 1;
+  const keeps = (from: number, to: number) => to - from > 1e-9 && (to - from) * speed > MIN_CUT_REMAINDER;
+  let pieces = [{ start: clip.timeline_start, end: clipEnd(clip) }];
+  for (const span of spans) {
+    const next: Array<{ start: number; end: number }> = [];
+    for (const piece of pieces) {
+      if (span.end <= piece.start + 1e-9 || span.start >= piece.end - 1e-9) {
+        next.push(piece);
+        continue;
+      }
+      if (span.start > piece.start && keeps(piece.start, span.start)) next.push({ start: piece.start, end: span.start });
+      if (span.end < piece.end && keeps(span.end, piece.end)) next.push({ start: span.end, end: piece.end });
+    }
+    pieces = next;
+  }
+  return pieces;
+}
 
 export function overlapsAny(
   clips: ClipLike[],

@@ -376,3 +376,43 @@ describe("轨道顺序", () => {
     expect(props.onMoveClip).toHaveBeenCalledWith("top", 0, "V1", false);
   });
 });
+
+describe("拖动预览和后端的覆盖 / 链接 / 修剪语义一致", () => {
+  it("覆盖模式:拖到别的片段上,被盖住的部分在预览里就挖掉(整段盖住的不画,露出的剩一截)", () => {
+    renderTimeline([
+      track("V1", "video", 0, [clip("mover", "V1", 0, 0, 2), clip("under", "V1", 5, 0, 4), clip("gone", "V1", 10, 0, 1)]),
+    ]);
+    fireEvent.pointerDown(screen.getByTestId("clip-mover"), { clientX: 10, clientY: 40, pointerId: 1, button: 0, buttons: 1 });
+    // 拖到 7–9:盖住 under(5–9)的后半段。
+    windowPointer("pointermove", { clientX: 290, clientY: 40, metaKey: true });
+    const under = screen.getByTestId("clip-under");
+    expect(under.style.left).toBe("200px");
+    expect(under.style.width).toBe("80px"); // 5–7
+    // 再拖到 9.5–11.5:整段盖住 gone(10–11),under 完整露出来。
+    windowPointer("pointermove", { clientX: 390, clientY: 40, metaKey: true });
+    expect(screen.queryByTestId("clip-gone")).toBeNull();
+    expect(screen.getByTestId("clip-under").style.width).toBe("160px");
+    windowPointer("pointerup", { clientX: 390, clientY: 40, metaKey: true });
+  });
+
+  it("链接组员(分离出去的声音)跟着画一起挪;松手只交一段,组员由后端跟着动", () => {
+    const { props } = renderTimeline([
+      track("V1", "video", 0, [clip("picture", "V1", 0, 0, 2, { link_group: "g" } as Partial<Clip>)]),
+      track("A1", "audio", 1, [clip("sound", "A1", 0, 0, 2, { link_group: "g" } as Partial<Clip>)]),
+    ]);
+    fireEvent.pointerDown(screen.getByTestId("clip-picture"), { clientX: 10, clientY: 40, pointerId: 1, button: 0, buttons: 1 });
+    windowPointer("pointermove", { clientX: 130, clientY: 40, metaKey: true });
+    expect(screen.getByTestId("clip-sound").style.transform).toBe("translate3d(120px, 0, 0)");
+    windowPointer("pointerup", { clientX: 130, clientY: 40, metaKey: true });
+    expect(props.onMoveClip).toHaveBeenCalledWith("picture", 3, undefined, false);
+  });
+
+  it("修剪拖过邻居:停在邻居的边上(同轨不重叠)", () => {
+    const { props } = renderTimeline([track("V1", "video", 0, [clip("c1", "V1", 0, 0, 4), clip("next", "V1", 5, 0, 2)])]);
+    const handle = screen.getByTestId("trim-end-c1");
+    fireEvent.pointerDown(handle, { clientX: 160, pointerId: 1, button: 0, buttons: 1 });
+    fireEvent.pointerMove(handle, { clientX: 400, pointerId: 1, buttons: 1 });
+    fireEvent.pointerUp(handle, { clientX: 400, pointerId: 1 });
+    expect(props.onTrimClip).toHaveBeenCalledWith("c1", expect.objectContaining({ src_out: 5 }));
+  });
+});

@@ -21,6 +21,8 @@ import {
   timelineToSrc,
   timeToPx,
   trackEdgeTimes,
+  trimLimits,
+  uncoveredPieces,
 } from "./geometry";
 
 const clip = (id: string, start: number, srcIn: number, srcOut: number) => ({
@@ -201,6 +203,42 @@ describe("时间线 ↔ 源时间按速度换算", () => {
     const result = resolveTrim(fast, "end", 100, 30);
     expect(result.src_out).toBe(30);
     expect(result.timeline_start + clipDuration({ ...fast, ...result })).toBeCloseTo(23);
+  });
+});
+
+describe("修剪停在邻居边上(和后端「修剪夹到邻居」同一口径)", () => {
+  const left = clip("left", 0, 0, 4);
+  const self = clip("self", 6, 0, 4); // 6–10
+  const right = clip("right", 12, 0, 3);
+
+  it("邻居的边就是这一段能修到的极限", () => {
+    expect(trimLimits([left, self, right], self)).toEqual({ min: 4, max: 12 });
+    expect(trimLimits([self], self)).toEqual({ min: 0, max: Number.POSITIVE_INFINITY });
+  });
+
+  it("头边往左拖过左邻居的尾巴,停在它的尾巴上;尾边同理停在右邻居的头上", () => {
+    const limits = trimLimits([left, self, right], self);
+    expect(resolveTrim({ ...self, src_in: 5, src_out: 9 }, "start", 1, null, undefined, limits).timeline_start).toBe(4);
+    const end = resolveTrim(self, "end", 20, null, undefined, limits);
+    expect(end.src_out).toBe(6); // 6–12
+  });
+});
+
+describe("覆盖放下的预览:被盖住的部分挖掉(和后端 coverage.carve 同一口径)", () => {
+  it("整段被盖住就没了;露出头尾的各剩一截;中间被盖住切成两截", () => {
+    const victim = clip("v", 2, 0, 6); // 2–8
+    expect(uncoveredPieces(victim, [{ start: 0, end: 10 }])).toEqual([]);
+    expect(uncoveredPieces(victim, [{ start: 5, end: 10 }])).toEqual([{ start: 2, end: 5 }]);
+    expect(uncoveredPieces(victim, [{ start: 0, end: 3 }])).toEqual([{ start: 3, end: 8 }]);
+    expect(uncoveredPieces(victim, [{ start: 4, end: 6 }])).toEqual([
+      { start: 2, end: 4 },
+      { start: 6, end: 8 },
+    ]);
+    expect(uncoveredPieces(victim, [{ start: 9, end: 12 }])).toEqual([{ start: 2, end: 8 }]);
+  });
+
+  it("剩下不到最小余量(源秒)的碎片不留", () => {
+    expect(uncoveredPieces(clip("v", 2, 0, 6), [{ start: 2.03, end: 9 }])).toEqual([]);
   });
 });
 

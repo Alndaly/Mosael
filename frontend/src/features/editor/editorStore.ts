@@ -18,8 +18,9 @@ export interface DragDraft {
   /** 组拖(框选多个后拖动)时,随锚点一起移动的其余选中片段。
    *
    *  锚点(clipId)保持单片段语义不变——裁剪、插入模式的涟漪预览、落位判定都只认它,
-   *  所以这些既有逻辑一行不用改;渲染侧另外把 followers 一并投影出去。 */
-  followers?: { clipId: string; trackId: string; timeline_start: number }[];
+   *  所以这些既有逻辑一行不用改;渲染侧另外把 followers 一并投影出去。
+   *  `linked` 的是链接组员(画和它分离出去的声音):只为预览,松手时不交 —— 后端移动时整组跟着走。 */
+  followers?: { clipId: string; trackId: string; timeline_start: number; linked?: boolean }[];
 }
 
 export const MIN_PX_PER_SECOND = 4;

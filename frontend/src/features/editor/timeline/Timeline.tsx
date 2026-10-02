@@ -25,6 +25,8 @@ import {
   timeToPx,
   timelineToSrc,
   trackEdgeTimes,
+  trimLimits,
+  uncoveredPieces,
 } from "@/domain/timeline/geometry";
 import { downsamplePeaks, slicePeaks } from "@/domain/timeline/waveform";
 import { MAX_PX_PER_SECOND, MIN_PX_PER_SECOND, markedRange, useEditorStore } from "@/features/editor/editorStore";
@@ -363,6 +365,30 @@ export function Timeline({
     const shift = end - Math.min(...downstreamStarts);
     return shift > 1e-9 ? { trackId: dragDraft.trackId, from: start, shift, split } : null;
   }, [editMode, dragDraft, dragMoveDuration, tracks]);
+  // 覆盖模式的落点预览:被拖着的片段盖住的部分,松手后后端会挖掉(coverage.carve)—— 预览里提前挖。
+  // clipId → 还露在外面的几截(时间线区间);整段被盖住就是空数组。没受影响的片段不在表里。
+  const overwriteCarve = React.useMemo(() => {
+    const carved = new Map<string, Array<{ start: number; end: number }>>();
+    if (editMode !== "overwrite" || !dragDraft || dragDraft.kind !== "move") return carved;
+    const spansByTrack = new Map<string, Array<{ start: number; end: number }>>();
+    for (const [clipId, at] of draftByClip) {
+      const source = allClips.find((item) => item.id === clipId);
+      if (!source) continue;
+      const end = at.timeline_start + clipDuration({ ...source, src_in: at.src_in, src_out: at.src_out });
+      spansByTrack.set(at.trackId, [...(spansByTrack.get(at.trackId) ?? []), { start: at.timeline_start, end }]);
+    }
+    for (const track of tracks) {
+      const spans = spansByTrack.get(track.id);
+      if (!spans) continue;
+      for (const other of track.clips ?? []) {
+        if (draftByClip.has(other.id)) continue;
+        const pieces = uncoveredPieces(other, spans);
+        const untouched = pieces.length === 1 && pieces[0].start === other.timeline_start && pieces[0].end === clipEnd(other);
+        if (!untouched) carved.set(other.id, pieces);
+      }
+    }
+    return carved;
+  }, [editMode, dragDraft, draftByClip, allClips, tracks]);
   const assetById = React.useMemo(() => new Map(assets.map((asset) => [asset.id, asset])), [assets]);
 
   //: 有声音的片段画波形 —— 视频也带声音(和 PR / DaVinci 一样),图片没有,放在视频轨上也不画。
@@ -574,9 +600,28 @@ export function Timeline({
     // 两级吸附候选在起手时算好:每条轨一份边缘表(拖到哪条 lane,哪条就是第一
     // 优先级),播放头/零点与其余轨道的边缘降为次级 — 否则字幕轨的密集 cue 边界
     // 或播放头会比同轨邻居更近,把肉眼可见的对接"抢走"。
+    // 链接组员(画和它分离出去的声音)跟着一起挪、轨道不变 —— 后端移动时整组走同样的时间差,预览照着画。
+    const movingIds = new Set([clip.id, ...followerOrigins.map((entry) => entry.clip.id)]);
+    const groups = new Set(
+      [clip, ...followerOrigins.map((entry) => entry.clip)].map((item) => item.link_group).filter((group): group is string => Boolean(group)),
+    );
+    const linkedOrigins =
+      groups.size === 0
+        ? []
+        : tracks
+            .filter((t) => !t.locked)
+            .flatMap((t) =>
+              (t.clips ?? [])
+                .filter((c) => c.link_group && groups.has(c.link_group) && !movingIds.has(c.id))
+                .map((c) => ({ clip: c, trackId: t.id })),
+            );
+    for (const entry of linkedOrigins) movingIds.add(entry.clip.id);
     const dragPlayhead = useEditorStore.getState().playhead;
+    // 跟着动的片段(自己、组拖的其余几段、链接组员)不当吸附目标:往自己原来的位置上吸没有意义。
     const edgesByTrack = new Map(
-      snapEnabled ? tracks.map((t) => [t.id, trackEdgeTimes(t.clips ?? [], clip.id)] as const) : [],
+      snapEnabled
+        ? tracks.map((t) => [t.id, trackEdgeTimes((t.clips ?? []).filter((c) => !movingIds.has(c.id)), null)] as const)
+        : [],
     );
     // 按住 ⌘ / Ctrl 拖:这一下临时不吸附(想贴着某条边但又不想被吸过去的时候)。
     const snapSetsFor = (laneId: string | null, suspended: boolean): { primary: number[]; secondary: number[] } => {
@@ -634,7 +679,14 @@ export function Timeline({
           trackId: groupCanChangeLane ? (followerTracks[index] as string) : entry.trackId,
           // 时间不能为负:整组左移撞到 0 时,锚点已被 resolveMove 夹住,跟随者也要各自夹一次。
           timeline_start: Math.max(0, entry.clip.timeline_start + deltaTime),
-        })),
+        })).concat(
+          linkedOrigins.map((entry) => ({
+            clipId: entry.clip.id,
+            trackId: entry.trackId,
+            timeline_start: Math.max(0, entry.clip.timeline_start + deltaTime),
+            linked: true,
+          })),
+        ),
       });
     };
     const detach = () => {
@@ -678,13 +730,15 @@ export function Timeline({
         (draft.timeline_start !== origin.timeline_start || draft.trackId !== track.id)
       ) {
         useEditorStore.getState().setDragDraft({ ...draft, settling: true });
-        if (draft.followers?.length && onMoveClips) {
+        // 链接组员只为预览:后端移动这几段时整组跟着走,不用(也不该)再交一遍。
+        const groupFollowers = (draft.followers ?? []).filter((f) => !f.linked);
+        if (groupFollowers.length && onMoveClips) {
           // 组拖走批量接口:一次手势落成一条操作,撤销一步还原整组。逐个调 onMoveClip 会产生
           // N 条操作,用户得按 N 次 ⌘Z——与"一次拖动"的心智完全对不上。
           // 组拖不支持插入模式的涟漪:一组(可能还跨轨)的片段要"挤开"什么没有唯一解,一律按覆盖。
           onMoveClips([
             { clipId: clip.id, timelineStart: draft.timeline_start, trackId: draft.trackId },
-            ...draft.followers.map((f) => ({ clipId: f.clipId, timelineStart: f.timeline_start, trackId: f.trackId })),
+            ...groupFollowers.map((f) => ({ clipId: f.clipId, timelineStart: f.timeline_start, trackId: f.trackId })),
           ]);
         } else {
           // Insert mode ripples the destination track's downstream clips aside.
@@ -716,6 +770,8 @@ export function Timeline({
     const trimSecondary = snapEnabled
       ? [0, useEditorStore.getState().playhead, ...tracks.filter((t) => t.id !== track.id).flatMap((t) => trackEdgeTimes(t.clips ?? [], clip.id))]
       : [];
+    // 同轨不重叠:头边停在左邻居的尾巴上、尾边停在右邻居的头上(后端修剪同样夹到邻居)。
+    const limits = trimLimits(track.clips ?? [], clip);
     const target = event.currentTarget as HTMLElement;
     capturePointer(target, event.pointerId);
 
@@ -725,7 +781,7 @@ export function Timeline({
       if (snapEnabled && !(moveEvent.metaKey || moveEvent.ctrlKey)) {
         rawTime = snapTimeTiered(rawTime, trimPrimary, trimSecondary, pxPerSecond).time;
       }
-      const result = resolveTrim(origin, edge, rawTime, assetDuration);
+      const result = resolveTrim(origin, edge, rawTime, assetDuration, undefined, limits);
       useEditorStore.getState().setDragDraft({
         clipId: clip.id,
         trackId: track.id,
@@ -1305,7 +1361,19 @@ export function Timeline({
                     if (!inWindow(clip.timeline_start, clipEnd(clip) + reach)) return null;
                   }
                   const draft = at ?? null;
-                  const display = draft ?? clip;
+                  // 覆盖预览:被拖着的片段盖住的部分挖掉。整段盖住就不画;露出好几截的,第一截画在本体上、
+                  // 其余几截由 lane 末尾的幽灵段画。
+                  const carved = at ? undefined : overwriteCarve.get(clip.id);
+                  if (carved && carved.length === 0) return null;
+                  const firstPiece = carved?.[0];
+                  const display = draft ?? (firstPiece
+                    ? {
+                        ...clip,
+                        timeline_start: firstPiece.start,
+                        src_in: timelineToSrc(clip, firstPiece.start),
+                        src_out: timelineToSrc(clip, firstPiece.end),
+                      }
+                    : clip);
                   // Insert-mode preview: clips at/after the drop point slide right by the
                   // dragged clip's duration, showing where the ripple will land them.
                   const partingShift =
@@ -1400,6 +1468,21 @@ export function Timeline({
                       />
                     );
                   })()}
+                {/* 覆盖预览里被切成两截的片段:后一截的幽灵(松手后后端切出的右段就落在这里)。 */}
+                {(track.clips ?? []).flatMap((source) =>
+                  (overwriteCarve.get(source.id) ?? []).slice(1).map((piece) => (
+                    <TimelineClip
+                      key={`carve-${source.id}-${piece.start}`}
+                      trackKind={track.kind}
+                      name={source.text_override ?? (source.asset_id ? assetById.get(source.asset_id)?.name ?? "" : "")}
+                      left={timeToPx(piece.start, pxPerSecond)}
+                      width={Math.max(10, timeToPx(piece.end - piece.start, pxPerSecond))}
+                      animate={animateClips}
+                      selected={false}
+                      dragging={false}
+                    />
+                  )),
+                )}
               </DroppableLane>
             ))}
             {dragDraft &&
