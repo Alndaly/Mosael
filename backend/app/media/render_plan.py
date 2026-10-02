@@ -159,6 +159,8 @@ class OutputSettings:
     encode_preset: str = "veryfast"
     #: 写进成片文件的元数据(key, value),比如数字人成片的 AIGC 隐式标识(ADR 0028 §5)。
     metadata: tuple[tuple[str, str], ...] = ()
+    #: 响度标准化(导出对话框的开关):整条混音拉到 −14 LUFS / −1 dBTP。限幅不看它,总是有。
+    loudnorm: bool = False
 
 
 @dataclass(frozen=True)
@@ -397,6 +399,7 @@ def build_render_plan(
     encode_preset: str = "veryfast",
     ai_label: str = "",
     metadata: tuple[tuple[str, str], ...] = (),
+    loudness_normalize: bool = False,
 ) -> RenderPlan:
     """
     clips: [{id, asset_id, timeline_start, src_in, src_out, has_audio}] from the base video track.
@@ -555,6 +558,7 @@ def build_render_plan(
             width=width, height=height, fps=fps, fill_mode=fill_mode if fill_mode in ("cover", "contain", "blur") else "cover",
             crf=max(0, min(51, int(crf))), encode_preset=encode_preset if encode_preset in X264_PRESETS else "veryfast",
             metadata=tuple(metadata),
+            loudnorm=loudness_normalize,
         ),
         overlays=tuple(overlays),
         audio_overlays=tuple(audio_overlays),

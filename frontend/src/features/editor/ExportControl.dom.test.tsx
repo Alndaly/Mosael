@@ -69,3 +69,18 @@ it("默认开着;关掉当场写明后果,导出时带上 ai_label: false;下一
   await user.click(await screen.findByRole("button", { name: "exportVideo" }));
   expect(screen.getByRole("checkbox", { name: /exportAiLabel/ })).toBeChecked();
 });
+
+it("响度标准化默认关;打开后导出带上 loudness_normalize: true,下一次还记得", async () => {
+  const user = userEvent.setup();
+  mount();
+  await user.click(screen.getByRole("button", { name: "exportVideo" }));
+  const toggle = screen.getByRole("checkbox", { name: /exportLoudnorm/ });
+  expect(toggle).not.toBeChecked();
+
+  await user.click(toggle);
+  await user.click(screen.getByRole("button", { name: "exportStart" }));
+  expect(exportSequence).toHaveBeenCalledWith("seq-1", expect.objectContaining({ loudness_normalize: true }));
+
+  await user.click(await screen.findByRole("button", { name: "exportVideo" }));
+  expect(screen.getByRole("checkbox", { name: /exportLoudnorm/ })).toBeChecked();
+});

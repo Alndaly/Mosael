@@ -27203,6 +27203,11 @@
             "type": "boolean",
             "title": "Ai Label",
             "default": true
+          },
+          "loudness_normalize": {
+            "type": "boolean",
+            "title": "Loudness Normalize",
+            "default": false
           }
         },
         "type": "object",

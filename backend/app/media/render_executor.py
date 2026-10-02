@@ -457,6 +457,28 @@ def _shown_during(start: float, end: float, fps: float) -> str:
     return f"gte(t,{start - half:.6f})*lt(t,{end - half:.6f})"
 
 
+#: 总线限幅的天花板:−1 dBFS。AAC 编码会让峰值再冒一点,留 1 dB 给它。
+MASTER_CEILING = 0.891
+#: 响度标准化的目标(短视频平台的常见值):整体 −14 LUFS,真峰值 −1 dBTP,响度范围 11 LU(不压得太扁)。
+LOUDNORM_TARGET = "I=-14:TP=-1:LRA=11"
+
+
+def _master_bus(loudnorm: bool) -> str:
+    """混音之后、编码之前的总线(不带输入输出标签)。
+
+    **限幅总是有。** amix 是 normalize=0 的直接相加,增益关键帧又能拉到 4 倍:人声 + 音乐 + 原声叠在一起,
+    采样轻易超过 ±1,编码时被硬削成方波(审查实测一段三轨叠加 9% 的采样在 0 dBFS 上)。alimiter 在
+    −1 dBFS 处软压:level=0 不做自动增益(不改没超的部分),latency=1 补偿它的前视延迟(不然整条声音晚 5 ms)。
+
+    **响度标准化可选,默认关**:单遍的 loudnorm 是动态模式,会改动混音的起伏;预览(浏览器里直接放)也
+    听不到它,导出和预览就不一样了;何况主流平台播放时自己会做响度归一。要发到不做归一的地方、或者
+    几段素材音量差得多时,导出框里打开。它会把采样率升到 192 kHz,后面接一个 aresample 拉回来。"""
+    chain = ""
+    if loudnorm:
+        chain += f"loudnorm={LOUDNORM_TARGET},aresample={AUDIO_RATE},"
+    return chain + f"alimiter=limit={MASTER_CEILING}:level=0:latency=1"
+
+
 def _fade_filters(fade_in: float, fade_out: float, duration: float, *, audio: bool) -> str:
     """Leading-comma filter suffix for edge fades in segment-local output time."""
     name = "afade" if audio else "fade"
@@ -1166,6 +1188,9 @@ def build_ffmpeg_command(
         if len(mix_inputs) > 1:
             filters.append(f"{''.join(mix_inputs)}amix=inputs={len(mix_inputs)}:normalize=0[amix]")
             audio_label = "[amix]"
+
+    filters.append(f"{audio_label}{_master_bus(plan.output.loudnorm)}[amaster]")
+    audio_label = "[amaster]"
 
     if still_at is not None:
         #: 只取一帧:画面那一路照旧,音频整条不要(一张图没有声音),输出换成单帧图片。

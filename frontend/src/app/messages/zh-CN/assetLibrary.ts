@@ -109,6 +109,8 @@ export const assetLibrary = {
   exportAiLabel: "给 AI 生成的内容加「AI 生成」标识",
   exportAiLabelHint: "片头和画面一角写明「AI 生成」。文件里的 AIGC 标记总会写上，不随这一项变。",
   exportAiLabelOffWarning: "关掉之后画面上没有 AI 标识。按《互联网信息服务深度合成管理规定》第十七条和《人工智能生成合成内容标识办法》，对外发布的数字人内容要显著标识 —— 关掉之后由发布的人负责。",
+  exportLoudnorm: "响度标准化（−14 LUFS）",
+  exportLoudnormHint: "把整条声音拉到 −14 LUFS、峰值不超过 −1 dB，适合发到不做音量归一的地方。它会改动混音的起伏，预览里听不到。不开也不会爆音：导出总会限幅。",
   entityDigitalHumanOk: "可以用于数字人",
   entityDigitalHumanBlocked: "真人要先声明「这是我本人」或「已取得本人同意」,才能用于数字人",
   entityConsentDeclaredAt: "{at} 声明",

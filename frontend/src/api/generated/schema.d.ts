@@ -9567,6 +9567,11 @@ export interface components {
              * @default true
              */
             ai_label: boolean;
+            /**
+             * Loudness Normalize
+             * @default false
+             */
+            loudness_normalize: boolean;
         };
         /** ExtractionSectionOut */
         ExtractionSectionOut: {

@@ -24,7 +24,7 @@ export function ExportControl({ sequence }: { sequence: Sequence }) {
   const [jobId, setJobId] = React.useState<string | null>(null);
   const [configOpen, setConfigOpen] = React.useState(false);
   // 参数记住上次选择:批量出片时不必每次重选。
-  //: 记住的只有这三项;「AI 生成」标识不记(见下面 aiLabel)。
+  //: 记住的是这几项;「AI 生成」标识不记(见下面 aiLabel)。
   const [params, setParams] = React.useState<RememberedExportParams>(() => {
     try {
       const saved = JSON.parse(localStorage.getItem(EXPORT_PARAMS_KEY) ?? "{}") as Partial<RememberedExportParams>;
@@ -32,9 +32,10 @@ export function ExportControl({ sequence }: { sequence: Sequence }) {
         resolution: ["original", "1080p", "720p", "480p"].includes(saved.resolution ?? "") ? saved.resolution! : "original",
         fps: typeof saved.fps === "number" ? saved.fps : null,
         quality: ["high", "standard", "compact"].includes(saved.quality ?? "") ? saved.quality! : "standard",
+        loudness_normalize: saved.loudness_normalize === true,
       };
     } catch {
-      return { resolution: "original", fps: null, quality: "standard" };
+      return { resolution: "original", fps: null, quality: "standard", loudness_normalize: false };
     }
   });
   const updateParams = (patch: Partial<RememberedExportParams>) => {
@@ -145,6 +146,16 @@ export function ExportControl({ sequence }: { sequence: Sequence }) {
               </SelectContent>
             </Select>
           </div>
+          <label className="grid cursor-pointer grid-cols-[auto_minmax(0,1fr)] items-start gap-x-2 gap-y-0.5" data-export-loudnorm="">
+            <input
+              type="checkbox"
+              className="mt-0.5"
+              checked={params.loudness_normalize}
+              onChange={(event) => updateParams({ loudness_normalize: event.target.checked })}
+            />
+            <span className="text-ui-sm font-medium">{t("exportLoudnorm")}</span>
+            <span className="col-start-2 text-ui-xs leading-relaxed text-muted-foreground">{t("exportLoudnormHint")}</span>
+          </label>
           {/* 只在时间线上真有 AI 生成的片段时出现,并说清是哪几段 —— 没有 AI 内容的片子摆一个「加 AI 标识」开关,
               只会让人以为自己的片子被当成了 AI 生成的。 */}
           {aiClipCount > 0 && (

@@ -251,6 +251,7 @@ def build_plan_for_sequence(db: Session, sequence_id: str, export_params: dict |
         encode_preset=encode_preset,
         ai_label=ai_label,
         metadata=metadata,
+        loudness_normalize=bool((export_params or {}).get("loudness_normalize", False)),
     )
 
 
