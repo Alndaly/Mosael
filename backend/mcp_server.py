@@ -344,8 +344,8 @@ def _edit_timeline_description() -> str:
     return "\n".join([
         "Confirmation required: propose edits to a VIDEO TIMELINE (ids from inspect_sequence).",
         "Do NOT use for workflow nodes/edges — use edit_workflow. Times in seconds; src_* = source-media time.",
-        "operations: [{kind, ...args}], applied in order, all or nothing; arg? = optional;",
-        f"kind{LINKED_MARK} also edits clips in the same link_group (linked:false = only this clip):",
+        "operations: [{kind, ...args}], in order, all or nothing; arg? = optional;",
+        f"kind{LINKED_MARK} = also its link_group (linked:false = only this clip):",
         *edit_operation_usage(),
     ])
 

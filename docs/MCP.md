@@ -224,7 +224,7 @@ plain-text notice that says which switches to flip — it does not fail silently
 
 <!-- BEGIN generated: timeline-ops -->
 
-`edit_timeline` 认 **19** 种算子(`?` 是可选参数;`*` 是默认带上同一链接组的片段,`linked: false` 只动点名的这一段):
+`edit_timeline` 认 **25** 种算子(`?` 是可选参数;`*` 是默认带上同一链接组的片段,`linked: false` 只动点名的这一段):
 
 - `insert_clip(track_id, asset_id, timeline_start, src_out, src_in?, ripple?, speed?)`
 - `move_clip*(clip_id, timeline_start, track_id?, ripple?)`
@@ -232,19 +232,25 @@ plain-text notice that says which switches to flip — it does not fail silently
 - `trim_clip*(clip_id, timeline_start, src_in, src_out)`
 - `split_clip*(clip_id, src_time)`
 - `delete_clip*(clip_id)`
-- `ripple_delete_clip*(clip_id, all_tracks?) — later clips slide left; all_tracks: on every unlocked track`
-- `cut_clip_range*(clip_id, src_start, src_end) — removes it, the rest closes up`
+- `ripple_delete_clip*(clip_id, all_tracks?) — closes the gap; all_tracks = every unlocked track`
+- `cut_clip_range*(clip_id, src_start, src_end) — rest closes up`
+- `cut_clip_ranges_batch*(cuts:[{clip_id, ranges:[{src_start, src_end}]}]) — one entry per clip`
 - `add_track(track_kind?:video|audio|subtitle)`
 - `remove_track(track_id, with_clips?)`
+- `set_track_state(track_id, muted?, solo?, duck?, locked?, hidden?)`
 - `detach_clip_audio(clip_id)`
 - `set_clip_effects(clip_id, effects)`
 - `set_clip_transform(clip_id, transform) — scale/x/y/rotation/opacity`
 - `set_clip_speed*(clip_id, speed, ripple?) — 0.25–4; ripple: later clips follow`
-- `set_clip_gain(clip_id, gain?, muted?) — gain 0–4; omitted = unchanged`
+- `set_clip_gain(clip_id, gain?, muted?) — omitted = unchanged`
 - `set_sequence_reframe(width, height, fill_mode?:cover|contain|blur)`
-- `insert_text_clip(track_id, text, timeline_start, duration) — one cue on a subtitle track`
+- `insert_text_clip(track_id, text, timeline_start, duration) — a subtitle cue`
+- `generate_subtitles(track_id, cues:[{text, timeline_start, duration}])`
 - `set_clip_text(clip_id, text)`
+- `set_clip_texts_batch(texts:[{clip_id, text}])`
 - `set_subtitle_style(style) — font_size/color/bg_color/bg_opacity/position`
+- `undo(expected_revision?) — refused if the revision moved`
+- `redo(expected_revision?) — refused if the revision moved`
 
 这一份从 `domain/sequences/op_args` 的入参模型生成 —— 智能体看到的说明、开卡时的参数校验都是它(见 test_timeline_ops_have_one_list、test_edit_timeline_args)。
 

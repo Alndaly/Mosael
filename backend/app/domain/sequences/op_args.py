@@ -29,8 +29,9 @@ from app.domain.sequences.clip_properties import (
     SetClipTransform,
     SetSequenceReframe,
 )
-from app.domain.sequences.cutting import CutClipRange, SplitClip
+from app.domain.sequences.cutting import ClipRangeCuts, CutClipRange, CutClipRangesBatch, SplitClip
 from app.domain.sequences.errors import SequenceDomainError
+from app.domain.sequences.history import HistoryStep
 from app.domain.sequences.placement import (
     ClipMove,
     DeleteClip,
@@ -40,8 +41,8 @@ from app.domain.sequences.placement import (
     RippleDeleteClip,
     TrimClip,
 )
-from app.domain.sequences.text import InsertTextClip, SetClipText, SetSubtitleStyle
-from app.domain.sequences.tracks import AddTrack, RemoveTrack
+from app.domain.sequences.text import GenerateSubtitles, InsertTextClip, SetClipText, SetClipTextsBatch, SetSubtitleStyle
+from app.domain.sequences.tracks import AddTrack, RemoveTrack, SetTrackState
 
 
 class _Args(BaseModel):
@@ -133,7 +134,7 @@ class DeleteClipArgs(_Linked):
 
 
 class RippleDeleteClipArgs(_Linked):
-    note = "later clips slide left; all_tracks: on every unlocked track"
+    note = "closes the gap; all_tracks = every unlocked track"
     clip_id: str
     all_tracks: bool = False
 
@@ -142,13 +143,35 @@ class RippleDeleteClipArgs(_Linked):
 
 
 class CutClipRangeArgs(_Linked):
-    note = "removes it, the rest closes up"
+    note = "rest closes up"
     clip_id: str
     src_start: float
     src_end: float
 
     def to_request(self, actor_id: str | None) -> CutClipRange:
         return CutClipRange(actor_id=actor_id, **self.model_dump())
+
+
+class _Range(_Args):
+    src_start: float
+    src_end: float
+
+
+class _ClipCuts(_Args):
+    clip_id: str
+    ranges: list[_Range] = Field(min_length=1)
+
+
+class CutClipRangesBatchArgs(_Linked):
+    note = "one entry per clip"
+    cuts: list[_ClipCuts] = Field(min_length=1)
+
+    def to_request(self, actor_id: str | None) -> CutClipRangesBatch:
+        cuts = tuple(
+            ClipRangeCuts(clip_id=cut.clip_id, ranges=tuple((one.src_start, one.src_end) for one in cut.ranges))
+            for cut in self.cuts
+        )
+        return CutClipRangesBatch(cuts=cuts, linked=self.linked, actor_id=actor_id)
 
 
 class AddTrackArgs(OpArgs):
@@ -164,6 +187,18 @@ class RemoveTrackArgs(OpArgs):
 
     def to_request(self, actor_id: str | None) -> RemoveTrack:
         return RemoveTrack(actor_id=actor_id, **self.model_dump())
+
+
+class SetTrackStateArgs(OpArgs):
+    track_id: str
+    muted: bool | None = None
+    solo: bool | None = None
+    duck: bool | None = None
+    locked: bool | None = None
+    hidden: bool | None = None
+
+    def to_request(self, actor_id: str | None) -> SetTrackState:
+        return SetTrackState(actor_id=actor_id, **self.model_dump())
 
 
 class DetachClipAudioArgs(OpArgs):
@@ -201,7 +236,7 @@ class SetClipSpeedArgs(_Linked):
 
 
 class SetClipGainArgs(OpArgs):
-    note = "gain 0–4; omitted = unchanged"
+    note = "omitted = unchanged"
     clip_id: str
     gain: float | None = Field(default=None, ge=0.0, le=4.0)
     muted: bool | None = None
@@ -220,7 +255,7 @@ class SetSequenceReframeArgs(OpArgs):
 
 
 class InsertTextClipArgs(OpArgs):
-    note = "one cue on a subtitle track"
+    note = "a subtitle cue"
     track_id: str
     text: str = Field(min_length=1)
     timeline_start: float
@@ -228,6 +263,21 @@ class InsertTextClipArgs(OpArgs):
 
     def to_request(self, actor_id: str | None) -> InsertTextClip:
         return InsertTextClip(actor_id=actor_id, **self.model_dump())
+
+
+class _Cue(_Args):
+    text: str = Field(min_length=1)
+    timeline_start: float
+    duration: float = Field(gt=0)
+
+
+class GenerateSubtitlesArgs(OpArgs):
+    track_id: str
+    cues: list[_Cue] = Field(min_length=1)
+
+    def to_request(self, actor_id: str | None) -> GenerateSubtitles:
+        cues = tuple((cue.text, cue.timeline_start, cue.duration) for cue in self.cues)
+        return GenerateSubtitles(track_id=self.track_id, cues=cues, actor_id=actor_id)
 
 
 class SetClipTextArgs(OpArgs):
@@ -238,12 +288,32 @@ class SetClipTextArgs(OpArgs):
         return SetClipText(actor_id=actor_id, **self.model_dump())
 
 
+class _Text(_Args):
+    clip_id: str
+    text: str = Field(min_length=1)
+
+
+class SetClipTextsBatchArgs(OpArgs):
+    texts: list[_Text] = Field(min_length=1)
+
+    def to_request(self, actor_id: str | None) -> SetClipTextsBatch:
+        return SetClipTextsBatch(texts=tuple((one.clip_id, one.text) for one in self.texts), actor_id=actor_id)
+
+
 class SetSubtitleStyleArgs(OpArgs):
     note = "font_size/color/bg_color/bg_opacity/position"
     style: dict[str, Any]
 
     def to_request(self, actor_id: str | None) -> SetSubtitleStyle:
         return SetSubtitleStyle(actor_id=actor_id, **self.model_dump())
+
+
+class HistoryArgs(OpArgs):
+    note = "refused if the revision moved"
+    expected_revision: int | None = None
+
+    def to_request(self, actor_id: str | None) -> HistoryStep:
+        return HistoryStep(expected_revision=self.expected_revision, actor_id=actor_id)
 
 
 def usage(kind: str, model: type[OpArgs]) -> str:

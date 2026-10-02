@@ -93,7 +93,7 @@ from app.domain.sequences.tracks import (
     remove_track,
     set_track_state,
 )
-from app.domain.sequences import op_args
+from app.domain.sequences import history, op_args
 from app.media.render_plan import TRANSFORM_BOUNDS, TRANSFORM_DEFAULTS
 
 # 统一再导出:调用方和编辑操作表都只认这一个入口,子模块怎么拆不该波及它们。
@@ -205,8 +205,11 @@ _EDIT_OPS: dict[str, tuple[type[op_args.OpArgs], Any]] = {
     "delete_clip": (op_args.DeleteClipArgs, delete_clip),
     "ripple_delete_clip": (op_args.RippleDeleteClipArgs, ripple_delete_clip),
     "cut_clip_range": (op_args.CutClipRangeArgs, cut_clip_range),
+    #: 同一段上连剪几刀。逐条 cut_clip_range 做不到:第一刀之后原片段就换成了切出来的新片段,第二刀找不到它。
+    "cut_clip_ranges_batch": (op_args.CutClipRangesBatchArgs, cut_clip_ranges_batch),
     "add_track": (op_args.AddTrackArgs, add_track),
     "remove_track": (op_args.RemoveTrackArgs, remove_track),
+    "set_track_state": (op_args.SetTrackStateArgs, set_track_state),
     "detach_clip_audio": (op_args.DetachClipAudioArgs, detach_clip_audio),
     "set_clip_effects": (op_args.SetClipEffectsArgs, set_clip_effects),
     "set_clip_transform": (op_args.SetClipTransformArgs, set_clip_transform),
@@ -216,8 +219,13 @@ _EDIT_OPS: dict[str, tuple[type[op_args.OpArgs], Any]] = {
     # 字幕条就是一段没有素材的文本片段。它此前不在清单里,于是"给这个视频加字幕"在对话里
     # 根本做不到 —— 而那是这个应用最常被要求做的几件事之一。
     "insert_text_clip": (op_args.InsertTextClipArgs, insert_text_clip),
+    #: 一整条字幕一次铺上去、一次改完文字:一条操作、一步撤销(逐条插 N 条就是 N 次撤销)。
+    "generate_subtitles": (op_args.GenerateSubtitlesArgs, generate_subtitles),
     "set_clip_text": (op_args.SetClipTextArgs, set_clip_text),
+    "set_clip_texts_batch": (op_args.SetClipTextsBatchArgs, set_clip_texts_batch),
     "set_subtitle_style": (op_args.SetSubtitleStyleArgs, set_subtitle_style),
+    "undo": (op_args.HistoryArgs, history.undo_step),
+    "redo": (op_args.HistoryArgs, history.redo_step),
 }
 
 EDIT_OP_KINDS = tuple(_EDIT_OPS)

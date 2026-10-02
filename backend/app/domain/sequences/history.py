@@ -10,6 +10,8 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -125,6 +127,23 @@ def redo(
         undo_of=undo_operation.id,
     )
     return sequence
+
+
+@dataclass(frozen=True)
+class HistoryStep:
+    """撤销 / 重做作为一条编辑操作(智能体、工作流的 `{"kind": "undo"}`)。撤的是整条时间线上最新的一步;
+    `expected_revision` 给了而时间线已经改过,就不撤(见 undo)。"""
+
+    expected_revision: int | None = None
+    actor_id: str | None = None
+
+
+def undo_step(db: Session, sequence_id: str, op: HistoryStep) -> Sequence:
+    return undo(db, sequence_id, expected_revision=op.expected_revision, actor_id=op.actor_id)
+
+
+def redo_step(db: Session, sequence_id: str, op: HistoryStep) -> Sequence:
+    return redo(db, sequence_id, expected_revision=op.expected_revision, actor_id=op.actor_id)
 
 
 def can_undo(db: Session, sequence_id: str) -> bool:
