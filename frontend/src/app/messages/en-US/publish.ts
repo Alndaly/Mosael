@@ -236,6 +236,8 @@ export const publish = {
   boardMoveChildrenOn: "Dragging the group takes its items along",
   boardMoveChildrenOff: "Dragging the group moves only the frame",
   boardReplaceAsset: "Swap",
+  boardOutputCount: "Results per run",
+  boardOutputsPerNode: "{count} per node",
   boardGenerationSettings: "Settings",
   boardGenerationUnknownParams: "Parameters not recognised · set it in Settings",
   boardGenerationMode: "Generation mode",

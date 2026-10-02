@@ -73,3 +73,47 @@ it("只有一个保存节点(插件不给「结果取自」)时参数里没有�
   await screen.findByRole("dialog");
   expect(screen.queryByRole("combobox", { name: "结果取自" })).not.toBeInTheDocument();
 });
+
+/**
+ * 「N×」只在模型有张数(`num_images`)时出现,上面的数是**这一次会落出几格**:两个保存节点 × 张数。
+ * 每个选项的副标题说清楚它调的是每个节点几张;「结果取自」选了一个节点,数就回到 1×–4×。
+ */
+function batched(): GenerationOption {
+  const model = twoSaves();
+  return { ...model, capabilities: { ...model.capabilities, parameter_keys: ["num_images", "output_node"], max_num_images: 4 } };
+}
+
+it("「N×」按一次会落出几格显示:两个保存节点时是 2×、4×、6×、8×,发出去的是每个节点几张", async () => {
+  const { onSubmit } = renderComposer(batched());
+  const count = screen.getByRole("combobox", { name: "boardOutputCount" });
+  expect(count).toHaveTextContent("2×");
+  fireEvent.click(count);
+  const options = within(await screen.findByRole("listbox")).getAllByRole("option");
+  expect(options.map((one) => one.textContent)).toEqual(
+    ["2×", "4×", "6×", "8×"].map((label) => `${label}boardOutputsPerNode`),
+  );
+  fireEvent.click(options[1]);
+  await waitFor(() => expect(screen.getByRole("combobox", { name: "boardOutputCount" })).toHaveTextContent("4×"));
+  fireEvent.click(screen.getByRole("button", { name: "boardGenerate" }));
+  expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ parameters: expect.objectContaining({ num_images: 2 }) }));
+});
+
+it("「结果取自」选了一个节点:「N×」回到每次一张的数", async () => {
+  renderComposer(batched());
+  fireEvent.click(screen.getByRole("button", { name: "boardGenerationSettings" }));
+  fireEvent.click(await screen.findByRole("combobox", { name: "结果取自" }));
+  fireEvent.click(within(await screen.findByRole("listbox")).getByRole("option", { name: "原图" }));
+  fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  const count = screen.getByRole("combobox", { name: "boardOutputCount" });
+  expect(count).toHaveTextContent("1×");
+  fireEvent.click(count);
+  expect(within(await screen.findByRole("listbox")).getAllByRole("option").map((one) => one.textContent)).toEqual([
+    "1×", "2×", "3×", "4×",
+  ]);
+});
+
+it("没有张数的模型(视频、没有 batch_size 的工作流)不摆「N×」", () => {
+  renderComposer(twoSaves());
+  expect(screen.queryByRole("combobox", { name: "boardOutputCount" })).not.toBeInTheDocument();
+});

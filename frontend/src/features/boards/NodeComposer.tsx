@@ -39,6 +39,7 @@ import {
   exclusiveSourceGroups,
   hasEnoughText,
   maxImages,
+  outputsPerRun,
   parameterChoiceEntries,
   pickGenerationOption,
   promptMode,
@@ -83,11 +84,14 @@ function Pick({
   allowFreeValue,
   placeholder,
   hint,
+  ariaLabel,
 }: {
   value: string;
   onChange: (next: string) => void;
-  options: { value: string; label: string }[];
+  options: { value: string; label: string; description?: string }[];
   label?: string;
+  /** 不摆标签(工具行里)时读屏念的名字。 */
+  ariaLabel?: string;
   /** 值左侧的装饰图标。**交给 OptionPicker 画在触发器里面** —— 见那边的注释:
    *  包在外面就成了两个盒子,hover 和焦点环各高亮一个,而且左右内边距对不齐。 */
   icon?: React.ReactNode;
@@ -124,7 +128,7 @@ function Pick({
       value={value}
       onChange={onChange}
       options={options}
-      ariaLabel={label}
+      ariaLabel={label ?? ariaLabel}
       icon={icon}
       placeholder={placeholder}
       size="sm"
@@ -645,6 +649,9 @@ export function NodeComposer({
   const { submitting, run } = useSubmitting();
   const working = submitting || busy;
 
+  //: 这个模型有没有张数(`num_images`):有才摆「N×」、才发。没声明的模型(视频、没有 batch_size 的 ComfyUI 工作流)
+  //: 发了也会被校验拦下 —— 和 AI 工作台同一个判据。
+  const batches = supportsParameter(current, "num_images") && maxImages(current) > 1;
   const formParameters = React.useMemo(() => {
     const parameters: Record<string, unknown> = {};
     if (supportsParameter(current, "aspect_ratio") && ratio) parameters.aspect_ratio = ratio;
@@ -667,9 +674,12 @@ export function NodeComposer({
       const value = declaredParameterValue(parameter, declared[parameter.key] ?? "");
       if (value !== undefined) parameters[parameter.key] = value;
     }
-    if (maxImages(current) > 1 && count > 1) parameters.num_images = count;
+    if (batches && count > 1) parameters.num_images = count;
     return parameters;
-  }, [current, ratio, resolution, size, duration, audio, booleanKeys, booleanParameters, enumEntries, enumParameters, declared, count]);
+  }, [current, ratio, resolution, size, duration, audio, booleanKeys, booleanParameters, enumEntries, enumParameters, declared, count, batches]);
+  //: 张数为 1 时一次交回几份(ComfyUI 一张工作流几个保存节点;「结果取自」选了一个就是 1)。「N×」上显示的是
+  //: 这一次会落出几格(= 这个数 × 张数),和画板一次摆好的占位一样多。
+  const perRun = outputsPerRun(current, formParameters);
 
   const editableForm = React.useMemo<NonNullable<BoardItem["form"]>>(
     () => ({
@@ -1135,14 +1145,18 @@ export function NodeComposer({
           : null
       }
       trailing={
-        options.length > 0 && maxImages(current) > 1 ? (
+        options.length > 0 && batches ? (
           <span className="flex w-14 items-center rounded-md transition-colors hover:bg-secondary">
+            {/* 数是**这一次会落出几格**(一次交回几份 × 张数),不是发出去的张数:一张工作流两个保存节点时选「4×」
+                是每个节点 2 张、一共 4 格 —— 和其他模型上「N×」的意思一样(落出 N 格),副标题说清每个节点几张。 */}
             <Pick
+              ariaLabel={t("boardOutputCount")}
               value={String(count)}
               onChange={(next) => setCount(Number(next))}
               options={Array.from({ length: maxImages(current) }, (_, index) => ({
                 value: String(index + 1),
-                label: `${index + 1}×`,
+                label: `${(index + 1) * perRun}×`,
+                ...(perRun > 1 ? { description: t("boardOutputsPerNode").replace("{count}", String(index + 1)) } : {}),
               }))}
             />
           </span>

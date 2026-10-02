@@ -29,6 +29,7 @@ from app.domain.generation.catalog import (
     SOURCE_GROUPS,
     SOURCE_ROLE_LABELS,
     known_capabilities_for,
+    outputs_per_run,
     prompt_mode,
 )
 from app.domain.generation.resolution import GenerationResolutionError, resolve_generation_model
@@ -390,6 +391,19 @@ def _create_generation_job(
     db.refresh(generation)
     db.refresh(job)
     return generation, job
+
+
+def planned_outputs(db: Session, *, user_id: str | None, provider: str, model: str, kind: str,
+                    provider_profile_id: str | None, parameters: dict[str, Any]) -> int:
+    """用这些参数跑这个模型一次会交回几份(见 catalog.outputs_per_run)。模型解析不出来(刚建好生成的那一个不会)
+    当一份 —— 少摆的占位照旧由回执往右排。"""
+    try:
+        resolved = resolve_generation_model(
+            db, user_id=user_id, provider=provider, model=model, kind=kind, provider_profile_id=provider_profile_id,
+        )
+    except GenerationResolutionError:
+        return 1
+    return outputs_per_run(resolved.capabilities if resolved.capabilities_known else None, parameters)
 
 
 def check_text_inputs(

@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from app.core.i18n import tr
 from app.db.models import Board
 from app.domain.boards.errors import BoardRevisionConflict
-from app.domain.boards.outputs import _canvas_with_delivered_result, outputs_of
+from app.domain.boards.outputs import _canvas_with_delivered_result, outputs_of, sibling_placeholders
 from app.domain.boards.persistence import get_board, update_board
 from app.domain.boards.producer_ids import derives_outputs
 from app.domain.boards.run_state import live_job
@@ -85,6 +85,7 @@ def place_pending(
     item: dict[str, Any],
     actor_id: str | None = None,
     ability: tuple[str, dict[str, Any]] | None = None,
+    outputs: int = 1,
 ) -> Board:
     """把某一项的「正在生成」状态放到画布上,再去起任务。
 
@@ -105,6 +106,10 @@ def place_pending(
     `ability`:这一轮跑的是宿主的一项能力(`(产出者, 那一项的设置)`)。设置合进宿主**此刻**表单的
     `abilities`(在最新画布上合,不拿调用方读到的那份覆盖 —— 这中间用户可能刚改了宿主的别的东西),
     宿主自己的产出者和别的几项能力的设置不动。
+
+    `outputs`:这一轮会交回几份(一次出几张、ComfyUI 一张工作流几个保存节点)。**一次摆好**:第 2 份起的占位
+    摆在这一格右边(见 outputs.sibling_placeholders),回执按先后填进去 —— 此前只摆这一格,第二份起在回执到的
+    那一刻才往右冒出来,用户选「1×」看着落出两三格。
     """
 
     def merge(canvas: dict[str, Any]) -> dict[str, Any]:
@@ -128,6 +133,9 @@ def place_pending(
             if not derives_outputs(merged):
                 merged.pop("asset_id", None)
             items[index] = merged
+        if outputs > 1:
+            placed = next(one for one in items if one.get("id") == item.get("id"))
+            items.extend(sibling_placeholders(placed, outputs - 1, {str(one.get("id")) for one in items}))
         return {**canvas, "items": items}
 
     board = _merge_into_latest(db, workspace_id=workspace_id, board_id=board_id, merge=merge, actor_id=actor_id)

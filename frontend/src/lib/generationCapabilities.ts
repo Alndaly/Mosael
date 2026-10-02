@@ -379,6 +379,28 @@ export function maxImages(model: GenerationOption | null): number {
   return capabilityNumber(model, "max_num_images", 4);
 }
 
+function positiveInteger(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isInteger(value) && value >= 1 ? value : undefined;
+}
+
+/**
+ * 张数为 1 时**一次交回几份**:模型说的 `outputs_per_run`(ComfyUI 的一张工作流有几个保存节点),某个参数的取值
+ * 改变它时(「结果取自」只要其中一个节点的)按那个参数的 `x-outputs-per-run`。和后端
+ * generation.catalog.outputs_per_run 同一个算法 —— 画板按它一次摆好那么多格占位,「N×」上显示的就是那个总数。
+ */
+export function outputsPerRun(model: GenerationOption | null, parameters: Record<string, unknown>): number {
+  let perRun = positiveInteger(model?.capabilities?.outputs_per_run) ?? 1;
+  const schema = model?.capabilities?.parameter_schema;
+  if (schema && typeof schema === "object") {
+    for (const [key, spec] of Object.entries(schema as Record<string, unknown>)) {
+      const table = spec && typeof spec === "object" ? (spec as Record<string, unknown>)["x-outputs-per-run"] : undefined;
+      if (!table || typeof table !== "object" || !(key in parameters)) continue;
+      perRun = positiveInteger((table as Record<string, unknown>)[String(parameters[key])]) ?? perRun;
+    }
+  }
+  return perRun;
+}
+
 /**
  * 换模型时参数里**留下哪几项**:新模型仍收的键里,`{{…}}` 绑定原样留着(值要到运行时才知道,能不能收由
  * 运行前检查按新模型判),写死的值只在新模型的可选值里还有它时才留 —— 不在的(Veo 不收 5 秒)丢掉,

@@ -121,6 +121,26 @@ def prompt_mode(capabilities: dict[str, Any] | None) -> str:
     return value if value in PROMPT_MODES else "required"
 
 
+def _positive_int(value: Any) -> int | None:
+    return value if isinstance(value, int) and not isinstance(value, bool) and value >= 1 else None
+
+
+def outputs_per_run(capabilities: dict[str, Any] | None, parameters: dict[str, Any]) -> int:
+    """这一次生成会交回几份 —— 画板发起生成时据此一次摆好那么多格占位(见 boards.actions.generate_on_board)。
+
+    模型说的一次几份(描述符的 `outputs_per_run`,张数为 1 时;没说是 1)× 张数(`num_images`,没给是 1)。
+    某个参数的取值改变一次几份时(ComfyUI 的「结果取自」:只要其中一个保存节点的),那个参数的
+    `x-outputs-per-run` 里有这次选的取值就用它(见 docs/PLUGIN_MANIFEST「替宿主做生成」)。
+    """
+    caps = capabilities or {}
+    per_run = _positive_int(caps.get("outputs_per_run")) or 1
+    for key, spec in (caps.get("parameter_schema") or {}).items():
+        table = spec.get("x-outputs-per-run") if isinstance(spec, dict) else None
+        if isinstance(table, dict) and key in parameters:
+            per_run = _positive_int(table.get(str(parameters[key]))) or per_run
+    return per_run * (_positive_int(parameters.get("num_images")) or 1)
+
+
 #: **能力档案的名册。** descriptors/ 下那几十个常量本来就是"档案" —— 9 份被 28 行共用,只是没有名字,
 #: 于是"另一条通道也有这个模型"每出现一次就只能再抄一行(openai / openai-compatible 下的
 #: gpt-image-2 就是抄出来的一对)。给它们一个稳定的 id 之后,这件事有了第二种说法:

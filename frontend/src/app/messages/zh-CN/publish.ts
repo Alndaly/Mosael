@@ -238,6 +238,8 @@ export const publish = {
   boardMoveChildrenOn: "拖动时带着框内的项一起走",
   boardMoveChildrenOff: "拖动时只移动这个框",
   boardReplaceAsset: "换一份",
+  boardOutputCount: "一次落出几格",
+  boardOutputsPerNode: "每个节点 {count} 张",
   boardGenerationSettings: "参数",
   boardGenerationUnknownParams: "参数未识别 · 去设置里指一下",
   boardGenerationMode: "生成方式",

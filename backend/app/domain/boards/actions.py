@@ -66,12 +66,14 @@ def _ensure_slot_ready(db: Session, workspace_id: str, slot: Slot) -> None:
 
 
 def _pending(db: Session, workspace_id: str, slot: Slot, *, actor_id: str, kind: str, producer: str,
-             form: dict[str, Any], job_id: str, ability: bool = False) -> Board:
+             form: dict[str, Any], job_id: str, ability: bool = False, outputs: int = 1) -> Board:
     """摆「正在做」的占位。表单末尾写上**是哪个产出者做的** —— 跑挂了回来,面板照它挂、照它重试。
 
     `ability`:这一轮跑的是宿主的一项**能力**(转写、翻译……,见 boards.transforms 的 `ability`)。宿主自己的
     产出者不换 —— `form` 是那一项的设置,存进宿主的 `form.abilities[producer]`;这一轮是哪一项记在
     `run.ability` 上(回执照它把产出新建在右边,界面照它说「转写中」)。
+
+    `outputs`:这一轮会交回几份 —— 就地落的那一格之外,其余几份的占位一起摆在右边(见 receipts.place_pending)。
     """
     if ability:
         return place_pending(
@@ -98,6 +100,7 @@ def _pending(db: Session, workspace_id: str, slot: Slot, *, actor_id: str, kind:
             "run": {"status": "running", "job_id": job_id},
         },
         actor_id=actor_id,
+        outputs=outputs,
     )
 
 
@@ -237,10 +240,13 @@ def generate_on_board(
 
     **顺序**:建任务 → 摆占位 → 起任务。起在占位之前的话,一个当场失败的生成会把回执送到一格
     还不存在的地方。生成的错误(GenerationDomainError)原样抛出。
+
+    **一次交回几份就摆几格**(generation.planned_outputs:模型说的一次几份 × 张数):第 2 份起的占位摆在右边,
+    回执按先后填进去(见 outputs._canvas_with_delivered_result)。
     """
     from app.domain.generation import create_generation_job
     from app.core.unit_of_work import after_commit
-    from app.domain.generation.operations import parse_source_assets
+    from app.domain.generation.operations import parse_source_assets, planned_outputs
     from app.domain.generation.runner import start_generation_thread
 
     _ensure_slot_ready(db, workspace_id, slot)
@@ -276,6 +282,9 @@ def generate_on_board(
         reset_receipt(token)
     board = _pending(
         db, workspace_id, slot, actor_id=actor_id, kind=kind, producer="generate", job_id=job.id,
+        #: 一次交回几份就一次摆几格(ComfyUI 一张工作流几个保存节点 × 张数):不再等回执到了往右冒出来。
+        outputs=planned_outputs(db, user_id=actor_id, provider=generation.provider, model=generation.model, kind=kind,
+                                provider_profile_id=generation.provider_profile_id, parameters=parameters),
         form={
             **form,
             #: 编辑器里的原样:换成不收提示词的模型时发出去的是空串,框里写过的字照样留着,换回来还在。

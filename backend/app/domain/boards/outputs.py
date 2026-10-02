@@ -202,6 +202,61 @@ def _derive(
     return new_items, new_edges
 
 
+#: 一次出多份时,第 2 份起往右排:这一格自己的宽(用户可能拉大了)加一道缝;没量过宽的按这个算。
+_SLOT_WIDTH = 260.0
+_SLOT_GAP = 24.0
+
+
+def _beside(slot: dict[str, Any], taken: set[str]):
+    """这一格右边的下一格:`({格子}-{n}, x)`,n 避开整张板上已有的 id(同一格再出一次多张时,上一轮的 `-2` 还在板上),
+    位置跟着序号走(第 n 格在第 n-1 列),于是也不会正好叠在上一轮那一格上。摆占位和回执往右排的是同一串位置。"""
+    step = float(slot.get("width") or _SLOT_WIDTH) + _SLOT_GAP
+    suffix = 1
+    while True:
+        suffix += 1
+        while f"{slot['id']}-{suffix}" in taken:
+            suffix += 1
+        one = f"{slot['id']}-{suffix}"
+        taken.add(one)
+        yield one, float(slot.get("x") or 0) + step * (suffix - 1)
+
+
+def sibling_placeholders(slot: dict[str, Any], count: int, taken: set[str]) -> list[dict[str, Any]]:
+    """一次会交回不止一份时,第 2 份起的占位:和这一格一样(种类、表单、大小、在跑的同一个任务),摆在它右边。
+    回执按先后把产出填进去(见 _canvas_with_delivered_result)。`taken` 是板上已有的 id,会被占上。"""
+    places = _beside(slot, taken)
+    return [{**{key: value for key, value in slot.items() if key != "asset_id"}, "id": one, "x": x}
+            for one, x in (next(places) for _ in range(count))]
+
+
+def _consumed(item: dict[str, Any], *, text: str | None, note: dict[str, Any] | None) -> dict[str, Any]:
+    """一格就地收下这一轮的产出之后的样子(素材另填):运行态成功,一次性的表单用掉了。"""
+    settled = dict(item)
+    # 成功结束一次编辑周期：提示词和引用素材已经被消费，保留模型/参数方便继续同风格创作。
+    # 失败/取消不走这里，因此原输入仍完整保留给重试。
+    if isinstance(settled.get("form"), dict):
+        form = dict(settled["form"])
+        form["prompt"] = ""
+        form["source_assets"] = []
+        form["mentioned_asset_ids"] = []
+        #: @ 到的资产随提示词一起被消费了;用过它这件事记在生成记录里(request.entities)。
+        if form.get("mentioned_entity_ids"):
+            form["mentioned_entity_ids"] = []
+        form.pop("prompt_document", None)
+        #: 自动填进来的那段也一起用掉了:下一轮面板照上游重新填。
+        form.pop("prefilled", None)
+        settled["form"] = form
+    settled["run"] = {"status": "succeeded"}
+    if text is not None:
+        settled["text"] = text
+    if note is not None and settled.get("kind") == "document":
+        #: 文档格钉到写出来的那篇笔记上,引用着的那份文件摘掉:note_id 和 asset_id 二选一,两样都有的话整封回执被
+        #: normalize 拒掉,那一格永远在跑(开跑前 producers._admits_write 已经拒了这种格子,这里兜住开跑之后才换上的)。
+        settled.pop("asset_id", None)
+        settled["note_id"], settled["note_revision"] = str(note["note_id"]), note.get("revision")
+    return settled
+
+
 def _canvas_with_delivered_result(
     canvas: dict[str, Any],
     *,
@@ -235,6 +290,10 @@ def _canvas_with_delivered_result(
       表单(能力的设置)**不清空**:再点一次那一项,还是上次的样子。
 
     `assets`:产出里那些素材的种类和名字(回执那一侧从库里查好)—— 派生时靠它决定落成哪种格子。
+
+    **一起摆的占位**(同一个任务、在跑的别的几格,见 sibling_placeholders):就地那种按先后收下第 2 份起的素材;
+    交回的少了,没收到的那几格摘掉;多了,多出来的照旧往右排;没做成(失败、取消、什么都没交回)就一起摘掉 ——
+    重试照这一格来。这一格已经不是这一轮了(被换成了别的),它们按先后收下全部素材。
     """
     asset_ids = [str(one["asset_id"]) for one in outputs if one.get("type") == "asset"]
     text = next((str(one["text"]) for one in outputs if one.get("type") == "text"), None)
@@ -244,11 +303,18 @@ def _canvas_with_delivered_result(
         text = str(note.get("title") or "")
     items = list(canvas.get("items") or [])
     edges = list(canvas.get("edges") or [])
+    siblings = [one for one in items if job_id and one.get("id") != item_id and live_job(one) == job_id]
+    waiting = {str(one.get("id")) for one in siblings}
+    #: 这一格是不是这一轮:是的话一起摆的占位跟着它定(收下第 2 份起的素材,或一起摘掉)。
+    this_round = False
     kept: list[dict[str, Any]] = []
     for item in items:
+        if str(item.get("id")) in waiting:
+            continue  # 一起摆的占位:收下几份、摘掉哪几格,等这一格定了再说(见循环后面)
         if item.get("id") != item_id or live_job(item) != job_id:
             kept.append(item)
             continue
+        this_round = True
         derives = derives_outputs(item)
         #: 这一轮跑的是哪一项能力:终态里也留着,界面照它说「转写失败」、把那一项的面板找回来。
         ability = ability_of(item)
@@ -300,55 +366,26 @@ def _canvas_with_delivered_result(
             kept.extend(new_items)
             edges.extend(new_edges)
             continue
-        settled = dict(item)
-        # 成功结束一次编辑周期：提示词和引用素材已经被消费，保留模型/参数方便继续同风格创作。
-        # 失败/取消不走这里，因此原输入仍完整保留给重试。
-        if isinstance(settled.get("form"), dict):
-            form = dict(settled["form"])
-            form["prompt"] = ""
-            form["source_assets"] = []
-            form["mentioned_asset_ids"] = []
-            #: @ 到的资产随提示词一起被消费了;用过它这件事记在生成记录里(request.entities)。
-            if form.get("mentioned_entity_ids"):
-                form["mentioned_entity_ids"] = []
-            form.pop("prompt_document", None)
-            #: 自动填进来的那段也一起用掉了:下一轮面板照上游重新填。
-            form.pop("prefilled", None)
-            settled["form"] = form
-        settled["run"] = {"status": "succeeded"}
-        if text is not None:
-            settled["text"] = text
-        if note is not None and settled.get("kind") == "document":
-            #: 文档格钉到写出来的那篇笔记上,引用着的那份文件摘掉:note_id 和 asset_id 二选一,两样都有的话整封回执被
-            #: normalize 拒掉,那一格永远在跑(开跑前 producers._admits_write 已经拒了这种格子,这里兜住开跑之后才换上的)。
-            settled.pop("asset_id", None)
-            settled["note_id"], settled["note_revision"] = str(note["note_id"]), note.get("revision")
+        settled = _consumed(item, text=text, note=note)
         if not asset_ids:
             kept.append(settled)
             continue
         kept.append({**settled, "asset_id": asset_ids[0]})
-        #: 多出来的那几张挨着它往右排。宽度按这一项自己的宽 —— 用户可能已经把它拉大了,
-        #: 用一个写死的间距会让它们叠在一起。
-        step = float(settled.get("width") or 260) + 24
-        #: 新格子的 id 要避开**整张板上已有的**:同一格再出一次多张时,上一轮的 `-2` 还在板上,
-        #: 照序号直接拼会撞上它 —— 整次回执被 normalize 拒掉,产出一张都落不回来,这一格永远在转圈。
-        #: 位置跟着序号走(第 n 格在第 n-1 列),于是也不会正好叠在上一轮那一格上。
-        taken = {str(one.get("id")) for one in items}
-        suffix = 1
-        for extra in asset_ids[1:]:
-            suffix += 1
-            while f"{item_id}-{suffix}" in taken:
-                suffix += 1
-            extra_id = f"{item_id}-{suffix}"
-            taken.add(extra_id)
-            kept.append(
-                {
-                    **settled,
-                    "id": extra_id,
-                    "x": float(settled.get("x") or 0) + step * (suffix - 1),
-                    "asset_id": extra,
-                }
-            )
+        #: 第 2 份起:先填一起摆好的占位(按先后),多出来的挨着往右排。宽度按这一项自己的宽 —— 用户可能已经把它
+        #: 拉大了,用一个写死的间距会让它们叠在一起。新格子的 id 要避开**整张板上已有的**,否则整次回执被 normalize
+        #: 拒掉,产出一张都落不回来,这一格永远在转圈(见 _beside)。
+        rest = asset_ids[1:]
+        for sibling, extra in zip(siblings, rest):
+            kept.append({**_consumed(sibling, text=None, note=None), "asset_id": extra})
+        places = _beside(settled, {str(one.get("id")) for one in items})
+        for extra in rest[len(siblings):]:
+            extra_id, x = next(places)
+            kept.append({**settled, "id": extra_id, "x": x, "asset_id": extra})
+
+    #: 这一格不是这一轮(被换掉了):一起摆的占位按先后收下全部素材;没做成就摘掉。
+    if not this_round and succeeded:
+        for sibling, extra in zip(siblings, asset_ids):
+            kept.append({**_consumed(sibling, text=None, note=None), "asset_id": extra})
 
     # 连线可能指着刚被摘掉的那一项 —— normalize 会拒绝悬空的线,所以先把它们去掉。
     alive = {item["id"] for item in kept}
