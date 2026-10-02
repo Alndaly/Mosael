@@ -384,6 +384,23 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
     onSuccess: (updated) => applySequence(updated),
     onError: (error: Error) => toast.error(error.message),
   });
+  // 加字幕 / 加花字之后选中新的那一段:下一步几乎一定是改它的文字,检查器得立刻对着它。
+  const insertTextAndSelect = async (trackId: string, text: string, duration: number) => {
+    const latest = latestSequence()!;
+    const before = new Set(clipIdsOf(latest));
+    const updated = await insertTextClip(latest, {
+      track_id: trackId,
+      text,
+      timeline_start: snapToFrame(useEditorStore.getState().playhead, sequence!.fps),
+      duration,
+    });
+    return { updated, created: clipIdsOf(updated).filter((id) => !before.has(id)) };
+  };
+  const applyAndSelectCreated = (result: { updated: Sequence; created: string[] } | undefined) => {
+    if (!result) return refreshSequences();
+    applySequence(result.updated);
+    if (result.created.length > 0) useEditorStore.getState().selectClips(result.created);
+  };
   const addSubtitleMutation = useMutation({
     scope: editScope,
     mutationFn: async () => {
@@ -393,14 +410,9 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
         track = (updated.tracks ?? []).find((item) => item.kind === "subtitle");
       }
       if (!track) return undefined;
-      return insertTextClip(latestSequence()!, {
-        track_id: track.id,
-        text: t("subtitleDefaultText"),
-        timeline_start: useEditorStore.getState().playhead,
-        duration: 2,
-      });
+      return insertTextAndSelect(track.id, t("subtitleDefaultText"), 2);
     },
-    onSuccess: (updated) => (updated ? applySequence(updated) : refreshSequences()),
+    onSuccess: applyAndSelectCreated,
   });
   // 加花字:放到专用图层——复用一条没有画面素材的 video 轨(纯花字/空轨),没有则新建一条,
   // 避免与 base 视频在同轨重叠。花字每条自带样式、用 transform 定位,区别于底部统一字幕。
@@ -416,14 +428,9 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
         track = (updated.tracks ?? []).find((tk) => tk.kind === "video" && !before.has(tk.id));
       }
       if (!track) return undefined;
-      return insertTextClip(latestSequence()!, {
-        track_id: track.id,
-        text: t("textDefaultText"),
-        timeline_start: useEditorStore.getState().playhead,
-        duration: 3,
-      });
+      return insertTextAndSelect(track.id, t("textDefaultText"), 3);
     },
-    onSuccess: (updated) => (updated ? applySequence(updated) : refreshSequences()),
+    onSuccess: applyAndSelectCreated,
   });
   // 一键从逐字稿生成字幕:拉齐所有视频/音频片段的转写,投影到时间线句子,批量插到字幕轨。
   // One pipeline, two entry points. Passing a target language inserts a translation step

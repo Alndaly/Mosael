@@ -28,6 +28,7 @@ const mocks = vi.hoisted(() => ({
   duplicateClips: vi.fn(),
   insertClip: vi.fn(),
   cutClipRangesBatch: vi.fn(),
+  insertTextClip: vi.fn(),
   timelineProps: null as Record<string, unknown> | null,
   monitorProps: null as Record<string, unknown> | null,
   transcriptProps: null as Record<string, unknown> | null,
@@ -180,7 +181,7 @@ beforeEach(() => {
   for (const fn of [
     mocks.splitClip, mocks.undoSequence, mocks.redoSequence, mocks.moveClip, mocks.moveClipsBatch, mocks.trimClip,
     mocks.setClipTransform, mocks.splitClipAtPointsBatch, mocks.addTrack, mocks.deleteClip, mocks.deleteClipsBatch,
-    mocks.duplicateClips, mocks.insertClip, mocks.cutClipRangesBatch,
+    mocks.duplicateClips, mocks.insertClip, mocks.cutClipRangesBatch, mocks.insertTextClip,
   ]) {
     fn.mockReset().mockImplementation(async () => current);
   }
@@ -626,5 +627,30 @@ describe(", / . 微移", () => {
     press(",");
     await new Promise((resolve) => setTimeout(resolve, 10));
     expect(mocks.moveClipsBatch).not.toHaveBeenCalled();
+  });
+});
+
+describe("加字幕 / 加花字", () => {
+  it("新的一段落地后被选中(检查器立刻对着它),起点吸到帧", async () => {
+    const sub = (id: string, start: number) => clip(id, "sub", start, 0, 2, { asset_id: null, asset_kind: "", text_override: id });
+    renderEditor(sequenceWith([track("sub", "subtitle", 0, [sub("old", 0)])]));
+    await ready();
+    act(() => useEditorStore.getState().setPlayhead(5.01));
+    mocks.insertTextClip.mockImplementationOnce(async () =>
+      sequenceWith([track("sub", "subtitle", 0, [sub("old", 0), sub("fresh", 5)])], { revision: 2 }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "addSubtitleAtPlayhead" }));
+    await waitFor(() => expect(useEditorStore.getState().selectedClipIds).toEqual(["fresh"]));
+    expect(mocks.insertTextClip).toHaveBeenCalledWith(onS1, expect.objectContaining({ track_id: "sub", timeline_start: 5 }));
+  });
+
+  it("加花字同样选中新的一段", async () => {
+    renderEditor(sequenceWith([track("t", "video", 0, [])]));
+    await ready();
+    mocks.insertTextClip.mockImplementationOnce(async () =>
+      sequenceWith([track("t", "video", 0, [clip("title", "t", 0, 0, 3, { asset_id: null, asset_kind: "", text_override: "T" })])], { revision: 2 }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "addTextAtPlayhead" }));
+    await waitFor(() => expect(useEditorStore.getState().selectedClipIds).toEqual(["title"]));
   });
 });
