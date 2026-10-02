@@ -1,8 +1,8 @@
 """画板上**一个概念一个入口**:和生成模型是同一件事的插件工具不再单独上画板(ADR 0021 修订)。
 
 ComfyUI 的一张工作流既是生成模型(图片 / 视频格的模型选择器里),又是一个工具(一格的能力、空格子的一种填法)——
-同一件事两个入口。只有工具做得到的(交回全部输出节点、文字产出、拿 alpha 当蒙版、取回预览)留给工具;
-生成表达得了的(只有一个图 / 视频 / 音频输出节点)在画板上只留生成:结果落在原位、有张数、用量、6 小时。
+同一件事两个入口。模型目录里有的(交得出文件的)在画板上只留生成:结果落在原位、有张数、「结果取自」、用量、6 小时;
+工具多做的(交回全部输出节点、文字产出、取回预览)留在工作流和智能体那边。只交出一段字的不是模型,照旧是工具。
 
 宿主不认识 ComfyUI:插件报出的工具声明 `mirrors`(见 docs/PLUGIN_MANIFEST),规矩是
 `boards.transforms.content_transform_gap` 的 `mirrored_by_generation` —— 声明了、而且点运行的人在生成目录里
@@ -376,6 +376,62 @@ def test_保存加预览的ControlNet工作流_存着的工具格也改写成生
         "source_assets": [{"asset_id": "asset-pose", "role": "reference_image", "from": "i1"}],
         "producer": "generate",
     }
+
+
+def test_两个保存节点的工作流_画板上只在模型下拉里(tmp_path: Path) -> None:
+    """用户报的:「古风女孩.json · ComfyUI」在图片格的模型下拉里,「工作流 · 古风女孩」又在格子顶上的「…」里 ——
+    那张图有两个保存节点,插件此前判它「只有工具交得全」,不说 `mirrors`。插件 1.6.0 起生成那一路有「结果取自」,
+    能当生成模型用的每张图都说;画板的产出者清单(「…」和空格子的切换都读它)里于是没有它,模型下拉里有。
+    清单是插件对着假 ComfyUI 现报的;只交出一段字的那张(不是模型)照旧在。"""
+    from app.core.db import SessionLocal
+    from app.db.models import PluginInstance, ProviderModel
+    from app.domain.boards import producers
+    from app.domain.plugins import runtime
+    from app.domain.plugins.dynamic_tools import clean_mirror
+    from app.domain.plugins.tools import refresh_tools
+    from app.domain.providers.selection import adopt_plugin_connection
+    from tests.fake_comfyui import TWO_SAVES_API, FakeComfyUI
+
+    tagger = {"1": {"class_type": "LoadImage", "inputs": {"image": "a.png"}},
+              "3": {"class_type": "ShowText|pysssss", "inputs": {"text": ["1", 0]}}}
+    plugin = Path(__file__).resolve().parents[2] / "plugins" / "bundled" / "comfyui"
+    with FakeComfyUI() as comfy:
+        comfy.state.workflows = {"古风女孩.json": TWO_SAVES_API, "tagger.json": tagger}
+        output = runtime.execute_tool(plugin, "tools/main.py", "comfyui_generation", {"op": "tools"},
+                                      {"SERVER_URL": comfy.url}, data_dir=tmp_path, timeout=60).output
+        models = runtime.execute_tool(plugin, "tools/main.py", "comfyui_generation", {"op": "models"},
+                                      {"SERVER_URL": comfy.url}, data_dir=tmp_path, timeout=60).output["models"]
+    by_label = {one["label"]["zh"]: one for one in output["tools"]}
+    girl, tags = by_label["工作流 · 古风女孩"], by_label["工作流 · tagger"]
+    assert girl["mirrors"]["generation_model"] == "古风女孩.json" and "mirrors" not in tags
+    assert [one["id"] for one in models if one["kind"] == "image"] == ["builtin:txt2img", "古风女孩.json"]
+
+    client = fresh_client()
+    me = _me(client)
+    _install_plugin(tmp_path)
+    with SessionLocal() as db:
+        instance = PluginInstance(package_id=PACKAGE, name="我的 ComfyUI", enabled=True, owner_user_id=me,
+                                  discovered_tools=[{**one, **({"mirrors": clean_mirror(one["mirrors"])}
+                                                               if "mirrors" in one else {})}
+                                                    for one in (girl, tags)])
+        db.add(instance)
+        db.commit()
+        refresh_tools(db, instance, notify=False)
+        profile = adopt_plugin_connection(db, plugin_instance_id=instance.id, owner_user_id=me,
+                                          vendor=f"plugin:{PACKAGE}", name="我的 ComfyUI", enabled=True)
+        db.add(ProviderModel(provider_profile_id=profile.id, model_id="古风女孩.json", display_name="古风女孩",
+                             enabled=True, capability_ids=["image"]))
+        db.commit()
+        listed = {one.id for one in producers.list_producers(db, me)}
+    assert f"node:plugin.{PACKAGE}.{girl['name']}" not in listed, "画板上这件事只走生成那一个入口"
+    assert f"node:plugin.{PACKAGE}.{tags['name']}" in listed, "不是生成模型的工作流照旧是格子的一项能力"
+    ws = _workspace(client)
+    described = client.get("/api/boards/producers", params={"workspace_id": ws})
+    assert described.status_code == 200, described.text
+    labels = {one["label"] for one in described.json()}
+    assert "工作流 · 古风女孩" not in labels and "工作流 · tagger" in labels
+    options = client.get("/api/generation/options?kind=image").json()
+    assert any(one["model"] == "古风女孩.json" for one in options), "模型下拉里有它"
 
 
 def test_说不准用哪条连接就不改(tmp_path: Path) -> None:

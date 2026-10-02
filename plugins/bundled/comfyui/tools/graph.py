@@ -370,6 +370,16 @@ def slots(api: dict[str, Any], kind: str, titles: dict[str, str] | None = None) 
     return found
 
 
+def alpha_masks(api: dict[str, Any], found_slots: list[dict[str, str]]) -> list[dict[str, str]]:
+    """拿 LoadImage 的 **alpha 当蒙版**的那几张图(图和 alpha 两路都接下去,ComfyUI 蒙版编辑器画的就在 alpha 里)。
+    图里没有单独的蒙版槽时,给的蒙版替掉 alpha 那一路(见 wire_inputs)—— 生成和工具都收一份蒙版。"""
+    if any(slot["media"] == "mask" for slot in found_slots):
+        return []
+    consumers = _consumers(api)
+    return [slot for slot in found_slots if slot["media"] == "image"
+            and {used for _, _, used in consumers.get(slot["node"], [])} >= {0, 1}]
+
+
 def features(api: dict[str, Any], found_slots: list[dict[str, str]] | None = None,
              object_info: dict[str, Any] | None = None) -> list[str]:
     """这张图在做什么(给人和智能体挑工作流用):upscale / inpaint / img2img / remove-background / …"""
@@ -702,6 +712,9 @@ def describe(
     counts: dict[str, int] = {}
     for slot in found_slots:
         counts[slot["role"]] = counts.get(slot["role"], 0) + 1
+    if alpha_masks(api, found_slots):
+        # 局部重绘拿 alpha 当蒙版:收一份蒙版(白色是要改的地方),替掉 alpha 那一路。不给就用图自己的 alpha。
+        counts["mask"] = 1
     prompted = bool(prompts) or "prompt" in placeholders
     image_roles = ("reference_image", "first_frame", "last_frame")
     # 没有提示词、也没有自己的画布(放大、抠图、修脸这类「处理一张图」的工作流):那张图是必须给的 ——
@@ -714,7 +727,7 @@ def describe(
         if needs_image and role in image_roles and not first_image_marked:
             entry["required"] = True
             first_image_marked = True
-        if role in ("mask", "source_video"):
+        if role in ("mask", "source_video") and role in {slot["role"] for slot in found_slots}:
             entry["required"] = True
         inputs.append(entry)
 

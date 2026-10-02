@@ -15,10 +15,9 @@
 - 输出按输出节点声明(`image_9`、`video_30`、`text_40`…),外加 `asset_id` / `asset_ids` / `texts` / `summary` /
   `prompt_id` —— 这五个是给工作流连线用的(第一份、全部、全部文字、摘要、任务号),声明成 `wiring_outputs`:
   画板上只落每个输出节点自己的产出(`board_outputs`),不再多出一张重复的图和几张 JSON / 摘要 / 任务号便签;
-- `mirrors`:这张图**就是**一个生成模型表达得了的东西时(只有一个存下来的输出节点、交出的是图 / 视频 / 音频 ——
-  预览节点不算,生成也不交回它们;没有文字产出、没有「拿 alpha 当蒙版」这种只有工具做得到的入参),说它和哪个
+- `mirrors`:这张图**就是**模型目录里的一个模型时(交得出文件的图都是,见 graph.media_outputs),说它和哪个
   模型是同一件事、入参怎么对到生成的表单上。宿主据此在画板上只留生成那一个入口(一个概念一个入口),工作流里
-  两个都在;
+  两个都在(见 _mirror);
 - `replaces` 告诉宿主:存着的 `run_workflow`(选的是这张工作流;那个工具已经删了)、以及这张图以前按路径哈希起的
   名字,怎么改写成这个工具 —— 宿主据此把工作流和画板上的老节点迁过来(见 domain/workflows/plugin_references),
   ComfyUI 的知识仍只在这里。
@@ -200,10 +199,8 @@ def shape_of(entry: models.Entry, object_info: dict[str, Any]) -> Shape:
             shape.rename["image" if index == 0 else f"images.{index - 1}"] = key
         elif media in ("mask", "video", "audio") and media not in shape.rename:
             shape.rename[media] = key
-    consumers = graph._consumers(api)  # noqa: SLF001
-    alpha = [slot for slot in image_slots
-             if {used for _, _, used in consumers.get(slot["node"], [])} >= {0, 1}]
-    if alpha and not any(slot["media"] == "mask" for slot in found):
+    alpha = graph.alpha_masks(api, found)
+    if alpha:
         shape.properties["mask"] = {
             "type": "string", "format": "asset", "x-media": "image",
             "title": _pair("蒙版", "Mask"),
@@ -289,7 +286,7 @@ def shape_of(entry: models.Entry, object_info: dict[str, Any]) -> Shape:
         shape.outputs.append(key)
         shape.output_types[key] = data_type
         shape.output_labels[key] = _pair(zh, en)
-    shape.mirror = _mirror(entry, kind, nodes, shape, found, object_info)
+    shape.mirror = _mirror(entry, kind, shape, found, object_info)
     return shape
 
 
@@ -305,29 +302,23 @@ WIRING_OUTPUTS: tuple[tuple[str, str, str, str], ...] = (
 )
 
 
-def _mirror(entry: models.Entry, kind: str, nodes: list[dict[str, str]], shape: Shape,
-            found: list[dict[str, str]], object_info: dict[str, Any]) -> dict[str, Any] | None:
-    """这张图是不是**就是**一个生成模型(同一个 id 在插件的模型目录里):是的话说出是哪一个、入参怎么对过去。
+def _mirror(entry: models.Entry, kind: str, shape: Shape, found: list[dict[str, str]],
+            object_info: dict[str, Any]) -> dict[str, Any] | None:
+    """这张图是不是**就是**一个生成模型:同一个 id 在插件的模型目录里(models.catalog 列它的判据:交得出文件,见
+    graph.media_outputs)。是的话说出是哪一个、入参怎么对过去 —— 宿主据此在画板上只留生成那一个入口(图片 / 视频 /
+    音频格的模型下拉里它就是这件事),「…」里不再列「工作流 · 名字」;工作流、智能体照旧用这个工具。
 
-    判据是「生成那条路表达得了它的全部」:
-    - 生成交回的只来自一个输出节点(`graph.generation_nodes`,和生成跑完收文件的 `collect_outputs` 同一个判据:
-      这一种里存下来的那个;一个都不存才是预览),交出的是图 / 视频 / 音频;
-    - 除此之外没有别的产出:没有显示文字的节点(一段字只有工具交得回),没有别的种类里**存下来**的文件
-      (两个保存节点、视频图里另存的逐帧图、认不出种类的自定义保存节点)。**预览节点不算**:PreviewImage 写的是
-      临时文件,工具缺省也不交回它(有存下来的就不取预览,见 graph.all_outputs)—— 放大图里预览的是读进来的
-      原图、ControlNet 图里预览的是预处理的线稿,都不是成片。工具的「也取回预览」是给搭流程、排查的人的开关,
-      不让一张「保存 + 预览」的图在画板上多出一个工具入口;要预览的,工作流里这个工具照旧在;
-    - 没有「拿 LoadImage 的 alpha 当蒙版」那一格(只有工具会把蒙版合进 alpha 那一路)。
+    生成那一路交得出的,就是同一件事:几个保存节点各交一份(「结果取自」可以只要一个,见 graph._output_choice)、
+    alpha 当蒙版有蒙版槽(graph.alpha_masks)。工具多做的 —— 交回全部输出节点、显示出来的文字、预览(「也取回预览」)——
+    是给搭流程、排查的人的,留在工作流和智能体那边;**只交出一段字的图**(打标签、反推提示词)不在模型目录里,
+    不是同一件事,画板上照旧是格子的一项能力。(插件 1.6.0 之前只在「一个保存节点、没有文字、没拿 alpha 当蒙版」时
+    才说,两个保存节点的图于是在画板上两个入口。)
 
-    对得过去的入参:提示词 → 提示词;读素材的节点 → 生成的素材角色;反向提示词 / 种子 / 张数 / 步数 / 可调参数 →
-    生成参数里的同一项(可调参数在生成里的键是 `节点 id.输入名`)。宽和高在生成里是一格「尺寸」,对不过去。
+    对得过去的入参:提示词 → 提示词;读素材的节点 → 生成的素材角色,alpha 的蒙版 → 蒙版;反向提示词 / 种子 / 张数 /
+    步数 / 可调参数 → 生成参数里的同一项(可调参数在生成里的键是 `节点 id.输入名`)。宽和高在生成里是一格「尺寸」,
+    对不过去。
     """
-    if kind not in ("image", "video", "audio") or len(graph.generation_nodes(entry.api, kind, object_info, entry.titles)) != 1:
-        return None
-    if any(node["media"] == "text" or (node["media"] != kind and graph.persists(entry.api.get(node["node"]) or {}))
-           for node in nodes):
-        return None
-    if any(binding[0] == "alpha_mask" for binding in shape.bindings.values()):
+    if kind not in ("image", "video", "audio") or not graph.media_outputs(entry.api, object_info, entry.titles):
         return None
     parameters: dict[str, str] = {}
     sources: dict[str, str] = {}
@@ -342,6 +333,8 @@ def _mirror(entry: models.Entry, kind: str, nodes: list[dict[str, str]], shape: 
             parameters[key] = "negative_prompt"
         elif how == "slot" and binding[1] in roles:
             sources[key] = roles[binding[1]]
+        elif how == "alpha_mask":
+            sources[key] = "mask"
     mirror: dict[str, Any] = {"generation_model": entry.id, "kind": kind}
     if "prompt" in shape.bindings:
         mirror["prompt"] = "prompt"

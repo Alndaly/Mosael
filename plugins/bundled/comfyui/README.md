@@ -54,16 +54,17 @@ The name comes from the id ComfyUI writes into the workflow file (stable across 
 falling back to a hash of the path; the template is `wf_api_template` and the built-in text-to-image is
 `wf_builtin_txt2img`.
 
-**A graph that is the same thing as a generation model declares `mirrors`** (1.5.0): a workflow with exactly one
-**saved** output node that returns images / video / audio, no text output, and no "LoadImage alpha used as a mask" slot.
-Since 1.5.2 preview nodes don't count: PreviewImage, and a video combine with `save_output` turned off, write temporary
-files that a finished generation doesn't return (`graph.collect_outputs`) and that the tool doesn't return by default
-either; the test is `graph.generation_nodes`, the same one generation uses to collect files, so a ControlNet graph that
-"saves the result and previews the line art" is also a generation model. The tool carries
-`{"generation_model": <model id>, "kind": …}` and a mapping from its inputs to the generation form (prompts, asset
-roles, parameter keys like `steps_3` → `3.steps`; width and height don't map). Using that, the host keeps only the
-generation entry on boards and rewrites stored tool cells into generation cells; workflows keep both. **A graph that
-only returns text (tagging, prompt extraction) is not in the model catalog** (`graph.media_outputs`); it is only a tool.
+**A graph that is the same thing as a generation model declares `mirrors`**: the tool of every workflow in the model
+catalog (one that returns files, `graph.media_outputs`) carries `{"generation_model": <model id>, "kind": …}` and a
+mapping from its inputs to the generation form (prompts, asset roles, the alpha mask → `mask`, parameter keys like
+`steps_3` → `3.steps`; width and height don't map). Using that, the host keeps only the generation entry on boards (the
+model picker of image / video cells): the "…" menu no longer lists "Workflow · name", and stored tool cells are rewritten
+into generation cells; workflows and the agent keep the tool (what it does on top — returning every output node, text
+shown by a node, previews — stays there). Since 1.6.0 graphs with several save nodes (generation has "Results from") and
+graphs that use LoadImage's alpha as a mask (the model has a mask slot) declare it too; 1.5.x only declared it for "one
+saved output node, no text, no alpha mask", so a graph with two save nodes had two entries on boards. **A graph that only
+returns text (tagging, prompt extraction) is not in the model catalog**; it is only a tool and stays an ability of a
+cell on boards.
 
 There used to be a generic `run_workflow` (run by id, with a fixed table of inputs): it didn't know which graph it would
 run, yet its form asked people to fill in parameters, so it was removed in 1.4.0. Every kind of graph it could run now

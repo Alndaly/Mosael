@@ -291,9 +291,26 @@ def test_画板上只落每个输出节点自己的产出_给连线用的五个�
     assert board_outputs(node_meta(tools[PORTRAIT_TOOL]), collected) == [{"type": "asset", "asset_id": "a1"}]
 
 
-def test_只有一个图视频音频输出节点的图_声明它和生成模型是同一件事(comfy, tmp_path: Path) -> None:
+#: 一张出图又**另外显示一段字**的工作流(出图之后反推一遍提示词看看):SaveImage + ShowText。
+IMAGE_AND_TEXT_API: dict[str, Any] = {
+    **{key: value for key, value in UPSCALE_API.items() if key != "5"},
+    "6": {"class_type": "WD14Tagger|pysssss", "inputs": {"image": ["3", 0], "threshold": 0.35}},
+    "7": {"class_type": "ShowText|pysssss", "inputs": {"text": ["6", 0]}},
+}
+
+
+def test_能当生成模型用的每张图_都声明它和生成模型是同一件事(comfy, tmp_path: Path) -> None:
+    """画板上一个概念一个入口:一张工作流在模型目录里(图片 / 视频格的模型下拉里有它),它的工具就说「我和那个模型是
+    同一件事」,画板的「…」里不再列「工作流 · 名字」。此前只有「一个保存节点、没有文字、没拿 alpha 当蒙版」的才说,
+    两个保存节点的(「古风女孩」那种)于是两个入口。现在生成那一路交得出的就是同一件事:几个保存节点有「结果取自」、
+    alpha 当蒙版有蒙版槽;工具多做的(交回全部节点、文字、预览)留给智能体和工作流。只交出一段字的不是模型,照旧是工具。"""
+    from tests.fake_comfyui import PREVIEWS_ONLY_API, TWO_SAVES_API
+
     _with_tagger_and_alpha(comfy)
+    comfy.state.workflows.update({"two-saves.json": TWO_SAVES_API, "previews.json": PREVIEWS_ONLY_API,
+                                  "image-and-text.json": IMAGE_AND_TEXT_API})
     tools = _tools(comfy.url, tmp_path)
+    models = _models(comfy)
     portrait = tools[PORTRAIT_TOOL]["mirrors"]
     assert portrait["generation_model"] == "portrait.json" and portrait["kind"] == "image"
     assert portrait["prompt"] == "prompt"
@@ -303,25 +320,56 @@ def test_只有一个图视频音频输出节点的图_声明它和生成模型�
     assert portrait["parameters"]["seed"] == "seed" and portrait["parameters"]["num_images"] == "num_images"
     assert "width" not in portrait["parameters"]
     #: 同一个 id 就在插件的模型目录里,改名后的键就是那个模型的生成参数。
-    models = _models(comfy)
     assert set(portrait["parameters"].values()) <= set(models["portrait.json"]["parameters"])
     assert tools[WAN_TOOL]["mirrors"]["kind"] == "video" and tools[WAN_TOOL]["mirrors"]["generation_model"] == "video/wan.json"
     assert tools[WAN_TOOL]["mirrors"]["sources"] == {"image_12": "first_frame"}
-    assert models["video/wan.json"]["kind"] == "video"
     assert tools["wf_builtin_txt2img"]["mirrors"]["generation_model"] == "builtin:txt2img"
-    #: 只有工具做得到的:只交出一段字、拿 alpha 当蒙版 —— 不声明。(保存 + 预览的放大图声明:预览不算产出,
-    #: 见下一条。)
-    for only_tool in (TAGGER_TOOL, ALPHA_TOOL):
-        assert "mirrors" not in tools[only_tool], only_tool
-    assert "mask" in tools[ALPHA_TOOL]["input_schema"]["properties"]
-    assert tools[UPSCALE_TOOL]["mirrors"]["sources"] == {"image_1": "reference_image"}
+
+    by_path = {path: "wf_" + hashlib.sha1(path.encode()).hexdigest()[:12]
+               for path in ("two-saves.json", "previews.json", "image-and-text.json")}
+    for path, name in by_path.items():
+        assert tools[name]["mirrors"]["generation_model"] == path, path
+        assert path in models, path
+    #: alpha 当蒙版:模型那一边有一个蒙版槽(生成会另起一个读红色通道的 LoadImageMask 接上 alpha 那一路)。
+    assert {"role": "mask", "max": 1} in models["alpha.json"]["inputs"]
+    assert tools[ALPHA_TOOL]["mirrors"]["sources"] == {"image_1": "reference_image", "mask": "mask"}
+    #: 只交出一段字的:不在模型目录里,不是同一件事。
+    assert "tagger.json" not in models and "mirrors" not in tools[TAGGER_TOOL]
+    #: 每一个声明了的,说的那个模型都在目录里、种类对得上。
+    for name, tool in tools.items():
+        if "mirrors" in tool:
+            assert models[tool["mirrors"]["generation_model"]]["kind"] == tool["mirrors"]["kind"], name
+
+
+def test_alpha当蒙版的图_生成给的蒙版接到alpha那一路(comfy, tmp_path: Path) -> None:
+    _with_tagger_and_alpha(comfy)
+    comfy.state.object_info["LoadImageMask"] = comfy.state.object_info.get("LoadImageMask") or {
+        "input": {"required": {"image": [["mask.png"]], "channel": [["alpha", "red"]]}}}
+    scratch = tmp_path / "gen"
+    scratch.mkdir()
+    image, mask = tmp_path / "pic.png", tmp_path / "mask.png"
+    image.write_bytes(PNG)
+    mask.write_bytes(PNG)
+    runtime.stream_tool(
+        PLUGIN, ENTRY, "comfyui_generation",
+        {"op": "generate", "kind": "image", "model": "alpha.json", "prompt": "", "negative_prompt": "", "parameters": {},
+         "inputs": [{"role": "reference_image", "path": str(image)}, {"role": "mask", "path": str(mask)}], "resume": None},
+        {"SERVER_URL": comfy.url}, hooks=runtime.StreamHooks(lambda *_: None, lambda _: None, lambda: False),
+        scratch_dir=scratch, timeout=60,
+    )
+    submitted = comfy.posted("/prompt")[0]["prompt"]
+    [added] = [node_id for node_id, node in submitted.items() if node["class_type"] == "LoadImageMask"]
+    assert submitted[added]["inputs"]["channel"] == "red"
+    assert submitted["6"]["inputs"]["mask"] == [added, 0], "alpha 那一路改接给的蒙版"
+    assert submitted["5"]["inputs"]["pixels"] == ["1", 0], "图那一路照旧"
 
 
 def test_保存加预览的图_预览不算输出节点_和生成模型是同一件事_不上画板(comfy, tmp_path: Path) -> None:
     """用户看到「工作流 · controlnet」和图片格模型选择器里的「controlnet.json · ComfyUI」同时在:图里是一个 SaveImage
     加一个看线稿的 PreviewImage,此前「只有一个输出节点」把预览也数进去,于是不声明 `mirrors`,画板上两个入口。
     预览写的是临时文件,生成跑完不交回它(collect_outputs),工具缺省也不交回 —— 判「同一件事」只数存下来的那几个
-    (graph.generation_nodes,和 collect_outputs 同一个判据)。两个都存下来的图照旧只有工具交得全。"""
+    (graph.generation_nodes,和 collect_outputs 同一个判据)。两个都存下来的图如今也是(插件 1.6.0:生成那一路有
+    「结果取自」,见 test_能当生成模型用的每张图_都声明它和生成模型是同一件事)。"""
     from app.domain.boards.transforms import content_transform_gap
     from app.domain.plugins.nodes import node_meta
     from tests.fake_comfyui import CONTROLNET_API
@@ -335,7 +383,8 @@ def test_保存加预览的图_预览不算输出节点_和生成模型是同一
     mirror = tool["mirrors"]
     assert (mirror["generation_model"], mirror["kind"]) == ("controlnet.json", "image")
     assert mirror["sources"] == {"image_11": "reference_image"} and mirror["prompt"] == "prompt"
-    assert "mirrors" not in tools["wf_" + hashlib.sha1(b"two-saves.json").hexdigest()[:12]], "两个保存节点:只有工具交得全"
+    assert tools["wf_" + hashlib.sha1(b"two-saves.json").hexdigest()[:12]]["mirrors"]["generation_model"] == (
+        "two-saves.json"), "两个保存节点:生成那一路有「结果取自」,也是同一件事"
 
     #: 同一个 id 就在模型目录里:用得上它的人,画板上这件事只走生成。
     models = _models(comfy)
