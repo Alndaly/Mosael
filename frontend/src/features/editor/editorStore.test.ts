@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { markedRange, selectedClipId, useEditorStore } from "@/features/editor/editorStore";
 
@@ -136,5 +136,27 @@ describe("入点 / 出点", () => {
 
   it("没打点就没有选区", () => {
     expect(markedRange(useEditorStore.getState(), 10)).toBeNull();
+  });
+});
+
+describe("吸附开关(N)", () => {
+  it("开关写进本机偏好,下次打开剪辑页还是同一个状态", async () => {
+    const storage = new Map<string, string>();
+    vi.stubGlobal("localStorage", {
+      getItem: (key: string) => storage.get(key) ?? null,
+      setItem: (key: string, value: string) => void storage.set(key, value),
+    });
+    try {
+      useEditorStore.setState({ snapEnabled: true });
+      useEditorStore.getState().toggleSnap();
+      expect(useEditorStore.getState().snapEnabled).toBe(false);
+      expect(storage.get("mosael:editor:snap")).toBe("off");
+      // 重新载入 store 模块 = 下次打开剪辑页。
+      vi.resetModules();
+      const fresh = await import("@/features/editor/editorStore");
+      expect(fresh.useEditorStore.getState().snapEnabled).toBe(false);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

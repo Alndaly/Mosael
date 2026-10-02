@@ -63,6 +63,8 @@ interface EditorState {
   /** 入点 / 出点(I / O,秒)。只打了一个时另一端取时间线的头 / 尾,见 markedRange。 */
   markIn: number | null;
   markOut: number | null;
+  /** 吸附(N)。是这个人怎么用剪辑台的偏好,存在本机,见 SNAP_KEY。 */
+  snapEnabled: boolean;
   setPlayhead: (time: number) => void;
   setPlaying: (playing: boolean) => void;
   togglePlaying: () => void;
@@ -86,6 +88,26 @@ interface EditorState {
   setMarkIn: (time: number) => void;
   setMarkOut: (time: number) => void;
   clearMarks: () => void;
+  toggleSnap: () => void;
+}
+
+const SNAP_KEY = "mosael:editor:snap";
+
+/** 吸附开没开:本机偏好。读不到(隐私模式、没有 storage)就按开着。 */
+function readSnapPreference(): boolean {
+  try {
+    return localStorage.getItem(SNAP_KEY) !== "off";
+  } catch {
+    return true;
+  }
+}
+
+function writeSnapPreference(enabled: boolean): void {
+  try {
+    localStorage.setItem(SNAP_KEY, enabled ? "on" : "off");
+  } catch {
+    // 存不下就只在这次会话里有效。
+  }
 }
 
 const PLAYBACK_RATES = [0.5, 1, 1.5, 2];
@@ -113,6 +135,7 @@ export const useEditorStore = create<EditorState>((set) => ({
   editMode: "overwrite",
   markIn: null,
   markOut: null,
+  snapEnabled: readSnapPreference(),
   setPlayhead: (time) => set({ playhead: Math.max(0, time) }),
   setPlaying: (playing) => set({ playing }),
   togglePlaying: () =>
@@ -160,6 +183,11 @@ export const useEditorStore = create<EditorState>((set) => ({
   setMarkOut: (time) =>
     set((state) => ({ markOut: Math.max(0, time), markIn: state.markIn !== null && state.markIn >= time ? null : state.markIn })),
   clearMarks: () => set({ markIn: null, markOut: null }),
+  toggleSnap: () =>
+    set((state) => {
+      writeSnapPreference(!state.snapEnabled);
+      return { snapEnabled: !state.snapEnabled };
+    }),
 }));
 
 /**

@@ -84,6 +84,8 @@ export function useEditorShortcuts(
       } else if (!mod && key === "s") {
         event.preventDefault();
         act.split();
+      } else if (!mod && key === "n") {
+        store.toggleSnap();
       } else if (!mod && key === "a") {
         store.setTool("select");
       } else if (!mod && key === "b") {

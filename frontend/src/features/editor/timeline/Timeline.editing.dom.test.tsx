@@ -128,3 +128,15 @@ describe("入出点在标尺上", () => {
     expect(band.style.width).toBe("140px");
   });
 });
+
+describe("吸附按钮", () => {
+  it("名字走文案表(不是写死的 Snap),按下状态跟着全局开关", () => {
+    useEditorStore.setState({ snapEnabled: false });
+    renderTimeline([track("V1", "video", 0)]);
+    const button = screen.getByRole("button", { name: "timelineSnap" });
+    expect(button).toHaveAttribute("aria-pressed", "false");
+    fireEvent.click(button);
+    expect(useEditorStore.getState().snapEnabled).toBe(true);
+    expect(button).toHaveAttribute("aria-pressed", "true");
+  });
+});

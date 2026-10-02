@@ -6,7 +6,7 @@ import { fetchWaveform, type Asset, type Clip, type Sequence, type Track, type T
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
-import { KbdGroup } from "@/components/ui/kbd";
+import { Kbd, KbdGroup } from "@/components/ui/kbd";
 import { Popover, PopoverClose, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
@@ -150,7 +150,7 @@ export function Timeline({
   const rawDragDraft = useEditorStore((state) => state.dragDraft);
   const selectedClipIds = useEditorStore((state) => state.selectedClipIds);
   const { setPlayhead, selectClip, setPxPerSecond } = useEditorStore.getState();
-  const [snapEnabled, setSnapEnabled] = React.useState(true);
+  const snapEnabled = useEditorStore((state) => state.snapEnabled);
   const canvasRef = React.useRef<HTMLDivElement | null>(null);
   const hscrollRef = React.useRef<HTMLDivElement | null>(null);
   const labelsRef = React.useRef<HTMLDivElement | null>(null);
@@ -866,14 +866,14 @@ export function Timeline({
                 variant="ghost"
                 size="icon-sm"
                 className={cn(snapEnabled && "bg-accent text-accent-foreground hover:bg-accent hover:text-accent-foreground")}
-                onClick={() => setSnapEnabled((value) => !value)}
+                onClick={() => useEditorStore.getState().toggleSnap()}
                 aria-pressed={snapEnabled}
-                aria-label="Snap"
+                aria-label={t("timelineSnap")}
               >
                 <Magnet size={14} />
               </Button>
             </TooltipTrigger>
-            <TooltipContent>Snap</TooltipContent>
+            <TooltipContent className="flex items-center gap-2">{t("timelineSnap")}<Kbd>N</Kbd></TooltipContent>
           </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>

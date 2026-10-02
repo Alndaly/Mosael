@@ -564,3 +564,15 @@ describe("对着播放头的剪辑:⇧⌘K、Q / W、S 的提示", () => {
     expect(mocks.splitClip).not.toHaveBeenCalled();
   });
 });
+
+describe("N 开关吸附", () => {
+  it("按 N 切换吸附", async () => {
+    useEditorStore.setState({ snapEnabled: true });
+    renderEditor(sequenceWith([track("v1", "video", 0, [clip("c1", "v1", 0, 0, 10)])]));
+    await ready();
+    press("n");
+    expect(useEditorStore.getState().snapEnabled).toBe(false);
+    press("n");
+    expect(useEditorStore.getState().snapEnabled).toBe(true);
+  });
+});
