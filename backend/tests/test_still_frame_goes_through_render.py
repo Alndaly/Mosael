@@ -3,7 +3,8 @@
 预览里花字和字幕是 DOM 叠上去的(见 features/editor/Monitor),画布抓不到它们 —— 抓出来的
 画面看着对,只是少了一层字,而用户不会发现自己导出的是没有字幕的那一版。
 
-这条钉住三件事:滤镜图和成片是同一份、文字先渲成 PNG、只出一帧不出音轨。
+这条钉住三件事:每一层的滤镜和成片是同一份、文字先渲成 PNG、只出一帧不出音轨。
+(只渲这一刻看得见的那部分,画出来的和成片逐像素比对,见 test_still_renders_only_what_is_visible。)
 """
 
 from __future__ import annotations
@@ -27,16 +28,19 @@ def _command(**kwargs) -> list[str]:
     return build_ffmpeg_command(plan, lambda key: Path("/nonexistent") / key, Path("/tmp/out.jpg"), **kwargs)
 
 
-def test_取一帧和出成片用同一条命令_只换输出那一段() -> None:
-    """**滤镜图一个字都不能改** —— 保真度全在那里:变换、调色、花字、字幕、叠层。
-    另写一条取帧的路的话,它迟早和成片长得不一样。"""
-    still = _command(still_at=3.2)
+def test_取一帧和出成片用同一份滤镜_只换输出那一段() -> None:
+    """**每一层的滤镜都不能改** —— 保真度全在那里:变换、调色、花字、字幕、叠层。
+    另写一条取帧的路的话,它迟早和成片长得不一样。取一帧只渲那一刻所在的一段,那一段的
+    滤镜链和成片里的是同一条。"""
+    still = _command(still_at=0.5)
     movie = _command()
 
+    def chain(command: list[str]) -> str:
+        graph = command[command.index("-filter_complex") + 1]
+        return next(part for part in graph.split(";") if part.startswith("[0:v]"))
+
     assert "-filter_complex" in still, "取帧没走滤镜图"
-    assert still[still.index("-filter_complex") + 1] == movie[movie.index("-filter_complex") + 1], (
-        "取帧的滤镜图和成片的不一样 —— 它们迟早会画出不同的东西"
-    )
+    assert chain(still) == chain(movie), "取帧那一段的滤镜和成片的不一样 —— 它们迟早会画出不同的东西"
 
 
 def test_只出一帧_不出音轨() -> None:
@@ -50,8 +54,11 @@ def test_seek_放在滤镜图之后() -> None:
     """输出侧 seek:滤镜图照常从头算,那些跟时间走的东西(关键帧、淡入淡出、字幕出入点)
     才会落在正确的位置上。放到输入侧的话,它们全部从那一刻重新开始。"""
     still = _command(still_at=3.2)
-    assert still.index("-ss") > still.index("-filter_complex")
-    assert still[still.index("-ss") + 1] == "3.200"
+    #: 输入侧也可能有 -ss(那一段从这一刻前一点开始解,时间戳照旧按段内时间),
+    #: 要看的是滤镜图之后的那一个。
+    after = still[still.index("-filter_complex"):]
+    assert "-ss" in after, "输出侧没有 seek"
+    assert after[after.index("-ss") + 1] == "3.200"
 
 
 def test_取帧之前要先把文字渲成_PNG() -> None:
@@ -99,12 +106,13 @@ def test_取帧之前要先把文字渲成_PNG() -> None:
     assert seen.get("text_pngs") == {"marker": "png"}, "渲了但没传给命令,等于没渲"
 
 
-def test_音频那条也要有人接_否则_ffmpeg_直接拒跑() -> None:
-    """滤镜图和成片是同一份,而它的 concat 会**同时吐出画面和声音**。只接画面的话 ffmpeg
-    连跑都不跑:「Filter 'concat' has output 1 (abase) unconnected」。
-
-    这条是踩出来的:第一版只 map 了画面,取帧在真机上一次都没成功过。
+def test_不建声音那一路_也就没有悬着的输出() -> None:
+    """第一版只 map 了画面,而滤镜图里 concat 还吐着声音,ffmpeg 连跑都不跑:
+    「Filter 'concat' has output 1 (abase) unconnected」—— 当时的补法是把声音丢进 null,
+    于是取一帧要把整条时间线的声音解一遍。现在声音那一路根本不建。
     """
     still = _command(still_at=3.2)
-    assert still.count("-map") == 2, f"只接了一路 —— 另一路悬着,ffmpeg 会拒跑:{still}"
-    assert still[-3:] == ["-f", "null", "-"], "音频那路没丢进 null"
+    graph = still[still.index("-filter_complex") + 1]
+    assert still.count("-map") == 1, f"一张图只该接画面那一路:{still}"
+    assert "[abase]" not in graph and "anullsrc" not in graph, "取一帧不该建声音那一路"
+    assert "null" not in still[still.index("-frames:v"):], "声音都没建,不该再有丢进 null 的那一路"

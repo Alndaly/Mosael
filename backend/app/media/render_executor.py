@@ -7,6 +7,7 @@ import math
 import subprocess
 import tempfile
 from collections.abc import Callable, Iterator
+from dataclasses import replace
 from pathlib import Path
 from typing import NamedTuple
 
@@ -24,6 +25,7 @@ from app.media.render_plan import (
     FILTER_PRESETS,
     ClipAppearance,
     RenderPlan,
+    Segment,
     ShadowSpec,
     TextOverlayItem,
     Transform,
@@ -842,10 +844,11 @@ def _image_loop_args(path: Path, trim_end: float) -> list[str]:
     return ["-stream_loop", "-1", *duration]
 
 
-def _base_video_chain(input_index: int, i: int, src_in: float, src_out: float, setpts: str, width: int, height: int, fps: float, tail: str, fill_mode: str) -> str:
-    """[input:v] → [vi] 的完整视频链;按画幅填充模式选择裁剪/留黑边/模糊背景。"""
+def _base_video_chain(input_index: int, i: int, src_in: float, src_out: float, setpts: str, width: int, height: int, fps: float, tail: str, fill_mode: str, *, start_time: float = 0.0) -> str:
+    """[input:v] → [vi] 的完整视频链;按画幅填充模式选择裁剪/留黑边/模糊背景。
+    start_time 是这一路画面从段内第几秒开始(只有取一帧时不是 0,见 _StillBase)。"""
     head = f"[{input_index}:v]trim=start={src_in}:end={src_out},setpts={setpts}"
-    end = f",fps={fps}:start_time=0,format=yuv420p,setsar=1{tail}[v{i}]"
+    end = f",fps={fps}:start_time={start_time:g},format=yuv420p,setsar=1{tail}[v{i}]"
     if fill_mode == "cover":
         return f"{head},scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height}{end}"
     if fill_mode == "blur":
@@ -985,6 +988,70 @@ def _video_encode_args(output, *, force_software: bool = False) -> list[str]:
     ]
 
 
+#: 取一帧时,那一段从这一刻之前多少秒开始解码。不卡在正好那一刻:fps 滤镜按输入时间戳给
+#: 每个输出时刻挑帧,前面留一小段余量,挑出来的才稳稳是成片同一时刻的那一帧。
+_STILL_PREROLL = 1.0
+
+
+class _StillBase(NamedTuple):
+    """取一帧时基底轨要渲的那一段:第几段、它在时间线上从哪开始、段内从第几秒开始解码;
+    at 是取的那一刻(时间线时间)。"""
+
+    index: int
+    start: float
+    skip: float
+    at: float
+
+
+def _still_base_segment(plan: RenderPlan, at: float) -> _StillBase:
+    """基底轨上画面落在 `at` 的那一段。前后的段在这一刻都不出画面,解它们纯属白干 ——
+    审查实测:300 秒的时间线,取第 5 秒和第 290 秒都要 3 秒,因为每次都把整条从头解了一遍。"""
+    start = 0.0
+    for index, segment in enumerate(plan.video_segments):
+        if start <= at < start + segment.duration:
+            return _StillBase(index, start, round(max(0.0, at - start - _STILL_PREROLL), 6), at)
+        start += segment.duration
+    raise RenderExecutionError("stillErr_noFrame")
+
+
+def _shift_pts(seconds: float) -> str:
+    """把一路画面的时间戳整体后移(带前导逗号);不移就是空串,命令一字不变。"""
+    return f",setpts=PTS+{seconds}/TB" if seconds else ""
+
+
+def still_plan(plan: RenderPlan, at: float) -> RenderPlan:
+    """`at` 这一刻**看得见的东西**组成的计划:取一帧只渲它们。
+
+    基底轨上 `at` 之前的段并成一段空白(只为保住那一段在时间线上的位置),之后的段扔掉;上层、
+    字幕、花字、AI 标识只留时间窗盖住这一刻的(闭区间,宁多勿少 —— 真正显不显示仍由各自的
+    enable 决定,见 _shown_during);声音整条不要。字幕和花字因此也只光栅化这一刻的那几条 ——
+    200 条字幕的片子取一帧,此前要先起浏览器把 200 张 PNG 全画一遍,再把它们全挂进滤镜图。
+    """
+    segments: list[Segment] = []
+    start = 0.0
+    for segment in plan.video_segments:
+        if start <= at < start + segment.duration:
+            if start > 0:
+                segments.append(Segment(kind="gap", duration=start))
+            segments.append(segment)
+            break
+        start += segment.duration
+
+    def covers(item_start: float, duration: float) -> bool:
+        return item_start <= at <= item_start + duration
+
+    return replace(
+        plan,
+        video_segments=tuple(segments),
+        overlays=tuple(item for item in plan.overlays if covers(item.start, item.duration)),
+        audio_overlays=(),
+        subtitles=tuple(item for item in plan.subtitles if covers(item.start, item.duration)),
+        text_overlays=tuple(item for item in plan.text_overlays if covers(item.start, item.duration)),
+        ai_labels=tuple(item for item in plan.ai_labels if covers(item.start, item.duration)),
+        base_audio_duck_windows=(),
+    )
+
+
 def build_ffmpeg_command(
     plan: RenderPlan,
     resolve: Callable[[str], Path],
@@ -1000,14 +1067,17 @@ def build_ffmpeg_command(
     workdir 是这一次渲染自己的中转目录(.ass 等写在这里),由调用方建、调用方清 —— 见
     execute_render。不给就写在成片旁边:只有直接拿命令去跑的测试走这条。
 
-    **滤镜图一个字都不改** —— 保真度全在那里:变换、调色、花字、字幕、叠层。另写一条"取当前帧"
-    的路的话,它迟早和成片长得不一样,而这种不一样是最难发现的:画面看着对,只是少了一层字。
+    **每一层的滤镜和成片是同一份** —— 保真度全在那里:变换、调色、花字、字幕、叠层。另写一条
+    "取当前帧"的路的话,它迟早和成片长得不一样,而这种不一样是最难发现的:画面看着对,只是
+    少了一层字。取一帧只在两处不同:基底轨只渲那一刻所在的一段(从那一刻前一点开始解,时间戳
+    挪回时间线位置),声音不建。各层要不要先按 still_plan 筛,是调用方的事(render_still 筛)。
     """
     width, height, fps = plan.output.width, plan.output.height, plan.output.fps
+    still = _still_base_segment(plan, max(still_at, 0.0)) if still_at is not None else None
     # Probe every source we will ask about up front, concurrently, instead of once per clip as
     # the command is assembled — the probes are independent and each one is just waiting on an
-    # ffprobe child. Repeated sources collapse to one probe.
-    has_audio = probe_has_audio_many(
+    # ffprobe child. Repeated sources collapse to one probe. 取一帧不要声音,也就不用问。
+    has_audio = {} if still is not None else probe_has_audio_many(
         [resolve(segment.source.file_key) for segment in plan.video_segments
          if segment.kind == "clip" and segment.source is not None]
         + [resolve(item.source.file_key) for item in plan.audio_overlays if item.optional]
@@ -1018,12 +1088,18 @@ def build_ffmpeg_command(
     input_index = 0
 
     for i, segment in enumerate(plan.video_segments):
+        if still is not None and i != still.index:
+            continue  # 取一帧:基底轨只渲画面落在那一刻的这一段
+        #: 取一帧时这一段从段内第 skip 秒开始解码(见 _StillBase);成片恒为 0,命令一字不变。
+        skip = still.skip if still is not None else 0.0
         if segment.kind == "clip" and segment.source is not None:
             path = resolve(segment.source.file_key)
             src = segment.source
-            seek, tin, tout = _seek_and_trim(src.src_in, src.src_out)
+            if guess_kind(path) == "image":
+                skip = 0.0  # -loop 出来的图片流不认输入侧快进;从头生成也只是几帧静图
+            seek, tin, tout = _seek_and_trim(src.src_in + skip * segment.speed, src.src_out)
             args += _image_loop_args(path, tout) + seek + ["-i", str(path)]
-            setpts = _video_from(tin, segment.speed)
+            setpts = _video_from(tin, segment.speed) + (f"+{skip}/TB" if skip else "")
             # Picture fade (画面淡变, fade to/from black) is independent of the audio fade below.
             video_fades = _fade_filters(segment.video_fade_in, segment.video_fade_out, segment.duration, audio=False)
             preset = f",{FILTER_PRESETS[segment.filter]}" if segment.filter else ""
@@ -1034,7 +1110,7 @@ def build_ffmpeg_command(
                 filters.append(
                     _base_video_chain(
                         input_index, i, tin, tout, setpts, width, height, fps,
-                        f"{preset}{video_fades}", plan.output.fill_mode,
+                        f"{preset}{video_fades}", plan.output.fill_mode, start_time=skip,
                     )
                 )
             else:
@@ -1043,7 +1119,7 @@ def build_ffmpeg_command(
                 # 和预览 scenePaint 的 followsBaseFill 同一条。此前这里一律铺满再裁到画幅:contain / blur 的片子一打
                 # 关键帧,画面就从留边跳成裁满。
                 head = f"[{input_index}:v]trim=start={tin}:end={tout},setpts={setpts}"
-                tail = f"{preset}{video_fades},fps={fps}:start_time=0,setsar=1"
+                tail = f"{preset}{video_fades},fps={fps}:start_time={skip:g},setsar=1"
                 if not free and plan.output.fill_mode == "blur":
                     filters.append(f"{head},split=2[eltsrc{i}][bgsrc{i}]")
                     filters.append(
@@ -1055,7 +1131,8 @@ def build_ffmpeg_command(
                     filters.append(
                         # 背景必须给时长:无 :d 的 color 是无限流,concat 会永远停在这一段推不动,
                         # 整条 filtergraph 疯狂缓冲——带动画的图片幻灯片导出因此慢到 0.0x(见回归测试)。
-                        f"color=black:s={width}x{height}:r={fps}:d={segment.duration}[bg{i}]"
+                        f"color=black:s={width}x{height}:r={fps}:d={round(segment.duration - skip, 6)}"
+                        f"{_shift_pts(skip)}[bg{i}]"
                     )
                     head += ","
                 fit = "increase" if free or plan.output.fill_mode == "cover" else "decrease"
@@ -1078,11 +1155,13 @@ def build_ffmpeg_command(
                 filters += tfilters
                 shadow_filters, tlabel, ox, oy = _with_shadow(
                     tlabel, ox, oy, segment.appearance.shadow, width, height, fps, f"bs{i}",
-                    start=0.0, duration=segment.duration,
+                    start=skip, duration=round(segment.duration - skip, 6),
                 )
                 filters += shadow_filters
                 filters.append(f"[bg{i}][{tlabel}]overlay=x='{ox}':y='{oy}',format=yuv420p,setsar=1[v{i}]")
-            if has_audio.get(path, False) and not plan.mute_base_audio and not segment.muted:
+            if still is not None:
+                pass  # 一张图没有声音:音频那一路整条不建
+            elif has_audio.get(path, False) and not plan.mute_base_audio and not segment.muted:
                 tempo = atempo_filters(segment.speed)
                 audio_fades = _fade_filters(segment.fade_in, segment.fade_out, segment.duration, audio=True)
                 # The clip's own gain (增益) mixes its audio, like a video clip's linked audio in PR/DaVinci.
@@ -1099,13 +1178,20 @@ def build_ffmpeg_command(
             input_index += 1
         else:
             filters.append(
-                f"color=black:s={width}x{height}:r={fps},trim=0:{segment.duration},format=yuv420p,setsar=1[v{i}]"
+                f"color=black:s={width}x{height}:r={fps},trim=0:{round(segment.duration - skip, 6)}"
+                f"{_shift_pts(skip)},format=yuv420p,setsar=1[v{i}]"
             )
-            filters.append(f"anullsrc=r={AUDIO_RATE}:cl=stereo,atrim=0:{segment.duration}[a{i}]")
+            if still is None:
+                filters.append(f"anullsrc=r={AUDIO_RATE}:cl=stereo,atrim=0:{segment.duration}[a{i}]")
         pair_labels.append(f"[v{i}][a{i}]")
 
-    n = len(plan.video_segments)
-    filters.append(f"{''.join(pair_labels)}concat=n={n}:v=1:a=1[vbase][abase]")
+    if still is not None:
+        #: 那一段的画面挪回它在时间线上的位置:上层、字幕、花字的 enable 窗口和关键帧都按
+        #: 时间线绝对时间写,底下这一路也得是绝对时间。
+        filters.append(f"[v{still.index}]{_shift_pts(still.start).lstrip(',') or 'null'}[vbase]")
+    else:
+        n = len(plan.video_segments)
+        filters.append(f"{''.join(pair_labels)}concat=n={n}:v=1:a=1[vbase][abase]")
 
     # Upper-video-track clips composited over the base, each an element at its transform
     # (cover-fitted at the source's own aspect ratio, then scaled/rotated/faded — see _element_fit).
@@ -1221,6 +1307,25 @@ def build_ffmpeg_command(
         )
         video_label = out_label
 
+    if still is not None:
+        #: 只取一帧:输出换成单帧图片,音频整条不建(一张图没有声音)。
+        #: -ss 放在 filter_complex **之后** —— 输出侧 seek,各层照常按时间线时间算,
+        #: 那些跟时间走的东西(关键帧、淡入淡出、字幕的出入点)才会落在正确的位置上。
+        args += [
+            "-filter_complex",
+            ";".join(filters),
+            "-map",
+            video_label,
+            "-ss",
+            f"{still.at:.3f}",
+            "-frames:v",
+            "1",
+            "-q:v",
+            "2",
+            str(output_path),
+        ]
+        return args
+
     # Audio-track clips + overlay video-track clips' audio, mixed over the base audio. An
     # overlay source may be a video without an audio stream (or an image) — probe and skip it,
     # since mapping [n:a] on a source with no audio would fail the whole render.
@@ -1267,34 +1372,6 @@ def build_ffmpeg_command(
 
     filters.append(f"{audio_label}{_master_bus(plan.output.loudnorm)}[amaster]")
     audio_label = "[amaster]"
-
-    if still_at is not None:
-        #: 只取一帧:画面那一路照旧,音频整条不要(一张图没有声音),输出换成单帧图片。
-        #: -ss 放在 filter_complex **之后** —— 输出侧 seek,滤镜图照常从头算,
-        #: 那些跟时间走的东西(关键帧、淡入淡出、字幕的出入点)才会落在正确的位置上。
-        args += [
-            "-filter_complex",
-            ";".join(filters),
-            "-map",
-            video_label,
-            "-ss",
-            f"{max(still_at, 0.0):.3f}",
-            "-frames:v",
-            "1",
-            "-q:v",
-            "2",
-            str(output_path),
-            #: **音频那条也得有人接。** 滤镜图和成片的是同一份(保真度全在那里),而它的
-            #: concat 会同时吐出画面和声音 —— 只接画面的话 ffmpeg 直接拒跑:
-            #: 「Filter 'concat' has output 1 (abase) unconnected」。丢进 null 就行,
-            #: 一张图本来就不要声音。
-            "-map",
-            audio_label,
-            "-f",
-            "null",
-            "-",
-        ]
-        return args
 
     args += [
         "-filter_complex",
@@ -1386,9 +1463,11 @@ def render_still(plan: RenderPlan, resolve: Callable[[str], Path], output_path: 
     成片长得不一样,而这种不一样最难发现:画面看着对,只是少了一层花字 —— 而那正是预览里
     用 DOM 叠出来的、canvas 抓不到的东西。
 
-    这里**也要先把文字渲成 PNG**:少这一步,取出来的帧就是没有字幕的那一版。
+    这里**也要先把文字渲成 PNG**:少这一步,取出来的帧就是没有字幕的那一版。只渲这一刻
+    看得见的那几条(still_plan)。
     """
     output_path.parent.mkdir(parents=True, exist_ok=True)
+    plan = still_plan(plan, at)
     with render_workdir() as workdir:
         text_pngs = _text_for_burn(plan, workdir)
         command = build_ffmpeg_command(plan, resolve, output_path, text_pngs=text_pngs, still_at=at, workdir=workdir)
