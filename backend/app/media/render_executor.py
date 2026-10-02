@@ -937,12 +937,19 @@ def _paste(canvas, image, x: int, y: int) -> None:
 # 该点重置为时间 0,所以 trim 改成从 0 起算、长度不变,帧仍然精确。src_in≈0(图片、从头的
 # 片段)不加 -ss,行为与之前完全一致。
 _INPUT_SEEK_THRESHOLD = 0.05
+#: 快进点比入点再往前留这么多秒,trim 从这里切到入点。**快进点正好落在关键帧上时**(相机、录屏素材的剪辑点
+#: 很常见),各路从快进点起解:声音解码器的头一帧没有前一帧可以叠(AAC 的 MDCT 重叠、MP3 的比特池、Opus 的
+#: 预滚都要前一帧),入点开头几十毫秒的声音和源对不上,听起来是一声「咔」。落在关键帧之间时 ffmpeg 会退到
+#: 前一个关键帧起解,正好躲过 —— 所以只坏在关键帧上。半秒够任何一种编码收敛;画面多解的那一点(最多一个 GOP)
+#: 被 trim 丢掉,帧仍然精确。
+_SEEK_PREROLL = 0.5
 
 
 def _seek_and_trim(src_in: float, src_out: float) -> tuple[list[str], float, float]:
-    """返回 (输入前置的 -ss 参数, trim 起点, trim 终点)。src_in 够大才快进,否则保持原样。"""
-    if src_in > _INPUT_SEEK_THRESHOLD:
-        return ["-ss", f"{src_in:.6f}"], 0.0, round(src_out - src_in, 6)
+    """返回 (输入前置的 -ss 参数, trim 起点, trim 终点)。入点够深才快进(快进到入点前 _SEEK_PREROLL),否则从头解。"""
+    seek = src_in - _SEEK_PREROLL
+    if seek > _INPUT_SEEK_THRESHOLD:
+        return ["-ss", f"{seek:.6f}"], round(src_in - seek, 6), round(src_out - seek, 6)
     return [], src_in, src_out
 
 
@@ -1332,8 +1339,8 @@ def _base_sources(
     sources: dict[int, _BaseSource] = {}
     for index, run in enumerate(runs):
         members = run["members"]
-        seek, _tin, _tout = _seek_and_trim(run["seek"], run["end"])
-        base = run["seek"] if seek else 0.0
+        seek, tin, _tout = _seek_and_trim(run["seek"], run["end"])
+        base = round(run["seek"] - tin, 6)  # 这一路输入的 0 点在源里的位置(快进了就是快进点,否则是 0)
         args += _image_loop_args(run["path"], round(run["end"] - base, 6)) + seek + ["-i", str(run["path"])]
         videos = [f"[{index}:v]"] if len(members) == 1 else [f"[bv{index}_{k}]" for k in range(len(members))]
         if len(members) > 1:

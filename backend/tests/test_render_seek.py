@@ -16,16 +16,18 @@ HAS_FFMPEG = shutil.which("ffmpeg") is not None
 
 
 def test_seek_and_trim_skips_small_offsets():
-    # src_in≈0(图片/从头的片段)不加 -ss,trim 保持原样。
+    # 入点浅(图片/从头的片段,或快进点退半秒后已经到头)不加 -ss,trim 保持原样。
     assert rx._seek_and_trim(0.0, 5.0) == ([], 0.0, 5.0)
     assert rx._seek_and_trim(0.01, 5.0) == ([], 0.01, 5.0)
+    assert rx._seek_and_trim(0.5, 5.0) == ([], 0.5, 5.0)
 
 
 def test_seek_and_trim_fast_forwards_deep_cuts():
     seek, tin, tout = rx._seek_and_trim(10.0, 12.5)
-    assert seek == ["-ss", "10.000000"]
-    assert tin == 0.0
-    assert tout == 2.5  # 长度不变,起点归零
+    #: 快进到入点前半秒(声音解码器要前一帧才收敛,见 _SEEK_PREROLL),trim 从那里切到入点。
+    assert seek == ["-ss", "9.500000"]
+    assert tin == 0.5
+    assert tout == 3.0  # 长度不变
 
 
 def test_build_command_emits_input_seek_before_input_for_deep_clip():
@@ -38,9 +40,9 @@ def test_build_command_emits_input_seek_before_input_for_deep_clip():
     assert "-ss" in cmd
     # -ss 必须在它对应的 -i 之前才是输入级快进
     assert cmd.index("-ss") < cmd.index("-i")
-    assert cmd[cmd.index("-ss") + 1] == "10.000000"
-    # trim 改成从 0 起算
-    assert "trim=start=0.0:end=2.0" in " ".join(cmd)
+    assert cmd[cmd.index("-ss") + 1] == "9.500000"
+    # trim 从快进点算起
+    assert "trim=start=0.5:end=2.5" in " ".join(cmd)
 
 
 def test_build_command_no_seek_for_from_start_clip():
@@ -94,3 +96,39 @@ def test_deep_clip_stays_frame_accurate(tmp_path: Path, monkeypatch):
     # 中间帧应为绿(G 主导);若 -ss 落错、从 0 帧解码则会是红。
     r, g, b = _first_pixel_rgb(out, 1.0)
     assert g > r and g > b, f"expected green, got rgb=({r},{g},{b})"
+
+
+@pytest.mark.skipif(not HAS_FFMPEG, reason="ffmpeg not installed")
+def test_入点落在关键帧上_声音不缺头(tmp_path: Path, monkeypatch):
+    """快进点正好落在关键帧上时,各路从快进点起解,声音解码器的头一帧没有前一帧可叠:入点开头几十毫秒的
+    声音和源对不上(一声「咔」)。底轨、上层轨、音频轨走的是同一个快进,这里用音频轨的一段量。"""
+    import numpy as np
+
+    monkeypatch.setattr(rx.settings, "hw_encode", False)
+    src = tmp_path / "src.mp4"
+    subprocess.run(
+        ["ffmpeg", "-y", "-v", "error", "-f", "lavfi", "-i", "testsrc2=s=64x36:r=30:d=8",
+         "-f", "lavfi", "-i", "sine=f=440:r=48000:d=8", "-shortest",
+         "-c:v", "libx264", "-preset", "ultrafast", "-g", "60", "-pix_fmt", "yuv420p", "-c:a", "aac", str(src)],
+        check=True, timeout=60,
+    )
+    plan = build_render_plan(
+        sequence_id="s", revision=1, width=64, height=36, fps=30,
+        clips=[{"id": "v", "asset_id": "a", "timeline_start": 0, "src_in": 0, "src_out": 3}],
+        audio_clips=[{"id": "m", "asset_id": "a", "timeline_start": 1.0, "src_in": 4.0, "src_out": 6.0, "gain": 1.0}],
+        assets={"a": {"file_key": str(src)}},
+        mute_base_audio=True,
+    )
+    out = tmp_path / "out.mp4"
+    rx.execute_render(plan, lambda key: Path(key), out)
+
+    def pcm(path: Path) -> np.ndarray:
+        raw = subprocess.run(["ffmpeg", "-v", "error", "-i", str(path), "-map", "0:a", "-ac", "1", "-ar", "48000",
+                              "-f", "f32le", "-"], capture_output=True, check=True, timeout=60).stdout
+        return np.frombuffer(raw, np.float32)
+
+    sound, source = pcm(out), pcm(src)
+    window = int(0.04 * 48000)
+    error = float(np.sqrt(np.mean((sound[48000:48000 + window] - source[4 * 48000:4 * 48000 + window]) ** 2)))
+    signal = float(np.sqrt(np.mean(source ** 2)))
+    assert error < signal * 0.05, f"入点开头 40 毫秒的声音和源对不上(误差 {error:.4f},信号 {signal:.4f})"

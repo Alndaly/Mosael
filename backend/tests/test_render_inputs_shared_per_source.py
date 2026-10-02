@@ -95,8 +95,9 @@ def test_共用输入渲出来_每一帧是源里那一帧_剪辑点上的声音
     sound, source_sound = _pcm(out), _pcm(tmp_path / "a.mp4")
     signal = float(np.sqrt(np.mean(source_sound ** 2)))
     window = int(0.04 * RATE)
-    #: 共用输入里接着往后的那几段(第 0 段从头开始、第 5 段倒回去另开一路,都要自己快进,不在此列)。
-    for start, src_in, _src_out in _CUTS[1:5] + _CUTS[6:]:
+    #: 每个剪辑点:共用输入里接着往后的是连续解码;倒回去另开一路的那段(第 5 段)自己快进 —— 入点落在
+    #: 关键帧上,快进点往前留了余量(见 _SEEK_PREROLL),声音一样对得上。
+    for start, src_in, _src_out in _CUTS[1:]:
         at, src_at = round(start * RATE), round(src_in * RATE)
         error = float(np.sqrt(np.mean((sound[at:at + window] - source_sound[src_at:src_at + window]) ** 2)))
         assert error < signal * 0.05, f"{start}s 剪辑点开头 40 毫秒的声音和源对不上(误差 {error:.4f},信号 {signal:.4f})"
