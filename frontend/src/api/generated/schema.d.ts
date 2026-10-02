@@ -2213,6 +2213,34 @@ export interface paths {
         get: operations["get_sequence_api_sequences__sequence_id__get"];
         put?: never;
         post?: never;
+        /**
+         * Delete Sequence
+         * @description 画板上还摆着它、或它是项目里最后一条时 422,并说清楚是哪种。
+         */
+        delete: operations["delete_sequence_api_sequences__sequence_id__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Rename Sequence
+         * @description 改名。不是一次剪辑(不进撤销栈),但推版本号:轮询和别人的剪辑页才拿得到新名字。
+         */
+        patch: operations["rename_sequence_api_sequences__sequence_id__patch"];
+        trace?: never;
+    };
+    "/api/sequences/{sequence_id}/duplicate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Duplicate Sequence
+         * @description 在同一个项目里复制一条时间线:轨道与片段的全部属性,编辑历史不带过去。交回副本。
+         */
+        post: operations["duplicate_sequence_api_sequences__sequence_id__duplicate_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -12799,6 +12827,11 @@ export interface components {
              */
             fps: number;
         };
+        /** SequenceDuplicate */
+        SequenceDuplicate: {
+            /** Name */
+            name?: string | null;
+        };
         /**
          * SequenceFrameRequest
          * @description 把时间线在某一时刻的合成画面存成一份新素材。
@@ -12850,6 +12883,11 @@ export interface components {
             tracks?: components["schemas"]["TrackOut"][];
             /** Ai Asset Ids */
             ai_asset_ids?: string[];
+        };
+        /** SequenceRename */
+        SequenceRename: {
+            /** Name */
+            name: string;
         };
         /**
          * SessionAllowance
@@ -18679,6 +18717,105 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SequenceOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_sequence_api_sequences__sequence_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sequence_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rename_sequence_api_sequences__sequence_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sequence_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SequenceRename"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SequenceOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    duplicate_sequence_api_sequences__sequence_id__duplicate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sequence_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["SequenceDuplicate"] | null;
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {

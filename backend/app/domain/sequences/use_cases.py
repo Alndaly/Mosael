@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session, selectinload
 
-from app.db.models import Project, Sequence, Track, User
+from app.core.i18n import tr
+from app.db.models import Board, Project, Sequence, Track, User
 from app.domain.permissions import NotVisible, ensure_workspace_access, ensure_workspace_perm, require_sequence_access
-from app.domain.sequences.creation import create_sequence_scaffold
+from app.domain.references import referrers
+from app.domain.sequences.creation import copy_sequence, create_sequence_scaffold
+from app.domain.sequences.errors import SequenceDomainError
 from app.domain.sequences.history import can_redo, can_undo
 
 
@@ -73,3 +76,51 @@ def create(
 def exportable(db: Session, user: User, sequence_id: str) -> Sequence:
     """导出、取一帧存成素材:要 `export`。"""
     return require_sequence_access(db, user, sequence_id, perm="export")
+
+
+def rename(db: Session, user: User, sequence_id: str, name: str) -> Sequence:
+    """改名。不是一次剪辑(不进撤销栈),但版本号要推一下:序列的 JSON 按 (id, revision) 缓存,
+    编辑器也靠轮询版本号决定要不要重取 —— 不推的话,别人那边一直显示旧名字。"""
+    sequence = require_sequence_access(db, user, sequence_id, perm="edit")
+    sequence.name = name
+    db.execute(update(Sequence).where(Sequence.id == sequence.id).values(revision=Sequence.revision + 1))
+    db.flush()
+    return sequence
+
+
+def duplicate(db: Session, user: User, sequence_id: str, *, name: str | None = None) -> Sequence:
+    """在同一个项目里复制一条时间线(copy_sequence:轨道、片段的全部属性;编辑历史不带过去)。"""
+    source = require_sequence_access(db, user, sequence_id, perm="edit")
+    project = db.get(Project, source.project_id)
+    return copy_sequence(db, source, project, name=name or tr("sequenceCopyName", name=source.name))
+
+
+def delete(db: Session, user: User, sequence_id: str) -> None:
+    """删一条时间线。两种情况不让删,并说清楚为什么:
+
+    · **画板上还摆着它**(时间线格):删了那一格就指着一条不存在的时间线,整张画板从此存不回去。
+      点名是哪几张画板 —— 和删 3D 场景同一条规矩(domain/scenes.delete_scene)。
+    · **这是项目里最后一条**:项目打开时总要停在一条时间线上;不要这个项目就删项目。
+
+    删掉的若是项目当前打开的那条,改停在最近改过的另一条上。
+    """
+    sequence = require_sequence_access(db, user, sequence_id, perm="delete")
+    boards = list(db.scalars(
+        select(Board.name).where(Board.workspace_id == sequence.workspace_id,
+                                 Board.id.in_(referrers("sequence", sequence.id, "board")))
+    ))
+    if boards:
+        raise SequenceDomainError("seqErr_sequenceOnBoards", names="、".join(sorted(boards)))
+    next_active = db.scalar(
+        select(Sequence.id)
+        .where(Sequence.project_id == sequence.project_id, Sequence.id != sequence.id)
+        .order_by(Sequence.updated_at.desc())
+        .limit(1)
+    )
+    if next_active is None:
+        raise SequenceDomainError("seqErr_lastSequence")
+    project = db.get(Project, sequence.project_id)
+    if project is not None and project.active_sequence_id == sequence.id:
+        project.active_sequence_id = next_active
+    db.delete(sequence)
+    db.flush()

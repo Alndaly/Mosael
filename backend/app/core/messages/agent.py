@@ -201,6 +201,15 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "新轨的位置要在 0 到 {count} 之间(0 是最上面)",
         "en": "The new track's position must be between 0 and {count} (0 is the top).",
     },
+    "seqErr_sequenceOnBoards": {
+        "zh": "画板「{names}」上还摆着这条时间线,先从画板上移走再删",
+        "en": "This timeline is still placed on the board(s) \"{names}\". Remove it from the board first.",
+    },
+    "seqErr_lastSequence": {
+        "zh": "这是项目里最后一条时间线,删不掉;不要这个项目的话,删掉整个项目",
+        "en": "This is the project's last timeline and can't be deleted. Delete the project instead.",
+    },
+    "sequenceCopyName": {"zh": "{name} 副本", "en": "{name} copy"},
     "seqErr_unknownOp": {"zh": "不认识的时间线操作: {kind}", "en": "Unknown timeline operation: {kind}"},
     "seqErr_trimNoRoom": {
         "zh": "这里没有地方放下这一段:修剪会让它短到没有,或者两边都贴着别的片段",

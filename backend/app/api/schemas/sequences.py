@@ -21,6 +21,15 @@ class SequenceCreate(ApiModel):
     fps: float = Field(default=30.0, ge=FPS_RANGE[0], le=FPS_RANGE[1])
 
 
+class SequenceRename(ApiModel):
+    name: str = Field(min_length=1, max_length=180)
+
+
+class SequenceDuplicate(ApiModel):
+    #: 副本叫什么;不给就是「原名 副本」。
+    name: str | None = Field(default=None, min_length=1, max_length=180)
+
+
 class ClipOut(OrmModel):
     id: str
     workspace_id: str

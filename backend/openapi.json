@@ -5777,6 +5777,151 @@
             }
           }
         }
+      },
+      "patch": {
+        "tags": [
+          "sequences"
+        ],
+        "summary": "Rename Sequence",
+        "description": "改名。不是一次剪辑(不进撤销栈),但推版本号:轮询和别人的剪辑页才拿得到新名字。",
+        "operationId": "rename_sequence_api_sequences__sequence_id__patch",
+        "parameters": [
+          {
+            "name": "sequence_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Sequence Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SequenceRename"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SequenceOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "sequences"
+        ],
+        "summary": "Delete Sequence",
+        "description": "画板上还摆着它、或它是项目里最后一条时 422,并说清楚是哪种。",
+        "operationId": "delete_sequence_api_sequences__sequence_id__delete",
+        "parameters": [
+          {
+            "name": "sequence_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Sequence Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sequences/{sequence_id}/duplicate": {
+      "post": {
+        "tags": [
+          "sequences"
+        ],
+        "summary": "Duplicate Sequence",
+        "description": "在同一个项目里复制一条时间线:轨道与片段的全部属性,编辑历史不带过去。交回副本。",
+        "operationId": "duplicate_sequence_api_sequences__sequence_id__duplicate_post",
+        "parameters": [
+          {
+            "name": "sequence_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Sequence Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/SequenceDuplicate"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SequenceOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/projects/{project_id}/sequences": {
@@ -34322,6 +34467,25 @@
         ],
         "title": "SequenceCreate"
       },
+      "SequenceDuplicate": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 180,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "title": "SequenceDuplicate"
+      },
       "SequenceFrameRequest": {
         "properties": {
           "at": {
@@ -34415,6 +34579,21 @@
           "revision"
         ],
         "title": "SequenceOut"
+      },
+      "SequenceRename": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 180,
+            "minLength": 1,
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "SequenceRename"
       },
       "SessionAllowance": {
         "properties": {

@@ -32,10 +32,12 @@ from app.api.schemas import (
     RippleDeleteClipsRequest,
     MoveClipsBatchRequest,
     SequenceCreate,
+    SequenceDuplicate,
     SequenceOut,
     SubtitleImportOut,
     ReplaceClipMediaRequest,
     ClipAudioRequest,
+    SequenceRename,
     SetClipEffectsRequest,
     SetClipGainRequest,
     SetClipSpeedRequest,
@@ -144,6 +146,29 @@ def create_sequence(body: SequenceCreate, db: Tx, user: CurrentUser) -> Response
 @router.get("/sequences/{sequence_id}", response_model=SequenceOut)
 def get_sequence(sequence_id: str, db: DbSession, user: CurrentUser) -> Response:
     return _sequence_response(sequence_use_cases.readable(db, user, sequence_id))
+
+
+@router.patch("/sequences/{sequence_id}", response_model=SequenceOut)
+def rename_sequence(sequence_id: str, body: SequenceRename, db: Tx, user: CurrentUser) -> Response:
+    """改名。不是一次剪辑(不进撤销栈),但推版本号:轮询和别人的剪辑页才拿得到新名字。"""
+    return _respond(db, user, sequence_id, lambda: sequence_use_cases.rename(db, user, sequence_id, body.name))
+
+
+@router.delete("/sequences/{sequence_id}", status_code=204)
+def delete_sequence(sequence_id: str, db: Tx, user: CurrentUser) -> Response:
+    """画板上还摆着它、或它是项目里最后一条时 422,并说清楚是哪种。"""
+    _domain(lambda: sequence_use_cases.delete(db, user, sequence_id))
+    after_commit(db, lambda: _SEQUENCE_JSON.pop(sequence_id, None))
+    return Response(status_code=204)
+
+
+@router.post("/sequences/{sequence_id}/duplicate", response_model=SequenceOut)
+def duplicate_sequence(
+    sequence_id: str, db: Tx, user: CurrentUser, body: SequenceDuplicate | None = None
+) -> Response:
+    """在同一个项目里复制一条时间线:轨道与片段的全部属性,编辑历史不带过去。交回副本。"""
+    copy = _domain(lambda: sequence_use_cases.duplicate(db, user, sequence_id, name=body.name if body else None))
+    return _get_sequence(db, copy.id)
 
 
 def _payload_shape_digest() -> str:
@@ -760,6 +785,14 @@ def _respond(db, user, sequence_id: str, run) -> Response:
     except SequenceDomainError as exc:
         raise HTTPException(status_code=exc.status, detail=str(exc)) from exc
     return _edited_response(db, sequence_id)
+
+
+def _domain(run):
+    """不是一次编辑、但领域层会说不行的那几件(删、复制整条序列):照错误自带的 status 翻。"""
+    try:
+        return run()
+    except SequenceDomainError as exc:
+        raise HTTPException(status_code=exc.status, detail=str(exc)) from exc
 
 
 def _conflict(db, sequence_id: str, exc: SequenceRevisionConflict) -> HTTPException:
