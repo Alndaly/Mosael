@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-import json
+from copy import deepcopy
 from dataclasses import dataclass
 
 from sqlalchemy.orm import Session
 
 from app.db.models import Clip, Project, Sequence, Track
+from app.domain.sequences._timeline import RESTORABLE_CLIP_FIELDS
 
 
 @dataclass(frozen=True)
@@ -75,13 +76,13 @@ def copy_sequence(db: Session, source: Sequence, project: Project, *, name: str)
         db.add(new_track)
         db.flush()
         for clip in track.clips:
+            # 位置之外的字段照撤销重建的那张表抄(RESTORABLE_CLIP_FIELDS),不再手写一份 —— 手写的那份
+            # 漏掉了后来加的链接组(副本里画和分离出去的声音不再一起动)。链接组号照抄无妨:组员查找
+            # 限在同一条序列里(links.linked_members)。深拷贝:JSON 列共享同一个 dict 的话,改副本会改到原片。
             db.add(Clip(
                 workspace_id=project.workspace_id, sequence_id=copy.id, track_id=new_track.id,
                 asset_id=clip.asset_id, timeline_start=clip.timeline_start, src_in=clip.src_in, src_out=clip.src_out,
-                speed=clip.speed, gain=clip.gain, muted=clip.muted, text_override=clip.text_override,
-                offline_asset=dict(clip.offline_asset) if clip.offline_asset else None,
-                effects=json.loads(json.dumps(clip.effects or {})),
-                transform=dict(clip.transform or {}),
+                **{field: deepcopy(getattr(clip, field)) for field in RESTORABLE_CLIP_FIELDS},
             ))
     db.flush()
     return copy

@@ -70,7 +70,13 @@ RESTORABLE_CLIP_FIELDS = (
 #:
 #: 链接组(link_group)**不**在里面:切出来的每一截和谁链接,由切它的那一步说清楚(左半跟左半、
 #: 右半跟右半),不能一律照抄 —— 照抄的话右半段会和链接音频的左半段一组,动一段拖走两段不相干的。
-INHERITED_CLIP_FIELDS = ("speed", "gain", "muted", "effects", "transform", "text_override")
+#:
+#: `offline_asset` 曾经也不在这里:切开一个脱机片段,两段都成了 asset_id 为空、又没有脱机标记
+#: 的东西 —— 导出前的脱机检查认不出它们,成片静默地少一段。
+#:
+#: Clip 加列时,tests/test_clip_fields_are_carried.py 会要求它出现在这里或 RESTORABLE_CLIP_FIELDS
+#: (或者写明为什么都不在)。
+INHERITED_CLIP_FIELDS = ("speed", "gain", "muted", "effects", "transform", "text_override", "offline_asset")
 
 
 def _inherited(clip: Clip) -> dict[str, Any]:
