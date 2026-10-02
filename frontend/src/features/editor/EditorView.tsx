@@ -72,6 +72,7 @@ import { HANDLE_COLUMN, HANDLE_ROW, handleOffset, useResizableSidebar } from "@/
 
 import { selectedClipId as selectedClipIdOf, useEditorStore } from "@/features/editor/editorStore";
 import { sequenceEditScope } from "@/features/editor/sequenceEditScope";
+import { isEditorKeyTarget } from "@/features/editor/editorKeys";
 import { ConfirmDialog } from "@/components/app/modals";
 import { useImportMediaFiles } from "@/features/media/useImportMediaFiles";
 import { FontFaces } from "@/features/editor/FontFaces";
@@ -142,7 +143,10 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
     "floating",
   ]);
   const [availableWidth, setAvailableWidth] = React.useState(Infinity);
+  // 整块剪辑页:全局快捷键只接从这里面(或 body)发出的按键,见 isEditorKeyTarget。
+  const workbenchRef = React.useRef<HTMLDivElement | null>(null);
   const measureWorkbench = React.useCallback((node: HTMLDivElement | null) => {
+    workbenchRef.current = node;
     if (!node || typeof ResizeObserver === "undefined") return;
     const observer = new ResizeObserver(([entry]) => {
       if (entry.contentRect.width > 0) setAvailableWidth(entry.contentRect.width);
@@ -805,8 +809,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
   // Keyboard: space toggles playback, delete removes selection.
   React.useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      const target = event.target as HTMLElement | null;
-      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) return;
+      if (!isEditorKeyTarget(event, workbenchRef.current)) return;
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "z") {
         event.preventDefault();
         if (event.shiftKey) redoMutation.mutate();

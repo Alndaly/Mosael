@@ -23,6 +23,8 @@ const mocks = vi.hoisted(() => ({
   setClipTransform: vi.fn(),
   splitClipAtPointsBatch: vi.fn(),
   addTrack: vi.fn(),
+  deleteClip: vi.fn(),
+  deleteClipsBatch: vi.fn(),
   timelineProps: null as Record<string, unknown> | null,
   monitorProps: null as Record<string, unknown> | null,
   transcriptProps: null as Record<string, unknown> | null,
@@ -60,7 +62,12 @@ vi.mock("@/features/editor/Monitor", () => ({
 vi.mock("@/features/editor/timeline/Timeline", () => ({
   Timeline: (props: Record<string, unknown>) => {
     mocks.timelineProps = props;
-    return <div data-testid="timeline" />;
+    // 时间线上的片段:可聚焦、带 role="button" 的画布元素(真实的 TimelineClip 也是这样)。
+    return (
+      <div data-testid="timeline">
+        <div data-clip-id="c1" role="button" tabIndex={0} data-testid="clip-c1" />
+      </div>
+    );
   },
   trackAcceptsAsset: () => true,
 }));
@@ -169,7 +176,7 @@ beforeEach(() => {
   mocks.listFonts.mockReset().mockResolvedValue([]);
   for (const fn of [
     mocks.splitClip, mocks.undoSequence, mocks.redoSequence, mocks.moveClip, mocks.moveClipsBatch, mocks.trimClip,
-    mocks.setClipTransform, mocks.splitClipAtPointsBatch, mocks.addTrack,
+    mocks.setClipTransform, mocks.splitClipAtPointsBatch, mocks.addTrack, mocks.deleteClip, mocks.deleteClipsBatch,
   ]) {
     fn.mockReset().mockImplementation(async () => current);
   }
@@ -301,5 +308,53 @@ describe("拖动类编辑失败时说出来", () => {
     const result = (mocks.monitorProps!.onSetTransform as (id: string, tf: unknown) => Promise<unknown>)("c1", { scale: 2 });
     await expect(result).rejects.toThrow("transform failed");
     await waitFor(() => expect(toasts.error).toHaveBeenCalledWith("transform failed"));
+  });
+});
+
+describe("快捷键只接冲着剪辑页来的按键", () => {
+  const seq = () => sequenceWith([track("v1", "video", 0, [clip("c1", "v1", 0, 0, 10)])]);
+
+  it("焦点在检查器的滑杆上按 →:让给滑杆,播放头不动", async () => {
+    renderEditor(seq());
+    await ready();
+    act(() => useEditorStore.getState().selectClip("c1"));
+    const slider = (await screen.findAllByRole("slider"))[0];
+    slider.focus();
+    fireEvent.keyDown(slider, { key: "ArrowRight", code: "ArrowRight" });
+    expect(useEditorStore.getState().playhead).toBe(0);
+  });
+
+  it("焦点在 Portal 出去的菜单里按 Delete:不删时间线上的片段", async () => {
+    renderEditor(seq());
+    await ready();
+    act(() => useEditorStore.getState().selectClip("c1"));
+    const menu = document.createElement("div");
+    menu.setAttribute("role", "menu");
+    menu.tabIndex = -1;
+    document.body.appendChild(menu);
+    menu.focus();
+    fireEvent.keyDown(menu, { key: "Delete", code: "Delete" });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(mocks.deleteClip).not.toHaveBeenCalled();
+    menu.remove();
+  });
+
+  it("焦点停在片段上按 Delete:删掉它", async () => {
+    renderEditor(seq());
+    await ready();
+    act(() => useEditorStore.getState().selectClip("c1"));
+    const clipElement = screen.getByTestId("clip-c1");
+    clipElement.focus();
+    fireEvent.keyDown(clipElement, { key: "Delete", code: "Delete" });
+    await waitFor(() => expect(mocks.deleteClip).toHaveBeenCalledWith(onS1, "c1"));
+  });
+
+  it("点过工具栏按钮(焦点停在按钮上)再按 ⌘Z:照常撤销", async () => {
+    renderEditor(seq());
+    await ready();
+    const button = screen.getByRole("button", { name: "undo" });
+    button.focus();
+    fireEvent.keyDown(button, { key: "z", code: "KeyZ", metaKey: true });
+    await waitFor(() => expect(mocks.undoSequence).toHaveBeenCalledTimes(1));
   });
 });
