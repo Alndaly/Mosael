@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.db.models import Sequence
 from app.domain.sequences.undo.journal import replay_backward, replay_forward
+from app.domain.sequences.undo.properties import SetSequenceReframe
 from app.domain.sequences.undo.registry import undoable
 
 #: 记改动日志的 kind。和 _record_operation 那一侧的 kind 字面量对得上由 tests/test_undo_registry.py 守着。
@@ -45,3 +46,18 @@ class Journaled:
 
 for _kind in JOURNALED_KINDS:
     undoable(_kind)(Journaled)
+
+
+@undoable("append_asset")
+class AppendAsset:
+    """接到时间线:空时间线上连带改了画幅。一个手势一步撤销 —— 片段和画幅一起退、一起回。"""
+
+    def inverse(db: Session, sequence: Sequence, payload: dict[str, Any]) -> None:
+        replay_backward(db, sequence, payload["changes"])
+        if payload["reframe"] is not None:
+            SetSequenceReframe.inverse(db, sequence, payload["reframe"])
+
+    def forward(db: Session, sequence: Sequence, payload: dict[str, Any]) -> None:
+        if payload["reframe"] is not None:
+            SetSequenceReframe.forward(db, sequence, payload["reframe"])
+        replay_forward(db, sequence, payload["changes"])

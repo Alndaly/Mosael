@@ -84,6 +84,24 @@ def test_接到末尾_画幅跟着第一段_音频进音频轨_图片定格五�
     assert client.post(f"/api/sequences/{sequence}/append", json={"asset_id": "blank"}).status_code == 422
 
 
+def test_接到空时间线_改画幅和插入是一步_一次撤销一起退_重做一起回() -> None:
+    """此前是两条操作:撤一次只撤掉片段,时间线停在一个没人要过的竖屏空画布上。"""
+    client, ws, board = _setup()
+    sequence = client.post(f"/api/boards/{board}/sequences", json={"workspace_id": ws}).json()["sequence_id"]
+    _asset(ws, "v1", "video", duration=4.0, width=720, height=1280)
+    before = client.get(f"/api/sequences/{sequence}").json()
+    appended = client.post(f"/api/sequences/{sequence}/append", json={"asset_id": "v1"}).json()
+    assert appended["revision"] == before["revision"] + 1
+
+    undone = client.post(f"/api/sequences/{sequence}/undo").json()
+    assert (undone["width"], undone["height"]) == (before["width"], before["height"])
+    assert not any(track["clips"] for track in undone["tracks"]) and undone["can_undo"] is False
+
+    redone = client.post(f"/api/sequences/{sequence}/redo").json()
+    assert (redone["width"], redone["height"]) == (720, 1280)
+    assert [clip["asset_id"] for track in redone["tracks"] for clip in track["clips"]] == ["v1"]
+
+
 def test_复制画板_时间线格各自复制一条_不和原板共用() -> None:
     """共用的话在副本里剪一刀原板跟着变,两边的撤销还会互相撤掉对方的步骤。"""
     client, ws, board = _setup()

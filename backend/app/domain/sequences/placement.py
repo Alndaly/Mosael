@@ -116,7 +116,26 @@ def insert_clip(db: Session, sequence_id: str, op: InsertClip) -> Clip:
     落点上已有片段时是**覆盖**(coverage.clear_range);插入模式(ripple)先把后面的推开再放。
     """
     sequence = _require_sequence(db, sequence_id)
-    track = _require_target_track(db, sequence_id, op.track_id)
+    journal = Journal(db, sequence)
+    clip = place_clip(journal, op)
+    _record_operation(
+        db,
+        sequence,
+        kind="insert_clip",
+        payload={"clip_id": clip.id, "changes": journal.entries},
+        summary={"operation": "insert_clip", "clip_id": clip.id},
+        actor_id=op.actor_id,
+    )
+    return clip
+
+
+def place_clip(journal: Journal, op: InsertClip) -> Clip:
+    """插入的本体:校验、建行、站稳(覆盖 / 让位)—— 经由改动日志写,**不记账**,交回放下的那一段。
+
+    拆出来是给要把插入和别的改动记成**一步**的入口用的(接到空时间线时连画幅一起改,见 append)。
+    """
+    db, sequence = journal.db, journal.sequence
+    track = _require_target_track(db, sequence.id, op.track_id)
     asset = db.get(Asset, op.asset_id)
     if asset is None or asset.workspace_id != sequence.workspace_id:
         raise SequenceNotFound("Asset not found")
@@ -127,7 +146,6 @@ def insert_clip(db: Session, sequence_id: str, op: InsertClip) -> Clip:
     src_out = fit_asset_on_track(asset, track, op.src_in, op.src_out)
     speed = require_speed(op.speed)
 
-    journal = Journal(db, sequence)
     clip = journal.create(
         Clip(
             workspace_id=sequence.workspace_id,
@@ -141,14 +159,6 @@ def insert_clip(db: Session, sequence_id: str, op: InsertClip) -> Clip:
         )
     )
     _land(journal, [clip], ripple=op.ripple)
-    _record_operation(
-        db,
-        sequence,
-        kind="insert_clip",
-        payload={"clip_id": clip.id, "changes": journal.entries},
-        summary={"operation": "insert_clip", "clip_id": clip.id},
-        actor_id=op.actor_id,
-    )
     return clip
 
 

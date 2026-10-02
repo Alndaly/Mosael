@@ -12,8 +12,12 @@ from typing import Any
 from sqlalchemy.orm import Session, object_session
 
 from app.db.models import Asset, Clip, Sequence, Track
+from app.domain.sequences._timeline import _record_operation
+from app.domain.sequences.clip_properties import SetSequenceReframe, reframe_sequence
 from app.domain.sequences.errors import SequenceDomainError, SequenceNotFound
 from app.domain.sequences.fitting import TRACK_FOR_ASSET
+from app.domain.sequences.journal import Journal
+from app.domain.sequences.placement import InsertClip, place_clip
 
 #: 图片在时间线上的定格时长(秒)。图片没有 duration,不给就是一段长度为 0 的空片段。
 STILL_SECONDS = 5.0
@@ -52,9 +56,10 @@ def append_asset(db: Session, sequence_id: str, asset_id: str, *, actor_id: str 
 
     **时间线还空着时,画幅跟着第一段走**(ADR 0030 §5):画板上新放的时间线格是默认的横屏,而拼的常常是竖屏的生成视频 ——
     让人先去改画幅再拼,是一步没人记得的仪式。
-    """
-    from app.domain.sequences.operations import InsertClip, SetSequenceReframe, insert_clip, set_sequence_reframe
 
+    **改画幅和插入记成一步**(append_asset):此前是两条操作,用户接上一段竖屏视频,按一次 ⌘Z 只撤掉了片段,
+    时间线停在一个没人要过的竖屏空画布上,还得再按一次。一个手势一步撤销。
+    """
     sequence = db.get(Sequence, sequence_id)
     asset = db.get(Asset, asset_id)
     if sequence is None:
@@ -69,9 +74,18 @@ def append_asset(db: Session, sequence_id: str, asset_id: str, *, actor_id: str 
         raise SequenceDomainError("seqErr_assetHasNoLength")
     empty = not any(track.clips for track in sequence.tracks or [])
     info: dict[str, Any] = asset.media_info or {}
+    reframe = None
     if empty and asset.kind in ("video", "image") and info.get("width") and info.get("height"):
-        set_sequence_reframe(db, sequence.id, SetSequenceReframe(width=int(info["width"]), height=int(info["height"]),
-                                                                 actor_id=actor_id))
-    clip = insert_clip(db, sequence.id, InsertClip(track_id=track.id, asset_id=asset.id, timeline_start=track_end(track),
-                                                   src_in=0.0, src_out=span, actor_id=actor_id))
+        reframe = reframe_sequence(sequence, SetSequenceReframe(width=int(info["width"]), height=int(info["height"])))
+    journal = Journal(db, sequence)
+    clip = place_clip(journal, InsertClip(track_id=track.id, asset_id=asset.id, timeline_start=track_end(track),
+                                          src_in=0.0, src_out=span))
+    _record_operation(
+        db,
+        sequence,
+        kind="append_asset",
+        payload={"clip_id": clip.id, "reframe": reframe, "changes": journal.entries},
+        summary={"operation": "append_asset", "clip_id": clip.id, "reframed": reframe is not None},
+        actor_id=actor_id,
+    )
     return clip

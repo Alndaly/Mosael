@@ -441,18 +441,24 @@ class SetSequenceReframe:
 def set_sequence_reframe(db: Session, sequence_id: str, op: SetSequenceReframe) -> Sequence:
     """改画幅(横转竖等):改序列输出宽高 + 填充模式。"""
     sequence = _require_sequence(db, sequence_id)
+    payload = reframe_sequence(sequence, op)
+    _record_operation(
+        db,
+        sequence,
+        kind="set_sequence_reframe",
+        payload=payload,
+        summary={"operation": "set_sequence_reframe"},
+        actor_id=op.actor_id,
+    )
+    return sequence
+
+
+def reframe_sequence(sequence: Sequence, op: SetSequenceReframe) -> dict[str, Any]:
+    """改画幅的本体 —— **不记账**,交回撤销记录(与 placement.place_clip 同一个理由)。"""
     validate_canvas(op.width, op.height)
     fill_mode = op.fill_mode if op.fill_mode in _FILL_MODES else "cover"
     previous = {"width": sequence.width, "height": sequence.height, "reframe": dict(sequence.reframe or {})}
     sequence.width = int(op.width)
     sequence.height = int(op.height)
     sequence.reframe = {"fill_mode": fill_mode}
-    _record_operation(
-        db,
-        sequence,
-        kind="set_sequence_reframe",
-        payload={"width": sequence.width, "height": sequence.height, "reframe": sequence.reframe, "previous": previous},
-        summary={"operation": "set_sequence_reframe"},
-        actor_id=op.actor_id,
-    )
-    return sequence
+    return {"width": sequence.width, "height": sequence.height, "reframe": sequence.reframe, "previous": previous}
