@@ -61,7 +61,8 @@ import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { CanvasAgentChat, type CanvasAgentMode } from "@/features/agent/CanvasAgentChat";
-import { clipEnd, frameAt, frameTime, snapToFrame, timelineToSrc } from "@/domain/timeline/geometry";
+import { clipEnd, frameAt, frameTime, snapToFrame } from "@/domain/timeline/geometry";
+import { clipContains, splitPointAt } from "@/domain/timeline/editTargets";
 import { projectTranscript, transcriptSegmentsFromApi, type SegmentLike } from "@/domain/timeline/transcriptProjection";
 import { transcriptSourceClips } from "@/domain/timeline/transcriptSources";
 import { type LeftTab, useEditorPanels } from "@/features/editor/useEditorPanels";
@@ -69,6 +70,7 @@ import { usePersistentTab } from "@/lib/usePersistentTab";
 import { HANDLE_COLUMN, HANDLE_ROW, handleOffset, useResizableSidebar } from "@/lib/useResizableSidebar";
 
 import { selectedClipId as selectedClipIdOf, useEditorStore } from "@/features/editor/editorStore";
+import { sequenceEditScope } from "@/features/editor/sequenceEditScope";
 import { ConfirmDialog } from "@/components/app/modals";
 import { useImportMediaFiles } from "@/features/media/useImportMediaFiles";
 import { FontFaces } from "@/features/editor/FontFaces";
@@ -212,6 +214,20 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
       }),
     [qc, project.id],
   );
+  // 编辑请求排队执行(见 sequenceEditScope)。排在后面的那一次真正执行时,前面几次的回包已经写进
+  // 了缓存 —— 所以需要「按当前时间线找片段 / 找轨道」的 mutation 在 mutationFn 里读 latestSequence,
+  // 而不是按下按键那一刻闭包里的 sequence(那份可能已经过时了好几步)。
+  const editScope = sequenceEditScope(sequence?.id);
+  const latestSequence = (): Sequence | null =>
+    qc.getQueryData<Sequence[]>(["sequences", project.id])?.find((item) => item.id === sequence?.id) ?? sequence;
+  // 写回包、清掉不再存在的选中。删除类操作用它:回包里已经没有的片段不该还挂在选中里。
+  const applyAndPruneSelection = (updated: Sequence) => {
+    applySequence(updated);
+    const present = new Set((updated.tracks ?? []).flatMap((tr) => (tr.clips ?? []).map((c) => c.id)));
+    const store = useEditorStore.getState();
+    const kept = store.selectedClipIds.filter((id) => present.has(id));
+    if (kept.length !== store.selectedClipIds.length) store.selectClips(kept);
+  };
   // Clearing the drag draft the instant a move settles renders ONE stale frame — the draft
   // (zustand) clears synchronously while the fresh sequence (react-query) propagates on a
   // deferred notification, so the clip flashes back to its old slot. Instead, arm this flag on
@@ -249,8 +265,9 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
     onSuccess: refreshSequences,
   });
   const insertClipMutation = useMutation({
+    scope: editScope,
     mutationFn: (args: { trackId: string; assetId: string; timelineStart: number; srcIn: number; srcOut: number }) =>
-      insertClip(sequence!, {
+      insertClip(latestSequence()!, {
         track_id: args.trackId,
         asset_id: args.assetId,
         timeline_start: args.timelineStart,
@@ -259,9 +276,10 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
         // 插入模式下素材落轨与移动同语义:让位(必要时切开落点上的片段)而不是覆盖。
         ripple: useEditorStore.getState().editMode === "insert",
       }),
-    onSuccess: refreshSequences,
+    onSuccess: applySequence,
   });
   const moveClipMutation = useMutation({
+    scope: editScope,
     mutationFn: ({
       clipId,
       timelineStart,
@@ -272,15 +290,16 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
       timelineStart: number;
       trackId?: string;
       ripple?: boolean;
-    }) => moveClip(sequence!, clipId, { timeline_start: timelineStart, track_id: trackId ?? null, ripple }),
+    }) => moveClip(latestSequence()!, clipId, { timeline_start: timelineStart, track_id: trackId ?? null, ripple }),
     onSuccess: settleWith,
     onError: resyncAfterFailedDrag,
   });
   /** 框选整组拖动。与单个移动共用 settle/resync,所以落位动画与失败回滚的行为完全一致。 */
   const moveClipsMutation = useMutation({
+    scope: editScope,
     mutationFn: (moves: { clipId: string; timelineStart: number; trackId?: string }[]) =>
       moveClipsBatch(
-        sequence!,
+        latestSequence()!,
         moves.map((move) => ({
           clip_id: move.clipId,
           timeline_start: move.timelineStart,
@@ -291,51 +310,49 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
     onError: resyncAfterFailedDrag,
   });
   const trimClipMutation = useMutation({
+    scope: editScope,
     mutationFn: ({ clipId, payload }: { clipId: string; payload: TrimPayload }) =>
-      trimClip(sequence!, clipId, payload),
+      trimClip(latestSequence()!, clipId, payload),
     onSuccess: settleWith,
     onError: resyncAfterFailedDrag,
   });
   const deleteClipMutation = useMutation({
-    mutationFn: (clipId: string) => deleteClip(sequence!, clipId),
-    onSuccess: () => {
-      useEditorStore.getState().selectClip(null);
-      void refreshSequences();
-    },
+    scope: editScope,
+    mutationFn: (clipId: string) => deleteClip(latestSequence()!, clipId),
+    onSuccess: applyAndPruneSelection,
   });
   const deleteClipsMutation = useMutation({
+    scope: editScope,
     // 一条请求、一条操作、一步撤销。逐个删会落成 N 条 SequenceOperation,⌘Z 一次只找回一段。
-    mutationFn: (clipIds: string[]) => deleteClipsBatch(sequence!, clipIds),
-    onSuccess: () => {
-      useEditorStore.getState().selectClip(null);
-      void refreshSequences();
-    },
+    mutationFn: (clipIds: string[]) => deleteClipsBatch(latestSequence()!, clipIds),
+    onSuccess: applyAndPruneSelection,
   });
   const rippleDeleteMutation = useMutation({
+    scope: editScope,
     // 顺序由后端负责(它内部从后往前删,先删靠前的会把后面的目标带偏);这里只管整批提交,
     // 换来一条操作、一步撤销。
-    mutationFn: (clipIds: string[]) => rippleDeleteClipsBatch(sequence!, clipIds),
-    onSuccess: () => {
-      useEditorStore.getState().selectClip(null);
-      void refreshSequences();
-    },
+    mutationFn: (clipIds: string[]) => rippleDeleteClipsBatch(latestSequence()!, clipIds),
+    onSuccess: applyAndPruneSelection,
   });
   const addTrackMutation = useMutation({
-    mutationFn: (kind: "video" | "audio" | "subtitle") => addTrack(sequence!, kind),
+    scope: editScope,
+    mutationFn: (kind: "video" | "audio" | "subtitle") => addTrack(latestSequence()!, kind),
     onSuccess: (updated) => applySequence(updated),
     onError: (error: Error) => toast.error(error.message),
   });
   const moveTrackMutation = useMutation({
+    scope: editScope,
     mutationFn: ({ trackId, direction }: { trackId: string; direction: "up" | "down" }) =>
-      moveTrack(sequence!, trackId, direction),
+      moveTrack(latestSequence()!, trackId, direction),
     onSuccess: (updated) => applySequence(updated),
     onError: (error: Error) => toast.error(error.message),
   });
   // Drag a clip above the top video track → create a new video layer and drop it there.
   const moveClipToNewLayerMutation = useMutation({
+    scope: editScope,
     mutationFn: async ({ clipId, timelineStart }: { clipId: string; timelineStart: number }) => {
-      const before = new Set((sequence!.tracks ?? []).map((tk) => tk.id));
-      const updated = await addTrack(sequence!, "video");
+      const before = new Set((latestSequence()?.tracks ?? []).map((tk) => tk.id));
+      const updated = await addTrack(latestSequence()!, "video");
       const created = (updated.tracks ?? []).find((tk) => tk.kind === "video" && !before.has(tk.id));
       if (!created) return updated;
       return moveClip(updated, clipId, { timeline_start: timelineStart, track_id: created.id });
@@ -344,55 +361,56 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
     onError: resyncAfterFailedDrag,
   });
   const setTextMutation = useMutation({
-    mutationFn: ({ clipId, text }: { clipId: string; text: string }) => setClipText(sequence!, clipId, text),
+    scope: editScope,
+    mutationFn: ({ clipId, text }: { clipId: string; text: string }) => setClipText(latestSequence()!, clipId, text),
     onSuccess: (updated) => applySequence(updated),
   });
   const setTextsMutation = useMutation({
-    mutationFn: (texts: { clip_id: string; text: string }[]) => setClipTexts(sequence!, texts),
+    scope: editScope,
+    mutationFn: (texts: { clip_id: string; text: string }[]) => setClipTexts(latestSequence()!, texts),
     onSuccess: (updated) => applySequence(updated),
     onError: (error: Error) => toast.error(error.message),
   });
   const addSubtitleMutation = useMutation({
+    scope: editScope,
     mutationFn: async () => {
-      let track = (sequence!.tracks ?? []).find((item) => item.kind === "subtitle" && !item.locked);
+      let track = (latestSequence()?.tracks ?? []).find((item) => item.kind === "subtitle" && !item.locked);
       if (!track) {
-        const updated = await addTrack(sequence!, "subtitle");
+        const updated = await addTrack(latestSequence()!, "subtitle");
         track = (updated.tracks ?? []).find((item) => item.kind === "subtitle");
       }
-      if (!track) return;
-      await insertTextClip(sequence!, {
+      if (!track) return undefined;
+      return insertTextClip(latestSequence()!, {
         track_id: track.id,
         text: t("subtitleDefaultText"),
         timeline_start: useEditorStore.getState().playhead,
         duration: 2,
       });
     },
-    onSuccess: refreshSequences,
+    onSuccess: (updated) => (updated ? applySequence(updated) : refreshSequences()),
   });
   // 加花字:放到专用图层——复用一条没有画面素材的 video 轨(纯花字/空轨),没有则新建一条,
   // 避免与 base 视频在同轨重叠。花字每条自带样式、用 transform 定位,区别于底部统一字幕。
   const addTextMutation = useMutation({
+    scope: editScope,
     mutationFn: async () => {
-      let track = (sequence!.tracks ?? []).find(
+      let track = (latestSequence()?.tracks ?? []).find(
         (item) => item.kind === "video" && !item.locked && (item.clips ?? []).every((c) => !c.asset_id),
       );
       if (!track) {
-        const before = new Set((sequence!.tracks ?? []).map((tk) => tk.id));
-        const updated = await addTrack(sequence!, "video");
+        const before = new Set((latestSequence()?.tracks ?? []).map((tk) => tk.id));
+        const updated = await addTrack(latestSequence()!, "video");
         track = (updated.tracks ?? []).find((tk) => tk.kind === "video" && !before.has(tk.id));
       }
       if (!track) return undefined;
-      return insertTextClip(sequence!, {
+      return insertTextClip(latestSequence()!, {
         track_id: track.id,
         text: t("textDefaultText"),
         timeline_start: useEditorStore.getState().playhead,
         duration: 3,
       });
     },
-    onSuccess: (updated) => {
-      if (updated) applySequence(updated);
-      refreshSequences();
-    },
+    onSuccess: (updated) => (updated ? applySequence(updated) : refreshSequences()),
   });
   // 一键从逐字稿生成字幕:拉齐所有视频/音频片段的转写,投影到时间线句子,批量插到字幕轨。
   // One pipeline, two entry points. Passing a target language inserts a translation step
@@ -403,8 +421,9 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
   //: 那条轨上已经有字幕时,先问一句「替换掉原来的 N 条吗」—— 此前再点一次就整条轨每句叠成两份。
   const [regeneratePending, setRegeneratePending] = React.useState<number | null>(null);
   const generateSubtitlesMutation = useMutation({
+    scope: editScope,
     mutationFn: async ({ replace }: { replace: boolean }) => {
-      const seq = sequence!;
+      const seq = latestSequence()!;
       // 和逐字稿面板同一份「看哪些片段」:不算配音轨、分离出来的派生素材,同素材同位置只算一份。
       const clips = transcriptSourceClips(seq.tracks ?? []);
       const assetIds = [...new Set(clips.map((c) => c.asset_id).filter((id): id is string => Boolean(id)))];
@@ -419,7 +438,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
       });
       const sentences = projectTranscript(clips, segmentsByAsset);
       if (sentences.length === 0) throw new Error(t("subtitleNoTranscript"));
-      let track = subtitleTarget;
+      let track = (seq.tracks ?? []).find((tk) => tk.kind === "subtitle" && !tk.locked);
       if (!track) track = (await addTrack(seq, "subtitle")).tracks?.find((tk) => tk.kind === "subtitle");
       if (!track) throw new Error(t("subtitleNoTranscript"));
       // 翻译不在这一步:生成字幕只铺原文,译成别的语言是字幕页「翻译」的事(那里一次一批、一步撤销)。
@@ -442,8 +461,9 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
   });
   //: 导入 .srt / .vtt:字幕页的入口和素材库(拖进来 / 选文件时认出是字幕文件)共用这一个。
   const importSubtitleMutation = useMutation({
+    scope: editScope,
     mutationFn: ({ file, trackId, replace }: { file: File; trackId?: string; replace?: boolean }) =>
-      importSubtitleFile(sequence!, file, { trackId, replace }),
+      importSubtitleFile(latestSequence()!, file, { trackId, replace }),
     onSuccess: (result) => {
       applySequence(result.sequence);
       // 落在时间线内容之外的那几条没落 —— 说出来,不让人以为文件读少了。
@@ -467,7 +487,8 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
     else generateSubtitlesMutation.mutate({ replace: false });
   };
   const subtitleStyleMutation = useMutation({
-    mutationFn: (style: Record<string, unknown>) => setSubtitleStyle(sequence!, style),
+    scope: editScope,
+    mutationFn: (style: Record<string, unknown>) => setSubtitleStyle(latestSequence()!, style),
     onSuccess: (updated) => {
       applySequence(updated);
       setStyleDraft(null);
@@ -483,8 +504,9 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
     null,
   );
   const removeTrackMutation = useMutation({
+    scope: editScope,
     mutationFn: ({ trackId, withClips }: { trackId: string; withClips: boolean }) =>
-      removeTrack(sequence!, trackId, withClips),
+      removeTrack(latestSequence()!, trackId, withClips),
     onSuccess: (updated) => {
       applySequence(updated);
       setTrackPendingRemoval(null);
@@ -495,16 +517,19 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
     },
   });
   const setSpeedMutation = useMutation({
-    mutationFn: ({ clipId, speed }: { clipId: string; speed: number }) => setClipSpeed(sequence!, clipId, speed),
-    onSuccess: refreshSequences,
+    scope: editScope,
+    mutationFn: ({ clipId, speed }: { clipId: string; speed: number }) => setClipSpeed(latestSequence()!, clipId, speed),
+    onSuccess: applySequence,
   });
   const setGainMutation = useMutation({
+    scope: editScope,
     mutationFn: ({ clipId, gain, muted }: { clipId: string; gain: number; muted: boolean }) =>
-      setClipGain(sequence!, clipId, gain, muted),
+      setClipGain(latestSequence()!, clipId, gain, muted),
     onSuccess: (updated) => applySequence(updated),
   });
   const detachAudioMutation = useMutation({
-    mutationFn: (clipId: string) => detachClipAudio(sequence!, clipId),
+    scope: editScope,
+    mutationFn: (clipId: string) => detachClipAudio(latestSequence()!, clipId),
     onSuccess: (updated) => {
       applySequence(updated);
       toast.success(t("detachAudioDone"));
@@ -514,7 +539,8 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
   //: 「替换媒体」对话框正对着哪一段(null = 没开)。
   const [replacingClipId, setReplacingClipId] = React.useState<string | null>(null);
   const replaceMediaMutation = useMutation({
-    mutationFn: (body: { asset_id: string; clip_ids?: string[]; from_asset_id?: string }) => replaceClipMedia(sequence!, body),
+    scope: editScope,
+    mutationFn: (body: { asset_id: string; clip_ids?: string[]; from_asset_id?: string }) => replaceClipMedia(latestSequence()!, body),
     onSuccess: (updated, body) => {
       setReplacingClipId(null);
       applySequence(updated);
@@ -526,61 +552,71 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
   });
   //: 片段声音处理排成任务:做完时间线怎么变由任务中心刷新(它说了改动 sequences),这里只说「开始了」。
   const clipAudioMutation = useMutation({
-    mutationFn: ({ clipId, action }: { clipId: string; action: ClipAudioAction }) => processClipAudio(sequence!, clipId, action),
+    scope: editScope,
+    mutationFn: ({ clipId, action }: { clipId: string; action: ClipAudioAction }) => processClipAudio(latestSequence()!, clipId, action),
     onSuccess: () => toast.success(t("clipAudioQueued")),
     onError: (error) => toast.error(String((error as Error).message)),
   });
   const setEffectsMutation = useMutation({
+    scope: editScope,
     mutationFn: ({ clipId, effects }: { clipId: string; effects: Record<string, unknown> }) =>
-      setClipEffects(sequence!, clipId, effects),
-    onSuccess: refreshSequences,
+      setClipEffects(latestSequence()!, clipId, effects),
+    onSuccess: applySequence,
   });
   const setTransformMutation = useMutation({
+    scope: editScope,
     mutationFn: ({ clipId, transform }: { clipId: string; transform: Record<string, unknown> }) =>
-      setClipTransform(sequence!, clipId, transform),
+      setClipTransform(latestSequence()!, clipId, transform),
     // Apply the returned sequence straight to the cache (no refetch gap) so the resized clip
     // lands at its final transform in the same tick the Monitor drops its drag draft.
     onSuccess: (updated) => applySequence(updated),
     onError: refreshSequences,
   });
   const reframeMutation = useMutation({
+    scope: editScope,
     mutationFn: ({ width, height, fillMode }: { width: number; height: number; fillMode: FillMode }) =>
-      setSequenceReframe(sequence!, { width, height, fill_mode: fillMode }),
+      setSequenceReframe(latestSequence()!, { width, height, fill_mode: fillMode }),
     onSuccess: (updated) => applySequence(updated),
     onError: (error: Error) => toast.error(error.message),
   });
   const cutRangeMutation = useMutation({
+    scope: editScope,
     mutationFn: ({ clipId, srcStart, srcEnd }: { clipId: string; srcStart: number; srcEnd: number }) =>
-      cutClipRange(sequence!, clipId, { src_start: srcStart, src_end: srcEnd }),
-    onSuccess: () => {
-      useEditorStore.getState().selectClip(null);
-      void refreshSequences();
-    },
+      cutClipRange(latestSequence()!, clipId, { src_start: srcStart, src_end: srcEnd }),
+    onSuccess: applyAndPruneSelection,
   });
   const cutRangesMutation = useMutation({
+    scope: editScope,
     mutationFn: (cuts: Array<{ clipId: string; ranges: Array<{ srcStart: number; srcEnd: number }> }>) =>
       cutClipRangesBatch(
-        sequence!,
+        latestSequence()!,
         cuts.map((cut) => ({
           clip_id: cut.clipId,
           ranges: cut.ranges.map((range) => ({ src_start: range.srcStart, src_end: range.srcEnd })),
         })),
       ),
-    onSuccess: () => {
-      useEditorStore.getState().selectClip(null);
-      void refreshSequences();
-    },
+    onSuccess: applyAndPruneSelection,
   });
+  // 切分有两种说法:刀片点在某段的某个源时刻上(clipId + srcTime,点哪切哪);或者「在播放头处切」
+  // (time + 可选的 trackId)—— 后者在**执行时**按最新的时间线找片段:连按 S 时,前一刀落地后
+  // 片段已经换了 id,按下按键那一刻闭包里的那一段早已不是播放头下的那一段。
   const splitMutation = useMutation({
-    mutationFn: ({ clipId, srcTime }: { clipId: string; srcTime: number }) => splitClip(sequence!, clipId, srcTime),
-    onSuccess: refreshSequences,
+    scope: editScope,
+    mutationFn: async (target: { clipId: string; srcTime: number } | { time: number; trackId: string | null }) => {
+      const point = "clipId" in target ? target : splitPointAt(latestSequence()?.tracks ?? [], target.time, target.trackId);
+      return point ? splitClip(latestSequence()!, point.clipId, point.srcTime) : null;
+    },
+    onSuccess: (updated) => {
+      if (updated) applySequence(updated);
+    },
   });
   // Transcript-driven split (按句切分 / 单句独立 / 在此切一刀): all named clips belong to
   // one user gesture, so the sequence Module records and undoes the whole batch atomically.
   const splitPointsMutation = useMutation({
+    scope: editScope,
     mutationFn: (cuts: Array<{ clipId: string; srcTimes: number[] }>) =>
       splitClipAtPointsBatch(
-        sequence!,
+        latestSequence()!,
         cuts
           .filter((cut) => cut.srcTimes.length > 0)
           .map((cut) => ({ clip_id: cut.clipId, src_times: cut.srcTimes })),
@@ -592,8 +628,9 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
     onError: () => void refreshSequences(),
   });
   const trackStateMutation = useMutation({
+    scope: editScope,
     mutationFn: ({ trackId, body }: { trackId: string; body: TrackStatePatch }) =>
-      setTrackState(sequence!, trackId, body),
+      setTrackState(latestSequence()!, trackId, body),
     // Write the returned sequence straight into the cache. An invalidate/refetch leaves a window
     // where the rail still shows the pre-change track, and a click landing in that window targets
     // a track the server has already changed or removed — which then fails as "Track not found".
@@ -613,13 +650,16 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
   // 少了 onError 的话,用户按 ⌘Z 之后什么都没发生,也没有任何提示 —— 和「按钮点了没反应」
   // 是同一个毛病,只是这次出在撤销上,而撤销恰恰是用户最需要确认「到底生效没有」的操作。
   const undoMutation = useMutation({
+    scope: editScope,
     //: 只撤**自己**最近的一步:几个人一起剪时,按一下撤掉的不该是同事刚做的那一下。其间别人的改动和它冲突时服务端回 409、说清是谁。
-    mutationFn: () => undoSequence(sequence!.id, { expectedRevision: baseRevisionOf(sequence!), mine: true }),
+    //: 版本号在执行时取(排在前面的编辑落地之后),连按 ⌘Z 时第二下报的是第一下之后的那一版。
+    mutationFn: () => undoSequence(sequence!.id, { expectedRevision: baseRevisionOf(latestSequence()!), mine: true }),
     onSuccess: keepSelectionIfPresent,
     onError: (error: Error) => toast.error(error.message),
   });
   const redoMutation = useMutation({
-    mutationFn: () => redoSequence(sequence!.id, { expectedRevision: baseRevisionOf(sequence!), mine: true }),
+    scope: editScope,
+    mutationFn: () => redoSequence(sequence!.id, { expectedRevision: baseRevisionOf(latestSequence()!), mine: true }),
     onSuccess: keepSelectionIfPresent,
     onError: (error: Error) => toast.error(error.message),
   });
@@ -643,14 +683,9 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
       // 切点落在帧上:播放停下来时播放头多半在两帧之间。
       const playhead = snapToFrame(useEditorStore.getState().playhead, sequence.fps);
       const targetId = clipId ?? selectedClipIdOf(useEditorStore.getState());
-      const all = (sequence.tracks ?? []).flatMap((track) => track.clips ?? []);
-      const clip = targetId
-        ? all.find((item) => item.id === targetId)
-        : all.find((item) => playhead > item.timeline_start && playhead < clipEnd(item));
-      if (!clip) return;
-      if (!(playhead > clip.timeline_start && playhead < clipEnd(clip))) return;
-      const srcTime = timelineToSrc(clip, playhead);
-      splitMutation.mutate({ clipId: clip.id, srcTime });
+      const target = targetId ? (sequence.tracks ?? []).flatMap((track) => track.clips ?? []).find((item) => item.id === targetId) : null;
+      if (target && !clipContains(target, playhead)) return;
+      splitMutation.mutate({ time: playhead, trackId: target?.track_id ?? null });
     },
     [sequence, splitMutation],
   );

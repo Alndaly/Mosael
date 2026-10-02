@@ -156,6 +156,58 @@ describe("S 键切分", () => {
   });
 });
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (error: unknown) => void;
+  const promise = new Promise<T>((ok, fail) => {
+    resolve = ok;
+    reject = fail;
+  });
+  return { promise, resolve, reject };
+}
+
+describe("同一条时间线的编辑排队执行", () => {
+  it("连按两次 ⌘Z:第二次等第一次落地再发,不和它撞车", async () => {
+    renderEditor(sequenceWith([track("v1", "video", 0, [clip("c1", "v1", 0, 0, 10)])]));
+    await ready();
+    const first = deferred<Sequence>();
+    mocks.undoSequence.mockImplementationOnce(() => first.promise);
+    press("z", { metaKey: true });
+    press("z", { metaKey: true });
+    await waitFor(() => expect(mocks.undoSequence).toHaveBeenCalledTimes(1));
+    // 第一次还在路上:第二次不能先发出去。
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(mocks.undoSequence).toHaveBeenCalledTimes(1);
+    await act(async () => first.resolve({ ...current, revision: 2 }));
+    await waitFor(() => expect(mocks.undoSequence).toHaveBeenCalledTimes(2));
+    // 剪辑页的 ⌘Z 只撤自己的;第二下报的版本号是第一下落地之后的那一版,不会拿旧版本去撞 409。
+    expect(mocks.undoSequence).toHaveBeenNthCalledWith(1, "s1", { expectedRevision: 1, mine: true });
+    expect(mocks.undoSequence).toHaveBeenNthCalledWith(2, "s1", { expectedRevision: 2, mine: true });
+  });
+
+  it("连按两次 S:第二刀按第一刀落地后的时间线找片段,不拿已经被切开的旧片段去切", async () => {
+    const before = sequenceWith([track("v1", "video", 0, [clip("c1", "v1", 0, 0, 10)])]);
+    const after = sequenceWith(
+      [track("v1", "video", 0, [clip("c1", "v1", 0, 0, 5), clip("c2", "v1", 5, 5, 10)])],
+      { revision: 2 },
+    );
+    renderEditor(before);
+    await ready();
+    const first = deferred<Sequence>();
+    mocks.splitClip.mockImplementationOnce(() => first.promise);
+    act(() => useEditorStore.getState().setPlayhead(5));
+    press("s");
+    await waitFor(() => expect(mocks.splitClip).toHaveBeenCalledTimes(1));
+    act(() => useEditorStore.getState().setPlayhead(7));
+    press("s");
+    current = after;
+    await act(async () => first.resolve(after));
+    await waitFor(() => expect(mocks.splitClip).toHaveBeenCalledTimes(2));
+    expect(mocks.splitClip).toHaveBeenNthCalledWith(1, onS1, "c1", 5);
+    expect(mocks.splitClip).toHaveBeenNthCalledWith(2, onS1, "c2", 7);
+  });
+});
+
 describe("方向键逐帧", () => {
   it("按帧号加减:停在两帧之间时先落到最近的帧,不把 1/fps 浮点累加上去", async () => {
     renderEditor(sequenceWith([track("v1", "video", 0, [clip("c1", "v1", 0, 0, 20)])]));
