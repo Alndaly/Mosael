@@ -21,6 +21,9 @@ from tests.fake_comfyui import (
     MINIMAX_T2V_API,
     OBJECT_INFO,
     PORTRAIT_UI,
+    PREVIEWS_ONLY_API,
+    TWO_SAVES_API,
+    TWO_VIDEOS_API,
     UPSCALE_API,
     VEO_FLF_API,
     VIDEO_NODE_INFO,
@@ -407,6 +410,8 @@ def test_一次几张对到宿主的num_images(graph, convert) -> None:
     model = _portrait(graph, convert)
     assert model["parameters"]["num_images"] == {"type": "integer", "minimum": 1, "maximum": 4, "default": 1}
     assert model["max_outputs"] == 4
+    #: 画布上存着一次两张也是:没选张数时生成一次出一张(宿主那个「N×」缺省就是 1),说的和做的是同一件事。
+    assert graph.describe("two.json", "two", TWO_SAVES_API, OBJECT_INFO)["parameters"]["num_images"]["default"] == 1
     api = convert.to_api(PORTRAIT_UI, OBJECT_INFO)
     assert graph.fill(api, {"batch": 3}, {})["5"]["inputs"]["batch_size"] == 3
     assert graph.fill(api, {"batch": 99}, {})["5"]["inputs"]["batch_size"] == 4, "不超过宿主一次的上限"
@@ -829,3 +834,57 @@ def test_认得的采样器那一路照旧_没接上的文字节点不算(graph)
     """往上游找只在采样器那一路什么都没找到时才找,也只找**接到产出节点上**的。"""
     api = {**MINIMAX_T2V_API, "50": {"class_type": "MinimaxTextToVideoNode", "inputs": {"prompt_text": "孤零零的一句"}}}
     assert graph.text_slots(api, VIDEO_INFO) == {("1", "prompt_text"): "prompt"}
+
+
+# --- 一次运行交回几份:这一种里存下来的(都没存就是预览)节点数 × 张数 ---------------------------------
+#
+# 用户在画板上选「1×」,落出来两三格:一次运行交回的是这一种**全部**存下来的文件,而工作流里常常不止一个保存节点
+# (原图 + 放大、几个预览)。插件在目录里照实说一次交回几份(`outputs_per_run`,张数为 1 时),多个保存节点时
+# 给一项「结果取自」(`output_node`):选其中一个,一次就只交回它那一份。
+
+
+def test_一次交回几份_按这一种的保存节点数(graph, convert) -> None:
+    assert _portrait(graph, convert)["outputs_per_run"] == 1
+    upscale = graph.describe("upscale.json", "upscale", UPSCALE_API, OBJECT_INFO)
+    assert upscale["outputs_per_run"] == 1, "保存 + 看一眼原图的预览:预览不交回"
+    assert "output_node" not in upscale["parameters"], "只有一个保存节点:没得选"
+    two = graph.describe("two.json", "two", TWO_SAVES_API, OBJECT_INFO, {"9": "原图", "12": "高清"})
+    assert two["outputs_per_run"] == 2 and two["max_outputs"] == 8, "两个节点 × 最多 4 张"
+    previews = graph.describe("previews.json", "p", PREVIEWS_ONLY_API, OBJECT_INFO)
+    assert previews["outputs_per_run"] == 3, "一个保存节点都没有:交回的是那三个预览"
+    videos = graph.describe("two_videos.json", "v", TWO_VIDEOS_API, OBJECT_INFO, {"30": "原速", "31": "补帧"})
+    assert videos["kind"] == "video" and videos["outputs_per_run"] == 2 and videos["max_outputs"] == 2
+    assert "num_images" not in videos["parameters"], "视频图没有张数"
+
+
+def test_多个保存节点时_结果取自列出每一个(graph) -> None:
+    two = graph.describe("two.json", "two", TWO_SAVES_API, OBJECT_INFO, {"9": "原图", "12": "高清"})
+    choice = two["parameters"]["output_node"]
+    assert choice["type"] == "string" and choice["title"] == {"zh": "结果取自", "en": "Results from"}
+    assert choice["enum"] == ["all", "9", "12"] and choice["default"] == "all"
+    assert choice["x-enum-labels"] == {"all": {"zh": "全部(2 个保存节点)", "en": "All (2 save nodes)"},
+                                       "9": "原图", "12": "高清"}
+    assert choice["x-outputs-per-run"] == {"all": 2, "9": 1, "12": 1}
+    assert "x-advanced" not in choice, "在「参数」里一眼看得到"
+    #: 节点没改标题(都叫 PreviewImage):带上节点号才分得清。
+    labels = graph.describe("previews.json", "p", PREVIEWS_ONLY_API, OBJECT_INFO)["parameters"]["output_node"]["x-enum-labels"]
+    assert labels == {"all": {"zh": "全部(3 个预览节点)", "en": "All (3 preview nodes)"},
+                      "13": "PreviewImage #13", "17": "PreviewImage #17", "18": "PreviewImage #18"}
+
+
+def test_收产出时只要选中的那个节点的(graph) -> None:
+    entry = {"outputs": {
+        "9": {"images": [{"filename": "a.png", "type": "output"}, {"filename": "b.png", "type": "output"}]},
+        "12": {"images": [{"filename": "hd.png", "type": "output"}]},
+    }}
+    assert [item["filename"] for item in graph.collect_outputs(entry, "image")] == ["a.png", "b.png", "hd.png"]
+    assert [item["filename"] for item in graph.collect_outputs(entry, "image", nodes={"12"})] == ["hd.png"]
+    assert graph.collect_outputs(entry, "image", nodes={"99"}) == [], "选中的节点什么都没交出:不拿别的顶替"
+
+
+def test_只要一个节点时_别的保存节点不跑(graph) -> None:
+    kept = graph.keep_output(TWO_SAVES_API, "image", "12", OBJECT_INFO)
+    assert "9" not in kept and {"11", "12"} <= set(kept), "原图那个保存节点摘掉;放大那一路照跑"
+    assert "9" in TWO_SAVES_API, "不改入参"
+    with pytest.raises(Exception, match="结果取自"):
+        graph.keep_output(TWO_SAVES_API, "image", "99", OBJECT_INFO)

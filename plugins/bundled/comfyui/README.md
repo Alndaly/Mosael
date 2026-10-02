@@ -25,7 +25,8 @@ For several servers, create several connections; each brings its own set of mode
 | Without a sampler ComfyUI knows (partner API nodes: MiniMax / Hailuo, Kling, Veo…; packs with their own sampler such as WanVideoWrapper): a **multiline** `prompt` / `prompt_text` / `positive_prompt` on a node wired into an output (1.6.0) | Prompt; a `negative_prompt` on the same node is the negative prompt |
 | The sampler's seed, RandomNoise's noise_seed | "Seed" (random on every run when left empty) |
 | Width and height of the node that creates the canvas (EmptyLatentImage, the Wan / Hunyuan video latent nodes…) | "Size" (the workflow's own size when not set) |
-| The canvas node's batch_size | "Image count" (up to 4); every image is returned |
+| The canvas node's batch_size | "Image count" (up to 4, 1 when not set); every image is returned |
+| The save nodes of that kind (the preview nodes when nothing is saved) | How many files one run returns (`outputs_per_run` = the node count, × the image count), so the host lays out that many placeholders up front; with more than one, the parameters get a "Results from" choice (node titles, "All" by default): pick one to get only its output, and the other save nodes don't run (1.6.0) |
 | Any other tunable literal input | An entry in the parameter form: known inputs get plain names (`labels.py`: sampler, steps, LoRA…), and only on a name clash do they carry the node title or "KSampler #2"; the common ones come first and the rest go under "Advanced"; the raw "node · input name" is in the description |
 | LoadImage nodes | Reference images; in a video graph, the ones wired to `start_image` / `first_frame` / `start_frame` / `first_frame_image`… are the first frame, `end_image` / `last_frame` / `end_frame`… the last frame |
 | LoadImageMask, or a LoadImage whose mask output is the only one used | Mask (`mask`) |

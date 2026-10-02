@@ -21,7 +21,8 @@
 | 没有认得的采样器时(合作方 API 节点:MiniMax / 海螺、Kling、Veo…,WanVideoWrapper 这类自带采样器的包):接到产出上的节点里**多行**的 `prompt` / `prompt_text` / `positive_prompt`(1.6.0) | 主提示词;同一个节点上的 `negative_prompt` 是反向提示词 |
 | 采样器的 seed、RandomNoise 的 noise_seed | 「随机种子」(不填每次随机) |
 | 生成画布的节点(EmptyLatentImage、Wan / Hunyuan 的视频潜空间节点…)的宽高 | 「尺寸」(不选就用工作流自己的) |
-| 画布节点的 batch_size | 「张数」(最多 4),几张全部交回 |
+| 画布节点的 batch_size | 「张数」(最多 4,没选就是 1),几张全部交回 |
+| 这一种的保存节点(一个都没存就是预览节点) | 一次交回几份(`outputs_per_run` = 节点数,× 张数),宿主据此一次摆好占位;不止一个时「参数」里有一项「结果取自」(节点标题,缺省「全部」),选了一个就只交回它的,别的保存节点不跑(1.6.0) |
 | 其余可调的字面量输入 | 参数表里的一项:认得的输入用人话起名(`labels.py`:采样器、步数、LoRA…),撞名才带上节点标题或「第 2 个 KSampler」;常用的在前,其余收进「高级」;原始的「节点 · 输入名」在说明里 |
 | LoadImage 节点 | 参考图;视频图里接到 `start_image` / `first_frame` / `start_frame` / `first_frame_image`…的是首帧,`end_image` / `last_frame` / `end_frame`…的是尾帧 |
 | LoadImageMask,或只用了 LoadImage 蒙版那一路的 | 蒙版(`mask`) |

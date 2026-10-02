@@ -1133,6 +1133,7 @@ Amazon S3 / S3 兼容服务是**一个插件的五个选项**(枚举配置 `STOR
     },
     "inputs": [{"role": "reference_image", "max": 2}],
     "max_outputs": 1,
+    "outputs_per_run": 1,                  // 可选:一次运行交回几份(张数为 1、参数按缺省时),见下
     "prompt_dialect": "sd-tags",           // 可选:提示词优化按哪种写法改
     "prompt": "optional"                   // 可选:required(默认)/ optional / none,见下
   }
@@ -1142,7 +1143,7 @@ Amazon S3 / S3 兼容服务是**一个插件的五个选项**(枚举配置 `STOR
 ```
 
 - `parameters` 认的键:`type`(integer / number / string / boolean)、`enum`、`default`、`minimum`、`maximum`、
-  `multipleOf`、`title`、`description`、`x-advanced`、`x-multiline`。认不出的类型整项丢掉。`title` / `description`
+  `multipleOf`、`title`、`description`、`x-advanced`、`x-multiline`、`x-enum-labels`、`x-outputs-per-run`(后两个见下)。认不出的类型整项丢掉。`title` / `description`
   可以按语言分(`{"zh": "步数", "en": "Steps"}`):宿主**原样存着、给人看时再挑** —— 目录是在后台刷新的,刷新那一刻
   的语言不是看的人的语言。`title` 写人话(「采样器」),原始的内部名(`KSampler · sampler_name`)放 `description`,
   界面上悬停看得到。**顺序就是界面上的顺序**:常用的在前,留空也能跑的标 `x-advanced`。
@@ -1161,7 +1162,17 @@ Amazon S3 / S3 兼容服务是**一个插件的五个选项**(枚举配置 `STOR
   提示词节点里存着话是 `optional`,存的是空的或模板里是 `{{prompt}}` 是 `required`。`optional` 的模型,
   `generate` 请求里的 `prompt` 可能是空串 —— 空串的意思是「没写」,用你自己的默认,不是「清成空」。
 - 一次能出几张:声明 `num_images`(`maximum` 是上限,宿主一次最多 4 张)并把 `max_outputs` 设成同一个数;
-  `generate` 时 `parameters.num_images` 就是这次要几张,产出几份交回几份。
+  `generate` 时 `parameters.num_images` 就是这次要几张,产出几份交回几份。**没给 `num_images` 就是 1** —— 宿主的
+  张数控件缺省就是 1,`default` 写别的数也只是占位提示。
+- **一次运行交回几份**(`outputs_per_run`,正整数,上限 64,没写是 1):张数为 1、参数都按缺省时这一次交回几个文件。
+  一次交回的是 `outputs_per_run × num_images` 份 —— ComfyUI 的一张工作流有两个保存节点(原图 + 放大),张数选 2 就是
+  4 张。**照实说**:画板发起生成时按它一次摆好那么多格占位(不再事后冒出来),张数控件上显示的也是这个总数。
+  交回的比说的少,多摆的占位收掉;多,多出来的照旧往右排。
+- **某个参数的取值改变一次交回几份**时(ComfyUI 的「结果取自」:选了其中一个保存节点就只交回它那一份),在那个参数上
+  写 `x-outputs-per-run`(`{可选值: 张数为 1 时交回几份}`),选中的取值在表里就用表里的数,不在(或没选)就用
+  `outputs_per_run`。
+- **可选值给人看的名字**:`x-enum-labels`(`{可选值: 名字}`,名字可以按语言分)。可选值是插件里的 id(节点号)、
+  人看的是标题时用它。两张表都只认 `enum` 里有的值,对不上的丢掉。
 - 宿主把这份清单**缓存成模型行**:连接新建、改配置、启停、授权 / 凭据变化、插件页点「刷新」,以及后端启动时
   各问一次。问不到(服务没开)就保留上一份,原因显示在插件页;清单里没有了的模型从选择器里消失。插件页上
   「查看模型」列的就是这份缓存(`GET /api/plugins/instances/{id}/models`):名字、种类、模式、收什么、有哪些参数。

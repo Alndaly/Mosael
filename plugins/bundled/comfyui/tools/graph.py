@@ -583,6 +583,60 @@ def tunable(
     return {described.key: {"title": names[described.key], **spec} for described, spec in found}
 
 
+#: 「结果取自」那一项的参数键:不带点(带点的是 `<节点 id>.<输入名>`,见 run.overrides_from),选中的是节点 id。
+OUTPUT_CHOICE = "output_node"
+#: 「全部」:这一种里存下来的每个节点各交回一份(缺省)。
+ALL_OUTPUTS = "all"
+
+
+def _output_choice(nodes: list[dict[str, str]], api: dict[str, Any]) -> dict[str, Any]:
+    """「结果取自」:这一种的几个保存节点(一个都没存时是几个预览节点)各是一个选项,名字用节点标题 ——
+    几个节点同名(没改标题,都叫 SaveImage / PreviewImage)才带上节点号。缺省「全部」。
+
+    每个选项一次交回几份写在 `x-outputs-per-run` 上(张数为 1 时):宿主据此按选中的那一项摆占位。
+    """
+    titles = [node["title"] for node in nodes]
+    saved = any(persists(api.get(node["node"]) or {}) for node in nodes)
+    count = len(nodes)
+    what = ("保存节点", "save nodes") if saved else ("预览节点", "preview nodes")
+    labels: dict[str, Any] = {ALL_OUTPUTS: {"zh": f"全部({count} 个{what[0]})", "en": f"All ({count} {what[1]})"}}
+    for node in nodes:
+        title = node["title"]
+        labels[node["node"]] = f"{title} #{node['node']}" if titles.count(title) > 1 else title
+    return {
+        "type": "string",
+        "title": {"zh": "结果取自", "en": "Results from"},
+        "description": {
+            "zh": f"这张工作流有 {count} 个{what[0]},一次运行各交回一份;只要其中一个的就选它,别的{what[0]}不跑。",
+            "en": f"This workflow has {count} {what[1]}, and each returns its own result per run. Pick one to get only "
+                  f"that one; the other {what[1]} don't run.",
+        },
+        "enum": [ALL_OUTPUTS, *(node["node"] for node in nodes)],
+        "default": ALL_OUTPUTS,
+        "x-enum-labels": labels,
+        "x-outputs-per-run": {ALL_OUTPUTS: count, **{node["node"]: 1 for node in nodes}},
+    }
+
+
+def keep_output(api: dict[str, Any], kind: str, node_id: str, object_info: dict[str, Any] | None = None,
+                titles: dict[str, str] | None = None, locale: str = "zh") -> dict[str, Any]:
+    """「结果取自」选了一个节点:这一种别的保存节点(没人接它的输出的)摘掉 —— ComfyUI 只跑产出节点要的那些,
+    放大那一路不要就不跑。返回新图,不改入参。选的节点已经不在了(工作流在 ComfyUI 里改过)就说清楚。"""
+    delivering = [node["node"] for node in generation_nodes(api, kind, object_info, titles)]
+    if node_id not in delivering:
+        from lines import ComfyError, say
+
+        raise ComfyError(say(locale, f"「结果取自」选的节点 #{node_id} 已经不在这张工作流里了 —— 到插件页点「刷新模型」再选一次",
+                             f"The node #{node_id} picked in “Results from” is no longer in this workflow. "
+                             "Click Refresh models on the Plugins page and pick again."))
+    used = _consumers(api)
+    graph = copy.deepcopy(api)
+    for other in delivering:
+        if other != node_id and not used.get(other):
+            graph.pop(other, None)
+    return graph
+
+
 def describe(
     model_id: str,
     label: Any,
@@ -597,7 +651,9 @@ def describe(
     - 其余可调的字面量输入按 `<节点 id>.<输入名>` 列成参数(见 `tunable`);
     - 读素材的节点列成输入槽位(图、蒙版、首尾帧、视频、音频);
     - 粘贴的模板里的 `{{占位符}}` 一样认;
-    - 提示词要不要写(`prompt`)从图里读:没有文字喂进采样器的(放大、抠图)是 `none`(见 prompt_requirement)。
+    - 提示词要不要写(`prompt`)从图里读:没有文字喂进采样器的(放大、抠图)是 `none`(见 prompt_requirement);
+    - 一次运行交回几份(`outputs_per_run`,张数为 1 时)照实说:这一种里存下来的节点各一份(见 generation_nodes),
+      不止一个时给一项「结果取自」(见 `_output_choice`)。宿主据此一次摆好那么多格占位。
     """
     titles = titles or {}
     kind = kind_of(api)
@@ -625,17 +681,22 @@ def describe(
             size["default"] = own
         parameters["size"] = size
     batched = batch_input(api)
-    max_outputs = 1
+    #: 一次运行交回几份(张数为 1 时):这一种里存下来的那几个节点各一份(见 generation_nodes)。
+    delivering = generation_nodes(api, kind, object_info, titles)
+    per_run = max(1, len(delivering))
+    max_outputs = per_run
     if kind == "image" and batched is not None:
-        own_batch = int(api[batched]["inputs"]["batch_size"])
-        max_outputs = MAX_BATCH
-        parameters["num_images"] = {"type": "integer", "minimum": 1, "maximum": MAX_BATCH,
-                                    "default": max(1, min(own_batch, MAX_BATCH))}
+        max_outputs = per_run * MAX_BATCH
+        # 缺省是 1:生成那一路没给张数就一次出一张(见 run.generate),不照画布上存着的 batch_size ——
+        # 宿主的「N×」缺省就是 1,说的和做的得是同一件事。
+        parameters["num_images"] = {"type": "integer", "minimum": 1, "maximum": MAX_BATCH, "default": 1}
     if "steps" in placeholders:
         parameters["steps"] = {"type": "integer", "minimum": 1, "maximum": 200, "default": 20,
                                "title": {"zh": "步数", "en": "Steps"}}
     if "duration_seconds" in placeholders:
         parameters["duration_seconds"] = {"type": "integer", "minimum": 1}
+    if len(delivering) > 1:
+        parameters[OUTPUT_CHOICE] = _output_choice(delivering, api)
     parameters.update(tunable(api, object_info, titles))
 
     counts: dict[str, int] = {}
@@ -683,6 +744,7 @@ def describe(
         "parameters": parameters,
         "inputs": inputs,
         "max_outputs": max_outputs,
+        "outputs_per_run": per_run,
         # 提示词要不要写:从图里读(见 prompt_requirement)。放大这类图是 none —— 宿主不再逼人敲一句没用的话。
         "prompt": prompt_requirement(api, prompts, placeholders),
     }
@@ -910,19 +972,22 @@ def all_outputs(history_entry: dict[str, Any], *, include_previews: bool = False
     return files, texts
 
 
-def collect_outputs(history_entry: dict[str, Any], kind: str) -> list[dict[str, Any]]:
-    """一次**生成**要交回的文件:这次要的那一种(图 / 视频 / 音频),全部。
+def collect_outputs(history_entry: dict[str, Any], kind: str, nodes: set[str] | None = None) -> list[dict[str, Any]]:
+    """一次**生成**要交回的文件:这次要的那一种(图 / 视频 / 音频),全部;`nodes`(「结果取自」选了一个)只要那几个
+    节点的。
 
     存下来的优先;一个都没有才用预览 —— 只接了 PreviewImage 的图也能出东西。视频图里常常同时有逐帧的图
     和合成的视频:要的是视频那几份,不是第一帧。跑之前在图上判的是 `generation_nodes`(同一个判据):
-    工具说「我和这个生成模型是同一件事」就是按它说的。
+    目录里说的一次交回几份(`outputs_per_run`)、工具说「我和这个生成模型是同一件事」都是按它说的。
     """
     files, _ = all_outputs(history_entry, include_previews=True)
-    wanted = [one for one in files if one["media"] == kind]
+    wanted = [one for one in files if one["media"] == kind and (nodes is None or one["node"] in nodes)]
     # 这一种里存下来的优先;一份都没存(VHS 关了 save_output)才用预览 —— 不拿别的种类顶替
     saved = [one["item"] for one in wanted if one["item"].get("type") != "temp"]
     if saved or wanted:
         return saved or [one["item"] for one in wanted]
+    if nodes is not None:
+        return []  # 选中的节点什么都没交出:不拿别的节点顶替
     # 认不出种类(没有后缀的文件名之类):照旧交回第一份,总比说「没有产出」强
     fallback = [one for one in files if one["item"].get("type") != "temp"] or files
     return [one["item"] for one in fallback][:1]

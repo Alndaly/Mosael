@@ -109,7 +109,7 @@ export function declaredChoices(
           { value: "true", label: t("wfGenToggleOn") },
           { value: "false", label: t("wfGenToggleOff") },
         ]
-      : parameter.options.map((option) => ({ value: option, label: option }));
+      : parameter.options.map((option) => ({ value: option, label: parameter.optionLabels[option] ?? option }));
   const listed = fallback !== "" && base.some((option) => option.value === fallback);
   const marked = base.map((option) =>
     listed && option.value === fallback ? { ...option, description: t("genDeclaredDefaultHint") } : option,
@@ -119,7 +119,7 @@ export function declaredChoices(
     : [
         {
           value: DEFAULT_CHOICE,
-          label: fallback || t("genDeclaredDefaultNone"),
+          label: (fallback && parameter.optionLabels[fallback]) || fallback || t("genDeclaredDefaultNone"),
           description: fallback ? t("genDeclaredDefaultHint") : undefined,
         },
         ...marked,

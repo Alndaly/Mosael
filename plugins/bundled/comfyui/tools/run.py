@@ -410,6 +410,9 @@ def download(comfy: Comfy, files: list[dict[str, Any]], stem: str) -> list[dict[
 def generate(request: dict[str, Any], comfy: Comfy, locale: str, emit: Emit) -> dict[str, Any]:
     kind = str(request.get("kind") or "image")
     resume = request.get("resume")
+    #: 「结果取自」选了一个节点(见 graph._output_choice):只要它的,别的保存节点不跑。「全部」和没选一样。
+    picked = str((request.get("parameters") or {}).get(graph.OUTPUT_CHOICE) or "")
+    picked = "" if picked == graph.ALL_OUTPUTS else picked
     if isinstance(resume, dict) and resume.get("prompt_id"):
         # 接着等上一个进程提交过的那个任务。**不再提交**:它可能已经跑了一半,也可能已经跑完。
         prompt_id = str(resume["prompt_id"])
@@ -421,12 +424,17 @@ def generate(request: dict[str, Any], comfy: Comfy, locale: str, emit: Emit) -> 
         parameters = request.get("parameters") or {}
         # 提示词空着 = 用这张图自己存着的那句(模型声明了 `prompt: optional`,见 graph.prompt_requirement)
         values = values_from(request.get("prompt"), request.get("negative_prompt"), parameters, defaults)
+        # 没给张数就一次一张(目录里张数的缺省就是 1,见 graph.describe):不照画布上存着的 batch_size ——
+        # 宿主照目录说的份数摆占位,做的得是同一件事。
+        values.setdefault("batch", 1)
         prompt = graph.fill(api, values, overrides_from(parameters), object_info)
+        if picked:
+            prompt = graph.keep_output(prompt, kind, picked, object_info, titles, locale)
         uploaded = upload(comfy, request.get("inputs") or [])
         if uploaded:
             prompt = graph.wire_inputs(prompt, graph.kind_of(prompt), uploaded)
         prompt_id, entry = run_prompt(comfy, prompt, emit, locale, titles)
-    files = [{"item": item, "media": kind} for item in graph.collect_outputs(entry or {}, kind)]
+    files = [{"item": item, "media": kind} for item in graph.collect_outputs(entry or {}, kind, {picked} if picked else None)]
     if not files:
         raise ComfyError(say(locale, "ComfyUI 跑完了,但没有产出文件 —— 工作流里需要一个保存节点(SaveImage 或视频合成)",
                              "ComfyUI finished but produced no files. The workflow needs a save node (SaveImage or a video combine node)."))

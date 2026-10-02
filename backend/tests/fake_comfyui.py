@@ -395,6 +395,40 @@ MINIMAX_H3_REFERENCE_API: dict[str, Any] = {
     "264": {"class_type": "VHS_VideoCombine", "inputs": {"images": ["116", 0], "frame_rate": 24, "save_output": False}},
 }
 
+#: 一张**两个保存节点**的出图工作流:一张原图(「原图」)、一张放大过的(「高清」),画布一次出两张(batch_size 2)。
+#: 一次运行存下来的是 2 个节点 × 2 张 = 4 张。
+TWO_SAVES_API: dict[str, Any] = {
+    "3": {"class_type": "KSampler", "inputs": {"seed": 5, "steps": 20, "cfg": 7.0, "sampler_name": "euler",
+                                                "scheduler": "normal", "denoise": 1.0, "model": ["4", 0],
+                                                "positive": ["6", 0], "negative": ["7", 0], "latent_image": ["5", 0]}},
+    "4": {"class_type": "CheckpointLoaderSimple", "inputs": {"ckpt_name": "v1-5.ckpt"}},
+    "5": {"class_type": "EmptyLatentImage", "inputs": {"width": 512, "height": 512, "batch_size": 2}},
+    "6": {"class_type": "CLIPTextEncode", "inputs": {"text": "a cat", "clip": ["4", 1]}},
+    "7": {"class_type": "CLIPTextEncode", "inputs": {"text": "blurry", "clip": ["4", 1]}},
+    "8": {"class_type": "VAEDecode", "inputs": {"samples": ["3", 0], "vae": ["4", 2]}},
+    "9": {"class_type": "SaveImage", "inputs": {"images": ["8", 0], "filename_prefix": "base"}, "_meta": {"title": "原图"}},
+    "10": {"class_type": "UpscaleModelLoader", "inputs": {"model_name": "4x-UltraSharp.pth"}},
+    "11": {"class_type": "ImageUpscaleWithModel", "inputs": {"upscale_model": ["10", 0], "image": ["8", 0]}},
+    "12": {"class_type": "SaveImage", "inputs": {"images": ["11", 0], "filename_prefix": "hd"}, "_meta": {"title": "高清"}},
+}
+
+#: 只接了**预览**节点的工作流(用户 ComfyUI 里「古风女孩1」那种):三个 PreviewImage,都没改标题。生成交回的就是
+#: 这三份预览。
+PREVIEWS_ONLY_API: dict[str, Any] = {
+    **{key: value for key, value in TWO_SAVES_API.items() if key not in ("9", "10", "11", "12")},
+    "5": {"class_type": "EmptyLatentImage", "inputs": {"width": 512, "height": 512, "batch_size": 1}},
+    "13": {"class_type": "PreviewImage", "inputs": {"images": ["8", 0]}},
+    "17": {"class_type": "PreviewImage", "inputs": {"images": ["8", 0]}},
+    "18": {"class_type": "PreviewImage", "inputs": {"images": ["8", 0]}},
+}
+
+#: 两个**视频**保存节点的视频工作流(一段原速、一段补帧之后的):一次交回两段。
+TWO_VIDEOS_API: dict[str, Any] = {
+    **WAN_API,
+    "30": {"class_type": "VHS_VideoCombine", "inputs": {"images": ["3", 0], "frame_rate": 16}, "_meta": {"title": "原速"}},
+    "31": {"class_type": "VHS_VideoCombine", "inputs": {"images": ["3", 0], "frame_rate": 32}, "_meta": {"title": "补帧"}},
+}
+
 #: 模型目录(`/models` 与 `/models/<目录>`)。
 MODEL_FOLDERS: dict[str, list[str]] = {
     "checkpoints": ["sd_xl_base.safetensors", "v1-5.ckpt"],

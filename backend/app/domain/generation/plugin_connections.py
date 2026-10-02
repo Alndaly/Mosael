@@ -138,6 +138,9 @@ def descriptor(model: plugin_generation.PluginModel) -> dict[str, Any]:
         caps["requires_source"] = required
     if model.prompt_dialect:
         caps["prompt_dialect"] = model.prompt_dialect
+    # 一次交回不止一份(ComfyUI 一张工作流几个保存节点):照插件说的写上,画板据此一次摆好占位。一份就不写。
+    if model.outputs_per_run > 1:
+        caps["outputs_per_run"] = model.outputs_per_run
     # 提示词要不要写:插件说了、而且是宿主认得的那三个值才写进去;没说就不出现(= required)。
     if model.prompt in PROMPT_MODES:
         caps["prompt"] = model.prompt

@@ -243,8 +243,8 @@ def generation_options(db: Session, kind: str, *, user_id: str | None) -> list[d
 
 
 def _for_reader(capabilities: dict[str, Any]) -> dict[str, Any]:
-    """描述符里**给人看的字**按看的人的语言挑好:`parameter_schema` 里的 title / description 可以是
-    `{"zh": …, "en": …}`(插件声明的模型参数,见 ADR 0020)。
+    """描述符里**给人看的字**按看的人的语言挑好:`parameter_schema` 里的 title / description、可选值的名字
+    (`x-enum-labels`)可以是 `{"zh": …, "en": …}`(插件声明的模型参数,见 ADR 0020)。
 
     在这里挑而不是存的时候挑:目录是在后台刷新的,刷新那一刻的语言不是看的人的语言。
     """
@@ -259,5 +259,9 @@ def _for_reader(capabilities: dict[str, Any]) -> dict[str, Any]:
                 **spec,
                 **{field: pick_text(spec[field], locale) for field in ("title", "description") if isinstance(spec.get(field), dict)},
             }
+            labels = spec.get("x-enum-labels")
+            if isinstance(labels, dict):
+                spec["x-enum-labels"] = {value: pick_text(label, locale) if isinstance(label, dict) else label
+                                         for value, label in labels.items()}
         readable[key] = spec
     return {**capabilities, "parameter_schema": readable}

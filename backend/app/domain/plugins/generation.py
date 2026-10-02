@@ -45,6 +45,8 @@ _MAX_ENUM = 1000
 #: 一个模型最多几个输入槽位、每个槽位最多几份。
 _MAX_INPUTS = 16
 _MAX_INPUT_COUNT = 32
+#: 一次运行最多说交回几份(一张工作流几十个保存节点就不是一个「模型」了,多半是插件数错了)。
+_MAX_OUTPUTS_PER_RUN = 64
 
 
 @dataclass(frozen=True)
@@ -61,6 +63,9 @@ class PluginModel:
     #: `{role, max, required, label}`。角色认不认,由宿主侧判(它才知道有哪些角色)。
     inputs: tuple[dict[str, Any], ...] = ()
     max_outputs: int = 1
+    #: 一次运行交回几份(张数为 1、参数都按缺省时):ComfyUI 的一张工作流有几个保存节点就是几。宿主据此一次摆好
+    #: 那么多格占位(见 generation.catalog.outputs_per_run)。
+    outputs_per_run: int = 1
     prompt_dialect: str = ""
     #: 提示词要不要写:`required` / `optional` / `none`(空串 = 没说,按 required)。认不认这个值由宿主侧判
     #: (生成域的 PROMPT_MODES)—— 和 `inputs` 的角色同一条:插件域只收形状,不认识生成的词汇。
@@ -111,6 +116,8 @@ def _model(entry: Any, text: Any) -> PluginModel | None:
     modes = tuple(str(one) for one in (entry.get("modes") or []) if isinstance(one, str) and one.strip())
     raw_outputs = entry.get("max_outputs")
     max_outputs = int(raw_outputs) if isinstance(raw_outputs, int) and not isinstance(raw_outputs, bool) else 1
+    per_run = entry.get("outputs_per_run")
+    outputs_per_run = int(per_run) if isinstance(per_run, int) and not isinstance(per_run, bool) else 1
     return PluginModel(
         id=model_id,
         label=text(entry.get("label")).strip() or model_id,
@@ -119,6 +126,7 @@ def _model(entry: Any, text: Any) -> PluginModel | None:
         parameters=_parameters(entry.get("parameters"), text),
         inputs=_inputs(entry.get("inputs"), text),
         max_outputs=min(max(max_outputs, 1), 16),
+        outputs_per_run=min(max(outputs_per_run, 1), _MAX_OUTPUTS_PER_RUN),
         prompt_dialect=str(entry.get("prompt_dialect") or "").strip()[:40],
         prompt=str(entry.get("prompt") or "").strip().lower()[:16] if isinstance(entry.get("prompt"), str) else "",
     )
@@ -163,6 +171,21 @@ def _parameters(raw: Any, text: Any) -> dict[str, dict[str, Any]]:
             clean["x-advanced"] = True
         if spec.get("x-multiline") is True and kind == "string":
             clean["x-multiline"] = True
+        # 可选值的名字(「结果取自」的选项是节点 id,给人看的是节点标题)和每个可选值一次交回几份:
+        # 只认可选值里有的,对不上的丢掉。
+        choices = {str(one) for one in clean.get("enum") or ()}
+        labels = spec.get("x-enum-labels")
+        if isinstance(labels, dict) and choices:
+            named = {str(value): label for value, one in labels.items()
+                     if str(value) in choices and (label := _localizable(one, text, 120))}
+            if named:
+                clean["x-enum-labels"] = named
+        counts = spec.get("x-outputs-per-run")
+        if isinstance(counts, dict) and choices:
+            counted = {str(value): min(one, _MAX_OUTPUTS_PER_RUN) for value, one in counts.items()
+                       if str(value) in choices and isinstance(one, int) and not isinstance(one, bool) and one >= 1}
+            if counted:
+                clean["x-outputs-per-run"] = counted
         out[key] = clean
     return out
 

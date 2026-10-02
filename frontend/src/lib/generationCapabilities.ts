@@ -211,6 +211,9 @@ export interface DeclaredParameter {
   maximum?: number;
   step?: number;
   options: string[];
+  /** 可选值给人看的名字(插件的 `x-enum-labels`,宿主已按语言挑好):ComfyUI「结果取自」的选项是节点 id,
+   *  看到的是节点标题。没有名字的可选值照原样显示。 */
+  optionLabels: Record<string, string>;
   multiline: boolean;
   advanced: boolean;
 }
@@ -219,6 +222,13 @@ const DECLARED_TYPES: readonly DeclaredParameterType[] = ["integer", "number", "
 
 function finiteNumber(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+function optionLabels(raw: unknown): Record<string, string> {
+  if (!raw || typeof raw !== "object") return {};
+  return Object.fromEntries(
+    Object.entries(raw as Record<string, unknown>).filter((entry): entry is [string, string] => typeof entry[1] === "string" && entry[1] !== ""),
+  );
 }
 
 /** 这个模型声明的那些参数,常用的在前、「高级」的在后(两段内部保持插件给的顺序)。 */
@@ -243,6 +253,7 @@ export function declaredParameters(model: GenerationOption | null): DeclaredPara
       maximum: finiteNumber(spec.maximum),
       step: finiteNumber(spec.multipleOf) ?? (type === "integer" ? 1 : undefined),
       options: Array.isArray(spec.enum) ? spec.enum.map(String) : [],
+      optionLabels: optionLabels(spec["x-enum-labels"]),
       multiline: spec["x-multiline"] === true,
       advanced: spec["x-advanced"] === true,
     });

@@ -20,7 +20,7 @@ from typing import Any
 import pytest
 
 from app.domain.plugins import runtime
-from tests.fake_comfyui import MINIMAX_T2V_API, PNG, VIDEO_NODE_INFO, FakeComfyUI, minimax_h3_ui
+from tests.fake_comfyui import MINIMAX_T2V_API, PNG, TWO_SAVES_API, VIDEO_NODE_INFO, FakeComfyUI, minimax_h3_ui
 
 PLUGIN = Path(__file__).resolve().parents[2] / "plugins" / "bundled" / "comfyui"
 ENTRY = "tools/main.py"
@@ -236,6 +236,30 @@ def test_没有认得的采样器的视频图_提示词照样写进去(comfy, tm
                                                    "prompt": "一条金鱼"})
     assert comfy.posted("/prompt")[1]["prompt"]["105:104"]["inputs"]["prompt"] == "一条金鱼"
     assert len(output["outputs"]) == 1, "CreateVideo 合成、SaveVideo 存下来:交回一段"
+
+
+def test_两个保存节点_一次交回两份_结果取自选一个就只交回它的(comfy, tmp_path: Path) -> None:
+    """目录说一次交回几份(`outputs_per_run`),做的就是那几份:没选张数时画布一次出一张(工作流里存着 2 张也是),
+    两个保存节点各一张;「结果取自」选了「高清」,只交回它那一张,原图那个保存节点不跑。"""
+    comfy.state.workflows["two.json"] = TWO_SAVES_API
+    comfy.state.outputs = {"9": {"images": [{"filename": "base_00001_.png", "subfolder": "", "type": "output"}]},
+                           "12": {"images": [{"filename": "hd_00001_.png", "subfolder": "", "type": "output"}]}}
+    model = next(one for one in _models(comfy.url) if one["id"] == "two.json")
+    assert model["outputs_per_run"] == 2 and model["parameters"]["output_node"]["enum"] == ["all", "9", "12"]
+
+    output, _, _ = _generate(comfy.url, tmp_path, {"model": "two.json"})
+    submitted = comfy.posted("/prompt")[0]["prompt"]
+    assert submitted["5"]["inputs"]["batch_size"] == 1, "没选张数:一次一张,和目录里张数的缺省一致"
+    assert {"9", "12"} <= set(submitted)
+    assert len(output["outputs"]) == 2 and output["usage"] == {"images": 2}
+
+    output, _, _ = _generate(comfy.url, tmp_path, {"model": "two.json",
+                                                   "parameters": {"output_node": "12", "num_images": 2}})
+    submitted = comfy.posted("/prompt")[1]["prompt"]
+    assert "9" not in submitted and submitted["5"]["inputs"]["batch_size"] == 2
+    assert output["usage"] == {"images": 1}
+    viewed = [query["filename"] for method, path, query in comfy.state.calls if method == "GET" and path == "/view"]
+    assert viewed[-1:] == [["hd_00001_.png"]], viewed
 
 
 def test_取消只停这一个任务(comfy, tmp_path: Path) -> None:

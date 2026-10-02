@@ -25,6 +25,7 @@ const steps: DeclaredParameter = {
   maximum: 150,
   step: 1,
   options: [],
+  optionLabels: {},
   multiline: false,
   advanced: false,
 };

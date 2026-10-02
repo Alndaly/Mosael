@@ -252,7 +252,7 @@ export function useGenerateNodeSection({
           options: [],
           declared: {
             key: "lyrics", type: "string", label: t("genLyrics"), description: t("genLyricsHint"),
-            defaultValue: undefined, options: [], multiline: true, advanced: false,
+            defaultValue: undefined, options: [], optionLabels: {}, multiline: true, advanced: false,
           },
         });
       }
