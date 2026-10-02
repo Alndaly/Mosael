@@ -1402,6 +1402,47 @@ def build_ffmpeg_command(
     return args
 
 
+_FILTER_SCRIPT_FLAGS: dict[str, str] = {}
+
+
+def _filter_script_flag(ffmpeg: str) -> str:
+    """「从文件读滤镜图」在这台机器的 ffmpeg 上怎么写(按可执行文件缓存)。
+
+    ffmpeg 7.0 起是通用的 `-/filter_complex <文件>`(任何选项前加 `-/` 都表示从文件读值),
+    旧的 `-filter_complex_script` 在 7.x 还认、8.0 起删了;6.x 及更早只认后者。所以看
+    `-h full` 里还列不列它:列着就用它(≤7.x 都通),没列就是新版,用 `-/`。
+    探测没成就按新版算,但**不记住** —— 一次失败的探测不该定下这个进程以后每一次导出。"""
+    if ffmpeg in _FILTER_SCRIPT_FLAGS:
+        return _FILTER_SCRIPT_FLAGS[ffmpeg]
+    try:
+        probe = run_logged(
+            [ffmpeg, "-hide_banner", "-h", "full"],
+            capture_output=True, text=True, timeout=20, what="ffmpeg 选项探测", level=logging.DEBUG,
+        )
+    except Exception:
+        return "-/filter_complex"
+    if probe.returncode != 0 or not probe.stdout:
+        return "-/filter_complex"
+    flag = "-filter_complex_script" if "-filter_complex_script" in probe.stdout else "-/filter_complex"
+    _FILTER_SCRIPT_FLAGS[ffmpeg] = flag
+    return flag
+
+
+def _with_filter_script(command: list[str], workdir: Path) -> list[str]:
+    """把命令里的滤镜图挪进这次渲染中转目录里的一个文件,命令行只留文件路径(随目录一起清掉)。
+
+    滤镜图随时间线线性增长(每段、每层、每条字幕都是几百个字符),而 Windows 上一条命令行
+    最长 32767 个字符(CreateProcess 的上限)—— 一两百段的时间线在那里连 ffmpeg 都起不来,
+    报的还是「文件名或扩展名太长」这种看不出原因的话。放进文件就和时间线多长无关了。
+    build_ffmpeg_command 仍然产出带内联滤镜图的命令:读起来、测起来都是一整条。"""
+    if "-filter_complex" not in command:
+        return command
+    at = command.index("-filter_complex")
+    script = workdir / "filter_complex.txt"
+    script.write_text(command[at + 1], encoding="utf-8")
+    return [*command[:at], _filter_script_flag(command[0]), str(script), *command[at + 2:]]
+
+
 def _png_size(data: bytes) -> tuple[int, int]:
     """从 PNG 头(IHDR)读宽高,免依赖。"""
     return int.from_bytes(data[16:20], "big"), int.from_bytes(data[20:24], "big")
@@ -1472,7 +1513,8 @@ def render_still(plan: RenderPlan, resolve: Callable[[str], Path], output_path: 
         text_pngs = _text_for_burn(plan, workdir)
         command = build_ffmpeg_command(plan, resolve, output_path, text_pngs=text_pngs, still_at=at, workdir=workdir)
         try:
-            result = run_logged(command, capture_output=True, text=True, timeout=_STILL_TIMEOUT, what="取当前帧")
+            result = run_logged(_with_filter_script(command, workdir), capture_output=True, text=True,
+                                timeout=_STILL_TIMEOUT, what="取当前帧")
         except subprocess.TimeoutExpired as exc:
             raise RenderExecutionError("renderErr_frameTimeout", seconds=_STILL_TIMEOUT) from exc
     if result.returncode != 0:
@@ -1490,7 +1532,7 @@ def render_still(plan: RenderPlan, resolve: Callable[[str], Path], output_path: 
 
 @contextlib.contextmanager
 def render_workdir() -> Iterator[Path]:
-    """一次导出 / 取帧自己的中转目录:文字 PNG、.ass 这些都写在这里,结束(成功、失败、取消)时整个删掉。
+    """一次导出 / 取帧自己的中转目录:文字 PNG、.ass、滤镜图这些都写在这里,结束(成功、失败、取消)时整个删掉。
 
     此前它们写在成片旁边,文件名按**序列** id 起(`text_{sequence_id}.sub0.png`):同一条时间线同时导出
     两份(比如 1080p 和 720p),后起的那份把先起的那份的字幕 PNG 覆盖掉 —— 先起的成片里烧进去的是另一份
@@ -1542,7 +1584,9 @@ def execute_render(
             command = build_ffmpeg_command(
                 plan, resolve, output_path, force_software=force_software, text_pngs=text_pngs, workdir=workdir
             )
-            process = popen_text(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            process = popen_text(
+                _with_filter_script(command, workdir), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+            )
             # ffmpeg's stderr must be drained WHILE we read progress off stdout. A source it cannot
             # fully decode emits an error per frame even at -v error; once that fills the pipe ffmpeg
             # blocks writing it, stops emitting progress, and both sides wait forever with the job
