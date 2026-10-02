@@ -700,7 +700,7 @@ function SubtitleStyleControls({
               onCommit={(v) => patch({ font_size: v })}
             />
             <StyleRow label={t("subColor")}>
-              <StyleColor label={t("subColor")} value={s.color} onChange={(v) => patch({ color: v })} />
+              <StyleColor label={t("subColor")} value={s.color} onPreview={(v) => preview({ color: v })} onCommit={(v) => patch({ color: v })} />
             </StyleRow>
             {/* 加粗自成一行,用和花字面板同一种「按下 / 抬起」的切换键 —— 此前它是一个开关,
                 挤在颜色那一行的右端,读起来像是这块颜色的附属选项。 */}
@@ -727,7 +727,8 @@ function SubtitleStyleControls({
               <StyleColor
                 label={t("subBg")}
                 value={s.bg_color}
-                onChange={(v) => patch({ bg_color: v })}
+                onPreview={(v) => preview({ bg_color: v })}
+                onCommit={(v) => patch({ bg_color: v })}
                 // 不透明度归零就是「没有衬底」—— 说出来,免得用户以为自己把颜色调错了。
                 note={s.bg_opacity <= 0.001 ? t("subBgNone") : undefined}
               />
@@ -850,15 +851,49 @@ function StyleSlider({
  * 颜色:一枚紧凑色块 + 十六进制读数,和花字面板(Inspector 的 TextStylePanel)同一种色块。
  * 此前色块铺满整行 —— 一条白色 / 黑色的长条,看着像一个进度条或者一块没加载出来的图。
  */
-function StyleColor({ label, value, onChange, note }: { label: string; value: string; onChange: (v: string) => void; note?: string }) {
+function StyleColor({
+  label,
+  value,
+  onPreview,
+  onCommit,
+  note,
+}: {
+  label: string;
+  value: string;
+  onPreview: (v: string) => void;
+  onCommit: (v: string) => void;
+  note?: string;
+}) {
+  //: **拖动只预览、松手才提交**(和滑杆同一个规矩)。React 的 onChange 是原生的 input 事件,在取色盘里拖一下就是
+  //: 几十次 —— 此前每一次都写一次库、记一步撤销、刷一遍整条时间线。原生的 change 事件只在选定(松手 / 关掉取色盘)
+  //: 时来一次,提交挂在它上面。
+  const ref = React.useRef<HTMLInputElement | null>(null);
+  const commit = React.useRef(onCommit);
+  commit.current = onCommit;
+  //: 拖动中最后预览的那个颜色。受控输入框的 value 由上层的预览草稿喂回来,不靠它 —— 提交的就是用户最后看到的那个。
+  const latest = React.useRef<string | null>(null);
+  React.useEffect(() => {
+    const input = ref.current;
+    if (!input) return;
+    const settle = () => {
+      commit.current(latest.current ?? input.value);
+      latest.current = null;
+    };
+    input.addEventListener("change", settle);
+    return () => input.removeEventListener("change", settle);
+  }, []);
   return (
     <span className="col-span-2 flex min-w-0 items-center gap-2">
       <input
+        ref={ref}
         type="color"
         aria-label={label}
         className="h-7 w-9 shrink-0 cursor-pointer rounded-md border border-field-border bg-transparent p-0.5 [&::-webkit-color-swatch]:rounded [&::-webkit-color-swatch]:border-0 [&::-webkit-color-swatch-wrapper]:p-0"
         value={value}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={(e) => {
+          latest.current = e.target.value;
+          onPreview(e.target.value);
+        }}
       />
       <span className="timecode text-ui-xs uppercase text-muted-foreground">{value}</span>
       {note && <span className="ml-auto truncate text-ui-xs text-muted-foreground">{note}</span>}

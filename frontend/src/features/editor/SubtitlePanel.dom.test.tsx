@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import React from "react";
 import { describe, expect, it, vi } from "vitest";
@@ -111,6 +111,7 @@ describe("去配音页的入口", () => {
 describe("字幕样式表单", () => {
   function renderStyle(style: Record<string, unknown> = {}) {
     const onSetStyle = vi.fn();
+    const onPreviewStyle = vi.fn();
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const view = render(
       <QueryClientProvider client={client}>
@@ -121,11 +122,12 @@ describe("字幕样式表单", () => {
           onDeleteClip={vi.fn()}
           style={style}
           onSetStyle={onSetStyle}
+          onPreviewStyle={onPreviewStyle}
           onUploadFont={vi.fn()}
         />
       </QueryClientProvider>,
     );
-    return { ...view, onSetStyle };
+    return { ...view, onSetStyle, onPreviewStyle };
   }
 
   it("三组各有名字,组名不和组里任何一行重名(此前是「位置 / 位置」)", async () => {
@@ -168,6 +170,18 @@ describe("字幕样式表单", () => {
     expect(swatch.className).not.toContain("flex-1");
     expect(swatch.parentElement).toHaveTextContent("#ffcc00");
     expect(screen.getByLabelText("subBg").className).toContain("w-9");
+  });
+
+  it("在取色盘里拖动只预览,选定(原生 change)才写回 —— 此前拖一下写几十次库、记几十步撤销", async () => {
+    const { onSetStyle, onPreviewStyle } = renderStyle();
+    await userEvent.click(screen.getByRole("button", { name: /subtitleStyle/ }));
+    const swatch = screen.getByLabelText("subColor") as HTMLInputElement;
+    for (const color of ["#110000", "#220000", "#330000"]) fireEvent.input(swatch, { target: { value: color } });
+    expect(onPreviewStyle).toHaveBeenLastCalledWith(expect.objectContaining({ color: "#330000" }));
+    expect(onSetStyle).not.toHaveBeenCalled();
+    swatch.dispatchEvent(new Event("change", { bubbles: true }));
+    expect(onSetStyle).toHaveBeenCalledOnce();
+    expect(onSetStyle).toHaveBeenLastCalledWith(expect.objectContaining({ color: "#330000" }));
   });
 
   it("加粗自成一行,是一个按下 / 抬起的切换键,写回的字段不变", async () => {
