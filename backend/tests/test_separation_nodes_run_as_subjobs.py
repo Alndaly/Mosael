@@ -113,10 +113,11 @@ def test_节点拆出来的两份也记着自己是从哪儿来的(monkeypatch, 
     _install(monkeypatch, "separate_audio")
     out = _node(ws, "separate_audio", asset_id)
     with SessionLocal() as db:
-        vocals = db.get(Asset, out["vocals_asset_id"]).media_info
-        background = db.get(Asset, out["background_asset_id"]).media_info
-    assert (vocals.get("derived_from_asset_id"), vocals.get("stem")) == (asset_id, VOCALS)
-    assert (background.get("derived_from_asset_id"), background.get("stem")) == (asset_id, BACKGROUND)
+        vocals = db.get(Asset, out["vocals_asset_id"])
+        background = db.get(Asset, out["background_asset_id"])
+        assert (vocals.derived_from, vocals.media_info.get("stem")) == ([{"asset_id": asset_id, "op": "separate"}], VOCALS)
+        assert (background.derived_from, background.media_info.get("stem")) == (
+            [{"asset_id": asset_id, "op": "separate"}], BACKGROUND)
 
 
 @pytest.mark.parametrize("node", ["separate_audio", "denoise_audio"])

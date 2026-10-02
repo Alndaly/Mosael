@@ -5,7 +5,7 @@ AI 出图常常一次交回一张拼好的宫格(九宫格表情包、四格分�
 
 宫格之间常有一道白边或黑边(出图模型画的分隔线)。`trim_gutter` 打开时,每一张再把四周和角上颜色相同的
 那一圈去掉,**每边最多去掉 6%**:分隔线只是一道细线,去得再多就是在啃画面了(白底的商品图四周本来就是白的)。
-原图不动;切出来的每一张记着它从哪张图、第几行第几列切出来(`media_info`)。
+原图不动;切出来的每一张记着它从哪张图切出来(`derived_from`,见 assets/lineage)、第几行第几列(`media_info`)。
 """
 
 from __future__ import annotations
@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 from app.core.i18n import LocalizedError
 from app.db.models import Asset
 from app.domain.assets.importer import register_file_asset
+from app.domain.assets.lineage import GRID_SPLIT, derived
 from app.media.paths import resolve_key
 
 #: 预设的切法:`行x列`。上限 12 张 —— 画板一轮最多落 12 格(boards.canvas.MAX_DERIVED_ITEMS)。
@@ -112,11 +113,10 @@ def split_image_grid(db: Session, asset: Asset, *, grid: str = DEFAULT_GRID, gut
                 source_path=target,
                 name=f"{asset.name} · {index + 1}",
                 source="generated",
+                derived_from=derived(GRID_SPLIT, asset.id),
             )
             piece.media_info = {
                 **(piece.media_info or {}),
-                "derived_from_asset_id": asset.id,
-                "derivation": "image_grid_split",
                 "grid": f"{rows}x{cols}",
                 "grid_cell": [index // cols + 1, index % cols + 1],
             }

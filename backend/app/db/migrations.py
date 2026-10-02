@@ -7110,6 +7110,124 @@ def _migrate_added_track_records_list_what_moved() -> None:
                 )
 
 
+def _migrate_assets_remember_where_they_came_from() -> None:
+    """素材补两列:出处 `derived_from`(`[{asset_id, op}]`)和「含 AI 生成 / 合成的内容」`ai_generated`
+    (见 domain/assets/lineage)。
+
+    加列必须在 SCHEMA 之前:之后 ORM 上的 Asset 已经指望这两列在了。老素材的回填在 AFTER_SCHEMA 的
+    backfill-asset-lineage —— 它要读生成记录和任务表。
+    """
+    with engine.begin() as conn:
+        columns = {row[1] for row in conn.execute(text("PRAGMA table_info(assets)"))}
+        if not columns:
+            return
+        if "derived_from" not in columns:
+            conn.execute(text("ALTER TABLE assets ADD COLUMN derived_from JSON NOT NULL DEFAULT '[]'"))
+        if "ai_generated" not in columns:
+            conn.execute(text("ALTER TABLE assets ADD COLUMN ai_generated BOOLEAN NOT NULL DEFAULT 0"))
+
+
+def _backfill_asset_lineage() -> None:
+    """老素材补上出处和「含 AI」:从现有记录推得出来的补上,推不出来的留空。
+
+    1. 自己就是 AI 做的:生成记录的每一份产出(generated_assets 一份一行;generation_jobs.result_asset_id
+       兜一道),来源是合成配音 / 播客 / 数字人整段的(tts、podcast、digital_human)。
+    2. 出处:
+       - 切宫格、分离、降噪、转 GIF 此前各自把出处塞在 media_info 的 `derived_from_asset_id` + `derivation` 里 ——
+         搬进 derived_from,media_info 里这两个键去掉(只留一处说法);derivation 不是这四种的原样留着;
+       - 画板截取的任务(jobs.kind = trim,成功的):payload.asset_id → result.asset_id;
+       - 导出任务(jobs.kind = render,成功的):成片的出处是它导出那一版时间线上的素材。只有时间线**还停在那一版**
+         (sequences.revision 等于任务记的 sequence_revision)时才认得出;之后改过的推不出,留空。
+       其余(取帧、对口型、插件……)当时没留下记录,推不出。
+    3. 「含 AI」顺着出处往下传:子素材总比出处晚登记,按创建时间排一遍就传到底;再跑到不变为止兜一道。
+
+    推断规则写在这里、不调领域代码:迁移是历史快照,领域以后怎么改,这一步重放出来的结果都不该变。
+    重跑:已经有出处的不动,「含 AI」只会从无到有,media_info 里的两个键第一遍就去掉了。
+    """
+    tables = set(inspect(engine).get_table_names())
+    if "assets" not in tables:
+        return
+    ops = {"image_grid_split": "grid_split", "separate_audio": "separate", "denoise": "denoise", "video_to_gif": "gif"}
+    synthesized = ("tts", "podcast", "digital_human")
+
+    def loads(value: Any, empty: Any) -> Any:
+        if isinstance(value, str):
+            try:
+                value = json.loads(value)
+            except ValueError:
+                return empty
+        return value if isinstance(value, type(empty)) else empty
+
+    with engine.begin() as conn:
+        rows = conn.execute(
+            text("SELECT id, source, media_info, derived_from, ai_generated FROM assets ORDER BY created_at, id")
+        ).mappings().all()
+        roots: set[str] = {row["id"] for row in rows if row["source"] in synthesized}
+        if "generated_assets" in tables:
+            roots |= {one for (one,) in conn.execute(text("SELECT asset_id FROM generated_assets"))}
+        if "generation_jobs" in tables:
+            roots |= {one for (one,) in conn.execute(
+                text("SELECT result_asset_id FROM generation_jobs WHERE result_asset_id IS NOT NULL"))}
+
+        inferred: dict[str, list[dict[str, str]]] = {}
+        if "jobs" in tables:
+            for kind, payload, result in conn.execute(
+                text("SELECT kind, payload, result FROM jobs WHERE kind IN ('trim', 'render') AND status = 'succeeded' "
+                     "ORDER BY created_at, id")
+            ):
+                payload, result = loads(payload, {}), loads(result, {})
+                made = str(result.get("asset_id") or "")
+                if not made:
+                    continue
+                if kind == "trim" and payload.get("asset_id"):
+                    inferred[made] = [{"asset_id": str(payload["asset_id"]), "op": "trim"}]
+                elif kind == "render" and {"sequences", "clips"} <= tables:
+                    revision = conn.execute(text("SELECT revision FROM sequences WHERE id = :id"),
+                                            {"id": str(payload.get("sequence_id") or "")}).scalar()
+                    if revision is None or revision != payload.get("sequence_revision"):
+                        continue
+                    used = conn.execute(
+                        text("SELECT asset_id FROM clips WHERE sequence_id = :id AND asset_id IS NOT NULL "
+                             "ORDER BY timeline_start, id"),
+                        {"id": str(payload["sequence_id"])},
+                    ).scalars().all()
+                    inferred[made] = [{"asset_id": one, "op": "export"} for one in dict.fromkeys(used) if one != made]
+
+        lineage: dict[str, list[dict[str, str]]] = {}
+        ai: dict[str, bool] = {}
+        #: media_info 要改写的那些(去掉搬走的两个键)。
+        infos: dict[str, dict[str, Any]] = {}
+        for row in rows:
+            asset_id = row["id"]
+            info = loads(row["media_info"], {})
+            parent, derivation = info.get("derived_from_asset_id"), info.get("derivation")
+            moved: list[dict[str, str]] = []
+            if parent and isinstance(derivation, str) and derivation in ops:
+                # 认得的才搬、才去掉;认不得的原样留着,不替它猜。
+                moved = [{"asset_id": str(parent), "op": ops[derivation]}]
+                infos[asset_id] = {key: value for key, value in info.items()
+                                   if key not in ("derived_from_asset_id", "derivation")}
+            current = loads(row["derived_from"], []) or moved or inferred.get(asset_id, [])
+            lineage[asset_id] = current
+            ai[asset_id] = bool(row["ai_generated"]) or asset_id in roots
+
+        grew = True
+        while grew:
+            grew = False
+            for asset_id, parents in lineage.items():
+                if not ai[asset_id] and any(ai.get(str(one.get("asset_id"))) for one in parents if isinstance(one, dict)):
+                    ai[asset_id] = grew = True
+
+        for row in rows:
+            asset_id = row["id"]
+            if lineage[asset_id] != loads(row["derived_from"], []) or ai[asset_id] != bool(row["ai_generated"]):
+                conn.execute(text("UPDATE assets SET derived_from = :lineage, ai_generated = :ai WHERE id = :id"),
+                             {"id": asset_id, "lineage": json.dumps(lineage[asset_id]), "ai": ai[asset_id]})
+            if asset_id in infos:
+                conn.execute(text("UPDATE assets SET media_info = :info WHERE id = :id"),
+                             {"id": asset_id, "info": json.dumps(infos[asset_id], ensure_ascii=False)})
+
+
 def _reindex_record_references() -> None:
     """引用表(record_references)是派生数据:抽取规则一变,整张按新规则重建。"""
     from app.db.references import reindex
@@ -7240,6 +7358,8 @@ def migration_plan() -> MigrationPlan:
                 _migrate_asset_extractions_remember_page_images,
                 # 加列必须在 SCHEMA 之前:之后 ORM 上的 GenerationJob 已经指望失败原因那三列在了。
                 _migrate_generation_jobs_keep_their_failure,
+                # 同上:ORM 上的 Asset 指望出处和「含 AI」两列在。
+                _migrate_assets_remember_where_they_came_from,
             ),
             #: create_all 每次启动都要跑 —— 新版本加的表靠它建出来,记账跳过就再也建不了。
             *_recurring(MigrationPhase.SCHEMA, _create_current_schema),
@@ -7387,6 +7507,8 @@ def migration_plan() -> MigrationPlan:
                 #: 排在素材对照那一步之后:对照后面跟着的文档已被它整段挪走,这一步只切还留在提示词里的。
                 _migrate_generation_prompts_drop_the_reference_documents,
             ),
+            #: 老素材补出处和「含 AI」:读生成记录、任务、时间线(jobs 的 payload / result 在很老的库上也是上面才齐)。
+            *_steps(MigrationPhase.AFTER_SCHEMA, _backfill_asset_lineage),
             #: 「本会话始终允许」记成 (工具, 档位)。排在所有改写这份清单(工具改名、去掉退役工具)的迁移之后 ——
             #: 它们认的是旧的工具名列表。
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_session_allow_remembers_the_tier),

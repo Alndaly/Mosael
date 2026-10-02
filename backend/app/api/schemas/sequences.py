@@ -105,23 +105,23 @@ class SequenceOut(OrmModel):
     can_undo: bool = False
     can_redo: bool = False
     tracks: list[TrackOut] = Field(default_factory=list)
-    #: 时间线上用到的 AI 生成素材(片段上的「AI」角标、导出对话框的标识开关都看它,见 assets/provenance)。
+    #: 时间线上用到的含 AI 生成内容的素材(片段上的「AI」角标、导出对话框的标识开关都看它)。判定和导出加标识
+    #: 是同一个:素材登记时定下、顺着出处继承的 Asset.ai_generated(见 assets/lineage.ai_generated_assets)。
     ai_asset_ids: list[str] = Field(default_factory=list)
 
     @model_validator(mode="wrap")
     @classmethod
     def _with_ai_assets(cls, value: Any, handler: Any) -> SequenceOut:
-        """从库里的序列转出来时,顺手算出哪些素材是 AI 生成的。算出来、不存:AI 与否是素材的属性、
-        不是时间线的,存进序列就得在素材变了的时候跟着改。在这一层算而不在序列领域里算:序列域去问素材域
-        的话,两个包就互相 import 了(素材删除要回头动片段)。"""
+        """从库里的序列转出来时,顺手查出哪些素材含 AI(一次查询)。算出来、不存:AI 与否是素材的属性、
+        不是时间线的,存进序列就得在素材变了的时候跟着改。"""
         model = handler(value)
         state = sqlalchemy_inspect(value, raiseerr=False)
         session = state.session if state is not None else None
         if session is not None:
-            from app.domain.assets.provenance import ai_generated_asset_ids
+            from app.domain.assets.lineage import ai_generated_assets
 
             used = {clip.asset_id for track in model.tracks for clip in track.clips if clip.asset_id}
-            model.ai_asset_ids = sorted(ai_generated_asset_ids(session, used))
+            model.ai_asset_ids = sorted(ai_generated_assets(session, used))
         return model
 
 

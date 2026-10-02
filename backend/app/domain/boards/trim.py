@@ -25,6 +25,7 @@ from app.core.config import settings
 from app.core.unit_of_work import unit_of_work
 from app.db.models import Asset, Job
 from app.domain.assets.importer import register_file_asset
+from app.domain.assets.lineage import TRIM, derived
 from app.domain.jobs import create_job, dispatch_job, emit_job_event, run_job_guarded, say
 from app.media.paths import resolve_key
 
@@ -122,6 +123,7 @@ def _trim_body(job_id: str, asset_id: str, start: float, end: float, mute: bool)
                 #: 名字带上范围 —— 一张画板上截出五段,光看「xxx 的片段」分不出哪段是哪段。
                 name=f"{asset.name} · {start:.1f}-{end:.1f}s",
                 source="generated",
+                derived_from=derived(TRIM, asset.id),
             )
 
         job.status = "succeeded"

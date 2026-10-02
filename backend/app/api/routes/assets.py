@@ -7,7 +7,7 @@ from fastapi.responses import FileResponse
 
 from app.core.i18n import tr
 from app.api.deps import CurrentUser, DbSession, Tx
-from app.api.schemas import AssetFrameRequest, AnalyzeAssetRequest, AnalyzeAssetResponse, AssetOut, AssetUpdate, DenoiseAssetRequest, JobOut, LocalImportRequest, TranscriptAttachRequest, TranscriptOut, UrlImportRequest, UrlProbeRequest, UrlProbeResponse, UrlSupportResponse, VideoToGifRequest
+from app.api.schemas import AssetFrameRequest, AnalyzeAssetRequest, AnalyzeAssetResponse, AssetLineageOut, AssetOut, AssetUpdate, DenoiseAssetRequest, JobOut, LocalImportRequest, TranscriptAttachRequest, TranscriptOut, UrlImportRequest, UrlProbeRequest, UrlProbeResponse, UrlSupportResponse, VideoToGifRequest
 from app.domain.voices.transcription import ASRError
 from app.db.models import Asset, Job, Transcript
 from app.core.config import settings
@@ -192,6 +192,12 @@ def get_asset(asset_id: str, db: DbSession, user: CurrentUser) -> Asset:
     # 单资产详情。前端 MediaPreview / 智能体工具卡靠它拉元数据;缺这个路由会 404,
     # 卡片就一直显示「素材不可用」。
     return use_cases.readable(db, user, asset_id)
+
+
+@router.get("/assets/{asset_id}/lineage", response_model=AssetLineageOut)
+def get_asset_lineage(asset_id: str, db: DbSession, user: CurrentUser) -> dict:
+    """来源链:这份素材是从哪几份、经过什么操作做出来的,一级一级往上(素材详情里的「来自」)。"""
+    return use_cases.lineage(db, user, asset_id)
 
 
 @router.patch("/assets/{asset_id}", response_model=AssetOut)

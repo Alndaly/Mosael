@@ -246,6 +246,7 @@ def dub_lipsync(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[st
     """
     from app.db.models import Asset, Clip, Sequence, Track
     from app.domain.assets.importer import register_file_asset
+    from app.domain.assets.lineage import CONCAT, MIX, TRIM, Derivation, derived
     from app.domain.render import DIGITAL_HUMAN_SOURCE
     from app.domain.sequences.operations import AddTrack, InsertClip, add_track, insert_clip
     from app.domain.workflows.executors.subjobs import _asset_in, _sequence_in
@@ -291,12 +292,16 @@ def dub_lipsync(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[st
         voice = work / "voice.wav"
         _mix_voice(lines, span, voice)
 
-        def keep(path: Path, name: str, source: str = "derived") -> str:
+        def keep(path: Path, name: str, derived_from: tuple[Derivation, ...], source: str = "derived",
+                 ai_generated: bool = False) -> str:
             #: 挂在译配那个项目下,不散落在素材库的「未归属」里(此前每块两份中间素材都是 project_id=None)。
             return register_file_asset(db, workspace_id=scope.workspace_id, project_id=project_id, source_path=path,
-                                       name=name, source=source).id
+                                       name=name, source=source, derived_from=derived_from,
+                                       ai_generated=ai_generated).id
 
         parts: list[Path] = []
+        #: 改过口型的每一块(接回的整段的出处,和原片一起)。
+        lipsynced: list[str] = []
         for index, (begin, end) in enumerate(chunks, start=1):
             piece = work / f"video-{index}.mp4"
             _cut(source_path, src_in + begin, src_in + end, piece, audio=False)
@@ -314,20 +319,23 @@ def dub_lipsync(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[st
                 #: 每一块都是一次付费改口型:这一轮在停(取消了、别的节点失败了)就不再提交下一块。
                 stop_if_stopping(db)
                 label = f"{video_name} · 对口型第 {index} 块"
+                said = [line.asset_id for line in lines if line.start < end and line.end > begin]
                 results = _generate(db, scope, model, [
-                    {"asset_id": keep(piece, f"{label}(原片)"), "role": SOURCE_VIDEO},
-                    {"asset_id": keep(speech, f"{label}(配音)"), "role": DRIVING_AUDIO},
+                    {"asset_id": keep(piece, f"{label}(原片)", derived(TRIM, video_id)), "role": SOURCE_VIDEO},
+                    {"asset_id": keep(speech, f"{label}(配音)", derived(MIX, *said)), "role": DRIVING_AUDIO},
                 ], project_id=project_id)
                 if not results:
                     raise WorkflowDomainError("wfErr_dubLipsyncNoResult", params={"index": index})
                 done = _asset_in(db, scope, results[0]).id
                 _remember_chunk(done, key)
                 generated += 1
+            lipsynced.append(done)
             parts.append(resolve_key(str(_asset_in(db, scope, done).file_key)))
         joined = work / "lipsync.mp4"
         _join(parts, width, height, fps, joined)
         #: 接回的整段不是哪一条生成记录的产出:标上数字人来源,导出时照样加 AI 标识(ADR 0028 §5)。
-        final = keep(joined, f"{video_name} · 对口型", DIGITAL_HUMAN_SOURCE)
+        final = keep(joined, f"{video_name} · 对口型", derived(CONCAT, video_id, *lipsynced), DIGITAL_HUMAN_SOURCE,
+                     ai_generated=True)
     #: 接回来的整段可能比原片短几帧(各块按帧取整):铺上去的长度取两者较短的那个。
     length = min(span, float((db.get(Asset, final).media_info or {}).get("duration") or span))
 

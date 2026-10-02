@@ -71,7 +71,7 @@ def test_降噪插件和本机引擎并列_点名它就走插件_产出记着是
     with SessionLocal() as db:
         made, used = denoise_asset(db, db.get(Asset, asset_id), engine=plugin, strength="light", owner_user_id=me)
         assert used == plugin and made.media_info["denoise_engine"] == plugin
-        assert made.media_info["derived_from_asset_id"] == asset_id
+        assert made.derived_from == [{"asset_id": asset_id, "op": "denoise"}]
 
 
 def test_分离插件_点名它拆出两份新素材(tmp_path) -> None:

@@ -16,6 +16,7 @@ from app.core.i18n import tr
 from app.domain.jobs import RENDER_SLOTS, dispatch_job, run_job_guarded, say
 from app.db.models import Asset, Font, Job, Lut, Sequence, Track
 from app.domain.assets.importer import register_file_asset
+from app.domain.assets.lineage import EXPORT, FRAME, derived
 from app.domain.export_presets import QUALITY_PRESETS, RESOLUTION_PRESETS
 from app.domain.jobs import create_job, emit_job_event, finish_job, register_job_child, unregister_job_child
 from app.media.paths import resolve_key
@@ -339,7 +340,29 @@ def grab_sequence_frame(db: Session, sequence_id: str, at: float, *, created_by:
             #: 名字带上时间 —— 从同一条时间线取三帧,光看「xxx 的帧」分不出哪张是哪张。
             name=f"{sequence.name} · {at:.1f}s",
             source="generated",
+            derived_from=derived(FRAME, *_sources_at(plan, at)),
         )
+
+
+def _sources_at(plan: RenderPlan, at: float) -> list[str]:
+    """`at` 这一刻画面上看得见的素材:那一刻的底轨片段和盖在上面的叠层(取当前帧的出处)。"""
+    found: list[str] = []
+    cursor = 0.0
+    for segment in plan.video_segments:
+        if segment.source is not None and cursor <= at < cursor + segment.duration:
+            found.append(segment.source.asset_id)
+        cursor += segment.duration
+    found += [item.source.asset_id for item in plan.overlays if item.start <= at < item.start + item.duration]
+    return found
+
+
+def _export_sources(plan: RenderPlan) -> list[str]:
+    """成片用到的素材:底轨的每一段、上层的每一段、混进去的每一段声音(静音的不在计划里)。导出成片的出处。"""
+    return [
+        *(segment.source.asset_id for segment in plan.video_segments if segment.source is not None),
+        *(item.source.asset_id for item in plan.overlays),
+        *(item.source.asset_id for item in plan.audio_overlays),
+    ]
 
 
 def start_export(db: Session, sequence_id: str, export_params: dict | None = None, *, created_by: str | None) -> Job:
@@ -482,6 +505,8 @@ def _run_export_body(job_id: str, plan: RenderPlan) -> None:
                 project_id=sequence.project_id if sequence else None,
                 source_path=output_path,
                 name=f"{sequence.name if sequence else 'Sequence'} · Export r{plan.sequence_revision}",
+                #: 成片的出处是它用到的每一份素材 —— 其中有 AI 内容的,成片也含 AI 内容(导出再拿去剪、再导出,照样认得出)。
+                derived_from=derived(EXPORT, *_export_sources(plan)),
             )
             if finish_job(
                 db,

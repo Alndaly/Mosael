@@ -121,7 +121,7 @@ def _fake_processing(monkeypatch, ws: str) -> list[str]:
     def fake_denoise(db, asset, **_):
         calls.append("denoise")
         made = Asset(workspace_id=ws, kind=asset.kind, name="降噪", file_key="media/dn.mp4",
-                     media_info={"duration": 10.0, "derived_from_asset_id": asset.id, "derivation": "denoise"})
+                     derived_from=[{"asset_id": asset.id, "op": "denoise"}], media_info={"duration": 10.0})
         db.add(made)
         db.flush()
         return made, "fake"
@@ -131,8 +131,8 @@ def _fake_processing(monkeypatch, ws: str) -> list[str]:
         made = {}
         for stem in ("vocals", "background"):
             row = Asset(workspace_id=ws, kind="audio", name=stem, file_key=f"media/{stem}.wav",
-                        media_info={"duration": 10.0, "derived_from_asset_id": asset.id, "derivation": "separate_audio",
-                                    "stem": stem})
+                        derived_from=[{"asset_id": asset.id, "op": "separate"}],
+                        media_info={"duration": 10.0, "stem": stem})
             db.add(row)
             db.flush()
             made[stem] = row

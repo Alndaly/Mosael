@@ -120,8 +120,8 @@ def _fake_separation(monkeypatch, ws: str) -> list[tuple[str, tuple[float, float
         made = {}
         for stem in ("vocals", "background"):
             row = Asset(workspace_id=ws, kind="audio", name=f"{asset.name}·{stem}", file_key=f"media/{stem}.wav",
-                        media_info={"derived_from_asset_id": asset.id, "derivation": "separate_audio", "stem": stem,
-                                    "source_range": list(span)})
+                        derived_from=[{"asset_id": asset.id, "op": "separate"}],
+                        media_info={"stem": stem, "source_range": list(span)})
             db.add(row)
             db.flush()
             made[stem] = row

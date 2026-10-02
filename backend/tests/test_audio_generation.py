@@ -297,6 +297,7 @@ def test_一次音频生成走普通的执行器_每一首都登记成音频素�
             assert asset.kind == "audio"
             assert asset.media_info["duration"] == pytest.approx(seconds, abs=0.05)
             assert db.get(GeneratedAsset, asset_id).model == "song-1"
+            assert asset.ai_generated is True, "每一首都含 AI —— 不只是记在 result_asset_id 上的那一首"
         usage = db.scalars(select(ProviderUsageEvent).where(ProviderUsageEvent.job_id == job_id)).one()
         assert usage.capability == "audio"
         assert usage.units["audios"] == 2

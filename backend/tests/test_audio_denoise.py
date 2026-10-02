@@ -278,7 +278,7 @@ class Test产出新素材:
             assert engine == "ffmpeg"
             assert made.id != asset.id and made.kind == "audio"
             assert "访谈" in made.name and "降噪" in made.name
-            assert made.media_info["derived_from_asset_id"] == asset.id
+            assert made.derived_from == [{"asset_id": asset.id, "op": "denoise"}]
             assert made.media_info["denoise_strength"] == "strong"
             db.refresh(asset)
             assert asset.file_key == "k"
@@ -375,7 +375,7 @@ class Test工作流节点和确认卡:
 
             out = denoise_audio_node(db, workflow, {"asset_id": ours.id, "engine": "", "strength": "light"})
             assert out["engine"] == "ffmpeg"
-            assert db.get(Asset, out["asset_id"]).media_info["derived_from_asset_id"] == ours.id
+            assert db.get(Asset, out["asset_id"]).derived_from == [{"asset_id": ours.id, "op": "denoise"}]
 
             with pytest.raises(WorkflowDomainError):
                 denoise_audio_node(db, workflow, {"asset_id": theirs.id})

@@ -17,12 +17,13 @@ from __future__ import annotations
 
 import logging
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.i18n import LocalizedError
 from app.core.unit_of_work import unit_of_work
 from app.db.models import Asset, Clip, Job, Sequence, Track
+from app.domain.assets.lineage import SEPARATE, made_from
 from app.domain.jobs import RENDER_SLOTS, create_job, dispatch_job, emit_job_event, finish_job, run_job_guarded, say
 
 logger = logging.getLogger(__name__)
@@ -76,8 +77,7 @@ def _cached_stems(db: Session, asset: Asset) -> dict[str, str]:
         select(Asset)
         .where(
             Asset.workspace_id == asset.workspace_id,
-            func.json_extract(Asset.media_info, "$.derived_from_asset_id") == asset.id,
-            func.json_extract(Asset.media_info, "$.derivation") == "separate_audio",
+            made_from(asset.id, SEPARATE),
         )
         .order_by(Asset.created_at.desc())
     )

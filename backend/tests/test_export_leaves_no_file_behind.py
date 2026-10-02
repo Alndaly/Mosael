@@ -31,7 +31,9 @@ def _job(workspace_id: str) -> str:
 
 
 def _plan() -> SimpleNamespace:
-    return SimpleNamespace(render_plan_hash="test", sequence_id="seq-1", sequence_revision=1)
+    # 成片登记时要记出处(计划里用到的素材,见 render._export_sources):这里一份都没有。
+    return SimpleNamespace(render_plan_hash="test", sequence_id="seq-1", sequence_revision=1,
+                           video_segments=(), overlays=(), audio_overlays=())
 
 
 def _workspace() -> str:

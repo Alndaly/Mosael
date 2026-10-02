@@ -30,6 +30,7 @@ from app.ai.providers.contracts.separation import (
 from app.core.unit_of_work import unit_of_work
 from app.db.models import Asset, Job
 from app.domain.assets.importer import register_file_asset
+from app.domain.assets.lineage import SEPARATE, derived
 from app.media.audio_io import AudioIOError, as_audio
 from app.domain.jobs import RENDER_SLOTS, create_job, dispatch_job, emit_job_event, finish_job, run_job_guarded, say
 from app.media.paths import resolve_key
@@ -129,15 +130,14 @@ def separate_asset(
                 source_path=path,
                 name=f"{asset.name} · {_SUFFIX[stem]}",
                 source="separated",
+                derived_from=derived(SEPARATE, asset.id),
             )
-    # 派生关系放在新素材上;原素材不改一字(和转 GIF、降噪同款)。**记在产出它们的这一处**,
-    # 不在某个调用方里:此前只有界面那条任务路径记,工作流节点和配音收尾拆出来的 stem
-    # 都不知道自己是从哪份来的、哪份是人声。
+    # 出处(登记时的 derived_from)和哪份是人声都记在新素材上;原素材不改一字(和转 GIF、降噪同款)。
+    # **记在产出它们的这一处**,不在某个调用方里:此前只有界面那条任务路径记,工作流节点和配音收尾
+    # 拆出来的 stem 都不知道自己是从哪份来的、哪份是人声。
     for stem, produced in made.items():
         produced.media_info = {
             **(produced.media_info or {}),
-            "derived_from_asset_id": asset.id,
-            "derivation": "separate_audio",
             "stem": stem,
             "separation_engine": adapter.engine_id,
             **({"source_range": [span[0], span[1]]} if span else {}),

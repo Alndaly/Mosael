@@ -372,7 +372,7 @@ class Test当作任务跑:
             }
             assert set(stems) == {VOCALS, BACKGROUND}
             for one in stems.values():
-                assert db.get(Asset, one).media_info["derived_from_asset_id"] == asset_id
+                assert db.get(Asset, one).derived_from == [{"asset_id": asset_id, "op": "separate"}]
 
 
 class Test节点上的引擎是选出来的:

@@ -25,10 +25,12 @@ from sqlalchemy.orm import Session
 
 
 class Sink(Protocol):
-    """文件 → 宿主。返回一个**引用**(素材 id),插件拿到的就是它。"""
+    """文件 → 宿主。返回一个**引用**(素材 id),插件拿到的就是它。`derived_from` 是这次调用交给插件的那几个引用 ——
+    产出是拿它们做出来的(宿主据此记出处;插件这一侧不用知道)。"""
 
     def __call__(
-        self, db: Session, path: Path, *, workspace_id: str, project_id: str | None, name: str
+        self, db: Session, path: Path, *, workspace_id: str, project_id: str | None, name: str,
+        derived_from: tuple[str, ...] = (),
     ) -> tuple[str, str]: ...
 
 

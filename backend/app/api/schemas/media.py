@@ -8,6 +8,13 @@ from typing import Any
 from pydantic import Field, computed_field
 from app.api.schemas.base import ApiModel, OrmModel
 
+class AssetDerivationOut(ApiModel):
+    """一项出处:从哪份素材、经过什么操作(op 的取值见 domain/assets/lineage.OPS)。"""
+
+    asset_id: str
+    op: str
+
+
 class AssetOut(OrmModel):
     id: str
     workspace_id: str
@@ -19,6 +26,10 @@ class AssetOut(OrmModel):
     file_key: str
     media_info: dict
     tags: list[str] = Field(default_factory=list)
+    #: 它是从哪几份素材做出来的(截取、转 GIF、导出成片……);导入的素材是空的。
+    derived_from: list[AssetDerivationOut] = Field(default_factory=list)
+    #: 含 AI 生成 / 合成的内容(自己是,或任一出处是)。导出时据此加 AI 标识。
+    ai_generated: bool = False
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
@@ -38,6 +49,25 @@ class AssetOut(OrmModel):
         from app.domain.assets.proxies import proxies_possible
 
         return proxies_possible(self)
+
+
+class AssetLineageNode(ApiModel):
+    """来源链上的一项出处。出处已经被删的,name / kind / ai_generated 是 None。"""
+
+    asset_id: str
+    op: str
+    name: str | None = None
+    kind: str | None = None
+    ai_generated: bool | None = None
+    parents: list[AssetLineageNode] = Field(default_factory=list)
+
+
+class AssetLineageOut(ApiModel):
+    """一份素材的来源链:它的出处,出处的出处……(往上至多几级,见 domain/assets/lineage)。"""
+
+    asset_id: str
+    ai_generated: bool
+    parents: list[AssetLineageNode]
 
 
 class AssetUpdate(ApiModel):

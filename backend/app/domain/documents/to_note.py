@@ -23,6 +23,7 @@ _IMAGE = re.compile(r"!\[([^\]]*)\]\(((?:images|pages)/[^)\s]+)\)")
 
 def save_as_note(db: Session, asset: Asset, *, actor_id: str) -> Note:
     from app.domain.assets.importer import register_file_asset
+    from app.domain.assets.lineage import EXTRACT, derived
     from app.domain.notes import create_note
 
     from app.domain.documents.reading import document_text
@@ -42,7 +43,8 @@ def save_as_note(db: Session, asset: Asset, *, actor_id: str) -> Note:
             if not source.is_relative_to(root.resolve()) or not source.is_file():
                 return ""
             made = register_file_asset(db, workspace_id=asset.workspace_id, project_id=asset.project_id, source_path=source,
-                                       name=f"{asset.name} · {alt or source.stem}", source="derived")
+                                       name=f"{asset.name} · {alt or source.stem}", source="derived",
+                                       derived_from=derived(EXTRACT, asset.id))
             kept[path] = made.id
         return f"![{alt}](mosael-asset:{kept[path]})"
 

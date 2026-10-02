@@ -65,7 +65,7 @@ def test_切成九张进素材库_按阅读顺序_记着出处(tmp_path) -> None
         source_name = db.get(Asset, source_id).name
         assert [piece.name for piece in pieces] == [f"{source_name} · {n}" for n in range(1, 10)]
         first, fifth = pieces[0], pieces[4]
-        assert first.media_info["derived_from_asset_id"] == source_id and first.media_info["grid_cell"] == [1, 1]
+        assert first.derived_from == [{"asset_id": source_id, "op": "grid_split"}] and first.media_info["grid_cell"] == [1, 1]
         assert fifth.media_info["grid_cell"] == [2, 2]
         with Image.open(resolve_key(fifth.file_key)) as tile:
             assert tile.size == (90, 90) and tile.convert("RGB").getpixel((45, 45)) == (128, 0, 128)

@@ -21,6 +21,7 @@ from sqlalchemy.orm import Session
 from app.core.i18n import LocalizedError
 from app.core.unit_of_work import unit_of_work
 from app.db.models import Asset, Clip, Sequence, Track, Transcript
+from app.domain.assets.lineage import SEPARATE, made_by, made_from
 
 if TYPE_CHECKING:
     from app.domain.sequences.grouping import OperationGroup
@@ -81,8 +82,7 @@ def _is_original_footage(db: Session, asset: Asset | None) -> bool:
     """
     if asset is None:
         return False
-    info = asset.media_info or {}
-    if info.get("derivation") == "separate_audio":
+    if made_by(asset, SEPARATE):
         return False
     if asset.kind == "video":
         return True
@@ -271,8 +271,7 @@ def _cached_background(db: Session, asset: Asset, span: tuple[float, float]) -> 
         select(Asset)
         .where(
             Asset.workspace_id == asset.workspace_id,
-            func.json_extract(Asset.media_info, "$.derived_from_asset_id") == asset.id,
-            func.json_extract(Asset.media_info, "$.derivation") == "separate_audio",
+            made_from(asset.id, SEPARATE),
             func.json_extract(Asset.media_info, "$.stem") == "background",
         )
         .order_by(Asset.created_at.desc())

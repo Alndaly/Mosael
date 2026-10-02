@@ -30,6 +30,7 @@ from app.ai.runtime import denoise_models
 from app.core.unit_of_work import unit_of_work
 from app.db.models import Asset, Job
 from app.domain.assets.importer import register_file_asset
+from app.domain.assets.lineage import DENOISE, derived
 from app.domain.jobs import RENDER_SLOTS, create_job, dispatch_job, emit_job_event, finish_job, run_job_guarded, say
 from app.media.audio_io import AudioIOError, as_audio, replace_audio
 from app.media.paths import resolve_key
@@ -143,12 +144,11 @@ def denoise_asset(
             source_path=output,
             name=f"{asset.name} · 降噪",
             source="denoised",
+            # 派生关系记在新素材上(同分离、转 GIF),否则"这份是从哪份降出来的"只能靠名字猜。
+            derived_from=derived(DENOISE, asset.id),
         )
-    # 派生关系记在新素材上(同分离、转 GIF),否则"这份是从哪份降出来的"只能靠名字猜。
     made.media_info = {
         **(made.media_info or {}),
-        "derived_from_asset_id": asset.id,
-        "derivation": "denoise",
         "denoise_engine": adapter.engine_id,
         "denoise_strength": request_strength if adapter.strengths else None,
     }

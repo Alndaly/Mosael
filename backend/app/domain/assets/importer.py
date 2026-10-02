@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import shutil
+from collections.abc import Sequence
 from pathlib import Path
 from typing import BinaryIO
 
@@ -10,6 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.models import Asset, new_id
+from app.domain.assets.lineage import Derivation, inherits_ai
 from app.domain.assets.project_scope import asset_project
 from app.media.paths import asset_dir, asset_key, resolve_key
 from app.core.i18n import LocalizedError
@@ -80,8 +82,14 @@ def register_file_asset(
     source_path: Path,
     name: str,
     source: str = "exported",
+    derived_from: Sequence[Derivation] = (),
+    ai_generated: bool = False,
 ) -> Asset:
-    """把一个已经存在的本机文件登记进素材库(渲染成片、配音产出、AI 生成结果都走这条)。"""
+    """把一个已经存在的本机文件登记进素材库(渲染成片、配音产出、AI 生成结果都走这条)。
+
+    `derived_from`:它是从哪几份素材做出来的(见 domain/assets/lineage —— 截取、转 GIF、导出成片……
+    **产出派生素材的地方都要说**,否则 AI 内容加工一道就认不出来了)。`ai_generated`:它自己就是 AI 生成 /
+    合成的(生成任务的产出、合成配音);出处里有 AI 内容的不用说,登记时自己继承。"""
     with source_path.open("rb") as handle:
         return _import_stream(
             db,
@@ -92,6 +100,8 @@ def register_file_asset(
             content_type=None,
             name=name,
             source=source,
+            derived_from=derived_from,
+            ai_generated=ai_generated,
         )
 
 
@@ -152,6 +162,8 @@ def _import_stream(
     content_type: str | None,
     name: str | None,
     source: str = "imported",
+    derived_from: Sequence[Derivation] = (),
+    ai_generated: bool = False,
 ) -> Asset:
     """**有字节的素材**入库的唯一实现:落盘 → 探测 → 缩略图/波形 → 建记录 → 起 proxy。
 
@@ -201,6 +213,9 @@ def _import_stream(
         original_filename=original,
         file_key=asset_key(workspace_id, asset_id, original),
         media_info=media_info,
+        derived_from=[one.as_json() for one in derived_from],
+        #: 含 AI 在这一刻定下:自己是 AI 做的,或继承出处的(见 lineage —— 导出时不再顺着来源链查库)。
+        ai_generated=ai_generated or inherits_ai(db, derived_from),
     )
     db.add(asset)
     # **这一笔提交是有意留下的**(入口层之外少数几处之一):字节已经落了盘,行跟着落库;调用方

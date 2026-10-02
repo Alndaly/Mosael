@@ -1129,6 +1129,26 @@ export interface paths {
         patch: operations["update_asset_api_assets__asset_id__patch"];
         trace?: never;
     };
+    "/api/assets/{asset_id}/lineage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Asset Lineage
+         * @description 来源链:这份素材是从哪几份、经过什么操作做出来的,一级一级往上(素材详情里的「来自」)。
+         */
+        get: operations["get_asset_lineage_api_assets__asset_id__lineage_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/assets/{asset_id}/analyze": {
         parameters: {
             query?: never;
@@ -7788,6 +7808,16 @@ export interface components {
             message: string;
         };
         /**
+         * AssetDerivationOut
+         * @description 一项出处:从哪份素材、经过什么操作(op 的取值见 domain/assets/lineage.OPS)。
+         */
+        AssetDerivationOut: {
+            /** Asset Id */
+            asset_id: string;
+            /** Op */
+            op: string;
+        };
+        /**
          * AssetEntityOut
          * @description 一份素材是哪个资产的参考图(素材详情里的「属于哪些资产」)。
          */
@@ -7877,6 +7907,36 @@ export interface components {
             /** Project Id */
             project_id?: string | null;
         };
+        /**
+         * AssetLineageNode
+         * @description 来源链上的一项出处。出处已经被删的,name / kind / ai_generated 是 None。
+         */
+        AssetLineageNode: {
+            /** Asset Id */
+            asset_id: string;
+            /** Op */
+            op: string;
+            /** Name */
+            name?: string | null;
+            /** Kind */
+            kind?: string | null;
+            /** Ai Generated */
+            ai_generated?: boolean | null;
+            /** Parents */
+            parents?: components["schemas"]["AssetLineageNode"][];
+        };
+        /**
+         * AssetLineageOut
+         * @description 一份素材的来源链:它的出处,出处的出处……(往上至多几级,见 domain/assets/lineage)。
+         */
+        AssetLineageOut: {
+            /** Asset Id */
+            asset_id: string;
+            /** Ai Generated */
+            ai_generated: boolean;
+            /** Parents */
+            parents: components["schemas"]["AssetLineageNode"][];
+        };
         /** AssetOut */
         AssetOut: {
             /** Id */
@@ -7901,6 +7961,13 @@ export interface components {
             };
             /** Tags */
             tags?: string[];
+            /** Derived From */
+            derived_from?: components["schemas"]["AssetDerivationOut"][];
+            /**
+             * Ai Generated
+             * @default false
+             */
+            ai_generated: boolean;
             /** Created At */
             created_at?: string | null;
             /** Updated At */
@@ -16700,6 +16767,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AssetOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_asset_lineage_api_assets__asset_id__lineage_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                asset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetLineageOut"];
                 };
             };
             /** @description Validation Error */

@@ -80,6 +80,15 @@ def asset_fields(tool: dict[str, Any]) -> list[str]:
     ]
 
 
+def asset_refs(tool: dict[str, Any], payload: dict[str, Any]) -> tuple[str, ...]:
+    """调用方交给这个工具的素材 id(声明成素材的那几格,按先后去重)。工具的产出拿它们记出处(见 artifacts.register)。"""
+    refs: list[str] = []
+    for key in asset_fields(tool):
+        value = payload.get(key)
+        refs += [str(one) for one in value if one] if isinstance(value, list) else [str(value)] if value else []
+    return tuple(dict.fromkeys(refs))
+
+
 def coerce(tool: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any]:
     """表单里填的是文字(工作流节点的配置、插件页试跑的输入框都是字符串),按 `input_schema` 声明的类型转回来:
     `integer` / `number` / `boolean` 的一格是字符串时转成数 / 布尔,空字符串当没填(去掉这一格)。
@@ -318,4 +327,4 @@ def materialize(
     return resolved
 
 
-__all__ = ["ASSET_FORMAT", "EXTERNAL_ID_FORMAT", "asset_fields", "coerce", "materialize", "schema_type"]
+__all__ = ["ASSET_FORMAT", "EXTERNAL_ID_FORMAT", "asset_fields", "asset_refs", "coerce", "materialize", "schema_type"]

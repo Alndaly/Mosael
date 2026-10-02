@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from app.core.i18n import LocalizedError
 from app.db.models import Asset
 from app.domain.assets.importer import register_file_asset
+from app.domain.assets.lineage import FRAME, derived
 from app.media.paths import resolve_key
 from app.media.still import grab_frame
 
@@ -34,4 +35,5 @@ def save_frame_as_asset(db: Session, asset: Asset, at: float, *, project_id: str
             #: 名字带上时间 —— 从同一段片子取三帧,光看「xxx 的帧」分不出哪张是哪张。
             name=f"{asset.name} · {at:.1f}s",
             source="generated",
+            derived_from=derived(FRAME, asset.id),
         )

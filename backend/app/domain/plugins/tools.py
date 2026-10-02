@@ -343,7 +343,7 @@ def invoke(
         else:
             output = _collect_artifact(
                 db, output, scratch, workspace_id=workspace_id, project_id=project_id, fallback_name=tool_name,
-                egress=egress,
+                egress=egress, inputs=plugin_inputs.asset_refs(tool, payload),
             )
         invocation.status, invocation.output = "succeeded", output
         inst.note_authorization(db, instance, rejected=False)
@@ -646,8 +646,9 @@ def _collect_artifact(
     project_id: str | None,
     fallback_name: str,
     egress: plugin_egress.Egress,
+    inputs: tuple[str, ...] = (),
 ) -> dict[str, Any]:
-    """把输出里的文件产出收进素材库:`artifact`(一份)换成 `asset_id`,`artifacts`(一串)换成
+    """把输出里的文件产出收进素材库(`inputs` 是这次交给插件的素材,产出记它们为出处):`artifact`(一份)换成 `asset_id`,`artifacts`(一串)换成
     `assets` / `asset_ids`,并在还没有 `asset_id` 时把第一份记成它 —— 下游(工作流里 `{{n1.asset_id}}`)
     不必知道这个工具交的是一份还是几份。
 
@@ -667,7 +668,7 @@ def _collect_artifact(
     if isinstance(single, dict):
         ref, name = artifacts.register(
             db, single, scratch, workspace_id=workspace_id, project_id=project_id, fallback_name=fallback_name,
-            egress=egress,
+            egress=egress, derived_from=inputs,
         )
         collected.update({"asset_id": ref, "asset_name": name})
     if isinstance(many, list):
@@ -675,7 +676,7 @@ def _collect_artifact(
         for spec in specs:
             ref, name = artifacts.register(
                 db, spec, scratch, workspace_id=workspace_id, project_id=project_id, fallback_name=fallback_name,
-                egress=egress,
+                egress=egress, derived_from=inputs,
             )
             extras = {
                 str(key): value for key, value in spec.items()

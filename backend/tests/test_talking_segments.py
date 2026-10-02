@@ -144,7 +144,8 @@ def test_拼接真的把几段接成一段() -> None:
             key = f"talk-test-{index}.wav"
             subprocess.run(["ffmpeg", "-y", "-v", "error", "-f", "lavfi", "-i", "sine=frequency=440:duration=1",
                             str(settings.data_dir / key)], check=True)
-            asset = Asset(workspace_id=ws, kind="audio", name=key, file_key=key, media_info={"duration": 1.0})
+            asset = Asset(workspace_id=ws, kind="audio", name=key, file_key=key, media_info={"duration": 1.0},
+                          ai_generated=True)
             db.add(asset)
             db.flush()
             ids.append(asset)
@@ -153,6 +154,9 @@ def test_拼接真的把几段接成一段() -> None:
         made = db.get(Asset, joined)
         assert made.workspace_id == ws and made.kind == "audio"
         assert abs(float(made.media_info["duration"]) - 2.0) < 0.1
+        # 出处是拼进来的那几段;它们是合成的配音,拼出来的这段也含 AI。
+        assert made.derived_from == [{"asset_id": one.id, "op": "concat"} for one in ids]
+        assert made.ai_generated is True
 
 
 KLING = {**S2V, "id": "k:video:kling-avatar", "model": "kling-avatar",

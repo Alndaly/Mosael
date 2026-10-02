@@ -42,6 +42,14 @@ def readable_file(db: Session, user: User, asset_id: str) -> Asset:
     return asset
 
 
+def lineage(db: Session, user: User, asset_id: str) -> dict[str, Any]:
+    """这份素材的来源链(他看得到这份素材才行;出处和它在同一个工作区)。"""
+    from app.domain.assets.lineage import lineage_tree
+
+    asset = require_asset(db, user, asset_id)
+    return {"asset_id": asset.id, "ai_generated": bool(asset.ai_generated), "parents": lineage_tree(db, asset)}
+
+
 def list_assets(
     db: Session,
     user: User,

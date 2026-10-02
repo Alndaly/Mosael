@@ -179,6 +179,7 @@ def test_存成笔记_插图这时才进素材库_分页隔开_来源记着原�
     images = [one for one in client.get("/api/assets", params={"workspace_id": ws}).json() if one["id"] != made["id"]]
     assert len(images) == 1 and images[0]["kind"] == "image"
     assert f"mosael-asset:{images[0]['id']}" in note["markdown"]
+    assert images[0]["derived_from"] == [{"asset_id": made["id"], "op": "extract"}], "插图记着是从哪份文档里取出来的"
 
 
 def test_还没解析好的不能存成笔记() -> None:

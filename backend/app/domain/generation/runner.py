@@ -206,6 +206,8 @@ def _run_generation(generation_id: str, *, resume_from: str = "") -> None:
                     source_path=path,
                     name=_asset_name(request.prompt, generation.model),
                     source="generated",
+                    #: 生成任务的每一份产出都是 AI 生成的(AI 工作台、画板、智能体、工作流都走这个漏斗)。
+                    ai_generated=True,
                 )
                 for path in result.output_paths
             ]

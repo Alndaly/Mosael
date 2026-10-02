@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Any
-from sqlalchemy import DateTime, ForeignKey, Index, Integer, JSON, String
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, JSON, String
 from sqlalchemy.orm import Mapped, mapped_column
 from app.core.db import Base
 from app.db.model_base import new_id, now
@@ -27,6 +27,10 @@ class Asset(Base):
     file_key: Mapped[str] = mapped_column(String(500), nullable=False, default="")
     media_info: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     tags: Mapped[list[Any]] = mapped_column(JSON, nullable=False, default=list)
+    #: 这份素材是从哪几份、经过什么操作做出来的:`[{asset_id, op}]`(见 domain/assets/lineage)。导入的是空的。
+    derived_from: Mapped[list[Any]] = mapped_column(JSON, nullable=False, default=list)
+    #: 含 AI 生成 / 合成的内容:自己是 AI 做的,或任一出处含 AI。登记时定下(继承),导出按它加标识。
+    ai_generated: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=now, onupdate=now, nullable=False)
 

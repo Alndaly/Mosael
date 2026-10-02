@@ -2946,6 +2946,49 @@
         }
       }
     },
+    "/api/assets/{asset_id}/lineage": {
+      "get": {
+        "tags": [
+          "assets"
+        ],
+        "summary": "Get Asset Lineage",
+        "description": "来源链:这份素材是从哪几份、经过什么操作做出来的,一级一级往上(素材详情里的「来自」)。",
+        "operationId": "get_asset_lineage_api_assets__asset_id__lineage_get",
+        "parameters": [
+          {
+            "name": "asset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Asset Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssetLineageOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/assets/{asset_id}/analyze": {
       "post": {
         "tags": [
@@ -23154,6 +23197,25 @@
         ],
         "title": "AsrModelOut"
       },
+      "AssetDerivationOut": {
+        "properties": {
+          "asset_id": {
+            "type": "string",
+            "title": "Asset Id"
+          },
+          "op": {
+            "type": "string",
+            "title": "Op"
+          }
+        },
+        "type": "object",
+        "required": [
+          "asset_id",
+          "op"
+        ],
+        "title": "AssetDerivationOut",
+        "description": "一项出处:从哪份素材、经过什么操作(op 的取值见 domain/assets/lineage.OPS)。"
+      },
       "AssetEntityOut": {
         "properties": {
           "id": {
@@ -23327,6 +23389,92 @@
         "title": "AssetFrameRequest",
         "description": "从一段视频里取某一时刻的一帧,存成一份新素材。"
       },
+      "AssetLineageNode": {
+        "properties": {
+          "asset_id": {
+            "type": "string",
+            "title": "Asset Id"
+          },
+          "op": {
+            "type": "string",
+            "title": "Op"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kind"
+          },
+          "ai_generated": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ai Generated"
+          },
+          "parents": {
+            "items": {
+              "$ref": "#/components/schemas/AssetLineageNode"
+            },
+            "type": "array",
+            "title": "Parents"
+          }
+        },
+        "type": "object",
+        "required": [
+          "asset_id",
+          "op"
+        ],
+        "title": "AssetLineageNode",
+        "description": "来源链上的一项出处。出处已经被删的,name / kind / ai_generated 是 None。"
+      },
+      "AssetLineageOut": {
+        "properties": {
+          "asset_id": {
+            "type": "string",
+            "title": "Asset Id"
+          },
+          "ai_generated": {
+            "type": "boolean",
+            "title": "Ai Generated"
+          },
+          "parents": {
+            "items": {
+              "$ref": "#/components/schemas/AssetLineageNode"
+            },
+            "type": "array",
+            "title": "Parents"
+          }
+        },
+        "type": "object",
+        "required": [
+          "asset_id",
+          "ai_generated",
+          "parents"
+        ],
+        "title": "AssetLineageOut",
+        "description": "一份素材的来源链:它的出处,出处的出处……(往上至多几级,见 domain/assets/lineage)。"
+      },
       "AssetOut": {
         "properties": {
           "id": {
@@ -23379,6 +23527,18 @@
             },
             "type": "array",
             "title": "Tags"
+          },
+          "derived_from": {
+            "items": {
+              "$ref": "#/components/schemas/AssetDerivationOut"
+            },
+            "type": "array",
+            "title": "Derived From"
+          },
+          "ai_generated": {
+            "type": "boolean",
+            "title": "Ai Generated",
+            "default": false
           },
           "created_at": {
             "anyOf": [

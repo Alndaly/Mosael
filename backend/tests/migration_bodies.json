@@ -1,6 +1,7 @@
 {
   "adopt-deepseek-vendor": "f42fe2eea7b98088",
   "backfill-activity-events": "097dfd677b7b46eb",
+  "backfill-asset-lineage": "98bc237b2cb4af76",
   "backfill-browser-pool": "8bf5b8bae7117258",
   "backfill-generation-failures": "2266e1d042a31a0a",
   "backfill-plugin-instances": "607a169e43a09c66",
@@ -28,6 +29,7 @@
   "migrate-agent-session-titles-drop-attachment-tokens": "1e65343fef00d7cc",
   "migrate-agent-thinking-level": "a01b2186f9af757d",
   "migrate-asset-extractions-remember-page-images": "2c845f1a664d62bf",
+  "migrate-assets-remember-where-they-came-from": "d78efd1f0b1d71d5",
   "migrate-audio-engines-are-providers": "5938a3485703345e",
   "migrate-auth-session-expiry": "d4d2606528ce1a4e",
   "migrate-blender-host-is-ipv4": "1710935947328230",

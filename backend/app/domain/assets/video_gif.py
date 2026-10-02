@@ -12,6 +12,7 @@ from app.core.unit_of_work import unit_of_work
 from app.core.i18n import LocalizedError
 from app.db.models import Asset, Job
 from app.domain.assets.importer import register_file_asset
+from app.domain.assets.lineage import GIF, derived
 from app.domain.jobs import RENDER_SLOTS, create_job, dispatch_job, emit_job_event, finish_job, run_job_guarded, say
 from app.media.paths import resolve_key
 from app.media.video_gif import encode_video_gif
@@ -99,12 +100,11 @@ def _body(job_id: str, asset_id: str, fps: int, width: int, start: float, durati
                 source_path=target,
                 name=f"{asset.name} · GIF",
                 source="generated",
+                # 派生关系放在新素材上;原视频不改一字。
+                derived_from=derived(GIF, asset.id),
             )
-            # 派生关系放在新素材上；原视频不改一字。后续可据此显示“来源”或重新转换。
             made.media_info = {
                 **(made.media_info or {}),
-                "derived_from_asset_id": asset.id,
-                "derivation": "video_to_gif",
                 "gif_fps": fps,
                 "gif_width": width,
                 "gif_start": start,

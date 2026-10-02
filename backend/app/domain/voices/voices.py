@@ -656,6 +656,8 @@ def _run_synthesis_body(
                     source_path=out_wav,
                     name=f"{voice.name} · 配音",
                     source="tts",
+                    #: 合成人声(克隆的嗓子也是):成片里有它就要加 AI 标识(《深度合成管理规定》第十七条)。
+                    ai_generated=True,
                 )
                 #: 记下是哪把克隆嗓子配的:这段音频拿去做数字人时,生成漏斗照它查音色的授权声明
                 #: (generation.operations.check_digital_human_rights)。引擎自带的嗓子不是谁的克隆,不记。
@@ -857,6 +859,7 @@ def _synthesize_remote(
             source_path=out,
             name=f"{engine_voice or engine} · 配音",
             source="tts",
+            ai_generated=True,
         )
     job = db.get(Job, job.id)
     job.status = "succeeded"
@@ -1000,6 +1003,7 @@ def _run_podcast_body(
                 source_path=out,
                 name="播客对话",
                 source="podcast",
+                ai_generated=True,
             )
 
         job = db.get(Job, job_id)

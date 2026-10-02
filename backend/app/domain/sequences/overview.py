@@ -61,6 +61,10 @@ def _clip(clip: Clip) -> dict[str, Any]:
     }
     if clip.asset is not None:
         row.update(asset_id=clip.asset_id, asset=clip.asset.name)
+        # 含 AI 生成内容(素材登记时定下、顺着出处继承的那一列):导出会加「AI 生成」标识,模型要能说得出是哪几段。
+        # 读的是素材行上的一列,不经素材域的函数 —— 序列域不 import 素材域(素材删除要回头动片段,反过来就成环)。
+        if clip.asset.ai_generated:
+            row["ai_generated"] = True
     elif clip.offline:
         # 素材被删了:这一段还在时间线上,但导出会被挡住。名字要给出来,模型才能告诉用户缺的是哪个文件。
         row.update(offline=True, asset=str((clip.offline_asset or {}).get("name") or ""))

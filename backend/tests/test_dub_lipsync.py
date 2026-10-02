@@ -109,6 +109,15 @@ def test_整条跑通_切两块都改口型_接回整段放在最上面_原片�
         assert db.get(Clip, ids.clip).track_id == ids.base, "原片不动"
         final = settings.data_dir / placed.asset.file_key
         assert digital_human_assets(db, {placed.asset_id}) == {placed.asset_id}, "接回的整段不是生成记录的产出,也认得出是数字人"
+        # 出处:切出来的每块原片 ← 原片(截取),每块配音 ← 配音轨上那几句(混音),接回的整段 ← 原片 + 改好的每一块。
+        pieces = [call["source_assets"][0]["asset_id"] for call in calls]
+        assert placed.asset.derived_from == [{"asset_id": ids.video, "op": "concat"}] + [
+            {"asset_id": one, "op": "concat"} for one in pieces]
+        assert placed.asset.ai_generated is True
+        for call in calls:
+            piece, speech = (db.get(Asset, one["asset_id"]) for one in call["source_assets"])
+            assert piece.derived_from == [{"asset_id": ids.video, "op": "trim"}]
+            assert speech.derived_from == [{"asset_id": ids.line, "op": "mix"}]
         plan = build_plan_for_sequence(db, ids.sequence, {})
         assert "AIGC" in dict(plan.output.metadata) and plan.text_overlays, "导出这条时间线:画面标识、AIGC 元数据都加上"
     streams = json.loads(subprocess.run(["ffprobe", "-v", "error", "-show_streams", "-of", "json", str(final)],

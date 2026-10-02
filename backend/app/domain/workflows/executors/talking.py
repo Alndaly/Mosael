@@ -382,6 +382,7 @@ def _concat_audio(db: Session, scope: RunScope, assets: list[Any], name: str) ->
 
     from app.core.child_process import run_logged
     from app.domain.assets.importer import register_file_asset
+    from app.domain.assets.lineage import CONCAT, derived
     from app.media.paths import resolve_key
 
     sources = [resolve_key(str(asset.file_key)) for asset in assets]
@@ -394,8 +395,9 @@ def _concat_audio(db: Session, scope: RunScope, assets: list[Any], name: str) ->
                             capture_output=True, text=True, timeout=300, what="口播分段拼接")
         if result.returncode != 0 or not target.exists():
             raise WorkflowDomainError("wfErr_talkingConcatFailed")
+        #: 合成的配音拼起来还是合成的:含 AI 跟着出处走(见 assets/lineage)。
         joined = register_file_asset(db, workspace_id=scope.workspace_id, project_id=None, source_path=target,
-                                     name=name, source="tts")
+                                     name=name, source="tts", derived_from=derived(CONCAT, *(one.id for one in assets)))
     #: 几句是同一把克隆嗓子配的:拼好的这段也记着它 —— 拿去别处做数字人时,漏斗照它查授权声明
     #: (generation.operations.check_digital_human_rights)。
     voices = {str((asset.media_info or {}).get("voice_id") or "") for asset in assets}
@@ -410,6 +412,7 @@ def _pad_audio(db: Session, scope: RunScope, asset: Any, seconds: float, name: s
 
     from app.core.child_process import run_logged
     from app.domain.assets.importer import register_file_asset
+    from app.domain.assets.lineage import PAD, derived
     from app.media.paths import resolve_key
 
     with tempfile.TemporaryDirectory(prefix="mosael-talking-") as folder:
@@ -420,7 +423,7 @@ def _pad_audio(db: Session, scope: RunScope, asset: Any, seconds: float, name: s
         if result.returncode != 0 or not target.exists():
             raise WorkflowDomainError("wfErr_talkingConcatFailed")
         padded = register_file_asset(db, workspace_id=scope.workspace_id, project_id=None, source_path=target,
-                                     name=name, source="tts")
+                                     name=name, source="tts", derived_from=derived(PAD, asset.id))
     voice = str((asset.media_info or {}).get("voice_id") or "")
     if voice:
         patch_media_info(db, padded.id, {"voice_id": voice})
