@@ -8534,6 +8534,11 @@ export interface components {
              * @default
              */
             asset_kind: string;
+            /**
+             * Asset Source
+             * @default
+             */
+            asset_source: string;
             /** Timeline Start */
             timeline_start: number;
             /** Src In */

@@ -106,6 +106,14 @@ class Clip(Base):
         return ""
 
     @property
+    def asset_source(self) -> str:
+        """这一段的素材是怎么来的(Asset.source:imported / generated / tts / separated……)。
+
+        界面据此把「分离出来的人声 / 背景音」这类派生素材排除在逐字稿之外 —— 它们说的是原片里的同一段话,
+        算进去每句话就出现两遍。"""
+        return self.asset.source if self.asset is not None else ""
+
+    @property
     def offline(self) -> bool:
         """素材已被删除。和"这是一行文字"不是一回事 —— 两者的 asset_id 都是空。"""
         return bool(self.offline_asset)

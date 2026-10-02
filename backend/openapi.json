@@ -24665,6 +24665,11 @@
             "title": "Asset Kind",
             "default": ""
           },
+          "asset_source": {
+            "type": "string",
+            "title": "Asset Source",
+            "default": ""
+          },
           "timeline_start": {
             "type": "number",
             "title": "Timeline Start"

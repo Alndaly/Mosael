@@ -27,6 +27,7 @@ import {
   type SegmentLike,
   type TranscriptDocItem,
 } from "@/domain/timeline/transcriptProjection";
+import { transcriptSourceClips } from "@/domain/timeline/transcriptSources";
 import { PILL } from "@/features/editor/pill";
 import { useEditorStore } from "@/features/editor/editorStore";
 import { useVirtualRows } from "@/features/editor/useVirtualRows";
@@ -345,13 +346,9 @@ export function TranscriptPanel({
   const [asrJobId, setAsrJobId] = React.useState<string | null>(null);
   const [asrError, setAsrError] = React.useState<string | null>(null);
 
-  // 逐字稿覆盖 V1(主叙事画面)加所有音轨(口播/旁白常在 A1)。
-  const videoClips = React.useMemo(() => {
-    const tracks = sequence.tracks ?? [];
-    const mainVideo = tracks.find((item) => item.kind === "video");
-    const audioTracks = tracks.filter((item) => item.kind === "audio");
-    return [...(mainVideo?.clips ?? []), ...audioTracks.flatMap((track) => track.clips ?? [])];
-  }, [sequence]);
+  // 逐字稿覆盖 V1(主叙事画面)加音轨(口播/旁白常在 A1)—— 不算配音轨和分离出来的派生素材,
+  // 同一段素材在视频轨和分离音频上只算一份(见 transcriptSourceClips,生成字幕用的是同一份)。
+  const videoClips = React.useMemo(() => transcriptSourceClips(sequence.tracks ?? []), [sequence]);
   // **按素材类型筛,不按轨道类型。** 视频轨上完全可以放图片,而图片没有声音:不筛的话一张静图排在
   // 最前时,「AI 转写」拿它去调接口,只换回一句「只有视频或音频素材可以转写」。
   const assetIds = React.useMemo(

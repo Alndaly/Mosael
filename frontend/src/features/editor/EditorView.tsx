@@ -60,6 +60,7 @@ import { EmptyState } from "@/components/layout/EmptyState";
 import { CanvasAgentChat, type CanvasAgentMode } from "@/features/agent/CanvasAgentChat";
 import { clipEnd } from "@/domain/timeline/geometry";
 import { projectTranscript, transcriptSegmentsFromApi, type SegmentLike } from "@/domain/timeline/transcriptProjection";
+import { transcriptSourceClips } from "@/domain/timeline/transcriptSources";
 import { type LeftTab, useEditorPanels } from "@/features/editor/useEditorPanels";
 import { usePersistentTab } from "@/lib/usePersistentTab";
 import { HANDLE_COLUMN, HANDLE_ROW, handleOffset, useResizableSidebar } from "@/lib/useResizableSidebar";
@@ -400,11 +401,8 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
   const generateSubtitlesMutation = useMutation({
     mutationFn: async ({ replace }: { replace: boolean }) => {
       const seq = sequence!;
-      const tracks = seq.tracks ?? [];
-      const clips = [
-        ...(tracks.find((tk) => tk.kind === "video")?.clips ?? []),
-        ...tracks.filter((tk) => tk.kind === "audio").flatMap((tk) => tk.clips ?? []),
-      ];
+      // 和逐字稿面板同一份「看哪些片段」:不算配音轨、分离出来的派生素材,同素材同位置只算一份。
+      const clips = transcriptSourceClips(seq.tracks ?? []);
       const assetIds = [...new Set(clips.map((c) => c.asset_id).filter((id): id is string => Boolean(id)))];
       //: 和逐字稿面板同一个键、同一种取法:面板已经取过的直接用缓存。
       const fetched = await Promise.all(
