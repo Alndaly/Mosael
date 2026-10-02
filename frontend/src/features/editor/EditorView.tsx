@@ -1249,6 +1249,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
           grabbingFrame={grabFrameMutation.isPending}
           onSplitClipAt={(clipId, srcTime) => splitMutation.mutate({ clipId, srcTime })}
           onDuplicateClip={(clipId) => duplicateClip(clipId)}
+          onDuplicateClipsAt={duplicateClipsAt}
           onDetachAudio={(clipId) => detachAudioMutation.mutate(clipId)}
           onReplaceMedia={setReplacingClipId}
           onClipAudio={(clipId, action) => clipAudioMutation.mutate({ clipId, action })}

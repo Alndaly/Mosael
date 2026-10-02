@@ -576,3 +576,27 @@ describe("N 开关吸附", () => {
     expect(useEditorStore.getState().snapEnabled).toBe(true);
   });
 });
+
+describe("⌥ 拖复制与 Esc", () => {
+  it("时间线上 ⌥ 拖到别的轨松手:深拷贝到落点那条轨", async () => {
+    renderEditor(sequenceWith([track("v1", "video", 0, [clip("c1", "v1", 0, 0, 2)]), track("v2", "video", 1, [])]));
+    await ready();
+    act(() => {
+      timeline("onDuplicateClipsAt")(["c1"], 3, "v2");
+    });
+    await waitFor(() => expect(mocks.duplicateClips).toHaveBeenCalledWith(onS1, { clip_ids: ["c1"], timeline_start: 3, track_id: "v2" }));
+  });
+
+  it("Esc 先撤掉剪切标记,再按一次清空选区", async () => {
+    renderEditor(sequenceWith([track("v1", "video", 0, [clip("c1", "v1", 0, 0, 2)])]));
+    await ready();
+    act(() => useEditorStore.getState().selectClip("c1"));
+    press("x", { metaKey: true });
+    expect(useEditorStore.getState().clipboard).toEqual({ clipIds: ["c1"], cut: true });
+    press("Escape");
+    expect(useEditorStore.getState().clipboard).toBeNull();
+    expect(useEditorStore.getState().selectedClipIds).toEqual(["c1"]);
+    press("Escape");
+    expect(useEditorStore.getState().selectedClipIds).toEqual([]);
+  });
+});

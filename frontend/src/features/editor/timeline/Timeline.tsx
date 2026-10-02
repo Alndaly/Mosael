@@ -31,6 +31,7 @@ import { MIN_PX_PER_SECOND, markedRange, useEditorStore } from "@/features/edito
 import { livePlayhead } from "@/features/editor/playback/playbackClock";
 import { TimelineClip } from "./TimelineClip";
 import { kindHasSound } from "@/lib/assetKinds";
+import { listenKeys } from "@/lib/shortcuts";
 import { cn } from "@/lib/utils";
 import { useDndMonitor, useDroppable } from "@dnd-kit/core";
 
@@ -102,6 +103,7 @@ export function Timeline({
   onGrabFrame,
   grabbingFrame = false,
   onDuplicateClip,
+  onDuplicateClipsAt,
   onDetachAudio,
   onReplaceMedia,
   onClipAudio,
@@ -131,6 +133,8 @@ export function Timeline({
   onGrabFrame?: () => void;
   grabbingFrame?: boolean;
   onDuplicateClip?: (clipId: string) => void;
+  /** 按住 ⌥ 拖动松手:把这几段复制到落点(整组最早的一段落在 timelineStart);只拖一段且换了轨时给 trackId。 */
+  onDuplicateClipsAt?: (clipIds: string[], timelineStart: number, trackId: string | null) => void;
   onDetachAudio?: (clipId: string) => void;
   /** 片段换成另一份素材(位置、时长、属性都不动)。 */
   onReplaceMedia?: (clipId: string) => void;
@@ -461,6 +465,7 @@ export function Timeline({
     }
     if (!useEditorStore.getState().selectedClipIds.includes(clip.id)) selectClip(clip.id);
     const startX = event.clientX;
+    const startY = event.clientY;
     const origin = { ...clip };
     // 组拖:按住的那个是锚点,其余选中片段按**同一个时间增量**跟随(框选后拖动应当整组一起走,
     // 而不是只拖鼠标底下那一个)。这里在起手时把跟随者连同它们的轨道索引一并快照——拖拽过程中
@@ -483,8 +488,9 @@ export function Timeline({
     const edgesByTrack = new Map(
       snapEnabled ? tracks.map((t) => [t.id, trackEdgeTimes(t.clips ?? [], clip.id)] as const) : [],
     );
-    const snapSetsFor = (laneId: string | null): { primary: number[]; secondary: number[] } => {
-      if (!snapEnabled) return { primary: [], secondary: [] };
+    // 按住 ⌘ / Ctrl 拖:这一下临时不吸附(想贴着某条边但又不想被吸过去的时候)。
+    const snapSetsFor = (laneId: string | null, suspended: boolean): { primary: number[]; secondary: number[] } => {
+      if (!snapEnabled || suspended) return { primary: [], secondary: [] };
       const primary = (laneId && edgesByTrack.get(laneId)) || [];
       const secondary = [0, dragPlayhead];
       for (const [id, edges] of edgesByTrack) if (id !== laneId) secondary.push(...edges);
@@ -498,14 +504,21 @@ export function Timeline({
     const onMove = (moveEvent: PointerEvent) => {
       autoScrollLanes(moveEvent.clientY);
       const rect = canvasRef.current?.getBoundingClientRect();
+      // 按住 ⇧ 锁轴:位移以横向为主就只改时间(不换轨),以纵向为主就只换轨(时间不动)。
+      const dx = moveEvent.clientX - startX;
+      const dy = moveEvent.clientY - startY;
+      const lockToTime = moveEvent.shiftKey && Math.abs(dx) >= Math.abs(dy);
+      const lockToLane = moveEvent.shiftKey && !lockToTime;
       // Dragged above the topmost lane → intent to spin up a new video layer.
       wantNewLayer = Boolean(
-        rect && onMoveClipToNewLayer && track.kind === "video" && moveEvent.clientY - rect.top - RULER_HEIGHT < 0,
+        !lockToTime && rect && onMoveClipToNewLayer && track.kind === "video" && moveEvent.clientY - rect.top - RULER_HEIGHT < 0,
       );
       setNewLayerDrag(wantNewLayer);
-      const lane = wantNewLayer ? null : laneTrackAt(moveEvent.clientY, track.kind);
-      const rawStart = snapToFrame(origin.timeline_start + pxToTime(moveEvent.clientX - startX, pxPerSecond), fps);
-      const sets = snapSetsFor(lane?.id ?? (wantNewLayer ? null : track.id));
+      const lane = wantNewLayer || lockToTime ? null : laneTrackAt(moveEvent.clientY, track.kind);
+      const rawStart = lockToLane
+        ? origin.timeline_start
+        : snapToFrame(origin.timeline_start + pxToTime(dx, pxPerSecond), fps);
+      const sets = snapSetsFor(lane?.id ?? (wantNewLayer ? null : track.id), lockToLane || moveEvent.metaKey || moveEvent.ctrlKey);
       const resolved = resolveMove(origin, rawStart, sets.primary, sets.secondary, pxPerSecond);
       const anchorTrackId = lane?.id ?? track.id;
       // 跟随者用锚点**吸附之后**的增量,整组保持相对位置——各自再吸附一次会让组内间距被拉变形。
@@ -534,11 +547,35 @@ export function Timeline({
         })),
       });
     };
-    const onUp = () => {
+    const detach = () => {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", cancel);
+      stopKeys();
       setNewLayerDrag(false);
+    };
+    // Esc / 指针被系统收回(pointercancel):整次拖动作废,片段回到原处,什么都不提交。
+    const cancel = () => {
+      detach();
+      useEditorStore.getState().setDragDraft(null);
+    };
+    const stopKeys = listenEscape(cancel);
+    const onUp = (upEvent: PointerEvent) => {
+      detach();
       const draft = useEditorStore.getState().dragDraft;
+      // 按住 ⌥ 松手:复制到落点,原片段留在原处(和 PR / 达芬奇一样)。草稿直接撤掉 —— 原片段没动,
+      // 副本等回包落进缓存后出现。
+      if (upEvent.altKey && onDuplicateClipsAt && draft && draft.clipId === clip.id && !wantNewLayer) {
+        useEditorStore.getState().setDragDraft(null);
+        const starts = [draft.timeline_start, ...(draft.followers ?? []).map((f) => f.timeline_start)];
+        const singleOnOtherTrack = !draft.followers?.length && draft.trackId !== track.id ? draft.trackId : null;
+        onDuplicateClipsAt(
+          [clip.id, ...(draft.followers ?? []).map((f) => f.clipId)],
+          Math.min(...starts),
+          singleOnOtherTrack,
+        );
+        return;
+      }
       // 提交前先把草稿标成 settling(而不是清掉):回包在途的几十毫秒里草稿继续把
       // 片段钉在松手位置,不闪回原位;顶部的 collapse memo 则靠这个标记区分
       // "拖拽中经过原点"(不能折叠)和"提交已落缓存"(该折叠、放落位动画)。
@@ -570,6 +607,7 @@ export function Timeline({
     };
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", cancel);
   };
 
   const startClipTrim = (event: React.PointerEvent, track: Track, clipId: string, edge: "start" | "end") => {
@@ -593,7 +631,10 @@ export function Timeline({
 
     const onMove = (moveEvent: PointerEvent) => {
       let rawTime = timeAtPointer(moveEvent);
-      if (snapEnabled) rawTime = snapTimeTiered(rawTime, trimPrimary, trimSecondary, pxPerSecond).time;
+      // 按住 ⌘ / Ctrl:这一下临时不吸附。
+      if (snapEnabled && !(moveEvent.metaKey || moveEvent.ctrlKey)) {
+        rawTime = snapTimeTiered(rawTime, trimPrimary, trimSecondary, pxPerSecond).time;
+      }
       const result = resolveTrim(origin, edge, rawTime, assetDuration);
       useEditorStore.getState().setDragDraft({
         clipId: clip.id,
@@ -602,9 +643,23 @@ export function Timeline({
         kind: edge === "start" ? "trim-start" : "trim-end",
       });
     };
-    const onUp = () => {
+    const detach = () => {
       target.removeEventListener("pointermove", onMove);
       target.removeEventListener("pointerup", onUp);
+      target.removeEventListener("pointercancel", cancel);
+      target.removeEventListener("lostpointercapture", cancel);
+      stopKeys();
+    };
+    // 修剪被打断 —— Esc、系统收回指针(pointercancel,如触控板手势、弹出的系统对话框)、指针捕获
+    // 在松手之前丢了 —— 一律作废:不提交,草稿撤掉。此前这几种情况下草稿留在原地、监听也没摘,
+    // 片段停在半截修剪的样子,下一次指针移动还会接着改它。
+    const cancel = () => {
+      detach();
+      useEditorStore.getState().setDragDraft(null);
+    };
+    const stopKeys = listenEscape(cancel);
+    const onUp = () => {
+      detach();
       const draft = useEditorStore.getState().dragDraft;
       if (draft && draft.clipId === clip.id) {
         // 与移动同理:settling 草稿钉住裁剪结果等回包,缓存追平后由过渡完成落位。
@@ -614,6 +669,8 @@ export function Timeline({
     };
     target.addEventListener("pointermove", onMove);
     target.addEventListener("pointerup", onUp);
+    target.addEventListener("pointercancel", cancel);
+    target.addEventListener("lostpointercapture", cancel);
   };
 
   // 给 memo 过的片段的手柄:身份恒定,按 (trackId, clipId) 找回此刻的轨道再分派。
@@ -1416,6 +1473,23 @@ function PlayheadReadout({ total, fps }: { total: number; fps: number }) {
       {formatFrameTimecode(playhead, fps)}
       <em> / {formatFrameTimecode(total, fps)}</em>
     </span>
+  );
+}
+
+/**
+ * 拖动 / 修剪进行中的 Esc:在捕获阶段接住并拦下 —— 这一下 Esc 是「取消这次拖动」,不该再传到
+ * 剪辑页的全局快捷键那里(那边的 Esc 是清选区 / 清剪切标记)。回一个摘掉监听的函数。
+ */
+function listenEscape(onEscape: () => void): () => void {
+  return listenKeys(
+    window,
+    (event) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopPropagation();
+      onEscape();
+    },
+    true,
   );
 }
 

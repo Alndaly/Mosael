@@ -131,6 +131,11 @@ export function useEditorShortcuts(
       } else if (!mod && (event.key === "Home" || event.key === "End")) {
         event.preventDefault();
         store.setPlayhead(event.key === "Home" ? 0 : totalOf(current));
+      } else if (event.key === "Escape") {
+        // 拖动 / 修剪中的 Esc 由时间线在捕获阶段接走(取消那次拖动),到不了这里。
+        // 这里的 Esc:先撤掉剪切标记(反悔了),再按一次清空选区。
+        if (store.clipboard?.cut) store.setClipboard(null);
+        else if (store.selectedClipIds.length > 0) store.selectClips([]);
       } else if (event.key === "Delete" || event.key === "Backspace") {
         if (store.selectedClipIds.length > 0 && current) {
           event.preventDefault();

@@ -140,3 +140,102 @@ describe("吸附按钮", () => {
     expect(button).toHaveAttribute("aria-pressed", "true");
   });
 });
+
+/** 在窗口上发指针事件(拖动片段时监听挂在 window 上)。 */
+function windowPointer(type: string, init: MouseEventInit) {
+  act(() => {
+    window.dispatchEvent(new MouseEvent(type, { buttons: 1, ...init }));
+  });
+}
+
+describe("拖动中的按键", () => {
+  const twoVideoTracks = () => [
+    track("V1", "video", 0, [clip("c1", "V1", 0, 0, 2)]),
+    track("V2", "video", 1, [clip("c2", "V2", 5, 0, 2)]),
+  ];
+
+  it("Esc 取消拖动:不提交,片段回到原处", () => {
+    const { props } = renderTimeline(twoVideoTracks());
+    fireEvent.pointerDown(screen.getByTestId("clip-c1"), { clientX: 10, clientY: 40, pointerId: 1, button: 0, buttons: 1 });
+    windowPointer("pointermove", { clientX: 90, clientY: 40 });
+    expect(useEditorStore.getState().dragDraft).not.toBeNull();
+    fireEvent.keyDown(document.body, { key: "Escape", code: "Escape" });
+    expect(useEditorStore.getState().dragDraft).toBeNull();
+    windowPointer("pointerup", { clientX: 90, clientY: 40 });
+    expect(props.onMoveClip).not.toHaveBeenCalled();
+  });
+
+  it("指针被系统收回(pointercancel):当作取消,不提交", () => {
+    const { props } = renderTimeline(twoVideoTracks());
+    fireEvent.pointerDown(screen.getByTestId("clip-c1"), { clientX: 10, clientY: 40, pointerId: 1, button: 0, buttons: 1 });
+    windowPointer("pointermove", { clientX: 90, clientY: 40 });
+    windowPointer("pointercancel", { clientX: 90, clientY: 40 });
+    expect(useEditorStore.getState().dragDraft).toBeNull();
+    windowPointer("pointerup", { clientX: 90, clientY: 40 });
+    expect(props.onMoveClip).not.toHaveBeenCalled();
+  });
+
+  it("按住 ⌥ 松手:在落点复制一份,原片段不动", () => {
+    const onDuplicateClipsAt = vi.fn();
+    const { props } = renderTimeline(twoVideoTracks(), { onDuplicateClipsAt });
+    fireEvent.pointerDown(screen.getByTestId("clip-c1"), { clientX: 10, clientY: 40, pointerId: 1, button: 0, buttons: 1 });
+    // 位移 120px = 3s。
+    windowPointer("pointermove", { clientX: 130, clientY: 40, altKey: true });
+    windowPointer("pointerup", { clientX: 130, clientY: 40, altKey: true });
+    expect(onDuplicateClipsAt).toHaveBeenCalledWith(["c1"], 3, null);
+    expect(props.onMoveClip).not.toHaveBeenCalled();
+    expect(useEditorStore.getState().dragDraft).toBeNull();
+  });
+
+  it("按住 ⇧ 锁轴:横向为主就不换轨,纵向为主就不改时间", () => {
+    const { props } = renderTimeline(twoVideoTracks());
+    // 第一下:横移 80px、竖移 50px(会落到 V2 那一行)—— 横向为主,锁在原轨。
+    fireEvent.pointerDown(screen.getByTestId("clip-c1"), { clientX: 10, clientY: 40, pointerId: 1, button: 0, buttons: 1 });
+    windowPointer("pointermove", { clientX: 90, clientY: 90, shiftKey: true });
+    windowPointer("pointerup", { clientX: 90, clientY: 90, shiftKey: true });
+    expect(props.onMoveClip).toHaveBeenLastCalledWith("c1", 2, undefined, false);
+  });
+
+  it("按住 ⇧ 纵向为主:换轨但时间不变", () => {
+    const { props } = renderTimeline(twoVideoTracks());
+    fireEvent.pointerDown(screen.getByTestId("clip-c1"), { clientX: 10, clientY: 40, pointerId: 1, button: 0, buttons: 1 });
+    windowPointer("pointermove", { clientX: 30, clientY: 90, shiftKey: true });
+    windowPointer("pointerup", { clientX: 30, clientY: 90, shiftKey: true });
+    expect(props.onMoveClip).toHaveBeenLastCalledWith("c1", 0, "V2", false);
+  });
+
+  it("按住 ⌘ 临时不吸附", () => {
+    const { props } = renderTimeline([track("V1", "video", 0, [clip("c1", "V1", 0, 0, 2), clip("c2", "V1", 5, 0, 2)])]);
+    fireEvent.pointerDown(screen.getByTestId("clip-c1"), { clientX: 10, clientY: 40, pointerId: 1, button: 0, buttons: 1 });
+    // 位移 114px ≈ 2.85s(吸到帧是第 86 帧)→ 尾边离 c2 的头(5s)约 5px —— 平时会吸过去(落在 3s)。
+    windowPointer("pointermove", { clientX: 124, clientY: 40, metaKey: true });
+    windowPointer("pointerup", { clientX: 124, clientY: 40, metaKey: true });
+    expect(props.onMoveClip).toHaveBeenLastCalledWith("c1", 86 / 30, undefined, false);
+    fireEvent.pointerDown(screen.getByTestId("clip-c1"), { clientX: 10, clientY: 40, pointerId: 1, button: 0, buttons: 1 });
+    windowPointer("pointermove", { clientX: 124, clientY: 40 });
+    windowPointer("pointerup", { clientX: 124, clientY: 40 });
+    expect(props.onMoveClip).toHaveBeenLastCalledWith("c1", 3, undefined, false);
+  });
+});
+
+describe("修剪中断", () => {
+  const one = () => [track("V1", "video", 0, [clip("c1", "V1", 0, 0, 4)])];
+
+  for (const [name, interrupt] of [
+    ["Esc", (handle: HTMLElement) => fireEvent.keyDown(handle, { key: "Escape", code: "Escape" })],
+    ["pointercancel", (handle: HTMLElement) => fireEvent.pointerCancel(handle, { pointerId: 1 })],
+    ["lostpointercapture", (handle: HTMLElement) => fireEvent(handle, new Event("lostpointercapture"))],
+  ] as const) {
+    it(`${name}:修剪作废,不提交,草稿撤掉`, () => {
+      const { props } = renderTimeline(one());
+      const handle = screen.getByTestId("trim-end-c1");
+      fireEvent.pointerDown(handle, { clientX: 160, pointerId: 1, button: 0, buttons: 1 });
+      fireEvent.pointerMove(handle, { clientX: 81, pointerId: 1, buttons: 1 });
+      expect(useEditorStore.getState().dragDraft).not.toBeNull();
+      interrupt(handle);
+      expect(useEditorStore.getState().dragDraft).toBeNull();
+      fireEvent.pointerUp(handle, { clientX: 81, pointerId: 1 });
+      expect(props.onTrimClip).not.toHaveBeenCalled();
+    });
+  }
+});
