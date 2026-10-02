@@ -215,6 +215,30 @@ def _validate_clip_range(timeline_start: float, src_in: float, src_out: float) -
         raise SequenceDomainError("src_out must be greater than src_in")
 
 
+def _claim_revision(db: Session, sequence: Sequence) -> tuple[int, int]:
+    """序列版本号加一,返回 (改之前, 改之后)。
+
+    版本号自增走**条件 UPDATE**,不是读出来加一再写回去。
+
+    后者是 check-then-act:两个写入方都读到 5,都写 6,于是两条编辑共用一个版本号 —— 而
+    版本号是撤销栈排序的依据(revision_after)、也是序列 JSON 缓存的键,两处都会因此错乱。
+    让数据库来挑赢家,输的那个改动 0 行,当场知道自己晚了一步。
+
+    这条路径以前基本只有一个人在走,现在不是了:智能体批准一张确认卡就会改时间线,而用户
+    同时还在拖片段 —— 两个写入方同时存在已经是常态。
+    (和 domain/agent/confirmations.py 的 _claim 同一个手法。)
+    """
+    before = sequence.revision
+    after = before + 1
+    claimed = db.execute(
+        update(Sequence).where(Sequence.id == sequence.id, Sequence.revision == before).values(revision=after)
+    ).rowcount
+    if claimed == 0:
+        # 409,和「照着过时的一版做」是同一种拒绝(见 concurrency):边界把最新的那一版交回去,而不是一句 422。
+        raise SequenceRevisionConflict("seqErr_revisionConflict", base_revision=before)
+    return before, after
+
+
 def _record_operation(
     db: Session,
     sequence: Sequence,
@@ -224,24 +248,15 @@ def _record_operation(
     summary: dict[str, Any],
     actor_id: str | None,
     undo_of: str | None = None,
-) -> None:
-    before = sequence.revision
-    after = before + 1
-    # 版本号自增走**条件 UPDATE**,不是读出来加一再写回去。
-    #
-    # 后者是 check-then-act:两个写入方都读到 5,都写 6,于是两条编辑共用一个版本号 —— 而
-    # 版本号是撤销栈排序的依据(revision_after)、也是序列 JSON 缓存的键,两处都会因此错乱。
-    # 让数据库来挑赢家,输的那个改动 0 行,当场知道自己晚了一步。
-    #
-    # 这条路径以前基本只有一个人在走,现在不是了:智能体批准一张确认卡就会改时间线,而用户
-    # 同时还在拖片段 —— 两个写入方同时存在已经是常态。
-    # (和 domain/agent/confirmations.py 的 _claim 同一个手法。)
-    claimed = db.execute(
-        update(Sequence).where(Sequence.id == sequence.id, Sequence.revision == before).values(revision=after)
-    ).rowcount
-    if claimed == 0:
-        # 409,和「照着过时的一版做」是同一种拒绝(见 concurrency):边界把最新的那一版交回去,而不是一句 422。
-        raise SequenceRevisionConflict("seqErr_revisionConflict", base_revision=before)
+) -> SequenceOperation:
+    #: 在一个操作组里(见 grouping.py,比如一次字幕配音):这一步并进组里那一条,撤销栈上不另记一步。
+    #: 撤销 / 重做自己的记账(带 undo_of)和组那一条本身不并。
+    from app.domain.sequences.grouping import GROUP_KIND, active_group
+
+    group = active_group(db, sequence.id) if undo_of is None and kind != GROUP_KIND else None
+    if group is not None:
+        return group.record(db, sequence, kind=kind, payload=payload, summary=summary)
+    before, after = _claim_revision(db, sequence)
     operation = SequenceOperation(
             workspace_id=sequence.workspace_id,
             sequence_id=sequence.id,
@@ -280,3 +295,4 @@ def _record_operation(
     # 这里 flush 一次:同一事务里接着组合的下一个算子(apply_edit_operations、配音任务)
     # 查到的就是这一步之后的时间线,冲突也在这一步当场报出来。
     db.flush()
+    return operation

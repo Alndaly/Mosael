@@ -37,4 +37,4 @@ from app.domain.sequences.undo.registry import (  # noqa: F401 —— 包的公�
 )
 
 # 导入即注册:各模块只认 registry,不回头 import 这个包 —— 包和它的子模块之间就没有环了。
-from app.domain.sequences.undo import clips, properties, tracks  # noqa: F401
+from app.domain.sequences.undo import clips, group, properties, tracks  # noqa: F401
