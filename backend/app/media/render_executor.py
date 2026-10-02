@@ -958,8 +958,14 @@ def _video_from(tin: float, speed: float) -> str:
 
     减的是 **trim 起点**,不是 STARTPTS(trim 之后第一帧自己的时间戳)—— 声音那边同理,见 _audio_from。
     两路都以同一个点为 0,画面和声音在素材里差多少,成片里就差多少。"""
-    base = f"PTS-{tin}/TB"
+    base = f"PTS{_minus(tin)}/TB"
     return base if speed == 1.0 else f"({base})/{speed}"
+
+
+def _minus(value: float) -> str:
+    """「减去 value」的写法。value 可以是负的(只渲一截时,素材的 0 点在这一路输入的快进点之前,见
+    _Window):写成 `-0.5`,不写 `--0.5`。"""
+    return f"-{value}" if value >= 0 else f"+{-value}"
 
 
 def _audio_from(tin: float) -> str:
@@ -970,7 +976,7 @@ def _audio_from(tin: float) -> str:
     那么多,口型对不上,而素材自己放是对的。走 -ss 快进的片段一样:快进点之后音轨的第一个采样也被拽到 0。
     现在两路都减 trim 起点;声音开头空着的那段由 aresample 的 first_pts=0 补静音(min_comp 打开补偿,
     中间的断档同样补上),后面 atempo 变速时这段静音跟着一起变。"""
-    return f"asetpts=PTS-{tin}/TB,aresample={AUDIO_RATE}:min_comp=0.001:min_hard_comp=0.01:first_pts=0,"
+    return f"asetpts=PTS{_minus(tin)}/TB,aresample={AUDIO_RATE}:min_comp=0.001:min_hard_comp=0.01:first_pts=0,"
 
 
 _IMAGE_LOOP_PAD = 0.2  # -t 相对 trim 末尾留的小余量,保证末帧不缺
@@ -1006,7 +1012,7 @@ def _image_loop_args(path: Path, trim_end: float) -> list[str]:
 
 def _base_video_chain(source: str, i: int, src_in: float, src_out: float, setpts: str, width: int, height: int, fps: float, tail: str, fill_mode: str, *, start_time: float = 0.0) -> str:
     """source(如 [3:v],或共用输入分出来的一支,见 _base_sources)→ [vi] 的完整视频链;按画幅填充模式
-    选择裁剪/留黑边/模糊背景。start_time 是这一路画面从段内第几秒开始(只有取一帧时不是 0,见 _StillBase)。"""
+    选择裁剪/留黑边/模糊背景。start_time 是这一路画面从段内第几秒开始(只有只渲一截时不是 0,见 _Window)。"""
     head = f"{source}trim=start={src_in}:end={src_out},setpts={setpts}"
     end = f",fps={fps}:start_time={start_time:g},format=yuv420p,setsar=1{tail}[v{i}]"
     if fill_mode == "cover":
@@ -1218,35 +1224,108 @@ def _video_encode_args(output, *, force_software: bool = False) -> list[str]:
     ]
 
 
-#: 取一帧时,那一段从这一刻之前多少秒开始解码。不卡在正好那一刻:fps 滤镜按输入时间戳给
-#: 每个输出时刻挑帧,前面留一小段余量,挑出来的才稳稳是成片同一时刻的那一帧。
-_STILL_PREROLL = 1.0
+#: 只渲一截(取一帧)时,跨进这一截的片段从这一截之前多少秒开始解码。不卡在正好那一刻:fps 滤镜按
+#: 输入时间戳给每个输出时刻挑帧,前面留一小段余量,挑出来的才稳稳是整条渲时同一时刻的那一帧。
+_WINDOW_PREROLL = 1.0
 
 
-class _StillBase(NamedTuple):
-    """取一帧时基底轨要渲的那一段:第几段、它在时间线上从哪开始、段内从第几秒开始解码;
-    at 是取的那一刻(时间线时间)。"""
+class _Window(NamedTuple):
+    """只渲时间线上 [start, end) 这一截(取一帧时 start == end,就是那一刻)。
 
-    index: int
+    基底轨上画面落在这一截里的是第 first..last 段;first 在时间线上从 base 开始,从段内第 skip 秒开始解
+    (前面的用不上)。别的层按各自的时间窗筛、跨进来的同样从这一截前一点开始解(见 _layer_skip)。"""
+
     start: float
+    end: float
+    first: int
+    last: int
+    base: float
     skip: float
-    at: float
+
+    def covers(self, item_start: float, duration: float) -> bool:
+        """这一层和这一截有没有交集(闭区间,宁多勿少 —— 真正显不显示仍由各自的 enable 决定)。"""
+        return item_start <= self.end and item_start + duration >= self.start
 
 
-def _still_base_segment(plan: RenderPlan, at: float) -> _StillBase:
-    """基底轨上画面落在 `at` 的那一段。前后的段在这一刻都不出画面,解它们纯属白干 ——
-    审查实测:300 秒的时间线,取第 5 秒和第 290 秒都要 3 秒,因为每次都把整条从头解了一遍。"""
-    start = 0.0
+def _segment_frames(plan: RenderPlan) -> list[tuple[int, int]]:
+    """基底轨每一段落在哪几帧上:(第一帧的帧号, 帧数)。段的起止按时间线时间取到最近的帧格。
+
+    **基底轨按整帧接**:每段的画面补齐 / 截到正好这么多帧、声音补齐 / 截到正好这么长(见 _exact_span),
+    concat 接出来的第 k 帧就是时间线上的第 k 帧。此前每段的长短由 concat 自己估 —— 画面按「最后一帧的时刻
+    × 帧数 /(帧数 − 1)」算、声音按采样算,取两者长的那个:起止不在帧格上的段,每段多出零点几帧,越往后
+    底轨越晚于上层、字幕和音频轨;而且估出来的长短取决于这一段从哪一帧开始,只渲一截(取一帧)时
+    接出来的位置和整条渲时就对不上。整帧接,位置只看帧号。"""
+    fps = plan.output.fps
+    frames: list[tuple[int, int]] = []
+    at = 0.0
+    count = len(plan.video_segments)
     for index, segment in enumerate(plan.video_segments):
-        if start <= at < start + segment.duration:
-            return _StillBase(index, start, round(max(0.0, at - start - _STILL_PREROLL), 6), at)
-        start += segment.duration
-    raise RenderExecutionError("stillErr_noFrame")
+        begin = _nearest_frame(at, fps)
+        at = round(at + segment.duration, 9)
+        #: 最后一段收在「片长之前的最后一整帧」之后 —— 和成片的 -t 片长一样:k/fps < 片长的帧都在。
+        end = math.ceil(at * fps - 1e-6) if index == count - 1 else _nearest_frame(at, fps)
+        frames.append((begin, end - begin))
+    return frames
+
+
+def _nearest_frame(at: float, fps: float) -> int:
+    """时间线上的一刻落在第几帧:四舍五入,正好半帧时往后(浮点误差不让它两边倒)。"""
+    return math.floor(at * fps + 0.5 + 1e-6)
+
+
+def _exact_span(frames: int, fps: float, *, audio: bool) -> str:
+    """一段补齐 / 截到正好 frames 帧那么长(带前导逗号;本段自己的时间,从 0 起)。画面不够就重复最后一帧
+    (素材比片段短时,此前那里是一段空档,成片按恒定帧率补的也是最后一帧),声音不够就补静音。"""
+    span = f"{frames / fps:.6f}"
+    if audio:
+        return f",apad=whole_dur={span},atrim=end={span}"
+    return f",tpad=stop_mode=clone:stop_duration={span},trim=end={span}"
+
+
+def _window(plan: RenderPlan, start: float, end: float) -> _Window:
+    """时间线 [start, end) 在基底轨上落在哪几段。前后的段在这一截里都不出画面,解它们纯属白干 ——
+    审查实测:300 秒的时间线,取第 5 秒和第 290 秒都要 3 秒,因为每次都把整条从头解了一遍。
+
+    段的起止按整帧算(见 _segment_frames);段内跳过的也是整帧,接起来的位置和整条渲时一帧不差。"""
+    fps = plan.output.fps
+    first = base = None
+    last = len(plan.video_segments) - 1
+    for index, (begin, count) in enumerate(_segment_frames(plan)):
+        lo, hi = begin / fps, (begin + count) / fps
+        if first is None and count and lo <= start < hi:
+            first, base = index, begin
+        if first is not None and count and lo <= max(start, end - 1e-6) < hi:
+            last = index
+            break
+    if first is None or base is None:
+        raise RenderExecutionError("stillErr_noFrame")
+    skip_frames = max(0, math.floor((start - base / fps - _WINDOW_PREROLL) * fps + 1e-6))
+    return _Window(start, end, first, last, base / fps, skip_frames / fps)
+
+
+def _layer_skip(window: _Window | None, item_start: float, path: Path) -> float:
+    """上层片段跨进这一截时,段内跳过的秒数;整条渲、图片(-loop 的流不认快进)是 0。"""
+    if window is None or guess_kind(path) == "image":
+        return 0.0
+    return round(max(0.0, window.start - _WINDOW_PREROLL - item_start), 6)
+
+
+def _frame_clock(fps: float) -> str:
+    """把底轨的时间单位换成「一帧」(不带逗号)。
+
+    concat 出来的时间单位是微秒,第 k 帧的时刻 k/fps 取整到微秒,而这个取整随这一路从哪一段开始接、前面
+    估过几段长短而差一微秒:整条渲是 6.000000,只渲一截时是 5.999999。上层片段的帧正好落在同一时刻时,
+    overlay 按「不晚于底下这一帧」挑帧 —— 差一微秒就挑到上一帧。换成帧,第 k 帧的时刻就是整数 k。"""
+    return f"settb=1/{fps:g}"
 
 
 def _shift_pts(seconds: float) -> str:
-    """把一路画面的时间戳整体后移(带前导逗号);不移就是空串,命令一字不变。"""
-    return f",setpts=PTS+{seconds}/TB" if seconds else ""
+    """把一路画面的时间戳整体挪 seconds 秒(带前导逗号,负数往前挪);不挪就是空串,命令一字不变。
+
+    挪的都是整帧(只渲一截时的段内跳过、这一截在时间线上的位置),但秒数是浮点:0.6333… 秒乘回帧数可能是
+    18.9999… 也可能是 19.0000…1,而 setpts 把结果**截断**成整数 —— 差一个时间单位(帧率时基下就是一整帧),
+    上层片段选帧就跟着错一帧。所以先 round。"""
+    return f",setpts=round(PTS{_minus(-seconds)}/TB)" if seconds else ""
 
 
 def still_plan(plan: RenderPlan, at: float) -> RenderPlan:
@@ -1289,17 +1368,20 @@ _SHARE_MAX_GAP = 10.0
 
 
 class _BaseSource(NamedTuple):
-    """基底轨上一段素材的画面、声音从哪个标签取,trim 的起止相对那一路输入的 0 点。"""
+    """基底轨上一段素材的画面、声音从哪个标签取,trim 的起止相对那一路输入的 0 点;zero 是这一段自己的
+    0 点在那一路输入里的位置(只渲一截、段内跳过一截时比 tin 早,可以是负的)。"""
 
     video: str
     audio: str | None  # 不要它的声音(没有音轨、被静音、取一帧)时是 None
     tin: float
     tout: float
-    skip: float  # 取一帧时段内跳过的秒数(见 _StillBase);成片恒为 0
+    zero: float
+    skip: float  # 只渲一截时段内跳过的秒数(见 _Window);整条渲恒为 0
 
 
 def _base_sources(
-    plan: RenderPlan, resolve: Callable[[str], Path], has_audio: dict, still: _StillBase | None,
+    plan: RenderPlan, resolve: Callable[[str], Path], has_audio: dict, window: _Window | None, *, sound: bool,
+    frames: list[tuple[int, int]],
 ) -> tuple[list[str], list[str], dict[int, _BaseSource]]:
     """基底轨各段的输入:返回 (输入参数, 分支滤镜, 每段 → _BaseSource)。
 
@@ -1313,15 +1395,17 @@ def _base_sources(
     runs: list[dict] = []
     by_source: dict[Path, list[dict]] = {}
     for i, segment in enumerate(plan.video_segments):
-        if segment.kind != "clip" or segment.source is None or (still is not None and i != still.index):
+        if segment.kind != "clip" or segment.source is None or not frames[i][1]:
+            continue  # 不到半帧长的段落不到任何一帧上
+        if window is not None and not window.first <= i <= window.last:
             continue
         path = resolve(segment.source.file_key)
         image = guess_kind(path) == "image"
-        # 取一帧时从段内第 skip 秒开始解;-loop 出来的图片流不认输入侧快进,从头生成也只是几帧静图。
-        skip = still.skip if still is not None and not image else 0.0
+        # 只渲一截时,头一段从段内第 skip 秒开始解;-loop 出来的图片流不认输入侧快进,从头生成也只是几帧静图。
+        skip = window.skip if window is not None and i == window.first and not image else 0.0
         src_in, src_out = segment.source.src_in + skip * segment.speed, segment.source.src_out
-        sound = still is None and has_audio.get(path, False) and not plan.mute_base_audio and not segment.muted
-        member = (i, src_in, src_out, sound, skip)
+        audible = sound and has_audio.get(path, False) and not plan.mute_base_audio and not segment.muted
+        member = (i, src_in, src_out, audible, skip, segment.source.src_in)
         #: 接得上的几路里挑跳得最少的那一路(倒回去用过一次之后,后面接着往后剪的还能回到原来那一路)。
         fits = [run for run in by_source.get(path, []) if run["end"] - 1e-6 <= src_in <= run["end"] + _SHARE_MAX_GAP]
         if fits:
@@ -1350,9 +1434,10 @@ def _base_sources(
         if len(with_sound) > 1:
             splits.append(f"[{index}:a]asplit={len(with_sound)}{''.join(audios)}")
         sounding = iter(audios)
-        for video, (i, src_in, src_out, sound, skip) in zip(videos, members):
+        for video, (i, src_in, src_out, audible, skip, origin) in zip(videos, members):
             sources[i] = _BaseSource(
-                video, next(sounding) if sound else None, round(src_in - base, 6), round(src_out - base, 6), skip,
+                video, next(sounding) if audible else None, round(src_in - base, 6), round(src_out - base, 6),
+                round(origin - base, 6), skip,
             )
     return args, splits, sources
 
@@ -1378,30 +1463,38 @@ def build_ffmpeg_command(
     挪回时间线位置),声音不建。各层要不要先按 still_plan 筛,是调用方的事(render_still 筛)。
     """
     width, height, fps = plan.output.width, plan.output.height, plan.output.fps
-    still = _still_base_segment(plan, max(still_at, 0.0)) if still_at is not None else None
+    still = still_at is not None
+    window = _window(plan, max(still_at, 0.0), max(still_at, 0.0)) if still_at is not None else None
     # Probe every source we will ask about up front, concurrently, instead of once per clip as
     # the command is assembled — the probes are independent and each one is just waiting on an
     # ffprobe child. Repeated sources collapse to one probe. 取一帧不要声音,也就不用问。
-    has_audio = {} if still is not None else probe_has_audio_many(
+    has_audio = {} if still else probe_has_audio_many(
         [resolve(segment.source.file_key) for segment in plan.video_segments
          if segment.kind == "clip" and segment.source is not None]
         + [resolve(item.source.file_key) for item in plan.audio_overlays if item.optional]
     )
     args: list[str] = [settings.ffmpeg, "-y", "-v", "error", "-progress", "pipe:1", "-nostats"]
-    base_args, filters, sources = _base_sources(plan, resolve, has_audio, still)
+    frames = _segment_frames(plan)
+    base_args, filters, sources = _base_sources(plan, resolve, has_audio, window, sound=not still, frames=frames)
     args += base_args
-    pair_labels: list[str] = []
+    video_labels: list[str] = []
+    audio_labels: list[str] = []
     input_index = args.count("-i")
 
     for i, segment in enumerate(plan.video_segments):
-        if still is not None and i != still.index:
-            continue  # 取一帧:基底轨只渲画面落在那一刻的这一段
-        #: 取一帧时这一段从段内第 skip 秒开始解码(见 _StillBase);成片恒为 0,命令一字不变。
-        skip = still.skip if still is not None else 0.0
+        if window is not None and not window.first <= i <= window.last:
+            continue  # 只渲一截:基底轨只渲画面落在这一截里的那几段
+        if not frames[i][1]:
+            continue  # 不到半帧长的段落不到任何一帧上
+        #: 只渲一截时头一段从段内第 skip 秒(整帧)开始解码(见 _Window);整条渲恒为 0。
+        skip = window.skip if window is not None and i == window.first else 0.0
+        span = frames[i][1] / fps
+        #: 画面补齐 / 截到整帧;从段内第 skip 秒开始的那段再挪回 0 起 —— concat 按「这段从 0 开始」估长短。
+        exact = _exact_span(frames[i][1], fps, audio=False) + _shift_pts(-skip)
         if segment.kind == "clip" and segment.source is not None:
             source = sources[i]
             tin, tout, skip = source.tin, source.tout, source.skip
-            setpts = _video_from(tin, segment.speed) + (f"+{skip}/TB" if skip else "")
+            setpts = _video_from(source.zero, segment.speed)
             # Picture fade (画面淡变, fade to/from black) is independent of the audio fade below.
             video_fades = _fade_filters(segment.video_fade_in, segment.video_fade_out, segment.duration, audio=False)
             preset = f",{FILTER_PRESETS[segment.filter]}" if segment.filter else ""
@@ -1412,7 +1505,7 @@ def build_ffmpeg_command(
                 filters.append(
                     _base_video_chain(
                         source.video, i, tin, tout, setpts, width, height, fps,
-                        f"{preset}{video_fades}", plan.output.fill_mode, start_time=skip,
+                        f"{preset}{video_fades}{exact}", plan.output.fill_mode, start_time=skip,
                     )
                 )
             else:
@@ -1433,7 +1526,7 @@ def build_ffmpeg_command(
                     filters.append(
                         # 背景必须给时长:无 :d 的 color 是无限流,concat 会永远停在这一段推不动,
                         # 整条 filtergraph 疯狂缓冲——带动画的图片幻灯片导出因此慢到 0.0x(见回归测试)。
-                        f"color=black:s={width}x{height}:r={fps}:d={round(segment.duration - skip, 6)}"
+                        f"color=black:s={width}x{height}:r={fps}:d={round(span - skip, 6)}"
                         f"{_shift_pts(skip)}[bg{i}]"
                     )
                     head += ","
@@ -1457,11 +1550,11 @@ def build_ffmpeg_command(
                 filters += tfilters
                 shadow_filters, tlabel, ox, oy = _with_shadow(
                     tlabel, ox, oy, segment.appearance.shadow, width, height, fps, f"bs{i}",
-                    start=skip, duration=round(segment.duration - skip, 6),
+                    start=skip, duration=round(span - skip, 6),
                 )
                 filters += shadow_filters
-                filters.append(f"[bg{i}][{tlabel}]overlay=x='{ox}':y='{oy}',format=yuv420p,setsar=1[v{i}]")
-            if still is not None:
+                filters.append(f"[bg{i}][{tlabel}]overlay=x='{ox}':y='{oy}',format=yuv420p,setsar=1{exact}[v{i}]")
+            if still:
                 pass  # 一张图没有声音:音频那一路整条不建
             elif source.audio is not None:
                 tempo = atempo_filters(segment.speed)
@@ -1469,38 +1562,48 @@ def build_ffmpeg_command(
                 # The clip's own gain (增益) mixes its audio, like a video clip's linked audio in PR/DaVinci.
                 gain = _volume_expr(segment.gain, segment.gain_keyframes, segment.duration)
                 filters.append(
-                    f"{source.audio}atrim=start={tin}:end={tout},{_audio_from(tin)}{tempo}"
-                    f"{gain}aresample={AUDIO_RATE},aformat=channel_layouts=stereo{audio_fades}[a{i}]"
+                    f"{source.audio}atrim=start={tin}:end={tout},{_audio_from(source.zero)}{tempo}"
+                    f"{gain}aresample={AUDIO_RATE},aformat=channel_layouts=stereo{audio_fades}"
+                    f"{_exact_span(frames[i][1], fps, audio=True)}[a{i}]"
                 )
             else:
                 # No source audio, or the base track is silenced by a solo elsewhere.
-                filters.append(
-                    f"anullsrc=r={AUDIO_RATE}:cl=stereo,atrim=0:{segment.duration}[a{i}]"
-                )
+                filters.append(f"anullsrc=r={AUDIO_RATE}:cl=stereo,atrim=0:{span:.6f}[a{i}]")
         else:
+            #: 空档:正好这么多帧的黑(从段内 skip 起的那截已经挪回 0 起)。
             filters.append(
-                f"color=black:s={width}x{height}:r={fps},trim=0:{round(segment.duration - skip, 6)}"
-                f"{_shift_pts(skip)},format=yuv420p,setsar=1[v{i}]"
+                f"color=black:s={width}x{height}:r={fps},trim=0:{round(span - skip, 6)},format=yuv420p,setsar=1[v{i}]"
             )
-            if still is None:
-                filters.append(f"anullsrc=r={AUDIO_RATE}:cl=stereo,atrim=0:{segment.duration}[a{i}]")
-        pair_labels.append(f"[v{i}][a{i}]")
+            if not still:
+                filters.append(f"anullsrc=r={AUDIO_RATE}:cl=stereo,atrim=0:{span:.6f}[a{i}]")
+        video_labels.append(f"[v{i}]")
+        if not still:
+            audio_labels.append(f"[a{i}]")
 
-    if still is not None:
-        #: 那一段的画面挪回它在时间线上的位置:上层、字幕、花字的 enable 窗口和关键帧都按
+    if window is not None:
+        #: 这几段的画面接起来、挪回它们在时间线上的位置:上层、字幕、花字的 enable 窗口和关键帧都按
         #: 时间线绝对时间写,底下这一路也得是绝对时间。
-        filters.append(f"[v{still.index}]{_shift_pts(still.start).lstrip(',') or 'null'}[vbase]")
+        joined = "".join(video_labels)
+        if len(video_labels) > 1:
+            filters.append(f"{joined}concat=n={len(video_labels)}:v=1:a=0[vjoined]")
+            joined = "[vjoined]"
+        filters.append(f"{joined}{_frame_clock(fps)}{_shift_pts(round(window.base + window.skip, 6))}[vbase]")
     else:
-        n = len(plan.video_segments)
-        filters.append(f"{''.join(pair_labels)}concat=n={n}:v=1:a=1[vbase][abase]")
+        pairs = "".join(v + a for v, a in zip(video_labels, audio_labels))
+        filters.append(f"{pairs}concat=n={len(video_labels)}:v=1:a=1[vjoined][abase]")
+        filters.append(f"[vjoined]{_frame_clock(fps)}[vbase]")
 
     # Upper-video-track clips composited over the base, each an element at its transform
     # (cover-fitted at the source's own aspect ratio, then scaled/rotated/faded — see _element_fit).
     video_label = "[vbase]"
     for i, overlay in enumerate(plan.overlays):
+        if window is not None and not window.covers(overlay.start, overlay.duration):
+            continue
         path = resolve(overlay.source.file_key)
         src = overlay.source
-        seek, tin, tout = _seek_and_trim(src.src_in, src.src_out)
+        skip = _layer_skip(window, overlay.start, path)
+        seek, tin, tout = _seek_and_trim(src.src_in + skip * overlay.speed, src.src_out)
+        zero = round(tin - skip * overlay.speed, 6)  # 这一段自己的 0 点在这一路输入里的位置
         args += _image_loop_args(path, tout) + seek + ["-i", str(path)]
         preset = f",{FILTER_PRESETS[overlay.filter]}" if overlay.filter else ""
         lut_path = _escape_filter_path(resolve(overlay.lut)) if overlay.lut else ""
@@ -1509,7 +1612,7 @@ def build_ffmpeg_command(
         # 上层片段按素材**自己的宽高比**成元素(铺满画幅的那个大小,不裁),再按变换缩放 —— 竖素材做横画幅的
         # 画中画就是竖的,和预览一样。此前先裁成画幅的比例:竖的人像画中画在成片里成了一条横的。
         filters.append(
-            f"[{input_index}:v]trim=start={tin}:end={tout},setpts={_video_from(tin, overlay.speed)},"
+            f"[{input_index}:v]trim=start={tin}:end={tout},setpts={_video_from(zero, overlay.speed)},"
             f"{_element_fit(overlay.appearance, 'increase', width, height)}"
             f"{preset}{video_fades},setpts=PTS+{overlay.start}/TB[oelt{i}]"
         )
@@ -1531,7 +1634,7 @@ def build_ffmpeg_command(
         filters += tfilters
         shadow_filters, tlabel, ox, oy = _with_shadow(
             tlabel, ox, oy, overlay.appearance.shadow, width, height, fps, f"os{i}",
-            start=overlay.start, duration=overlay.duration,
+            start=overlay.start + skip, duration=round(overlay.duration - skip, 6),
         )
         filters += shadow_filters
         out_label = f"[vov{i}]"
@@ -1563,6 +1666,8 @@ def build_ffmpeg_command(
             input_index += 1
         for k, png, _pw, _ph in text_layers.text_overlays:
             item = plan.text_overlays[k]
+            if window is not None and not window.covers(item.start, item.duration):
+                continue
             args += ["-loop", "1", "-framerate", f"{fps:g}", "-t", f"{item.duration + 0.2:.6f}", "-i", str(png)]
             # 花字 PNG 当作一个自由元素:移到时间线起点,再复用元素变换管线施加动画,以文字中心
             # 对齐 (cx,cy)。element_sized=True 让缩放/定位按 PNG 自然尺寸而非画幅尺寸。
@@ -1580,9 +1685,14 @@ def build_ffmpeg_command(
             video_label = out_label
             input_index += 1
         for k, (label, (png, pw, ph)) in enumerate(zip(plan.ai_labels, text_layers.ai_labels)):
-            args += ["-loop", "1", "-framerate", f"{fps:g}", "-t", f"{label.duration + 0.2:.6f}", "-i", str(png)]
+            if window is not None and not window.covers(label.start, label.duration):
+                continue
+            #: 标识是一张不动的图:只渲一截时从这一截前一点开始生成,不必从片头一帧帧数过来(整片的角标就是整片长)。
+            begin = max(label.start, window.start - _WINDOW_PREROLL) if window is not None else label.start
+            span = label.start + label.duration - begin
+            args += ["-loop", "1", "-framerate", f"{fps:g}", "-t", f"{span + 0.2:.6f}", "-i", str(png)]
             lx, ly = _ai_label_position(label, pw, ph, width, height)
-            filters.append(f"[{input_index}:v]setpts=PTS-STARTPTS+{label.start}/TB[lbin{k}]")
+            filters.append(f"[{input_index}:v]setpts=PTS-STARTPTS+{begin}/TB[lbin{k}]")
             out_label = f"[vlb{k}]"
             filters.append(
                 f"{video_label}[lbin{k}]overlay=x={lx}:y={ly}:eof_action=repeat:"
@@ -1607,7 +1717,7 @@ def build_ffmpeg_command(
         )
         video_label = out_label
 
-    if still is not None:
+    if still and window is not None:
         #: 只取一帧:输出换成单帧图片,音频整条不建(一张图没有声音)。
         #: -ss 放在 filter_complex **之后** —— 输出侧 seek,各层照常按时间线时间算,
         #: 那些跟时间走的东西(关键帧、淡入淡出、字幕的出入点)才会落在正确的位置上。
@@ -1617,7 +1727,7 @@ def build_ffmpeg_command(
             "-map",
             video_label,
             "-ss",
-            f"{still.at:.3f}",
+            f"{window.start:.3f}",
             "-frames:v",
             "1",
             "-q:v",
