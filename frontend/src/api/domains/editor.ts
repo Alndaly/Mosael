@@ -1,6 +1,6 @@
 import type { components } from "@/api/generated/schema";
 import type { Job } from "@/api/domains/jobs";
-import { API_BASE, api, getAuthToken } from "@/api/transport";
+import { API_BASE, ApiError, api, getAuthToken } from "@/api/transport";
 
 export type Sequence = components["schemas"]["SequenceOut"];
 
@@ -12,8 +12,77 @@ export type LinkOption = { linked?: boolean };
 export type Track = components["schemas"]["TrackOut"];
 export type Clip = components["schemas"]["ClipOut"];
 
+/**
+ * 一次编辑照着的那一版:时间线的 id 和调用方看到的版本号。每个编辑请求都带上它(`base_revision`)——
+ * 时间线在这期间被别人改过、而这一步和那些改动对不上时,服务端回 409 并附上最新的一版,不在一份过时的时间线上
+ * 替人做决定(见后端 domain/sequences/concurrency)。**类型上必填**:漏传版本号的编辑写不出来。
+ */
+export type SequenceRef = Pick<Sequence, "id" | "revision">;
+
+/**
+ * 这个客户端从自己的编辑回包(和 409 附带的最新序列)里见过的最新版本号。
+ *
+ * 调用方手里的那份可能还没来得及换成上一步的回包(onSuccess 里用的是重新拉取、或闭包里还是上一次渲染的序列),
+ * 只按它报版本号的话,连着做的第二步会把**自己刚做的第一步**当成别人的改动、被 409 挡下。取两者里新的那个:
+ * 回包是自己这一步换来的,算「看到过」。
+ */
+const knownRevisions = new Map<string, number>();
+
+function remember(sequence: Sequence): void {
+  knownRevisions.set(sequence.id, Math.max(sequence.revision, knownRevisions.get(sequence.id) ?? sequence.revision));
+}
+
+/** 这一步该报的版本号:调用方手里那份和自己见过的回包里新的那个。 */
+export function baseRevisionOf(sequence: SequenceRef): number {
+  return Math.max(sequence.revision, knownRevisions.get(sequence.id) ?? sequence.revision);
+}
+
+type ConflictListener = (latest: Sequence) => void;
+const conflictListeners = new Set<ConflictListener>();
+
+/**
+ * 编辑(或撤销 / 重做)撞上 409 时,服务端附上的最新序列送到这里 —— 剪辑页、画板上的时间线格各自把手里的缓存换成它。
+ * 提示那一句不在这里弹:409 照常抛给发起的那个 mutation,它(或全局的兜底)弹服务端那句话(说清是谁改的)。
+ */
+export function onSequenceConflict(listener: ConflictListener): () => void {
+  conflictListeners.add(listener);
+  return () => conflictListeners.delete(listener);
+}
+
+/** 409 里附带的最新序列;不是时间线的版本冲突就是 null。 */
+export function conflictLatest(error: unknown): Sequence | null {
+  if (!(error instanceof ApiError) || error.status !== 409) return null;
+  try {
+    const detail = (JSON.parse(error.body) as { detail?: { code?: unknown; sequence?: Sequence } }).detail;
+    return detail?.code === "sequence_revision_conflict" && detail.sequence ? detail.sequence : null;
+  } catch {
+    return null;
+  }
+}
+
+async function send(sequenceId: string, path: string, init: RequestInit): Promise<Sequence> {
+  try {
+    const next = await api<Sequence>(`/api/sequences/${sequenceId}${path}`, init);
+    remember(next);
+    return next;
+  } catch (error) {
+    const latest = conflictLatest(error);
+    if (latest) {
+      remember(latest);
+      for (const listener of conflictListeners) listener(latest);
+    }
+    throw error;
+  }
+}
+
+/** 一次编辑:照着 `sequence` 那一版做(带上 base_revision)。 */
+function edit(sequence: SequenceRef, path: string, init: RequestInit): Promise<Sequence> {
+  const separator = path.includes("?") ? "&" : "?";
+  return send(sequence.id, `${path}${separator}base_revision=${baseRevisionOf(sequence)}`, init);
+}
+
 export function insertClip(
-  sequenceId: string,
+  sequence: SequenceRef,
   body: {
     track_id: string;
     asset_id: string;
@@ -23,35 +92,32 @@ export function insertClip(
     ripple?: boolean;
   },
 ): Promise<Sequence> {
-  return api<Sequence>(`/api/sequences/${sequenceId}/clips`, { method: "POST", body: JSON.stringify(body) });
+  return edit(sequence, "/clips", { method: "POST", body: JSON.stringify(body) });
 }
 
 export function moveClip(
-  sequenceId: string,
+  sequence: SequenceRef,
   clipId: string,
   body: { timeline_start: number; track_id?: string | null; ripple?: boolean } & LinkOption,
 ): Promise<Sequence> {
-  return api<Sequence>(`/api/sequences/${sequenceId}/clips/${clipId}/move`, {
-    method: "PATCH",
-    body: JSON.stringify(body),
-  });
+  return edit(sequence, `/clips/${clipId}/move`, { method: "PATCH", body: JSON.stringify(body) });
 }
 
 /** One batch is one operation and therefore one undo step. */
-export function deleteClipsBatch(sequenceId: string, clipIds: string[], options: LinkOption = {}): Promise<Sequence> {
-  return api<Sequence>(`/api/sequences/${sequenceId}/clips/delete-batch`, {
-    method: "POST",
-    body: JSON.stringify({ clip_ids: clipIds, ...options }),
-  });
+export function deleteClipsBatch(sequence: SequenceRef, clipIds: string[], options: LinkOption = {}): Promise<Sequence> {
+  return edit(sequence, "/clips/delete-batch", { method: "POST", body: JSON.stringify({ clip_ids: clipIds, ...options }) });
 }
 
 export function getSequence(sequenceId: string): Promise<Sequence> {
   return api<Sequence>(`/api/sequences/${sequenceId}`);
 }
 
-/** 把整段素材接到它那种轨道的末尾;时间线还空着时画幅跟着它走(后端 sequences.append)。 */
+/**
+ * 把整段素材接到它那种轨道的末尾;时间线还空着时画幅跟着它走(后端 sequences.append)。
+ * 不带版本号:「末尾」本来就由服务端按现状算,画板上连线接素材时那条时间线常常还没在这个客户端里打开过。
+ */
 export function appendAssetToSequence(sequenceId: string, assetId: string): Promise<Sequence> {
-  return api<Sequence>(`/api/sequences/${sequenceId}/append`, { method: "POST", body: JSON.stringify({ asset_id: assetId }) });
+  return send(sequenceId, "/append", { method: "POST", body: JSON.stringify({ asset_id: assetId }) });
 }
 
 /**
@@ -61,36 +127,30 @@ export function appendAssetToSequence(sequenceId: string, assetId: string): Prom
 export type RippleDeleteOptions = LinkOption & { all_tracks?: boolean };
 
 export function rippleDeleteClipsBatch(
-  sequenceId: string,
+  sequence: SequenceRef,
   clipIds: string[],
   options: RippleDeleteOptions = {},
 ): Promise<Sequence> {
-  return api<Sequence>(`/api/sequences/${sequenceId}/clips/ripple-delete-batch`, {
+  return edit(sequence, "/clips/ripple-delete-batch", {
     method: "POST",
     body: JSON.stringify({ clip_ids: clipIds, ...options }),
   });
 }
 
 export function moveClipsBatch(
-  sequenceId: string,
+  sequence: SequenceRef,
   moves: { clip_id: string; timeline_start: number; track_id?: string | null }[],
   options: LinkOption = {},
 ): Promise<Sequence> {
-  return api<Sequence>(`/api/sequences/${sequenceId}/clips/move-batch`, {
-    method: "PATCH",
-    body: JSON.stringify({ moves, ...options }),
-  });
+  return edit(sequence, "/clips/move-batch", { method: "PATCH", body: JSON.stringify({ moves, ...options }) });
 }
 
 export function trimClip(
-  sequenceId: string,
+  sequence: SequenceRef,
   clipId: string,
   body: { timeline_start: number; src_in: number; src_out: number } & LinkOption,
 ): Promise<Sequence> {
-  return api<Sequence>(`/api/sequences/${sequenceId}/clips/${clipId}/trim`, {
-    method: "PATCH",
-    body: JSON.stringify(body),
-  });
+  return edit(sequence, `/clips/${clipId}/trim`, { method: "PATCH", body: JSON.stringify(body) });
 }
 
 /**
@@ -98,44 +158,35 @@ export function trimClip(
  * 未锁定字幕轨上落在区间里的字幕删掉、后面的左移;整批一步撤销。
  */
 export function cutClipRange(
-  sequenceId: string,
+  sequence: SequenceRef,
   clipId: string,
   body: { src_start: number; src_end: number },
   options: LinkOption = {},
 ): Promise<Sequence> {
   const query = options.linked === false ? "?linked=false" : "";
-  return api<Sequence>(`/api/sequences/${sequenceId}/clips/${clipId}/cut-range${query}`, {
-    method: "POST",
-    body: JSON.stringify(body),
-  });
+  return edit(sequence, `/clips/${clipId}/cut-range${query}`, { method: "POST", body: JSON.stringify(body) });
 }
 
-export function deleteClip(sequenceId: string, clipId: string, options: LinkOption = {}): Promise<Sequence> {
+export function deleteClip(sequence: SequenceRef, clipId: string, options: LinkOption = {}): Promise<Sequence> {
   const query = options.linked === false ? "?linked=false" : "";
-  return api<Sequence>(`/api/sequences/${sequenceId}/clips/${clipId}${query}`, { method: "DELETE" });
+  return edit(sequence, `/clips/${clipId}${query}`, { method: "DELETE" });
 }
 
 export function cutClipRanges(
-  sequenceId: string,
+  sequence: SequenceRef,
   clipId: string,
   ranges: Array<{ src_start: number; src_end: number }>,
   options: LinkOption = {},
 ): Promise<Sequence> {
-  return api<Sequence>(`/api/sequences/${sequenceId}/clips/${clipId}/cut-ranges`, {
-    method: "POST",
-    body: JSON.stringify({ ranges, ...options }),
-  });
+  return edit(sequence, `/clips/${clipId}/cut-ranges`, { method: "POST", body: JSON.stringify({ ranges, ...options }) });
 }
 
 export function cutClipRangesBatch(
-  sequenceId: string,
+  sequence: SequenceRef,
   cuts: Array<{ clip_id: string; ranges: Array<{ src_start: number; src_end: number }> }>,
   options: LinkOption = {},
 ): Promise<Sequence> {
-  return api<Sequence>(`/api/sequences/${sequenceId}/clips/cut-ranges`, {
-    method: "POST",
-    body: JSON.stringify({ cuts, ...options }),
-  });
+  return edit(sequence, "/clips/cut-ranges", { method: "POST", body: JSON.stringify({ cuts, ...options }) });
 }
 
 /**
@@ -143,51 +194,39 @@ export function cutClipRangesBatch(
  * false:后面的不动;慢放会盖住下一段时后端拒绝(422),不替用户裁掉下一段。
  */
 export function setClipSpeed(
-  sequenceId: string,
+  sequence: SequenceRef,
   clipId: string,
   speed: number,
   options: { ripple?: boolean } & LinkOption = {},
 ): Promise<Sequence> {
-  return api<Sequence>(`/api/sequences/${sequenceId}/clips/${clipId}/speed`, {
-    method: "PATCH",
-    body: JSON.stringify({ speed, ...options }),
-  });
+  return edit(sequence, `/clips/${clipId}/speed`, { method: "PATCH", body: JSON.stringify({ speed, ...options }) });
 }
 
-export function setClipGain(sequenceId: string, clipId: string, gain: number, muted: boolean): Promise<Sequence> {
-  return api<Sequence>(`/api/sequences/${sequenceId}/clips/${clipId}/gain`, {
-    method: "PATCH",
-    body: JSON.stringify({ gain, muted }),
-  });
+export function setClipGain(sequence: SequenceRef, clipId: string, gain: number, muted: boolean): Promise<Sequence> {
+  return edit(sequence, `/clips/${clipId}/gain`, { method: "PATCH", body: JSON.stringify({ gain, muted }) });
 }
 
-export function detachClipAudio(sequenceId: string, clipId: string): Promise<Sequence> {
-  return api<Sequence>(`/api/sequences/${sequenceId}/clips/${clipId}/detach-audio`, { method: "POST" });
+export function detachClipAudio(sequence: SequenceRef, clipId: string): Promise<Sequence> {
+  return edit(sequence, `/clips/${clipId}/detach-audio`, { method: "POST" });
 }
 
 export function setClipTransform(
-  sequenceId: string,
+  sequence: SequenceRef,
   clipId: string,
   transform: Record<string, unknown>,
 ): Promise<Sequence> {
-  return api<Sequence>(`/api/sequences/${sequenceId}/clips/${clipId}/transform`, {
-    method: "PATCH",
-    body: JSON.stringify({ transform }),
-  });
+  return edit(sequence, `/clips/${clipId}/transform`, { method: "PATCH", body: JSON.stringify({ transform }) });
 }
 
 export function setSequenceReframe(
-  sequenceId: string,
+  sequence: SequenceRef,
   reframe: { width: number; height: number; fill_mode: string },
 ): Promise<Sequence> {
-  return api<Sequence>(`/api/sequences/${sequenceId}/reframe`, {
-    method: "PATCH",
-    body: JSON.stringify(reframe),
-  });
+  return edit(sequence, "/reframe", { method: "PATCH", body: JSON.stringify(reframe) });
 }
 
 export function rippleDeleteClip(
-  sequenceId: string,
+  sequence: SequenceRef,
   clipId: string,
   options: RippleDeleteOptions = {},
 ): Promise<Sequence> {
@@ -195,84 +234,66 @@ export function rippleDeleteClip(
   if (options.linked === false) query.set("linked", "false");
   if (options.all_tracks) query.set("all_tracks", "true");
   const suffix = query.size ? `?${query}` : "";
-  return api<Sequence>(`/api/sequences/${sequenceId}/clips/${clipId}/ripple${suffix}`, { method: "DELETE" });
+  return edit(sequence, `/clips/${clipId}/ripple${suffix}`, { method: "DELETE" });
 }
 
 export function splitClip(
-  sequenceId: string,
+  sequence: SequenceRef,
   clipId: string,
   srcTime: number,
   options: LinkOption = {},
 ): Promise<Sequence> {
-  return api<Sequence>(`/api/sequences/${sequenceId}/clips/${clipId}/split`, {
+  return edit(sequence, `/clips/${clipId}/split`, {
     method: "POST",
     body: JSON.stringify({ src_time: srcTime, ...options }),
   });
 }
 
 export function splitClipAtPoints(
-  sequenceId: string,
+  sequence: SequenceRef,
   clipId: string,
   srcTimes: number[],
   options: LinkOption = {},
 ): Promise<Sequence> {
-  return api<Sequence>(`/api/sequences/${sequenceId}/clips/${clipId}/split-points`, {
+  return edit(sequence, `/clips/${clipId}/split-points`, {
     method: "POST",
     body: JSON.stringify({ src_times: srcTimes, ...options }),
   });
 }
 
 export function splitClipAtPointsBatch(
-  sequenceId: string,
+  sequence: SequenceRef,
   splits: Array<{ clip_id: string; src_times: number[] }>,
   options: LinkOption = {},
 ): Promise<Sequence> {
-  return api<Sequence>(`/api/sequences/${sequenceId}/clips/split-points`, {
-    method: "POST",
-    body: JSON.stringify({ splits, ...options }),
-  });
+  return edit(sequence, "/clips/split-points", { method: "POST", body: JSON.stringify({ splits, ...options }) });
 }
 
 /** 轨道头上的几个开关。静音只管声音,隐藏只管字幕显示(只有字幕轨收 hidden、字幕轨不收 muted)。 */
 export type TrackStatePatch = { muted?: boolean; hidden?: boolean; locked?: boolean; solo?: boolean; duck?: boolean };
 
-export function setTrackState(sequenceId: string, trackId: string, body: TrackStatePatch): Promise<Sequence> {
-  return api<Sequence>(`/api/sequences/${sequenceId}/tracks/${trackId}`, {
-    method: "PATCH",
-    body: JSON.stringify(body),
-  });
+export function setTrackState(sequence: SequenceRef, trackId: string, body: TrackStatePatch): Promise<Sequence> {
+  return edit(sequence, `/tracks/${trackId}`, { method: "PATCH", body: JSON.stringify(body) });
 }
 
-export function addTrack(sequenceId: string, kind: "video" | "audio" | "subtitle"): Promise<Sequence> {
-  return api<Sequence>(`/api/sequences/${sequenceId}/tracks`, {
-    method: "POST",
-    body: JSON.stringify({ kind }),
-  });
+export function addTrack(sequence: SequenceRef, kind: "video" | "audio" | "subtitle"): Promise<Sequence> {
+  return edit(sequence, "/tracks", { method: "POST", body: JSON.stringify({ kind }) });
 }
 
-export function moveTrack(sequenceId: string, trackId: string, direction: "up" | "down"): Promise<Sequence> {
-  return api<Sequence>(`/api/sequences/${sequenceId}/tracks/${trackId}/move`, {
-    method: "PATCH",
-    body: JSON.stringify({ direction }),
-  });
+export function moveTrack(sequence: SequenceRef, trackId: string, direction: "up" | "down"): Promise<Sequence> {
+  return edit(sequence, `/tracks/${trackId}/move`, { method: "PATCH", body: JSON.stringify({ direction }) });
 }
 
 export function generateSubtitles(
-  sequenceId: string,
+  sequence: SequenceRef,
   trackId: string,
   cues: Array<{ text: string; timeline_start: number; duration: number }>,
 ): Promise<Sequence> {
-  return api<Sequence>(`/api/sequences/${sequenceId}/subtitles/generate`, {
-    method: "POST",
-    body: JSON.stringify({ track_id: trackId, cues }),
-  });
+  return edit(sequence, "/subtitles/generate", { method: "POST", body: JSON.stringify({ track_id: trackId, cues }) });
 }
 
-export function setSubtitleStyle(sequenceId: string, style: Record<string, unknown>): Promise<Sequence> {
-  return api<Sequence>(`/api/sequences/${sequenceId}/subtitle-style`, {
-    method: "PUT",
-    body: JSON.stringify({ style }),
-  });
+export function setSubtitleStyle(sequence: SequenceRef, style: Record<string, unknown>): Promise<Sequence> {
+  return edit(sequence, "/subtitle-style", { method: "PUT", body: JSON.stringify({ style }) });
 }
 
 /** Backend safety limit for one translation request; the client exposes an unbounded operation. */
@@ -303,48 +324,33 @@ export async function translateTexts(
 }
 
 export function insertTextClip(
-  sequenceId: string,
+  sequence: SequenceRef,
   body: { track_id: string; text: string; timeline_start: number; duration: number },
 ): Promise<Sequence> {
-  return api<Sequence>(`/api/sequences/${sequenceId}/text-clips`, {
-    method: "POST",
-    body: JSON.stringify(body),
-  });
+  return edit(sequence, "/text-clips", { method: "POST", body: JSON.stringify(body) });
 }
 
-export function setClipText(sequenceId: string, clipId: string, text: string): Promise<Sequence> {
-  return api<Sequence>(`/api/sequences/${sequenceId}/clips/${clipId}/text`, {
-    method: "PATCH",
-    body: JSON.stringify({ text }),
-  });
+export function setClipText(sequence: SequenceRef, clipId: string, text: string): Promise<Sequence> {
+  return edit(sequence, `/clips/${clipId}/text`, { method: "PATCH", body: JSON.stringify({ text }) });
 }
 
 /** Retext many clips in one revision and one undo step. */
-export function setClipTexts(
-  sequenceId: string,
-  texts: { clip_id: string; text: string }[],
-): Promise<Sequence> {
-  return api<Sequence>(`/api/sequences/${sequenceId}/clips/texts`, {
-    method: "PATCH",
-    body: JSON.stringify({ texts }),
-  });
+export function setClipTexts(sequence: SequenceRef, texts: { clip_id: string; text: string }[]): Promise<Sequence> {
+  return edit(sequence, "/clips/texts", { method: "PATCH", body: JSON.stringify({ texts }) });
 }
 
 /** Removing a populated track is destructive and therefore requires an explicit flag. */
-export function removeTrack(sequenceId: string, trackId: string, withClips = false): Promise<Sequence> {
+export function removeTrack(sequence: SequenceRef, trackId: string, withClips = false): Promise<Sequence> {
   const suffix = withClips ? "?with_clips=true" : "";
-  return api<Sequence>(`/api/sequences/${sequenceId}/tracks/${trackId}${suffix}`, { method: "DELETE" });
+  return edit(sequence, `/tracks/${trackId}${suffix}`, { method: "DELETE" });
 }
 
 export function setClipEffects(
-  sequenceId: string,
+  sequence: SequenceRef,
   clipId: string,
   effects: Record<string, unknown>,
 ): Promise<Sequence> {
-  return api<Sequence>(`/api/sequences/${sequenceId}/clips/${clipId}/effects`, {
-    method: "PATCH",
-    body: JSON.stringify({ effects }),
-  });
+  return edit(sequence, `/clips/${clipId}/effects`, { method: "PATCH", body: JSON.stringify({ effects }) });
 }
 
 /** `expectedRevision`:调用方看到的是第几版。给了而时间线已在别处改过,服务端回 409、不撤别人的那一步(画板上的撤销)。 */

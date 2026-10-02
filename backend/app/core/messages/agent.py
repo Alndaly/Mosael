@@ -100,6 +100,13 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "这条时间线在别处改过(剪辑页、智能体或别人),这一步不能从这里撤销 / 重做了 —— 去剪辑页里看一眼再改",
         "en": "This timeline was changed elsewhere (the editor, the agent or someone else), so this step can't be undone or redone from here. Check it in the editor.",
     },
+    # 并发:拒的时候说清是谁改的(见 domain/sequences/concurrency)。{who} 是人名的列表,或「你」「有人」。
+    "seqErr_changedBy": {
+        "zh": "{who}刚改过这条时间线,和这一步对不上;已换成最新的一版,请在它上面再做一次",
+        "en": "{who} just changed this timeline, and this step no longer fits. It now shows the latest version — please do it again there.",
+    },
+    "seqWho_you": {"zh": "你", "en": "You"},
+    "seqWho_someone": {"zh": "有人", "en": "Someone"},
     "seqErr_undoTrackHasClips": {
         "zh": "轨道上还有片段,撤销不了「新建轨道」",
         "en": "The track still has clips, so \"Add track\" can't be undone.",
@@ -122,8 +129,8 @@ MESSAGES: dict[str, dict[str, str]] = {
     "seqErr_transformNotNumber": {"zh": "transform.{key} 必须是数字", "en": "transform.{key} must be a number."},
     "seqErr_canvasSizeRange": {"zh": "画幅尺寸需在 16–8192 之间", "en": "The frame size must be between 16 and 8192."},
     "seqErr_revisionConflict": {
-        "zh": "这个序列刚被改过,请刷新后重试",
-        "en": "This sequence was just changed. Refresh and try again.",
+        "zh": "这条时间线刚被改过;已换成最新的一版,请在它上面再做一次",
+        "en": "This timeline was just changed. It now shows the latest version — please do it again there.",
     },
     "seqErr_unknownOp": {"zh": "不认识的时间线操作: {kind}", "en": "Unknown timeline operation: {kind}"},
     "seqErr_trimNoRoom": {

@@ -43,6 +43,7 @@ import {
   translateTexts,
   trimClip,
   undoSequence,
+  onSequenceConflict,
   type Asset,
   type Project,
   type Sequence,
@@ -190,6 +191,18 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
     qc.setQueryData<Sequence[]>(["sequences", project.id], (old) =>
       (old ?? []).map((item) => (item.id === updated.id ? updated : item)),
     );
+  //: 一步编辑撞上 409(时间线在这期间被别人改过、和这一步对不上):服务端附上了最新的一版,直接换掉手里这份过时的。
+  //: 提示那一句由发起的 mutation(或全局兜底)弹 —— 服务端那句话里说清了是谁改的。
+  React.useEffect(
+    () =>
+      onSequenceConflict((latest) => {
+        if (latest.project_id !== project.id) return;
+        qc.setQueryData<Sequence[]>(["sequences", project.id], (old) =>
+          (old ?? []).map((item) => (item.id === latest.id ? latest : item)),
+        );
+      }),
+    [qc, project.id],
+  );
   // Clearing the drag draft the instant a move settles renders ONE stale frame — the draft
   // (zustand) clears synchronously while the fresh sequence (react-query) propagates on a
   // deferred notification, so the clip flashes back to its old slot. Instead, arm this flag on
@@ -228,7 +241,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
   });
   const insertClipMutation = useMutation({
     mutationFn: (args: { trackId: string; assetId: string; timelineStart: number; srcIn: number; srcOut: number }) =>
-      insertClip(sequence!.id, {
+      insertClip(sequence!, {
         track_id: args.trackId,
         asset_id: args.assetId,
         timeline_start: args.timelineStart,
@@ -250,7 +263,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
       timelineStart: number;
       trackId?: string;
       ripple?: boolean;
-    }) => moveClip(sequence!.id, clipId, { timeline_start: timelineStart, track_id: trackId ?? null, ripple }),
+    }) => moveClip(sequence!, clipId, { timeline_start: timelineStart, track_id: trackId ?? null, ripple }),
     onSuccess: settleWith,
     onError: resyncAfterFailedDrag,
   });
@@ -258,7 +271,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
   const moveClipsMutation = useMutation({
     mutationFn: (moves: { clipId: string; timelineStart: number; trackId?: string }[]) =>
       moveClipsBatch(
-        sequence!.id,
+        sequence!,
         moves.map((move) => ({
           clip_id: move.clipId,
           timeline_start: move.timelineStart,
@@ -270,12 +283,12 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
   });
   const trimClipMutation = useMutation({
     mutationFn: ({ clipId, payload }: { clipId: string; payload: TrimPayload }) =>
-      trimClip(sequence!.id, clipId, payload),
+      trimClip(sequence!, clipId, payload),
     onSuccess: settleWith,
     onError: resyncAfterFailedDrag,
   });
   const deleteClipMutation = useMutation({
-    mutationFn: (clipId: string) => deleteClip(sequence!.id, clipId),
+    mutationFn: (clipId: string) => deleteClip(sequence!, clipId),
     onSuccess: () => {
       useEditorStore.getState().selectClip(null);
       void refreshSequences();
@@ -283,7 +296,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
   });
   const deleteClipsMutation = useMutation({
     // 一条请求、一条操作、一步撤销。逐个删会落成 N 条 SequenceOperation,⌘Z 一次只找回一段。
-    mutationFn: (clipIds: string[]) => deleteClipsBatch(sequence!.id, clipIds),
+    mutationFn: (clipIds: string[]) => deleteClipsBatch(sequence!, clipIds),
     onSuccess: () => {
       useEditorStore.getState().selectClip(null);
       void refreshSequences();
@@ -292,20 +305,20 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
   const rippleDeleteMutation = useMutation({
     // 顺序由后端负责(它内部从后往前删,先删靠前的会把后面的目标带偏);这里只管整批提交,
     // 换来一条操作、一步撤销。
-    mutationFn: (clipIds: string[]) => rippleDeleteClipsBatch(sequence!.id, clipIds),
+    mutationFn: (clipIds: string[]) => rippleDeleteClipsBatch(sequence!, clipIds),
     onSuccess: () => {
       useEditorStore.getState().selectClip(null);
       void refreshSequences();
     },
   });
   const addTrackMutation = useMutation({
-    mutationFn: (kind: "video" | "audio" | "subtitle") => addTrack(sequence!.id, kind),
+    mutationFn: (kind: "video" | "audio" | "subtitle") => addTrack(sequence!, kind),
     onSuccess: (updated) => applySequence(updated),
     onError: (error: Error) => toast.error(error.message),
   });
   const moveTrackMutation = useMutation({
     mutationFn: ({ trackId, direction }: { trackId: string; direction: "up" | "down" }) =>
-      moveTrack(sequence!.id, trackId, direction),
+      moveTrack(sequence!, trackId, direction),
     onSuccess: (updated) => applySequence(updated),
     onError: (error: Error) => toast.error(error.message),
   });
@@ -313,20 +326,20 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
   const moveClipToNewLayerMutation = useMutation({
     mutationFn: async ({ clipId, timelineStart }: { clipId: string; timelineStart: number }) => {
       const before = new Set((sequence!.tracks ?? []).map((tk) => tk.id));
-      const updated = await addTrack(sequence!.id, "video");
+      const updated = await addTrack(sequence!, "video");
       const created = (updated.tracks ?? []).find((tk) => tk.kind === "video" && !before.has(tk.id));
       if (!created) return updated;
-      return moveClip(sequence!.id, clipId, { timeline_start: timelineStart, track_id: created.id });
+      return moveClip(updated, clipId, { timeline_start: timelineStart, track_id: created.id });
     },
     onSuccess: settleWith,
     onError: resyncAfterFailedDrag,
   });
   const setTextMutation = useMutation({
-    mutationFn: ({ clipId, text }: { clipId: string; text: string }) => setClipText(sequence!.id, clipId, text),
+    mutationFn: ({ clipId, text }: { clipId: string; text: string }) => setClipText(sequence!, clipId, text),
     onSuccess: (updated) => applySequence(updated),
   });
   const setTextsMutation = useMutation({
-    mutationFn: (texts: { clip_id: string; text: string }[]) => setClipTexts(sequence!.id, texts),
+    mutationFn: (texts: { clip_id: string; text: string }[]) => setClipTexts(sequence!, texts),
     onSuccess: (updated) => applySequence(updated),
     onError: (error: Error) => toast.error(error.message),
   });
@@ -334,11 +347,11 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
     mutationFn: async () => {
       let track = (sequence!.tracks ?? []).find((item) => item.kind === "subtitle" && !item.locked);
       if (!track) {
-        const updated = await addTrack(sequence!.id, "subtitle");
+        const updated = await addTrack(sequence!, "subtitle");
         track = (updated.tracks ?? []).find((item) => item.kind === "subtitle");
       }
       if (!track) return;
-      await insertTextClip(sequence!.id, {
+      await insertTextClip(sequence!, {
         track_id: track.id,
         text: t("subtitleDefaultText"),
         timeline_start: useEditorStore.getState().playhead,
@@ -356,11 +369,11 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
       );
       if (!track) {
         const before = new Set((sequence!.tracks ?? []).map((tk) => tk.id));
-        const updated = await addTrack(sequence!.id, "video");
+        const updated = await addTrack(sequence!, "video");
         track = (updated.tracks ?? []).find((tk) => tk.kind === "video" && !before.has(tk.id));
       }
       if (!track) return undefined;
-      return insertTextClip(sequence!.id, {
+      return insertTextClip(sequence!, {
         track_id: track.id,
         text: t("textDefaultText"),
         timeline_start: useEditorStore.getState().playhead,
@@ -397,7 +410,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
       const sentences = projectTranscript(clips, segmentsByAsset);
       if (sentences.length === 0) throw new Error(t("subtitleNoTranscript"));
       let track = tracks.find((tk) => tk.kind === "subtitle" && !tk.locked);
-      if (!track) track = (await addTrack(seq.id, "subtitle")).tracks?.find((tk) => tk.kind === "subtitle");
+      if (!track) track = (await addTrack(seq, "subtitle")).tracks?.find((tk) => tk.kind === "subtitle");
       if (!track) throw new Error(t("subtitleNoTranscript"));
       // Translated in one batched, concurrent request — the same path the subtitle panel uses,
       // so a 200-cue transcript costs one round-trip's latency rather than 200.
@@ -409,7 +422,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
         timeline_start: s.timelineStart,
         duration: Math.max(0.4, s.timelineEnd - s.timelineStart),
       }));
-      return { updated: await generateSubtitles(seq.id, track.id, cues), count: cues.length };
+      return { updated: await generateSubtitles(seq, track.id, cues), count: cues.length };
     },
     onSuccess: ({ updated, count }) => {
       applySequence(updated);
@@ -418,7 +431,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
     onError: (error: Error) => toast.error(error.message),
   });
   const subtitleStyleMutation = useMutation({
-    mutationFn: (style: Record<string, unknown>) => setSubtitleStyle(sequence!.id, style),
+    mutationFn: (style: Record<string, unknown>) => setSubtitleStyle(sequence!, style),
     onSuccess: (updated) => {
       applySequence(updated);
       setStyleDraft(null);
@@ -435,7 +448,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
   );
   const removeTrackMutation = useMutation({
     mutationFn: ({ trackId, withClips }: { trackId: string; withClips: boolean }) =>
-      removeTrack(sequence!.id, trackId, withClips),
+      removeTrack(sequence!, trackId, withClips),
     onSuccess: (updated) => {
       applySequence(updated);
       setTrackPendingRemoval(null);
@@ -446,16 +459,16 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
     },
   });
   const setSpeedMutation = useMutation({
-    mutationFn: ({ clipId, speed }: { clipId: string; speed: number }) => setClipSpeed(sequence!.id, clipId, speed),
+    mutationFn: ({ clipId, speed }: { clipId: string; speed: number }) => setClipSpeed(sequence!, clipId, speed),
     onSuccess: refreshSequences,
   });
   const setGainMutation = useMutation({
     mutationFn: ({ clipId, gain, muted }: { clipId: string; gain: number; muted: boolean }) =>
-      setClipGain(sequence!.id, clipId, gain, muted),
+      setClipGain(sequence!, clipId, gain, muted),
     onSuccess: (updated) => applySequence(updated),
   });
   const detachAudioMutation = useMutation({
-    mutationFn: (clipId: string) => detachClipAudio(sequence!.id, clipId),
+    mutationFn: (clipId: string) => detachClipAudio(sequence!, clipId),
     onSuccess: (updated) => {
       applySequence(updated);
       toast.success(t("detachAudioDone"));
@@ -464,12 +477,12 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
   });
   const setEffectsMutation = useMutation({
     mutationFn: ({ clipId, effects }: { clipId: string; effects: Record<string, unknown> }) =>
-      setClipEffects(sequence!.id, clipId, effects),
+      setClipEffects(sequence!, clipId, effects),
     onSuccess: refreshSequences,
   });
   const setTransformMutation = useMutation({
     mutationFn: ({ clipId, transform }: { clipId: string; transform: Record<string, unknown> }) =>
-      setClipTransform(sequence!.id, clipId, transform),
+      setClipTransform(sequence!, clipId, transform),
     // Apply the returned sequence straight to the cache (no refetch gap) so the resized clip
     // lands at its final transform in the same tick the Monitor drops its drag draft.
     onSuccess: (updated) => applySequence(updated),
@@ -477,13 +490,13 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
   });
   const reframeMutation = useMutation({
     mutationFn: ({ width, height, fillMode }: { width: number; height: number; fillMode: FillMode }) =>
-      setSequenceReframe(sequence!.id, { width, height, fill_mode: fillMode }),
+      setSequenceReframe(sequence!, { width, height, fill_mode: fillMode }),
     onSuccess: (updated) => applySequence(updated),
     onError: (error: Error) => toast.error(error.message),
   });
   const cutRangeMutation = useMutation({
     mutationFn: ({ clipId, srcStart, srcEnd }: { clipId: string; srcStart: number; srcEnd: number }) =>
-      cutClipRange(sequence!.id, clipId, { src_start: srcStart, src_end: srcEnd }),
+      cutClipRange(sequence!, clipId, { src_start: srcStart, src_end: srcEnd }),
     onSuccess: () => {
       useEditorStore.getState().selectClip(null);
       void refreshSequences();
@@ -492,7 +505,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
   const cutRangesMutation = useMutation({
     mutationFn: (cuts: Array<{ clipId: string; ranges: Array<{ srcStart: number; srcEnd: number }> }>) =>
       cutClipRangesBatch(
-        sequence!.id,
+        sequence!,
         cuts.map((cut) => ({
           clip_id: cut.clipId,
           ranges: cut.ranges.map((range) => ({ src_start: range.srcStart, src_end: range.srcEnd })),
@@ -504,7 +517,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
     },
   });
   const splitMutation = useMutation({
-    mutationFn: ({ clipId, srcTime }: { clipId: string; srcTime: number }) => splitClip(sequence!.id, clipId, srcTime),
+    mutationFn: ({ clipId, srcTime }: { clipId: string; srcTime: number }) => splitClip(sequence!, clipId, srcTime),
     onSuccess: refreshSequences,
   });
   // Transcript-driven split (按句切分 / 单句独立 / 在此切一刀): all named clips belong to
@@ -512,7 +525,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
   const splitPointsMutation = useMutation({
     mutationFn: (cuts: Array<{ clipId: string; srcTimes: number[] }>) =>
       splitClipAtPointsBatch(
-        sequence!.id,
+        sequence!,
         cuts
           .filter((cut) => cut.srcTimes.length > 0)
           .map((cut) => ({ clip_id: cut.clipId, src_times: cut.srcTimes })),
@@ -525,7 +538,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
   });
   const trackStateMutation = useMutation({
     mutationFn: ({ trackId, body }: { trackId: string; body: TrackStatePatch }) =>
-      setTrackState(sequence!.id, trackId, body),
+      setTrackState(sequence!, trackId, body),
     // Write the returned sequence straight into the cache. An invalidate/refetch leaves a window
     // where the rail still shows the pre-change track, and a click landing in that window targets
     // a track the server has already changed or removed — which then fails as "Track not found".

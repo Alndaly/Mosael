@@ -21,6 +21,11 @@ describe("接口报错", () => {
     expect(humanError(422, "Unprocessable Content", body)).toContain("字段必填");
   });
 
+  it("带结构的 409 取它的 message —— 不是一句「409 Conflict」", () => {
+    const body = JSON.stringify({ detail: { code: "sequence_revision_conflict", message: "mate刚改过这条时间线" } });
+    expect(humanError(409, "Conflict", body)).toBe("mate刚改过这条时间线");
+  });
+
   it("没有 detail 就退回状态码 —— 总比一句空话强", () => {
     expect(humanError(500, "Internal Server Error", "<html>oops</html>")).toContain("500");
   });

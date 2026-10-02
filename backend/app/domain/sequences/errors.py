@@ -28,3 +28,20 @@ class SequenceChangedElsewhere(SequenceDomainError):
     撤掉的就不是他以为的那一步 —— 拒掉,让他去看一眼。"""
 
     status = 409
+
+
+class SequenceRevisionConflict(SequenceDomainError):
+    """这一步是照着某一版时间线做的,而时间线已经被别人(另一个人、智能体、画板、自己的另一个窗口)改到了
+    别的样子,和这一步对不上 —— 照做就是在一份过时的时间线上替人做决定。拒掉,边界把最新的那一版一起交回去,
+    让他看着现状再做(见 concurrency)。
+
+    `who` 是改了它的那些人(文案片段的列表,按读的人的语言连起来);`base_revision` 是调用方以为的那一版。"""
+
+    status = 409
+
+    def __init__(
+        self, key: str, *, base_revision: int | None = None, current_revision: int | None = None, **params: object
+    ) -> None:
+        super().__init__(key, **params)
+        self.base_revision = base_revision
+        self.current_revision = current_revision

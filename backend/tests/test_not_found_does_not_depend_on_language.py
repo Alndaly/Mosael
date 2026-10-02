@@ -10,7 +10,7 @@ from __future__ import annotations
 import pytest
 from fastapi import HTTPException
 
-from app.api.routes.sequences import _apply
+from app.api.routes.sequences import _respond
 from app.core.i18n import get_current_locale, set_current_locale
 from app.domain.sequences.errors import SequenceDomainError, SequenceNotFound
 from app.domain.transcripts.operations import TranscriptAssetNotFound, TranscriptDomainError
@@ -33,14 +33,14 @@ def _raise(exc: Exception):
 
 def test_中文请求里时间线不存在也是_404(chinese) -> None:
     with pytest.raises(HTTPException) as caught:
-        _apply(_raise(SequenceNotFound("seqErr_sequenceNotFound")))
+        _respond(None, None, "s", _raise(SequenceNotFound("seqErr_sequenceNotFound")))
     assert caught.value.status_code == 404
     assert "not found" not in str(caught.value.detail).lower()  # 真的是中文那句
 
 
 def test_其余时间线错误仍是_422(chinese) -> None:
     with pytest.raises(HTTPException) as caught:
-        _apply(_raise(SequenceDomainError("seqErr_assetHasNoLength")))
+        _respond(None, None, "s", _raise(SequenceDomainError("seqErr_assetHasNoLength")))
     assert caught.value.status_code == 422
 
 

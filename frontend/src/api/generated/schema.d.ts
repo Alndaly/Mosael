@@ -18533,7 +18533,10 @@ export interface operations {
     };
     append_asset_api_sequences__sequence_id__append_post: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description 这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。 */
+                base_revision?: number | null;
+            };
             header?: never;
             path: {
                 sequence_id: string;
@@ -18568,7 +18571,10 @@ export interface operations {
     };
     insert_clip_api_sequences__sequence_id__clips_post: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description 这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。 */
+                base_revision?: number | null;
+            };
             header?: never;
             path: {
                 sequence_id: string;
@@ -18603,7 +18609,10 @@ export interface operations {
     };
     move_clip_api_sequences__sequence_id__clips__clip_id__move_patch: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description 这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。 */
+                base_revision?: number | null;
+            };
             header?: never;
             path: {
                 sequence_id: string;
@@ -18639,7 +18648,10 @@ export interface operations {
     };
     delete_clips_batch_api_sequences__sequence_id__clips_delete_batch_post: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description 这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。 */
+                base_revision?: number | null;
+            };
             header?: never;
             path: {
                 sequence_id: string;
@@ -18674,7 +18686,10 @@ export interface operations {
     };
     ripple_delete_clips_batch_api_sequences__sequence_id__clips_ripple_delete_batch_post: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description 这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。 */
+                base_revision?: number | null;
+            };
             header?: never;
             path: {
                 sequence_id: string;
@@ -18709,7 +18724,10 @@ export interface operations {
     };
     move_clips_batch_api_sequences__sequence_id__clips_move_batch_patch: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description 这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。 */
+                base_revision?: number | null;
+            };
             header?: never;
             path: {
                 sequence_id: string;
@@ -18744,7 +18762,10 @@ export interface operations {
     };
     trim_clip_api_sequences__sequence_id__clips__clip_id__trim_patch: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description 这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。 */
+                base_revision?: number | null;
+            };
             header?: never;
             path: {
                 sequence_id: string;
@@ -18780,7 +18801,10 @@ export interface operations {
     };
     cut_clip_ranges_batch_api_sequences__sequence_id__clips_cut_ranges_post: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description 这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。 */
+                base_revision?: number | null;
+            };
             header?: never;
             path: {
                 sequence_id: string;
@@ -18817,6 +18841,8 @@ export interface operations {
         parameters: {
             query?: {
                 linked?: boolean;
+                /** @description 这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。 */
+                base_revision?: number | null;
             };
             header?: never;
             path: {
@@ -18853,7 +18879,10 @@ export interface operations {
     };
     cut_clip_ranges_api_sequences__sequence_id__clips__clip_id__cut_ranges_post: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description 这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。 */
+                base_revision?: number | null;
+            };
             header?: never;
             path: {
                 sequence_id: string;
@@ -18889,7 +18918,10 @@ export interface operations {
     };
     split_clip_api_sequences__sequence_id__clips__clip_id__split_post: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description 这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。 */
+                base_revision?: number | null;
+            };
             header?: never;
             path: {
                 sequence_id: string;
@@ -18925,7 +18957,10 @@ export interface operations {
     };
     split_clip_points_batch_api_sequences__sequence_id__clips_split_points_post: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description 这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。 */
+                base_revision?: number | null;
+            };
             header?: never;
             path: {
                 sequence_id: string;
@@ -18960,7 +18995,10 @@ export interface operations {
     };
     split_clip_points_api_sequences__sequence_id__clips__clip_id__split_points_post: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description 这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。 */
+                base_revision?: number | null;
+            };
             header?: never;
             path: {
                 sequence_id: string;
@@ -18998,6 +19036,8 @@ export interface operations {
         parameters: {
             query?: {
                 with_clips?: boolean;
+                /** @description 这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。 */
+                base_revision?: number | null;
             };
             header?: never;
             path: {
@@ -19030,7 +19070,10 @@ export interface operations {
     };
     set_track_state_api_sequences__sequence_id__tracks__track_id__patch: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description 这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。 */
+                base_revision?: number | null;
+            };
             header?: never;
             path: {
                 sequence_id: string;
@@ -19066,7 +19109,10 @@ export interface operations {
     };
     move_track_api_sequences__sequence_id__tracks__track_id__move_patch: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description 这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。 */
+                base_revision?: number | null;
+            };
             header?: never;
             path: {
                 sequence_id: string;
@@ -19102,7 +19148,10 @@ export interface operations {
     };
     set_subtitle_style_api_sequences__sequence_id__subtitle_style_put: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description 这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。 */
+                base_revision?: number | null;
+            };
             header?: never;
             path: {
                 sequence_id: string;
@@ -19137,7 +19186,10 @@ export interface operations {
     };
     generate_subtitles_api_sequences__sequence_id__subtitles_generate_post: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description 这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。 */
+                base_revision?: number | null;
+            };
             header?: never;
             path: {
                 sequence_id: string;
@@ -19174,6 +19226,8 @@ export interface operations {
         parameters: {
             query?: {
                 linked?: boolean;
+                /** @description 这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。 */
+                base_revision?: number | null;
             };
             header?: never;
             path: {
@@ -19206,7 +19260,10 @@ export interface operations {
     };
     insert_text_clip_api_sequences__sequence_id__text_clips_post: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description 这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。 */
+                base_revision?: number | null;
+            };
             header?: never;
             path: {
                 sequence_id: string;
@@ -19241,7 +19298,10 @@ export interface operations {
     };
     set_clip_texts_api_sequences__sequence_id__clips_texts_patch: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description 这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。 */
+                base_revision?: number | null;
+            };
             header?: never;
             path: {
                 sequence_id: string;
@@ -19276,7 +19336,10 @@ export interface operations {
     };
     set_clip_text_api_sequences__sequence_id__clips__clip_id__text_patch: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description 这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。 */
+                base_revision?: number | null;
+            };
             header?: never;
             path: {
                 sequence_id: string;
@@ -19312,7 +19375,10 @@ export interface operations {
     };
     set_clip_speed_api_sequences__sequence_id__clips__clip_id__speed_patch: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description 这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。 */
+                base_revision?: number | null;
+            };
             header?: never;
             path: {
                 sequence_id: string;
@@ -19348,7 +19414,10 @@ export interface operations {
     };
     set_clip_gain_api_sequences__sequence_id__clips__clip_id__gain_patch: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description 这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。 */
+                base_revision?: number | null;
+            };
             header?: never;
             path: {
                 sequence_id: string;
@@ -19384,7 +19453,10 @@ export interface operations {
     };
     detach_clip_audio_api_sequences__sequence_id__clips__clip_id__detach_audio_post: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description 这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。 */
+                base_revision?: number | null;
+            };
             header?: never;
             path: {
                 sequence_id: string;
@@ -19416,7 +19488,10 @@ export interface operations {
     };
     set_clip_transform_api_sequences__sequence_id__clips__clip_id__transform_patch: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description 这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。 */
+                base_revision?: number | null;
+            };
             header?: never;
             path: {
                 sequence_id: string;
@@ -19452,7 +19527,10 @@ export interface operations {
     };
     set_sequence_reframe_api_sequences__sequence_id__reframe_patch: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description 这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。 */
+                base_revision?: number | null;
+            };
             header?: never;
             path: {
                 sequence_id: string;
@@ -19490,6 +19568,8 @@ export interface operations {
             query?: {
                 linked?: boolean;
                 all_tracks?: boolean;
+                /** @description 这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。 */
+                base_revision?: number | null;
             };
             header?: never;
             path: {
@@ -19522,7 +19602,10 @@ export interface operations {
     };
     add_track_api_sequences__sequence_id__tracks_post: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description 这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。 */
+                base_revision?: number | null;
+            };
             header?: never;
             path: {
                 sequence_id: string;
@@ -19557,7 +19640,10 @@ export interface operations {
     };
     set_clip_effects_api_sequences__sequence_id__clips__clip_id__effects_patch: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description 这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。 */
+                base_revision?: number | null;
+            };
             header?: never;
             path: {
                 sequence_id: string;

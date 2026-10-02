@@ -15,7 +15,7 @@ const api = vi.hoisted(() => ({
   rippleDeleteClipsBatch: vi.fn(),
   moveClipsBatch: vi.fn(),
 }));
-vi.mock("@/api/domains/editor", () => api);
+vi.mock("@/api/domains/editor", async (original) => ({ ...(await original<object>()), ...api }));
 vi.mock("@/api/domains/assets", () => ({ assetFileUrl: (id: string) => `/file/${id}`, assetThumbnailUrl: (id: string) => `/thumb/${id}` }));
 vi.mock("@/app/preferences", () => ({ useI18n: () => (key: string) => key }));
 
@@ -27,7 +27,7 @@ const clip = (id: string, start: number, length: number, extra: Record<string, u
   id, asset_id: `a-${id}`, asset_kind: "video", timeline_start: start, src_in: 0, src_out: length, speed: 1, ...extra,
 });
 const SEQUENCE = {
-  id: "seq", project_id: "proj",
+  id: "seq", project_id: "proj", revision: 7,
   tracks: [
     { id: "v", kind: "video", position: 0, clips: [clip("b", 4, 2), clip("a", 0, 4)] },
     { id: "m", kind: "audio", position: 1, clips: [clip("music", 0, 6, { asset_kind: "audio" })] },
@@ -107,7 +107,7 @@ describe("时间线格", () => {
     //: 剪成了就告诉画板,记进它的撤销栈(⌘Z 撤得回来)。
     await waitFor(() => expect(edits).toEqual(["seq"]));
     stop();
-    expect(api.splitClip.mock.calls[0][0]).toBe("seq");
+    expect(api.splitClip.mock.calls[0][0], "照着格子手里那一版切(带版本号)").toMatchObject({ id: "seq", revision: SEQUENCE.revision });
     expect(api.splitClip.mock.calls[0][1]).toBe("a");
     expect(api.splitClip.mock.calls[0][2]).toBeCloseTo(1.5);
   });
@@ -121,7 +121,7 @@ describe("时间线格", () => {
     fireEvent.click(tile("b"), { clientX: 110 });
     expect(tile("b").getAttribute("aria-pressed")).toBe("true");
     fireEvent.click(screen.getByRole("button", { name: "boardSequenceDelete" }));
-    await waitFor(() => expect(api.rippleDeleteClipsBatch).toHaveBeenCalledWith("seq", ["b"]));
+    await waitFor(() => expect(api.rippleDeleteClipsBatch).toHaveBeenCalledWith(expect.objectContaining({ id: "seq" }), ["b"]));
     expect(api.moveClipsBatch).not.toHaveBeenCalled();
   });
 
@@ -149,7 +149,7 @@ describe("时间线格", () => {
       fireEvent.pointerMove(document, { clientX: 10, clientY: 30, pointerId: 1 });
       fireEvent.pointerUp(document, { clientX: 10, clientY: 30, pointerId: 1 });
       await waitFor(() => expect(api.moveClipsBatch).toHaveBeenCalled());
-      expect(api.moveClipsBatch).toHaveBeenCalledWith("seq", [{ clip_id: "b", timeline_start: 0 }, { clip_id: "a", timeline_start: 2 }]);
+      expect(api.moveClipsBatch).toHaveBeenCalledWith(expect.objectContaining({ id: "seq" }), [{ clip_id: "b", timeline_start: 0 }, { clip_id: "a", timeline_start: 2 }]);
     } finally {
       Element.prototype.getBoundingClientRect = original;
     }

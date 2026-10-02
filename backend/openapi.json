@@ -5842,6 +5842,24 @@
               "type": "string",
               "title": "Sequence Id"
             }
+          },
+          {
+            "name": "base_revision",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。",
+              "title": "Base Revision"
+            },
+            "description": "这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。"
           }
         ],
         "requestBody": {
@@ -5894,6 +5912,24 @@
               "type": "string",
               "title": "Sequence Id"
             }
+          },
+          {
+            "name": "base_revision",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。",
+              "title": "Base Revision"
+            },
+            "description": "这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。"
           }
         ],
         "requestBody": {
@@ -5955,6 +5991,24 @@
               "type": "string",
               "title": "Clip Id"
             }
+          },
+          {
+            "name": "base_revision",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。",
+              "title": "Base Revision"
+            },
+            "description": "这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。"
           }
         ],
         "requestBody": {
@@ -6008,6 +6062,24 @@
               "type": "string",
               "title": "Sequence Id"
             }
+          },
+          {
+            "name": "base_revision",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。",
+              "title": "Base Revision"
+            },
+            "description": "这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。"
           }
         ],
         "requestBody": {
@@ -6061,6 +6133,24 @@
               "type": "string",
               "title": "Sequence Id"
             }
+          },
+          {
+            "name": "base_revision",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。",
+              "title": "Base Revision"
+            },
+            "description": "这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。"
           }
         ],
         "requestBody": {
@@ -6114,6 +6204,24 @@
               "type": "string",
               "title": "Sequence Id"
             }
+          },
+          {
+            "name": "base_revision",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。",
+              "title": "Base Revision"
+            },
+            "description": "这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。"
           }
         ],
         "requestBody": {
@@ -6175,6 +6283,24 @@
               "type": "string",
               "title": "Clip Id"
             }
+          },
+          {
+            "name": "base_revision",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。",
+              "title": "Base Revision"
+            },
+            "description": "这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。"
           }
         ],
         "requestBody": {
@@ -6227,6 +6353,24 @@
               "type": "string",
               "title": "Sequence Id"
             }
+          },
+          {
+            "name": "base_revision",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。",
+              "title": "Base Revision"
+            },
+            "description": "这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。"
           }
         ],
         "requestBody": {
@@ -6299,6 +6443,24 @@
               "default": true,
               "title": "Linked"
             }
+          },
+          {
+            "name": "base_revision",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。",
+              "title": "Base Revision"
+            },
+            "description": "这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。"
           }
         ],
         "requestBody": {
@@ -6360,6 +6522,24 @@
               "type": "string",
               "title": "Clip Id"
             }
+          },
+          {
+            "name": "base_revision",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。",
+              "title": "Base Revision"
+            },
+            "description": "这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。"
           }
         ],
         "requestBody": {
@@ -6421,6 +6601,24 @@
               "type": "string",
               "title": "Clip Id"
             }
+          },
+          {
+            "name": "base_revision",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。",
+              "title": "Base Revision"
+            },
+            "description": "这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。"
           }
         ],
         "requestBody": {
@@ -6473,6 +6671,24 @@
               "type": "string",
               "title": "Sequence Id"
             }
+          },
+          {
+            "name": "base_revision",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。",
+              "title": "Base Revision"
+            },
+            "description": "这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。"
           }
         ],
         "requestBody": {
@@ -6535,6 +6751,24 @@
               "type": "string",
               "title": "Clip Id"
             }
+          },
+          {
+            "name": "base_revision",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。",
+              "title": "Base Revision"
+            },
+            "description": "这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。"
           }
         ],
         "requestBody": {
@@ -6596,6 +6830,24 @@
               "type": "string",
               "title": "Track Id"
             }
+          },
+          {
+            "name": "base_revision",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。",
+              "title": "Base Revision"
+            },
+            "description": "这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。"
           }
         ],
         "requestBody": {
@@ -6666,6 +6918,24 @@
               "default": false,
               "title": "With Clips"
             }
+          },
+          {
+            "name": "base_revision",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。",
+              "title": "Base Revision"
+            },
+            "description": "这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。"
           }
         ],
         "responses": {
@@ -6717,6 +6987,24 @@
               "type": "string",
               "title": "Track Id"
             }
+          },
+          {
+            "name": "base_revision",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。",
+              "title": "Base Revision"
+            },
+            "description": "这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。"
           }
         ],
         "requestBody": {
@@ -6769,6 +7057,24 @@
               "type": "string",
               "title": "Sequence Id"
             }
+          },
+          {
+            "name": "base_revision",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。",
+              "title": "Base Revision"
+            },
+            "description": "这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。"
           }
         ],
         "requestBody": {
@@ -6822,6 +7128,24 @@
               "type": "string",
               "title": "Sequence Id"
             }
+          },
+          {
+            "name": "base_revision",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。",
+              "title": "Base Revision"
+            },
+            "description": "这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。"
           }
         ],
         "requestBody": {
@@ -6894,6 +7218,24 @@
               "default": true,
               "title": "Linked"
             }
+          },
+          {
+            "name": "base_revision",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。",
+              "title": "Base Revision"
+            },
+            "description": "这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。"
           }
         ],
         "responses": {
@@ -6936,6 +7278,24 @@
               "type": "string",
               "title": "Sequence Id"
             }
+          },
+          {
+            "name": "base_revision",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。",
+              "title": "Base Revision"
+            },
+            "description": "这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。"
           }
         ],
         "requestBody": {
@@ -6989,6 +7349,24 @@
               "type": "string",
               "title": "Sequence Id"
             }
+          },
+          {
+            "name": "base_revision",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。",
+              "title": "Base Revision"
+            },
+            "description": "这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。"
           }
         ],
         "requestBody": {
@@ -7050,6 +7428,24 @@
               "type": "string",
               "title": "Clip Id"
             }
+          },
+          {
+            "name": "base_revision",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。",
+              "title": "Base Revision"
+            },
+            "description": "这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。"
           }
         ],
         "requestBody": {
@@ -7111,6 +7507,24 @@
               "type": "string",
               "title": "Clip Id"
             }
+          },
+          {
+            "name": "base_revision",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。",
+              "title": "Base Revision"
+            },
+            "description": "这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。"
           }
         ],
         "requestBody": {
@@ -7172,6 +7586,24 @@
               "type": "string",
               "title": "Clip Id"
             }
+          },
+          {
+            "name": "base_revision",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。",
+              "title": "Base Revision"
+            },
+            "description": "这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。"
           }
         ],
         "requestBody": {
@@ -7233,6 +7665,24 @@
               "type": "string",
               "title": "Clip Id"
             }
+          },
+          {
+            "name": "base_revision",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。",
+              "title": "Base Revision"
+            },
+            "description": "这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。"
           }
         ],
         "responses": {
@@ -7284,6 +7734,24 @@
               "type": "string",
               "title": "Clip Id"
             }
+          },
+          {
+            "name": "base_revision",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。",
+              "title": "Base Revision"
+            },
+            "description": "这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。"
           }
         ],
         "requestBody": {
@@ -7336,6 +7804,24 @@
               "type": "string",
               "title": "Sequence Id"
             }
+          },
+          {
+            "name": "base_revision",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。",
+              "title": "Base Revision"
+            },
+            "description": "这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。"
           }
         ],
         "requestBody": {
@@ -7418,6 +7904,24 @@
               "default": false,
               "title": "All Tracks"
             }
+          },
+          {
+            "name": "base_revision",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。",
+              "title": "Base Revision"
+            },
+            "description": "这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。"
           }
         ],
         "responses": {
@@ -7460,6 +7964,24 @@
               "type": "string",
               "title": "Sequence Id"
             }
+          },
+          {
+            "name": "base_revision",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。",
+              "title": "Base Revision"
+            },
+            "description": "这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。"
           }
         ],
         "requestBody": {
@@ -7521,6 +8043,24 @@
               "type": "string",
               "title": "Clip Id"
             }
+          },
+          {
+            "name": "base_revision",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。",
+              "title": "Base Revision"
+            },
+            "description": "这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。"
           }
         ],
         "requestBody": {

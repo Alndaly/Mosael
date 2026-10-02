@@ -9,7 +9,7 @@ from sqlalchemy import update
 from sqlalchemy.orm import Session
 
 from app.db.models import Clip, Sequence, SequenceOperation, SequenceRevision
-from app.domain.sequences.errors import SequenceDomainError, SequenceNotFound
+from app.domain.sequences.errors import SequenceDomainError, SequenceNotFound, SequenceRevisionConflict
 
 
 MIN_CUT_REMAINDER = 0.05
@@ -240,7 +240,8 @@ def _record_operation(
         update(Sequence).where(Sequence.id == sequence.id, Sequence.revision == before).values(revision=after)
     ).rowcount
     if claimed == 0:
-        raise SequenceDomainError("seqErr_revisionConflict")
+        # 409,和「照着过时的一版做」是同一种拒绝(见 concurrency):边界把最新的那一版交回去,而不是一句 422。
+        raise SequenceRevisionConflict("seqErr_revisionConflict", base_revision=before)
     operation = SequenceOperation(
             workspace_id=sequence.workspace_id,
             sequence_id=sequence.id,

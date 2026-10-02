@@ -12,6 +12,11 @@ export function humanError(status: number, statusText: string, body: string): st
     const parsed = JSON.parse(body) as { detail?: unknown };
     const detail = parsed.detail;
     if (typeof detail === "string" && detail.trim()) return detail;
+    // 带结构的拒绝(画板、工作流、时间线的 409:{code, message, …}):给人看的那句在 message 里。
+    if (detail && typeof detail === "object" && !Array.isArray(detail)) {
+      const message = (detail as { message?: unknown }).message;
+      if (typeof message === "string" && message.trim()) return message;
+    }
     if (Array.isArray(detail)) {
       // pydantic 的校验错误:[{loc, msg, ...}]
       const parts = detail

@@ -3,7 +3,9 @@ from __future__ import annotations
 import hashlib
 import json
 
-from fastapi import APIRouter, HTTPException, Request, Response
+from typing import Annotated
+
+from fastapi import APIRouter, HTTPException, Query, Request, Response
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
@@ -48,7 +50,8 @@ from app.api.schemas import (
 from app.db.models import Asset, Job, Sequence, Track
 from app.domain.permissions import require_sequence_access
 from app.domain.render import start_export
-from app.domain.sequences.errors import SequenceDomainError
+from app.domain.sequences import concurrency
+from app.domain.sequences.errors import SequenceDomainError, SequenceNotFound, SequenceRevisionConflict
 from app.domain.sequences.history import can_redo, can_undo, redo as redo_operation, undo as undo_operation
 from app.media.render_plan import RenderPlanError
 from app.domain.sequences.operations import (
@@ -190,79 +193,95 @@ def list_sequences(project_id: str, request: Request, db: DbSession, user: Curre
     return Response(f"[{','.join(bodies)}]", media_type="application/json", headers=headers)
 
 
+#: 编辑请求看到的是第几版(见 domain/sequences/concurrency)。落后了而这一步和中间那几步能交换就照做,
+#: 否则 409 并附上最新的一版、说清是谁改的。不给就照现状做。
+BaseRevision = Annotated[
+    int | None,
+    Query(description="这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。"),
+]
+
+
 @router.post("/sequences/{sequence_id}/append", response_model=SequenceOut)
-def append_asset(sequence_id: str, body: AppendAssetRequest, db: Tx, user: CurrentUser) -> Response:
+def append_asset(
+    sequence_id: str, body: AppendAssetRequest, db: Tx, user: CurrentUser, base_revision: BaseRevision = None
+) -> Response:
     """把整段素材接到它那种轨道的末尾;时间线还空着时画幅跟着它走(sequences.append)。"""
     from app.domain.sequences.append import append_asset as append
 
     require_sequence_access(db, user, sequence_id, perm="edit")
-    _apply(lambda: append(db, sequence_id, body.asset_id, actor_id=user.id))
-    return _edited_response(db, sequence_id)
+    actor = user.id
+
+    def run() -> None:
+        sequence = db.get(Sequence, sequence_id)
+        if sequence is None:
+            raise SequenceNotFound("Sequence not found")
+        concurrency.run_on_base(
+            db,
+            sequence,
+            lambda: append(db, sequence_id, body.asset_id, actor_id=actor),
+            base_revision=base_revision,
+            footprint=concurrency.POSITIONAL,
+            actor_id=actor,
+        )
+
+    return _respond(db, user, sequence_id, run)
 
 
 @router.post("/sequences/{sequence_id}/clips", response_model=SequenceOut)
-def insert_clip(sequence_id: str, body: InsertClipRequest, db: Tx, user: CurrentUser) -> Response:
-    require_sequence_access(db, user, sequence_id, perm="edit")
-    _apply(lambda: insert_clip_operation(db, sequence_id, InsertClip(**body.model_dump())))
-    return _edited_response(db, sequence_id)
+def insert_clip(
+    sequence_id: str, body: InsertClipRequest, db: Tx, user: CurrentUser, base_revision: BaseRevision = None
+) -> Response:
+    op = InsertClip(**body.model_dump())
+    return _edit(db, user, sequence_id, base_revision, insert_clip_operation, op, perm="edit")
 
 
 @router.patch("/sequences/{sequence_id}/clips/{clip_id}/move", response_model=SequenceOut)
-def move_clip(sequence_id: str, clip_id: str, body: MoveClipRequest, db: Tx, user: CurrentUser) -> Response:
-    require_sequence_access(db, user, sequence_id, perm="edit")
-    _apply(lambda: move_clip_operation(db, sequence_id, MoveClip(clip_id=clip_id, **body.model_dump())))
-    return _edited_response(db, sequence_id)
+def move_clip(
+    sequence_id: str, clip_id: str, body: MoveClipRequest, db: Tx, user: CurrentUser, base_revision: BaseRevision = None
+) -> Response:
+    op = MoveClip(clip_id=clip_id, **body.model_dump())
+    return _edit(db, user, sequence_id, base_revision, move_clip_operation, op, perm="edit")
 
 
 @router.post("/sequences/{sequence_id}/clips/delete-batch", response_model=SequenceOut)
-def delete_clips_batch(sequence_id: str, body: ClipIdsRequest, db: Tx, user: CurrentUser) -> Response:
+def delete_clips_batch(
+    sequence_id: str, body: ClipIdsRequest, db: Tx, user: CurrentUser, base_revision: BaseRevision = None
+) -> Response:
     """多选后一次删除:一条操作,撤销一步全部找回。"""
-    require_sequence_access(db, user, sequence_id, perm="edit")
-    _apply(
-        lambda: delete_clips_batch_operation(
-            db, sequence_id, DeleteClipsBatch(clip_ids=tuple(body.clip_ids), linked=body.linked)
-        )
-    )
-    return _edited_response(db, sequence_id)
+    op = DeleteClipsBatch(clip_ids=tuple(body.clip_ids), linked=body.linked)
+    return _edit(db, user, sequence_id, base_revision, delete_clips_batch_operation, op, perm="edit")
 
 
 @router.post("/sequences/{sequence_id}/clips/ripple-delete-batch", response_model=SequenceOut)
 def ripple_delete_clips_batch(
-    sequence_id: str, body: RippleDeleteClipsRequest, db: Tx, user: CurrentUser
+    sequence_id: str, body: RippleDeleteClipsRequest, db: Tx, user: CurrentUser, base_revision: BaseRevision = None
 ) -> Response:
     """多选后一次波纹删除(后续左移补位;链接组员同删同移;all_tracks 时所有未锁定轨一起):一条操作、一步撤销。"""
-    require_sequence_access(db, user, sequence_id, perm="edit")
-    _apply(
-        lambda: ripple_delete_clips_batch_operation(
-            db,
-            sequence_id,
-            RippleDeleteClipsBatch(clip_ids=tuple(body.clip_ids), linked=body.linked, all_tracks=body.all_tracks),
-        )
-    )
-    return _edited_response(db, sequence_id)
+    op = RippleDeleteClipsBatch(clip_ids=tuple(body.clip_ids), linked=body.linked, all_tracks=body.all_tracks)
+    return _edit(db, user, sequence_id, base_revision, ripple_delete_clips_batch_operation, op, perm="edit")
 
 
 @router.patch("/sequences/{sequence_id}/clips/move-batch", response_model=SequenceOut)
-def move_clips_batch(sequence_id: str, body: MoveClipsBatchRequest, db: Tx, user: CurrentUser) -> Response:
+def move_clips_batch(
+    sequence_id: str, body: MoveClipsBatchRequest, db: Tx, user: CurrentUser, base_revision: BaseRevision = None
+) -> Response:
     """框选后整组拖动:一次手势一条操作,撤销一步还原整组。"""
-    require_sequence_access(db, user, sequence_id, perm="edit")
-    moves = tuple(ClipMove(**move.model_dump()) for move in body.moves)
-    _apply(lambda: move_clips_batch_operation(db, sequence_id, MoveClipsBatch(moves=moves, linked=body.linked)))
-    return _edited_response(db, sequence_id)
+    op = MoveClipsBatch(moves=tuple(ClipMove(**move.model_dump()) for move in body.moves), linked=body.linked)
+    return _edit(db, user, sequence_id, base_revision, move_clips_batch_operation, op, perm="edit")
 
 
 @router.patch("/sequences/{sequence_id}/clips/{clip_id}/trim", response_model=SequenceOut)
-def trim_clip(sequence_id: str, clip_id: str, body: TrimClipRequest, db: Tx, user: CurrentUser) -> Response:
-    require_sequence_access(db, user, sequence_id, perm="edit")
-    _apply(lambda: trim_clip_operation(db, sequence_id, TrimClip(clip_id=clip_id, **body.model_dump())))
-    return _edited_response(db, sequence_id)
+def trim_clip(
+    sequence_id: str, clip_id: str, body: TrimClipRequest, db: Tx, user: CurrentUser, base_revision: BaseRevision = None
+) -> Response:
+    op = TrimClip(clip_id=clip_id, **body.model_dump())
+    return _edit(db, user, sequence_id, base_revision, trim_clip_operation, op, perm="edit")
 
 
 @router.post("/sequences/{sequence_id}/clips/cut-ranges", response_model=SequenceOut)
 def cut_clip_ranges_batch(
-    sequence_id: str, body: CutClipRangesBatchRequest, db: Tx, user: CurrentUser
+    sequence_id: str, body: CutClipRangesBatchRequest, db: Tx, user: CurrentUser, base_revision: BaseRevision = None
 ) -> Response:
-    require_sequence_access(db, user, sequence_id, perm="edit")
     cuts = tuple(
         ClipRangeCuts(
             clip_id=cut.clip_id,
@@ -270,236 +289,211 @@ def cut_clip_ranges_batch(
         )
         for cut in body.cuts
     )
-    _apply(lambda: cut_clip_ranges_batch_operation(db, sequence_id, CutClipRangesBatch(cuts=cuts, linked=body.linked)))
-    return _edited_response(db, sequence_id)
+    op = CutClipRangesBatch(cuts=cuts, linked=body.linked)
+    return _edit(db, user, sequence_id, base_revision, cut_clip_ranges_batch_operation, op, perm="edit")
 
 
 @router.post("/sequences/{sequence_id}/clips/{clip_id}/cut-range", response_model=SequenceOut)
 def cut_clip_range(
-    sequence_id: str, clip_id: str, body: CutClipRangeRequest, db: Tx, user: CurrentUser, linked: bool = True
+    sequence_id: str, clip_id: str, body: CutClipRangeRequest, db: Tx, user: CurrentUser, linked: bool = True,
+    base_revision: BaseRevision = None,
 ) -> Response:
     """按文字剪的单个区间(波纹删除,见 cutting._ripple_cut)。`linked=false`:链接的音频不跟着剪。"""
-    require_sequence_access(db, user, sequence_id, perm="edit")
-    _apply(
-        lambda: cut_clip_range_operation(db, sequence_id, CutClipRange(clip_id=clip_id, linked=linked, **body.model_dump()))
-    )
-    return _edited_response(db, sequence_id)
+    op = CutClipRange(clip_id=clip_id, linked=linked, **body.model_dump())
+    return _edit(db, user, sequence_id, base_revision, cut_clip_range_operation, op, perm="edit")
 
 
 @router.post("/sequences/{sequence_id}/clips/{clip_id}/cut-ranges", response_model=SequenceOut)
 def cut_clip_ranges(
-    sequence_id: str, clip_id: str, body: CutClipRangesRequest, db: Tx, user: CurrentUser
+    sequence_id: str, clip_id: str, body: CutClipRangesRequest, db: Tx, user: CurrentUser,
+    base_revision: BaseRevision = None,
 ) -> Response:
-    require_sequence_access(db, user, sequence_id, perm="edit")
     ranges = tuple((item.src_start, item.src_end) for item in body.ranges)
-    _apply(
-        lambda: cut_clip_ranges_operation(
-            db, sequence_id, CutClipRanges(clip_id=clip_id, ranges=ranges, linked=body.linked)
-        )
-    )
-    return _edited_response(db, sequence_id)
+    op = CutClipRanges(clip_id=clip_id, ranges=ranges, linked=body.linked)
+    return _edit(db, user, sequence_id, base_revision, cut_clip_ranges_operation, op, perm="edit")
 
 
 @router.post("/sequences/{sequence_id}/clips/{clip_id}/split", response_model=SequenceOut)
-def split_clip(sequence_id: str, clip_id: str, body: SplitClipRequest, db: Tx, user: CurrentUser) -> Response:
-    require_sequence_access(db, user, sequence_id, perm="edit")
-    _apply(lambda: split_clip_operation(db, sequence_id, SplitClip(clip_id=clip_id, **body.model_dump())))
-    return _edited_response(db, sequence_id)
+def split_clip(
+    sequence_id: str, clip_id: str, body: SplitClipRequest, db: Tx, user: CurrentUser,
+    base_revision: BaseRevision = None,
+) -> Response:
+    op = SplitClip(clip_id=clip_id, **body.model_dump())
+    return _edit(db, user, sequence_id, base_revision, split_clip_operation, op, perm="edit")
 
 
 @router.post("/sequences/{sequence_id}/clips/split-points", response_model=SequenceOut)
 def split_clip_points_batch(
-    sequence_id: str, body: SplitClipPointsBatchRequest, db: Tx, user: CurrentUser
+    sequence_id: str, body: SplitClipPointsBatchRequest, db: Tx, user: CurrentUser, base_revision: BaseRevision = None
 ) -> Response:
-    require_sequence_access(db, user, sequence_id, perm="edit")
     splits = tuple(
         ClipPointSplits(clip_id=split.clip_id, src_times=tuple(split.src_times))
         for split in body.splits
     )
-    _apply(
-        lambda: split_clip_points_batch_operation(
-            db, sequence_id, SplitClipPointsBatch(splits=splits, linked=body.linked)
-        )
-    )
-    return _edited_response(db, sequence_id)
+    op = SplitClipPointsBatch(splits=splits, linked=body.linked)
+    return _edit(db, user, sequence_id, base_revision, split_clip_points_batch_operation, op, perm="edit")
 
 
 @router.post("/sequences/{sequence_id}/clips/{clip_id}/split-points", response_model=SequenceOut)
 def split_clip_points(
-    sequence_id: str, clip_id: str, body: SplitClipPointsRequest, db: Tx, user: CurrentUser
+    sequence_id: str, clip_id: str, body: SplitClipPointsRequest, db: Tx, user: CurrentUser,
+    base_revision: BaseRevision = None,
 ) -> Response:
     """Split one clip into pieces at several source-time cut points (transcript 按句切分)."""
-    require_sequence_access(db, user, sequence_id, perm="edit")
-    _apply(
-        lambda: split_clip_points_operation(
-            db, sequence_id, SplitClipPoints(clip_id=clip_id, src_times=tuple(body.src_times), linked=body.linked)
-        )
-    )
-    return _edited_response(db, sequence_id)
+    op = SplitClipPoints(clip_id=clip_id, src_times=tuple(body.src_times), linked=body.linked)
+    return _edit(db, user, sequence_id, base_revision, split_clip_points_operation, op, perm="edit")
 
 
 @router.patch("/sequences/{sequence_id}/tracks/{track_id}", response_model=SequenceOut)
 def set_track_state(
-    sequence_id: str, track_id: str, body: SetTrackStateRequest, db: Tx, user: CurrentUser
+    sequence_id: str, track_id: str, body: SetTrackStateRequest, db: Tx, user: CurrentUser,
+    base_revision: BaseRevision = None,
 ) -> Response:
-    require_sequence_access(db, user, sequence_id, perm="edit")
-    _apply(lambda: set_track_state_operation(db, sequence_id, SetTrackState(track_id=track_id, **body.model_dump())))
-    return _edited_response(db, sequence_id)
+    op = SetTrackState(track_id=track_id, **body.model_dump())
+    return _edit(db, user, sequence_id, base_revision, set_track_state_operation, op, perm="edit")
 
 
 @router.patch("/sequences/{sequence_id}/tracks/{track_id}/move", response_model=SequenceOut)
-def move_track(sequence_id: str, track_id: str, body: MoveTrackRequest, db: Tx, user: CurrentUser) -> Response:
-    require_sequence_access(db, user, sequence_id, perm="edit")
-    _apply(lambda: move_track_operation(db, sequence_id, MoveTrack(track_id=track_id, direction=body.direction)))
-    return _edited_response(db, sequence_id)
+def move_track(
+    sequence_id: str, track_id: str, body: MoveTrackRequest, db: Tx, user: CurrentUser,
+    base_revision: BaseRevision = None,
+) -> Response:
+    op = MoveTrack(track_id=track_id, direction=body.direction)
+    return _edit(db, user, sequence_id, base_revision, move_track_operation, op, perm="edit")
 
 
 @router.put("/sequences/{sequence_id}/subtitle-style", response_model=SequenceOut)
-def set_subtitle_style(sequence_id: str, body: SetSubtitleStyleRequest, db: Tx, user: CurrentUser) -> Response:
-    require_sequence_access(db, user, sequence_id, perm="edit")
-    _apply(lambda: set_subtitle_style_operation(db, sequence_id, SetSubtitleStyle(style=body.style)))
-    return _edited_response(db, sequence_id)
+def set_subtitle_style(
+    sequence_id: str, body: SetSubtitleStyleRequest, db: Tx, user: CurrentUser, base_revision: BaseRevision = None
+) -> Response:
+    op = SetSubtitleStyle(style=body.style)
+    return _edit(db, user, sequence_id, base_revision, set_subtitle_style_operation, op, perm="edit")
 
 
 @router.post("/sequences/{sequence_id}/subtitles/generate", response_model=SequenceOut)
-def generate_subtitles(sequence_id: str, body: GenerateSubtitlesRequest, db: Tx, user: CurrentUser) -> Response:
+def generate_subtitles(
+    sequence_id: str, body: GenerateSubtitlesRequest, db: Tx, user: CurrentUser, base_revision: BaseRevision = None
+) -> Response:
     """一键从逐字稿生成字幕:批量把句子插成字幕轨上的文本片段。"""
-    require_sequence_access(db, user, sequence_id, perm="edit")
     cues = tuple((cue.text, cue.timeline_start, cue.duration) for cue in body.cues)
-    _apply(lambda: generate_subtitles_operation(db, sequence_id, GenerateSubtitles(track_id=body.track_id, cues=cues)))
-    return _edited_response(db, sequence_id)
+    op = GenerateSubtitles(track_id=body.track_id, cues=cues)
+    return _edit(db, user, sequence_id, base_revision, generate_subtitles_operation, op, perm="edit")
 
 
 @router.delete("/sequences/{sequence_id}/clips/{clip_id}", response_model=SequenceOut)
-def delete_clip(sequence_id: str, clip_id: str, db: Tx, user: CurrentUser, linked: bool = True) -> Response:
+def delete_clip(
+    sequence_id: str, clip_id: str, db: Tx, user: CurrentUser, linked: bool = True, base_revision: BaseRevision = None
+) -> Response:
     """`linked=false`:只删这一段,链接的组员留着(「临时解链」)。"""
-    require_sequence_access(db, user, sequence_id, perm="edit")
-    _apply(lambda: delete_clip_operation(db, sequence_id, DeleteClip(clip_id=clip_id, linked=linked)))
-    return _edited_response(db, sequence_id)
+    op = DeleteClip(clip_id=clip_id, linked=linked)
+    return _edit(db, user, sequence_id, base_revision, delete_clip_operation, op, perm="edit")
 
 
 @router.post("/sequences/{sequence_id}/text-clips", response_model=SequenceOut)
-def insert_text_clip(sequence_id: str, body: InsertTextClipRequest, db: Tx, user: CurrentUser) -> Response:
-    require_sequence_access(db, user, sequence_id, perm="edit")
-    _apply(lambda: insert_text_clip_operation(db, sequence_id, InsertTextClip(**body.model_dump())))
-    return _edited_response(db, sequence_id)
+def insert_text_clip(
+    sequence_id: str, body: InsertTextClipRequest, db: Tx, user: CurrentUser, base_revision: BaseRevision = None
+) -> Response:
+    op = InsertTextClip(**body.model_dump())
+    return _edit(db, user, sequence_id, base_revision, insert_text_clip_operation, op, perm="edit")
 
 
 @router.patch("/sequences/{sequence_id}/clips/texts", response_model=SequenceOut)
-def set_clip_texts(sequence_id: str, body: SetClipTextsRequest, db: Tx, user: CurrentUser) -> Response:
+def set_clip_texts(
+    sequence_id: str, body: SetClipTextsRequest, db: Tx, user: CurrentUser, base_revision: BaseRevision = None
+) -> Response:
     """Retext many clips in one revision — used by translate-whole-track. Registered BEFORE the
     single-clip route below so "texts" is not captured as a {clip_id}."""
-    require_sequence_access(db, user, sequence_id, perm="edit")
-    texts = tuple((entry.clip_id, entry.text) for entry in body.texts)
-    _apply(lambda: set_clip_texts_batch_operation(db, sequence_id, SetClipTextsBatch(texts=texts)))
-    return _edited_response(db, sequence_id)
+    op = SetClipTextsBatch(texts=tuple((entry.clip_id, entry.text) for entry in body.texts))
+    return _edit(db, user, sequence_id, base_revision, set_clip_texts_batch_operation, op, perm="edit")
 
 
 @router.patch("/sequences/{sequence_id}/clips/{clip_id}/text", response_model=SequenceOut)
 def set_clip_text(
-    sequence_id: str, clip_id: str, body: SetClipTextRequest, db: Tx, user: CurrentUser
+    sequence_id: str, clip_id: str, body: SetClipTextRequest, db: Tx, user: CurrentUser,
+    base_revision: BaseRevision = None,
 ) -> Response:
-    require_sequence_access(db, user, sequence_id, perm="edit")
-    _apply(lambda: set_clip_text_operation(db, sequence_id, SetClipText(clip_id=clip_id, text=body.text)))
-    return _edited_response(db, sequence_id)
+    op = SetClipText(clip_id=clip_id, text=body.text)
+    return _edit(db, user, sequence_id, base_revision, set_clip_text_operation, op, perm="edit")
 
 
 @router.patch("/sequences/{sequence_id}/clips/{clip_id}/speed", response_model=SequenceOut)
 def set_clip_speed(
-    sequence_id: str, clip_id: str, body: SetClipSpeedRequest, db: Tx, user: CurrentUser
+    sequence_id: str, clip_id: str, body: SetClipSpeedRequest, db: Tx, user: CurrentUser,
+    base_revision: BaseRevision = None,
 ) -> Response:
-    require_sequence_access(db, user, sequence_id, perm="edit")
-    _apply(lambda: set_clip_speed_operation(db, sequence_id, SetClipSpeed(clip_id=clip_id, **body.model_dump())))
-    return _edited_response(db, sequence_id)
+    op = SetClipSpeed(clip_id=clip_id, **body.model_dump())
+    return _edit(db, user, sequence_id, base_revision, set_clip_speed_operation, op, perm="edit")
 
 
 @router.patch("/sequences/{sequence_id}/clips/{clip_id}/gain", response_model=SequenceOut)
 def set_clip_gain(
-    sequence_id: str, clip_id: str, body: SetClipGainRequest, db: Tx, user: CurrentUser
+    sequence_id: str, clip_id: str, body: SetClipGainRequest, db: Tx, user: CurrentUser,
+    base_revision: BaseRevision = None,
 ) -> Response:
-    require_sequence_access(db, user, sequence_id, perm="edit")
-    _apply(
-        lambda: set_clip_gain_operation(
-            db, sequence_id, SetClipGain(clip_id=clip_id, gain=body.gain, muted=body.muted)
-        )
-    )
-    return _edited_response(db, sequence_id)
+    op = SetClipGain(clip_id=clip_id, gain=body.gain, muted=body.muted)
+    return _edit(db, user, sequence_id, base_revision, set_clip_gain_operation, op, perm="edit")
 
 
 @router.post("/sequences/{sequence_id}/clips/{clip_id}/detach-audio", response_model=SequenceOut)
-def detach_clip_audio(sequence_id: str, clip_id: str, db: Tx, user: CurrentUser) -> Response:
-    require_sequence_access(db, user, sequence_id, perm="edit")
-    _apply(lambda: detach_clip_audio_operation(db, sequence_id, DetachClipAudio(clip_id=clip_id)))
-    return _edited_response(db, sequence_id)
+def detach_clip_audio(
+    sequence_id: str, clip_id: str, db: Tx, user: CurrentUser, base_revision: BaseRevision = None
+) -> Response:
+    op = DetachClipAudio(clip_id=clip_id)
+    return _edit(db, user, sequence_id, base_revision, detach_clip_audio_operation, op, perm="edit")
 
 
 @router.patch("/sequences/{sequence_id}/clips/{clip_id}/transform", response_model=SequenceOut)
 def set_clip_transform(
-    sequence_id: str, clip_id: str, body: SetClipTransformRequest, db: Tx, user: CurrentUser
+    sequence_id: str, clip_id: str, body: SetClipTransformRequest, db: Tx, user: CurrentUser,
+    base_revision: BaseRevision = None,
 ) -> Response:
-    require_sequence_access(db, user, sequence_id, perm="edit")
-    _apply(
-        lambda: set_clip_transform_operation(
-            db, sequence_id, SetClipTransform(clip_id=clip_id, transform=body.transform)
-        )
-    )
-    return _edited_response(db, sequence_id)
+    op = SetClipTransform(clip_id=clip_id, transform=body.transform)
+    return _edit(db, user, sequence_id, base_revision, set_clip_transform_operation, op, perm="edit")
 
 
 @router.patch("/sequences/{sequence_id}/reframe", response_model=SequenceOut)
 def set_sequence_reframe(
-    sequence_id: str, body: SetSequenceReframeRequest, db: Tx, user: CurrentUser
+    sequence_id: str, body: SetSequenceReframeRequest, db: Tx, user: CurrentUser, base_revision: BaseRevision = None
 ) -> Response:
-    require_sequence_access(db, user, sequence_id, perm="edit")
-    _apply(
-        lambda: set_sequence_reframe_operation(
-            db, sequence_id, SetSequenceReframe(width=body.width, height=body.height, fill_mode=body.fill_mode)
-        )
-    )
-    return _edited_response(db, sequence_id)
+    op = SetSequenceReframe(width=body.width, height=body.height, fill_mode=body.fill_mode)
+    return _edit(db, user, sequence_id, base_revision, set_sequence_reframe_operation, op, perm="edit")
 
 
 @router.delete("/sequences/{sequence_id}/clips/{clip_id}/ripple", response_model=SequenceOut)
 def ripple_delete_clip(
-    sequence_id: str, clip_id: str, db: Tx, user: CurrentUser, linked: bool = True, all_tracks: bool = False
+    sequence_id: str, clip_id: str, db: Tx, user: CurrentUser, linked: bool = True, all_tracks: bool = False,
+    base_revision: BaseRevision = None,
 ) -> Response:
     """`linked=false` 只删这一段;`all_tracks=true` 这段时间从所有未锁定轨上拿掉(见 RippleDeleteClip)。"""
-    require_sequence_access(db, user, sequence_id, perm="edit")
-    _apply(
-        lambda: ripple_delete_clip_operation(
-            db, sequence_id, RippleDeleteClip(clip_id=clip_id, linked=linked, all_tracks=all_tracks)
-        )
-    )
-    return _edited_response(db, sequence_id)
+    op = RippleDeleteClip(clip_id=clip_id, linked=linked, all_tracks=all_tracks)
+    return _edit(db, user, sequence_id, base_revision, ripple_delete_clip_operation, op, perm="edit")
 
 
 @router.post("/sequences/{sequence_id}/tracks", response_model=SequenceOut)
-def add_track(sequence_id: str, body: AddTrackRequest, db: Tx, user: CurrentUser) -> Response:
-    require_sequence_access(db, user, sequence_id, perm="edit")
-    _apply(lambda: add_track_operation(db, sequence_id, AddTrack(kind=body.kind)))
-    return _edited_response(db, sequence_id)
+def add_track(
+    sequence_id: str, body: AddTrackRequest, db: Tx, user: CurrentUser, base_revision: BaseRevision = None
+) -> Response:
+    return _edit(db, user, sequence_id, base_revision, add_track_operation, AddTrack(kind=body.kind), perm="edit")
 
 
 @router.delete("/sequences/{sequence_id}/tracks/{track_id}", response_model=SequenceOut)
 def remove_track(
-    sequence_id: str, track_id: str, db: Tx, user: CurrentUser, with_clips: bool = False
+    sequence_id: str, track_id: str, db: Tx, user: CurrentUser, with_clips: bool = False,
+    base_revision: BaseRevision = None,
 ) -> Response:
     """Remove a track. A track that still holds clips is refused unless with_clips says
     otherwise — the UI asks first and names how many clips would go with it."""
-    require_sequence_access(db, user, sequence_id, perm="edit")
-    _apply(
-        lambda: remove_track_operation(db, sequence_id, RemoveTrack(track_id=track_id, with_clips=with_clips))
-    )
-    return _edited_response(db, sequence_id)
+    op = RemoveTrack(track_id=track_id, with_clips=with_clips)
+    return _edit(db, user, sequence_id, base_revision, remove_track_operation, op, perm="edit")
 
 
 @router.patch("/sequences/{sequence_id}/clips/{clip_id}/effects", response_model=SequenceOut)
 def set_clip_effects(
-    sequence_id: str, clip_id: str, body: SetClipEffectsRequest, db: Tx, user: CurrentUser
+    sequence_id: str, clip_id: str, body: SetClipEffectsRequest, db: Tx, user: CurrentUser,
+    base_revision: BaseRevision = None,
 ) -> Response:
-    require_sequence_access(db, user, sequence_id, perm="edit")
-    _apply(lambda: set_clip_effects_operation(db, sequence_id, SetClipEffects(clip_id=clip_id, effects=body.effects)))
-    return _edited_response(db, sequence_id)
+    op = SetClipEffects(clip_id=clip_id, effects=body.effects)
+    return _edit(db, user, sequence_id, base_revision, set_clip_effects_operation, op, perm="edit")
 
 
 @router.post("/sequences/{sequence_id}/undo", response_model=SequenceOut)
@@ -508,8 +502,7 @@ def undo_sequence(
 ) -> Response:
     """`expected_revision`:调用方看到的是第几版(画板上的撤销带着它)。时间线已经在别处改过就 409,不撤别人的那一步。"""
     require_sequence_access(db, user, sequence_id, perm="edit")
-    _apply(lambda: undo_operation(db, sequence_id, expected_revision=expected_revision))
-    return _edited_response(db, sequence_id)
+    return _respond(db, user, sequence_id, lambda: undo_operation(db, sequence_id, expected_revision=expected_revision))
 
 
 @router.post("/sequences/{sequence_id}/redo", response_model=SequenceOut)
@@ -518,8 +511,7 @@ def redo_sequence(
 ) -> Response:
     """`expected_revision` 同撤销。"""
     require_sequence_access(db, user, sequence_id, perm="edit")
-    _apply(lambda: redo_operation(db, sequence_id, expected_revision=expected_revision))
-    return _edited_response(db, sequence_id)
+    return _respond(db, user, sequence_id, lambda: redo_operation(db, sequence_id, expected_revision=expected_revision))
 
 
 @router.post("/sequences/{sequence_id}/dub-subtitles", response_model=JobOut)
@@ -571,11 +563,44 @@ def grab_sequence_frame_route(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-def _apply(operation) -> None:
+def _edit(db, user, sequence_id: str, base_revision: int | None, handler, op, *, perm: str) -> Response:
+    """一次编辑请求:过闸(权限由调用点点名)、记下是谁、照着它看到的那一版判断还能不能做(见 domain/sequences/concurrency)。"""
+    require_sequence_access(db, user, sequence_id, perm=perm)
+    return _respond(
+        db, user, sequence_id,
+        lambda: concurrency.apply_on_base(db, sequence_id, handler, op, base_revision=base_revision, actor_id=user.id),
+    )
+
+
+def _respond(db, user, sequence_id: str, run) -> Response:
     try:
-        operation()
+        run()
+    except SequenceRevisionConflict as exc:
+        raise _conflict(db, sequence_id, exc) from exc
     except SequenceDomainError as exc:
         raise HTTPException(status_code=exc.status, detail=str(exc)) from exc
+    return _edited_response(db, sequence_id)
+
+
+def _conflict(db, sequence_id: str, exc: SequenceRevisionConflict) -> HTTPException:
+    """409 和画板、工作流的 409 同一个形状(code / base_revision / current_revision / message),**另带最新的序列** ——
+    客户端拿它直接换掉手里那份过时的,而不是只弹一句「刷新后重试」。
+
+    先回滚:这一步可能已经改了一半(版本号的 CAS 在记账那一刻才撞上),交回去的得是库里真有的那一版。
+    """
+    message = str(exc)
+    db.rollback()
+    latest = _get_sequence(db, sequence_id)
+    return HTTPException(
+        status_code=409,
+        detail={
+            "code": "sequence_revision_conflict",
+            "message": message,
+            "base_revision": exc.base_revision,
+            "current_revision": latest.revision,
+            "sequence": json.loads(_sequence_json(latest)),
+        },
+    )
 
 
 # sequence_id -> (revision, serialised JSON). One entry per sequence, so it cannot grow with

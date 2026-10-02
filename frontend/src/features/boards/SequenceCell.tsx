@@ -7,7 +7,15 @@ import React from "react";
 import { toast } from "sonner";
 
 import { assetFileUrl, assetThumbnailUrl } from "@/api/domains/assets";
-import { getSequence, moveClipsBatch, rippleDeleteClipsBatch, splitClip, type Clip, type Sequence } from "@/api/domains/editor";
+import {
+  getSequence,
+  moveClipsBatch,
+  onSequenceConflict,
+  rippleDeleteClipsBatch,
+  splitClip,
+  type Clip,
+  type Sequence,
+} from "@/api/domains/editor";
 import { errorText } from "@/api/errorMessage";
 import { isNotFound } from "@/api/transport";
 import { useI18n } from "@/app/preferences";
@@ -180,6 +188,14 @@ export function SequenceCell({ sequenceId }: { sequenceId: string }) {
 
   const settle = (next: Sequence) => qc.setQueryData(boardSequenceKey(sequenceId), next);
   const fail = (error: unknown) => toast.error(errorText(error));
+  //: 格子里的一步撞上 409(这条时间线在剪辑页、智能体或别人那里改过,和这一步对不上):换成服务端附上的最新一版。
+  React.useEffect(
+    () =>
+      onSequenceConflict((latest) => {
+        if (latest.id === sequenceId) qc.setQueryData(boardSequenceKey(sequenceId), latest);
+      }),
+    [qc, sequenceId],
+  );
   const actions = useSequenceActions(sequenceId);
   const reorder = useMutation({
     mutationFn: (order: Clip[]) => {
@@ -190,7 +206,7 @@ export function SequenceCell({ sequenceId }: { sequenceId: string }) {
         cursor += span(clip);
         return move;
       });
-      return moveClipsBatch(sequenceId, moves);
+      return moveClipsBatch(sequence.data!, moves);
     },
     onSuccess: (next) => {
       settle(next);
@@ -461,7 +477,7 @@ export function useSequenceActions(sequenceId: string) {
   const settle = (next: Sequence) => qc.setQueryData(boardSequenceKey(sequenceId), next);
   const fail = (error: unknown) => toast.error(errorText(error));
   const cut = useMutation({
-    mutationFn: (clip: Clip) => splitClip(sequenceId, clip.id, clip.src_in + (time - clip.timeline_start) * (clip.speed || 1)),
+    mutationFn: (clip: Clip) => splitClip(sequence.data!, clip.id, clip.src_in + (time - clip.timeline_start) * (clip.speed || 1)),
     onSuccess: (next) => {
       settle(next);
       noteSequenceEdit(sequenceId, next.revision);
@@ -469,7 +485,7 @@ export function useSequenceActions(sequenceId: string) {
     onError: fail,
   });
   const removal = useMutation({
-    mutationFn: (clipId: string) => rippleDeleteClipsBatch(sequenceId, [clipId]),
+    mutationFn: (clipId: string) => rippleDeleteClipsBatch(sequence.data!, [clipId]),
     onSuccess: (next) => {
       settle(next);
       updateSequenceCursor(sequenceId, { picked: null });
