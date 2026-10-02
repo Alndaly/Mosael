@@ -83,7 +83,7 @@ class TestDialogue:
         assert "\\pos(960.0,540.0)" in line  # 恒等 transform → 画面中心
         assert f"\\fs{64 * _ASS_FONTSIZE_SCALE:g}" in line  # 字号按 libass↔浏览器系数放大
         assert "\\1c&H0000FF&" in line  # 红 #ff0000 → BGR 0000FF
-        assert "\\bord3\\3c&H000000&" in line
+        assert "\\bord1.5\\3c&H000000&" in line  # 外描边 = 存储线宽的一半(契约 text-stroke-cases)
         assert "\\b1" in line
         assert line.endswith("Hi")
 

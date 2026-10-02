@@ -456,8 +456,12 @@ _ASS_FONTSIZE_SCALE = 1.4
 def _text_style_tags(st) -> list[str]:
     """花字外观标签(字号/颜色/描边/阴影/粗斜/字体),不含位置/缩放/旋转/透明度。"""
     tags = [f"\\fs{st.font_size * _ASS_FONTSIZE_SCALE:g}", f"\\1c{_ass_bgr(st.color)}"]
-    if st.stroke_width > 0:
-        tags.append(f"\\bord{st.stroke_width:g}\\3c{_ass_bgr(st.stroke_color)}")
+    # libass 的 \bord 本来就是纯外描边,直接写外圈宽度;ScaledBorderAndShadow 开着、PlayRes 等于
+    # 输出画幅,脚本像素即画面像素。此前写的是整个 stroke_width,外圈是 PNG 路径的两倍
+    # (契约 contracts/text-stroke-cases.json)。
+    outer = st.outer_stroke_px
+    if outer > 0:
+        tags.append(f"\\bord{outer:g}\\3c{_ass_bgr(st.stroke_color)}")
     else:
         tags.append("\\bord0")
     if st.shadow > 0:

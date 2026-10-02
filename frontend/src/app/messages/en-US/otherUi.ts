@@ -459,6 +459,8 @@ export const otherUi = {
   textColor: "Fill",
   textStrokeColor: "Stroke color",
   textStroke: "Stroke",
+  textStrokeHint: "The stroke is drawn outside the letters so it never covers them; at most 15% of the font size",
+  textStrokeCapped: "The stroke is drawn at the limit for this font size; a larger font size restores it",
   textShadow: "Shadow",
   textBold: "Bold",
   textItalic: "Italic",

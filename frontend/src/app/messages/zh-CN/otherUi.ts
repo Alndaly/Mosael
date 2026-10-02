@@ -459,6 +459,8 @@ export const otherUi = {
   textColor: "文字",
   textStrokeColor: "描边色",
   textStroke: "描边",
+  textStrokeHint: "描边只画在文字外侧,不压住字芯;最粗为字号的 15%",
+  textStrokeCapped: "描边已按这个字号的上限绘制;字号调大后会恢复原来的粗细",
   textShadow: "阴影",
   textBold: "加粗",
   textItalic: "斜体",

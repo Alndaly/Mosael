@@ -72,6 +72,31 @@ export function readTextStyle(raw: unknown): TextStyle {
   };
 }
 
+/**
+ * 外描边的上限:字形轮廓外那一圈最宽是字号的多少。描边画在字外,再粗字芯也还在;过了这条线,
+ * 笔画之间的空隙被糊成一整块,尖角处的斜接尖刺也开始比字还显眼(霞鹜文楷实测)。
+ * 后端 render_plan.TEXT_STROKE_MAX_OUTER_RATIO 是同一个数,两份都对着
+ * contracts/text-stroke-cases.json 的 max_outer_ratio 测。
+ */
+export const TEXT_STROKE_MAX_OUTER_RATIO = 0.15;
+
+/**
+ * 描边在字形轮廓**外**那一圈的宽度(帧像素)。预览、导出 PNG、libass 回落三条路径都只画这一圈
+ * (契约 contracts/text-stroke-cases.json)。
+ *
+ * stroke_width 是历史上「居中描边」的线宽 —— 一半在字外、一半压进字里,细笔画字体的白芯因此被
+ * 吃掉。外圈取它的一半,正好是那时向外伸出的部分:已有花字的外轮廓不动,还回来的只有字芯。
+ * 再按字号封顶;超出时按上限画,存储值不动。
+ */
+export function outerStrokePx(style: Pick<TextStyle, "font_size" | "stroke_width">): number {
+  return Math.min(style.stroke_width / 2, style.font_size * TEXT_STROKE_MAX_OUTER_RATIO);
+}
+
+/** 描边滑杆的上限:这个字号下还画得出差别的最大存储值(外圈封顶 × 2),最多到原来的 20。 */
+export function strokeSliderMax(fontSize: number): number {
+  return Math.max(1, Math.min(20, Math.floor(fontSize * TEXT_STROKE_MAX_OUTER_RATIO * 2)));
+}
+
 /** 原生帧像素 → 相对帧宽的 cqw(frame 是 container-query 容器),让文字/描边随预览缩放。 */
 function cqw(px: number, frameWidth: number): string {
   return `${(px / Math.max(frameWidth, 1)) * 100}cqw`;
@@ -84,6 +109,8 @@ function cqw(px: number, frameWidth: number): string {
 export function textStyleCss(style: TextStyle, tf: Transform, frameWidth: number): React.CSSProperties {
   const cx = (0.5 + tf.x * 0.5) * 100;
   const cy = (0.5 + tf.y * 0.5) * 100;
+  // 描边居中骑在轮廓上,线宽给外圈的两倍;paint-order 让填充后画、盖回向内的那一半,只剩字外一圈。
+  const outer = outerStrokePx(style);
   return {
     position: "absolute",
     left: `${cx}%`,
@@ -99,8 +126,9 @@ export function textStyleCss(style: TextStyle, tf: Transform, frameWidth: number
     fontFamily: style.font_family || undefined,
     textAlign: style.align,
     whiteSpace: "pre",
-    WebkitTextStrokeWidth: style.stroke_width > 0 ? cqw(style.stroke_width, frameWidth) : undefined,
-    WebkitTextStrokeColor: style.stroke_width > 0 ? style.stroke_color : undefined,
+    paintOrder: outer > 0 ? "stroke fill" : undefined,
+    WebkitTextStrokeWidth: outer > 0 ? cqw(outer * 2, frameWidth) : undefined,
+    WebkitTextStrokeColor: outer > 0 ? style.stroke_color : undefined,
     textShadow: style.shadow > 0 ? `0 ${cqw(style.shadow, frameWidth)} ${cqw(style.shadow * 1.5, frameWidth)} rgba(0,0,0,0.65)` : undefined,
   };
 }

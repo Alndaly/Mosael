@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { DEFAULT_TEXT_STYLE, readTextStyle, textStyleCss } from "@/features/editor/textStyle";
+import { DEFAULT_TEXT_STYLE, outerStrokePx, readTextStyle, strokeSliderMax, textStyleCss } from "@/features/editor/textStyle";
 import type { Transform } from "@/features/editor/TransformOverlay";
 
 const tf = (over: Partial<Transform> = {}): Transform => ({ scale: 1, x: 0, y: 0, rotation: 0, opacity: 1, ...over });
@@ -52,7 +52,21 @@ describe("textStyleCss", () => {
 
   it("emits webkit text stroke only when stroke width > 0", () => {
     expect(textStyleCss(DEFAULT_TEXT_STYLE, tf(), 1920).WebkitTextStrokeWidth).toBeUndefined();
+    expect(textStyleCss(DEFAULT_TEXT_STYLE, tf(), 1920).paintOrder).toBeUndefined();
     const css = textStyleCss({ ...DEFAULT_TEXT_STYLE, stroke_width: 4, stroke_color: "#000000" }, tf(), 1920);
     expect(css.WebkitTextStrokeColor).toBe("#000000");
+  });
+});
+
+describe("外描边封顶", () => {
+  it("外圈 = 存储线宽的一半,按字号的 15% 封顶", () => {
+    expect(outerStrokePx({ font_size: 48, stroke_width: 6 })).toBe(3);
+    expect(outerStrokePx({ font_size: 12, stroke_width: 6 })).toBeCloseTo(1.8, 6);
+  });
+
+  it("滑杆上限跟着字号走,最多到 20,至少留 1 格", () => {
+    expect(strokeSliderMax(48)).toBe(14);
+    expect(strokeSliderMax(200)).toBe(20);
+    expect(strokeSliderMax(4)).toBe(1);
   });
 });

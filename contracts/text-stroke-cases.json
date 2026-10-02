@@ -1,0 +1,63 @@
+{
+  "contract": "text-stroke",
+  "version": 1,
+  "readme": "contracts/README.md",
+  "description": "花字描边在三条路径上必须一致的语义:预览(DOM CSS)、导出 PNG(无头 Chromium 跑同一套 CSS)、libass 回落(\\bord)。描边只画在字形轮廓**外**,外圈有多宽。后端 backend/tests/test_text_stroke_parity.py 与前端 textStroke.parity.test.ts 跑同一份语料。",
+  "notes": [
+    "stroke_width 是存储值,沿用历史上「居中描边」的线宽:那时描边骑在轮廓上,一半在字外、一半压进字里。外圈宽度取它的一半,于是已有花字的外轮廓与修复前逐像素相同,不用迁移数据 —— 被还回来的只有字芯。",
+    "外圈宽度按字号封顶(max_outer_ratio × font_size):描边画在字外,再粗字芯也在,但超过这个比例时笔画之间的空隙被糊成一整块,尖角处的斜接尖刺也开始比字还显眼。超出时按上限画,存储值不动。",
+    "css_stroke_width_px 是预览与导出 PNG 写给 -webkit-text-stroke 的线宽(配 paint-order: stroke fill,向内那一半被填充盖回)。预览按 cqw 写、导出按帧原生 px 写,两种写法在画幅原生宽度上解析到同一个像素值,所以语料记像素。",
+    "ass_bord 是 libass 回落写进 \\bord 的值。libass 的边框本来就是纯外描边;ScaledBorderAndShadow: yes 且 PlayResX/Y 等于输出画幅,脚本像素即画面像素,所以它等于 outer_px。"
+  ],
+  "max_outer_ratio": 0.15,
+  "cases": [
+    {
+      "name": "no-stroke",
+      "why": "描边为 0:三条路径都不画描边,也不该留下 paint-order 之类的残余声明。",
+      "style": { "font_size": 48, "stroke_width": 0 },
+      "expected": { "outer_px": 0, "css_stroke_width_px": 0, "ass_bord": 0 }
+    },
+    {
+      "name": "outline-preset",
+      "why": "「描边」预设(4)。外圈 2px —— 正是修复前居中描边向字外伸出的那一半,外轮廓不变。",
+      "style": { "font_size": 48, "stroke_width": 4 },
+      "expected": { "outer_px": 2, "css_stroke_width_px": 4, "ass_bord": 2 }
+    },
+    {
+      "name": "variety-preset",
+      "why": "「综艺」预设(6)。修复前 libass 回落写的是 \\bord6,外圈是 PNG 路径的两倍 —— 三条路径的语义从这里开始分岔。",
+      "style": { "font_size": 48, "stroke_width": 6 },
+      "expected": { "outer_px": 3, "css_stroke_width_px": 6, "ass_bord": 3 }
+    },
+    {
+      "name": "odd-width-keeps-half-pixel",
+      "why": "奇数线宽:外圈 1.5px 原样保留(CSS 与 libass 都接受小数),不取整 —— 取整会让外轮廓和修复前差半像素。",
+      "style": { "font_size": 64, "stroke_width": 3 },
+      "expected": { "outer_px": 1.5, "css_stroke_width_px": 3, "ass_bord": 1.5 }
+    },
+    {
+      "name": "exactly-at-cap",
+      "why": "外圈恰好等于字号的 15%:不算超,原样画。",
+      "style": { "font_size": 40, "stroke_width": 12 },
+      "expected": { "outer_px": 6, "css_stroke_width_px": 12, "ass_bord": 6 }
+    },
+    {
+      "name": "slider-max-on-default-font-is-capped",
+      "why": "旧滑杆的最大值 20 配默认字号 48:外圈 10px 超过上限 7.2px,按上限画。",
+      "style": { "font_size": 48, "stroke_width": 20 },
+      "expected": { "outer_px": 7.2, "css_stroke_width_px": 14.4, "ass_bord": 7.2 }
+    },
+    {
+      "name": "small-font-capped",
+      "why": "字号很小、描边照常:外圈封顶在 12×15% = 1.8px,否则 12px 的字整个埋进描边里。",
+      "style": { "font_size": 12, "stroke_width": 6 },
+      "expected": { "outer_px": 1.8, "css_stroke_width_px": 3.6, "ass_bord": 1.8 }
+    },
+    {
+      "name": "large-font-not-capped",
+      "why": "大字号下存储上限 40 也到不了封顶线(200×15% = 30):照常取一半。",
+      "style": { "font_size": 200, "stroke_width": 40 },
+      "expected": { "outer_px": 20, "css_stroke_width_px": 40, "ass_bord": 20 }
+    }
+  ]
+}

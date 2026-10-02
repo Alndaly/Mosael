@@ -55,7 +55,9 @@ def _app_css_href(dist: Path) -> str:
 def _huazi_style_css(style, frame_w: int) -> tuple[str, int]:
     """花字元素的内联样式(不含位置/变换/透明度——那些交给 ffmpeg)。返回 (css, padding)。"""
     fs = float(style.font_size)
-    sw = float(style.stroke_width)
+    # 线宽是外圈的两倍:描边居中骑在轮廓上,paint-order 让填充后画、盖回向内的那一半,
+    # 只剩字外一圈(见 TextStyleSpec.outer_stroke_px,契约 contracts/text-stroke-cases.json)。
+    sw = style.outer_stroke_px * 2
     sh = float(style.shadow)
     pad = max(int(round(sh * 3)), int(round(sw)), 6)  # 给描边/投影留出溢出空间(对称,文字仍居中)
     parts = [
@@ -70,6 +72,7 @@ def _huazi_style_css(style, frame_w: int) -> tuple[str, int]:
         f"padding:{pad}px",
     ]
     if sw > 0:
+        parts.append("paint-order:stroke fill")
         parts.append(f"-webkit-text-stroke:{sw:g}px {style.stroke_color}")
     if sh > 0:
         parts.append(f"text-shadow:0 {sh:g}px {sh * 1.5:g}px rgba(0,0,0,0.65)")

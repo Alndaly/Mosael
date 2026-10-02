@@ -11,7 +11,7 @@ import { useI18n } from "@/app/preferences";
 import { clipEnd } from "@/domain/timeline/geometry";
 import { formatTimecode } from "@/lib/time";
 import { clipProgress, hasActiveKeyframes, propTimes, sampleProp, togglePropKeyframe, upsertKeyframe, sampleGain, gainKeyTimes, toggleGainKeyframe, upsertGainKeyframe, type GainKeyframe, type Keyframe, type KfProp } from "@/features/editor/keyframes";
-import { readTextStyle, TEXT_PRESETS, type TextStyle } from "@/features/editor/textStyle";
+import { readTextStyle, strokeSliderMax, TEXT_PRESETS, type TextStyle } from "@/features/editor/textStyle";
 import { SUBTITLE_FONTS } from "@/features/editor/subtitleStyle";
 import { uploadedFontStack } from "@/features/editor/FontFaces";
 import { useEditorStore } from "@/features/editor/editorStore";
@@ -667,9 +667,13 @@ function TextStylePanel({
     );
   const swatch =
     "h-6 w-9 shrink-0 cursor-pointer rounded-md border border-field-border bg-transparent p-0.5 [&::-webkit-color-swatch]:rounded [&::-webkit-color-swatch]:border-0 [&::-webkit-color-swatch-wrapper]:p-0";
-  const bars: Array<{ key: "stroke_width" | "shadow"; label: string }> = [
-    { key: "stroke_width", label: t("textStroke") },
-    { key: "shadow", label: t("textShadow") },
+  // 描边的滑杆上限跟着字号走:外圈按字号封顶,再往右拖画面不会变(见 outerStrokePx)。
+  // 存储值大于上限(旧工程,或事后把字号调小了)时不改它,只说明「按上限画」。
+  const strokeMax = strokeSliderMax(style.font_size);
+  const strokeCapped = style.stroke_width > strokeMax;
+  const bars: Array<{ key: "stroke_width" | "shadow"; label: string; hint?: string; max: number }> = [
+    { key: "stroke_width", label: t("textStroke"), hint: t("textStrokeHint"), max: strokeMax },
+    { key: "shadow", label: t("textShadow"), max: 20 },
   ];
   return (
     <InspectorSection className="gap-2" title={t("textStyleTitle")}>
@@ -764,18 +768,19 @@ function TextStylePanel({
       </div>
       {bars.map((bar) => (
         <div key={bar.key} className="grid grid-cols-[40px_1fr_34px] items-center gap-2">
-          <span className="text-ui-xs text-muted-foreground">{bar.label}</span>
+          <span className="text-ui-xs text-muted-foreground" title={bar.hint}>{bar.label}</span>
           <Slider
-            key={`${bar.key}-${clip.id}-${style[bar.key]}`}
+            key={`${bar.key}-${clip.id}-${style[bar.key]}-${bar.max}`}
             min={0}
-            max={20}
+            max={bar.max}
             step={1}
-            defaultValue={[style[bar.key]]}
+            defaultValue={[Math.min(style[bar.key], bar.max)]}
             onValueCommit={([value]) => set({ [bar.key]: value } as Partial<TextStyle>)}
           />
-          <span className="timecode text-right text-ui-xs text-muted-foreground">{Math.round(style[bar.key])}</span>
+          <span className="timecode text-right text-ui-xs text-muted-foreground">{Math.round(Math.min(style[bar.key], bar.max))}</span>
         </div>
       ))}
+      {strokeCapped && <p className="m-0 text-ui-xs leading-normal text-muted-foreground">{t("textStrokeCapped")}</p>}
       <div className="flex items-center gap-1">
         <button type="button" className={iconBtn(style.bold)} onClick={() => set({ bold: !style.bold })} aria-label={t("textBold")}>
           <Bold size={13} />

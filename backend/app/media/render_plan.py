@@ -230,6 +230,13 @@ class SubtitleStyleSpec:
 DEFAULT_SUBTITLE_STYLE = SubtitleStyleSpec()
 
 
+#: 花字外描边的上限:字形轮廓外那一圈最宽是字号的多少。描边画在字外,再粗字芯也还在;但过了
+#: 这条线,笔画之间的空隙被糊成一整块,尖角处的斜接尖刺也开始比字还显眼(霞鹜文楷实测)。
+#: 前端 textStyle.ts 有一份同名常量(预览要在浏览器里自己算),两份都对着
+#: contracts/text-stroke-cases.json 的 max_outer_ratio 测。
+TEXT_STROKE_MAX_OUTER_RATIO = 0.15
+
+
 @dataclass(frozen=True)
 class TextStyleSpec:
     """花字(独立文本元素)的逐条外观:每条自带一套样式,区别于序列级统一的 SubtitleStyleSpec。
@@ -246,6 +253,16 @@ class TextStyleSpec:
     font_family: str = ""
     font_id: str = ""  # 上传字体 id;导出侧据此解析真实字族名与 fontsdir
     font_dir: str = ""
+
+    @property
+    def outer_stroke_px(self) -> float:
+        """描边在字形轮廓**外**那一圈的宽度(帧像素)。三条路径都只画这一圈:预览与导出 PNG 用
+        `paint-order: stroke fill` 让填充盖回向内的那一半,libass 的 \\bord 本来就是纯外描边。
+
+        stroke_width 是历史上「居中描边」的线宽 —— 一半在字外、一半压进字里,细笔画字体的白芯
+        因此被吃掉。外圈取它的一半,正好是那时向外伸出的部分:已有花字的外轮廓一个像素都不动,
+        不用迁移数据,还回来的只有字芯。再按字号封顶(见 TEXT_STROKE_MAX_OUTER_RATIO)。"""
+        return min(self.stroke_width / 2, self.font_size * TEXT_STROKE_MAX_OUTER_RATIO)
 
 
 DEFAULT_TEXT_STYLE = TextStyleSpec()

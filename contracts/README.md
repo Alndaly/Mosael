@@ -70,6 +70,24 @@
 后端那份的注释就写着「镜像预览 subtitleCss」。**"靠注释提醒对方"不是机制。** 建立契约时两侧恰好还是
 一致的,所以这次没有换来 bug —— 它防的是下一次。
 
+### `text-stroke-cases.json` —— 花字描边契约
+
+「描边画在哪、外圈多宽。」同一条花字有三条路径画描边:预览(DOM 上的 `-webkit-text-stroke`)、
+导出 PNG(无头 Chromium 跑同一套 CSS)、libass 回落(`\bord`)。
+
+| 实现 | 位置 | 测试 |
+| --- | --- | --- |
+| 预览 | `frontend/src/features/editor/textStyle.ts` 的 `outerStrokePx` / `textStyleCss` | `textStroke.parity.test.ts`、`textStyle.dom.test.tsx` |
+| 导出 PNG + libass 回落 | `backend/app/media/render_plan.py` 的 `TextStyleSpec.outer_stroke_px`、`text_render._huazi_style_css`、`render_executor._text_style_tags` | `backend/tests/test_text_stroke_parity.py` |
+
+后端那条 parity 除了跑语料,还**真渲**两条导出路径量像素:白芯在不在、外轮廓和修复前差没差、
+libass 与 PNG 的外圈一不一样宽。只比 CSS 字符串验不出「字芯被吃掉」—— 那是浏览器画出来才有的事。
+
+**建立契约之前它是这样的**:CSS 是**居中**描边,一半压进字里,霞鹜文楷这类细笔画字体白字黑描边时
+白芯只剩不到 1%,字整个变黑;libass 的 `\bord` 是**纯外**描边,同一个存储值画出来的外圈是 PNG
+路径的两倍。三份实现各自自洽,互不相识。现在统一成外描边,外圈取存储值的一半(正是居中描边向外
+伸出的那部分,已有花字的外轮廓不变,不用迁移),按字号封顶。
+
 ### `context-meter-cases.json` —— 上下文水位契约
 
 「一组 pi 消息占了多少 token。」
