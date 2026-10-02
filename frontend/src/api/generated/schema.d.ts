@@ -9447,6 +9447,11 @@ export interface components {
             track_id: string;
             /** Cues */
             cues: components["schemas"]["SubtitleCueInput"][];
+            /**
+             * Replace
+             * @default false
+             */
+            replace: boolean;
         };
         /** GenerationCapabilityProfileCreate */
         GenerationCapabilityProfileCreate: {

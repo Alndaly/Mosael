@@ -26766,6 +26766,11 @@
             "type": "array",
             "minItems": 1,
             "title": "Cues"
+          },
+          "replace": {
+            "type": "boolean",
+            "title": "Replace",
+            "default": false
           }
         },
         "type": "object",

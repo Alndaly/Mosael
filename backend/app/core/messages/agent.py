@@ -126,6 +126,14 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Only subtitle tracks can be hidden.",
     },
     "seqErr_detachAudioVideoOnly": {"zh": "只能从视频片段分离音频", "en": "Audio can only be detached from a video clip."},
+    "seqErr_cueNotFinite": {
+        "zh": "第 {index} 条字幕的时间不是有效的数字",
+        "en": "Subtitle {index} has a start or duration that isn't a valid number.",
+    },
+    "seqErr_cueOutsideTimeline": {
+        "zh": "第 {index} 条字幕从第 {start} 秒开始,在时间线内容之外(内容到第 {end} 秒为止)",
+        "en": "Subtitle {index} starts at {start}s, past the end of the timeline's content ({end}s).",
+    },
     "seqErr_detachAudioOffset": {
         "zh": "这份声音不覆盖片段用到的那一段,对不上",
         "en": "That audio doesn't cover the part of the source this clip uses.",

@@ -23,6 +23,7 @@ import { PILL } from "@/features/editor/pill";
 import { SaveToNote } from "@/features/notes/SaveToNote";
 import { useNoteStrings } from "@/features/notes/strings";
 import { noteExportVariants, type NoteExportLine } from "@/features/editor/noteExport";
+import { translatedCue, translationSource } from "@/features/editor/subtitleTranslate";
 import { useEditorStore } from "@/features/editor/editorStore";
 import { useVirtualRows } from "@/features/editor/useVirtualRows";
 import { cn } from "@/lib/utils";
@@ -359,18 +360,20 @@ function SubtitleTranslate({
         // 轨道处于部分翻译状态 —— 所以失败提示必须说清写到了第几条。
         await translateTexts(
           workspaceId,
-          items.map((clip) => clip.text_override ?? ""),
+          // 只送原文那一行(双语字幕的第一行),见 subtitleTranslate —— 送整条的话旧译文也被再翻一遍。
+          items.map((clip) => translationSource(clip.text_override ?? "")),
           lang,
           engine,
           async (batch, offset) => {
             const texts = batch.flatMap((translated, j) => {
               const clip = items[offset + j];
-              const original = clip.text_override ?? "";
-              if (!clip || !translated || translated === original) return [];
-              // Bilingual keeps the source line above the translation. The subtitle renders with
-              // white-space: pre-wrap, so the newline is a real second line in the preview and,
-              // via the ASS \N we emit at export, in the burned-in output too.
-              return [{ clip_id: clip.id, text: bilingual ? `${original}\n${translated}` : translated }];
+              if (!clip || !translated) return [];
+              // Bilingual keeps the source line above the translation (replacing any older second line).
+              // The subtitle renders with white-space: pre-wrap, so the newline is a real second line
+              // in the preview and, via the ASS \N we emit at export, in the burned-in output too.
+              const text = translatedCue(clip.text_override ?? "", translated, bilingual);
+              if (text === (clip.text_override ?? "")) return [];
+              return [{ clip_id: clip.id, text }];
             });
             if (texts.length > 0) {
               await onApplyTexts(texts);

@@ -227,6 +227,8 @@ class SubtitleCueInput(ApiModel):
 class GenerateSubtitlesRequest(ApiModel):
     track_id: str
     cues: list[SubtitleCueInput] = Field(min_length=1)
+    #: 先清掉这条字幕轨上原有的字幕(「重新生成」),和铺新的一起是撤销栈上的一步。
+    replace: bool = False
 
 
 class SetSubtitleStyleRequest(ApiModel):

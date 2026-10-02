@@ -376,7 +376,7 @@ def generate_subtitles(
 ) -> Response:
     """一键从逐字稿生成字幕:批量把句子插成字幕轨上的文本片段。"""
     cues = tuple((cue.text, cue.timeline_start, cue.duration) for cue in body.cues)
-    op = GenerateSubtitles(track_id=body.track_id, cues=cues)
+    op = GenerateSubtitles(track_id=body.track_id, cues=cues, replace=body.replace)
     return _edit(db, user, sequence_id, base_revision, generate_subtitles_operation, op, perm="edit")
 
 

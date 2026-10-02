@@ -83,3 +83,20 @@ def test_不在组里的编辑照旧各记一步() -> None:
         db.commit()
         kinds = [op.kind for op in db.scalars(select(SequenceOperation).where(SequenceOperation.sequence_id == sid))]
     assert kinds == ["add_track", "add_track"]
+
+
+def test_组里再开一组_外面那组说了算() -> None:
+    """「重新生成字幕」自己是一组(删旧 + 铺新);被更大的动作调用时,用户撤销的是那个更大的动作。"""
+    client = fresh_client()
+    sid = _sequence(client)
+    outer = OperationGroup(sid, label="outer", actor_id=None)
+    inner = OperationGroup(sid, label="inner", actor_id=None)
+    with SessionLocal() as db, outer.collect(db):
+        add_track(db, sid, AddTrack(kind="subtitle"))
+        with inner.collect(db):
+            add_track(db, sid, AddTrack(kind="audio"))
+        add_track(db, sid, AddTrack(kind="video"))
+        db.commit()
+    with SessionLocal() as db:
+        [op] = db.scalars(select(SequenceOperation).where(SequenceOperation.sequence_id == sid))
+        assert op.payload["label"] == "outer" and len(op.payload["steps"]) == 3

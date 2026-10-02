@@ -288,8 +288,10 @@ export function generateSubtitles(
   sequence: SequenceRef,
   trackId: string,
   cues: Array<{ text: string; timeline_start: number; duration: number }>,
+  /** 先清掉这条轨上原有的字幕(「重新生成」),和铺新的一起是撤销栈上的一步。 */
+  replace = false,
 ): Promise<Sequence> {
-  return edit(sequence, "/subtitles/generate", { method: "POST", body: JSON.stringify({ track_id: trackId, cues }) });
+  return edit(sequence, "/subtitles/generate", { method: "POST", body: JSON.stringify({ track_id: trackId, cues, replace }) });
 }
 
 export function setSubtitleStyle(sequence: SequenceRef, style: Record<string, unknown>): Promise<Sequence> {

@@ -42,7 +42,15 @@ class OperationGroup:
 
     @contextmanager
     def collect(self, db: Session) -> Iterator[OperationGroup]:
-        """这个会话里对 `sequence_id` 的编辑都记进这个组。可以嵌套在同一个组里重复进入。"""
+        """这个会话里对 `sequence_id` 的编辑都记进这个组。
+
+        已经在别的组里(对同一条序列)时,**外面那个组说了算**:这一组的步骤并进外面那一步 —— 比如「重新生成字幕」
+        自己是一组(删旧 + 插新),被一次更大的动作调用时,用户要撤销的是那次更大的动作。
+        """
+        outer = active_group(db, self.sequence_id)
+        if outer is not None and outer is not self:
+            yield outer
+            return
         previous = db.info.get(_SESSION_KEY)
         db.info[_SESSION_KEY] = self
         try:

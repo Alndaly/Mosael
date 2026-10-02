@@ -14,7 +14,7 @@ from app.domain.sequences._timeline import (
     _require_sequence,
     _validate_clip_range,
 )
-from app.domain.sequences.coverage import clear_range, clip_end
+from app.domain.sequences.coverage import clear_range, clip_end, clips_on_track
 from app.domain.sequences.errors import SequenceDomainError, SequenceNotFound
 from app.domain.sequences.journal import Journal
 
@@ -37,7 +37,16 @@ class GenerateSubtitles:
 
     track_id: str
     cues: tuple[tuple[str, float, float], ...]
+    #: 先清掉这条字幕轨上原有的字幕再铺(「重新生成」)。和铺新的记成撤销栈上的一步。
+    #: 此前再点一次「生成字幕」,同一条轨上每一句都叠成两份(探针 P5)。
+    replace: bool = False
     actor_id: str | None = None
+
+
+#: 时间线上一条字幕最晚能从第几秒开始 —— 没有任何内容可对照时的兜底(一条一天长的时间线已经不是剪辑了)。
+_MAX_CUE_START = 24 * 3600.0
+#: 字幕比内容末尾多出这么一点不算越界(转写的句尾常常比素材长几十毫秒)。
+_CUE_END_SLACK = 0.05
 
 
 def generate_subtitles(db: Session, sequence_id: str, op: GenerateSubtitles) -> Sequence:
@@ -47,10 +56,16 @@ def generate_subtitles(db: Session, sequence_id: str, op: GenerateSubtitles) -> 
         raise SequenceNotFound("Track not found")
     if track.kind != "subtitle":
         raise SequenceDomainError("Subtitles need a subtitle track")
+    cues = _checked_cues(db, sequence, op.cues)
     journal = Journal(db, sequence)
+    if op.replace:
+        # 「重新生成」:先清掉这条轨上原有的字幕,和铺新的记在同一份改动日志里(一步撤销)。放下即覆盖只盖住
+        # 新字幕落点上的那几条 —— 重新转写后断句变了,落在新字幕空隙里的旧字幕还会留着。
+        for old in clips_on_track(db, track.id):
+            journal.delete(old)
     created = 0
     seen: set[tuple[float, str]] = set()
-    for text, start, duration in op.cues:
+    for text, start, duration in cues:
         cleaned = (text or "").strip()
         if not cleaned or duration <= 0 or start < 0:
             continue
@@ -87,6 +102,40 @@ def generate_subtitles(db: Session, sequence_id: str, op: GenerateSubtitles) -> 
         actor_id=op.actor_id,
     )
     return sequence
+
+
+def _checked_cues(
+    db: Session, sequence: Sequence, cues: tuple[tuple[str, float, float], ...]
+) -> list[tuple[str, float, float]]:
+    """字幕的时间先验过再落库:非有限数直接拒;起点落在时间线内容之外的拒(说是第几条);
+    尾巴超出内容末尾的截到末尾。时间线上还没有任何内容时,只拦明显荒谬的起点。
+
+    此前一条起点 1e9 秒的字幕照样 200 —— 时间线一下子变成三十年长,导出和缩放全部错乱。
+    """
+    import math
+
+    # 按库查每条轨的末尾(coverage.clips_on_track),不经 append.track_end:append 要 import 编辑算子,
+    # 而这里就是编辑算子 —— 那是一个环。
+    content_end = max(
+        (
+            clip_end(clip)
+            for track in sequence.tracks or []
+            if track.kind != "subtitle" and track.role != "dub"
+            for clip in clips_on_track(db, track.id)
+        ),
+        default=0.0,
+    )
+    limit = content_end if content_end > 0 else _MAX_CUE_START
+    checked: list[tuple[str, float, float]] = []
+    for index, (text, start, duration) in enumerate(cues, start=1):
+        if not (math.isfinite(start) and math.isfinite(duration)):
+            raise SequenceDomainError("seqErr_cueNotFinite", index=index)
+        if start >= limit:
+            raise SequenceDomainError("seqErr_cueOutsideTimeline", index=index, start=f"{start:g}", end=f"{limit:g}")
+        if content_end > 0 and start + duration > content_end + _CUE_END_SLACK:
+            duration = content_end - start
+        checked.append((text, start, duration))
+    return checked
 
 
 def insert_text_clip(db: Session, sequence_id: str, op: InsertTextClip) -> Sequence:
