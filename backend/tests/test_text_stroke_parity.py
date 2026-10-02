@@ -261,7 +261,7 @@ needs_libass = pytest.mark.skipif(
 _GREEN = "0x00ff00"
 
 
-def _libass_ink(tmp_path: Path, text_style: dict, transform: dict | None = None,
+def _libass_ink(tmp_path: Path, text_style: dict, transform: dict | None = None, at: float = 0.0,
                 w: int = 640, h: int = 360) -> np.ndarray:
     """走导出回落的真路径:时间线片段 → 渲染计划 → _build_ass → ffmpeg 的 subtitles(libass)。"""
     plan = build_render_plan(
@@ -275,17 +275,18 @@ def _libass_ink(tmp_path: Path, text_style: dict, transform: dict | None = None,
     ass.write_text(_build_ass(plan), encoding="utf-8")
     out = tmp_path / "f.png"
     subprocess.run(
-        [settings.ffmpeg, "-y", "-v", "error", "-f", "lavfi", "-i", f"color=c={_GREEN}:s={w}x{h}:d=1",
-         "-vf", f"format=rgb24,subtitles=filename={ass}", "-frames:v", "1", str(out)],
+        [settings.ffmpeg, "-y", "-v", "error", "-f", "lavfi", "-i", f"color=c={_GREEN}:s={w}x{h}:d=3",
+         "-vf", f"format=rgb24,subtitles=filename={ass}", "-ss", f"{at:.3f}", "-frames:v", "1", str(out)],
         check=True, timeout=60,
     )
     frame = np.asarray(Image.open(out).convert("RGB")).astype(int)
     return (frame[..., 0] >= 128) | (frame[..., 1] < 128)
 
 
-def _libass_ring(tmp_path: Path, text_style: dict, transform: dict | None = None) -> tuple[float, float]:
-    stroked = _libass_ink(tmp_path, text_style, transform)
-    plain = _libass_ink(tmp_path, {**text_style, "stroke_width": 0}, transform)
+def _libass_ring(tmp_path: Path, text_style: dict, transform: dict | None = None,
+                 at: float = 0.0) -> tuple[float, float]:
+    stroked = _libass_ink(tmp_path, text_style, transform, at)
+    plain = _libass_ink(tmp_path, {**text_style, "stroke_width": 0}, transform, at)
     return _outer_ring(stroked, plain)
 
 
@@ -302,3 +303,23 @@ def test_libass_ring_matches_export_png(rasterizer: TextRasterizer, tmp_path: Pa
     libass = _libass_ring(tmp_path, _BLOCK_STYLE)
     png = _png_ring(rasterizer, _BLOCK_STYLE)
     assert max(abs(a - b) for a, b in zip(libass, png)) <= 1, (libass, png)
+
+
+#: 缩放用例的字小一号:放大两倍后整块字仍落在 640×360 画面里。外圈同样是 6px(未封顶)。
+_SMALL_BLOCK = {"font_size": 50.0, "stroke_width": 12.0}
+
+
+@needs_libass
+def test_libass_ring_grows_with_title_scale(tmp_path: Path) -> None:
+    """花字放大 2 倍:预览与 PNG 路径是整张放大,描边跟着变粗到 12px;libass 的 \\bord 却不跟
+    \\fscx 走 —— 不把缩放乘进去,回落导出里的外圈还停在 6px。"""
+    ring = _libass_ring(tmp_path, _SMALL_BLOCK, {"scale": 2})
+    assert all(abs(side - 2 * _BLOCK_OUTER) <= 1 for side in ring), ring
+
+
+@needs_libass
+def test_libass_ring_follows_scale_keyframes(tmp_path: Path) -> None:
+    """缩放打了关键帧(1 → 2,片长 2 秒):\\bord 随 \\t 一起渐变。取 1.9 秒那一帧,缩放 1.95。"""
+    keyframes = {"keyframes": [{"t": 0, "scale": 1}, {"t": 1, "scale": 2}]}
+    ring = _libass_ring(tmp_path, _SMALL_BLOCK, keyframes, at=1.9)
+    assert all(abs(side - 1.95 * _BLOCK_OUTER) <= 1 for side in ring), ring

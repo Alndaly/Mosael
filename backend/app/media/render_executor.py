@@ -453,15 +453,21 @@ def _ass_bgr(hex_color: str) -> str:
 _ASS_FONTSIZE_SCALE = 1.4
 
 
-def _text_style_tags(st) -> list[str]:
-    """花字外观标签(字号/颜色/描边/阴影/粗斜/字体),不含位置/缩放/旋转/透明度。"""
+def _ass_bord(st, scale: float) -> str:
+    """描边外圈在缩放 `scale` 下的 \\bord 值。
+
+    libass 的 \\bord 本来就是纯外描边,直接写外圈宽度;ScaledBorderAndShadow 开着、PlayRes 等于
+    输出画幅,脚本像素即画面像素(契约 contracts/text-stroke-cases.json)。但它**不跟 \\fscx 走**:
+    预览和 PNG 路径是整块放大,描边一起变粗,这里得自己乘上花字的缩放。"""
+    return f"\\bord{st.outer_stroke_px * scale:g}"
+
+
+def _text_style_tags(st, scale: float = 1.0) -> list[str]:
+    """花字外观标签(字号/颜色/描边/阴影/粗斜/字体),不含位置/缩放/旋转/透明度。
+    scale 只用来换算描边(见 _ass_bord),缩放本身由调用方的 \\fscx 给。"""
     tags = [f"\\fs{st.font_size * _ASS_FONTSIZE_SCALE:g}", f"\\1c{_ass_bgr(st.color)}"]
-    # libass 的 \bord 本来就是纯外描边,直接写外圈宽度;ScaledBorderAndShadow 开着、PlayRes 等于
-    # 输出画幅,脚本像素即画面像素。此前写的是整个 stroke_width,外圈是 PNG 路径的两倍
-    # (契约 contracts/text-stroke-cases.json)。
-    outer = st.outer_stroke_px
-    if outer > 0:
-        tags.append(f"\\bord{outer:g}\\3c{_ass_bgr(st.stroke_color)}")
+    if st.outer_stroke_px > 0:
+        tags.append(f"{_ass_bord(st, scale)}\\3c{_ass_bgr(st.stroke_color)}")
     else:
         tags.append("\\bord0")
     if st.shadow > 0:
@@ -499,7 +505,6 @@ def _text_overlay_dialogues(item: "TextOverlayItem", w: int, h: int) -> list[str
     tf, st = item.transform, item.style
     x_pts, y_pts = tf.keyed("x"), tf.keyed("y")
     s_pts, r_pts, o_pts = tf.keyed("scale"), tf.keyed("rotation"), tf.keyed("opacity")
-    base_tags = _text_style_tags(st)
     text = _ass_text(item.text)
 
     if not any(len(p) >= 2 for p in (x_pts, y_pts, s_pts, r_pts, o_pts)):
@@ -511,7 +516,7 @@ def _text_overlay_dialogues(item: "TextOverlayItem", w: int, h: int) -> list[str
             tags.append(f"\\fscx{tf.scale * 100:.1f}\\fscy{tf.scale * 100:.1f}")
         if tf.opacity < 1.0:
             tags.append(f"\\alpha&H{round((1.0 - tf.opacity) * 255):02X}&")
-        override = "{" + "".join(tags + base_tags) + "}"
+        override = "{" + "".join(tags + _text_style_tags(st, scale=tf.scale)) + "}"
         return [
             f"Dialogue: 0,{_ass_timestamp(item.start)},{_ass_timestamp(item.start + item.duration)},"
             f"Text,,0,0,0,,{override}{text}"
@@ -538,12 +543,14 @@ def _text_overlay_dialogues(item: "TextOverlayItem", w: int, h: int) -> list[str
         parts: list[str] = []
         if abs(sb - sa) > 1e-4:
             parts.append(f"\\fscx{sb * 100:.1f}\\fscy{sb * 100:.1f}")
+            if st.outer_stroke_px > 0:
+                parts.append(_ass_bord(st, sb))  # 描边跟着缩放一起渐变(见 _ass_bord)
         if abs(rb - ra) > 1e-4:
             parts.append(f"\\frz{-rb:.2f}")
         if abs(ob - oa) > 1e-4:
             parts.append(f"\\alpha&H{round((1.0 - ob) * 255):02X}&")
         anim = f"\\t(0,{seg_ms},{''.join(parts)})" if parts else ""
-        override = "{" + "".join(tags + base_tags) + anim + "}"
+        override = "{" + "".join(tags + _text_style_tags(st, scale=sa)) + anim + "}"
         seg_start, seg_end = item.start + a * item.duration, item.start + b * item.duration
         lines.append(
             f"Dialogue: 0,{_ass_timestamp(seg_start)},{_ass_timestamp(seg_end)},Text,,0,0,0,,{override}{text}"

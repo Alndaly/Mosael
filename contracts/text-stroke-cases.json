@@ -7,7 +7,7 @@
     "stroke_width 是存储值,沿用历史上「居中描边」的线宽:那时描边骑在轮廓上,一半在字外、一半压进字里。外圈宽度取它的一半,于是已有花字的外轮廓与修复前逐像素相同,不用迁移数据 —— 被还回来的只有字芯。",
     "外圈宽度按字号封顶(max_outer_ratio × font_size):描边画在字外,再粗字芯也在,但超过这个比例时笔画之间的空隙被糊成一整块,尖角处的斜接尖刺也开始比字还显眼。超出时按上限画,存储值不动。",
     "css_stroke_width_px 是预览与导出 PNG 写给 -webkit-text-stroke 的线宽(配 paint-order: stroke fill,向内那一半被填充盖回)。预览按 cqw 写、导出按帧原生 px 写,两种写法在画幅原生宽度上解析到同一个像素值,所以语料记像素。",
-    "ass_bord 是 libass 回落写进 \\bord 的值。libass 的边框本来就是纯外描边;ScaledBorderAndShadow: yes 且 PlayResX/Y 等于输出画幅,脚本像素即画面像素,所以它等于 outer_px。"
+    "ass_bord 是 libass 回落写进 \\bord 的值。libass 的边框本来就是纯外描边;ScaledBorderAndShadow: yes 且 PlayResX/Y 等于输出画幅,脚本像素即画面像素,所以它等于 outer_px。这份语料只管缩放为 1:libass 的 \\bord 不跟 \\fscx 走,花字放大时 render_executor._ass_bord 再乘上缩放(预览与 PNG 路径是整块放大,描边自然跟着变粗)。"
   ],
   "max_outer_ratio": 0.15,
   "cases": [
