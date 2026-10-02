@@ -204,6 +204,10 @@ def _canonicalize_graph(graph: dict[str, Any], node_types: dict[str, dict[str, A
             and str(edge.get("source", "")) in data_sources.get(str(edge.get("target", "")), set())
         )
 
+    def routing(edge: dict[str, Any]) -> bool:
+        """带路由语义的控制边:写了 handle(条件的真 / 假出口),或从会分支的节点出发。"""
+        return edge.get("kind", "control") == "control" and (bool(edge.get("source_handle")) or routes(edge))
+
     control_into: dict[str, list[dict[str, Any]]] = {}
     for edge in edges:
         if edge.get("kind", "control") == "control":
@@ -215,12 +219,16 @@ def _canonicalize_graph(graph: dict[str, Any], node_types: dict[str, dict[str, A
         引擎的判法(engine.incoming_active):有控制边只看控制边,任一条来源跑了就跑;一条控制边都没有时看数据边。
         - T 另有**带路由语义**的控制边(条件的「真」出口):那几条只排先后的边折掉,T 由那条路由边说了算 —— 作者
           画它们就是为了排先后(官方模板里「这一拍有画外音才放音轨」就靠这个)。
-        - T 的控制边全是只排先后的:折掉之后 T 改由数据边判,所以只在数据边的来源恰好就是这几条控制边的来源时折。
-          此前不看这一条:T 的控制边只来自条件分支里的 A、另有一条数据边来自分支外的 B,折掉 A→T 就把「A 跑了才跑」
-          改成了「A 或 B 跑了就跑」,A 被跳过、T 照样拿着空值跑。
+        - T 没有路由边:「任一条来源跑了就跑」的那组来源折前折后得是同一组。所以只在数据边的来源恰好就是这几条
+          控制边的来源时折(折掉之后改由数据边判,判的还是这一组)。两种情况因此都不折:
+          · 数据边另有分支外的来源 B:T 的控制边只来自条件分支里的 A,折掉 A→T 就把「A 跑了才跑」改成了「A 或 B
+            跑了就跑」,A 被跳过、T 照样拿着空值跑;
+          · 另有一条**不带数据**的普通控制边:折掉之后 T 只看那一条,它没跑 T 就跟着不跑。此前把「不是只排先后」当成了
+            「带路由」:出镜版带货口播的「配字幕」从「逐拍成片」(另有数据边)和「放收尾」(不带数据)各来一条控制边,
+            前一条被折掉 —— 收尾那句是空的、「放收尾」跳过时,字幕、导出、交付整段跟着跳过,工作流照样报成功。
         """
         control = control_into.get(target, [])
-        if any(not ordering_only(edge) for edge in control):
+        if any(routing(edge) for edge in control):
             return True
         return {str(edge.get("source", "")) for edge in control} == data_sources.get(target, set())
 

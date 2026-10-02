@@ -4,11 +4,11 @@
   "workflow_revision": 1,
   "name": "Product into a presenter-led short",
   "description": "Everything in the narrated short, but a character from your asset library speaks the hook and the call to action on camera (with its own face and voice), while each beat in between stays a product shot voiced in the same voice, lined up with the beat and captioned, exported as a vertical short with an \"AI-generated\" label. Pick the character on “Pick the presenter” before running; it needs a front image and a voice in the asset library; real people need a consent declaration, and a cloned voice needs one too.",
-  "graph_hash": "e4c5336fe7757cf698a86fe620d6922c7f30885e99f6f42e2cddeee6c3d90e35",
+  "graph_hash": "bdc953187c553747763777776d9c37694c4c42fad54e9f0586e3d9a12b622e5c",
   "graph": {
     "meta": {
       "template_id": "product_pitch_presenter",
-      "template_version": 3,
+      "template_version": 4,
       "source": "official"
     },
     "nodes": [
@@ -713,6 +713,11 @@
       {
         "id": "cta_captions",
         "source": "cta_place",
+        "target": "beat_captions"
+      },
+      {
+        "id": "shoot_captions",
+        "source": "shoot_beats",
         "target": "beat_captions"
       },
       {

@@ -428,9 +428,16 @@ class Test带货口播真跑:
         _pick(graph, "product_photo", asset_id=_asset(ws, "image", "毛衣"))
         _pick(graph, "presenter", entity_id="presenter-1")
         context = _run(ws, graph, product_name="羊毛衫", selling_points="不起球")
-        video = [clip.timeline_start for clip in _clips(context["pitch_project"]["sequence_id"], "video")]
+        sequence_id = context["pitch_project"]["sequence_id"]
+        video = [clip.timeline_start for clip in _clips(sequence_id, "video")]
         assert [one["text"] for one in studio.calls["entity_speak"]] == [script["hook_line"] or script["call_to_action"]]
         assert video == ([0.0, 3.0, 7.0, 10.0] if empty == "hook_line" else [0.0, 6.0, 9.0, 13.0])
+        #: 「其余照样成片」是**导出了**,不只是时间线上铺好了。「配字幕」的控制边此前在规范化时只剩「放收尾」那一条
+        #: (来自「逐拍成片」那条被折掉了):收尾那句是空的、「放收尾」跳过时,字幕、导出、交付整段跟着跳过,
+        #: 工作流照样报成功 —— 这里此前只看时间线,看不出来。
+        assert [one["sequence_id"] for one in studio.calls["export_sequence"]] == [sequence_id]
+        assert len(_clips(sequence_id, "subtitle")) == 3, "每拍的字幕照样配上"
+        assert context["output"]["output"]["final_asset_id"] == f"export-of-{sequence_id}"
 
     def test_脚本的目标时长跟着开始参数走_不是写死的一个区间(self, monkeypatch) -> None:
         ws = _workspace()

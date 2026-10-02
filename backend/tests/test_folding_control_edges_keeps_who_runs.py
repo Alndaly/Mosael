@@ -8,7 +8,10 @@
 条件为假、A 被跳过,T 照样拿着空的 A.text 跑了。
 
 修法:T 另有带路由语义的控制边(条件的「真」出口)时,只排先后的那几条照旧折掉、由路由边说了算(官方模板靠
-这个:「这一拍有画外音才放音轨」);T 的控制边全是只排先后的,只在数据边的来源恰好就是它们的来源时折。
+这个:「这一拍有画外音才放音轨」);没有路由边时,只在数据边的来源恰好就是控制边的来源时折。
+
+第二处同一类:T 另有一条**不带数据**的普通控制边时,「不是只排先后」被当成了「带路由」,带数据的那条照样被折掉,
+T 只剩那一条普通边说了算 —— 它没跑,T 就跟着不跑(出镜版带货口播收尾为空时字幕、导出整段跳过)。
 """
 
 from __future__ import annotations
@@ -61,6 +64,20 @@ def test_T的数据和控制都只来自A_控制边照旧折掉_判法不变() -
     assert ("A", "T") not in _pairs(saved, "control"), "只剩排先后一个作用的控制边该折掉"
     assert ("A", "T") in _pairs(saved, "data")
     assert "T" not in context, "折掉之后只剩来自 A 的数据边:A 被跳过,T 照样跳过"
+
+
+def test_T另有一条不带数据的普通控制边_带数据的那条不折_那一条没跑T照样跑() -> None:
+    """T 的控制边一条来自分支里的 A(不带数据)、一条来自分支外的 B(另有数据边)。作者画的是「A 或 B 跑了就跑」,
+    折掉 B→T 就只剩 A→T:A 被跳过,T 也跟着跳过 —— 出镜版带货口播收尾那句是空的时,字幕、导出、交付就是这样整段没了。
+    「不是只排先后」不等于「带路由」:A→T 没写 handle、A 也不是条件节点。"""
+    graph = _graph(with_b=True)
+    next(node for node in graph["nodes"] if node["id"] == "T")["config"] = {"title": "{{B.text}}", "body": "固定的正文"}
+    graph["edges"].append({"id": "e5", "source": "B", "target": "T"})
+    saved, context = _save_and_run(graph)
+    assert {("A", "T"), ("B", "T")} <= _pairs(saved, "control"), "折掉 B→T,T 就变成「A 跑了才跑」"
+    assert ("B", "T") in _pairs(saved, "data")
+    assert "A" not in context, "条件为假,A 被跳过"
+    assert context["T"]["sent"], "B 跑了,T 照样跑"
 
 
 def test_T另有条件的真出口_只排先后的控制边照旧折掉_由条件说了算() -> None:

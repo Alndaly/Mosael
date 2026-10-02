@@ -1641,7 +1641,7 @@ def _with_presenter(nodes: list[dict[str, Any]]) -> dict[str, Any]:
     ]
     return normalize_graph(
         {
-            "meta": {"template_id": PRODUCT_PITCH_PRESENTER, "template_version": 3, "source": "official"},
+            "meta": {"template_id": PRODUCT_PITCH_PRESENTER, "template_version": 4, "source": "official"},
             "nodes": kept,
             "edges": edges,
         },
