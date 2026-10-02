@@ -19,7 +19,7 @@ from tests.util import fresh_client, wait_status
 def _child_needing_topic(client, ws: str) -> dict:
     return client.post("/api/workflows", json={"workspace_id": ws, "name": "写稿子", "graph": {
         "nodes": [
-            {"id": "start", "type": "start", "config": {"params": {"topic": ""}, "required_params": "topic"}},
+            {"id": "start", "type": "start", "config": {"params": {"topic": ""}, "required_params": ["topic"]}},
             {"id": "t", "type": "template", "config": {"template": "关于 {{start.topic}}"}},
             {"id": "out", "type": "output", "config": {"values": {"text": "{{t.text}}"}}},
         ],

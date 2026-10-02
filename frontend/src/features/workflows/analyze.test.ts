@@ -278,11 +278,11 @@ describe("analyzeWorkflow", () => {
     ]);
   });
 
-  it("开始节点点名为必填的参数空着是阻塞错误,说清是哪一个;数字 0 不算空", () => {
+  it("开始节点勾了必填的参数空着是阻塞错误,说清是哪一个;数字 0 不算空", () => {
     const make = (params: Record<string, unknown>) =>
       graph(
         [
-          { id: "start", type: "start", config: { params, required_params: "product_name， selling_points, count" } },
+          { id: "start", type: "start", config: { params, required_params: ["product_name", "selling_points", "count"] } },
           { id: "llm-1", type: "llm", config: { prompt: "{{start.product_name}}", profile_id: "p1" } },
         ],
         [{ id: "e1", source: "start", target: "llm-1" }],
@@ -810,7 +810,7 @@ describe("引到开始节点的参数", () => {
   });
 
   it("点名为必填、但 params 里没有的参数照样报:编辑器里的运行不带参数", () => {
-    expect(missing(make({ params: {}, required_params: "topic" }, "{{start.topic}}"))).toEqual([
+    expect(missing(make({ params: {}, required_params: ["topic"] }, "{{start.topic}}"))).toEqual([
       ["llm-1", "prompt", "{{start.topic}}", "error"],
     ]);
   });

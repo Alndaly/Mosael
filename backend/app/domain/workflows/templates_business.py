@@ -578,7 +578,7 @@ def product_on_model_graph(
                     "brand_tone": "简洁、克制、质感",
                     "scene_count": 4,
                 },
-                "required_params": "product_name, product_brief",
+                "required_params": ["product_name", "product_brief"],
             },
         },
         {
@@ -949,7 +949,7 @@ def product_pitch_short_graph(
                     "height": VERTICAL["height"],
                     "fps": 30,
                 },
-                "required_params": "product_name, selling_points",
+                "required_params": ["product_name", "selling_points"],
             },
         },
         {
@@ -1159,7 +1159,7 @@ def fabric_lookbook_graph(*, chat: Any, image: Any) -> dict[str, Any]:
                     "target_client": "家纺采购 / 服装品牌",
                     "application_count": 4,
                 },
-                "required_params": "fabric_name",
+                "required_params": ["fabric_name"],
             },
         },
         {
@@ -2035,7 +2035,7 @@ def footage_montage_graph(*, chat: Any, voice_id: str = "") -> dict[str, Any]:
                     "fps": 30,
                 },
                 #: 标签空着的话「按标签取」取到的是整个素材库 —— 那不是用户要混剪的那一批,所以运行前就拦。
-                "required_params": "topic, footage_tag",
+                "required_params": ["topic", "footage_tag"],
             },
         },
         {

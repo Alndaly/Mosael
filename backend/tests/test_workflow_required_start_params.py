@@ -1,4 +1,4 @@
-"""开始节点点名为必填的参数(`required_params`),空着运行前就拦住。
+"""开始节点勾了「必填」的参数(`required_params`,参数名的列表),空着运行前就拦住。
 
 官方模板里要用户自己填的东西(商品名、卖点、主题、素材标签)住在开始节点的参数里,由别的节点用 `{{start.x}}`
 引用 —— 而引用本身在必填检查里算"填了"。于是空着也能启动:模型对着空白写脚本,后面的付费生成照样扣费;
@@ -18,7 +18,7 @@ from app.domain.workflows.templates_business import (
 from tests.util import fresh_client
 
 
-def _graph(required: str, **params: object) -> dict:
+def _graph(required: list[str], **params: object) -> dict:
     return {
         "nodes": [
             {"id": "start", "type": "start", "config": {"params": params, "required_params": required}},
@@ -29,15 +29,15 @@ def _graph(required: str, **params: object) -> dict:
 
 
 def test_点名的参数空着就报_说清是哪一个() -> None:
-    assert validate_graph(_graph("topic, tag", topic="面馆", tag="  ")) == ["节点 start 缺少必填配置 params.tag"]
+    assert validate_graph(_graph(["topic", "tag"], topic="面馆", tag="  ")) == ["节点 start 缺少必填配置 params.tag"]
     #: 0 和 false 是值,不是空。
-    assert validate_graph(_graph("topic，count", topic="面馆", count=0)) == []
+    assert validate_graph(_graph(["topic", "count"], topic="面馆", count=0)) == []
     #: 没点名的参数照旧可以空着。
-    assert validate_graph(_graph("", topic="")) == []
+    assert validate_graph(_graph([], topic="")) == []
 
 
 def test_这一次运行带了值就不拦() -> None:
-    graph = _graph("topic", topic="")
+    graph = _graph(["topic"], topic="")
     assert validate_graph(graph) != []
     assert validate_graph(with_run_params(graph, {"topic": "面馆"})) == []
     assert graph["nodes"][0]["config"]["params"] == {"topic": ""}, "只叠在这一次的副本上,不改存着的图"
@@ -56,7 +56,7 @@ def test_官方模板把要用户填的那几格都点名了_而且默认是空�
     }
     for template_id, (graph, names) in expected.items():
         start = next(node for node in graph["nodes"] if node["type"] == "start")["config"]
-        assert {one.strip() for one in start["required_params"].split(",")} == names, template_id
+        assert set(start["required_params"]) == names, template_id
         #: 默认空着 —— 不放「请把这里改成……」那种会被当成真参数的说明文字。
         assert all(start["params"][name] == "" for name in names), template_id
         errors = validate_graph(graph)
@@ -77,11 +77,12 @@ def test_按下运行时空着拦下_带着参数跑就过了这一关() -> None
     assert given.status_code == 422 and "params." not in given.json()["detail"], given.text
 
 
-def test_必填参数这一格是一串参数名_不是能插值能接上游的模板() -> None:
-    """它装的是开始节点**自己的**参数名(逗号分隔),运行前校验按字面读。
+def test_必填参数这一格是参数名的列表_不是能插值能接上游的模板() -> None:
+    """它装的是开始节点**自己的**参数名,运行前校验按字面读。
 
-    此前声明成 `template`:检查器给它变量插入器(插进去的 `{{llm.text}}` 被当成一个叫这个名字的参数)
-    和「接上游」开关(开始节点前面什么都没有)。两样都是这一格用不上、用了就坏的东西。"""
+    更早声明成 `template`:检查器给它变量插入器(插进去的 `{{llm.text}}` 被当成一个叫这个名字的参数)
+    和「接上游」开关(开始节点前面什么都没有)。后来是一格逗号分隔的字;现在是列表,由参数那一格的控件按行编辑
+    (见 test_start_required_params_are_rows)。"""
     client = fresh_client()
     types = {one["type"]: one for one in client.get("/api/workflows/node-types").json()}
-    assert types["start"]["config"]["required_params"]["type"] == "string"
+    assert types["start"]["config"]["required_params"]["type"] == "list"

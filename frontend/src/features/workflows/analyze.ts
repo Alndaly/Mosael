@@ -488,13 +488,13 @@ function collect(
       }
     }
 
-    // 开始节点点名为必填的参数(required_params,逗号分隔)一个都不能空 —— 与后端 validate_graph 的
+    // 开始节点勾了「必填」的参数(required_params,参数名的列表)一个都不能空 —— 与后端 validate_graph 的
     // _start_param_errors 同一条规矩。参数被别处用 {{start.x}} 引用,引用本身在上面的必填检查里算"填了"。
     if (node.type === "start") {
       const params = (config.params ?? {}) as Record<string, unknown>;
-      for (const name of String(config.required_params ?? "").replace(/，/g, ",").split(",")) {
-        const key = name.trim();
-        if (key && isEmpty(params[key])) push("error", "required-missing", { configKey: key });
+      const required = Array.isArray(config.required_params) ? config.required_params : [];
+      for (const name of required) {
+        if (typeof name === "string" && isEmpty(params[name])) push("error", "required-missing", { configKey: name });
       }
     }
 

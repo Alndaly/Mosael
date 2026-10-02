@@ -18,7 +18,7 @@ def _workflow(client) -> tuple[str, str]:
     workflow = client.post("/api/workflows", json={"workspace_id": ws, "name": "写稿", "graph": {
         "nodes": [
             {"id": "start", "type": "start",
-             "config": {"params": {"topic": "默认主题", "tone": "轻松"}, "required_params": "topic"}},
+             "config": {"params": {"topic": "默认主题", "tone": "轻松"}, "required_params": ["topic"]}},
             {"id": "t", "type": "template", "config": {"template": "{{start.topic}}/{{start.tone}}/{{start.extra}}"}},
         ],
         "edges": [{"id": "e1", "source": "start", "target": "t"}],

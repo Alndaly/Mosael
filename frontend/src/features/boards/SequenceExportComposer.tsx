@@ -57,6 +57,7 @@ export function SequenceExportComposer({
   const empty = summary.clips === 0;
 
   const setConfig = (key: string, value: unknown) => onFormChange({ ...item.form, config: { ...config, [key]: value } });
+  const patchConfig = (patch: Record<string, unknown>) => onFormChange({ ...item.form, config: { ...config, ...patch } });
   const label = (key: string) => String(specs[key]?.label || key);
   //: 只发导出自己的那几项(服务端的表单不收不认识的键)。
   const send = () => {
@@ -104,6 +105,7 @@ export function SequenceExportComposer({
                   fieldOptions={fieldOptions}
                   onSetConfig={setConfig}
                   onTypeConfig={setConfig}
+                  onPatchConfig={(_owner, patch) => patchConfig(patch)}
                 />
               ),
             }

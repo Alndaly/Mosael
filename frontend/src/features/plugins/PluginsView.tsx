@@ -1065,6 +1065,7 @@ export function ToolTryForm({
   const fieldOptions = useNodeFieldOptions({ specs, config, workspaceId, nodeType: "" });
   const { basic, advanced } = nodeConfigTiers(specs, config);
   const set = (key: string, value: unknown) => setConfig((current) => ({ ...current, [key]: value }));
+  const patch = (next: Record<string, unknown>) => setConfig((current) => ({ ...current, ...next }));
   const missingRequired = Object.entries(specs).some(([key, spec]) => spec?.required && !filled(config[key]));
   const form = (fields: Array<[string, ConfigSpec]>) => (
     <NodeConfigForm
@@ -1075,6 +1076,7 @@ export function ToolTryForm({
       fieldOptions={fieldOptions}
       onSetConfig={set}
       onTypeConfig={set}
+      onPatchConfig={(_owner, next) => patch(next)}
     />
   );
   return (

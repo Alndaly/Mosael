@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "商品 → 数字人出镜带货口播",
   "description": "在「带货口播短视频」的基础上,开场钩子和收尾号召换成资产库里的一位人物出镜说出来(用它的脸和嗓子),中间每一拍仍是带商品的画面,口播用同一个嗓子念、对齐每一拍的开头,每拍铺上屏幕短句,导出竖屏成片(带「AI 生成」标识)。运行前在「挑一位主播」上选好人物;人物要先在资产库里有正面图和音色;真人要有授权声明,克隆音色也要声明是谁的。",
-  "graph_hash": "0b5b976dad7ff7470dc2b6ed2e06ccbb2a15e61c4a2fd9f3faeec6fa4b864160",
+  "graph_hash": "7173b86c90ad104dd879ae3a81ab114ec22d2d3e3bee98ae5f0fd092c95074a4",
   "graph": {
     "meta": {
       "template_id": "product_pitch_presenter",
@@ -30,7 +30,10 @@
             "height": 1920,
             "fps": 30
           },
-          "required_params": "product_name, selling_points"
+          "required_params": [
+            "product_name",
+            "selling_points"
+          ]
         }
       },
       {

@@ -60,6 +60,7 @@ function Host({ config }: { config: Record<string, unknown> }) {
       fieldOptions={fieldOptions}
       onSetConfig={vi.fn()}
       onTypeConfig={vi.fn()}
+      onPatchConfig={vi.fn()}
     />
   );
 }
@@ -133,6 +134,7 @@ describe("节点表单", () => {
           fieldOptions={fieldOptions}
           onSetConfig={vi.fn()}
           onTypeConfig={vi.fn()}
+          onPatchConfig={vi.fn()}
         />
       );
     }
@@ -169,6 +171,7 @@ describe("节点表单", () => {
             fieldOptions={{ dynamicOptions: () => null, whyEmpty: () => ({ kind: "none" }), assets: [] }}
             onSetConfig={onSet}
             onTypeConfig={vi.fn()}
+            onPatchConfig={vi.fn()}
           />
         </TooltipProvider>
       </QueryClientProvider>,
@@ -195,6 +198,7 @@ describe("节点表单", () => {
           fieldOptions={{ dynamicOptions: () => null, whyEmpty: () => ({ kind: "none" }), assets: [] }}
           onSetConfig={vi.fn()}
           onTypeConfig={onType}
+          onPatchConfig={vi.fn()}
         />
       </QueryClientProvider>,
     );
@@ -229,6 +233,7 @@ describe("节点表单", () => {
           fieldOptions={fieldOptions}
           onSetConfig={onSet}
           onTypeConfig={onSet}
+          onPatchConfig={vi.fn()}
           references={references}
         />
       );
@@ -315,7 +320,7 @@ describe("节点表单", () => {
       const fieldOptions = useNodeFieldOptions({ specs, config: {}, workspaceId: "w1", nodeType: "x.transcribe" });
       return (
         <NodeConfigForm fields={Object.entries(specs)} config={{}} workspaceId="w1" variables={[]}
-                        fieldOptions={fieldOptions} onSetConfig={vi.fn()} onTypeConfig={vi.fn()} />
+                        fieldOptions={fieldOptions} onSetConfig={vi.fn()} onTypeConfig={vi.fn()} onPatchConfig={vi.fn()} />
       );
     }
     render(
@@ -354,6 +359,7 @@ describe("节点表单", () => {
             fieldOptions={{ dynamicOptions: () => null, whyEmpty: () => ({ kind: "none" }) } as never}
             onSetConfig={vi.fn()}
             onTypeConfig={vi.fn()}
+            onPatchConfig={vi.fn()}
             binding={{ isBound: () => false, setBound: vi.fn(), renderBound: () => null }}
           />
         </TooltipProvider>

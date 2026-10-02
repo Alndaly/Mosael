@@ -125,6 +125,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "对话节点没选模型,而连接「{name}」上没有可用的对话模型:在设置里给它启用一个对话模型(或在节点上选一个),再运行",
         "en": "A chat step has no model picked, and the connection “{name}” has no usable chat model: enable one in Settings (or pick one on the step), then run again",
     },
+    "wfErr_requiredParamsShape": {
+        "zh": "节点 {node} 的 required_params 要是参数名的列表(params 里的名字),例如 [\"topic\"] —— 不是一串逗号分隔的字",
+        "en": "Node {node}: required_params must be a list of parameter names from params, e.g. [\"topic\"] — not a comma-separated string",
+    },
     "wfErr_referencesNeverRunNode": {
         # 一个会跑的节点引用了一定不会跑(没接进流程)的节点 —— 见 graph_rules.never_run_references。
         "zh": "节点 {nodes} 引用了 {refs},可节点 {source} 没接进流程(没有一条会让它运行的入边),永远不会运行 —— 这个引用跑起来只会是空的。把 {source} 连进流程;图是从官方模板建的,可以点画布顶上的「按新版重建」",

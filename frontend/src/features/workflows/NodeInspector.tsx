@@ -256,6 +256,9 @@ export function NodeInspector({
    */
   const typingRun = (field: string): SetGraphOptions => ({ coalesce: `${node.id}.${field}` });
   const typeConfig = (key: string) => (value: unknown) => setConfig(key, value, typingRun(key));
+  /** 一个控件一次改好几格(开始节点的参数连同必填清单):一次落进图里,打字的那一串按控件所在的字段塌成一条。 */
+  const patchConfig = (owner: string, patch: Record<string, unknown>, typing: boolean) =>
+    onChange({ config: { ...config, ...patch } }, typing ? typingRun(owner) : undefined);
   const responseFormat = String(config.response_format || "text");
   const setTextConfig = (key: string) => (event: React.ChangeEvent<HTMLInputElement>) => typeConfig(key)(event.target.value);
 
@@ -442,6 +445,7 @@ export function NodeInspector({
       fieldOptions={fieldOptions}
       onSetConfig={(key, value) => setConfig(key, value)}
       onTypeConfig={(key, value) => typeConfig(key)(value)}
+      onPatchConfig={patchConfig}
       binding={binding}
       renderOwnField={renderOwnField}
       references

@@ -60,6 +60,7 @@ export function SceneComposer({
   const working = submitting || busy;
 
   const setConfig = (key: string, value: unknown) => onFormChange({ ...item.form, config: { ...config, [key]: value } });
+  const patchConfig = (patch: Record<string, unknown>) => onFormChange({ ...item.form, config: { ...config, ...patch } });
   const label = (key: string) => String(specs[key]?.label || key);
 
   const shotSpec = specs[SHOT];
@@ -139,6 +140,7 @@ export function SceneComposer({
                   fieldOptions={fieldOptions}
                   onSetConfig={setConfig}
                   onTypeConfig={setConfig}
+                  onPatchConfig={(_owner, patch) => patchConfig(patch)}
                 />
               ),
             }

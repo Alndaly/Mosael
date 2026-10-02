@@ -72,6 +72,7 @@ function renderForm(config: Record<string, unknown>, keys: string[] = ["steps"])
           fieldOptions={{ dynamicOptions: () => null, whyEmpty: () => ({ kind: "none" }), assets: [] }}
           onSetConfig={onSet}
           onTypeConfig={vi.fn()}
+          onPatchConfig={vi.fn()}
           references
         />
       </TooltipProvider>

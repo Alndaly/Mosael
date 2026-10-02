@@ -395,7 +395,7 @@ def account_analysis_graph(*, chat: Any, locale: str | None = None) -> dict[str,
             "focus": "",
             "report_language": _report_language(locale),
         },
-        "required_params": "account_link, data_source",
+        "required_params": ["account_link", "data_source"],
     })
     _source_switch(b, link_param="account_link", expect="account")
 
@@ -543,7 +543,7 @@ def viral_video_breakdown_graph(*, chat: Any, locale: str | None = None) -> dict
             "my_topic": "",
             "report_language": _report_language(locale),
         },
-        "required_params": "video_link, data_source",
+        "required_params": ["video_link", "data_source"],
     })
     _source_switch(b, link_param="video_link", expect="video")
 
@@ -719,7 +719,7 @@ def comment_insights_graph(*, chat: Any, locale: str | None = None) -> dict[str,
             "focus": "",
             "report_language": _report_language(locale),
         },
-        "required_params": "video_link, data_source",
+        "required_params": ["video_link", "data_source"],
     })
     _source_switch(b, link_param="video_link", expect="video")
 

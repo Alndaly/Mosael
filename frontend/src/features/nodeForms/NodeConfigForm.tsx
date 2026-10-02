@@ -21,6 +21,7 @@ import { ListField } from "@/features/nodeForms/ListField";
 import { MapField, bareRef } from "@/features/nodeForms/MapField";
 import { RefEditor } from "@/features/nodeForms/RefEditor";
 import { ScenePropsField, parseIds } from "@/features/nodeForms/ScenePropsField";
+import { StartParamsField } from "@/features/nodeForms/StartParamsField";
 import { cn } from "@/lib/utils";
 
 /**
@@ -73,6 +74,10 @@ export interface ConfigSpec {
   /** 一串最少 / 最多几项(插件数组的 minItems / maxItems)。 */
   min_items?: number;
   max_items?: number;
+  /** 这一格的控件顺带编辑的另一格:存「哪几行必填」的那一格(开始节点的参数,`editor: "start_params"`)。 */
+  required_list?: string;
+  /** 这一格不单独出现:它由那一格的控件一起编辑(开始节点的 required_params 跟着参数的每一行走)。 */
+  edited_by?: string;
 }
 
 // Nested controls (such as MapField rows) own their dimensions and field styling.
@@ -121,6 +126,8 @@ export function nodeConfigTiers(
   isBound: (key: string) => boolean = () => false,
 ): { basic: Array<[string, ConfigSpec]>; advanced: Array<[string, ConfigSpec]> } {
   const visible = Object.entries(specs)
+    //: 由别的格子的控件一起编辑的(声明 edited_by),不单独出一格 —— 否则同一件事在面板上有两处可改。
+    .filter(([, spec]) => !spec?.edited_by)
     .filter(([, spec]) => isWorkflowFieldActive(spec, config, specs))
     .filter(([key]) => !isTakenByOneOfPeer(key, specs, config, isBound))
     .filter(([key]) => !hidden(key));
@@ -287,6 +294,7 @@ export function NodeConfigForm({
   fieldOptions,
   onSetConfig,
   onTypeConfig,
+  onPatchConfig,
   binding,
   renderOwnField,
   references = false,
@@ -305,6 +313,9 @@ export function NodeConfigForm({
   onSetConfig: (key: string, value: unknown) => void;
   /** 打字(一串连发):宿主可以把它在撤销历史里塌成一条。 */
   onTypeConfig: (key: string, value: unknown) => void;
+  /** 一个控件一次改好几格(开始节点的参数连同必填清单):一次交给宿主,撤销一步退回。`typing` 同 onTypeConfig,
+   *  连发的那一串按 `owner`(那个控件所在的字段)塌成一条。 */
+  onPatchConfig: (owner: string, patch: Record<string, unknown>, typing: boolean) => void;
   binding?: FieldBinding;
   /** 宿主自己认得的字段;返回 null 就按声明渲染。 */
   renderOwnField?: (key: string, spec: ConfigSpec) => React.ReactNode | null;
@@ -390,6 +401,16 @@ export function NodeConfigForm({
                 <div className="relative pl-3 before:absolute before:left-0 before:top-1/2 before:h-[7px] before:w-[7px] before:-translate-y-1/2 before:rounded-full before:bg-primary before:content-[''] [&_:where(button,[role=combobox])]:w-full">
                   {binding?.renderBound(key)}
                 </div>
+              ) : spec?.editor === "start_params" && spec.required_list ? (
+                // 开始节点的启动参数:一行一个(名字、默认值、必填)。必填存在声明点名的那一格里,和这一格一起交出去 ——
+                // 改名、删行时必填跟着那一行走。值那格只是默认值:开始节点是入口,没有上游可接。
+                <StartParamsField
+                  params={value}
+                  required={config[spec.required_list]}
+                  onChange={(next, typing) =>
+                    onPatchConfig(key, { [key]: next.params, [String(spec.required_list)]: next.required }, typing)
+                  }
+                />
               ) : String((spec as { editor?: unknown } | undefined)?.editor ?? "") === "note_ref" ? (
                 // 和下面的 scene_models 同一条:挑笔记这个控件由**后端的字段声明**点名。
                 <NoteReferenceField workspaceId={workspaceId} value={String(value ?? "")} onChange={next => setConfig(key, next)} />

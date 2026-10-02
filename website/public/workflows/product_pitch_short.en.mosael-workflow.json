@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "Product into a narrated short",
   "description": "From a product photo and a few selling points, write a beat-by-beat script (the first beat is the hook, the last the call to action, up to 12 beats), paint one portrait frame per beat with the product in it, lay each on the timeline for that beat's length, voice each beat in your cloned voice lined up with its start, add the on-screen lines, and export a vertical short. Nobody appears on camera. Only the selling points you provide are used — no invented claims or figures.",
-  "graph_hash": "51006234e01cb9ad6e94683247874663db122da7877ce57f41df4298611c1154",
+  "graph_hash": "bd80839498aa187fe7dddcef1ff9067dc430b36faaaa2c41eebb613ad22e231b",
   "graph": {
     "meta": {
       "template_id": "product_pitch_short",
@@ -30,7 +30,10 @@
             "height": 1920,
             "fps": 30
           },
-          "required_params": "product_name, selling_points"
+          "required_params": [
+            "product_name",
+            "selling_points"
+          ]
         }
       },
       {

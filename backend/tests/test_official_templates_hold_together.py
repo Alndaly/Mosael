@@ -138,8 +138,7 @@ def _filled_in(graph: dict[str, Any]) -> dict[str, Any]:
 
 def _run_params(graph: dict[str, Any]) -> dict[str, str]:
     start = next(node for node in graph["nodes"] if node["type"] == "start")
-    names = str(start["config"].get("required_params") or "").replace("，", ",").split(",")
-    return {name.strip(): "跑的人填的" for name in names if name.strip()}
+    return {name: "跑的人填的" for name in start["config"].get("required_params") or []}
 
 
 def _data_type(value: Any) -> str:

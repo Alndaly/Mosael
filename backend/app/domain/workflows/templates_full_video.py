@@ -582,7 +582,7 @@ JSON Schema 的对象。"""
                     # 配音音色。**留空 = 不配音**(成片只有画面),而不是跑到一半失败。
                     "voice_id": voice_id,
                 },
-                "required_params": "topic",
+                "required_params": ["topic"],
             },
         },
         {

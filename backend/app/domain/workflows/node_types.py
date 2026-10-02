@@ -536,13 +536,21 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "label": "wfNode_start",
         "description": "wfNode_start_desc",
         "config": {
-            "params": {"type": "object", "description": "wfNode_start_params"},
-            #: 哪几个参数**跑之前必须有值**(逗号分隔)。运行前校验按它查(连同这次运行传进来的值,见
+            #: 一行一个参数:名字 → 默认值。面板上用开始节点专用的控件(名字、默认值、「必填」开关 —— 前端
+            #: StartParamsField),它同时编辑 `required_list` 点名的那一格:必填是**那一行自己的**,改名、删行时跟着走。
+            "params": {
+                "type": "object",
+                "editor": "start_params",
+                "required_list": "required_params",
+                "description": "wfNode_start_params",
+            },
+            #: 哪几个参数**跑之前必须有值**:params 里参数名的**列表**,按参数的顺序(保存时规范化,见
+            #: normalization.canonicalize_start_params)。运行前校验按它查(连同这次运行传进来的值,见
             #: graph_rules.with_run_params):空着就当场拒,说清是哪一个。官方模板里要用户自己填的商品名、卖点、主题
             #: 都点名在这里 —— 空着跑的话,模型对着空白写脚本,后面的付费生成照样扣费。
-            #: 是一串**参数名**,按字面读:声明成 template 的话检查器会给它变量插入器和「接上游」,
-            #: 插进去的 `{{llm.text}}` 被当成一个叫这个名字的参数。
-            "required_params": {"type": "string", "description": "wfNode_start_required_params"},
+            #: 此前是一格逗号分隔的字:同一个名字写两遍,参数改名、删行之后它不跟着变。旧形状由迁移和图升级改成列表
+            #: (graph_upgrade.start_required_params_become_a_list)。`edited_by`:不单独出一格,由参数那一格的控件编辑。
+            "required_params": {"type": "list", "edited_by": "params", "description": "wfNode_start_required_params"},
         },
         "outputs": ["*params"],
     },

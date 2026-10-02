@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "Comment insights and audience",
   "description": "Paste a post link to fetch its most-liked comments (50 by default: one page via TikHub, about 20–50; the browser scrolls through the comment section), group them by topic, infer the audience, needs and pain points, open questions, objections and sentiment, suggest next topics and replies to the comments worth answering, saved as a note. Pick one data source: TikHub (1 call per run) or the built-in browser (free; Xiaohongshu comments need a sign-in). Plus one or two AI chat calls.",
-  "graph_hash": "bb712887ee23f42b6b5bc3d10774eeeb3512c5f574ea3ddafce8531e1348b0f7",
+  "graph_hash": "d28c2fc9dc58ac2f75ece989fc2bddf3f484a7dc9f3e59e18fcda8b358996c4a",
   "graph": {
     "meta": {
       "template_id": "comment_insights",
@@ -29,7 +29,10 @@
             "focus": "",
             "report_language": "English"
           },
-          "required_params": "video_link, data_source"
+          "required_params": [
+            "video_link",
+            "data_source"
+          ]
         }
       },
       {

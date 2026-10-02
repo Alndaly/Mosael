@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "评论区洞察与观众画像",
   "description": "贴一条作品链接,取赞最多的一批评论(默认 50 条:TikHub 一次取一页,约 20–50 条;浏览器往下滚着读评论区),按话题聚类,推断观众画像、需求与痛点、疑问清单、异议与情绪分布,给出下一条可以做的选题和值得回复的评论的建议回复,存成笔记。数据来源二选一:TikHub(每次运行 1 次请求)或内嵌浏览器(不花钱,小红书评论要登录)。另有 1–2 次 AI 对话。",
-  "graph_hash": "eaabf93298cf27f405652a82e81cb6809a2e154d86851400f39665979621cd10",
+  "graph_hash": "465bc98c0272e95a335e066859816d7633a03795b5e67b3d8a002ce829e2cbbb",
   "graph": {
     "meta": {
       "template_id": "comment_insights",
@@ -29,7 +29,10 @@
             "focus": "",
             "report_language": "中文"
           },
-          "required_params": "video_link, data_source"
+          "required_params": [
+            "video_link",
+            "data_source"
+          ]
         }
       },
       {

@@ -6076,6 +6076,24 @@ def _migrate_migration_revisions_keep_their_vouchers() -> None:
         db.commit()
 
 
+def _migrate_start_required_params_are_a_list() -> None:
+    """开始节点的必填参数(`required_params`)从一串逗号分隔的名字改成参数名的列表。
+
+    面板上必填改成了每一行参数自己的开关,改名、删行时跟着那一行走;一串字表示不了「这一行」。点名了却没有那一行的
+    参数补成一行(默认空着):它照旧是必填,运行前照旧拦,只是现在面板上看得见。改写规则在领域层的图升级里
+    (graph_upgrade.start_required_params_become_a_list),导入旧文件、恢复旧修订用的是同一份。经
+    `_rewrite_workflow_graphs` 落成新的一版修订:作者沿用上一版、认可过上一版的人照样担保。
+    """
+    if not {"workflows", "workflow_revisions"} <= set(inspect(engine).get_table_names()):
+        return
+    from app.domain.workflows.graph_upgrade import start_required_params_become_a_list
+
+    _rewrite_workflow_graphs(
+        start_required_params_become_a_list,
+        "开始节点的必填参数改成每一行参数自己的开关:逗号分隔的名字改成参数名的列表(点名了却没有那一行的补一行)",
+    )
+
+
 def _walk_graph_nodes(graph: Any, visit: Any) -> Any:
     """一张图(连同循环体 / 子图体)里的每个节点交给 `visit(node) -> node`,返回新图。不改原图。"""
     if not isinstance(graph, dict):
@@ -7494,6 +7512,7 @@ def migration_plan() -> MigrationPlan:
                 _migrate_plugin_array_inputs_are_lists,
                 _migrate_board_plugin_array_inputs_are_lists,
                 _migrate_plugin_union_array_inputs_are_lists,
+                _migrate_start_required_params_are_a_list,
             ),
             #: 对账:上面那条只改得了它那一刻认得出的;工具清单后来才报上来的,每次启动按当时的声明补改。
             *_recurring(MigrationPhase.AFTER_SCHEMA, _plugin_array_inputs_follow_their_declarations),

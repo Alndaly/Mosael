@@ -25,7 +25,40 @@ def normalize_graph(graph: dict[str, Any], *, node_types: dict[str, dict[str, An
     数据边(见 canonicalize_data_bindings)。库里只存规范形状,读取端和编辑器因此只认一种。
     """
     lists = canonicalize_list_fields(canonicalize_line_fields(graph, node_types=node_types), node_types=node_types)
-    return canonicalize_data_bindings(lists, node_types=node_types)
+    return canonicalize_data_bindings(canonicalize_start_params(lists), node_types=node_types)
+
+
+def canonicalize_start_params(graph: dict[str, Any]) -> dict[str, Any]:
+    """开始节点的必填清单(`required_params`)只含 params 里有的参数,按参数的顺序,不重复。
+
+    面板上必填是每一行自己的开关,改名、删行时跟着走(前端 StartParamsField);别的写入方(智能体、接口)写的
+    清单在这里收拾:名字去两头空白、去掉空的和重复的;**点名了却没有那一行的补一行**(默认空着)—— 写的人要的是
+    「这个参数跑之前必须有值」,补一行之后运行前照旧拦,面板上看得见;丢掉它就悄悄变成了可以不填。
+
+    不是列表的不动(还写成一串字的,由校验说清形状,见 graph_rules._required_params_shape_errors)。开始节点只在顶层。
+    """
+    normalized = deepcopy(graph)
+    for node in normalized.get("nodes") or []:
+        if isinstance(node, dict) and node.get("type") == "start" and isinstance(node.get("config"), dict):
+            node["config"] = required_params_as_rows(node["config"])
+    return normalized
+
+
+def required_params_as_rows(config: dict[str, Any]) -> dict[str, Any]:
+    """一个开始节点的配置,必填清单收拾成规范形状(见 canonicalize_start_params)。清单不是列表的原样交回。"""
+    names = config.get("required_params")
+    params = config.get("params")
+    if not isinstance(names, list) or not isinstance(params, (dict, type(None))):
+        return config
+    wanted: list[str] = []
+    for name in names:
+        name = name.strip() if isinstance(name, str) else ""
+        if name and name not in wanted:
+            wanted.append(name)
+    rows = dict(params or {})
+    for name in wanted:
+        rows.setdefault(name, "")
+    return {**config, "params": rows, "required_params": [name for name in rows if name in wanted]}
 
 
 def canonicalize_list_fields(graph: dict[str, Any], *, node_types: dict[str, dict[str, Any]]) -> dict[str, Any]:

@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "Why a video went viral",
   "description": "Paste a Douyin, Xiaohongshu or Bilibili video link to fetch its numbers and most-liked comments, download it and transcribe the speech with timecodes, then break down why it worked (topic, the first-three-second hook, structure and pacing, emotional beats, title and cover, comment feedback, reusable patterns) and outline a script to make one the same way, saved as a note. Pick one data source: TikHub (2 calls per run, from about $0.001 each) or the built-in browser (free; pick a signed-in profile where needed). The download uses the library's Import from link (Douyin usually needs a signed-in browser profile on the download step); if it fails, the breakdown still runs on the numbers and comments. Transcription runs locally; plus one or two AI chat calls. Frames are not looked at yet.",
-  "graph_hash": "adf34782d4fe5007bd7f173c8f7780b1201c0ec425c7370c2d3ca8d3ef7c129f",
+  "graph_hash": "6e3c62ac05ed3e46b1f846881a3615bfd887cf20585149afc799991544594831",
   "graph": {
     "meta": {
       "template_id": "viral_video_breakdown",
@@ -30,7 +30,10 @@
             "my_topic": "",
             "report_language": "English"
           },
-          "required_params": "video_link, data_source"
+          "required_params": [
+            "video_link",
+            "data_source"
+          ]
         }
       },
       {

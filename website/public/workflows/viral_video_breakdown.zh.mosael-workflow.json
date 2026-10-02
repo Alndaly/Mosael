@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "自媒体视频爆款拆解",
   "description": "贴一条抖音、小红书或 B站视频的链接,取视频数据和赞最多的评论,下载视频、转写带时间码的口播,拆解它为什么火(选题、前 3 秒钩子、结构节奏、情绪点、标题封面、评论区反馈、可复用的套路),并给一份「照这个套路做一条」的脚本提纲,存成笔记。数据来源二选一:TikHub(每次运行 2 次请求,每次约 0.001 美元起)或内嵌浏览器(不花钱,要登录的平台选登录档案)。下载用的是素材库的「从链接导入」(抖音一般要在「下载视频进素材库」上选已登录的浏览器档案),下不到时照样按数据和评论拆;转写在本机跑;另有 1–2 次 AI 对话。暂不看画面(没有抽关键帧)。",
-  "graph_hash": "647152a25259caf0338a73bced1e042e25160b8c86a4780c119a17602f90e755",
+  "graph_hash": "ccc77c6785d9015eaf24c1d8d2a2301203114fa856b8a34950e355447cf7010a",
   "graph": {
     "meta": {
       "template_id": "viral_video_breakdown",
@@ -30,7 +30,10 @@
             "my_topic": "",
             "report_language": "中文"
           },
-          "required_params": "video_link, data_source"
+          "required_params": [
+            "video_link",
+            "data_source"
+          ]
         }
       },
       {

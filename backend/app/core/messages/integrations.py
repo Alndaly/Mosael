@@ -824,10 +824,13 @@ MESSAGES: dict[str, dict[str, str]] = {
     #: 和「写的 key 必须能翻」,见 tests/test_backend_i18n。
     "wfNode_start": {"zh": "开始", "en": "Start"},
     "wfNode_start_desc": {"zh": "工作流入口,声明输入参数(运行时可覆盖默认值)。", "en": "Workflow entry point; declares input parameters (defaults can be overridden per run)."},
-    "wfNode_start_params": {"zh": "输入参数名 → 默认值", "en": "Input parameter name → default value"},
+    "wfNode_start_params": {
+        "zh": "一行一个启动参数:名字和默认值。勾了「必填」的,跑之前必须有值(默认值或这次运行传进来的),空着就不让运行",
+        "en": "One start parameter per row: a name and a default value. A row marked Required must have a value before a run (its default or one passed in for the run); the run is refused while it is blank",
+    },
     "wfNode_start_required_params": {
-        "zh": "跑之前必须有值的参数名,逗号分隔;空着就不让运行",
-        "en": "Parameter names that must have a value before a run, comma-separated; the run is refused while any is blank",
+        "zh": "跑之前必须有值的参数:params 里参数名的列表,例如 [\"topic\"]",
+        "en": "Parameters that must have a value before a run: a list of parameter names from params, e.g. [\"topic\"]",
     },
     "wfNode_llm": {"zh": "LLM 生成", "en": "LLM"},
     "wfNode_llm_desc": {"zh": "调用配置的 AI 供应商生成文本。", "en": "Generate text with the configured AI provider."},

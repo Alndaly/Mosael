@@ -10,7 +10,8 @@
   (见 `inner_scope_fields_come_back`);
 - 代码字段里的 `{{…}}`(老版本按文字插值)→ 挪进入参、代码改成读入参(见 `code_references_read_input`);
 - 插件节点的数组入参存成「名字 → 值」对象 → 值的列表:这一步要知道哪一格是数组,在规范化里
-  (normalization.canonicalize_list_fields,保存、导入、模板都走它)。
+  (normalization.canonicalize_list_fields,保存、导入、模板都走它);
+- 开始节点的必填参数写成一串逗号分隔的名字 → 参数名的列表(见 `start_required_params_become_a_list`)。
 """
 
 from __future__ import annotations
@@ -21,6 +22,7 @@ from typing import Any
 from app.domain.workflows.code_references import REFERENCE, declares_input, references_become_input
 from app.domain.workflows.graph_rules import NESTED_BODY_TYPES
 from app.domain.workflows.node_types import NODE_TYPES
+from app.domain.workflows.normalization import required_params_as_rows
 
 #: 内嵌子图节点的哪几格属于体内作用域(和 graph_rules.NESTED_BODY_RAW_KEYS 同一条界线,body 本身除外)。
 _INNER_FIELDS = {"loop_foreach": ("output",), "loop_while": ("output", "condition"), "subgraph": ("output",)}
@@ -31,7 +33,26 @@ CODE_FIELDS = {"code": ("code", "python"), "browser_evaluate": ("expression", "j
 
 def upgrade_graph(graph: Any) -> Any:
     """一张图(连同循环体 / 子图体)改成现在的形状。不是图的原样交回;不改传进来的那份。"""
-    return code_references_read_input(inner_scope_fields_come_back(graph))
+    return start_required_params_become_a_list(code_references_read_input(inner_scope_fields_come_back(graph)))
+
+
+def start_required_params_become_a_list(graph: Any) -> Any:
+    """开始节点的 `required_params` 是一串逗号分隔的名字(旧形状)→ 参数名的列表。
+
+    旧面板上它是一格独立的文本框:同一个名字写两遍,半角全角逗号、多余的空格都有。拆开之后按规范形状收拾
+    (normalization.required_params_as_rows):去重、按参数的顺序,点名了却没有那一行的补一行(默认空着)——
+    它照旧是必填,运行前照旧拦。已经是列表的原样过。开始节点只在顶层。
+    """
+    if not isinstance(graph, dict) or not isinstance(graph.get("nodes"), list):
+        return graph
+    nodes = []
+    for node in graph["nodes"]:
+        config = node.get("config") if isinstance(node, dict) else None
+        if isinstance(config, dict) and node.get("type") == "start" and isinstance(config.get("required_params"), str):
+            names = config["required_params"].replace("，", ",").split(",")
+            node = {**node, "config": required_params_as_rows({**config, "required_params": names})}
+        nodes.append(node)
+    return {**graph, "nodes": nodes}
 
 
 def inner_scope_fields_come_back(graph: Any) -> Any:

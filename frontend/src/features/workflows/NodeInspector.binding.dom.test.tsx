@@ -174,20 +174,23 @@ it("失效引用不查代码字段:代码里的 {{…}} 是字面文字;入参�
   expect(stale).toEqual(["{{gone.input}}"]);
 });
 
-it("开始节点的字段不给「接上游」:它是入口,前面什么都没有", () => {
-  //: 此前「必填参数」声明成模板,检查器给它变量插入器和「接上游」开关 —— 接上一条数据边,
-  //: 入口就成了别人的下游。画布上开始节点连控制入口都没有(WorkflowNode),检查器不该另开一个。
+it("开始节点的字段不给「接上游」:它是入口,前面什么都没有;必填不再是单独的一格", () => {
+  //: 此前「必填参数」是一格单独的文本框(更早还声明成模板,检查器给它变量插入器和「接上游」开关)。现在必填是
+  //: 参数每一行自己的开关(StartParamsField),那一格由参数的控件一起编辑(声明 edited_by),不单独出现。
   const START_META = {
     type: "start",
     label: "开始",
     description: "",
     category: "",
-    config: { params: { type: "object", label: "参数" }, required_params: { type: "string", label: "必填参数" } },
+    config: {
+      params: { type: "object", label: "参数", editor: "start_params", required_list: "required_params" },
+      required_params: { type: "list", label: "必填参数", edited_by: "params" },
+    },
     outputs: ["*params"],
     output_types: {},
     output_labels: {},
   } as unknown as WorkflowNodeType;
-  const node = { id: "start", type: "start", config: { params: { topic: "" }, required_params: "topic" } };
+  const node = { id: "start", type: "start", config: { params: { topic: "" }, required_params: ["topic"] } };
   render(
     <QueryClientProvider client={new QueryClient()}>
       <TooltipProvider>
@@ -205,6 +208,7 @@ it("开始节点的字段不给「接上游」:它是入口,前面什么都没�
       </TooltipProvider>
     </QueryClientProvider>,
   );
-  expect(document.querySelector('[data-field-key="required_params"]')).not.toBeNull();
-  expect(document.querySelector('[data-field-key="required_params"] button[title="wfInputModeHint"]')).toBeNull();
+  expect(document.querySelector('[data-field-key="required_params"]')).toBeNull();
+  expect(document.querySelector('[data-field-key="params"] [data-start-params]')).not.toBeNull();
+  expect(document.querySelector('[data-field-key="params"] button[title="wfInputModeHint"]')).toBeNull();
 });

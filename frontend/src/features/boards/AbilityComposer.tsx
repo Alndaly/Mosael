@@ -146,6 +146,8 @@ export function AbilityComposer({
   };
   //: 换了父字段就清掉跟着它的(换场景 → 旧镜头失效),和工作流检查器同一条规矩(nodeForms/dependents)。
   const setConfig = (key: string, value: unknown) => save({ config: withDependentsCleared(config, key, value, specs) });
+  //: 一个控件一次改好几格(见 NodeConfigForm 的 onPatchConfig):一次存。
+  const patchConfig = (patch: Record<string, unknown>) => save({ config: { ...config, ...patch } });
 
   const fieldLabel = (key: string, spec: BoardFieldSpec) => String(spec.label || key);
   //: **只有一个连接时不摆「连接」**:留空就是用它(sole_option_default,运行时同一条),摆出来只会在「从网盘导入」
@@ -269,6 +271,7 @@ export function AbilityComposer({
                   fieldOptions={fieldOptions}
                   onSetConfig={setConfig}
                   onTypeConfig={setConfig}
+                  onPatchConfig={(_owner, patch) => patchConfig(patch)}
                 />
               ),
             }

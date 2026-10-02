@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "Social account health check",
   "description": "Paste a Douyin, Xiaohongshu or Bilibili profile link to fetch the profile and the latest 30 posts (publish time, caption, length, views / likes / comments / saves / shares). Code works out posting frequency, posting-time distribution, engagement rate, top posts and a recent-half-vs-earlier-half growth or decline signal, then a diagnosis (where it stands, content pillars, what works, problems, concrete next steps) is saved as a note with the key numbers attached. Pick one data source: TikHub (2 calls per run, from about $0.001 each — see your TikHub bill) or the built-in browser (free; Xiaohongshu / Douyin need a sign-in, other platforms work too). Plus one or two AI chat calls (one more on the browser route to read the page).",
-  "graph_hash": "fe7a6a579985671e17ed3adb9178b1fa13b187da3feb2dab476c8adf4662fcc7",
+  "graph_hash": "f20bea054d35288baf1ccf110e3faca8f371dd840fa2befa2e907942ad04035d",
   "graph": {
     "meta": {
       "template_id": "account_analysis",
@@ -29,7 +29,10 @@
             "focus": "",
             "report_language": "English"
           },
-          "required_params": "account_link, data_source"
+          "required_params": [
+            "account_link",
+            "data_source"
+          ]
         }
       },
       {

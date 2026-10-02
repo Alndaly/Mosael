@@ -115,15 +115,24 @@ def one_of_errors(
 
 
 def _start_param_errors(node_id: str, config: dict[str, Any]) -> list[str]:
-    """开始节点点名为必填的参数(`required_params`)一个都不能空。
+    """开始节点勾了「必填」的参数(`required_params`,参数名的列表)一个都不能空。
 
     参数的值常常是模板建好之后才由用户填的(商品名、卖点、主题),而它们被别的节点用 `{{start.x}}` 引用 ——
     引用本身在必填检查里算"填了",所以此前空着也能启动,要等用到它的那一步才失败,或者更糟:模型对着空白
-    照样写完、后面的付费生成照样扣费。
+    照样写完、后面的付费生成照样扣费。形状不对的由 _required_params_shape_errors 报。
     """
     params = config.get("params") if isinstance(config.get("params"), dict) else {}
-    names = [name.strip() for name in str(config.get("required_params") or "").replace("，", ",").split(",")]
-    return [f"节点 {node_id} 缺少必填配置 params.{name}" for name in names if name and blank(params.get(name))]
+    names = config.get("required_params") if isinstance(config.get("required_params"), list) else []
+    return [f"节点 {node_id} 缺少必填配置 params.{name}" for name in names if isinstance(name, str) and blank(params.get(name))]
+
+
+def _required_params_shape_errors(node_id: str, config: dict[str, Any]) -> list[str]:
+    """`required_params` 是参数名的列表。还写成一串逗号分隔的字的(旧形状,智能体照旧习惯写的)当场说清 ——
+    不在这里猜着拆:旧形状由迁移和图升级改(graph_upgrade.start_required_params_become_a_list)。"""
+    value = config.get("required_params")
+    if value is None or (isinstance(value, list) and all(isinstance(name, str) for name in value)):
+        return []
+    return [tr("wfErr_requiredParamsShape", node=node_id)]
 
 
 def blank(value: Any) -> bool:
@@ -254,6 +263,7 @@ def validate_graph(
             continue
         if node_type == "start":
             start_count += 1
+            errors.extend(_required_params_shape_errors(node_id, node.get("config") or {}))
         if require_config:
             node_config = node.get("config") or {}
             node_specs = known_types[node_type]["config"]

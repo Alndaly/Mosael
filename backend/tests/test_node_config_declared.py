@@ -318,7 +318,8 @@ def test_名字到值的映射不该让用户手写_JSON() -> None:
             if meta.get("type") != "object":
                 continue
             editor = config_editor(key, meta)
-            assert editor in {"map", "json"}, f"{name}.{key} 没说清用哪种编辑器"
+            #: start_params 也是一行一对(名字 → 默认值),多一个「必填」开关 —— 开始节点的启动参数。
+            assert editor in {"map", "json", "start_params"}, f"{name}.{key} 没说清用哪种编辑器"
 
 
 def test_只有真正自由结构的才留原始_JSON() -> None:
