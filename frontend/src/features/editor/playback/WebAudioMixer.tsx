@@ -4,6 +4,7 @@ import { assetFileUrl } from "@/api/client";
 import { audioGainAt, type AudioSourceSpec } from "./audioMix";
 export type { AudioSourceSpec } from "./audioMix";
 import { useEditorStore } from "@/features/editor/editorStore";
+import { setPlaybackClock } from "./playbackClock";
 
 /**
  * S3 of the compositor: all preview audio through one WebAudio graph, and the AudioContext
@@ -21,6 +22,8 @@ const TICK_MS = 40;
 // The store playhead equals the value we last set unless someone else moved it; a divergence
 // past this (a scrub / frame-step / clip edit) means a seek → reschedule from the new position.
 const SEEK_EPSILON = 0.02;
+// 插值时钟最多往两次节拍之间外推这么远:节拍被节流(后台标签页)时宁可停住,也不要一路冲过头。
+const MAX_EXTRAPOLATE_SEC = 0.25;
 
 export function WebAudioMixer({
   sources,
@@ -51,7 +54,38 @@ export function WebAudioMixer({
     // playhead to the value we last set — anything else means someone else moved it.
     let lastCtx = 0;
     let lastSet = 0;
+    let lastTickPerf = 0;
     let hasSession = false;
+    // 插值时钟已经报出去的最大值:同一段播放里画面只往前走,节拍之间的抖动不会让它倒退一帧。
+    let reported = 0;
+    const anchor = (playhead: number) => {
+      lastCtx = ctx.currentTime;
+      lastSet = playhead;
+      lastTickPerf = performance.now();
+      reported = playhead;
+    };
+
+    // 「此刻」的上下文时间。优先用输出时间戳:它给出「正在从扬声器出来的那一刻」对应的上下文时间
+    // 和 performance 时间,按 performance.now() 外推就是连续的,而且自动扣掉了输出延迟 —— 画面对的是
+    // 听到的声音,不是刚排进去的声音。拿不到时退回「上一拍的上下文时间 + 墙钟流逝」。
+    const contextNow = (): number => {
+      const now = performance.now();
+      const stamp = typeof ctx.getOutputTimestamp === "function" ? ctx.getOutputTimestamp() : null;
+      if (stamp && typeof stamp.contextTime === "number" && typeof stamp.performanceTime === "number" && stamp.performanceTime > 0) {
+        return stamp.contextTime + Math.max(0, now - stamp.performanceTime) / 1000;
+      }
+      return lastCtx + Math.max(0, now - lastTickPerf) / 1000;
+    };
+    setPlaybackClock(() => {
+      const state = useEditorStore.getState();
+      if (!hasSession) return state.playhead;
+      const elapsed = Math.max(-MAX_EXTRAPOLATE_SEC, Math.min(MAX_EXTRAPOLATE_SEC, contextNow() - lastCtx));
+      let value = Math.max(reported, lastSet + elapsed * state.playbackRate);
+      const total = totalRef.current;
+      if (total > 0) value = Math.min(value, total);
+      reported = value;
+      return value;
+    });
 
     const clipEnd = (s: AudioSourceSpec) => s.timelineStart + Math.max(0, (s.srcOut - s.srcIn) / (s.speed || 1));
     // Effective linear gain: clip gain × master volume, zeroed by any mute. 音量关键帧存在时,
@@ -147,8 +181,7 @@ export function WebAudioMixer({
       if (ctx.state === "suspended") void ctx.resume();
 
       if (!hasSession) {
-        lastCtx = ctx.currentTime;
-        lastSet = state.playhead;
+        anchor(state.playhead);
         hasSession = true;
         reconcile(state.playhead, rate, volume, masterMuted);
         return;
@@ -156,8 +189,7 @@ export function WebAudioMixer({
 
       // Someone else moved the playhead (scrub, clip edit) → adopt it and reschedule.
       if (Math.abs(state.playhead - lastSet) > SEEK_EPSILON) {
-        lastCtx = ctx.currentTime;
-        lastSet = state.playhead;
+        anchor(state.playhead);
         stopAll();
         reconcile(state.playhead, rate, volume, masterMuted);
         return;
@@ -165,11 +197,13 @@ export function WebAudioMixer({
 
       const dt = ctx.currentTime - lastCtx;
       lastCtx = ctx.currentTime;
+      lastTickPerf = performance.now();
       let next = lastSet + dt * rate;
       const total = totalRef.current;
       if (total > 0 && next >= total) {
         if (loop) {
           next = 0;
+          reported = 0; // 回到开头:插值时钟的「只进不退」从这里重新算
           stopAll();
         } else {
           state.setPlayhead(total);
@@ -186,6 +220,7 @@ export function WebAudioMixer({
 
     return () => {
       window.clearInterval(interval);
+      setPlaybackClock(null);
       stopAll();
       void ctx.close();
     };

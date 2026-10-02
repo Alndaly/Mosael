@@ -24,6 +24,7 @@ import {
 import { formatTimecode } from "@/lib/time";
 import { downsamplePeaks, slicePeaks } from "@/domain/timeline/waveform";
 import { MIN_PX_PER_SECOND, useEditorStore } from "@/features/editor/editorStore";
+import { livePlayhead } from "@/features/editor/playback/playbackClock";
 import { TimelineClip } from "./TimelineClip";
 import { kindHasSound } from "@/lib/assetKinds";
 import { cn } from "@/lib/utils";
@@ -1328,10 +1329,24 @@ function TrackToggle({
 /** Isolated playhead subscribers: only these re-render on the ~25×/s playhead tick,
  *  not the whole Timeline (see the note at the top of Timeline). */
 function TimelinePlayhead({ pxPerSecond, children }: { pxPerSecond: number; children: React.ReactNode }) {
-  const playhead = useEditorStore((state) => state.playhead);
+  // 播放中竖线由 rAF 按插值时钟直接挪(见 playbackClock),不跟 store 那 25Hz 的写入一顿一顿地跳;
+  // 暂停时才按 store 的值渲染。播放中这个选择器恒为 null,store 的写入不会让它重渲。
+  const pausedAt = useEditorStore((state) => (state.playing ? null : state.playhead));
+  const lineRef = React.useRef<HTMLDivElement | null>(null);
+  React.useEffect(() => {
+    if (pausedAt !== null) return;
+    let raf = 0;
+    const tick = () => {
+      if (lineRef.current) lineRef.current.style.left = `${timeToPx(livePlayhead(), pxPerSecond)}px`;
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [pausedAt, pxPerSecond]);
+  const left = timeToPx(pausedAt ?? livePlayhead(), pxPerSecond);
   // z-[6] 高于刻度尺(z-5),否则竖线在刻度尺区被 ruler 背景盖住——之前刻度尺上看不到播放头。
   return (
-    <div className="pointer-events-none absolute bottom-0 top-0 z-[6] w-px bg-[var(--playhead)]" style={{ left: timeToPx(playhead, pxPerSecond) }}>
+    <div ref={lineRef} className="pointer-events-none absolute bottom-0 top-0 z-[6] w-px bg-[var(--playhead)]" style={{ left }}>
       {/* 刻度尺上的把手:五边形(顶宽下尖)标出播放头位置,像 PR/剪映的播放头头部 */}
       <div
         className="absolute top-0 left-1/2 h-[13px] w-[13px] -translate-x-1/2 bg-[var(--playhead)]"

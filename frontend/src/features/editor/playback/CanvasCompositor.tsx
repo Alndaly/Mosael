@@ -9,7 +9,7 @@ import { paintScene, type ScenePaintLayer } from "@/features/editor/playback/sce
 import { evictions } from "@/features/editor/playback/sourcePool";
 import { readTransform, type Transform } from "@/features/editor/TransformOverlay";
 import { clipProgress, sampleTransform } from "@/features/editor/keyframes";
-import { useEditorStore } from "@/features/editor/editorStore";
+import { livePlayhead } from "@/features/editor/playback/playbackClock";
 
 export interface CompositorLayer {
   clip: Clip;
@@ -188,7 +188,8 @@ export function CanvasCompositor({
       if (canvas.width !== width) canvas.width = width;
       if (canvas.height !== height) canvas.height = height;
 
-      const { playhead } = useEditorStore.getState();
+      // 播放中按音频时钟插值(见 playbackClock):store 每 40ms 才写一次,直接读它画面就是 25fps 的阶梯。
+      const playhead = livePlayhead();
       const currentLayers = layersRef.current;
 
       // A paused monitor was repainting 60 times a second to produce the same pixels. Resolve
