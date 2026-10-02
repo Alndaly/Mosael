@@ -9,7 +9,10 @@ items are content transforms only; 修订 2 adds "one concept, one entry" (a plu
 generation model the user can use stays off the board) and `wiring_outputs` (never landed on the board); 修订 3 keeps
 tools that fetch by an id from another system (`external_id` fields) off the board and stops counting ComfyUI preview
 nodes as outputs when deciding `mirrors`; 修订 4 makes the 3D scene item render itself; 修订 5 (2026-09-27) retires
-tool items altogether — every content transform is an **ability of the content item it consumes** (ADR 0025 修订).
+tool items altogether — every content transform is an **ability of the content item it consumes** (ADR 0025 修订);
+修订 6 (2026-10-02) makes ComfyUI declare `mirrors` for **every workflow in its model catalog** (several save nodes, an
+alpha mask) — generation can now express them ("Results from", a mask slot) — and board generation lays out one
+placeholder per output it will return.
 The "ComfyUI becomes a plugin generation provider" work (ADR 0020) landed before P1, so board generation already sees
 plugin models as ordinary provider models.
 
@@ -507,6 +510,13 @@ id、位置、名字不变,产出者 `generate`,选的就是那条连接下的�
   图数成两个,于是不声明 `mirrors`,同一张图在画板上两个入口。预览写的是临时文件:生成跑完不交回(`collect_outputs`),
   工具缺省也不交回。现在判据只数生成会交回的那几个(`graph.generation_nodes`:这一种里存下来的,一个都不存才是预览),
   和 `collect_outputs` 同一条;别的种类里存下来的文件、文字产出照旧说明「只有工具交得全」。
+- **修订 6(2026-10-02):判据是「它就是模型目录里的那个模型」**。用户还是看到两个入口:「古风女孩.json · ComfyUI」在
+  图片格的模型下拉里,「工作流 · 古风女孩」在格子的「…」里 —— 那张图有几个保存 / 预览节点,上一条的判据说「只有工具
+  交得全」。可生成那一路其实交得出:一次交回每个节点各一份,模型照实说份数(`outputs_per_run`),画板一次摆好那么多格
+  占位;只要其中一个的,「参数」里选「结果取自」(插件只交回那个节点的,别的保存节点不跑)。拿 alpha 当蒙版的图,模型
+  多一个蒙版槽。于是 ComfyUI 插件 1.6.0 起模型目录里有的每张工作流(交得出文件的)都声明 `mirrors`;工具多做的(交回
+  全部节点、显示出来的文字、预览)留在工作流和智能体那边,工具本身不删。只交出一段字的图不在模型目录里,照旧是格子的
+  一项能力。宿主的规矩 5 不变 —— 什么算同一件事由插件说。
 
 **已有数据**:两者都是对账,不是一次性迁移 —— 合不合格读的是插件此刻的清单,插件升级可能在任何一次启动之后。
 被生成取代的照旧由 `rewrite_mirrored_tools` 改写成生成格;按编号取东西的由 `retire_external_id_tools` 改成便签,
