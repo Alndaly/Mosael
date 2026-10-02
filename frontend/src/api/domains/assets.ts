@@ -19,7 +19,7 @@ export interface WaveformData {
   peaks: number[];
 }
 
-function assetUrl(assetId: string, representation: "file" | "preview" | "thumbnail" | "filmstrip" | "proxy") {
+function assetUrl(assetId: string, representation: "file" | "preview" | "thumbnail" | "filmstrip" | "proxy" | "audio-proxy") {
   const token = getAuthToken();
   const suffix = token ? `?token=${token}` : "";
   return `${API_BASE}/api/assets/${assetId}/${representation}${suffix}`;
@@ -80,6 +80,11 @@ export function assetFilmstripUrl(assetId: string): string {
 /** The 720p preview proxy decoded by the WebCodecs compositor. */
 export function assetProxyUrl(assetId: string): string {
   return assetUrl(assetId, "proxy");
+}
+
+/** The AAC preview audio proxy the editor mixer reads by Range and decodes chunk by chunk. */
+export function assetAudioProxyUrl(assetId: string): string {
+  return assetUrl(assetId, "audio-proxy");
 }
 
 /** Save one video frame as a new asset without mutating the source. */

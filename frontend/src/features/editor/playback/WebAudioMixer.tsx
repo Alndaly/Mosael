@@ -1,8 +1,8 @@
 import React from "react";
 
-import { assetFileUrl } from "@/api/client";
-import { audioGainAt, type AudioSourceSpec } from "./audioMix";
+import { type AudioSourceSpec } from "./audioMix";
 export type { AudioSourceSpec } from "./audioMix";
+import { AudioVoices } from "./audioVoices";
 import { useEditorStore } from "@/features/editor/editorStore";
 import { setPlaybackClock } from "./playbackClock";
 
@@ -10,12 +10,10 @@ import { setPlaybackClock } from "./playbackClock";
  * S3 of the compositor: all preview audio through one WebAudio graph, and the AudioContext
  * clock drives the playhead (the timeline's master clock while the compositor is active).
  *
- * Each active audio-bearing clip is an AudioBufferSourceNode → per-clip GainNode → master
- * GainNode → destination. Source nodes are one-shot, so we (re)schedule on play, seek and
- * when clips enter/leave. `ctx.currentTime` is the time base: each tick advances the store
- * playhead from it; if the playhead was moved externally (a scrub) we re-anchor and reschedule.
- *
- * Mounted only when the compositor is active; Monitor's interval clock stands down meanwhile.
+ * 每个有声片段从它素材的**音频代理**里按块取 PCM(见 audioVoices / audioProxySource),不再整份下载
+ * 原文件、整份解码。`ctx.currentTime` is the time base: each tick advances the store playhead from it;
+ * if the playhead was moved externally (a scrub) we re-anchor and reschedule. 画面要的连续时间由
+ * playbackClock 按同一个时钟插值。
  */
 
 const TICK_MS = 40;
@@ -24,6 +22,11 @@ const TICK_MS = 40;
 const SEEK_EPSILON = 0.02;
 // 插值时钟最多往两次节拍之间外推这么远:节拍被节流(后台标签页)时宁可停住,也不要一路冲过头。
 const MAX_EXTRAPOLATE_SEC = 0.25;
+/**
+ * 上下文固定跑在 48kHz:和音频代理同一个采样率,解出来的块直接用,不用逐块重采样(设备不是 48k 时由
+ * 浏览器在输出端统一转一次)。
+ */
+const CONTEXT_SAMPLE_RATE = 48_000;
 
 export function WebAudioMixer({
   sources,
@@ -40,13 +43,11 @@ export function WebAudioMixer({
   React.useEffect(() => {
     const AudioCtx = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
     if (!AudioCtx) return;
-    const ctx = new AudioCtx();
+    const ctx = new AudioCtx({ sampleRate: CONTEXT_SAMPLE_RATE });
     const master = ctx.createGain();
     master.connect(ctx.destination);
+    const voices = new AudioVoices(ctx, master);
 
-    const buffers = new Map<string, AudioBuffer>(); // assetId → decoded
-    const loading = new Set<string>();
-    const active = new Map<string, { node: AudioBufferSourceNode; gain: GainNode }>();
     // Master clock, integrated incrementally: each tick advances the playhead by the real
     // AudioContext time elapsed since the last tick × the CURRENT rate (so a rate change is
     // absorbed per-interval, never mistaken for a seek, and a throttled background tick just
@@ -87,95 +88,15 @@ export function WebAudioMixer({
       return value;
     });
 
-    const clipEnd = (s: AudioSourceSpec) => s.timelineStart + Math.max(0, (s.srcOut - s.srcIn) / (s.speed || 1));
-    // Effective linear gain: clip gain × master volume, zeroed by any mute. 音量关键帧存在时,
-    // 按播放头在片段内的进度采样增益(与 AudioElement 和导出的 volume 表达式一致)。
-    const gainValue = (s: AudioSourceSpec, volume: number, masterMuted: boolean, playhead: number) =>
-      audioGainAt(s, sourcesRef.current, playhead, volume, masterMuted);
-
-    const stopAll = () => {
-      for (const { node } of active.values()) {
-        try {
-          node.stop();
-        } catch {
-          /* already stopped */
-        }
-      }
-      active.clear();
-    };
-
-    const ensureBuffer = (assetId: string) => {
-      if (buffers.has(assetId) || loading.has(assetId)) return;
-      loading.add(assetId);
-      fetch(assetFileUrl(assetId))
-        .then((r) => r.arrayBuffer())
-        .then((buf) => ctx.decodeAudioData(buf))
-        .then((decoded) => {
-          buffers.set(assetId, decoded);
-        })
-        .catch(() => undefined)
-        .finally(() => loading.delete(assetId));
-    };
-
-    const scheduleClip = (s: AudioSourceSpec, playhead: number, rate: number, volume: number, masterMuted: boolean) => {
-      const buffer = buffers.get(s.assetId);
-      if (!buffer) {
-        ensureBuffer(s.assetId);
-        return;
-      }
-      const speed = s.speed || 1;
-      const offset = s.srcIn + (playhead - s.timelineStart) * speed;
-      if (offset < 0 || offset >= buffer.duration) return;
-      const node = ctx.createBufferSource();
-      node.buffer = buffer;
-      node.playbackRate.value = rate * speed;
-      const gain = ctx.createGain();
-      gain.gain.value = gainValue(s, volume, masterMuted, playhead);
-      node.connect(gain).connect(master);
-      // Pass the clip's remaining buffer span as duration so the node self-terminates at its
-      // trim-out (srcOut) even if the reconcile tick is throttled (backgrounded tab), instead
-      // of bleeding past the cut until the next tick stops it.
-      const remaining = Math.min(s.srcOut, buffer.duration) - offset;
-      if (remaining <= 0) return;
-      node.start(0, offset, remaining);
-      active.set(s.key, { node, gain });
-    };
-
-    const reconcile = (playhead: number, rate: number, volume: number, masterMuted: boolean) => {
-      master.gain.value = 1; // per-clip gains already fold in master volume; keep master unity
-      const wanted = new Set<string>();
-      for (const s of sourcesRef.current) {
-        if (playhead < s.timelineStart || playhead >= clipEnd(s)) continue;
-        wanted.add(s.key);
-        const existing = active.get(s.key);
-        if (existing) {
-          existing.gain.gain.value = gainValue(s, volume, masterMuted, playhead);
-          existing.node.playbackRate.value = rate * (s.speed || 1);
-        } else {
-          scheduleClip(s, playhead, rate, volume, masterMuted);
-        }
-      }
-      for (const [key, { node }] of active) {
-        if (!wanted.has(key)) {
-          try {
-            node.stop();
-          } catch {
-            /* ignore */
-          }
-          active.delete(key);
-        }
-      }
-    };
-
     const interval = window.setInterval(() => {
       const state = useEditorStore.getState();
-      const { playing, playbackRate: rate, volume, muted: masterMuted, loop } = state;
+      const { playing, playbackRate: rate, volume, muted, loop } = state;
+      const mix = (playhead: number) => ({ playhead, rate, volume, muted });
 
       if (!playing) {
-        if (hasSession) {
-          stopAll();
-          hasSession = false;
-        }
+        hasSession = false;
+        // 暂停:声部全停,播放头下的那几块先解好(按下播放就有声音);用不到的块放掉。
+        voices.idle(sourcesRef.current, state.playhead);
         return;
       }
       if (ctx.state === "suspended") void ctx.resume();
@@ -183,15 +104,15 @@ export function WebAudioMixer({
       if (!hasSession) {
         anchor(state.playhead);
         hasSession = true;
-        reconcile(state.playhead, rate, volume, masterMuted);
+        voices.play(sourcesRef.current, ctx.currentTime, mix(state.playhead));
         return;
       }
 
       // Someone else moved the playhead (scrub, clip edit) → adopt it and reschedule.
       if (Math.abs(state.playhead - lastSet) > SEEK_EPSILON) {
         anchor(state.playhead);
-        stopAll();
-        reconcile(state.playhead, rate, volume, masterMuted);
+        voices.stopAll();
+        voices.play(sourcesRef.current, ctx.currentTime, mix(state.playhead));
         return;
       }
 
@@ -204,24 +125,24 @@ export function WebAudioMixer({
         if (loop) {
           next = 0;
           reported = 0; // 回到开头:插值时钟的「只进不退」从这里重新算
-          stopAll();
+          voices.stopAll();
         } else {
           state.setPlayhead(total);
           state.setPlaying(false);
-          stopAll();
+          voices.stopAll();
           hasSession = false;
           return;
         }
       }
       state.setPlayhead(next);
       lastSet = next;
-      reconcile(next, rate, volume, masterMuted);
+      voices.play(sourcesRef.current, ctx.currentTime, mix(next));
     }, TICK_MS);
 
     return () => {
       window.clearInterval(interval);
       setPlaybackClock(null);
-      stopAll();
+      voices.close();
       void ctx.close();
     };
   }, []);
