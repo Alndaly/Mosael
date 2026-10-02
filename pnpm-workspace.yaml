@@ -24,7 +24,7 @@ onlyBuiltDependencies:
   - electron-winstaller
   - esbuild
 
-# electron-builder 26.15.3 起(到 26.16.1 仍是)的依赖声明有缺陷:app-builder-lib 代码里用了
+# electron-builder 26.15.3 起(到 26.17.0 仍是)的依赖声明有缺陷:app-builder-lib 代码里用了
 # `ElectronDownloadCacheMode`(只存在于 @electron/get 5.x),依赖却声明成 `^3.0.0`。
 # 于是 pnpm 严格解析出 3.0.0,打包在 resolveCacheMode 处炸:
 #   TypeError: Cannot read properties of undefined (reading 'ReadWrite')
@@ -40,4 +40,4 @@ overrides:
 #   TypeError: Cannot read properties of undefined (reading 'createKeywordTypeNode')
 # 挂在 frontend 时 peer 会被 frontend 自己的 TS 7 满足;挂在根(根不声明 typescript)则由
 # pnpm 自动装一份 TS 5 给它。overrides 和 packageExtensions 都改不了 peer 的解析,试过。
-# openapi-typescript 支持 TS 7 后可挪回 frontend。
+# 到 7.13.0(截至 2026-10 的最新版)peer 仍是 ^5.x。openapi-typescript 支持 TS 7 后可挪回 frontend。
