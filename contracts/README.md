@@ -137,6 +137,10 @@ sidecar 那份没跟上。开着 prompt caching 时 `input` 只剩新增的一�
 契约还顺带抓出第二处:Python 的 `json.dumps` 默认在冒号后加空格、JS 的 `JSON.stringify` 不加,
 每个工具入参都系统性差出几个字符。**靠注释提醒对方不是机制。**
 
+v6 补上 `cacheWrite`:pi 上报的 `input` / `cacheRead` / `cacheWrite` 是提示词里互不相交的三段,两侧此前都只
+加了前两段。Anthropic 协议(Kimi Code 订阅走的就是它)开着缓存时,新进来的对话正记在 `cacheWrite` 上 ——
+水位停在「工具定义 + 系统提示」那么高,压缩迟迟不触发;而 pi 夹 `max_tokens` 时是把它算进去的。
+
 ### `transform-cases.json` —— 片段变换契约
 
 「一份 `clip.transform` 读出来是什么(默认、钳制、垃圾值怎么退),关键帧在某进度处采样成什么。」

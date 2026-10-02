@@ -9,8 +9,8 @@
 sidecar 的 test/context-meter.parity.test.mjs 跑同一份语料 —— 早先这里只写着「改一处就要改
 另一处」,而它没做到:后端补了 cacheRead,sidecar 那份没跟上。规则是:
 
-  1. 以最近一条带 usage 的 assistant 消息为锚,取它的 input+output —— 那是供应商上次
-     **实际看到**的量,比我们估算准得多;
+  1. 以最近一条带 usage 的 assistant 消息为锚,取它的 input+output+cacheRead+cacheWrite —— 那是
+     供应商上次**实际看到**的量,比我们估算准得多;
   2. 只估算锚之后新增的消息;
   3. 一条 usage 都没有就整段估算。
 
@@ -91,10 +91,15 @@ def context_tokens(messages: Any) -> int:
     # **cacheRead 也占窗口。** 它在计价上另算(便宜十倍),但"还能装多少"问的是占地方,
     # 两者没有区别。此前漏掉它,于是水位系统性偏乐观 —— 而偏乐观的水位是最坏的那种:
     # 它让人以为还早,直到某一轮突然被压缩。
+    #
+    # **cacheWrite 也一样。** input / cacheRead / cacheWrite 是提示词里互不相交的三段(pi 上报前 input 已经减掉了
+    # 另外两段,见 domain/billing/usage)。Anthropic 协议(Kimi Code 订阅走的就是它)开着缓存时,新进来的对话正
+    # 记在 cacheWrite 上 —— 漏掉它,水位停在「工具定义 + 系统提示」那么高(用户截图:前一轮输入 104k,剩余 97%)。
     total = (
         int(usage.get("input") or 0)
         + int(usage.get("output") or 0)
         + int(usage.get("cacheRead") or 0)
+        + int(usage.get("cacheWrite") or 0)
     )
     for index in range(anchor + 1, len(messages)):
         total += estimate_tokens(messages[index])

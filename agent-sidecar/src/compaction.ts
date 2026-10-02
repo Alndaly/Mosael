@@ -27,6 +27,10 @@ export interface Usage {
   output?: number;
   /** 缓存命中的部分。**计价另算,但照样占窗口** —— 见 contextTokens。 */
   cacheRead?: number;
+  /** 这次写进缓存的部分。和 input / cacheRead 互不相交,同样占窗口。 */
+  cacheWrite?: number;
+  /** 供应商给的总数(pi 的 estimate 优先读它)。给了就和上面几项之和一致。 */
+  totalTokens?: number;
 }
 
 export interface Message {
@@ -120,7 +124,7 @@ export function estimateAll(messages: readonly Message[]): number {
 /**
  * 当前上下文占了多少 token。
  *
- * 以最近一条带 usage 的 assistant 消息为锚:那条 usage 的 input+output+cacheRead 就是
+ * 以最近一条带 usage 的 assistant 消息为锚:那条 usage 的 input+output+cacheRead+cacheWrite 就是
  * 供应商上次实际看到的量。锚之后的消息(新的用户提问、工具结果)才需要估算。
  *
  * 语义由 `contracts/context-meter-cases.json` 钉住,后端 `domain/context_meter.py` 跑同一份
@@ -143,7 +147,11 @@ export function contextTokens(messages: readonly Message[]): number {
   // **cacheRead 也占窗口。** 它在计价上另算(便宜十倍),但"还能装多少"问的是占地方,两者
   // 没有区别。开着 prompt caching 时 input 只剩新增的一小段、绝大部分记在 cacheRead 上,
   // 漏掉它这里看到的水位就只有真实值的零头 —— 压缩迟迟不触发,直到某一轮直接超窗失败。
-  let total = (usage.input ?? 0) + (usage.output ?? 0) + (usage.cacheRead ?? 0);
+  //
+  // **cacheWrite 也一样。** input / cacheRead / cacheWrite 是提示词里互不相交的三段(pi 上报前 input 已经
+  // 减掉了另外两段)。Anthropic 协议开着缓存时,新进来的对话正记在 cacheWrite 上 —— 漏掉它,水位停在
+  // 「工具定义 + 系统提示」那么高,压缩迟迟不触发;而 pi 夹 max_tokens 时是算上它的(calculateContextTokens)。
+  let total = (usage.input ?? 0) + (usage.output ?? 0) + (usage.cacheRead ?? 0) + (usage.cacheWrite ?? 0);
   for (let i = anchor + 1; i < messages.length; i += 1) total += estimateTokens(messages[i]);
   return total;
 }

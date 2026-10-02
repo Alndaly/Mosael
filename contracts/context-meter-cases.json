@@ -1,6 +1,6 @@
 {
   "contract": "context-meter",
-  "version": 5,
+  "version": 6,
   "readme": "contracts/README.md",
   "description": "上下文水位:一组 pi 消息占了多少 token。sidecar 用它决定**压不压**,后端用它在界面上显示**还能聊多久**。两边算出不同的数,就会出现「水位显示 90% 而压缩迟迟不触发」。后端 backend/tests/test_context_meter_parity.py 与 sidecar test/context-meter.parity.test.mjs 跑同一份语料。同一份语料还钉住**模型的两个运行时上限**:上下文窗口和单次输出额度 —— 它们一起决定「能聊多久」和「一次能说多长」,而且都在目录查不到模型时要各自回退。",
   "notes": [
@@ -111,6 +111,27 @@
         }
       ],
       "context_tokens": 12350
+    },
+    {
+      "name": "cache-write-counts-toward-the-window",
+      "why": "**写进缓存的那一段也占窗口。** pi 上报的 input / cacheRead / cacheWrite 是提示词里互不相交的三段(input 已经减掉了另外两段,见 backend/app/domain/billing/usage.py),三段加起来才是供应商这次读了多少。Anthropic 协议(Kimi Code 订阅走的就是它)开着 prompt caching 时,新进来的对话正是记在 cacheWrite 上 —— 漏掉它,水位停在「工具定义 + 系统提示」那么高(用户截图:前一轮输入 104k,设置里写着剩余 97%),压缩也跟着迟迟不触发;而 pi 夹 max_tokens 时是把它算进去的(pi-ai utils/estimate.calculateContextTokens),两边各说各的。",
+      "messages": [
+        {
+          "role": "user",
+          "content": "问题"
+        },
+        {
+          "role": "assistant",
+          "content": "回答",
+          "usage": {
+            "input": 200,
+            "output": 30,
+            "cacheRead": 30000,
+            "cacheWrite": 80000
+          }
+        }
+      ],
+      "context_tokens": 110230
     },
     {
       "name": "messages-after-the-anchor-are-estimated",
