@@ -103,7 +103,28 @@ def require_engine(db: Session, engine: str, *, user_id: str | None) -> None:
             return
     elif any(one.id == engine for one in capabilities.plugin_providers(db, user_id, CAPABILITY)):
         return
-    raise SpeechProviderUnavailable(CAPABILITY.unknown_key, name=engine)
+    # 认不出就把能用的 id 摆出来(和开卡时 pick_speech 同一句):只说「没有这个配音引擎」,下一次照样写错。
+    raise SpeechProviderUnavailable("speechErr_unknownEngineChoose", name=engine, **engine_choices(db, user_id))
+
+
+#: 不用钥匙、不花钱的内置引擎:Edge 和本机克隆(和引擎目录里 needs_key=False 的那两条是同一组)。
+_NO_SETUP = (EDGE_ENGINE, CLONE_ENGINE)
+
+
+def engine_choices(db: Session, user_id: str | None) -> dict[str, str]:
+    """「点错了引擎」那句话里摆出来的两串:**现在**能用的引擎 id,和其中不用配置、不花钱的那几个。
+
+    配音没有默认引擎(`defaultable=False`,不替人挑一个要钥匙的),所以不说「默认是哪个」,说「哪个不用配」——
+    智能体此前点错了名字只拿到一句「没有这个配音引擎」,转头请用户去设置里给 Edge 配一个根本不用配的东西。
+    """
+    from app.domain import capabilities
+
+    usable = [one for one in capabilities.providers(db, user_id, CAPABILITY) if not one.missing]
+
+    def listed(engines: list) -> str:
+        return tr("punct_listSep").join(f"{one.id} ({one.name})" for one in engines) or "—"
+
+    return {"choices": listed(usable), "free": listed([one for one in usable if one.id in _NO_SETUP])}
 
 
 def known_engine(db: Session, engine: str) -> bool:
@@ -156,6 +177,7 @@ __all__ = [
     "SPEECH",
     "SpeechProviderUnavailable",
     "adapter_id",
+    "engine_choices",
     "engine_ready",
     "is_plugin",
     "known_engine",

@@ -399,8 +399,8 @@ MESSAGES: dict[str, dict[str, str]] = {
     "speechErr_unknownEngine": {"zh": "没有这个配音引擎:{name}", "en": "No such speech engine: {name}"},
     "speechErr_engineNotReady": {"zh": "「{plugin}」还用不了:{missing}", "en": "“{plugin}” can't be used yet: {missing}"},
     "speechErr_unknownEngineChoose": {
-        "zh": "没有叫「{name}」的配音引擎。能用的引擎(写它的 id):{choices}",
-        "en": "There is no speech engine called “{name}”. Engines you can use (give the id): {choices}",
+        "zh": "没有叫「{name}」的配音引擎。能用的引擎(写它的 id):{choices}。不用配置、不花钱的:{free}",
+        "en": "There is no speech engine called “{name}”. Engines you can use (give the id): {choices}. Free, nothing to set up: {free}",
     },
     "speechErr_pickEngineAndVoice": {
         "zh": "配音要点名引擎和音色(两者成对)。能用的引擎:{choices}。免费、不用配置的:{free}",

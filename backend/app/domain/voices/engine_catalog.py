@@ -328,6 +328,7 @@ def _engine_list(engines: list[dict[str, Any]]) -> str:
     return tr("punct_listSep").join(f"{one['id']} ({one['name']})" for one in engines) or "—"
 
 
+
 def pick_speech(db: Session, *, engine: str, voice: str, user_id: str | None, workspace_id: str) -> tuple[str, str]:
     """「引擎 + 音色」定成确定的一对 `(引擎 id, 音色)`,给**点名不全**的一方(智能体)用。
 
@@ -351,7 +352,12 @@ def pick_speech(db: Session, *, engine: str, voice: str, user_id: str | None, wo
     if engine:
         named = capabilities.resolve_named(db, user_id, CAPABILITY, engine)
         if named is None:
-            raise SpeechProviderUnavailable("speechErr_unknownEngineChoose", name=engine, choices=_engine_list(usable))
+            raise SpeechProviderUnavailable(
+                "speechErr_unknownEngineChoose",
+                name=engine,
+                choices=_engine_list(usable),
+                free=_engine_list([one for one in usable if one["free"]]),
+            )
         capabilities.pick(db, user_id, CAPABILITY, named.id)  # 缺什么(连接、本机引擎)当场说
         if not voice:
             sample = ", ".join(voices_of.get(named.id, [])[:6]) or "—"
