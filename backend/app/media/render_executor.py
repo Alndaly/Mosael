@@ -10,6 +10,8 @@ from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import NamedTuple
 
+import numpy as np
+
 from app.core.i18n import LocalizedError
 from app.core.child_process import ChildProcess, popen_text, run_logged
 
@@ -39,16 +41,48 @@ AUDIO_RATE = 48000
 DUCK_GAIN = 0.3  # ≈ −10.5 dB: how far a ducked track drops under overlapping audio (闪避)
 
 
-def _duck_volume(windows: tuple[tuple[float, float], ...]) -> str:
-    """闪避那一段 volume 滤镜(带前导逗号,可直接拼在滤镜链上);没有窗口就是空串。
+#: 闪避压下去 / 抬回来用多久(秒):压在人声开口**之前**的 30 ms 里,抬在人声结束**之后**的 30 ms 里。
+#: 此前是一刀切的 volume=enable:音乐在窗口边上瞬间掉 10 dB,听得见一声「咔」。
+DUCK_RAMP = 0.03
+#: 增益包络的采样率。包络是分段线性的(平台 + 30 ms 斜坡),1 kHz 足够,进滤镜图时再升到 48 kHz。
+DUCK_ENVELOPE_RATE = 1000
 
-    上层轨和基底轨共用它 —— 两边的窗口都已经是时间线上的绝对时间(overlay 那路是 adelay
-    之后,基底那路是 concat 之后),所以 enable 表达式的写法必须一模一样。
-    """
-    if not windows:
-        return ""
-    enable = "+".join(f"between(t,{a},{b})" for a, b in windows)
-    return f",volume=enable='{enable}':volume={DUCK_GAIN}"
+
+def _duck_envelope(windows: tuple[tuple[float, float], ...], length: float) -> np.ndarray:
+    """闪避的增益包络:窗口外 1、窗口里 DUCK_GAIN,两头各一段 DUCK_RAMP 的线性斜坡。时间是时间线时间。
+
+    **为什么是一条预先算好的包络,而不是 volume 的 enable 表达式**:此前每个窗口拼一段 `between(t,a,b)`,
+    一条配音一个窗口 —— 译配一集一两百句,表达式超过 ffmpeg 的解析上限,导出直接失败(实测 100 段左右
+    开始挂)。包络是一个文件,窗口再多它也只是长一点;窗口挨得比两段斜坡还近时取两者的小值,中间不回弹。
+
+    不用 sidechaincompress(按人声电平触发):预览(audioMix.audioGainAt)是按窗口压到 0.3 的,导出改成
+    按电平压,两边听起来就不一样了 —— 而且基底轨的人声和配音哪个算「人声」也说不清。"""
+    rate = DUCK_ENVELOPE_RATE
+    envelope = np.ones(int(math.ceil(length * rate)) + 1, dtype=np.float32)
+    ramp = max(1, int(round(DUCK_RAMP * rate)))
+    down = np.linspace(1.0, DUCK_GAIN, ramp + 1, dtype=np.float32)
+    for start, end in windows:
+        lo, hi = int(round(start * rate)), int(round(end * rate))
+        pieces = ((lo - ramp, down), (lo, np.full(max(0, hi - lo), DUCK_GAIN, np.float32)), (hi, down[::-1]))
+        for at, values in pieces:
+            first, last = max(0, at), min(len(envelope), at + len(values))
+            if last > first:
+                envelope[first:last] = np.minimum(envelope[first:last], values[first - at:last - at])
+    return envelope
+
+
+def _duck_input(windows: tuple[tuple[float, float], ...], length: float, path: Path) -> list[str]:
+    """把包络写成裸 float32 文件,返回读它的输入参数。"""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    _duck_envelope(windows, length).astype("<f4").tofile(path)
+    return ["-f", "f32le", "-ar", str(DUCK_ENVELOPE_RATE), "-ac", "1", "-i", str(path)]
+
+
+def _duck_apply(label: str, envelope_input: int, out: str) -> str:
+    """[label] × 包络 → [out]。包络升到 48 kHz、复制成双声道(不走默认的单→双混音,那会 −3 dB),再逐采样相乘。
+    包络比声音长一截(见调用处),amultiply 跟着短的那条结束,不会截掉声音。"""
+    return (f"[{envelope_input}:a]aresample={AUDIO_RATE},pan=stereo|c0=c0|c1=c0[{out}env];"
+            f"{label}[{out}env]amultiply[{out}]")
 
 
 class RenderExecutionError(LocalizedError, RuntimeError):
@@ -1096,9 +1130,11 @@ def build_ffmpeg_command(
     # 基底轨的声音是 concat 出来的 [abase]。配音压原声正是这个形状(原片在基底轨上),漏了这一路
     # 就等于整条闪避没生效:成片里两个人同时说话,而界面上那个开关是按下去了的。
     base_audio_label = "[abase]"
-    duck_base = _duck_volume(plan.base_audio_duck_windows)
-    if duck_base:
-        filters.append(f"[abase]{duck_base.lstrip(',')}[abaseduck]")
+    scratch = workdir or output_path.parent
+    if plan.base_audio_duck_windows:
+        args += _duck_input(plan.base_audio_duck_windows, plan.timeline_duration + 1.0, scratch / "duck_base.f32")
+        filters.append(_duck_apply("[abase]", input_index, "abaseduck"))
+        input_index += 1
         base_audio_label = "[abaseduck]"
     audio_label = base_audio_label
     if plan.audio_overlays:
@@ -1112,18 +1148,21 @@ def build_ffmpeg_command(
             args += seek + ["-i", str(path)]
             delay_ms = int(item.start * 1000)
             audio_fades = _fade_filters(item.fade_in, item.fade_out, item.duration, audio=True)
-            # Ducking: after adelay the stream is on timeline time, so the enable windows are
-            # absolute — drop to DUCK_GAIN while a non-ducked clip overlaps, full gain elsewhere.
-            duck = _duck_volume(item.duck_windows)
+            # 闪避:adelay 之后这条声音已经在时间线时间上,窗口是绝对时间,包络也从时间线 0 算起。
+            delayed = f"aovpre{i}" if item.duck_windows else f"aov{i}"
             filters.append(
                 f"[{input_index}:a]atrim=start={tin}:end={tout},{_audio_from(tin)}"
                 f"{atempo_filters(item.speed)}"
                 f"{_volume_expr(item.gain, item.gain_keyframes, item.duration)}"
                 f"aresample={AUDIO_RATE},aformat=channel_layouts=stereo{audio_fades},"
-                f"adelay={delay_ms}:all=1{duck}[aov{i}]"
+                f"adelay={delay_ms}:all=1[{delayed}]"
             )
-            mix_inputs.append(f"[aov{i}]")
             input_index += 1
+            if item.duck_windows:
+                args += _duck_input(item.duck_windows, item.start + item.duration + 1.0, scratch / f"duck{i}.f32")
+                filters.append(_duck_apply(f"[{delayed}]", input_index, f"aov{i}"))
+                input_index += 1
+            mix_inputs.append(f"[aov{i}]")
         if len(mix_inputs) > 1:
             filters.append(f"{''.join(mix_inputs)}amix=inputs={len(mix_inputs)}:normalize=0[amix]")
             audio_label = "[amix]"

@@ -174,7 +174,7 @@ def test_duck_windows_from_overlapping_non_ducked_clip() -> None:
     assert voice.duck_windows == ()  # the key clip itself isn't ducked
 
 
-def test_duck_and_solo_in_command() -> None:
+def test_duck_and_solo_in_command(tmp_path) -> None:
     from app.media.render_executor import build_ffmpeg_command
 
     plan = build_render_plan(
@@ -186,8 +186,9 @@ def test_duck_and_solo_in_command() -> None:
         ],
         mute_base_audio=True,
     )
-    graph = " ".join(build_ffmpeg_command(plan, lambda key: Path(f"/x/{key}"), Path("/tmp/o.mp4")))
-    assert "volume=enable='between(t,2.0,5.0)':volume=0.3" in graph  # music ducked over voice
+    graph = " ".join(build_ffmpeg_command(plan, lambda key: Path(f"/x/{key}"), tmp_path / "o.mp4", workdir=tmp_path))
+    assert "[aovpre0][aov0env]amultiply[aov0]" in graph  # music ducked over voice(增益包络,见 test_render_ducking)
+    assert (tmp_path / "duck0.f32").exists()
     assert "anullsrc" in graph  # base audio silenced by solo
 
 
@@ -431,7 +432,7 @@ def test_real_upper_video_speed_filter_and_fade(tmp_path):
     assert max(tail) <= 3
 
 
-def test_base_video_track_audio_can_be_ducked() -> None:
+def test_base_video_track_audio_can_be_ducked(tmp_path) -> None:
     """原片在**基底视频轨**上、配音在音频轨上 —— 译配就是这个形状。
 
     基底轨的声音不在 audio_overlays 里(它是 concat 出来的一整条),所以闪避必须单独有一条路。
@@ -450,8 +451,8 @@ def test_base_video_track_audio_can_be_ducked() -> None:
 
     from app.media.render_executor import build_ffmpeg_command
 
-    graph = " ".join(build_ffmpeg_command(plan, lambda key: Path(f"/x/{key}"), Path("/tmp/o.mp4")))
-    assert "[abase]volume=enable='between(t,2.0,5.0)':volume=0.3[abaseduck]" in graph
+    graph = " ".join(build_ffmpeg_command(plan, lambda key: Path(f"/x/{key}"), tmp_path / "o.mp4", workdir=tmp_path))
+    assert "[abase][abaseduckenv]amultiply[abaseduck]" in graph
     # 进混音的必须是压过的那一条。只看「图里有 [abaseduck]」不够 —— 定义它而不用它,
     # 正是这个 bug 修一半的样子。
     assert "[abaseduck][aov0]amix=" in graph
