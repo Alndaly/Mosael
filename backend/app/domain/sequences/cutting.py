@@ -5,9 +5,10 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.models import Clip, Sequence
+from app.db.models import Clip, Sequence, Track
 from app.domain.sequences._timeline import (
     MIN_CUT_REMAINDER,
     _inherited,
@@ -17,7 +18,7 @@ from app.domain.sequences._timeline import (
     _sliced_inherited,
 )
 from app.domain.sequences.errors import SequenceDomainError
-from app.domain.sequences.coverage import EPS, clip_end
+from app.domain.sequences.coverage import EPS, clip_end, remove_time_ranges
 from app.domain.sequences.journal import Journal
 from app.domain.sequences.links import linked_members, new_link_group
 
@@ -26,14 +27,15 @@ from app.domain.sequences.links import linked_members, new_link_group
 class CutClipRange:
     """Remove a source-time range from a clip (transcript-driven edit).
 
-    The clip splits into a left part (original position) and a right part
-    that ripples left to close the gap. Cuts touching an edge trim instead;
-    a cut covering everything deletes the clip.
+    波纹删除(见 _ripple_cut):片段在区间处切开、区间拿掉,同轨后面的、链接音频、字幕跟着左移。
+    贴着片段一头的就是裁掉那一头;盖住整段就整段删掉。
     """
 
     clip_id: str
     src_start: float
     src_end: float
+    #: 链接组员(分离出去的音频)剪掉同样的时间;False = 只剪这一段。
+    linked: bool = True
     actor_id: str | None = None
 
 
@@ -144,7 +146,7 @@ def cut_clip_range(db: Session, sequence_id: str, op: CutClipRange) -> Sequence:
     if min(op.src_end, clip.src_out) <= max(op.src_start, clip.src_in):
         raise SequenceDomainError("Cut range does not intersect the clip")
     journal = Journal(db, sequence)
-    _apply_clip_range_cuts(journal, clip.id, ((op.src_start, op.src_end),))
+    _ripple_cut(journal, [(clip.id, ((op.src_start, op.src_end),))], linked=op.linked)
     _record_operation(
         db,
         sequence,
@@ -158,15 +160,14 @@ def cut_clip_range(db: Session, sequence_id: str, op: CutClipRange) -> Sequence:
 
 @dataclass(frozen=True)
 class CutClipRanges:
-    """Remove several source-time ranges from one clip in a single operation.
+    """Remove several source-time ranges from one clip in a single operation (按文字剪)。
 
-    Kept pieces are laid back-to-back from the clip's original position
-    (transcript-style ripple). Recorded as apply_transcript_edit so the
-    existing original+created undo/redo path applies unchanged.
+    波纹删除,见 _ripple_cut。
     """
 
     clip_id: str
     ranges: tuple[tuple[float, float], ...]
+    linked: bool = True
     actor_id: str | None = None
 
 
@@ -181,13 +182,14 @@ class CutClipRangesBatch:
     """Remove ranges from several clips as one user gesture and one undo step."""
 
     cuts: tuple[ClipRangeCuts, ...]
+    linked: bool = True
     actor_id: str | None = None
 
 
 def cut_clip_ranges(db: Session, sequence_id: str, op: CutClipRanges) -> Sequence:
     sequence = _require_sequence(db, sequence_id)
     journal = Journal(db, sequence)
-    _apply_clip_range_cuts(journal, op.clip_id, op.ranges)
+    _ripple_cut(journal, [(op.clip_id, op.ranges)], linked=op.linked)
     _record_operation(
         db,
         sequence,
@@ -205,8 +207,7 @@ def cut_clip_ranges_batch(db: Session, sequence_id: str, op: CutClipRangesBatch)
     if len(clip_ids) != len(set(clip_ids)):
         raise SequenceDomainError("Each clip may only appear once in a batch cut")
     journal = Journal(db, sequence)
-    for cut in op.cuts:
-        _apply_clip_range_cuts(journal, cut.clip_id, cut.ranges)
+    _ripple_cut(journal, [(cut.clip_id, cut.ranges) for cut in op.cuts], linked=op.linked)
     _record_operation(
         db,
         sequence,
@@ -218,11 +219,49 @@ def cut_clip_ranges_batch(db: Session, sequence_id: str, op: CutClipRangesBatch)
     return sequence
 
 
-def _apply_clip_range_cuts(journal: Journal, clip_id: str, ranges: tuple[tuple[float, float], ...]) -> None:
-    """Apply one clip's range cuts without committing or recording an operation."""
+def _ripple_cut(
+    journal: Journal, cuts: list[tuple[str, tuple[tuple[float, float], ...]]], *, linked: bool
+) -> None:
+    """按文字剪:把片段里这几段源时间对应的**时间线时间**拿掉,真正的波纹删除。
 
-    clip = _require_clip(journal.db, journal.sequence.id, clip_id)
+    此前只把这一段切开、保留部分首尾相接,别的全不管 —— 审查实测:V1 剪掉 2–4 秒之后,同轨第二段
+    还在 10 秒、中间留着 2 秒黑场;分离出去的音频没剪,音画错开 2 秒;字幕也都晚了 2 秒。现在这几段
+    时间从下面这些轨上一起拿掉(区间里的挖掉,后面的左移补上):
 
+    - 这一段自己的轨:同轨后面的片段左移;
+    - 链接组员的轨(linked,默认):分离出去的音频剪掉同样的时间,音画仍对齐;
+    - 所有未锁定的字幕轨:落在删掉区间里的字幕删掉,跨着切口的缩短,后面的跟着左移。
+
+    别的轨(画中画、垫乐)不动:按文字剪是在剪说话的那一段,垫乐被剪出跳音比错开几秒更糟;要整条
+    时间线一起拿掉某段时间,用波纹删除的 all_tracks。时间线上没有独立的「标记」,所以没有标记要挪。
+
+    整批算一次:各段的区间先全部按**剪之前**的位置换算好,每条轨从后往前拿 —— 先拿靠前的,后面的
+    区间就全错位了。
+    """
+    db = journal.db
+    spans_by_track: dict[str, list[tuple[float, float]]] = {}
+    subtitle_tracks = db.scalars(
+        select(Track.id).where(
+            Track.sequence_id == journal.sequence.id, Track.kind == "subtitle", Track.locked.is_(False)
+        )
+    ).all()
+    for clip_id, ranges in cuts:
+        clip = _require_clip(db, journal.sequence.id, clip_id)
+        speed = clip.speed or 1.0
+        spans = [
+            (clip.timeline_start + (start - clip.src_in) / speed, clip.timeline_start + (end - clip.src_in) / speed)
+            for start, end in _removed_source(clip, ranges)
+        ]
+        tracks = {clip.track_id, *(member.track_id for member in linked_members(db, [clip], linked=linked))}
+        for track_id in tracks | set(subtitle_tracks):
+            spans_by_track.setdefault(track_id, []).extend(spans)
+    for track_id, spans in spans_by_track.items():
+        remove_time_ranges(journal, track_id, spans)
+
+
+def _removed_source(clip: Clip, ranges: tuple[tuple[float, float], ...]) -> list[tuple[float, float]]:
+    """要拿掉的源时间区间:夹进片段、合并相邻;两段之间(或贴着片段两头)剩不到最小余量的碎片一并拿掉 ——
+    留下一截不到一帧的画面,只会在成片里闪一下。"""
     clamped = sorted(
         (max(float(start), clip.src_in), min(float(end), clip.src_out))
         for start, end in ranges
@@ -230,44 +269,16 @@ def _apply_clip_range_cuts(journal: Journal, clip_id: str, ranges: tuple[tuple[f
     )
     if not clamped:
         raise SequenceDomainError("No cut range intersects the clip")
-    merged: list[list[float]] = []
-    for start, end in clamped:
-        if merged and start <= merged[-1][1]:
-            merged[-1][1] = max(merged[-1][1], end)
-        else:
-            merged.append([start, end])
-
     kept: list[tuple[float, float]] = []
-    cursor_src = clip.src_in
-    for start, end in merged:
-        if start - cursor_src > MIN_CUT_REMAINDER:
-            kept.append((cursor_src, start))
-        cursor_src = max(cursor_src, end)
-    if clip.src_out - cursor_src > MIN_CUT_REMAINDER:
-        kept.append((cursor_src, clip.src_out))
-
-    speed = clip.speed or 1.0
-    common = {
-        "workspace_id": clip.workspace_id,
-        "sequence_id": clip.sequence_id,
-        "track_id": clip.track_id,
-        "asset_id": clip.asset_id,
-        **_inherited(clip),
-    }
-    orig_in, orig_out = clip.src_in, clip.src_out
-    timeline_cursor = clip.timeline_start
-    journal.delete(clip)
-    for src_start, src_end in kept:
-        journal.create(
-            Clip(
-                timeline_start=timeline_cursor,
-                src_in=src_start,
-                src_out=src_end,
-                # 关键帧/淡变按保留段的源区间重投影(同 split);否则每段重播整段动画、并在切口淡一次。
-                **{**common, **_sliced_inherited(common, orig_in, orig_out, src_start, src_end)},
-            )
-        )
-        timeline_cursor += (src_end - src_start) / speed
+    cursor = clip.src_in
+    for start, end in clamped:
+        if start - cursor > MIN_CUT_REMAINDER:
+            kept.append((cursor, start))
+        cursor = max(cursor, end)
+    if clip.src_out - cursor > MIN_CUT_REMAINDER:
+        kept.append((cursor, clip.src_out))
+    bounds = [clip.src_in, *(edge for piece in kept for edge in piece), clip.src_out]
+    return [(start, end) for start, end in zip(bounds[::2], bounds[1::2]) if end > start]
 
 
 @dataclass

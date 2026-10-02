@@ -444,7 +444,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfNode_project_sequence_create_height": {"zh": "画布高度(默认 1080)", "en": "Canvas height (1080 by default)"},
     "wfNode_project_sequence_create_fps": {"zh": "帧率(默认 30)", "en": "Frame rate (30 by default)"},
     "wfNode_timeline_cut_ranges": {"zh": "按时间批量整理", "en": "Clean up time ranges"},
-    "wfNode_timeline_cut_ranges_desc": {"zh": "一次删除同一片段的多个源时间范围,保留部分自动首尾相接。适合根据带时间码逐字稿清理停顿、口头禅、重复和错误重录。", "en": "Remove multiple source-time ranges from one clip in a single operation and ripple the kept pieces together. Designed for transcript-driven cleanup of pauses, fillers, repetition, and false starts."},
+    "wfNode_timeline_cut_ranges_desc": {"zh": "一次删除同一片段的多个源时间范围,是真正的波纹删除:保留部分首尾相接,同轨后面的片段左移补位,从它分离出的音频剪掉同样的时间,字幕轨上落在删掉区间里的字幕删掉、后面的跟着提前;整批一步撤销。适合根据带时间码逐字稿清理停顿、口头禅、重复和错误重录。", "en": "Remove multiple source-time ranges from one clip in a single operation as a true ripple delete: kept pieces close up, later clips on the same track move left, audio detached from the clip loses the same time, and subtitles inside a removed range are deleted while later ones move earlier; one undo reverts the whole batch. Designed for transcript-driven cleanup of pauses, fillers, repetition, and false starts."},
     "wfNode_timeline_cut_ranges_clip_id": {"zh": "要整理的原始片段 id", "en": "Original clip ID to clean up"},
     "wfNode_timeline_cut_ranges_ranges": {"zh": "范围数组:[{src_start,src_end,reason,...}];空数组保持原片不变", "en": "Range array: [{src_start, src_end, reason, ...}]; an empty array keeps the clip unchanged"},
     "wfNode_timeline_cut_ranges_min_confidence": {"zh": "只执行达到此置信度的范围(默认 0,取值 0–1)", "en": "Only apply ranges at or above this confidence (0 by default; 0–1)"},

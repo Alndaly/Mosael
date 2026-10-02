@@ -101,6 +101,8 @@ def carve(journal: Journal, clip: Clip, start: float, end: float) -> Clip | None
                 timeline_start=end,
                 src_in=right_in,
                 src_out=orig_out,
+                # 链接组员在同一刻被切开时(按文字剪、跨轨波纹删除),右半段们进同一个新组。
+                link_group=journal.split_group(clip.link_group, at=end),
             )
         )
     if keep_left:
@@ -133,14 +135,24 @@ def remove_time_ranges(
     excluded = set(exclude)
     for start, end in sorted(_merged(ranges), reverse=True):
         for other in clips_on_track(journal.db, track_id):
-            if other.id not in excluded:
-                carve(journal, other, start, end)
+            if other.id in excluded:
+                continue
+            if _is_text(other) and other.timeline_start < start - EPS and clip_end(other) > end + EPS:
+                # 跨着切口的字幕 / 花字缩短就好:切成两条一模一样的字,在成片里看着是同一条,在时间线上却是两条。
+                journal.update(other, src_out=other.src_out - (end - start) * (other.speed or 1.0))
+                continue
+            carve(journal, other, start, end)
         followers = [
             other
             for other in clips_on_track(journal.db, track_id)
             if other.id not in excluded and other.timeline_start >= end - EPS
         ]
         shift(journal, followers, -(end - start))
+
+
+def _is_text(clip: Clip) -> bool:
+    """文字片段(字幕、花字):没有素材,也不是素材被删后的脱机占位。它的「源区间」只是一个时长。"""
+    return clip.asset_id is None and not clip.offline_asset
 
 
 def make_room(journal: Journal, track_id: str, start: float, end: float, *, exclude: Iterable[str]) -> None:

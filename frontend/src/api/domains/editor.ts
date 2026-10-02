@@ -93,12 +93,18 @@ export function trimClip(
   });
 }
 
+/**
+ * 按文字剪是波纹删除:同轨后面的左移,链接的音频同步剪(`linked: false` 时不剪),
+ * 未锁定字幕轨上落在区间里的字幕删掉、后面的左移;整批一步撤销。
+ */
 export function cutClipRange(
   sequenceId: string,
   clipId: string,
   body: { src_start: number; src_end: number },
+  options: LinkOption = {},
 ): Promise<Sequence> {
-  return api<Sequence>(`/api/sequences/${sequenceId}/clips/${clipId}/cut-range`, {
+  const query = options.linked === false ? "?linked=false" : "";
+  return api<Sequence>(`/api/sequences/${sequenceId}/clips/${clipId}/cut-range${query}`, {
     method: "POST",
     body: JSON.stringify(body),
   });
@@ -113,20 +119,22 @@ export function cutClipRanges(
   sequenceId: string,
   clipId: string,
   ranges: Array<{ src_start: number; src_end: number }>,
+  options: LinkOption = {},
 ): Promise<Sequence> {
   return api<Sequence>(`/api/sequences/${sequenceId}/clips/${clipId}/cut-ranges`, {
     method: "POST",
-    body: JSON.stringify({ ranges }),
+    body: JSON.stringify({ ranges, ...options }),
   });
 }
 
 export function cutClipRangesBatch(
   sequenceId: string,
   cuts: Array<{ clip_id: string; ranges: Array<{ src_start: number; src_end: number }> }>,
+  options: LinkOption = {},
 ): Promise<Sequence> {
   return api<Sequence>(`/api/sequences/${sequenceId}/clips/cut-ranges`, {
     method: "POST",
-    body: JSON.stringify({ cuts }),
+    body: JSON.stringify({ cuts, ...options }),
   });
 }
 

@@ -172,6 +172,8 @@ class CutClipRangeRequest(ApiModel):
 
 class CutClipRangesRequest(ApiModel):
     ranges: list[CutClipRangeRequest] = Field(min_length=1)
+    #: 链接组员(分离出去的音频)剪掉同样的时间;False = 只剪这一段。
+    linked: bool = True
 
 
 class ClipRangeCutsRequest(ApiModel):
@@ -183,6 +185,8 @@ class CutClipRangesBatchRequest(ApiModel):
     """一次字幕裁切手势涉及的全部片段。整批只产生一条时间线操作。"""
 
     cuts: list[ClipRangeCutsRequest] = Field(min_length=1)
+    #: 链接组员(分离出去的音频)剪掉同样的时间;False = 只剪点到的这些段。字幕轨总是跟着左移。
+    linked: bool = True
 
 
 class SplitClipRequest(ApiModel):

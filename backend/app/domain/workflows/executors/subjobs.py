@@ -788,10 +788,11 @@ def timeline_clear(db: Session, scope: RunScope, config: dict[str, Any]) -> dict
 
 @register("timeline_cut_ranges")
 def timeline_cut_ranges(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
-    """一次删除同一片段的多个源时间范围，并把保留段首尾相接。
+    """一次删除同一片段的多个源时间范围 —— 和剪辑台按文字剪同一个波纹删除(cutting._ripple_cut):
+    保留段首尾相接,同轨后面的左移,分离出的音频同步剪,字幕跟着删 / 左移,整批一步撤销。
 
-    不能循环调用 cut_clip_range：第一次裁切后原 clip_id 已经不存在。批量算子在删除原片段前先
-    归并全部范围，因此正好承接逐字稿分析节点产出的多个停顿、口头禅和重录区间。
+    不循环调用 cut_clip_range:范围都是**原片段**的源时间,一次交给批量算子,它先归并、再从后往前拿,
+    正好承接逐字稿分析节点产出的多个停顿、口头禅和重录区间。
     """
     from app.domain.sequences.operations import CutClipRanges, cut_clip_ranges
 

@@ -2393,7 +2393,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Cut Clip Range */
+        /**
+         * Cut Clip Range
+         * @description 按文字剪的单个区间(波纹删除,见 cutting._ripple_cut)。`linked=false`:链接的音频不跟着剪。
+         */
         post: operations["cut_clip_range_api_sequences__sequence_id__clips__clip_id__cut_range_post"];
         delete?: never;
         options?: never;
@@ -8719,11 +8722,21 @@ export interface components {
         CutClipRangesBatchRequest: {
             /** Cuts */
             cuts: components["schemas"]["ClipRangeCutsRequest"][];
+            /**
+             * Linked
+             * @default true
+             */
+            linked: boolean;
         };
         /** CutClipRangesRequest */
         CutClipRangesRequest: {
             /** Ranges */
             ranges: components["schemas"]["CutClipRangeRequest"][];
+            /**
+             * Linked
+             * @default true
+             */
+            linked: boolean;
         };
         /**
          * DailyActivityOut
@@ -18802,7 +18815,9 @@ export interface operations {
     };
     cut_clip_range_api_sequences__sequence_id__clips__clip_id__cut_range_post: {
         parameters: {
-            query?: never;
+            query?: {
+                linked?: boolean;
+            };
             header?: never;
             path: {
                 sequence_id: string;

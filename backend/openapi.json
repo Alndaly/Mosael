@@ -6269,6 +6269,7 @@
           "sequences"
         ],
         "summary": "Cut Clip Range",
+        "description": "按文字剪的单个区间(波纹删除,见 cutting._ripple_cut)。`linked=false`:链接的音频不跟着剪。",
         "operationId": "cut_clip_range_api_sequences__sequence_id__clips__clip_id__cut_range_post",
         "parameters": [
           {
@@ -6287,6 +6288,16 @@
             "schema": {
               "type": "string",
               "title": "Clip Id"
+            }
+          },
+          {
+            "name": "linked",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": true,
+              "title": "Linked"
             }
           }
         ],
@@ -24549,6 +24560,11 @@
             "type": "array",
             "minItems": 1,
             "title": "Cuts"
+          },
+          "linked": {
+            "type": "boolean",
+            "title": "Linked",
+            "default": true
           }
         },
         "type": "object",
@@ -24567,6 +24583,11 @@
             "type": "array",
             "minItems": 1,
             "title": "Ranges"
+          },
+          "linked": {
+            "type": "boolean",
+            "title": "Linked",
+            "default": true
           }
         },
         "type": "object",

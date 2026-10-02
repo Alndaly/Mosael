@@ -34,6 +34,19 @@ class Journal:
         self.db = db
         self.sequence = sequence
         self.entries: list[dict[str, Any]] = []
+        self._split_groups: dict[tuple[str, float], str] = {}
+
+    def split_group(self, group: str | None, *, at: float) -> str | None:
+        """同一次编辑里、同一个链接组在同一时刻被切开时,右半段们进同一个新组(左半段留原组)。
+
+        按文字剪会在同一时刻切开画面和它链接的音频,两刀是两次 carve,各自不认识对方 —— 由这次编辑
+        记着「这一组在这一刻切出的右半段该进哪个组」。
+        """
+        if not group:
+            return None
+        from app.domain.sequences.links import new_link_group
+
+        return self._split_groups.setdefault((group, round(at, 6)), new_link_group())
 
     def create(self, clip: Clip) -> Clip:
         self.db.add(clip)

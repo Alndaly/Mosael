@@ -270,14 +270,19 @@ def cut_clip_ranges_batch(
         )
         for cut in body.cuts
     )
-    _apply(lambda: cut_clip_ranges_batch_operation(db, sequence_id, CutClipRangesBatch(cuts=cuts)))
+    _apply(lambda: cut_clip_ranges_batch_operation(db, sequence_id, CutClipRangesBatch(cuts=cuts, linked=body.linked)))
     return _edited_response(db, sequence_id)
 
 
 @router.post("/sequences/{sequence_id}/clips/{clip_id}/cut-range", response_model=SequenceOut)
-def cut_clip_range(sequence_id: str, clip_id: str, body: CutClipRangeRequest, db: Tx, user: CurrentUser) -> Response:
+def cut_clip_range(
+    sequence_id: str, clip_id: str, body: CutClipRangeRequest, db: Tx, user: CurrentUser, linked: bool = True
+) -> Response:
+    """按文字剪的单个区间(波纹删除,见 cutting._ripple_cut)。`linked=false`:链接的音频不跟着剪。"""
     require_sequence_access(db, user, sequence_id, perm="edit")
-    _apply(lambda: cut_clip_range_operation(db, sequence_id, CutClipRange(clip_id=clip_id, **body.model_dump())))
+    _apply(
+        lambda: cut_clip_range_operation(db, sequence_id, CutClipRange(clip_id=clip_id, linked=linked, **body.model_dump()))
+    )
     return _edited_response(db, sequence_id)
 
 
@@ -287,7 +292,11 @@ def cut_clip_ranges(
 ) -> Response:
     require_sequence_access(db, user, sequence_id, perm="edit")
     ranges = tuple((item.src_start, item.src_end) for item in body.ranges)
-    _apply(lambda: cut_clip_ranges_operation(db, sequence_id, CutClipRanges(clip_id=clip_id, ranges=ranges)))
+    _apply(
+        lambda: cut_clip_ranges_operation(
+            db, sequence_id, CutClipRanges(clip_id=clip_id, ranges=ranges, linked=body.linked)
+        )
+    )
     return _edited_response(db, sequence_id)
 
 
