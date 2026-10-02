@@ -212,6 +212,11 @@ MESSAGES: dict[str, dict[str, str]] = {
     "jobMsg_ttsFailed": {"zh": "配音生成失败", "en": "Voiceover generation failed"},
     "jobMsg_dubRunning": {"zh": "字幕配音中({done}/{total})", "en": "Dubbing subtitles ({done}/{total})"},
     "jobMsg_dubDone": {"zh": "字幕配音完成:{done} 条", "en": "Dubbed {done} subtitle(s)"},
+    # 同一句、同一把嗓子已经配过的不再合成:说出来,不让人以为那几句被漏掉了。
+    "jobMsg_dubDoneSkipped": {
+        "zh": "字幕配音完成:新配 {done} 条,{skipped} 条已用同一把嗓子配过、没有重配",
+        "en": "Dubbed {done} subtitle(s); {skipped} already had this voice and were left as they were",
+    },
     # 部分失败单独一句:把「10 条里成了 9 条」说成「配音完成」,用户要到时间线上一段段找才发现少了一条。
     "jobMsg_dubPartial": {"zh": "字幕配音完成:{done} 条成功,{failed} 条失败", "en": "Dubbed {done} subtitle(s), {failed} failed"},
     # 1.5 倍、占满空当还是念不完的那几句压到了下一句上:说出来,不让人在成片里自己听出来。

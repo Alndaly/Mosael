@@ -249,7 +249,40 @@ def _room_for(db: Session, clip: Clip | None) -> float | None:
 _OVERLAP_TOLERANCE = 0.05
 
 
+def _dub_tracks(db: Session, sequence_id: str) -> list[Track]:
+    """这条时间线上的配音轨(认 role,不认名字 —— 见 _dub_track)。"""
+    return [track for track in db.scalars(select(Track).where(Track.sequence_id == sequence_id))
+            if track.kind == "audio" and track.role == "dub"]
+
+
+def _line_identity(text: str, synthesis: dict) -> dict[str, str]:
+    """一段配音「是哪一句、哪把嗓子念的」(见 DUB_LINE_KEY)。"""
+    return {"text": text, "voice": voice_identity(synthesis)}
+
+
+def _existing_dubs(db: Session, sequence_id: str, start: float, end: float) -> list[tuple[Clip, dict]]:
+    """配音轨上**属于这一句**的那几段配音:起点落在这条字幕的时间窗里、素材上记着 DUB_LINE_KEY。
+
+    按起点认、不按「有没有重叠」认:上一句 1.5 倍速也念不完时,它的尾巴会压进这一句的时间窗
+    (见 _speed_for),那是上一句的配音 —— 重配这一句时把它删了,上一句就哑了。
+    用户自己放到配音轨上的音频(素材上没有 DUB_LINE_KEY)一律不算:那不是配音这件事产出的。
+    """
+    found: list[tuple[Clip, dict]] = []
+    for track in _dub_tracks(db, sequence_id):
+        for clip in sorted(track.clips or [], key=lambda one: one.timeline_start):
+            if not (start - _OVERLAP_TOLERANCE <= clip.timeline_start < end):
+                continue
+            asset = db.get(Asset, clip.asset_id) if clip.asset_id else None
+            identity = (asset.media_info or {}).get(DUB_LINE_KEY) if asset is not None else None
+            if isinstance(identity, dict):
+                found.append((clip, identity))
+    return found
+
+
 def _run_dub(job_id: str) -> None:
+    from app.domain.sequences.grouping import OperationGroup
+    from app.domain.sequences.operations import DeleteClip, delete_clip
+
     with unit_of_work() as db:
         job = db.get(Job, job_id)
         if job is None:
@@ -273,8 +306,14 @@ def _run_dub(job_id: str) -> None:
 
     from app.domain.voices.voices import start_synthesis
 
+    #: **整次配音在撤销栈上是一步。** 建轨、每句的插入与调速、删掉被重配替换的旧配音、原声处理,
+    #: 全部记进这一组(见 sequences/grouping)—— 此前一句 3 步,1000 句是两千多次 ⌘Z。
+    group = OperationGroup(sequence_id, label="subtitle_dub", actor_id=created_by)
     done = 0
     failed = 0
+    #: 同一句、同一把嗓子、同样的文本已经配过的:不再合成(那是一次付费调用),也不再叠一段。
+    #: 中途断了的配音再跑一遍,就只补缺的那几句。
+    skipped = 0
     #: 1.5 倍、占满空当还是念不完,压到下一句(或念过片尾)的条数和秒数 —— 如实报出来,不静默叠着念。
     #: 不顺延后一句:顺延会把后面每一句都推离它自己的字幕和画面,错得更多、也更难找。
     overlaps = 0
@@ -292,6 +331,16 @@ def _run_dub(job_id: str) -> None:
                 text = dub_text(clip.text_override or "", line)
                 slot_seconds = max(0.0, (clip.src_out - clip.src_in) / (clip.speed or 1.0))
                 timeline_start = clip.timeline_start
+                slot_end = timeline_start + max(slot_seconds, _OVERLAP_TOLERANCE)
+                existing = _existing_dubs(db, sequence_id, timeline_start, slot_end)
+                if any(identity == _line_identity(text, synthesis) for _, identity in existing):
+                    skipped += 1
+                    track_id = track_id or existing[0][0].track_id
+                    job = db.get(Job, job_id)
+                    if not finish_job(db, job, status="running", progress=(index + 1) / max(1, total)):
+                        return
+                    say(job, "jobMsg_dubRunning", done=done + skipped, total=total)
+                    continue
                 sequence = db.get(Sequence, sequence_id)
                 try:
                     child = start_synthesis(
@@ -312,23 +361,29 @@ def _run_dub(job_id: str) -> None:
                 asset_id = _await_child(child_id)
             except DubError as exc:
                 # 一条失败不该拖垮整批:已经配好的那些留在轨上,失败的条数最后报出来。
+                # 这一句原来的配音(换嗓子之前那段)也留着 —— 新的没配成,不能先把旧的删了。
                 failed += 1
                 logger.warning("字幕配音:第 %s 条失败:%s", index + 1, str(exc)[:200])
                 continue
 
-            with unit_of_work() as db:
+            with unit_of_work() as db, group.collect(db):
                 asset = db.get(Asset, asset_id)
                 audio_seconds = float((asset.media_info or {}).get("duration") or 0.0) if asset else 0.0
                 if audio_seconds <= 0:
                     failed += 1
                     continue
+                # **重配是替换,不是叠加。** 这一句原来的配音(换了嗓子、改了字之后再配一次)先整段删掉 ——
+                # 放下即覆盖(sequences/coverage)只裁掉新这段盖住的那一截:新配的比旧的短时,旧配音的尾巴
+                # 还留在轨上接着念。只删属于这一句的(见 _existing_dubs),而且到新的这段真配好了才删。
+                for stale, _identity in _existing_dubs(db, sequence_id, timeline_start, slot_end):
+                    delete_clip(db, sequence_id, DeleteClip(clip_id=stale.id, actor_id=created_by))
+                patch_media_info(db, asset_id, {DUB_LINE_KEY: _line_identity(text, synthesis)})
                 # 落哪条轨:**已有配音轨就用它**,没有才新建。每配一次多一条轨的话,改几句台词
                 # 重配几段,时间线上就摞起一叠只有一两段音频的轨。
                 #
                 # 而且只在**第一条音频真的要落地的这一刻**才建。建在合成之前的话,一次全军覆没的
                 # 配音会留下一条空轨 —— 空轨看起来和「配音没生成」一模一样,用户先怀疑的是功能坏了,
                 # 不是那次失败(这条 bug 就是这么被报上来的)。
-                patch_media_info(db, asset_id, {DUB_LINE_KEY: {"text": text, "voice": voice_identity(synthesis)}})
                 if not track_id:
                     track_id = _dub_track(db, sequence_id, created_by)
                 speed = _speed_for(audio_seconds, slot_seconds, rooms[index]) if match_duration else None
@@ -344,6 +399,7 @@ def _run_dub(job_id: str) -> None:
                         src_in=0.0,
                         src_out=audio_seconds,
                         speed=speed or 1.0,
+                        actor_id=created_by,
                     ),
                 )
                 if rooms[index] is not None:
@@ -355,13 +411,13 @@ def _run_dub(job_id: str) -> None:
                 job = db.get(Job, job_id)
                 if not finish_job(db, job, status="running", progress=(index + 1) / max(1, total)):
                     return
-                say(job, "jobMsg_dubRunning", done=done, total=total)
+                say(job, "jobMsg_dubRunning", done=done + skipped, total=total)
 
         with unit_of_work() as db:
             job = db.get(Job, job_id)
             if job is None:
                 return
-            if done == 0:
+            if done == 0 and skipped == 0:
                 #: 失败原因和任务消息同一条规矩:落库存 key,出口按读的人的语言翻。
                 if finish_job(
                     db, job, status="failed",
@@ -369,32 +425,37 @@ def _run_dub(job_id: str) -> None:
                 ):
                     say(job, "jobMsg_dubFailed")
                     emit_job_event(db, job.id, "job.failed", {})
-            elif finish_job(db, job, status="running"):
-                # 原声的处理放在**任务里**、成功之前:分离要跑一阵,而任务说"完成"时成片应当已经是
-                # 最终的样子。先确认没被取消 —— 取消了的配音不该再去动原片的音轨。
-                # 这一笔提交是有意的:finish_job 拿了 SQLite 的写锁,分离一跑就是几分钟,不先放掉,
-                # 别的会话(任务进度、界面上的剪辑)等过 busy_timeout 就写不进去。
-                db.commit()
-                # 原声处理自己管会话(分离要先拿渲染名额、再开会话,见 original_audio),它提交了之后
-                # 这里 expire 一遍,读到别的会话写进来的取消。
-                applied = apply_original_audio(sequence_id, track_id, original_audio, actor_id=created_by)
-                db.expire_all()
-                job = db.get(Job, job_id)
-                # 部分失败也是成功的一种:配好的那些是真的配好了。但**不能都说成「完成」** ——
-                # 「10 条里成了 9 条」说成「配音完成」,用户要到时间线上一段段找才发现少了一条。
-                result = {"track_id": track_id, "done": done, "failed": failed, "original_audio": applied,
-                          "overlaps": overlaps, "overlap_seconds": round(overlap_seconds, 1)}
-                if finish_job(db, job, status="succeeded", progress=1.0, result=result):
-                    seconds = f"{overlap_seconds:.1f}"
-                    if failed and overlaps:
-                        say(job, "jobMsg_dubPartialOverlap", done=done, failed=failed, overlaps=overlaps, seconds=seconds)
-                    elif failed:
-                        say(job, "jobMsg_dubPartial", done=done, failed=failed)
-                    elif overlaps:
-                        say(job, "jobMsg_dubDoneOverlap", done=done, overlaps=overlaps, seconds=seconds)
-                    else:
-                        say(job, "jobMsg_dubDone", done=done)
-                    emit_job_event(db, job.id, "job.succeeded", {"track_id": track_id})
+                return
+            # 先确认没被取消 —— 取消了的配音不该再去动原片的音轨。
+            if not finish_job(db, job, status="running"):
+                return
+
+        # 原声的处理放在**任务里**、成功之前:分离要跑一阵,而任务说"完成"时成片应当已经是
+        # 最终的样子。它自己管会话(分离要先拿渲染名额、再开会话,见 original_audio),
+        # 改时间线的那几步记进同一组,和配音一起一步撤销。
+        applied = apply_original_audio(sequence_id, track_id, original_audio, actor_id=created_by, group=group)
+
+        with unit_of_work() as db:
+            job = db.get(Job, job_id)
+            if job is None:
+                return
+            # 部分失败也是成功的一种:配好的那些是真的配好了。但**不能都说成「完成」** ——
+            # 「10 条里成了 9 条」说成「配音完成」,用户要到时间线上一段段找才发现少了一条。
+            result = {"track_id": track_id, "done": done, "failed": failed, "skipped": skipped,
+                      "original_audio": applied, "overlaps": overlaps, "overlap_seconds": round(overlap_seconds, 1)}
+            if finish_job(db, job, status="succeeded", progress=1.0, result=result):
+                seconds = f"{overlap_seconds:.1f}"
+                if failed and overlaps:
+                    say(job, "jobMsg_dubPartialOverlap", done=done, failed=failed, overlaps=overlaps, seconds=seconds)
+                elif failed:
+                    say(job, "jobMsg_dubPartial", done=done, failed=failed)
+                elif overlaps:
+                    say(job, "jobMsg_dubDoneOverlap", done=done, overlaps=overlaps, seconds=seconds)
+                elif skipped:
+                    say(job, "jobMsg_dubDoneSkipped", done=done, skipped=skipped)
+                else:
+                    say(job, "jobMsg_dubDone", done=done)
+                emit_job_event(db, job.id, "job.succeeded", {"track_id": track_id})
     except Exception as exc:  # noqa: BLE001 — 任何意外都要落进任务行,否则会话永远停在 running
         logger.exception("字幕配音任务 %s 失败", job_id)
         with unit_of_work() as db:
