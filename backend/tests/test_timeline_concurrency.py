@@ -185,7 +185,8 @@ def test_跨轨波纹删除挪到别的轨上那段_中间有人改过它_拒() 
     owner, mate, sid, _seen, first, _second = _setup()
     state = owner.get(f"/api/sequences/{sid}").json()
     audio_track = next(track for track in state["tracks"] if track["kind"] == "audio")["id"]
-    asset = _clip(state, first)["asset_id"]
+    # 音频轨上只放音频素材(视频素材进不了音频轨,见 sequences/fitting)。
+    asset = insert_asset(state["workspace_id"], kind="audio", name="a", file_key="y", media_info={"duration": 60})
     seen = owner.post(
         f"/api/sequences/{sid}/clips",
         json={"track_id": audio_track, "asset_id": asset, "timeline_start": 20, "src_in": 0, "src_out": 3},

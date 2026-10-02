@@ -79,7 +79,7 @@ def test_指定的轨道类型不对_拦下() -> None:
     with pytest.raises(WorkflowDomainError) as caught:
         _run("timeline_append", wf_id, {"sequence_id": sequence_id, "asset_id": _asset(ws, "audio"),
                                         "track_id": video_track})
-    assert caught.value.key == "wfErr_trackKindMismatch"
+    assert caught.value.key == "seqErr_trackKindMismatch"
 
 
 def test_出点夹到素材时长_图片不夹() -> None:

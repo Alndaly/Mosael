@@ -13,13 +13,10 @@ from sqlalchemy.orm import Session, object_session
 
 from app.db.models import Asset, Clip, Sequence, Track
 from app.domain.sequences.errors import SequenceDomainError, SequenceNotFound
+from app.domain.sequences.fitting import TRACK_FOR_ASSET
 
 #: 图片在时间线上的定格时长(秒)。图片没有 duration,不给就是一段长度为 0 的空片段。
 STILL_SECONDS = 5.0
-
-#: 素材种类 → 该进哪种轨道。没列的(图片)按视频走 —— 图片在时间线上就是一段定格视频。
-TRACK_FOR_ASSET = {"audio": "audio"}
-
 
 def track_for_asset(sequence: Sequence, asset_kind: str) -> Track | None:
     """这种素材默认进哪条轨:第一条**没锁的**同类轨道(绝大多数时间线只有一条视频轨和一条音频轨)。

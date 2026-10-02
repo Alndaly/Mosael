@@ -183,6 +183,14 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "轨道「{name}」已锁定,先解锁再改",
         "en": "Track \"{name}\" is locked. Unlock it to make changes.",
     },
+    "seqErr_trackKindMismatch": {
+        "zh": "这份素材要放在 {want} 轨道上,选的那条是 {kind} 轨道",
+        "en": "This asset goes on a {want} track; the chosen track is a {kind} track.",
+    },
+    "seqErr_clipStartsPastAssetEnd": {
+        "zh": "入点 {src_in} 秒已经在素材末尾({duration} 秒)之后",
+        "en": "The in point ({src_in}s) is past the end of the asset ({duration}s).",
+    },
     "seqErr_unknownOp": {"zh": "不认识的时间线操作: {kind}", "en": "Unknown timeline operation: {kind}"},
     "seqErr_trimNoRoom": {
         "zh": "这里没有地方放下这一段:修剪会让它短到没有,或者两边都贴着别的片段",

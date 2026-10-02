@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 from tests.test_clips_never_overlap import Timeline
+from tests.util import create_asset
 
 
 def _detached(line: Timeline, start: float = 2, length: float = 6, src_in: float = 10):
@@ -62,9 +63,12 @@ def test_修剪画面_声音修同一条边_整组一起夹() -> None:
     assert _clip(head, line.video) == [(3, 11, 16)]
     assert _clip(head, audio_track) == [(3, 11, 16)]
 
-    # A1 上紧跟着放一段别的声音:画面的尾巴往右拉,整组停在那段声音的头上。
+    # A1 上紧跟着放一段别的声音:画面的尾巴往右拉,整组停在那段声音的头上。(音频轨上只放音频素材。)
+    music = create_asset(line.client, {
+        "workspace_id": line.sequence["workspace_id"], "project_id": line.sequence["project_id"], "kind": "audio",
+        "name": "M", "file_key": "media/m.wav", "media_info": {"duration": 60}})["id"]
     line.ok(line.client.post(f"/api/sequences/{line.id}/clips", json={
-        "track_id": audio_track, "asset_id": line.asset, "timeline_start": 9, "src_in": 40, "src_out": 41}))
+        "track_id": audio_track, "asset_id": music, "timeline_start": 9, "src_in": 40, "src_out": 41}))
     tail = line.checked(lambda: line.ok(line.client.patch(f"/api/sequences/{line.id}/clips/{video['id']}/trim", json={
         "timeline_start": 3, "src_in": 11, "src_out": 25})))
     assert _clip(tail, line.video) == [(3, 11, 17)]

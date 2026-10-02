@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from tests.test_clips_never_overlap import Timeline
 from tests.test_linked_clips import _clip, _detached
+from tests.util import create_asset
 
 
 def _track(line: Timeline, kind: str) -> str:
@@ -12,9 +13,19 @@ def _track(line: Timeline, kind: str) -> str:
 
 
 def _put(line: Timeline, track: str, start: float, length: float, src_in: float = 0.0) -> None:
+    kind = next(t["kind"] for t in line.get()["tracks"] if t["id"] == track)
     line.ok(line.client.post(f"/api/sequences/{line.id}/clips", json={
-        "track_id": track, "asset_id": line.asset, "timeline_start": start, "src_in": src_in,
-        "src_out": src_in + length}))
+        "track_id": track, "asset_id": _audio_asset(line) if kind == "audio" else line.asset, "timeline_start": start,
+        "src_in": src_in, "src_out": src_in + length}))
+
+
+def _audio_asset(line: Timeline) -> str:
+    """音频轨上只放音频素材(视频素材进不了音频轨,见 sequences/fitting)。"""
+    if not hasattr(line, "audio_asset"):
+        line.audio_asset = create_asset(line.client, {
+            "workspace_id": line.sequence["workspace_id"], "project_id": line.sequence["project_id"], "kind": "audio",
+            "name": "A", "file_key": "media/a.wav", "media_info": {"duration": 600}})["id"]
+    return line.audio_asset
 
 
 def test_波纹删除画面_链接的声音同删_两条轨各自左移_别的轨不动() -> None:
@@ -49,7 +60,7 @@ def test_波纹影响所有未锁定轨_这段时间从整条时间线上拿掉_
         line.ok(line.client.post(f"/api/sequences/{line.id}/text-clips", json={
             "track_id": subtitles, "text": text, "timeline_start": start, "duration": 1}))
     logo = _track(line, "video")
-    _put(line, logo, 6, 1, src_in=200)
+    _put(line, logo, 6, 1, src_in=50)  # 素材 60 秒:入点要在素材里面
     line.ok(line.client.patch(f"/api/sequences/{line.id}/tracks/{logo}", json={"locked": True}))
     middle = line.clips()[1]
 
@@ -59,7 +70,7 @@ def test_波纹影响所有未锁定轨_这段时间从整条时间线上拿掉_
     assert _clip(after, music) == [(0, 100, 104), (4, 108, 110)], "垫乐里那 4 秒一起拿掉,前后接上"
     cues = sorted(next(t for t in after["tracks"] if t["id"] == subtitles)["clips"], key=lambda c: c["timeline_start"])
     assert [(c["text_override"], c["timeline_start"]) for c in cues] == [("一", 1), ("三", 4)], "落在里面的字幕删掉,后面的跟着左移"
-    assert _clip(after, logo) == [(6, 200, 201)], "锁定轨原样不动"
+    assert _clip(after, logo) == [(6, 50, 51)], "锁定轨原样不动"
 
     # 单个删除的接口同样认 all_tracks。
     line.ok(line.client.post(f"/api/sequences/{line.id}/undo"))

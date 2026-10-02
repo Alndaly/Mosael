@@ -29,6 +29,7 @@ from app.domain.sequences.coverage import (
     remove_time_ranges,
 )
 from app.domain.sequences.errors import SequenceDomainError, SequenceNotFound
+from app.domain.sequences.fitting import fit_asset_on_track
 from app.domain.sequences.journal import Journal
 from app.domain.sequences.links import linked_members, with_links
 
@@ -123,6 +124,7 @@ def insert_clip(db: Session, sequence_id: str, op: InsertClip) -> Clip:
         #: 文档(ADR 0031)没有画面和声音可放 —— 渲染时会炸在 ffmpeg 里,在这里就说清楚。
         raise SequenceDomainError("seqErr_assetNotMedia", name=asset.name)
     _validate_clip_range(op.timeline_start, op.src_in, op.src_out)
+    src_out = fit_asset_on_track(asset, track, op.src_in, op.src_out)
     speed = require_speed(op.speed)
 
     journal = Journal(db, sequence)
@@ -134,7 +136,7 @@ def insert_clip(db: Session, sequence_id: str, op: InsertClip) -> Clip:
             asset_id=asset.id,
             timeline_start=op.timeline_start,
             src_in=op.src_in,
-            src_out=op.src_out,
+            src_out=src_out,
             speed=speed,
         )
     )
@@ -273,12 +275,14 @@ def trim_clip(db: Session, sequence_id: str, op: TrimClip) -> Sequence:
         previous_end, next_start = neighbours(db, one, exclude=group_ids)
         head_floor = max(head_floor, previous_end - one.timeline_start)
         tail_ceiling = min(tail_ceiling, next_start - clip_end(one))
-    for member in members:
-        member_speed = member.speed or 1.0
-        head_floor = max(head_floor, -member.src_in / member_speed)  # 组员的源不能早于 0
-        duration = _source_duration(member)
+    # 源区间也夹:不早于素材的 0、不晚于素材的末尾 —— 点中的这段和组员一样(往外拉出去的那一截渲染时是空白;
+    # 此前只夹了组员,点中的这段能拉成 10 秒素材上的 40 秒片段)。
+    for one in (clip, *members):
+        one_speed = one.speed or 1.0
+        head_floor = max(head_floor, -one.src_in / one_speed)
+        duration = _source_duration(one)
         if duration is not None:
-            tail_ceiling = min(tail_ceiling, (duration - member.src_out) / member_speed)
+            tail_ceiling = min(tail_ceiling, (duration - one.src_out) / one_speed)
     clamped_head, clamped_tail = max(head, head_floor), min(tail, tail_ceiling)
     start += clamped_head - head
     src_in += (clamped_head - head) * speed

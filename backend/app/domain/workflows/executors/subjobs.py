@@ -638,22 +638,20 @@ def timeline_append(db: Session, scope: RunScope, config: dict[str, Any]) -> dic
     `{"kind": "insert_clip", "timeline_start": …}` —— 那个 timeline_start 还得自己算,
     而"接到末尾"本来就该由机器算。
     """
-    from app.domain.sequences.append import TRACK_FOR_ASSET, asset_span, track_end, track_for_asset
+    from app.domain.sequences.append import asset_span, track_end, track_for_asset
+    from app.domain.sequences.fitting import TRACK_FOR_ASSET, fit_asset_on_track
     from app.domain.sequences.operations import InsertClip, insert_clip
 
     sequence_id = _sequence_in(db, scope, str(config.get("sequence_id", "")).strip()).id
     asset = _asset_in(db, scope, str(config.get("asset_id", "")).strip())
     want = TRACK_FOR_ASSET.get(asset.kind, "video")
 
-    # 截取范围:留空就是整段素材。有时长的素材(视频、音频)出点夹到素材末尾 —— 超出去的那一截
-    # 渲染时是没有画面也没有声音的空白;图片没有"末尾",定格多久由这里说了算。
+    # 截取范围:留空就是整段素材。出点夹到素材末尾、素材进不进得了这条轨,由放片段的那一套规矩
+    # 说了算(sequences.fitting.fit_asset_on_track)—— 剪辑页的插入过的也是它,两边不再各写一份。
     src_in = _seconds(config, "start", "timeline_append") or 0.0
     src_out = _seconds(config, "end", "timeline_append")
     if src_out is None:
         src_out = asset_span(asset)
-    probed = (asset.media_info or {}).get("duration")
-    if asset.kind in ("video", "audio") and probed:
-        src_out = min(src_out, float(probed))
     if src_in < 0:
         raise WorkflowDomainError("wfErr_trimStartNegative")
     if src_out <= src_in:
@@ -661,32 +659,31 @@ def timeline_append(db: Session, scope: RunScope, config: dict[str, Any]) -> dic
     at = _seconds(config, "at", "timeline_append")
     if at is not None and at < 0:
         raise WorkflowDomainError("wfErr_startNegative")
-    speed = _fit_speed(src_out - src_in, config.get("max_duration"))
-    #: 加速到上限仍放不下、又要求不许超出去(口播不能压到下一段、成片尾不能留黑):把尾巴裁到正好放下。
-    trimmed = 0.0
     limit = _seconds(config, "max_duration", "timeline_append")
-    if _yes_no(config, "trim_overflow", default=False) and limit is not None and limit > 0:
-        overflow = (src_out - src_in) / (speed or 1.0) - limit
-        if overflow > 1e-6:
-            trimmed = overflow
-            src_out = src_in + limit * (speed or 1.0)
+    trim_overflow = _yes_no(config, "trim_overflow", default=False)
     track_id = str(config.get("track_id", "")).strip()
 
-    def append(sequence: Sequence) -> tuple[str, float, float]:
+    def append(sequence: Sequence) -> tuple[str, float, float, float]:
         tracks = list(sequence.tracks or [])
         if track_id:
             track = next((one for one in tracks if one.id == track_id), None)
             if track is None:
                 raise WorkflowDomainError("wfErr_trackNotOnSequence")
-            # 和剪辑页拖片段(placement.move_clip)同一条规矩:音频进不了视频轨,反之亦然。
-            if track.kind != want:
-                raise WorkflowDomainError("wfErr_trackKindMismatch", params={"want": want, "kind": track.kind})
         else:
             # 留空就挑第一条同类轨道 —— 绝大多数时间线只有一条视频轨和一条音频轨,
             # 逼用户先跑一个「看一眼时间线」把 id 取出来是纯仪式。
             track = track_for_asset(sequence, asset.kind)
             if track is None:
                 raise WorkflowDomainError("wfErr_noSuchTrackKind", params={"kind": want})
+        clip_out = fit_asset_on_track(asset, track, src_in, src_out)
+        speed = _fit_speed(clip_out - src_in, config.get("max_duration"))
+        #: 加速到上限仍放不下、又要求不许超出去(口播不能压到下一段、成片尾不能留黑):把尾巴裁到正好放下。
+        trimmed = 0.0
+        if trim_overflow and limit is not None and limit > 0:
+            overflow = (clip_out - src_in) / (speed or 1.0) - limit
+            if overflow > 1e-6:
+                trimmed = overflow
+                clip_out = src_in + limit * (speed or 1.0)
         # 落点:给了 `at` 就放在那一秒(口播要对齐它那一镜的画面,而不是接在上一段口播后面);
         # 没给就接到末尾 —— 这条轨道上最后一个片段的终点,空轨道就是 0。在锁里算:并行分支刚接上去的
         # 那一段也算在"末尾"里。
@@ -695,12 +692,12 @@ def timeline_append(db: Session, scope: RunScope, config: dict[str, Any]) -> dic
         clip = insert_clip(
             db,
             sequence.id,
-            InsertClip(track_id=track.id, asset_id=asset.id, timeline_start=start, src_in=src_in, src_out=src_out,
+            InsertClip(track_id=track.id, asset_id=asset.id, timeline_start=start, src_in=src_in, src_out=clip_out,
                        speed=speed or 1.0),
         )
-        return clip.id, start, (src_out - src_in) / (speed or 1.0)
+        return clip.id, start, (clip_out - src_in) / (speed or 1.0), trimmed
 
-    clip_id, timeline_start, span = _write_timeline(db, scope, sequence_id, append)
+    clip_id, timeline_start, span, trimmed = _write_timeline(db, scope, sequence_id, append)
     return {
         "clip_id": clip_id,
         "timeline_start": timeline_start,
