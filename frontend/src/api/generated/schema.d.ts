@@ -12932,10 +12932,15 @@ export interface components {
          */
         SubtitleDubRequest: {
             /** Clip Ids */
-            clip_ids: string[];
+            clip_ids?: string[];
+            /**
+             * Track Id
+             * @default
+             */
+            track_id: string;
             /**
              * Match Duration
-             * @default false
+             * @default true
              */
             match_duration: boolean;
             /**

@@ -16,7 +16,8 @@ import type { SpeechVoice } from "@/features/voice/useSpeechVoice";
 import { useWatchedJob } from "@/lib/useWatchedJob";
 import { formatBytes } from "@/lib/bytes";
 import { useEditorStore } from "@/features/editor/editorStore";
-import { CLONE_ENGINE } from "@/api/domains/speech";
+import { CLONE_ENGINE, DEFAULT_MATCH_DURATION } from "@/api/domains/speech";
+import { formatTimecode } from "@/lib/time";
 
 type Line = "all" | "first" | "last";
 
@@ -24,42 +25,60 @@ type Line = "all" | "first" | "last";
  * 给时间线上的字幕配音:字幕 → 逐条合成 → 落到一条新的音频轨。
  *
  * 「用哪个引擎、哪个声音」不在这里 —— 那是 SpeechVoiceFields,和它共用一份状态。这里只管
- * 字幕特有的:配哪几条、双语念哪一行、要不要拉到段落长度、这段文字这个引擎念不念得了。
+ * 字幕特有的:配哪条轨、配哪几条、双语念哪一行、要不要拉到段落长度、这段文字这个引擎念不念得了。
  *
- * **范围跟着时间线上的选中走。** 字幕列表里每一行的配音按钮做的就是「选中这一条、切过来」,
- * 所以「只配这一条」不需要另一套入口。
+ * **一次只配一条字幕轨。** 双语字幕分成两条轨时(原文一条、译文一条),此前这里把所有字幕轨的条目
+ * 一股脑交下去,同一秒上一句念原文、一句念译文。有多条时摆一个选择,默认最下面那条(先有的原文轨);
+ * 时间线上选中了哪条轨的字幕,就默认那条。后端也拒绝跨轨的一批(subtitle_dub.start_subtitle_dub)。
+ *
+ * **字幕列表行内的配音按钮只配那一条**(`focusClipId`),不去改时间线上的选中 —— 选中是全局的,
+ * 借它传「配哪一条」会顺手把用户在时间线上框好的东西冲掉。
  */
 export function SubtitleDub({
   sequence,
   voice,
   onOpenSubtitles,
+  focusClipId,
+  onClearFocus,
 }: {
   sequence: Sequence;
   voice: SpeechVoice;
   onOpenSubtitles?: () => void;
+  /** 只配这一条(字幕列表行内的配音按钮)。 */
+  focusClipId?: string | null;
+  onClearFocus?: () => void;
 }) {
   const t = useI18n();
   const qc = useQueryClient();
-  const subtitles = React.useMemo(
-    () =>
-      (sequence.tracks ?? [])
-        .filter((track) => track.kind === "subtitle")
-        .flatMap((track) => track.clips ?? [])
-        .sort((a, b) => a.timeline_start - b.timeline_start),
+  const subtitleTracks = React.useMemo(
+    () => (sequence.tracks ?? []).filter((track) => track.kind === "subtitle").sort((a, b) => a.position - b.position),
     [sequence],
   );
+  const subtitles = React.useMemo(
+    () => subtitleTracks.flatMap((track) => track.clips ?? []).sort((a, b) => a.timeline_start - b.timeline_start),
+    [subtitleTracks],
+  );
   const selectedClipIds = useEditorStore((state) => state.selectedClipIds);
-  const selected = subtitles.filter((clip) => selectedClipIds.includes(clip.id));
+  const focused = focusClipId ? subtitles.find((clip) => clip.id === focusClipId) ?? null : null;
+  //: 默认配哪条轨:选中的字幕在哪条轨上就是哪条,否则最下面那条。用户挑过就听他的。
+  const [pickedTrackId, setPickedTrackId] = React.useState<string>("");
+  const selectedTrackId = subtitles.find((clip) => selectedClipIds.includes(clip.id))?.track_id;
+  const trackId = subtitleTracks.some((track) => track.id === pickedTrackId)
+    ? pickedTrackId
+    : (selectedTrackId ?? subtitleTracks[0]?.id ?? "");
+  const onTrack = subtitles.filter((clip) => clip.track_id === trackId);
+  const selected = onTrack.filter((clip) => selectedClipIds.includes(clip.id));
   const [selectedOnly, setSelectedOnly] = React.useState(true);
-  const pool = selectedOnly && selected.length > 0 ? selected : subtitles;
+  const pool = focused ? [focused] : selectedOnly && selected.length > 0 ? selected : onTrack;
   const targets = pool.filter((clip) => (clip.text_override ?? "").trim());
 
   // 双语字幕是「原文\n译文」两行。整段念 = 先念原文再念译文,一条 3 秒的字幕配出 12 秒的音。
   // 默认全念(单语字幕就该全念),真有多行时才把这个选择摆出来。
   const [line, setLine] = React.useState<Line>("all");
   const hasBilingual = targets.some((clip) => (clip.text_override ?? "").trim().includes("\n"));
-  // 匹配段落长度默认**关**:变速会改语速听感,超出 ±20% 就明显不自然。
-  const [matchDuration, setMatchDuration] = React.useState(false);
+  // 匹配段落长度的默认值和后端一处(subtitle_dub.DEFAULT_MATCH_DURATION):开。变速夹在 0.9–1.5 倍,
+  // 念出来仍是人话;此前这里默认关、智能体和工作流默认开,同一条时间线两个入口配出来不一样。
+  const [matchDuration, setMatchDuration] = React.useState(DEFAULT_MATCH_DURATION);
   const [originalAudio, setOriginalAudio] = React.useState<OriginalAudio>("duck");
   //: 用哪份 F5 权重。空 = 按文字自动挑 —— 中日韩俄阿印能认出来,而法德西意芬都写拉丁字母,
   //: 没有任何字符能证明"这是法语而不是英语",只能由用户明说。
@@ -118,6 +137,7 @@ export function SubtitleDub({
       dubSubtitles(sequence.id, {
         ...voice.params,
         clip_ids: targets.map((clip) => clip.id),
+        track_id: focused ? focused.track_id : trackId,
         match_duration: matchDuration,
         line,
         original_audio: originalAudio,
@@ -179,6 +199,35 @@ export function SubtitleDub({
           </Select>
         </VoiceField>
       )}
+      {focused ? (
+        <div className="flex items-center justify-between gap-2 rounded-md border border-border px-2 py-1.5 text-ui-xs">
+          <span className="min-w-0 truncate">
+            {t("subtitleDubFocused").replace("{time}", formatTimecode(focused.timeline_start))}
+          </span>
+          {onClearFocus && (
+            <Button size="sm" variant="ghost" onClick={onClearFocus}>
+              {t("subtitleDubFocusClear")}
+            </Button>
+          )}
+        </div>
+      ) : (
+        subtitleTracks.length > 1 && (
+          <VoiceField label={t("subtitleDubTrack")}>
+            <Select value={trackId} onValueChange={setPickedTrackId}>
+              <SelectTrigger className="w-full min-w-0" aria-label={t("subtitleDubTrack")}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {subtitleTracks.map((track) => (
+                  <SelectItem key={track.id} value={track.id}>
+                    {track.name} · {t("subtitleDubTrackCount").replace("{n}", String((track.clips ?? []).length))}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </VoiceField>
+        )
+      )}
       <VoiceField label={t("subtitleDubOriginal")}>
         <Select value={originalAudio} onValueChange={(next) => setOriginalAudio(next as OriginalAudio)}>
           <SelectTrigger className="w-full min-w-0" aria-label={t("subtitleDubOriginal")} title={t("subtitleDubOriginalHint")}>
@@ -192,7 +241,7 @@ export function SubtitleDub({
         </Select>
       </VoiceField>
       <div className="grid gap-2 text-ui-xs text-muted-foreground">
-        {selected.length > 0 && (
+        {!focused && selected.length > 0 && (
           <label className="flex items-center justify-between gap-2">
             <span>{t("subtitleTranslateSelectedOnly").replace("{n}", String(selected.length))}</span>
             <Switch checked={selectedOnly} onCheckedChange={setSelectedOnly} />

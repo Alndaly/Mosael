@@ -62,17 +62,24 @@ function sequenceWith(texts: string[]) {
       {
         id: "t1",
         kind: "subtitle",
+        name: "S1",
+        position: 0,
         clips: texts.map((text, index) => ({
-          id: `c${index}`, asset_id: null, asset_kind: "", timeline_start: index * 5, src_in: 0, src_out: 3, speed: 1, text_override: text,
+          id: `c${index}`, track_id: "t1", asset_id: null, asset_kind: "", timeline_start: index * 5, src_in: 0, src_out: 3, speed: 1, text_override: text,
         })),
       },
     ],
   } as never;
 }
 
-type Served = { voices?: unknown[]; texts?: string[]; weights?: unknown[]; onOpenSubtitles?: () => void; admin?: boolean };
+type Served = {
+  voices?: unknown[]; texts?: string[]; weights?: unknown[]; onOpenSubtitles?: () => void; admin?: boolean;
+  sequence?: unknown; focusClipId?: string;
+};
 
-function renderPanel({ voices: voiceData = voices, texts = ["一条字幕"], weights = BASE_WEIGHTS, onOpenSubtitles, admin = true }: Served = {}) {
+function renderPanel({
+  voices: voiceData = voices, texts = ["一条字幕"], weights = BASE_WEIGHTS, onOpenSubtitles, admin = true, sequence, focusClipId,
+}: Served = {}) {
   const dubRequests: Array<Record<string, unknown>> = [];
   globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
@@ -109,8 +116,9 @@ function renderPanel({ voices: voiceData = voices, texts = ["一条字幕"], wei
       <VoicePanel
         workspace={{ id: "w1", name: "W" } as never}
         project={{ id: "p1" } as never}
-        sequence={sequenceWith(texts)}
+        sequence={(sequence ?? sequenceWith(texts)) as never}
         onOpenSubtitles={onOpenSubtitles}
+        dubFocusClipId={focusClipId}
       />
     </QueryClientProvider>,
   );
@@ -311,6 +319,39 @@ describe("给字幕配音", () => {
     expect(dubRequests[0]).toMatchObject({ clip_ids: ["c1"], engine: "builtin:clone", voice_id: "v1", clone_engine: "f5-tts", speed: 1 });
   });
 
+  it("两条字幕轨(双语分轨):一次只配一条,默认最下面那条,请求里带上轨道", async () => {
+    const cue = (id: string, track: string, text: string) => ({
+      id, track_id: track, asset_id: null, asset_kind: "", timeline_start: 0, src_in: 0, src_out: 3, speed: 1, text_override: text,
+    });
+    const sequence = {
+      id: "s1", workspace_id: "w1", revision: 1,
+      tracks: [
+        { id: "zh", kind: "subtitle", name: "S2", position: 3, clips: [cue("z1", "zh", "你好")] },
+        { id: "en", kind: "subtitle", name: "S1", position: 2, clips: [cue("e1", "en", "Hello")] },
+      ],
+    };
+    const user = userEvent.setup();
+    const { dubRequests } = renderPanel({ sequence });
+    expect(await screen.findByRole("combobox", { name: "subtitleDubTrack" })).toBeInTheDocument();
+    const apply = await screen.findByRole("button", { name: /subtitleDubApply/ });
+    await waitFor(() => expect(apply).toBeEnabled());
+    await user.click(apply);
+    await waitFor(() => expect(dubRequests).toHaveLength(1));
+    expect(dubRequests[0]).toMatchObject({ clip_ids: ["e1"], track_id: "en" });
+  });
+
+  it("字幕列表里点了某一条:只配那一条,不看时间线上的选中", async () => {
+    useEditorStore.getState().selectClip("c0");
+    const user = userEvent.setup();
+    const { dubRequests } = renderPanel({ texts: ["第一条", "第二条"], focusClipId: "c1" });
+    expect(await screen.findByText("subtitleDubFocused")).toBeInTheDocument();
+    const apply = await screen.findByRole("button", { name: /subtitleDubApply/ });
+    await waitFor(() => expect(apply).toBeEnabled());
+    await user.click(apply);
+    await waitFor(() => expect(dubRequests).toHaveLength(1));
+    expect(dubRequests[0]).toMatchObject({ clip_ids: ["c1"], track_id: "t1" });
+  });
+
   it("日文字幕 + 本地克隆:当场说缺哪份权重,并把下载放在手边", async () => {
     renderPanel({ texts: ["お漏らし。", "ここに寝てるんでしょ？"] });
     expect(await screen.findByText(/subtitleDubModelMissing/)).toBeInTheDocument();
@@ -347,10 +388,10 @@ describe("给字幕配音", () => {
     await waitFor(() => expect(screen.queryByText(/subtitleDubModelMissing|subtitleDubLang/)).toBeNull());
   });
 
-  it("缩放到段落长度默认关 —— 变速会改语速听感,值不值由用户按素材定", async () => {
+  it("缩放到段落长度默认开 —— 和智能体、工作流同一个默认(变速夹在 0.9–1.5 倍)", async () => {
     renderPanel();
     const toggle = await screen.findByRole("switch");
-    expect(toggle.getAttribute("data-state")).toBe("unchecked");
+    expect(toggle.getAttribute("data-state")).toBe("checked");
   });
 
   it("时间线上没有字幕:说清楚,并给一个去字幕页的按钮", async () => {

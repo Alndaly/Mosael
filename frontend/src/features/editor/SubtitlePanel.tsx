@@ -68,8 +68,8 @@ export function SubtitlePanel({
   onPreviewStyle?: (style: Record<string, unknown>) => void;
   onSetStyle?: (style: Record<string, unknown>) => void;
   onDeleteClip: (clipId: string) => void;
-  /** 切到「配音」页。配音在那里做,这里只给入口。 */
-  onDub?: () => void;
+  /** 切到「配音」页。配音在那里做,这里只给入口。带 clipId = 只配这一条(不改时间线上的选中)。 */
+  onDub?: (clipId?: string) => void;
 }) {
   const t = useI18n();
   const noteStrings = useNoteStrings();
@@ -99,10 +99,9 @@ export function SubtitlePanel({
         useEditorStore.getState().setPlayhead(clip.timeline_start);
         selectClip(clip.id);
       },
-      dub: (clipId) => {
-        selectClip(clipId);
-        latest.current.onDub?.();
-      },
+      // 只配这一条:把是哪一条交给配音页,**不去改时间线上的选中** —— 选中是全局的,此前借它传
+      // 「配哪一条」,顺手把用户在时间线上框好的一批冲掉了。
+      dub: (clipId) => latest.current.onDub?.(clipId),
       remove: (clipId) => latest.current.onDeleteClip(clipId),
       setText: (clipId, text) => latest.current.onSetText(clipId, text),
     }),
@@ -202,7 +201,7 @@ export function SubtitlePanel({
           <SubtitleTranslate workspaceId={sequence.workspace_id} subtitles={subtitles} onApplyTexts={onApplyTexts} />
         )}
         {subtitles.length > 0 && onDub && (
-          <button type="button" className={PILL} title={t("subtitleDub")} onClick={onDub}>
+          <button type="button" className={PILL} title={t("subtitleDub")} onClick={() => onDub()}>
             <AudioLines size={12} /> {t("subtitleDub")}
           </button>
         )}
@@ -268,8 +267,7 @@ const SubtitleRow = React.memo(function SubtitleRow({
           {formatTimecode(clip.timeline_start)} – {formatTimecode(clipEnd(clip))}
         </button>
         <span className="flex shrink-0 items-center gap-1">
-          {/* 给这一条配音 = 选中它、切到「配音」页。配音页的范围跟着选中走,
-              所以不需要第二套"只配这一条"的表单。 */}
+          {/* 给这一条配音 = 切到「配音」页、只配这一条(不改时间线上的选中)。 */}
           {canDub && (
             <button
               type="button"

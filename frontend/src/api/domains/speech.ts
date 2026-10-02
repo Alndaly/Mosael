@@ -8,6 +8,11 @@ import { API_BASE, api, apiBlob, getAuthToken } from "@/api/transport";
  */
 /** 克隆音色(工作区配音库里的那些嗓子)。没选引擎时按它算。 */
 export const CLONE_ENGINE = "builtin:clone";
+/**
+ * 字幕配音「压进原字幕长度」默认开不开 —— **抄的是后端 subtitle_dub.DEFAULT_MATCH_DURATION**,
+ * 由 dubDefaults.parity.test.ts 对着 openapi.json 里的默认值钉住。剪辑台、智能体、工作流是同一个默认。
+ */
+export const DEFAULT_MATCH_DURATION = true;
 /** Edge:不要钥匙,音色名里带着语言(见 editor/dubLanguage)。 */
 export const EDGE_ENGINE = "builtin:edge";
 /** 播客引擎。一次产出一整段双人对话 —— 它有自己的表单(AI 生成 → 音频 → 播客)。 */
@@ -162,6 +167,8 @@ export function dubSubtitles(
   sequenceId: string,
   body: {
     clip_ids: string[];
+    /** 配哪条字幕轨。一次只配一条:条目跨轨会被后端拒绝。 */
+    track_id?: string;
     match_duration?: boolean;
     line?: "all" | "first" | "last";
     original_audio?: OriginalAudio;

@@ -140,6 +140,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "这条时间线上有多条字幕轨,请指明配哪一条",
         "en": "This timeline has more than one subtitle track — say which one to dub.",
     },
+    "dubErr_clipsAcrossSubtitleTracks": {
+        "zh": "选中的字幕分在不止一条字幕轨上,一次只能配一条轨 —— 双语字幕两条轨一起配会把两种语言同时念出来",
+        "en": "The selected subtitles span more than one subtitle track. Dub one track at a time — dubbing both tracks of a bilingual pair reads both languages at once.",
+    },
     "dubErr_nothingToDub": {"zh": "选中的字幕里没有可配音的文本", "en": "The selected subtitles have no text to dub."},
     "dubErr_childMissing": {"zh": "合成任务不见了", "en": "The synthesis job has disappeared."},
     "dubErr_childNoAudio": {"zh": "合成任务报成功却没有产出音频", "en": "The synthesis job reported success but produced no audio."},

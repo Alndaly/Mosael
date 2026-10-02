@@ -90,12 +90,13 @@ describe("去配音页的入口", () => {
     expect(screen.getAllByLabelText("subtitleDubThis")).toHaveLength(2);
   });
 
-  it("点某一条的入口:选中那一条,再切到配音页", async () => {
+  it("点某一条的入口:只配那一条切到配音页,不动时间线上的选中", async () => {
     const onDub = vi.fn();
+    useEditorStore.getState().selectClip("c0");
     renderPanel(["第一条", "第二条"], onDub);
     await userEvent.click(screen.getAllByLabelText("subtitleDubThis")[1]);
-    expect(useEditorStore.getState().selectedClipIds).toEqual(["c1"]);
-    expect(onDub).toHaveBeenCalledOnce();
+    expect(onDub).toHaveBeenCalledWith("c1");
+    expect(useEditorStore.getState().selectedClipIds).toEqual(["c0"]);
   });
 
   it("底部的「配音」也切过去,不再在这里弹一张表单", async () => {

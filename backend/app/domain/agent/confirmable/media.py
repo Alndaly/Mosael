@@ -172,8 +172,10 @@ def _summarize_dub_subtitles(db: Session, payload: dict[str, Any]) -> str:
         scope = fragment("confirm_dubScopeTrack")
     else:
         scope = fragment("confirm_dubScopeTrackCounted", count=subtitle_cues)
-    fit = fragment("confirm_dubFit") if payload.get("match_duration", True) else ""
     from app.domain.voices.original_audio import DEFAULT_ORIGINAL_AUDIO
+    from app.domain.voices.subtitle_dub import DEFAULT_MATCH_DURATION
+
+    fit = fragment("confirm_dubFit") if payload.get("match_duration", DEFAULT_MATCH_DURATION) else ""
 
     original = fragment(_ORIGINAL_AUDIO_SUMMARY.get(str(payload.get("original_audio") or DEFAULT_ORIGINAL_AUDIO), ""))
     return "confirm_dubSubtitles", {"scope": scope, "fit": fit, "original": original}
@@ -184,18 +186,17 @@ def _execute_dub_subtitles(db: Session, confirmation: Any, actor: str | None) ->
     from app.domain.voices.engine_catalog import synthesis_params
     from app.domain.voices.speech import CLONE_ENGINE
     from app.domain.voices.original_audio import DEFAULT_ORIGINAL_AUDIO
-    from app.domain.voices.subtitle_dub import start_subtitle_dub, subtitle_clip_ids
+    from app.domain.voices.subtitle_dub import DEFAULT_MATCH_DURATION, dub_targets, start_subtitle_dub
 
     sequence_id = str(payload.get("sequence_id") or "")
-    clip_ids = [str(one) for one in (payload.get("clip_ids") or []) if str(one).strip()]
-    if not clip_ids:
-        clip_ids = subtitle_clip_ids(db, sequence_id, str(payload.get("track_id") or ""))
+    named = [str(one) for one in (payload.get("clip_ids") or []) if str(one).strip()]
+    clip_ids = dub_targets(db, sequence_id, named, str(payload.get("track_id") or ""))
     engine = str(payload.get("engine") or "").strip() or CLONE_ENGINE
     job = start_subtitle_dub(
         db,
         sequence_id=sequence_id,
         clip_ids=clip_ids,
-        match_duration=bool(payload.get("match_duration", True)),
+        match_duration=bool(payload.get("match_duration", DEFAULT_MATCH_DURATION)),
         line=str(payload.get("line") or "all"),
         created_by=actor,
         synthesis=synthesis_params(

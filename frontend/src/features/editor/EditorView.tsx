@@ -123,6 +123,8 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
   // (面板宽度早就是这么存的,见 PANEL_SIZES_KEY)。用项目里已有的那个钩子,它自带白名单:
   // 哪天某个 tab 被删掉,存着旧值的用户不会卡在一个不存在的页面上。
   const panels = useEditorPanels();
+  //: 字幕列表里点了某一条的配音按钮:配音页只配那一条。单独一份状态,不借时间线上的选中。
+  const [dubFocusClipId, setDubFocusClipId] = React.useState<string | null>(null);
   // 剪辑助手与工作流/画板助手共用 CanvasAgentChat。开合与停靠方式属于工作台偏好，
   // 切项目或刷新时不应该无故消失，因此沿用页面级持久化状态。
   const [agentOpen, setAgentOpen] = usePersistentTab<"on" | "off">("editor-agent", "off", ["on", "off"]);
@@ -963,7 +965,14 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
           onAddToTimeline={addAssetToTimeline}
         />
       ) : panels.tab === "voice" ? (
-        <VoicePanel workspace={workspace} project={project} sequence={sequence} onOpenSubtitles={() => panels.setTab("subtitle")} />
+        <VoicePanel
+          workspace={workspace}
+          project={project}
+          sequence={sequence}
+          onOpenSubtitles={() => panels.setTab("subtitle")}
+          dubFocusClipId={dubFocusClipId}
+          onClearDubFocus={() => setDubFocusClipId(null)}
+        />
       ) : (
         <section aria-label={t(panels.tab === "transcript" ? "transcriptTab" : "subtitleTab")} className="editor-pane min-h-0 overflow-hidden bg-workspace-panel grid grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)]">
           {panels.tab === "transcript" ? (
@@ -994,7 +1003,10 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
                 subtitleStyleMutation.mutate(style);
               }}
               onDeleteClip={(clipId) => deleteClipMutation.mutate(clipId)}
-              onDub={() => panels.setTab("voice")}
+              onDub={(clipId) => {
+                setDubFocusClipId(clipId ?? null);
+                panels.setTab("voice");
+              }}
             />
           )}
         </section>

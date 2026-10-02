@@ -34454,13 +34454,18 @@
             },
             "type": "array",
             "maxItems": 500,
-            "minItems": 1,
             "title": "Clip Ids"
+          },
+          "track_id": {
+            "type": "string",
+            "maxLength": 64,
+            "title": "Track Id",
+            "default": ""
           },
           "match_duration": {
             "type": "boolean",
             "title": "Match Duration",
-            "default": false
+            "default": true
           },
           "line": {
             "type": "string",
@@ -34546,9 +34551,6 @@
           }
         },
         "type": "object",
-        "required": [
-          "clip_ids"
-        ],
         "title": "SubtitleDubRequest",
         "description": "给选中的字幕条配音。音色/引擎那一套与 /tts/synthesize 同构 —— 配音就是合成,只是文本\n来自字幕、产物直接落到时间线上。"
       },

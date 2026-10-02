@@ -6,6 +6,7 @@ from datetime import datetime
 from typing import Literal
 from pydantic import Field
 from app.api.schemas.base import ApiModel
+from app.domain.voices.subtitle_dub import DEFAULT_MATCH_DURATION
 
 class AgentVoiceOut(ApiModel):
     """语音对话的音色。**和配音的 TTS 默认是两行配置** —— 见 db.models.AgentVoicePref。"""
@@ -80,10 +81,13 @@ class SubtitleDubRequest(ApiModel):
     """给选中的字幕条配音。音色/引擎那一套与 /tts/synthesize 同构 —— 配音就是合成,只是文本
     来自字幕、产物直接落到时间线上。"""
 
-    clip_ids: list[str] = Field(min_length=1, max_length=500)
-    #: 把配音拉伸/压缩到字幕段落的长度。**默认关** —— 变速会改变语速听感,超出 ±20% 就开始
-    #: 明显不自然,值不值这个代价由用户按素材决定,而不是替他默认承受。
-    match_duration: bool = False
+    #: 点名要配的字幕条;留空 = 整条字幕轨(`track_id`,只有一条字幕轨时可省)。规则见 subtitle_dub.dub_targets。
+    clip_ids: list[str] = Field(default_factory=list, max_length=500)
+    #: 配哪条字幕轨。点名了条目时只取这条轨上的;条目跨两条字幕轨会被拒(一次只配一条轨)。
+    track_id: str = Field(default="", max_length=64)
+    #: 把配音拉伸/压缩到字幕段落的长度。默认值归领域层(subtitle_dub.DEFAULT_MATCH_DURATION),
+    #: 剪辑台、智能体、工作流、MCP 是同一个。
+    match_duration: bool = DEFAULT_MATCH_DURATION
     #: 双语字幕(「原文\n译文」)念哪一行。整段念的话是先念一遍原文再念一遍译文 ——
     #: 一条 3 秒的字幕能配出 12 秒的音。默认全念:单语字幕就该全念,那是绝大多数情况。
     line: str = Field(default="all", pattern="^(all|first|last)$")

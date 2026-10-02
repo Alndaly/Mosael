@@ -63,6 +63,7 @@ def dub_subtitles(
     sequence_id: str,
     *,
     clip_ids: list[str],
+    track_id: str = "",
     match_duration: bool,
     line: str,
     original_audio: str,
@@ -78,7 +79,7 @@ def dub_subtitles(
     """
     from app.domain.voices.engine_catalog import synthesis_params
     from app.domain.voices.speech import CLONE_ENGINE
-    from app.domain.voices.subtitle_dub import start_subtitle_dub
+    from app.domain.voices.subtitle_dub import dub_targets, start_subtitle_dub
 
     sequence = require_sequence_access(db, user, sequence_id, perm="edit")
     ensure_workspace_perm(db, user, sequence.workspace_id, "ai")
@@ -95,7 +96,7 @@ def dub_subtitles(
     return start_subtitle_dub(
         db,
         sequence_id=sequence_id,
-        clip_ids=list(clip_ids),
+        clip_ids=dub_targets(db, sequence_id, list(clip_ids), track_id),
         match_duration=match_duration,
         line=line,
         created_by=user.id,

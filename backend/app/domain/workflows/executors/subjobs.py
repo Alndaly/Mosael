@@ -1117,7 +1117,7 @@ def dub_subtitles(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[
     """
     from app.core.i18n import get_current_locale, t
     from app.domain.voices.original_audio import DEFAULT_ORIGINAL_AUDIO
-    from app.domain.voices.subtitle_dub import DubError, start_subtitle_dub
+    from app.domain.voices.subtitle_dub import DEFAULT_MATCH_DURATION, DubError, start_subtitle_dub
 
     sequence = _sequence_in(db, scope, str(config.get("sequence_id", "")).strip())
     clip_ids = id_list(config.get("clip_ids"))
@@ -1142,7 +1142,7 @@ def dub_subtitles(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[
             db,
             sequence_id=sequence.id,
             clip_ids=clip_ids,
-            match_duration=_yes_no(config, "match_duration", default=True),
+            match_duration=_yes_no(config, "match_duration", default=DEFAULT_MATCH_DURATION),
             line=str(config.get("line") or "all"),
             created_by=current_actor(db),
             synthesis=synthesis,

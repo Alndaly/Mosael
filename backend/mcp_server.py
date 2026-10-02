@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 from app.domain.generation.catalog import SOURCE_ROLE_HELP, SOURCE_ROLE_LABELS
+from app.domain.voices.subtitle_dub import DEFAULT_MATCH_DURATION
 import contextlib
 import contextvars
 import json
@@ -2318,7 +2319,7 @@ def dub_subtitles(
     sequence_id: str,
     clip_ids: list[str] | None = None,
     track_id: str = "",
-    match_duration: bool = True,
+    match_duration: bool = DEFAULT_MATCH_DURATION,
     line: str = "all",
     voice_id: str = "",
     engine: str = "",
@@ -2331,18 +2332,16 @@ def dub_subtitles(
     Use when the user wants an existing timeline's subtitles voiced — dubbing a video
     into another language, or narrating captions. Run inspect_sequence first to see the
     subtitle track and its cues. Leave clip_ids empty to dub every cue on `track_id`
-    (or on the only subtitle track). Requires approval because it spends AI budget.
+    (or on the only subtitle track); one track per call. Requires approval because it spends AI budget.
 
     match_duration speeds each spoken line up or down so it fills the original cue's
     slot and stays in sync with the picture. `line` picks which line of a bilingual
     cue to speak: all / first / last. Voice: either voice_id (a cloned voice from the
     user's voice library) or engine + engine_voice (a stock voice; list_speech_engines gives the
-    engine ids, e.g. "builtin:edge", and their voices). The dub lands on
-    its own audio track, so the user undoes the whole thing by deleting that one track.
-    original_audio says what happens to the existing sound once the dub is in: duck (lowered
-    while the dub speaks — narration over ambience), mute (translated dubbing: two voices at
-    once is wrong), keep, or separate (drop only the original voice, keep the music; falls back
-    to mute when no separation engine is installed).
+    engine ids, e.g. "builtin:edge", and their voices). The dub is one undo step; re-dubbing
+    a cue replaces its old dub. original_audio once the dub is in: duck (lowered while the dub
+    speaks), mute (translated dubbing: original footage silent under the dub, music stays), keep,
+    or separate (drop only the original voice; fails without a separation engine).
     Do NOT use to create the subtitles themselves — use edit_timeline's insert_text_clip.
     """
     confirmation = _open_card(

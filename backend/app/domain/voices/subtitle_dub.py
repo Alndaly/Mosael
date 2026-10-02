@@ -41,6 +41,11 @@ logger = logging.getLogger(__name__)
 _CHILD_TIMEOUT_SECONDS = 20 * 60
 _POLL_SECONDS = 0.5
 
+#: 「把每句配音压进原字幕的长度」默认开不开。**剪辑台、智能体、工作流、MCP 的默认值都从这里取** ——
+#: 此前剪辑台默认关、另外三处默认开:同一条时间线从两个入口配,一个对得上画面、一个一路念过下一句。
+#: 开:变速夹在 0.9–1.5 倍(见下),念出来仍是人话;不想变速的人在入口上关掉它。
+DEFAULT_MATCH_DURATION = True
+
 #: 配音「压回原长度」时变速的范围。夹住而不是报错:一条字幕的文本长到要 3 倍速才塞得进去,那是文本和时长
 #: 本身不匹配,不该让整批配音失败。
 #:
@@ -101,6 +106,21 @@ def _subtitle_clips(db: Session, sequence_id: str, clip_ids: list[str], line: st
     return sorted(chosen, key=lambda clip: clip.timeline_start)
 
 
+def dub_targets(db: Session, sequence_id: str, clip_ids: list[str], track_id: str = "") -> list[str]:
+    """「这次配哪几条」—— 剪辑台、智能体、工作流三个入口共用的那一条规则。
+
+    - 点名了条目:就是这些;给了 `track_id` 时只取那条轨上的。
+    - 没点名:整条字幕轨(见 subtitle_clip_ids)。
+
+    条目跨了两条字幕轨由 start_subtitle_dub 拒绝(双语分两条轨时两种语言会被一起念出来)。
+    """
+    if not clip_ids:
+        return subtitle_clip_ids(db, sequence_id, track_id)
+    if not track_id:
+        return list(clip_ids)
+    return [clip_id for clip_id in clip_ids if (clip := db.get(Clip, clip_id)) is not None and clip.track_id == track_id]
+
+
 def subtitle_clip_ids(db: Session, sequence_id: str, track_id: str = "") -> list[str]:
     """「要配的那批」的默认答案:一条字幕轨上的全部字幕条,按时间顺序。
 
@@ -148,6 +168,10 @@ def start_subtitle_dub(
     clips = _subtitle_clips(db, sequence_id, clip_ids, line)
     if not clips:
         raise DubError("dubErr_nothingToDub")
+    if len({clip.track_id for clip in clips}) > 1:
+        # **一次只配一条字幕轨。** 双语视频常见的形态是原文一条、译文一条:两条一起配,同一秒上一句念原文、
+        # 一句念译文。剪辑台此前把所有字幕轨的条目一股脑交下来,而后端照单全收(探针 P2)。
+        raise DubError("dubErr_clipsAcrossSubtitleTracks")
 
     job = create_job(
         db,

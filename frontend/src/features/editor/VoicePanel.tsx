@@ -20,11 +20,16 @@ export function VoicePanel({
   project,
   sequence,
   onOpenSubtitles,
+  dubFocusClipId,
+  onClearDubFocus,
 }: {
   workspace: Workspace;
   project: Project;
   sequence: Sequence;
   onOpenSubtitles?: () => void;
+  /** 字幕列表里点了某一条的配音按钮:只配那一条。 */
+  dubFocusClipId?: string | null;
+  onClearDubFocus?: () => void;
 }) {
   const t = useI18n();
   const voice = useSpeechVoice(workspace.id);
@@ -36,7 +41,13 @@ export function VoicePanel({
       <div className="grid min-h-0 flex-1 content-start gap-5 overflow-y-auto overflow-x-hidden p-4">
         <div className="grid gap-3">
           <SpeechVoiceFields voice={voice} />
-          <SubtitleDub sequence={sequence} voice={voice} onOpenSubtitles={onOpenSubtitles} />
+          <SubtitleDub
+            sequence={sequence}
+            voice={voice}
+            onOpenSubtitles={onOpenSubtitles}
+            focusClipId={dubFocusClipId}
+            onClearFocus={onClearDubFocus}
+          />
         </div>
         {/* 音色库只服务本地克隆;远端引擎有自己的目录,在它们下面摆这个库暗示了一层不存在的关系。 */}
         {voice.engine === CLONE_ENGINE && (
