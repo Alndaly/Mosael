@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import bisect
 import contextlib
 import functools
 import logging
@@ -1224,7 +1225,7 @@ def _video_encode_args(output, *, force_software: bool = False) -> list[str]:
     ]
 
 
-#: 只渲一截(取一帧)时,跨进这一截的片段从这一截之前多少秒开始解码。不卡在正好那一刻:fps 滤镜按
+#: 只渲一截(取一帧、分块)时,跨进这一截的片段从这一截之前多少秒开始解码。不卡在正好那一刻:fps 滤镜按
 #: 输入时间戳给每个输出时刻挑帧,前面留一小段余量,挑出来的才稳稳是整条渲时同一时刻的那一帧。
 _WINDOW_PREROLL = 1.0
 
@@ -1253,7 +1254,7 @@ def _segment_frames(plan: RenderPlan) -> list[tuple[int, int]]:
     **基底轨按整帧接**:每段的画面补齐 / 截到正好这么多帧、声音补齐 / 截到正好这么长(见 _exact_span),
     concat 接出来的第 k 帧就是时间线上的第 k 帧。此前每段的长短由 concat 自己估 —— 画面按「最后一帧的时刻
     × 帧数 /(帧数 − 1)」算、声音按采样算,取两者长的那个:起止不在帧格上的段,每段多出零点几帧,越往后
-    底轨越晚于上层、字幕和音频轨;而且估出来的长短取决于这一段从哪一帧开始,只渲一截(取一帧)时
+    底轨越晚于上层、字幕和音频轨;而且估出来的长短取决于这一段从哪一帧开始,只渲一截(分块、取帧)时
     接出来的位置和整条渲时就对不上。整帧接,位置只看帧号。"""
     fps = plan.output.fps
     frames: list[tuple[int, int]] = []
@@ -1377,6 +1378,9 @@ class _BaseSource(NamedTuple):
     tout: float
     zero: float
     skip: float  # 只渲一截时段内跳过的秒数(见 _Window);整条渲恒为 0
+    #: 声音那一路的 (trim 起, trim 止, 0 点)。和画面同一路输入时就是上面那三个;段内跳过了一截时声音另开
+    #: 一路、从段头解(见 _base_sources),这三个按那一路算。
+    sound_trim: tuple[float, float, float]
 
 
 def _base_sources(
@@ -1394,6 +1398,7 @@ def _base_sources(
     跳得太远的、图片(-loop 出来的流),都另开一路。"""
     runs: list[dict] = []
     by_source: dict[Path, list[dict]] = {}
+    separate: list[tuple[int, Path, float, float]] = []
     for i, segment in enumerate(plan.video_segments):
         if segment.kind != "clip" or segment.source is None or not frames[i][1]:
             continue  # 不到半帧长的段落不到任何一帧上
@@ -1405,7 +1410,12 @@ def _base_sources(
         skip = window.skip if window is not None and i == window.first and not image else 0.0
         src_in, src_out = segment.source.src_in + skip * segment.speed, segment.source.src_out
         audible = sound and has_audio.get(path, False) and not plan.mute_base_audio and not segment.muted
-        member = (i, src_in, src_out, audible, skip, segment.source.src_in)
+        member = (i, src_in, src_out, audible and not skip, skip, segment.source.src_in)
+        if audible and skip:
+            #: 声音不跟着画面跳:从段内某处快进起解的声音,aresample 的时间戳补偿会把开头那几秒拉伸一点点,
+            #: 和整条渲时连续解出来的差在采样上;画面跳过省下的是解码,声音解码几乎不花钱。所以这一段的声音
+            #: 另开一路、从段头解。
+            separate.append((i, path, segment.source.src_in, src_out))
         #: 接得上的几路里挑跳得最少的那一路(倒回去用过一次之后,后面接着往后剪的还能回到原来那一路)。
         fits = [run for run in by_source.get(path, []) if run["end"] - 1e-6 <= src_in <= run["end"] + _SHARE_MAX_GAP]
         if fits:
@@ -1435,10 +1445,12 @@ def _base_sources(
             splits.append(f"[{index}:a]asplit={len(with_sound)}{''.join(audios)}")
         sounding = iter(audios)
         for video, (i, src_in, src_out, audible, skip, origin) in zip(videos, members):
-            sources[i] = _BaseSource(
-                video, next(sounding) if audible else None, round(src_in - base, 6), round(src_out - base, 6),
-                round(origin - base, 6), skip,
-            )
+            trim = (round(src_in - base, 6), round(src_out - base, 6), round(origin - base, 6))
+            sources[i] = _BaseSource(video, next(sounding) if audible else None, *trim, skip, trim)
+    for index, (i, path, src_in, src_out) in enumerate(separate, start=len(runs)):
+        seek, tin, tout = _seek_and_trim(src_in, src_out)
+        sources[i] = sources[i]._replace(audio=f"[{index}:a]", sound_trim=(tin, tout, tin))
+        args += seek + ["-i", str(path)]
     return args, splits, sources
 
 
@@ -1450,6 +1462,8 @@ def build_ffmpeg_command(
     force_software: bool = False,
     text_layers: BurnedText | None = None,
     still_at: float | None = None,
+    chunk: tuple[float, float] | None = None,
+    audio_path: Path | None = None,
     workdir: Path | None = None,
 ) -> list[str]:
     """…still_at 给了就**只出那一时刻的一帧**(一张图,不是一段片子)。
@@ -1461,10 +1475,16 @@ def build_ffmpeg_command(
     "取当前帧"的路的话,它迟早和成片长得不一样,而这种不一样是最难发现的:画面看着对,只是
     少了一层字。取一帧只在两处不同:基底轨只渲那一刻所在的一段(从那一刻前一点开始解,时间戳
     挪回时间线位置),声音不建。各层要不要先按 still_plan 筛,是调用方的事(render_still 筛)。
+
+    chunk=(start, end) 给了就只渲时间线上这一截(分块渲染,见 _chunk_windows):画面写进 output_path(只有
+    画面,end 之前的整帧),混音前的声音写进 audio_path(无损 PCM,按采样数切),和取一帧同一套「只渲一截」。
     """
     width, height, fps = plan.output.width, plan.output.height, plan.output.fps
     still = still_at is not None
-    window = _window(plan, max(still_at, 0.0), max(still_at, 0.0)) if still_at is not None else None
+    window = (
+        _window(plan, max(still_at, 0.0), max(still_at, 0.0)) if still_at is not None
+        else _window(plan, *chunk) if chunk is not None else None
+    )
     # Probe every source we will ask about up front, concurrently, instead of once per clip as
     # the command is assembled — the probes are independent and each one is just waiting on an
     # ffprobe child. Repeated sources collapse to one probe. 取一帧不要声音,也就不用问。
@@ -1479,6 +1499,10 @@ def build_ffmpeg_command(
     args += base_args
     video_labels: list[str] = []
     audio_labels: list[str] = []
+    if window is not None and not still and window.base > 0:
+        #: 这一截之前的那些段,声音并成一段静音:混音按时间线时间对齐,前面得垫上(静音几乎不花钱)。
+        filters.append(f"anullsrc=r={AUDIO_RATE}:cl=stereo,atrim=0:{window.base}[abefore]")
+        audio_labels.append("[abefore]")
     input_index = args.count("-i")
 
     for i, segment in enumerate(plan.video_segments):
@@ -1561,8 +1585,9 @@ def build_ffmpeg_command(
                 audio_fades = _fade_filters(segment.fade_in, segment.fade_out, segment.duration, audio=True)
                 # The clip's own gain (增益) mixes its audio, like a video clip's linked audio in PR/DaVinci.
                 gain = _volume_expr(segment.gain, segment.gain_keyframes, segment.duration)
+                sound_in, sound_out, sound_zero = source.sound_trim
                 filters.append(
-                    f"{source.audio}atrim=start={tin}:end={tout},{_audio_from(source.zero)}{tempo}"
+                    f"{source.audio}atrim=start={sound_in}:end={sound_out},{_audio_from(sound_zero)}{tempo}"
                     f"{gain}aresample={AUDIO_RATE},aformat=channel_layouts=stereo{audio_fades}"
                     f"{_exact_span(frames[i][1], fps, audio=True)}[a{i}]"
                 )
@@ -1588,6 +1613,8 @@ def build_ffmpeg_command(
             filters.append(f"{joined}concat=n={len(video_labels)}:v=1:a=0[vjoined]")
             joined = "[vjoined]"
         filters.append(f"{joined}{_frame_clock(fps)}{_shift_pts(round(window.base + window.skip, 6))}[vbase]")
+        if not still:
+            filters.append(f"{''.join(audio_labels)}concat=n={len(audio_labels)}:v=0:a=1[abase]")
     else:
         pairs = "".join(v + a for v, a in zip(video_labels, audio_labels))
         filters.append(f"{pairs}concat=n={len(video_labels)}:v=1:a=1[vjoined][abase]")
@@ -1753,10 +1780,14 @@ def build_ffmpeg_command(
     if plan.audio_overlays:
         mix_inputs = [base_audio_label]
         for i, item in enumerate(plan.audio_overlays):
+            if window is not None and not window.covers(item.start, item.duration):
+                continue
             path = resolve(item.source.file_key)
             if item.optional and not has_audio.get(path, False):
                 continue  # overlay video-track source with no audio stream
             src = item.source
+            #: 跨进这一截的照样从头解(和底轨跳过一截时的声音一样,见 _base_sources):声音解码几乎不花钱,
+            #: 从中间快进起解反倒会被时间戳补偿拉伸一点点,和整条渲时差在采样上。
             seek, tin, tout = _seek_and_trim(src.src_in, src.src_out)
             args += seek + ["-i", str(path)]
             delay_ms = int(item.start * 1000)
@@ -1779,6 +1810,31 @@ def build_ffmpeg_command(
         if len(mix_inputs) > 1:
             filters.append(f"{''.join(mix_inputs)}amix=inputs={len(mix_inputs)}:normalize=0[amix]")
             audio_label = "[amix]"
+
+    if chunk is not None and window is not None:
+        #: 分块:画面只要这一截里的整帧(end 之前,帧号按帧格算,块与块之间不多不少),只有画面;声音在**混音之后、
+        #: 总线之前**按采样数切下这一截,写成无损 PCM —— 限幅 / 响度标准化是跨整条的状态,接起来以后再统一过一遍
+        #: (见 _chunk_mux_command)。切下来的声音**保留时间线上的时间戳**,不归零:两个输出按时间戳齐头并进,声音
+        #: 要是从 0 起而画面从这一截的起点起,ffmpeg 会先把声音追到画面那么远,这期间解出来的画面全攒在内存里
+        #: (实测 20 秒 1080p 就多攒 1.3 GB)。WAV 不认时间戳,写进去的只是采样。
+        first_frame = round(window.start * fps)
+        first_sample, last_sample = round(window.start * AUDIO_RATE), round(window.end * AUDIO_RATE)
+        filters.append(
+            f"{audio_label}atrim=start_sample={first_sample}:end_sample={last_sample}[achunk]"
+        )
+        assert audio_path is not None, "分块渲染要给声音那一截的去处"
+        last = window.end >= plan.timeline_duration
+        args += [
+            "-filter_complex", ";".join(filters),
+            "-map", video_label, "-ss", f"{window.start:.6f}",
+            #: 最后一块和整条渲一样按 -t 截在片长上;其余按帧数,块与块之间不多不少。
+            *(["-t", str(round(plan.timeline_duration - window.start, 6))] if last
+              else ["-frames:v", str(round(window.end * fps) - first_frame)]),
+            "-r", str(plan.output.fps), *_video_encode_args(plan.output, force_software=force_software), "-an",
+            str(output_path),
+            "-map", "[achunk]", "-c:a", "pcm_f32le", str(audio_path),
+        ]
+        return args
 
     filters.append(f"{audio_label}{_master_bus(plan.output.loudnorm)}[amaster]")
     audio_label = "[amaster]"
@@ -1966,6 +2022,82 @@ def render_workdir() -> Iterator[Path]:
         yield Path(tmp)
 
 
+#: 一次 ffmpeg 最多同时挂多少层(底轨片段、上层片段、音频轨片段、花字):超过就分块渲,每块各起一次 ffmpeg。
+#: 每一层是一路输入加一条滤镜链,1080p 下一层二三十 MB:300 段不同素材的时间线一次渲要 7 GB 内存;
+#: macOS 从图形界面起的进程默认只能开 256 个文件,250 段以上 ffmpeg 直接「Too many open files」。
+_CHUNK_LAYERS = 60
+
+
+def _chunk_windows(plan: RenderPlan) -> list[tuple[float, float]] | None:
+    """把时间线切成几截,每截同时在场的层不超过 _CHUNK_LAYERS;层不多(一次渲得下)就是 None。
+
+    切点只取在帧格上(第 k 帧的时刻),而且挑在某一层**开始之前**:跨过切点的层两截都要挂一次。
+    每一截尽量往后延,直到再延一刀就超了;一刀之内就超(同一时刻挂着的层本来就多)也只能切在那里。"""
+    fps, total = plan.output.fps, plan.timeline_duration
+    layers: list[tuple[float, float]] = []
+    at = 0.0
+    for segment in plan.video_segments:
+        if segment.kind == "clip":
+            layers.append((at, at + segment.duration))
+        at += segment.duration
+    layers += [(item.start, item.start + item.duration) for item in (*plan.overlays, *plan.audio_overlays)]
+    layers += [(item.start, item.start + item.duration) for item in plan.text_overlays]
+    if len(layers) <= _CHUNK_LAYERS:
+        return None
+    cuts = sorted({math.floor(start * fps + 1e-6) for start, _end in layers if 0 < start < total})
+    windows: list[tuple[float, float]] = []
+    first = 0
+    while True:
+        begin = first / fps
+        live = sorted(start for start, end in layers if end > begin)
+        later = [cut for cut in cuts if cut > first]
+        best = None
+        for cut in later:
+            if bisect.bisect_left(live, cut / fps) > _CHUNK_LAYERS:
+                break
+            best = cut
+        if best is None:
+            best = later[0] if later else None
+        if best is None:
+            windows.append((begin, total))
+            break
+        windows.append((begin, best / fps))
+        first = best
+    return windows if len(windows) > 1 else None
+
+
+def _chunk_progress(block: dict[str, str], done_frames: int, total_frames: int, fps: float) -> RenderProgress:
+    """分块渲染时的进度:按帧数算(每块各自从 0 数,前面几块已经出了 done_frames 帧)。"""
+    try:
+        frames = done_frames + int(block.get("frame", "0"))
+    except ValueError:
+        frames = done_frames
+    fraction = min(1.0, frames / max(total_frames, 1))
+    speed = _parse_ffmpeg_speed(block.get("speed", ""))
+    eta = (total_frames - frames) / fps / speed if speed else None
+    return RenderProgress(fraction=fraction, speed=speed, fps=None, eta_seconds=eta)
+
+
+def _chunk_mux_command(plan: RenderPlan, workdir: Path, videos: list[Path], audios: list[Path], output_path: Path) -> list[str]:
+    """把各块接起来:画面原样拷贝(各块同一套编码参数,开头都是关键帧),声音的 PCM 按采样接上以后**整条**过
+    一遍总线(限幅 / 响度标准化跨整条才对),再编 AAC。"""
+    def listing(name: str, files: list[Path]) -> Path:
+        script = workdir / name
+        script.write_text("ffconcat version 1.0\n" + "".join(f"file '{file.name}'\n" for file in files), encoding="utf-8")
+        return script
+
+    return [
+        settings.ffmpeg, "-y", "-v", "error", "-progress", "pipe:1", "-nostats",
+        "-f", "concat", "-safe", "0", "-i", str(listing("video.ffconcat", videos)),
+        "-f", "concat", "-safe", "0", "-i", str(listing("audio.ffconcat", audios)),
+        "-filter_complex", f"[1:a]{_master_bus(plan.output.loudnorm)}[amaster]",
+        "-map", "0:v", "-map", "[amaster]", "-c:v", "copy", "-c:a", "aac", "-b:a", "192k",
+        "-t", str(plan.timeline_duration),
+        *[part for key, value in plan.output.metadata for part in ("-metadata", f"{key}={value}")],
+        "-movflags", "+faststart", str(output_path),
+    ]
+
+
 def execute_render(
     plan: RenderPlan,
     resolve: Callable[[str], Path],
@@ -2002,13 +2134,13 @@ def execute_render(
         # 起一次无头 Chromium 把所有字幕/花字渲染成 PNG(软件回落时复用同一批,不重复渲染)。
         text_layers = _text_for_burn(plan, workdir)
 
-        def run_once(*, force_software: bool, fallback: bool = False) -> tuple[int, str, bool]:
-            if on_phase is not None:
-                on_phase(PHASE_FALLBACK if fallback else PHASE_PREPARE)
-            # build_ffmpeg_command probes every source; that is part of the "preparing" wait.
-            command = build_ffmpeg_command(
-                plan, resolve, output_path, force_software=force_software, text_layers=text_layers, workdir=workdir
-            )
+        windows = _chunk_windows(plan)
+        encoding = False
+
+        def spawn(
+            command: list[str], progress_of: Callable[[dict[str, str]], RenderProgress], *, last: bool = True,
+        ) -> tuple[int, str, bool]:
+            nonlocal encoding
             process = popen_text(
                 _with_filter_script(command, workdir), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
             )
@@ -2020,7 +2152,6 @@ def execute_render(
             if on_child is not None:
                 on_child(child)
             block: dict[str, str] = {}
-            encoding = False
             for line in child.raw_lines():
                 line = line.strip()
                 if "=" not in line:
@@ -2032,13 +2163,52 @@ def execute_render(
                 if not encoding and on_phase is not None:
                     encoding = True
                     on_phase(PHASE_ENCODE)  # first block ⇒ frames are flowing
-                if value == "end" and on_phase is not None:
+                if value == "end" and last and on_phase is not None:
                     on_phase(PHASE_FINALIZE)  # -progress end; ffmpeg still writes faststart moov
                 if on_progress is not None:
-                    on_progress(_progress_from_block(block, total_us))
+                    on_progress(progress_of(block))
                 block = {}
             stderr_tail = child.finish()
             return process.returncode or 0, stderr_tail, child.killed
+
+        def run_once(*, force_software: bool, fallback: bool = False) -> tuple[int, str, bool]:
+            nonlocal encoding
+            encoding = False  # 回落重跑时,出帧了再报一次「编码」
+            if on_phase is not None:
+                on_phase(PHASE_FALLBACK if fallback else PHASE_PREPARE)
+            if windows is None:
+                # build_ffmpeg_command probes every source; that is part of the "preparing" wait.
+                command = build_ffmpeg_command(
+                    plan, resolve, output_path, force_software=force_software, text_layers=text_layers, workdir=workdir
+                )
+                return spawn(command, lambda block: _progress_from_block(block, total_us))
+            return render_chunks(force_software)
+
+        def render_chunks(force_software: bool) -> tuple[int, str, bool]:
+            """分块渲(见 _chunk_windows):每块一次 ffmpeg,画面一个 mp4、混音前的声音一个 PCM,最后接起来。"""
+            assert windows is not None
+            fps = plan.output.fps
+            total_frames = math.ceil(plan.timeline_duration * fps - 1e-6)
+            videos: list[Path] = []
+            audios: list[Path] = []
+            for n, (start, end) in enumerate(windows):
+                videos.append(workdir / f"chunk{n}.mp4")
+                audios.append(workdir / f"chunk{n}.wav")
+                command = build_ffmpeg_command(
+                    plan, resolve, videos[-1], force_software=force_software, text_layers=text_layers,
+                    chunk=(start, end), audio_path=audios[-1], workdir=workdir,
+                )
+                done = round(start * fps)
+                result = spawn(
+                    command, lambda block, done=done: _chunk_progress(block, done, total_frames, fps), last=False,
+                )
+                if result[0] != 0:
+                    return result
+            logger.info("render: %d chunks done, joining → %s", len(windows), output_path.name)
+            return spawn(
+                _chunk_mux_command(plan, workdir, videos, audios, output_path),
+                lambda block: RenderProgress(fraction=1.0, speed=None, fps=None, eta_seconds=0.0),
+            )
 
         returncode, stderr_tail, killed = run_once(force_software=hw_encoder is None)
         # 起不来的硬件编码器已经被小样自检挡在开跑之前(_hw_encoder_works);这里兜的是跑到一半才挂的

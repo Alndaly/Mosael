@@ -560,7 +560,7 @@ qwen 和 GLM 用的不是 `reasoning_effort`(前者 `enable_thinking`、后者 `
 
 | | 预览 | 导出 |
 | --- | --- | --- |
-| 在哪 | 浏览器,`CanvasCompositor`(WebCodecs 解 720p 代理 → canvas 2D)——**唯一路径,无 `<video>` 兜底** | 后端,`render_plan.py` + `render_executor.py` → 单次 ffmpeg |
+| 在哪 | 浏览器,`CanvasCompositor`(WebCodecs 解 720p 代理 → canvas 2D)——**唯一路径,无 `<video>` 兜底** | 后端,`render_plan.py` + `render_executor.py` → 单次 ffmpeg(层多时分块渲再无损接起来,见 `_chunk_windows`) |
 | 为什么不能挪 | 要本地同步跑到 60fps,要渲染**尚未提交**的拖拽草稿 | 要无头、跨重启存活、可被外部 worker 认领([ADR-0002](adr/0002-claim-report-worker-protocol.md)) |
 
 两个约束各自成立,所以合并成一个渲染器不是可选项。一致性按**谁是权威**分层处理
