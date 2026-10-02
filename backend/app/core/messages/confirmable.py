@@ -107,6 +107,14 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "浏览器只能打开 http(s) 网址",
         "en": "The browser can only open http(s) URLs.",
     },
+    "confirmErr_projectIdNotSequence": {
+        "zh": "「{id}」是项目「{project}」的 id,不是时间线的。它的时间线(sequence_id):{timelines}",
+        "en": "“{id}” is the id of the project “{project}”, not of a timeline. Its timelines (sequence_id): {timelines}",
+    },
+    "confirmErr_projectHasNoTimeline": {
+        "zh": "「{id}」是项目「{project}」的 id,不是时间线的;这个项目还没有时间线 —— 先用 create_project(project_id=\"{id}\", name=…) 建一条。",
+        "en": "“{id}” is the id of the project “{project}”, not of a timeline, and that project has no timeline yet — create one with create_project(project_id=\"{id}\", name=…).",
+    },
     "confirmErr_speechNeedsText": {
         "zh": "配音要有一段要念的文字(text)",
         "en": "Speech needs some text to read (text).",

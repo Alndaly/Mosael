@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from app.core.i18n import fragment, tr
 from app.domain.agent.confirmable.registry import ConfirmableTool, Summary, confirmable_tool
 from app.domain.agent.errors import ConfirmationError
-from app.db.models import Sequence
+from app.db.models import Project, Sequence
 from app.domain.sequences import operations as seq_ops
 from app.domain.sequences.errors import SequenceDomainError
 
@@ -33,9 +33,31 @@ _ORIGINAL_AUDIO_SUMMARY = {
 def _sequence_in(db: Session, workspace_id: str, payload: dict[str, Any]) -> None:
     """这次要动的那条时间线,**收进这个工作区** —— 改时间线、导出、字幕配音都是"拿一个
     sequence_id 去动一条时间线",没有理由各判各的。"""
-    sequence = db.get(Sequence, str(payload.get("sequence_id", "")))
+    sequence_id = str(payload.get("sequence_id", ""))
+    sequence = db.get(Sequence, sequence_id)
     if sequence is None or sequence.workspace_id != workspace_id:
+        _not_a_sequence(db, workspace_id, sequence_id)
         raise ConfirmationError("Sequence not found in this workspace")
+
+
+def _not_a_sequence(db: Session, workspace_id: str, sequence_id: str) -> None:
+    """拿错的 id 若是这个工作区的一个**项目**,直接说出来,连同它的时间线。
+
+    两种 id 长得一样(都是 32 位十六进制),list_projects 又把项目 id 和 active_sequence_id 摆在同一行 —— 拿错是很自然
+    的事。只说「Sequence not found」的话,模型分不出是时间线被删了还是工作区不对,用户会话里它就这么重试了六次。
+    """
+    project = db.get(Project, sequence_id)
+    if project is None or project.workspace_id != workspace_id:
+        return
+    timelines = sorted(project.sequences, key=lambda one: one.updated_at, reverse=True)
+    if not timelines:
+        raise ConfirmationError("confirmErr_projectHasNoTimeline", id=project.id, project=project.name)
+    raise ConfirmationError(
+        "confirmErr_projectIdNotSequence",
+        id=project.id,
+        project=project.name,
+        timelines=tr("punct_listSep").join(f"{one.id} ({one.name})" for one in timelines),
+    )
 
 
 
