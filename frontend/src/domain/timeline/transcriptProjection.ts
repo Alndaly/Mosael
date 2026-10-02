@@ -385,11 +385,76 @@ export function detectSilences(
   return gaps;
 }
 
-const FILLER_WORDS = new Set([
-  "呃", "嗯", "唔", "啊这", "那个", "这个那个", "就是说", "然后就是",
-  "um", "uh", "uhm", "er", "erm", "hmm", "like", "you know",
-]);
+/**
+ * 口癖词表,**按类别**。「一键全选」此前不分青红皂白:英文的 like(「I like it」)、中文的「那个」
+ * (「那个人」)大多数时候是正经词,全选之后一刀下去,句子就缺了字。所以:
+ *
+ *   - 拖音(呃 / 嗯 / um / uh …)几乎总是口癖,默认选;
+ *   - 中文套话(就是说 / 然后就是 …)多半是口癖,默认选;
+ *   - **歧义词**(中文「那个」、英文 like)默认**不**选,要用户看过预览自己打开。
+ *
+ * 「you know」是两个词,按单个词判永远命中不了 —— 词表里不收它,免得看上去管用。
+ */
+export const FILLER_CATEGORIES = [
+  { id: "hesitation", ambiguous: false, words: ["呃", "嗯", "唔", "um", "uh", "uhm", "er", "erm", "hmm"] },
+  { id: "phrase", ambiguous: false, words: ["啊这", "这个那个", "就是说", "然后就是"] },
+  { id: "ambiguousZh", ambiguous: true, words: ["那个"] },
+  { id: "ambiguousEn", ambiguous: true, words: ["like"] },
+] as const;
 
-export function isFillerToken(text: string): boolean {
-  return FILLER_WORDS.has(text.trim().toLowerCase().replace(/[，。！？、,.;:!?…]/gu, ""));
+export type FillerCategoryId = (typeof FILLER_CATEGORIES)[number]["id"];
+
+/** 默认打开的类别:不含歧义词。 */
+export const DEFAULT_FILLER_CATEGORIES: ReadonlySet<FillerCategoryId> = new Set(
+  FILLER_CATEGORIES.filter((category) => !category.ambiguous).map((category) => category.id),
+);
+
+const FILLER_CATEGORY_BY_WORD = new Map<string, FillerCategoryId>(
+  FILLER_CATEGORIES.flatMap((category) => category.words.map((word) => [word, category.id] as const)),
+);
+
+/** 这个词是哪一类口癖;不是口癖就是 null。 */
+export function fillerCategory(text: string): FillerCategoryId | null {
+  return FILLER_CATEGORY_BY_WORD.get(text.trim().toLowerCase().replace(/[，。！？、,.;:!?…]/gu, "")) ?? null;
+}
+
+/** 是不是口癖 —— 只看默认打开的那几类(歧义词不算)。 */
+export function isFillerToken(text: string, enabled: ReadonlySet<FillerCategoryId> = DEFAULT_FILLER_CATEGORIES): boolean {
+  const category = fillerCategory(text);
+  return category !== null && enabled.has(category);
+}
+
+export interface FillerMatch {
+  /** 和逐字稿面板的选区键同一个形状:`clipId:segmentId:词序号`。 */
+  key: string;
+  clipId: string;
+  srcStart: number;
+  srcEnd: number;
+  category: FillerCategoryId;
+  /** 预览用:前后各几个词,口癖词本身单独给出。 */
+  before: string;
+  word: string;
+  after: string;
+}
+
+/** 逐字稿里所有口癖词(全部类别),带上下文 —— 「全选」之前给人看的那份预览。 */
+export function fillerMatches(projected: readonly ProjectedSegment[], context = 4): FillerMatch[] {
+  const matches: FillerMatch[] = [];
+  for (const item of projected) {
+    item.tokens.forEach((token, index) => {
+      const category = fillerCategory(token.text);
+      if (category === null) return;
+      matches.push({
+        key: `${item.clipId}:${item.segmentId}:${index}`,
+        clipId: item.clipId,
+        srcStart: token.start_time,
+        srcEnd: token.end_time,
+        category,
+        before: item.tokens.slice(Math.max(0, index - context), index).map((one) => one.text).join(""),
+        word: token.text,
+        after: item.tokens.slice(index + 1, index + 1 + context).map((one) => one.text).join(""),
+      });
+    });
+  }
+  return matches;
 }

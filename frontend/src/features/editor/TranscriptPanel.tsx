@@ -3,7 +3,7 @@ import { useNoteStrings } from "@/features/notes/strings";
 import { noteExportVariants, type NoteExportLine } from "@/features/editor/noteExport";
 import React from "react";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AudioLines, Captions, Loader2, MessageSquareText, Mic, Scissors, Sparkles, Split, SplitSquareVertical, Trash2, UserRound, X } from "lucide-react";
+import { AudioLines, Captions, Loader2, MessageSquareText, Mic, Scissors, Split, SplitSquareVertical, Trash2, UserRound, X } from "lucide-react";
 
 import { api, getAssetTranscript, getJob, listAsrModels, transcribeAsset, type Clip, type Job, type Sequence } from "@/api/client";
 import { transcriptKeys } from "@/api/queryKeys";
@@ -17,16 +17,21 @@ import { speakerChipStyle, speakerLabel, speakerShort, speakersAreMeaningful } f
 import { useI18n } from "@/app/preferences";
 import { formatTimecode } from "@/lib/time";
 import {
+  DEFAULT_FILLER_CATEGORIES,
   detectSilences,
+  fillerMatches,
   isFillerToken,
   projectTranscript,
   projectedRowKey,
   transcriptDocument,
   transcriptSegmentsFromApi,
+  type FillerCategoryId,
+  type FillerMatch,
   type ProjectedSegment,
   type SegmentLike,
   type TranscriptDocItem,
 } from "@/domain/timeline/transcriptProjection";
+import { FillerPicker } from "@/features/editor/FillerPicker";
 import { transcriptSourceClips } from "@/domain/timeline/transcriptSources";
 import { PILL } from "@/features/editor/pill";
 import { useEditorStore } from "@/features/editor/editorStore";
@@ -151,6 +156,7 @@ const TranscriptRow = React.memo(function TranscriptRow({
   showSpeakers,
   flatIndexByKey,
   canSplit,
+  fillerKinds,
   actions,
 }: {
   rowRef: (element: HTMLElement | null) => void;
@@ -161,6 +167,8 @@ const TranscriptRow = React.memo(function TranscriptRow({
   showSpeakers: boolean;
   flatIndexByKey: Map<string, number>;
   canSplit: boolean;
+  /** 哪几类口癖算(高亮跟着走,见 FillerPicker)。 */
+  fillerKinds: ReadonlySet<FillerCategoryId>;
   actions: TranscriptRowActions;
 }) {
   const t = useI18n();
@@ -277,7 +285,7 @@ const TranscriptRow = React.memo(function TranscriptRow({
                   // 「喂喂喂喂喂」拆成「喂 喂 喂 喂 喂」—— 一句话被排版成了五个字。
                   // 纵向留着:行内元素的上下内边距不参与布局,只把高亮的底色撑高一点。
                   "m-0 inline cursor-pointer rounded-[3px] border-0 bg-transparent px-0 py-px text-foreground [font:inherit] [box-decoration-break:clone] hover:bg-[color-mix(in_oklab,var(--foreground)_10%,transparent)]",
-                  isFillerToken(token.text) && "bg-[color-mix(in_oklab,#eab308_20%,transparent)]",
+                  isFillerToken(token.text, fillerKinds) && "bg-[color-mix(in_oklab,#eab308_20%,transparent)]",
                   // 播放头所在的词:实心一点、字重一点,不再拿 1px 硬阴影当下划线 ——
                   // 那道线在换行处断开,看着像输入框的边。
                   current && "bg-[color-mix(in_oklab,var(--primary)_28%,transparent)] font-medium",
@@ -388,10 +396,9 @@ export function TranscriptPanel({
     () => (showSilences ? detectSilences(videoClips, segmentsByAsset) : []),
     [showSilences, videoClips, segmentsByAsset],
   );
-  const fillerCount = React.useMemo(
-    () => projected.reduce((count, item) => count + item.tokens.filter((tok) => isFillerToken(tok.text)).length, 0),
-    [projected],
-  );
+  //: 口癖:哪几类算(歧义词默认不算,见 FILLER_CATEGORIES),以及逐字稿里每一处 —— 选中之前先给看(FillerPicker)。
+  const [fillerKinds, setFillerKinds] = React.useState<Set<FillerCategoryId>>(() => new Set(DEFAULT_FILLER_CATEGORIES));
+  const fillers = React.useMemo(() => fillerMatches(projected), [projected]);
   // 只有一个说话人时,那个标签每行都一样 —— 不是信息,是噪声。
   const showSpeakers = React.useMemo(
     () => speakersAreMeaningful(projected.map((item) => item.speaker)),
@@ -615,19 +622,12 @@ export function TranscriptPanel({
     setSelected(new Map());
   };
 
-  const selectAllFillers = () => {
+  const selectFillers = (chosen: FillerMatch[]) => {
     setSelected((current) => {
       const next = new Map(current);
-      projected.forEach((item) => {
-        item.tokens.forEach((token, index) => {
-          if (!isFillerToken(token.text)) return;
-          next.set(`${item.clipId}:${item.segmentId}:${index}`, {
-            clipId: item.clipId,
-            srcStart: token.start_time,
-            srcEnd: token.end_time,
-          });
-        });
-      });
+      for (const match of chosen) {
+        next.set(match.key, { clipId: match.clipId, srcStart: match.srcStart, srcEnd: match.srcEnd });
+      }
       return next;
     });
   };
@@ -843,10 +843,7 @@ export function TranscriptPanel({
           <AudioLines size={12} /> {t("silences")}
           {showSilences && silences.length > 0 && <em>{silences.length}</em>}
         </button>
-        <button type="button" className={PILL} title={t("fillersHint")} onClick={selectAllFillers} disabled={fillerCount === 0}>
-          <Sparkles size={12} /> {t("fillers")}
-          {fillerCount > 0 && <em>{fillerCount}</em>}
-        </button>
+        <FillerPicker matches={fillers} enabled={fillerKinds} onEnabledChange={setFillerKinds} onSelect={selectFillers} />
         {onSplitPoints && (
           <>
             <button type="button" className={PILL} title={t("splitBySentenceHint")} onClick={splitBySentence}>
@@ -918,6 +915,7 @@ export function TranscriptPanel({
                 showSpeakers={showSpeakers}
                 flatIndexByKey={flatIndexByKey}
                 canSplit={Boolean(onSplitPoints)}
+                fillerKinds={fillerKinds}
                 actions={rowActions}
               />
             );
