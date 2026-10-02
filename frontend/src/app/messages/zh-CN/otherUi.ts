@@ -393,6 +393,7 @@ export const otherUi = {
   chatSubagentsTitle: "子代理",
   chatFromAgentSession: "来自其他智能体",
   chatFromJob: "后台任务回执",
+  chatReceiptWaiting: "这一轮结束后交给智能体",
   chatSubagentSteps: "{n} 步",
   chatSubagentRunning: "正在调查…",
   chatSubagentNoTrace: "这次没有留下轨迹(旧版本派出的)",

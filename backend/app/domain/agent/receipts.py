@@ -7,6 +7,10 @@
 **方向是反的:任务不认识智能体,是这里认识任务。** 登记在装配层(app/main.py),和
 tts_runtime_config 那条同一个做法 —— 发布、导出、转写都建任务,它们没有一个该因为
 「智能体也许想知道」而依赖智能体域。
+
+**回执不是用户消息。** 此前它借用户的名义进会话(post_user_message + from_job),会话正忙就进了排队:
+输入框上方排出七八条「已完成」,带着 Steer 和删除,这一轮之后又每条各跑一轮。现在它落成自己的角色
+(host.JOB_RECEIPT_ROLE),怎么交给智能体见 host.post_job_receipt。
 """
 
 from __future__ import annotations
@@ -58,24 +62,24 @@ def deliver(db: Session, job: Job, receipt: dict[str, Any]) -> None:
     session = db.get(AgentSession, str(receipt.get("session_id") or ""))
     if session is None:
         return
-    # 回执替谁说话:建这个任务的那个人。会话是私人的,而 post_user_message 要一个主体来
+    # 回执交给智能体之后,那一轮以谁的身份跑:建这个任务的那个人。会话是私人的,而起一轮要一个主体来
     # 铸服务令牌 —— 拿不到人就不送,而不是找一个凑数的。
     owner = db.get(User, str(job.created_by or "")) if job.created_by else None
     if owner is None:
         logger.warning("job %s 的回执没送:任务没有归属人", job.id)
         return
-    host.post_user_message(db, session, _summarize(job), owner, origin_job_id=job.id)
+    host.post_job_receipt(db, session, _summarize(job), owner, job_id=job.id)
 
 
 def acknowledge_seen(db: Session, _user: User, job_id: str, session_id: str) -> None:
     """智能体在这次对话里**亲眼看到**这个任务到了终态(get_job 查到的):它的回执就不必再送了。
 
     回执是给「提交之后就断了线索」的那种情况的。智能体一直在轮询、已经拿到结果接着做完了的话,那句回执
-    还是会来 —— 它在这一轮跑着的时候到,进了排队,这一轮结束后又被当成一条新消息跑一轮,智能体回一句
+    还是会来 —— 它在这一轮跑着的时候到,等这一轮结束又交给智能体跑一轮,智能体回一句
     「收到,这正是刚才那次解析的回执,不需要再做别的处理」(用户截图:「这种回执本身智能体调用 job 获取结果中
     就有了的吧,为何还会独立显示」)。
 
-    两个先后都要管:回执已经排上队了 —— 从这次对话的队列里拿掉;还没送 —— 在任务上记一笔,送的时候跳过。
+    两个先后都要管:回执已经落库、还没交给智能体 —— 拿掉它;还没送 —— 在任务上记一笔,送的时候跳过。
     只认发给**这次对话**的回执:别的会话起的任务,这里看一眼不代表那边知道了。
     """
     job = db.get(Job, job_id)
@@ -86,10 +90,12 @@ def acknowledge_seen(db: Session, _user: User, job_id: str, session_id: str) -> 
         return
     if not receipt.get("seen"):
         job.payload = {**(job.payload or {}), "receipt": {**receipt, "seen": True}}
-    queued = db.scalars(select(AgentMessage).where(AgentMessage.session_id == session_id, AgentMessage.role == "user"))
-    for message in queued:
+    waiting = db.scalars(
+        select(AgentMessage).where(AgentMessage.session_id == session_id, AgentMessage.role == host.JOB_RECEIPT_ROLE)
+    )
+    for message in waiting:
         payload = message.payload or {}
-        if payload.get("queued") and payload.get("from_job") == job.id:
+        if payload.get("undelivered") and payload.get("job_id") == job.id:
             db.delete(message)
 
 

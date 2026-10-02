@@ -99,6 +99,7 @@
   "migrate-job-actor": "79a8f9b75a1f0ee9",
   "migrate-job-message-i18n": "0ae1574be9399702",
   "migrate-job-parent": "25583e462d75d4f6",
+  "migrate-job-receipts-get-their-own-role": "79cc23d95733bffb",
   "migrate-job-worker-leases": "96ded71e21f2035a",
   "migrate-line-fields-are-lists": "7b87009b22fc77c8",
   "migrate-loop-scopes-are-not-outer-data-edges": "15505b678c3edbcf",

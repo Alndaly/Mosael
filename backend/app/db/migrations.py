@@ -1786,6 +1786,40 @@ def _migrate_board_sequence_cells_name_their_producer() -> None:
                 )
 
 
+def _migrate_job_receipts_get_their_own_role() -> None:
+    """后台任务的回执从「用户消息」改成自己的角色 `job_receipt`(见 domain/agent/host.JOB_RECEIPT_ROLE)。
+
+    此前回执借用户的名义进会话:role=user,来源记在 payload.from_job;会话正忙时还带着 queued / queued_by
+    进了排队 —— 输入框上方排出一串「已完成」,带着 Steer 和删除。现在:
+      · 交给过智能体的(没有 queued)→ `{job_id}`;
+      · 还排着的(queued)→ `{job_id, undelivered: true, deliver_as: <queued_by>}`,下一轮收尾时一并交出去。
+    回执消息的 payload 里没有别的东西(引用、正文文档、上下文都是人发的消息才有),所以整个换掉。
+    不是回执的用户消息(含另一个会话发来的通知)不动。重跑:已经换过的不再是 role=user,什么都不做。
+    """
+    if "agent_messages" not in set(inspect(engine).get_table_names()):
+        return
+    with engine.begin() as conn:
+        rows = conn.execute(
+            text("SELECT id, payload FROM agent_messages WHERE role = 'user' AND payload LIKE '%from_job%'")
+        ).fetchall()
+        for row in rows:
+            try:
+                payload = json.loads(row.payload) if isinstance(row.payload, str) else (row.payload or {})
+            except ValueError:
+                continue
+            if not isinstance(payload, dict) or not payload.get("from_job"):
+                continue
+            receipt: dict[str, Any] = {"job_id": str(payload["from_job"])}
+            if payload.get("queued"):
+                receipt["undelivered"] = True
+                if payload.get("queued_by"):
+                    receipt["deliver_as"] = str(payload["queued_by"])
+            conn.execute(
+                text("UPDATE agent_messages SET role = 'job_receipt', payload = :p WHERE id = :i"),
+                {"p": json.dumps(receipt, ensure_ascii=False), "i": row.id},
+            )
+
+
 def _migrate_agent_session_titles_drop_attachment_tokens() -> None:
     """会话标题里的附件标记去掉:此前标题直接截首条消息的前 60 个字,挂了附件的会话标题里就是一截
     `[附件 asset_id=… 名称=…`。照首条用户消息重算 —— 附件标记、文本附件的围栏块都不算;只发了附件的用附件名。
@@ -7505,6 +7539,8 @@ def migration_plan() -> MigrationPlan:
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_board_sequence_cells_name_their_producer),
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_board_documents_keep_the_note_they_became),
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_agent_session_titles_drop_attachment_tokens),
+            #: 后台任务的回执不再是用户消息:换成自己的角色,排着的那条改成「待送」。
+            *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_job_receipts_get_their_own_role),
             #: 具名浏览器会话的登录分区按工作区分开:写下搬家单,由 Electron 执行器在磁盘上搬(新表由 SCHEMA 建)。
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_named_browser_partitions_are_per_workspace),
             #: 具名 / 池档案会话的租约落进库里(局部唯一索引);建之前先收掉已经撞上的。

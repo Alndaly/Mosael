@@ -52,6 +52,7 @@ import { AgentSessionSwitcher } from "@/features/agent/AgentSessionSwitcher";
 import { ModelPicker } from "@/features/agent/ModelPicker";
 import { AgentErrorCard, AgentTurnContent, toolCallIds, type AgentTimelineItem } from "@/features/agent/ToolCalls";
 import { AnsweredChoiceCard, type AnsweredChoice } from "@/features/agent/AnsweredChoice";
+import { JOB_RECEIPT_ROLE, JobReceiptNotice, isWaitingReceipt } from "@/features/agent/JobReceiptNotice";
 import { isRedundantAnswerRecord, recordedQuestionIds } from "@/features/agent/answerRecords";
 import { AgentStatusRow } from "@/features/agent/AgentStatusRow";
 import { useStickToBottom } from "@/features/agent/stickToBottom";
@@ -218,6 +219,10 @@ export function CanvasAgentChat({
   const allMessages = messages.data ?? [];
   const recordedQuestions = React.useMemo(() => recordedQuestionIds(allMessages), [allMessages]);
   const visibleMessages = allMessages.filter((message) => !isRedundantAnswerRecord(message, recordedQuestions));
+  //: 还没交给智能体的回执画在正在跑的那一轮**下面**:这一轮结束它才交出去(时间戳改成那一刻),
+  //: 交出去之后它在对话里也排在这一轮的回答之后 —— 现在就按那个位置画,结束时不跳位。
+  const transcript = visibleMessages.filter((message) => !isWaitingReceipt(message));
+  const waitingReceipts = visibleMessages.filter(isWaitingReceipt);
   //: 对话里画出来的工具调用:对得上其中一行的确认卡就摆在那一行里,对不上的才退回列表末尾。
   const placedToolCalls = toolCallIds([
     ...visibleMessages.map((message) => (message.payload as { timeline?: AgentTimelineItem[] } | null)?.timeline),
@@ -424,7 +429,7 @@ export function CanvasAgentChat({
             <span>{emptyHint}</span>
           </div>
         )}
-        {visibleMessages.map((message) => {
+        {transcript.map((message) => {
           const payload = message.payload as
             | {
                 usage?: { duration_seconds?: number };
@@ -441,6 +446,10 @@ export function CanvasAgentChat({
           // 手动压缩留下的是一条 role=system、内容为空的消息:它只承载压缩标记。
           if (message.role === "system") {
             return payload?.compaction ? <CompactionNotice key={message.id} info={payload.compaction} /> : null;
+          }
+          // 后台任务的回执:一行任务通知,不是用户气泡(见 JobReceiptNotice)。
+          if (message.role === JOB_RECEIPT_ROLE) {
+            return <JobReceiptNotice key={message.id} content={message.content} payload={message.payload} />;
           }
           return (
             <div
@@ -499,6 +508,9 @@ export function CanvasAgentChat({
           </div>
         )}
         <PendingDecisions placed={placedToolCalls} />
+        {waitingReceipts.map((message) => (
+          <JobReceiptNotice key={message.id} content={message.content} payload={message.payload} />
+        ))}
       </div>
       <JumpToLatestOrDecision
         stick={stick}

@@ -37,6 +37,7 @@ import type { AgentReference } from "@/features/agent/references";
 import { ModalShell } from "@/components/app/modals";
 import { AgentStatusRow } from "@/features/agent/AgentStatusRow";
 import { ChatBubble } from "@/features/agent/ChatBubble";
+import { isWaitingReceipt } from "@/features/agent/JobReceiptNotice";
 import { SessionList } from "@/features/ai-studio/SessionList";
 import { attachmentToken, chatMediaGallery } from "@/features/agent/userMessage";
 import { type AgentUsageEvent } from "@/features/agent/messageUsage";
@@ -261,6 +262,12 @@ export function ChatWorkspace({
     (message) => !queuedIds.has(message.id) && !isRedundantAnswerRecord(message, recordedQuestions),
   );
   const mediaGallery = React.useMemo(() => chatMediaGallery(visibleMessages), [visibleMessages]);
+  //: 还没交给智能体的回执不算进对话记录(轨迹、统计):它们这一轮结束才交出去,在那之前画在正在跑的那一轮下面。
+  const transcriptMessages = React.useMemo(
+    () => visibleMessages.filter((message) => !isWaitingReceipt(message)),
+    [visibleMessages],
+  );
+  const waitingReceipts = visibleMessages.filter(isWaitingReceipt);
   //: 「N 个子代理」的数据源:历史消息的 timeline 摊平,再接上正在流的这一轮 ——
   //: 子代理跑到一半时就该在列表里(转着圈),不是等它跑完才出现。
   //: 正在查看的子代理(DSH 形态:进它自己的会话视图,面包屑返回)。换会话就退出 ——
@@ -290,8 +297,8 @@ export function ChatWorkspace({
   //: 会话统计用的轮次结构。和轨迹视图同一个构建函数 —— 两处各写一套的话,
   //: 底下报的「3 轮 · 23 步」和轨迹里数出来的迟早对不上。
   const statsTurns = React.useMemo(
-    () => buildTurns(visibleMessages, running ? streamTimeline : [], usageEvents.data ?? []),
-    [visibleMessages, running, streamTimeline, usageEvents.data],
+    () => buildTurns(transcriptMessages, running ? streamTimeline : [], usageEvents.data ?? []),
+    [transcriptMessages, running, streamTimeline, usageEvents.data],
   );
 
   /** 水位由会话详情**现算**给出,不从消息 payload 里翻。
@@ -500,7 +507,7 @@ export function ChatWorkspace({
             {view === "trace" ? (
               <TraceView
                 key={activeSession?.id ?? "none"}
-                messages={visibleMessages}
+                messages={transcriptMessages}
                 streamTimeline={running ? streamTimeline : []}
                 usageEvents={usageEvents.data ?? []}
                 loading={sessionLoading && !running}
@@ -511,7 +518,7 @@ export function ChatWorkspace({
                  撑宽,整个对话区就能左右滚。代码块自己的 overflow-x-auto 只在父容器被约束时生效。 */
             <div className="relative grid min-h-0 min-w-0" ref={threadArea}>
             <div className="flex min-w-0 flex-col gap-3.5 overflow-y-auto overflow-x-hidden px-4 pb-2.5 pt-7" ref={stick.ref}>
-              {visibleMessages.map((message) => (
+              {transcriptMessages.map((message) => (
                 <ChatBubble
                   key={message.id}
                   message={message}
@@ -552,6 +559,16 @@ export function ChatWorkspace({
                 </div>
               )}
               <PendingDecisions placed={placedToolCalls} />
+              {/* 还没交给智能体的回执画在正在跑的那一轮下面:这一轮结束它才交出去,交出去之后也排在这里。 */}
+              {waitingReceipts.map((message) => (
+                <ChatBubble
+                  key={message.id}
+                  message={message}
+                  workspaceId={workspace.id}
+                  usageEvents={[]}
+                  mediaGallery={mediaGallery}
+                />
+              ))}
             </div>
             <JumpToLatestOrDecision
               stick={stick}

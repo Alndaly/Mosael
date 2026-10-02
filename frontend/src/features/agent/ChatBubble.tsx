@@ -1,6 +1,6 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Bot, ListChecks } from "lucide-react";
+import { Bot } from "lucide-react";
 
 import { api } from "@/api/client";
 import type { components } from "@/api/generated/schema";
@@ -13,6 +13,7 @@ import { MessageFooter, MessageTime, MessageUsageFooter, type AgentUsageEvent } 
 import type { JSONContent } from "@tiptap/react";
 
 import { UserMessageContent } from "@/features/agent/userMessage";
+import { JOB_RECEIPT_ROLE, JobReceiptNotice } from "@/features/agent/JobReceiptNotice";
 import type { ImagePreviewItem } from "@/components/app/image-preview";
 import { cn } from "@/lib/utils";
 
@@ -55,17 +56,6 @@ function AgentOrigin({ sessionId }: { sessionId: string }) {
   );
 }
 
-/** 回执的来源抬头:「后台任务回执」。任务 id 只放在悬停提示里 —— 那是给查问题的人看的。 */
-function JobOrigin({ jobId }: { jobId: string }) {
-  const t = useI18n();
-  return (
-    <span data-job-receipt="" className="flex items-center gap-1.5 text-ui-2xs text-muted-foreground" title={jobId}>
-      <ListChecks size={12} className="flex-none" />
-      <span className="font-medium">{t("chatFromJob")}</span>
-    </span>
-  );
-}
-
 export function ChatBubble({
   message,
   usageEvents,
@@ -88,8 +78,6 @@ export function ChatBubble({
         body_document?: JSONContent;
         /** notify_agent_session 发来的:发起会话的 id(结构化来源,不靠信封文案)。 */
         from_agent_session?: string;
-        /** 后台任务跑完送回来的回执(后端 agent/receipts):那个任务的 id。 */
-        from_job?: string;
         /** 用户消息:这条是一次**选择的回执**,问的什么、选的哪一项都在里面。 */
         answers?: AnsweredChoice;
       }
@@ -102,15 +90,20 @@ export function ChatBubble({
       </div>
     ) : null;
   }
+  // 后台任务的回执:一行任务通知,不是谁说的话(用户截图:摆成用户气泡,「这不是我发送的」)。
+  if (message.role === JOB_RECEIPT_ROLE) {
+    return (
+      <div className="mx-auto w-full max-w-[780px] shrink-0">
+        <JobReceiptNotice content={message.content} payload={message.payload} />
+      </div>
+    );
+  }
   // 另一个智能体会话发来的通知**不套用户气泡**。右侧气泡在这套界面里的意思是"坐在这儿的人
   // 说的",而这条不是 —— 它来自另一次对话。摆成左侧一块安静的内嵌,配一条来源抬头:形状本身
   // 就把"谁说的"讲清楚了,不必靠正文里一行方括号标签(那行现在只进提示词,见后端
   // host.agent_notice_envelope)。
   const fromAgent = message.role === "user" ? payload?.from_agent_session : undefined;
-  //: 后台任务的回执同理(用户截图:「签章文件.pdf」已完成……摆成了他发的一条,他问「这不是我发送的」)。
-  //: 它借用户的名义进会话,是为了让智能体接着往下做,不是用户说了话。
-  const fromJob = message.role === "user" && !fromAgent ? payload?.from_job : undefined;
-  const inset = Boolean(fromAgent || fromJob);
+  const inset = Boolean(fromAgent);
   // 外层只负责**摆位置**和挂 group,可见的那块(药丸/内嵌卡)在里面 —— 脚注要落在药丸
   // **下方**而不是它的内边距里,所以这两层必须分开。
   return (
@@ -154,7 +147,6 @@ export function ChatBubble({
           }
         >
           {fromAgent && <AgentOrigin sessionId={fromAgent} />}
-          {fromJob && <JobOrigin jobId={fromJob} />}
           <div className={inset ? "whitespace-pre-wrap" : undefined}>
             {/* 一次选择在对话里不该退化成一段自述:有结构就照结构画,没有(老消息)才退回正文。 */}
             {payload?.answers ? (

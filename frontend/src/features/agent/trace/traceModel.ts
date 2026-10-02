@@ -13,6 +13,7 @@
 import type { AgentTimelineItem, ToolCall } from "@/features/agent/ToolCalls";
 import type { AgentUsageEvent } from "@/features/agent/messageUsage";
 import { summarizeMessageUsage } from "@/features/agent/messageUsage";
+import { JOB_RECEIPT_ROLE } from "@/features/agent/JobReceiptNotice";
 
 /** 轨迹里的一步。kind 决定行首那个标签,也决定 Inspector 里能看什么。 */
 export type TraceEventKind = "system" | "context" | "user" | "text" | "thinking" | "tool" | "subtool" | "compaction" | "error";
@@ -139,7 +140,10 @@ function readPayload(message: TraceMessage): MessagePayload {
 /**
  * 摊平成轮次。
  *
- * 分轮的依据是**用户消息**:每遇到一条 user 就开新的一轮,后续的助手/系统消息都归到它名下。
+ * 分轮的依据是**这一轮的由头**:用户消息,或者后台任务的回执(job_receipt —— 智能体空闲时一条回执自己
+ * 起一轮;忙时攒到下一轮一并交出去)。后续的助手/系统消息都归到它名下。回执是交给模型的输入,画成
+ * CONTEXT;还没答的那一轮里接着到的回执、以及它们搭车的那条用户消息,都并进同一轮 —— 后端就是把它们
+ * 拼成一份提示词一起交出去的。
  * 会话可能以助手消息开头(历史数据、系统提示),那种情况下先开一轮无提问的轮 —— 丢掉它们
  * 等于轨迹里凭空少几步。
  */
@@ -154,7 +158,7 @@ export function buildTurns(
   const openTurn = (prompt: string, context = "", contextMessageId = ""): TraceTurn => {
     const turn: TraceTurn = {
       turn: turns.length + 1,
-      prompt,
+      prompt: "",
       events: [],
       messageIds: [],
       usage: null,
@@ -164,6 +168,12 @@ export function buildTurns(
       toolSeconds: null,
     };
     turns.push(turn);
+    askIn(turn, prompt, context, contextMessageId);
+    return turn;
+  };
+
+  const askIn = (turn: TraceTurn, prompt: string, context: string, contextMessageId: string): void => {
+    turn.prompt = prompt;
     // **上下文排在提问之前** —— 模型实际收到的就是这个次序:后端发出去的是
     // `_prompt_with_context()`,拼出来是「上下文 \n\n 用户消息:正文」,不是反过来。
     // 单独成条是因为它不是用户打的字,而「它凭什么知道我选中了哪个素材」的答案往往就在这儿。
@@ -194,8 +204,10 @@ export function buildTurns(
         durationSeconds: null,
       });
     }
-    return turn;
   };
+
+  //: 当前这一轮有没有助手消息了。没答之前接着到的回执 / 用户消息还属于这一轮。
+  let answered = false;
 
   const pushTimeline = (turn: TraceTurn, timeline: AgentTimelineItem[] | undefined, messageId: string) => {
     for (const item of timeline ?? []) {
@@ -261,8 +273,29 @@ export function buildTurns(
 
   for (const message of messages) {
     const payload = readPayload(message);
+    if (message.role === JOB_RECEIPT_ROLE) {
+      if (!current || answered) current = openTurn("");
+      answered = false;
+      current.events.push({
+        key: `${message.id}:receipt`,
+        turn: current.turn,
+        step: 0,
+        kind: "context",
+        messageId: message.id,
+        summary: oneLine(message.content),
+        text: message.content,
+        startedAt: null,
+        durationSeconds: null,
+      });
+      current.messageIds.push(message.id);
+      continue;
+    }
     if (message.role === "user") {
-      current = openTurn(message.content, payload.context ?? "", message.id);
+      const ridesWithReceipts =
+        current !== null && !answered && !current.prompt && current.events.every((event) => event.kind === "context");
+      if (current && ridesWithReceipts) askIn(current, message.content, payload.context ?? "", message.id);
+      else current = openTurn(message.content, payload.context ?? "", message.id);
+      answered = false;
       current.messageIds.push(message.id);
       continue;
     }
@@ -286,6 +319,7 @@ export function buildTurns(
     }
 
     current.messageIds.push(message.id);
+    answered = true;
     // 系统提示插到**这一轮最前面**,因为模型收到的顺序就是它在最先 —— 线上它是 messages[0]
     // (pi-ai 的 openai-completions 先 push system,再遍历消息;Anthropic 那条路是顶层 system
     // 字段)。它存在助手消息的 payload 里只是**存储位置**,不是发生顺序:跟着存储位置渲染

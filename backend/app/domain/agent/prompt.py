@@ -302,18 +302,30 @@ def job_receipt_envelope(content: str, job_id: str) -> str:
     return f"【后台任务回执】job id:{job_id}\n\n{content}"
 
 
+def job_receipts_prompt(receipts: list[tuple[str, str]], *, before_user: bool) -> str:
+    """一批回执 → 给模型的那一段。`receipts` 是 [(job id, 正文)],按到达先后。
+
+    一批一起交:智能体正忙时到的几条攒到这一轮结束,合成一次交给它(见 host._drain_queue_locked)。
+    `before_user`:这批回执搭的是一条用户消息的那一轮 —— 末尾说清楚下面那段才是用户说的话,
+    不然最后一条回执的正文和用户的话连成一片,模型分不出哪句是谁说的。
+    """
+    text = "\n\n".join(job_receipt_envelope(content, job_id) for job_id, content in receipts)
+    return f"{text}\n\n(以上是后台任务回执。下面是用户的消息。)" if before_user and text else text
+
+
 ORIGIN_ENVELOPES = {
     "from_agent_session": agent_notice_envelope,
-    "from_job": job_receipt_envelope,
 }
 
 
-def origin_marker_for(origin_session_id: str | None, origin_job_id: str | None = None) -> dict[str, str]:
-    """把来源收成落库用的那一个标记。**同一条消息只有一个来源** —— 先来先得。"""
+def origin_marker_for(origin_session_id: str | None) -> dict[str, str]:
+    """把来源收成落库用的那一个标记。
+
+    后台任务的回执**不走这里**:它不是一条用户消息,落库就是自己的角色(host.JOB_RECEIPT_ROLE),
+    信封在交给模型的那一刻按批加(job_receipts_prompt)。
+    """
     if origin_session_id:
         return {"from_agent_session": origin_session_id}
-    if origin_job_id:
-        return {"from_job": origin_job_id}
     return {}
 
 

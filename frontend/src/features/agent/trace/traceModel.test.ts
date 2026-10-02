@@ -215,3 +215,36 @@ describe("轨迹概览投影", () => {
     expect(model!.spans.some((span) => span.kind === "turn")).toBe(true);
   });
 });
+
+describe("后台任务回执在轨迹里", () => {
+  /* 回执不再是用户消息(role=job_receipt)。它照样是一轮的由头:智能体空闲时一条回执自己起一轮,忙时攒到
+     下一轮一并交出去 —— 不认它的话,回执和它引出的那个回答会挂到上一轮名下,一轮看起来答了两遍。 */
+  it("回执自己起一轮,画成交给模型的 CONTEXT;连着到的几条并在同一轮", () => {
+    const turns = buildTurns([
+      message({ id: "u1", role: "user", content: "配三段" }),
+      message({ id: "a1", role: "assistant", payload: { timeline: [{ type: "text", text: "提交了" }] } }),
+      message({ id: "r1", role: "job_receipt", content: "「配音 1」已完成" }),
+      message({ id: "r2", role: "job_receipt", content: "「配音 2」已完成" }),
+      message({ id: "a2", role: "assistant", payload: { timeline: [{ type: "text", text: "都好了" }] } }),
+    ]);
+    expect(turns).toHaveLength(2);
+    expect(turns[1].events.filter((event) => event.kind === "context").map((event) => event.text)).toEqual([
+      "「配音 1」已完成",
+      "「配音 2」已完成",
+    ]);
+    expect(turns[1].messageIds).toEqual(["r1", "r2", "a2"]);
+  });
+
+  it("回执搭了一条用户消息的车:同一轮,回执在前、提问在后", () => {
+    const turns = buildTurns([
+      message({ id: "u1", role: "user", content: "配三段" }),
+      message({ id: "a1", role: "assistant" }),
+      message({ id: "r1", role: "job_receipt", content: "「配音 1」已完成" }),
+      message({ id: "u2", role: "user", content: "顺便调大音量" }),
+      message({ id: "a2", role: "assistant" }),
+    ]);
+    expect(turns).toHaveLength(2);
+    expect(turns[1].prompt).toBe("顺便调大音量");
+    expect(turns[1].events.map((event) => event.kind)).toEqual(["context", "user"]);
+  });
+});

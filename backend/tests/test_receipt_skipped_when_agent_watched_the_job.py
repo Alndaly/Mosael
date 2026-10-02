@@ -11,7 +11,7 @@ import mcp_server
 from app.core.db import SessionLocal
 from app.db.models import AgentMessage, AgentSession, Job, User
 from app.domain import jobs as jobs_domain
-from app.domain.agent import receipts
+from app.domain.agent import host, receipts
 from tests.util import fresh_client
 
 
@@ -35,10 +35,10 @@ def _job(ws: str, me: str, session_id: str) -> str:
 
 
 def _queued_receipt(session_id: str, job_id: str) -> None:
-    """回执在这一轮跑着的时候到:post_user_message 抢不到会话,落成一条排队的消息。"""
+    """回执在这一轮跑着的时候到:post_job_receipt 抢不到会话,落成一条「待送」的回执(不进队列)。"""
     with SessionLocal() as db:
-        db.add(AgentMessage(session_id=session_id, role="user", content="「签章文件.pdf」已完成。",
-                            payload={"queued": True, "from_job": job_id}))
+        db.add(AgentMessage(session_id=session_id, role=host.JOB_RECEIPT_ROLE, content="「签章文件.pdf」已完成。",
+                            payload={"job_id": job_id, "undelivered": True}))
         db.commit()
 
 
@@ -50,14 +50,15 @@ def _finish(job_id: str) -> None:
 
 
 def _queued(session_id: str) -> list[str]:
+    """还等着交给智能体的回执(按任务 id)。"""
     with SessionLocal() as db:
-        rows = db.query(AgentMessage).filter_by(session_id=session_id).all()
-        return [str((row.payload or {}).get("from_job")) for row in rows if (row.payload or {}).get("queued")]
+        rows = db.query(AgentMessage).filter_by(session_id=session_id, role=host.JOB_RECEIPT_ROLE).all()
+        return [str((row.payload or {}).get("job_id")) for row in rows if (row.payload or {}).get("undelivered")]
 
 
-def test_回执已经排上队_智能体get_job看到终态就从队列里拿掉(monkeypatch) -> None:
+def test_回执已经落库待送_智能体get_job看到终态就拿掉(monkeypatch) -> None:
     ws, me = _setup()
-    monkeypatch.setattr(receipts.host, "post_user_message", lambda *args, **kwargs: None)
+    monkeypatch.setattr(receipts.host, "post_job_receipt", lambda *args, **kwargs: None)
     job_id = _job(ws, me, "s-mine")
     _finish(job_id)
     _queued_receipt("s-mine", job_id)
@@ -66,7 +67,7 @@ def test_回执已经排上队_智能体get_job看到终态就从队列里拿掉
     with mcp_server.calling_as(user_id=me, session_id="s-mine"):
         seen = mcp_server.get_job(job_id)
     assert seen["status"] == "succeeded"
-    assert _queued("s-mine") == [], "看到终态之后,排队的回执还会再跑一轮"
+    assert _queued("s-mine") == [], "看到终态之后,待送的回执还会再跑一轮"
     with SessionLocal() as db:
         assert db.get(Job, job_id).payload["receipt"]["seen"] is True
 
@@ -74,7 +75,7 @@ def test_回执已经排上队_智能体get_job看到终态就从队列里拿掉
 def test_看到终态之后才轮到送_就不送(monkeypatch) -> None:
     ws, me = _setup()
     posted: list[str] = []
-    monkeypatch.setattr(receipts.host, "post_user_message", lambda db, session, content, *a, **k: posted.append(content))
+    monkeypatch.setattr(receipts.host, "post_job_receipt", lambda db, session, content, *a, **k: posted.append(content))
     job_id = _job(ws, me, "s-mine")
     with SessionLocal() as db:
         job = db.get(Job, job_id)
@@ -88,7 +89,7 @@ def test_没看到的照样送_还在跑时查一眼不算(monkeypatch) -> None:
     """回执的本意不变:智能体提交完就断了线索的,跑完照样告诉它。"""
     ws, me = _setup()
     posted: list[str] = []
-    monkeypatch.setattr(receipts.host, "post_user_message", lambda db, session, content, *a, **k: posted.append(content))
+    monkeypatch.setattr(receipts.host, "post_job_receipt", lambda db, session, content, *a, **k: posted.append(content))
     job_id = _job(ws, me, "s-mine")
     with mcp_server.calling_as(user_id=me, session_id="s-mine"):
         assert mcp_server.get_job(job_id)["status"] != "succeeded"
@@ -98,7 +99,7 @@ def test_没看到的照样送_还在跑时查一眼不算(monkeypatch) -> None:
 
 def test_别的会话看一眼_不替这次对话确认(monkeypatch) -> None:
     ws, me = _setup()
-    monkeypatch.setattr(receipts.host, "post_user_message", lambda *args, **kwargs: None)
+    monkeypatch.setattr(receipts.host, "post_job_receipt", lambda *args, **kwargs: None)
     job_id = _job(ws, me, "s-mine")
     _finish(job_id)
     _queued_receipt("s-mine", job_id)

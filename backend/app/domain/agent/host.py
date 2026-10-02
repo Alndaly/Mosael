@@ -6,7 +6,7 @@ import math
 import threading
 import time
 
-from sqlalchemy import exists, select, update
+from sqlalchemy import and_, exists, or_, select, update
 from sqlalchemy.orm import Session
 
 from app.ai.sidecar.pi_client import SidecarError, TurnResult, abort_turn, compact_session, run_turn, steer_turn
@@ -15,6 +15,7 @@ from app.domain.agent.prompt import (
     _prompt_snapshot,
     _prompt_with_context,
     build_system_prompt,
+    job_receipts_prompt,
     origin_marker_for,
     session_title,
     user_prompt,
@@ -315,6 +316,26 @@ def unseen_since_last_success(db: Session, session: AgentSession) -> str:
 
 
 
+#: 后台任务的回执落库用的角色。**它不是用户消息**:此前回执借用户的名义进会话(role=user + from_job),
+#: 会话正忙时就带着 queued 进了排队 —— 输入框上方排出七八条「「配音 3」已完成」,带着 Steer 和删除,
+#: 这一轮结束后又每条各跑一轮(用户截图)。现在它有自己的角色:不进队列,界面画成一行任务通知。
+#:
+#: payload:`job_id`(哪个任务);还没交给智能体的另带 `undelivered: true` 和 `deliver_as`(以谁的身份跑
+#: 那一轮 —— 建任务的人,和排队消息的 queued_by 同一个理由:后台线程没有请求可以认人)。
+JOB_RECEIPT_ROLE = "job_receipt"
+
+
+def _waiting(session_id: str):
+    """「这个会话有东西在等下一轮」的条件:有人排了话,或者有回执还没交给智能体。"""
+    return exists().where(
+        AgentMessage.session_id == session_id,
+        or_(
+            and_(AgentMessage.role == "user", AgentMessage.payload["queued"].as_boolean().is_(True)),
+            and_(AgentMessage.role == JOB_RECEIPT_ROLE, AgentMessage.payload["undelivered"].as_boolean().is_(True)),
+        ),
+    )
+
+
 def _claim_idle_session(db: Session, session_id: str, *, only_if_queued: bool = False) -> bool:
     """Atomically reserve the session for exactly one direct sender or queue drain.
 
@@ -322,22 +343,109 @@ def _claim_idle_session(db: Session, session_id: str, *, only_if_queued: bool = 
     turn in that gap. Keep the conditional update in one shared primitive so the direct-message
     and drain paths cannot drift back to different locking rules.
 
-    ``only_if_queued``(队列 drain 用):**有排队的消息才抢**,和「是不是空闲」写在同一条条件
-    更新里。此前 drain 是先抢(置 running 并提交)、再看队列、空的再放回 idle —— 每一轮结束后
+    ``only_if_queued``(队列 drain 用):**有东西在等才抢**(排队的话、没送的回执),和「是不是空闲」写在
+    同一条条件更新里。此前 drain 是先抢(置 running 并提交)、再看队列、空的再放回 idle —— 每一轮结束后
     都有一小段「没有任何一轮在跑,会话却显示 running」:界面上闪一下「思考中」,CI 里
     test_turn_error_becomes_assistant_error_message 时不时正好读到这一刻。先看队列再抢也不行,
     那正是两个 drain 抢同一条消息的缝;两个条件交给数据库一步裁决,缝就没了。
     """
     claim = update(AgentSession).where(AgentSession.id == session_id, AgentSession.status != "running")
     if only_if_queued:
-        claim = claim.where(
-            exists().where(
-                AgentMessage.session_id == session_id,
-                AgentMessage.role == "user",
-                AgentMessage.payload["queued"].as_boolean().is_(True),
-            )
-        )
+        claim = claim.where(_waiting(session_id))
     return bool(db.execute(claim.values(status="running")).rowcount)
+
+
+def _undelivered_receipts(db: Session, session: AgentSession) -> list[AgentMessage]:
+    """还没交给智能体的回执,按到达先后。"""
+    rows = db.scalars(
+        select(AgentMessage)
+        .where(AgentMessage.session_id == session.id, AgentMessage.role == JOB_RECEIPT_ROLE)
+        .order_by(AgentMessage.created_at)
+    )
+    return [row for row in rows if (row.payload or {}).get("undelivered")]
+
+
+def _hand_over_receipts(db: Session, session: AgentSession, *, before_user: bool) -> str:
+    """把还没送的回执**一次**交出去:标成已送、时间戳改成现在,返回给模型的那一段(没有就是空串)。
+
+    时间戳改成交出去的这一刻,和 `_unqueue` 同一个理由:对话按 created_at 排,回执落库时那一轮还在跑,
+    它的回答要到这一轮结束才落库 —— 不改的话回执排在那个回答**前面**,读起来像回答之前就收到了。
+    界面在这期间把它们画在正在跑的那一轮下面(见前端 CanvasAgentChat / ChatWorkspace),交出去之后
+    的位置和那时一致。
+    """
+    receipts = _undelivered_receipts(db, session)
+    for receipt in receipts:
+        payload = dict(receipt.payload or {})
+        payload.pop("undelivered", None)
+        payload.pop("deliver_as", None)
+        receipt.payload = payload
+        receipt.created_at = now()
+    return job_receipts_prompt(
+        [(str((receipt.payload or {}).get("job_id") or ""), receipt.content) for receipt in receipts],
+        before_user=before_user,
+    )
+
+
+def _with_receipts(prompt: str, receipts: str) -> str:
+    return f"{receipts}\n\n{prompt}" if receipts else prompt
+
+
+def post_job_receipt(db: Session, session: AgentSession, content: str, owner: User, *, job_id: str) -> AgentMessage:
+    """一个后台任务跑完了,把回执交给这次对话的智能体。
+
+    **会话空闲**:回执落库(已送),直接起一轮,那一轮的提示词就是这条回执(连同此前没送出去的,如果有)。
+    **会话正忙**:回执落库成「待送」,**不进队列** —— 这一轮结束时 drain 把攒下的回执合成一次交出去:
+    只有回执就起一轮;有人排了话,就搭那一轮的车(见 _drain_queue_locked)。
+
+    为什么不插进正在跑的这一轮(steer / follow_up):pi 的插话队列在「最后一次取队列之后、这一轮收尾之前」有一道缝,
+    落进缝里的消息就丢了(agent-sidecar/src/subagent.ts 为同一个缝选了收尾清算);而回执丢了,智能体就永远不知道
+    那个任务跑完了。收尾时从库里取没有这道缝,代价是晚到这一轮结束 —— 而这一轮本来也在忙别的。
+    """
+    if _claim_idle_session(db, session.id):
+        # 失败的那几轮模型没见过(失败不回存 adapter_state),而用户以为它见过 —— 和用户消息同一处补法。
+        unseen = unseen_since_last_success(db, session)
+        # 先交出此前没送出去的(如果有),这一条排在它们后面 —— 同一轮里一并交给智能体。
+        earlier = _hand_over_receipts(db, session, before_user=False)
+        prompt = _with_receipts(job_receipts_prompt([(job_id, content)], before_user=False), earlier)
+        message = AgentMessage(session_id=session.id, role=JOB_RECEIPT_ROLE, content=content, payload={"job_id": job_id})
+        return _start_turn_with(db, session, message, _prompt_with_context(prompt, unseen), owner)
+    return _wait_for_the_running_turn(
+        db,
+        session,
+        AgentMessage(
+            session_id=session.id,
+            role=JOB_RECEIPT_ROLE,
+            content=content,
+            payload={"job_id": job_id, "undelivered": True, "deliver_as": owner.id},
+        ),
+    )
+
+
+def _start_turn_with(db: Session, session: AgentSession, message: AgentMessage, prompt: str, actor: User) -> AgentMessage:
+    """落库这一轮的由头(用户消息 / 回执),以 `actor` 的身份起一轮。调用方已经抢到了会话。"""
+    db.add(message)
+    db.commit()
+    token = _mint_service_token(db, actor, session.id)
+    _start_turn(session.id, prompt, token, actor_id=actor.id)
+    db.refresh(message)
+    return message
+
+
+def _wait_for_the_running_turn(db: Session, session: AgentSession, message: AgentMessage) -> AgentMessage:
+    """落库一条等这一轮结束的(排队的话 / 待送的回执),**再 drain 一次**。
+
+    排队这个决定是「读 status」和「写消息」两步,中间那一轮完全可能跑完并 drain 过了 —— 那次 drain
+    看到的队列还是空的,而这条消息随后才落库,于是它躺在一个 idle 的会话里,再也没有下一轮来捞它。
+    用户看到的是「发过去没反应」。
+
+    这一下补在写之后,所以看得见自己刚写的东西。上一轮还在跑的话它抢不到会话、直接让位,
+    那条消息由那一轮结束时的 drain 接走 —— 两边都不会漏,也不会重。
+    """
+    db.add(message)
+    db.commit()
+    db.refresh(message)
+    _drain_queue(session.id)
+    return message
 
 
 def post_user_message(
@@ -350,7 +458,6 @@ def post_user_message(
     references: list[dict] | None = None,
     body_document: dict | None = None,
     origin_session_id: str | None = None,
-    origin_job_id: str | None = None,
     answers: dict | None = None,
     steer_if_running: bool = False,
 ) -> AgentMessage:
@@ -376,10 +483,10 @@ def post_user_message(
     )
     # 再一样:失败的那几轮模型没见过(失败不回存 adapter_state),而用户以为它见过。
     prompt = _prompt_with_context(prompt, unseen_since_last_success(db, session))
-    prompt = with_origin_envelope(prompt, origin_marker_for(origin_session_id, origin_job_id))
+    prompt = with_origin_envelope(prompt, origin_marker_for(origin_session_id))
     # 另一个智能体会话发来的通知:落库带结构化来源(前端画徽章靠它),
     # 且**不参与**会话自动命名 —— 标题应当是人提的第一件事,不是别的智能体的信封。
-    origin_marker = origin_marker_for(origin_session_id, origin_job_id)
+    origin_marker = origin_marker_for(origin_session_id)
     if not _claim_idle_session(db, session.id):
         # 回答走插话:抢不到会话说明有一轮在跑,而这条正是它等的东西。插进去成功就当场落库
         # (不带 queued 标),于是它像一条正常的用户消息出现在对话里,而不是队列里那种待办。
@@ -410,31 +517,25 @@ def post_user_message(
         # The sender rides along: a queued turn is run later by a background thread, which has
         # no request and therefore no user to mint a service token for. The session does not
         # record an owner, so the message has to.
-        message = AgentMessage(
-            session_id=session.id,
-            role="user",
-            content=content,
-            payload={
-                "queued": True,
-                "queued_by": user.id,
-                **({"references": references} if references else {}),
-                **({"body_document": body_document} if body_document else {}),
-                **({"context": context.strip()} if context and context.strip() else {}),
-                **({"answers": answers} if answers else {}),
-                **origin_marker,
-            },
+        # **落库之后再 drain 一次**(见 _wait_for_the_running_turn)。
+        return _wait_for_the_running_turn(
+            db,
+            session,
+            AgentMessage(
+                session_id=session.id,
+                role="user",
+                content=content,
+                payload={
+                    "queued": True,
+                    "queued_by": user.id,
+                    **({"references": references} if references else {}),
+                    **({"body_document": body_document} if body_document else {}),
+                    **({"context": context.strip()} if context and context.strip() else {}),
+                    **({"answers": answers} if answers else {}),
+                    **origin_marker,
+                },
+            ),
         )
-        db.add(message)
-        db.commit()
-        db.refresh(message)
-        # **落库之后再 drain 一次。** 排队这个决定是「读 status」和「写消息」两步,中间那一轮
-        # 完全可能跑完并 drain 过了 —— 那次 drain 看到的队列还是空的,而这条消息随后才落库,
-        # 于是它躺在一个 idle 的会话里,再也没有下一轮来捞它。用户看到的是「发过去没反应」。
-        #
-        # 这一下补在写之后,所以看得见自己刚写的东西。上一轮还在跑的话它抢不到会话、直接让位,
-        # 那条消息由那一轮结束时的 drain 接走 —— 两边都不会漏,也不会重。
-        _drain_queue(session.id)
-        return message
     # context 也要存:发出去的是 `_prompt_with_context(content, context)`,而 content 只是它的一半。
     # 排队那条路一直存着,直发这条没存 —— 于是同一件事有两种记录,轨迹上看到的提问不是模型
     # 收到的提问。不存的话这段上下文除了当场生效之外不留任何痕迹,事后无从复盘。
@@ -452,13 +553,10 @@ def post_user_message(
     )
     if session.title == "新对话" and content.strip() and not origin_session_id:
         session.title = session_title(content)
-    db.add(message)
-    db.commit()
-
-    token = _mint_service_token(db, user, session.id)
-    _start_turn(session.id, prompt, token, actor_id=user.id)
-    db.refresh(message)
-    return message
+    # 还没交给智能体的回执(只会是上一轮收尾和这条消息之间到的)搭这一轮的车,排在这条消息之前。
+    # 先交再落这条:交出去的回执时间戳改成现在,这条消息落库在它们之后。
+    receipts = _hand_over_receipts(db, session, before_user=True)
+    return _start_turn_with(db, session, message, _with_receipts(prompt, receipts), user)
 
 
 def mint_tool_token(db: Session, user: User) -> str:
@@ -784,31 +882,43 @@ def _drain_queue_locked(session_id: str) -> None:
             return
         db.refresh(session)
         pending = _queued_messages(db, session)
-        if not pending:
+        receipts = _undelivered_receipts(db, session)
+        if not pending and not receipts:
             # 抢的时候队列里还有,读的时候没了(那条刚被取消 / 被引导进了别的轮)。必须把 status
             # 放回去,否则这个会话永远停在 running,之后每一条消息都会被当成"正忙"排进一个再也
             # 不会被 drain 的队列。
             session.status = "idle"
             db.commit()
             return
-        message = pending[0]
-        owner_id = (message.payload or {}).get("queued_by")
-        owner = db.get(User, owner_id) if owner_id else None
-        _unqueue(db, message)
+        # **攒下的回执一次交出去**,不是每条各起一轮:智能体连着提交一串配音时,它们在这一轮里陆续跑完,
+        # 此前每条都在这一轮之后各跑一轮(用户截图:输入框上方排了七八条)。有人排了话,回执就搭那一轮的车
+        # —— 排在他那句话之前交代,智能体回答他的时候已经知道这些任务跑完了;只有回执就自己起一轮。
+        message = pending[0] if pending else None
+        if message is not None:
+            actor_id = (message.payload or {}).get("queued_by")
+        else:
+            actor_id = (receipts[0].payload or {}).get("deliver_as")
+        owner = db.get(User, actor_id) if actor_id else None
+        handed = _hand_over_receipts(db, session, before_user=message is not None)
+        if message is not None:
+            _unqueue(db, message)
         if owner is None:
             # Without a sender there is no credential to run as. Clearing the flag anyway so it
             # is not retried on every subsequent turn — a message that silently reappears
             # forever is worse than one that visibly did not run.
-            logger.warning("queued message %s has no sender; not running it", message.id)
+            logger.warning("queued message / receipt in session %s has no sender; not running it", session_id)
             session.status = "idle"
             db.commit()
             return
         token = _mint_service_token(db, owner, session_id)
-        payload = message.payload or {}
-        content = user_prompt(message.content, payload, db=db, workspace_id=session.workspace_id)
-        # 排队那条也要补信封:它和直发走的是同一件事,只是晚一点跑。漏在这儿的话,
-        # 「对方正忙」时收到的消息,模型就不知道它是谁发的。
-        content = with_origin_envelope(content, payload)
+        if message is not None:
+            payload = message.payload or {}
+            content = user_prompt(message.content, payload, db=db, workspace_id=session.workspace_id)
+            # 排队那条也要补信封:它和直发走的是同一件事,只是晚一点跑。漏在这儿的话,
+            # 「对方正忙」时收到的消息,模型就不知道它是谁发的。
+            content = _with_receipts(with_origin_envelope(content, payload), handed)
+        else:
+            content = handed
         # 提交排在拼完提示词之后:拼的时候可能为挂着的文档补起一次解析(documents.reading.attachment_context),
         # 解析任务在提交之后才开跑(jobs.dispatch_job)。
         db.commit()
