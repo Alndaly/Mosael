@@ -103,6 +103,9 @@ def remove_track(db: Session, sequence_id: str, op: RemoveTrack) -> Sequence:
         "solo": track.solo,
         "locked": track.locked,
         "duck": track.duck,
+        #: 用途也要记:配音轨(role="dub")撤销回来要还是配音轨 —— 名字认不出它,
+        #: 再配一次就会另开一条新轨,旧的那条成了一条普通轨。
+        "role": track.role,
         "clips": [_clip_payload(clip) for clip in track.clips],
     }
     for clip in list(track.clips):

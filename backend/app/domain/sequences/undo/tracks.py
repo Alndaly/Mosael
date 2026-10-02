@@ -43,11 +43,12 @@ class RemoveTrack:
                 kind=payload["kind"],
                 name=payload["name"],
                 position=payload["position"],
-                muted=payload.get("muted", False),
+                muted=payload["muted"],
                 hidden=payload["hidden"],
-                solo=payload.get("solo", False),
-                locked=payload.get("locked", False),
-                duck=payload.get("duck", False),
+                solo=payload["solo"],
+                locked=payload["locked"],
+                duck=payload["duck"],
+                role=payload["role"],
             )
         )
         db.flush()  # 轨道行要先存在,它的片段才能引用它

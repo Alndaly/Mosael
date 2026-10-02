@@ -7055,6 +7055,37 @@ def _migrate_sequence_operation_clip_records_are_complete() -> None:
                 )
 
 
+def _migrate_removed_track_records_are_complete() -> None:
+    """「删轨道」的撤销记录补齐轨道的全部状态,包括用途(role)。
+
+    撤销按键取这几项(domain/sequences/undo/tracks.RemoveTrack)。早先的记录里没有 muted / solo / locked /
+    duck(当时还没有这几列,或者没记),也从来没有 role —— 撤销删掉的配音轨,还回来的是一条普通轨,再配
+    一次就另开一条新轨。缺的补成它们当时的含义:没有这个开关就是关着,没有用途就是普通轨(那份记录
+    本来就不知道它是不是配音轨,撤销的结果和此前一样)。已经齐全的原样留着:幂等。
+    """
+    if "sequence_operations" not in set(inspect(engine).get_table_names()):
+        return
+    defaults: dict[str, Any] = {"muted": False, "solo": False, "locked": False, "duck": False, "role": ""}
+    with engine.begin() as conn:
+        rows = conn.execute(
+            text("SELECT id, payload FROM sequence_operations WHERE kind = 'remove_track'")
+        ).mappings().all()
+        for row in rows:
+            raw = row["payload"]
+            try:
+                payload = json.loads(raw) if isinstance(raw, str) else raw
+            except ValueError:
+                continue
+            if not isinstance(payload, dict):
+                continue
+            missing = {key: value for key, value in defaults.items() if key not in payload}
+            if missing:
+                conn.execute(
+                    text("UPDATE sequence_operations SET payload = :p WHERE id = :id"),
+                    {"p": json.dumps({**payload, **missing}, ensure_ascii=False), "id": row["id"]},
+                )
+
+
 def _reindex_record_references() -> None:
     """引用表(record_references)是派生数据:抽取规则一变,整张按新规则重建。"""
     from app.db.references import reindex
@@ -7338,6 +7369,7 @@ def migration_plan() -> MigrationPlan:
             #: 撤销 / 重做按键取片段记录的每个字段:老记录先补齐。要读 clips.offline_asset;排在把老记录转成
             #: 改动日志的 clip-edits-keep-a-change-journal 之后,它转出来的片段记录也在这里补齐。
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_sequence_operation_clip_records_are_complete),
+            *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_removed_track_records_are_complete),
             #: 对账:引用表按当前抽取规则建(见 db/references)。排在所有改写 JSON 的迁移之后 —— 那些是原生 SQL,
             #: 不经过 flush 时的维护;抽取规则的版本号变了才整张重建,平常是一次查询。
             *_recurring(MigrationPhase.AFTER_SCHEMA, _reindex_record_references),
