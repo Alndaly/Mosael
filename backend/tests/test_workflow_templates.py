@@ -85,7 +85,7 @@ def test_full_video_template_has_valid_refs_and_parallel_planning() -> None:
     assert _invalid_references(graph) == []
     assert graph["meta"] == {
         "template_id": "full_video_generation",
-        "template_version": 11,
+        "template_version": 12,
         "source": "official",
     }
 
@@ -93,6 +93,12 @@ def test_full_video_template_has_valid_refs_and_parallel_planning() -> None:
     for edge in graph["edges"]:
         successors.setdefault(edge["source"], set()).add(edge["target"])
     assert successors["creative_brief"] == {"narrative_script", "visual_bible"}
+    #: 工作区里有哪些 3D 道具,和资产库那两份清单一样一开跑就列,接到布景师之前 —— 此前它一条线都没有,引擎不跑它。
+    assert {"props", "library_characters", "library_locations"} <= successors["start"]
+    assert successors["props"] == {"set_design"}
+    #: 建项目用「按画幅取尺寸」那一组;三视图、设定图一画出来就归进项目 —— 这两处此前只写在引用里,画布上看不见。
+    assert successors["frame_plan"] == {"video_project"}
+    assert successors["video_project"] >= {"character_sheets", "location_art"}
     #: 角色三视图、场景设定图和分镜都从视觉圣经出发,三视图与设定图并行画。项目在视觉圣经定下来之后才建
     #: (三视图一画出来就归进去),不和第一次对话并行 —— 后面几次对话失败时不留空项目。
     assert successors["visual_bible"] == {"character_sheets", "location_art", "storyboard", "video_project"}

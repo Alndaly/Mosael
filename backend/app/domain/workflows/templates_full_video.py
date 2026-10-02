@@ -551,6 +551,10 @@ JSON Schema 的对象。"""
         },
     )
 
+    #: **摆位:没有一条线从别的卡片底下穿过。** 卡片压在线上面,穿过去的线看着就像是那张卡片接出来的:此前
+    #: 「可用的 3D 道具」摆在三视图 → 逐镜那条线上,看着像它的输出接到了下游;建项目 → 字幕 / 导出两条数据线、
+    #: 按画幅取尺寸 → 逐镜那条长线横穿分镜、布景、搭场景那一排,真正的连线反倒认不出来。所以建项目和按画幅取尺寸
+    #: 放在最上面一行(长线沿着顶上走),逐镜和接时间线错开一行(字幕的那条线从它们上面进来)。
     nodes: list[dict[str, Any]] = [
         {
             "id": "start",
@@ -585,7 +589,7 @@ JSON Schema 的对象。"""
             "id": "frame_plan",
             "type": "json_extract",
             "name": {"zh": "按画幅取尺寸", "en": "Pick the sizes for the aspect ratio"},
-            "position": {"x": 340, "y": 460},
+            "position": {"x": 340, "y": -120},
             "config": {"source": json.dumps(frame_table, ensure_ascii=False), "path": "{{start.aspect_ratio}}"},
         },
         {
@@ -685,7 +689,7 @@ JSON Schema 的对象。"""
             "id": "video_project",
             "type": "project_sequence_create",
             "name": {"zh": "建立成片项目与时间线", "en": "Create the project and its timeline"},
-            "position": {"x": 680, "y": 300},
+            "position": {"x": 1040, "y": -120},
             "config": {
                 "name": "{{creative_brief.json.title}} · 自动成片",
                 "width": "{{frame_plan.value.width}}",
@@ -697,7 +701,7 @@ JSON Schema 的对象。"""
             "id": "character_sheets",
             "type": "loop_foreach",
             "name": {"zh": "每个角色:库里有就用,没有就画三视图", "en": "Every character: reuse from the library or draw a turnaround"},
-            "position": {"x": 1040, "y": 620},
+            "position": {"x": 1400, "y": 620},
             "config": {
                 "items": "{{visual_bible.json.characters}}",
                 "inputs": {"style": "{{visual_bible.json.style_prompt}}", "project_id": "{{video_project.project_id}}"},
@@ -712,7 +716,7 @@ JSON Schema 的对象。"""
             "id": "location_art",
             "type": "loop_foreach",
             "name": {"zh": "每个场景:库里有就用,没有就画设定图", "en": "Every location: reuse from the library or paint concept art"},
-            "position": {"x": 1040, "y": 820},
+            "position": {"x": 1400, "y": 820},
             "config": {
                 "items": "{{visual_bible.json.locations}}",
                 "inputs": {"style": "{{visual_bible.json.style_prompt}}", "project_id": "{{video_project.project_id}}"},
@@ -725,7 +729,7 @@ JSON Schema 的对象。"""
             "id": "storyboard",
             "type": "llm",
             "name": {"zh": "按时间拆解分镜与机位", "en": "Break the script into timed shots and camera set-ups"},
-            "position": {"x": 1040, "y": 300},
+            "position": {"x": 1040, "y": 140},
             "config": {
                 "profile_id": chat.profile_id,
                 "model": chat.model,
@@ -760,7 +764,7 @@ JSON Schema 的对象。"""
             "id": "props",
             "type": "scene_props",
             "name": {"zh": "可用的 3D 道具", "en": "Available 3D props"},
-            "position": {"x": 1400, "y": 460},
+            "position": {"x": 340, "y": 940},
             "config": {"model_ids": ""},
         },
         {
@@ -805,7 +809,7 @@ JSON Schema 的对象。"""
             "id": "generate_shots",
             "type": "loop_foreach",
             "name": {"zh": "逐镜生成画面与口播", "en": "Generate every shot's picture and narration"},
-            "position": {"x": 2040, "y": 300},
+            "position": {"x": 2080, "y": 460},
             "config": {
                 "items": "{{storyboard.json.shots}}",
                 "inputs": {
@@ -835,7 +839,7 @@ JSON Schema 的对象。"""
             "id": "assemble_timeline",
             "type": "loop_foreach",
             "name": {"zh": "按镜头顺序接上时间线", "en": "Append the shots to the timeline in order"},
-            "position": {"x": 2360, "y": 300},
+            "position": {"x": 2400, "y": 460},
             "config": {
                 "items": "{{generate_shots.results}}",
                 "inputs": {
@@ -853,7 +857,7 @@ JSON Schema 的对象。"""
             "id": "narration_subtitles",
             "type": "generate_subtitles",
             "name": {"zh": "把口播做成字幕", "en": "Turn the narration into subtitles"},
-            "position": {"x": 2680, "y": 300},
+            "position": {"x": 2720, "y": 300},
             "config": {
                 "sequence_id": "{{video_project.sequence_id}}",
                 "segments": "{{assemble_timeline.results}}",
@@ -868,14 +872,14 @@ JSON Schema 的对象。"""
             "id": "export_final",
             "type": "export_sequence",
             "name": {"zh": "合成并导出最终视频", "en": "Compose and export the final video"},
-            "position": {"x": 3000, "y": 300},
+            "position": {"x": 3040, "y": 140},
             "config": {"sequence_id": "{{video_project.sequence_id}}"},
         },
         {
             "id": "done_notice",
             "type": "notify",
             "name": {"zh": "成片完成通知", "en": "Video finished notice"},
-            "position": {"x": 3320, "y": 120},
+            "position": {"x": 3360, "y": -40},
             "config": {
                 "title": "视频已生成：{{creative_brief.json.title}}",
                 "body": "脚本、角色三视图、3D 白模、各镜视频和最终合成均已完成。最终素材 ID：{{export_final.asset_id}}",
@@ -885,7 +889,7 @@ JSON Schema 的对象。"""
             "id": "output",
             "type": "output",
             "name": {"zh": "交付完整制作结果", "en": "Hand over the finished production"},
-            "position": {"x": 3320, "y": 480},
+            "position": {"x": 3360, "y": 300},
             "config": {
                 "values": {
                     "title": "{{creative_brief.json.title}}",
@@ -906,10 +910,13 @@ JSON Schema 的对象。"""
             },
         },
     ]
+    #: **谁等谁,画布上都看得见。** 引用即依赖(引擎照样等它),可画布只画连线:此前「按画幅取尺寸 → 建项目」
+    #: 「建项目 → 三视图 / 设定图」只写在引用里,「可用的 3D 道具」更是一条线都没有 —— 顶层没有入边的节点引擎
+    #: 根本不跑(编辑器上挂着「未连接到流程」的角标),布景师拿到的道具清单永远是空的。这张图顶层没有条件分支,
+    #: 每一步都会跑,所以每个引用都画成一条控制边,不改谁该跑。
     edges = [
         {"id": "start_brief", "source": "start", "target": "creative_brief"},
         {"id": "start_frame_plan", "source": "start", "target": "frame_plan"},
-        {"id": "frame_plan_generate", "source": "frame_plan", "target": "generate_shots"},
         {"id": "brief_narrative", "source": "creative_brief", "target": "narrative_script"},
         {"id": "brief_visual", "source": "creative_brief", "target": "visual_bible"},
         #: 定角色之前先看资产库里有谁、有哪些地方 —— 故事里要的就是库里那一个时原名沿用,下游才认得出它。
@@ -917,19 +924,26 @@ JSON Schema 的对象。"""
         {"id": "start_library_locations", "source": "start", "target": "library_locations"},
         {"id": "library_characters_visual", "source": "library_characters", "target": "visual_bible"},
         {"id": "library_locations_visual", "source": "library_locations", "target": "visual_bible"},
+        #: 工作区里有哪些 3D 道具,和上面两份清单同一类:一开跑就列,布景师用。
+        {"id": "start_props", "source": "start", "target": "props"},
+        {"id": "props_set", "source": "props", "target": "set_design"},
         #: 项目在视觉圣经定下来之后才建(三视图、设定图一画出来就归进去):此前紧跟着第一次对话,后面几次对话
-        #: 失败时留下一个空项目。画布尺寸按「按画幅取尺寸」那一组(引用即依赖,会等它)。
+        #: 失败时留下一个空项目。画布尺寸按「按画幅取尺寸」那一组。
         {"id": "visual_project", "source": "visual_bible", "target": "video_project"},
+        {"id": "frame_plan_project", "source": "frame_plan", "target": "video_project"},
         {"id": "visual_sheets", "source": "visual_bible", "target": "character_sheets"},
         {"id": "visual_locations", "source": "visual_bible", "target": "location_art"},
+        {"id": "project_sheets", "source": "video_project", "target": "character_sheets"},
+        {"id": "project_locations", "source": "video_project", "target": "location_art"},
         {"id": "narrative_storyboard", "source": "narrative_script", "target": "storyboard"},
         {"id": "visual_storyboard", "source": "visual_bible", "target": "storyboard"},
         {"id": "storyboard_set", "source": "storyboard", "target": "set_design"},
         {"id": "set_build", "source": "set_design", "target": "build_set"},
+        #: 逐镜要用的项目和画幅尺寸经三视图 / 设定图那两步传到这里(它们在建项目之后),不再各拉一条长线横穿
+        #: 中间那一排 —— 那两条线压在分镜、布景、搭场景的卡片底下,看着像是它们之间的连线。
         {"id": "build_generate", "source": "build_set", "target": "generate_shots"},
         {"id": "sheets_generate", "source": "character_sheets", "target": "generate_shots"},
         {"id": "locations_generate", "source": "location_art", "target": "generate_shots"},
-        {"id": "project_generate", "source": "video_project", "target": "generate_shots"},
         {"id": "generate_assemble", "source": "generate_shots", "target": "assemble_timeline"},
         {"id": "assemble_subtitles", "source": "assemble_timeline", "target": "narration_subtitles"},
         {"id": "subtitles_export", "source": "narration_subtitles", "target": "export_final"},
@@ -937,7 +951,7 @@ JSON Schema 的对象。"""
         {"id": "export_output", "source": "export_final", "target": "output"},
     ]
     graph = {
-        "meta": {"template_id": FULL_VIDEO_GENERATION, "template_version": 11, "source": "official"},
+        "meta": {"template_id": FULL_VIDEO_GENERATION, "template_version": 12, "source": "official"},
         "nodes": nodes,
         "edges": edges,
     }

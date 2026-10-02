@@ -4,11 +4,11 @@
   "workflow_revision": 1,
   "name": "Topic to finished video",
   "description": "Turn a topic into a creative brief, script and visual bible; characters and locations already in the asset library are reused with their references, and only new ones get a turnaround sheet or concept art — saved to the library — auto-build a 3D blockout with each shot's camera position and move, then generate each shot from a first frame (and a last frame where needed) painted on the blockout — or straight from the turnarounds and the blockout camera move — and assemble, caption and export the video. Cost: by default up to 8 shots, each one video generation plus one or two keyframe images, on top of up to 7 turnaround and location images (none for those already in the library), 5 chat calls and per-shot narration — the most expensive template here; max_shots on the start node caps the shot count.",
-  "graph_hash": "bdc4eaf4c61ecb0fd924fc73ad2c39a49661be96bfb3b2d1176d4cc38e752da2",
+  "graph_hash": "78059bcf242b021339afb2c9a8e1d5c231cfa1eddc5ff22d8bc9d94742e592ee",
   "graph": {
     "meta": {
       "template_id": "full_video_generation",
-      "template_version": 11,
+      "template_version": 12,
       "source": "official"
     },
     "nodes": [
@@ -42,7 +42,7 @@
         "name": "Pick the sizes for the aspect ratio",
         "position": {
           "x": 340,
-          "y": 460
+          "y": -120
         },
         "config": {
           "source": "{\"16:9\": {\"frame_size\": \"\", \"video_size\": \"\", \"width\": 1920, \"height\": 1080}, \"9:16\": {\"frame_size\": \"\", \"video_size\": \"\", \"width\": 1080, \"height\": 1920}, \"1:1\": {\"frame_size\": \"\", \"video_size\": \"\", \"width\": 1080, \"height\": 1080}}",
@@ -398,8 +398,8 @@
         "type": "project_sequence_create",
         "name": "Create the project and its timeline",
         "position": {
-          "x": 680,
-          "y": 300
+          "x": 1040,
+          "y": -120
         },
         "config": {
           "name": "{{creative_brief.json.title}} · 自动成片",
@@ -413,7 +413,7 @@
         "type": "loop_foreach",
         "name": "Every character: reuse from the library or draw a turnaround",
         "position": {
-          "x": 1040,
+          "x": 1400,
           "y": 620
         },
         "config": {
@@ -544,7 +544,7 @@
         "type": "loop_foreach",
         "name": "Every location: reuse from the library or paint concept art",
         "position": {
-          "x": 1040,
+          "x": 1400,
           "y": 820
         },
         "config": {
@@ -675,7 +675,7 @@
         "name": "Break the script into timed shots and camera set-ups",
         "position": {
           "x": 1040,
-          "y": 300
+          "y": 140
         },
         "config": {
           "profile_id": "",
@@ -880,8 +880,8 @@
         "type": "scene_props",
         "name": "Available 3D props",
         "position": {
-          "x": 1400,
-          "y": 460
+          "x": 340,
+          "y": 940
         },
         "config": {
           "model_ids": ""
@@ -1217,8 +1217,8 @@
         "type": "loop_foreach",
         "name": "Generate every shot's picture and narration",
         "position": {
-          "x": 2040,
-          "y": 300
+          "x": 2080,
+          "y": 460
         },
         "config": {
           "items": "{{storyboard.json.shots}}",
@@ -1495,8 +1495,8 @@
         "type": "loop_foreach",
         "name": "Append the shots to the timeline in order",
         "position": {
-          "x": 2360,
-          "y": 300
+          "x": 2400,
+          "y": 460
         },
         "config": {
           "items": "",
@@ -1616,7 +1616,7 @@
         "type": "generate_subtitles",
         "name": "Turn the narration into subtitles",
         "position": {
-          "x": 2680,
+          "x": 2720,
           "y": 300
         },
         "config": {
@@ -1637,8 +1637,8 @@
         "type": "export_sequence",
         "name": "Compose and export the final video",
         "position": {
-          "x": 3000,
-          "y": 300
+          "x": 3040,
+          "y": 140
         },
         "config": {
           "sequence_id": ""
@@ -1652,8 +1652,8 @@
         "type": "notify",
         "name": "Video finished notice",
         "position": {
-          "x": 3320,
-          "y": 120
+          "x": 3360,
+          "y": -40
         },
         "config": {
           "title": "视频已生成：{{creative_brief.json.title}}",
@@ -1665,8 +1665,8 @@
         "type": "output",
         "name": "Hand over the finished production",
         "position": {
-          "x": 3320,
-          "y": 480
+          "x": 3360,
+          "y": 300
         },
         "config": {
           "values": {
@@ -1700,11 +1700,6 @@
         "target": "frame_plan"
       },
       {
-        "id": "frame_plan_generate",
-        "source": "frame_plan",
-        "target": "generate_shots"
-      },
-      {
         "id": "brief_narrative",
         "source": "creative_brief",
         "target": "narrative_script"
@@ -1735,8 +1730,23 @@
         "target": "visual_bible"
       },
       {
+        "id": "start_props",
+        "source": "start",
+        "target": "props"
+      },
+      {
+        "id": "props_set",
+        "source": "props",
+        "target": "set_design"
+      },
+      {
         "id": "visual_project",
         "source": "visual_bible",
+        "target": "video_project"
+      },
+      {
+        "id": "frame_plan_project",
+        "source": "frame_plan",
         "target": "video_project"
       },
       {
@@ -1747,6 +1757,16 @@
       {
         "id": "visual_locations",
         "source": "visual_bible",
+        "target": "location_art"
+      },
+      {
+        "id": "project_sheets",
+        "source": "video_project",
+        "target": "character_sheets"
+      },
+      {
+        "id": "project_locations",
+        "source": "video_project",
         "target": "location_art"
       },
       {
@@ -1777,11 +1797,6 @@
       {
         "id": "locations_generate",
         "source": "location_art",
-        "target": "generate_shots"
-      },
-      {
-        "id": "project_generate",
-        "source": "video_project",
         "target": "generate_shots"
       },
       {

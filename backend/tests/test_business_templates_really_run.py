@@ -39,6 +39,7 @@ from app.domain.workflows.templates_business import (
     product_pitch_short_graph,
     talking_script_video_graph,
 )
+from tests.test_scene_workflow_nodes import _import_glb
 from tests.util import fresh_client, make_voice
 
 CHAT = ModelChoice(profile_id="chat", provider="openai", model="chat-model")
@@ -756,8 +757,11 @@ def _sample(schema: dict[str, Any]) -> Any:
 
 
 class Test整片真跑:
-    def test_角色有的沿用没有的画_每一镜三种走法都交得出_有口播的镜头配音配字幕(self, monkeypatch) -> None:
+    def test_角色有的沿用没有的画_每一镜三种走法都交得出_有口播的镜头配音配字幕(self, monkeypatch, tmp_path) -> None:
         ws = _workspace()
+        #: 工作区里收着一件真道具。「可用的 3D 道具」用真执行器(读 GLB 量尺寸),不打桩 —— 此前它在模板顶层没有
+        #: 入边,引擎根本不跑它,布景师拿到的清单永远是空的;这里的假节点又恰好交空清单,两边一起把它盖住了。
+        _import_glb(ws, "产品主体", tmp_path, width=2, height=1, depth=3)
         graph = full_video_generation_graph(chat=CHAT, image=SEEDREAM, video=SEEDANCE)
         schemas = {
             node["config"]["json_schema_name"]: node["config"]["json_schema"]
@@ -804,7 +808,6 @@ class Test整片真跑:
             "entity_get": entity_get,
             "entity_list": lambda db, scope, config: {"entities": [], "count": 0, "text": ""},
             "entity_save": entity_save,
-            "scene_props": lambda db, scope, config: {"catalog": "", "model_ids": [], "count": 0},
             "scene_create": lambda db, scope, config: {"scene_id": "scene-1", "shot_ids": [], "shot_count": 3},
             "scene_render": scene_render,
         }
@@ -813,6 +816,10 @@ class Test整片真跑:
 
         context = _run(ws, graph, topic="一家老面馆", voice_id="voice-1")
 
+        #: 道具清单真的列出来了,而且交到了设计布景的那一次对话里。
+        assert context["props"]["count"] == 1
+        set_design = next(one for one in studio.calls["llm"] if one["name"] == "blockout_scene")
+        assert "产品主体 · 宽 2.00 × 高 1.00 × 深 3.00 米" in set_design["prompt"], set_design["prompt"]
         #: 老周库里有图,不再画;小林没有,画一张三视图并存进资产库。场景同样是新的。
         sheets = [one for one in studio.calls["ai_generate"] if one["prompt"].startswith("Character turnaround")]
         assert len(sheets) == 1 and "小林" in sheets[0]["prompt"]
