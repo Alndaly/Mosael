@@ -9,16 +9,27 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 import React from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const seen = vi.hoisted(() => ({ layers: [] as Array<{ clip: { id: string }; isBase?: boolean }> }));
+type SeenLayer = { clip: { id: string }; isBase?: boolean; transformOverride?: unknown };
+const seen = vi.hoisted(() => ({
+  layers: [] as SeenLayer[],
+  overlay: null as null | { onChange: (tf: unknown) => void; onCommit: (tf: unknown) => void },
+}));
 
 vi.mock("@/app/preferences", () => ({ useI18n: () => (key: string) => key }));
 vi.mock("@/features/editor/playback/CanvasCompositor", () => ({
-  CanvasCompositor: ({ layers }: { layers: Array<{ clip: { id: string }; isBase?: boolean }> }) => {
+  CanvasCompositor: ({ layers }: { layers: SeenLayer[] }) => {
     seen.layers = layers;
     return <canvas data-testid="compositor" />;
   },
 }));
 vi.mock("@/features/editor/playback/WebAudioMixer", () => ({ WebAudioMixer: () => null }));
+vi.mock("@/features/editor/TransformOverlay", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/features/editor/TransformOverlay")>()),
+  TransformOverlay: (props: { onChange: (tf: unknown) => void; onCommit: (tf: unknown) => void }) => {
+    seen.overlay = props;
+    return null;
+  },
+}));
 vi.mock("@/features/editor/playback/compositorFlag", () => ({ compositorSupported: () => true }));
 
 import type { Asset, Clip, Sequence, Track } from "@/api/client";
@@ -38,9 +49,9 @@ function track(id: string, position: number, clips: Clip[], kind = "video"): Tra
 
 const assets = [{ id: "img", kind: "image", name: "still", media_info: {} }] as unknown as Asset[];
 
-function renderMonitor(tracks: Track[], fps = 30) {
+function renderMonitor(tracks: Track[], fps = 30, props: Partial<React.ComponentProps<typeof Monitor>> = {}) {
   const sequence = { id: "s", name: "S", width: 1920, height: 1080, fps, tracks, reframe: {}, subtitle_style: {} } as unknown as Sequence;
-  return render(<Monitor sequence={sequence} assets={assets} />);
+  return render(<Monitor sequence={sequence} assets={assets} {...props} />);
 }
 
 beforeEach(() => {
@@ -50,6 +61,7 @@ beforeEach(() => {
     disconnect() {}
   });
   seen.layers = [];
+  seen.overlay = null;
   useEditorStore.setState({ playhead: 0, playing: false, selectedClipIds: [] });
 });
 
@@ -63,5 +75,22 @@ describe("监视器走帧", () => {
     fireEvent.click(screen.getByRole("button", { name: "monFrameBack" }));
     expect(useEditorStore.getState().playhead).toBe(24 / 25);
     expect(screen.getByTestId("monitor-timecode").textContent).toBe("00:00:00:24 / 00:00:10:00");
+  });
+});
+
+describe("画布上拖变换", () => {
+  it("提交失败:草稿撤掉,画面回到已保存的变换", async () => {
+    const onSetTransform = vi.fn(() => Promise.reject(new Error("locked")));
+    renderMonitor([track("V1", 0, [clip("c1", "V1", 0, 10)])], 30, { onSetTransform });
+    act(() => useEditorStore.getState().selectClip("c1"));
+    const dragged = { scale: 2, x: 0, y: 0, rotation: 0, opacity: 1 };
+    act(() => seen.overlay!.onChange(dragged));
+    expect(seen.layers[0]?.transformOverride).toEqual(dragged);
+    await act(async () => {
+      seen.overlay!.onCommit(dragged);
+      await Promise.resolve();
+    });
+    expect(onSetTransform).toHaveBeenCalledTimes(1);
+    expect(seen.layers[0]?.transformOverride ?? null).toBeNull();
   });
 });

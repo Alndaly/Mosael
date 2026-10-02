@@ -61,7 +61,8 @@ export function Monitor({
   /** In-progress style from the subtitle panel, so dragging a slider previews live. */
   subtitleStyleOverride?: Record<string, unknown> | null;
   assets: Asset[];
-  onSetTransform?: (clipId: string, transform: Transform) => void;
+  /** 提交画布上拖出来的变换。回一个 Promise 的话,失败时监视器丢掉草稿、画面回到已保存的样子。 */
+  onSetTransform?: (clipId: string, transform: Transform) => unknown;
   /** 双击花字在画布上就地编辑文字后提交。 */
   onSetText?: (clipId: string, text: string) => void;
   /** 重新拉取素材。代理转码中时按秒轮询,重试代理后也立刻调一次——服务端实体归 React Query
@@ -574,7 +575,7 @@ export function Monitor({
                   tfInteractRef.current = performance.now();
                   tfSettleRef.current = true; // hold the draft until the fresh sequence arrives
                   // 关键帧模式:拖拽结果写到当前进度的关键帧(已打点的属性),而不是覆盖基值。
-                  onSetTransform(
+                  const committed = onSetTransform(
                     selectedActive.id,
                     applyTransformCommit(
                       readTransform(selectedActive.transform),
@@ -582,6 +583,13 @@ export function Monitor({
                       next,
                     ),
                   );
+                  // 失败时序列不会变,等"新序列到了再撤草稿"就会一直等下去 —— 当场撤掉,回到已保存的样子。
+                  if (committed instanceof Promise) {
+                    committed.catch(() => {
+                      tfSettleRef.current = false;
+                      setDraft(null);
+                    });
+                  }
                 }}
               />
             </div>

@@ -17,11 +17,23 @@ const mocks = vi.hoisted(() => ({
   splitClip: vi.fn(),
   undoSequence: vi.fn(),
   redoSequence: vi.fn(),
+  moveClip: vi.fn(),
+  moveClipsBatch: vi.fn(),
+  trimClip: vi.fn(),
+  setClipTransform: vi.fn(),
+  splitClipAtPointsBatch: vi.fn(),
+  addTrack: vi.fn(),
   timelineProps: null as Record<string, unknown> | null,
+  monitorProps: null as Record<string, unknown> | null,
+  transcriptProps: null as Record<string, unknown> | null,
+  panelTab: "media",
 }));
 
+const toasts = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn(), message: vi.fn() }));
+vi.mock("sonner", () => ({ toast: toasts }));
+
 vi.mock("@/api/client", async (importOriginal) => {
-  const { timelineProps: _unused, ...apiMocks } = mocks;
+  const { timelineProps: _timeline, monitorProps: _monitor, transcriptProps: _transcript, panelTab: _tab, ...apiMocks } = mocks;
   return { ...(await importOriginal<typeof import("@/api/client")>()), ...apiMocks };
 });
 
@@ -29,7 +41,7 @@ vi.mock("@/app/preferences", () => ({ useI18n: () => (key: string) => key, usePr
 
 vi.mock("@/features/editor/useEditorPanels", () => ({
   useEditorPanels: () => ({
-    tab: "media",
+    tab: mocks.panelTab,
     setTab: vi.fn(),
     compact: false,
     sizes: { left: { media: 252, transcript: 420, subtitle: 320, voice: 320 }, right: 264, timeline: 252 },
@@ -39,7 +51,12 @@ vi.mock("@/features/editor/useEditorPanels", () => ({
 }));
 vi.mock("@/features/agent/CanvasAgentChat", () => ({ CanvasAgentChat: () => null }));
 vi.mock("@/features/editor/MediaPool", () => ({ MediaPool: () => <section /> }));
-vi.mock("@/features/editor/Monitor", () => ({ Monitor: () => <div data-testid="monitor" /> }));
+vi.mock("@/features/editor/Monitor", () => ({
+  Monitor: (props: Record<string, unknown>) => {
+    mocks.monitorProps = props;
+    return <div data-testid="monitor" />;
+  },
+}));
 vi.mock("@/features/editor/timeline/Timeline", () => ({
   Timeline: (props: Record<string, unknown>) => {
     mocks.timelineProps = props;
@@ -48,6 +65,12 @@ vi.mock("@/features/editor/timeline/Timeline", () => ({
   trackAcceptsAsset: () => true,
 }));
 vi.mock("@/features/editor/FontFaces", () => ({ FontFaces: () => null }));
+vi.mock("@/features/editor/TranscriptPanel", () => ({
+  TranscriptPanel: (props: Record<string, unknown>) => {
+    mocks.transcriptProps = props;
+    return null;
+  },
+}));
 
 import type { Clip, Project, Sequence, Track, Workspace } from "@/api/client";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -135,12 +158,21 @@ beforeEach(() => {
   });
   Element.prototype.scrollIntoView = vi.fn();
   mocks.timelineProps = null;
+  mocks.monitorProps = null;
+  mocks.transcriptProps = null;
+  mocks.panelTab = "media";
+  for (const fn of Object.values(toasts)) fn.mockReset();
   mocks.api.mockReset().mockImplementation((path: string) => {
     if (path.startsWith("/api/projects/") && path.endsWith("/sequences")) return Promise.resolve([current]);
     return Promise.resolve([]);
   });
   mocks.listFonts.mockReset().mockResolvedValue([]);
-  for (const fn of [mocks.splitClip, mocks.undoSequence, mocks.redoSequence]) fn.mockReset().mockImplementation(async () => current);
+  for (const fn of [
+    mocks.splitClip, mocks.undoSequence, mocks.redoSequence, mocks.moveClip, mocks.moveClipsBatch, mocks.trimClip,
+    mocks.setClipTransform, mocks.splitClipAtPointsBatch, mocks.addTrack,
+  ]) {
+    fn.mockReset().mockImplementation(async () => current);
+  }
   useEditorStore.setState({ playhead: 0, playing: false, selectedClipIds: [], dragDraft: null, tool: "select" });
 });
 
@@ -219,5 +251,55 @@ describe("方向键逐帧", () => {
     expect(useEditorStore.getState().playhead).toBe(26 / 30);
     press("ArrowLeft");
     expect(useEditorStore.getState().playhead).toBe(25 / 30);
+  });
+});
+
+/** 时间线把回调交给 EditorView;测试像时间线那样调用它们。 */
+function timeline<K extends string>(name: K): (...args: unknown[]) => unknown {
+  return mocks.timelineProps![name] as (...args: unknown[]) => unknown;
+}
+
+describe("拖动类编辑失败时说出来", () => {
+  const seq = () => sequenceWith([track("v1", "video", 0, [clip("c1", "v1", 0, 0, 10)])]);
+
+  it("移动失败:提示原因,草稿撤掉让片段回到原位", async () => {
+    renderEditor(seq());
+    await ready();
+    mocks.moveClip.mockRejectedValueOnce(new Error("Track is locked"));
+    act(() => {
+      useEditorStore.getState().setDragDraft({ clipId: "c1", trackId: "v1", timeline_start: 3, src_in: 0, src_out: 10, kind: "move", settling: true });
+      timeline("onMoveClip")("c1", 3, undefined, false);
+    });
+    await waitFor(() => expect(toasts.error).toHaveBeenCalledWith("Track is locked"));
+    expect(useEditorStore.getState().dragDraft).toBeNull();
+  });
+
+  it("修剪、组拖、换到新图层、按句切分失败都会提示", async () => {
+    mocks.panelTab = "transcript";
+    renderEditor(seq());
+    await ready();
+    mocks.trimClip.mockRejectedValueOnce(new Error("trim failed"));
+    mocks.moveClipsBatch.mockRejectedValueOnce(new Error("batch failed"));
+    mocks.addTrack.mockRejectedValueOnce(new Error("layer failed"));
+    mocks.splitClipAtPointsBatch.mockRejectedValueOnce(new Error("points failed"));
+    act(() => {
+      timeline("onTrimClip")("c1", { timeline_start: 0, src_in: 0, src_out: 5 });
+      timeline("onMoveClips")([{ clipId: "c1", timelineStart: 2 }]);
+      timeline("onMoveClipToNewLayer")("c1", 1);
+      (mocks.transcriptProps!.onSplitPoints as (cuts: unknown) => void)([{ clipId: "c1", srcTimes: [2] }]);
+    });
+    await waitFor(() => expect(toasts.error).toHaveBeenCalledWith("points failed"));
+    expect(toasts.error).toHaveBeenCalledWith("layer failed");
+    expect(toasts.error).toHaveBeenCalledWith("trim failed");
+    expect(toasts.error).toHaveBeenCalledWith("batch failed");
+  });
+
+  it("监视器上拖变换失败:提示原因,并告诉监视器这次没成(它好丢掉草稿)", async () => {
+    renderEditor(seq());
+    await ready();
+    mocks.setClipTransform.mockRejectedValueOnce(new Error("transform failed"));
+    const result = (mocks.monitorProps!.onSetTransform as (id: string, tf: unknown) => Promise<unknown>)("c1", { scale: 2 });
+    await expect(result).rejects.toThrow("transform failed");
+    await waitFor(() => expect(toasts.error).toHaveBeenCalledWith("transform failed"));
   });
 });

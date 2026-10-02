@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bot, FolderPlus, Plus, Redo2, Scissors, Sparkles, Type, Undo2 } from "lucide-react";
 
 import { toast } from "sonner";
+import { errorText } from "@/api/errorMessage";
 import { useRecorder } from "@/features/media/recordingContext";
 
 import {
@@ -244,8 +245,13 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
     applySequence(updated);
     draftSettleRef.current = true;
   };
-  const resyncAfterFailedDrag = () => {
-    draftSettleRef.current = true;
+  // 拖动 / 修剪 / 换层失败:先说出来为什么(锁定轨、越界、冲突……)—— 此前只悄悄 resync,片段弹回
+  // 原处而用户不知道发生了什么。草稿当场撤掉:缓存里还是失败前的真位置,片段就该回到那里;
+  // 等 refetch 改变 sequence 再撤是靠不住的 —— 数据没变时结构共享给回同一个引用,草稿会卡在失败的落点上。
+  const resyncAfterFailedDrag = (error: Error) => {
+    toast.error(errorText(error));
+    draftSettleRef.current = false;
+    useEditorStore.getState().setDragDraft(null);
     void refreshSequences();
   };
   React.useEffect(() => {
@@ -570,7 +576,10 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
     // Apply the returned sequence straight to the cache (no refetch gap) so the resized clip
     // lands at its final transform in the same tick the Monitor drops its drag draft.
     onSuccess: (updated) => applySequence(updated),
-    onError: refreshSequences,
+    onError: (error: Error) => {
+      toast.error(errorText(error));
+      void refreshSequences();
+    },
   });
   const reframeMutation = useMutation({
     scope: editScope,
@@ -625,7 +634,10 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
       if (updated) applySequence(updated);
       else void refreshSequences();
     },
-    onError: () => void refreshSequences(),
+    onError: (error: Error) => {
+      toast.error(errorText(error));
+      void refreshSequences();
+    },
   });
   const trackStateMutation = useMutation({
     scope: editScope,
@@ -1127,7 +1139,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
           sequence={sequence}
           subtitleStyleOverride={styleDraft}
           assets={assets.data ?? []}
-          onSetTransform={(clipId, transform) => setTransformMutation.mutate({ clipId, transform })}
+          onSetTransform={(clipId, transform) => setTransformMutation.mutateAsync({ clipId, transform })}
           onSetText={(clipId, text) => setTextMutation.mutate({ clipId, text })}
           onRefreshAssets={() => void qc.invalidateQueries({ queryKey: assetKeys.all(workspace.id) })}
         />
