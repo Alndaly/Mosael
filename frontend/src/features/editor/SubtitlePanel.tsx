@@ -1,6 +1,6 @@
 import React from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { AudioLines, Bold, ChevronDown, ChevronRight, Languages, Loader2, Plus, Sparkles, Trash2, Type, Upload } from "lucide-react";
+import { AudioLines, Bold, ChevronDown, ChevronRight, Clock, Languages, Loader2, Plus, Sparkles, Trash2, Type, Upload } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -25,6 +25,7 @@ import { useNoteStrings } from "@/features/notes/strings";
 import { noteExportVariants, type NoteExportLine } from "@/features/editor/noteExport";
 import { translatedCue, translationSource } from "@/features/editor/subtitleTranslate";
 import { SubtitleFiles } from "@/features/editor/SubtitleFiles";
+import { cueTrim, parseCueTime } from "@/features/editor/cueTiming";
 import { useEditorStore } from "@/features/editor/editorStore";
 import { useVirtualRows } from "@/features/editor/useVirtualRows";
 import { cn } from "@/lib/utils";
@@ -56,6 +57,7 @@ export function SubtitlePanel({
   onDub,
   onImportFile,
   importingFile,
+  onSetTiming,
 }: {
   sequence: Sequence;
   onSetText: (clipId: string, text: string) => void;
@@ -77,9 +79,12 @@ export function SubtitlePanel({
   /** 导入 .srt / .vtt(见 SubtitleFiles)。 */
   onImportFile?: (file: File, options: { trackId?: string; replace?: boolean }) => void;
   importingFile?: boolean;
+  /** 改一条字幕的起止(一次 trim、一步撤销)。 */
+  onSetTiming?: (clipId: string, timing: { timeline_start: number; src_in: number; src_out: number }) => void;
 }) {
   const t = useI18n();
   const noteStrings = useNoteStrings();
+  const playing = useEditorStore((state) => state.playing);
   const selectClip = useEditorStore((state) => state.selectClip);
 
   const subtitles = React.useMemo(
@@ -96,9 +101,9 @@ export function SubtitlePanel({
   const activeIds = React.useMemo(() => new Set(activeKey ? activeKey.split("\n") : []), [activeKey]);
 
   // 行的回调身份要稳定,memo 过的行才跳得过去;调用时读最新的 props。
-  const latest = React.useRef({ onSetText, onDeleteClip, onDub });
+  const latest = React.useRef({ onSetText, onDeleteClip, onDub, onSetTiming });
   React.useLayoutEffect(() => {
-    latest.current = { onSetText, onDeleteClip, onDub };
+    latest.current = { onSetText, onDeleteClip, onDub, onSetTiming };
   });
   const rowActions = React.useMemo<SubtitleRowActions>(
     () => ({
@@ -111,6 +116,7 @@ export function SubtitlePanel({
       dub: (clipId) => latest.current.onDub?.(clipId),
       remove: (clipId) => latest.current.onDeleteClip(clipId),
       setText: (clipId, text) => latest.current.onSetText(clipId, text),
+      setTiming: (clipId, timing) => latest.current.onSetTiming?.(clipId, timing),
     }),
     [selectClip],
   );
@@ -139,6 +145,16 @@ export function SubtitlePanel({
     () => noteExportVariants(noteLines, sequence.name, noteStrings),
     [noteLines, noteStrings, sequence.name],
   );
+
+  //: **播放时跟着当前字幕滚动**:一长串字幕里,正在念的那条滚出视野之后,列表就和画面对不上了。只在播放时跟,
+  //: 停下来编辑时不去拽用户正在看的位置。没渲染的行没有 DOM,按算出来的偏移滚(useVirtualRows.reveal)。
+  const revealRow = rows.reveal;
+  React.useEffect(() => {
+    const first = activeKey ? activeKey.split("\n")[0] : "";
+    if (playing && first) revealRow(rowKeys.indexOf(first));
+    // 只在「当前是哪一条」或播放状态变了时滚;行列表换了不该把视图拽走。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeKey, playing]);
 
   // 列轴要和行轴一起锁:不声明 grid-cols 的话隐式列按 max-content 定尺,样式条里任何一段
   // nowrap 文案(字体名、时间码)都会把整栏撑过左侧面板的固定宽度。
@@ -189,6 +205,7 @@ export function SubtitlePanel({
                 clip={clip}
                 active={activeIds.has(clip.id)}
                 canDub={Boolean(onDub)}
+                canEditTiming={Boolean(onSetTiming)}
                 actions={rowActions}
               />
             ))}
@@ -229,6 +246,7 @@ interface SubtitleRowActions {
   dub: (clipId: string) => void;
   remove: (clipId: string) => void;
   setText: (clipId: string, text: string) => void;
+  setTiming: (clipId: string, timing: { timeline_start: number; src_in: number; src_out: number }) => void;
 }
 
 /** 播放头下的字幕 id(多条以换行连接,没有则空串)。字符串可以直接拿 === 比,选择器据此判断要不要重渲。 */
@@ -247,15 +265,19 @@ const SubtitleRow = React.memo(function SubtitleRow({
   clip,
   active,
   canDub,
+  canEditTiming,
   actions,
 }: {
   rowRef: (element: HTMLElement | null) => void;
   clip: SubtitleClip;
   active: boolean;
   canDub: boolean;
+  canEditTiming: boolean;
   actions: SubtitleRowActions;
 }) {
   const t = useI18n();
+  //: 这一行正在改起止时间。
+  const [editingTiming, setEditingTiming] = React.useState(false);
   return (
     <div ref={rowRef} className={cn(
       // **不在行上留 border-l**:父容器的 divide-border 选择器特异性更高,会把子项的
@@ -275,6 +297,18 @@ const SubtitleRow = React.memo(function SubtitleRow({
           {formatTimecode(clip.timeline_start)} – {formatTimecode(clipEnd(clip))}
         </button>
         <span className="flex shrink-0 items-center gap-1">
+          {canEditTiming && (
+            <button
+              type="button"
+              className="cursor-pointer rounded-sm border-0 bg-transparent p-0.5 text-muted-foreground hover:bg-secondary hover:text-foreground"
+              title={t("subtitleEditTiming")}
+              aria-label={t("subtitleEditTiming")}
+              aria-pressed={editingTiming}
+              onClick={() => setEditingTiming((on) => !on)}
+            >
+              <Clock size={12} />
+            </button>
+          )}
           {/* 给这一条配音 = 切到「配音」页、只配这一条(不改时间线上的选中)。 */}
           {canDub && (
             <button
@@ -303,19 +337,81 @@ const SubtitleRow = React.memo(function SubtitleRow({
           静止时它就是一行正文,聚焦才垫一块浅底 + ring 说明"正在编辑"。
           `field-sizing:content` 让高度贴内容走(实测生效,单行字幕一行高);
           padding 恒定,聚焦时不会发生文字跳位。 */}
+      {editingTiming && (
+        <CueTimingEditor
+          start={clip.timeline_start}
+          end={clipEnd(clip)}
+          onCommit={(start, end) => {
+            const timing = cueTrim(start, end, clip.speed ?? 1);
+            if (timing && (start !== clip.timeline_start || end !== clipEnd(clip))) actions.setTiming(clip.id, timing);
+            setEditingTiming(false);
+          }}
+          onCancel={() => setEditingTiming(false)}
+        />
+      )}
       <textarea
         key={`sub-${clip.id}-${clip.text_override}`}
         className="w-full resize-none rounded-sm border-0 bg-transparent px-1 py-0.5 text-ui-sm leading-[1.55] text-foreground transition-colors duration-100 [field-sizing:content] hover:bg-[color-mix(in_oklab,var(--foreground)_4%,transparent)] focus-visible:bg-field focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
         rows={1}
         defaultValue={clip.text_override ?? ""}
+        title={t("subtitleClearToDelete")}
         onBlur={(event) => {
           const value = event.target.value.trim();
-          if (value && value !== clip.text_override) actions.setText(clip.id, value);
+          // **清空 = 删掉这条字幕。** 此前清空之后什么都不发生(后端也不收空文本),失焦后文字原样回来,
+          // 看着像没生效。一条没有字的字幕没有意义;删掉也是一步撤销就回来。
+          if (!value) actions.remove(clip.id);
+          else if (value !== clip.text_override) actions.setText(clip.id, value);
         }}
       />
     </div>
   );
 });
+
+/** 改一条字幕的起止。回车或失焦提交,Esc 放弃;读不出来的写法还原成原值(见 cueTiming.parseCueTime)。 */
+function CueTimingEditor({
+  start,
+  end,
+  onCommit,
+  onCancel,
+}: {
+  start: number;
+  end: number;
+  onCommit: (start: number, end: number) => void;
+  onCancel: () => void;
+}) {
+  const t = useI18n();
+  const [startText, setStartText] = React.useState(start.toFixed(2));
+  const [endText, setEndText] = React.useState(end.toFixed(2));
+  //: 回车提交之后输入框随即卸载,浏览器还会补一个失焦 —— 只认第一次。
+  const settled = React.useRef(false);
+  const commit = () => {
+    if (settled.current) return;
+    settled.current = true;
+    onCommit(parseCueTime(startText) ?? start, parseCueTime(endText) ?? end);
+  };
+  const keys = (event: React.KeyboardEvent) => {
+    if (event.key === "Enter") commit();
+    if (event.key === "Escape") {
+      settled.current = true;
+      onCancel();
+    }
+  };
+  const field = "w-20 rounded-sm border border-border bg-field px-1 py-0.5 text-ui-2xs tabular-nums text-foreground";
+  return (
+    <div
+      className="flex items-center gap-1.5 pl-1 text-ui-2xs text-muted-foreground"
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) commit();
+      }}
+    >
+      <input aria-label={t("subtitleStart")} className={field} value={startText} autoFocus
+        onChange={(event) => setStartText(event.target.value)} onKeyDown={keys} />
+      –
+      <input aria-label={t("subtitleEnd")} className={field} value={endText}
+        onChange={(event) => setEndText(event.target.value)} onKeyDown={keys} />
+    </div>
+  );
+}
 
 /** 一键翻译:把整轨字幕批量译成目标语言,一次提交、一步撤销。 */
 function SubtitleTranslate({

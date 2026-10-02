@@ -1073,6 +1073,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
               }}
               onDeleteClip={(clipId) => deleteClipMutation.mutate(clipId)}
               onImportFile={(file, options) => importSubtitleMutation.mutate({ file, ...options })}
+              onSetTiming={(clipId, payload) => trimClipMutation.mutate({ clipId, payload })}
               importingFile={importSubtitleMutation.isPending}
               onDub={(clipId) => {
                 setDubFocusClipId(clipId ?? null);
