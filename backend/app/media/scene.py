@@ -127,7 +127,7 @@ class TextLayers:
     subtitles: list[dict[str, Any]]
     #: video 轨上的花字(没有素材、有文字的片段)。**不看静音** —— 静音只管声音。
     titles: list[dict[str, Any]]
-    #: 每条字幕画在第几「道」(clip id → 道)。见 subtitle_lanes。
+    #: 每条字幕在字幕框里排第几「道」(clip id → 道)。见 subtitle_lanes。
     subtitle_lanes: dict[str, int]
 
 
@@ -149,11 +149,15 @@ def text_layers(tracks: list[dict[str, Any]]) -> TextLayers:
 
 
 def subtitle_lanes(shown: list[dict[str, Any]]) -> dict[str, int]:
-    """每条字幕画在第几「道」:显示着、有字幕的字幕轨按 position 从下往上排,第几条就是第几道。
+    """每条字幕在字幕框里排第几「道」:显示着、有字幕的字幕轨按 position 升序(= 时间线上从上到下)排,
+    第几条就是第几道,道 0 在框的最上面。
 
-    **两条字幕轨要各占一处。** 双语分两条轨(原文一条、译文一条)时,此前预览只画找到的第一条、导出把两条
-    叠在同一个位置 —— 预览看着少一种语言,成片里两行字压成一团。道的位置怎么摆见 render_plan.lane_style。
-    空轨不占道:一条没字的字幕轨不该把另一条挤到画面另一头。
+    **为什么按时间线顺序,而不是认「原文 / 译文」**:字幕轨上没有这种标记 —— role 只给配音轨用,翻译功能
+    把译文写回同一条字幕(「原文\\n译文」),不另建轨;轨名是给人看的、随便改。时间线顺序是用户看得见、
+    也挪得动的那一个。新建的字幕轨缺省放在最下面(tracks.add_track 只有视频轨缺省放最上面),所以先有的
+    原文轨默认在上、后导入的译文轨在下;要换就在时间线上把轨道上移 / 下移。
+
+    空轨不占道。各道怎么合成一框见 subtitle_frames。
     """
     lanes: dict[str, int] = {}
     occupied = sorted((track for track in shown if track.get("clips")), key=lambda track: int(track.get("position") or 0))
@@ -161,3 +165,75 @@ def subtitle_lanes(shown: list[dict[str, Any]]) -> dict[str, int]:
         for clip in track.get("clips") or []:
             lanes[str(clip["id"])] = lane
     return lanes
+
+
+def subtitle_text(clip: dict[str, Any]) -> str:
+    """一条字幕要画的字:去掉首尾空白。只剩空白就是不画。"""
+    return str(clip.get("text_override") or "").strip()
+
+
+def stacked_subtitle_text(present: list[dict[str, Any]], lanes: dict[str, int]) -> str:
+    """此刻在场的几条字幕合成**一框**:按道从上到下一道一行(一条字幕自己有几行就占几行),空白的不占行。
+
+    **为什么合成一框而不是各道分开摆**:双语分两条轨时用户要两行都在字幕样式指定的位置(通常底部),原文在上、
+    译文在下。合成一框之后,框整体按字幕样式定位 —— 底部时下沿不动、往上长,顶部时上沿不动、往下长 ——
+    每道此刻几行高由排版自己决定,预览(一个 DOM 元素)和导出(同一套 CSS 渲染的一张 PNG、或一条 libass
+    Dialogue)不用各算一遍高度。也因此「分两条轨」和「同一条轨里写两行」是同一框字、同一个画面。
+
+    同一道上不该同时有两条(一条轨上的片段不重叠);真有的话按开始时间、再按 id 排,结果仍是确定的。
+    前端 textLayers.stackedSubtitleText 是同一条规则,contracts/text-layer-cases.json 钉住。
+    """
+    drawn = sorted(
+        (clip for clip in present if subtitle_text(clip)),
+        key=lambda clip: (lanes.get(str(clip["id"]), 0), float(clip["timeline_start"]), str(clip["id"])),
+    )
+    return "\n".join(subtitle_text(clip) for clip in drawn)
+
+
+@dataclass(frozen=True)
+class SubtitleFrame:
+    """[start, end) 这段时间里画面上的那一框字幕。"""
+
+    start: float
+    end: float
+    text: str
+
+
+def subtitle_frames(subtitles: list[dict[str, Any]], lanes: dict[str, int]) -> list[SubtitleFrame]:
+    """把字幕切成「画面上那一框字不变」的几段 —— 导出按段烧(渲染计划的 subtitles 就是它)。
+
+    在场取左闭右开 [start, end),和预览(Monitor 的场景键)、画面层(active_clip_on_track)同一个区间:
+    同一道上首尾相接的两条,交界处只算后一条。切点是各条字幕的起止,按微秒取整 —— 浮点误差切出来的
+    几纳秒小段会在成片里闪一帧两道都在的画面。相邻两段的字一样就并成一段。
+
+    预览不切段,逐时刻用 stacked_subtitle_text 合成;两者按同一个在场区间、同一个合成规则,所以每一刻一致。
+
+    扫一遍切点、维护「此刻在场」的集合:一部两小时的片子几千条字幕,逐段再扫全部字幕是平方级的。
+    """
+    spans = [
+        (clip, round(float(clip["timeline_start"]), 6), round(clip_end(clip), 6))
+        for clip in subtitles
+        if subtitle_text(clip)
+    ]
+    spans = [(clip, start, end) for clip, start, end in spans if start < end]
+    entering: dict[float, list[int]] = {}
+    leaving: dict[float, list[int]] = {}
+    for index, (_clip, start, end) in enumerate(spans):
+        entering.setdefault(start, []).append(index)
+        leaving.setdefault(end, []).append(index)
+    cuts = sorted({*entering, *leaving})
+    present: dict[int, dict[str, Any]] = {}
+    frames: list[SubtitleFrame] = []
+    for lo, hi in zip(cuts, cuts[1:]):
+        for index in leaving.get(lo, ()):
+            present.pop(index, None)
+        for index in entering.get(lo, ()):
+            present[index] = spans[index][0]
+        text = stacked_subtitle_text(list(present.values()), lanes)
+        if not text:
+            continue
+        if frames and frames[-1].end == lo and frames[-1].text == text:
+            frames[-1] = SubtitleFrame(start=frames[-1].start, end=hi, text=text)
+        else:
+            frames.append(SubtitleFrame(start=lo, end=hi, text=text))
+    return frames

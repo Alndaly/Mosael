@@ -16,7 +16,7 @@
 import { describe, expect, it } from "vitest";
 
 import contract from "../../../../contracts/subtitle-cases.json";
-import { subtitleBox, subtitleCss, subtitleLaneStyle, type SubtitleStyle } from "@/features/editor/subtitleStyle";
+import { subtitleBox, subtitleCss, type SubtitleStyle } from "@/features/editor/subtitleStyle";
 
 type Case = (typeof contract)["cases"][number];
 
@@ -71,7 +71,7 @@ describe("字幕契约", () => {
     const place = testCase.placement;
 
     const actual = resolveTopLeft(
-      subtitleCss(subtitleLaneStyle(style, testCase.lane), testCase.frame.w),
+      subtitleCss(style, testCase.frame.w),
       testCase.frame,
       { w: place.box_w, h: place.box_h },
     );

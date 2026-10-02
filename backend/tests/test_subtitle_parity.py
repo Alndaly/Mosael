@@ -25,7 +25,6 @@ from pathlib import Path
 import pytest
 
 from app.media.render_executor import _subtitle_overlay_pos
-from app.media.render_plan import lane_style
 from app.media.text_render import _subtitle_style_css
 
 _CONTRACT = Path(__file__).resolve().parents[2] / "contracts" / "subtitle-cases.json"
@@ -108,9 +107,7 @@ def test_subtitle_placement_matches_contract(case: dict) -> None:
     style = _Style(**case["style"])
     place = case["placement"]
 
-    x, y = _subtitle_overlay_pos(
-        lane_style(style, case["lane"]), place["box_w"], place["box_h"], case["frame"]["w"], case["frame"]["h"]
-    )
+    x, y = _subtitle_overlay_pos(style, place["box_w"], place["box_h"], case["frame"]["w"], case["frame"]["h"])
 
     assert (x, y) == (place["x"], place["y"]), (
         f"{case['name']}\n  契约: {(place['x'], place['y'])}\n  实际: {(x, y)}\n"

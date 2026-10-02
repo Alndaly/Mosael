@@ -1,8 +1,14 @@
 {
   "contract": "text-layers",
-  "version": 2,
+  "version": 3,
   "readme": "contracts/README.md",
-  "description": "预览与导出必须一致的文字层语义:哪些片段作为字幕画出来、哪些作为花字画出来。轨道的「静音」只管声音,「隐藏」只管字幕显示。后端 backend/tests/test_text_layer_parity.py 与前端 textLayers.parity.test.ts 跑同一份语料。比较的是集合,不含叠放顺序。subtitle_lanes 是每条字幕画在第几道:显示着、有字幕的字幕轨按 position 从下往上排,第几条就是第几道;空轨和隐藏的轨不占道。",
+  "description": "预览与导出必须一致的文字层语义:哪些片段作为字幕画出来、哪些作为花字画出来,以及每一刻画面上那一框字幕里是哪几行。轨道的「静音」只管声音,「隐藏」只管字幕显示。后端 backend/tests/test_text_layer_parity.py 与前端 textLayers.parity.test.ts 跑同一份语料。",
+  "notes": [
+    "subtitles / titles 比较的是集合,不含叠放顺序。",
+    "subtitle_lanes 是每条字幕在字幕框里排第几道:显示着、有字幕的字幕轨按 position 升序(= 时间线上从上到下)排,第几条就是第几道,道 0 在框的最上面;空轨和隐藏的轨不占道。字幕轨上没有「原文 / 译文」的标记(role 只用于配音轨,翻译功能把译文写回同一条字幕),所以顺序就是用户在时间线上看到、也能挪动的那个顺序;新建的字幕轨缺省放在最下面(只有视频轨缺省放最上面),先有的原文轨默认在上。",
+    "subtitle_frames 是导出烧进成片的那几段:同一时刻各道在场的字幕合成一框,一道一行(一条字幕自己有几行就占几行),每条字幕去掉首尾空白,空白字幕不占行;画面上那一框字不变就是同一段。在场取左闭右开 [start, end)。时间是秒,按微秒取整。框放在画面哪里见 subtitle-cases。",
+    "后端直接比 subtitle_frames;预览不切段、逐时刻合成,前端那一侧在每一段的起点、中点、终点前一刻和终点上取样,看此刻合成出来的字和这一段(或段外的空)一致。"
+  ],
   "cases": [
     {
       "name": "subtitle-track-shows-its-clips",
@@ -15,16 +21,24 @@
           "muted": false,
           "hidden": false,
           "clips": [
-            { "id": "sub1", "asset_id": null, "text_override": "你好" },
-            { "id": "sub2", "asset_id": null, "text_override": "再见" }
+            { "id": "sub1", "asset_id": null, "text_override": "你好", "timeline_start": 0, "src_in": 0, "src_out": 2 },
+            { "id": "sub2", "asset_id": null, "text_override": "再见", "timeline_start": 2, "src_in": 0, "src_out": 2 }
           ]
         }
       ],
-      "expected": { "subtitles": ["sub1", "sub2"], "titles": [], "subtitle_lanes": { "sub1": 0, "sub2": 0 } }
+      "expected": {
+        "subtitles": ["sub1", "sub2"],
+        "titles": [],
+        "subtitle_lanes": { "sub1": 0, "sub2": 0 },
+        "subtitle_frames": [
+          { "start": 0, "end": 2, "text": "你好" },
+          { "start": 2, "end": 4, "text": "再见" }
+        ]
+      }
     },
     {
       "name": "hidden-subtitle-track-draws-nothing",
-      "why": "字幕轨头上的眼睛:隐藏的字幕轨在预览和成片里都不画,另一条没隐藏的照旧。",
+      "why": "字幕轨头上的眼睛:隐藏的字幕轨在预览和成片里都不画,也不在框里占一行;另一条没隐藏的照旧。",
       "tracks": [
         {
           "id": "s1",
@@ -32,7 +46,7 @@
           "position": 2,
           "muted": false,
           "hidden": true,
-          "clips": [{ "id": "hiddenSub", "asset_id": null, "text_override": "原文" }]
+          "clips": [{ "id": "hiddenSub", "asset_id": null, "text_override": "原文", "timeline_start": 0, "src_in": 0, "src_out": 2 }]
         },
         {
           "id": "s2",
@@ -40,10 +54,15 @@
           "position": 3,
           "muted": false,
           "hidden": false,
-          "clips": [{ "id": "shownSub", "asset_id": null, "text_override": "译文" }]
+          "clips": [{ "id": "shownSub", "asset_id": null, "text_override": "译文", "timeline_start": 0, "src_in": 0, "src_out": 2 }]
         }
       ],
-      "expected": { "subtitles": ["shownSub"], "titles": [], "subtitle_lanes": { "shownSub": 0 } }
+      "expected": {
+        "subtitles": ["shownSub"],
+        "titles": [],
+        "subtitle_lanes": { "shownSub": 0 },
+        "subtitle_frames": [{ "start": 0, "end": 2, "text": "译文" }]
+      }
     },
     {
       "name": "muted-video-track-keeps-its-titles",
@@ -58,7 +77,7 @@
           "clips": [{ "id": "title1", "asset_id": null, "text_override": "标题" }]
         }
       ],
-      "expected": { "subtitles": [], "titles": ["title1"], "subtitle_lanes": {} }
+      "expected": { "subtitles": [], "titles": ["title1"], "subtitle_lanes": {}, "subtitle_frames": [] }
     },
     {
       "name": "only-text-clips-on-video-tracks-are-titles",
@@ -86,7 +105,7 @@
           "clips": [{ "id": "strayText", "asset_id": null, "text_override": "不是花字" }]
         }
       ],
-      "expected": { "subtitles": [], "titles": ["title"], "subtitle_lanes": {} }
+      "expected": { "subtitles": [], "titles": ["title"], "subtitle_lanes": {}, "subtitle_frames": [] }
     },
     {
       "name": "subtitle-mute-flag-does-not-hide",
@@ -98,14 +117,19 @@
           "position": 1,
           "muted": true,
           "hidden": false,
-          "clips": [{ "id": "sub", "asset_id": null, "text_override": "字幕" }]
+          "clips": [{ "id": "sub", "asset_id": null, "text_override": "字幕", "timeline_start": 0, "src_in": 0, "src_out": 3 }]
         }
       ],
-      "expected": { "subtitles": ["sub"], "titles": [], "subtitle_lanes": { "sub": 0 } }
+      "expected": {
+        "subtitles": ["sub"],
+        "titles": [],
+        "subtitle_lanes": { "sub": 0 },
+        "subtitle_frames": [{ "start": 0, "end": 3, "text": "字幕" }]
+      }
     },
     {
-      "name": "bilingual-on-two-tracks-gets-two-lanes",
-      "why": "双语分两条字幕轨:两条都画、各占一道。此前预览只画找到的第一条、导出把两条叠在同一个位置。空轨不占道。",
+      "name": "bilingual-on-two-tracks-stacks-into-one-box",
+      "why": "双语分两条字幕轨:同一时刻两条轨上的字合成一框、两行都在字幕样式指定的位置,时间线上靠上的那条(先建的原文轨)在上。此前第二道换到画面另一头,底部样式下译文跑到画面顶上。空轨不占道。",
       "tracks": [
         {
           "id": "en",
@@ -113,7 +137,7 @@
           "position": 4,
           "muted": false,
           "hidden": false,
-          "clips": [{ "id": "hello", "asset_id": null, "text_override": "Hello" }]
+          "clips": [{ "id": "hello", "asset_id": null, "text_override": "Hello", "timeline_start": 0, "src_in": 0, "src_out": 2 }]
         },
         { "id": "empty", "kind": "subtitle", "position": 2, "muted": false, "hidden": false, "clips": [] },
         {
@@ -122,10 +146,235 @@
           "position": 3,
           "muted": false,
           "hidden": false,
-          "clips": [{ "id": "nihao", "asset_id": null, "text_override": "你好" }]
+          "clips": [{ "id": "nihao", "asset_id": null, "text_override": "你好", "timeline_start": 0, "src_in": 0, "src_out": 2 }]
         }
       ],
-      "expected": { "subtitles": ["hello", "nihao"], "titles": [], "subtitle_lanes": { "nihao": 0, "hello": 1 } }
+      "expected": {
+        "subtitles": ["hello", "nihao"],
+        "titles": [],
+        "subtitle_lanes": { "nihao": 0, "hello": 1 },
+        "subtitle_frames": [{ "start": 0, "end": 2, "text": "你好\nHello" }]
+      }
+    },
+    {
+      "name": "bilingual-in-one-cue-is-the-same-box",
+      "why": "同一条轨里写两行(翻译时勾「保留原文」就是这个形状)和分两条轨是同一框字 —— 验收判据:分两条轨的成片 = 同一条轨里写两行。",
+      "tracks": [
+        {
+          "id": "s1",
+          "kind": "subtitle",
+          "position": 3,
+          "muted": false,
+          "hidden": false,
+          "clips": [{ "id": "both", "asset_id": null, "text_override": "你好\nHello", "timeline_start": 0, "src_in": 0, "src_out": 2 }]
+        }
+      ],
+      "expected": {
+        "subtitles": ["both"],
+        "titles": [],
+        "subtitle_lanes": { "both": 0 },
+        "subtitle_frames": [{ "start": 0, "end": 2, "text": "你好\nHello" }]
+      }
+    },
+    {
+      "name": "track-moved-up-goes-on-top",
+      "why": "顺序只看时间线:把译文轨挪到原文轨上面,框里译文就在上。不凭轨名、不凭先后去猜哪条是原文。",
+      "tracks": [
+        {
+          "id": "zh",
+          "kind": "subtitle",
+          "position": 3,
+          "muted": false,
+          "hidden": false,
+          "clips": [{ "id": "nihao", "asset_id": null, "text_override": "你好", "timeline_start": 0, "src_in": 0, "src_out": 2 }]
+        },
+        {
+          "id": "en",
+          "kind": "subtitle",
+          "position": 1,
+          "muted": false,
+          "hidden": false,
+          "clips": [{ "id": "hello", "asset_id": null, "text_override": "Hello", "timeline_start": 0, "src_in": 0, "src_out": 2 }]
+        }
+      ],
+      "expected": {
+        "subtitles": ["hello", "nihao"],
+        "titles": [],
+        "subtitle_lanes": { "hello": 0, "nihao": 1 },
+        "subtitle_frames": [{ "start": 0, "end": 2, "text": "Hello\n你好" }]
+      }
+    },
+    {
+      "name": "only-one-lane-present-draws-one-line",
+      "why": "某一刻只有一条轨有字:框里只有那一行,和单轨字幕同一个位置 —— 不给不在场的那一道留空行。",
+      "tracks": [
+        {
+          "id": "zh",
+          "kind": "subtitle",
+          "position": 2,
+          "muted": false,
+          "hidden": false,
+          "clips": [{ "id": "nihao", "asset_id": null, "text_override": "你好", "timeline_start": 0, "src_in": 0, "src_out": 2 }]
+        },
+        {
+          "id": "en",
+          "kind": "subtitle",
+          "position": 3,
+          "muted": false,
+          "hidden": false,
+          "clips": [{ "id": "hello", "asset_id": null, "text_override": "Hello", "timeline_start": 3, "src_in": 0, "src_out": 2 }]
+        }
+      ],
+      "expected": {
+        "subtitles": ["hello", "nihao"],
+        "titles": [],
+        "subtitle_lanes": { "nihao": 0, "hello": 1 },
+        "subtitle_frames": [
+          { "start": 0, "end": 2, "text": "你好" },
+          { "start": 3, "end": 5, "text": "Hello" }
+        ]
+      }
+    },
+    {
+      "name": "staggered-cues-split-where-the-visible-set-changes",
+      "why": "两道时间不对齐:在场的字一变就切一段 —— 先只有原文,重叠的那段两行,原文走了只剩译文(框贴着样式那条边缩回一行)。",
+      "tracks": [
+        {
+          "id": "zh",
+          "kind": "subtitle",
+          "position": 2,
+          "muted": false,
+          "hidden": false,
+          "clips": [{ "id": "nihao", "asset_id": null, "text_override": "你好", "timeline_start": 0, "src_in": 0, "src_out": 3 }]
+        },
+        {
+          "id": "en",
+          "kind": "subtitle",
+          "position": 3,
+          "muted": false,
+          "hidden": false,
+          "clips": [{ "id": "hello", "asset_id": null, "text_override": "Hello", "timeline_start": 1.5, "src_in": 0, "src_out": 2.5 }]
+        }
+      ],
+      "expected": {
+        "subtitles": ["hello", "nihao"],
+        "titles": [],
+        "subtitle_lanes": { "nihao": 0, "hello": 1 },
+        "subtitle_frames": [
+          { "start": 0, "end": 1.5, "text": "你好" },
+          { "start": 1.5, "end": 3, "text": "你好\nHello" },
+          { "start": 3, "end": 4, "text": "Hello" }
+        ]
+      }
+    },
+    {
+      "name": "next-cue-on-a-lane-starts-a-new-frame",
+      "why": "区间左闭右开:同一道上相邻两条在交界处只算后一条,框里不会同时出现「一」和「二」;另一道那条横跨两段,两段里都在。",
+      "tracks": [
+        {
+          "id": "zh",
+          "kind": "subtitle",
+          "position": 2,
+          "muted": false,
+          "hidden": false,
+          "clips": [
+            { "id": "one", "asset_id": null, "text_override": "一", "timeline_start": 0, "src_in": 0, "src_out": 2 },
+            { "id": "two", "asset_id": null, "text_override": "二", "timeline_start": 2, "src_in": 0, "src_out": 2 }
+          ]
+        },
+        {
+          "id": "en",
+          "kind": "subtitle",
+          "position": 3,
+          "muted": false,
+          "hidden": false,
+          "clips": [{ "id": "both", "asset_id": null, "text_override": "One, two", "timeline_start": 0, "src_in": 0, "src_out": 4 }]
+        }
+      ],
+      "expected": {
+        "subtitles": ["both", "one", "two"],
+        "titles": [],
+        "subtitle_lanes": { "one": 0, "two": 0, "both": 1 },
+        "subtitle_frames": [
+          { "start": 0, "end": 2, "text": "一\nOne, two" },
+          { "start": 2, "end": 4, "text": "二\nOne, two" }
+        ]
+      }
+    },
+    {
+      "name": "three-lanes-stack-in-track-order",
+      "why": "三条字幕轨同时有字:按时间线从上到下一道一行;一条字幕自己有两行就占两行。中间那条隐藏的轨不占道。",
+      "tracks": [
+        {
+          "id": "note",
+          "kind": "subtitle",
+          "position": 6,
+          "muted": false,
+          "hidden": false,
+          "clips": [{ "id": "n", "asset_id": null, "text_override": "注释第一行\n注释第二行", "timeline_start": 1, "src_in": 0, "src_out": 1 }]
+        },
+        {
+          "id": "off",
+          "kind": "subtitle",
+          "position": 3,
+          "muted": false,
+          "hidden": true,
+          "clips": [{ "id": "x", "asset_id": null, "text_override": "看不见", "timeline_start": 0, "src_in": 0, "src_out": 2 }]
+        },
+        {
+          "id": "en",
+          "kind": "subtitle",
+          "position": 4,
+          "muted": false,
+          "hidden": false,
+          "clips": [{ "id": "t", "asset_id": null, "text_override": "Translation", "timeline_start": 0, "src_in": 0, "src_out": 2 }]
+        },
+        {
+          "id": "zh",
+          "kind": "subtitle",
+          "position": 1,
+          "muted": false,
+          "hidden": false,
+          "clips": [{ "id": "o", "asset_id": null, "text_override": "原文", "timeline_start": 0, "src_in": 0, "src_out": 2 }]
+        }
+      ],
+      "expected": {
+        "subtitles": ["n", "o", "t"],
+        "titles": [],
+        "subtitle_lanes": { "o": 0, "t": 1, "n": 2 },
+        "subtitle_frames": [
+          { "start": 0, "end": 1, "text": "原文\nTranslation" },
+          { "start": 1, "end": 2, "text": "原文\nTranslation\n注释第一行\n注释第二行" }
+        ]
+      }
+    },
+    {
+      "name": "blank-cue-takes-no-line",
+      "why": "只有空白的字幕不画、不占一行;每条字幕首尾的空白与换行去掉 —— 此前预览原样画出末尾那个换行(多一行空行),导出却去掉了。",
+      "tracks": [
+        {
+          "id": "zh",
+          "kind": "subtitle",
+          "position": 2,
+          "muted": false,
+          "hidden": false,
+          "clips": [{ "id": "blank", "asset_id": null, "text_override": "  ", "timeline_start": 0, "src_in": 0, "src_out": 2 }]
+        },
+        {
+          "id": "en",
+          "kind": "subtitle",
+          "position": 3,
+          "muted": false,
+          "hidden": false,
+          "clips": [{ "id": "hello", "asset_id": null, "text_override": " Hello\n", "timeline_start": 0, "src_in": 0, "src_out": 2 }]
+        }
+      ],
+      "expected": {
+        "subtitles": ["blank", "hello"],
+        "titles": [],
+        "subtitle_lanes": { "blank": 0, "hello": 1 },
+        "subtitle_frames": [{ "start": 0, "end": 2, "text": "Hello" }]
+      }
     }
   ]
 }

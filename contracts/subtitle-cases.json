@@ -1,13 +1,13 @@
 {
   "contract": "subtitle",
-  "version": 2,
+  "version": 3,
   "readme": "contracts/README.md",
   "description": "预览与导出必须字面一致的字幕语义:同一份 subtitle_style 在同一画幅下,字幕框解析出来的几何与用色是什么、这个框放在画面的哪个像素上。后端 backend/tests/test_subtitle_parity.py 与前端 subtitleStyle.parity.test.ts 跑同一份语料。",
   "notes": [
     "box 是**解析后**的值,不是 CSS 写法:预览按容器查询单位(cqw)写字号、导出按帧原生 px 写,两种写法在画幅原生宽度上解析到同一个像素值,所以语料记像素。",
     "placement 给的是字幕框左上角在画面里的像素坐标。预览用 CSS 百分比表达(浏览器负责解析),导出直接算 overlay 坐标 —— 语料记两者共同的那个结果。",
     "颜色一律写成无空格的 rgba(r,g,b,a);两侧都按这个格式产出,免得比较时还要各写一个解析器。",
-    "lane 是这条字幕画在第几道(见 text-layer-cases 的 subtitle_lanes):奇数道换到画面另一头(底部 ↔ 顶部,居中 → 底部),离边的距离不变。placement 是换道之后的位置。"
+    "同一时刻几条字幕轨上的字合成**一框**(哪几行、什么顺序见 text-layer-cases 的 subtitle_frames),placement 量的是合成后的整框:底部样式下框的下沿留在一行字幕时的位置、多出来的行往上长;顶部样式上沿不动、往下长;居中以框的中心为准。框高(box_h)是浏览器排出来的(行数 × 行高 1.45em + 上下内边距),语料把它当输入。"
   ],
   "cases": [
     {
@@ -38,8 +38,7 @@
         "text_shadow": "0 0.055em 0.11em rgba(0,0,0,0.7)",
         "white_space": "pre-wrap"
       },
-      "placement": { "box_w": 800, "box_h": 60, "x": 560, "y": 934 },
-      "lane": 0
+      "placement": { "box_w": 800, "box_h": 60, "x": 560, "y": 934 }
     },
     {
       "name": "transparent-background",
@@ -69,8 +68,7 @@
         "text_shadow": "0 0.055em 0.11em rgba(0,0,0,0.7)",
         "white_space": "pre-wrap"
       },
-      "placement": { "box_w": 800, "box_h": 60, "x": 560, "y": 934 },
-      "lane": 0
+      "placement": { "box_w": 800, "box_h": 60, "x": 560, "y": 934 }
     },
     {
       "name": "custom-colour-and-weight",
@@ -100,8 +98,7 @@
         "text_shadow": "0 0.055em 0.11em rgba(0,0,0,0.7)",
         "white_space": "pre-wrap"
       },
-      "placement": { "box_w": 900, "box_h": 90, "x": 510, "y": 860 },
-      "lane": 0
+      "placement": { "box_w": 900, "box_h": 90, "x": 510, "y": 860 }
     },
     {
       "name": "position-top",
@@ -131,8 +128,7 @@
         "text_shadow": "0 0.055em 0.11em rgba(0,0,0,0.7)",
         "white_space": "pre-wrap"
       },
-      "placement": { "box_w": 800, "box_h": 60, "x": 560, "y": 86 },
-      "lane": 0
+      "placement": { "box_w": 800, "box_h": 60, "x": 560, "y": 86 }
     },
     {
       "name": "position-center",
@@ -162,8 +158,7 @@
         "text_shadow": "0 0.055em 0.11em rgba(0,0,0,0.7)",
         "white_space": "pre-wrap"
       },
-      "placement": { "box_w": 800, "box_h": 60, "x": 560, "y": 515 },
-      "lane": 0
+      "placement": { "box_w": 800, "box_h": 60, "x": 560, "y": 515 }
     },
     {
       "name": "vertical-1080x1920",
@@ -193,12 +188,11 @@
         "text_shadow": "0 0.055em 0.11em rgba(0,0,0,0.7)",
         "white_space": "pre-wrap"
       },
-      "placement": { "box_w": 700, "box_h": 80, "x": 190, "y": 1648 },
-      "lane": 0
+      "placement": { "box_w": 700, "box_h": 80, "x": 190, "y": 1648 }
     },
     {
-      "name": "second-lane-goes-to-the-top",
-      "why": "双语分两条字幕轨:第二道换到顶部、离边同样 8%,和第一道上下分开 —— 此前导出把两条叠在同一个位置。",
+      "name": "stacked-box-grows-up-from-the-bottom",
+      "why": "双语两行(分两条字幕轨,或一条轨里写两行)合成一框:框的下沿留在一行字幕时的位置(和 defaults-bottom-1080p 一样是 994),多出来的那行往上长。此前第二条轨换到画面顶上。两行框高 103 = 2 × 46.4 + 2 × 5.12。",
       "frame": { "w": 1920, "h": 1080 },
       "style": {
         "font_size": 32,
@@ -224,12 +218,71 @@
         "text_shadow": "0 0.055em 0.11em rgba(0,0,0,0.7)",
         "white_space": "pre-wrap"
       },
-      "placement": { "box_w": 800, "box_h": 60, "x": 560, "y": 86 },
-      "lane": 1
+      "placement": { "box_w": 800, "box_h": 103, "x": 560, "y": 891 }
     },
     {
-      "name": "second-lane-of-a-centered-style-goes-to-the-bottom",
-      "why": "第一道居中时,第二道放到底部,离边同样 8%。",
+      "name": "stacked-box-grows-down-from-the-top",
+      "why": "顶部样式:框的上沿不动(和 position-top 一样是 86),第二行往下长 —— 原文仍在上、译文在下,只是整框贴着顶边。",
+      "frame": { "w": 1920, "h": 1080 },
+      "style": {
+        "font_size": 32,
+        "color": "#ffffff",
+        "bg_color": "#000000",
+        "bg_opacity": 0.5,
+        "bold": true,
+        "position": "top",
+        "offset": 8,
+        "font_family": "",
+        "font_id": ""
+      },
+      "box": {
+        "font_size_px": 32,
+        "color": "#ffffff",
+        "font_weight": 700,
+        "background": "rgba(0,0,0,0.5)",
+        "max_width_px": 1651,
+        "border_radius": "0.33em",
+        "padding": "0.16em 0.55em",
+        "line_height": "1.45",
+        "text_align": "center",
+        "text_shadow": "0 0.055em 0.11em rgba(0,0,0,0.7)",
+        "white_space": "pre-wrap"
+      },
+      "placement": { "box_w": 800, "box_h": 103, "x": 560, "y": 86 }
+    },
+    {
+      "name": "three-stacked-lines-keep-the-bottom-edge",
+      "why": "三条字幕轨同时有字:三行一框,下沿仍是 994。",
+      "frame": { "w": 1920, "h": 1080 },
+      "style": {
+        "font_size": 32,
+        "color": "#ffffff",
+        "bg_color": "#000000",
+        "bg_opacity": 0.5,
+        "bold": true,
+        "position": "bottom",
+        "offset": 8,
+        "font_family": "",
+        "font_id": ""
+      },
+      "box": {
+        "font_size_px": 32,
+        "color": "#ffffff",
+        "font_weight": 700,
+        "background": "rgba(0,0,0,0.5)",
+        "max_width_px": 1651,
+        "border_radius": "0.33em",
+        "padding": "0.16em 0.55em",
+        "line_height": "1.45",
+        "text_align": "center",
+        "text_shadow": "0 0.055em 0.11em rgba(0,0,0,0.7)",
+        "white_space": "pre-wrap"
+      },
+      "placement": { "box_w": 800, "box_h": 149, "x": 560, "y": 845 }
+    },
+    {
+      "name": "stacked-box-centered",
+      "why": "居中样式:以框的中心为准,上下各长一半;offset 的基准是框自身的高,所以框高一变,偏移也跟着变(0.08 × 103)。",
       "frame": { "w": 1920, "h": 1080 },
       "style": {
         "font_size": 32,
@@ -255,8 +308,7 @@
         "text_shadow": "0 0.055em 0.11em rgba(0,0,0,0.7)",
         "white_space": "pre-wrap"
       },
-      "placement": { "box_w": 800, "box_h": 60, "x": 560, "y": 934 },
-      "lane": 1
+      "placement": { "box_w": 800, "box_h": 103, "x": 560, "y": 497 }
     }
   ]
 }

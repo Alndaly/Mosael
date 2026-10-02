@@ -3,6 +3,9 @@
 前端 `textLayers.parity.test.ts` 跑**同一份文件**。哪些字幕、哪些花字会被画出来,预览在 Monitor 里
 算、导出在 render.py 里算;两侧各写一份的时候,「视频轨静音」在两边都把花字藏掉了 —— 而轨道头
 是喇叭。改语义时先改语料,看着两侧一起红,再改两侧实现。
+
+subtitle_frames 是导出烧进成片的那几段(scene.subtitle_frames,渲染计划的字幕就是它);前端预览不切段,
+逐时刻合成同一框字,那一侧按段取样比对。
 """
 
 from __future__ import annotations
@@ -12,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from app.media.scene import text_layers
+from app.media.scene import subtitle_frames, text_layers
 
 _CONTRACT = Path(__file__).resolve().parents[2] / "contracts" / "text-layer-cases.json"
 
@@ -40,10 +43,15 @@ def test_text_layers_match_contract(case: dict) -> None:
         "subtitles": sorted(clip["id"] for clip in layers.subtitles),
         "titles": sorted(clip["id"] for clip in layers.titles),
         "subtitle_lanes": layers.subtitle_lanes,
+        "subtitle_frames": [
+            {"start": frame.start, "end": frame.end, "text": frame.text}
+            for frame in subtitle_frames(layers.subtitles, layers.subtitle_lanes)
+        ],
     }
     expected = {
         "subtitles": sorted(case["expected"]["subtitles"]),
         "titles": sorted(case["expected"]["titles"]),
         "subtitle_lanes": case["expected"]["subtitle_lanes"],
+        "subtitle_frames": case["expected"]["subtitle_frames"],
     }
     assert actual == expected, case["why"]
