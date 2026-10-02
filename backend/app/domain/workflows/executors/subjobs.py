@@ -520,7 +520,9 @@ def edit_timeline(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[
         raise WorkflowDomainError("wfErr_operationsEmpty")
 
     def edit(sequence: Sequence) -> tuple[int, int]:
-        applied = apply_edit_operations(db, sequence.id, operations)
+        # 改动记在跑这条工作流的人头上 —— 和剪辑页、智能体一样,不记成「没有人」(撤销「只撤我自己的」、
+        # 冲突时「是谁改的」都靠它)。
+        applied = apply_edit_operations(db, sequence.id, operations, actor_id=current_actor(db))
         db.flush()
         db.refresh(sequence)
         return applied, sequence.revision
@@ -662,6 +664,7 @@ def timeline_append(db: Session, scope: RunScope, config: dict[str, Any]) -> dic
     limit = _seconds(config, "max_duration", "timeline_append")
     trim_overflow = _yes_no(config, "trim_overflow", default=False)
     track_id = str(config.get("track_id", "")).strip()
+    actor = current_actor(db)
 
     def append(sequence: Sequence) -> tuple[str, float, float, float]:
         tracks = list(sequence.tracks or [])
@@ -693,7 +696,7 @@ def timeline_append(db: Session, scope: RunScope, config: dict[str, Any]) -> dic
             db,
             sequence.id,
             InsertClip(track_id=track.id, asset_id=asset.id, timeline_start=start, src_in=src_in, src_out=clip_out,
-                       speed=speed or 1.0),
+                       speed=speed or 1.0, actor_id=actor),
         )
         return clip.id, start, (clip_out - src_in) / (speed or 1.0), trimmed
 

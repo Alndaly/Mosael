@@ -130,3 +130,30 @@ def test_字幕段落缺时间码_报错而不是当成第_0_秒() -> None:
     assert caught.value.params["index"] == "2"
     out = _run("generate_subtitles", wf_id, {"sequence_id": sequence_id, "segments": [{"start": 0, "end": 1, "text": "一"}]})
     assert out["count"] == 1, "第 0 秒开始的段落是合法的"
+
+
+def test_工作流对时间线的改动记在跑它的人头上() -> None:
+    """此前工作流节点不传 actor:操作日志里是「没有人」,「只撤我自己的」撤不到它,冲突时也说不出是谁改的。"""
+    from sqlalchemy import select
+
+    from app.db.models import Job
+    from app.domain.jobs import reset_parent_job, set_parent_job
+    from tests.util import user_id
+
+    ws, sequence_id, wf_id = _setup()
+    me = user_id("tester")
+    with SessionLocal() as db:
+        job = Job(workspace_id=ws, kind="workflow", status="running", created_by=me)
+        db.add(job)
+        db.commit()
+        job_id = job.id
+    token = set_parent_job(job_id)
+    try:
+        _run("timeline_append", wf_id, {"sequence_id": sequence_id, "asset_id": _asset(ws)})
+        _run("edit_timeline", wf_id, {"sequence_id": sequence_id,
+                                      "operations": [{"kind": "add_track", "track_kind": "audio"}]})
+    finally:
+        reset_parent_job(token)
+    with SessionLocal() as db:
+        actors = db.scalars(select(SequenceOperation.actor_id).where(SequenceOperation.sequence_id == sequence_id)).all()
+    assert actors and set(actors) == {me}
