@@ -1,13 +1,17 @@
-import { createFile, DataStream, MP4BoxBuffer, type ISOFile, type MultiBufferStream, type Movie, type Sample } from "mp4box";
+import { RangeReader, byteSpan, readTrackIndex, sampleIndexAt, type TrackIndex } from "./mp4Index";
 
 /**
- * Decodes one proxy .mp4 (720p, short-GOP, B-frame-free — see media/proxy.py) with
- * WebCodecs and serves the frame at any presentation time. Because the proxy has no
- * B-frames, decode order == presentation order (cts == dts), so seeking is just
- * "flush, jump to the nearest keyframe ≤ target, decode forward".
+ * 画面代理(720p、短 GOP、无 B 帧 —— 见后端 media/proxy.py)的解码,分两层:
  *
- * Frames are decoded on demand around the requested time and closed as the playhead
- * passes them, so memory stays bounded regardless of clip length.
+ * - {@link ProxyMedia}:**一份素材一个**。样本表只读一次(按 Range 读开头的 moov),样本数据按 GOP 用
+ *   Range 取、按字节预算缓存。同一素材的所有片段共用它 —— 此前每个片段各自下载并常驻一整份代理,
+ *   长访谈切成几十段就是几十份。
+ * - {@link ProxyVideoSource}:一个解码游标(一个 VideoDecoder + 解出来的帧 + 当前位置)。一个游标同一
+ *   时刻只能服务一个位置,所以同一素材同时出现在两层(画中画套自己)时要两个游标;但切点两侧的前后
+ *   两段可以接力用同一个(见 videoSourcePool)。
+ *
+ * 没有 B 帧,解码顺序 == 展示顺序(cts == dts),所以 seek 就是「复位,跳到目标之前最近的关键帧,往后解」。
+ * 帧按需解、播放头走过就关,内存与片段长度无关。
  */
 
 const MICRO = 1_000_000;
@@ -17,6 +21,149 @@ const LOOKAHEAD = 12;
 const MAX_FRAMES = 24;
 // Drop frames this far behind the playhead (seconds).
 const EVICT_BEHIND = 0.4;
+/** 往前多取几个 GOP:播放头走到 GOP 末尾时下一个已经在手里,取数据的往返不会卡住解码。 */
+const PREFETCH_GOPS = 2;
+/** 一份素材缓存多少秒的样本数据 —— 按这份代理自己的码率换算成字节(见 cacheBudget)。 */
+const CACHE_SECONDS = 30;
+const MIN_CACHE_BYTES = 8 * 1024 * 1024;
+const MAX_CACHE_BYTES = 48 * 1024 * 1024;
+
+interface Gop {
+  /** GOP 第一个样本(关键帧)与最后一个样本的下标。 */
+  first: number;
+  last: number;
+  /** 这一段在文件里的起始偏移;bytes 覆盖 [start, start + bytes.byteLength)。 */
+  start: number;
+  bytes: Uint8Array | null;
+  loading: boolean;
+  lastUsed: number;
+}
+
+export class ProxyMedia {
+  private readonly reader: RangeReader;
+  private index: TrackIndex | null = null;
+  private gops: Gop[] = [];
+  /** 样本下标 → 所在 GOP 的下标。 */
+  private gopOfSample: Uint32Array = new Uint32Array(0);
+  private failedFlag = false;
+  private closed = false;
+  private useClock = 0;
+  private cacheBytes = MIN_CACHE_BYTES;
+  readonly ready: Promise<void>;
+
+  constructor(url: string) {
+    this.reader = new RangeReader(url);
+    this.ready = this.load();
+  }
+
+  private async load(): Promise<void> {
+    try {
+      const index = await readTrackIndex(this.reader, "video");
+      if (this.closed) return;
+      this.index = index;
+      this.buildGops(index);
+    } catch {
+      // 读不到、不是 faststart、没有画面轨:这份代理在这里解不了。轮询的是这个标记,所以 ready 不 reject。
+      this.failedFlag = true;
+    }
+  }
+
+  private buildGops(index: TrackIndex): void {
+    const samples = index.samples;
+    this.gopOfSample = new Uint32Array(samples.length);
+    let total = 0;
+    for (let i = 0; i < samples.length; i++) {
+      if (samples[i].sync || this.gops.length === 0) {
+        this.gops.push({ first: i, last: i, start: 0, bytes: null, loading: false, lastUsed: 0 });
+      }
+      const gop = this.gops[this.gops.length - 1];
+      gop.last = i;
+      this.gopOfSample[i] = this.gops.length - 1;
+      total += samples[i].size;
+    }
+    // 缓存预算按这份代理自己的码率换算:码率高的多给字节,低的少给 —— 都是约 CACHE_SECONDS 秒的内容。
+    const last = samples[samples.length - 1];
+    const seconds = last ? last.time + last.duration : 0;
+    const bytesPerSecond = seconds > 0 ? total / seconds : 0;
+    this.cacheBytes = Math.max(MIN_CACHE_BYTES, Math.min(MAX_CACHE_BYTES, bytesPerSecond * CACHE_SECONDS));
+  }
+
+  get ok(): boolean {
+    return !this.failedFlag;
+  }
+  get track(): TrackIndex | null {
+    return this.index;
+  }
+
+  /** 此刻占着的字节:缓存的样本数据(服务端不认 Range 时还有整份文件)。闲置池按它记账。 */
+  get retainedBytes(): number {
+    // 样本表本身也占内存(一小时约十万个样本),按每个样本几十字节估进去。
+    let total = this.reader.retainedBytes + (this.index?.samples.length ?? 0) * 64;
+    for (const gop of this.gops) total += gop.bytes?.byteLength ?? 0;
+    return total;
+  }
+
+  /** 第 i 个样本的数据;还没取到就发起读取并返回 null(调用方下一帧再来要)。 */
+  sampleData(i: number): Uint8Array | null {
+    const index = this.index;
+    if (!index || i < 0 || i >= index.samples.length) return null;
+    const gopIndex = this.gopOfSample[i];
+    const gop = this.gops[gopIndex];
+    gop.lastUsed = ++this.useClock;
+    for (let ahead = 0; ahead <= PREFETCH_GOPS; ahead++) this.loadGop(gopIndex + ahead);
+    if (!gop.bytes) return null;
+    const sample = index.samples[i];
+    const from = sample.offset - gop.start;
+    return gop.bytes.subarray(from, from + sample.size);
+  }
+
+  private loadGop(gopIndex: number): void {
+    const gop = this.gops[gopIndex];
+    const index = this.index;
+    if (!gop || !index || gop.bytes || gop.loading || this.closed) return;
+    gop.loading = true;
+    const span = byteSpan(index.samples, gop.first, gop.last);
+    this.reader
+      .read(span.start, span.end)
+      .then((bytes) => {
+        gop.loading = false;
+        if (this.closed) return;
+        gop.start = span.start;
+        gop.bytes = bytes;
+        gop.lastUsed = ++this.useClock;
+        this.trim();
+      })
+      .catch(() => {
+        gop.loading = false;
+        // 一个 GOP 取不到(后端重启、文件被换掉):整份判为解不了,让上层退回去说明原因,而不是黑着。
+        this.failedFlag = true;
+      });
+  }
+
+  /** 超出预算时按最久没用的先丢。正在用的那几个刚被 sampleData 碰过,排在最后。 */
+  private trim(): void {
+    let total = 0;
+    for (const gop of this.gops) total += gop.bytes?.byteLength ?? 0;
+    if (total <= this.cacheBytes) return;
+    const loaded = this.gops.filter((gop) => gop.bytes).sort((a, b) => a.lastUsed - b.lastUsed);
+    for (const gop of loaded) {
+      if (total <= this.cacheBytes) break;
+      total -= gop.bytes!.byteLength;
+      gop.bytes = null;
+    }
+  }
+
+  /** 闲置时只留样本表:缓存的样本数据丢掉,复活时按需再取。 */
+  dropCache(): void {
+    for (const gop of this.gops) gop.bytes = null;
+  }
+
+  close(): void {
+    this.closed = true;
+    this.gops = [];
+    this.index = null;
+  }
+}
 
 interface Decoded {
   t: number; // presentation time, seconds
@@ -24,134 +171,80 @@ interface Decoded {
 }
 
 export class ProxyVideoSource {
-  private file: ISOFile;
   private decoder: VideoDecoder | null = null;
-  private samples: Sample[] = []; // decode order == presentation order (no B-frames)
   private frames: Decoded[] = []; // buffered decoded frames, ascending t
-  private trackId = -1;
-  private timescale = 1;
-  private codec = "";
-  private codedWidth = 0;
-  private codedHeight = 0;
-  private description?: Uint8Array;
   private decodeCursor = 0; // next sample index to feed the decoder
   private configured = false;
   private closed = false;
   private failed = false;
-  private byteLength = 0;
   // 一帧"上次画过的画面",专门用来填 seek 期间的空窗。向后跳(或跨回已 park 的片段)必须
   // 丢弃整个缓冲从关键帧重解,而解码是异步的 —— 那几个 rAF 里没有任何帧可返回,合成器就
   // 跳过该层、画出黑屏(正向播放不进这条路径,所以只有倒着拖/跨切分边界才闪黑)。
   // 留住最后一帧当兜底:画面停一下,远好过闪黑。
   private held: Decoded | null = null;
+  /** 此刻(或上一次)服务的是哪个片段。兜底帧只对同一个片段有意义 —— 换了主人就丢掉,免得新片段
+   *  seek 的空窗里闪出上一个片段的画面。 */
+  private owner: string | null = null;
 
-  readonly ready: Promise<void>;
+  constructor(readonly media: ProxyMedia) {}
 
-  constructor(url: string) {
-    this.file = createFile();
-    this.ready = new Promise<void>((resolve, reject) => {
-      this.file.onError = (_module, message) => {
-        this.failed = true;
-        reject(new Error(message));
-      };
-      this.file.onReady = (info) => {
-        try {
-          this.onReady(info);
-          resolve();
-        } catch (err) {
-          this.failed = true;
-          reject(err as Error);
-        }
-      };
-      this.file.onSamples = (_id, _user, samples) => {
-        for (const s of samples) {
-          this.samples.push(s);
-          this.byteLength += s.data?.byteLength ?? 0;
-        }
-      };
-    });
-    void this.load(url);
+  get ownerKey(): string | null {
+    return this.owner;
   }
 
-  get width(): number {
-    return this.codedWidth;
+  /** 交给某个片段用。换了主人时兜底帧作废。 */
+  assign(clipKey: string): void {
+    if (this.owner === clipKey) return;
+    this.owner = clipKey;
+    this.hold(null);
   }
-  get height(): number {
-    return this.codedHeight;
+
+  /** 片段离场、游标回到素材名下待用:解出来的帧放掉(留一张兜底),解码器留着给下一段接着用。 */
+  release(): void {
+    if (this.closed) return;
+    this.holdNewest();
+    for (const f of this.frames) {
+      if (f !== this.held) f.frame.close();
+    }
+    this.frames = [];
   }
+
   get ok(): boolean {
-    return !this.failed;
+    return !this.failed && this.media.ok;
   }
 
-  /** Bytes of encoded samples still held. Used to bound the idle-source pool. */
-  get retainedBytes(): number {
-    return this.byteLength;
-  }
-
-  private async load(url: string): Promise<void> {
-    try {
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(`proxy fetch ${res.status}`);
-      const buf = MP4BoxBuffer.fromArrayBuffer(await res.arrayBuffer(), 0);
-      this.file.appendBuffer(buf, true);
-      this.file.flush();
-    } catch {
-      this.failed = true;
-      // `ready` may already be settled by onError; this covers fetch/parse failures. The flag is
-      // what callers actually poll, so a rejected `ready` nobody awaited cannot go unnoticed.
-    }
-  }
-
-  private onReady(info: Movie): void {
-    const track = info.videoTracks[0];
-    if (!track) throw new Error("proxy has no video track");
-    this.trackId = track.id;
-    this.timescale = track.timescale;
-    this.codec = track.codec;
-    this.codedWidth = track.track_width;
-    this.codedHeight = track.track_height;
-    this.description = this.readDescription();
-    // Extract every sample of the video track (data included) via onSamples.
-    this.file.setExtractionOptions(this.trackId, undefined, { nbSamples: Number.POSITIVE_INFINITY });
-    this.file.start();
-    this.file.flush();
-  }
-
-  /** avcC/hvcC box bytes (without the 8-byte box header) for VideoDecoder.configure. */
-  private readDescription(): Uint8Array | undefined {
-    for (const type of ["avcC", "hvcC", "vpcC", "av1C"] as const) {
-      const box = this.file.getBox(type);
-      if (!box) continue;
-      const stream = new DataStream(undefined, 0); // defaults to big-endian
-      // Runtime: box.write drives a DataStream (the canonical mp4box+WebCodecs path);
-      // its typings ask for the MultiBufferStream subclass, so bridge with a cast.
-      box.write(stream as unknown as MultiBufferStream);
-      return new Uint8Array(stream.buffer.slice(8));
-    }
-    return undefined;
+  /** 解码器此刻停在哪(秒):下一个要喂的样本的时间。池子据此挑「离目标最近、不用 seek」的游标。 */
+  get position(): number {
+    const samples = this.media.track?.samples;
+    if (!samples || samples.length === 0) return 0;
+    return samples[Math.min(this.decodeCursor, samples.length - 1)].time;
   }
 
   private ensureDecoder(): VideoDecoder | null {
     if (this.configured) return this.decoder;
+    const track = this.media.track;
+    if (!track) return null;
     if (typeof VideoDecoder === "undefined") {
       this.failed = true;
       return null;
     }
-    const decoder = new VideoDecoder({
-      output: (frame) => this.onFrame(frame),
-      error: () => {
-        // Losing the decoder mid-playback used to leave frameAt returning null forever, which
-        // the compositor drew as nothing — a black frame with no explanation. Record it so the
-        // caller can fall back to element playback instead.
-        this.failed = true;
-      },
-    });
+    if (!this.decoder || this.decoder.state === "closed") {
+      this.decoder = new VideoDecoder({
+        output: (frame) => this.onFrame(frame),
+        error: () => {
+          // Losing the decoder mid-playback used to leave frameAt returning null forever, which
+          // the compositor drew as nothing — a black frame with no explanation. Record it so the
+          // caller can say so instead.
+          this.failed = true;
+        },
+      });
+    }
     try {
-      decoder.configure({
-        codec: this.codec,
-        codedWidth: this.codedWidth,
-        codedHeight: this.codedHeight,
-        description: this.description,
+      this.decoder.configure({
+        codec: track.codec,
+        codedWidth: track.width,
+        codedHeight: track.height,
+        description: track.description,
         optimizeForLatency: true,
       });
     } catch {
@@ -159,9 +252,8 @@ export class ProxyVideoSource {
       this.failed = true;
       return null;
     }
-    this.decoder = decoder;
     this.configured = true;
-    return decoder;
+    return this.decoder;
   }
 
   private onFrame(frame: VideoFrame): void {
@@ -178,45 +270,26 @@ export class ProxyVideoSource {
     while (this.frames.length > MAX_FRAMES) this.frames.shift()?.frame.close();
   }
 
-  private sampleTime(i: number): number {
-    return this.samples[i].cts / this.timescale;
-  }
-
-  /** Largest sample index whose presentation time ≤ sec (binary search). */
-  private indexAt(sec: number): number {
-    let lo = 0;
-    let hi = this.samples.length - 1;
-    let ans = 0;
-    while (lo <= hi) {
-      const mid = (lo + hi) >> 1;
-      if (this.sampleTime(mid) <= sec) {
-        ans = mid;
-        lo = mid + 1;
-      } else {
-        hi = mid - 1;
-      }
-    }
-    return ans;
-  }
-
   private nearestKeyframe(idx: number): number {
-    for (let i = idx; i >= 0; i--) if (this.samples[i].is_sync) return i;
+    const samples = this.media.track!.samples;
+    for (let i = idx; i >= 0; i--) if (samples[i].sync) return i;
     return 0;
   }
 
-  private feed(i: number): void {
-    const decoder = this.decoder;
-    if (!decoder) return;
-    const s = this.samples[i];
-    if (!s.data) return;
+  /** 喂一个样本;数据还没取到就返回 false(下一帧再来)。 */
+  private feed(decoder: VideoDecoder, i: number): boolean {
+    const data = this.media.sampleData(i);
+    if (!data) return false;
+    const s = this.media.track!.samples[i];
     decoder.decode(
       new EncodedVideoChunk({
-        type: s.is_sync ? "key" : "delta",
-        timestamp: Math.round((s.cts / this.timescale) * MICRO),
-        duration: Math.round((s.duration / this.timescale) * MICRO),
-        data: s.data,
+        type: s.sync ? "key" : "delta",
+        timestamp: Math.round(s.time * MICRO),
+        duration: Math.round(s.duration * MICRO),
+        data,
       }),
     );
+    return true;
   }
 
   /**
@@ -226,31 +299,36 @@ export class ProxyVideoSource {
    * a few samples ahead of the playhead.
    */
   frameAt(sec: number): VideoFrame | null {
-    if (this.failed || this.samples.length === 0) return null;
+    const track = this.media.track;
+    if (!this.ok || !track || track.samples.length === 0) return null;
     const decoder = this.ensureDecoder();
     if (!decoder) return null;
+    const samples = track.samples;
 
-    const target = this.indexAt(sec);
-    const haveTarget = this.frames.some((f) => f.t <= sec + 1e-3 && f.t >= this.sampleTime(target) - 1e-3);
+    const target = sampleIndexAt(samples, sec);
+    const haveTarget = this.frames.some((f) => f.t <= sec + 1e-3 && f.t >= samples[target].time - 1e-3);
     // Reset to a keyframe when we've jumped (backwards, or forward past the buffer).
     if (!haveTarget && (this.decodeCursor > target || this.decodeCursor < this.nearestKeyframe(target))) {
-      const key = this.nearestKeyframe(target);
+      // reset 而不是 flush:还在解码队列里的旧位置的帧直接作废,不会晚到一步混进新位置的缓冲。
+      // reset 之后要重新 configure —— 同一个解码器,不重建。
       try {
-        decoder.flush().catch(() => undefined);
+        decoder.reset();
       } catch {
-        /* flush on a fresh decoder can reject; ignore */
+        /* closed under us; ensureDecoder will notice next time */
       }
+      this.configured = false;
       this.holdNewest();
       for (const f of this.frames) {
         if (f !== this.held) f.frame.close();
       }
       this.frames = [];
-      this.decodeCursor = key;
+      this.decodeCursor = this.nearestKeyframe(target);
+      if (!this.ensureDecoder()) return this.held?.frame ?? null;
     }
     // Pump forward: keep the decoder fed a little past the target.
-    const limit = Math.min(this.samples.length - 1, target + LOOKAHEAD);
+    const limit = Math.min(samples.length - 1, target + LOOKAHEAD);
     while (this.decodeCursor <= limit && decoder.decodeQueueSize < LOOKAHEAD) {
-      this.feed(this.decodeCursor);
+      if (!this.feed(decoder, this.decodeCursor)) break;
       this.decodeCursor++;
     }
     // The frame to show = the NEWEST frame at or before the playhead. frames is ascending
@@ -295,21 +373,17 @@ export class ProxyVideoSource {
   }
 
   /**
-   * Release GPU-side resources but KEEP the parsed samples.
+   * Release the decoder and decoded frames (keeping one held frame), but keep the position.
    *
-   * Parking used to mean "leave the source completely alone", which quietly pinned up to
-   * MAX_FRAMES open VideoFrames (~1.4MB each at 720p) plus a configured VideoDecoder per
-   * off-screen clip — invisible to the pool's budget, which only counts encoded bytes, and
-   * enough to exhaust the browser's limit on concurrent hardware decoders. After this, encoded
-   * samples are genuinely all a parked source retains, so `retainedBytes` tells the truth.
-   *
-   * frameAt() revives it: ensureDecoder reconfigures, and a decodeCursor of 0 with no buffered
-   * frames makes the next call take the seek path to the right keyframe.
+   * An open VideoDecoder plus up to MAX_FRAMES open VideoFrames (~1.4MB each at 720p) per idle
+   * cursor is invisible to any byte budget and enough to exhaust the browser's limit on
+   * concurrent hardware decoders. frameAt() revives it: ensureDecoder reconfigures, and a
+   * decodeCursor of 0 with no buffered frames makes the next call take the seek path.
    */
   park(): void {
     if (this.closed) return;
     // 留一帧兜底:跨回这个片段(倒着拖过任一切分边界)时,复活要先从关键帧重解,
-    // 期间没有兜底就会闪黑。一个源只多留一张帧,代价可控。
+    // 期间没有兜底就会闪黑。一个游标只多留一张帧,代价可控。
     this.holdNewest();
     for (const f of this.frames) {
       if (f !== this.held) f.frame.close();
@@ -329,18 +403,8 @@ export class ProxyVideoSource {
 
   close(): void {
     if (this.closed) return;
+    this.park();
     this.closed = true;
     this.hold(null);
-    for (const f of this.frames) f.frame.close();
-    this.frames = [];
-    if (this.decoder && this.decoder.state !== "closed") {
-      try {
-        this.decoder.close();
-      } catch {
-        /* already closing */
-      }
-    }
-    this.decoder = null;
-    this.samples = [];
   }
 }

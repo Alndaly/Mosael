@@ -4,12 +4,13 @@ import { assetPreviewUrl, assetProxyUrl, type Asset, type Clip } from "@/api/cli
 import { CURVES_FILTER_ID } from "@/features/editor/colorCurves";
 import { readClipAppearance } from "@/features/editor/clipAppearance";
 import { computeFilters, type ClipEffects } from "@/features/editor/monitorFilters";
-import { ProxyVideoSource } from "@/features/editor/playback/ProxyVideoSource";
+import type { ProxyVideoSource } from "@/features/editor/playback/ProxyVideoSource";
 import { paintScene, type ScenePaintLayer } from "@/features/editor/playback/scenePaint";
-import { evictions } from "@/features/editor/playback/sourcePool";
+import { VideoSourcePool, type WantedSource } from "@/features/editor/playback/videoSourcePool";
 import { readTransform, type Transform } from "@/features/editor/TransformOverlay";
 import { clipProgress, sampleTransform } from "@/features/editor/keyframes";
 import { livePlayhead } from "@/features/editor/playback/playbackClock";
+import { useEditorStore } from "@/features/editor/editorStore";
 
 export interface CompositorLayer {
   clip: Clip;
@@ -22,7 +23,8 @@ export interface CompositorLayer {
  * S2 of the compositor: every active video/image clip drawn onto ONE canvas in z-order
  * (bottom → top), each with its own transform, opacity and colour grade — replacing the
  * base `<video>` plus N overlay elements with a single decode-and-composite pass. Video
- * clips decode from their proxy via {@link ProxyVideoSource}; images blit from a cached
+ * clips decode from their proxy via {@link VideoSourcePool} (one shared index + byte cache per
+ * asset, one decoder cursor per clip, handed on across cuts); images blit from a cached
  * `<img>`. The rAF loop reads layers + playhead from refs so paint never restarts on a
  * React re-render.
  */
@@ -52,12 +54,10 @@ export function CanvasCompositor({
   onSourceFailed?: (assetId: string) => void;
 }) {
   const canvasRef = React.useRef<HTMLCanvasElement | null>(null);
-  const sourcesRef = React.useRef<Map<string, ProxyVideoSource>>(new Map());
-  // Sources whose clip is no longer under the playhead. Closing them immediately meant that
-  // scrubbing back across a cut re-fetched and re-parsed the whole proxy; keeping a few alive
-  // makes crossing a boundary free in both directions. Bounded by retained bytes, not count,
-  // because one long proxy costs far more than several short ones.
-  const idleRef = React.useRef<Map<string, ProxyVideoSource>>(new Map());
+  // 素材共用样本表与样本数据缓存,片段各占一个解码游标,离场的游标留给同素材的下一段接着用;
+  // 不在场的素材按占用字节停放(见 videoSourcePool)。
+  const poolRef = React.useRef<VideoSourcePool | null>(null);
+  if (!poolRef.current) poolRef.current = new VideoSourcePool(IDLE_SOURCE_BYTE_BUDGET);
   const onSourceFailedRef = React.useRef(onSourceFailed);
   onSourceFailedRef.current = onSourceFailed;
   const reportedFailures = React.useRef<Set<string>>(new Set());
@@ -91,48 +91,23 @@ export function CanvasCompositor({
 
   // Keep the decoder/image pools in step with the active asset set.
   React.useEffect(() => {
-    // Keyed by CLIP, not by asset. A source owns a playback position, and that belongs to the
-    // clip: put the same asset on two layers at different times — a picture-in-picture of its
-    // own source, a duplicated clip used as a backdrop — and one shared decoder was asked for
-    // two positions per frame. Each call saw the cursor parked at the other's time, took the
-    // seek path, flushed and closed every buffered frame, and returned null. Neither layer ever
-    // accumulated a frame: both stayed black forever while the decoder thrashed at 60Hz.
+    // 解码游标按**片段**分,不按素材:游标有自己的播放位置,而位置属于片段 —— 同一素材放在两层的不同
+    // 时间上(画中画套自己的源、复制出来当背景的一段),共用一个游标就是每帧被要两个位置,两边来回
+    // seek、谁也攒不下一帧,双双黑屏。样本表和样本数据则按素材共享(那是只读的)。
     // Images stay keyed by asset — an <img> has no position, so sharing one is correct.
-    const wantVideo = new Map<string, string>(); // source key -> asset id
+    const wantVideo: WantedSource[] = [];
     const wantImage = new Set<string>();
+    const playhead = useEditorStore.getState().playhead;
     for (const layer of layers) {
       if (layer.asset.kind === "image") wantImage.add(layer.asset.id);
-      else wantVideo.set(sourceKey(layer), layer.asset.id);
+      else wantVideo.push(wanted(layer, layer.clip.src_in + (playhead - layer.clip.timeline_start) * (layer.clip.speed || 1)));
     }
-    // Upcoming clips keep their decoder too — created here so the fetch/parse starts ahead of the
+    // Upcoming clips keep their cursor too — assigned here so the fetch/decode starts ahead of the
     // playhead; the draw loop then primes their first frame. (Video only; images decode instantly.)
     for (const layer of prewarmLayers ?? []) {
-      if (layer.asset.kind !== "image") wantVideo.set(sourceKey(layer), layer.asset.id);
+      if (layer.asset.kind !== "image") wantVideo.push(wanted(layer, layer.clip.src_in));
     }
-    for (const [id, source] of sourcesRef.current) {
-      if (!wantVideo.has(id)) {
-        source.park(); // drop decoded frames + the decoder; keep the parsed samples
-        idleRef.current.set(id, source);
-        sourcesRef.current.delete(id);
-      }
-    }
-    for (const [clipId, assetId] of wantVideo) {
-      if (sourcesRef.current.has(clipId)) continue;
-      const parked = idleRef.current.get(clipId);
-      if (parked) {
-        idleRef.current.delete(clipId);
-        sourcesRef.current.set(clipId, parked);
-      } else {
-        sourcesRef.current.set(clipId, new ProxyVideoSource(assetProxyUrl(assetId)));
-      }
-    }
-    // Map preserves insertion order and re-parking re-inserts, so iterating it gives
-    // least-recently-parked first — which is exactly the order `evictions` expects.
-    const parked = [...idleRef.current].map(([id, source]) => ({ id, retainedBytes: source.retainedBytes }));
-    for (const id of evictions(parked, IDLE_SOURCE_BYTE_BUDGET)) {
-      idleRef.current.get(id)?.close();
-      idleRef.current.delete(id);
-    }
+    poolRef.current?.sync(wantVideo);
     dirtyRef.current = true;
     for (const id of wantImage) {
       if (!imagesRef.current.has(id)) {
@@ -166,10 +141,8 @@ export function CanvasCompositor({
 
   React.useEffect(() => {
     return () => {
-      sourcesRef.current.forEach((source) => source.close());
-      sourcesRef.current.clear();
-      idleRef.current.forEach((source) => source.close());
-      idleRef.current.clear();
+      poolRef.current?.close();
+      poolRef.current = null;
       imagesRef.current.clear();
     };
   }, []);
@@ -196,9 +169,9 @@ export function CanvasCompositor({
       // what WOULD be drawn first; if it matches the last pass often enough to be settled, skip
       // the clear/draw entirely. Note mediaFor is still called — it is what drives decoding, so
       // skipping it would stall the frame we are waiting to settle on.
-      const resolved = currentLayers.map((layer) =>
-        mediaFor(layer, playhead, sourcesRef.current, imagesRef.current),
-      );
+      const pool = poolRef.current;
+      if (!pool) return;
+      const resolved = currentLayers.map((layer) => mediaFor(layer, playhead, pool, imagesRef.current));
       const signature = resolved
         .map((m, i) => `${currentLayers[i].clip.id}:${m ? mediaKey(m.source) : "-"}`)
         .join("|");
@@ -212,7 +185,7 @@ export function CanvasCompositor({
         // Looked up per clip, reported per asset: the source is the clip's, but "this machine
         // cannot decode that proxy" is a property of the asset, and that is what the fallback
         // decision keys on.
-        const source = sourcesRef.current.get(sourceKey(layer));
+        const source = pool.sourceFor(sourceKey(layer));
         if (source && !source.ok && !reportedFailures.current.has(layer.asset.id)) {
           reportedFailures.current.add(layer.asset.id);
           onSourceFailedRef.current?.(layer.asset.id);
@@ -225,7 +198,7 @@ export function CanvasCompositor({
       // this settles to a no-op. Kept above the settle early-return for the same reason mediaFor is:
       // it is what drives decoding, and a paused playhead parked just before a cut still needs it.
       for (const layer of prewarmRef.current ?? []) {
-        const source = sourcesRef.current.get(sourceKey(layer));
+        const source = pool.sourceFor(sourceKey(layer));
         if (source && source.ok) source.frameAt(layer.clip.src_in);
       }
 
@@ -289,9 +262,8 @@ export function CanvasCompositor({
   );
 }
 
-/** How much encoded proxy to keep parked for sources that are off-screen. Two or three short
-    clips' worth — enough that scrubbing over a cut is instant, not so much that a long timeline
-    pins hundreds of megabytes. */
+/** 不在场的素材最多停放这么多字节(样本表 + 缓存的样本数据)。按 Range 取之后每份素材只留几十秒
+    的数据(按它自己的码率换算,见 ProxyMedia),这点预算能停住十几份素材,而不是从前的两三份整代理。 */
 const IDLE_SOURCE_BYTE_BUDGET = 96 * 1024 * 1024;
 /** Consecutive identical frames after which a paused canvas stops repainting. Frames keep
     arriving for a moment after a seek, so one identical pass is not enough to call it settled. */
@@ -314,14 +286,23 @@ function mediaKey(source: CanvasImageSource): string {
  * 「重新生成代理」成功了,画面照样黑着,只有刷新整页才活过来(而刷新之所以有效,正是因为
  * 它把这些 source 全丢了)。代理的指纹一变,键就变,旧的自然被淘汰、新的重新建。 */
 function sourceKey(layer: CompositorLayer): string {
+  return `${layer.clip.id}::${proxyMediaKey(layer)}`;
+}
+
+/** 素材 + 它此刻那份代理的指纹:同一个键共用一份样本表与缓存;代理重转过就是新的一份。 */
+function proxyMediaKey(layer: CompositorLayer): string {
   const info = (layer.asset.media_info ?? {}) as { proxy_key?: string; proxy_status?: string };
-  return `${layer.clip.id}::${info.proxy_key ?? ""}:${info.proxy_status ?? ""}`;
+  return `${layer.asset.id}:${info.proxy_key ?? ""}:${info.proxy_status ?? ""}`;
+}
+
+function wanted(layer: CompositorLayer, target: number): WantedSource {
+  return { clipKey: sourceKey(layer), mediaKey: proxyMediaKey(layer), url: assetProxyUrl(layer.asset.id), target };
 }
 
 function mediaFor(
   layer: CompositorLayer,
   playhead: number,
-  sources: Map<string, ProxyVideoSource>,
+  pool: VideoSourcePool,
   images: Map<string, HTMLImageElement>,
 ): Media | null {
   if (layer.asset.kind === "image") {
@@ -329,7 +310,7 @@ function mediaFor(
     if (!img || !img.complete || img.naturalWidth === 0) return null;
     return { source: img, w: img.naturalWidth, h: img.naturalHeight };
   }
-  const source = sources.get(sourceKey(layer));
+  const source: ProxyVideoSource | undefined = pool.sourceFor(sourceKey(layer));
   if (!source) return null;
   const speed = layer.clip.speed || 1;
   const mediaSec = layer.clip.src_in + (playhead - layer.clip.timeline_start) * speed;

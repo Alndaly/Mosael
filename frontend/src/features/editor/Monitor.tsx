@@ -30,9 +30,17 @@ import { isImeKeystroke } from "@/lib/shortcuts";
  * **明说**(PreviewUnavailable:转码中 / 失败 / 本机解不动 / 环境不支持),而不是悄悄退化成
  * 另一套画法。播放头由 WebAudioMixer 的 AudioContext 驱动(唯一主时钟)。
  */
-/** How far ahead of the playhead to warm an upcoming clip's decoder. One short-GOP proxy's
-    fetch+parse+first-GOP fits comfortably inside this, so a cut into it never flashes black. */
-const PREWARM_SEC = 0.8;
+/**
+ * 提前多久给下一段预热解码(按 Range 取它的第一个 GOP、解出第一帧)。素材已经在用时只差一个 GOP,
+ * 一秒绰绰有余;冷素材还得先读开头的样本表,而样本表随代理时长线性变大(一小时约 1MB),所以按素材
+ * 时长加时 —— 一小时的素材提前三秒。
+ */
+const PREWARM_BASE_SEC = 1;
+const PREWARM_EXTRA_SEC_PER_HOUR = 2;
+function prewarmHorizon(asset: Asset | undefined): number {
+  const duration = Number((asset?.media_info as { duration?: number } | undefined)?.duration) || 0;
+  return PREWARM_BASE_SEC + Math.min(PREWARM_EXTRA_SEC_PER_HOUR, (duration / 3600) * PREWARM_EXTRA_SEC_PER_HOUR);
+}
 /** CSS approximations of the backend FFmpeg filter presets (render_plan.FILTER_PRESETS). */
 const FILTER_CSS: Record<string, string> = {
   bw: "grayscale(1)",
@@ -133,7 +141,9 @@ export function Monitor({
       }
     }
     const upcoming = videoTracks.flatMap((track) =>
-      (track.clips ?? []).filter((clip) => clip.asset_id && assetById.get(clip.asset_id)?.kind === "video"),
+      (track.clips ?? [])
+        .filter((clip) => clip.asset_id && assetById.get(clip.asset_id)?.kind === "video")
+        .map((clip) => ({ clip, horizon: prewarmHorizon(assetById.get(clip.asset_id!)) })),
     );
     return { present, upcoming };
   }, [videoClips, overlayClips, subtitleClips, textOverlayClips, sequence, videoTracks, assetById]);
@@ -625,7 +635,7 @@ export function Monitor({
 /** 场景键要扫的片段:在场判定用 present,预热判定用 upcoming(视频素材的片段)。 */
 interface SceneIndex {
   present: Clip[];
-  upcoming: Clip[];
+  upcoming: { clip: Clip; horizon: number }[];
 }
 
 /**
@@ -638,9 +648,8 @@ export function monitorSceneKey(index: SceneIndex, playhead: number): string {
     if (playhead >= clip.timeline_start && playhead < clipEnd(clip)) present.push(clip.id);
   }
   const upcoming: string[] = [];
-  const horizon = playhead + PREWARM_SEC;
-  for (const clip of index.upcoming) {
-    if (clip.timeline_start > playhead && clip.timeline_start <= horizon) upcoming.push(clip.id);
+  for (const { clip, horizon } of index.upcoming) {
+    if (clip.timeline_start > playhead && clip.timeline_start <= playhead + horizon) upcoming.push(clip.id);
   }
   return `${present.join(",")}|${upcoming.join(",")}`;
 }
