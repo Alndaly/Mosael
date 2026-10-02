@@ -7086,6 +7086,30 @@ def _migrate_removed_track_records_are_complete() -> None:
                 )
 
 
+def _migrate_added_track_records_list_what_moved() -> None:
+    """「加轨道」的撤销记录补一项 `shifted`:为新轨让过位置的那几条(撤销时还回原来的行)。
+
+    此前新轨一律排在最后,谁都不用让,所以老记录一律是空的。已经有这一项的原样留着:幂等。
+    """
+    if "sequence_operations" not in set(inspect(engine).get_table_names()):
+        return
+    with engine.begin() as conn:
+        rows = conn.execute(
+            text("SELECT id, payload FROM sequence_operations WHERE kind = 'add_track'")
+        ).mappings().all()
+        for row in rows:
+            raw = row["payload"]
+            try:
+                payload = json.loads(raw) if isinstance(raw, str) else raw
+            except ValueError:
+                continue
+            if isinstance(payload, dict) and "shifted" not in payload:
+                conn.execute(
+                    text("UPDATE sequence_operations SET payload = :p WHERE id = :id"),
+                    {"p": json.dumps({**payload, "shifted": []}, ensure_ascii=False), "id": row["id"]},
+                )
+
+
 def _reindex_record_references() -> None:
     """引用表(record_references)是派生数据:抽取规则一变,整张按新规则重建。"""
     from app.db.references import reindex
@@ -7370,6 +7394,7 @@ def migration_plan() -> MigrationPlan:
             #: 改动日志的 clip-edits-keep-a-change-journal 之后,它转出来的片段记录也在这里补齐。
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_sequence_operation_clip_records_are_complete),
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_removed_track_records_are_complete),
+            *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_added_track_records_list_what_moved),
             #: 对账:引用表按当前抽取规则建(见 db/references)。排在所有改写 JSON 的迁移之后 —— 那些是原生 SQL,
             #: 不经过 flush 时的维护;抽取规则的版本号变了才整张重建,平常是一次查询。
             *_recurring(MigrationPhase.AFTER_SCHEMA, _reindex_record_references),

@@ -14,7 +14,10 @@ from app.domain.sequences.errors import SequenceDomainError, SequenceNotFound
 
 @dataclass(frozen=True)
 class AddTrack:
-    kind: str  # "video" | "audio"
+    kind: str  # "video" | "audio" | "subtitle"
+    #: 放在第几行(0 = 最上面,按 position 排的轨道列表里的下标)。缺省:视频轨放最上面(盖在
+    #: 所有画面之上),音频 / 字幕轨放最下面。
+    index: int | None = None
     actor_id: str | None = None
 
 
@@ -52,22 +55,40 @@ def next_track_name(sequence: Sequence, kind: str) -> str:
 
 
 def add_track(db: Session, sequence_id: str, op: AddTrack) -> Sequence:
+    """加一条轨。**新视频轨默认放最上面**:position 升序就是时间线从上到下,也是画面的叠放顺序
+    (最上面的盖住下面的,见 media/scene.video_tracks_sorted)。
+
+    此前新轨一律排在所有轨之后:新视频轨落在音频轨下面,而且是**最底**的画面层 —— 有画面的最底层
+    就是底图(base),于是加一条轨放上画中画,它反而成了底图、把原片盖住了。「加花字」「拖到最上面
+    建新层」都靠新建视频轨,都中了这一条;配音对口型那边干脆加完再一格一格往上挪。
+    """
     sequence = _require_sequence(db, sequence_id)
     if op.kind not in ("video", "audio", "subtitle"):
         raise SequenceDomainError("Track kind must be video, audio, or subtitle")
-    track = Track(
-        sequence_id=sequence.id,
-        kind=op.kind,
-        name=next_track_name(sequence, op.kind),
-        position=max((item.position for item in sequence.tracks), default=-1) + 1,
-    )
+    ordered = sorted(sequence.tracks, key=lambda item: item.position)
+    if op.index is None:
+        index = 0 if op.kind == "video" else len(ordered)
+    elif isinstance(op.index, bool) or not isinstance(op.index, int) or not 0 <= op.index <= len(ordered):
+        raise SequenceDomainError("seqErr_trackIndexRange", count=len(ordered))
+    else:
+        index = op.index
+    track = Track(sequence_id=sequence.id, kind=op.kind, name=next_track_name(sequence, op.kind), position=index)
+    # 插进去之后从 0 起重新编号,让出它的位置。挪过的那几条记下来,撤销时还回去。
+    shifted = []
+    for position, other in enumerate(ordered[:index] + [track] + ordered[index:]):
+        if other is not track and other.position != position:
+            shifted.append({"track_id": other.id, "previous": other.position, "position": position})
+            other.position = position
     db.add(track)
     db.flush()
     _record_operation(
         db,
         sequence,
         kind="add_track",
-        payload={"track_id": track.id, "kind": track.kind, "name": track.name, "position": track.position},
+        payload={
+            "track_id": track.id, "kind": track.kind, "name": track.name, "position": track.position,
+            "shifted": shifted,
+        },
         summary={"operation": "add_track", "track_id": track.id},
         actor_id=op.actor_id,
     )

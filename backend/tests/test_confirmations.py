@@ -21,7 +21,8 @@ def setup_sequence(client: TestClient) -> tuple[dict, dict, dict, dict]:
 
 
 def video_clips(sequence: dict) -> list[dict]:
-    return next(t for t in sequence["tracks"] if t["kind"] == "video")["clips"]
+    # 所有视频轨上的:新视频轨建在最上面,「第一条视频轨」不再是原来那条。
+    return [clip for t in sequence["tracks"] if t["kind"] == "video" for clip in t["clips"]]
 
 
 def wait_job(client: TestClient, job_id: str, timeout: float = 10.0) -> dict:

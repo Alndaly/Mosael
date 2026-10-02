@@ -7062,6 +7062,8 @@ export interface components {
         AddTrackRequest: {
             /** Kind */
             kind: string;
+            /** Index */
+            index?: number | null;
         };
         /** AdminOverviewOut */
         AdminOverviewOut: {

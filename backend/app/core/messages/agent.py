@@ -197,6 +197,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "This is the last video track; without it there is nowhere to put picture. Add another video track first.",
     },
     "seqErr_clipTooShort": {"zh": "片段要长于 {min} 秒", "en": "A clip must be longer than {min}s."},
+    "seqErr_trackIndexRange": {
+        "zh": "新轨的位置要在 0 到 {count} 之间(0 是最上面)",
+        "en": "The new track's position must be between 0 and {count} (0 is the top).",
+    },
     "seqErr_unknownOp": {"zh": "不认识的时间线操作: {kind}", "en": "Unknown timeline operation: {kind}"},
     "seqErr_trimNoRoom": {
         "zh": "这里没有地方放下这一段:修剪会让它短到没有,或者两边都贴着别的片段",

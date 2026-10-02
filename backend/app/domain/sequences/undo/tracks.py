@@ -20,8 +20,17 @@ class AddTrack:
             if track.clips:
                 raise SequenceDomainError("seqErr_undoTrackHasClips")
             db.delete(track)
+        # 为它让过位置的那几条回到原来的行。
+        for entry in payload["shifted"]:
+            other = db.get(Track, entry["track_id"])
+            if other is not None:
+                other.position = entry["previous"]
 
     def forward(db: Session, sequence: Sequence, payload: dict[str, Any]) -> None:
+        for entry in payload["shifted"]:
+            other = db.get(Track, entry["track_id"])
+            if other is not None:
+                other.position = entry["position"]
         db.add(
             Track(
                 id=payload["track_id"],

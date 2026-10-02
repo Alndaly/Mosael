@@ -291,6 +291,8 @@ class SetTrackStateRequest(ApiModel):
 
 class AddTrackRequest(ApiModel):
     kind: str = Field(pattern="^(video|audio|subtitle)$")
+    #: 放在第几行(0 = 最上面)。不给:视频轨放最上面(盖在所有画面之上),音频 / 字幕轨放最下面。
+    index: int | None = Field(default=None, ge=0)
 
 
 class SetClipEffectsRequest(ApiModel):

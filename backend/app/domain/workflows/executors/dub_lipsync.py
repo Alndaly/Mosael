@@ -247,7 +247,7 @@ def dub_lipsync(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[st
     from app.db.models import Asset, Clip, Sequence, Track
     from app.domain.assets.importer import register_file_asset
     from app.domain.render import DIGITAL_HUMAN_SOURCE
-    from app.domain.sequences.operations import AddTrack, InsertClip, MoveTrack, add_track, insert_clip, move_track
+    from app.domain.sequences.operations import AddTrack, InsertClip, add_track, insert_clip
     from app.domain.workflows.executors.subjobs import _asset_in, _sequence_in
     from app.media.paths import resolve_key
 
@@ -331,16 +331,13 @@ def dub_lipsync(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[st
     #: 接回来的整段可能比原片短几帧(各块按帧取整):铺上去的长度取两者较短的那个。
     length = min(span, float((db.get(Asset, final).media_info or {}).get("duration") or span))
 
-    #: 放到最上面一条新的视频轨,盖在原片上。新轨建在最下面(add_track),一格一格挪到顶。
+    #: 放到最上面一条新的视频轨,盖在原片上(新视频轨默认就建在最上面,见 sequences.tracks.add_track)。
     sequence = db.get(Sequence, sequence_id)
     before = {one.id for one in sequence.tracks}
     add_track(db, sequence_id, AddTrack(kind="video"))
     db.refresh(sequence)
     track = next(one for one in sequence.tracks if one.id not in before)
     track_id = track.id
-    for _ in range(len(sequence.tracks)):
-        move_track(db, sequence_id, MoveTrack(track_id=track_id, direction="up"))
-    db.flush()
     placed = insert_clip(db, sequence_id, InsertClip(track_id=track_id, asset_id=final,
                                                     timeline_start=clip_start, src_in=0.0, src_out=length))
     return {"asset_id": final, "clip_id": placed.id, "track_id": track_id, "chunk_count": len(chunks),

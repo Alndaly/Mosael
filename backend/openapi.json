@@ -21523,6 +21523,18 @@
             "type": "string",
             "pattern": "^(video|audio|subtitle)$",
             "title": "Kind"
+          },
+          "index": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Index"
           }
         },
         "type": "object",

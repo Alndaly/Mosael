@@ -596,7 +596,8 @@ def ripple_delete_clip(
 def add_track(
     sequence_id: str, body: AddTrackRequest, db: Tx, user: CurrentUser, base_revision: BaseRevision = None
 ) -> Response:
-    return _edit(db, user, sequence_id, base_revision, add_track_operation, AddTrack(kind=body.kind), perm="edit")
+    op = AddTrack(kind=body.kind, index=body.index)
+    return _edit(db, user, sequence_id, base_revision, add_track_operation, op, perm="edit")
 
 
 @router.delete("/sequences/{sequence_id}/tracks/{track_id}", response_model=SequenceOut)

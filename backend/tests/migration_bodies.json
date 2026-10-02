@@ -19,6 +19,7 @@
   "merge-object-storage-plugins": "d22ccc9bdeb8df38",
   "merge-openai-tts-engine": "6616e03243e9af33",
   "merge-split-vendors": "acc3ce2d90ccc0b6",
+  "migrate-added-track-records-list-what-moved": "5ea733e249c2b5e0",
   "migrate-agent-notice-envelope-out-of-content": "6356f25bea2f9940",
   "migrate-agent-pending-view": "9c546ca4b77446e2",
   "migrate-agent-session-groups": "5928805a420a4235",

@@ -8,8 +8,10 @@ from tests.util import create_asset
 
 
 def _track(line: Timeline, kind: str) -> str:
+    """新建一条轨,交回它的 id(新视频轨建在最上面,不能按「同类最后一条」去找)。"""
+    before = {t["id"] for t in line.get()["tracks"]}
     body = line.ok(line.client.post(f"/api/sequences/{line.id}/tracks", json={"kind": kind}))
-    return [t for t in body["tracks"] if t["kind"] == kind][-1]["id"]
+    return next(t["id"] for t in body["tracks"] if t["id"] not in before)
 
 
 def _put(line: Timeline, track: str, start: float, length: float, src_in: float = 0.0) -> None:
