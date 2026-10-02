@@ -179,6 +179,10 @@ MESSAGES: dict[str, dict[str, str]] = {
     "seqErr_notFiniteNumber": {"zh": "{name} 必须是一个有限的数字", "en": "{name} must be a finite number."},
     "seqErr_effectBadValue": {"zh": "特效 {effect} 的值不对", "en": "The effect {effect} has an invalid value."},
     "seqErr_effectsNotObject": {"zh": "特效必须是一个对象", "en": "Effects must be an object."},
+    "seqErr_trackLocked": {
+        "zh": "轨道「{name}」已锁定,先解锁再改",
+        "en": "Track \"{name}\" is locked. Unlock it to make changes.",
+    },
     "seqErr_unknownOp": {"zh": "不认识的时间线操作: {kind}", "en": "Unknown timeline operation: {kind}"},
     "seqErr_trimNoRoom": {
         "zh": "这里没有地方放下这一段:修剪会让它短到没有,或者两边都贴着别的片段",

@@ -8,16 +8,17 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.db.models import Clip, Sequence, Track
+from app.db.models import Clip, Sequence
 from app.domain.sequences._timeline import (
     _record_operation,
     _require_clip,
     _require_sequence,
+    _require_target_track,
     _validate_clip_range,
     finite_number,
 )
 from app.domain.sequences.coverage import clear_range, clip_end, clips_on_track
-from app.domain.sequences.errors import SequenceDomainError, SequenceNotFound
+from app.domain.sequences.errors import SequenceDomainError
 from app.domain.sequences.journal import Journal
 
 
@@ -53,9 +54,7 @@ _CUE_END_SLACK = 0.05
 
 def generate_subtitles(db: Session, sequence_id: str, op: GenerateSubtitles) -> Sequence:
     sequence = _require_sequence(db, sequence_id)
-    track = db.get(Track, op.track_id)
-    if track is None or track.sequence_id != sequence_id:
-        raise SequenceNotFound("Track not found")
+    track = _require_target_track(db, sequence_id, op.track_id)
     if track.kind != "subtitle":
         raise SequenceDomainError("Subtitles need a subtitle track")
     cues = _checked_cues(db, sequence, op.cues)
@@ -142,9 +141,7 @@ def _checked_cues(
 
 def insert_text_clip(db: Session, sequence_id: str, op: InsertTextClip) -> Sequence:
     sequence = _require_sequence(db, sequence_id)
-    track = db.get(Track, op.track_id)
-    if track is None or track.sequence_id != sequence_id:
-        raise SequenceNotFound("Track not found")
+    track = _require_target_track(db, sequence_id, op.track_id)
     # 字幕轨 = 序列级统一样式的底部字幕;video 轨 = 花字(每条自带样式、transform 定位)。
     if track.kind not in ("subtitle", "video"):
         raise SequenceDomainError("Text clips can only be placed on subtitle or video tracks")

@@ -23,6 +23,13 @@ class SequenceNotFound(SequenceDomainError):
     status = 404
 
 
+class TrackLocked(SequenceDomainError):
+    """要改的片段(或要放进去的轨道)在一条锁定的轨上。锁是用户说的「这条别动」—— 剪辑页
+    自己会挡,而智能体、工作流、另一个人的剪辑页不经过那几行前端判断,所以由领域层守。"""
+
+    status = 423
+
+
 class SequenceRevisionConflict(SequenceDomainError):
     """这一步是照着某一版时间线做的,而时间线已经被别人(另一个人、智能体、画板、自己的另一个窗口)改到了
     别的样子,和这一步对不上 —— 照做就是在一份过时的时间线上替人做决定。拒掉,边界把最新的那一版一起交回去,

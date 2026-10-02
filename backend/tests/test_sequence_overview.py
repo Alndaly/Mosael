@@ -100,6 +100,9 @@ def test_链接组给出来_模型知道哪几段会一起动() -> None:
     client.post(f"/api/sequences/{sid}/clips/{fast}/detach-audio")
     view = _agent_view(client, sid)
     picture = next(one for one in _clips(view, "video") if one["clip_id"] == fast)
-    sound = next(one for one in _clips(view, "audio") if one.get("link_group"))
+    # A1 锁着,分离出的声音落在新开的那条音频轨上(锁定的轨不往里放东西)。
+    sound = next(
+        one for track in view["tracks"] if track["kind"] == "audio" for one in track["clips"] if one.get("link_group")
+    )
     assert picture["link_group"] == sound["link_group"]
     assert "link_group" not in next(one for one in _clips(view, "video") if one.get("offline")), "没链接的不带这一项"

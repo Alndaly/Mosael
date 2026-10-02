@@ -15,6 +15,7 @@ from app.domain.sequences._timeline import (
     _record_operation,
     _require_clip,
     _require_sequence,
+    _require_target_track,
     _validate_clip_range,
     finite_number,
     require_speed,
@@ -114,10 +115,8 @@ def insert_clip(db: Session, sequence_id: str, op: InsertClip) -> Clip:
     落点上已有片段时是**覆盖**(coverage.clear_range);插入模式(ripple)先把后面的推开再放。
     """
     sequence = _require_sequence(db, sequence_id)
-    track = db.get(Track, op.track_id)
+    track = _require_target_track(db, sequence_id, op.track_id)
     asset = db.get(Asset, op.asset_id)
-    if track is None or track.sequence_id != sequence_id:
-        raise SequenceNotFound("Track not found")
     if asset is None or asset.workspace_id != sequence.workspace_id:
         raise SequenceNotFound("Asset not found")
     if asset.kind not in MEDIA_KINDS:
@@ -170,11 +169,8 @@ def _land(journal: Journal, placed: list[Clip], *, ripple: bool) -> None:
 def _target_track(db: Session, sequence_id: str, clip: Clip, track_id: str | None) -> str:
     target_track_id = track_id or clip.track_id
     if target_track_id != clip.track_id:
-        target = db.get(Track, target_track_id)
-        source = db.get(Track, clip.track_id)
-        if target is None or target.sequence_id != sequence_id:
-            raise SequenceNotFound("Target track not found")
-        if source is not None and target.kind != source.kind:
+        target = _require_target_track(db, sequence_id, target_track_id)
+        if target.kind != clip.track.kind:
             raise SequenceDomainError("Target track kind does not match clip track kind")
     return target_track_id
 

@@ -170,7 +170,8 @@ def detach_clip_audio(db: Session, sequence_id: str, op: DetachClipAudio) -> Seq
     audio_in, audio_out = max(0.0, clip.src_in - offset), clip.src_out - offset
 
     audio_tracks = sorted((t for t in sequence.tracks if t.kind == "audio" and not t.role), key=lambda t: t.position)
-    target = next((t for t in audio_tracks if t.id != track.id and _range_free(t, start, end)), None)
+    # 锁定的音频轨不挑:往上面放东西就是在改它。
+    target = next((t for t in audio_tracks if t.id != track.id and not t.locked and _range_free(t, start, end)), None)
     journal = Journal(db, sequence)
     if target is None:
         target = journal.create_track(

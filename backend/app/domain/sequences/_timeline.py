@@ -8,8 +8,8 @@ from typing import Any
 from sqlalchemy import update
 from sqlalchemy.orm import Session
 
-from app.db.models import Clip, Sequence, SequenceOperation, SequenceRevision
-from app.domain.sequences.errors import SequenceDomainError, SequenceNotFound, SequenceRevisionConflict
+from app.db.models import Clip, Sequence, SequenceOperation, SequenceRevision, Track
+from app.domain.sequences.errors import SequenceDomainError, SequenceNotFound, SequenceRevisionConflict, TrackLocked
 from app.domain.sequences.offline import offline_snapshot
 
 
@@ -205,11 +205,30 @@ def _require_sequence(db: Session, sequence_id: str) -> Sequence:
     return sequence
 
 
+def _require_unlocked(track: Track) -> None:
+    """锁定的轨不让改。此前锁只是前端的几行判断:智能体、工作流、另一个人的剪辑页照样能在锁定
+    的轨上移动、删除、插入 —— 用户锁上它,正是不想让这些事发生。撤销 / 重做不过这一道:它们是
+    在还原已经发生过的事,而不是新的编辑(与达芬奇一致)。链接组员在锁定轨上的本来就不跟着动(links)。"""
+    if track.locked:
+        raise TrackLocked("seqErr_trackLocked", name=track.name)
+
+
 def _require_clip(db: Session, sequence_id: str, clip_id: str) -> Clip:
+    """要改的那个片段。**每个改片段的算子都从这里取它**,所以锁定轨的检查放在这里一处。"""
     clip = db.get(Clip, clip_id)
     if clip is None or clip.sequence_id != sequence_id:
         raise SequenceNotFound("Clip not found")
+    _require_unlocked(clip.track)
     return clip
+
+
+def _require_target_track(db: Session, sequence_id: str, track_id: str) -> Track:
+    """片段要放进去的那条轨:在这条序列上,而且没锁。插入、移到别的轨、字幕批量插入、花字都从这里取。"""
+    track = db.get(Track, track_id)
+    if track is None or track.sequence_id != sequence_id:
+        raise SequenceNotFound("Track not found")
+    _require_unlocked(track)
+    return track
 
 
 def finite_number(name: str, value: Any) -> float:

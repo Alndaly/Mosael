@@ -22,9 +22,13 @@ TRACK_FOR_ASSET = {"audio": "audio"}
 
 
 def track_for_asset(sequence: Sequence, asset_kind: str) -> Track | None:
-    """这种素材默认进哪条轨:第一条同类轨道(绝大多数时间线只有一条视频轨和一条音频轨)。"""
+    """这种素材默认进哪条轨:第一条**没锁的**同类轨道(绝大多数时间线只有一条视频轨和一条音频轨)。
+
+    同类的全锁着就交回第一条 —— 插入时由锁定检查说清楚「它锁着」,而不是说成「没有这种轨」。
+    """
     want = TRACK_FOR_ASSET.get(asset_kind, "video")
-    return next((one for one in sorted(sequence.tracks or [], key=lambda item: item.position) if one.kind == want), None)
+    same_kind = [one for one in sorted(sequence.tracks or [], key=lambda item: item.position) if one.kind == want]
+    return next((one for one in same_kind if not one.locked), same_kind[0] if same_kind else None)
 
 
 def track_end(track: Track) -> float:
