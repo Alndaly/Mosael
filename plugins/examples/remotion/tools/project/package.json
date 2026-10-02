@@ -4,11 +4,11 @@
   "type": "module",
   "description": "Installed by the Mosael Remotion plugin into its data directory. Versions are pinned: the plugin's tools are tested against exactly these.",
   "dependencies": {
-    "@remotion/bundler": "4.0.526",
-    "@remotion/renderer": "4.0.526",
-    "katex": "0.18.7",
+    "@remotion/bundler": "4.0.529",
+    "@remotion/renderer": "4.0.529",
+    "katex": "0.18.9",
     "react": "19.3.0",
     "react-dom": "19.3.0",
-    "remotion": "4.0.526"
+    "remotion": "4.0.529"
   }
 }

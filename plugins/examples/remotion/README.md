@@ -68,4 +68,4 @@ Only `react`, `remotion` and `katex` can be imported. If bundling or rendering f
 
 ## Versions
 
-Remotion 4.0.526, React 19.3.0, KaTeX 0.18.7, all pinned to exact versions (`tools/project/package.json`). When a plugin upgrade changes the versions, the rendering tools remind you to run "Prepare the renderer" again, which reinstalls the new versions.
+Remotion 4.0.529, React 19.3.0, KaTeX 0.18.9, all pinned to exact versions (`tools/project/package.json`). When a plugin upgrade changes the versions, the rendering tools remind you to run "Prepare the renderer" again, which reinstalls the new versions.

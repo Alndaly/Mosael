@@ -68,4 +68,4 @@ export default function Scene({ data }: { data: { word: string } }) {
 
 ## 版本
 
-Remotion 4.0.526、React 19.3.0、KaTeX 0.18.7,均锁定精确版本(`tools/project/package.json`)。插件升级换了版本时,渲染工具会提醒再运行一次「准备渲染环境」,它按新版本重装。
+Remotion 4.0.529、React 19.3.0、KaTeX 0.18.9,均锁定精确版本(`tools/project/package.json`)。插件升级换了版本时,渲染工具会提醒再运行一次「准备渲染环境」,它按新版本重装。
