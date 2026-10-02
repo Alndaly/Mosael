@@ -3,6 +3,12 @@ import type { Job } from "@/api/domains/jobs";
 import { API_BASE, api, getAuthToken } from "@/api/transport";
 
 export type Sequence = components["schemas"]["SequenceOut"];
+
+/**
+ * 链接片段(`Clip.link_group`:视频与分离出的音频)默认整组移动 / 修剪 / 切分 / 删除 / 变速。
+ * `linked: false` 是「临时解链」:这一下只动点中的那段(后端 sequences/links.py)。
+ */
+export type LinkOption = { linked?: boolean };
 export type Track = components["schemas"]["TrackOut"];
 export type Clip = components["schemas"]["ClipOut"];
 
@@ -23,7 +29,7 @@ export function insertClip(
 export function moveClip(
   sequenceId: string,
   clipId: string,
-  body: { timeline_start: number; track_id?: string | null; ripple?: boolean },
+  body: { timeline_start: number; track_id?: string | null; ripple?: boolean } & LinkOption,
 ): Promise<Sequence> {
   return api<Sequence>(`/api/sequences/${sequenceId}/clips/${clipId}/move`, {
     method: "PATCH",
@@ -32,10 +38,10 @@ export function moveClip(
 }
 
 /** One batch is one operation and therefore one undo step. */
-export function deleteClipsBatch(sequenceId: string, clipIds: string[]): Promise<Sequence> {
+export function deleteClipsBatch(sequenceId: string, clipIds: string[], options: LinkOption = {}): Promise<Sequence> {
   return api<Sequence>(`/api/sequences/${sequenceId}/clips/delete-batch`, {
     method: "POST",
-    body: JSON.stringify({ clip_ids: clipIds }),
+    body: JSON.stringify({ clip_ids: clipIds, ...options }),
   });
 }
 
@@ -58,17 +64,18 @@ export function rippleDeleteClipsBatch(sequenceId: string, clipIds: string[]): P
 export function moveClipsBatch(
   sequenceId: string,
   moves: { clip_id: string; timeline_start: number; track_id?: string | null }[],
+  options: LinkOption = {},
 ): Promise<Sequence> {
   return api<Sequence>(`/api/sequences/${sequenceId}/clips/move-batch`, {
     method: "PATCH",
-    body: JSON.stringify({ moves }),
+    body: JSON.stringify({ moves, ...options }),
   });
 }
 
 export function trimClip(
   sequenceId: string,
   clipId: string,
-  body: { timeline_start: number; src_in: number; src_out: number },
+  body: { timeline_start: number; src_in: number; src_out: number } & LinkOption,
 ): Promise<Sequence> {
   return api<Sequence>(`/api/sequences/${sequenceId}/clips/${clipId}/trim`, {
     method: "PATCH",
@@ -87,8 +94,9 @@ export function cutClipRange(
   });
 }
 
-export function deleteClip(sequenceId: string, clipId: string): Promise<Sequence> {
-  return api<Sequence>(`/api/sequences/${sequenceId}/clips/${clipId}`, { method: "DELETE" });
+export function deleteClip(sequenceId: string, clipId: string, options: LinkOption = {}): Promise<Sequence> {
+  const query = options.linked === false ? "?linked=false" : "";
+  return api<Sequence>(`/api/sequences/${sequenceId}/clips/${clipId}${query}`, { method: "DELETE" });
 }
 
 export function cutClipRanges(
@@ -120,7 +128,7 @@ export function setClipSpeed(
   sequenceId: string,
   clipId: string,
   speed: number,
-  options: { ripple?: boolean } = {},
+  options: { ripple?: boolean } & LinkOption = {},
 ): Promise<Sequence> {
   return api<Sequence>(`/api/sequences/${sequenceId}/clips/${clipId}/speed`, {
     method: "PATCH",
@@ -164,27 +172,38 @@ export function rippleDeleteClip(sequenceId: string, clipId: string): Promise<Se
   return api<Sequence>(`/api/sequences/${sequenceId}/clips/${clipId}/ripple`, { method: "DELETE" });
 }
 
-export function splitClip(sequenceId: string, clipId: string, srcTime: number): Promise<Sequence> {
+export function splitClip(
+  sequenceId: string,
+  clipId: string,
+  srcTime: number,
+  options: LinkOption = {},
+): Promise<Sequence> {
   return api<Sequence>(`/api/sequences/${sequenceId}/clips/${clipId}/split`, {
     method: "POST",
-    body: JSON.stringify({ src_time: srcTime }),
+    body: JSON.stringify({ src_time: srcTime, ...options }),
   });
 }
 
-export function splitClipAtPoints(sequenceId: string, clipId: string, srcTimes: number[]): Promise<Sequence> {
+export function splitClipAtPoints(
+  sequenceId: string,
+  clipId: string,
+  srcTimes: number[],
+  options: LinkOption = {},
+): Promise<Sequence> {
   return api<Sequence>(`/api/sequences/${sequenceId}/clips/${clipId}/split-points`, {
     method: "POST",
-    body: JSON.stringify({ src_times: srcTimes }),
+    body: JSON.stringify({ src_times: srcTimes, ...options }),
   });
 }
 
 export function splitClipAtPointsBatch(
   sequenceId: string,
   splits: Array<{ clip_id: string; src_times: number[] }>,
+  options: LinkOption = {},
 ): Promise<Sequence> {
   return api<Sequence>(`/api/sequences/${sequenceId}/clips/split-points`, {
     method: "POST",
-    body: JSON.stringify({ splits }),
+    body: JSON.stringify({ splits, ...options }),
   });
 }
 

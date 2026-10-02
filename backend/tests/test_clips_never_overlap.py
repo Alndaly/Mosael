@@ -42,8 +42,9 @@ def snapshot(sequence: dict[str, Any]) -> dict[str, list[tuple]]:
 
 
 class Timeline:
-    def __init__(self) -> None:
-        self.client = fresh_client()
+    def __init__(self, client=None) -> None:
+        """`client` 给了就在同一个库里再开一条时间线(fresh_client 会清库)。"""
+        self.client = client or fresh_client()
         ws = self.client.post("/api/workspaces", json={"name": "W"}).json()["id"]
         project = self.client.post("/api/projects", json={"workspace_id": ws, "name": "P"}).json()["id"]
         self.asset = create_asset(self.client, {"workspace_id": ws, "project_id": project, "kind": "video", "name": "V",

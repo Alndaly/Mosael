@@ -6853,6 +6853,7 @@
           "sequences"
         ],
         "summary": "Delete Clip",
+        "description": "`linked=false`:只删这一段,链接的组员留着(「临时解链」)。",
         "operationId": "delete_clip_api_sequences__sequence_id__clips__clip_id__delete",
         "parameters": [
           {
@@ -6871,6 +6872,16 @@
             "schema": {
               "type": "string",
               "title": "Clip Id"
+            }
+          },
+          {
+            "name": "linked",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": true,
+              "title": "Linked"
             }
           }
         ],
@@ -23815,6 +23826,11 @@
             "type": "array",
             "minItems": 1,
             "title": "Clip Ids"
+          },
+          "linked": {
+            "type": "boolean",
+            "title": "Linked",
+            "default": true
           }
         },
         "type": "object",
@@ -23933,6 +23949,17 @@
               }
             ],
             "title": "Offline Asset"
+          },
+          "link_group": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Link Group"
           },
           "effects": {
             "additionalProperties": true,
@@ -27561,6 +27588,11 @@
             "type": "boolean",
             "title": "Ripple",
             "default": false
+          },
+          "linked": {
+            "type": "boolean",
+            "title": "Linked",
+            "default": true
           }
         },
         "type": "object",
@@ -27578,6 +27610,11 @@
             "type": "array",
             "minItems": 1,
             "title": "Moves"
+          },
+          "linked": {
+            "type": "boolean",
+            "title": "Linked",
+            "default": true
           }
         },
         "type": "object",
@@ -33394,6 +33431,11 @@
             "type": "boolean",
             "title": "Ripple",
             "default": true
+          },
+          "linked": {
+            "type": "boolean",
+            "title": "Linked",
+            "default": true
           }
         },
         "type": "object",
@@ -33679,6 +33721,11 @@
             "type": "array",
             "minItems": 1,
             "title": "Splits"
+          },
+          "linked": {
+            "type": "boolean",
+            "title": "Linked",
+            "default": true
           }
         },
         "type": "object",
@@ -33697,6 +33744,11 @@
             "type": "array",
             "minItems": 1,
             "title": "Src Times"
+          },
+          "linked": {
+            "type": "boolean",
+            "title": "Linked",
+            "default": true
           }
         },
         "type": "object",
@@ -33710,6 +33762,11 @@
           "src_time": {
             "type": "number",
             "title": "Src Time"
+          },
+          "linked": {
+            "type": "boolean",
+            "title": "Linked",
+            "default": true
           }
         },
         "type": "object",
@@ -34359,6 +34416,11 @@
           "src_out": {
             "type": "number",
             "title": "Src Out"
+          },
+          "linked": {
+            "type": "boolean",
+            "title": "Linked",
+            "default": true
           }
         },
         "type": "object",

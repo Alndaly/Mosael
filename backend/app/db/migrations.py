@@ -5729,6 +5729,18 @@ def _migrate_clip_offline_asset() -> None:
             conn.execute(text("ALTER TABLE clips ADD COLUMN offline_asset JSON"))
 
 
+def _migrate_clips_get_a_link_group() -> None:
+    """片段多一列 `link_group`(链接组):同组的片段一起移动、修剪、切分、删除(见 sequences/links.py)。
+
+    已有的片段都不在任何组里(NULL)。此前分离出去、还和画面对得严丝合缝的音频,由
+    migrate-detached-audio-joins-its-video 补进同一组。
+    """
+    with engine.begin() as conn:
+        columns = {row[1] for row in conn.execute(text("PRAGMA table_info(clips)"))}
+        if columns and "link_group" not in columns:
+            conn.execute(text("ALTER TABLE clips ADD COLUMN link_group VARCHAR(64)"))
+
+
 def _migrate_browser_profile_start_url() -> None:
     """通用档案记下下次从哪一页开(见 BrowserProfile.start_url)。老档案留空 —— 它们从没记过。"""
     with engine.begin() as conn:
@@ -6910,6 +6922,61 @@ def _migrate_clips_on_a_track_do_not_overlap() -> None:
             conn.execute(text("UPDATE sequences SET revision = revision + 1 WHERE id = :id"), {"id": sequence_id})
 
 
+def _migrate_detached_audio_joins_its_video() -> None:
+    """升级前「分离音频」分出去的那段音频,和它的画面补进同一个链接组。
+
+    分离出去的音频是画面自己那段声音的一份拷贝,只有和画面对齐才有意义 —— 现在分离时两段就进同一组
+    (之后默认一起动)。老的那些按撤销记录认:还生效的 detach_clip_audio(没被撤销)建的那段音频和
+    它的画面,**两段都还在、而且还对得严丝合缝**(起点、入出点、倍速都一样)才补;用户已经把它们
+    挪开过,说明他要的就是分开,不替他绑回去。画面已经在一个组里(先前分离过一次)就加进那一组。
+
+    读的是改动日志的形状,排在 migrate-clip-edits-keep-a-change-journal 之后。已经有组的不动,重跑无害。
+    补过组的序列 revision +1。
+    """
+    tables = set(inspect(engine).get_table_names())
+    if "sequence_operations" not in tables or "clips" not in tables:
+        return
+    with engine.begin() as conn:
+        operations = conn.execute(
+            text(
+                "SELECT payload FROM sequence_operations WHERE kind = 'detach_clip_audio' AND reverted = 0 "
+                "ORDER BY revision_after"
+            )
+        ).scalars().all()
+        for raw in operations:
+            payload = json.loads(raw) if isinstance(raw, str) else dict(raw or {})
+            changes = payload.get("changes") or []
+            audio_id = next((entry["clip"]["clip_id"] for entry in changes if entry.get("op") == "create"), None)
+            video_id = next((entry["clip_id"] for entry in changes if entry.get("op") == "update"), None)
+            if not audio_id or not video_id:
+                continue
+            rows = {
+                row["id"]: row
+                for row in conn.execute(
+                    text(
+                        "SELECT id, timeline_start, src_in, src_out, speed, link_group FROM clips "
+                        "WHERE id IN (:audio, :video)"
+                    ),
+                    {"audio": audio_id, "video": video_id},
+                ).mappings()
+            }
+            audio, video = rows.get(audio_id), rows.get(video_id)
+            if audio is None or video is None or audio["link_group"]:
+                continue
+            if any(abs(float(audio[name]) - float(video[name])) > 1e-6 for name in ("timeline_start", "src_in", "src_out", "speed")):
+                continue
+            group = video["link_group"] or uuid.uuid4().hex
+            conn.execute(
+                text("UPDATE clips SET link_group = :group WHERE id IN (:audio, :video)"),
+                {"group": group, "audio": audio_id, "video": video_id},
+            )
+            # 编辑器按 revision 轮询、浏览器按它的 ETag 缓存:不换版本号就一直拿着补组之前的那份。
+            conn.execute(
+                text("UPDATE sequences SET revision = revision + 1 WHERE id = (SELECT sequence_id FROM clips WHERE id = :video)"),
+                {"video": video_id},
+            )
+
+
 def _reindex_record_references() -> None:
     """引用表(record_references)是派生数据:抽取规则一变,整张按新规则重建。"""
     from app.db.references import reindex
@@ -7018,6 +7085,8 @@ def migration_plan() -> MigrationPlan:
                 _migrate_job_worker_leases,
                 _migrate_browser_pool,
                 _migrate_clip_offline_asset,
+                # 加列必须在 SCHEMA 之前:之后 ORM 上的 Clip 已经指望 link_group 存在了。
+                _migrate_clips_get_a_link_group,
                 # 加列必须在 SCHEMA 之前:之后 ORM 上的 Track 已经指望 hidden 存在了。
                 _migrate_subtitle_tracks_hide_instead_of_mute,
                 _migrate_model_structured_output,
@@ -7074,6 +7143,8 @@ def migration_plan() -> MigrationPlan:
                 # 片段级编辑的撤销记录改成改动日志;同一轨上叠着的片段按「后开始的盖住先开始的」规整。
                 _migrate_clip_edits_keep_a_change_journal,
                 _migrate_clips_on_a_track_do_not_overlap,
+                # 读改动日志认出分离音频,排在上面那条之后。
+                _migrate_detached_audio_joins_its_video,
                 _migrate_provider_model_capability_ref,
                 _migrate_generation_capability_profiles,
                 _migrate_prompt_requirement_becomes_one_field,

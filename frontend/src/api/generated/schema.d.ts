@@ -2558,7 +2558,10 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** Delete Clip */
+        /**
+         * Delete Clip
+         * @description `linked=false`:只删这一段,链接的组员留着(「临时解链」)。
+         */
         delete: operations["delete_clip_api_sequences__sequence_id__clips__clip_id__delete"];
         options?: never;
         head?: never;
@@ -8427,6 +8430,11 @@ export interface components {
         ClipIdsRequest: {
             /** Clip Ids */
             clip_ids: string[];
+            /**
+             * Linked
+             * @default true
+             */
+            linked: boolean;
         };
         /** ClipMoveEntry */
         ClipMoveEntry: {
@@ -8472,6 +8480,8 @@ export interface components {
             offline_asset?: {
                 [key: string]: unknown;
             } | null;
+            /** Link Group */
+            link_group?: string | null;
             /** Effects */
             effects: {
                 [key: string]: unknown;
@@ -10008,6 +10018,11 @@ export interface components {
              * @default false
              */
             ripple: boolean;
+            /**
+             * Linked
+             * @default true
+             */
+            linked: boolean;
         };
         /**
          * MoveClipsBatchRequest
@@ -10016,6 +10031,11 @@ export interface components {
         MoveClipsBatchRequest: {
             /** Moves */
             moves: components["schemas"]["ClipMoveEntry"][];
+            /**
+             * Linked
+             * @default true
+             */
+            linked: boolean;
         };
         /** MoveTrackRequest */
         MoveTrackRequest: {
@@ -12698,6 +12718,11 @@ export interface components {
              * @default true
              */
             ripple: boolean;
+            /**
+             * Linked
+             * @default true
+             */
+            linked: boolean;
         };
         /** SetClipTextRequest */
         SetClipTextRequest: {
@@ -12821,16 +12846,31 @@ export interface components {
         SplitClipPointsBatchRequest: {
             /** Splits */
             splits: components["schemas"]["ClipPointSplitsRequest"][];
+            /**
+             * Linked
+             * @default true
+             */
+            linked: boolean;
         };
         /** SplitClipPointsRequest */
         SplitClipPointsRequest: {
             /** Src Times */
             src_times: number[];
+            /**
+             * Linked
+             * @default true
+             */
+            linked: boolean;
         };
         /** SplitClipRequest */
         SplitClipRequest: {
             /** Src Time */
             src_time: number;
+            /**
+             * Linked
+             * @default true
+             */
+            linked: boolean;
         };
         /** StartOut */
         StartOut: {
@@ -13143,6 +13183,11 @@ export interface components {
             src_in: number;
             /** Src Out */
             src_out: number;
+            /**
+             * Linked
+             * @default true
+             */
+            linked: boolean;
         };
         /** TtsConfigOut */
         TtsConfigOut: {
@@ -19091,7 +19136,9 @@ export interface operations {
     };
     delete_clip_api_sequences__sequence_id__clips__clip_id__delete: {
         parameters: {
-            query?: never;
+            query?: {
+                linked?: boolean;
+            };
             header?: never;
             path: {
                 sequence_id: string;

@@ -83,6 +83,9 @@ class Clip(Base):
     #: 上写不出原来是哪个文件的话,用户没法把它对回去。
     offline_asset: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True, default=None)
     effects: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    #: 链接组:同组的片段一起移动、修剪、切分、删除(视频和从它分离出去的音频)。空 = 不和谁链接。
+    #: 是一个组号而不是「指向另一段」:切分之后左半和左半一组、右半和右半一组,两两配对的指针表达不了。
+    link_group: Mapped[str | None] = mapped_column(String(64), nullable=True, default=None)
     # 片段变换(缩放/位移/旋转/透明度);空 = 恒等。{scale,x,y,rotation,opacity}
     transform: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=now, nullable=False)

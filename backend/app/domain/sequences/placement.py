@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from math import inf
 
 from sqlalchemy import inspect
 from sqlalchemy.orm import Session
@@ -16,9 +17,9 @@ from app.domain.sequences._timeline import (
     _require_sequence,
     _validate_clip_range,
     require_speed,
+    timeline_span,
 )
 from app.domain.sequences.coverage import (
-    EPS,
     clear_range,
     clip_end,
     make_room,
@@ -27,6 +28,7 @@ from app.domain.sequences.coverage import (
 )
 from app.domain.sequences.errors import SequenceDomainError, SequenceNotFound
 from app.domain.sequences.journal import Journal
+from app.domain.sequences.links import linked_members, with_links
 
 
 @dataclass(frozen=True)
@@ -52,6 +54,8 @@ class MoveClip:
     # Insert-edit (DaVinci "insert" mode): push destination-track clips at or
     # after the drop point right by this clip's duration to make room.
     ripple: bool = False
+    #: 链接组(视频和它分离出去的音频)一起动;False = 只动这一段(前端的「临时解链」)。见 links.py。
+    linked: bool = True
     actor_id: str | None = None
 
 
@@ -68,6 +72,8 @@ class MoveClipsBatch:
     """
 
     moves: tuple["ClipMove", ...]
+    #: 链接组(视频和它分离出去的音频)一起动;False = 只动这一段(前端的「临时解链」)。见 links.py。
+    linked: bool = True
     actor_id: str | None = None
 
 
@@ -84,12 +90,16 @@ class TrimClip:
     timeline_start: float
     src_in: float
     src_out: float
+    #: 链接组(视频和它分离出去的音频)一起动;False = 只动这一段(前端的「临时解链」)。见 links.py。
+    linked: bool = True
     actor_id: str | None = None
 
 
 @dataclass(frozen=True)
 class DeleteClip:
     clip_id: str
+    #: 链接组(视频和它分离出去的音频)一起动;False = 只动这一段(前端的「临时解链」)。见 links.py。
+    linked: bool = True
     actor_id: str | None = None
 
 
@@ -176,8 +186,8 @@ def move_clip(db: Session, sequence_id: str, op: MoveClip) -> Sequence:
     target_track_id = _target_track(db, sequence_id, clip, op.track_id)
 
     journal = Journal(db, sequence)
-    journal.update(clip, timeline_start=float(op.timeline_start), track_id=target_track_id)
-    _land(journal, [clip], ripple=op.ripple)
+    moved = _move_with_links(journal, [(clip, float(op.timeline_start), target_track_id)], linked=op.linked)
+    _land(journal, moved, ripple=op.ripple)
     _record_operation(
         db,
         sequence,
@@ -203,9 +213,8 @@ def move_clips_batch(db: Session, sequence_id: str, op: MoveClipsBatch) -> Seque
         planned.append((clip, float(move.timeline_start), _target_track(db, sequence_id, clip, move.track_id)))
 
     journal = Journal(db, sequence)
-    for clip, start, target_track_id in planned:
-        journal.update(clip, timeline_start=start, track_id=target_track_id)
-    _land(journal, [clip for clip, _, _ in planned], ripple=False)
+    moved = _move_with_links(journal, planned, linked=op.linked)
+    _land(journal, moved, ripple=False)
     _record_operation(
         db,
         sequence,
@@ -217,11 +226,37 @@ def move_clips_batch(db: Session, sequence_id: str, op: MoveClipsBatch) -> Seque
     return sequence
 
 
+def _move_with_links(journal: Journal, planned: list[tuple[Clip, float, str]], *, linked: bool) -> list[Clip]:
+    """把点中的几段挪到各自的落点,同组的片段平移同样的量(留在自己的轨上)。返回挪过的全部片段。
+
+    一组里谁也不能挪到 0 之前:往左拖过头时整组停在最早那段碰到 0 的位置,而不是只把它压扁在 0 上 ——
+    那样音画就错开了。
+    """
+    picked = {clip.id for clip, _, _ in planned}
+    followers: dict[str, tuple[Clip, Clip]] = {}  # 组员 id → (组员, 带着它的那段)
+    for clip, _, _ in planned:
+        for member in linked_members(journal.db, [clip], linked=linked):
+            if member.id not in picked:
+                followers.setdefault(member.id, (member, clip))
+    moved: list[Clip] = []
+    for clip, start, track_id in planned:
+        group = [clip] + [member for member, leader in followers.values() if leader is clip]
+        delta = max(start - clip.timeline_start, -min(one.timeline_start for one in group))
+        for member in group[1:]:
+            journal.update(member, timeline_start=member.timeline_start + delta)
+        journal.update(clip, timeline_start=clip.timeline_start + delta, track_id=track_id)
+        moved.extend(group)
+    return moved
+
+
 def trim_clip(db: Session, sequence_id: str, op: TrimClip) -> Sequence:
     """修剪:改片段的起点、入点、出点。**拉进邻居时夹到邻居的边上**,不盖住它。
 
     修剪是在动这一段自己的边,用户没打算动邻居 —— 和放下一段(覆盖)不是一回事。夹住而不是
     报错:拖过头是手势的常态,停在边上就是用户要的结果。
+
+    链接的组员跟着修同一条边、修同样的量(头往右收 1 秒,链接音频的头也收 1 秒),而且**整组一起夹**:
+    哪一段先碰到邻居、素材头尾,整组就停在那里 —— 只让一段停下的话,音画就错开了。
     """
     sequence = _require_sequence(db, sequence_id)
     clip = _require_clip(db, sequence_id, op.clip_id)
@@ -229,18 +264,42 @@ def trim_clip(db: Session, sequence_id: str, op: TrimClip) -> Sequence:
 
     speed = clip.speed or 1.0
     start, src_in, src_out = float(op.timeline_start), float(op.src_in), float(op.src_out)
-    previous_end, next_start = neighbours(db, clip)
-    if start < previous_end - EPS:
-        pulled = previous_end - start
-        start, src_in = previous_end, src_in + pulled * speed
-    end = start + (src_out - src_in) / speed
-    if end > next_start + EPS:
-        src_out -= (end - next_start) * speed
-    if src_out - src_in <= MIN_CUT_REMAINDER:
+    members = linked_members(db, [clip], linked=op.linked)
+    group_ids = {clip.id, *(member.id for member in members)}
+    head = start - clip.timeline_start  # 起点挪了多少(时间线秒,往右为正)
+    tail = start + (src_out - src_in) / speed - clip_end(clip)  # 终点挪了多少
+
+    head_floor, tail_ceiling = -inf, inf
+    for one in (clip, *members):
+        previous_end, next_start = neighbours(db, one, exclude=group_ids)
+        head_floor = max(head_floor, previous_end - one.timeline_start)
+        tail_ceiling = min(tail_ceiling, next_start - clip_end(one))
+    for member in members:
+        member_speed = member.speed or 1.0
+        head_floor = max(head_floor, -member.src_in / member_speed)  # 组员的源不能早于 0
+        duration = _source_duration(member)
+        if duration is not None:
+            tail_ceiling = min(tail_ceiling, (duration - member.src_out) / member_speed)
+    clamped_head, clamped_tail = max(head, head_floor), min(tail, tail_ceiling)
+    start += clamped_head - head
+    src_in += (clamped_head - head) * speed
+    src_out += (clamped_tail - tail) * speed
+    if src_out - src_in <= MIN_CUT_REMAINDER or any(
+        (timeline_span(member) - clamped_head + clamped_tail) * (member.speed or 1.0) <= MIN_CUT_REMAINDER
+        for member in members
+    ):
         raise SequenceDomainError("seqErr_trimNoRoom")
 
     journal = Journal(db, sequence)
     journal.update(clip, timeline_start=start, src_in=src_in, src_out=src_out)
+    for member in members:
+        member_speed = member.speed or 1.0
+        journal.update(
+            member,
+            timeline_start=member.timeline_start + clamped_head,
+            src_in=member.src_in + clamped_head * member_speed,
+            src_out=member.src_out + clamped_tail * member_speed,
+        )
     _record_operation(
         db,
         sequence,
@@ -252,12 +311,21 @@ def trim_clip(db: Session, sequence_id: str, op: TrimClip) -> Sequence:
     return sequence
 
 
+def _source_duration(clip: Clip) -> float | None:
+    """素材本身多长(在 media_info 里,不是独立列);图片、文字没有尽头。"""
+    if clip.asset is None or clip.asset.kind not in ("video", "audio"):
+        return None
+    duration = (clip.asset.media_info or {}).get("duration")
+    return float(duration) if duration else None
+
+
 def delete_clip(db: Session, sequence_id: str, op: DeleteClip) -> Sequence:
     sequence = _require_sequence(db, sequence_id)
     clip = _require_clip(db, sequence_id, op.clip_id)
 
     journal = Journal(db, sequence)
-    journal.delete(clip)
+    for one in with_links(db, [clip], linked=op.linked):
+        journal.delete(one)
     _record_operation(
         db,
         sequence,
@@ -274,6 +342,8 @@ class DeleteClipsBatch:
     """多选后一次删除。整批一条操作,撤销一步全部找回。"""
 
     clip_ids: tuple[str, ...]
+    #: 链接组(视频和它分离出去的音频)一起动;False = 只动这一段(前端的「临时解链」)。见 links.py。
+    linked: bool = True
     actor_id: str | None = None
 
 
@@ -305,7 +375,7 @@ def delete_clips_batch(db: Session, sequence_id: str, op: DeleteClipsBatch) -> S
     # 全部先解析,任一不存在就整批不删——留下删了一半的时间线比直接报错更难收拾。
     clips = [_require_clip(db, sequence_id, clip_id) for clip_id in dict.fromkeys(op.clip_ids)]
     journal = Journal(db, sequence)
-    for clip in clips:
+    for clip in with_links(db, clips, linked=op.linked):
         journal.delete(clip)
     _record_operation(
         db,

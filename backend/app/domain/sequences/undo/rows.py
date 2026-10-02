@@ -48,5 +48,6 @@ def restore_clip_row(db: Session, sequence: Sequence, payload: dict) -> None:
             effects=payload.get("effects") or {},
             transform=payload.get("transform") or {},
             text_override=payload.get("text_override"),
+            link_group=payload.get("link_group"),
         )
     )

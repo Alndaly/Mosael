@@ -37,6 +37,8 @@ class ClipOut(OrmModel):
     #: 素材已被删除时的占位:`{asset_id, name, kind, duration}`;素材还在就是 None。
     #: **不能只看 asset_id 为空**——文字片段的 asset_id 同样为空,而它不是脱机。
     offline_asset: dict | None = None
+    #: 链接组:同组的片段默认一起移动、修剪、切分、删除(视频与分离出的音频)。None = 没有链接。
+    link_group: str | None = None
     effects: dict
     transform: dict = Field(default_factory=dict)
 
@@ -112,6 +114,8 @@ class MoveClipRequest(ApiModel):
     track_id: str | None = None
     #: 同 InsertClipRequest.ripple。
     ripple: bool = False
+    #: 链接组(视频与分离出的音频)一起动;False = 只动这一段(「临时解链」)。
+    linked: bool = True
 
 
 class ClipMoveEntry(ApiModel):
@@ -124,18 +128,24 @@ class ClipIdsRequest(ApiModel):
     """多选批量操作的通用入参:一次手势一条操作,撤销一步全部还原。"""
 
     clip_ids: list[str] = Field(min_length=1)
+    #: 链接组(视频与分离出的音频)一起动;False = 只动这一段(「临时解链」)。
+    linked: bool = True
 
 
 class MoveClipsBatchRequest(ApiModel):
     """框选后整组拖动。没有 ripple —— 一组片段要"挤开"什么没有唯一解,组拖按覆盖语义。"""
 
     moves: list[ClipMoveEntry] = Field(min_length=1)
+    #: 链接组(视频与分离出的音频)一起动;False = 只动这一段(「临时解链」)。
+    linked: bool = True
 
 
 class TrimClipRequest(ApiModel):
     timeline_start: float
     src_in: float
     src_out: float
+    #: 链接组(视频与分离出的音频)一起动;False = 只动这一段(「临时解链」)。
+    linked: bool = True
 
 
 class ExportRequest(ApiModel):
@@ -170,10 +180,14 @@ class CutClipRangesBatchRequest(ApiModel):
 
 class SplitClipRequest(ApiModel):
     src_time: float
+    #: 链接组(视频与分离出的音频)一起动;False = 只动这一段(「临时解链」)。
+    linked: bool = True
 
 
 class SplitClipPointsRequest(ApiModel):
     src_times: list[float] = Field(min_length=1)
+    #: 链接组(视频与分离出的音频)一起动;False = 只动这一段(「临时解链」)。
+    linked: bool = True
 
 
 class ClipPointSplitsRequest(ApiModel):
@@ -185,6 +199,8 @@ class SplitClipPointsBatchRequest(ApiModel):
     """一次字幕切分手势涉及的全部片段。整批只产生一条时间线操作。"""
 
     splits: list[ClipPointSplitsRequest] = Field(min_length=1)
+    #: 链接组(视频与分离出的音频)一起动;False = 只动这一段(「临时解链」)。
+    linked: bool = True
 
 
 class MoveTrackRequest(ApiModel):
@@ -226,6 +242,8 @@ class SetClipSpeedRequest(ApiModel):
     speed: float = Field(ge=0.25, le=4.0)
     #: 变速后时长变了:True(默认)推开 / 拉回同轨后续片段;False 后面的不动,慢放会盖住下一段时拒绝。
     ripple: bool = True
+    #: 链接组(视频与分离出的音频)一起动;False = 只动这一段(「临时解链」)。
+    linked: bool = True
 
 
 class SetClipGainRequest(ApiModel):

@@ -217,7 +217,11 @@ def move_clip(sequence_id: str, clip_id: str, body: MoveClipRequest, db: Tx, use
 def delete_clips_batch(sequence_id: str, body: ClipIdsRequest, db: Tx, user: CurrentUser) -> Response:
     """多选后一次删除:一条操作,撤销一步全部找回。"""
     require_sequence_access(db, user, sequence_id, perm="edit")
-    _apply(lambda: delete_clips_batch_operation(db, sequence_id, DeleteClipsBatch(clip_ids=tuple(body.clip_ids))))
+    _apply(
+        lambda: delete_clips_batch_operation(
+            db, sequence_id, DeleteClipsBatch(clip_ids=tuple(body.clip_ids), linked=body.linked)
+        )
+    )
     return _edited_response(db, sequence_id)
 
 
@@ -236,7 +240,7 @@ def move_clips_batch(sequence_id: str, body: MoveClipsBatchRequest, db: Tx, user
     """框选后整组拖动:一次手势一条操作,撤销一步还原整组。"""
     require_sequence_access(db, user, sequence_id, perm="edit")
     moves = tuple(ClipMove(**move.model_dump()) for move in body.moves)
-    _apply(lambda: move_clips_batch_operation(db, sequence_id, MoveClipsBatch(moves=moves)))
+    _apply(lambda: move_clips_batch_operation(db, sequence_id, MoveClipsBatch(moves=moves, linked=body.linked)))
     return _edited_response(db, sequence_id)
 
 
@@ -283,7 +287,7 @@ def cut_clip_ranges(
 @router.post("/sequences/{sequence_id}/clips/{clip_id}/split", response_model=SequenceOut)
 def split_clip(sequence_id: str, clip_id: str, body: SplitClipRequest, db: Tx, user: CurrentUser) -> Response:
     require_sequence_access(db, user, sequence_id, perm="edit")
-    _apply(lambda: split_clip_operation(db, sequence_id, SplitClip(clip_id=clip_id, src_time=body.src_time)))
+    _apply(lambda: split_clip_operation(db, sequence_id, SplitClip(clip_id=clip_id, **body.model_dump())))
     return _edited_response(db, sequence_id)
 
 
@@ -296,7 +300,11 @@ def split_clip_points_batch(
         ClipPointSplits(clip_id=split.clip_id, src_times=tuple(split.src_times))
         for split in body.splits
     )
-    _apply(lambda: split_clip_points_batch_operation(db, sequence_id, SplitClipPointsBatch(splits=splits)))
+    _apply(
+        lambda: split_clip_points_batch_operation(
+            db, sequence_id, SplitClipPointsBatch(splits=splits, linked=body.linked)
+        )
+    )
     return _edited_response(db, sequence_id)
 
 
@@ -306,7 +314,11 @@ def split_clip_points(
 ) -> Response:
     """Split one clip into pieces at several source-time cut points (transcript 按句切分)."""
     require_sequence_access(db, user, sequence_id, perm="edit")
-    _apply(lambda: split_clip_points_operation(db, sequence_id, SplitClipPoints(clip_id=clip_id, src_times=tuple(body.src_times))))
+    _apply(
+        lambda: split_clip_points_operation(
+            db, sequence_id, SplitClipPoints(clip_id=clip_id, src_times=tuple(body.src_times), linked=body.linked)
+        )
+    )
     return _edited_response(db, sequence_id)
 
 
@@ -343,9 +355,10 @@ def generate_subtitles(sequence_id: str, body: GenerateSubtitlesRequest, db: Tx,
 
 
 @router.delete("/sequences/{sequence_id}/clips/{clip_id}", response_model=SequenceOut)
-def delete_clip(sequence_id: str, clip_id: str, db: Tx, user: CurrentUser) -> Response:
+def delete_clip(sequence_id: str, clip_id: str, db: Tx, user: CurrentUser, linked: bool = True) -> Response:
+    """`linked=false`:只删这一段,链接的组员留着(「临时解链」)。"""
     require_sequence_access(db, user, sequence_id, perm="edit")
-    _apply(lambda: delete_clip_operation(db, sequence_id, DeleteClip(clip_id=clip_id)))
+    _apply(lambda: delete_clip_operation(db, sequence_id, DeleteClip(clip_id=clip_id, linked=linked)))
     return _edited_response(db, sequence_id)
 
 

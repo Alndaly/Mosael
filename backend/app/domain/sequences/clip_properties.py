@@ -18,6 +18,7 @@ from app.domain.sequences._timeline import (
 from app.domain.sequences.coverage import EPS, clip_end, clips_on_track, shift
 from app.domain.sequences.errors import SequenceDomainError, SequenceNotFound
 from app.domain.sequences.journal import Journal
+from app.domain.sequences.links import new_link_group, with_links
 from app.media.render_plan import TRANSFORM_BOUNDS, TRANSFORM_DEFAULTS
 
 
@@ -39,6 +40,8 @@ class SetClipSpeed:
     #: - False:后面的一段都不动。快放留出空当;慢放到会盖住下一段时**拒绝**,而不是替用户把下一段
     #:   裁掉 —— 改的是这一段的属性,用户没有在「放下」什么,悄悄删掉别人的画面是最难发现的那种错。
     ripple: bool = True
+    #: 链接组一起变速(分离出去的音频和画面同速,才对得上);False = 只改这一段。见 links.py。
+    linked: bool = True
     actor_id: str | None = None
 
 
@@ -46,8 +49,14 @@ def set_clip_speed(db: Session, sequence_id: str, op: SetClipSpeed) -> Sequence:
     sequence = _require_sequence(db, sequence_id)
     clip = _require_clip(db, sequence_id, op.clip_id)
     speed = require_speed(op.speed)
+    group = with_links(db, [clip], linked=op.linked)
+    if not op.ripple:
+        # 先全部量过再动手:组里第二段放不下时,第一段不该已经改了速。
+        for one in group:
+            _ensure_room(db, one, speed)
     journal = Journal(db, sequence)
-    _respeed(journal, clip, speed, ripple=op.ripple)
+    for one in group:
+        _respeed(journal, one, speed, ripple=op.ripple)
     _record_operation(
         db,
         sequence,
@@ -59,21 +68,25 @@ def set_clip_speed(db: Session, sequence_id: str, op: SetClipSpeed) -> Sequence:
     return sequence
 
 
-def _respeed(journal: Journal, clip: Clip, speed: float, *, ripple: bool) -> None:
-    old_end = clip_end(clip)
+def _followers(db: Session, clip: Clip) -> list[Clip]:
+    end = clip_end(clip)
+    return [other for other in clips_on_track(db, clip.track_id) if other.id != clip.id and other.timeline_start >= end - EPS]
+
+
+def _ensure_room(db: Session, clip: Clip, speed: float) -> None:
+    """不推开后面的时,改速之后放不放得下;放不下就拒绝。"""
     new_end = clip.timeline_start + (clip.src_out - clip.src_in) / speed
-    followers = [
-        other
-        for other in clips_on_track(journal.db, clip.track_id)
-        if other.id != clip.id and other.timeline_start >= old_end - EPS
-    ]
-    if not ripple:
-        next_start = min((other.timeline_start for other in followers), default=float("inf"))
-        if new_end > next_start + EPS:
-            raise SequenceDomainError("seqErr_speedWouldOverlap")
+    next_start = min((other.timeline_start for other in _followers(db, clip)), default=float("inf"))
+    if new_end > next_start + EPS:
+        raise SequenceDomainError("seqErr_speedWouldOverlap")
+
+
+def _respeed(journal: Journal, clip: Clip, speed: float, *, ripple: bool) -> None:
+    followers = _followers(journal.db, clip)
+    old_end = clip_end(clip)
     journal.update(clip, speed=speed)
     if ripple:
-        shift(journal, followers, new_end - old_end)
+        shift(journal, followers, clip_end(clip) - old_end)
 
 
 @dataclass(frozen=True)
@@ -157,6 +170,9 @@ def detach_clip_audio(db: Session, sequence_id: str, op: DetachClipAudio) -> Seq
             )
         )
 
+    # 画和分离出去的声音进同一个链接组:之后移动、修剪、切分、删除默认一起,音画不会被单独拖开。
+    # 画面已经在一个组里(之前分离过一次)就加进那一组。
+    group = clip.link_group or new_link_group()
     journal.create(
         Clip(
             workspace_id=sequence.workspace_id,
@@ -168,9 +184,10 @@ def detach_clip_audio(db: Session, sequence_id: str, op: DetachClipAudio) -> Seq
             src_out=clip.src_out,
             speed=clip.speed,
             gain=clip.gain,
+            link_group=group,
         )
     )
-    journal.update(clip, muted=True)
+    journal.update(clip, muted=True, link_group=group)
 
     _record_operation(
         db,
