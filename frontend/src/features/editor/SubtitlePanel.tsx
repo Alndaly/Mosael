@@ -28,6 +28,7 @@ import { SubtitleFiles } from "@/features/editor/SubtitleFiles";
 import { cueTrim, parseCueTime } from "@/features/editor/cueTiming";
 import { useEditorStore } from "@/features/editor/editorStore";
 import { useVirtualRows } from "@/features/editor/useVirtualRows";
+import { ColorSwatchInput } from "@/features/editor/ColorSwatchInput";
 import { cn } from "@/lib/utils";
 
 //: 下拉里「按默认」那一项的值(OptionPicker 不收空串当值)。发给接口时是空串。
@@ -850,6 +851,7 @@ function StyleSlider({
 /**
  * 颜色:一枚紧凑色块 + 十六进制读数,和花字面板(Inspector 的 TextStylePanel)同一种色块。
  * 此前色块铺满整行 —— 一条白色 / 黑色的长条,看着像一个进度条或者一块没加载出来的图。
+ * 和滑杆一样:拖动只预览(onPreview),松手才写入(onCommit),见 ColorSwatchInput。
  */
 function StyleColor({
   label,
@@ -864,36 +866,14 @@ function StyleColor({
   onCommit: (v: string) => void;
   note?: string;
 }) {
-  //: **拖动只预览、松手才提交**(和滑杆同一个规矩)。React 的 onChange 是原生的 input 事件,在取色盘里拖一下就是
-  //: 几十次 —— 此前每一次都写一次库、记一步撤销、刷一遍整条时间线。原生的 change 事件只在选定(松手 / 关掉取色盘)
-  //: 时来一次,提交挂在它上面。
-  const ref = React.useRef<HTMLInputElement | null>(null);
-  const commit = React.useRef(onCommit);
-  commit.current = onCommit;
-  //: 拖动中最后预览的那个颜色。受控输入框的 value 由上层的预览草稿喂回来,不靠它 —— 提交的就是用户最后看到的那个。
-  const latest = React.useRef<string | null>(null);
-  React.useEffect(() => {
-    const input = ref.current;
-    if (!input) return;
-    const settle = () => {
-      commit.current(latest.current ?? input.value);
-      latest.current = null;
-    };
-    input.addEventListener("change", settle);
-    return () => input.removeEventListener("change", settle);
-  }, []);
   return (
     <span className="col-span-2 flex min-w-0 items-center gap-2">
-      <input
-        ref={ref}
-        type="color"
+      <ColorSwatchInput
         aria-label={label}
         className="h-7 w-9 shrink-0 cursor-pointer rounded-md border border-field-border bg-transparent p-0.5 [&::-webkit-color-swatch]:rounded [&::-webkit-color-swatch]:border-0 [&::-webkit-color-swatch-wrapper]:p-0"
         value={value}
-        onChange={(e) => {
-          latest.current = e.target.value;
-          onPreview(e.target.value);
-        }}
+        onPreview={onPreview}
+        onCommit={onCommit}
       />
       <span className="timecode text-ui-xs uppercase text-muted-foreground">{value}</span>
       {note && <span className="ml-auto truncate text-ui-xs text-muted-foreground">{note}</span>}

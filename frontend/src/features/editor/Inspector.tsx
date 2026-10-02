@@ -9,6 +9,7 @@ import { Slider } from "@/components/ui/slider";
 import { Textarea } from "@/components/ui/textarea";
 import { useI18n } from "@/app/preferences";
 import { clipEnd, formatFrameTimecode } from "@/domain/timeline/geometry";
+import { ColorSwatchInput } from "@/features/editor/ColorSwatchInput";
 import { clipProgress, hasActiveKeyframes, propTimes, sampleProp, togglePropKeyframe, upsertKeyframe, sampleGain, gainKeyTimes, toggleGainKeyframe, upsertGainKeyframe, type GainKeyframe, type Keyframe, type KfProp } from "@/features/editor/keyframes";
 import { readTextStyle, strokeSliderMax, TEXT_PRESETS, type TextStyle } from "@/features/editor/textStyle";
 import { SUBTITLE_FONTS } from "@/features/editor/subtitleStyle";
@@ -762,11 +763,11 @@ function TextStylePanel({
       <div className="grid grid-cols-2 gap-2">
         <label className="flex items-center justify-between gap-1.5 text-ui-xs text-muted-foreground">
           {t("textColor")}
-          <input type="color" className={swatch} value={style.color} onChange={(event) => set({ color: event.target.value })} />
+          <ColorSwatchInput className={swatch} value={style.color} onCommit={(color) => set({ color })} />
         </label>
         <label className="flex items-center justify-between gap-1.5 text-ui-xs text-muted-foreground">
           {t("textStrokeColor")}
-          <input type="color" className={swatch} value={style.stroke_color} onChange={(event) => set({ stroke_color: event.target.value })} />
+          <ColorSwatchInput className={swatch} value={style.stroke_color} onCommit={(stroke_color) => set({ stroke_color })} />
         </label>
       </div>
       {bars.map((bar) => (
