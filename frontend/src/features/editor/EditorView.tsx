@@ -64,7 +64,7 @@ import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { CanvasAgentChat, type CanvasAgentMode } from "@/features/agent/CanvasAgentChat";
-import { clipEnd, frameAt, frameTime, snapToFrame } from "@/domain/timeline/geometry";
+import { clipEnd, snapToFrame } from "@/domain/timeline/geometry";
 import { clipContains, splitPointAt } from "@/domain/timeline/editTargets";
 import { projectTranscript, transcriptSegmentsFromApi, type SegmentLike } from "@/domain/timeline/transcriptProjection";
 import { transcriptSourceClips } from "@/domain/timeline/transcriptSources";
@@ -74,7 +74,7 @@ import { HANDLE_COLUMN, HANDLE_ROW, handleOffset, useResizableSidebar } from "@/
 
 import { selectedClipId as selectedClipIdOf, useEditorStore } from "@/features/editor/editorStore";
 import { sequenceEditScope } from "@/features/editor/sequenceEditScope";
-import { isEditorKeyTarget } from "@/features/editor/editorKeys";
+import { useEditorShortcuts } from "@/features/editor/useEditorShortcuts";
 import { ConfirmDialog } from "@/components/app/modals";
 import { useImportMediaFiles } from "@/features/media/useImportMediaFiles";
 import { FontFaces } from "@/features/editor/FontFaces";
@@ -90,7 +90,6 @@ import { VoicePanel } from "./VoicePanel";
 import { Timeline, trackAcceptsAsset, type TrimPayload } from "./timeline/Timeline";
 import { cn } from "@/lib/utils";
 import { DndContext, DragOverlay, PointerSensor, pointerWithin, useSensor, useSensors, type DragStartEvent } from "@dnd-kit/core";
-import { leaveClipboardToSystem, listenKeys } from "@/lib/shortcuts";
 
 export function EditorView({
   workspace,
@@ -831,64 +830,22 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
     });
   };
 
-  // Keyboard: space toggles playback, delete removes selection.
-  React.useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (!isEditorKeyTarget(event, workbenchRef.current)) return;
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "z") {
-        event.preventDefault();
-        if (event.shiftKey) redoMutation.mutate();
-        else undoMutation.mutate();
-      } else if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "d") {
-        event.preventDefault();
-        duplicateClip();
-      } else if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "c") {
-        if (leaveClipboardToSystem(event)) return;
-        event.preventDefault();
-        copyClip();
-      } else if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "x") {
-        if (leaveClipboardToSystem(event)) return;
-        event.preventDefault();
-        cutClip();
-      } else if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "v") {
-        event.preventDefault();
-        pasteClip();
-      } else if ((event.metaKey || event.ctrlKey) && event.key === "]") {
-        event.preventDefault();
-        moveClipLayer(1);
-      } else if ((event.metaKey || event.ctrlKey) && event.key === "[") {
-        event.preventDefault();
-        moveClipLayer(-1);
-      } else if (event.key.toLowerCase() === "s" && !event.metaKey && !event.ctrlKey) {
-        event.preventDefault();
-        splitAtPlayhead();
-      } else if (event.key.toLowerCase() === "a" && !event.metaKey && !event.ctrlKey) {
-        useEditorStore.getState().setTool("select");
-      } else if (event.key.toLowerCase() === "b" && !event.metaKey && !event.ctrlKey) {
-        useEditorStore.getState().setTool("blade");
-      } else if (event.code === "Space") {
-        event.preventDefault();
-        useEditorStore.getState().togglePlaying();
-      } else if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
-        event.preventDefault();
-        // 按帧号加减,不把 1/fps 一次次浮点累加(累加会漂到两帧之间)。
-        const fps = sequence?.fps ?? 30;
-        const step = (event.shiftKey ? 10 : 1) * (event.key === "ArrowLeft" ? -1 : 1);
-        const store = useEditorStore.getState();
-        store.setPlayhead(frameTime(frameAt(store.playhead, fps) + step, fps));
-      } else if (event.key === "Delete" || event.key === "Backspace") {
-        const clipIds = useEditorStore.getState().selectedClipIds;
-        if (clipIds.length > 0 && sequence) {
-          event.preventDefault();
-          if (event.shiftKey) rippleDeleteMutation.mutate(clipIds);
-          else if (clipIds.length === 1) deleteClipMutation.mutate(clipIds[0]);
-          else deleteClipsMutation.mutate(clipIds);
-        }
-      }
-    };
-    return listenKeys(window, onKeyDown);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sequence?.id, splitAtPlayhead, duplicateClip, copyClip, cutClip, pasteClip, moveClipLayer]);
+  useEditorShortcuts(workbenchRef, sequence, {
+    undo: () => undoMutation.mutate(),
+    redo: () => redoMutation.mutate(),
+    duplicate: () => duplicateClip(),
+    copy: copyClip,
+    cut: cutClip,
+    paste: pasteClip,
+    moveLayer: moveClipLayer,
+    split: () => splitAtPlayhead(),
+    deleteSelection: (ripple) => {
+      const clipIds = useEditorStore.getState().selectedClipIds;
+      if (ripple) rippleDeleteMutation.mutate(clipIds);
+      else if (clipIds.length === 1) deleteClipMutation.mutate(clipIds[0]);
+      else deleteClipsMutation.mutate(clipIds);
+    },
+  });
 
   // 素材拖入时间线走 dnd-kit(指针传感器,移动 6px 才起手,不吃普通点击/右键菜单)。
   const dndSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
