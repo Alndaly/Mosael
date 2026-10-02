@@ -33,10 +33,17 @@ W, H, FPS, RATE = 96, 54, 30, 48000
 
 def _sources(tmp_path: Path) -> None:
     #: 底轨素材每一帧亮度不同,声音 440 Hz;上层素材是测试图;音频轨是 660 Hz。
+    #:
+    #: 底轨的 AAC 关掉 PNS(感知噪声替代)。PNS 的频带里没有编码采样,解码器拿一个随机数发生器现造噪声,而发生器
+    #: 的状态从解码器打开那一刻起一帧帧往下传 —— 同一段声音从哪里开始解,造出来的噪声就不一样。分块渲时每块的
+    #: 底轨从这一块的第一段起解,整条渲时从整条的第一段起解,两边在 PNS 频带上差一点噪声(实测最大 1.3e-5,约
+    #: −98 dBFS),逐采样比就过不了;整条渲换个起点也一样会变,这不是接缝的毛病。ffmpeg 6.1 / 7.1 的编码器给这段
+    #: 440 Hz 用了 PNS,9.0 的没用 —— 所以这条测试此前只在旧版上红。关掉它,解码和从哪里起解无关,逐采样相等
+    #: 才量得到接缝本身。
     subprocess.run([settings.ffmpeg, "-y", "-v", "error", "-f", "lavfi", "-i", f"color=s={W}x{H}:r={FPS}:d=30",
                     "-f", "lavfi", "-i", f"sine=f=440:r={RATE}:d=30", "-vf", "geq=lum='mod(N*7,200)+20':cb=128:cr=128",
                     "-shortest", "-c:v", "libx264", "-preset", "ultrafast", "-g", "30", "-pix_fmt", "yuv420p",
-                    "-c:a", "aac", str(tmp_path / "base.mp4")], check=True, timeout=60)
+                    "-c:a", "aac", "-aac_pns", "0", str(tmp_path / "base.mp4")], check=True, timeout=60)
     subprocess.run([settings.ffmpeg, "-y", "-v", "error", "-f", "lavfi", "-i", f"testsrc2=s={W}x{H}:r={FPS}:d=8",
                     "-pix_fmt", "yuv420p", str(tmp_path / "pip.mp4")], check=True, timeout=60)
     subprocess.run([settings.ffmpeg, "-y", "-v", "error", "-f", "lavfi", "-i", f"sine=f=660:r={RATE}:d=10",
