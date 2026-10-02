@@ -14,8 +14,8 @@ import { audioProxyPending, buildAudioSources } from "@/features/editor/playback
 import { compositorSupported } from "@/features/editor/playback/compositorFlag";
 import { PreviewUnavailable } from "@/features/editor/playback/PreviewUnavailable";
 import { blockingPreviewState, resolvesOnItsOwn } from "@/features/editor/playback/previewReadiness";
-import { textLayers } from "@/features/editor/playback/textLayers";
-import { readSubtitleStyle, subtitleCss, subtitleLaneStyle } from "@/features/editor/subtitleStyle";
+import { stackedSubtitleText, textLayers } from "@/features/editor/playback/textLayers";
+import { readSubtitleStyle, subtitleCss } from "@/features/editor/subtitleStyle";
 import { readTextStyle, textStyleCss } from "@/features/editor/textStyle";
 import { applyTransformCommit, clipProgress, hasActiveKeyframes, sampleTransform } from "@/features/editor/keyframes";
 import { TransformOverlay, readTransform, type Transform } from "@/features/editor/TransformOverlay";
@@ -188,18 +188,14 @@ export function Monitor({
   // Keep the draft until the fresh sequence lands (same anti-flicker pattern as timeline drags),
   // otherwise clearing the draft on release snaps the box back to the stale saved transform.
   const tfSettleRef = React.useRef(false);
-  //: 此刻要画的字幕 —— **每条字幕轨各一条**,各画在自己那一道(textLayers.subtitleLanes)。此前只取找到的第一条:
-  //: 双语分两条轨时预览少一种语言,而导出两条都烧,预览和成片不是同一个画面。
+  //: 此刻那一框字幕:各字幕轨上在场的字**合成一框**,一道一行,时间线上靠上的轨在上(textLayers.stackedSubtitleText)。
+  //: 双语分两条轨时两行都在字幕样式指定的位置,和同一条轨里写两行是同一个元素、同一个画面 —— 导出把同一框字
+  //: 渲成一张 PNG(或一条 libass Dialogue),按同一份 subtitleCss 定位。
   //: 「此刻在场」用场景键(presentKey),不订阅播放头本身(见上面 sceneKey 那段)。
-  const activeSubtitles = React.useMemo(() => {
-    const byLane = new Map<number, (typeof subtitleClips)[number]>();
-    for (const clip of subtitleClips) {
-      const lane = subtitleLanes[clip.id] ?? 0;
-      if (byLane.has(lane) || !clip.text_override) continue;
-      if (presentIds.has(clip.id)) byLane.set(lane, clip);
-    }
-    return [...byLane.entries()];
-  }, [subtitleClips, subtitleLanes, presentIds]);
+  const activeSubtitleText = React.useMemo(
+    () => stackedSubtitleText(subtitleClips.filter((clip) => presentIds.has(clip.id)), subtitleLanes),
+    [subtitleClips, subtitleLanes, presentIds],
+  );
   const activeEffects = (activeClip?.effects ?? {}) as {
     filter?: string;
     color?: Record<string, number> & { curves?: ColorCurves };
@@ -456,28 +452,24 @@ export function Monitor({
               style={{ boxShadow: `inset 0 0 ${60 + vignette * 120}px ${vignette * 60}px rgba(0,0,0,${0.35 + vignette * 0.4})` }}
             />
           )}
-          {activeSubtitles.map(([lane, clip]) => (
+          {activeSubtitleText && (
             // 定位(left/top/bottom/transform)全部来自 subtitleCss 的行内样式,类里不要再写
             // 定位类:Tailwind v4 的 -translate-x-1/2 编译成独立的 translate 属性,会和行内
             // transform 叠加成双重位移(字幕整体左偏半个画框宽,曾以此形态返场过一次)。
             <div
-              key={clip.id}
-              data-subtitle-lane={lane}
+              data-testid="monitor-subtitle"
               // 盒子几何(最大宽/圆角/内边距/行高/对齐/投影)**全部来自 subtitleCss**,
               // 类里一个都不要写:它们是和导出侧的契约(contracts/subtitle-cases.json),
               // 在这里重写一份就等于给同一个问题准备了第二个答案。
               className="pointer-events-none absolute z-[3]"
               style={subtitleCss(
-                subtitleLaneStyle(
-                  readSubtitleStyle((subtitleStyleOverride ?? sequence.subtitle_style) as Record<string, unknown>),
-                  lane,
-                ),
+                readSubtitleStyle((subtitleStyleOverride ?? sequence.subtitle_style) as Record<string, unknown>),
                 sequence.width,
               )}
             >
-              {clip.text_override}
+              {activeSubtitleText}
             </div>
-          ))}
+          )}
           {/* 花字:每条按自身 transform 定位、随关键帧动画,DOM 叠加在视频之上(与导出的 ASS 一致)。 */}
           {/* 同上:画不出来时,文字片段的拖动/编辑层也不该在 —— 它是 z-[3] 且排在提示之后,
               正是压住那个按钮的另一层。 */}
