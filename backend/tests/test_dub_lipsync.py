@@ -119,7 +119,7 @@ def test_整条跑通_切两块都改口型_接回整段放在最上面_原片�
             assert piece.derived_from == [{"asset_id": ids.video, "op": "trim"}]
             assert speech.derived_from == [{"asset_id": ids.line, "op": "mix"}]
         plan = build_plan_for_sequence(db, ids.sequence, {})
-        assert "AIGC" in dict(plan.output.metadata) and plan.text_overlays, "导出这条时间线:画面标识、AIGC 元数据都加上"
+        assert "AIGC" in dict(plan.output.metadata) and plan.ai_labels, "导出这条时间线:画面标识、AIGC 元数据都加上"
     streams = json.loads(subprocess.run(["ffprobe", "-v", "error", "-show_streams", "-of", "json", str(final)],
                                         capture_output=True, text=True, check=True).stdout)["streams"]
     assert [one["codec_type"] for one in streams] == ["video"], "声音在配音轨和背景轨上,接回的整段不带声音"

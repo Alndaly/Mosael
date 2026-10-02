@@ -21,6 +21,7 @@ from app.media.probe import guess_kind, probe_has_audio_many
 from app.media.tempo import atempo_filters
 from app.media.render_plan import (
     DEFAULT_APPEARANCE,
+    AiLabelItem,
     FILTER_PRESETS,
     ClipAppearance,
     RenderPlan,
@@ -689,7 +690,13 @@ def _build_ass(plan: RenderPlan) -> str:
         # 字号/颜色/粗斜/描边/阴影/字体全部由每条 Dialogue 的 \\ 覆盖标签逐条给出;这里只定
         # BorderStyle 和阴影色(&H59… ≈ 预览 rgba(0,0,0,.65) 的投影)。
         "Style: Text,Sans,48,&H00FFFFFF,&H000000FF,&H00000000,&H59000000,-1,0,0,0,"
-        "100,100,0,0,1,0,0,5,0,0,0,1\n\n"
+        "100,100,0,0,1,0,0,5,0,0,0,1\n"
+        # 「AI 生成」标识:BorderStyle=3 的半透明深色底框 + 白字(和浏览器那条路的 _label_css 同一个样子)。
+        # 底框色在 OutlineColour 和 BackColour 都给(libass 画框用前者、投影用后者)。拉丁字母和汉字落在
+        # 两个字体里时 libass 一段一个框,接缝处略深 —— 不用 BorderStyle=4(整条一个框):libass 0.17 之前
+        # 不认它,会退成没有框的白字,压在白底上就看不见了。
+        f"Style: Label,Sans,48,&H00FFFFFF,&H000000FF,{_LABEL_BOX},{_LABEL_BOX},-1,0,0,0,"
+        "100,100,0,0,3,0,0,5,0,0,0,1\n\n"
         "[Events]\n"
         "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n"
     )
@@ -699,12 +706,42 @@ def _build_ass(plan: RenderPlan) -> str:
         for item in plan.subtitles
     ]
     lines += [line for item in plan.text_overlays for line in _text_overlay_dialogues(item, w, h)]
+    lines += [_ai_label_dialogue(item, w, h) for item in plan.ai_labels]
     return header + "\n".join(lines) + "\n"
+
+
+#: 标识底框:黑,不透明度 0.55(ASS 的 alpha 是透明度,0x73 ≈ 0.45 透明)。
+_LABEL_BOX = "&H73000000"
+#: 底框比字多出来的边(相对字号),两条路一样。
+_LABEL_PAD = 0.25
+
+
+def _ai_label_dialogue(item: AiLabelItem, w: int, h: int) -> str:
+    """一块标识 → 一条 ASS Dialogue(Layer 1,压在字幕和花字上面)。
+
+    角标用 \\an9(右上角为锚点)贴在离右边、上边各 margin 的地方:锚的是**字**,底框还要往外多出
+    一圈 pad,所以锚点再往里收 pad —— 框的外沿正好落在 margin 上。"""
+    size = item.font_size * _ASS_FONTSIZE_SCALE
+    pad = round(item.font_size * _LABEL_PAD)
+    if item.placement == "top_right":
+        anchor = f"\\an9\\pos({w - item.margin - pad:.1f},{item.margin + pad:.1f})"
+    else:
+        anchor = f"\\an5\\pos({w / 2:.1f},{h / 2:.1f})"
+    override = "{" + anchor + f"\\fs{size:g}\\bord{pad}\\shad0" + "}"
+    return (f"Dialogue: 1,{_ass_timestamp(item.start)},{_ass_timestamp(item.start + item.duration)},"
+            f"Label,,0,0,0,,{override}{_ass_text(item.text)}")
 
 
 def _escape_filter_path(path: Path) -> str:
     # Inside filter_complex, colons separate options and backslashes escape.
     return str(path).replace("\\", "\\\\").replace(":", "\\:").replace("'", "\\'")
+
+
+def _ai_label_position(label: AiLabelItem, pw: int, ph: int, w: int, h: int) -> tuple[int, int]:
+    """标识 PNG(已带底框)左上角坐标:片头那块居中;角标的右边、上边各离画面边缘 margin。"""
+    if label.placement == "top_right":
+        return int(round(w - label.margin - pw)), int(round(label.margin))
+    return (w - pw) // 2, (h - ph) // 2
 
 
 def _subtitle_overlay_pos(style, pw: int, ph: int, w: int, h: int) -> tuple[int, int]:
@@ -858,7 +895,7 @@ def _text_rasterizer_available() -> bool:
 
 
 def _has_text(plan: RenderPlan) -> bool:
-    return bool(plan.subtitles or plan.text_overlays)
+    return bool(plan.subtitles or plan.text_overlays or plan.ai_labels)
 
 
 def ensure_text_can_burn(plan: RenderPlan) -> None:
@@ -1128,6 +1165,17 @@ def build_ffmpeg_command(
             )
             video_label = out_label
             input_index += 1
+        for k, (label, (png, pw, ph)) in enumerate(zip(plan.ai_labels, text_pngs.get("ai_labels", []))):
+            args += ["-loop", "1", "-framerate", f"{fps:g}", "-t", f"{label.duration + 0.2:.6f}", "-i", str(png)]
+            lx, ly = _ai_label_position(label, pw, ph, width, height)
+            filters.append(f"[{input_index}:v]setpts=PTS-STARTPTS+{label.start}/TB[lbin{k}]")
+            out_label = f"[vlb{k}]"
+            filters.append(
+                f"{video_label}[lbin{k}]overlay=x={lx}:y={ly}:eof_action=repeat:"
+                f"enable='{_shown_during(label.start, label.start + label.duration, fps)}'{out_label}"
+            )
+            video_label = out_label
+            input_index += 1
     elif _has_text(plan):
         ass_path = (workdir or output_path.parent) / "subtitles.ass"
         ass_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1267,8 +1315,8 @@ def _rasterize_text(plan: RenderPlan, workdir: Path) -> dict | None:
     (png路径, 宽, 高));关掉开关 / 找不到前端 dist / Chromium 失败时返回 None → 回落 ASS。"""
     if not settings.text_rasterize:
         return None
-    if not (plan.subtitles or plan.text_overlays):
-        return {"subtitles": [], "text_overlays": []}
+    if not _has_text(plan):
+        return {"subtitles": [], "text_overlays": [], "ai_labels": []}
     try:
         from app.media.text_render import TextRasterizer
 
@@ -1276,7 +1324,7 @@ def _rasterize_text(plan: RenderPlan, workdir: Path) -> dict | None:
         if not tr.available():
             logger.warning("frontend dist not found; text burn falls back to ASS")
             return None
-        result: dict = {"subtitles": [], "text_overlays": []}
+        result: dict = {"subtitles": [], "text_overlays": [], "ai_labels": []}
         with tr:
             for i, item in enumerate(plan.subtitles):
                 png = tr.render_subtitle(item.text, plan.subtitle_style)
@@ -1288,6 +1336,11 @@ def _rasterize_text(plan: RenderPlan, workdir: Path) -> dict | None:
                 path = workdir / f"txt{i}.png"
                 path.write_bytes(png)
                 result["text_overlays"].append((path, *_png_size(png)))
+            for i, label in enumerate(plan.ai_labels):
+                png = tr.render_label(label.text, label.font_size)
+                path = workdir / f"label{i}.png"
+                path.write_bytes(png)
+                result["ai_labels"].append((path, *_png_size(png)))
         return result
     except Exception:
         logger.exception("text rasterization failed; falling back to ASS burn")

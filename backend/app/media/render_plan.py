@@ -286,6 +286,25 @@ class TextOverlayItem:
 
 
 @dataclass(frozen=True)
+class AiLabelItem:
+    """「AI 生成」显式标识的一块(ADR 0028 §5)。不是花字:用户改不了它的样子,它也不跟画面走。
+
+    样式固定成**半透明深色底框 + 白字**,压在纯黑、纯白、花哨的画面上都读得出 —— 此前借花字的样式
+    (白字 + 黑描边),浏览器的描边是骑在字形轮廓上画的,小字号下黑边把白芯吃掉大半,压在深色画面上
+    几乎看不见。字号、边距都是**输出像素**,按画幅短边算(_ai_label_items):换分辨率导出跟着缩放。
+
+    placement:center 是片头正中那一块;top_right 是整片右上角那一行 —— **按边距贴边**,标识的右边、
+    上边各离画面边缘 margin 像素,长短不同的文字(「AI 生成」/「AI-generated」)都不会被裁。"""
+
+    start: float
+    duration: float
+    text: str
+    font_size: float
+    placement: str  # center | top_right
+    margin: float = 0.0
+
+
+@dataclass(frozen=True)
 class RenderPlan:
     sequence_id: str
     sequence_revision: int
@@ -297,6 +316,8 @@ class RenderPlan:
     subtitles: tuple[SubtitleItem, ...] = ()
     subtitle_style: SubtitleStyleSpec = DEFAULT_SUBTITLE_STYLE
     text_overlays: tuple[TextOverlayItem, ...] = ()
+    #: 「AI 生成」显式标识,画在最上面(字幕、花字之上)。
+    ai_labels: tuple[AiLabelItem, ...] = ()
     # Solo: silence the base video track's audio (a soloed track elsewhere took over).
     mute_base_audio: bool = False
     # 基底视频轨自己的声音被闪避的时间窗。**它和 AudioItem.duck_windows 不是一回事**:
@@ -320,6 +341,7 @@ class RenderPlan:
             subtitles=self.subtitles,
             subtitle_style=self.subtitle_style,
             text_overlays=self.text_overlays,
+            ai_labels=self.ai_labels,
             mute_base_audio=self.mute_base_audio,
             base_audio_duck_windows=self.base_audio_duck_windows,
             render_plan_hash=digest,
@@ -546,8 +568,6 @@ def build_render_plan(
     # 字幕还在往后走,画面却没了,导出比预览短一大截、内容对不上(用户报的「预览与导出完全不同」)。
     if cursor < duration - GAP_EPSILON:
         segments.append(Segment(kind="gap", duration=round(duration - cursor, 6)))
-    if ai_label and duration > 0:
-        text_items.extend(_ai_label_items(ai_label, duration))
 
     plan = RenderPlan(
         sequence_id=sequence_id,
@@ -565,6 +585,7 @@ def build_render_plan(
         subtitles=tuple(subtitles),
         subtitle_style=_read_subtitle_style(subtitle_style),
         text_overlays=tuple(text_items),
+        ai_labels=_ai_label_items(ai_label, duration, width, height) if ai_label and duration > 0 else (),
         mute_base_audio=mute_base_audio,
         # 基底轨被静音时无所谓闪避;窗口按整条时间线算 —— 基底声音是 concat 出来的一整条,
         # 哪几段有声音要到执行时探过才知道,而在没有声音的地方压音量本来就是空操作。
@@ -579,20 +600,24 @@ def build_render_plan(
 AI_LABEL_OPENING_SECONDS = 3.0
 
 
-def _ai_label_items(text: str, duration: float) -> list[TextOverlayItem]:
-    """数字人成片的显式标识(ADR 0028 §5):片头正中一块大字,整片右上角一行小字。和花字同一条烧录路,
-    成片里有,预览里没有(预览不是要发布的东西)。描边加阴影:压在任何画面上都读得出。"""
-    opening = TextOverlayItem(
-        start=0.0, duration=round(min(AI_LABEL_OPENING_SECONDS, duration), 6), text=text,
-        style=TextStyleSpec(font_size=72.0, stroke_color="#000000", stroke_width=3.0, shadow=2.0),
-        transform=Transform(),
+#: 标识的大小按画幅**短边**的比例给(输出像素):1080 宽的竖屏片头字 65 px、角标 30 px;720 宽的 43 / 20 px。
+AI_LABEL_OPENING_SIZE = 0.06
+AI_LABEL_CORNER_SIZE = 0.028
+AI_LABEL_CORNER_MARGIN = 0.03
+#: 角标再小就读不出了(480p 的短边乘出来只有 13 px)。
+AI_LABEL_MIN_SIZE = 16.0
+
+
+def _ai_label_items(text: str, duration: float, width: int, height: int) -> tuple[AiLabelItem, ...]:
+    """显式标识(ADR 0028 §5):片头正中一块大字,整片右上角一行小字。成片里有,预览里没有(预览不是要发布的东西)。"""
+    short = min(width, height)
+    return (
+        AiLabelItem(start=0.0, duration=round(min(AI_LABEL_OPENING_SECONDS, duration), 6), text=text,
+                    font_size=round(max(AI_LABEL_MIN_SIZE, short * AI_LABEL_OPENING_SIZE), 1), placement="center"),
+        AiLabelItem(start=0.0, duration=round(duration, 6), text=text,
+                    font_size=round(max(AI_LABEL_MIN_SIZE, short * AI_LABEL_CORNER_SIZE), 1), placement="top_right",
+                    margin=round(short * AI_LABEL_CORNER_MARGIN)),
     )
-    corner = TextOverlayItem(
-        start=0.0, duration=round(duration, 6), text=text,
-        style=TextStyleSpec(font_size=28.0, stroke_color="#000000", stroke_width=2.0, shadow=1.0, align="right"),
-        transform=Transform(x=0.82, y=-0.88, opacity=0.9),
-    )
-    return [opening, corner]
 
 
 def _clip_timing(clip: dict) -> tuple[float, float]:

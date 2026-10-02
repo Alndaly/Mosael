@@ -102,6 +102,20 @@ def _subtitle_style_css(style, frame_w: int) -> str:
     return ";".join(parts)
 
 
+def _label_css(font_size: float) -> str:
+    """「AI 生成」标识:半透明深色底框 + 白字。和 render_executor 里 ASS 那条路的 Label 样式是同一个样子
+    (底框 0.55 不透明的黑、四周多出 0.25 个字号)。
+
+    **不用描边**:浏览器的 -webkit-text-stroke 是骑在字形轮廓上画的,一半压进字里 —— 小字号下黑边把
+    白芯吃掉大半,标识压在深色画面上几乎看不见(审查实测)。底框在纯黑、纯白、花哨的画面上都读得出。"""
+    return ";".join([
+        "position:absolute", "left:0", "top:0", "display:inline-block", "white-space:pre",
+        f"font-size:{float(font_size):g}px", "line-height:1.2", "padding:0.12em 0.25em",
+        "border-radius:0.25em", "background:rgba(0,0,0,0.55)", "color:#ffffff", "font-weight:700",
+        f"font-family:{_SUBTITLE_FONT_STACK}",
+    ])
+
+
 class TextRasterizer:
     """一次导出复用一个 Chromium + dist 静态服务:把每条字幕/花字渲染成透明 PNG。
 
@@ -177,6 +191,9 @@ class TextRasterizer:
     def render_huazi(self, text: str, style) -> bytes:
         css, _pad = _huazi_style_css(style, self.frame_w)
         return self._screenshot(css, text)
+
+    def render_label(self, text: str, font_size: float) -> bytes:
+        return self._screenshot(_label_css(font_size), text)
 
     def render_subtitle(self, text: str, style) -> bytes:
         return self._screenshot(_subtitle_style_css(style, self.frame_w), text)

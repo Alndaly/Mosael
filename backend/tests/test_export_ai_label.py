@@ -46,8 +46,9 @@ def test_数字人成片_片头和角上加标识_元数据写_AIGC() -> None:
     sequence_id = _sequence(talking=True)
     with SessionLocal() as db:
         plan = build_plan_for_sequence(db, sequence_id, {})
-    labels = [(item.start, item.duration, item.text) for item in plan.text_overlays]
-    assert labels == [(0.0, 3.0, "AI 生成"), (0.0, 8.0, "AI 生成")], "片头 3 秒一块,整片角上一行"
+    labels = [(item.start, item.duration, item.text, item.placement) for item in plan.ai_labels]
+    assert labels == [(0.0, 3.0, "AI 生成", "center"), (0.0, 8.0, "AI 生成", "top_right")], "片头 3 秒一块,整片角上一行"
+    assert plan.text_overlays == (), "标识不是花字"
     keys = dict(plan.output.metadata)
     assert json.loads(keys["AIGC"])["Label"] == "1" and json.loads(keys["AIGC"])["ProduceID"].startswith(sequence_id)
     command = build_ffmpeg_command(plan, lambda key: Path("/tmp") / key, Path("/tmp/out.mp4"))
@@ -59,7 +60,7 @@ def test_关掉显式标识_画面上没有_元数据照写() -> None:
     sequence_id = _sequence(talking=True)
     with SessionLocal() as db:
         plan = build_plan_for_sequence(db, sequence_id, {"ai_label": False})
-    assert plan.text_overlays == ()
+    assert plan.ai_labels == ()
     assert "AIGC" in dict(plan.output.metadata)
 
 
@@ -68,7 +69,7 @@ def test_没有数字人片段_一样都不加() -> None:
     sequence_id = _sequence(talking=False)
     with SessionLocal() as db:
         plan = build_plan_for_sequence(db, sequence_id, {})
-    assert plan.text_overlays == () and plan.output.metadata == ()
+    assert plan.ai_labels == () and plan.output.metadata == ()
     command = build_ffmpeg_command(plan, lambda key: Path("/tmp") / key, Path("/tmp/out.mp4"))
     assert "-metadata" not in command and "+faststart" in command
 
