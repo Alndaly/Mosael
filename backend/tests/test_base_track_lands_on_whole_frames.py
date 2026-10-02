@@ -32,10 +32,14 @@ def _luma(path: Path) -> np.ndarray:
     return np.frombuffer(raw, np.uint8).reshape(-1, H, W).mean(axis=(1, 2))
 
 
-def test_段长不在帧格上_底轨也不往后漂(tmp_path: Path) -> None:
+def _source(tmp_path: Path) -> None:
     subprocess.run([settings.ffmpeg, "-y", "-v", "error", "-f", "lavfi", "-i", f"color=s={W}x{H}:r={FPS}:d=80",
                     "-vf", "geq=lum='mod(N*7,200)+20':cb=128:cr=128", "-c:v", "libx264", "-preset", "ultrafast",
                     "-crf", "0", "-g", "30", "-pix_fmt", "yuv420p", str(tmp_path / "a.mp4")], check=True, timeout=60)
+
+
+def test_段长不在帧格上_底轨也不往后漂(tmp_path: Path) -> None:
+    _source(tmp_path)
     #: 20 段,段长 1.234 秒(每段 37.02 帧),其中几段变速 1.5 倍(0.8227 秒 = 24.68 帧)。
     clips, at = [], 0.0
     for i in range(20):
@@ -60,3 +64,42 @@ def test_段长不在帧格上_底轨也不往后漂(tmp_path: Path) -> None:
         if abs(luma[first] - source[round(clip["src_in"] * FPS)]) > 1.5 or not last_ok:
             drift.append(first)
     assert not drift, f"这些段的头一帧不是它自己的头一帧(底轨漂了):{drift}"
+
+
+#: 底轨的每一种链各走一遍:原样铺满、模糊背景、带关键帧(变换那条路)、带投影(自由元素)。关键帧原地不动、
+#: 投影整个落在画外,画面仍是素材原样,亮度直接和素材比。
+_STILL_KEYS = {"transform": {"keyframes": [{"t": 0, "x": 0.0}, {"t": 1, "x": 0.0}]}}
+_OFFSCREEN_SHADOW = {"effects": {"appearance": {"shadow": {"enabled": True, "opacity": 0.8, "blur": 0,
+                                                           "offset_x": 200, "offset_y": 0}}}}
+_SHAPES = {
+    "cover": ({}, "cover"),
+    "blur": ({}, "blur"),
+    "keyframed": (_STILL_KEYS, "cover"),
+    "keyframed-blur": (_STILL_KEYS, "blur"),
+    "shadow": (_OFFSCREEN_SHADOW, "cover"),
+}
+
+
+@pytest.mark.parametrize("shape", list(_SHAPES))
+def test_段长正好整帧_每段的头一帧和末一帧都是它自己的(tmp_path: Path, shape: str) -> None:
+    """段长正好整帧时,素材里正好有这么多帧:一帧不能多、一帧不能少。旧版 ffmpeg(8.0 之前;7.1 系列 7.1.1 之前)
+    的 overlay 报的结束时刻是最后一帧自己的时刻,在那上面发生过两种错(Ubuntu 24.04 的 ffmpeg 6.1 实测):模糊背景的
+    段末一帧被倒数第二帧顶掉;带变换 / 投影的段多出一帧,后面每一段都晚一帧(见 _onto_frame_grid、_exact_span)。"""
+    _source(tmp_path)
+    extra, fill_mode = _SHAPES[shape]
+    clips = [{"id": f"c{i}", "asset_id": "a", "timeline_start": float(i), "src_in": 1.0 + i * 3.0,
+              "src_out": 2.0 + i * 3.0, **extra} for i in range(3)]
+    plan = build_render_plan(sequence_id="s", revision=1, width=W, height=H, fps=FPS, crf=0, encode_preset="ultrafast",
+                             clips=clips, assets={"a": {"file_key": "a.mp4"}}, fill_mode=fill_mode)
+    out = tmp_path / "out.mp4"
+    execute_render(plan, lambda key: tmp_path / key, out)
+
+    luma, source = _luma(out), _luma(tmp_path / "a.mp4")
+    assert len(luma) == 3 * FPS
+    wrong = []
+    for clip, (first, count) in zip(clips, _segment_frames(plan)):
+        start = round(clip["src_in"] * FPS)
+        for at, want in ((first, start), (first + count - 1, start + count - 1)):
+            if abs(luma[at] - source[want]) > 1.5:
+                wrong.append(at)
+    assert not wrong, f"这些帧不是素材里该是的那一帧:{wrong}"

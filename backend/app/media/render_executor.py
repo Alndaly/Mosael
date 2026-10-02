@@ -1011,11 +1011,23 @@ def _image_loop_args(path: Path, trim_end: float) -> list[str]:
     return ["-stream_loop", "-1", *duration]
 
 
+def _onto_frame_grid(fps: float, start_time: float) -> str:
+    """把一路素材画面落到输出的帧格上(带前导逗号):每个输出时刻挑一帧,从段内第 start_time 秒开始。
+
+    **紧跟在 trim / setpts 后面,不放在 scale / overlay 后面。** fps 按上游报的结束时刻决定最后一帧要不要:
+    结束时刻等于最后一帧自己的时刻,那一帧就算「零时长」被丢掉。旧版 ffmpeg 的 framesync 结束时不带时刻,下游
+    看到的就是最后一帧自己的时刻 —— 上游提交 de976eaf30「avfilter/framesync: fix forward EOF pts」才补上(8.0 起,
+    7.1 系列 7.1.1 起;它的说明里写的就是 fps 丢最后一帧)。overlay 一直走 framesync,scale 从 7.1 起也走。
+    此前 fps 在 scale 后面、模糊背景时还在 overlay 后面:Ubuntu 24.04 的 ffmpeg 6.1 上,模糊背景的段在素材正好
+    够帧数时末一帧被丢掉,由后面补齐整帧的那一步拿倒数第二帧顶上。挑帧只看时间戳,挪到前面挑出来的是同一帧。"""
+    return f",fps={fps}:start_time={start_time:g}"
+
+
 def _base_video_chain(source: str, i: int, src_in: float, src_out: float, setpts: str, width: int, height: int, fps: float, tail: str, fill_mode: str, *, start_time: float = 0.0) -> str:
     """source(如 [3:v],或共用输入分出来的一支,见 _base_sources)→ [vi] 的完整视频链;按画幅填充模式
     选择裁剪/留黑边/模糊背景。start_time 是这一路画面从段内第几秒开始(只有只渲一截时不是 0,见 _Window)。"""
-    head = f"{source}trim=start={src_in}:end={src_out},setpts={setpts}"
-    end = f",fps={fps}:start_time={start_time:g},format=yuv420p,setsar=1{tail}[v{i}]"
+    head = f"{source}trim=start={src_in}:end={src_out},setpts={setpts}{_onto_frame_grid(fps, start_time)}"
+    end = f",format=yuv420p,setsar=1{tail}[v{i}]"
     if fill_mode == "cover":
         return f"{head},scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height}{end}"
     if fill_mode == "blur":
@@ -1276,11 +1288,17 @@ def _nearest_frame(at: float, fps: float) -> int:
 
 def _exact_span(frames: int, fps: float, *, audio: bool) -> str:
     """一段补齐 / 截到正好 frames 帧那么长(带前导逗号;本段自己的时间,从 0 起)。画面不够就重复最后一帧
-    (素材比片段短时,此前那里是一段空档,成片按恒定帧率补的也是最后一帧),声音不够就补静音。"""
+    (素材比片段短时,此前那里是一段空档,成片按恒定帧率补的也是最后一帧),声音不够就补静音。
+
+    画面这边 tpad 之后、trim 之前再过一道 fps:tpad 补的第一帧落在上游报的**结束时刻**上,而这一段的末尾常常是
+    overlay(带变换 / 投影的段、模糊背景),旧版 ffmpeg 的 overlay 报的结束时刻是最后一帧**自己的**时刻(哪些版本见
+    _onto_frame_grid)—— 补出来的第一帧和最后一帧同一个时间戳,这一段就多出一帧。Ubuntu 24.04 的 ffmpeg 6.1 上
+    实测:带变换的段多一帧,成片按 -r 排帧时把它往后挤,这一段之后的每一帧都晚一帧。fps 每个时刻只留一帧(同一
+    时刻的两帧留后一帧,补出来的那帧和最后一帧是同一张画面);新版上没有重复的时刻,它什么都不改。"""
     span = f"{frames / fps:.6f}"
     if audio:
         return f",apad=whole_dur={span},atrim=end={span}"
-    return f",tpad=stop_mode=clone:stop_duration={span},trim=end={span}"
+    return f",tpad=stop_mode=clone:stop_duration={span},fps={fps},trim=end={span}"
 
 
 def _window(plan: RenderPlan, start: float, end: float) -> _Window:
@@ -1537,8 +1555,8 @@ def build_ffmpeg_command(
                 # 画幅的填充模式** —— contain / blur 下元素是「装进画幅」的大小,blur 的背景是同一段素材铺满再模糊;
                 # 和预览 scenePaint 的 followsBaseFill 同一条。此前这里一律铺满再裁到画幅:contain / blur 的片子一打
                 # 关键帧,画面就从留边跳成裁满。
-                head = f"{source.video}trim=start={tin}:end={tout},setpts={setpts}"
-                tail = f"{preset}{video_fades},fps={fps}:start_time={skip:g},setsar=1"
+                head = f"{source.video}trim=start={tin}:end={tout},setpts={setpts}{_onto_frame_grid(fps, skip)}"
+                tail = f"{preset}{video_fades},setsar=1"
                 if not free and plan.output.fill_mode == "blur":
                     filters.append(f"{head},split=2[eltsrc{i}][bgsrc{i}]")
                     filters.append(
