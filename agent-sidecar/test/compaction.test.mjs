@@ -77,6 +77,25 @@ test("轮内大工具结果会被压进预算，给模型回答保留空间", ()
   assert.equal(JSON.stringify(messages).includes("内容过长已截断"), false, "只能裁发送副本，完整历史仍要保存");
 });
 
+test("裁的是锚点**之前**的工具结果时,锚点的用量跟着减 —— 否则估算纹丝不动,max_tokens 照样被夹到底", () => {
+  /* 锚点是供应商**上次**读到的量,那个数里含着这段大结果。只裁结果、不动锚点,两边的估算(这里的
+     contextTokens、pi 夹 max_tokens 用的 estimateContextTokens)都还是裁之前的数:裁了个寂寞,
+     pi 照旧按「窗口 − 旧用量 − 4096」把输出额度夹到几十、几个 token。 */
+  const huge = "很长的工具结果。".repeat(7_000);
+  const messages = [
+    user("看看素材"),
+    assistant("我先列一下", { input: 2_000, output: 20 }),
+    { role: "toolResult", toolName: "list_assets", content: [{ type: "text", text: huge }] },
+    assistant("列完了", { input: 19_000, output: 100, cacheRead: 0, cacheWrite: 0, totalTokens: 19_100 }),
+    user("再来"),
+  ];
+  const fitted = fitTurnContext(messages, 12_000);
+  assert.ok(contextTokens(fitted) <= 12_000, `应压到预算内,实际 ${contextTokens(fitted)}`);
+  const anchor = fitted[3].usage;
+  assert.equal(anchor.totalTokens, anchor.input + anchor.output + anchor.cacheRead + anchor.cacheWrite, "pi 优先读 totalTokens,要一起减");
+  assert.equal(messages[3].usage.input, 19_000, "只改发送副本,会话里存的用量不动");
+});
+
 test("预算充足时不改写工具结果", () => {
   const messages = [user("x"), { role: "toolResult", content: [{ type: "text", text: "short" }] }];
   assert.strictEqual(fitTurnContext(messages, 10_000), messages);

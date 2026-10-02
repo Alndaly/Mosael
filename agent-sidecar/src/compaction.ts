@@ -134,14 +134,7 @@ export function estimateAll(messages: readonly Message[]): number {
  * 一条 usage 都没有(首轮、或供应商不回报)就整段估算。
  */
 export function contextTokens(messages: readonly Message[]): number {
-  let anchor = -1;
-  for (let i = messages.length - 1; i >= 0; i -= 1) {
-    const usage = messages[i]?.usage;
-    if (messages[i]?.role === "assistant" && usage && (usage.input || usage.output)) {
-      anchor = i;
-      break;
-    }
-  }
+  const anchor = anchorIndex(messages);
   if (anchor < 0) return messages.reduce((sum, message) => sum + estimateTokens(message), 0);
   const usage = messages[anchor].usage!;
   // **cacheRead 也占窗口。** 它在计价上另算(便宜十倍),但"还能装多少"问的是占地方,两者
@@ -154,6 +147,39 @@ export function contextTokens(messages: readonly Message[]): number {
   let total = (usage.input ?? 0) + (usage.output ?? 0) + (usage.cacheRead ?? 0) + (usage.cacheWrite ?? 0);
   for (let i = anchor + 1; i < messages.length; i += 1) total += estimateTokens(messages[i]);
   return total;
+}
+
+/** 锚点:最近一条带 usage 的 assistant 消息的下标;没有就是 -1。规则见 contextTokens。 */
+export function anchorIndex(messages: readonly Message[]): number {
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    const usage = messages[i]?.usage;
+    if (messages[i]?.role === "assistant" && usage && (usage.input || usage.output)) return i;
+  }
+  return -1;
+}
+
+/**
+ * 锚点用量里减掉 `tokens` —— 发送副本里锚点**之前**的内容被裁掉 / 丢掉了多少,供应商这次就少读多少。
+ *
+ * 不减的话,两边的估算(这里的 contextTokens、pi 夹 max_tokens 用的 estimateContextTokens)都还停在裁之前:
+ * 锚点之前的东西本来就只算在锚点的用量里,裁得再狠估算也纹丝不动 —— 裁了个寂寞,pi 照旧把 max_tokens 夹到底。
+ * 先减 input,再减 cacheRead、cacheWrite;totalTokens 一起减(pi 优先读它)。只改副本。
+ */
+export function discountAnchor(message: Message, tokens: number): Message {
+  const usage = message.usage;
+  if (!usage || tokens <= 0) return message;
+  let left = tokens;
+  const take = (value: number | undefined) => {
+    const have = value ?? 0;
+    const used = Math.min(have, left);
+    left -= used;
+    return have - used;
+  };
+  const next: Usage = { ...usage, input: take(usage.input) };
+  if (usage.cacheRead !== undefined) next.cacheRead = take(usage.cacheRead);
+  if (usage.cacheWrite !== undefined) next.cacheWrite = take(usage.cacheWrite);
+  if (usage.totalTokens !== undefined) next.totalTokens = Math.max(0, usage.totalTokens - (tokens - left));
+  return { ...message, usage: next };
 }
 
 export function shouldCompact(messages: readonly Message[], contextWindow: number): boolean {
@@ -174,6 +200,7 @@ export function fitTurnContext(messages: readonly Message[], targetTokens: numbe
   if (targetTokens <= 0 || contextTokens(messages) <= targetTokens) return messages as Message[];
 
   const next = [...messages];
+  const anchor = anchorIndex(messages);
   const candidates: Array<{ messageIndex: number; partIndex: number; text: string }> = [];
   for (let messageIndex = 0; messageIndex < messages.length; messageIndex += 1) {
     const message = messages[messageIndex];
@@ -205,8 +232,24 @@ export function fitTurnContext(messages: readonly Message[], targetTokens: numbe
     const content = [...(originalMessage.content as unknown[])];
     content[candidate.partIndex] = { ...(content[candidate.partIndex] as Record<string, unknown>), text: shortened };
     next[candidate.messageIndex] = { ...originalMessage, content };
+    // 裁的是锚点之前的:它只算在锚点的用量里,锚点要跟着减(见 discountAnchor)。
+    if (candidate.messageIndex < anchor) {
+      next[anchor] = discountAnchor(next[anchor], Math.floor((candidate.text.length - shortened.length) / CHARS_PER_TOKEN));
+    }
   }
   return next;
+}
+
+/**
+ * 发送副本里丢掉 `start` 之前的消息。锚点若留在后面,它的用量减掉丢掉的那一段(理由同 discountAnchor)。
+ */
+export function dropOlder(messages: readonly Message[], start: number): Message[] {
+  if (start <= 0) return messages as Message[];
+  const kept = messages.slice(start);
+  const anchor = anchorIndex(kept);
+  if (anchor < 0) return kept;
+  kept[anchor] = discountAnchor(kept[anchor], estimateAll(messages.slice(0, start)));
+  return kept;
 }
 
 /**

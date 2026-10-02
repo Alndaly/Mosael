@@ -493,7 +493,7 @@ def _run_pi(
                     "context": failed_context if isinstance(failed_context, dict) else None,
                     "code": error_code,
                 }
-                if error_code == "output_limit":
+                if error_code in TURN_CUT_SHORT:
                     raise SidecarError(detail, failed_state, human=detail, **error_kwargs)
                 if not saw_tool:
                     raise SidecarError("aiErr_turnFailedCheckProvider", failed_state, detail=detail, **error_kwargs)
@@ -538,6 +538,12 @@ def _run_pi(
         context=result_context,
         compaction=result_compaction,
     )
+#: sidecar 报的「这一轮**跑起来了、但没说完**」(见 agent-sidecar/src/pi.ts 的 stallOf):输出额度用完、
+#: 工具调用在路上丢了、供应商暂停,以及窗口装不下下一次请求(context_full,没有发出去)。它们的那句话就是原因,
+#: 原样进对话 —— 不能落进下面「还没调过工具就失败 = 检查供应商配置」那条分支:base_url、模型名都没有错。
+TURN_CUT_SHORT = frozenset({"output_limit", "tool_call_lost", "paused", "context_full"})
+
+
 def _tail(text: str, limit: int = 500) -> str:
     return text.strip()[-limit:]
 

@@ -215,3 +215,37 @@ class TestControlFrames:
 
         run = next(f for f in _frames(echo_sidecar) if f["type"] == "run_turn")
         assert run["images"] == images
+
+
+CUT_SIDECAR = """
+import json, os, sys
+line = sys.stdin.readline()
+turn = json.loads(line)["turnId"]
+print(json.dumps({"type": "text_delta", "turnId": turn, "delta": "我先看看现在的状态:"}), flush=True)
+print(json.dumps({"type": "error", "turnId": turn, "message": os.environ["CUT_MESSAGE"], "code": os.environ["CUT_CODE"],
+                  "sessionState": [1]}), flush=True)
+for _ in sys.stdin:
+    pass
+"""
+
+
+@pytest.mark.parametrize("code", ["output_limit", "tool_call_lost", "paused", "context_full"])
+def test_a_turn_that_stopped_short_reports_what_happened_not_check_your_provider(tmp_path: Path, monkeypatch, code) -> None:
+    """**没说完就停下**(截断 / 工具调用丢了 / 供应商暂停)是跑起来之后的事,不是供应商配置错了。
+
+    这一轮已经吐过正文,没调过工具 —— 此前 `saw_tool=False` 那条分支会把它说成「检查供应商配置」,
+    用户去翻设置,而真正的原因(sidecar 说得清清楚楚)被换掉了。对话里要的是 sidecar 那句话原样。
+    """
+    script = tmp_path / "cut_sidecar.py"
+    script.write_text(CUT_SIDECAR)
+    monkeypatch.setattr(pi_client, "pi_sidecar_command", lambda: (sys.executable, str(script)))
+    monkeypatch.setattr(Path, "exists", lambda self: True, raising=False)
+    monkeypatch.setenv("CUT_CODE", code)
+    monkeypatch.setenv("CUT_MESSAGE", f"这一轮没说完({code})")
+
+    with pytest.raises(pi_client.SidecarError) as caught:
+        _run()
+
+    assert caught.value.human == f"这一轮没说完({code})"
+    assert caught.value.code == code
+    assert caught.value.adapter_state == [1], "跑过的那一轮的记忆要交回去"

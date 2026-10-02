@@ -24,11 +24,14 @@ import { dropToolImages, keepRecentToolImages } from "./toolImages.js";
 // 这个入口能用的前提是构建带 --ignore-annotations,原因见 package.json 里的说明。
 import { openAICompletionsApi } from "@earendil-works/pi-ai/api/openai-completions.lazy";
 
+import { estimateContextTokens } from "@earendil-works/pi-ai/utils/estimate";
+
 import {
   type CompactionResult,
   type Message as CompactionMessage,
   SUMMARY_PROMPT,
   compact,
+  dropOlder,
   FALLBACK_CONTEXT_WINDOW,
   fallbackContextWindow,
   contextTokens,
@@ -152,18 +155,48 @@ function buildSubagentTools(
 const RUNAWAY_TURN_MESSAGES = 120;
 const RUNAWAY_KEEP = 60;
 
-function guardRunawayTurn(messages: AgentMessage[], contextWindow: number): AgentMessage[] {
-  let guarded = messages;
+/** pi 夹 max_tokens 时给上下文估算留的余量(pi-ai api/simple-options 的 CONTEXT_SAFETY_TOKENS,没有导出)。 */
+const PI_CONTEXT_SAFETY_TOKENS = 4096;
+/**
+ * 一次请求至少要留得出这么多输出额度,不够就不发。和 pi 给「思考之后的正文」留的下限同一个数
+ * (simple-options 的 MIN_ANSWER_TOKENS):少于它,模型能说出来的就只剩半句话。
+ */
+const MIN_REPLY_TOKENS = 1024;
+
+/** 窗口装不下这次请求(见 guardRunawayTurn)。单独一类,好让后端把它说成「窗口太小」而不是「检查供应商配置」。 */
+class ContextFullError extends Error {}
+
+/**
+ * 每次请求前(transformContext)整理发送副本,保证**留得出一段回答**。
+ *
+ * pi 按「窗口 − 已用 − 4096」夹 max_tokens,下限是 1(clampMaxTokensToContext)。上下文一满就只剩几个 token:
+ * 用户看到「我」「抱歉」,或者一句话说到冒号就没了,而这一轮看起来是正常结束的。所以:
+ *   1. 消息堆得太多就丢掉早先的(从一条 user 边界起,工具调用和结果不拆开);
+ *   2. 按 token 裁超大的工具结果,至少空出四分之一窗口、且不少于 MIN_REPLY_TOKENS 的输出额度;
+ *   3. 用 **pi 自己的估算**复核一遍 —— 还是留不出,就不发这个请求,报一句说得清的错。
+ *      那种情况是固定开销(工具定义 + 系统提示 + 没法裁的历史)自己就快占满窗口,裁不出来;发出去只会换来半句话。
+ */
+function guardRunawayTurn(messages: AgentMessage[], contextWindow: number, maxTokens: number): AgentMessage[] {
+  let guarded = messages as unknown as CompactionMessage[];
   if (guarded.length > RUNAWAY_TURN_MESSAGES) {
     let start = guarded.length - RUNAWAY_KEEP;
-    while (start > 0 && (guarded[start] as { role?: string }).role !== "user") start -= 1;
-    if (start > 0) guarded = guarded.slice(start);
+    while (start > 0 && guarded[start]?.role !== "user") start -= 1;
+    guarded = dropOlder(guarded, start);
   }
-  // 至少保留四分之一窗口给下一次回答和可能的下一次工具调用。
-  return fitTurnContext(
-    guarded as unknown as CompactionMessage[],
-    Math.floor(contextWindow * 0.75),
+  const need = Math.min(MIN_REPLY_TOKENS, maxTokens);
+  const fitted = fitTurnContext(
+    guarded,
+    Math.min(Math.floor(contextWindow * 0.75), contextWindow - PI_CONTEXT_SAFETY_TOKENS - need),
   ) as unknown as AgentMessage[];
+  const used = estimateContextTokens(fitted as unknown as Parameters<typeof estimateContextTokens>[0]).tokens;
+  if (contextWindow - used - PI_CONTEXT_SAFETY_TOKENS < need) {
+    throw new ContextFullError(
+      `上下文窗口放不下这一次请求:窗口 ${contextWindow.toLocaleString("en-US")} Token,要发出去的内容已有约 ` +
+        `${used.toLocaleString("en-US")} Token,留给回答的不到 ${need.toLocaleString("en-US")}。请在模型设置里填写这个模型` +
+        "真实的上下文窗口(本机推理服务常常比回退值大),或者换一个窗口更大的模型;对话太长的话,先「立即整理」上下文。",
+    );
+  }
+  return fitted;
 }
 
 /**
@@ -228,10 +261,91 @@ export function fallbackMaxTokens(
   );
 }
 
-/** stopReason=length 是输出预算耗尽，不等于上下文窗口已满。 */
+/**
+ * stopReason=length 是输出预算耗尽，不等于上下文窗口已满。
+ *
+ * **不看正文长短。** 此前只在正文不到 24 个字(「我」这类碎片)时才报,正文长一点就当成功 —— 而一条停在
+ * 「我先看看现在的状态:」的回复同样是被截断的,只是截得体面一些(用户截图:没有工具调用、没有错误,
+ * 一轮像是说完了)。截断就是截断。
+ */
 export function outputLimitMessage(stopReason: string | undefined, text: string, maxTokens: number): string | undefined {
-  if (stopReason !== "length" || text.trim().length >= 24) return undefined;
-  return `模型已用完本轮 ${maxTokens.toLocaleString("en-US")} Token 输出额度（思考过程也计入），还没来得及形成完整回复。请降低思考强度，或在模型设置中提高「最大输出 Token」后重试。`;
+  if (stopReason !== "length") return undefined;
+  const budget = `${maxTokens.toLocaleString("en-US")} Token 输出额度（思考过程也计入）`;
+  return text.trim().length < 24
+    ? `模型已用完本轮 ${budget}，还没来得及形成完整回复。请降低思考强度，或在模型设置中提高「最大输出 Token」后重试。`
+    : `回复在本轮 ${budget}处被截断了，已自动让它接着说过一次仍未说完。请降低思考强度，或在模型设置中提高「最大输出 Token」后让它继续。`;
+}
+
+/** 一轮**没说完就停下**的原因(给后端的机器可读码)。`context_full`:窗口装不下下一次请求,没有发出去。 */
+export type StallCode = "output_limit" | "tool_call_lost" | "paused" | "context_full";
+
+/** `dangling`:正常结束,但停在冒号上 —— 续一次,续完不论怎样都不算错(见 stallOf)。 */
+type Stall = { code: Exclude<StallCode, "context_full"> | "dangling"; nudge: string };
+
+/**
+ * 这条助手消息是不是「没说完就停下了」—— pi 的循环在下面这几种情况下没有工具可跑,于是安静地结束这一轮:
+ *
+ *  · stopReason=length 且这条回复里还没有工具调用:输出额度用完了(带了工具调用的那种 pi 自己处理 ——
+ *    把截断的调用报成失败结果、让模型重发,循环接着跑);
+ *  · stopReason=toolUse(finish_reason=tool_calls)却一个工具调用都没有:模型说要调工具,调用在路上丢了;
+ *  · Anthropic 协议的 pause_turn:供应商要我们重发接着来,pi 把它映射成了普通的 stop;
+ *  · 正常 stop,但最后一句停在冒号上(`dangling`,见下)。
+ *
+ * 不是这几种(说完了的 stop、出错、被中止)就是 null。
+ */
+export function stallOf(message: unknown): Stall | null {
+  const m = message as { role?: string; stopReason?: string; rawStopReason?: string; content?: unknown } | undefined;
+  if (!m || m.role !== "assistant") return null;
+  const hasToolCall = Array.isArray(m.content) && m.content.some((part) => (part as { type?: string })?.type === "toolCall");
+  if (m.stopReason === "length" && !hasToolCall) {
+    return {
+      code: "output_limit",
+      nudge:
+        "【系统】你上一条回复在输出额度处被截断了,还没说完。请从断处直接接着说下去,不要重复已经说过的内容;如果接下来要调用工具,请完整地发起调用。",
+    };
+  }
+  if (m.stopReason === "toolUse" && !hasToolCall) {
+    return {
+      code: "tool_call_lost",
+      nudge: "【系统】你上一条回复表示要调用工具,但这次没有收到任何工具调用(可能在传输中丢失)。请重新完整地发起你要做的工具调用。",
+    };
+  }
+  if (m.rawStopReason === "pause_turn") {
+    return { code: "paused", nudge: "【系统】上一条回复被供应商暂停了(pause_turn)。请从断处接着完成。" };
+  }
+  // 供应商说正常结束,而最后一句停在冒号上,也没有工具调用。用户截图里连着三轮都是这样:「需要你帮一个小忙:」
+  // 「…画板列表是否恢复了:」「没卡住,马上检查现状:」—— 一句话停在冒号上几乎从来不是说完了(多半是接着要调工具
+  // 或列内容)。续一次;续完还这样就是模型的决定,不报错。
+  if (m.stopReason === "stop" && !hasToolCall && /[:：]\s*$/.test(textOf(m.content))) {
+    return {
+      code: "dangling",
+      nudge:
+        "【系统】你上一条回复停在了冒号上,后面没有内容,也没有调用工具。如果接下来要调用工具,现在就完整地发起调用;如果要列出内容或向用户提问,把它说完整。",
+    };
+  }
+  return null;
+}
+
+function textOf(content: unknown): string {
+  if (typeof content === "string") return content;
+  if (!Array.isArray(content)) return "";
+  return content
+    .filter((part) => (part as { type?: string })?.type === "text")
+    .map((part) => String((part as { text?: unknown }).text ?? ""))
+    .join("");
+}
+
+/** 续过一次之后仍然没说完时,对话里那一行写什么。 */
+function stallMessage(stall: Stall & { code: Exclude<Stall["code"], "dangling"> }, text: string, maxTokens: number): string {
+  if (stall.code === "output_limit") return outputLimitMessage("length", text, maxTokens) ?? "";
+  if (stall.code === "tool_call_lost") {
+    return "模型说要调用工具,但供应商返回的回复里没有任何可执行的工具调用(已让它重发过一次)。可以让它重试;反复出现的话,检查这个供应商 / 模型对工具调用的支持。";
+  }
+  return "供应商暂停了这一轮(pause_turn),已让它接着做过一次仍未完成。可以让它继续。";
+}
+
+function lastAssistant(messages: readonly unknown[]): unknown {
+  return [...messages].reverse().find((message) => (message as { role?: string }).role === "assistant");
 }
 
 /** A single-provider Models collection targeting an OpenAI-compatible endpoint. */
@@ -467,7 +581,7 @@ export interface PiTurnResult {
    * 上游只会看到一个空的 turn_done,配置错误就变成了"什么都没发生"。
    */
   errorMessage?: string;
-  errorCode?: "output_limit";
+  errorCode?: StallCode;
   /** True when the run was stopped by abort() rather than finishing on its own. */
   aborted?: boolean;
   /** 本轮结束时的上下文水位(前端画进度条)。 */
@@ -577,6 +691,7 @@ export async function runPiTurn(input: PiTurnInput, handlers: PiTurnHandlers): P
     : buildModels(input.provider.baseUrl, input.provider.apiKey, input.model, input.provider);
   const prior = Array.isArray(input.sessionState) ? (input.sessionState as AgentMessage[]) : [];
   const images = model?.input?.includes("image") ? (input.images ?? []) : [];
+  let contextFull = false;
   // **必须是 streamSimple**,不是 stream。pi 的 Agent 把思考档位放在 options.reasoning 里,
   // 而拼请求体的地方读的是 options.reasoningEffort —— 这两者之间的翻译(含按模型 clamp)
   // 只发生在 streamSimple 里。走 stream 的话 reasoningEffort 永远是 undefined,于是供应商
@@ -610,12 +725,20 @@ export async function runPiTurn(input: PiTurnInput, handlers: PiTurnHandlers): P
       thinkingLevel: input.thinkingLevel ?? "off",
     },
     streamFn,
-    // 轮内兜底:只防单轮里工具调用把消息堆爆,正常对话碰不到。
-    transformContext: async (messages) =>
-      guardRunawayTurn(
-        keepRecentToolImages(messages, Boolean(model?.input?.includes("image"))),
-        Number(model?.contextWindow) || FALLBACK_CONTEXT_WINDOW,
-      ),
+    // 轮内兜底:只防单轮里工具调用把消息堆爆、以及留不出回答的请求,正常对话碰不到。
+    transformContext: async (messages) => {
+      try {
+        return guardRunawayTurn(
+          keepRecentToolImages(messages, Boolean(model?.input?.includes("image"))),
+          Number(model?.contextWindow) || FALLBACK_CONTEXT_WINDOW,
+          Number(model?.maxTokens) || FALLBACK_MAX_TOKENS,
+        );
+      } catch (err) {
+        // pi 只把 message 记在失败消息上,类型丢了 —— 在这里记下是哪一类。
+        if (err instanceof ContextFullError) contextFull = true;
+        throw err;
+      }
+    },
   });
   const turnStartIndex = priorMessages.length;
   // One queued message per turn, in the order they were sent. Draining the whole queue at
@@ -643,12 +766,10 @@ export async function runPiTurn(input: PiTurnInput, handlers: PiTurnHandlers): P
     }
   });
   let aborted = false;
-  try {
-    if (images.length > 0) await agent.prompt(input.prompt, images);
-    else await agent.prompt(input.prompt);
-    // 收尾清算:模型答完了,但后台可能还有子智能体在跑、或报告还没进过它的上下文。
-    // 等全部跑完,把没送达的报告作为一条通知消息续一轮 —— 模型消化完(可能因此又派新的,
-    // 所以是循环)才算真正结束。丢报告是不可接受的:sidecar 是回合级进程,这轮不送,永远没了。
+  // 收尾清算:模型答完了,但后台可能还有子智能体在跑、或报告还没进过它的上下文。
+  // 等全部跑完,把没送达的报告作为一条通知消息续一轮 —— 模型消化完(可能因此又派新的,
+  // 所以是循环)才算真正结束。丢报告是不可接受的:sidecar 是回合级进程,这轮不送,永远没了。
+  const settleSubagents = async () => {
     for (;;) {
       if (agent.signal?.aborted) {
         // 中止也要等后台子智能体真的停下。它们现在收得到同一个中止信号(见 subagent.ts),
@@ -668,6 +789,18 @@ export async function runPiTurn(input: PiTurnInput, handlers: PiTurnHandlers): P
         .join("\n\n");
       await agent.prompt(`${notice}\n\n请基于以上报告继续:该转述的转述,该行动的行动。`);
     }
+  };
+  try {
+    if (images.length > 0) await agent.prompt(input.prompt, images);
+    else await agent.prompt(input.prompt);
+    await settleSubagents();
+    // 没说完就停下的(截断 / 工具调用丢了 / 供应商暂停,见 stallOf):**续一次**,让它从断处接着做。
+    // 只续一次:输出额度本身太小的话续多少次都一样,那时该说清楚,而不是替用户一遍遍花钱。
+    const stall = agent.signal?.aborted ? null : stallOf(lastAssistant(agent.state.messages));
+    if (stall) {
+      await agent.prompt(stall.nudge);
+      await settleSubagents();
+    }
   } catch (err) {
     // An aborted run rejects. The text streamed so far is real output the user watched
     // arrive, so it is returned rather than discarded.
@@ -684,20 +817,17 @@ export async function runPiTurn(input: PiTurnInput, handlers: PiTurnHandlers): P
     .find((message) => (message as { stopReason?: string }).stopReason === "error") as
     | { errorMessage?: string }
     | undefined;
-  const terminal = [...turnMessages]
-    .reverse()
-    .find((message) => (message as { role?: string }).role === "assistant") as
-    | { stopReason?: string }
-    | undefined;
-  const outputLimit = outputLimitMessage(terminal?.stopReason, full, Number(model?.maxTokens) || FALLBACK_MAX_TOKENS);
+  // 续过一次还是没说完:报出来。对话里一定要有一行说清楚,而不是停在一个冒号上假装说完了。
+  // (停在冒号上的那种续过就算,不报 —— 见 stallOf。)
+  const leftover = aborted || failed?.errorMessage ? null : stallOf(lastAssistant(turnMessages));
+  const stalled = leftover && leftover.code !== "dangling" ? { ...leftover, code: leftover.code } : null;
+  const stallText = stalled ? stallMessage(stalled, full, Number(model?.maxTokens) || FALLBACK_MAX_TOKENS) : undefined;
   return {
     text: full,
     usage: collectUsage(messages, turnStartIndex),
     sessionState: messages,
-    errorMessage: aborted
-      ? undefined
-      : failed?.errorMessage ?? outputLimit,
-    errorCode: !aborted && !failed?.errorMessage && outputLimit ? "output_limit" : undefined,
+    errorMessage: aborted ? undefined : failed?.errorMessage ?? stallText,
+    errorCode: aborted ? undefined : contextFull ? "context_full" : stalled ? stalled.code : undefined,
     aborted,
     // 每轮都回报水位:前端据此画进度条。窗口按**当前模型**给 —— 换个模型上限就变了,
     // 用一个全局常量会在小窗口模型上显示成"还早得很"。

@@ -517,7 +517,13 @@ OpenRouter 的 id 还带 `厂商/` 前缀),最长前缀赢,数值一律向下取
 钉住;内置表只在后端(sidecar 拿到的是后端算好的数),所以它不进契约。
 
 **输出预算和上下文水位是两件事**:`stopReason=length` 表示本轮 `maxTokens` 已耗尽,推理 token 也计入;
-它不能被解释成上下文窗口已满。知道模型上限时按 `OUTPUT_BUDGET_CAP = 65536` 封顶(**那是预算,不是上限**:
+它不能被解释成上下文窗口已满。一轮**没说完就停下**(`length` 且还没写出工具调用、`finish_reason=tool_calls`
+却没有工具调用、Anthropic 的 `pause_turn`)时,sidecar 先让模型从断处续一次,续完仍没说完就报错
+(`output_limit` / `tool_call_lost` / `paused`,见 `agent-sidecar/src/pi.ts` 的 `stallOf`)—— 不论正文多长,
+对话里都有一行说清楚,而不是停在一个冒号上。正常结束却停在冒号上的也续一次,续完不论怎样都不报错(那是模型的决定)。
+另一头:每次请求前 `guardRunawayTurn` 用 pi 自己的估算复核,留不出 1024 Token 的回答就不发这个请求,报
+`context_full`(窗口太小),而不是让 pi 把 `max_tokens` 夹到个位数、换回半句话;轮内裁锚点之前的工具结果时,
+发送副本里锚点的用量跟着减(`discountAnchor`),否则两边的估算都还停在裁之前。知道模型上限时按 `OUTPUT_BUDGET_CAP = 65536` 封顶(**那是预算,不是上限**:
 `max_tokens` 在部分接口上要和输入一起装进窗口);查不到上限时,普通兼容模型保守回退到 4K,推理模型回退到 32K,
 两者都不超过上下文窗口的四分之一。
 

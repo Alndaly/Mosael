@@ -238,8 +238,8 @@ export type Event =
       type: "error";
       turnId: string | null;
       message: string;
-      /** 机器可读原因，避免后端把输出额度耗尽误判成供应商配置错误。 */
-      code?: "output_limit";
+      /** 机器可读原因，避免后端把「这一轮没说完」误判成供应商配置错误:输出额度耗尽 / 工具调用丢了 / 供应商暂停。 */
+      code?: "output_limit" | "tool_call_lost" | "paused" | "context_full";
       sessionState?: unknown;
       usage?: Record<string, unknown>;
       context?: { tokens: number; window: number };
