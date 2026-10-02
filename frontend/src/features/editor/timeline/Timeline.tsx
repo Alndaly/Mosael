@@ -136,6 +136,8 @@ export function Timeline({
   toolbarExtra?: React.ReactNode;
 }) {
   const t = useI18n();
+  //: 时间线上哪些素材是 AI 生成的(后端算好给的,见 SequenceOut.ai_asset_ids):片段上标「AI」角标。
+  const aiAssetIds = React.useMemo(() => new Set(sequence.ai_asset_ids ?? []), [sequence.ai_asset_ids]);
   // NOTE: Timeline deliberately does NOT subscribe to playhead — during playback it ticks
   // ~25×/s and would re-render every clip + waveform (the "播放卡顿" on dense segments).
   // The moving playhead line and the toolbar readout are isolated in tiny subscriber
@@ -1152,6 +1154,7 @@ export function Timeline({
                       trackId={track.id}
                       trackKind={track.kind}
                       offline={Boolean(clip.offline_asset)}
+                      aiGenerated={Boolean(clip.asset_id && aiAssetIds.has(clip.asset_id))}
                       // 脱机片段显示**它原来的**素材名 —— 那是用户唯一能拿来对回去的线索。
                       name={
                         clip.text_override ??

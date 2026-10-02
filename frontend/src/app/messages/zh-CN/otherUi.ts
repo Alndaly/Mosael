@@ -348,6 +348,8 @@ export const otherUi = {
   clipAudioIsolateVoice: "只留人声",
   clipAudioSeparate: "拆成人声和背景音",
   clipAudioQueued: "已开始处理,做完会直接换到时间线上",
+  clipAiGenerated: "AI 生成的素材",
+  exportAiLabelFound: "时间线上有 {n} 段 AI 生成的片段(片段上带「AI」角标)。",
   subtitleDubTrackNote: "配音会落到一条单独的配音轨;原声按上面选的处理,都能撤销。",
   subtitleDubOriginal: "原声",
   subtitleDubOriginal_duck: "配音说话时压低",

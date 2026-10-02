@@ -23,14 +23,34 @@ beforeEach(() => {
   localStorage.clear();
 });
 
-function mount() {
+//: 一段 AI 生成(数字人)的片段 + 一段自己拍的。
+const WITH_AI = {
+  ai_asset_ids: ["talking"],
+  tracks: [{ id: "V1", kind: "video", clips: [{ id: "c1", asset_id: "talking" }, { id: "c2", asset_id: "shot" }] }],
+};
+
+function mount(extra: Record<string, unknown> = WITH_AI) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
     <QueryClientProvider client={client}>
-      <ExportControl sequence={{ id: "seq-1", width: 1920, height: 1080, fps: 30 } as never} />
+      <ExportControl sequence={{ id: "seq-1", width: 1920, height: 1080, fps: 30, ...extra } as never} />
     </QueryClientProvider>,
   );
 }
+
+it("时间线上没有 AI 生成的片段:不摆「AI 生成」标识开关", async () => {
+  const user = userEvent.setup();
+  mount({ ai_asset_ids: [], tracks: [{ id: "V1", kind: "video", clips: [{ id: "c2", asset_id: "shot" }] }] });
+  await user.click(screen.getByRole("button", { name: "exportVideo" }));
+  expect(screen.queryByRole("checkbox", { name: /exportAiLabel/ })).toBeNull();
+});
+
+it("有 AI 生成的片段:开关出现,并说清有几段", async () => {
+  const user = userEvent.setup();
+  mount();
+  await user.click(screen.getByRole("button", { name: "exportVideo" }));
+  expect(document.querySelector("[data-export-ai-label]")?.textContent).toContain("exportAiLabelFound");
+});
 
 it("默认开着;关掉当场写明后果,导出时带上 ai_label: false;下一次打开又是开着的", async () => {
   const user = userEvent.setup();

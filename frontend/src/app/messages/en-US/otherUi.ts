@@ -348,6 +348,8 @@ export const otherUi = {
   clipAudioIsolateVoice: "Keep only the voice",
   clipAudioSeparate: "Split into voice and background",
   clipAudioQueued: "Processing started — the result lands on the timeline when it's done",
+  clipAiGenerated: "AI-generated asset",
+  exportAiLabelFound: "{n} clip(s) on the timeline are AI-generated (marked “AI” on the clip).",
   subtitleDubTrackNote: "Voiceover lands on its own dub track; the original audio is handled as chosen above, and both can be undone.",
   subtitleDubOriginal: "Original audio",
   subtitleDubOriginal_duck: "Lower while the dub speaks",

@@ -5,8 +5,9 @@
 
 from __future__ import annotations
 
-from typing import Literal
-from pydantic import Field, field_validator
+from typing import Any, Literal
+from pydantic import Field, field_validator, model_validator
+from sqlalchemy import inspect as sqlalchemy_inspect
 from app.api.schemas.base import ApiModel, OrmModel
 
 class SequenceCreate(ApiModel):
@@ -93,6 +94,24 @@ class SequenceOut(OrmModel):
     can_undo: bool = False
     can_redo: bool = False
     tracks: list[TrackOut] = Field(default_factory=list)
+    #: 时间线上用到的 AI 生成素材(片段上的「AI」角标、导出对话框的标识开关都看它,见 assets/provenance)。
+    ai_asset_ids: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="wrap")
+    @classmethod
+    def _with_ai_assets(cls, value: Any, handler: Any) -> SequenceOut:
+        """从库里的序列转出来时,顺手算出哪些素材是 AI 生成的。算出来、不存:AI 与否是素材的属性、
+        不是时间线的,存进序列就得在素材变了的时候跟着改。在这一层算而不在序列领域里算:序列域去问素材域
+        的话,两个包就互相 import 了(素材删除要回头动片段)。"""
+        model = handler(value)
+        state = sqlalchemy_inspect(value, raiseerr=False)
+        session = state.session if state is not None else None
+        if session is not None:
+            from app.domain.assets.provenance import ai_generated_asset_ids
+
+            used = {clip.asset_id for track in model.tracks for clip in track.clips if clip.asset_id}
+            model.ai_asset_ids = sorted(ai_generated_asset_ids(session, used))
+        return model
 
 
 class AppendAssetRequest(ApiModel):

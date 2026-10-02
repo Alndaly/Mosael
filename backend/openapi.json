@@ -34245,6 +34245,13 @@
             },
             "type": "array",
             "title": "Tracks"
+          },
+          "ai_asset_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Ai Asset Ids"
           }
         },
         "type": "object",

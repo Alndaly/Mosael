@@ -20,6 +20,7 @@ export const TimelineClip = React.memo(function TimelineClip({
   trackKind,
   name,
   offline = false,
+  aiGenerated = false,
   left,
   width,
   shiftPx = 0,
@@ -37,6 +38,8 @@ export const TimelineClip = React.memo(function TimelineClip({
   name: string;
   /** 素材已被删除:片段留在原位,但没有画面可放。达芬奇的「媒体脱机」。 */
   offline?: boolean;
+  /** 素材是 AI 生成的(见后端 assets/provenance):片段上标一个「AI」角标,一眼看出成片里哪几段要带标识。 */
+  aiGenerated?: boolean;
   left: number;
   width: number;
   /** 相对 left 的水平位移(px):拖拽中的本体与涟漪让位的邻居都走 transform。 */
@@ -91,7 +94,7 @@ export const TimelineClip = React.memo(function TimelineClip({
       data-selected={selected || undefined}
       role="button"
       tabIndex={-1}
-      title={offline ? `${t("clipOffline")} · ${name}` : name}
+      title={offline ? `${t("clipOffline")} · ${name}` : aiGenerated ? `${name} · ${t("clipAiGenerated")}` : name}
     >
       {peaks && peaks.length > 0 && (
         <svg className="pointer-events-none absolute inset-x-px inset-y-0.5 h-[calc(100%-4px)] w-[calc(100%-2px)] [&_polygon]:fill-current [&_polygon]:opacity-30" viewBox="0 0 1 1" preserveAspectRatio="none" aria-hidden>
@@ -106,6 +109,16 @@ export const TimelineClip = React.memo(function TimelineClip({
       />
       <span className="pointer-events-none relative z-[1] flex min-w-0 flex-1 items-center gap-1 px-1.5 text-ui-xs font-semibold">
         {offline && <Unlink size={11} className="shrink-0 text-destructive" aria-hidden />}
+        {aiGenerated && (
+          <span
+            data-ai-badge=""
+            aria-hidden
+            title={t("clipAiGenerated")}
+            className="shrink-0 rounded-[3px] border border-current px-0.5 text-[9px] font-bold leading-[11px] opacity-80"
+          >
+            AI
+          </span>
+        )}
         <span className="truncate">{name}</span>
       </span>
       <span

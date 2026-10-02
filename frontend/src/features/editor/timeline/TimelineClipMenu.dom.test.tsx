@@ -57,7 +57,7 @@ function renderTimeline() {
     onReplaceMedia: vi.fn(),
     onClipAudio: vi.fn(),
   };
-  const sequence = { id: "s", name: "S", width: 1920, height: 1080, fps: 30, tracks } as unknown as Sequence;
+  const sequence = { id: "s", name: "S", width: 1920, height: 1080, fps: 30, tracks, ai_asset_ids: ["asset-film"] } as unknown as Sequence;
   render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
       <TooltipProvider>
@@ -157,6 +157,14 @@ describe("片段右键:替换媒体与做完直接替换的声音处理", () => 
     await screen.findByRole("menuitem", { name: "deleteClip" });
     expect(menuItems()).not.toContain("replaceMedia");
     await userEvent.keyboard("{Escape}");
+  });
+});
+
+describe("AI 生成的片段", () => {
+  it("片段上标「AI」角标,只标后端认定为 AI 生成的那几段", () => {
+    renderTimeline();
+    expect(screen.getByRole("button", { name: /film/ }).querySelector("[data-ai-badge]")).not.toBeNull();
+    expect(screen.getByRole("button", { name: "voice" }).querySelector("[data-ai-badge]")).toBeNull();
   });
 });
 

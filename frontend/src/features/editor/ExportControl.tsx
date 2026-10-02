@@ -47,6 +47,11 @@ export function ExportControl({ sequence }: { sequence: Sequence }) {
   //: 「AI 生成」显式标识(ADR 0028 §5):**默认开、允许关,不记住关** —— 每次导出都从开着开始,关掉是这一次的决定。
   //: 记住的话,关过一次之后每一片都悄悄不带标识,而发布的人未必记得自己关过。
   const [aiLabel, setAiLabel] = React.useState(true);
+  //: 时间线上有几段 AI 生成的片段(后端认的,见 SequenceOut.ai_asset_ids)。
+  const aiClipCount = React.useMemo(() => {
+    const ai = new Set(sequence.ai_asset_ids ?? []);
+    return (sequence.tracks ?? []).flatMap((track) => track.clips ?? []).filter((clip) => clip.asset_id && ai.has(clip.asset_id)).length;
+  }, [sequence]);
   React.useEffect(() => {
     if (configOpen) setAiLabel(true);
   }, [configOpen]);
@@ -140,16 +145,22 @@ export function ExportControl({ sequence }: { sequence: Sequence }) {
               </SelectContent>
             </Select>
           </div>
-          <label className="grid cursor-pointer grid-cols-[auto_minmax(0,1fr)] items-start gap-x-2 gap-y-0.5" data-export-ai-label="">
-            <input type="checkbox" className="mt-0.5" checked={aiLabel} onChange={(event) => setAiLabel(event.target.checked)} />
-            <span className="text-ui-sm font-medium">{t("exportAiLabel")}</span>
-            <span className="col-start-2 text-ui-xs leading-relaxed text-muted-foreground">{t("exportAiLabelHint")}</span>
-            {!aiLabel && (
-              <span role="alert" data-export-ai-label-off="" className="col-start-2 text-ui-xs leading-relaxed text-warning">
-                {t("exportAiLabelOffWarning")}
+          {/* 只在时间线上真有 AI 生成的片段时出现,并说清是哪几段 —— 没有 AI 内容的片子摆一个「加 AI 标识」开关,
+              只会让人以为自己的片子被当成了 AI 生成的。 */}
+          {aiClipCount > 0 && (
+            <label className="grid cursor-pointer grid-cols-[auto_minmax(0,1fr)] items-start gap-x-2 gap-y-0.5" data-export-ai-label="">
+              <input type="checkbox" className="mt-0.5" checked={aiLabel} onChange={(event) => setAiLabel(event.target.checked)} />
+              <span className="text-ui-sm font-medium">{t("exportAiLabel")}</span>
+              <span className="col-start-2 text-ui-xs leading-relaxed text-muted-foreground">
+                {t("exportAiLabelFound").replace("{n}", String(aiClipCount))} {t("exportAiLabelHint")}
               </span>
-            )}
-          </label>
+              {!aiLabel && (
+                <span role="alert" data-export-ai-label-off="" className="col-start-2 text-ui-xs leading-relaxed text-warning">
+                  {t("exportAiLabelOffWarning")}
+                </span>
+              )}
+            </label>
+          )}
         </div>
       </ModalShell>
     </span>

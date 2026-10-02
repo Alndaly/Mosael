@@ -12810,6 +12810,8 @@ export interface components {
             can_redo: boolean;
             /** Tracks */
             tracks?: components["schemas"]["TrackOut"][];
+            /** Ai Asset Ids */
+            ai_asset_ids?: string[];
         };
         /**
          * SessionAllowance
