@@ -25,11 +25,11 @@ const ROOT = path.resolve(import.meta.dirname, "..");
 const OUT = path.join(ROOT, "build", "python");
 
 // python-build-standalone:预编译、可重定位的 CPython,专为"随应用分发"设计。
-const RELEASE = "20260901";
+const RELEASE = "20261001";
 // **3.13,不是 3.14。** 这个解释器建的 venv 要装转写引擎 whisperx,而它到最新的 3.8.6 为止都声明
 // Requires-Python <3.14 —— 3.14 上 pip 直接找不到能装的版本。其余引擎(f5-tts、fish-speech、
 // funasr、demucs)3.14 都装得上。whisperx 放开 3.14 之后再升;后端自己早已是 3.14,它不 import whisperx。
-const PY = "3.13.15";
+const PY = "3.13.16";
 const TARGETS = {
   "darwin-arm64": `cpython-${PY}+${RELEASE}-aarch64-apple-darwin-install_only_stripped.tar.gz`,
   "darwin-x64": `cpython-${PY}+${RELEASE}-x86_64-apple-darwin-install_only_stripped.tar.gz`,
