@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 from math import inf
 
 from sqlalchemy import inspect, select
@@ -16,6 +17,8 @@ from app.domain.sequences._timeline import (
     _require_clip,
     _require_sequence,
     _require_target_track,
+    _slice_keyframes,
+    _sliced_transform,
     _validate_clip_range,
     finite_number,
     require_speed,
@@ -306,14 +309,17 @@ def trim_clip(db: Session, sequence_id: str, op: TrimClip) -> Sequence:
         raise SequenceDomainError("seqErr_trimNoRoom")
 
     journal = Journal(db, sequence)
-    journal.update(clip, timeline_start=start, src_in=src_in, src_out=src_out)
+    journal.update(clip, timeline_start=start, src_in=src_in, src_out=src_out, **_reanchored(clip, src_in, src_out))
     for member in members:
         member_speed = member.speed or 1.0
+        member_in = member.src_in + clamped_head * member_speed
+        member_out = member.src_out + clamped_tail * member_speed
         journal.update(
             member,
             timeline_start=member.timeline_start + clamped_head,
-            src_in=member.src_in + clamped_head * member_speed,
-            src_out=member.src_out + clamped_tail * member_speed,
+            src_in=member_in,
+            src_out=member_out,
+            **_reanchored(member, member_in, member_out),
         )
     _record_operation(
         db,
@@ -324,6 +330,25 @@ def trim_clip(db: Session, sequence_id: str, op: TrimClip) -> Sequence:
         actor_id=op.actor_id,
     )
     return sequence
+
+
+def _reanchored(clip: Clip, new_in: float, new_out: float) -> dict[str, Any]:
+    """修剪之后关键帧还钉在**原来的那一帧画面**上:transform 与音量关键帧按源时间重投影到新的出入点。
+
+    关键帧按片段内进度(0=头、1=尾)存。只改出入点不动它们,等于把整条动画压缩 / 拉伸到新的长度里:
+    剪掉后一半,原来在第 5 秒的峰值跑到了第 2.5 秒。和切分同一个做法(_slice_keyframes):剪短时取原动画
+    在新端点处的值,拉长时端点钉住(动画在原来的地方结束)。
+
+    淡入淡出不动:它们是相对片段首尾的秒数,修剪之后照样在新的首尾淡 —— 这一点和切分不同
+    (切分出的中间段不该在切口淡)。没有可动的,交回原值(改动日志不记没变的字段)。
+    """
+    transform = _sliced_transform(clip.transform, clip.src_in, clip.src_out, new_in, new_out)
+    effects = clip.effects
+    if isinstance(effects, dict):
+        gain = _slice_keyframes(effects.get("gain_keyframes"), ("gain",), clip.src_in, clip.src_out, new_in, new_out)
+        if gain is not None:
+            effects = {**effects, "gain_keyframes": gain}
+    return {"transform": transform, "effects": effects}
 
 
 def _source_duration(clip: Clip) -> float | None:
