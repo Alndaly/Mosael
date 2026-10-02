@@ -1,6 +1,6 @@
 import React from "react";
 import { useQueries } from "@tanstack/react-query";
-import { AudioLines, AudioWaveform, BetweenHorizontalStart, Camera, ChevronDown, ChevronUp, CircleHelp, Copy, Eye, EyeOff, Film, Lock, LockOpen, Magnet, Mic, Minus, MousePointer2, Plus, Replace, Scissors, Slice, Split, Trash2, Type, Volume2, VolumeX, Waves, X } from "lucide-react";
+import { AudioLines, AudioWaveform, BetweenHorizontalStart, Camera, ChevronDown, ChevronUp, CircleHelp, Copy, Eye, EyeOff, Film, Lock, LockOpen, Magnet, Maximize2, Mic, Minus, MousePointer2, Plus, Replace, Scissors, Slice, Split, Trash2, Type, Volume2, VolumeX, Waves, X } from "lucide-react";
 
 import { fetchWaveform, type Asset, type Clip, type Sequence, type Track, type TrackStatePatch, type WaveformData } from "@/api/client";
 import { useI18n } from "@/app/preferences";
@@ -27,7 +27,8 @@ import {
   trackEdgeTimes,
 } from "@/domain/timeline/geometry";
 import { downsamplePeaks, slicePeaks } from "@/domain/timeline/waveform";
-import { MIN_PX_PER_SECOND, markedRange, useEditorStore } from "@/features/editor/editorStore";
+import { MAX_PX_PER_SECOND, MIN_PX_PER_SECOND, markedRange, useEditorStore } from "@/features/editor/editorStore";
+import { isEditorKeyTarget } from "@/features/editor/editorKeys";
 import { livePlayhead } from "@/features/editor/playback/playbackClock";
 import { TimelineClip } from "./TimelineClip";
 import { kindHasSound } from "@/lib/assetKinds";
@@ -352,11 +353,22 @@ export function Timeline({
   const duration = sequenceDuration(allClips) + 10;
   const contentWidth = timeToPx(duration, pxPerSecond) + 120;
 
-  // Zoom out can't go below "the whole timeline fits the viewport" — past that is dead space.
-  const applyZoom = (factor: number) => {
-    const viewport = hscrollRef.current?.clientWidth ?? 0;
-    const fitPx = viewport > 0 ? Math.max(MIN_PX_PER_SECOND, (viewport - 130) / Math.max(duration, 1)) : MIN_PX_PER_SECOND;
-    setPxPerSecond(Math.max(fitPx, pxPerSecond * factor));
+  // 缩放要有锚:放大缩小后,锚点(播放头,或滚轮缩放时的指针)停在屏幕上原来的位置。此前只改
+  // 比例尺、不动滚动位置 —— 放大一下,正看着的那一段就被推出视口,得自己去找。
+  // 新的滚动位置要等这次缩放渲染出更宽的画布之后才能写进去,先存着,由下面的 layout effect 落地。
+  const pendingScrollRef = React.useRef<number | null>(null);
+  React.useLayoutEffect(() => {
+    const el = hscrollRef.current;
+    if (el && pendingScrollRef.current !== null) el.scrollLeft = Math.max(0, pendingScrollRef.current);
+    pendingScrollRef.current = null;
+  }, [pxPerSecond]);
+  /** 锚在播放头上:播放头在视口里就停在原处,不在视口里就把它放到视口正中。 */
+  const playheadAnchor = (): { time: number; screenX: number } => {
+    const el = hscrollRef.current;
+    const time = useEditorStore.getState().playhead;
+    const width = el?.clientWidth ?? 0;
+    const screenX = timeToPx(time, pxPerSecond) - (el?.scrollLeft ?? 0);
+    return { time, screenX: screenX >= 0 && screenX <= width ? screenX : width / 2 };
   };
   // 视口换算成时间窗:片段与刻度只画落在 [windowStart, windowEnd] 里的。
   const viewportWidth = viewport.width || FALLBACK_VIEWPORT_PX;
@@ -365,6 +377,42 @@ export function Timeline({
   const windowEnd = pxToTime(viewport.left + viewportWidth + bufferPx, pxPerSecond);
   const ticks = rulerTicks(windowStart, Math.min(duration, windowEnd), pxPerSecond);
   const inWindow = (start: number, end: number) => end >= windowStart && start <= windowEnd;
+  const zoomAround = (nextPxPerSecond: number, anchor: { time: number; screenX: number }) => {
+    // Zoom out can't go below "the whole timeline fits the viewport" — past that is dead space.
+    const viewportPx = hscrollRef.current?.clientWidth ?? 0;
+    const floor = viewportPx > 0 ? Math.max(MIN_PX_PER_SECOND, (viewportPx - 130) / Math.max(duration, 1)) : MIN_PX_PER_SECOND;
+    const next = Math.min(MAX_PX_PER_SECOND, Math.max(floor, nextPxPerSecond));
+    pendingScrollRef.current = timeToPx(anchor.time, next) - anchor.screenX;
+    setPxPerSecond(next);
+  };
+  const applyZoom = (factor: number) => zoomAround(pxPerSecond * factor, playheadAnchor());
+  /** 适配窗口:整条时间线正好铺满视口,回到开头。 */
+  const zoomToFit = () => {
+    const viewportPx = hscrollRef.current?.clientWidth ?? 0;
+    if (viewportPx <= 0) return;
+    const fit = (viewportPx - 40) / Math.max(sequenceDuration(allClips), 1);
+    pendingScrollRef.current = 0;
+    setPxPerSecond(Math.min(MAX_PX_PER_SECOND, Math.max(MIN_PX_PER_SECOND, fit)));
+  };
+  // 缩放快捷键:+ / -(以播放头为锚)、⇧Z 适配窗口。只接冲着剪辑页来的按键(isEditorKeyTarget)。
+  // 处理函数每次渲染都换新(它们读当前比例尺),经 ref 调,监听只挂一次。
+  const zoomKeysRef = React.useRef({ applyZoom, zoomToFit });
+  zoomKeysRef.current = { applyZoom, zoomToFit };
+  const rootRef = React.useRef<HTMLDivElement | null>(null);
+  React.useEffect(
+    () =>
+      listenKeys(window, (event) => {
+        if (event.metaKey || event.ctrlKey || event.altKey) return;
+        const root = rootRef.current?.closest("[data-editor-root]") ?? rootRef.current;
+        if (!isEditorKeyTarget(event, root)) return;
+        if (event.key === "=" || event.key === "+") zoomKeysRef.current.applyZoom(1.3);
+        else if (event.key === "-" || event.key === "_") zoomKeysRef.current.applyZoom(1 / 1.3);
+        else if (event.shiftKey && event.code === "KeyZ") zoomKeysRef.current.zoomToFit();
+        else return;
+        event.preventDefault();
+      }),
+    [],
+  );
   const tickStep = rulerStep(pxPerSecond);
 
   // 指针能放下的每一个时刻(标尺、修剪、刀片、素材落点)都吸到序列的帧上:落在两帧之间的点
@@ -771,12 +819,16 @@ export function Timeline({
   const handleWheel = (event: React.WheelEvent) => {
     if (event.ctrlKey || event.metaKey) {
       event.preventDefault();
-      applyZoom(event.deltaY < 0 ? 1.15 : 1 / 1.15);
+      // 滚轮缩放以指针为锚:指针下的那一刻留在指针下。
+      const el = hscrollRef.current;
+      const screenX = event.clientX - (el?.getBoundingClientRect().left ?? 0);
+      const time = pxToTime((el?.scrollLeft ?? 0) + screenX, pxPerSecond);
+      zoomAround(pxPerSecond * (event.deltaY < 0 ? 1.15 : 1 / 1.15), { time, screenX });
     }
   };
 
   return (
-    <div className="grid h-full grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)_auto]" data-tool={tool} onWheel={handleWheel}>
+    <div ref={rootRef} className="grid h-full grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)_auto]" data-tool={tool} onWheel={handleWheel}>
       <div className="editor-timeline-toolbar flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b border-divider bg-workspace-panel px-3 py-1.5">
         <div className="flex min-w-0 flex-nowrap items-center gap-2">
           <div className="inline-flex h-8 items-stretch gap-0.5 whitespace-nowrap" role="group" aria-label={t("editTools")}>
@@ -938,7 +990,7 @@ export function Timeline({
                 <Minus size={14} />
               </Button>
             </TooltipTrigger>
-            <TooltipContent>{t("zoomOut")}</TooltipContent>
+            <TooltipContent className="flex items-center gap-2">{t("zoomOut")}<Kbd>-</Kbd></TooltipContent>
           </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>
@@ -946,7 +998,15 @@ export function Timeline({
                 <Plus size={14} />
               </Button>
             </TooltipTrigger>
-            <TooltipContent>{t("zoomIn")}</TooltipContent>
+            <TooltipContent className="flex items-center gap-2">{t("zoomIn")}<Kbd>+</Kbd></TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="ghost" size="icon-sm" onClick={zoomToFit} aria-label={t("zoomToFit")}>
+                <Maximize2 size={14} />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent className="flex items-center gap-2">{t("zoomToFit")}<Kbd>⇧Z</Kbd></TooltipContent>
           </Tooltip>
           <Popover open={helpOpen} onOpenChange={setHelpOpen}>
             <PopoverTrigger asChild>
@@ -1092,6 +1152,7 @@ export function Timeline({
         <div
           className="min-w-0 overflow-auto"
           ref={hscrollRef}
+          data-testid="timeline-scroll"
           onScroll={(event) => {
             // Mirror vertical scroll to the labels column so track rows stay aligned.
             if (labelsRef.current) labelsRef.current.scrollTop = event.currentTarget.scrollTop;

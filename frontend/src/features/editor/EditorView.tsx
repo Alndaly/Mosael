@@ -982,7 +982,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
       onDragEnd={onAssetDragStop}
       onDragCancel={onAssetDragStop}
     >
-    <div ref={measureWorkbench} className="editor-workbench flex h-full min-h-0 flex-col overflow-hidden bg-workspace">
+    <div ref={measureWorkbench} data-editor-root="" className="editor-workbench flex h-full min-h-0 flex-col overflow-hidden bg-workspace">
       {/* 四周同一个内边距:32px 的控件 + 上下各 8px 正好是 48px 的条高,左右也是 8px ——
           此前左右 16px(右边导出按钮再自带 8px 外边距)、上下 8px,两端看着比上下空一截。 */}
       <div role="toolbar" aria-label={t("editTools")} className="editor-commandbar flex min-h-12 shrink-0 flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b border-divider p-2">

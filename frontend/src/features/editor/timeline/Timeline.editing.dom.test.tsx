@@ -239,3 +239,59 @@ describe("修剪中断", () => {
     });
   }
 });
+
+describe("缩放", () => {
+  /** jsdom 没有版面:给滚动容器一个 800px 宽的视口。 */
+  function viewport(width = 800): HTMLElement {
+    const scroller = screen.getByTestId("timeline-scroll");
+    Object.defineProperty(scroller, "clientWidth", { configurable: true, value: width });
+    return scroller;
+  }
+  const long = () => [track("V1", "video", 0, [clip("c1", "V1", 0, 0, 60)])];
+
+  it("+ / - 放大缩小,播放头停在屏幕上原来的位置", () => {
+    renderTimeline(long());
+    const scroller = viewport();
+    act(() => useEditorStore.getState().setPlayhead(10));
+    scroller.scrollLeft = 300; // 播放头在屏幕 x = 400 - 300 = 100
+    fireEvent.keyDown(document.body, { key: "=", code: "Equal" });
+    const zoomed = useEditorStore.getState().pxPerSecond;
+    expect(zoomed).toBeCloseTo(52);
+    expect(10 * zoomed - scroller.scrollLeft).toBeCloseTo(100);
+    fireEvent.keyDown(document.body, { key: "-", code: "Minus" });
+    expect(useEditorStore.getState().pxPerSecond).toBeCloseTo(40);
+    expect(10 * 40 - scroller.scrollLeft).toBeCloseTo(100);
+  });
+
+  it("工具栏的放大键同样以播放头为锚", () => {
+    renderTimeline(long());
+    const scroller = viewport();
+    act(() => useEditorStore.getState().setPlayhead(20));
+    scroller.scrollLeft = 500; // 屏幕 x = 800 - 500 = 300
+    fireEvent.click(screen.getByRole("button", { name: "zoomIn" }));
+    expect(20 * useEditorStore.getState().pxPerSecond - scroller.scrollLeft).toBeCloseTo(300);
+  });
+
+  it("⌘ + 滚轮以指针为锚", () => {
+    renderTimeline(long());
+    const scroller = viewport();
+    scroller.scrollLeft = 200;
+    // 指针在屏幕 x = 120 → 时间 (200 + 120) / 40 = 8s。
+    fireEvent.wheel(scroller, { deltaY: -100, ctrlKey: true, clientX: 120 });
+    expect(8 * useEditorStore.getState().pxPerSecond - scroller.scrollLeft).toBeCloseTo(120);
+  });
+
+  it("适配窗口(⇧Z 或工具栏):整条时间线正好铺满视口,回到开头", () => {
+    renderTimeline(long());
+    const scroller = viewport();
+    scroller.scrollLeft = 900;
+    fireEvent.keyDown(document.body, { key: "Z", code: "KeyZ", shiftKey: true });
+    const fit = useEditorStore.getState().pxPerSecond;
+    expect(60 * fit).toBeLessThanOrEqual(800);
+    expect(60 * fit).toBeGreaterThan(700);
+    expect(scroller.scrollLeft).toBe(0);
+    act(() => useEditorStore.getState().setPxPerSecond(200));
+    fireEvent.click(screen.getByRole("button", { name: "zoomToFit" }));
+    expect(useEditorStore.getState().pxPerSecond).toBeCloseTo(fit);
+  });
+});
