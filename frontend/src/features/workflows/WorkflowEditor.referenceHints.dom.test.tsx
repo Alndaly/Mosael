@@ -55,7 +55,19 @@ beforeAll(() => {
 });
 
 const NODE_TYPES = [
-  { type: "start", label: "start", description: "", category: "", config: { params: { type: "object", editor: "map" } }, outputs: ["*params"], output_types: {}, output_labels: {} },
+  {
+    type: "start",
+    label: "start",
+    description: "",
+    category: "",
+    config: {
+      params: { type: "object", editor: "start_params", required_list: "required_params" },
+      required_params: { type: "list", edited_by: "params" },
+    },
+    outputs: ["*params"],
+    output_types: {},
+    output_labels: {},
+  },
   { type: "llm", label: "llm", description: "", category: "", config: { prompt: { type: "template", required: true } }, outputs: ["text"], output_types: { text: "text" }, output_labels: {} },
   { type: "template", label: "template", description: "", category: "", config: { template: { type: "template", required: true } }, outputs: ["text"], output_types: { text: "text" }, output_labels: {} },
   { type: "loop_foreach", label: "loop", description: "", category: "", config: { items: { type: "template" }, body: { type: "graph" }, output: { type: "template" } }, outputs: ["results"], output_types: {}, output_labels: {}, body_scope: { loop: ["item", "index"], input: ["*inputs"] } },
@@ -124,7 +136,7 @@ it("主流程:引用画成提示线(已有真连线的不画),从输出口出发
   await renderEditor(GRAPH);
   await waitFor(() => expect(hints().size).toBe(2));
   expect([...hints().values()].map((edge) => [edge.source, edge.sourceHandle, edge.target, edge.className])).toEqual([
-    ["start", undefined, "set", canvasEdgeClass("ref", { hint: true })],
+    ["start", "out:topic", "set", canvasEdgeClass("ref", { hint: true })],
     ["props", "out:text", "set", canvasEdgeClass("ref-never-runs", { hint: true })],
   ]);
   for (const edge of hints().values()) {
@@ -136,6 +148,34 @@ it("主流程:引用画成提示线(已有真连线的不画),从输出口出发
   expect(flow.props?.edgeTypes?.[REFERENCE_HINT_EDGE_TYPE]).toBeDefined();
   //: 和就绪检查对上:被引用的那个挂的是 error(unwired-referenced),不是黄色提醒。
   expect(within(nodeEl("props")).getByLabelText("wfIssueUnwiredReferenced")).toBeTruthy();
+});
+
+/** 开始节点卡片上的参数输出口(不算顶上那个接进流程的控制出口)。 */
+function startPorts(): string[] {
+  return [...nodeEl("start").querySelectorAll<HTMLElement>(".react-flow__handle.source")]
+    .map((el) => el.dataset.handleid ?? "")
+    .filter((id) => id.startsWith("out:"));
+}
+
+it("开始节点每个参数一个输出口,引用从那个参数的口出发;改名、加一行时口跟着变", async () => {
+  await renderEditor(GRAPH);
+  await waitFor(() => expect(startPorts()).toEqual(["out:topic"]));
+  //: 顶上那个控制出口还在 —— 接进流程的控制边走它。
+  expect(nodeEl("start").querySelectorAll(".react-flow__handle.source:not([data-handleid])")).toHaveLength(1);
+  expect(hints().get("ref-hint:start>out:topic>set")?.sourceHandle).toBe("out:topic");
+
+  fireEvent.click(nodeEl("start"));
+  const name = await screen.findByDisplayValue("topic");
+  fireEvent.change(name, { target: { value: "theme" } });
+  await waitFor(() => expect(startPorts()).toEqual(["out:theme"]));
+  //: `set` 里写的还是 {{start.topic}}:开始节点已经没有这个参数、也就没有这个口,线退回从节点出发。
+  await waitFor(() => expect(hints().get("ref-hint:start>>set")?.sourceHandle).toBeUndefined());
+
+  fireEvent.click(screen.getByRole("button", { name: "wfMapAdd" }));
+  const added = screen.getAllByLabelText("wfStartParamName").at(-1)!;
+  fireEvent.change(added, { target: { value: "topic" } });
+  await waitFor(() => expect(startPorts()).toEqual(["out:theme", "out:topic"]));
+  await waitFor(() => expect(hints().get("ref-hint:start>out:topic>set")?.sourceHandle).toBe("out:topic"));
 });
 
 it("连进流程之后:线变回淡色,角标消失;再接上真连线,那根提示线就不画了", async () => {

@@ -71,6 +71,28 @@ describe("workflow canvas model", () => {
     });
   });
 
+  it("开始节点有几个参数就有几个输出口;从参数拉出的数据边落在那个参数的口上", () => {
+    //: 开始节点声明的是 `*params`(「params 里的每个键」)。此前通配一律滤掉,卡片上只有顶上那一个控制出口,
+    //: 引用 `{{start.x}}` 的线、从参数拉出的数据边全都挤在它上面。
+    const registry = new Map([
+      ["start", meta("start", { params: { type: "object" } }, ["*params"])],
+      ["llm", meta("llm", { prompt: { type: "template" } }, ["text"])],
+    ]);
+    const graph: WorkflowGraph = {
+      nodes: [
+        { id: "start", type: "start", config: { params: { account_link: "", post_count: 30 } } },
+        { id: "n1", type: "llm", inputs: ["prompt"], config: { prompt: "" } },
+      ],
+      edges: [{ id: "d1", source: "start", target: "n1", kind: "data", source_output: "post_count", target_input: "prompt" }],
+    };
+
+    const [start] = toWorkflowFlowNodes(graph, registry);
+    expect(start.data).toMatchObject({ outputs: ["account_link", "post_count"] });
+    expect(toWorkflowFlowEdges(graph, translate, registry)[0]).toMatchObject({ sourceHandle: "out:post_count", targetHandle: "in:prompt" });
+    //: 没有参数的开始节点照旧没有输出口(只有控制出口)。
+    expect(toWorkflowFlowNodes({ nodes: [{ id: "start", type: "start", config: {} }], edges: [] }, registry)[0].data).toMatchObject({ outputs: [] });
+  });
+
   it("marks a data edge when declared source and target types conflict", () => {
     const registry = new Map([
       ["source", { ...meta("source", {}, ["text"]), output_types: { text: "text" } }],

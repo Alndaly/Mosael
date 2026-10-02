@@ -43,6 +43,14 @@ if (typeof document !== "undefined") {
   Range.prototype.getClientRects ??= () => ({ length: 0, item: () => null, [Symbol.iterator]: [][Symbol.iterator] }) as unknown as DOMRectList;
   Range.prototype.getBoundingClientRect ??= () => new DOMRect(0, 0, 0, 0);
 
+  // jsdom 没有 DOMMatrixReadOnly。React Flow 重新量一个节点的接点(useUpdateNodeInternals)时拿它从画布的
+  // transform 读缩放 —— 工作流节点的接点一变(开始节点的参数改名、加一行)就会量,那一帧在 jsdom 里报成
+  // 「unhandled error」让整轮测试失败。给单位矩阵即可:jsdom 没有版面,量出来本来都是 0。
+  window.DOMMatrixReadOnly ??= class {
+    a = 1; b = 0; c = 0; d = 1; e = 0; f = 0;
+    m11 = 1; m12 = 0; m21 = 0; m22 = 1; m41 = 0; m42 = 0;
+  } as unknown as typeof DOMMatrixReadOnly;
+
   // jsdom 30.1 的焦点回归:获得焦点的元素被移出 DOM 后,它把「上一个焦点」记成 document;
   // 下一次 focus() 时就对 document 派发 blur,并按规则转发到 window。浏览器不会这样 —— 焦点
   // 在同一个文档里移动时,文档同时在新旧两条焦点链上,规范里它不失焦。

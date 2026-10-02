@@ -11,6 +11,7 @@ import {
   typesCompatible,
   type NodeIssue,
 } from "@/features/workflows/analyze";
+import { declaredFieldNames } from "@/features/workflows/scope";
 import type { WorkflowNodeData } from "@/features/workflows/WorkflowNode";
 import type { DataType } from "@/features/nodeForms/fieldTypes";
 
@@ -74,8 +75,10 @@ export function toWorkflowFlowNodes(graph: WorkflowGraph, registry: NodeRegistry
       nodeType: node.type,
       typeLabel: registry.get(node.type)?.label ?? node.type,
       inputs: node.inputs ?? [],
-      // Wildcard outputs (for example start.*params) are references, not concrete handles.
-      outputs: (registry.get(node.type)?.outputs ?? []).filter((output) => !output.startsWith("*")),
+      //: 通配的输出按这份配置展开:开始节点的 `*params` 是「params 里的每个键」—— 有几个参数就有几个输出口,
+      //: 引用 `{{start.x}}` 的线、从参数拉出的数据边(`source_output` 就是参数名)各落在自己的口上。
+      //: 此前通配一律滤掉,开始节点只剩顶上那一个控制出口,所有参数的线都挤在它上面。
+      outputs: declaredFieldNames(registry.get(node.type)?.outputs ?? [], node.config as Record<string, unknown> | undefined),
       configSummary: workflowConfigSummary(node),
     } satisfies WorkflowNodeData,
     deletable: true,

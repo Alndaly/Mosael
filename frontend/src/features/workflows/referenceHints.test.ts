@@ -61,14 +61,14 @@ describe("引用 → 提示线", () => {
     expect(new Set(hints.map((hint) => hint.id)).size).toBe(hints.length);
   });
 
-  it("找不到具体口就从节点出发:开始节点的参数(通配)、条件节点(只画真假出口)、没声明的输出", () => {
+  it("找不到具体口就从节点出发:条件节点(只画真假出口)、没声明的输出、开始节点没有的参数", () => {
     const hints = referenceHints(
       graph(
         [
           start,
-          { id: "c", type: "condition", config: { left: "{{start.topic}}" } },
+          { id: "c", type: "condition", config: { left: "{{start.nope}}" } },
           plan,
-          { id: "t", type: "template", config: { template: "{{start.topic}} {{c.result}} {{plan.nope}}" } },
+          { id: "t", type: "template", config: { template: "{{start.nope}} {{c.result}} {{plan.nope}}" } },
         ],
         [
           { id: "e1", source: "start", target: "c" },
@@ -82,8 +82,49 @@ describe("引用 → 提示线", () => {
     expect(hints.map((hint) => [hint.source, hint.sourceHandle, hint.target])).toEqual([
       ["start", null, "t"],
       ["c", null, "t"],
-      //: plan → t 已经有真连线,{{plan.nope}} 不再画。
+      //: plan → t 已经有真连线,{{plan.nope}} 不再画;start → c 也有,而 nope 不是参数、没有口,同样不画。
     ]);
+  });
+
+  it("开始节点的参数各有一个口:引用从那个参数的口出发;接进流程的控制边另走顶上的控制出口,所以照画", () => {
+    //: 控制边只说先后,而开始节点永远最先跑 —— 它说不出「哪个参数流到哪」。参数线才说得出,哪怕两头已有那条控制边。
+    const hints = referenceHints(
+      graph(
+        [
+          { id: "start", type: "start", config: { params: { topic: "猫", style: "", tone: "" } } },
+          { id: "plan", type: "llm", inputs: ["prompt"], config: { prompt: "", system: "" } },
+          { id: "t", type: "template", config: { template: "{{start.topic}} / {{start.style}} / {{start.tone}}" } },
+        ],
+        [
+          { id: "e1", source: "start", target: "plan" },
+          { id: "e2", source: "plan", target: "t" },
+          //: 已经从 style 口拉了一条数据边进 plan:同一个口到同一个节点不再叠一根提示线。
+          { id: "d1", source: "start", target: "plan", kind: "data", source_output: "style", target_input: "prompt" },
+        ],
+      ),
+      { get: (type) => (type === "llm" ? { ...TYPES.llm!, config: { prompt: { type: "template" }, system: { type: "template" } } } : TYPES[type]) },
+      top,
+    );
+    expect(hints.map((hint) => [hint.source, hint.sourceHandle, hint.target])).toEqual([
+      ["start", "out:topic", "t"],
+      ["start", "out:style", "t"],
+      ["start", "out:tone", "t"],
+    ]);
+    const plan = referenceHints(
+      graph(
+        [
+          { id: "start", type: "start", config: { params: { topic: "猫", style: "" } } },
+          { id: "plan", type: "llm", inputs: ["prompt"], config: { prompt: "", system: "{{start.style}} {{start.topic}}" } },
+        ],
+        [
+          { id: "e1", source: "start", target: "plan" },
+          { id: "d1", source: "start", target: "plan", kind: "data", source_output: "style", target_input: "prompt" },
+        ],
+      ),
+      { get: (type) => (type === "llm" ? { ...TYPES.llm!, config: { prompt: { type: "template" }, system: { type: "template" } } } : TYPES[type]) },
+      top,
+    );
+    expect(plan.map((hint) => [hint.source, hint.sourceHandle, hint.target])).toEqual([["start", "out:topic", "plan"]]);
   });
 
   it("两头之间已有真连线(控制或数据)的不重复画;反方向的连线不算", () => {
@@ -138,6 +179,7 @@ describe("引用 → 提示线", () => {
     );
     expect(hints.map((hint) => [hint.source, hint.sourceHandle, hint.target, hint.refs])).toEqual([
       ["plan", "out:json", "loop", ["{{plan.json.shots}}"]],
+      ["start", "out:topic", "loop", ["{{start.topic}}"]],
     ]);
   });
 
@@ -181,6 +223,7 @@ describe("引用 → 提示线", () => {
     );
     const hints = referenceHints(g, registry, top);
     expect(hints.map((hint) => [hint.source, hint.target, hint.neverRuns])).toEqual([
+      ["start", "c", false],
       ["props", "set", true],
       ["voice", "set", false],
       ["props", "stray", false],

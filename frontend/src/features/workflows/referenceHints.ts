@@ -6,6 +6,7 @@ import type { MessageKey } from "@/app/messages";
 import type { EdgeShape } from "@/components/app/canvasEdgeShape";
 import { canvasEdgeClass } from "@/components/app/canvasEdges";
 import { layerReferences, neverRunReferences, type RegistryLike } from "@/features/workflows/analyze";
+import { declaredFieldNames } from "@/features/workflows/scope";
 
 /**
  * 画布上的**引用提示线**:每一处 `{{A.x}}`,从 A 的 x 口(找不到具体口就从节点)到引用它的节点画一根淡点线。
@@ -15,7 +16,9 @@ import { layerReferences, neverRunReferences, type RegistryLike } from "@/featur
  * 只靠一句引用挂着、没接进流程,从模板 v8 到 v11 一次都没跑过。画出来,谁等谁、谁根本不会跑,看图就知道。
  *
  * 它**不是连线**:不在图里(只在显示时叠上去),不能选中、删除、拖去重连,也不参与连线校验(连线校验读的是图);
- * 两头之间已经有真连线(同一个方向)的不再画。被引用的节点一定不会跑、而引用方会跑时用错误色 —— 和就绪检查的
+ * 两头之间已经有真连线(同一个方向)的不再画 —— 开始节点的参数除外:开始节点永远最先跑,它连出去的控制边(走顶上的
+ * 控制出口)说不出「哪个参数流到哪」,参数线从那个参数自己的口出发,才说得出;只有从同一个口拉到同一个节点的数据边
+ * 才算画过了。被引用的节点一定不会跑、而引用方会跑时用错误色 —— 和就绪检查的
  * unwired-referenced、后端运行前拦的那一条是同一对(analyze.neverRunReferences)。长什么样见 components/app/canvasEdges。
  */
 
@@ -39,7 +42,7 @@ export interface HintRegistry extends RegistryLike {
 export interface ReferenceHint {
   id: string;
   source: string;
-  /** A 的输出口(`out:x`);找不到具体口(开始节点的参数、条件节点、没声明的输出)就是 null —— 从节点的出口出发。 */
+  /** A 的输出口(`out:x`);找不到具体口(条件节点、没声明的输出、开始节点没有的参数)就是 null —— 从节点的出口出发。 */
   sourceHandle: string | null;
   target: string;
   /** 这一根线代表的引用写法(同一个口被引用几处只画一根)。 */
@@ -49,12 +52,14 @@ export interface ReferenceHint {
 }
 
 /**
- * A 的 `output` 在卡片上有没有自己的口:声明里有它、不是通配(开始节点的 `*params`),而且这个节点画输出口 ——
- * 条件节点只画真 / 假两路出口(见 WorkflowNode 的 isCondition)。
+ * A 的 `output` 在卡片上有没有自己的口:声明里有它(通配按 A 的配置展开 —— 开始节点的 `*params` 是它的每个参数,
+ * 和卡片画口的取法同一份,见 workflowCanvasModel),而且这个节点画输出口 —— 条件节点只画真 / 假两路出口
+ * (见 WorkflowNode 的 isCondition)。
  */
-function outputHandle(registry: HintRegistry, nodeType: string, output: string): string | null {
-  if (!output || output.startsWith("*") || nodeType === "condition") return null;
-  return (registry.get(nodeType)?.outputs ?? []).includes(output) ? `out:${output}` : null;
+function outputHandle(registry: HintRegistry, node: WorkflowGraph["nodes"][number], output: string): string | null {
+  if (!output || node.type === "condition") return null;
+  const outputs = declaredFieldNames(registry.get(node.type)?.outputs ?? [], node.config as Record<string, unknown> | undefined);
+  return outputs.includes(output) ? `out:${output}` : null;
 }
 
 const pair = (source: string, target: string) => JSON.stringify([source, target]);
@@ -67,6 +72,10 @@ export function referenceHints(
 ): ReferenceHint[] {
   const nodes = new Map(graph.nodes.map((node) => [node.id, node]));
   const wired = new Set(graph.edges.map((edge) => pair(edge.source, edge.target)));
+  //: 开始节点那边按口算:同一个参数口已经有一条数据边拉到这个节点,才算画过了(见文件头)。
+  const wiredFromPort = new Set(
+    graph.edges.filter((edge) => edge.kind === "data" && edge.source_output).map((edge) => JSON.stringify([edge.source, `out:${edge.source_output}`, edge.target])),
+  );
   const neverRuns = new Set(
     neverRunReferences(graph, registry, { entryIsRoot }).flatMap((one) =>
       one.referencedBy.map((target) => pair(one.source, target)),
@@ -78,8 +87,13 @@ export function referenceHints(
     if (node.type === "start") continue;
     for (const { ref, sourceId } of layerReferences(node, registry)) {
       const source = nodes.get(sourceId);
-      if (!source || sourceId === node.id || wired.has(pair(sourceId, node.id))) continue;
-      const handle = outputHandle(registry, source.type, ref.slice(2, -2).split(".")[1] ?? "");
+      if (!source || sourceId === node.id) continue;
+      const handle = outputHandle(registry, source, ref.slice(2, -2).split(".")[1] ?? "");
+      const drawn =
+        source.type === "start" && handle
+          ? wiredFromPort.has(JSON.stringify([sourceId, handle, node.id]))
+          : wired.has(pair(sourceId, node.id));
+      if (drawn) continue;
       const id = `${REFERENCE_HINT_ID_PREFIX}${sourceId}>${handle ?? ""}>${node.id}`;
       const hint = hints.get(id) ?? {
         id,

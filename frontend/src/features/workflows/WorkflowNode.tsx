@@ -1,6 +1,6 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Handle, Position, type NodeProps } from "@xyflow/react";
+import { Handle, Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react";
 import {
   AlertTriangle,
   AudioLines,
@@ -120,9 +120,20 @@ function NodeResultPreview({ items, roundedBottom }: { items: AssetOutput[]; rou
   );
 }
 
-function WorkflowNode({ data, selected }: NodeProps) {
+function WorkflowNode({ id, data, selected }: NodeProps) {
   const t = useI18n();
   const d = data as WorkflowNodeData;
+  //: **接点变了要告诉 React Flow 重新量。** 它只在卡片尺寸变了时自己量接点:开始节点的参数改个名,卡片不一定变大小,
+  //: 新名字的口它不认识,从那个口出发的线就画不出来(React Flow 报 008,线直接消失)。
+  const updateNodeInternals = useUpdateNodeInternals();
+  const handleKey = [...(d.inputs ?? []).map((key) => `in:${key}`), ...(d.outputs ?? []).map((key) => `out:${key}`)].join("\n");
+  const measured = React.useRef(handleKey);
+  React.useEffect(() => {
+    //: 挂载时那一次 React Flow 自己会量,不重复。
+    if (measured.current === handleKey) return;
+    measured.current = handleKey;
+    updateNodeInternals(id);
+  }, [id, handleKey, updateNodeInternals]);
   // 素材节点的图标要跟着**这份素材本身**走:一张图和一段视频不该长同一个样子。
   // 取不到就退回类型图标 —— 素材可能已被删除,那是正常路径。
   const configAsset = useQuery({

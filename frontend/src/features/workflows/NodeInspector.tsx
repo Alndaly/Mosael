@@ -286,10 +286,10 @@ export function NodeInspector({
     return seen;
   }, [graph.edges, node.id]);
   // 可绑定来源:任意非后代、非自身节点的具体输出(数据边本身即建立依赖/排序)。
+  //: 通配按那个节点的配置展开 —— 开始节点的每个参数各是一个口(和画布上画口的取法同一份,见 workflowCanvasModel)。
   const upstreamOptions = graph.nodes.flatMap((source) => {
     if (source.id === node.id || descendants.has(source.id)) return [];
-    return (registry.get(source.type)?.outputs ?? [])
-      .filter((output) => !output.startsWith("*"))
+    return declaredFieldNames(registry.get(source.type)?.outputs ?? [], source.config as Record<string, unknown> | undefined)
       .map((output) => ({ ref: `{{${source.id}.${output}}}`, sourceId: source.id, output }));
   });
   const dataEdgeFor = (key: string) =>
