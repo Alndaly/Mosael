@@ -16,7 +16,7 @@ from app.domain.assets import use_cases
 from app.domain.transcripts.operations import SegmentIn, TokenIn, TranscriptDomainError
 from app.media.image_preview import browser_compatible_image
 from app.media.paths import resolve_key
-from app.media.proxy import proxy_path
+from app.media.proxy import audio_proxy_path, proxy_path
 from app.media.thumbnails import THUMBNAIL_MEDIA_TYPE, generate_thumbnail, thumbnail_path
 from app.media.waveform import waveform_path
 
@@ -414,6 +414,19 @@ def get_asset_proxy(asset_id: str, db: DbSession, user: CurrentUser) -> FileResp
     if not proxy.is_file():
         raise HTTPException(status_code=404, detail="Proxy not available")
     return FileResponse(proxy, media_type="video/mp4")
+
+
+@router.get("/assets/{asset_id}/audio-proxy")
+def get_asset_audio_proxy(asset_id: str, db: DbSession, user: CurrentUser) -> FileResponse:
+    """预览混音器解的音频代理(AAC 48k,faststart,见 media/proxy.py)。
+
+    按 Range 取:前端先读开头的样本表,再只取要播的那几段样本的字节,不把整份下下来。
+    """
+    asset = use_cases.readable_file(db, user, asset_id)
+    proxy = audio_proxy_path(resolve_key(asset.file_key).parent)
+    if not proxy.is_file():
+        raise HTTPException(status_code=404, detail="Audio proxy not available")
+    return FileResponse(proxy, media_type="audio/mp4")
 
 
 

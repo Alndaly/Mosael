@@ -38,7 +38,11 @@ def test_启动补齐扫描跳过failed_只救孤儿(monkeypatch) -> None:
 
     queued: list[str] = []
     monkeypatch.setattr(proxies.settings, "generate_proxies", True)
-    monkeypatch.setattr(proxies, "start_proxy_job", lambda db, asset, **kw: queued.append(asset.id) or object())
+    # 只看**画面**代理排没排:音频代理是另一样(见 test_audio_proxy),坏视频的声音照样该补。
+    monkeypatch.setattr(
+        proxies, "queue_proxy_job",
+        lambda db, asset, **kw: kw["video"] and (queued.append(asset.id) or object()),
+    )
     # 磁盘上都没有 proxy 文件(路径指向不存在的位置),全部走"要不要排队"的分支
     from app.core.db import SessionLocal
 

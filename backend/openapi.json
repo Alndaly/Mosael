@@ -3650,6 +3650,47 @@
         }
       }
     },
+    "/api/assets/{asset_id}/audio-proxy": {
+      "get": {
+        "tags": [
+          "assets"
+        ],
+        "summary": "Get Asset Audio Proxy",
+        "description": "预览混音器解的音频代理(AAC 48k,faststart,见 media/proxy.py)。\n\n按 Range 取:前端先读开头的样本表,再只取要播的那几段样本的字节,不把整份下下来。",
+        "operationId": "get_asset_audio_proxy_api_assets__asset_id__audio_proxy_get",
+        "parameters": [
+          {
+            "name": "asset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Asset Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/asr/models": {
       "get": {
         "tags": [
