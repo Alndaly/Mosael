@@ -881,7 +881,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfNode_export_sequence_desc": {"zh": "渲染导出一条时间线,产出新素材。", "en": "Render a timeline to a file and register it as a new asset."},
     "wfNode_export_sequence_resolution": {"zh": "成片的分辨率:原样,或把短边降到某一档(只降不升)", "en": "Output resolution: as is, or scale the short side down to a preset (never up)"},
     "wfNode_export_sequence_quality": {"zh": "画质:高画质文件大、紧凑文件小", "en": "Quality: high makes larger files, compact makes smaller ones"},
-    "wfNode_export_sequence_ai_label": {"zh": "成片里有数字人片段时,在片头和画面一角标明「AI 生成」。关掉也照样写入 AIGC 隐式标识", "en": "When the video contains digital-human clips, mark it “AI generated” at the start and in a corner. The implicit AIGC metadata is written either way"},
+    "wfNode_export_sequence_ai_label": {"zh": "成片里用了 AI 生成的素材(AI 视频、AI 图片、数字人、AI 配音)时,在片头和画面一角标明「AI 生成」。关掉也照样写入 AIGC 隐式标识", "en": "When the video uses AI-generated material (AI video, AI images, digital humans, AI voice-over), mark it “AI generated” at the start and in a corner. The implicit AIGC metadata is written either way"},
     "wfNode_image_grid_split": {"zh": "宫格切分", "en": "Split grid"},
     "wfNode_image_grid_split_board": {"zh": "把九宫格、四宫格这类拼图切成一张张单图", "en": "Cut a 3×3, 2×2 or other grid image into separate images."},
     "wfNode_image_grid_split_desc": {"zh": "把一张宫格拼图按行列等分切成几张单图,各自进素材库,原图不变。", "en": "Split a grid image into equal tiles by rows and columns; each tile becomes a new asset and the original stays as it is."},

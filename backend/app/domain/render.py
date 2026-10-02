@@ -225,10 +225,13 @@ def build_plan_for_sequence(db: Session, sequence_id: str, export_params: dict |
     width, height, fps, subtitle_style, crf, encode_preset = resolve_export_output(
         sequence.width, sequence.height, sequence.fps, _resolve_subtitle_font(db, sequence), export_params
     )
-    #: 数字人成片的标识(ADR 0028 §5):**隐式的总写**(不影响画面,没有关掉的理由),显式的按导出时的开关。
-    talking = digital_human_assets(db, {clip["asset_id"] for clip in base_clips + overlay_clips if clip["asset_id"]})
-    ai_label = tr("exportAiLabelText") if talking and (export_params or {}).get("ai_label", True) is not False else ""
-    metadata = aigc_metadata(sequence) if talking else ()
+    #: 成片里用了 AI 生成 / 合成的素材就加标识(ADR 0028 §5):**隐式的总写**(不影响画面,没有关掉的理由),
+    #: 显式的按导出时的开关。听得见的才算:静音的音频片段不进成片。
+    used = {clip["asset_id"] for clip in base_clips + overlay_clips if clip["asset_id"]}
+    used |= {clip["asset_id"] for clip in audio_clips if clip["asset_id"] and not clip.get("muted")}
+    generated = ai_generated_assets(db, used)
+    ai_label = tr("exportAiLabelText") if generated and (export_params or {}).get("ai_label", True) is not False else ""
+    metadata = aigc_metadata(sequence) if generated else ()
     return build_render_plan(
         sequence_id=sequence.id,
         revision=sequence.revision,
@@ -260,37 +263,34 @@ def build_plan_for_sequence(db: Session, sequence_id: str, export_params: dict |
 DIGITAL_HUMAN_SOURCE = "digital_human"
 
 
-def digital_human_assets(db: Session, asset_ids: set[str]) -> set[str]:
-    """这几份素材里哪些是**数字人**生成的:生成时有一段驱动音频(说话照片、对口型;模式见 ADR 0028 §1)。
+def ai_generated_assets(db: Session, asset_ids: set[str]) -> set[str]:
+    """这几份素材里哪些是 AI 生成 / 合成的 —— 成片里有它们,导出就加显式与隐式标识。
 
-    按生成记录认,不按模型名认 —— 以后接进来的数字人模型也是「脸 + 驱动音频」这个组合。驱动音频可能在提交时
-    换成了直链(`driving_audio_url`,见 generation.operations 的临时存储那一段),两处都看。
-    数字人片段拼接出来的素材没有生成记录,按来源 `DIGITAL_HUMAN_SOURCE` 认。
-    """
-    from app.ai.providers.contracts.generation import DRIVING_AUDIO
-    from app.db.models import GenerationJob
+    《人工智能生成合成内容标识办法》管的是 AI 生成合成的文本、图片、音频、视频,《深度合成管理规定》第十七条
+    点名了合成人声、仿声、人脸生成与操控 —— 不只数字人。此前只认数字人(生成时带驱动音频),文生 / 图生视频、
+    AI 图片、AI 配音进了成片什么标识都没有。
 
-    if not asset_ids:
-        return set()
-    found: set[str] = set(db.scalars(select(Asset.id).where(Asset.id.in_(asset_ids),
-                                                            Asset.source == DIGITAL_HUMAN_SOURCE)))
-    for row in db.scalars(select(GenerationJob).where(GenerationJob.result_asset_id.in_(asset_ids))):
-        request = row.request or {}
-        roles = {str((one or {}).get("role") or "") for one in request.get("source_assets") or []}
-        if DRIVING_AUDIO in roles or f"{DRIVING_AUDIO}_url" in (request.get("parameters") or {}):
-            found.add(str(row.result_asset_id))
-    return found
+    判据只有一份:素材登记时定下、顺着出处继承的 ai_generated(assets/lineage)。时间线上片段的「AI」角标、
+    导出对话框里那个开关出不出现,看的也是它 —— 两边各认各的,就会出现「角标亮着、成片没标」。"""
+    from app.domain.assets import lineage
+
+    return lineage.ai_generated_assets(db, asset_ids)
 
 
 def aigc_metadata(sequence: Sequence) -> tuple[tuple[str, str], ...]:
-    """数字人成片的隐式标识:写进 MP4 元数据的 AIGC 字段(《人工智能生成合成内容标识办法》第五条的字段名),
-    外加一句人读得懂的 comment。ProduceID 是这条时间线和它的修订 —— 能对回是哪一次导出。"""
+    """隐式标识:写进成片元数据的 AIGC 字段(《人工智能生成合成内容标识办法》第五条、GB 45438 的字段名)。
+    ProduceID 是这条时间线和它的修订 —— 能对回是哪一次导出。
+
+    **写在 MP4 的标准键里**(comment / description,iTunes 那组原子),不用自定义键:自定义键要
+    `use_metadata_tags` 写成 mdta,而平台转码、用户自己 `ffmpeg -c copy` 一遍,mdta 里认不出的键直接丢
+    (审查实测 remux 之后 AIGC 没了,只剩 comment)。comment 在 MP4、MOV 的 remux 和重编码后都还在 ——
+    机读的那份 JSON 就放在它里面,外层包一个 "AIGC" 键,字段名不丢;description 放一句人读得懂的话。"""
     import json
 
-    label = {"AIGC": {"Label": "1", "ContentProducer": "Mosael", "ProduceID": f"{sequence.id}:{sequence.revision}",
-                      "ReservedCode1": "", "ContentPropagator": "", "PropagateID": "", "ReservedCode2": ""}}
-    return (("AIGC", json.dumps(label["AIGC"], ensure_ascii=False, separators=(",", ":"))),
-            ("comment", "AIGC: contains AI-generated digital human content"))
+    label = {"Label": "1", "ContentProducer": "Mosael", "ProduceID": f"{sequence.id}:{sequence.revision}",
+             "ReservedCode1": "", "ContentPropagator": "", "PropagateID": "", "ReservedCode2": ""}
+    return (("comment", json.dumps({"AIGC": label}, ensure_ascii=False, separators=(",", ":"))),
+            ("description", "Contains AI-generated content (AIGC) · Mosael"))
 
 
 def _resolve_font(db: Session, workspace_id: str, font_id: str) -> tuple[str, str] | None:
@@ -329,7 +329,9 @@ def grab_sequence_frame(db: Session, sequence_id: str, at: float, *, created_by:
     """
     from app.media.render_executor import render_still
 
-    plan = build_plan_for_sequence(db, sequence_id)
+    #: 取出来的这一帧是**素材**,不是要发布的成片:不烧「AI 生成」标识 —— 片头 3 秒里取一帧,正中就是一块大字。
+    #: 它含不含 AI 由出处记着(lineage,登记时继承),拿它再导出的时候标识照加。
+    plan = build_plan_for_sequence(db, sequence_id, {"ai_label": False})
     ensure_text_can_burn(plan)
     sequence = db.get(Sequence, sequence_id)
     assert sequence is not None

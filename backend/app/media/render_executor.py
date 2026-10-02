@@ -1287,10 +1287,11 @@ def build_ffmpeg_command(
         "aac",
         "-b:a",
         "192k",
-        #: 写进文件的元数据(数字人成片的 AIGC 隐式标识)。自定义键要 use_metadata_tags 才进得了 MP4。
+        #: 写进文件的元数据(AI 生成内容的 AIGC 隐式标识)。只用 MP4 的标准键,不开 use_metadata_tags:
+        #: 那样写出来的 mdta 键在 remux / 转码后会丢,见 domain.render.aigc_metadata。
         *[part for key, value in plan.output.metadata for part in ("-metadata", f"{key}={value}")],
         "-movflags",
-        "+faststart+use_metadata_tags" if plan.output.metadata else "+faststart",
+        "+faststart",
         str(output_path),
     ]
     return args

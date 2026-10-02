@@ -20,7 +20,7 @@ from app.core.unit_of_work import unit_of_work
 from app.core.config import settings
 from app.db.models import Asset, Clip, Entity, EntityReference, Job, Project, Sequence, Track, Voice, Workspace
 from app.domain.assets.importer import register_file_asset
-from app.domain.render import build_plan_for_sequence, digital_human_assets
+from app.domain.render import ai_generated_assets, build_plan_for_sequence
 from app.domain.workflows import WorkflowDomainError
 from app.domain.workflows.executors import dub_lipsync as module
 from app.domain.workflows.executors.dub_lipsync import dub_lipsync, plan_chunks
@@ -108,7 +108,7 @@ def test_整条跑通_切两块都改口型_接回整段放在最上面_原片�
         assert placed.track_id == top.id and placed.timeline_start == 0 and abs(placed.src_out - 6) < 0.2
         assert db.get(Clip, ids.clip).track_id == ids.base, "原片不动"
         final = settings.data_dir / placed.asset.file_key
-        assert digital_human_assets(db, {placed.asset_id}) == {placed.asset_id}, "接回的整段不是生成记录的产出,也认得出是数字人"
+        assert ai_generated_assets(db, {placed.asset_id}) == {placed.asset_id}, "接回的整段不是生成记录的产出,也认得出是 AI 生成的"
         # 出处:切出来的每块原片 ← 原片(截取),每块配音 ← 配音轨上那几句(混音),接回的整段 ← 原片 + 改好的每一块。
         pieces = [call["source_assets"][0]["asset_id"] for call in calls]
         assert placed.asset.derived_from == [{"asset_id": ids.video, "op": "concat"}] + [
@@ -119,7 +119,7 @@ def test_整条跑通_切两块都改口型_接回整段放在最上面_原片�
             assert piece.derived_from == [{"asset_id": ids.video, "op": "trim"}]
             assert speech.derived_from == [{"asset_id": ids.line, "op": "mix"}]
         plan = build_plan_for_sequence(db, ids.sequence, {})
-        assert "AIGC" in dict(plan.output.metadata) and plan.ai_labels, "导出这条时间线:画面标识、AIGC 元数据都加上"
+        assert "AIGC" in dict(plan.output.metadata)["comment"] and plan.ai_labels, "导出这条时间线:画面标识、AIGC 元数据都加上"
     streams = json.loads(subprocess.run(["ffprobe", "-v", "error", "-show_streams", "-of", "json", str(final)],
                                         capture_output=True, text=True, check=True).stdout)["streams"]
     assert [one["codec_type"] for one in streams] == ["video"], "声音在配音轨和背景轨上,接回的整段不带声音"

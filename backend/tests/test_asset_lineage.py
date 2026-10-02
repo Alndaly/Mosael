@@ -121,7 +121,9 @@ def test_导出成片的出处是用到的素材_含AI的成片拿去再剪再�
         for asset_id, start in clips:
             client.post(f"/api/sequences/{sequence['id']}/clips",
                         json={"track_id": track["id"], "asset_id": asset_id, "timeline_start": start, "src_in": 0, "src_out": 1})
-        job = _done(client, client.post(f"/api/sequences/{sequence['id']}/export").json()["id"])
+        #: 不要画面上的「AI 生成」标识:这条看的是出处,而烧标识要 libass 或浏览器那条路 —— 精简版 ffmpeg 的机器上
+        #: 含 AI 的那几次会在建任务之前就被拒(见 render_executor.ensure_text_can_burn)。隐式标识照写。
+        job = _done(client, client.post(f"/api/sequences/{sequence['id']}/export", json={"ai_label": False}).json()["id"])
         return client.get(f"/api/assets/{job['result']['asset_id']}").json() | {"sequence_id": sequence["id"]}
 
     mixed = export((shot, 0.0), (ai_clip, 1.0))

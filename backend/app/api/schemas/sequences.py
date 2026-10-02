@@ -203,7 +203,8 @@ class ExportRequest(ApiModel):
     resolution: Literal["original", "1080p", "720p", "480p"] = "original"
     fps: float | None = Field(default=None, ge=1, le=120)
     quality: Literal["high", "standard", "compact"] = "standard"
-    #: 成片里有数字人片段时,片头和画面一角加「AI 生成」(ADR 0028 §5)。**默认开、允许关**;关了照样写 AIGC 隐式标识。
+    #: 成片里用了 AI 生成 / 合成的素材时,片头和画面一角加「AI 生成」(ADR 0028 §5)。**默认开、允许关**;
+    #: 关了照样写 AIGC 隐式标识。
     ai_label: bool = True
     #: 响度标准化到 −14 LUFS / −1 dBTP。**默认关**:单遍 loudnorm 会改动混音的起伏、预览里听不到它;
     #: 平台播放时多半自己归一。限幅不受它影响,总是有(见 render_executor._master_bus)。

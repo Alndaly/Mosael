@@ -108,7 +108,7 @@ export const assetLibrary = {
   voiceNeedConsent: "Pick a consent declaration: whose voice is this",
   exportAiLabel: "Label AI-generated content \"AI-generated\"",
   exportAiLabelHint: "The opening and a corner of the frame say \"AI-generated\". The AIGC tag in the file is always written, whatever this is set to.",
-  exportAiLabelOffWarning: "With this off, the picture carries no AI label. Chinese rules on deep synthesis and on labelling AI-generated content require published digital-human content to be clearly labelled; turning it off makes that the publisher's responsibility.",
+  exportAiLabelOffWarning: "With this off, the picture carries no AI label. Chinese rules on labelling AI-generated content and on deep synthesis require published AI-generated content to be clearly labelled; turning it off makes that the publisher's responsibility.",
   exportLoudnorm: "Normalize loudness (−14 LUFS)",
   exportLoudnormHint: "Brings the whole mix to −14 LUFS with peaks at or below −1 dB, for places that don't even out volume themselves. It reshapes the mix's dynamics and isn't audible in the preview. Leaving it off won't clip: exports are always limited.",
   entityDigitalHumanOk: "Can be used for digital humans",

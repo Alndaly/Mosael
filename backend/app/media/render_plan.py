@@ -157,7 +157,7 @@ class OutputSettings:
     # 编码参数(导出对话框可调):CRF 越小画质越高;preset 是 x264 速度档。
     crf: int = 20
     encode_preset: str = "veryfast"
-    #: 写进成片文件的元数据(key, value),比如数字人成片的 AIGC 隐式标识(ADR 0028 §5)。
+    #: 写进成片文件的元数据(key, value),比如 AI 生成内容的 AIGC 隐式标识(ADR 0028 §5)。
     metadata: tuple[tuple[str, str], ...] = ()
     #: 响度标准化(导出对话框的开关):整条混音拉到 −14 LUFS / −1 dBTP。限幅不看它,总是有。
     loudnorm: bool = False

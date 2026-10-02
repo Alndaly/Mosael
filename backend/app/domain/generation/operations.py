@@ -113,7 +113,7 @@ def documents_note(documents: Sequence[ReferenceDocument]) -> str:
 
 def is_digital_human_request(source_assets: Sequence[dict[str, Any]], parameters: dict[str, Any]) -> bool:
     """这一次是不是数字人生成:带一段驱动音频(说话照片、对口型;ADR 0028 §1)。按素材角色认,不按模型名认;
-    驱动音频也可能是用户直接给的链接(`driving_audio_url`)。和导出时认数字人片段(render.digital_human_assets)同一条。"""
+    驱动音频也可能是用户直接给的链接(`driving_audio_url`)。"""
     if any(str((one or {}).get("role") or "") == DRIVING_AUDIO for one in source_assets):
         return True
     return bool(str(parameters.get(f"{DRIVING_AUDIO}_url") or "").strip())
