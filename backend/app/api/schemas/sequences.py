@@ -162,6 +162,16 @@ class RippleDeleteClipsRequest(ClipIdsRequest):
     all_tracks: bool = False
 
 
+class DuplicateClipsRequest(ApiModel):
+    """复制几段片段(复制粘贴、Alt 拖复制):位置之外的一切照原样,放下是覆盖,整批一步撤销。"""
+
+    clip_ids: list[str] = Field(min_length=1, max_length=2000)
+    #: 整组副本的起点(秒);不给就紧接在原片段组的末尾之后。
+    timeline_start: float | None = Field(default=None, ge=0)
+    #: 整组放到这条轨上;不给就各回各的原轨。
+    track_id: str | None = None
+
+
 class MoveClipsBatchRequest(ApiModel):
     """框选后整组拖动。没有 ripple —— 一组片段要"挤开"什么没有唯一解,组拖按覆盖语义。"""
 

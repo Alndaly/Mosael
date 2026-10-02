@@ -2310,6 +2310,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/sequences/{sequence_id}/clips/duplicate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Duplicate Clips
+         * @description 复制几段片段(复制粘贴、Alt 拖复制):速度、调色、关键帧、文字……位置之外的一切照原样,
+         *     放下是覆盖,整批一步撤销。
+         */
+        post: operations["duplicate_clips_api_sequences__sequence_id__clips_duplicate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/sequences/{sequence_id}/clips/ripple-delete-batch": {
         parameters: {
             query?: never;
@@ -9059,6 +9080,18 @@ export interface components {
              * @default
              */
             error: string;
+        };
+        /**
+         * DuplicateClipsRequest
+         * @description 复制几段片段(复制粘贴、Alt 拖复制):位置之外的一切照原样,放下是覆盖,整批一步撤销。
+         */
+        DuplicateClipsRequest: {
+            /** Clip Ids */
+            clip_ids: string[];
+            /** Timeline Start */
+            timeline_start?: number | null;
+            /** Track Id */
+            track_id?: string | null;
         };
         /**
          * EngineSynthesizeRequest
@@ -18828,6 +18861,44 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["ClipIdsRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SequenceOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    duplicate_clips_api_sequences__sequence_id__clips_duplicate_post: {
+        parameters: {
+            query?: {
+                /** @description 这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。 */
+                base_revision?: number | null;
+            };
+            header?: never;
+            path: {
+                sequence_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DuplicateClipsRequest"];
             };
         };
         responses: {

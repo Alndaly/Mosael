@@ -6116,6 +6116,77 @@
         }
       }
     },
+    "/api/sequences/{sequence_id}/clips/duplicate": {
+      "post": {
+        "tags": [
+          "sequences"
+        ],
+        "summary": "Duplicate Clips",
+        "description": "复制几段片段(复制粘贴、Alt 拖复制):速度、调色、关键帧、文字……位置之外的一切照原样,\n放下是覆盖,整批一步撤销。",
+        "operationId": "duplicate_clips_api_sequences__sequence_id__clips_duplicate_post",
+        "parameters": [
+          {
+            "name": "sequence_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Sequence Id"
+            }
+          },
+          {
+            "name": "base_revision",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。",
+              "title": "Base Revision"
+            },
+            "description": "这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DuplicateClipsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SequenceOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/sequences/{sequence_id}/clips/ripple-delete-batch": {
       "post": {
         "tags": [
@@ -25884,6 +25955,48 @@
         ],
         "title": "DocumentTextOut",
         "description": "画板上文档格要的全文。`status`:ready 读得到 / parsing 还在解析 / failed 解析失败(`error` 说原因)。"
+      },
+      "DuplicateClipsRequest": {
+        "properties": {
+          "clip_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 2000,
+            "minItems": 1,
+            "title": "Clip Ids"
+          },
+          "timeline_start": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timeline Start"
+          },
+          "track_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Track Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "clip_ids"
+        ],
+        "title": "DuplicateClipsRequest",
+        "description": "复制几段片段(复制粘贴、Alt 拖复制):位置之外的一切照原样,放下是覆盖,整批一步撤销。"
       },
       "EngineSynthesizeRequest": {
         "properties": {

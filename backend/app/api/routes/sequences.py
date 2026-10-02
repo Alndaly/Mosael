@@ -28,6 +28,7 @@ from app.api.schemas import (
     JobOut,
     MoveClipRequest,
     ClipIdsRequest,
+    DuplicateClipsRequest,
     RippleDeleteClipsRequest,
     MoveClipsBatchRequest,
     SequenceCreate,
@@ -67,6 +68,7 @@ from app.domain.sequences.operations import (
     CutClipRangesBatch,
     DeleteClip,
     DeleteClipsBatch,
+    DuplicateClips,
     RippleDeleteClipsBatch,
     InsertClip,
     GenerateSubtitles,
@@ -98,6 +100,7 @@ from app.domain.sequences.operations import (
     cut_clip_ranges_batch as cut_clip_ranges_batch_operation,
     delete_clip as delete_clip_operation,
     delete_clips_batch as delete_clips_batch_operation,
+    duplicate_clips as duplicate_clips_operation,
     ripple_delete_clips_batch as ripple_delete_clips_batch_operation,
     remove_track as remove_track_operation,
     ripple_delete_clip as ripple_delete_clip_operation,
@@ -259,6 +262,16 @@ def delete_clips_batch(
     """多选后一次删除:一条操作,撤销一步全部找回。"""
     op = DeleteClipsBatch(clip_ids=tuple(body.clip_ids), linked=body.linked)
     return _edit(db, user, sequence_id, base_revision, delete_clips_batch_operation, op, perm="edit")
+
+
+@router.post("/sequences/{sequence_id}/clips/duplicate", response_model=SequenceOut)
+def duplicate_clips(
+    sequence_id: str, body: DuplicateClipsRequest, db: Tx, user: CurrentUser, base_revision: BaseRevision = None
+) -> Response:
+    """复制几段片段(复制粘贴、Alt 拖复制):速度、调色、关键帧、文字……位置之外的一切照原样,
+    放下是覆盖,整批一步撤销。"""
+    op = DuplicateClips(clip_ids=tuple(body.clip_ids), timeline_start=body.timeline_start, track_id=body.track_id)
+    return _edit(db, user, sequence_id, base_revision, duplicate_clips_operation, op, perm="edit")
 
 
 @router.post("/sequences/{sequence_id}/clips/ripple-delete-batch", response_model=SequenceOut)

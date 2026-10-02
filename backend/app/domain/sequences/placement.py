@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections import Counter
+from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any
 from math import inf
@@ -12,6 +14,7 @@ from sqlalchemy.orm import Session
 from app.db.models import Asset, Clip, Sequence, Track
 from app.domain.media_kinds import MEDIA_KINDS
 from app.domain.sequences._timeline import (
+    INHERITED_CLIP_FIELDS,
     MIN_CUT_REMAINDER,
     _record_operation,
     _require_clip,
@@ -35,7 +38,7 @@ from app.domain.sequences.coverage import (
 from app.domain.sequences.errors import SequenceDomainError, SequenceNotFound
 from app.domain.sequences.fitting import fit_asset_on_track
 from app.domain.sequences.journal import Journal
-from app.domain.sequences.links import linked_members, with_links
+from app.domain.sequences.links import linked_members, new_link_group, with_links
 
 
 @dataclass(frozen=True)
@@ -497,3 +500,76 @@ def _ripple_delete(journal: Journal, clips: list[Clip], *, linked: bool, all_tra
         ranges.setdefault(clip.track_id, []).append(span)
     for track_id, track_ranges in ranges.items():
         remove_time_ranges(journal, track_id, track_ranges)
+
+
+@dataclass(frozen=True)
+class DuplicateClips:
+    """复制几段片段(复制粘贴、Alt 拖复制)。整批一条操作,撤销一步全部拿掉。
+
+    副本保持彼此的相对位置。`timeline_start` 是整组副本的起点,不给就紧接在原片段组的末尾之后;
+    `track_id` 把整组放到那一条轨上(轨道类型要对得上),不给就各回各的原轨。
+    """
+
+    clip_ids: tuple[str, ...]
+    timeline_start: float | None = None
+    track_id: str | None = None
+    actor_id: str | None = None
+
+
+def duplicate_clips(db: Session, sequence_id: str, op: DuplicateClips) -> Sequence:
+    """按 id 复制片段,**位置之外的一切照原样**(速度、音量、静音、调色与特效、变换与关键帧、文字、脱机占位)。
+
+    前端此前要自己拼一个 insert_clip 去「复制」:只带得过去素材和出入点,速度、调色、关键帧、花字的文字
+    全没了;复制字幕 / 花字(没有素材)则根本插不进去。
+
+    副本**放下**和插入同一条规矩(_land):落点上已有的片段被盖住的部分裁掉,同轨不重叠。链接组:一起复制
+    的组员(画和它分离出去的声音)在副本里自成一个新组;只复制了组里一段的,副本不进任何组 —— 进原来的组的话,
+    拖原片会把副本一起拖走。原片段只读,源轨锁着也能复制;副本要放进去的轨才过锁定检查。
+    """
+    sequence = _require_sequence(db, sequence_id)
+    ids = tuple(dict.fromkeys(op.clip_ids))
+    if not ids:
+        raise SequenceDomainError("No clips to duplicate")
+    sources: list[Clip] = []
+    for clip_id in ids:
+        clip = db.get(Clip, clip_id)
+        if clip is None or clip.sequence_id != sequence_id:
+            raise SequenceNotFound("Clip not found")
+        sources.append(clip)
+    group_start = min(clip.timeline_start for clip in sources)
+    group_end = max(clip_end(clip) for clip in sources)
+    start = group_end if op.timeline_start is None else finite_number("timeline_start", op.timeline_start)
+    if start < 0:
+        raise SequenceDomainError("timeline_start must be non-negative")
+    target = _require_target_track(db, sequence_id, op.track_id) if op.track_id else None
+    if target is not None and any(clip.track.kind != target.kind for clip in sources):
+        raise SequenceDomainError("Target track kind does not match clip track kind")
+    copied_groups = Counter(clip.link_group for clip in sources if clip.link_group)
+    new_groups = {group: new_link_group() for group, count in copied_groups.items() if count > 1}
+
+    journal = Journal(db, sequence)
+    copies: list[Clip] = []
+    for source in sources:
+        track = target or _require_target_track(db, sequence_id, source.track_id)
+        copies.append(journal.create(Clip(
+            workspace_id=sequence.workspace_id,
+            sequence_id=sequence.id,
+            track_id=track.id,
+            asset_id=source.asset_id,
+            timeline_start=start + (source.timeline_start - group_start),
+            src_in=source.src_in,
+            src_out=source.src_out,
+            # 深拷贝:JSON 列共享同一个 dict 的话,改副本的调色会改到原片。
+            **{field: deepcopy(getattr(source, field)) for field in INHERITED_CLIP_FIELDS},
+            link_group=new_groups.get(source.link_group),
+        )))
+    _land(journal, copies, ripple=False)
+    _record_operation(
+        db,
+        sequence,
+        kind="duplicate_clips",
+        payload={"clip_ids": list(ids), "changes": journal.entries},
+        summary={"operation": "duplicate_clips", "count": len(copies)},
+        actor_id=op.actor_id,
+    )
+    return sequence
