@@ -196,7 +196,7 @@ describe("S 键切分", () => {
     act(() => useEditorStore.getState().setPlayhead(15));
     press("s");
     await waitFor(() => expect(mocks.splitClip).toHaveBeenCalledTimes(1));
-    expect(mocks.splitClip).toHaveBeenCalledWith(onS1, "c1", 10);
+    expect(mocks.splitClip).toHaveBeenCalledWith(onS1, "c1", 10, {});
   });
 });
 
@@ -247,8 +247,8 @@ describe("同一条时间线的编辑排队执行", () => {
     current = after;
     await act(async () => first.resolve(after));
     await waitFor(() => expect(mocks.splitClip).toHaveBeenCalledTimes(2));
-    expect(mocks.splitClip).toHaveBeenNthCalledWith(1, onS1, "c1", 5);
-    expect(mocks.splitClip).toHaveBeenNthCalledWith(2, onS1, "c2", 7);
+    expect(mocks.splitClip).toHaveBeenNthCalledWith(1, onS1, "c1", 5, {});
+    expect(mocks.splitClip).toHaveBeenNthCalledWith(2, onS1, "c2", 7, {});
   });
 });
 
@@ -351,7 +351,7 @@ describe("快捷键只接冲着剪辑页来的按键", () => {
     const clipElement = screen.getByTestId("clip-c1");
     clipElement.focus();
     fireEvent.keyDown(clipElement, { key: "Delete", code: "Delete" });
-    await waitFor(() => expect(mocks.deleteClip).toHaveBeenCalledWith(onS1, "c1"));
+    await waitFor(() => expect(mocks.deleteClip).toHaveBeenCalledWith(onS1, "c1", {}));
   });
 
   it("点过工具栏按钮(焦点停在按钮上)再按 ⌘Z:照常撤销", async () => {
@@ -411,7 +411,7 @@ describe("复制 / 粘贴 / ⌘D 走后端深拷贝", () => {
     act(() => useEditorStore.getState().setPlayhead(8));
     press("v", { metaKey: true });
     await waitFor(() =>
-      expect(mocks.moveClipsBatch).toHaveBeenCalledWith(onS1, [{ clip_id: "c1", timeline_start: 8, track_id: "v1" }]),
+      expect(mocks.moveClipsBatch).toHaveBeenCalledWith(onS1, [{ clip_id: "c1", timeline_start: 8, track_id: "v1" }], {}),
     );
     expect(mocks.duplicateClips).not.toHaveBeenCalled();
   });
@@ -613,11 +613,11 @@ describe(", / . 微移", () => {
     press(".");
     press(".");
     await waitFor(() => expect(mocks.moveClipsBatch).toHaveBeenCalledTimes(1));
-    expect(mocks.moveClipsBatch).toHaveBeenNthCalledWith(1, onS1, [{ clip_id: "c1", timeline_start: 31 / 30, track_id: "v1" }]);
+    expect(mocks.moveClipsBatch).toHaveBeenNthCalledWith(1, onS1, [{ clip_id: "c1", timeline_start: 31 / 30, track_id: "v1" }], {});
     current = at(31 / 30);
     await act(async () => first.resolve(current));
     await waitFor(() => expect(mocks.moveClipsBatch).toHaveBeenCalledTimes(2));
-    expect(mocks.moveClipsBatch).toHaveBeenNthCalledWith(2, onS1, [{ clip_id: "c1", timeline_start: 32 / 30, track_id: "v1" }]);
+    expect(mocks.moveClipsBatch).toHaveBeenNthCalledWith(2, onS1, [{ clip_id: "c1", timeline_start: 32 / 30, track_id: "v1" }], {});
   });
 
   it("挪到 0 之前就不挪", async () => {
@@ -669,5 +669,34 @@ describe("键盘移动选中", () => {
     expect(useEditorStore.getState().playhead).toBe(0);
     press("ArrowDown", { altKey: true });
     expect(useEditorStore.getState().selectedClipIds).toEqual(["m"]);
+  });
+});
+
+describe("临时解链的选区", () => {
+  const seq = () =>
+    sequenceWith([
+      track("v1", "video", 0, [clip("c1", "v1", 0, 0, 10, { link_group: "g" } as Partial<Clip>)]),
+      track("a1", "audio", 1, [clip("s1a", "a1", 0, 0, 10, { link_group: "g" } as Partial<Clip>)]),
+    ]);
+
+  it("⌥ 单击选中的那段:删除、切分只动它(linked:false)", async () => {
+    renderEditor(seq());
+    await ready();
+    act(() => {
+      useEditorStore.getState().selectClipUnlinked("c1");
+      useEditorStore.getState().setPlayhead(4);
+    });
+    press("s");
+    await waitFor(() => expect(mocks.splitClip).toHaveBeenCalledWith(onS1, "c1", 4, { linked: false }));
+    press("Delete");
+    await waitFor(() => expect(mocks.deleteClip).toHaveBeenCalledWith(onS1, "c1", { linked: false }));
+  });
+
+  it("普通选中:照常整组(不带 linked 参数,后端默认整组)", async () => {
+    renderEditor(seq());
+    await ready();
+    act(() => useEditorStore.getState().selectClip("c1"));
+    press("Delete");
+    await waitFor(() => expect(mocks.deleteClip).toHaveBeenCalledWith(onS1, "c1", {}));
   });
 });

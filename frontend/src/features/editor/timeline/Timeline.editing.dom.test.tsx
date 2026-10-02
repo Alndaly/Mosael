@@ -92,7 +92,7 @@ describe("拖动", () => {
       window.dispatchEvent(new MouseEvent("pointermove", { clientX: 61, clientY: 0, buttons: 1 }));
       window.dispatchEvent(new MouseEvent("pointerup", { clientX: 61, clientY: 0 }));
     });
-    expect(props.onMoveClip).toHaveBeenCalledWith("c1", 38 / 30, undefined, false);
+    expect(props.onMoveClip).toHaveBeenCalledWith("c1", 38 / 30, undefined, false, {});
   });
 });
 
@@ -193,7 +193,7 @@ describe("拖动中的按键", () => {
     fireEvent.pointerDown(screen.getByTestId("clip-c1"), { clientX: 10, clientY: 40, pointerId: 1, button: 0, buttons: 1 });
     windowPointer("pointermove", { clientX: 90, clientY: 90, shiftKey: true });
     windowPointer("pointerup", { clientX: 90, clientY: 90, shiftKey: true });
-    expect(props.onMoveClip).toHaveBeenLastCalledWith("c1", 2, undefined, false);
+    expect(props.onMoveClip).toHaveBeenLastCalledWith("c1", 2, undefined, false, {});
   });
 
   it("按住 ⇧ 纵向为主:换轨但时间不变", () => {
@@ -201,7 +201,7 @@ describe("拖动中的按键", () => {
     fireEvent.pointerDown(screen.getByTestId("clip-c1"), { clientX: 10, clientY: 40, pointerId: 1, button: 0, buttons: 1 });
     windowPointer("pointermove", { clientX: 30, clientY: 90, shiftKey: true });
     windowPointer("pointerup", { clientX: 30, clientY: 90, shiftKey: true });
-    expect(props.onMoveClip).toHaveBeenLastCalledWith("c1", 0, "V2", false);
+    expect(props.onMoveClip).toHaveBeenLastCalledWith("c1", 0, "V2", false, {});
   });
 
   it("按住 ⌘ 临时不吸附", () => {
@@ -210,11 +210,11 @@ describe("拖动中的按键", () => {
     // 位移 114px ≈ 2.85s(吸到帧是第 86 帧)→ 尾边离 c2 的头(5s)约 5px —— 平时会吸过去(落在 3s)。
     windowPointer("pointermove", { clientX: 124, clientY: 40, metaKey: true });
     windowPointer("pointerup", { clientX: 124, clientY: 40, metaKey: true });
-    expect(props.onMoveClip).toHaveBeenLastCalledWith("c1", 86 / 30, undefined, false);
+    expect(props.onMoveClip).toHaveBeenLastCalledWith("c1", 86 / 30, undefined, false, {});
     fireEvent.pointerDown(screen.getByTestId("clip-c1"), { clientX: 10, clientY: 40, pointerId: 1, button: 0, buttons: 1 });
     windowPointer("pointermove", { clientX: 124, clientY: 40 });
     windowPointer("pointerup", { clientX: 124, clientY: 40 });
-    expect(props.onMoveClip).toHaveBeenLastCalledWith("c1", 3, undefined, false);
+    expect(props.onMoveClip).toHaveBeenLastCalledWith("c1", 3, undefined, false, {});
   });
 });
 
@@ -373,7 +373,7 @@ describe("轨道顺序", () => {
       window.dispatchEvent(new MouseEvent("pointermove", { clientX: 10, clientY: 90, buttons: 1 }));
       window.dispatchEvent(new MouseEvent("pointerup", { clientX: 10, clientY: 90 }));
     });
-    expect(props.onMoveClip).toHaveBeenCalledWith("top", 0, "V1", false);
+    expect(props.onMoveClip).toHaveBeenCalledWith("top", 0, "V1", false, {});
   });
 });
 
@@ -404,7 +404,7 @@ describe("拖动预览和后端的覆盖 / 链接 / 修剪语义一致", () => {
     windowPointer("pointermove", { clientX: 130, clientY: 40, metaKey: true });
     expect(screen.getByTestId("clip-sound").style.transform).toBe("translate3d(120px, 0, 0)");
     windowPointer("pointerup", { clientX: 130, clientY: 40, metaKey: true });
-    expect(props.onMoveClip).toHaveBeenCalledWith("picture", 3, undefined, false);
+    expect(props.onMoveClip).toHaveBeenCalledWith("picture", 3, undefined, false, {});
   });
 
   it("修剪拖过邻居:停在邻居的边上(同轨不重叠)", () => {
@@ -414,5 +414,58 @@ describe("拖动预览和后端的覆盖 / 链接 / 修剪语义一致", () => {
     fireEvent.pointerMove(handle, { clientX: 400, pointerId: 1, buttons: 1 });
     fireEvent.pointerUp(handle, { clientX: 400, pointerId: 1 });
     expect(props.onTrimClip).toHaveBeenCalledWith("c1", expect.objectContaining({ src_out: 5 }));
+  });
+});
+
+describe("链接片段:标记与 ⌥ 临时解链", () => {
+  const linkedPair = () => [
+    track("V1", "video", 0, [clip("picture", "V1", 0, 0, 2, { link_group: "g" } as Partial<Clip>)]),
+    track("A1", "audio", 1, [clip("sound", "A1", 0, 0, 2, { link_group: "g" } as Partial<Clip>), clip("music", "A1", 5, 0, 2)]),
+  ];
+
+  it("链接组里的片段带链接标记,普通片段没有", () => {
+    renderTimeline(linkedPair());
+    expect(screen.getByTestId("clip-picture")).toHaveAttribute("data-linked", "true");
+    expect(screen.getByTestId("clip-music")).not.toHaveAttribute("data-linked");
+  });
+
+  it("⌥ 单击只选这一段(临时解链):接着拖,声音不跟着走,松手交的是 linked:false", () => {
+    const { props } = renderTimeline(linkedPair());
+    const picture = screen.getByTestId("clip-picture");
+    fireEvent.pointerDown(picture, { clientX: 10, clientY: 40, pointerId: 1, button: 0, buttons: 1, altKey: true });
+    windowPointer("pointerup", { clientX: 10, clientY: 40, altKey: true });
+    expect(useEditorStore.getState()).toMatchObject({ selectedClipIds: ["picture"], selectionUnlinked: true });
+    expect(props.onMoveClip).not.toHaveBeenCalled();
+    fireEvent.pointerDown(picture, { clientX: 10, clientY: 40, pointerId: 1, button: 0, buttons: 1 });
+    windowPointer("pointermove", { clientX: 130, clientY: 40, metaKey: true });
+    expect(screen.getByTestId("clip-sound").style.transform).toBe("");
+    windowPointer("pointerup", { clientX: 130, clientY: 40, metaKey: true });
+    expect(props.onMoveClip).toHaveBeenCalledWith("picture", 3, undefined, false, { linked: false });
+  });
+
+  it("普通单击回到链接选择", () => {
+    renderTimeline(linkedPair());
+    act(() => useEditorStore.getState().selectClipUnlinked("picture"));
+    fireEvent.pointerDown(screen.getByTestId("clip-music"), { clientX: 210, clientY: 90, pointerId: 1, button: 0, buttons: 1 });
+    windowPointer("pointerup", { clientX: 210, clientY: 90 });
+    expect(useEditorStore.getState().selectionUnlinked).toBe(false);
+  });
+
+  it("按住 ⌥ 修剪:只修这一段", () => {
+    const { props } = renderTimeline(linkedPair());
+    const handle = screen.getByTestId("trim-end-picture");
+    fireEvent.pointerDown(handle, { clientX: 80, pointerId: 1, button: 0, buttons: 1, altKey: true });
+    fireEvent.pointerMove(handle, { clientX: 60, pointerId: 1, buttons: 1, altKey: true });
+    fireEvent.pointerUp(handle, { clientX: 60, pointerId: 1, altKey: true });
+    expect(props.onTrimClip).toHaveBeenCalledWith("picture", expect.objectContaining({ src_out: 1.5, linked: false }));
+  });
+
+  it("⌥ 轻点一下(指针抖了一点)不会被当成 ⌥ 拖复制", () => {
+    const onDuplicateClipsAt = vi.fn();
+    renderTimeline(linkedPair(), { onDuplicateClipsAt });
+    fireEvent.pointerDown(screen.getByTestId("clip-picture"), { clientX: 10, clientY: 40, pointerId: 1, button: 0, buttons: 1, altKey: true });
+    windowPointer("pointermove", { clientX: 11, clientY: 40, altKey: true });
+    windowPointer("pointerup", { clientX: 11, clientY: 40, altKey: true });
+    expect(onDuplicateClipsAt).not.toHaveBeenCalled();
   });
 });

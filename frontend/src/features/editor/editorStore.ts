@@ -55,6 +55,11 @@ interface EditorState {
   pxPerSecond: number;
   /** 选中的片段。**只有这一份** —— 单选是"长度为一的列表",见 selectedClipId 选择器。 */
   selectedClipIds: string[];
+  /**
+   * 临时解链:这份选区是 ⌥ 单击选出来的「链接组里的这一段」。作用在选区上的编辑(拖、修剪、删除、切分、
+   * 微移)只动选中的,不带链接组员(后端 `linked: false`)。任何别的方式改选区都把它清掉。
+   */
+  selectionUnlinked: boolean;
   dragDraft: DragDraft | null;
   draggingAsset: DraggingAsset | null;
   /** 片段剪贴板:存片段 id,粘贴时由后端深拷贝。cut = 剪切 —— 粘贴时把这几段搬过去(见 EditorView)。 */
@@ -80,6 +85,8 @@ interface EditorState {
   selectClip: (clipId: string | null) => void;
   toggleSelectClip: (clipId: string) => void;
   selectClips: (clipIds: string[]) => void;
+  /** ⌥ 单击:只选链接组里的这一段(临时解链)。 */
+  selectClipUnlinked: (clipId: string) => void;
   setDragDraft: (draft: DragDraft | null) => void;
   setDraggingAsset: (asset: DraggingAsset | null) => void;
   setClipboard: (clipboard: ClipClipboard | null) => void;
@@ -129,6 +136,7 @@ export const useEditorStore = create<EditorState>((set) => ({
   muted: false,
   pxPerSecond: DEFAULT_PX_PER_SECOND,
   selectedClipIds: [],
+  selectionUnlinked: false,
   dragDraft: null,
   draggingAsset: null,
   clipboard: null,
@@ -163,15 +171,16 @@ export const useEditorStore = create<EditorState>((set) => ({
     set((state) => ({
       pxPerSecond: Math.min(MAX_PX_PER_SECOND, Math.max(MIN_PX_PER_SECOND, state.pxPerSecond * factor)),
     })),
-  selectClip: (clipId) => set({ selectedClipIds: clipId ? [clipId] : [] }),
+  selectClip: (clipId) => set({ selectedClipIds: clipId ? [clipId] : [], selectionUnlinked: false }),
   toggleSelectClip: (clipId) =>
     set((state) => {
       const ids = state.selectedClipIds.includes(clipId)
         ? state.selectedClipIds.filter((id) => id !== clipId)
         : [...state.selectedClipIds, clipId];
-      return { selectedClipIds: ids };
+      return { selectedClipIds: ids, selectionUnlinked: false };
     }),
-  selectClips: (clipIds) => set({ selectedClipIds: clipIds }),
+  selectClips: (clipIds) => set({ selectedClipIds: clipIds, selectionUnlinked: false }),
+  selectClipUnlinked: (clipId) => set({ selectedClipIds: [clipId], selectionUnlinked: true }),
   setDragDraft: (draft) => set({ dragDraft: draft }),
   setDraggingAsset: (asset) => set({ draggingAsset: asset }),
   setClipboard: (clipboard) => set({ clipboard }),
@@ -217,3 +226,13 @@ export function markedRange(
  */
 export const selectedClipId = (state: EditorState): string | null =>
   state.selectedClipIds[state.selectedClipIds.length - 1] ?? null;
+
+/**
+ * 作用在这几段上的编辑带不带链接组员:这几段都在一份「临时解链」的选区里 → `{ linked: false }`(只动它们),
+ * 否则 `{}`(后端默认整组)。
+ */
+export function linkOptionFor(state: Pick<EditorState, "selectedClipIds" | "selectionUnlinked">, clipIds: string[]): { linked?: boolean } {
+  return state.selectionUnlinked && clipIds.length > 0 && clipIds.every((id) => state.selectedClipIds.includes(id))
+    ? { linked: false }
+    : {};
+}

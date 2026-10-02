@@ -53,6 +53,7 @@ import {
   onSequenceConflict,
   type Asset,
   type Clip,
+  type LinkOption,
   type Project,
   type Sequence,
   type TrackStatePatch,
@@ -72,7 +73,7 @@ import { type LeftTab, useEditorPanels } from "@/features/editor/useEditorPanels
 import { usePersistentTab } from "@/lib/usePersistentTab";
 import { HANDLE_COLUMN, HANDLE_ROW, handleOffset, useResizableSidebar } from "@/lib/useResizableSidebar";
 
-import { selectedClipId as selectedClipIdOf, useEditorStore } from "@/features/editor/editorStore";
+import { linkOptionFor, selectedClipId as selectedClipIdOf, useEditorStore } from "@/features/editor/editorStore";
 import { sequenceEditScope } from "@/features/editor/sequenceEditScope";
 import { useEditorShortcuts } from "@/features/editor/useEditorShortcuts";
 import { ConfirmDialog } from "@/components/app/modals";
@@ -298,19 +299,21 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
       timelineStart,
       trackId,
       ripple,
+      link = {},
     }: {
       clipId: string;
       timelineStart: number;
       trackId?: string;
       ripple?: boolean;
-    }) => moveClip(latestSequence()!, clipId, { timeline_start: timelineStart, track_id: trackId ?? null, ripple }),
+      link?: LinkOption;
+    }) => moveClip(latestSequence()!, clipId, { timeline_start: timelineStart, track_id: trackId ?? null, ripple, ...link }),
     onSuccess: settleWith,
     onError: resyncAfterFailedDrag,
   });
   /** 框选整组拖动。与单个移动共用 settle/resync,所以落位动画与失败回滚的行为完全一致。 */
   const moveClipsMutation = useMutation({
     scope: editScope,
-    mutationFn: (moves: { clipId: string; timelineStart: number; trackId?: string }[]) =>
+    mutationFn: ({ moves, link = {} }: { moves: { clipId: string; timelineStart: number; trackId?: string }[]; link?: LinkOption }) =>
       moveClipsBatch(
         latestSequence()!,
         moves.map((move) => ({
@@ -318,6 +321,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
           timeline_start: move.timelineStart,
           track_id: move.trackId ?? null,
         })),
+        link,
       ),
     onSuccess: settleWith,
     onError: resyncAfterFailedDrag,
@@ -331,20 +335,23 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
   });
   const deleteClipMutation = useMutation({
     scope: editScope,
-    mutationFn: (clipId: string) => deleteClip(latestSequence()!, clipId),
+    // 临时解链的选区(⌥ 单击选出来的那一段)只删它,不带链接组员;否则后端默认整组。
+    mutationFn: (clipId: string) => deleteClip(latestSequence()!, clipId, linkOptionFor(useEditorStore.getState(), [clipId])),
     onSuccess: applyAndPruneSelection,
   });
   const deleteClipsMutation = useMutation({
     scope: editScope,
     // 一条请求、一条操作、一步撤销。逐个删会落成 N 条 SequenceOperation,⌘Z 一次只找回一段。
-    mutationFn: (clipIds: string[]) => deleteClipsBatch(latestSequence()!, clipIds),
+    mutationFn: (clipIds: string[]) =>
+      deleteClipsBatch(latestSequence()!, clipIds, linkOptionFor(useEditorStore.getState(), clipIds)),
     onSuccess: applyAndPruneSelection,
   });
   const rippleDeleteMutation = useMutation({
     scope: editScope,
     // 顺序由后端负责(它内部从后往前删,先删靠前的会把后面的目标带偏);这里只管整批提交,
     // 换来一条操作、一步撤销。
-    mutationFn: (clipIds: string[]) => rippleDeleteClipsBatch(latestSequence()!, clipIds),
+    mutationFn: (clipIds: string[]) =>
+      rippleDeleteClipsBatch(latestSequence()!, clipIds, linkOptionFor(useEditorStore.getState(), clipIds)),
     onSuccess: applyAndPruneSelection,
   });
   const addTrackMutation = useMutation({
@@ -627,7 +634,9 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
     scope: editScope,
     mutationFn: async (target: { clipId: string; srcTime: number } | { time: number; trackId: string | null }) => {
       const point = "clipId" in target ? target : splitPointAt(latestSequence()?.tracks ?? [], target.time, target.trackId);
-      return point ? splitClip(latestSequence()!, point.clipId, point.srcTime) : null;
+      return point
+        ? splitClip(latestSequence()!, point.clipId, point.srcTime, linkOptionFor(useEditorStore.getState(), [point.clipId]))
+        : null;
     },
     onSuccess: (updated) => {
       if (updated) applySequence(updated);
@@ -646,10 +655,11 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
       const moves = targets.map((item) => ({ clip: item, start: frameTime(frameAt(item.timeline_start, fps) + frames, fps) }));
       // 整组有一段会挪到 0 之前:整组不动(只挪一部分会把组内间距挤变形)。
       if (moves.length === 0 || moves.some((move) => move.start < 0)) return null;
-      // 链接组员(没选中的那半)由后端跟着挪同样的距离。
+      // 链接组员(没选中的那半)由后端跟着挪同样的距离 —— 临时解链的选区除外。
       return moveClipsBatch(
         latest!,
         moves.map((move) => ({ clip_id: move.clip.id, timeline_start: move.start, track_id: move.clip.track_id })),
+        linkOptionFor(useEditorStore.getState(), targets.map((item) => item.id)),
       );
     },
     onSuccess: (updated) => {
@@ -865,9 +875,9 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
     }
     if (board.cut) {
       const delta = playhead - Math.min(...sources.map((item) => item.timeline_start));
-      moveClipsMutation.mutate(
-        sources.map((item) => ({ clipId: item.id, timelineStart: Math.max(0, item.timeline_start + delta), trackId: item.track_id })),
-      );
+      moveClipsMutation.mutate({
+        moves: sources.map((item) => ({ clipId: item.id, timelineStart: Math.max(0, item.timeline_start + delta), trackId: item.track_id })),
+      });
       store.setClipboard(null);
       return;
     }
@@ -1255,10 +1265,10 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
           sequence={sequence}
           assets={assets.data ?? []}
           onInsertClip={(args) => insertClipMutation.mutate(args)}
-          onMoveClip={(clipId, timelineStart, trackId, ripple) =>
-            moveClipMutation.mutate({ clipId, timelineStart, trackId, ripple })
+          onMoveClip={(clipId, timelineStart, trackId, ripple, link) =>
+            moveClipMutation.mutate({ clipId, timelineStart, trackId, ripple, link })
           }
-          onMoveClips={(moves) => moveClipsMutation.mutate(moves)}
+          onMoveClips={(moves, link) => moveClipsMutation.mutate({ moves, link })}
           onMoveClipToNewLayer={(clipId, timelineStart) =>
             moveClipToNewLayerMutation.mutate({ clipId, timelineStart })
           }

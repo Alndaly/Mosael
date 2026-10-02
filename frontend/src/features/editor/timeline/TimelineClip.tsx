@@ -1,5 +1,5 @@
 import React from "react";
-import { Unlink } from "lucide-react";
+import { Link2, Unlink } from "lucide-react";
 
 import { useI18n } from "@/app/preferences";
 import { waveformPolygonPoints } from "@/domain/timeline/waveform";
@@ -22,6 +22,7 @@ export const TimelineClip = React.memo(function TimelineClip({
   offline = false,
   aiGenerated = false,
   cut = false,
+  linked = false,
   tabbable = false,
   left,
   width,
@@ -45,6 +46,8 @@ export const TimelineClip = React.memo(function TimelineClip({
   aiGenerated?: boolean;
   /** 剪切了、等着粘贴时搬走:变淡 + 虚线框。 */
   cut?: boolean;
+  /** 在一个链接组里(画和它分离出去的声音):一起移动、修剪、切分、删除。片段上标一个链环。 */
+  linked?: boolean;
   /** 时间线上只有一段在 Tab 序列里(选中的那段,没选中时第一段),其余靠 ⌥ + 方向键走过去。 */
   tabbable?: boolean;
   left: number;
@@ -103,6 +106,7 @@ export const TimelineClip = React.memo(function TimelineClip({
       }}
       data-selected={selected || undefined}
       data-cut={cut || undefined}
+      data-linked={linked || undefined}
       data-testid={clipId ? `clip-${clipId}` : undefined}
       role="button"
       tabIndex={clipId ? (tabbable ? 0 : -1) : undefined}
@@ -123,6 +127,7 @@ export const TimelineClip = React.memo(function TimelineClip({
       />
       <span className="pointer-events-none relative z-[1] flex min-w-0 flex-1 items-center gap-1 px-1.5 text-ui-xs font-semibold">
         {offline && <Unlink size={11} className="shrink-0 text-destructive" aria-hidden />}
+        {linked && <Link2 size={11} className="shrink-0 opacity-70" aria-label={t("clipLinked")} />}
         {aiGenerated && (
           <span
             data-ai-badge=""

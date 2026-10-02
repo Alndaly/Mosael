@@ -2,7 +2,7 @@ import React from "react";
 import { useQueries } from "@tanstack/react-query";
 import { AudioLines, AudioWaveform, BetweenHorizontalStart, Camera, ChevronDown, ChevronUp, CircleHelp, Copy, Eye, EyeOff, Film, Lock, LockOpen, Magnet, Maximize2, Mic, Minus, MousePointer2, Plus, Replace, Scissors, Slice, Split, Trash2, Type, Volume2, VolumeX, Waves, X } from "lucide-react";
 
-import { fetchWaveform, type Asset, type Clip, type Sequence, type Track, type TrackStatePatch, type WaveformData } from "@/api/client";
+import { fetchWaveform, type Asset, type Clip, type LinkOption, type Sequence, type Track, type TrackStatePatch, type WaveformData } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
@@ -29,7 +29,7 @@ import {
   uncoveredPieces,
 } from "@/domain/timeline/geometry";
 import { downsamplePeaks, slicePeaks } from "@/domain/timeline/waveform";
-import { MAX_PX_PER_SECOND, MIN_PX_PER_SECOND, markedRange, useEditorStore } from "@/features/editor/editorStore";
+import { MAX_PX_PER_SECOND, MIN_PX_PER_SECOND, linkOptionFor, markedRange, useEditorStore } from "@/features/editor/editorStore";
 import { isEditorKeyTarget } from "@/features/editor/editorKeys";
 import { livePlayhead } from "@/features/editor/playback/playbackClock";
 import { TimelineClip } from "./TimelineClip";
@@ -86,6 +86,8 @@ export interface TrimPayload {
   timeline_start: number;
   src_in: number;
   src_out: number;
+  /** false = 只修这一段,不带链接组员(按住 ⌥ 修剪,或临时解链的选区)。 */
+  linked?: boolean;
 }
 
 export function Timeline({
@@ -116,9 +118,10 @@ export function Timeline({
   sequence: Sequence;
   assets: Asset[];
   onInsertClip: (args: { trackId: string; assetId: string; timelineStart: number; srcIn: number; srcOut: number }) => void;
-  onMoveClip: (clipId: string, timelineStart: number, trackId?: string, ripple?: boolean) => void;
+  /** options.linked === false:只动这一段,不带链接组员(临时解链)。 */
+  onMoveClip: (clipId: string, timelineStart: number, trackId?: string, ripple?: boolean, options?: LinkOption) => void;
   /** 组拖(框选多个后拖动)整组提交:一条操作、一步撤销。缺省时组拖降级为只移动锚点。 */
-  onMoveClips?: (moves: { clipId: string; timelineStart: number; trackId?: string }[]) => void;
+  onMoveClips?: (moves: { clipId: string; timelineStart: number; trackId?: string }[], options?: LinkOption) => void;
   onMoveClipToNewLayer?: (clipId: string, timelineStart: number) => void;
   onTrimClip: (clipId: string, payload: TrimPayload) => void;
   onAddTrack?: (kind: "video" | "audio" | "subtitle") => void;
@@ -602,8 +605,14 @@ export function Timeline({
     // 或播放头会比同轨邻居更近,把肉眼可见的对接"抢走"。
     // 链接组员(画和它分离出去的声音)跟着一起挪、轨道不变 —— 后端移动时整组走同样的时间差,预览照着画。
     const movingIds = new Set([clip.id, ...followerOrigins.map((entry) => entry.clip.id)]);
+    // ⌥ 单击选出来的临时解链选区:只拖它,不带组员。
+    const unlinked = linkOptionFor(useEditorStore.getState(), [...movingIds]).linked === false;
     const groups = new Set(
-      [clip, ...followerOrigins.map((entry) => entry.clip)].map((item) => item.link_group).filter((group): group is string => Boolean(group)),
+      unlinked
+        ? []
+        : [clip, ...followerOrigins.map((entry) => entry.clip)]
+            .map((item) => item.link_group)
+            .filter((group): group is string => Boolean(group)),
     );
     const linkedOrigins =
       groups.size === 0
@@ -705,9 +714,18 @@ export function Timeline({
     const onUp = (upEvent: PointerEvent) => {
       detach();
       const draft = useEditorStore.getState().dragDraft;
-      // 按住 ⌥ 松手:复制到落点,原片段留在原处(和 PR / 达芬奇一样)。草稿直接撤掉 —— 原片段没动,
-      // 副本等回包落进缓存后出现。
-      if (upEvent.altKey && onDuplicateClipsAt && draft && draft.clipId === clip.id && !wantNewLayer) {
+      const moved = Boolean(
+        draft && draft.clipId === clip.id && (draft.timeline_start !== origin.timeline_start || draft.trackId !== track.id),
+      );
+      // ⌥ 单击(没拖动):只选这一段 —— 临时解链,接下来的拖动 / 修剪 / 删除 / 切分不带链接组员。
+      if (upEvent.altKey && !moved && !wantNewLayer) {
+        useEditorStore.getState().setDragDraft(null);
+        useEditorStore.getState().selectClipUnlinked(clip.id);
+        return;
+      }
+      // 按住 ⌥ 拖动松手:复制到落点,原片段留在原处(和 PR / 达芬奇一样)。草稿直接撤掉 —— 原片段没动,
+      // 副本等回包落进缓存后出现。指针只抖了一下(没真挪动)不算拖,见上一条。
+      if (upEvent.altKey && onDuplicateClipsAt && draft && moved && !wantNewLayer) {
         useEditorStore.getState().setDragDraft(null);
         const starts = [draft.timeline_start, ...(draft.followers ?? []).map((f) => f.timeline_start)];
         const singleOnOtherTrack = !draft.followers?.length && draft.trackId !== track.id ? draft.trackId : null;
@@ -732,6 +750,7 @@ export function Timeline({
         useEditorStore.getState().setDragDraft({ ...draft, settling: true });
         // 链接组员只为预览:后端移动这几段时整组跟着走,不用(也不该)再交一遍。
         const groupFollowers = (draft.followers ?? []).filter((f) => !f.linked);
+        const link = linkOptionFor(useEditorStore.getState(), [clip.id, ...groupFollowers.map((f) => f.clipId)]);
         if (groupFollowers.length && onMoveClips) {
           // 组拖走批量接口:一次手势落成一条操作,撤销一步还原整组。逐个调 onMoveClip 会产生
           // N 条操作,用户得按 N 次 ⌘Z——与"一次拖动"的心智完全对不上。
@@ -739,11 +758,11 @@ export function Timeline({
           onMoveClips([
             { clipId: clip.id, timelineStart: draft.timeline_start, trackId: draft.trackId },
             ...groupFollowers.map((f) => ({ clipId: f.clipId, timelineStart: f.timeline_start, trackId: f.trackId })),
-          ]);
+          ], link);
         } else {
           // Insert mode ripples the destination track's downstream clips aside.
           const ripple = useEditorStore.getState().editMode === "insert";
-          onMoveClip(clip.id, draft.timeline_start, draft.trackId !== track.id ? draft.trackId : undefined, ripple);
+          onMoveClip(clip.id, draft.timeline_start, draft.trackId !== track.id ? draft.trackId : undefined, ripple, link);
         }
       } else {
         useEditorStore.getState().setDragDraft(null);
@@ -758,7 +777,6 @@ export function Timeline({
     const clip = (track.clips ?? []).find((item) => item.id === clipId);
     if (!clip || track.locked) return;
     event.stopPropagation();
-    selectClip(clip.id);
     const origin = { ...clip };
     const asset = clip.asset_id ? assetById.get(clip.asset_id) : undefined;
     // 图片是静态帧,没有固有时长——可自由拉伸到任意长度(渲染时按该时长定格显示);
@@ -770,6 +788,10 @@ export function Timeline({
     const trimSecondary = snapEnabled
       ? [0, useEditorStore.getState().playhead, ...tracks.filter((t) => t.id !== track.id).flatMap((t) => trackEdgeTimes(t.clips ?? [], clip.id))]
       : [];
+    // 按住 ⌥ 修剪,或这一段是临时解链的选区:只修这一段,不带链接组员。
+    const trimUnlinked = event.altKey || linkOptionFor(useEditorStore.getState(), [clip.id]).linked === false;
+    if (event.altKey) useEditorStore.getState().selectClipUnlinked(clip.id);
+    else if (!trimUnlinked) selectClip(clip.id);
     // 同轨不重叠:头边停在左邻居的尾巴上、尾边停在右邻居的头上(后端修剪同样夹到邻居)。
     const limits = trimLimits(track.clips ?? [], clip);
     const target = event.currentTarget as HTMLElement;
@@ -810,7 +832,12 @@ export function Timeline({
       if (draft && draft.clipId === clip.id) {
         // 与移动同理:settling 草稿钉住裁剪结果等回包,缓存追平后由过渡完成落位。
         useEditorStore.getState().setDragDraft({ ...draft, settling: true });
-        onTrimClip(clip.id, { timeline_start: draft.timeline_start, src_in: draft.src_in, src_out: draft.src_out });
+        onTrimClip(clip.id, {
+          timeline_start: draft.timeline_start,
+          src_in: draft.src_in,
+          src_out: draft.src_out,
+          ...(trimUnlinked ? { linked: false } : {}),
+        });
       }
     };
     target.addEventListener("pointermove", onMove);
@@ -1155,6 +1182,7 @@ export function Timeline({
                   [[t("hintShiftClickKey")], t("hintMultiSelect")],
                   [[t("hintDragLabel")], t("hintDragBody")],
                   [[t("hintModifiersLabel")], t("hintDragModifiers")],
+                  [[t("hintUnlinkKey")], t("hintUnlink")],
                   [["↕"], t("hintVerticalDrag")],
                 ] as const
               ).map(([keys, body]) => (
@@ -1436,6 +1464,7 @@ export function Timeline({
                       onClipFocus={handleClipFocus}
                       tabbable={clip.id === tabbableClipId}
                       cut={cutIds.has(clip.id)}
+                      linked={Boolean(clip.link_group)}
                     />
                   );
                 })}
