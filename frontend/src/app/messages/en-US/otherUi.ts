@@ -695,6 +695,7 @@ export const otherUi = {
   hintDragLabel: "Drag",
   hintDragBody: "Drag assets into the timeline; clips move across same-kind tracks",
   hintVerticalDrag: "Drag a clip up/down to switch track/layer; drag above the top to add a video layer",
+  splitNotUnderPlayhead: "The selected clip isn't under the playhead \u2014 move the playhead onto it, or deselect to split whatever is there",
   monitorBlankHint: "Nothing at the playhead — drag media into the timeline below, or move the playhead",
   previewTranscoding: "Preparing preview",
   previewTranscodingHint: "A newly imported video needs a preview proxy first (usually seconds). Playback starts here automatically once it is ready.",

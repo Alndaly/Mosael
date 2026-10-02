@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { adjacentEditPoint, editPoints, splitPointAt, splitPointsAcrossTracks } from "./editTargets";
+import { adjacentEditPoint, editPoints, rippleTrimCuts, splitPointAt, splitPointsAcrossTracks } from "./editTargets";
 
 const clip = (id: string, start: number, srcIn: number, srcOut: number, speed = 1) => ({
   id,
@@ -29,6 +29,14 @@ describe("播放头上切谁", () => {
     expect(splitPointAt(tracks, 4, "V1")).toBeNull();
   });
 
+  it("⇧⌘K:链接组只报一段(组员由后端在同一刻跟着切、左右各自配对)", () => {
+    const linked = [
+      { id: "V1", clips: [{ ...clip("picture", 0, 0, 10), link_group: "g" }] },
+      { id: "A1", clips: [{ ...clip("sound", 0, 0, 10), link_group: "g" }, clip("other", 0, 0, 10)] },
+    ];
+    expect(splitPointsAcrossTracks(linked, 3).map((point) => point.clipId)).toEqual(["picture", "other"]);
+  });
+
   it("⌘K:每条未锁定轨上播放头下的片段各一刀", () => {
     expect(splitPointsAcrossTracks(tracks, 2)).toEqual([
       { clipId: "a", srcTime: 2 },
@@ -55,5 +63,48 @@ describe("编辑点(↑ / ↓ 跳转)", () => {
     expect(adjacentEditPoint(points, 4.001, -1, 0.01)).toBe(1);
     expect(adjacentEditPoint(points, 8, 1)).toBeNull();
     expect(adjacentEditPoint(points, 0, -1)).toBeNull();
+  });
+});
+
+describe("Q / W 波纹修剪到播放头", () => {
+  const tracks = [
+    { id: "V1", clips: [clip("a", 0, 0, 4), clip("b", 6, 0, 2)] },
+    { id: "V2", locked: true, clips: [clip("locked", 0, 0, 10)] },
+    { id: "A1", clips: [clip("m", 1, 0, 20, 2)] },
+  ];
+
+  it("Q:剪掉上一个编辑点到播放头这一段,所有目标轨剪同样长(各轨保持同步)", () => {
+    // 目标轨上的边缘:V1 的 0 / 4 / 6 / 8,A1 的 1 / 11;播放头 2 之前最近的是 1。
+    expect(rippleTrimCuts(tracks, 2, "start", [])).toEqual({
+      from: 1,
+      to: 2,
+      cuts: [
+        { clipId: "a", srcStart: 1, srcEnd: 2 },
+        { clipId: "m", srcStart: 0, srcEnd: 2 },
+      ],
+    });
+  });
+
+  it("W:剪掉播放头到下一个编辑点这一段", () => {
+    expect(rippleTrimCuts(tracks, 2, "end", [])).toEqual({
+      from: 2,
+      to: 4,
+      cuts: [
+        { clipId: "a", srcStart: 2, srcEnd: 4 },
+        { clipId: "m", srcStart: 2, srcEnd: 6 },
+      ],
+    });
+  });
+
+  it("选中的片段压在播放头上时,只动选中的那几条轨", () => {
+    expect(rippleTrimCuts(tracks, 2, "start", ["m"])).toEqual({
+      from: 1,
+      to: 2,
+      cuts: [{ clipId: "m", srcStart: 0, srcEnd: 2 }],
+    });
+  });
+
+  it("播放头下没有片段:不剪", () => {
+    expect(rippleTrimCuts(tracks, 30, "start", [])).toBeNull();
   });
 });

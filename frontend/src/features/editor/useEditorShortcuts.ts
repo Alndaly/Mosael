@@ -25,6 +25,10 @@ export interface EditorShortcutActions {
   paste: () => void;
   moveLayer: (direction: -1 | 1) => void;
   split: () => void;
+  /** ⇧⌘K:播放头下所有未锁定轨各切一刀。 */
+  splitAll: () => void;
+  /** Q(start)/ W(end):波纹修剪上一个 / 下一个编辑点到播放头。 */
+  rippleTrim: (edge: "start" | "end") => void;
   deleteSelection: (ripple: boolean) => void;
 }
 
@@ -61,6 +65,10 @@ export function useEditorShortcuts(
       } else if (mod && key === "v") {
         event.preventDefault();
         act.paste();
+      } else if (mod && event.shiftKey && key === "k") {
+        // ⇧⌘K(Premiere 的「所有轨道添加编辑点」)。⌘K 本身是全局命令面板,不抢。
+        event.preventDefault();
+        act.splitAll();
       } else if (mod && key === "a") {
         // ⌘A:选中所有未锁定轨上的片段(锁定的轨本来就选不中、拖不动)。
         event.preventDefault();
@@ -95,6 +103,9 @@ export function useEditorShortcuts(
         // ⌥X 清掉入出点(macOS 上 ⌥X 的 key 是 "≈",认物理键)。
         event.preventDefault();
         store.clearMarks();
+      } else if (!mod && (key === "q" || key === "w")) {
+        event.preventDefault();
+        act.rippleTrim(key === "q" ? "start" : "end");
       } else if (!mod && (key === "j" || key === "k" || key === "l")) {
         event.preventDefault();
         store.shuttle(key === "j" ? -1 : key === "l" ? 1 : 0);

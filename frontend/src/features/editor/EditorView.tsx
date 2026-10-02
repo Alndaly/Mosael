@@ -65,7 +65,7 @@ import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { CanvasAgentChat, type CanvasAgentMode } from "@/features/agent/CanvasAgentChat";
 import { clipEnd, snapToFrame } from "@/domain/timeline/geometry";
-import { clipContains, splitPointAt } from "@/domain/timeline/editTargets";
+import { clipContains, rippleTrimCuts, splitPointAt, splitPointsAcrossTracks } from "@/domain/timeline/editTargets";
 import { projectTranscript, transcriptSegmentsFromApi, type SegmentLike } from "@/domain/timeline/transcriptProjection";
 import { transcriptSourceClips } from "@/domain/timeline/transcriptSources";
 import { type LeftTab, useEditorPanels } from "@/features/editor/useEditorPanels";
@@ -626,6 +626,43 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
       if (updated) applySequence(updated);
     },
   });
+  // ⇧⌘K:播放头下每条未锁定轨各切一刀,一条操作、一步撤销。执行时按最新的时间线找片段。
+  const splitAllMutation = useMutation({
+    scope: editScope,
+    mutationFn: async (time: number) => {
+      const latest = latestSequence()!;
+      const points = splitPointsAcrossTracks(latest.tracks ?? [], time);
+      if (points.length === 0) return null;
+      return splitClipAtPointsBatch(
+        latest,
+        points.map((point) => ({ clip_id: point.clipId, src_times: [point.srcTime] })),
+      );
+    },
+    onSuccess: (updated) => {
+      if (updated) applySequence(updated);
+    },
+  });
+  // Q / W:波纹修剪上一个 / 下一个编辑点到播放头(见 editTargets.rippleTrimCuts)。剪口之后的内容
+  // 跟着左移由后端的波纹语义负责(按区间剪是真正的波纹删除:同轨后面的左移,字幕跟着走);Q 之后播放头落到剪口上 —— 原来播放头下的那一帧现在就在那儿。
+  const rippleTrimMutation = useMutation({
+    scope: editScope,
+    mutationFn: async ({ edge, time }: { edge: "start" | "end"; time: number }) => {
+      const latest = latestSequence()!;
+      const plan = rippleTrimCuts(latest.tracks ?? [], time, edge, useEditorStore.getState().selectedClipIds);
+      if (!plan) return null;
+      // 链接组员(画和它分离出去的声音)若也在目标轨上,和它剪的是同一段时间线,后端按轨合并区间,不会剪两遍。
+      const updated = await cutClipRangesBatch(
+        latest,
+        plan.cuts.map((cut) => ({ clip_id: cut.clipId, ranges: [{ src_start: cut.srcStart, src_end: cut.srcEnd }] })),
+      );
+      return { updated, plan, edge };
+    },
+    onSuccess: (result) => {
+      if (!result) return;
+      applyAndPruneSelection(result.updated);
+      if (result.edge === "start") useEditorStore.getState().setPlayhead(result.plan.from);
+    },
+  });
   // Transcript-driven split (按句切分 / 单句独立 / 在此切一刀): all named clips belong to
   // one user gesture, so the sequence Module records and undoes the whole batch atomically.
   const splitPointsMutation = useMutation({
@@ -703,7 +740,11 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
       const playhead = snapToFrame(useEditorStore.getState().playhead, sequence.fps);
       const targetId = clipId ?? selectedClipIdOf(useEditorStore.getState());
       const target = targetId ? (sequence.tracks ?? []).flatMap((track) => track.clips ?? []).find((item) => item.id === targetId) : null;
-      if (target && !clipContains(target, playhead)) return;
+      if (target && !clipContains(target, playhead)) {
+        // 选中的那段不在播放头下:说一声。悄悄不切,用户只会觉得 S 坏了。
+        toast.message(t("splitNotUnderPlayhead"));
+        return;
+      }
       splitMutation.mutate({ time: playhead, trackId: target?.track_id ?? null });
     },
     [sequence, splitMutation],
@@ -841,6 +882,8 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
     paste: pasteClip,
     moveLayer: moveClipLayer,
     split: () => splitAtPlayhead(),
+    splitAll: () => splitAllMutation.mutate(snapToFrame(useEditorStore.getState().playhead, sequence?.fps ?? 30)),
+    rippleTrim: (edge) => rippleTrimMutation.mutate({ edge, time: snapToFrame(useEditorStore.getState().playhead, sequence?.fps ?? 30) }),
     deleteSelection: (ripple) => {
       const clipIds = useEditorStore.getState().selectedClipIds;
       if (ripple) rippleDeleteMutation.mutate(clipIds);

@@ -27,6 +27,7 @@ const mocks = vi.hoisted(() => ({
   deleteClipsBatch: vi.fn(),
   duplicateClips: vi.fn(),
   insertClip: vi.fn(),
+  cutClipRangesBatch: vi.fn(),
   timelineProps: null as Record<string, unknown> | null,
   monitorProps: null as Record<string, unknown> | null,
   transcriptProps: null as Record<string, unknown> | null,
@@ -179,7 +180,7 @@ beforeEach(() => {
   for (const fn of [
     mocks.splitClip, mocks.undoSequence, mocks.redoSequence, mocks.moveClip, mocks.moveClipsBatch, mocks.trimClip,
     mocks.setClipTransform, mocks.splitClipAtPointsBatch, mocks.addTrack, mocks.deleteClip, mocks.deleteClipsBatch,
-    mocks.duplicateClips, mocks.insertClip,
+    mocks.duplicateClips, mocks.insertClip, mocks.cutClipRangesBatch,
   ]) {
     fn.mockReset().mockImplementation(async () => current);
   }
@@ -499,5 +500,67 @@ describe("在时间线上走动与全选", () => {
     expect(useEditorStore.getState().selectedClipIds).toEqual(["a", "b", "m"]);
     // ⌘A 不是 A(选择工具):工具不变。
     expect(useEditorStore.getState().tool).toBe("select");
+  });
+});
+
+describe("对着播放头的剪辑:⇧⌘K、Q / W、S 的提示", () => {
+  const seq = () =>
+    sequenceWith([
+      track("v1", "video", 0, [clip("a", "v1", 0, 0, 4), clip("b", "v1", 6, 0, 2)]),
+      track("v2", "video", 1, [clip("locked", "v2", 0, 0, 10)], { locked: true }),
+      track("a1", "audio", 2, [clip("m", "a1", 1, 0, 10)]),
+    ]);
+
+  it("⇧⌘K:播放头下每条未锁定轨各切一刀,一条操作", async () => {
+    renderEditor(seq());
+    await ready();
+    act(() => useEditorStore.getState().setPlayhead(2));
+    press("K", { metaKey: true, shiftKey: true, code: "KeyK" });
+    await waitFor(() =>
+      expect(mocks.splitClipAtPointsBatch).toHaveBeenCalledWith(onS1, [
+        { clip_id: "a", src_times: [2] },
+        { clip_id: "m", src_times: [1] },
+      ]),
+    );
+  });
+
+  it("Q:剪掉上一个编辑点到播放头,播放头落到剪口", async () => {
+    renderEditor(seq());
+    await ready();
+    act(() => useEditorStore.getState().setPlayhead(2));
+    press("q");
+    await waitFor(() =>
+      expect(mocks.cutClipRangesBatch).toHaveBeenCalledWith(onS1, [
+        { clip_id: "a", ranges: [{ src_start: 1, src_end: 2 }] },
+        { clip_id: "m", ranges: [{ src_start: 0, src_end: 1 }] },
+      ]),
+    );
+    await waitFor(() => expect(useEditorStore.getState().playhead).toBe(1));
+  });
+
+  it("W:剪掉播放头到下一个编辑点,播放头不动", async () => {
+    renderEditor(seq());
+    await ready();
+    act(() => useEditorStore.getState().setPlayhead(2));
+    press("w");
+    await waitFor(() =>
+      expect(mocks.cutClipRangesBatch).toHaveBeenCalledWith(onS1, [
+        { clip_id: "a", ranges: [{ src_start: 2, src_end: 4 }] },
+        { clip_id: "m", ranges: [{ src_start: 1, src_end: 3 }] },
+      ]),
+    );
+    expect(useEditorStore.getState().playhead).toBe(2);
+  });
+
+  it("选中的片段不在播放头下按 S:说一声,不悄悄什么都不做", async () => {
+    renderEditor(seq());
+    await ready();
+    act(() => {
+      useEditorStore.getState().selectClip("b");
+      useEditorStore.getState().setPlayhead(2);
+    });
+    press("s");
+    expect(toasts.message).toHaveBeenCalledWith("splitNotUnderPlayhead");
+    expect(mocks.splitClip).not.toHaveBeenCalled();
   });
 });

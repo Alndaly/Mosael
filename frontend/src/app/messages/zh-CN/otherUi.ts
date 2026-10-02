@@ -695,6 +695,7 @@ export const otherUi = {
   hintDragLabel: "拖拽",
   hintDragBody: "素材拖入时间线;片段可跨同类轨道拖动",
   hintVerticalDrag: "上下拖动片段切换轨道/图层;拖到最上方松开新建视频图层",
+  splitNotUnderPlayhead: "选中的片段不在播放头下 —— 把播放头移到片段上再切,或先取消选中",
   monitorBlankHint: "播放头处无画面 — 拖动素材到下方时间线,或移动播放头",
   previewTranscoding: "正在准备预览",
   previewTranscodingHint: "首次导入的视频要先转一份预览代理(通常几秒到几十秒)。完成后这里会自动开始播放。",

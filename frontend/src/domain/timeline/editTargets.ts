@@ -4,6 +4,9 @@
  */
 import { clipEnd, timelineToSrc, type ClipLike } from "./geometry";
 
+/** 片段可能属于一个链接组(视频和从它分离出去的音频):组员一起切、一起动。 */
+export type LinkableClip = ClipLike & { link_group?: string | null };
+
 export interface TrackLike<C extends ClipLike = ClipLike> {
   id: string;
   locked?: boolean;
@@ -38,13 +41,24 @@ export function splitPointAt<C extends ClipLike>(
   return null;
 }
 
-/** ⌘K:播放头下每一条未锁定轨上的片段各切一刀。 */
-export function splitPointsAcrossTracks<C extends ClipLike>(tracks: TrackLike<C>[], time: number): SplitPoint[] {
+/**
+ * ⇧⌘K:播放头下每一条未锁定轨上的片段各切一刀。
+ *
+ * 链接组只报一段:切开它时后端会在同一时刻切开它的组员,并把左右两截各自配好对(左半跟左半);
+ * 组员再单独切一次就切了两遍 —— 而且它在第一刀里已经被换成两截,原 id 找不到了。
+ */
+export function splitPointsAcrossTracks<C extends LinkableClip>(tracks: TrackLike<C>[], time: number): SplitPoint[] {
   const points: SplitPoint[] = [];
+  const groups = new Set<string>();
   for (const track of tracks) {
     if (track.locked) continue;
     for (const clip of track.clips ?? []) {
-      if (clipContains(clip, time)) points.push({ clipId: clip.id, srcTime: timelineToSrc(clip, time) });
+      if (!clipContains(clip, time)) continue;
+      if (clip.link_group) {
+        if (groups.has(clip.link_group)) continue;
+        groups.add(clip.link_group);
+      }
+      points.push({ clipId: clip.id, srcTime: timelineToSrc(clip, time) });
     }
   }
   return points;
@@ -72,4 +86,47 @@ export function adjacentEditPoint(points: number[], time: number, direction: -1 
     if (points[index] < time - tolerance) return points[index];
   }
   return null;
+}
+
+export interface RippleTrimPlan {
+  /** 剪掉的时间线区间 [from, to)。Q 之后播放头落到 from。 */
+  from: number;
+  to: number;
+  cuts: Array<{ clipId: string; srcStart: number; srcEnd: number }>;
+}
+
+/**
+ * Q / W 波纹修剪到播放头(Premiere 的「波纹修剪上一个 / 下一个编辑点到播放头」)。
+ *
+ * 目标轨:选中的片段里有压在播放头上的,就是它们所在的轨;否则是播放头下有片段的每一条未锁定轨。
+ * 剪掉的区间对**所有目标轨一样长** —— Q 是「目标轨上播放头之前最近的编辑点 → 播放头」,W 是
+ * 「播放头 → 之后最近的编辑点」—— 各轨按各自的片段剪,剪完一起左移同样的长度,彼此保持同步。
+ * 每条目标轨上压着播放头的那一段一定包住整个区间(它自己的头尾也在编辑点里),所以一轨一刀。
+ */
+export function rippleTrimCuts<C extends ClipLike>(
+  tracks: TrackLike<C>[],
+  time: number,
+  edge: "start" | "end",
+  selectedClipIds: string[],
+): RippleTrimPlan | null {
+  const underPlayhead = tracks
+    .filter((track) => !track.locked)
+    .map((track) => ({ track, clip: (track.clips ?? []).find((item) => clipContains(item, time)) }))
+    .filter((entry): entry is { track: TrackLike<C>; clip: C } => Boolean(entry.clip));
+  const selected = underPlayhead.filter((entry) => selectedClipIds.includes(entry.clip.id));
+  const targets = selected.length > 0 ? selected : underPlayhead;
+  if (targets.length === 0) return null;
+  const points = editPoints(targets.map((entry) => entry.track));
+  const bound = adjacentEditPoint(points, time, edge === "start" ? -1 : 1);
+  if (bound === null) return null;
+  const [from, to] = edge === "start" ? [bound, time] : [time, bound];
+  return {
+    from,
+    to,
+    cuts: targets.map(({ clip }) => ({
+      clipId: clip.id,
+      srcStart: timelineToSrc(clip, from),
+      srcEnd: timelineToSrc(clip, to),
+    })),
+  };
 }
