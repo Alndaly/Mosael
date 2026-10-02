@@ -36,6 +36,9 @@ def require_speed(speed: float) -> float:
 #: 画幅宽高(像素)与帧率的取值范围 —— 新建序列、改画幅、工作流的「新建成片项目」、接口的请求体认的都是这一份。
 CANVAS_SIZE_RANGE = (16, 8192)
 FPS_RANGE = (1.0, 240.0)
+#: 新建时间线不给画幅 / 帧率时用的那一组(宽, 高, 帧率)。剪辑页「新建时间线」(POST /api/sequences 不带画幅)
+#: 和智能体给一个还没有时间线的项目建第一条,用的是同一组 —— 两个入口建出来的不该不一样。
+DEFAULT_CANVAS = (1920, 1080, 30.0)
 
 
 def validate_canvas(width: int, height: int, fps: float | None = None) -> None:

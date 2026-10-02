@@ -93,7 +93,7 @@ NODE_TO_TOOL: dict[str, str] = {
     #: 译配对口型:智能体按块 generate_video(源视频 + 驱动音频),再 edit_timeline 放到最上面一条轨。
     "dub_lipsync": "generate_video",
     "project_create": "create_project",
-    # 画布上的自动成片便利节点会顺手建立默认序列和轨道；智能体侧对应的用户目标仍是新建项目。
+    # 建项目 + 时间线(给了项目就建在它里面):智能体那边是同一个工具 —— create_project 的 timeline / project_id。
     "project_sequence_create": "create_project",
     "call_workflow": "run_workflow",
     "browser_open": "browser_open",

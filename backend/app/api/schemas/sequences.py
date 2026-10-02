@@ -9,16 +9,16 @@ from typing import Any, Literal
 from pydantic import Field, field_validator, model_validator
 from sqlalchemy import inspect as sqlalchemy_inspect
 from app.api.schemas.base import ApiModel, OrmModel
-from app.domain.sequences import CANVAS_SIZE_RANGE, FPS_RANGE
+from app.domain.sequences import CANVAS_SIZE_RANGE, DEFAULT_CANVAS, FPS_RANGE
 
 class SequenceCreate(ApiModel):
     workspace_id: str
     project_id: str
     name: str = Field(min_length=1, max_length=180)
     #: 范围与领域层同一份(sequences._timeline):宽 -5、帧率 0 的序列此前建得出来,到预览、导出才炸。
-    width: int = Field(default=1920, ge=CANVAS_SIZE_RANGE[0], le=CANVAS_SIZE_RANGE[1])
-    height: int = Field(default=1080, ge=CANVAS_SIZE_RANGE[0], le=CANVAS_SIZE_RANGE[1])
-    fps: float = Field(default=30.0, ge=FPS_RANGE[0], le=FPS_RANGE[1])
+    width: int = Field(default=DEFAULT_CANVAS[0], ge=CANVAS_SIZE_RANGE[0], le=CANVAS_SIZE_RANGE[1])
+    height: int = Field(default=DEFAULT_CANVAS[1], ge=CANVAS_SIZE_RANGE[0], le=CANVAS_SIZE_RANGE[1])
+    fps: float = Field(default=DEFAULT_CANVAS[2], ge=FPS_RANGE[0], le=FPS_RANGE[1])
 
 
 class SequenceRename(ApiModel):

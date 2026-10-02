@@ -40,7 +40,7 @@
 | `convert_video_to_gif` | 确认卡 | Confirmation required: convert an EXISTING video asset into a NEW GIF asset. |
 | `create_entity` | 直接执行 | Create a character, location or prop in the asset library (a workspace edit, no confirmation). |
 | `create_note` | 直接执行 | Create a persistent note when the user asks to save research or writing. Preserve factual |
-| `create_project` | 直接执行 | Runs directly: create a project in the workspace; returns its id. |
+| `create_project` | 直接执行 | Runs directly: create a project; returns its id. timeline=true also gives it an empty VIDEO TIMELINE. |
 | `create_scene` | 直接执行 | Create an empty persistent 3D scene. Then use edit_scene to add geometry and camera shots. |
 | `create_workflow` | 确认卡 | Confirmation required: create a NEW visual workflow. |
 | `delete_assets` | 确认卡 | Confirmation required: PERMANENTLY delete media assets. This cannot be undone. |

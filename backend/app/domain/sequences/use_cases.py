@@ -9,6 +9,7 @@ from app.core.i18n import tr
 from app.db.models import Board, Project, Sequence, Track, User
 from app.domain.permissions import NotVisible, ensure_workspace_access, ensure_workspace_perm, require_sequence_access
 from app.domain.references import referrers
+from app.domain.sequences._timeline import DEFAULT_CANVAS
 from app.domain.sequences.creation import copy_sequence, create_sequence_scaffold
 from app.domain.sequences.errors import SequenceDomainError
 from app.domain.sequences.history import can_redo, can_undo
@@ -71,6 +72,28 @@ def create(
         project.active_sequence_id = sequence.id
     db.flush()
     return sequence
+
+
+def create_in_project(
+    db: Session, user: User, workspace_id: str, project_id: str, *, name: str, width: int = 0, height: int = 0,
+    fps: float = 0.0,
+) -> Sequence:
+    """在一个已有项目里建一条空时间线(一条视频轨、一条音频轨,见 create_sequence_scaffold)。
+
+    画幅 / 帧率给 0 就**跟这个项目当前那条**(active_sequence,没有就最近改过的那条):给项目再开一条剪法,
+    十有八九是同一个画幅。项目里一条都还没有就用 DEFAULT_CANVAS —— 和剪辑页「新建时间线」同一组。
+    """
+    project = db.get(Project, project_id)
+    if project is None:
+        raise NotVisible("Project not found")
+    current_id = project.active_sequence_id or db.scalar(
+        select(Sequence.id).where(Sequence.project_id == project.id).order_by(Sequence.updated_at.desc()).limit(1)
+    )
+    current = db.get(Sequence, current_id) if current_id else None
+    base = (current.width, current.height, current.fps) if current is not None else DEFAULT_CANVAS
+    return create(
+        db, user, workspace_id, project.id, name=name, width=width or base[0], height=height or base[1], fps=fps or base[2]
+    )
 
 
 def exportable(db: Session, user: User, sequence_id: str) -> Sequence:

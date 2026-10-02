@@ -317,7 +317,7 @@ def inspect_sequence(sequence_id: str = "", project_id: str = "") -> dict[str, A
     def load(db, user) -> dict[str, Any]:
         row = sequences.readable(db, user, sequence_id) if sequence_id else sequences.latest_of_project(db, user, project_id)
         if row is None:
-            raise ValueError("Project has no sequences")
+            raise ValueError("This project has no timeline yet. Create one: create_project(project_id=..., name=...).")
         return describe_sequence(row)
 
     return _use_case(load)
@@ -2392,17 +2392,39 @@ def get_job(job_id: str) -> dict[str, Any]:
 
 
 @tool(effect="writes")
-def create_project(name: str, workspace_id: str = "") -> dict[str, Any]:
-    """Runs directly: create a project in the workspace; returns its id.
+def create_project(
+    name: str, workspace_id: str = "", project_id: str = "", timeline: bool = False,
+    width: int = 0, height: int = 0, fps: float = 0,
+) -> dict[str, Any]:
+    """Runs directly: create a project; returns its id. timeline=true also gives it an empty VIDEO TIMELINE.
 
-    Use before organising assets under a new piece of work. Pair with update_asset to
-    move existing assets into it.
+    project_id: add a new empty timeline named `name` to that EXISTING project instead — the way to
+    create a timeline. Returns sequence_id for edit_timeline. width/height/fps default to the project's
+    current timeline, else 1920x1080@30 (1080x1920 = vertical). Move assets in with update_asset.
     """
-    from app.api.schemas import ProjectCreate, ProjectOut
-    from app.domain.projects import use_cases
+    from app.api.schemas import ProjectCreate, ProjectOut, SequenceCreate
+    from app.domain.projects import use_cases as projects
+    from app.domain.sequences import use_cases as sequences
 
     request = ProjectCreate(workspace_id=workspace_id or _default_workspace_id(), name=name)
-    return _use_case(use_cases.create, request.workspace_id, request.name, out=ProjectOut)
+    if not project_id and not timeline:
+        return _use_case(projects.create, request.workspace_id, request.name, out=ProjectOut)
+    # 时间线的名字照建时间线那个接口的规矩校验(长度);画幅 / 帧率越界由领域层报。
+    timeline_name = SequenceCreate(workspace_id=request.workspace_id, project_id=project_id or "-", name=name).name
+
+    def build(db, user) -> dict[str, Any]:
+        # 新项目和它的第一条时间线在**同一个事务**里:不留一个建了一半的项目。
+        target = project_id or projects.create(db, user, request.workspace_id, request.name).id
+        sequence = sequences.create_in_project(
+            db, user, request.workspace_id, target, name=timeline_name, width=width, height=height, fps=fps
+        )
+        return {
+            **ProjectOut.model_validate(sequence.project).model_dump(mode="json"),
+            "sequence_id": sequence.id,
+            "timeline": {"name": sequence.name, "width": sequence.width, "height": sequence.height, "fps": sequence.fps},
+        }
+
+    return _use_case(build)
 
 
 @tool(effect="writes")
