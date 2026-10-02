@@ -34169,16 +34169,22 @@
           },
           "width": {
             "type": "integer",
+            "maximum": 8192.0,
+            "minimum": 16.0,
             "title": "Width",
             "default": 1920
           },
           "height": {
             "type": "integer",
+            "maximum": 8192.0,
+            "minimum": 16.0,
             "title": "Height",
             "default": 1080
           },
           "fps": {
             "type": "number",
+            "maximum": 240.0,
+            "minimum": 1.0,
             "title": "Fps",
             "default": 30.0
           }

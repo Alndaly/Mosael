@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 from typing import Any
 
 from sqlalchemy import String, select, type_coerce, update
@@ -12,7 +13,7 @@ from app.db.models import Asset, Project
 from app.domain.jobs import current_actor, current_parent_job_id
 from app.domain.notifications import notify
 from app.domain.projects import create_project
-from app.domain.sequences import create_sequence_scaffold
+from app.domain.sequences import CANVAS_SIZE_RANGE, FPS_RANGE, create_sequence_scaffold
 from app.domain.workflows import WorkflowDomainError, as_text
 from app.domain.plugins.nodes import PLUGIN_NODE_PREFIX
 from app.domain.workflows.executors.registry import (
@@ -316,9 +317,11 @@ def project_sequence_create(db: Session, scope: RunScope, config: dict[str, Any]
         fps = float(config.get("fps") or 30)
     except (TypeError, ValueError) as exc:
         raise WorkflowDomainError("wfErr_canvasNumbers") from exc
-    if not 16 <= width <= 16384 or not 16 <= height <= 16384:
+    # 范围是时间线自己的那一份(新建序列、改画幅认的都是它),这里只是先用节点的话说一遍。
+    lo, hi = CANVAS_SIZE_RANGE
+    if not lo <= width <= hi or not lo <= height <= hi:
         raise WorkflowDomainError("wfErr_canvasSizeRange")
-    if not 1 <= fps <= 240:
+    if not math.isfinite(fps) or not FPS_RANGE[0] <= fps <= FPS_RANGE[1]:
         raise WorkflowDomainError("wfErr_fpsRange")
 
     #: 给了项目就把这条时间线建在它里面 —— 「一条长视频切十条竖屏」是一个项目十条时间线,不是十个项目。

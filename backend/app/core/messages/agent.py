@@ -172,6 +172,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "seqErr_clipNoAudioSource": {"zh": "该片段没有音频源", "en": "This clip has no audio source."},
     "seqErr_transformNotNumber": {"zh": "transform.{field} 必须是数字", "en": "transform.{field} must be a number."},
     "seqErr_canvasSizeRange": {"zh": "画幅尺寸需在 16–8192 之间", "en": "The frame size must be between 16 and 8192."},
+    "seqErr_fpsRange": {"zh": "帧率需在 1–240 之间", "en": "The frame rate must be between 1 and 240."},
     "seqErr_revisionConflict": {
         "zh": "这条时间线刚被改过;已换成最新的一版,请在它上面再做一次",
         "en": "This timeline was just changed. It now shows the latest version — please do it again there.",

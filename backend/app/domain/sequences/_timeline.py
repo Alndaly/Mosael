@@ -25,6 +25,21 @@ def require_speed(speed: float) -> float:
         raise SequenceDomainError("Speed must be between 0.25 and 4")
     return float(speed)
 
+#: 画幅宽高(像素)与帧率的取值范围 —— 新建序列、改画幅、工作流的「新建成片项目」、接口的请求体认的都是这一份。
+CANVAS_SIZE_RANGE = (16, 8192)
+FPS_RANGE = (1.0, 240.0)
+
+
+def validate_canvas(width: int, height: int, fps: float | None = None) -> None:
+    """画幅与帧率在范围里。此前新建序列一样都不查:宽 -5、高 0、帧率 0 的序列建得出来,
+    而它们要到预览按宽高比算尺寸、导出把帧率交给 ffmpeg 时才炸。"""
+    lo, hi = CANVAS_SIZE_RANGE
+    for name, value in (("width", width), ("height", height)):
+        if not lo <= finite_number(name, value) <= hi:
+            raise SequenceDomainError("seqErr_canvasSizeRange")
+    if fps is not None and not FPS_RANGE[0] <= finite_number("fps", fps) <= FPS_RANGE[1]:
+        raise SequenceDomainError("seqErr_fpsRange")
+
 
 def _clip_payload(clip: Clip) -> dict[str, Any]:
     """重建这个片段所需的一切。改动日志的 create / delete 条目存的就是它,撤销 / 重做按它原样还原

@@ -45,7 +45,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfErr_projectNameEmpty": {"zh": "新建项目:项目名不能为空", "en": "New project: the name cannot be empty"},
     "wfErr_sequenceProjectNameEmpty": {"zh": "新建成片项目:项目名不能为空", "en": "New video project: the name cannot be empty"},
     "wfErr_sequenceProjectMissing": {"zh": "新建成片项目:指定的项目不存在,或不属于当前工作区", "en": "New video project: the given project does not exist in this workspace"},
-    "wfErr_canvasSizeRange": {"zh": "新建成片项目:画布宽高必须在 16 到 16384 之间", "en": "New video project: width and height must be between 16 and 16384"},
+    "wfErr_canvasSizeRange": {"zh": "新建成片项目:画布宽高必须在 16 到 8192 之间", "en": "New video project: width and height must be between 16 and 8192"},
     "wfErr_fpsRange": {"zh": "新建成片项目:帧率必须在 1 到 240 之间", "en": "New video project: the frame rate must be between 1 and 240"},
     "wfErr_targetProjectMissing": {"zh": "素材整理:目标项目不存在,或不属于当前工作区", "en": "Update assets: the target project does not exist in this workspace"},
     "wfErr_canvasNumbers": {"zh": "新建成片项目:宽、高和帧率必须是数字", "en": "New video project: width, height and frame rate must be numbers"},

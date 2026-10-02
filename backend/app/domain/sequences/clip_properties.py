@@ -16,6 +16,7 @@ from app.domain.sequences._timeline import (
     finite_number,
     require_speed,
     timeline_span,
+    validate_canvas,
 )
 from app.domain.sequences.coverage import EPS, clip_end, clips_on_track, shift
 from app.domain.sequences.errors import SequenceDomainError, SequenceNotFound
@@ -440,8 +441,7 @@ class SetSequenceReframe:
 def set_sequence_reframe(db: Session, sequence_id: str, op: SetSequenceReframe) -> Sequence:
     """改画幅(横转竖等):改序列输出宽高 + 填充模式。"""
     sequence = _require_sequence(db, sequence_id)
-    if not (16 <= op.width <= 8192 and 16 <= op.height <= 8192):
-        raise SequenceDomainError("seqErr_canvasSizeRange")
+    validate_canvas(op.width, op.height)
     fill_mode = op.fill_mode if op.fill_mode in _FILL_MODES else "cover"
     previous = {"width": sequence.width, "height": sequence.height, "reframe": dict(sequence.reframe or {})}
     sequence.width = int(op.width)

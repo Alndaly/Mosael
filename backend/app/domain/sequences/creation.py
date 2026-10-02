@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from sqlalchemy.orm import Session
 
 from app.db.models import Clip, Project, Sequence, Track
-from app.domain.sequences._timeline import RESTORABLE_CLIP_FIELDS
+from app.domain.sequences._timeline import RESTORABLE_CLIP_FIELDS, validate_canvas
 
 
 @dataclass(frozen=True)
@@ -35,6 +35,7 @@ def create_sequence_scaffold(
     keeps transaction ownership so a project plus its initial timeline either
     commits as one unit or not at all.
     """
+    validate_canvas(width, height, fps)
     sequence = Sequence(
         workspace_id=project.workspace_id,
         project=project,

@@ -128,9 +128,13 @@ router = APIRouter(tags=["sequences"])
 
 @router.post("/sequences", response_model=SequenceOut)
 def create_sequence(body: SequenceCreate, db: Tx, user: CurrentUser) -> Response:
-    sequence = sequence_use_cases.create(
-        db, user, body.workspace_id, body.project_id, name=body.name, width=body.width, height=body.height, fps=body.fps
-    )
+    try:
+        sequence = sequence_use_cases.create(
+            db, user, body.workspace_id, body.project_id, name=body.name, width=body.width, height=body.height,
+            fps=body.fps,
+        )
+    except SequenceDomainError as exc:  # 画幅 / 帧率越界(接口这层已挡过一道,领域层是给别的入口的)
+        raise HTTPException(status_code=exc.status, detail=str(exc)) from exc
     return _get_sequence(db, sequence.id)
 
 
