@@ -366,6 +366,16 @@ describe("轨道顺序", () => {
     expect(names).toEqual(["V2", "V1"]);
   });
 
+  it("新建的视频轨(后端放在最上:position 0,回包里却排在数组末尾)画在最上面一行", () => {
+    renderTimeline([
+      track("V1", "video", 1, [clip("base", "V1", 0, 0, 2)]),
+      track("A1", "audio", 2),
+      track("V2", "video", 0),
+    ]);
+    const names = [...document.querySelectorAll(".group\\/label")].map((row) => row.textContent?.match(/[VA]\d/)?.[0]);
+    expect(names).toEqual(["V2", "V1", "A1"]);
+  });
+
   it("拖到第二行,落到界面上第二行的那条轨", () => {
     const { props } = renderTimeline(shuffled());
     fireEvent.pointerDown(screen.getByTestId("clip-top"), { clientX: 10, clientY: 40, pointerId: 1, button: 0, buttons: 1 });

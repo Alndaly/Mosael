@@ -84,6 +84,8 @@ vi.mock("@/features/editor/TranscriptPanel", () => ({
 }));
 
 import type { Clip, Project, Sequence, Track, Workspace } from "@/api/client";
+import { humanError } from "@/api/errorMessage";
+import { ApiError } from "@/api/transport";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { EditorView } from "@/features/editor/EditorView";
 import { useEditorStore } from "@/features/editor/editorStore";
@@ -284,6 +286,17 @@ describe("拖动类编辑失败时说出来", () => {
     });
     await waitFor(() => expect(toasts.error).toHaveBeenCalledWith("Track is locked"));
     expect(useEditorStore.getState().dragDraft).toBeNull();
+  });
+
+  it("锁定的轨(后端 423):说的是「轨道已锁定」那句话,不是一个状态码", async () => {
+    renderEditor(seq());
+    await ready();
+    const body = JSON.stringify({ detail: "轨道「V1」已锁定,先解锁再改" });
+    mocks.moveClip.mockRejectedValueOnce(new ApiError(humanError(423, "Locked", body), 423, body));
+    act(() => {
+      timeline("onMoveClip")("c1", 3, undefined, false, {});
+    });
+    await waitFor(() => expect(toasts.error).toHaveBeenCalledWith("轨道「V1」已锁定,先解锁再改"));
   });
 
   it("修剪、组拖、换到新图层、按句切分失败都会提示", async () => {
