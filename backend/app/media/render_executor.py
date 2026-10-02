@@ -778,6 +778,159 @@ def _subtitle_overlay_pos(style, pw: int, ph: int, w: int, h: int) -> tuple[int,
     return x, y
 
 
+class TextTrack(NamedTuple):
+    """字幕(和能并进来的静止花字)合成的**一路**透明画面:一份 ffconcat,每一段是一张画布大小的 PNG +
+    它在画面上停多久。画布只有所有字的外接框那么大,叠在 (x, y)。"""
+
+    script: Path
+    x: int
+    y: int
+
+
+class BurnedText(NamedTuple):
+    """浏览器那条路渲好的文字,按叠的次序分好层:最下面一路字幕轨(TextTrack),再往上是没并进轨的花字
+    (plan.text_overlays 里的下标 + PNG,一条一路,带动画的都在这里),最上面是 AI 标识(PNG)。"""
+
+    track: TextTrack | None
+    text_overlays: tuple[tuple[int, Path, int, int], ...]
+    ai_labels: tuple[tuple[Path, int, int], ...]
+
+
+class _TrackLayer(NamedTuple):
+    """并进字幕轨的一块字:画在 [on, off) 毫秒(切换点落在两帧正中,见 compose_text_layers),左上角 (x, y)。"""
+
+    on: int
+    off: int
+    png: Path
+    x: int
+    y: int
+    w: int
+    h: int
+
+
+def _overlay_xy(value: float) -> int:
+    """overlay 滤镜落位置的取法:截断成整数,再按 4:2:0 的色度对齐往下取偶数(vf_overlay 的
+    normalize_xy)。并进轨的字要落在和单独叠时**同一个**像素上。"""
+    return int(value) & ~1
+
+
+def _still_text_xy(item: TextOverlayItem, pw: int, ph: int, width: int, height: int) -> tuple[int, int] | None:
+    """一条花字能不能并进字幕轨:不动(没有关键帧)、不缩放不旋转、不透明 —— 这样它就是一张原样贴上去的
+    PNG,贴在哪和单独叠时(_element_transform 的元素尺寸那条路)算得一模一样。能就返回左上角。"""
+    tf = item.transform
+    if tf.keyframes or tf.scale != 1.0 or tf.rotation != 0 or tf.opacity < 1.0:
+        return None
+    x, y = float(f"{tf.x:.5f}"), float(f"{tf.y:.5f}")
+    return _overlay_xy((0.5 + x * 0.5) * width - pw / 2), _overlay_xy((0.5 + y * 0.5) * height - ph / 2)
+
+
+def compose_text_layers(plan: RenderPlan, pngs: dict, workdir: Path) -> BurnedText:
+    """把逐条渲好的文字 PNG(_rasterize_text 的那张表)分层:字幕和能并的花字合成一条轨,其余照旧一条一路。
+
+    **为什么要合成一条轨**:此前每条字幕是一路 `-loop` 的 PNG 输入加一个整幅 overlay,而 overlay 不在
+    窗口里也要逐帧走一遍 —— 字幕越多,每一帧付的钱越多(1 小时 1000 条字幕的片子多花约 50 分钟),
+    命令行和输入数也跟着涨。一条轨就只有一路输入、一个 overlay。
+
+    **叠的次序不变**:字幕在所有花字下面;一条花字只有在它之前、和它时间上重叠的花字都也并得进来时
+    才并 —— 否则它会被压到本该在它下面的那条带动画的花字底下。"""
+    width, height, fps = plan.output.width, plan.output.height, plan.output.fps
+
+    def switch_ms(at: float) -> int:
+        # _shown_during 的式子 gte(t, at − 半帧) 按**精确**算术求:先算出第一个到了的帧(k/fps ≥ at − 半帧),
+        # 再把切换点放在它和前一帧**正中间**(毫秒,ffconcat 的精度),离两边的帧都有半帧远,不会被时间戳的取整
+        # 带偏。边界恰好压在某一帧上时(片段起止不在帧格上,挪半帧正好挪到帧上),那一帧归后一段 —— 逐条 enable
+        # 时这一帧归哪边取决于浮点误差(同一条时间线里实测两边都有),这里定下来。
+        first = math.ceil(at * fps - 0.5 - 1e-6)
+        return max(0, round((first - 0.5) / fps * 1000))
+
+    def window(start: float, duration: float) -> tuple[int, int]:
+        return switch_ms(start), switch_ms(start + duration)
+
+    layers: list[_TrackLayer] = []
+    for item, (png, pw, ph) in zip(plan.subtitles, pngs.get("subtitles", [])):
+        sx, sy = _subtitle_overlay_pos(plan.subtitle_style, pw, ph, width, height)
+        layers.append(_TrackLayer(*window(item.start, item.duration), png, _overlay_xy(sx), _overlay_xy(sy), pw, ph))
+    loose: list[tuple[int, Path, int, int]] = []
+    for k, (item, (png, pw, ph)) in enumerate(zip(plan.text_overlays, pngs.get("text_overlays", []))):
+        xy = _still_text_xy(item, pw, ph, width, height)
+        on, off = window(item.start, item.duration)
+        below_loose = any(
+            on < window(plan.text_overlays[j].start, plan.text_overlays[j].duration)[1]
+            and window(plan.text_overlays[j].start, plan.text_overlays[j].duration)[0] < off
+            for j, *_ in loose
+        )
+        if xy is None or below_loose:
+            loose.append((k, png, pw, ph))
+        else:
+            layers.append(_TrackLayer(on, off, png, *xy, pw, ph))
+    track = _write_text_track(layers, workdir, width, height) if layers else None
+    return BurnedText(track, tuple(loose), tuple(pngs.get("ai_labels", [])))
+
+
+def _write_text_track(layers: list[_TrackLayer], workdir: Path, width: int, height: int) -> TextTrack | None:
+    """按「这一段里哪几块字在场」切段,每种组合画一张画布 PNG(同一组合只画一次),写成 ffconcat。
+
+    画布是所有字的外接框(夹在画幅里、左上角取偶数),每张都一样大 —— 一路视频中途换尺寸,ffmpeg 会把
+    整张滤镜图重建。时间用每个文件的 `option framerate 1000` 定到毫秒(不给的话 image2 按 25fps 取整,
+    边界会差出 40 毫秒);各段时长是相邻边界之差,不会越拼越漂。"""
+    from PIL import Image
+
+    left = max(0, min(layer.x for layer in layers)) & ~1
+    top = max(0, min(layer.y for layer in layers)) & ~1
+    right = min(width, max(layer.x + layer.w for layer in layers))
+    bottom = min(height, max(layer.y + layer.h for layer in layers))
+    if right <= left or bottom <= top:
+        return None  # 字全在画外
+    canvas_w, canvas_h = right - left + (right - left) % 2, bottom - top + (bottom - top) % 2
+
+    folder = workdir / "text_track"
+    folder.mkdir(parents=True, exist_ok=True)
+    images: dict[Path, Image.Image] = {}
+    states: dict[tuple[int, ...], str] = {}
+
+    def state(visible: tuple[int, ...]) -> str:
+        if visible not in states:
+            canvas = Image.new("RGBA", (canvas_w, canvas_h), (0, 0, 0, 0))
+            for index in visible:
+                layer = layers[index]
+                if layer.png not in images:
+                    images[layer.png] = Image.open(layer.png).convert("RGBA")
+                _paste(canvas, images[layer.png], layer.x - left, layer.y - top)
+            name = f"state{len(states)}.png"
+            canvas.save(folder / name, compress_level=1)
+            states[visible] = name
+        return states[visible]
+
+    edges = sorted({0, *(layer.on for layer in layers), *(layer.off for layer in layers)})
+    entries: list[tuple[str, int]] = []
+    for at, until in zip(edges, edges[1:]):
+        visible = tuple(i for i, layer in enumerate(layers) if layer.on <= at < layer.off)
+        name = state(visible)
+        if entries and entries[-1][0] == name:
+            entries[-1] = (name, entries[-1][1] + until - at)
+        else:
+            entries.append((name, until - at))
+    #: 最后一段:全透明,没有时长 —— 它是这一路的最后一帧,overlay 一直拿它垫到片尾。
+    entries.append((state(()), 0))
+    lines = ["ffconcat version 1.0"]
+    for name, ms in entries:
+        lines += [f"file '{name}'", "option framerate 1000"]
+        if ms:
+            lines.append(f"duration {ms / 1000:.3f}")
+    script = folder / "track.ffconcat"
+    script.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return TextTrack(script, left, top)
+
+
+def _paste(canvas, image, x: int, y: int) -> None:
+    """把 image 按 straight alpha 叠到 canvas 的 (x, y);伸出画布的部分裁掉(alpha_composite 不认负坐标)。"""
+    sx, sy = max(0, -x), max(0, -y)
+    w = min(image.width - sx, canvas.width - max(x, 0))
+    h = min(image.height - sy, canvas.height - max(y, 0))
+    if w > 0 and h > 0:
+        canvas.alpha_composite(image, dest=(max(x, 0), max(y, 0)), source=(sx, sy, sx + w, sy + h))
+
+
 # 从深处剪一小段时,靠 trim 滤镜切会逼 ffmpeg 从第 0 帧一路解码到 src_in——长素材里这一步
 # 能占掉绝大多数导出时间(表现为进度长时间卡在个位数、speed≈0.0x)。改用输入级 -ss 快进:
 # ffmpeg 先跳到 src_in 之前最近的关键帧,默认 accurate_seek 会精确解码并丢弃到 src_in、并把
@@ -1128,7 +1281,7 @@ def build_ffmpeg_command(
     output_path: Path,
     *,
     force_software: bool = False,
-    text_pngs: dict | None = None,
+    text_layers: BurnedText | None = None,
     still_at: float | None = None,
     workdir: Path | None = None,
 ) -> list[str]:
@@ -1317,22 +1470,21 @@ def build_ffmpeg_command(
         video_label = out_label
         input_index += 1
 
-    # 字幕 + 花字:优先叠加「按预览 CSS 用无头 Chromium 渲染的透明 PNG」(text_pngs),逐像素
+    # 字幕 + 花字:优先叠加「按预览 CSS 用无头 Chromium 渲染的透明 PNG」(text_layers),逐像素
     # 对齐预览(字体/字号/描边/阴影/背景圆角全一致);拿不到(找不到前端 dist/Chromium,或测试
-    # 关闭)时回落到下面的 ASS(libass)烧字。每条 PNG 都 -loop 成时间线上的一段,再叠加。
-    if text_pngs is not None:
-        for item, (png, pw, ph) in zip(plan.subtitles, text_pngs.get("subtitles", [])):
-            args += ["-loop", "1", "-framerate", f"{fps:g}", "-t", f"{item.duration + 0.2:.6f}", "-i", str(png)]
-            sx, sy = _subtitle_overlay_pos(plan.subtitle_style, pw, ph, width, height)
-            filters.append(f"[{input_index}:v]setpts=PTS-STARTPTS+{item.start}/TB[stin{input_index}]")
-            out_label = f"[vts{input_index}]"
+    # 关闭)时回落到下面的 ASS(libass)烧字。字幕(和能并的静止花字)合成一路轨叠一次,见 compose_text_layers;
+    # 带动画的花字和 AI 标识各 -loop 成时间线上的一段,再叠加。
+    if text_layers is not None:
+        if text_layers.track is not None:
+            args += ["-f", "concat", "-safe", "0", "-i", str(text_layers.track.script)]
+            out_label = "[vtrack]"
             filters.append(
-                f"{video_label}[stin{input_index}]overlay=x={sx}:y={sy}:eof_action=repeat:"
-                f"enable='{_shown_during(item.start, item.start + item.duration, fps)}'{out_label}"
+                f"{video_label}[{input_index}:v]overlay=x={text_layers.track.x}:y={text_layers.track.y}{out_label}"
             )
             video_label = out_label
             input_index += 1
-        for k, (item, (png, _pw, _ph)) in enumerate(zip(plan.text_overlays, text_pngs.get("text_overlays", []))):
+        for k, png, _pw, _ph in text_layers.text_overlays:
+            item = plan.text_overlays[k]
             args += ["-loop", "1", "-framerate", f"{fps:g}", "-t", f"{item.duration + 0.2:.6f}", "-i", str(png)]
             # 花字 PNG 当作一个自由元素:移到时间线起点,再复用元素变换管线施加动画,以文字中心
             # 对齐 (cx,cy)。element_sized=True 让缩放/定位按 PNG 自然尺寸而非画幅尺寸。
@@ -1349,7 +1501,7 @@ def build_ffmpeg_command(
             )
             video_label = out_label
             input_index += 1
-        for k, (label, (png, pw, ph)) in enumerate(zip(plan.ai_labels, text_pngs.get("ai_labels", []))):
+        for k, (label, (png, pw, ph)) in enumerate(zip(plan.ai_labels, text_layers.ai_labels)):
             args += ["-loop", "1", "-framerate", f"{fps:g}", "-t", f"{label.duration + 0.2:.6f}", "-i", str(png)]
             lx, ly = _ai_label_position(label, pw, ph, width, height)
             filters.append(f"[{input_index}:v]setpts=PTS-STARTPTS+{label.start}/TB[lbin{k}]")
@@ -1518,18 +1670,23 @@ def _png_size(data: bytes) -> tuple[int, int]:
     return int.from_bytes(data[16:20], "big"), int.from_bytes(data[20:24], "big")
 
 
-def _text_for_burn(plan: RenderPlan, workdir: Path) -> dict | None:
-    """文字怎么烧:能渲成 PNG 就用 PNG(返回那张表);否则回落 ASS(返回 None)—— 回落之前先看
-    ffmpeg 有没有 libass。没有的话 ffmpeg 会以「No such filter: 'subtitles'」失败,在这里先说人话。"""
+def _text_for_burn(plan: RenderPlan, workdir: Path) -> BurnedText | None:
+    """文字怎么烧:能渲成 PNG 就用 PNG(分好层,见 compose_text_layers);否则回落 ASS(返回 None)—— 回落
+    之前先看 ffmpeg 有没有 libass。没有的话 ffmpeg 会以「No such filter: 'subtitles'」失败,在这里先说人话。"""
     text_pngs = _rasterize_text(plan, workdir)
-    if text_pngs is None and _has_text(plan) and not ffmpeg_has_libass(settings.ffmpeg):
-        raise RenderExecutionError("renderErr_noLibass", ffmpeg=settings.ffmpeg)
-    return text_pngs
+    if text_pngs is None:
+        if _has_text(plan) and not ffmpeg_has_libass(settings.ffmpeg):
+            raise RenderExecutionError("renderErr_noLibass", ffmpeg=settings.ffmpeg)
+        return None
+    return compose_text_layers(plan, text_pngs, workdir)
 
 
 def _rasterize_text(plan: RenderPlan, workdir: Path) -> dict | None:
-    """把每条字幕/花字按预览 CSS 渲染成透明 PNG,返回 {subtitles, text_overlays} 列表(元素为
-    (png路径, 宽, 高));关掉开关 / 找不到前端 dist / Chromium 失败时返回 None → 回落 ASS。"""
+    """把每条字幕/花字按预览 CSS 渲染成透明 PNG,返回 {subtitles, text_overlays, ai_labels} 列表(元素为
+    (png路径, 宽, 高),和计划里的条目一一对应);关掉开关 / 找不到前端 dist / Chromium 失败时返回 None → 回落 ASS。
+
+    字一样、样式一样的只渲一次,几条共用一张 PNG:字幕是「一框一段」,同一句话被别的轨上的字切开、或者
+    隔一阵又出现一次,都是同一张图。"""
     if not settings.text_rasterize:
         return None
     if not _has_text(plan):
@@ -1541,23 +1698,33 @@ def _rasterize_text(plan: RenderPlan, workdir: Path) -> dict | None:
         if not tr.available():
             logger.warning("frontend dist not found; text burn falls back to ASS")
             return None
+        rendered: dict[tuple, tuple[Path, int, int]] = {}
+
+        def once(key: tuple, name: str, draw: Callable[[], bytes]) -> tuple[Path, int, int]:
+            if key not in rendered:
+                png = draw()
+                path = workdir / name
+                path.write_bytes(png)
+                rendered[key] = (path, *_png_size(png))
+            return rendered[key]
+
         result: dict = {"subtitles": [], "text_overlays": [], "ai_labels": []}
         with tr:
             for i, item in enumerate(plan.subtitles):
-                png = tr.render_subtitle(item.text, plan.subtitle_style)
-                path = workdir / f"sub{i}.png"
-                path.write_bytes(png)
-                result["subtitles"].append((path, *_png_size(png)))
+                result["subtitles"].append(once(
+                    ("subtitle", item.text), f"sub{i}.png",
+                    lambda item=item: tr.render_subtitle(item.text, plan.subtitle_style),
+                ))
             for i, item in enumerate(plan.text_overlays):
-                png = tr.render_huazi(item.text, item.style)
-                path = workdir / f"txt{i}.png"
-                path.write_bytes(png)
-                result["text_overlays"].append((path, *_png_size(png)))
+                result["text_overlays"].append(once(
+                    ("huazi", item.text, item.style), f"txt{i}.png",
+                    lambda item=item: tr.render_huazi(item.text, item.style),
+                ))
             for i, label in enumerate(plan.ai_labels):
-                png = tr.render_label(label.text, label.font_size)
-                path = workdir / f"label{i}.png"
-                path.write_bytes(png)
-                result["ai_labels"].append((path, *_png_size(png)))
+                result["ai_labels"].append(once(
+                    ("label", label.text, label.font_size), f"label{i}.png",
+                    lambda label=label: tr.render_label(label.text, label.font_size),
+                ))
         return result
     except Exception:
         logger.exception("text rasterization failed; falling back to ASS burn")
@@ -1580,8 +1747,8 @@ def render_still(plan: RenderPlan, resolve: Callable[[str], Path], output_path: 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     plan = still_plan(plan, at)
     with render_workdir() as workdir:
-        text_pngs = _text_for_burn(plan, workdir)
-        command = build_ffmpeg_command(plan, resolve, output_path, text_pngs=text_pngs, still_at=at, workdir=workdir)
+        text_layers = _text_for_burn(plan, workdir)
+        command = build_ffmpeg_command(plan, resolve, output_path, text_layers=text_layers, still_at=at, workdir=workdir)
         try:
             result = run_logged(_with_filter_script(command, workdir), capture_output=True, text=True,
                                 timeout=_STILL_TIMEOUT, what="取当前帧")
@@ -1645,14 +1812,14 @@ def execute_render(
     #: 中转文件(文字 PNG、.ass)都进这次渲染自己的目录,出了这个 with 就删,不管成败。
     with render_workdir() as workdir:
         # 起一次无头 Chromium 把所有字幕/花字渲染成 PNG(软件回落时复用同一批,不重复渲染)。
-        text_pngs = _text_for_burn(plan, workdir)
+        text_layers = _text_for_burn(plan, workdir)
 
         def run_once(*, force_software: bool, fallback: bool = False) -> tuple[int, str, bool]:
             if on_phase is not None:
                 on_phase(PHASE_FALLBACK if fallback else PHASE_PREPARE)
             # build_ffmpeg_command probes every source; that is part of the "preparing" wait.
             command = build_ffmpeg_command(
-                plan, resolve, output_path, force_software=force_software, text_pngs=text_pngs, workdir=workdir
+                plan, resolve, output_path, force_software=force_software, text_layers=text_layers, workdir=workdir
             )
             process = popen_text(
                 _with_filter_script(command, workdir), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True

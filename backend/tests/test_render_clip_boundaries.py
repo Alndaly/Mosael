@@ -18,7 +18,7 @@ import numpy as np
 import pytest
 
 from app.core.config import settings
-from app.media.render_executor import _subtitle_overlay_pos, build_ffmpeg_command
+from app.media.render_executor import _subtitle_overlay_pos, build_ffmpeg_command, compose_text_layers
 from app.media.render_plan import build_render_plan
 
 pytestmark = pytest.mark.skipif(shutil.which(settings.ffmpeg) is None, reason="ffmpeg not installed")
@@ -85,7 +85,8 @@ def test_相邻两条字幕_交界帧只有后一条(tmp_path) -> None:
     )
     out = tmp_path / "out.mp4"
     pngs = {"subtitles": [(first, 80, 20), (second, 40, 10)], "text_overlays": []}
-    subprocess.run(build_ffmpeg_command(plan, lambda key: tmp_path / key, out, force_software=True, text_pngs=pngs),
+    layers = compose_text_layers(plan, pngs, tmp_path)
+    subprocess.run(build_ffmpeg_command(plan, lambda key: tmp_path / key, out, force_software=True, text_layers=layers),
                    check=True, capture_output=True, timeout=60)
     frames = _frames(out)
     x, y = _subtitle_overlay_pos(plan.subtitle_style, 80, 20, W, H)

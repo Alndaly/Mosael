@@ -83,10 +83,10 @@ def test_取帧之前要先把文字渲成_PNG() -> None:
 
     def fake_rasterize(p, workdir):
         seen["rasterized"] = True
-        return {"marker": "png"}
+        return {"subtitles": [], "text_overlays": [], "ai_labels": []}
 
     def fake_build(p, resolve, output, **kwargs):
-        seen["text_pngs"] = kwargs.get("text_pngs")
+        seen["text_layers"] = kwargs.get("text_layers")
         return ["true"]
 
     def fake_run(*_args, **_kwargs):
@@ -103,7 +103,7 @@ def test_取帧之前要先把文字渲成_PNG() -> None:
             render_executor.render_still(plan, lambda key: _Path(key), target, 1.0)
 
     assert seen.get("rasterized"), "取帧前没渲文字 —— 导出的帧会少一层字幕"
-    assert seen.get("text_pngs") == {"marker": "png"}, "渲了但没传给命令,等于没渲"
+    assert isinstance(seen.get("text_layers"), render_executor.BurnedText), "渲了但没传给命令,等于没渲"
 
 
 def test_不建声音那一路_也就没有悬着的输出() -> None:

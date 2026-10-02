@@ -21,7 +21,12 @@ from app.core.config import settings
 from app.core.db import SessionLocal
 from app.db.models import Asset, Clip, Job, Sequence, Track
 from app.media import render_executor
-from app.media.render_executor import RenderExecutionError, build_ffmpeg_command, ensure_text_can_burn
+from app.media.render_executor import (
+    RenderExecutionError,
+    build_ffmpeg_command,
+    compose_text_layers,
+    ensure_text_can_burn,
+)
 from app.media.render_plan import build_render_plan
 from tests.util import fresh_client
 
@@ -70,7 +75,7 @@ def test_文字走浏览器那条路时_不碰_libass_真跑得通(slim_ffmpeg, 
     plan = _plan_with_subtitle(src.name)
     out = tmp_path / "out.mp4"
     command = build_ffmpeg_command(plan, lambda key: tmp_path / key, out, force_software=True,
-                                   text_pngs={"subtitles": [(png, 40, 10)], "text_overlays": []})
+                                   text_layers=compose_text_layers(plan, {"subtitles": [(png, 40, 10)]}, tmp_path))
     assert "subtitles=" not in " ".join(command)
     subprocess.run(command, check=True, capture_output=True, timeout=60)
     assert out.stat().st_size > 0

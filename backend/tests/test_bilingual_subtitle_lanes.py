@@ -24,7 +24,7 @@ from app.core.config import settings
 from app.core.db import SessionLocal
 from app.db.models import Asset
 from app.domain.render import build_plan_for_sequence
-from app.media.render_executor import build_ffmpeg_command, render_still
+from app.media.render_executor import build_ffmpeg_command, compose_text_layers, render_still
 from app.media.render_plan import build_render_plan
 from tests.util import fresh_client
 
@@ -105,9 +105,12 @@ def test_导出命令里是一框字幕_用序列的字幕样式定位(tmp_path:
     _subtitle_track(client, sid, [("Hello", 0.0, 2.0)])
     plan = _plan(sid)
     # 按预览 CSS 渲染的 PNG 那条路:只有一张字幕图(两行一框),按序列的字幕样式(底部 8%)放:下沿贴 1080 − 86。
-    pngs = {"subtitles": [(tmp_path / "s0.png", 400, 103)], "text_overlays": []}
-    graph = " ".join(build_ffmpeg_command(plan, lambda key: tmp_path / key, tmp_path / "o.mp4", text_pngs=pngs))
-    assert re.findall(r"\[stin\d+\]overlay=x=(\d+):y=(\d+)", graph) == [("760", str(1080 - 86 - 103))], graph
+    # 字幕合成一路轨叠上去(见 compose_text_layers),轨就是这一张图那么大;4:2:0 下 overlay 只落在偶数行,
+    # 891 落在 890(单独叠的时候写 891,ffmpeg 也是落在 890)。
+    Image.new("RGBA", (400, 103), (255, 255, 255, 255)).save(tmp_path / "s0.png")
+    layers = compose_text_layers(plan, {"subtitles": [(tmp_path / "s0.png", 400, 103)]}, tmp_path)
+    graph = " ".join(build_ffmpeg_command(plan, lambda key: tmp_path / key, tmp_path / "o.mp4", text_layers=layers))
+    assert re.findall(r"overlay=x=(\d+):y=(\d+)\[vtrack\]", graph) == [("760", str((1080 - 86 - 103) & ~1))], graph
 
     # libass 回落那条路:一条 Dialogue,两行用 \N 连起来,沿用 Default 样式(没有换道用的 \an 覆盖)。
     build_ffmpeg_command(plan, lambda key: tmp_path / key, tmp_path / "o.mp4")
