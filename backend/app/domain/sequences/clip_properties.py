@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any
 
@@ -123,6 +124,12 @@ def set_clip_gain(db: Session, sequence_id: str, op: SetClipGain) -> Sequence:
     return sequence
 
 
+#: 分离音频时跟着声音走的特效:音频淡入淡出、音量关键帧(都按片段计时,分出来的那段时长相同)。
+#: 此前只带了速度和音量:声音一分离,淡入淡出和音量曲线就没了,而视频片段被静音,那份设置再也听不见。
+#: 画面那一侧的(调色、画面淡变、花字样式、外观)留在视频片段上。
+AUDIO_EFFECT_KEYS = ("fade_in", "fade_out", "gain_keyframes")
+
+
 @dataclass(frozen=True)
 class DetachClipAudio:
     clip_id: str
@@ -199,6 +206,9 @@ def detach_clip_audio(db: Session, sequence_id: str, op: DetachClipAudio) -> Seq
             src_out=audio_out,
             speed=clip.speed,
             gain=clip.gain,
+            # 声音原先静着的,分出来也静着 —— 分离是搬家,不是顺手把声音打开。
+            muted=clip.muted,
+            effects={key: deepcopy(clip.effects[key]) for key in AUDIO_EFFECT_KEYS if key in (clip.effects or {})},
             link_group=group,
         )
     )
