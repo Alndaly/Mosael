@@ -456,8 +456,9 @@ def test_base_video_track_audio_can_be_ducked(tmp_path) -> None:
     graph = " ".join(build_ffmpeg_command(plan, lambda key: Path(f"/x/{key}"), tmp_path / "o.mp4", workdir=tmp_path))
     assert "[abase][abaseduckenv]amultiply[abaseduck]" in graph
     # 进混音的必须是压过的那一条。只看「图里有 [abaseduck]」不够 —— 定义它而不用它,
-    # 正是这个 bug 修一半的样子。
-    assert "[abaseduck][aov0]amix=" in graph
+    # 正是这个 bug 修一半的样子。(混音的第一路先补上无尽的静音再进 amix,见 render_executor。)
+    assert "[abaseduck]apad[abasepad]" in graph
+    assert "[abasepad][aov0]amix=" in graph
 
 
 def test_base_audio_duck_is_off_unless_the_track_says_so() -> None:

@@ -1826,6 +1826,14 @@ def build_ffmpeg_command(
                 input_index += 1
             mix_inputs.append(f"[aov{i}]")
         if len(mix_inputs) > 1:
+            #: amix 的第一路(底轨)后面补上无尽的静音,混音多长由后面按采样数截定(整条:片长;分块:这一截)。
+            #: ffmpeg 7.0 之前的 amix 在第一路结束的那一刻就把它关掉,它 FIFO 里还在等别的路一起混的采样全部扔掉
+            #: (上游 7282137f48「lavfi/af_amix: make sure the output does not depend on input ordering」才改成和
+            #: 别的路一样混完再关)。Ubuntu 24.04 的 ffmpeg 6.1 上实测:整条渲时音频轨和底轨同时收尾(底轨从素材
+            #: 中间剪起),底轨最后约半秒的声音没了;分块渲时每块的底轨在这一截末尾结束、跨块的音频轨还在往后走,
+            #: 丢的是这一截的最后半秒。第一路永远不结束,就走不到那一步。
+            filters.append(f"{mix_inputs[0]}apad[abasepad]")
+            mix_inputs[0] = "[abasepad]"
             filters.append(f"{''.join(mix_inputs)}amix=inputs={len(mix_inputs)}:normalize=0[amix]")
             audio_label = "[amix]"
 
@@ -1854,7 +1862,12 @@ def build_ffmpeg_command(
         ]
         return args
 
-    filters.append(f"{audio_label}{_master_bus(plan.output.loudnorm)}[amaster]")
+    #: 进总线的混音正好片长那么多采样 —— 和分块渲接起来的那一条一样长(最后一块截在片长上,见上面),限幅 /
+    #: 响度标准化在两边看到的是同一条声音;底轨补了无尽的静音时,混音也靠这一刀收尾。
+    filters.append(
+        f"{audio_label}atrim=end_sample={round(plan.timeline_duration * AUDIO_RATE)},"
+        f"{_master_bus(plan.output.loudnorm)}[amaster]"
+    )
     audio_label = "[amaster]"
 
     args += [
