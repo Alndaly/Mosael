@@ -209,6 +209,8 @@ def create_app(settings: Settings | None = None, *, context: Context | None = No
     app = FastAPI(
         title="Mosael Community",
         version="1",
+        #: FastAPI 0.142 起自带 OpenTelemetry,默认读 OTEL_* 环境变量自己挂导出器;社区服务不往外发遥测,全部关掉。
+        telemetry={"auto_configure": False, "tracing": False, "metrics": False, "logs": False},
         docs_url=None if settings.production else f"{API_PREFIX}/docs",
         redoc_url=None,
         openapi_url=None if settings.production else f"{API_PREFIX}/openapi.json",

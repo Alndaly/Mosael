@@ -107,3 +107,12 @@ def test_命令行_建管理员_导入官方条目_生成密钥(tmp_path: Path, 
     from community.tokens import KeyRing
 
     assert KeyRing.from_settings(Settings()).private_key is not None
+
+
+def test_社区服务的遥测全部关着_不读环境变量自己挂导出器(ctx) -> None:
+    """FastAPI 0.142 起自带 OpenTelemetry,默认会读 OTEL_* 环境变量自己挂导出器。社区服务不往外发遥测。"""
+    from community.app import create_app
+
+    config = create_app(context=ctx)._telemetry
+    assert config["auto_configure"] is False
+    assert not any(config[key] for key in ("tracing", "metrics", "logs"))

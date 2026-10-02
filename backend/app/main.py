@@ -393,8 +393,13 @@ def _wire_seams() -> None:
 _wire_seams()
 
 
+#: FastAPI 0.142 起自带 OpenTelemetry:默认读 OTEL_* 环境变量、自己挂上导出器。Mosael 是装在用户电脑上的应用,
+#: 请求路径、报错原文和堆栈都不该因为某个依赖带进了 SDK、用户环境里又恰好设了导出地址就被发出去 —— 全部关掉。
+TELEMETRY_OFF = {"auto_configure": False, "tracing": False, "metrics": False, "logs": False}
+
+
 def create_app() -> FastAPI:
-    app = FastAPI(title="Mosael API", version="0.1.0", lifespan=lifespan)
+    app = FastAPI(title="Mosael API", version="0.1.0", lifespan=lifespan, telemetry=TELEMETRY_OFF)
     _install_permission_handlers(app)
     install_rate_limiting(app, settings)
     # 这几层都是纯 ASGI(见 api/middleware 的说明:包在大文件响应外面的 BaseHTTPMiddleware
