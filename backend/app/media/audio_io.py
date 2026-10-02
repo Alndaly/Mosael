@@ -22,10 +22,12 @@ class AudioIOError(LocalizedError, RuntimeError):
     """取不出 / 放不回。带文案 key(`audioErr_*`),可以直接给用户看。"""
 
 
-def extract_audio(source: Path, target: Path) -> Path:
-    """把 source 里的声音存成 target(wav,原采样率、原声道)。"""
+def extract_audio(source: Path, target: Path, span: tuple[float, float] | None = None) -> Path:
+    """把 source 里的声音存成 target(wav,原采样率、原声道)。`span` = 只取源里 [起, 止) 那一段(秒)。"""
+    window = ["-ss", f"{span[0]:.6f}", "-t", f"{max(0.0, span[1] - span[0]):.6f}"] if span else []
     result = run_logged(
-        [settings.ffmpeg, "-y", "-v", "error", "-i", str(source), "-vn", "-c:a", "pcm_s16le", "-f", "wav", str(target)],
+        [settings.ffmpeg, "-y", "-v", "error", *window, "-i", str(source), "-vn", "-c:a", "pcm_s16le", "-f", "wav",
+         str(target)],
         capture_output=True,
         text=True,
         timeout=900,
@@ -51,11 +53,11 @@ def extract_speech(source: Path, target: Path) -> Path:
     return target
 
 
-def as_audio(source: Path, work: Path) -> Path:
-    """本来就是音频的原样用;视频先抽一条 wav 到 work 下。"""
-    if source.suffix.lower() in AUDIO_SUFFIXES:
+def as_audio(source: Path, work: Path, span: tuple[float, float] | None = None) -> Path:
+    """本来就是音频的原样用;视频先抽一条 wav 到 work 下。只要其中一段(`span`)时一律抽出那一段。"""
+    if span is None and source.suffix.lower() in AUDIO_SUFFIXES:
         return source
-    return extract_audio(source, work / "source.wav")
+    return extract_audio(source, work / "source.wav", span)
 
 
 def replace_audio(video: Path, audio: Path, target: Path) -> Path:

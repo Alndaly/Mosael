@@ -124,6 +124,9 @@ class DetachClipAudio:
     #: 放到音频轨上的那份声音。缺省是片段自己的素材;译配分离人声时换成它的背景音 ——
     #: 这时源片段也可以在音频轨上(之前已经分离过一次的原声)。
     audio_asset_id: str | None = None
+    #: `audio_asset_id` 那份声音从源素材的第几秒开始。只拆了用到的那一段的背景音(见 voices/original_audio)
+    #: 不是从第 0 秒开始的:片段的入出点要减掉这个偏移才对得上同一句话。
+    audio_src_offset: float = 0.0
     actor_id: str | None = None
 
 
@@ -158,6 +161,10 @@ def detach_clip_audio(db: Session, sequence_id: str, op: DetachClipAudio) -> Seq
             raise SequenceNotFound("Asset not found")
     duration = timeline_span(clip)
     start, end = clip.timeline_start, clip.timeline_start + duration
+    offset = op.audio_src_offset if replacing else 0.0
+    if offset < 0 or clip.src_in - offset < -1e-6:
+        raise SequenceDomainError("seqErr_detachAudioOffset")
+    audio_in, audio_out = max(0.0, clip.src_in - offset), clip.src_out - offset
 
     audio_tracks = sorted((t for t in sequence.tracks if t.kind == "audio" and not t.role), key=lambda t: t.position)
     target = next((t for t in audio_tracks if t.id != track.id and _range_free(t, start, end)), None)
@@ -182,8 +189,8 @@ def detach_clip_audio(db: Session, sequence_id: str, op: DetachClipAudio) -> Seq
             track_id=target.id,
             asset_id=audio_asset_id,
             timeline_start=clip.timeline_start,
-            src_in=clip.src_in,
-            src_out=clip.src_out,
+            src_in=audio_in,
+            src_out=audio_out,
             speed=clip.speed,
             gain=clip.gain,
             link_group=group,

@@ -174,7 +174,10 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfOut_overlap_note": {"zh": "念不完的说明", "en": "Overrun note"},
     "dubOriginalAudio_keep": {"zh": "原声保留原样。", "en": "The original audio was left as it was."},
     "dubOriginalAudio_duck": {"zh": "配音说话时原声被压低。", "en": "The original audio is lowered while the dub speaks."},
-    "dubOriginalAudio_mute": {"zh": "原声整轨静音。", "en": "The original audio track is muted."},
+    "dubOriginalAudio_mute": {
+        "zh": "原片在配音说话的那几段静音;BGM、音效和没配音的段落原样。",
+        "en": "The original footage is muted where the dub speaks; music, effects and undubbed stretches are untouched.",
+    },
     "dubOriginalAudio_separate": {"zh": "已拆出人声并去掉,背景音乐保留。", "en": "The original voice was separated out and removed; the background music is kept."},
     "dubOriginalAudio_mute_fallback": {
         "zh": "没有可用的人声分离引擎,原声整轨静音 —— 背景音乐也一起没了。部署管理员在「管理 → 引擎」里装好人声分离后重跑,可以保住背景音乐。",
@@ -251,8 +254,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Choose which part of a two-line bilingual cue is sent to speech synthesis. Use Full cue for single-line subtitles.",
     },
     "wfNode_dub_subtitles_original_audio": {
-        "zh": "配音之后原声怎么办。「压低」在配音说话时把原声降到 30%,适合原声是环境音或音乐;译配时两边都是人声,压低只会变成两个人同时说话,用「静音」;「只去掉人声」要求本机已装好分离引擎,不可用时任务会明确失败而不会改成静音。都不删东西,随时能改回来。",
-        "en": "What happens to the original audio once the dub lands. Lower turns it down to 30% while the dub speaks, which suits ambience or music; a translated dub replaces one voice with another, so lowering leaves two people talking at once — use Mute. Remove the voice requires a ready separation engine; the task fails explicitly instead of switching to mute when it is unavailable. Nothing is deleted, and it can be changed back at any time.",
+        "zh": "配音之后原声怎么办。「压低」在配音说话时把原声降到 30%,适合原声是环境音或音乐;译配时两边都是人声,压低只会变成两个人同时说话,用「静音」;静音和去人声只动原片(视频、转写过的口播录音)里配音盖到的那几段,BGM 和音效不动;「只去掉人声」要求本机已装好分离引擎,不可用时任务会明确失败而不会改成静音,拆过的原片下次直接复用。都不删东西,随时能改回来。",
+        "en": "What happens to the original audio once the dub lands. Lower turns it down to 30% while the dub speaks, which suits ambience or music; a translated dub replaces one voice with another, so lowering leaves two people talking at once — use Mute. Mute and Remove the voice only touch the original footage (video, or a transcribed voice recording) where the dub covers it — music and effects are left alone. Remove the voice requires a ready separation engine; the task fails explicitly instead of switching to mute when it is unavailable, and footage separated once is reused next time. Nothing is deleted, and it can be changed back at any time.",
     },
     "wfNode_loop_foreach": {"zh": "循环·遍历", "en": "Loop · for each"},
     "wfNode_loop_foreach_desc": {"zh": "对一个列表逐项运行内嵌子流程,汇总每次迭代的输出为列表。子流程内用 {{loop.item}} / {{loop.index}} 读取当前元素与序号,用 {{input.名}} 读取显式传入的外层值。", "en": "Run an embedded sub-flow once per item of a list and collect each iteration's output into a list. Inside it, {{loop.item}} / {{loop.index}} read the current item and index, while {{input.name}} reads explicitly passed outer values."},

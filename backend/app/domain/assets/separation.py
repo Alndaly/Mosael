@@ -80,8 +80,10 @@ def separate_asset(
     engine: str = "",
     project_id: str | None = None,
     owner_user_id: str | None = None,
+    span: tuple[float, float] | None = None,
 ) -> SeparatedAssets:
-    """把这份素材拆成人声 + 背景音两份新素材。
+    """把这份素材拆成人声 + 背景音两份新素材。`span` = 只拆源里 [起, 止) 那一段(秒),产出从那一段的起点开始,
+    并在 media_info 里记下 `source_range` —— 用的人按它对齐,缓存按它判断够不够用(见 voices/original_audio)。
 
     输入可以是视频:分离引擎只认音频,所以先抽一条 wav 出来。**用的是保留原采样率的那条**
     (media/audio_io)—— 此前借的是转写那条,会先降成 16 kHz 单声道,拆出来的背景音再进成片时
@@ -111,7 +113,7 @@ def separate_asset(
     with tempfile.TemporaryDirectory(prefix="mosael-separate-") as tmp:
         work = Path(tmp)
         try:
-            audio = as_audio(source, work)
+            audio = as_audio(source, work, span)
         except AudioIOError as exc:
             raise SeparationError(str(exc)) from exc
         stems = adapter.separate(SeparationRequest(audio_path=audio), work / "out")
@@ -138,6 +140,7 @@ def separate_asset(
             "derivation": "separate_audio",
             "stem": stem,
             "separation_engine": adapter.engine_id,
+            **({"source_range": [span[0], span[1]]} if span else {}),
         }
     return SeparatedAssets(vocals=made[VOCALS], background=made[BACKGROUND], engine=adapter.engine_id)
 

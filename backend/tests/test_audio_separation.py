@@ -177,41 +177,20 @@ class Test契约不认识任何一个引擎:
 
 class Test配音流程忠实执行用户选择:
     def test_没装引擎时明确失败__不擅自静音(self, monkeypatch) -> None:
-        from app.domain.voices import original_audio as subjobs
-
         from app.domain.assets import separation
+        from app.domain.voices import original_audio
+        from tests.util import fresh_client
 
+        fresh_client()
         monkeypatch.setattr(separation, "available", lambda *_a, **_k: False)
         seen: list[str] = []
-
-        def fake_set_state(db, sequence_id, state):
-            seen.append("muted" if state.muted else "duck")
-
         import app.domain.sequences.operations as ops
 
-        monkeypatch.setattr(ops, "set_track_state", fake_set_state)
-
-        class _Track:
-            def __init__(self) -> None:
-                self.id = "t1"
-                self.kind = "audio"
-                self.muted = False
-                self.duck = False
-                self.clips = [type("C", (), {"asset_id": "a1"})()]
-
-        class _Seq:
-            tracks = [_Track()]
-
-        monkeypatch.setattr(subjobs, "Sequence", type("S", (), {}))
-        monkeypatch.setattr(subjobs, "db_get_sequence", lambda *a, **k: _Seq(), raising=False)
-
-        class _DB:
-            def get(self, model, key):
-                return _Seq()
-
-        with pytest.raises(subjobs.OriginalAudioError, match="分离引擎"):
-            subjobs.apply_original_audio(_DB(), "s1", "dub", "separate", actor_id=None)
-        assert seen == [], "用户选的是分离，不得偷偷改成整轨静音"
+        monkeypatch.setattr(ops, "set_track_state", lambda *a, **k: seen.append("state"))
+        monkeypatch.setattr(ops, "set_clip_effects", lambda *a, **k: seen.append("effects"))
+        with pytest.raises(original_audio.OriginalAudioError, match="分离引擎"):
+            original_audio.apply_original_audio("s1", "dub", "separate", actor_id=None)
+        assert seen == [], "用户选的是分离，不得偷偷改成静音"
 
     def test_分离可用时_画面留着_原声换成背景音_撤得回来(self, monkeypatch) -> None:
         """成功那条路,在**真的时间线**上看成片会是什么样。
@@ -247,23 +226,21 @@ class Test配音流程忠实执行用户选择:
             db.add_all([
                 Clip(workspace_id=ws.id, sequence_id=seq.id, track_id=video.id, asset_id=footage.id,
                      timeline_start=0, src_in=2, src_out=12, speed=1.25, gain=0.8),
-                #: 配音轨上留着空档 —— 背景音不能因为"那一段空着"就被塞进配音轨。
+                #: 配音轨上只有 3–5 秒这一段,其余是空档 —— 背景音不能因为"那一段空着"就被塞进配音轨。
                 Clip(workspace_id=ws.id, sequence_id=seq.id, track_id=dub.id, asset_id=voice.id,
-                     timeline_start=20, src_in=0, src_out=2),
+                     timeline_start=3, src_in=0, src_out=2),
             ])
             db.commit()
             ids = (seq.id, dub.id, footage.id, background.id)
 
         made = type("M", (), {"background": type("A", (), {"id": ids[3]})()})()
-        separated: list[str] = []
+        separated: list[tuple[str, tuple[float, float]]] = []
         monkeypatch.setattr(sep, "available", lambda *_a, **_k: True)
-        monkeypatch.setattr(sep, "separate_asset", lambda db, asset, **k: separated.append(asset.id) or made)
+        monkeypatch.setattr(sep, "separate_asset", lambda db, asset, **k: separated.append((asset.id, k["span"])) or made)
 
         seq_id, dub_id, footage_id, background_id = ids
-        with SessionLocal() as db:
-            assert original_audio.apply_original_audio(db, seq_id, dub_id, "separate", actor_id=None) == "separate"
-            db.commit()  # 剪辑算子不提交,提交归入口(这里是测试自己)
-        assert separated == [footage_id]
+        assert original_audio.apply_original_audio(seq_id, dub_id, "separate", actor_id=None) == "separate"
+        assert separated == [(footage_id, (2, 12))], "只拆这一段用到的源区间"
 
         def check(db) -> None:
             plan = build_plan_for_sequence(db, seq_id)
@@ -271,7 +248,8 @@ class Test配音流程忠实执行用户选择:
             assert base.source.asset_id == footage_id, "画面还是原片"
             assert base.muted, "原片自己的声音关掉了"
             [bed] = [item for item in plan.audio_overlays if item.source.asset_id == background_id]
-            assert (bed.start, bed.source.src_in, bed.source.src_out, bed.speed) == (0, 2, 12, 1.25), "背景音和画面对齐"
+            # 拆出来的背景音从源的第 2 秒开始:片段的入出点减掉这个偏移,对上的还是同一句话。
+            assert (bed.start, bed.source.src_in, bed.source.src_out, bed.speed) == (0, 0, 10, 1.25), "背景音和画面对齐"
             track = db.scalar(select(Clip).where(Clip.asset_id == background_id)).track
             assert track.id != dub_id and not track.role
 
@@ -288,12 +266,39 @@ class Test配音流程忠实执行用户选择:
 
     def test_分到一半失败_时间线一点没动(self, monkeypatch) -> None:
         """失败必须上报；这之前不能留下半套背景音轨。"""
+        from app.core.db import SessionLocal
+        from app.db.models import Asset, Clip, Project, Sequence, Track, Workspace
         from app.domain.assets import separation as sep
         from app.domain.sequences import operations as ops
         from app.domain.voices import original_audio
+        from tests.util import fresh_client
 
-        clips = [type("C", (), {"id": f"c{i}", "asset_id": f"a{i}", "muted": False})() for i in range(2)]
-        track = type("T", (), {"id": "v", "kind": "video", "muted": False, "clips": clips})()
+        fresh_client()
+        with SessionLocal() as db:
+            ws = Workspace(name="W")
+            db.add(ws)
+            db.flush()
+            project = Project(workspace_id=ws.id, name="P")
+            db.add(project)
+            db.flush()
+            seq = Sequence(workspace_id=ws.id, project_id=project.id, name="S")
+            video = Track(sequence=seq, kind="video", name="V1", position=0)
+            dub = Track(sequence=seq, kind="audio", name="A1", position=1, role="dub")
+            first = Asset(workspace_id=ws.id, kind="video", name="一", file_key="media/1.mp4")
+            second = Asset(workspace_id=ws.id, kind="video", name="二", file_key="media/2.mp4")
+            voice = Asset(workspace_id=ws.id, kind="audio", name="配音", file_key="media/d.wav")
+            db.add_all([seq, video, dub, first, second, voice])
+            db.flush()
+            db.add_all([
+                Clip(workspace_id=ws.id, sequence_id=seq.id, track_id=video.id, asset_id=first.id,
+                     timeline_start=0, src_in=0, src_out=5),
+                Clip(workspace_id=ws.id, sequence_id=seq.id, track_id=video.id, asset_id=second.id,
+                     timeline_start=5, src_in=0, src_out=5),
+                Clip(workspace_id=ws.id, sequence_id=seq.id, track_id=dub.id, asset_id=voice.id,
+                     timeline_start=0, src_in=0, src_out=10),
+            ])
+            db.commit()
+            seq_id, dub_id, revision = seq.id, dub.id, seq.revision
         calls = iter([type("M", (), {"background": type("A", (), {"id": "bg"})()})()])
 
         def separate(db, asset, **k):
@@ -302,15 +307,13 @@ class Test配音流程忠实执行用户选择:
             except StopIteration:
                 raise SeparationError("第二段炸了") from None
 
-        class _DB:
-            def get(self, model, key):
-                return type("S", (), {"tracks": [track]})() if key == "s1" else type("A", (), {"id": key, "kind": "video"})()
-
         monkeypatch.setattr(sep, "available", lambda *_a, **_k: True)
         monkeypatch.setattr(sep, "separate_asset", separate)
         monkeypatch.setattr(ops, "detach_clip_audio", lambda *a, **k: pytest.fail("不该动时间线"))
         with pytest.raises(original_audio.OriginalAudioError, match="第二段炸了"):
-            original_audio._split_voice_from_music(_DB(), "s1", "dub", actor_id=None)
+            original_audio.apply_original_audio(seq_id, dub_id, "separate", actor_id=None)
+        with SessionLocal() as db:
+            assert db.get(Sequence, seq_id).revision == revision
 
 
 class Test当作任务跑:

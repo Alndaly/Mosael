@@ -322,7 +322,7 @@ export const otherUi = {
   subtitleDubOriginal_mute: "静音(译配用这个)",
   subtitleDubOriginal_keep: "保持原样",
   subtitleDubOriginal_separate: "只去掉人声,留背景音",
-  subtitleDubOriginalHint: "压低适合旁白盖在环境音上;译配时两边都是人声,压低会变成两个人同时说话,用静音。去掉人声要求本机已装好分离引擎;不可用时会明确失败,不会改成静音。",
+  subtitleDubOriginalHint: "压低适合旁白盖在环境音上;译配时两边都是人声,压低会变成两个人同时说话,用静音。静音和去掉人声只动原片里配音说话的那几段,BGM 和音效不动。去掉人声要求本机已装好分离引擎;不可用时会明确失败,不会改成静音。",
   langName_ja: "日语",
   langName_ko: "韩语",
   langName_ru: "俄语",

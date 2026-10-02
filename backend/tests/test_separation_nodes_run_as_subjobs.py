@@ -69,7 +69,7 @@ def audio(monkeypatch, tmp_path) -> tuple[str, str]:
     monkeypatch.setattr(separation, "_source_path", lambda one: source)
     monkeypatch.setattr(denoise, "_source_path", lambda one: source)
     # 输入是 wav,as_audio 照原样用;这里不关心 ffmpeg,只关心节点怎么跑这件活。
-    monkeypatch.setattr(separation, "as_audio", lambda path, work: path)
+    monkeypatch.setattr(separation, "as_audio", lambda path, work, span=None: path)
     monkeypatch.setattr(denoise, "as_audio", lambda path, work: path)
     with SessionLocal() as db:
         asset = Asset(workspace_id=ws, kind="audio", name="访谈", file_key="media/talk.wav")

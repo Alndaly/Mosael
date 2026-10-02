@@ -361,7 +361,11 @@ class Test原声处理归配音本身:
             job = db.get(Job, job_id)
             assert job.status == "succeeded", job.error
             assert job.result["original_audio"] == "mute"
-            assert db.get(Track, video_id).muted, "原片那条轨静音了"
+            footage = db.get(Track, video_id)
+            assert not footage.muted, "不整条轨静音 —— 只静配音占着的那一段(见 test_original_audio_scope)"
+            [clip] = footage.clips
+            gains = {point["t"]: point["gain"] for point in clip.effects["gain_keyframes"]}
+            assert gains[0.1] == 0 and gains[0.0] == 1 and gains[1.0] == 1, "字幕 1–3 秒那段配音底下原片是静音的"
             assert not db.get(Track, job.result["track_id"]).muted, "配音轨不动"
 
     def test_不认识的档位当场拒(self) -> None:

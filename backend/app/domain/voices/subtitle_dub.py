@@ -375,10 +375,9 @@ def _run_dub(job_id: str) -> None:
                 # 这一笔提交是有意的:finish_job 拿了 SQLite 的写锁,分离一跑就是几分钟,不先放掉,
                 # 别的会话(任务进度、界面上的剪辑)等过 busy_timeout 就写不进去。
                 db.commit()
-                applied = apply_original_audio(db, sequence_id, track_id, original_audio, actor_id=created_by)
-                # 先 flush 再 expire:原声处理改的东西(分离出的 stem、剪辑操作)还没提交,
-                # 直接 expire 会把没写下去的改动丢掉;expire 是为了读到别的会话写进来的取消。
-                db.flush()
+                # 原声处理自己管会话(分离要先拿渲染名额、再开会话,见 original_audio),它提交了之后
+                # 这里 expire 一遍,读到别的会话写进来的取消。
+                applied = apply_original_audio(sequence_id, track_id, original_audio, actor_id=created_by)
                 db.expire_all()
                 job = db.get(Job, job_id)
                 # 部分失败也是成功的一种:配好的那些是真的配好了。但**不能都说成「完成」** ——

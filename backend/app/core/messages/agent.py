@@ -126,6 +126,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Only subtitle tracks can be hidden.",
     },
     "seqErr_detachAudioVideoOnly": {"zh": "只能从视频片段分离音频", "en": "Audio can only be detached from a video clip."},
+    "seqErr_detachAudioOffset": {
+        "zh": "这份声音不覆盖片段用到的那一段,对不上",
+        "en": "That audio doesn't cover the part of the source this clip uses.",
+    },
     "seqErr_clipNoAudioSource": {"zh": "该片段没有音频源", "en": "This clip has no audio source."},
     "seqErr_transformNotNumber": {"zh": "transform.{key} 必须是数字", "en": "transform.{key} must be a number."},
     "seqErr_canvasSizeRange": {"zh": "画幅尺寸需在 16–8192 之间", "en": "The frame size must be between 16 and 8192."},

@@ -322,7 +322,7 @@ export const otherUi = {
   subtitleDubOriginal_mute: "Mute (for translated dubs)",
   subtitleDubOriginal_keep: "Leave as is",
   subtitleDubOriginal_separate: "Remove the voice, keep the music",
-  subtitleDubOriginalHint: "Lowering suits narration over ambience. A translated dub replaces one voice with another, so lowering leaves two people talking at once; mute instead. Removing the voice requires a ready separation engine; when unavailable, the task fails explicitly instead of switching to mute.",
+  subtitleDubOriginalHint: "Lowering suits narration over ambience. A translated dub replaces one voice with another, so lowering leaves two people talking at once; mute instead. Muting and removing the voice only touch the original footage where the dub speaks — music and effects stay. Removing the voice requires a ready separation engine; when unavailable, the task fails explicitly instead of switching to mute.",
   langName_ja: "Japanese",
   langName_ko: "Korean",
   langName_ru: "Russian",
