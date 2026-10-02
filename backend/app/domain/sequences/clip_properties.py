@@ -22,6 +22,7 @@ from app.domain.sequences.coverage import EPS, clip_end, clips_on_track, shift
 from app.domain.sequences.errors import SequenceDomainError, SequenceNotFound
 from app.domain.sequences.journal import Journal
 from app.domain.sequences.links import new_link_group, with_links
+from app.domain.sequences.tracks import next_track_name
 from app.media.render_plan import FILTER_PRESETS, GRADE_FIELDS, TRANSFORM_BOUNDS, TRANSFORM_DEFAULTS
 
 
@@ -179,7 +180,7 @@ def detach_clip_audio(db: Session, sequence_id: str, op: DetachClipAudio) -> Seq
             Track(
                 sequence_id=sequence.id,
                 kind="audio",
-                name=f"A{sum(1 for t in sequence.tracks if t.kind == 'audio') + 1}",
+                name=next_track_name(sequence, "audio"),
                 position=max((t.position for t in sequence.tracks), default=-1) + 1,
             )
         )

@@ -192,6 +192,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "入点 {src_in} 秒已经在素材末尾({duration} 秒)之后",
         "en": "The in point ({src_in}s) is past the end of the asset ({duration}s).",
     },
+    "seqErr_lastVideoTrack": {
+        "zh": "这是最后一条视频轨,删掉后画面就无处可放了;先加一条新的视频轨再删它",
+        "en": "This is the last video track; without it there is nowhere to put picture. Add another video track first.",
+    },
     "seqErr_unknownOp": {"zh": "不认识的时间线操作: {kind}", "en": "Unknown timeline operation: {kind}"},
     "seqErr_trimNoRoom": {
         "zh": "这里没有地方放下这一段:修剪会让它短到没有,或者两边都贴着别的片段",

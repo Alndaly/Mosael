@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.models import Sequence, Track
@@ -33,16 +34,31 @@ class MoveTrack:
     actor_id: str | None = None
 
 
+_TRACK_PREFIX = {"video": "V", "audio": "A", "subtitle": "S"}
+
+
+def next_track_name(sequence: Sequence, kind: str) -> str:
+    """新轨的名字:V1、V2…… 里第一个**没人用的**。
+
+    此前是「同类轨的条数 + 1」:有 V1、V2,删掉 V1 再加一条,新的那条又叫 V2 —— 两条同名的轨,
+    用户和智能体(它按名字说话)都分不清哪条是哪条。
+    """
+    prefix = _TRACK_PREFIX[kind]
+    taken = {track.name for track in sequence.tracks}
+    number = sum(1 for track in sequence.tracks if track.kind == kind) + 1
+    while f"{prefix}{number}" in taken:
+        number += 1
+    return f"{prefix}{number}"
+
+
 def add_track(db: Session, sequence_id: str, op: AddTrack) -> Sequence:
     sequence = _require_sequence(db, sequence_id)
     if op.kind not in ("video", "audio", "subtitle"):
         raise SequenceDomainError("Track kind must be video, audio, or subtitle")
-    existing = [track for track in sequence.tracks if track.kind == op.kind]
-    prefix = {"video": "V", "audio": "A", "subtitle": "S"}[op.kind]
     track = Track(
         sequence_id=sequence.id,
         kind=op.kind,
-        name=f"{prefix}{len(existing) + 1}",
+        name=next_track_name(sequence, op.kind),
         position=max((item.position for item in sequence.tracks), default=-1) + 1,
     )
     db.add(track)
@@ -91,6 +107,14 @@ def remove_track(db: Session, sequence_id: str, op: RemoveTrack) -> Sequence:
         raise SequenceNotFound("Track not found")
     if track.clips and not op.with_clips:
         raise SequenceDomainError("Track must be empty before it can be removed")
+    # 最后一条视频轨不让删:没有它,画面无处可放 —— 接素材报「没有放视频的轨道」,画板连线、
+    # 工作流的「接到时间线」全都接不上,而用户不会想到是刚才删掉了它。
+    # (查库而不是读 sequence.tracks:读过的集合在同一事务里不会随 db.delete 更新,响应里会留着删掉的那条。)
+    other_video = db.scalar(
+        select(Track.id).where(Track.sequence_id == sequence_id, Track.kind == "video", Track.id != track.id).limit(1)
+    )
+    if track.kind == "video" and other_video is None:
+        raise SequenceDomainError("seqErr_lastVideoTrack")
     # Record the clips as well as the track: without them undo would hand back an empty track
     # and the footage on it would be gone for good.
     payload = {
