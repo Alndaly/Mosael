@@ -82,8 +82,13 @@ def _parse(rows: object) -> list[CatalogModel]:
         pricing = row.get("pricing") if isinstance(row.get("pricing"), dict) else {}
         models[model_id] = CatalogModel(
             id=model_id,
-            # 字段名各家不一:OpenRouter 用 context_length,vLLM/部分网关用 context_window。
-            context_window=_positive_int(row.get("context_length") or row.get("context_window")),
+            # 字段名各家不一:OpenRouter 用 context_length,部分网关用 context_window,vLLM(以及照它写的
+            # SGLang)用 max_model_len —— 那是服务端**真正按它拒请求**的长度(--max-model-len),不是模型
+            # 训练时的上限,所以可以直接当窗口用。本机端点里只有它说得出这个数:Ollama 与 LM Studio 的 /v1/models
+            # 只给 id;llama.cpp 给的 meta.n_ctx_train 是训练窗口,服务实际开的 -c 可以小得多,不收(宁可报小)。
+            context_window=_positive_int(
+                row.get("context_length") or row.get("context_window") or row.get("max_model_len")
+            ),
             max_output_tokens=_positive_int(row.get("max_output_tokens") or row.get("max_tokens")),
             input_cost=_per_million(pricing.get("prompt")),
             output_cost=_per_million(pricing.get("completion")),

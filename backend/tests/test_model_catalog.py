@@ -49,6 +49,25 @@ def test_both_field_spellings_are_accepted(monkeypatch) -> None:
     assert (models["b"].context_window, models["b"].max_output_tokens) == (200000, 8192)
 
 
+def test_vllm_reports_the_window_it_serves(monkeypatch) -> None:
+    """vLLM 的 /v1/models 在每行带 max_model_len —— 服务端按它拒请求(--max-model-len),本机端点里唯一
+    说得出真实窗口的一家。不认它的话,一台按 32K 起的 vLLM 会被当成本机回退值,请求到了服务端才被拒。"""
+    _stub(monkeypatch, {"object": "list", "data": [
+        {"id": "Qwen/Qwen3-8B", "object": "model", "owned_by": "vllm", "root": "Qwen/Qwen3-8B", "max_model_len": 32768},
+    ]})
+    (model,) = fetch_models("http://127.0.0.1:8000/v1", "")
+    assert model.context_window == 32768
+
+
+def test_llama_cpp_training_window_is_not_taken_as_the_serving_window(monkeypatch) -> None:
+    """llama.cpp 报的 n_ctx_train 是模型训练时的上限,服务开的 -c 可以小得多 —— 当成窗口就是「报大」。"""
+    _stub(monkeypatch, {"object": "list", "data": [
+        {"id": "qwen3-8b.gguf", "object": "model", "owned_by": "llamacpp", "meta": {"n_ctx_train": 131072}},
+    ]})
+    (model,) = fetch_models("http://127.0.0.1:8080/v1", "")
+    assert model.context_window is None
+
+
 def test_dirty_rows_are_dropped_not_crashed(monkeypatch) -> None:
     """字符串窗口、0、负数、非法行 —— 一律当作「没给」,而不是抛异常或者带着脏值往下走。"""
     _stub(monkeypatch, {"data": [
