@@ -224,7 +224,7 @@ plain-text notice that says which switches to flip — it does not fail silently
 
 <!-- BEGIN generated: timeline-ops -->
 
-`edit_timeline` 认 **25** 种算子(`?` 是可选参数;`*` 是默认带上同一链接组的片段,`linked: false` 只动点名的这一段):
+`edit_timeline` 认 **27** 种算子(`?` 是可选参数;`*` 是默认带上同一链接组的片段,`linked: false` 只动点名的这一段):
 
 - `insert_clip(track_id, asset_id, timeline_start, src_out, src_in?, ripple?, speed?)`
 - `move_clip*(clip_id, timeline_start, track_id?, ripple?)`
@@ -235,10 +235,12 @@ plain-text notice that says which switches to flip — it does not fail silently
 - `ripple_delete_clip*(clip_id, all_tracks?) — closes the gap; all_tracks = every unlocked track`
 - `cut_clip_range*(clip_id, src_start, src_end) — rest closes up`
 - `cut_clip_ranges_batch*(cuts:[{clip_id, ranges:[{src_start, src_end}]}]) — one entry per clip`
-- `add_track(track_kind?:video|audio|subtitle)`
+- `duplicate_clips(clip_ids, timeline_start?, track_id?) — keeps spacing; default: right after the originals; overwrites what it lands on`
+- `add_track(track_kind?:video|audio|subtitle, index?) — index 0 = top row; default: video top, others bottom`
 - `remove_track(track_id, with_clips?)`
 - `set_track_state(track_id, muted?, solo?, duck?, locked?, hidden?)`
 - `detach_clip_audio(clip_id)`
+- `replace_clip_media(clip_ids, asset_id) — keeps position, length and settings`
 - `set_clip_effects(clip_id, effects)`
 - `set_clip_transform(clip_id, transform) — scale/x/y/rotation/opacity`
 - `set_clip_speed*(clip_id, speed, ripple?) — 0.25–4; ripple: later clips follow`

@@ -51,6 +51,7 @@ from app.domain.sequences.cutting import (
     split_clip_points_batch,
 )
 from app.domain.sequences.errors import SequenceDomainError, SequenceNotFound
+from app.domain.sequences.media_swap import replace_clip_media
 from app.domain.sequences.placement import (
     ClipMove,
     DeleteClip,
@@ -211,10 +212,15 @@ _EDIT_OPS: dict[str, tuple[type[op_args.OpArgs], Any]] = {
     "cut_clip_range": (op_args.CutClipRangeArgs, cut_clip_range),
     #: 同一段上连剪几刀。逐条 cut_clip_range 做不到:第一刀之后原片段就换成了切出来的新片段,第二刀找不到它。
     "cut_clip_ranges_batch": (op_args.CutClipRangesBatchArgs, cut_clip_ranges_batch),
+    #: 复制在剪辑页里是一等操作(复制粘贴、Alt 拖),智能体此前只能拿 insert_clip 去凑:速度、调色、关键帧、
+    #: 花字的文字全丢,字幕 / 花字(没有素材)根本插不进去。
+    "duplicate_clips": (op_args.DuplicateClipsArgs, duplicate_clips),
     "add_track": (op_args.AddTrackArgs, add_track),
     "remove_track": (op_args.RemoveTrackArgs, remove_track),
     "set_track_state": (op_args.SetTrackStateArgs, set_track_state),
     "detach_clip_audio": (op_args.DetachClipAudioArgs, detach_clip_audio),
+    #: 换素材而片段留在原地。删掉再插一份会把这一段上做过的调整全丢掉(见 media_swap)。
+    "replace_clip_media": (op_args.ReplaceClipMediaArgs, replace_clip_media),
     "set_clip_effects": (op_args.SetClipEffectsArgs, set_clip_effects),
     "set_clip_transform": (op_args.SetClipTransformArgs, set_clip_transform),
     "set_clip_speed": (op_args.SetClipSpeedArgs, set_clip_speed),

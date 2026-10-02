@@ -32,9 +32,11 @@ from app.domain.sequences.clip_properties import (
 from app.domain.sequences.cutting import ClipRangeCuts, CutClipRange, CutClipRangesBatch, SplitClip
 from app.domain.sequences.errors import SequenceDomainError
 from app.domain.sequences.history import HistoryStep
+from app.domain.sequences.media_swap import ReplaceClipMedia
 from app.domain.sequences.placement import (
     ClipMove,
     DeleteClip,
+    DuplicateClips,
     InsertClip,
     MoveClip,
     MoveClipsBatch,
@@ -174,11 +176,28 @@ class CutClipRangesBatchArgs(_Linked):
         return CutClipRangesBatch(cuts=cuts, linked=self.linked, actor_id=actor_id)
 
 
+class DuplicateClipsArgs(OpArgs):
+    note = "keeps spacing; default: right after the originals; overwrites what it lands on"
+    clip_ids: list[str] = Field(min_length=1, max_length=2000)
+    #: 整组副本的起点;不给就紧接在原片段组的末尾之后。
+    timeline_start: float | None = Field(default=None, ge=0)
+    #: 整组放到这条轨上;不给就各回各的原轨。
+    track_id: str | None = None
+
+    def to_request(self, actor_id: str | None) -> DuplicateClips:
+        return DuplicateClips(
+            clip_ids=tuple(self.clip_ids), timeline_start=self.timeline_start, track_id=self.track_id, actor_id=actor_id
+        )
+
+
 class AddTrackArgs(OpArgs):
+    note = "index 0 = top row; default: video top, others bottom"
     track_kind: Literal["video", "audio", "subtitle"] = "video"
+    #: 放在第几行。越界(大于现有轨数)由领域在开卡试做时拒 —— 这里只认得出它不是负数。
+    index: int | None = Field(default=None, ge=0)
 
     def to_request(self, actor_id: str | None) -> AddTrack:
-        return AddTrack(kind=self.track_kind, actor_id=actor_id)
+        return AddTrack(kind=self.track_kind, index=self.index, actor_id=actor_id)
 
 
 class RemoveTrackArgs(OpArgs):
@@ -206,6 +225,15 @@ class DetachClipAudioArgs(OpArgs):
 
     def to_request(self, actor_id: str | None) -> DetachClipAudio:
         return DetachClipAudio(actor_id=actor_id, **self.model_dump())
+
+
+class ReplaceClipMediaArgs(OpArgs):
+    note = "keeps position, length and settings"
+    clip_ids: list[str] = Field(min_length=1, max_length=2000)
+    asset_id: str
+
+    def to_request(self, actor_id: str | None) -> ReplaceClipMedia:
+        return ReplaceClipMedia(clip_ids=tuple(self.clip_ids), asset_id=self.asset_id, actor_id=actor_id)
 
 
 class SetClipEffectsArgs(OpArgs):
