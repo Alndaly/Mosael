@@ -1,6 +1,7 @@
 import { assetAudioProxyUrl } from "@/api/client";
 import { audioGainAt, type AudioSourceSpec } from "./audioMix";
 import { AUDIO_CHUNK_SEC, AudioProxySource, type PcmChunk } from "./audioProxySource";
+import type { StretchFactory, StretchNode } from "./stretchWorklet";
 
 /**
  * 预览混音的「声部」:每个在播(或马上要播)的有声片段一个,从它素材的音频代理里按块取 PCM,
@@ -10,6 +11,10 @@ import { AUDIO_CHUNK_SEC, AudioProxySource, type PcmChunk } from "./audioProxySo
  * 几秒,播过的块随时放掉。块与块按同一条「上下文时间 ↔ 媒体时间」直线换算起止,接缝是采样级对齐的。
  *
  * 片段开头不再等到播放头跨进去的那一拍(最多晚 40ms)才起:落在前瞻窗口里的片段提前按精确时间排上。
+ *
+ * **变速片段(速率 × 速度 ≠ 1)变速不变调**:声部换成一个 AudioWorklet 节点(WSOLA,见 wsola.ts),块按
+ * 顺序推给它,而不是把 playbackRate 调成速度 —— 那样 2 倍速是花栗鼠,而导出的 atempo 不变调,预览和
+ * 成片对不上。环境加载不了 worklet 时才退回 playbackRate。
  */
 
 /** 节点最多提前排多远(上下文时间,秒)。 */
@@ -18,6 +23,8 @@ const SCHEDULE_AHEAD_SEC = 0.5;
 const DECODE_AHEAD_SEC = 8;
 /** 每份素材在眼前窗口之外再留几块(倒回去一点、暂停后接着播,不用重解)。 */
 const SPARE_CHUNKS = 2;
+/** 音频代理的采样率(后端固定转成 48k)。上下文不是这个采样率时变速声部不能直接推 PCM,退回 playbackRate。 */
+const PROXY_SAMPLE_RATE = 48_000;
 
 export interface MixState {
   playhead: number;
@@ -27,7 +34,7 @@ export interface MixState {
 }
 
 /** AudioContext 里声部用得到的那几样 —— 测试里换成假的。 */
-export type VoiceContext = Pick<BaseAudioContext, "createBuffer" | "createBufferSource" | "createGain">;
+export type VoiceContext = Pick<BaseAudioContext, "createBuffer" | "createBufferSource" | "createGain" | "sampleRate">;
 
 export type SourceFactory = (assetId: string) => AudioProxySource;
 
@@ -48,6 +55,8 @@ interface Voice {
   mEnd: number;
   /** 下一块要排的块号。 */
   nextChunk: number;
+  /** 变速不变调的声部:worklet 节点、已经推到的媒体时间、有没有说过「推完了」。 */
+  stretch: { node: StretchNode | null; fedUntil: number; ended: boolean } | null;
 }
 
 const clipEnd = (s: AudioSourceSpec) => s.timelineStart + Math.max(0, (s.srcOut - s.srcIn) / (s.speed || 1));
@@ -56,6 +65,7 @@ export class AudioVoices {
   private readonly sources = new Map<string, AudioProxySource>();
   private readonly voices = new Map<string, Voice>();
   private readonly buffers = new WeakMap<PcmChunk, AudioBuffer>();
+  private stretchFactory: StretchFactory | null = null;
 
   constructor(
     private readonly ctx: VoiceContext,
@@ -75,6 +85,11 @@ export class AudioVoices {
       this.sources.set(spec.audioProxy, source);
     }
     return source.ok ? source : null;
+  }
+
+  /** worklet 加载好了:之后新起的变速声部走变速不变调。 */
+  enableStretch(factory: StretchFactory): void {
+    this.stretchFactory = factory;
   }
 
   /** 时间线上已经没人用的代理:解码源连同解好的块一起放掉。 */
@@ -153,6 +168,8 @@ export class AudioVoices {
     const mStart = spec.srcIn + (timelineFrom - spec.timelineStart) * speed;
     const gain = this.ctx.createGain();
     gain.connect(this.destination);
+    const tempo = state.rate * speed;
+    const stretched = Math.abs(tempo - 1) > 1e-6 && this.stretchFactory !== null && this.ctx.sampleRate === PROXY_SAMPLE_RATE;
     return {
       spec,
       signature,
@@ -161,10 +178,11 @@ export class AudioVoices {
       nodes: new Set(),
       tAnchor: now + (timelineFrom - state.playhead) / state.rate,
       mAnchor: mStart,
-      tempo: state.rate * speed,
+      tempo,
       mStart,
       mEnd: spec.srcOut,
       nextChunk: Math.floor(mStart / AUDIO_CHUNK_SEC),
+      stretch: stretched ? { node: null, fedUntil: mStart, ended: false } : null,
     };
   }
 
@@ -183,6 +201,10 @@ export class AudioVoices {
     const mEnd = Math.min(voice.mEnd, source.duration || voice.mEnd);
     const lastWanted = Math.floor(Math.min(mEnd, mNow + DECODE_AHEAD_SEC * voice.tempo) / AUDIO_CHUNK_SEC);
     for (let k = Math.floor(mNow / AUDIO_CHUNK_SEC); k <= lastWanted; k++) source.request(k);
+    if (voice.stretch) {
+      this.feedStretch(voice, voice.stretch, now, mEnd);
+      return;
+    }
 
     while (true) {
       const k = voice.nextChunk;
@@ -222,6 +244,52 @@ export class AudioVoices {
     }
   }
 
+  /**
+   * 变速声部:把块按顺序推给 worklet,推到「上下文时间 now + SCHEDULE_AHEAD_SEC」为止。
+   *
+   * 节点等第一块解出来才建,起点从「此刻该播的位置」算(和 AudioBufferSource 路径晚到时一样),按上下文
+   * 帧号精确开声。之后某块到点还没解出来(罕见:往前 8 秒就在解),推一段等长的静音占住时间 ——
+   * worklet 按输入推进,缺了输入整段声音就会比画面晚。
+   */
+  private feedStretch(voice: Voice, stretch: NonNullable<Voice["stretch"]>, now: number, mEnd: number): void {
+    if (!stretch.node) {
+      const k = Math.floor(Math.max(stretch.fedUntil, this.mediaAt(voice, now)) / AUDIO_CHUNK_SEC);
+      if (!voice.source.chunk(k)) return;
+      const from = Math.max(stretch.fedUntil, this.mediaAt(voice, now));
+      stretch.fedUntil = from;
+      const node = this.stretchFactory!(voice.tempo, 2);
+      node.connect(voice.gain);
+      node.port.postMessage({ type: "start", frame: Math.round(Math.max(now, this.ctxAt(voice, from)) * this.ctx.sampleRate) });
+      stretch.node = node;
+    }
+    const node = stretch.node;
+    while (!stretch.ended) {
+      if (stretch.fedUntil >= mEnd - 1e-9) {
+        node.port.postMessage({ type: "end" });
+        stretch.ended = true;
+        break;
+      }
+      if (this.ctxAt(voice, stretch.fedUntil) > now + SCHEDULE_AHEAD_SEC) break;
+      const k = Math.floor(stretch.fedUntil / AUDIO_CHUNK_SEC);
+      const segEnd = Math.min((k + 1) * AUDIO_CHUNK_SEC, mEnd);
+      const chunk = voice.source.chunk(k);
+      let channels: Float32Array[];
+      if (chunk) {
+        const from = Math.max(0, Math.round((stretch.fedUntil - chunk.start) * chunk.sampleRate));
+        const to = Math.min(chunk.frames, Math.round((segEnd - chunk.start) * chunk.sampleRate));
+        channels = [0, 1].map((c) => chunk.channels[Math.min(c, chunk.channels.length - 1)].slice(from, Math.max(from, to)));
+      } else if (this.ctxAt(voice, stretch.fedUntil) <= now) {
+        const frames = Math.round((segEnd - stretch.fedUntil) * PROXY_SAMPLE_RATE);
+        channels = [new Float32Array(frames), new Float32Array(frames)];
+      } else {
+        voice.source.request(k);
+        break;
+      }
+      node.port.postMessage({ type: "push", channels }, channels.map((c) => c.buffer));
+      stretch.fedUntil = segEnd;
+    }
+  }
+
   private bufferOf(chunk: PcmChunk): AudioBuffer {
     let buffer = this.buffers.get(chunk);
     if (!buffer) {
@@ -241,6 +309,10 @@ export class AudioVoices {
       }
     }
     voice.nodes.clear();
+    if (voice.stretch?.node) {
+      voice.stretch.node.port.postMessage({ type: "stop" });
+      voice.stretch.node.disconnect();
+    }
     voice.gain.disconnect();
   }
 

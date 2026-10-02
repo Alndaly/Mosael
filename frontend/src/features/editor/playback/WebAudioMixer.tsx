@@ -5,6 +5,7 @@ export type { AudioSourceSpec } from "./audioMix";
 import { AudioVoices } from "./audioVoices";
 import { useEditorStore } from "@/features/editor/editorStore";
 import { setPlaybackClock } from "./playbackClock";
+import { loadStretchFactory } from "./stretchWorklet";
 
 /**
  * S3 of the compositor: all preview audio through one WebAudio graph, and the AudioContext
@@ -47,6 +48,11 @@ export function WebAudioMixer({
     const master = ctx.createGain();
     master.connect(ctx.destination);
     const voices = new AudioVoices(ctx, master);
+    // 变速不变调的 worklet 异步加载;加载好之前(或加载不了)变速片段先用 playbackRate。
+    let disposed = false;
+    void loadStretchFactory(ctx).then((factory) => {
+      if (factory && !disposed) voices.enableStretch(factory);
+    });
 
     // Master clock, integrated incrementally: each tick advances the playhead by the real
     // AudioContext time elapsed since the last tick × the CURRENT rate (so a rate change is
@@ -140,6 +146,7 @@ export function WebAudioMixer({
     }, TICK_MS);
 
     return () => {
+      disposed = true;
       window.clearInterval(interval);
       setPlaybackClock(null);
       voices.close();

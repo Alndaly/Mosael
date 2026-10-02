@@ -10,6 +10,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { AudioSourceSpec } from "./audioMix";
 import { AUDIO_CHUNK_SEC, type AudioProxySource, type PcmChunk } from "./audioProxySource";
 import { AudioVoices } from "./audioVoices";
+import type { StretchNode } from "./stretchWorklet";
 
 interface Started {
   when: number;
@@ -135,7 +136,7 @@ describe("排程", () => {
     expect(ctx.started[0].offset).toBeCloseTo(1.3, 9);
   });
 
-  it("变速片段按 速率 × 速度 推进(本条提交里先用 playbackRate)", () => {
+  it("加载不了变速 worklet 时:变速片段退回 playbackRate,按 速率 × 速度 推进", () => {
     const { ctx, voices } = setup();
     voices.play([spec({ speed: 2, srcOut: 40 })], 0, state(1));
     expect(ctx.started[0].rate).toBe(2);
@@ -176,5 +177,61 @@ describe("内存", () => {
     voices.play([spec()], 0, state(1));
     voices.play([], 0.04, state(1.04));
     expect(source.closed).toBe(true);
+  });
+});
+
+describe("变速不变调(worklet 声部)", () => {
+  class FakeStretchNode {
+    messages: { type: string; frame?: number; channels?: Float32Array[] }[] = [];
+    connect = vi.fn();
+    disconnect = vi.fn();
+    port = { postMessage: (message: { type: string }) => this.messages.push(message) };
+    constructor(readonly tempo: number) {}
+    pushedSeconds() {
+      return this.messages.filter((m) => m.type === "push").reduce((sum, m) => sum + m.channels![0].length, 0) / 48000;
+    }
+  }
+  function setupStretch(source = new FakeSource()) {
+    const parts = setup(source);
+    (parts.ctx as unknown as { sampleRate: number }).sampleRate = 48000;
+    const nodes: FakeStretchNode[] = [];
+    parts.voices.enableStretch((tempo) => {
+      const node = new FakeStretchNode(tempo);
+      nodes.push(node);
+      return node as unknown as StretchNode;
+    });
+    return { ...parts, nodes };
+  }
+
+  it("2 倍速片段:不调 playbackRate,建一个 tempo=2 的 worklet 节点,按上下文帧号起声,块按顺序推进去", () => {
+    const { ctx, voices, nodes } = setupStretch();
+    voices.play([spec({ speed: 2, srcOut: 40 })], 10, state(1));
+    expect(ctx.started).toHaveLength(0);
+    expect(nodes).toHaveLength(1);
+    expect(nodes[0].tempo).toBe(2);
+    expect(nodes[0].messages[0]).toEqual({ type: "start", frame: 10 * 48000 });
+    // 从媒体 2s(播放头 1s × 速度 2)推起,推到上下文 now + 0.5s 以后的那一块为止。
+    expect(nodes[0].pushedSeconds()).toBeCloseTo(AUDIO_CHUNK_SEC - 2, 6);
+  });
+
+  it("推到出点就说一声 end;seek / 删片段时 stop", () => {
+    const { voices, nodes } = setupStretch();
+    voices.play([spec({ speed: 1.5, srcOut: 3 })], 0, state(0));
+    expect(nodes[0].messages.at(-1)!.type).toBe("end");
+    voices.stopAll();
+    expect(nodes[0].messages.at(-1)!.type).toBe("stop");
+    expect(nodes[0].disconnect).toHaveBeenCalled();
+  });
+
+  it("中途某块到点还没解出来:推等长的静音占住时间,后面的声音不会比画面晚", () => {
+    const source = new FakeSource(new Set([0]));
+    const { voices, nodes } = setupStretch(source);
+    voices.play([spec({ speed: 2, srcOut: 40 })], 0, state(0));
+    expect(nodes[0].pushedSeconds()).toBeCloseTo(AUDIO_CHUNK_SEC, 6);
+    // 第 1 块(媒体 4–8s)本该在上下文 2s 开始;到 2.1s 还没解出来。
+    voices.play([spec({ speed: 2, srcOut: 40 })], 2.1, state(2.1));
+    const silent = nodes[0].messages.filter((m) => m.type === "push").at(-1)!;
+    expect(silent.channels![0].length).toBe(AUDIO_CHUNK_SEC * 48000);
+    expect(silent.channels![0].every((v) => v === 0)).toBe(true);
   });
 });
