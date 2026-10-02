@@ -49,3 +49,27 @@ export function splitPointsAcrossTracks<C extends ClipLike>(tracks: TrackLike<C>
   }
   return points;
 }
+
+/** 编辑点:时间线开头 + 每条轨上每段片段的头和尾(去重、升序)。↑ / ↓ 在它们之间跳。 */
+export function editPoints<C extends ClipLike>(tracks: TrackLike<C>[]): number[] {
+  const points = new Set<number>([0]);
+  for (const track of tracks) {
+    for (const clip of track.clips ?? []) {
+      points.add(clip.timeline_start);
+      points.add(clipEnd(clip));
+    }
+  }
+  return [...points].sort((a, b) => a - b);
+}
+
+/**
+ * 从 time 往前(-1)/ 往后(1)最近的编辑点。正停在某一点上(误差 tolerance 以内,通常取半帧)
+ * 时跳过它,否则按一下原地不动。没有了返回 null。
+ */
+export function adjacentEditPoint(points: number[], time: number, direction: -1 | 1, tolerance = 1e-6): number | null {
+  if (direction > 0) return points.find((point) => point > time + tolerance) ?? null;
+  for (let index = points.length - 1; index >= 0; index -= 1) {
+    if (points[index] < time - tolerance) return points[index];
+  }
+  return null;
+}

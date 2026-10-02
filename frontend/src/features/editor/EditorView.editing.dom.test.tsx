@@ -460,3 +460,44 @@ describe("入点 / 出点", () => {
     expect(useEditorStore.getState()).toMatchObject({ markIn: null, markOut: null });
   });
 });
+
+describe("在时间线上走动与全选", () => {
+  const seq = () =>
+    sequenceWith([
+      track("v1", "video", 0, [clip("a", "v1", 0, 0, 4), clip("b", "v1", 6, 0, 2)]),
+      track("v2", "video", 1, [clip("locked", "v2", 0, 0, 3)], { locked: true }),
+      track("a1", "audio", 2, [clip("m", "a1", 1, 0, 10)]),
+    ]);
+
+  it("↓ / ↑ 跳到下一个 / 上一个编辑点", async () => {
+    renderEditor(seq());
+    await ready();
+    act(() => useEditorStore.getState().setPlayhead(2));
+    press("ArrowDown");
+    expect(useEditorStore.getState().playhead).toBe(3);
+    press("ArrowDown");
+    expect(useEditorStore.getState().playhead).toBe(4);
+    press("ArrowUp");
+    press("ArrowUp");
+    expect(useEditorStore.getState().playhead).toBe(1);
+  });
+
+  it("Home 回到开头,End 到结尾", async () => {
+    renderEditor(seq());
+    await ready();
+    act(() => useEditorStore.getState().setPlayhead(5));
+    press("End");
+    expect(useEditorStore.getState().playhead).toBe(11);
+    press("Home");
+    expect(useEditorStore.getState().playhead).toBe(0);
+  });
+
+  it("⌘A 选中所有未锁定轨上的片段", async () => {
+    renderEditor(seq());
+    await ready();
+    press("a", { metaKey: true });
+    expect(useEditorStore.getState().selectedClipIds).toEqual(["a", "b", "m"]);
+    // ⌘A 不是 A(选择工具):工具不变。
+    expect(useEditorStore.getState().tool).toBe("select");
+  });
+});

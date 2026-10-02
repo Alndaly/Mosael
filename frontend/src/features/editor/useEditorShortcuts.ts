@@ -2,6 +2,7 @@ import React from "react";
 
 import type { Sequence } from "@/api/client";
 import { frameAt, frameTime, sequenceDuration, snapToFrame } from "@/domain/timeline/geometry";
+import { adjacentEditPoint, editPoints } from "@/domain/timeline/editTargets";
 import { isEditorKeyTarget } from "@/features/editor/editorKeys";
 import { useEditorStore } from "@/features/editor/editorStore";
 import { leaveClipboardToSystem, listenKeys } from "@/lib/shortcuts";
@@ -60,6 +61,12 @@ export function useEditorShortcuts(
       } else if (mod && key === "v") {
         event.preventDefault();
         act.paste();
+      } else if (mod && key === "a") {
+        // ⌘A:选中所有未锁定轨上的片段(锁定的轨本来就选不中、拖不动)。
+        event.preventDefault();
+        store.selectClips(
+          (current?.tracks ?? []).filter((track) => !track.locked).flatMap((track) => (track.clips ?? []).map((item) => item.id)),
+        );
       } else if (mod && event.key === "]") {
         event.preventDefault();
         act.moveLayer(1);
@@ -76,7 +83,7 @@ export function useEditorShortcuts(
       } else if (event.code === "Space") {
         event.preventDefault();
         // 停在结尾按空格:从头播。不然播放头原地一动不动,看着像空格失灵。
-        const total = current ? sequenceDuration((current.tracks ?? []).flatMap((track) => track.clips ?? [])) : 0;
+        const total = totalOf(current);
         if (!store.playing && total > 0 && store.playhead >= total - 1e-6) store.setPlayhead(0);
         store.togglePlaying();
       } else if (!mod && !event.altKey && (key === "i" || key === "o")) {
@@ -97,6 +104,20 @@ export function useEditorShortcuts(
         const fps = current?.fps ?? 30;
         const step = (event.shiftKey ? 10 : 1) * (event.key === "ArrowLeft" ? -1 : 1);
         store.setPlayhead(frameTime(frameAt(store.playhead, fps) + step, fps));
+      } else if (!mod && (event.key === "ArrowUp" || event.key === "ArrowDown")) {
+        // 上一个 / 下一个编辑点(任一轨上片段的头尾)。正停在某点上时跳过它:容差半帧。
+        event.preventDefault();
+        const fps = current?.fps ?? 30;
+        const target = adjacentEditPoint(
+          editPoints(current?.tracks ?? []),
+          store.playhead,
+          event.key === "ArrowUp" ? -1 : 1,
+          0.5 / fps,
+        );
+        if (target !== null) store.setPlayhead(target);
+      } else if (!mod && (event.key === "Home" || event.key === "End")) {
+        event.preventDefault();
+        store.setPlayhead(event.key === "Home" ? 0 : totalOf(current));
       } else if (event.key === "Delete" || event.key === "Backspace") {
         if (store.selectedClipIds.length > 0 && current) {
           event.preventDefault();
@@ -106,4 +127,8 @@ export function useEditorShortcuts(
     };
     return listenKeys(window, onKeyDown);
   }, [root]);
+}
+
+function totalOf(sequence: Sequence | null): number {
+  return sequenceDuration((sequence?.tracks ?? []).flatMap((track) => track.clips ?? []));
 }
