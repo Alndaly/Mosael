@@ -27,6 +27,7 @@ from app.media.render_executor import (
     PHASE_PREPARE,
     RenderExecutionError,
     RenderProgress,
+    ensure_text_can_burn,
     execute_render,
 )
 from app.media.render_plan import RenderPlan, RenderPlanError, build_render_plan
@@ -328,6 +329,7 @@ def grab_sequence_frame(db: Session, sequence_id: str, at: float, *, created_by:
     from app.media.render_executor import render_still
 
     plan = build_plan_for_sequence(db, sequence_id)
+    ensure_text_can_burn(plan)
     sequence = db.get(Sequence, sequence_id)
     assert sequence is not None
     with tempfile.TemporaryDirectory(prefix="mosael-still-") as tmp:
@@ -369,6 +371,8 @@ def _export_sources(plan: RenderPlan) -> list[str]:
 def start_export(db: Session, sequence_id: str, export_params: dict | None = None, *, created_by: str | None) -> Job:
     """Validate the plan, create the render job, and run FFmpeg off-thread."""
     plan = build_plan_for_sequence(db, sequence_id, export_params)  # raises before job creation
+    #: 字烧不了(没有 libass、浏览器那条路也不通)在建任务之前就说,别等跑起来才失败。
+    ensure_text_can_burn(plan)
     sequence = db.get(Sequence, sequence_id)
     assert sequence is not None
     job = create_job(

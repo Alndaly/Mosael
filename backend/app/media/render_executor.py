@@ -745,6 +745,41 @@ def _available_hw_encoder() -> str | None:
     return None
 
 
+@functools.lru_cache(maxsize=4)
+def ffmpeg_has_libass(ffmpeg: str) -> bool:
+    """这个 ffmpeg 有没有 `subtitles` 滤镜(libass)。按二进制路径缓存:路径换了(设置里改了)要重探。
+
+    Homebrew 的 core `ffmpeg` 是精简版,没有 libass —— 文字一旦落到 ASS 那条路,ffmpeg 只会说一句
+    「No such filter: 'subtitles'」,导出失败的原因用户看不懂。探不出来(ffmpeg 不在)按「没有」算。"""
+    try:
+        proc = run_logged([ffmpeg, "-hide_banner", "-filters"], capture_output=True, text=True,
+                          timeout=20, what="libass 探测", level=logging.DEBUG)
+    except Exception:
+        return False
+    return any(line.split()[1:2] == ["subtitles"] for line in (proc.stdout or "").splitlines())
+
+
+def _text_rasterizer_available() -> bool:
+    """文字能不能走「浏览器按预览 CSS 渲成 PNG」那条路(不需要 libass)。Chromium 起不起得来要到用时才知道。"""
+    if not settings.text_rasterize:
+        return False
+    from app.media.text_render import find_frontend_dist
+
+    return find_frontend_dist() is not None
+
+
+def _has_text(plan: RenderPlan) -> bool:
+    return bool(plan.subtitles or plan.text_overlays)
+
+
+def ensure_text_can_burn(plan: RenderPlan) -> None:
+    """有字要烧,而两条路(浏览器渲 PNG、libass 烧 ASS)都走不通时,**在建任务之前**就说清楚。
+
+    此前要等任务跑起来、ffmpeg 报「No such filter」才失败,失败原因是一串滤镜图。"""
+    if _has_text(plan) and not _text_rasterizer_available() and not ffmpeg_has_libass(settings.ffmpeg):
+        raise RenderExecutionError("renderErr_noLibass", ffmpeg=settings.ffmpeg)
+
+
 def _target_bitrate_kbps(output) -> int:
     """由 分辨率×帧率×每像素比特(bpp) 推目标码率,bpp 受 CRF 调节。
 
@@ -999,7 +1034,7 @@ def build_ffmpeg_command(
             )
             video_label = out_label
             input_index += 1
-    elif plan.subtitles or plan.text_overlays:
+    elif _has_text(plan):
         ass_path = output_path.with_suffix(".ass")
         ass_path.parent.mkdir(parents=True, exist_ok=True)
         ass_path.write_text(_build_ass(plan), encoding="utf-8")
@@ -1116,6 +1151,15 @@ def _png_size(data: bytes) -> tuple[int, int]:
     return int.from_bytes(data[16:20], "big"), int.from_bytes(data[20:24], "big")
 
 
+def _text_for_burn(plan: RenderPlan, workdir: Path) -> dict | None:
+    """文字怎么烧:能渲成 PNG 就用 PNG(返回那张表);否则回落 ASS(返回 None)—— 回落之前先看
+    ffmpeg 有没有 libass。没有的话 ffmpeg 会以「No such filter: 'subtitles'」失败,在这里先说人话。"""
+    text_pngs = _rasterize_text(plan, workdir)
+    if text_pngs is None and _has_text(plan) and not ffmpeg_has_libass(settings.ffmpeg):
+        raise RenderExecutionError("renderErr_noLibass", ffmpeg=settings.ffmpeg)
+    return text_pngs
+
+
 def _rasterize_text(plan: RenderPlan, workdir: Path) -> dict | None:
     """把每条字幕/花字按预览 CSS 渲染成透明 PNG,返回 {subtitles, text_overlays} 列表(元素为
     (png路径, 宽, 高));关掉开关 / 找不到前端 dist / Chromium 失败时返回 None → 回落 ASS。"""
@@ -1162,7 +1206,7 @@ def render_still(plan: RenderPlan, resolve: Callable[[str], Path], output_path: 
     这里**也要先把文字渲成 PNG**:少这一步,取出来的帧就是没有字幕的那一版。
     """
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    text_pngs = _rasterize_text(plan, output_path.parent)
+    text_pngs = _text_for_burn(plan, output_path.parent)
     command = build_ffmpeg_command(plan, resolve, output_path, text_pngs=text_pngs, still_at=at)
     try:
         result = run_logged(command, capture_output=True, text=True, timeout=_STILL_TIMEOUT, what="取当前帧")
@@ -1217,7 +1261,7 @@ def execute_render(
     )
 
     # 起一次无头 Chromium 把所有字幕/花字渲染成 PNG(软件回落时复用同一批,不重复渲染)。
-    text_pngs = _rasterize_text(plan, output_path.parent)
+    text_pngs = _text_for_burn(plan, output_path.parent)
 
     def run_once(*, force_software: bool) -> tuple[int, str, bool]:
         if on_phase is not None:

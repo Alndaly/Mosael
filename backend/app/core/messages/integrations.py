@@ -103,6 +103,13 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "取当前帧超时({seconds} 秒内没画完)",
         "en": "Grabbing the current frame timed out (not done within {seconds} s).",
     },
+    "renderErr_noLibass": {
+        "zh": "烧不了字幕和花字:这台机器上的 ffmpeg({ffmpeg})没有 libass,用浏览器渲染文字那条路也不可用。"
+              "请装带 libass 的完整版 ffmpeg(macOS:brew install ffmpeg-full),并用环境变量 MOSAEL_FFMPEG 指向它。",
+        "en": "Can't burn in subtitles or titles: this machine's ffmpeg ({ffmpeg}) has no libass, and rendering the text "
+              "in the browser isn't available either. Install a full ffmpeg build with libass (macOS: brew install "
+              "ffmpeg-full) and point the MOSAEL_FFMPEG environment variable at it.",
+    },
     "renderErr_ffmpegExit": {
         "zh": "FFmpeg 异常退出,退出码 {code}",
         "en": "FFmpeg exited with code {code}",

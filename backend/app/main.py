@@ -177,6 +177,12 @@ def _warm_engine_probes() -> None:
     from app.domain.voices.transcription import LOCAL_ENGINES
 
     def probe() -> None:
+        from app.media.render_executor import ffmpeg_has_libass
+
+        #: 没有 libass 的 ffmpeg(Homebrew 的 core 版)烧不了 ASS:文字只能走浏览器渲 PNG 那条路。启动时记一笔,
+        #: 真导出时 ensure_text_can_burn 会在建任务之前把话说清楚。
+        if not ffmpeg_has_libass(settings.ffmpeg):
+            logger.warning("ffmpeg %s has no libass (subtitles filter); text burn-in relies on the browser path", settings.ffmpeg)
         for engine in LOCAL_ENGINES:
             asr_models.resolve_engine_python(engine)
         for adapter in (*DENOISE_ADAPTERS.values(), *SEPARATION_ADAPTERS.values()):

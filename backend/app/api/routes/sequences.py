@@ -718,12 +718,14 @@ def dub_subtitles(
 
 @router.post("/sequences/{sequence_id}/export", response_model=JobOut)
 def export_sequence(sequence_id: str, db: Tx, user: CurrentUser, body: ExportRequest | None = None) -> Job:
+    from app.media.render_executor import RenderExecutionError
+
     sequence_use_cases.exportable(db, user, sequence_id)
     try:
         return start_export(db, sequence_id, body.model_dump() if body else None, created_by=user.id)
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except RenderPlanError as exc:
+    except (RenderPlanError, RenderExecutionError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
