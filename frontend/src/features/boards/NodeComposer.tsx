@@ -53,6 +53,8 @@ import { cn } from "@/lib/utils";
 import { toPlainText } from "@/components/markdown/inlineSyntax";
 import { BoardComposerShell } from "@/features/boards/BoardComposerShell";
 import { SourceAssetSlotPreview } from "@/features/boards/SourceAssetSlotPreview";
+import { AssetUploadStatus, fileKind, namedFile, useAssetUpload, wrongKindText } from "@/features/boards/assetUpload";
+import { useFileDrop } from "@/lib/useFileDrop";
 import { EntityThumb, matchEntities, useMentionableEntities } from "@/features/entities/EntityMention";
 import { entityDisplayName } from "@/features/entities/entityMeta";
 
@@ -379,6 +381,23 @@ export function defaultMode(
   return fits(best) > 0 ? best.key : modes[0].key;
 }
 
+/**
+ * 「+」槽收拖上来的文件:悬着的时候框亮起来,松手交给 `onFiles`(收不收、挂哪个槽由面板判)。
+ * 收不了的也交过去 —— 由面板说为什么,而不是松手之后什么都不发生。
+ */
+function SlotDrop({ onFiles, children }: { onFiles: (files: File[]) => void; children: React.ReactNode }) {
+  const drop = useFileDrop(onFiles);
+  return (
+    <span
+      {...drop.handlers}
+      data-slot-drop={drop.active ? "active" : ""}
+      className={cn("inline-flex shrink-0 rounded-md", drop.active && "ring-2 ring-primary ring-offset-1 ring-offset-background")}
+    >
+      {children}
+    </span>
+  );
+}
+
 function roleLabel(t: ReturnType<typeof useI18n>, role: string): string {
   const key = ROLE_COPY[role as SourceRole]?.label;
   return key ? t(key as Parameters<typeof t>[0]) : role;
@@ -542,6 +561,33 @@ export function NodeComposer({
   //: 同类型两个角色的组合仍旧一格一个,那时候格子数量是真的在表达信息。
   const mergedSlots = React.useMemo(() => mergeableSourceSlots(displaySlots), [displaySlots]);
   const [addOpen, setAddOpen] = React.useState(false);
+
+  /**
+   * 本地文件**直接挂进槽**(拖到「+」上、面板里 ⌘V,见 assetUpload):挑第一个这几个槽收得下的文件(按它自己的种类
+   * 找还有空位的那个角色),传进素材库、挂上去。一个都收不下就就地说一句,不传。
+   */
+  const upload = useAssetUpload(workspaceId);
+  const attachFiles = (files: File[], roles: readonly string[]) => {
+    const open = roles.filter((role) => {
+      const limit = slots.find((slot) => slot.role === role)?.limit ?? 0;
+      return sources.filter((one) => one.role === role).length < limit;
+    });
+    for (const file of files) {
+      const role = open.find((one) => roleAccepts(one) === fileKind(file));
+      if (!role) continue;
+      upload.start(file, (asset) => setSources((all) => [...all, { role, assetId: asset.id }]));
+      return;
+    }
+    const kinds = new Set(roles.map(roleAccepts));
+    const [only] = kinds;
+    if (files[0]) upload.reject(wrongKindText(t, files[0], kinds.size === 1 && only ? only : "media"));
+  };
+  const pasteIntoSlots = (event: React.ClipboardEvent) => {
+    const files = Array.from(event.clipboardData?.files ?? []);
+    if (!files.length || !slots.length) return;
+    event.preventDefault();
+    attachFiles(files.map(namedFile), slots.map((slot) => slot.role));
+  };
 
   //: 换模型、换方式、或者上游连线变了 —— 都重新照上游挂一遍。
   //:
@@ -821,16 +867,18 @@ export function NodeComposer({
               // 只靠 tooltip 区分的虚线框之间选,等于让他猜一件他不需要知道的事。
               // 份数上限按模型各不相同,所以「还能加几份」在这里现算,不写进文案。
               <Popover open={addOpen} onOpenChange={setAddOpen}>
-                <PopoverTrigger asChild>
-                  <button
-                    type="button"
-                    title={t("boardAddSource")}
-                    aria-label={t("boardAddSource")}
-                    className="grid h-8 w-8 shrink-0 cursor-pointer place-items-center rounded-md border border-dashed border-border-strong text-muted-foreground transition-colors hover:border-primary hover:text-foreground"
-                  >
-                    <Plus size={13} />
-                  </button>
-                </PopoverTrigger>
+                <SlotDrop onFiles={(files) => attachFiles(files, mergedSlots.map((slot) => slot.role))}>
+                  <PopoverTrigger asChild>
+                    <button
+                      type="button"
+                      title={t("boardAddSource")}
+                      aria-label={t("boardAddSource")}
+                      className="grid h-8 w-8 shrink-0 cursor-pointer place-items-center rounded-md border border-dashed border-border-strong text-muted-foreground transition-colors hover:border-primary hover:text-foreground"
+                    >
+                      <Plus size={13} />
+                    </button>
+                  </PopoverTrigger>
+                </SlotDrop>
                 <PopoverContent align="start" className="w-[248px] p-1.5">
                   <p className="m-0 px-1.5 pb-1.5 pt-1 text-ui-xs leading-[1.5] text-muted-foreground">
                     {t("boardAddSourceHint")}
@@ -916,18 +964,20 @@ export function NodeComposer({
                 );
               })}
               {mine.length < slot.limit && (
-                <button
-                  type="button"
-                  title={roleLabel(t, slot.role)}
-                  onClick={() =>
-                    onPickAsset(roleAccepts(slot.role), (assetId) =>
-                      setSources((all) => [...all, { role: slot.role, assetId }]),
-                    )
-                  }
-                  className="grid h-8 w-8 shrink-0 cursor-pointer place-items-center rounded-md border border-dashed border-border-strong text-muted-foreground transition-colors hover:border-primary hover:text-foreground"
-                >
-                  <Plus size={13} />
-                </button>
+                <SlotDrop onFiles={(files) => attachFiles(files, [slot.role])}>
+                  <button
+                    type="button"
+                    title={roleLabel(t, slot.role)}
+                    onClick={() =>
+                      onPickAsset(roleAccepts(slot.role), (assetId) =>
+                        setSources((all) => [...all, { role: slot.role, assetId }]),
+                      )
+                    }
+                    className="grid h-8 w-8 shrink-0 cursor-pointer place-items-center rounded-md border border-dashed border-border-strong text-muted-foreground transition-colors hover:border-primary hover:text-foreground"
+                  >
+                    <Plus size={13} />
+                  </button>
+                </SlotDrop>
               )}
             </React.Fragment>
           );
@@ -954,6 +1004,7 @@ export function NodeComposer({
             {t("boardKindDocument")} · {doc.title || t("documentUntitled")} · v{doc.revision}
           </a>
         ))}
+        <AssetUploadStatus upload={upload} className="basis-full" />
       </>
     ) : null;
 
@@ -963,6 +1014,7 @@ export function NodeComposer({
       name="generate"
       width="lg"
       upstream={upstreamChips}
+      onPaste={pasteIntoSlots}
       bar={
         options.length === 0 ? (
           // 没有可用模型时说清楚 —— 给一个点了没反应的按钮比什么都不给更糟。

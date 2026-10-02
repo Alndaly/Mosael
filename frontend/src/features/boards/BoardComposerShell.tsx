@@ -67,6 +67,7 @@ export function BoardComposerShell({
   settings,
   trailing,
   send,
+  onPaste,
 }: {
   /** 挂在哪一格下面。 */
   nodeId: string;
@@ -85,6 +86,8 @@ export function BoardComposerShell({
   trailing?: React.ReactNode;
   /** 圆形的发送键。不给 = 这会儿发不了(没有模型、工具用不了),底栏只留说明。 */
   send?: ComposerSend | null;
+  /** 面板里(焦点在面板里任何一处)粘贴:生成面板拿剪贴板里的图片填槽。不管的话 preventDefault 都别调。 */
+  onPaste?: (event: React.ClipboardEvent<HTMLDivElement>) => void;
 }) {
   const body = React.useRef<HTMLDivElement | null>(null);
   const frame = React.useRef<HTMLDivElement | null>(null);
@@ -97,6 +100,7 @@ export function BoardComposerShell({
         data-board-composer={name}
         data-width={width}
         style={fit}
+        onPaste={onPaste}
         className={cn(
           CANVAS_WINDOW_SURFACE_CLASS,
           "nodrag nopan grid max-h-[min(560px,70vh)] max-w-[calc(100vw-2rem)] grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)_auto] overflow-hidden",

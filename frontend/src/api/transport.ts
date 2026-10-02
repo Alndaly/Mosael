@@ -93,9 +93,9 @@ export function setUnauthorizedHandler(handler: (() => void) | null): void {
   onUnauthorized = handler;
 }
 
-/** Unified HTTP seam for every domain client: headers, offline, 401 and error bodies are handled once. */
-async function request(path: string, init?: RequestInit): Promise<Response> {
-  const auth: Record<string, string> = {
+/** 每个请求都带的那几个头:客户端、语言、登录凭据。 */
+function baseHeaders(): Record<string, string> {
+  return {
     // 语法是 `<界面>/<版本>`(见 backend/app/api/deps/auth.parse_client_header)。此前这里只发
     // 版本号,而浏览器扩展发的是字面量 `browser-extension` —— 同一栏两个意思,管理页于是
     // 把扩展那一行渲染成「vbrowser-extension」。
@@ -103,6 +103,21 @@ async function request(path: string, init?: RequestInit): Promise<Response> {
     "Accept-Language": apiLocale.locale,
     ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
   };
+}
+
+/** 一个没成的响应 → 抛什么:401 交给登录处理,别的带着状态码和原文。`api` 和 `apiUpload` 同一套。 */
+function failure(path: string, method: string, status: number, statusText: string, body: string): Error {
+  if (status === 401 && !path.startsWith("/api/auth/")) {
+    onUnauthorized?.();
+    return new Error("Not authenticated");
+  }
+  console.warn(`[api] ${method.toUpperCase()} ${path} → ${status} ${statusText}${body ? `: ${body}` : ""}`);
+  return new ApiError(humanError(status, statusText, body), status, body);
+}
+
+/** Unified HTTP seam for every domain client: headers, offline, 401 and error bodies are handled once. */
+async function request(path: string, init?: RequestInit): Promise<Response> {
+  const auth = baseHeaders();
   const headers =
     init?.body instanceof FormData
       ? { ...auth, ...(init?.headers as Record<string, string> | undefined) }
@@ -116,16 +131,10 @@ async function request(path: string, init?: RequestInit): Promise<Response> {
     throw new ApiOfflineError(apiLocale.unreachable(API_BASE), { cause });
   }
   if (response.status === 401 && !path.startsWith("/api/auth/")) {
-    onUnauthorized?.();
-    throw new Error("Not authenticated");
+    throw failure(path, init?.method ?? "GET", response.status, response.statusText, "");
   }
   if (!response.ok) {
-    const body = await response.text();
-    const method = (init?.method ?? "GET").toUpperCase();
-    console.warn(
-      `[api] ${method} ${path} → ${response.status} ${response.statusText}${body ? `: ${body}` : ""}`,
-    );
-    throw new ApiError(humanError(response.status, response.statusText, body), response.status, body);
+    throw failure(path, init?.method ?? "GET", response.status, response.statusText, await response.text());
   }
   if (response.headers.has(NEW_JOBS_HEADER) && typeof window !== "undefined") {
     window.dispatchEvent(new Event(JOBS_CREATED_EVENT));
@@ -149,4 +158,47 @@ export async function apiStream(path: string, init?: RequestInit): Promise<Reada
   const response = await request(path, init);
   if (!response.body) throw new ApiError("Empty stream", response.status, "");
   return response.body;
+}
+
+/**
+ * 传一个文件(表单),**说得出传了多少、停得下来**:`onProgress` 收 0..1(上传那一段的进度;服务端收完到回包之间
+ * 停在 1),`signal` 一掐就停,抛 `AbortError`。fetch 给不出上传进度,所以这一个走 XMLHttpRequest;请求头、
+ * 掉线、401、报错原文和 `api` 同一套。
+ */
+export function apiUpload<T>(
+  path: string,
+  form: FormData,
+  { signal, onProgress }: { signal?: AbortSignal; onProgress?: (fraction: number) => void } = {},
+): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const aborted = () => new DOMException("The upload was cancelled.", "AbortError");
+    if (signal?.aborted) {
+      reject(aborted());
+      return;
+    }
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", `${API_BASE}${path}`);
+    for (const [name, value] of Object.entries(baseHeaders())) xhr.setRequestHeader(name, value);
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable && event.total > 0) onProgress?.(Math.min(1, event.loaded / event.total));
+    };
+    xhr.onload = () => {
+      if (xhr.status < 200 || xhr.status >= 300) {
+        reject(failure(path, "POST", xhr.status, xhr.statusText, xhr.responseText ?? ""));
+        return;
+      }
+      if (xhr.getResponseHeader(NEW_JOBS_HEADER) !== null && typeof window !== "undefined") {
+        window.dispatchEvent(new Event(JOBS_CREATED_EVENT));
+      }
+      try {
+        resolve((xhr.status === 204 || !xhr.responseText ? undefined : JSON.parse(xhr.responseText)) as T);
+      } catch (cause) {
+        reject(cause);
+      }
+    };
+    xhr.onerror = () => reject(new ApiOfflineError(apiLocale.unreachable(API_BASE)));
+    xhr.onabort = () => reject(aborted());
+    signal?.addEventListener("abort", () => xhr.abort(), { once: true });
+    xhr.send(form);
+  });
 }

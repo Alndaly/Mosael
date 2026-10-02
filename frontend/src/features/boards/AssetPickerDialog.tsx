@@ -1,6 +1,6 @@
 import React from "react";
 import { assetKeys } from "@/api/queryKeys";
-import { Image as ImageIcon, Music } from "lucide-react";
+import { FileUp, Image as ImageIcon, Music, Upload } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 
 import { assetThumbnailUrl, listAssets, type Asset } from "@/api/client";
@@ -9,6 +9,8 @@ import { PickListDialog } from "@/components/app/PickListDialog";
 import { Button } from "@/components/ui/button";
 import { kindIcon, kindText, MEDIA_KINDS, type MediaKind } from "@/features/boards/boardNodes";
 import { placedAsset, type PlacedAsset } from "@/features/boards/boardPlacement";
+import { AssetUploadStatus, acceptFor, fileKind, useAssetUpload, wrongKindText } from "@/features/boards/assetUpload";
+import { useFileDrop } from "@/lib/useFileDrop";
 
 /**
  * 往画板上贴一份现成素材:从素材库里挑。
@@ -21,6 +23,9 @@ import { placedAsset, type PlacedAsset } from "@/features/boards/boardPlacement"
  *
  * 给了 `onBoard`(这张画板上已有的素材,时间线格的「+」)时头里多一枚「这张画板上的」,打开时先按它筛 ——
  * 往时间线里拼的多半是刚在画板上生成的那几段;点掉它就是整个素材库。
+ *
+ * **库里没有就直接传一个**:头里一枚「上传本地文件」,把文件拖进弹窗也行(见 assetUpload)。只收这一格要的那一种
+ * (三种都列时三种都收),传完就当是挑中了它 —— 和点一行同一个 `onPick`。
  */
 /** 行尾那句说明:尺寸、时长 —— 挑素材时真正要看的东西。取不到就不写,不编。 */
 function describe(asset: Asset): string {
@@ -83,6 +88,27 @@ export function AssetPickerDialog({
     );
   }, [assets.data, kinds, keyword, boardOnly, boardSet]);
 
+  //: 直接传一个:只收这一格要的那一种;收不了的就地说一句(拖进图片槽的一段视频)。
+  const upload = useAssetUpload(workspaceId);
+  const chooser = React.useRef<HTMLInputElement | null>(null);
+  const wanted = mixed ? "media" : kind;
+  const take = (files: File[]) => {
+    const file = files.find((one) => {
+      const found = fileKind(one);
+      return found !== null && (wanted === "media" || found === wanted);
+    });
+    if (!file) {
+      if (files[0]) upload.reject(wrongKindText(t, files[0], wanted));
+      return;
+    }
+    upload.start(file, (asset) => {
+      const placed = placedAsset(asset);
+      if (placed) onPick(placed);
+    });
+  };
+  //: 收不了的也交给 take,由它说为什么 —— 筛掉的话松手之后什么都不发生。
+  const drop = useFileDrop(take);
+
   const EmptyIcon = mixed ? ImageIcon : kindIcon(kind);
   const kindLabel = (one: string) => (one === "document" ? t("kindDocument") : kindText(t, one as MediaKind).label);
   return (
@@ -122,6 +148,38 @@ export function AssetPickerDialog({
           </div>
         ) : undefined
       }
+      actions={
+        <div className="grid gap-1.5">
+          <div className="flex items-center gap-1">
+            <Button type="button" size="sm" variant="ghost" className="gap-1.5" onClick={() => chooser.current?.click()}>
+              <Upload size={14} />
+              {t("boardsUploadLocal")}
+            </Button>
+            <input
+              ref={chooser}
+              type="file"
+              accept={acceptFor(wanted)}
+              hidden
+              onChange={(event) => {
+                take(Array.from(event.target.files ?? []));
+                event.target.value = "";
+              }}
+            />
+          </div>
+          <AssetUploadStatus upload={upload} />
+        </div>
+      }
+      dropzone={{
+        handlers: drop.handlers,
+        overlay: drop.active ? (
+          <div className="pointer-events-none absolute inset-0 z-20 grid place-items-center rounded-[inherit] bg-[color-mix(in_oklab,var(--primary)_10%,var(--background))]">
+            <span className="grid justify-items-center gap-2 rounded-lg border-2 border-dashed border-primary px-6 py-4 text-ui-md font-semibold text-primary">
+              <FileUp size={20} />
+              {t("boardsUploadDropHint")}
+            </span>
+          </div>
+        ) : null,
+      }}
       searchLabel={t("boardsSearchImages")}
       query={keyword}
       onQueryChange={setKeyword}

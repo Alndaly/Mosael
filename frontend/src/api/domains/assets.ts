@@ -1,7 +1,7 @@
 import type { components } from "@/api/generated/schema";
 import type { Job } from "@/api/domains/jobs";
 import type { Transcript } from "@/api/domains/speech";
-import { API_BASE, ApiError, api, getAuthToken } from "@/api/transport";
+import { API_BASE, ApiError, api, apiUpload, getAuthToken } from "@/api/transport";
 
 export type Asset = components["schemas"]["AssetOut"];
 
@@ -180,12 +180,19 @@ export async function importAsset(params: {
   projectId?: string;
   file: File;
   name?: string;
+  /** 给了就说传了多少(0..1)—— 挑素材弹窗、生成面板的槽位上传一段大视频时看得见进度。 */
+  onProgress?: (fraction: number) => void;
+  /** 给了就停得下来(取消上传)。 */
+  signal?: AbortSignal;
 }): Promise<Asset> {
   const form = new FormData();
   form.set("workspace_id", params.workspaceId);
   if (params.projectId) form.set("project_id", params.projectId);
   if (params.name) form.set("name", params.name);
   form.set("file", params.file);
+  if (params.onProgress || params.signal) {
+    return apiUpload<Asset>("/api/assets/import", form, { signal: params.signal, onProgress: params.onProgress });
+  }
   return api<Asset>("/api/assets/import", { method: "POST", body: form });
 }
 

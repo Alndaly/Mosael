@@ -13,7 +13,7 @@ import { NodeComposer } from "./NodeComposer";
 
 vi.mock("@/app/preferences", () => ({ useI18n: () => (key: string) => key }));
 vi.mock("@xyflow/react", () => ({ NodeToolbar: ({ children }: { children: React.ReactNode }) => children, Position: { Bottom: "bottom" } }));
-vi.mock("@tanstack/react-query", () => ({ useQuery: () => ({ data: [] }) }));
+vi.mock("@tanstack/react-query", () => ({ useQuery: () => ({ data: [] }), useQueryClient: () => ({ invalidateQueries: vi.fn() }) }));
 vi.mock("./PromptEditor", () => ({
   PromptEditor: () => <div data-testid="prompt-editor" />,
   restorePromptDocument: vi.fn(),

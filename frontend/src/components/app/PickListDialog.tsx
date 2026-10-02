@@ -48,6 +48,8 @@ export function PickListDialog<T>({
   notice,
   className,
   filters,
+  actions,
+  dropzone,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -71,6 +73,10 @@ export function PickListDialog<T>({
   className?: string;
   /** 搜索框下面、同样钉在头里的一排筛选(挑素材时按图片 / 视频 / 音频筛)。它也作用于整份清单。 */
   filters?: React.ReactNode;
+  /** 筛选下面、钉在头里的一行动作(挑素材时「上传本地文件」和传的进度)—— 清单里没有的,从这里来。 */
+  actions?: React.ReactNode;
+  /** 整个弹窗收拖进来的文件(见 ModalShell 的 dropzone)。 */
+  dropzone?: React.ComponentProps<typeof ModalShell>["dropzone"];
 }) {
   const t = useI18n();
   const [active, setActive] = React.useState(0);
@@ -99,6 +105,7 @@ export function PickListDialog<T>({
       open={open}
       onOpenChange={onOpenChange}
       title={title}
+      dropzone={dropzone}
       className={cn("w-[min(560px,calc(100vw-32px))] h-[min(560px,calc(100dvh-32px))]", className)}
       header={
         <>
@@ -119,6 +126,7 @@ export function PickListDialog<T>({
             />
           </div>
           {filters}
+          {actions}
         </>
       }
     >

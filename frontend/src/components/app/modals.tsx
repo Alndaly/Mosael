@@ -69,6 +69,7 @@ export function ModalShell({
   dismissible = true,
   modal = true,
   onEscapeKeyDown,
+  dropzone,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -91,10 +92,13 @@ export function ModalShell({
    * `preventDefault()` 并退回上一层 —— Esc 先退一层,再按一次才关窗,和浏览器的后退同一个直觉。
    */
   onEscapeKeyDown?: (event: KeyboardEvent) => void;
+  /** 整个弹窗收拖进来的文件(挑素材时直接传一个):拖放的事件摊在弹窗上,`overlay` 盖住整个弹窗(「松手上传」)。 */
+  dropzone?: { handlers: React.HTMLAttributes<HTMLDivElement>; overlay: React.ReactNode };
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange} modal={modal}>
       <DialogContent
+        {...dropzone?.handlers}
         showClose={dismissible}
         showOverlay={modal}
         onEscapeKeyDown={(event) => {
@@ -143,6 +147,7 @@ export function ModalShell({
             {footer}
           </DialogFooter>
         )}
+        {dropzone?.overlay}
       </DialogContent>
     </Dialog>
   );

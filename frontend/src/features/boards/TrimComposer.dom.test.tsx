@@ -16,7 +16,7 @@ vi.mock("@xyflow/react", () => ({
   Position: { Bottom: "bottom" },
 }));
 //: 素材库里查不到时长 —— 不画轨,退回填秒数,这里要看的只是那排开关。
-vi.mock("@tanstack/react-query", () => ({ useQuery: () => ({ data: [] }) }));
+vi.mock("@tanstack/react-query", () => ({ useQuery: () => ({ data: [] }), useQueryClient: () => ({ invalidateQueries: vi.fn() }) }));
 
 const clip = (kind: "video" | "audio") =>
   ({ id: kind, kind, x: 0, y: 0, asset_id: `${kind}-asset` }) as BoardItem & { kind: "video" | "audio" };

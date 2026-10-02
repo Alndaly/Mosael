@@ -17,6 +17,7 @@ let shots = [{ id: "shot-1", name: "全景" }, { id: "shot-2", name: "跟拍" }]
 vi.mock("@tanstack/react-query", () => ({
   useQuery: ({ queryKey }: { queryKey: unknown[] }) =>
     queryKey[0] === "scene" ? { data: { name: "草原", revision: 2, content: { shots } } } : { data: [] },
+  useQueryClient: () => ({ invalidateQueries: vi.fn() }),
 }));
 vi.mock("./PromptEditor", () => ({
   PromptEditor: () => <div data-testid="prompt-editor" />,
