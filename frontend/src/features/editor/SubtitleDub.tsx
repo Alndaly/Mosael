@@ -134,7 +134,7 @@ export function SubtitleDub({
   const job = useWatchedJob();
   const run = useMutation({
     mutationFn: () =>
-      dubSubtitles(sequence.id, {
+      dubSubtitles(sequence, {
         ...voice.params,
         clip_ids: targets.map((clip) => clip.id),
         track_id: focused ? focused.track_id : trackId,

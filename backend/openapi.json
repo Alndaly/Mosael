@@ -8533,7 +8533,7 @@
           "sequences"
         ],
         "summary": "Dub Subtitles",
-        "description": "给选中的字幕条配音,产物落到一条新的音频轨。\n\n两道闸门都要过:配音**改这条时间线**(edit),也**花 AI 的钱**(ai)。少判一个,就等于让\n只读成员消费工作区的额度、或者让有额度的人改别人的片子。",
+        "description": "给选中的字幕条配音,产物落到一条新的音频轨。\n\n两道闸门都要过:配音**改这条时间线**(edit),也**花 AI 的钱**(ai)。少判一个,就等于让\n只读成员消费工作区的额度、或者让有额度的人改别人的片子。\n\n配哪几句是照着调用方看到的那一版选的(`base_revision`):那几条字幕(或那条字幕轨)在这之后被别人改过,\n就 409 附最新序列 —— 不按一份过时的选择去付费合成(见 _ensure_seen)。",
         "operationId": "dub_subtitles_api_sequences__sequence_id__dub_subtitles_post",
         "parameters": [
           {
@@ -8544,6 +8544,24 @@
               "type": "string",
               "title": "Sequence Id"
             }
+          },
+          {
+            "name": "base_revision",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。",
+              "title": "Base Revision"
+            },
+            "description": "这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。"
           }
         ],
         "requestBody": {

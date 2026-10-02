@@ -1,6 +1,7 @@
 import type { components } from "@/api/generated/schema";
 import type { Job } from "@/api/domains/jobs";
 import { API_BASE, api, apiBlob, getAuthToken } from "@/api/transport";
+import { baseRevisionOf, noticeConflict, type SequenceRef } from "@/api/domains/editor";
 
 /**
  * 配音引擎的 id 是能力表里的提供方 id(ADR 0032 第四步):内置的带 `builtin:` 前缀,插件连接是它的连接 id。
@@ -163,8 +164,8 @@ export function downloadF5Model(modelId: string): Promise<F5Model> {
 }
 
 /** Generate one audio track from selected subtitle clips as an orchestration job. */
-export function dubSubtitles(
-  sequenceId: string,
+export async function dubSubtitles(
+  sequence: SequenceRef,
   body: {
     clip_ids: string[];
     /** 配哪条字幕轨。一次只配一条:条目跨轨会被后端拒绝。 */
@@ -180,10 +181,17 @@ export function dubSubtitles(
     speed?: number;
   },
 ): Promise<Job> {
-  return api<Job>(`/api/sequences/${sequenceId}/dub-subtitles`, {
-    method: "POST",
-    body: JSON.stringify(body),
-  });
+  // 排的是任务,但配哪几句是照着这一版选的:带上 base_revision,那几条字幕在这之后被别人改过就 409(后端 _ensure_seen),
+  // 剪辑页随即换成最新的一版(noticeConflict),不在一份过时的选择上花钱。
+  try {
+    return await api<Job>(`/api/sequences/${sequence.id}/dub-subtitles?base_revision=${baseRevisionOf(sequence)}`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  } catch (error) {
+    noticeConflict(error);
+    throw error;
+  }
 }
 
 /**

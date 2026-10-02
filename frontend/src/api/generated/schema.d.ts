@@ -2906,6 +2906,9 @@ export interface paths {
          *
          *     两道闸门都要过:配音**改这条时间线**(edit),也**花 AI 的钱**(ai)。少判一个,就等于让
          *     只读成员消费工作区的额度、或者让有额度的人改别人的片子。
+         *
+         *     配哪几句是照着调用方看到的那一版选的(`base_revision`):那几条字幕(或那条字幕轨)在这之后被别人改过,
+         *     就 409 附最新序列 —— 不按一份过时的选择去付费合成(见 _ensure_seen)。
          */
         post: operations["dub_subtitles_api_sequences__sequence_id__dub_subtitles_post"];
         delete?: never;
@@ -20059,7 +20062,10 @@ export interface operations {
     };
     dub_subtitles_api_sequences__sequence_id__dub_subtitles_post: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description 这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。 */
+                base_revision?: number | null;
+            };
             header?: never;
             path: {
                 sequence_id: string;

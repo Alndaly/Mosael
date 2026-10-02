@@ -70,6 +70,34 @@ def test_剪辑台的接口带上轨道_只把那条轨交下去(monkeypatch) ->
     assert seen["match_duration"] is DEFAULT_MATCH_DURATION, "接口不传时用领域层那一个默认"
 
 
+def test_配音照着看到的那一版排_选中的字幕被人改过就409_别处改过照排(monkeypatch) -> None:
+    """排任务的编辑也走并发协议:配哪几句是照着调用方看到的那一版选的。"""
+    import app.domain.voices.subtitle_dub as dub
+
+    started: list[list[str]] = []
+
+    def fake_start(db, **kwargs):
+        started.append(kwargs["clip_ids"])
+        raise DubError("到此为止")
+
+    monkeypatch.setattr(dub, "start_subtitle_dub", fake_start)
+    client = fresh_client()
+    sid, cues = _two_tracks(client)
+    first, second = cues
+    body = {"track_id": second, "engine": "builtin:edge", "engine_voice": "zh-CN-XiaoxiaoNeural"}
+    seen = client.get(f"/api/sequences/{sid}").json()["revision"]
+    # 改的是另一条字幕轨上的字:和这次要配的那条轨不相干,照排。
+    assert client.patch(f"/api/sequences/{sid}/clips/texts", json={"texts": [{"clip_id": cues[first][0], "text": "早"}]}).status_code == 200
+    assert client.post(f"/api/sequences/{sid}/dub-subtitles?base_revision={seen}", json=body).status_code == 422
+    assert started == [cues[second]]
+    # 要配的那一句被人改了字:拒,附最新的一版。
+    seen = client.get(f"/api/sequences/{sid}").json()["revision"]
+    assert client.patch(f"/api/sequences/{sid}/clips/texts", json={"texts": [{"clip_id": cues[second][0], "text": "Hi"}]}).status_code == 200
+    stale = client.post(f"/api/sequences/{sid}/dub-subtitles?base_revision={seen}", json=body)
+    assert stale.status_code == 409 and stale.json()["detail"]["sequence"]["revision"] > seen
+    assert len(started) == 1, "没有按过时的选择去排配音"
+
+
 def test_三个入口的默认值都是领域层那一个() -> None:
     import inspect
 

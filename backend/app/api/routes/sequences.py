@@ -644,16 +644,29 @@ def redo_sequence(
 
 
 @router.post("/sequences/{sequence_id}/dub-subtitles", response_model=JobOut)
-def dub_subtitles(sequence_id: str, body: SubtitleDubRequest, db: Tx, user: CurrentUser) -> Job:
+def dub_subtitles(
+    sequence_id: str, body: SubtitleDubRequest, db: Tx, user: CurrentUser, base_revision: BaseRevision = None
+) -> Job:
     """给选中的字幕条配音,产物落到一条新的音频轨。
 
     两道闸门都要过:配音**改这条时间线**(edit),也**花 AI 的钱**(ai)。少判一个,就等于让
     只读成员消费工作区的额度、或者让有额度的人改别人的片子。
+
+    配哪几句是照着调用方看到的那一版选的(`base_revision`):那几条字幕(或那条字幕轨)在这之后被别人改过,
+    就 409 附最新序列 —— 不按一份过时的选择去付费合成(见 _ensure_seen)。
     """
     from app.domain.voices import use_cases as voices
-    from app.domain.voices.subtitle_dub import DubError
+    from app.domain.voices.subtitle_dub import DubError, dub_targets
     from app.domain.voices.voices import VoiceError
 
+    require_sequence_access(db, user, sequence_id, perm="edit")
+    # 「碰过没有」按要配的那几条字幕算:没点名就是整条轨上现在的那些(改字的记录里只有片段 id,没有轨道 id),
+    # 再加上轨道本身(删掉 / 新放上的字幕记录里带着轨道)。认不出要配哪几条的,留给下面说清楚原因。
+    try:
+        targets = dub_targets(db, sequence_id, list(body.clip_ids), body.track_id)
+    except DubError:
+        targets = list(body.clip_ids)
+    _ensure_seen(db, user, sequence_id, base_revision, [*targets, body.track_id])
     try:
         return voices.dub_subtitles(db, user, sequence_id, **body.model_dump())
     except (DubError, VoiceError) as exc:
