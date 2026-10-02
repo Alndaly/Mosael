@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "Translated dubbing with lip-sync",
   "description": "Everything in translated dubbing with subtitles, then re-sync the speaker's lips to the translated dub: cut the source into chunks the model accepts at the gaps between lines, lip-sync the chunks with speech, and lay the joined result on the top video track over the source (delete that track to undo the lip-sync). The export carries an \"AI-generated\" label. Pick the target language on the translate step (English by default). Confirm the speaker's consent on the lip-sync step before running. Cost: lip-sync is billed by source length (Bailian videoretalk lists about 0.08 CNY per second, so roughly 5 CNY a minute), plus translation and per-line dubbing; a re-run doesn't pay again for chunks whose translation, voice and timing are unchanged (a reworded line re-buys its chunk).",
-  "graph_hash": "b20f7445d561938dadf80e8a165eaab035d050e6a90a2f15f9f05e1272e66d75",
+  "graph_hash": "f2263d91124e29c03fc975ed480d221820505b2568c35f99bc9e5e1a65ae2557",
   "graph": {
     "meta": {
       "template_id": "translated_dub_lipsync",
@@ -128,13 +128,13 @@
           "segments": "",
           "texts": "",
           "keep_original": "no",
-          "offset": ""
+          "clip_id": ""
         },
         "inputs": [
           "sequence_id",
           "segments",
           "texts",
-          "offset"
+          "clip_id"
         ]
       },
       {
@@ -348,11 +348,11 @@
         "target_input": "asset_id"
       },
       {
-        "id": "d-verbatim_transcript-segments-translate_lines-texts",
+        "id": "d-verbatim_transcript-sentences-translate_lines-texts",
         "source": "verbatim_transcript",
         "target": "translate_lines",
         "kind": "data",
-        "source_output": "segments",
+        "source_output": "sentences",
         "target_input": "texts"
       },
       {
@@ -372,11 +372,11 @@
         "target_input": "sequence_id"
       },
       {
-        "id": "d-verbatim_transcript-segments-translated_subtitles-segments",
+        "id": "d-verbatim_transcript-sentences-translated_subtitles-segments",
         "source": "verbatim_transcript",
         "target": "translated_subtitles",
         "kind": "data",
-        "source_output": "segments",
+        "source_output": "sentences",
         "target_input": "segments"
       },
       {
@@ -388,12 +388,12 @@
         "target_input": "texts"
       },
       {
-        "id": "d-video_on_timeline-timeline_start-translated_subtitles-offset",
+        "id": "d-video_on_timeline-clip_id-translated_subtitles-clip_id",
         "source": "video_on_timeline",
         "target": "translated_subtitles",
         "kind": "data",
-        "source_output": "timeline_start",
-        "target_input": "offset"
+        "source_output": "clip_id",
+        "target_input": "clip_id"
       },
       {
         "id": "d-dub_project-sequence_id-dubbing-sequence_id",

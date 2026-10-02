@@ -111,6 +111,9 @@ def transcribe_asset(db: Session, scope: RunScope, config: dict[str, Any]) -> di
         "text": text,
         "timed_text": timed_text,
         "segments": segments,
+        #: 一句一行 —— 和剪辑台逐字稿同一套断句(voices/sentences,契约 transcript-sentence-cases)。
+        #: 要做字幕、逐句翻译的接这个:引擎的段落一段动辄二三十秒。
+        "sentences": transcript_sentences(segments),
         "language": transcript.language,
         "transcript_id": transcript.id,
         "duration": duration,
@@ -966,6 +969,37 @@ def _yes_no(config: dict[str, Any], key: str, *, default: bool) -> bool:
     return truthy(raw) if raw else default
 
 
+def transcript_sentences(segments: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """逐字稿段落(`{start, end, text, speaker, tokens}`)按剪辑台那一套切成一句一行,形状不变。"""
+    from app.domain.voices.sentences import Segment, Token, sentences_for_editing
+
+    parsed = [
+        Segment(
+            id=str(index),
+            start_time=float(segment["start"]),
+            end_time=float(segment["end"]),
+            text=str(segment.get("text") or ""),
+            speaker=str(segment.get("speaker") or "") or None,
+            tokens=tuple(
+                Token(start_time=float(token["start"]), end_time=float(token["end"]), text=str(token.get("text") or ""))
+                for token in segment.get("tokens") or []
+                if isinstance(token, dict)
+            ),
+        )
+        for index, segment in enumerate(segments)
+    ]
+    return [
+        {
+            "start": row.start_time,
+            "end": row.end_time,
+            "text": row.text,
+            "speaker": row.speaker or "",
+            "tokens": [{"start": token.start_time, "end": token.end_time, "text": token.text} for token in row.tokens],
+        }
+        for row in sentences_for_editing(parsed)
+    ]
+
+
 def _segments_in(value: Any) -> list[dict[str, Any]]:
     """上游给的逐字稿段落。接列表,也接一串 JSON —— 手填时它只能是文本。"""
     if isinstance(value, str):
@@ -989,6 +1023,24 @@ def _field(item: dict[str, Any], path: str) -> Any:
             return ""
         current = current.get(part, "")
     return current
+
+
+def _clip_window(db: Session, sequence: Sequence, clip_id: str):
+    """`clip_id` 给了就返回「素材时间 (起, 止) → 时间线 (起, 止)」的映射,落在片段用到的那一截之外的返回 None。"""
+    if not clip_id:
+        return None
+    clip = db.get(Clip, clip_id)
+    if clip is None or clip.sequence_id != sequence.id:
+        raise WorkflowDomainError("wfErr_clipNotOnSequence")
+    timeline_start, src_in, src_out, speed = clip.timeline_start, clip.src_in, clip.src_out, clip.speed or 1.0
+
+    def mapped(start: float, end: float) -> tuple[float, float] | None:
+        low, high = max(start, src_in), min(end, src_out)
+        if high <= low:
+            return None
+        return timeline_start + (low - src_in) / speed, timeline_start + (high - src_in) / speed
+
+    return mapped
 
 
 def _subtitle_track(db: Session, sequence: Sequence, track_id: str) -> str:
@@ -1043,6 +1095,16 @@ def generate_subtitles(db: Session, scope: RunScope, config: dict[str, Any]) -> 
             return nothing
         raise WorkflowDomainError("wfErr_noSegments")
     lines = text_lines(config.get("texts"))
+    start_field = str(config.get("start_field") or "start").strip()
+    end_field = str(config.get("end_field") or "end").strip()
+    text_field = str(config.get("text_field") or "text").strip()
+    #: 交来的是转写引擎的原始段落(带词级时间戳)、又没有逐条译文时:按剪辑台那一套切成一句一行再铺。
+    #: 此前直接拿引擎的段落当字幕,一条二三十秒、上百个字,和剪辑台上同一份逐字稿铺出来的不一样。
+    #: 给了译文时不切 —— 译文是一段对一条的,切了就对不上;要逐句翻译就接转写节点的 sentences。
+    if not lines and (start_field, end_field, text_field) == ("start", "end", "text") and segments and all(
+        isinstance(segment.get("tokens"), list) for segment in segments
+    ):
+        segments = transcript_sentences(segments)
     if lines and len(lines) != len(segments):
         raise WorkflowDomainError("wfErr_linesSegmentsMismatch", params={"lines": len(lines), "segments": len(segments)})
     keep_original = _yes_no(config, "keep_original", default=False)
@@ -1053,10 +1115,9 @@ def generate_subtitles(db: Session, scope: RunScope, config: dict[str, Any]) -> 
     #: 字幕最晚到哪一秒(一般是这一段在时间线上的终点):素材比计划短、模型写的时间码超出这一段时,
     #: 不让字幕盖到下一段上。
     until = _seconds(config, "until", "generate_subtitles")
-
-    start_field = str(config.get("start_field") or "start").strip()
-    end_field = str(config.get("end_field") or "end").strip()
-    text_field = str(config.get("text_field") or "text").strip()
+    #: 给了片段:段落的时间是**这段素材里**的时间,按片段的入点和倍速映射到时间线上,只留片段用到的那一截
+    #: (和剪辑台的逐字稿投影同一个算法)。此前只能给一个平移量 —— 片段从素材中间开始、或者调过速,字幕就对不上嘴。
+    clip_window = _clip_window(db, sequence, str(config.get("clip_id") or "").strip())
     cues: list[tuple[str, float, float]] = []
     for index, segment in enumerate(segments):
         # 起止**都**没有:这一段不上屏(整片生成里「这一镜没有口播」就是这样交过来的),跳过。
@@ -1076,7 +1137,13 @@ def generate_subtitles(db: Session, scope: RunScope, config: dict[str, Any]) -> 
         if keep_original and lines and original and original != text:
             # 原文在上、译文在下 —— 和「字幕配音」的 line=last 正好配套:看两行,只念译文。
             text = f"{original}\n{text}"
-        begin, finish = start + offset, end + offset
+        if clip_window is not None:
+            mapped = clip_window(start, end)
+            if mapped is None:
+                continue
+            begin, finish = mapped
+        else:
+            begin, finish = start + offset, end + offset
         if until is not None:
             finish = min(finish, until)
         if text and finish > begin:

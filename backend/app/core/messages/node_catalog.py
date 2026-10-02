@@ -242,6 +242,10 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfNode_generate_subtitles_text_field": {"zh": "每一段的文本在哪个字段;默认 text。起止或文本为空的段落会被跳过", "en": "Which field holds each segment's text. text by default. Segments with an empty start, end or text are skipped"},
     "wfNode_generate_subtitles_allow_empty": {"zh": "一条能用的段落都没有时怎么办:no = 报错(翻译配字幕时那说明上游出了问题);yes = 交出 0 条、流程继续", "en": "What to do when no segment is usable: no raises an error (when subtitling a translation that means something upstream went wrong); yes returns zero cues and the flow continues"},
     "wfNode_generate_subtitles_until": {"zh": "字幕最晚到时间线上的第几秒,如 {{接入素材.timeline_end}}:超出的那一截裁掉,整条落在它之后的不上屏;留空不限", "en": "The latest timeline second captions may reach, e.g. {{append.timeline_end}}: anything past it is cut, and cues that start after it are dropped; leave empty for no limit"},
+    "wfNode_generate_subtitles_clip_id": {
+        "zh": "段落是哪个片段的素材转出来的,如 {{接入素材.clip_id}}:给了就按片段的入点和倍速换算到时间线上,只留片段用到的那一截(此时不看起点偏移)",
+        "en": "The clip whose footage the segments were transcribed from, e.g. {{append.clip_id}}: times are mapped through the clip's in-point and speed, keeping only the part the clip uses (the offset is then ignored)",
+    },
     "wfNode_generate_subtitles_offset": {"zh": "素材在时间线上的起点,如 {{接入素材.timeline_start}};默认 0", "en": "Where the clip starts on the timeline, e.g. {{append.timeline_start}}; 0 by default"},
     "wfNode_generate_subtitles_track_id": {"zh": "落到哪条字幕轨,留空就用第一条(没有就新建)", "en": "Which subtitle track to use; empty means the first one, created if there is none"},
     "wfNode_dub_subtitles": {"zh": "字幕配音", "en": "Dub subtitles"},

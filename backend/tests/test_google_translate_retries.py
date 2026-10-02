@@ -202,7 +202,8 @@ def test_模板不再逐句发请求() -> None:
         for edge in graph["edges"]
         if edge.get("kind") == "data"
     }
-    assert ("verbatim_transcript", "segments", "translate_lines", "texts") in data, "段落该整批交给它"
+    # 整批交的是一句一行的 sentences(和剪辑台同一套断句),不是引擎的原始段落。
+    assert ("verbatim_transcript", "sentences", "translate_lines", "texts") in data, "句子该整批交给它"
     #: 下游读的是这个节点的输出名,改名而不改引用会让整条链路拿到空。
     assert ("translate_lines", "texts", "translated_subtitles", "texts") in data
 

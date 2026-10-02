@@ -757,6 +757,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfField_results": {"zh": "结果列表", "en": "Results"},
     "wfField_revision": {"zh": "版本", "en": "Revision"},
     "wfField_segments": {"zh": "分段", "en": "Segments"},
+    "wfField_sentences": {"zh": "逐句", "en": "Sentences"},
     "wfField_texts": {"zh": "逐条文本", "en": "Per-segment lines"},
     "wfField_clip_ids": {"zh": "片段", "en": "Clips"},
     "wfField_keep_original": {"zh": "保留原文", "en": "Keep the original"},

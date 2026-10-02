@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "视频译配 · 字幕与配音",
   "description": "把一段视频逐句转写、逐句翻译，按原时间码铺上译文字幕，再逐条配音并变速压回原段落长度。目标语言在「逐句翻译」一步上选（默认英文）。原声里的人声拆出去、背景音乐留着；开始前需装好人声分离引擎。",
-  "graph_hash": "66cad99c3c3c309e3f45193b45c385398447a8966f515e18c08f3e54daca6812",
+  "graph_hash": "6139204ffb81e3a4fdaa3d2a880e59742e4304b1b09273fcdadbd4f7df74a539",
   "graph": {
     "meta": {
       "template_id": "translated_dub",
@@ -128,13 +128,13 @@
           "segments": "",
           "texts": "",
           "keep_original": "no",
-          "offset": ""
+          "clip_id": ""
         },
         "inputs": [
           "sequence_id",
           "segments",
           "texts",
-          "offset"
+          "clip_id"
         ]
       },
       {
@@ -320,11 +320,11 @@
         "target_input": "asset_id"
       },
       {
-        "id": "d-verbatim_transcript-segments-translate_lines-texts",
+        "id": "d-verbatim_transcript-sentences-translate_lines-texts",
         "source": "verbatim_transcript",
         "target": "translate_lines",
         "kind": "data",
-        "source_output": "segments",
+        "source_output": "sentences",
         "target_input": "texts"
       },
       {
@@ -344,11 +344,11 @@
         "target_input": "sequence_id"
       },
       {
-        "id": "d-verbatim_transcript-segments-translated_subtitles-segments",
+        "id": "d-verbatim_transcript-sentences-translated_subtitles-segments",
         "source": "verbatim_transcript",
         "target": "translated_subtitles",
         "kind": "data",
-        "source_output": "segments",
+        "source_output": "sentences",
         "target_input": "segments"
       },
       {
@@ -360,12 +360,12 @@
         "target_input": "texts"
       },
       {
-        "id": "d-video_on_timeline-timeline_start-translated_subtitles-offset",
+        "id": "d-video_on_timeline-clip_id-translated_subtitles-clip_id",
         "source": "video_on_timeline",
         "target": "translated_subtitles",
         "kind": "data",
-        "source_output": "timeline_start",
-        "target_input": "offset"
+        "source_output": "clip_id",
+        "target_input": "clip_id"
       },
       {
         "id": "d-dub_project-sequence_id-dubbing-sequence_id",

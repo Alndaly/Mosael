@@ -110,8 +110,9 @@ def translated_dub_graph(
             "name": {"zh": "逐句翻译成目标语言", "en": "Translate line by line into the target language"},
             "position": {"x": 990, "y": 120},
             "config": {
-                # 直接收 segments:节点自己从每段里取 text,不需要模板层写 `{{loop.item.text}}`。
-                "texts": "{{verbatim_transcript.segments}}",
+                # 直接收一句一行的 sentences(和剪辑台同一套断句):节点自己从每句里取 text,不需要模板层写
+                # `{{loop.item.text}}`。不收引擎的原始段落 —— 一段二三十秒,译出来、铺成字幕都太长。
+                "texts": "{{verbatim_transcript.sentences}}",
                 #: 默认英文;模板说明的步骤里写着「选目标语言」—— 在这个节点上选。
                 "target_lang": "en",
                 #: 识别出的原文语言:和目标语言一样时翻译节点直接拒(译配成同一种语言就是白花一遍翻译和配音的钱)。
@@ -137,13 +138,13 @@ def translated_dub_graph(
             "position": {"x": 1310, "y": 260},
             "config": {
                 "sequence_id": "{{dub_project.sequence_id}}",
-                "segments": "{{verbatim_transcript.segments}}",
+                "segments": "{{verbatim_transcript.sentences}}",
                 "texts": "{{translate_lines.texts}}",
                 # 只念译文的话就把这里改成 yes、并把下一个节点的 line 改成 last:
                 # 屏幕上两行(原文/译文),嘴里只念下面那行。
                 "keep_original": "no",
-                # 逐字稿的时间是**素材内**的时间;视频接在第几秒由上一步说了算。
-                "offset": "{{video_on_timeline.timeline_start}}",
+                # 逐字稿的时间是**素材内**的时间:按片段的入点和倍速换算到时间线上(和剪辑台的逐字稿投影同一个算法)。
+                "clip_id": "{{video_on_timeline.clip_id}}",
             },
         },
         {

@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "Translated dubbing with subtitles",
   "description": "Transcribe a video sentence by sentence, translate each line, lay translated subtitles on the original timecodes, then dub each line and time-compress it back into its own slot. Pick the target language on the translate step (English by default). The original voice is separated out and the background music kept; a voice separation engine must be ready before the workflow starts.",
-  "graph_hash": "0220ef57b679ef846697123e6c106a977c2ead700e7249c670bb5bd2944d5344",
+  "graph_hash": "a7f6dcb8898fcb727c4d698b152bfb927c689833ba9cc55687dbc57f243337ad",
   "graph": {
     "meta": {
       "template_id": "translated_dub",
@@ -128,13 +128,13 @@
           "segments": "",
           "texts": "",
           "keep_original": "no",
-          "offset": ""
+          "clip_id": ""
         },
         "inputs": [
           "sequence_id",
           "segments",
           "texts",
-          "offset"
+          "clip_id"
         ]
       },
       {
@@ -320,11 +320,11 @@
         "target_input": "asset_id"
       },
       {
-        "id": "d-verbatim_transcript-segments-translate_lines-texts",
+        "id": "d-verbatim_transcript-sentences-translate_lines-texts",
         "source": "verbatim_transcript",
         "target": "translate_lines",
         "kind": "data",
-        "source_output": "segments",
+        "source_output": "sentences",
         "target_input": "texts"
       },
       {
@@ -344,11 +344,11 @@
         "target_input": "sequence_id"
       },
       {
-        "id": "d-verbatim_transcript-segments-translated_subtitles-segments",
+        "id": "d-verbatim_transcript-sentences-translated_subtitles-segments",
         "source": "verbatim_transcript",
         "target": "translated_subtitles",
         "kind": "data",
-        "source_output": "segments",
+        "source_output": "sentences",
         "target_input": "segments"
       },
       {
@@ -360,12 +360,12 @@
         "target_input": "texts"
       },
       {
-        "id": "d-video_on_timeline-timeline_start-translated_subtitles-offset",
+        "id": "d-video_on_timeline-clip_id-translated_subtitles-clip_id",
         "source": "video_on_timeline",
         "target": "translated_subtitles",
         "kind": "data",
-        "source_output": "timeline_start",
-        "target_input": "offset"
+        "source_output": "clip_id",
+        "target_input": "clip_id"
       },
       {
         "id": "d-dub_project-sequence_id-dubbing-sequence_id",

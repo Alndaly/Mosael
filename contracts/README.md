@@ -88,6 +88,19 @@ libass 与 PNG 的外圈一不一样宽。只比 CSS 字符串验不出「字芯
 路径的两倍。三份实现各自自洽,互不相识。现在统一成外描边,外圈取存储值的一半(正是居中描边向外
 伸出的那部分,已有花字的外轮廓不变,不用迁移),按字号封顶。
 
+### `transcript-sentence-cases.json` —— 断句契约
+
+「转写引擎交来的段落怎么切成一句一行。」剪辑台的逐字稿和生成字幕、工作流的「生成字幕」必须切得一样。
+
+| 实现 | 位置 | 测试 |
+| --- | --- | --- |
+| 剪辑台 | `frontend/src/domain/timeline/transcriptProjection.ts` 的 `transcriptSegmentsForEditing` | `transcriptProjection.parity.test.ts` |
+| 工作流 | `backend/app/domain/voices/sentences.py` 的 `sentences_for_editing` | `backend/tests/test_transcript_sentence_parity.py` |
+
+**为什么不共用一份实现**:剪辑台在浏览器里跟着时间线实时投影(切一刀、拖一下就重算),工作流在后台
+节点里跑,中间隔着进程边界。**建立契约之前**:工作流直接拿引擎的段落当字幕(一段二三十秒、上百个字),
+同一个视频两个入口铺出来的字幕不一样。
+
 ### `context-meter-cases.json` —— 上下文水位契约
 
 「一组 pi 消息占了多少 token。」

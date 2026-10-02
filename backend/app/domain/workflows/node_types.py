@@ -271,6 +271,7 @@ _FIELD_LABELS = {
     "results": "wfField_results",
     "revision": "wfField_revision",
     "segments": "wfField_segments",
+    "sentences": "wfField_sentences",
     "sent": "wfField_sent",
     "source_asset_id": "wfField_source_asset_id",
     "status": "wfField_status",
@@ -620,8 +621,8 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
                 "options_from": "providers.transcription",
             },
         },
-        "outputs": ["text", "timed_text", "segments", "language", "transcript_id", "duration"],
-        "output_types": {"segments": "json", "duration": "number"},
+        "outputs": ["text", "timed_text", "segments", "sentences", "language", "transcript_id", "duration"],
+        "output_types": {"segments": "json", "sentences": "json", "duration": "number"},
     },
     #: 画板上的时间线格导出也跑这一个(内置产出者 `sequence_export`,见 boards.producers):时间线由格子给,
     #: 分辨率 / 画质 / 「AI 生成」标识读的是这同一份字段声明,和剪辑页导出同一组取值(render.EXPORT_*)。
@@ -1364,6 +1365,8 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
                 "description": "wfNode_generate_subtitles_keep_original",
             },
             "offset": {"advanced": True, "type": "number", "description": "wfNode_generate_subtitles_offset"},
+            #: 段落是哪个片段的素材转出来的:给了就按片段的入点和倍速映射到时间线(offset 不再用)。
+            "clip_id": {"advanced": True, "type": "template", "description": "wfNode_generate_subtitles_clip_id"},
             #: 字幕最晚到时间线上的第几秒(一般接上游那一段的 timeline_end):超出的那一截裁掉、整条落在它之后的不上屏 ——
             #: 素材比计划短时,字幕不会盖到下一段上。
             "until": {"advanced": True, "type": "number", "description": "wfNode_generate_subtitles_until"},

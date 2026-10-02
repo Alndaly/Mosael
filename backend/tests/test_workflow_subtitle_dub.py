@@ -224,11 +224,13 @@ class Test官方工作流:
             for edge in graph["edges"]
             if edge.get("kind") == "data" and edge["target"] == "translated_subtitles"
         }
-        assert ("verbatim_transcript", "segments", "segments") in wired
+        # 一句一行(和剪辑台同一套断句),不是引擎的原始段落。
+        assert ("verbatim_transcript", "sentences", "segments") in wired
         #: 整轨一次翻完(translate_lines 节点),不是 loop_foreach 套一个 translate ——
         #: 那是 N 次串行调用,而免费端点按 IP 封。输出名也跟着从 results 变成 texts。
         assert ("translate_lines", "texts", "texts") in wired
-        assert ("video_on_timeline", "timeline_start", "offset") in wired
+        # 按片段的入点和倍速换算到时间线上,不是只平移一个起点。
+        assert ("video_on_timeline", "clip_id", "clip_id") in wired
         # 逐句翻译 —— 但「逐句」说的是**切分**,不是逐个发请求:整轨一次交给批量节点,
         # 它自己从每段里取正文、并发发出、顺序不变。此前这里是 loop_foreach 套一个 translate,
         # 于是一轨字幕变成 N 次串行调用,而免费端点按出口 IP 封(真机上第 1/31 次就 429)。
@@ -237,7 +239,7 @@ class Test官方工作流:
             (edge["source"], edge["source_output"], edge["target_input"])
             for edge in graph["edges"]
             if edge.get("kind") == "data" and edge["target"] == "translate_lines"
-        } == {("verbatim_transcript", "segments", "texts"), ("verbatim_transcript", "language", "source_lang")}
+        } == {("verbatim_transcript", "sentences", "texts"), ("verbatim_transcript", "language", "source_lang")}
         #: 官方模板不把成败押在免费端点上 —— 这条链路本来就在用用户自己的供应商。
         assert nodes["translate_lines"]["config"]["engine"] == "builtin:chat"
 
