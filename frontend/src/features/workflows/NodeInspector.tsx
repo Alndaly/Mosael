@@ -13,14 +13,16 @@ import {
 import { providerKeys } from "@/api/queryKeys";
 import type { MessageKey } from "@/app/messages";
 import { useI18n } from "@/app/preferences";
+import { Combobox } from "@/components/app/combobox";
 import { ConfigNotice, Notice } from "@/components/app/ConfigNotice";
 import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
 import { ACTION_MENU, MODAL_SURFACE } from "@/components/ui/floating";
-import { OptionPicker } from "@/components/ui/option-picker";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { dependentsCleared, withDependentsCleared } from "@/features/nodeForms/dependents";
-import { RefCatalogContext } from "@/features/nodeForms/refCatalog";
+import { RefCatalogContext, refLabel } from "@/features/nodeForms/refCatalog";
+import { refProblemText } from "@/features/nodeForms/refLook";
+import { RefToken } from "@/features/nodeForms/RefToken";
 import {
   FIELD_BOX,
   NodeConfigForm,
@@ -417,21 +419,33 @@ export function NodeInspector({
     renderBound: (key) => {
       const boundEdge = dataEdgeFor(key);
       const boundValue = boundEdge ? `${boundEdge.source}.${boundEdge.source_output}` : "";
-      // 上游输出会长到几十条(每个上游节点各带一串),超过阈值 OptionPicker 自己
-      // 换成可搜索的那一版 —— 在一列 `source_video.*` 里滚着找一个后缀最费眼。
+      //: 接的是哪个上游输出,和引用同一个样子:「节点标题 · 输出显示名」的标签(RefToken),悬停看路径;
+      //: 指不到(输出改了名、插件没装)是错误色,底下说为什么。此前这里摆的是 `link.platform` 这种 id 写法。
+      const look = boundValue ? refCatalog.look(boundValue) : null;
+      // 上游输出会长到几十条(每个上游节点各带一串):能搜,按名字和路径都搜得到。
       return (
-        <OptionPicker
-          value={boundValue}
-          onChange={(next) => {
-            const dot = next.indexOf(".");
-            bindInput(key, next.slice(0, dot), next.slice(dot + 1));
-          }}
-          options={upstreamOptions.map((option) => ({
-            value: `${option.sourceId}.${option.output}`,
-            label: `${option.sourceId}.${option.output}`,
-          }))}
-          placeholder={t("wfPickUpstream")}
-        />
+        <div className="grid min-w-0 gap-0.5">
+          <Combobox
+            value={boundValue}
+            onValueChange={(next) => {
+              const dot = next.indexOf(".");
+              bindInput(key, next.slice(0, dot), next.slice(dot + 1));
+            }}
+            options={upstreamOptions.map((option) => {
+              const path = `${option.sourceId}.${option.output}`;
+              return { value: path, label: refLabel(refCatalog.look(path)) };
+            })}
+            renderValue={() => (look ? <RefToken path={boundValue} look={look} /> : undefined)}
+            placeholder={t("wfPickUpstream")}
+            emptyText={t("cmdkEmpty")}
+            className={cn("w-full", look?.problem && "border-destructive")}
+          />
+          {look?.problem && (
+            <small className="text-ui-2xs leading-[1.4] text-destructive" role="alert">
+              {refProblemText(t, look.problem)}
+            </small>
+          )}
+        </div>
       );
     },
   };

@@ -46,6 +46,7 @@ const REGISTRY = new Map<string, WorkflowNodeType>([
   ],
   ["note_create", meta("note_create", { title: { type: "template" } }, ["note_id"], { output_labels: { note_id: "笔记" } })],
   ["output", meta("output", { values: { type: "object", editor: "map", label: "具名输出" } }, [])],
+  ["condition", meta("condition", { left: { type: "template", label: "左值" } }, ["result"])],
 ]);
 
 const OUTPUT = {
@@ -147,5 +148,54 @@ describe("具名输出里的引用", () => {
     await user.click(within(listbox).getByText("写运营诊断 · JSON · title"));
     const [patch] = onChange.mock.calls.at(-1)!;
     expect(patch.config.values).toEqual({ ...OUTPUT.config.values, title: "{{report.json.title}}" });
+  });
+});
+
+describe("接上游的来源", () => {
+  //: 字段接的是数据边时,检查器里那个「接哪个上游」的下拉此前摆的是 `link.platform` 这种 id 写法。
+  const GATE = { id: "tk_is_dy", type: "condition", name: "是抖音吗", inputs: ["left"], config: { left: "" } };
+  const WIRED: WorkflowGraph = {
+    nodes: [...GRAPH.nodes.filter((node) => node.id !== "output"), GATE],
+    edges: [
+      { id: "e1", source: "start", target: "link" },
+      { id: "e2", source: "link", target: "tk_is_dy" },
+      { id: "d1", source: "link", target: "tk_is_dy", kind: "data", source_output: "platform", target_input: "left" },
+    ],
+  };
+
+  function renderGate(graph: WorkflowGraph) {
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <TooltipProvider>
+          <ReactFlowProvider>
+            <NodeInspector node={GATE as never} meta={REGISTRY.get("condition")!} graph={graph} registry={REGISTRY}
+                           workspaceId="w1" onChange={vi.fn()} onApplyGraph={vi.fn()} />
+          </ReactFlowProvider>
+        </TooltipProvider>
+      </QueryClientProvider>,
+    );
+    return document.querySelector<HTMLElement>('[data-field-key="left"]')!;
+  }
+
+  it("接着的那个上游输出显示成引用标签「节点标题 · 输出显示名」,下拉里也是这个名字", async () => {
+    const user = userEvent.setup();
+    const field = renderGate(WIRED);
+    const trigger = within(field).getByRole("combobox");
+    expect(trigger.textContent).toBe("认出平台和编号 · 平台");
+    expect(trigger.querySelector<HTMLElement>("[data-ref-token]")?.title).toBe("link.platform");
+    expect(field.textContent).not.toContain("link.platform");
+    await user.click(trigger);
+    const listbox = await screen.findByRole("listbox");
+    expect(within(listbox).getByText("写运营诊断 · JSON")).toBeTruthy();
+    expect(within(listbox).queryByText("report.json")).toBeNull();
+  });
+
+  it("接着的输出指不到(上游改了输出名):错误色,底下说为什么", () => {
+    const field = renderGate({
+      ...WIRED,
+      edges: WIRED.edges.map((edge) => (edge.id === "d1" ? { ...edge, source_output: "plat" } : edge)),
+    });
+    expect(within(field).getByRole("combobox").querySelector("[data-ref-problem='output']")).not.toBeNull();
+    expect(within(field).getByRole("alert").textContent).toBe("wfRefMissingOutput");
   });
 });
