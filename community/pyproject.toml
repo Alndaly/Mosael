@@ -47,7 +47,8 @@ mosael-formats = { path = "../packages/mosael-formats", editable = true }
 [dependency-groups]
 dev = [
   "pytest>=8.0",
-  "httpx>=0.28",
+  # TestClient 的传输。Starlette 1.x 起认 httpx2,还拿 httpx 跑会报弃用告警(下一个大版本就不认了)。
+  "httpx2>=2.13",
   "ruff>=0.14",
 ]
 

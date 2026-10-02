@@ -51,7 +51,9 @@ dependencies = [
 [dependency-groups]
 dev = [
   "pytest>=8.0",
-  "httpx>=0.28",
+  # TestClient 的传输。Starlette 1.x 起认 httpx2(还拿 httpx 跑会报弃用告警);此前它是 mcp 顺带装上的,
+  # 测试能跑全靠这层传递依赖 —— 显式写上。httpx 本身是运行时依赖,不必在这里再列一次。
+  "httpx2>=2.13",
   "pyinstaller>=6.21.0",
   "ruff>=0.14",
 ]
