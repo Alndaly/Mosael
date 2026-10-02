@@ -129,9 +129,9 @@ def test_text_overlay_triggers_ass_burn(tmp_path: Path) -> None:
     plan = _plan_with_text([{
         "id": "t1", "asset_id": None, "timeline_start": 0, "src_in": 0, "src_out": 2, "text_override": "标题",
     }])
-    graph = " ".join(build_ffmpeg_command(plan, lambda k: tmp_path / k, tmp_path / "o.mp4"))
+    graph = " ".join(build_ffmpeg_command(plan, lambda k: tmp_path / k, tmp_path / "o.mp4", workdir=tmp_path / "job"))
     assert "subtitles=filename=" in graph
-    assert (tmp_path / "o.ass").exists()  # ASS 已落盘
+    assert (tmp_path / "job" / "subtitles.ass").exists()  # ASS 落在这次渲染自己的中转目录里
 
 
 def test_read_text_style_keeps_font_id() -> None:

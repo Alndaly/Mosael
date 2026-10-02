@@ -133,7 +133,7 @@ def test_plan_collects_subtitles_and_ass_burnin(tmp_path) -> None:
     out = tmp_path / "out.mp4"
     command = " ".join(build_ffmpeg_command(plan, lambda key: tmp_path / key, out))
     assert "subtitles=filename=" in command
-    ass = (tmp_path / "out.ass").read_text(encoding="utf-8")
+    ass = (tmp_path / "subtitles.ass").read_text(encoding="utf-8")  # 不给 workdir 时写在成片旁边
     assert "Dialogue: 0,0:00:01.00,0:00:03.00,Default" in ass and "你好" in ass
 
 
@@ -148,7 +148,7 @@ def test_subtitle_style_flows_into_ass(tmp_path) -> None:
                         "bg_opacity": 1.0, "bold": True, "position": "top", "offset": 10},
     )
     build_ffmpeg_command(plan, lambda key: tmp_path / key, tmp_path / "out.mp4")
-    ass = (tmp_path / "out.ass").read_text(encoding="utf-8")
+    ass = (tmp_path / "subtitles.ass").read_text(encoding="utf-8")  # 不给 workdir 时写在成片旁边
     style_line = next(line for line in ass.splitlines() if line.startswith("Style: Default"))
     fields = style_line.split(",")
     assert fields[2] == f"{48 * _ASS_FONTSIZE_SCALE:g}"  # Fontsize（ASS 回退按此系数放大以对齐浏览器视觉字号)

@@ -111,7 +111,7 @@ def test_导出命令里是一框字幕_用序列的字幕样式定位(tmp_path:
 
     # libass 回落那条路:一条 Dialogue,两行用 \N 连起来,沿用 Default 样式(没有换道用的 \an 覆盖)。
     build_ffmpeg_command(plan, lambda key: tmp_path / key, tmp_path / "o.mp4")
-    ass = (tmp_path / "o.ass").read_text(encoding="utf-8")
+    ass = (tmp_path / "subtitles.ass").read_text(encoding="utf-8")  # 不给 workdir 时写在成片旁边
     dialogues = [line for line in ass.splitlines() if line.startswith("Dialogue:") and ",Default," in line]
     assert dialogues == ["Dialogue: 0,0:00:00.00,0:00:02.00,Default,,0,0,0,,你好\\NHello"]
 

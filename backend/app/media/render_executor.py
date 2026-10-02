@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import contextlib
 import functools
 import logging
 import math
 import subprocess
-from collections.abc import Callable
+import tempfile
+from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import NamedTuple
 
@@ -851,8 +853,12 @@ def build_ffmpeg_command(
     force_software: bool = False,
     text_pngs: dict | None = None,
     still_at: float | None = None,
+    workdir: Path | None = None,
 ) -> list[str]:
     """…still_at 给了就**只出那一时刻的一帧**(一张图,不是一段片子)。
+
+    workdir 是这一次渲染自己的中转目录(.ass 等写在这里),由调用方建、调用方清 —— 见
+    execute_render。不给就写在成片旁边:只有直接拿命令去跑的测试走这条。
 
     **滤镜图一个字都不改** —— 保真度全在那里:变换、调色、花字、字幕、叠层。另写一条"取当前帧"
     的路的话,它迟早和成片长得不一样,而这种不一样是最难发现的:画面看着对,只是少了一层字。
@@ -1035,7 +1041,7 @@ def build_ffmpeg_command(
             video_label = out_label
             input_index += 1
     elif _has_text(plan):
-        ass_path = output_path.with_suffix(".ass")
+        ass_path = (workdir or output_path.parent) / "subtitles.ass"
         ass_path.parent.mkdir(parents=True, exist_ok=True)
         ass_path.write_text(_build_ass(plan), encoding="utf-8")
         out_label = "[vsub]"
@@ -1175,16 +1181,15 @@ def _rasterize_text(plan: RenderPlan, workdir: Path) -> dict | None:
             logger.warning("frontend dist not found; text burn falls back to ASS")
             return None
         result: dict = {"subtitles": [], "text_overlays": []}
-        stem = workdir / output_stem(plan)
         with tr:
             for i, item in enumerate(plan.subtitles):
                 png = tr.render_subtitle(item.text, plan.subtitle_style)
-                path = stem.with_name(f"{stem.name}.sub{i}.png")
+                path = workdir / f"sub{i}.png"
                 path.write_bytes(png)
                 result["subtitles"].append((path, *_png_size(png)))
             for i, item in enumerate(plan.text_overlays):
                 png = tr.render_huazi(item.text, item.style)
-                path = stem.with_name(f"{stem.name}.txt{i}.png")
+                path = workdir / f"txt{i}.png"
                 path.write_bytes(png)
                 result["text_overlays"].append((path, *_png_size(png)))
         return result
@@ -1206,12 +1211,13 @@ def render_still(plan: RenderPlan, resolve: Callable[[str], Path], output_path: 
     这里**也要先把文字渲成 PNG**:少这一步,取出来的帧就是没有字幕的那一版。
     """
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    text_pngs = _text_for_burn(plan, output_path.parent)
-    command = build_ffmpeg_command(plan, resolve, output_path, text_pngs=text_pngs, still_at=at)
-    try:
-        result = run_logged(command, capture_output=True, text=True, timeout=_STILL_TIMEOUT, what="取当前帧")
-    except subprocess.TimeoutExpired as exc:
-        raise RenderExecutionError("renderErr_frameTimeout", seconds=_STILL_TIMEOUT) from exc
+    with render_workdir() as workdir:
+        text_pngs = _text_for_burn(plan, workdir)
+        command = build_ffmpeg_command(plan, resolve, output_path, text_pngs=text_pngs, still_at=at, workdir=workdir)
+        try:
+            result = run_logged(command, capture_output=True, text=True, timeout=_STILL_TIMEOUT, what="取当前帧")
+        except subprocess.TimeoutExpired as exc:
+            raise RenderExecutionError("renderErr_frameTimeout", seconds=_STILL_TIMEOUT) from exc
     if result.returncode != 0:
         #: 带上 ffmpeg 自己说的那句 —— 只说「取当前帧失败」的话,用户和排查的人都只能干瞪眼
         #: (GIF 不认 `-loop` 那次就是这样:界面上一句话,原因只在后端日志里)。
@@ -1225,8 +1231,15 @@ def render_still(plan: RenderPlan, resolve: Callable[[str], Path], output_path: 
     return output_path
 
 
-def output_stem(plan: RenderPlan) -> str:
-    return f"text_{plan.sequence_id}"
+@contextlib.contextmanager
+def render_workdir() -> Iterator[Path]:
+    """一次导出 / 取帧自己的中转目录:文字 PNG、.ass 这些都写在这里,结束(成功、失败、取消)时整个删掉。
+
+    此前它们写在成片旁边,文件名按**序列** id 起(`text_{sequence_id}.sub0.png`):同一条时间线同时导出
+    两份(比如 1080p 和 720p),后起的那份把先起的那份的字幕 PNG 覆盖掉 —— 先起的成片里烧进去的是另一份
+    尺寸的字。.ass 倒是按任务起名,可从来没人删,导出目录里一直在攒。按任务一个目录,两件事一起没了。"""
+    with tempfile.TemporaryDirectory(prefix="mosael-render-") as tmp:
+        yield Path(tmp)
 
 
 def execute_render(
@@ -1260,57 +1273,59 @@ def execute_render(
         output_path.name,
     )
 
-    # 起一次无头 Chromium 把所有字幕/花字渲染成 PNG(软件回落时复用同一批,不重复渲染)。
-    text_pngs = _text_for_burn(plan, output_path.parent)
+    #: 中转文件(文字 PNG、.ass)都进这次渲染自己的目录,出了这个 with 就删,不管成败。
+    with render_workdir() as workdir:
+        # 起一次无头 Chromium 把所有字幕/花字渲染成 PNG(软件回落时复用同一批,不重复渲染)。
+        text_pngs = _text_for_burn(plan, workdir)
 
-    def run_once(*, force_software: bool) -> tuple[int, str, bool]:
-        if on_phase is not None:
-            on_phase(PHASE_FALLBACK if force_software else PHASE_PREPARE)
-        # build_ffmpeg_command probes every source; that is part of the "preparing" wait.
-        command = build_ffmpeg_command(
-            plan, resolve, output_path, force_software=force_software, text_pngs=text_pngs
-        )
-        process = popen_text(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-        # ffmpeg's stderr must be drained WHILE we read progress off stdout. A source it cannot
-        # fully decode emits an error per frame even at -v error; once that fills the pipe ffmpeg
-        # blocks writing it, stops emitting progress, and both sides wait forever with the job
-        # stuck in `running` and no way out but killing the backend.
-        child = ChildProcess(process)
-        if on_child is not None:
-            on_child(child)
-        block: dict[str, str] = {}
-        encoding = False
-        for line in child.raw_lines():
-            line = line.strip()
-            if "=" not in line:
-                continue
-            key, value = line.split("=", 1)
-            block[key] = value
-            if key != "progress":  # accumulate until the block terminator
-                continue
-            if not encoding and on_phase is not None:
-                encoding = True
-                on_phase(PHASE_ENCODE)  # first block ⇒ frames are flowing
-            if value == "end" and on_phase is not None:
-                on_phase(PHASE_FINALIZE)  # -progress end; ffmpeg still writes faststart moov
-            if on_progress is not None:
-                on_progress(_progress_from_block(block, total_us))
-            block = {}
-        stderr_tail = child.finish()
-        return process.returncode or 0, stderr_tail, child.killed
+        def run_once(*, force_software: bool) -> tuple[int, str, bool]:
+            if on_phase is not None:
+                on_phase(PHASE_FALLBACK if force_software else PHASE_PREPARE)
+            # build_ffmpeg_command probes every source; that is part of the "preparing" wait.
+            command = build_ffmpeg_command(
+                plan, resolve, output_path, force_software=force_software, text_pngs=text_pngs, workdir=workdir
+            )
+            process = popen_text(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            # ffmpeg's stderr must be drained WHILE we read progress off stdout. A source it cannot
+            # fully decode emits an error per frame even at -v error; once that fills the pipe ffmpeg
+            # blocks writing it, stops emitting progress, and both sides wait forever with the job
+            # stuck in `running` and no way out but killing the backend.
+            child = ChildProcess(process)
+            if on_child is not None:
+                on_child(child)
+            block: dict[str, str] = {}
+            encoding = False
+            for line in child.raw_lines():
+                line = line.strip()
+                if "=" not in line:
+                    continue
+                key, value = line.split("=", 1)
+                block[key] = value
+                if key != "progress":  # accumulate until the block terminator
+                    continue
+                if not encoding and on_phase is not None:
+                    encoding = True
+                    on_phase(PHASE_ENCODE)  # first block ⇒ frames are flowing
+                if value == "end" and on_phase is not None:
+                    on_phase(PHASE_FINALIZE)  # -progress end; ffmpeg still writes faststart moov
+                if on_progress is not None:
+                    on_progress(_progress_from_block(block, total_us))
+                block = {}
+            stderr_tail = child.finish()
+            return process.returncode or 0, stderr_tail, child.killed
 
-    returncode, stderr_tail, killed = run_once(force_software=False)
-    # A hardware encoder can be *listed* by ffmpeg yet fail at runtime (no GPU, driver/permission,
-    # unsupported dimensions). When that happens — and only when we weren't the ones who stopped it
-    # (cancel/timeout set `killed`) — fall back to software libx264 once so the export still lands.
-    hw_used = hw_encoder is not None
-    if returncode != 0 and hw_used and not killed:
-        logger.warning(
-            "render: hardware encoder %s failed (rc=%s), retrying with software libx264",
-            hw_encoder,
-            returncode,
-        )
-        returncode, stderr_tail, killed = run_once(force_software=True)
-    if returncode != 0:
-        logger.error("render: ffmpeg failed (rc=%s):\n%s", returncode, stderr_tail)
-        raise RenderExecutionError("renderErr_ffmpegExit", code=returncode, stderr_tail=stderr_tail)
+        returncode, stderr_tail, killed = run_once(force_software=False)
+        # A hardware encoder can be *listed* by ffmpeg yet fail at runtime (no GPU, driver/permission,
+        # unsupported dimensions). When that happens — and only when we weren't the ones who stopped it
+        # (cancel/timeout set `killed`) — fall back to software libx264 once so the export still lands.
+        hw_used = hw_encoder is not None
+        if returncode != 0 and hw_used and not killed:
+            logger.warning(
+                "render: hardware encoder %s failed (rc=%s), retrying with software libx264",
+                hw_encoder,
+                returncode,
+            )
+            returncode, stderr_tail, killed = run_once(force_software=True)
+        if returncode != 0:
+            logger.error("render: ffmpeg failed (rc=%s):\n%s", returncode, stderr_tail)
+            raise RenderExecutionError("renderErr_ffmpegExit", code=returncode, stderr_tail=stderr_tail)
