@@ -939,8 +939,30 @@ def _target_bitrate_kbps(output) -> int:
     return int(max(500.0, min(kbps, 120_000.0)))
 
 
+def _videotoolbox_quality(crf: int) -> int:
+    """x264 的 CRF → VideoToolbox 恒定质量 `-q:v`(1–100,越大越好)。
+
+    两个标定点是真 ffmpeg 对着 x264 veryfast 同档量 SSIM 定的:标准档 CRF 20 ↔ q 66、体积小档
+    CRF 26 ↔ q 50。在 360p/720p/1080p 的分形、测试图、渐变颗粒、满屏噪声上(30fps)都不低于
+    x264 同档 —— 最难的满屏噪声上 q 63 还差 0.03,所以取 66;代价是文件大三到五成。之间线性
+    插值。q 和 CRF 不一样,不随帧率给码:10fps 的噪声片 x264 每帧给的码多出一倍多,硬件追不上,
+    好在导出是序列帧率(24–60)。此前给的是按分辨率×帧率推出来的固定码率,硬件「高画质」只有
+    0.978,比软件「体积小」的 0.981 还低,档位名不副实。"""
+    return int(round(max(1.0, min(100.0, 66 - (crf - 20) * 8 / 3))))
+
+
 def _hw_encode_args(encoder: str, output) -> list[str]:
-    """给定硬件编码器的完整 -c:v 参数(码率模式 + yuv420p,保证各家播放器都能放)。"""
+    """给定硬件编码器的完整 -c:v 参数(yuv420p,保证各家播放器都能放)。
+
+    VideoToolbox 用恒定质量(见 _videotoolbox_quality);其余几家在本机量不到,仍是码率模式。"""
+    if encoder == "h264_videotoolbox":
+        # 非实时(-realtime 0)换更好画质;-allow_sw 1 在个别机器无硬件编码单元时回落苹果的
+        # 软件实现而不是直接报错。-q:v 只有 Apple Silicon 认 —— Intel Mac 上起不来,由
+        # _hw_encoder_works 的小样自检挡在开跑之前。
+        return [
+            "-c:v", encoder, "-q:v", str(_videotoolbox_quality(int(output.crf))),
+            "-pix_fmt", "yuv420p", "-realtime", "0", "-allow_sw", "1",
+        ]
     kbps = _target_bitrate_kbps(output)
     common = [
         "-c:v",
@@ -954,10 +976,6 @@ def _hw_encode_args(encoder: str, output) -> list[str]:
         "-pix_fmt",
         "yuv420p",
     ]
-    if encoder == "h264_videotoolbox":
-        # 非实时(-realtime 0)换更好画质;-allow_sw 1 在个别机器无硬件编码单元时回落苹果的
-        # 软件实现而不是直接报错。
-        return common + ["-realtime", "0", "-allow_sw", "1"]
     if encoder == "h264_nvenc":
         # p5 是质量/速度的平衡档,vbr 走上面的 b:v/maxrate,spatial_aq 改善平坦区域观感。
         return common + ["-preset", "p5", "-rc", "vbr", "-spatial-aq", "1"]
@@ -966,6 +984,58 @@ def _hw_encode_args(encoder: str, output) -> list[str]:
     if encoder == "h264_amf":
         return common + ["-quality", "balanced", "-rc", "vbr_peak"]
     return common
+
+
+#: CRF 低于这个(「高画质」档是 18)直接软件编码。硬件恒定质量追到 x264 medium CRF 18 的画质,
+#: 实测 q 71 仍略低(复杂画面 SSIM 0.9936 对 0.9940)而文件还大三成;选了「高画质」的人要的
+#: 是画质,不是快那一两倍。其余几家硬件编码器在本机量不到,同样不让它们接这一档。
+_HW_MIN_CRF = 20
+#: 比这短的片子直接软件编码:硬件编码器开一次会话的固定开销抵掉了它的速度,实测 10 秒
+#: 1080p 的简单画面软件 0.8 秒、硬件 2.3 秒;复杂画面到 60 秒以上硬件才快出一倍。
+_HW_MIN_DURATION = 30.0
+#: 小样自检通过过的 (ffmpeg, 宽, 高, 编码参数)。只记成功:一次失败可能只是当时 GPU 忙。
+_HW_SELF_TESTED: set[tuple] = set()
+
+
+def _hw_encoder_works(encoder: str, output) -> bool:
+    """用这次导出的分辨率、帧率和编码参数先编 0.2 秒黑场,看硬件编码器到底起不起得来。
+
+    `-encoders` 里列着不等于能用:没有显卡、驱动或权限不对、分辨率超出硬件上限、Intel Mac 不认
+    VideoToolbox 的 -q:v,都要到开编那一刻才报错。此前的办法是整条硬件跑挂了再用软件**从 0
+    重来**,而那之前读素材、建滤镜图、渲字幕的时间全白花了;先编一小段,挂了就一开始走软件。"""
+    args = _hw_encode_args(encoder, output)
+    key = (settings.ffmpeg, output.width, output.height, tuple(args))
+    if key in _HW_SELF_TESTED:
+        return True
+    fps = output.fps if output.fps and output.fps > 0 else 30
+    try:
+        probe = run_logged(
+            [settings.ffmpeg, "-v", "error", "-f", "lavfi",
+             "-i", f"color=black:s={output.width}x{output.height}:r={fps:g}:d=0.2",
+             *args, "-f", "null", "-"],
+            capture_output=True, text=True, timeout=30, what="硬件编码小样自检", level=logging.DEBUG,
+        )
+    except Exception:
+        logger.warning("render: hardware encoder %s self-test could not run", encoder, exc_info=True)
+        return False
+    if probe.returncode != 0:
+        logger.warning("render: hardware encoder %s failed its self-test: %s", encoder, blame_line(probe.stderr))
+        return False
+    _HW_SELF_TESTED.add(key)
+    return True
+
+
+def _choose_hw_encoder(plan: RenderPlan) -> str | None:
+    """这次导出用哪个硬件编码器;None = 软件 libx264。
+
+    开关关着、没有硬件编码器、「高画质」档(_HW_MIN_CRF)、片子太短(_HW_MIN_DURATION)、
+    小样自检没过,都走软件。"""
+    if not settings.hw_encode:
+        return None
+    encoder = _available_hw_encoder()
+    if encoder is None or plan.output.crf < _HW_MIN_CRF or plan.timeline_duration < _HW_MIN_DURATION:
+        return None
+    return encoder if _hw_encoder_works(encoder, plan.output) else None
 
 
 def _video_encode_args(output, *, force_software: bool = False) -> list[str]:
@@ -1561,7 +1631,7 @@ def execute_render(
     output_path.parent.mkdir(parents=True, exist_ok=True)
     total_us = max(plan.timeline_duration, 0.001) * 1_000_000
 
-    hw_encoder = _available_hw_encoder() if settings.hw_encode else None
+    hw_encoder = _choose_hw_encoder(plan)
     logger.info(
         "render start: encoder=%s output=%dx%d@%gfps duration=%.1fs → %s",
         hw_encoder or "libx264",
@@ -1577,9 +1647,9 @@ def execute_render(
         # 起一次无头 Chromium 把所有字幕/花字渲染成 PNG(软件回落时复用同一批,不重复渲染)。
         text_pngs = _text_for_burn(plan, workdir)
 
-        def run_once(*, force_software: bool) -> tuple[int, str, bool]:
+        def run_once(*, force_software: bool, fallback: bool = False) -> tuple[int, str, bool]:
             if on_phase is not None:
-                on_phase(PHASE_FALLBACK if force_software else PHASE_PREPARE)
+                on_phase(PHASE_FALLBACK if fallback else PHASE_PREPARE)
             # build_ffmpeg_command probes every source; that is part of the "preparing" wait.
             command = build_ffmpeg_command(
                 plan, resolve, output_path, force_software=force_software, text_pngs=text_pngs, workdir=workdir
@@ -1615,10 +1685,9 @@ def execute_render(
             stderr_tail = child.finish()
             return process.returncode or 0, stderr_tail, child.killed
 
-        returncode, stderr_tail, killed = run_once(force_software=False)
-        # A hardware encoder can be *listed* by ffmpeg yet fail at runtime (no GPU, driver/permission,
-        # unsupported dimensions). When that happens — and only when we weren't the ones who stopped it
-        # (cancel/timeout set `killed`) — fall back to software libx264 once so the export still lands.
+        returncode, stderr_tail, killed = run_once(force_software=hw_encoder is None)
+        # 起不来的硬件编码器已经被小样自检挡在开跑之前(_hw_encoder_works);这里兜的是跑到一半才挂的
+        # 那种 —— 只要不是我们自己停的(取消/超时会置 `killed`),就用软件再跑一遍,保证导出能落地。
         hw_used = hw_encoder is not None
         if returncode != 0 and hw_used and not killed:
             logger.warning(
@@ -1626,7 +1695,7 @@ def execute_render(
                 hw_encoder,
                 returncode,
             )
-            returncode, stderr_tail, killed = run_once(force_software=True)
+            returncode, stderr_tail, killed = run_once(force_software=True, fallback=True)
         if returncode != 0:
             logger.error("render: ffmpeg failed (rc=%s):\n%s", returncode, stderr_tail)
             raise RenderExecutionError("renderErr_ffmpegExit", code=returncode, stderr_tail=stderr_tail)
