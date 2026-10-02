@@ -913,7 +913,7 @@ JSON Schema 的对象。"""
     #: **谁等谁,画布上都看得见。** 引用即依赖(引擎照样等它),可画布只画连线:此前「按画幅取尺寸 → 建项目」
     #: 「建项目 → 三视图 / 设定图」只写在引用里,「可用的 3D 道具」更是一条线都没有 —— 顶层没有入边的节点引擎
     #: 根本不跑(编辑器上挂着「未连接到流程」的角标),布景师拿到的道具清单永远是空的。这张图顶层没有条件分支,
-    #: 每一步都会跑,所以每个引用都画成一条控制边,不改谁该跑。
+    #: 每一步都会跑,所以每个引用都画成一条控制边,不改谁该跑(棘轮见 tests/test_official_templates_hold_together)。
     edges = [
         {"id": "start_brief", "source": "start", "target": "creative_brief"},
         {"id": "start_frame_plan", "source": "start", "target": "frame_plan"},
@@ -939,8 +939,8 @@ JSON Schema 的对象。"""
         {"id": "visual_storyboard", "source": "visual_bible", "target": "storyboard"},
         {"id": "storyboard_set", "source": "storyboard", "target": "set_design"},
         {"id": "set_build", "source": "set_design", "target": "build_set"},
-        #: 逐镜要用的项目和画幅尺寸经三视图 / 设定图那两步传到这里(它们在建项目之后),不再各拉一条长线横穿
-        #: 中间那一排 —— 那两条线压在分镜、布景、搭场景的卡片底下,看着像是它们之间的连线。
+        #: 逐镜引用的项目和画幅尺寸,沿连线经三视图 / 设定图那两步就排在它前面(那两步在建项目之后),不再各拉一条
+        #: 长线横穿中间那一排 —— 那两条线压在分镜、布景、搭场景的卡片底下,看着像是它们之间的连线。
         {"id": "build_generate", "source": "build_set", "target": "generate_shots"},
         {"id": "sheets_generate", "source": "character_sheets", "target": "generate_shots"},
         {"id": "locations_generate", "source": "location_art", "target": "generate_shots"},
