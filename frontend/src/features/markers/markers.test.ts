@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { markerShortcutConflict, nextMarkerName, newMarkerId, type CanvasMarker } from "@/features/markers/markers";
-import { comboFromEvent, formatCombo, normalizeCombo, RESERVED_COMBOS } from "@/lib/shortcuts";
+import { comboFromEvent, formatCombo, normalizeCombo, RESERVED_COMBOS, reservedOwner } from "@/lib/shortcuts";
 
 const marker = (id: string, name: string, shortcut?: string): CanvasMarker => ({ id, name, x: 0, y: 0, shortcut });
 
@@ -74,6 +74,12 @@ describe("标记的快捷键冲突", () => {
 describe("保留键名单", () => {
   it("每一条都是规范形态 —— 不然它永远匹配不上用户按出来的那个串", () => {
     for (const { combo } of RESERVED_COMBOS) expect(normalizeCombo(combo)).toBe(combo);
+  });
+
+  it("剪辑页的单键快捷键都在名单上,画板标记绑不上去", () => {
+    for (const combo of ["J", "K", "L", "I", "O", "Q", "W", "N", ",", ".", "=", "-", "Shift+Z", "Alt+X", "Mod+Shift+K"]) {
+      expect(reservedOwner(combo), combo).not.toBeNull();
+    }
   });
 
   it("没有重复(重复意味着其中一条的 owner 永远显示不出来)", () => {

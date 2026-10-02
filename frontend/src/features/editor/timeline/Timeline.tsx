@@ -1068,20 +1068,34 @@ export function Timeline({
                 <CircleHelp size={14} />
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="grid w-[300px] gap-1.5 px-3 py-2.5 [&_strong]:mb-0.5 [&_strong]:text-xs" aria-label={t("shortcutsHelp")}>
+            <PopoverContent className="grid max-h-[70vh] w-[340px] gap-1.5 overflow-y-auto px-3 py-2.5 [&_strong]:mb-0.5 [&_strong]:text-xs" aria-label={t("shortcutsHelp")}>
               <strong>{t("shortcutsHelp")}</strong>
               {(
                 [
                   [["Space"], t("hintPlayPause")],
+                  [["J", "K", "L"], t("hintShuttle")],
+                  [["←", "→"], t("hintFrameStep")],
+                  [["↑", "↓"], t("hintEditPoints")],
+                  [["Home", "End"], t("hintHomeEnd")],
+                  [["I", "O"], t("hintMarks")],
                   [["A", "B"], t("hintTools")],
                   [["S"], t("hintSplit")],
+                  [["⇧⌘K"], t("hintSplitAll")],
+                  [["Q", "W"], t("hintRippleTrim")],
                   [["⌘D"], t("hintDuplicate")],
+                  [["⌘C", "⌘X", "⌘V"], t("hintClipboard")],
                   [["Delete"], t("hintDelete")],
                   [["⇧Delete"], t("hintRipple")],
                   [["⌘Z", "⇧⌘Z"], t("hintUndoRedo")],
-                  [["←", "→"], t("hintFrameStep")],
+                  [["⌘A"], t("hintSelectAll")],
+                  [["⌥←→↑↓"], t("hintSelectMove")],
+                  [[",", "."], t("hintNudge")],
+                  [["N"], t("hintSnapToggle")],
+                  [["+", "-", "⇧Z"], t("hintZoom")],
+                  [["Esc"], t("hintEscape")],
                   [[t("hintShiftClickKey")], t("hintMultiSelect")],
                   [[t("hintDragLabel")], t("hintDragBody")],
+                  [[t("hintModifiersLabel")], t("hintDragModifiers")],
                   [["↕"], t("hintVerticalDrag")],
                 ] as const
               ).map(([keys, body]) => (

@@ -211,6 +211,22 @@ export const RESERVED_COMBOS: ReadonlyArray<{ combo: Combo; owner: MessageKey }>
   { combo: "S", owner: "shortcutOwnerSplit" },
   { combo: "A", owner: "shortcutOwnerSelectTool" },
   { combo: "B", owner: "shortcutOwnerBladeTool" },
+  // 剪辑页的穿梭、入出点、波纹修剪、吸附、微移、缩放(useEditorShortcuts / Timeline)。
+  // I 和 3D 页的「记关键帧」是同一个键,名单里只留下面那条。
+  { combo: "J", owner: "hintShuttle" },
+  { combo: "K", owner: "hintShuttle" },
+  { combo: "L", owner: "hintShuttle" },
+  { combo: "O", owner: "hintMarks" },
+  { combo: "Alt+X", owner: "hintMarks" },
+  { combo: "Q", owner: "hintRippleTrim" },
+  { combo: "W", owner: "hintRippleTrim" },
+  { combo: "N", owner: "hintSnapToggle" },
+  { combo: ",", owner: "hintNudge" },
+  { combo: ".", owner: "hintNudge" },
+  { combo: "=", owner: "hintZoom" },
+  { combo: "-", owner: "hintZoom" },
+  { combo: "Shift+Z", owner: "hintZoom" },
+  { combo: "Mod+Shift+K", owner: "hintSplitAll" },
   // 3D 场景页照 Blender 的手势:G/R/S 移动旋转缩放、I 记关键帧、⌥I 移除、⇧D 复制、
   // X 删除、F 聚焦。S 和上面那条是同一个键(缩放 / 切分),名单里只留一条。
   { combo: "F", owner: "shortcutOwnerFocus" },

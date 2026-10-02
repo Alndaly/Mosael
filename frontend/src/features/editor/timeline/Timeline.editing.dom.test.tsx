@@ -337,3 +337,17 @@ describe("片段键盘可达", () => {
     expect(document.activeElement).toBe(screen.getByTestId("clip-c2"));
   });
 });
+
+describe("快捷键帮助", () => {
+  it("剪辑快捷键都列在帮助里", async () => {
+    renderTimeline([track("V1", "video", 0)]);
+    fireEvent.click(screen.getByRole("button", { name: "shortcutsHelp" }));
+    const help = await screen.findByRole("dialog");
+    for (const hint of [
+      "hintShuttle", "hintMarks", "hintRippleTrim", "hintEditPoints", "hintHomeEnd", "hintSelectAll", "hintSplitAll",
+      "hintSnapToggle", "hintNudge", "hintSelectMove", "hintClipboard", "hintZoom", "hintEscape", "hintDragModifiers",
+    ]) {
+      expect(help).toHaveTextContent(hint);
+    }
+  });
+});
