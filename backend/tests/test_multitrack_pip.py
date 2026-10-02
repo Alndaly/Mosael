@@ -141,7 +141,7 @@ def test_base_image_is_looped_so_overlays_enable_over_it(tmp_path) -> None:
     # The base image input carries -loop 1 (so it produces real frames across its duration)…
     assert "-loop" in cmd and "bg.png" in joined
     # …and the transformed overlay's enable window is present to gate over it.
-    assert "enable='between(t," in joined
+    assert "enable='gte(t," in joined
 
 
 def test_solo_silences_non_soloed_audio_and_base() -> None:

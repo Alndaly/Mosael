@@ -412,6 +412,17 @@ def _volume_expr(gain: float, keyframes: tuple[tuple[float, float], ...], durati
     return ""
 
 
+def _shown_during(start: float, end: float, fps: float) -> str:
+    """一个叠层在时间线 [start, end) 里画 —— overlay 的 enable 表达式,**右开**。
+
+    此前是 `between(t,start,end)`,两端都闭:相邻两段的交界帧(上一段的 end == 下一段的 start)两段都画,
+    交界那一帧叠着两条字幕;上层视频那一路还带 eof_action=repeat,上一段在交界帧把自己的末帧再画一遍。
+    边界往前挪半帧:帧时间是 k/fps 的浮点数,恰好落在边界上的那一帧不该因为 1e-9 的误差两边倒 ——
+    挪半帧等于「离哪个边界近就归哪段」,边界在帧格上时结果和精确的 [start, end) 一样。"""
+    half = 0.5 / max(fps, 1e-6)
+    return f"gte(t,{start - half:.6f})*lt(t,{end - half:.6f})"
+
+
 def _fade_filters(fade_in: float, fade_out: float, duration: float, *, audio: bool) -> str:
     """Leading-comma filter suffix for edge fades in segment-local output time."""
     name = "afade" if audio else "fade"
@@ -1001,9 +1012,10 @@ def build_ffmpeg_command(
             # 输入级 -ss 快进后,解码从 src_in 之后的第一帧开始,尾巴就少了不到一帧。pass 会在
             # 流结束的瞬间把底层放出来,于是**每个叠加片段的最后 1~2 帧变黑**,连续片段之间
             # 看起来就是"切换处闪一下黑"(blackdetect 在真实工程里逐个边界都抓到了)。
-            # repeat 保持最后一帧,窗口由 enable 关闭,不会多画。
+            # repeat 保持最后一帧,窗口由 enable 关闭 —— 前提是 enable 右开(见 _shown_during),
+            # 否则窗口末端那一帧还开着,repeat 出来的末帧就多露一帧。
             f"{video_label}[{tlabel}]overlay=x='{ox}':y='{oy}':eof_action=repeat:"
-            f"enable='between(t,{overlay.start},{overlay.start + overlay.duration})'{out_label}"
+            f"enable='{_shown_during(overlay.start, overlay.start + overlay.duration, fps)}'{out_label}"
         )
         video_label = out_label
         input_index += 1
@@ -1019,7 +1031,7 @@ def build_ffmpeg_command(
             out_label = f"[vts{input_index}]"
             filters.append(
                 f"{video_label}[stin{input_index}]overlay=x={sx}:y={sy}:eof_action=repeat:"
-                f"enable='between(t,{item.start},{item.start + item.duration})'{out_label}"
+                f"enable='{_shown_during(item.start, item.start + item.duration, fps)}'{out_label}"
             )
             video_label = out_label
             input_index += 1
@@ -1036,7 +1048,7 @@ def build_ffmpeg_command(
             out_label = f"[vtx{k}]"
             filters.append(
                 f"{video_label}[{tlabel}]overlay=x='{tox}':y='{toy}':eof_action=repeat:"
-                f"enable='between(t,{item.start},{item.start + item.duration})'{out_label}"
+                f"enable='{_shown_during(item.start, item.start + item.duration, fps)}'{out_label}"
             )
             video_label = out_label
             input_index += 1
