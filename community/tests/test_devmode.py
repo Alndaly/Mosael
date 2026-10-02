@@ -7,10 +7,12 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
+from sqlalchemy import make_url
 
 from community.app import create_app
 from community.cli import main as cli_main
 from community.config import Settings
+from community.db import make_engine
 
 API = "/api/community/v1"
 
@@ -28,13 +30,27 @@ def dev_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 def test_开发环境的缺省值(tmp_path: Path) -> None:
     dev = Settings(env="development", data_dir=str(tmp_path))
-    assert dev.database_url == f"sqlite:///{(tmp_path / 'community.db').resolve()}"
+    assert make_url(dev.database_url).database == str((tmp_path / "community.db").resolve())
     assert dev.storage_dir == str(tmp_path / "media") and dev.serve_media is True
     assert dev.cookie_secure is False and dev.media_url_prefix == "/api/community/media"
     assert dev.public_url == "http://localhost:3100"
     prod = Settings(env="production")
     assert any("COMMUNITY_PUBLIC_URL" in one for one in prod.problems())
     assert prod.cookie_secure is True and prod.serve_media is False and prod.media_url_prefix == "/community-media"
+
+
+def test_数据目录名里带百分号_库还落在这个目录里(tmp_path: Path) -> None:
+    # SQLAlchemy 2.1 起解析 URL 会把库名里的 `%41` 反转义成 `A`;手拼 `sqlite:///{路径}` 的话,
+    # 建出来的库在另一个(不存在的)目录里,连接直接失败。
+    data = tmp_path / "a%41b"
+    data.mkdir()
+    engine = make_engine(Settings(env="development", data_dir=str(data)).database_url)
+    try:
+        with engine.connect() as connection:
+            connection.exec_driver_sql("create table t (x int)")
+        assert (data / "community.db").is_file()
+    finally:
+        engine.dispose()
 
 
 def test_固定验证码只在开发环境收() -> None:

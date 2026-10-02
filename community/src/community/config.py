@@ -16,6 +16,7 @@ from typing import Literal
 
 from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from sqlalchemy import URL
 
 #: 仓库根(开发时的缺省路径从这里算;容器里由环境变量指到镜像里的位置)。
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -153,7 +154,10 @@ class Settings(BaseSettings):
         if not self.public_url:
             self.public_url = "" if self.env == "production" else DEV_PUBLIC_URL
         if not self.database_url:
-            self.database_url = f"sqlite:///{(data / 'community.db').resolve()}"
+            #: 用 URL.create 拼,不手写 `sqlite:///{路径}`:SQLAlchemy 2.1 起解析 URL 时会把库名里的 `%xx`
+            #: 反转义,手拼的话目录名里带 `%41` 就落到另一个文件(`A`)上;URL.create 渲染时会把它转义好。
+            path = str((data / "community.db").resolve())
+            self.database_url = URL.create("sqlite", database=path).render_as_string(hide_password=False)
         if not self.storage_dir:
             self.storage_dir = str(data / "media")
         if self.cookie_secure is None:

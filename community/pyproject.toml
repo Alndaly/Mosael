@@ -8,7 +8,7 @@ dependencies = [
   "uvicorn[standard]>=0.30",
   "pydantic>=2.9",
   "pydantic-settings>=2.5",
-  "sqlalchemy>=2.0.36",
+  "sqlalchemy>=2.1",
   "alembic>=1.14",
   # PostgreSQL 驱动(psycopg 3)。本地和测试可以用 SQLite,生产用 Postgres。
   "psycopg[binary]>=3.2",

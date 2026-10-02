@@ -5,6 +5,7 @@ from datetime import timedelta
 from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from sqlalchemy import URL
 
 ENV_PREFIX = "MOSAEL_"
 
@@ -128,8 +129,10 @@ class Settings(BaseSettings):
         return self.data_dir / "mosael.db"
 
     @property
-    def database_url(self) -> str:
-        return f"sqlite:///{self.db_path}"
+    def database_url(self) -> URL:
+        #: 给 URL 对象,不手拼 `sqlite:///{路径}`:SQLAlchemy 2.1 起解析 URL 字符串时会把库名里的 `%xx`
+        #: 反转义 —— 数据目录名里带 `%41` 的话,打开的就是另一个目录下的库(多半根本不存在)。
+        return URL.create("sqlite", database=str(self.db_path))
 
     @property
     def media_dir(self) -> Path:

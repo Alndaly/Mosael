@@ -572,7 +572,7 @@ requires-dist = [
     { name = "pydantic-settings", specifier = ">=2.5" },
     { name = "pyjwt", extras = ["crypto"], specifier = ">=2.9" },
     { name = "python-multipart", specifier = ">=0.0.9" },
-    { name = "sqlalchemy", specifier = ">=2.0.36" },
+    { name = "sqlalchemy", specifier = ">=2.1" },
     { name = "tencentcloud-sdk-python-captcha", specifier = ">=3.0.1200" },
     { name = "tencentcloud-sdk-python-common", specifier = ">=3.0.1200" },
     { name = "tencentcloud-sdk-python-sms", specifier = ">=3.0.1200" },
