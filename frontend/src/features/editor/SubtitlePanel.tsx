@@ -13,7 +13,7 @@ import { readSubtitleStyle, SUBTITLE_FONTS, TRANSLATE_LANGS, type SubtitleStyle 
 import { uploadedFontStack } from "@/features/editor/FontFaces";
 import type { Font } from "@/api/client";
 
-import { translateTexts, type Sequence } from "@/api/client";
+import { translateTexts, type Clip, type Sequence } from "@/api/client";
 import { listCapabilityChoices } from "@/api/domains/capabilities";
 import { capabilityKeys } from "@/api/queryKeys";
 import { useI18n } from "@/app/preferences";
@@ -24,6 +24,7 @@ import { SaveToNote } from "@/features/notes/SaveToNote";
 import { useNoteStrings } from "@/features/notes/strings";
 import { noteExportVariants, type NoteExportLine } from "@/features/editor/noteExport";
 import { useEditorStore } from "@/features/editor/editorStore";
+import { useVirtualRows } from "@/features/editor/useVirtualRows";
 import { cn } from "@/lib/utils";
 
 //: 下拉里「按默认」那一项的值(OptionPicker 不收空串当值)。发给接口时是空串。
@@ -72,7 +73,6 @@ export function SubtitlePanel({
 }) {
   const t = useI18n();
   const noteStrings = useNoteStrings();
-  const playhead = useEditorStore((state) => state.playhead);
   const selectClip = useEditorStore((state) => state.selectClip);
 
   const subtitles = React.useMemo(
@@ -83,6 +83,37 @@ export function SubtitlePanel({
         .sort((a, b) => a.timeline_start - b.timeline_start),
     [sequence],
   );
+  // 播放头下是哪几条(双语双轨时可能两条)。**只订阅这个派生值,不订阅播放头本身**:播放时播放头一秒
+  // 动二十几次,而「当前是哪一条」几秒才变一次 —— 此前每一帧都把整列 textarea 重渲一遍。
+  const activeKey = useEditorStore((state) => activeSubtitleKey(subtitles, state.playhead));
+  const activeIds = React.useMemo(() => new Set(activeKey ? activeKey.split("\n") : []), [activeKey]);
+
+  // 行的回调身份要稳定,memo 过的行才跳得过去;调用时读最新的 props。
+  const latest = React.useRef({ onSetText, onDeleteClip, onDub });
+  React.useLayoutEffect(() => {
+    latest.current = { onSetText, onDeleteClip, onDub };
+  });
+  const rowActions = React.useMemo<SubtitleRowActions>(
+    () => ({
+      seek: (clip) => {
+        useEditorStore.getState().setPlayhead(clip.timeline_start);
+        selectClip(clip.id);
+      },
+      dub: (clipId) => {
+        selectClip(clipId);
+        latest.current.onDub?.();
+      },
+      remove: (clipId) => latest.current.onDeleteClip(clipId),
+      setText: (clipId, text) => latest.current.onSetText(clipId, text),
+    }),
+    [selectClip],
+  );
+
+  // 长列表只渲染视口里的几十行(一小时的字幕是上千个 textarea)。
+  const scrollRef = React.useRef<HTMLDivElement | null>(null);
+  const listRef = React.useRef<HTMLDivElement | null>(null);
+  const rowKeys = React.useMemo(() => subtitles.map((clip) => clip.id), [subtitles]);
+  const rows = useVirtualRows({ keys: rowKeys, scrollRef, listRef, estimate: 72 });
 
   // 双语字幕存成一条 `原文\n译文`(见下面的 SubtitleTranslate),导出时拆回两行 ——
   // 揉成一行会让笔记里中英黏在一起,而那正是双语最该分开的地方。
@@ -119,10 +150,9 @@ export function SubtitlePanel({
         />
       )}
       <div
+        ref={scrollRef}
         className={cn(
-          // 行与行之间用细分隔线,不用逐行边框(行自己是无框的)。**行不带圆角**:
-          // 圆角 + 横贯的分隔线拼在一起,看上去就是一摞缺了口的卡片(试过,被打回)。
-          "grid content-start divide-y divide-border overflow-y-auto overflow-x-hidden px-3 py-2",
+          "grid overflow-y-auto overflow-x-hidden px-3 py-2",
           // 空态整块居中,有内容时才贴顶 —— `content-start` 恒定的话,空状态会钉在顶上,
           // 下面留一屏空白(会话列表、轨迹视图都是这个处理)。
           subtitles.length === 0 ? "content-center justify-items-center" : "content-start",
@@ -136,76 +166,28 @@ export function SubtitlePanel({
         )}
         {/* 一条字幕是一行,不是一张卡片:此前每条都是「卡片边框套输入框边框」的双层框,
             三十条字幕就是六十个框。改成分隔线列表 + 点进去才像输入框的正文 ——
-            绝大多数时候用户在**读**这一列,编辑是偶发的。 */}
-        {subtitles.map((clip) => {
-          const active = playhead >= clip.timeline_start && playhead < clipEnd(clip);
-          return (
-            <div key={clip.id} className={cn(
-              // **不在行上留 border-l**:父容器的 divide-border 选择器特异性更高,会把子项的
-              // 整圈 border-color 一起改掉 —— "透明的左边框"于是显形成一条实线(实测计算样式
-              // 里 border-l-transparent 被覆盖成了主题边框色)。选中态的色条用绝对定位画,
-              // 不占边框,谁也覆盖不了它。
-              "relative grid gap-2 py-3 pl-2 pr-1",
-              active && "bg-[color-mix(in_oklab,var(--primary)_5%,transparent)] before:absolute before:inset-y-1.5 before:left-0 before:w-0.5 before:rounded-full before:bg-primary",
-            )}>
-              <div className="flex items-center justify-between gap-2">
-                <button
-                  type="button"
-                  className="timecode cursor-pointer border-0 bg-transparent p-0 pl-1 text-ui-2xs text-muted-foreground hover:text-foreground"
-                  title={t("seekToSubtitle")}
-                  onClick={() => {
-                    useEditorStore.getState().setPlayhead(clip.timeline_start);
-                    selectClip(clip.id);
-                  }}
-                >
-                  {formatTimecode(clip.timeline_start)} – {formatTimecode(clipEnd(clip))}
-                </button>
-                <span className="flex shrink-0 items-center gap-1">
-                  {/* 给这一条配音 = 选中它、切到「配音」页。配音页的范围跟着选中走,
-                      所以不需要第二套"只配这一条"的表单。 */}
-                  {onDub && (
-                    <button
-                      type="button"
-                      className="cursor-pointer rounded-sm border-0 bg-transparent p-0.5 text-muted-foreground hover:bg-secondary hover:text-foreground"
-                      title={t("subtitleDubThis")}
-                      aria-label={t("subtitleDubThis")}
-                      onClick={() => {
-                        selectClip(clip.id);
-                        onDub();
-                      }}
-                    >
-                      <AudioLines size={12} />
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    className="cursor-pointer rounded-sm border-0 bg-transparent p-0.5 text-muted-foreground hover:bg-[color-mix(in_oklab,var(--destructive)_10%,transparent)] hover:text-destructive"
-                    title={t("deleteClip")}
-                    aria-label={t("deleteClip")}
-                    onClick={() => onDeleteClip(clip.id)}
-                  >
-                    <Trash2 size={12} />
-                  </button>
-                </span>
-              </div>
-              {/* 原生 textarea,不走 <Textarea>:基础组件的 border-field-border 在 twMerge 里赢过
-                  border-transparent(实测计算样式里边框还在),而这里要的是**零装饰** ——
-                  静止时它就是一行正文,聚焦才垫一块浅底 + ring 说明"正在编辑"。
-                  `field-sizing:content` 让高度贴内容走(实测生效,单行字幕一行高);
-                  padding 恒定,聚焦时不会发生文字跳位。 */}
-              <textarea
-                key={`sub-${clip.id}-${clip.text_override}`}
-                className="w-full resize-none rounded-sm border-0 bg-transparent px-1 py-0.5 text-ui-sm leading-[1.55] text-foreground transition-colors duration-100 [field-sizing:content] hover:bg-[color-mix(in_oklab,var(--foreground)_4%,transparent)] focus-visible:bg-field focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                rows={1}
-                defaultValue={clip.text_override ?? ""}
-                onBlur={(event) => {
-                  const value = event.target.value.trim();
-                  if (value && value !== clip.text_override) onSetText(clip.id, value);
-                }}
+            绝大多数时候用户在**读**这一列,编辑是偶发的。
+            行与行之间用细分隔线,不用逐行边框(行自己是无框的)。**行不带圆角**:
+            圆角 + 横贯的分隔线拼在一起,看上去就是一摞缺了口的卡片(试过,被打回)。
+            视口外的行不渲染,上下留白按(量过的 / 估计的)行高占位。 */}
+        {subtitles.length > 0 && (
+          <div
+            ref={listRef}
+            className="grid content-start divide-y divide-border"
+            style={{ paddingTop: rows.padTop, paddingBottom: rows.padBottom }}
+          >
+            {subtitles.slice(rows.start, rows.end).map((clip) => (
+              <SubtitleRow
+                key={clip.id}
+                rowRef={rows.measure(clip.id)}
+                clip={clip}
+                active={activeIds.has(clip.id)}
+                canDub={Boolean(onDub)}
+                actions={rowActions}
               />
-            </div>
-          );
-        })}
+            ))}
+          </div>
+        )}
       </div>
       <div className="flex flex-wrap justify-start gap-2 border-t border-border px-3 py-3">
         {onGenerate && (
@@ -232,6 +214,102 @@ export function SubtitlePanel({
     </div>
   );
 }
+
+type SubtitleClip = Clip;
+
+interface SubtitleRowActions {
+  seek: (clip: SubtitleClip) => void;
+  dub: (clipId: string) => void;
+  remove: (clipId: string) => void;
+  setText: (clipId: string, text: string) => void;
+}
+
+/** 播放头下的字幕 id(多条以换行连接,没有则空串)。字符串可以直接拿 === 比,选择器据此判断要不要重渲。 */
+export function activeSubtitleKey(subtitles: readonly SubtitleClip[], playhead: number): string {
+  let key = "";
+  for (const clip of subtitles) {
+    if (clip.timeline_start > playhead) break; // 按起点排过序,后面的都还没开始
+    if (playhead < clipEnd(clip)) key = key ? `${key}\n${clip.id}` : clip.id;
+  }
+  return key;
+}
+
+/** 一条字幕。memo:只有这一条自己的数据或「是不是当前句」变了才重渲。 */
+const SubtitleRow = React.memo(function SubtitleRow({
+  rowRef,
+  clip,
+  active,
+  canDub,
+  actions,
+}: {
+  rowRef: (element: HTMLElement | null) => void;
+  clip: SubtitleClip;
+  active: boolean;
+  canDub: boolean;
+  actions: SubtitleRowActions;
+}) {
+  const t = useI18n();
+  return (
+    <div ref={rowRef} className={cn(
+      // **不在行上留 border-l**:父容器的 divide-border 选择器特异性更高,会把子项的
+      // 整圈 border-color 一起改掉 —— "透明的左边框"于是显形成一条实线(实测计算样式
+      // 里 border-l-transparent 被覆盖成了主题边框色)。选中态的色条用绝对定位画,
+      // 不占边框,谁也覆盖不了它。
+      "relative grid gap-2 py-3 pl-2 pr-1",
+      active && "bg-[color-mix(in_oklab,var(--primary)_5%,transparent)] before:absolute before:inset-y-1.5 before:left-0 before:w-0.5 before:rounded-full before:bg-primary",
+    )}>
+      <div className="flex items-center justify-between gap-2">
+        <button
+          type="button"
+          className="timecode cursor-pointer border-0 bg-transparent p-0 pl-1 text-ui-2xs text-muted-foreground hover:text-foreground"
+          title={t("seekToSubtitle")}
+          onClick={() => actions.seek(clip)}
+        >
+          {formatTimecode(clip.timeline_start)} – {formatTimecode(clipEnd(clip))}
+        </button>
+        <span className="flex shrink-0 items-center gap-1">
+          {/* 给这一条配音 = 选中它、切到「配音」页。配音页的范围跟着选中走,
+              所以不需要第二套"只配这一条"的表单。 */}
+          {canDub && (
+            <button
+              type="button"
+              className="cursor-pointer rounded-sm border-0 bg-transparent p-0.5 text-muted-foreground hover:bg-secondary hover:text-foreground"
+              title={t("subtitleDubThis")}
+              aria-label={t("subtitleDubThis")}
+              onClick={() => actions.dub(clip.id)}
+            >
+              <AudioLines size={12} />
+            </button>
+          )}
+          <button
+            type="button"
+            className="cursor-pointer rounded-sm border-0 bg-transparent p-0.5 text-muted-foreground hover:bg-[color-mix(in_oklab,var(--destructive)_10%,transparent)] hover:text-destructive"
+            title={t("deleteClip")}
+            aria-label={t("deleteClip")}
+            onClick={() => actions.remove(clip.id)}
+          >
+            <Trash2 size={12} />
+          </button>
+        </span>
+      </div>
+      {/* 原生 textarea,不走 <Textarea>:基础组件的 border-field-border 在 twMerge 里赢过
+          border-transparent(实测计算样式里边框还在),而这里要的是**零装饰** ——
+          静止时它就是一行正文,聚焦才垫一块浅底 + ring 说明"正在编辑"。
+          `field-sizing:content` 让高度贴内容走(实测生效,单行字幕一行高);
+          padding 恒定,聚焦时不会发生文字跳位。 */}
+      <textarea
+        key={`sub-${clip.id}-${clip.text_override}`}
+        className="w-full resize-none rounded-sm border-0 bg-transparent px-1 py-0.5 text-ui-sm leading-[1.55] text-foreground transition-colors duration-100 [field-sizing:content] hover:bg-[color-mix(in_oklab,var(--foreground)_4%,transparent)] focus-visible:bg-field focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        rows={1}
+        defaultValue={clip.text_override ?? ""}
+        onBlur={(event) => {
+          const value = event.target.value.trim();
+          if (value && value !== clip.text_override) actions.setText(clip.id, value);
+        }}
+      />
+    </div>
+  );
+});
 
 /** 一键翻译:把整轨字幕批量译成目标语言,一次提交、一步撤销。 */
 function SubtitleTranslate({

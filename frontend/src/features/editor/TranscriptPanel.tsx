@@ -5,7 +5,7 @@ import React from "react";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AudioLines, Captions, Loader2, MessageSquareText, Mic, Scissors, Sparkles, Split, SplitSquareVertical, Trash2, UserRound, X } from "lucide-react";
 
-import { api, getAssetTranscript, getJob, listAsrModels, transcribeAsset, type Job, type Sequence } from "@/api/client";
+import { api, getAssetTranscript, getJob, listAsrModels, transcribeAsset, type Clip, type Job, type Sequence } from "@/api/client";
 import { transcriptKeys } from "@/api/queryKeys";
 import { asrEngineMissing, pendingTranscribeIds } from "@/features/editor/transcribeQueue";
 import { Button } from "@/components/ui/button";
@@ -23,10 +23,13 @@ import {
   projectedRowKey,
   transcriptDocument,
   transcriptSegmentsFromApi,
+  type ProjectedSegment,
   type SegmentLike,
+  type TranscriptDocItem,
 } from "@/domain/timeline/transcriptProjection";
 import { PILL } from "@/features/editor/pill";
 import { useEditorStore } from "@/features/editor/editorStore";
+import { useVirtualRows } from "@/features/editor/useVirtualRows";
 import { cn } from "@/lib/utils";
 
 
@@ -54,6 +57,269 @@ const GUTTER = "grid-cols-[58px_minmax(0,1fr)]";
  */
 const SPEAKER_GUTTER = "grid-cols-[92px_minmax(0,1fr)]";
 
+interface TranscriptRowActions {
+  beginWordDrag: (flatIndex: number) => void;
+  toggleToken: (key: string, clipId: string, srcStart: number, srcEnd: number) => void;
+  splitSentenceOut: (clipId: string, srcStart: number, srcEnd: number) => void;
+  cutSentence: (clipId: string, srcStart: number, srcEnd: number) => void;
+}
+
+function docItemKey(item: TranscriptDocItem): string {
+  return item.kind === "silence" ? `${item.gap.clipId}:sil:${item.gap.srcStart}` : projectedRowKey(item.sentence);
+}
+
+/** 播放头落在哪个片段、对应源时间多少;不在任何片段上则为 null。 */
+function activeSourceAt(clips: readonly Clip[], playhead: number): { clipId: string; src: number } | null {
+  for (const clip of clips) {
+    const end = clip.timeline_start + (clip.src_out - clip.src_in) / (clip.speed || 1);
+    if (playhead >= clip.timeline_start && playhead < end) {
+      return { clipId: clip.id, src: clip.src_in + (playhead - clip.timeline_start) * (clip.speed || 1) };
+    }
+  }
+  return null;
+}
+
+function activeSentenceKeyAt(projected: readonly ProjectedSegment[], playhead: number): string | null {
+  const hit = projected.find((item) => playhead >= item.timelineStart && playhead < item.timelineEnd);
+  return hit ? projectedRowKey(hit) : null;
+}
+
+interface TokenSpans {
+  starts: number[];
+  ends: number[];
+  keys: string[];
+  /** 最长的一个词有多长:二分到「起点 ≤ 播放头」之后,往回只需看这么远。 */
+  longest: number;
+}
+
+/**
+ * 每个词在时间线上的区间,按起点排序。问的是「这个词落在时间线的哪一段」,而不是「当前是哪个
+ * 片段」—— 视频轨和音频轨时间上重叠,而逐字稿来自音频片段,按「第一个覆盖播放头的片段」去比对,
+ * 命中的永远是排在前面的视频片段。
+ */
+function buildTokenSpans(items: readonly TranscriptDocItem[], clipById: Map<string, Clip>): TokenSpans {
+  const spans: { start: number; end: number; key: string }[] = [];
+  for (const item of items) {
+    if (item.kind !== "sentence") continue;
+    const sentence = item.sentence;
+    const clip = clipById.get(sentence.clipId);
+    sentence.tokens.forEach((token, index) => {
+      const span = tokenTimelineRange(clip, token);
+      if (span) spans.push({ start: span[0], end: span[1], key: `${sentence.clipId}:${sentence.segmentId}:${index}` });
+    });
+  }
+  spans.sort((a, b) => a.start - b.start);
+  let longest = 0;
+  for (const span of spans) longest = Math.max(longest, span.end - span.start);
+  return { starts: spans.map((x) => x.start), ends: spans.map((x) => x.end), keys: spans.map((x) => x.key), longest };
+}
+
+/** 播放头所在的词(可能不止一个:两条轨上的逐字稿时间重叠),以换行连成一个可 === 比较的字符串。 */
+export function currentTokenKeys(spans: TokenSpans, playhead: number): string {
+  let lo = 0;
+  let hi = spans.starts.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (spans.starts[mid] <= playhead) lo = mid + 1;
+    else hi = mid;
+  }
+  const hits: string[] = [];
+  for (let i = lo - 1; i >= 0 && spans.starts[i] >= playhead - spans.longest; i--) {
+    if (playhead < spans.ends[i]) hits.push(spans.keys[i]);
+  }
+  return hits.sort().join("\n");
+}
+
+/** 只把属于这一句的当前词交给这一行:其余行拿到空串,memo 让它们整行跳过。 */
+function tokensOfSentence(current: string, sentence: ProjectedSegment): string {
+  if (!current) return "";
+  const prefix = `${sentence.clipId}:${sentence.segmentId}:`;
+  return current
+    .split("\n")
+    .filter((key) => key.startsWith(prefix))
+    .join("\n");
+}
+
+/** 逐字稿里的一行(一句,或一段静音)。memo:播放时只有当前词所在的那一句重渲。 */
+const TranscriptRow = React.memo(function TranscriptRow({
+  rowRef,
+  item,
+  active,
+  currentTokens,
+  selected,
+  showSpeakers,
+  flatIndexByKey,
+  canSplit,
+  actions,
+}: {
+  rowRef: (element: HTMLElement | null) => void;
+  item: TranscriptDocItem;
+  active: boolean;
+  currentTokens: string;
+  selected: TokenSelection;
+  showSpeakers: boolean;
+  flatIndexByKey: Map<string, number>;
+  canSplit: boolean;
+  actions: TranscriptRowActions;
+}) {
+  const t = useI18n();
+  const currentSet = React.useMemo(() => new Set(currentTokens ? currentTokens.split("\n") : []), [currentTokens]);
+  return <div ref={rowRef} className="pb-1.5">{renderRow()}</div>;
+
+  function renderRow() {
+    if (item.kind === "silence") {
+      const gap = item.gap;
+      const gapKey = `${gap.clipId}:sil:${gap.srcStart}`;
+      return (
+        // 静音块走**同一套栅格**:空掉时间码那一栏,正文那一栏自然对齐。
+        // 此前是 `ml-[46px]` —— 一个照着时间码宽度手调出来的数,时间码一改就错开。
+        <div
+          className={cn(
+            "grid items-center gap-x-2 pl-3",
+            showSpeakers ? SPEAKER_GUTTER : GUTTER,
+          )}
+        >
+          <span aria-hidden />
+          <button
+            type="button"
+            className={cn(
+              "inline-flex cursor-pointer items-center gap-1 justify-self-start rounded-full border border-dashed border-border-strong bg-secondary px-[9px] py-px text-ui-xs text-muted-foreground hover:border-destructive hover:text-destructive",
+              selected.has(gapKey) && "border-destructive bg-[color-mix(in_oklab,var(--destructive)_8%,transparent)] text-destructive line-through",
+            )}
+            title={t("silenceGapHint")}
+            onClick={() => actions.toggleToken(gapKey, gap.clipId, gap.srcStart, gap.srcEnd)}
+          >
+            <AudioLines size={10} /> {gap.duration.toFixed(1)}s
+          </button>
+        </div>
+      );
+    }
+    const sentence = item.sentence;
+    const key = projectedRowKey(sentence);
+    return (
+      <div
+        className={cn(
+          "group/sentence relative grid items-start gap-x-2 rounded-md py-1 pl-3 pr-2 transition-[background] duration-100 hover:bg-[color-mix(in_oklab,var(--foreground)_4%,transparent)]",
+          showSpeakers ? SPEAKER_GUTTER : GUTTER,
+          active && "bg-[color-mix(in_oklab,var(--primary)_7%,transparent)]",
+        )}
+      >
+        {/* 当前句的指示条:上下内缩的圆角条,而不是贴着行高的直角边框。
+            边框还得在每一行都占着 2px 透明位置(不占就会在切换时整行横跳),
+            一个绝对定位的条子既不参与布局,也能圆角。 */}
+        {active && (
+          <span aria-hidden className="pointer-events-none absolute bottom-[5px] left-[3px] top-[5px] w-[3px] rounded-full bg-primary" />
+        )}
+        <div className="flex h-6 min-w-0 items-center justify-start gap-1 whitespace-nowrap">
+          <button
+            type="button"
+            className={cn(
+              "timecode cursor-pointer border-0 bg-transparent p-0 text-ui-2xs leading-6 tabular-nums text-muted-foreground hover:text-primary",
+              active && "font-medium text-primary",
+            )}
+            title={t("seekToSentence")}
+            onClick={() => useEditorStore.getState().setPlayhead(sentence.timelineStart)}
+          >
+            {formatTimecode(sentence.timelineStart)}
+          </button>
+          {/* 说话人与时间码在正文首行的同一个元数据组里,不再垂直居中到多行正文中间。 */}
+          {showSpeakers && sentence.speaker && (
+            // 人形图标 + 从 1 数的序号:光一个 `00` 挨着时间码 `00:00.4`,读起来像时间码的一部分。
+            <span
+              className="inline-flex h-5 min-w-6 shrink-0 items-center justify-center gap-0.5 rounded-full px-1.5 text-ui-2xs font-semibold leading-5 tabular-nums"
+              style={speakerChipStyle(sentence.speaker)}
+              title={speakerLabel(sentence.speaker, t)}
+              aria-label={speakerLabel(sentence.speaker, t)}
+            >
+              <UserRound size={9} aria-hidden className="shrink-0" />
+              {speakerShort(sentence.speaker)}
+            </span>
+          )}
+        </div>
+        {/* 操作浮层不参与栅格宽度:平时完全不占正文空间,悬停或键盘聚焦时才出现。 */}
+        <div className="pointer-events-none absolute right-1 top-1 z-10 flex items-center gap-0.5 rounded-md border border-border bg-popover/95 p-0.5 opacity-0 shadow-sm transition-opacity group-hover/sentence:pointer-events-auto group-hover/sentence:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100">
+          {canSplit && (
+            <button
+              type="button"
+              className="inline-flex size-5 cursor-pointer items-center justify-center rounded-sm border-0 bg-transparent p-0 text-muted-foreground hover:bg-[color-mix(in_oklab,var(--primary)_12%,transparent)] hover:text-primary"
+              title={t("splitSentenceOutHint")}
+              aria-label={t("splitSentenceOut")}
+              onClick={() => actions.splitSentenceOut(sentence.clipId, sentence.srcStart, sentence.srcEnd)}
+            >
+              <SplitSquareVertical size={12} />
+            </button>
+          )}
+          <button
+            type="button"
+            className="inline-flex size-5 cursor-pointer items-center justify-center rounded-sm border-0 bg-transparent p-0 text-muted-foreground hover:bg-[color-mix(in_oklab,var(--destructive)_12%,transparent)] hover:text-destructive"
+            title={t("cutSentenceHint")}
+            aria-label={t("cutSentence")}
+            onClick={() => actions.cutSentence(sentence.clipId, sentence.srcStart, sentence.srcEnd)}
+          >
+            <X size={12} />
+          </button>
+        </div>
+        <p className="m-0 min-w-0 whitespace-normal text-ui-md leading-6 [overflow-wrap:anywhere]">
+          {sentence.tokens.length > 0
+            ? sentence.tokens.map((token, index) => {
+                const tokenKey = `${sentence.clipId}:${sentence.segmentId}:${index}`;
+                const flatIndex = flatIndexByKey.get(tokenKey) ?? -1;
+                // 问"这个词落在时间线的哪一段",而不是"当前是哪个片段" ——
+                // 视频轨和音频轨时间上重叠,而逐字稿来自音频片段,按"第一个覆盖
+                // 播放头的片段"去比对,命中的永远是排在前面的视频片段。
+                const current = currentSet.has(tokenKey);
+                const classes = cn(
+                  // 悬停用**中性**灰。此前用 `bg-accent`,而深色下 accent 是 #2b2542 ——
+                  // 一块紫色,和播放头所在词的高亮长得一模一样:鼠标扫过哪个词,哪个词就
+                  // 像"正在播"。一种颜色不能同时表示两件事。
+                  // **横向不留内边距**:中文每个词就是一两个字,左右各 1px 会把
+                  // 「喂喂喂喂喂」拆成「喂 喂 喂 喂 喂」—— 一句话被排版成了五个字。
+                  // 纵向留着:行内元素的上下内边距不参与布局,只把高亮的底色撑高一点。
+                  "m-0 inline cursor-pointer rounded-[3px] border-0 bg-transparent px-0 py-px text-foreground [font:inherit] [box-decoration-break:clone] hover:bg-[color-mix(in_oklab,var(--foreground)_10%,transparent)]",
+                  isFillerToken(token.text) && "bg-[color-mix(in_oklab,#eab308_20%,transparent)]",
+                  // 播放头所在的词:实心一点、字重一点,不再拿 1px 硬阴影当下划线 ——
+                  // 那道线在换行处断开,看着像输入框的边。
+                  current && "bg-[color-mix(in_oklab,var(--primary)_28%,transparent)] font-medium",
+                  // 标记要删的词:8% 在深色下几乎看不出来,全靠那道删除线撑着。
+                  selected.has(tokenKey) &&
+                    "bg-[color-mix(in_oklab,var(--destructive)_16%,transparent)] text-muted-foreground line-through [text-decoration-color:var(--destructive)] [text-decoration-thickness:1.5px]",
+                );
+                return (
+                  <button
+                    key={tokenKey}
+                    type="button"
+                    className={classes}
+                    data-flat={flatIndex}
+                    onPointerDown={(event) => {
+                      if (event.button === 0) actions.beginWordDrag(flatIndex);
+                    }}
+                    onDoubleClick={() => actions.toggleToken(tokenKey, sentence.clipId, token.start_time, token.end_time)}
+                  >
+                    {token.text}
+                  </button>
+                );
+              })
+            : (
+                <button
+                  type="button"
+                  className={cn(
+                    "m-0 inline cursor-pointer rounded-[3px] border-0 bg-transparent px-0 py-px text-left text-foreground [font:inherit] [box-decoration-break:clone] hover:bg-[color-mix(in_oklab,var(--foreground)_10%,transparent)]",
+                    selected.has(`${key}:all`) &&
+                      "bg-[color-mix(in_oklab,var(--destructive)_16%,transparent)] text-muted-foreground line-through [text-decoration-color:var(--destructive)] [text-decoration-thickness:1.5px]",
+                  )}
+                  title={t("markSentenceHint")}
+                  onClick={() => useEditorStore.getState().setPlayhead(sentence.timelineStart)}
+                  onDoubleClick={() => actions.toggleToken(`${key}:all`, sentence.clipId, sentence.srcStart, sentence.srcEnd)}
+                >
+                  {sentence.text}
+                </button>
+              )}
+        </p>
+      </div>
+    );
+  }
+});
+
 export function TranscriptPanel({
   sequence,
   onCutSegment,
@@ -74,7 +340,6 @@ export function TranscriptPanel({
   const t = useI18n();
   const s = useNoteStrings();
   const qc = useQueryClient();
-  const playhead = useEditorStore((state) => state.playhead);
   const [selected, setSelected] = React.useState<TokenSelection>(new Map());
   const [showSilences, setShowSilences] = React.useState(false);
   const [asrJobId, setAsrJobId] = React.useState<string | null>(null);
@@ -391,25 +656,13 @@ export function TranscriptPanel({
   );
 
   // 卡拉OK定位:播放头映射回当前片段的源时间,命中的词高亮。
+  //
+  // **这里不订阅播放头本身。** 播放时它一秒变二十几次,而面板关心的只是「当前是哪一句、哪个词、
+  // 播放头下有没有片段」—— 一个词要几百毫秒才换一次。此前每一帧都把上万个词按钮整个重渲。
+  // 选择器只返回这些低频派生值(字符串 / 布尔,=== 可比),值不变就不重渲。
   const clipById = React.useMemo(() => new Map(videoClips.map((clip) => [clip.id, clip])), [videoClips]);
-  const activeSrc = React.useMemo(() => {
-    for (const clip of videoClips) {
-      const end = clip.timeline_start + (clip.src_out - clip.src_in) / (clip.speed || 1);
-      if (playhead >= clip.timeline_start && playhead < end) {
-        return { clipId: clip.id, src: clip.src_in + (playhead - clip.timeline_start) * (clip.speed || 1) };
-      }
-    }
-    return null;
-  }, [videoClips, playhead]);
-
-  const activeSentenceRef = React.useRef<HTMLDivElement | null>(null);
-  const activeSentenceKey = React.useMemo(() => {
-    const hit = projected.find((item) => playhead >= item.timelineStart && playhead < item.timelineEnd);
-    return hit ? projectedRowKey(hit) : null;
-  }, [projected, playhead]);
-  React.useEffect(() => {
-    activeSentenceRef.current?.scrollIntoView({ block: "nearest" });
-  }, [activeSentenceKey]);
+  const overClip = useEditorStore((state) => activeSourceAt(videoClips, state.playhead) !== null);
+  const activeSentenceKey = useEditorStore((state) => activeSentenceKeyAt(projected, state.playhead));
 
   const selectedSeconds = React.useMemo(() => {
     let total = 0;
@@ -446,6 +699,9 @@ export function TranscriptPanel({
   );
   const docTokensRef = React.useRef(docTokens);
   docTokensRef.current = docTokens;
+  // 词的时间线区间按起点排好,播放头下是哪几个词靠二分找(见 currentTokenKeys)。
+  const tokenSpans = React.useMemo(() => buildTokenSpans(docItems, clipById), [docItems, clipById]);
+  const currentTokens = useEditorStore((state) => currentTokenKeys(tokenSpans, state.playhead));
 
   // 交互模型(Descript/剪映):单击 = 定位播放头;按住拖过多个词 = 标记
   // 范围(在既有选择上追加);双击 = 单词标记/取消。
@@ -494,10 +750,39 @@ export function TranscriptPanel({
   const splitSentenceOut = (clipId: string, srcStart: number, srcEnd: number) => {
     onSplitPoints?.([{ clipId, srcTimes: [srcStart, srcEnd] }]);
   };
-  // 在播放头当前词处切一刀(单点)。
+  // 在播放头当前词处切一刀(单点)。播放头在点下去那一刻读,不订阅。
   const splitAtPlayhead = () => {
+    const activeSrc = activeSourceAt(videoClips, useEditorStore.getState().playhead);
     if (onSplitPoints && activeSrc) onSplitPoints([{ clipId: activeSrc.clipId, srcTimes: [activeSrc.src] }]);
   };
+
+  // 行的回调身份要稳定,memo 过的行才跳得过去;调用时读最新的闭包。
+  const latestActions = React.useRef({ beginWordDrag, toggleToken, splitSentenceOut, onCutSegment });
+  React.useLayoutEffect(() => {
+    latestActions.current = { beginWordDrag, toggleToken, splitSentenceOut, onCutSegment };
+  });
+  const rowActions = React.useMemo<TranscriptRowActions>(
+    () => ({
+      beginWordDrag: (flatIndex) => latestActions.current.beginWordDrag(flatIndex),
+      toggleToken: (key, clipId, srcStart, srcEnd) => latestActions.current.toggleToken(key, clipId, srcStart, srcEnd),
+      splitSentenceOut: (clipId, srcStart, srcEnd) => latestActions.current.splitSentenceOut(clipId, srcStart, srcEnd),
+      cutSentence: (clipId, srcStart, srcEnd) => latestActions.current.onCutSegment(clipId, srcStart, srcEnd),
+    }),
+    [],
+  );
+
+  // 长逐字稿只渲染视口里的几十句(一小时是上万个词按钮)。
+  const scrollRef = React.useRef<HTMLDivElement | null>(null);
+  const listRef = React.useRef<HTMLDivElement | null>(null);
+  const rowKeys = React.useMemo(() => docItems.map(docItemKey), [docItems]);
+  const rows = useVirtualRows({ keys: rowKeys, scrollRef, listRef, estimate: 56 });
+  // 当前句换了就把它滚进视野。没渲染的行没有 DOM,所以按算出来的偏移滚,而不是 scrollIntoView。
+  const revealRow = rows.reveal;
+  React.useEffect(() => {
+    if (activeSentenceKey) revealRow(rowKeys.indexOf(activeSentenceKey));
+    // 只跟着「当前句」走:行高量到新值时不该把用户手动滚开的列表拽回来。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeSentenceKey]);
 
   if (projected.length === 0) {
     // **正在转写时不说「还没有转写结果」。** 那句话字面上成立,却把用户引向"是不是没点上" ——
@@ -575,7 +860,7 @@ export function TranscriptPanel({
               className={PILL}
               title={t("splitAtWordHint")}
               onClick={splitAtPlayhead}
-              disabled={!activeSrc}
+              disabled={!overClip}
             >
               <Scissors size={12} /> {t("splitAtWord")}
             </button>
@@ -612,170 +897,35 @@ export function TranscriptPanel({
       )}
       <p className="m-0 px-3 pb-0.5 pt-2 text-ui-xs leading-[1.5] text-muted-foreground/80">{t("transcriptUsage")}</p>
       <div
-        className="flex min-h-0 flex-1 select-none flex-col gap-1.5 overflow-y-auto px-2 pb-3 pt-2"
+        ref={scrollRef}
+        className="flex min-h-0 flex-1 select-none flex-col overflow-y-auto px-2 pb-3 pt-2"
         onPointerOver={(event) => {
           if (!(event.buttons & 1) || !dragRef.current) return;
           const el = (event.target as HTMLElement).closest("[data-flat]");
           if (el) dragOverWord(Number(el.getAttribute("data-flat")));
         }}
       >
-        {docItems.map((item) => {
-          if (item.kind === "silence") {
-            const gap = item.gap;
-            const gapKey = `${gap.clipId}:sil:${gap.srcStart}`;
+        {/* 视口外的句子不渲染,上下留白按(量过的 / 估计的)行高占位。行间距放在每行自己的下内边距里
+            (而不是容器的 gap),量到的行高才包含它,占位才对得上。 */}
+        <div ref={listRef} className="flex flex-col" style={{ paddingTop: rows.padTop, paddingBottom: rows.padBottom }}>
+          {docItems.slice(rows.start, rows.end).map((item) => {
+            const key = docItemKey(item);
             return (
-              // 静音块走**同一套栅格**:空掉时间码那一栏,正文那一栏自然对齐。
-              // 此前是 `ml-[46px]` —— 一个照着时间码宽度手调出来的数,时间码一改就错开。
-              <div
-                key={gapKey}
-                className={cn(
-                  "grid items-center gap-x-2 pl-3",
-                  showSpeakers ? SPEAKER_GUTTER : GUTTER,
-                )}
-              >
-                <span aria-hidden />
-                <button
-                  type="button"
-                  className={cn(
-                    "inline-flex cursor-pointer items-center gap-1 justify-self-start rounded-full border border-dashed border-border-strong bg-secondary px-[9px] py-px text-ui-xs text-muted-foreground hover:border-destructive hover:text-destructive",
-                    selected.has(gapKey) && "border-destructive bg-[color-mix(in_oklab,var(--destructive)_8%,transparent)] text-destructive line-through",
-                  )}
-                  title={t("silenceGapHint")}
-                  onClick={() => toggleToken(gapKey, gap.clipId, gap.srcStart, gap.srcEnd)}
-                >
-                  <AudioLines size={10} /> {gap.duration.toFixed(1)}s
-                </button>
-              </div>
+              <TranscriptRow
+                key={key}
+                rowRef={rows.measure(key)}
+                item={item}
+                active={key === activeSentenceKey}
+                currentTokens={item.kind === "sentence" ? tokensOfSentence(currentTokens, item.sentence) : ""}
+                selected={selected}
+                showSpeakers={showSpeakers}
+                flatIndexByKey={flatIndexByKey}
+                canSplit={Boolean(onSplitPoints)}
+                actions={rowActions}
+              />
             );
-          }
-          const sentence = item.sentence;
-          const key = projectedRowKey(sentence);
-          const active = key === activeSentenceKey;
-          return (
-            <div
-              key={key}
-              ref={active ? activeSentenceRef : undefined}
-              className={cn(
-                "group/sentence relative grid items-start gap-x-2 rounded-md py-1 pl-3 pr-2 transition-[background] duration-100 hover:bg-[color-mix(in_oklab,var(--foreground)_4%,transparent)]",
-                showSpeakers ? SPEAKER_GUTTER : GUTTER,
-                active && "bg-[color-mix(in_oklab,var(--primary)_7%,transparent)]",
-              )}
-            >
-              {/* 当前句的指示条:上下内缩的圆角条,而不是贴着行高的直角边框。
-                  边框还得在每一行都占着 2px 透明位置(不占就会在切换时整行横跳),
-                  一个绝对定位的条子既不参与布局,也能圆角。 */}
-              {active && (
-                <span aria-hidden className="pointer-events-none absolute bottom-[5px] left-[3px] top-[5px] w-[3px] rounded-full bg-primary" />
-              )}
-              <div className="flex h-6 min-w-0 items-center justify-start gap-1 whitespace-nowrap">
-                <button
-                  type="button"
-                  className={cn(
-                    "timecode cursor-pointer border-0 bg-transparent p-0 text-ui-2xs leading-6 tabular-nums text-muted-foreground hover:text-primary",
-                    active && "font-medium text-primary",
-                  )}
-                  title={t("seekToSentence")}
-                  onClick={() => useEditorStore.getState().setPlayhead(sentence.timelineStart)}
-                >
-                  {formatTimecode(sentence.timelineStart)}
-                </button>
-                {/* 说话人与时间码在正文首行的同一个元数据组里,不再垂直居中到多行正文中间。 */}
-                {showSpeakers && sentence.speaker && (
-                  // 人形图标 + 从 1 数的序号:光一个 `00` 挨着时间码 `00:00.4`,读起来像时间码的一部分。
-                  <span
-                    className="inline-flex h-5 min-w-6 shrink-0 items-center justify-center gap-0.5 rounded-full px-1.5 text-ui-2xs font-semibold leading-5 tabular-nums"
-                    style={speakerChipStyle(sentence.speaker)}
-                    title={speakerLabel(sentence.speaker, t)}
-                    aria-label={speakerLabel(sentence.speaker, t)}
-                  >
-                    <UserRound size={9} aria-hidden className="shrink-0" />
-                    {speakerShort(sentence.speaker)}
-                  </span>
-                )}
-              </div>
-              {/* 操作浮层不参与栅格宽度:平时完全不占正文空间,悬停或键盘聚焦时才出现。 */}
-              <div className="pointer-events-none absolute right-1 top-1 z-10 flex items-center gap-0.5 rounded-md border border-border bg-popover/95 p-0.5 opacity-0 shadow-sm transition-opacity group-hover/sentence:pointer-events-auto group-hover/sentence:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100">
-                {onSplitPoints && (
-                  <button
-                    type="button"
-                    className="inline-flex size-5 cursor-pointer items-center justify-center rounded-sm border-0 bg-transparent p-0 text-muted-foreground hover:bg-[color-mix(in_oklab,var(--primary)_12%,transparent)] hover:text-primary"
-                    title={t("splitSentenceOutHint")}
-                    aria-label={t("splitSentenceOut")}
-                    onClick={() => splitSentenceOut(sentence.clipId, sentence.srcStart, sentence.srcEnd)}
-                  >
-                    <SplitSquareVertical size={12} />
-                  </button>
-                )}
-                <button
-                  type="button"
-                  className="inline-flex size-5 cursor-pointer items-center justify-center rounded-sm border-0 bg-transparent p-0 text-muted-foreground hover:bg-[color-mix(in_oklab,var(--destructive)_12%,transparent)] hover:text-destructive"
-                  title={t("cutSentenceHint")}
-                  aria-label={t("cutSentence")}
-                  onClick={() => onCutSegment(sentence.clipId, sentence.srcStart, sentence.srcEnd)}
-                >
-                  <X size={12} />
-                </button>
-              </div>
-              <p className="m-0 min-w-0 whitespace-normal text-ui-md leading-6 [overflow-wrap:anywhere]">
-                {sentence.tokens.length > 0
-                  ? sentence.tokens.map((token, index) => {
-                      const tokenKey = `${sentence.clipId}:${sentence.segmentId}:${index}`;
-                      const flatIndex = flatIndexByKey.get(tokenKey) ?? -1;
-                      // 问"这个词落在时间线的哪一段",而不是"当前是哪个片段" ——
-                      // 视频轨和音频轨时间上重叠,而逐字稿来自音频片段,按"第一个覆盖
-                      // 播放头的片段"去比对,命中的永远是排在前面的视频片段。
-                      const span = tokenTimelineRange(clipById.get(sentence.clipId), token);
-                      const current = span !== null && playhead >= span[0] && playhead < span[1];
-                      const classes = cn(
-                        // 悬停用**中性**灰。此前用 `bg-accent`,而深色下 accent 是 #2b2542 ——
-                        // 一块紫色,和播放头所在词的高亮长得一模一样:鼠标扫过哪个词,哪个词就
-                        // 像"正在播"。一种颜色不能同时表示两件事。
-                        // **横向不留内边距**:中文每个词就是一两个字,左右各 1px 会把
-                        // 「喂喂喂喂喂」拆成「喂 喂 喂 喂 喂」—— 一句话被排版成了五个字。
-                        // 纵向留着:行内元素的上下内边距不参与布局,只把高亮的底色撑高一点。
-                        "m-0 inline cursor-pointer rounded-[3px] border-0 bg-transparent px-0 py-px text-foreground [font:inherit] [box-decoration-break:clone] hover:bg-[color-mix(in_oklab,var(--foreground)_10%,transparent)]",
-                        isFillerToken(token.text) && "bg-[color-mix(in_oklab,#eab308_20%,transparent)]",
-                        // 播放头所在的词:实心一点、字重一点,不再拿 1px 硬阴影当下划线 ——
-                        // 那道线在换行处断开,看着像输入框的边。
-                        current && "bg-[color-mix(in_oklab,var(--primary)_28%,transparent)] font-medium",
-                        // 标记要删的词:8% 在深色下几乎看不出来,全靠那道删除线撑着。
-                        selected.has(tokenKey) &&
-                          "bg-[color-mix(in_oklab,var(--destructive)_16%,transparent)] text-muted-foreground line-through [text-decoration-color:var(--destructive)] [text-decoration-thickness:1.5px]",
-                      );
-                      return (
-                        <button
-                          key={tokenKey}
-                          type="button"
-                          className={classes}
-                          data-flat={flatIndex}
-                          onPointerDown={(event) => {
-                            if (event.button === 0) beginWordDrag(flatIndex);
-                          }}
-                          onDoubleClick={() => toggleToken(tokenKey, sentence.clipId, token.start_time, token.end_time)}
-                        >
-                          {token.text}
-                        </button>
-                      );
-                    })
-                  : (
-                      <button
-                        type="button"
-                        className={cn(
-                          "m-0 inline cursor-pointer rounded-[3px] border-0 bg-transparent px-0 py-px text-left text-foreground [font:inherit] [box-decoration-break:clone] hover:bg-[color-mix(in_oklab,var(--foreground)_10%,transparent)]",
-                          selected.has(`${key}:all`) &&
-                            "bg-[color-mix(in_oklab,var(--destructive)_16%,transparent)] text-muted-foreground line-through [text-decoration-color:var(--destructive)] [text-decoration-thickness:1.5px]",
-                        )}
-                        title={t("markSentenceHint")}
-                        onClick={() => useEditorStore.getState().setPlayhead(sentence.timelineStart)}
-                        onDoubleClick={() => toggleToken(`${key}:all`, sentence.clipId, sentence.srcStart, sentence.srcEnd)}
-                      >
-                        {sentence.text}
-                      </button>
-                    )}
-              </p>
-            </div>
-          );
-        })}
+          })}
+        </div>
       </div>
 
       {selected.size > 0 && (

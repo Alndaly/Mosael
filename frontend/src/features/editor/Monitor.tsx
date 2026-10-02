@@ -1,7 +1,7 @@
 import React from "react";
 import { Maximize2, Pause, Play, Repeat, SkipBack, SkipForward, StepBack, StepForward, Volume2, VolumeX } from "lucide-react";
 
-import { type Asset, type Sequence } from "@/api/client";
+import { type Asset, type Clip, type Sequence } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
@@ -17,7 +17,7 @@ import { blockingPreviewState, resolvesOnItsOwn } from "@/features/editor/playba
 import { textLayers } from "@/features/editor/playback/textLayers";
 import { readSubtitleStyle, subtitleCss } from "@/features/editor/subtitleStyle";
 import { readTextStyle, textStyleCss } from "@/features/editor/textStyle";
-import { applyTransformCommit, clipProgress, sampleTransform } from "@/features/editor/keyframes";
+import { applyTransformCommit, clipProgress, hasActiveKeyframes, sampleTransform } from "@/features/editor/keyframes";
 import { TransformOverlay, readTransform, type Transform } from "@/features/editor/TransformOverlay";
 import { useEditorStore } from "@/features/editor/editorStore";
 import { isImeKeystroke } from "@/lib/shortcuts";
@@ -62,7 +62,6 @@ export function Monitor({
   onRefreshAssets?: () => void;
 }) {
   const t = useI18n();
-  const playhead = useEditorStore((state) => state.playhead);
   const selectedClipIds = useEditorStore((state) => state.selectedClipIds);
   const playing = useEditorStore((state) => state.playing);
   const loop = useEditorStore((state) => state.loop);
@@ -75,7 +74,6 @@ export function Monitor({
   const monitorStageRef = React.useRef<HTMLDivElement | null>(null);
   const scrubRef = React.useRef<HTMLDivElement | null>(null);
 
-  const assetById = React.useMemo(() => new Map(assets.map((asset) => [asset.id, asset])), [assets]);
   const videoTracks = React.useMemo(
     () =>
       (sequence.tracks ?? [])
@@ -106,29 +104,55 @@ export function Monitor({
     () => textLayers(sequence.tracks ?? []),
     [sequence],
   );
-  const activeTextClips = React.useMemo(
-    () => textOverlayClips.filter((clip) => playhead >= clip.timeline_start && playhead < clipEnd(clip)),
-    [textOverlayClips, playhead],
-  );
   const totalDuration = React.useMemo(
     () => sequenceDuration((sequence.tracks ?? []).flatMap((track) => track.clips ?? [])),
     [sequence],
   );
 
-  const activeClip =
-    videoClips.find((clip) => playhead >= clip.timeline_start && playhead < clipEnd(clip)) ?? null;
+  // **监视器不订阅播放头本身。** 播放时它一秒变二十几次,而监视器的 DOM(片段层、字幕、花字、脱机提示、
+  // 预热)只在「播放头下是哪几段」变化时才需要变 —— 那是几秒一次。此前整个监视器每一帧重渲。
+  // 这里的选择器把播放头折成一个低频的场景键(在场片段 id + 即将到来的预热片段 id),字符串 === 可比,
+  // 不变就不重渲。逐帧要动的只有进度条和时间码(各自是独立的小订阅者),画面本身由合成器的 rAF 画。
+  const assetById = React.useMemo(() => new Map(assets.map((asset) => [asset.id, asset])), [assets]);
+  const sceneIndex = React.useMemo<SceneIndex>(() => {
+    const present: Clip[] = [];
+    const seen = new Set<string>();
+    for (const clip of [...videoClips, ...overlayClips, ...subtitleClips, ...textOverlayClips]) {
+      if (!seen.has(clip.id)) {
+        seen.add(clip.id);
+        present.push(clip);
+      }
+    }
+    // 脱机片段可能在任何轨上(音频轨也算),一并收进来。
+    for (const track of sequence.tracks ?? []) {
+      for (const clip of track.clips ?? []) {
+        if (clip.offline_asset && !seen.has(clip.id)) {
+          seen.add(clip.id);
+          present.push(clip);
+        }
+      }
+    }
+    const upcoming = videoTracks.flatMap((track) =>
+      (track.clips ?? []).filter((clip) => clip.asset_id && assetById.get(clip.asset_id)?.kind === "video"),
+    );
+    return { present, upcoming };
+  }, [videoClips, overlayClips, subtitleClips, textOverlayClips, sequence, videoTracks, assetById]);
+  const sceneKey = useEditorStore((state) => monitorSceneKey(sceneIndex, state.playhead));
+  const [presentKey, prewarmKey] = sceneKey.split("|");
+  const presentIds = React.useMemo(() => new Set(presentKey ? presentKey.split(",") : []), [presentKey]);
+  const isPresent = (clip: Clip) => presentIds.has(clip.id);
+
+  const activeTextClips = React.useMemo(
+    () => textOverlayClips.filter((clip) => presentIds.has(clip.id)),
+    [textOverlayClips, presentIds],
+  );
+  const activeClip = videoClips.find(isPresent) ?? null;
   //: 播放头下有脱机片段(素材被删了)。合成器拿不到源,画出来的是一片黑 —— 而"一片黑"
   //: 和"这里本来就没内容"长得一模一样。达芬奇在这里画一块写着 MEDIA OFFLINE 的红屏,
   //: 就是为了让它不可能被当成正常画面。
   const offlineClip = React.useMemo(
-    () =>
-      (sequence.tracks ?? [])
-        .flatMap((track) => track.clips ?? [])
-        .find(
-          (clip) =>
-            clip.offline_asset && playhead >= clip.timeline_start && playhead < clipEnd(clip),
-        ) ?? null,
-    [sequence, playhead],
+    () => sceneIndex.present.find((clip) => clip.offline_asset && presentIds.has(clip.id)) ?? null,
+    [sceneIndex, presentIds],
   );
   
   // 改画幅:画框宽高比 + 填充模式(cover 裁剪 / contain 留黑边 / blur 模糊背景)。
@@ -157,8 +181,7 @@ export function Monitor({
   // Keep the draft until the fresh sequence lands (same anti-flicker pattern as timeline drags),
   // otherwise clearing the draft on release snaps the box back to the stale saved transform.
   const tfSettleRef = React.useRef(false);
-  const activeSubtitle =
-    subtitleClips.find((clip) => playhead >= clip.timeline_start && playhead < clipEnd(clip)) ?? null;
+  const activeSubtitle = subtitleClips.find(isPresent) ?? null;
   const activeEffects = (activeClip?.effects ?? {}) as {
     filter?: string;
     color?: Record<string, number> & { curves?: ColorCurves };
@@ -194,8 +217,8 @@ export function Monitor({
   // 上层视频轨(V2+)当前活跃的片段,按轨道 z 序。合成器把它们和 base 一起画在同一张 canvas 上;
   // 这里保留这份列表是给变换手柄用的(选中哪个元素就把手柄挂到哪个上)。
   const activeOverlayClips = React.useMemo(
-    () => overlayClips.filter((clip) => playhead >= clip.timeline_start && playhead < clipEnd(clip)),
-    [overlayClips, playhead],
+    () => overlayClips.filter((clip) => presentIds.has(clip.id)),
+    [overlayClips, presentIds],
   );
   // The selected on-screen element (base V1 or any active overlay) gets the transform handles.
   const selectedActive = React.useMemo(
@@ -203,6 +226,12 @@ export function Monitor({
     [activeClip, activeOverlayClips, selectedClipIds],
   );
   React.useEffect(() => setDraft(null), [selectedActive?.id]);
+  // 关键帧动画的花字、挂在动画片段上的变换手柄要逐帧跟播放头 —— 只有在场的片段里**真有**动画时才订阅,
+  // 否则这个选择器恒为 0,不触发重渲。
+  const animated =
+    activeTextClips.some((clip) => hasActiveKeyframes(readTransform(clip.transform))) ||
+    (selectedActive !== null && hasActiveKeyframes(readTransform(selectedActive.transform)));
+  const animationPlayhead = useEditorStore((state) => (animated ? state.playhead : 0));
   // Drop the committed draft only once the fresh sequence has propagated (armed on commit), so the
   // box never flashes back to the pre-drag transform between release and the server round-trip.
   React.useEffect(() => {
@@ -233,20 +262,7 @@ export function Monitor({
   // flashing black through its fetch/parse/first-GOP window. The id-set (not the clip objects) is the
   // stable key: it only changes when a clip enters/leaves the look-ahead window, so the array identity
   // holds across playhead ticks and the compositor's source pool doesn't churn every frame.
-  const prewarmIds = React.useMemo(() => {
-    const ids: string[] = [];
-    const horizon = playhead + PREWARM_SEC;
-    for (const track of videoTracks) {
-      for (const clip of track.clips ?? []) {
-        if (!clip.asset_id || assetById.get(clip.asset_id)?.kind !== "video") continue;
-        if (clip.timeline_start > playhead && clip.timeline_start <= horizon) ids.push(clip.id);
-      }
-    }
-    return ids;
-  }, [videoTracks, assetById, playhead]);
-  const prewarmKey = prewarmIds.join(",");
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const prewarmSet = React.useMemo(() => new Set(prewarmIds), [prewarmKey]);
+  const prewarmSet = React.useMemo(() => new Set(prewarmKey ? prewarmKey.split(",") : []), [prewarmKey]);
   const prewarmLayers = React.useMemo<CompositorLayer[]>(() => {
     const out: CompositorLayer[] = [];
     for (const track of videoTracks) {
@@ -349,8 +365,13 @@ export function Monitor({
     else void stage.requestFullscreen().catch(() => undefined);
   };
   const playToggle = () => {
-    if (!playing && totalDuration > 0 && playhead >= totalDuration) setPlayhead(0);
+    if (!playing && totalDuration > 0 && useEditorStore.getState().playhead >= totalDuration) setPlayhead(0);
     togglePlaying();
+  };
+  // 帧步进在点下去那一刻读播放头,不订阅。
+  const stepFrames = (frames: number) => {
+    const at = useEditorStore.getState().playhead + frames * frameStep;
+    setPlayhead(Math.max(0, Math.min(totalDuration, at)));
   };
   // Frame click toggles play — but not the click that just ended a transform drag.
   const onFrameClick = () => {
@@ -446,7 +467,7 @@ export function Monitor({
           {!previewBlock &&
             activeTextClips.map((clip) => {
             // 拖外框(TransformOverlay)时 draft 实时驱动,花字与手柄同步动;否则按关键帧采样。
-            const tf = draftFor(clip.id) ?? sampleTransform(readTransform(clip.transform), clipProgress(clip, playhead));
+            const tf = draftFor(clip.id) ?? sampleTransform(readTransform(clip.transform), clipProgress(clip, animationPlayhead));
             const elStyle = textStyleCss(readTextStyle((clip.effects as { text_style?: unknown } | undefined)?.text_style), tf, sequence.width);
             if (editingTextId === clip.id) {
               // 就地编辑:独立 key 重挂 + ref 一次性写入内容(无 React children),避免每帧重渲染覆盖输入。
@@ -515,7 +536,7 @@ export function Monitor({
             <div className="pointer-events-none absolute inset-0 z-[4]" onClick={(event) => event.stopPropagation()}>
               <TransformOverlay
                 frameRef={stageRef}
-                transform={draft ?? sampleTransform(readTransform(selectedActive.transform), clipProgress(selectedActive, playhead))}
+                transform={draft ?? sampleTransform(readTransform(selectedActive.transform), clipProgress(selectedActive, animationPlayhead))}
                 onChange={(tf) => {
                   tfInteractRef.current = performance.now();
                   setDraft(tf);
@@ -526,7 +547,11 @@ export function Monitor({
                   // 关键帧模式:拖拽结果写到当前进度的关键帧(已打点的属性),而不是覆盖基值。
                   onSetTransform(
                     selectedActive.id,
-                    applyTransformCommit(readTransform(selectedActive.transform), clipProgress(selectedActive, playhead), next),
+                    applyTransformCommit(
+                      readTransform(selectedActive.transform),
+                      clipProgress(selectedActive, useEditorStore.getState().playhead),
+                      next,
+                    ),
                   );
                 }}
               />
@@ -540,10 +565,7 @@ export function Monitor({
         onPointerDown={handleScrub}
         onPointerMove={(event) => event.buttons & 1 && seekFromScrub(event.clientX)}
       >
-        <div
-          className="pointer-events-none relative h-[3px] rounded-sm bg-primary after:absolute after:-right-[5px] after:top-1/2 after:h-2.5 after:w-2.5 after:-translate-y-1/2 after:rounded-full after:bg-white after:opacity-0 after:transition-opacity after:duration-100 after:content-[''] group-hover/scrub:after:opacity-100"
-          style={{ width: totalDuration > 0 ? `${(Math.min(playhead, totalDuration) / totalDuration) * 100}%` : "0%" }}
-        />
+        <ScrubFill totalDuration={totalDuration} />
       </div>
       {/* 底部行:左右缩进与画面/进度条同一刻度(12px);上下留白让按钮离面板底边有呼吸感,
           不再紧贴底边界线(pt 略小于 pb,视觉重心稍稍上抬)。 */}
@@ -552,13 +574,13 @@ export function Monitor({
           <Button variant="ghost" size="icon-sm" onClick={() => setPlayhead(0)} aria-label={t("monStart")}>
             <SkipBack size={14} />
           </Button>
-          <Button variant="ghost" size="icon-sm" onClick={() => setPlayhead(Math.max(0, playhead - frameStep))} aria-label={t("monFrameBack")}>
+          <Button variant="ghost" size="icon-sm" onClick={() => stepFrames(-1)} aria-label={t("monFrameBack")}>
             <StepBack size={14} />
           </Button>
           <Button variant="secondary" size="icon-sm" className="rounded-full! bg-white! text-[#17181a]! transition-transform duration-[120ms] hover:scale-[1.06] hover:bg-white! hover:text-[#17181a]!" onClick={playToggle} aria-label={t("playPause")}>
             {playing ? <Pause size={14} /> : <Play size={14} className="ml-px" />}
           </Button>
-          <Button variant="ghost" size="icon-sm" onClick={() => setPlayhead(Math.min(totalDuration, playhead + frameStep))} aria-label={t("monFrameForward")}>
+          <Button variant="ghost" size="icon-sm" onClick={() => stepFrames(1)} aria-label={t("monFrameForward")}>
             <StepForward size={14} />
           </Button>
           <Button variant="ghost" size="icon-sm" onClick={() => setPlayhead(totalDuration)} aria-label={t("monEnd")}>
@@ -577,10 +599,7 @@ export function Monitor({
             {playbackRate}x
           </button>
         </div>
-        <div className="timecode whitespace-nowrap text-ui-xs text-[#e8eaed]">
-          {formatTimecode(playhead)}
-          <span className="text-[#82878f]"> / {formatTimecode(totalDuration)}</span>
-        </div>
+        <MonitorTimecode totalDuration={totalDuration} />
         <div className="flex items-center gap-0.5">
           <Button variant="ghost" size="icon-sm" onClick={toggleMuted} aria-label={t("monMute")}>
             {masterMuted || volume === 0 ? <VolumeX size={14} /> : <Volume2 size={14} />}
@@ -599,6 +618,51 @@ export function Monitor({
           </Button>
         </div>
       </div>
+    </div>
+  );
+}
+
+/** 场景键要扫的片段:在场判定用 present,预热判定用 upcoming(视频素材的片段)。 */
+interface SceneIndex {
+  present: Clip[];
+  upcoming: Clip[];
+}
+
+/**
+ * 播放头下在场的片段 id + 即将到来、要预热解码器的片段 id,拼成一个字符串:`在场|预热`。
+ * 片段集合不变时它就不变 —— 监视器据此决定要不要重渲,而不是跟着播放头每帧重渲。
+ */
+export function monitorSceneKey(index: SceneIndex, playhead: number): string {
+  const present: string[] = [];
+  for (const clip of index.present) {
+    if (playhead >= clip.timeline_start && playhead < clipEnd(clip)) present.push(clip.id);
+  }
+  const upcoming: string[] = [];
+  const horizon = playhead + PREWARM_SEC;
+  for (const clip of index.upcoming) {
+    if (clip.timeline_start > playhead && clip.timeline_start <= horizon) upcoming.push(clip.id);
+  }
+  return `${present.join(",")}|${upcoming.join(",")}`;
+}
+
+/** 进度条的填充:逐帧跟播放头,所以单独成一个小订阅者,不拖着整个监视器重渲。 */
+function ScrubFill({ totalDuration }: { totalDuration: number }) {
+  const playhead = useEditorStore((state) => state.playhead);
+  return (
+    <div
+      className="pointer-events-none relative h-[3px] rounded-sm bg-primary after:absolute after:-right-[5px] after:top-1/2 after:h-2.5 after:w-2.5 after:-translate-y-1/2 after:rounded-full after:bg-white after:opacity-0 after:transition-opacity after:duration-100 after:content-[''] group-hover/scrub:after:opacity-100"
+      style={{ width: totalDuration > 0 ? `${(Math.min(playhead, totalDuration) / totalDuration) * 100}%` : "0%" }}
+    />
+  );
+}
+
+/** 时间码读数:同上,独立订阅播放头。 */
+function MonitorTimecode({ totalDuration }: { totalDuration: number }) {
+  const playhead = useEditorStore((state) => state.playhead);
+  return (
+    <div className="timecode whitespace-nowrap text-ui-xs text-[#e8eaed]">
+      {formatTimecode(playhead)}
+      <span className="text-[#82878f]"> / {formatTimecode(totalDuration)}</span>
     </div>
   );
 }

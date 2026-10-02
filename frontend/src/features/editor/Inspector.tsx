@@ -127,9 +127,19 @@ export function Inspector({
   };
   // 关键帧按属性独立成轨(AE/PR 风):每个属性有自己的关键帧点,互不绑定。滑块作用于 playhead
   // 所在的片段进度——该属性已有关键帧时写该进度点,否则改静态基值;钻石按钮在该属性上打/删点。
-  const playhead = useEditorStore((s) => s.playhead);
   const setPlayhead = useEditorStore((s) => s.setPlayhead);
-  const progress = clipProgress(selectedClip, playhead);
+  const gainKeyframeCount = Array.isArray((effects as { gain_keyframes?: unknown }).gain_keyframes)
+    ? ((effects as { gain_keyframes: unknown[] }).gain_keyframes.length)
+    : 0;
+  // **只在这一段有关键帧时才跟着播放头重渲。** 没有关键帧时显示的是基值,和播放头无关;此前无条件
+  // 订阅播放头,播放时检查器每一帧整体重渲一遍。有关键帧时显示值随进度采样、钻石按当前进度点亮,
+  // 这时才需要它 —— 进度取到千分之一,片段外夹在 0/1 不再变化。
+  // 动作(打点、写值)发生在点下去那一刻,直接读 store 里此刻的播放头(progressNow),不靠订阅。
+  const hasKeyframes = keyframes.length > 0 || gainKeyframeCount > 0;
+  const progress = useEditorStore((s) =>
+    hasKeyframes ? Math.round(clipProgress(selectedClip, s.playhead) * 1000) / 1000 : 0,
+  );
+  const progressNow = () => clipProgress(selectedClip, useEditorStore.getState().playhead);
   const clipDuration = (selectedClip.src_out - selectedClip.src_in) / (selectedClip.speed || 1);
   const commitTransform = (next: Record<string, unknown>) => {
     if (!onSetTransform) return;
@@ -137,14 +147,17 @@ export function Inspector({
   };
   const propKeyed = (prop: KfProp) => propTimes(keyframes, prop).length > 0;
   // 某属性当前显示值:有关键帧→按进度采样(随播放头动),否则基值。
-  const shownProp = (prop: KfProp): number => (propKeyed(prop) ? sampleProp(keyframes, prop, transform[prop], progress) : transform[prop]);
+  const shownProp = (prop: KfProp, at = progress): number => (propKeyed(prop) ? sampleProp(keyframes, prop, transform[prop], at) : transform[prop]);
   const shown = { scale: shownProp("scale"), rotation: shownProp("rotation"), opacity: shownProp("opacity"), x: shownProp("x"), y: shownProp("y") } as const;
   // 调某属性:该属性有关键帧则写当前进度点,否则改基值。
   const setProp = (prop: KfProp, value: number) => {
-    if (propKeyed(prop)) commitTransform({ ...transform, keyframes: upsertKeyframe(keyframes, progress, { [prop]: value }) });
+    if (propKeyed(prop)) commitTransform({ ...transform, keyframes: upsertKeyframe(keyframes, progressNow(), { [prop]: value }) });
     else commitTransform({ ...transform, [prop]: value });
   };
-  const toggleProp = (prop: KfProp) => commitTransform({ ...transform, keyframes: togglePropKeyframe(keyframes, prop, progress, shownProp(prop)) });
+  const toggleProp = (prop: KfProp) => {
+    const at = progressNow();
+    commitTransform({ ...transform, keyframes: togglePropKeyframe(keyframes, prop, at, shownProp(prop, at)) });
+  };
   const clearKeyframes = () => commitTransform({ scale: transform.scale, x: transform.x, y: transform.y, rotation: transform.rotation, opacity: transform.opacity });
   const seekToKeyframe = (t: number) => setPlayhead(selectedClip.timeline_start + t * clipDuration);
   const anyKeyframes = keyframes.length > 0;
@@ -316,7 +329,7 @@ export function Inspector({
                       defaultValue={[shownGain]}
                       disabled={selectedClip.muted}
                       onValueCommit={([value]) => {
-                        if (gainKeyed) onSetEffects(selectedClip.id, { ...selectedClip.effects, gain_keyframes: upsertGainKeyframe(gainKfs, progress, value) });
+                        if (gainKeyed) onSetEffects(selectedClip.id, { ...selectedClip.effects, gain_keyframes: upsertGainKeyframe(gainKfs, progressNow(), value) });
                         else onSetGain(selectedClip.id, value, selectedClip.muted);
                       }}
                     />
@@ -327,7 +340,11 @@ export function Inspector({
                       aria-label={onGainKf ? t("kfRemoveHere") : t("kfAddHere")}
                       disabled={selectedClip.muted}
                       className={cn("grid h-5 w-5 cursor-pointer place-items-center rounded border-0 bg-transparent disabled:cursor-default disabled:opacity-40", onGainKf ? "text-primary" : gainKeyed ? "text-muted-foreground hover:text-primary" : "text-muted-foreground/50 hover:text-primary")}
-                      onClick={() => onSetEffects(selectedClip.id, { ...selectedClip.effects, gain_keyframes: toggleGainKeyframe(gainKfs, progress, shownGain) })}
+                      onClick={() => {
+                        const at = progressNow();
+                        const value = gainKeyed ? sampleGain(gainKfs, selectedClip.gain, at) : selectedClip.gain;
+                        onSetEffects(selectedClip.id, { ...selectedClip.effects, gain_keyframes: toggleGainKeyframe(gainKfs, at, value) });
+                      }}
                     >
                       <Diamond size={11} fill={onGainKf ? "currentColor" : "none"} />
                     </button>
