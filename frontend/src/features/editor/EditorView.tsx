@@ -61,7 +61,7 @@ import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { CanvasAgentChat, type CanvasAgentMode } from "@/features/agent/CanvasAgentChat";
-import { clipEnd } from "@/domain/timeline/geometry";
+import { clipEnd, timelineToSrc } from "@/domain/timeline/geometry";
 import { projectTranscript, transcriptSegmentsFromApi, type SegmentLike } from "@/domain/timeline/transcriptProjection";
 import { transcriptSourceClips } from "@/domain/timeline/transcriptSources";
 import { type LeftTab, useEditorPanels } from "@/features/editor/useEditorPanels";
@@ -648,7 +648,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
         : all.find((item) => playhead > item.timeline_start && playhead < clipEnd(item));
       if (!clip) return;
       if (!(playhead > clip.timeline_start && playhead < clipEnd(clip))) return;
-      const srcTime = clip.src_in + (playhead - clip.timeline_start);
+      const srcTime = timelineToSrc(clip, playhead);
       splitMutation.mutate({ clipId: clip.id, srcTime });
     },
     [sequence, splitMutation],

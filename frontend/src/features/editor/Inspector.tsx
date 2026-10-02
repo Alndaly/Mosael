@@ -246,7 +246,7 @@ export function Inspector({
               {formatTimecode(selectedClip.src_in)} – {formatTimecode(selectedClip.src_out)}
             </dd>
             <dt>{t("duration")}</dt>
-            <dd className="timecode">{formatTimecode(selectedClip.src_out - selectedClip.src_in)}</dd>
+            <dd className="timecode">{formatTimecode(clipDuration)}</dd>
             <dt>{t("speed")}</dt>
             <dd className="timecode">{selectedClip.speed.toFixed(2)}x</dd>
           </dl>

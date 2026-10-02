@@ -28,6 +28,23 @@ export function clipEnd(clip: ClipLike): number {
   return clip.timeline_start + clipDuration(clip);
 }
 
+/* ---------- 时间线 ↔ 源 ----------
+ *
+ * 片段在时间线上走 1 秒,源里走 speed 秒。切分点、修剪后的 src_in/src_out、插入预览的切口、
+ * 刀片落点……凡是"时间线上这一刻对应源里哪一刻"的问题都经这一对函数 —— 此前各处手写一遍,
+ * 有的乘了 speed、有的没乘(S 键在 2 倍速片段上切错位置、修剪尾边拖到 15 实际停在 12.5),
+ * 而它们看起来都"差不多对",只有变速片段会露馅。 */
+
+/** 时间线时刻 → 这一刻播放的源时刻。 */
+export function timelineToSrc(clip: ClipLike, time: number): number {
+  return clip.src_in + (time - clip.timeline_start) * (clip.speed || 1);
+}
+
+/** 源时刻 → 它出现在时间线上的时刻。 */
+export function srcToTimeline(clip: ClipLike, srcTime: number): number {
+  return clip.timeline_start + (srcTime - clip.src_in) / (clip.speed || 1);
+}
+
 export function sequenceDuration(clips: ClipLike[]): number {
   return clips.reduce((end, clip) => Math.max(end, clipEnd(clip)), 0);
 }
@@ -179,6 +196,9 @@ export const MIN_CLIP_DURATION = 0.05;
  * Trim one edge of a clip to a new timeline time, keeping source material
  * anchored (start-trim shifts src_in with the clip; end-trim adjusts src_out).
  * assetDuration bounds src_out when known.
+ *
+ * 入参 rawTime 与 minDuration 都是**时间线**秒;换成源秒一律经 timelineToSrc,所以变速片段的
+ * 边缘停在指针所在处,头边拖动时尾部纹丝不动。
  */
 export function resolveTrim(
   clip: ClipLike,
@@ -189,23 +209,22 @@ export function resolveTrim(
 ): TrimResult {
   if (edge === "start") {
     const maxStart = clipEnd(clip) - minDuration;
-    const minStart = Math.max(0, clip.timeline_start - clip.src_in);
+    // 源 0 点在时间线上的位置:头边最多退到这里(也不能退到时间线 0 之前)。
+    const minStart = Math.max(0, srcToTimeline(clip, 0));
     const start = Math.min(Math.max(rawTime, minStart), maxStart);
-    const delta = start - clip.timeline_start;
     return {
       timeline_start: start,
-      src_in: clip.src_in + delta,
+      src_in: Math.max(0, timelineToSrc(clip, start)),
       src_out: clip.src_out,
     };
   }
   const minEnd = clip.timeline_start + minDuration;
-  const maxEnd =
-    assetDuration != null ? clip.timeline_start + (assetDuration - clip.src_in) : Number.POSITIVE_INFINITY;
+  const maxEnd = assetDuration != null ? srcToTimeline(clip, assetDuration) : Number.POSITIVE_INFINITY;
   const end = Math.min(Math.max(rawTime, minEnd), maxEnd);
   return {
     timeline_start: clip.timeline_start,
     src_in: clip.src_in,
-    src_out: clip.src_in + (end - clip.timeline_start),
+    src_out: assetDuration != null ? Math.min(assetDuration, timelineToSrc(clip, end)) : timelineToSrc(clip, end),
   };
 }
 

@@ -10,6 +10,7 @@ import { KbdGroup } from "@/components/ui/kbd";
 import { Popover, PopoverClose, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
+  clipDuration,
   clipEnd,
   formatRulerLabel,
   pxToTime,
@@ -19,6 +20,7 @@ import {
   sequenceDuration,
   snapTimeTiered,
   timeToPx,
+  timelineToSrc,
   trackEdgeTimes,
 } from "@/domain/timeline/geometry";
 import { formatTimecode } from "@/lib/time";
@@ -278,7 +280,7 @@ export function Timeline({
   const dragMoveDuration = React.useMemo(() => {
     if (!dragDraft || dragDraft.kind !== "move") return 0;
     const src = allClips.find((item) => item.id === dragDraft.clipId);
-    return src ? (dragDraft.src_out - dragDraft.src_in) / (src.speed || 1) : 0;
+    return src ? clipDuration({ ...src, src_in: dragDraft.src_in, src_out: dragDraft.src_out }) : 0;
   }, [dragDraft, allClips]);
 
   // Insert-mode ripple preview: downstream clips on the target track part only by
@@ -295,15 +297,11 @@ export function Timeline({
     );
     const MIN_CUT_REMAINDER = 0.05; // 与后端同值(src 秒)
     let split: { clipId: string; cutSrc: number; tailDuration: number } | null = null;
-    const straddler = others.find((c) => {
-      const span = (c.src_out - c.src_in) / (c.speed || 1);
-      return c.timeline_start < start - 1e-9 && c.timeline_start + span > start + 1e-9;
-    });
+    const straddler = others.find((c) => c.timeline_start < start - 1e-9 && clipEnd(c) > start + 1e-9);
     if (straddler) {
-      const speed = straddler.speed || 1;
-      const cutSrc = straddler.src_in + (start - straddler.timeline_start) * speed;
+      const cutSrc = timelineToSrc(straddler, start);
       if (straddler.src_in + MIN_CUT_REMAINDER < cutSrc && cutSrc < straddler.src_out - MIN_CUT_REMAINDER) {
-        split = { clipId: straddler.id, cutSrc, tailDuration: (straddler.src_out - cutSrc) / speed };
+        split = { clipId: straddler.id, cutSrc, tailDuration: clipEnd(straddler) - start };
       }
     }
     // 切出的尾段落在落点上,和既有下游片段一起按同一重叠量右移(间距保留)。
@@ -444,9 +442,7 @@ export function Timeline({
     if (tool === "blade") {
       // Blade (B): one click cuts the clip right where you clicked.
       if (onSplitClipAt) {
-        const clickTime = timeAtPointer(event);
-        const srcTime = clip.src_in + (clickTime - clip.timeline_start) * (clip.speed || 1);
-        onSplitClipAt(clip.id, srcTime);
+        onSplitClipAt(clip.id, timelineToSrc(clip, timeAtPointer(event)));
       }
       return;
     }

@@ -14,6 +14,8 @@ import {
   snapCandidates,
   snapTime,
   snapTimeTiered,
+  srcToTimeline,
+  timelineToSrc,
   timeToPx,
   trackEdgeTimes,
 } from "./geometry";
@@ -161,6 +163,41 @@ describe("resolveTrim", () => {
   it("end-trim is unbounded when assetDuration is null (images have no fixed length)", () => {
     // A still image can be stretched to any length — no source-duration ceiling.
     expect(resolveTrim(base, "end", 20, null)).toEqual({ timeline_start: 4, src_in: 1, src_out: 17 });
+  });
+});
+
+describe("时间线 ↔ 源时间按速度换算", () => {
+  // 2 倍速:时间线上 10s 长,源里 20s。
+  const fast = { id: "f", timeline_start: 10, src_in: 4, src_out: 24, speed: 2 };
+
+  it("时间线上走 1 秒,源里走 speed 秒", () => {
+    expect(timelineToSrc(fast, 12)).toBe(8);
+    expect(srcToTimeline(fast, 8)).toBe(12);
+    expect(srcToTimeline(fast, timelineToSrc(fast, 17.5))).toBeCloseTo(17.5);
+  });
+
+  it("尾边拖到哪,片段就结束在哪(2 倍速不再缩一半)", () => {
+    const result = resolveTrim(fast, "end", 15);
+    expect(result.timeline_start + clipDuration({ ...fast, ...result })).toBeCloseTo(15);
+    expect(result.src_out).toBeCloseTo(14);
+  });
+
+  it("头边拖动时尾部不动", () => {
+    const result = resolveTrim(fast, "start", 12);
+    expect(result.timeline_start).toBe(12);
+    expect(result.src_in).toBeCloseTo(8);
+    expect(result.timeline_start + clipDuration({ ...fast, ...result })).toBeCloseTo(clipEnd(fast));
+  });
+
+  it("头边最多退到源 0 点:2 倍速下源前面的 4 秒只占时间线 2 秒", () => {
+    expect(resolveTrim(fast, "start", 0)).toEqual({ timeline_start: 8, src_in: 0, src_out: 24 });
+  });
+
+  it("尾边的素材上限按速度折算到时间线", () => {
+    // 素材 30s:源里还剩 6s,时间线上只能再长 3s。
+    const result = resolveTrim(fast, "end", 100, 30);
+    expect(result.src_out).toBe(30);
+    expect(result.timeline_start + clipDuration({ ...fast, ...result })).toBeCloseTo(23);
   });
 });
 
