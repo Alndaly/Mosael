@@ -9,6 +9,14 @@ export function getAsset(assetId: string): Promise<Asset> {
   return api<Asset>(`/api/assets/${assetId}`);
 }
 
+export type AssetLineage = components["schemas"]["AssetLineageOut"];
+export type AssetLineageNode = components["schemas"]["AssetLineageNode"];
+
+/** 这份素材的来源链:从哪几份、经过什么操作做出来的,一级一级往上(出处被删了的 name 是 null)。 */
+export function getAssetLineage(assetId: string): Promise<AssetLineage> {
+  return api<AssetLineage>(`/api/assets/${assetId}/lineage`);
+}
+
 export type RemoteEntry = components["schemas"]["RemoteEntryOut"];
 
 export type UrlProbe = components["schemas"]["UrlProbeResponse"];

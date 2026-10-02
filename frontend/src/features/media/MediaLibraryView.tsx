@@ -27,6 +27,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { EmptyState } from "@/components/layout/EmptyState";
 import { useRecorder } from "@/features/media/recordingContext";
 import { AssetPreviewModal } from "@/features/media/AssetPreviewModal";
+import { assetOriginKey, showsContainsAi } from "@/features/media/assetOrigin";
 import { useImportMediaFiles } from "@/features/media/useImportMediaFiles";
 import { TagFilter } from "@/components/app/TagFilter";
 import { SetAsReferenceDialog } from "@/features/entities/AssetEntities";
@@ -593,7 +594,10 @@ function AssetTile({ asset, selected = false, list = false }: { asset: Asset; se
         </strong>
         <div className="flex items-center gap-1.5">
           <span className="text-ui-xs text-muted-foreground">{t(assetKindKey(asset.kind))}</span>
-          <small className="text-ui-xs text-muted-foreground">{asset.source === "generated" ? t("mediaSourceGenerated") : asset.source === "exported" ? t("mediaSourceExported") : t("mediaSourceImported")}</small>
+          <small className="text-ui-xs text-muted-foreground">
+            {t(assetOriginKey(asset))}
+            {showsContainsAi(asset) ? ` · ${t("mediaSourceContainsAi")}` : ""}
+          </small>
         </div>
         <span className="truncate font-mono text-ui-xs tabular-nums text-muted-foreground">
           {asset.kind === "document" ? documentFacts(asset) : width ? `${width}×${asset.media_info.height}` : "—"}

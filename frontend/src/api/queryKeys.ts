@@ -36,6 +36,8 @@ export const assetKeys = {
    * 此前这份数据散在 `asset` / `agent-asset` / `note-source` 三个键族里,哪个都不会被失效。
    */
   detail: (assetId: string) => ["assets", "detail", assetId] as const,
+  /** 取数用:一份素材的来源链。和 detail 一样挂在 `everywhere()` 下 —— 删了出处,链上那一级要跟着变。 */
+  lineage: (assetId: string) => ["assets", "lineage", assetId] as const,
 };
 
 /**
