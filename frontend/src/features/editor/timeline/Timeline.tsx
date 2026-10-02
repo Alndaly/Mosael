@@ -5,6 +5,7 @@ import { AudioLines, BetweenHorizontalStart, Camera, ChevronDown, ChevronUp, Cir
 import { fetchWaveform, type Asset, type Clip, type Sequence, type Track, type TrackStatePatch, type WaveformData } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { KbdGroup } from "@/components/ui/kbd";
 import { Popover, PopoverClose, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -30,6 +31,26 @@ import { useDndMonitor, useDroppable } from "@dnd-kit/core";
 
 const TRACK_HEIGHT = 48;
 const RULER_HEIGHT = 26;
+
+/**
+ * 时间线只画视口里(含两侧缓冲)的片段与刻度。
+ *
+ * 一小时的访谈切成几千段、或者放到 240px/s,此前每一段、每一根刻度都在 DOM 里(1 小时 240px/s 的
+ * 标尺是 28801 个 div),拖一下、点一下都要整树协调几百毫秒。缓冲取「至少一屏」:横向滚半个缓冲以内
+ * 不重算窗口,滚得再远才换一批 —— 滚动本身不触发 React。
+ */
+const VIRTUAL_MIN_BUFFER_PX = 600;
+/** 视口还没量到(首帧、测试环境)时按这个宽度开窗,而不是退回全量渲染。 */
+const FALLBACK_VIEWPORT_PX = 1600;
+
+/** 回调身份恒定、调用时总读到最新闭包 —— memo 过的片段拿它当手柄,不会因为父组件重渲而失效。 */
+function useStableHandler<A extends unknown[], R>(fn: (...args: A) => R): (...args: A) => R {
+  const ref = React.useRef(fn);
+  React.useLayoutEffect(() => {
+    ref.current = fn;
+  });
+  return React.useCallback((...args: A) => ref.current(...args), []);
+}
 
 // Peaks are expensive (slice + downsample over the whole waveform) and were recomputed for
 // EVERY audio clip on EVERY dragDraft change — the drag felt laggy. Cache by the inputs that
@@ -129,6 +150,32 @@ export function Timeline({
   const [helpOpen, setHelpOpen] = React.useState(false);
   // True while dragging a video clip above the top track — drop creates a new layer.
   const [newLayerDrag, setNewLayerDrag] = React.useState(false);
+  // 视口(横向滚动位置 + 可见宽度,px)。只在滚出半个缓冲时才写 state,见 VIRTUAL_MIN_BUFFER_PX。
+  const [viewport, setViewport] = React.useState<{ left: number; width: number }>({ left: 0, width: 0 });
+  React.useLayoutEffect(() => {
+    const el = hscrollRef.current;
+    if (!el) return;
+    let raf = 0;
+    const measure = () => {
+      raf = 0;
+      const left = el.scrollLeft;
+      const width = el.clientWidth;
+      const slack = Math.max(VIRTUAL_MIN_BUFFER_PX, width) / 2;
+      setViewport((prev) => (prev.width === width && Math.abs(prev.left - left) < slack ? prev : { left, width }));
+    };
+    const schedule = () => {
+      if (!raf) raf = requestAnimationFrame(measure);
+    };
+    measure();
+    el.addEventListener("scroll", schedule, { passive: true });
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(schedule);
+    observer?.observe(el);
+    return () => {
+      el.removeEventListener("scroll", schedule);
+      observer?.disconnect();
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, []);
 
   // Follow the playhead during playback: page-scroll the timeline so the cursor stays in view
   // (like Premiere/DaVinci). Subscribes to the store directly so the Timeline doesn't re-render
@@ -295,7 +342,13 @@ export function Timeline({
     const fitPx = viewport > 0 ? Math.max(MIN_PX_PER_SECOND, (viewport - 130) / Math.max(duration, 1)) : MIN_PX_PER_SECOND;
     setPxPerSecond(Math.max(fitPx, pxPerSecond * factor));
   };
-  const ticks = rulerTicks(0, duration, pxPerSecond);
+  // 视口换算成时间窗:片段与刻度只画落在 [windowStart, windowEnd] 里的。
+  const viewportWidth = viewport.width || FALLBACK_VIEWPORT_PX;
+  const bufferPx = Math.max(VIRTUAL_MIN_BUFFER_PX, viewportWidth);
+  const windowStart = Math.max(0, pxToTime(viewport.left - bufferPx, pxPerSecond));
+  const windowEnd = pxToTime(viewport.left + viewportWidth + bufferPx, pxPerSecond);
+  const ticks = rulerTicks(windowStart, Math.min(duration, windowEnd), pxPerSecond);
+  const inWindow = (start: number, end: number) => end >= windowStart && start <= windowEnd;
 
   const timeAtPointer = (event: { clientX: number }): number => {
     const rect = canvasRef.current?.getBoundingClientRect();
@@ -548,6 +601,37 @@ export function Timeline({
     target.addEventListener("pointermove", onMove);
     target.addEventListener("pointerup", onUp);
   };
+
+  // 给 memo 过的片段的手柄:身份恒定,按 (trackId, clipId) 找回此刻的轨道再分派。
+  const handleClipPointerDown = useStableHandler((event: React.PointerEvent, trackId: string, clipId: string) => {
+    const track = tracks.find((item) => item.id === trackId);
+    if (track) startClipDrag(event, track, clipId);
+  });
+  const handleClipTrimPointerDown = useStableHandler(
+    (event: React.PointerEvent, trackId: string, clipId: string, edge: "start" | "end") => {
+      const track = tracks.find((item) => item.id === trackId);
+      if (track) startClipTrim(event, track, clipId, edge);
+    },
+  );
+  const handleClipSelect = React.useCallback((clipId: string) => {
+    if (!useEditorStore.getState().selectedClipIds.includes(clipId)) useEditorStore.getState().selectClip(clipId);
+  }, []);
+
+  // 右键菜单是**一个**单例:右键时按事件目标认出是哪一段,再按那一段生成菜单项。此前每段各包一棵
+  // Radix ContextMenu,几千段就是几千棵,拖动时每棵都跟着协调。点在空白处(不是片段)不开菜单。
+  const [menuClipId, setMenuClipId] = React.useState<string | null>(null);
+  const handleCanvasContextMenu = (event: React.MouseEvent) => {
+    const clipId = (event.target as HTMLElement).closest<HTMLElement>("[data-clip-id]")?.dataset.clipId;
+    if (!clipId || !onDeleteClips) {
+      // 先于 Radix 的处理器拦下:它看到 defaultPrevented 就不开菜单。
+      event.preventDefault();
+      return;
+    }
+    handleClipSelect(clipId);
+    setMenuClipId(clipId);
+  };
+  const menuClip = menuClipId ? allClips.find((item) => item.id === menuClipId) : undefined;
+  const menuTrack = menuClip ? tracks.find((track) => (track.clips ?? []).some((c) => c.id === menuClip.id)) : undefined;
 
   // 素材拖入落点的指针 X:直接取实时指针的视口 clientX(与标尺/框选/移动片段同一套),
   // 而不是 dnd-kit 的 activatorEvent.clientX + event.delta.x。delta 里已含 dnd-kit 对滚动容器
@@ -942,7 +1026,9 @@ export function Timeline({
             if (labelsRef.current) labelsRef.current.scrollTop = event.currentTarget.scrollTop;
           }}
         >
-          <div className="relative min-w-full" ref={canvasRef} style={{ width: contentWidth }}>
+          <ContextMenu>
+          <ContextMenuTrigger asChild>
+          <div className="relative min-w-full" ref={canvasRef} style={{ width: contentWidth }} onContextMenu={handleCanvasContextMenu}>
             <div
               className="workspace-sticky sticky top-0 z-[5] cursor-ew-resize touch-none overflow-hidden border-b border-border bg-[var(--ruler-bg)]"
               style={{ height: RULER_HEIGHT }}
@@ -1005,9 +1091,6 @@ export function Timeline({
                           width={Math.max(10, timeToPx((at.src_out - at.src_in) / (source.speed || 1), pxPerSecond))}
                           selected
                           dragging
-                          onPointerDown={() => undefined}
-                          onTrimPointerDown={() => undefined}
-                          onSelect={() => undefined}
                         />
                       );
                     })}
@@ -1015,6 +1098,12 @@ export function Timeline({
                   const at = draftByClip.get(clip.id);
                   // 已被拖到别的轨:本轨不画(目标轨的草稿本体负责显示)。
                   if (at && at.trackId !== track.id) return null;
+                  // 视口外的不画。正在拖/裁的那几段例外:它们的指针监听挂在自己身上(裁剪手柄),
+                  // 卸载会掐断手势;插入预览里被挤开的下游可能从左边被推进视口,窗口按位移放宽。
+                  if (!at) {
+                    const reach = insertRipple?.trackId === track.id ? insertRipple.shift : 0;
+                    if (!inWindow(clip.timeline_start, clipEnd(clip) + reach)) return null;
+                  }
                   const draft = at ?? null;
                   const display = draft ?? clip;
                   // Insert-mode preview: clips at/after the drop point slide right by the
@@ -1052,6 +1141,8 @@ export function Timeline({
                   return (
                     <TimelineClip
                       key={clip.id}
+                      clipId={clip.id}
+                      trackId={track.id}
                       trackKind={track.kind}
                       offline={Boolean(clip.offline_asset)}
                       // 脱机片段显示**它原来的**素材名 —— 那是用户唯一能拿来对回去的线索。
@@ -1070,23 +1161,9 @@ export function Timeline({
                       selected={selectedClipIds.includes(clip.id)}
                       dragging={Boolean(draft)}
                       peaks={peaks}
-                      onPointerDown={(event) => startClipDrag(event, track, clip.id)}
-                      onTrimPointerDown={(event, edge) => startClipTrim(event, track, clip.id, edge)}
-                      onSelect={() => {
-                        if (!useEditorStore.getState().selectedClipIds.includes(clip.id)) selectClip(clip.id);
-                      }}
-                      onDelete={onDeleteClips ? () => onDeleteClips(menuTargets(clip.id)) : undefined}
-                      onRippleDelete={onRippleDeleteClips ? () => onRippleDeleteClips(menuTargets(clip.id)) : undefined}
-                      onSplit={onSplitClip ? () => onSplitClip(clip.id) : undefined}
-                      onDuplicate={onDuplicateClip && clip.asset_id ? () => onDuplicateClip(clip.id) : undefined}
-                      // 按**素材类型**给,不按轨道:视频轨上完全可以放图片(AI 生成的静图就是这么
-                      // 落上去的),而图片没有声音。「人声分离」「降噪」处理的是整份素材、产出进
-                      // 素材库,所以在素材池 / 素材库的菜单里,不在片段菜单里。
-                      onDetachAudio={
-                        onDetachAudio && track.kind === "video" && clip.asset_id && clip.asset_kind === "video"
-                          ? () => onDetachAudio(clip.id)
-                          : undefined
-                      }
+                      onClipPointerDown={handleClipPointerDown}
+                      onClipTrimPointerDown={handleClipTrimPointerDown}
+                      onClipSelect={handleClipSelect}
                     />
                   );
                 })}
@@ -1116,9 +1193,6 @@ export function Timeline({
                         selected={false}
                         dragging={false}
                         peaks={peaks}
-                        onPointerDown={() => undefined}
-                        onTrimPointerDown={() => undefined}
-                        onSelect={() => undefined}
                       />
                     );
                   })()}
@@ -1162,6 +1236,41 @@ export function Timeline({
               <div className="absolute left-[-4px] top-0 h-2.5 w-[9px] bg-[var(--playhead)] [clip-path:polygon(0_0,100%_0,100%_55%,50%_100%,0_55%)]" />
             </TimelinePlayhead>
           </div>
+          </ContextMenuTrigger>
+          {menuClip && (
+            <ContextMenuContent>
+              {onSplitClip && (
+                <ContextMenuItem onSelect={() => onSplitClip(menuClip.id)}>
+                  <Scissors /> {t("splitAtPlayhead")}
+                </ContextMenuItem>
+              )}
+              {onDuplicateClip && menuClip.asset_id && (
+                <ContextMenuItem onSelect={() => onDuplicateClip(menuClip.id)}>
+                  <Copy /> {t("duplicateClip")}
+                </ContextMenuItem>
+              )}
+              {/* 按**素材类型**给,不按轨道:视频轨上完全可以放图片(AI 生成的静图就是这么落上去的),
+                  而图片没有声音。「人声分离」「降噪」处理的是整份素材、产出进素材库,所以在素材池 /
+                  素材库的菜单里,不在片段菜单里。 */}
+              {onDetachAudio && menuTrack?.kind === "video" && menuClip.asset_id && menuClip.asset_kind === "video" && (
+                <ContextMenuItem onSelect={() => onDetachAudio(menuClip.id)}>
+                  <AudioLines /> {t("detachAudio")}
+                </ContextMenuItem>
+              )}
+              <ContextMenuSeparator />
+              {onDeleteClips && (
+                <ContextMenuItem className="text-destructive focus:text-destructive" onSelect={() => onDeleteClips(menuTargets(menuClip.id))}>
+                  <Trash2 /> {t("deleteClip")}
+                </ContextMenuItem>
+              )}
+              {onRippleDeleteClips && (
+                <ContextMenuItem className="text-destructive focus:text-destructive" onSelect={() => onRippleDeleteClips(menuTargets(menuClip.id))}>
+                  <Waves /> {t("rippleDelete")}
+                </ContextMenuItem>
+              )}
+            </ContextMenuContent>
+          )}
+          </ContextMenu>
         </div>
       </div>
       <div className="flex min-h-7 flex-wrap items-center justify-between gap-x-4 border-t border-divider px-3 py-1">

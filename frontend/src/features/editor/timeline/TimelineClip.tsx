@@ -1,12 +1,22 @@
 import React from "react";
-import { AudioLines, Copy, Scissors, Trash2, Unlink, Waves } from "lucide-react";
+import { Unlink } from "lucide-react";
 
 import { useI18n } from "@/app/preferences";
-import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { waveformPolygonPoints } from "@/domain/timeline/waveform";
 import { cn } from "@/lib/utils";
 
-export function TimelineClip({
+/**
+ * 时间线上的一段。
+ *
+ * **memo + 只收稳定的回调**:拖一段时 Timeline 每个 pointermove 都重渲,此前每段都带着现捏的闭包
+ * 和自己的一棵右键菜单,三千段的时间线拖一下要两百多毫秒。现在回调以 (trackId, clipId) 为参数、
+ * 身份恒定,没变的片段整段跳过;右键菜单是 Timeline 里的**一个**单例,按 `data-clip-id` 认目标。
+ *
+ * 不传 clipId 的是「幽灵」(跨轨拖动的草稿本体、插入预览切出的尾段):只画,不接事件、不进菜单。
+ */
+export const TimelineClip = React.memo(function TimelineClip({
+  clipId,
+  trackId = "",
   trackKind,
   name,
   offline = false,
@@ -17,15 +27,12 @@ export function TimelineClip({
   selected,
   dragging,
   peaks,
-  onPointerDown,
-  onTrimPointerDown,
-  onSelect,
-  onDelete,
-  onRippleDelete,
-  onSplit,
-  onDuplicate,
-  onDetachAudio,
+  onClipPointerDown,
+  onClipTrimPointerDown,
+  onClipSelect,
 }: {
+  clipId?: string;
+  trackId?: string;
   trackKind: string;
   name: string;
   /** 素材已被删除:片段留在原位,但没有画面可放。达芬奇的「媒体脱机」。 */
@@ -39,14 +46,9 @@ export function TimelineClip({
   selected: boolean;
   dragging: boolean;
   peaks?: number[];
-  onPointerDown: (event: React.PointerEvent) => void;
-  onTrimPointerDown: (event: React.PointerEvent, edge: "start" | "end") => void;
-  onSelect: () => void;
-  onDelete?: () => void;
-  onRippleDelete?: () => void;
-  onSplit?: () => void;
-  onDuplicate?: () => void;
-  onDetachAudio?: () => void;
+  onClipPointerDown?: (event: React.PointerEvent, trackId: string, clipId: string) => void;
+  onClipTrimPointerDown?: (event: React.PointerEvent, trackId: string, clipId: string, edge: "start" | "end") => void;
+  onClipSelect?: (clipId: string) => void;
 }) {
   const t = useI18n();
   const className = cn(
@@ -68,9 +70,10 @@ export function TimelineClip({
       "border-destructive/70 bg-[repeating-linear-gradient(135deg,color-mix(in_srgb,var(--destructive)_26%,transparent)_0_6px,transparent_6px_12px)] text-foreground",
   );
 
-  const clip = (
+  return (
     <div
       className={className}
+      data-clip-id={clipId}
       style={{
         left,
         width,
@@ -81,11 +84,10 @@ export function TimelineClip({
         willChange: dragging ? "transform" : undefined,
       }}
       onPointerDown={(event) => {
-        if (event.button !== 0) return;
-        onSelect();
-        onPointerDown(event);
+        if (event.button !== 0 || !clipId) return;
+        onClipSelect?.(clipId);
+        onClipPointerDown?.(event, trackId, clipId);
       }}
-      onContextMenu={onSelect}
       data-selected={selected || undefined}
       role="button"
       tabIndex={-1}
@@ -99,7 +101,7 @@ export function TimelineClip({
       <span
         className="absolute bottom-0 top-0 z-[2] w-2.5 cursor-ew-resize touch-none bg-[color-mix(in_srgb,currentColor_22%,transparent)] opacity-0 transition-opacity duration-100 after:absolute after:top-1/2 after:h-3 after:w-0.5 after:-translate-y-1/2 after:rounded-full after:bg-current after:opacity-75 after:content-[''] group-hover/clip:opacity-100 group-data-[selected]/clip:opacity-100 [[data-tool=blade]_&]:hidden left-0 rounded-l-md after:left-[3px]"
         onPointerDown={(event) => {
-          if (event.button === 0) onTrimPointerDown(event, "start");
+          if (event.button === 0 && clipId) onClipTrimPointerDown?.(event, trackId, clipId, "start");
         }}
       />
       <span className="pointer-events-none relative z-[1] flex min-w-0 flex-1 items-center gap-1 px-1.5 text-ui-xs font-semibold">
@@ -109,42 +111,9 @@ export function TimelineClip({
       <span
         className="absolute bottom-0 top-0 z-[2] w-2.5 cursor-ew-resize touch-none bg-[color-mix(in_srgb,currentColor_22%,transparent)] opacity-0 transition-opacity duration-100 after:absolute after:top-1/2 after:h-3 after:w-0.5 after:-translate-y-1/2 after:rounded-full after:bg-current after:opacity-75 after:content-[''] group-hover/clip:opacity-100 group-data-[selected]/clip:opacity-100 [[data-tool=blade]_&]:hidden right-0 rounded-r-md after:right-[3px]"
         onPointerDown={(event) => {
-          if (event.button === 0) onTrimPointerDown(event, "end");
+          if (event.button === 0 && clipId) onClipTrimPointerDown?.(event, trackId, clipId, "end");
         }}
       />
     </div>
   );
-
-  if (!onDelete) return clip;
-  return (
-    <ContextMenu>
-      <ContextMenuTrigger asChild>{clip}</ContextMenuTrigger>
-      <ContextMenuContent>
-        {onSplit && (
-          <ContextMenuItem onSelect={onSplit}>
-            <Scissors /> {t("splitAtPlayhead")}
-          </ContextMenuItem>
-        )}
-        {onDuplicate && (
-          <ContextMenuItem onSelect={onDuplicate}>
-            <Copy /> {t("duplicateClip")}
-          </ContextMenuItem>
-        )}
-        {onDetachAudio && (
-          <ContextMenuItem onSelect={onDetachAudio}>
-            <AudioLines /> {t("detachAudio")}
-          </ContextMenuItem>
-        )}
-        <ContextMenuSeparator />
-        <ContextMenuItem className="text-destructive focus:text-destructive" onSelect={onDelete}>
-          <Trash2 /> {t("deleteClip")}
-        </ContextMenuItem>
-        {onRippleDelete && (
-          <ContextMenuItem className="text-destructive focus:text-destructive" onSelect={onRippleDelete}>
-            <Waves /> {t("rippleDelete")}
-          </ContextMenuItem>
-        )}
-      </ContextMenuContent>
-    </ContextMenu>
-  );
-}
+});
