@@ -67,3 +67,46 @@ describe("剪辑台的选区", () => {
     expect(Object.keys(useEditorStore.getState())).not.toContain("selectedClipId");
   });
 });
+
+describe("J / K / L 变速穿梭", () => {
+  beforeEach(() => {
+    useEditorStore.setState({ playing: false, playbackRate: 1 });
+  });
+
+  it("L 正向播放,再按一次倍速翻倍,封顶 8 倍", () => {
+    const { shuttle } = useEditorStore.getState();
+    shuttle(1);
+    expect(useEditorStore.getState()).toMatchObject({ playing: true, playbackRate: 1 });
+    shuttle(1);
+    expect(useEditorStore.getState().playbackRate).toBe(2);
+    shuttle(1);
+    shuttle(1);
+    shuttle(1);
+    expect(useEditorStore.getState().playbackRate).toBe(8);
+  });
+
+  it("J 倒放;正向播放中按 J 直接转成 1 倍倒放", () => {
+    const { shuttle } = useEditorStore.getState();
+    shuttle(1);
+    shuttle(1);
+    shuttle(-1);
+    expect(useEditorStore.getState()).toMatchObject({ playing: true, playbackRate: -1 });
+    shuttle(-1);
+    expect(useEditorStore.getState().playbackRate).toBe(-2);
+  });
+
+  it("K 停下,倍速回到 1:之后按空格是正常播放,不会接着倒放", () => {
+    const { shuttle } = useEditorStore.getState();
+    shuttle(-1);
+    shuttle(0);
+    expect(useEditorStore.getState()).toMatchObject({ playing: false, playbackRate: 1 });
+  });
+
+  it("倒放中按空格停下,再按空格是正向播放", () => {
+    const store = useEditorStore.getState();
+    store.shuttle(-1);
+    store.togglePlaying();
+    store.togglePlaying();
+    expect(useEditorStore.getState()).toMatchObject({ playing: true, playbackRate: 1 });
+  });
+});

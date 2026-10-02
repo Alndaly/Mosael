@@ -87,7 +87,9 @@ export function WebAudioMixer({
       const state = useEditorStore.getState();
       if (!hasSession) return state.playhead;
       const elapsed = Math.max(-MAX_EXTRAPOLATE_SEC, Math.min(MAX_EXTRAPOLATE_SEC, contextNow() - lastCtx));
-      let value = Math.max(reported, lastSet + elapsed * state.playbackRate);
+      const projected = lastSet + elapsed * state.playbackRate;
+      // 「只进不退」按播放方向算:倒放(J)时只退不进,而且不越过 0。
+      let value = state.playbackRate < 0 ? Math.max(0, Math.min(reported, projected)) : Math.max(reported, projected);
       const total = totalRef.current;
       if (total > 0) value = Math.min(value, total);
       reported = value;
@@ -107,10 +109,13 @@ export function WebAudioMixer({
       }
       if (ctx.state === "suspended") void ctx.resume();
 
+      // 倒放(J)只走播放头、不出声:声部从代理里按块正着排,放不了反向,硬排只会正着响。
+      const reverse = rate < 0;
       if (!hasSession) {
         anchor(state.playhead);
         hasSession = true;
-        voices.play(sourcesRef.current, ctx.currentTime, mix(state.playhead));
+        if (reverse) voices.stopAll();
+        else voices.play(sourcesRef.current, ctx.currentTime, mix(state.playhead));
         return;
       }
 
@@ -118,7 +123,7 @@ export function WebAudioMixer({
       if (Math.abs(state.playhead - lastSet) > SEEK_EPSILON) {
         anchor(state.playhead);
         voices.stopAll();
-        voices.play(sourcesRef.current, ctx.currentTime, mix(state.playhead));
+        if (!reverse) voices.play(sourcesRef.current, ctx.currentTime, mix(state.playhead));
         return;
       }
 
@@ -126,6 +131,19 @@ export function WebAudioMixer({
       lastCtx = ctx.currentTime;
       lastTickPerf = performance.now();
       let next = lastSet + dt * rate;
+      if (reverse) {
+        voices.stopAll();
+        if (next <= 0) {
+          // 倒放到头:停在 0,和正向放到结尾停住一个道理。
+          state.setPlayhead(0);
+          state.setPlaying(false);
+          hasSession = false;
+          return;
+        }
+        state.setPlayhead(next);
+        lastSet = next;
+        return;
+      }
       const total = totalRef.current;
       if (total > 0 && next >= total) {
         if (loop) {

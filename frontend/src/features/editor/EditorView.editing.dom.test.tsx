@@ -414,3 +414,28 @@ describe("复制 / 粘贴 / ⌘D 走后端深拷贝", () => {
     expect(mocks.duplicateClips).not.toHaveBeenCalled();
   });
 });
+
+describe("播放:J / K / L 与空格", () => {
+  const seq = () => sequenceWith([track("v1", "video", 0, [clip("c1", "v1", 0, 0, 10)])]);
+
+  it("L 播放、再按加速,J 倒放,K 停", async () => {
+    renderEditor(seq());
+    await ready();
+    press("l");
+    expect(useEditorStore.getState()).toMatchObject({ playing: true, playbackRate: 1 });
+    press("l");
+    expect(useEditorStore.getState().playbackRate).toBe(2);
+    press("j");
+    expect(useEditorStore.getState()).toMatchObject({ playing: true, playbackRate: -1 });
+    press("k");
+    expect(useEditorStore.getState()).toMatchObject({ playing: false, playbackRate: 1 });
+  });
+
+  it("停在结尾按空格:从头播,而不是原地不动", async () => {
+    renderEditor(seq());
+    await ready();
+    act(() => useEditorStore.getState().setPlayhead(10));
+    press(" ", { code: "Space" });
+    expect(useEditorStore.getState()).toMatchObject({ playing: true, playhead: 0 });
+  });
+});

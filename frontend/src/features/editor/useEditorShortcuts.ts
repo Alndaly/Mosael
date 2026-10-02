@@ -1,7 +1,7 @@
 import React from "react";
 
 import type { Sequence } from "@/api/client";
-import { frameAt, frameTime } from "@/domain/timeline/geometry";
+import { frameAt, frameTime, sequenceDuration } from "@/domain/timeline/geometry";
 import { isEditorKeyTarget } from "@/features/editor/editorKeys";
 import { useEditorStore } from "@/features/editor/editorStore";
 import { leaveClipboardToSystem, listenKeys } from "@/lib/shortcuts";
@@ -75,7 +75,13 @@ export function useEditorShortcuts(
         store.setTool("blade");
       } else if (event.code === "Space") {
         event.preventDefault();
+        // 停在结尾按空格:从头播。不然播放头原地一动不动,看着像空格失灵。
+        const total = current ? sequenceDuration((current.tracks ?? []).flatMap((track) => track.clips ?? [])) : 0;
+        if (!store.playing && total > 0 && store.playhead >= total - 1e-6) store.setPlayhead(0);
         store.togglePlaying();
+      } else if (!mod && (key === "j" || key === "k" || key === "l")) {
+        event.preventDefault();
+        store.shuttle(key === "j" ? -1 : key === "l" ? 1 : 0);
       } else if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
         event.preventDefault();
         // 按帧号加减,不把 1/fps 一次次浮点累加(累加会漂到两帧之间)。

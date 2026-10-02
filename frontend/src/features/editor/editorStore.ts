@@ -63,6 +63,8 @@ interface EditorState {
   setPlayhead: (time: number) => void;
   setPlaying: (playing: boolean) => void;
   togglePlaying: () => void;
+  /** J / K / L 穿梭:1 = L(正向,再按加速),-1 = J(倒放,再按加速),0 = K(停,倍速回 1)。 */
+  shuttle: (direction: -1 | 0 | 1) => void;
   toggleLoop: () => void;
   cyclePlaybackRate: () => void;
   setVolume: (volume: number) => void;
@@ -81,6 +83,13 @@ interface EditorState {
 }
 
 const PLAYBACK_RATES = [0.5, 1, 1.5, 2];
+/** 穿梭的档位(倍速的绝对值):每按一次同方向的键升一档。 */
+const SHUTTLE_RATES = [1, 2, 4, 8];
+
+/** 正常播放用的倍速:倒放和穿梭的高档位(4×、8×)都不是 —— 空格、K 之后回到 1。 */
+function normalRate(rate: number): number {
+  return PLAYBACK_RATES.includes(rate) ? rate : 1;
+}
 
 export const useEditorStore = create<EditorState>((set) => ({
   playhead: 0,
@@ -98,7 +107,17 @@ export const useEditorStore = create<EditorState>((set) => ({
   editMode: "overwrite",
   setPlayhead: (time) => set({ playhead: Math.max(0, time) }),
   setPlaying: (playing) => set({ playing }),
-  togglePlaying: () => set((state) => ({ playing: !state.playing })),
+  togglePlaying: () =>
+    set((state) => (state.playing ? { playing: false } : { playing: true, playbackRate: normalRate(state.playbackRate) })),
+  shuttle: (direction) =>
+    set((state) => {
+      if (direction === 0) return { playing: false, playbackRate: normalRate(state.playbackRate) };
+      const sameWay = state.playing && Math.sign(state.playbackRate) === direction;
+      const speed = sameWay
+        ? (SHUTTLE_RATES.find((rate) => rate > Math.abs(state.playbackRate)) ?? SHUTTLE_RATES[SHUTTLE_RATES.length - 1])
+        : 1;
+      return { playing: true, playbackRate: direction * speed };
+    }),
   toggleLoop: () => set((state) => ({ loop: !state.loop })),
   cyclePlaybackRate: () =>
     set((state) => ({
