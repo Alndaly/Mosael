@@ -2,7 +2,7 @@ import React from "react";
 
 import type { Sequence } from "@/api/client";
 import { frameAt, frameTime, sequenceDuration, snapToFrame } from "@/domain/timeline/geometry";
-import { adjacentEditPoint, editPoints } from "@/domain/timeline/editTargets";
+import { adjacentClip, adjacentEditPoint, editPoints } from "@/domain/timeline/editTargets";
 import { isEditorKeyTarget } from "@/features/editor/editorKeys";
 import { useEditorStore } from "@/features/editor/editorStore";
 import { leaveClipboardToSystem, listenKeys } from "@/lib/shortcuts";
@@ -119,6 +119,13 @@ export function useEditorShortcuts(
       } else if (!mod && (key === "j" || key === "k" || key === "l")) {
         event.preventDefault();
         store.shuttle(key === "j" ? -1 : key === "l" ? 1 : 0);
+      } else if (!mod && event.altKey && event.key.startsWith("Arrow")) {
+        // ⌥ + 方向键:把选中挪到相邻的片段(左右同轨前后,上下相邻轨),不动播放头。
+        event.preventDefault();
+        const direction = event.key.slice("Arrow".length).toLowerCase() as "left" | "right" | "up" | "down";
+        const ordered = [...(current?.tracks ?? [])].sort((a, b) => a.position - b.position);
+        const next = adjacentClip(ordered, store.selectedClipIds.at(-1) ?? null, direction);
+        if (next) store.selectClip(next);
       } else if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
         event.preventDefault();
         // 按帧号加减,不把 1/fps 一次次浮点累加(累加会漂到两帧之间)。

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { adjacentEditPoint, editPoints, rippleTrimCuts, splitPointAt, splitPointsAcrossTracks } from "./editTargets";
+import { adjacentClip, adjacentEditPoint, editPoints, rippleTrimCuts, splitPointAt, splitPointsAcrossTracks } from "./editTargets";
 
 const clip = (id: string, start: number, srcIn: number, srcOut: number, speed = 1) => ({
   id,
@@ -106,5 +106,31 @@ describe("Q / W 波纹修剪到播放头", () => {
 
   it("播放头下没有片段:不剪", () => {
     expect(rippleTrimCuts(tracks, 30, "start", [])).toBeNull();
+  });
+});
+
+describe("键盘移动选中(⌥ + 方向键)", () => {
+  const tracks = [
+    { id: "V2", clips: [clip("title", 3, 0, 2)] },
+    { id: "V1", clips: [clip("b", 5, 0, 5), clip("a", 0, 0, 5)] },
+    { id: "A1", clips: [] },
+    { id: "A2", clips: [clip("music", 0, 0, 20)] },
+  ];
+
+  it("左右:同一轨上按时间顺序的前一段 / 后一段(到头就停)", () => {
+    expect(adjacentClip(tracks, "a", "right")).toBe("b");
+    expect(adjacentClip(tracks, "b", "left")).toBe("a");
+    expect(adjacentClip(tracks, "b", "right")).toBeNull();
+  });
+
+  it("上下:相邻那条有片段的轨上,时间上最接近的一段(空轨跳过)", () => {
+    expect(adjacentClip(tracks, "b", "up")).toBe("title");
+    expect(adjacentClip(tracks, "a", "down")).toBe("music");
+    expect(adjacentClip(tracks, "music", "up")).toBe("a");
+    expect(adjacentClip(tracks, "title", "up")).toBeNull();
+  });
+
+  it("没有当前选中:从第一条轨的第一段开始", () => {
+    expect(adjacentClip(tracks, null, "right")).toBe("title");
   });
 });

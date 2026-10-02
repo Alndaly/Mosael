@@ -226,6 +226,45 @@ export function Timeline({
     const selected = useEditorStore.getState().selectedClipIds;
     return selected.includes(clipId) ? selected : [clipId];
   };
+  // 键盘可达:Tab 进时间线只停一站(roving tabindex)—— 选中的那段;没选中时是界面上第一段。
+  const tabbableClipId = React.useMemo(() => {
+    const selected = selectedClipIds[selectedClipIds.length - 1];
+    if (selected && allClips.some((clip) => clip.id === selected)) return selected;
+    for (const track of tracks) {
+      const first = [...(track.clips ?? [])].sort((a, b) => a.timeline_start - b.timeline_start)[0];
+      if (first) return first.id;
+    }
+    return null;
+  }, [selectedClipIds, allClips, tracks]);
+  // 鼠标按下也会让片段拿到焦点。那次聚焦不是「用键盘走到这段」,不能拿来改选中 —— ⇧ 点击刚把它
+  // 从选区里拿掉,紧跟着的聚焦又把它选回来。按下时记一笔,紧随其后的聚焦就认得出来。
+  const pointerFocusRef = React.useRef(0);
+  // 焦点在某一段上时,选中挪到哪(⌥ + 方向键),焦点跟到哪 —— 屏幕阅读器和下一次 Tab 都从那儿接着走。
+  // 时间线只画视口里的片段:要去的那段在视口外时先把它滚进来,等它画出来(视口窗口更新)再聚焦。
+  const pendingFocusRef = React.useRef<string | null>(null);
+  React.useEffect(() => {
+    const root = canvasRef.current;
+    if (!root || !tabbableClipId) return;
+    const focused = document.activeElement as HTMLElement | null;
+    const focusInClips = Boolean(focused && root.contains(focused) && focused.dataset.clipId);
+    if (!focusInClips && pendingFocusRef.current !== tabbableClipId) return;
+    if (focused?.dataset.clipId === tabbableClipId) {
+      pendingFocusRef.current = null;
+      return;
+    }
+    const element = root.querySelector<HTMLElement>(`[data-clip-id="${CSS.escape(tabbableClipId)}"]`);
+    if (element) {
+      pendingFocusRef.current = null;
+      element.focus();
+      return;
+    }
+    const target = allClips.find((clip) => clip.id === tabbableClipId);
+    const scroller = hscrollRef.current;
+    if (!target || !scroller) return;
+    pendingFocusRef.current = tabbableClipId;
+    scroller.scrollLeft = Math.max(0, timeToPx(target.timeline_start, pxPerSecond) - scroller.clientWidth / 3);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tabbableClipId, viewport]);
   // 复制走后端深拷贝,文字、字幕片段一样能复制。
   const duplicateTarget = allClips.find((clip) => clip.id === selectedClipIds[selectedClipIds.length - 1]);
   // 剪切了还没粘贴的片段:标出来(变淡、虚线框),用户知道粘贴时会搬走的是哪几段。
@@ -723,11 +762,13 @@ export function Timeline({
 
   // 给 memo 过的片段的手柄:身份恒定,按 (trackId, clipId) 找回此刻的轨道再分派。
   const handleClipPointerDown = useStableHandler((event: React.PointerEvent, trackId: string, clipId: string) => {
+    pointerFocusRef.current = performance.now();
     const track = tracks.find((item) => item.id === trackId);
     if (track) startClipDrag(event, track, clipId);
   });
   const handleClipTrimPointerDown = useStableHandler(
     (event: React.PointerEvent, trackId: string, clipId: string, edge: "start" | "end") => {
+      pointerFocusRef.current = performance.now();
       const track = tracks.find((item) => item.id === trackId);
       if (track) startClipTrim(event, track, clipId, edge);
     },
@@ -735,6 +776,14 @@ export function Timeline({
   const handleClipSelect = React.useCallback((clipId: string) => {
     if (!useEditorStore.getState().selectedClipIds.includes(clipId)) useEditorStore.getState().selectClip(clipId);
   }, []);
+  // 键盘 Tab 到片段上 = 选中它;紧跟在鼠标按下之后的那次聚焦不算(见 pointerFocusRef)。
+  const handleClipFocus = React.useCallback(
+    (clipId: string) => {
+      if (performance.now() - pointerFocusRef.current < 500) return;
+      handleClipSelect(clipId);
+    },
+    [handleClipSelect],
+  );
 
   // 右键菜单是**一个**单例:右键时按事件目标认出是哪一段,再按那一段生成菜单项。此前每段各包一棵
   // Radix ContextMenu,几千段就是几千棵,拖动时每棵都跟着协调。点在空白处(不是片段)不开菜单。
@@ -1299,6 +1348,8 @@ export function Timeline({
                       onClipPointerDown={handleClipPointerDown}
                       onClipTrimPointerDown={handleClipTrimPointerDown}
                       onClipSelect={handleClipSelect}
+                      onClipFocus={handleClipFocus}
+                      tabbable={clip.id === tabbableClipId}
                       cut={cutIds.has(clip.id)}
                     />
                   );

@@ -130,3 +130,34 @@ export function rippleTrimCuts<C extends ClipLike>(
     })),
   };
 }
+
+/**
+ * ⌥ + 方向键移动选中:左右是同一轨上按时间顺序的前一段 / 后一段;上下是相邻那条有片段的轨上
+ * 时间上最接近的一段(包住当前片段起点的优先,空轨跳过)。没有当前选中时从第一条轨的第一段开始。
+ * tracks 按界面上的顺序(从上到下)传入。到头了返回 null。
+ */
+export function adjacentClip<C extends ClipLike>(
+  tracks: TrackLike<C>[],
+  currentId: string | null,
+  direction: "left" | "right" | "up" | "down",
+): string | null {
+  const lanes = tracks.map((track) => [...(track.clips ?? [])].sort((a, b) => a.timeline_start - b.timeline_start));
+  const laneIndex = lanes.findIndex((lane) => lane.some((item) => item.id === currentId));
+  if (laneIndex < 0) return lanes.find((lane) => lane.length > 0)?.[0]?.id ?? null;
+  const lane = lanes[laneIndex];
+  const index = lane.findIndex((item) => item.id === currentId);
+  const current = lane[index];
+  if (direction === "left" || direction === "right") return lane[index + (direction === "left" ? -1 : 1)]?.id ?? null;
+  const step = direction === "up" ? -1 : 1;
+  for (let other = laneIndex + step; other >= 0 && other < lanes.length; other += step) {
+    const candidates = lanes[other];
+    if (candidates.length === 0) continue;
+    const at = current.timeline_start;
+    const covering = candidates.find((item) => item.timeline_start <= at && at < clipEnd(item));
+    if (covering) return covering.id;
+    return candidates.reduce((best, item) =>
+      Math.abs(item.timeline_start - at) < Math.abs(best.timeline_start - at) ? item : best,
+    ).id;
+  }
+  return null;
+}

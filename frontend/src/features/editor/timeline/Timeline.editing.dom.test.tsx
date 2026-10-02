@@ -7,7 +7,7 @@
  */
 import { DndContext } from "@dnd-kit/core";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import React from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -293,5 +293,47 @@ describe("缩放", () => {
     act(() => useEditorStore.getState().setPxPerSecond(200));
     fireEvent.click(screen.getByRole("button", { name: "zoomToFit" }));
     expect(useEditorStore.getState().pxPerSecond).toBeCloseTo(fit);
+  });
+});
+
+describe("片段键盘可达", () => {
+  const two = () => [track("V1", "video", 0, [clip("c1", "V1", 0, 0, 2), clip("c2", "V1", 3, 0, 1)])];
+
+  it("Tab 进时间线只停一站:选中的那段,没选中时是第一段", () => {
+    renderTimeline(two());
+    expect(screen.getByTestId("clip-c1")).toHaveAttribute("tabindex", "0");
+    expect(screen.getByTestId("clip-c2")).toHaveAttribute("tabindex", "-1");
+    act(() => useEditorStore.getState().selectClip("c2"));
+    expect(screen.getByTestId("clip-c1")).toHaveAttribute("tabindex", "-1");
+    expect(screen.getByTestId("clip-c2")).toHaveAttribute("tabindex", "0");
+  });
+
+  it("用键盘聚焦到片段上就选中它;鼠标点出来的聚焦不改选中(⇧ 点击取消选中不会被它撤回)", () => {
+    renderTimeline(two());
+    act(() => screen.getByTestId("clip-c1").focus());
+    expect(useEditorStore.getState().selectedClipIds).toEqual(["c1"]);
+    act(() => useEditorStore.getState().selectClips(["c1", "c2"]));
+    const second = screen.getByTestId("clip-c2");
+    fireEvent.pointerDown(second, { clientX: 130, pointerId: 1, button: 0, buttons: 1, shiftKey: true });
+    act(() => second.focus());
+    expect(useEditorStore.getState().selectedClipIds).toEqual(["c1"]);
+  });
+
+  it("要去的那段在视口外(时间线只画视口里的):先滚过去,画出来后焦点跟上", async () => {
+    renderTimeline([track("V1", "video", 0, [clip("near", "V1", 0, 0, 2), clip("far", "V1", 500, 0, 2)])]);
+    expect(screen.queryByTestId("clip-far")).toBeNull();
+    act(() => screen.getByTestId("clip-near").focus());
+    act(() => useEditorStore.getState().selectClip("far"));
+    const scroller = screen.getByTestId("timeline-scroll");
+    expect(scroller.scrollLeft).toBeGreaterThan(10000);
+    fireEvent.scroll(scroller);
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByTestId("clip-far")));
+  });
+
+  it("焦点在片段上时,选中挪到哪焦点跟到哪", () => {
+    renderTimeline(two());
+    act(() => screen.getByTestId("clip-c1").focus());
+    act(() => useEditorStore.getState().selectClip("c2"));
+    expect(document.activeElement).toBe(screen.getByTestId("clip-c2"));
   });
 });

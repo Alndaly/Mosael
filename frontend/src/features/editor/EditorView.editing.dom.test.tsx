@@ -654,3 +654,20 @@ describe("加字幕 / 加花字", () => {
     await waitFor(() => expect(useEditorStore.getState().selectedClipIds).toEqual(["title"]));
   });
 });
+
+describe("键盘移动选中", () => {
+  it("⌥→ / ⌥↓ 把选中挪到后一段 / 下一条轨上最近的一段", async () => {
+    renderEditor(sequenceWith([
+      track("v1", "video", 0, [clip("a", "v1", 0, 0, 4), clip("b", "v1", 5, 0, 2)]),
+      track("a1", "audio", 1, [clip("m", "a1", 4, 0, 10)]),
+    ]));
+    await ready();
+    act(() => useEditorStore.getState().selectClip("a"));
+    press("ArrowRight", { altKey: true });
+    expect(useEditorStore.getState().selectedClipIds).toEqual(["b"]);
+    // ⌥ 方向键只挪选中,不动播放头。
+    expect(useEditorStore.getState().playhead).toBe(0);
+    press("ArrowDown", { altKey: true });
+    expect(useEditorStore.getState().selectedClipIds).toEqual(["m"]);
+  });
+});

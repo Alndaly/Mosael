@@ -22,6 +22,7 @@ export const TimelineClip = React.memo(function TimelineClip({
   offline = false,
   aiGenerated = false,
   cut = false,
+  tabbable = false,
   left,
   width,
   shiftPx = 0,
@@ -32,6 +33,7 @@ export const TimelineClip = React.memo(function TimelineClip({
   onClipPointerDown,
   onClipTrimPointerDown,
   onClipSelect,
+  onClipFocus,
 }: {
   clipId?: string;
   trackId?: string;
@@ -43,6 +45,8 @@ export const TimelineClip = React.memo(function TimelineClip({
   aiGenerated?: boolean;
   /** 剪切了、等着粘贴时搬走:变淡 + 虚线框。 */
   cut?: boolean;
+  /** 时间线上只有一段在 Tab 序列里(选中的那段,没选中时第一段),其余靠 ⌥ + 方向键走过去。 */
+  tabbable?: boolean;
   left: number;
   width: number;
   /** 相对 left 的水平位移(px):拖拽中的本体与涟漪让位的邻居都走 transform。 */
@@ -55,6 +59,8 @@ export const TimelineClip = React.memo(function TimelineClip({
   onClipPointerDown?: (event: React.PointerEvent, trackId: string, clipId: string) => void;
   onClipTrimPointerDown?: (event: React.PointerEvent, trackId: string, clipId: string, edge: "start" | "end") => void;
   onClipSelect?: (clipId: string) => void;
+  /** 片段拿到焦点时(键盘 Tab 过来)。鼠标按下引起的聚焦由时间线自己分辨、不当成选中。 */
+  onClipFocus?: (clipId: string) => void;
 }) {
   const t = useI18n();
   const className = cn(
@@ -99,7 +105,8 @@ export const TimelineClip = React.memo(function TimelineClip({
       data-cut={cut || undefined}
       data-testid={clipId ? `clip-${clipId}` : undefined}
       role="button"
-      tabIndex={-1}
+      tabIndex={clipId ? (tabbable ? 0 : -1) : undefined}
+      onFocus={() => clipId && onClipFocus?.(clipId)}
       title={offline ? `${t("clipOffline")} · ${name}` : aiGenerated ? `${name} · ${t("clipAiGenerated")}` : name}
     >
       {peaks && peaks.length > 0 && (
