@@ -49,6 +49,7 @@ export const JOB_KIND_ICONS: Record<string, LucideIcon> = {
   video_to_gif: Film,
   denoise_audio: AudioWaveform,
   separate_audio: Split,
+  clip_audio: AudioWaveform,
   document_parse: FileText,
   trim: Scissors,
   board_write: PenLine,

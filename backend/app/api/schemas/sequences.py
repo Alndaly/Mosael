@@ -242,6 +242,20 @@ class SubtitleImportOut(ApiModel):
     sequence: SequenceOut
 
 
+class ReplaceClipMediaRequest(ApiModel):
+    """把片段换成另一份素材,位置、时长、属性都不动。`clip_ids` 点名;`from_asset_id` = 这条时间线上用着那份素材的全部片段。"""
+
+    asset_id: str
+    clip_ids: list[str] = Field(default_factory=list, max_length=2000)
+    from_asset_id: str = ""
+
+
+class ClipAudioRequest(ApiModel):
+    """对片段做声音处理,做完直接换到时间线上:降噪 / 只留人声 / 拆成人声和背景音。"""
+
+    action: Literal["denoise", "isolate_voice", "separate"]
+
+
 class SetSubtitleStyleRequest(ApiModel):
     style: dict
 

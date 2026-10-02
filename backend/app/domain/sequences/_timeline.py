@@ -215,6 +215,11 @@ def _validate_clip_range(timeline_start: float, src_in: float, src_out: float) -
         raise SequenceDomainError("src_out must be greater than src_in")
 
 
+#: 操作组(grouping.OperationGroup)挂在会话的 info 上用的键,以及撤销栈上那一条的 kind。
+GROUP_SESSION_KEY = "sequence_operation_group"
+GROUP_KIND = "operation_group"
+
+
 def _claim_revision(db: Session, sequence: Sequence) -> tuple[int, int]:
     """序列版本号加一,返回 (改之前, 改之后)。
 
@@ -250,11 +255,10 @@ def _record_operation(
     undo_of: str | None = None,
 ) -> SequenceOperation:
     #: 在一个操作组里(见 grouping.py,比如一次字幕配音):这一步并进组里那一条,撤销栈上不另记一步。
-    #: 撤销 / 重做自己的记账(带 undo_of)和组那一条本身不并。
-    from app.domain.sequences.grouping import GROUP_KIND, active_group
-
-    group = active_group(db, sequence.id) if undo_of is None and kind != GROUP_KIND else None
-    if group is not None:
+    #: 撤销 / 重做自己的记账(带 undo_of)和组那一条本身不并。组是挂在会话上的(GROUP_SESSION_KEY),
+    #: 这里只认会话上的那个对象,不 import grouping —— 那边要 import 这里的记账,反过来就成了环。
+    group = db.info.get(GROUP_SESSION_KEY) if undo_of is None and kind != GROUP_KIND else None
+    if group is not None and group.sequence_id == sequence.id:
         return group.record(db, sequence, kind=kind, payload=payload, summary=summary)
     before, after = _claim_revision(db, sequence)
     operation = SequenceOperation(

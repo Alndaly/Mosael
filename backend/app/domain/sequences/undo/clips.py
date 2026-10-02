@@ -31,6 +31,7 @@ JOURNALED_KINDS = (
     "apply_transcript_edits_batch",
     "set_clip_speed",
     "detach_clip_audio",
+    "replace_clip_media",
 )
 
 

@@ -7323,6 +7323,157 @@
         }
       }
     },
+    "/api/sequences/{sequence_id}/clips/replace-media": {
+      "post": {
+        "tags": [
+          "sequences"
+        ],
+        "summary": "Replace Clip Media",
+        "description": "片段换成另一份素材(位置、时长、属性都不动)。给 `from_asset_id` 就换掉这条时间线上用着它的全部片段。",
+        "operationId": "replace_clip_media_api_sequences__sequence_id__clips_replace_media_post",
+        "parameters": [
+          {
+            "name": "sequence_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Sequence Id"
+            }
+          },
+          {
+            "name": "base_revision",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。",
+              "title": "Base Revision"
+            },
+            "description": "这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReplaceClipMediaRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SequenceOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sequences/{sequence_id}/clips/{clip_id}/audio": {
+      "post": {
+        "tags": [
+          "sequences"
+        ],
+        "summary": "Process Clip Audio",
+        "description": "对片段做声音处理(降噪 / 只留人声 / 拆成人声和背景音),做完直接换到时间线上。排成任务:要跑好几分钟。",
+        "operationId": "process_clip_audio_api_sequences__sequence_id__clips__clip_id__audio_post",
+        "parameters": [
+          {
+            "name": "sequence_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Sequence Id"
+            }
+          },
+          {
+            "name": "clip_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Clip Id"
+            }
+          },
+          {
+            "name": "base_revision",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。",
+              "title": "Base Revision"
+            },
+            "description": "这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClipAudioRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/sequences/{sequence_id}/clips/{clip_id}": {
       "delete": {
         "tags": [
@@ -24579,6 +24730,25 @@
         "title": "CapabilityUseOut",
         "description": "一项宿主能力用在哪(ADR 0032 §4),从能力表现算。"
       },
+      "ClipAudioRequest": {
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "denoise",
+              "isolate_voice",
+              "separate"
+            ],
+            "title": "Action"
+          }
+        },
+        "type": "object",
+        "required": [
+          "action"
+        ],
+        "title": "ClipAudioRequest",
+        "description": "对片段做声音处理,做完直接换到时间线上:降噪 / 只留人声 / 拆成人声和背景音。"
+      },
       "ClipIdsRequest": {
         "properties": {
           "clip_ids": {
@@ -32870,6 +33040,33 @@
           "name"
         ],
         "title": "RenameRequest"
+      },
+      "ReplaceClipMediaRequest": {
+        "properties": {
+          "asset_id": {
+            "type": "string",
+            "title": "Asset Id"
+          },
+          "clip_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 2000,
+            "title": "Clip Ids"
+          },
+          "from_asset_id": {
+            "type": "string",
+            "title": "From Asset Id",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "asset_id"
+        ],
+        "title": "ReplaceClipMediaRequest",
+        "description": "把片段换成另一份素材,位置、时长、属性都不动。`clip_ids` 点名;`from_asset_id` = 这条时间线上用着那份素材的全部片段。"
       },
       "RippleDeleteClipsRequest": {
         "properties": {

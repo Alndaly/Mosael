@@ -23,11 +23,10 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.db.models import Sequence, SequenceOperation, SequenceRevision
+from app.domain.sequences._timeline import GROUP_KIND, GROUP_SESSION_KEY, _claim_revision, _record_operation
 
-#: 撤销栈上那一条的 kind。
-GROUP_KIND = "operation_group"
-#: 会话上挂着「这个会话里的编辑记进哪个组」的那个键。
-_SESSION_KEY = "sequence_operation_group"
+#: 会话上挂着「这个会话里的编辑记进哪个组」的那个键(_timeline 认它,见 _record_operation)。
+_SESSION_KEY = GROUP_SESSION_KEY
 
 
 class OperationGroup:
@@ -65,21 +64,12 @@ class OperationGroup:
         self, db: Session, sequence: Sequence, *, kind: str, payload: dict[str, Any], summary: dict[str, Any]
     ) -> SequenceOperation:
         """组里的一步落地:版本号照常加一,操作追加进组那一条的 steps。"""
-        from app.domain.sequences._timeline import _claim_revision, _record_operation
-
         step = {"kind": kind, "payload": payload}
         operation = db.get(SequenceOperation, self.operation_id) if self.operation_id else None
         #: 已经被撤销过的组不再往里加:用户在配音中途按了 ⌘Z,撤掉的是到那一刻为止的那一组;
         #: 后面的步骤接着记进去的话,重做时会把他没见过的步骤一起"重做"出来。另起一组。
         if operation is None or operation.reverted:
-            created = _record_operation(
-                db,
-                sequence,
-                kind="operation_group",
-                payload={"label": self.label, "steps": [step]},
-                summary={"operation": GROUP_KIND, "label": self.label, "first": summary},
-                actor_id=self.actor_id,
-            )
+            created = _open_group(db, sequence, label=self.label, step=step, summary=summary, actor_id=self.actor_id)
             self.operation_id = created.id
             return created
         before, after = _claim_revision(db, sequence)
@@ -96,6 +86,20 @@ class OperationGroup:
         )
         db.flush()
         return operation
+
+
+def _open_group(
+    db: Session, sequence: Sequence, *, label: str, step: dict[str, Any], summary: dict[str, Any], actor_id: str | None
+) -> SequenceOperation:
+    """撤销栈上那一条:组里第一步落地时记下。之后的步骤追加进它的 steps(见 OperationGroup.record)。"""
+    return _record_operation(
+        db,
+        sequence,
+        kind="operation_group",
+        payload={"label": label, "steps": [step]},
+        summary={"operation": GROUP_KIND, "label": label, "first": summary},
+        actor_id=actor_id,
+    )
 
 
 def active_group(db: Session, sequence_id: str) -> OperationGroup | None:

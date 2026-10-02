@@ -71,8 +71,9 @@ async function send(sequenceId: string, path: string, init: RequestInit): Promis
   }
 }
 
-/** 撞上 409 时把附带的最新序列记下、交给订阅的人(剪辑页、画板时间线格)。不是版本冲突就什么都不做。 */
-function noticeConflict(error: unknown): void {
+/** 撞上 409 时把附带的最新序列记下、交给订阅的人(剪辑页、画板时间线格)。不是版本冲突就什么都不做。
+ *  排任务的编辑(配音)不回序列,也走它:冲突时剪辑页照样换成最新的一版。 */
+export function noticeConflict(error: unknown): void {
   const latest = conflictLatest(error);
   if (latest) {
     remember(latest);
@@ -297,6 +298,30 @@ export function generateSubtitles(
   replace = false,
 ): Promise<Sequence> {
   return edit(sequence, "/subtitles/generate", { method: "POST", body: JSON.stringify({ track_id: trackId, cues, replace }) });
+}
+
+/** 片段换成另一份素材(位置、时长、属性都不动)。给 fromAssetId = 这条时间线上用着那份素材的全部片段。 */
+export function replaceClipMedia(
+  sequence: SequenceRef,
+  body: { asset_id: string; clip_ids?: string[]; from_asset_id?: string },
+): Promise<Sequence> {
+  return edit(sequence, "/clips/replace-media", { method: "POST", body: JSON.stringify(body) });
+}
+
+export type ClipAudioAction = "denoise" | "isolate_voice" | "separate";
+
+/** 对片段做声音处理(降噪 / 只留人声 / 拆成人声和背景音),做完直接换到时间线上。排成任务。 */
+export async function processClipAudio(sequence: SequenceRef, clipId: string, action: ClipAudioAction): Promise<Job> {
+  // 排的是任务,但处理哪一段是照着这一版选的:带上 base_revision,那一段被别人改过就 409(见后端 _ensure_seen)。
+  try {
+    return await api<Job>(`/api/sequences/${sequence.id}/clips/${clipId}/audio?base_revision=${baseRevisionOf(sequence)}`, {
+      method: "POST",
+      body: JSON.stringify({ action }),
+    });
+  } catch (error) {
+    noticeConflict(error);
+    throw error;
+  }
 }
 
 export type SubtitleFileFormat = "srt" | "vtt";

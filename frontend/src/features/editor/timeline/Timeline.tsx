@@ -1,6 +1,6 @@
 import React from "react";
 import { useQueries } from "@tanstack/react-query";
-import { AudioLines, BetweenHorizontalStart, Camera, ChevronDown, ChevronUp, CircleHelp, Copy, Eye, EyeOff, Film, Lock, LockOpen, Magnet, Minus, MousePointer2, Plus, Replace, Scissors, Slice, Trash2, Type, Volume2, VolumeX, Waves, X } from "lucide-react";
+import { AudioLines, AudioWaveform, BetweenHorizontalStart, Camera, ChevronDown, ChevronUp, CircleHelp, Copy, Eye, EyeOff, Film, Lock, LockOpen, Magnet, Mic, Minus, MousePointer2, Plus, Replace, Scissors, Slice, Split, Trash2, Type, Volume2, VolumeX, Waves, X } from "lucide-react";
 
 import { fetchWaveform, type Asset, type Clip, type Sequence, type Track, type TrackStatePatch, type WaveformData } from "@/api/client";
 import { useI18n } from "@/app/preferences";
@@ -99,6 +99,8 @@ export function Timeline({
   grabbingFrame = false,
   onDuplicateClip,
   onDetachAudio,
+  onReplaceMedia,
+  onClipAudio,
   onSetTrackState,
   toolbarExtra,
 }: {
@@ -126,6 +128,10 @@ export function Timeline({
   grabbingFrame?: boolean;
   onDuplicateClip?: (clipId: string) => void;
   onDetachAudio?: (clipId: string) => void;
+  /** 片段换成另一份素材(位置、时长、属性都不动)。 */
+  onReplaceMedia?: (clipId: string) => void;
+  /** 片段声音处理(降噪 / 只留人声 / 拆成人声和背景音),做完直接换到时间线上。 */
+  onClipAudio?: (clipId: string, action: "denoise" | "isolate_voice" | "separate") => void;
   onSetTrackState?: (trackId: string, body: TrackStatePatch) => void;
   toolbarExtra?: React.ReactNode;
 }) {
@@ -1251,12 +1257,32 @@ export function Timeline({
                 </ContextMenuItem>
               )}
               {/* 按**素材类型**给,不按轨道:视频轨上完全可以放图片(AI 生成的静图就是这么落上去的),
-                  而图片没有声音。「人声分离」「降噪」处理的是整份素材、产出进素材库,所以在素材池 /
-                  素材库的菜单里,不在片段菜单里。 */}
+                  而图片没有声音。片段菜单里的降噪 / 分离是「做完直接换到时间线上」那一版(onClipAudio);
+                  素材库里那两项只产出新素材、不动时间线。 */}
               {onDetachAudio && menuTrack?.kind === "video" && menuClip.asset_id && menuClip.asset_kind === "video" && (
                 <ContextMenuItem onSelect={() => onDetachAudio(menuClip.id)}>
                   <AudioLines /> {t("detachAudio")}
                 </ContextMenuItem>
+              )}
+              {/* 媒体片段(含脱机的 —— 换一份就重新接上)才能换素材;文字片段没有媒体。 */}
+              {onReplaceMedia && (menuClip.asset_id || menuClip.offline_asset) && (
+                <ContextMenuItem onSelect={() => onReplaceMedia(menuClip.id)}>
+                  <Replace /> {t("replaceMedia")}
+                </ContextMenuItem>
+              )}
+              {onClipAudio && menuClip.asset_id && (menuClip.asset_kind === "video" || menuClip.asset_kind === "audio") && (
+                <>
+                  <ContextMenuSeparator />
+                  <ContextMenuItem onSelect={() => onClipAudio(menuClip.id, "denoise")}>
+                    <AudioWaveform /> {t("clipAudioDenoise")}
+                  </ContextMenuItem>
+                  <ContextMenuItem onSelect={() => onClipAudio(menuClip.id, "isolate_voice")}>
+                    <Mic /> {t("clipAudioIsolateVoice")}
+                  </ContextMenuItem>
+                  <ContextMenuItem onSelect={() => onClipAudio(menuClip.id, "separate")}>
+                    <Split /> {t("clipAudioSeparate")}
+                  </ContextMenuItem>
+                </>
               )}
               <ContextMenuSeparator />
               {onDeleteClips && (

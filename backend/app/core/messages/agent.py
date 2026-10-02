@@ -143,6 +143,16 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "文件里的字幕全都落在时间线内容之外(检查一下起始偏移)",
         "en": "Every subtitle in the file falls outside the timeline's content — check the start offset.",
     },
+    # 替换媒体(domain/sequences/media_swap.py)
+    "seqErr_replaceTextClip": {"zh": "文字片段没有媒体可换", "en": "A text clip has no media to replace."},
+    "seqErr_replaceWrongKind": {
+        "zh": "{track} 轨上放不了这份{kind}素材",
+        "en": "A {kind} asset can't go on a {track} track.",
+    },
+    "seqErr_replaceTooShort": {
+        "zh": "新素材只有 {has} 秒,片段用到了第 {needed} 秒 —— 放到一半就没了",
+        "en": "The new asset is only {has}s long but the clip plays up to {needed}s — it would run out halfway.",
+    },
     "seqErr_cueNotFinite": {
         "zh": "第 {index} 条字幕的时间不是有效的数字",
         "en": "Subtitle {index} has a start or duration that isn't a valid number.",

@@ -51,6 +51,8 @@ JOB_KINDS: dict[str, JobKind] = {
         JobKind("video_to_gif", "always", ("assets",), view="media"),
         JobKind("denoise_audio", "always", ("assets",), view="media"),
         JobKind("separate_audio", "always", ("assets",), view="media"),
+        # 剪辑台上对片段做声音处理:产出进素材库,并直接换到时间线上(voices/clip_audio)。
+        JobKind("clip_audio", "always", ("assets", "sequences"), view="editor"),
         # 文档解析(ADR 0031):导入时自动跑本地解析,是没人主动要的维护活 —— 只有失败才说;结果在素材详情里看。
         JobKind("document_parse", "failures", ("assets",), view="media"),
         JobKind("trim", "always", ("assets", "boards"), view="boards"),

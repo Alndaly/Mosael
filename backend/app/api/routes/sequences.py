@@ -33,6 +33,8 @@ from app.api.schemas import (
     SequenceCreate,
     SequenceOut,
     SubtitleImportOut,
+    ReplaceClipMediaRequest,
+    ClipAudioRequest,
     SetClipEffectsRequest,
     SetClipGainRequest,
     SetClipSpeedRequest,
@@ -467,6 +469,36 @@ async def import_subtitles(
     )
 
 
+@router.post("/sequences/{sequence_id}/clips/replace-media", response_model=SequenceOut)
+def replace_clip_media(
+    sequence_id: str, body: ReplaceClipMediaRequest, db: Tx, user: CurrentUser, base_revision: BaseRevision = None
+) -> Response:
+    """片段换成另一份素材(位置、时长、属性都不动)。给 `from_asset_id` 就换掉这条时间线上用着它的全部片段。"""
+    from app.domain.sequences.media_swap import ReplaceClipMedia, clips_using
+    from app.domain.sequences.media_swap import replace_clip_media as replace_media
+
+    sequence = require_sequence_access(db, user, sequence_id, perm="edit")
+    clip_ids = list(body.clip_ids) or (clips_using(sequence, body.from_asset_id) if body.from_asset_id else [])
+    op = ReplaceClipMedia(clip_ids=tuple(clip_ids), asset_id=body.asset_id)
+    return _edit(db, user, sequence_id, base_revision, replace_media, op, perm="edit")
+
+
+@router.post("/sequences/{sequence_id}/clips/{clip_id}/audio", response_model=JobOut)
+def process_clip_audio(
+    sequence_id: str, clip_id: str, body: ClipAudioRequest, db: Tx, user: CurrentUser, base_revision: BaseRevision = None
+) -> Job:
+    """对片段做声音处理(降噪 / 只留人声 / 拆成人声和背景音),做完直接换到时间线上。排成任务:要跑好几分钟。"""
+    from app.ai.providers.contracts.denoise import DenoiseError
+    from app.domain.voices.clip_audio import ClipAudioError, start_clip_audio_job
+
+    require_sequence_access(db, user, sequence_id, perm="edit")
+    _ensure_seen(db, user, sequence_id, base_revision, [clip_id])
+    try:
+        return start_clip_audio_job(db, sequence_id=sequence_id, clip_id=clip_id, action=body.action, created_by=user.id)
+    except (ClipAudioError, DenoiseError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
 @router.delete("/sequences/{sequence_id}/clips/{clip_id}", response_model=SequenceOut)
 def delete_clip(
     sequence_id: str, clip_id: str, db: Tx, user: CurrentUser, linked: bool = True, base_revision: BaseRevision = None
@@ -667,6 +699,26 @@ def _edit(db, user, sequence_id: str, base_revision: int | None, handler, op, *,
         db, user, sequence_id,
         lambda: concurrency.apply_on_base(db, sequence_id, handler, op, base_revision=base_revision, actor_id=user.id),
     )
+
+
+def _ensure_seen(db, user, sequence_id: str, base_revision: int | None, ids: list[str]) -> None:
+    """排任务的编辑(配音、片段声音处理)也照着调用方看到的那一版:任务稍后才动时间线,但念哪几句、处理哪一段,
+    是按他看到的那一版选的。那几段(或那条轨)在这之后被别人改过,就 409 附最新序列,不替他在一份过时的选择上花钱。
+    只看点名的那几样有没有被碰过(见 concurrency.Footprint):别处的编辑不挡。"""
+    sequence = db.get(Sequence, sequence_id)
+    if sequence is None:
+        raise HTTPException(status_code=404, detail="Sequence not found")
+    try:
+        concurrency.run_on_base(
+            db,
+            sequence,
+            lambda: None,
+            base_revision=base_revision,
+            footprint=concurrency.Footprint(coordinate_free=True, ids=frozenset(one for one in ids if one)),
+            actor_id=user.id,
+        )
+    except SequenceRevisionConflict as exc:
+        raise _conflict(db, sequence_id, exc) from exc
 
 
 def _respond(db, user, sequence_id: str, run) -> Response:

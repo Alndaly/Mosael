@@ -2594,6 +2594,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/sequences/{sequence_id}/clips/replace-media": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Replace Clip Media
+         * @description 片段换成另一份素材(位置、时长、属性都不动)。给 `from_asset_id` 就换掉这条时间线上用着它的全部片段。
+         */
+        post: operations["replace_clip_media_api_sequences__sequence_id__clips_replace_media_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sequences/{sequence_id}/clips/{clip_id}/audio": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Process Clip Audio
+         * @description 对片段做声音处理(降噪 / 只留人声 / 拆成人声和背景音),做完直接换到时间线上。排成任务:要跑好几分钟。
+         */
+        post: operations["process_clip_audio_api_sequences__sequence_id__clips__clip_id__audio_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/sequences/{sequence_id}/clips/{clip_id}": {
         parameters: {
             query?: never;
@@ -8496,6 +8536,17 @@ export interface components {
             label: string;
         };
         /**
+         * ClipAudioRequest
+         * @description 对片段做声音处理,做完直接换到时间线上:降噪 / 只留人声 / 拆成人声和背景音。
+         */
+        ClipAudioRequest: {
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: "denoise" | "isolate_voice" | "separate";
+        };
+        /**
          * ClipIdsRequest
          * @description 多选批量操作的通用入参:一次手势一条操作,撤销一步全部还原。
          */
@@ -12177,6 +12228,21 @@ export interface components {
         RenameRequest: {
             /** Name */
             name: string;
+        };
+        /**
+         * ReplaceClipMediaRequest
+         * @description 把片段换成另一份素材,位置、时长、属性都不动。`clip_ids` 点名;`from_asset_id` = 这条时间线上用着那份素材的全部片段。
+         */
+        ReplaceClipMediaRequest: {
+            /** Asset Id */
+            asset_id: string;
+            /** Clip Ids */
+            clip_ids?: string[];
+            /**
+             * From Asset Id
+             * @default
+             */
+            from_asset_id: string;
         };
         /**
          * RippleDeleteClipsRequest
@@ -19376,6 +19442,83 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SubtitleImportOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    replace_clip_media_api_sequences__sequence_id__clips_replace_media_post: {
+        parameters: {
+            query?: {
+                /** @description 这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。 */
+                base_revision?: number | null;
+            };
+            header?: never;
+            path: {
+                sequence_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReplaceClipMediaRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SequenceOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    process_clip_audio_api_sequences__sequence_id__clips__clip_id__audio_post: {
+        parameters: {
+            query?: {
+                /** @description 这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。 */
+                base_revision?: number | null;
+            };
+            header?: never;
+            path: {
+                sequence_id: string;
+                clip_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClipAudioRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobOut"];
                 };
             };
             /** @description Validation Error */

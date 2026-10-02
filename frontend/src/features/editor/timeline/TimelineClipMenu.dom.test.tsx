@@ -4,8 +4,10 @@
  *
  * - 删除 / 波纹删除和工具栏、Delete 键同一条路径:右键的那段在选区里,删的是**整个选区**。
  *   此前多选后右键删除只删被点的那一段。
- * - 「分离音频」按素材类型给:视频轨上的图片没有声音。它是片段级的(把这一段的声音摘到音频轨);
- *   「分离人声与背景音」「降噪」处理整份素材、产出进素材库,所以不在片段菜单里,在素材的菜单里。
+ * - 「分离音频」按素材类型给:视频轨上的图片没有声音。它是片段级的(把这一段的声音摘到音频轨)。
+ * - 片段级的声音处理(降噪 / 只留人声 / 拆成人声和背景音)做完**直接换到时间线上**,只给有声音的素材;
+ *   素材库里那两项(只产出新素材、不动时间线)的名字不同,不混进来。
+ * - 「替换媒体」给媒体片段(含脱机的),文字片段没有媒体可换。
  * - 文字、字幕、脱机片段没有素材可复制:菜单里不给「复制片段」,工具栏上的那颗灰掉。
  */
 import { DndContext } from "@dnd-kit/core";
@@ -52,6 +54,8 @@ function renderTimeline() {
     onRippleDeleteClips: vi.fn(),
     onDuplicateClip: vi.fn(),
     onDetachAudio: vi.fn(),
+    onReplaceMedia: vi.fn(),
+    onClipAudio: vi.fn(),
   };
   const sequence = { id: "s", name: "S", width: 1920, height: 1080, fps: 30, tracks } as unknown as Sequence;
   render(
@@ -128,6 +132,31 @@ describe("片段右键:声音相关的动作", () => {
       expect(menuItems()).not.toContain("denoiseAction");
       await userEvent.keyboard("{Escape}");
     }
+  });
+});
+
+describe("片段右键:替换媒体与做完直接替换的声音处理", () => {
+  it("视频、音频片段:降噪 / 只留人声 / 拆成人声和背景音,点了就交给那一段", async () => {
+    const handlers = renderTimeline();
+    openMenu("voice");
+    await userEvent.click(await screen.findByRole("menuitem", { name: "clipAudioIsolateVoice" }));
+    expect(handlers.onClipAudio).toHaveBeenCalledWith("voice", "isolate_voice");
+    openMenu("film");
+    await userEvent.click(await screen.findByRole("menuitem", { name: "clipAudioDenoise" }));
+    expect(handlers.onClipAudio).toHaveBeenLastCalledWith("film", "denoise");
+  });
+
+  it("图片没有声音可处理;文字片段没有媒体可换", async () => {
+    const handlers = renderTimeline();
+    openMenu("still");
+    await screen.findByRole("menuitem", { name: "deleteClip" });
+    expect(menuItems()).not.toContain("clipAudioDenoise");
+    await userEvent.click(screen.getByRole("menuitem", { name: "replaceMedia" }));
+    expect(handlers.onReplaceMedia).toHaveBeenCalledWith("still");
+    openMenu("Hello");
+    await screen.findByRole("menuitem", { name: "deleteClip" });
+    expect(menuItems()).not.toContain("replaceMedia");
+    await userEvent.keyboard("{Escape}");
   });
 });
 

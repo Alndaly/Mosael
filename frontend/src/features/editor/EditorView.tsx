@@ -42,6 +42,9 @@ import {
   getAssetTranscript,
   importSubtitleFile,
   isSubtitleFile,
+  processClipAudio,
+  replaceClipMedia,
+  type ClipAudioAction,
   trimClip,
   undoSequence,
   baseRevisionOf,
@@ -75,6 +78,7 @@ import { SequenceSettings, type FillMode } from "./SequenceSettings";
 import { MediaPool } from "./MediaPool";
 import { Monitor } from "./Monitor";
 import { SubtitlePanel } from "./SubtitlePanel";
+import { ReplaceMediaDialog } from "./ReplaceMediaDialog";
 import { TranscriptPanel } from "./TranscriptPanel";
 import { VoicePanel } from "./VoicePanel";
 import { Timeline, trackAcceptsAsset, type TrimPayload } from "./timeline/Timeline";
@@ -507,6 +511,25 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
     },
     onError: (error) => toast.error(String((error as Error).message)),
   });
+  //: 「替换媒体」对话框正对着哪一段(null = 没开)。
+  const [replacingClipId, setReplacingClipId] = React.useState<string | null>(null);
+  const replaceMediaMutation = useMutation({
+    mutationFn: (body: { asset_id: string; clip_ids?: string[]; from_asset_id?: string }) => replaceClipMedia(sequence!, body),
+    onSuccess: (updated, body) => {
+      setReplacingClipId(null);
+      applySequence(updated);
+      const count = body.clip_ids?.length
+        ?? (updated.tracks ?? []).flatMap((track) => track.clips ?? []).filter((clip) => clip.asset_id === body.asset_id).length;
+      toast.success(t("replaceMediaDone").replace("{n}", String(count)));
+    },
+    onError: (error) => toast.error(String((error as Error).message)),
+  });
+  //: 片段声音处理排成任务:做完时间线怎么变由任务中心刷新(它说了改动 sequences),这里只说「开始了」。
+  const clipAudioMutation = useMutation({
+    mutationFn: ({ clipId, action }: { clipId: string; action: ClipAudioAction }) => processClipAudio(sequence!, clipId, action),
+    onSuccess: () => toast.success(t("clipAudioQueued")),
+    onError: (error) => toast.error(String((error as Error).message)),
+  });
   const setEffectsMutation = useMutation({
     mutationFn: ({ clipId, effects }: { clipId: string; effects: Record<string, unknown> }) =>
       setClipEffects(sequence!, clipId, effects),
@@ -935,6 +958,14 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
       {/* Uploaded fonts must be registered before the monitor or the style panel can paint
           text in them. */}
       <FontFaces fonts={fonts.data ?? []} />
+      <ReplaceMediaDialog
+        sequence={sequence}
+        clipId={replacingClipId}
+        assets={assets.data ?? []}
+        pending={replaceMediaMutation.isPending}
+        onCancel={() => setReplacingClipId(null)}
+        onReplace={(body) => replaceMediaMutation.mutate(body)}
+      />
       <ConfirmDialog
         open={regeneratePending !== null}
         title={t("subtitleRegenerateTitle")}
@@ -1138,6 +1169,8 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
           onSplitClipAt={(clipId, srcTime) => splitMutation.mutate({ clipId, srcTime })}
           onDuplicateClip={(clipId) => duplicateClip(clipId)}
           onDetachAudio={(clipId) => detachAudioMutation.mutate(clipId)}
+          onReplaceMedia={setReplacingClipId}
+          onClipAudio={(clipId, action) => clipAudioMutation.mutate({ clipId, action })}
           onSetTrackState={(trackId, body) => trackStateMutation.mutate({ trackId, body })}
           toolbarExtra={
             <SequenceSettings

@@ -31,6 +31,7 @@ from app.db.models import Sequence, SequenceOperation, User
 from app.domain.sequences._timeline import _require_sequence
 from app.domain.sequences.clip_properties import SetClipEffects, SetClipGain, SetClipTransform
 from app.domain.sequences.errors import SequenceDomainError, SequenceRevisionConflict
+from app.domain.sequences.media_swap import ReplaceClipMedia
 from app.domain.sequences.text import SetClipText, SetClipTextsBatch, SetSubtitleStyle
 from app.domain.sequences.tracks import SetTrackState
 
@@ -45,6 +46,8 @@ COORDINATE_FREE_REQUESTS: dict[type, str] = {
     SetClipTextsBatch: "set_clip_texts_batch",
     SetTrackState: "set_track_state",
     SetSubtitleStyle: "set_subtitle_style",
+    #: 换素材:片段的位置和长短都不动(media_swap 先验过新素材覆盖得了出点)。
+    ReplaceClipMedia: "replace_clip_media",
 }
 COORDINATE_FREE_KINDS = frozenset(COORDINATE_FREE_REQUESTS.values())
 
