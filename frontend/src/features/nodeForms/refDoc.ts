@@ -30,6 +30,27 @@ export function parsePieces(value: string): Piece[] {
   return out;
 }
 
+/** `{{llm-1.text}}` → `llm-1.text`。存的是模板,里面那截才是路径。 */
+export function bareRef(ref: string): string {
+  return ref.replace(/^\{\{|\}\}$/g, "");
+}
+
+/** 整格正好是一个引用(两头的空白不算,规范化同样认它是整格引用)时,给出里面那截路径;否则 null。 */
+export function wholeRef(value: string): string | null {
+  const pieces = parsePieces(value.trim());
+  return pieces.length === 1 && pieces[0].type === "ref" ? pieces[0].ref : null;
+}
+
+/** 值里有没有一段 `{{…}}` 引用。 */
+export function hasReference(value: string): boolean {
+  return parsePieces(value).some((piece) => piece.type === "ref");
+}
+
+/** 字和引用混写:里面有引用,但不是整格一个引用(「> {{report.json.verdict}}」「{{a.text}}{{b.text}}」)。 */
+export function isMixedTemplate(value: string): boolean {
+  return hasReference(value) && wholeRef(value) === null;
+}
+
 /** 片段 → 字符串。和 parsePieces 严格互逆。 */
 export function piecesToString(pieces: Piece[]): string {
   return pieces.map((piece) => (piece.type === "ref" ? `{{${piece.ref}}}` : piece.text)).join("");

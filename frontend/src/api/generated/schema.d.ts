@@ -8188,6 +8188,10 @@ export interface components {
             body_scope?: {
                 [key: string]: string[];
             };
+            /** Output Schema From */
+            output_schema_from?: {
+                [key: string]: string;
+            };
             /** Id */
             id: string;
             /** Hosts */
@@ -14171,6 +14175,10 @@ export interface components {
             /** Body Scope */
             body_scope?: {
                 [key: string]: string[];
+            };
+            /** Output Schema From */
+            output_schema_from?: {
+                [key: string]: string;
             };
         };
         /** WorkflowOut */

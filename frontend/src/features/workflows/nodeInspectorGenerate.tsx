@@ -3,6 +3,7 @@ import React from "react";
 import type { GenerationOption, WorkflowGraph } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { Combobox } from "@/components/app/combobox";
+import { RefCombobox } from "@/features/nodeForms/RefCombobox";
 import { declaredChoices } from "@/components/generation/parameterPanel";
 import { Input } from "@/components/ui/input";
 import { OptionPicker } from "@/components/ui/option-picker";
@@ -518,18 +519,16 @@ export function generateNodeSection({
               </small>
             )}
           </span>
-          <Combobox
+          {/* 「值或上游输出」:工作流里这一格多半填的是上游输出(`{{ai-generate-1.asset_id}}`),
+              上游的输出列在素材后面,引用显示成「节点 · 输出」的标签(见 RefCombobox)。 */}
+          <RefCombobox
             value={valueForRole(genSourceLines, role)}
             options={fieldOptions.assets.map((asset) => ({
               value: asset.id,
               label: asset.name || asset.original_filename,
             }))}
+            variables={variables}
             placeholder={t("wfGenSourcePlaceholder")}
-            emptyText={t("cmdkEmpty")}
-            // 手填是**常态**而不是逃生口:工作流里这一格多半填的是上游输出
-            // (`{{ai-generate-1.asset_id}}`),那种东西下拉里根本没有。
-            allowCustomValue
-            className="w-full"
             onValueChange={(next: string) =>
               setConfig("source_assets", writeSourceAssets(withRole(genSourceLines, role, next)))
             }

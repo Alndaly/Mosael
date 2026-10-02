@@ -284,7 +284,7 @@ describe("节点表单", () => {
       expect(asked.some((one) => one.startsWith("scene_shots"))).toBe(false);
     });
 
-    it("工作流里:清单后面列上游的输出,手敲只收引用,存着的引用原样显示", async () => {
+    it("工作流里:清单后面列上游的输出,手敲只收引用,存着的引用显示成引用", async () => {
       const user = userEvent.setup();
       const onSet = vi.fn();
       mountPick({
@@ -293,12 +293,16 @@ describe("节点表单", () => {
         variables: ["{{build.scene_id}}"],
         onSet,
       });
-      //: 官方模板里写的是 `shot-{{loop.item.shot_number}}` —— 下拉不能把它显示成空白。
-      expect(trigger("shot").textContent).toContain("shot-{{loop.item.n}}");
+      //: 官方模板里写的是 `shot-{{loop.item.shot_number}}` —— 下拉不能把它显示成空白;字和引用混写,
+      //: 和提示词同一个编辑器显示(引用是整块的标签),不摆双括号。
+      const shot = document.querySelector<HTMLElement>('[data-field-key="shot"]')!;
+      await waitFor(() => expect([...shot.querySelectorAll("[data-ref-chip]")].map((chip) => chip.textContent)).toEqual(["loop.item.n"]));
+      expect(shot.textContent).toContain("shot-");
+      expect(shot.textContent).not.toContain("{{");
 
       await user.click(trigger("scene"));
       expect(await screen.findByRole("option", { name: /客厅/ })).toBeTruthy();
-      expect(screen.getByRole("option", { name: /build\.scene_id/ })).toBeTruthy();
+      expect(screen.getByRole("option", { name: "build · scene_id" })).toBeTruthy();
       //: 随手敲一串字不是一个场景:不给「使用」。
       await user.keyboard("随便写写");
       expect(screen.queryByText(/wfUseReference/)).toBeNull();

@@ -4,7 +4,15 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { docToString, filterRefs, parsePieces, piecesToDoc, piecesToString } from "@/features/nodeForms/refDoc";
+import {
+  docToString,
+  filterRefs,
+  isMixedTemplate,
+  parsePieces,
+  piecesToDoc,
+  piecesToString,
+  wholeRef,
+} from "@/features/nodeForms/refDoc";
 
 describe("字符串 → 片段", () => {
   it("认得出引用和它两边的文字", () => {
@@ -99,5 +107,23 @@ describe("按输入筛选候选", () => {
 
   it("匹配输出名那一半也算", () => {
     expect(filterRefs(["{{llm-1.text}}", "{{llm-1.json}}"], "json")).toEqual(["{{llm-1.json}}"]);
+  });
+});
+
+describe("整格一个引用,还是字和引用混写", () => {
+  //: 「值或上游输出」那一格按这个挑显示:整格一个引用是一枚标签,混写的用提示词同一个编辑器(见 RefCombobox)。
+  it("整格一个引用(两头的空白不算)给出里面那截路径,子路径也算", () => {
+    expect(wholeRef("{{report.json.verdict}}")).toBe("report.json.verdict");
+    expect(wholeRef("  {{ save_note.note_id }} ")).toBe("save_note.note_id");
+    expect(wholeRef("> {{report.json.verdict}}")).toBeNull();
+    expect(wholeRef("{{a.text}}{{b.text}}")).toBeNull();
+    expect(wholeRef("字面量")).toBeNull();
+  });
+
+  it("混写:里面有引用,但不是整格一个", () => {
+    expect(isMixedTemplate("> {{report.json.verdict}}")).toBe(true);
+    expect(isMixedTemplate("{{a.text}}{{b.text}}")).toBe(true);
+    expect(isMixedTemplate("{{report.json.verdict}}")).toBe(false);
+    expect(isMixedTemplate("没有引用")).toBe(false);
   });
 });

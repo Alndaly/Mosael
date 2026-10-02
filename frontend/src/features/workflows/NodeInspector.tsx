@@ -20,6 +20,7 @@ import { OptionPicker } from "@/components/ui/option-picker";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { dependentsCleared, withDependentsCleared } from "@/features/nodeForms/dependents";
+import { RefCatalogContext } from "@/features/nodeForms/refCatalog";
 import {
   FIELD_BOX,
   NodeConfigForm,
@@ -38,6 +39,7 @@ import type { Step } from "@/features/workflows/runSteps";
 import { bodyKey, bodyVariables, declaredFieldNames } from "@/features/workflows/scope";
 import { workflowNodeVisual } from "@/features/workflows/WorkflowNode";
 import { useUnusableNodeReasons } from "@/features/workflows/useUnusableNodeReasons";
+import { workflowRefCatalog } from "@/features/workflows/workflowRefCatalog";
 import { unknownNodeTypeText } from "@/features/workflows/workflowCanvasModel";
 import type { SetGraphOptions } from "@/features/workflows/workflowGraphStore";
 import { EMPTY_SCOPE_VARIABLES } from "@/features/workflows/workflowViewShared";
@@ -78,9 +80,12 @@ function upstreamVariables(
   return refs;
 }
 
+const NO_STEPS: Readonly<Record<string, Step>> = {};
+
 export function NodeInspector({
   inert = false,
   step = null,
+  runSteps = NO_STEPS,
   node,
   meta,
   graph,
@@ -98,6 +103,8 @@ export function NodeInspector({
   inert?: boolean;
   /** 这个节点在**最近一次运行**里的那一步。没跑过就是 null。 */
   step?: Step | null;
+  /** 最近一次运行里每个节点的那一步(节点 id → 步):引用上游输出时,交回过的字段能直接挑。 */
+  runSteps?: Readonly<Record<string, Step>>;
   node: WorkflowGraph["nodes"][number];
   meta: WorkflowNodeType | null;
   graph: WorkflowGraph;
@@ -125,6 +132,17 @@ export function NodeInspector({
   const variables = React.useMemo(
     () => Array.from(new Set([...scopeVariables, ...upstreamVariables(graph, node.id, registry)])),
     [graph, node.id, registry, scopeVariables],
+  );
+  //: 引用长什么样、指不指得到、底下有哪些字段(表单里「值或上游输出」那一类控件读它,见 nodeForms/refCatalog)。
+  const refCatalog = React.useMemo(
+    () =>
+      workflowRefCatalog({
+        graph,
+        registry,
+        scopeVariables,
+        runOutputs: Object.fromEntries(Object.entries(runSteps).map(([id, one]) => [id, one.outputs])),
+      }),
+    [graph, registry, scopeVariables, runSteps],
   );
   //: 容器自己的 output / condition 在体跑完之后求值,能插的是体里节点的输出(和体的作用域变量),
   //: 不是容器外面的上游 —— 列外层变量的话,选进去的引用运行时一律是空的。
@@ -465,7 +483,7 @@ export function NodeInspector({
    * 还能填表单。换算、四边钳制、量高度那一整套因此全部删掉。
    */
   return (
-    <>
+    <RefCatalogContext.Provider value={refCatalog}>
     {/* 节点悬浮键,分两组、中间一道竖线(tapnow 那条也是这么断的):
           左边 = **这个节点有哪几块内容**(点了换下面面板的内容),右边 = **能对它做什么**。
         两组都按"有才出":没跑过就没有「本次产出」,不是子图就没有「进入子图」。
@@ -689,6 +707,6 @@ export function NodeInspector({
       </div>
     </aside>
     </NodeToolbar>
-    </>
+    </RefCatalogContext.Provider>
   );
 }

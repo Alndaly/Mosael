@@ -386,6 +386,5 @@ def test_界面文案里的花括号原样留着() -> None:
     「{名: 引用},如 …」在界面上只剩下一个",如"。
     """
     assert t("wfNode_generate_subtitles_segments", "zh").count("{{转写.segments}}") == 1
-    values = t("wfNode_output_values", "zh")
-    assert values.startswith("{名: 引用}") and "{{llm_1.text}}" in values
-    assert "{{input.名}}" in t("wfNode_loop_foreach_inputs", "zh")
+    assert "[{src_start,src_end,reason,...}]" in t("wfNode_timeline_cut_ranges_ranges", "zh")
+    assert "{{input.名}}" in t("wfNode_loop_foreach_desc", "zh")

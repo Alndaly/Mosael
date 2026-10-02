@@ -717,6 +717,7 @@ export function WorkflowEditor({
           <NodeInspector
             inert={canvas.panning}
             step={atRoot ? (runByNode[selectedNode.id] ?? null) : null}
+            runSteps={atRoot ? runByNode : undefined}
             node={selectedNode}
             meta={registry.get(selectedNode.type) ?? null}
             graph={graph}

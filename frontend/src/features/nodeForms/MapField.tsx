@@ -4,8 +4,9 @@ import { X } from "lucide-react";
 import { useI18n } from "@/app/preferences";
 import { AddRow } from "@/components/ui/add-row";
 import { Button } from "@/components/ui/button";
-import { Combobox } from "@/components/app/combobox";
 import { Input } from "@/components/ui/input";
+import { RefCombobox } from "@/features/nodeForms/RefCombobox";
+import { bareRef, wholeRef } from "@/features/nodeForms/refDoc";
 
 /**
  * 「名字 → 值」的映射:入参映射、请求头、具名输出、启动参数……
@@ -101,14 +102,6 @@ export function MapField({
     onChange(object);
   };
 
-  /* 存进去的是 `{{source_video.asset_id}}`(那是要交给引擎插值的模板),但**屏幕上不摆花括号**:
-     那两对括号是语法,不是信息 —— 一列全是 `{{…}}` 时,眼睛要跨过它们才读得到真正区分彼此的
-     那半截,而右边一截长了还会先被截断。手填的字面量仍原样显示,一眼分得出哪些是引用。 */
-  const options = React.useMemo(
-    () => variables.map((ref) => ({ value: ref, label: bareRef(ref) })),
-    [variables],
-  );
-
   return (
     <div className="grid gap-1.5">
       {/* 有行的时候给一排列头 —— 两列都是输入框,不说明哪列是什么就得靠猜。 */}
@@ -128,22 +121,22 @@ export function MapField({
             placeholder={keyPlaceholder ?? t("wfMapKey")}
             onChange={(event) => push(rows.map((one, i) => (i === index ? { ...one, key: event.target.value } : one)))}
           />
-          <Combobox
+          {/* 存进去的是 `{{source_video.asset_id}}`(那是要交给引擎插值的模板),但**屏幕上不摆花括号**:
+              引用显示成「节点 · 输出 · 子路径」的标签,手填的字面量原样显示 —— 一眼分得出哪些是引用(见 RefCombobox)。
+              手填是**常态**:值可以是上游引用,也可以是写死的字面量。 */}
+          <RefCombobox
             value={row.value}
-            options={options}
+            variables={variables}
             placeholder={t("wfMapValue")}
-            emptyText={t("cmdkEmpty")}
-            // 手填是**常态**:值可以是上游引用,也可以是写死的字面量。
-            allowCustomValue
             size="sm"
-            className="w-full min-w-0 text-ui-xs"
+            className="text-ui-xs"
             onValueChange={(next: string) =>
               push(
                 rows.map((one, i) =>
                   i === index
-                    ? // 名字还空着就顺手起一个(`{{llm-1.text}}` → `text`)—— 多数时候那就是他想要的,
-                      // 不合适再改。手填的字面量起不出名字来,那种情况仍然留空。
-                      { ...one, value: next, key: one.key || (variables.includes(next) ? suggestName(next, rows) : "") }
+                    ? // 名字还空着就顺手起一个(`{{llm-1.text}}` → `text`、`{{report.json.verdict}}` → `verdict`)——
+                      // 多数时候那就是他想要的,不合适再改。手填的字面量起不出名字来,那种情况仍然留空。
+                      { ...one, value: next, key: one.key || (wholeRef(next) !== null ? suggestName(next, rows) : "") }
                     : one,
                 ),
               )
@@ -171,20 +164,16 @@ export function MapField({
   );
 }
 
-/** `{{llm-1.text}}` → `llm-1.text`。存的是模板,给人看的是里面那截。 */
-export function bareRef(ref: string): string {
-  return ref.replace(/^\{\{|\}\}$/g, "");
-}
-
-/** `{{llm-1.text}}` → `text`;重名就跟上游节点名,再不行加序号。 */
+/** `{{llm-1.text}}` → `text`、`{{report.json.verdict}}` → `verdict`(取最后一段);重名就跟上游节点名,再不行加序号。 */
 export function suggestName(ref: string, rows: MapRow[]): string {
-  const inner = bareRef(ref);
-  const [nodeId, output] = inner.split(".");
+  const segments = bareRef(ref).trim().split(".");
+  const nodeId = segments[0];
+  const last = segments.at(-1) ?? "";
   const taken = new Set(rows.map((row) => row.key));
-  for (const candidate of [output, `${nodeId}_${output}`.replace(/-/g, "_")]) {
+  for (const candidate of [last, `${nodeId}_${last}`.replace(/-/g, "_")]) {
     if (candidate && !taken.has(candidate)) return candidate;
   }
   let n = 2;
-  while (taken.has(`${output}_${n}`)) n += 1;
-  return `${output}_${n}`;
+  while (taken.has(`${last}_${n}`)) n += 1;
+  return `${last}_${n}`;
 }

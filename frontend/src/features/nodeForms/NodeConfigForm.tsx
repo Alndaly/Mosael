@@ -7,7 +7,6 @@ import { useI18n } from "@/app/preferences";
 import type { MessageKey } from "@/app/messages";
 import { CodeEditor } from "@/components/app/code-editor";
 import { AssetListField } from "@/features/nodeForms/AssetListField";
-import { Combobox } from "@/components/app/combobox";
 import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
 import { toPlainText } from "@/components/markdown/inlineSyntax";
 import { Input } from "@/components/ui/input";
@@ -18,8 +17,10 @@ import { isOneOfFallback, isTakenByOneOfPeer, isWorkflowFieldActive } from "@/fe
 import { ItemsField, itemsFromValue } from "@/features/nodeForms/ItemsField";
 import { JsonField } from "@/features/nodeForms/JsonField";
 import { ListField } from "@/features/nodeForms/ListField";
-import { MapField, bareRef } from "@/features/nodeForms/MapField";
+import { MapField } from "@/features/nodeForms/MapField";
+import { RefCombobox } from "@/features/nodeForms/RefCombobox";
 import { RefEditor } from "@/features/nodeForms/RefEditor";
+import { hasReference } from "@/features/nodeForms/refDoc";
 import { ScenePropsField, parseIds } from "@/features/nodeForms/ScenePropsField";
 import { StartParamsField } from "@/features/nodeForms/StartParamsField";
 import { cn } from "@/lib/utils";
@@ -155,11 +156,6 @@ export interface NodeFieldOptions {
   whyEmpty: (key: string) => EmptyOptions;
   /** 工作区素材(有素材字段、或宿主说它要时才拉,见 hostNeeds)。 */
   assets: Asset[];
-}
-
-/** 值里有没有一段 `{{…}}` 引用。 */
-export function hasReference(value: string): boolean {
-  return /\{\{[^{}]+\}\}/.test(value);
 }
 
 /**
@@ -342,10 +338,6 @@ export function NodeConfigForm({
   //: 清单之外还能不能手填,由**声明**说了算(后端 allow_custom)——此前是按字段名猜 key === "model"。
   const allowsCustomValue = (spec?: ConfigSpec) => Boolean(spec?.allow_custom);
 
-  /** 引用也是一项:存的是 `{{source_video.asset_id}}`,列表里显示成不带花括号的 `source_video.asset_id`
-   *  (和 MapField 同一个写法)。排在这个工作区的东西后面 —— 挑现成的是常态。 */
-  const referenceOptions = references ? variables.map((ref) => ({ value: ref, label: bareRef(ref) })) : [];
-
   /** 现查的清单是空的:占位里说为什么(还在查 / 先填哪一格 / 那一格接的是上游 / 真的没有)。 */
   const emptyHint = (key: string): string => emptyOptionsHint(t, fieldOptions.whyEmpty(key));
 
@@ -454,7 +446,7 @@ export function NodeConfigForm({
                 />
               ) : spec?.options && options ? (
                 // 固定选项:闭集给纯下拉;声明了 allow_custom 的(逐镜决定的 source_group / render ——
-                // 值常是上游的 `{{…}}`)走可手填的那一版,否则引用在纯下拉里显示成空白,也填不回去。
+                // 值常是上游的 `{{…}}`)走「值或上游输出」那一版,否则引用在纯下拉里显示成空白,也填不回去。
                 !allowsCustomValue(spec) ? (
                   <OptionPicker
                     value={String(value ?? spec.default ?? "")}
@@ -464,14 +456,12 @@ export function NodeConfigForm({
                     size={size}
                   />
                 ) : (
-                  <Combobox
+                  <RefCombobox
                     value={String(value ?? spec.default ?? "")}
                     options={options}
+                    variables={references ? insertable : []}
                     placeholder={t("wfPickOption")}
-                    emptyText={t("cmdkEmpty")}
-                    allowCustomValue
                     size={size}
-                    className="w-full"
                     onValueChange={(next) => setConfig(key, next)}
                   />
                 )
@@ -483,22 +473,17 @@ export function NodeConfigForm({
                   const shown =
                     !current && spec?.sole_option_default && options.length === 1 ? options[0].value : current;
                   const placeholder = options.length > 0 ? t("wfPickOption") : emptyHint(key);
-                  // 清单之外还收什么:声明了 allow_custom 的(模型名)什么都收;能写引用的宿主里收引用。
+                  // 清单之外还收什么:声明了 allow_custom 的(模型名)什么都收;能写引用的宿主里收引用 ——
+                  // 上游的输出列在清单后面,挑现成的是常态(见 RefCombobox)。
                   if (allowsCustomValue(spec) || references) {
-                    const known = new Set(options.map((option) => option.value));
                     return (
-                      <Combobox
+                      <RefCombobox
                         value={shown}
-                        options={[...options, ...referenceOptions.filter((option) => !known.has(option.value))]}
+                        options={options}
+                        variables={references ? insertable : []}
+                        literal={allowsCustomValue(spec)}
                         placeholder={placeholder}
-                        emptyText={t("cmdkEmpty")}
-                        allowCustomValue
-                        acceptsCustomValue={allowsCustomValue(spec) ? undefined : hasReference}
-                        customValueLabel={
-                          allowsCustomValue(spec) ? undefined : (query) => t("wfUseReference").replace("{q}", query)
-                        }
                         size={size}
-                        className="w-full"
                         onValueChange={(next) => setConfig(key, next)}
                       />
                     );

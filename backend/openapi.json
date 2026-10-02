@@ -24046,6 +24046,13 @@
             "type": "object",
             "title": "Body Scope"
           },
+          "output_schema_from": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Output Schema From"
+          },
           "id": {
             "type": "string",
             "title": "Id"
@@ -37125,6 +37132,13 @@
             },
             "type": "object",
             "title": "Body Scope"
+          },
+          "output_schema_from": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Output Schema From"
           }
         },
         "type": "object",

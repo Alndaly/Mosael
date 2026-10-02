@@ -47,7 +47,7 @@ const META = {
   output_labels: {},
 } as unknown as WorkflowNodeType;
 
-function renderInspector(config: Record<string, unknown>) {
+function renderInspector(config: Record<string, unknown>, scopeVariables?: string[]) {
   const onChange = vi.fn();
   const node = { id: "n1", type: META.type, position: { x: 0, y: 0 }, config };
   render(
@@ -59,6 +59,7 @@ function renderInspector(config: Record<string, unknown>) {
             meta={META}
             graph={{ nodes: [node], edges: [] } as never}
             registry={new Map([[META.type, META]])}
+            scopeVariables={scopeVariables}
             workspaceId="w1"
             onChange={onChange}
             onApplyGraph={vi.fn()}
@@ -96,11 +97,13 @@ describe("带固定选项的字段", () => {
   //: 声明了 allow_custom 的(生成节点的 source_group、白模渲染的 render):整片流程里是逐镜
   //: 决定的,官方模板写的是 `{{loop.item.reference_mode}}`。此前面板对「有固定选项」的字段
   //: 一律给纯下拉,不认 allow_custom —— 引用显示成空白,也填不回去。
-  it("声明了能手填的:引用原样显示,也能手填", async () => {
+  it("声明了能手填的:引用显示成引用,也能手填", async () => {
     const user = userEvent.setup();
-    const { box, onChange } = renderInspector({ mode: "{{loop.item.mode}}", kind: "x" });
+    const { box, onChange } = renderInspector({ mode: "{{loop.item.mode}}", kind: "x" }, ["{{loop.item}}", "{{loop.index}}"]);
     const trigger = within(box("mode")).getByRole("combobox");
-    expect(trigger.textContent).toContain("{{loop.item.mode}}");
+    //: 循环体里:`loop` 是循环给体播的作用域,指得到 —— 显示成引用标签,不摆双括号、不报错。
+    expect(trigger.textContent).toBe("loop · item · mode");
+    expect(trigger.querySelector("[data-ref-token]:not([data-ref-problem])")).not.toBeNull();
     await user.click(trigger);
     await user.keyboard("{{{{shot.mode}}");
     await user.click(await screen.findByText(/comboboxUseCustomValue/));

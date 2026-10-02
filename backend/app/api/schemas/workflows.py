@@ -109,6 +109,9 @@ class WorkflowNodeTypeOut(ApiModel):
     #: 内嵌子图节点(循环 / 子图)体内看得见什么:作用域名 → 字段,`*字段名` 表示那个配置字段里的
     #: 每个键。如 {"loop": ["item", "index"], "input": ["*inputs"]};普通节点为空。
     body_scope: dict[str, list[str]] = Field(default_factory=dict)
+    #: 输出 → 写着它结构的那一格配置(一份 JSON Schema),如大模型的 {"json": "json_schema"}。
+    #: 引用这个输出的地方据此列出 `{{节点.输出.字段}}` 让人挑;普通节点为空。
+    output_schema_from: dict[str, str] = Field(default_factory=dict)
 
 
 class WorkflowAiEditRequest(ApiModel):

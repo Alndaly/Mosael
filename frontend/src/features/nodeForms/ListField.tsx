@@ -4,8 +4,7 @@ import { X } from "lucide-react";
 import { useI18n } from "@/app/preferences";
 import { AddRow } from "@/components/ui/add-row";
 import { Button } from "@/components/ui/button";
-import { Combobox } from "@/components/app/combobox";
-import { bareRef } from "@/features/nodeForms/MapField";
+import { RefCombobox } from "@/features/nodeForms/RefCombobox";
 
 /**
  * 一串值:插件入参里声明成数组(`"type": "array"`)、每一项是字符串或数字的那种。
@@ -74,11 +73,6 @@ export function ListField({
     onChange(list);
   };
 
-  const options = React.useMemo(
-    () => variables.map((ref) => ({ value: ref, label: bareRef(ref) })),
-    [variables],
-  );
-
   return (
     <div className="grid gap-1.5">
       {isMapping(value) && rows.length === 0 && (
@@ -88,14 +82,12 @@ export function ListField({
       )}
       {rows.map((row, index) => (
         <div className="grid grid-cols-[minmax(0,1fr)_24px] items-center gap-1" key={index}>
-          <Combobox
+          <RefCombobox
             value={row}
-            options={options}
+            variables={variables}
             placeholder={t("wfListItem")}
-            emptyText={t("cmdkEmpty")}
-            allowCustomValue
             size="sm"
-            className="w-full min-w-0 text-ui-xs"
+            className="text-ui-xs"
             onValueChange={(next: string) => push(rows.map((one, i) => (i === index ? next : one)))}
           />
           <Button

@@ -29,7 +29,9 @@ describe("具名输出的「值或上游输出」", () => {
     const onChange = vi.fn();
     render(<MapField value={{ source_asset_id: "{{source_video.asset_id}}" }} onChange={onChange} variables={variables} />);
     const trigger = screen.getByRole("combobox");
-    expect(trigger.textContent).toContain("source_video.asset_id");
+    //: 没有宿主给的引用目录(节点叫什么)时按路径分段;工作流里是「节点名 · 输出名」(见 NodeInspector.references)。
+    expect(trigger.textContent).toBe("source_video · asset_id");
+    expect(trigger.querySelector("[data-ref-token]")).not.toBeNull();
     expect(trigger.textContent).not.toContain("{{");
     // 没动过就不该发出变更 —— 顺带钉住"显示归显示,值不受影响"。
     expect(onChange).not.toHaveBeenCalled();

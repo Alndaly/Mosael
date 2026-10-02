@@ -601,6 +601,10 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         #: 那时模型只是"看过一份贴在提示词里的 Schema",没有任何东西强制它遵守。
         "outputs": ["text", "json", "response_format_used"],
         "output_labels": {"response_format_used": "wfOut_response_format_used"},
+        #: 输出的结构写在哪一格配置里(那一格是一份 JSON Schema):`json` 长什么样由 `json_schema` 说。
+        #: 引用它的地方(具名输出、入参……)据此列出 `{{节点.json.字段}}` 让人挑,而不是只能挑整个 `json`、
+        #: 再手敲子路径。界面只读这份声明,不按节点类型认(见前端 workflows/workflowRefCatalog)。
+        "output_schema_from": {"json": "json_schema"},
     },
     "plugin_tool": {
         "external": True,

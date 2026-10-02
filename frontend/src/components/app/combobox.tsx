@@ -42,6 +42,9 @@ export function Combobox({
   allowCustomValue = false,
   acceptsCustomValue,
   customValueLabel,
+  extraOptions,
+  renderValue,
+  title,
   disabled,
   className,
   size,
@@ -58,6 +61,13 @@ export function Combobox({
    *  随手敲的一串字在那里是一个不存在的 id,只会在运行时报错。 */
   acceptsCustomValue?: (query: string) => boolean;
   customValueLabel?: (query: string) => string;
+  /** 按这次敲的字现算的几项,排在清单最前(手填那一项之前)。值和显示名都由调用方给 ——
+   *  比如敲 `report.json.verdict` 时给一项「引用 写运营诊断 · JSON · verdict」,存下去是 `{{report.json.verdict}}`。 */
+  extraOptions?: (query: string) => ComboboxOption[];
+  /** 触发器上怎么显示当前值;不给(或返回 undefined)就是选中项的显示名,不在清单里的照原样。 */
+  renderValue?: (value: string) => React.ReactNode;
+  /** 触发器的悬停说明。 */
+  title?: string;
   disabled?: boolean;
   className?: string;
   /** 触发器档位,和 `<Input size>`、`<Button size>` 同一把尺。 */
@@ -72,13 +82,15 @@ export function Combobox({
   const [query, setQuery] = React.useState("");
   const selected = options.find((option) => option.value === value);
   const trimmedQuery = query.trim();
+  const extras = trimmedQuery && extraOptions ? extraOptions(trimmedQuery) : [];
   // 认 label 也认 value:显示名和真实值不一样时(如 `source_video.asset_id` 背后存的是
   // `{{source_video.asset_id}}`),照着屏幕上的字打一遍不该被当成"自己新写的字面量"。
   const canUseCustom =
     allowCustomValue &&
     Boolean(trimmedQuery) &&
     (acceptsCustomValue?.(trimmedQuery) ?? true) &&
-    !options.some((option) => option.value === trimmedQuery || option.label === trimmedQuery);
+    ![...options, ...extras].some((option) => option.value === trimmedQuery || option.label === trimmedQuery);
+  const shown = value ? renderValue?.(value) : undefined;
 
   const choose = (nextValue: string) => {
     onValueChange(nextValue);
@@ -105,10 +117,11 @@ export function Combobox({
           role="combobox"
           aria-expanded={open}
           disabled={disabled}
+          title={title}
           className={cn(fieldTriggerClass(size), "cursor-pointer text-left", className)}
         >
           <span className={value ? "text-foreground" : "text-muted-foreground"}>
-            {selected?.label ?? (value || placeholder)}
+            {shown ?? selected?.label ?? (value || placeholder)}
           </span>
           <ChevronDown className={FIELD_TRIGGER_CHEVRON} />
         </button>
@@ -117,6 +130,12 @@ export function Combobox({
         <Command shouldFilter>
           <CommandInput value={query} onValueChange={setQuery} placeholder={searchPlaceholder ?? placeholder} />
           <CommandList>
+            {extras.map((option) => (
+              // 现算的项要躲过 cmdk 按字过滤:value 带上这次敲的字。
+              <CommandItem key={`extra-${option.value}`} value={`${trimmedQuery} ${option.value}`} onSelect={() => choose(option.value)}>
+                <span className="min-w-0 flex-1 truncate">{option.label ?? option.value}</span>
+              </CommandItem>
+            ))}
             {canUseCustom ? (
               <CommandItem value={`custom-${trimmedQuery}`} onSelect={() => choose(trimmedQuery)}>
                 <span className="truncate">{customValueLabel ? customValueLabel(trimmedQuery) : t("comboboxUseCustomValue").replace("{q}", trimmedQuery)}</span>

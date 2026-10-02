@@ -54,6 +54,8 @@ def describe_node_types(registry: dict[str, dict[str, Any]], locale: str) -> lis
             "tool_name": meta.get("tool_name", ""),
             # 内嵌子图节点体内看得见的作用域名 —— 画布就绪检查和后端校验读同一格(见 NESTED_BODY_TYPES)。
             "body_scope": {root: list(fields) for root, fields in (meta.get("body_scope") or {}).items()},
+            # 哪个输出的结构写在哪一格配置里(那一格是 JSON Schema):引用它的地方据此列出能挑的字段。
+            "output_schema_from": dict(meta.get("output_schema_from") or {}),
         }
         for key, meta in registry.items()
     ]

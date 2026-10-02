@@ -304,6 +304,24 @@ def test_每个输出接点都有随请求语言变化的显示名() -> None:
     assert by_locale["en-US"]["timeline_append"]["output_labels"]["timeline_end"] == "Timeline end"
 
 
+def test_输出的结构写在哪一格_照声明发到接口上() -> None:
+    """大模型的 `json` 长什么样写在 `json_schema` 那一格里:引用它的地方(具名输出、入参……)据此列出能挑的字段。
+
+    此前「交付诊断与数据」里的 `{{report.json.verdict}}` 在下拉里没有这一项,只能手敲子路径,界面上还退回原样显示
+    那串模板。每一条声明都得对得上:输出是这个节点声明了的,那一格是这个节点的 object 字段 —— 指错了的话,
+    界面列出来的字段和运行时交回的对不上。
+    """
+    from tests.util import fresh_client
+
+    items = fresh_client().get("/api/workflows/node-types").json()
+    by_type = {item["type"]: item for item in items}
+    assert by_type["llm"]["output_schema_from"] == {"json": "json_schema"}
+    for item in items:
+        for output, field in item["output_schema_from"].items():
+            assert output in item["outputs"], f"{item['type']} 的 {output} 不是它声明的输出"
+            assert (item["config"].get(field) or {}).get("type") == "object", f"{item['type']} 的 {field} 不是一格 object"
+
+
 def test_名字到值的映射不该让用户手写_JSON() -> None:
     """入参映射、请求头、具名输出、启动参数……绝大多数 object 字段其实是「名字 → 值」,
     而值往往是上游节点的引用(`{{llm-1.text}}`)。
