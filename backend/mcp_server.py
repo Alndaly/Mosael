@@ -296,65 +296,23 @@ def list_assets(workspace_id: str = "", kind: str = "", name_contains: str = "")
 
 @tool(effect="reads")
 def inspect_sequence(sequence_id: str = "", project_id: str = "") -> dict[str, Any]:
-    """Read-only: inspect a VIDEO TIMELINE sequence — format, revision, duration, tracks, clips.
+    """Read-only: a VIDEO TIMELINE's tracks and clips — the ids, times and revision edit_timeline needs.
 
-    Use before edit_timeline/render_sequence so you have the right sequence_id,
-    track layout, clip_id values, and current timing. Provide sequence_id, or
-    project_id to inspect its most recent sequence. Do NOT use for visual workflows
-    or workflow canvas nodes/edges — use get_workflow for those.
+    Give sequence_id, or project_id for its latest sequence. Clip duration is on the timeline
+    (after speed); src_in/src_out are source-media time. Not for workflows — use get_workflow.
     """
-    if not sequence_id:
-        if not project_id:
-            raise ValueError("Provide sequence_id or project_id")
-    from app.api.schemas import SequenceOut
-    from app.domain.assets import use_cases as assets
+    if not sequence_id and not project_id:
+        raise ValueError("Provide sequence_id or project_id")
     from app.domain.sequences import use_cases as sequences
+    from app.domain.sequences.overview import describe_sequence
 
-    def load(db, user) -> tuple[dict[str, Any], dict[str, str]]:
+    def load(db, user) -> dict[str, Any]:
         row = sequences.readable(db, user, sequence_id) if sequence_id else sequences.latest_of_project(db, user, project_id)
         if row is None:
             raise ValueError("Project has no sequences")
-        names = {asset.id: asset.name for asset in assets.list_assets(db, user, row.workspace_id)}
-        return SequenceOut.model_validate(row).model_dump(mode="json"), names
+        return describe_sequence(row)
 
-    sequence, workspaces_assets = _use_case(load)
-    duration = 0.0
-    tracks_summary = []
-    for track in sequence.get("tracks", []):
-        clips_summary = []
-        for clip in track.get("clips", []):
-            clip_duration = clip["src_out"] - clip["src_in"]
-            duration = max(duration, clip["timeline_start"] + clip_duration)
-            row = {
-                "clip_id": clip["id"],
-                "asset": workspaces_assets.get(clip["asset_id"], clip["asset_id"]),
-                "timeline_start": clip["timeline_start"],
-                "duration": round(clip_duration, 3),
-            }
-            # 字幕条没有素材,它的内容就是那行字。不给出来的话,一条字幕在这里显示成
-            # 「asset: null」—— 模型既看不出写的是什么,也就没法说"把这几条配音"。
-            text = str(clip.get("text_override") or "").strip()
-            if text:
-                row["text"] = text
-            clips_summary.append(row)
-        tracks_summary.append(
-            {
-                # 插入字幕/片段都要 track_id,而此前这里只给名字 —— 模型只能猜,或者去翻原始接口。
-                "track_id": track["id"],
-                "name": track["name"],
-                "kind": track["kind"],
-                "clip_count": len(clips_summary),
-                "clips": clips_summary,
-            }
-        )
-    return {
-        "sequence_id": sequence["id"],
-        "name": sequence["name"],
-        "format": f"{sequence['width']}x{sequence['height']} @ {sequence['fps']}fps",
-        "revision": sequence["revision"],
-        "duration_seconds": round(duration, 3),
-        "tracks": tracks_summary,
-    }
+    return _use_case(load)
 
 
 @tool(effect="reads")

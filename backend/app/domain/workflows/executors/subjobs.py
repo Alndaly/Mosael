@@ -530,48 +530,26 @@ def edit_timeline(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[
 def inspect_sequence(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
     """看一眼时间线现在长什么样 —— 编排之前得先知道有哪些轨道、片段排到了第几秒。
 
-    智能体有对应的工具;工作流此前只能盲改。
+    和智能体的 inspect_sequence 读的是**同一份**(domain/sequences/overview):片段用 clip_id、轨道用
+    track_id,正好是 edit_timeline 的操作要的名字。
     """
+    from app.domain.sequences.overview import describe_sequence
+
     sequence_id = str(config.get("sequence_id", "")).strip()
     if not sequence_id:
         raise WorkflowDomainError("wfErr_inspectNeedsSequence")
     sequence = db.get(Sequence, sequence_id)
     if sequence is None or sequence.workspace_id != scope.workspace_id:
         raise WorkflowDomainError("wfErr_sequenceNotInWorkspace")
-    tracks = [
-        {
-            "id": track.id,
-            "kind": track.kind,
-            "clips": [
-                {
-                    "id": clip.id,
-                    "asset_id": clip.asset_id,
-                    "timeline_start": clip.timeline_start,
-                    "src_in": clip.src_in,
-                    "src_out": clip.src_out,
-                    "speed": clip.speed or 1.0,
-                }
-                for clip in (track.clips or [])
-            ],
-        }
-        for track in (sequence.tracks or [])
-    ]
-    duration = max(
-        (clip["timeline_start"] + (clip["src_out"] - clip["src_in"]) / clip["speed"] for track in tracks for clip in track["clips"]),
-        default=0.0,
-    )
-    # 顺手把第一条视频/音频轨的 id 摆出来 —— 下游「接素材」想指定轨道时,不用自己去
-    # tracks 里翻。绝大多数时间线各只有一条。
-    def first(kind: str) -> str:
-        return next((one["id"] for one in tracks if one["kind"] == kind), "")
-
+    view = describe_sequence(sequence)
+    # 只交出声明过的那几个输出(见 node_types 的 outputs):画幅、名字这类工作流里接不出去的就不带。
     return {
-        "sequence_id": sequence.id,
-        "revision": sequence.revision,
-        "tracks": tracks,
-        "duration": duration,
-        "video_track_id": first("video"),
-        "audio_track_id": first("audio"),
+        "sequence_id": view["sequence_id"],
+        "revision": view["revision"],
+        "tracks": view["tracks"],
+        "duration": view["duration"],
+        "video_track_id": view["video_track_id"],
+        "audio_track_id": view["audio_track_id"],
     }
 
 

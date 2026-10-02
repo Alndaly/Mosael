@@ -70,7 +70,7 @@
 | `http_request` | 确认卡 | Confirmation required: call an external HTTP API (POST/PUT/PATCH/DELETE). |
 | `import_from_url` | 确认卡 | Confirmation required: download a video (kind=audio: its audio) from a web link into the media library. |
 | `import_media_from_url` | 直接执行 | Runs directly: download a video or audio from a link into the asset library. |
-| `inspect_sequence` | 直接执行 | Read-only: inspect a VIDEO TIMELINE sequence — format, revision, duration, tracks, clips. |
+| `inspect_sequence` | 直接执行 | Read-only: a VIDEO TIMELINE's tracks and clips — the ids, times and revision edit_timeline needs. |
 | `list_agent_sessions` | 直接执行 | Runs directly: list the agent sessions in this workspace (id, title, status). |
 | `list_assets` | 直接执行 | Read-only: list media assets in a workspace (id, name, kind, source, duration). |
 | `list_board_producers` | 直接执行 | Read-only: list what content items on a creative board can DO — their abilities and slot generators. |
