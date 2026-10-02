@@ -10,12 +10,14 @@ from sqlalchemy.orm import Session
 
 from app.db.models import Clip, Sequence
 from app.domain.sequences._timeline import (
+    MIN_CUT_REMAINDER,
     _record_operation,
     _require_clip,
     _require_sequence,
     _require_target_track,
     _validate_clip_range,
     finite_number,
+    too_short,
 )
 from app.domain.sequences.coverage import clear_range, clip_end, clips_on_track
 from app.domain.sequences.errors import SequenceDomainError
@@ -149,6 +151,8 @@ def insert_text_clip(db: Session, sequence_id: str, op: InsertTextClip) -> Seque
         raise SequenceDomainError("Text must not be empty")
     if finite_number("duration", op.duration) <= 0:
         raise SequenceDomainError("Duration must be positive")
+    if too_short(op.duration):
+        raise SequenceDomainError("seqErr_clipTooShort", min=MIN_CUT_REMAINDER)
     _validate_clip_range(op.timeline_start, 0, op.duration)
 
     journal = Journal(db, sequence)

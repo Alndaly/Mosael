@@ -8,7 +8,7 @@
 from __future__ import annotations
 
 from app.db.models import Asset, Track
-from app.domain.sequences._timeline import MIN_CUT_REMAINDER
+from app.domain.sequences._timeline import too_short
 from app.domain.sequences.errors import SequenceDomainError
 
 #: 素材种类 → 该进哪种轨道。没列的(图片)按视频走 —— 图片在时间线上就是一段定格视频。
@@ -39,6 +39,6 @@ def clamp_to_source(asset: Asset, src_in: float, src_out: float) -> float:
         return src_out
     end = float(probed)
     # 夹完还得够一个片段长(和切分、覆盖的最小余量同一个口径):入点离末尾不到那么点,夹出来的是一片碎屑。
-    if end - src_in <= MIN_CUT_REMAINDER:
+    if too_short(end - src_in):
         raise SequenceDomainError("seqErr_clipStartsPastAssetEnd", src_in=round(src_in, 3), duration=round(end, 3))
     return min(src_out, end)

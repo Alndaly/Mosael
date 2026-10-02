@@ -13,7 +13,15 @@ from app.domain.sequences.errors import SequenceDomainError, SequenceNotFound, S
 from app.domain.sequences.offline import offline_snapshot
 
 
+#: 一个片段最短多长(源时间,秒)。切分、按点切、按文字剪、覆盖裁剩、插入让位、修剪,以及新放下的
+#: 片段和花字,认的都是这一个数(too_short)。此前插入 / 花字一个都不查:0.0001 秒的片段放得下去,
+#: 而切分、覆盖却把不到 0.05 秒的一截当碎片丢掉 —— 同一种东西,这边造得出、那边容不下。
 MIN_CUT_REMAINDER = 0.05
+
+
+def too_short(source_seconds: float) -> bool:
+    """这么长(源时间秒)够不够一个片段。不够的碎片只会让人点不中、看不见,在成片里闪一下。"""
+    return source_seconds <= MIN_CUT_REMAINDER
 
 #: 片段倍速的范围。插入时就给倍速(配音、旁白按位置定速)和事后改速是同一条规矩。
 SPEED_RANGE = (0.25, 4.0)

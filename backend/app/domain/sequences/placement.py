@@ -20,6 +20,7 @@ from app.domain.sequences._timeline import (
     finite_number,
     require_speed,
     timeline_span,
+    too_short,
 )
 from app.domain.sequences.coverage import (
     clear_range,
@@ -144,6 +145,8 @@ def place_clip(journal: Journal, op: InsertClip) -> Clip:
         raise SequenceDomainError("seqErr_assetNotMedia", name=asset.name)
     _validate_clip_range(op.timeline_start, op.src_in, op.src_out)
     src_out = fit_asset_on_track(asset, track, op.src_in, op.src_out)
+    if too_short(src_out - op.src_in):
+        raise SequenceDomainError("seqErr_clipTooShort", min=MIN_CUT_REMAINDER)
     speed = require_speed(op.speed)
 
     clip = journal.create(
@@ -297,9 +300,8 @@ def trim_clip(db: Session, sequence_id: str, op: TrimClip) -> Sequence:
     start += clamped_head - head
     src_in += (clamped_head - head) * speed
     src_out += (clamped_tail - tail) * speed
-    if src_out - src_in <= MIN_CUT_REMAINDER or any(
-        (timeline_span(member) - clamped_head + clamped_tail) * (member.speed or 1.0) <= MIN_CUT_REMAINDER
-        for member in members
+    if too_short(src_out - src_in) or any(
+        too_short((timeline_span(member) - clamped_head + clamped_tail) * (member.speed or 1.0)) for member in members
     ):
         raise SequenceDomainError("seqErr_trimNoRoom")
 

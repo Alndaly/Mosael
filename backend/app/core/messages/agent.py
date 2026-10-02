@@ -196,6 +196,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "这是最后一条视频轨,删掉后画面就无处可放了;先加一条新的视频轨再删它",
         "en": "This is the last video track; without it there is nowhere to put picture. Add another video track first.",
     },
+    "seqErr_clipTooShort": {"zh": "片段要长于 {min} 秒", "en": "A clip must be longer than {min}s."},
     "seqErr_unknownOp": {"zh": "不认识的时间线操作: {kind}", "en": "Unknown timeline operation: {kind}"},
     "seqErr_trimNoRoom": {
         "zh": "这里没有地方放下这一段:修剪会让它短到没有,或者两边都贴着别的片段",

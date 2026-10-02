@@ -10,13 +10,13 @@ from sqlalchemy.orm import Session
 
 from app.db.models import Clip, Sequence, Track
 from app.domain.sequences._timeline import (
-    MIN_CUT_REMAINDER,
     _inherited,
     _record_operation,
     _require_clip,
     _require_sequence,
     _sliced_inherited,
     finite_number,
+    too_short,
 )
 from app.domain.sequences.errors import SequenceDomainError
 from app.domain.sequences.coverage import EPS, clip_end, remove_time_ranges
@@ -55,7 +55,7 @@ def split_clip(db: Session, sequence_id: str, op: SplitClip) -> Sequence:
     sequence = _require_sequence(db, sequence_id)
     clip = _require_clip(db, sequence_id, op.clip_id)
     src_time = finite_number("src_time", op.src_time)
-    if not (clip.src_in + MIN_CUT_REMAINDER < src_time < clip.src_out - MIN_CUT_REMAINDER):
+    if too_short(src_time - clip.src_in) or too_short(clip.src_out - src_time):
         raise SequenceDomainError("Split point must fall inside the clip")
     journal = Journal(db, sequence)
     _split_linked(journal, clip, [src_time], linked=op.linked)
@@ -101,7 +101,7 @@ def _interior_times(clip: Clip, times: list[float]) -> list[float]:
     kept: list[float] = []
     previous = clip.timeline_start
     for time in sorted(times):
-        if (time - previous) * speed > MIN_CUT_REMAINDER and (clip_end(clip) - time) * speed > MIN_CUT_REMAINDER:
+        if not too_short((time - previous) * speed) and not too_short((clip_end(clip) - time) * speed):
             kept.append(time)
             previous = time
     return kept
@@ -277,10 +277,10 @@ def _removed_source(clip: Clip, ranges: tuple[tuple[float, float], ...]) -> list
     kept: list[tuple[float, float]] = []
     cursor = clip.src_in
     for start, end in clamped:
-        if start - cursor > MIN_CUT_REMAINDER:
+        if not too_short(start - cursor):
             kept.append((cursor, start))
         cursor = max(cursor, end)
-    if clip.src_out - cursor > MIN_CUT_REMAINDER:
+    if not too_short(clip.src_out - cursor):
         kept.append((cursor, clip.src_out))
     bounds = [clip.src_in, *(edge for piece in kept for edge in piece), clip.src_out]
     return [(start, end) for start, end in zip(bounds[::2], bounds[1::2]) if end > start]
@@ -360,7 +360,7 @@ def _apply_clip_point_splits(journal: Journal, clip_id: str, src_times: tuple[fl
     points: list[float] = []
     cursor = clip.src_in
     for value in sorted({finite_number("src_time", point) for point in src_times}):
-        if value - cursor > MIN_CUT_REMAINDER and clip.src_out - value > MIN_CUT_REMAINDER:
+        if not too_short(value - cursor) and not too_short(clip.src_out - value):
             points.append(value)
             cursor = value
     if not points:

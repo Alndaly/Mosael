@@ -21,11 +21,11 @@ from sqlalchemy.orm import Session
 
 from app.db.models import Clip
 from app.domain.sequences._timeline import (
-    MIN_CUT_REMAINDER,
     _inherited,
     _sliced_effects,
     _sliced_transform,
     timeline_span,
+    too_short,
 )
 from app.domain.sequences.journal import Journal
 
@@ -57,11 +57,6 @@ def piece_appearance(
     }
 
 
-def _too_short(source_seconds: float) -> bool:
-    """剩下的一截太短就整段不要 —— 和切分的最小余量同一个口径(源时间秒)。"""
-    return source_seconds <= MIN_CUT_REMAINDER
-
-
 def carve(journal: Journal, clip: Clip, start: float, end: float) -> Clip | None:
     """从一个片段上挖掉时间线区间 [start, end) 覆盖的部分。
 
@@ -80,8 +75,8 @@ def carve(journal: Journal, clip: Clip, start: float, end: float) -> Clip | None
     orig_in, orig_out = clip.src_in, clip.src_out
     left_out = orig_in + max(0.0, start - clip_start) * speed
     right_in = orig_in + max(0.0, end - clip_start) * speed
-    keep_left = start > clip_start + EPS and not _too_short(left_out - orig_in)
-    keep_right = end < clip_stop - EPS and not _too_short(orig_out - right_in)
+    keep_left = start > clip_start + EPS and not too_short(left_out - orig_in)
+    keep_right = end < clip_stop - EPS and not too_short(orig_out - right_in)
 
     def piece(piece_in: float, piece_out: float) -> dict[str, Any]:
         return piece_appearance(clip.transform, clip.effects, orig_in, orig_out, piece_in, piece_out)
@@ -170,7 +165,7 @@ def make_room(journal: Journal, track_id: str, start: float, end: float, *, excl
     )
     pushed_along: list[Clip] = []
     if straddler is not None:
-        if _too_short((start - straddler.timeline_start) * (straddler.speed or 1.0)):
+        if too_short((start - straddler.timeline_start) * (straddler.speed or 1.0)):
             pushed_along.append(straddler)
         else:
             # 零宽的区间 = 在落点切一刀;尾巴太短时 carve 自己会把它裁掉而不是切出一段碎片。
