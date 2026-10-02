@@ -23,13 +23,6 @@ class SequenceNotFound(SequenceDomainError):
     status = 404
 
 
-class SequenceChangedElsewhere(SequenceDomainError):
-    """调用方以为时间线停在某一版,它却已经在别处被改过(剪辑页、智能体、另一个人)。这时照「最新的一步」撤,
-    撤掉的就不是他以为的那一步 —— 拒掉,让他去看一眼。"""
-
-    status = 409
-
-
 class SequenceRevisionConflict(SequenceDomainError):
     """这一步是照着某一版时间线做的,而时间线已经被别人(另一个人、智能体、画板、自己的另一个窗口)改到了
     别的样子,和这一步对不上 —— 照做就是在一份过时的时间线上替人做决定。拒掉,边界把最新的那一版一起交回去,

@@ -353,15 +353,31 @@ export function setClipEffects(
   return edit(sequence, `/clips/${clipId}/effects`, { method: "PATCH", body: JSON.stringify({ effects }) });
 }
 
-/** `expectedRevision`:调用方看到的是第几版。给了而时间线已在别处改过,服务端回 409、不撤别人的那一步(画板上的撤销)。 */
-export function undoSequence(sequenceId: string, expectedRevision?: number): Promise<Sequence> {
-  const query = expectedRevision === undefined ? "" : `?expected_revision=${expectedRevision}`;
-  return api<Sequence>(`/api/sequences/${sequenceId}/undo${query}`, { method: "POST" });
+/**
+ * 撤销 / 重做的两个选项。
+ *
+ * - `expectedRevision`:调用方看到的是第几版。只给它时撤**整条时间线上最新的一步**,时间线已经被改过就 409、
+ *   不撤别人的那一步(画板上的撤销)。
+ * - `mine`:撤**自己**最近的一步(剪辑页的 ⌘Z)。其间别人的改动和它冲突才 409(说清是谁),不冲突的话版本落后也照撤。
+ *
+ * 409 附带的最新序列照编辑一样送给 onSequenceConflict。
+ */
+export type HistoryOptions = { expectedRevision?: number; mine?: boolean };
+
+function historyQuery({ expectedRevision, mine }: HistoryOptions): string {
+  const params = new URLSearchParams();
+  if (expectedRevision !== undefined) params.set("expected_revision", String(expectedRevision));
+  if (mine) params.set("mine", "true");
+  const query = params.toString();
+  return query ? `?${query}` : "";
 }
 
-export function redoSequence(sequenceId: string, expectedRevision?: number): Promise<Sequence> {
-  const query = expectedRevision === undefined ? "" : `?expected_revision=${expectedRevision}`;
-  return api<Sequence>(`/api/sequences/${sequenceId}/redo${query}`, { method: "POST" });
+export function undoSequence(sequenceId: string, options: HistoryOptions = {}): Promise<Sequence> {
+  return send(sequenceId, `/undo${historyQuery(options)}`, { method: "POST" });
+}
+
+export function redoSequence(sequenceId: string, options: HistoryOptions = {}): Promise<Sequence> {
+  return send(sequenceId, `/redo${historyQuery(options)}`, { method: "POST" });
 }
 
 export type ExportParams = components["schemas"]["ExportRequest"];

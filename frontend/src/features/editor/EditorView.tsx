@@ -43,6 +43,7 @@ import {
   translateTexts,
   trimClip,
   undoSequence,
+  baseRevisionOf,
   onSequenceConflict,
   type Asset,
   type Project,
@@ -558,12 +559,13 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
   // 少了 onError 的话,用户按 ⌘Z 之后什么都没发生,也没有任何提示 —— 和「按钮点了没反应」
   // 是同一个毛病,只是这次出在撤销上,而撤销恰恰是用户最需要确认「到底生效没有」的操作。
   const undoMutation = useMutation({
-    mutationFn: () => undoSequence(sequence!.id),
+    //: 只撤**自己**最近的一步:几个人一起剪时,按一下撤掉的不该是同事刚做的那一下。其间别人的改动和它冲突时服务端回 409、说清是谁。
+    mutationFn: () => undoSequence(sequence!.id, { expectedRevision: baseRevisionOf(sequence!), mine: true }),
     onSuccess: keepSelectionIfPresent,
     onError: (error: Error) => toast.error(error.message),
   });
   const redoMutation = useMutation({
-    mutationFn: () => redoSequence(sequence!.id),
+    mutationFn: () => redoSequence(sequence!.id, { expectedRevision: baseRevisionOf(sequence!), mine: true }),
     onSuccess: keepSelectionIfPresent,
     onError: (error: Error) => toast.error(error.message),
   });

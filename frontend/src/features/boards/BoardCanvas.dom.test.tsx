@@ -202,7 +202,7 @@ describe("画板的撤销与服务端那份", () => {
       await vi.advanceTimersByTimeAsync(500);
     });
     expect(editor.undoSequence).toHaveBeenCalledTimes(1);
-    expect(editor.undoSequence, "带着这一步做完时的版本号去撤").toHaveBeenCalledWith("seq", 3);
+    expect(editor.undoSequence, "带着这一步做完时的版本号去撤").toHaveBeenCalledWith("seq", { expectedRevision: 3 });
     expect(view.latest().items[0]?.text, "撤的是时间线那一刀,画布上的字还在").toBe("先写一句");
 
     act(() => view.api().undo());
@@ -217,7 +217,7 @@ describe("画板的撤销与服务端那份", () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(500);
     });
-    expect(editor.redoSequence, "重做照撤销回来的那一版比").toHaveBeenCalledWith("seq", 4);
+    expect(editor.redoSequence, "重做照撤销回来的那一版比").toHaveBeenCalledWith("seq", { expectedRevision: 4 });
     expect(view.latest().items[0]?.text).toBe("先写一句");
   });
 
@@ -236,7 +236,7 @@ describe("画板的撤销与服务端那份", () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(500);
     });
-    expect(editor.undoSequence).toHaveBeenCalledWith("seq", 3);
+    expect(editor.undoSequence).toHaveBeenCalledWith("seq", { expectedRevision: 3 });
     act(() => view.api().redo());
     await act(async () => {
       await vi.advanceTimersByTimeAsync(500);

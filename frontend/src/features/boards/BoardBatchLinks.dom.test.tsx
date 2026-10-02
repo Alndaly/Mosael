@@ -244,7 +244,7 @@ describe("选区框的统一出口", () => {
     act(() => view.api().undo());
     await settle();
     expect(view.latest().edges, "两根新线一起撤掉").toEqual([]);
-    expect(editor.undoSequence.mock.calls, "时间线上接的两段也一起撤,一次接一次").toEqual([["seq", 8], ["seq", 9]]);
+    expect(editor.undoSequence.mock.calls, "时间线上接的两段也一起撤,一次接一次").toEqual([["seq", { expectedRevision: 8 }], ["seq", { expectedRevision: 9 }]]);
   });
 
   it("已经连着的不算没连上:不提示", async () => {

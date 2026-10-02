@@ -2776,7 +2776,10 @@ export interface paths {
         put?: never;
         /**
          * Undo Sequence
-         * @description `expected_revision`:调用方看到的是第几版(画板上的撤销带着它)。时间线已经在别处改过就 409,不撤别人的那一步。
+         * @description 撤一步。`expected_revision`:调用方看到的是第几版(画板、剪辑页都带着它)。
+         *
+         *     缺省撤整条时间线上最新的一步,版本对不上就 409(不撤别人的那一步)。`mine=true` 撤**这个人自己**最近的一步:
+         *     其间别人的改动和它冲突就 409 并说清是谁;不冲突的话版本落后也照撤。409 的 detail 里带最新的序列。
          */
         post: operations["undo_sequence_api_sequences__sequence_id__undo_post"];
         delete?: never;
@@ -2796,7 +2799,7 @@ export interface paths {
         put?: never;
         /**
          * Redo Sequence
-         * @description `expected_revision` 同撤销。
+         * @description `expected_revision`、`mine` 同撤销。
          */
         post: operations["redo_sequence_api_sequences__sequence_id__redo_post"];
         delete?: never;
@@ -19681,6 +19684,7 @@ export interface operations {
         parameters: {
             query?: {
                 expected_revision?: number | null;
+                mine?: boolean;
             };
             header?: never;
             path: {
@@ -19714,6 +19718,7 @@ export interface operations {
         parameters: {
             query?: {
                 expected_revision?: number | null;
+                mine?: boolean;
             };
             header?: never;
             path: {

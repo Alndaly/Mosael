@@ -198,3 +198,92 @@ def test_跨轨波纹删除挪到别的轨上那段_中间有人改过它_拒() 
     assert stale.status_code == 409, "整条时间线左移,同事刚改过的那段音频也被挪了"
     one_track = owner.delete(f"/api/sequences/{sid}/clips/{first}/ripple?base_revision={base}")
     assert one_track.status_code == 200, "只在本轨波纹,碰不到那段音频"
+
+
+def test_只撤我自己的_同事后来的那一步留着() -> None:
+    owner, mate, sid, _seen, first, second = _setup()
+    seen = owner.patch(f"/api/sequences/{sid}/clips/{first}/gain", json={"gain": 0.5, "muted": False}).json()["revision"]
+    mate.patch(f"/api/sequences/{sid}/clips/{second}/gain", json={"gain": 0.2, "muted": False})
+
+    #: 我手里还是自己做完那一步时的版本(同事那一步还没轮询到):不冲突,照撤。
+    undone = owner.post(f"/api/sequences/{sid}/undo?mine=true&expected_revision={seen}")
+    assert undone.status_code == 200, undone.text
+    after = undone.json()
+    assert _clip(after, first)["gain"] == 1.0, "撤的是我自己的那一步"
+    assert _clip(after, second)["gain"] == 0.2, "同事那一步还在"
+
+    redone = owner.post(f"/api/sequences/{sid}/redo?mine=true&expected_revision={after['revision']}")
+    assert redone.status_code == 200, redone.text
+    assert _clip(redone.json(), first)["gain"] == 0.5
+
+
+def test_只撤我自己的_其间同事动了同一段_拒并说是谁() -> None:
+    owner, mate, sid, _seen, first, _second = _setup()
+    owner.patch(f"/api/sequences/{sid}/clips/{first}/move", json={"timeline_start": 30})
+    mate.patch(f"/api/sequences/{sid}/clips/{first}/gain", json={"gain": 0.2, "muted": False})
+
+    refused = owner.post(f"/api/sequences/{sid}/undo?mine=true")
+    assert refused.status_code == 409, refused.text
+    detail = refused.json()["detail"]
+    assert "mate" in detail["message"]
+    assert _clip(detail["sequence"], first)["timeline_start"] == 30, "没撤"
+
+
+def test_只撤我自己的_其间同事挪了别的片段_两步都依赖坐标_拒() -> None:
+    owner, mate, sid, _seen, first, second = _setup()
+    owner.patch(f"/api/sequences/{sid}/clips/{first}/move", json={"timeline_start": 30})
+    mate.patch(f"/api/sequences/{sid}/clips/{second}/move", json={"timeline_start": 40})
+
+    assert owner.post(f"/api/sequences/{sid}/undo?mine=true").status_code == 409
+
+
+def test_只撤我自己的_我没做过就说没有() -> None:
+    owner, mate, sid, _seen, _first, _second = _setup()
+    refused = mate.post(f"/api/sequences/{sid}/undo?mine=true")
+    assert refused.status_code == 422
+    assert "你自己" in refused.json()["detail"] or "own" in refused.json()["detail"]
+
+
+def test_撤销版本对不上_409带最新序列和是谁() -> None:
+    owner, mate, sid, seen, first, _second = _setup()
+    mate.patch(f"/api/sequences/{sid}/clips/{first}/gain", json={"gain": 0.2, "muted": False})
+
+    refused = owner.post(f"/api/sequences/{sid}/undo?expected_revision={seen}")
+    assert refused.status_code == 409, refused.text
+    detail = refused.json()["detail"]
+    assert "mate" in detail["message"]
+    assert _clip(detail["sequence"], first)["gain"] == 0.2
+
+
+def test_只撤我自己的_我撤过又做过的那一步不挡后面的撤销() -> None:
+    """自己挪了一下、撤掉、再撤更早的一步:中间那次挪动已经相抵,不该被当成「之后有人挪过」。"""
+    owner, mate, sid, _seen, first, second = _setup()
+    owner.patch(f"/api/sequences/{sid}/clips/{first}/move", json={"timeline_start": 20})
+    owner.patch(f"/api/sequences/{sid}/clips/{second}/move", json={"timeline_start": 30})
+    assert owner.post(f"/api/sequences/{sid}/undo?mine=true").status_code == 200
+    again = owner.post(f"/api/sequences/{sid}/undo?mine=true")
+    assert again.status_code == 200, again.text
+    assert _clip(again.json(), first)["timeline_start"] == 0
+
+
+def test_只重做我自己的_其间同事动了同一段_拒() -> None:
+    owner, mate, sid, _seen, first, _second = _setup()
+    owner.patch(f"/api/sequences/{sid}/clips/{first}/move", json={"timeline_start": 30})
+    owner.post(f"/api/sequences/{sid}/undo?mine=true")
+    mate.patch(f"/api/sequences/{sid}/clips/{first}/gain", json={"gain": 0.2, "muted": False})
+
+    refused = owner.post(f"/api/sequences/{sid}/redo?mine=true")
+    assert refused.status_code == 409, refused.text
+    assert "mate" in refused.json()["detail"]["message"]
+
+
+def test_只撤我自己的_那一步带着链接音频挪_同事后来改了那段音频_拒() -> None:
+    """要撤的那一步碰到的也按改动日志算:挪画面时链接的音频跟着挪了,撤销会把它也挪回去。"""
+    owner, mate, sid, _seen, first, _second = _setup()
+    audio = _audio(owner.post(f"/api/sequences/{sid}/clips/{first}/detach-audio").json())[0]["id"]
+    owner.patch(f"/api/sequences/{sid}/clips/{first}/move", json={"timeline_start": 30})
+    mate.patch(f"/api/sequences/{sid}/clips/{audio}/gain", json={"gain": 0.2, "muted": False})
+
+    refused = owner.post(f"/api/sequences/{sid}/undo?mine=true")
+    assert refused.status_code == 409, refused.text
+    assert "mate" in refused.json()["detail"]["message"]

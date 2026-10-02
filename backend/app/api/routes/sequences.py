@@ -498,20 +498,30 @@ def set_clip_effects(
 
 @router.post("/sequences/{sequence_id}/undo", response_model=SequenceOut)
 def undo_sequence(
-    sequence_id: str, db: Tx, user: CurrentUser, expected_revision: int | None = None
+    sequence_id: str, db: Tx, user: CurrentUser, expected_revision: int | None = None, mine: bool = False
 ) -> Response:
-    """`expected_revision`:调用方看到的是第几版(画板上的撤销带着它)。时间线已经在别处改过就 409,不撤别人的那一步。"""
+    """撤一步。`expected_revision`:调用方看到的是第几版(画板、剪辑页都带着它)。
+
+    缺省撤整条时间线上最新的一步,版本对不上就 409(不撤别人的那一步)。`mine=true` 撤**这个人自己**最近的一步:
+    其间别人的改动和它冲突就 409 并说清是谁;不冲突的话版本落后也照撤。409 的 detail 里带最新的序列。
+    """
     require_sequence_access(db, user, sequence_id, perm="edit")
-    return _respond(db, user, sequence_id, lambda: undo_operation(db, sequence_id, expected_revision=expected_revision))
+    return _respond(
+        db, user, sequence_id,
+        lambda: undo_operation(db, sequence_id, expected_revision=expected_revision, actor_id=user.id, mine=mine),
+    )
 
 
 @router.post("/sequences/{sequence_id}/redo", response_model=SequenceOut)
 def redo_sequence(
-    sequence_id: str, db: Tx, user: CurrentUser, expected_revision: int | None = None
+    sequence_id: str, db: Tx, user: CurrentUser, expected_revision: int | None = None, mine: bool = False
 ) -> Response:
-    """`expected_revision` 同撤销。"""
+    """`expected_revision`、`mine` 同撤销。"""
     require_sequence_access(db, user, sequence_id, perm="edit")
-    return _respond(db, user, sequence_id, lambda: redo_operation(db, sequence_id, expected_revision=expected_revision))
+    return _respond(
+        db, user, sequence_id,
+        lambda: redo_operation(db, sequence_id, expected_revision=expected_revision, actor_id=user.id, mine=mine),
+    )
 
 
 @router.post("/sequences/{sequence_id}/dub-subtitles", response_model=JobOut)

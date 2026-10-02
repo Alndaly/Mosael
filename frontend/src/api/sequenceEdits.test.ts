@@ -57,4 +57,13 @@ describe("时间线编辑的版本号", () => {
     stop();
     expect(seen).toEqual([latest]);
   });
+
+  it("撤销带 expected_revision 与 mine", async () => {
+    const { undoSequence } = await import("@/api/domains/editor");
+    fetchMock.mockResolvedValue(reply(200, sequence(50)));
+
+    await undoSequence("s1", { expectedRevision: 49, mine: true });
+
+    expect(String(fetchMock.mock.calls[0][0])).toContain("/api/sequences/s1/undo?expected_revision=49&mine=true");
+  });
 });

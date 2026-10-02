@@ -181,7 +181,8 @@ export function useBoardHistory({
       let revision = step.revision;
       let next = null as Awaited<ReturnType<typeof undoSequence>> | null;
       for (let time = 0; time < (step.count ?? 1); time += 1) {
-        next = await (direction === "undo" ? undoSequence(step.sequence, revision) : redoSequence(step.sequence, revision));
+        const expected = { expectedRevision: revision };
+        next = await (direction === "undo" ? undoSequence(step.sequence, expected) : redoSequence(step.sequence, expected));
         revision = next.revision;
       }
       return next as Awaited<ReturnType<typeof undoSequence>>;
