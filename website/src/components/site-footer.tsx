@@ -17,9 +17,12 @@ import { SITE } from "@/lib/site";
  *   项目 —— 关于这个软件本身(源码、下载、反馈)
  * 上一版把「工作流」挂在「插件」标题下面,那是拿第一项当了组名 —— 组里第二项一出现就说不通。
  */
+// 版权年份在构建时定下:页面都是静态预渲染的,渲染时取 `new Date()` 得到的本来也是构建那一刻,
+// 写在模块顶层把这一点说明白,也不让渲染函数里出现不纯的调用(oxlint react/purity)。
+const COPYRIGHT_YEAR = new Date().getFullYear();
+
 export function SiteFooter({ locale }: { locale: Locale }) {
   const t = getMessages(locale);
-  const year = new Date().getFullYear();
 
   const columns = [
     {
@@ -99,7 +102,7 @@ export function SiteFooter({ locale }: { locale: Locale }) {
         <div className="border-t border-white/10">
           <div className="flex flex-wrap items-center gap-x-6 gap-y-2 px-6 py-6 text-xs text-white/40 sm:px-10 lg:px-14">
             <span>
-              © {year} Mosael. {t.footer.rights}
+              © {COPYRIGHT_YEAR} Mosael. {t.footer.rights}
             </span>
             <Link href={localePath(locale, "/docs/about/project#media-credits")} className="transition-colors hover:text-white">{t.docs.mediaCredits}</Link>
             <a className="ml-auto transition-colors hover:text-foreground" href={SITE.email}>
