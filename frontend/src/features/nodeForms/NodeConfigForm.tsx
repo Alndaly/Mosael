@@ -12,7 +12,7 @@ import { toPlainText } from "@/components/markdown/inlineSyntax";
 import { Input } from "@/components/ui/input";
 import { OptionPicker } from "@/components/ui/option-picker";
 import { NoteReferenceField } from "@/features/notes/NotePickerDialog";
-import { fieldDataType } from "@/features/nodeForms/fieldTypes";
+import { canTakeUpstream, fieldDataType } from "@/features/nodeForms/fieldTypes";
 import { isOneOfFallback, isTakenByOneOfPeer, isWorkflowFieldActive } from "@/features/nodeForms/fieldActivation";
 import { ItemsField, itemsFromValue } from "@/features/nodeForms/ItemsField";
 import { JsonField } from "@/features/nodeForms/JsonField";
@@ -360,10 +360,9 @@ export function NodeConfigForm({
           // 标签由节点声明提供(后端内置节点和运行时插件走同一份接口),最后才退到裸键名。
           const declaredLabel = String((spec as { label?: unknown } | undefined)?.label ?? "").trim();
           // ComfyUI 式:非 object 字段都可切到"连接"(值从上游来,而不是手填)。上游是什么、怎么挑,
-          // 由调用方的 binding 说 —— 工作流里是数据边。
+          // 由调用方的 binding 说 —— 工作流里是数据边。哪些字段能接见 canTakeUpstream(画布画输入口判的是同一条)。
           //: 代码字段不接上游:上游的值会整段变成代码(后端校验同样拦),上游的值接到节点的 input。
-          const canConnect =
-            Boolean(binding) && !isObject && !isAssetList && spec?.type !== "code" && (binding?.canBind?.(key) ?? true);
+          const canConnect = Boolean(binding) && canTakeUpstream(spec) && (binding?.canBind?.(key) ?? true);
           const connected = canConnect && Boolean(binding?.isBound(key));
           //: 代码字段**已经**接上了(智能体改的、旧图):后端运行前拒(wfErr_codeFieldBound)。开关是收着的,
           //: 不给个断开的入口的话,这一格就再也解不开 —— 就绪清单指过来,人在这里却无事可做。

@@ -27,3 +27,13 @@ export function normalizeDataType(value: unknown): DataType {
 export function fieldDataType(spec: object | null | undefined): DataType {
   return normalizeDataType((spec as { data_type?: unknown } | null | undefined)?.data_type);
 }
+
+/**
+ * 这一格**能不能接上游**(数据边,ComfyUI 式的「连接」)。检查器的「接上游」开关、画布上能不能有这个输入口,判的是同一条:
+ * 对象(映射 / 原始 JSON)、一串素材、代码(上游的值会整段变成代码,后端同样拦)、内嵌子图都不能;
+ * 由别的格子的控件一起编辑的(`edited_by`,开始节点的必填清单)不单独出现,也不能。
+ */
+export function canTakeUpstream(spec: { type?: string; edited_by?: string } | null | undefined): boolean {
+  const type = spec?.type ?? "";
+  return !spec?.edited_by && !["object", "asset_list", "code", "graph"].includes(type);
+}

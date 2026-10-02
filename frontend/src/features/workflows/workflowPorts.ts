@@ -1,0 +1,28 @@
+import type { WorkflowGraph } from "@/api/client";
+import { declaredFieldNames } from "@/features/workflows/scope";
+
+/**
+ * **一张卡片上画哪些数据接点** —— 卡片(workflowCanvasModel)和引用提示线找口(referenceHints)读的是这一份。
+ *
+ * - 输入口:接了上游的那几格(连接态 `inputs`),加上每条指进来的数据边的 `target_input`;
+ * - 输出口:声明的输出(通配按配置展开 —— 开始节点的 `*params` 是它的每个参数),加上每条拉出去的数据边的 `source_output`。
+ *   条件节点例外:它的出口是标题层的真 / 假两路,声明的 `result` 不另画口(卡片保持紧凑),只有真有数据边从它拉出时才画。
+ *
+ * 数据边两头一律画:连接态没记上这一格的旧图、插件没装(注册表里没有它的输出)、开始节点删掉了那个参数 —— 口不在,
+ * React Flow 就不画这根线(只在控制台报 008),人看不见它,也就删不掉、改不了。画出来,就绪检查再说它哪里不对。
+ */
+
+type WNode = WorkflowGraph["nodes"][number];
+type WEdge = WorkflowGraph["edges"][number];
+type Registry = { get(type: string): { outputs?: readonly string[] } | undefined };
+
+export function nodePorts(node: WNode, registry: Registry, edges: readonly WEdge[]): { inputs: string[]; outputs: string[] } {
+  const wiredIn = edges.filter((edge) => edge.kind === "data" && edge.target === node.id && edge.target_input).map((edge) => edge.target_input!);
+  const wiredOut = edges.filter((edge) => edge.kind === "data" && edge.source === node.id && edge.source_output).map((edge) => edge.source_output!);
+  const declared =
+    node.type === "condition" ? [] : declaredFieldNames(registry.get(node.type)?.outputs ?? [], node.config as Record<string, unknown> | undefined);
+  return {
+    inputs: [...new Set([...(node.inputs ?? []), ...wiredIn])],
+    outputs: [...new Set([...declared, ...wiredOut])],
+  };
+}

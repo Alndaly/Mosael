@@ -96,7 +96,7 @@ export interface WorkflowNodeData extends Record<string, unknown> {
 }
 
 /** 画布节点:语义色图标 + 名称 + 类型标签,全平面卡片。
-    条件节点右侧是「真/假」两个分支端点,其余节点单一出口。
+    条件节点标题层右侧是「真/假」两个分支端点,其余节点单一出口;数据接点(接了上游的输入、声明的输出)谁都画在页脚条上。
     缺配置/失效引用/断连的节点在右上角挂一枚告警角标,一眼可辨。 */
 /** 节点上的产出预览:这一步生成了什么,直接摆在节点里 —— 不用再点开历史面板去找。
  *
@@ -151,8 +151,10 @@ function WorkflowNode({ id, data, selected }: NodeProps) {
   const badge = d.badge ?? null;
   const inputs = d.inputs ?? [];
   const outputs = d.outputs ?? [];
-  // 条件节点保持紧凑(真/假分支端点),不上数据 IO 体;其余节点显示输入/输出接点。
-  const showIo = !isCondition && (inputs.length > 0 || outputs.length > 0);
+  //: 数据接点**谁都画**,条件节点也不例外(画哪些口见 workflowPorts)。此前它为了紧凑不上接点页脚,而官方模板里
+  //: 「认出的平台 → 是抖音吗」正是一条接进 `left` 的数据边 —— 卡片上没有 `in:left`,React Flow 找不到口就不画这根线
+  //: (只在控制台报 008)。真/假两路出口挂在标题层(见下),和页脚的接点互不相干。
+  const showIo = inputs.length > 0 || outputs.length > 0;
   const visual = workflowNodeVisual(d.nodeType);
   return (
     <div
@@ -262,14 +264,16 @@ function WorkflowNode({ id, data, selected }: NodeProps) {
       )}
       {isCondition ? (
         <>
-          <Handle id="true" type="source" position={Position.Right} className={cn(WORKFLOW_HANDLE_CLASS, "border-success", selected && "border-primary")} style={{ top: "32%" }} />
-          <Handle id="false" type="source" position={Position.Right} className={cn(WORKFLOW_HANDLE_CLASS, "border-destructive", selected && "border-primary")} style={{ top: "68%" }} />
+          {/* **钉在标题层,按像素,不按卡片高度的百分比。** 卡片有了接点页脚就变高,按百分比的话两个出口会滑进页脚、
+              和页脚右侧的输出口挤在一起。上下对称地夹着别的节点那个出口的高度(28)。 */}
+          <Handle id="true" type="source" position={Position.Right} className={cn(WORKFLOW_HANDLE_CLASS, "border-success", selected && "border-primary")} style={{ top: 18 }} />
+          <Handle id="false" type="source" position={Position.Right} className={cn(WORKFLOW_HANDLE_CLASS, "border-destructive", selected && "border-primary")} style={{ top: 38 }} />
           {/* 真/假走 i18n:英文界面下这两个字此前还是中文 —— 它们贴在连线端点上,是整张图里
               最该看懂的两个词。 */}
           {/* **锚左边缘,不是右边缘。** `-right-5` 钉的是文字的右边,于是文字一变长就往左长 ——
               中文「真/假」两个字时看着还行,换成 True/False 就压在连接点上了。 */}
-          <span className="pointer-events-none absolute left-full top-[calc(32%-7px)] ml-2 whitespace-nowrap text-ui-2xs font-semibold text-success">{t("wfBranchTrue")}</span>
-          <span className="pointer-events-none absolute left-full top-[calc(68%-7px)] ml-2 whitespace-nowrap text-ui-2xs font-semibold text-destructive">{t("wfBranchFalse")}</span>
+          <span className="pointer-events-none absolute left-full top-[11px] ml-2 whitespace-nowrap text-ui-2xs font-semibold text-success">{t("wfBranchTrue")}</span>
+          <span className="pointer-events-none absolute left-full top-[31px] ml-2 whitespace-nowrap text-ui-2xs font-semibold text-destructive">{t("wfBranchFalse")}</span>
         </>
       ) : (
         <Handle type="source" position={Position.Right} className={cn(WORKFLOW_HANDLE_CLASS, selected && "border-primary")} style={{ top: 28 }} />

@@ -93,6 +93,35 @@ describe("workflow canvas model", () => {
     expect(toWorkflowFlowNodes({ nodes: [{ id: "start", type: "start", config: {} }], edges: [] }, registry)[0].data).toMatchObject({ outputs: [] });
   });
 
+  it("每条数据边两头的口都画出来:连接态没记上的输入、注册表里没有的输出(插件没装)", () => {
+    //: 口不在,React Flow 就不画这根线(只报 008),人看不见它,也就删不掉。
+    const registry = new Map([["llm", meta("llm", { prompt: { type: "template" } }, ["text"])]]);
+    const graph: WorkflowGraph = {
+      nodes: [
+        { id: "tool", type: "plugin.gone.tool", config: {} },
+        { id: "n1", type: "llm", config: { prompt: "" } },
+      ],
+      edges: [{ id: "d1", source: "tool", target: "n1", kind: "data", source_output: "result", target_input: "prompt" }],
+    };
+    const [tool, llm] = toWorkflowFlowNodes(graph, registry);
+    expect(tool.data).toMatchObject({ outputs: ["result"] });
+    expect(llm.data).toMatchObject({ inputs: ["prompt"], outputs: ["text"] });
+  });
+
+  it("条件节点:接了上游的输入照画;出口是标题层的真 / 假两路,result 只有数据边拉出时才画口", () => {
+    const registry = new Map([["condition", meta("condition", { left: { type: "template" } }, ["result"])]]);
+    const gate = { id: "c", type: "condition", inputs: ["left"], config: { left: "" } };
+    expect(toWorkflowFlowNodes({ nodes: [gate], edges: [] }, registry)[0].data).toMatchObject({ inputs: ["left"], outputs: [] });
+    const wired: WorkflowGraph = {
+      nodes: [gate, { id: "n", type: "condition", config: {} }],
+      edges: [{ id: "d", source: "c", target: "n", kind: "data", source_output: "result", target_input: "left" }],
+    };
+    expect(toWorkflowFlowNodes(wired, registry).map((node) => node.data)).toMatchObject([
+      { inputs: ["left"], outputs: ["result"] },
+      { inputs: ["left"], outputs: [] },
+    ]);
+  });
+
   it("marks a data edge when declared source and target types conflict", () => {
     const registry = new Map([
       ["source", { ...meta("source", {}, ["text"]), output_types: { text: "text" } }],

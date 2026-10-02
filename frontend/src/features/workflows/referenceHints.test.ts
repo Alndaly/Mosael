@@ -61,7 +61,7 @@ describe("引用 → 提示线", () => {
     expect(new Set(hints.map((hint) => hint.id)).size).toBe(hints.length);
   });
 
-  it("找不到具体口就从节点出发:条件节点(只画真假出口)、没声明的输出、开始节点没有的参数", () => {
+  it("找不到具体口就从节点出发:条件节点(出口是真假两路)、没声明的输出、开始节点没有的参数", () => {
     const hints = referenceHints(
       graph(
         [

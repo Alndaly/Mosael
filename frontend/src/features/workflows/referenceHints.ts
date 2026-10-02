@@ -6,7 +6,7 @@ import type { MessageKey } from "@/app/messages";
 import type { EdgeShape } from "@/components/app/canvasEdgeShape";
 import { canvasEdgeClass } from "@/components/app/canvasEdges";
 import { layerReferences, neverRunReferences, type RegistryLike } from "@/features/workflows/analyze";
-import { declaredFieldNames } from "@/features/workflows/scope";
+import { nodePorts } from "@/features/workflows/workflowPorts";
 
 /**
  * 画布上的**引用提示线**:每一处 `{{A.x}}`,从 A 的 x 口(找不到具体口就从节点)到引用它的节点画一根淡点线。
@@ -42,7 +42,7 @@ export interface HintRegistry extends RegistryLike {
 export interface ReferenceHint {
   id: string;
   source: string;
-  /** A 的输出口(`out:x`);找不到具体口(条件节点、没声明的输出、开始节点没有的参数)就是 null —— 从节点的出口出发。 */
+  /** A 的输出口(`out:x`);卡片上没有这个口(没声明的输出、开始节点没有的参数、条件节点的结果)就是 null —— 从节点的出口出发。 */
   sourceHandle: string | null;
   target: string;
   /** 这一根线代表的引用写法(同一个口被引用几处只画一根)。 */
@@ -52,14 +52,12 @@ export interface ReferenceHint {
 }
 
 /**
- * A 的 `output` 在卡片上有没有自己的口:声明里有它(通配按 A 的配置展开 —— 开始节点的 `*params` 是它的每个参数,
- * 和卡片画口的取法同一份,见 workflowCanvasModel),而且这个节点画输出口 —— 条件节点只画真 / 假两路出口
- * (见 WorkflowNode 的 isCondition)。
+ * A 的 `output` 在卡片上有没有自己的口 —— 和卡片画口的取法同一份(workflowPorts):开始节点的每个参数各一个口;
+ * 条件节点的出口是真 / 假两路,`result` 没有数据边拉出时不画口。
  */
-function outputHandle(registry: HintRegistry, node: WorkflowGraph["nodes"][number], output: string): string | null {
-  if (!output || node.type === "condition") return null;
-  const outputs = declaredFieldNames(registry.get(node.type)?.outputs ?? [], node.config as Record<string, unknown> | undefined);
-  return outputs.includes(output) ? `out:${output}` : null;
+function outputHandle(registry: HintRegistry, graph: WorkflowGraph, node: WorkflowGraph["nodes"][number], output: string): string | null {
+  if (!output) return null;
+  return nodePorts(node, registry, graph.edges).outputs.includes(output) ? `out:${output}` : null;
 }
 
 const pair = (source: string, target: string) => JSON.stringify([source, target]);
@@ -88,7 +86,7 @@ export function referenceHints(
     for (const { ref, sourceId } of layerReferences(node, registry)) {
       const source = nodes.get(sourceId);
       if (!source || sourceId === node.id) continue;
-      const handle = outputHandle(registry, source, ref.slice(2, -2).split(".")[1] ?? "");
+      const handle = outputHandle(registry, graph, source, ref.slice(2, -2).split(".")[1] ?? "");
       const drawn =
         source.type === "start" && handle
           ? wiredFromPort.has(JSON.stringify([sourceId, handle, node.id]))

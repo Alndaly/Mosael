@@ -10,6 +10,9 @@
 
 它只管到快照这一层。`schema.d.ts` 由 `pnpm gen:api` 从快照生成,那一跳仍由 CI 的
 `git diff --exit-code` 守;而只要快照本身不漂,那一跳就不会独自漂。
+
+同一个脚本还导出内置节点类型的接点快照(`frontend/src/api/generated/workflow-node-ports.json`),前端画布的
+测试拿它当注册表(canvasPorts.dom.test:连线指向的口卡片上一定画着),同样在这里守新鲜度。
 """
 
 from __future__ import annotations
