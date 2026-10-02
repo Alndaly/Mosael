@@ -682,6 +682,26 @@ def _seek_and_trim(src_in: float, src_out: float) -> tuple[list[str], float, flo
     return [], src_in, src_out
 
 
+def _video_from(tin: float, speed: float) -> str:
+    """把一段素材的画面放到「从 trim 起点算的 0」上(setpts 表达式)。
+
+    减的是 **trim 起点**,不是 STARTPTS(trim 之后第一帧自己的时间戳)—— 声音那边同理,见 _audio_from。
+    两路都以同一个点为 0,画面和声音在素材里差多少,成片里就差多少。"""
+    base = f"PTS-{tin}/TB"
+    return base if speed == 1.0 else f"({base})/{speed}"
+
+
+def _audio_from(tin: float) -> str:
+    """声音那一路的「从 trim 起点算的 0」,外加把开头缺的那段补成静音(带尾逗号)。
+
+    **素材里的音轨常常比画面晚开始**(AAC 的起始延迟、录屏、-itsoffset 过的文件:音轨 start_time 0.2~0.5 秒)。
+    此前两路各自 `PTS-STARTPTS`:画面的第一帧归 0,声音的第一个采样**也**归 0 —— 声音整段提前了它晚开始的
+    那么多,口型对不上,而素材自己放是对的。走 -ss 快进的片段一样:快进点之后音轨的第一个采样也被拽到 0。
+    现在两路都减 trim 起点;声音开头空着的那段由 aresample 的 first_pts=0 补静音(min_comp 打开补偿,
+    中间的断档同样补上),后面 atempo 变速时这段静音跟着一起变。"""
+    return f"asetpts=PTS-{tin}/TB,aresample={AUDIO_RATE}:min_comp=0.001:min_hard_comp=0.01:first_pts=0,"
+
+
 _IMAGE_LOOP_PAD = 0.2  # -t 相对 trim 末尾留的小余量,保证末帧不缺
 #: ffmpeg 用 image2 解复用器打开的静态图后缀 —— 只有它们认 `-loop`(见 _image_loop_args)。
 _IMAGE2_STILL_SUFFIXES = frozenset({".png", ".jpg", ".jpeg", ".jfif", ".bmp", ".tif", ".tiff", ".webp"})
@@ -716,7 +736,7 @@ def _image_loop_args(path: Path, trim_end: float) -> list[str]:
 def _base_video_chain(input_index: int, i: int, src_in: float, src_out: float, setpts: str, width: int, height: int, fps: float, tail: str, fill_mode: str) -> str:
     """[input:v] → [vi] 的完整视频链;按画幅填充模式选择裁剪/留黑边/模糊背景。"""
     head = f"[{input_index}:v]trim=start={src_in}:end={src_out},setpts={setpts}"
-    end = f",fps={fps},format=yuv420p,setsar=1{tail}[v{i}]"
+    end = f",fps={fps}:start_time=0,format=yuv420p,setsar=1{tail}[v{i}]"
     if fill_mode == "cover":
         return f"{head},scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height}{end}"
     if fill_mode == "blur":
@@ -894,7 +914,7 @@ def build_ffmpeg_command(
             src = segment.source
             seek, tin, tout = _seek_and_trim(src.src_in, src.src_out)
             args += _image_loop_args(path, tout) + seek + ["-i", str(path)]
-            setpts = "PTS-STARTPTS" if segment.speed == 1.0 else f"(PTS-STARTPTS)/{segment.speed}"
+            setpts = _video_from(tin, segment.speed)
             # Picture fade (画面淡变, fade to/from black) is independent of the audio fade below.
             video_fades = _fade_filters(segment.video_fade_in, segment.video_fade_out, segment.duration, audio=False)
             preset = f",{FILTER_PRESETS[segment.filter]}" if segment.filter else ""
@@ -914,7 +934,7 @@ def build_ffmpeg_command(
                 filters.append(
                     f"[{input_index}:v]trim=start={tin}:end={tout},setpts={setpts},"
                     f"scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height}"
-                    f"{preset}{video_fades},fps={fps},setsar=1[elt{i}]"
+                    f"{preset}{video_fades},fps={fps}:start_time=0,setsar=1[elt{i}]"
                 )
                 appearance_filters, appearance_label, appearance_sized = _appearance_filters(
                     f"elt{i}", segment.appearance, width, height, f"ba{i}"
@@ -949,7 +969,7 @@ def build_ffmpeg_command(
                 # The clip's own gain (增益) mixes its audio, like a video clip's linked audio in PR/DaVinci.
                 gain = _volume_expr(segment.gain, segment.gain_keyframes, segment.duration)
                 filters.append(
-                    f"[{input_index}:a]atrim=start={tin}:end={tout},asetpts=PTS-STARTPTS,{tempo}"
+                    f"[{input_index}:a]atrim=start={tin}:end={tout},{_audio_from(tin)}{tempo}"
                     f"{gain}aresample={AUDIO_RATE},aformat=channel_layouts=stereo{audio_fades}[a{i}]"
                 )
             else:
@@ -981,7 +1001,7 @@ def build_ffmpeg_command(
         preset += _grade_filter(dict(overlay.grade), overlay.curves, lut_path)
         video_fades = _fade_filters(overlay.video_fade_in, overlay.video_fade_out, overlay.duration, audio=False)
         filters.append(
-            f"[{input_index}:v]trim=start={tin}:end={tout},setpts=(PTS-STARTPTS)/{overlay.speed},"
+            f"[{input_index}:v]trim=start={tin}:end={tout},setpts={_video_from(tin, overlay.speed)},"
             f"scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height}"
             f"{preset}{video_fades},setpts=PTS+{overlay.start}/TB[oelt{i}]"
         )
@@ -1096,7 +1116,7 @@ def build_ffmpeg_command(
             # absolute — drop to DUCK_GAIN while a non-ducked clip overlaps, full gain elsewhere.
             duck = _duck_volume(item.duck_windows)
             filters.append(
-                f"[{input_index}:a]atrim=start={tin}:end={tout},asetpts=PTS-STARTPTS,"
+                f"[{input_index}:a]atrim=start={tin}:end={tout},{_audio_from(tin)}"
                 f"{atempo_filters(item.speed)}"
                 f"{_volume_expr(item.gain, item.gain_keyframes, item.duration)}"
                 f"aresample={AUDIO_RATE},aformat=channel_layouts=stereo{audio_fades},"

@@ -79,7 +79,7 @@ def test_ffmpeg_command_contains_speed_and_fades(monkeypatch) -> None:
         })], assets=ASSETS,
     )
     command = " ".join(build_ffmpeg_command(plan, lambda key: Path("/tmp") / key, Path("/tmp/out.mp4")))
-    assert "(PTS-STARTPTS)/3.0" in command
+    assert "(PTS-0.0/TB)/3.0" in command  # 以 trim 起点为 0(见 _video_from)
     assert "atempo=2.0,atempo=1.5" in command
     assert "fade=t=in:st=0:d=0.5" in command  # picture fade uses video_fade_in
     # 8s source at 3x → 2.666667s; picture fade out starts at duration - 0.5
@@ -174,7 +174,7 @@ def test_upper_tracks_keep_speed_and_all_visual_effects(monkeypatch):
     assert plan.timeline_duration == 6
     cmd = build_ffmpeg_command(plan, lambda key: Path("/tmp") / key, Path("/tmp/o.mp4"), force_software=True)
     graph = cmd[cmd.index("-filter_complex") + 1]
-    assert "(PTS-STARTPTS)/2.0" in graph and "atempo=2.0" in graph
+    assert "(PTS-0.0/TB)/2.0" in graph and "atempo=2.0" in graph
     assert "hue=s=0" in graph and "lut3d=" in graph
     assert "fade=t=out:st=3.0:d=1.0" in graph
     assert graph.index("fade=t=out:st=3.0:d=1.0") < graph.index("setpts=PTS+2.0/TB")
