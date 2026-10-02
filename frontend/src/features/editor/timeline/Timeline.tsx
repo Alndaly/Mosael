@@ -17,6 +17,7 @@ import {
   pxToTime,
   resolveMove,
   resolveTrim,
+  rulerStep,
   rulerTicks,
   sequenceDuration,
   snapTimeTiered,
@@ -357,6 +358,7 @@ export function Timeline({
   const windowEnd = pxToTime(viewport.left + viewportWidth + bufferPx, pxPerSecond);
   const ticks = rulerTicks(windowStart, Math.min(duration, windowEnd), pxPerSecond);
   const inWindow = (start: number, end: number) => end >= windowStart && start <= windowEnd;
+  const tickStep = rulerStep(pxPerSecond);
 
   // 指针能放下的每一个时刻(标尺、修剪、刀片、素材落点)都吸到序列的帧上:落在两帧之间的点
   // 导出时会被吞成某一帧,预览里看到的却是另一处。
@@ -1051,7 +1053,7 @@ export function Timeline({
                   className={cn("absolute bottom-0 h-[5px] w-px bg-[var(--ruler-tick)]", tick.major && "h-[9px] [&_span]:absolute [&_span]:bottom-2 [&_span]:left-1 [&_span]:whitespace-nowrap [&_span]:text-ui-2xs [&_span]:text-[var(--ruler-text)]")}
                   style={{ left: timeToPx(tick.time, pxPerSecond) }}
                 >
-                  {tick.major && <span className="timecode">{formatRulerLabel(tick.time)}</span>}
+                  {tick.major && <span className="timecode">{formatRulerLabel(tick.time, tickStep)}</span>}
                 </div>
               ))}
             </div>

@@ -247,4 +247,19 @@ describe("timecode", () => {
     expect(formatRulerLabel(65)).toBe("1:05");
     expect(formatRulerLabel(3661)).toBe("1:01:01");
   });
+
+  it("步长不到 1 秒时带小数,放大到最大也不出现重复的标签", () => {
+    for (const pxPerSecond of [200, 240]) {
+      const step = rulerStep(pxPerSecond);
+      expect(step).toBeLessThan(1);
+      const labels = rulerTicks(0, 3, pxPerSecond)
+        .filter((tick) => tick.major)
+        .map((tick) => formatRulerLabel(tick.time, step));
+      expect(new Set(labels).size).toBe(labels.length);
+    }
+    expect(formatRulerLabel(0.5, 0.5)).toBe("0:00.5");
+    expect(formatRulerLabel(61.2, 0.2)).toBe("1:01.2");
+    // 整秒的刻度不带小数,和缩小时的标签一个样子。
+    expect(formatRulerLabel(2, 0.5)).toBe("0:02");
+  });
 });

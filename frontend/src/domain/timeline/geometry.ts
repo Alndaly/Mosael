@@ -281,12 +281,21 @@ export function overlapsAny(
 
 /* ---------- Timecode ---------- */
 
-/** Compact ruler label: M:SS below an hour, H:MM:SS above. */
-export function formatRulerLabel(seconds: number): string {
-  const abs = Math.max(0, Math.round(seconds));
+/**
+ * Compact ruler label: M:SS below an hour, H:MM:SS above.
+ *
+ * 传了刻度步长且不到 1 秒时,不落在整秒上的刻度带一位小数(0:00.5)。此前一律取整秒:放大到
+ * 半秒一格时 0.5 和 1 都写成 0:01,标尺上一排重复的标签,看不出哪格是哪格。
+ */
+export function formatRulerLabel(seconds: number, step = 1): string {
+  const clamped = Math.max(0, seconds);
+  const tenths = Math.round(clamped * 10) % 10;
+  const fractional = step < 1 && tenths !== 0;
+  const abs = fractional ? Math.floor(clamped) : Math.round(clamped);
   const hours = Math.floor(abs / 3600);
   const minutes = Math.floor((abs % 3600) / 60);
   const secs = abs % 60;
-  if (hours > 0) return `${hours}:${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
-  return `${minutes}:${String(secs).padStart(2, "0")}`;
+  const tail = fractional ? `.${tenths}` : "";
+  if (hours > 0) return `${hours}:${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")}${tail}`;
+  return `${minutes}:${String(secs).padStart(2, "0")}${tail}`;
 }
