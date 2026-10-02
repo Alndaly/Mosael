@@ -23,7 +23,6 @@ from app.media.render_plan import (
     ShadowSpec,
     TextOverlayItem,
     Transform,
-    lane_style,
 )
 
 """
@@ -627,22 +626,11 @@ def _build_ass(plan: RenderPlan) -> str:
     )
     lines = [
         f"Dialogue: 0,{_ass_timestamp(item.start)},{_ass_timestamp(item.start + item.duration)},"
-        f"Default,,0,0,{_lane_override(plan, item.lane)}{_ass_text(item.text)}"
+        f"Default,,0,0,0,,{_ass_text(item.text)}"
         for item in plan.subtitles
     ]
     lines += [line for item in plan.text_overlays for line in _text_overlay_dialogues(item, w, h)]
     return header + "\n".join(lines) + "\n"
-
-
-def _lane_override(plan: RenderPlan, lane: int) -> str:
-    """ASS 那一行的「MarginV,Effect,」两栏 + 换道时的对齐覆盖:第一道沿用 Default 样式;换到画面另一头的那道
-    (render_plan.lane_style)用 \an 改对齐、MarginV 给同样的离边距离。"""
-    style = lane_style(plan.subtitle_style, lane)
-    if style is plan.subtitle_style:
-        return "0,,"
-    align = {"bottom": 2, "center": 5, "top": 8}.get(style.position, 2)
-    margin_v = 0 if style.position == "center" else round(style.offset / 100.0 * plan.output.height)
-    return f"{margin_v},,{{\\an{align}}}"
 
 
 def _escape_filter_path(path: Path) -> str:
@@ -985,7 +973,7 @@ def build_ffmpeg_command(
     if text_pngs is not None:
         for item, (png, pw, ph) in zip(plan.subtitles, text_pngs.get("subtitles", [])):
             args += ["-loop", "1", "-framerate", f"{fps:g}", "-t", f"{item.duration + 0.2:.6f}", "-i", str(png)]
-            sx, sy = _subtitle_overlay_pos(lane_style(plan.subtitle_style, item.lane), pw, ph, width, height)
+            sx, sy = _subtitle_overlay_pos(plan.subtitle_style, pw, ph, width, height)
             filters.append(f"[{input_index}:v]setpts=PTS-STARTPTS+{item.start}/TB[stin{input_index}]")
             out_label = f"[vts{input_index}]"
             filters.append(

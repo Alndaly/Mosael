@@ -194,6 +194,7 @@ def build_plan_for_sequence(db: Session, sequence_id: str, export_params: dict |
         for clip in media_clips(track)
         if carries_sound(clip)
     ]
+    # lane:这条字幕在字幕框里排第几道(时间线上靠上的字幕轨在上)。同一时刻各道的字由计划合成一框。
     subtitle_clips = [
         {**clip_dict(clip_by_id[view["id"]]), "lane": shown_text.subtitle_lanes[view["id"]]} for view in shown_text.subtitles
     ]
