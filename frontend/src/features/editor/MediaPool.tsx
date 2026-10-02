@@ -113,7 +113,8 @@ export function MediaPool({
             <label>
               <input
                 type="file"
-                accept="video/*,audio/*,image/*"
+                // 字幕文件(.srt / .vtt)也从这里进:剪辑台认出来后导入成一条字幕轨,不当素材上传。
+                accept="video/*,audio/*,image/*,.srt,.vtt"
                 multiple
                 className="hidden"
                 onChange={(event) => {

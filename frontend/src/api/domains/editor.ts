@@ -1,6 +1,6 @@
 import type { components } from "@/api/generated/schema";
 import type { Job } from "@/api/domains/jobs";
-import { API_BASE, ApiError, api, getAuthToken } from "@/api/transport";
+import { API_BASE, ApiError, api, apiBlob, getAuthToken } from "@/api/transport";
 
 export type Sequence = components["schemas"]["SequenceOut"];
 
@@ -66,12 +66,17 @@ async function send(sequenceId: string, path: string, init: RequestInit): Promis
     remember(next);
     return next;
   } catch (error) {
-    const latest = conflictLatest(error);
-    if (latest) {
-      remember(latest);
-      for (const listener of conflictListeners) listener(latest);
-    }
+    noticeConflict(error);
     throw error;
+  }
+}
+
+/** 撞上 409 时把附带的最新序列记下、交给订阅的人(剪辑页、画板时间线格)。不是版本冲突就什么都不做。 */
+function noticeConflict(error: unknown): void {
+  const latest = conflictLatest(error);
+  if (latest) {
+    remember(latest);
+    for (const listener of conflictListeners) listener(latest);
   }
 }
 
@@ -292,6 +297,52 @@ export function generateSubtitles(
   replace = false,
 ): Promise<Sequence> {
   return edit(sequence, "/subtitles/generate", { method: "POST", body: JSON.stringify({ track_id: trackId, cues, replace }) });
+}
+
+export type SubtitleFileFormat = "srt" | "vtt";
+export type SubtitleImportResult = components["schemas"]["SubtitleImportOut"];
+
+/** 一条字幕轨导出成 .srt / .vtt。双语字幕(两行)用 `line` 选全写、只写原文或只写译文。 */
+export function exportSubtitleFile(
+  sequenceId: string,
+  trackId: string,
+  format: SubtitleFileFormat,
+  line: "all" | "first" | "last" = "all",
+): Promise<Blob> {
+  const query = new URLSearchParams({ track_id: trackId, format, line });
+  return apiBlob(`/api/sequences/${sequenceId}/subtitles/export?${query.toString()}`);
+}
+
+/**
+ * 读一份 .srt / .vtt 落到字幕轨上(不给轨道就新建一条)。整次导入是撤销栈上的一步。
+ * 和别的编辑一样照着 `sequence` 那一版做(base_revision);回包里带着改完的序列,冲突时同样把最新的一版交出去。
+ */
+export async function importSubtitleFile(
+  sequence: SequenceRef,
+  file: File,
+  options: { trackId?: string; offset?: number; replace?: boolean } = {},
+): Promise<SubtitleImportResult> {
+  const form = new FormData();
+  form.append("file", file);
+  form.append("track_id", options.trackId ?? "");
+  form.append("offset", String(options.offset ?? 0));
+  form.append("replace", String(Boolean(options.replace)));
+  try {
+    const result = await api<SubtitleImportResult>(
+      `/api/sequences/${sequence.id}/subtitles/import?base_revision=${baseRevisionOf(sequence)}`,
+      { method: "POST", body: form },
+    );
+    remember(result.sequence);
+    return result;
+  } catch (error) {
+    noticeConflict(error);
+    throw error;
+  }
+}
+
+/** 这个文件是不是字幕文件(按扩展名):素材库收到它时转去导入字幕,而不是当成一份素材上传。 */
+export function isSubtitleFile(file: File): boolean {
+  return /\.(srt|vtt)$/i.test(file.name);
 }
 
 export function setSubtitleStyle(sequence: SequenceRef, style: Record<string, unknown>): Promise<Sequence> {

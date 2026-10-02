@@ -2,13 +2,15 @@ from __future__ import annotations
 
 import hashlib
 import json
+from urllib.parse import quote
 
 from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, Query, Request, Response
+from fastapi import APIRouter, File, Form, HTTPException, Query, Request, Response, UploadFile
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
+from app.core.i18n import tr
 from app.domain.sequences import use_cases as sequence_use_cases
 from app.api.deps import CurrentUser, DbSession, Tx
 from app.core.unit_of_work import after_commit
@@ -30,6 +32,7 @@ from app.api.schemas import (
     MoveClipsBatchRequest,
     SequenceCreate,
     SequenceOut,
+    SubtitleImportOut,
     SetClipEffectsRequest,
     SetClipGainRequest,
     SetClipSpeedRequest,
@@ -378,6 +381,90 @@ def generate_subtitles(
     cues = tuple((cue.text, cue.timeline_start, cue.duration) for cue in body.cues)
     op = GenerateSubtitles(track_id=body.track_id, cues=cues, replace=body.replace)
     return _edit(db, user, sequence_id, base_revision, generate_subtitles_operation, op, perm="edit")
+
+
+#: 一份字幕文件最大多大。一部两小时电影的双语 SRT 也就几百 KB;再大多半是传错了文件。
+_SUBTITLE_FILE_LIMIT = 5 * 1024 * 1024
+
+
+@router.get("/sequences/{sequence_id}/subtitles/export")
+def export_subtitles(
+    sequence_id: str,
+    db: DbSession,
+    user: CurrentUser,
+    track_id: str = Query(...),
+    format: str = Query("srt"),
+    line: str = Query("all"),
+) -> Response:
+    """一条字幕轨导出成 .srt / .vtt。双语字幕(两行)用 `line` 选全写、只写原文(first)或只写译文(last)。"""
+    from app.domain.sequences.subtitle_io import export_track
+    from app.domain.workflows.file_export import ascii_file_stem
+
+    sequence = require_sequence_access(db, user, sequence_id)
+    try:
+        content = export_track(db, sequence_id, track_id, fmt=format, line=line)
+    except SequenceDomainError as exc:
+        raise HTTPException(status_code=exc.status, detail=str(exc)) from exc
+    suffix = f".{format}"
+    media_type = "application/x-subrip" if format == "srt" else "text/vtt"
+    return Response(
+        content=content.encode("utf-8"),
+        media_type=f"{media_type}; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{ascii_file_stem(sequence.name)}{suffix}"; '
+            f"filename*=UTF-8''{quote(sequence.name + suffix)}"
+        },
+    )
+
+
+@router.post("/sequences/{sequence_id}/subtitles/import", response_model=SubtitleImportOut)
+async def import_subtitles(
+    sequence_id: str,
+    db: Tx,
+    user: CurrentUser,
+    file: UploadFile = File(...),
+    track_id: str = Form(""),
+    offset: float = Form(0.0),
+    replace: bool = Form(False),
+    base_revision: BaseRevision = None,
+) -> SubtitleImportOut:
+    """读一份 .srt / .vtt 落到字幕轨上(`track_id` 空 = 新建一条)。整次导入是撤销栈上的一步。
+
+    和别的编辑同一个并发协议(见 domain/sequences/concurrency):照着 `base_revision` 那一版做,落后了且和中间的
+    改动对不上就 409 附最新序列。导入会建片段、覆盖落点,是依赖坐标的一步。"""
+    from app.domain.sequences.subtitle_io import import_into_track
+    from app.media.subtitle_files import SubtitleFileError
+
+    require_sequence_access(db, user, sequence_id, perm="edit")
+    data = await file.read(_SUBTITLE_FILE_LIMIT + 1)
+    if len(data) > _SUBTITLE_FILE_LIMIT:
+        raise HTTPException(status_code=413, detail=tr("subfileErr_tooLarge"))
+    sequence = db.get(Sequence, sequence_id)
+    if sequence is None:
+        raise HTTPException(status_code=404, detail="Sequence not found")
+    try:
+        result = concurrency.run_on_base(
+            db,
+            sequence,
+            lambda: import_into_track(
+                db, sequence_id, data, track_id=track_id, offset=offset, replace=replace, actor_id=user.id
+            ),
+            base_revision=base_revision,
+            footprint=concurrency.POSITIONAL,
+            actor_id=user.id,
+        )
+    except SubtitleFileError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except SequenceRevisionConflict as exc:
+        raise _conflict(db, sequence_id, exc) from exc
+    except SequenceDomainError as exc:
+        raise HTTPException(status_code=exc.status, detail=str(exc)) from exc
+    return SubtitleImportOut(
+        track_id=result.track_id,
+        imported=result.imported,
+        dropped=result.dropped,
+        sequence=SequenceOut.model_validate(_get_sequence(db, sequence_id)),
+    )
 
 
 @router.delete("/sequences/{sequence_id}/clips/{clip_id}", response_model=SequenceOut)

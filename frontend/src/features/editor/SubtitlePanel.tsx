@@ -24,6 +24,7 @@ import { SaveToNote } from "@/features/notes/SaveToNote";
 import { useNoteStrings } from "@/features/notes/strings";
 import { noteExportVariants, type NoteExportLine } from "@/features/editor/noteExport";
 import { translatedCue, translationSource } from "@/features/editor/subtitleTranslate";
+import { SubtitleFiles } from "@/features/editor/SubtitleFiles";
 import { useEditorStore } from "@/features/editor/editorStore";
 import { useVirtualRows } from "@/features/editor/useVirtualRows";
 import { cn } from "@/lib/utils";
@@ -53,6 +54,8 @@ export function SubtitlePanel({
   onSetStyle,
   onDeleteClip,
   onDub,
+  onImportFile,
+  importingFile,
 }: {
   sequence: Sequence;
   onSetText: (clipId: string, text: string) => void;
@@ -71,6 +74,9 @@ export function SubtitlePanel({
   onDeleteClip: (clipId: string) => void;
   /** 切到「配音」页。配音在那里做,这里只给入口。带 clipId = 只配这一条(不改时间线上的选中)。 */
   onDub?: (clipId?: string) => void;
+  /** 导入 .srt / .vtt(见 SubtitleFiles)。 */
+  onImportFile?: (file: File, options: { trackId?: string; replace?: boolean }) => void;
+  importingFile?: boolean;
 }) {
   const t = useI18n();
   const noteStrings = useNoteStrings();
@@ -206,6 +212,7 @@ export function SubtitlePanel({
             <AudioLines size={12} /> {t("subtitleDub")}
           </button>
         )}
+        {onImportFile && <SubtitleFiles sequence={sequence} onImport={onImportFile} importing={importingFile} />}
         {subtitles.length > 0 && (
           <SaveToNote workspaceId={sequence.workspace_id} variants={noteVariants} className={PILL}
             label={noteStrings.saveAll} />

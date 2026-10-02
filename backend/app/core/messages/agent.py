@@ -126,6 +126,23 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Only subtitle tracks can be hidden.",
     },
     "seqErr_detachAudioVideoOnly": {"zh": "只能从视频片段分离音频", "en": "Audio can only be detached from a video clip."},
+    # 字幕文件导入导出(media/subtitle_files.py、domain/sequences/subtitle_io.py)
+    "subfileErr_encoding": {
+        "zh": "读不出这份字幕文件的编码(支持 UTF-8 / UTF-16 / GBK)",
+        "en": "Couldn't work out this subtitle file's encoding (UTF-8, UTF-16 and GBK are supported).",
+    },
+    "subfileErr_noCues": {
+        "zh": "这份文件里没有读得出来的字幕 —— 要是 SRT 或 WebVTT 格式",
+        "en": "No subtitles could be read from this file — it needs to be SRT or WebVTT.",
+    },
+    "subfileErr_format": {"zh": "字幕文件格式只能是 {formats}", "en": "The subtitle format must be one of {formats}."},
+    "subfileErr_line": {"zh": "导出哪一行只能是 all / first / last", "en": "The line to export must be all, first or last."},
+    "subfileErr_trackEmpty": {"zh": "这条字幕轨上没有字幕可导出", "en": "This subtitle track has no subtitles to export."},
+    "subfileErr_tooLarge": {"zh": "字幕文件太大(上限 5 MB),多半不是字幕", "en": "That subtitle file is too large (5 MB max) — it's probably not a subtitle file."},
+    "subfileErr_nothingInRange": {
+        "zh": "文件里的字幕全都落在时间线内容之外(检查一下起始偏移)",
+        "en": "Every subtitle in the file falls outside the timeline's content — check the start offset.",
+    },
     "seqErr_cueNotFinite": {
         "zh": "第 {index} 条字幕的时间不是有效的数字",
         "en": "Subtitle {index} has a start or duration that isn't a valid number.",

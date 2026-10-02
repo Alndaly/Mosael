@@ -40,6 +40,8 @@ import {
   setClipText,
   setClipTexts,
   getAssetTranscript,
+  importSubtitleFile,
+  isSubtitleFile,
   trimClip,
   undoSequence,
   baseRevisionOf,
@@ -436,6 +438,27 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
       toast.error(error.message);
     },
   });
+  //: 导入 .srt / .vtt:字幕页的入口和素材库(拖进来 / 选文件时认出是字幕文件)共用这一个。
+  const importSubtitleMutation = useMutation({
+    mutationFn: ({ file, trackId, replace }: { file: File; trackId?: string; replace?: boolean }) =>
+      importSubtitleFile(sequence!, file, { trackId, replace }),
+    onSuccess: (result) => {
+      applySequence(result.sequence);
+      // 落在时间线内容之外的那几条没落 —— 说出来,不让人以为文件读少了。
+      toast.success(
+        result.dropped > 0
+          ? t("subtitleFileImportedSome").replace("{n}", String(result.imported)).replace("{dropped}", String(result.dropped))
+          : t("subtitleFileImported").replace("{n}", String(result.imported)),
+      );
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+  const importMediaOrSubtitles = (files: File[]) => {
+    const subtitleFiles = files.filter(isSubtitleFile);
+    const media = files.filter((file) => !isSubtitleFile(file));
+    for (const file of subtitleFiles) importSubtitleMutation.mutate({ file });
+    if (media.length > 0) importFiles.mutate(media);
+  };
   const requestGenerateSubtitles = () => {
     const existing = (subtitleTarget?.clips ?? []).length;
     if (existing > 0) setRegeneratePending(existing);
@@ -977,7 +1000,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
         <MediaPool
           assets={assets.data ?? []}
           uploading={importFiles.isPending}
-          onImportFiles={(files) => importFiles.mutate(files)}
+          onImportFiles={importMediaOrSubtitles}
           onRecord={() => openRecorder({ projectId: project.id })}
           onAddToTimeline={addAssetToTimeline}
         />
@@ -1020,6 +1043,8 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
                 subtitleStyleMutation.mutate(style);
               }}
               onDeleteClip={(clipId) => deleteClipMutation.mutate(clipId)}
+              onImportFile={(file, options) => importSubtitleMutation.mutate({ file, ...options })}
+              importingFile={importSubtitleMutation.isPending}
               onDub={(clipId) => {
                 setDubFocusClipId(clipId ?? null);
                 panels.setTab("voice");

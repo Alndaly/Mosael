@@ -7182,6 +7182,147 @@
         }
       }
     },
+    "/api/sequences/{sequence_id}/subtitles/export": {
+      "get": {
+        "tags": [
+          "sequences"
+        ],
+        "summary": "Export Subtitles",
+        "description": "一条字幕轨导出成 .srt / .vtt。双语字幕(两行)用 `line` 选全写、只写原文(first)或只写译文(last)。",
+        "operationId": "export_subtitles_api_sequences__sequence_id__subtitles_export_get",
+        "parameters": [
+          {
+            "name": "sequence_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Sequence Id"
+            }
+          },
+          {
+            "name": "track_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Track Id"
+            }
+          },
+          {
+            "name": "format",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "srt",
+              "title": "Format"
+            }
+          },
+          {
+            "name": "line",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "all",
+              "title": "Line"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sequences/{sequence_id}/subtitles/import": {
+      "post": {
+        "tags": [
+          "sequences"
+        ],
+        "summary": "Import Subtitles",
+        "description": "读一份 .srt / .vtt 落到字幕轨上(`track_id` 空 = 新建一条)。整次导入是撤销栈上的一步。\n\n和别的编辑同一个并发协议(见 domain/sequences/concurrency):照着 `base_revision` 那一版做,落后了且和中间的\n改动对不上就 409 附最新序列。导入会建片段、覆盖落点,是依赖坐标的一步。",
+        "operationId": "import_subtitles_api_sequences__sequence_id__subtitles_import_post",
+        "parameters": [
+          {
+            "name": "sequence_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Sequence Id"
+            }
+          },
+          {
+            "name": "base_revision",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。",
+              "title": "Base Revision"
+            },
+            "description": "这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_import_subtitles_api_sequences__sequence_id__subtitles_import_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubtitleImportOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/sequences/{sequence_id}/clips/{clip_id}": {
       "delete": {
         "tags": [
@@ -23684,6 +23825,35 @@
         ],
         "title": "Body_import_asset_api_assets_import_post"
       },
+      "Body_import_subtitles_api_sequences__sequence_id__subtitles_import_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File"
+          },
+          "track_id": {
+            "type": "string",
+            "title": "Track Id",
+            "default": ""
+          },
+          "offset": {
+            "type": "number",
+            "title": "Offset",
+            "default": 0.0
+          },
+          "replace": {
+            "type": "boolean",
+            "title": "Replace",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_import_subtitles_api_sequences__sequence_id__subtitles_import_post"
+      },
       "Body_stage_restore_api_settings_data_restore_stage_post": {
         "properties": {
           "file": {
@@ -34558,6 +34728,34 @@
         "type": "object",
         "title": "SubtitleDubRequest",
         "description": "给选中的字幕条配音。音色/引擎那一套与 /tts/synthesize 同构 —— 配音就是合成,只是文本\n来自字幕、产物直接落到时间线上。"
+      },
+      "SubtitleImportOut": {
+        "properties": {
+          "track_id": {
+            "type": "string",
+            "title": "Track Id"
+          },
+          "imported": {
+            "type": "integer",
+            "title": "Imported"
+          },
+          "dropped": {
+            "type": "integer",
+            "title": "Dropped"
+          },
+          "sequence": {
+            "$ref": "#/components/schemas/SequenceOut"
+          }
+        },
+        "type": "object",
+        "required": [
+          "track_id",
+          "imported",
+          "dropped",
+          "sequence"
+        ],
+        "title": "SubtitleImportOut",
+        "description": "导入 .srt / .vtt 的结果:落到了哪条轨、落了几条、几条因为在时间线内容之外没落,以及改完的整条序列。"
       },
       "SynthesizeRequest": {
         "properties": {

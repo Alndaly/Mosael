@@ -231,6 +231,15 @@ class GenerateSubtitlesRequest(ApiModel):
     replace: bool = False
 
 
+class SubtitleImportOut(ApiModel):
+    """导入 .srt / .vtt 的结果:落到了哪条轨、落了几条、几条因为在时间线内容之外没落,以及改完的整条序列。"""
+
+    track_id: str
+    imported: int
+    dropped: int
+    sequence: SequenceOut
+
+
 class SetSubtitleStyleRequest(ApiModel):
     style: dict
 

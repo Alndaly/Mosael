@@ -2551,6 +2551,49 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/sequences/{sequence_id}/subtitles/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Subtitles
+         * @description 一条字幕轨导出成 .srt / .vtt。双语字幕(两行)用 `line` 选全写、只写原文(first)或只写译文(last)。
+         */
+        get: operations["export_subtitles_api_sequences__sequence_id__subtitles_export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sequences/{sequence_id}/subtitles/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import Subtitles
+         * @description 读一份 .srt / .vtt 落到字幕轨上(`track_id` 空 = 新建一条)。整次导入是撤销栈上的一步。
+         *
+         *     和别的编辑同一个并发协议(见 domain/sequences/concurrency):照着 `base_revision` 那一版做,落后了且和中间的
+         *     改动对不上就 409 附最新序列。导入会建片段、覆盖落点,是依赖坐标的一步。
+         */
+        post: operations["import_subtitles_api_sequences__sequence_id__subtitles_import_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/sequences/{sequence_id}/clips/{clip_id}": {
         parameters: {
             query?: never;
@@ -8147,6 +8190,26 @@ export interface components {
             /** File */
             file: string;
         };
+        /** Body_import_subtitles_api_sequences__sequence_id__subtitles_import_post */
+        Body_import_subtitles_api_sequences__sequence_id__subtitles_import_post: {
+            /** File */
+            file: string;
+            /**
+             * Track Id
+             * @default
+             */
+            track_id: string;
+            /**
+             * Offset
+             * @default 0
+             */
+            offset: number;
+            /**
+             * Replace
+             * @default false
+             */
+            replace: boolean;
+        };
         /** Body_stage_restore_api_settings_data_restore_stage_post */
         Body_stage_restore_api_settings_data_restore_stage_post: {
             /** File */
@@ -12998,6 +13061,19 @@ export interface components {
              * @default 1
              */
             speed: number;
+        };
+        /**
+         * SubtitleImportOut
+         * @description 导入 .srt / .vtt 的结果:落到了哪条轨、落了几条、几条因为在时间线内容之外没落,以及改完的整条序列。
+         */
+        SubtitleImportOut: {
+            /** Track Id */
+            track_id: string;
+            /** Imported */
+            imported: number;
+            /** Dropped */
+            dropped: number;
+            sequence: components["schemas"]["SequenceOut"];
         };
         /** SynthesizeRequest */
         SynthesizeRequest: {
@@ -19222,6 +19298,79 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SequenceOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_subtitles_api_sequences__sequence_id__subtitles_export_get: {
+        parameters: {
+            query: {
+                track_id: string;
+                format?: string;
+                line?: string;
+            };
+            header?: never;
+            path: {
+                sequence_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    import_subtitles_api_sequences__sequence_id__subtitles_import_post: {
+        parameters: {
+            query?: {
+                /** @description 这一步是照着第几版时间线做的。落后且与中间的改动冲突时回 409,detail 里带最新的序列。 */
+                base_revision?: number | null;
+            };
+            header?: never;
+            path: {
+                sequence_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_import_subtitles_api_sequences__sequence_id__subtitles_import_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubtitleImportOut"];
                 };
             };
             /** @description Validation Error */
