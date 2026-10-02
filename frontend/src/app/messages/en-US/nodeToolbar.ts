@@ -82,6 +82,7 @@ export const nodeToolbar = {
   wfIssueScopeFieldMissing: "{ref} doesn't exist here: only {available} is provided",
   wfIssueStartParamMissing: "The start node has no such parameter: {ref}. Declare it in the start node's parameters — running from here passes none",
   wfIssueDisconnected: "Not connected to the flow — it won't run",
+  wfIssueUnwiredReferenced: "Not wired into the flow, so it never runs — yet {names} reference it ({refs}) and would only get empty values, so the run is refused. Connect it into the flow; if this came from an official template, use “Rebuild from the new version” at the top of the canvas",
   wfIssueNoProviders: "No model provider configured",
   customCssTitle: "Custom CSS",
   customCssDesc: "Write a CSS file that overrides the app's styles. Saving applies it — no restart.",

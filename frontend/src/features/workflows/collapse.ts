@@ -21,7 +21,7 @@
  *     `{{input.template-1.text}}`,折叠完的循环安静地读错了值。
  */
 import type { WorkflowGraph } from "../../api/client";
-import { extractRefs, isCodeConfig, isNestedScopeConfig, type RegistryLike } from "@/features/workflows/analyze";
+import { isCodeConfig, isNestedScopeConfig, layerReferences, type RegistryLike } from "@/features/workflows/analyze";
 
 type Graph = WorkflowGraph;
 type WNode = Graph["nodes"][number];
@@ -80,11 +80,9 @@ function rewriteOuterRefs(
   return out;
 }
 
-/** 这个节点在**这一层**引用了哪些节点 id(与后端 reference_dependencies 同一口径)。 */
+/** 这个节点在**这一层**引用了哪些节点 id(与后端 reference_dependencies 同一口径,见 analyze.layerReferences)。 */
 function outerRefSources(node: WNode, registry: RegistryLike): string[] {
-  return Object.entries(node.config ?? {})
-    .filter(([key]) => !isNestedScopeConfig(registry, node.type, key) && !isCodeConfig(registry, node.type, key))
-    .flatMap(([, value]) => extractRefs(value).map(({ sourceId }) => sourceId));
+  return layerReferences(node, registry).map(({ sourceId }) => sourceId);
 }
 
 /** 生成一个当前 graph 里没用过的节点 id(deterministic:扫已用后缀,不用随机/时间)。 */

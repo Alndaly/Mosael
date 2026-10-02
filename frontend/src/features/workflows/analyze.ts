@@ -19,7 +19,8 @@ export type IssueCode =
   | "required-missing" // 必填字段为空
   | "one-of-both" // 同组(one_of)的字段填了不止一个
   | "one-of-missing" // 同组(one_of)的字段一个都没填
-  | "disconnected" // 非 start 节点无法从 start 到达
+  | "disconnected" // 一定不会被执行(没接进流程),也没有会跑的节点引用它 —— 只是提醒
+  | "unwired-referenced" // 一定不会被执行,却被会跑的节点引用(`{{…}}` 或数据边):后端运行前拒(wfErr_referencesNeverRunNode)
   | "stale-var" // 配置里引用了已删除的节点
   | "start-param-missing" // 引到开始节点的参数({{start.x}} 或从它拉出的数据边),开始节点没声明
   | "no-providers" // LLM 节点但一个供应商都没配
@@ -49,6 +50,10 @@ export interface NodeIssue {
   group?: string[];
   /** stale-var:失效的完整引用,如 "{{llm-1.text}}"。 */
   ref?: string;
+  /** unwired-referenced:谁引用了它(节点名),拼进文案。 */
+  referencedBy?: string[];
+  /** unwired-referenced:引用的写法(`{{props.catalog}}`),拼进文案。 */
+  refs?: string[];
   /** scope-field-missing:这个作用域实际提供的那几个(`loop.item`、`loop.index`),拼进文案。 */
   available?: string[];
   /** type-mismatch:期望/实际类型,拼进文案。 */
@@ -225,23 +230,109 @@ function isEmpty(value: unknown): boolean {
   return false;
 }
 
-/** 从 start 节点出发能到达的节点集合(顺着连线方向 BFS)。 */
-function reachableFromStart(graph: WorkflowGraph): Set<string> {
-  const start = graph.nodes.find((n) => n.type === "start");
-  const reached = new Set<string>();
-  if (!start) return reached;
-  const adjacency = new Map<string, string[]>();
+type WorkflowNodeLike = WorkflowGraph["nodes"][number];
+type WorkflowEdgeLike = WorkflowGraph["edges"][number];
+
+/**
+ * 这个节点在**这一层**会插值的 `{{…}}` 引用:代码字段不插值、容器节点的 body / output / condition 属于体内,
+ * 都不算 —— 和后端 graph_rules.reference_dependencies 同一口径(契约 contracts/workflow-never-run-cases.json)。
+ * 引擎按它们排先后(引用即依赖),**只管先后,不会让被引用的节点运行**。
+ */
+export function layerReferences(node: WorkflowNodeLike, registry: RegistryLike): Array<{ ref: string; sourceId: string }> {
+  return Object.entries(node.config ?? {})
+    .filter(([key]) => !isNestedScopeConfig(registry, node.type, key) && !isCodeConfig(registry, node.type, key))
+    .flatMap(([, value]) => extractRefs(value));
+}
+
+/**
+ * 这一层图里**一定不会被执行**的节点:引擎的入口规则加「该不该跑」,只是条件分支两支都算可能走。
+ *
+ * - 入口:开始节点永远是;`entryIsRoot`(循环体 / 子图,执行器就这么跑体)时没有入边的节点也是。
+ * - 其余节点「可能跑」:决定它跑不跑的入边(有控制边只看控制边,一条都没有才看数据边)里,有一条的来源可能跑。
+ * - `{{…}}` 引用不让被引用的节点跑:顶层一个只靠引用挂着的节点,引擎每次都跳过它。
+ *
+ * 两头有一头不在这一层的连线不算入边。和后端 graph_rules.never_run_nodes 跑同一份语料
+ * contracts/workflow-never-run-cases.json —— 运行前拦不拦、画布标不标,是同一个判据。
+ */
+export function neverRunNodes(graph: WorkflowGraph, { entryIsRoot }: { entryIsRoot: boolean }): Set<string> {
+  const ids = new Set(graph.nodes.map((node) => node.id));
+  const incoming = new Map<string, WorkflowEdgeLike[]>([...ids].map((id) => [id, []]));
   for (const edge of graph.edges) {
-    adjacency.set(edge.source, [...(adjacency.get(edge.source) ?? []), edge.target]);
+    if (ids.has(edge.source) && ids.has(edge.target)) incoming.get(edge.target)!.push(edge);
   }
-  const queue = [start.id];
-  while (queue.length) {
-    const current = queue.pop()!;
-    if (reached.has(current)) continue;
-    reached.add(current);
-    queue.push(...(adjacency.get(current) ?? []));
+  //: 谁跑了就能让谁跑:来源 → 由它决定跑不跑的下游。
+  const unlocks = new Map<string, string[]>();
+  for (const [target, edges] of incoming) {
+    const control = edges.filter((edge) => edge.kind !== "data");
+    for (const edge of control.length > 0 ? control : edges) {
+      unlocks.set(edge.source, [...(unlocks.get(edge.source) ?? []), target]);
+    }
   }
-  return reached;
+  const mayRun = new Set(
+    graph.nodes
+      .filter((node) => node.type === "start" || (entryIsRoot && incoming.get(node.id)!.length === 0))
+      .map((node) => node.id),
+  );
+  const frontier = [...mayRun];
+  while (frontier.length > 0) {
+    for (const target of unlocks.get(frontier.pop()!) ?? []) {
+      if (mayRun.has(target)) continue;
+      mayRun.add(target);
+      frontier.push(target);
+    }
+  }
+  return new Set([...ids].filter((id) => !mayRun.has(id)));
+}
+
+/** 一个一定不会跑的节点,被哪些会跑的节点、以哪几种写法引用了。 */
+export interface NeverRunReference {
+  source: string;
+  referencedBy: string[];
+  refs: string[];
+}
+
+const byCodeUnit = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
+
+/**
+ * **会跑的节点引用了一定不会跑的节点** —— 那个引用跑起来只会是空串,而工作流照样报成功。后端运行前拦
+ * (wfErr_referencesNeverRunNode),画布在被引用的节点上标 error(unwired-referenced)、把那条引用画成错误色的虚线。
+ *
+ * 引用 = 这一层会插值的 `{{节点.…}}`(layerReferences)+ 数据边 —— 规范化把整格一条的引用升级成的就是数据边。
+ * 被引用的节点在条件分支里(可能跑可能不跑)不算,引用方自己也不会跑的不算。按被引用的节点归拢,都排好序。
+ * 和后端 graph_rules.never_run_references 跑同一份语料 contracts/workflow-never-run-cases.json。
+ */
+export function neverRunReferences(
+  graph: WorkflowGraph,
+  registry: RegistryLike,
+  { entryIsRoot }: { entryIsRoot: boolean },
+): NeverRunReference[] {
+  const never = neverRunNodes(graph, { entryIsRoot });
+  if (never.size === 0) return [];
+  const found = new Map<string, { referencedBy: Set<string>; refs: Set<string> }>();
+  const note = (source: string, target: string, ref: string) => {
+    const one = found.get(source) ?? { referencedBy: new Set<string>(), refs: new Set<string>() };
+    one.referencedBy.add(target);
+    one.refs.add(ref);
+    found.set(source, one);
+  };
+  const ids = new Set(graph.nodes.map((node) => node.id));
+  for (const node of graph.nodes) {
+    if (never.has(node.id)) continue;
+    for (const { ref, sourceId } of layerReferences(node, registry)) {
+      if (never.has(sourceId) && sourceId !== node.id) note(sourceId, node.id, ref);
+    }
+  }
+  for (const edge of graph.edges) {
+    if (edge.kind !== "data" || !never.has(edge.source) || !ids.has(edge.target) || never.has(edge.target)) continue;
+    note(edge.source, edge.target, `{{${edge.source_output ? `${edge.source}.${edge.source_output}` : edge.source}}}`);
+  }
+  return [...found.entries()]
+    .sort(([a], [b]) => byCodeUnit(a, b))
+    .map(([source, one]) => ({
+      source,
+      referencedBy: [...one.referencedBy].sort(byCodeUnit),
+      refs: [...one.refs].sort(byCodeUnit),
+    }));
 }
 
 export interface Analysis {
@@ -281,9 +372,18 @@ function collect(
 ): void {
   const layerIds = new Set(graph.nodes.map((n) => n.id));
   const nodeIds = new Set([...layerIds, ...Object.keys(scope)]);
-  const reachable = reachableFromStart(graph);
   // 「没有开始节点」只对顶层成立 —— 循环体本来就没有 start,它由外层驱动。
   const hasStart = graph.nodes.some((n) => n.type === "start");
+  // 一定不会被执行的节点(没接进流程):没人引用只是一句提醒;被会跑的节点引用了,那个引用跑起来只会是空串 ——
+  // 后端运行前拒,这里同一个判据、同一级(neverRunNodes / neverRunReferences)。循环体 / 子图按体的入口规则
+  // (无入边的根也是入口);顶层没有开始节点时什么都不会跑,「缺少开始节点」已经说了这一件。
+  const entryIsRoot = path.length > 0;
+  const judgesRuns = entryIsRoot || hasStart;
+  const neverRun = judgesRuns ? neverRunNodes(graph, { entryIsRoot }) : new Set<string>();
+  const unwired = new Map(
+    (judgesRuns ? neverRunReferences(graph, registry, { entryIsRoot }) : []).map((one) => [one.source, one]),
+  );
+  const layerNames = new Map(graph.nodes.map((n) => [n.id, n.name || n.type]));
   if (!hasStart && path.length === 0) {
     issues.push({
       nodeId: "__workflow__",
@@ -448,8 +548,18 @@ function collect(
         push("error", "gen-provider-unconfigured", { configKey: "provider" });
     }
 
-    // 断连:有 start 时,非 start 节点却到不了 → 游离
-    if (hasStart && node.type !== "start" && !reachable.has(node.id)) push("warn", "disconnected");
+    // 一定不会被执行:被会跑的节点引用了就是阻断(和后端运行前那一道对齐),没人引用只是提醒。
+    if (neverRun.has(node.id)) {
+      const referenced = unwired.get(node.id);
+      if (referenced) {
+        push("error", "unwired-referenced", {
+          referencedBy: referenced.referencedBy.map((id) => layerNames.get(id) ?? id),
+          refs: referenced.refs,
+        });
+      } else {
+        push("warn", "disconnected");
+      }
+    }
   }
 
   // 数据边:软类型校验(不阻断)。目标输入是强类型槽、上游输出类型又对不上时给提醒。

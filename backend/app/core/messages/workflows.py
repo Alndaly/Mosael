@@ -125,6 +125,11 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "对话节点没选模型,而连接「{name}」上没有可用的对话模型:在设置里给它启用一个对话模型(或在节点上选一个),再运行",
         "en": "A chat step has no model picked, and the connection “{name}” has no usable chat model: enable one in Settings (or pick one on the step), then run again",
     },
+    "wfErr_referencesNeverRunNode": {
+        # 一个会跑的节点引用了一定不会跑(没接进流程)的节点 —— 见 graph_rules.never_run_references。
+        "zh": "节点 {nodes} 引用了 {refs},可节点 {source} 没接进流程(没有一条会让它运行的入边),永远不会运行 —— 这个引用跑起来只会是空的。把 {source} 连进流程;图是从官方模板建的,可以点画布顶上的「按新版重建」",
+        "en": "Node {nodes} references {refs}, but node {source} isn't wired into the flow (no incoming connection makes it run), so it never runs and the reference would always come out empty. Connect {source} into the flow; if this workflow was built from an official template, use “Rebuild from the new version” at the top of the canvas",
+    },
     "wfErr_notFromTemplate": {
         "zh": "这张图不是从官方模板建的(或那个模板已经没有了),没法按新版重建",
         "en": "This workflow wasn't created from an official template (or that template no longer exists), so it can't be rebuilt from the new version",

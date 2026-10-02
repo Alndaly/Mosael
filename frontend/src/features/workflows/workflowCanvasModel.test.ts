@@ -120,6 +120,16 @@ describe("workflow canvas model", () => {
     expect(workflowIssueText(say, issue, new Map())).toBe("wfIssuePluginUnavailable");
   });
 
+  it("被引用着却不会跑:点名谁引用了它、怎么引用的", () => {
+    const issue: NodeIssue = {
+      nodeId: "props", path: [], nodeName: "可用的 3D 道具", nodeType: "scene_props", severity: "error",
+      code: "unwired-referenced", referencedBy: ["布景", "分镜"], refs: ["{{props.catalog}}", "{{props.names}}"],
+    };
+    const say = ((key: MessageKey) =>
+      key === "wfIssueUnwiredReferenced" ? "「{names}」引用了它({refs})" : key === "listSeparator" ? "、" : key) as (key: MessageKey) => string;
+    expect(workflowIssueText(say, issue, new Map())).toBe("「布景、分镜」引用了它({{props.catalog}}、{{props.names}})");
+  });
+
   it("keeps stable port keys while projecting localized labels for both sides", () => {
     const registry = new Map([
       [

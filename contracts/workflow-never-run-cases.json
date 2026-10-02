@@ -1,0 +1,264 @@
+{
+  "why": "「一定不会跑」的节点被一个会跑的节点引用,引用跑起来只会是空串 ——「从主题到完整视频」的「可用的 3D 道具」从模板 v8 到 v11 一次都没跑过,布景师拿到的道具清单永远是空的,工作流照样报成功。后端运行前拦(graph_rules.never_run_references,经 validate_graph),画布把被引用的那个节点标成 error、把引用画成错误色的虚线(analyze.ts 的 neverRunReferences)。两侧各一份实现,跑这同一份语料。",
+  "rules": [
+    "入口:开始节点永远是入口;循环体 / 子图里(entry_is_root)没有入边的节点也是入口 —— 和 engine.execute_graph 的 is_entry 同一条。",
+    "其余节点「可能跑」:决定它跑不跑的那几条入边(有控制边只看控制边,一条控制边都没有才看数据边)里,有一条的来源可能跑 —— engine.incoming_active,只是条件分支两支都算可能。",
+    "never_runs:这一层里不是「可能跑」的节点。`{{…}}` 引用不让被引用的节点跑(它只管先后)。",
+    "blocked:可能跑的节点引用了 never_runs 里的节点。引用 = 这一层会插值的 `{{节点.…}}`(代码字段、容器节点的 body / output / condition 不算 —— 和 reference_dependencies 同一口径)+ 数据边(整格一条的引用规范化之后就是数据边)。按被引用的节点归拢:引用它的节点、引用写法都排好序。"
+  ],
+  "node_types": {
+    "start": { "config": { "params": { "type": "object" } } },
+    "template": { "config": { "template": { "type": "template" } } },
+    "notify": { "config": { "title": { "type": "template" }, "body": { "type": "template" } } },
+    "condition": { "config": { "left": { "type": "template" }, "op": { "type": "string" }, "right": { "type": "template" } } },
+    "code": { "config": { "code": { "type": "code" }, "input": { "type": "object" } } },
+    "loop_foreach": {
+      "config": {
+        "items": { "type": "template" },
+        "inputs": { "type": "object" },
+        "body": { "type": "graph" },
+        "output": { "type": "template" }
+      },
+      "body_scope": { "loop": ["item", "index"], "input": ["*inputs"] }
+    }
+  },
+  "cases": [
+    {
+      "name": "没接进流程的节点被引用 —— 拦",
+      "why": "「可用的 3D 道具」的现场:一条连线都没有,只靠布景提示词里的引用。顶层只有开始节点是入口,它永远不跑。",
+      "entry_is_root": false,
+      "graph": {
+        "nodes": [
+          { "id": "start", "type": "start", "config": { "params": { "topic": "猫" } } },
+          { "id": "props", "type": "template", "config": { "template": "桌子、椅子" } },
+          { "id": "set_design", "type": "template", "config": { "template": "{{start.topic}} 的布景,道具从这里挑:{{props.text}}" } }
+        ],
+        "edges": [{ "id": "e1", "source": "start", "target": "set_design" }]
+      },
+      "never_runs": ["props"],
+      "blocked": [{ "source": "props", "referenced_by": ["set_design"], "refs": ["{{props.text}}"] }]
+    },
+    {
+      "name": "孤立、没人引用 —— 不会跑,但不拦",
+      "why": "画布照旧挂「未连接到流程」的提醒;它不跑不影响任何别的节点拿到的值。",
+      "entry_is_root": false,
+      "graph": {
+        "nodes": [
+          { "id": "start", "type": "start", "config": {} },
+          { "id": "a", "type": "template", "config": { "template": "x" } },
+          { "id": "stray", "type": "template", "config": { "template": "y" } }
+        ],
+        "edges": [{ "id": "e1", "source": "start", "target": "a" }]
+      },
+      "never_runs": ["stray"],
+      "blocked": []
+    },
+    {
+      "name": "引用方自己也不会跑 —— 不拦",
+      "why": "两头都不跑,没有谁会拿着空值往下走。",
+      "entry_is_root": false,
+      "graph": {
+        "nodes": [
+          { "id": "start", "type": "start", "config": {} },
+          { "id": "p", "type": "template", "config": { "template": "x" } },
+          { "id": "q", "type": "template", "config": { "template": "{{p.text}}" } }
+        ],
+        "edges": []
+      },
+      "never_runs": ["p", "q"],
+      "blocked": []
+    },
+    {
+      "name": "被引用的在条件分支里 —— 可能跑,不拦",
+      "why": "另一支没跑时引用出来是空串,这是作者有意为之;两支都可能走,真假两个出口都算。",
+      "entry_is_root": false,
+      "graph": {
+        "nodes": [
+          { "id": "start", "type": "start", "config": { "params": { "voice": "yes" } } },
+          { "id": "c", "type": "condition", "config": { "left": "{{start.voice}}", "op": "equals", "right": "yes" } },
+          { "id": "yes", "type": "template", "config": { "template": "画外音" } },
+          { "id": "no", "type": "template", "config": { "template": "字幕" } },
+          { "id": "join", "type": "template", "config": { "template": "{{yes.text}}{{no.text}}" } }
+        ],
+        "edges": [
+          { "id": "e1", "source": "start", "target": "c" },
+          { "id": "e2", "source": "c", "target": "yes", "source_handle": "true" },
+          { "id": "e3", "source": "c", "target": "no", "source_handle": "false" },
+          { "id": "e4", "source": "start", "target": "join" }
+        ]
+      },
+      "never_runs": [],
+      "blocked": []
+    },
+    {
+      "name": "跟在不会跑的节点后面的,也不会跑",
+      "why": "props → catalog 连着,可 props 自己没有入边:整串都不跑,引用 catalog 的照样拦。",
+      "entry_is_root": false,
+      "graph": {
+        "nodes": [
+          { "id": "start", "type": "start", "config": {} },
+          { "id": "props", "type": "template", "config": { "template": "x" } },
+          { "id": "catalog", "type": "template", "config": { "template": "{{props.text}}" } },
+          { "id": "a", "type": "template", "config": { "template": "{{catalog.text}}" } }
+        ],
+        "edges": [
+          { "id": "e1", "source": "props", "target": "catalog" },
+          { "id": "e2", "source": "start", "target": "a" }
+        ]
+      },
+      "never_runs": ["catalog", "props"],
+      "blocked": [{ "source": "catalog", "referenced_by": ["a"], "refs": ["{{catalog.text}}"] }]
+    },
+    {
+      "name": "有控制边只看控制边:控制边来自不会跑的节点,另有来自开始节点的数据边 —— 照样不会跑",
+      "why": "engine.incoming_active:数据边只说值从哪来,不说该不该跑。",
+      "entry_is_root": false,
+      "graph": {
+        "nodes": [
+          { "id": "start", "type": "start", "config": { "params": { "topic": "猫" } } },
+          { "id": "p", "type": "template", "config": { "template": "x" } },
+          { "id": "q", "type": "template", "config": { "template": "" } },
+          { "id": "a", "type": "notify", "config": { "title": "{{q.text}}", "body": "固定" } }
+        ],
+        "edges": [
+          { "id": "e1", "source": "p", "target": "q" },
+          { "id": "d1", "source": "start", "target": "q", "kind": "data", "source_output": "topic", "target_input": "template" },
+          { "id": "e2", "source": "start", "target": "a" }
+        ]
+      },
+      "never_runs": ["p", "q"],
+      "blocked": [{ "source": "q", "referenced_by": ["a"], "refs": ["{{q.text}}"] }]
+    },
+    {
+      "name": "只有数据边时任一来源会跑就会跑 —— 它从不会跑的那个来源拿的值照样拦",
+      "why": "规范化把整格一条的 `{{p.text}}` 升级成数据边:数据边就是引用的另一种写法。",
+      "entry_is_root": false,
+      "graph": {
+        "nodes": [
+          { "id": "start", "type": "start", "config": { "params": { "topic": "猫" } } },
+          { "id": "p", "type": "template", "config": { "template": "x" } },
+          { "id": "q", "type": "notify", "config": { "title": "", "body": "" } }
+        ],
+        "edges": [
+          { "id": "d1", "source": "start", "target": "q", "kind": "data", "source_output": "topic", "target_input": "title" },
+          { "id": "d2", "source": "p", "target": "q", "kind": "data", "source_output": "text", "target_input": "body" }
+        ]
+      },
+      "never_runs": ["p"],
+      "blocked": [{ "source": "p", "referenced_by": ["q"], "refs": ["{{p.text}}"] }]
+    },
+    {
+      "name": "一个节点被几处、几种写法引用 —— 归到一条里",
+      "entry_is_root": false,
+      "graph": {
+        "nodes": [
+          { "id": "start", "type": "start", "config": {} },
+          { "id": "p", "type": "template", "config": { "template": "x" } },
+          { "id": "b", "type": "notify", "config": { "title": "{{p.text}}", "body": "{{p.text}} / {{ p.json.items }}" } },
+          { "id": "a", "type": "template", "config": { "template": "" } }
+        ],
+        "edges": [
+          { "id": "e1", "source": "start", "target": "a" },
+          { "id": "e2", "source": "start", "target": "b" },
+          { "id": "d1", "source": "p", "target": "a", "kind": "data", "source_output": "text", "target_input": "template" }
+        ]
+      },
+      "never_runs": ["p"],
+      "blocked": [{ "source": "p", "referenced_by": ["a", "b"], "refs": ["{{p.json.items}}", "{{p.text}}"] }]
+    },
+    {
+      "name": "代码字段里的 {{…}} 不是引用 —— 不拦",
+      "why": "代码不插值(graph_rules.code_fields),那一串原样留在代码里。",
+      "entry_is_root": false,
+      "graph": {
+        "nodes": [
+          { "id": "start", "type": "start", "config": {} },
+          { "id": "p", "type": "template", "config": { "template": "x" } },
+          { "id": "run", "type": "code", "config": { "code": "print('{{p.text}}')", "input": {} } }
+        ],
+        "edges": [{ "id": "e1", "source": "start", "target": "run" }]
+      },
+      "never_runs": ["p"],
+      "blocked": []
+    },
+    {
+      "name": "容器节点:inputs / items 在这一层解析,算引用;body / output 属于体内,不算",
+      "why": "output 里的 `{{p.json}}` 指的是体里那个 p,不是外层这个。",
+      "entry_is_root": false,
+      "graph": {
+        "nodes": [
+          { "id": "start", "type": "start", "config": {} },
+          { "id": "p", "type": "template", "config": { "template": "x" } },
+          {
+            "id": "loop",
+            "type": "loop_foreach",
+            "config": {
+              "items": "a\nb",
+              "inputs": { "style": "{{p.text}}" },
+              "output": "{{p.json}}",
+              "body": {
+                "nodes": [{ "id": "p", "type": "template", "config": { "template": "{{loop.item}} {{input.style}}" } }],
+                "edges": []
+              }
+            }
+          }
+        ],
+        "edges": [{ "id": "e1", "source": "start", "target": "loop" }]
+      },
+      "never_runs": ["p"],
+      "blocked": [{ "source": "p", "referenced_by": ["loop"], "refs": ["{{p.text}}"] }]
+    },
+    {
+      "name": "循环体里没有入边的节点就是入口 —— 被引用也不拦",
+      "why": "执行器跑体时 entry_is_root:无入边的根照样跑(和顶层相反)。",
+      "entry_is_root": true,
+      "graph": {
+        "nodes": [
+          { "id": "shot", "type": "template", "config": { "template": "{{loop.item}}" } },
+          { "id": "style", "type": "template", "config": { "template": "胶片感" } },
+          { "id": "prompt", "type": "template", "config": { "template": "{{shot.text}},{{style.text}}" } }
+        ],
+        "edges": [{ "id": "e1", "source": "shot", "target": "prompt" }]
+      },
+      "never_runs": [],
+      "blocked": []
+    },
+    {
+      "name": "同一张图放在顶层 —— 没有开始节点连过来的根不跑",
+      "why": "和上一条对照:入口规则按层定。",
+      "entry_is_root": false,
+      "graph": {
+        "nodes": [
+          { "id": "start", "type": "start", "config": {} },
+          { "id": "shot", "type": "template", "config": { "template": "x" } },
+          { "id": "style", "type": "template", "config": { "template": "胶片感" } },
+          { "id": "prompt", "type": "template", "config": { "template": "{{shot.text}},{{style.text}}" } }
+        ],
+        "edges": [
+          { "id": "e0", "source": "start", "target": "shot" },
+          { "id": "e1", "source": "shot", "target": "prompt" }
+        ]
+      },
+      "never_runs": ["style"],
+      "blocked": [{ "source": "style", "referenced_by": ["prompt"], "refs": ["{{style.text}}"] }]
+    },
+    {
+      "name": "连线两头有一头不在图里 —— 不算入边",
+      "why": "引擎只认两头都在这一层的边(execute_graph 的 incoming)。",
+      "entry_is_root": false,
+      "graph": {
+        "nodes": [
+          { "id": "start", "type": "start", "config": {} },
+          { "id": "p", "type": "template", "config": { "template": "x" } },
+          { "id": "a", "type": "template", "config": { "template": "{{p.text}} {{gone.text}}" } }
+        ],
+        "edges": [
+          { "id": "e0", "source": "start", "target": "a" },
+          { "id": "e1", "source": "gone", "target": "p" }
+        ]
+      },
+      "never_runs": ["p"],
+      "blocked": [{ "source": "p", "referenced_by": ["a"], "refs": ["{{p.text}}"] }]
+    }
+  ]
+}

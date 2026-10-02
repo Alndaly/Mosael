@@ -14,8 +14,9 @@ TEMPLATE_CATALOG 里的每一个(整片、业务、译配、整理、分析)都�
 
 ## 守的几条
 
-1. 除开始节点外,顶层每个节点都从开始节点沿连线走得到 —— 编辑器就绪检查的 disconnected(analyze.ts 的
-   reachableFromStart)同一个判据。
+1. 除开始节点外,顶层每个节点都可能跑:从开始节点沿着「决定它跑不跑」的连线走得到 —— 运行前检查与编辑器就绪检查的
+   disconnected 同一个判据(graph_rules.never_run_nodes / analyze.ts 的 neverRunNodes,契约
+   contracts/workflow-never-run-cases.json)。没有哪个会跑的节点引用了一定不会跑的节点(那是运行前的阻断)。
 2. 两头都一定会跑的引用,画布上沿连线也是上游:谁等谁,看图就知道。条件分支里可能不跑的不算 —— 那种引用
    (「另一支没跑,引用出来是空串」)是作者有意的,画成控制边反倒会改谁该跑。
 3. 就绪:落库前的结构校验干净;运行前的校验除了留给用的人填的那几格(必填、几选一),没有别的阻断;数据边两头的
@@ -39,6 +40,8 @@ import pytest
 from app.domain.workflows import (
     NODE_TYPES,
     config_data_type,
+    never_run_nodes,
+    never_run_references,
     output_data_type,
     reference_dependencies,
     validate_graph,
@@ -67,21 +70,6 @@ def _routing(edge: dict[str, Any], types: dict[str, str]) -> bool:
     return edge.get("kind", "control") == "control" and (
         bool(edge.get("source_handle")) or bool(NODE_TYPES[types[edge["source"]]].get("branches"))
     )
-
-
-def _unreachable(graph: dict[str, Any]) -> set[str]:
-    """从开始节点顺着连线(控制边、数据边都算)走不到的节点 —— analyze.ts 的 reachableFromStart 同一个判据。"""
-    successors: dict[str, list[str]] = {}
-    for edge in graph["edges"]:
-        successors.setdefault(edge["source"], []).append(edge["target"])
-    reached: set[str] = set()
-    frontier = [node["id"] for node in graph["nodes"] if node["type"] == "start"]
-    while frontier:
-        current = frontier.pop()
-        if current not in reached:
-            reached.add(current)
-            frontier.extend(successors.get(current, []))
-    return {node["id"] for node in graph["nodes"]} - reached
 
 
 def _always_runs(graph: dict[str, Any]) -> set[str]:
@@ -189,9 +177,26 @@ def _shape(graph: dict[str, Any]) -> dict[str, Any]:
 
 
 @pytest.mark.parametrize("template_id", TEMPLATE_IDS)
-def test_除开始节点外每个顶层节点都从开始节点走得到(template_id: str) -> None:
+def test_除开始节点外每个顶层节点都可能跑(template_id: str) -> None:
     _, _, created = _created(template_id)
-    assert _unreachable(created["graph"]) == set(), "顶层没有入边的节点引擎不跑(engine.is_entry 只认开始节点)"
+    assert never_run_nodes(created["graph"]) == set(), "顶层没有入边的节点引擎不跑(engine.is_entry 只认开始节点)"
+
+
+def _never_run_references_in_every_layer(graph: dict[str, Any], where: str = "", *, entry_is_root: bool = False) -> list[str]:
+    found = [f"{where}{one}" for one in never_run_references(graph, entry_is_root=entry_is_root)]
+    for node in graph["nodes"]:
+        body = (node.get("config") or {}).get("body")
+        if isinstance(body, dict) and isinstance(body.get("nodes"), list):
+            found += _never_run_references_in_every_layer(body, f"{where}{node['id']} › ", entry_is_root=True)
+    return found
+
+
+@pytest.mark.parametrize("template_id", TEMPLATE_IDS)
+def test_没有会跑的节点引用一定不会跑的节点_运行前不会被这一条拦(template_id: str) -> None:
+    """「可用的 3D 道具」那种:引用挂着、节点没接进流程。运行前检查拦的就是它(graph_rules.never_run_references),
+    官方模板建出来的图一处都不能有 —— 循环体、子图里按它们自己的入口规则,一样查。"""
+    _, _, created = _created(template_id)
+    assert _never_run_references_in_every_layer(created["graph"]) == []
 
 
 @pytest.mark.parametrize("template_id", TEMPLATE_IDS)

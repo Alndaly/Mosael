@@ -91,6 +91,7 @@ export const nodeToolbar = {
   wfIssueScopeFieldMissing: "这里没有 {ref}:只提供 {available}",
   wfIssueStartParamMissing: "开始节点没有这个参数:{ref}。在开始节点的参数里声明它 —— 在这里运行不会另外传参数",
   wfIssueDisconnected: "未连接到流程,不会被执行",
+  wfIssueUnwiredReferenced: "没接进流程,永远不会运行 ——「{names}」却引用了它({refs}),跑起来只会拿到空的,运行前会被拦下。把它连进流程;图是从官方模板建的,可以点画布顶上的「按新版重建」",
   wfIssueNoProviders: "未配置模型服务",
   // 条件节点引出的两条边,画布上就标这两个字。
   customCssTitle: "自定义 CSS",

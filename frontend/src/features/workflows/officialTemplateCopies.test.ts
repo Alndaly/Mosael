@@ -1,5 +1,7 @@
 /**
- * 官方模板打开就是一张连好的图:画布的就绪检查里没有「未连接到流程」的节点。
+ * 官方模板打开就是一张连好的图:画布的就绪检查里没有「未连接到流程」的节点,也没有被引用着却不会跑的。
+ *
+ * 后者(unwired-referenced)就是后端运行前拦的那一条。
  *
  * 查的是官网副本(website/public/workflows,由 scripts/sync-website-workflows.py 从后端真建出来的图导出,应用里
  * 建的是同一张)。
@@ -41,7 +43,7 @@ describe("官方模板的官网副本", () => {
   it.each(COPIES)("%s:每个节点都从开始节点连得到", (name) => {
     const graph = (JSON.parse(readFileSync(join(DIR, name), "utf8")) as { graph: WorkflowGraph }).graph;
     const { issues } = analyzeWorkflow(graph, EVERY_TYPE_KNOWN, NOTHING_LOADED);
-    const unwired = issues.filter((issue) => issue.code === "disconnected" || issue.code === "missing-start");
+    const unwired = issues.filter((issue) => ["disconnected", "unwired-referenced", "missing-start"].includes(issue.code));
     expect(unwired.map((issue) => `${issue.nodeName}(${issue.nodeId})`)).toEqual([]);
   });
 });

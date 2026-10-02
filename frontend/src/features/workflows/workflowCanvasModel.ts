@@ -216,6 +216,10 @@ export function workflowIssueText(
         .replace("{available}", (issue.available ?? []).join(" / "));
     case "disconnected":
       return t("wfIssueDisconnected");
+    case "unwired-referenced":
+      return t("wfIssueUnwiredReferenced")
+        .replace("{names}", (issue.referencedBy ?? []).join(t("listSeparator")))
+        .replace("{refs}", (issue.refs ?? []).join(t("listSeparator")));
     case "no-providers":
       return t("wfIssueNoProviders");
     case "provider-missing":

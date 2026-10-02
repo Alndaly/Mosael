@@ -918,3 +918,155 @@ describe("one_of 里前面的是引用、最后一个是字面量:兜底,不算�
     expect(both(click({ selector: "#submit", text: "{{up.text}}" }))).toHaveLength(1);
   });
 });
+
+describe("没接进流程的节点被引用(和后端运行前那一道同一个判据)", () => {
+  const ofNode = (a: ReturnType<typeof analyzeWorkflow>, id: string, path: string[] = []) =>
+    a.issues.filter((issue) => issue.nodeId === id && issue.path.join("/") === path.join("/"));
+
+  it("会跑的节点引用了它:被引用的那个标 error,点名谁引用、怎么引用;不能运行", () => {
+    //: 「可用的 3D 道具」的现场:一条连线都没有,只靠布景提示词里的引用挂着,引擎每次都跳过它。
+    const a = analyzeWorkflow(
+      graph(
+        [
+          { id: "start", type: "start", config: {} },
+          { id: "props", type: "template", name: "可用的 3D 道具", config: { template: "桌子" } },
+          { id: "set", type: "template", name: "布景", config: { template: "道具:{{props.text}}" } },
+        ],
+        [{ id: "e1", source: "start", target: "set" }],
+      ),
+      registry,
+      fullCtx,
+    );
+    expect(ofNode(a, "props")).toEqual([
+      expect.objectContaining({ code: "unwired-referenced", severity: "error", referencedBy: ["布景"], refs: ["{{props.text}}"] }),
+    ]);
+    expect(a.runnable).toBe(false);
+  });
+
+  it("没人引用的孤立节点:照旧只是提醒,不挡运行", () => {
+    const a = analyzeWorkflow(
+      graph([
+        { id: "start", type: "start", config: {} },
+        { id: "stray", type: "template", config: { template: "x" } },
+      ]),
+      registry,
+      fullCtx,
+    );
+    expect(ofNode(a, "stray")).toEqual([expect.objectContaining({ code: "disconnected", severity: "warn" })]);
+    expect(a.runnable).toBe(true);
+  });
+
+  it("数据边也是引用:从不会跑的节点接过来的值照样拦", () => {
+    const a = analyzeWorkflow(
+      graph(
+        [
+          { id: "start", type: "start", config: {} },
+          { id: "props", type: "template", config: { template: "桌子" } },
+          { id: "set", type: "template", config: { template: "" } },
+        ],
+        [
+          { id: "e1", source: "start", target: "set" },
+          { id: "d1", source: "props", target: "set", kind: "data", source_output: "text", target_input: "template" },
+        ],
+      ),
+      registry,
+      fullCtx,
+    );
+    expect(ofNode(a, "props")).toEqual([expect.objectContaining({ code: "unwired-referenced", refs: ["{{props.text}}"] })]);
+  });
+
+  it("被引用的在条件分支里:可能跑可能不跑,不标", () => {
+    const a = analyzeWorkflow(
+      graph(
+        [
+          { id: "start", type: "start", config: {} },
+          { id: "c", type: "condition", config: {} },
+          { id: "voice", type: "template", config: { template: "画外音" } },
+          { id: "join", type: "template", config: { template: "[{{voice.text}}]" } },
+        ],
+        [
+          { id: "e1", source: "start", target: "c" },
+          { id: "e2", source: "c", target: "voice", source_handle: "true" },
+          { id: "e3", source: "start", target: "join" },
+        ],
+      ),
+      registry,
+      fullCtx,
+    );
+    expect(a.issues.filter((issue) => issue.code === "unwired-referenced" || issue.code === "disconnected")).toEqual([]);
+  });
+
+  it("有控制边只看控制边:控制边来自不会跑的节点,另有来自开始节点的数据边 —— 也算不会跑", () => {
+    //: 此前「从开始节点沿任意连线走得到」就算接上了;引擎却只看控制边,它每次都被跳过。
+    const a = analyzeWorkflow(
+      graph(
+        [
+          { id: "start", type: "start", config: { params: { topic: "猫" } } },
+          { id: "p", type: "template", config: { template: "x" } },
+          { id: "q", type: "template", config: { template: "" } },
+        ],
+        [
+          { id: "e1", source: "p", target: "q" },
+          { id: "d1", source: "start", target: "q", kind: "data", source_output: "topic", target_input: "template" },
+        ],
+      ),
+      registry,
+      fullCtx,
+    );
+    expect(ofNode(a, "q").map((issue) => issue.code)).toEqual(["disconnected"]);
+  });
+
+  it("循环体里没有入边的根就是入口:被引用不标,也不算没接上", () => {
+    const a = analyzeWorkflow(
+      graph(
+        [
+          { id: "start", type: "start", config: {} },
+          {
+            id: "loop",
+            type: "loop_foreach",
+            config: {
+              items: "a",
+              body: {
+                nodes: [
+                  { id: "style", type: "template", config: { template: "胶片感" } },
+                  { id: "shot", type: "template", config: { template: "{{loop.item}} {{style.text}}" } },
+                ],
+                edges: [],
+              },
+            },
+          },
+        ],
+        [{ id: "e1", source: "start", target: "loop" }],
+      ),
+      registry,
+      fullCtx,
+    );
+    expect(a.issues).toEqual([]);
+  });
+
+  it("循环节点的 inputs 在外层解析:引用了外层没接进流程的节点,标在外层那个节点上;output 属于体内,不算", () => {
+    const a = analyzeWorkflow(
+      graph(
+        [
+          { id: "start", type: "start", config: {} },
+          { id: "p", type: "template", config: { template: "x" } },
+          {
+            id: "loop",
+            type: "loop_foreach",
+            config: {
+              items: "a",
+              inputs: { style: "{{p.text}}" },
+              output: "{{p.text}}",
+              body: { nodes: [{ id: "p", type: "template", config: { template: "{{input.style}}" } }], edges: [] },
+            },
+          },
+        ],
+        [{ id: "e1", source: "start", target: "loop" }],
+      ),
+      registry,
+      fullCtx,
+    );
+    expect(ofNode(a, "p")).toEqual([expect.objectContaining({ code: "unwired-referenced", referencedBy: ["loop_foreach"] })]);
+    expect(ofNode(a, "p", ["loop"])).toEqual([]);
+  });
+});

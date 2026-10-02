@@ -300,6 +300,18 @@ def validate_graph(
             errors.extend(_unresolved_reference_errors(nodes, edges))
     elif start_count > 0:
         errors.append("循环体子图不能包含开始节点")
+    #: **会跑的节点引用了一定不会跑的节点**(没接进流程):那个引用跑起来只会是空串,工作流照样报成功 ——
+    #: 「从主题到完整视频」的「可用的 3D 道具」从模板 v8 到 v11 一次都没跑过,画布上只挂着一个黄色提醒。
+    #: 只在**运行前**(require_config)拦:保存不拦,旧图照样存得下、打得开,用户才连得上它、或者按新版重建。
+    #: 顶层没有开始节点时什么都不会跑,上面已经说了这一件,不再逐个报。循环体 / 子图按它们自己的入口规则
+    #: (无入边的根也是入口,见 never_run_nodes)。
+    if require_config and (start_count > 0 or not require_start):
+        separator = tr("punct_listSep")
+        errors.extend(
+            tr("wfErr_referencesNeverRunNode", nodes=separator.join(one["referenced_by"]),
+               refs=separator.join(one["refs"]), source=one["source"])
+            for one in never_run_references({"nodes": nodes, "edges": edges}, entry_is_root=not require_start)
+        )
 
     node_types = {str(node.get("id", "")): str(node.get("type", "")) for node in nodes}
     adjacency: dict[str, list[str]] = {}
@@ -609,6 +621,87 @@ def reference_dependencies(graph: dict[str, Any]) -> dict[str, set[str]]:
         roots = {match.group(1).strip().split(".")[0] for match in VARIABLE_RE.finditer(json.dumps(config, ensure_ascii=False))}
         deps[node_id] = (roots & ids) - {node_id}
     return deps
+
+
+def never_run_nodes(graph: dict[str, Any], *, entry_is_root: bool = False) -> set[str]:
+    """这一层图里**一定不会被执行**的节点:engine.execute_graph 的 is_entry + incoming_active,只是条件分支两支都算可能走。
+
+    - 入口:开始节点永远是;`entry_is_root`(循环体 / 子图,执行器就这么跑体)时没有入边的节点也是。
+    - 其余节点「可能跑」:决定它跑不跑的那几条入边(有控制边只看控制边,一条都没有才看数据边)里,有一条的来源
+      可能跑。从条件节点出发的边,真假哪一支都可能走。
+    - `{{…}}` 引用不在其中:它只管先后(见 reference_dependencies),不会让被引用的节点运行 —— 顶层一个只靠引用
+      挂着的节点,引擎每次都跳过它。
+
+    两头有一头不在这一层的连线不算入边(和引擎同一条)。和画布的 analyze.ts neverRunNodes 跑同一份语料
+    contracts/workflow-never-run-cases.json。
+    """
+    nodes = [node for node in graph.get("nodes") or [] if isinstance(node, dict)]
+    ids = {str(node.get("id", "")) for node in nodes}
+    incoming: dict[str, list[dict[str, Any]]] = {node_id: [] for node_id in ids}
+    for edge in graph.get("edges") or []:
+        if isinstance(edge, dict) and str(edge.get("source")) in ids and str(edge.get("target")) in ids:
+            incoming[str(edge.get("target"))].append(edge)
+    #: 谁跑了就能让谁跑:来源 → 由它决定跑不跑的下游。
+    unlocks: dict[str, set[str]] = {}
+    for target, edges in incoming.items():
+        control = [edge for edge in edges if str(edge.get("kind", "")) != "data"]
+        for edge in control or edges:
+            unlocks.setdefault(str(edge.get("source")), set()).add(target)
+    may_run = {
+        str(node.get("id", "")) for node in nodes
+        if node.get("type") == "start" or (entry_is_root and not incoming[str(node.get("id", ""))])
+    }
+    frontier = list(may_run)
+    while frontier:
+        for target in unlocks.get(frontier.pop(), ()):
+            if target not in may_run:
+                may_run.add(target)
+                frontier.append(target)
+    return ids - may_run
+
+
+def never_run_references(graph: dict[str, Any], *, entry_is_root: bool = False) -> list[dict[str, Any]]:
+    """**会跑的节点引用了一定不会跑的节点** —— 那个引用跑起来只会是空串,而工作流照样报成功。
+
+    引用:这一层会插值的 `{{节点.…}}`(和 reference_dependencies 同一口径:代码字段、容器的 body / output / condition
+    不算),加上数据边 —— 规范化把整格一条的引用升级成的就是数据边,两种写法是同一件事。
+
+    只管「一定不会跑」的(见 never_run_nodes);被引用的节点在条件分支里、可能跑可能不跑的不算 —— 另一支没跑时
+    引用出来是空串,那是作者有意为之。引用方自己也不会跑的不算:没有谁会拿着空值往下走。
+
+    按被引用的节点归拢:`[{source, referenced_by, refs}]`,都排好序。和画布的 analyze.ts neverRunReferences 跑同一份
+    语料 contracts/workflow-never-run-cases.json。
+    """
+    never = never_run_nodes(graph, entry_is_root=entry_is_root)
+    if not never:
+        return []
+    found: dict[str, tuple[set[str], set[str]]] = {}
+
+    def note(source: str, target: str, ref: str) -> None:
+        referenced_by, refs = found.setdefault(source, (set(), set()))
+        referenced_by.add(target)
+        refs.add(ref)
+
+    nodes = [node for node in graph.get("nodes") or [] if isinstance(node, dict)]
+    ids = {str(node.get("id", "")) for node in nodes}
+    for node in nodes:
+        node_id = str(node.get("id", ""))
+        if node_id in never:
+            continue
+        for parts in _outer_references(node):
+            if parts[0] in never and parts[0] != node_id:
+                note(parts[0], node_id, "{{" + ".".join(parts) + "}}")
+    for edge in graph.get("edges") or []:
+        if not isinstance(edge, dict) or str(edge.get("kind", "")) != "data":
+            continue
+        source, target = str(edge.get("source", "")), str(edge.get("target", ""))
+        if source in never and target in ids and target not in never:
+            output = str(edge.get("source_output") or "")
+            note(source, target, "{{" + (f"{source}.{output}" if output else source) + "}}")
+    return [
+        {"source": source, "referenced_by": sorted(referenced_by), "refs": sorted(refs)}
+        for source, (referenced_by, refs) in sorted(found.items())
+    ]
 
 
 def topo_order(graph: dict[str, Any]) -> list[dict[str, Any]]:
