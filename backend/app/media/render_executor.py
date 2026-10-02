@@ -997,10 +997,10 @@ def _image_loop_args(path: Path, trim_end: float) -> list[str]:
     return ["-stream_loop", "-1", *duration]
 
 
-def _base_video_chain(input_index: int, i: int, src_in: float, src_out: float, setpts: str, width: int, height: int, fps: float, tail: str, fill_mode: str, *, start_time: float = 0.0) -> str:
-    """[input:v] → [vi] 的完整视频链;按画幅填充模式选择裁剪/留黑边/模糊背景。
-    start_time 是这一路画面从段内第几秒开始(只有取一帧时不是 0,见 _StillBase)。"""
-    head = f"[{input_index}:v]trim=start={src_in}:end={src_out},setpts={setpts}"
+def _base_video_chain(source: str, i: int, src_in: float, src_out: float, setpts: str, width: int, height: int, fps: float, tail: str, fill_mode: str, *, start_time: float = 0.0) -> str:
+    """source(如 [3:v],或共用输入分出来的一支,见 _base_sources)→ [vi] 的完整视频链;按画幅填充模式
+    选择裁剪/留黑边/模糊背景。start_time 是这一路画面从段内第几秒开始(只有取一帧时不是 0,见 _StillBase)。"""
+    head = f"{source}trim=start={src_in}:end={src_out},setpts={setpts}"
     end = f",fps={fps}:start_time={start_time:g},format=yuv420p,setsar=1{tail}[v{i}]"
     if fill_mode == "cover":
         return f"{head},scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height}{end}"
@@ -1275,6 +1275,81 @@ def still_plan(plan: RenderPlan, at: float) -> RenderPlan:
     )
 
 
+#: 同一素材在基底轨上**接着往后**用(源里的位置只往前走)、中间跳过的不超过这么多秒,就共用一路输入。
+#: 跳过的那段照样要解码(解出来就丢),10 秒 1080p 的 H.264 解码是零点几秒;另开一路输入要从关键帧解起、
+#: 再占一份解码器的内存(1080p 约 25 MB)。
+_SHARE_MAX_GAP = 10.0
+
+
+class _BaseSource(NamedTuple):
+    """基底轨上一段素材的画面、声音从哪个标签取,trim 的起止相对那一路输入的 0 点。"""
+
+    video: str
+    audio: str | None  # 不要它的声音(没有音轨、被静音、取一帧)时是 None
+    tin: float
+    tout: float
+    skip: float  # 取一帧时段内跳过的秒数(见 _StillBase);成片恒为 0
+
+
+def _base_sources(
+    plan: RenderPlan, resolve: Callable[[str], Path], has_audio: dict, still: _StillBase | None,
+) -> tuple[list[str], list[str], dict[int, _BaseSource]]:
+    """基底轨各段的输入:返回 (输入参数, 分支滤镜, 每段 → _BaseSource)。
+
+    **同一素材接着往后用的几段共用一路输入**,由 split / asplit 分给各段,每段照旧自己 trim。此前一段一路
+    输入:一条 1 小时的口播剪成 300 段,就是 300 个解码器(1080p 每个约 25 MB)、300 次快进、300 个 `-i`。
+
+    只合并**源里的位置只往前走**的那几段(下一段的入点不早于上一段的出点,中间跳过的不超过 _SHARE_MAX_GAP):
+    concat 是一段一段取的,解码器往前走时,还没轮到的那几支只会丢掉不归它的帧;要是后面的段倒回去用
+    前面的内容,先解出来的帧就得一直攒在那一支里等 concat 轮到它 —— 那会攒下整段画面。倒回去的、
+    跳得太远的、图片(-loop 出来的流),都另开一路。"""
+    runs: list[dict] = []
+    by_source: dict[Path, list[dict]] = {}
+    for i, segment in enumerate(plan.video_segments):
+        if segment.kind != "clip" or segment.source is None or (still is not None and i != still.index):
+            continue
+        path = resolve(segment.source.file_key)
+        image = guess_kind(path) == "image"
+        # 取一帧时从段内第 skip 秒开始解;-loop 出来的图片流不认输入侧快进,从头生成也只是几帧静图。
+        skip = still.skip if still is not None and not image else 0.0
+        src_in, src_out = segment.source.src_in + skip * segment.speed, segment.source.src_out
+        sound = still is None and has_audio.get(path, False) and not plan.mute_base_audio and not segment.muted
+        member = (i, src_in, src_out, sound, skip)
+        #: 接得上的几路里挑跳得最少的那一路(倒回去用过一次之后,后面接着往后剪的还能回到原来那一路)。
+        fits = [run for run in by_source.get(path, []) if run["end"] - 1e-6 <= src_in <= run["end"] + _SHARE_MAX_GAP]
+        if fits:
+            run = max(fits, key=lambda run: run["end"])
+            run["members"].append(member)
+            run["end"] = src_out
+            continue
+        run = {"path": path, "image": image, "seek": src_in, "end": src_out, "members": [member]}
+        runs.append(run)
+        if not image:
+            by_source.setdefault(path, []).append(run)
+
+    args: list[str] = []
+    splits: list[str] = []
+    sources: dict[int, _BaseSource] = {}
+    for index, run in enumerate(runs):
+        members = run["members"]
+        seek, _tin, _tout = _seek_and_trim(run["seek"], run["end"])
+        base = run["seek"] if seek else 0.0
+        args += _image_loop_args(run["path"], round(run["end"] - base, 6)) + seek + ["-i", str(run["path"])]
+        videos = [f"[{index}:v]"] if len(members) == 1 else [f"[bv{index}_{k}]" for k in range(len(members))]
+        if len(members) > 1:
+            splits.append(f"[{index}:v]split={len(members)}{''.join(videos)}")
+        with_sound = [member for member in members if member[3]]
+        audios = [f"[{index}:a]"] if len(with_sound) == 1 else [f"[ba{index}_{k}]" for k in range(len(with_sound))]
+        if len(with_sound) > 1:
+            splits.append(f"[{index}:a]asplit={len(with_sound)}{''.join(audios)}")
+        sounding = iter(audios)
+        for video, (i, src_in, src_out, sound, skip) in zip(videos, members):
+            sources[i] = _BaseSource(
+                video, next(sounding) if sound else None, round(src_in - base, 6), round(src_out - base, 6), skip,
+            )
+    return args, splits, sources
+
+
 def build_ffmpeg_command(
     plan: RenderPlan,
     resolve: Callable[[str], Path],
@@ -1306,9 +1381,10 @@ def build_ffmpeg_command(
         + [resolve(item.source.file_key) for item in plan.audio_overlays if item.optional]
     )
     args: list[str] = [settings.ffmpeg, "-y", "-v", "error", "-progress", "pipe:1", "-nostats"]
-    filters: list[str] = []
+    base_args, filters, sources = _base_sources(plan, resolve, has_audio, still)
+    args += base_args
     pair_labels: list[str] = []
-    input_index = 0
+    input_index = args.count("-i")
 
     for i, segment in enumerate(plan.video_segments):
         if still is not None and i != still.index:
@@ -1316,12 +1392,8 @@ def build_ffmpeg_command(
         #: 取一帧时这一段从段内第 skip 秒开始解码(见 _StillBase);成片恒为 0,命令一字不变。
         skip = still.skip if still is not None else 0.0
         if segment.kind == "clip" and segment.source is not None:
-            path = resolve(segment.source.file_key)
-            src = segment.source
-            if guess_kind(path) == "image":
-                skip = 0.0  # -loop 出来的图片流不认输入侧快进;从头生成也只是几帧静图
-            seek, tin, tout = _seek_and_trim(src.src_in + skip * segment.speed, src.src_out)
-            args += _image_loop_args(path, tout) + seek + ["-i", str(path)]
+            source = sources[i]
+            tin, tout, skip = source.tin, source.tout, source.skip
             setpts = _video_from(tin, segment.speed) + (f"+{skip}/TB" if skip else "")
             # Picture fade (画面淡变, fade to/from black) is independent of the audio fade below.
             video_fades = _fade_filters(segment.video_fade_in, segment.video_fade_out, segment.duration, audio=False)
@@ -1332,7 +1404,7 @@ def build_ffmpeg_command(
             if segment.transform.is_identity and not free:
                 filters.append(
                     _base_video_chain(
-                        input_index, i, tin, tout, setpts, width, height, fps,
+                        source.video, i, tin, tout, setpts, width, height, fps,
                         f"{preset}{video_fades}", plan.output.fill_mode, start_time=skip,
                     )
                 )
@@ -1341,7 +1413,7 @@ def build_ffmpeg_command(
                 # 画幅的填充模式** —— contain / blur 下元素是「装进画幅」的大小,blur 的背景是同一段素材铺满再模糊;
                 # 和预览 scenePaint 的 followsBaseFill 同一条。此前这里一律铺满再裁到画幅:contain / blur 的片子一打
                 # 关键帧,画面就从留边跳成裁满。
-                head = f"[{input_index}:v]trim=start={tin}:end={tout},setpts={setpts}"
+                head = f"{source.video}trim=start={tin}:end={tout},setpts={setpts}"
                 tail = f"{preset}{video_fades},fps={fps}:start_time={skip:g},setsar=1"
                 if not free and plan.output.fill_mode == "blur":
                     filters.append(f"{head},split=2[eltsrc{i}][bgsrc{i}]")
@@ -1384,13 +1456,13 @@ def build_ffmpeg_command(
                 filters.append(f"[bg{i}][{tlabel}]overlay=x='{ox}':y='{oy}',format=yuv420p,setsar=1[v{i}]")
             if still is not None:
                 pass  # 一张图没有声音:音频那一路整条不建
-            elif has_audio.get(path, False) and not plan.mute_base_audio and not segment.muted:
+            elif source.audio is not None:
                 tempo = atempo_filters(segment.speed)
                 audio_fades = _fade_filters(segment.fade_in, segment.fade_out, segment.duration, audio=True)
                 # The clip's own gain (增益) mixes its audio, like a video clip's linked audio in PR/DaVinci.
                 gain = _volume_expr(segment.gain, segment.gain_keyframes, segment.duration)
                 filters.append(
-                    f"[{input_index}:a]atrim=start={tin}:end={tout},{_audio_from(tin)}{tempo}"
+                    f"{source.audio}atrim=start={tin}:end={tout},{_audio_from(tin)}{tempo}"
                     f"{gain}aresample={AUDIO_RATE},aformat=channel_layouts=stereo{audio_fades}[a{i}]"
                 )
             else:
@@ -1398,7 +1470,6 @@ def build_ffmpeg_command(
                 filters.append(
                     f"anullsrc=r={AUDIO_RATE}:cl=stereo,atrim=0:{segment.duration}[a{i}]"
                 )
-            input_index += 1
         else:
             filters.append(
                 f"color=black:s={width}x{height}:r={fps},trim=0:{round(segment.duration - skip, 6)}"
