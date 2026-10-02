@@ -65,6 +65,38 @@ beforeEach(() => {
   useEditorStore.setState({ playhead: 0, playing: false, selectedClipIds: [] });
 });
 
+/** 监视器交给合成器的图层,写成契约语料的形状:哪段、是不是底图。 */
+function layerSummary() {
+  return seen.layers.map((layer) => ({ clip: layer.clip.id, isBase: layer.isBase }));
+}
+
+describe("监视器画哪些层(与导出同一份 sceneLayersAt)", () => {
+  it("底图轨此刻没有片段:上层的画中画仍是叠加层,不冒充底图去吃填充方式", () => {
+    renderMonitor([
+      track("V2", 0, [clip("pip", "V2", 0, 10)]),
+      track("V1", 1, [clip("base", "V1", 5, 10)]),
+    ]);
+    act(() => useEditorStore.getState().setPlayhead(2));
+    expect(layerSummary()).toEqual([{ clip: "pip", isBase: false }]);
+    act(() => useEditorStore.getState().setPlayhead(6));
+    expect(layerSummary()).toEqual([
+      { clip: "base", isBase: true },
+      { clip: "pip", isBase: false },
+    ]);
+  });
+
+  it("最底下是一条只有花字的视频轨:真正的画面仍是底图", () => {
+    const title = clip("title", "T", 0, 10, { asset_id: null, asset_kind: "", text_override: "Hi" });
+    renderMonitor([
+      track("V1", 0, [clip("picture", "V1", 0, 10)]),
+      track("T", 1, [title]),
+    ]);
+    act(() => useEditorStore.getState().setPlayhead(1));
+    expect(layerSummary()).toEqual([{ clip: "picture", isBase: true }]);
+    expect(screen.queryByText("monitorBlankHint")).toBeNull();
+  });
+});
+
 describe("监视器走帧", () => {
   it("逐帧按钮按帧号走,时间码显示到帧", () => {
     renderMonitor([track("V1", 0, [clip("c1", "V1", 0, 10)])], 25);

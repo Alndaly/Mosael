@@ -8,6 +8,7 @@ import { Slider } from "@/components/ui/slider";
 import { clipEnd, formatFrameTimecode, frameAt, frameTime, sequenceDuration, snapToFrame } from "@/domain/timeline/geometry";
 import { CURVES_FILTER_ID, colorCurvesTables, type ColorCurves } from "@/features/editor/colorCurves";
 import { CanvasCompositor, type CompositorLayer } from "@/features/editor/playback/CanvasCompositor";
+import { sceneLayersAt } from "@/features/editor/playback/sceneModel";
 import { WebAudioMixer } from "@/features/editor/playback/WebAudioMixer";
 import { audioProxyPending, buildAudioSources } from "@/features/editor/playback/audioMix";
 import { compositorSupported } from "@/features/editor/playback/compositorFlag";
@@ -89,21 +90,8 @@ export function Monitor({
         .sort((a, b) => a.position - b.position),
     [sequence],
   );
-  // PR/DaVinci z-order: the topmost timeline video track renders on top. videoTracks is sorted by
-  // position ascending (top row first), so the base (bottom layer, full frame) is the LAST track;
-  // tracks above composite upward, rendered so the top row (index 0) is last in the DOM = on top.
-  const videoClips = React.useMemo(
-    () => [...(videoTracks[videoTracks.length - 1]?.clips ?? [])].sort((a, b) => a.timeline_start - b.timeline_start),
-    [videoTracks],
-  );
-  const overlayClips = React.useMemo(
-    () =>
-      videoTracks
-        .slice(0, -1)
-        .reverse()
-        .flatMap((track) => [...(track.clips ?? [])].sort((a, b) => a.timeline_start - b.timeline_start)),
-    [videoTracks],
-  );
+  // 视频轨上的全部片段:场景键要扫的就是它们(画面层由 sceneLayersAt 在其中挑)。
+  const videoTrackClips = React.useMemo(() => videoTracks.flatMap((track) => track.clips ?? []), [videoTracks]);
   
   // 字幕与花字画哪些由 textLayers 决定(导出侧同一条规则,contracts/text-layer-cases.json):
   // 隐藏的字幕轨不画;静音只管声音,静音视频轨上的花字照旧。花字作为最上层 DOM 叠加渲染(与
@@ -125,7 +113,7 @@ export function Monitor({
   const sceneIndex = React.useMemo<SceneIndex>(() => {
     const present: Clip[] = [];
     const seen = new Set<string>();
-    for (const clip of [...videoClips, ...overlayClips, ...subtitleClips, ...textOverlayClips]) {
+    for (const clip of [...videoTrackClips, ...subtitleClips, ...textOverlayClips]) {
       if (!seen.has(clip.id)) {
         seen.add(clip.id);
         present.push(clip);
@@ -146,17 +134,26 @@ export function Monitor({
         .map((clip) => ({ clip, horizon: prewarmHorizon(assetById.get(clip.asset_id!)) })),
     );
     return { present, upcoming };
-  }, [videoClips, overlayClips, subtitleClips, textOverlayClips, sequence, videoTracks, assetById]);
+  }, [videoTrackClips, subtitleClips, textOverlayClips, sequence, videoTracks, assetById]);
   const sceneKey = useEditorStore((state) => monitorSceneKey(sceneIndex, state.playhead));
   const [presentKey, prewarmKey] = sceneKey.split("|");
   const presentIds = React.useMemo(() => new Set(presentKey ? presentKey.split(",") : []), [presentKey]);
-  const isPresent = (clip: Clip) => presentIds.has(clip.id);
 
   const activeTextClips = React.useMemo(
     () => textOverlayClips.filter((clip) => presentIds.has(clip.id)),
     [textOverlayClips, presentIds],
   );
-  const activeClip = videoClips.find(isPresent) ?? null;
+  // 此刻画面上有哪些层、哪一层是底图:**只问 sceneLayersAt**(与导出侧 scene.py 跑同一份契约语料)。
+  // 监视器此前自己判一遍 —— 把字面上最底下那条视频轨当底图,于是最底下是一条只有花字的轨时,
+  // 真正的画面被降成叠加层;底图轨此刻空着时,画中画又被合成器当成底图去吃填充方式。
+  // 只在场景键里的「在场片段」变了时重算:哪几段在场一定,层序与底图就一定;此刻的播放头只用来
+  // 让 sceneLayersAt 挑出这几段,读的是和场景键同一次 store 状态。
+  const sceneLayers = React.useMemo(
+    () => sceneLayersAt(sequence.tracks ?? [], assetById, useEditorStore.getState().playhead),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [presentKey, sequence.tracks, assetById],
+  );
+  const activeClip = sceneLayers.find((layer) => layer.isBase)?.clip ?? null;
   //: 播放头下有脱机片段(素材被删了)。合成器拿不到源,画出来的是一片黑 —— 而"一片黑"
   //: 和"这里本来就没内容"长得一模一样。达芬奇在这里画一块写着 MEDIA OFFLINE 的红屏,
   //: 就是为了让它不可能被当成正常画面。
@@ -235,16 +232,10 @@ export function Monitor({
   
   // 画面引擎:WebCodecs 解代理 → 一张 canvas 合成全部活跃视频/图片片段。没有第二条路。
   const webCodecsOk = compositorSupported();
-  // 上层视频轨(V2+)当前活跃的片段,按轨道 z 序。合成器把它们和 base 一起画在同一张 canvas 上;
-  // 这里保留这份列表是给变换手柄用的(选中哪个元素就把手柄挂到哪个上)。
-  const activeOverlayClips = React.useMemo(
-    () => overlayClips.filter((clip) => presentIds.has(clip.id)),
-    [overlayClips, presentIds],
-  );
-  // The selected on-screen element (base V1 or any active overlay) gets the transform handles.
+  // The selected on-screen element (base or any active overlay) gets the transform handles.
   const selectedActive = React.useMemo(
-    () => [activeClip, ...activeOverlayClips].find((clip) => clip && selectedClipIds.includes(clip.id)) ?? null,
-    [activeClip, activeOverlayClips, selectedClipIds],
+    () => sceneLayers.find((layer) => selectedClipIds.includes(layer.clip.id))?.clip ?? null,
+    [sceneLayers, selectedClipIds],
   );
   React.useEffect(() => setDraft(null), [selectedActive?.id]);
   // 关键帧动画的花字、挂在动画片段上的变换手柄要逐帧跟播放头 —— 只有在场的片段里**真有**动画时才订阅,
@@ -267,17 +258,16 @@ export function Monitor({
   // Active video/image clips in z-order (base first = bottom, overlays bottom→top) as
   // compositor layers, each carrying its live drag transform. Memoised so the compositor's
   // decoder pool doesn't churn on every playhead tick.
-  const compositorLayers = React.useMemo<CompositorLayer[]>(() => {
-    const layers: CompositorLayer[] = [];
-    for (const clip of [activeClip, ...activeOverlayClips]) {
-      if (!clip?.asset_id) continue;
-      const asset = assetById.get(clip.asset_id);
-      if (!asset || (asset.kind !== "video" && asset.kind !== "image")) continue;
-      layers.push({ clip, asset, transformOverride: draft && selectedActive?.id === clip.id ? draft : null });
-    }
-    return layers;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeClip, activeOverlayClips, assetById, draft, selectedActive?.id]);
+  const compositorLayers = React.useMemo<CompositorLayer[]>(
+    () =>
+      sceneLayers.map((layer) => ({
+        clip: layer.clip,
+        asset: layer.asset,
+        isBase: layer.isBase,
+        transformOverride: draft && selectedActive?.id === layer.clip.id ? draft : null,
+      })),
+    [sceneLayers, draft, selectedActive?.id],
+  );
   // Video clips (any video track) the playhead is about to reach — handed to the compositor to warm
   // their decoders before the cut, so playing into a never-seen proxy paints immediately instead of
   // flashing black through its fetch/parse/first-GOP window. The id-set (not the clip objects) is the
@@ -290,7 +280,7 @@ export function Monitor({
       for (const clip of track.clips ?? []) {
         if (!prewarmSet.has(clip.id)) continue;
         const asset = clip.asset_id ? assetById.get(clip.asset_id) : null;
-        if (asset && asset.kind === "video") out.push({ clip, asset });
+        if (asset && asset.kind === "video") out.push({ clip, asset, isBase: false });
       }
     }
     return out;
@@ -310,12 +300,9 @@ export function Monitor({
   // ——时间线末尾一个还在转码的片段,不该把开头已经能放的部分一起挡住。
   const activeVisualAssets = React.useMemo(() => {
     const seen = new Map<string, Asset>();
-    for (const clip of [activeClip, ...activeOverlayClips]) {
-      const asset = clip?.asset_id ? assetById.get(clip.asset_id) : null;
-      if (asset && (asset.kind === "video" || asset.kind === "image")) seen.set(asset.id, asset);
-    }
+    for (const layer of sceneLayers) seen.set(layer.asset.id, layer.asset);
     return [...seen.values()];
-  }, [activeClip, activeOverlayClips, assetById]);
+  }, [sceneLayers]);
   // **代理换了就重新判一次。**「本机解不动」说的是"这一份代理文件这台机器解不了",不是这个素材
   // 永远解不了 —— 重新生成一份通常就好了(界面上那个按钮正是干这个的)。可这个标记原先只进不出:
   // 代理换好了,画面仍旧黑着,只有刷新整页才活过来。而刷新之所以有效,恰恰是因为它把这个 Set 清空了。
@@ -458,7 +445,7 @@ export function Monitor({
               </div>
             </div>
           )}
-          {!activeClip && !offlineClip && (
+          {sceneLayers.length === 0 && !offlineClip && (
             <div className="grid h-full w-full place-items-center bg-black object-contain">
               <span className="px-5 text-center text-ui-sm text-[rgb(255_255_255/0.4)]">{t("monitorBlankHint")}</span>
             </div>

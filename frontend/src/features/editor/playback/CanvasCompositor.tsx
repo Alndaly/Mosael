@@ -15,6 +15,9 @@ import { useEditorStore } from "@/features/editor/editorStore";
 export interface CompositorLayer {
   clip: Clip;
   asset: Asset;
+  /** 底图(跟随序列填充方式)还是叠加层 —— 由 sceneLayersAt 判定后带进来,不按数组位置猜:
+      底图轨此刻空着时,排第一的是画中画,它不该吃填充方式。 */
+  isBase: boolean;
   /** Live transform while dragging the on-canvas handles. */
   transformOverride?: Transform | null;
 }
@@ -214,8 +217,8 @@ export function CanvasCompositor({
 
       // Resolve each visible layer to a finished paint spec, then hand the whole frame to the ONE
       // shared draw routine (also used by the offline export renderer, so preview == export pixels).
-      // isBase is the layer's ORIGINAL index-0 position, not its position after nulls are dropped:
-      // a base whose frame hasn't decoded yet must not let an overlay inherit base framing.
+      // isBase comes from the scene model, never from array position: a base whose frame hasn't
+      // decoded yet (or a base track that is empty right now) must not let an overlay inherit base framing.
       const paintLayers: ScenePaintLayer[] = [];
       for (let i = 0; i < currentLayers.length; i++) {
         const media = resolved[i];
@@ -229,7 +232,7 @@ export function CanvasCompositor({
           mh: media.h,
           tf,
           filter: filtersRef.current[i]?.filter || "",
-          isBase: i === 0,
+          isBase: layer.isBase,
           appearance: readClipAppearance(layer.clip.effects),
         });
       }
