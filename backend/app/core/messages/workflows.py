@@ -64,7 +64,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfErr_clipNotOnSequence": {"zh": "要整理的片段不在这条时间线上", "en": "The clip to cut is not on this timeline"},
     "wfErr_ratioRange": {"zh": "最低置信度和最大删除比例必须在 0–1 之间", "en": "The confidence floor and the removal cap must be between 0 and 1"},
     "wfErr_rangesArray": {"zh": "裁切范围必须是数组", "en": "The cut ranges must be an array"},
-    "wfErr_segmentsArray": {"zh": "segments 要是一个段落数组(如 {{转写.segments}})", "en": "segments must be an array of transcript segments (e.g. {{transcribe.segments}})"},
+    "wfErr_segmentsArray": {"zh": "segments 要是一个段落数组(如「素材转写」交回的段落)", "en": "segments must be an array of transcript segments (e.g. the ones from “Transcribe asset”)"},
     "wfErr_textsArray": {"zh": "texts 要是一个字符串数组,或者一行一条的文本", "en": "texts must be an array of strings, or one line per entry"},
     "wfErr_subtitleTrackFailed": {"zh": "新建字幕轨失败", "en": "Could not create the subtitle track"},
     "wfErr_noSegments": {"zh": "没有可用来生成字幕的逐字稿段落", "en": "No transcript segments to build subtitles from"},
@@ -100,9 +100,8 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "This asset's tags were being changed in several places at once and the write kept losing — run it again shortly",
     },
     "wfErr_codeFieldReference": {
-        # 带参数的文案按 str.format 渲染:字面的花括号写成两个。
-        "zh": "节点 {node} 的代码字段 {field} 里写了 {{{{…}}}}:代码不替换引用,它会原样留在代码里。把上游的值放进这个节点的 input(键随你起,值写 {{{{节点.输出}}}}),代码里读 input.键(Python 是 inputs[\"键\"])",
-        "en": "Node {node}: the code field {field} contains {{{{…}}}}. Code isn't interpolated, so it stays in the code as-is. Put the upstream value into this node's input (any key, value {{{{node.output}}}}) and read input.key in the code (inputs[\"key\"] in Python)",
+        "zh": "节点 {node} 的代码字段 {field} 里写了上游引用:代码不替换引用,它会原样留在代码里。把上游的值接到这个节点的 input(键随你起,值选上游的输出),代码里读 input.键(Python 是 inputs[\"键\"])",
+        "en": "Node {node}: the code field {field} contains an upstream reference. Code isn't interpolated, so it stays in the code as-is. Wire the upstream value into this node's input (any key, pick the upstream output as its value) and read input.key in the code (inputs[\"key\"] in Python)",
     },
     "wfErr_pluginNodeUnusable": {"zh": "节点 {node}:{reason}", "en": "Node {node}: {reason}"},
     "wfErr_pluginNodeUnknownReason": {

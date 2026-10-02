@@ -384,7 +384,7 @@ def test_界面文案里的花括号原样留着() -> None:
     此前它和任务消息共用一条路:`t()` 一律跑 format,于是 `{{转写.segments}}` 被吃掉一层花括号
     (照抄下去不生效),而 `{名: 引用}` 这种示例干脆被当成一个填不上的槽整段抹掉 ——
     「{名: 引用},如 …」在界面上只剩下一个",如"。
+
+    (节点说明里已经不再摆 `{{…}}` 这种模板写法了,见 test_node_config_declared 那道棘轮;这里守的是 t() 不吃花括号。)
     """
-    assert t("wfNode_generate_subtitles_segments", "zh").count("{{转写.segments}}") == 1
     assert "[{src_start,src_end,reason,...}]" in t("wfNode_timeline_cut_ranges_ranges", "zh")
-    assert "{{input.名}}" in t("wfNode_loop_foreach_desc", "zh")

@@ -1957,6 +1957,9 @@ def edit_workflow(workflow_id: str, operations: list[dict[str, Any]], workspace_
            "inputs":{"稿子":"{{llm_1.text}}"},
            "body":{"nodes":[{"id":"t_1","type":"template","config":{"template":"{{input.稿子}}"}}],"edges":[]},
            "output":"{{t_1.text}}"}}
+      loop_foreach / loop_while —— 体内用 {{loop.item}} / {{loop.index}} 取当前项和序号(loop_while 只有
+      {{loop.index}}),{{input.名}} 取 inputs 传进来的值;容器自己的 output / condition 引用体内节点的输出。
+      (节点说明是给人看的,不写这种写法;体内看得见什么以 list_workflow_node_types 的 body_scope 为准。)
       call_workflow —— 一段会被别处复用的流程,抽成独立工作流再调它(复制粘贴的两份迟早不一样):
         {"kind":"add_node","type":"call_workflow","node_id":"call_1",
          "config":{"workflow_id":"<另一张图的 id>","inputs":{"标题":"{{start.text}}"}}}
