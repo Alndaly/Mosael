@@ -380,7 +380,7 @@ def set_clip_speed(
     sequence_id: str, clip_id: str, body: SetClipSpeedRequest, db: Tx, user: CurrentUser
 ) -> Response:
     require_sequence_access(db, user, sequence_id, perm="edit")
-    _apply(lambda: set_clip_speed_operation(db, sequence_id, SetClipSpeed(clip_id=clip_id, speed=body.speed)))
+    _apply(lambda: set_clip_speed_operation(db, sequence_id, SetClipSpeed(clip_id=clip_id, **body.model_dump())))
     return _edited_response(db, sequence_id)
 
 

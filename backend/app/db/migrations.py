@@ -6679,6 +6679,237 @@ def _migrate_session_allow_remembers_the_tier() -> None:
                 )
 
 
+def _migrate_clip_edits_keep_a_change_journal() -> None:
+    """片段级编辑的撤销记录改成「改动日志」(sequences/journal.py):payload 只认 `changes`。
+
+    此前每种操作各存一种形状(移动存前后位置 + 让位右移的片段 + 落点切开的那一刀,波纹删除存原片段 +
+    左移的片段……),各自配一对手写的还原。覆盖、修剪夹边、链接片段、跨轨波纹让一次编辑的副作用
+    散到好几条轨上之后,撤销改为倒放一份逐条记下的改动日志。库里已有的记录在这里一次转成日志,
+    撤销那一侧只认这一种形状 —— 已经做过、还能撤销 / 重做的编辑照样能撤。
+
+    日志条目:`create` / `delete`(片段的全部字段)、`update`(改了哪几个字段的前后值)、
+    `create_track`(分离音频时新建的那条轨)。已经是日志的(带 `changes`)不再动,所以重跑无害。
+    """
+    if "sequence_operations" not in set(inspect(engine).get_table_names()):
+        return
+
+    def clip(payload: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "clip_id": payload["clip_id"],
+            "track_id": payload["track_id"],
+            "asset_id": payload.get("asset_id"),
+            "timeline_start": payload["timeline_start"],
+            "src_in": payload["src_in"],
+            "src_out": payload["src_out"],
+            "speed": payload.get("speed", 1.0),
+            "gain": payload.get("gain", 1.0),
+            "muted": payload.get("muted", False),
+            "effects": payload.get("effects") or {},
+            "transform": payload.get("transform") or {},
+            "text_override": payload.get("text_override"),
+        }
+
+    def update(clip_id: str, before: dict[str, Any], after: dict[str, Any]) -> dict[str, Any]:
+        return {"op": "update", "clip_id": clip_id, "before": before, "after": after}
+
+    def made_room(payload: dict[str, Any]) -> list[dict[str, Any]]:
+        """插入编辑的让位:先在落点切一刀(原片段收短 + 尾段),再把后面的右移。"""
+        entries: list[dict[str, Any]] = []
+        split = payload.get("split")
+        if split:
+            tail = clip(split["tail"])
+            entries.append(update(split["clip_id"], {"src_out": split["previous_src_out"]}, {"src_out": tail["src_in"]}))
+            entries.append({"op": "create", "clip": tail})
+        return entries + shifted(payload.get("shifted") or [])
+
+    def shifted(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        return [
+            update(entry["clip_id"], {"timeline_start": entry["previous_timeline_start"]},
+                   {"timeline_start": entry["timeline_start"]})
+            for entry in entries
+        ]
+
+    def replaced(edit: dict[str, Any]) -> list[dict[str, Any]]:
+        """一个原片段换成若干新片段(切分、按文字剪)。"""
+        return [{"op": "delete", "clip": clip(edit["original"])}] + [
+            {"op": "create", "clip": clip(created)} for created in edit["created"]
+        ]
+
+    def journal(kind: str, payload: dict[str, Any]) -> list[dict[str, Any]]:
+        if kind == "insert_clip":
+            return [{"op": "create", "clip": clip(payload)}] + made_room(payload)
+        if kind == "insert_clips_batch":
+            return [{"op": "create", "clip": clip(created)} for created in payload["created"]]
+        if kind == "delete_clip":
+            return [{"op": "delete", "clip": clip(payload)}]
+        if kind == "delete_clips_batch":
+            return [{"op": "delete", "clip": clip(entry)} for entry in payload["deleted"]]
+        if kind == "ripple_delete_clip":
+            return [{"op": "delete", "clip": clip(payload["original"])}] + shifted(payload["shifted"])
+        if kind == "ripple_delete_clips_batch":
+            return [
+                change
+                for entry in payload["entries"]
+                for change in [{"op": "delete", "clip": clip(entry["original"])}] + shifted(entry["shifted"])
+            ]
+        if kind == "move_clip":
+            previous_track = payload.get("previous_track_id") or payload["track_id"]
+            moved = update(
+                payload["clip_id"],
+                {"timeline_start": payload["previous_timeline_start"], "track_id": previous_track},
+                {"timeline_start": payload["timeline_start"], "track_id": payload["track_id"]},
+            )
+            return [moved] + made_room(payload)
+        if kind == "move_clips_batch":
+            return [
+                update(
+                    entry["clip_id"],
+                    {"timeline_start": entry["previous_timeline_start"], "track_id": entry["previous_track_id"]},
+                    {"timeline_start": entry["timeline_start"], "track_id": entry["track_id"]},
+                )
+                for entry in payload["moved"]
+            ]
+        if kind == "trim_clip":
+            fields = ("timeline_start", "src_in", "src_out")
+            return [update(payload["clip_id"], {name: payload["previous"][name] for name in fields},
+                           {name: payload[name] for name in fields})]
+        if kind in ("split_clip", "apply_transcript_edit"):
+            return replaced(payload)
+        if kind == "apply_transcript_edits_batch":
+            return [change for edit in payload["edits"] for change in replaced(edit)]
+        if kind == "set_clip_speed":
+            return [update(payload["clip_id"], {"speed": payload["previous"]}, {"speed": payload["speed"]})]
+        if kind == "detach_clip_audio":
+            entries: list[dict[str, Any]] = []
+            created_track = payload.get("created_track")
+            if created_track:
+                entries.append({"op": "create_track", "track": {**created_track, "kind": "audio", "role": ""}})
+            audio = payload["audio_clip"]
+            entries.append({"op": "create", "clip": clip({**audio, "clip_id": audio["id"]})})
+            entries.append(update(payload["video_clip_id"], {"muted": payload["video_muted_prev"]}, {"muted": True}))
+            return entries
+        raise ValueError(kind)
+
+    kinds = (
+        "insert_clip", "insert_clips_batch", "delete_clip", "delete_clips_batch", "ripple_delete_clip",
+        "ripple_delete_clips_batch", "move_clip", "move_clips_batch", "trim_clip", "split_clip",
+        "apply_transcript_edit", "apply_transcript_edits_batch", "set_clip_speed", "detach_clip_audio",
+    )
+    with engine.begin() as conn:
+        rows = conn.execute(text("SELECT id, kind, payload FROM sequence_operations")).mappings().all()
+        for row in rows:
+            if row["kind"] not in kinds:
+                continue
+            raw = row["payload"]
+            payload = json.loads(raw) if isinstance(raw, str) else dict(raw or {})
+            if "changes" in payload:
+                continue
+            converted = {"changes": journal(row["kind"], payload)}
+            conn.execute(
+                text("UPDATE sequence_operations SET payload = :payload WHERE id = :id"),
+                {"payload": json.dumps(converted, ensure_ascii=False), "id": row["id"]},
+            )
+
+
+def _migrate_clips_on_a_track_do_not_overlap() -> None:
+    """同一条轨上已经叠在一起的片段,按「后开始的盖住先开始的」规整成不重叠。
+
+    「同一轨上的片段不重叠」是预览和导出共同的前提(media/scene.py),而此前非波纹的插入 / 移动、
+    修剪、慢放都能造出重叠。重叠时画面上是**先开始的那段赢**,后放上去的被它盖住 —— 这些重叠
+    几乎都来自「把一段拖到另一段上」,用户要的是后放的那段。所以规整和现在的覆盖语义同一条规矩:
+    后开始的(同时开始的,后建的)盖住先开始的;被盖住的部分裁掉,两头都露出来就切成两段,
+    剩下不到最小余量(0.05 秒源时间)的碎片不留。关键帧 / 淡变按每一截自己的源区间重投影。
+
+    **启动时一次规整完,而不是等用户第一次编辑那条序列**:编辑时规整会让「第一次编辑」顺带改掉
+    别处的片段,而撤销那一步又会把重叠原样还回来;导出也不会等到有人编辑。代价是这次规整不在
+    撤销栈里 —— 升级前做的编辑若撤回到重叠之前,撤销照它记下的样子还原。
+
+    改过的序列 revision 加一:编辑器按 revision 轮询、浏览器按它的 ETag 缓存,不加的话会一直拿着
+    规整之前的那份。重跑时已经没有重叠,什么都不做。
+    """
+    if "clips" not in set(inspect(engine).get_table_names()):
+        return
+    from app.domain.sequences.coverage import piece_appearance
+
+    epsilon, min_remainder = 1e-6, 0.05
+
+    def end_of(row: dict[str, Any]) -> float:
+        return row["timeline_start"] + (row["src_out"] - row["src_in"]) / (row["speed"] or 1.0)
+
+    def as_json(value: Any) -> Any:
+        return json.loads(value) if isinstance(value, str) else (value or {})
+
+    with engine.begin() as conn:
+        columns = [row[1] for row in conn.execute(text("PRAGMA table_info(clips)"))]
+        tracks: dict[str, list[dict[str, Any]]] = {}
+        for row in conn.execute(text("SELECT rowid AS _rowid, * FROM clips")).mappings():
+            row = dict(row)
+            try:
+                for name in ("timeline_start", "src_in", "src_out", "speed"):
+                    row[name] = float(row[name] if row[name] is not None else 1.0)
+            except (TypeError, ValueError):
+                continue  # 量不出时间的行没法判断它盖住了谁,不动它
+            tracks.setdefault(row["track_id"], []).append(row)
+        touched_sequences: set[str] = set()
+        for track_rows in tracks.values():
+            ordered = sorted(track_rows, key=lambda row: (row["timeline_start"], row["_rowid"]))
+            gone: set[str] = set()
+            for index in range(len(ordered) - 1, -1, -1):
+                cover = ordered[index]
+                if cover["id"] in gone:
+                    continue
+                start, end = cover["timeline_start"], end_of(cover)
+                for under in ordered[:index]:
+                    if under["id"] in gone:
+                        continue
+                    under_start, under_end = under["timeline_start"], end_of(under)
+                    if not (under_start < end - epsilon and under_end > start + epsilon):
+                        continue
+                    touched_sequences.add(under["sequence_id"])
+                    speed = under["speed"] or 1.0
+                    orig_in, orig_out = under["src_in"], under["src_out"]
+                    left_out = orig_in + max(0.0, start - under_start) * speed
+                    right_in = orig_in + max(0.0, end - under_start) * speed
+                    keep_left = start > under_start + epsilon and left_out - orig_in > min_remainder
+                    keep_right = end < under_end - epsilon and orig_out - right_in > min_remainder
+                    transform, effects = as_json(under["transform"]), as_json(under["effects"])
+                    if keep_right:
+                        piece = {name: under[name] for name in columns}
+                        piece.update(
+                            id=uuid.uuid4().hex,
+                            timeline_start=end,
+                            src_in=right_in,
+                            src_out=orig_out,
+                            **{name: json.dumps(value) for name, value in piece_appearance(
+                                transform, effects, orig_in, orig_out, right_in, orig_out).items()},
+                        )  # 时间戳照抄:它是原片段的一截,不是新放上去的东西
+                        conn.execute(
+                            text(f"INSERT INTO clips ({', '.join(columns)}) VALUES ({', '.join(':' + c for c in columns)})"),
+                            piece,
+                        )
+                    if keep_left:
+                        under.update(src_out=left_out)
+                        sliced = (orig_in, orig_out, orig_in, left_out)
+                    elif keep_right:
+                        under.update(timeline_start=end, src_in=right_in)
+                        sliced = (orig_in, orig_out, right_in, orig_out)
+                    else:
+                        gone.add(under["id"])
+                        conn.execute(text("DELETE FROM clips WHERE id = :id"), {"id": under["id"]})
+                        continue
+                    under.update({name: json.dumps(value)
+                                  for name, value in piece_appearance(transform, effects, *sliced).items()})
+                    conn.execute(
+                        text(
+                            "UPDATE clips SET timeline_start = :timeline_start, src_in = :src_in, src_out = :src_out, "
+                            "transform = :transform, effects = :effects WHERE id = :id"
+                        ),
+                        {name: under[name] for name in ("timeline_start", "src_in", "src_out", "transform", "effects", "id")},
+                    )
+        for sequence_id in touched_sequences:
+            conn.execute(text("UPDATE sequences SET revision = revision + 1 WHERE id = :id"), {"id": sequence_id})
+
+
 def _reindex_record_references() -> None:
     """引用表(record_references)是派生数据:抽取规则一变,整张按新规则重建。"""
     from app.db.references import reindex
@@ -6840,6 +7071,9 @@ def migration_plan() -> MigrationPlan:
                 _migrate_prepared_publish_tasks,
                 _migrate_track_role,
                 _migrate_subtitle_tracks_carry_no_sound,
+                # 片段级编辑的撤销记录改成改动日志;同一轨上叠着的片段按「后开始的盖住先开始的」规整。
+                _migrate_clip_edits_keep_a_change_journal,
+                _migrate_clips_on_a_track_do_not_overlap,
                 _migrate_provider_model_capability_ref,
                 _migrate_generation_capability_profiles,
                 _migrate_prompt_requirement_becomes_one_field,

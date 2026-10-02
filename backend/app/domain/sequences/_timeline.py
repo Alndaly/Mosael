@@ -14,6 +14,16 @@ from app.domain.sequences.errors import SequenceDomainError, SequenceNotFound
 
 MIN_CUT_REMAINDER = 0.05
 
+#: 片段倍速的范围。插入时就给倍速(配音、旁白按位置定速)和事后改速是同一条规矩。
+SPEED_RANGE = (0.25, 4.0)
+
+
+def require_speed(speed: float) -> float:
+    low, high = SPEED_RANGE
+    if not (math.isfinite(speed) and low <= speed <= high):
+        raise SequenceDomainError("Speed must be between 0.25 and 4")
+    return float(speed)
+
 
 def _clip_payload(clip: Clip) -> dict[str, Any]:
     payload = {

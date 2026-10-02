@@ -276,8 +276,8 @@ export function Timeline({
   // Insert-mode ripple preview: downstream clips on the target track part only by
   // the actual overlap (mirrors the backend), so a nudge doesn't shove everything.
   // 落点插进某个片段身体里时,后端会把它切开(头段留在原地、尾段并入右移)——预览
-  // 必须同步演出来,否则拖动时看着是覆盖、松手才弹开。split 口径与 _ripple_make_room
-  // 一致:切点贴边 0.05s 内不切,只按重叠量右移。
+  // 必须同步演出来,否则拖动时看着是覆盖、松手才弹开。split 口径与后端 coverage.make_room
+  // 一致:切点贴边 0.05s 内不切,只按重叠量右移(贴着尾巴时后端把那一点尾巴裁掉)。
   const insertRipple = React.useMemo(() => {
     if (editMode !== "insert" || !dragDraft || dragDraft.kind !== "move") return null;
     const start = dragDraft.timeline_start;

@@ -1,4 +1,9 @@
-"""片段级操作的逆向/正向重放:插入、删除、移动、裁剪、切分。"""
+"""片段级操作的逆向/正向重放:插入、删除、移动、修剪、切分、按文字剪、变速、分离音频。
+
+这一组操作的 payload 都带一份改动日志(`changes`,见 sequences/journal.py),撤销 / 重做就是把它倒放 /
+顺放 —— 一对实现,登记给每一种 kind。覆盖切掉的那一截、链接片段跟着挪的那一下、波纹推开的后续片段,
+都在日志里,不会有哪一种操作的还原漏掉它们。
+"""
 
 from __future__ import annotations
 
@@ -7,161 +12,35 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.db.models import Sequence
+from app.domain.sequences.undo.journal import replay_backward, replay_forward
 from app.domain.sequences.undo.registry import undoable
-from app.domain.sequences.undo.rows import (
-    delete_clip_row,
-    redo_ripple_room,
-    require_clip_row,
-    restore_clip_row,
-    undo_ripple_room,
+
+#: 记改动日志的 kind。和 _record_operation 那一侧的 kind 字面量对得上由 tests/test_undo_registry.py 守着。
+JOURNALED_KINDS = (
+    "insert_clip",
+    "insert_clips_batch",
+    "delete_clip",
+    "delete_clips_batch",
+    "ripple_delete_clip",
+    "ripple_delete_clips_batch",
+    "move_clip",
+    "move_clips_batch",
+    "trim_clip",
+    "split_clip",
+    "apply_transcript_edit",
+    "apply_transcript_edits_batch",
+    "set_clip_speed",
+    "detach_clip_audio",
 )
 
 
-@undoable("insert_clip")
-class InsertClip:
+class Journaled:
     def inverse(db: Session, sequence: Sequence, payload: dict[str, Any]) -> None:
-        delete_clip_row(db, payload["clip_id"])
-        undo_ripple_room(db, payload)
+        replay_backward(db, sequence, payload["changes"])
 
     def forward(db: Session, sequence: Sequence, payload: dict[str, Any]) -> None:
-        restore_clip_row(db, sequence, payload)
-        redo_ripple_room(db, sequence, payload)
+        replay_forward(db, sequence, payload["changes"])
 
 
-@undoable("insert_clips_batch")
-class InsertClipsBatch:
-    def inverse(db: Session, sequence: Sequence, payload: dict[str, Any]) -> None:
-        for created in payload["created"]:
-            delete_clip_row(db, created["clip_id"])
-
-    def forward(db: Session, sequence: Sequence, payload: dict[str, Any]) -> None:
-        for created in payload["created"]:
-            restore_clip_row(db, sequence, created)
-
-
-@undoable("delete_clip")
-class DeleteClip:
-    def inverse(db: Session, sequence: Sequence, payload: dict[str, Any]) -> None:
-        restore_clip_row(db, sequence, payload)
-
-    def forward(db: Session, sequence: Sequence, payload: dict[str, Any]) -> None:
-        delete_clip_row(db, payload["clip_id"])
-
-
-@undoable("delete_clips_batch")
-class DeleteClipsBatch:
-    def inverse(db: Session, sequence: Sequence, payload: dict[str, Any]) -> None:
-        for entry in payload["deleted"]:
-            restore_clip_row(db, sequence, entry)
-
-    def forward(db: Session, sequence: Sequence, payload: dict[str, Any]) -> None:
-        for entry in payload["deleted"]:
-            delete_clip_row(db, entry["clip_id"])
-
-
-@undoable("ripple_delete_clip")
-class RippleDeleteClip:
-    def inverse(db: Session, sequence: Sequence, payload: dict[str, Any]) -> None:
-        for entry in payload["shifted"]:
-            require_clip_row(db, entry["clip_id"]).timeline_start = entry["previous_timeline_start"]
-        restore_clip_row(db, sequence, payload["original"])
-
-    def forward(db: Session, sequence: Sequence, payload: dict[str, Any]) -> None:
-        delete_clip_row(db, payload["original"]["clip_id"])
-        for entry in payload["shifted"]:
-            require_clip_row(db, entry["clip_id"]).timeline_start = entry["timeline_start"]
-
-
-@undoable("ripple_delete_clips_batch")
-class RippleDeleteClipsBatch:
-    def inverse(db: Session, sequence: Sequence, payload: dict[str, Any]) -> None:
-        # 逆序回放:删除时是从后往前删的,撤销要从前往后还原,位移才能层层退回。
-        for entry in reversed(payload["entries"]):
-            for shifted in entry["shifted"]:
-                require_clip_row(db, shifted["clip_id"]).timeline_start = shifted["previous_timeline_start"]
-            restore_clip_row(db, sequence, entry["original"])
-
-    def forward(db: Session, sequence: Sequence, payload: dict[str, Any]) -> None:
-        for entry in payload["entries"]:
-            delete_clip_row(db, entry["original"]["clip_id"])
-            for shifted in entry["shifted"]:
-                require_clip_row(db, shifted["clip_id"]).timeline_start = shifted["timeline_start"]
-
-
-@undoable("move_clip")
-class MoveClip:
-    def inverse(db: Session, sequence: Sequence, payload: dict[str, Any]) -> None:
-        clip = require_clip_row(db, payload["clip_id"])
-        clip.timeline_start = payload["previous_timeline_start"]
-        clip.track_id = payload.get("previous_track_id", clip.track_id)
-        undo_ripple_room(db, payload)
-
-    def forward(db: Session, sequence: Sequence, payload: dict[str, Any]) -> None:
-        clip = require_clip_row(db, payload["clip_id"])
-        clip.timeline_start = payload["timeline_start"]
-        clip.track_id = payload["track_id"]
-        redo_ripple_room(db, sequence, payload)
-
-
-@undoable("move_clips_batch")
-class MoveClipsBatch:
-    def inverse(db: Session, sequence: Sequence, payload: dict[str, Any]) -> None:
-        # 整组一步退回:组拖记的是一条操作,撤销就该把整组还原,而不是退回其中一个。
-        for entry in payload["moved"]:
-            clip = require_clip_row(db, entry["clip_id"])
-            clip.timeline_start = entry["previous_timeline_start"]
-            clip.track_id = entry["previous_track_id"]
-
-    def forward(db: Session, sequence: Sequence, payload: dict[str, Any]) -> None:
-        for entry in payload["moved"]:
-            clip = require_clip_row(db, entry["clip_id"])
-            clip.timeline_start = entry["timeline_start"]
-            clip.track_id = entry["track_id"]
-
-
-@undoable("trim_clip")
-class TrimClip:
-    def inverse(db: Session, sequence: Sequence, payload: dict[str, Any]) -> None:
-        clip = require_clip_row(db, payload["clip_id"])
-        previous = payload["previous"]
-        clip.timeline_start = previous["timeline_start"]
-        clip.src_in = previous["src_in"]
-        clip.src_out = previous["src_out"]
-
-    def forward(db: Session, sequence: Sequence, payload: dict[str, Any]) -> None:
-        clip = require_clip_row(db, payload["clip_id"])
-        clip.timeline_start = payload["timeline_start"]
-        clip.src_in = payload["src_in"]
-        clip.src_out = payload["src_out"]
-
-
-@undoable("split_clip")
-class SplitClip:
-    """一个原片段换成若干新片段。"""
-
-    def inverse(db: Session, sequence: Sequence, payload: dict[str, Any]) -> None:
-        for created in payload["created"]:
-            delete_clip_row(db, created["clip_id"])
-        restore_clip_row(db, sequence, payload["original"])
-
-    def forward(db: Session, sequence: Sequence, payload: dict[str, Any]) -> None:
-        delete_clip_row(db, payload["original"]["clip_id"])
-        for created in payload["created"]:
-            restore_clip_row(db, sequence, created)
-
-
-# 字幕编辑落到时间线上就是「一个片段换成若干片段」,和切分同一个形状,复用同一对实现。
-undoable("apply_transcript_edit")(SplitClip)
-
-
-@undoable("apply_transcript_edits_batch")
-class TranscriptEditsBatch:
-    """Several original clips replaced together by one transcript gesture."""
-
-    def inverse(db: Session, sequence: Sequence, payload: dict[str, Any]) -> None:
-        for edit in reversed(payload["edits"]):
-            SplitClip.inverse(db, sequence, edit)
-
-    def forward(db: Session, sequence: Sequence, payload: dict[str, Any]) -> None:
-        for edit in payload["edits"]:
-            SplitClip.forward(db, sequence, edit)
+for _kind in JOURNALED_KINDS:
+    undoable(_kind)(Journaled)

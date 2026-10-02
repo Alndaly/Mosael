@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, object_session
 
 from app.db.models import Asset, Clip, Sequence, Track
 from app.domain.sequences.errors import SequenceDomainError, SequenceNotFound
@@ -28,10 +28,14 @@ def track_for_asset(sequence: Sequence, asset_kind: str) -> Track | None:
 
 
 def track_end(track: Track) -> float:
-    """这条轨道上最后一段的终点;空轨道是 0。"""
-    from app.domain.sequences.operations import timeline_span
+    """这条轨道上最后一段的终点;空轨道是 0。
 
-    return max((clip.timeline_start + timeline_span(clip) for clip in (track.clips or [])), default=0.0)
+    查库,不读 `track.clips`:同一个会话里连着接两段时,关系集合还是接第一段之前的样子,第二段就会
+    算出「末尾是 0」而落在第一段上 —— 落点上已有片段是覆盖,第一段就没了。
+    """
+    from app.domain.sequences.coverage import clip_end, clips_on_track
+
+    return max((clip_end(clip) for clip in clips_on_track(object_session(track), track.id)), default=0.0)
 
 
 def asset_span(asset: Asset) -> float:

@@ -12693,6 +12693,11 @@ export interface components {
         SetClipSpeedRequest: {
             /** Speed */
             speed: number;
+            /**
+             * Ripple
+             * @default true
+             */
+            ripple: boolean;
         };
         /** SetClipTextRequest */
         SetClipTextRequest: {

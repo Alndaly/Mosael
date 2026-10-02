@@ -1,4 +1,6 @@
-"""属性型操作的逆向/正向重放:片段的调色/速度/增益/变换/文本,序列的画幅与字幕样式。
+"""属性型操作的逆向/正向重放:片段的调色/增益/变换/文本,序列的画幅与字幕样式。
+
+(变速会推开 / 拉回后面的片段,不再是「只改一个值」,它走改动日志,见 clips.py。)
 
 这一组的形状都一样 —— payload 里存着改之前和改之后的值,两个方向就是各写一边。
 """
@@ -21,15 +23,6 @@ class SetClipEffect:
 
     def forward(db: Session, sequence: Sequence, payload: dict[str, Any]) -> None:
         require_clip_row(db, payload["clip_id"]).effects = payload["effects"]
-
-
-@undoable("set_clip_speed")
-class SetClipSpeed:
-    def inverse(db: Session, sequence: Sequence, payload: dict[str, Any]) -> None:
-        require_clip_row(db, payload["clip_id"]).speed = payload["previous"]
-
-    def forward(db: Session, sequence: Sequence, payload: dict[str, Any]) -> None:
-        require_clip_row(db, payload["clip_id"]).speed = payload["speed"]
 
 
 @undoable("set_clip_gain")

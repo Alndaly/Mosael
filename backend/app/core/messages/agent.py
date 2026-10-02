@@ -126,6 +126,14 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "This sequence was just changed. Refresh and try again.",
     },
     "seqErr_unknownOp": {"zh": "不认识的时间线操作: {kind}", "en": "Unknown timeline operation: {kind}"},
+    "seqErr_trimNoRoom": {
+        "zh": "这里没有地方放下这一段:修剪会让它短到没有,或者两边都贴着别的片段",
+        "en": "There's no room for this clip here: the trim would leave nothing, or it is boxed in by its neighbours.",
+    },
+    "seqErr_speedWouldOverlap": {
+        "zh": "慢放后这一段会盖住同轨的下一段。打开「推开后面的片段」,或先给它腾出地方",
+        "en": "At this speed the clip would run into the next clip on its track. Let it push the following clips, or make room first.",
+    },
     # 工作流:选项来源、修订、AI 编排、JSON 校验
     "wfErr_unknownOptionSource": {"zh": "未知的选项来源:{source}", "en": "Unknown option source: {source}"},
     "wfErr_graphConflict": {

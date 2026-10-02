@@ -9,13 +9,14 @@ from sqlalchemy.orm import Session
 
 from app.db.models import Clip, Sequence, Track
 from app.domain.sequences._timeline import (
-    _clip_payload,
     _record_operation,
     _require_clip,
     _require_sequence,
     _validate_clip_range,
 )
+from app.domain.sequences.coverage import clear_range, clip_end
 from app.domain.sequences.errors import SequenceDomainError, SequenceNotFound
+from app.domain.sequences.journal import Journal
 
 
 @dataclass(frozen=True)
@@ -46,7 +47,8 @@ def generate_subtitles(db: Session, sequence_id: str, op: GenerateSubtitles) -> 
         raise SequenceNotFound("Track not found")
     if track.kind != "subtitle":
         raise SequenceDomainError("Subtitles need a subtitle track")
-    created: list[dict[str, Any]] = []
+    journal = Journal(db, sequence)
+    created = 0
     seen: set[tuple[float, str]] = set()
     for text, start, duration in op.cues:
         cleaned = (text or "").strip()
@@ -59,27 +61,29 @@ def generate_subtitles(db: Session, sequence_id: str, op: GenerateSubtitles) -> 
         if key in seen:
             continue
         seen.add(key)
-        clip = Clip(
-            workspace_id=sequence.workspace_id,
-            sequence_id=sequence.id,
-            track_id=track.id,
-            asset_id=None,
-            timeline_start=float(start),
-            src_in=0,
-            src_out=float(duration),
-            text_override=cleaned,
+        clip = journal.create(
+            Clip(
+                workspace_id=sequence.workspace_id,
+                sequence_id=sequence.id,
+                track_id=track.id,
+                asset_id=None,
+                timeline_start=float(start),
+                src_in=0,
+                src_out=float(duration),
+                text_override=cleaned,
+            )
         )
-        db.add(clip)
-        db.flush()
-        created.append(_clip_payload(clip))
+        # 和放下一段片段同一条规矩:同一条字幕轨上不叠着两条字幕,后来的这条盖住落点上的。
+        clear_range(journal, track.id, clip.timeline_start, clip_end(clip), keep={clip.id})
+        created += 1
     if not created:
         raise SequenceDomainError("No subtitle cues to insert")
     _record_operation(
         db,
         sequence,
         kind="insert_clips_batch",
-        payload={"created": created},
-        summary={"operation": "insert_clips_batch", "count": len(created)},
+        payload={"changes": journal.entries},
+        summary={"operation": "insert_clips_batch", "count": created},
         actor_id=op.actor_id,
     )
     return sequence
@@ -99,23 +103,26 @@ def insert_text_clip(db: Session, sequence_id: str, op: InsertTextClip) -> Seque
         raise SequenceDomainError("Duration must be positive")
     _validate_clip_range(op.timeline_start, 0, op.duration)
 
-    clip = Clip(
-        workspace_id=sequence.workspace_id,
-        sequence_id=sequence.id,
-        track_id=track.id,
-        asset_id=None,
-        timeline_start=op.timeline_start,
-        src_in=0,
-        src_out=op.duration,
-        text_override=op.text,
+    journal = Journal(db, sequence)
+    clip = journal.create(
+        Clip(
+            workspace_id=sequence.workspace_id,
+            sequence_id=sequence.id,
+            track_id=track.id,
+            asset_id=None,
+            timeline_start=op.timeline_start,
+            src_in=0,
+            src_out=op.duration,
+            text_override=op.text,
+        )
     )
-    db.add(clip)
-    db.flush()
+    # 覆盖:同轨落点上已有的字幕 / 花字被盖住的部分裁掉(见 coverage)。
+    clear_range(journal, track.id, clip.timeline_start, clip_end(clip), keep={clip.id})
     _record_operation(
         db,
         sequence,
         kind="insert_clip",
-        payload=_clip_payload(clip),
+        payload={"clip_id": clip.id, "changes": journal.entries},
         summary={"operation": "insert_clip", "clip_id": clip.id, "text": True},
         actor_id=op.actor_id,
     )

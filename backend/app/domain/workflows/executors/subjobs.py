@@ -658,7 +658,7 @@ def timeline_append(db: Session, scope: RunScope, config: dict[str, Any]) -> dic
     而"接到末尾"本来就该由机器算。
     """
     from app.domain.sequences.append import TRACK_FOR_ASSET, asset_span, track_end, track_for_asset
-    from app.domain.sequences.operations import InsertClip, SetClipSpeed, insert_clip, set_clip_speed
+    from app.domain.sequences.operations import InsertClip, insert_clip
 
     sequence_id = _sequence_in(db, scope, str(config.get("sequence_id", "")).strip()).id
     asset = _asset_in(db, scope, str(config.get("asset_id", "")).strip())
@@ -710,13 +710,13 @@ def timeline_append(db: Session, scope: RunScope, config: dict[str, Any]) -> dic
         # 没给就接到末尾 —— 这条轨道上最后一个片段的终点,空轨道就是 0。在锁里算:并行分支刚接上去的
         # 那一段也算在"末尾"里。
         start = at if at is not None else track_end(track)
+        # 倍速随插入一起给:先按 1 倍放下再改速的话,放下那一刻多出来的那截已经按覆盖把后面的片段裁掉了。
         clip = insert_clip(
             db,
             sequence.id,
-            InsertClip(track_id=track.id, asset_id=asset.id, timeline_start=start, src_in=src_in, src_out=src_out),
+            InsertClip(track_id=track.id, asset_id=asset.id, timeline_start=start, src_in=src_in, src_out=src_out,
+                       speed=speed or 1.0),
         )
-        if speed is not None:
-            set_clip_speed(db, sequence.id, SetClipSpeed(clip_id=clip.id, speed=speed))
         return clip.id, start, (src_out - src_in) / (speed or 1.0)
 
     clip_id, timeline_start, span = _write_timeline(db, scope, sequence_id, append)

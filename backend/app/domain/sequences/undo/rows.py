@@ -50,27 +50,3 @@ def restore_clip_row(db: Session, sequence: Sequence, payload: dict) -> None:
             text_override=payload.get("text_override"),
         )
     )
-
-
-def undo_ripple_room(db: Session, payload: dict) -> None:
-    """撤销插入编辑的「让位」:右移的片段归位;落点处若切开过跨越片段,
-    删掉切出的尾段、把原片段的 src_out 补回去。"""
-    for entry in payload.get("shifted", []):
-        other = require_clip_row(db, entry["clip_id"])
-        other.timeline_start = entry["previous_timeline_start"]
-    split = payload.get("split")
-    if split:
-        delete_clip_row(db, split["tail"]["clip_id"])
-        require_clip_row(db, split["clip_id"]).src_out = split["previous_src_out"]
-
-
-def redo_ripple_room(db: Session, sequence: Sequence, payload: dict) -> None:
-    """重做让位:先复原切割(收短原片段 + 原 id 重建尾段),再重放右移。"""
-    split = payload.get("split")
-    if split:
-        require_clip_row(db, split["clip_id"]).src_out = split["tail"]["src_in"]
-        restore_clip_row(db, sequence, split["tail"])
-        db.flush()  # 尾段也在 shifted 里,下面的 db.get 要能查到它
-    for entry in payload.get("shifted", []):
-        other = require_clip_row(db, entry["clip_id"])
-        other.timeline_start = entry["timeline_start"]

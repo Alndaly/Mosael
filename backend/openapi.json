@@ -33389,6 +33389,11 @@
             "maximum": 4.0,
             "minimum": 0.25,
             "title": "Speed"
+          },
+          "ripple": {
+            "type": "boolean",
+            "title": "Ripple",
+            "default": true
           }
         },
         "type": "object",

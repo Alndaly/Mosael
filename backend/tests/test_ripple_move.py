@@ -104,9 +104,12 @@ def test_move_without_ripple_leaves_others() -> None:
     sequence, clips = setup_three_clips(client)
     c = clips[2]  # C @10
 
-    # Overwrite mode: plain move, no one else shifts (clips may overlap freely).
+    # 覆盖模式:别的片段不挪位置,但也不叠在一起 —— C[5,7) 盖住 B[5,8) 的头,B 只剩 [7,8)。
     state = client.patch(
         f"/api/sequences/{sequence['id']}/clips/{c['id']}/move",
         json={"timeline_start": 5},
     ).json()
-    assert sorted(round(x["timeline_start"], 3) for x in video_clips(state)) == [0, 5, 5]
+    clips_after = video_clips(state)
+    assert [round(x["timeline_start"], 3) for x in clips_after] == [0, 5, 7]
+    b = clips_after[2]
+    assert (round(b["src_in"], 3), round(b["src_out"], 3)) == (2, 3), "被盖住的那截从 B 的源里裁掉了"

@@ -8,8 +8,16 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.db.models import Asset, Clip, Sequence, Track
-from app.domain.sequences._timeline import _record_operation, _require_clip, _require_sequence, timeline_span
+from app.domain.sequences._timeline import (
+    _record_operation,
+    _require_clip,
+    _require_sequence,
+    require_speed,
+    timeline_span,
+)
+from app.domain.sequences.coverage import EPS, clip_end, clips_on_track, shift
 from app.domain.sequences.errors import SequenceDomainError, SequenceNotFound
+from app.domain.sequences.journal import Journal
 from app.media.render_plan import TRANSFORM_BOUNDS, TRANSFORM_DEFAULTS
 
 
@@ -24,25 +32,48 @@ class SetClipEffects:
 class SetClipSpeed:
     clip_id: str
     speed: float
+    #: 变速改了片段在时间线上的长度,后面的片段怎么办:
+    #:
+    #: - True(默认,剪映的习惯):同轨后续片段跟着推开 / 拉回,彼此的间距保留 —— 慢放不会盖住下一段,
+    #:   快放也不会在后面留出一截空白;
+    #: - False:后面的一段都不动。快放留出空当;慢放到会盖住下一段时**拒绝**,而不是替用户把下一段
+    #:   裁掉 —— 改的是这一段的属性,用户没有在「放下」什么,悄悄删掉别人的画面是最难发现的那种错。
+    ripple: bool = True
     actor_id: str | None = None
 
 
 def set_clip_speed(db: Session, sequence_id: str, op: SetClipSpeed) -> Sequence:
     sequence = _require_sequence(db, sequence_id)
     clip = _require_clip(db, sequence_id, op.clip_id)
-    if not (0.25 <= op.speed <= 4.0):
-        raise SequenceDomainError("Speed must be between 0.25 and 4")
-    previous = clip.speed
-    clip.speed = op.speed
+    speed = require_speed(op.speed)
+    journal = Journal(db, sequence)
+    _respeed(journal, clip, speed, ripple=op.ripple)
     _record_operation(
         db,
         sequence,
         kind="set_clip_speed",
-        payload={"clip_id": clip.id, "speed": op.speed, "previous": previous},
+        payload={"clip_id": clip.id, "speed": speed, "changes": journal.entries},
         summary={"operation": "set_clip_speed", "clip_id": clip.id},
         actor_id=op.actor_id,
     )
     return sequence
+
+
+def _respeed(journal: Journal, clip: Clip, speed: float, *, ripple: bool) -> None:
+    old_end = clip_end(clip)
+    new_end = clip.timeline_start + (clip.src_out - clip.src_in) / speed
+    followers = [
+        other
+        for other in clips_on_track(journal.db, clip.track_id)
+        if other.id != clip.id and other.timeline_start >= old_end - EPS
+    ]
+    if not ripple:
+        next_start = min((other.timeline_start for other in followers), default=float("inf"))
+        if new_end > next_start + EPS:
+            raise SequenceDomainError("seqErr_speedWouldOverlap")
+    journal.update(clip, speed=speed)
+    if ripple:
+        shift(journal, followers, new_end - old_end)
 
 
 @dataclass(frozen=True)
@@ -115,53 +146,37 @@ def detach_clip_audio(db: Session, sequence_id: str, op: DetachClipAudio) -> Seq
 
     audio_tracks = sorted((t for t in sequence.tracks if t.kind == "audio" and not t.role), key=lambda t: t.position)
     target = next((t for t in audio_tracks if t.id != track.id and _range_free(t, start, end)), None)
-    created_track = None
+    journal = Journal(db, sequence)
     if target is None:
-        target = Track(
-            sequence_id=sequence.id,
-            kind="audio",
-            name=f"A{sum(1 for t in sequence.tracks if t.kind == 'audio') + 1}",
-            position=max((t.position for t in sequence.tracks), default=-1) + 1,
+        target = journal.create_track(
+            Track(
+                sequence_id=sequence.id,
+                kind="audio",
+                name=f"A{sum(1 for t in sequence.tracks if t.kind == 'audio') + 1}",
+                position=max((t.position for t in sequence.tracks), default=-1) + 1,
+            )
         )
-        db.add(target)
-        db.flush()
-        created_track = {"id": target.id, "name": target.name, "position": target.position}
 
-    audio_clip = Clip(
-        workspace_id=sequence.workspace_id,
-        sequence_id=sequence.id,
-        track_id=target.id,
-        asset_id=audio_asset_id,
-        timeline_start=clip.timeline_start,
-        src_in=clip.src_in,
-        src_out=clip.src_out,
-        speed=clip.speed,
-        gain=clip.gain,
+    journal.create(
+        Clip(
+            workspace_id=sequence.workspace_id,
+            sequence_id=sequence.id,
+            track_id=target.id,
+            asset_id=audio_asset_id,
+            timeline_start=clip.timeline_start,
+            src_in=clip.src_in,
+            src_out=clip.src_out,
+            speed=clip.speed,
+            gain=clip.gain,
+        )
     )
-    db.add(audio_clip)
-    db.flush()
-    video_muted_prev = clip.muted
-    clip.muted = True
+    journal.update(clip, muted=True)
 
     _record_operation(
         db,
         sequence,
         kind="detach_clip_audio",
-        payload={
-            "video_clip_id": clip.id,
-            "video_muted_prev": video_muted_prev,
-            "created_track": created_track,
-            "audio_clip": {
-                "id": audio_clip.id,
-                "track_id": target.id,
-                "asset_id": audio_asset_id,
-                "timeline_start": clip.timeline_start,
-                "src_in": clip.src_in,
-                "src_out": clip.src_out,
-                "speed": clip.speed,
-                "gain": clip.gain,
-            },
-        },
+        payload={"clip_id": clip.id, "changes": journal.entries},
         summary={"operation": "detach_clip_audio", "clip_id": clip.id},
         actor_id=op.actor_id,
     )

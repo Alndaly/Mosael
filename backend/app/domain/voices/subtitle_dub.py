@@ -26,7 +26,7 @@ from app.core.i18n import DEFAULT_LOCALE, LocalizedError, t
 from app.db.models import Asset, Clip, Job, Sequence, Track
 from app.domain.assets.media_info import patch_media_info
 from app.domain.jobs import JobError, blame, cancel_job_tree, create_job, dispatch_job, emit_job_event, finish_job, say
-from app.domain.sequences.operations import AddTrack, InsertClip, SetClipSpeed, add_track, insert_clip, set_clip_speed
+from app.domain.sequences.operations import AddTrack, InsertClip, add_track, insert_clip
 from app.domain.voices.original_audio import (
     DEFAULT_ORIGINAL_AUDIO,
     OriginalAudioError,
@@ -331,7 +331,10 @@ def _run_dub(job_id: str) -> None:
                 patch_media_info(db, asset_id, {DUB_LINE_KEY: {"text": text, "voice": voice_identity(synthesis)}})
                 if not track_id:
                     track_id = _dub_track(db, sequence_id, created_by)
-                new_clip = insert_clip(
+                speed = _speed_for(audio_seconds, slot_seconds, rooms[index]) if match_duration else None
+                # 倍速随插入一起给:同一条配音轨上不叠两段(覆盖),先按 1 倍放下的话,多出来的那截
+                # 会先把下一句已有的配音裁掉,再改速也找不回来。
+                insert_clip(
                     db,
                     sequence_id,
                     InsertClip(
@@ -340,11 +343,9 @@ def _run_dub(job_id: str) -> None:
                         timeline_start=timeline_start,
                         src_in=0.0,
                         src_out=audio_seconds,
+                        speed=speed or 1.0,
                     ),
                 )
-                speed = _speed_for(audio_seconds, slot_seconds, rooms[index]) if match_duration else None
-                if speed is not None:
-                    set_clip_speed(db, sequence_id, SetClipSpeed(clip_id=new_clip.id, speed=speed))
                 if rooms[index] is not None:
                     over = audio_seconds / (speed or 1.0) - max(rooms[index], slot_seconds)
                     if over > _OVERLAP_TOLERANCE:

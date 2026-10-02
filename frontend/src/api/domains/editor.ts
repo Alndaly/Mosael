@@ -112,10 +112,19 @@ export function cutClipRangesBatch(
   });
 }
 
-export function setClipSpeed(sequenceId: string, clipId: string, speed: number): Promise<Sequence> {
+/**
+ * `ripple`(默认 true,剪映的习惯):变速后同轨后续片段跟着推开 / 拉回。
+ * false:后面的不动;慢放会盖住下一段时后端拒绝(422),不替用户裁掉下一段。
+ */
+export function setClipSpeed(
+  sequenceId: string,
+  clipId: string,
+  speed: number,
+  options: { ripple?: boolean } = {},
+): Promise<Sequence> {
   return api<Sequence>(`/api/sequences/${sequenceId}/clips/${clipId}/speed`, {
     method: "PATCH",
-    body: JSON.stringify({ speed }),
+    body: JSON.stringify({ speed, ...options }),
   });
 }
 

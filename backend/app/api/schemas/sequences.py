@@ -103,12 +103,14 @@ class InsertClipRequest(ApiModel):
     timeline_start: float = 0.0
     src_in: float = 0.0
     src_out: float
+    #: 插入模式:落点之后的同轨片段让位。False 是覆盖 —— 落点盖住的部分从别的片段上裁掉。
     ripple: bool = False
 
 
 class MoveClipRequest(ApiModel):
     timeline_start: float
     track_id: str | None = None
+    #: 同 InsertClipRequest.ripple。
     ripple: bool = False
 
 
@@ -222,6 +224,8 @@ class SetClipEffectsRequest(ApiModel):
 
 class SetClipSpeedRequest(ApiModel):
     speed: float = Field(ge=0.25, le=4.0)
+    #: 变速后时长变了:True(默认)推开 / 拉回同轨后续片段;False 后面的不动,慢放会盖住下一段时拒绝。
+    ripple: bool = True
 
 
 class SetClipGainRequest(ApiModel):
