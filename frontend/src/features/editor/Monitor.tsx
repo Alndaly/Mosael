@@ -5,8 +5,7 @@ import { type Asset, type Clip, type Sequence } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
-import { clipEnd, sequenceDuration } from "@/domain/timeline/geometry";
-import { formatTimecode } from "@/lib/time";
+import { clipEnd, formatFrameTimecode, frameAt, frameTime, sequenceDuration, snapToFrame } from "@/domain/timeline/geometry";
 import { CURVES_FILTER_ID, colorCurvesTables, type ColorCurves } from "@/features/editor/colorCurves";
 import { CanvasCompositor, type CompositorLayer } from "@/features/editor/playback/CanvasCompositor";
 import { WebAudioMixer } from "@/features/editor/playback/WebAudioMixer";
@@ -366,12 +365,13 @@ export function Monitor({
   }, [pendingProxy, onRefreshAssets]);
 
 
-  const frameStep = 1 / (sequence.fps || 30);
+  // 逐帧按帧号走、拖进度条落到帧上 —— 与时间线同一套帧对齐(geometry 的帧函数)。
+  const fps = sequence.fps;
   const seekFromScrub = (clientX: number) => {
     const rect = scrubRef.current?.getBoundingClientRect();
     if (!rect || totalDuration <= 0) return;
     const ratio = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
-    setPlayhead(ratio * totalDuration);
+    setPlayhead(Math.min(totalDuration, snapToFrame(ratio * totalDuration, fps)));
   };
   const handleScrub = (event: React.PointerEvent<HTMLDivElement>) => {
     seekFromScrub(event.clientX);
@@ -394,9 +394,9 @@ export function Monitor({
     if (!playing && totalDuration > 0 && useEditorStore.getState().playhead >= totalDuration) setPlayhead(0);
     togglePlaying();
   };
-  // 帧步进在点下去那一刻读播放头,不订阅。
+  // 帧步进在点下去那一刻读播放头,不订阅;按帧号加减,不把 1/fps 浮点累加。
   const stepFrames = (frames: number) => {
-    const at = useEditorStore.getState().playhead + frames * frameStep;
+    const at = frameTime(frameAt(useEditorStore.getState().playhead, fps) + frames, fps);
     setPlayhead(Math.max(0, Math.min(totalDuration, at)));
   };
   // Frame click toggles play — but not the click that just ended a transform drag.
@@ -628,7 +628,7 @@ export function Monitor({
             {playbackRate}x
           </button>
         </div>
-        <MonitorTimecode totalDuration={totalDuration} />
+        <MonitorTimecode totalDuration={totalDuration} fps={fps} />
         <div className="flex items-center gap-0.5">
           <Button variant="ghost" size="icon-sm" onClick={toggleMuted} aria-label={t("monMute")}>
             {masterMuted || volume === 0 ? <VolumeX size={14} /> : <Volume2 size={14} />}
@@ -685,12 +685,12 @@ function ScrubFill({ totalDuration }: { totalDuration: number }) {
 }
 
 /** 时间码读数:同上,独立订阅播放头。 */
-function MonitorTimecode({ totalDuration }: { totalDuration: number }) {
+function MonitorTimecode({ totalDuration, fps }: { totalDuration: number; fps: number }) {
   const playhead = useEditorStore((state) => state.playhead);
   return (
-    <div className="timecode whitespace-nowrap text-ui-xs text-[#e8eaed]">
-      {formatTimecode(playhead)}
-      <span className="text-[#82878f]"> / {formatTimecode(totalDuration)}</span>
+    <div className="timecode whitespace-nowrap text-ui-xs text-[#e8eaed]" data-testid="monitor-timecode">
+      {formatFrameTimecode(playhead, fps)}
+      <span className="text-[#82878f]"> / {formatFrameTimecode(totalDuration, fps)}</span>
     </div>
   );
 }

@@ -49,6 +49,44 @@ export function sequenceDuration(clips: ClipLike[]): number {
   return clips.reduce((end, clip) => Math.max(end, clipEnd(clip)), 0);
 }
 
+/* ---------- 帧 ----------
+ *
+ * 成片是一帧一帧的:落在两帧之间的切点、修剪边缘、播放头,导出时都会被吞成某一帧,而预览里
+ * 看到的是另一个位置。所以用户能放下的每一个时间点(播放头、标尺点击、拖动、修剪、切分)
+ * 都先吸到序列帧率的帧上;逐帧移动按帧号加减,而不是把 1/fps 一次次浮点累加。 */
+
+const FALLBACK_FPS = 30;
+
+function usableFps(fps: number): number {
+  return Number.isFinite(fps) && fps > 0 ? fps : FALLBACK_FPS;
+}
+
+/** 这个时刻落在第几帧(四舍五入到最近的帧)。 */
+export function frameAt(time: number, fps: number): number {
+  // 先截掉浮点毛刺再取整:0.1 * 30 是 3.0000000000000004,不该算成"3 帧多一点"。
+  return Math.round(Number((time * usableFps(fps)).toFixed(6)));
+}
+
+/** 第 frame 帧的起点时刻。 */
+export function frameTime(frame: number, fps: number): number {
+  return frame / usableFps(fps);
+}
+
+/** 吸到最近的一帧上。 */
+export function snapToFrame(time: number, fps: number): number {
+  return frameTime(frameAt(time, fps), fps);
+}
+
+/** HH:MM:SS:FF —— 剪辑软件通用的帧级时间码(非丢帧:29.97 按 30 帧一秒计)。 */
+export function formatFrameTimecode(seconds: number, fps: number): string {
+  const base = Math.max(1, Math.round(usableFps(fps)));
+  const total = Math.max(0, frameAt(seconds, fps));
+  const frames = total % base;
+  const wholeSeconds = Math.floor(total / base);
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${pad(Math.floor(wholeSeconds / 3600))}:${pad(Math.floor((wholeSeconds % 3600) / 60))}:${pad(wholeSeconds % 60)}:${pad(frames)}`;
+}
+
 /* ---------- Ruler ---------- */
 
 const RULER_STEPS = [0.1, 0.2, 0.5, 1, 2, 5, 10, 15, 30, 60, 120, 300, 600];

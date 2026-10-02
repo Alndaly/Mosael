@@ -3,7 +3,9 @@ import { describe, expect, it } from "vitest";
 import {
   clipDuration,
   clipEnd,
+  formatFrameTimecode,
   formatRulerLabel,
+  frameAt,
   overlapsAny,
   pxToTime,
   resolveMove,
@@ -14,6 +16,7 @@ import {
   snapCandidates,
   snapTime,
   snapTimeTiered,
+  snapToFrame,
   srcToTimeline,
   timelineToSrc,
   timeToPx,
@@ -211,6 +214,30 @@ describe("overlapsAny", () => {
 
   it("treats touching edges as non-overlapping", () => {
     expect(overlapsAny(clips, { start: 4, end: 10 })).toBe(false);
+  });
+});
+
+describe("帧对齐", () => {
+  it("时间落到最近的帧上(按序列帧率)", () => {
+    expect(frameAt(1.025, 30)).toBe(31);
+    expect(snapToFrame(1.025, 30)).toBe(31 / 30);
+    expect(snapToFrame(0.51, 25)).toBe(13 / 25);
+    // 浮点累加的毛刺(0.1 * 30 = 3.0000000000000004)不该把帧号推到下一帧。
+    expect(frameAt(0.1, 30)).toBe(3);
+  });
+
+  it("帧率缺失或非法时按 30fps,不产出 NaN", () => {
+    expect(snapToFrame(1.025, 0)).toBe(31 / 30);
+    expect(Number.isFinite(snapToFrame(2, Number.NaN))).toBe(true);
+  });
+
+  it("时间码精确到帧:HH:MM:SS:FF", () => {
+    expect(formatFrameTimecode(0, 30)).toBe("00:00:00:00");
+    expect(formatFrameTimecode(15 + 12 / 30, 30)).toBe("00:00:15:12");
+    expect(formatFrameTimecode(3725 + 12 / 25, 25)).toBe("01:02:05:12");
+    // 29.97 按 30 帧一秒计(非丢帧):帧号不会出现 30。
+    expect(formatFrameTimecode(10, 29.97)).toBe("00:00:10:00");
+    expect(formatFrameTimecode(-1, 30)).toBe("00:00:00:00");
   });
 });
 

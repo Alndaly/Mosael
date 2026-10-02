@@ -155,3 +155,17 @@ describe("S 键切分", () => {
     expect(mocks.splitClip).toHaveBeenCalledWith(onS1, "c1", 10);
   });
 });
+
+describe("方向键逐帧", () => {
+  it("按帧号加减:停在两帧之间时先落到最近的帧,不把 1/fps 浮点累加上去", async () => {
+    renderEditor(sequenceWith([track("v1", "video", 0, [clip("c1", "v1", 0, 0, 20)])]));
+    await ready();
+    act(() => useEditorStore.getState().setPlayhead(0.51));
+    press("ArrowRight");
+    expect(useEditorStore.getState().playhead).toBe(16 / 30);
+    press("ArrowRight", { shiftKey: true });
+    expect(useEditorStore.getState().playhead).toBe(26 / 30);
+    press("ArrowLeft");
+    expect(useEditorStore.getState().playhead).toBe(25 / 30);
+  });
+});

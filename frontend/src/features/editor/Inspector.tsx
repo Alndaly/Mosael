@@ -8,8 +8,7 @@ import { OptionPicker } from "@/components/ui/option-picker";
 import { Slider } from "@/components/ui/slider";
 import { Textarea } from "@/components/ui/textarea";
 import { useI18n } from "@/app/preferences";
-import { clipEnd } from "@/domain/timeline/geometry";
-import { formatTimecode } from "@/lib/time";
+import { clipEnd, formatFrameTimecode } from "@/domain/timeline/geometry";
 import { clipProgress, hasActiveKeyframes, propTimes, sampleProp, togglePropKeyframe, upsertKeyframe, sampleGain, gainKeyTimes, toggleGainKeyframe, upsertGainKeyframe, type GainKeyframe, type Keyframe, type KfProp } from "@/features/editor/keyframes";
 import { readTextStyle, strokeSliderMax, TEXT_PRESETS, type TextStyle } from "@/features/editor/textStyle";
 import { SUBTITLE_FONTS } from "@/features/editor/subtitleStyle";
@@ -63,6 +62,7 @@ export function Inspector({
   onDeleteFont,
   uploadingFont,
   onClose,
+  fps = 30,
 }: {
   workspaceId: string;
   selectedClip: Clip;
@@ -82,8 +82,11 @@ export function Inspector({
   uploadingFont?: boolean;
   /** 紧凑模式抽屉需要显式关闭入口(桌面三栏布局不传)。 */
   onClose?: () => void;
+  /** 序列帧率:起止与时长按帧显示(HH:MM:SS:FF)。 */
+  fps?: number;
 }) {
   const t = useI18n();
+  const timecode = (seconds: number) => formatFrameTimecode(seconds, fps);
   // 同上:切走再回来还在这一栏。
   const [tab, setTab] = usePersistentTab<"props" | "color">("editor-inspector", "props", INSPECTOR_TABS);
   const asset = selectedClip.asset_id ? assets.find((item) => item.id === selectedClip.asset_id) : null;
@@ -239,14 +242,14 @@ export function Inspector({
             </dd>
             <dt>{t("timelineRange")}</dt>
             <dd className="timecode">
-              {formatTimecode(selectedClip.timeline_start)} – {formatTimecode(clipEnd(selectedClip))}
+              {timecode(selectedClip.timeline_start)} – {timecode(clipEnd(selectedClip))}
             </dd>
             <dt>{t("sourceRange")}</dt>
             <dd className="timecode">
-              {formatTimecode(selectedClip.src_in)} – {formatTimecode(selectedClip.src_out)}
+              {timecode(selectedClip.src_in)} – {timecode(selectedClip.src_out)}
             </dd>
             <dt>{t("duration")}</dt>
-            <dd className="timecode">{formatTimecode(clipDuration)}</dd>
+            <dd className="timecode">{timecode(clipDuration)}</dd>
             <dt>{t("speed")}</dt>
             <dd className="timecode">{selectedClip.speed.toFixed(2)}x</dd>
           </dl>

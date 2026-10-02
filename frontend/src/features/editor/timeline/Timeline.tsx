@@ -12,6 +12,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import {
   clipDuration,
   clipEnd,
+  formatFrameTimecode,
   formatRulerLabel,
   pxToTime,
   resolveMove,
@@ -19,11 +20,11 @@ import {
   rulerTicks,
   sequenceDuration,
   snapTimeTiered,
+  snapToFrame,
   timeToPx,
   timelineToSrc,
   trackEdgeTimes,
 } from "@/domain/timeline/geometry";
-import { formatTimecode } from "@/lib/time";
 import { downsamplePeaks, slicePeaks } from "@/domain/timeline/waveform";
 import { MIN_PX_PER_SECOND, useEditorStore } from "@/features/editor/editorStore";
 import { livePlayhead } from "@/features/editor/playback/playbackClock";
@@ -357,10 +358,13 @@ export function Timeline({
   const ticks = rulerTicks(windowStart, Math.min(duration, windowEnd), pxPerSecond);
   const inWindow = (start: number, end: number) => end >= windowStart && start <= windowEnd;
 
+  // 指针能放下的每一个时刻(标尺、修剪、刀片、素材落点)都吸到序列的帧上:落在两帧之间的点
+  // 导出时会被吞成某一帧,预览里看到的却是另一处。
+  const fps = sequence.fps;
   const timeAtPointer = (event: { clientX: number }): number => {
     const rect = canvasRef.current?.getBoundingClientRect();
     if (!rect) return 0;
-    return Math.max(0, pxToTime(event.clientX - rect.left, pxPerSecond));
+    return snapToFrame(Math.max(0, pxToTime(event.clientX - rect.left, pxPerSecond)), fps);
   };
 
   const capturePointer = (element: Element, pointerId: number) => {
@@ -495,7 +499,7 @@ export function Timeline({
       );
       setNewLayerDrag(wantNewLayer);
       const lane = wantNewLayer ? null : laneTrackAt(moveEvent.clientY, track.kind);
-      const rawStart = origin.timeline_start + pxToTime(moveEvent.clientX - startX, pxPerSecond);
+      const rawStart = snapToFrame(origin.timeline_start + pxToTime(moveEvent.clientX - startX, pxPerSecond), fps);
       const sets = snapSetsFor(lane?.id ?? (wantNewLayer ? null : track.id));
       const resolved = resolveMove(origin, rawStart, sets.primary, sets.secondary, pxPerSecond);
       const anchorTrackId = lane?.id ?? track.id;
@@ -1036,6 +1040,7 @@ export function Timeline({
           <div className="relative min-w-full" ref={canvasRef} style={{ width: contentWidth }} onContextMenu={handleCanvasContextMenu}>
             <div
               className="workspace-sticky sticky top-0 z-[5] cursor-ew-resize touch-none overflow-hidden border-b border-border bg-[var(--ruler-bg)]"
+              data-testid="timeline-ruler"
               style={{ height: RULER_HEIGHT }}
               onPointerDown={handleRulerPointerDown}
               onPointerMove={handleRulerPointerMove}
@@ -1223,7 +1228,7 @@ export function Timeline({
                       top: RULER_HEIGHT + trackIndex * TRACK_HEIGHT - 10,
                     }}
                   >
-                    {formatTimecode(edgeTime)} · {duration.toFixed(2)}s
+                    {formatFrameTimecode(edgeTime, fps)} · {formatFrameTimecode(duration, fps)}
                   </div>
                 );
               })()}
@@ -1300,7 +1305,7 @@ export function Timeline({
         </div>
       </div>
       <div className="flex min-h-7 flex-wrap items-center justify-between gap-x-4 border-t border-divider px-3 py-1">
-          <PlayheadReadout total={sequenceDuration(allClips)} />
+          <PlayheadReadout total={sequenceDuration(allClips)} fps={fps} />
           <span className="whitespace-nowrap text-ui-xs text-muted-foreground">
             {t("clipCount").replace("{n}", String(allClips.length))} · {sequence.width}×{sequence.height} ·{" "}
             {Math.round(sequence.fps)}fps
@@ -1382,12 +1387,12 @@ function TimelinePlayhead({ pxPerSecond, children }: { pxPerSecond: number; chil
   );
 }
 
-function PlayheadReadout({ total }: { total: number }) {
+function PlayheadReadout({ total, fps }: { total: number; fps: number }) {
   const playhead = useEditorStore((state) => state.playhead);
   return (
-    <span className="timecode whitespace-nowrap text-xs font-semibold text-foreground [&_em]:not-italic [&_em]:text-muted-foreground">
-      {formatTimecode(playhead)}
-      <em> / {formatTimecode(total)}</em>
+    <span className="timecode whitespace-nowrap text-xs font-semibold text-foreground [&_em]:not-italic [&_em]:text-muted-foreground" data-testid="timeline-playhead-readout">
+      {formatFrameTimecode(playhead, fps)}
+      <em> / {formatFrameTimecode(total, fps)}</em>
     </span>
   );
 }

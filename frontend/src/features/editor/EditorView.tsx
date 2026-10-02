@@ -61,7 +61,7 @@ import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { CanvasAgentChat, type CanvasAgentMode } from "@/features/agent/CanvasAgentChat";
-import { clipEnd, timelineToSrc } from "@/domain/timeline/geometry";
+import { clipEnd, frameAt, frameTime, snapToFrame, timelineToSrc } from "@/domain/timeline/geometry";
 import { projectTranscript, transcriptSegmentsFromApi, type SegmentLike } from "@/domain/timeline/transcriptProjection";
 import { transcriptSourceClips } from "@/domain/timeline/transcriptSources";
 import { type LeftTab, useEditorPanels } from "@/features/editor/useEditorPanels";
@@ -640,7 +640,8 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
   const splitAtPlayhead = React.useCallback(
     (clipId?: string) => {
       if (!sequence) return;
-      const playhead = useEditorStore.getState().playhead;
+      // 切点落在帧上:播放停下来时播放头多半在两帧之间。
+      const playhead = snapToFrame(useEditorStore.getState().playhead, sequence.fps);
       const targetId = clipId ?? selectedClipIdOf(useEditorStore.getState());
       const all = (sequence.tracks ?? []).flatMap((track) => track.clips ?? []);
       const clip = targetId
@@ -795,10 +796,11 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
         useEditorStore.getState().togglePlaying();
       } else if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
         event.preventDefault();
-        const fps = sequence?.fps || 30;
-        const step = (event.shiftKey ? 10 : 1) / fps;
+        // 按帧号加减,不把 1/fps 一次次浮点累加(累加会漂到两帧之间)。
+        const fps = sequence?.fps ?? 30;
+        const step = (event.shiftKey ? 10 : 1) * (event.key === "ArrowLeft" ? -1 : 1);
         const store = useEditorStore.getState();
-        store.setPlayhead(store.playhead + (event.key === "ArrowLeft" ? -step : step));
+        store.setPlayhead(frameTime(frameAt(store.playhead, fps) + step, fps));
       } else if (event.key === "Delete" || event.key === "Backspace") {
         const clipIds = useEditorStore.getState().selectedClipIds;
         if (clipIds.length > 0 && sequence) {
@@ -1114,6 +1116,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
               onDeleteFont={(fontId) => deleteFontMutation.mutate(fontId)}
               uploadingFont={uploadFontMutation.isPending}
               onClose={!inspectorInGrid ? () => useEditorStore.getState().selectClip(null) : undefined}
+              fps={sequence.fps}
             />
           );
           return !inspectorInGrid ? <div className="canvas-overlay-surface absolute right-0 top-0 z-[60] grid w-[min(320px,90%)] border-l border-divider [&>section]:h-full [&>section]:rounded-none [&>section]:border-0" style={{ bottom: panelsRowBottom }}>{inspector}</div> : inspector;

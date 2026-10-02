@@ -19,9 +19,20 @@ describe("检查器的时长", () => {
       gain: 1, muted: false, effects: {}, transform: {},
     } as never;
     render(
-      <Inspector workspaceId="w1" selectedClip={clip} assets={[{ id: "a1", name: "V", kind: "video" }] as never} onDeleteClip={vi.fn()} onSetEffects={vi.fn()} />,
+      <Inspector workspaceId="w1" selectedClip={clip} assets={[{ id: "a1", name: "V", kind: "video" }] as never} onDeleteClip={vi.fn()} onSetEffects={vi.fn()} fps={25} />,
     );
     const duration = screen.getByText("duration").nextElementSibling;
-    expect(duration?.textContent).toBe("00:10.0");
+    expect(duration?.textContent).toBe("00:00:10:00");
+  });
+
+  it("起止按序列帧率显示到帧", () => {
+    const clip = {
+      id: "c1", asset_id: "a1", asset_kind: "video", timeline_start: 1 + 12 / 25, src_in: 0, src_out: 2, speed: 1,
+      gain: 1, muted: false, effects: {}, transform: {},
+    } as never;
+    render(
+      <Inspector workspaceId="w1" selectedClip={clip} assets={[{ id: "a1", name: "V", kind: "video" }] as never} onDeleteClip={vi.fn()} onSetEffects={vi.fn()} fps={25} />,
+    );
+    expect(screen.getByText("timelineRange").nextElementSibling?.textContent).toBe("00:00:01:12 – 00:00:03:12");
   });
 });

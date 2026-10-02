@@ -92,6 +92,7 @@ export const TimelineClip = React.memo(function TimelineClip({
         onClipPointerDown?.(event, trackId, clipId);
       }}
       data-selected={selected || undefined}
+      data-testid={clipId ? `clip-${clipId}` : undefined}
       role="button"
       tabIndex={-1}
       title={offline ? `${t("clipOffline")} · ${name}` : aiGenerated ? `${name} · ${t("clipAiGenerated")}` : name}
@@ -103,6 +104,7 @@ export const TimelineClip = React.memo(function TimelineClip({
       )}
       <span
         className="absolute bottom-0 top-0 z-[2] w-2.5 cursor-ew-resize touch-none bg-[color-mix(in_srgb,currentColor_22%,transparent)] opacity-0 transition-opacity duration-100 after:absolute after:top-1/2 after:h-3 after:w-0.5 after:-translate-y-1/2 after:rounded-full after:bg-current after:opacity-75 after:content-[''] group-hover/clip:opacity-100 group-data-[selected]/clip:opacity-100 [[data-tool=blade]_&]:hidden left-0 rounded-l-md after:left-[3px]"
+        data-testid={clipId ? `trim-start-${clipId}` : undefined}
         onPointerDown={(event) => {
           if (event.button === 0 && clipId) onClipTrimPointerDown?.(event, trackId, clipId, "start");
         }}
@@ -123,6 +125,7 @@ export const TimelineClip = React.memo(function TimelineClip({
       </span>
       <span
         className="absolute bottom-0 top-0 z-[2] w-2.5 cursor-ew-resize touch-none bg-[color-mix(in_srgb,currentColor_22%,transparent)] opacity-0 transition-opacity duration-100 after:absolute after:top-1/2 after:h-3 after:w-0.5 after:-translate-y-1/2 after:rounded-full after:bg-current after:opacity-75 after:content-[''] group-hover/clip:opacity-100 group-data-[selected]/clip:opacity-100 [[data-tool=blade]_&]:hidden right-0 rounded-r-md after:right-[3px]"
+        data-testid={clipId ? `trim-end-${clipId}` : undefined}
         onPointerDown={(event) => {
           if (event.button === 0 && clipId) onClipTrimPointerDown?.(event, trackId, clipId, "end");
         }}
