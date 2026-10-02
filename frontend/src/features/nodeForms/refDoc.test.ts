@@ -108,6 +108,12 @@ describe("按输入筛选候选", () => {
   it("匹配输出名那一半也算", () => {
     expect(filterRefs(["{{llm-1.text}}", "{{llm-1.json}}"], "json")).toEqual(["{{llm-1.json}}"]);
   });
+
+  it("给了屏幕上的名字,照着名字敲也找得到", () => {
+    const labelOf = (ref: string) => ({ "{{llm-1.text}}": "写标题 · 文本", "{{note.note_id}}": "存成笔记 · 笔记" })[ref] ?? ref;
+    expect(filterRefs(["{{llm-1.text}}", "{{note.note_id}}"], "笔记", labelOf)).toEqual(["{{note.note_id}}"]);
+    expect(filterRefs(["{{llm-1.text}}", "{{note.note_id}}"], "llm", labelOf)).toEqual(["{{llm-1.text}}"]);
+  });
 });
 
 describe("整格一个引用,还是字和引用混写", () => {

@@ -144,7 +144,8 @@ describe("一串结构:一项一张卡", () => {
   it("整格是一段 `{{…}}` 引用:照旧显示那段引用,不摆卡片", async () => {
     renderForm({ steps: "{{llm-1.json}}" });
     expect(cards()).toHaveLength(0);
-    await waitFor(() => expect(document.body.textContent).toContain("llm-1.json"));
+    //: 引用显示成标签(节点 · 输出),不摆双括号。
+    await waitFor(() => expect(document.querySelector("[data-ref-chip]")?.textContent).toBe("llm-1 · json"));
   });
 
   it("存着的不是一串对象(形状写错了):退回 JSON 框原样摆出来,不在卡片里丢掉", () => {

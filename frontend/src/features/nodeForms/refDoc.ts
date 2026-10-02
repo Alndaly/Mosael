@@ -96,11 +96,14 @@ export const TRIGGER = "@";
 /**
  * 按输入筛上游引用。
  *
- * 匹配的是**去掉花括号之后**的名字(`llm-1.text`),因为用户敲的是 `@llm` 而不是 `@{{llm`。
+ * 匹配的是**去掉花括号之后**的名字(`llm-1.text`),因为用户敲的是 `@llm` 而不是 `@{{llm`;给了 `labelOf`
+ * 的话,屏幕上那个名字(「写标题 · 文本」)也算 —— 菜单里摆的是它,照着敲就该找得到。
  * 大小写不敏感;查询为空时全给 —— 刚敲下 `@` 就该看见所有候选,而不是一片空白。
  */
-export function filterRefs(variables: string[], query: string): string[] {
+export function filterRefs(variables: readonly string[], query: string, labelOf?: (ref: string) => string): string[] {
   const needle = query.trim().toLowerCase();
-  if (!needle) return variables;
-  return variables.filter((ref) => ref.replace(/[{}]/g, "").toLowerCase().includes(needle));
+  if (!needle) return [...variables];
+  return variables.filter(
+    (ref) => ref.replace(/[{}]/g, "").toLowerCase().includes(needle) || Boolean(labelOf?.(ref).toLowerCase().includes(needle)),
+  );
 }

@@ -110,8 +110,9 @@ function renderLoop() {
 it("条件循环的 condition:@ 列的是体里节点的输出和 loop.index,不是容器外面的上游", async () => {
   renderLoop();
   const listed = await suggestionsIn("condition");
-  expect(listed).toContain("check.result");
-  expect(listed).toContain("tr.translated");
-  expect(listed).toContain("loop.index");
-  expect(listed).not.toContain("up.text");
+  //: 菜单里摆的是引用的样子(节点 · 输出),和插进去之后那枚标签同一个名字。
+  expect(listed).toContain("check · result");
+  expect(listed).toContain("tr · translated");
+  expect(listed).toContain("loop · index");
+  expect(listed).not.toContain("up · text");
 });

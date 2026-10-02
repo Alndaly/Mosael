@@ -296,7 +296,7 @@ describe("节点表单", () => {
       //: 官方模板里写的是 `shot-{{loop.item.shot_number}}` —— 下拉不能把它显示成空白;字和引用混写,
       //: 和提示词同一个编辑器显示(引用是整块的标签),不摆双括号。
       const shot = document.querySelector<HTMLElement>('[data-field-key="shot"]')!;
-      await waitFor(() => expect([...shot.querySelectorAll("[data-ref-chip]")].map((chip) => chip.textContent)).toEqual(["loop.item.n"]));
+      await waitFor(() => expect([...shot.querySelectorAll("[data-ref-chip]")].map((chip) => chip.textContent)).toEqual(["loop · item · n"]));
       expect(shot.textContent).toContain("shot-");
       expect(shot.textContent).not.toContain("{{");
 

@@ -17,7 +17,10 @@ import { useSuggestionMenu } from "@/components/app/suggestionMenu";
 import { useExternalContent } from "@/components/app/useExternalContent";
 import { cn } from "@/lib/utils";
 
-import { TRIGGER, docToString, filterRefs, parsePieces, piecesToDoc } from "@/features/nodeForms/refDoc";
+import { TRIGGER, bareRef, docToString, filterRefs, parsePieces, piecesToDoc } from "@/features/nodeForms/refDoc";
+import { RefCatalogContext, refLabel, useRefCatalog } from "@/features/nodeForms/refCatalog";
+import { listedRefs } from "@/features/nodeForms/refLook";
+import { RefToken } from "@/features/nodeForms/RefToken";
 import { RefSuggestion } from "@/components/app/refSuggestion";
 
 /**
@@ -57,16 +60,14 @@ const RefNode = Node.create({
   addNodeView: () => ReactNodeViewRenderer(RefChip),
 });
 
+/** 编辑器里的一个引用:和整格引用同一枚标签(RefToken)——「节点标题 · 输出显示名 · 子路径」,指不到东西时是错误色,
+ *  悬停看存下去的那条路径。节点叫什么、指不指得到由宿主的引用目录说(经编辑器外面那层 context,见 RefEditor)。 */
 function RefChip(props: { node: { attrs: { ref?: string } } }) {
+  const catalog = useRefCatalog();
+  const path = props.node.attrs.ref ?? "";
   return (
     <NodeViewWrapper as="span" className="inline-block align-baseline">
-      <span
-        className="mx-px inline-flex items-center rounded-md bg-[color-mix(in_srgb,var(--primary)_14%,transparent)] px-1 py-px font-mono text-ui-2xs text-primary"
-        // 整体选中时给个明确的高亮 —— 用户要看得出"我选中的是一整个引用",而不是几个字符。
-        data-ref-chip=""
-      >
-        {props.node.attrs.ref}
-      </span>
+      <RefToken chip path={path} look={catalog.look(path)} className="mx-px" />
     </NodeViewWrapper>
   );
 }
@@ -88,7 +89,7 @@ export function RefEditor({
    */
   normalize?: (text: string) => string;
   /** 上游能引用的输出,形如 `{{llm-1.text}}`。 */
-  variables: string[];
+  variables: readonly string[];
   placeholder?: string;
   rows?: number;
   className?: string;
@@ -101,6 +102,12 @@ export function RefEditor({
   const t = useI18n();
   const variablesRef = React.useRef(variables);
   variablesRef.current = variables;
+  //: 引用长什么样:宿主的目录,按这一格的上游清单放行(见 refLook.listedRefs)—— 和整格引用的下拉同一个说法。
+  //: 编辑器里的标签是节点视图,经下面那层 context 读它;菜单的回调同 variables 一样用 ref 兜住当前值。
+  const hostCatalog = useRefCatalog();
+  const catalog = React.useMemo(() => listedRefs(hostCatalog, variables), [hostCatalog, variables]);
+  const catalogRef = React.useRef(catalog);
+  catalogRef.current = catalog;
   // 文案走 i18n,但 suggestion 的回调是在 useEffect 里一次性装好的(拿不到后续渲染的 t),
   // 所以和 variables 一样用 ref 兜住当前值。
   const emptyHintRef = React.useRef("");
@@ -143,7 +150,8 @@ export function RefEditor({
           //: 放开之后 `a@b` 这样的邮箱也会试着唤起,但它匹配不到任何东西,菜单自己就不显示 ——
           //: 「偶尔多算一次、什么都不弹」比「中文里一半时候用不了」轻得多。
           allowedPrefixes: null,
-          items: ({ query }) => filterRefs(variablesRef.current, query),
+          items: ({ query }) =>
+            filterRefs(variablesRef.current, query, (ref) => refLabel(catalogRef.current.look(bareRef(ref)))),
           command: ({ editor: instance, range, props }) => {
             instance
               .chain()
@@ -183,6 +191,7 @@ export function RefEditor({
   }, [value]);
 
   return (
+    <RefCatalogContext.Provider value={catalog}>
     <div className="relative">
       <EditorContent editor={editor} />
       <menu.Portal>
@@ -191,17 +200,20 @@ export function RefEditor({
             key={ref}
             type="button"
             className={cn(
-              "block w-full cursor-pointer rounded-[5px] border-0 bg-transparent px-2 py-1 text-left font-mono text-ui-xs text-foreground",
+              "block w-full cursor-pointer rounded-[5px] border-0 bg-transparent px-2 py-1 text-left text-ui-xs text-foreground",
               index === (menu.menu?.active ?? 0) ? "bg-secondary" : "hover:bg-secondary",
             )}
+            // 菜单里摆的和插进去之后那枚标签同一个名字;悬停看存下去的路径。
+            title={bareRef(ref)}
             // mousedown 会先让编辑器失焦,失焦又会收起菜单 —— 拦掉,让 click 有机会跑到。
             onMouseDown={(event) => event.preventDefault()}
             onClick={() => menu.choose(ref)}
           >
-            {ref.replace(/^\{\{|\}\}$/g, "")}
+            {refLabel(catalog.look(bareRef(ref)))}
           </button>
         )}
       </menu.Portal>
     </div>
+    </RefCatalogContext.Provider>
   );
 }

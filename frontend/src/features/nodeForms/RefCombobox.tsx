@@ -1,12 +1,13 @@
 import React from "react";
-import { AlertTriangle } from "lucide-react";
 
 import { useI18n } from "@/app/preferences";
 import { Combobox, type ComboboxOption } from "@/components/app/combobox";
 import type { FieldSize } from "@/components/ui/control-size";
 import { RefEditor } from "@/features/nodeForms/RefEditor";
-import { refLabel, useRefCatalog, type RefLook, type RefProblem } from "@/features/nodeForms/refCatalog";
+import { RefToken } from "@/features/nodeForms/RefToken";
+import { refLabel, useRefCatalog } from "@/features/nodeForms/refCatalog";
 import { bareRef, hasReference, isMixedTemplate, wholeRef } from "@/features/nodeForms/refDoc";
+import { listedRefs, refProblemText } from "@/features/nodeForms/refLook";
 import { cn } from "@/lib/utils";
 
 /**
@@ -52,7 +53,9 @@ export function RefCombobox({
   className?: string;
 }) {
   const t = useI18n();
-  const catalog = useRefCatalog();
+  const hostCatalog = useRefCatalog();
+  //: 这一格的上游清单里列着的一定指得到(见 refLook.listedRefs)—— 混写编辑器里的引用标签用的是同一条。
+  const catalog = React.useMemo(() => listedRefs(hostCatalog, variables), [hostCatalog, variables]);
   //: 编辑器自己发出去的最后一版。正在编辑器里改的时候,值暂时不再是混写(删掉了最后一个引用、清空了)也不换控件 ——
   //: 换了的话编辑器当场卸掉,光标没了。外面改了(撤销、智能体改图)才按值重新挑控件。
   const [typed, setTyped] = React.useState<string | null>(null);
@@ -78,7 +81,7 @@ export function RefCombobox({
       <RefEditor
         rows={1}
         value={value}
-        variables={[...variables]}
+        variables={variables}
         className="py-1 text-ui-xs"
         onChange={(next) => {
           setTyped(next);
@@ -90,9 +93,7 @@ export function RefCombobox({
 
   const path = wholeRef(value);
   const look = path === null ? null : catalog.look(path);
-  //: 在上游清单里的(连同它底下的字段)一定指得到:容器的输出那几格读的是体里的节点,这一层的图里没有它们。
-  const listed = path !== null && variables.some((ref) => path === bareRef(ref) || path.startsWith(`${bareRef(ref)}.`));
-  const problem = look && !listed ? look.problem : null;
+  const problem = look?.problem ?? null;
 
   /** 敲的是一段字段路径(`report.json.verdict`),前两段是上游的一个输出:给一项「引用 …」。 */
   const fieldPathOption = (query: string): ComboboxOption[] => {
@@ -114,43 +115,17 @@ export function RefCombobox({
         acceptsCustomValue={literal ? undefined : hasReference}
         customValueLabel={literal ? undefined : (query) => t("wfUseReference").replace("{q}", query)}
         extraOptions={fieldPathOption}
-        renderValue={() => (look ? <RefToken look={look} problem={problem} /> : undefined)}
-        title={problem ? problemText(t, problem) : path ?? undefined}
+        renderValue={() => (look && path !== null ? <RefToken path={path} look={look} /> : undefined)}
+        title={problem ? refProblemText(t, problem) : path ?? undefined}
         size={size}
         className={cn("w-full min-w-0", problem && "border-destructive", className)}
         onValueChange={onValueChange}
       />
       {problem && (
         <small className="text-ui-2xs leading-[1.4] text-destructive" role="alert">
-          {problemText(t, problem)}
+          {refProblemText(t, problem)}
         </small>
       )}
     </div>
-  );
-}
-
-/** 指不到东西时那句话。 */
-function problemText(t: ReturnType<typeof useI18n>, problem: RefProblem): string {
-  return problem.kind === "node"
-    ? t("wfRefMissingNode").replace("{node}", problem.node)
-    : t("wfRefMissingOutput").replace("{node}", problem.node).replace("{output}", problem.output);
-}
-
-/** 引用标签:和提示词编辑器里的引用同一个底色;指不到东西时换错误色、带一枚警示。 */
-function RefToken({ look, problem }: { look: RefLook; problem: RefProblem | null }) {
-  return (
-    <span
-      data-ref-token=""
-      data-ref-problem={problem?.kind}
-      className={cn(
-        "inline-flex max-w-full items-center gap-1 rounded-md px-1.5 py-px align-middle text-ui-2xs",
-        problem
-          ? "bg-[color-mix(in_srgb,var(--destructive)_12%,transparent)] text-destructive"
-          : "bg-[color-mix(in_srgb,var(--primary)_14%,transparent)] text-primary",
-      )}
-    >
-      {problem && <AlertTriangle size={11} className="shrink-0" />}
-      <span className="min-w-0 truncate">{refLabel(look)}</span>
-    </span>
   );
 }

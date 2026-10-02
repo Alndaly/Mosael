@@ -147,8 +147,8 @@ describe("字和引用混写", () => {
     expect(screen.queryByRole("combobox")).toBeNull();
     await waitFor(() =>
       expect([...container.querySelectorAll("[data-ref-chip]")].map((chip) => chip.textContent)).toEqual([
-        "report.json.verdict",
-        "report.json.report_markdown",
+        "写运营诊断 · JSON · verdict",
+        "写运营诊断 · JSON · report_markdown",
       ]),
     );
     expect(container.textContent).not.toContain("{{");
