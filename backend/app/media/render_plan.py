@@ -26,8 +26,10 @@ class ClipSource:
 
 @dataclass(frozen=True)
 class Transform:
-    """A video clip's free-element placement, mirroring the preview compositor's CSS
-    ``translate(x·50%, y·50%) scale(s) rotate(r)`` + opacity over a cover-filled frame box.
+    """A video clip's free-element placement, mirroring the preview compositor's
+    ``translate(x·50%, y·50%) scale(s) rotate(r)`` + opacity. The element is the source fitted to the
+    frame at its own aspect ratio (cover; contain for a base clip in a contain/blur sequence), or the
+    frame-sized box for a masked / shadowed clip — see render_executor._element_fit.
     x/y are center offsets in half-frame units (x=1 → center shifted right by half the frame);
     scale multiplies the frame-sized element; rotation is degrees; opacity is 0..1.
 

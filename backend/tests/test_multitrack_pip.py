@@ -194,7 +194,8 @@ def test_duck_and_solo_in_command(tmp_path) -> None:
 
 def test_transform_geometry_in_command() -> None:
     """Lock the transform→overlay-offset math against the preview formula so export parity
-    can't silently drift. For a 320×180 frame, scale 0.5 → 160×90; centre (0.5+x·0.5)·W."""
+    can't silently drift. The element is the source cover-fitted at its OWN aspect ratio (not cropped to
+    the frame — see test_render_element_aspect), then scaled by 0.5; centre (0.5+x·0.5)·W."""
     from app.media.render_executor import build_ffmpeg_command
 
     plan = build_render_plan(
@@ -206,8 +207,9 @@ def test_transform_geometry_in_command() -> None:
     )
     fc = build_ffmpeg_command(plan, lambda key: Path(f"/x/{key}"), Path("/tmp/o.mp4"))
     graph = fc[fc.index("-filter_complex") + 1]
-    assert "scale=160:90" in graph  # 0.5 · (320×180)
-    assert "overlay=x='80':y='45'" in graph  # centred: 160−80, 90−45
+    assert "scale=320:180:force_original_aspect_ratio=increase:force_divisible_by=2" in graph  # 不裁到画幅
+    assert "scale=w='iw*0.50000':h='ih*0.50000'" in graph
+    assert "overlay=x='(0.5+(0.00000)*0.5)*W-w/2':y='(0.5+(0.00000)*0.5)*H-h/2'" in graph  # centred
 
 
 def test_offset_transform_geometry() -> None:
@@ -223,7 +225,7 @@ def test_offset_transform_geometry() -> None:
     )
     fc = build_ffmpeg_command(plan, lambda key: Path(f"/x/{key}"), Path("/tmp/o.mp4"))
     graph = fc[fc.index("-filter_complex") + 1]
-    assert "overlay=x='240':y='45'" in graph  # cx=(0.5+0.5)·320=320 → 320−80
+    assert "overlay=x='(0.5+(1.00000)*0.5)*W-w/2'" in graph  # cx=(0.5+0.5)·W
 
 
 def setup_project(client: TestClient) -> tuple[dict, dict, dict]:

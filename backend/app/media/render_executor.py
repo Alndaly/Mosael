@@ -20,7 +20,6 @@ from app.core.text import blame_line
 from app.media.probe import guess_kind, probe_has_audio_many
 from app.media.tempo import atempo_filters
 from app.media.render_plan import (
-    DEFAULT_APPEARANCE,
     AiLabelItem,
     FILTER_PRESETS,
     ClipAppearance,
@@ -343,6 +342,23 @@ def _element_transform(
     cx = (0.5 + tf.x * 0.5) * width
     cy = (0.5 + tf.y * 0.5) * height
     return filters, label, str(int(round(cx - ow / 2))), str(int(round(cy - oh / 2)))
+
+
+def _is_free_element(appearance: ClipAppearance) -> bool:
+    """有蒙版或投影的片段是「自由元素」:画幅那么大(铺满再裁到画幅),蒙版和投影画在这一块上 ——
+    契约 contracts/clip-free-element-geometry.json。和预览 scenePaint 的 freeElement 同一条判据:
+    看**开没开**,不看外观字典和默认值是否逐字段相等(关着的投影改过颜色,也还是没有投影)。"""
+    return appearance.mask.shape != "none" or appearance.shadow.enabled
+
+
+def _element_fit(appearance: ClipAppearance, fit: str, width: int, height: int) -> str:
+    """素材 → 元素的那一步缩放(不带前后逗号)。
+
+    自由元素:铺满画幅再裁成画幅大小。其余:按 fit(increase 铺满 / decrease 装进)缩到画幅,**保持素材自己的
+    宽高比、不裁** —— 预览 scenePaint 里就是 mw×fit、mh×fit 那么大的一块。"""
+    if _is_free_element(appearance):
+        return f"scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height}"
+    return f"scale={width}:{height}:force_original_aspect_ratio={fit}:force_divisible_by=2"
 
 
 def _appearance_filters(
@@ -1013,7 +1029,8 @@ def build_ffmpeg_command(
             preset = f",{FILTER_PRESETS[segment.filter]}" if segment.filter else ""
             lut_path = _escape_filter_path(resolve(segment.lut)) if segment.lut else ""
             preset += _grade_filter(dict(segment.grade), segment.curves, lut_path)
-            if segment.transform.is_identity and segment.appearance == DEFAULT_APPEARANCE:
+            free = _is_free_element(segment.appearance)
+            if segment.transform.is_identity and not free:
                 filters.append(
                     _base_video_chain(
                         input_index, i, tin, tout, setpts, width, height, fps,
@@ -1021,14 +1038,28 @@ def build_ffmpeg_command(
                     )
                 )
             else:
-                # Free-element clip: cover-fill to frame, grade/fade, then composite over black
-                # at its transform (matches the preview compositor; fill_mode is moot here since
-                # the element is cover-filled like the preview's objectFit:cover).
-                filters.append(
-                    f"[{input_index}:v]trim=start={tin}:end={tout},setpts={setpts},"
-                    f"scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height}"
-                    f"{preset}{video_fades},fps={fps}:start_time=0,setsar=1[elt{i}]"
-                )
+                # 带变换(或蒙版 / 投影)的底轨片段:先成一个元素,再按变换叠到背景上。**没有蒙版 / 投影时它仍跟着
+                # 画幅的填充模式** —— contain / blur 下元素是「装进画幅」的大小,blur 的背景是同一段素材铺满再模糊;
+                # 和预览 scenePaint 的 followsBaseFill 同一条。此前这里一律铺满再裁到画幅:contain / blur 的片子一打
+                # 关键帧,画面就从留边跳成裁满。
+                head = f"[{input_index}:v]trim=start={tin}:end={tout},setpts={setpts}"
+                tail = f"{preset}{video_fades},fps={fps}:start_time=0,setsar=1"
+                if not free and plan.output.fill_mode == "blur":
+                    filters.append(f"{head},split=2[eltsrc{i}][bgsrc{i}]")
+                    filters.append(
+                        f"[bgsrc{i}]scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height},"
+                        f"gblur=sigma=20{tail},format=yuv420p[bg{i}]"
+                    )
+                    head = f"[eltsrc{i}]"
+                else:
+                    filters.append(
+                        # 背景必须给时长:无 :d 的 color 是无限流,concat 会永远停在这一段推不动,
+                        # 整条 filtergraph 疯狂缓冲——带动画的图片幻灯片导出因此慢到 0.0x(见回归测试)。
+                        f"color=black:s={width}x{height}:r={fps}:d={segment.duration}[bg{i}]"
+                    )
+                    head += ","
+                fit = "increase" if free or plan.output.fill_mode == "cover" else "decrease"
+                filters.append(f"{head}{_element_fit(segment.appearance, fit, width, height)}{tail}[elt{i}]")
                 appearance_filters, appearance_label, appearance_sized = _appearance_filters(
                     f"elt{i}", segment.appearance, width, height, f"ba{i}"
                 )
@@ -1042,7 +1073,7 @@ def build_ffmpeg_command(
                     f"bt{i}",
                     start=0.0,
                     duration=segment.duration,
-                    element_sized=appearance_sized,
+                    element_sized=appearance_sized or not free,
                 )
                 filters += tfilters
                 shadow_filters, tlabel, ox, oy = _with_shadow(
@@ -1050,12 +1081,7 @@ def build_ffmpeg_command(
                     start=0.0, duration=segment.duration,
                 )
                 filters += shadow_filters
-                filters.append(
-                    # 背景必须给时长:无 :d 的 color 是无限流,concat 会永远停在这一段推不动,
-                    # 整条 filtergraph 疯狂缓冲——带动画的图片幻灯片导出因此慢到 0.0x(见回归测试)。
-                    f"color=black:s={width}x{height}:r={fps}:d={segment.duration}[bg{i}];"
-                    f"[bg{i}][{tlabel}]overlay=x='{ox}':y='{oy}',format=yuv420p,setsar=1[v{i}]"
-                )
+                filters.append(f"[bg{i}][{tlabel}]overlay=x='{ox}':y='{oy}',format=yuv420p,setsar=1[v{i}]")
             if has_audio.get(path, False) and not plan.mute_base_audio and not segment.muted:
                 tempo = atempo_filters(segment.speed)
                 audio_fades = _fade_filters(segment.fade_in, segment.fade_out, segment.duration, audio=True)
@@ -1081,8 +1107,8 @@ def build_ffmpeg_command(
     n = len(plan.video_segments)
     filters.append(f"{''.join(pair_labels)}concat=n={n}:v=1:a=1[vbase][abase]")
 
-    # Upper-video-track clips composited over the base, each a free element at its transform
-    # (cover-filled to the frame then scaled/rotated/faded — same model as the base track).
+    # Upper-video-track clips composited over the base, each an element at its transform
+    # (cover-fitted at the source's own aspect ratio, then scaled/rotated/faded — see _element_fit).
     video_label = "[vbase]"
     for i, overlay in enumerate(plan.overlays):
         path = resolve(overlay.source.file_key)
@@ -1093,9 +1119,11 @@ def build_ffmpeg_command(
         lut_path = _escape_filter_path(resolve(overlay.lut)) if overlay.lut else ""
         preset += _grade_filter(dict(overlay.grade), overlay.curves, lut_path)
         video_fades = _fade_filters(overlay.video_fade_in, overlay.video_fade_out, overlay.duration, audio=False)
+        # 上层片段按素材**自己的宽高比**成元素(铺满画幅的那个大小,不裁),再按变换缩放 —— 竖素材做横画幅的
+        # 画中画就是竖的,和预览一样。此前先裁成画幅的比例:竖的人像画中画在成片里成了一条横的。
         filters.append(
             f"[{input_index}:v]trim=start={tin}:end={tout},setpts={_video_from(tin, overlay.speed)},"
-            f"scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height}"
+            f"{_element_fit(overlay.appearance, 'increase', width, height)}"
             f"{preset}{video_fades},setpts=PTS+{overlay.start}/TB[oelt{i}]"
         )
         appearance_filters, appearance_label, appearance_sized = _appearance_filters(
@@ -1111,7 +1139,7 @@ def build_ffmpeg_command(
             f"ot{i}",
             start=overlay.start,
             duration=overlay.duration,
-            element_sized=appearance_sized,
+            element_sized=appearance_sized or not _is_free_element(overlay.appearance),
         )
         filters += tfilters
         shadow_filters, tlabel, ox, oy = _with_shadow(
