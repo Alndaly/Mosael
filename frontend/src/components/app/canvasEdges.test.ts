@@ -153,6 +153,9 @@ describe("共用的连线外观", () => {
       mismatch: "var(--warning)",
       taken: "var(--canvas-edge-run)",
       pending: "var(--primary)",
+      //: 引用提示:同一族颜色往底色退成实色(不用半透明),亮暗两套都跟着令牌走。
+      ref: "color-mix(in_oklab,var(--canvas-edge)_70%,var(--background))",
+      "ref-never-runs": "color-mix(in_oklab,var(--destructive)_85%,var(--background))",
     };
     for (const [tone, token] of Object.entries(expected)) {
       const className = canvasEdgeClass(tone as CanvasEdgeTone)!;
@@ -196,6 +199,21 @@ describe("共用的连线外观", () => {
     expect(canvasEdgeClass("true")).toBe("canvas-edge-true");
     expect(canvasEdgeClass("data", { flow: true })).toBe("canvas-edge-data canvas-edge-flow");
     expect(canvasEdgeClass("taken", { flow: true })).toBe("canvas-edge-taken canvas-edge-flow");
+    expect(canvasEdgeClass("ref", { hint: true })).toBe("canvas-edge-ref canvas-edge-hint");
+    expect(canvasEdgeClass("ref-never-runs", { hint: true })).toBe("canvas-edge-ref-never-runs canvas-edge-hint");
+  });
+
+  it("引用提示线:比连线细一档、静止的点线(和流动虚线、待定虚线都不一样);不可选,却还能悬停看说明", () => {
+    const width = Number(declared("&_.canvas-edge-hint", "--xy-edge-stroke-width"));
+    expect(width).toBeLessThan(CANVAS_EDGE_WIDTH.rest);
+    const dash = declared(String.raw`&_.canvas-edge-hint_.react-flow\_\_edge-path`, "stroke-dasharray");
+    expect(dash).toBeDefined();
+    expect(dash).not.toBe(declared(String.raw`&_.canvas-edge-flow_.react-flow\_\_edge-path`, "stroke-dasharray"));
+    expect(dash).not.toBe(declared(String.raw`&_.canvas-edge-pending_.react-flow\_\_edge-path`, "stroke-dasharray"));
+    //: 静止:不跟数据线一起流动 —— 流动说的是「值从这儿流过去」,引用提示不传值。
+    expect(CANVAS_EDGE_CLASS.split(/\s+/).filter((one) => one.includes("canvas-edge-hint") && one.includes("animate"))).toEqual([]);
+    //: xyflow 给「不可选、没有点击回调」的线挂 `.inactive`(pointer-events: none),悬停就没了 —— 这里还回去。
+    expect(declared(String.raw`&_.react-flow\_\_edge.canvas-edge-hint`, "pointer-events")).toBe("visibleStroke");
   });
 
   it("箭头:闭合三角,按画布坐标定大小(不随线宽胀缩),颜色取线自己的", () => {

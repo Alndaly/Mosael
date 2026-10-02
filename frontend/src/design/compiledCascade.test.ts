@@ -86,6 +86,8 @@ describe("编出来的层叠", () => {
       "react-flow__edges .react-flow__edge.canvas-edge-taken",
       "react-flow__edge:not(.selected):hover .react-flow__edge-path",
       "canvas-edge-flow .react-flow__edge-path",
+      "canvas-edge-hint .react-flow__edge-path",
+      "react-flow__edge.canvas-edge-hint",
       "react-flow__handle-left:hover",
       "react-flow__handle-right:hover",
     ]) {
@@ -104,6 +106,10 @@ describe("编出来的层叠", () => {
     ]) {
       expect(utilities, edge).toMatch(new RegExp(`\\.${edge}[^{]*\\{[^}]*--xy-edge-stroke: var\\(${token}\\)`));
     }
+    //: 引用提示线:颜色是令牌往底色退的实色;不可选的线也还能悬停(xyflow 的 .inactive 关掉了指针事件)。
+    expect(utilities).toMatch(/\.canvas-edge-ref[^-][^{]*\{[^}]*--xy-edge-stroke: color-mix\(in oklab, ?var\(--canvas-edge\) 70%, ?var\(--background\)\)/);
+    expect(utilities).toMatch(/\.canvas-edge-ref-never-runs[^{]*\{[^}]*--xy-edge-stroke: color-mix\(in oklab, ?var\(--destructive\) 85%, ?var\(--background\)\)/);
+    expect(utilities).toMatch(/\.react-flow__edge\.canvas-edge-hint[^{]*\{[^}]*pointer-events: visibleStroke/);
     //: 流动虚线的动画确实生成了(它的 keyframes 在 tokens.css 的 @theme 里),而且只在不要求减少动态时跑。
     expect(utilities).toMatch(/prefers-reduced-motion: no-preference[\s\S]*animation: edge-flow 0\.6s linear infinite/);
   }, 20_000);

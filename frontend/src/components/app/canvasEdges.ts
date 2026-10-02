@@ -20,6 +20,8 @@ import { MarkerType } from "@xyflow/react";
  * | 类型对不上      | `canvas-edge-mismatch canvas-edge-flow` | 数据线两端类型不兼容(软提示,不拦)      | `--warning` 流动虚线,无箭头            |
  * | 运行走过        | `canvas-edge-taken`(数据线再带 flow) | 上一次运行真的走了这根                   | `--canvas-edge-run`(紫),线宽取选中档  |
  * | 待定            | `canvas-edge-pending`                 | 拉线松手在空白处,等你在单子上选一种      | `--primary` 静止虚线 + 箭头            |
+ * | 引用提示        | `canvas-edge-ref canvas-edge-hint`    | 工作流:`{{A.x}}` 引用 —— 只管先后,不让 A 跑 | `--canvas-edge` 往底色退三成的细点线,无箭头 |
+ * | 引用了不会跑的  | `canvas-edge-ref-never-runs canvas-edge-hint` | 被引用的节点没接进流程,运行前会被拦 | `--destructive` 的细点线,无箭头       |
  * | 拖线途中        | (xyflow 的 connection line)          | 正在拉                                   | 和「待定」同一个样子                   |
  * | 悬停            | `:hover`                              | 指针在这根线上                           | 本色往 `--foreground` 走一截,线宽 2.5  |
  * | 选中            | `.selected`                           | 选中了这根                               | `--primary`,线宽 2.75                  |
@@ -30,6 +32,10 @@ import { MarkerType } from "@xyflow/react";
  *  · **颜色互斥,图案另算。** 一根线只挂一个颜色类(true/false/data/mismatch/taken/pending 之一),
  *    「流动虚线」是单独的 `canvas-edge-flow`。于是「数据线跑过了」= taken + flow,颜色由调用方
  *    一次定好,不靠两条同权重规则谁后生成谁赢。
+ *  · **引用提示线不是连线。** 它只把画布上看不见的 `{{…}}` 依赖画出来:更淡、更细、点线、无箭头,
+ *    不能选中、删除、拖去重连,也不参与连线校验(它不在图里,只在显示时叠上去,见
+ *    features/workflows/referenceHints)。只有悬停是活的 —— 要靠它看那句「只管先后」的说明,所以
+ *    `canvas-edge-hint` 把 xyflow 给不可选的线关掉的指针事件(`.inactive`)还回去。
  *  · **每种意思一个颜色,互不借用。**「运行走过」此前借 success,和「真」那一路是同一种绿,只能靠
  *    粗细分;现在它有自己的 `--canvas-edge-run`(紫),和真/假/数据/警示/选中都不撞。
  *
@@ -44,14 +50,30 @@ import { MarkerType } from "@xyflow/react";
 export const CANVAS_EDGE_WIDTH = { rest: 2, hover: 2.5, selected: 2.75 } as const;
 
 /** 一根线的颜色(互斥,见上表)。`reference` 是默认的那种,不挂类。 */
-export type CanvasEdgeTone = "reference" | "true" | "false" | "data" | "mismatch" | "taken" | "pending";
+export type CanvasEdgeTone =
+  | "reference"
+  | "true"
+  | "false"
+  | "data"
+  | "mismatch"
+  | "taken"
+  | "pending"
+  | "ref"
+  | "ref-never-runs";
 
 /**
- * 一根线该挂的类名。`flow`:流动虚线(数据线)。没有要挂的就回 undefined —— React Flow 的
- * className 是可选的,给空串会在 DOM 上留一个 `class="react-flow__edge "`。
+ * 一根线该挂的类名。`flow`:流动虚线(数据线)。`hint`:引用提示的细点线(只能悬停,见上表)。
+ * 没有要挂的就回 undefined —— React Flow 的 className 是可选的,给空串会在 DOM 上留一个 `class="react-flow__edge "`。
  */
-export function canvasEdgeClass(tone: CanvasEdgeTone, { flow = false }: { flow?: boolean } = {}): string | undefined {
-  const classes = [tone === "reference" ? null : `canvas-edge-${tone}`, flow ? "canvas-edge-flow" : null].filter(Boolean);
+export function canvasEdgeClass(
+  tone: CanvasEdgeTone,
+  { flow = false, hint = false }: { flow?: boolean; hint?: boolean } = {},
+): string | undefined {
+  const classes = [
+    tone === "reference" ? null : `canvas-edge-${tone}`,
+    flow ? "canvas-edge-flow" : null,
+    hint ? "canvas-edge-hint" : null,
+  ].filter(Boolean);
   return classes.length > 0 ? classes.join(" ") : undefined;
 }
 
@@ -103,6 +125,9 @@ export const CANVAS_EDGE_CLASS = [
   "[&_.canvas-edge-mismatch]:[--xy-edge-stroke:var(--warning)]",
   "[&_.canvas-edge-taken]:[--xy-edge-stroke:var(--canvas-edge-run)]",
   "[&_.canvas-edge-pending]:[--xy-edge-stroke:var(--primary)]",
+  //: 引用提示:同一族颜色往底色退(实色,不用半透明 —— 交叉处不叠出色斑,见 tokens.css 的 --canvas-edge)。
+  "[&_.canvas-edge-ref]:[--xy-edge-stroke:color-mix(in_oklab,var(--canvas-edge)_70%,var(--background))]",
+  "[&_.canvas-edge-ref-never-runs]:[--xy-edge-stroke:color-mix(in_oklab,var(--destructive)_85%,var(--background))]",
   String.raw`[&_.react-flow\_\_edges_.react-flow\_\_edge.canvas-edge-taken]:[--xy-edge-stroke-width:2.75]`,
   // 图案:数据线流动的虚线(周期 11,和 edge-flow 动画的位移一致;减少动态效果时停住);
   // 待定的线和拖线途中那根是静止的虚线 —— 圆线帽让每段两头各长出半个线宽,`4 6` 看上去是 6 实 4 空。
@@ -110,6 +135,12 @@ export const CANVAS_EDGE_CLASS = [
   String.raw`[&_.canvas-edge-flow_.react-flow\_\_edge-path]:motion-safe:animate-edge-flow`,
   String.raw`[&_.canvas-edge-pending_.react-flow\_\_edge-path]:[stroke-dasharray:4_6]`,
   String.raw`[&_.react-flow\_\_connection-path]:[stroke-dasharray:4_6]`,
+  // 引用提示的细点线:比连线细一档、静止;不可选的线 xyflow 会关掉指针事件(.inactive),这里还回去 ——
+  // 悬停才看得到那句说明(线上的 <title>)。
+  "[&_.canvas-edge-hint]:[--xy-edge-stroke-width:1.5]",
+  String.raw`[&_.canvas-edge-hint_.react-flow\_\_edge-path]:[stroke-dasharray:1_4]`,
+  String.raw`[&_.react-flow\_\_edge.canvas-edge-hint]:[pointer-events:visibleStroke]`,
+  String.raw`[&_.react-flow\_\_edge.canvas-edge-hint]:cursor-help`,
   // 边上的字(条件分支的「真/假」)。
   "[--xy-edge-label-background-color:var(--panel)]",
   "[--xy-edge-label-color:var(--muted-foreground)]",

@@ -38,6 +38,8 @@ import { CollaborationSheet } from "@/features/collaboration/CollaborationSheet"
 import { MarkerEditorProvider } from "@/features/markers/MarkerEditorProvider";
 import { useNodePicker } from "@/features/nodeForms/nodePicker";
 import { NodeInspector } from "@/features/workflows/NodeInspector";
+import { WORKFLOW_CANVAS_EDGE_TYPES } from "@/features/workflows/ReferenceHintEdge";
+import { useReferenceHintEdges } from "@/features/workflows/referenceHints";
 import { highlightAtLayer, nodeSearchEntryId, nodeSearchTargets } from "@/features/workflows/nodeSearch";
 import { bodyKey, scopeContainer, scopeId } from "@/features/workflows/scope";
 import { useCanvasPosture } from "@/features/workflows/useCanvasPosture";
@@ -425,6 +427,8 @@ export function WorkflowEditor({
   const agentRow = useResizableRow("workflow-agent", { min: 160, max: 900, fallback: 420 });
 
   const displayEdges = useWorkflowDisplayEdges(edges, runByNode, edgeShape);
+  //: `{{…}}` 引用画成淡点线(只管先后,不让被引用的节点跑);被引用的不会跑时是错误色。不在图里,只叠在显示上。
+  const referenceHintEdges = useReferenceHintEdges(graph, registry, { entryIsRoot: !atRoot, shape: edgeShape, t });
 
   useWorkflowEditorShortcuts({ save, startRun });
 
@@ -604,8 +608,10 @@ export function WorkflowEditor({
             nodes={displayNodes}
             nodesConnectable={!annotationMode}
             elementsSelectable={!workflowComments.active}
-            edges={displayEdges.map(edge => ({ ...edge, selectable: !annotationMode }))}
+            //: 提示线排在前面:后画的真连线压在它上面。它们自己就不可选(见 referenceHints),不跟着标注模式切。
+            edges={[...referenceHintEdges, ...displayEdges.map(edge => ({ ...edge, selectable: !annotationMode }))]}
             nodeTypes={WORKFLOW_CANVAS_NODE_TYPES}
+            edgeTypes={WORKFLOW_CANVAS_EDGE_TYPES}
             minZoom={0.1}
             onInit={(instance) => {
               const flow = instance as unknown as ReactFlowInstance;
