@@ -55,29 +55,30 @@ def _asset_kinds(db: Session, sequence: Sequence) -> dict[str, dict[str, str]]:
 
 
 def resolve_export_output(
-    width: int, height: int, fps: float, subtitle_style: dict, export_params: dict | None
-) -> tuple[int, int, float, dict, int, str]:
-    """把导出参数落成输出设置:(width, height, fps, subtitle_style, crf, preset)。"""
+    width: int, height: int, fps: float, export_params: dict | None
+) -> tuple[int, int, float, float, int, str]:
+    """把导出参数落成输出设置:(width, height, fps, pixel_scale, crf, preset)。
+
+    pixel_scale 是输出 ÷ 序列的比例:字幕 / 花字字号、描边、阴影这些以序列像素记的量都要乘它,
+    交给 build_render_plan 一处做(此前只在这里改了字幕字号)。"""
     crf, encode_preset = QUALITY_PRESETS["standard"]
+    pixel_scale = 1.0
     if not export_params:
-        return width, height, fps, subtitle_style, crf, encode_preset
+        return width, height, fps, pixel_scale, crf, encode_preset
     target_short = RESOLUTION_PRESETS.get(str(export_params.get("resolution") or ""))
     short_side = min(width, height)
     if target_short and target_short < short_side:
-        # 等比缩放到目标短边(偶数对齐);字幕字号是原生帧像素,必须一起缩,
-        # 否则 720p 导出里的字会比预览大出一截。
-        ratio = target_short / short_side
-        width = max(2, round(width * ratio / 2) * 2)
-        height = max(2, round(height * ratio / 2) * 2)
-        if subtitle_style.get("font_size"):
-            subtitle_style = {**subtitle_style, "font_size": round(float(subtitle_style["font_size"]) * ratio, 1)}
+        # 等比缩放到目标短边(偶数对齐)。
+        pixel_scale = target_short / short_side
+        width = max(2, round(width * pixel_scale / 2) * 2)
+        height = max(2, round(height * pixel_scale / 2) * 2)
     fps_override = export_params.get("fps")
     if fps_override:
         fps = max(1.0, min(120.0, float(fps_override)))
     quality = QUALITY_PRESETS.get(str(export_params.get("quality") or ""))
     if quality:
         crf, encode_preset = quality
-    return width, height, fps, subtitle_style, crf, encode_preset
+    return width, height, fps, pixel_scale, crf, encode_preset
 
 
 def build_plan_for_sequence(db: Session, sequence_id: str, export_params: dict | None = None) -> RenderPlan:
@@ -222,8 +223,8 @@ def build_plan_for_sequence(db: Session, sequence_id: str, export_params: dict |
         lut.id: lut.file_key
         for lut in (db.scalars(select(Lut).where(Lut.id.in_(lut_ids))) if lut_ids else [])
     }
-    width, height, fps, subtitle_style, crf, encode_preset = resolve_export_output(
-        sequence.width, sequence.height, sequence.fps, _resolve_subtitle_font(db, sequence), export_params
+    width, height, fps, pixel_scale, crf, encode_preset = resolve_export_output(
+        sequence.width, sequence.height, sequence.fps, export_params
     )
     #: 成片里用了 AI 生成 / 合成的素材就加标识(ADR 0028 §5):**隐式的总写**(不影响画面,没有关掉的理由),
     #: 显式的按导出时的开关。听得见的才算:静音的音频片段不进成片。
@@ -244,7 +245,7 @@ def build_plan_for_sequence(db: Session, sequence_id: str, export_params: dict |
         overlay_clips=overlay_clips,
         audio_clips=audio_clips,
         subtitle_clips=subtitle_clips,
-        subtitle_style=subtitle_style,
+        subtitle_style=_resolve_subtitle_font(db, sequence),
         text_overlays=text_overlays,
         luts=luts,
         solo_active=solo_active,
@@ -255,6 +256,7 @@ def build_plan_for_sequence(db: Session, sequence_id: str, export_params: dict |
         ai_label=ai_label,
         metadata=metadata,
         loudness_normalize=bool((export_params or {}).get("loudness_normalize", False)),
+        pixel_scale=pixel_scale,
     )
 
 

@@ -4,7 +4,7 @@ import hashlib
 import json
 import re
 
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 
 from app.media.scene import subtitle_frames, subtitle_text
 
@@ -422,6 +422,7 @@ def build_render_plan(
     ai_label: str = "",
     metadata: tuple[tuple[str, str], ...] = (),
     loudness_normalize: bool = False,
+    pixel_scale: float = 1.0,
 ) -> RenderPlan:
     """
     clips: [{id, asset_id, timeline_start, src_in, src_out, has_audio}] from the base video track.
@@ -431,6 +432,8 @@ def build_render_plan(
     assets: {asset_id: {file_key}}.
     Overlaps on the base track are rejected; gaps become black/silent segments.
     ai_label: 显式标识的那几个字(空 = 不加);见 _ai_label_items。metadata: 写进文件的元数据。
+    pixel_scale: 输出画幅 ÷ 序列画幅(降分辨率导出时 < 1)。片段里以序列像素记的量 —— 字幕 / 花字的字号、描边、
+        阴影,画面元素投影的模糊和偏移 —— 都乘它;位置、缩放这些按画幅比例记的量不用。
     """
     ordered = sorted(clips, key=lambda c: float(c["timeline_start"]))
     segments: list[Segment] = []
@@ -467,7 +470,7 @@ def build_render_plan(
                 muted=bool(clip.get("muted")),
                 **_visual_effects(clip, duration, luts),
                 transform=_read_transform(clip),
-                appearance=_read_appearance(effects),
+                appearance=_scale_appearance(_read_appearance(effects), pixel_scale),
             )
         )
         if clip.get("has_audio") and not clip.get("muted"):
@@ -490,7 +493,7 @@ def build_render_plan(
                 speed=speed,
                 **_visual_effects(clip, clip_duration, luts),
                 transform=_read_transform(clip),
-                appearance=_read_appearance(clip.get("effects") or {}),
+                appearance=_scale_appearance(_read_appearance(clip.get("effects") or {}), pixel_scale),
             )
         )
         duration = max(duration, float(clip["timeline_start"]) + clip_duration)
@@ -557,7 +560,7 @@ def build_render_plan(
                 start=float(clip["timeline_start"]),
                 duration=round(clip_duration, 6),
                 text=text,
-                style=_read_text_style((clip.get("effects") or {}).get("text_style")),
+                style=_scale_text_style(_read_text_style((clip.get("effects") or {}).get("text_style")), pixel_scale),
                 transform=_read_transform(clip),
             )
         )
@@ -583,7 +586,7 @@ def build_render_plan(
         overlays=tuple(overlays),
         audio_overlays=tuple(audio_overlays),
         subtitles=tuple(subtitles),
-        subtitle_style=_read_subtitle_style(subtitle_style),
+        subtitle_style=_scale_subtitle_style(_read_subtitle_style(subtitle_style), pixel_scale),
         text_overlays=tuple(text_items),
         ai_labels=_ai_label_items(ai_label, duration, width, height) if ai_label and duration > 0 else (),
         mute_base_audio=mute_base_audio,
@@ -663,6 +666,29 @@ def _duck_windows(
         else:
             merged.append([lo, hi])
     return tuple((round(lo, 6), round(hi, 6)) for lo, hi in merged)
+
+
+# 降分辨率导出:以序列像素记的量乘输出比例(见 build_render_plan 的 pixel_scale)。此前只有字幕字号跟着缩
+# (而且是在 domain 里改字典),花字的字号 / 描边 / 阴影、画面元素投影的模糊 / 偏移都还是原尺寸 —— 1080 的竖屏
+# 导成 720,花字比预览大一半,投影糊成一片。读取函数(和前端对账的那几个)不动,缩放是读完之后单独一步。
+
+def _scale_subtitle_style(style: SubtitleStyleSpec, k: float) -> SubtitleStyleSpec:
+    return style if k == 1.0 else replace(style, font_size=round(style.font_size * k, 3))
+
+
+def _scale_text_style(style: TextStyleSpec, k: float) -> TextStyleSpec:
+    if k == 1.0:
+        return style
+    return replace(style, font_size=round(style.font_size * k, 3), stroke_width=round(style.stroke_width * k, 3),
+                   shadow=round(style.shadow * k, 3))
+
+
+def _scale_appearance(appearance: ClipAppearance, k: float) -> ClipAppearance:
+    if k == 1.0 or not appearance.shadow.enabled:
+        return appearance
+    shadow = appearance.shadow
+    return replace(appearance, shadow=replace(shadow, blur=round(shadow.blur * k, 3),
+                                              offset_x=round(shadow.offset_x * k, 3), offset_y=round(shadow.offset_y * k, 3)))
 
 
 def _read_subtitle_style(raw: dict | None) -> SubtitleStyleSpec:
