@@ -39,6 +39,11 @@ def test_text_layers_match_contract(case: dict) -> None:
     actual = {
         "subtitles": sorted(clip["id"] for clip in layers.subtitles),
         "titles": sorted(clip["id"] for clip in layers.titles),
+        "subtitle_lanes": layers.subtitle_lanes,
     }
-    expected = {key: sorted(ids) for key, ids in case["expected"].items()}
+    expected = {
+        "subtitles": sorted(case["expected"]["subtitles"]),
+        "titles": sorted(case["expected"]["titles"]),
+        "subtitle_lanes": case["expected"]["subtitle_lanes"],
+    }
     assert actual == expected, case["why"]

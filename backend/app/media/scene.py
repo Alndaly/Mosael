@@ -127,6 +127,8 @@ class TextLayers:
     subtitles: list[dict[str, Any]]
     #: video 轨上的花字(没有素材、有文字的片段)。**不看静音** —— 静音只管声音。
     titles: list[dict[str, Any]]
+    #: 每条字幕画在第几「道」(clip id → 道)。见 subtitle_lanes。
+    subtitle_lanes: dict[str, int]
 
 
 def is_text_clip(clip: dict[str, Any]) -> bool:
@@ -140,11 +142,22 @@ def text_layers(tracks: list[dict[str, Any]]) -> TextLayers:
     轨道上两个开关各管一件事:`hidden` 只管字幕显示,`muted` 只管声音。此前字幕轨借 muted 表示
     「不显示」,视频轨的 muted 又顺带把花字藏掉 —— 给一条画中画轨关声音,字从成片里没了。
     """
-    subtitles = [
-        clip
-        for track in tracks
-        if str(track.get("kind")) == "subtitle" and not bool(track.get("hidden"))
-        for clip in track.get("clips") or []
-    ]
+    shown = [track for track in tracks if str(track.get("kind")) == "subtitle" and not bool(track.get("hidden"))]
+    subtitles = [clip for track in shown for clip in track.get("clips") or []]
     titles = [clip for track in video_tracks_sorted(tracks) for clip in track.get("clips") or [] if is_text_clip(clip)]
-    return TextLayers(subtitles=subtitles, titles=titles)
+    return TextLayers(subtitles=subtitles, titles=titles, subtitle_lanes=subtitle_lanes(shown))
+
+
+def subtitle_lanes(shown: list[dict[str, Any]]) -> dict[str, int]:
+    """每条字幕画在第几「道」:显示着、有字幕的字幕轨按 position 从下往上排,第几条就是第几道。
+
+    **两条字幕轨要各占一处。** 双语分两条轨(原文一条、译文一条)时,此前预览只画找到的第一条、导出把两条
+    叠在同一个位置 —— 预览看着少一种语言,成片里两行字压成一团。道的位置怎么摆见 render_plan.lane_style。
+    空轨不占道:一条没字的字幕轨不该把另一条挤到画面另一头。
+    """
+    lanes: dict[str, int] = {}
+    occupied = sorted((track for track in shown if track.get("clips")), key=lambda track: int(track.get("position") or 0))
+    for lane, track in enumerate(occupied):
+        for clip in track.get("clips") or []:
+            lanes[str(clip["id"])] = lane
+    return lanes

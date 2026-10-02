@@ -15,7 +15,7 @@ import { compositorSupported } from "@/features/editor/playback/compositorFlag";
 import { PreviewUnavailable } from "@/features/editor/playback/PreviewUnavailable";
 import { blockingPreviewState, resolvesOnItsOwn } from "@/features/editor/playback/previewReadiness";
 import { textLayers } from "@/features/editor/playback/textLayers";
-import { readSubtitleStyle, subtitleCss } from "@/features/editor/subtitleStyle";
+import { readSubtitleStyle, subtitleCss, subtitleLaneStyle } from "@/features/editor/subtitleStyle";
 import { readTextStyle, textStyleCss } from "@/features/editor/textStyle";
 import { applyTransformCommit, clipProgress, hasActiveKeyframes, sampleTransform } from "@/features/editor/keyframes";
 import { TransformOverlay, readTransform, type Transform } from "@/features/editor/TransformOverlay";
@@ -108,7 +108,7 @@ export function Monitor({
   // 字幕与花字画哪些由 textLayers 决定(导出侧同一条规则,contracts/text-layer-cases.json):
   // 隐藏的字幕轨不画;静音只管声音,静音视频轨上的花字照旧。花字作为最上层 DOM 叠加渲染(与
   // compositor/element 视频路径解耦,和字幕同理),用 transform 定位、随关键帧动画,匹配后端 ASS 烧录。
-  const { subtitles: subtitleClips, titles: textOverlayClips } = React.useMemo(
+  const { subtitles: subtitleClips, titles: textOverlayClips, subtitleLanes } = React.useMemo(
     () => textLayers(sequence.tracks ?? []),
     [sequence],
   );
@@ -191,7 +191,18 @@ export function Monitor({
   // Keep the draft until the fresh sequence lands (same anti-flicker pattern as timeline drags),
   // otherwise clearing the draft on release snaps the box back to the stale saved transform.
   const tfSettleRef = React.useRef(false);
-  const activeSubtitle = subtitleClips.find(isPresent) ?? null;
+  //: 此刻要画的字幕 —— **每条字幕轨各一条**,各画在自己那一道(textLayers.subtitleLanes)。此前只取找到的第一条:
+  //: 双语分两条轨时预览少一种语言,而导出两条都烧,预览和成片不是同一个画面。
+  //: 「此刻在场」用场景键(presentKey),不订阅播放头本身(见上面 sceneKey 那段)。
+  const activeSubtitles = React.useMemo(() => {
+    const byLane = new Map<number, (typeof subtitleClips)[number]>();
+    for (const clip of subtitleClips) {
+      const lane = subtitleLanes[clip.id] ?? 0;
+      if (byLane.has(lane) || !clip.text_override) continue;
+      if (presentIds.has(clip.id)) byLane.set(lane, clip);
+    }
+    return [...byLane.entries()];
+  }, [subtitleClips, subtitleLanes, presentIds]);
   const activeEffects = (activeClip?.effects ?? {}) as {
     filter?: string;
     color?: Record<string, number> & { curves?: ColorCurves };
@@ -457,25 +468,28 @@ export function Monitor({
               style={{ boxShadow: `inset 0 0 ${60 + vignette * 120}px ${vignette * 60}px rgba(0,0,0,${0.35 + vignette * 0.4})` }}
             />
           )}
-          {activeSubtitle?.text_override && (
+          {activeSubtitles.map(([lane, clip]) => (
             // 定位(left/top/bottom/transform)全部来自 subtitleCss 的行内样式,类里不要再写
             // 定位类:Tailwind v4 的 -translate-x-1/2 编译成独立的 translate 属性,会和行内
             // transform 叠加成双重位移(字幕整体左偏半个画框宽,曾以此形态返场过一次)。
             <div
+              key={clip.id}
+              data-subtitle-lane={lane}
               // 盒子几何(最大宽/圆角/内边距/行高/对齐/投影)**全部来自 subtitleCss**,
               // 类里一个都不要写:它们是和导出侧的契约(contracts/subtitle-cases.json),
               // 在这里重写一份就等于给同一个问题准备了第二个答案。
               className="pointer-events-none absolute z-[3]"
               style={subtitleCss(
-                readSubtitleStyle(
-                  (subtitleStyleOverride ?? sequence.subtitle_style) as Record<string, unknown>,
+                subtitleLaneStyle(
+                  readSubtitleStyle((subtitleStyleOverride ?? sequence.subtitle_style) as Record<string, unknown>),
+                  lane,
                 ),
                 sequence.width,
               )}
             >
-              {activeSubtitle.text_override}
+              {clip.text_override}
             </div>
-          )}
+          ))}
           {/* 花字:每条按自身 transform 定位、随关键帧动画,DOM 叠加在视频之上(与导出的 ASS 一致)。 */}
           {/* 同上:画不出来时,文字片段的拖动/编辑层也不该在 —— 它是 z-[3] 且排在提示之后,
               正是压住那个按钮的另一层。 */}

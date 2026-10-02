@@ -1,12 +1,13 @@
 {
   "contract": "subtitle",
-  "version": 1,
+  "version": 2,
   "readme": "contracts/README.md",
   "description": "预览与导出必须字面一致的字幕语义:同一份 subtitle_style 在同一画幅下,字幕框解析出来的几何与用色是什么、这个框放在画面的哪个像素上。后端 backend/tests/test_subtitle_parity.py 与前端 subtitleStyle.parity.test.ts 跑同一份语料。",
   "notes": [
     "box 是**解析后**的值,不是 CSS 写法:预览按容器查询单位(cqw)写字号、导出按帧原生 px 写,两种写法在画幅原生宽度上解析到同一个像素值,所以语料记像素。",
     "placement 给的是字幕框左上角在画面里的像素坐标。预览用 CSS 百分比表达(浏览器负责解析),导出直接算 overlay 坐标 —— 语料记两者共同的那个结果。",
-    "颜色一律写成无空格的 rgba(r,g,b,a);两侧都按这个格式产出,免得比较时还要各写一个解析器。"
+    "颜色一律写成无空格的 rgba(r,g,b,a);两侧都按这个格式产出,免得比较时还要各写一个解析器。",
+    "lane 是这条字幕画在第几道(见 text-layer-cases 的 subtitle_lanes):奇数道换到画面另一头(底部 ↔ 顶部,居中 → 底部),离边的距离不变。placement 是换道之后的位置。"
   ],
   "cases": [
     {
@@ -37,7 +38,8 @@
         "text_shadow": "0 0.055em 0.11em rgba(0,0,0,0.7)",
         "white_space": "pre-wrap"
       },
-      "placement": { "box_w": 800, "box_h": 60, "x": 560, "y": 934 }
+      "placement": { "box_w": 800, "box_h": 60, "x": 560, "y": 934 },
+      "lane": 0
     },
     {
       "name": "transparent-background",
@@ -67,7 +69,8 @@
         "text_shadow": "0 0.055em 0.11em rgba(0,0,0,0.7)",
         "white_space": "pre-wrap"
       },
-      "placement": { "box_w": 800, "box_h": 60, "x": 560, "y": 934 }
+      "placement": { "box_w": 800, "box_h": 60, "x": 560, "y": 934 },
+      "lane": 0
     },
     {
       "name": "custom-colour-and-weight",
@@ -97,7 +100,8 @@
         "text_shadow": "0 0.055em 0.11em rgba(0,0,0,0.7)",
         "white_space": "pre-wrap"
       },
-      "placement": { "box_w": 900, "box_h": 90, "x": 510, "y": 860 }
+      "placement": { "box_w": 900, "box_h": 90, "x": 510, "y": 860 },
+      "lane": 0
     },
     {
       "name": "position-top",
@@ -127,7 +131,8 @@
         "text_shadow": "0 0.055em 0.11em rgba(0,0,0,0.7)",
         "white_space": "pre-wrap"
       },
-      "placement": { "box_w": 800, "box_h": 60, "x": 560, "y": 86 }
+      "placement": { "box_w": 800, "box_h": 60, "x": 560, "y": 86 },
+      "lane": 0
     },
     {
       "name": "position-center",
@@ -157,7 +162,8 @@
         "text_shadow": "0 0.055em 0.11em rgba(0,0,0,0.7)",
         "white_space": "pre-wrap"
       },
-      "placement": { "box_w": 800, "box_h": 60, "x": 560, "y": 515 }
+      "placement": { "box_w": 800, "box_h": 60, "x": 560, "y": 515 },
+      "lane": 0
     },
     {
       "name": "vertical-1080x1920",
@@ -187,7 +193,70 @@
         "text_shadow": "0 0.055em 0.11em rgba(0,0,0,0.7)",
         "white_space": "pre-wrap"
       },
-      "placement": { "box_w": 700, "box_h": 80, "x": 190, "y": 1648 }
+      "placement": { "box_w": 700, "box_h": 80, "x": 190, "y": 1648 },
+      "lane": 0
+    },
+    {
+      "name": "second-lane-goes-to-the-top",
+      "why": "双语分两条字幕轨:第二道换到顶部、离边同样 8%,和第一道上下分开 —— 此前导出把两条叠在同一个位置。",
+      "frame": { "w": 1920, "h": 1080 },
+      "style": {
+        "font_size": 32,
+        "color": "#ffffff",
+        "bg_color": "#000000",
+        "bg_opacity": 0.5,
+        "bold": true,
+        "position": "bottom",
+        "offset": 8,
+        "font_family": "",
+        "font_id": ""
+      },
+      "box": {
+        "font_size_px": 32,
+        "color": "#ffffff",
+        "font_weight": 700,
+        "background": "rgba(0,0,0,0.5)",
+        "max_width_px": 1651,
+        "border_radius": "0.33em",
+        "padding": "0.16em 0.55em",
+        "line_height": "1.45",
+        "text_align": "center",
+        "text_shadow": "0 0.055em 0.11em rgba(0,0,0,0.7)",
+        "white_space": "pre-wrap"
+      },
+      "placement": { "box_w": 800, "box_h": 60, "x": 560, "y": 86 },
+      "lane": 1
+    },
+    {
+      "name": "second-lane-of-a-centered-style-goes-to-the-bottom",
+      "why": "第一道居中时,第二道放到底部,离边同样 8%。",
+      "frame": { "w": 1920, "h": 1080 },
+      "style": {
+        "font_size": 32,
+        "color": "#ffffff",
+        "bg_color": "#000000",
+        "bg_opacity": 0.5,
+        "bold": true,
+        "position": "center",
+        "offset": 8,
+        "font_family": "",
+        "font_id": ""
+      },
+      "box": {
+        "font_size_px": 32,
+        "color": "#ffffff",
+        "font_weight": 700,
+        "background": "rgba(0,0,0,0.5)",
+        "max_width_px": 1651,
+        "border_radius": "0.33em",
+        "padding": "0.16em 0.55em",
+        "line_height": "1.45",
+        "text_align": "center",
+        "text_shadow": "0 0.055em 0.11em rgba(0,0,0,0.7)",
+        "white_space": "pre-wrap"
+      },
+      "placement": { "box_w": 800, "box_h": 60, "x": 560, "y": 934 },
+      "lane": 1
     }
   ]
 }

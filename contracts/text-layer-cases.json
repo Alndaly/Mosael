@@ -1,8 +1,8 @@
 {
   "contract": "text-layers",
-  "version": 1,
+  "version": 2,
   "readme": "contracts/README.md",
-  "description": "预览与导出必须一致的文字层语义:哪些片段作为字幕画出来、哪些作为花字画出来。轨道的「静音」只管声音,「隐藏」只管字幕显示。后端 backend/tests/test_text_layer_parity.py 与前端 textLayers.parity.test.ts 跑同一份语料。比较的是集合,不含叠放顺序。",
+  "description": "预览与导出必须一致的文字层语义:哪些片段作为字幕画出来、哪些作为花字画出来。轨道的「静音」只管声音,「隐藏」只管字幕显示。后端 backend/tests/test_text_layer_parity.py 与前端 textLayers.parity.test.ts 跑同一份语料。比较的是集合,不含叠放顺序。subtitle_lanes 是每条字幕画在第几道:显示着、有字幕的字幕轨按 position 从下往上排,第几条就是第几道;空轨和隐藏的轨不占道。",
   "cases": [
     {
       "name": "subtitle-track-shows-its-clips",
@@ -20,7 +20,7 @@
           ]
         }
       ],
-      "expected": { "subtitles": ["sub1", "sub2"], "titles": [] }
+      "expected": { "subtitles": ["sub1", "sub2"], "titles": [], "subtitle_lanes": { "sub1": 0, "sub2": 0 } }
     },
     {
       "name": "hidden-subtitle-track-draws-nothing",
@@ -43,7 +43,7 @@
           "clips": [{ "id": "shownSub", "asset_id": null, "text_override": "译文" }]
         }
       ],
-      "expected": { "subtitles": ["shownSub"], "titles": [] }
+      "expected": { "subtitles": ["shownSub"], "titles": [], "subtitle_lanes": { "shownSub": 0 } }
     },
     {
       "name": "muted-video-track-keeps-its-titles",
@@ -58,7 +58,7 @@
           "clips": [{ "id": "title1", "asset_id": null, "text_override": "标题" }]
         }
       ],
-      "expected": { "subtitles": [], "titles": ["title1"] }
+      "expected": { "subtitles": [], "titles": ["title1"], "subtitle_lanes": {} }
     },
     {
       "name": "only-text-clips-on-video-tracks-are-titles",
@@ -86,7 +86,7 @@
           "clips": [{ "id": "strayText", "asset_id": null, "text_override": "不是花字" }]
         }
       ],
-      "expected": { "subtitles": [], "titles": ["title"] }
+      "expected": { "subtitles": [], "titles": ["title"], "subtitle_lanes": {} }
     },
     {
       "name": "subtitle-mute-flag-does-not-hide",
@@ -101,7 +101,31 @@
           "clips": [{ "id": "sub", "asset_id": null, "text_override": "字幕" }]
         }
       ],
-      "expected": { "subtitles": ["sub"], "titles": [] }
+      "expected": { "subtitles": ["sub"], "titles": [], "subtitle_lanes": { "sub": 0 } }
+    },
+    {
+      "name": "bilingual-on-two-tracks-gets-two-lanes",
+      "why": "双语分两条字幕轨:两条都画、各占一道。此前预览只画找到的第一条、导出把两条叠在同一个位置。空轨不占道。",
+      "tracks": [
+        {
+          "id": "en",
+          "kind": "subtitle",
+          "position": 4,
+          "muted": false,
+          "hidden": false,
+          "clips": [{ "id": "hello", "asset_id": null, "text_override": "Hello" }]
+        },
+        { "id": "empty", "kind": "subtitle", "position": 2, "muted": false, "hidden": false, "clips": [] },
+        {
+          "id": "zh",
+          "kind": "subtitle",
+          "position": 3,
+          "muted": false,
+          "hidden": false,
+          "clips": [{ "id": "nihao", "asset_id": null, "text_override": "你好" }]
+        }
+      ],
+      "expected": { "subtitles": ["hello", "nihao"], "titles": [], "subtitle_lanes": { "nihao": 0, "hello": 1 } }
     }
   ]
 }

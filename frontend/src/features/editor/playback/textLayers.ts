@@ -12,6 +12,8 @@ export interface TextLayers {
   subtitles: Clip[];
   /** video 轨上的花字:没有素材、有文字的片段。 */
   titles: Clip[];
+  /** 每条字幕画在第几道(clip id → 道)。见 subtitleLanes。 */
+  subtitleLanes: Record<string, number>;
 }
 
 /** 文本片段:没有素材、有文字。放在 video 轨上就是花字。 */
@@ -20,12 +22,28 @@ export function isTextClip(clip: Clip): boolean {
 }
 
 export function textLayers(tracks: Track[]): TextLayers {
-  const subtitles = tracks
-    .filter((track) => track.kind === "subtitle" && !track.hidden)
-    .flatMap((track) => track.clips ?? []);
+  const shown = tracks.filter((track) => track.kind === "subtitle" && !track.hidden);
+  const subtitles = shown.flatMap((track) => track.clips ?? []);
   const titles = tracks
     .filter((track) => track.kind === "video")
     .sort((a, b) => a.position - b.position)
     .flatMap((track) => (track.clips ?? []).filter(isTextClip));
-  return { subtitles, titles };
+  return { subtitles, titles, subtitleLanes: subtitleLanes(shown) };
+}
+
+/**
+ * 每条字幕画在第几「道」:显示着、有字幕的字幕轨按 position 从下往上排,第几条就是第几道。
+ *
+ * 两条字幕轨要各占一处:双语分两条轨时,此前预览只画找到的第一条、导出把两条叠在同一个位置。
+ * 道的位置见 subtitleStyle 的 subtitleLaneStyle。空轨不占道。导出侧是 scene.subtitle_lanes。
+ */
+function subtitleLanes(shown: Track[]): Record<string, number> {
+  const lanes: Record<string, number> = {};
+  shown
+    .filter((track) => (track.clips ?? []).length > 0)
+    .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
+    .forEach((track, lane) => {
+      for (const clip of track.clips ?? []) lanes[clip.id] = lane;
+    });
+  return lanes;
 }

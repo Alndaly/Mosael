@@ -4,7 +4,7 @@ import hashlib
 import json
 import re
 
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 
 """
 RenderPlan kernel (plan §11): converts a sequence's materialized clips into a
@@ -206,6 +206,8 @@ class SubtitleItem:
     start: float
     duration: float
     text: str
+    #: 画在第几道(见 scene.subtitle_lanes / lane_style)。只有一条字幕轨时都是 0。
+    lane: int = 0
 
 
 @dataclass(frozen=True)
@@ -511,7 +513,8 @@ def build_render_plan(
             continue
         speed, clip_duration = _clip_timing(clip)
         subtitles.append(
-            SubtitleItem(start=float(clip["timeline_start"]), duration=round(clip_duration, 6), text=text)
+            SubtitleItem(start=float(clip["timeline_start"]), duration=round(clip_duration, 6), text=text,
+                         lane=int(clip.get("lane") or 0))
         )
         duration = max(duration, float(clip["timeline_start"]) + clip_duration)
 
@@ -629,6 +632,23 @@ def _duck_windows(
         else:
             merged.append([lo, hi])
     return tuple((round(lo, 6), round(hi, 6)) for lo, hi in merged)
+
+
+#: 第二道放到哪:和第一道隔着画面上下分开。
+_MIRRORED_POSITION = {"bottom": "top", "top": "bottom", "center": "bottom"}
+
+
+def lane_style(style: SubtitleStyleSpec, lane: int) -> SubtitleStyleSpec:
+    """第 `lane` 道字幕用的样式:偶数道就是序列的字幕样式,奇数道换到画面另一头(底部 ↔ 顶部,居中 → 底部),
+    离边的距离不变。
+
+    **为什么是上下分开而不是摞在一起**:摞在一起要知道下面那道此刻几行高,而每条字幕的行数不同、还会自动折行
+    —— 预览和导出要逐时刻算同一个高度才对得上,算错一点两道就压在一起。上下分开在两边都是一个固定位置,
+    怎么都压不到一起。前端 subtitleLaneStyle 是同一条规则,contracts/subtitle-cases.json 钉住。
+    """
+    if lane % 2 == 0:
+        return style
+    return replace(style, position=_MIRRORED_POSITION.get(style.position, "top"))
 
 
 def _read_subtitle_style(raw: dict | None) -> SubtitleStyleSpec:

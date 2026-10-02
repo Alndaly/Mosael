@@ -154,6 +154,23 @@ export function subtitleCss(style: SubtitleStyle, frameWidth: number): React.CSS
 }
 
 
+const MIRRORED_POSITION: Record<SubtitleStyle["position"], SubtitleStyle["position"]> = {
+  bottom: "top",
+  top: "bottom",
+  center: "bottom",
+};
+
+/**
+ * 第 `lane` 道字幕用的样式:偶数道就是序列的字幕样式,奇数道换到画面另一头(底部 ↔ 顶部,居中 → 底部),
+ * 离边的距离不变。导出侧 render_plan.lane_style 是同一条规则,contracts/subtitle-cases.json 钉住。
+ *
+ * 上下分开而不是摞在一起:摞在一起要知道下面那道此刻几行高(行数各不相同、还会自动折行),预览和导出
+ * 要逐时刻算同一个高度才对得上;上下分开在两边都是一个固定位置,怎么都压不到一起。
+ */
+export function subtitleLaneStyle(style: SubtitleStyle, lane: number): SubtitleStyle {
+  return lane % 2 === 0 ? style : { ...style, position: MIRRORED_POSITION[style.position] ?? "top" };
+}
+
 /** Target languages offered wherever translation appears (Google codes; the AI path takes the
     same codes as hints). Shared so the transcript and subtitle panels cannot drift apart. */
 export const TRANSLATE_LANGS = ["en", "zh-CN", "zh-TW", "ja", "ko", "fr", "de", "es", "ru"] as const;

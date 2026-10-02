@@ -193,7 +193,9 @@ def build_plan_for_sequence(db: Session, sequence_id: str, export_params: dict |
         for clip in media_clips(track)
         if carries_sound(clip)
     ]
-    subtitle_clips = [clip_dict(clip_by_id[view["id"]]) for view in shown_text.subtitles]
+    subtitle_clips = [
+        {**clip_dict(clip_by_id[view["id"]]), "lane": shown_text.subtitle_lanes[view["id"]]} for view in shown_text.subtitles
+    ]
 
     solo_active = any(track.solo for track in sequence.tracks)
     base_video_soloed = bool(base_track and base_track.solo)

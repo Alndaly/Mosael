@@ -14,7 +14,7 @@ type ContractCase = {
   name: string;
   why: string;
   tracks: unknown[];
-  expected: { subtitles: string[]; titles: string[] };
+  expected: { subtitles: string[]; titles: string[]; subtitle_lanes: Record<string, number> };
 };
 
 const contract = JSON.parse(readFileSync(CONTRACT_PATH, "utf-8")) as {
@@ -36,10 +36,12 @@ describe("text-layer contract", () => {
       const actual = {
         subtitles: layers.subtitles.map((clip) => clip.id).sort(),
         titles: layers.titles.map((clip) => clip.id).sort(),
+        subtitle_lanes: layers.subtitleLanes,
       };
       const expected = {
         subtitles: [...testCase.expected.subtitles].sort(),
         titles: [...testCase.expected.titles].sort(),
+        subtitle_lanes: testCase.expected.subtitle_lanes,
       };
       expect(actual, testCase.why).toEqual(expected);
     });
