@@ -146,8 +146,9 @@ describe("输出变量一档", () => {
       </QueryClientProvider>,
     );
     fireEvent.click(screen.getByRole("button", { name: "wfOutputs" }));
-    expect(screen.getByText("{{start.topic}}")).toBeInTheDocument();
-    expect(screen.getByText("{{start.lang}}")).toBeInTheDocument();
-    expect(screen.queryByText("{{start.*params}}")).toBeNull();
+    //: 显示成引用标签(节点 · 输出),点一下复制的才是存储写法。
+    expect(screen.getByText("start · topic")).toBeInTheDocument();
+    expect(screen.getByText("start · lang")).toBeInTheDocument();
+    expect(screen.queryByText(/\*params/)).toBeNull();
   });
 });

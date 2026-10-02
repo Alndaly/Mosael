@@ -11,6 +11,8 @@ import {
   typesCompatible,
   type NodeIssue,
 } from "@/features/workflows/analyze";
+import type { ScopePath } from "@/features/workflows/scope";
+import { plainRefName } from "@/features/workflows/workflowRefCatalog";
 import { nodePorts } from "@/features/workflows/workflowPorts";
 import type { WorkflowNodeData } from "@/features/workflows/WorkflowNode";
 import type { DataType } from "@/features/nodeForms/fieldTypes";
@@ -187,7 +189,10 @@ export function workflowIssueText(
   issue: NodeIssue,
   registry: NodeRegistry,
   reasons?: ReadonlyMap<string, string>,
+  /** 提示里提到的引用怎么说(见 workflowRefNamer):「节点标题 · 输出」。不给就按路径分段 —— 都不摆 `{{…}}`。 */
+  refName: (ref: string, path: ScopePath) => string = plainRefName,
 ): string {
+  const name = (ref: string | undefined) => (ref ? refName(ref, issue.path) : "");
   switch (issue.code) {
     case "missing-start":
       return t("wfIssueMissingStart");
@@ -203,9 +208,9 @@ export function workflowIssueText(
     case "one-of-missing":
       return t("wfIssueOneOfMissing").replace("{k}", fieldLabels(issue, registry));
     case "stale-var":
-      return t("wfIssueStaleVar").replace("{ref}", issue.ref ?? "");
+      return t("wfIssueStaleVar").replace("{ref}", name(issue.ref));
     case "start-param-missing":
-      return t("wfIssueStartParamMissing").replace("{ref}", issue.ref ?? "");
+      return t("wfIssueStartParamMissing").replace("{ref}", name(issue.ref));
     case "start-param-not-an-option":
       return t("wfIssueStartParamNotAnOption")
         .replace("{k}", issue.configKey ?? "")
@@ -216,14 +221,14 @@ export function workflowIssueText(
       return t("wfIssueOutputInBody");
     case "scope-field-missing":
       return t("wfIssueScopeFieldMissing")
-        .replace("{ref}", issue.ref ?? "")
-        .replace("{available}", (issue.available ?? []).join(" / "));
+        .replace("{ref}", name(issue.ref))
+        .replace("{available}", (issue.available ?? []).map(name).join(" / "));
     case "disconnected":
       return t("wfIssueDisconnected");
     case "unwired-referenced":
       return t("wfIssueUnwiredReferenced")
         .replace("{names}", (issue.referencedBy ?? []).join(t("listSeparator")))
-        .replace("{refs}", (issue.refs ?? []).join(t("listSeparator")));
+        .replace("{refs}", (issue.refs ?? []).map(name).join(t("listSeparator")));
     case "no-providers":
       return t("wfIssueNoProviders");
     case "provider-missing":

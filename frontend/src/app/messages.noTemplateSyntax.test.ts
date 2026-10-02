@@ -3,7 +3,9 @@
  *
  * 引用在界面上是「节点标题 · 输出 · 子路径」的标签(nodeForms/RefToken),人从下拉里挑、在编辑器里敲 @ 插,从来不用
  * 手写 `{{节点.输出}}`。可循环 / 子图的提示此前写着「子流程内用 {{loop.item}}」,就绪检查写着「代码里的 {{…}}」——
- * 用户明确不想再在界面上看到这种写法。后端节点目录的说明同一条,见 backend/tests/test_ui_copy_has_no_template_syntax.py。
+ * 用户明确不想再在界面上看到这种写法。后端节点目录的说明同一条,见 backend/tests/test_ui_copy_has_no_template_syntax.py;
+ * 带着引用**拼出来**的那几处(失效引用、输出变量、就绪检查的提示、引用提示线的悬停说明)见
+ * features/workflows/refsShownAsNames.dom.test.tsx。
  */
 import { describe, expect, it } from "vitest";
 

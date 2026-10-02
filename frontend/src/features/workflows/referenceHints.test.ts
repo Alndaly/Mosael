@@ -262,9 +262,10 @@ describe("提示线 → React Flow 的边", () => {
   });
 
   it("悬停的说明:引用的写法、被引用节点的名字;找不到具体口时从节点出发", () => {
-    expect(ok.data?.title).toBe("引用 {{plan.text}}、{{plan.text.0}}(只管先后,不会让「写分镜」运行)");
+    //: 引用说成名字(没给目录时按路径分段),不摆 `{{…}}`;编辑器里给的是按图起名的目录(见 refsShownAsNames)。
+    expect(ok.data?.title).toBe("引用 plan · text、plan · text · 0(只管先后,不会让「写分镜」运行)");
     expect(ok.ariaLabel).toBe(ok.data?.title);
-    expect(broken.data?.title).toBe("「可用的 3D 道具」不会跑:{{props.catalog}}");
+    expect(broken.data?.title).toBe("「可用的 3D 道具」不会跑:props · catalog");
     expect(ok.sourceHandle).toBe("out:text");
     expect(broken.sourceHandle).toBeUndefined();
   });

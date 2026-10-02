@@ -30,7 +30,7 @@ export const nodeToolbar = {
   wffProvider: "服务商",
   wffKind: "类型",
   wfBadJson: "JSON 格式不正确",
-  wfCopyRef: "点击复制引用",
+  wfCopyRef: "复制引用「{name}」",
   wfRefCopied: "已复制变量引用",
   wfAgentTitle: "AI 助手",
   wfAdvanced: "高级选项",

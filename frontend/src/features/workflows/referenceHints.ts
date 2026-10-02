@@ -7,6 +7,7 @@ import type { EdgeShape } from "@/components/app/canvasEdgeShape";
 import { canvasEdgeClass } from "@/components/app/canvasEdges";
 import { layerReferences, neverRunReferences, type RegistryLike } from "@/features/workflows/analyze";
 import { nodePorts } from "@/features/workflows/workflowPorts";
+import { plainRefName, workflowRefNamer } from "@/features/workflows/workflowRefCatalog";
 
 /**
  * 画布上的**引用提示线**:每一处 `{{A.x}}`,从 A 的 x 口(找不到具体口就从节点)到引用它的节点画一根淡点线。
@@ -36,7 +37,16 @@ type NodeMeta = NonNullable<ReturnType<RegistryLike["get"]>>;
 
 /** 画提示线要读的:引用的口径(代码字段、体字段,同 analyze.layerReferences)和节点声明的输出。 */
 export interface HintRegistry extends RegistryLike {
-  get(type: string): (NodeMeta & { outputs?: readonly string[]; label?: string }) | undefined;
+  get(
+    type: string,
+  ):
+    | (NodeMeta & {
+        outputs?: readonly string[];
+        label?: string;
+        output_labels?: Record<string, string>;
+        output_schema_from?: Record<string, string>;
+      })
+    | undefined;
 }
 
 export interface ReferenceHint {
@@ -121,11 +131,22 @@ export type ReferenceHintFlowEdge = Edge<ReferenceHintEdgeData, typeof REFERENCE
 /** 提示线 → React Flow 的边:淡点线、无箭头,不能选、删、拖去重连,也不进 Tab 序。 */
 export function toReferenceHintEdges(
   hints: readonly ReferenceHint[],
-  { shape, t, nodeName }: { shape: EdgeShape; t: (key: MessageKey) => string; nodeName: (id: string) => string },
+  {
+    shape,
+    t,
+    nodeName,
+    refName = plainRefName,
+  }: {
+    shape: EdgeShape;
+    t: (key: MessageKey) => string;
+    nodeName: (id: string) => string;
+    /** 悬停说明里的引用怎么说(见 workflowRefNamer):「节点标题 · 输出」,不摆 `{{…}}`。不给就按路径分段。 */
+    refName?: (ref: string) => string;
+  },
 ): ReferenceHintFlowEdge[] {
   return hints.map((hint) => {
     const title = t(hint.neverRuns ? "wfRefHintNeverRuns" : "wfRefHint")
-      .replace("{refs}", hint.refs.join(t("listSeparator")))
+      .replace("{refs}", hint.refs.map((ref) => refName(ref)).join(t("listSeparator")))
       .replace("{source}", nodeName(hint.source));
     return {
       id: hint.id,
@@ -173,6 +194,8 @@ export function useReferenceHintEdges(
   const hints = React.useMemo(() => referenceHints(structure, registry, { entryIsRoot }), [structure, registry, entryIsRoot]);
   return React.useMemo(() => {
     const names = new Map(structure.nodes.map((node) => [node.id, node.name || registry.get(node.type)?.label || node.type]));
-    return toReferenceHintEdges(hints, { shape, t, nodeName: (id) => names.get(id) ?? id });
+    //: 提示线只连这一层的节点,引用按这一层的图说成名字。
+    const refName = workflowRefNamer(structure, registry);
+    return toReferenceHintEdges(hints, { shape, t, nodeName: (id) => names.get(id) ?? id, refName: (ref) => refName(ref) });
   }, [hints, structure, registry, shape, t]);
 }

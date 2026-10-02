@@ -21,6 +21,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { dependentsCleared, withDependentsCleared } from "@/features/nodeForms/dependents";
 import { RefCatalogContext, refLabel } from "@/features/nodeForms/refCatalog";
+import { bareRef } from "@/features/nodeForms/refDoc";
 import { refProblemText } from "@/features/nodeForms/refLook";
 import { RefToken } from "@/features/nodeForms/RefToken";
 import {
@@ -634,7 +635,8 @@ export function NodeInspector({
             </span>
             {staleRefs.map(({ key, ref }) => (
               <div className="flex items-center justify-between gap-2" key={`${key}-${ref}`}>
-                <code className="rounded-md border border-[color-mix(in_srgb,var(--destructive)_45%,transparent)] bg-[color-mix(in_srgb,var(--destructive)_10%,transparent)] px-1.5 py-px font-mono text-ui-2xs text-destructive line-through">{ref}</code>
+                {/* 和别处的引用同一枚标签:指不到的是错误态,悬停说为什么 —— 不摆 `{{…}}` 原文。 */}
+                <RefToken path={bareRef(ref)} look={refCatalog.look(bareRef(ref))} className="min-w-0" />
                 <Popover>
                   <PopoverTrigger asChild>
                     <button type="button" className="flex-none cursor-pointer rounded-md border border-border bg-panel px-2 py-0.5 text-ui-xs text-foreground hover:border-border-strong">
@@ -646,10 +648,11 @@ export function NodeInspector({
                       <button
                         key={valid}
                         type="button"
-                        className="cursor-pointer rounded-md border-0 bg-transparent px-2 py-1.5 text-left font-mono text-xs hover:bg-muted"
+                        className="cursor-pointer rounded-md border-0 bg-transparent px-2 py-1.5 text-left text-xs hover:bg-muted"
+                        title={bareRef(valid)}
                         onClick={() => repoint(key, ref, valid)}
                       >
-                        {valid.replace(/[{}]/g, "")}
+                        {refLabel(refCatalog.look(bareRef(valid)))}
                       </button>
                     ))}
                     <button
@@ -695,21 +698,25 @@ export function NodeInspector({
         {area === "outputs" && (
           <div className="grid gap-[5px] pt-0.5 [&>span]:text-ui-xs [&>span]:font-semibold [&>span]:uppercase [&>span]:tracking-[0.05em] [&>span]:text-muted-foreground">
             <span>{t("wfOutputs")}</span>
-            <div className="flex flex-wrap gap-1">
+            <div className="flex flex-wrap gap-1" data-output-refs="">
               {outputNames.map((output) => {
-                const ref = `{{${node.id}.${output}}}`;
+                //: 显示的是引用标签(「节点标题 · 输出」);点一下复制的仍是存储写法 —— 贴进别的字段就是一条引用。
+                const path = `${node.id}.${output}`;
+                const look = refCatalog.look(path);
+                const name = refLabel(look);
                 return (
                   <button
                     key={output}
                     type="button"
-                    className="cursor-copy rounded-md border border-border bg-secondary px-[7px] py-0.5 font-mono text-ui-2xs text-foreground transition-[border-color] duration-100 hover:border-primary"
-                    title={t("wfCopyRef")}
+                    className="cursor-copy rounded-md border-0 bg-transparent p-0"
+                    title={t("wfCopyRef").replace("{name}", name)}
+                    aria-label={t("wfCopyRef").replace("{name}", name)}
                     onClick={() => {
-                      void navigator.clipboard.writeText(ref);
-                      toast.success(t("wfRefCopied"), { description: ref });
+                      void navigator.clipboard.writeText(`{{${path}}}`);
+                      toast.success(t("wfRefCopied"), { description: name });
                     }}
                   >
-                    {ref}
+                    <RefToken path={path} look={look} className="pointer-events-none" />
                   </button>
                 );
               })}

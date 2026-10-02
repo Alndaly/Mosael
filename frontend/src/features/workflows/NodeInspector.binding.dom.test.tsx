@@ -170,8 +170,9 @@ it("失效引用不查代码字段:代码里的 {{…}} 是字面文字;入参�
       </TooltipProvider>
     </QueryClientProvider>,
   );
-  const stale = [...document.querySelectorAll("code.line-through")].map((one) => one.textContent);
-  expect(stale).toEqual(["{{gone.input}}"]);
+  //: 失效的引用显示成错误态的引用标签(节点 · 输出),不摆 `{{…}}` 原文。
+  const stale = [...document.querySelectorAll<HTMLElement>("[data-ref-token][data-ref-problem]")].map((one) => one.textContent);
+  expect(stale).toEqual(["gone · input"]);
 });
 
 it("开始节点的字段不给「接上游」:它是入口,前面什么都没有;必填不再是单独的一格", () => {

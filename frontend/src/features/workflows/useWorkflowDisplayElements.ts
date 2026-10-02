@@ -13,6 +13,7 @@ import { assetOutputs, outputRows } from "@/features/workflows/runSteps";
 import type { WorkflowRunState } from "@/features/workflows/useWorkflowRun";
 import type { WorkflowNodeData } from "@/features/workflows/WorkflowNode";
 import { configAssetId, workflowIssueText, workflowPortPresentation } from "@/features/workflows/workflowCanvasModel";
+import type { ScopePath } from "@/features/workflows/scope";
 import { useUnusableNodeReasons } from "@/features/workflows/useUnusableNodeReasons";
 import { isMarkerNode } from "@/features/workflows/workflowViewShared";
 import { cn } from "@/lib/utils";
@@ -60,6 +61,7 @@ export function useWorkflowDisplayNodes({
   annotationMode,
   searchHit,
   atRoot,
+  refName,
 }: {
   nodes: Node[];
   graph: WorkflowGraph;
@@ -76,6 +78,8 @@ export function useWorkflowDisplayNodes({
   annotationMode: boolean;
   searchHit: CanvasSearchHighlight | null;
   atRoot: boolean;
+  /** 角标说明里提到的引用怎么说:「节点标题 · 输出」(见 workflowRefNamer)。 */
+  refName: (ref: string, path: ScopePath) => string;
 }) {
   //: 认不出的插件节点为什么用不了(后端说的真实原因),角标的提示里说它。
   const unknownTypes = React.useMemo(
@@ -98,7 +102,7 @@ export function useWorkflowDisplayNodes({
         // (体里也可以有一个 llm-1),拿去查只会张冠李戴。
         const nodeIssues = layerIssues.get(node.id);
         const badge = nodeIssues
-          ? { severity: worstSeverity(nodeIssues), count: nodeIssues.length, title: nodeIssues.map((i) => workflowIssueText(t, i, registry, unusableReasons)).join("\n") }
+          ? { severity: worstSeverity(nodeIssues), count: nodeIssues.length, title: nodeIssues.map((i) => workflowIssueText(t, i, registry, unusableReasons, refName)).join("\n") }
           : null;
         const step = atRoot ? runByNode[node.id] : undefined;
         return {
@@ -122,6 +126,6 @@ export function useWorkflowDisplayNodes({
       });
     },
     // registry / graph 也要在里面:缩略图和接点类型都读它们,漏了就一直是加载前的空值。
-    [nodes, layerIssues, unusableReasons, t, runByNode, nodeZ, registry, graph, markers, patchMarker, deleteMarker, markerMode, markersVisible, annotationMode, searchHit, atRoot],
+    [nodes, layerIssues, unusableReasons, t, runByNode, nodeZ, registry, graph, markers, patchMarker, deleteMarker, markerMode, markersVisible, annotationMode, searchHit, atRoot, refName],
   );
 }

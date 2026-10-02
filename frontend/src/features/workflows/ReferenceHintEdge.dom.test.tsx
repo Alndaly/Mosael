@@ -91,9 +91,9 @@ describe("引用提示线画在画布上", () => {
   it("悬停说明:线上挂着 <title>,也是它的无障碍名字", () => {
     const { edge } = renderFlow();
     const g = edge("ref-hint:plan>out:text>shot")!;
-    expect(g.querySelector("title")?.textContent).toBe("引用 {{plan.text}}(只管先后,不会让「plan」运行)");
-    expect(g.getAttribute("aria-label")).toBe("引用 {{plan.text}}(只管先后,不会让「plan」运行)");
-    expect(edge("ref-hint:props>>shot")!.querySelector("title")?.textContent).toBe("「props」不会跑:{{props.catalog}}");
+    expect(g.querySelector("title")?.textContent).toBe("引用 plan · text(只管先后,不会让「plan」运行)");
+    expect(g.getAttribute("aria-label")).toBe("引用 plan · text(只管先后,不会让「plan」运行)");
+    expect(edge("ref-hint:props>>shot")!.querySelector("title")?.textContent).toBe("「props」不会跑:props · catalog");
   });
 
   it("点它不会选中它(也就删不掉)", async () => {

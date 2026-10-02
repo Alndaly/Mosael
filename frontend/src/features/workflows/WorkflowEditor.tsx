@@ -45,6 +45,7 @@ import { bodyKey, scopeContainer, scopeId } from "@/features/workflows/scope";
 import { useCanvasPosture } from "@/features/workflows/useCanvasPosture";
 import { useWorkflowCanvasEdits } from "@/features/workflows/useWorkflowCanvasEdits";
 import { useWorkflowDisplayEdges, useWorkflowDisplayNodes } from "@/features/workflows/useWorkflowDisplayElements";
+import { workflowRefNamer } from "@/features/workflows/workflowRefCatalog";
 import { useWorkflowEditorShortcuts, useWorkflowNodeZ } from "@/features/workflows/useWorkflowEditorKeys";
 import { useWorkflowGraph } from "@/features/workflows/useWorkflowGraph";
 import { useWorkflowRun } from "@/features/workflows/useWorkflowRun";
@@ -438,10 +439,13 @@ export function WorkflowEditor({
 
   const nodeZ = useWorkflowNodeZ(nodes);
 
+  //: 就绪检查的提示(画布角标、就绪清单)里提到的引用,按它所在那一层说成「节点标题 · 输出」。
+  const refName = React.useMemo(() => workflowRefNamer(rootGraph, registry), [rootGraph, registry]);
   const displayNodes = useWorkflowDisplayNodes({
     nodes,
     graph,
     registry,
+    refName,
     t,
     layerIssues,
     runByNode,
@@ -491,6 +495,7 @@ export function WorkflowEditor({
           workflow,
           registry,
           unusableReasons,
+          refName,
           agentOpen,
           setAgentOpen,
           setAgentMode,

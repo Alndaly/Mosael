@@ -1,7 +1,14 @@
-import type { WorkflowGraph, WorkflowNodeType } from "@/api/client";
-import type { RefCatalog, RefLook } from "@/features/nodeForms/refCatalog";
+import type { WorkflowGraph } from "@/api/client";
+import { refLabel, type RefCatalog, type RefLook } from "@/features/nodeForms/refCatalog";
 import { bareRef } from "@/features/nodeForms/refDoc";
-import { declaredFieldNames } from "@/features/workflows/scope";
+import {
+  declaredFieldNames,
+  graphAtScope,
+  scopeContainer,
+  scopeVariables,
+  type ScopePath,
+  type ScopeRegistry,
+} from "@/features/workflows/scope";
 
 /**
  * 工作流里**一个引用指的是什么**:这一层图的节点、节点注册表的声明、容器给体播的作用域变量、上次运行交回的输出 →
@@ -14,7 +21,12 @@ import { declaredFieldNames } from "@/features/workflows/scope";
  *   输出交回的是对象,就按交回的键列。只往对象里走、不进数组(数组要下标),最多三层。
  */
 
-type Registry = ReadonlyMap<string, Pick<WorkflowNodeType, "outputs" | "output_labels" | "output_schema_from">>;
+/** 只读节点类型的输出声明:有哪些、叫什么、结构写在哪一格。 */
+interface Registry {
+  get(type: string):
+    | { outputs?: readonly string[]; output_labels?: Record<string, string>; output_schema_from?: Record<string, string> }
+    | undefined;
+}
 
 const MAX_DEPTH = 3;
 const MAX_FIELDS = 60;
@@ -47,7 +59,7 @@ export function workflowRefCatalog({
       const meta = registry.get(node.type);
       const name = node.name?.trim() || node.id;
       if (output === undefined) return { parts: [name], problem: null };
-      const outputs = meta ? declaredFieldNames(meta.outputs, node.config as Record<string, unknown> | undefined) : null;
+      const outputs = meta ? declaredFieldNames(meta.outputs ?? [], node.config as Record<string, unknown> | undefined) : null;
       const label = meta?.output_labels?.[output]?.trim() || output;
       return {
         parts: [name, label, ...rest],
@@ -100,4 +112,36 @@ function valuePaths(value: unknown, prefix: string[], out: string[]): void {
     out.push([...prefix, key].join("."));
     valuePaths(child, [...prefix, key], out);
   }
+}
+
+/**
+ * **一句话里提到一个引用时怎么说它**:`{{start.topic}}` → 「填主题 · topic」。就绪检查的提示(画布角标、就绪清单)、
+ * 画布上引用提示线的悬停说明都拼着引用,经这里换成名字 —— 界面上不摆 `{{…}}`。
+ *
+ * 引用按它所在的那一层解析(`path`:主流程是 `[]`,体里是从主流程往里经过的容器):那一层的节点,加上容器给体播的
+ * 作用域变量。每一层的目录只建一次。引用写不写花括号都认(`{{a.b}}` / `a.b`)。
+ */
+export function workflowRefNamer(
+  root: WorkflowGraph,
+  registry: Registry & ScopeRegistry,
+): (ref: string, path?: ScopePath) => string {
+  const catalogs = new Map<string, RefCatalog>();
+  return (ref, path = []) => {
+    const key = JSON.stringify(path);
+    let catalog = catalogs.get(key);
+    if (!catalog) {
+      catalog = workflowRefCatalog({
+        graph: graphAtScope(root, path, registry) ?? { nodes: [], edges: [] },
+        registry,
+        scopeVariables: scopeVariables(scopeContainer(root, path, registry), registry),
+      });
+      catalogs.set(key, catalog);
+    }
+    return refLabel(catalog.look(bareRef(ref).trim()));
+  };
+}
+
+/** 没有图可查时(或在图之外)怎么说一个引用:按路径分段 —— 照样不摆花括号。 */
+export function plainRefName(ref: string): string {
+  return bareRef(ref).trim().split(".").join(" · ");
 }

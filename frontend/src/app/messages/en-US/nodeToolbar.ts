@@ -29,7 +29,7 @@ export const nodeToolbar = {
   wffProvider: "Provider",
   wffKind: "Type",
   wfBadJson: "Invalid JSON",
-  wfCopyRef: "Click to copy reference",
+  wfCopyRef: "Copy reference “{name}”",
   wfRefCopied: "Reference copied",
   wfAgentTitle: "AI assistant",
   wfAdvanced: "Advanced",

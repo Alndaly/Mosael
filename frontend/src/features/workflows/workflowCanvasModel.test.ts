@@ -178,7 +178,11 @@ describe("workflow canvas model", () => {
     };
     const say = ((key: MessageKey) =>
       key === "wfIssueUnwiredReferenced" ? "「{names}」引用了它({refs})" : key === "listSeparator" ? "、" : key) as (key: MessageKey) => string;
-    expect(workflowIssueText(say, issue, new Map())).toBe("「布景、分镜」引用了它({{props.catalog}}、{{props.names}})");
+    //: 引用说成名字:没给目录时按路径分段;给了就是「节点标题 · 输出」(见 refsShownAsNames)。
+    expect(workflowIssueText(say, issue, new Map())).toBe("「布景、分镜」引用了它(props · catalog、props · names)");
+    expect(workflowIssueText(say, issue, new Map(), undefined, (ref) => (ref === "{{props.catalog}}" ? "道具 · 清单" : "道具 · 名字"))).toBe(
+      "「布景、分镜」引用了它(道具 · 清单、道具 · 名字)",
+    );
   });
 
   it("keeps stable port keys while projecting localized labels for both sides", () => {
