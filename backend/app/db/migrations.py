@@ -48,6 +48,22 @@ def _migrate_tool_confirmations_session() -> None:
         conn.execute(text("ALTER TABLE tool_confirmations ADD COLUMN session_id VARCHAR(64)"))
 
 
+def _migrate_tool_confirmations_name_their_tool_call() -> None:
+    """tool_confirmations 新增 tool_call_id 列:卡是那次对话里哪一次工具调用开的。
+
+    create_all 只建新表,不给已有表补列。这列可空:MCP 直连等外部智能体开的卡不是对话里的某一步。
+    老卡不回填 —— 已有结论的卡此前就不在对话里留存(批完只在当时那个界面的内存里留一张,刷新即无),
+    没有可以「摆回去」的东西;重启时还在等的会话卡已被 reconcile_orphaned_agent_sessions 作废。
+    """
+    inspector = inspect(engine)
+    if "tool_confirmations" not in set(inspector.get_table_names()):
+        return
+    if "tool_call_id" in {c["name"] for c in inspector.get_columns("tool_confirmations")}:
+        return
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE tool_confirmations ADD COLUMN tool_call_id VARCHAR(128)"))
+
+
 def _migrate_workflow_revisions() -> None:
     """初始化旧工作流的修订历史，并保持当前投影与最新修订一致。
 
@@ -7378,6 +7394,8 @@ def migration_plan() -> MigrationPlan:
                 _migrate_generation_jobs_keep_their_failure,
                 # 同上:ORM 上的 Asset 指望出处和「含 AI」两列在。
                 _migrate_assets_remember_where_they_came_from,
+                # 加列必须在 SCHEMA 之前:之后 ORM 上的 ToolConfirmation 已经指望 tool_call_id 在了。
+                _migrate_tool_confirmations_name_their_tool_call,
             ),
             #: create_all 每次启动都要跑 —— 新版本加的表靠它建出来,记账跳过就再也建不了。
             *_recurring(MigrationPhase.SCHEMA, _create_current_schema),

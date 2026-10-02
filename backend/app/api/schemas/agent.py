@@ -244,6 +244,8 @@ class ConfirmationOut(OrmModel):
     id: str
     workspace_id: str
     session_id: str | None
+    #: 那次对话里开这张卡的工具调用 —— 对话界面把卡摆回那一步、决定之后收成那一行的状态。
+    tool_call_id: str | None = None
     tool: str
     permission: str
     summary: str

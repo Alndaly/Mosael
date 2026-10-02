@@ -107,6 +107,8 @@ export const confirmationKeys = {
   all: (workspaceId: string) => ["confirmations", workspaceId] as const,
   /** 那次对话里等人拍板的卡(聊天里就地的那一叠)。 */
   pending: (workspaceId: string, sessionId: string) => ["confirmations", workspaceId, "pending", sessionId] as const,
+  /** 那次对话里最近的卡,不论状态 —— 有了结论的收成它那次工具调用里的一行状态。 */
+  session: (workspaceId: string, sessionId: string) => ["confirmations", workspaceId, "session", sessionId] as const,
   /** 这个工作区里**我能拍板**、还在等的卡(全局确认中心)。 */
   toDecide: (workspaceId: string) => ["confirmations", workspaceId, "to-decide"] as const,
   /** 那次对话里没问人就放行了的卡(对话设置里的「自动放行留痕」)。 */

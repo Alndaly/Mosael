@@ -10,10 +10,10 @@
  * 这些用例驱动的是真的 hook —— 在测试里另写一份判据的话,改坏 hook 它照样绿。
  */
 import React from "react";
-import { render, act } from "@testing-library/react";
+import { render, act, fireEvent, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { useStickToBottom } from "./stickToBottom";
+import { JumpToLatest, useStickToBottom } from "./stickToBottom";
 
 /** jsdom 不做布局:scrollHeight / clientHeight 恒为 0,得自己接管。 */
 function measurable(el: HTMLElement, clientHeight: number) {
@@ -163,3 +163,28 @@ describe("贴底跟随", () => {
   });
 });
 
+
+describe("「回到最新」遇上等你拍板的卡", () => {
+  /* 卡跟着对话走之后,它在哪儿由发起它的那次工具调用决定 —— 人往上翻着历史时,那张卡在视口外。
+     按钮要说清底下有一件**等他做**的事,点下去把他带到那张卡跟前,而不只是滚到最底。 */
+  const stick = (scrollToBottom = vi.fn()) => ({ pinned: false, unseen: true, scrollToBottom });
+
+  it("有待决的卡:按钮换成「有请求等你确认」,点了把那张卡滚进视口", () => {
+    const card = document.createElement("article");
+    card.scrollIntoView = vi.fn();
+    const scrollToBottom = vi.fn();
+    render(
+      <JumpToLatest stick={stick(scrollToBottom)} label="回到最新" newLabel="有新内容" attention={{ label: "有请求等你确认", target: () => card }} />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /有请求等你确认/ }));
+    expect(card.scrollIntoView).toHaveBeenCalledOnce();
+    expect(scrollToBottom).not.toHaveBeenCalled();
+  });
+
+  it("没有待决的卡:照旧是「有新内容」,点了回到底部", () => {
+    const scrollToBottom = vi.fn();
+    render(<JumpToLatest stick={stick(scrollToBottom)} label="回到最新" newLabel="有新内容" attention={null} />);
+    fireEvent.click(screen.getByRole("button", { name: /有新内容/ }));
+    expect(scrollToBottom).toHaveBeenCalledOnce();
+  });
+});

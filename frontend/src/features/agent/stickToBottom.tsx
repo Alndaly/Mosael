@@ -1,6 +1,8 @@
 import React from "react";
 import { ArrowDown } from "lucide-react";
 
+import { cn } from "@/lib/utils";
+
 /**
  * 对话正文的「贴底跟随」。
  *
@@ -149,20 +151,36 @@ export function JumpToLatest({
   stick,
   label,
   newLabel,
+  attention = null,
 }: {
   stick: Pick<StickToBottom<HTMLElement>, "pinned" | "unseen" | "scrollToBottom">;
   label: string;
   newLabel: string;
+  /**
+   * 有一件**等他做**的事(一张等拍板的卡):按钮改说这件事,点了把那张卡滚进视口,而不只是滚到底。
+   *
+   * 卡跟着对话走之后摆在发起它的那次工具调用里 —— 人往上翻着历史时它在视口外,而智能体正阻塞着等它。
+   * 「有新内容」说不出这件事的分量;滚到底也不一定看得见它(那一轮停在更早的一步时)。
+   */
+  attention?: { label: string; target: () => HTMLElement | null } | null;
 }) {
   if (stick.pinned) return null;
+  const jump = () => {
+    const target = attention?.target();
+    if (target) target.scrollIntoView({ block: "center" });
+    else stick.scrollToBottom();
+  };
   return (
     <button
       type="button"
-      onClick={() => stick.scrollToBottom()}
-      className="absolute bottom-2.5 left-1/2 z-10 flex -translate-x-1/2 items-center gap-1 rounded-full border border-border bg-panel px-2.5 py-1 text-ui-2xs text-muted-foreground shadow-[var(--shadow-panel)] hover:bg-muted hover:text-foreground"
+      onClick={jump}
+      className={cn(
+        "absolute bottom-2.5 left-1/2 z-10 flex -translate-x-1/2 items-center gap-1 rounded-full border border-border bg-panel px-2.5 py-1 text-ui-2xs text-muted-foreground shadow-[var(--shadow-panel)] hover:bg-muted hover:text-foreground",
+        attention && "border-primary text-foreground",
+      )}
     >
       <ArrowDown size={11} />
-      {stick.unseen ? newLabel : label}
+      {attention ? attention.label : stick.unseen ? newLabel : label}
     </button>
   );
 }

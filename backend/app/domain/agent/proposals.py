@@ -29,9 +29,12 @@ def propose(
     payload: dict[str, Any],
     requested_by: str = "",
     session_id: str | None = None,
+    tool_call_id: str | None = None,
 ) -> ToolConfirmation:
     """开一张卡。`session_id` 是这次调用**凭据**所属的对话(由入口从令牌取出),不是调用方自己声明的 ——
     声明的话就能把自己的动作挂进别人的对话(三档权限模式下,那等于挂进别人开的自动放行)。
+
+    `tool_call_id` 反过来**可以**由调用方报:它只决定卡在对话里摆在哪一步(见 ToolConfirmation.tool_call_id)。
 
     开卡要 edit 权限:卡批了就会改东西,不能让只读的人借一张卡去改。
     """
@@ -44,6 +47,7 @@ def propose(
         actor_id=user.id,
         requested_by=requested_by,
         session_id=session_id,
+        tool_call_id=tool_call_id,
     )
     # 该不该不问就执行。判定就地做完(全是本地查询),执行交给后台线程 —— 放行了就不必再问用户,
     # 飞书那边也不用推一张没人需要点的卡。

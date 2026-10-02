@@ -47,14 +47,14 @@ import type { JSONContent } from "@tiptap/react";
 
 import { ChatComposer, appendText, collectReferences, documentText, emptyDocument } from "@/features/agent/ChatComposer";
 import type { AgentReference } from "@/features/agent/references";
-import { PendingDecisions } from "@/features/agent/PendingDecisions";
+import { JumpToLatestOrDecision, PendingDecisions, SessionDecisions } from "@/features/agent/PendingDecisions";
 import { AgentSessionSwitcher } from "@/features/agent/AgentSessionSwitcher";
 import { ModelPicker } from "@/features/agent/ModelPicker";
-import { AgentErrorCard, AgentTurnContent, type AgentTimelineItem } from "@/features/agent/ToolCalls";
+import { AgentErrorCard, AgentTurnContent, toolCallIds, type AgentTimelineItem } from "@/features/agent/ToolCalls";
 import { AnsweredChoiceCard, type AnsweredChoice } from "@/features/agent/AnsweredChoice";
 import { isRedundantAnswerRecord, recordedQuestionIds } from "@/features/agent/answerRecords";
 import { AgentStatusRow } from "@/features/agent/AgentStatusRow";
-import { JumpToLatest, useStickToBottom } from "@/features/agent/stickToBottom";
+import { useStickToBottom } from "@/features/agent/stickToBottom";
 import { QueuedMessages } from "@/features/agent/QueuedMessages";
 import { ConfirmDialog } from "@/components/app/modals";
 import { useCurrentAgentSession } from "@/features/agent/currentAgentSession";
@@ -218,6 +218,13 @@ export function CanvasAgentChat({
   const allMessages = messages.data ?? [];
   const recordedQuestions = React.useMemo(() => recordedQuestionIds(allMessages), [allMessages]);
   const visibleMessages = allMessages.filter((message) => !isRedundantAnswerRecord(message, recordedQuestions));
+  //: 对话里画出来的工具调用:对得上其中一行的确认卡就摆在那一行里,对不上的才退回列表末尾。
+  const placedToolCalls = toolCallIds([
+    ...visibleMessages.map((message) => (message.payload as { timeline?: AgentTimelineItem[] } | null)?.timeline),
+    running ? streamTimeline : [],
+  ]);
+  //: 装着这段对话的那一块 —— 「有请求等你确认」在它里面找那张卡。
+  const threadArea = React.useRef<HTMLDivElement | null>(null);
 
   /** 水位由会话详情**现算**给出,不从消息 payload 里翻。
    *  挂在消息上等于"必须先成功跑一轮才看得到" —— 而想知道"还能聊多久"的时刻恰恰在开口之前:
@@ -359,6 +366,8 @@ export function CanvasAgentChat({
     >
       {handles}
       {!readOnly && attach.drop.overlay}
+      {/* 确认卡跟着对话走:取卡、拍板在这一层,对话里每一次工具调用的那一行各自查自己的卡(见 PendingDecisions)。 */}
+      <SessionDecisions workspaceId={workspaceId} sessionId={activeSession?.id ?? null} readOnly={readOnly} live={running}>
       <div className={cn(PANEL_HEADER_CLASS, isFloating && "cursor-move")} onPointerDown={startDrag}>
         {/* h2 会吃满按钮以外的剩余标题栏，悬浮时这整段都是拖动命中区。会话标题本身仍是
             button，useFloatingPanel 会排除它，所以单击切会话与拖窗口不会互相抢事件。此前把
@@ -395,7 +404,7 @@ export function CanvasAgentChat({
           <X size={13} />
         </button>
       </div>
-      <div className="relative grid min-h-0 min-w-0">
+      <div className="relative grid min-h-0 min-w-0" ref={threadArea}>
       <div
         className={cn(
           // 横向必须一起锁死。grid 子项默认 min-width:auto —— 一段长代码块 / 一条长 URL 会把
@@ -489,9 +498,15 @@ export function CanvasAgentChat({
             <AgentStatusRow label={t("chatThinking")} meta={t("usageRunning").replace("{t}", formatElapsedSeconds(elapsedSeconds))} />
           </div>
         )}
-        {activeSession && <PendingDecisions workspaceId={workspaceId} sessionId={activeSession.id} readOnly={readOnly} />}
+        <PendingDecisions placed={placedToolCalls} />
       </div>
-      <JumpToLatest stick={stick} label={t("chatJumpToLatest")} newLabel={t("chatNewBelow")} />
+      <JumpToLatestOrDecision
+        stick={stick}
+        label={t("chatJumpToLatest")}
+        newLabel={t("chatNewBelow")}
+        decisionLabel={t("chatDecisionWaiting")}
+        area={threadArea}
+      />
       </div>
       {readOnly ? (
         <p
@@ -600,6 +615,7 @@ export function CanvasAgentChat({
           </div>
         </>
       )}
+      </SessionDecisions>
       <ConfirmDialog
         open={deletingSession !== null}
         title={t("deleteConfirmTitle")}

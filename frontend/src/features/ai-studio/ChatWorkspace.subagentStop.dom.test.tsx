@@ -67,7 +67,11 @@ vi.mock("@/features/agent/ChatBubble", () => ({ ChatBubble: () => null }));
 vi.mock("@/features/agent/DictateButton", () => ({ DictateButton: () => null }));
 vi.mock("@/features/agent/ModelPicker", () => ({ ModelPicker: () => null }));
 vi.mock("@/features/agent/SessionSettingsMenu", () => ({ SessionSettingsMenu: () => null }));
-vi.mock("@/features/agent/PendingDecisions", () => ({ PendingDecisions: () => null }));
+vi.mock("@/features/agent/PendingDecisions", () => ({
+  SessionDecisions: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  PendingDecisions: () => null,
+  JumpToLatestOrDecision: () => null,
+}));
 vi.mock("@/features/agent/QueuedMessages", () => ({ QueuedMessages: () => null }));
 vi.mock("@/features/agent/trace/TraceView", () => ({ TraceView: () => null, TraceStatsBar: () => null }));
 vi.mock("@/features/agent/trace/traceModel", () => ({ buildTurns: () => [] }));

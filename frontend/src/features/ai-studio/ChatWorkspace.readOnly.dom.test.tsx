@@ -68,7 +68,15 @@ vi.mock("@/features/agent/ChatBubble", () => ({ ChatBubble: () => null }));
 vi.mock("@/features/agent/DictateButton", () => ({ DictateButton: () => null }));
 vi.mock("@/features/agent/ModelPicker", () => ({ ModelPicker: () => <span>model-picker</span> }));
 vi.mock("@/features/agent/SessionSettingsMenu", () => ({ SessionSettingsMenu: () => <span>session-settings</span> }));
-vi.mock("@/features/agent/PendingDecisions", () => ({ PendingDecisions: mocks.pendingDecisions }));
+vi.mock("@/features/agent/PendingDecisions", () => ({
+  SessionDecisions: ({ children, ...props }: { children: React.ReactNode; sessionId: string | null; readOnly?: boolean }) => {
+    //: 会话读回来之前没有会话可拍板(provider 什么都不取),只记有会话之后的那几次。
+    if (props.sessionId) mocks.pendingDecisions(props);
+    return <>{children}</>;
+  },
+  PendingDecisions: () => null,
+  JumpToLatestOrDecision: () => null,
+}));
 vi.mock("@/features/agent/QueuedMessages", () => ({ QueuedMessages: () => null }));
 vi.mock("@/features/agent/trace/TraceView", () => ({ TraceView: () => null, TraceStatsBar: () => null }));
 vi.mock("@/features/agent/trace/traceModel", () => ({ buildTurns: () => [] }));

@@ -49,11 +49,11 @@ import { useCurrentAgentSession } from "@/features/agent/currentAgentSession";
 import { type CompactionInfo, type ContextInfo } from "@/features/agent/ContextMeter";
 import { InspectorCard, InspectorRow } from "@/components/layout/InspectorCard";
 import { PlanCard, planHistory, type PlanStep } from "@/features/agent/PlanCard";
-import { JumpToLatest, useStickToBottom } from "@/features/agent/stickToBottom";
+import { useStickToBottom } from "@/features/agent/stickToBottom";
 import { QueuedMessages } from "@/features/agent/QueuedMessages";
-import { PendingDecisions } from "@/features/agent/PendingDecisions";
+import { JumpToLatestOrDecision, PendingDecisions, SessionDecisions } from "@/features/agent/PendingDecisions";
 import { isRedundantAnswerRecord, recordedQuestionIds } from "@/features/agent/answerRecords";
-import { AgentTurnContent, type AgentTimelineItem, type ToolCall } from "@/features/agent/ToolCalls";
+import { AgentTurnContent, toolCallIds, type AgentTimelineItem, type ToolCall } from "@/features/agent/ToolCalls";
 import { formatElapsedSeconds } from "@/lib/time";
 import { AgentStatusIcon, ToolName, toAgentStatus } from "@/features/agent/StatusIcon";
 import { readToolPayload } from "@/features/ai-studio/toolPayload";
@@ -79,6 +79,8 @@ export const AI_PANEL_BOUNDS = {
 /* 输入框那一列的宽度 —— 队列条和它下面那行脚注共用这一个。
    写死三遍的结果是窗口变窄时只有输入框缩进去,队列条仍顶着两侧边缘,同一件事的几个盒子对不齐。 */
 const COMPOSER_COLUMN = "mx-auto w-[min(780px,calc(100%-32px))]";
+/** 轨迹 / 子代理视图:对话里的工具行不在屏上,待决的卡全摆在输入框上方。 */
+const NOTHING_PLACED: ReadonlySet<string> = new Set();
 
 export function ChatWorkspace({
   workspace,
@@ -324,14 +326,22 @@ export function ChatWorkspace({
     return byMessage;
   }, [usageEvents.data]);
 
-  //: 等你拍板的卡(确认 / 选择)不跟着视图走。对话视图里它们在消息流末尾;看轨迹、看子代理时
-  //: 消息流不在屏上,它们就停在输入框上方 —— 此前两张卡只写在对话分支里,一切到轨迹就卸载:
-  //: 确认卡掉回右上角的全局中心(少了「本会话始终允许」),选择卡哪儿都看不到,智能体干等到超时。
+  //: 等你拍板的卡(确认 / 选择)不跟着视图走。对话视图里确认卡摆在发起它的那次工具调用里(对不上任何一行的
+  //: 和选择卡在消息流末尾);看轨迹、看子代理时消息流不在屏上,它们就全停在输入框上方 —— 此前两张卡只写在
+  //: 对话分支里,一切到轨迹就卸载:确认卡掉回右上角的全局中心(少了「本会话始终允许」),选择卡哪儿都看不到,
+  //: 智能体干等到超时。
   const pendingCards = activeSession ? (
     <div className={cn(COMPOSER_COLUMN, "grid max-h-[40vh] min-w-0 gap-2 overflow-y-auto overflow-x-hidden empty:hidden")}>
-      <PendingDecisions workspaceId={workspace.id} sessionId={activeSession.id} readOnly={readOnly} />
+      <PendingDecisions placed={NOTHING_PLACED} />
     </div>
   ) : null;
+  //: 对话视图里画出来的工具调用:对得上其中一行的确认卡就摆在那一行里。
+  const placedToolCalls = toolCallIds([
+    ...visibleMessages.map((message) => (message.payload as { timeline?: AgentTimelineItem[] } | null)?.timeline),
+    running ? streamTimeline : [],
+  ]);
+  //: 装着这段对话的那一块 —— 「有请求等你确认」在它里面找那张卡。
+  const threadArea = React.useRef<HTMLDivElement | null>(null);
 
   const narrow = useMediaMatch("(max-width: 1180px)");
   const single = useMediaMatch("(max-width: 820px)");
@@ -409,6 +419,8 @@ export function ChatWorkspace({
         className="relative min-h-0 overflow-hidden bg-workspace-panel grid grid-rows-[auto_minmax(0,1fr)_auto]"
         {...(acceptsFiles ? attach.drop.handlers : {})}
       >
+        {/* 确认卡跟着对话走:取卡、拍板在这一层,对话里每一次工具调用的那一行各自查自己的卡(见 PendingDecisions)。 */}
+        <SessionDecisions workspaceId={workspace.id} sessionId={activeSession?.id ?? null} readOnly={readOnly} live={running}>
         {acceptsFiles && attach.drop.overlay}
         {/* min-w-0:这行是 grid 子项,默认 min-width:auto —— 面包屑里的长任务名会把它撑到
             section 的 overflow-hidden 上被硬裁,而不是走内部的 truncate 省略号。 */}
@@ -497,7 +509,7 @@ export function ChatWorkspace({
             ) : (
             /* 横向和纵向一起锁:flex 子项默认 min-width:auto,一段长代码块或长 URL 会把这一列
                  撑宽,整个对话区就能左右滚。代码块自己的 overflow-x-auto 只在父容器被约束时生效。 */
-            <div className="relative grid min-h-0 min-w-0">
+            <div className="relative grid min-h-0 min-w-0" ref={threadArea}>
             <div className="flex min-w-0 flex-col gap-3.5 overflow-y-auto overflow-x-hidden px-4 pb-2.5 pt-7" ref={stick.ref}>
               {visibleMessages.map((message) => (
                 <ChatBubble
@@ -539,9 +551,15 @@ export function ChatWorkspace({
                   </div>
                 </div>
               )}
-              {activeSession && <PendingDecisions workspaceId={workspace.id} sessionId={activeSession.id} readOnly={readOnly} />}
+              <PendingDecisions placed={placedToolCalls} />
             </div>
-            <JumpToLatest stick={stick} label={t("chatJumpToLatest")} newLabel={t("chatNewBelow")} />
+            <JumpToLatestOrDecision
+              stick={stick}
+              label={t("chatJumpToLatest")}
+              newLabel={t("chatNewBelow")}
+              decisionLabel={t("chatDecisionWaiting")}
+              area={threadArea}
+            />
             </div>
             )}
             {view === "trace" && pendingCards}
@@ -666,6 +684,7 @@ export function ChatWorkspace({
             />
           </>
         )}
+        </SessionDecisions>
       </section>
 
       {environmentOpen && <div id={environmentId}

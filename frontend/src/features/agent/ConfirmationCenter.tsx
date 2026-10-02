@@ -35,7 +35,12 @@ export function ConfirmationCenter({ workspaceId }: { workspaceId: string }) {
     mutationFn: ({ id, action }: { id: string; action: "approve" | "reject" }) =>
       action === "approve" ? approveConfirmation(id) : rejectConfirmation(id),
     onSuccess: (card) => {
-      settled.remember(card);
+      // **拍板之后卡就走**,只有一种例外:外部智能体(没有对话)的卡执行失败了。
+      //  - 对话里的卡:结果收在那次对话里那次工具调用的一行里(见 ToolCalls),这里再留一张是第二份;
+      //  - 执行成了 / 拒了:那件事本身就是结果,一张「✓ 已执行」挂在右上角只是要人再点一次 × 的东西
+      //    (用户:「智能体审批通过后那个卡片不需要继续保留着的」);
+      //  - 外部智能体的卡执行失败:原因只有这里看得到(它没有对话可收),留着等人读完移走。
+      if (!card.session_id && card.status === "failed") settled.remember(card);
       invalidateAfterDecision(qc, workspaceId);
     },
   });

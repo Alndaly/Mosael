@@ -322,7 +322,7 @@ export async function buildAllTools(
         description: spec.description || spec.name,
         // The manifest's parameters are already JSON Schema, which is what pi wants.
         parameters: (spec.parameters ?? { type: "object", properties: {} }) as never,
-        execute: async (_id: string, rawParams: unknown, signal?: AbortSignal) => {
+        execute: async (toolCallId: string, rawParams: unknown, signal?: AbortSignal) => {
           const args = { ...((rawParams ?? {}) as Record<string, unknown>) };
           // Fill in the workspace only for tools that declare it: the model has no reason to
           // know which workspace this turn belongs to, but the tools are plain Python functions
@@ -333,6 +333,9 @@ export async function buildAllTools(
           const response = (await apiPost(apiBase, token, `/api/agent/tools/${spec.name}`, {
             arguments: args,
             requested_by: "pi-agent",
+            // 这是哪一次调用:开卡时记在卡上,对话界面据此把卡摆回这一步(而不是堆在输入框上面)。
+            // 它只管摆位、不管授权,所以由这里报 —— 和下面那条 sessionId 正相反。
+            tool_call_id: toolCallId,
             // **不再转述 sessionId**:这次调用属于哪次对话,后端从 token 认出来(turn 令牌铸造时
             // 就带着它)。转述的东西可以被伪造,而确认卡的归属决定它出现在谁面前、以后还决定
             // 要不要自动放行。

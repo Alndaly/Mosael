@@ -99,6 +99,7 @@ def request_confirmation(
     actor_id: str | None,
     requested_by: str = "external-agent",
     session_id: str | None = None,
+    tool_call_id: str | None = None,
 ) -> ToolConfirmation:
     """开一张卡。`actor_id` 是开卡的人(发起这次调用的凭据是谁的),校验里因人而异的事实按他算。"""
     spec = tool_spec(tool)
@@ -120,6 +121,7 @@ def request_confirmation(
         payload=payload,
         requested_by=requested_by,
         session_id=session_id,
+        tool_call_id=tool_call_id,
     )
     db.add(confirmation)
     db.flush()

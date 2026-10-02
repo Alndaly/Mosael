@@ -12,8 +12,8 @@ import { PermissionBadge, permissionTone, type PermissionTone } from "@/features
 import { cn } from "@/lib/utils";
 
 /**
- * 一张确认卡 —— 聊天里的内联卡(InlineConfirmations)和右上角的全局中心(ConfirmationCenter)
- * 共用这一个,两处只各自给「谁在请求」和底部的按钮。
+ * 一张确认卡 —— 聊天里的内联卡(InlineConfirmations,摆在发起它的那次工具调用下面)和右上角的全局中心
+ * (ConfirmationCenter)共用这一个,两处只各自给「谁在请求」和底部的按钮。
  *
  * 此前两处各画一遍,而内联那份把四样东西塞进一行:图标 + 一整句摘要(连参数一行摘要一起)+
  * 句尾的「⚠️ 会在你的电脑上运行代码」+ 实心粉红的档次胶囊。窄对话栏里标题和警告各被挤成三行,
@@ -110,7 +110,7 @@ const REASON_PREVIEW_CHARS = 280;
  * 失败原因:**后端整句存下**(不再按第 500 个字截成半句),长短在这里排 —— 长的先露前几行,点开看全文。
  * 截在前面的只是显示,不是数据:「展开」之后读到的就是后端存的那一整句。
  */
-function FailureReason({ text }: { text: string }) {
+export function FailureReason({ text }: { text: string }) {
   const t = useI18n();
   const [open, setOpen] = React.useState(false);
   const preview = text.split("\n").slice(0, REASON_PREVIEW_LINES).join("\n").slice(0, REASON_PREVIEW_CHARS);
@@ -263,10 +263,12 @@ function TextBlock({ name, text, language }: { name: string; text: string; langu
 }
 
 /**
- * 做出了结论的卡:接口回来的那一份。留在原处显示终态,直到用户移走它或换了会话 ——
- * 此前卡一批就从列表里消失,「执行失败」和原因谁也看不见。
+ * 做出了结论的卡:接口回来的那一份。留在原处显示终态,直到用户移走它或换了工作区。
  *
- * `scope` 换了(切到另一个会话)就当作清空,不用 effect 去追。
+ * 只剩全局确认中心在用,而且只留**外部智能体执行失败**的那种(见 ConfirmationCenter):那张卡没有对话可收,
+ * 原因只在这里看得到。对话里的卡不再留成一张「✓ 已执行」—— 结果收进那次工具调用的一行里(见 ToolCalls)。
+ *
+ * `scope` 换了就当作清空,不用 effect 去追。
  */
 export function useSettledCards(scope: string) {
   const [state, setState] = React.useState<{ scope: string; cards: Confirmation[] }>({ scope, cards: [] });

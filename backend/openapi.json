@@ -25711,6 +25711,17 @@
             ],
             "title": "Session Id"
           },
+          "tool_call_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tool Call Id"
+          },
           "tool": {
             "type": "string",
             "title": "Tool"
@@ -35550,6 +35561,12 @@
           "requested_by": {
             "type": "string",
             "title": "Requested By",
+            "default": ""
+          },
+          "tool_call_id": {
+            "type": "string",
+            "maxLength": 128,
+            "title": "Tool Call Id",
             "default": ""
           }
         },

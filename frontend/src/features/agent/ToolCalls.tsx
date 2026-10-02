@@ -1,8 +1,8 @@
 import React from "react";
 import { useQueries, useQuery } from "@tanstack/react-query";
-import { Brain, Check, ChevronRight, CircleAlert, FileWarning, Loader2, Music } from "lucide-react";
+import { Brain, Check, ChevronRight, CircleAlert, FileWarning, Loader2, Music, X } from "lucide-react";
 
-import { assetFileUrl, assetPreviewUrl, getAsset, type Asset } from "@/api/client";
+import { assetFileUrl, assetPreviewUrl, getAsset, type Asset, type Confirmation } from "@/api/client";
 import { assetKeys } from "@/api/queryKeys";
 import { useI18n } from "@/app/preferences";
 import { AgentMarkdown } from "@/components/markdown/Markdown";
@@ -18,6 +18,9 @@ import { cn } from "@/lib/utils";
 import { ToolResultCard, detectShape, toolResultData } from "./toolResultShapes";
 import { CitationContext } from "@/components/markdown/CitationLink";
 import { collectCitations } from "@/features/agent/citations";
+import { FailureReason } from "@/features/agent/ConfirmationCard";
+import { PendingConfirmationCard } from "@/features/agent/InlineConfirmations";
+import { useToolCallConfirmation } from "@/features/agent/decisionsContext";
 
 /** 工具调用卡的数据形态:后端从 sidecar 事件累积(host.py),流里实时更新、消息 payload 里持久化。 */
 export type ToolCall = {
@@ -241,10 +244,40 @@ function format(value: unknown): string {
   }
 }
 
+/**
+ * 这次调用开的确认卡走到了哪一步 —— 决定之后它就是工具行里的这一句,不再是一张卡。
+ *
+ * 「谁放的行」要说清:自动放行(本会话始终允许、自动 / 跳过档)和用户亲手点的不是一回事,
+ * 写成同一个「已批准」等于替他认了一个他没做过的决定(同一条理由见 AutoApprovalTrace)。
+ */
+function decisionWord(card: Confirmation, t: ReturnType<typeof useI18n>): string {
+  const who = card.decision_mode === "manual" ? t("confirmDecisionManual") : t("confirmDecisionAuto");
+  switch (card.status) {
+    case "pending":
+      return t("confirmWaiting");
+    case "approved":
+      return `${who} · ${t("confirmOutcomeRunning")}`;
+    case "executed":
+      return `${who} · ${t("confirmOutcomeExecuted")}`;
+    case "failed":
+      return `${who} · ${t("confirmOutcomeFailed")}`;
+    case "rejected":
+      return t("confirmStatusRejected");
+    default:
+      return t("confirmStatusCancelled");
+  }
+}
+
 function ToolCallCard({ tool }: { tool: ToolCall }) {
   const t = useI18n();
+  //: 这次调用开的确认卡(没有就是 null)。等决定时卡就摆在这一行下面;有了结论只剩行里那一句状态。
+  const decision = useToolCallConfirmation(tool.id);
+  //: 用户拒了 / 卡作废了:工具那边是「失败」(sidecar 抛的是「用户拒绝了该操作」),但这不是出了错 ——
+  //: 是他做的决定。不标红、不自动摊开那句错误。
+  const declined = decision?.status === "rejected" || decision?.status === "cancelled";
+  const failed = tool.status === "error" && !declined;
   // 失败默认展开(让人一眼看到出错原因),其余默认折叠。
-  const [open, setOpen] = React.useState(tool.status === "error");
+  const [open, setOpen] = React.useState(failed);
   const preview = summarize(tool.args);
   // 明细里也去噪:workspace_id 那几个占的行常常比真正的参数还多,而它们对读的人没有任何意义。
   const cleanArgs = React.useMemo(() => withoutNoise(tool.args), [tool.args]);
@@ -280,21 +313,34 @@ function ToolCallCard({ tool }: { tool: ToolCall }) {
 
   // **成功时不写「已完成」** —— 那个 ✓ 已经说过一遍了,再写一次只是在占地方。
   // 运行中和失败时保留:那两个词带的信息,图标传达不了全部(尤其失败,它要把视线拉过去)。
-  const statusWord =
-    tool.status === "running" ? t("toolRunning") : tool.status === "error" ? t("toolFailed") : null;
+  // 开了确认卡的调用改说卡走到了哪一步:「已批准 · 已执行」比一个 ✓ 多说了一件事 —— 这一步是问过人的。
+  const statusWord = decision
+    ? null
+    : tool.status === "running"
+      ? t("toolRunning")
+      : tool.status === "error"
+        ? t("toolFailed")
+        : null;
+  const statusText = decision ? (
+    <span data-decision={decision.status} className={cn(decision.status === "failed" && "text-destructive")}>
+      {decisionWord(decision, t)}
+    </span>
+  ) : (
+    statusWord
+  );
 
   return (
     // 一次工具调用是对话里的**一条行内标记**,不是一张与正文并列的卡片 —— 所以用 Marker:
     // 折叠态就是安静的一行(没有填充、没有整圈边框),不再和旁边的正文抢分量;展开的明细挂在
     // 一条左竖线下面,读起来是"这一步的细节",而不是又一个内容块。
-    <div className="w-full min-w-0">
+    <div className="w-full min-w-0" data-tool-call={tool.id}>
       <Marker
         asChild
         className={cn(
           AGENT_ROW_CLASS,
           "transition-colors duration-100",
           hasBody && "enabled:cursor-pointer enabled:hover:bg-muted",
-          tool.status === "error" && "text-destructive",
+          failed && "text-destructive",
         )}
       >
         <button
@@ -307,11 +353,13 @@ function ToolCallCard({ tool }: { tool: ToolCall }) {
             className={cn(
               "inline-flex items-center justify-center",
               tool.status === "done" && "text-success",
-              tool.status === "error" && "text-destructive",
+              failed && "text-destructive",
             )}
           >
             {tool.status === "running" ? (
               <Loader2 className={cn(AGENT_ROW_ICON_CLASS, "animate-mosael-spin")} />
+            ) : declined ? (
+              <X className={AGENT_ROW_ICON_CLASS} />
             ) : tool.status === "error" ? (
               <CircleAlert className={AGENT_ROW_ICON_CLASS} />
             ) : (
@@ -327,8 +375,8 @@ function ToolCallCard({ tool }: { tool: ToolCall }) {
                 字号挂在 span 上:根是 button,那条全局 `button{font:inherit}` 会吃掉根上的字号。 */}
             {!(preview && !open) && <span className="min-w-0 flex-1" aria-hidden />}
             <span className="flex-none pl-1.5 text-ui-xs">
-              {statusWord}
-              {statusWord && elapsed && " · "}
+              {statusText}
+              {statusText && elapsed && " · "}
               {elapsed && <span className="tabular-nums">{elapsed}</span>}
             </span>
           </MarkerContent>
@@ -342,6 +390,18 @@ function ToolCallCard({ tool }: { tool: ToolCall }) {
           )}
         </button>
       </Marker>
+      {/* 执行失败的原因**不跟着折叠**:卡收成一行之后,这是它留下的唯一一处能读到「为什么没成」的地方。 */}
+      {decision?.status === "failed" && decision.error ? (
+        <div className={cn(AGENT_ROW_BODY_CLASS, "mt-1 grid min-w-0 gap-0.5 text-ui-xs")}>
+          <FailureReason text={decision.error} />
+        </div>
+      ) : null}
+      {/* 等人拍板的卡就摆在发起它的这一行下面 —— 不是统一堆在对话末尾。 */}
+      {decision?.status === "pending" ? (
+        <div className="mt-1.5 min-w-0">
+          <PendingConfirmationCard item={decision} />
+        </div>
+      ) : null}
       {/* 明细挂在左竖线下。富结果卡**跟着折叠走** —— 它此前在 open 之外,于是折叠只收得起
           原始 JSON,而真正占版面的那几十行结果一直摊着:头上明明有个收拢箭头,点了却不动。
           结果可能几十条 → 封顶高度、内部滚动,别把一步撑到几屏高。 */}
@@ -392,6 +452,17 @@ export function ToolCalls({ tools }: { tools: ToolCall[] | undefined }) {
       ))}
     </div>
   );
+}
+
+/** 这些时间线里画出来的全部工具调用(含子步)的 id —— 对得上其中一行的确认卡就摆在那一行里。 */
+export function toolCallIds(timelines: Iterable<AgentTimelineItem[] | undefined>): Set<string> {
+  const ids = new Set<string>();
+  for (const timeline of timelines) {
+    for (const item of timeline ?? []) {
+      if ((item.type === "tool" || item.type === "subtool") && item.tool?.id) ids.add(item.tool.id);
+    }
+  }
+  return ids;
 }
 
 export function agentTurnParts(

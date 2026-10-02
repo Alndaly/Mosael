@@ -6,7 +6,8 @@ import type { components } from "@/api/generated/schema";
 import { api } from "@/api/transport";
 
 export type Confirmation = components["schemas"]["ConfirmationOut"];
-export type ConfirmationStatus = "pending" | "approved" | "executed" | "failed" | "rejected";
+/** `cancelled`:还没人拍板就作废了(那一轮随后端重启中断,见 host.reconcile_orphaned_agent_sessions)。 */
+export type ConfirmationStatus = "pending" | "approved" | "executed" | "failed" | "rejected" | "cancelled";
 
 /**
  * 一个工作区里的卡,按状态筛(不给就不筛);带会话 id 就只要那次对话的。

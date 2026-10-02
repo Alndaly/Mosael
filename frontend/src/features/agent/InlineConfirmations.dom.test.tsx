@@ -36,6 +36,7 @@ let releaseDecision: () => void = () => {};
 
 const api = vi.fn(async (path: string, _init?: unknown) => {
   if (path.startsWith("/api/confirmations?")) return pendingCards;
+  if (path.startsWith("/api/agent/questions")) return [];
   if (path.startsWith("/api/agent/sessions/")) return { id: "s1", auto_allow_tools: [] };
   await new Promise<void>((resolve) => {
     releaseDecision = resolve;
@@ -46,13 +47,16 @@ const api = vi.fn(async (path: string, _init?: unknown) => {
 vi.mock("@/api/transport", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/api/transport")>()), api: (path: string, init?: unknown) => api(path, init) }));
 
-import { InlineConfirmations } from "@/features/agent/InlineConfirmations";
+import { PendingDecisions, SessionDecisions } from "@/features/agent/PendingDecisions";
 
-function renderCards() {
+/** 对话里没有任何一行对得上这几张卡(夹具的卡不带 tool_call_id):它们全摆在列表末尾那一叠里。 */
+function renderCards({ readOnly = false }: { readOnly?: boolean } = {}) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
-      <InlineConfirmations workspaceId="w1" allowKey="s1" />
+      <SessionDecisions workspaceId="w1" sessionId="s1" readOnly={readOnly}>
+        <PendingDecisions placed={new Set()} />
+      </SessionDecisions>
     </QueryClientProvider>,
   );
 }
@@ -136,20 +140,18 @@ describe("确认卡的等待状态", () => {
   });
 });
 
-it("有了结论的卡留在原处:按钮换成终态那一行,失败的写明原因", async () => {
-  /* 此前卡一批就从列表里消失 —— 执行失败了,原因只有智能体知道。 */
+it("拍板之后卡就离开这一叠 —— 待决列表还没刷新也不再画它", async () => {
+  /* 此前有了结论的卡留成一张「✓ 已执行 / 执行失败」加 ×,要人手动关(用户:「审批通过后那个卡片不需要继续保留着的」)。
+     结果(连同失败原因)现在收在那次工具调用的一行里,见 CanvasAgentChat.decisions.dom.test。 */
   const { container } = renderCards();
   (await screen.findAllByText("允许一次"))[0].click();
   await waitFor(() => expect(busyLabels(container).length).toBe(1));
   releaseDecision();
 
-  await waitFor(() => expect(container.querySelector("article[data-status='failed']")).toBeTruthy());
-  const failed = container.querySelector("article[data-status='failed']")!;
-  expect(failed.textContent).toContain("confirmStatusFailed");
-  expect(failed.textContent).toContain("磁盘满了");
-  expect(failed.textContent).not.toContain("允许一次");
-  //: 待决列表还没刷新时同一张卡两边都有 —— 只留有结论的那份。
-  expect(container.querySelectorAll("article")).toHaveLength(pendingCards.length);
+  //: 夹具的待决列表一直把 c1 当待决返回 —— 自己刚拍板的那一份走得更远,以它为准。
+  await waitFor(() => expect(container.querySelectorAll("article")).toHaveLength(pendingCards.length - 1));
+  expect(container.querySelector("article[data-status='failed']")).toBeNull();
+  expect(screen.queryByRole("button", { name: "confirmDismiss" })).toBeNull();
 });
 
 it("权限徽标不跟着长摘要换行 —— 两个字被压成一列竖排就没法读了", async () => {
@@ -169,12 +171,7 @@ it("摘要里的 **强调** 渲染成粗体 —— 这是用户批准前唯一�
 });
 
 it("同事共享来的对话:卡照样看得见,三档动作换成「等主人拍板」", async () => {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  render(
-    <QueryClientProvider client={client}>
-      <InlineConfirmations workspaceId="w1" allowKey="s1" readOnly />
-    </QueryClientProvider>,
-  );
+  renderCards({ readOnly: true });
   expect(await screen.findByText("改时间线")).toBeTruthy();
   expect(screen.getAllByText("agentDecisionOwnerOnly")).toHaveLength(pendingCards.length);
   expect(screen.queryByRole("button", { name: /允许一次|本会话始终允许|拒绝/ })).toBeNull();

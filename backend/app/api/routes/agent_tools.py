@@ -28,7 +28,7 @@ import logging
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.core.i18n import tr
 from app.api.deps import CurrentUser, DbSession, PresentedToken
@@ -47,6 +47,9 @@ class ToolInvocation(BaseModel):
     requested_by: str = ""
     # **没有 session_id**:这次调用属于哪次对话,由调用方的令牌说了算(见下面 set_session_id 那段)。
     # 参数说的可以是任何值,令牌不行。
+    #: 这是那次对话里的哪一次工具调用(运行时的 toolCallId)。开卡时记在卡上,只决定卡在对话里摆在哪一步 ——
+    #: 和 session_id 相反,它不涉及授权,所以由调用方报(见 ToolConfirmation.tool_call_id)。
+    tool_call_id: str = Field(default="", max_length=128)
 
 
 @router.get("/agent/tools", response_model=list[ToolSpec])
@@ -139,6 +142,7 @@ def _invoke_plugin_tool(
             confirmation = propose(
                 db, user, workspace_id=workspace_id, tool=name, payload={"arguments": dict(body.arguments)},
                 requested_by=body.requested_by or "external-agent", session_id=session_for_token(db, token),
+                tool_call_id=body.tool_call_id or None,
             )
         except ConfirmationError as exc:
             # 参数不对(缺必填、类型错)开卡时就拒:模型据这句话改了重发,而不是等人批准了才炸。
@@ -196,7 +200,9 @@ def invoke_agent_tool(
     # 工具体在本进程里直接调领域用例,以**这个人**的身份(见 mcp_server._use_case):不再经 HTTP 回连,
     # 也就不再需要为每次调用铸一份短期令牌。
     agent_session_id = (auth.agent_session_id if auth is not None else None) or None
-    with registry.calling_as(user_id=user.id, requested_by=body.requested_by, session_id=agent_session_id or ""):
+    with registry.calling_as(
+        user_id=user.id, requested_by=body.requested_by, session_id=agent_session_id or "", tool_call_id=body.tool_call_id
+    ):
         try:
             result = fn(**arguments)
         except TypeError as exc:  # 缺必填参数(含把参数名拼错的情况)—— 是模型的输入问题,不是服务端故障

@@ -98,6 +98,7 @@ def _open_card(request: dict[str, Any]) -> dict[str, Any]:
         payload=request.get("payload") or {},
         requested_by=request.get("requested_by") or "",
         session_id=_SESSION_ID.get() or None,
+        tool_call_id=_TOOL_CALL_ID.get() or None,
         out=ConfirmationOut,
     )
 
@@ -191,23 +192,29 @@ def set_session_id(session_id: str) -> contextvars.Token:
 #: 这次调用是**谁**(用户 id)。直接调领域用例的工具据此在自己的事务里取出行动人,不再经 HTTP 回连让路由去认令牌。
 _CALLER_ID: contextvars.ContextVar[str] = contextvars.ContextVar("mosael_caller_id", default="")
 
+#: 这是那次对话里**哪一次工具调用**(运行时报的 toolCallId)。开卡时记在卡上,对话界面据此把卡摆回那一步
+#: (见 ToolConfirmation.tool_call_id)。只管摆位,不管授权 —— 所以由运行时报上来也无妨。空串 = 不知道。
+_TOOL_CALL_ID: contextvars.ContextVar[str] = contextvars.ContextVar("mosael_tool_call_id", default="")
 
-def calling_as(*, user_id: str, requested_by: str = "", session_id: str = ""):
+
+def calling_as(*, user_id: str, requested_by: str = "", session_id: str = "", tool_call_id: str = ""):
     """在进程内以某个调用方的身份跑工具。几个上下文变量一起设、一起还原 —— 调用方不必知道这里有几个、叫什么。
 
-    只有**身份**:这次调用是谁、属于哪次对话、谁发起的。工具体直接调领域用例,不再经 HTTP 回连,
+    只有**身份**:这次调用是谁、属于哪次对话、是其中哪一次调用、谁发起的。工具体直接调领域用例,不再经 HTTP 回连,
     所以没有令牌、没有后端地址要交给它。
     """
-    return _calling_as(user_id=user_id, requested_by=requested_by, session_id=session_id)
+    return _calling_as(user_id=user_id, requested_by=requested_by, session_id=session_id, tool_call_id=tool_call_id)
 
 
 @contextlib.contextmanager
-def _calling_as(*, user_id: str, requested_by: str, session_id: str):
+def _calling_as(*, user_id: str, requested_by: str, session_id: str, tool_call_id: str):
     resets = [(_CALLER_ID, _CALLER_ID.set(user_id))]
     if requested_by:
         resets.append((_REQUESTED_BY, _REQUESTED_BY.set(requested_by)))
     if session_id:
         resets.append((_SESSION_ID, _SESSION_ID.set(session_id)))
+    if tool_call_id:
+        resets.append((_TOOL_CALL_ID, _TOOL_CALL_ID.set(tool_call_id)))
     try:
         yield
     finally:

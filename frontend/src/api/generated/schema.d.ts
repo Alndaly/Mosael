@@ -8881,6 +8881,8 @@ export interface components {
             workspace_id: string;
             /** Session Id */
             session_id: string | null;
+            /** Tool Call Id */
+            tool_call_id?: string | null;
             /** Tool */
             tool: string;
             /** Permission */
@@ -13350,6 +13352,11 @@ export interface components {
              * @default
              */
             requested_by: string;
+            /**
+             * Tool Call Id
+             * @default
+             */
+            tool_call_id: string;
         };
         /** ToolSpec */
         ToolSpec: {
