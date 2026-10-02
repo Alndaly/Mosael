@@ -2321,7 +2321,7 @@ export interface paths {
         put?: never;
         /**
          * Ripple Delete Clips Batch
-         * @description 多选后一次波纹删除(同轨后续左移补位):同样一条操作、一步撤销。
+         * @description 多选后一次波纹删除(后续左移补位;链接组员同删同移;all_tracks 时所有未锁定轨一起):一条操作、一步撤销。
          */
         post: operations["ripple_delete_clips_batch_api_sequences__sequence_id__clips_ripple_delete_batch_post"];
         delete?: never;
@@ -2718,7 +2718,10 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** Ripple Delete Clip */
+        /**
+         * Ripple Delete Clip
+         * @description `linked=false` 只删这一段;`all_tracks=true` 这段时间从所有未锁定轨上拿掉(见 RippleDeleteClip)。
+         */
         delete: operations["ripple_delete_clip_api_sequences__sequence_id__clips__clip_id__ripple_delete"];
         options?: never;
         head?: never;
@@ -12086,6 +12089,24 @@ export interface components {
             /** Name */
             name: string;
         };
+        /**
+         * RippleDeleteClipsRequest
+         * @description 多选后一次波纹删除。
+         */
+        RippleDeleteClipsRequest: {
+            /** Clip Ids */
+            clip_ids: string[];
+            /**
+             * Linked
+             * @default true
+             */
+            linked: boolean;
+            /**
+             * All Tracks
+             * @default false
+             */
+            all_tracks: boolean;
+        };
         /** RunScheduledTaskResponse */
         RunScheduledTaskResponse: {
             task: components["schemas"]["ScheduledTaskOut"];
@@ -18649,7 +18670,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["ClipIdsRequest"];
+                "application/json": components["schemas"]["RippleDeleteClipsRequest"];
             };
         };
         responses: {
@@ -19451,7 +19472,10 @@ export interface operations {
     };
     ripple_delete_clip_api_sequences__sequence_id__clips__clip_id__ripple_delete: {
         parameters: {
-            query?: never;
+            query?: {
+                linked?: boolean;
+                all_tracks?: boolean;
+            };
             header?: never;
             path: {
                 sequence_id: string;

@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from math import inf
 
-from sqlalchemy import inspect
+from sqlalchemy import inspect, select
 from sqlalchemy.orm import Session
 
 from app.db.models import Asset, Clip, Sequence, Track
@@ -352,6 +352,12 @@ class RippleDeleteClipsBatch:
     """多选后一次波纹删除(删掉并让同轨后续左移补位)。"""
 
     clip_ids: tuple[str, ...]
+    #: 链接组员一起删、在各自的轨上一起左移(视频和它分离出去的音频)。False = 只删这一段。
+    linked: bool = True
+    #: 波纹影响所有**未锁定**的轨:把这段时间从整条时间线上拿掉 —— 每条未锁定轨上落在这段时间里的
+    #: 都挖掉(盖住一部分的裁掉、跨过去的切开)、后面的一起左移,各轨之间的对位不变。锁定轨原样不动。
+    #: False(默认)只动被删片段(和链接组员)自己的轨。
+    all_tracks: bool = False
     actor_id: str | None = None
 
 
@@ -360,6 +366,12 @@ class RippleDeleteClip:
     """Delete a clip and shift later clips on the same track left to close the gap."""
 
     clip_id: str
+    #: 链接组员一起删、在各自的轨上一起左移(视频和它分离出去的音频)。False = 只删这一段。
+    linked: bool = True
+    #: 波纹影响所有**未锁定**的轨:把这段时间从整条时间线上拿掉 —— 每条未锁定轨上落在这段时间里的
+    #: 都挖掉(盖住一部分的裁掉、跨过去的切开)、后面的一起左移,各轨之间的对位不变。锁定轨原样不动。
+    #: False(默认)只动被删片段(和链接组员)自己的轨。
+    all_tracks: bool = False
     actor_id: str | None = None
 
 
@@ -395,7 +407,7 @@ def ripple_delete_clips_batch(db: Session, sequence_id: str, op: RippleDeleteCli
         raise SequenceDomainError("No clips to delete")
     clips = [_require_clip(db, sequence_id, clip_id) for clip_id in dict.fromkeys(op.clip_ids)]
     journal = Journal(db, sequence)
-    _ripple_delete(journal, clips)
+    _ripple_delete(journal, clips, linked=op.linked, all_tracks=op.all_tracks)
     _record_operation(
         db,
         sequence,
@@ -411,7 +423,7 @@ def ripple_delete_clip(db: Session, sequence_id: str, op: RippleDeleteClip) -> S
     sequence = _require_sequence(db, sequence_id)
     clip = _require_clip(db, sequence_id, op.clip_id)
     journal = Journal(db, sequence)
-    _ripple_delete(journal, [clip])
+    _ripple_delete(journal, [clip], linked=op.linked, all_tracks=op.all_tracks)
     _record_operation(
         db,
         sequence,
@@ -423,10 +435,25 @@ def ripple_delete_clip(db: Session, sequence_id: str, op: RippleDeleteClip) -> S
     return sequence
 
 
-def _ripple_delete(journal: Journal, clips: list[Clip]) -> None:
-    """删掉这几段,并把它们占的时间从各自的轨上拿掉(后面的左移补位)。"""
+def _ripple_delete(journal: Journal, clips: list[Clip], *, linked: bool, all_tracks: bool) -> None:
+    """删掉这几段(和它们的链接组员),并把它们占的时间拿掉、后面的左移补位。
+
+    - 默认:每段只在**自己的轨上**拿掉自己那段时间。链接音频和画面同删同移,音画对位不变;
+      别的轨不动。
+    - all_tracks:这几段时间从**每一条未锁定的轨**上拿掉。区间里的东西都挖掉(这是「从时间线上
+      剪掉这段时间」,不只是删一段),所以各轨之间的对位不变;锁定轨原样不动 —— 锁定就是为了这个。
+    """
+    targets = with_links(journal.db, clips, linked=linked)
+    spans = [(clip.timeline_start, clip_end(clip)) for clip in targets]
+    if all_tracks:
+        tracks = journal.db.scalars(
+            select(Track.id).where(Track.sequence_id == journal.sequence.id, Track.locked.is_(False))
+        ).all()
+        for track_id in tracks:
+            remove_time_ranges(journal, track_id, spans)
+        return
     ranges: dict[str, list[tuple[float, float]]] = {}
-    for clip in clips:
-        ranges.setdefault(clip.track_id, []).append((clip.timeline_start, clip_end(clip)))
+    for clip, span in zip(targets, spans):
+        ranges.setdefault(clip.track_id, []).append(span)
     for track_id, track_ranges in ranges.items():
         remove_time_ranges(journal, track_id, track_ranges)

@@ -6050,7 +6050,7 @@
           "sequences"
         ],
         "summary": "Ripple Delete Clips Batch",
-        "description": "多选后一次波纹删除(同轨后续左移补位):同样一条操作、一步撤销。",
+        "description": "多选后一次波纹删除(后续左移补位;链接组员同删同移;all_tracks 时所有未锁定轨一起):一条操作、一步撤销。",
         "operationId": "ripple_delete_clips_batch_api_sequences__sequence_id__clips_ripple_delete_batch_post",
         "parameters": [
           {
@@ -6068,7 +6068,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ClipIdsRequest"
+                "$ref": "#/components/schemas/RippleDeleteClipsRequest"
               }
             }
           }
@@ -7367,6 +7367,7 @@
           "sequences"
         ],
         "summary": "Ripple Delete Clip",
+        "description": "`linked=false` 只删这一段;`all_tracks=true` 这段时间从所有未锁定轨上拿掉(见 RippleDeleteClip)。",
         "operationId": "ripple_delete_clip_api_sequences__sequence_id__clips__clip_id__ripple_delete",
         "parameters": [
           {
@@ -7385,6 +7386,26 @@
             "schema": {
               "type": "string",
               "title": "Clip Id"
+            }
+          },
+          {
+            "name": "linked",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": true,
+              "title": "Linked"
+            }
+          },
+          {
+            "name": "all_tracks",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "All Tracks"
             }
           }
         ],
@@ -32088,6 +32109,34 @@
           "name"
         ],
         "title": "RenameRequest"
+      },
+      "RippleDeleteClipsRequest": {
+        "properties": {
+          "clip_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Clip Ids"
+          },
+          "linked": {
+            "type": "boolean",
+            "title": "Linked",
+            "default": true
+          },
+          "all_tracks": {
+            "type": "boolean",
+            "title": "All Tracks",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "clip_ids"
+        ],
+        "title": "RippleDeleteClipsRequest",
+        "description": "多选后一次波纹删除。"
       },
       "RunScheduledTaskResponse": {
         "properties": {

@@ -132,6 +132,13 @@ class ClipIdsRequest(ApiModel):
     linked: bool = True
 
 
+class RippleDeleteClipsRequest(ClipIdsRequest):
+    """多选后一次波纹删除。"""
+
+    #: 波纹影响所有未锁定的轨(这段时间从整条时间线上拿掉);默认只动被删片段和链接组员自己的轨。
+    all_tracks: bool = False
+
+
 class MoveClipsBatchRequest(ApiModel):
     """框选后整组拖动。没有 ripple —— 一组片段要"挤开"什么没有唯一解,组拖按覆盖语义。"""
 

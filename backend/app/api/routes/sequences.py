@@ -24,6 +24,7 @@ from app.api.schemas import (
     JobOut,
     MoveClipRequest,
     ClipIdsRequest,
+    RippleDeleteClipsRequest,
     MoveClipsBatchRequest,
     SequenceCreate,
     SequenceOut,
@@ -226,11 +227,17 @@ def delete_clips_batch(sequence_id: str, body: ClipIdsRequest, db: Tx, user: Cur
 
 
 @router.post("/sequences/{sequence_id}/clips/ripple-delete-batch", response_model=SequenceOut)
-def ripple_delete_clips_batch(sequence_id: str, body: ClipIdsRequest, db: Tx, user: CurrentUser) -> Response:
-    """多选后一次波纹删除(同轨后续左移补位):同样一条操作、一步撤销。"""
+def ripple_delete_clips_batch(
+    sequence_id: str, body: RippleDeleteClipsRequest, db: Tx, user: CurrentUser
+) -> Response:
+    """多选后一次波纹删除(后续左移补位;链接组员同删同移;all_tracks 时所有未锁定轨一起):一条操作、一步撤销。"""
     require_sequence_access(db, user, sequence_id, perm="edit")
     _apply(
-        lambda: ripple_delete_clips_batch_operation(db, sequence_id, RippleDeleteClipsBatch(clip_ids=tuple(body.clip_ids)))
+        lambda: ripple_delete_clips_batch_operation(
+            db,
+            sequence_id,
+            RippleDeleteClipsBatch(clip_ids=tuple(body.clip_ids), linked=body.linked, all_tracks=body.all_tracks),
+        )
     )
     return _edited_response(db, sequence_id)
 
@@ -444,9 +451,16 @@ def set_sequence_reframe(
 
 
 @router.delete("/sequences/{sequence_id}/clips/{clip_id}/ripple", response_model=SequenceOut)
-def ripple_delete_clip(sequence_id: str, clip_id: str, db: Tx, user: CurrentUser) -> Response:
+def ripple_delete_clip(
+    sequence_id: str, clip_id: str, db: Tx, user: CurrentUser, linked: bool = True, all_tracks: bool = False
+) -> Response:
+    """`linked=false` 只删这一段;`all_tracks=true` 这段时间从所有未锁定轨上拿掉(见 RippleDeleteClip)。"""
     require_sequence_access(db, user, sequence_id, perm="edit")
-    _apply(lambda: ripple_delete_clip_operation(db, sequence_id, RippleDeleteClip(clip_id=clip_id)))
+    _apply(
+        lambda: ripple_delete_clip_operation(
+            db, sequence_id, RippleDeleteClip(clip_id=clip_id, linked=linked, all_tracks=all_tracks)
+        )
+    )
     return _edited_response(db, sequence_id)
 
 

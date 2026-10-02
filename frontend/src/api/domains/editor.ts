@@ -54,10 +54,20 @@ export function appendAssetToSequence(sequenceId: string, assetId: string): Prom
   return api<Sequence>(`/api/sequences/${sequenceId}/append`, { method: "POST", body: JSON.stringify({ asset_id: assetId }) });
 }
 
-export function rippleDeleteClipsBatch(sequenceId: string, clipIds: string[]): Promise<Sequence> {
+/**
+ * 波纹删除。默认:被删片段和它的链接组员在各自的轨上删掉、后面的左移。
+ * `all_tracks: true`:这段时间从所有**未锁定**的轨上拿掉(区间里的都挖掉、后面的一起左移),锁定轨不动。
+ */
+export type RippleDeleteOptions = LinkOption & { all_tracks?: boolean };
+
+export function rippleDeleteClipsBatch(
+  sequenceId: string,
+  clipIds: string[],
+  options: RippleDeleteOptions = {},
+): Promise<Sequence> {
   return api<Sequence>(`/api/sequences/${sequenceId}/clips/ripple-delete-batch`, {
     method: "POST",
-    body: JSON.stringify({ clip_ids: clipIds }),
+    body: JSON.stringify({ clip_ids: clipIds, ...options }),
   });
 }
 
@@ -168,8 +178,16 @@ export function setSequenceReframe(
   });
 }
 
-export function rippleDeleteClip(sequenceId: string, clipId: string): Promise<Sequence> {
-  return api<Sequence>(`/api/sequences/${sequenceId}/clips/${clipId}/ripple`, { method: "DELETE" });
+export function rippleDeleteClip(
+  sequenceId: string,
+  clipId: string,
+  options: RippleDeleteOptions = {},
+): Promise<Sequence> {
+  const query = new URLSearchParams();
+  if (options.linked === false) query.set("linked", "false");
+  if (options.all_tracks) query.set("all_tracks", "true");
+  const suffix = query.size ? `?${query}` : "";
+  return api<Sequence>(`/api/sequences/${sequenceId}/clips/${clipId}/ripple${suffix}`, { method: "DELETE" });
 }
 
 export function splitClip(
