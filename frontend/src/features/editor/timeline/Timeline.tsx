@@ -215,7 +215,10 @@ export function Timeline({
     return useEditorStore.subscribe(follow);
   }, [pxPerSecond]);
 
-  const tracks = sequence.tracks ?? [];
+  // 按 position 从上到下排,不信数组先后:后端改了 position(上移一条轨、新视频轨放到最上)之后,
+  // 回包里的数组顺序不一定跟着变。监视器的合成层序(sceneLayersAt)同样按 position —— 两边各信
+  // 各的,时间线上看着在上面的那层,画面里可能被压在下面。
+  const tracks = React.useMemo(() => [...(sequence.tracks ?? [])].sort((a, b) => a.position - b.position), [sequence.tracks]);
   const allClips = React.useMemo(() => tracks.flatMap((track) => track.clips ?? []), [tracks]);
 
   /**

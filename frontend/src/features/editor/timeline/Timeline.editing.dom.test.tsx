@@ -351,3 +351,28 @@ describe("快捷键帮助", () => {
     }
   });
 });
+
+describe("轨道顺序", () => {
+  // 后端改了 position(上移一条轨、新建视频轨放到最上)之后,回包里轨道数组的先后不一定跟着变 ——
+  // 时间线必须按 position 排,和监视器的合成层序(sceneLayersAt 同样按 position)一致。
+  const shuffled = () => [
+    track("V1", "video", 1, [clip("base", "V1", 0, 0, 2)]),
+    track("V2", "video", 0, [clip("top", "V2", 0, 0, 2)]),
+  ];
+
+  it("按 position 从上到下画,不按数组先后", () => {
+    renderTimeline(shuffled());
+    const names = [...document.querySelectorAll(".group\\/label")].map((row) => row.textContent?.match(/V\d/)?.[0]);
+    expect(names).toEqual(["V2", "V1"]);
+  });
+
+  it("拖到第二行,落到界面上第二行的那条轨", () => {
+    const { props } = renderTimeline(shuffled());
+    fireEvent.pointerDown(screen.getByTestId("clip-top"), { clientX: 10, clientY: 40, pointerId: 1, button: 0, buttons: 1 });
+    act(() => {
+      window.dispatchEvent(new MouseEvent("pointermove", { clientX: 10, clientY: 90, buttons: 1 }));
+      window.dispatchEvent(new MouseEvent("pointerup", { clientX: 10, clientY: 90 }));
+    });
+    expect(props.onMoveClip).toHaveBeenCalledWith("top", 0, "V1", false);
+  });
+});

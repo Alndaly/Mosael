@@ -97,6 +97,20 @@ describe("监视器画哪些层(与导出同一份 sceneLayersAt)", () => {
   });
 });
 
+describe("层序与时间线一致", () => {
+  it("按 position 合成:数组先后颠倒时,position 0 那条(时间线最上面一行)仍压在最上", () => {
+    renderMonitor([
+      track("V1", 1, [clip("base", "V1", 0, 10)]),
+      track("V2", 0, [clip("top", "V2", 0, 10)]),
+    ]);
+    act(() => useEditorStore.getState().setPlayhead(1));
+    expect(layerSummary()).toEqual([
+      { clip: "base", isBase: true },
+      { clip: "top", isBase: false },
+    ]);
+  });
+});
+
 describe("监视器走帧", () => {
   it("逐帧按钮按帧号走,时间码显示到帧", () => {
     renderMonitor([track("V1", 0, [clip("c1", "V1", 0, 10)])], 25);
