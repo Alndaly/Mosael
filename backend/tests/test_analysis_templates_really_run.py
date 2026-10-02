@@ -265,7 +265,7 @@ class Test账号诊断真跑:
     def test_TikHub_抖音_按平台取资料和作品_算好的指标交给报告_存成笔记(self, monkeypatch, tikhub_tools) -> None:
         ws, _ = _setup(with_tikhub=True)
         outside = Outside(monkeypatch, {"account_diagnosis": _report("做饭的老王 · 运营诊断")})
-        context = _run(ws, account_analysis_graph(chat=CHAT), account_link=DOUYIN_USER, data_source="TikHub", post_count=20)
+        context = _run(ws, account_analysis_graph(chat=CHAT), account_link=DOUYIN_USER, data_source="tikhub", post_count=20)
 
         assert [name for name, _ in outside.calls["tikhub"]] == ["douyin_web_handler_user_profile", "douyin_web_fetch_user_post_videos"]
         posts_call = outside.calls["tikhub"][1][1]
@@ -309,7 +309,7 @@ class Test账号诊断真跑:
         }
         outside = Outside(monkeypatch, {"account_page": page, "account_diagnosis": _report("穿搭日记 · 运营诊断")},
                           page_text="穿搭日记 3.4万粉丝 秋天第一套 1.2万 ……")
-        context = _run(ws, account_analysis_graph(chat=CHAT), account_link=XHS_USER, data_source="浏览器")
+        context = _run(ws, account_analysis_graph(chat=CHAT), account_link=XHS_USER, data_source="browser")
 
         actions = [action for action, _ in outside.calls["browser"]]
         assert actions == ["navigate", "evaluate"], actions
@@ -496,3 +496,123 @@ class Test前置检查:
             group = [one for one in card["requirements"] if one["group"] == "data_source"]
             assert [one["check"] for one in group] == [check, ""], "TikHub 一条、内嵌浏览器一条"
             assert all(not one["optional"] for one in group)
+
+
+# --------------------------------------------------------------------------------------
+# 数据来源是选项参数:下拉里两项,按值直接分支,运行前只查选中的那一项
+# --------------------------------------------------------------------------------------
+
+GRAPHS = {
+    "account_analysis": (account_analysis_graph, "account_link", DOUYIN_USER, "tikhub_account"),
+    "viral_video_breakdown": (viral_video_breakdown_graph, "video_link", DOUYIN_VIDEO, "tikhub_video"),
+    "comment_insights": (comment_insights_graph, "video_link", DOUYIN_VIDEO, "tikhub_comments"),
+}
+
+
+def _start(graph: dict[str, Any]) -> dict[str, Any]:
+    return next(node for node in graph["nodes"] if node["type"] == "start")["config"]
+
+
+def _check(ws: str, user: str, graph: dict[str, Any], **params: Any) -> None:
+    from app.domain.workflows.engine import check_runnable
+
+    with SessionLocal() as db:
+        check_runnable(db, graph, params, user, workspace_id=ws)
+
+
+class Test数据来源是选项:
+    @pytest.mark.parametrize("template_id", list(GRAPHS))
+    def test_两个选项_必填_默认空着_TikHub那一项写明要什么(self, template_id: str) -> None:
+        build, _, _, check = GRAPHS[template_id]
+        start = _start(build(chat=CHAT))
+        options = start["param_options"]["data_source"]
+        assert [one["value"] for one in options] == ["browser", "tikhub"]
+        assert all(one["label"] and one["description"] for one in options)
+        assert [one.get("requires") for one in options] == [None, check], "浏览器那一项什么都不用配"
+        assert start["params"]["data_source"] == "" and "data_source" in start["required_params"]
+
+    @pytest.mark.parametrize("template_id", list(GRAPHS))
+    def test_按值直接分支_没有转小写那一步(self, template_id: str) -> None:
+        build = GRAPHS[template_id][0]
+        graph = build(chat=CHAT)
+        nodes = {node["id"]: node for node in graph["nodes"]}
+        assert "source_mode" not in nodes and not [node for node in graph["nodes"] if node["type"] == "text_transform"]
+        assert nodes["use_tikhub"]["config"] == {"left": "{{start.data_source}}", "op": "equals", "right": "tikhub"}
+        assert graph["meta"]["template_version"] == 2, "旧图走「按新版重建」"
+
+    @pytest.mark.parametrize("template_id", list(GRAPHS))
+    def test_打错字_运行前就拦_说出能选哪几个(self, template_id: str) -> None:
+        build, link, url, _ = GRAPHS[template_id]
+        errors = validate_graph(with_run_params(build(chat=CHAT), {link: url, "data_source": "TikHub"}))
+        assert errors == ["节点 start 的参数 data_source 是「TikHub」,只能选:browser(内嵌浏览器)、tikhub(TikHub)"], errors
+
+    @pytest.mark.parametrize("template_id", list(GRAPHS))
+    def test_选了TikHub而没装_运行前当场拦_说清去装或改选浏览器(self, template_id: str) -> None:
+        build, link, url, _ = GRAPHS[template_id]
+        ws, user = _setup(with_tikhub=False)
+        with pytest.raises(WorkflowDomainError) as caught:
+            _check(ws, user, build(chat=CHAT), **{link: url, "data_source": "tikhub"})
+        message = str(caught.value)
+        assert "没装 TikHub 插件" not in message, "仓库那份清单装上了:说的该是去接连接"
+        assert "还没接 TikHub" in message and "内嵌浏览器" in message, message
+
+    def test_没装插件_说去装(self) -> None:
+        from tests.util import fresh_client
+
+        client = fresh_client()
+        ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+        from app.db.models import User
+
+        with SessionLocal() as db:
+            user = db.query(User).order_by(User.created_at).first().id
+        with pytest.raises(WorkflowDomainError) as caught:
+            _check(ws, user, account_analysis_graph(chat=CHAT), account_link=DOUYIN_USER, data_source="tikhub")
+        assert "没装 TikHub 插件" in str(caught.value)
+
+    def test_接了却没勾工具_拦下时点名连接和要勾的工具(self, tikhub_tools) -> None:
+        ws, user = _setup(with_tikhub=True, platforms=("douyin",), enable_tools=False)
+        with pytest.raises(WorkflowDomainError) as caught:
+            _check(ws, user, account_analysis_graph(chat=CHAT), account_link=DOUYIN_USER, data_source="tikhub")
+        message = str(caught.value)
+        assert "douyin_web_handler_user_profile" in message and "没有勾选" in message, message
+
+    def test_连接停用_拦下时点名那条连接卡在哪(self, tikhub_tools) -> None:
+        from app.core.i18n import tr
+        from app.db.models import PluginInstance
+
+        ws, user = _setup(with_tikhub=True, platforms=("douyin",))
+        with SessionLocal() as db:
+            for one in db.query(PluginInstance).all():
+                one.enabled = False
+            db.commit()
+        with pytest.raises(WorkflowDomainError) as caught:
+            _check(ws, user, account_analysis_graph(chat=CHAT), account_link=DOUYIN_USER, data_source="tikhub")
+        assert tr("pluginBlocked_disabled") in str(caught.value), str(caught.value)
+
+    @pytest.mark.parametrize("template_id", list(GRAPHS))
+    def test_选浏览器_不查TikHub(self, template_id: str) -> None:
+        build, link, url, _ = GRAPHS[template_id]
+        ws, user = _setup(with_tikhub=False)
+        _check(ws, user, build(chat=CHAT), **{link: url, "data_source": "browser"})
+
+    def test_TikHub备好了_选它也过(self, tikhub_tools) -> None:
+        ws, user = _setup(with_tikhub=True, platforms=("bilibili",))
+        _check(ws, user, account_analysis_graph(chat=CHAT), account_link=BILI_SPACE, data_source="tikhub")
+
+    def test_按新版重建_手填过的数据来源只带选项里有的值(self) -> None:
+        from tests.util import fresh_client
+
+        client = fresh_client()
+        ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+        created = client.post("/api/workflows", json={"workspace_id": ws, "name": "诊断", "template_id": "account_analysis"}).json()
+        for typed, carried in (("TikHub", ""), ("tikhub", "tikhub"), ("浏览器", "")):
+            old = json.loads(json.dumps(created["graph"]))
+            old["meta"]["template_version"] = 1
+            _start(old)["params"].update({"data_source": typed, "account_link": DOUYIN_USER})
+            saved = client.post("/api/workflows", json={"workspace_id": ws, "name": "旧版", "graph": old})
+            assert saved.status_code == 200, saved.text
+            rebuilt = client.post(f"/api/workflows/{saved.json()['id']}/rebuild-from-template")
+            assert rebuilt.status_code == 200, rebuilt.text
+            params = _start(rebuilt.json()["graph"])["params"]
+            assert params["data_source"] == carried, typed
+            assert params["account_link"] == DOUYIN_USER, "别的开始参数照旧带过去"

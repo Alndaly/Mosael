@@ -3,12 +3,12 @@
   "version": 1,
   "workflow_revision": 1,
   "name": "Why a video went viral",
-  "description": "Paste a Douyin, Xiaohongshu or Bilibili video link to fetch its numbers and most-liked comments, download it and transcribe the speech with timecodes, then break down why it worked (topic, the first-three-second hook, structure and pacing, emotional beats, title and cover, comment feedback, reusable patterns) and outline a script to make one the same way, saved as a note. Pick one data source: TikHub (2 calls per run, from about $0.001 each) or the built-in browser (free; pick a signed-in profile where needed). The download uses the library's Import from link (Douyin usually needs a signed-in browser profile on the download step); if it fails, the breakdown still runs on the numbers and comments. Transcription runs locally; plus one or two AI chat calls. Frames are not looked at yet.",
-  "graph_hash": "6e3c62ac05ed3e46b1f846881a3615bfd887cf20585149afc799991544594831",
+  "description": "Paste a Douyin, Xiaohongshu or Bilibili video link to fetch its numbers and most-liked comments, download it and transcribe the speech with timecodes, then break down why it worked (topic, the first-three-second hook, structure and pacing, emotional beats, title and cover, comment feedback, reusable patterns) and outline a script to make one the same way, saved as a note. Pick the data source from the start node's drop-down: the built-in browser (nothing to set up and free; switch to a signed-in browser profile where needed) or TikHub (needs the plugin and an API key; 2 calls per run, from about $0.001 each; complete fields, steadier, no sign-in). The download uses the library's Import from link (Douyin usually needs a signed-in browser profile on the download step); if it fails, the breakdown still runs on the numbers and comments. Transcription runs locally; plus one or two AI chat calls. Frames are not looked at yet.",
+  "graph_hash": "de60e3082e61c6ee773d273cb37f8c729b300e10081b0003b1c85a803734ee2a",
   "graph": {
     "meta": {
       "template_id": "viral_video_breakdown",
-      "template_version": 1,
+      "template_version": 2,
       "source": "official"
     },
     "nodes": [
@@ -33,7 +33,22 @@
           "required_params": [
             "video_link",
             "data_source"
-          ]
+          ],
+          "param_options": {
+            "data_source": [
+              {
+                "value": "browser",
+                "label": "Built-in browser",
+                "description": "Nothing to set up and free; for pages that need a sign-in (Xiaohongshu always, Douyin mostly), switch “Open in the built-in browser” to a signed-in browser-pool profile. Numbers on the page are rounded and publish times are often missing"
+              },
+              {
+                "value": "tikhub",
+                "label": "TikHub",
+                "description": "Needs the TikHub plugin with a connection and your API key (billed per call); fuller, steadier data and no sign-in",
+                "requires": "tikhub_video"
+              }
+            ]
+          }
         }
       },
       {
@@ -51,19 +66,6 @@
         }
       },
       {
-        "id": "source_mode",
-        "type": "text_transform",
-        "name": "Lower-case the data source",
-        "position": {
-          "x": 680,
-          "y": 535
-        },
-        "config": {
-          "text": "{{start.data_source}}",
-          "op": "lower"
-        }
-      },
-      {
         "id": "use_tikhub",
         "type": "condition",
         "name": "Fetch with TikHub?",
@@ -72,13 +74,10 @@
           "y": 535
         },
         "config": {
-          "left": "",
-          "op": "contains",
+          "left": "{{start.data_source}}",
+          "op": "equals",
           "right": "tikhub"
-        },
-        "inputs": [
-          "left"
-        ]
+        }
       },
       {
         "id": "tk_is_dy",
@@ -352,7 +351,7 @@
         },
         "config": {
           "title": "Analysis not started: the TikHub route doesn't cover this platform",
-          "body": "The platform was read as “{{link.platform}}”. The TikHub route covers Douyin, Xiaohongshu and Bilibili; for anything else set data_source on the start node to browser and run again. If the platform was misread, name it in the start node's platform."
+          "body": "The platform was read as “{{link.platform}}”. The TikHub route covers Douyin, Xiaohongshu and Bilibili; for anything else pick “Built-in browser” as the data source (data_source) on the start node and run again. If the platform was misread, name it in the start node's platform."
         }
       },
       {
@@ -783,9 +782,9 @@
         "target": "link"
       },
       {
-        "id": "link__source_mode",
+        "id": "link__use_tikhub",
         "source": "link",
-        "target": "source_mode"
+        "target": "use_tikhub"
       },
       {
         "id": "use_tikhub__tk_is_dy__true",
@@ -962,14 +961,6 @@
         "id": "done_notice__output",
         "source": "done_notice",
         "target": "output"
-      },
-      {
-        "id": "d-source_mode-text-use_tikhub-left",
-        "source": "source_mode",
-        "target": "use_tikhub",
-        "kind": "data",
-        "source_output": "text",
-        "target_input": "left"
       },
       {
         "id": "d-link-platform-tk_is_dy-left",

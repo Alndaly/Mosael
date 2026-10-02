@@ -137,8 +137,13 @@ def _filled_in(graph: dict[str, Any]) -> dict[str, Any]:
 
 
 def _run_params(graph: dict[str, Any]) -> dict[str, str]:
+    """跑的人给每个必填参数填一个值;只能从几项里选的(`param_options`)挑第一项 —— 那一格本来就只认这几个。"""
     start = next(node for node in graph["nodes"] if node["type"] == "start")
-    return {name: "跑的人填的" for name in start["config"].get("required_params") or []}
+    options = start["config"].get("param_options") or {}
+    return {
+        name: options[name][0]["value"] if name in options else "跑的人填的"
+        for name in start["config"].get("required_params") or []
+    }
 
 
 def _data_type(value: Any) -> str:

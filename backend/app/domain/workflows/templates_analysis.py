@@ -3,7 +3,9 @@
 三张图:账号运营诊断、单条视频爆款拆解、评论区洞察。它们的难处不在分析(那是一次对话),在**取数**:
 
 - **数据来源二选一。** TikHub 插件(按次计费、字段全、不用登录)或者内嵌浏览器(不花钱,但很多平台不登录
-  看不到东西)。开始节点的 `data_source` 决定走哪一路,条件节点分两支。没装 TikHub 时浏览器那一支照样能跑 ——
+  看不到东西)。开始节点的 `data_source` 是一个**选项参数**(`param_options`:browser / tikhub,面板上是下拉),
+  条件节点按值直接分两支;值不在选项里运行前就拦,选了 TikHub 而它没备好也当场拦(选项的 `requires`,
+  见 engine._check_chosen_options)。没装 TikHub 时浏览器那一支照样能跑 ——
   所以 TikHub 的工具用**通用插件节点**(`plugin_tool`)引用,而不是 `plugin.<包>.<工具>`:后者是动态类型,
   插件不在时整张图校验不过,连浏览器那一支也跑不了。
 - **两路交出同一个形状。** TikHub 回的是各平台接口的投影(字段名各异),浏览器回的是页面文字。浏览器那一路先让
@@ -280,27 +282,58 @@ class _Builder:
 
     def graph(self, template_id: str) -> dict[str, Any]:
         return normalize_graph(
-            {"meta": {"template_id": template_id, "template_version": 1, "source": "official"},
+            #: 第 2 版:数据来源从手填的一格(转小写、「包含 tikhub」)改成选项参数,按值直接分支。
+            {"meta": {"template_id": template_id, "template_version": 2, "source": "official"},
              "nodes": self.nodes, "edges": self.edges},
             node_types=NODE_TYPES,
         )
 
 
+#: 数据来源的两个选项的值 —— 分支按它直接判。
+BROWSER, TIKHUB = "browser", "tikhub"
+
+
+def _data_source_options(b: _Builder, check: str) -> list[dict[str, str]]:
+    """开始节点「数据来源」那一格的选项(`param_options`):面板上是下拉,运行前只认这两个值。TikHub 那一项要什么
+    写在 `requires` 上(和模板库前置条件同一个检查键):选了它而它没备好,运行前当场拦、说清缺什么。"""
+    return [
+        {
+            "value": BROWSER,
+            "label": b.text("内嵌浏览器", "Built-in browser"),
+            "description": b.text(
+                "不用配置、不花钱;要登录才看得到的页面(小红书一定要、抖音多半要),在「用内嵌浏览器打开」里换成浏览器池里"
+                "已登录的档案。页面上的数字是约数,发布时间常常缺",
+                "Nothing to set up and free; for pages that need a sign-in (Xiaohongshu always, Douyin mostly), switch"
+                " “Open in the built-in browser” to a signed-in browser-pool profile. Numbers on the page are rounded and"
+                " publish times are often missing",
+            ),
+        },
+        {
+            "value": TIKHUB,
+            "label": "TikHub",
+            "description": b.text(
+                "需安装 TikHub 插件、接好连接并填上 API 密钥(按次计费);数据更全更稳、不用登录",
+                "Needs the TikHub plugin with a connection and your API key (billed per call); fuller, steadier data and no"
+                " sign-in",
+            ),
+            "requires": check,
+        },
+    ]
+
+
 def _source_switch(b: _Builder, *, link_param: str, expect: str) -> None:
-    """认链接 → 认数据来源 → 分两支。`use_tikhub` 的「真」是 TikHub,「假」是浏览器。"""
+    """认链接 → 按数据来源分两支。`use_tikhub` 的「真」是 TikHub,「假」是浏览器。
+
+    数据来源是选项参数,值只会是 browser / tikhub(别的运行前就拦了),所以按值直接判「等于 tikhub」—— 此前是手填的
+    一格,先转小写再判「包含 tikhub」,打错字就静默走了浏览器。"""
     b.node("link", "social_link", {"zh": "认出平台和编号", "en": "Work out the platform and id"}, 1, 2.5, {
         "link": f"{{{{start.{link_param}}}}}", "platform": "{{start.platform}}", "expect": expect,
     })
     b.edge("start", "link")
-    #: 数据来源是手填的一格,「TikHub」「tikhub」都算;不是 TikHub 的一律走浏览器 —— 那一支什么都不用配。
-    b.node("source_mode", "text_transform", {"zh": "数据来源统一成小写", "en": "Lower-case the data source"}, 2, 2.5, {
-        "text": "{{start.data_source}}", "op": "lower",
-    })
-    b.edge("link", "source_mode")
     b.node("use_tikhub", "condition", {"zh": "用 TikHub 取数吗", "en": "Fetch with TikHub?"}, 3, 2.5, {
-        "left": "{{source_mode.text}}", "op": "contains", "right": "tikhub",
+        "left": "{{start.data_source}}", "op": "equals", "right": TIKHUB,
     })
-    b.edge("source_mode", "use_tikhub")
+    b.edge("link", "use_tikhub")
 
 
 def _platform_chain(b: _Builder, make_branch, *, col: float) -> list[str]:
@@ -321,11 +354,11 @@ def _platform_chain(b: _Builder, make_branch, *, col: float) -> list[str]:
            col + 1, len(TIKHUB_PLATFORMS), {
                "title": b.text("没有开始分析:TikHub 这一路不支持这个平台", "Analysis not started: the TikHub route doesn't cover this platform"),
                "body": b.text(
-                   "认出的平台是「{{link.platform}}」。TikHub 这一路接了抖音、小红书、B站;别的平台把开始节点的"
-                   " data_source 改成 browser(内嵌浏览器)再运行。认错了的话,在开始节点的 platform 里写明平台。",
+                   "认出的平台是「{{link.platform}}」。TikHub 这一路接了抖音、小红书、B站;别的平台在开始节点的"
+                   "数据来源(data_source)里改选「内嵌浏览器」再运行。认错了的话,在开始节点的 platform 里写明平台。",
                    "The platform was read as “{{link.platform}}”. The TikHub route covers Douyin, Xiaohongshu and"
-                   " Bilibili; for anything else set data_source on the start node to browser and run again. If the platform"
-                   " was misread, name it in the start node's platform.",
+                   " Bilibili; for anything else pick “Built-in browser” as the data source (data_source) on the start node"
+                   " and run again. If the platform was misread, name it in the start node's platform.",
                ),
            })
     b.edge(previous, "tk_unsupported", handle)
@@ -433,6 +466,8 @@ def account_analysis_graph(*, chat: Any, locale: str | None = None) -> dict[str,
             "report_language": _report_language(locale),
         },
         "required_params": ["account_link", "data_source"],
+        #: 数据来源只能从这两项里选(面板上是下拉),默认空着 —— 让用的人自己挑。
+        "param_options": {"data_source": _data_source_options(b, TIKHUB_ACCOUNT)},
     })
     _source_switch(b, link_param="account_link", expect="account")
 
@@ -581,6 +616,7 @@ def viral_video_breakdown_graph(*, chat: Any, locale: str | None = None) -> dict
             "report_language": _report_language(locale),
         },
         "required_params": ["video_link", "data_source"],
+        "param_options": {"data_source": _data_source_options(b, TIKHUB_VIDEO)},
     })
     _source_switch(b, link_param="video_link", expect="video")
 
@@ -757,6 +793,7 @@ def comment_insights_graph(*, chat: Any, locale: str | None = None) -> dict[str,
             "report_language": _report_language(locale),
         },
         "required_params": ["video_link", "data_source"],
+        "param_options": {"data_source": _data_source_options(b, TIKHUB_COMMENTS)},
     })
     _source_switch(b, link_param="video_link", expect="video")
 
@@ -882,15 +919,18 @@ ANALYSIS_TEMPLATE_CATALOG: list[dict[str, Any]] = [
         "summary": {
             "zh": "贴一个抖音、小红书或 B站账号的主页链接,取账号资料和最近 30 条作品(发布时间、文案、时长、播放 / 点赞 / 评论 / 收藏 / 转发),"
                   "由代码算出发布频率、发布时段分布、互动率、头部作品和「最近一半对之前一半」的增长 / 衰退信号,再写一份运营诊断"
-                  "(现状、内容支柱、做得好的、问题、可执行建议)存成笔记,附关键数据表。数据来源二选一:TikHub(每次运行 2 次请求,"
-                  "每次约 0.001 美元起,以 TikHub 账单为准)或内嵌浏览器(不花钱,小红书 / 抖音要登录,其他平台也能用)。"
+                  "(现状、内容支柱、做得好的、问题、可执行建议)存成笔记,附关键数据表。数据来源在开始节点的下拉里二选一:"
+                  "内嵌浏览器(不用配置、不花钱,小红书 / 抖音要换成已登录的浏览器档案,其他平台也能用,数字是页面上的约数)"
+                  "或 TikHub(要装插件、填密钥,每次运行 2 次请求、每次约 0.001 美元起,以 TikHub 账单为准;字段全、更稳、不用登录)。"
                   "另有 1–2 次 AI 对话(浏览器那一路多一次整理页面)。",
             "en": "Paste a Douyin, Xiaohongshu or Bilibili profile link to fetch the profile and the latest 30 posts (publish time,"
                   " caption, length, views / likes / comments / saves / shares). Code works out posting frequency, posting-time"
                   " distribution, engagement rate, top posts and a recent-half-vs-earlier-half growth or decline signal, then a"
                   " diagnosis (where it stands, content pillars, what works, problems, concrete next steps) is saved as a note with"
-                  " the key numbers attached. Pick one data source: TikHub (2 calls per run, from about $0.001 each — see your"
-                  " TikHub bill) or the built-in browser (free; Xiaohongshu / Douyin need a sign-in, other platforms work too)."
+                  " the key numbers attached. Pick the data source from the start node's drop-down: the built-in browser (nothing to"
+                  " set up and free; Xiaohongshu / Douyin need a signed-in browser profile, other platforms work too, and the"
+                  " numbers are the page's rounded ones) or TikHub (needs the plugin and an API key; 2 calls per run, from about"
+                  " $0.001 each — see your TikHub bill; complete fields, steadier, no sign-in)."
                   " Plus one or two AI chat calls (one more on the browser route to read the page).",
         },
         "requires": [
@@ -900,10 +940,10 @@ ANALYSIS_TEMPLATE_CATALOG: list[dict[str, Any]] = [
             requirement(None, zh="一个账号主页链接(或账号编号 + 平台)", en="A profile link (or an account id plus the platform)"),
         ],
         "stages": {
-            "zh": ["填主页链接、数据来源(tikhub 或 browser),可选平台和关心的问题", "认出平台和账号编号",
+            "zh": ["填主页链接、选数据来源(内嵌浏览器或 TikHub),可选平台和关心的问题", "认出平台和账号编号",
                    "TikHub 按平台取资料与作品,或浏览器打开主页、滚动读出页面", "整理作品、算频率 / 时段 / 互动率 / 趋势",
                    "写运营诊断", "存成笔记(附数据表)"],
-            "en": ["Profile link and data source (tikhub or browser), optionally the platform and your question",
+            "en": ["Profile link and the data source (built-in browser or TikHub), optionally the platform and your question",
                    "Work out the platform and account id", "TikHub fetches profile and posts per platform, or the browser reads the page",
                    "Tidy the posts; frequency, timing, engagement and trend", "Write the diagnosis", "Save as a note with the numbers"],
         },
@@ -914,14 +954,17 @@ ANALYSIS_TEMPLATE_CATALOG: list[dict[str, Any]] = [
         "summary": {
             "zh": "贴一条抖音、小红书或 B站视频的链接,取视频数据和赞最多的评论,下载视频、转写带时间码的口播,拆解它为什么火"
                   "(选题、前 3 秒钩子、结构节奏、情绪点、标题封面、评论区反馈、可复用的套路),并给一份「照这个套路做一条」的脚本提纲,"
-                  "存成笔记。数据来源二选一:TikHub(每次运行 2 次请求,每次约 0.001 美元起)或内嵌浏览器(不花钱,要登录的平台选登录档案)。"
+                  "存成笔记。数据来源在开始节点的下拉里二选一:内嵌浏览器(不用配置、不花钱,要登录的平台换成已登录的浏览器档案)"
+                  "或 TikHub(要装插件、填密钥,每次运行 2 次请求、每次约 0.001 美元起;字段全、更稳、不用登录)。"
                   "下载用的是素材库的「从链接导入」(抖音一般要在「下载视频进素材库」上选已登录的浏览器档案),下不到时照样按数据和评论拆;"
                   "转写在本机跑;另有 1–2 次 AI 对话。暂不看画面(没有抽关键帧)。",
             "en": "Paste a Douyin, Xiaohongshu or Bilibili video link to fetch its numbers and most-liked comments, download it and"
                   " transcribe the speech with timecodes, then break down why it worked (topic, the first-three-second hook,"
                   " structure and pacing, emotional beats, title and cover, comment feedback, reusable patterns) and outline a"
-                  " script to make one the same way, saved as a note. Pick one data source: TikHub (2 calls per run, from about"
-                  " $0.001 each) or the built-in browser (free; pick a signed-in profile where needed). The download uses the"
+                  " script to make one the same way, saved as a note. Pick the data source from the start node's drop-down: the"
+                  " built-in browser (nothing to set up and free; switch to a signed-in browser profile where needed) or TikHub"
+                  " (needs the plugin and an API key; 2 calls per run, from about $0.001 each; complete fields, steadier, no"
+                  " sign-in). The download uses the"
                   " library's Import from link (Douyin usually needs a signed-in browser profile on the download step); if it"
                   " fails, the breakdown still runs on the numbers and comments. Transcription runs locally; plus one or two AI"
                   " chat calls. Frames are not looked at yet.",
@@ -934,10 +977,10 @@ ANALYSIS_TEMPLATE_CATALOG: list[dict[str, Any]] = [
             requirement(None, zh="一条视频链接(或作品编号 + 平台)", en="A video link (or a post id plus the platform)"),
         ],
         "stages": {
-            "zh": ["填视频链接、数据来源(tikhub 或 browser),可选你想做的主题", "认出平台和作品编号",
+            "zh": ["填视频链接、选数据来源(内嵌浏览器或 TikHub),可选你想做的主题", "认出平台和作品编号",
                    "TikHub 按平台取详情与评论,或浏览器打开、滚到评论区读出页面", "整理视频数据、评论按赞排好",
                    "可选:下载视频、转写口播", "拆解爆款原因、写脚本提纲", "存成笔记"],
-            "en": ["Video link and data source (tikhub or browser), optionally a topic of your own", "Work out the platform and post id",
+            "en": ["Video link and the data source (built-in browser or TikHub), optionally a topic of your own", "Work out the platform and post id",
                    "TikHub fetches details and comments per platform, or the browser reads the page down to the comments",
                    "Tidy the numbers, rank the comments", "Optional: download and transcribe", "Break it down and outline a script",
                    "Save as a note"],
@@ -949,12 +992,14 @@ ANALYSIS_TEMPLATE_CATALOG: list[dict[str, Any]] = [
         "summary": {
             "zh": "贴一条作品链接,取赞最多的一批评论(默认 50 条:TikHub 一次取一页,约 20–50 条;浏览器往下滚着读评论区),按话题聚类,"
                   "推断观众画像、需求与痛点、疑问清单、异议与情绪分布,给出下一条可以做的选题和值得回复的评论的建议回复,存成笔记。"
-                  "数据来源二选一:TikHub(每次运行 1 次请求)或内嵌浏览器(不花钱,小红书评论要登录)。另有 1–2 次 AI 对话。",
+                  "数据来源在开始节点的下拉里二选一:内嵌浏览器(不用配置、不花钱,小红书评论要换成已登录的浏览器档案)"
+                  "或 TikHub(要装插件、填密钥,每次运行 1 次请求;字段全、更稳、不用登录)。另有 1–2 次 AI 对话。",
             "en": "Paste a post link to fetch its most-liked comments (50 by default: one page via TikHub, about 20–50; the"
                   " browser scrolls through the comment section), group them by topic, infer the audience, needs and pain points, open questions, objections and"
-                  " sentiment, suggest next topics and replies to the comments worth answering, saved as a note. Pick one data"
-                  " source: TikHub (1 call per run) or the built-in browser (free; Xiaohongshu comments need a sign-in). Plus one"
-                  " or two AI chat calls.",
+                  " sentiment, suggest next topics and replies to the comments worth answering, saved as a note. Pick the data"
+                  " source from the start node's drop-down: the built-in browser (nothing to set up and free; Xiaohongshu"
+                  " comments need a signed-in browser profile) or TikHub (needs the plugin and an API key; 1 call per run;"
+                  " complete fields, steadier, no sign-in). Plus one or two AI chat calls.",
         },
         "requires": [
             requirement(CHAT_MODEL, zh="AI 对话模型", en="Chat model"),
@@ -963,9 +1008,9 @@ ANALYSIS_TEMPLATE_CATALOG: list[dict[str, Any]] = [
             requirement(None, zh="一条作品链接(或作品编号 + 平台)", en="A post link (or a post id plus the platform)"),
         ],
         "stages": {
-            "zh": ["填作品链接、数据来源(tikhub 或 browser),可选关心的问题", "认出平台和作品编号",
+            "zh": ["填作品链接、选数据来源(内嵌浏览器或 TikHub),可选关心的问题", "认出平台和作品编号",
                    "TikHub 按平台取评论,或浏览器滚动读出评论区", "评论按赞排好", "做评论区洞察、写建议回复", "存成笔记"],
-            "en": ["Post link and data source (tikhub or browser), optionally your question", "Work out the platform and post id",
+            "en": ["Post link and the data source (built-in browser or TikHub), optionally your question", "Work out the platform and post id",
                    "TikHub fetches comments per platform, or the browser reads the comment section", "Rank the comments by likes",
                    "Analyse the comments, draft replies", "Save as a note"],
         },

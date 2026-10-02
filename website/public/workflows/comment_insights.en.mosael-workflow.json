@@ -3,12 +3,12 @@
   "version": 1,
   "workflow_revision": 1,
   "name": "Comment insights and audience",
-  "description": "Paste a post link to fetch its most-liked comments (50 by default: one page via TikHub, about 20–50; the browser scrolls through the comment section), group them by topic, infer the audience, needs and pain points, open questions, objections and sentiment, suggest next topics and replies to the comments worth answering, saved as a note. Pick one data source: TikHub (1 call per run) or the built-in browser (free; Xiaohongshu comments need a sign-in). Plus one or two AI chat calls.",
-  "graph_hash": "d28c2fc9dc58ac2f75ece989fc2bddf3f484a7dc9f3e59e18fcda8b358996c4a",
+  "description": "Paste a post link to fetch its most-liked comments (50 by default: one page via TikHub, about 20–50; the browser scrolls through the comment section), group them by topic, infer the audience, needs and pain points, open questions, objections and sentiment, suggest next topics and replies to the comments worth answering, saved as a note. Pick the data source from the start node's drop-down: the built-in browser (nothing to set up and free; Xiaohongshu comments need a signed-in browser profile) or TikHub (needs the plugin and an API key; 1 call per run; complete fields, steadier, no sign-in). Plus one or two AI chat calls.",
+  "graph_hash": "39979f947ead748b8653543a575cf6712ef5e93f4b1eca6d46d30518b3d0135e",
   "graph": {
     "meta": {
       "template_id": "comment_insights",
-      "template_version": 1,
+      "template_version": 2,
       "source": "official"
     },
     "nodes": [
@@ -32,7 +32,22 @@
           "required_params": [
             "video_link",
             "data_source"
-          ]
+          ],
+          "param_options": {
+            "data_source": [
+              {
+                "value": "browser",
+                "label": "Built-in browser",
+                "description": "Nothing to set up and free; for pages that need a sign-in (Xiaohongshu always, Douyin mostly), switch “Open in the built-in browser” to a signed-in browser-pool profile. Numbers on the page are rounded and publish times are often missing"
+              },
+              {
+                "value": "tikhub",
+                "label": "TikHub",
+                "description": "Needs the TikHub plugin with a connection and your API key (billed per call); fuller, steadier data and no sign-in",
+                "requires": "tikhub_comments"
+              }
+            ]
+          }
         }
       },
       {
@@ -50,19 +65,6 @@
         }
       },
       {
-        "id": "source_mode",
-        "type": "text_transform",
-        "name": "Lower-case the data source",
-        "position": {
-          "x": 680,
-          "y": 535
-        },
-        "config": {
-          "text": "{{start.data_source}}",
-          "op": "lower"
-        }
-      },
-      {
         "id": "use_tikhub",
         "type": "condition",
         "name": "Fetch with TikHub?",
@@ -71,13 +73,10 @@
           "y": 535
         },
         "config": {
-          "left": "",
-          "op": "contains",
+          "left": "{{start.data_source}}",
+          "op": "equals",
           "right": "tikhub"
-        },
-        "inputs": [
-          "left"
-        ]
+        }
       },
       {
         "id": "tk_is_dy",
@@ -245,7 +244,7 @@
         },
         "config": {
           "title": "Analysis not started: the TikHub route doesn't cover this platform",
-          "body": "The platform was read as “{{link.platform}}”. The TikHub route covers Douyin, Xiaohongshu and Bilibili; for anything else set data_source on the start node to browser and run again. If the platform was misread, name it in the start node's platform."
+          "body": "The platform was read as “{{link.platform}}”. The TikHub route covers Douyin, Xiaohongshu and Bilibili; for anything else pick “Built-in browser” as the data source (data_source) on the start node and run again. If the platform was misread, name it in the start node's platform."
         }
       },
       {
@@ -531,9 +530,9 @@
         "target": "link"
       },
       {
-        "id": "link__source_mode",
+        "id": "link__use_tikhub",
         "source": "link",
-        "target": "source_mode"
+        "target": "use_tikhub"
       },
       {
         "id": "use_tikhub__tk_is_dy__true",
@@ -644,14 +643,6 @@
         "id": "done_notice__output",
         "source": "done_notice",
         "target": "output"
-      },
-      {
-        "id": "d-source_mode-text-use_tikhub-left",
-        "source": "source_mode",
-        "target": "use_tikhub",
-        "kind": "data",
-        "source_output": "text",
-        "target_input": "left"
       },
       {
         "id": "d-link-platform-tk_is_dy-left",

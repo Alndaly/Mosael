@@ -3,12 +3,12 @@
   "version": 1,
   "workflow_revision": 1,
   "name": "评论区洞察与观众画像",
-  "description": "贴一条作品链接,取赞最多的一批评论(默认 50 条:TikHub 一次取一页,约 20–50 条;浏览器往下滚着读评论区),按话题聚类,推断观众画像、需求与痛点、疑问清单、异议与情绪分布,给出下一条可以做的选题和值得回复的评论的建议回复,存成笔记。数据来源二选一:TikHub(每次运行 1 次请求)或内嵌浏览器(不花钱,小红书评论要登录)。另有 1–2 次 AI 对话。",
-  "graph_hash": "465bc98c0272e95a335e066859816d7633a03795b5e67b3d8a002ce829e2cbbb",
+  "description": "贴一条作品链接,取赞最多的一批评论(默认 50 条:TikHub 一次取一页,约 20–50 条;浏览器往下滚着读评论区),按话题聚类,推断观众画像、需求与痛点、疑问清单、异议与情绪分布,给出下一条可以做的选题和值得回复的评论的建议回复,存成笔记。数据来源在开始节点的下拉里二选一:内嵌浏览器(不用配置、不花钱,小红书评论要换成已登录的浏览器档案)或 TikHub(要装插件、填密钥,每次运行 1 次请求;字段全、更稳、不用登录)。另有 1–2 次 AI 对话。",
+  "graph_hash": "8db56796c69753c1df9dd476137e8a5f2f608f1546d897bb02133bdb7b4653a3",
   "graph": {
     "meta": {
       "template_id": "comment_insights",
-      "template_version": 1,
+      "template_version": 2,
       "source": "official"
     },
     "nodes": [
@@ -32,7 +32,22 @@
           "required_params": [
             "video_link",
             "data_source"
-          ]
+          ],
+          "param_options": {
+            "data_source": [
+              {
+                "value": "browser",
+                "label": "内嵌浏览器",
+                "description": "不用配置、不花钱;要登录才看得到的页面(小红书一定要、抖音多半要),在「用内嵌浏览器打开」里换成浏览器池里已登录的档案。页面上的数字是约数,发布时间常常缺"
+              },
+              {
+                "value": "tikhub",
+                "label": "TikHub",
+                "description": "需安装 TikHub 插件、接好连接并填上 API 密钥(按次计费);数据更全更稳、不用登录",
+                "requires": "tikhub_comments"
+              }
+            ]
+          }
         }
       },
       {
@@ -50,19 +65,6 @@
         }
       },
       {
-        "id": "source_mode",
-        "type": "text_transform",
-        "name": "数据来源统一成小写",
-        "position": {
-          "x": 680,
-          "y": 535
-        },
-        "config": {
-          "text": "{{start.data_source}}",
-          "op": "lower"
-        }
-      },
-      {
         "id": "use_tikhub",
         "type": "condition",
         "name": "用 TikHub 取数吗",
@@ -71,13 +73,10 @@
           "y": 535
         },
         "config": {
-          "left": "",
-          "op": "contains",
+          "left": "{{start.data_source}}",
+          "op": "equals",
           "right": "tikhub"
-        },
-        "inputs": [
-          "left"
-        ]
+        }
       },
       {
         "id": "tk_is_dy",
@@ -245,7 +244,7 @@
         },
         "config": {
           "title": "没有开始分析:TikHub 这一路不支持这个平台",
-          "body": "认出的平台是「{{link.platform}}」。TikHub 这一路接了抖音、小红书、B站;别的平台把开始节点的 data_source 改成 browser(内嵌浏览器)再运行。认错了的话,在开始节点的 platform 里写明平台。"
+          "body": "认出的平台是「{{link.platform}}」。TikHub 这一路接了抖音、小红书、B站;别的平台在开始节点的数据来源(data_source)里改选「内嵌浏览器」再运行。认错了的话,在开始节点的 platform 里写明平台。"
         }
       },
       {
@@ -531,9 +530,9 @@
         "target": "link"
       },
       {
-        "id": "link__source_mode",
+        "id": "link__use_tikhub",
         "source": "link",
-        "target": "source_mode"
+        "target": "use_tikhub"
       },
       {
         "id": "use_tikhub__tk_is_dy__true",
@@ -644,14 +643,6 @@
         "id": "done_notice__output",
         "source": "done_notice",
         "target": "output"
-      },
-      {
-        "id": "d-source_mode-text-use_tikhub-left",
-        "source": "source_mode",
-        "target": "use_tikhub",
-        "kind": "data",
-        "source_output": "text",
-        "target_input": "left"
       },
       {
         "id": "d-link-platform-tk_is_dy-left",

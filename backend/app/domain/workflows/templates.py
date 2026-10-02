@@ -424,9 +424,16 @@ def _carry_picks(fresh: dict[str, Any], old: dict[str, Any]) -> None:
         config, old_config = node.get("config") or {}, before.get("config") or {}
         if node.get("type") == "start":
             params, old_params = config.get("params") or {}, old_config.get("params") or {}
+            #: 新版里只能从几项里选的参数,只带选项里有的值 —— 旧版那一格可能是手填的(「TikHub」「浏览器」),
+            #: 带过去只会在运行前被拦;不带就留空,面板上那一行说「必填,还没选」,由人挑。
+            options = config.get("param_options") if isinstance(config.get("param_options"), dict) else {}
             for key in params:
-                if old_params.get(key) not in (None, ""):
-                    params[key] = copy.deepcopy(old_params[key])
+                kept = old_params.get(key)
+                if kept in (None, ""):
+                    continue
+                if key in options and kept not in {one.get("value") for one in options[key] if isinstance(one, dict)}:
+                    continue
+                params[key] = copy.deepcopy(kept)
             continue
         bound = set(node.get("inputs") or [])
         for key, value in config.items():

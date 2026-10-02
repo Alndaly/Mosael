@@ -562,8 +562,8 @@
       "en": "Social account health check"
     },
     "summary": {
-      "zh": "贴一个抖音、小红书或 B站账号的主页链接,取账号资料和最近 30 条作品(发布时间、文案、时长、播放 / 点赞 / 评论 / 收藏 / 转发),由代码算出发布频率、发布时段分布、互动率、头部作品和「最近一半对之前一半」的增长 / 衰退信号,再写一份运营诊断(现状、内容支柱、做得好的、问题、可执行建议)存成笔记,附关键数据表。数据来源二选一:TikHub(每次运行 2 次请求,每次约 0.001 美元起,以 TikHub 账单为准)或内嵌浏览器(不花钱,小红书 / 抖音要登录,其他平台也能用)。另有 1–2 次 AI 对话(浏览器那一路多一次整理页面)。",
-      "en": "Paste a Douyin, Xiaohongshu or Bilibili profile link to fetch the profile and the latest 30 posts (publish time, caption, length, views / likes / comments / saves / shares). Code works out posting frequency, posting-time distribution, engagement rate, top posts and a recent-half-vs-earlier-half growth or decline signal, then a diagnosis (where it stands, content pillars, what works, problems, concrete next steps) is saved as a note with the key numbers attached. Pick one data source: TikHub (2 calls per run, from about $0.001 each — see your TikHub bill) or the built-in browser (free; Xiaohongshu / Douyin need a sign-in, other platforms work too). Plus one or two AI chat calls (one more on the browser route to read the page)."
+      "zh": "贴一个抖音、小红书或 B站账号的主页链接,取账号资料和最近 30 条作品(发布时间、文案、时长、播放 / 点赞 / 评论 / 收藏 / 转发),由代码算出发布频率、发布时段分布、互动率、头部作品和「最近一半对之前一半」的增长 / 衰退信号,再写一份运营诊断(现状、内容支柱、做得好的、问题、可执行建议)存成笔记,附关键数据表。数据来源在开始节点的下拉里二选一:内嵌浏览器(不用配置、不花钱,小红书 / 抖音要换成已登录的浏览器档案,其他平台也能用,数字是页面上的约数)或 TikHub(要装插件、填密钥,每次运行 2 次请求、每次约 0.001 美元起,以 TikHub 账单为准;字段全、更稳、不用登录)。另有 1–2 次 AI 对话(浏览器那一路多一次整理页面)。",
+      "en": "Paste a Douyin, Xiaohongshu or Bilibili profile link to fetch the profile and the latest 30 posts (publish time, caption, length, views / likes / comments / saves / shares). Code works out posting frequency, posting-time distribution, engagement rate, top posts and a recent-half-vs-earlier-half growth or decline signal, then a diagnosis (where it stands, content pillars, what works, problems, concrete next steps) is saved as a note with the key numbers attached. Pick the data source from the start node's drop-down: the built-in browser (nothing to set up and free; Xiaohongshu / Douyin need a signed-in browser profile, other platforms work too, and the numbers are the page's rounded ones) or TikHub (needs the plugin and an API key; 2 calls per run, from about $0.001 each — see your TikHub bill; complete fields, steadier, no sign-in). Plus one or two AI chat calls (one more on the browser route to read the page)."
     },
     "requires": {
       "zh": [
@@ -581,7 +581,7 @@
     },
     "stages": {
       "zh": [
-        "填主页链接、数据来源(tikhub 或 browser),可选平台和关心的问题",
+        "填主页链接、选数据来源(内嵌浏览器或 TikHub),可选平台和关心的问题",
         "认出平台和账号编号",
         "TikHub 按平台取资料与作品,或浏览器打开主页、滚动读出页面",
         "整理作品、算频率 / 时段 / 互动率 / 趋势",
@@ -589,7 +589,7 @@
         "存成笔记(附数据表)"
       ],
       "en": [
-        "Profile link and data source (tikhub or browser), optionally the platform and your question",
+        "Profile link and the data source (built-in browser or TikHub), optionally the platform and your question",
         "Work out the platform and account id",
         "TikHub fetches profile and posts per platform, or the browser reads the page",
         "Tidy the posts; frequency, timing, engagement and trend",
@@ -598,8 +598,8 @@
       ]
     },
     "author": "Mosael",
-    "version": 1,
-    "nodes": 29,
+    "version": 2,
+    "nodes": 28,
     "download": {
       "zh": "/workflows/account_analysis.zh.mosael-workflow.json",
       "en": "/workflows/account_analysis.en.mosael-workflow.json"
@@ -612,8 +612,8 @@
       "en": "Why a video went viral"
     },
     "summary": {
-      "zh": "贴一条抖音、小红书或 B站视频的链接,取视频数据和赞最多的评论,下载视频、转写带时间码的口播,拆解它为什么火(选题、前 3 秒钩子、结构节奏、情绪点、标题封面、评论区反馈、可复用的套路),并给一份「照这个套路做一条」的脚本提纲,存成笔记。数据来源二选一:TikHub(每次运行 2 次请求,每次约 0.001 美元起)或内嵌浏览器(不花钱,要登录的平台选登录档案)。下载用的是素材库的「从链接导入」(抖音一般要在「下载视频进素材库」上选已登录的浏览器档案),下不到时照样按数据和评论拆;转写在本机跑;另有 1–2 次 AI 对话。暂不看画面(没有抽关键帧)。",
-      "en": "Paste a Douyin, Xiaohongshu or Bilibili video link to fetch its numbers and most-liked comments, download it and transcribe the speech with timecodes, then break down why it worked (topic, the first-three-second hook, structure and pacing, emotional beats, title and cover, comment feedback, reusable patterns) and outline a script to make one the same way, saved as a note. Pick one data source: TikHub (2 calls per run, from about $0.001 each) or the built-in browser (free; pick a signed-in profile where needed). The download uses the library's Import from link (Douyin usually needs a signed-in browser profile on the download step); if it fails, the breakdown still runs on the numbers and comments. Transcription runs locally; plus one or two AI chat calls. Frames are not looked at yet."
+      "zh": "贴一条抖音、小红书或 B站视频的链接,取视频数据和赞最多的评论,下载视频、转写带时间码的口播,拆解它为什么火(选题、前 3 秒钩子、结构节奏、情绪点、标题封面、评论区反馈、可复用的套路),并给一份「照这个套路做一条」的脚本提纲,存成笔记。数据来源在开始节点的下拉里二选一:内嵌浏览器(不用配置、不花钱,要登录的平台换成已登录的浏览器档案)或 TikHub(要装插件、填密钥,每次运行 2 次请求、每次约 0.001 美元起;字段全、更稳、不用登录)。下载用的是素材库的「从链接导入」(抖音一般要在「下载视频进素材库」上选已登录的浏览器档案),下不到时照样按数据和评论拆;转写在本机跑;另有 1–2 次 AI 对话。暂不看画面(没有抽关键帧)。",
+      "en": "Paste a Douyin, Xiaohongshu or Bilibili video link to fetch its numbers and most-liked comments, download it and transcribe the speech with timecodes, then break down why it worked (topic, the first-three-second hook, structure and pacing, emotional beats, title and cover, comment feedback, reusable patterns) and outline a script to make one the same way, saved as a note. Pick the data source from the start node's drop-down: the built-in browser (nothing to set up and free; switch to a signed-in browser profile where needed) or TikHub (needs the plugin and an API key; 2 calls per run, from about $0.001 each; complete fields, steadier, no sign-in). The download uses the library's Import from link (Douyin usually needs a signed-in browser profile on the download step); if it fails, the breakdown still runs on the numbers and comments. Transcription runs locally; plus one or two AI chat calls. Frames are not looked at yet."
     },
     "requires": {
       "zh": [
@@ -633,7 +633,7 @@
     },
     "stages": {
       "zh": [
-        "填视频链接、数据来源(tikhub 或 browser),可选你想做的主题",
+        "填视频链接、选数据来源(内嵌浏览器或 TikHub),可选你想做的主题",
         "认出平台和作品编号",
         "TikHub 按平台取详情与评论,或浏览器打开、滚到评论区读出页面",
         "整理视频数据、评论按赞排好",
@@ -642,7 +642,7 @@
         "存成笔记"
       ],
       "en": [
-        "Video link and data source (tikhub or browser), optionally a topic of your own",
+        "Video link and the data source (built-in browser or TikHub), optionally a topic of your own",
         "Work out the platform and post id",
         "TikHub fetches details and comments per platform, or the browser reads the page down to the comments",
         "Tidy the numbers, rank the comments",
@@ -652,8 +652,8 @@
       ]
     },
     "author": "Mosael",
-    "version": 1,
-    "nodes": 38,
+    "version": 2,
+    "nodes": 37,
     "download": {
       "zh": "/workflows/viral_video_breakdown.zh.mosael-workflow.json",
       "en": "/workflows/viral_video_breakdown.en.mosael-workflow.json"
@@ -666,8 +666,8 @@
       "en": "Comment insights and audience"
     },
     "summary": {
-      "zh": "贴一条作品链接,取赞最多的一批评论(默认 50 条:TikHub 一次取一页,约 20–50 条;浏览器往下滚着读评论区),按话题聚类,推断观众画像、需求与痛点、疑问清单、异议与情绪分布,给出下一条可以做的选题和值得回复的评论的建议回复,存成笔记。数据来源二选一:TikHub(每次运行 1 次请求)或内嵌浏览器(不花钱,小红书评论要登录)。另有 1–2 次 AI 对话。",
-      "en": "Paste a post link to fetch its most-liked comments (50 by default: one page via TikHub, about 20–50; the browser scrolls through the comment section), group them by topic, infer the audience, needs and pain points, open questions, objections and sentiment, suggest next topics and replies to the comments worth answering, saved as a note. Pick one data source: TikHub (1 call per run) or the built-in browser (free; Xiaohongshu comments need a sign-in). Plus one or two AI chat calls."
+      "zh": "贴一条作品链接,取赞最多的一批评论(默认 50 条:TikHub 一次取一页,约 20–50 条;浏览器往下滚着读评论区),按话题聚类,推断观众画像、需求与痛点、疑问清单、异议与情绪分布,给出下一条可以做的选题和值得回复的评论的建议回复,存成笔记。数据来源在开始节点的下拉里二选一:内嵌浏览器(不用配置、不花钱,小红书评论要换成已登录的浏览器档案)或 TikHub(要装插件、填密钥,每次运行 1 次请求;字段全、更稳、不用登录)。另有 1–2 次 AI 对话。",
+      "en": "Paste a post link to fetch its most-liked comments (50 by default: one page via TikHub, about 20–50; the browser scrolls through the comment section), group them by topic, infer the audience, needs and pain points, open questions, objections and sentiment, suggest next topics and replies to the comments worth answering, saved as a note. Pick the data source from the start node's drop-down: the built-in browser (nothing to set up and free; Xiaohongshu comments need a signed-in browser profile) or TikHub (needs the plugin and an API key; 1 call per run; complete fields, steadier, no sign-in). Plus one or two AI chat calls."
     },
     "requires": {
       "zh": [
@@ -685,7 +685,7 @@
     },
     "stages": {
       "zh": [
-        "填作品链接、数据来源(tikhub 或 browser),可选关心的问题",
+        "填作品链接、选数据来源(内嵌浏览器或 TikHub),可选关心的问题",
         "认出平台和作品编号",
         "TikHub 按平台取评论,或浏览器滚动读出评论区",
         "评论按赞排好",
@@ -693,7 +693,7 @@
         "存成笔记"
       ],
       "en": [
-        "Post link and data source (tikhub or browser), optionally your question",
+        "Post link and the data source (built-in browser or TikHub), optionally your question",
         "Work out the platform and post id",
         "TikHub fetches comments per platform, or the browser reads the comment section",
         "Rank the comments by likes",
@@ -702,8 +702,8 @@
       ]
     },
     "author": "Mosael",
-    "version": 1,
-    "nodes": 26,
+    "version": 2,
+    "nodes": 25,
     "download": {
       "zh": "/workflows/comment_insights.zh.mosael-workflow.json",
       "en": "/workflows/comment_insights.en.mosael-workflow.json"

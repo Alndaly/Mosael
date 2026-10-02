@@ -3,12 +3,12 @@
   "version": 1,
   "workflow_revision": 1,
   "name": "自媒体账号运营诊断",
-  "description": "贴一个抖音、小红书或 B站账号的主页链接,取账号资料和最近 30 条作品(发布时间、文案、时长、播放 / 点赞 / 评论 / 收藏 / 转发),由代码算出发布频率、发布时段分布、互动率、头部作品和「最近一半对之前一半」的增长 / 衰退信号,再写一份运营诊断(现状、内容支柱、做得好的、问题、可执行建议)存成笔记,附关键数据表。数据来源二选一:TikHub(每次运行 2 次请求,每次约 0.001 美元起,以 TikHub 账单为准)或内嵌浏览器(不花钱,小红书 / 抖音要登录,其他平台也能用)。另有 1–2 次 AI 对话(浏览器那一路多一次整理页面)。",
-  "graph_hash": "b12af19b197967fd75ebe0745c09735cf7e66555fc4fac346058c48b9865e584",
+  "description": "贴一个抖音、小红书或 B站账号的主页链接,取账号资料和最近 30 条作品(发布时间、文案、时长、播放 / 点赞 / 评论 / 收藏 / 转发),由代码算出发布频率、发布时段分布、互动率、头部作品和「最近一半对之前一半」的增长 / 衰退信号,再写一份运营诊断(现状、内容支柱、做得好的、问题、可执行建议)存成笔记,附关键数据表。数据来源在开始节点的下拉里二选一:内嵌浏览器(不用配置、不花钱,小红书 / 抖音要换成已登录的浏览器档案,其他平台也能用,数字是页面上的约数)或 TikHub(要装插件、填密钥,每次运行 2 次请求、每次约 0.001 美元起,以 TikHub 账单为准;字段全、更稳、不用登录)。另有 1–2 次 AI 对话(浏览器那一路多一次整理页面)。",
+  "graph_hash": "d5e966a8b4c87845dfe003928643503d68760b93be22a109bdb4b558adb9372e",
   "graph": {
     "meta": {
       "template_id": "account_analysis",
-      "template_version": 1,
+      "template_version": 2,
       "source": "official"
     },
     "nodes": [
@@ -32,7 +32,22 @@
           "required_params": [
             "account_link",
             "data_source"
-          ]
+          ],
+          "param_options": {
+            "data_source": [
+              {
+                "value": "browser",
+                "label": "内嵌浏览器",
+                "description": "不用配置、不花钱;要登录才看得到的页面(小红书一定要、抖音多半要),在「用内嵌浏览器打开」里换成浏览器池里已登录的档案。页面上的数字是约数,发布时间常常缺"
+              },
+              {
+                "value": "tikhub",
+                "label": "TikHub",
+                "description": "需安装 TikHub 插件、接好连接并填上 API 密钥(按次计费);数据更全更稳、不用登录",
+                "requires": "tikhub_account"
+              }
+            ]
+          }
         }
       },
       {
@@ -50,19 +65,6 @@
         }
       },
       {
-        "id": "source_mode",
-        "type": "text_transform",
-        "name": "数据来源统一成小写",
-        "position": {
-          "x": 680,
-          "y": 535
-        },
-        "config": {
-          "text": "{{start.data_source}}",
-          "op": "lower"
-        }
-      },
-      {
         "id": "use_tikhub",
         "type": "condition",
         "name": "用 TikHub 取数吗",
@@ -71,13 +73,10 @@
           "y": 535
         },
         "config": {
-          "left": "",
-          "op": "contains",
+          "left": "{{start.data_source}}",
+          "op": "equals",
           "right": "tikhub"
-        },
-        "inputs": [
-          "left"
-        ]
+        }
       },
       {
         "id": "tk_is_dy",
@@ -307,7 +306,7 @@
         },
         "config": {
           "title": "没有开始分析:TikHub 这一路不支持这个平台",
-          "body": "认出的平台是「{{link.platform}}」。TikHub 这一路接了抖音、小红书、B站;别的平台把开始节点的 data_source 改成 browser(内嵌浏览器)再运行。认错了的话,在开始节点的 platform 里写明平台。"
+          "body": "认出的平台是「{{link.platform}}」。TikHub 这一路接了抖音、小红书、B站;别的平台在开始节点的数据来源(data_source)里改选「内嵌浏览器」再运行。认错了的话,在开始节点的 platform 里写明平台。"
         }
       },
       {
@@ -648,9 +647,9 @@
         "target": "link"
       },
       {
-        "id": "link__source_mode",
+        "id": "link__use_tikhub",
         "source": "link",
-        "target": "source_mode"
+        "target": "use_tikhub"
       },
       {
         "id": "use_tikhub__tk_is_dy__true",
@@ -791,14 +790,6 @@
         "id": "done_notice__output",
         "source": "done_notice",
         "target": "output"
-      },
-      {
-        "id": "d-source_mode-text-use_tikhub-left",
-        "source": "source_mode",
-        "target": "use_tikhub",
-        "kind": "data",
-        "source_output": "text",
-        "target_input": "left"
       },
       {
         "id": "d-link-platform-tk_is_dy-left",

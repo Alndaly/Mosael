@@ -3,12 +3,12 @@
   "version": 1,
   "workflow_revision": 1,
   "name": "Social account health check",
-  "description": "Paste a Douyin, Xiaohongshu or Bilibili profile link to fetch the profile and the latest 30 posts (publish time, caption, length, views / likes / comments / saves / shares). Code works out posting frequency, posting-time distribution, engagement rate, top posts and a recent-half-vs-earlier-half growth or decline signal, then a diagnosis (where it stands, content pillars, what works, problems, concrete next steps) is saved as a note with the key numbers attached. Pick one data source: TikHub (2 calls per run, from about $0.001 each — see your TikHub bill) or the built-in browser (free; Xiaohongshu / Douyin need a sign-in, other platforms work too). Plus one or two AI chat calls (one more on the browser route to read the page).",
-  "graph_hash": "f20bea054d35288baf1ccf110e3faca8f371dd840fa2befa2e907942ad04035d",
+  "description": "Paste a Douyin, Xiaohongshu or Bilibili profile link to fetch the profile and the latest 30 posts (publish time, caption, length, views / likes / comments / saves / shares). Code works out posting frequency, posting-time distribution, engagement rate, top posts and a recent-half-vs-earlier-half growth or decline signal, then a diagnosis (where it stands, content pillars, what works, problems, concrete next steps) is saved as a note with the key numbers attached. Pick the data source from the start node's drop-down: the built-in browser (nothing to set up and free; Xiaohongshu / Douyin need a signed-in browser profile, other platforms work too, and the numbers are the page's rounded ones) or TikHub (needs the plugin and an API key; 2 calls per run, from about $0.001 each — see your TikHub bill; complete fields, steadier, no sign-in). Plus one or two AI chat calls (one more on the browser route to read the page).",
+  "graph_hash": "0e097a19b53a179911e532d2409f35bd859e616bdaa961ee43b8b00c5cffb869",
   "graph": {
     "meta": {
       "template_id": "account_analysis",
-      "template_version": 1,
+      "template_version": 2,
       "source": "official"
     },
     "nodes": [
@@ -32,7 +32,22 @@
           "required_params": [
             "account_link",
             "data_source"
-          ]
+          ],
+          "param_options": {
+            "data_source": [
+              {
+                "value": "browser",
+                "label": "Built-in browser",
+                "description": "Nothing to set up and free; for pages that need a sign-in (Xiaohongshu always, Douyin mostly), switch “Open in the built-in browser” to a signed-in browser-pool profile. Numbers on the page are rounded and publish times are often missing"
+              },
+              {
+                "value": "tikhub",
+                "label": "TikHub",
+                "description": "Needs the TikHub plugin with a connection and your API key (billed per call); fuller, steadier data and no sign-in",
+                "requires": "tikhub_account"
+              }
+            ]
+          }
         }
       },
       {
@@ -50,19 +65,6 @@
         }
       },
       {
-        "id": "source_mode",
-        "type": "text_transform",
-        "name": "Lower-case the data source",
-        "position": {
-          "x": 680,
-          "y": 535
-        },
-        "config": {
-          "text": "{{start.data_source}}",
-          "op": "lower"
-        }
-      },
-      {
         "id": "use_tikhub",
         "type": "condition",
         "name": "Fetch with TikHub?",
@@ -71,13 +73,10 @@
           "y": 535
         },
         "config": {
-          "left": "",
-          "op": "contains",
+          "left": "{{start.data_source}}",
+          "op": "equals",
           "right": "tikhub"
-        },
-        "inputs": [
-          "left"
-        ]
+        }
       },
       {
         "id": "tk_is_dy",
@@ -307,7 +306,7 @@
         },
         "config": {
           "title": "Analysis not started: the TikHub route doesn't cover this platform",
-          "body": "The platform was read as “{{link.platform}}”. The TikHub route covers Douyin, Xiaohongshu and Bilibili; for anything else set data_source on the start node to browser and run again. If the platform was misread, name it in the start node's platform."
+          "body": "The platform was read as “{{link.platform}}”. The TikHub route covers Douyin, Xiaohongshu and Bilibili; for anything else pick “Built-in browser” as the data source (data_source) on the start node and run again. If the platform was misread, name it in the start node's platform."
         }
       },
       {
@@ -648,9 +647,9 @@
         "target": "link"
       },
       {
-        "id": "link__source_mode",
+        "id": "link__use_tikhub",
         "source": "link",
-        "target": "source_mode"
+        "target": "use_tikhub"
       },
       {
         "id": "use_tikhub__tk_is_dy__true",
@@ -791,14 +790,6 @@
         "id": "done_notice__output",
         "source": "done_notice",
         "target": "output"
-      },
-      {
-        "id": "d-source_mode-text-use_tikhub-left",
-        "source": "source_mode",
-        "target": "use_tikhub",
-        "kind": "data",
-        "source_output": "text",
-        "target_input": "left"
       },
       {
         "id": "d-link-platform-tk_is_dy-left",
