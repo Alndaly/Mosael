@@ -64,7 +64,7 @@ import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { CanvasAgentChat, type CanvasAgentMode } from "@/features/agent/CanvasAgentChat";
-import { clipEnd, snapToFrame } from "@/domain/timeline/geometry";
+import { clipEnd, frameAt, frameTime, snapToFrame } from "@/domain/timeline/geometry";
 import { clipContains, rippleTrimCuts, splitPointAt, splitPointsAcrossTracks } from "@/domain/timeline/editTargets";
 import { projectTranscript, transcriptSegmentsFromApi, type SegmentLike } from "@/domain/timeline/transcriptProjection";
 import { transcriptSourceClips } from "@/domain/timeline/transcriptSources";
@@ -626,6 +626,29 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
       if (updated) applySequence(updated);
     },
   });
+  // , / . 微移:选中的片段整组按帧挪。目标位置在**执行时**按最新的时间线算 —— 连按几下时,
+  // 每一下都要在前一下落地之后的位置上再挪一帧,按下那一刻算就会几下都落到同一处。
+  const nudgeMutation = useMutation({
+    scope: editScope,
+    mutationFn: async (frames: number) => {
+      const latest = latestSequence();
+      const fps = latest?.fps ?? 30;
+      const locked = new Set((latest?.tracks ?? []).filter((track) => track.locked).map((track) => track.id));
+      const selected = new Set(useEditorStore.getState().selectedClipIds);
+      const targets = clipsOf(latest).filter((item) => selected.has(item.id) && !locked.has(item.track_id));
+      const moves = targets.map((item) => ({ clip: item, start: frameTime(frameAt(item.timeline_start, fps) + frames, fps) }));
+      // 整组有一段会挪到 0 之前:整组不动(只挪一部分会把组内间距挤变形)。
+      if (moves.length === 0 || moves.some((move) => move.start < 0)) return null;
+      // 链接组员(没选中的那半)由后端跟着挪同样的距离。
+      return moveClipsBatch(
+        latest!,
+        moves.map((move) => ({ clip_id: move.clip.id, timeline_start: move.start, track_id: move.clip.track_id })),
+      );
+    },
+    onSuccess: (updated) => {
+      if (updated) applySequence(updated);
+    },
+  });
   // ⇧⌘K:播放头下每条未锁定轨各切一刀,一条操作、一步撤销。执行时按最新的时间线找片段。
   const splitAllMutation = useMutation({
     scope: editScope,
@@ -883,6 +906,7 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
     moveLayer: moveClipLayer,
     split: () => splitAtPlayhead(),
     splitAll: () => splitAllMutation.mutate(snapToFrame(useEditorStore.getState().playhead, sequence?.fps ?? 30)),
+    nudge: (frames) => nudgeMutation.mutate(frames),
     rippleTrim: (edge) => rippleTrimMutation.mutate({ edge, time: snapToFrame(useEditorStore.getState().playhead, sequence?.fps ?? 30) }),
     deleteSelection: (ripple) => {
       const clipIds = useEditorStore.getState().selectedClipIds;

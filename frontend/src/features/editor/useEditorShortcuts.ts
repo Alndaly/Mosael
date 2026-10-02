@@ -27,6 +27,8 @@ export interface EditorShortcutActions {
   split: () => void;
   /** ⇧⌘K:播放头下所有未锁定轨各切一刀。 */
   splitAll: () => void;
+  /** , / .:选中的片段左 / 右挪 frames 帧(⇧ 为 10 帧)。 */
+  nudge: (frames: number) => void;
   /** Q(start)/ W(end):波纹修剪上一个 / 下一个编辑点到播放头。 */
   rippleTrim: (edge: "start" | "end") => void;
   deleteSelection: (ripple: boolean) => void;
@@ -105,6 +107,12 @@ export function useEditorShortcuts(
         // ⌥X 清掉入出点(macOS 上 ⌥X 的 key 是 "≈",认物理键)。
         event.preventDefault();
         store.clearMarks();
+      } else if (!mod && (event.key === "," || event.key === "." || event.key === "<" || event.key === ">")) {
+        // ⇧ 时 key 变成 < / >(美式键盘),一并认。
+        if (store.selectedClipIds.length === 0) return;
+        event.preventDefault();
+        const left = event.key === "," || event.key === "<";
+        act.nudge((event.shiftKey ? 10 : 1) * (left ? -1 : 1));
       } else if (!mod && (key === "q" || key === "w")) {
         event.preventDefault();
         act.rippleTrim(key === "q" ? "start" : "end");

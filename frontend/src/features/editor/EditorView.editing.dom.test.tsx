@@ -600,3 +600,31 @@ describe("⌥ 拖复制与 Esc", () => {
     expect(useEditorStore.getState().selectedClipIds).toEqual([]);
   });
 });
+
+describe(", / . 微移", () => {
+  it("选中的片段按帧左右挪;连按两下在第一下落地之后再算,不丢步", async () => {
+    const at = (start: number) => sequenceWith([track("v1", "video", 0, [clip("c1", "v1", start, 0, 2)])], { revision: Math.round(start * 30) });
+    renderEditor(at(1));
+    await ready();
+    act(() => useEditorStore.getState().selectClip("c1"));
+    const first = deferred<Sequence>();
+    mocks.moveClipsBatch.mockImplementationOnce(() => first.promise);
+    press(".");
+    press(".");
+    await waitFor(() => expect(mocks.moveClipsBatch).toHaveBeenCalledTimes(1));
+    expect(mocks.moveClipsBatch).toHaveBeenNthCalledWith(1, onS1, [{ clip_id: "c1", timeline_start: 31 / 30, track_id: "v1" }]);
+    current = at(31 / 30);
+    await act(async () => first.resolve(current));
+    await waitFor(() => expect(mocks.moveClipsBatch).toHaveBeenCalledTimes(2));
+    expect(mocks.moveClipsBatch).toHaveBeenNthCalledWith(2, onS1, [{ clip_id: "c1", timeline_start: 32 / 30, track_id: "v1" }]);
+  });
+
+  it("挪到 0 之前就不挪", async () => {
+    renderEditor(sequenceWith([track("v1", "video", 0, [clip("c1", "v1", 0, 0, 2)])]));
+    await ready();
+    act(() => useEditorStore.getState().selectClip("c1"));
+    press(",");
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(mocks.moveClipsBatch).not.toHaveBeenCalled();
+  });
+});
