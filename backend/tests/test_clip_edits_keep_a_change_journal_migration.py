@@ -56,7 +56,7 @@ def _payloads(sequence_id: str) -> list[dict]:
 
 
 def test_插入模式的移动_让位和落点那一刀都撤得回() -> None:
-    from app.db.migrations import _migrate_clip_edits_keep_a_change_journal
+    from app.db.migrations import _migrate_clip_edits_keep_a_change_journal, _migrate_sequence_operation_clip_records_are_complete
 
     client = fresh_client()
     ws, asset, sid, video = _setup(client)
@@ -78,8 +78,12 @@ def test_插入模式的移动_让位和落点那一刀都撤得回() -> None:
     after = _state(client, sid)
 
     _migrate_clip_edits_keep_a_change_journal()
+    # 启动时紧跟着的那一步:转出来的片段记录补齐撤销要按键取的字段(素材快照、脱机占位、链接组)。
+    _migrate_sequence_operation_clip_records_are_complete()
     once = _payloads(sid)
     _migrate_clip_edits_keep_a_change_journal()
+    # 启动时紧跟着的那一步:转出来的片段记录补齐撤销要按键取的字段(素材快照、脱机占位、链接组)。
+    _migrate_sequence_operation_clip_records_are_complete()
     assert _payloads(sid) == once, "再跑一次不该再动"
     assert all(set(payload) == {"changes"} for payload in once)
 
@@ -92,7 +96,7 @@ def test_插入模式的移动_让位和落点那一刀都撤得回() -> None:
 
 
 def test_分离音频_新建的那条轨和静音一起撤掉() -> None:
-    from app.db.migrations import _migrate_clip_edits_keep_a_change_journal
+    from app.db.migrations import _migrate_clip_edits_keep_a_change_journal, _migrate_sequence_operation_clip_records_are_complete
 
     client = fresh_client()
     ws, asset, sid, video = _setup(client)
@@ -110,6 +114,8 @@ def test_分离音频_新建的那条轨和静音一起撤掉() -> None:
     })
     after = _state(client, sid)
     _migrate_clip_edits_keep_a_change_journal()
+    # 启动时紧跟着的那一步:转出来的片段记录补齐撤销要按键取的字段(素材快照、脱机占位、链接组)。
+    _migrate_sequence_operation_clip_records_are_complete()
 
     assert client.post(f"/api/sequences/{sid}/undo").status_code == 200
     state = _state(client, sid)
@@ -120,7 +126,7 @@ def test_分离音频_新建的那条轨和静音一起撤掉() -> None:
 
 
 def test_按文字剪与波纹删除_原片段和左移的都还回来() -> None:
-    from app.db.migrations import _migrate_clip_edits_keep_a_change_journal
+    from app.db.migrations import _migrate_clip_edits_keep_a_change_journal, _migrate_sequence_operation_clip_records_are_complete
 
     client = fresh_client()
     ws, asset, sid, video = _setup(client)
@@ -139,6 +145,8 @@ def test_按文字剪与波纹删除_原片段和左移的都还回来() -> None
     _old_operation(sid, "ripple_delete_clips_batch", {"entries": [{
         "original": right, "shifted": [{"clip_id": "Y", "previous_timeline_start": 8, "timeline_start": 2}]}]})
     _migrate_clip_edits_keep_a_change_journal()
+    # 启动时紧跟着的那一步:转出来的片段记录补齐撤销要按键取的字段(素材快照、脱机占位、链接组)。
+    _migrate_sequence_operation_clip_records_are_complete()
 
     assert client.post(f"/api/sequences/{sid}/undo").status_code == 200
     assert _state(client, sid)["V1"] == [("L", 0, 0, 2, False), ("R", 2, 4, 10, False), ("Y", 8, 40, 41, False)]

@@ -6977,6 +6977,84 @@ def _migrate_detached_audio_joins_its_video() -> None:
             )
 
 
+def _migrate_sequence_operation_clip_records_are_complete() -> None:
+    """时间线操作日志里的每一份「片段记录」补齐到重建一个片段所需的全部字段。
+
+    撤销 / 重做按这些记录重建片段(domain/sequences/undo/rows.restore_clip_row)。此前它对缺的字段
+    逐个猜默认值:老记录只记了位置(插入、单段剪掉的原片段),或者早于某个字段出现。现在重放一律
+    按键取,缺的由这里补成它们当时的含义:1 倍速、单位增益、未静音、无特效、无变换、无文字、不脱机。
+
+    另补一份 `asset_snapshot`(素材的名字 / 类型 / 时长):素材在记录之后被删掉时,重建要还成一个
+    脱机占位,而不是按旧 asset_id 撞上 RESTRICT 外键、让撤销栈卡死在这一条上。素材还在就照它抄;
+    已经删掉的,从当时转成脱机的片段那里找(删素材时它们记下了同一份快照);都找不到就只留下 id ——
+    名字已经无处可查。
+
+    「片段记录」按形状认:同时有 asset_id / timeline_start / src_in / src_out 的字典,不管它挂在
+    payload 的哪一层(改动日志 changes 里 create / delete 条目的 clip、删轨道记下的 clips……)。排在把老记录
+    转成改动日志的那一步(clip-edits-keep-a-change-journal)之后,它转出来的片段记录同样在这里补齐。
+    已经补齐的原样留着:幂等。静态的默认值抄在这里,迁移不跟着领域代码变。
+    """
+    tables = set(inspect(engine).get_table_names())
+    if "sequence_operations" not in tables or "clips" not in tables or "assets" not in tables:
+        return
+    defaults: dict[str, Any] = {
+        "speed": 1.0, "gain": 1.0, "muted": False, "effects": {}, "transform": {},
+        "text_override": None, "link_group": None, "offline_asset": None,
+    }
+    clip_shape = ("asset_id", "timeline_start", "src_in", "src_out")
+
+    def loads(raw: Any) -> Any:
+        try:
+            return json.loads(raw) if isinstance(raw, str) else raw
+        except ValueError:
+            return None
+
+    with engine.begin() as conn:
+        snapshots: dict[str, dict[str, Any]] = {}
+        for row in conn.execute(text("SELECT offline_asset FROM clips WHERE offline_asset IS NOT NULL")):
+            offline = loads(row[0])
+            if isinstance(offline, dict) and isinstance(offline.get("asset_id"), str):
+                snapshots.setdefault(offline["asset_id"], offline)
+        for row in conn.execute(text("SELECT id, name, kind, media_info FROM assets")).mappings():
+            info = loads(row["media_info"])
+            snapshots[row["id"]] = {
+                "asset_id": row["id"], "name": row["name"], "kind": row["kind"],
+                "duration": info.get("duration") if isinstance(info, dict) else None,
+            }
+
+        def complete(node: Any) -> bool:
+            touched = False
+            if isinstance(node, list):
+                for item in node:
+                    touched = complete(item) or touched
+                return touched
+            if not isinstance(node, dict):
+                return False
+            if all(key in node for key in clip_shape):
+                for key, value in defaults.items():
+                    if key not in node:
+                        node[key] = json.loads(json.dumps(value))
+                        touched = True
+                if "asset_snapshot" not in node:
+                    asset_id = node["asset_id"]
+                    node["asset_snapshot"] = (
+                        None if not isinstance(asset_id, str)
+                        else snapshots.get(asset_id, {"asset_id": asset_id, "name": "", "kind": "", "duration": None})
+                    )
+                    touched = True
+            for value in node.values():
+                touched = complete(value) or touched
+            return touched
+
+        for row in conn.execute(text("SELECT id, payload FROM sequence_operations")).mappings().all():
+            payload = loads(row["payload"])
+            if complete(payload):
+                conn.execute(
+                    text("UPDATE sequence_operations SET payload = :p WHERE id = :id"),
+                    {"p": json.dumps(payload, ensure_ascii=False), "id": row["id"]},
+                )
+
+
 def _reindex_record_references() -> None:
     """引用表(record_references)是派生数据:抽取规则一变,整张按新规则重建。"""
     from app.db.references import reindex
@@ -7257,6 +7335,9 @@ def migration_plan() -> MigrationPlan:
             #: 「本会话始终允许」记成 (工具, 档位)。排在所有改写这份清单(工具改名、去掉退役工具)的迁移之后 ——
             #: 它们认的是旧的工具名列表。
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_session_allow_remembers_the_tier),
+            #: 撤销 / 重做按键取片段记录的每个字段:老记录先补齐。要读 clips.offline_asset;排在把老记录转成
+            #: 改动日志的 clip-edits-keep-a-change-journal 之后,它转出来的片段记录也在这里补齐。
+            *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_sequence_operation_clip_records_are_complete),
             #: 对账:引用表按当前抽取规则建(见 db/references)。排在所有改写 JSON 的迁移之后 —— 那些是原生 SQL,
             #: 不经过 flush 时的维护;抽取规则的版本号变了才整张重建,平常是一次查询。
             *_recurring(MigrationPhase.AFTER_SCHEMA, _reindex_record_references),

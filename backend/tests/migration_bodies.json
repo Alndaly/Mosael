@@ -132,6 +132,7 @@
   "migrate-scene-models-to-disk": "80c084b8618aeb26",
   "migrate-scene-models-to-workspace": "285f7da4cb74cd93",
   "migrate-scripts-declaring-input-go-back": "fda5622147f0bbbb",
+  "migrate-sequence-operation-clip-records-are-complete": "95ac47630e60a6c0",
   "migrate-session-allow-remembers-the-tier": "4eb778106e7f3e23",
   "migrate-session-groups-serve-both": "df30d38a56c6b759",
   "migrate-shared-host-folders": "d75d0a271bbdb3e9",

@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from app.core.unit_of_work import after_commit
 from app.db.models import Asset, Clip
 from app.db.models import Sequence as SequenceModel
+from app.domain.sequences.offline import offline_snapshot
 from app.media.paths import resolve_key
 
 
@@ -39,13 +40,7 @@ def delete_asset(db: Session, asset: Asset) -> Deleted:
 
     不记成可撤销的时间线操作:素材文件已经删了,撤销只能还回一个指向空文件的片段。
     """
-    snapshot = {
-        "asset_id": asset.id,
-        "name": asset.name,
-        "kind": asset.kind,
-        # 时长在 media_info 里,顶层没有这个字段(见 db/model_slices 的 Asset)。
-        "duration": (asset.media_info or {}).get("duration"),
-    }
+    snapshot = offline_snapshot(asset)
     touched: set[str] = set()
     count = 0
     # asset_id 上的外键是 RESTRICT,所以要**先**把引用摘掉再删,而不是指望级联。

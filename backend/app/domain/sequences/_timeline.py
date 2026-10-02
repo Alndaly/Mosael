@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.db.models import Clip, Sequence, SequenceOperation, SequenceRevision
 from app.domain.sequences.errors import SequenceDomainError, SequenceNotFound, SequenceRevisionConflict
+from app.domain.sequences.offline import offline_snapshot
 
 
 MIN_CUT_REMAINDER = 0.05
@@ -26,6 +27,13 @@ def require_speed(speed: float) -> float:
 
 
 def _clip_payload(clip: Clip) -> dict[str, Any]:
+    """重建这个片段所需的一切。改动日志的 create / delete 条目存的就是它,撤销 / 重做按它原样还原
+    (见 undo/rows.restore_clip_row)。
+
+    `asset_snapshot` 是素材**此刻**的名字、类型和时长。撤销可能发生在素材被删掉之后 —— 那时
+    asset_id 已经指不到任何东西(外键是 RESTRICT,按它重建当场 IntegrityError,撤销栈卡死在
+    这一条上),而素材的名字也已经无处可查。这里先记下,重建时才能还成一个说得出原来是谁的脱机占位。
+    """
     payload = {
         "clip_id": clip.id,
         "track_id": clip.track_id,
@@ -33,6 +41,7 @@ def _clip_payload(clip: Clip) -> dict[str, Any]:
         "timeline_start": clip.timeline_start,
         "src_in": clip.src_in,
         "src_out": clip.src_out,
+        "asset_snapshot": offline_snapshot(clip.asset) if clip.asset is not None else None,
     }
     for field in RESTORABLE_CLIP_FIELDS:
         payload[field] = getattr(clip, field)
@@ -42,9 +51,14 @@ def _clip_payload(clip: Clip) -> dict[str, Any]:
 #: Everything about a clip beyond where it sits. Recorded on every operation that may have to
 #: rebuild the clip later, because none of it can be recovered from anywhere else — undoing a
 #: delete used to hand back a clip at 1x, unity gain, unmuted and ungraded, and a subtitle with
-#: no text at all. Read back with .get() and a default so operations recorded before this
-#: existed still replay.
-RESTORABLE_CLIP_FIELDS = ("speed", "gain", "muted", "effects", "transform", "text_override", "link_group")
+#: no text at all. 早于某个字段记下的老记录由迁移补齐(complete-sequence-operation-clip-records),
+#: 重放时一律按键取,不在重放那里猜默认值。
+#:
+#: `offline_asset` 也在里面:撤销一个脱机片段的删除,还回来的必须仍是那个脱机占位 —— 不然它
+#: 和一行没有字的文字片段长得一模一样(两者的 asset_id 都是空)。
+RESTORABLE_CLIP_FIELDS = (
+    "speed", "gain", "muted", "effects", "transform", "text_override", "link_group", "offline_asset",
+)
 
 #: What a piece carved out of a clip inherits. A half is still the same footage at the same
 #: speed with the same grade, and half a caption still says what the caption said — rebuilding a

@@ -10,9 +10,11 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.db.models import Sequence, SequenceOperation
@@ -76,7 +78,7 @@ def undo(
         if operation is None:
             raise SequenceDomainError("seqErr_nothingToUndo")
     # kind 不在注册表里就直接报错。往回跳过这一条去撤更早的,等于替用户丢掉一件他没要求撤销的事。
-    undo_registry.apply_inverse(db, sequence, operation.kind, operation.payload)
+    _replay(db, lambda: undo_registry.apply_inverse(db, sequence, operation.kind, operation.payload))
     operation.reverted = True
     _record_operation(
         db,
@@ -114,7 +116,7 @@ def redo(
         raise SequenceDomainError("seqErr_nothingToRedo")
     if mine:
         _ensure_reversible(db, sequence, undo_operation, expected_revision, actor_id)
-    undo_registry.apply_forward(db, sequence, original.kind, original.payload)
+    _replay(db, lambda: undo_registry.apply_forward(db, sequence, original.kind, original.payload))
     original.reverted = False
     undo_operation.reverted = True
     _record_operation(
@@ -127,6 +129,20 @@ def redo(
         undo_of=undo_operation.id,
     )
     return sequence
+
+
+def _replay(db: Session, apply: Callable[[], None]) -> None:
+    """重放一条记录,数据库不收就说人话。
+
+    重放是照着当时的记录重建行,而记录之后世界变了:素材被删了、轨道被别处删了。重放各自尽量绕开
+    这些(见 undo/rows.restore_clip_row 的脱机重建),绕不开的落到这里 —— 此前它是一个 IntegrityError
+    一路冒成 500,前端只看到「出错了」,撤销按钮还亮着,再按一次还是 500。
+    """
+    try:
+        apply()
+        db.flush()
+    except IntegrityError as exc:
+        raise SequenceDomainError("seqErr_replayConflict") from exc
 
 
 @dataclass(frozen=True)

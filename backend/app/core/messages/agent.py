@@ -113,6 +113,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "The track still has clips, so \"Add track\" can't be undone.",
     },
     "seqErr_notUndoable": {"zh": "「{kind}」这种操作不支持撤销", "en": "\"{kind}\" can't be undone."},
+    "seqErr_replayConflict": {
+        "zh": "这一步引用的东西已经被别处改掉或删掉了,没法照原样撤销 / 重做",
+        "en": "Something this step refers to was changed or deleted elsewhere, so it can't be undone or redone as it was.",
+    },
     "seqErr_undoClipGone": {
         "zh": "这一步引用的片段已经不在了,撤销不了",
         "en": "The clip this step refers to no longer exists, so it can't be undone.",
