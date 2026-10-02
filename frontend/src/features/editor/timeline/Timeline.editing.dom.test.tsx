@@ -95,3 +95,22 @@ describe("拖动", () => {
     expect(props.onMoveClip).toHaveBeenCalledWith("c1", 38 / 30, undefined, false);
   });
 });
+
+describe("复制与剪切的标记", () => {
+  it("文字 / 字幕片段也能复制:工具栏的复制键可用,点了交给 onDuplicateClip", () => {
+    const onDuplicateClip = vi.fn();
+    renderTimeline([track("S1", "subtitle", 0, [clip("c1", "S1", 0, 0, 2)])], { onDuplicateClip });
+    act(() => useEditorStore.getState().selectClip("c1"));
+    const button = screen.getByRole("button", { name: "duplicateClip" });
+    expect(button).toBeEnabled();
+    fireEvent.click(button);
+    expect(onDuplicateClip).toHaveBeenCalledWith("c1");
+  });
+
+  it("剪切了还没粘贴的片段在时间线上标出来", () => {
+    renderTimeline([track("V1", "video", 0, [clip("c1", "V1", 0, 0, 2), clip("c2", "V1", 3, 0, 1)])]);
+    act(() => useEditorStore.getState().setClipboard({ clipIds: ["c1"], cut: true }));
+    expect(screen.getByTestId("clip-c1")).toHaveAttribute("data-cut", "true");
+    expect(screen.getByTestId("clip-c2")).not.toHaveAttribute("data-cut");
+  });
+});

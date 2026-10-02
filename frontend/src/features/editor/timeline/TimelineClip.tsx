@@ -21,6 +21,7 @@ export const TimelineClip = React.memo(function TimelineClip({
   name,
   offline = false,
   aiGenerated = false,
+  cut = false,
   left,
   width,
   shiftPx = 0,
@@ -40,6 +41,8 @@ export const TimelineClip = React.memo(function TimelineClip({
   offline?: boolean;
   /** 素材是 AI 生成的(见后端 assets/provenance):片段上标一个「AI」角标,一眼看出成片里哪几段要带标识。 */
   aiGenerated?: boolean;
+  /** 剪切了、等着粘贴时搬走:变淡 + 虚线框。 */
+  cut?: boolean;
   left: number;
   width: number;
   /** 相对 left 的水平位移(px):拖拽中的本体与涟漪让位的邻居都走 transform。 */
@@ -69,6 +72,7 @@ export const TimelineClip = React.memo(function TimelineClip({
     // 脱机:斜纹 + 警示色。**要一眼看出来**,而不是"这一段颜色好像浅一点" —— 它在成片里
     // 是一个洞,用户必须在时间线上就发现,而不是导出被拒时才知道。斜纹排在轨道底色之后,
     // 靠 tailwind-merge 的后者胜出盖掉 bg-*。
+    cut && "border-dashed opacity-50",
     offline &&
       "border-destructive/70 bg-[repeating-linear-gradient(135deg,color-mix(in_srgb,var(--destructive)_26%,transparent)_0_6px,transparent_6px_12px)] text-foreground",
   );
@@ -92,6 +96,7 @@ export const TimelineClip = React.memo(function TimelineClip({
         onClipPointerDown?.(event, trackId, clipId);
       }}
       data-selected={selected || undefined}
+      data-cut={cut || undefined}
       data-testid={clipId ? `clip-${clipId}` : undefined}
       role="button"
       tabIndex={-1}

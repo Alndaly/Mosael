@@ -25,6 +25,8 @@ const mocks = vi.hoisted(() => ({
   addTrack: vi.fn(),
   deleteClip: vi.fn(),
   deleteClipsBatch: vi.fn(),
+  duplicateClips: vi.fn(),
+  insertClip: vi.fn(),
   timelineProps: null as Record<string, unknown> | null,
   monitorProps: null as Record<string, unknown> | null,
   transcriptProps: null as Record<string, unknown> | null,
@@ -177,6 +179,7 @@ beforeEach(() => {
   for (const fn of [
     mocks.splitClip, mocks.undoSequence, mocks.redoSequence, mocks.moveClip, mocks.moveClipsBatch, mocks.trimClip,
     mocks.setClipTransform, mocks.splitClipAtPointsBatch, mocks.addTrack, mocks.deleteClip, mocks.deleteClipsBatch,
+    mocks.duplicateClips, mocks.insertClip,
   ]) {
     fn.mockReset().mockImplementation(async () => current);
   }
@@ -356,5 +359,58 @@ describe("快捷键只接冲着剪辑页来的按键", () => {
     button.focus();
     fireEvent.keyDown(button, { key: "z", code: "KeyZ", metaKey: true });
     await waitFor(() => expect(mocks.undoSequence).toHaveBeenCalledTimes(1));
+  });
+});
+
+describe("复制 / 粘贴 / ⌘D 走后端深拷贝", () => {
+  const subtitle = (id: string, start: number, end: number) =>
+    clip(id, "sub", start, 0, end - start, { asset_id: null, asset_kind: "", text_override: id });
+
+  it("⌘D:文字片段也能复制,副本紧跟在原片段之后,并且选中副本", async () => {
+    const before = sequenceWith([track("sub", "subtitle", 0, [subtitle("c1", 0, 3)])]);
+    renderEditor(before);
+    await ready();
+    const after = sequenceWith([track("sub", "subtitle", 0, [subtitle("c1", 0, 3), subtitle("copy", 3, 6)])], { revision: 2 });
+    mocks.duplicateClips.mockImplementationOnce(async () => after);
+    act(() => useEditorStore.getState().selectClip("c1"));
+    press("d", { metaKey: true });
+    await waitFor(() => expect(mocks.duplicateClips).toHaveBeenCalledWith(onS1, { clip_ids: ["c1"] }));
+    await waitFor(() => expect(useEditorStore.getState().selectedClipIds).toEqual(["copy"]));
+    expect(mocks.insertClip).not.toHaveBeenCalled();
+  });
+
+  it("多选 ⌘D:整组一起复制(起点交给后端:紧接在整组之后)", async () => {
+    renderEditor(sequenceWith([
+      track("v1", "video", 0, [clip("a", "v1", 0, 0, 3)]),
+      track("v2", "video", 1, [clip("b", "v2", 5, 0, 1)]),
+    ]));
+    await ready();
+    act(() => useEditorStore.getState().selectClips(["a", "b"]));
+    press("d", { metaKey: true });
+    await waitFor(() => expect(mocks.duplicateClips).toHaveBeenCalledWith(onS1, { clip_ids: ["a", "b"] }));
+  });
+
+  it("⌘C 再 ⌘V:副本落在播放头处", async () => {
+    renderEditor(sequenceWith([track("sub", "subtitle", 0, [subtitle("c1", 0, 3)])]));
+    await ready();
+    act(() => useEditorStore.getState().selectClip("c1"));
+    press("c", { metaKey: true });
+    act(() => useEditorStore.getState().setPlayhead(7));
+    press("v", { metaKey: true });
+    await waitFor(() => expect(mocks.duplicateClips).toHaveBeenCalledWith(onS1, { clip_ids: ["c1"], timeline_start: 7 }));
+  });
+
+  it("⌘X 再 ⌘V:片段整段搬到播放头处(一步操作),不是先删再贴一段丢了效果的新片段", async () => {
+    renderEditor(sequenceWith([track("v1", "video", 0, [clip("c1", "v1", 1, 0, 3, { effects: { filter: "bw" } })])]));
+    await ready();
+    act(() => useEditorStore.getState().selectClip("c1"));
+    press("x", { metaKey: true });
+    expect(mocks.deleteClip).not.toHaveBeenCalled();
+    act(() => useEditorStore.getState().setPlayhead(8));
+    press("v", { metaKey: true });
+    await waitFor(() =>
+      expect(mocks.moveClipsBatch).toHaveBeenCalledWith(onS1, [{ clip_id: "c1", timeline_start: 8, track_id: "v1" }]),
+    );
+    expect(mocks.duplicateClips).not.toHaveBeenCalled();
   });
 });

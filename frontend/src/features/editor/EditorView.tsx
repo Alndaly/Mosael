@@ -20,6 +20,7 @@ import {
   cutClipRangesBatch,
   deleteClip,
   deleteClipsBatch,
+  duplicateClips,
   rippleDeleteClipsBatch,
   insertClip,
   insertTextClip,
@@ -51,6 +52,7 @@ import {
   baseRevisionOf,
   onSequenceConflict,
   type Asset,
+  type Clip,
   type Project,
   type Sequence,
   type TrackStatePatch,
@@ -721,63 +723,86 @@ function Editor({ workspace, project }: { workspace: Workspace; project: Project
     onError: (error) => toast.error(t("editorGrabFrameFailed"), { description: (error as Error).message }),
   });
 
+  // 复制 / 粘贴 / ⌘D:一律走后端深拷贝(duplicateClips)—— 效果、变换、关键帧、文字原样带上,文字和
+  // 字幕片段也能复制;一次手势一条操作、一步撤销。此前前端拿素材 + 源区间重新插一段:调好的色、
+  // 动画、音量全丢,文字片段干脆复制不了。副本落地后选中它们,接着就能拖、能改。
+  const duplicateMutation = useMutation({
+    scope: editScope,
+    mutationFn: async (args: { clipIds: string[]; timelineStart?: number; trackId?: string | null }) => {
+      const latest = latestSequence()!;
+      const before = new Set(clipIdsOf(latest));
+      const updated = await duplicateClips(latest, {
+        clip_ids: args.clipIds,
+        ...(args.timelineStart !== undefined ? { timeline_start: Math.max(0, args.timelineStart) } : {}),
+        ...(args.trackId ? { track_id: args.trackId } : {}),
+      });
+      return { updated, created: clipIdsOf(updated).filter((id) => !before.has(id)) };
+    },
+    onSuccess: ({ updated, created }) => {
+      applySequence(updated);
+      if (created.length > 0) useEditorStore.getState().selectClips(created);
+    },
+  });
+  /** 这几段拷到 timelineStart(整组保持相对位置);不给起点就紧接在原片段组之后(后端的默认)。 */
+  const duplicateClipsAt = React.useCallback(
+    (clipIds: string[], timelineStart?: number, trackId?: string | null) => {
+      if (clipIds.length === 0) return;
+      duplicateMutation.mutate({ clipIds, timelineStart, trackId });
+    },
+    [duplicateMutation],
+  );
+  // 作用对象:点名的那一段在选区里就是整个选区(和右键菜单同一条规矩),否则就是它自己。
+  const targetsOf = React.useCallback((clipId?: string): Clip[] => {
+    const selected = useEditorStore.getState().selectedClipIds;
+    const ids = clipId ? (selected.includes(clipId) ? selected : [clipId]) : selected;
+    const byId = new Map(clipsOf(latestSequence()).map((item) => [item.id, item]));
+    return ids.map((id) => byId.get(id)).filter((item): item is Clip => Boolean(item));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sequence]);
   const duplicateClip = React.useCallback(
     (clipId?: string) => {
-      if (!sequence) return;
-      const targetId = clipId ?? selectedClipIdOf(useEditorStore.getState());
-      if (!targetId) return;
-      for (const track of sequence.tracks ?? []) {
-        const clip = (track.clips ?? []).find((item) => item.id === targetId);
-        if (clip) {
-          if (!clip.asset_id) return;
-          const trackEnd = (track.clips ?? []).reduce((end, item) => Math.max(end, clipEnd(item)), 0);
-          insertClipMutation.mutate({
-            trackId: track.id,
-            assetId: clip.asset_id,
-            timelineStart: trackEnd,
-            srcIn: clip.src_in,
-            srcOut: clip.src_out,
-          });
-          return;
-        }
-      }
+      const targets = targetsOf(clipId);
+      if (targets.length === 0) return;
+      // 副本紧跟在原片段(整组)之后 —— 不给起点,由后端按整组的末尾放。
+      duplicateClipsAt(targets.map((item) => item.id));
     },
-    [sequence, insertClipMutation],
+    [targetsOf, duplicateClipsAt],
   );
 
-  // 剪贴板(片段级复制/剪切/粘贴)+ 图层上下移。
-  const clipboardRef = React.useRef<{ assetId: string; srcIn: number; srcOut: number; trackId: string } | null>(null);
-  const findSelectedClip = React.useCallback(() => {
-    if (!sequence) return null;
-    const id = selectedClipIdOf(useEditorStore.getState());
-    if (!id) return null;
-    for (const track of sequence.tracks ?? []) {
-      const clip = (track.clips ?? []).find((item) => item.id === id);
-      if (clip) return clip;
-    }
-    return null;
-  }, [sequence]);
+  // 剪贴板(片段级复制 / 剪切 / 粘贴)。存的是片段 id —— 粘贴时由后端从这些片段深拷贝。
+  // 剪切不当场删:剪切的片段先标出来(时间线上变淡),粘贴时整段**搬**到播放头处,一步操作。
+  // 当场删掉的话,粘贴时已经没有源片段可拷,只能退回「拿素材重新插一段」—— 效果全丢,文字片段贴不回来。
   const copyClip = React.useCallback(() => {
-    const clip = findSelectedClip();
-    if (!clip?.asset_id) return;
-    clipboardRef.current = { assetId: clip.asset_id, srcIn: clip.src_in, srcOut: clip.src_out, trackId: clip.track_id };
-  }, [findSelectedClip]);
-  const pasteClip = React.useCallback(() => {
-    const cb = clipboardRef.current;
-    if (!cb || !sequence) return;
-    const playhead = useEditorStore.getState().playhead;
-    const track =
-      (sequence.tracks ?? []).find((item) => item.id === cb.trackId) ??
-      (sequence.tracks ?? []).find((item) => item.kind === "video");
-    if (!track) return;
-    insertClipMutation.mutate({ trackId: track.id, assetId: cb.assetId, timelineStart: playhead, srcIn: cb.srcIn, srcOut: cb.srcOut });
-  }, [sequence, insertClipMutation]);
+    const ids = targetsOf().map((item) => item.id);
+    if (ids.length > 0) useEditorStore.getState().setClipboard({ clipIds: ids, cut: false });
+  }, [targetsOf]);
   const cutClip = React.useCallback(() => {
-    const clip = findSelectedClip();
-    if (!clip?.asset_id) return;
-    clipboardRef.current = { assetId: clip.asset_id, srcIn: clip.src_in, srcOut: clip.src_out, trackId: clip.track_id };
-    deleteClipMutation.mutate(clip.id);
-  }, [findSelectedClip, deleteClipMutation]);
+    const ids = targetsOf().map((item) => item.id);
+    if (ids.length > 0) useEditorStore.getState().setClipboard({ clipIds: ids, cut: true });
+  }, [targetsOf]);
+  const pasteClip = React.useCallback(() => {
+    const store = useEditorStore.getState();
+    const board = store.clipboard;
+    if (!board || !sequence) return;
+    const playhead = snapToFrame(store.playhead, sequence.fps);
+    const byId = new Map(clipsOf(latestSequence()).map((item) => [item.id, item]));
+    const sources = board.clipIds.map((id) => byId.get(id)).filter((item): item is Clip => Boolean(item));
+    if (sources.length === 0) {
+      store.setClipboard(null);
+      return;
+    }
+    if (board.cut) {
+      const delta = playhead - Math.min(...sources.map((item) => item.timeline_start));
+      moveClipsMutation.mutate(
+        sources.map((item) => ({ clipId: item.id, timelineStart: Math.max(0, item.timeline_start + delta), trackId: item.track_id })),
+      );
+      store.setClipboard(null);
+      return;
+    }
+    duplicateClipsAt(sources.map((item) => item.id), playhead);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sequence, moveClipsMutation, duplicateClipsAt]);
+  const findSelectedClip = React.useCallback(() => targetsOf().at(-1) ?? null, [targetsOf]);
   const moveClipLayer = React.useCallback(
     (direction: -1 | 1) => {
       const clip = findSelectedClip();
@@ -1288,3 +1313,10 @@ function LeftTabs({
   );
 }
 
+function clipsOf(sequence: Sequence | null): Clip[] {
+  return (sequence?.tracks ?? []).flatMap((track) => track.clips ?? []);
+}
+
+function clipIdsOf(sequence: Sequence | null): string[] {
+  return clipsOf(sequence).map((item) => item.id);
+}

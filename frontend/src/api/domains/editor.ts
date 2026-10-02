@@ -114,6 +114,19 @@ export function deleteClipsBatch(sequence: SequenceRef, clipIds: string[], optio
   return edit(sequence, "/clips/delete-batch", { method: "POST", body: JSON.stringify({ clip_ids: clipIds, ...options }) });
 }
 
+/**
+ * 复制几段片段(后端 duplicate_clips):位置之外的一切照原样 —— 速度、音量、调色与特效、变换与关键帧、文字 ——
+ * 放下是覆盖,整批一步撤销;一起复制的链接组员自成新组。副本彼此保持相对位置,最早的一段落在 `timeline_start`
+ * (不给就紧接在原片段组之后);给 `track_id` 就整组放到那条轨上,不给各回各的原轨。
+ * 新片段的 id 由调用方对比前后两版得出。
+ */
+export function duplicateClips(
+  sequence: SequenceRef,
+  body: { clip_ids: string[]; timeline_start?: number; track_id?: string | null },
+): Promise<Sequence> {
+  return edit(sequence, "/clips/duplicate", { method: "POST", body: JSON.stringify(body) });
+}
+
 export function getSequence(sequenceId: string): Promise<Sequence> {
   return api<Sequence>(`/api/sequences/${sequenceId}`);
 }

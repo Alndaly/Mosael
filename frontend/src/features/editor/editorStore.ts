@@ -32,6 +32,11 @@ export interface DraggingAsset {
   duration: number;
 }
 
+export interface ClipClipboard {
+  clipIds: string[];
+  cut: boolean;
+}
+
 /** "select" drags/moves clips; "blade" splits a clip where you click. */
 export type ToolMode = "select" | "blade";
 
@@ -51,6 +56,8 @@ interface EditorState {
   selectedClipIds: string[];
   dragDraft: DragDraft | null;
   draggingAsset: DraggingAsset | null;
+  /** 片段剪贴板:存片段 id,粘贴时由后端深拷贝。cut = 剪切 —— 粘贴时把这几段搬过去(见 EditorView)。 */
+  clipboard: ClipClipboard | null;
   tool: ToolMode;
   editMode: EditMode;
   setPlayhead: (time: number) => void;
@@ -67,6 +74,7 @@ interface EditorState {
   selectClips: (clipIds: string[]) => void;
   setDragDraft: (draft: DragDraft | null) => void;
   setDraggingAsset: (asset: DraggingAsset | null) => void;
+  setClipboard: (clipboard: ClipClipboard | null) => void;
   setTool: (tool: ToolMode) => void;
   setEditMode: (mode: EditMode) => void;
   toggleEditMode: () => void;
@@ -85,6 +93,7 @@ export const useEditorStore = create<EditorState>((set) => ({
   selectedClipIds: [],
   dragDraft: null,
   draggingAsset: null,
+  clipboard: null,
   tool: "select",
   editMode: "overwrite",
   setPlayhead: (time) => set({ playhead: Math.max(0, time) }),
@@ -114,6 +123,7 @@ export const useEditorStore = create<EditorState>((set) => ({
   selectClips: (clipIds) => set({ selectedClipIds: clipIds }),
   setDragDraft: (draft) => set({ dragDraft: draft }),
   setDraggingAsset: (asset) => set({ draggingAsset: asset }),
+  setClipboard: (clipboard) => set({ clipboard }),
   setTool: (tool) => set({ tool }),
   setEditMode: (editMode) => set({ editMode }),
   toggleEditMode: () => set((state) => ({ editMode: state.editMode === "insert" ? "overwrite" : "insert" })),

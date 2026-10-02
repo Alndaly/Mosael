@@ -8,7 +8,7 @@
  * - 片段级的声音处理(降噪 / 只留人声 / 拆成人声和背景音)做完**直接换到时间线上**,只给有声音的素材;
  *   素材库里那两项(只产出新素材、不动时间线)的名字不同,不混进来。
  * - 「替换媒体」给媒体片段(含脱机的),文字片段没有媒体可换。
- * - 文字、字幕、脱机片段没有素材可复制:菜单里不给「复制片段」,工具栏上的那颗灰掉。
+ * - 复制片段走后端深拷贝,文字、字幕片段也能复制。
  */
 import { DndContext } from "@dnd-kit/core";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -168,15 +168,12 @@ describe("AI 生成的片段", () => {
   });
 });
 
-describe("复制片段只给有素材的片段", () => {
-  it("文字片段:菜单里没有,工具栏上的灰掉", async () => {
+describe("复制片段", () => {
+  it("文字片段也能复制(后端深拷贝,文字和样式一并带上):菜单里有", async () => {
     const handlers = renderTimeline();
     openMenu("Hello");
-    await screen.findByRole("menuitem", { name: "deleteClip" });
-    expect(menuItems()).not.toContain("duplicateClip");
-    await userEvent.keyboard("{Escape}");
-    expect(await screen.findByRole("button", { name: "duplicateClip" })).toBeDisabled();
-    expect(handlers.onDuplicateClip).not.toHaveBeenCalled();
+    await userEvent.click(await screen.findByRole("menuitem", { name: "duplicateClip" }));
+    expect(handlers.onDuplicateClip).toHaveBeenCalledWith("title");
   });
 
   it("素材片段:菜单和工具栏都能用", async () => {

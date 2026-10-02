@@ -221,8 +221,11 @@ export function Timeline({
     const selected = useEditorStore.getState().selectedClipIds;
     return selected.includes(clipId) ? selected : [clipId];
   };
-  // 复制片段只复制素材片段:文字、字幕和脱机片段没有 asset_id,复制不出东西 —— 入口就不给。
+  // 复制走后端深拷贝,文字、字幕片段一样能复制。
   const duplicateTarget = allClips.find((clip) => clip.id === selectedClipIds[selectedClipIds.length - 1]);
+  // 剪切了还没粘贴的片段:标出来(变淡、虚线框),用户知道粘贴时会搬走的是哪几段。
+  const clipboard = useEditorStore((state) => state.clipboard);
+  const cutIds = React.useMemo(() => new Set(clipboard?.cut ? clipboard.clipIds : []), [clipboard]);
 
   // 落位动画(前身项目同款):提交回包落进缓存、而 EditorView 的效应还没清草稿的
   // 那一帧,缓存已是终值 — 把"追平了缓存的 settling 草稿"视作已清,片段在该帧带着
@@ -797,7 +800,7 @@ export function Timeline({
                 <Button
                   variant="ghost"
                   size="icon-sm"
-                  disabled={!duplicateTarget?.asset_id}
+                  disabled={!duplicateTarget}
                   onClick={() => duplicateTarget && onDuplicateClip(duplicateTarget.id)}
                   aria-label={t("duplicateClip")}
                 >
@@ -1177,6 +1180,7 @@ export function Timeline({
                       onClipPointerDown={handleClipPointerDown}
                       onClipTrimPointerDown={handleClipTrimPointerDown}
                       onClipSelect={handleClipSelect}
+                      cut={cutIds.has(clip.id)}
                     />
                   );
                 })}
@@ -1257,7 +1261,7 @@ export function Timeline({
                   <Scissors /> {t("splitAtPlayhead")}
                 </ContextMenuItem>
               )}
-              {onDuplicateClip && menuClip.asset_id && (
+              {onDuplicateClip && (
                 <ContextMenuItem onSelect={() => onDuplicateClip(menuClip.id)}>
                   <Copy /> {t("duplicateClip")}
                 </ContextMenuItem>
