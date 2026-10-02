@@ -89,9 +89,14 @@ export function paintScene(ctx: Ctx2D, layers: ScenePaintLayer[], opts: ScenePai
     ctx.globalAlpha = Math.max(0, Math.min(1, tf.opacity));
     ctx.filter = filter || "none";
     // Match Monitor's CSS: translate(x·50%, y·50%) of the frame, scale + rotate about center.
-    ctx.translate(width / 2 + tf.x * 0.5 * width, height / 2 + tf.y * 0.5 * height);
-    ctx.rotate((tf.rotation * Math.PI) / 180);
-    ctx.scale(tf.scale, tf.scale);
+    // `shiftX` moves the element sideways in canvas pixels (the shadow pass below needs that).
+    const centerX = width / 2 + tf.x * 0.5 * width;
+    const centerY = height / 2 + tf.y * 0.5 * height;
+    const place = (shiftX: number) => {
+      ctx.translate(centerX + shiftX, centerY);
+      ctx.rotate((tf.rotation * Math.PI) / 180);
+      ctx.scale(tf.scale, tf.scale);
+    };
     // **自由元素就是画幅那么大,和素材自身的宽高比无关。** 导出那边是
     // `scale=W:H:force_original_aspect_ratio=increase,crop=W:H` —— 铺满**再裁到画幅**。
     // 这里此前只铺满、不裁,拿的是 min(dw,dh):素材比例和画幅一致时两者相等(所以一直没露),
@@ -104,23 +109,31 @@ export function paintScene(ctx: Ctx2D, layers: ScenePaintLayer[], opts: ScenePai
     const drawX = -drawWidth / 2;
     const drawY = -drawHeight / 2;
 
-    // Paint the silhouette first so its shadow is not clipped by the mask. The media draw below
-    // completely covers this fill; only the blurred/offset pixels remain visible around it.
+    // Shadow first (under the media), from the silhouette so the mask's clip doesn't cut it off.
+    //
+    // **投影按画面像素**(契约 contracts/clip-shadow-cases.json):canvas 的 shadowOffset / shadowBlur 本来就
+    // 不受当前变换影响,σ = shadowBlur / 2 —— 片段缩放、旋转时投影的偏移和模糊都不变。导出那边是
+    // render_executor._with_shadow,在元素摆好之后、在画幅坐标里画同一个投影。
+    //
+    // **只要影子,不要剪影本身。** 剪影整块挪到画布左边外面(画布像素),横向偏移再把影子补回原处。此前剪影
+    // 就画在元素底下、靠媒体盖住 —— 片段半透明时,那块实色剪影透上来,预览比成片暗一截(成片里元素底下
+    // 只有偏开、糊开的影子)。
     if (appearance.shadow.enabled && appearance.shadow.opacity > 0) {
+      const away = Math.abs(centerX) + width + Math.hypot(drawWidth, drawHeight) * tf.scale;
+      ctx.save();
+      place(-away);
       ctx.filter = "none";
       ctx.fillStyle = appearance.shadow.color;
       ctx.shadowColor = shadowColor(appearance.shadow.color, appearance.shadow.opacity);
       ctx.shadowBlur = appearance.shadow.blur;
-      ctx.shadowOffsetX = appearance.shadow.offsetX;
+      ctx.shadowOffsetX = appearance.shadow.offsetX + away;
       ctx.shadowOffsetY = appearance.shadow.offsetY;
       maskPath(ctx, appearance.mask.shape, drawX, drawY, drawWidth, drawHeight, appearance.mask.radius);
       ctx.fill();
-      ctx.shadowColor = "rgba(0, 0, 0, 0)";
-      ctx.shadowBlur = 0;
-      ctx.shadowOffsetX = 0;
-      ctx.shadowOffsetY = 0;
+      ctx.restore();
     }
 
+    place(0);
     if (appearance.mask.shape !== "none") {
       maskPath(ctx, appearance.mask.shape, drawX, drawY, drawWidth, drawHeight, appearance.mask.radius);
       ctx.clip();

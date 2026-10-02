@@ -20,6 +20,7 @@ from app.media.render_plan import (
     FILTER_PRESETS,
     ClipAppearance,
     RenderPlan,
+    ShadowSpec,
     TextOverlayItem,
     Transform,
     lane_style,
@@ -315,10 +316,11 @@ def _appearance_filters(
     height: int,
     prefix: str,
 ) -> tuple[list[str], str, bool]:
-    """Apply mask + shadow in local element space before transform.
+    """Apply the mask in local element space before transform.
 
     Returns filters, output label, and whether the resulting element must be scaled from its own
-    dimensions (circle centre-crops to a square; shadow adds symmetric transparent padding).
+    dimensions (circle centre-crops to a square). The drop shadow is **not** drawn here — it lives
+    in frame pixels and is composited after placement (see _with_shadow).
     """
     filters: list[str] = []
     label = in_label
@@ -345,31 +347,56 @@ def _appearance_filters(
         )
         label = f"{prefix}mask"
 
-    shadow = appearance.shadow
-    if shadow.enabled and shadow.opacity > 0:
-        pad = int(math.ceil(shadow.blur * 3 + max(abs(shadow.offset_x), abs(shadow.offset_y))))
-        padded_width = element_width + pad * 2
-        padded_height = element_height + pad * 2
-        red = int(shadow.color[1:3], 16)
-        green = int(shadow.color[3:5], 16)
-        blue = int(shadow.color[5:7], 16)
-        blur_filter = f",gblur=sigma={shadow.blur:.4f}:planes=8" if shadow.blur > 0 else ""
-        filters.append(f"[{label}]split=2[{prefix}fg][{prefix}shsrc]")
-        filters.append(
-            f"[{prefix}shsrc]format=rgba,"
-            f"geq=r='{red}':g='{green}':b='{blue}':a='alpha(X,Y)*{shadow.opacity:.4f}'"
-            f"{blur_filter},"
-            f"pad={padded_width}:{padded_height}:{pad + shadow.offset_x:.4f}:{pad + shadow.offset_y:.4f}:color=black@0"
-            f"[{prefix}shadow]"
-        )
-        filters.append(
-            f"[{prefix}fg]pad={padded_width}:{padded_height}:{pad}:{pad}:color=black@0[{prefix}fgpad]"
-        )
-        filters.append(f"[{prefix}shadow][{prefix}fgpad]overlay=0:0:format=auto[{prefix}appearance]")
-        label = f"{prefix}appearance"
-        return filters, label, True
-
     return filters, label, appearance.mask.shape == "circle"
+
+
+def _with_shadow(
+    in_label: str,
+    ox: str,
+    oy: str,
+    shadow: ShadowSpec,
+    width: int,
+    height: int,
+    fps: float,
+    prefix: str,
+    *,
+    start: float,
+    duration: float,
+) -> tuple[list[str], str, str, str]:
+    """把**已经摆好位置**的元素连同它的投影合成一张画幅大小的透明层,交回 (滤镜, 标签, "0", "0")。
+    没开投影就原样交回。
+
+    投影的偏移与模糊按**画面像素**算,不随片段的缩放、旋转变(契约 contracts/clip-shadow-cases.json)。
+    预览 canvas 的 shadowOffset / shadowBlur 本来就不受变换影响;此前这里把投影画在元素自己的坐标里、再连同
+    元素一起缩放旋转 —— 缩到 0.4 的画中画,成片里的投影偏移只有预览的四成,转 90° 还换了方向。所以投影从
+    「元素摆好之后的样子」取:元素先叠到一张透明底板上(和底下的画面同一个坐标),拿它的 alpha 上色、模糊、
+    平移,垫在元素下面。
+
+    模糊:canvas 的 shadowBlur 是 2σ(HTML 规范,Chromium 实测一致),gblur 要的是 σ —— 取 blur / 2;此前
+    直接拿 blur 当 σ,成片比预览糊一倍。gblur 默认 steps=1 是 IIR 的粗近似,实测出来的 σ 只有设定值的
+    87%;steps=4 到 96%,和 canvas 的真高斯差不出来。偏移取整到像素(pad / crop 只认整数),和预览差不到一个像素。
+    """
+    if not shadow.enabled or shadow.opacity <= 0:
+        return [], in_label, ox, oy
+    red, green, blue = (int(shadow.color[index:index + 2], 16) for index in (1, 3, 5))
+    dx, dy = int(round(shadow.offset_x)), int(round(shadow.offset_y))
+    sigma = shadow.blur / 2
+    # 底板和元素同一段时间:上层片段的元素带着时间线上的时间戳(start 起),底板也从那里开始。
+    timing = f",setpts=PTS+{start:.6f}/TB" if start else ""
+    blur = f",gblur=sigma={sigma:.4f}:steps=4:planes=8" if sigma > 0 else ""
+    # 平移:一边垫透明边、另一边裁掉,还是画幅大小。负方向同理。
+    shift = (
+        f",pad={width + abs(dx)}:{height + abs(dy)}:{max(dx, 0)}:{max(dy, 0)}:color=black@0,"
+        f"crop={width}:{height}:{max(-dx, 0)}:{max(-dy, 0)}"
+        if dx or dy
+        else ""
+    )
+    return [
+        f"color=black@0:s={width}x{height}:r={fps}:d={duration:.6f},format=rgba{timing}[{prefix}board]",
+        f"[{prefix}board][{in_label}]overlay=x='{ox}':y='{oy}':format=auto,format=rgba,split=2[{prefix}fg][{prefix}src]",
+        f"[{prefix}src]lutrgb=r={red}:g={green}:b={blue}:a='val*{shadow.opacity:.4f}'{blur}{shift},format=rgba[{prefix}sh]",
+        f"[{prefix}sh][{prefix}fg]overlay=0:0:format=auto,format=rgba[{prefix}layer]",
+    ], f"{prefix}layer", "0", "0"
 
 
 def _volume_expr(gain: float, keyframes: tuple[tuple[float, float], ...], duration: float) -> str:
@@ -865,6 +892,11 @@ def build_ffmpeg_command(
                     element_sized=appearance_sized,
                 )
                 filters += tfilters
+                shadow_filters, tlabel, ox, oy = _with_shadow(
+                    tlabel, ox, oy, segment.appearance.shadow, width, height, fps, f"bs{i}",
+                    start=0.0, duration=segment.duration,
+                )
+                filters += shadow_filters
                 filters.append(
                     # 背景必须给时长:无 :d 的 color 是无限流,concat 会永远停在这一段推不动,
                     # 整条 filtergraph 疯狂缓冲——带动画的图片幻灯片导出因此慢到 0.0x(见回归测试)。
@@ -929,6 +961,11 @@ def build_ffmpeg_command(
             element_sized=appearance_sized,
         )
         filters += tfilters
+        shadow_filters, tlabel, ox, oy = _with_shadow(
+            tlabel, ox, oy, overlay.appearance.shadow, width, height, fps, f"os{i}",
+            start=overlay.start, duration=overlay.duration,
+        )
+        filters += shadow_filters
         out_label = f"[vov{i}]"
         filters.append(
             # eof_action=repeat(而不是 pass):叠加流常常比它的 enable 窗口短一丁点 —— 用了

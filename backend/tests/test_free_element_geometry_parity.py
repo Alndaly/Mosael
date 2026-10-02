@@ -55,9 +55,10 @@ def test_export_element_size_matches_the_shared_contract() -> None:
             assert "crop=" not in ";".join(filters), case["name"]
             assert (frame_w, frame_h) == (want["width"], want["height"]), case["name"]
 
-        # element_sized 决定后面按元素自身尺寸缩放还是按画幅 —— 两档都必须是 True,
-        # 否则 transform 的 scale 会乘错基准(圆会按画幅缩,阴影那档会丢掉外扩的透明边)。
-        assert element_sized is True, case["name"]
+        # element_sized 决定后面按元素自身尺寸缩放还是按画幅:圆形裁过,必须按自身尺寸(否则会按画幅缩);
+        # 只有阴影的那档元素就是画幅那么大 —— 投影在摆好位置之后才画(契约 clip-shadow-cases.json),
+        # 不再往元素四周垫透明边。
+        assert element_sized is case["circle"], case["name"]
 
 
 def test_source_rect_is_element_over_cover_scale() -> None:

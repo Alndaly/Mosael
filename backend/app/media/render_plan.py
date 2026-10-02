@@ -87,7 +87,8 @@ class MaskSpec:
 
 @dataclass(frozen=True)
 class ShadowSpec:
-    """Drop shadow in output-frame pixels, applied after masking and before placement."""
+    """Drop shadow in frame pixels, drawn under the element **after** placement: offset and blur do not
+    follow the clip's scale or rotation (contracts/clip-shadow-cases.json). blur is the canvas shadowBlur, σ = blur / 2."""
 
     enabled: bool = False
     color: str = "#000000"

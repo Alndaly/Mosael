@@ -1,0 +1,44 @@
+{
+  "contract": "clip-shadow",
+  "version": 1,
+  "why": "片段投影的偏移与模糊此前在预览和导出里是两种语义:预览 canvas 的 shadowOffset / shadowBlur 不受变换影响(按画面像素),导出把投影画在元素自己的坐标里、再连同元素一起缩放旋转 —— 缩到 0.4 的画中画,成片里的投影偏移只有预览的四成,转 90° 还换了方向;模糊还差一倍(canvas 的 shadowBlur 是 2σ,导出直接拿它当 σ)。两边各有绿测试,因为没有一条测试同时看两边。",
+  "semantics": "偏移(画面像素)= offset_x / offset_y;模糊的高斯 σ(画面像素)= blur / 2(canvas shadowBlur 的规范定义,Chromium 实测一致)。两者都不随片段的 scale / rotation 变 —— 投影像一盏固定的灯打下来的影子。画面像素指序列画幅;降分辨率导出时由 render_plan 按输出比例乘过(pixel_scale)。",
+  "frame": { "width": 640, "height": 360 },
+  "cases": [
+    {
+      "name": "缩到一半:偏移照写成画面像素",
+      "note": "导出曾经是 12×8(跟着 scale 缩了一半)。",
+      "transform": { "scale": 0.5, "rotation": 0 },
+      "shadow": { "blur": 0, "offset_x": 24, "offset_y": 16 },
+      "expected": { "offset_px": { "x": 24, "y": 16 }, "sigma_px": 0 }
+    },
+    {
+      "name": "缩到四分之一:负方向的偏移也不跟着缩",
+      "note": "导出曾经是 −5×7.5。",
+      "transform": { "scale": 0.25, "rotation": 0 },
+      "shadow": { "blur": 0, "offset_x": -20, "offset_y": 30 },
+      "expected": { "offset_px": { "x": -20, "y": 30 }, "sigma_px": 0 }
+    },
+    {
+      "name": "转 90°:偏移的方向不跟着转",
+      "note": "导出曾经把向右 30 转成了向下 12(先跟着 0.4 缩、再跟着 90° 转)。",
+      "transform": { "scale": 0.4, "rotation": 90 },
+      "shadow": { "blur": 0, "offset_x": 30, "offset_y": 0 },
+      "expected": { "offset_px": { "x": 30, "y": 0 }, "sigma_px": 0 }
+    },
+    {
+      "name": "缩小:模糊的 σ 是 blur 的一半,不跟着缩",
+      "note": "导出曾经是 σ = 20 × 0.3 = 6(把 blur 当 σ,再跟着缩)。",
+      "transform": { "scale": 0.3, "rotation": 0 },
+      "shadow": { "blur": 20, "offset_x": 0, "offset_y": 0 },
+      "expected": { "offset_px": { "x": 0, "y": 0 }, "sigma_px": 10 }
+    },
+    {
+      "name": "接近原大小:模糊也不是 blur 本身",
+      "note": "导出曾经是 σ = 12 × 0.8 = 9.6。",
+      "transform": { "scale": 0.8, "rotation": 0 },
+      "shadow": { "blur": 12, "offset_x": 0, "offset_y": 0 },
+      "expected": { "offset_px": { "x": 0, "y": 0 }, "sigma_px": 6 }
+    }
+  ]
+}

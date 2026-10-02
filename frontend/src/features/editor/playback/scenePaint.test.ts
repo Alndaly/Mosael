@@ -41,17 +41,22 @@ describe("paintScene clip appearance", () => {
       mask: { shape: "rounded", radius: 0.2 },
       shadow: { enabled: true, color: "#123456", opacity: 0.6, blur: 20, offsetX: 5, offsetY: 7 },
     };
+    let offsetX = 0;
     ctx.fill.mockImplementationOnce(() => {
       expect(ctx.shadowColor).toBe("rgba(18, 52, 86, 0.6)");
       expect(ctx.shadowBlur).toBe(20);
-      expect(ctx.shadowOffsetX).toBe(5);
       expect(ctx.shadowOffsetY).toBe(7);
+      offsetX = ctx.shadowOffsetX;
     });
 
     paintScene(ctx as unknown as CanvasRenderingContext2D, [layer], { width: 800, height: 450, fillMode: "cover" });
 
     expect(ctx.roundRect).toHaveBeenCalled();
     expect(ctx.fill).toHaveBeenCalledTimes(1);
+    // 剪影挪到了画布外面(第一次 translate),横向偏移把影子补回来:落在媒体(第二次 translate)右边 5 像素。
+    // 跟着变换矩阵量的对账见 clipShadow.parity.test.ts。
+    const [[silhouetteX], [mediaX]] = ctx.translate.mock.calls as Array<[number, number]>;
+    expect(silhouetteX + offsetX - mediaX).toBe(5);
   });
 });
 

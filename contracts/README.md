@@ -161,6 +161,19 @@ sidecar 那份没跟上。开着 prompt caching 时 `input` 只剩新增的一�
 圆里装的源又是错的 —— 两侧各写了一遍"铺满再裁"的几何,各自自洽,互不相识。
 语料里的 `why` 字段留着完整的经过,提醒下一个想"就两行几何,各写一遍就好"的人。
 
+### `clip-shadow-cases.json` —— 片段投影契约
+
+「投影在画面上偏多少、糊多少:偏移按画面像素,σ = blur / 2,都不随片段的缩放、旋转变。」
+
+| 实现 | 位置 | 测试 |
+| --- | --- | --- |
+| 预览 | `frontend/src/features/editor/playback/scenePaint.ts`(canvas shadowOffset / shadowBlur) | `clipShadow.parity.test.ts` |
+| 导出 | `backend/app/media/render_executor.py` 的 `_with_shadow` | `backend/tests/test_clip_shadow_parity.py`(真渲一帧量像素) |
+
+**建立契约之前**:预览的 canvas 投影本来就不受变换影响,导出却把投影画在元素自己的坐标里、再连同元素
+一起缩放旋转 —— 缩到 0.4 的画中画,成片里的投影偏移只有预览的四成,转 90° 还换了方向;模糊还差一倍
+(canvas 的 shadowBlur 是 2σ,导出直接拿它当 σ)。两侧的单元测试各自是绿的,因为没有一条同时看两边。
+
 ### `audio-mix-cases.json` —— 混音契约
 
 「t 时刻每条音频轨的增益是多少:音量、变速下的淡入淡出、重叠淡变怎么缩放进片段长度、

@@ -118,7 +118,9 @@ def test_circle_mask_centre_crops_and_writes_an_alpha_plane() -> None:
     assert "alpha(X,Y)" in graph
 
 
-def test_shadow_is_built_from_the_masked_alpha_and_composited_behind_video() -> None:
+def test_shadow_is_built_from_the_placed_element_and_composited_behind_it() -> None:
+    """投影从**摆好位置之后**的元素取(按画面像素,契约 clip-shadow-cases.json):蒙版先上、元素再变换,
+    然后整块的 alpha 上色、模糊(σ = blur / 2)、平移,垫在元素底下。真渲的对账见 test_clip_shadow_parity。"""
     graph = _graph(overlay_clips=[{
         "id": "c2", "asset_id": "b", "timeline_start": 0, "src_in": 0, "src_out": 4,
         "effects": {"appearance": {
@@ -127,9 +129,10 @@ def test_shadow_is_built_from_the_masked_alpha_and_composited_behind_video() -> 
                        "offset_x": 5, "offset_y": 7},
         }},
     }])
-    assert "geq=r='18':g='52':b='86':a='alpha(X,Y)*0.6000'" in graph
-    assert "gblur=sigma=20.0000:planes=8" in graph
-    assert "[oa0shadow][oa0fgpad]overlay=0:0:format=auto[oa0appearance]" in graph
+    assert "[oa0mask]" in graph
+    assert "lutrgb=r=18:g=52:b=86:a='val*0.6000'" in graph
+    assert "gblur=sigma=10.0000:steps=4:planes=8" in graph
+    assert "[os0sh][os0fg]overlay=0:0" in graph
 
 
 def test_base_clip_appearance_uses_the_same_compositing_pipeline() -> None:
