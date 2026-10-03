@@ -24012,6 +24012,16 @@
             "type": "array",
             "title": "Outputs"
           },
+          "port_maps": {
+            "additionalProperties": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            "type": "object",
+            "title": "Port Maps"
+          },
           "output_types": {
             "additionalProperties": {
               "type": "string"
@@ -37098,6 +37108,16 @@
             },
             "type": "array",
             "title": "Outputs"
+          },
+          "port_maps": {
+            "additionalProperties": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            "type": "object",
+            "title": "Port Maps"
           },
           "output_types": {
             "additionalProperties": {

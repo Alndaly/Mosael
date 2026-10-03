@@ -151,6 +151,7 @@ function WorkflowNode({ id, data, selected }: NodeProps) {
   const badge = d.badge ?? null;
   const inputs = d.inputs ?? [];
   const outputs = d.outputs ?? [];
+  const portLabel = (key: string) => key.split(".").at(-1) || key;
   //: 数据接点**谁都画**,条件节点也不例外(画哪些口见 workflowPorts)。此前它为了紧凑不上接点页脚,而官方模板里
   //: 「认出的平台 → 是抖音吗」正是一条接进 `left` 的数据边 —— 卡片上没有 `in:left`,React Flow 找不到口就不画这根线
   //: (只在控制台报 008)。真/假两路出口挂在标题层(见下),和页脚的接点互不相干。
@@ -298,7 +299,7 @@ function WorkflowNode({ id, data, selected }: NodeProps) {
                   className={cn("whitespace-nowrap text-ui-2xs text-muted-foreground", !(d.inputLabels ?? {})[key] && "font-mono")}
                   title={key}
                 >
-                  {(d.inputLabels ?? {})[key] || key}
+                  {(d.inputLabels ?? {})[key] || portLabel(key)}
                 </span>
               </div>
             ))}
@@ -310,7 +311,7 @@ function WorkflowNode({ id, data, selected }: NodeProps) {
                   className={cn("whitespace-nowrap text-ui-2xs text-muted-foreground", !(d.outputLabels ?? {})[output] && "font-mono")}
                   title={output}
                 >
-                  {(d.outputLabels ?? {})[output] || output}
+                  {(d.outputLabels ?? {})[output] || portLabel(output)}
                 </span>
                 <Handle
                   id={`out:${output}`}

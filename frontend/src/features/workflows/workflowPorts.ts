@@ -1,4 +1,5 @@
 import type { WorkflowGraph } from "@/api/client";
+import { layerReferences, type RegistryLike } from "@/features/workflows/analyze";
 import { declaredFieldNames } from "@/features/workflows/scope";
 
 /**
@@ -14,15 +15,41 @@ import { declaredFieldNames } from "@/features/workflows/scope";
 
 type WNode = WorkflowGraph["nodes"][number];
 type WEdge = WorkflowGraph["edges"][number];
-type Registry = { get(type: string): { outputs?: readonly string[] } | undefined };
+type PortMap = { input?: string; output?: string };
+type PortMeta = NonNullable<ReturnType<RegistryLike["get"]>> & {
+  outputs?: readonly string[];
+  port_maps?: Record<string, PortMap>;
+};
+type Registry = { get(type: string): PortMeta | undefined };
+
+function mappedPorts(node: WNode, registry: Registry): { inputs: string[]; outputs: string[]; outputRoots: Set<string> } {
+  const maps = registry.get(node.type)?.port_maps ?? {};
+  const inputs: string[] = [];
+  const outputs: string[] = [];
+  const outputRoots = new Set<string>();
+  for (const [configKey, map] of Object.entries(maps)) {
+    const value = node.config?.[configKey];
+    if (!value || typeof value !== "object" || Array.isArray(value)) continue;
+    const keys = Object.keys(value);
+    if (map.input) inputs.push(...keys.map((key) => `${map.input}.${key}`));
+    if (map.output) {
+      outputs.push(...keys.map((key) => `${map.output}.${key}`));
+      outputRoots.add(map.output);
+    }
+  }
+  return { inputs, outputs, outputRoots };
+}
 
 export function nodePorts(node: WNode, registry: Registry, edges: readonly WEdge[]): { inputs: string[]; outputs: string[] } {
   const wiredIn = edges.filter((edge) => edge.kind === "data" && edge.target === node.id && edge.target_input).map((edge) => edge.target_input!);
   const wiredOut = edges.filter((edge) => edge.kind === "data" && edge.source === node.id && edge.source_output).map((edge) => edge.source_output!);
+  const mapped = mappedPorts(node, registry);
   const declared =
     node.type === "condition" ? [] : declaredFieldNames(registry.get(node.type)?.outputs ?? [], node.config as Record<string, unknown> | undefined);
+  const referencedInputs = layerReferences(node, registry).map(({ targetInput }) => targetInput).filter(Boolean);
   return {
-    inputs: [...new Set([...(node.inputs ?? []), ...wiredIn])],
-    outputs: [...new Set([...declared, ...wiredOut])],
+    inputs: [...new Set([...mapped.inputs, ...referencedInputs, ...(node.inputs ?? []), ...wiredIn])],
+    // 动态属性已经把容器拆成逐项端口时，不再同时摆一个笼统的容器端口。
+    outputs: [...new Set([...declared.filter((name) => !mapped.outputRoots.has(name)), ...mapped.outputs, ...wiredOut])],
   };
 }

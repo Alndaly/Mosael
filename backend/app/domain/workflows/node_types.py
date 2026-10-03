@@ -1819,6 +1819,9 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
             "values": {"type": "object", "description": "wfNode_output_values"},
         },
         "outputs": ["output"],
+        # 一张动态映射同时扮演两侧契约:左边逐项接收要交付的值，右边逐项暴露给下游。
+        # 路径写的是执行上下文里的真实位置，画布和数据边都不需要认识 output 节点。
+        "port_maps": {"values": {"input": "values", "output": "output"}},
     },
     "subgraph": {
         "external": False,

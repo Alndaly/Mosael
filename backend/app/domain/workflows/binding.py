@@ -39,9 +39,38 @@ def apply_data_edges(
         source = str(edge.get("source", ""))
         output = str(edge.get("source_output", ""))
         target_input = str(edge.get("target_input", ""))
-        if target_input and source in context and output in context[source]:
-            config[target_input] = context[source][output]
+        value = _path_value(context.get(source), output)
+        if target_input and value is not _MISSING:
+            _set_existing_path(config, target_input, value)
     return config
+
+
+_MISSING = object()
+
+
+def _path_value(value: Any, path: str) -> Any:
+    """数据端口允许指向结构化输出里的叶子，例如 ``output.note_id``。"""
+    current = value
+    for part in path.split("."):
+        if not part or not isinstance(current, dict) or part not in current:
+            return _MISSING
+        current = current[part]
+    return current
+
+
+def _set_existing_path(config: dict[str, Any], path: str, value: Any) -> None:
+    """写已有的嵌套配置叶子；路径不存在时按旧契约写顶层键，兼容已保存的普通输入。"""
+    parts = [part for part in path.split(".") if part]
+    current: Any = config
+    for part in parts[:-1]:
+        if not isinstance(current, dict) or part not in current or not isinstance(current[part], dict):
+            config[path] = value
+            return
+        current = current[part]
+    if not parts or not isinstance(current, dict) or parts[-1] not in current:
+        config[path] = value
+        return
+    current[parts[-1]] = value
 
 
 def check_number_fields(node_type: str, config: dict[str, Any]) -> dict[str, Any]:

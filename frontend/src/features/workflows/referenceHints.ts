@@ -10,16 +10,16 @@ import { nodePorts } from "@/features/workflows/workflowPorts";
 import { plainRefName, workflowRefNamer } from "@/features/workflows/workflowRefCatalog";
 
 /**
- * 画布上的**引用提示线**:每一处 `{{A.x}}`,从 A 的 x 口(找不到具体口就从节点)到引用它的节点画一根淡点线。
+ * 画布上的**引用提示线**:每一处 `{{A.x}}`,从 A 的 x 口(找不到具体口就从节点)连到使用它的具体属性口。
  *
  * 引用即依赖(后端 graph_rules.reference_dependencies):引擎等 A 落定才跑引用它的节点 —— 可这件事此前只写在
  * 提示词里,画布上看不见。「从主题到完整视频」里「按画幅取尺寸 → 建项目」那几处先后只靠引用;「可用的 3D 道具」
  * 只靠一句引用挂着、没接进流程,从模板 v8 到 v11 一次都没跑过。画出来,谁等谁、谁根本不会跑,看图就知道。
  *
  * 它**不是连线**:不在图里(只在显示时叠上去),不能选中、删除、拖去重连,也不参与连线校验(连线校验读的是图);
- * 两头之间已经有真连线(同一个方向)的不再画 —— 开始节点的参数除外:开始节点永远最先跑,它连出去的控制边(走顶上的
- * 控制出口)说不出「哪个参数流到哪」,参数线从那个参数自己的口出发,才说得出;只有从同一个口拉到同一个节点的数据边
- * 才算画过了。被引用的节点一定不会跑、而引用方会跑时用错误色 —— 和就绪检查的
+ * 两头之间已有控制连线时不重复画执行依赖；数据连线则必须两端属性都一致才算已经画过。开始节点永远最先跑,它连出去的
+ * 控制边(走顶上的控制出口)说不出「哪个参数流到哪个属性」,所以开始参数引用仍会画。被引用的节点一定不会跑、而引用方
+ * 会跑时用错误色 —— 和就绪检查的
  * unwired-referenced、后端运行前拦的那一条是同一对(analyze.neverRunReferences)。长什么样见 components/app/canvasEdges。
  */
 
@@ -55,6 +55,8 @@ export interface ReferenceHint {
   /** A 的输出口(`out:x`);卡片上没有这个口(没声明的输出、开始节点没有的参数、条件节点的结果)就是 null —— 从节点的出口出发。 */
   sourceHandle: string | null;
   target: string;
+  /** 引用住在目标节点的哪个属性；没有具体属性口时才退回节点入口。 */
+  targetHandle?: string | null;
   /** 这一根线代表的引用写法(同一个口被引用几处只画一根)。 */
   refs: string[];
   /** 被引用的节点一定不会跑,而引用方会跑:运行前会被拦。 */
@@ -65,9 +67,13 @@ export interface ReferenceHint {
  * A 的 `output` 在卡片上有没有自己的口 —— 和卡片画口的取法同一份(workflowPorts):开始节点的每个参数各一个口;
  * 条件节点的出口是真 / 假两路,`result` 没有数据边拉出时不画口。
  */
-function outputHandle(registry: HintRegistry, graph: WorkflowGraph, node: WorkflowGraph["nodes"][number], output: string): string | null {
-  if (!output) return null;
-  return nodePorts(node, registry, graph.edges).outputs.includes(output) ? `out:${output}` : null;
+function outputHandle(registry: HintRegistry, graph: WorkflowGraph, node: WorkflowGraph["nodes"][number], path: string): string | null {
+  if (!path) return null;
+  const ports = nodePorts(node, registry, graph.edges).outputs;
+  const exact = ports.find((port) => port === path);
+  if (exact) return `out:${exact}`;
+  const root = path.split(".")[0];
+  return ports.includes(root) ? `out:${root}` : null;
 }
 
 const pair = (source: string, target: string) => JSON.stringify([source, target]);
@@ -79,10 +85,14 @@ export function referenceHints(
   { entryIsRoot }: { entryIsRoot: boolean },
 ): ReferenceHint[] {
   const nodes = new Map(graph.nodes.map((node) => [node.id, node]));
-  const wired = new Set(graph.edges.map((edge) => pair(edge.source, edge.target)));
-  //: 开始节点那边按口算:同一个参数口已经有一条数据边拉到这个节点,才算画过了(见文件头)。
-  const wiredFromPort = new Set(
-    graph.edges.filter((edge) => edge.kind === "data" && edge.source_output).map((edge) => JSON.stringify([edge.source, `out:${edge.source_output}`, edge.target])),
+  const wiredByControl = new Set(
+    graph.edges.filter((edge) => edge.kind !== "data").map((edge) => pair(edge.source, edge.target)),
+  );
+  // 数据边按两端属性算：同一对节点能同时传多项，接好一项不能把其余提示线一并藏掉。
+  const wiredByPort = new Set(
+    graph.edges
+      .filter((edge) => edge.kind === "data" && edge.source_output && edge.target_input)
+      .map((edge) => JSON.stringify([edge.source, `out:${edge.source_output}`, edge.target, `in:${edge.target_input}`])),
   );
   const neverRuns = new Set(
     neverRunReferences(graph, registry, { entryIsRoot }).flatMap((one) =>
@@ -93,21 +103,24 @@ export function referenceHints(
   for (const node of graph.nodes) {
     //: 开始节点没有入口可接(它自己就是入口)。
     if (node.type === "start") continue;
-    for (const { ref, sourceId } of layerReferences(node, registry)) {
+    for (const { ref, sourceId, targetInput } of layerReferences(node, registry)) {
       const source = nodes.get(sourceId);
       if (!source || sourceId === node.id) continue;
-      const handle = outputHandle(registry, graph, source, ref.slice(2, -2).split(".")[1] ?? "");
-      const drawn =
-        source.type === "start" && handle
-          ? wiredFromPort.has(JSON.stringify([sourceId, handle, node.id]))
-          : wired.has(pair(sourceId, node.id));
+      const handle = outputHandle(registry, graph, source, ref.slice(2, -2).split(".").slice(1).join("."));
+      const targetHandle = nodePorts(node, registry, graph.edges).inputs.includes(targetInput) ? `in:${targetInput}` : null;
+      const exactDataEdge = handle && targetHandle
+        ? wiredByPort.has(JSON.stringify([sourceId, handle, node.id, targetHandle]))
+        : false;
+      // 开始节点永远先跑，它的控制线只说顺序，不说哪个参数流向哪个属性。
+      const drawn = exactDataEdge || (source.type !== "start" && wiredByControl.has(pair(sourceId, node.id)));
       if (drawn) continue;
-      const id = `${REFERENCE_HINT_ID_PREFIX}${sourceId}>${handle ?? ""}>${node.id}`;
+      const id = `${REFERENCE_HINT_ID_PREFIX}${sourceId}>${handle ?? ""}>${node.id}>${targetHandle ?? ""}`;
       const hint = hints.get(id) ?? {
         id,
         source: sourceId,
         sourceHandle: handle,
         target: node.id,
+        targetHandle,
         refs: [],
         neverRuns: neverRuns.has(pair(sourceId, node.id)),
       };
@@ -153,6 +166,7 @@ export function toReferenceHintEdges(
       source: hint.source,
       target: hint.target,
       sourceHandle: hint.sourceHandle ?? undefined,
+      targetHandle: hint.targetHandle ?? undefined,
       type: REFERENCE_HINT_EDGE_TYPE,
       className: canvasEdgeClass(hint.neverRuns ? "ref-never-runs" : "ref", { hint: true }),
       //: 写成 undefined 是为了**盖掉** defaultEdgeOptions 的默认箭头:提示线不画箭头。

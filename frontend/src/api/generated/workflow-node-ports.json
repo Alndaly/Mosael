@@ -1055,7 +1055,13 @@
     },
     "outputs": [
       "output"
-    ]
+    ],
+    "port_maps": {
+      "values": {
+        "input": "values",
+        "output": "output"
+      }
+    }
   },
   {
     "type": "plugin_tool",

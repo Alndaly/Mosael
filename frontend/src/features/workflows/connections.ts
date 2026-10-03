@@ -8,6 +8,34 @@ import { dependentsCleared, type DependencySpec } from "../nodeForms/dependents"
 
 type WEdge = WorkflowGraph["edges"][number];
 
+/** 已存在的配置路径才按嵌套属性写；否则保留旧图的顶层字段语义。 */
+function clearInput(config: Record<string, unknown>, path: string): { config: Record<string, unknown>; root: string } {
+  const parts = path.split(".").filter(Boolean);
+  if (parts.length < 2) return { config: { ...config, [path]: "" }, root: path };
+  let cursor: unknown = config;
+  for (const part of parts.slice(0, -1)) {
+    if (!cursor || typeof cursor !== "object" || Array.isArray(cursor) || !(part in cursor)) {
+      return { config: { ...config, [path]: "" }, root: path };
+    }
+    cursor = (cursor as Record<string, unknown>)[part];
+  }
+  const leaf = parts.at(-1)!;
+  if (!cursor || typeof cursor !== "object" || Array.isArray(cursor) || !(leaf in cursor)) {
+    return { config: { ...config, [path]: "" }, root: path };
+  }
+  const next = { ...config };
+  let target = next;
+  let source = config;
+  for (const part of parts.slice(0, -1)) {
+    const child = { ...(source[part] as Record<string, unknown>) };
+    target[part] = child;
+    target = child;
+    source = source[part] as Record<string, unknown>;
+  }
+  target[leaf] = "";
+  return { config: next, root: parts[0] };
+}
+
 /** 拖动中的连接是不是数据边(从输出接点 out:x 拖到输入接点 in:y)。 */
 export function isDataConnection(
   srcHandle: string | null | undefined,
@@ -66,14 +94,14 @@ export function withDataInputBound(
       ...graph.edges.filter((edge) => !(edge.kind === "data" && edge.target === targetId && edge.target_input === key)),
       { id, source: sourceId, target: targetId, kind: "data", source_output: output, target_input: key },
     ],
-    nodes: graph.nodes.map((node) =>
-      node.id === targetId
-        ? {
+    nodes: graph.nodes.map((node) => {
+      if (node.id !== targetId) return node;
+      const cleared = clearInput(node.config ?? {}, key);
+      return {
             ...node,
             inputs: [...new Set([...(node.inputs ?? []), key])],
-            config: dependentsCleared({ ...(node.config ?? {}), [key]: "" }, key, specs),
-          }
-        : node,
-    ),
+            config: dependentsCleared(cleared.config, cleared.root, specs),
+          };
+    }),
   };
 }

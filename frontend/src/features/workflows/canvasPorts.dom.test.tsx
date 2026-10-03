@@ -74,6 +74,25 @@ describe("每种节点", () => {
     expect(REGISTRY.get("condition")?.config).toHaveProperty("left");
   });
 
+  it("具名输出的每个属性各有输入和输出接点", () => {
+    const ports = drawnPorts({
+      nodes: [{
+        id: "deliver",
+        type: "output",
+        position: { x: 0, y: 0 },
+        config: { values: { note_id: "{{save.note_id}}", report: "{{review.json}}" } },
+      }],
+      edges: [],
+    }).get("deliver");
+
+    expect([...(ports ?? [])]).toEqual(expect.arrayContaining([
+      "in:values.note_id",
+      "in:values.report",
+      "out:output.note_id",
+      "out:output.report",
+    ]));
+  });
+
   it("能接上游的字段接上之后,卡片上都有那个输入口;声明的每个输出都有输出口(条件节点的出口是真 / 假两路)", () => {
     const nodes = types.map((meta, index) => {
       const config = meta.type === "start" ? { params: { topic: "", style: "" } } : {};

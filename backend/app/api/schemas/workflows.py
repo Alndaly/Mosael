@@ -100,6 +100,8 @@ class WorkflowNodeTypeOut(ApiModel):
     category: str = ""  # 面板分组;空=通用组
     config: dict
     outputs: list[str]
+    #: 配置里的动态映射如何展开为属性端口:配置字段 → {input/output: 运行时路径前缀}。
+    port_maps: dict[str, dict[str, str]] = Field(default_factory=dict)
     output_types: dict[str, str] = Field(default_factory=dict)
     output_labels: dict[str, str] = Field(default_factory=dict)
     #: 插件节点带来源插件名(内置节点为空)。面板据此在同名工具之间区分是谁提供的。

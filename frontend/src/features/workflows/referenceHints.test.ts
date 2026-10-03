@@ -20,6 +20,7 @@ const TYPES: Record<string, ReturnType<HintRegistry["get"]>> = {
   notify: { config: { title: { type: "template" }, body: { type: "template" } }, outputs: ["sent"] },
   condition: { config: { left: { type: "template" } }, outputs: ["result"] },
   code: { config: { code: { type: "code" }, input: { type: "object" } }, outputs: ["output"] },
+  output: { config: { values: { type: "object" } }, outputs: ["*values"] },
   loop_foreach: {
     config: { items: { type: "template" }, inputs: { type: "object" }, body: { type: "graph" }, output: { type: "template" } },
     outputs: ["results"],
@@ -37,6 +38,31 @@ const start = { id: "start", type: "start", config: { params: { topic: "猫" } }
 const plan = { id: "plan", type: "llm", config: { prompt: "写个分镜" } };
 
 describe("引用 → 提示线", () => {
+  it("每条引用落到使用它的属性端口，具名输出的属性不再共用流程入口", () => {
+    const hints = referenceHints(
+      graph([
+        plan,
+        {
+          id: "deliver",
+          type: "output",
+          config: {
+            values: {
+              note_id: "{{plan.text}}",
+              report: "{{plan.json.report}}",
+            },
+          },
+        },
+      ]),
+      registry,
+      top,
+    );
+
+    expect(hints.map(({ sourceHandle, targetHandle, refs }) => ({ sourceHandle, targetHandle, refs }))).toEqual([
+      { sourceHandle: "out:text", targetHandle: "in:values.note_id", refs: ["{{plan.text}}"] },
+      { sourceHandle: "out:json", targetHandle: "in:values.report", refs: ["{{plan.json.report}}"] },
+    ]);
+  });
+
   it("从被引用节点的那个输出口出发;同一个口被引用几处只画一根,不同的口各一根", () => {
     const hints = referenceHints(
       graph(
@@ -53,9 +79,10 @@ describe("引用 → 提示线", () => {
       registry,
       top,
     );
-    expect(hints.map(({ source, sourceHandle, target, refs }) => ({ source, sourceHandle, target, refs }))).toEqual([
-      { source: "plan", sourceHandle: "out:text", target: "shot", refs: ["{{plan.text}}"] },
-      { source: "plan", sourceHandle: "out:json", target: "shot", refs: ["{{plan.json.shots}}"] },
+    expect(hints.map(({ source, sourceHandle, target, targetHandle, refs }) => ({ source, sourceHandle, target, targetHandle, refs }))).toEqual([
+      { source: "plan", sourceHandle: "out:text", target: "shot", targetHandle: "in:title", refs: ["{{plan.text}}"] },
+      { source: "plan", sourceHandle: "out:text", target: "shot", targetHandle: "in:body", refs: ["{{plan.text}}"] },
+      { source: "plan", sourceHandle: "out:json", target: "shot", targetHandle: "in:body", refs: ["{{plan.json.shots}}"] },
     ]);
     expect(hints.every((hint) => isReferenceHintId(hint.id))).toBe(true);
     expect(new Set(hints.map((hint) => hint.id)).size).toBe(hints.length);
@@ -80,9 +107,10 @@ describe("引用 → 提示线", () => {
       top,
     );
     expect(hints.map((hint) => [hint.source, hint.sourceHandle, hint.target])).toEqual([
+      ["start", null, "c"],
       ["start", null, "t"],
       ["c", null, "t"],
-      //: plan → t 已经有真连线,{{plan.nope}} 不再画;start → c 也有,而 nope 不是参数、没有口,同样不画。
+      //: plan → t 已经有控制线,{{plan.nope}} 不再画。start 的控制线只表达执行顺序，属性依赖仍然可见。
     ]);
   });
 
@@ -124,7 +152,10 @@ describe("引用 → 提示线", () => {
       { get: (type) => (type === "llm" ? { ...TYPES.llm!, config: { prompt: { type: "template" }, system: { type: "template" } } } : TYPES[type]) },
       top,
     );
-    expect(plan.map((hint) => [hint.source, hint.sourceHandle, hint.target])).toEqual([["start", "out:topic", "plan"]]);
+    expect(plan.map((hint) => [hint.source, hint.sourceHandle, hint.target])).toEqual([
+      ["start", "out:style", "plan"],
+      ["start", "out:topic", "plan"],
+    ]);
   });
 
   it("两头之间已有真连线(控制或数据)的不重复画;反方向的连线不算", () => {
@@ -140,7 +171,7 @@ describe("引用 → 提示线", () => {
         [
           { id: "e1", source: "start", target: "plan" },
           { id: "e2", source: "plan", target: "a" },
-          { id: "d1", source: "plan", target: "b", kind: "data", source_output: "text", target_input: "template" },
+          { id: "d1", source: "plan", target: "b", kind: "data", source_output: "json", target_input: "template" },
           { id: "e3", source: "c", target: "plan" },
         ],
       ),
@@ -148,6 +179,33 @@ describe("引用 → 提示线", () => {
       top,
     );
     expect(hints.map((hint) => [hint.source, hint.target])).toEqual([["plan", "c"]]);
+  });
+
+  it("同一对节点接好一个属性，只隐藏那一项，其他属性提示线仍保留", () => {
+    const hints = referenceHints(
+      graph(
+        [
+          plan,
+          { id: "deliver", type: "output", config: { values: { note: "{{plan.text}}", report: "{{plan.json}}" } } },
+        ],
+        [
+          {
+            id: "d1",
+            source: "plan",
+            target: "deliver",
+            kind: "data",
+            source_output: "text",
+            target_input: "values.note",
+          },
+        ],
+      ),
+      registry,
+      top,
+    );
+
+    expect(hints.map(({ sourceHandle, targetHandle }) => [sourceHandle, targetHandle])).toEqual([
+      ["out:json", "in:values.report"],
+    ]);
   });
 
   it("代码字段里的 {{…}} 不是引用;容器的 inputs / items 在这一层画,体内的 body / output 不在这一层画", () => {

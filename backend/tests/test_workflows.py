@@ -129,6 +129,22 @@ def test_apply_data_edges_binds_input() -> None:
     assert config2["template"] == "orig"
 
 
+def test_apply_data_edges_binds_nested_input() -> None:
+    from app.domain.workflows.binding import apply_data_edges
+
+    edges = [{
+        "kind": "data", "source": "plan", "source_output": "output.note_id",
+        "target": "deliver", "target_input": "values.note_id",
+    }]
+    config = apply_data_edges(
+        "deliver",
+        {"values": {"note_id": "old", "report": "keep"}},
+        edges,
+        {"plan": {"output": {"note_id": "note-1"}}},
+    )
+    assert config == {"values": {"note_id": "note-1", "report": "keep"}}
+
+
 def test_topo_and_interpolate() -> None:
     order = [node["id"] for node in topo_order(linear_graph())]
     assert order == ["start", "search"]

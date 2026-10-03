@@ -184,18 +184,32 @@ export function drivesDigitalHuman(nodeType: string, config: Record<string, unkn
   return Boolean(String(parameters.driving_audio_url ?? "").trim());
 }
 
-/** 从任意配置值里抽出 `{{id.output}}` 引用,返回 [{ ref, sourceId }]。 */
-export function extractRefs(value: unknown): Array<{ ref: string; sourceId: string }> {
-  if (Array.isArray(value)) return value.flatMap(extractRefs);
-  if (value && typeof value === "object") return Object.values(value).flatMap(extractRefs);
+export interface LocatedReference {
+  ref: string;
+  sourceId: string;
+  /** 这条引用住在目标配置的哪个叶子；画布据此把提示线接到属性自己的输入口。 */
+  targetInput: string;
+}
+
+/** 从任意配置值里抽出 `{{id.output}}` 引用，并保留它所在的配置路径。 */
+function extractLocatedRefs(value: unknown, path: readonly string[] = []): LocatedReference[] {
+  if (Array.isArray(value)) return value.flatMap((one, index) => extractLocatedRefs(one, [...path, String(index)]));
+  if (value && typeof value === "object") {
+    return Object.entries(value).flatMap(([key, one]) => extractLocatedRefs(one, [...path, key]));
+  }
   if (typeof value !== "string" || !value.includes("{{")) return [];
-  const out: Array<{ ref: string; sourceId: string }> = [];
+  const out: LocatedReference[] = [];
   for (const match of value.matchAll(VAR_RE)) {
     const inner = match[1];
     const sourceId = inner.split(".")[0];
-    if (sourceId) out.push({ ref: `{{${inner}}}`, sourceId });
+    if (sourceId) out.push({ ref: `{{${inner}}}`, sourceId, targetInput: path.join(".") });
   }
   return out;
+}
+
+/** 兼容分析调用方的简洁形状；属性路径只属于画布端口定位。 */
+export function extractRefs(value: unknown): Array<{ ref: string; sourceId: string }> {
+  return extractLocatedRefs(value).map(({ ref, sourceId }) => ({ ref, sourceId }));
 }
 
 /**
@@ -239,10 +253,10 @@ type WorkflowEdgeLike = WorkflowGraph["edges"][number];
  * 都不算 —— 和后端 graph_rules.reference_dependencies 同一口径(契约 contracts/workflow-never-run-cases.json)。
  * 引擎按它们排先后(引用即依赖),**只管先后,不会让被引用的节点运行**。
  */
-export function layerReferences(node: WorkflowNodeLike, registry: RegistryLike): Array<{ ref: string; sourceId: string }> {
+export function layerReferences(node: WorkflowNodeLike, registry: RegistryLike): LocatedReference[] {
   return Object.entries(node.config ?? {})
     .filter(([key]) => !isNestedScopeConfig(registry, node.type, key) && !isCodeConfig(registry, node.type, key))
-    .flatMap(([, value]) => extractRefs(value));
+    .flatMap(([key, value]) => extractLocatedRefs(value, [key]));
 }
 
 /**

@@ -47,6 +47,10 @@ def describe_node_types(registry: dict[str, dict[str, Any]], locale: str) -> lis
             # 「素材」节点本身就漏了,而插件节点它永远也覆盖不到。
             "config": {key: translated_spec(key, with_data_type(key, spec), locale) for key, spec in meta["config"].items()},
             "outputs": list(meta["outputs"]),
+            # 配置映射 → 动态属性端口。输入/输出路径都是运行时真实路径；前端只负责展开键。
+            "port_maps": {
+                field: dict(mapping) for field, mapping in (meta.get("port_maps") or {}).items()
+            },
             "output_types": {output: output_data_type(output, meta) for output in meta["outputs"]},
             # 英文键留给连线/导出,翻译后的名字留给人;两者不再混成一个字段。
             "output_labels": {output: t(output_label(output, meta), locale) for output in meta["outputs"]},

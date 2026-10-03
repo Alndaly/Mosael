@@ -27,6 +27,7 @@ def node_ports() -> str:
                 for key, spec in item["config"].items()
             },
             "outputs": item["outputs"],
+            **({"port_maps": item["port_maps"]} if item.get("port_maps") else {}),
         }
         for item in sorted(described, key=lambda item: item["type"])
     ]

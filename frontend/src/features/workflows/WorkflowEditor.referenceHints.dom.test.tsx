@@ -162,20 +162,20 @@ it("开始节点每个参数一个输出口,引用从那个参数的口出发;�
   await waitFor(() => expect(startPorts()).toEqual(["out:topic"]));
   //: 顶上那个控制出口还在 —— 接进流程的控制边走它。
   expect(nodeEl("start").querySelectorAll(".react-flow__handle.source:not([data-handleid])")).toHaveLength(1);
-  expect(hints().get("ref-hint:start>out:topic>set")?.sourceHandle).toBe("out:topic");
+  expect(hints().get("ref-hint:start>out:topic>set>in:template")?.sourceHandle).toBe("out:topic");
 
   fireEvent.click(nodeEl("start"));
   const name = await screen.findByDisplayValue("topic");
   fireEvent.change(name, { target: { value: "theme" } });
   await waitFor(() => expect(startPorts()).toEqual(["out:theme"]));
   //: `set` 里写的还是 {{start.topic}}:开始节点已经没有这个参数、也就没有这个口,线退回从节点出发。
-  await waitFor(() => expect(hints().get("ref-hint:start>>set")?.sourceHandle).toBeUndefined());
+  await waitFor(() => expect(hints().get("ref-hint:start>>set>in:template")?.sourceHandle).toBeUndefined());
 
   fireEvent.click(screen.getByRole("button", { name: "wfMapAdd" }));
   const added = screen.getAllByLabelText("wfStartParamName").at(-1)!;
   fireEvent.change(added, { target: { value: "topic" } });
   await waitFor(() => expect(startPorts()).toEqual(["out:theme", "out:topic"]));
-  await waitFor(() => expect(hints().get("ref-hint:start>out:topic>set")?.sourceHandle).toBe("out:topic"));
+  await waitFor(() => expect(hints().get("ref-hint:start>out:topic>set>in:template")?.sourceHandle).toBe("out:topic"));
 });
 
 it("连进流程之后:线变回淡色,角标消失;再接上真连线,那根提示线就不画了", async () => {
@@ -184,7 +184,7 @@ it("连进流程之后:线变回淡色,角标消失;再接上真连线,那根提
     edges: [...GRAPH.edges, { id: "e-start-props", source: "start", target: "props" }],
   } as WorkflowGraph);
   await waitFor(() => expect(hints().size).toBe(2));
-  expect(hints().get("ref-hint:props>out:text>set")?.className).toBe(canvasEdgeClass("ref", { hint: true }));
+  expect(hints().get("ref-hint:props>out:text>set>in:template")?.className).toBe(canvasEdgeClass("ref", { hint: true }));
   expect(within(nodeEl("props")).queryByLabelText("wfIssueUnwiredReferenced")).toBeNull();
   //: 画布上连一根 props → set 的真连线。
   act(() => flow.props?.onConnect?.({ source: "props", target: "set", sourceHandle: null, targetHandle: null }));
@@ -197,7 +197,7 @@ it("提示线不在图里:画布报来的删除落不到图上,也不触发保�
   act(() => flow.props?.onEdgesChange?.([{ type: "remove", id: "ref-hint:props>out:text>set" }]));
   await new Promise((resolve) => setTimeout(resolve, 1200));
   expect(apiMocks.updateWorkflow).not.toHaveBeenCalled();
-  expect(hints().has("ref-hint:props>out:text>set")).toBe(true);
+  expect(hints().has("ref-hint:props>out:text>set>in:template")).toBe(true);
 });
 
 it("循环体里的引用照画;体里没有入边的根是入口,不算错误", async () => {
@@ -228,6 +228,6 @@ it("循环体里的引用照画;体里没有入边的根是入口,不算错误",
   fireEvent.click(nodeEl("loop-1"));
   fireEvent.doubleClick(nodeEl("loop-1"));
   await screen.findByText(/wfLoopBody/);
-  await waitFor(() => expect([...hints().keys()]).toEqual(["ref-hint:style>out:text>shot"]));
-  expect(hints().get("ref-hint:style>out:text>shot")?.className).toBe(canvasEdgeClass("ref", { hint: true }));
+  await waitFor(() => expect([...hints().keys()]).toEqual(["ref-hint:style>out:text>shot>in:template"]));
+  expect(hints().get("ref-hint:style>out:text>shot>in:template")?.className).toBe(canvasEdgeClass("ref", { hint: true }));
 });

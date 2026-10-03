@@ -8166,6 +8166,12 @@ export interface components {
             };
             /** Outputs */
             outputs: string[];
+            /** Port Maps */
+            port_maps?: {
+                [key: string]: {
+                    [key: string]: string;
+                };
+            };
             /** Output Types */
             output_types?: {
                 [key: string]: string;
@@ -14154,6 +14160,12 @@ export interface components {
             };
             /** Outputs */
             outputs: string[];
+            /** Port Maps */
+            port_maps?: {
+                [key: string]: {
+                    [key: string]: string;
+                };
+            };
             /** Output Types */
             output_types?: {
                 [key: string]: string;

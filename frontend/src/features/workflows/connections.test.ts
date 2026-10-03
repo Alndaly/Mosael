@@ -58,6 +58,24 @@ describe("withDataInputBound", () => {
     edges: [],
   } as WorkflowGraph;
 
+  it("嵌套属性端口写回对应配置叶子，而不是造一个带点号的顶层字段", () => {
+    const nested = {
+      nodes: [
+        { id: "plan", type: "llm", config: {} },
+        { id: "deliver", type: "output", config: { values: { note_id: "{{plan.text}}", report: "原值" } } },
+      ],
+      edges: [],
+    } as WorkflowGraph;
+    const next = withDataInputBound(
+      nested,
+      { targetId: "deliver", key: "values.note_id", sourceId: "plan", output: "text" },
+      {},
+    );
+
+    expect(next.nodes[1].config).toEqual({ values: { note_id: "", report: "原值" } });
+    expect(Object.keys(next.nodes[1].config ?? {})).not.toContain("values.note_id");
+  });
+
   it("接上游:建数据边、进连接态、字面量清空,依赖它的轨道一并清掉(旧轨道不在新时间线上)", () => {
     const next = withDataInputBound(graph, { targetId: "append", key: "sequence_id", sourceId: "tl", output: "sequence_id" }, specs);
     const target = next.nodes.find((node) => node.id === "append")!;
