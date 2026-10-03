@@ -47,6 +47,11 @@ MAX_SENTENCE_SECONDS = 8
 MAX_SENTENCE_UNITS = 48
 SOFT_BREAK_UNITS = 28
 PAUSE_BREAK_SECONDS = 0.75
+#: 触到上限时找更好切点的三个窗口:句末标点允许超出的量、软标点允许超出的量、回退逗号的最小行宽。
+#: 全部来自真实事故 —— 行宽上限把 controlnet 劈成「co|ntrol net」、把「比较重|要呢」劈成两半。
+_EXTEND_TO_SENTENCE_END_UNITS = 12
+_EXTEND_TO_SOFT_PUNCT_UNITS = 8
+_BACKWARD_SOFT_MIN_UNITS = 14
 _CJK_NAMES = ("CJK UNIFIED IDEOGRAPH", "CJK COMPATIBILITY IDEOGRAPH", "HIRAGANA", "KATAKANA", "HANGUL")
 
 
@@ -87,6 +92,57 @@ def _restore_token_formatting(tokens: list[Token], segment_text: str) -> list[To
     return restored
 
 
+_ASCII_LETTER = re.compile(r"[A-Za-z]")
+
+
+def _choose_cap_cut(tokens: list[Token], start: int, hit: int) -> int:
+    """行宽/时长上限在 hit 处撞上:选一个像样的切点(返回「切在它后面」的索引,含)。
+
+    优先级 —— 全部规则只认**给人看的符号**和**词边界**,不认位置:
+    1. 前方几拍内有句末标点:延长到它(完整的一句话,配音最好的单位);
+    2. 前方一小步内有逗号类软标点:延长到它(一个气口);
+    3. 后方最近的软标点,只要那一行已有 _BACKWARD_SOFT_MIN_UNITS 宽:断在它(太短的一行不值得);
+    4. 不劈开拉丁词:controlnet 不能切成「co|ntrol net」(逐字时间戳下,词就是一串字母 token);
+    5. 都没有:就在上限处断(纯中文按字断是可读的)。
+    """
+    cumulative = ""
+    texts: dict[int, str] = {}
+    for i in range(start, hit + 1):
+        cumulative += tokens[i].text
+        texts[i] = cumulative
+    units_at_hit = display_units(texts[hit])
+
+    ahead = cumulative
+    for j in range(hit + 1, len(tokens)):
+        ahead += tokens[j].text
+        if display_units(ahead) - units_at_hit > _EXTEND_TO_SENTENCE_END_UNITS:
+            break
+        if _SENTENCE_END.search(ahead):
+            return j
+    ahead = cumulative
+    for j in range(hit + 1, len(tokens)):
+        ahead += tokens[j].text
+        if display_units(ahead) - units_at_hit > _EXTEND_TO_SOFT_PUNCT_UNITS:
+            break
+        if _SOFT_PUNCTUATION.search(ahead):
+            return j
+    for j in range(hit, start, -1):
+        if _SOFT_PUNCTUATION.search(texts[j]) and display_units(texts[j]) >= _BACKWARD_SOFT_MIN_UNITS:
+            return j
+    for j in range(hit, start, -1):
+        left = tokens[j].text
+        right = tokens[j + 1].text if j + 1 < len(tokens) else ""
+        if not (_ASCII_LETTER.match(left[-1:]) and _ASCII_LETTER.match(right[:1])):
+            return j
+    # 整行从头就是一个拉丁词(没有任何可回退的边界):延长到这个词结束。
+    if hit + 1 < len(tokens) and _ASCII_LETTER.match(tokens[hit].text[-1:]) and _ASCII_LETTER.match(tokens[hit + 1].text[:1]):
+        j = hit + 1
+        while j + 1 < len(tokens) and _ASCII_LETTER.match(tokens[j + 1].text[:1]):
+            j += 1
+        return j
+    return hit
+
+
 def _fallback_paragraph(segment: Segment) -> list[Segment]:
     parts = [part.strip() for part in _FALLBACK_PARTS.findall(segment.text) if part.strip()]
     if len(parts) <= 1:
@@ -117,26 +173,45 @@ def sentences_for_editing(segments: list[Segment]) -> list[Segment]:
             continue
         tokens = _restore_token_formatting(ordered, segment.text)
         lines: list[tuple[list[Token], str]] = []
-        row: list[Token] = []
-        text = ""
-        for index, token in enumerate(tokens):
-            row.append(token)
-            text += token.text
-            following = tokens[index + 1] if index + 1 < len(tokens) else None
-            duration = token.end_time - row[0].start_time
-            pause = following.start_time - token.end_time if following else 0.0
-            units = display_units(text)
-            if (
-                following is None
-                or _SENTENCE_END.search(text)
-                or pause >= PAUSE_BREAK_SECONDS
-                or duration >= MAX_SENTENCE_SECONDS
-                or units >= MAX_SENTENCE_UNITS
-                or (units >= SOFT_BREAK_UNITS and _SOFT_PUNCTUATION.search(text))
-            ):
-                if row and text.strip():
-                    lines.append((row, text.strip()))
-                row, text = [], ""
+        index = 0
+        while index < len(tokens):
+            # 一行:从 index 开始累积到自然断点(句末 / 停顿 / 软标点),或撞到上限。
+            start = index
+            row: list[Token] = []
+            text = ""
+            while index < len(tokens):
+                token = tokens[index]
+                row.append(token)
+                text += token.text
+                following = tokens[index + 1] if index + 1 < len(tokens) else None
+                duration = token.end_time - row[0].start_time
+                pause = following.start_time - token.end_time if following else 0.0
+                units = display_units(text)
+                #: 停顿断行也要认词边界:说话人在一个词中间换气(「中的 co … ntrol net」),
+                #: 这一拍两边都是拉丁字母就不断 —— 词是断行的最小单位,停顿只是静音,留在这行里。
+                pause_breaks_word = (
+                    following is not None
+                    and _ASCII_LETTER.match(token.text[-1:])
+                    and _ASCII_LETTER.match(following.text[:1])
+                )
+                natural = (
+                    following is None
+                    or _SENTENCE_END.search(text)
+                    or (pause >= PAUSE_BREAK_SECONDS and not pause_breaks_word)
+                    or (units >= SOFT_BREAK_UNITS and _SOFT_PUNCTUATION.search(text))
+                )
+                if natural:
+                    index += 1
+                    break
+                if units >= MAX_SENTENCE_UNITS or duration >= MAX_SENTENCE_SECONDS:
+                    # 撞到上限:不就地硬切,挑一个像样的切点(见 _choose_cap_cut)。
+                    index = _choose_cap_cut(tokens, start, index) + 1
+                    break
+                index += 1
+            row = tokens[start:index]
+            text = "".join(one.text for one in row)
+            if row and text.strip():
+                lines.append((row, text.strip()))
         if len(lines) <= 1:
             rows.append(replace(segment, tokens=tuple(tokens), text=segment.text.strip() or (lines[0][1] if lines else "")))
             continue

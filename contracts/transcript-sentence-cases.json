@@ -1,373 +1,789 @@
 {
-  "contract": "transcript-sentences",
-  "version": 1,
-  "readme": "contracts/README.md",
-  "description": "转写段落切成「一句一行」的规则:剪辑台的逐字稿 / 生成字幕(前端 transcriptSegmentsForEditing)和工作流的生成字幕(后端 voices/sentences.sentences_for_editing)必须切得一样。后端 tests/test_transcript_sentence_parity.py 与前端 transcriptProjection.parity.test.ts 跑同一份语料。时间保留 6 位小数比较。",
-  "cases": [
+ "contract": "transcript-sentences",
+ "version": 1,
+ "readme": "contracts/README.md",
+ "description": "转写段落切成「一句一行」的规则:剪辑台的逐字稿 / 生成字幕(前端 transcriptSegmentsForEditing)和工作流的生成字幕(后端 voices/sentences.sentences_for_editing)必须切得一样。后端 tests/test_transcript_sentence_parity.py 与前端 transcriptProjection.parity.test.ts 跑同一份语料。时间保留 6 位小数比较。",
+ "cases": [
+  {
+   "name": "punctuation-restored-from-paragraph-text",
+   "why": "引擎的词级时间戳里没有标点:先把段落原文的标点补回词上,再按句末标点断。",
+   "segments": [
     {
-      "name": "punctuation-restored-from-paragraph-text",
-      "why": "引擎的词级时间戳里没有标点:先把段落原文的标点补回词上,再按句末标点断。",
-      "segments": [
-        {
-          "id": "p",
-          "start_time": 0.0,
-          "end_time": 4.0,
-          "text": "你好。今天天气不错!",
-          "tokens": [
-            {
-              "start_time": 0.0,
-              "end_time": 0.4,
-              "text": "你"
-            },
-            {
-              "start_time": 0.4,
-              "end_time": 0.8,
-              "text": "好"
-            },
-            {
-              "start_time": 1.0,
-              "end_time": 1.5,
-              "text": "今天"
-            },
-            {
-              "start_time": 1.5,
-              "end_time": 2.2,
-              "text": "天气"
-            },
-            {
-              "start_time": 2.2,
-              "end_time": 3.8,
-              "text": "不错"
-            }
-          ]
-        }
-      ],
-      "expected": [
-        {
-          "id": "p:0",
-          "start_time": 0.0,
-          "end_time": 0.8,
-          "text": "你好。"
-        },
-        {
-          "id": "p:1",
-          "start_time": 1.0,
-          "end_time": 4.0,
-          "text": "今天天气不错!"
-        }
-      ]
-    },
-    {
-      "name": "english-spaces-and-a-long-pause",
-      "why": "英文的空格要补回去;停顿 ≥ 0.75 秒断一行,即使没有标点。",
-      "segments": [
-        {
-          "id": "e",
-          "start_time": 10.0,
-          "end_time": 16.0,
-          "text": "so we went home and then we slept",
-          "tokens": [
-            {
-              "start_time": 10.0,
-              "end_time": 10.3,
-              "text": "so"
-            },
-            {
-              "start_time": 10.3,
-              "end_time": 10.5,
-              "text": "we"
-            },
-            {
-              "start_time": 10.5,
-              "end_time": 10.9,
-              "text": "went"
-            },
-            {
-              "start_time": 10.9,
-              "end_time": 11.4,
-              "text": "home"
-            },
-            {
-              "start_time": 12.5,
-              "end_time": 12.8,
-              "text": "and"
-            },
-            {
-              "start_time": 12.8,
-              "end_time": 13.1,
-              "text": "then"
-            },
-            {
-              "start_time": 13.1,
-              "end_time": 13.3,
-              "text": "we"
-            },
-            {
-              "start_time": 13.3,
-              "end_time": 15.9,
-              "text": "slept"
-            }
-          ]
-        }
-      ],
-      "expected": [
-        {
-          "id": "e:0",
-          "start_time": 10.0,
-          "end_time": 11.4,
-          "text": "so we went home"
-        },
-        {
-          "id": "e:1",
-          "start_time": 12.5,
-          "end_time": 16.0,
-          "text": "and then we slept"
-        }
-      ]
-    },
-    {
-      "name": "soft-break-at-a-comma-once-the-line-is-long",
-      "why": "满 28 个显示单位(中文字算 2)且遇到逗号类标点就断。",
-      "segments": [
-        {
-          "id": "s",
-          "start_time": 0.0,
-          "end_time": 6.0,
-          "text": "我们今天要讲的这个话题非常重要,其实大家都很熟悉",
-          "tokens": [
-            {
-              "start_time": 0.0,
-              "end_time": 0.5,
-              "text": "我们"
-            },
-            {
-              "start_time": 0.5,
-              "end_time": 1.0,
-              "text": "今天"
-            },
-            {
-              "start_time": 1.0,
-              "end_time": 1.4,
-              "text": "要讲"
-            },
-            {
-              "start_time": 1.4,
-              "end_time": 1.6,
-              "text": "的"
-            },
-            {
-              "start_time": 1.6,
-              "end_time": 2.0,
-              "text": "这个"
-            },
-            {
-              "start_time": 2.0,
-              "end_time": 2.3,
-              "text": "话题"
-            },
-            {
-              "start_time": 2.3,
-              "end_time": 2.45,
-              "text": "非常"
-            },
-            {
-              "start_time": 2.45,
-              "end_time": 2.6,
-              "text": "重要"
-            },
-            {
-              "start_time": 2.6,
-              "end_time": 3.2,
-              "text": "其实"
-            },
-            {
-              "start_time": 3.2,
-              "end_time": 3.8,
-              "text": "大家"
-            },
-            {
-              "start_time": 3.8,
-              "end_time": 4.2,
-              "text": "都很"
-            },
-            {
-              "start_time": 4.2,
-              "end_time": 5.9,
-              "text": "熟悉"
-            }
-          ]
-        }
-      ],
-      "expected": [
-        {
-          "id": "s:0",
-          "start_time": 0.0,
-          "end_time": 2.6,
-          "text": "我们今天要讲的这个话题非常重要,"
-        },
-        {
-          "id": "s:1",
-          "start_time": 2.6,
-          "end_time": 6.0,
-          "text": "其实大家都很熟悉"
-        }
-      ]
-    },
-    {
-      "name": "eight-seconds-is-the-longest-line",
-      "why": "一行满 8 秒就断,哪怕一直没停顿、没标点。",
-      "segments": [
-        {
-          "id": "l",
-          "start_time": 0.0,
-          "end_time": 12.0,
-          "text": "a b c d e f",
-          "tokens": [
-            {
-              "start_time": 0.0,
-              "end_time": 2.0,
-              "text": "a"
-            },
-            {
-              "start_time": 2.0,
-              "end_time": 4.0,
-              "text": "b"
-            },
-            {
-              "start_time": 4.0,
-              "end_time": 6.0,
-              "text": "c"
-            },
-            {
-              "start_time": 6.0,
-              "end_time": 8.5,
-              "text": "d"
-            },
-            {
-              "start_time": 8.5,
-              "end_time": 10.0,
-              "text": "e"
-            },
-            {
-              "start_time": 10.0,
-              "end_time": 12.0,
-              "text": "f"
-            }
-          ]
-        }
-      ],
-      "expected": [
-        {
-          "id": "l:0",
-          "start_time": 0.0,
-          "end_time": 8.5,
-          "text": "a b c d"
-        },
-        {
-          "id": "l:1",
-          "start_time": 8.5,
-          "end_time": 12.0,
-          "text": "e f"
-        }
-      ]
-    },
-    {
-      "name": "no-word-timings-split-by-sentence-proportionally",
-      "why": "没有词级时间戳:按句末标点切,时间按显示单位数按比例分。中文句号后不必有空格。",
-      "segments": [
-        {
-          "id": "f",
-          "start_time": 0.0,
-          "end_time": 9.0,
-          "text": "第一句话。第二句！Third one. Fourth",
-          "tokens": []
-        }
-      ],
-      "expected": [
-        {
-          "id": "f:0",
-          "start_time": 0.0,
-          "end_time": 2.612903,
-          "text": "第一句话。"
-        },
-        {
-          "id": "f:1",
-          "start_time": 2.612903,
-          "end_time": 4.645161,
-          "text": "第二句！"
-        },
-        {
-          "id": "f:2",
-          "start_time": 4.645161,
-          "end_time": 7.258065,
-          "text": "Third one."
-        },
-        {
-          "id": "f:3",
-          "start_time": 7.258065,
-          "end_time": 9.0,
-          "text": "Fourth"
-        }
-      ]
-    },
-    {
-      "name": "a-decimal-point-is-not-a-sentence-end",
-      "why": "ASCII 句号后面要有空白才算句末 —— 3.5 不切开。",
-      "segments": [
-        {
-          "id": "d",
-          "start_time": 0.0,
-          "end_time": 4.0,
-          "text": "It costs 3.5 dollars. Then more",
-          "tokens": []
-        }
-      ],
-      "expected": [
-        {
-          "id": "d:0",
-          "start_time": 0.0,
-          "end_time": 2.769231,
-          "text": "It costs 3.5 dollars."
-        },
-        {
-          "id": "d:1",
-          "start_time": 2.769231,
-          "end_time": 4.0,
-          "text": "Then more"
-        }
-      ]
-    },
-    {
-      "name": "one-sentence-keeps-the-paragraph",
-      "why": "只有一句:原样一行,文本用段落原文。",
-      "segments": [
-        {
-          "id": "o",
-          "start_time": 1.0,
-          "end_time": 2.0,
-          "text": "嗯 好的",
-          "tokens": [
-            {
-              "start_time": 1.0,
-              "end_time": 1.3,
-              "text": "嗯"
-            },
-            {
-              "start_time": 1.4,
-              "end_time": 1.9,
-              "text": "好的"
-            }
-          ]
-        }
-      ],
-      "expected": [
-        {
-          "id": "o",
-          "start_time": 1.0,
-          "end_time": 2.0,
-          "text": "嗯 好的"
-        }
-      ]
+     "id": "p",
+     "start_time": 0.0,
+     "end_time": 4.0,
+     "text": "你好。今天天气不错!",
+     "tokens": [
+      {
+       "start_time": 0.0,
+       "end_time": 0.4,
+       "text": "你"
+      },
+      {
+       "start_time": 0.4,
+       "end_time": 0.8,
+       "text": "好"
+      },
+      {
+       "start_time": 1.0,
+       "end_time": 1.5,
+       "text": "今天"
+      },
+      {
+       "start_time": 1.5,
+       "end_time": 2.2,
+       "text": "天气"
+      },
+      {
+       "start_time": 2.2,
+       "end_time": 3.8,
+       "text": "不错"
+      }
+     ]
     }
-  ]
+   ],
+   "expected": [
+    {
+     "id": "p:0",
+     "start_time": 0.0,
+     "end_time": 0.8,
+     "text": "你好。"
+    },
+    {
+     "id": "p:1",
+     "start_time": 1.0,
+     "end_time": 4.0,
+     "text": "今天天气不错!"
+    }
+   ]
+  },
+  {
+   "name": "english-spaces-and-a-long-pause",
+   "why": "英文的空格要补回去;停顿 ≥ 0.75 秒断一行,即使没有标点。",
+   "segments": [
+    {
+     "id": "e",
+     "start_time": 10.0,
+     "end_time": 16.0,
+     "text": "so we went home and then we slept",
+     "tokens": [
+      {
+       "start_time": 10.0,
+       "end_time": 10.3,
+       "text": "so"
+      },
+      {
+       "start_time": 10.3,
+       "end_time": 10.5,
+       "text": "we"
+      },
+      {
+       "start_time": 10.5,
+       "end_time": 10.9,
+       "text": "went"
+      },
+      {
+       "start_time": 10.9,
+       "end_time": 11.4,
+       "text": "home"
+      },
+      {
+       "start_time": 12.5,
+       "end_time": 12.8,
+       "text": "and"
+      },
+      {
+       "start_time": 12.8,
+       "end_time": 13.1,
+       "text": "then"
+      },
+      {
+       "start_time": 13.1,
+       "end_time": 13.3,
+       "text": "we"
+      },
+      {
+       "start_time": 13.3,
+       "end_time": 15.9,
+       "text": "slept"
+      }
+     ]
+    }
+   ],
+   "expected": [
+    {
+     "id": "e:0",
+     "start_time": 10.0,
+     "end_time": 11.4,
+     "text": "so we went home"
+    },
+    {
+     "id": "e:1",
+     "start_time": 12.5,
+     "end_time": 16.0,
+     "text": "and then we slept"
+    }
+   ]
+  },
+  {
+   "name": "soft-break-at-a-comma-once-the-line-is-long",
+   "why": "满 28 个显示单位(中文字算 2)且遇到逗号类标点就断。",
+   "segments": [
+    {
+     "id": "s",
+     "start_time": 0.0,
+     "end_time": 6.0,
+     "text": "我们今天要讲的这个话题非常重要,其实大家都很熟悉",
+     "tokens": [
+      {
+       "start_time": 0.0,
+       "end_time": 0.5,
+       "text": "我们"
+      },
+      {
+       "start_time": 0.5,
+       "end_time": 1.0,
+       "text": "今天"
+      },
+      {
+       "start_time": 1.0,
+       "end_time": 1.4,
+       "text": "要讲"
+      },
+      {
+       "start_time": 1.4,
+       "end_time": 1.6,
+       "text": "的"
+      },
+      {
+       "start_time": 1.6,
+       "end_time": 2.0,
+       "text": "这个"
+      },
+      {
+       "start_time": 2.0,
+       "end_time": 2.3,
+       "text": "话题"
+      },
+      {
+       "start_time": 2.3,
+       "end_time": 2.45,
+       "text": "非常"
+      },
+      {
+       "start_time": 2.45,
+       "end_time": 2.6,
+       "text": "重要"
+      },
+      {
+       "start_time": 2.6,
+       "end_time": 3.2,
+       "text": "其实"
+      },
+      {
+       "start_time": 3.2,
+       "end_time": 3.8,
+       "text": "大家"
+      },
+      {
+       "start_time": 3.8,
+       "end_time": 4.2,
+       "text": "都很"
+      },
+      {
+       "start_time": 4.2,
+       "end_time": 5.9,
+       "text": "熟悉"
+      }
+     ]
+    }
+   ],
+   "expected": [
+    {
+     "id": "s:0",
+     "start_time": 0.0,
+     "end_time": 2.6,
+     "text": "我们今天要讲的这个话题非常重要,"
+    },
+    {
+     "id": "s:1",
+     "start_time": 2.6,
+     "end_time": 6.0,
+     "text": "其实大家都很熟悉"
+    }
+   ]
+  },
+  {
+   "name": "eight-seconds-is-the-longest-line",
+   "why": "一行满 8 秒就断,哪怕一直没停顿、没标点。",
+   "segments": [
+    {
+     "id": "l",
+     "start_time": 0.0,
+     "end_time": 12.0,
+     "text": "a b c d e f",
+     "tokens": [
+      {
+       "start_time": 0.0,
+       "end_time": 2.0,
+       "text": "a"
+      },
+      {
+       "start_time": 2.0,
+       "end_time": 4.0,
+       "text": "b"
+      },
+      {
+       "start_time": 4.0,
+       "end_time": 6.0,
+       "text": "c"
+      },
+      {
+       "start_time": 6.0,
+       "end_time": 8.5,
+       "text": "d"
+      },
+      {
+       "start_time": 8.5,
+       "end_time": 10.0,
+       "text": "e"
+      },
+      {
+       "start_time": 10.0,
+       "end_time": 12.0,
+       "text": "f"
+      }
+     ]
+    }
+   ],
+   "expected": [
+    {
+     "id": "l:0",
+     "start_time": 0.0,
+     "end_time": 8.5,
+     "text": "a b c d"
+    },
+    {
+     "id": "l:1",
+     "start_time": 8.5,
+     "end_time": 12.0,
+     "text": "e f"
+    }
+   ]
+  },
+  {
+   "name": "no-word-timings-split-by-sentence-proportionally",
+   "why": "没有词级时间戳:按句末标点切,时间按显示单位数按比例分。中文句号后不必有空格。",
+   "segments": [
+    {
+     "id": "f",
+     "start_time": 0.0,
+     "end_time": 9.0,
+     "text": "第一句话。第二句！Third one. Fourth",
+     "tokens": []
+    }
+   ],
+   "expected": [
+    {
+     "id": "f:0",
+     "start_time": 0.0,
+     "end_time": 2.612903,
+     "text": "第一句话。"
+    },
+    {
+     "id": "f:1",
+     "start_time": 2.612903,
+     "end_time": 4.645161,
+     "text": "第二句！"
+    },
+    {
+     "id": "f:2",
+     "start_time": 4.645161,
+     "end_time": 7.258065,
+     "text": "Third one."
+    },
+    {
+     "id": "f:3",
+     "start_time": 7.258065,
+     "end_time": 9.0,
+     "text": "Fourth"
+    }
+   ]
+  },
+  {
+   "name": "a-decimal-point-is-not-a-sentence-end",
+   "why": "ASCII 句号后面要有空白才算句末 —— 3.5 不切开。",
+   "segments": [
+    {
+     "id": "d",
+     "start_time": 0.0,
+     "end_time": 4.0,
+     "text": "It costs 3.5 dollars. Then more",
+     "tokens": []
+    }
+   ],
+   "expected": [
+    {
+     "id": "d:0",
+     "start_time": 0.0,
+     "end_time": 2.769231,
+     "text": "It costs 3.5 dollars."
+    },
+    {
+     "id": "d:1",
+     "start_time": 2.769231,
+     "end_time": 4.0,
+     "text": "Then more"
+    }
+   ]
+  },
+  {
+   "name": "one-sentence-keeps-the-paragraph",
+   "why": "只有一句:原样一行,文本用段落原文。",
+   "segments": [
+    {
+     "id": "o",
+     "start_time": 1.0,
+     "end_time": 2.0,
+     "text": "嗯 好的",
+     "tokens": [
+      {
+       "start_time": 1.0,
+       "end_time": 1.3,
+       "text": "嗯"
+      },
+      {
+       "start_time": 1.4,
+       "end_time": 1.9,
+       "text": "好的"
+      }
+     ]
+    }
+   ],
+   "expected": [
+    {
+     "id": "o",
+     "start_time": 1.0,
+     "end_time": 2.0,
+     "text": "嗯 好的"
+    }
+   ]
+  },
+  {
+   "name": "cap-extends-forward-to-comma",
+   "why": "触到 48 单位的行宽上限时,前方一小步内就有逗号 —— 延长到逗号断,比卡在句子正中强。配音按段出音,句中切断就是两段各说半句。",
+   "segments": [
+    {
+     "id": "a",
+     "start_time": 0.0,
+     "end_time": 3.2,
+     "text": "今天我们来讲一下这个工具用起来其实非常顺手而且强细节，值得细看",
+     "tokens": [
+      {
+       "start_time": 0.0,
+       "end_time": 0.4,
+       "text": "今天我们"
+      },
+      {
+       "start_time": 0.4,
+       "end_time": 0.8,
+       "text": "来讲一下"
+      },
+      {
+       "start_time": 0.8,
+       "end_time": 1.2,
+       "text": "这个工具"
+      },
+      {
+       "start_time": 1.2,
+       "end_time": 1.6,
+       "text": "用起来其"
+      },
+      {
+       "start_time": 1.6,
+       "end_time": 2.0,
+       "text": "实非常顺"
+      },
+      {
+       "start_time": 2.0,
+       "end_time": 2.4,
+       "text": "手而且强"
+      },
+      {
+       "start_time": 2.4,
+       "end_time": 2.8,
+       "text": "细节，"
+      },
+      {
+       "start_time": 2.8,
+       "end_time": 3.2,
+       "text": "值得细看"
+      }
+     ]
+    }
+   ],
+   "expected": [
+    {
+     "id": "a:0",
+     "start_time": 0.0,
+     "end_time": 2.8,
+     "text": "今天我们来讲一下这个工具用起来其实非常顺手而且强细节，"
+    },
+    {
+     "id": "a:1",
+     "start_time": 2.8,
+     "end_time": 3.2,
+     "text": "值得细看"
+    }
+   ]
+  },
+  {
+   "name": "cap-never-splits-a-latin-word",
+   "why": "引擎给的是逐字时间戳,行宽上限可能落在 controlnet 这种词的中间(真实事故:「co|ntrol net」)。回退到词开始之前断;词本身超出一整行的,延长到词尾再断。",
+   "segments": [
+    {
+     "id": "b",
+     "start_time": 0.0,
+     "end_time": 3.8,
+     "text": "今天我们来讲一下控制网络这个东西其实用法controlnet很好用对吧",
+     "tokens": [
+      {
+       "start_time": 0.0,
+       "end_time": 0.4,
+       "text": "今天我们"
+      },
+      {
+       "start_time": 0.4,
+       "end_time": 0.8,
+       "text": "来讲一下"
+      },
+      {
+       "start_time": 0.8,
+       "end_time": 1.2,
+       "text": "控制网络"
+      },
+      {
+       "start_time": 1.2,
+       "end_time": 1.6,
+       "text": "这个东西"
+      },
+      {
+       "start_time": 1.6,
+       "end_time": 2.0,
+       "text": "其实用法"
+      },
+      {
+       "start_time": 2.0,
+       "end_time": 2.1,
+       "text": "c"
+      },
+      {
+       "start_time": 2.1,
+       "end_time": 2.2,
+       "text": "o"
+      },
+      {
+       "start_time": 2.2,
+       "end_time": 2.3,
+       "text": "n"
+      },
+      {
+       "start_time": 2.3,
+       "end_time": 2.4,
+       "text": "t"
+      },
+      {
+       "start_time": 2.4,
+       "end_time": 2.5,
+       "text": "r"
+      },
+      {
+       "start_time": 2.5,
+       "end_time": 2.6,
+       "text": "o"
+      },
+      {
+       "start_time": 2.6,
+       "end_time": 2.7,
+       "text": "l"
+      },
+      {
+       "start_time": 2.7,
+       "end_time": 2.8,
+       "text": "n"
+      },
+      {
+       "start_time": 2.8,
+       "end_time": 2.9,
+       "text": "e"
+      },
+      {
+       "start_time": 2.9,
+       "end_time": 3.0,
+       "text": "t"
+      },
+      {
+       "start_time": 3.0,
+       "end_time": 3.4,
+       "text": "很好用"
+      },
+      {
+       "start_time": 3.4,
+       "end_time": 3.8,
+       "text": "对吧"
+      }
+     ]
+    }
+   ],
+   "expected": [
+    {
+     "id": "b:0",
+     "start_time": 0.0,
+     "end_time": 2.0,
+     "text": "今天我们来讲一下控制网络这个东西其实用法"
+    },
+    {
+     "id": "b:1",
+     "start_time": 2.0,
+     "end_time": 3.8,
+     "text": "controlnet很好用对吧"
+    }
+   ]
+  },
+  {
+   "name": "cap-falls-back-to-comma-below-soft-minimum",
+   "why": "软断点(逗号)平时要满 28 单位才用;但触到上限时,哪怕它只有 16 单位,断在逗号也比断在句中强。 余下的纯中文段仍按上限断(见 cap-hard-cut-pure-cjk-unchanged)。",
+   "segments": [
+    {
+     "id": "c",
+     "start_time": 0.0,
+     "end_time": 3.6,
+     "text": "今天我们来看这个，具体怎么把一段口播切成字幕然后翻成另一种语言再配音贴回去",
+     "tokens": [
+      {
+       "start_time": 0.0,
+       "end_time": 0.4,
+       "text": "今天我们"
+      },
+      {
+       "start_time": 0.4,
+       "end_time": 0.8,
+       "text": "来看这个，"
+      },
+      {
+       "start_time": 0.8,
+       "end_time": 1.2,
+       "text": "具体怎么"
+      },
+      {
+       "start_time": 1.2,
+       "end_time": 1.6,
+       "text": "把一段口"
+      },
+      {
+       "start_time": 1.6,
+       "end_time": 2.0,
+       "text": "播切成字"
+      },
+      {
+       "start_time": 2.0,
+       "end_time": 2.4,
+       "text": "幕然后翻"
+      },
+      {
+       "start_time": 2.4,
+       "end_time": 2.8,
+       "text": "成另一种"
+      },
+      {
+       "start_time": 2.8,
+       "end_time": 3.2,
+       "text": "语言再配"
+      },
+      {
+       "start_time": 3.2,
+       "end_time": 3.6,
+       "text": "音贴回去"
+      }
+     ]
+    }
+   ],
+   "expected": [
+    {
+     "id": "c:0",
+     "start_time": 0.0,
+     "end_time": 0.8,
+     "text": "今天我们来看这个，"
+    },
+    {
+     "id": "c:1",
+     "start_time": 0.8,
+     "end_time": 3.2,
+     "text": "具体怎么把一段口播切成字幕然后翻成另一种语言再配"
+    },
+    {
+     "id": "c:2",
+     "start_time": 3.2,
+     "end_time": 3.6,
+     "text": "音贴回去"
+    }
+   ]
+  },
+  {
+   "name": "cap-hard-cut-pure-cjk-unchanged",
+   "why": "纯中文、没有任何可借的标点或词边界时,触到上限就在上限断 —— 中文按字断是可读的,这条行为不许变。",
+   "segments": [
+    {
+     "id": "d",
+     "start_time": 0.0,
+     "end_time": 5.6,
+     "text": "今天我们来讲一下这个工具用起来其实非常顺手而且强大灵活大家可以慢慢体会它的好处和美妙之处还有很多值得细看对吧各位",
+     "tokens": [
+      {
+       "start_time": 0.0,
+       "end_time": 0.4,
+       "text": "今天我们"
+      },
+      {
+       "start_time": 0.4,
+       "end_time": 0.8,
+       "text": "来讲一下"
+      },
+      {
+       "start_time": 0.8,
+       "end_time": 1.2,
+       "text": "这个工具"
+      },
+      {
+       "start_time": 1.2,
+       "end_time": 1.6,
+       "text": "用起来其"
+      },
+      {
+       "start_time": 1.6,
+       "end_time": 2.0,
+       "text": "实非常顺"
+      },
+      {
+       "start_time": 2.0,
+       "end_time": 2.4,
+       "text": "手而且强"
+      },
+      {
+       "start_time": 2.4,
+       "end_time": 2.8,
+       "text": "大灵活大"
+      },
+      {
+       "start_time": 2.8,
+       "end_time": 3.2,
+       "text": "家可以慢"
+      },
+      {
+       "start_time": 3.2,
+       "end_time": 3.6,
+       "text": "慢体会它"
+      },
+      {
+       "start_time": 3.6,
+       "end_time": 4.0,
+       "text": "的好处和"
+      },
+      {
+       "start_time": 4.0,
+       "end_time": 4.4,
+       "text": "美妙之处"
+      },
+      {
+       "start_time": 4.4,
+       "end_time": 4.8,
+       "text": "还有很多"
+      },
+      {
+       "start_time": 4.8,
+       "end_time": 5.2,
+       "text": "值得细看"
+      },
+      {
+       "start_time": 5.2,
+       "end_time": 5.6,
+       "text": "对吧各位"
+      }
+     ]
+    }
+   ],
+   "expected": [
+    {
+     "id": "d:0",
+     "start_time": 0.0,
+     "end_time": 2.4,
+     "text": "今天我们来讲一下这个工具用起来其实非常顺手而且强"
+    },
+    {
+     "id": "d:1",
+     "start_time": 2.4,
+     "end_time": 4.8,
+     "text": "大灵活大家可以慢慢体会它的好处和美妙之处还有很多"
+    },
+    {
+     "id": "d:2",
+     "start_time": 4.8,
+     "end_time": 5.6,
+     "text": "值得细看对吧各位"
+    }
+   ]
+  },
+  {
+   "name": "pause-inside-latin-word-does-not-split",
+   "why": "说话人在词中间换气(「初图控制中的 co … ntrol net」,停顿 1.1s)——停顿断行也要认词边界:正在一个拉丁词中间就不断,等这个词走完。",
+   "segments": [
+    {
+     "id": "e",
+     "start_time": 0.0,
+     "end_time": 3.6,
+     "text": "今天我们来讲一下这个东西其实是control",
+     "tokens": [
+      {
+       "start_time": 0.0,
+       "end_time": 0.4,
+       "text": "今天我们"
+      },
+      {
+       "start_time": 0.4,
+       "end_time": 0.8,
+       "text": "来讲一下"
+      },
+      {
+       "start_time": 0.8,
+       "end_time": 1.2,
+       "text": "这个东西"
+      },
+      {
+       "start_time": 1.2,
+       "end_time": 1.6,
+       "text": "其实是"
+      },
+      {
+       "start_time": 1.6,
+       "end_time": 2.0,
+       "text": "co"
+      },
+      {
+       "start_time": 3.1,
+       "end_time": 3.6,
+       "text": "ntrol"
+      }
+     ]
+    }
+   ],
+   "expected": [
+    {
+     "id": "e",
+     "start_time": 0.0,
+     "end_time": 3.6,
+     "text": "今天我们来讲一下这个东西其实是control"
+    }
+   ]
+  }
+ ]
 }

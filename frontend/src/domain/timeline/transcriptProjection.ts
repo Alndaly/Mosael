@@ -116,6 +116,11 @@ const MAX_SENTENCE_SECONDS = 8;
 const MAX_SENTENCE_UNITS = 48;
 const SOFT_BREAK_UNITS = 28;
 const PAUSE_BREAK_SECONDS = 0.75;
+//: 触到上限时找更好切点的三个窗口 —— 与后端 voices/sentences.py 同一份,contracts/transcript-sentence-cases.json 钉住。
+const EXTEND_TO_SENTENCE_END_UNITS = 12;
+const EXTEND_TO_SOFT_PUNCT_UNITS = 8;
+const BACKWARD_SOFT_MIN_UNITS = 14;
+const ASCII_LETTER = /^[A-Za-z]$/;
 
 function displayUnits(text: string): number {
   return Array.from(text).reduce((total, character) => {
@@ -160,6 +165,53 @@ function restoreTokenFormatting(tokens: TokenLike[], segmentText: string): Token
  * `。！？` 后面从不空格,同一条要求会让整段永远匹配不到第一个分支,于是"切不开"降级成
  * "一整段"。两类标点分开写:ASCII 保留空白守卫,CJK 直接切。
  */
+/**
+ * 行宽/时长上限撞上时挑一个像样的切点(返回「切在它后面」的索引,含)。优先级与后端 voices/sentences.py
+ * 的 _choose_cap_cut 一一对应:句末延长 → 逗号延长 → 回退最近逗号(够宽才用)→ 不劈开拉丁词 → 硬切。
+ */
+function chooseCapCut(tokens: TokenLike[], start: number, hit: number): number {
+  const texts = new Map<number, string>();
+  let cumulative = "";
+  for (let i = start; i <= hit; i += 1) {
+    cumulative += tokens[i].text;
+    texts.set(i, cumulative);
+  }
+  const unitsAtHit = displayUnits(cumulative);
+
+  let ahead = cumulative;
+  for (let j = hit + 1; j < tokens.length; j += 1) {
+    ahead += tokens[j].text;
+    if (displayUnits(ahead) - unitsAtHit > EXTEND_TO_SENTENCE_END_UNITS) break;
+    if (SENTENCE_END.test(ahead)) return j;
+  }
+  ahead = cumulative;
+  for (let j = hit + 1; j < tokens.length; j += 1) {
+    ahead += tokens[j].text;
+    if (displayUnits(ahead) - unitsAtHit > EXTEND_TO_SOFT_PUNCT_UNITS) break;
+    if (SOFT_PUNCTUATION.test(ahead)) return j;
+  }
+  for (let j = hit; j > start; j -= 1) {
+    const text = texts.get(j)!;
+    if (SOFT_PUNCTUATION.test(text) && displayUnits(text) >= BACKWARD_SOFT_MIN_UNITS) return j;
+  }
+  for (let j = hit; j > start; j -= 1) {
+    const left = tokens[j].text.slice(-1);
+    const right = j + 1 < tokens.length ? tokens[j + 1].text.charAt(0) : "";
+    if (!(ASCII_LETTER.test(left) && ASCII_LETTER.test(right))) return j;
+  }
+  // 整行从头就是一个拉丁词:延长到这个词结束。
+  if (
+    hit + 1 < tokens.length
+    && ASCII_LETTER.test(tokens[hit].text.slice(-1))
+    && ASCII_LETTER.test(tokens[hit + 1].text.charAt(0))
+  ) {
+    let j = hit + 1;
+    while (j + 1 < tokens.length && ASCII_LETTER.test(tokens[j + 1].text.charAt(0))) j += 1;
+    return j;
+  }
+  return hit;
+}
+
 function fallbackParagraphSegments(segment: SegmentLike): SegmentLike[] {
   const parts = segment.text.match(/.*?(?:[.!?](?:["'”’」』）)\]]+)?(?:\s+|$)|[。！？…](?:["'”’」』）)\]]+)?)|.+$/gu)
     ?.map((part) => part.trim())
@@ -189,31 +241,45 @@ export function transcriptSegmentsForEditing(segments: SegmentLike[]): SegmentLi
 
     const tokens = restoreTokenFormatting(ordered, segment.text);
     const rows: Array<{ tokens: TokenLike[]; text: string }> = [];
-    let row: TokenLike[] = [];
-    let text = "";
-    const flush = () => {
-      const rowText = text.trim();
-      if (row.length > 0 && rowText) rows.push({ tokens: row, text: rowText });
-      row = [];
-      text = "";
-    };
 
-    tokens.forEach((token, index) => {
-      row.push(token);
-      text += token.text;
-      const next = tokens[index + 1];
-      const duration = token.end_time - row[0].start_time;
-      const pause = next ? next.start_time - token.end_time : 0;
-      const units = displayUnits(text);
-      if (
-        !next
-        || SENTENCE_END.test(text)
-        || pause >= PAUSE_BREAK_SECONDS
-        || duration >= MAX_SENTENCE_SECONDS
-        || units >= MAX_SENTENCE_UNITS
-        || (units >= SOFT_BREAK_UNITS && SOFT_PUNCTUATION.test(text))
-      ) flush();
-    });
+    let index = 0;
+    while (index < tokens.length) {
+      // 一行:从 index 累积到自然断点(句末 / 停顿 / 软标点),或撞到上限 —— 撞上限不就地硬切,
+      // 挑一个像样的切点(见 chooseCapCut)。
+      const start = index;
+      while (index < tokens.length) {
+        const token = tokens[index];
+        const row = tokens.slice(start, index + 1);
+        const text = row.map((one) => one.text).join("");
+        const next = tokens[index + 1];
+        const duration = token.end_time - row[0].start_time;
+        const pause = next ? next.start_time - token.end_time : 0;
+        const units = displayUnits(text);
+        //: 停顿断行也要认词边界(见后端 voices/sentences.py):一个词中间的换气不断行。
+        const pauseBreaksWord = Boolean(
+          next
+          && ASCII_LETTER.test(token.text.slice(-1))
+          && ASCII_LETTER.test(next.text.charAt(0)),
+        );
+        const natural =
+          !next
+          || SENTENCE_END.test(text)
+          || (pause >= PAUSE_BREAK_SECONDS && !pauseBreaksWord)
+          || (units >= SOFT_BREAK_UNITS && SOFT_PUNCTUATION.test(text));
+        if (natural) {
+          index += 1;
+          break;
+        }
+        if (units >= MAX_SENTENCE_UNITS || duration >= MAX_SENTENCE_SECONDS) {
+          index = chooseCapCut(tokens, start, index) + 1;
+          break;
+        }
+        index += 1;
+      }
+      const row = tokens.slice(start, index);
+      const text = row.map((one) => one.text).join("").trim();
+      if (row.length > 0 && text) rows.push({ tokens: row, text });
+    }
 
     if (rows.length <= 1) return [{ ...segment, tokens, text: segment.text.trim() || rows[0]?.text || "" }];
     return rows.map((item, index) => ({
