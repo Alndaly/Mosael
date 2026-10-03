@@ -2,14 +2,16 @@
 export const releaseCopy: Record<string, { zh: string[]; en: string[] }> = {
   "v1.8.3": {
     zh: [
-      "**评论区洞察会把真实数据完整带进分析。** B 站优先在已登录页面内翻完评论接口，楼中楼一并读取；长清单按批分析后再综合，附表仍只保留最有价值的条目。其它站点和接口不可用时继续走页面读取，并明确说明实际取得多少。",
-      "**工作流连线和运行反馈更可靠。** 输入、输出里的每个属性都有自己的端口；新增通用「拆成几批」节点和可调预算的浏览器脚本节点；后端重启后的中断状态、运行历史空状态、长数组结果和属性表单都更容易读懂。",
-      "**桌面交互集中修正。** 内嵌浏览器不再把点击穿透到工作流画布，音频开关会同时恢复网页播放器；智能体只显示当前层级的任务活动；逐字稿重断句不再留下空白，也不会在换气处、词中或句中硬切。",
+      "**剪辑模块从里到外修了一遍。** 放下即覆盖、视频和它的声音链接在一起、波纹删除和变速带着后面的内容走;多人或智能体同时改一条时间线不再互相覆盖,⌘Z 默认只撤你自己的;J / K / L、入出点、全轨切、波纹修剪等快捷键补齐,长时间线也流畅了。",
+      "**字幕、配音和导出更靠谱也更快。** 双语两行叠在底部,字幕能导入导出 .srt / .vtt,花字描边不再吃掉字芯,素材记得自己是从哪来的;导出不再削波、可选响度标准化,含 AI 的成片都加标识,字幕多、片段多的时间线导出快了好几倍。",
+      "**智能体和画板顺手多了。** 审批卡片跟着对话走、批完收成一行,任务回执不再挤进消息队列,不再说到冒号就停;画板上 ComfyUI 工作流只剩生成这一个入口、事先说清会出几张,选参考图的弹窗能直接上传。",
+      "**工作流和分析模板更可靠。** 引用显示成节点和输出的名字、不再露出双括号,开始节点和每个属性都有自己的端口,会跑的节点引用了不会跑的节点运行前就拦;评论区洞察在 B 站翻完评论接口、楼中楼一并读取,长清单分批分析再综合;分析模板的数据来源可选内嵌浏览器或 TikHub。",
     ],
     en: [
-      "**Comment Insights now carries the data it actually finds into the analysis.** On Bilibili it pages through the signed-in comment API and includes nested replies; long lists are analysed in batches and then synthesised, while the appendix can stay selective. Other sites and failed API reads still fall back to page capture and report the real count.",
-      "**Workflow wiring and run feedback are more dependable.** Every input and output property gets its own port; a reusable Split into batches node and configurable browser-script budget support larger jobs; interrupted runs, empty history, long arrays and property forms are clearer.",
-      "**Desktop interaction fixes land together.** Embedded-browser clicks no longer pass through to the workflow canvas and its audio control restores the page player as well; the agent only shows activity from the current level; transcript reflow no longer leaves blank space or splits at breaths, inside words, or mid-sentence.",
+      "**The editor, rebuilt from the inside out.** Dropping a clip overwrites what is under it, video stays linked to its audio, and ripple delete and speed changes carry what follows; several people or the agent can edit one timeline without overwriting each other, and ⌘Z undoes your own step by default; J / K / L, in/out points, cut-all-tracks and ripple trim join the shortcuts, and long timelines stay smooth.",
+      "**Subtitles, voice-over and export are sturdier and faster.** Bilingual lines stack at the bottom, subtitle tracks import and export .srt / .vtt, text strokes no longer eat into white letters, and assets remember where they came from; exports stop clipping with optional loudness normalisation, anything with AI-generated content is labelled, and timelines with many subtitles or clips export several times faster.",
+      "**The agent and boards feel smoother.** Approval cards stay with the step that asked and fold into a line once decided, job receipts no longer crowd the message queue, and the agent no longer stops mid-sentence at a colon; on boards a ComfyUI workflow has a single Generate entry that says how many results it will make, and the reference picker uploads files directly.",
+      "**Workflows and analysis templates are more dependable.** References show node and output names instead of raw braces, the start node and every property get their own ports, and a running node that references one that can never run is stopped before the run; Comment Insights pages through Bilibili's comment API with nested replies and analyses long lists in batches; analysis templates let you choose the built-in browser or TikHub.",
     ],
   },
   "v1.8.2": {
