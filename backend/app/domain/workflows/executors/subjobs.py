@@ -939,11 +939,13 @@ def _join_words(words: list[str]) -> str:
     西文字母或数字开头,中间才空一格(`hello world`、`AI, right`);中文逐字的 token 之间、中英交界处都不空。
 
     此前按整段判:中文段里只要夹着一个英文词,整段每个字之间都插了空格(「今 天 我 们 用 AI」)。
+
+    **数字挨着数字不空**:SenseVoice 把「92」逐位给成「9」「2」两个 token,空一格就成了「9 2度」。
     """
     out = ""
     for word in words:
         if out and out[-1].isascii() and not out[-1].isspace() and out[-1] not in "([{'\"" \
-                and word[0].isascii() and word[0].isalnum():
+                and word[0].isascii() and word[0].isalnum() and not (out[-1].isdigit() and word[0].isdigit()):
             out += " "
         out += word
     return out

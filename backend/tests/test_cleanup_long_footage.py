@@ -117,3 +117,18 @@ def test_中文段里夹着英文词_字之间不插空格_英文词之间照样
         out = timeline_cut_ranges(db, scope, {"sequence_id": ids.sequence, "clip_id": ids.clip, "ranges": ranges,
                                               "segments": segments})
     assert out["kept_text"] == "今天我们用AI做Hello world, OK"
+
+
+def test_逐位给的数字拼回一个数_不在数字之间插空格() -> None:
+    """SenseVoice 把「92」给成「9」「2」两个 token(实测)。此前两个数字之间也插了空格,整理后的逐字稿
+    成了「水温控制在9 2度」「静置3 0秒」—— 这份逐字稿会进笔记、进通知。数字和英文词之间照样空一格。"""
+    ids = _clip(10.0)
+    words = ["水", "温", "9", "2", "度", "I", "have", "3", "0", "cats", "嗯"]
+    tokens = [{"text": word, "start": 0.2 * index, "end": 0.2 * index + 0.2} for index, word in enumerate(words)]
+    segments = [{"start": 0.0, "end": 2.2, "text": "".join(words), "tokens": tokens}]
+    ranges = [{"src_start": 2.0, "src_end": 2.2, "confidence": 1}]
+    scope = SimpleNamespace(workspace_id=ids.workspace, id="wf:1", name="整理")
+    with unit_of_work() as db:
+        out = timeline_cut_ranges(db, scope, {"sequence_id": ids.sequence, "clip_id": ids.clip, "ranges": ranges,
+                                              "segments": segments})
+    assert out["kept_text"] == "水温92度I have 30 cats"
