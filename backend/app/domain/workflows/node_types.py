@@ -1040,7 +1040,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         },
         "outputs": ["value", "text"],
     },
-        #: 把一串拆成等长的几批 —— 全量分析、分批拉取的公共积木。此前「分批」只有手写循环一条
+    #: 把一串拆成等长的几批 —— 全量分析、分批拉取的公共积木。此前「分批」只有手写循环一条
     #: 路,而循环体拿不到「第几批的内容」;拆批之后 loop_foreach 直接逐批跑。
     "list_chunk": {
         "external": False,
@@ -1054,7 +1054,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "outputs": ["batches", "count", "total"],
         "output_types": {"batches": "json", "count": "number", "total": "number"},
     },
-"text_transform": {
+    "text_transform": {
         "external": False,
         "category": "wfCat_data",
         "label": "wfNode_text_transform",

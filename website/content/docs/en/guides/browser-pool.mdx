@@ -2,8 +2,8 @@
 title: Browser profiles
 description: Manage sign-ins, proxies and identity permissions for publishing, imports and automation.
 order: 13
-updated: 2026-09-25
-version: 1.8.2
+updated: 2026-10-04
+version: 1.8.3
 ---
 
 Browser Pool stores platform accounts and general browser profiles for publishing, workflow automation, URL imports and agents. Each profile has its own sign-in state, site storage and proxy configuration. Profile permissions control which identity can be used.
@@ -34,6 +34,8 @@ site you were last on.
 
 General profile cards carry **no sign-in badge**: a profile can hold any site, and Mosael cannot
 tell whether you are signed into an arbitrary one, so it does not guess.
+
+When a workflow or the agent keeps a browser as a picture-in-picture panel, the speaker button in its title bar controls that page's audio. Unmuting restores both Electron audio and the page player's own mute, volume and host-paused playback state; it stays in sync when the site replaces or creates the player later. Title-bar gaps, rounded corners and panel edges also absorb pointer input instead of passing clicks through to workflow nodes underneath.
 
 ## Signing in, and staying signed in
 

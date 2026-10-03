@@ -163,6 +163,9 @@
       "input": {
         "type": "object",
         "editor": "map"
+      },
+      "timeout_ms": {
+        "type": "number"
       }
     },
     "outputs": [
@@ -855,6 +858,22 @@
     ]
   },
   {
+    "type": "list_chunk",
+    "config": {
+      "items": {
+        "type": "template"
+      },
+      "size": {
+        "type": "number"
+      }
+    },
+    "outputs": [
+      "batches",
+      "count",
+      "total"
+    ]
+  },
+  {
     "type": "llm",
     "config": {
       "prompt": {
@@ -1278,6 +1297,9 @@
         "type": "template"
       },
       "limit": {
+        "type": "number"
+      },
+      "table_limit": {
         "type": "number"
       },
       "duration_unit": {

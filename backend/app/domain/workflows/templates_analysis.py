@@ -244,7 +244,7 @@ _READ_PAGE_SCRIPT = """(async () => {
     await wait(Number(input.expand_settle_ms) || 1200);
     //: 目标站点说什么语言不归界面语言管 —— 两种都认。英文站点(YouTube 等)的折叠钮是
     //: 「View 12 replies」「Show more replies」;认不出就这轮不展开,读到的仍是顶层评论。
-    const PATTERN = /^(共\s*\d+\s*条回复|展开\s*\d*\s*条回复|展开更多回复|查看回复|view\s+\d+\s+(more\s+)?repl|show\s+more\s+repl)/i;
+    const PATTERN = /^(共\\s*\\d+\\s*条回复|展开\\s*\\d*\\s*条回复|展开更多回复|查看回复|view\\s+\\d+\\s+(more\\s+)?repl|show\\s+more\\s+repl)/i;
     //: 折叠钮的文字可能是「共<em>43</em>条回复」这种带子标签的 —— 不要求叶子,
     //: 取**最深的**那个匹配(后代里没有再匹配的),点它才对得上点击处理器。
     const collect = (root) => {

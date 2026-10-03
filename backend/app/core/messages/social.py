@@ -40,8 +40,12 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "The account profile JSON (optional): interactions per follower need a follower count",
     },
     "wfNode_social_metrics_limit": {
-        "zh": "最多整理几条(作品取最新的这几条,评论取赞最多的这几条,最多 200)",
-        "en": "How many to keep at most (the newest posts, the most-liked comments; up to 200)",
+        "zh": "最多整理几条(作品取最新的这几条,评论取赞最多的这几条,最多 2000)",
+        "en": "How many to keep at most (the newest posts, the most-liked comments; up to 2000)",
+    },
+    "wfNode_social_metrics_table_limit": {
+        "zh": "附表最多多少条(默认跟 limit;分析要全量、附表要精选时用)",
+        "en": "Max rows in the appendix table (defaults to limit; set when analysis wants everything but the table should stay short)",
     },
     "wfNode_social_metrics_duration_unit": {
         "zh": "时长的数是秒还是毫秒(抖音的接口是毫秒);自动时超过十小时的当毫秒",

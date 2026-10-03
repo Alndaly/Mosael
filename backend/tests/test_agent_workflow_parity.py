@@ -120,6 +120,7 @@ NOT_A_TOOL: dict[str, str] = {
     "template": "拼字符串。模型自己就在做这件事。",
     "json_extract": "从 JSON 里按路径取值。模型自己会读 JSON。",
     "text_transform": "去空白/大小写/正则。模型自己会做。",
+    "list_chunk": "把一串拆成等长的几批。模型自己会拆(数组切片),同 json_extract。",
     "llm": "调模型生成文本 —— 智能体本身就是那个模型,再给它一个调模型的工具是套娃。",
     "plugin_tool": "插件工具已展开成一等公民(plugin__<连接>__<工具>),不是固定的一个工具名。",
     "social_link": "从链接、分享口令里认出平台和编号。模型自己会读链接。",

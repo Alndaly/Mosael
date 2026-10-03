@@ -2,8 +2,8 @@
 title: AI Studio & agents
 description: Discuss projects with an agent, use creative tools and review actions and results.
 order: 3
-updated: 2026-09-26
-version: 1.8.2
+updated: 2026-10-04
+version: 1.8.3
 ---
 
 **AI Studio** switches between **Chat**, **Generate** and **Audio** in the top toolbar. The conversation toolbar also has **Conversation / Trace** and a toggle for the agent environment panel.
@@ -107,6 +107,7 @@ conversation receives the answer instead of the rummaging.
 - **Nothing is lost.** Reports it never waited for are delivered at wrap-up.
 - **Each subagent is a session you can open**, with the same interface as the main conversation —
   from the right-hand panel or the header. You can watch it work, step by step, while it runs.
+- The main conversation's plan and recent tools show only the parent agent's level. A subagent's task cards and tool steps stay in that sub-session instead of appearing twice in parent and child.
 
 Agents in different sessions can also **@-notify each other**. An idle recipient starts immediately;
 a busy one queues the message and picks it up when it is free. Messages that arrive this way carry a

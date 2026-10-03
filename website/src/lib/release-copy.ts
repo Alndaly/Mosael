@@ -1,5 +1,17 @@
 /** Bilingual highlights for major releases; publication status always comes from GitHub. */
 export const releaseCopy: Record<string, { zh: string[]; en: string[] }> = {
+  "v1.8.3": {
+    zh: [
+      "**评论区洞察会把真实数据完整带进分析。** B 站优先在已登录页面内翻完评论接口，楼中楼一并读取；长清单按批分析后再综合，附表仍只保留最有价值的条目。其它站点和接口不可用时继续走页面读取，并明确说明实际取得多少。",
+      "**工作流连线和运行反馈更可靠。** 输入、输出里的每个属性都有自己的端口；新增通用「拆成几批」节点和可调预算的浏览器脚本节点；后端重启后的中断状态、运行历史空状态、长数组结果和属性表单都更容易读懂。",
+      "**桌面交互集中修正。** 内嵌浏览器不再把点击穿透到工作流画布，音频开关会同时恢复网页播放器；智能体只显示当前层级的任务活动；逐字稿重断句不再留下空白，也不会在换气处、词中或句中硬切。",
+    ],
+    en: [
+      "**Comment Insights now carries the data it actually finds into the analysis.** On Bilibili it pages through the signed-in comment API and includes nested replies; long lists are analysed in batches and then synthesised, while the appendix can stay selective. Other sites and failed API reads still fall back to page capture and report the real count.",
+      "**Workflow wiring and run feedback are more dependable.** Every input and output property gets its own port; a reusable Split into batches node and configurable browser-script budget support larger jobs; interrupted runs, empty history, long arrays and property forms are clearer.",
+      "**Desktop interaction fixes land together.** Embedded-browser clicks no longer pass through to the workflow canvas and its audio control restores the page player as well; the agent only shows activity from the current level; transcript reflow no longer leaves blank space or splits at breaths, inside words, or mid-sentence.",
+    ],
+  },
   "v1.8.2": {
     zh: ["**三张分析类官方工作流:账号运营诊断、视频爆款拆解、评论区洞察。** 给一个链接,取账号和作品数据、热门评论,算发布频率、互动率、头部作品和涨跌信号,写成笔记;爆款拆解还能下载视频、转写口播,给一份照着做的脚本提纲。数据来源可选 TikHub 插件或内嵌浏览器。", "**画板多选之后从选区框右侧的 ＋ 一次连线或拉出新建,** 格子自己的 ＋ 只连自己;插件里一步一步的结构化参数(比如 Manim 讲解步骤)在表单上一项一张卡,不用再手写 JSON。", "**又一轮大修:** 「本会话始终允许」按风险档位放行,开跑前的检查只有一套、在任何节点花钱之前说;画板合并不再冲掉刚敲的字,撤销不再撤没在跑的格子;改口型重跑真的不重买已改好的块。"],
     en: ["**Three analysis workflows: account health check, viral video breakdown and comment insights.** Give a link and it gathers account and post data plus top comments, works out posting cadence, engagement, top posts and momentum, and writes a note; the breakdown can also download the video, transcribe it and outline a script that follows the same formula. Data comes from the TikHub plugin or the built-in browser.", "**Select several board cells and wire them from the + on the selection box,** while each cell's own + connects only itself; structured plugin parameters such as Manim's explainer steps become one card per item instead of hand-written JSON.", "**Another thorough pass:** \"Always allow in this session\" now respects the risk tier, one pre-run check catches problems before any node spends money, board merges no longer drop what you just typed, undo no longer removes a running cell, and lip-sync reruns really reuse finished chunks."],

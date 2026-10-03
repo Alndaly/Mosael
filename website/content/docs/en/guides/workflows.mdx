@@ -2,8 +2,8 @@
 title: Visual workflows
 description: Connect media, models and tools, check inputs and run repeatable creative tasks.
 order: 6
-updated: 2026-09-26
-version: 1.8.2
+updated: 2026-10-04
+version: 1.8.3
 ---
 
 A workflow is **done once, run endlessly**: it turns something you did once into a process that runs again on new input, runs unattended, and runs at scale. Start-node inputs and templates make it reusable; it can carry media through the timeline, subtitles, export and publishing to a finished piece; loops, concurrency and branches handle batches and say which item failed; schedules, webhooks, the agent or other workflows can start it; and every run keeps each node's inputs, results and errors. The process itself is the product. While you are still looking, revising and picking between versions, use a [creative board](/docs/guides/boards).
@@ -19,7 +19,7 @@ The [website workflow catalog](/workflows) includes Topic to finished video, Tra
 3. Open the imported graph, choose your own providers and models, supply the required media and pass the readiness check before running.
 
 Downloads contain no account secrets or private assets, and do not automatically select local default models. Importing needs
-1.8.2 or newer. Template node names and prompts are currently in Chinese.
+1.8.3 or newer. Template node names and prompts are currently in Chinese.
 
 | Template | What it does | Needs |
 | --- | --- | --- |
@@ -49,7 +49,7 @@ switch it to `deepfilternet` (a deployment admin downloads it first under Admin 
   | Assets & timeline | asset, create project, create video project, append to timeline, add a track, clear timeline, inspect timeline, clean up time ranges, timeline advanced operations, generate subtitles, video to GIF, export timeline, find assets, tag assets, organize assets, get from asset library, save to asset library |
   | Knowledge | search notes, read note, save as note |
   | Publishing | publish, send notification |
-  | Data | HTTP request, code, text template, JSON extract, text transform |
+  | Data | HTTP request, code, text template, JSON extract, split into batches, text transform |
   | Plugins | plugin tool |
   | Browser | open / navigate / click / type / upload file / extract / wait / scroll / run script / close |
 - **Edges** define execution order; drag from a node's right port to a downstream node's left port. The **condition** node has "true / false" outlets.
@@ -59,6 +59,7 @@ switch it to `deepfilternet` (a deployment admin downloads it first under Admin 
   already running finish, and anything they submitted for generation is still collected), and the error lists every failed item and
   how many were not started. Without an iteration output,
   each item returns everything that round produced plus the item itself (`loop.item`), so a later loop can iterate over the results.
+- **Split into batches** divides a list into fixed-size, non-overlapping batches in the original order, ready for a for-each loop. Use it for comments and other long result sets instead of putting the entire list into one model call; it also outputs batch count and original item count.
 - **Text to speech and Dub subtitles** ask for the engine first, then the voice: with "Cloned voice" the voice list is your
   voice library; pick an engine and the list becomes that engine's voices. Changing the engine clears the chosen voice. The toolbar switches **edge shape** between curved (bezier) and stepped (right-angle); your choice is remembered.
 - Click a node to open its **inspector** — it sits **directly below** the node, and a floating bar sits
@@ -89,6 +90,8 @@ Node forms use a translucent, blurred surface above the canvas. When an assistan
 
 After a node runs it writes results into the context; output variables look like `{{nodeId.output}}` (e.g. `{{llm-1.text}}`).
 
+Data ports now match properties one for one: named configuration inputs and named output variables each receive their own port. Property data no longer attaches to the control-flow socket at the top of a card; control edges express order, while data edges state exactly which property moves.
+
 Each field can switch between **two input modes** (the small pill at the right of the label row):
 
 - **Manual**: type a value / pick an option; in template fields press **`@`** to pull up upstream variables (keep typing to filter), or click a variable chip to insert at the cursor.
@@ -110,6 +113,8 @@ Once a run starts, the toolbar's **Run** button becomes **Stop**, and the run's 
 centre carries **Cancel task** as well. Cancelling is **node-grained**: it stops after the current step
 finishes, whatever it already produced (assets, timelines, 3D scenes) is kept, and derived sub-tasks are
 cancelled with it.
+
+The browser **Run script** node gives a script 20 seconds by default. Long paged reads can set a script budget under Advanced, up to 180 seconds. The budget applies only to that script and does not leave an unresponsive browser session running indefinitely.
 
 The **Available 3D props** node lists this workspace's 3D models (usually modelled in Blender and brought
 back in) as a catalogue — each one's id, name and measured width/height/depth — to feed into the prompt of
