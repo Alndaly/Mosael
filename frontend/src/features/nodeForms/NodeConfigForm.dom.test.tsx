@@ -153,6 +153,7 @@ describe("节点表单", () => {
     renderForm({});
     await waitFor(() => expect(fieldKeys()).toEqual(["video", "platform"]));
     expect(document.body.textContent).not.toContain("wfInputManual");
+    expect(screen.getByRole("group", { name: "视频" })).toHaveAttribute("aria-required", "true");
   });
 
   it("一串、每一项只能是那几个值之一(插件数组的 items.enum):多选,挑出来的一排 —— 不是单选下拉,也不是逐行手写", () => {
@@ -278,6 +279,14 @@ describe("节点表单", () => {
       expect(trigger("shot")).toBeDisabled();
     });
 
+    it("父字段还没选时不请求子清单,禁用并提示先选父字段", async () => {
+      const { asked } = mountPick({ config: {} });
+      await waitFor(() => expect(asked).toContain("scenes:"));
+      expect(asked.some((one) => one.startsWith("scene_shots"))).toBe(false);
+      expect(trigger("shot")).toBeDisabled();
+      expect(trigger("shot").textContent).toContain("wfPickParentFirst");
+    });
+
     it("场景是一段 `{{…}}` 引用时同样不查:那不是一个场景 id", async () => {
       const { asked } = mountPick({ config: { scene: "{{input.scene_id}}" }, references: true });
       await waitFor(() => expect(trigger("shot").textContent).toContain("wfParentFromUpstream"));
@@ -372,5 +381,31 @@ describe("节点表单", () => {
     const field = (key: string) => document.querySelector<HTMLElement>(`[data-field-key="${key}"]`)!;
     expect(within(field("expression")).queryByText("wfInputManual")).toBeNull();
     expect(within(field("title")).getByText("wfInputManual")).toBeTruthy();
+  });
+
+  it("列表字段使用本字段的作用域变量,不混入节点外层变量", async () => {
+    const user = userEvent.setup();
+    const specs = { rows: { type: "list", label: "行" } } as unknown as Record<string, ConfigSpec>;
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <TooltipProvider>
+          <NodeConfigForm
+            fields={Object.entries(specs)}
+            config={{ rows: [] }}
+            workspaceId="w1"
+            variables={["{{outside.text}}"]}
+            fieldVariables={{ rows: ["{{inside.text}}"] }}
+            fieldOptions={{ dynamicOptions: () => null, whyEmpty: () => ({ kind: "none" }), assets: [] }}
+            onSetConfig={vi.fn()}
+            onTypeConfig={vi.fn()}
+            onPatchConfig={vi.fn()}
+          />
+        </TooltipProvider>
+      </QueryClientProvider>,
+    );
+    await user.click(screen.getByRole("button", { name: "wfMapAdd" }));
+    await user.click(screen.getByRole("combobox"));
+    expect(await screen.findByRole("option", { name: "inside · text" })).toBeTruthy();
+    expect(screen.queryByRole("option", { name: "outside · text" })).toBeNull();
   });
 });

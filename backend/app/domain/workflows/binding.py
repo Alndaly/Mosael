@@ -49,28 +49,43 @@ _MISSING = object()
 
 
 def _path_value(value: Any, path: str) -> Any:
-    """数据端口允许指向结构化输出里的叶子，例如 ``output.note_id``。"""
+    """数据端口允许指向结构化输出里的叶子，例如 ``output.note_id`` / ``items.0.id``。"""
     current = value
     for part in path.split("."):
-        if not part or not isinstance(current, dict) or part not in current:
+        if not part:
             return _MISSING
-        current = current[part]
+        if isinstance(current, dict) and part in current:
+            current = current[part]
+            continue
+        if isinstance(current, list) and part.isdigit() and int(part) < len(current):
+            current = current[int(part)]
+            continue
+        return _MISSING
     return current
 
 
 def _set_existing_path(config: dict[str, Any], path: str, value: Any) -> None:
-    """写已有的嵌套配置叶子；路径不存在时按旧契约写顶层键，兼容已保存的普通输入。"""
+    """写已有的对象/数组叶子；路径不存在时按旧契约写顶层键，兼容已保存的普通输入。"""
     parts = [part for part in path.split(".") if part]
     current: Any = config
     for part in parts[:-1]:
-        if not isinstance(current, dict) or part not in current or not isinstance(current[part], dict):
+        if isinstance(current, dict) and part in current:
+            current = current[part]
+        elif isinstance(current, list) and part.isdigit() and int(part) < len(current):
+            current = current[int(part)]
+        else:
             config[path] = value
             return
-        current = current[part]
-    if not parts or not isinstance(current, dict) or parts[-1] not in current:
+    if not parts:
         config[path] = value
         return
-    current[parts[-1]] = value
+    leaf = parts[-1]
+    if isinstance(current, dict) and leaf in current:
+        current[leaf] = value
+    elif isinstance(current, list) and leaf.isdigit() and int(leaf) < len(current):
+        current[int(leaf)] = value
+    else:
+        config[path] = value
 
 
 def check_number_fields(node_type: str, config: dict[str, Any]) -> dict[str, Any]:

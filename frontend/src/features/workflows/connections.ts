@@ -8,32 +8,32 @@ import { dependentsCleared, type DependencySpec } from "../nodeForms/dependents"
 
 type WEdge = WorkflowGraph["edges"][number];
 
-/** 已存在的配置路径才按嵌套属性写；否则保留旧图的顶层字段语义。 */
+function clearedAt(value: unknown, parts: readonly string[]): { found: boolean; value: unknown } {
+  if (parts.length === 0) return { found: true, value: "" };
+  const [head, ...tail] = parts;
+  if (Array.isArray(value)) {
+    const index = /^\d+$/.test(head) ? Number(head) : -1;
+    if (index < 0 || index >= value.length) return { found: false, value };
+    const child = clearedAt(value[index], tail);
+    if (!child.found) return { found: false, value };
+    const next = [...value];
+    next[index] = child.value;
+    return { found: true, value: next };
+  }
+  if (!value || typeof value !== "object" || !(head in value)) return { found: false, value };
+  const object = value as Record<string, unknown>;
+  const child = clearedAt(object[head], tail);
+  return child.found ? { found: true, value: { ...object, [head]: child.value } } : { found: false, value };
+}
+
+/** 已存在的对象/数组路径才按嵌套属性写；否则保留旧图的顶层字段语义。 */
 function clearInput(config: Record<string, unknown>, path: string): { config: Record<string, unknown>; root: string } {
   const parts = path.split(".").filter(Boolean);
   if (parts.length < 2) return { config: { ...config, [path]: "" }, root: path };
-  let cursor: unknown = config;
-  for (const part of parts.slice(0, -1)) {
-    if (!cursor || typeof cursor !== "object" || Array.isArray(cursor) || !(part in cursor)) {
-      return { config: { ...config, [path]: "" }, root: path };
-    }
-    cursor = (cursor as Record<string, unknown>)[part];
-  }
-  const leaf = parts.at(-1)!;
-  if (!cursor || typeof cursor !== "object" || Array.isArray(cursor) || !(leaf in cursor)) {
-    return { config: { ...config, [path]: "" }, root: path };
-  }
-  const next = { ...config };
-  let target = next;
-  let source = config;
-  for (const part of parts.slice(0, -1)) {
-    const child = { ...(source[part] as Record<string, unknown>) };
-    target[part] = child;
-    target = child;
-    source = source[part] as Record<string, unknown>;
-  }
-  target[leaf] = "";
-  return { config: next, root: parts[0] };
+  const cleared = clearedAt(config, parts);
+  return cleared.found
+    ? { config: cleared.value as Record<string, unknown>, root: parts[0] }
+    : { config: { ...config, [path]: "" }, root: path };
 }
 
 /** 拖动中的连接是不是数据边(从输出接点 out:x 拖到输入接点 in:y)。 */

@@ -41,6 +41,7 @@ const META = {
     fps: { type: "number", label: "帧率" },
     mode: { type: "string", label: "模式", options: ["a", "b"], option_labels: { a: "甲", b: "乙" }, allow_custom: true },
     kind: { type: "string", label: "种类", options: ["x", "y"], option_labels: { x: "叉", y: "歪" } },
+    quality: { type: "number", label: "质量", advanced: true },
   },
   outputs: [],
   output_types: {},
@@ -115,6 +116,38 @@ describe("带固定选项的字段", () => {
     const { box } = renderInspector({ mode: "a", kind: "x" });
     expect(within(box("kind")).getByRole("combobox").textContent).toContain("叉");
     expect(within(box("mode")).getByRole("combobox").textContent).toContain("甲");
+  });
+});
+
+describe("节点之间切换", () => {
+  it("新节点总是从基础参数开始,不沿用上一节点停留的高级页", () => {
+    const makeNode = (id: string) => ({ id, type: META.type, position: { x: 0, y: 0 }, config: {} });
+    const tree = (node: ReturnType<typeof makeNode>) => (
+      <QueryClientProvider client={new QueryClient()}>
+        <TooltipProvider>
+          <ReactFlowProvider>
+            <NodeInspector
+              node={node as never}
+              meta={META}
+              graph={{ nodes: [node], edges: [] } as never}
+              registry={new Map([[META.type, META]])}
+              workspaceId="w1"
+              onChange={vi.fn()}
+              onApplyGraph={vi.fn()}
+            />
+          </ReactFlowProvider>
+        </TooltipProvider>
+      </QueryClientProvider>
+    );
+    const first = makeNode("n1");
+    const view = render(tree(first));
+    fireEvent.click(screen.getByRole("button", { name: "wfAdvanced" }));
+    expect(screen.getByRole("group", { name: "质量" })).toBeInTheDocument();
+    expect(screen.queryByRole("group", { name: "宽" })).toBeNull();
+
+    view.rerender(tree(makeNode("n2")));
+    expect(screen.getByRole("group", { name: "宽" })).toBeInTheDocument();
+    expect(screen.queryByRole("group", { name: "质量" })).toBeNull();
   });
 });
 

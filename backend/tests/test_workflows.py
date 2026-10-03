@@ -132,10 +132,15 @@ def test_apply_data_edges_binds_input() -> None:
 def test_apply_data_edges_binds_nested_input() -> None:
     from app.domain.workflows.binding import apply_data_edges
 
-    edges = [{
-        "kind": "data", "source": "plan", "source_output": "output.note_id",
-        "target": "deliver", "target_input": "values.note_id",
-    }]
+    edges = [
+        {
+            "kind": "data",
+            "source": "plan",
+            "source_output": "output.note_id",
+            "target": "deliver",
+            "target_input": "values.note_id",
+        }
+    ]
     config = apply_data_edges(
         "deliver",
         {"values": {"note_id": "old", "report": "keep"}},
@@ -143,6 +148,27 @@ def test_apply_data_edges_binds_nested_input() -> None:
         {"plan": {"output": {"note_id": "note-1"}}},
     )
     assert config == {"values": {"note_id": "note-1", "report": "keep"}}
+
+
+def test_apply_data_edges_binds_list_item_input() -> None:
+    from app.domain.workflows.binding import apply_data_edges
+
+    edges = [
+        {
+            "kind": "data",
+            "source": "plan",
+            "source_output": "items.0.title",
+            "target": "batch",
+            "target_input": "items.1.prompt",
+        }
+    ]
+    config = apply_data_edges(
+        "batch",
+        {"items": [{"prompt": "first"}, {"prompt": "old", "keep": True}]},
+        edges,
+        {"plan": {"items": [{"title": "new"}]}},
+    )
+    assert config == {"items": [{"prompt": "first"}, {"prompt": "new", "keep": True}]}
 
 
 def test_topo_and_interpolate() -> None:

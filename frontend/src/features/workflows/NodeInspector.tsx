@@ -403,7 +403,10 @@ export function NodeInspector({
   const outputNames = meta ? declaredFieldNames(meta.outputs, config) : [];
   if (outputNames.length > 0) areas.push("outputs");
   if (step) areas.push("run");
-  const [pickedArea, setPickedArea] = React.useState<string | null>(null);
+  // 选区属于节点。切到另一个也有“高级/输出”的节点时，不能沿用上一节点停留的页签；否则新节点
+  // 一打开就跳过基础参数，像是表单缺了一截。把节点 id 和选区一起存，派生时同步回第一块且不慢一帧。
+  const [picked, setPicked] = React.useState<{ nodeId: string; area: string } | null>(null);
+  const pickedArea = picked?.nodeId === node.id ? picked.area : null;
   // 派生而不是同步:换节点时 areas 变了,上一个节点选中的那块可能根本不存在 —— 直接回落到
   // 第一块,不需要一个 effect 追着清空(那种 effect 总慢一帧,会先露出一个空面板)。
   const area = pickedArea && areas.includes(pickedArea) ? pickedArea : areas[0];
@@ -516,7 +519,7 @@ export function NodeInspector({
                 : "text-muted-foreground hover:bg-secondary hover:text-foreground",
             )}
             aria-pressed={area === id}
-            onClick={() => setPickedArea(id)}
+            onClick={() => setPicked({ nodeId: node.id, area: id })}
           >
             {t(AREA_LABELS[id])}
           </button>

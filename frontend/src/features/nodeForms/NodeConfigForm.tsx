@@ -49,7 +49,7 @@ export interface ConfigSpec {
   /** 选项的显示名(后端按语言翻好;值照旧是英文的,存进 config 的是它)。 */
   option_labels?: Record<string, string>;
   /** 后端声明的默认值,拿来做占位提示(告诉用户"留空会用什么")。 */
-  default?: string;
+  default?: unknown;
   /** 留空也能跑的专业旋钮 —— 收进折叠的「高级选项」,不在第一眼糊到用户脸上。 */
   advanced?: boolean;
   /** 这个字段的值跟着谁走(后端 NODE_TYPES 声明)。父字段一换,这里的旧值就失效了。 */
@@ -212,7 +212,9 @@ export function useNodeFieldOptions({
             workflowId,
           }),
         // 父字段的值要到运行时才知道:问了也是空清单。
-        enabled: !parent.upstream,
+        // 有依赖的清单必须等父字段有值再问。否则后端若把空 parent 当“不过滤”，会先展示一份
+        // 看似可选、实际和随后选中的父项不匹配的子清单；也白做一次必然作废的请求。
+        enabled: !parent.upstream && (!parent.key || Boolean(parent.value)),
         staleTime: 30_000,
       };
     }),
@@ -349,7 +351,7 @@ export function NodeConfigForm({
   const renderField = ([key, spec]: [string, ConfigSpec]) => {
           // 调用方自己渲染的字段(工作流的循环体 / 子图概览):表单不认识它们是什么。
           const own = renderOwnField?.(key, spec);
-          if (own) return <React.Fragment key={key}>{own}</React.Fragment>;
+          if (own !== null && own !== undefined) return <React.Fragment key={key}>{own}</React.Fragment>;
           const value = config[key];
           const insertable = fieldVariables?.[key] ?? variables;
           const isObject = spec?.type === "object";
@@ -368,7 +370,14 @@ export function NodeConfigForm({
           //: 不给个断开的入口的话,这一格就再也解不开 —— 就绪清单指过来,人在这里却无事可做。
           const codeBound = spec?.type === "code" && Boolean(binding?.isBound(key));
           return (
-            <div className={compact ? COMPACT_FIELD_BOX : FIELD_BOX} key={key} data-field-key={key}>
+            <div
+              className={compact ? COMPACT_FIELD_BOX : FIELD_BOX}
+              key={key}
+              data-field-key={key}
+              role="group"
+              aria-label={declaredLabel || key}
+              aria-required={spec?.required || undefined}
+            >
               <span title={compact && spec?.description ? toPlainText(spec.description) : undefined}>
                 {declaredLabel || key}
                 {spec?.required ? <em className="font-bold not-italic text-destructive">*</em> : null}
@@ -380,6 +389,7 @@ export function NodeConfigForm({
                       connected && "border-[color-mix(in_srgb,var(--primary)_45%,transparent)] bg-[color-mix(in_srgb,var(--primary)_10%,transparent)] text-primary hover:text-primary",
                     )}
                     title={t("wfInputModeHint")}
+                    aria-pressed={connected}
                     onClick={(event) => {
                       event.preventDefault();
                       binding?.setBound(key, !connected);
@@ -532,7 +542,7 @@ export function NodeConfigForm({
                 ) : (
                   <ListField
                     value={value}
-                    variables={variables}
+                    variables={insertable}
                     maxItems={spec.max_items}
                     onChange={(next) => setConfig(key, next)}
                   />

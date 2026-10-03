@@ -76,6 +76,24 @@ describe("withDataInputBound", () => {
     expect(Object.keys(next.nodes[1].config ?? {})).not.toContain("values.note_id");
   });
 
+  it("列表项里的属性端口按数组索引写回,不把索引路径当成顶层字段", () => {
+    const nested = {
+      nodes: [
+        { id: "plan", type: "llm", config: {} },
+        { id: "batch", type: "plugin", config: { items: [{ prompt: "first" }, { prompt: "old", keep: true }] } },
+      ],
+      edges: [],
+    } as WorkflowGraph;
+    const next = withDataInputBound(
+      nested,
+      { targetId: "batch", key: "items.1.prompt", sourceId: "plan", output: "text" },
+      {},
+    );
+
+    expect(next.nodes[1].config).toEqual({ items: [{ prompt: "first" }, { prompt: "", keep: true }] });
+    expect(Object.keys(next.nodes[1].config ?? {})).not.toContain("items.1.prompt");
+  });
+
   it("接上游:建数据边、进连接态、字面量清空,依赖它的轨道一并清掉(旧轨道不在新时间线上)", () => {
     const next = withDataInputBound(graph, { targetId: "append", key: "sequence_id", sourceId: "tl", output: "sequence_id" }, specs);
     const target = next.nodes.find((node) => node.id === "append")!;
