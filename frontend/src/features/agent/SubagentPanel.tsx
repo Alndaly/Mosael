@@ -38,10 +38,19 @@ export type SubagentRun = {
   archive: SubagentArchive | null;
   /** 还在跑:工具卡本身 running,或已派发(非阻塞)但存档还没回填。 */
   running: boolean;
+  /** 运行期间从父流中按 parent_id 归回来的步骤；完成后以 archive 为准。 */
+  liveTools: ToolCall[];
 };
 
 /** 从时间线里挑出所有 run_subagent 调用,并尽力解出各自的存档。 */
 export function collectSubagentRuns(timeline: AgentTimelineItem[] | undefined): SubagentRun[] {
+  const liveByParent = new Map<string, ToolCall[]>();
+  for (const item of timeline ?? []) {
+    if (item.type !== "subtool" || !item.parent_id) continue;
+    const current = liveByParent.get(item.parent_id) ?? [];
+    current.push(item.tool);
+    liveByParent.set(item.parent_id, current);
+  }
   const runs: SubagentRun[] = [];
   for (const item of timeline ?? []) {
     if (item.type !== "tool" || item.tool?.name !== "run_subagent") continue;
@@ -49,7 +58,12 @@ export function collectSubagentRuns(timeline: AgentTimelineItem[] | undefined): 
     // 非阻塞派发:卡本身立刻 done(回执是「已派发」),子智能体还在后台跑,
     // 存档(details.subagent)要等它跑完才回填 —— 这段时间也是「进行中」。
     const dispatched = readDispatched(item.tool.result);
-    runs.push({ call: item.tool, archive, running: item.tool.status === "running" || (dispatched && !archive) });
+    runs.push({
+      call: item.tool,
+      archive,
+      running: item.tool.status === "running" || (dispatched && !archive),
+      liveTools: liveByParent.get(item.tool.id) ?? [],
+    });
   }
   return runs;
 }
@@ -270,30 +284,32 @@ export function SubagentBreadcrumb({
 /** 存档 → 合成消息:让子代理的会话能喂给主界面同一套渲染(对话用 timeline,轨迹用 TraceView)。 */
 function synthesize(run: SubagentRun): { timeline: AgentTimelineItem[]; messages: unknown[] } {
   const archive = run.archive;
-  if (!archive) return { timeline: [], messages: [] };
-  const timeline: AgentTimelineItem[] = archive.trace.map((item) =>
-    item.type === "text"
-      ? { type: "text", text: item.text }
-      : {
-          type: "tool",
-          tool: {
-            id: item.id,
-            name: item.name,
-            args: item.args,
-            result: item.result,
-            status: item.isError ? "error" : "done",
-          } as ToolCall,
-        },
-  );
+  const timeline: AgentTimelineItem[] = archive
+    ? archive.trace.map((item) =>
+        item.type === "text"
+          ? { type: "text", text: item.text }
+          : {
+              type: "tool",
+              tool: {
+                id: item.id,
+                name: item.name,
+                args: item.args,
+                result: item.result,
+                status: item.isError ? "error" : "done",
+              } as ToolCall,
+            },
+      )
+    : run.liveTools.map((tool) => ({ type: "tool" as const, tool }));
   // 结论正文 = 轨迹里最后一段助手文字(脚注的复制按钮复制的就是它)。
-  const lastText = [...archive.trace].reverse().find((item) => item.type === "text");
+  const lastText = archive ? [...archive.trace].reverse().find((item) => item.type === "text") : undefined;
+  const task = archive?.task ?? (run.call.args as { task?: string } | undefined)?.task ?? "";
   const messages = [
-    { id: `${run.call.id}:task`, role: "user", content: archive.task, payload: {}, created_at: null },
+    { id: `${run.call.id}:task`, role: "user", content: task, payload: {}, created_at: null },
     {
       id: `${run.call.id}:run`,
       role: "assistant",
       content: lastText?.type === "text" ? lastText.text : "",
-      error: archive.error,
+      error: archive?.error ?? null,
       payload: { timeline, usage: { duration_seconds: run.call.usage?.duration_seconds } },
       created_at: null,
     },
@@ -308,7 +324,7 @@ export function SubagentSessionView({ run, workspaceId }: { run: SubagentRun; wo
   const { messages } = React.useMemo(() => synthesize(run), [run]);
   const mediaGallery = React.useMemo(() => chatMediaGallery(messages as ChatMessage[]), [messages]);
 
-  if (!run.archive) {
+  if (!run.archive && run.liveTools.length === 0) {
     return (
       <div className="grid min-h-0 place-items-center p-6">
         <p className="m-0 flex items-center gap-1.5 text-ui-sm text-muted-foreground">

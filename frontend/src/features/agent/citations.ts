@@ -21,7 +21,9 @@ function unwrap(value: unknown): unknown {
 export function collectCitations(timeline: AgentTimelineItem[] = []): Map<string, Citation> {
   const found = new Map<string, Citation>();
   for (const item of timeline) {
-    if (item.type !== "tool" && item.type !== "subtool") continue;
+    // 子智能体读过的来源属于它自己的会话。父智能体若采用该结论,应在自己的回答里引用；
+    // 直接把 subtool 的来源徽章挂到父回答上会把「谁读过什么」混为一谈。
+    if (item.type !== "tool") continue;
     const { name, status, result } = item.tool;
     if (status !== "done" || !["web_search", "fetch_url", "read_note"].includes(name)) continue;
     const data = unwrap(result);

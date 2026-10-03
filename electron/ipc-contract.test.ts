@@ -21,6 +21,7 @@ const contract = require("./ipc-contract.cjs") as {
   };
   parseBrowserProfile: (value: unknown) => { partition: string };
   parsePanelLayout: (value: unknown) => Record<string, number>;
+  parsePanelMuted: (value: unknown) => { id: string; muted: boolean };
   parseAuthToken: (value: unknown, channel: string) => { token: string };
   parseRestoreStage: (value: unknown) => { stageId: string };
   parseLocale: (value: unknown) => { locale: string };
@@ -87,6 +88,8 @@ describe("Electron IPC contract", () => {
 
     expect(contract.parsePanelLayout({ x: 10, y: 20, width: undefined, ignored: 3 })).toEqual({ x: 10, y: 20 });
     expect(() => contract.parsePanelLayout({ width: Number.NaN })).toThrow(/width/);
+    expect(contract.parsePanelMuted({ id: " browser-1 ", muted: false })).toEqual({ id: "browser-1", muted: false });
+    expect(() => contract.parsePanelMuted({ id: "browser-1", muted: "false" })).toThrow(/muted/);
   });
 
   it("accepts only a bounded authentication token for privileged data IPC", () => {

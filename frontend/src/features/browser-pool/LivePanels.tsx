@@ -1,5 +1,5 @@
 import React from "react";
-import { GripVertical, MonitorPlay, X } from "lucide-react";
+import { GripVertical, MonitorPlay, Volume2, VolumeX, X } from "lucide-react";
 
 import { useI18n } from "@/app/preferences";
 
@@ -125,6 +125,18 @@ export function LivePanels() {
                   }
                 >
                   <GripVertical size={11} />
+                </button>
+              )}
+
+              {isTop && (
+                <button
+                  type="button"
+                  aria-label={t(card.muted ? "livePanelUnmute" : "livePanelMute")}
+                  aria-pressed={!card.muted}
+                  className="pointer-events-auto grid h-5 w-5 shrink-0 place-items-center rounded border-0 bg-transparent text-muted-foreground transition-colors hover:text-foreground"
+                  onClick={() => void window.mosaelPublish?.setPanelMuted?.(card.id, !card.muted)}
+                >
+                  {card.muted ? <VolumeX size={11} /> : <Volume2 size={11} />}
                 </button>
               )}
 

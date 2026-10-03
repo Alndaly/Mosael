@@ -31,6 +31,7 @@ const IPC = Object.freeze({
     publishHideView: "publish:hideView",
     publishPanelLayout: "publish:panelLayout",
     publishClosePanel: "publish:closePanel",
+    publishPanelMuted: "publish:panelMuted",
     browserOpenLogin: "browser:openLogin",
     publishSignOut: "publish:signOut",
     browserClearProfile: "browser:clearProfile",
@@ -100,6 +101,15 @@ function parseUrlRequest(value, channel) {
 function parsePanelId(value) {
   const payload = record(value, IPC.invoke.publishClosePanel);
   return { id: requiredString(payload, "id", IPC.invoke.publishClosePanel) };
+}
+
+function parsePanelMuted(value) {
+  const channel = IPC.invoke.publishPanelMuted;
+  const payload = record(value, channel);
+  if (typeof payload.muted !== "boolean") {
+    throw new TypeError(`${channel}: muted must be a boolean`);
+  }
+  return { id: requiredString(payload, "id", channel), muted: payload.muted };
 }
 
 function parsePanelLayout(value) {
@@ -199,6 +209,7 @@ module.exports = {
   parseBrowserProfile,
   parseLocale,
   parsePanelId,
+  parsePanelMuted,
   parsePanelLayout,
   parsePublishTarget,
   parseSystemStatus,

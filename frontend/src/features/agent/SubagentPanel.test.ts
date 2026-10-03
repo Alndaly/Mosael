@@ -30,6 +30,7 @@ describe("collectSubagentRuns", () => {
     expect(runs).toHaveLength(1);
     expect(runs[0].archive?.steps).toBe(3);
     expect(runs[0].archive?.trace).toHaveLength(2);
+    expect(runs[0].liveTools).toEqual([]);
   });
 
   it("字符串化的 result 也解得出 —— 有的链路会把它先转成字符串", () => {
@@ -49,5 +50,16 @@ describe("collectSubagentRuns", () => {
       { type: "text", text: "好的" },
     ];
     expect(collectSubagentRuns(timeline)).toHaveLength(0);
+  });
+
+  it("子步骤按 parent_id 归到对应子智能体,不会混到别的任务", () => {
+    const timeline: AgentTimelineItem[] = [
+      runCall({ details: { subagent_dispatched: true } }),
+      { type: "subtool", parent_id: "p1", tool: { id: "s1", name: "fetch_url", status: "running" } },
+      { type: "subtool", parent_id: "other", tool: { id: "s2", name: "read_note", status: "done" } },
+    ];
+    const runs = collectSubagentRuns(timeline);
+    expect(runs[0].liveTools.map((tool) => tool.id)).toEqual(["s1"]);
+    expect(runs[0].running).toBe(true);
   });
 });

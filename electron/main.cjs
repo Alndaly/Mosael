@@ -37,6 +37,7 @@ const {
   parseLocale,
   parsePanelId,
   parsePanelLayout,
+  parsePanelMuted,
   parsePublishTarget,
   parseRestoreStage,
   parseSystemStatus,
@@ -818,6 +819,10 @@ app.whenReady().then(async () => {
   ipcMain.handle(IPC.invoke.publishClosePanel, (_e, payload) => {
     const { id } = parsePanelId(payload);
     return requirePublish().closePanel(id);
+  });
+  ipcMain.handle(IPC.invoke.publishPanelMuted, (_e, payload) => {
+    const { id, muted } = parsePanelMuted(payload);
+    return requirePublish().setPanelMuted(id, muted);
   });
   // 通用池档案登录:复用发布账号那套 app **内嵌视图**(不弹外部系统窗,体验与发布登录一致)。
   // 安全:只放行 persist:pool-* 分区(发布账号走 publish:login),只放行 http(s)。

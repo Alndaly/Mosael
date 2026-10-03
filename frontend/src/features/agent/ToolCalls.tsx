@@ -39,8 +39,7 @@ export type ToolCall = {
 export type AgentTimelineItem =
   | { type: "text"; text: string }
   | { type: "tool"; tool: ToolCall }
-  /** 子智能体内部的一步工具调用,挂在发起它的 run_subagent 调用(parent_id)名下。
-      嵌套显示在父卡之后 —— 没有它,run_subagent 是一段几十秒的静默。 */
+  /** 子智能体内部的一步工具调用。父时间线只是实时运输载体；展示时按 parent_id 归入子会话。 */
   | { type: "subtool"; parent_id?: string; tool: ToolCall }
   /** 思考块。`done=false` 表示正在思考(展开并转圈),结束后默认收起。 */
   | { type: "thinking"; text: string; done?: boolean; duration_seconds?: number };
@@ -454,12 +453,12 @@ export function ToolCalls({ tools }: { tools: ToolCall[] | undefined }) {
   );
 }
 
-/** 这些时间线里画出来的全部工具调用(含子步)的 id —— 对得上其中一行的确认卡就摆在那一行里。 */
+/** 父会话里实际画出来的工具调用 id。子智能体的步骤只在子会话里画,不能把确认卡挂回父会话。 */
 export function toolCallIds(timelines: Iterable<AgentTimelineItem[] | undefined>): Set<string> {
   const ids = new Set<string>();
   for (const timeline of timelines) {
     for (const item of timeline ?? []) {
-      if ((item.type === "tool" || item.type === "subtool") && item.tool?.id) ids.add(item.tool.id);
+      if (item.type === "tool" && item.tool?.id) ids.add(item.tool.id);
     }
   }
   return ids;
@@ -498,12 +497,13 @@ type TurnBlock =
  * 互不相干的行:ToolCalls 里那句"竖排成任务步骤"的设计从来没生效过,它内部的 gap-1 也
  * 一直是死代码(每次只传一个工具进去)。
  *
- * 子步(subtool)和普通工具一起并:它们在视觉上本来就是同一串步骤,分开只会在中间豁一个口。
+ * subtool 属于子智能体自己的会话。它仍保存在父时间线中作为流式传输与诊断载体,但不能在
+ * 父对话里画成任务卡；子会话由 SubagentPanel 按 parent_id 接走。
  */
 export function turnBlocks(timeline: AgentTimelineItem[] | undefined): TurnBlock[] {
   const blocks: TurnBlock[] = [];
   for (const item of agentTurnParts(timeline)) {
-    if ((item.type === "tool" || item.type === "subtool") && item.tool) {
+    if (item.type === "tool" && item.tool) {
       const last = blocks[blocks.length - 1];
       if (last?.type === "tools") last.tools.push(item.tool);
       else blocks.push({ type: "tools", tools: [item.tool] });

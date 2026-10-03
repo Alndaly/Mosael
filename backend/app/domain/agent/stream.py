@@ -73,8 +73,8 @@ def _close_open_thinking(state: dict) -> None:
 def _stream_tool_event(session_id: str, event: dict) -> None:
     """pi 工具事件 → 流里的工具卡:tool_start 建卡(running),tool_end 更新(done/error)。
 
-    subtool 是子智能体内部的一步,同样建卡/收卡,只是条目带 parent_id(发起它的
-    run_subagent 调用)—— 界面据此嵌套在父卡下显示,轨迹里render成 SUBTOOL 行。
+    subtool 是子智能体内部的一步,同样建卡/收卡,条目带 parent_id(发起它的
+    run_subagent 调用)。父流只是实时运输载体:界面会把它归入对应子会话,父对话不渲染。
     """
     with _streams_lock:
         state = _streams.get(session_id)

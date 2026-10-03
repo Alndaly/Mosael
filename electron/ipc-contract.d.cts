@@ -20,6 +20,7 @@ export const IPC: {
     publishHideView: "publish:hideView";
     publishPanelLayout: "publish:panelLayout";
     publishClosePanel: "publish:closePanel";
+    publishPanelMuted: "publish:panelMuted";
     browserOpenLogin: "browser:openLogin";
     publishSignOut: "publish:signOut";
     browserClearProfile: "browser:clearProfile";
@@ -51,6 +52,7 @@ export function parseAuthToken(value: unknown, channel: string): { token: string
 export function parseRestoreStage(value: unknown): { stageId: string };
 export function parseUrlRequest(value: unknown, channel: string): { url: string };
 export function parsePanelId(value: unknown): { id: string };
+export function parsePanelMuted(value: unknown): { id: string; muted: boolean };
 export function parsePanelLayout(value: unknown): Partial<Record<"x" | "y" | "width" | "height", number>>;
 export function parseBrowserProfile(value: unknown): { partition: string };
 export function parseBrowserLogin(value: unknown): {

@@ -286,6 +286,8 @@ export const shell = {
   browserPreviewNoPixels: "Running in background — no preview image",
   browserPreviewNoPixelsDone: "Finished — no image captured",
   livePanelResize: "Drag to resize",
+  livePanelMute: "Mute browser audio",
+  livePanelUnmute: "Unmute browser audio",
   imagePreviewTitle: "Image preview",
   openOriginal: "Open original",
   rename: "Rename",

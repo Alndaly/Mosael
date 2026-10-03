@@ -83,6 +83,8 @@ export interface PanelCard {
   height: number;
   header: number;
   radius: number;
+  /** Electron 层的真实静音状态；标题条据此画开关。 */
+  muted: boolean;
 }
 
 /**
@@ -102,6 +104,8 @@ export class AccountViewManager {
   private names = new Map<string, string>();
   // 正在以悬浮面板形式挂载的账号,按挂载顺序 —— 决定叠放次序(后挂的在上)。
   private panels: string[] = [];
+  /** 用户明确允许出声的悬浮面板。未挂载/已关闭的视图永远不在这里。 */
+  private audiblePanels = new Set<string>();
   /**
    * 用户拖动/缩放后的面板几何。x/y 为 null 表示「贴右下角」(默认),拖过之后就记住绝对位置。
    * 卡片堆仍从这个锚点向上错开。
@@ -233,6 +237,7 @@ export class AccountViewManager {
     if (index >= 0) this.panels.splice(index, 1);
     this.panelIdleMs.delete(accountId);
     this.panelTouchedAt.delete(accountId);
+    this.audiblePanels.delete(accountId);
     this.views.delete(accountId);
     this.drivers.delete(accountId);
     if (this.visibleId === accountId) {
@@ -271,7 +276,7 @@ export class AccountViewManager {
   }
 
   /**
-   * 只有**前台那个视图**允许出声,其余(隐藏的、悬浮面板里的)一律静音。
+   * 前台视图默认出声；悬浮面板只有用户明确打开声音后才出声；隐藏视图永远静音。
    *
    * hide() 只是把视图从窗口摘掉 —— WebContents 还在跑,而且我们特意关掉了 backgroundThrottling,
    * 于是 TikTok 信息流这种自动播放的页面在你回到应用之后还在响。静音走 Electron 这一层而不是往页面
@@ -283,7 +288,8 @@ export class AccountViewManager {
   private syncAudio(): void {
     for (const [id, view] of this.views) {
       if (!this.alive(view)) continue;
-      view.webContents.setAudioMuted(id !== this.visibleId);
+      const audible = id === this.visibleId || (this.panels.includes(id) && this.audiblePanels.has(id));
+      view.webContents.setAudioMuted(!audible);
     }
   }
 
@@ -472,10 +478,20 @@ export class AccountViewManager {
     if (index >= 0) this.panels.splice(index, 1);
     this.panelIdleMs.delete(accountId);
     this.panelTouchedAt.delete(accountId);
+    this.audiblePanels.delete(accountId);
     if (this.visibleId === accountId) return;
     const view = this.views.get(accountId);
     if (this.alive(view)) view.webContents.setZoomFactor(1);
     this.detachView(accountId);
+    this.layout();
+  }
+
+  /** 用户切换悬浮浏览器声音。只接受仍挂在面板里的 id,避免给隐藏视图留下出声许可。 */
+  setPanelMuted(accountId: string, muted: boolean): void {
+    if (!this.panels.includes(accountId)) return;
+    if (muted) this.audiblePanels.delete(accountId);
+    else this.audiblePanels.add(accountId);
+    this.syncAudio();
     this.layout();
   }
 
@@ -758,6 +774,7 @@ export class AccountViewManager {
         height: cardH,
         header: PANEL.header,
         radius: PANEL.radius,
+        muted: view.webContents.isAudioMuted(),
       };
       cards.push(card);
       // 原生视图嵌在卡片里:让出标题条,四周内缩,于是卡片的圆角边框在视图外侧露出来。

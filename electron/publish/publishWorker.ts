@@ -809,6 +809,11 @@ export function closePanel(id: string): void {
   views?.panelDetach(id);
 }
 
+/** 悬浮浏览器声音由 Electron 层控制,页面脚本无法绕过也不会因 SPA 导航失效。 */
+export function setPanelMuted(id: string, muted: boolean): void {
+  views?.setPanelMuted(id, muted);
+}
+
 export function hidePublishView(): void {
   views?.hide();
 }

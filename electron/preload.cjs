@@ -122,6 +122,8 @@ const publishBridge = {
   setPanelLayout: (patch) => ipcRenderer.invoke(IPC.invoke.publishPanelLayout, patch),
   /** 手动关闭某块面板:只撤面板,任务照常继续。 */
   closePanel: (id) => ipcRenderer.invoke(IPC.invoke.publishClosePanel, { id }),
+  /** 悬浮浏览器声音开关；真实状态随 onPanels 回传。 */
+  setPanelMuted: (id, muted) => ipcRenderer.invoke(IPC.invoke.publishPanelMuted, { id, muted }),
   onPanels: (callback) => onEvent(IPC.event.publishPanels, callback),
 };
 contextBridge.exposeInMainWorld("mosaelPublish", publishBridge);

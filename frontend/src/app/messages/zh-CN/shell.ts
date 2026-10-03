@@ -288,6 +288,8 @@ export const shell = {
   browserPreviewNoPixels: "后台运行中,暂无画面",
   browserPreviewNoPixelsDone: "已结束,无画面留存",
   livePanelResize: "拖动缩放窗口",
+  livePanelMute: "关闭浏览器声音",
+  livePanelUnmute: "打开浏览器声音",
   imagePreviewTitle: "图片预览",
   openOriginal: "打开原图",
   rename: "重命名",

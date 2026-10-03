@@ -21,6 +21,7 @@ export interface LivePanelCard {
   height: number;
   header: number;
   radius: number;
+  muted: boolean;
 }
 
 export interface MosaelUpdateInfo {
@@ -54,6 +55,7 @@ export interface MosaelPublishBridge {
   onPanels(callback: (cards: LivePanelCard[]) => void): () => void;
   setPanelLayout(patch: { x?: number; y?: number; width?: number; height?: number }): Promise<void>;
   closePanel(id: string): Promise<void>;
+  setPanelMuted(id: string, muted: boolean): Promise<void>;
 }
 
 export interface MosaelBrowserBridge {
@@ -98,4 +100,3 @@ export interface MosaelDesktopBridge {
     onChange(callback: (css: string) => void): () => void;
   };
 }
-
