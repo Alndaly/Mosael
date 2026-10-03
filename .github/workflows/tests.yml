@@ -37,9 +37,28 @@ jobs:
             packages/mosael-formats/uv.lock
 
       # 没有 ffmpeg 的话,9 个测试文件会整体 skip —— 导出与渲染主流程都在里面。
-      # 那样这道闸看着是绿的,实际没验到最该验的那部分。
-      - name: Install ffmpeg
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+      # Ubuntu 24.04 自带的是 6.1,其 framesync 在 EOF 处有已知时序缺陷;产品与开发环境已经以
+      # 现代 FFmpeg 为基线,CI 也必须测同一条契约,不能继续为发行多年前的运行时堆兼容滤镜。
+      # 下载地址与 sha256 都钉在一次不可变的上游构建,避免 latest 静默换包。
+      - uses: actions/cache@v5
+        id: ffmpeg-cache
+        with:
+          path: .ci/ffmpeg
+          key: ffmpeg-linux64-8.1.3-14-g330caae0c1-89cca03b
+      - name: Install FFmpeg 8.1
+        env:
+          FFMPEG_URL: https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-10-01-13-06/ffmpeg-n8.1.3-14-g330caae0c1-linux64-gpl-8.1.tar.xz
+          FFMPEG_SHA256: 89cca03b81002bef5a48c2e983afa6100e52904052c1c75dfd2090b09b57efee
+        run: |
+          if [ ! -x .ci/ffmpeg/bin/ffmpeg ]; then
+            curl --fail --location --retry 3 "$FFMPEG_URL" --output /tmp/ffmpeg.tar.xz
+            echo "$FFMPEG_SHA256  /tmp/ffmpeg.tar.xz" | sha256sum --check --strict
+            mkdir -p .ci/ffmpeg
+            tar -xJf /tmp/ffmpeg.tar.xz --strip-components=1 -C .ci/ffmpeg
+          fi
+          echo "$GITHUB_WORKSPACE/.ci/ffmpeg/bin" >> "$GITHUB_PATH"
+          .ci/ffmpeg/bin/ffmpeg -version | head -1
+          test "$(.ci/ffmpeg/bin/ffmpeg -version | sed -n 's/^ffmpeg version n\?\([0-9][0-9]*\).*/\1/p')" -ge 8
 
       # 沙箱执行时禁止拉取镜像,所以测试前显式准备。环境不可用必须阻止发版,
       # 不能让隔离用例被跳过后仍然显示测试通过。

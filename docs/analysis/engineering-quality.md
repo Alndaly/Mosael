@@ -169,7 +169,7 @@ graph TD
 
 - **没有任何覆盖率度量**：`backend/pyproject.toml` 无 pytest-cov，`frontend/package.json` 无 `@vitest/coverage`。覆盖率完全盲区——不过考虑到 89 道棘轮 + 契约语料走的是"定点防守关键不变量"路线，这更像是有意的取舍而非疏漏；但代价是"哪些领域测试稀薄"没有数据回答。
 - **无 UI E2E**：编辑器拖拽、画布交互这类最复杂的用户路径只有单测+棘轮，没有浏览器级回归。
-- ffmpeg 依赖的 9 个测试文件在无 ffmpeg 环境会**整体 skip**——CI 因此显式 `apt-get install ffmpeg`（`tests.yml` 第 36-39 行注释："那样这道闸看着是绿的，实际没验到最该验的那部分"）。
+- FFmpeg 依赖的测试文件在无 FFmpeg 环境会**整体 skip**——CI 因此缓存并校验一份固定哈希的 FFmpeg 8.1 构建，既保证媒体主流程真的执行，也让 CI 与当前渲染契约使用同一代运行时。
 - 沙箱（代码节点隔离）测试依赖 Docker，CI 显式等待 dockerd 并断言 `OSType/MemoryLimit/SwapLimit/PidsLimit` 四项能力、预拉 `python:3.14-alpine`（`tests.yml` 第 43-50 行），并声明"环境不可用必须阻止发版，不能让隔离用例被跳过后仍然显示测试通过"。
 
 ---
