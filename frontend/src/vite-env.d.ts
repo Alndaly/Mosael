@@ -5,6 +5,7 @@ declare const __APP_VERSION__: string;
 
 type PublishViewState = import("../../electron/preload-api").PublishViewState;
 type LivePanelCard = import("../../electron/preload-api").LivePanelCard;
+type LivePanelHandle = import("../../electron/preload-api").LivePanelHandle;
 type MosaelUpdateInfo = import("../../electron/preload-api").MosaelUpdateInfo;
 type LiveViewFrame = import("../../electron/preload-api").LiveViewFrame;
 type RecordingPermissionKind = import("../../electron/preload-api").RecordingPermissionKind;

@@ -4,6 +4,18 @@ import path from "node:path";
 import { EMBED_HEADER_HEIGHT, type ViewState } from "./types";
 import { PageDriver } from "./pageDriver";
 import { panelMediaScript } from "./panelAudio";
+import {
+  DEFAULT_PANEL_LAYOUT,
+  PANEL,
+  fitPanelLayout,
+  movePanel,
+  panelRect,
+  resizePanel,
+  type PanelArea,
+  type PanelHandle,
+  type PanelLayout,
+  type PanelRect,
+} from "./panelGeometry";
 import { PanelHover } from "./panelHover";
 
 /* eslint-disable @typescript-eslint/no-require-imports */
@@ -24,49 +36,12 @@ export const PARTITION_PREFIX = "mosael";
 const DOUBLE_ESCAPE_MS = 700;
 
 /**
- * 后台任务的「悬浮面板」几何。
- *
- * 卡片外廓 384×244,里面嵌一个内缩 4px、让出 26px 标题条的原生视图;缩放按「视图宽 / layoutWidth」
- * 反算,于是页面**布局视口恒为 1280 宽**,平台页面按桌面版排版,显示只占右下角一小块。这不是美观
- * 取舍,是必要条件:面板若不缩放地做成 384 宽,B 站会渲染窄屏版布局,选择器与整个流程都会变。
- *
- * 为什么要挂进窗口而不是留在后台:只有**参与合成**的视图才有真实布局和可用的命中测试 —— 挂上去
- * 之后真实指针输入(isTrusted=true)才生效,同时画面也是真的,不必再靠截图镜像。实测三个面板
- * 叠放(后加的压住先加的)时,被完全遮挡的那个照样有 1280×800 视口、照样能被可信点击命中。
- */
-const PANEL = {
-  /** 卡片(含标题条与边框)的外廓尺寸。 */
-  width: 384,
-  height: 244,
-  /** React 在卡片顶部画的标题条高度 —— 原生视图从这条下面开始。 */
-  header: 26,
-  /** 视图四周相对卡片内缩。卡片圆角 R 时,内缩需 ≥ 0.293R 才不让视图的直角戳出圆弧;
-   *  R=12 → 3.5px,取 4px。原生 View 没有 setBorderRadius(Electron 32 只有 setBackgroundColor /
-   *  setBounds / setVisible),圆角与阴影只能由渲染层画在视图**下方**(子视图永远盖在宿主页面之上)。 */
-  inset: 4,
-  /** 卡片圆角。**只有这一份**:经 IPC 随面板状态下发(见 emitPanels),渲染层用收到的值,
-   *  不自己写一个 —— 这里改了前端跟着变,不存在两边要记得一起改的问题。 */
-  radius: 12,
-  margin: 16,
-  stackOffset: 22,
-  /** 页面要按这个宽度布局(桌面版)。缩放由「视图实际宽度 / 这个值」反算,而不是写死 0.3 —— 卡片
-   *  尺寸一改,写死的比例就会让布局视口偏掉。 */
-  layoutWidth: 1280,
-  /** 页面布局视口的高。与 layoutWidth 一起定死面板的宽高比 —— 面板里永远是完整的桌面版视口。 */
-  layoutHeight: 800,
-  /** 面板最大占窗口的比例。它是「边跑边看」的东西,不该把整个应用吞掉。 */
-  maxWindowFraction: 0.6,
-} as const;
-
-/**
  * 同时挂载的面板上限。挂载的视图是真在合成的页面,不是免费的 —— 智能体可能开很多路会话,全挂上去
  * 既吃 GPU 也把卡片堆推出窗口。超出上限的视图不挂载:它照样能跑(RPA 的动作走的是 DOM 事件,不
  * 依赖布局与命中测试),只是没有画面、也用不上可信输入。
  */
 const MAX_PANELS = 4;
 
-/** 面板最小尺寸:再小就既看不清、也让标题条上的手柄挤成一团。 */
-const PANEL_MIN = { width: 240, height: 160 } as const;
 /** 空闲清扫的检查间隔。 */
 const IDLE_SWEEP_MS = 5_000;
 /** 用户拖动/缩放后的面板几何存这儿,重启后接着用。 */
@@ -92,6 +67,12 @@ export interface PanelCard {
 }
 
 /**
+ * 渲染层对面板几何的一次改动:要么拖标题条挪位置,要么拖某个手柄缩放。缩放给的是指针要的矩形
+ * (不带约束),比例、上下限与窗口边界由 panelGeometry 定。
+ */
+export type PanelLayoutChange = { x: number; y: number } | ({ handle: PanelHandle } & PanelRect);
+
+/**
  * Owns one embedded WebContentsView per account. Each view uses a persistent
  * session partition (`persist:mosael-<id>`) so cookies / localStorage are isolated
  * and survive restarts — this replaces the old Playwright per-account profile
@@ -111,15 +92,9 @@ export class AccountViewManager {
   /** 用户明确允许出声的悬浮面板。未挂载/已关闭的视图永远不在这里。 */
   private audiblePanels = new Set<string>();
   /**
-   * 用户拖动/缩放后的面板几何。x/y 为 null 表示「贴右下角」(默认),拖过之后就记住绝对位置。
-   * 卡片堆仍从这个锚点向上错开。
+   * 用户拖动/缩放后的面板几何(见 PanelLayout)。卡片堆最上面那张落在这里,其余从它向上错开。
    */
-  private panelLayout: { x: number | null; y: number | null; width: number; height: number } = {
-    x: null,
-    y: null,
-    width: PANEL.width,
-    height: PANEL.height,
-  };
+  private panelLayout: PanelLayout = DEFAULT_PANEL_LAYOUT;
   /** 指针停在哪些面板的网页上。状态一变就重排一次,把 hovered 随卡片下发。 */
   private hover = new PanelHover({
     pointerInside: (id) => this.pointerOverView(id),
@@ -364,62 +339,35 @@ export class AccountViewManager {
   }
 
   /**
-   * 用户拖动/缩放面板后调这个。x/y 传绝对坐标(卡片左上角),不传则保持「贴右下角」。
-   * 会夹到窗口内并尊重最小尺寸,然后落盘,重启后接着用。
-   */
-  /**
-   * 面板几何。**尺寸是一个标量,不是两个** —— 宽高按页面的布局比例联动。
+   * 用户拖动 / 缩放面板后调这个(卡片堆作为一个整体:它们共享锚点与尺寸)。
    *
-   * 为什么:面板里的页面布局视口恒为 1280 宽(见 PANEL.layoutWidth),缩放 = 面板宽 / 1280。
-   * 于是"改宽"是把页面放大缩小,"改高"是多露一点少露一点 —— 两件毫不相干的事,用一个对角手柄
-   * 同时驱动,拖起来就是没道理的:斜着拉一下,画面既变大又变形。锁住比例之后,拖动只有一个含义:
-   * 这块面板要多大。
-   *
-   * 比例取 layoutWidth : layoutHeight(1280×800),与页面本身一致 —— 于是面板里看到的永远是完整
-   * 的桌面版视口,不会出现"下面空一截"或"底部被切掉"。
+   * 两种改动,一个动作一个含义:给 x/y 是拖标题条挪位置;带 handle 的是拖某个手柄缩放 —— 尺寸是
+   * 一个标量(宽高按页面比例联动,理由见 PanelLayout),手柄只决定**哪个点不动**。规则全在
+   * panelGeometry 里:上下限、窗口内约束、锚点。改完落盘,重启后接着用。
    */
-  setPanelLayout(patch: { x?: number; y?: number; width?: number; height?: number }): void {
-    const next = { ...this.panelLayout };
-    const ratio = PANEL.layoutHeight / PANEL.layoutWidth;
-    // 宽是主动的那一维:给了宽就按比例算高;只给了高就反推宽。两个都给以宽为准。
-    if (patch.width !== undefined) {
-      next.width = Math.max(PANEL_MIN.width, Math.round(patch.width));
-      next.height = Math.round((next.width - PANEL.inset * 2) * ratio) + PANEL.header + PANEL.inset;
-    } else if (patch.height !== undefined) {
-      const inner = Math.max(1, Math.round(patch.height) - PANEL.header - PANEL.inset);
-      next.width = Math.max(PANEL_MIN.width, Math.round(inner / ratio) + PANEL.inset * 2);
-      next.height = Math.round((next.width - PANEL.inset * 2) * ratio) + PANEL.header + PANEL.inset;
-    }
-    if (patch.x !== undefined) next.x = Math.round(patch.x);
-    if (patch.y !== undefined) next.y = Math.round(patch.y);
+  setPanelLayout(change: PanelLayoutChange): void {
+    const area = this.panelArea();
+    if (!area) return;
+    this.applyPanelLayout(
+      "handle" in change
+        ? resizePanel(change.handle, change, area)
+        : movePanel(this.panelLayout, change, area),
+    );
+    this.savePanelLayout();
+  }
 
-    if (this.window && !this.window.isDestroyed()) {
-      const [w, h] = this.window.getContentSize();
-      // 上限留出余地:面板是"边跑边看"的,不该把整个应用吞掉(实测拖到几乎满屏,什么都点不了)。
-      const maxWidth = Math.min(w - PANEL.margin * 2, Math.round(w * PANEL.maxWindowFraction));
-      const maxHeight = Math.min(
-        h - EMBED_HEADER_HEIGHT - PANEL.margin,
-        Math.round(h * PANEL.maxWindowFraction),
-      );
-      if (next.width > maxWidth) {
-        next.width = maxWidth;
-        next.height = Math.round((next.width - PANEL.inset * 2) * ratio) + PANEL.header + PANEL.inset;
-      }
-      if (next.height > maxHeight) {
-        next.height = maxHeight;
-        const inner = Math.max(1, next.height - PANEL.header - PANEL.inset);
-        next.width = Math.round(inner / ratio) + PANEL.inset * 2;
-      }
-      if (next.x !== null) next.x = Math.min(Math.max(0, next.x), Math.max(0, w - next.width));
-      if (next.y !== null) {
-        next.y = Math.min(Math.max(EMBED_HEADER_HEIGHT, next.y), Math.max(EMBED_HEADER_HEIGHT, h - next.height));
-      }
-    }
+  private applyPanelLayout(next: PanelLayout): void {
     this.panelLayout = next;
     // 尺寸变了 → 缩放要跟着变(布局视口必须恒为 layoutWidth),所以每块面板都补一次。
     for (const id of this.panels) this.applyPanelZoom(id);
     this.layout();
-    this.savePanelLayout();
+  }
+
+  /** 窗口内容区 —— 面板几何的边界。窗口没了就没有可摆的地方。 */
+  private panelArea(): PanelArea | null {
+    if (!this.window || this.window.isDestroyed()) return null;
+    const [width, height] = this.window.getContentSize();
+    return { width, height };
   }
 
   /** 系统指针此刻是否在这块面板的网页(原生视图)上。PanelHover 的兜底检查用。 */
@@ -458,15 +406,22 @@ export class AccountViewManager {
   }
 
   private loadPanelLayout(): void {
+    const area = this.panelArea();
+    if (!area) return;
     try {
-      const raw = JSON.parse(fs.readFileSync(this.layoutFilePath(), "utf8")) as Partial<typeof this.panelLayout>;
-      // 只接受数值/null,并且照常过一遍 setPanelLayout 的夹取 —— 窗口尺寸可能比上次小。
-      this.setPanelLayout({
-        x: typeof raw.x === "number" ? raw.x : undefined,
-        y: typeof raw.y === "number" ? raw.y : undefined,
-        width: typeof raw.width === "number" ? raw.width : undefined,
-        height: typeof raw.height === "number" ? raw.height : undefined,
-      });
+      const { x, y, width } = JSON.parse(fs.readFileSync(this.layoutFilePath(), "utf8")) as Record<string, unknown>;
+      // 只认数值;照常过一遍夹取 —— 窗口尺寸可能比上次小。
+      const placed = typeof x === "number" && typeof y === "number";
+      this.applyPanelLayout(
+        fitPanelLayout(
+          {
+            x: placed ? x : null,
+            y: placed ? y : null,
+            width: typeof width === "number" ? width : DEFAULT_PANEL_LAYOUT.width,
+          },
+          area,
+        ),
+      );
     } catch {
       /* 没存过 / 文件坏了:用默认的贴右下角 */
     }
@@ -800,9 +755,12 @@ export class AccountViewManager {
     // 悬浮面板:右下角卡片堆,后挂的在上、每层向上错开一点,好看出同时有几路在跑。
     // 面板必须**整块落在可视区内** —— 实测挂进窗口但 bounds 移出屏幕的视图视口是 0×0,
     // 布局与命中测试双双失效,可信输入就白费了。所以错开量有上限,不让底层被推出窗口。
-    const { width: cardW, height: cardH } = this.panelLayout;
-    const anchorX = this.panelLayout.x ?? Math.max(0, width - cardW - PANEL.margin);
-    const anchorY = this.panelLayout.y ?? Math.max(EMBED_HEADER_HEIGHT, height - cardH - PANEL.margin);
+    const {
+      x: anchorX,
+      y: anchorY,
+      width: cardW,
+      height: cardH,
+    } = panelRect(this.panelLayout, { width, height });
     const maxStack = Math.max(1, Math.floor((anchorY - EMBED_HEADER_HEIGHT) / PANEL.stackOffset) + 1);
     const cards: PanelCard[] = [];
     this.panels.forEach((accountId, index) => {

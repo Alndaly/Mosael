@@ -112,17 +112,27 @@ function parsePanelMuted(value) {
   return { id: requiredString(payload, "id", channel), muted: payload.muted };
 }
 
+/** 悬浮面板的八个缩放手柄(四角 + 四边,罗盘方位)。 */
+const PANEL_HANDLES = ["n", "ne", "e", "se", "s", "sw", "w", "nw"];
+
+/**
+ * 面板几何的一次改动:`{ x, y }` 是拖标题条挪位置;带 `handle` 的是拖手柄缩放,
+ * `x/y/width/height` 是指针要的矩形(不带约束,主进程按比例与边界去夹)。
+ */
 function parsePanelLayout(value) {
-  const payload = record(value ?? {}, IPC.invoke.publishPanelLayout);
-  const result = {};
-  for (const key of ["x", "y", "width", "height"]) {
-    if (payload[key] === undefined) continue;
+  const channel = IPC.invoke.publishPanelLayout;
+  const payload = record(value, channel);
+  const number = (key) => {
     if (typeof payload[key] !== "number" || !Number.isFinite(payload[key])) {
-      throw new TypeError(`${IPC.invoke.publishPanelLayout}: ${key} must be a finite number`);
+      throw new TypeError(`${channel}: ${key} must be a finite number`);
     }
-    result[key] = payload[key];
+    return payload[key];
+  };
+  if (payload.handle === undefined) return { x: number("x"), y: number("y") };
+  if (!PANEL_HANDLES.includes(payload.handle)) {
+    throw new TypeError(`${channel}: handle must be one of ${PANEL_HANDLES.join(", ")}`);
   }
-  return result;
+  return { handle: payload.handle, x: number("x"), y: number("y"), width: number("width"), height: number("height") };
 }
 
 function parseBrowserLogin(value) {

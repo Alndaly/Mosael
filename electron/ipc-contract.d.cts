@@ -53,7 +53,7 @@ export function parseRestoreStage(value: unknown): { stageId: string };
 export function parseUrlRequest(value: unknown, channel: string): { url: string };
 export function parsePanelId(value: unknown): { id: string };
 export function parsePanelMuted(value: unknown): { id: string; muted: boolean };
-export function parsePanelLayout(value: unknown): Partial<Record<"x" | "y" | "width" | "height", number>>;
+export function parsePanelLayout(value: unknown): import("./preload-api").LivePanelLayoutChange;
 export function parseBrowserProfile(value: unknown): { partition: string };
 export function parseBrowserLogin(value: unknown): {
   resume: boolean;

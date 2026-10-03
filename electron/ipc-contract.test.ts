@@ -20,7 +20,7 @@ const contract = require("./ipc-contract.cjs") as {
     resume: boolean;
   };
   parseBrowserProfile: (value: unknown) => { partition: string };
-  parsePanelLayout: (value: unknown) => Record<string, number>;
+  parsePanelLayout: (value: unknown) => Record<string, number | string>;
   parsePanelMuted: (value: unknown) => { id: string; muted: boolean };
   parseAuthToken: (value: unknown, channel: string) => { token: string };
   parseRestoreStage: (value: unknown) => { stageId: string };
@@ -86,8 +86,17 @@ describe("Electron IPC contract", () => {
     expect(contract.parseBrowserProfile({ partition: "persist:pool-user" })).toEqual({ partition: "persist:pool-user" });
     expect(() => contract.parseBrowserProfile({ partition: "persist:mosael-account" })).toThrow(/partition/);
 
-    expect(contract.parsePanelLayout({ x: 10, y: 20, width: undefined, ignored: 3 })).toEqual({ x: 10, y: 20 });
-    expect(() => contract.parsePanelLayout({ width: Number.NaN })).toThrow(/width/);
+    // 挪位置:只要 x/y,别的字段不往下带。
+    expect(contract.parsePanelLayout({ x: 10, y: 20, width: 300, ignored: 3 })).toEqual({ x: 10, y: 20 });
+    expect(() => contract.parsePanelLayout({ x: 10 })).toThrow(/y/);
+    // 缩放:手柄 + 指针要的整块矩形,缺一不可。
+    expect(contract.parsePanelLayout({ handle: "nw", x: 1, y: 2, width: 300, height: 200 }))
+      .toEqual({ handle: "nw", x: 1, y: 2, width: 300, height: 200 });
+    expect(() => contract.parsePanelLayout({ handle: "se", x: 1, y: 2, width: Number.NaN, height: 200 }))
+      .toThrow(/width/);
+    expect(() => contract.parsePanelLayout({ handle: "se", x: 1, y: 2, width: 300 })).toThrow(/height/);
+    expect(() => contract.parsePanelLayout({ handle: "middle", x: 1, y: 2, width: 300, height: 200 }))
+      .toThrow(/handle/);
     expect(contract.parsePanelMuted({ id: " browser-1 ", muted: false })).toEqual({ id: "browser-1", muted: false });
     expect(() => contract.parsePanelMuted({ id: "browser-1", muted: "false" })).toThrow(/muted/);
   });

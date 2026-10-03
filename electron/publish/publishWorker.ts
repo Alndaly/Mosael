@@ -2,7 +2,8 @@
 // (上传/填表/发表)→ 回报状态。任务状态源在后端,这里只做「浏览器驱动」这件只有 Electron 能做的事。
 //
 // 并发模型:「跨账号并发、同账号串行 + 前台单槽」。
-//  - 发布任务默认把账号视图挂成**右下角悬浮面板**(384×240 + zoom 0.3 → 布局仍是 1280×800 桌面版)。
+//  - 发布任务默认把账号视图挂成**右下角悬浮面板**(宽 384、高按页面比例算出,zoom = 视图宽 / 1280
+//    → 布局仍是 1280×800 桌面版,见 panelGeometry)。
 //    挂载 = 参与合成 = 有真实布局与命中测试,于是可信指针输入(isTrusted=true)可用、画面也是真的。
 //    多条并发就叠成卡片堆;实测被完全遮挡的那层照样有布局、照样点得中。同时最多 MAX_CONCURRENT 条。
 //  - 一个账号共享一个内嵌视图,不能并发两条任务:认领时把「正在跑的账号」传给后端排除(claimTask)。
@@ -14,7 +15,13 @@ import { mkdir } from "node:fs/promises";
 import path from "node:path";
 
 import { t as tr } from "../i18n.cjs";
-import { createSharedViews, destroySharedViews, type AccountViewManager, type PanelCard } from "./accountViews";
+import {
+  createSharedViews,
+  destroySharedViews,
+  type AccountViewManager,
+  type PanelCard,
+  type PanelLayoutChange,
+} from "./accountViews";
 import { plog } from "./log";
 import { createAdapter } from "./adapters";
 import { isAutomationBlockedError } from "./errors";
@@ -800,8 +807,8 @@ export function viewReload(): void {
 
 /** 收起内嵌视图,把窗口还给 React UI。 */
 /** 渲染层拖动/缩放悬浮面板后落到这里(几何由主进程持有:layout() 要用,还要落盘)。 */
-export function setPanelLayout(patch: { x?: number; y?: number; width?: number; height?: number }): void {
-  views?.setPanelLayout(patch);
+export function setPanelLayout(change: PanelLayoutChange): void {
+  views?.setPanelLayout(change);
 }
 
 /** 手动关闭某块悬浮面板:只撤面板,任务/会话照常继续跑(它不依赖面板)。 */

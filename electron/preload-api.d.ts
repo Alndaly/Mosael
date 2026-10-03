@@ -26,6 +26,17 @@ export interface LivePanelCard {
   hovered: boolean;
 }
 
+/** 悬浮面板的缩放手柄:四角 + 四边,按罗盘方位命名。 */
+export type LivePanelHandle = "n" | "ne" | "e" | "se" | "s" | "sw" | "w" | "nw";
+
+/**
+ * 面板几何的一次改动。`{ x, y }`:拖标题条挪到这里。带 `handle`:拖这个手柄缩放,矩形是指针要的
+ * 大小与位置(不带约束)—— 比例(宽高联动)、上下限、窗口边界与锚点都由主进程定。
+ */
+export type LivePanelLayoutChange =
+  | { x: number; y: number }
+  | { handle: LivePanelHandle; x: number; y: number; width: number; height: number };
+
 export interface MosaelUpdateInfo {
   current?: string;
   latest?: string;
@@ -55,7 +66,7 @@ export interface MosaelPublishBridge {
   hideView(): Promise<void>;
   onViewState(callback: (state: PublishViewState) => void): () => void;
   onPanels(callback: (cards: LivePanelCard[]) => void): () => void;
-  setPanelLayout(patch: { x?: number; y?: number; width?: number; height?: number }): Promise<void>;
+  setPanelLayout(change: LivePanelLayoutChange): Promise<void>;
   closePanel(id: string): Promise<void>;
   setPanelMuted(id: string, muted: boolean): Promise<void>;
 }
