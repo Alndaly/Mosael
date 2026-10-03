@@ -2,7 +2,7 @@
 title: Asset library: characters, locations, props
 description: Save characters, places and objects as named assets with reference images and a prompt descriptor, then @-mention them in generations and on boards.
 order: 19
-updated: 2026-09-28
+updated: 2026-10-04
 version: 1.8.3
 ---
 
@@ -29,7 +29,8 @@ The asset library uses the same toolbar as the media library, and it sticks to t
 Click **New character** (or location, prop), give it a name, and you land on its detail page. The top shows **who it is**:
 a large cover, then the name, kind, a one-line description, tags, and a quick summary (how many references and variants,
 voice, blockout color, real or fictional). The name, description and tags read like text; click to edit, and they save when
-you leave them.
+you leave them. A character's header also has **Make it talk**: write a script and it is voiced with the character's own voice and
+turned into a talking video from its front image (see [Digital humans](/docs/guides/digital-humans)).
 
 Below that, tabs split the rest:
 
@@ -119,7 +120,7 @@ finds the same subject instead of creating a duplicate.
 
 ## Assets in workflows
 
-Workflows have three asset-library nodes under "Assets & timeline":
+Workflows have three asset-library nodes under the "Assets" group of Add node:
 
 - **Get from asset library**: pick an asset, or look it up by kind + name. It outputs the prompt descriptor, references (in
   the order generation picks them), cover and voice, ready to feed generation, plugin and other nodes. When a name lookup
@@ -146,8 +147,8 @@ a turnaround or concept art, which is then saved to the library. The same charac
   connected assets along its top, and they come first in the `@` menu.
 - Connect it into a note or a document and "Let AI write" reads its description and looks at its first two references
   ("describe this character", "write her backstory").
-- Select the asset item and its toolbar offers its abilities: **Fill in angles** (all three kinds) and **Generate
-  expressions** (characters only). The new images appear to the right and are attached to the asset.
+- Select the asset item and its toolbar offers its abilities: **Fill in angles** (all three kinds), **Generate
+  expressions** (characters only) and **Make it talk** (characters only; see [Digital humans](/docs/guides/digital-humans)). The new images appear to the right and are attached to the asset.
 
 ## Where it's used
 
