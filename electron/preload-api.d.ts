@@ -22,6 +22,8 @@ export interface LivePanelCard {
   header: number;
   radius: number;
   muted: boolean;
+  /** 指针停在这张卡片的网页(原生视图)上 —— 渲染层自己看不见那一块。 */
+  hovered: boolean;
 }
 
 export interface MosaelUpdateInfo {

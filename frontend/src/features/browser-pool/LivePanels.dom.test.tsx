@@ -28,7 +28,7 @@ describe("LivePanels audio", () => {
 
   it("uses the main-process mute state and toggles the top embedded browser", () => {
     render(<LivePanels />);
-    act(() => publishPanels?.([{ id: "browser-1", x: 20, y: 20, width: 384, height: 244, header: 26, radius: 12, muted: true }]));
+    act(() => publishPanels?.([{ id: "browser-1", x: 20, y: 20, width: 384, height: 244, header: 26, radius: 12, muted: true, hovered: false }]));
 
     const button = screen.getByRole("button", { name: "livePanelUnmute" });
     expect(button.getAttribute("aria-pressed")).toBe("false");
@@ -39,7 +39,7 @@ describe("LivePanels audio", () => {
   it("blocks exposed borders and title gaps from reaching the workflow canvas", () => {
     const canvasPointer = vi.fn();
     render(<div onPointerDown={canvasPointer}><LivePanels /></div>);
-    act(() => publishPanels?.([{ id: "browser-1", x: 20, y: 20, width: 384, height: 244, header: 26, radius: 12, muted: true }]));
+    act(() => publishPanels?.([{ id: "browser-1", x: 20, y: 20, width: 384, height: 244, header: 26, radius: 12, muted: true, hovered: false }]));
 
     const shell = document.querySelector('[data-live-panel="browser-1"]');
     expect(shell?.className).toContain("pointer-events-auto");

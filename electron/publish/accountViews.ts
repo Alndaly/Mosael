@@ -1,9 +1,10 @@
-import { app, session, WebContentsView, type BaseWindow } from "electron";
+import { app, screen, session, WebContentsView, type BaseWindow } from "electron";
 import fs from "node:fs";
 import path from "node:path";
 import { EMBED_HEADER_HEIGHT, type ViewState } from "./types";
 import { PageDriver } from "./pageDriver";
 import { panelMediaScript } from "./panelAudio";
+import { PanelHover } from "./panelHover";
 
 /* eslint-disable @typescript-eslint/no-require-imports */
 const { handleAccountSelection: bindWebauthnAccountSelection } =
@@ -86,6 +87,8 @@ export interface PanelCard {
   radius: number;
   /** Electron 层的真实静音状态；标题条据此画开关。 */
   muted: boolean;
+  /** 指针正停在这张卡片的网页上(渲染层看不见那一块,见 PanelHover)。卡片外壳据此亮出缩放手柄。 */
+  hovered: boolean;
 }
 
 /**
@@ -117,6 +120,11 @@ export class AccountViewManager {
     width: PANEL.width,
     height: PANEL.height,
   };
+  /** 指针停在哪些面板的网页上。状态一变就重排一次,把 hovered 随卡片下发。 */
+  private hover = new PanelHover({
+    pointerInside: (id) => this.pointerOverView(id),
+    onChange: () => this.layout(),
+  });
   /**
    * 自动关闭:面板 → 允许空闲多久(毫秒)。
    *
@@ -239,6 +247,7 @@ export class AccountViewManager {
     this.panelIdleMs.delete(accountId);
     this.panelTouchedAt.delete(accountId);
     this.audiblePanels.delete(accountId);
+    this.hover.drop(accountId);
     this.views.delete(accountId);
     this.drivers.delete(accountId);
     if (this.visibleId === accountId) {
@@ -261,6 +270,7 @@ export class AccountViewManager {
     if (this.visibleId && this.visibleId !== accountId) {
       this.demote(this.visibleId);
     }
+    this.hover.drop(accountId); // 亮到前台就不再是面板,手柄不该因为它亮着
     this.visibleId = accountId;
     this.layout();
     // Re-adding the same View is the current View API's z-order operation:
@@ -412,6 +422,18 @@ export class AccountViewManager {
     this.savePanelLayout();
   }
 
+  /** 系统指针此刻是否在这块面板的网页(原生视图)上。PanelHover 的兜底检查用。 */
+  private pointerOverView(accountId: string): boolean {
+    const view = this.views.get(accountId);
+    if (!this.window || this.window.isDestroyed() || !this.alive(view)) return false;
+    const content = this.window.getContentBounds();
+    const bounds = view.getBounds();
+    const cursor = screen.getCursorScreenPoint();
+    const x = cursor.x - content.x;
+    const y = cursor.y - content.y;
+    return x >= bounds.x && x < bounds.x + bounds.width && y >= bounds.y && y < bounds.y + bounds.height;
+  }
+
   /** 面板被用到了 —— 刷新空闲计时(自动关闭的判据由所有者主动 touch 表达,见 panelIdleMs)。 */
   touchPanel(accountId: string): void {
     if (this.panels.includes(accountId)) this.panelTouchedAt.set(accountId, Date.now());
@@ -487,6 +509,7 @@ export class AccountViewManager {
     this.panelIdleMs.delete(accountId);
     this.panelTouchedAt.delete(accountId);
     this.audiblePanels.delete(accountId);
+    this.hover.drop(accountId);
     if (this.visibleId === accountId) return;
     const view = this.views.get(accountId);
     if (this.alive(view)) view.webContents.setZoomFactor(1);
@@ -610,6 +633,7 @@ export class AccountViewManager {
       clearInterval(this.idleTimer);
       this.idleTimer = null;
     }
+    this.hover.dispose();
     for (const accountId of [...this.views.keys()]) {
       this.destroy(accountId);
     }
@@ -712,6 +736,12 @@ export class AccountViewManager {
         }
         lastEscapeAt = now;
       });
+      // 指针在不在这块面板的网页上 —— 渲染层看不见原生视图上的鼠标,缩放手柄要靠这个才能在
+      // 悬停网页时亮出来。只看不拦(从不 preventDefault),页面照常收到每一个事件。见 PanelHover。
+      view.webContents.on("before-mouse-event", (_event, mouse) => {
+        if (this.visibleId === accountId || !this.panels.includes(accountId)) return;
+        this.hover.observe(accountId, mouse.type);
+      });
       // 地址/加载态变化 → 刷新工具栏(仅当前可见视图才广播)。
       const sync = () => {
         if (this.visibleId === accountId) this.emit();
@@ -790,6 +820,7 @@ export class AccountViewManager {
         header: PANEL.header,
         radius: PANEL.radius,
         muted: view.webContents.isAudioMuted(),
+        hovered: this.hover.has(accountId),
       };
       cards.push(card);
       // 原生视图嵌在卡片里:让出标题条,四周内缩,于是卡片的圆角边框在视图外侧露出来。
