@@ -2,7 +2,7 @@
 title: Using plugins
 description: Connect local tools or MCP services and configure permissions for agents and workflows.
 order: 10
-updated: 2026-09-25
+updated: 2026-10-04
 version: 1.8.3
 ---
 
@@ -45,16 +45,20 @@ often, not less.
 
 ## Installing one
 
-The Plugins page has two tabs: **Installed** and **Market**.
+The left column of the Plugins page lists installed plugins; the header has **Scan plugins** and **Browse plugins**. The market is a grid of
+cards: search at the top (tool names count too), filter by **All / Installed / Updates**, and **Filter by capability** — noise reduction,
+transcription, translation, speech, document parsing… only those some plugin in the market actually provides, each with a count. A card
+opens a detail page: permissions in plain words, **What it adds to Mosael** saying where each capability shows up once installed, and
+**Tools it brings**.
 
 **From the market**: find the one you want and hit Install. It does not go straight in — the
 package is fetched, its manifest read, and **the permissions it declares and the tools it brings
 are laid out for you** before anything lands. Installing a plugin puts code that will be executed
 on your machine; that list is worth a look.
 
-**Built-in plugins** (ComfyUI, for one) show up in the market too, marked **Built in**: they are
+**Built-in plugins** (ComfyUI, Object Storage and MinerU document parsing) show up in the market too, marked **Built in**: they are
 already installed and update with the app, so there is no Install button and they cannot be
-uninstalled — add a connection under **Installed** to start using one.
+uninstalled — select one in the left column and add a connection to start using it.
 
 **From a link**: any zip URL works, through the same confirmation. A company intranet can host its
 own market index (plain JSON — format in [Writing a plugin](/docs/guides/writing-plugins)) and
@@ -62,7 +66,7 @@ point the app at it in settings.
 
 **By hand**: copy the plugin directory into the plugins folder (the Plugins page tells you where —
 don't go looking for `~/.mosael/plugins`, that path does not exist on Windows) and hit
-**Scan**. This is the fastest loop while writing one.
+**Scan plugins**. This is the fastest loop while writing one.
 
 Once installed: a package with no settings comes with a connection ready to go, one with settings
 needs you to add a connection; the **permissions** the manifest declares are granted one at a
@@ -82,6 +86,17 @@ Mosael does not inject its own provider secrets or API session token into the pl
 
 A plugin missing a required credential stays out of the tool list — letting the agent call a tool
 that is certain to 401 only burns a turn restating what the settings page already said.
+
+Each connection also carries two settings that come from the host:
+
+- **Network**: **Follow Mosael** (the default — the outbound proxy under Admin → Deployment), **Direct (no proxy)**, or **Use a proxy**
+  with an address. MinerU, for instance, only serves mainland China: from abroad pick a proxy into the mainland; inside China with a
+  global proxy on, pick direct.
+- **PyPI mirror / npm registry**: only for plugins that install dependencies (Manim, Remotion); they follow Admin → Engines → Download
+  sources by default, or pick a preset or custom address per connection.
+
+The proxy environment variables (`HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`, `NO_PROXY` and friends) are injected by the host from this
+setting; a plugin manifest can't declare them itself.
 
 ## Letting it do the OAuth for you
 
@@ -129,6 +144,12 @@ all makes the node panel a forty-row haystack, costs tokens on forty description
 crowds out the model's choice among the built-in tools. The tool list on the Plugins page is
 searchable (names and descriptions both match) and can be toggled in bulk over the current filter.
 
+**Tools with consequences ask first.** Every tool declares its effects: nothing outside, costs money, acts outside the app, or runs code
+on this machine. When the agent (the in-app assistant, or an MCP client such as Claude CLI) calls a plugin tool that costs money, acts
+outside or runs code, a confirmation card comes first, naming the tool, the connection, a parameter summary and why it asks (e.g. "runs
+code on your computer"); once approved it runs with your own connection. Read-only tools still run directly. Those tools carry an
+**Asks first** badge in the tool table and the market. A tool that declares nothing counts as acting outside.
+
 **Sub-agents get no plugin tools by default.** A sub-agent only uses read-only tools, and a plugin
 tool with no confirmation gate can still send requests or write files. To allow one, mark it
 `"read_only": true` in the manifest — that is a judgement made by whoever ships the plugin, not
@@ -153,7 +174,7 @@ workflow nodes.
 Export a workflow to a machine that lacks the plugin and opening it tells you exactly which tool of
 which plugin is missing.
 
-## Plugins that generate for Mosael
+## Plugins that work for Mosael
 
 Some plugins don't offer tools to the agent and workflows; they **generate for Mosael** instead. Such a plugin lists
 its models (the parameters each one takes and its reference image slots), and those models appear in the model
@@ -165,11 +186,19 @@ uninstalled (switch its connection off if you don't use it). See [Generating wit
 for setup. The connection card of such a plugin shows “N generation models · refreshed …”; after saving a new
 workflow in ComfyUI, click “Refresh models”.
 
+Plugins can also register in Mosael's **capability table**, side by side with the local engines: **document parsing, noise reduction,
+vocal separation, transcription, translation, speech and asset links**. Install one and it appears under that capability in **Settings →
+Capability providers** (where it can become the default), as well as in workflow engine dropdowns, the editor, the media library and the
+agent, used whenever it's named. A tool that claims a capability isn't hidden: it sits in the Plugins page's tool table with a badge for the
+capability, and expanding it shows where else it's used (MinerU's **Parse a document with MinerU**, for example — a document's **Parse again** and the
+**Document to Markdown** node call it too); tick it and the agent and workflows can call it directly. A plugin that only works behind the
+scenes and exposes no separate tools says on the Plugins page which jobs it does.
+
 ## Examples
 
 These live under `plugins/examples/` in the repository — examples and official plugins at once:
 
-- `text-toolkit` — pure functions, no dependencies, no credentials.
+- `text-toolkit` — pure functions, no dependencies, no credentials: word count, extract hashtags, split into subtitle lines, shorten to a length, tidy up copy, Markdown to plain text, extract links and mentions — all local and read-only.
 - `tikhub` — **an MCP service with zero code**: one package, one connection per platform, each with its own key; the tool list comes live from TikHub's MCP server. Reads public data from Douyin, TikTok,
   Xiaohongshu, Bilibili, Kuaishou and more.
 - `baidu-pan` — **the one with OAuth**: it runs the authorization itself and renews its own
@@ -206,7 +235,7 @@ reference **video** may not). It uploads the asset to **your own bucket** and ha
 3. Grant its network permission.
 
 From then on, when a generation input only accepts links and you gave it a local asset, the asset is uploaded
-**automatically** first; with several buckets, pick the default under **Settings → Asset links**. The same
+**automatically** first; with several buckets, pick the default under **Settings → Capability providers → Asset links**. The same
 asset reuses its link until it expires. It is also a set of ordinary tools: upload (large files go up in
 parts, with progress), sign a link for an existing object, list a bucket, and pull an object back into the
 library.
@@ -214,6 +243,21 @@ library.
 The former Alibaba Cloud OSS / Tencent Cloud COS / Volcengine TOS / Amazon S3 plugins have been merged into
 it: on upgrade their connections, keys, permissions, default choice and workflow nodes move over as they are —
 nothing to set up again.
+
+## MinerU document parsing (built in)
+
+Scans, image-only PDFs, multi-column layouts and documents full of formulas and complex tables go to [MinerU](https://mineru.net): layout
+analysis, OCR, table and formula recognition — far better than local parsing for these.
+
+1. Create an API token under "API management" on mineru.net.
+2. Enable **MinerU document parsing** on the Plugins page, add a connection and paste the token; you can pick the model, the document
+   language and whether to force OCR.
+3. Use it on one document via **Parse again → Parse with MinerU** in the reader; make it the default under **Settings → Capability providers →
+   Document parsing**; or let the agent and workflows call **Parse a document with MinerU** (the result is stored as another parse of that document).
+
+Imports are always parsed locally first; sending a document to MinerU only happens when you name it — the document is uploaded to MinerU.
+Files are limited to 200 MB and 200 pages, and the free quota caps pages per day. MinerU only serves mainland China; from abroad or behind a
+global proxy, see the **Network** setting under Credentials above. Importing and reading documents is covered in [Documents](/docs/guides/documents).
 
 ## Manim teaching animations
 
