@@ -31,7 +31,7 @@ result = os.fdopen(os.dup(1), "w", encoding="utf-8")
 os.dup2(2, 1)
 exec(payload["code"], scope)
 sys.stdout.flush()
-result.write(json.dumps({"output": scope.get("output")}, ensure_ascii=False, default=str))
+result.write(json.dumps({"output": scope.get("output"), "assigned": "output" in scope}, ensure_ascii=False, default=str))
 result.flush()
 """
 
@@ -173,6 +173,12 @@ def run_code(code: str, inputs: dict[str, Any], *, timeout: float = TIMEOUT_SECO
         why = blame_line(attempt.stderr.decode(errors="replace"), fallback="") or tr("sandboxErr_noReason")
         raise SandboxError("sandboxErr_codeFailed", why=why)
     try:
-        return {"output": json.loads(attempt.stdout.decode())["output"]}
-    except (ValueError, KeyError) as exc:
+        result = json.loads(attempt.stdout.decode())
+        output, assigned = result["output"], result["assigned"]
+    except (ValueError, KeyError, TypeError) as exc:
         raise SandboxError("sandboxErr_outputUnparsable") from exc
+    #: 沙箱里没有网络、看不到文件 —— 代码唯一交得出去的就是 output。没赋值不是「结果为空」,是写错了
+    #: (常见的是按别家习惯写成 `def main(inputs): return …` 却没调用它);此前照常成功、交出 null。
+    if not assigned:
+        raise SandboxError("sandboxErr_outputNotAssigned")
+    return {"output": output}

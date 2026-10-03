@@ -213,6 +213,16 @@ def test_print_does_not_spoil_the_output() -> None:
     assert sandbox.run_code("print('调试一下')\noutput = 42", {})["output"] == 42
 
 
+def test_never_assigning_output_is_an_error_not_a_null() -> None:
+    """沙箱里没有网络、看不到文件 —— 代码唯一能交出去的就是 output。没赋值时此前照常「成功」、交出 null,
+    下游拿着空值往下跑(实测:按别家习惯写成 `def main(inputs): return {...}`)。现在当场说清。"""
+    _skip_without_backend()
+    with pytest.raises(sandbox.SandboxError) as caught:
+        sandbox.run_code("def main(inputs):\n    return {'x': 1}\n", {})
+    assert caught.value.key == "sandboxErr_outputNotAssigned"
+    assert sandbox.run_code("output = None", {})["output"] is None, "明确赋了 None 是赋了"
+
+
 def test_a_syntax_error_is_reported_not_swallowed() -> None:
     _skip_without_backend()
     with pytest.raises(sandbox.SandboxError) as caught:

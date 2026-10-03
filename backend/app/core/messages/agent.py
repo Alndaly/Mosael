@@ -297,6 +297,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "代码输出无法解析(请把结果赋给 output 变量)",
         "en": "Could not read the code's output (assign the result to the output variable).",
     },
+    "sandboxErr_outputNotAssigned": {
+        "zh": "代码跑完了,但没有给 output 赋值 —— 把结果写成 output = …(写成函数的话,最后调用它:output = main(inputs))",
+        "en": "The code finished without assigning output. Write the result as output = … (if you wrote a function, call it: output = main(inputs)).",
+    },
     # 白模渲染与导入模型
     "sceneRenderErr_shotNoCamera": {"zh": "镜头「{shot}」没有可用的机位", "en": "Shot \"{shot}\" has no usable camera."},
     "sceneRenderErr_shotMissing": {"zh": "场景里没有镜头 {shot_id}", "en": "The scene has no shot {shot_id}."},
