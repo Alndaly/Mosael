@@ -7,6 +7,7 @@ import {
   movePanel,
   panelHeightFor,
   panelRect,
+  panelStack,
   resizePanel,
   type PanelHandle,
   type PanelLayout,
@@ -214,5 +215,29 @@ describe("a resize handle never slides the panel", () => {
         }
       }
     }
+  });
+});
+
+describe("stacked panels", () => {
+  it("staggers the lower cards upward so their title bars show, and hides every page behind the top one", () => {
+    const { cards, page } = panelStack(START, AREA, 3);
+    const top = panelRect(START, AREA);
+    expect(cards[2]).toEqual(top);
+    expect(cards.map((card) => top.y - card.y)).toEqual([2 * PANEL.stackOffset, PANEL.stackOffset, 0]);
+    // 所有网页共用最上面那张的网页区域:它以外的标题条、那圈边、手柄热区,以及下层露出的标题条,
+    // 都不会被任何原生视图压住。
+    expect(page).toEqual({
+      x: top.x + PANEL.inset,
+      y: top.y + PANEL.header,
+      width: top.width - PANEL.inset * 2,
+      height: top.height - PANEL.header - PANEL.inset,
+    });
+  });
+
+  it("never pushes a lower title bar into the toolbar", () => {
+    const nearTop: PanelLayout = { x: 100, y: EMBED_HEADER_HEIGHT + 30, width: 384 };
+    const { cards } = panelStack(nearTop, AREA, 4);
+    for (const card of cards) expect(card.y).toBeGreaterThanOrEqual(EMBED_HEADER_HEIGHT);
+    expect(cards.at(-1)!.y).toBe(EMBED_HEADER_HEIGHT + 30);
   });
 });

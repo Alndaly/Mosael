@@ -134,6 +134,39 @@ export function panelRect(layout: PanelLayout, area: PanelArea): PanelRect {
   };
 }
 
+/**
+ * 卡片堆:最上面那张落在 layout 上,下面的每层往上错开 stackOffset,露出各自的标题条 —— 看得出
+ * 同时有几路在跑,也点得到它们的关闭。
+ *
+ * **所有网页(原生视图)都叠在最上面那张的网页区域里**(`page`)。原生视图永远盖在渲染层之上:
+ * 下层的网页只要跟着卡片错开、露出一截,就必然压在别的卡片的界面上 —— 此前下层网页从上层卡片的
+ * y+4 开始,正好盖住上层标题条的 y+4..y+26,上层的拖动、静音、关闭和上边的缩放手柄全点不到;
+ * 更下一层又盖住中间那层露出来的标题条。只有完全藏在最上面那张网页的后面,才哪儿都不压。
+ *
+ * 藏在后面不等于停掉:被完全遮挡的视图照样参与合成、照样是同样大小的 1280×800 视口、照样能被
+ * 可信输入命中(见 PANEL 的说明)—— 此前它们本来就有大半张压在上层下面,现在是整张。
+ */
+export function panelStack(
+  layout: PanelLayout,
+  area: PanelArea,
+  count: number,
+): { cards: PanelRect[]; page: PanelRect } {
+  const top = panelRect(layout, area);
+  // 错开量有上限:露出来的标题条不能顶进窗口顶部的工具栏。
+  const deepest = Math.max(0, Math.floor((top.y - EMBED_HEADER_HEIGHT) / PANEL.stackOffset));
+  const cards = Array.from({ length: count }, (_, index) => {
+    const depth = Math.min(count - 1 - index, deepest);
+    return { ...top, y: Math.max(EMBED_HEADER_HEIGHT, top.y - depth * PANEL.stackOffset) };
+  });
+  const page = {
+    x: top.x + PANEL.inset,
+    y: top.y + PANEL.header,
+    width: top.width - PANEL.inset * 2,
+    height: top.height - PANEL.header - PANEL.inset,
+  };
+  return { cards, page };
+}
+
 /** 把一份(可能来自上次运行的)几何夹进当前窗口 —— 窗口可能比上次小。 */
 export function fitPanelLayout(layout: PanelLayout, area: PanelArea): PanelLayout {
   const width = clampWidth(layout.width, area);

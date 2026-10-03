@@ -9,7 +9,7 @@ import {
   PANEL,
   fitPanelLayout,
   movePanel,
-  panelRect,
+  panelStack,
   resizePanel,
   type PanelArea,
   type PanelHandle,
@@ -324,10 +324,13 @@ export class AccountViewManager {
     if (!this.window || this.window.isDestroyed() || this.visibleId === accountId) {
       return false;
     }
-    if (!this.panels.includes(accountId)) {
-      if (this.panels.length >= MAX_PANELS) return false; // 见 MAX_PANELS:超额不挂,但任务照跑
-      this.panels.push(accountId);
-    }
+    // 下面的 addChildView 会把这块视图挪到最上层(再加一次同一个 View 就是 View API 的 z 序操作),
+    // 所以它在卡片堆里也要排到最上面:已挂着的(比如从前台全屏退回来)先摘出来再放到末尾。次序
+    // 对不上的话,最上面那张卡片的外壳底下露出的是别人的网页。
+    const index = this.panels.indexOf(accountId);
+    if (index >= 0) this.panels.splice(index, 1);
+    else if (this.panels.length >= MAX_PANELS) return false; // 见 MAX_PANELS:超额不挂,但任务照跑
+    this.panels.push(accountId);
     if (opts?.idleMs) this.panelIdleMs.set(accountId, opts.idleMs);
     this.panelTouchedAt.set(accountId, Date.now());
     const { view } = this.ensure(accountId);
@@ -752,42 +755,26 @@ export class AccountViewManager {
       });
     }
 
-    // 悬浮面板:右下角卡片堆,后挂的在上、每层向上错开一点,好看出同时有几路在跑。
-    // 面板必须**整块落在可视区内** —— 实测挂进窗口但 bounds 移出屏幕的视图视口是 0×0,
-    // 布局与命中测试双双失效,可信输入就白费了。所以错开量有上限,不让底层被推出窗口。
-    const {
-      x: anchorX,
-      y: anchorY,
-      width: cardW,
-      height: cardH,
-    } = panelRect(this.panelLayout, { width, height });
-    const maxStack = Math.max(1, Math.floor((anchorY - EMBED_HEADER_HEIGHT) / PANEL.stackOffset) + 1);
-    const cards: PanelCard[] = [];
-    this.panels.forEach((accountId, index) => {
-      if (accountId === this.visibleId) return; // 已在前台全屏,别再按面板摆
-      const view = this.views.get(accountId);
-      if (!this.alive(view)) return;
-      const depth = Math.min(this.panels.length - 1 - index, maxStack - 1);
+    // 悬浮面板:右下角卡片堆,后挂的在上,下层的卡片往上错开、露出标题条;网页全部叠在最上面那张
+    // 的网页区域里(为什么见 panelStack)。面板必须**整块落在可视区内** —— 实测挂进窗口但 bounds
+    // 移出屏幕的视图视口是 0×0,布局与命中测试双双失效,可信输入就白费了。
+    // 已在前台全屏的那块不再按面板摆。
+    const mounted = this.panels.filter(
+      (accountId) => accountId !== this.visibleId && this.alive(this.views.get(accountId)),
+    );
+    const stack = panelStack(this.panelLayout, { width, height }, mounted.length);
+    const cards: PanelCard[] = mounted.map((accountId, index) => {
+      const view = this.views.get(accountId)!;
+      view.setBounds(stack.page);
       // 卡片外廓:渲染层照这个矩形画圆角、边框、阴影和标题条。
-      const card = {
+      return {
         id: accountId,
-        x: anchorX,
-        y: Math.max(EMBED_HEADER_HEIGHT, anchorY - depth * PANEL.stackOffset),
-        width: cardW,
-        height: cardH,
+        ...stack.cards[index],
         header: PANEL.header,
         radius: PANEL.radius,
         muted: view.webContents.isAudioMuted(),
         hovered: this.hover.has(accountId),
       };
-      cards.push(card);
-      // 原生视图嵌在卡片里:让出标题条,四周内缩,于是卡片的圆角边框在视图外侧露出来。
-      view.setBounds({
-        x: card.x + PANEL.inset,
-        y: card.y + PANEL.header,
-        width: cardW - PANEL.inset * 2,
-        height: cardH - PANEL.header - PANEL.inset,
-      });
     });
     this.onPanelsChanged(cards);
   }

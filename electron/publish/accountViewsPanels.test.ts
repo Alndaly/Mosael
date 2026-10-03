@@ -123,6 +123,9 @@ interface Rect {
   height: number;
 }
 
+const intersects = (a: Rect, b: Rect) =>
+  a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+
 let window: InstanceType<typeof fake.Window>;
 let manager: InstanceType<typeof AccountViewManager>;
 let cards: PanelCard[];
@@ -227,5 +230,54 @@ describe("resizing a panel from its handles", () => {
       expect(Math.abs(x - ax), `${handle} ${JSON.stringify(rect)}`).toBeLessThanOrEqual(0.5);
       expect(Math.abs(y - ay), `${handle} ${JSON.stringify(rect)}`).toBeLessThanOrEqual(0.5);
     }
+  });
+});
+
+describe("stacked panels", () => {
+  it("keeps every page clear of the top card's title bar, rim and resize handles", () => {
+    attach("a", "b", "c");
+    const top = cards[cards.length - 1];
+    expect(top.id).toBe("c");
+
+    // 最上面那张卡片的网页区域:标题条以下、四周让出内缩边。它以外的部分(标题条、那圈边、
+    // 伸出卡片的手柄热区)都是渲染层要收指针的地方,任何一块原生视图都不许压上去。
+    const content = viewOf("c").getBounds();
+    const chrome: Rect[] = [
+      { x: top.x - 10, y: top.y - 10, width: top.width + 20, height: top.header + 10 },
+      { x: top.x - 10, y: top.y, width: 10 + (content.x - top.x), height: top.height + 10 },
+      { x: content.x + content.width, y: top.y, width: top.x + top.width + 10 - (content.x + content.width), height: top.height + 10 },
+      { x: top.x - 10, y: content.y + content.height, width: top.width + 20, height: top.y + top.height + 10 - (content.y + content.height) },
+    ];
+    for (const id of ["a", "b", "c"]) {
+      for (const region of chrome) expect(intersects(viewOf(id).getBounds(), region), `${id} over ${JSON.stringify(region)}`).toBe(false);
+    }
+  });
+
+  it("still shows the lower cards' title bars peeking above the top one", () => {
+    attach("a", "b", "c");
+    const [a, b, c] = cards;
+    expect(c.y - b.y).toBeGreaterThan(0);
+    expect(b.y - a.y).toBeGreaterThan(0);
+    // 下层卡片露出来的那截标题条上也没有任何原生视图(关闭按钮在那儿)。
+    for (const lower of [a, b]) {
+      const peek = { x: lower.x, y: lower.y, width: lower.width, height: Math.min(lower.header, c.y - lower.y) };
+      for (const id of ["a", "b", "c"]) expect(intersects(viewOf(id).getBounds(), peek)).toBe(false);
+    }
+  });
+
+  it("keeps lower pages fully laid out at the panel size, just covered by the top one", () => {
+    attach("a", "b");
+    // 被压在下面的页面照样挂着、照样是同样大小的视口(可信输入要靠它),只是看不见。
+    expect(viewOf("a").getBounds()).toEqual(viewOf("b").getBounds());
+    expect(window.children).toEqual([viewOf("a"), viewOf("b")]);
+  });
+
+  it("puts a panel brought back from the full view on top of the stack, page and card alike", () => {
+    attach("a", "b");
+    manager.show("a");
+    manager.hide();
+
+    expect(cards.map((card) => card.id)).toEqual(["b", "a"]);
+    expect(window.children.at(-1)).toBe(viewOf("a"));
   });
 });
