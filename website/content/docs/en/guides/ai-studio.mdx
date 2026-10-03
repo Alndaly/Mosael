@@ -14,22 +14,54 @@ The agent uses Mosael's MCP tools to **see your project and propose changes**: s
 
 ![AI Studio: initial chat state before a model is configured](/media/screens/en/ai-chat.png)
 
-- **Confirmation cards**: any action that would mutate project / external state pops a confirmation card and only lands after you approve.
+- **Confirmation cards**: any action that would mutate project / external state pops a confirmation card and only lands after you approve (see the next section).
 - **Choice cards**: at a genuine fork — two or three routes all make sense and which one is right
   depends on what you want (which platform to publish to, which style) — it lays the options out
   for you to pick, single or multi select, with an "other" box and a skip. Skipping means it
-  continues on its own judgement rather than asking again.
-  A confirmation card can be set to "always allow in this session"; **a choice card cannot** —
-  it is asking precisely because it does not know, and auto-answering would mean it made the
-  answer up.
+  continues on its own judgement rather than asking again. A choice card has no "always allow this
+  session" — it is asking precisely because it does not know, and auto-answering would mean it made
+  the answer up.
   Both kinds make it **wait for you** rather than carrying on after asking. If the wait runs out
   (ten minutes), it continues on its own judgement or wraps up; answer later and your answer still
   reaches the conversation.
 - **Skills**: available skills come from the embedded agent runtime and current environment.
-- **Attachments**: images on the current message go straight to the selected model. Images and
-  videos imported into the media library are analyzed by `analyze_asset` with the **current
-  session model**, not a separate hidden vision model.
-- The left column lists **conversations**; each is independent and can be renamed / deleted.
+- The left column lists **conversations**; each is independent and can be renamed / deleted. Someone else's conversation shared into the workspace is read-only.
+
+Its tools reach across media, documents, assets, notes, boards, 3D scenes, editing, workflows and publishing: creating projects and
+timelines, duplicating clips, replacing media, adding a track at a given row, listing boards, checking which voice engines exist
+(`list_speech_engines`), importing media from a link, reading documents, creating assets… When it names something wrong it gets a
+real error back (a mistyped voice engine lists the ones that exist) instead of making something up.
+
+### Confirmation cards follow the conversation
+
+A confirmation card appears **under the tool call that opened it**, not floating at the end of the chat. Top to bottom it shows the
+requester and the permission tier, the action in one sentence, the consequence, the parameters (one per line; code keeps its line
+breaks and syntax highlighting, the first 8 lines show with "expand all N lines"), a collapsed **Raw data** section, and the buttons
+**Allow once**, **Always allow this session** and **Reject**. Once decided, the card collapses into a one-line status inside that tool
+call ("Approved · Done", "Auto-approved · Failed", "Rejected"…) — nothing to dismiss; a failure reason is kept in full and folds when
+long. While a request is waiting, **Jump to latest** turns into **A request needs your approval** and takes you straight to the card.
+
+The tier is on the card: **Edit**, **AI cost**, **Render cost**, **Outside this app** and **Permanent delete**. **Always allow this
+session** is **remembered per tier**: it only covers later cards from the same tool at the same tier or lower, and **the Outside this
+app and Permanent delete tiers never offer it** — the card says irreversible actions ask every time. If a card fails halfway, what it
+already did is rolled back rather than left half-done.
+
+### Attachments, documents and background jobs
+
+- **Attachments**: 📎, dragging files from Finder onto the chat ("Drop to add to the chat") and pasting a screenshot all follow the same
+  rules. Images, video and audio go into the media library; PDF, Word, slides, spreadsheets, EPUB, Markdown, TXT, CSV and web pages go in
+  as [documents](/docs/guides/documents), which the agent reads section by section — short ones whole, long ones from the table of
+  contents, handing page images to a vision model when layout matters; other text files (scripts, subtitles, configs) are pasted into
+  the message, up to 3,000 characters each; anything else is refused with the file and the reason. Files dragged straight out of a
+  WeChat or Feishu chat window live in that app's sandbox and can't be read — save them to disk first.
+- Images on the current message go straight to the selected model. Images and videos imported into the media library are analyzed by
+  `analyze_asset` with the **current session model**, not a separate hidden vision model.
+- **Background job receipts**: when a job the agent started (parsing an attachment, a generation) finishes, a one-line job notice appears
+  in the chat (hover for "Background job receipt" and the job id) — never in your message queue; receipts that arrive while the agent is
+  busy are saved up and handed over together when the turn ends. Jobs it already watched to the end send no receipt.
+- **It doesn't stop at a colon**: when the model stops on a half sentence like "Let me check…:", it is prompted to continue once; likewise
+  when the output was cut off, when it said it would call a tool but sent none, or when the provider paused the turn. If that still fails,
+  the reason is written into the chat (for example, raise **Max output tokens** in the model settings).
 
 The editor, workflow canvas and boards reuse this same session pool in a compact assistant panel.
 Its top-left heading is the current conversation title; click the title or arrow to search or switch sessions. Drag empty header space to move a floating panel.
@@ -68,8 +100,11 @@ summary itself.
   editable in [model settings](/docs/guides/providers).
 - You can compact on demand instead of waiting — it costs one model call, so it's an explicit button
   rather than something that fires on its own.
-- The meter is anchored on **real usage reported by the vendor** (the last call's input + output);
-  only messages newer than that are estimated.
+- The meter is anchored on **real usage reported by the vendor** (the last call's input, output and
+  cache reads and writes); only messages newer than that are estimated.
+- If fewer than 1,024 tokens would be left for the answer, the turn isn't sent; instead you're told the
+  window size and how much is going out — enter the model's real context window in its settings, switch
+  to a model with a bigger window, or compact the context first.
 
 ### Trajectory: what it did, and where the time went
 
@@ -125,6 +160,8 @@ In **Generate** mode the left column is the **generation model** catalog, the mi
 
 - Pick a model → write a prompt → send; the job queues and finished results land in the media library. Your **default model** from Settings is preselected; with no default set the picker shows "Choose a model" and you pick one before sending.
 - Whether a model can run depends on **its vendor's key** being configured; with no usable model, a banner at the top links to settings.
+- **@ Asset** under the prompt names a character, location or prop from the asset library: its description joins the prompt and its references attach, as many as the model takes (see [Asset library](/docs/guides/assets)).
+- Attaching driving audio makes it a digital-human generation (talking photo, lip-sync), which needs **I have the pictured person's consent** ticked first — see [Digital humans](/docs/guides/digital-humans).
 - **Once submitted, it waits for the result.** Video generation often takes minutes, longer when the vendor is busy. Mosael never
   gives up on a task you have already paid for because it took "too long" — it ends only when the vendor reports it finished (or
   failed), or when you cancel it in the task center. The same holds across a backend restart: the result is **picked up again**
