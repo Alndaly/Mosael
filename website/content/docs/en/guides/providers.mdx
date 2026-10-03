@@ -2,7 +2,7 @@
 title: Model connections
 description: Connect your model services, choose defaults and configure cost estimates.
 order: 1
-updated: 2026-09-26
+updated: 2026-10-04
 version: 1.8.3
 ---
 
@@ -17,7 +17,7 @@ Settings groups AI providers into four **capability sections**, each configured 
 | **AI Chat** | the agent and workflow LLM nodes |
 | **AI Image** | text-to-image generation |
 | **AI Video** | text-to-video generation |
-| **AI Audio** | TTS voiceover / podcast synthesis / music and sound generation |
+| **AI Audio** | three blocks: speech synthesis (TTS voiceover), podcast dialogue, music & sound generation |
 
 At the top of each section is the **default model**: the default provider and model for that capability. Boards, AI Studio and workflow generation nodes **preselect** it, and you can switch in place. With no default set, those pickers show "Choose a model" and wait for you to pick one — they never fall back to whichever model happens to be listed first. The dropdown lists **models** (e.g. "DeepSeek · deepseek-v4-pro"), not providers — several models under one provider each appear on their own.
 
@@ -39,7 +39,11 @@ Click the chevron on a provider row to see that connection's model list.
 
 Click **Add provider** in the relevant section:
 
-1. Pick a **vendor** (built-ins include Alibaba DashScope, Volcengine ARK (video / Seedream image), Evolink, Kimi, MiniMax, OpenAI, Google, Kuaishou Kling, OpenAI-compatible endpoints; the catalog grows over time).
+1. Pick a **vendor**. The list is filtered by section and grows over time:
+   - **AI Chat**: Alibaba Bailian, Kimi, DeepSeek, MiniMax, OpenAI, OpenAI-compatible endpoints, plus the subscription group below;
+   - **AI Image**: Alibaba Bailian, Volcengine ARK, OpenAI, OpenAI-compatible endpoints, Evolink;
+   - **AI Video**: Alibaba Bailian, Volcengine ARK, MiniMax, Volcengine Jimeng AI (vision), HeyGen, Hedra, Google (Veo), Evolink, Kuaishou Kling — the digital-human models from Jimeng, HeyGen, Hedra and Kling are covered in [Digital humans](/docs/guides/digital-humans);
+   - **AI Audio**: speech synthesis (Alibaba Bailian, OpenAI, Volcengine TTS), podcast dialogue (Volcengine podcast), music & sound (below).
 2. Give it a **name** (e.g. "My Kimi").
 3. Paste the **API key** (subscription plans have no key field — you authorize after saving instead). A "Get API key ↗" link jumps straight to that vendor's key console.
 4. **Base URL**: API-key providers can leave it empty for the vendor default (shown as the
@@ -103,8 +107,9 @@ Expand a provider row:
 - **Enable / disable** a single model with the switch. Disabled models disappear from the default-model dropdown and every model picker.
 - **Model settings** (gear icon):
   - **Capabilities**: which sections this model serves (chat / image / video / music & SFX / speech / podcast). Untagged models are detected automatically, see "Capability tags" below. This is how one endpoint expresses "a chat model *and* an image model".
-  - **Context window**: decides how long a conversation can run before compaction kicks in. Defaults to the vendor catalog; when the catalog doesn't know the model, a conservative 32000 is used and you can override it. The line underneath says whether the current value is **yours, the catalog's, or the fallback**.
-  - **Advanced** (collapsed): four compatibility switches — reasoning model, vision, reasoning effort, developer role. You only come here when an endpoint rejects a request; normally none of them need touching.
+  - **Context window**: decides how long a conversation can run before compaction kicks in. Defaults to the vendor catalog, then the built-in verified limits; when neither knows the model, a cloud model counts as 128K and a local or LAN endpoint (localhost, private addresses) as 64K — 32K can't even hold the tool descriptions. You can override it, and the line underneath says whether the current value is **yours, the catalog's, built-in, or the fallback**. Context lengths reported by vLLM are recognised.
+  - **Max output tokens**: how long one reply can be, thinking included. When unknown it is estimated at a quarter of the context window (capped at 32,768); left empty, the request sends a default budget rather than the model's limit, and the line underneath says so.
+  - **Advanced** (collapsed): compatibility switches — reasoning model, supports image input, supports reasoning_effort, supports json_schema (Structured Outputs), supports the developer role. You only come here when an endpoint rejects a request; for json_schema, verified vendors come with the answer filled in.
   - **Where parameters come from** (image/video models only; a model with both capabilities configures each separately): see the next section.
 - **Delete** with the trash icon.
 
@@ -169,6 +174,28 @@ Gateway; choose Auto or Frames + transcript instead.
 Subscription rows carry an extra **gauge icon** showing the current plan, each quota, and when it resets.
 
 It is **fetched on click**. None of these quota endpoints is a documented public API (they're what each vendor's own CLI uses internally), so polling them on a timer would both trip rate limits and quietly rot into a permanently failing background task the day a vendor changes something. When a fetch fails, the message distinguishes "this vendor isn't supported" from "this attempt didn't succeed".
+
+## Capability providers: who does each job
+
+**Settings → Capability providers** lists Mosael's own capabilities and who performs each one. Each block's **Provider** picker lists
+**local engines and connections of matching plugins side by side**; ones that aren't set up are listed with what's missing (and stay out of
+the picker), and a row of **Used in** tags is computed from where the capability is actually used. **Find plugins** in the corner opens the
+plugin market filtered to that capability.
+
+| Capability | Local / built in | Default |
+| --- | --- | --- |
+| Noise reduction | Built-in, DeepFilterNet, RNNoise | Built-in (the two speech models remove music, so they're never picked automatically) |
+| Vocal separation | Demucs (local) | Demucs |
+| Document parsing | Local parsing | Local parsing; a cloud parser such as MinerU is only used when you choose it |
+| Asset links | None — needs an object-storage plugin connection | With exactly one set up it's used automatically; with several and none chosen, you're asked at generation time |
+| Speech | Local voice cloning, Edge free voices, OpenAI, Volcano, Alibaba Bailian | **No default**: engine and voice are chosen as a pair wherever they're used |
+| Transcription | FunASR, WhisperX (local) | The first one with its runtime installed (FunASR first); missing runtimes point to Admin → Engines |
+| Translation | Google Translate (free), Chat model | Google Translate; the chat model costs money, so it's used only when chosen, with your own chat connection |
+
+**Plugins are never picked silently** (except asset links with a single storage): a transcription, translation or document-parsing plugin
+must be made the default here or named where it's used. Transcription and subtitle translation in the editor, the engine dropdowns on
+workflow nodes, voice input in the composer and a document's **Parse again** all follow this page. How plugin authors register for these
+capabilities is in [Writing a plugin](/docs/guides/writing-plugins).
 
 ## Outbound proxy
 
