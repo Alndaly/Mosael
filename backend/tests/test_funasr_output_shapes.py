@@ -54,6 +54,40 @@ def test_sensevoice_sentence_field_is_read() -> None:
     assert [w["word"] for w in segments[0]["words"]] == ["你", "真", "不", "错"]
 
 
+def test_sensevoice_spans_follow_its_own_tokens_not_the_characters() -> None:
+    """**SenseVoice 给每个 token 一个时间,标点也算一个 token;英文的 token 是词,不是字母。**
+
+    实测(本机 SenseVoiceSmall):「大家好，嗯，…」120 个 token 里 13 个是标点,各带一段时间;
+    此前按「去掉标点的字」逐个配时间,每过一个标点就错开一位 —— 30 秒的口播到结尾错开十几个字
+    (两三秒),字幕、剪口头禅的范围全跟着偏。英文更糟:44 个词的时间被配给了前 44 个字母,
+    逐字稿的词级时间变成 `W`、`e`、`l`……,后半句一个时间都没有。
+
+    时间和 token 的对应关系在结果的 `words` 里(和各句 timestamp 首尾相接、一一对应),照它配。
+    """
+    sentences = [
+        {"start": 0, "end": 1500, "sentence": "<|zh|><|NEUTRAL|><|Speech|><|withitn|>你好，世界。",
+         "timestamp": [[0, 100], [100, 200], [200, 300], [300, 400], [400, 500], [500, 600]], "spk": 0},
+        {"start": 2000, "end": 3500, "sentence": "<|en|><|NEUTRAL|><|Speech|><|withitn|>Hello world, 92.",
+         "timestamp": [[2000, 2400], [2400, 2800], [2800, 2850], [2900, 3000], [3000, 3100], [3100, 3150]], "spk": 0},
+    ]
+    words = ["你", "好", "，", "世", "界", "。", "Hello", "world", ",", "9", "2", "."]
+    segments = asr_worker.funasr_sentences_to_segments(sentences, words=words)
+    assert [(w["word"], w["start"]) for w in segments[0]["words"]] == [("你", 0.0), ("好", 0.1), ("世", 0.3), ("界", 0.4)]
+    assert [(w["word"], w["start"], w["end"]) for w in segments[1]["words"]] == [
+        ("Hello", 2.0, 2.4), ("world", 2.4, 2.8), ("9", 2.9, 3.0), ("2", 3.0, 3.1),
+    ]
+    assert segments[1]["text"] == "Hello world, 92."
+
+
+def test_sensevoice_words_that_do_not_line_up_fall_back_to_characters() -> None:
+    """`words` 的个数和时间对不上时不硬配(那正是错位的来源),退回逐字配 —— Paraformer 的老路。"""
+    segments = asr_worker.funasr_sentences_to_segments(
+        [{"start": 0, "end": 500, "text": "你好", "timestamp": [[0, 200], [200, 400]], "spk": 0}],
+        words=["你好"],
+    )
+    assert [w["word"] for w in segments[0]["words"]] == ["你", "好"]
+
+
 def test_paraformer_text_field_still_works() -> None:
     """老字段不能因此失效:同一个函数要同时认两种模型的输出。"""
     segments = asr_worker.funasr_sentences_to_segments([

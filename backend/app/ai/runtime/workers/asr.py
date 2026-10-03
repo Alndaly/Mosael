@@ -69,26 +69,56 @@ def strip_funasr_tags(text: str) -> tuple[str, str]:
     return _TAG.sub("", text or "").strip(), language
 
 
-def funasr_sentences_to_segments(sentences: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Map FunASR sentence_info (Paraformer spans + cam++ spk) to the segment
-    contract. Per-char timestamps become word tokens; punctuation stays only in
-    the sentence display text."""
+def _tokens_per_sentence(sentences: list[dict[str, Any]], tokens: Any) -> list[list[str]] | None:
+    """模型自己的 token(结果里的 `words`)按句切开,和各句的 timestamp 一一对应;对不上就 None。
+
+    **SenseVoice 的时间是按它自己的 token 给的**:标点也是一个 token、也带一段时间;英文的 token
+    是词。各句的 timestamp 首尾相接正好是整条的那一串,`words` 与它一一对应(本机实测,中英文、
+    单句多句都是)。Paraformer 没有这一栏(它的标点由 ct-punc 事后插入、不带时间),走逐字那条老路。
+    """
+    if not isinstance(tokens, list) or not all(isinstance(one, str) for one in tokens):
+        return None
+    counts = [len(sentence.get("timestamp") or []) for sentence in sentences]
+    if sum(counts) != len(tokens):
+        return None
+    per_sentence, at = [], 0
+    for count in counts:
+        per_sentence.append(tokens[at:at + count])
+        at += count
+    return per_sentence
+
+
+def _is_spoken(token: str) -> bool:
+    """一个 token 是不是念出来的东西 —— 空白和纯标点不是,它们只留在整句的显示文本里。"""
+    return any(_is_timed_char(ch) for ch in token)
+
+
+def funasr_sentences_to_segments(sentences: list[dict[str, Any]], words: Any = None) -> list[dict[str, Any]]:
+    """Map FunASR sentence_info (+ cam++ spk) to the segment contract.
+
+    `words` 是 SenseVoice 结果里的 token 列表:给了而且对得上,每个 token 配它自己的那段时间
+    (标点 token 跳过);没给或对不上,逐字配(Paraformer:时间只给字,标点不带时间)。
+    标点只留在整句的显示文本里。"""
+    tokens_per_sentence = _tokens_per_sentence(sentences, words)
     segments: list[dict[str, Any]] = []
-    for sentence in sentences:
+    for index, sentence in enumerate(sentences):
         # **两种模型的字段名不同**:Paraformer 给 "text",SenseVoice 给 "sentence"。
         # 只读前者的那段时间里,SenseVoice 的每一句都取到空串,于是整条转写产出 0 段 ——
         # 界面上报的是「转写结果为空」,看不出是字段名对不上。
         raw = sentence.get("sentence") or sentence.get("text") or ""
         text, _lang = strip_funasr_tags(raw)
         spans = sentence.get("timestamp") or []
-        timed_chars = [ch for ch in text if _is_timed_char(ch)]
-        words: list[dict[str, Any]] = []
-        for ch, span in zip(timed_chars, spans):
+        if tokens_per_sentence is not None:
+            pairs = [(token.strip(), span) for token, span in zip(tokens_per_sentence[index], spans) if _is_spoken(token)]
+        else:
+            pairs = list(zip([ch for ch in text if _is_timed_char(ch)], spans))
+        timed: list[dict[str, Any]] = []
+        for token, span in pairs:
             if not isinstance(span, (list, tuple)) or len(span) < 2:
                 continue
-            words.append({"word": ch, "start": _sec(span[0]), "end": _sec(span[1])})
-        start = _sec(sentence["start"]) if sentence.get("start") is not None else (words[0]["start"] if words else 0.0)
-        end = _sec(sentence["end"]) if sentence.get("end") is not None else (words[-1]["end"] if words else 0.0)
+            timed.append({"word": token, "start": _sec(span[0]), "end": _sec(span[1])})
+        start = _sec(sentence["start"]) if sentence.get("start") is not None else (timed[0]["start"] if timed else 0.0)
+        end = _sec(sentence["end"]) if sentence.get("end") is not None else (timed[-1]["end"] if timed else 0.0)
         if end <= start:
             end = start + 0.01
         spk = sentence.get("spk")
@@ -96,9 +126,9 @@ def funasr_sentences_to_segments(sentences: list[dict[str, Any]]) -> list[dict[s
             speaker = f"SPEAKER_{int(spk):02d}" if spk is not None else None
         except (TypeError, ValueError):
             speaker = str(spk) if spk else None
-        if not text and not words:
+        if not text and not timed:
             continue
-        segments.append({"start": start, "end": end, "text": text, "speaker": speaker, "words": words})
+        segments.append({"start": start, "end": end, "text": text, "speaker": speaker, "words": timed})
     return segments
 
 
@@ -185,7 +215,7 @@ def run_funasr(request: dict[str, Any]) -> dict[str, Any]:
             break
     return {
         "language": detected or request.get("language") or "",
-        "segments": funasr_sentences_to_segments(sentences),
+        "segments": funasr_sentences_to_segments(sentences, words=item.get("words")),
     }
 
 
