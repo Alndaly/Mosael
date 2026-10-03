@@ -47,10 +47,10 @@ NO_PROXY_ENV = {key: "" for key in ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "h
 #: Excerpts cut from the trailer: (key, start, end). Only picture segments, no title cards.
 EXCERPTS = [
     ("forest", 4.45, 6.3),
-    ("bunny", 9.1, 11.2),
-    ("rodents", 13.2, 16.6),
+    ("bunny", 9.15, 11.1),
+    ("rodents", 13.25, 16.55),
     ("ambush", 18.9, 22.7),
-    ("butterfly", 24.95, 26.8),
+    ("butterfly", 24.97, 26.75),
     ("title", 26.9, 29.9),
 ]
 
@@ -72,7 +72,7 @@ TEXT = {
     "zh": {
         "workspace": "演示工作区",
         "project": "Big Buck Bunny · 剪辑练习",
-        "project2": "展厅漫游 · 镜头研究",
+        "project2": "Big Buck Bunny · 竖屏版",
         "sequence": "主时间线",
         "assets": {
             "forest": "林间光影", "bunny": "主角登场", "rodents": "三只捣蛋鬼", "ambush": "森林伏击",
@@ -113,7 +113,10 @@ TEXT = {
         "board": "镜头与灵感",
         "board_notes": ["镜头练习\n\n从一个镜头开始,\n把灵感变成一段故事。", "Big Buck Bunny\nBlender Foundation · CC BY 3.0\n\n参考画面 → 时间线 → 成片"],
         "board_draft": "让画面中的阳光缓缓移动",
+        "board_image": "清晨逆光的林间草地,大兔子坐在树洞前",
         "board2": "展厅创作",
+        "board3": "粗剪 · 三个镜头",
+        "board2_shot": "沿着三间展厅缓缓推进",
         "board2_note": "以这份文档为参考,写一段简洁的展厅介绍。",
         "markers": ["开场", "结尾"],
         "entities": [
@@ -136,17 +139,18 @@ TEXT = {
             "start": "设置标签与清单标题", "find": "找出全部视频素材", "tag": "给它们打上标签",
             "summary": "写一段清单", "save": "存成笔记", "output": "交付清单",
             "tag_value": "待剪", "report_title": "本周素材清单",
-            "template": "本周共 {{find.count}} 段视频,已标记为「{{start.tag}}」。\n\n素材 ID:{{find.ids}}",
+            "template": "本周共 {{find.count}} 段视频,都已打上「{{start.tag}}」标签。\n\n在素材库里按这个标签筛选就能找到它们。",
         },
         "schedule": "每天整理创作素材",
         "export_schedule": "每周一导出主时间线",
         "profile": "通用档案",
         "plugin_connection": "我的网盘",
+        "agent_request": "把素材库里名叫「木弓 · 参考」的那张图片删掉。",
     },
     "en": {
         "workspace": "Demo workspace",
         "project": "Big Buck Bunny · Editing practice",
-        "project2": "Gallery walk · Camera study",
+        "project2": "Big Buck Bunny · Vertical cut",
         "sequence": "Main timeline",
         "assets": {
             "forest": "Forest light", "bunny": "Enter the hero", "rodents": "Three troublemakers", "ambush": "Forest ambush",
@@ -193,7 +197,10 @@ TEXT = {
         "board_notes": ["Shot study\n\nStart with one shot\nand turn an idea into a story.",
                         "Big Buck Bunny\nBlender Foundation · CC BY 3.0\n\nReference → timeline → film"],
         "board_draft": "Let the sunlight move gently across the frame",
+        "board_image": "A backlit forest meadow at dawn, Big Buck by the burrow",
         "board2": "Gallery story board",
+        "board3": "Rough cut · three shots",
+        "board2_shot": "A slow push through the three halls",
         "board2_note": "Write a concise gallery introduction using the brief.",
         "markers": ["Opening", "Finale"],
         "entities": [
@@ -217,12 +224,13 @@ TEXT = {
             "start": "Tag and list title", "find": "Find all video assets", "tag": "Tag them",
             "summary": "Write the list", "save": "Save as a note", "output": "Deliver the list",
             "tag_value": "to-edit", "report_title": "This week's assets",
-            "template": "{{find.count}} videos this week, tagged “{{start.tag}}”.\n\nAsset IDs: {{find.ids}}",
+            "template": "{{find.count}} videos this week, all tagged “{{start.tag}}”.\n\nFilter the asset library by that tag to find them.",
         },
         "schedule": "Daily asset roundup",
         "export_schedule": "Export the main timeline every Monday",
         "profile": "General profile",
         "plugin_connection": "My netdisk",
+        "agent_request": "Delete the image called “Wooden bow · Reference” from the asset library. Please reply in English.",
     },
 }
 
@@ -232,6 +240,11 @@ TEMPLATES = ["transcript_video_cleanup", "full_video_generation", "account_analy
 #: Example plugins from plugins/examples, copied into the demo plugins directory and picked up by the app's
 #: own "scan plugins" (the same path as dropping a plugin folder there by hand).
 EXAMPLE_PLUGINS = ["baidu-pan", "manim", "tikhub", "text-toolkit"]
+
+#: The demo's generation connection: a placeholder (closed local port, placeholder key), named as such.
+PLACEHOLDER_PROVIDER = "演示占位 · Placeholder"
+#: With --local-chat, the agent talks to a model served by Ollama on this machine.
+LOCAL_CHAT_PROVIDER = "本机 Ollama · Local"
 
 
 # ------------------------------------------------------------------------------------------------ guards
@@ -295,9 +308,9 @@ def prepare_media(media: Path) -> None:
             continue
         parts, cues, cursor, gap = [], [], 0.4, 0.55
         silence = media / "gap.wav"
-        run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", f"anullsrc=r=44100:cl=mono", "-t", str(gap), str(silence)])
+        run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "anullsrc=r=44100:cl=mono", "-t", str(gap), str(silence)])
         lead = media / "lead.wav"
-        run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", f"anullsrc=r=44100:cl=mono", "-t", "0.4", str(lead)])
+        run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "anullsrc=r=44100:cl=mono", "-t", "0.4", str(lead)])
         parts.append(lead)
         for index, sentence in enumerate(sentences):
             aiff = media / f"say-{locale}-{index}.aiff"
@@ -335,9 +348,9 @@ def start_servers(base: Path) -> None:
         "MOSAEL_DATA_DIR": str(data),
         "MOSAEL_BACKEND_PORT": str(API_PORT),
         "MOSAEL_CORS_ORIGINS": f"http://127.0.0.1:{APP_PORT},http://localhost:{APP_PORT}",
-        # Nothing in the demo should reach out on its own: no Feishu bots, no scheduled runs.
+        # No Feishu bots. The scheduler loop stays on: it is what settles a run record once the workflow it
+        # started has finished (the seeded task is due at 21:00, outside a normal recording session).
         "MOSAEL_FEISHU_AUTOSTART": "0",
-        "MOSAEL_SCHEDULER_ENABLED": "0",
         "MOSAEL_LOCAL_DESKTOP": "1",
         "MOSAEL_APP_VERSION": json.loads((ROOT / "package.json").read_text())["version"],
     }
@@ -454,8 +467,9 @@ class Seeder:
         out["note"] = out["notes"]["brief"]
         out["entities"] = self.entities(api, workspace, locale, assets)
         out["scene"] = self.scene(workspace, locale)
-        out["board"], out["board2"] = self.boards(api, workspace, locale, out)
+        out["board"], out["board2"], out["board3"] = self.boards(api, workspace, locale, out)
         out["workflows"] = self.workflows(api, workspace, locale)
+        out["workflow_names"] = {key: ok(api.get(f"/workflows/{wid}"))["name"] for key, wid in out["workflows"].items()}
         out["workflow"] = out["workflows"]["transcript_video_cleanup"]
         out["schedules"] = self.schedules(api, workspace, project, locale, out)
         ok(api.post("/browser/profiles", json={"workspace_id": workspace, "name": text["profile"]}))
@@ -494,7 +508,7 @@ class Seeder:
             return target
         sheet = TEXT[locale]["shotlist"]
         images = []
-        for key, start, _ in EXCERPTS[:4]:
+        for key, *_ in EXCERPTS[:4]:
             still = self.media / f"still-{key}.jpg"
             if not still.exists():
                 run(["ffmpeg", "-v", "error", "-y", "-ss", "0.5", "-i", str(self.media / f"{key}.mp4"), "-frames:v", "1",
@@ -559,41 +573,57 @@ class Seeder:
             browser.close()
         return scene_id
 
-    def boards(self, api: httpx.Client, workspace: str, locale: str, out: dict) -> tuple[str, str]:
+    def boards(self, api: httpx.Client, workspace: str, locale: str, out: dict) -> tuple[str, str, str]:
         text, assets, entities = TEXT[locale], out["assets"], out["entities"]
+        # The story study: references, a character and an empty video cell waiting for its prompt.
         study = {
             "items": [
-                {"id": "idea", "kind": "note", "x": 0, "y": 0, "width": 300, "height": 170, "text": text["board_notes"][0], "color": "blue"},
-                {"id": "credit", "kind": "note", "x": 0, "y": 280, "width": 300, "height": 170, "text": text["board_notes"][1], "color": "yellow"},
-                {"id": "reference-frame", "kind": "image", "x": 380, "y": 0, "width": 360, "height": 203, "asset_id": assets["forest-frame"]},
-                {"id": "reference-clip", "kind": "video", "x": 380, "y": 280, "width": 360, "height": 203, "asset_id": assets["bunny"]},
-                {"id": "hero", "kind": "entity", "x": 820, "y": 330, "width": 220, "height": 280, "entity_id": entities["buck"]},
-                {"id": "draft-video", "kind": "video", "x": 820, "y": 40, "width": 320, "height": 200, "form": {"prompt": text["board_draft"]}},
-                {"id": "timeline", "kind": "sequence", "x": 1240, "y": 0, "width": 560, "height": 400, "sequence_id": out["sequence"]},
+                {"id": "idea", "kind": "note", "x": 0, "y": 0, "width": 260, "height": 150, "text": text["board_notes"][0], "color": "blue"},
+                {"id": "credit", "kind": "note", "x": 0, "y": 220, "width": 260, "height": 190, "text": text["board_notes"][1], "color": "yellow"},
+                {"id": "reference-frame", "kind": "image", "x": 310, "y": 0, "width": 300, "height": 169, "asset_id": assets["forest-frame"]},
+                {"id": "reference-clip", "kind": "video", "x": 310, "y": 220, "width": 300, "height": 169, "asset_id": assets["bunny"]},
+                {"id": "draft-video", "kind": "video", "x": 670, "y": 0, "width": 300, "height": 169, "form": {"prompt": text["board_draft"]}},
+                {"id": "draft-image", "kind": "image", "x": 670, "y": 220, "width": 300, "height": 169, "form": {"prompt": text["board_image"]}},
+                {"id": "hero", "kind": "entity", "x": 1030, "y": 0, "width": 200, "height": 250, "entity_id": entities["buck"]},
             ],
             "edges": [
                 {"source": "idea", "target": "reference-frame"},
                 {"source": "reference-frame", "target": "draft-video"},
-                {"source": "reference-clip", "target": "timeline"},
             ],
         }
         board = ok(api.post("/boards", json={"workspace_id": workspace, "name": text["board"], "canvas": study}))
+        # The gallery: a note document, the 3D scene cell feeding an empty video cell, two viewport markers.
         note = ok(api.get(f"/notes/{out['notes']['brief']}", params={"workspace_id": workspace}))
         gallery = {
             "items": [
                 {"id": "brief", "kind": "document", "x": 0, "y": 0, "width": 340, "height": 360,
                  "note_id": note["id"], "note_revision": note["revision"]},
-                {"id": "prompt", "kind": "note", "x": 400, "y": 0, "width": 280, "height": 200, "text": text["board2_note"], "color": "yellow"},
-                {"id": "scene", "kind": "scene", "x": 400, "y": 250, "width": 320, "height": 220, "scene_id": out["scene"]},
+                {"id": "prompt", "kind": "note", "x": 400, "y": 0, "width": 280, "height": 180, "text": text["board2_note"], "color": "yellow"},
+                {"id": "scene", "kind": "scene", "x": 400, "y": 240, "width": 320, "height": 220, "scene_id": out["scene"]},
+                {"id": "shot-video", "kind": "video", "x": 780, "y": 260, "width": 300, "height": 169, "form": {"prompt": text["board2_shot"]}},
             ],
-            "edges": [{"source": "brief", "target": "prompt"}],
+            "edges": [{"source": "brief", "target": "prompt"}, {"source": "scene", "target": "shot-video"}],
             "markers": [
-                {"id": "opening", "name": text["markers"][0], "x": -140, "y": 420, "shortcut": "1"},
-                {"id": "finale", "name": text["markers"][1], "x": 780, "y": 420, "shortcut": "2"},
+                {"id": "opening", "name": text["markers"][0], "x": -140, "y": 480, "shortcut": "1"},
+                {"id": "finale", "name": text["markers"][1], "x": 1120, "y": 480, "shortcut": "2"},
             ],
         }
         board2 = ok(api.post("/boards", json={"workspace_id": workspace, "name": text["board2"], "canvas": gallery}))
-        return board["id"], board2["id"]
+        # The rough cut: three shots connected into a timeline cell (its own timeline in the board's project).
+        board3 = ok(api.post("/boards", json={"workspace_id": workspace, "name": text["board3"], "canvas": {"items": [], "edges": []}}))
+        timeline = ok(api.post(f"/boards/{board3['id']}/sequences", json={"workspace_id": workspace}))["sequence_id"]
+        for key in ("bunny", "butterfly", "title"):
+            ok(api.post(f"/sequences/{timeline}/append", json={"asset_id": assets[key]}))
+        rough = {
+            "items": [
+                *({"id": f"shot-{i + 1}", "kind": "video", "x": 0, "y": i * 190, "width": 260, "height": 146, "asset_id": assets[key]}
+                  for i, key in enumerate(("bunny", "butterfly", "title"))),
+                {"id": "timeline", "kind": "sequence", "x": 340, "y": 20, "width": 560, "height": 400, "sequence_id": timeline},
+            ],
+            "edges": [{"source": f"shot-{i}", "target": "timeline"} for i in (1, 2, 3)],
+        }
+        ok(api.patch(f"/boards/{board3['id']}", json={"workspace_id": workspace, "base_revision": board3["revision"], "canvas": rough}))
+        return board["id"], board2["id"], board3["id"]
 
     def workflows(self, api: httpx.Client, workspace: str, locale: str) -> dict:
         names = {t["id"]: t["name"] for t in ok(api.get("/workflows/templates"))}
@@ -607,11 +637,11 @@ class Seeder:
             "nodes": [
                 node("start", "start", r["start"], 0, {"params": {"tag": r["tag_value"], "report_title": r["report_title"]},
                                                        "required_params": ["tag"]}),
-                node("find", "asset_query", r["find"], 320, {"kind": "video", "name_contains": "", "tags": "", "limit": 50}),
-                node("tag", "asset_tag", r["tag"], 640, {"asset_ids": "{{find.ids}}", "tags": "{{start.tag}}", "mode": "add"}),
-                node("summary", "template", r["summary"], 960, {"template": r["template"]}),
-                node("save", "note_create", r["save"], 1280, {"title": "{{start.report_title}}", "markdown": "{{summary.text}}", "tags": "{{start.tag}}"}),
-                node("output", "output", r["output"], 1600, {"values": {"note_id": "{{save.note_id}}", "count": "{{find.count}}"}}),
+                node("find", "asset_query", r["find"], 290, {"kind": "video", "name_contains": "", "tags": "", "limit": 50}),
+                node("tag", "asset_tag", r["tag"], 580, {"asset_ids": "{{find.ids}}", "tags": "{{start.tag}}", "mode": "add"}),
+                node("summary", "template", r["summary"], 870, {"template": r["template"]}),
+                node("save", "note_create", r["save"], 1160, {"title": "{{start.report_title}}", "markdown": "{{summary.text}}", "tags": "{{start.tag}}"}),
+                node("output", "output", r["output"], 1450, {"values": {"note_id": "{{save.note_id}}", "count": "{{find.count}}"}}),
             ],
             "edges": [{"id": f"{a}-{b}", "source": a, "target": b} for a, b in
                       [("start", "find"), ("find", "tag"), ("tag", "summary"), ("summary", "save"), ("save", "output")]],
@@ -622,10 +652,10 @@ class Seeder:
 
     def schedules(self, api: httpx.Client, workspace: str, project: str, locale: str, out: dict) -> dict:
         text = TEXT[locale]
-        timezone = "Asia/Shanghai" if locale == "zh" else "UTC"
+        timezone = "Asia/Shanghai" if locale == "zh" else "Europe/London"
         roundup = ok(api.post("/scheduled-tasks", json={
             "workspace_id": workspace, "project_id": project, "name": text["schedule"], "kind": "workflow", "trigger_type": "daily",
-            "schedule": {"time": "09:00"}, "timezone": timezone, "enabled": True,
+            "schedule": {"time": "21:00"}, "timezone": timezone, "enabled": True,
             "payload": {"workflow_id": out["workflows"]["roundup"], "params": {}}}))
         export = ok(api.post("/scheduled-tasks", json={
             "workspace_id": workspace, "project_id": project, "name": text["export_schedule"], "kind": "render", "trigger_type": "weekly",
@@ -642,6 +672,14 @@ class Seeder:
                     sys.exit(f"The roundup workflow failed: {runs[0].get('error')}")
                 break
             time.sleep(1)
+        # The scheduler loop copies the workflow's end state onto the task's run record.
+        for _ in range(90):
+            records = ok(api.get(f"/scheduled-tasks/{roundup['id']}/runs"))
+            if records and records[0]["status"] in ("succeeded", "failed", "cancelled"):
+                break
+            time.sleep(1)
+        else:
+            sys.exit("The scheduled run record never settled; is the scheduler loop running?")
         return {"roundup": roundup["id"], "export": export["id"]}
 
     def plugins(self) -> None:
@@ -655,6 +693,34 @@ class Seeder:
         ok(api.post("/plugins/scan"))
         # One connection without credentials: the plugin page shows it as not signed in, which is the truth.
         ok(api.post("/plugins/dev.mosael.baidu-pan/instances", json={"name": "演示网盘 · Demo netdisk", "config": {}}))
+
+    def placeholder_provider(self) -> None:
+        """A generation connection that is configured but cannot run: its endpoint is a closed local port and its
+        key is a placeholder string. Generation panels then show their configured, not-yet-run state (model picker,
+        "N×"); nothing is ever generated, and the name says what it is."""
+        api = self.api("zh")
+        profile = ok(api.post("/settings/providers", json={
+            "name": PLACEHOLDER_PROVIDER, "vendor": "alibaba",
+            "config": {"api_key": "placeholder-not-a-key", "base_url": "http://127.0.0.1:9/compatible-mode/v1", "default_model": ""}}))
+        # Image (up to four per run, so the board shows "N×"), text-to-video, talking photo and lip-sync models.
+        for model in ("qwen-image", "wan2.7-t2v", "wan2.2-s2v", "videoretalk"):
+            ok(api.post(f"/settings/providers/{profile['id']}/models", json={"model_id": model, "enabled": True}))
+        for capability, model in (("image", "qwen-image"), ("video", "wan2.7-t2v")):
+            ok(api.put(f"/settings/provider-defaults/{capability}", json={"provider_profile_id": profile["id"], "model": model}))
+
+    def local_chat(self, model: str) -> None:
+        """Optional: a real chat model served by Ollama on this machine, for the agent's confirmation-card scene.
+        Its replies are genuine model output. Only the named model is enabled — Ollama's list can include
+        `:cloud` models that would run on someone's Ollama account, and those stay off."""
+        api = self.api("zh")
+        profile = ok(api.post("/settings/providers", json={
+            "name": LOCAL_CHAT_PROVIDER, "vendor": "openai-compatible",
+            "config": {"api_key": "ollama", "base_url": "http://127.0.0.1:11434/v1", "default_model": model}}))
+        for entry in ok(api.get(f"/settings/providers/{profile['id']}/models")):
+            if entry["id"] != model and entry["enabled"]:
+                ok(api.patch(f"/settings/providers/{profile['id']}/models/{entry['id']}", json={"enabled": False}))
+        ok(api.put("/settings/provider-defaults/chat", json={"provider_profile_id": profile["id"], "model": model}))
+        self.fixture["local_chat"] = model
 
     def wait_assets(self, api: httpx.Client, workspace: str, ids: list[str]) -> None:
         """Imports probe and thumbnail in the background; wait until every asset has its media info."""
@@ -747,6 +813,9 @@ def main() -> None:
     parser.add_argument("command", choices=["up", "seed", "down"])
     parser.add_argument("--dir", type=Path, required=True, help="private directory for data, media, logs, token and fixture")
     parser.add_argument("--fresh", action="store_true", help="wipe the demo database first (keeps downloaded media)")
+    parser.add_argument("--local-chat", default="", metavar="MODEL",
+                        help="also connect a chat model served by Ollama on this machine (e.g. qwen3.5:latest); "
+                             "the agent scene needs it")
     args = parser.parse_args()
     base = args.dir.expanduser().resolve()
     check_isolated(base)
@@ -773,6 +842,11 @@ def main() -> None:
     token = register(base)
     seeder = Seeder(base, token)
     seeder.plugins()
+    seeder.placeholder_provider()
+    if args.local_chat:
+        if not (ROOT / "agent-sidecar/dist/sidecar.cjs").exists():
+            sys.exit("The agent runs in agent-sidecar; build it first: pnpm install && pnpm --dir agent-sidecar build")
+        seeder.local_chat(args.local_chat)
     for locale in ("zh", "en"):
         seeder.fixture["locales"][locale] = seeder.seed_locale(locale)
         print(f"Seeded {locale} workspace", flush=True)
