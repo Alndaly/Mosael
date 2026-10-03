@@ -12,23 +12,30 @@ Workflows connect media, models and tools into reusable steps. Configure node in
 
 ## Download and import official templates
 
-The [website workflow catalog](/workflows) includes Topic to finished video, Transcript-based video cleanup and Translated dubbing with subtitles.
+The [website workflow catalog](/workflows) describes every official template, what it needs, and offers Chinese and English downloads; the template gallery in the app can add them directly too.
 
 1. Download a `.mosael-workflow.json` file; no extraction is needed.
 2. Choose your workspace in the app, open Workflows, then use Import workflow to select the file.
-3. Open the imported graph, choose your own providers and models, supply the required media and pass the readiness check before running.
+3. Open the imported graph, choose your own providers and models, fill in the start node's required parameters and pass the readiness check before running.
 
-Downloads contain no account secrets or private assets, and do not automatically select local default models. Importing needs
-1.8.3 or newer. Template node names and prompts are currently in Chinese.
+Downloads contain no account secrets or private assets, and do not automatically select local default models. Importing needs 1.8.3 or newer. Node names follow the language of the file you downloaded.
 
-| Template | What it does | Needs |
-| --- | --- | --- |
-| Topic to finished video | Thesis → script and visual bible in parallel (defining the characters and locations) → **a turnaround sheet for every character and concept art for every location** → timed storyboard (shot size, lens, camera angle, camera move) → **a 3D blockout built automatically from the storyboard**, one set and one camera per shot, with the move on the camera's path → per shot (up to 3 at once): render the blockout's first/last frames and camera-move video → either **keyframes** (paint the first frame on the blockout, add a last frame for big moves, then generate) or **references** (turnarounds, location art and the blockout move go straight to the video model) — chosen per shot, limited to what the video model accepts; camera language (lens, height, dolly/pan/orbit) is **computed** from the blockout camera and added to the prompt → assembled in shot order → narration captions → export. The blockout stays in 3D Scenes for you to adjust. With a voice selected, narration is **placed at the second its shot starts**, sped up to fit when longer (at most 1.5×) | A chat model, an image model that takes reference images (e.g. Seedream 4) and a video model that takes a first frame or references (e.g. Seedance 2.0); narration is optional: a cloned voice |
-| Transcript-based video cleanup | **Remove background hiss first** (built-in engine, music untouched; transcription gets more accurate) → timed transcript → diagnose pauses, fillers and repetition → ripple-cut high-confidence ranges in a new project → export. Denoising produces a new video; the source is untouched | A chat model, a transcription engine, a source video |
-| Translated dubbing with subtitles | Transcribe line by line → translate each line (chat model, switchable to Google on the node) → lay subtitles on the original timecodes → dub each line and time-compress it into its slot → remove the original voice and keep the background music → export. If Remove voice is selected while separation is unavailable, the run fails explicitly before dubbing starts instead of switching to whole-track mute | A transcription engine, a chat model, a voice (cloned or a stock engine voice; Edge's free voices need no setup), and a voice separation engine installed in advance |
+| For | Templates |
+| --- | --- |
+| Finished videos | **Topic to finished video** (brief → script and visual bible → characters looked up in the asset library first, with turnarounds / location art drawn and saved only for new ones → storyboard → an automatic 3D blockout → per-shot video from the blockout → narration captions → export; the most expensive one, up to 8 shots by default), **Long video into vertical clips** (picks up to 12 segments, each on its own vertical timeline with short captions) |
+| Clean-up and montage | **Transcript-based video cleanup** (denoise first, then cut pauses, fillers and repetition by the transcript; for material up to about 30 minutes), **Montage from your own footage** (orders a tagged batch of your clips and adds narration and captions) |
+| Translated dubbing | **Translated dubbing with subtitles** (transcribe, translate and subtitle line by line on the original timecodes, dub each line into its slot, strip the original voice but keep the music), **Translated dubbing with lip-sync** (the same, then the speaker's lips follow the dub) |
+| Products and business | **Product photo into on-model shots**, **Product into a narrated short**, **Fabric into applications and a spec sheet** |
+| Digital humans | **Script into a talking-head video**, **Product into a presenter-led short** (see [Digital humans](/docs/guides/digital-humans)) |
+| Analytics | **Social account health check**, **Why a video went viral**, **Comment insights and audience** (see "Analytics templates" below) |
 
+What each one needs (a chat model, an image model that takes references, a video model, a cloned voice, a transcription or separation engine…) is on its card, and the template gallery checks each item off.
 The reduce-noise node uses the built-in engine by default. For speech-led material with messy noise (keyboards, dishes, chatter)
-switch it to `deepfilternet` (a deployment admin downloads it first under Admin → Engines); it removes music as well.
+switch it to DeepFilterNet (a deployment admin downloads it first under Admin → Engines); it removes music as well.
+
+**Graphs from an older template offer "Rebuild from the new version".** When a template has been fixed in ways that would make an old
+copy fail, opening that copy shows a notice: **Rebuild from the new version (keeps this one)** builds a fresh graph, carrying over the
+start parameters and values you filled in, and keeps the old one; dismiss it and a newer version will remind you again.
 
 ## Canvas & nodes
 
@@ -39,42 +46,60 @@ switch it to `deepfilternet` (a deployment admin downloads it first under Admin 
 ![Demo: open the node catalog and inspect transcription parameters](/media/gifs/en/workflows.gif)
 
 - The entry page is a gallery of workflow cards. Open one to enter the full canvas; return at the top left and manage nodes, runs and history from the top-right toolbar.
-- **Add node** from the toolbar, grouped roughly by what they are for:
+- **Add node** (⌘N) from the toolbar, grouped by what they are for:
 
   | Group | Nodes |
   | --- | --- |
-  | Flow | start, output, condition, delay, for-each loop, while loop, subgraph, call workflow |
-  | AI | LLM, AI generate, translate, translate lines |
-  | Audio | transcribe asset, text to speech, dub subtitles, separate voice and background, reduce noise |
-  | Assets & timeline | asset, create project, create video project, append to timeline, add a track, clear timeline, inspect timeline, clean up time ranges, timeline advanced operations, generate subtitles, video to GIF, export timeline, find assets, tag assets, organize assets, get from asset library, save to asset library |
-  | Knowledge | search notes, read note, save as note |
-  | Publishing | publish, send notification |
-  | Data | HTTP request, code, text template, JSON extract, split into batches, text transform |
-  | Plugins | plugin tool |
-  | Browser | open / navigate / click / type / upload file / extract / wait / scroll / run script / close |
-- **Edges** define execution order; drag from a node's right port to a downstream node's left port. The **condition** node has "true / false" outlets.
-  A node hanging off one outlet runs only when that branch holds; a data connection it takes a value from elsewhere decides only the value, never whether it runs.
-- A **for-each loop** runs one item after another by default. When items don't depend on each other (such as generating each shot), raise
-  "Concurrency" to 2–4 under Advanced; results keep their original order. Once any item fails, **no new item starts** (items
-  already running finish, and anything they submitted for generation is still collected), and the error lists every failed item and
-  how many were not started. Without an iteration output,
-  each item returns everything that round produced plus the item itself (`loop.item`), so a later loop can iterate over the results.
-- **Split into batches** divides a list into fixed-size, non-overlapping batches in the original order, ready for a for-each loop. Use it for comments and other long result sets instead of putting the entire list into one model call; it also outputs batch count and original item count.
-- **Text to speech and Dub subtitles** ask for the engine first, then the voice: with "Cloned voice" the voice list is your
-  voice library; pick an engine and the list becomes that engine's voices. Changing the engine clears the chosen voice. The toolbar switches **edge shape** between curved (bezier) and stepped (right-angle); your choice is remembered.
+  | Flow | Start, Condition, Delay, Loop · for each, Loop · while, Call workflow, Output, Subgraph |
+  | AI | LLM, AI generate, Translate, Translate lines, Fill in angles, Generate expressions, Make it talk (character / image), Lip sync, Lip-sync a dubbed timeline, Voice a long script in segments |
+  | Audio | Transcribe asset, Text to speech, Separate voice and background, Reduce noise, Dub subtitles |
+  | Assets | Export timeline, Asset, Download from a link, Inspect timeline, Append to timeline, Add a track, Clear timeline, Clean up time ranges, Timeline advanced operations, Video to GIF, Split grid, Generate subtitles, Find assets, Get from asset library, List library assets, Save to asset library, Tag assets, Organize assets, Create project, Create video project |
+  | 3D | Available 3D props, Build a 3D blockout scene, Build a 3D scene from text, Render blockout references |
+  | Knowledge | Search notes, Read note, Save as note, Document to Markdown |
+  | Data | HTTP request, Code, Text template, JSON extract, Split into batches, Text transform, Read a social media link, Tidy post and comment data |
+  | Publishing | Publish, Send notification |
+  | Browser | Open browser, navigate, click, type, upload file, extract, wait, scroll, run script, Close browser |
+  | Plugins | One node per tool from your installed plugins |
+- **Edges** define execution order; drag from a node's right port to a downstream node's left port. The toolbar switches **edge shape** between curved (bezier) and stepped (right-angle); your choice is remembered.
 - Click a node to open its **inspector** — it sits **directly below** the node, and a floating bar sits
   **directly above** it: content sections on the left (**Parameters** / **Advanced** / **Outputs**, plus
   **This run** once it has run — each shown **only when the node has it**), node actions on the right
   (open subgraph, delete). "Advanced" holds the knobs that **work fine left blank**, so the first screen
   isn't a wall of sampling parameters.
 
+### The start node: parameters, required and options
+
+The start node's parameters are a three-column table — **Name / Default / Required** — and **Add** appends a row.
+
+- **Each row has its own Required checkbox.** A required parameter without a default must be filled in at run time; until it is, the
+  run won't start — placeholder examples are never taken for real input.
+- **Option parameters**: the Default cell becomes a dropdown (**Pick one**) limited to the given options. An option whose prerequisite
+  isn't set up is marked "not set up" but can still be picked; the run then says what's missing (that's how the analytics templates'
+  data source works).
+- **The start node has one output port per parameter**, so downstream nodes wire straight from the matching port.
+- References to parameters the start node doesn't declare, defaults outside the options, empty or duplicate names are all flagged by
+  the readiness check.
+
+### Loops and branches
+
+- The **Condition** node has true / false outlets. A node hanging off one outlet runs only when that branch holds; a data connection it
+  takes a value from elsewhere decides only the value, never whether it runs. When the condition's **Left value** comes from upstream,
+  the canvas draws its input port. Empty lists and objects count as empty, and two numbers compare numerically.
+- **Loop · for each** runs one item after another by default. When items don't depend on each other (such as generating each shot),
+  raise **Concurrency** to 2–4 under Advanced; results keep their original order. **Max items** caps the list; **When an item fails**
+  is either **Fail the whole loop** (the default: once any item fails **no new item starts**, items already running finish and their
+  submitted generations are still collected) or **Note it and carry on** — the failures are listed under **Failed items** and in the
+  notification. Without an iteration output, each item returns everything that round produced plus the item itself (`loop.item`).
+- **Loop · while** stops after 50 rounds by default (adjustable, at most 1000).
+- **Split into batches** divides a list into fixed-size, non-overlapping batches in the original order, ready for a for-each loop. Use it for comments and other long result sets instead of putting the entire list into one model call; it also outputs batch count and original item count.
+- **Text to speech and Dub subtitles** ask for the engine first, then the voice: with "Cloned voice" the voice list is your
+  voice library; pick an engine and the list becomes that engine's voices. Changing the engine clears the chosen voice.
+
 ### Top toolbar
 
 The order matches creative boards: add and undo/redo, comments, markers and their list, search and view controls, then the AI assistant. Readiness, run history and Run form a separate group on the right.
 
-**More** contains rename, revision history, file export and deletion. The current version shows at the end of the revision-history row; deletion sits in its own group and still requires confirmation. Arrow keys move through the menu and Escape closes it. ⌘F finds nodes: matches are outlined on the canvas and Enter / ⇧Enter steps through them. In narrow windows, arrows reveal the remaining tools while the assistant, run controls and More stay visible.
-
-Node panels follow the same soft surface style as creative boards. The upper bar switches content sections, while the lower form scrolls independently. Name and value fields use matching control heights.
+**More** contains rename, revision history, file export and deletion. The current version shows at the end of the revision-history row; deletion sits in its own group and still requires confirmation. Arrow keys move through the menu and Escape closes it. ⌘F finds nodes across the whole graph (ids too): matches are outlined on the canvas and Enter / ⇧Enter steps through them. ⌘S saves and ⌘Enter runs. In narrow windows, arrows reveal the remaining tools while the assistant, run controls and More stay visible.
 
 ### When something is buried
 
@@ -86,48 +111,75 @@ Node forms use a translucent, blurred surface above the canvas. When an assistan
 
 ![Transcription node parameters](/media/screens/en/workflow-node.png)
 
-## Variables: wiring upstream outputs into downstream inputs
+## Variables and references: wiring upstream outputs into downstream inputs
 
-After a node runs it writes results into the context; output variables look like `{{nodeId.output}}` (e.g. `{{llm-1.text}}`).
+After a node runs it writes results into the context, and downstream fields read them with references such as `{{nodeId.output}}`.
+**The interface doesn't show raw `{{…}}`**: in parameters, the prompt editor, stale-reference notices and the readiness check, a
+reference reads "**Node title · output · field**"; one that points nowhere turns red and says why — the node can't be found (deleted,
+renamed or mistyped) or it has no such output — so you can pick another upstream output.
 
-Data ports now match properties one for one: named configuration inputs and named output variables each receive their own port. Property data no longer attaches to the control-flow socket at the top of a card; control edges express order, while data edges state exactly which property moves.
+Data ports match properties one for one: named configuration inputs and named output variables each receive their own port. Control edges express order, while data edges state exactly which property moves.
+
+**The canvas draws each reference as a faint dotted line**: it only orders things (a node waits for whatever it references), **it never
+makes the referenced node run**, it can't be selected, and hovering it says which reference it is. When the referenced node isn't wired
+into the flow and will never run, the line turns the error colour.
 
 Each field can switch between **two input modes** (the small pill at the right of the label row):
 
 - **Manual**: type a value / pick an option; in template fields press **`@`** to pull up upstream variables (keep typing to filter), or click a variable chip to insert at the cursor.
-  Fields that point at something (3D scene, shot, timeline, track, project, account, connection…) are dropdowns: this workspace's items first, then upstream outputs.
-  You can also type a `{{…}}` reference into the search box (that is how `{{loop.item.…}}` inside a loop body is written); other free text is not accepted.
-  A dropdown that follows another field (shot follows scene, track follows timeline) says its choices are known at run time when that field comes from upstream.
-  When the node has nothing upstream yet, `@` says so instead of doing nothing.
-- **Connected**: the field becomes a port; pick one from the **upstream outputs** dropdown — equivalent to binding `{{upstream.output}}`. Switching back to manual keeps the previous value.
+  Fields that point at something (3D scene, shot, timeline, track, project, account, connection…) are dropdowns: this workspace's items first, then upstream outputs;
+  `{{loop.item.…}}` inside a loop body can be typed into the search box too. A dropdown that follows another field (shot follows scene, track follows timeline)
+  says its choices are known at run time when that field comes from upstream. When the node has nothing upstream yet, `@` says so instead of doing nothing.
+- **Connected**: the field becomes a port; pick one from the **upstream outputs** dropdown — equivalent to binding that reference. Switching back to manual keeps the previous value.
+
+Code fields such as **Run script** and **Code** **don't interpolate references**: upstream values go into `input` and arrive as JSON data — text scraped from a page can't rewrite the script.
 
 ## Readiness check / run gating
 
-The toolbar's **readiness check** aggregates all blockers: missing required fields, unconfigured models / providers, disconnected nodes, references to deleted nodes, and so on.
+The toolbar's **Readiness** button gathers every issue and shows a count: red blocks the run, amber is advisory, and with nothing left it
+says all set — ready to run. It checks: a missing start node, missing required fields, one-of fields with nothing filled, stale references,
+references to start parameters that don't exist, values outside their options, empty loop / subgraph bodies, an Output node inside a body,
+nodes not wired into the flow, **references to nodes that will never run**, models / providers missing or without keys, type mismatches,
+references written into code, plugin nodes that can't run (with the real reason)…
 
-- Problem nodes get a **warning badge** on the canvas (red = blocking, amber = advisory) with a tooltip listing the issues.
-- With errors present the **Run** button is disabled; each issue is clickable and jumps to the node.
-- After deleting an upstream node, fields referencing it are marked **stale** and can be re-pointed or cleared.
+- Problem nodes get a **warning badge** on the canvas with a tooltip listing the issues; each issue is clickable and jumps to the node.
+- With blockers present the **Run** button is disabled, and ⌘Enter opens the readiness list instead.
+- **A node that will run but references one that never will is stopped before the run**, naming who references whom and suggesting you
+  wire it into the flow — or, for a graph built from an official template, use **Rebuild from the new version** at the top. Before, such a
+  reference just came out empty.
+- **There is one pre-run check**, shared by the editor's Run, sub-workflows, the agent's cards and scheduled tasks. A sub-workflow's
+  required parameters, digital-human consent, a clone engine that isn't installed, an aspect ratio the video model won't take, or no chat
+  model at all — each is reported before any node spends money.
 
-Once a run starts, the toolbar's **Run** button becomes **Stop**, and the run's detail dialog in the task
-centre carries **Cancel task** as well. Cancelling is **node-grained**: it stops after the current step
-finishes, whatever it already produced (assets, timelines, 3D scenes) is kept, and derived sub-tasks are
-cancelled with it.
+Once a run starts, Run becomes **Stop run**, and ⌘Enter during a run doesn't start another one. The run's detail dialog in the task centre
+carries **Cancel task** as well. Cancelling is **node-grained**: it stops after the current step finishes, whatever it already produced
+(assets, timelines, 3D scenes) is kept, and derived sub-tasks are cancelled with it.
 
-The browser **Run script** node gives a script 20 seconds by default. Long paged reads can set a script budget under Advanced, up to 180 seconds. The budget applies only to that script and does not leave an unresponsive browser session running indefinitely.
+A few node details:
 
-The **Available 3D props** node lists this workspace's 3D models (usually modelled in Blender and brought
-back in) as a catalogue — each one's id, name and measured width/height/depth — to feed into the prompt of
-the node that designs the blockout, so a set can hold real props instead of boxes and cylinders. Leave it
-empty for every model in the workspace; models that cannot be read (compressed mesh, over the triangle
-budget, missing file) are left out and noted.
+- **HTTP request** escapes upstream text inserted into a JSON body as JSON and sets `Content-Type`; **Fail on non-2xx** is on by default (switchable under Advanced).
+- **Browser · run script** gives a script 20 seconds by default; long paged reads can raise the timeout under Advanced, up to 180 seconds.
+- **Available 3D props** lists this workspace's 3D models as a catalogue (id, name, measured width/height/depth) to feed into the node that designs the blockout, so a set can hold real props.
+- **Video to GIF** and **Split grid** always output **new assets** and never overwrite their input.
+- LLM nodes use a **Preset** (Precise / Balanced / Creative) instead of a raw temperature, and a node's max output tokens never exceed the model's output limit.
 
-The **Video to GIF** node takes a video asset id plus frame rate, width, start time and duration. It
-outputs a **new GIF asset id** and never overwrites the source video.
+## Analytics templates: accounts, viral videos, comments
 
-## LLM generation style
+The three analytics templates take a profile or post link (Douyin, Xiaohongshu, Bilibili), fetch the account, recent posts, video stats and top
+comments, compute posting frequency and times, engagement, top posts and growth signals, and write it up as a note. Three nodes exist for them:
+**Read a social media link**, **Tidy post and comment data** and **Download from a link**.
 
-LLM nodes use a **generation style** (precise / balanced / creative) instead of a raw temperature, lowering the configuration bar.
+- **The data source is a two-way choice in the start node's `data_source` dropdown**: **Built-in browser** (no setup, no cost; Xiaohongshu always
+  needs a sign-in and Douyin mostly does — switch the template's "Open in the built-in browser" step to the browser pool and pick a signed-in
+  profile; Bilibili needs none; page numbers are rounded) or **TikHub** (install the TikHub plugin, create a connection and enable the tools the
+  template lists on the Plugins page; billed per call, complete fields, no sign-in). If TikHub is chosen but not ready (plugin missing, no
+  connection, tools not enabled, an extra connection for the same platform), **the run says what's missing before it starts** — or switch back
+  to the browser.
+- **Comment insights analyses every comment there is**: on Bilibili it pages through the site's own comment API (up to 1000, and says so if
+  there are more, replies included); elsewhere it reads the comment section. All comments are taken 80 at a time, the model notes what it sees
+  in each batch, and the notes are synthesised into the report — nothing is dropped however many there are. The comment-count parameter only
+  sets how many top-liked comments go into the appendix table.
+- A profile that isn't signed in to a platform that requires it reports "no comments fetched" rather than inventing any.
 
 ## Triggers
 
@@ -159,7 +211,9 @@ history or version history. Approving doesn't change the graph or add a version.
 ## Let AI build it
 
 The toolbar's **AI assistant** uses the shared persistent session pool: describe the flow you want
-in natural language and it builds / edits nodes for you; changes go through confirmation cards.
+in natural language and it builds / edits nodes for you; changes go through confirmation cards. A card
+that runs a workflow is titled with the workflow's name and pins the version it was opened on — if the graph
+changes before you approve, it doesn't run and says which two versions differ.
 Its top-left title is the active conversation — click it to search or switch sessions — and the
 panel can dock beside the canvas or float above it.
 
