@@ -55,6 +55,15 @@ export function useVirtualRows({
   const offsetsRef = React.useRef(offsets);
   offsetsRef.current = offsets;
 
+  // 行集合换了:量过的高度里凡是不再在这份名单上的,都是旧内容的尺寸 —— 留着只会让总高虚高
+  // (重断句后行数变少,滚动区却按旧的量,面板下面空出一大块)。
+  React.useLayoutEffect(() => {
+    const keep = new Set(keys);
+    for (const key of [...heights.current.keys()]) {
+      if (!keep.has(key)) heights.current.delete(key);
+    }
+  }, [keys]);
+
   const rangeFor = React.useCallback(
     (top: number, height: number): { start: number; end: number } => {
       const table = offsetsRef.current;

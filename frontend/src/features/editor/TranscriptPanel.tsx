@@ -771,7 +771,12 @@ export function TranscriptPanel({
   // 长逐字稿只渲染视口里的几十句(一小时是上万个词按钮)。
   const scrollRef = React.useRef<HTMLDivElement | null>(null);
   const listRef = React.useRef<HTMLDivElement | null>(null);
-  const rowKeys = React.useMemo(() => docItems.map(docItemKey), [docItems]);
+  //: 量高用的键:同一个 key 但内容变了(重断句、改了词)不能沿用旧高度 —— 带上内容长度当签名,
+  //: 变了就重新量。注意这不是 React key(那个还是 docItemKey,改字不该让行重挂载丢焦点)。
+  const rowKeys = React.useMemo(
+    () => docItems.map((item) => `${docItemKey(item)}:${item.kind === "sentence" ? item.sentence.text.length : 0}`),
+    [docItems],
+  );
   const rows = useVirtualRows({ keys: rowKeys, scrollRef, listRef, estimate: 56 });
   // 当前句换了就把它滚进视野。没渲染的行没有 DOM,所以按算出来的偏移滚,而不是 scrollIntoView。
   const revealRow = rows.reveal;
