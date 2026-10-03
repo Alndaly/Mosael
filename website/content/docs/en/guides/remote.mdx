@@ -2,7 +2,7 @@
 title: Remote deployment
 description: Connect a shared backend, configure access and workers, and understand where data is stored.
 order: 14
-updated: 2026-09-25
+updated: 2026-10-04
 version: 1.8.3
 ---
 
@@ -10,7 +10,7 @@ By default the whole of Mosael runs on your own machine. But the backend can mov
 the desktop app pointed at it — several people sharing one media library, one set of workflows, one
 publishing queue.
 
-> Think this through first: your data now lives on that server. Access still requires authentication and workspace membership. Ask the administrator to configure members and registration policy.
+> Think this through first: your data now lives on that server. Access still requires authentication and workspace membership; members, sign-up, local engines and the outbound proxy are managed by the deployment admin in the [admin console](/docs/guides/admin).
 
 ## Point the desktop app at a remote backend
 
@@ -35,8 +35,13 @@ database, registration succeeds for anyone who can reach the port. Under a wildc
 the user happens to open could register an account on your backend **and read the token back**. So
 domains get listed one at a time.
 
-While you are at it: the first thing to do after exposing a deployment is turn **open registration**
-off (registration policy in Admin).
+While you are at it: the first thing to do after exposing a deployment is turn **Open self-serve signup**
+off (Admin → Deployment → Who can join) and send invite codes instead. With it off, third-party sign-in such as Google or Apple
+can't create new accounts either.
+
+A server deployment can also list the host names or IPs it may be reached under in `MOSAEL_ALLOWED_HOSTS` (comma-separated):
+the Host header is checked only when it is set, which blocks DNS rebinding. The desktop app needs nothing — it only answers to
+local names.
 
 ## Files on the backend's computer belong to the deployment admin
 
@@ -50,7 +55,7 @@ So these reads depend on who you are:
 - **Deployment admins** can read the whole computer, and can approve "run code on this computer" and
   Blender code cards. On a single-user install you are the admin, so nothing changes;
 - **Other members** can only use assets from the library, or files inside the folders an admin lists
-  under **Admin → Folders shared with members**. Paths are compared after resolving symlinks and `..`,
+  under **Admin → Deployment → Shared folders**. Paths are compared after resolving symlinks and `..`,
   so a link inside a shared folder can't point somewhere else;
 - Browser automation only opens `http(s)` addresses, never `file://`.
 
