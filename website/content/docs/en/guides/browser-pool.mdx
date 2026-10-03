@@ -82,8 +82,8 @@ This is the part worth reading carefully.
 Two details of that last rule are worth knowing, because they decide how much a single approval
 buys:
 
-- A confirmation card offers **"always allow for this session"**. That is per tool and per session,
-  and it is your click, not a mode the agent can set for itself.
+- The card is in the **Outside this app** tier, so it has **no "Always allow this session"**: every
+  time a profile is opened you press **Allow once** yourself, and auto-approval never answers for you.
 - Approval is on **opening** the profile. Once a page is open, the agent's interactions inside it —
   typing, clicking, evaluating — are classed read-only and do not each raise their own card. So an
   approved `browser_pool_open` is best read as "you may act as this identity on this site", not
