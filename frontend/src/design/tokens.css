@@ -658,6 +658,10 @@ html,
 body,
 #root {
   height: 100%;
+  /* AppShell owns the viewport and every page owns its content scroller. If the
+     document remains scrollable, a long page can move the whole desktop shell:
+     the global header disappears under the native title bar. */
+  overflow: hidden;
 }
 
 body {
