@@ -26,6 +26,13 @@ pytestmark = pytest.mark.skipif(shutil.which(settings.ffmpeg) is None, reason="f
 W, H, FPS = 64, 36, 30
 
 
+#: 认帧的容差:相邻两帧差半步以内就是「这一帧」。素材的亮度每帧加 7(有限范围的 Y),读成全范围灰度是一步约
+#: 8.15;错一帧就差这么多,而同一帧只会差取整 —— 带投影的自由元素走一趟 RGBA 再回 YUV,x86 上的 swscale
+#: 比 ARM 少 1 个 Y 码值,放大到全范围正好是 2(CI 上 Linux 的 FFmpeg 8.1.3 实测,画面是对的那一帧)。
+#: 此前写死 1.5,把这一级取整当成了错帧。
+_SAME_FRAME = 7 * 255 / 219 / 2
+
+
 def _luma(path: Path) -> np.ndarray:
     raw = subprocess.run([settings.ffmpeg, "-v", "error", "-i", str(path), "-f", "rawvideo", "-pix_fmt", "gray", "-"],
                          capture_output=True, check=True, timeout=60).stdout
@@ -60,8 +67,8 @@ def test_段长不在帧格上_底轨也不往后漂(tmp_path: Path) -> None:
         assert abs(first - clip["timeline_start"] * FPS) <= 0.5 + 1e-4
         #: 末一帧:变速的段落在两帧源画面中间时取哪一帧都算对。
         last_at = (clip["src_in"] + (count - 1) / FPS * clip["speed"]) * FPS
-        last_ok = min(abs(luma[first + count - 1] - source[k]) for k in {math.floor(last_at), math.ceil(last_at)}) <= 1.5
-        if abs(luma[first] - source[round(clip["src_in"] * FPS)]) > 1.5 or not last_ok:
+        last_ok = min(abs(luma[first + count - 1] - source[k]) for k in {math.floor(last_at), math.ceil(last_at)}) <= _SAME_FRAME
+        if abs(luma[first] - source[round(clip["src_in"] * FPS)]) > _SAME_FRAME or not last_ok:
             drift.append(first)
     assert not drift, f"这些段的头一帧不是它自己的头一帧(底轨漂了):{drift}"
 
@@ -100,6 +107,6 @@ def test_段长正好整帧_每段的头一帧和末一帧都是它自己的(tmp
     for clip, (first, count) in zip(clips, _segment_frames(plan)):
         start = round(clip["src_in"] * FPS)
         for at, want in ((first, start), (first + count - 1, start + count - 1)):
-            if abs(luma[at] - source[want]) > 1.5:
+            if abs(luma[at] - source[want]) > _SAME_FRAME:
                 wrong.append(at)
     assert not wrong, f"这些帧不是素材里该是的那一帧:{wrong}"
