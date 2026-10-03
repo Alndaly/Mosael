@@ -701,6 +701,17 @@ def test_json_extract_node() -> None:
     assert out["value"] == {"a": 1} and out["text"] == '{"a": 1}'
 
 
+def test_json_extract_reads_fenced_json() -> None:
+    """模型的 text 输出常常裹着 ```json 围栏。实测:接「LLM 生成」的 text 取 x.y,此前整段被当成一个字符串,
+    取路径落空、静默交出 null —— 而「LLM 生成」自己的 json 输出认得围栏。用同一种解析。"""
+    from app.domain.workflows.executors.basic import json_extract
+
+    fenced = '```json\n{"x": {"y": "围栏里的值"}}\n```'
+    assert json_extract(None, None, {"source": fenced, "path": "x.y"}) == {"value": "围栏里的值", "text": "围栏里的值"}
+    # 不是 JSON 的文字照旧当一个值(路径为空时原样交出),不去里面捞片段。
+    assert json_extract(None, None, {"source": "就是一句话 {不是 JSON}", "path": ""})["value"] == "就是一句话 {不是 JSON}"
+
+
 def test_text_transform_node() -> None:
     from app.domain.workflows.executors.basic import text_transform
 

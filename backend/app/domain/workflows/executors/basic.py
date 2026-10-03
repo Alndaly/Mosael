@@ -202,6 +202,21 @@ def list_chunk(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str
     return {"batches": batches, "count": len(batches), "total": len(items)}
 
 
+def _fenced_json(text: str, *, default: Any) -> Any:
+    """模型的 text 输出常裹着 ```json 围栏 —— 和「LLM 生成」自己的 json 输出同一种解析(executors.ai)。
+
+    只认**围栏**这一种:散文里夹着的 `{…}` 片段不去捞,那种文字照旧当一个值(见 json_extract 的说明)。
+    """
+    if not text.strip().startswith("```"):
+        return default
+    from app.domain.workflows.executors.ai import _parse_json_response
+
+    try:
+        return _parse_json_response(text)
+    except ValueError:
+        return default
+
+
 @register("json_extract")
 def json_extract(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
     """Walk a JSON string/object by a dot path (list indices as integers). Missing → None."""
@@ -211,7 +226,7 @@ def json_extract(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[s
         try:
             data = json.loads(source)
         except ValueError:
-            data = source  # not JSON — treat the raw string as the value
+            data = _fenced_json(source, default=source)  # not JSON — treat the raw string as the value
     value: Any = data
     for part in [p for p in str(config.get("path", "")).split(".") if p]:
         if isinstance(value, dict):
