@@ -206,6 +206,13 @@ def test_inputs_reach_the_code_and_output_comes_back() -> None:
     assert sandbox.run_code("output = inputs['a'] + inputs['b']", {"a": 2, "b": 3})["output"] == 5
 
 
+def test_print_does_not_spoil_the_output() -> None:
+    """实测:代码里打一行 print 调试,结果明明赋给了 output,节点却报「代码输出无法解析(请把结果赋给 output 变量)」
+    —— 打印的那一行和结果挤在同一条 stdout 上,解析不出来,报错还把人往错的方向指。"""
+    _skip_without_backend()
+    assert sandbox.run_code("print('调试一下')\noutput = 42", {})["output"] == 42
+
+
 def test_a_syntax_error_is_reported_not_swallowed() -> None:
     _skip_without_backend()
     with pytest.raises(sandbox.SandboxError) as caught:

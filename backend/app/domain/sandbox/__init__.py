@@ -20,12 +20,19 @@ and process limits. Docker is now required on every platform; unavailable isolat
 """
 
 #: 用户代码在沙箱里的样子。inputs 从 stdin 进,output 从 stdout 出 —— 沙箱里没有别的通路。
+#:
+#: **stdout 只留给结果。** 用户代码(连同它起的子进程)的打印在 fd 层面改道到 stderr:此前打一行 print 调试,
+#: 那一行和结果挤在同一条 stdout 上,解析失败,报的还是「请把结果赋给 output 变量」—— 而它明明赋了。
 _WRAPPER = """\
-import json, sys
+import json, os, sys
 payload = json.load(sys.stdin)
 scope = {"inputs": payload.get("inputs") or {}}
+result = os.fdopen(os.dup(1), "w", encoding="utf-8")
+os.dup2(2, 1)
 exec(payload["code"], scope)
-sys.stdout.write(json.dumps({"output": scope.get("output")}, ensure_ascii=False, default=str))
+sys.stdout.flush()
+result.write(json.dumps({"output": scope.get("output")}, ensure_ascii=False, default=str))
+result.flush()
 """
 
 TIMEOUT_SECONDS = 15.0
