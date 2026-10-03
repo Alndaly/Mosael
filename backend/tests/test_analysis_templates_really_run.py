@@ -120,10 +120,13 @@ class Outside:
     """记下每一次出这台机器的调用。`answers` 按 json_schema_name 给对话节点的回答;`pages` 是浏览器读到的页面文字。"""
 
     def __init__(self, monkeypatch: pytest.MonkeyPatch, answers: dict[str, Any], *, page_text: str = "页面文字",
-                 responses: dict[str, Any] | None = None, download_fails: bool = False) -> None:
+                 responses: dict[str, Any] | None = None, download_fails: bool = False,
+                 page_value: dict[str, Any] | None = None) -> None:
         # 评论洞察的分批笔记是每次必跑的步骤,缺省回答在这;具体测试自己的 schema 照常传。
         self.answers = {"comment_insights_batch": BATCH_NOTE, **answers}
         self.page_text = page_text
+        #: 读页面那段脚本交回的整个值;不给就是「读 DOM」那一支的样子(页面文字)。
+        self.page_value = page_value
         self.responses = {**RESPONSES, **(responses or {})}
         self.calls: dict[str, list[Any]] = defaultdict(list)
         self.download_fails = download_fails
@@ -150,6 +153,8 @@ class Outside:
     def browser_action(self, session_id, action, args, **_kwargs):
         self.calls["browser"].append((action, dict(args or {})))
         if action == "evaluate":
+            if self.page_value is not None:
+                return {"value": self.page_value}
             return {"value": {"url": "https://example", "title": "页面", "now": "2026-10-01T12:00:00+08:00",
                               "text": self.page_text}}
         return {}
@@ -410,6 +415,40 @@ class Test爆款拆解真跑:
         assert "讲得太清楚了" in breakdown["prompt"]
         assert len(_notes(ws)) == 1
 
+    def test_浏览器_B站走接口那一支_视频数据和评论都直接整理(self, monkeypatch) -> None:
+        """读页面的脚本在 B 站视频页上**优先调它自己的接口**(mode=api):交回的是评论清单,不是页面文字。
+
+        实测撞到:这一支是给评论区洞察加的,爆款拆解没跟上 —— 它把评论 JSON 当「页面文字」交给模型抄视频数据,
+        页面文字里根本没有播放、点赞、时长,于是视频数据全空,`has_video` 不成立,整条拆解停在「没取到这条视频」。
+        脚本那一支现在顺手把 view 接口里的视频数据带回来(`video`),拆解按 mode 分支直接整理,不再让模型抄。
+        """
+        ws, _ = _setup(with_tikhub=False)
+        view = {"bvid": "BV1xx411c7mD", "aid": 2, "title": "字幕君交流场所", "pubdate": _stamp(9), "duration": 2055,
+                "desc": "www", "owner": {"name": "碧诗"},
+                "stat": {"view": 5531373, "like": 276830, "reply": 89327, "favorite": 127298, "share": 9100}}
+        comments = [{"author": "碧诗", "text": "wwwww", "likes": 54669, "published_at": "2010-12-09"}]
+        page = {"url": BILI_VIDEO, "title": "字幕君交流场所_哔哩哔哩_bilibili", "now": "2026-10-04T03:30:00+08:00",
+                "mode": "api", "total": 89327, "expanded": -1, "video": view,
+                "text": json.dumps({"total": 89327, "comments": comments}, ensure_ascii=False)}
+        outside = Outside(monkeypatch, {"viral_breakdown": BREAKDOWN}, page_value=page)
+        context = _run(ws, viral_video_breakdown_graph(chat=CHAT), video_link=BILI_VIDEO, data_source="browser",
+                       download_video="no")
+
+        assert [call["name"] for call in outside.calls["llm"]] == ["viral_breakdown"], "接口取回的是结构化数据,不该再让模型抄一遍"
+        video = context["web_api_video_m"]["items"][0]
+        assert (video["views"], video["likes"], video["duration_seconds"]) == (5531373, 276830, 2055.0)
+        assert [one["text"] for one in context["web_api_comments_m"]["items"]] == ["wwwww"]
+        assert context["has_video"]["result"] is True and "no_video_notice" not in context
+        breakdown = outside.calls["llm"][-1]
+        assert "字幕君交流场所" in breakdown["prompt"] and "wwwww" in breakdown["prompt"]
+
+    def test_读页面脚本的B站接口那一支_带回视频数据(self) -> None:
+        """脚本在浏览器里跑、这里跑不了它 —— 至少钉住接口那一支交回的值里有 view 接口的视频数据。"""
+        from app.domain.workflows.templates_analysis import _READ_PAGE_SCRIPT
+
+        api_return = _READ_PAGE_SCRIPT[_READ_PAGE_SCRIPT.index('mode: "api"') - 200:_READ_PAGE_SCRIPT.index('mode: "api"') + 300]
+        assert "video" in api_return, api_return
+
     def test_不下载视频时_不排下载任务(self, monkeypatch, tikhub_tools) -> None:
         ws, _ = _setup(with_tikhub=True)
         outside = Outside(monkeypatch, {"viral_breakdown": BREAKDOWN})
@@ -541,7 +580,7 @@ class Test数据来源是选项:
         nodes = {node["id"]: node for node in graph["nodes"]}
         assert "source_mode" not in nodes and not [node for node in graph["nodes"] if node["type"] == "text_transform"]
         assert nodes["use_tikhub"]["config"] == {"left": "{{start.data_source}}", "op": "equals", "right": "tikhub"}
-        assert graph["meta"]["template_version"] == 2, "旧图走「按新版重建」"
+        assert graph["meta"]["template_version"] >= 2, "选项参数是第 2 版起的,旧图走「按新版重建」"
 
     @pytest.mark.parametrize("template_id", list(GRAPHS))
     def test_打错字_运行前就拦_说出能选哪几个(self, template_id: str) -> None:

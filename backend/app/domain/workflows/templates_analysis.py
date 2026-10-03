@@ -221,8 +221,13 @@ _READ_PAGE_SCRIPT = """(async () => {
           await wait(400);
         }
         if (all.length) {
+          //: 视频本身的数据也在 view 接口里(播放、点赞、时长、发布时间……)—— 一并交回,爆款拆解直接整理它。
+          //: 只带整理要用的那几格,原样的 view 返回很大,会白占运行记录。
+          const v = view.data;
+          const video = { bvid: v.bvid, aid: v.aid, title: v.title, pubdate: v.pubdate, duration: v.duration, desc: v.desc,
+                          owner: v.owner ? { name: v.owner.name, mid: v.owner.mid } : null, stat: v.stat || {} };
           return { url: location.href, title: document.title, now: new Date().toISOString(), mode: "api", total, expanded: -1,
-                   text: JSON.stringify({ total, comments: all.slice(0, wanted) }) };
+                   video, text: JSON.stringify({ total, comments: all.slice(0, wanted) }) };
         }
       }
     } catch (e) { /* 接口这条路不通就落回读 DOM */ }
@@ -372,10 +377,10 @@ class _Builder:
             "max_tokens": max_tokens,
         })
 
-    def graph(self, template_id: str) -> dict[str, Any]:
+    def graph(self, template_id: str, *, version: int = 2) -> dict[str, Any]:
         return normalize_graph(
             #: 第 2 版:数据来源从手填的一格(转小写、「包含 tikhub」)改成选项参数,按值直接分支。
-            {"meta": {"template_id": template_id, "template_version": 2, "source": "official"},
+            {"meta": {"template_id": template_id, "template_version": version, "source": "official"},
              "nodes": self.nodes, "edges": self.edges},
             node_types=NODE_TYPES,
         )
@@ -735,25 +740,39 @@ def viral_video_breakdown_graph(*, chat: Any, locale: str | None = None) -> dict
     tikhub_exits = _platform_chain(b, branch, col=4)
 
     _browser_read(b, col=4, row=4.2, scrolls=8, max_chars=40000, expand_replies=6)
+    #: 读页面那段脚本在 B 站视频页上优先调它自己的接口(mode=api),交回的是视频数据和评论清单,不是页面文字 ——
+    #: 直连整理;只有 DOM 读来的页面文字才需要模型抄写(和评论区洞察同一个分法)。
+    b.node("web_is_api", "condition", {"zh": "是接口取的吗", "en": "Came from the site API?"}, 5.6, 4.2, {
+        "left": "{{web_read.value.mode}}", "op": "equals", "right": "api",
+    })
+    b.edge("web_read", "web_is_api")
+    b.node("web_api_video_m", "social_metrics", {"zh": "整理接口取回的视频数据", "en": "Tidy the API video numbers"}, 6.6, 3.6, {
+        "data": "{{web_read.value.video}}", "kind": "posts", "limit": 1, "duration_unit": "seconds",
+    })
+    b.edge("web_is_api", "web_api_video_m", "true")
+    b.node("web_api_comments_m", "social_metrics", {"zh": "整理接口取回的评论", "en": "Tidy the API comments"}, 6.6, 4.0, {
+        "data": "{{web_read.value.text}}", "kind": "comments", "limit": "{{start.comment_count}}",
+    })
+    b.edge("web_is_api", "web_api_comments_m", "true")
     b.llm("web_struct", {"zh": "把页面文字抄成视频数据和评论", "en": "Turn the page text into video data and comments"},
-          6, 4.2,
+          6, 4.6,
           system="你会收到内嵌浏览器打开一条自媒体视频 / 笔记后读到的页面文字(往下滚过,评论区可能在里面)。"
                  "把这条视频的数据和页面上能看到的评论整理出来(评论原文一字不改,最多 80 条,赞多的优先)。\n" + _TRANSCRIBE_RULES,
           prompt="平台(可能为空):{{link.platform}}\n视频:{{link.url}}\n读取时间:{{web_read.value.now}}\n"
                  "页面标题:{{web_read.value.title}}\n\n页面文字:\n{{web_read.value.text}}",
           schema_name="video_page", schema=_video_page_schema(), max_tokens=12000, temperature=0.1)
-    b.edge("web_read", "web_struct")
-    b.node("web_video_m", "social_metrics", {"zh": "整理视频数据", "en": "Tidy the video's numbers"}, 7, 4.2, {
+    b.edge("web_is_api", "web_struct", "false")
+    b.node("web_video_m", "social_metrics", {"zh": "整理视频数据", "en": "Tidy the video's numbers"}, 7, 4.6, {
         "data": "{{web_struct.json.video}}", "kind": "posts", "limit": 1,
     })
     b.edge("web_struct", "web_video_m")
-    b.node("web_comments_m", "social_metrics", {"zh": "按赞排好评论", "en": "Rank the comments"}, 7, 4.65, {
+    b.node("web_comments_m", "social_metrics", {"zh": "按赞排好评论", "en": "Rank the comments"}, 7, 5.05, {
         "data": "{{web_struct.json.comments}}", "kind": "comments", "limit": "{{start.comment_count}}",
     })
     b.edge("web_struct", "web_comments_m")
 
-    video_ids = [one for one in tikhub_exits if one.endswith("_video_m")] + ["web_video_m"]
-    comment_ids = [one for one in tikhub_exits if one.endswith("_comments_m")] + ["web_comments_m"]
+    video_ids = [one for one in tikhub_exits if one.endswith("_video_m")] + ["web_api_video_m", "web_video_m"]
+    comment_ids = [one for one in tikhub_exits if one.endswith("_comments_m")] + ["web_api_comments_m", "web_comments_m"]
     _merge(b, "data_block", {"zh": "汇合这一路的数据", "en": "Collect the data from whichever route ran"}, 8, 2.5,
            _joined(video_ids, "summary") + "\n\n### " + b.text("视频明细", "Video") + "\n\n" + _joined(video_ids, "table")
            + "\n\n" + _joined(comment_ids, "summary") + "\n\n" + _joined(comment_ids, "table"),
@@ -828,7 +847,8 @@ def viral_video_breakdown_graph(*, chat: Any, locale: str | None = None) -> dict
         },
     })
     b.edge("done_notice", "output")
-    return b.graph(VIRAL_VIDEO_BREAKDOWN)
+    #: 第 3 版:浏览器那一路在 B 站上走接口(mode=api)时直接整理接口交回的视频数据和评论,不再交给模型当页面文字抄。
+    return b.graph(VIRAL_VIDEO_BREAKDOWN, version=3)
 
 
 # --------------------------------------------------------------------------------------

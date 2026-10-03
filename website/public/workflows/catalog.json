@@ -652,8 +652,8 @@
       ]
     },
     "author": "Mosael",
-    "version": 2,
-    "nodes": 37,
+    "version": 3,
+    "nodes": 40,
     "download": {
       "zh": "/workflows/viral_video_breakdown.zh.mosael-workflow.json",
       "en": "/workflows/viral_video_breakdown.en.mosael-workflow.json"
