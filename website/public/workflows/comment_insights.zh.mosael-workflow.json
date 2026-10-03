@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "评论区洞察与观众画像",
   "description": "贴一条作品链接,取赞最多的一批评论(默认 50 条:TikHub 一次取一页,约 20–50 条;浏览器往下滚着读评论区),按话题聚类,推断观众画像、需求与痛点、疑问清单、异议与情绪分布,给出下一条可以做的选题和值得回复的评论的建议回复,存成笔记。数据来源在开始节点的下拉里二选一:内嵌浏览器(不用配置、不花钱,小红书评论要换成已登录的浏览器档案)或 TikHub(要装插件、填密钥,每次运行 1 次请求;字段全、更稳、不用登录)。另有 1–2 次 AI 对话。",
-  "graph_hash": "8db56796c69753c1df9dd476137e8a5f2f608f1546d897bb02133bdb7b4653a3",
+  "graph_hash": "6041dd76306b92c946fd09e809c576fc208ee7743eab21206ec162e7fe830ab1",
   "graph": {
     "meta": {
       "template_id": "comment_insights",
@@ -274,12 +274,12 @@
         },
         "config": {
           "session": "",
-          "expression": "(async () => {\n  const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));\n  await wait(Number(input.settle_ms) || 2500);\n  const rounds = Math.min(Number(input.scrolls) || 0, 10);\n  for (let i = 0; i < rounds; i += 1) {\n    window.scrollBy(0, Math.max(window.innerHeight, 800));\n    await wait(Number(input.pause_ms) || 1200);\n  }\n  const parts = [(document.body && document.body.innerText) || \"\"];\n  const visit = (root) => {\n    root.querySelectorAll(\"*\").forEach((el) => {\n      if (!el.shadowRoot) return;\n      const text = Array.from(el.shadowRoot.children).map((one) => one.innerText || \"\").join(\"\\n\").trim();\n      if (text) parts.push(text);\n      visit(el.shadowRoot);\n    });\n  };\n  visit(document);\n  const limit = Number(input.max_chars) || 30000;\n  return { url: location.href, title: document.title, now: new Date().toISOString(), text: parts.join(\"\\n\\n\").slice(0, limit) };\n})()",
+          "expression": "(async () => {\n  const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));\n  await wait(Number(input.settle_ms) || 2500);\n  const rounds = Math.min(Number(input.scrolls) || 0, 12);\n  let last = -1, stable = 0;\n  for (let i = 0; i < rounds; i += 1) {\n    window.scrollBy(0, Math.max(window.innerHeight, 800));\n    await wait(Number(input.pause_ms) || 1300);\n    const h = document.body.scrollHeight;\n    const atBottom = window.scrollY + window.innerHeight >= h - 4;\n    if (atBottom && h === last) { stable += 1; if (stable >= 2) break; } else { stable = 0; }\n    last = h;\n  }\n  await wait(Number(input.final_ms) || 1500);\n  const SKIP = new Set([\"STYLE\", \"SCRIPT\", \"NOSCRIPT\", \"LINK\", \"META\"]);\n  const parts = [(document.body && document.body.innerText) || \"\"];\n  const visit = (root) => {\n    root.querySelectorAll(\"*\").forEach((el) => {\n      if (!el.shadowRoot) return;\n      const text = Array.from(el.shadowRoot.children)\n        .filter((one) => !SKIP.has(one.tagName))\n        .map((one) => one.innerText || \"\").join(\"\\n\").trim();\n      if (text) parts.push(text);\n      visit(el.shadowRoot);\n    });\n  };\n  visit(document);\n  const limit = Number(input.max_chars) || 30000;\n  return { url: location.href, title: document.title, now: new Date().toISOString(), text: parts.join(\"\\n\\n\").slice(0, limit) };\n})()",
           "input": {
             "settle_ms": 2500,
-            "scrolls": 10,
+            "scrolls": 12,
             "pause_ms": 1200,
-            "max_chars": 50000
+            "max_chars": 120000
           }
         },
         "inputs": [

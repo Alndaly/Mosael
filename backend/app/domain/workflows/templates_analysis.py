@@ -168,19 +168,36 @@ def _tool_list_en(check: str) -> str:
 #: **不写选择器。** 各平台的页面结构隔几周就改一次,写死的选择器一改就静悄悄地取到空;页面文字交给模型抄成
 #: 结构化数据,改版只影响「文字长什么样」,模型照样读得懂。B 站评论区在 shadow DOM 里,`innerText` 拿不到,
 #: 所以另外把每个打开的 shadow root 的文字也收进来。总时长压在执行器的 20 秒脚本上限以内。
+#:
+#: 实测过的三个坑(2026-10,B 站 310 条评论的页面):
+#: 1. shadow root 里的 STYLE/SCRIPT 会被一并抄进来 —— 评论区组件的 `:host` 样式块先吃掉大半字符预算,
+#:    页面尾部的评论在截取处被截掉(实测只抄到 13 条),所以采集时跳过这些节点。
+#: 2. 滚动轮数写死会两头不靠:滚少了评论区没加载完,直接跳到底则哨兵来不及触发(实测抄到 0 条)。
+#:    按步进滚、到底且高度不再长就停,最后留一段收尾等待给最后一次懒加载。
+#: 3. max_chars 是抄写的总预算,不是「页面有多大」:评论区模板给到 120k(约 350 条评论的量级),
+#:    超过的部分由模型那一步的条数上限收口,而不是在这里截断。
 _READ_PAGE_SCRIPT = """(async () => {
   const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   await wait(Number(input.settle_ms) || 2500);
-  const rounds = Math.min(Number(input.scrolls) || 0, 10);
+  const rounds = Math.min(Number(input.scrolls) || 0, 12);
+  let last = -1, stable = 0;
   for (let i = 0; i < rounds; i += 1) {
     window.scrollBy(0, Math.max(window.innerHeight, 800));
-    await wait(Number(input.pause_ms) || 1200);
+    await wait(Number(input.pause_ms) || 1300);
+    const h = document.body.scrollHeight;
+    const atBottom = window.scrollY + window.innerHeight >= h - 4;
+    if (atBottom && h === last) { stable += 1; if (stable >= 2) break; } else { stable = 0; }
+    last = h;
   }
+  await wait(Number(input.final_ms) || 1500);
+  const SKIP = new Set(["STYLE", "SCRIPT", "NOSCRIPT", "LINK", "META"]);
   const parts = [(document.body && document.body.innerText) || ""];
   const visit = (root) => {
     root.querySelectorAll("*").forEach((el) => {
       if (!el.shadowRoot) return;
-      const text = Array.from(el.shadowRoot.children).map((one) => one.innerText || "").join("\\n").trim();
+      const text = Array.from(el.shadowRoot.children)
+        .filter((one) => !SKIP.has(one.tagName))
+        .map((one) => one.innerText || "").join("\\n").trim();
       if (text) parts.push(text);
       visit(el.shadowRoot);
     });
@@ -810,7 +827,8 @@ def comment_insights_graph(*, chat: Any, locale: str | None = None) -> dict[str,
 
     tikhub_exits = _platform_chain(b, branch, col=4)
 
-    _browser_read(b, col=4, row=4.2, scrolls=10, max_chars=50000)
+    #: 评论区的预算给足:310 条评论的页面正文约 5 万字符,楼中楼展开后更多;条数上限由模型那步收口。
+    _browser_read(b, col=4, row=4.2, scrolls=12, max_chars=120000)
     b.llm("web_struct", {"zh": "把页面文字抄成评论清单", "en": "Turn the page text into a comment list"}, 6, 4.2,
           system="你会收到内嵌浏览器打开一条自媒体作品、往下滚过评论区之后读到的页面文字。"
                  "把这条作品的标题和页面上能看到的每一条评论整理出来(原文一字不改,赞多的优先,最多 150 条;"
