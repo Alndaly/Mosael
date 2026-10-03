@@ -2,13 +2,15 @@
 title: Media library
 description: Import, record and download media, then find it with previews, tags and search.
 order: 7
-updated: 2026-09-17
+updated: 2026-10-04
 version: 1.8.3
 ---
 
 The media library is where every file enters Mosael: local uploads, screen/camera recordings,
 downloads from a link, and the output of renders, dubbing and AI generation. They all go through
 **the same import path**, so thumbnails, waveforms and duration probing are there no matter the source.
+
+**Documents** such as PDFs, Word files, slide decks and spreadsheets come in here too and are parsed into readable text on your machine; see [Documents](/docs/guides/documents).
 
 ![Media library: grid view, tag filters, multi-select](/media/screens/en/media.png)
 
@@ -93,18 +95,31 @@ batch: what downloaded stays in the library, and the failed count is reported.
 
 ## Tags and filters
 
-- Filter by type (video / audio / image) or by tag from the toolbar. Several tags can be ticked at once;
-  with two or more you choose between **all of them** and **any of them**.
+- Filter by type (video / audio / image / document) or by tag from the toolbar. Several tags can be ticked at once;
+  with two or more you choose between **Has all of them** and **Has any of them**. The library, the editor's media
+  panel and the asset library share the same tag filter.
 - Multi-select to tag or delete in bulk.
 - **Compare**: multi-select assets of one kind to lay them side by side and pick a version. Images sit next
   to each other; videos share one screen and one play button, start muted (click a speaker to hear only that
   one), and frame stepping and timeline scrubbing apply to all of them at once.
 
+## Where an asset came from: provenance
+
+Every asset remembers **where it came from**. Cards and the detail view carry an origin tag: **Imported**, **AI generated**,
+**Processed** (made from another asset — trimmed, denoised, separated and the like) or **Exported** (a finished cut from the
+editor). The detail view's **Made from** row lists the source assets and the operation — trimmed, frame grab, grid split, to GIF,
+denoised, separated, export, joined, padded, mixed, from document, plugin — and you can follow it up level by level, then
+**Back**. A source that has since been deleted shows as "Deleted asset".
+
+**"Contains AI content" follows the chain**: trim a piece out of an AI-generated video, or denoise an AI voiceover, and the
+new asset keeps the flag (an extra **Contains AI content** badge next to its tag) — even after the original is deleted. Export
+uses it to decide on the AI label; see [Editing → Export](/docs/guides/editing).
+
 ## Processing sound
 
 Audio and video assets have two extra items in their More and right-click menus. Both **create new
 assets and leave the original untouched**; they run as background tasks you can follow in the task
-panel. Right-clicking an asset in the editor's media pool offers the same two.
+panel. Right-clicking an asset in the editor's media pool offers the same two; to have the result swapped straight onto the timeline, right-click a clip there and choose **Denoise (replaces when done)**, **Keep only the voice** or **Split into voice and background** (see [Editing](/docs/guides/editing)).
 
 - **Reduce noise…**: pick a method and a strength. A cleaned video keeps its picture; only the sound
   changes. The methods trade off differently:

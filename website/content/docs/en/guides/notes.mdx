@@ -1,16 +1,16 @@
 ---
-title: Notes & documents
-description: Collect research, edit documents and reference saved versions in boards and workflows.
+title: Notes
+description: Collect scripts and research, edit text with revision history, and reference notes from boards, workflows and the agent.
 order: 8
-updated: 2026-09-24
+updated: 2026-10-04
 version: 1.8.3
 ---
 
-Use **Notes** for scripts, research, transcripts and conversation excerpts. Workspace documents support rich text, Markdown, source references and revision history. Saved content can be referenced by boards, workflows and agents.
+Use **Notes** for scripts, research, transcripts and conversation excerpts. Notes belong to the workspace and support rich text, Markdown, source references and revision history. Saved content can be referenced by boards, workflows and agents. PDFs, Word files and slide decks don't live here: they enter the media library as [document assets](/docs/guides/documents), and **Save as note** turns one into a note when you need it.
 
 ## Getting things in
 
-Four places offer **Save to notes**, and everything written this way carries its **source**:
+These places can turn content into a note, and everything written this way carries its **source**:
 
 | From | What lands in the note |
 | --- | --- |
@@ -18,6 +18,7 @@ Four places offer **Save to notes**, and everything written this way carries its
 | A sticky note on a board | The note text, sourced back to that board |
 | Editor → Transcript | The whole transcript; with a selection, only the selected lines |
 | Editor → Subtitles | The whole subtitle track; translations are written alongside the original |
+| **Save as note** on a document asset | The parsed full text; the document's images enter the library at this point, sourced back to the original document |
 
 The dialog can **create a note** or **append to an existing one**. Transcripts and subtitles add a
 choice of **body shape**:
@@ -98,22 +99,25 @@ clicking one goes back to the original — asset excerpts carry their timecode w
 
 ### Infinite canvas
 
-Boards gained a **Document** node: pick a note and it pins that revision's content. Connect it to a
-text, image, video or voice node and the content flows downstream as input. The node offers **Open
-original**, **Update to the latest version** and **Replace note**.
+A **document item** on a board references a note: select it and press **Choose a note** on the action bar (once a note is
+referenced it reads **Choose another note**); it pins **that revision's** content and shows `v<revision>` at the bottom. Connect
+it to a note, image, video or audio item and the content flows downstream as input. The bottom offers **Update to latest revision**
+and **Open note**. **Ask AI to write** on the action bar writes a new note from scratch (saved and referenced) or rewrites the
+referenced note as its next revision (the old one stays).
 
 When the original is trashed or deleted, the node says **Note unavailable** instead of quietly
 passing an empty string downstream.
 
 ### Workflows
 
-The workflow **Knowledge** category has three nodes:
+The workflow **Knowledge** category has these nodes:
 
 | Node | What it does |
 | --- | --- |
 | **Search notes** | Searches titles, content, tags and topics; returns cited excerpts |
 | **Read note** | Outputs the full Markdown and a source link; leave the revision empty for the latest, or pin one |
 | **Save as note** | Saves text or upstream output as a new note, **without** overwriting existing ones |
+| **Document to Markdown** | Turns a PDF / Word / slides / spreadsheet asset into Markdown text, optionally only some pages (see [Documents](/docs/guides/documents)) |
 
 **Search notes** returns excerpts rather than full text — connect it to **Read note** when you need
 the whole thing. That keeps a search across dozens of notes from blowing up the context.
@@ -126,11 +130,12 @@ asked to trust that it remembered correctly.
 
 ## Related
 
-- [Creative boards](/docs/guides/boards) — how a document node connects to generation nodes
-- [Visual workflows](/docs/guides/workflows) — where the three knowledge nodes sit in a graph
+- [Creative boards](/docs/guides/boards) — how a document item connects to generation items
+- [Documents](/docs/guides/documents) — importing, reading and saving PDFs, Word files and slides as notes
+- [Visual workflows](/docs/guides/workflows) — where the knowledge nodes sit in a graph
 - [Editing and color](/docs/guides/editing) — where transcripts and subtitles become notes
 - [AI Studio](/docs/guides/ai-studio) — saving excerpts from a conversation
 
-![Workspace document editing](/media/screens/en/notes.png)
+![Workspace note editing](/media/screens/en/notes.png)
 
 <Recording src="/media/videos/en/notes.mp4" poster="/media/screens/en/notes.png" caption="Live interaction: editing, reading and Markdown modes" />
