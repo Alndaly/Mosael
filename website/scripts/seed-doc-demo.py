@@ -349,7 +349,7 @@ def start_servers(base: Path) -> None:
         "MOSAEL_BACKEND_PORT": str(API_PORT),
         "MOSAEL_CORS_ORIGINS": f"http://127.0.0.1:{APP_PORT},http://localhost:{APP_PORT}",
         # No Feishu bots. The scheduler loop stays on: it is what settles a run record once the workflow it
-        # started has finished (the seeded task is due at 21:00, outside a normal recording session).
+        # started has finished (the seeded task is due an hour before the seed ran, so ~23 hours away).
         "MOSAEL_FEISHU_AUTOSTART": "0",
         "MOSAEL_LOCAL_DESKTOP": "1",
         "MOSAEL_APP_VERSION": json.loads((ROOT / "package.json").read_text())["version"],
@@ -360,9 +360,14 @@ def start_servers(base: Path) -> None:
             cwd=ROOT / "backend", env=env, stdout=open(logs / "backend.log", "ab"), stderr=subprocess.STDOUT, start_new_session=True)
         pids["backend"] = backend.pid
     if not app_up():
+        # A production build, served as is: the packaged app loads the same bundle from disk. The dev server
+        # compiles each page on first visit, and its half-second "Loading…" would end up in the recordings.
         vite = ROOT / "frontend/node_modules/.bin/vite"
+        dist = base / "dist"
+        run([str(vite), "build", "--outDir", str(dist), "--emptyOutDir"], cwd=ROOT / "frontend",
+            stdout=open(logs / "frontend-build.log", "ab"), stderr=subprocess.STDOUT)
         frontend = subprocess.Popen(
-            [str(vite), "--host", "127.0.0.1", "--port", str(APP_PORT), "--strictPort"],
+            [str(vite), "preview", "--outDir", str(dist), "--host", "127.0.0.1", "--port", str(APP_PORT), "--strictPort"],
             cwd=ROOT / "frontend", stdout=open(logs / "frontend.log", "ab"), stderr=subprocess.STDOUT, start_new_session=True)
         pids["frontend"] = frontend.pid
     if pids:
@@ -405,6 +410,11 @@ def stop_servers(base: Path) -> None:
         except ProcessLookupError:
             pass
     (base / "pids.json").unlink(missing_ok=True)
+    # Wait for the ports to close: `up --fresh` would otherwise see the old backend still answering and reuse it.
+    for _ in range(60):
+        if not healthy() and not app_up():
+            return
+        time.sleep(0.5)
 
 
 # ------------------------------------------------------------------------------------------------ seeding
@@ -652,10 +662,15 @@ class Seeder:
 
     def schedules(self, api: httpx.Client, workspace: str, project: str, locale: str, out: dict) -> dict:
         text = TEXT[locale]
-        timezone = "Asia/Shanghai" if locale == "zh" else "Europe/London"
+        # Due once a day at the hour that has just passed on this machine: it will not fire again for ~23 hours,
+        # so a recording session never catches a second, unplanned run.
+        from datetime import datetime, timedelta, timezone as tz
+
+        timezone = "UTC"
+        due = (datetime.now(tz.utc) - timedelta(hours=1)).strftime("%H:00")
         roundup = ok(api.post("/scheduled-tasks", json={
             "workspace_id": workspace, "project_id": project, "name": text["schedule"], "kind": "workflow", "trigger_type": "daily",
-            "schedule": {"time": "21:00"}, "timezone": timezone, "enabled": True,
+            "schedule": {"time": due}, "timezone": timezone, "enabled": True,
             "payload": {"workflow_id": out["workflows"]["roundup"], "params": {}}}))
         export = ok(api.post("/scheduled-tasks", json={
             "workspace_id": workspace, "project_id": project, "name": text["export_schedule"], "kind": "render", "trigger_type": "weekly",

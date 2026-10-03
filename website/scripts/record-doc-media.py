@@ -122,16 +122,20 @@ class Capture:
         self.hold(1200)
 
     def board(self, key: str = "board") -> None:
-        # The board page reads `?board=` when it mounts; switching boards inside one page load goes through a
-        # fresh load, as reopening the app on that board would.
-        self.goto("boards?board=" + self.F[key])
-        self.page.reload(wait_until="networkidle")
+        # Through the board list, as a user switches boards (a page reload would flash an unstyled frame
+        # into the recording).
+        self.goto("boards")
+        crumb = self.page.get_by_role("banner").get_by_role("button", name=self.word("创意画板", "Idea board"), exact=True)
+        if crumb.count():  # a board is open: the breadcrumb leads back to the list
+            crumb.click()
+            self.hold(900)
+        self.page.get_by_text(self.T[key], exact=True).first.click()
         self.page.locator(".react-flow__node").first.wait_for()
         self.hold(1400)
 
     def workflow(self, key: str) -> None:
         self.goto("workflows")
-        crumb = self.page.get_by_role("banner").get_by_role("button", name=self.word("工作流"), exact=True)
+        crumb = self.page.get_by_role("banner").get_by_role("button", name=self.word("工作流", "Workflows"), exact=True)
         if crumb.count():  # an editor is open: the breadcrumb leads back to the list
             crumb.click()
             self.hold(900)
@@ -352,7 +356,8 @@ def agent(c: Capture) -> None:
     c.page.get_by_text(c.word("原始数据"), exact=True).first.click()
     c.hold(600)
     c.click("拒绝", "Reject", hold=600)
-    c.page.get_by_text(c.word("智能体思考中…"), exact=True).wait_for(state="detached", timeout=240_000)
+    # While the turn runs the composer shows "Stop" instead of "Send"; Send coming back means the reply is in.
+    c.button("发送", "Send").wait_for(timeout=240_000)
     c.hold(1500)
     c.shot("agent-decided")
     c.hold(1200)
@@ -520,11 +525,16 @@ def notes(c: Capture) -> None:
     c.goto("notes?note=" + c.F["note"])
     c.shot("notes")
     c.begin()
-    c.click("阅读", "Read", hold=1100)
+    # The note's own mode buttons, inside the page — in English the sidebar's "Edit" (the editor) has the same name.
+    mode = lambda zh, en: c.page.get_by_role("main").get_by_role("button", name=c.word(zh, en), exact=True).first.click()
+    mode("阅读", "Read")
+    c.hold(1100)
     c.shot("notes-read")
-    c.click("Markdown", "Markdown", hold=1300)
+    mode("Markdown", "Markdown")
+    c.hold(1300)
     c.shot("notes-markdown")
-    c.click("编辑", "Edit", hold=1000)
+    mode("编辑", "Edit")
+    c.hold(1000)
 
 
 def scenes(c: Capture) -> None:
