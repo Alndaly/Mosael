@@ -2,7 +2,7 @@
 title: Generating with ComfyUI
 description: Connect a ComfyUI server on this machine or your LAN; every saved workflow becomes a model you can pick, and a set of tools lets the agent and workflows run any workflow as-is.
 order: 18
-updated: 2026-09-26
+updated: 2026-10-04
 version: 1.8.3
 ---
 
@@ -60,9 +60,11 @@ Mosael reads **what each workflow lets you tune and what it takes**:
 | In the workflow | In Mosael |
 | --- | --- |
 | The prompt nodes upstream of the sampler / guider | Prompt and negative prompt |
+| With no sampler Mosael knows (API nodes such as MiniMax / Hailuo, Kling and Veo; packs with their own sampler such as WanVideo; MiniMax H3 wrapped in a subgraph): a multiline `prompt` on a node wired into an output | Prompt; a `negative_prompt` on the same node is the negative prompt |
 | The sampler's seed, RandomNoise's noise_seed | Seed (random each time when left empty) |
 | Width and height of the node that creates the canvas (EmptyLatentImage, Wan / Hunyuan video latents) | Size (the workflow's own when not chosen) |
-| The canvas node's batch_size | “Images”: how many per run (up to 4), all of them collected |
+| The canvas node's batch_size | “Images”: how many per run (up to 4, one when not chosen), all of them collected |
+| The save nodes of that kind (the preview nodes when nothing is saved) | How many files one run returns, so that many placeholders are laid out up front. With more than one, the parameters gain **Results from**: all by default, or pick one node to get only its output while the other save nodes don't run |
 | Checkpoint, LoRA, VAE, upscale model and ControlNet loaders | Drop-downs listing the files installed in ComfyUI |
 | Steps, CFG, sampler, scheduler, denoise, frame count … | One entry each in the parameters panel with a plain name (“Steps”, “Sampler”); common ones first, details under Advanced |
 | LoadImage nodes | Reference images; in video workflows the ones wired to `start_image` / `end_image` are the first / last frame |
@@ -132,19 +134,15 @@ progress in the task center, cancel, resume after a restart and usage records, a
 processing workflow as-is** (upscale, background removal, inpainting, face restore, frame interpolation), feed it
 several inputs at once, or get every intermediate output back, use that workflow's tool.
 
-**On a board a workflow has one entry.** A workflow with a single saved image / video / audio output node, no
-text output and no alpha-as-mask input (preview nodes such as PreviewImage don't count — they write temporary files
-that neither generation nor the tool returns by default, so a “save + peek at the line art” ControlNet workflow
-qualifies too) is the same thing as the model of the same name: the board no longer lists its tool separately —
-add an image (video, audio) item and pick that model; the result lands in place, several at a time, with a longer wait.
-Empty items already set to such a workflow switch to generation with that model automatically: position, name, prompt
-and parameters carry over; width / height and “Include previews” have no place in generation and are dropped. Workflows
-with several saved output nodes, text outputs or an alpha mask stay tools on boards — one that takes an image (upscale,
-background removal, face restore) is an ability of image items (select an image and pick it on the toolbar above it),
-one that only takes a prompt is another way to fill an empty item. “Import outputs”
-fetches by task id, so it is not on boards; use it in workflows and chat.
-Workflows keep both, and the tool's description ends with “If you only need the image, use the “AI generate” node with
-this model”.
+**On a board a workflow has one entry: Generate.** A workflow that delivers images, video or audio (preview nodes such as
+PreviewImage don't count — they write temporary files) is the same thing as the model of the same name: the board no longer lists
+its tool, and the "⋯" at the top of an item doesn't repeat it — add an image (video, audio) item and pick that model; the result
+lands in place. Workflows with several save nodes work the same way: placeholders for every save node are laid out before it runs
+(**Results per run** shows "N per node"), and **Results from** under Settings narrows it to one node. Calling ComfyUI through
+Generate without choosing a count makes one. A workflow that only returns text (tagging, prompt extraction) isn't a model and stays an
+item ability on boards. "Import outputs" fetches by task id, so it is not on boards. Workflows and the agent keep the tools (what they
+do beyond generation — every output node, displayed text, previews — stays there), and the tool's description ends with "If you only
+need the image, use the AI generate node with this model".
 
 A workflow tool may run for up to 30 minutes and reports progress step by step (inside a workflow the run panel shows
 “Sampler 12/20”); cancelling stops that one task in ComfyUI, and **every output** goes into the asset library — each
