@@ -8,9 +8,10 @@ transcriptProjection.parity.test.ts 跑同一份语料)。改断句规则时先�
 是一句一行 —— 同一个视频,两个入口铺出来的字幕不一样。
 
 规则(和前端逐字一致):
-- 有词级时间戳:按词累加,遇到句末标点、停顿 ≥ 0.75 秒、一行满 8 秒、满 48 个显示单位(中日韩字算 2)、
-  或满 28 个单位且遇到逗号类标点,就断一行。词的时间戳里常常没有标点,先把段落原文里的分隔符(含英文空格)
-  补回到前一个词上。
+- 有词级时间戳:按词累加,遇到句末标点、以标点结尾后的停顿 ≥ 0.75 秒(句中换气只是静音,不断)、
+  一行满 8 秒、满 48 个显示单位(中日韩字算 2),或满 28 个单位且遇到逗号类标点,就断一行。
+  触到上限不就地硬切:前方一小步内的标点、后方最近的逗号、拉丁词的边界,按这个顺序挑(语料里的
+  cap-* 用例)。词的时间戳里常常没有标点,先把段落原文里的分隔符(含英文空格)补回到前一个词上。
 - 没有词级时间戳:按句末标点切,时间按每句的显示单位数在段落里按比例分。ASCII 句号后面要跟空白(挡住 `3.5`),
   中文句号直接切。
 """
@@ -187,17 +188,16 @@ def sentences_for_editing(segments: list[Segment]) -> list[Segment]:
                 duration = token.end_time - row[0].start_time
                 pause = following.start_time - token.end_time if following else 0.0
                 units = display_units(text)
-                #: 停顿断行也要认词边界:说话人在一个词中间换气(「中的 co … ntrol net」),
-                #: 这一拍两边都是拉丁字母就不断 —— 词是断行的最小单位,停顿只是静音,留在这行里。
-                pause_breaks_word = (
-                    following is not None
-                    and _ASCII_LETTER.match(token.text[-1:])
-                    and _ASCII_LETTER.match(following.text[:1])
+                #: 停顿断行只认**以标点结尾**的行:那是句子的气口。句中的换气只是静音 ——
+                #: 教程讲话人句句都有换气,认它就把每句话劈成两半,译配拿到半句没法翻。
+                #: (词边界不用单独守:一个词中间的停顿,行尾必然不是标点,已经被这条挡住。)
+                pause_at_breath = pause >= PAUSE_BREAK_SECONDS and (
+                    _SENTENCE_END.search(text) or _SOFT_PUNCTUATION.search(text)
                 )
                 natural = (
                     following is None
                     or _SENTENCE_END.search(text)
-                    or (pause >= PAUSE_BREAK_SECONDS and not pause_breaks_word)
+                    or pause_at_breath
                     or (units >= SOFT_BREAK_UNITS and _SOFT_PUNCTUATION.search(text))
                 )
                 if natural:

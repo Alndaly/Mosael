@@ -59,13 +59,13 @@
   },
   {
    "name": "english-spaces-and-a-long-pause",
-   "why": "英文的空格要补回去;停顿 ≥ 0.75 秒断一行,即使没有标点。",
+   "why": "英文的空格要补回去;停顿 ≥ 0.75 秒断一行**只在这一行以标点结尾时**(句子/气口的停顿才断)。句中的换气只是静音、不断开 —— 教程讲话人句句都有换气,认它就把每句话都劈成两半,译配拿到半句没法翻。",
    "segments": [
     {
      "id": "e",
      "start_time": 10.0,
      "end_time": 16.0,
-     "text": "so we went home and then we slept",
+     "text": "so we went home, and then we slept",
      "tokens": [
       {
        "start_time": 10.0,
@@ -98,12 +98,12 @@
        "text": "then"
       },
       {
-       "start_time": 13.1,
-       "end_time": 13.3,
+       "start_time": 14.3,
+       "end_time": 14.5,
        "text": "we"
       },
       {
-       "start_time": 13.3,
+       "start_time": 14.5,
        "end_time": 15.9,
        "text": "slept"
       }
@@ -115,7 +115,7 @@
      "id": "e:0",
      "start_time": 10.0,
      "end_time": 11.4,
-     "text": "so we went home"
+     "text": "so we went home,"
     },
     {
      "id": "e:1",

@@ -255,16 +255,14 @@ export function transcriptSegmentsForEditing(segments: SegmentLike[]): SegmentLi
         const duration = token.end_time - row[0].start_time;
         const pause = next ? next.start_time - token.end_time : 0;
         const units = displayUnits(text);
-        //: 停顿断行也要认词边界(见后端 voices/sentences.py):一个词中间的换气不断行。
-        const pauseBreaksWord = Boolean(
-          next
-          && ASCII_LETTER.test(token.text.slice(-1))
-          && ASCII_LETTER.test(next.text.charAt(0)),
-        );
+        //: 停顿断行只认以标点结尾的行(句子的气口);句中的换气只是静音。
+        //: 与后端 voices/sentences.py 同一条,contracts/transcript-sentence-cases.json 钉住。
+        const pauseAtBreath =
+          pause >= PAUSE_BREAK_SECONDS && (SENTENCE_END.test(text) || SOFT_PUNCTUATION.test(text));
         const natural =
           !next
           || SENTENCE_END.test(text)
-          || (pause >= PAUSE_BREAK_SECONDS && !pauseBreaksWord)
+          || pauseAtBreath
           || (units >= SOFT_BREAK_UNITS && SOFT_PUNCTUATION.test(text));
         if (natural) {
           index += 1;

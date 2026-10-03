@@ -87,7 +87,8 @@ describe("projectTranscript", () => {
       id: "paragraph",
       start_time: 0,
       end_time: 20,
-      text: "first part second part",
+      // 停顿断行只认「以标点结尾」的行(句中换气只是静音)—— 这里给一个逗号。
+      text: "first part, second part",
       tokens: [
         { start_time: 0, end_time: 1, text: "first" },
         { start_time: 1.1, end_time: 2, text: "part" },
@@ -98,7 +99,7 @@ describe("projectTranscript", () => {
 
     const result = projectTranscript([clip("c1", "a1", 0, 0, 20)], source);
 
-    expect(result.map((sentence) => sentence.text)).toEqual(["first part", "second part"]);
+    expect(result.map((sentence) => sentence.text)).toEqual(["first part,", "second part"]);
     expect(new Set(result.map((sentence) => sentence.segmentId)).size).toBe(2);
   });
 });
@@ -264,15 +265,16 @@ describe("兜底切分(没有词级时间戳时)", () => {
     const tokens = [
       { start_time: 0, end_time: 1, text: "小小" },
       { start_time: 1, end_time: 2, text: "玲珑" },
-      // 停顿 ≥ 0.75s 就断句,即使这里一个句号都没有。
+      // 停顿 ≥ 0.75s 断句只在这一行以标点结尾时(规则见 contracts/transcript-sentence-cases.json);
+      // 这里用一个逗号让这个停顿断得成。
       { start_time: 3, end_time: 4, text: "但功能" },
       { start_time: 4, end_time: 5, text: "异常强大" },
     ];
     const rows = transcriptSegmentsForEditing([
-      { id: "s1", start_time: 0, end_time: 5, text: "小小玲珑但功能异常强大", tokens },
+      { id: "s1", start_time: 0, end_time: 5, text: "小小玲珑,但功能异常强大", tokens },
     ]);
     expect(rows).toHaveLength(2);
-    expect(rows[0].text).toBe("小小玲珑");
+    expect(rows[0].text).toBe("小小玲珑,");
     expect(rows[1].text).toBe("但功能异常强大");
   });
 
