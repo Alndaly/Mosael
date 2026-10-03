@@ -180,8 +180,51 @@ def _tool_list_en(check: str) -> str:
 #:    (`expand_max` 个点开上限,0 = 不展开):按**文字模式**找折叠钮而不是选择器 —— 选择器一改版就
 #:    静默失效,而「共 43 条回复」这几个字是给人看的,变了用户先发现。只点顶层评论的折叠钮,
 #:    深度展开(「展开更多回复」)不值得那点预算;要全量回复走 TikHub 那一路的回复接口。
+#: 5. **已知平台优先走它自己的接口**(2026-10 实测,B 站):页面上下文 fetch 平台 JSON 接口,
+#:    带登录态、分页器、楼中楼都在返回里,评论区组件被风控卡住也不受影响(实测组件空转时接口
+#:    照常返回 106 条)。接口也是一种会变的契约 —— 所以它只是**优先策略**,落空就落回读 DOM。
+#:    抖音/小红书要签名(a_bogus / x-s),不在页面里调,继续走 DOM 那条路。
 _READ_PAGE_SCRIPT = """(async () => {
   const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  const BILI = /bilibili\\.com\\/video\\/(BV[\\w]+)/;
+  const bili = location.href.match(BILI) || String(input.video_url || "").match(BILI);
+  if (bili) {
+    //: B 站:页面上下文直接调它自己的接口 —— 带登录态、结构化 JSON、分页器和楼中楼都在里面,
+    //: 评论区组件渲染失败(风控「玩命加载」)也不受影响。接口变了就落空,落回下面读 DOM 那条路。
+    try {
+      const view = await (await fetch("https://api.bilibili.com/x/web-interface/view?bvid=" + bili[1], { credentials: "include" })).json();
+      const aid = view && view.data ? view.data.aid : null;
+      const total = view && view.data && view.data.stat ? view.data.stat.reply : 0;
+      if (aid) {
+        const wanted = Math.min(Number(input.comment_max) || 150, 300);
+        const all = [];
+        let pn = 1;
+        while (all.length < wanted && pn <= 15) {
+          const r = await (await fetch("https://api.bilibili.com/x/v2/reply?type=1&oid=" + aid + "&sort=2&ps=20&pn=" + pn, { credentials: "include" })).json();
+          const replies = r && r.data && r.data.replies ? r.data.replies : [];
+          if (!replies.length) break;
+          for (const one of replies) {
+            const push = (c, prefix) => all.push({
+              author: c && c.member ? c.member.uname : "",
+              text: prefix + ((c && c.content ? c.content.message : "") || "").replace(/\\s+/g, " ").trim(),
+              likes: c && typeof c.like === "number" ? c.like : "",
+              published_at: c && c.ctime ? new Date(c.ctime * 1000).toISOString().slice(0, 10) : "",
+            });
+            push(one, "");
+            //: 楼中楼:接口里每条顶层评论自带前几层回复,拍平、带 ↳ 前缀,回复也算数。
+            for (const sub of one.replies || []) push(sub, "↳ ");
+          }
+          pn += 1;
+          if (replies.length < 20) break;
+          await wait(400);
+        }
+        if (all.length) {
+          return { url: location.href, title: document.title, now: new Date().toISOString(), mode: "api", total, expanded: -1,
+                   text: JSON.stringify({ total, comments: all.slice(0, wanted) }) };
+        }
+      }
+    } catch (e) { /* 接口这条路不通就落回读 DOM */ }
+  }
   await wait(Number(input.settle_ms) || 2500);
   const rounds = Math.min(Number(input.scrolls) || 0, 12);
   let last = -1, stable = 0;
