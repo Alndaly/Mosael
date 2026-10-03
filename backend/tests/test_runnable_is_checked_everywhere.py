@@ -56,6 +56,46 @@ def test_调用的子工作流缺必填参数_父工作流点运行当场就说_
     assert result["call"]["output"] == {"text": "关于 猫"}
 
 
+def test_入参引用上游的值_运行前不拿引用原文去查子工作流() -> None:
+    """入参是 `{{start.v}}` 这种引用时,它的值要到运行时才知道 —— 运行前只能算「给了」。
+
+    实测撞到:父工作流把自己的开始参数接给子工作流的必填参数,点运行当场 422,说子工作流
+    「开始节点没有这些参数:start.v」—— 引用原文被当成子工作流自己的配置去校验了。于是
+    「调用工作流」只能传写死的字面量,接上游的值一律跑不起来。
+    """
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+    child = _child_needing_topic(client, ws)
+
+    def parent(inputs: dict) -> dict:
+        return client.post("/api/workflows", json={"workspace_id": ws, "name": "总流程", "graph": {
+            "nodes": [
+                {"id": "start", "type": "start", "config": {"params": {"v": "猫"}}},
+                {"id": "call", "type": "call_workflow", "config": {"workflow_id": child["id"], "inputs": inputs}},
+            ],
+            "edges": [{"id": "e1", "source": "start", "target": "call"}],
+        }}).json()
+
+    for inputs, expected in (({"topic": "{{start.v}}"}, "关于 猫"), ({"topic": "小{{start.v}}"}, "关于 小猫")):
+        started = client.post(f"/api/workflows/{parent(inputs)['id']}/run", json={"params": {}})
+        assert started.status_code == 200, started.text
+        assert wait_status(client, started.json()["id"]) == "succeeded"
+        result = client.get(f"/api/jobs/{started.json()['id']}").json()["result"]["context"]
+        assert result["call"]["output"] == {"text": expected}
+
+    # 引用落空、运行时才是空的那种,仍由子工作流开跑时那一道拦下(不是在这里静默放过)。
+    blank = client.post("/api/workflows", json={"workspace_id": ws, "name": "空引用", "graph": {
+        "nodes": [
+            {"id": "start", "type": "start", "config": {"params": {"v": ""}}},
+            {"id": "call", "type": "call_workflow", "config": {"workflow_id": child["id"], "inputs": {"topic": "{{start.v}}"}}},
+        ],
+        "edges": [{"id": "e1", "source": "start", "target": "call"}],
+    }}).json()
+    started = client.post(f"/api/workflows/{blank['id']}/run", json={"params": {}})
+    assert started.status_code == 200, started.text
+    assert wait_status(client, started.json()["id"]) == "failed"
+
+
 def test_智能体的运行工作流卡_跑不起来就不开卡_原因交给智能体() -> None:
     client = fresh_client()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]

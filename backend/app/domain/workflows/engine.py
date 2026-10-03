@@ -300,12 +300,40 @@ def _check_called_workflows(
             )
         if child.id in seen:
             continue
+        given = dict(inputs or {})
+        #: 写成引用的入参(`{{start.v}}`、`小{{start.v}}`)值要到运行时才知道:运行前只能算「给了」。
+        #: 把引用原文当参数交下去的话,它会被当成子工作流自己的配置去校验(「开始节点没有这些参数:start.v」),
+        #: 接上游值的调用一律跑不起来。真到运行时它是空的、或不在选项里,由子工作流开跑时那一道照样拦下。
+        later = {name for name, value in given.items() if _templated(value)}
+        literal = {name: value for name, value in given.items() if name not in later}
         try:
-            _check_graph_runnable(db, _revision_graph(db, child), child.workspace_id, dict(inputs or {}), actor, seen=seen | {child.id})
+            _check_graph_runnable(
+                db, _given_at_run_time(_revision_graph(db, child), later), child.workspace_id, literal, actor,
+                seen=seen | {child.id},
+            )
         except WorkflowDomainError as exc:
             raise WorkflowDomainError(
                 "wfErr_calledWorkflowNotRunnable", params={"node": node_id, "name": child.name, "reason": exc}
             ) from exc
+
+
+def _given_at_run_time(graph: dict[str, Any], names: set[str]) -> dict[str, Any]:
+    """这几个开始参数**会给、但运行前不知道值**:运行前不按必填、不按选项判它们,其余照旧。"""
+    if not names:
+        return graph
+    nodes = []
+    for node in graph.get("nodes") or []:
+        if isinstance(node, dict) and node.get("type") == "start":
+            config = dict(node.get("config") or {})
+            required = config.get("required_params")
+            if isinstance(required, list):
+                config["required_params"] = [name for name in required if name not in names]
+            options = config.get("param_options")
+            if isinstance(options, dict):
+                config["param_options"] = {name: one for name, one in options.items() if name not in names}
+            node = {**node, "config": config}
+        nodes.append(node)
+    return {**graph, "nodes": nodes}
 
 
 def _check_generation_text(db: Session, graph: Any, actor: str | None) -> None:
