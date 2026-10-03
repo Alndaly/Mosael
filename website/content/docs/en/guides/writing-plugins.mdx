@@ -2,7 +2,7 @@
 title: Writing a plugin
 description: Write a manifest, declare tools and permissions, and test file inputs and outputs.
 order: 11
-updated: 2026-09-25
+updated: 2026-10-04
 version: 1.8.3
 ---
 
@@ -109,6 +109,12 @@ parse. Write placeholders in `help` as inline code with backticks.
 
 **Environment injection is not a sandbox.** Mosael passes a minimal environment and the declared credentials. Local plugins still run with the current user’s operating-system permissions and may read accessible files. Declare the permissions your tools need and keep credentials out of logs.
 
+**Don't declare network or mirror settings yourself.** Which proxy to use is each connection's **Network** row; the host injects
+`HTTP_PROXY` / `HTTPS_PROXY` / `ALL_PROXY` / `NO_PROXY` into your process, so just let your libraries read the environment as usual. A
+plugin that installs dependencies writes `"package_sources": ["pypi"]` (or `"npm"`) at the top level, and the host injects
+`PIP_INDEX_URL`, `UV_DEFAULT_INDEX` or `npm_config_registry` from the connection's **PyPI mirror / npm registry** choice. Those names,
+`PATH` and anything `MOSAEL_*` belong to the host: config or credential keys with the same name fail at install.
+
 ## Handing over a file
 
 The path above moves JSON, capped at 1MB — a 2GB mp4 does not fit. To hand a file to the media
@@ -179,6 +185,33 @@ directory — that is the isolation boundary, not an oversight.
 
 See `pan_upload` in the [Baidu Netdisk plugin](/plugins/baidu-pan).
 
+Two hints on that field let the host do half the work:
+
+- `"x-media": "document"` or `["audio", "video"]` limits which kinds of media it takes; the form lists only those, and a wrong kind is
+  explained on the spot.
+- `"x-audio": "original"` has the host extract the sound as a wav at the original sample rate first (for denoising, separation and other
+  things that go back into a cut); `"speech"` gives 16 kHz mono wav (what recognition models want). You don't need to ship ffmpeg.
+
+**When a field holds an id from another system** (a ComfyUI task id, a netdisk `fs_id`, an object-storage path, a paging cursor), mark it
+`"format": "external_id"`. Nothing changes at run time; it is a declaration: such tools stay off boards — a creator can't type a task id
+there — and work as usual in workflows and chat.
+
+## Consequences and confirmation: `effects`
+
+Whether the agent asks the user before calling your tool directly is decided by the tool's `effects`:
+
+| `effects` | Meaning | When the agent calls it |
+| --- | --- | --- |
+| `none` | Costs nothing, stays inside: read-only, or only writes into Mosael (into the library, say) | Runs directly |
+| `paid` | Costs money or paid compute | Confirmation card first (AI cost tier) |
+| `external` | Consequences outside Mosael that can't be undone: uploading to someone's server, sending things out | Confirmation card first (Outside this app tier) |
+| `local-code` | Runs **caller-written code** on this computer | Confirmation card first, saying it runs code on your computer |
+
+**The default is `external`** — a tool that isn't read-only and declares nothing always asks. `read_only: true` means `none`, and
+declaring another `effects` alongside it fails at install. `tools.default_effects` sets a package-wide default; MCP plugins write theirs by
+name under `tools.overrides`. Things a person starts themselves (Try it on the Plugins page, a plugin node in a workflow they run, running
+an item on a board) never raise a card. Tools with consequences carry an **Asks first** badge on the Plugins page and in the market.
+
 ## Remembering something
 
 A plugin **process** is stateless: environment in, JSON out, then it is gone — you have no way to write anything back yourself. Fine for pure computation, a dead end for
@@ -237,7 +270,7 @@ For long work the agent may call without confirmation, offer a “submit and ret
 task id” tool; tools that need confirmation (paid, external, local code) open a card and run in the background once
 approved, so they don't count against the agent's wait for a single call.
 
-## Generating for Mosael
+## Working for Mosael: generation and capabilities
 
 A plugin can also be a **generation provider**: declare `"provides": ["generation"]` in the manifest and let one
 tool claim it. Mosael calls that tool with two operations — `models` (which models this connection has, the
@@ -251,7 +284,32 @@ That tool is host-only — it never shows up for the agent or in workflows. Its 
 and only re-reads the list when it changed — models the user adds on your side appear without a manual refresh.
 Parameter `title`s may be written per language (`{"zh": "步数", "en": "Steps"}`); Mosael picks one when it shows
 them. The full protocol and fields are in `docs/PLUGIN_MANIFEST.md` (“Generating for the host”) in the repository;
-the ComfyUI plugin that ships with Mosael (`plugins/bundled/comfyui`) is a complete example.
+the ComfyUI plugin that ships with Mosael (`plugins/bundled/comfyui`) is a complete example. Each model can also declare
+`prompt: "required" | "optional" | "none"`: upscalers and background removers that take no prompt say `none`, and the interface
+drops the prompt box.
+
+**Reporting tools at run time**: with `"provides": ["tools"]` the plugin reports its own tools while running (that's how ComfyUI gets one
+tool per workflow); they join the tool table, node panel and agent like declared ones and refresh when the catalogue changes. A reported
+tool can declare `replaces` (the old tool it supersedes — saved nodes are rewritten to it) and `mirrors` (it is the same thing as a
+generation model, so boards keep only the Generate entry).
+
+**Registering in the host's capability table.** Several of the host's jobs can be handed to a plugin, which then sits beside the local
+engines in **Settings → Capability providers**, node engine dropdowns, the editor, the media library and the agent:
+
+| `provides` | Does | Inputs follow a contract |
+| --- | --- | --- |
+| `document_parse` | Parse a document into Markdown (stored as another parse of that document) | `file`: `format: asset`, `x-media: document` |
+| `audio_denoise` / `audio_separation` | Denoise / split into voice and background | `file`: audio or video, `x-audio: original` |
+| `transcription` | Speech to a timed transcript | `file`: audio or video, `x-audio: speech` |
+| `translation` | Translate a batch of texts | `texts` (array) and `target` |
+| `speech` | Read text with a voice | `op`: `voices` lists voices, `speak` reads |
+| `public_url` | Turn a local asset into a time-limited public link | Takes `asset_id`, `expires`; returns `url` |
+
+Write the same `provides` on the package and on **exactly one** tool (process plugins only). A tool that claims one of these **is still an
+ordinary tool**: it sits in the Plugins page's tool table, can be ticked, and the agent and workflows can call it directly, with a capability
+badge and a **Used in** list. The host never picks a plugin on its own — users make it the default under Capability providers or name it
+where it's used. Outputs and details for each are in `docs/PLUGIN_MANIFEST.md` ("Declaring what you can do for the host"); the bundled
+`plugins/bundled/mineru` (document parsing) and `plugins/bundled/object-storage` (asset links) are full examples.
 
 ## Making it a workflow node
 
@@ -262,7 +320,12 @@ Tools work in the agent by default. To make one a workflow node too, add `node` 
   "node": { "label": "Import from netdisk", "outputs": ["asset_id", "asset_name"] } }
 ```
 
-Downstream nodes reference the `outputs` keys as `{{nodeId.asset_id}}`.
+Downstream nodes wire straight from the ports named by the `outputs` keys. Outputs meant only for wiring workflows (asset id lists,
+summaries, task ids) go into `wiring_outputs`, so boards only receive the finished results.
+
+When a parameter is an array whose items are structured (each step of an explainer video, say), declare `properties` under `items` and the
+node form shows one card per item with a field for each — add, remove, move up and down — instead of a box of hand-written JSON. Parameter
+and tool names can be written as `{"zh": "…", "en": "…"}` and follow the interface language.
 
 ## Writing the readme
 
@@ -272,6 +335,9 @@ Put a `README.md` in the plugin directory. It is **rendered as-is on the plugin'
 Two traps: relative links can follow the repository layout (they get rewritten to point back at
 the repo), but **don't point at files that don't exist**; and while `<https://…>` is fine on
 GitHub, `[link](https://…)` is safer here.
+
+The manifest can also carry `author` (a name, per language if you like, and a link) and `docs` (your usage docs' address): the Plugins
+page and the market show who wrote it, and **Docs** opens your page instead of the generic plugin guide.
 
 ## Shipping it
 
