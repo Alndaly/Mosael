@@ -122,7 +122,7 @@ export class AccountViewManager {
   attachWindow(window: BaseWindow, nameResolver: (accountId: string) => string | null): void {
     this.window = window;
     this.nameOf = nameResolver;
-    window.on("resize", () => this.layout());
+    window.on("resize", () => this.fitPanelsToWindow());
     this.loadPanelLayout();
     if (!this.idleTimer) this.idleTimer = setInterval(() => this.sweepIdlePanels(), IDLE_SWEEP_MS);
   }
@@ -364,6 +364,20 @@ export class AccountViewManager {
     // 尺寸变了 → 缩放要跟着变(布局视口必须恒为 layoutWidth),所以每块面板都补一次。
     for (const id of this.panels) this.applyPanelZoom(id);
     this.layout();
+  }
+
+  /**
+   * 窗口大小变了:面板按同样的上下限与比例重新夹回窗口里(尺寸与位置,和启动时读回存档那一步
+   * 是同一个 fitPanelLayout)。此前这里只重排,窗口一缩小,拖到过右下角的面板就半截留在窗口外 ——
+   * 而挂在窗口外的视图视口是 0×0,可信输入跟着失效。夹过的结果落盘;没变就不写。
+   */
+  private fitPanelsToWindow(): void {
+    const area = this.panelArea();
+    if (!area) return;
+    const fitted = fitPanelLayout(this.panelLayout, area);
+    const changed = (["x", "y", "width"] as const).some((key) => fitted[key] !== this.panelLayout[key]);
+    this.applyPanelLayout(fitted);
+    if (changed) this.savePanelLayout();
   }
 
   /** 窗口内容区 —— 面板几何的边界。窗口没了就没有可摆的地方。 */

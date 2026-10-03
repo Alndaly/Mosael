@@ -92,6 +92,11 @@ const fake = vi.hoisted(() => {
     getContentSize() {
       return this.size;
     }
+    /** 用户拖窗口边改大小:尺寸变了再发 resize(Electron 的顺序)。 */
+    resizeTo(width: number, height: number) {
+      this.size = [width, height];
+      this.emit("resize");
+    }
     getContentBounds() {
       return { x: 0, y: 0, width: this.size[0], height: this.size[1] };
     }
@@ -110,6 +115,7 @@ vi.mock("electron", () => ({
 }));
 
 const { AccountViewManager } = await import("./accountViews");
+const { panelHeightFor } = await import("./panelGeometry");
 // main.cjs 就是这么接的:ipcMain.handle(publishPanelLayout, (_e, p) => setPanelLayout(parsePanelLayout(p)))。
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { parsePanelLayout } = require("../ipc-contract.cjs") as { parsePanelLayout: (value: unknown) => never };
@@ -279,5 +285,50 @@ describe("stacked panels", () => {
 
     expect(cards.map((card) => card.id)).toEqual(["b", "a"]);
     expect(window.children.at(-1)).toBe(viewOf("a"));
+  });
+});
+
+describe("window resizing", () => {
+  const layoutFile = () => path.join(fake.userData, "panel-layout.json");
+
+  it("pulls the panel back inside a shrunken window with the usual limits, and remembers it", () => {
+    attach("a");
+    manager.setPanelLayout(parsePanelLayout({ handle: "nw", x: 560, y: 300, width: 624, height: 484 }));
+    expect(topCard().x + topCard().width).toBe(1184);
+
+    window.resizeTo(800, 600);
+    const card = topCard();
+    // 800×600:宽上限 min(800−32, 800×0.6) = 480,高上限 min(600−56−16, 600×0.6) = 360 → 折成宽 536。
+    expect(card.width).toBe(480);
+    expect(card.height).toBe(panelHeightFor(480));
+    expect(card.x + card.width).toBeLessThanOrEqual(800);
+    expect(card.y).toBeGreaterThanOrEqual(56);
+    expect(card.y + card.height).toBeLessThanOrEqual(600);
+    // 网页跟着卡片走,缩放跟着宽走(布局视口仍是 1280 宽)。
+    expect(viewOf("a").getBounds()).toEqual({ x: card.x + 4, y: card.y + 26, width: card.width - 8, height: card.height - 30 });
+    expect(viewOf("a").webContents.zoom).toBeCloseTo((card.width - 8) / 1280);
+    expect(JSON.parse(fs.readFileSync(layoutFile(), "utf8"))).toEqual({ x: card.x, y: card.y, width: card.width });
+  });
+
+  it("shrinks a never-moved panel in place and keeps it tucked into the bottom-right corner", () => {
+    attach("a");
+    window.resizeTo(500, 400);
+    const card = topCard();
+    // 500×400:宽上限 min(468, 300) = 300。
+    expect(card.width).toBe(300);
+    expect(card).toEqual({ x: 500 - 300 - 16, y: 400 - panelHeightFor(300) - 16, width: 300, height: panelHeightFor(300) });
+    expect(JSON.parse(fs.readFileSync(layoutFile(), "utf8"))).toEqual({ x: null, y: null, width: 300 });
+  });
+
+  it("leaves a panel that still fits alone and does not rewrite the file", () => {
+    attach("a");
+    manager.setPanelLayout(parsePanelLayout({ x: 100, y: 100 }));
+    const before = topCard();
+    fs.rmSync(layoutFile());
+
+    window.resizeTo(1600, 1000);
+    window.resizeTo(1000, 700);
+    expect(topCard()).toEqual(before);
+    expect(fs.existsSync(layoutFile())).toBe(false);
   });
 });
