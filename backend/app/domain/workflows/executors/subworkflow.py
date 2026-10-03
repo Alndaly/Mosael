@@ -85,7 +85,12 @@ def call_workflow(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[
     inputs = config.get("inputs")
     params = dict(inputs) if isinstance(inputs, dict) else {}
     # start_workflow_job 建的子 job 经 create_job 读 contextvar,parent = 当前工作流 job → 自动收纳。
-    child = start_workflow_job(db, target, created_by=current_actor(db), params=params)
+    try:
+        child = start_workflow_job(db, target, created_by=current_actor(db), params=params)
+    except WorkflowDomainError as exc:
+        #: 开跑前那一道说的是**子工作流自己**的话(「节点 start 缺少必填配置 …」),挂在这个节点上读的人会去
+        #: 调用方的开始节点里找。说清是调的哪一张跑不起来。
+        raise WorkflowDomainError("wfErr_calledWorkflowCannotStart", params={"name": target.name, "reason": exc}) from exc
     final = wait_for_job(child.id, release=db)
     result = final.result or {}
     # **判有无,不判真假;而且没有退路。**

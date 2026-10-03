@@ -96,6 +96,29 @@ def test_入参引用上游的值_运行前不拿引用原文去查子工作流(
     assert wait_status(client, started.json()["id"]) == "failed"
 
 
+def test_运行时才知道调哪一张_跑不起来时说的是那一张() -> None:
+    """子工作流是引用给的(运行前查不了),到运行时才发现它缺必填参数。
+
+    实测:报错原样是子工作流自己的那句「节点 start 缺少必填配置 params.x」—— 挂在父工作流的「调用工作流」节点上,
+    读的人会去父工作流的开始节点里找,而那里根本没有 x。要说清是调的哪一张跑不起来。
+    """
+    client = fresh_client()
+    ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]
+    child = _child_needing_topic(client, ws)
+    parent = client.post("/api/workflows", json={"workspace_id": ws, "name": "总流程", "graph": {
+        "nodes": [
+            {"id": "start", "type": "start", "config": {"params": {"wid": child["id"]}}},
+            {"id": "call", "type": "call_workflow", "config": {"workflow_id": "{{start.wid}}", "inputs": {}}},
+        ],
+        "edges": [{"id": "e1", "source": "start", "target": "call"}],
+    }}).json()
+    started = client.post(f"/api/workflows/{parent['id']}/run", json={"params": {}})
+    assert started.status_code == 200, started.text
+    assert wait_status(client, started.json()["id"]) == "failed"
+    error = client.get(f"/api/jobs/{started.json()['id']}").json()["error"]
+    assert "写稿子" in error and "topic" in error, error
+
+
 def test_智能体的运行工作流卡_跑不起来就不开卡_原因交给智能体() -> None:
     client = fresh_client()
     ws = client.post("/api/workspaces", json={"name": "W"}).json()["id"]

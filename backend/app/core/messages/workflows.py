@@ -23,6 +23,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "节点 {node} 调用的工作流「{name}」现在跑不起来:{reason}",
         "en": "The workflow “{name}” called by node {node} can't run right now: {reason}",
     },
+    "wfErr_calledWorkflowCannotStart": {
+        "zh": "调用的工作流「{name}」跑不起来:{reason}",
+        "en": "The called workflow “{name}” can't run: {reason}",
+    },
     "wfErr_calledWorkflowHasNoOutput": {
         "zh": "被调用的工作流「{name}」没有「输出」节点 —— 加一个,并在里面声明要交给调用方的那几个值",
         "en": "The called workflow \u300c{name}\u300d has no Output node — add one and declare the values it hands back",
