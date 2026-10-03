@@ -68,8 +68,12 @@ export function LivePanels() {
         return (
           <div
             key={card.id}
-            // 卡片是外壳,默认不抢点击;只有标题条上的手柄打开 pointer-events。
-            className="pointer-events-none fixed z-[70] overflow-hidden border border-floating-border bg-panel shadow-[var(--shadow-raised)]"
+            // 原生视图只覆盖内容矩形。外壳若 pointer-events:none,标题间隙、圆角和 4px 内缩边框
+            // 会直接点到下面的工作流画布。整个外壳承担命中屏障；内容区仍由上层原生视图接管。
+            className="pointer-events-auto fixed z-[70] overflow-hidden border border-floating-border bg-panel shadow-[var(--shadow-raised)]"
+            data-live-panel={card.id}
+            onPointerDown={(event) => event.stopPropagation()}
+            onClick={(event) => event.stopPropagation()}
             style={{
               left: card.x,
               top: card.y,

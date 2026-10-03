@@ -35,4 +35,15 @@ describe("LivePanels audio", () => {
     fireEvent.click(button);
     expect(setPanelMuted).toHaveBeenCalledWith("browser-1", false);
   });
+
+  it("blocks exposed borders and title gaps from reaching the workflow canvas", () => {
+    const canvasPointer = vi.fn();
+    render(<div onPointerDown={canvasPointer}><LivePanels /></div>);
+    act(() => publishPanels?.([{ id: "browser-1", x: 20, y: 20, width: 384, height: 244, header: 26, radius: 12, muted: true }]));
+
+    const shell = document.querySelector('[data-live-panel="browser-1"]');
+    expect(shell?.className).toContain("pointer-events-auto");
+    fireEvent.pointerDown(shell!);
+    expect(canvasPointer).not.toHaveBeenCalled();
+  });
 });

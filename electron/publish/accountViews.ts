@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { EMBED_HEADER_HEIGHT, type ViewState } from "./types";
 import { PageDriver } from "./pageDriver";
+import { panelMediaScript } from "./panelAudio";
 
 /* eslint-disable @typescript-eslint/no-require-imports */
 const { handleAccountSelection: bindWebauthnAccountSelection } =
@@ -288,21 +289,29 @@ export class AccountViewManager {
   private syncAudio(): void {
     for (const [id, view] of this.views) {
       if (!this.alive(view)) continue;
-      const audible = id === this.visibleId || (this.panels.includes(id) && this.audiblePanels.has(id));
-      view.webContents.setAudioMuted(!audible);
+      view.webContents.setAudioMuted(!this.isAudible(id));
     }
   }
 
-  /** 尽力暂停页面里正在播的音视频。失败无所谓 —— 静音才是那条硬的。 */
-  private pauseMedia(accountId: string): void {
+  private isAudible(accountId: string): boolean {
+    return accountId === this.visibleId || (this.panels.includes(accountId) && this.audiblePanels.has(accountId));
+  }
+
+  /**
+   * 同步网页播放器自身的状态。主 frame 与 iframe 都要做:B 站等页面会把播放器放进子 frame。
+   * 失败无所谓,Electron 的硬静音仍是兜底；这里负责恢复被我们暂停或站点默认静音的媒体。
+   */
+  private syncPageMedia(accountId: string, audible: boolean): void {
     const view = this.views.get(accountId);
     if (!this.alive(view)) return;
-    void view.webContents
-      .executeJavaScript(
-        `document.querySelectorAll('video,audio').forEach((el) => { try { el.pause(); } catch (e) {} })`,
-        true,
-      )
-      .catch(() => undefined);
+    const root = view.webContents.mainFrame;
+    const frames = [root, ...root.framesInSubtree];
+    const seen = new Set<number>();
+    for (const frame of frames) {
+      if (seen.has(frame.routingId)) continue;
+      seen.add(frame.routingId);
+      void frame.executeJavaScript(panelMediaScript(audible), audible).catch(() => undefined);
+    }
   }
 
   /** Hide whatever view is currently shown (returns the window to the React UI). */
@@ -313,10 +322,9 @@ export class AccountViewManager {
       const previous = this.visibleId;
       this.visibleId = null;
       this.demote(previous);
-      // 静音之外再按一次暂停:光静音的话视频仍在解码、仍在拉流,只是你听不见。这一步是尽力而为
-      // (页面随时可能自己再播),真正兜底的是上面的静音。
-      this.pauseMedia(previous);
       this.syncAudio();
+      // 收回后仍获用户授权出声的面板继续播放；其余暂停以免隐藏视频继续解码、拉流。
+      this.syncPageMedia(previous, this.isAudible(previous));
       this.emit();
     }
   }
@@ -492,6 +500,8 @@ export class AccountViewManager {
     if (muted) this.audiblePanels.delete(accountId);
     else this.audiblePanels.add(accountId);
     this.syncAudio();
+    // 解除 Electron 总静音还不够:网页可能自身 muted/volume=0，或此前被 hide() 暂停。
+    if (!muted) this.syncPageMedia(accountId, true);
     this.layout();
   }
 
@@ -625,6 +635,11 @@ export class AccountViewManager {
       view.webContents.setUserAgent(platformUserAgent(view.webContents.getUserAgent()));
       // 新视图默认静音:它此刻不在前台。show() 会按 syncAudio 的唯一判据放开。
       view.webContents.setAudioMuted(true);
+      // 单页应用可能在用户解除面板静音后才创建播放器，或切集时替换 video 元素。
+      // 每次媒体真正起播都重申网页侧状态，避免 Electron 已放行但页面仍 muted/volume=0。
+      view.webContents.on("media-started-playing", () => {
+        if (this.isAudible(accountId)) this.syncPageMedia(accountId, true);
+      });
       view.webContents.setWindowOpenHandler(({ url }) => {
         // **弹窗要真的开成弹窗**,不能塞进本视图导航。
         //
