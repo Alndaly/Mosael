@@ -176,6 +176,10 @@ def _tool_list_en(check: str) -> str:
 #:    按步进滚、到底且高度不再长就停,最后留一段收尾等待给最后一次懒加载。
 #: 3. max_chars 是抄写的总预算,不是「页面有多大」:评论区模板给到 120k(约 350 条评论的量级),
 #:    超过的部分由模型那一步的条数上限收口,而不是在这里截断。
+#: 4. 楼中楼默认折叠,不点就不渲染(「共 N 条回复」「展开 N 条回复」)。展开是可选阶段
+#:    (`expand_max` 个点开上限,0 = 不展开):按**文字模式**找折叠钮而不是选择器 —— 选择器一改版就
+#:    静默失效,而「共 43 条回复」这几个字是给人看的,变了用户先发现。只点顶层评论的折叠钮,
+#:    深度展开(「展开更多回复」)不值得那点预算;要全量回复走 TikHub 那一路的回复接口。
 _READ_PAGE_SCRIPT = """(async () => {
   const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   await wait(Number(input.settle_ms) || 2500);
@@ -188,6 +192,32 @@ _READ_PAGE_SCRIPT = """(async () => {
     const atBottom = window.scrollY + window.innerHeight >= h - 4;
     if (atBottom && h === last) { stable += 1; if (stable >= 2) break; } else { stable = 0; }
     last = h;
+  }
+  const expandMax = Math.min(Number(input.expand_max) || 0, 20);
+  const expanders = [];
+  if (expandMax > 0) {
+    await wait(Number(input.expand_settle_ms) || 1200);
+    //: 目标站点说什么语言不归界面语言管 —— 两种都认。英文站点(YouTube 等)的折叠钮是
+    //: 「View 12 replies」「Show more replies」;认不出就这轮不展开,读到的仍是顶层评论。
+    const PATTERN = /^(共\s*\d+\s*条回复|展开\s*\d*\s*条回复|展开更多回复|查看回复|view\s+\d+\s+(more\s+)?repl|show\s+more\s+repl)/i;
+    //: 折叠钮的文字可能是「共<em>43</em>条回复」这种带子标签的 —— 不要求叶子,
+    //: 取**最深的**那个匹配(后代里没有再匹配的),点它才对得上点击处理器。
+    const collect = (root) => {
+      root.querySelectorAll("*").forEach((el) => {
+        if (el.shadowRoot) collect(el.shadowRoot);
+        if (expanders.length >= expandMax || el.tagName === "A") return;
+        const text = (el.textContent || "").trim();
+        if (text.length <= 2 || text.length >= 40 || !PATTERN.test(text)) return;
+        const nested = Array.from(el.children).some((c) => PATTERN.test((c.textContent || "").trim()));
+        if (!nested) expanders.push(el);
+      });
+    };
+    collect(document);
+    for (const el of expanders) {
+      el.scrollIntoView({ block: "center" });
+      el.click();
+      await wait(Number(input.expand_wait_ms) || 600);
+    }
   }
   await wait(Number(input.final_ms) || 1500);
   const SKIP = new Set(["STYLE", "SCRIPT", "NOSCRIPT", "LINK", "META"]);
@@ -204,7 +234,7 @@ _READ_PAGE_SCRIPT = """(async () => {
   };
   visit(document);
   const limit = Number(input.max_chars) || 30000;
-  return { url: location.href, title: document.title, now: new Date().toISOString(), text: parts.join("\\n\\n").slice(0, limit) };
+  return { url: location.href, title: document.title, now: new Date().toISOString(), expanded: expanders.length, text: parts.join("\\n\\n").slice(0, limit) };
 })()"""
 
 
@@ -389,7 +419,7 @@ def _tikhub_call(b: _Builder, node_id: str, platform: str, need: str, name: dict
     })
 
 
-def _browser_read(b: _Builder, *, col: float, row: float, scrolls: int, max_chars: int) -> None:
+def _browser_read(b: _Builder, *, col: float, row: float, scrolls: int, max_chars: int, expand_replies: int = 0) -> None:
     """打开 → 读页面文字 → 关掉。会话默认是具名的「自媒体分析」(登录跨次保留);要登录的平台在
     「打开浏览器」上改成浏览器池、选一个已登录的档案。"""
     b.node("web_open", "browser_open", {"zh": "用内嵌浏览器打开", "en": "Open in the built-in browser"}, col, row, {
@@ -400,7 +430,8 @@ def _browser_read(b: _Builder, *, col: float, row: float, scrolls: int, max_char
            col + 1, row, {
                "session": "{{web_open.session}}",
                "expression": _READ_PAGE_SCRIPT,
-               "input": {"settle_ms": 2500, "scrolls": scrolls, "pause_ms": 1200, "max_chars": max_chars},
+               "input": {"settle_ms": 2500, "scrolls": scrolls, "pause_ms": 1200, "max_chars": max_chars,
+                      "expand_max": expand_replies},
            })
     b.edge("web_open", "web_read")
     b.node("web_close", "browser_close", {"zh": "关掉浏览器", "en": "Close the browser"}, col + 2, row + 0.8, {
@@ -658,7 +689,7 @@ def viral_video_breakdown_graph(*, chat: Any, locale: str | None = None) -> dict
 
     tikhub_exits = _platform_chain(b, branch, col=4)
 
-    _browser_read(b, col=4, row=4.2, scrolls=8, max_chars=40000)
+    _browser_read(b, col=4, row=4.2, scrolls=8, max_chars=40000, expand_replies=6)
     b.llm("web_struct", {"zh": "把页面文字抄成视频数据和评论", "en": "Turn the page text into video data and comments"},
           6, 4.2,
           system="你会收到内嵌浏览器打开一条自媒体视频 / 笔记后读到的页面文字(往下滚过,评论区可能在里面)。"
@@ -828,7 +859,7 @@ def comment_insights_graph(*, chat: Any, locale: str | None = None) -> dict[str,
     tikhub_exits = _platform_chain(b, branch, col=4)
 
     #: 评论区的预算给足:310 条评论的页面正文约 5 万字符,楼中楼展开后更多;条数上限由模型那步收口。
-    _browser_read(b, col=4, row=4.2, scrolls=12, max_chars=120000)
+    _browser_read(b, col=4, row=4.2, scrolls=7, max_chars=120000, expand_replies=8)
     b.llm("web_struct", {"zh": "把页面文字抄成评论清单", "en": "Turn the page text into a comment list"}, 6, 4.2,
           system="你会收到内嵌浏览器打开一条自媒体作品、往下滚过评论区之后读到的页面文字。"
                  "把这条作品的标题和页面上能看到的每一条评论整理出来(原文一字不改,赞多的优先,最多 150 条;"

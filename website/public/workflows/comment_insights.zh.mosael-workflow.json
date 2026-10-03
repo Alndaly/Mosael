@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "评论区洞察与观众画像",
   "description": "贴一条作品链接,取赞最多的一批评论(默认 50 条:TikHub 一次取一页,约 20–50 条;浏览器往下滚着读评论区),按话题聚类,推断观众画像、需求与痛点、疑问清单、异议与情绪分布,给出下一条可以做的选题和值得回复的评论的建议回复,存成笔记。数据来源在开始节点的下拉里二选一:内嵌浏览器(不用配置、不花钱,小红书评论要换成已登录的浏览器档案)或 TikHub(要装插件、填密钥,每次运行 1 次请求;字段全、更稳、不用登录)。另有 1–2 次 AI 对话。",
-  "graph_hash": "6041dd76306b92c946fd09e809c576fc208ee7743eab21206ec162e7fe830ab1",
+  "graph_hash": "58b4932b620d5b0a08975ec89d1b5b45c84b91cbf91e277bb4b3252d0a3b3498",
   "graph": {
     "meta": {
       "template_id": "comment_insights",
@@ -274,12 +274,13 @@
         },
         "config": {
           "session": "",
-          "expression": "(async () => {\n  const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));\n  await wait(Number(input.settle_ms) || 2500);\n  const rounds = Math.min(Number(input.scrolls) || 0, 12);\n  let last = -1, stable = 0;\n  for (let i = 0; i < rounds; i += 1) {\n    window.scrollBy(0, Math.max(window.innerHeight, 800));\n    await wait(Number(input.pause_ms) || 1300);\n    const h = document.body.scrollHeight;\n    const atBottom = window.scrollY + window.innerHeight >= h - 4;\n    if (atBottom && h === last) { stable += 1; if (stable >= 2) break; } else { stable = 0; }\n    last = h;\n  }\n  await wait(Number(input.final_ms) || 1500);\n  const SKIP = new Set([\"STYLE\", \"SCRIPT\", \"NOSCRIPT\", \"LINK\", \"META\"]);\n  const parts = [(document.body && document.body.innerText) || \"\"];\n  const visit = (root) => {\n    root.querySelectorAll(\"*\").forEach((el) => {\n      if (!el.shadowRoot) return;\n      const text = Array.from(el.shadowRoot.children)\n        .filter((one) => !SKIP.has(one.tagName))\n        .map((one) => one.innerText || \"\").join(\"\\n\").trim();\n      if (text) parts.push(text);\n      visit(el.shadowRoot);\n    });\n  };\n  visit(document);\n  const limit = Number(input.max_chars) || 30000;\n  return { url: location.href, title: document.title, now: new Date().toISOString(), text: parts.join(\"\\n\\n\").slice(0, limit) };\n})()",
+          "expression": "(async () => {\n  const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));\n  await wait(Number(input.settle_ms) || 2500);\n  const rounds = Math.min(Number(input.scrolls) || 0, 12);\n  let last = -1, stable = 0;\n  for (let i = 0; i < rounds; i += 1) {\n    window.scrollBy(0, Math.max(window.innerHeight, 800));\n    await wait(Number(input.pause_ms) || 1300);\n    const h = document.body.scrollHeight;\n    const atBottom = window.scrollY + window.innerHeight >= h - 4;\n    if (atBottom && h === last) { stable += 1; if (stable >= 2) break; } else { stable = 0; }\n    last = h;\n  }\n  const expandMax = Math.min(Number(input.expand_max) || 0, 20);\n  const expanders = [];\n  if (expandMax > 0) {\n    await wait(Number(input.expand_settle_ms) || 1200);\n    //: 目标站点说什么语言不归界面语言管 —— 两种都认。英文站点(YouTube 等)的折叠钮是\n    //: 「View 12 replies」「Show more replies」;认不出就这轮不展开,读到的仍是顶层评论。\n    const PATTERN = /^(共\\s*\\d+\\s*条回复|展开\\s*\\d*\\s*条回复|展开更多回复|查看回复|view\\s+\\d+\\s+(more\\s+)?repl|show\\s+more\\s+repl)/i;\n    //: 折叠钮的文字可能是「共<em>43</em>条回复」这种带子标签的 —— 不要求叶子,\n    //: 取**最深的**那个匹配(后代里没有再匹配的),点它才对得上点击处理器。\n    const collect = (root) => {\n      root.querySelectorAll(\"*\").forEach((el) => {\n        if (el.shadowRoot) collect(el.shadowRoot);\n        if (expanders.length >= expandMax || el.tagName === \"A\") return;\n        const text = (el.textContent || \"\").trim();\n        if (text.length <= 2 || text.length >= 40 || !PATTERN.test(text)) return;\n        const nested = Array.from(el.children).some((c) => PATTERN.test((c.textContent || \"\").trim()));\n        if (!nested) expanders.push(el);\n      });\n    };\n    collect(document);\n    for (const el of expanders) {\n      el.scrollIntoView({ block: \"center\" });\n      el.click();\n      await wait(Number(input.expand_wait_ms) || 600);\n    }\n  }\n  await wait(Number(input.final_ms) || 1500);\n  const SKIP = new Set([\"STYLE\", \"SCRIPT\", \"NOSCRIPT\", \"LINK\", \"META\"]);\n  const parts = [(document.body && document.body.innerText) || \"\"];\n  const visit = (root) => {\n    root.querySelectorAll(\"*\").forEach((el) => {\n      if (!el.shadowRoot) return;\n      const text = Array.from(el.shadowRoot.children)\n        .filter((one) => !SKIP.has(one.tagName))\n        .map((one) => one.innerText || \"\").join(\"\\n\").trim();\n      if (text) parts.push(text);\n      visit(el.shadowRoot);\n    });\n  };\n  visit(document);\n  const limit = Number(input.max_chars) || 30000;\n  return { url: location.href, title: document.title, now: new Date().toISOString(), expanded: expanders.length, text: parts.join(\"\\n\\n\").slice(0, limit) };\n})()",
           "input": {
             "settle_ms": 2500,
-            "scrolls": 12,
+            "scrolls": 7,
             "pause_ms": 1200,
-            "max_chars": 120000
+            "max_chars": 120000,
+            "expand_max": 8
           }
         },
         "inputs": [
