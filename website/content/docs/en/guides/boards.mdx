@@ -1,227 +1,168 @@
 ---
 title: Creative boards
-description: Arrange documents, media and 3D scenes on an infinite canvas and connect generation inputs.
+description: Lay out documents, media, assets, 3D scenes and timelines on an infinite canvas, connect generation inputs, and let items do their own work.
 order: 5
-updated: 2026-09-26
+updated: 2026-10-04
 version: 1.8.3
 ---
 
 A creative board is where you **lay ideas out and work on them in plain sight**: put media, text and generations on one desk, then look, compare and revise until an idea takes shape. The content is the interface, and placement and groups are how you organize it; try one prompt on several models side by side and carry on with the one you like; every item remembers how it was made, so you can regenerate or run it again. When you want to lock a process in and have it run again by itself on new input, use a [workflow](/docs/guides/workflows).
 
-Place sticky notes, documents, images, videos, audio and 3D scenes on a creative board, then organize them into groups. **A connection passes upstream content to a downstream input**: for example, a reference image to a video node or a document to a writing node — a line means "refer to this", not "then do this".
+A board holds nine kinds of item: note, document, image, video, audio, 3D scene, asset, timeline, and the group that fences others in. **Connecting two items passes upstream content to a downstream input** — a reference image to a video item, say, or a document to a note — a line means "refer to this", not "then do this". Drop a connection onto the visible **+** area on either side of an item. Select an item to open its action bar above and its generation or editing panel below.
 
-Drop a connection onto the visible **+** area on either side of a node. Select a node to open its actions above and its generation or editing form below.
+## Getting things onto the board
 
-**Getting things onto the board**: drag images, videos or audio in from Finder or Explorer — each file goes into the asset library first, then lands as an item of its own kind where you let go. ⌘V / Ctrl+V works the same way: a screenshot or copied media file becomes one item each, and plain text becomes a sticky note in the middle of the view. While the cursor is in a note, a prompt box or any other text field, pasting goes there as usual and nothing is added to the canvas.
+**Add** on the toolbar (⌘N) is a searchable list — each row a name and a one-line hint — in three groups:
+
+| Group | Items |
+| --- | --- |
+| **New** | Image, video, audio, note, document, 3D scene (connect a script to build a blockout), timeline |
+| **From your libraries** | Media (an image, video, audio clip or document from the library), asset (a character, location or prop from the asset library), 3D scene (reference an existing scene) |
+| **Organize** | Group |
+
+- **Drag from Finder or Explorer**: images, videos, audio and PDF / Word / slide files go into the library first, then land as an item of their own kind where you let go.
+- **⌘V / Ctrl+V**: board items (see below), screenshots and copied media files become one item each, and plain text becomes a note in the middle of the view. While the cursor is in a note, a prompt box or any other text field, pasting goes there as usual and nothing is added to the canvas.
+- **The media picker** searches by name, filters by kind, can show only what's **On this board**, and imports directly with **Upload a file** or by dropping files onto it (**Drop to upload**) — it only takes the kind this item needs.
 
 ## What a connection gives you
 
-Connections are not decoration. The downstream node reshapes its form around what it receives:
+Connections are not decoration. The downstream item reshapes its panel around what it receives:
 
 | Upstream → downstream | What arrives |
 | --- | --- |
 | Note → image / video | The text fills in the prompt |
 | Note → audio | The text is what gets read aloud |
-| Note → note | The upstream text is sent as **material**, kept separate from your instruction |
+| Note / document → note | The upstream text is sent as **material**, kept separate from your instruction |
+| Document → image / video | The backend reads the document's text to the model along the connection; one still parsing or failed to parse is reported |
 | Image → image | Attached as a reference image |
 | Image → video | One image becomes the first frame; several become references |
 | Image / video → note | The model **looks at it** — images directly, video as sampled frames |
 | Audio → note | Its transcript, if one exists, becomes material |
+| Asset → image / video | The same as `@`-ing it in the prompt: its description joins the prompt and its references attach, as many as the model takes |
+| 3D scene → image / video | A **3D reference** chip appears on the panel; see "3D scene items" below |
+| Video / image / audio → timeline | Appended to the end of that timeline |
 
-What flows in **never overwrites what you typed**: it only fills a box that is still empty, or one
-that still holds the previous auto-filled text.
+What flows in **never overwrites what you typed**: it only fills a box that is still empty, or one that still holds the previous auto-filled text.
+
+**Connecting several at once.** Select two or more items and the selection frame grows a **+** with a count on its right edge. Drag from it: release on an item and every selected item connects to it (each line previews whether it can connect), or release on empty space for "Add a cell linked to the N selected", a new item that takes all of them as upstream — that's how several images become references together. While several are selected, each item's own + only shows on hover and connects just that item. Either way it's one undo step.
+
+**Copy and paste items.** ⌘C copies the selected items and the connections between them, ⌘V pastes; connections to items you didn't copy are left out. Running state isn't copied, and a timeline item pastes as a separate copy of its timeline, marked as a copy.
 
 ## Top toolbar
 
-From left to right: add and undo/redo, comments and the discussion center, markers and their list, view and navigation, then the AI assistant. Thin dividers separate these groups.
+From left to right: Add (⌘N) with undo / redo; comment mode, show / hide comments, the discussion center; marker mode, show / hide markers, the marker list; **Find node** (⌘F), edge style (Bezier / Smooth step, remembered per board), trackpad / mouse mode, overview and fit to view; then the AI assistant and **More** (delete the board, with confirmation) at the right end. In narrow windows, arrows scroll through the tools; the AI assistant and More stay visible.
 
-To delete the board, open **More** and confirm the deletion. The toolbar switches **edge shape** between curved (bezier) and stepped (right-angle); boards remember their own choice. ⌘F finds nodes by name, text, prompt or type (named nodes are listed by their names): matches are outlined on the canvas, Enter / ⇧Enter jumps to the next / previous one, Escape closes.
+⌘F finds items by text, name or type (named items are listed by their names): matches are outlined on the canvas, Enter / ⇧Enter jumps to the next / previous one, Escape closes. Rename the board by clicking its name in the path at the top.
 
-In the board list, a card's ⋯ button and its right-click menu offer the same actions: open, rename, duplicate and delete (with confirmation). **Select** in the header enters multi-select with select-all and bulk delete; if some deletions fail, the message says how many and those cards stay selected. A duplicate leaves out cells that are still generating: they become empty slots with their prompts kept. In narrow windows, arrows scroll through the tools; the AI assistant and More stay visible.
+In the board list, a card's ⋯ button and its right-click menu offer the same actions: open, rename, duplicate and delete (with confirmation). **Select** in the header enters multi-select with select-all and bulk delete; if some deletions fail, the message says how many and those cards stay selected. A duplicate leaves out items that are still generating: they become empty slots with their prompts kept.
 
-## What each node can do
+## What each item can do
 
-Select a node: the action bar sits above it, its form below. Every form looks the same: a row of
-upstream chips and attached media on top, the prompt or the text to work on as the body, and a bottom bar
-with a few setting chips (model, voice, target language…), a **Settings** button holding the rest, and a
-round send button on the right. However long the body gets, the bottom bar stays pinned.
+Select an item: the action bar sits above it, its panel below. Every panel looks the same: a row of upstream chips and attached media on top, the prompt or the text to work on as the body, and a bottom bar with a few setting chips (model, voice, target language…), a **Settings** button holding the rest, and a round send button (⌘↵) on the right. However long the body gets, the bottom bar stays pinned.
 
-- **Image / video** — while still empty, a prompt panel hangs underneath. Model, aspect ratio,
-  resolution and duration are **driven by the model descriptor**, so switching models reshapes
-  that row by itself. Once there is a result, the action bar is a row of icons: Preview, Trim, Swap, then
-  the item's **abilities** (see "What an item can do with its content" below).
-- **Note** — selecting a note **does not open the writing panel**; you usually select a note to move
-  it or recolor it. Press **Ask AI to write** in the action bar when you want help: empty means "write
-  it", with text it means "change it the way I say" (you wrote something, now you want it half as long);
-  press it again to close. A note grown with "Write copy" opens it right away. Notes holding an ability's
-  structured data (code-formatted) have no such button. Double-click still edits by hand.
-- **Audio** — pick a voice and the text to read (voice-over). The action bar above an empty audio item
-  switches between ways to fill it: Voice-over, Generate (music, sound effects) once a generation model
-  supports audio, and generators from plugins (extra ones go under "…").
-- **Group frame** — fence things off and name them. Select a few nodes and press
-  <kbd>⌘</kbd><kbd>G</kbd> to group them directly.
+- **Image / video** — while empty, a generation panel hangs underneath. Each row of the model dropdown reads "model · connection"; your default model from Settings is preselected, and with none set it says **Choose a model**; switching models resets the settings to the new model's defaults. Aspect ratio, resolution, duration, the generation mode (first & last frame / all-round reference) and sound are **driven by the model's description** and live under Settings. When a model can make several at once, the bottom bar gains **Results per run** (N×), and that many placeholders are laid out to the right before it runs. Image items also offer **Prompt templates**. Once there is a result, the action bar has Preview, Trim and Swap, then the item's **abilities** (next section).
+- **Reference media** — the + slot opens **Add reference material**, saying how many more each role takes; you can also drop files onto the slot or press ⌘V in the panel to paste a screenshot, and it's uploaded and attached.
+- **Note** — selecting a note **does not open the writing panel**; you usually select a note to move it or recolor it. Press **Ask AI to write** in the action bar when you want help: empty means "write it", with text it means "change it the way I say"; press it again to close. Double-click still edits by hand. The bar also has colors and **Save to notes**.
+- **Audio** — pick a voice and the text to read (voice-over). The action bar above an empty audio item switches between ways to fill it: Voice-over, Generate (music, sound effects) once a generation model supports audio, and generators from plugins (extra ones go under "…").
+- **Group frame** — fence things off and name them; with **Move together** on, dragging the frame carries what's inside. Select a few items and press <kbd>⌘</kbd><kbd>G</kbd> to group them directly.
 
-Prompt, model, duration, source references and run status live **inside the node's own data**.
-Closing an inspector, selecting another node or reopening the board therefore cannot reconstruct a
-different placeholder or lose the form. Failed jobs settle into a visible failed state instead of
-spinning forever. Models that declare a continuous duration range get a numeric input for that range.
+**"+ Make ▾" for the next step.** On an item with content, **+ Make ▾** spells out what comes next: a note offers "Turn this text into an image / a video" and "Read this text aloud"; an image "Use this image as the first frame of a video"; a video "Make a video that references this one"; audio "Make a video to go with this audio"; a 3D scene "Generate an image from this scene's composition" and "Generate a video using a shot of this scene as reference"; and almost all of them "Let AI write from this". Pick one and an empty, connected item appears to the right, waiting for you to generate.
 
-Every node also exposes its run state directly: queued uses a light primary outline, running adds an
-animated glow, failed turns red, and cancelled uses a subdued dashed outline. **Completion flashes once and
-settles** — no lasting green ring; the content itself is the proof. **Every running item has Stop**
-(generation, voice-over, writing, trimming, abilities); it stops that one job, though a provider may still bill
-for a remote generation it already accepted. A failed item says "Generation failed" or "Run failed" plus
-the reason, not "could not start".
-The signal is not confined to a spinner in an empty media slot, so a failed rerun remains visible even
-when the node still has an older result. A new result or manual asset replacement rehydrates the form
-from that node's saved data; failure and cancellation keep the inputs intact for retry.
+Prompt, model, duration, source references and run status live **inside the item's own data**. Closing a panel, selecting another item or reopening the board loses nothing; failed jobs settle into a visible failed state with the reason, and failure or cancellation keeps the inputs intact for retry.
 
-### Naming nodes
+Every item shows its run state: queued uses a light primary outline, generating shimmers across the whole item, failed turns red, and cancelled uses a subdued dashed outline. **Completion flashes once and settles.** **Every running item has Stop** (generation, voice-over, writing, trimming, abilities); it stops that one job, though a provider may still bill for a remote generation it already accepted. A failed item says "Generation failed" or "Run failed" plus the reason. An item whose job is still alive can't simply be deleted — it asks to stop and delete.
 
-The line above each node shows its name, or its type ("Image", "Video", "Group"…) while it has
-none. With several images on a board, names are how you tell them apart. **Double-click that line
-to rename in place**, or select the node and use the pencil (Rename) in its action bar:
-<kbd>Enter</kbd> or clicking elsewhere confirms, <kbd>Esc</kbd> cancels, and the Enter that picks
-a candidate in an input method never confirms early. Clear the name to go back to the type. Names
-are up to 120 characters, and a rename is a single undo step.
+### Naming items
 
-Group frames use the same name as every other node, and it is what board search, the board list
-thumbnails, duplicated copies and the AI assistant all see.
+The line above each item shows its name, or its type ("Image", "Video", "Group"…) while it has none. **Double-click that line to rename in place**, or select the item and use **Rename** in its action bar: <kbd>Enter</kbd> or clicking elsewhere confirms, <kbd>Esc</kbd> cancels, and the Enter that picks a candidate in an input method never confirms early. Clear the name to go back to the type. Names are up to 120 characters, and a rename is a single undo step. Board search, list thumbnails, duplicated copies and the AI assistant all use this name.
 
-### Referencing assets with `@`
+### Referencing media and assets with `@`
 
-Press `@` in a prompt to reference something from the asset library; the menu follows the caret.
-What you pick becomes an **inline chip in the sentence** — "put the person from @creator.png on
-the street" reads as one sentence. On submit it splits in two: the name stays in the prompt (with
-several images the model needs to know which one you meant) and the asset itself is sent as input.
+Press `@` in a prompt and a menu follows the caret, listing linked items, then the asset library, then the media library, with filters for All / Linked / Assets / Image / Video / Audio. Only the media kinds the selected model takes are listed; assets (characters, locations, props) always are. What you pick becomes an **inline chip in the sentence** — "put the person from @creator.png on the street" reads as one sentence. On submit it splits in two: the name stays in the prompt and the media itself is sent as input; how an asset's description and references attach is in [Asset library](/docs/guides/assets).
 
 ### Trimming
 
-Video gets a **filmstrip**, audio gets its **waveform**; drag either end to set the range. The
-problem with typing numbers is not the typing — it is that you do not know what second 3.2 looks
-like. When you do want frame accuracy, the number fields on the right are still faster.
-
-**The original is untouched.** A trim produces a new asset in a new node — every step on a board
-should be one you can walk back from.
+Video gets a **filmstrip**, audio gets its **waveform**; drag either end to set the range and press **Cut it**; video can also **Grab frame** and choose **Keep the sound / Drop the sound**. For frame accuracy, the number fields on the right are faster. **The original is untouched**: a trim produces a new asset in a new item.
 
 ## What an item can do with its content
 
-There are **no separate tool items** on a board. Turning an item into something new is **something the item itself
-does**: select an audio clip and the action bar above it gains a row of icons — transcribe, separate voice and
-background, reduce noise; a video also offers "Video to GIF"; a note or a document offers "Translate". Content tools
-from plugins work the same way: a ComfyUI workflow that takes an image (upscale, background removal, face restore) sits
-on image items, one that takes a video on video items. Built-in abilities come first and show directly; extra ones go
-under "…". Hover any icon to see what it does to this item.
+There are **no separate tool items** on a board. Turning an item into something new is **something the item itself does**: the first four abilities sit directly on the action bar, the rest under **⋯ More abilities**:
 
-**Click an icon and its panel opens under the item; click another and the panel below switches to it; click the same
-one again to close it** (<kbd>Esc</kbd> or selecting another item closes it too). Trim and Ask AI to write are icons in
-the same row and replace the panel below in the same way. The top of the panel says what happens to which item —
-"Reduce noise · Narration: clean the background noise out of audio or video" — **this item's content is the input**:
-nothing to pick, nothing to connect. Below that are the ability's own settings:
+| Item | Abilities |
+| --- | --- |
+| Audio, video | Transcribe asset, Separate voice and background, Reduce noise (strength Light / Medium / Strong) |
+| Video | Video to GIF, Lip sync (audio from a connected audio item, or voiced from a script on the spot) |
+| Image | Split grid, Make it talk |
+| Note, document | Translate (English, Simplified / Traditional Chinese, Japanese, Korean, French, German, Spanish, Russian) |
+| Asset | Fill in angles (all kinds), Generate expressions (characters only), Make it talk (characters only) |
 
-- **The bottom bar holds the pick-one settings** ("Target language: English", "Engine"); a chip shows the chosen value,
-  or the field name while nothing is chosen. Required ones come first, three at most; the rest are under **Settings**,
-  whose button shows a dot while a required one there is still empty.
-- **While something required is missing the round send button is grey**, and hovering it says what is missing —
-  Translate needs a target language first.
-- When a tool needs another input (say, audio to put under a video), **connect that item into this one**: the row of
-  upstream chips at the top lets you pick which one feeds which field. Notes give their text, documents the pinned
-  revision's text, images / video / audio the asset, 3D scenes the scene. Values are read **when you run**, so edit the
-  upstream note and the next run follows; delete the connection and the binding goes with it.
-- **Each ability's settings are stored on the item**, so reopening it shows what you used last time; the item's own
-  content (image, text, prompt) is untouched.
+Content tools from plugins work the same way, attached to the items whose content they take. Lip sync, Make it talk, Fill in angles and Generate expressions cost money; the two digital-human abilities also need a consent check — see [Digital humans](/docs/guides/digital-humans).
 
-**Outputs land to the right**: every run adds **a new column of items to the right of this one**, connected to it —
-images, video and audio in items of their kind, other files as a note naming the file, text as a note, structured
-data as a code-formatted note; this item itself does not change. Only the tool's **results** land: outputs meant for
-wiring workflows (asset id lists, summaries, task ids) don't. Earlier outputs stay; nothing is overwritten. At most 12
-items per run; the rest merge into the last note.
+**Split grid** cuts a 3×3, 2×2 or storyboard-strip collage into equal tiles: 2 × 2, 3 × 3 (default), 1 × 2 side by side, 2 × 1 stacked, 1 × 3 in a row, 3 × 1 in a column, 2 rows × 3 columns, 3 rows × 2 columns, 3 rows × 4 columns, 4 rows × 3 columns; **Gutters** can be kept (exact equal split) or removed (up to 6% per side). It runs locally at no cost, and the tiles are laid out to the right in their original grid.
 
-**While it runs**, the item keeps showing its content with a strip along the bottom — "Running · Transcribe asset",
-progress and **Stop** (which really stops the plugin process and cancels its job in the task center). A failed run
-doesn't paint the item red: select it and the strip says why, and so does the panel; adjust and run again.
+**Click an icon and its panel opens under the item; click another and the panel below switches to it; click the same one again to close it** (<kbd>Esc</kbd> or selecting another item closes it too). The top of the panel says what happens to which item, and **this item's content is the input**: nothing to pick, nothing to connect.
 
-**Plugin generators that take no board content** (a ComfyUI workflow that turns a prompt into an image, Manim /
-Remotion animations) are not an ability of any item — they are **another way to fill an empty item**: add an empty
-image (video, audio) item, switch it to that generator in the action bar above it, and the panel is the generator's
-form; the image it makes fills this item and any other outputs (a caption…) land to the right.
+- **The bottom bar holds the pick-one settings** ("Target language: English", "Engine"); a chip shows the chosen value, or the field name while nothing is chosen; the rest are under **Settings**, whose button shows a dot while a required one there is still empty. **While something required is missing the send button is grey**, and hovering it says what is missing.
+- When a tool needs another input, **connect that item into this one**: the row of upstream chips lets you pick which one feeds which field — notes give their text, documents the pinned revision's text, images / video / audio the asset, 3D scenes the scene. Values are read **when you run**.
+- **Each ability's settings are stored on the item**, so reopening it shows what you used last time; the item's own content is untouched.
 
-A board holds **only content-to-content tools**. Flow control and data steps — calling a workflow, HTTP requests,
-text templates, JSON extraction, string handling, note search — plugin tools that only list, report or upload, and
-plugin tools that **fetch things by an id from another system** (importing ComfyUI outputs by task id, the drive by
-fs_id, object storage by object key) are not on boards; use them in [workflows](/docs/guides/workflows) and chat, and
-drag a file in from the asset library to put it on a board. Forms hold **only what a creator fills in**: parameter
-mappings, raw JSON and code are not on boards; a tool that requires such a field (like an explainer video that needs
-structured steps) is for workflows and chat.
+**Outputs land to the right**: every run adds **a new column of items to the right of this one**, connected to it — images, video and audio in items of their kind, text as a note, structured data as a code-formatted note. Only the tool's **results** land, not outputs meant for wiring workflows. Earlier outputs stay. At most 12 items per run; the rest merge into the last note. While it runs, a strip along the bottom shows progress and **Stop**; after a failure, select the item and the strip says why.
 
-**One thing, one entry.** When a plugin tool is the same thing as a generation model — say a ComfyUI workflow with
-a single saved image / video / audio output node (preview nodes don't count), which is already a model in image and
-video items — and you can use that model, it isn't listed separately: add an image (video, audio) item and pick that
-model; the result lands in place, several at a time, with a longer wait.
+**Plugin generators that take no board content** (a ComfyUI workflow that turns a prompt into an image, Manim / Remotion animations) are **another way to fill an empty item**: add an empty image (video, audio) item, switch it to that generator in the action bar, and the panel is the generator's form.
 
-**Fields that point at something are dropdowns, not ids to copy**: projects and connections are picked from this
-workspace, with search once the list is long. A dropdown that depends on another field (a model that depends on the
-connection) clears when its parent changes.
+A board holds **only content-to-content tools**. Flow control and data steps — calling a workflow, HTTP requests, text templates — plugin tools that only list, report or upload, and tools that **fetch things by an id from another system** (importing ComfyUI outputs by task id, the drive by fs_id) belong to [workflows](/docs/guides/workflows) and chat.
 
-**Whose connection**: a plugin tool runs with **the connection of whoever presses run**. On a shared board, settings a
-teammate saved still run with your own connection — if you have none, the panel names the plugin and links to the
-Plugins page to create one. With several connections, pick one under Settings.
+**One thing, one entry.** When a plugin tool is the same thing as a generation model — a ComfyUI workflow that delivers images, video or audio is already a model in image and video items — the board keeps **only the Generate entry**, and "⋯" no longer lists it again: add an image (video, audio) item and pick that model; the result lands in place. When the workflow has several save nodes, the placeholders for every save node are laid out before it runs (**Results per run** shows "N per node"), and **Settings** gains **Results from**: all by default, or pick one node to get only its output while the other save nodes don't run. A ComfyUI workflow that only returns text (tagging, prompt extraction) isn't a model and stays an item ability. See [Generating with ComfyUI](/docs/guides/comfyui).
 
-**Tool items from before the upgrade** move onto the item they were connected to: their settings are stored there, the
-tool item goes away, and its earlier outputs stay, now connected from that item. A tool item that made assets from
-parameters becomes an empty item of that kind with that generator selected; one with nothing to attach to (or whose
-tool is no longer on boards) becomes a note spelling out its old settings, with its connections intact.
+**Whose connection**: a plugin tool runs with **the connection of whoever presses run**. On a shared board, settings a teammate saved still run with your own connection — if you have none, the panel names the plugin and links to the Plugins page to create one.
+
+## Timeline items
+
+**Add → New → Timeline** puts a small editing desk on the canvas. Behind it is an ordinary timeline, kept in a project the board creates under its own name, so you can refine it in the editor.
+
+- **The top half is a rough-cut preview**: the main video track plays in order with the first audio track alongside, with play / pause, "current / total" and mute underneath. Transforms and captions aren't previewed here — they live in the editor.
+- **The bottom half is a thumbnail strip** (width follows duration) with a playhead: click a clip to select it, drag it sideways to reorder (what follows moves along), Delete removes the selected clip.
+- **Adding clips**: connect video / image / audio items and each is appended to the end (audio goes to the audio track; the aspect follows the first clip; disconnecting doesn't remove the clip), or use the + at the end of the strip, which lists this board's media first and can browse the whole library. Other kinds can't connect — you're told a timeline item only takes video, images and audio.
+- **Action bar**: Split at the playhead, Delete the selected clip, Open in the editor, Export. Splitting, deleting, reordering and adding clips are all in the board's undo history, interleaved with your canvas edits.
+- **Export**: the panel shows clip count, length and size; the bottom bar picks resolution (as is / 1080p / 720p / 480p) and quality (High / Standard / Compact), and Settings holds the "AI generated" label (on by default). The finished video lands as a video item to the right; while it exports a strip above the item says so and can stop it, and the preview keeps working.
+
+## Document, asset and 3D scene items
+
+**Document items** come in two kinds:
+
+- **Referencing a note**: **Add → New → Document** places an empty one. Select it and press **Choose a note** in the action bar to pin a note at one revision (afterwards **Choose another note**); the footer shows the revision, with **Update to latest revision** and **Open note**. Or press **Ask AI to write** — empty, it writes a new note and references it; referencing a note, it writes that note's next revision (the old one stays). Ask AI to write sees connected images, assets and notes.
+- **A document asset**: drag in a PDF / Word / slide deck / spreadsheet (or pick one from the library) and the item holds the parsed text, with "Original document · read-only" and **Open in the library** at the bottom. **Save as note** on the action bar saves the text as a note and switches the item to reference it, after which Ask AI to write is available. See [Documents](/docs/guides/documents).
+
+**Asset items** (**Add → From your libraries → Asset**) show a cover, the name and a kind badge. Connected into a generation item they act like an `@`; connected into a note or document their description is material. See [Asset library](/docs/guides/assets).
+
+**3D scene items** show a whole-scene blockout rendered by the backend (change the scene and the board shows the new one), and the action bar has **Edit scene**. The panel's **How to produce** switches between two modes:
+
+- **Render references**: pick a **Shot** in the bottom bar (a single shot is used automatically; with none, open the scene and add one) and **Render** (First and last frame / Camera-move video / Stills and video), then press the round button; the first frame, last frame and camera-move video **land as new items to the right**, connected to it, and rendering again adds a new column.
+- **Build a 3D scene from text**: connect a script or storyboard (document or note) into the scene item, pick a model, **Max shots** (6 by default) and the aspect ratio, and it builds **one** blockout set — figures move as the text says, several cameras cover the same action from different positions, with camera moves written. The built scene replaces the one in this item (the old one stays under 3D Scenes). **Add → New → 3D scene** places exactly such an empty scene waiting to be built.
+
+**Connect a 3D scene item into an image or video item** and the generation panel gets a **3D reference** chip: pick the shot and **Use as** — **Composition**, **First & last frames** (video) or **Camera move** (video), limited to what the selected model takes. At generation time the shot is rendered from the scene **as it is then**, and the prompt notes that it's a blockout to take composition and camera position from; figures in the shot that **Play** a character from the asset library bring that character's looks and description along. More in [3D scenes & animation](/docs/guides/scenes).
 
 ## The AI assistant
 
-The robot icon in the top-right opens it. It is **not a second AI**: sessions, messages and
-confirmation cards are the same ones the global assistant uses; each message just carries one
-extra line saying which board you are looking at.
+The robot icon in the top-right opens it. It is **not a second AI**: sessions, messages and confirmation cards are the same ones the global assistant uses; each message just carries one extra line saying which board you are looking at. The top-left title is the current conversation; click it to search or switch sessions.
 
-The top-left title is the current conversation. Click it to search or switch sessions; the title
-ellipsizes when space is tight instead of introducing another framed picker.
-
-It can read the canvas (`get_board`) and change it (`edit_board`): add notes, rewrite text,
-name nodes, connect, delete, move things. It sees the names you give nodes, so you can refer to
-a node by its name. **Every change goes through a confirmation card** — nothing lands
-until you approve it. It submits granular operations rather than a whole canvas, because a model
-handed the whole thing gets it wrong on any non-trivial board: items go missing, or the positions
-you arranged by hand get flattened.
+It can read the canvas (`get_board`) and change it (`edit_board`): add notes, rewrite text, name items, connect, delete, move things, place a new timeline item and wire items into it, write export settings. **Every change goes through a confirmation card** — nothing lands until you approve it, and an open board follows along. It submits granular operations rather than a whole canvas, because a model handed the whole thing gets it wrong on any non-trivial board.
 
 ### Letting the agent use an item's abilities
 
-The assistant can use an item's abilities for you. It first looks at what is available (`list_board_producers` — the
-same list the action bar reads: which kinds of item each ability sits on, which field the item's own content fills,
-and the other settings; plugin tools only from **your own** connections), then stores the ability's settings on that
-item and says which other inputs come from which connected items, connecting them in the same batch (`edit_board`'s
-`set_form`). Edits still go through a confirmation card, and a broken edit (the item has no such ability, no such
-field, a binding to an item that isn't connected, a note bound to an asset field) is refused when the card is opened,
-not after you approve it. It can no longer place separate tool items.
+The assistant can use an item's abilities for you. It first looks at what is available (`list_board_producers` — the same list the action bar reads; plugin tools only from **your own** connections), then stores the ability's settings on that item and says which other inputs come from which connected items, connecting them in the same batch (`edit_board`'s `set_form`). A broken edit is refused when the card is opened.
 
-**Running** (`run_board_item`, naming the ability) takes the same path as pressing the send button yourself, with
-**the approver's own connection**:
-
-- **Tools that neither cost money nor reach outside run directly** (translate, transcribe, video to GIF,
-  plugin tools that declare themselves read-only…) — no card;
-- **Tools that cost money or act outside the app wait for you** — such as running a ComfyUI workflow,
-  and plugin tools that declare outward effects. The card says which tool runs on which board, with which of
-  your connections, and whether it costs money or reaches outside the app. Reject it and nothing runs.
-
-Auto-approval still applies: in auto mode paid runs have a streak limit and outward-facing ones come
-back to you; "Approve everything" approves everything. The read-only runs you weren't asked about are
-still listed under "Auto-approved in this chat" in the session settings.
+**Running** (`run_board_item`) takes the same path as pressing the send button yourself, with **the approver's own connection**: tools that neither cost money nor reach outside run directly; tools that cost money or act outside the app wait for your approval, and the card names the tool, the board and which of your connections it uses. Auto-approval still applies.
 
 ## Undo
 
-<kbd>⌘</kbd><kbd>Z</kbd> undoes, <kbd>⌘</kbd><kbd>⇧</kbd><kbd>Z</kbd> redoes, and the toolbar has
-buttons too. A continuous drag collapses into one step — dragging a node emits dozens of position
-updates, and one-per-update would mean dozens of presses to get back.
+<kbd>⌘</kbd><kbd>Z</kbd> undoes, <kbd>⌘</kbd><kbd>⇧</kbd><kbd>Z</kbd> (or <kbd>⌘</kbd><kbd>Y</kbd>) redoes, and the toolbar has buttons too. A continuous drag collapses into one step, and splitting, deleting and reordering inside a timeline item share the same history. Undo never removes an item that is still running, and after the board catches up with an agent's edit, undo won't paint that edit back over.
 
 ## Forms and media selection
 
-![Board: reference frames, notes and a generation node](/media/screens/en/boards.png)
+![Board: reference frames, notes and a generation item](/media/screens/en/boards.png)
 
-Selecting a node opens a translucent, blurred form above the canvas. Long model names ellipsize; click parameters such as aspect ratio and duration to expand their choices. The `@` media menu follows the input and adjusts to available viewport space.
+Selecting an item opens a translucent, blurred panel above the canvas. Long model names ellipsize; parameters such as aspect ratio and duration open under Settings. The `@` menu follows the input and adjusts to available viewport space.
 
 <Recording src="/media/videos/en/boards.mp4" poster="/media/screens/en/boards.png" caption="Live capture: document dragging, marker configuration and modes" />
 
@@ -229,33 +170,11 @@ The recording demonstrates document references and markers without invoking a ge
 
 ## Comments and markers
 
-The comment and flag buttons enter separate, mutually exclusive modes. Escape exits. Their eye buttons independently show or hide all comments or markers without deleting them. Markers are not listed in Add node.
+The comment and flag buttons enter separate, mutually exclusive modes. Escape exits. Their eye buttons independently show or hide all comments or markers without deleting them. Markers are not listed in Add.
 
 In marker mode, click empty space to place a position bookmark, then set its name and jump shortcut. Only one marker editor opens per canvas. Clear a binding beside the shortcut field or remove the marker using the footer action. In comment mode, click empty space to write a comment and mention workspace members with `@`. Submitted mentions keep their interactive labels. Use the pencil to edit your own comment. Adjacent comment pins remain directly clickable.
 
-Switching modes or undoing preserves graph connections. Toolbar groups use separators. Comments and markers are collaboration overlays and do not execute as graph nodes.
-
-## Document and 3D references
-
-Add → New → Document places an empty document. Select it, then use **Reference a note** in the toolbar to pin a fixed note revision, or **Let AI write** to write one — it is saved as a new note and referenced; a document already referencing a note gets a new version of that note (the old one stays). "Let AI write" sees connected images, assets and notes. Dragging its text or embedded image moves the node. Connect it downstream as reference text; update the revision or open the source from the footer.
-
-The Add menu has three groups: **New** (image, video, audio, note, document), **From your libraries** (media, asset, 3D scene; the media picker filters by image / video / audio) and **Organize** (group).
-
-Add → 3D scene selects a workspace scene. **A scene item renders its own blockout references**: select it,
-pick a **Shot** in the panel's bottom bar (a scene with a single shot needs no pick — the chip shows it; a scene
-with no shots greys the chip out, so open the scene and add one) and **What to render** (first and last frame,
-camera-move video, or both), then press the round button. While it renders the item shows the same shimmer,
-progress and Stop as any other item; the first frame, last frame and camera-move video **land as new items to
-the right of the scene item**, connected to it, and the scene item and its thumbnail stay as they were. Render
-again and you get a new column; the earlier one stays. **Edit scene** in the panel opens the scene page to
-change the framing or add shots. Connect the rendered frames and video to image or video items as references.
-
-This used to take a separate "Render blockout references" tool item next to the scene item, where you picked
-the scene all over again — two halves of one thing. That tool item is off the board now (the workflow node is
-unchanged). On upgrade, each such tool item moves its shot and render choice onto the scene item it was
-connected to and goes away; what it already rendered stays and is now connected from the scene item. One that
-has no scene item on the board becomes a note carrying its old settings. See
-[3D scenes & animation](/docs/guides/scenes).
+Switching modes or undoing preserves the connections between items. Comments and markers are collaboration overlays and do not take part in generation or workflow runs.
 
 ![Document references and canvas markers](/media/screens/en/annotations.png)
 
