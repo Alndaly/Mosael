@@ -122,6 +122,23 @@ class Test循环并发:
         assert "1、2、3" in message, f"三项都失败了,却只报了一部分:{message}"
         assert "3 次因此停下" in message
 
+    def test_几项同时失败_没有被叫停的就不说另有0次(self, fake_node) -> None:
+        """实测:三项同时跑、第 1、3 项失败、第 2 项跑完了 —— 报错说「另有 0 次因此停下」。没有被叫停的就不提这半句。"""
+        ws = _workspace()
+
+        def call(db, workflow, config):
+            if config["item"] in {"1", "3"}:
+                raise WorkflowDomainError("素材不在这个工作区里")
+            return {"text": config["item"]}
+
+        fake_node("template", call)
+        body = {"nodes": [{"id": "shot", "type": "template", "config": {"template": "x", "item": "{{loop.item}}"}}], "edges": []}
+        with pytest.raises(WorkflowDomainError) as caught:
+            _loop(ws, {"items": ["1", "2", "3"], "body": body, "concurrency": 3})
+        message = str(caught.value)
+        assert "1、3" in message and "素材不在这个工作区里" in message, message
+        assert "0 次" not in message, message
+
     def test_并发数有上限_写错就说(self, fake_node) -> None:
         ws = _workspace()
         seen: set[int] = set()

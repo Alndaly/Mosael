@@ -266,7 +266,8 @@ def _all_failures(failures: list[tuple[int, BaseException]], *, total: int, skip
         return first
     reason = getattr(first, "params", {}).get("reason") or str(first)
     return WorkflowDomainError(
-        "wfErr_loopIterationsFailed",
+        #: 没有被叫停的(各项都开始了、也都跑完了)就不提「另有 0 次因此停下」那半句。
+        "wfErr_loopIterationsFailed" if skipped else "wfErr_loopIterationsFailedNoneStopped",
         params={
             "count": len(failures),
             "total": total,

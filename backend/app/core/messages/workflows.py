@@ -115,6 +115,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "{total} 次迭代里第 {which} 次失败,另有 {skipped} 次因此停下(没开始或没跑完)。第一个原因:{reason}",
         "en": "Iterations {which} of {total} failed, and {skipped} more were stopped because of it (not started or not finished). First reason: {reason}",
     },
+    "wfErr_loopIterationsFailedNoneStopped": {
+        "zh": "{total} 次迭代里第 {which} 次失败。第一个原因:{reason}",
+        "en": "Iterations {which} of {total} failed. First reason: {reason}",
+    },
     "wfErr_loopIterationFailed": {"zh": "{where}失败:{reason}", "en": "{where} failed: {reason}"},
     "wfErr_llmNoChatConnection": {
         "zh": "对话节点没选连接和模型,而你还没有能对话的连接:先在设置里接一个对话模型(或在节点上选一个),再运行",
