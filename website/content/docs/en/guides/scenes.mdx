@@ -2,7 +2,7 @@
 title: 3D scenes & animation
 description: Build spaces, keyframe cameras and objects, and use shots as image or video references.
 order: 17
-updated: 2026-09-24
+updated: 2026-10-04
 version: 1.8.3
 ---
 
@@ -59,9 +59,9 @@ The single toolbar contains shot selection, add/delete shot, playback, time, ins
 
 ## Generate images or videos
 
-**Generate** can hand the current camera frame to an image node, or first/last frames or a camera-preview video to a video node. Continue in the creative board, choose your model and describe the desired result. The linked scene remains available for further editing.
+**Generate** on the toolbar no longer exports a frame first: it **opens a creative board with this scene wired into a generation item**, where you choose an image or video model, describe the look and generate. The three ways in are "Generate an image from this shot's composition", "Generate from first and last frames" and "Generate from the camera-move video". The shot is rendered from the scene **as it is at that moment** — change the scene and generate again, and the new version is what gets used; an unsaved scene asks you to save first (the server renders the saved version). The current lighting is written into the prompt; camera helpers never appear in reference frames, videos or GLB exports.
 
-Lighting information accompanies the prompt. An optional clay reference renders neutral materials to emphasize lighting and composition; it is separate from the normal textured frame. Camera helpers are excluded from frames, videos and GLB exports.
+A figure in the scene can be told which character it **Plays** — any person in the asset library, picked in the inspector. When a shot shows those figures, generation brings along their looks and descriptions too (see [Asset library](/docs/guides/assets)). Scenes built from a script on a board get this filled in automatically.
 
 On a creative board, **a 3D scene item renders its own blockout references**: select the scene item, pick a shot and what to render, and the first/last frame and camera-move video land to its right (see [Creative boards](/docs/guides/boards)). In workflows it is the "Render blockout references" node, with the scene and shot picked from dropdowns (a scene with a single shot needs no pick). Both use the same renderer: the backend has its own blockout renderer for the reference frames and the camera-move video, and what it draws — geometry, camera interpolation, light direction — matches what this page shows. **Imported models are drawn too**, using their own material colours. Anything it cannot draw — a Draco- or meshopt-compressed mesh, a model over the reference frame's triangle budget, a missing file — is reported one by one with the reason, rather than quietly leaving a gap.
 

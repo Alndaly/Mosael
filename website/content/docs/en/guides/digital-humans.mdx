@@ -2,7 +2,7 @@
 title: "Digital humans: make a face talk, re-sync a video's lips"
 description: Turn a character asset or a portrait plus a voice-over into a talking video, or make an existing video's lips match new audio; how consent and AI labels work.
 order: 20
-updated: 2026-09-30
+updated: 2026-10-04
 version: 1.8.3
 ---
 
@@ -81,10 +81,18 @@ confirmation card, not after you approve it.
 
 ## AI-generated label
 
-When an exported video contains digital-human clips, "AI-generated" is shown at the start and in the top-right corner by
-default. You can turn it off in the export dialog, which then states that deep-synthesis and AI-labelling regulations
-require published digital-human content to be clearly labelled and that the publisher is responsible once it's off; the
-next export has it on again. The MP4 always carries an AIGC marker, regardless of the on-screen label.
+It is not just digital humans: an export that uses **any AI-generated or synthesized media** — generated images, video or
+music, AI voiceover, digital humans, and anything trimmed, denoised or separated from them (the "contains AI-generated
+content" flag follows an asset's sources) — gets labelled. Muted audio clips don't count.
+
+- **In the picture**: a large "AI-generated" in the centre for the first 3 seconds, and a small line in the top-right corner
+  (white text on a translucent box) for the whole video, sized from the frame's short edge so it scales with the export
+  resolution. It appears in the exported file only, not in the editor preview.
+- **In the file**: the standard implicit-label (AIGC) metadata is always written, whatever the on-screen setting.
+
+The export dialog's **Label AI-generated content "AI-generated"** is on by default. Turning it off states that Chinese rules
+on labelling AI-generated content and on deep synthesis require published AI content to be clearly labelled, and that the
+publisher is responsible once it's off. The digital-human templates always export with the label.
 
 ## Cost
 
