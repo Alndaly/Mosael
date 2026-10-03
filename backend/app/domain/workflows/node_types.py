@@ -716,7 +716,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
                            "description": "wfNode_import_url_profile_id"},
             "max_height": {"advanced": True, "type": "number", "default": 1080, "description": "wfNode_import_url_max_height"},
             "fail_on_error": {"advanced": True, "type": "string", "options": ["yes", "no"], "default": "yes",
-                              "description": "wfNode_import_url_fail_on_error"},
+                              "label": "wfField_download_fail_on_error", "description": "wfNode_import_url_fail_on_error"},
         },
         "outputs": ["asset_id", "name", "error"],
         "output_types": {"name": "text", "error": "text"},
@@ -999,7 +999,8 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
             #: `"interpolate": "json"`:请求体是一段 JSON 时,引用按 JSON 的规矩填进去 —— 引号里的
             #: 转义成字符串内容,引号外的写成 JSON 字面量(见 graph_rules.interpolate_json_text)。
             #: 此前原样拼接,一段带引号或换行的 LLM 回答就把请求体弄成了坏的 JSON。
-            "body": {"type": "template", "interpolate": "json", "description": "wfNode_http_request_body"},
+            "body": {"type": "template", "interpolate": "json", "label": "wfField_request_body",
+                     "description": "wfNode_http_request_body"},
             "fail_on_error": {
                 "advanced": True,
                 "type": "string",
@@ -1160,7 +1161,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         "description": "wfNode_notify_desc",
         "config": {
             "title": {"type": "template", "required": True},
-            "body": {"type": "template", "description": "wfNode_notify_body"},
+            "body": {"type": "template", "label": "wfField_notify_body", "description": "wfNode_notify_body"},
         },
         "outputs": ["sent"],
     },

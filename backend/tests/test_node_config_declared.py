@@ -247,6 +247,27 @@ def test_节点自己的_label_压过共用表() -> None:
     assert config_label("selector", {"label": "要点的元素"}) == "要点的元素"
 
 
+def test_共用表的名字只给同一个意思的字段() -> None:
+    """共用表按键名给名字,所以**同一个键在不同节点里意思不同**时,那个节点得自己写 label。
+
+    实测撞到的三处:「发送通知」的正文、「HTTP 请求」的请求体都叫 `body`,于是在检查器里显示成
+    循环体那一格的名字「子图」;「从链接下载素材」的 `fail_on_error` 管的是下载失败,却显示成 HTTP
+    节点那一格的「非 2xx 算失败」。
+    """
+    from app.domain.workflows import config_label
+
+    def label(node_type: str, key: str) -> str:
+        return config_label(key, NODE_TYPES[node_type]["config"][key])
+
+    subgraph = {node_type for node_type, spec in NODE_TYPES.items()
+                for key, field in spec["config"].items() if label(node_type, key) == "wfField_body"}
+    assert all(NODE_TYPES[one]["config"]["body"]["type"] == "graph" for one in subgraph), \
+        f"「子图」只该给内嵌子图那一格:{sorted(subgraph)}"
+    http_only = {node_type for node_type, spec in NODE_TYPES.items()
+                 for key in spec["config"] if label(node_type, key) == "wfField_fail_on_error"}
+    assert http_only == {"http_request"}, f"「非 2xx 算失败」只说得通 HTTP 请求:{sorted(http_only)}"
+
+
 def test_标签真的发到接口上() -> None:
     """在后端算好但没发出去,等于没算。
 
