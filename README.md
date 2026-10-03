@@ -45,13 +45,13 @@ generation, voiceover, or transcription, add a connection and model under the ap
 
 ### Collect research and plan the story
 
-Import footage, images and sound into the media library, record your screen or camera, or download a supported video URL. Use tags, search and previews to find material again. Save scripts, transcripts and agent answers as documents with revision history and source references.
+Import footage, images and sound into the media library, record your screen or camera, or download a supported video URL; PDFs, Word files, slides and spreadsheets are parsed into readable text on your machine, and scans can be re-parsed with the MinerU plugin. Every asset remembers what it was made from and how. Use tags, search and previews to find material again. Save scripts, transcripts and agent answers as notes with revision history and source references. Keep recurring characters, locations and props in the asset library — `@` one while generating and its description and reference images come along.
 
-Lay those documents beside images, videos and 3D scenes on an infinite board. Connect nodes to pass text and reference media to generation, and use comments, member mentions and position markers to review the work. Comments and markers have separate modes and visibility controls.
+Lay documents, media, assets and 3D scenes side by side on an infinite board. Connections pass text and reference media to generation; items do their own work — transcribe, translate, denoise, split a grid — and a timeline item gives you a rough cut right on the board. Comments, member mentions and position markers keep review anchored.
 
 ![Documents and references on a creative board](website/public/media/screens/en/boards.png)
 
-[Media library](https://mosael.com/en/docs/guides/media) · [Notes & documents](https://mosael.com/en/docs/guides/notes) · [Creative boards](https://mosael.com/en/docs/guides/boards)
+[Media library](https://mosael.com/en/docs/guides/media) · [Documents](https://mosael.com/en/docs/guides/documents) · [Notes](https://mosael.com/en/docs/guides/notes) · [Asset library](https://mosael.com/en/docs/guides/assets) · [Creative boards](https://mosael.com/en/docs/guides/boards)
 
 ### Build the scene before generating the shot
 
@@ -65,7 +65,7 @@ Import GLB/glTF models, export a frame or camera preview, and exchange scenes wi
 
 ### Edit picture, words and sound together
 
-Work with multiple timelines and tracks, splitting, snapping, ripple deletion, speed changes, fades and picture-in-picture. Edit from a transcript, add or translate captions, and place generated voiceover on a separate track. Curves, LUTs and scopes help with color; export the finished sequence from the editor.
+Work with multiple timelines and tracks: drops overwrite what they land on, video stays linked to its detached audio, ripple edits reach every track, and the usual J / K / L, I / O and Q / W shortcuts are there. People and agents can edit the same timeline at once without overwriting each other, and ⌘Z undoes only your own step. Edit from a transcript, import and export .srt / .vtt captions, stack bilingual subtitles, and place voiceover on its own track; right-click a clip to denoise it or keep only the voice. Curves, LUTs and scopes handle color; export can normalize loudness, and anything containing AI-generated content is labelled.
 
 ![Captions and voiceover in the editor](website/public/media/screens/en/subtitle-dub.png)
 
@@ -73,17 +73,17 @@ Work with multiple timelines and tracks, splitting, snapping, ripple deletion, s
 
 ### Work with AI on your terms
 
-Connect your own model services through API keys or supported subscription sign-in. Connections store credentials; models declare chat, image, video and audio capabilities. Model-specific controls and reference roles keep inputs appropriate to the selected model. Generated results return to the media library.
+Connect your own model services through API keys or supported subscription sign-in. Connections store credentials; models declare chat, image, video, music & sound and voice capabilities. Model-specific controls and reference roles keep inputs appropriate to the selected model. Digital-human models make a face speak a voiceover or re-sync the lips of existing footage, with consent checked at every entry point. Generated results return to the media library.
 
 Agents can read project context and use tools across media, notes, boards, scenes, editing and workflows. Actions that need approval show a confirmation card. Sessions, tool results, citations and execution traces stay available for review; workspace assistants can dock beside the work or float above it.
 
 ![AI Studio conversation workspace](website/public/media/screens/en/ai-chat.png)
 
-[Model connections](https://mosael.com/en/docs/guides/providers) · [AI Studio & agents](https://mosael.com/en/docs/guides/ai-studio)
+[Model connections](https://mosael.com/en/docs/guides/providers) · [AI Studio & agents](https://mosael.com/en/docs/guides/ai-studio) · [Digital humans](https://mosael.com/en/docs/guides/digital-humans)
 
 ### Reuse a process and publish the result
 
-Connect models, media and tools in a visual workflow. Check required inputs, run the flow, inspect node results and reuse it manually, on a schedule or through a webhook. Local schedules need the backend to remain running.
+Connect models, media and tools in a visual workflow. Check required inputs, run the flow, inspect node results, and catch references that can never resolve before anything runs. Official templates cover topic-to-video, translated dubbing, product shorts, talking-head scripts and account / viral-video / comment analysis. Run a flow manually, on a schedule or through a webhook; local schedules need the backend to remain running.
 
 Browser Pool manages persistent sign-ins and proxies for uploads, URL imports and browser automation. Agents ask before borrowing a profile. Publishing forms follow each destination's capabilities; review the video, account and post before submitting, then track the result. Browser uploads require a connected desktop executor.
 
@@ -95,9 +95,11 @@ Browser Pool manages persistent sign-ins and proxies for uploads, URL imports an
 
 The **Chrome video companion** opens in the browser's Side Panel to read transcripts, seek to words, translate and import media or clean video frames. Supported URLs depend on the installed yt-dlp build; page controls require a usable video player. It uses its own Mosael session and does not read Chrome cookies.
 
-**Plugins** connect local scripts or MCP services to agents and workflows. Review the manifest, tool permissions and credentials before enabling a connection. Local process plugins run with your operating-system user permissions.
+**Plugins** connect local scripts or MCP services to agents and workflows, and can also take over generation, transcription, translation, voiceover, denoising or document parsing for Mosael. ComfyUI, object storage and MinerU document parsing ship with the app; Manim, Remotion, TikHub, Baidu Netdisk, Blender and more are in the plugin market. Review the manifest, tool permissions and credentials before enabling a connection. Local process plugins run with your operating-system user permissions.
 
-[Chrome companion](browser-extension/README.md) · [Using plugins](https://mosael.com/en/docs/guides/plugins) · [Writing a plugin](https://mosael.com/en/docs/guides/writing-plugins)
+On a shared deployment, the deployment admin uses the **Admin** console to manage members and sign-up, install local engines, and set download mirrors, the outbound proxy and cost rules.
+
+[Chrome companion](browser-extension/README.md) · [Using plugins](https://mosael.com/en/docs/guides/plugins) · [Generating with ComfyUI](https://mosael.com/en/docs/guides/comfyui) · [Writing a plugin](https://mosael.com/en/docs/guides/writing-plugins) · [Admin console](https://mosael.com/en/docs/guides/admin)
 
 ## Documentation
 
@@ -280,4 +282,4 @@ and personal non-commercial purposes; commercial use and redistribution require 
 See [LICENSE](LICENSE). Contact the maker through the [community and contact page](https://mosael.com/en/docs/about/contact),
 or follow [KindaHuaX on X](https://x.com/KindaHuaX), for commercial licensing.
 
-User guides cover the current 1.3.0 interface. Screenshots and recordings use isolated demo data; capture dates, source revisions and media credits are documented in [the media guide](docs/media/README.md).
+User guides cover the current 1.8.3 interface. Screenshots and recordings use isolated demo data; capture dates, source revisions and media credits are documented in [the media guide](docs/media/README.md).

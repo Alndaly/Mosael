@@ -44,13 +44,13 @@ Mosael 将文档、无限画布、3D 场景、AI 生成、剪辑与发布放在�
 
 ### 整理资料，展开构思
 
-将视频、图片与声音导入素材库，也可以录制屏幕、摄像头或下载支持的视频链接。用标签、搜索和预览找到素材；把脚本、逐字稿和智能体回答保存为文档，保留版本历史与来源。
+将视频、图片与声音导入素材库，也可以录制屏幕、摄像头或下载支持的视频链接；PDF、Word、PPT、Excel 等文档导入后在本机解析成可读全文，扫描件可以交给 MinerU 插件重新解析。每份素材记得自己是从哪一份、经过什么做出来的。用标签、搜索和预览找到素材；把脚本、逐字稿和智能体回答保存为笔记，保留版本历史与来源。反复出现的人物、场景、道具存进资产库，生成时 `@` 一下就带上它的描述和参考图。
 
-在无限画布上并排放置文档、媒体和 3D 场景。连线将文字与参考素材传给下游生成节点；评论、成员提及和位置标记帮助讨论与定位。评论和标记各有独立模式与显示开关。
+在无限画布上并排放置文档、媒体、资产和 3D 场景。连线将文字与参考素材传给下游生成格；格子自己会转写、翻译、降噪、宫格切分，画板上还能放一格时间线做粗剪。评论、成员提及和位置标记帮助讨论与定位。
 
 ![创意画板中的文档与素材参考](website/public/media/screens/boards.png)
 
-[素材库](https://mosael.com/zh/docs/guides/media) · [笔记与文档](https://mosael.com/zh/docs/guides/notes) · [创意画板](https://mosael.com/zh/docs/guides/boards)
+[素材库](https://mosael.com/zh/docs/guides/media) · [文档](https://mosael.com/zh/docs/guides/documents) · [笔记](https://mosael.com/zh/docs/guides/notes) · [资产库](https://mosael.com/zh/docs/guides/assets) · [创意画板](https://mosael.com/zh/docs/guides/boards)
 
 ### 先搭场景，再生成镜头
 
@@ -64,7 +64,7 @@ Mosael 将文档、无限画布、3D 场景、AI 生成、剪辑与发布放在�
 
 ### 一起处理画面、文字与声音
 
-多时间线、多轨道支持切分、吸附、涟漪删除、变速、淡入淡出与画中画。根据逐字稿剪辑，添加或翻译字幕，把生成的配音放到独立轨道。通过曲线、LUT 和示波器调整色彩，完成后从剪辑页导出。
+多时间线、多轨道：放下即覆盖、视频和分离出来的声音链接在一起、波纹删除跨所有轨，J / K / L、I / O、Q / W 等快捷键一应俱全；多人和智能体同时改一条时间线不会互相覆盖，⌘Z 只撤你自己的那一步。根据逐字稿剪辑，导入导出 .srt / .vtt 字幕、做双语字幕，把配音放到独立轨道；片段右键就能降噪、只留人声。通过曲线、LUT 和示波器调整色彩，导出时可选响度标准化，含 AI 生成内容的成片自动加标识。
 
 ![剪辑页中的字幕与配音](website/public/media/screens/subtitle-dub.png)
 
@@ -72,17 +72,17 @@ Mosael 将文档、无限画布、3D 场景、AI 生成、剪辑与发布放在�
 
 ### 按自己的方式使用 AI
 
-使用 API Key 或支持的订阅登录连接自己的模型服务。连接保存凭据，模型声明对话、图片、视频和音频能力；参数控件与参考素材角色跟随所选模型。生成结果回到素材库继续使用。
+使用 API Key 或支持的订阅登录连接自己的模型服务。连接保存凭据，模型声明对话、图片、视频、音乐与音效、配音能力；参数控件与参考素材角色跟随所选模型。数字人模型让一张脸跟着配音说话，或给已有片子改口型，授权声明在每个入口都把关。生成结果回到素材库继续使用。
 
 智能体可以读取工程上下文，调用素材、笔记、画板、场景、剪辑与工作流工具。需要批准的操作显示确认卡；会话、工具结果、来源引用和执行轨迹可随时回看。工作区助手可以停靠在侧边，也可以悬浮显示。
 
 ![AI Studio 会话工作区](website/public/media/screens/ai-chat.png)
 
-[模型连接与配置](https://mosael.com/zh/docs/guides/providers) · [AI Studio 与智能体](https://mosael.com/zh/docs/guides/ai-studio)
+[模型连接与配置](https://mosael.com/zh/docs/guides/providers) · [AI Studio 与智能体](https://mosael.com/zh/docs/guides/ai-studio) · [数字人](https://mosael.com/zh/docs/guides/digital-humans)
 
 ### 复用流程，发布作品
 
-将模型、素材与工具连接成可视化工作流，检查必填输入、运行流程并查看各节点结果。流程可以手动、定时或通过 Webhook 触发；本地定时任务需要后端持续运行。
+将模型、素材与工具连接成可视化工作流，检查必填输入、运行流程并查看各节点结果；运行前就拦下不会跑通的引用。官方模板覆盖从主题到成片、视频译配、带货短视频、数字人口播和账号 / 爆款 / 评论区分析。流程可以手动、定时或通过 Webhook 触发；本地定时任务需要后端持续运行。
 
 浏览器池统一管理上传、链接导入和浏览器自动化使用的登录身份与代理。智能体借用档案前会请求授权。发布表单按目标平台显示选项，检查视频、账号与文案后提交并追踪结果。浏览器上传需要已连接的桌面执行器。
 
@@ -94,9 +94,11 @@ Mosael 将文档、无限画布、3D 场景、AI 生成、剪辑与发布放在�
 
 **Chrome 视频助手**在浏览器原生侧栏中显示逐字稿，支持逐词跳转、翻译，以及导入视频或不含播放控件的画面。可导入的链接取决于已安装的 yt-dlp；页面交互需要可用的视频播放器。扩展使用独立的 Mosael 会话，不读取 Chrome Cookie。
 
-**插件**把本地脚本或 MCP 服务接入智能体和工作流。启用连接前检查清单、工具权限与凭据；本地进程插件以当前操作系统用户的权限运行。
+**插件**把本地脚本或 MCP 服务接入智能体和工作流，也能替 Mosael 做生成、转写、翻译、配音、降噪、文档解析。随应用内置 ComfyUI、对象存储和 MinerU 文档解析；Manim、Remotion、TikHub、百度网盘、Blender 等在插件市场。启用连接前检查清单、工具权限与凭据；本地进程插件以当前操作系统用户的权限运行。
 
-[Chrome 视频助手](browser-extension/README.zh-CN.md) · [安装与使用插件](https://mosael.com/zh/docs/guides/plugins) · [开发插件](https://mosael.com/zh/docs/guides/writing-plugins)
+团队部署时，部署管理员在**管理**控制台里管成员与注册、安装本机引擎、设下载源、出站代理和成本规则。
+
+[Chrome 视频助手](browser-extension/README.zh-CN.md) · [安装与使用插件](https://mosael.com/zh/docs/guides/plugins) · [用 ComfyUI 生成](https://mosael.com/zh/docs/guides/comfyui) · [开发插件](https://mosael.com/zh/docs/guides/writing-plugins) · [管理控制台](https://mosael.com/zh/docs/guides/admin)
 
 ## 文档
 
@@ -267,4 +269,4 @@ MOSAEL_OAUTH_REDIRECT_BASE=...
 详见 [LICENSE](LICENSE)。商业授权可通过[交流群与作者微信](https://mosael.com/zh/docs/about/contact#%E5%BE%AE%E4%BF%A1)
 联系，也可以在 X 关注 [KindaHuaX](https://x.com/KindaHuaX)。
 
-使用指南对应当前 1.3.0 界面。截图与录屏使用独立演示数据，拍摄日期、代码版本和素材署名见[实拍素材说明](docs/media/README.md)。
+使用指南对应当前 1.8.3 界面。截图与录屏使用独立演示数据，拍摄日期、代码版本和素材署名见[实拍素材说明](docs/media/README.md)。
