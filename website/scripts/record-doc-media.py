@@ -116,6 +116,13 @@ class Capture:
         self.page.wait_for_function('document.fonts.status === "loaded"')
         self.hold(900)
 
+    def warm(self, *views: str) -> None:
+        """Visit the pages a recording will move to before it starts, like someone who has already opened them
+        this session: their code and data are loaded, so the recording does not catch the page-level "Loading…"."""
+        for view in views:
+            self.goto(view)
+            self.hold(1200)
+
     def editor(self) -> None:
         self.goto("editor?p=" + self.F["project"])
         self.page.get_by_role("button", name=re.compile(re.escape(self.T["assets"]["forest"]) + "$")).first.wait_for()
@@ -171,6 +178,7 @@ class Capture:
 
 
 def home(c: Capture) -> None:
+    c.warm("editor?p=" + c.F["project"])
     c.goto("home")
     c.shot("home")
     c.begin()
@@ -419,6 +427,13 @@ def workflow_templates(c: Capture) -> None:
     c.shot("workflow-start-options")
     c.hold(1000)
     c.escape()
+    c.escape()
+    # Readiness: what still blocks this template here (its required start parameters are empty).
+    c.page.get_by_role("button", name=re.compile("^" + c.word("就绪检查") + "[:：]")).click()
+    c.hold(1300)
+    c.shot("workflow-readiness-blocked")
+    c.hold(900)
+    c.escape()
     c.workflow("full_video_generation")
     c.shot("workflow-full-video")
     c.hold(800)
@@ -594,6 +609,7 @@ def plugin_market(c: Capture) -> None:
 
 
 def publishing(c: Capture) -> None:
+    c.warm("browser-pool")
     c.goto("publish")
     c.shot("publish")
     c.begin()
@@ -674,6 +690,7 @@ def entities(c: Capture) -> None:
 
 
 def admin(c: Capture) -> None:
+    c.warm("statistics")
     c.goto("admin")
     c.shot("admin")
     c.begin()
