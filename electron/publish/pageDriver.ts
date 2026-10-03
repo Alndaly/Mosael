@@ -47,6 +47,9 @@ const KEY_MAP: Record<string, string> = {
  */
 /** 单次求值的兜底上限。调用方给了更短的预算就用更短的。 */
 const EVALUATE_TIMEOUT_MS = 20_000;
+//: 调用方显式声明的预算可以超过缺省(工作流里分页拉评论这类长读脚本),但仍有天花板 ——
+//: 再大的「读取」其实是挂起。缺省不变,只有点名要更久的才更久。
+const EVALUATE_MAX_MS = 180_000;
 
 /** 一次导航的结局。rejected 带着 Chromium 的网络错误码(errno 是负数,code 是 ERR_… 名字)。 */
 export type GotoOutcome =
@@ -257,7 +260,7 @@ export class PageDriver {
    */
   async evaluate<T = unknown>(expression: string, budgetMs = EVALUATE_TIMEOUT_MS): Promise<T> {
     this.throwIfAborted();
-    const cap = Math.max(200, Math.min(EVALUATE_TIMEOUT_MS, budgetMs));
+    const cap = Math.max(200, Math.min(EVALUATE_MAX_MS, budgetMs));
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
       return await Promise.race([

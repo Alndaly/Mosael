@@ -15,7 +15,9 @@ from app.domain.workflows import WorkflowDomainError, as_text
 from app.domain.workflows.executors.registry import RunScope, register
 
 #: 一次最多整理多少条。作品列表一页几十条,评论能翻出几百条 —— 交给模型读的那份要有个头。
-MAX_ITEMS = 200
+#: 一次进分析的上限。评论区全量分析(下游分批喂模型)要装得下几千条;人看的那张表
+#: 另有 table_limit 收口 —— 它从来不是为了读完,是为了抽查。
+MAX_ITEMS = 2000
 
 
 @register("social_link")
@@ -55,6 +57,9 @@ def social_metrics(db: Session, scope: RunScope, config: dict[str, Any]) -> dict
         raise WorkflowDomainError("wfErr_socialMetricsKind", params={"kind": kind})
     #: 数字格在进执行体之前已经按声明查过是数(binding.check_number_fields)。
     limit = max(1, min(int(float(config.get("limit") or 30)), MAX_ITEMS))
+    #: 附表给人看,默认跟着 limit 走;分析要全量、附表要精选时,单独给 table_limit。
+    table_limit_raw = config.get("table_limit")
+    table_limit = max(1, min(int(float(table_limit_raw)), limit)) if table_limit_raw not in (None, "") else limit
     offset = _offset_hours(config)
     raw = social_media.find_items(config.get("data"), kind=kind)
 
@@ -68,7 +73,7 @@ def social_metrics(db: Session, scope: RunScope, config: dict[str, Any]) -> dict
             "account": {},
             "stats": stats,
             "summary": social_media.comments_summary(stats),
-            "table": social_media.comments_table(comments),
+            "table": social_media.comments_table(comments[:table_limit]),
         }
 
     unit = str(config.get("duration_unit") or "auto")

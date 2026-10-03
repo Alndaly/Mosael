@@ -277,10 +277,17 @@ def browser_evaluate(db: Session, scope: RunScope, config: dict[str, Any]) -> di
     sid = _session_in(db, scope, config)
     #: 脚本原样交出去(它不插值,见 binding),上游的值在 input 里、作为 JSON 数据进脚本(见 electron 的 scriptWithInput)。
     raw_input = config.get("input")
-    out = _run(sid, "evaluate", {
+    args: dict[str, Any] = {
         "expression": str(config.get("expression") or ""),
         "input": raw_input if isinstance(raw_input, dict) else {},
-    })
+    }
+    #: 长读脚本(分页拉评论这类)可以声明自己的预算;缺省仍是 worker 的 20s。上限三分钟,
+    #: 再大就是挂起而不是读取。后端轮询的上限要比脚本预算宽一点,不然 worker 还在跑这边先超时。
+    timeout_ms = _int(config.get("timeout_ms"), 0)
+    if timeout_ms:
+        timeout_ms = min(max(timeout_ms, 1000), 180_000)
+        args["timeout_ms"] = timeout_ms
+    out = _run(sid, "evaluate", args, timeout=timeout_ms / 1000 + 15 if timeout_ms else None)
     return {"session": sid, "value": out.get("value")}
 
 

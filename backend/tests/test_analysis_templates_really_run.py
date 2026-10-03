@@ -121,7 +121,8 @@ class Outside:
 
     def __init__(self, monkeypatch: pytest.MonkeyPatch, answers: dict[str, Any], *, page_text: str = "页面文字",
                  responses: dict[str, Any] | None = None, download_fails: bool = False) -> None:
-        self.answers = answers
+        # 评论洞察的分批笔记是每次必跑的步骤,缺省回答在这;具体测试自己的 schema 照常传。
+        self.answers = {"comment_insights_batch": BATCH_NOTE, **answers}
         self.page_text = page_text
         self.responses = {**RESPONSES, **(responses or {})}
         self.calls: dict[str, list[Any]] = defaultdict(list)
@@ -252,6 +253,8 @@ def _report(title: str) -> dict[str, Any]:
 
 BREAKDOWN = {"title": "番茄炒蛋 · 爆款拆解", "verdict": "一个反常识的钩子", "report_markdown": "## 钩子\n……",
              "script_outline_markdown": "1. 钩子……"}
+BATCH_NOTE = {"notes_markdown": "这批在问色号与价格。", "standout_comments": ["这个色号显黑吗"]}
+
 INSIGHT = {"title": "色号 · 评论区洞察", "verdict": "大家最关心显不显黑", "report_markdown": "## 大家在聊什么\n……",
            "reply_suggestions_markdown": "- 回复……"}
 
@@ -439,7 +442,7 @@ class Test评论区洞察真跑:
         assert outside.calls["tikhub"] == [("xiaohongshu_app_v2_get_note_comments",
                                             {"note_id": "64f0a1b2c3d4e5f6a7b8c9d0", "share_text": XHS_NOTE})]
         assert [one["likes"] for one in context["xhs_comments_m"]["items"]] == [320, 88]
-        [insight] = outside.calls["llm"]
+        [insight] = [call for call in outside.calls["llm"] if call["name"] == "comment_insights"]
         assert "这个色号显黑吗" in insight["prompt"] and "色号" in insight["prompt"]
         [note] = _notes(ws)
         assert "建议回复" in _note_text(note)

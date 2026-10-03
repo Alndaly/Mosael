@@ -703,7 +703,7 @@
     },
     "author": "Mosael",
     "version": 2,
-    "nodes": 25,
+    "nodes": 30,
     "download": {
       "zh": "/workflows/comment_insights.zh.mosael-workflow.json",
       "en": "/workflows/comment_insights.en.mosael-workflow.json"

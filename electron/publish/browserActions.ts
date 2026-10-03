@@ -161,7 +161,9 @@ export async function executeBrowserAction(
       return { value: found?.value ?? null, lastUrl: driver.url() };
     }
     case "evaluate": {
-      return { value: await driver.evaluate(scriptWithInput(s(args.expression), args.input)), lastUrl: driver.url() };
+      //: 调用方(工作流节点)可以为自己的长脚本声明预算;不带就按缺省 20s。
+      const budget = Number(args.timeout_ms) || undefined;
+      return { value: await driver.evaluate(scriptWithInput(s(args.expression), args.input), budget), lastUrl: driver.url() };
     }
     case "wait": {
       const timeout = Number(args.timeout_ms) || 15_000;

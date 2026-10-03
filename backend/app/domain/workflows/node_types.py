@@ -237,6 +237,10 @@ _FIELD_LABELS = {
     "text": "wfField_text",
     "texts": "wfField_texts",
     "timeout_ms": "wfField_timeout_ms",
+    "table_limit": "wfField_table_limit",
+    "size": "wfField_size",
+    "batches": "wfField_batches",
+    "total": "wfField_total",
     "title": "wfField_title",
     "tool_name": "wfField_tool_name",
     "top_p": "wfField_top_p",
@@ -1036,7 +1040,21 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
         },
         "outputs": ["value", "text"],
     },
-    "text_transform": {
+        #: 把一串拆成等长的几批 —— 全量分析、分批拉取的公共积木。此前「分批」只有手写循环一条
+    #: 路,而循环体拿不到「第几批的内容」;拆批之后 loop_foreach 直接逐批跑。
+    "list_chunk": {
+        "external": False,
+        "category": "wfCat_data",
+        "label": "wfNode_list_chunk",
+        "description": "wfNode_list_chunk_desc",
+        "config": {
+            "items": {"type": "template", "required": True, "description": "wfNode_list_chunk_items"},
+            "size": {"type": "number", "default": 100, "description": "wfNode_list_chunk_size"},
+        },
+        "outputs": ["batches", "count", "total"],
+        "output_types": {"batches": "json", "count": "number", "total": "number"},
+    },
+"text_transform": {
         "external": False,
         "category": "wfCat_data",
         "label": "wfNode_text_transform",
@@ -1085,6 +1103,7 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
             "profile": {"type": "template", "active_when": {"kind": "posts"},
                         "description": "wfNode_social_metrics_profile"},
             "limit": {"type": "number", "default": 30, "description": "wfNode_social_metrics_limit"},
+            "table_limit": {"advanced": True, "type": "number", "description": "wfNode_social_metrics_table_limit"},
             "duration_unit": {"advanced": True, "type": "string", "options": ["auto", "seconds", "milliseconds"],
                               "default": "auto", "active_when": {"kind": "posts"},
                               "description": "wfNode_social_metrics_duration_unit"},
@@ -1979,6 +1998,8 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
             #: 脚本里按 `input.名字` 读 —— 值作为 JSON 数据交进去,拼不进代码。
             "expression": {"type": "code", "required": True, "description": "wfNode_browser_evaluate_expression"},
             "input": {"type": "object", "description": "wfNode_browser_evaluate_input"},
+            # 长读脚本(分页拉评论这种)声明自己的预算;缺省 20s,上限三分钟。
+            "timeout_ms": {"advanced": True, "type": "number", "description": "wfNode_browser_evaluate_timeout"},
         },
         "outputs": ["session", "value"],
     },

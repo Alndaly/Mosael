@@ -197,3 +197,18 @@ describe("提取和滚动:选择器没匹配到默认报错", () => {
     });
   });
 });
+
+describe("evaluate 的脚本预算", () => {
+  it("声明了 timeout_ms 就按它给预算(长读脚本用),没声明走缺省", async () => {
+    const seen: Array<number | undefined> = [];
+    const driver = fakeDriver("https://example.com/", {
+      evaluate: async (_expr: string, budget?: number) => {
+        seen.push(budget);
+        return { ok: true };
+      },
+    });
+    await executeBrowserAction(driver, "evaluate", { expression: "1", input: {}, timeout_ms: 120000 });
+    await executeBrowserAction(driver, "evaluate", { expression: "1", input: {} });
+    expect(seen).toEqual([120000, undefined]);
+  });
+});

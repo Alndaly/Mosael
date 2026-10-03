@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.domain.workflows import WorkflowDomainError, as_text
 from app.domain.workflows.executors.registry import RunScope, register
+from app.domain.workflows.executors.numbers import at_least, whole_number
 from app.domain.workflows.executors.common import truthy, wait_until
 
 HTTP_NODE_TIMEOUT_SECONDS = 60
@@ -170,6 +171,35 @@ def code(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]
 def template(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
     # interpolate 已在 config 解析阶段完成,这里只需转成文本。
     return {"text": as_text(config.get("template"))}
+
+
+@register("list_chunk")
+def list_chunk(db: Session, scope: RunScope, config: dict[str, Any]) -> dict[str, Any]:
+    """把一串拆成等长的几批:分批分析、分批拉取的公共积木(评论区全量分析就是它)。
+
+    批与批不重叠、顺序不变;空串/空列表 = 零批。给的不是一串就明说,不悄悄当成一批。
+    """
+    raw = config.get("items")
+    items: Any = raw
+    if isinstance(raw, str):
+        text = raw.strip()
+        if not text:
+            items = []
+        else:
+            try:
+                items = json.loads(text)
+            except ValueError as exc:
+                raise WorkflowDomainError("wfErr_listChunkNotAList", params={"kind": "text"}) from exc
+    if items is None:
+        items = []
+    if not isinstance(items, list):
+        raise WorkflowDomainError("wfErr_listChunkNotAList", params={"kind": type(items).__name__})
+    #: 不写 `or 100`:那会把「填了 0」悄悄变成默认(loop_while 的注释里挂着这个反模式)。
+    #: 缺省走默认,填了 0 由 at_least 当场报错。
+    size = whole_number(config, "size", node_type="list_chunk", default=100)
+    size = min(at_least(size, 1, key="size", node_type="list_chunk"), 500)
+    batches = [items[i : i + size] for i in range(0, len(items), size)]
+    return {"batches": batches, "count": len(batches), "total": len(items)}
 
 
 @register("json_extract")

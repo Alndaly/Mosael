@@ -4,7 +4,7 @@
   "workflow_revision": 1,
   "name": "评论区洞察与观众画像",
   "description": "贴一条作品链接,取赞最多的一批评论(默认 50 条:TikHub 一次取一页,约 20–50 条;浏览器往下滚着读评论区),按话题聚类,推断观众画像、需求与痛点、疑问清单、异议与情绪分布,给出下一条可以做的选题和值得回复的评论的建议回复,存成笔记。数据来源在开始节点的下拉里二选一:内嵌浏览器(不用配置、不花钱,小红书评论要换成已登录的浏览器档案)或 TikHub(要装插件、填密钥,每次运行 1 次请求;字段全、更稳、不用登录)。另有 1–2 次 AI 对话。",
-  "graph_hash": "2dd67b96f4e3715f0c4cac17511fdecc14c42d71913053b7523deae6684b7f67",
+  "graph_hash": "2dd5081298123eaa52503405166fd708d84d33270211e6f09617a23961abecec",
   "graph": {
     "meta": {
       "template_id": "comment_insights",
@@ -124,7 +124,8 @@
         "config": {
           "data": "",
           "kind": "comments",
-          "limit": "{{start.comment_count}}"
+          "limit": "2000",
+          "table_limit": "{{start.comment_count}}"
         },
         "inputs": [
           "data"
@@ -176,7 +177,8 @@
         "config": {
           "data": "",
           "kind": "comments",
-          "limit": "{{start.comment_count}}"
+          "limit": "2000",
+          "table_limit": "{{start.comment_count}}"
         },
         "inputs": [
           "data"
@@ -228,7 +230,8 @@
         "config": {
           "data": "",
           "kind": "comments",
-          "limit": "{{start.comment_count}}"
+          "limit": "2000",
+          "table_limit": "{{start.comment_count}}"
         },
         "inputs": [
           "data"
@@ -274,14 +277,15 @@
         },
         "config": {
           "session": "",
-          "expression": "(async () => {\n  const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));\n  const BILI = /bilibili\\.com\\/video\\/(BV[\\w]+)/;\n  const bili = location.href.match(BILI) || String(input.video_url || \"\").match(BILI);\n  if (bili) {\n    //: B 站:页面上下文直接调它自己的接口 —— 带登录态、结构化 JSON、分页器和楼中楼都在里面,\n    //: 评论区组件渲染失败(风控「玩命加载」)也不受影响。接口变了就落空,落回下面读 DOM 那条路。\n    try {\n      const view = await (await fetch(\"https://api.bilibili.com/x/web-interface/view?bvid=\" + bili[1], { credentials: \"include\" })).json();\n      const aid = view && view.data ? view.data.aid : null;\n      const total = view && view.data && view.data.stat ? view.data.stat.reply : 0;\n      if (aid) {\n        const wanted = Math.min(Number(input.comment_max) || 150, 300);\n        const all = [];\n        let pn = 1;\n        while (all.length < wanted && pn <= 15) {\n          const r = await (await fetch(\"https://api.bilibili.com/x/v2/reply?type=1&oid=\" + aid + \"&sort=2&ps=20&pn=\" + pn, { credentials: \"include\" })).json();\n          const replies = r && r.data && r.data.replies ? r.data.replies : [];\n          if (!replies.length) break;\n          for (const one of replies) {\n            const push = (c, prefix) => all.push({\n              author: c && c.member ? c.member.uname : \"\",\n              text: prefix + ((c && c.content ? c.content.message : \"\") || \"\").replace(/\\s+/g, \" \").trim(),\n              likes: c && typeof c.like === \"number\" ? c.like : \"\",\n              published_at: c && c.ctime ? new Date(c.ctime * 1000).toISOString().slice(0, 10) : \"\",\n            });\n            push(one, \"\");\n            //: 楼中楼:接口里每条顶层评论自带前几层回复,拍平、带 ↳ 前缀,回复也算数。\n            for (const sub of one.replies || []) push(sub, \"↳ \");\n          }\n          pn += 1;\n          if (replies.length < 20) break;\n          await wait(400);\n        }\n        if (all.length) {\n          return { url: location.href, title: document.title, now: new Date().toISOString(), mode: \"api\", total, expanded: -1,\n                   text: JSON.stringify({ total, comments: all.slice(0, wanted) }) };\n        }\n      }\n    } catch (e) { /* 接口这条路不通就落回读 DOM */ }\n  }\n  await wait(Number(input.settle_ms) || 2500);\n  const rounds = Math.min(Number(input.scrolls) || 0, 12);\n  let last = -1, stable = 0;\n  for (let i = 0; i < rounds; i += 1) {\n    window.scrollBy(0, Math.max(window.innerHeight, 800));\n    await wait(Number(input.pause_ms) || 1300);\n    const h = document.body.scrollHeight;\n    const atBottom = window.scrollY + window.innerHeight >= h - 4;\n    if (atBottom && h === last) { stable += 1; if (stable >= 2) break; } else { stable = 0; }\n    last = h;\n  }\n  const expandMax = Math.min(Number(input.expand_max) || 0, 20);\n  const expanders = [];\n  if (expandMax > 0) {\n    await wait(Number(input.expand_settle_ms) || 1200);\n    //: 目标站点说什么语言不归界面语言管 —— 两种都认。英文站点(YouTube 等)的折叠钮是\n    //: 「View 12 replies」「Show more replies」;认不出就这轮不展开,读到的仍是顶层评论。\n    const PATTERN = /^(共\\s*\\d+\\s*条回复|展开\\s*\\d*\\s*条回复|展开更多回复|查看回复|view\\s+\\d+\\s+(more\\s+)?repl|show\\s+more\\s+repl)/i;\n    //: 折叠钮的文字可能是「共<em>43</em>条回复」这种带子标签的 —— 不要求叶子,\n    //: 取**最深的**那个匹配(后代里没有再匹配的),点它才对得上点击处理器。\n    const collect = (root) => {\n      root.querySelectorAll(\"*\").forEach((el) => {\n        if (el.shadowRoot) collect(el.shadowRoot);\n        if (expanders.length >= expandMax || el.tagName === \"A\") return;\n        const text = (el.textContent || \"\").trim();\n        if (text.length <= 2 || text.length >= 40 || !PATTERN.test(text)) return;\n        const nested = Array.from(el.children).some((c) => PATTERN.test((c.textContent || \"\").trim()));\n        if (!nested) expanders.push(el);\n      });\n    };\n    collect(document);\n    for (const el of expanders) {\n      el.scrollIntoView({ block: \"center\" });\n      el.click();\n      await wait(Number(input.expand_wait_ms) || 600);\n    }\n  }\n  await wait(Number(input.final_ms) || 1500);\n  const SKIP = new Set([\"STYLE\", \"SCRIPT\", \"NOSCRIPT\", \"LINK\", \"META\"]);\n  const parts = [(document.body && document.body.innerText) || \"\"];\n  const visit = (root) => {\n    root.querySelectorAll(\"*\").forEach((el) => {\n      if (!el.shadowRoot) return;\n      const text = Array.from(el.shadowRoot.children)\n        .filter((one) => !SKIP.has(one.tagName))\n        .map((one) => one.innerText || \"\").join(\"\\n\").trim();\n      if (text) parts.push(text);\n      visit(el.shadowRoot);\n    });\n  };\n  visit(document);\n  const limit = Number(input.max_chars) || 30000;\n  return { url: location.href, title: document.title, now: new Date().toISOString(), expanded: expanders.length, text: parts.join(\"\\n\\n\").slice(0, limit) };\n})()",
+          "expression": "(async () => {\n  const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));\n  const BILI = /bilibili\\.com\\/video\\/(BV[\\w]+)/;\n  const bili = location.href.match(BILI) || String(input.video_url || \"\").match(BILI);\n  if (bili) {\n    //: B 站:页面上下文直接调它自己的接口 —— 带登录态、结构化 JSON、分页器和楼中楼都在里面,\n    //: 评论区组件渲染失败(风控「玩命加载」)也不受影响。接口变了就落空,落回下面读 DOM 那条路。\n    try {\n      const view = await (await fetch(\"https://api.bilibili.com/x/web-interface/view?bvid=\" + bili[1], { credentials: \"include\" })).json();\n      const aid = view && view.data ? view.data.aid : null;\n      const total = view && view.data && view.data.stat ? view.data.stat.reply : 0;\n      if (aid) {\n        //: 评论有多少抓多少(上限 1000 条 / 50 页 —— 再大的楼在「评论数」参数里也读不完,\n    //: 超过的部分由 web_read 的 total 如实说出来)。页与页之间隔 400ms,不踩频控。\n    const wanted = Math.min(Number(input.comment_max) || 1000, 1000);\n        const all = [];\n        let pn = 1;\n        while (all.length < wanted && pn <= 15) {\n          const r = await (await fetch(\"https://api.bilibili.com/x/v2/reply?type=1&oid=\" + aid + \"&sort=2&ps=20&pn=\" + pn, { credentials: \"include\" })).json();\n          const replies = r && r.data && r.data.replies ? r.data.replies : [];\n          if (!replies.length) break;\n          for (const one of replies) {\n            const push = (c, prefix) => all.push({\n              author: c && c.member ? c.member.uname : \"\",\n              text: prefix + ((c && c.content ? c.content.message : \"\") || \"\").replace(/\\s+/g, \" \").trim(),\n              likes: c && typeof c.like === \"number\" ? c.like : \"\",\n              published_at: c && c.ctime ? new Date(c.ctime * 1000).toISOString().slice(0, 10) : \"\",\n            });\n            push(one, \"\");\n            //: 楼中楼:接口里每条顶层评论自带前几层回复,拍平、带 ↳ 前缀,回复也算数。\n            for (const sub of one.replies || []) push(sub, \"↳ \");\n          }\n          pn += 1;\n          if (replies.length < 20) break;\n          await wait(400);\n        }\n        if (all.length) {\n          return { url: location.href, title: document.title, now: new Date().toISOString(), mode: \"api\", total, expanded: -1,\n                   text: JSON.stringify({ total, comments: all.slice(0, wanted) }) };\n        }\n      }\n    } catch (e) { /* 接口这条路不通就落回读 DOM */ }\n  }\n  await wait(Number(input.settle_ms) || 2500);\n  const rounds = Math.min(Number(input.scrolls) || 0, 12);\n  let last = -1, stable = 0;\n  for (let i = 0; i < rounds; i += 1) {\n    window.scrollBy(0, Math.max(window.innerHeight, 800));\n    await wait(Number(input.pause_ms) || 1300);\n    const h = document.body.scrollHeight;\n    const atBottom = window.scrollY + window.innerHeight >= h - 4;\n    if (atBottom && h === last) { stable += 1; if (stable >= 2) break; } else { stable = 0; }\n    last = h;\n  }\n  const expandMax = Math.min(Number(input.expand_max) || 0, 20);\n  const expanders = [];\n  if (expandMax > 0) {\n    await wait(Number(input.expand_settle_ms) || 1200);\n    //: 目标站点说什么语言不归界面语言管 —— 两种都认。英文站点(YouTube 等)的折叠钮是\n    //: 「View 12 replies」「Show more replies」;认不出就这轮不展开,读到的仍是顶层评论。\n    const PATTERN = /^(共\\s*\\d+\\s*条回复|展开\\s*\\d*\\s*条回复|展开更多回复|查看回复|view\\s+\\d+\\s+(more\\s+)?repl|show\\s+more\\s+repl)/i;\n    //: 折叠钮的文字可能是「共<em>43</em>条回复」这种带子标签的 —— 不要求叶子,\n    //: 取**最深的**那个匹配(后代里没有再匹配的),点它才对得上点击处理器。\n    const collect = (root) => {\n      root.querySelectorAll(\"*\").forEach((el) => {\n        if (el.shadowRoot) collect(el.shadowRoot);\n        if (expanders.length >= expandMax || el.tagName === \"A\") return;\n        const text = (el.textContent || \"\").trim();\n        if (text.length <= 2 || text.length >= 40 || !PATTERN.test(text)) return;\n        const nested = Array.from(el.children).some((c) => PATTERN.test((c.textContent || \"\").trim()));\n        if (!nested) expanders.push(el);\n      });\n    };\n    collect(document);\n    for (const el of expanders) {\n      el.scrollIntoView({ block: \"center\" });\n      el.click();\n      await wait(Number(input.expand_wait_ms) || 600);\n    }\n  }\n  await wait(Number(input.final_ms) || 1500);\n  const SKIP = new Set([\"STYLE\", \"SCRIPT\", \"NOSCRIPT\", \"LINK\", \"META\"]);\n  const parts = [(document.body && document.body.innerText) || \"\"];\n  const visit = (root) => {\n    root.querySelectorAll(\"*\").forEach((el) => {\n      if (!el.shadowRoot) return;\n      const text = Array.from(el.shadowRoot.children)\n        .filter((one) => !SKIP.has(one.tagName))\n        .map((one) => one.innerText || \"\").join(\"\\n\").trim();\n      if (text) parts.push(text);\n      visit(el.shadowRoot);\n    });\n  };\n  visit(document);\n  const limit = Number(input.max_chars) || 30000;\n  return { url: location.href, title: document.title, now: new Date().toISOString(), expanded: expanders.length, text: parts.join(\"\\n\\n\").slice(0, limit) };\n})()",
           "input": {
             "settle_ms": 2500,
             "scrolls": 7,
             "pause_ms": 1200,
             "max_chars": 120000,
             "expand_max": 8
-          }
+          },
+          "timeout_ms": 120000
         },
         "inputs": [
           "session"
@@ -303,18 +307,47 @@
         ]
       },
       {
+        "id": "web_is_api",
+        "type": "condition",
+        "name": "是接口取的吗",
+        "position": {
+          "x": 1832,
+          "y": 858
+        },
+        "config": {
+          "left": "{{web_read.value.mode}}",
+          "op": "equals",
+          "right": "api"
+        }
+      },
+      {
+        "id": "web_api_m",
+        "type": "social_metrics",
+        "name": "整理接口取回的评论",
+        "position": {
+          "x": 2152,
+          "y": 820
+        },
+        "config": {
+          "data": "{{web_read.value.text}}",
+          "kind": "comments",
+          "limit": "2000",
+          "table_limit": "{{start.comment_count}}"
+        }
+      },
+      {
         "id": "web_struct",
         "type": "llm",
         "name": "把页面文字抄成评论清单",
         "position": {
-          "x": 1960,
-          "y": 858
+          "x": 2152,
+          "y": 933
         },
         "config": {
           "profile_id": "",
           "model": "",
           "preset": "precise",
-          "system": "你会收到内嵌浏览器打开一条自媒体作品、往下滚过评论区之后读到的页面文字。把这条作品的标题和页面上能看到的每一条评论整理出来(原文一字不改,赞多的优先,最多 150 条;回复楼里的也算,但不要把推荐视频的标题当成评论)。\n规则:\n- 只抄页面上真有的,不编、不补、不估;页面上没有的字段写空字符串。\n- 数字照页面原样抄(1.2万、3.4w、10万+ 都原样写),不要自己换算。\n- 发布时间:能确定就写成 YYYY-MM-DD(有钟点就 YYYY-MM-DD HH:MM);写的是相对时间(3天前、昨天、2小时前)就按\n  「读取时间」换算成日期;只写了月-日(09-21)就补上读取时间那一年;实在看不出就空字符串。\n- 页面主要是登录框、验证码、「登录后查看更多」时 login_wall = true,并在 notes 里说清看到了什么;\n  这时宁可少抄,不要把推荐位、广告、别人的作品当成这个账号的。\n只输出符合 JSON Schema 的对象。",
+          "system": "你会收到内嵌浏览器打开一条自媒体作品、往下滚过评论区之后读到的页面文字。把这条作品的标题和页面上能看到的每一条评论整理出来(原文一字不改,赞多的优先;回复楼里的也算,但不要把推荐视频的标题当成评论)。\n规则:\n- 只抄页面上真有的,不编、不补、不估;页面上没有的字段写空字符串。\n- 数字照页面原样抄(1.2万、3.4w、10万+ 都原样写),不要自己换算。\n- 发布时间:能确定就写成 YYYY-MM-DD(有钟点就 YYYY-MM-DD HH:MM);写的是相对时间(3天前、昨天、2小时前)就按\n  「读取时间」换算成日期;只写了月-日(09-21)就补上读取时间那一年;实在看不出就空字符串。\n- 页面主要是登录框、验证码、「登录后查看更多」时 login_wall = true,并在 notes 里说清看到了什么;\n  这时宁可少抄,不要把推荐位、广告、别人的作品当成这个账号的。\n只输出符合 JSON Schema 的对象。",
           "prompt": "平台(可能为空):{{link.platform}}\n作品:{{link.url}}\n读取时间:{{web_read.value.now}}\n页面标题:{{web_read.value.title}}\n\n页面文字:\n{{web_read.value.text}}",
           "response_format": "json_schema",
           "json_schema_name": "comments_page",
@@ -382,13 +415,14 @@
         "type": "social_metrics",
         "name": "按赞排好评论",
         "position": {
-          "x": 2280,
-          "y": 858
+          "x": 2472,
+          "y": 933
         },
         "config": {
           "data": "{{web_struct.json.comments}}",
           "kind": "comments",
-          "limit": "{{start.comment_count}}"
+          "limit": "2000",
+          "table_limit": "{{start.comment_count}}"
         }
       },
       {
@@ -400,7 +434,7 @@
           "y": 535
         },
         "config": {
-          "template": "{{dy_comments_m.summary}}{{xhs_comments_m.summary}}{{bili_comments_m.summary}}{{web_comments_m.summary}}\n\n### 全部评论(按赞排)\n\n{{dy_comments_m.table}}{{xhs_comments_m.table}}{{bili_comments_m.table}}{{web_comments_m.table}}"
+          "template": "{{dy_comments_m.summary}}{{xhs_comments_m.summary}}{{bili_comments_m.summary}}{{web_api_m.summary}}{{web_comments_m.summary}}\n\n### 全部评论(按赞排)\n\n{{dy_comments_m.table}}{{xhs_comments_m.table}}{{bili_comments_m.table}}{{web_api_m.table}}{{web_comments_m.table}}"
         }
       },
       {
@@ -412,7 +446,7 @@
           "y": 535
         },
         "config": {
-          "left": "{{dy_comments_m.count}}{{xhs_comments_m.count}}{{bili_comments_m.count}}{{web_comments_m.count}}",
+          "left": "{{dy_comments_m.count}}{{xhs_comments_m.count}}{{bili_comments_m.count}}{{web_api_m.count}}{{web_comments_m.count}}",
           "op": "gt",
           "right": "0"
         }
@@ -431,9 +465,106 @@
         }
       },
       {
+        "id": "all_items",
+        "type": "template",
+        "name": "汇合全部评论",
+        "position": {
+          "x": 2920,
+          "y": 535
+        },
+        "config": {
+          "template": "{{dy_comments_m.items}}{{xhs_comments_m.items}}{{bili_comments_m.items}}{{web_api_m.items}}{{web_comments_m.items}}"
+        }
+      },
+      {
+        "id": "chunks",
+        "type": "list_chunk",
+        "name": "拆成几批",
+        "position": {
+          "x": 2920,
+          "y": 649
+        },
+        "config": {
+          "items": "",
+          "size": 80
+        },
+        "inputs": [
+          "items"
+        ]
+      },
+      {
+        "id": "batch_analyze",
+        "type": "loop_foreach",
+        "name": "逐批分析",
+        "position": {
+          "x": 2920,
+          "y": 763
+        },
+        "config": {
+          "items": "",
+          "concurrency": 2,
+          "inputs": {
+            "url": "{{link.url}}",
+            "focus": "{{start.focus}}"
+          },
+          "body": {
+            "nodes": [
+              {
+                "id": "batch_notes",
+                "type": "llm",
+                "name": "分析这一批",
+                "position": {
+                  "x": 80,
+                  "y": 120
+                },
+                "config": {
+                  "profile_id": "",
+                  "model": "",
+                  "preset": "precise",
+                  "system": "你是用户研究助手,负责读完一批评论并留下紧凑的观察笔记。只根据给到的这批评论说话:\n- 这批在聊什么(话题 + 条数);\n- 大家在问什么、哪里不满、哪里惊喜;\n- 值得回复的评论(高赞的问题、误解、负面),写出建议回复;\n- 值得原样引用的金句(抄原文)。\n用户写了关心的问题就优先回应它。只输出符合 JSON Schema 的对象。",
+                  "prompt": "作品:{{input.url}}\n用户关心的问题(可能为空):{{input.focus}}\n\n这一批评论(JSON):\n{{loop.item}}",
+                  "response_format": "json_schema",
+                  "json_schema_name": "comment_insights_batch",
+                  "json_schema": {
+                    "type": "object",
+                    "properties": {
+                      "notes_markdown": {
+                        "type": "string",
+                        "description": "这一批的观察笔记,紧凑 markdown"
+                      },
+                      "standout_comments": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "description": "值得原样引用的评论原文"
+                        },
+                        "description": "最多 8 条"
+                      }
+                    },
+                    "required": [
+                      "notes_markdown",
+                      "standout_comments"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "json_schema_strict": "true",
+                  "temperature": 0.3,
+                  "max_tokens": 6000
+                }
+              }
+            ],
+            "edges": []
+          },
+          "output": "{{batch_notes.json.notes_markdown}}"
+        },
+        "inputs": [
+          "items"
+        ]
+      },
+      {
         "id": "insight",
         "type": "llm",
-        "name": "做评论区洞察",
+        "name": "综合各批,做评论区洞察",
         "position": {
           "x": 3240,
           "y": 535
@@ -442,8 +573,8 @@
           "profile_id": "",
           "model": "",
           "preset": "precise",
-          "system": "你是用户研究和社区运营专家。你会收到一条作品下赞最多的一批评论(按赞排好,赞数写在前面)。做评论区洞察。\n\n- verdict:一句话,评论区最值得注意的事。\n- report_markdown 用二级标题分成这几节:\n  1. 大家在聊什么:按话题聚类,每类写条数和 1–2 条代表评论原文;\n  2. 观众画像:从用词、关心的事推断年龄段、身份、所处阶段,每一条写明依据,并注明是推断;\n  3. 需求与痛点;\n  4. 疑问清单:大家在问什么,哪些值得单独做一条内容回答;\n  5. 异议与负面:说了什么、有多少、建议怎么回应;\n  6. 情绪分布:正面 / 中性 / 负面的大致比例(注明是估计);\n  7. 下一条可以做什么:3–5 个选题,每个写清依据的是哪几条评论。\n- reply_suggestions_markdown:挑 5–10 条最值得回复的评论(高赞的问题、误解、负面),写出建议回复,语气真诚、不抬杠。\n- 只引用给到的评论原文,不要编评论;样本少就明说结论的把握有限。\n- 用户写了关心的问题就单独一节回应。\n- 用{{start.report_language}}写。\n只输出符合 JSON Schema 的对象。",
-          "prompt": "作品:{{link.url}}\n平台:{{link.platform}}\n标题(可能为空):{{web_struct.json.title}}\n用户关心的问题(可能为空):{{start.focus}}\n\n{{data_block.text}}",
+          "system": "你是用户研究和社区运营专家。你会收到:一份按赞排的整体统计,以及**分批覆盖全部评论**的分析笔记\n(评论太多装不下一次读完时,分批读过再交给你综合)。以分批笔记为准,统计用来校准比例;所有评论都被读过了,\n不要说「样本」。做评论区洞察。\n\n- verdict:一句话,评论区最值得注意的事。\n- report_markdown 用二级标题分成这几节:\n  1. 大家在聊什么:按话题聚类,每类写条数和 1–2 条代表评论原文;\n  2. 观众画像:从用词、关心的事推断年龄段、身份、所处阶段,每一条写明依据,并注明是推断;\n  3. 需求与痛点;\n  4. 疑问清单:大家在问什么,哪些值得单独做一条内容回答;\n  5. 异议与负面:说了什么、有多少、建议怎么回应;\n  6. 情绪分布:正面 / 中性 / 负面的大致比例(注明是估计);\n  7. 下一条可以做什么:3–5 个选题,每个写清依据的是哪几条评论。\n- reply_suggestions_markdown:挑 5–10 条最值得回复的评论(高赞的问题、误解、负面),写出建议回复,语气真诚、不抬杠。\n- 只引用给到的评论原文,不要编评论;样本少就明说结论的把握有限。\n- 用户写了关心的问题就单独一节回应。\n- 用{{start.report_language}}写。\n只输出符合 JSON Schema 的对象。",
+          "prompt": "作品:{{link.url}}\n平台:{{link.platform}}\n标题(可能为空):{{web_struct.json.title}}{{web_read.value.title}}\n用户关心的问题(可能为空):{{start.focus}}\n\n按赞排的整体情况:\n{{data_block.text}}\n\n分批分析笔记(覆盖了全部评论,JSON 数组,逐条是一份笔记):\n{{batch_analyze.results}}",
           "response_format": "json_schema",
           "json_schema_name": "comment_insights",
           "json_schema": {
@@ -584,9 +715,21 @@
         "source_handle": "false"
       },
       {
-        "id": "web_read__web_struct",
+        "id": "web_read__web_is_api",
         "source": "web_read",
-        "target": "web_struct"
+        "target": "web_is_api"
+      },
+      {
+        "id": "web_is_api__web_api_m__true",
+        "source": "web_is_api",
+        "target": "web_api_m",
+        "source_handle": "true"
+      },
+      {
+        "id": "web_is_api__web_struct__false",
+        "source": "web_is_api",
+        "target": "web_struct",
+        "source_handle": "false"
       },
       {
         "id": "web_struct__web_comments_m",
@@ -609,6 +752,11 @@
         "target": "data_block"
       },
       {
+        "id": "web_api_m__data_block",
+        "source": "web_api_m",
+        "target": "data_block"
+      },
+      {
         "id": "web_comments_m__data_block",
         "source": "web_comments_m",
         "target": "data_block"
@@ -625,10 +773,15 @@
         "source_handle": "false"
       },
       {
-        "id": "has_comments__insight__true",
+        "id": "has_comments__all_items__true",
         "source": "has_comments",
-        "target": "insight",
+        "target": "all_items",
         "source_handle": "true"
+      },
+      {
+        "id": "batch_analyze__insight",
+        "source": "batch_analyze",
+        "target": "insight"
       },
       {
         "id": "insight__save_note",
@@ -716,6 +869,22 @@
         "kind": "data",
         "source_output": "session",
         "target_input": "session"
+      },
+      {
+        "id": "d-all_items-text-chunks-items",
+        "source": "all_items",
+        "target": "chunks",
+        "kind": "data",
+        "source_output": "text",
+        "target_input": "items"
+      },
+      {
+        "id": "d-chunks-batches-batch_analyze-items",
+        "source": "chunks",
+        "target": "batch_analyze",
+        "kind": "data",
+        "source_output": "batches",
+        "target_input": "items"
       }
     ]
   }

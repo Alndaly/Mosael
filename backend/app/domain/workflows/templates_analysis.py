@@ -196,7 +196,9 @@ _READ_PAGE_SCRIPT = """(async () => {
       const aid = view && view.data ? view.data.aid : null;
       const total = view && view.data && view.data.stat ? view.data.stat.reply : 0;
       if (aid) {
-        const wanted = Math.min(Number(input.comment_max) || 150, 300);
+        //: 评论有多少抓多少(上限 1000 条 / 50 页 —— 再大的楼在「评论数」参数里也读不完,
+    //: 超过的部分由 web_read 的 total 如实说出来)。页与页之间隔 400ms,不踩频控。
+    const wanted = Math.min(Number(input.comment_max) || 1000, 1000);
         const all = [];
         let pn = 1;
         while (all.length < wanted && pn <= 15) {
@@ -843,6 +845,25 @@ def _comments_page_schema() -> dict[str, Any]:
     })
 
 
+#: 分批分析的提示词:每一批只做「观察」,不下结论 —— 结论是综合那一步的事。
+_BATCH_SYSTEM = (
+    "你是用户研究助手,负责读完一批评论并留下紧凑的观察笔记。只根据给到的这批评论说话:\n"
+    "- 这批在聊什么(话题 + 条数);\n"
+    "- 大家在问什么、哪里不满、哪里惊喜;\n"
+    "- 值得回复的评论(高赞的问题、误解、负面),写出建议回复;\n"
+    "- 值得原样引用的金句(抄原文)。\n"
+    "用户写了关心的问题就优先回应它。只输出符合 JSON Schema 的对象。"
+)
+
+
+def _batch_schema() -> dict[str, Any]:
+    return _object({
+        "notes_markdown": _string("这一批的观察笔记,紧凑 markdown"),
+        "standout_comments": {"type": "array", "items": _string("值得原样引用的评论原文"),
+                              "description": "最多 8 条"},
+    })
+
+
 def _insight_schema() -> dict[str, Any]:
     return _object({
         "title": _string("笔记标题:带上作品标题和「评论区洞察」"),
@@ -852,7 +873,9 @@ def _insight_schema() -> dict[str, Any]:
     })
 
 
-_INSIGHT_SYSTEM = """你是用户研究和社区运营专家。你会收到一条作品下赞最多的一批评论(按赞排好,赞数写在前面)。做评论区洞察。
+_INSIGHT_SYSTEM = """你是用户研究和社区运营专家。你会收到:一份按赞排的整体统计,以及**分批覆盖全部评论**的分析笔记
+(评论太多装不下一次读完时,分批读过再交给你综合)。以分批笔记为准,统计用来校准比例;所有评论都被读过了,
+不要说「样本」。做评论区洞察。
 
 - verdict:一句话,评论区最值得注意的事。
 - report_markdown 用二级标题分成这几节:
@@ -878,7 +901,8 @@ def comment_insights_graph(*, chat: Any, locale: str | None = None) -> dict[str,
             "video_link": "",
             "data_source": "",
             "platform": "",
-            #: TikHub 一次取一页(抖音一页最多约 50 条),整理时也只留赞最多的这么多条。
+            #: 附表按赞给前这么几条;分析覆盖抓到的**全部**(分批喂模型)。TikHub 一路一次一页,
+            #: 浏览器一路已知平台直接翻它的接口。
             "comment_count": 50,
             "focus": "",
             "report_language": _report_language(locale),
@@ -894,7 +918,8 @@ def comment_insights_graph(*, chat: Any, locale: str | None = None) -> dict[str,
                                 {"zh": f"TikHub 取{names['zh']}评论", "en": f"TikHub: {names['en']} comments"}, col, row)
         b.edge(check, comments, "true")
         ranked = b.node(f"{short}_comments_m", "social_metrics", {"zh": "按赞排好评论", "en": "Rank the comments"}, col + 1, row, {
-            "data": f"{{{{{comments}.output}}}}", "kind": "comments", "limit": "{{start.comment_count}}",
+            "data": f"{{{{{comments}.output}}}}", "kind": "comments",
+            "limit": "2000", "table_limit": "{{start.comment_count}}",
         })
         b.edge(comments, ranked)
         return [ranked]
@@ -903,20 +928,36 @@ def comment_insights_graph(*, chat: Any, locale: str | None = None) -> dict[str,
 
     #: 评论区的预算给足:310 条评论的页面正文约 5 万字符,楼中楼展开后更多;条数上限由模型那步收口。
     _browser_read(b, col=4, row=4.2, scrolls=7, max_chars=120000, expand_replies=8)
-    b.llm("web_struct", {"zh": "把页面文字抄成评论清单", "en": "Turn the page text into a comment list"}, 6, 4.2,
+    # 接口那一路一次要翻几十页,20 秒的默认预算不够 —— 声明自己的(上限见节点声明)。
+    for node in b.nodes:
+        if node["id"] == "web_read":
+            node["config"]["timeout_ms"] = 120000
+    #: 接口回来的已经是结构化清单,再让模型抄一遍只会丢条(实测 106 条抄丢成 71)——
+    #: 接口路直连整理;只有 DOM 读来的页面文字才需要模型抄写。
+    b.node("web_is_api", "condition", {"zh": "是接口取的吗", "en": "Came from the site API?"}, 5.6, 4.2, {
+        "left": "{{web_read.value.mode}}", "op": "equals", "right": "api",
+    })
+    b.edge("web_read", "web_is_api")
+    b.node("web_api_m", "social_metrics", {"zh": "整理接口取回的评论", "en": "Tidy the API comments"}, 6.6, 4.0, {
+        "data": "{{web_read.value.text}}", "kind": "comments",
+        "limit": "2000", "table_limit": "{{start.comment_count}}",
+    })
+    b.edge("web_is_api", "web_api_m", "true")
+    b.llm("web_struct", {"zh": "把页面文字抄成评论清单", "en": "Turn the page text into a comment list"}, 6.6, 4.6,
           system="你会收到内嵌浏览器打开一条自媒体作品、往下滚过评论区之后读到的页面文字。"
-                 "把这条作品的标题和页面上能看到的每一条评论整理出来(原文一字不改,赞多的优先,最多 150 条;"
+                 "把这条作品的标题和页面上能看到的每一条评论整理出来(原文一字不改,赞多的优先;"
                  "回复楼里的也算,但不要把推荐视频的标题当成评论)。\n" + _TRANSCRIBE_RULES,
           prompt="平台(可能为空):{{link.platform}}\n作品:{{link.url}}\n读取时间:{{web_read.value.now}}\n"
                  "页面标题:{{web_read.value.title}}\n\n页面文字:\n{{web_read.value.text}}",
           schema_name="comments_page", schema=_comments_page_schema(), max_tokens=16000, temperature=0.1)
-    b.edge("web_read", "web_struct")
-    b.node("web_comments_m", "social_metrics", {"zh": "按赞排好评论", "en": "Rank the comments"}, 7, 4.2, {
-        "data": "{{web_struct.json.comments}}", "kind": "comments", "limit": "{{start.comment_count}}",
+    b.edge("web_is_api", "web_struct", "false")
+    b.node("web_comments_m", "social_metrics", {"zh": "按赞排好评论", "en": "Rank the comments"}, 7.6, 4.6, {
+        "data": "{{web_struct.json.comments}}", "kind": "comments",
+        "limit": "2000", "table_limit": "{{start.comment_count}}",
     })
     b.edge("web_struct", "web_comments_m")
 
-    ranked = [*tikhub_exits, "web_comments_m"]
+    ranked = [*tikhub_exits, "web_api_m", "web_comments_m"]
     _merge(b, "data_block", {"zh": "汇合这一路的评论", "en": "Collect the comments from whichever route ran"}, 8, 2.5,
            _joined(ranked, "summary") + "\n\n### " + b.text("全部评论(按赞排)", "All comments (by likes)") + "\n\n"
            + _joined(ranked, "table"), ranked)
@@ -935,12 +976,51 @@ def comment_insights_graph(*, chat: Any, locale: str | None = None) -> dict[str,
         ),
     })
     b.edge("has_comments", "no_comments_notice", "false")
-    b.llm("insight", {"zh": "做评论区洞察", "en": "Analyse the comments"}, 10, 2.5,
+
+    #: 分析覆盖抓到的**全部**评论:五个来源只跑一支,items 引用出来其余四支是空串,拼起来就是那一支的
+    #: JSON(as_text 把列表写成 JSON;见 graph_rules)。拆批 → 逐批出笔记 → 综合,模型上下文装不下时也不丢评论。
+    b.node("all_items", "template", {"zh": "汇合全部评论", "en": "Collect every comment"}, 9, 2.5, {
+        "template": _joined(ranked, "items"),
+    })
+    b.edge("has_comments", "all_items", "true")
+    b.node("chunks", "list_chunk", {"zh": "拆成几批", "en": "Split into batches"}, 9, 3.1, {
+        "items": "{{all_items.text}}", "size": 80,
+    })
+    b.edge("all_items", "chunks")
+    b.node("batch_analyze", "loop_foreach", {"zh": "逐批分析", "en": "Analyse batch by batch"}, 9, 3.7, {
+        "items": "{{chunks.batches}}",
+        "concurrency": 2,
+        #: 循环体的作用域只有 loop / item / input —— 作品链接和用户关心的问题经 inputs 带进去。
+        "inputs": {"url": "{{link.url}}", "focus": "{{start.focus}}"},
+        "body": {"nodes": [{
+            "id": "batch_notes",
+            "type": "llm",
+            "name": {"zh": "分析这一批", "en": "Analyse this batch"},
+            "position": {"x": 80, "y": 120},
+            "config": {
+                "profile_id": getattr(chat, "profile_id", ""),
+                "model": getattr(chat, "model", ""),
+                "preset": "precise",
+                "system": _BATCH_SYSTEM,
+                "prompt": "作品:{{input.url}}\n用户关心的问题(可能为空):{{input.focus}}\n\n这一批评论(JSON):\n{{loop.item}}",
+                "response_format": "json_schema",
+                "json_schema_name": "comment_insights_batch",
+                "json_schema": _batch_schema(),
+                "json_schema_strict": "true",
+                "temperature": 0.3,
+                "max_tokens": 6000,
+            },
+        }], "edges": []},
+        "output": "{{batch_notes.json.notes_markdown}}",
+    })
+    b.edge("chunks", "batch_analyze")
+    b.llm("insight", {"zh": "综合各批,做评论区洞察", "en": "Synthesize the batch notes"}, 10, 2.5,
           system=_INSIGHT_SYSTEM,
-          prompt="作品:{{link.url}}\n平台:{{link.platform}}\n标题(可能为空):{{web_struct.json.title}}\n"
-                 "用户关心的问题(可能为空):{{start.focus}}\n\n{{data_block.text}}",
+          prompt="作品:{{link.url}}\n平台:{{link.platform}}\n标题(可能为空):{{web_struct.json.title}}{{web_read.value.title}}\n"
+                 "用户关心的问题(可能为空):{{start.focus}}\n\n按赞排的整体情况:\n{{data_block.text}}\n\n"
+                 "分批分析笔记(覆盖了全部评论,JSON 数组,逐条是一份笔记):\n{{batch_analyze.results}}",
           schema_name="comment_insights", schema=_insight_schema(), max_tokens=12000, temperature=0.3)
-    b.edge("has_comments", "insight", "true")
+    b.edge("batch_analyze", "insight")
     b.node("save_note", "note_create", {"zh": "存成笔记", "en": "Save as a note"}, 11, 2.5, {
         "title": "{{insight.json.title}}",
         "markdown": "> {{insight.json.verdict}}\n\n{{insight.json.report_markdown}}\n\n## "
