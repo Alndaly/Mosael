@@ -179,3 +179,40 @@ describe("limits", () => {
     expect(rect.y + rect.height).toBeLessThanOrEqual(small.height);
   });
 });
+
+describe("a resize handle never slides the panel", () => {
+  const HANDLES: PanelHandle[] = ["n", "ne", "e", "se", "s", "sw", "w", "nw"];
+  const SPOTS: PanelLayout[] = [
+    START,
+    DEFAULT_PANEL_LAYOUT, // 贴右下角,离窗口边只有 16px
+    { x: 0, y: EMBED_HEADER_HEIGHT, width: 384 }, // 顶到左上
+    { x: AREA.width - 500, y: EMBED_HEADER_HEIGHT, width: 500 }, // 顶到右上
+    { x: 0, y: AREA.height - panelHeightFor(300), width: 300 }, // 顶到左下
+  ];
+  const anchorOf = (handle: PanelHandle, r: PanelRect): [number, number] => [
+    r.x + (handle.includes("w") ? 1 : handle.includes("e") ? 0 : 0.5) * r.width,
+    r.y + (handle.includes("n") ? 1 : handle.includes("s") ? 0 : 0.5) * r.height,
+  ];
+
+  it("keeps the opposite corner / edge midpoint fixed for any drag from any spot, and stays in the window", () => {
+    // 从一个合法位置出发,锚点到窗口边的空间至少装得下当前这张卡片,所以无论往哪拖、拖多远,
+    // 都只会是尺寸停下(上下限、撞边),锚点不会被推走。
+    for (const spot of SPOTS) {
+      const from = panelRect(spot, AREA);
+      for (const handle of HANDLES) {
+        for (let dx = -400; dx <= 400; dx += 40) {
+          for (let dy = -400; dy <= 400; dy += 40) {
+            const next = panelRect(resizePanel(handle, dragged(handle, from, dx, dy), AREA), AREA);
+            const [ax, ay] = anchorOf(handle, from);
+            const [bx, by] = anchorOf(handle, next);
+            const where = `${handle} from ${JSON.stringify(from)} by (${dx},${dy}) → ${JSON.stringify(next)}`;
+            expect(Math.abs(bx - ax), where).toBeLessThanOrEqual(0.5);
+            expect(Math.abs(by - ay), where).toBeLessThanOrEqual(0.5);
+            expect(next.x >= 0 && next.x + next.width <= AREA.width, where).toBe(true);
+            expect(next.y >= EMBED_HEADER_HEIGHT && next.y + next.height <= AREA.height, where).toBe(true);
+          }
+        }
+      }
+    }
+  });
+});

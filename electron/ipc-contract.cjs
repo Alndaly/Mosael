@@ -118,10 +118,19 @@ const PANEL_HANDLES = ["n", "ne", "e", "se", "s", "sw", "w", "nw"];
 /**
  * 面板几何的一次改动:`{ x, y }` 是拖标题条挪位置;带 `handle` 的是拖手柄缩放,
  * `x/y/width/height` 是指针要的矩形(不带约束,主进程按比例与边界去夹)。
+ *
+ * **认不出的字段一律拒收**,不「半懂地执行」。渲染层由 vite 热更新,主进程只在启动时加载这份
+ * 契约 —— 开发时两边不是同一版是常态。上一版解析器只挑自己认识的键、悄悄丢掉新加的 `handle`,
+ * 于是新渲染层的「拖这个手柄缩放」被旧主进程当成「挪到这里 + 改宽」执行:拖角、拖边时整张卡片
+ * 跟着平移(2026-10 用户在没重启的开发应用里撞到)。拒收让这种错位当场报错,一眼看得出是版本对不上。
  */
 function parsePanelLayout(value) {
   const channel = IPC.invoke.publishPanelLayout;
   const payload = record(value, channel);
+  const allowed = payload.handle === undefined ? ["x", "y"] : ["handle", "x", "y", "width", "height"];
+  for (const key of Object.keys(payload)) {
+    if (!allowed.includes(key)) throw new TypeError(`${channel}: unexpected field ${key}`);
+  }
   const number = (key) => {
     if (typeof payload[key] !== "number" || !Number.isFinite(payload[key])) {
       throw new TypeError(`${channel}: ${key} must be a finite number`);

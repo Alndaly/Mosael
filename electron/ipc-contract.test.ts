@@ -86,8 +86,13 @@ describe("Electron IPC contract", () => {
     expect(contract.parseBrowserProfile({ partition: "persist:pool-user" })).toEqual({ partition: "persist:pool-user" });
     expect(() => contract.parseBrowserProfile({ partition: "persist:mosael-account" })).toThrow(/partition/);
 
-    // 挪位置:只要 x/y,别的字段不往下带。
-    expect(contract.parsePanelLayout({ x: 10, y: 20, width: 300, ignored: 3 })).toEqual({ x: 10, y: 20 });
+    // 挪位置:只有 x/y。
+    expect(contract.parsePanelLayout({ x: 10, y: 20 })).toEqual({ x: 10, y: 20 });
+    // 认不出的字段一律拒收,不能「半懂地执行」:开发时渲染层热更新、主进程不重启,两边常常不是同一版。
+    // 旧版解析器悄悄丢掉了新字段 handle,把缩放当成「挪到这里 + 改宽」,拖角时整张卡片跟着平移。
+    expect(() => contract.parsePanelLayout({ x: 10, y: 20, width: 300 })).toThrow(/width/);
+    expect(() => contract.parsePanelLayout({ handle: "se", x: 1, y: 2, width: 3, height: 4, anchor: "nw" }))
+      .toThrow(/anchor/);
     expect(() => contract.parsePanelLayout({ x: 10 })).toThrow(/y/);
     // 缩放:手柄 + 指针要的整块矩形,缺一不可。
     expect(contract.parsePanelLayout({ handle: "nw", x: 1, y: 2, width: 300, height: 200 }))

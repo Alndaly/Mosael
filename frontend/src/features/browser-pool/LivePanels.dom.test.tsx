@@ -178,6 +178,27 @@ describe("LivePanels resize handles", () => {
     expect(setPanelLayout).toHaveBeenCalledTimes(1);
   });
 
+  it("dragging a top corner or the top edge only resizes — it never also drags the title bar under it", () => {
+    render(<LivePanels />);
+    show();
+
+    for (const name of ["nw", "n", "ne"] as const) {
+      // 这三个热区压在标题条上方:必须画在卡片外壳之后(盖在上面),也不能是标题条的后代(冒泡上去)。
+      expect(shell().compareDocumentPosition(handle(name)) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      expect(shell().contains(handle(name))).toBe(false);
+
+      setPanelLayout.mockClear();
+      fireEvent.pointerDown(handle(name), { clientX: 100, clientY: 100 });
+      fireEvent.pointerMove(window, { clientX: 80, clientY: 70 });
+      fireEvent.pointerMove(window, { clientX: 60, clientY: 40 });
+      fireEvent.pointerUp(window);
+      fireEvent.pointerMove(window, { clientX: 300, clientY: 300 });
+      const changes = setPanelLayout.mock.calls.map(([change]) => change as Record<string, unknown>);
+      expect(changes).toHaveLength(2);
+      for (const change of changes) expect(change.handle).toBe(name);
+    }
+  });
+
   it("measures the drag from where it started, not from the previous move", () => {
     render(<LivePanels />);
     show();
