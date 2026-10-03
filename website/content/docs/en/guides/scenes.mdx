@@ -65,6 +65,8 @@ A figure in the scene can be told which character it **Plays** — any person in
 
 On a creative board, **a 3D scene item renders its own blockout references**: select the scene item, pick a shot and what to render, and the first/last frame and camera-move video land to its right (see [Creative boards](/docs/guides/boards)). In workflows it is the "Render blockout references" node, with the scene and shot picked from dropdowns (a scene with a single shot needs no pick). Both use the same renderer: the backend has its own blockout renderer for the reference frames and the camera-move video, and what it draws — geometry, camera interpolation, light direction — matches what this page shows. **Imported models are drawn too**, using their own material colours. Anything it cannot draw — a Draco- or meshopt-compressed mesh, a model over the reference frame's triangle budget, a missing file — is reported one by one with the reason, rather than quietly leaving a gap.
 
+A board's 3D scene item can also **Build a 3D scene from text**: connect a script or storyboard (document or note) and it builds a blockout set — figures move as written, several cameras cover the same action from different positions with camera moves, and each figure's **Plays** is filled in. Workflows have a node of the same name. The built scene lives on this page, ready for you to adjust the cameras.
+
 **Export** saves frames, camera previews and models. Preview encoding uses deterministic MP4 frames where supported, with a WebM recording fallback when necessary.
 
 ## Models and Blender
