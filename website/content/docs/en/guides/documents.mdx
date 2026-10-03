@@ -1,0 +1,86 @@
+---
+title: Documents: PDF, Word, slides and spreadsheets
+description: Import PDFs, Word files, slide decks and spreadsheets into the library, parse them into readable text on your machine, then use them on boards, in workflows and with the agent.
+order: 21
+updated: 2026-10-04
+version: 1.8.3
+---
+
+Research papers, a brand book, the deck a client sent, a spec sheet — these used to need copying into plain text before
+anything could use them. Now they go straight into the **media library** and are parsed on your machine as they come in:
+open one and read the full text, let the agent read it, wire it into a board or a workflow, or turn it into an editable
+[note](/docs/guides/notes) in one click.
+
+## Importing
+
+Use **Import** in the media library or drag files into the window — the same way as video and images, several at once if
+you like. Recognised formats:
+
+| Kind | Formats | Split into |
+| --- | --- | --- |
+| PDF | `.pdf` | Pages, each with a page image |
+| Slides | `.pptx` (also `.ppt` with LibreOffice installed) | Slides: title, bullet points, speaker notes |
+| Word | `.docx` (also `.doc` with LibreOffice installed) | Sections |
+| Spreadsheets | `.xlsx` (also `.xls` with LibreOffice installed), `.csv` | Sheets |
+| Other text | `.md`, `.txt`, `.html`, `.epub` | Chapters or the whole text |
+
+The library's type filter gains **Document**, and cards show the format and page count. Files the library doesn't take,
+such as archives, are refused at import with a note on what can be imported, instead of being filed as video.
+
+## Parsing on your machine
+
+Each import is parsed locally — **nothing leaves your computer and nothing is billed**. The result is Markdown split by
+page, slide, sheet or chapter, plus the document's embedded images; every PDF page also gets a rendered page image.
+
+- With **LibreOffice** installed, two more things happen: slides and Word pages get layout images too (so the agent can
+  see what a slide looks like), and the legacy `doc / ppt / xls` formats are converted and parsed. Without it you get text
+  and embedded images, and the detail view says so.
+- Very long documents get page images for the first 200 pages (all the text is still extracted); very large tables keep the
+  first 2000 rows and 40 columns. Both are stated in the detail view rather than cut silently.
+- Parsing queues in the background, so several PDFs imported together take turns. **Stop** halts a parse in progress; it is
+  recorded as stopped, not failed, and you can parse again any time.
+- Local parsing handles born-digital documents, not scans or complex layouts. When very little text comes out, the detail
+  view suggests it may be scanned or image-only — that's the time to use another parser (below).
+
+## Reading a document
+
+Opening a document asset shows a three-column reader: the parsed text on the **left**, every page of the original in the
+**middle** (Original document · read-only), and metadata on the **right**. Click a section heading on the left and the
+middle column scrolls to that page. The header says which parser produced it and how many pages (slides, sheets, sections)
+it has.
+
+Clicking a document attachment in the agent's composer, in a message or in a citation opens the same reader.
+
+## Parsing it again with another parser
+
+Scans, image-only PDFs, multi-column layouts and documents full of formulas and complex tables are hard for the local
+parser. With a document-parsing plugin installed (**MinerU document parsing**, which ships with the app, is one):
+
+- **For one document**: press **Parse again** in the reader and pick an option such as **Parse with MinerU**. The new
+  result is stored as another parse of the same document; the agent, boards and workflows use the latest successful one.
+- **As the default from now on**: choose it under **Settings → Capability providers → Document parsing**.
+
+Imports are still **parsed locally first**; sending a document to a cloud parser only happens when you name it — installing
+a plugin never uploads documents quietly. Setting up MinerU, its network option and its quota are covered in
+[Using plugins](/docs/guides/plugins).
+
+## Save as note
+
+To edit the text or have AI keep writing from it, use **Save as note** — in the library's right-click / ⋯ menu and in the
+reader. The full text becomes a new note, the document's images enter the library only at this point, and the note's
+sources point back to the original document. The document itself stays in the library unchanged.
+
+## On boards, in workflows and with the agent
+
+- **Boards**: drag a PDF / Word / slide deck / spreadsheet onto a board (or paste it, or pick one under **Add → From
+  library → Media**) and you get a document item holding the parsed text. Wire it into a writing or generation item and that
+  text is what the model reads (the backend reads it along the connection; one that is still parsing or failed to parse is
+  reported, not skipped). **Save as note** on its action bar swaps it for an editable note you can ask AI to write in. See
+  [Creative boards](/docs/guides/boards).
+- **Workflows**: the **Document to Markdown** node turns a document into Markdown text, optionally only some pages or slides
+  (**From section** / **To section**), and can name the parser to use; left empty it uses the latest existing parse, or parses
+  locally first.
+- **The agent**: attach a PDF / Word / slide deck / spreadsheet / Markdown file right in the chat (📎, or drag it from
+  Finder into the conversation). Short ones are handed over whole; long ones come with a table of contents and it reads
+  section by section as needed, picking up big tables mid-section. When it needs to see a page's layout, a chart or a
+  screenshot, it passes those page images to a vision model. See [AI Studio & agents](/docs/guides/ai-studio).

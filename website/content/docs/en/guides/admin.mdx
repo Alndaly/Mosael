@@ -1,0 +1,87 @@
+---
+title: Admin console & statistics
+description: Deployment admins use Admin to watch usage, manage members and sign-up, install local engines, set mirrors and the outbound proxy, and back up data; everyone gets their own numbers in Statistics.
+order: 22
+updated: 2026-10-04
+version: 1.8.3
+---
+
+**Admin** in the sidebar is for **deployment admins**: how the whole backend runs, who can get in, which local engines are
+installed, where the money goes. Only deployment admins see it, and every admin endpoint on the backend checks for that role —
+a workspace admin doesn't count. **On a single machine you are the deployment admin** and nothing needs changing; these settings
+only need an owner once the backend is shared with teammates (see [Remote deployment](/docs/guides/remote)).
+
+Admin has five tabs: **Overview, Members, Cost rules, Engines, Deployment**.
+
+## Overview
+
+Pick a range at the top: the last 7 / 30 / 90 days. Job activity and spend follow the range; accounts, workspaces and assets
+(across all workspaces) are current totals.
+
+- **Job activity**: how many jobs ran each day and how many failed; days without jobs still get a slot.
+- **Who is spending**: AI spend per person. Currencies are listed separately, never added up or converted; if usage didn't match
+  any price rule this stays empty — fill in Cost rules.
+
+## Members
+
+- **Accounts**: who uses this deployment — member, role, last active, workspaces, and each one's client version (self-reported by
+  the desktop app or the browser extension). Each row's ⋯ menu offers **Make deployment admin**, **Remove deployment admin** (keep
+  one), or **Delete account**: it deletes that person and what only belongs to them — their conversations, their keys, their default
+  models, and workspaces where they are the only member; workspaces with other people stay. It cannot be undone.
+- **Invite codes**: when self-serve signup is off, **New invite code** lets someone in. Codes are single-use and expire after 7 days;
+  the note is for you (who you sent it to). Send it out of band; they set their own password. With signup open, this section says no
+  invite code is needed.
+
+However people join, each gets a workspace of their own; to work together, add people to the same workspace (**Settings → Team &
+members**).
+
+## Cost rules
+
+Price rules for models (per token, image, second or item, optionally with time-of-day prices) let Statistics and the task center add
+up AI spend. Only deployment admins can edit them; other members see spend computed from them. How rules work and where **Prefill
+prices** gets its numbers is covered in [Model connections → Cost rules](/docs/guides/providers).
+
+## Engines
+
+The things that run locally — transcription, voice cloning, voice separation, noise reduction — need runtimes and model downloads
+of several GB, installed on the computer the backend runs on, so only deployment admins install them. Other members see "installed
+by a deployment admin" where they would need one (the transcript, the denoise dialog, subtitle dubbing).
+
+- **Download sources**: which mirrors packages come from. **Dependency source (pip index)** serves the local engines' Python
+  dependencies — each pulls 2–3 GB, and the official PyPI is often too slow from mainland China; **npm registry** serves plugins that
+  install npm packages (such as Remotion). A plugin connection can pick its own; otherwise it follows these.
+- **Transcription models**: runtimes and models for FunASR and WhisperX. After **Install runtime**, an engine becomes selectable under
+  **Settings → Capability providers → Transcription**.
+- **Voice cloning**: runtime, weights and download source for local cloning (F5-TTS, Fish Speech).
+- **Voice and background separation**: Demucs. A long asset takes many minutes on a CPU.
+- **Noise reduction**: the built-in method needs nothing; DeepFilterNet downloads once here (about 30 MB); RNNoise ships with the app.
+
+"Installed" here means the engine was actually loaded once, not that a folder exists; an interrupted install reports an incomplete
+runtime, and installing again fills in what is missing.
+
+## Deployment
+
+- **Who can join**: with **Open self-serve signup** on, anyone who can reach this backend can create an account; turn it off as soon as
+  a deployment is public and send invite codes instead. With it off, third-party sign-in such as Google or Apple can't create new accounts
+  either.
+- **Shared folders**: when other members read local files on this computer (a workflow's file-upload node, importing by path) they can
+  only read inside these folders; deployment admins aren't limited. See [Remote deployment](/docs/guides/remote).
+- **Outbound proxy**: the proxy URL and **Bypass hosts** (one per line). AI provider requests and subscription sign-in go through it;
+  loopback calls never do. The embedded browser isn't affected (publishing accounts set their own proxy), and a plugin connection can
+  choose follow, direct or its own proxy under **Network**.
+- **AI runtime**: **Max retries** (0–10, default 3). Every AI call retries with exponential backoff on 429, 5xx and connection failures.
+- **Data & diagnostics**: **Full backup** saves the database, media (including fonts and avatars), plugins and the local secret key (logs,
+  exports and model caches are left out); **Restore from backup** validates the archive format, file checksums and database integrity before
+  replacing local data and restarting; the **Diagnostic bundle** exports versions, system info and the redacted tail of the logs — no
+  database, media or keys — to attach when you report a problem.
+
+## Statistics
+
+**Statistics** in the sidebar is for everyone and covers the data you can see. It has three tabs; the range is the last 7 / 30 / 90 days
+(30 by default), every block that follows it says "last N days", and projects, assets, sequences and workflows are current totals.
+
+- **Overview**: projects, assets, sequences, workflows, running jobs, and AI spend, completed jobs and publishes over the last N days;
+  charts for job activity and asset mix.
+- **Publishing**: publishing activity and the platform mix.
+- **AI usage**: AI spend (per day and per provider; each currency is charted on its own, with a switch), tokens and cache hit rate. When
+  some usage is unpriced, deployment admins can click through to add the missing cost rules.
