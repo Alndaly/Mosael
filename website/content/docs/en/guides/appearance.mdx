@@ -2,7 +2,7 @@
 title: Appearance & fonts
 description: Choose a theme, background and interface fonts for your workspace.
 order: 15
-updated: 2026-09-24
+updated: 2026-10-04
 version: 1.8.3
 ---
 
@@ -12,7 +12,9 @@ Open **Settings → Appearance** in the sidebar. Changes apply across the interf
 
 ## Theme and background
 
-Choose light, dark or system theme. With a custom background enabled, Media, AI Studio, Plugins, Scheduled tasks, Edit and Settings share the background's visual layers. Floating forms, menus and assistant panels use translucent blurred surfaces to keep text readable.
+Choose light, dark or system theme.
+
+**Background & glass** puts a backdrop behind the whole app: the source is None, a **Gradient preset** or a **Custom image** (upload, replace, remove). With a background set, panels turn into translucent glass, and **Surface opacity**, **Glass blur** and **Background dim** keep text readable; floating forms, menus and assistant panels use the same blurred surfaces. Changes preview instantly and are saved per device; **Reset** returns to the original look.
 
 ## Interface language
 
@@ -32,3 +34,7 @@ Each font card previews Chinese, English and numbers. Options include default In
 Select a card to preview the entire interface. Bundled fonts work without an online font service; system fonts vary by device. Interface fonts do not change media, subtitle styling or fonts in exported video.
 
 <Recording src="/media/videos/en/appearance.mp4" poster="/media/screens/en/settings-fonts.png" caption="Live capture: switch between Caveat, Kalam and the default font" />
+
+## Custom CSS
+
+On the desktop app you can also write a CSS file that overrides the app's styles: **Open** creates the file from a template and hands it to your default editor, saving applies it without a restart, and **Show in folder** tells you where it lives. Rules in this file beat every style the app ships, so `!important` is rarely needed. If the interface looks wrong, switch **Enabled** off — the file stays, it just isn't loaded — to find out whether your CSS did it. The web version can't read files on your machine, so it doesn't have this.

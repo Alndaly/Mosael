@@ -2,7 +2,7 @@
 title: Voice interaction
 description: Dictate messages, listen to replies or use hands-free conversation.
 order: 4
-updated: 2026-09-09
+updated: 2026-10-04
 version: 1.8.3
 ---
 
@@ -16,8 +16,15 @@ Voice in Mosael is three separate things. You can use just one of them:
 
 ## Speak instead of typing
 
-Hold to talk; on release the recognized text is **appended** to the composer — appended, not
-replaced, because you may have typed half a sentence before switching to speech.
+Click the microphone to start talking and click again (**Stop and transcribe**) to have the recognized
+text **appended** to the composer — appended, not replaced, because you may have typed half a sentence
+before switching to speech. It is not push-to-talk: the composer is where you think out loud, and holding
+a button forces you to have the whole sentence ready. One take runs up to 120 seconds; at the limit it
+wraps up and hands in what you have said so far.
+
+Recognition uses whichever engine is set under "Settings → Capability providers → Transcription" (local
+FunASR or WhisperX, or a transcription plugin). A missing transcription runtime, a denied microphone or
+silence each get a plain explanation.
 
 It only fills the box; it does not send. Fixing a misheard word right there is the point:
 recognition will get things wrong sometimes, and sending straight through means the model has to
