@@ -2,7 +2,7 @@
 title: Publishing
 description: Choose a finished video and destination, review the post and track its publishing result.
 order: 12
-updated: 2026-09-25
+updated: 2026-10-04
 version: 1.8.3
 ---
 
@@ -34,3 +34,13 @@ publishes as the task's owner; the agent publishes as whoever approved its confi
 Only supported platform options appear, such as visibility, originality declarations or YouTube's made-for-kids setting. Review the media, account, copy and options before submitting. Available options and authentication can change with the platform; complete verification in the account browser when prompted.
 
 Publishing records show progress, errors and successful links. The task center and notifications also reflect progress. Workflow publishing nodes use the same publishing capabilities.
+
+## After it goes out: the post record
+
+When a publish succeeds, Mosael reads the **post**'s id from the platform's own publish response (Douyin / TikTok item_id, Bilibili bvid, Xiaohongshu note id, YouTube video id) and stores it with the link and publish time on the record; the detail view has **View on the platform**. If the platform's response did not include it, the record says the post id was not read — the post itself went out, the field is simply empty rather than invented.
+
+- A workflow's Publish node exposes **Post ID** and **Post link** outputs, so downstream steps can look up that post's data (with the TikHub plugin, or the analytics templates).
+- The agent can list publishing records with the read-only `list_publish_tasks` tool.
+- Deleting a record that already went out only removes the local entry; nothing is taken down on the platform.
+
+If queued publishes never start, the Publish page tells you the desktop publisher isn't running: keep Mosael open (closing the window only sends it to the tray), or restart the app.

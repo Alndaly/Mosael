@@ -124,6 +124,16 @@ Who counts as the one using it:
 
 The workflow pickers for publishing account and pool profile only list the ones you may use.
 
+### Browser sessions opened by workflows and the agent
+
+A workflow's **Open browser** node has three kinds of session:
+
+- **Throwaway**: wiped when the run ends; nothing is kept.
+- **Persistent by name**: keeps sign-ins under a name. **Within a workspace the same name is the same sign-in**, a different name is a different one, and workspaces never share; names can be any text (non-Latin included), up to 80 characters. One sign-in serves one run at a time — if another run holds it you are told so, rather than two runs fighting over the same tab.
+- **Browser pool**: reuses one of the signed-in profiles above, one session per profile at a time.
+
+A session the agent opens belongs to that conversation; if nobody closes it, it is reclaimed after 15 minutes idle instead of holding the name forever. A workflow's session is kept until that run ends — a long generation between two browser steps is normal.
+
 ## Where the data lives
 
 Sessions live under Electron's user data directory (`Partitions/`), not in the SQLite database.
