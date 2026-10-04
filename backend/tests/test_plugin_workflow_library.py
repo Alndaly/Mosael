@@ -7,7 +7,9 @@
 - 宿主补上它在 Mosael 里的样子:是不是这个连接下的生成模型(用它生成要它)、这个工作区里最近一次用它生成的产出、
   这个工作区里哪些工作流节点 / 画板格子选的是它;
 - 写操作(复制、改名、挪进 / 挪出回收目录):路径先在宿主这里过一遍(不合格的不交给插件);撞名回 409 带建议名、
-  不覆盖;改成了让这个连接的目录马上重拉一遍。
+  不覆盖;改成了让这个连接的目录马上重拉一遍;
+- 导入:要导入的东西(一段文字 / 一个文件 / 一个链接,只给一样,太大的不交)先让插件认一遍,宿主规整预览;存进去和别的
+  写操作同一套(不覆盖、撞名 409、改完重拉),原文以 JSON 字符串交给插件(调用记录里只留截断的一段)。
 """
 
 from __future__ import annotations
@@ -86,6 +88,27 @@ elif op in ("copy_workflow", "rename_workflow", "restore_workflow"):
         emit({"ok": True, "output": {"conflict": True, "suggestion": "taken (1).json"}})
     else:
         emit({"ok": True, "output": {"path": payload["new_path"]}})
+elif op == "inspect_import":
+    if payload.get("url") == "https://example.com/flow.json":
+        emit({"ok": False, "error": "example.com 上的东西 Mosael 不替你去取"})
+    else:
+        emit({"ok": True, "output": {
+            "format": "api", "source": "png" if payload.get("data") else "json",
+            "workflow": {"id": "new-id", "nodes": [{"id": 3, "type": "KSampler"}], "links": []},
+            "suggested_path": "../出去.json" if payload.get("filename") == "evil.png" else "人像.json",
+            "notes": ["这份是 API 格式,没有布局", "", 3],
+            "graph": {"nodes": [{"x": 0, "y": 0, "w": 320, "h": 200, "role": "sampler", "title": "KSampler"}],
+                      "links": [], "groups": [], "auto_layout": True},
+            "node_count": 1, "kind": "image", "parameters": [{"key": "3.steps", "title": "步数", "type": "integer"}],
+            "missing_nodes": [{"type": "CR Prompt Text", "count": 1,
+                               "packs": [{"id": "ComfyUI_Comfyroll_CustomNodes", "title": "Comfyroll", "installed": False}]}],
+            "missing_models": [{"folder": "loras", "name": "x.safetensors", "url": "https://huggingface.co/a/b/resolve/main/x.safetensors"}],
+        }})
+elif op == "save_workflow":
+    if payload["path"] == "taken.json":
+        emit({"ok": True, "output": {"conflict": True, "suggestion": "taken (1).json"}})
+    else:
+        emit({"ok": True, "output": {"path": payload["path"]}})
 elif op == "trash_workflow":
     emit({"ok": True, "output": {"path": ".mosael-trash/workflows/20261005-101500/" + payload["path"]}})
 else:
@@ -280,6 +303,62 @@ def test_复制_改名_撞名回409带建议名_不覆盖(library) -> None:
     assert same.json() == {"path": "portrait.json"}
     assert [one["op"] for one in _ops() if one["op"].endswith("_workflow")] == ["copy_workflow", "copy_workflow",
                                                                                  "rename_workflow"], "改成原名不去插件"
+
+
+def test_导入前先让插件认一遍_宿主规整预览(library) -> None:
+    client, instance_id = library
+    response = client.post(f"/api/plugins/instances/{instance_id}/workflow-library/inspect",
+                           json={"text": '{"3": {"class_type": "KSampler", "inputs": {}}}', "filename": "人像.json"})
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["format"] == "api" and body["source"] == "json"
+    assert body["workflow"]["nodes"] == [{"id": 3, "type": "KSampler"}]
+    assert body["suggested_path"] == "人像.json"
+    assert body["notes"] == ["这份是 API 格式,没有布局"], "空的、不是字的说明丢掉"
+    assert body["graph"]["nodes"][0]["role"] == "sampler" and body["graph"]["auto_layout"] is True
+    assert body["kind"] == "image" and body["parameters"][0]["key"] == "3.steps"
+    assert body["missing_nodes"][0]["packs"][0]["id"] == "ComfyUI_Comfyroll_CustomNodes"
+    assert body["missing_models"][0]["url"].startswith("https://huggingface.co/")
+    sent = [one for one in _ops() if one["op"] == "inspect_import"][-1]
+    assert sent == {"op": "inspect_import", "text": '{"3": {"class_type": "KSampler", "inputs": {}}}', "filename": "人像.json"}
+
+
+def test_导入_插件建议的路径不像样就不给_插件说认不出照原话(library) -> None:
+    client, instance_id = library
+    base = f"/api/plugins/instances/{instance_id}/workflow-library"
+    body = client.post(f"{base}/inspect", json={"data": "iVBORw0KGgo=", "filename": "evil.png"}).json()
+    assert body["source"] == "png" and body["suggested_path"] == ""
+    refused = client.post(f"{base}/inspect", json={"url": "https://example.com/flow.json"})
+    assert refused.status_code == 422 and "不替你去取" in refused.text
+
+
+@pytest.mark.parametrize("body", [{}, {"text": "{}", "url": "https://huggingface.co/a/b/resolve/main/x.json"},
+                                  {"url": "ftp://example.com/x.json"}, {"text": "x" * 200}])
+def test_导入_只给一样_链接要http_太大的不交给插件(library, monkeypatch, body) -> None:
+    from app.domain import workflow_library
+
+    monkeypatch.setattr(workflow_library, "MAX_IMPORT_CHARS", 100)
+    client, instance_id = library
+    response = client.post(f"/api/plugins/instances/{instance_id}/workflow-library/inspect", json=body)
+    assert response.status_code == 422, response.text
+    assert not [one for one in _ops() if one.get("op") == "inspect_import"]
+
+
+def test_导入的存进去_不覆盖_撞名回409_原文以JSON字符串交给插件_存好重拉目录(library) -> None:
+    client, instance_id = library
+    base = f"/api/plugins/instances/{instance_id}/workflow-library"
+    flow = {"id": "new-id", "nodes": [{"id": 3, "type": "KSampler"}], "links": []}
+    clash = client.post(f"{base}/save", json={"path": "taken.json", "content": flow})
+    assert clash.status_code == 409 and clash.json()["detail"]["suggestion"] == "taken (1).json"
+    before = len([one for one in _ops() if one["op"] == "models"])
+    done = client.post(f"{base}/save", json={"path": "导入/人像.json", "content": flow})
+    assert done.status_code == 200 and done.json() == {"path": "导入/人像.json"}
+    sent = [one for one in _ops() if one["op"] == "save_workflow"][-1]
+    assert isinstance(sent["content"], str) and json.loads(sent["content"]) == flow
+    assert len([one for one in _ops() if one["op"] == "models"]) > before
+    for bad in ({"path": "x.json", "content": {"3": {"class_type": "KSampler"}}}, {"path": "../x.json", "content": flow}):
+        assert client.post(f"{base}/save", json=bad).status_code == 422
+    assert len([one for one in _ops() if one["op"] == "save_workflow"]) == 2, "不像样的不交给插件"
 
 
 def test_删除是挪进回收目录_能恢复_改完马上重拉目录(library) -> None:

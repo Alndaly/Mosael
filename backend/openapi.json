@@ -19608,6 +19608,112 @@
         }
       }
     },
+    "/api/plugins/instances/{instance_id}/workflow-library/inspect": {
+      "post": {
+        "tags": [
+          "plugins"
+        ],
+        "summary": "Inspect Workflow Import",
+        "description": "导入前先认一遍(不改那台机器):换成界面格式的那张图和它的预览。",
+        "operationId": "inspect_workflow_import_api_plugins_instances__instance_id__workflow_library_inspect_post",
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Instance Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkflowLibraryImportRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowLibraryImportOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/plugins/instances/{instance_id}/workflow-library/save": {
+      "post": {
+        "tags": [
+          "plugins"
+        ],
+        "summary": "Save Workflow",
+        "description": "把导入的那张存进那台服务器的 workflows/(不覆盖)。",
+        "operationId": "save_workflow_api_plugins_instances__instance_id__workflow_library_save_post",
+        "parameters": [
+          {
+            "name": "instance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Instance Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkflowLibrarySaveRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowPathOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/plugins/instances/{instance_id}/workflow-library/copy": {
       "post": {
         "tags": [
@@ -39508,6 +39614,141 @@
         ],
         "title": "WorkflowLastOutputOut"
       },
+      "WorkflowLibraryImportOut": {
+        "properties": {
+          "format": {
+            "type": "string",
+            "enum": [
+              "ui",
+              "api"
+            ],
+            "title": "Format"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "json",
+              "png",
+              "webp",
+              "zip",
+              "url"
+            ],
+            "title": "Source"
+          },
+          "workflow": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Workflow"
+          },
+          "suggested_path": {
+            "type": "string",
+            "title": "Suggested Path",
+            "default": ""
+          },
+          "notes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Notes"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind",
+            "default": ""
+          },
+          "problem": {
+            "type": "string",
+            "title": "Problem",
+            "default": ""
+          },
+          "node_count": {
+            "type": "integer",
+            "title": "Node Count",
+            "default": 0
+          },
+          "graph": {
+            "$ref": "#/components/schemas/WorkflowGraphOut"
+          },
+          "inputs": {
+            "items": {
+              "$ref": "#/components/schemas/WorkflowInputOut"
+            },
+            "type": "array",
+            "title": "Inputs"
+          },
+          "parameters": {
+            "items": {
+              "$ref": "#/components/schemas/WorkflowParameterOut"
+            },
+            "type": "array",
+            "title": "Parameters"
+          },
+          "outputs": {
+            "items": {
+              "$ref": "#/components/schemas/WorkflowOutputOut"
+            },
+            "type": "array",
+            "title": "Outputs"
+          },
+          "models": {
+            "items": {
+              "$ref": "#/components/schemas/WorkflowModelRefOut"
+            },
+            "type": "array",
+            "title": "Models"
+          },
+          "missing_nodes": {
+            "items": {
+              "$ref": "#/components/schemas/WorkflowMissingNodeOut"
+            },
+            "type": "array",
+            "title": "Missing Nodes"
+          },
+          "missing_models": {
+            "items": {
+              "$ref": "#/components/schemas/WorkflowMissingModelOut"
+            },
+            "type": "array",
+            "title": "Missing Models"
+          }
+        },
+        "type": "object",
+        "required": [
+          "format",
+          "source",
+          "workflow"
+        ],
+        "title": "WorkflowLibraryImportOut",
+        "description": "导入前的预览:换成界面格式的那张图,和列出来的每一张同一套描述。"
+      },
+      "WorkflowLibraryImportRequest": {
+        "properties": {
+          "text": {
+            "type": "string",
+            "title": "Text",
+            "default": ""
+          },
+          "data": {
+            "type": "string",
+            "title": "Data",
+            "default": ""
+          },
+          "filename": {
+            "type": "string",
+            "title": "Filename",
+            "default": ""
+          },
+          "url": {
+            "type": "string",
+            "title": "Url",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "title": "WorkflowLibraryImportRequest",
+        "description": "要导入的东西,只给一样:一段文字(JSON 原文或一个链接)、一个文件(base64,带上文件名)、一个链接。"
+      },
       "WorkflowLibraryOut": {
         "properties": {
           "workflows": {
@@ -39547,6 +39788,25 @@
         },
         "type": "object",
         "title": "WorkflowLibraryOut"
+      },
+      "WorkflowLibrarySaveRequest": {
+        "properties": {
+          "path": {
+            "type": "string",
+            "title": "Path"
+          },
+          "content": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Content"
+          }
+        },
+        "type": "object",
+        "required": [
+          "path",
+          "content"
+        ],
+        "title": "WorkflowLibrarySaveRequest"
       },
       "WorkflowManagerOut": {
         "properties": {

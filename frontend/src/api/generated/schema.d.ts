@@ -6455,6 +6455,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/plugins/instances/{instance_id}/workflow-library/inspect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Inspect Workflow Import
+         * @description 导入前先认一遍(不改那台机器):换成界面格式的那张图和它的预览。
+         */
+        post: operations["inspect_workflow_import_api_plugins_instances__instance_id__workflow_library_inspect_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/plugins/instances/{instance_id}/workflow-library/save": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Save Workflow
+         * @description 把导入的那张存进那台服务器的 workflows/(不覆盖)。
+         */
+        post: operations["save_workflow_api_plugins_instances__instance_id__workflow_library_save_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/plugins/instances/{instance_id}/workflow-library/copy": {
         parameters: {
             query?: never;
@@ -15266,6 +15306,87 @@ export interface components {
              */
             created_at: string;
         };
+        /**
+         * WorkflowLibraryImportOut
+         * @description 导入前的预览:换成界面格式的那张图,和列出来的每一张同一套描述。
+         */
+        WorkflowLibraryImportOut: {
+            /**
+             * Format
+             * @enum {string}
+             */
+            format: "ui" | "api";
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "json" | "png" | "webp" | "zip" | "url";
+            /** Workflow */
+            workflow: {
+                [key: string]: unknown;
+            };
+            /**
+             * Suggested Path
+             * @default
+             */
+            suggested_path: string;
+            /** Notes */
+            notes?: string[];
+            /**
+             * Kind
+             * @default
+             */
+            kind: string;
+            /**
+             * Problem
+             * @default
+             */
+            problem: string;
+            /**
+             * Node Count
+             * @default 0
+             */
+            node_count: number;
+            graph?: components["schemas"]["WorkflowGraphOut"];
+            /** Inputs */
+            inputs?: components["schemas"]["WorkflowInputOut"][];
+            /** Parameters */
+            parameters?: components["schemas"]["WorkflowParameterOut"][];
+            /** Outputs */
+            outputs?: components["schemas"]["WorkflowOutputOut"][];
+            /** Models */
+            models?: components["schemas"]["WorkflowModelRefOut"][];
+            /** Missing Nodes */
+            missing_nodes?: components["schemas"]["WorkflowMissingNodeOut"][];
+            /** Missing Models */
+            missing_models?: components["schemas"]["WorkflowMissingModelOut"][];
+        };
+        /**
+         * WorkflowLibraryImportRequest
+         * @description 要导入的东西,只给一样:一段文字(JSON 原文或一个链接)、一个文件(base64,带上文件名)、一个链接。
+         */
+        WorkflowLibraryImportRequest: {
+            /**
+             * Text
+             * @default
+             */
+            text: string;
+            /**
+             * Data
+             * @default
+             */
+            data: string;
+            /**
+             * Filename
+             * @default
+             */
+            filename: string;
+            /**
+             * Url
+             * @default
+             */
+            url: string;
+        };
         /** WorkflowLibraryOut */
         WorkflowLibraryOut: {
             /** Workflows */
@@ -15276,6 +15397,15 @@ export interface components {
             trash?: components["schemas"]["WorkflowTrashedOut"][];
             manager?: components["schemas"]["WorkflowManagerOut"];
             editor?: components["schemas"]["WorkflowEditorOut"] | null;
+        };
+        /** WorkflowLibrarySaveRequest */
+        WorkflowLibrarySaveRequest: {
+            /** Path */
+            path: string;
+            /** Content */
+            content: {
+                [key: string]: unknown;
+            };
         };
         /** WorkflowManagerOut */
         WorkflowManagerOut: {
@@ -29036,6 +29166,76 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkflowContentOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    inspect_workflow_import_api_plugins_instances__instance_id__workflow_library_inspect_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkflowLibraryImportRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowLibraryImportOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    save_workflow_api_plugins_instances__instance_id__workflow_library_save_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkflowLibrarySaveRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowPathOut"];
                 };
             };
             /** @description Validation Error */

@@ -42,10 +42,13 @@ from app.api.schemas import (
     PluginToolOut,
     WorkflowContentOut,
     WorkflowCopyRequest,
+    WorkflowLibraryImportOut,
+    WorkflowLibraryImportRequest,
     WorkflowLibraryOut,
     WorkflowPathOut,
     WorkflowRenameRequest,
     WorkflowRestoreRequest,
+    WorkflowLibrarySaveRequest,
     WorkflowTrashRequest,
 )
 from app.core.config import settings
@@ -558,6 +561,27 @@ def get_workflow_content(instance_id: str, path: str, db: DbSession, user: Curre
     instance = my_instance(db, instance_id, user)
     try:
         return workflow_library.content(db, instance, path)
+    except _WORKFLOW_LIBRARY_ERRORS as exc:
+        raise _workflow_library_failed(exc) from exc
+
+
+@router.post("/plugins/instances/{instance_id}/workflow-library/inspect", response_model=WorkflowLibraryImportOut)
+def inspect_workflow_import(instance_id: str, body: WorkflowLibraryImportRequest, db: DbSession, user: CurrentUser) -> dict:
+    """导入前先认一遍(不改那台机器):换成界面格式的那张图和它的预览。"""
+    instance = my_instance(db, instance_id, user)
+    try:
+        return workflow_library.inspect_import(db, instance, text=body.text, data=body.data, filename=body.filename,
+                                               url=body.url)
+    except _WORKFLOW_LIBRARY_ERRORS as exc:
+        raise _workflow_library_failed(exc) from exc
+
+
+@router.post("/plugins/instances/{instance_id}/workflow-library/save", response_model=WorkflowPathOut)
+def save_workflow(instance_id: str, body: WorkflowLibrarySaveRequest, db: Tx, user: CurrentUser) -> dict:
+    """把导入的那张存进那台服务器的 workflows/(不覆盖)。"""
+    instance = my_instance(db, instance_id, user)
+    try:
+        return workflow_library.save(db, instance, body.path, body.content)
     except _WORKFLOW_LIBRARY_ERRORS as exc:
         raise _workflow_library_failed(exc) from exc
 

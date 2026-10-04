@@ -5,10 +5,10 @@ import {
   CircleAlert,
   Copy,
   Download,
+  FileUp,
   FolderTree,
   Info,
   LayoutGrid,
-  Library,
   MoreHorizontal,
   PencilLine,
   RefreshCcw,
@@ -21,6 +21,7 @@ import {
   Trash2,
   TriangleAlert,
   Unplug,
+  Upload,
   Workflow,
   X,
 } from "lucide-react";
@@ -65,7 +66,10 @@ import { Hint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
 import type { Focused, ModelFocus, WorkflowFocus } from "@/features/plugins/libraryLinks";
 import { invalidatePluginDependents } from "@/features/plugins/pluginCaches";
+import { WorkflowFacts, kindName } from "@/features/plugins/WorkflowFacts";
 import { WorkflowGraphView } from "@/features/plugins/WorkflowGraph";
+import { WorkflowImportDialog, importable } from "@/features/plugins/WorkflowImport";
+import { WorkflowPathField, useWorkflowPath } from "@/features/plugins/WorkflowPathField";
 import {
   embeddedEditor,
   useWorkflowEditor,
@@ -78,21 +82,19 @@ import {
   TRASH_VIEW,
   WORKFLOW_KINDS,
   WORKFLOW_SORTS,
-  conflictOf,
   filterWorkflows,
   freeWorkflowPath,
   inView,
   lacksSomething,
   sortWorkflows,
-  validWorkflowPath,
   workflowFolders,
-  workflowPathFrom,
   type WorkflowKindFilter,
   type WorkflowSort,
 } from "@/features/plugins/workflowLibraryView";
 import { gotoRecord } from "@/lib/deepLink";
 import { saveJsonToDisk } from "@/lib/download";
 import { handOffToGeneration } from "@/lib/generationHandoff";
+import { useFileDrop } from "@/lib/useFileDrop";
 import { usePersistentTab } from "@/lib/usePersistentTab";
 import { cn } from "@/lib/utils";
 
@@ -105,15 +107,12 @@ import { cn } from "@/lib/utils";
  * 打开」开那台服务器自己的编辑器(见 workflowEditor),回来时刷新。和模型库互相跳(见 ConnectionLibraries):用到的模型
  * 点了停到模型库那一项,缺的点了去模型库下载;从模型库跳过来停到那一张。
  *
+ * 工具条上的「导入」(或者往库上拖一个文件)导入别处的工作流,见 WorkflowImport。
+ *
  * 列表每次打开现问插件(不存库)。
  */
 
-type Translate = ReturnType<typeof useI18n>;
-
 const keyOf = (flow: WorkflowFile) => flow.path;
-
-const kindName = (t: Translate, kind: string) =>
-  kind === "image" || kind === "video" || kind === "audio" ? t(`workflowKind_${kind}`) : t("workflowKind_unknown");
 
 export function WorkflowLibraryDialog({
   open,
@@ -159,6 +158,8 @@ export function WorkflowLibraryDialog({
     | null
   >(null);
   const [deleting, setDeleting] = React.useState(false);
+  //: 正在导入(往库上拖进来的那个文件一并带上)
+  const [importing, setImporting] = React.useState<{ file?: File } | null>(null);
   const qc = useQueryClient();
   //: 改完一张:工作流库重新问一遍;生成选项、工具清单里的那张也跟着变(宿主已经让这个连接的目录重拉过)
   const changed = () => {
@@ -211,6 +212,17 @@ export function WorkflowLibraryDialog({
            removeLabel: t("workflowLibraryChipRemoveKind"), onRemove: () => setKind("all") }]
       : []),
   ];
+
+  const importButton = (
+    <Hint label={t("workflowImportDesc")}>
+      <Button variant="outline" onClick={() => setImporting({})}>
+        <Upload size={13} />
+        {t("workflowImport")}
+      </Button>
+    </Hint>
+  );
+  //: 往库上拖一个工作流文件:直接打开导入、认它(回收站那一页也一样 —— 拖进来的总是要导入的)
+  const drop = useFileDrop((files) => setImporting({ file: files[0] }), importable);
 
   const refresh = (
     <IconButton
@@ -271,6 +283,7 @@ export function WorkflowLibraryDialog({
         }))}
       />
       <LibraryDensitySwitch value={density} onChange={setDensity} />
+      {importButton}
       {refresh}
     </>
   );
@@ -345,6 +358,21 @@ export function WorkflowLibraryDialog({
       title={t("workflowLibraryTitle").replace("{name}", instance.name)}
       nav={library.data ? { label: t("workflowLibraryFolders"), value: current, onChange: setView, items: navItems, pinned } : undefined}
       toolbar={toolbar}
+      dropzone={
+        library.data
+          ? {
+              handlers: drop.handlers,
+              overlay: drop.active ? (
+                <div className="pointer-events-none absolute inset-0 z-20 grid place-items-center rounded-[inherit] bg-[color-mix(in_oklab,var(--primary)_10%,var(--background))]">
+                  <span className="grid justify-items-center gap-2 rounded-lg border-2 border-dashed border-primary px-6 py-4 text-ui-md font-semibold text-primary">
+                    <FileUp size={20} />
+                    {t("workflowImportDropOverlay")}
+                  </span>
+                </div>
+              ) : null,
+            }
+          : undefined
+      }
       chips={
         library.data ? (
           <LibraryFilterChips
@@ -381,6 +409,18 @@ export function WorkflowLibraryDialog({
       }
       dialogs={
         <>
+          {importing && (
+            <WorkflowImportDialog
+              instance={instance}
+              taken={taken}
+              initialFile={importing.file}
+              onClose={() => setImporting(null)}
+              onSaved={(path) => {
+                changed();
+                setDetailKey(path);
+              }}
+            />
+          )}
           {action && action.kind !== "delete" && (
             <WorkflowPathDialog
               title={t(action.kind === "copy" ? "workflowCopyTitle" : action.kind === "rename" ? "workflowRenameTitle" : "workflowRestoreTitle")
@@ -593,14 +633,6 @@ function WorkflowTable({ label, workflows, onOpen }: { label: string; workflows:
   );
 }
 
-const mediaName = (t: Translate, media: string) =>
-  media === "image" || media === "video" || media === "audio" || media === "text" ? t(`workflowMedia_${media}`) : media;
-
-/**
- * 一张工作流的详情(LibraryDetail 的骨架):头上是名字、目录 · 种类 · 节点数 · 改动时间,右边「用它生成」;左栏大一号的节点图
- * (带节点标题和分组名);右栏转不过来的原因、能填什么 / 能调什么 / 交出什么、用到的模型、缺的节点和模型、最近的产出、
- * Mosael 里谁在用它。
- */
 /** 「在编辑器里打开」之后留下的那句话:没打开成那一张、开了新标签页要自己点开、或者出了错。 */
 function EditorNoteLine({ note, onDismiss }: { note: EditorNote; onDismiss: () => void }) {
   const t = useI18n();
@@ -630,6 +662,11 @@ function EditorNoteLine({ note, onDismiss }: { note: EditorNote; onDismiss: () =
   );
 }
 
+/**
+ * 一张工作流的详情(LibraryDetail 的骨架):头上是名字、目录 · 种类 · 节点数 · 改动时间,右边「用它生成」;左栏大一号的节点图
+ * (带节点标题和分组名);右栏转不过来的原因、能填什么 / 能调什么 / 交出什么、用到的模型、缺的节点和模型、最近的产出、
+ * Mosael 里谁在用它。
+ */
 function WorkflowDetail({
   flow,
   editor,
@@ -662,9 +699,6 @@ function WorkflowDetail({
   const [exportError, setExportError] = React.useState("");
   const { locale } = usePreferences();
   const generation = flow.generation;
-  const parameters = flow.parameters ?? [];
-
-  const [allParameters, setAllParameters] = React.useState(false);
 
   const media = (
     <div className="grid gap-2">
@@ -758,136 +792,7 @@ function WorkflowDetail({
           <span className="min-w-0 break-words">{flow.problem}</span>
         </div>
       )}
-      {(flow.inputs?.length ?? 0) > 0 && (
-        <LibrarySection title={t("workflowInputs")} count={flow.inputs?.length}>
-          <ul className="m-0 grid list-none gap-1 p-0">
-            {(flow.inputs ?? []).map((one) => (
-              <li key={`${one.node}-${one.role}`} className="flex min-w-0 items-baseline gap-2 text-ui-sm text-foreground">
-                <Truncate className="min-w-0 flex-1">{one.title}</Truncate>
-                <span className="shrink-0 text-ui-xs text-muted-foreground">{mediaName(t, one.media)}</span>
-              </li>
-            ))}
-          </ul>
-        </LibrarySection>
-      )}
-      {parameters.length > 0 && (
-        <LibrarySection
-          title={t("workflowParameters")}
-          count={parameters.length}
-          action={
-            parameters.length > 12 ? (
-              <Button variant="ghost" size="sm" className="text-muted-foreground" aria-expanded={allParameters}
-                      onClick={() => setAllParameters(!allParameters)}>
-                {allParameters ? t("modelMetaCollapse") : t("modelTagsAll").replace("{n}", String(parameters.length))}
-              </Button>
-            ) : undefined
-          }
-        >
-          <ul className="m-0 flex min-w-0 list-none flex-wrap gap-1.5 p-0">
-            {(allParameters ? parameters : parameters.slice(0, 12)).map((one) => (
-              <li key={one.key} className="min-w-0 max-w-full">
-                <Hint label={one.key}>
-                  <span className="inline-flex h-7 max-w-full items-center rounded-full bg-secondary px-2.5 text-ui-xs text-foreground">
-                    <Truncate>{one.title}</Truncate>
-                  </span>
-                </Hint>
-              </li>
-            ))}
-          </ul>
-        </LibrarySection>
-      )}
-      {(flow.outputs?.length ?? 0) > 0 && (
-        <LibrarySection title={t("workflowOutputs")} count={flow.outputs?.length}>
-          <ul className="m-0 grid list-none gap-1 p-0">
-            {(flow.outputs ?? []).map((one) => (
-              <li key={one.node} className="flex min-w-0 items-baseline gap-2 text-ui-sm text-foreground">
-                <Truncate className="min-w-0 flex-1">{one.title}</Truncate>
-                <span className="shrink-0 text-ui-xs text-muted-foreground">{mediaName(t, one.media)}</span>
-              </li>
-            ))}
-          </ul>
-        </LibrarySection>
-      )}
-      <LibrarySection title={t("workflowModels")} count={flow.models?.length ?? 0}>
-        {(flow.models?.length ?? 0) > 0 ? (
-          <ul className="m-0 grid list-none gap-1 p-0">
-            {(flow.models ?? []).map((one) => (
-              <li key={`${one.folder}/${one.name}`} className="flex min-w-0 items-center gap-2 text-ui-sm text-foreground">
-                <Truncate className="min-w-0 flex-1">{one.name}</Truncate>
-                <span className="shrink-0 text-ui-xs text-muted-foreground">{one.folder}</span>
-                <CatalogBadge tone={one.present ? "success" : "warning"}>
-                  {one.present ? t("workflowModelPresent") : t("workflowModelMissing")}
-                </CatalogBadge>
-                {/* 缺的在下面「缺的模型」那一节里下载;这里只给在的那几个跳到模型库 */}
-                {onShowModel && one.present && (
-                  <IconButton
-                    size="sm"
-                    className="shrink-0 text-muted-foreground"
-                    label={t("workflowShowInModelLibrary").replace("{name}", one.name)}
-                    onClick={() => onShowModel({ model: { folder: one.folder, name: one.name } })}
-                  >
-                    <Library size={13} />
-                  </IconButton>
-                )}
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="m-0 text-ui-xs text-muted-foreground">{t("workflowModelsNone")}</p>
-        )}
-      </LibrarySection>
-      {(flow.missing_nodes?.length ?? 0) > 0 && (
-        <LibrarySection title={t("workflowMissingNodes")} count={flow.missing_nodes?.length}>
-          <ul className="m-0 grid list-none gap-2 p-0">
-            {(flow.missing_nodes ?? []).map((one) => (
-              <li key={one.type} className="grid min-w-0 gap-0.5">
-                <span className="flex min-w-0 items-baseline gap-2 text-ui-sm text-foreground">
-                  <Truncate className="min-w-0">{one.type}</Truncate>
-                  <span className="shrink-0 text-ui-xs tabular-nums text-muted-foreground">×{one.count}</span>
-                </span>
-                {(one.packs?.length ?? 0) > 0 ? (
-                  (one.packs ?? []).map((pack) => (
-                    <span key={pack.id} className="flex min-w-0 items-baseline gap-2 text-ui-xs text-muted-foreground">
-                      <Truncate hint={pack.id !== pack.title ? pack.id : undefined}>{pack.title}</Truncate>
-                      <span className={cn("shrink-0", pack.installed && "text-warning")}>
-                        {pack.installed ? t("workflowPackInstalledNotLoaded") : t("workflowPackNotInstalled")}
-                      </span>
-                    </span>
-                  ))
-                ) : (
-                  <span className="text-ui-xs text-muted-foreground">{t("workflowPackUnknown")}</span>
-                )}
-              </li>
-            ))}
-          </ul>
-        </LibrarySection>
-      )}
-      {(flow.missing_models?.length ?? 0) > 0 && (
-        <LibrarySection title={t("workflowMissingModels")} count={flow.missing_models?.length}>
-          <ul className="m-0 grid list-none gap-1 p-0">
-            {(flow.missing_models ?? []).map((one) => (
-              <li key={`${one.folder}/${one.name}`} className="flex min-w-0 items-center gap-3">
-                <span className="grid min-w-0 flex-1 gap-0.5">
-                  <span className="flex min-w-0 items-baseline gap-2 text-ui-sm text-foreground">
-                    <Truncate className="min-w-0 flex-1">{one.name}</Truncate>
-                    <span className="shrink-0 text-ui-xs text-muted-foreground">{one.folder}</span>
-                  </span>
-                  <Truncate className="text-ui-xs text-muted-foreground">
-                    {one.url ? new URL(one.url).host : t("workflowMissingModelNoUrl")}
-                  </Truncate>
-                </span>
-                {onShowModel && (
-                  <Button variant="outline" size="sm" aria-label={t("workflowDownloadInModelLibrary").replace("{name}", one.name)}
-                          onClick={() => onShowModel({ download: { folder: one.folder, name: one.name, ...(one.url ? { url: one.url } : {}) } })}>
-                    <Download size={13} />
-                    {t("modelMissingDownload")}
-                  </Button>
-                )}
-              </li>
-            ))}
-          </ul>
-        </LibrarySection>
-      )}
+      <WorkflowFacts facts={flow} onShowModel={onShowModel} />
       {flow.last_output && (
         <LibrarySection title={t("workflowLastOutput")}>
           <div className="flex min-w-0 items-center gap-3">
@@ -988,29 +893,8 @@ function WorkflowPathDialog({
   onClose: () => void;
 }) {
   const t = useI18n();
-  const [value, setValue] = React.useState(initial);
-  const [pending, setPending] = React.useState(false);
-  const [clash, setClash] = React.useState<{ path: string; suggestion: string } | null>(null);
-  const [error, setError] = React.useState("");
-  const path = workflowPathFrom(value);
-  const bad = !validWorkflowPath(path);
-  const inputId = React.useId();
-  const submit = async () => {
-    if (bad || pending) return;
-    setPending(true);
-    setClash(null);
-    setError("");
-    try {
-      await onSubmit(path);
-      onClose();
-    } catch (failure) {
-      const conflict = conflictOf(failure);
-      if (conflict) setClash({ path, suggestion: conflict.suggestion });
-      else setError(errorText(failure));
-    } finally {
-      setPending(false);
-    }
-  };
+  const state = useWorkflowPath(initial, onSubmit, onClose);
+  const pending = state.pending;
   return (
     <ModalShell
       open
@@ -1020,45 +904,13 @@ function WorkflowPathDialog({
       footer={
         <>
           <Button variant="ghost" disabled={pending} onClick={onClose}>{t("cancel")}</Button>
-          <Button loading={pending} disabled={bad} onClick={() => void submit()}>{confirmLabel}</Button>
+          <Button loading={pending} disabled={state.bad} onClick={() => void state.submit()}>{confirmLabel}</Button>
         </>
       }
     >
       <div className="grid gap-3">
         <p className="m-0 text-ui-sm leading-relaxed text-muted-foreground">{where}</p>
-        <div className="grid gap-1.5">
-          <label htmlFor={inputId} className="text-ui-xs font-medium text-muted-foreground">{t("workflowPathLabel")}</label>
-          <Input
-            id={inputId}
-            aria-label={t("workflowPathLabel")}
-            value={value}
-            onChange={(event) => {
-              setValue(event.target.value);
-              setClash(null);
-            }}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" && !event.nativeEvent.isComposing) void submit();
-            }}
-          />
-          {bad && value.trim() ? (
-            <p className="m-0 text-ui-xs text-destructive">{t("workflowPathBad")}</p>
-          ) : (
-            <p className="m-0 text-ui-xs text-muted-foreground">{t("workflowPathHelp")}</p>
-          )}
-        </div>
-        {clash && (
-          <div role="alert" className="grid gap-2 rounded-lg border border-warning/40 bg-panel p-3 text-ui-sm text-foreground">
-            <span>{t("workflowExists").replace("{path}", clash.path)}</span>
-            {clash.suggestion && (
-              <span>
-                <Button variant="outline" size="sm" onClick={() => { setValue(clash.suggestion); setClash(null); }}>
-                  {t("workflowUseSuggestion").replace("{name}", clash.suggestion)}
-                </Button>
-              </span>
-            )}
-          </div>
-        )}
-        {error && <p role="alert" className="m-0 text-ui-sm text-destructive">{error}</p>}
+        <WorkflowPathField state={state} />
       </div>
     </ModalShell>
   );

@@ -33,6 +33,8 @@ export type WorkflowLibrary = components["schemas"]["WorkflowLibraryOut"];
 export type WorkflowFile = components["schemas"]["WorkflowFileOut"];
 export type WorkflowFileGraph = components["schemas"]["WorkflowGraphOut"];
 export type WorkflowTrashed = components["schemas"]["WorkflowTrashedOut"];
+export type WorkflowNodePack = components["schemas"]["WorkflowNodePackOut"];
+export type WorkflowImport = components["schemas"]["WorkflowLibraryImportOut"];
 
 export const listPluginPackages = () => api<PluginPackage[]>("/api/plugins");
 export const pluginDir = () => api<{ path: string }>("/api/plugins/dir");
@@ -131,7 +133,7 @@ export const getWorkflowContent = (instanceId: string, path: string) =>
     `/api/plugins/instances/${instanceId}/workflow-library/content?${new URLSearchParams({ path })}`,
   );
 
-const workflowWrite = (instanceId: string, op: "copy" | "rename" | "trash" | "restore", body: Record<string, string>) =>
+const workflowWrite = (instanceId: string, op: "copy" | "rename" | "trash" | "restore" | "save", body: Record<string, unknown>) =>
   api<{ path: string }>(`/api/plugins/instances/${instanceId}/workflow-library/${op}`, {
     method: "POST",
     body: JSON.stringify(body),
@@ -148,6 +150,19 @@ export const trashWorkflow = (instanceId: string, path: string) => workflowWrite
 /** 从回收目录挪回去;不给新名字就回原处(被占了回 409)。 */
 export const restoreWorkflow = (instanceId: string, path: string, newPath = "") =>
   workflowWrite(instanceId, "restore", { path, new_path: newPath });
+
+/** 导入前先让插件认一遍(不改那台机器):一段文字(JSON 或链接)、一个文件(base64 带文件名)、一个链接,只给一样。 */
+export const inspectWorkflowImport = (
+  instanceId: string,
+  body: { text?: string; data?: string; filename?: string; url?: string },
+) =>
+  api<WorkflowImport>(`/api/plugins/instances/${instanceId}/workflow-library/inspect`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+/** 把导入的那张(界面格式)存进那台服务器的 workflows/。撞名回 409(带建议名),不覆盖。 */
+export const saveImportedWorkflow = (instanceId: string, path: string, content: Record<string, unknown>) =>
+  workflowWrite(instanceId, "save", { path, content });
 
 /** 预览图地址。`<img>` 带不了请求头,凭据走 `?token=`(和素材的图同一条旁路)。 */
 export function modelPreviewUrl(instanceId: string, folder: string, name: string): string {

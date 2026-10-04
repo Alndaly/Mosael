@@ -68,6 +68,7 @@ export function LibraryDialog({
   onBack,
   children,
   dialogs,
+  dropzone,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -88,6 +89,8 @@ export function LibraryDialog({
   children: (openItem: (key: string) => void) => React.ReactNode;
   /** 挂在弹窗里的二级弹窗(下载框)。 */
   dialogs?: React.ReactNode;
+  /** 往整个库上拖文件(工作流库:拖进来就导入)。见 ModalShell 的同名参数。 */
+  dropzone?: React.ComponentProps<typeof ModalShell>["dropzone"];
 }) {
   const narrow = useMediaMatch(LIBRARY_NARROW_QUERY);
   const scrollerRef = React.useRef<HTMLDivElement>(null);
@@ -138,6 +141,7 @@ export function LibraryDialog({
       title={title}
       className={LIBRARY_DIALOG}
       bodyClassName="flex flex-col overflow-hidden p-0 [scrollbar-gutter:auto]"
+      dropzone={dropzone}
       onEscapeKeyDown={(event) => {
         if (!detailKey) return;
         event.preventDefault();

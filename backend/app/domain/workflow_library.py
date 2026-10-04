@@ -14,11 +14,16 @@
 
 **不覆盖**:复制、改名、恢复撞了名,插件回 `conflict` 和一个建议名,这里翻成 409(带着建议名),界面要求换名。
 
+**导入**(ADR 0035 §5):要导入的东西只给一样(一段文字 / 一个文件 / 一个链接),太大的不交;插件认出来、换成界面格式,
+这里规整预览(和列出来的每一张同一套);存进去和别的写操作同一套,原文以 JSON 字符串交给插件 —— 调用记录里只留截断的
+一段,不把整张图存进记录。
+
 **这里不认识 ComfyUI**:任何认领 `workflow_library` 的连接,插件页上都有「工作流库」。列表不存库,每次现问插件。
 """
 
 from __future__ import annotations
 
+import json
 import re
 from typing import Any
 from urllib.parse import urlsplit
@@ -54,6 +59,10 @@ _ROLES = {"input", "model", "sampler", "text", "output", "note", "missing", "oth
 _BAD_SEGMENT = re.compile(r'[\x00-\x1f<>:"|?*\\]')
 #: 回收目录里的一张:`.mosael-trash/workflows/<时刻>/<原来的相对路径>`(ADR 0035 §3)。
 _TRASH_PATH = re.compile(r"^\.mosael-trash/workflows/\d{8}-\d{6}(-\d+)?/(?P<original>.+)$")
+#: 要导入的东西最多多长(字符):文件是 base64,30 MB 的文件约 40 M 个字符。
+MAX_IMPORT_CHARS = 40 * 1024 * 1024
+_IMPORT_FORMATS = {"ui", "api"}
+_IMPORT_SOURCES = {"json", "png", "webp", "zip", "url"}
 #: 编辑器的种类名(界面按它决定怎么打开那一张,如 `comfyui`)。
 _EDITOR_KIND = re.compile(r"[a-z][a-z0-9-]{0,39}")
 
@@ -366,6 +375,62 @@ def restore(db: Session, instance: PluginInstance, path: str, new_path: str = ""
     return {"path": _write(db, instance, {"op": "restore_workflow", "path": path, "new_path": target}, wanted=target)}
 
 
+# --- 导入 ---------------------------------------------------------------------
+
+def inspect_import(db: Session, instance: PluginInstance, *, text: str = "", data: str = "", filename: str = "",
+                   url: str = "") -> dict[str, Any]:
+    """让插件认一遍要导入的东西,规整成预览:换成界面格式的那张图、从哪儿来、什么格式、建议的路径、要告诉人的话,
+    加上和列出来的每一张同一套的描述(图摘要、识别出的输入 / 参数 / 输出、用到的模型、缺的节点和模型)。"""
+    _require(db, instance)
+    if len([one for one in (text, data, url) if one]) != 1:
+        raise WorkflowLibraryError("workflowLibErr_importOne")
+    if max(len(text), len(data), len(url)) > MAX_IMPORT_CHARS:
+        raise WorkflowLibraryError("workflowLibErr_importTooBig", mb=str(MAX_IMPORT_CHARS * 3 // 4 // (1024 * 1024)))
+    if url and not re.match(r"^https?://\S+$", url.strip()):
+        raise WorkflowLibraryError("workflowLibErr_importBadUrl")
+    request: dict[str, Any] = {"op": "inspect_import"}
+    if text:
+        request["text"] = text
+    if data:
+        request["data"] = data
+    if url:
+        request["url"] = url.strip()
+    if filename:
+        request["filename"] = _text(filename, 300)
+    output = tools.invoke_host(db, instance.id, WORKFLOW_LIBRARY, request, timeout=QUICK_TIMEOUT_SECONDS, record=False)
+    workflow = output.get("workflow")
+    if not isinstance(workflow, dict) or not isinstance(workflow.get("nodes"), list):
+        raise WorkflowLibraryError("workflowLibErr_badAnswer", name=instance.name)
+    try:
+        suggested = workflow_path(_text(output.get("suggested_path"), 500))
+    except WorkflowLibraryError:
+        suggested = ""  # 界面自己给一个
+    described = _workflow({**output, "path": suggested or "imported.json"}) or {}
+    for key in ("path", "label", "folder", "size", "modified"):
+        described.pop(key, None)
+    fmt, source = _text(output.get("format"), 10), _text(output.get("source"), 10)
+    return {
+        **described,
+        "format": fmt if fmt in _IMPORT_FORMATS else "ui",
+        "source": source if source in _IMPORT_SOURCES else "json",
+        "workflow": workflow,
+        "suggested_path": suggested,
+        "notes": [_text(one, 1000) for one in (output.get("notes") or []) if isinstance(one, str) and one.strip()][:10],
+    }
+
+
+def save(db: Session, instance: PluginInstance, path: str, content: dict[str, Any]) -> dict[str, str]:
+    """把导入的那张(界面格式)存进那台服务器的 workflows/:只新建、不覆盖,撞名 409 带建议名。"""
+    _require(db, instance)
+    path = workflow_path(path)
+    if not isinstance(content.get("nodes"), list):
+        raise WorkflowLibraryError("workflowLibErr_notUiWorkflow")
+    text = json.dumps(content, ensure_ascii=False)
+    if len(text) > MAX_IMPORT_CHARS:
+        raise WorkflowLibraryError("workflowLibErr_importTooBig", mb=str(MAX_IMPORT_CHARS * 3 // 4 // (1024 * 1024)))
+    return {"path": _write(db, instance, {"op": "save_workflow", "path": path, "content": text}, wanted=path)}
+
+
 def register_uses() -> None:
     capabilities.register_use(capabilities.Use(WORKFLOW_LIBRARY, "app", fragment("capUse_workflowLibrary")))
 
@@ -385,10 +450,12 @@ __all__ = [
     "WorkflowLibraryError",
     "content",
     "copy",
+    "inspect_import",
     "library",
     "register_uses",
     "rename",
     "restore",
+    "save",
     "trash",
     "trash_path",
     "workflow_path",

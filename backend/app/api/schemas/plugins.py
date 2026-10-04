@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import Field
 from app.api.schemas.base import ApiModel, OrmModel
@@ -633,6 +633,46 @@ class WorkflowLibraryOut(ApiModel):
     manager: WorkflowManagerOut = Field(default_factory=WorkflowManagerOut)
     #: 插件没报编辑器、或者报的不像样就没有 —— 界面不出「在编辑器里打开」
     editor: WorkflowEditorOut | None = None
+
+
+class WorkflowLibraryImportRequest(ApiModel):
+    """要导入的东西,只给一样:一段文字(JSON 原文或一个链接)、一个文件(base64,带上文件名)、一个链接。"""
+
+    text: str = ""
+    data: str = ""
+    filename: str = ""
+    url: str = ""
+
+
+class WorkflowLibraryImportOut(ApiModel):
+    """导入前的预览:换成界面格式的那张图,和列出来的每一张同一套描述。"""
+
+    #: 原来是界面格式还是 API 格式(API 格式没有布局,位置是自动排的)
+    format: Literal["ui", "api"]
+    #: 从哪儿认出来的:JSON 原文、PNG / WebP 里嵌的、压缩包里的、链接取回的
+    source: Literal["json", "png", "webp", "zip", "url"]
+    #: 要存进去的那张(界面格式,新的图 id)
+    workflow: dict[str, Any]
+    #: 插件建议的路径(不撞名);空 = 界面自己给一个
+    suggested_path: str = ""
+    #: 要告诉人的话(自动排的位置、压缩包里另外几张)
+    notes: list[str] = Field(default_factory=list)
+    kind: str = ""
+    problem: str = ""
+    node_count: int = 0
+    graph: WorkflowGraphOut = Field(default_factory=WorkflowGraphOut)
+    inputs: list[WorkflowInputOut] = Field(default_factory=list)
+    parameters: list[WorkflowParameterOut] = Field(default_factory=list)
+    outputs: list[WorkflowOutputOut] = Field(default_factory=list)
+    models: list[WorkflowModelRefOut] = Field(default_factory=list)
+    missing_nodes: list[WorkflowMissingNodeOut] = Field(default_factory=list)
+    missing_models: list[WorkflowMissingModelOut] = Field(default_factory=list)
+
+
+class WorkflowLibrarySaveRequest(ApiModel):
+    path: str
+    #: 界面格式的工作流
+    content: dict[str, Any]
 
 
 class WorkflowContentOut(ApiModel):

@@ -212,6 +212,22 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "那台服务器上已经有「{path}」了,不会覆盖。换一个名字",
         "en": "“{path}” already exists on that server and won't be overwritten. Pick another name",
     },
+    "workflowLibErr_importOne": {
+        "zh": "要导入的东西只给一样:一段 JSON、一个文件或一个链接",
+        "en": "Give exactly one thing to import: a piece of JSON, a file or a link",
+    },
+    "workflowLibErr_importTooBig": {
+        "zh": "要导入的东西太大了(超过 {mb} MB),不像一张工作流",
+        "en": "What you're importing is too big (over {mb} MB) to be a workflow",
+    },
+    "workflowLibErr_importBadUrl": {
+        "zh": "链接要以 http:// 或 https:// 开头",
+        "en": "The link must start with http:// or https://",
+    },
+    "workflowLibErr_notUiWorkflow": {
+        "zh": "要存的不是一张界面格式的工作流(没有 nodes)",
+        "en": "What's being saved is not a UI-format workflow (no nodes)",
+    },
     "workflowLibErr_badAnswer": {
         "zh": "「{name}」的插件回的东西不对,没改成",
         "en": "The plugin of “{name}” answered with something unexpected; nothing was changed",
