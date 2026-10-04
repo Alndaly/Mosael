@@ -205,6 +205,14 @@ def test_relay_borrows_only_an_unambiguous_exact_id(monkeypatch) -> None:
     assert lookup_for_relay("gpt-9-mini") == [], "中转上不按前缀借价"
 
 
+def test_relay_borrows_only_from_original_vendors(monkeypatch) -> None:
+    """别家中转自己的条目(它起的型号名、它挂的价)说的是那家中转,不是原厂 —— 不借。"""
+    _fake(monkeypatch, _e("openai-compatible", "relay-alias"), _e("evolink", "evo-only"))
+    assert lookup_for_relay("relay-alias") == []
+    assert lookup_for_relay("evo-only") == []
+    assert [e.vendor for e in lookup("evolink", "evo-only")] == ["evolink"], "它自己的连接上照查"
+
+
 def test_relay_prefers_the_home_region(monkeypatch) -> None:
     _fake(monkeypatch, _e("alibaba", "qwen-x", region="intl"), _e("alibaba", "qwen-x", region="cn"))
     assert [e.region for e in lookup_for_relay("qwen-x")] == ["cn"]

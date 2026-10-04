@@ -28,6 +28,9 @@
 5. **中转站只按 id 精确匹配,而且只在 id 唯一属于某一家时。**中转(OpenAI 兼容端点、Evolink、
    OpenRouter)后面挂的可能是任何一家,它们自己的收费也可能和原厂不同 —— 所以只在「这个 id
    只有一家在卖」时才借用原厂价,并在规则备注里说明那是原厂价。
+   中转**自己的**条目(`vendor` 就是这家中转)先查:中转自己挂出来的价(Evolink 的价目页),或者中转
+   自己起的型号名(147ai 的 gpt-image-2-client)—— 后者没有公开价时按对应原厂型号记参考价,备注写明。
+   借原厂价只从原厂的条目里借,不从别家中转的条目里借。
 
 ## 来源(2026-09 查证)
 
@@ -53,8 +56,8 @@
   判断不出这条连接开的是哪边的账户,又分有声 / 无声、带不带视频输入 —— 不收。
 - **数字人(ADR 0028)没收的**:火山即梦 OmniHuman 1.5 与 HeyGen(Avatar IV、对口型)的官方价目页要登录或靠脚本渲染,
   取不到原文,只找到第三方汇总;Hedra Character-3 按积分计价;可灵数字人 / 对口型和可灵视频同一个一家两币的问题。
-- **中转站自己的价**(Evolink、147ai 等):不是原厂价目,不在这张表的范围里;中转的目录报了价就用目录的。
-  Evolink 上的 Suno(产品页写「8 积分 ≈ $0.118 / 两首」)同理不收。
+- **中转站自己的价**:目录报了价就用目录的。中转自己的价目页查得到、用户在用的才收(约定 5);
+  Evolink 上的 Suno(产品页写「8 积分 ≈ $0.118 / 两首」)只给了积分折算、不是按次挂牌价,不收。
 - **音频生成(ADR 0022)没收的**:可灵文生音效 / 视频生音效(每次 0.25 单位 / 积分,和可灵视频同一个一家两币的问题);
   百炼 qwen-audio-3.1-tts-next(按 token 计价,而文档说计费按生成时长,换算关系没写);火山音乐的预付费
   资源包(包价,不是按次价);Lyria RealTime(价目页没有列)。
@@ -687,6 +690,11 @@ _OPENAI_CHAT_ROWS = (
     ("o3-pro", "20", "", "", "80", False),
     ("o4-mini", "1.1", "0.275", "", "4.4", False),
 )
+#: 147ai 自己起的型号名:后面就是 gpt-image-2(模型行的生成能力也指向它),147ai 没公开它的价。
+_GPT_IMAGE_2_CLIENT_REMARK = (
+    "147ai 自己的型号名,实价未公开:按 OpenAI gpt-image-2 官方价参考,和 147ai 账单对不上就改这条",
+    "147ai's own model name with no published price: priced at OpenAI's gpt-image-2 list price for reference; edit this rule if it disagrees with your 147ai bill",
+)
 _GPT_IMAGE_UNITS = (
     ("million_input_token", "文字输入 token 的价", "Text input token price"),
     ("million_image_input_token", "参考图(图像)输入 token 的价", "Reference-image (image) input token price"),
@@ -713,6 +721,11 @@ _OPENAI_PRICES = [
             ("gpt-image-1-mini", ("2", "2.5", "8")),
         )
         for (unit, zh, en), amount in zip(_GPT_IMAGE_UNITS, prices)
+    ],
+    *[
+        _p("openai-compatible", "gpt-image-2-client", "image", unit, amount, "USD", _OPENAI, checked="2026-10",
+           remark=(f"{zh};{_GPT_IMAGE_2_CLIENT_REMARK[0]}", f"{en}; {_GPT_IMAGE_2_CLIENT_REMARK[1]}"))
+        for (unit, zh, en), amount in zip(_GPT_IMAGE_UNITS, ("5", "8", "30"))
     ],
     _p("openai", "tts-1", "tts", "character", "15", "USD", _OPENAI, per=1_000_000,
        remark=("官方价 $15/百万字符", "Listed at $15 per 1M characters")),
@@ -838,7 +851,10 @@ def lookup_for_relay(model_id: str) -> list[ListPrice]:
     """
     if not model_id.strip():
         return []
-    exact = [entry for entry in LIST_PRICES if not entry.prefix and entry.matches(model_id)]
+    # 只从原厂的条目里借:别家中转自己的条目(它起的型号名、它的价目)说的是那家中转,不是原厂。
+    exact = [
+        entry for entry in LIST_PRICES if not entry.prefix and entry.matches(model_id) and entry.vendor not in RELAY_VENDORS
+    ]
     vendors = {entry.vendor for entry in exact}
     if len(vendors) != 1:
         return []

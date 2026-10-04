@@ -451,6 +451,36 @@ def test_relay_borrows_the_original_vendor_price_and_says_so(monkeypatch, client
     assert "中转" in rule["notes"] and "platform.claude.com" in rule["notes"]
 
 
+def test_147ai_gpt_image_2_client_gets_the_gpt_image_2_reference_price(monkeypatch, client_fixture) -> None:
+    """用户现在的默认生图是 147ai 的 gpt-image-2-client(147ai 自己起的型号名),此前没有价目、一直记成未定价。
+    按 gpt-image-2 的官方价补上三条,备注说清 147ai 实价未公开、可以改;gpt-image-2 本身照旧借原厂价。"""
+    client = client_fixture
+    _stub_models(monkeypatch, {"data": []})
+    profile_id = _profile(client, "openai-compatible", {"api_key": "k", "base_url": "https://147ai.com/v1", "default_model": "gpt-image-2-client"})
+    _add_models(profile_id, ("gpt-image-2-client", ["image"]), ("gpt-image-2", ["image"]))
+
+    body = client.post(f"/api/settings/providers/{profile_id}/pricing/prefill").json()
+    assert body["unpriced_models"] == []
+    rules = _rules(client)
+    for model in ("gpt-image-2-client", "gpt-image-2"):
+        assert {unit: rules[(model, "image", unit)]["unit_amount_micros"] for unit in (
+            "million_input_token", "million_image_input_token", "million_output_token"
+        )} == {"million_input_token": 5_000_000, "million_image_input_token": 8_000_000, "million_output_token": 30_000_000}
+    client_note = rules[("gpt-image-2-client", "image", "million_output_token")]["notes"]
+    assert "147ai" in client_note and "未公开" in client_note, "要说清这是参考价、实价可以改"
+    assert "原厂" not in client_note, "这条是给 147ai 这个型号名记的参考价,不是借来的原厂价"
+    assert "中转" in rules[("gpt-image-2", "image", "million_output_token")]["notes"]
+
+
+def test_an_official_vendor_pointed_at_a_relay_still_says_the_price_is_borrowed(monkeypatch, client_fixture) -> None:
+    """OpenAI 连接把 Endpoint 改到了中转:价照借原厂的,备注照旧说明中转可能另价。"""
+    client = client_fixture
+    _stub_models(monkeypatch, {"data": [{"id": "gpt-5"}]})
+    profile_id = _profile(client, "openai", {"api_key": "k", "base_url": "https://relay.example/v1", "default_model": "gpt-5"})
+    client.post(f"/api/settings/providers/{profile_id}/pricing/prefill")
+    assert "中转" in _rules(client)[("gpt-5", "chat", "million_input_token")]["notes"]
+
+
 def test_prefilled_rules_show_up_in_the_workspace_list(monkeypatch, client_fixture) -> None:
     """预填的规则不属于任何工作区(对所有工作区生效)—— 此前列表只取本工作区的,新建了也看不见。"""
     client = client_fixture

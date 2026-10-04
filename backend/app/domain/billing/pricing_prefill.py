@@ -79,16 +79,22 @@ def prefill_profile_pricing(
     for model_id in model_ids:
         quotes = _catalog_quotes(catalog_rates.get(model_id) or {})
         if not quotes:
-            listed = (
-                price_reference.lookup_for_relay(model_id)
-                if relay
-                else price_reference.lookup(profile.vendor, model_id, region=region)
-            )
+            # 中转类连接(Evolink、OpenAI 兼容端点)先查**它自己的**条目:它自己挂的价、它自己起的型号名
+            # (见 price_reference 约定 5);查不到再借原厂价。把官方 vendor 的 Endpoint 改到别处的,
+            # 照旧只借原厂价、备注里说明中转可能另价。
+            own_relay = profile.vendor in price_reference.RELAY_VENDORS
+            listed = price_reference.lookup(profile.vendor, model_id, region=region) if not relay or own_relay else []
+            if relay and not listed:
+                listed = price_reference.lookup_for_relay(model_id)
             row = rows.get(model_id)
             # 只补这个模型**在这条连接上**真会用到的能力:中转挂着一个视频模型 id,而这条连接
             # 根本做不了视频,那条规则永远匹配不上,只是往表里塞行。
             allowed = effective_capabilities(row) if row is not None else vendor_capabilities
-            quotes = [_reference_quote(entry, relay=relay) for entry in listed if entry.capability in allowed]
+            quotes = [
+                _reference_quote(entry, relay=relay and not (own_relay and entry.vendor == profile.vendor))
+                for entry in listed
+                if entry.capability in allowed
+            ]
         if quotes:
             priced += 1
         for quote in prefill_model_pricing(
