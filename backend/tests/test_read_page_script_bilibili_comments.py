@@ -183,3 +183,51 @@ def test_接口交回的原文照原样带回_换行不压_转义留给整理那
     root["content"]["message"] = raw
     value, _calls = _run(_site(logged_in=True, roots=[root], top=None, subs={}, total=1))
     assert _comments(value)[0]["text"] == raw
+
+
+
+_DOM_HARNESS = r"""
+const made = [];
+const el = (tagName, text, children = []) => {
+  const node = { tagName, textContent: text, innerText: text, children, parentElement: null, shadowRoot: null,
+                 clicked: 0, scrollIntoView() {}, click() { this.clicked += 1; } };
+  children.forEach((child) => { child.parentElement = node; });
+  made.push(node);
+  return node;
+};
+const __BUILD__
+globalThis.location = { href: "https://www.example.com/post/1" };
+globalThis.document = { title: "t", body: { innerText: "正文", scrollHeight: 1000 }, querySelectorAll: () => made };
+globalThis.window = { innerHeight: 800, scrollY: 0, scrollBy() {} };
+const input = { settle_ms: 1, scrolls: 0, expand_max: 5, expand_settle_ms: 1, expand_wait_ms: 1, final_ms: 1, max_chars: 1000 };
+(__SCRIPT__).then((value) => process.stdout.write(JSON.stringify({ value, clicks: made.map((one) => [one.tagName, one.textContent, one.clicked]) })));
+"""
+
+
+def _run_dom(build: str) -> tuple[dict, list]:
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("这台机器上没有 node")
+    program = _DOM_HARNESS.replace("const __BUILD__", build).replace("__SCRIPT__", _READ_PAGE_SCRIPT)
+    done = subprocess.run([node, "-e", program], capture_output=True, text=True, timeout=60, check=False)
+    assert done.returncode == 0, done.stderr
+    out = json.loads(done.stdout)
+    return out["value"], out["clicks"]
+
+
+def test_读页面那一路_B站的折叠钮_点的是旁边的点击查看_不是那段说明文字() -> None:
+    """B 站评论区的折叠钮长这样(2026-10 实测):<div id="view-more"><span>共5条回复，</span><bili-text-button>点击查看
+    </bili-text-button></div>。最深的那个匹配是 span —— 点它什么也不发生:展开报了 8 次,楼中楼一条没出来。"""
+    value, clicks = _run_dom(
+        'const label = el("SPAN", "共5条回复，"); const button = el("BILI-TEXT-BUTTON", "点击查看");'
+        ' el("DIV", "共5条回复，点击查看", [label, button]);'
+    )
+    assert value["expanded"] == 1
+    assert ["BILI-TEXT-BUTTON", "点击查看", 1] in clicks
+    assert ["SPAN", "共5条回复，", 0] in clicks
+
+
+def test_读页面那一路_折叠钮自己就是按钮的_照旧点它() -> None:
+    value, clicks = _run_dom('el("DIV", "评论区", [el("BUTTON", "展开3条回复")]);')
+    assert value["expanded"] == 1
+    assert ["BUTTON", "展开3条回复", 1] in clicks

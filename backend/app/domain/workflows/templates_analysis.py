@@ -318,9 +318,15 @@ _READ_PAGE_SCRIPT = """(async () => {
       });
     };
     collect(document);
+    //: 说明文字旁边另有一个「点击查看」时点那个:B 站的折叠钮是 <span>共5条回复，</span><bili-text-button>点击查看
+    //: </bili-text-button>,点 span 什么也不发生(实测展开报了 8 次、楼中楼一条没出来)。
+    const VIEW = /^(点击查看|查看|展开|view|show)/i;
+    const clickTarget = (el) => Array.from((el.parentElement && el.parentElement.children) || [])
+      .find((one) => one !== el && VIEW.test((one.textContent || "").trim())) || el;
     for (const el of expanders) {
-      el.scrollIntoView({ block: "center" });
-      el.click();
+      const target = clickTarget(el);
+      target.scrollIntoView({ block: "center" });
+      target.click();
       await wait(Number(input.expand_wait_ms) || 600);
     }
   }
