@@ -7,7 +7,7 @@
 import type { NativeImage, WebContents } from "electron";
 import { writeFile } from "node:fs/promises";
 
-import { ElementMissingError } from "./errors";
+import { ActionAbortedError, ElementMissingError, EvaluateTimeoutError } from "./errors";
 import { plog } from "./log";
 
 const wait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
@@ -78,8 +78,27 @@ export class PageDriver {
 
   private throwIfAborted(): void {
     if (this.abortSignal?.aborted) {
-      throw new Error("Task was cancelled by user.");
+      throw new ActionAbortedError();
     }
+  }
+
+  /**
+   * 等页面做完一件事(脚本、导航),**中止开关一扳就放手**。
+   *
+   * executeJavaScript / loadURL 自己不认中止:此前取消一条正在跑 60 秒脚本的运行,这里照等 60 秒 ——
+   * 同一会话的动作串行(见 browserWorker),关闭会话那一步排在它后面,面板就一直挂着(实测 54 秒)。
+   * 页面里的脚本停不下来,但我们不必陪它:放手之后视图随即被关掉,脚本也就跟着没了。
+   */
+  private untilAborted<T>(work: Promise<T>): Promise<T> {
+    const signal = this.abortSignal;
+    if (!signal) return work;
+    if (signal.aborted) return Promise.reject(new ActionAbortedError());
+    let onAbort: (() => void) | undefined;
+    const aborted = new Promise<never>((_, reject) => {
+      onAbort = () => reject(new ActionAbortedError());
+      signal.addEventListener("abort", onAbort, { once: true });
+    });
+    return Promise.race([work, aborted]).finally(() => signal.removeEventListener("abort", onAbort!));
   }
 
   private async wait(ms: number): Promise<void> {
@@ -220,8 +239,11 @@ export class PageDriver {
     plog("goto:", url);
     // loadURL 的 promise 等 did-finish-load;B 站等重前端页面可能长期不触发(未登录重定向 +
     // 持续加载),没有超时就会把整条认领链吊死。超时后放行:页面通常已可交互,交给 checkLogin 判断。
-    const timeout = new Promise<GotoOutcome>((resolve) => setTimeout(() => resolve({ outcome: "timeout" }), 45_000));
-    const result = await Promise.race([
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<GotoOutcome>((resolve) => {
+      timer = setTimeout(() => resolve({ outcome: "timeout" }), 45_000);
+    });
+    const result = await this.untilAborted(Promise.race([
       this.wc.loadURL(url).then(
         (): GotoOutcome => ({ outcome: "loaded" }),
         (error: unknown): GotoOutcome => {
@@ -236,7 +258,7 @@ export class PageDriver {
         },
       ),
       timeout,
-    ]);
+    ])).finally(() => clearTimeout(timer));
     plog(`goto ${result.outcome}:`, this.wc.getURL());
     return result;
   }
@@ -263,12 +285,12 @@ export class PageDriver {
     const cap = Math.max(200, Math.min(EVALUATE_MAX_MS, budgetMs));
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
-      return await Promise.race([
+      return await this.untilAborted(Promise.race([
         this.wc.executeJavaScript(expression, true) as Promise<T>,
         new Promise<never>((_, reject) => {
-          timer = setTimeout(() => reject(new Error("evaluate timeout (page not settled)")), cap);
+          timer = setTimeout(() => reject(new EvaluateTimeoutError(cap)), cap);
         }),
-      ]);
+      ]));
     } finally {
       if (timer) clearTimeout(timer);
     }
