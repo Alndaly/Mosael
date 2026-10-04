@@ -3,7 +3,9 @@
 **测试套不连真的 ComfyUI。** 这台假的只实现插件用到的那几个接口,形状照 ComfyUI 0.3x 的真实回包:
 `/object_info`、`/api/userdata`(列工作流 / 取工作流)、`/upload/image`(multipart)、`/prompt`、
 `/history/{id}`、`/queue`、`/interrupt`、`/view`,以及 `/ws?clientId=…` 上的执行事件;模型库用到的
-`/experiment/models*`、`/view_metadata/*`、`/internal/logs/raw` 和 ComfyUI-Manager 的 `/v2/manager/*`。
+`/experiment/models*`、`/view_metadata/*`、`/internal/logs/raw` 和 ComfyUI-Manager 的 `/v2/manager/*`;工作流库用到的
+userdata 写 / 移动 / 删除(照 ComfyUI 源码 app/user_manager.py 的语义:`overwrite=false` 撞名回 409、移动时建目标的父目录、
+删除是硬删)和 Manager 的 `/v2/customnode/getmappings`、`/v2/customnode/installed`。
 
 每次请求都记在 `server.calls` 里,测试据此断言插件发了什么(提交的图、上传的文件、停的是哪个任务)。
 """
@@ -556,6 +558,27 @@ class State:
     manager_tasks: list[dict[str, Any]] = field(default_factory=list)
     manager_history: dict[str, Any] = field(default_factory=dict)
     log_entries: list[dict[str, str]] = field(default_factory=list)
+    #: workflows/ 以外的 userdata(回收目录 `.mosael-trash/…`):键是相对用户目录的路径。
+    userdata: dict[str, Any] = field(default_factory=dict)
+    #: Manager 的节点映射(`/v2/customnode/getmappings`):包 → [节点类型…, 附加信息];已装的包(`/v2/customnode/installed`)。
+    manager_mappings: dict[str, Any] = field(default_factory=dict)
+    manager_installed: dict[str, Any] = field(default_factory=dict)
+
+    def userdata_get(self, path: str) -> Any:
+        if path.startswith("workflows/"):
+            return self.workflows.get(path[len("workflows/"):])
+        return self.userdata.get(path)
+
+    def userdata_put(self, path: str, value: Any) -> None:
+        if path.startswith("workflows/"):
+            self.workflows[path[len("workflows/"):]] = value
+        else:
+            self.userdata[path] = value
+
+    def userdata_pop(self, path: str) -> Any:
+        if path.startswith("workflows/"):
+            return self.workflows.pop(path[len("workflows/"):])
+        return self.userdata.pop(path)
 
     def log(self, entry: dict[str, str]) -> None:
         """记一行日志。和 ComfyUI 一样只留最近 300 行(环形缓冲):行数到顶之后不再变,只能按时间认新旧。"""
@@ -615,6 +638,18 @@ class _Handler(BaseHTTPRequestHandler):
         elif path == "/api/userdata" and query.get("dir") == ["workflows"]:
             self._json([{"path": name, "size": len(json.dumps(graph)), "modified": 1}
                         for name, graph in state.workflows.items()])
+        elif path == "/api/userdata":
+            prefix = (query.get("dir") or [""])[0].rstrip("/") + "/"
+            found = [{"path": name[len(prefix):], "size": len(json.dumps(value)), "modified": 1791000000000}
+                     for name, value in state.userdata.items() if name.startswith(prefix)]
+            if not found:
+                self._json({"error": "Directory not found"}, 404)
+            else:
+                self._json(found)
+        elif path == "/v2/customnode/getmappings" and state.manager:
+            self._json(state.manager_mappings)
+        elif path == "/v2/customnode/installed" and state.manager:
+            self._json(state.manager_installed)
         elif path == "/system_stats":
             self._json(SYSTEM_STATS)
         elif path == "/models" and state.models_api:
@@ -679,11 +714,11 @@ class _Handler(BaseHTTPRequestHandler):
             self._json(dict(items[-limit:] if limit else items))
         elif path.startswith("/api/userdata/"):
             name = unquote(path[len("/api/userdata/"):])
-            workflow = state.workflows.get(name.removeprefix("workflows/"))
-            if workflow is None:
+            found = state.userdata_get(name)
+            if found is None:
                 self._json({"error": "not found"}, 404)
             else:
-                self._json(workflow)
+                self._json(found)
         elif path.startswith("/history/"):
             prompt_id = path[len("/history/"):]
             entry = state.history.get(prompt_id)
@@ -703,11 +738,67 @@ class _Handler(BaseHTTPRequestHandler):
 
     # --- POST -------------------------------------------------------------
 
-    def do_POST(self) -> None:  # noqa: N802
+    def _userdata_write(self, path: str, query: dict[str, list[str]], raw: bytes) -> None:
+        """`POST /api/userdata/{file}`(写)和 `POST /api/userdata/{file}/move/{dest}`(移动),照 ComfyUI 的语义。"""
+        state = self.server.state
+        overwrite = query.get("overwrite", ["true"])[0] != "false"
+        rest = path[len("/api/userdata/"):]
+        if "/move/" in rest:
+            source_raw, dest_raw = rest.split("/move/", 1)
+            source, dest = unquote(source_raw), unquote(dest_raw)
+            state.calls.append(("MOVE", source, {"dest": dest, "overwrite": overwrite}))
+            if ".." in source.split("/") or ".." in dest.split("/"):
+                self._json({"error": "forbidden"}, 403)
+                return
+            if state.userdata_get(source) is None:
+                self._json({"error": "not found"}, 404)
+                return
+            if not overwrite and state.userdata_get(dest) is not None:
+                self.send_response(409)
+                self.send_header("Content-Length", "19")
+                self.end_headers()
+                self.wfile.write(b"File already exists")
+                return
+            state.userdata_put(dest, state.userdata_pop(source))
+            self._json({"path": dest, "size": 1, "modified": 1791000000000})
+            return
+        name = unquote(rest)
+        state.calls.append(("WRITE", name, {"overwrite": overwrite, "body": raw.decode("utf-8", "replace")}))
+        if ".." in name.split("/"):
+            self._json({"error": "forbidden"}, 403)
+            return
+        if not overwrite and state.userdata_get(name) is not None:
+            self.send_response(409)
+            self.send_header("Content-Length", "19")
+            self.end_headers()
+            self.wfile.write(b"File already exists")
+            return
+        state.userdata_put(name, json.loads(raw or b"null"))
+        self._json({"path": name, "size": len(raw), "modified": 1791000000000})
+
+    def do_DELETE(self) -> None:  # noqa: N802
         state = self.server.state
         path = urlsplit(self.path).path
+        if not self._authorized():
+            return
+        name = unquote(path[len("/api/userdata/"):]) if path.startswith("/api/userdata/") else path
+        state.calls.append(("DELETE", name, None))
+        if state.userdata_get(name) is None:
+            self._json({"error": "not found"}, 404)
+            return
+        state.userdata_pop(name)
+        self.send_response(204)
+        self.end_headers()
+
+    def do_POST(self) -> None:  # noqa: N802
+        state = self.server.state
+        parts = urlsplit(self.path)
+        path = parts.path
         raw = self._body()
         if not self._authorized():
+            return
+        if path.startswith("/api/userdata/"):
+            self._userdata_write(path, parse_qs(parts.query), raw)
             return
         if path == "/upload/image":
             name, content = _multipart_file(self.headers.get("Content-Type", ""), raw)

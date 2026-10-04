@@ -170,6 +170,25 @@ ModelScope AIGC 专区的模型按登记的类型定;HuggingFace / ModelScope �
 发给 modelscope.cn / modelscope.ai;跳转到别处的存储时不带),不进结果和报错;经 Manager 下 Civitai 时只能拼进下载地址,
 会留在那台机器的 Manager 任务记录里。
 
+## 工作流库(1.11.0)
+
+插件页上这个连接的「工作流库」:这台 ComfyUI 上存着的全部工作流(ADR 0035),和模型库同一套界面 —— 左边按子目录,
+上面搜索、按种类筛、排序、三档显示方式。每张一张卡:节点图的缩略预览(照工作流里节点的位置和连线画,不截 ComfyUI 的图;
+API 格式的图没有位置,按依赖自动排)、识别出的输入 / 参数 / 输出、用到的模型(在不在)、缺的节点(和它出自哪个节点包,
+Manager 的映射查得到就列)、声明了下载地址又缺的模型。
+
+缺节点的判据:节点类型不在这台 ComfyUI 的 object_info 里,**且**不是只在前端的节点(Note、Reroute、PrimitiveNode、
+KJNodes 的 Set / Get、rgthree 的 Fast Groups Bypasser / Label / Bookmark 这类,后端永远没有),子图实例也不算。
+
+在 Mosael 里能直接改那台机器上的工作流文件,都经 ComfyUI 自己的 userdata 接口、**不覆盖**:
+
+- 复制(副本换一个新的图 id —— 两张同 id 的图,插件给它们起的工具名会撞)、改名 / 挪目录:目标已经有了就说撞名,给一个
+  建议名;
+- 删除**不硬删**(ComfyUI 的 DELETE 是硬删,插件从不调):挪进用户目录下的 `.mosael-trash/workflows/<删除时刻 UTC>/<原路径>`,
+  在 `workflows/` 外面,ComfyUI 的侧栏和插件的模型清单都不列它;Mosael 的「回收站」能恢复,原处被占了就要求换名。真要
+  删掉,在那台机器上删这个目录;
+- 每次改完,宿主让这个连接的模型和工具清单马上重拉一遍。
+
 ## 进度、取消、重启
 
 - 进度来自 ComfyUI 的 WebSocket:哪个节点在跑(用界面上的节点名)、采样器第几步、第几个节点;连不上就退回轮询。

@@ -16,6 +16,13 @@
     {"op": "resolve", "url"}               → 一个链接指的是哪个文件(见 sources)
     {"op": "download", "url", "folder", "filename"} → 流式:下到这台 ComfyUI 上(见 install)
 
+**工作流库**(ADR 0035,同一个工具认领 `workflow_library`,见 workflow_library):
+
+    {"op": "workflows"}                                 → 全部工作流(图摘要、输入 / 参数 / 输出、用到的模型、缺什么)
+    {"op": "workflow", "path"}                          → 一张的原文
+    {"op": "copy_workflow" | "rename_workflow" | "restore_workflow", "path", "new_path"} → 不覆盖,撞名回 conflict
+    {"op": "trash_workflow", "path"}                    → 挪进回收目录(不硬删)
+
 **给智能体和工作流的工具**:
 
     wf_<id>                                                每张工作流自己的那个(运行时报出,流式)
@@ -41,6 +48,7 @@ import run
 import server
 import sources
 import tooling
+import workflow_library
 import workflows
 from comfy_http import Comfy, env_access_token, env_base_url
 from lines import ComfyError, say
@@ -70,8 +78,20 @@ def _generation(payload: dict[str, Any], comfy: Comfy, locale: str) -> dict[str,
         return sources.resolve(payload, comfy, locale)
     if op == "download":
         return install.download(payload, comfy, locale, emit)
+    if op in _WORKFLOW_LIBRARY:
+        return _WORKFLOW_LIBRARY[op](payload, comfy, locale)
     raise ComfyError(say(locale, f"不认识的操作:{op}", f"Unknown op: {op}"))
 
+
+#: 工作流库的 op(ADR 0035)。
+_WORKFLOW_LIBRARY: dict[str, Callable[[dict[str, Any], Comfy, str], dict[str, Any]]] = {
+    "workflows": workflow_library.workflows,
+    "workflow": workflow_library.workflow,
+    "copy_workflow": workflow_library.copy_workflow,
+    "rename_workflow": workflow_library.rename_workflow,
+    "trash_workflow": workflow_library.trash_workflow,
+    "restore_workflow": workflow_library.restore_workflow,
+}
 
 #: 一问一答的工具。
 _PLAIN: dict[str, Callable[[dict[str, Any], Comfy, str], dict[str, Any]]] = {

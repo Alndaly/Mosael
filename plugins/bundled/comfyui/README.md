@@ -213,6 +213,30 @@ its own site (ModelScope's to modelscope.cn / modelscope.ai; never to the storag
 into results or errors; a Civitai download through the Manager can only carry it in the URL, so it stays in that
 machine's Manager task history.
 
+## Workflow library (1.11.0)
+
+The connection's "Workflow library" on the Plugins page: every workflow saved on this ComfyUI (ADR 0035), in the same
+layout as the model library — subfolders on the left, search, kind filter, sorting and three view densities on top. Each
+workflow gets a card: a thumbnail of its node graph (drawn from the nodes' positions and links in the workflow, not a
+screenshot of ComfyUI; API-format graphs have no positions and are laid out by dependency), the inputs / parameters /
+outputs it takes and produces, the model files it uses (present or not), missing node types (and the node pack each
+comes from, when the Manager's mapping knows), and missing models whose download URL the workflow declares.
+
+A node type counts as missing when it is not in this ComfyUI's object_info **and** is not a frontend-only node (Note,
+Reroute, PrimitiveNode, KJNodes' Set / Get, rgthree's Fast Groups Bypasser / Label / Bookmark and the like never exist on
+the backend); subgraph instances don't count either.
+
+Mosael can change the workflow files on that machine directly, always through ComfyUI's own userdata API and **never
+overwriting**:
+
+- copy (the copy gets a new graph id — two graphs with the same id would get clashing tool names) and rename / move: if
+  the target exists you're told so and offered a free name;
+- delete is **not a hard delete** (ComfyUI's DELETE is, so the plugin never calls it): the file moves to
+  `.mosael-trash/workflows/<deletion time UTC>/<original path>` in the user directory, outside `workflows/`, so neither
+  ComfyUI's sidebar nor the plugin's model list shows it; Mosael's "Trash" can restore it, asking for another name if the
+  original place is taken. To really delete it, remove that folder on the machine;
+- after every change the host refreshes this connection's models and tools right away.
+
 ## Progress, cancelling, restarts
 
 - Progress comes from ComfyUI's WebSocket: which node is running (by its name in the interface), the sampler step and

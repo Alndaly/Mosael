@@ -148,6 +148,43 @@ class Comfy:
             raise
         return [item for item in items if isinstance(item, dict)] if isinstance(items, list) else []
 
+    def userdata_listing(self, directory: str) -> list[dict[str, Any]]:
+        """用户目录里某个目录下的文件(相对那个目录的路径、大小、改动时间)。目录不存在 → 空。"""
+        try:
+            items = self.get("/api/userdata", {"dir": directory, "recurse": "true", "split": "false", "full_info": "true"})
+        except ComfyError as exc:
+            if exc.status == 404:
+                return []
+            raise
+        return [item for item in items if isinstance(item, dict)] if isinstance(items, list) else []
+
+    def write_userdata(self, path: str, value: Any) -> bool:
+        """在用户目录里**新建**一份(相对用户目录的路径):已经有了就回 False(ComfyUI 回 409),**不覆盖**。"""
+        body = json.dumps(value, ensure_ascii=False, indent=2).encode("utf-8")
+        try:
+            with self._open("POST", f"/api/userdata/{parse.quote(path, safe='')}",
+                            params={"overwrite": "false", "full_info": "true"}, body=body,
+                            headers={"Content-Type": "application/json"}) as response:
+                response.read()
+        except error.HTTPError as exc:
+            if exc.code == 409:
+                return False
+            raise self._http_error(exc) from exc
+        return True
+
+    def move_userdata(self, source: str, dest: str) -> bool:
+        """在用户目录里挪一份(改名、挪目录、挪进 / 挪出回收目录):目标已经有了就回 False(409),**不覆盖**。"""
+        path = f"/api/userdata/{parse.quote(source, safe='')}/move/{parse.quote(dest, safe='')}"
+        try:
+            with self._open("POST", path, params={"overwrite": "false", "full_info": "true"}, body=b"",
+                            headers={"Content-Type": "application/json"}) as response:
+                response.read()
+        except error.HTTPError as exc:
+            if exc.code == 409:
+                return False
+            raise self._http_error(exc) from exc
+        return True
+
     def system_stats(self) -> dict[str, Any]:
         stats = self.get("/system_stats")
         return stats if isinstance(stats, dict) else {}
