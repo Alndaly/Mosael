@@ -130,11 +130,19 @@ class _Previews:
 
     def __init__(self) -> None:
         self.requests: list[dict[str, Any]] = []
+        #: 接下来几次请求回 503(那台机器一时忙不过来)。
+        self.busy = 0
         outer = self
 
         class Handler(BaseHTTPRequestHandler):
             def do_GET(self) -> None:  # noqa: N802 — http.server 的约定
                 outer.requests.append({"path": self.path, "auth": self.headers.get("Authorization")})
+                if outer.busy > 0:
+                    outer.busy -= 1
+                    self.send_response(503)
+                    self.send_header("Content-Length", "0")
+                    self.end_headers()
+                    return
                 if self.path == "/preview/a":
                     self.send_response(200)
                     self.send_header("Content-Type", "image/webp")
@@ -285,6 +293,38 @@ def test_重启后一屏预览图同时到_只替它列一遍(library) -> None:
         results = list(pool.map(fetch, range(8)))
     assert all(result and result[0] == WEBP for result in results)
     assert sum(1 for one in _ops() if one["op"] == "library") == 1
+
+
+def test_同一张图同时被要好几次_只去那台服务器取一次(library) -> None:
+    """整套测试跑满时这里偶尔有一张拿不到:八个请求各自去取同一张图,那台机器一时接不过来,没取到的还被记成「没有图」。"""
+    client, instance_id, previews = library
+    from concurrent.futures import ThreadPoolExecutor
+
+    from app.db.models import PluginInstance
+    from app.domain import model_library
+
+    assert client.get(f"/api/plugins/instances/{instance_id}/model-library").status_code == 200
+
+    def fetch(_index: int):
+        with SessionLocal() as db:
+            return model_library.preview(db, db.get(PluginInstance, instance_id), "checkpoints", "sdxl_base.safetensors")
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        results = list(pool.map(fetch, range(8)))
+    assert all(result and result[0] == WEBP for result in results)
+    assert [one["path"] for one in previews.requests] == ["/preview/a"], "同一张图只取一次,其余等它落盘再读"
+
+
+def test_那台机器一时忙不过来_不当成没有预览图(library) -> None:
+    """503、连接断了是「这次没取到」,不是「这个模型没有预览图」:记成没有的话,这张卡要显示好一阵占位。"""
+    client, instance_id, previews = library
+    assert client.get(f"/api/plugins/instances/{instance_id}/model-library").status_code == 200
+    url = f"/api/plugins/instances/{instance_id}/model-library/preview"
+    previews.busy = 1
+    first = client.get(url, params={"folder": "checkpoints", "name": "sdxl_base.safetensors"})
+    assert first.status_code == 404
+    again = client.get(url, params={"folder": "checkpoints", "name": "sdxl_base.safetensors"})
+    assert again.status_code == 200 and again.content == WEBP, "下一次照常去取"
 
 
 def test_详情_原样交回插件读到的元数据(library) -> None:

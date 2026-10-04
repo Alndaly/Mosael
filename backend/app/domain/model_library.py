@@ -87,6 +87,12 @@ _snapshots: dict[str, _Snapshot] = {}
 _listing_locks: dict[str, threading.Lock] = {}
 #: (连接, 预览地址) → 到这个时刻之前不再去问(那边说没有)。
 _absent: dict[tuple[str, str], float] = {}
+#: (连接, 预览地址) 一把:同一张图同时被要好几次时只去取一次,别的等它落盘再读。
+_fetch_locks: dict[tuple[str, str], threading.Lock] = {}
+
+
+class _PreviewNotNow(Exception):
+    """这次没取到(那台机器回 5xx、连接断了、超时)—— 不是「没有预览图」,下次照常去取。"""
 
 
 def forget(instance_id: str | None = None) -> None:
@@ -95,10 +101,13 @@ def forget(instance_id: str | None = None) -> None:
         if instance_id is None:
             _snapshots.clear()
             _absent.clear()
+            _fetch_locks.clear()
             return
         _snapshots.pop(instance_id, None)
         for key in [key for key in _absent if key[0] == instance_id]:
             _absent.pop(key, None)
+        for key in [key for key in _fetch_locks if key[0] == instance_id]:
+            _fetch_locks.pop(key, None)
 
 
 def drop_cache(instance_id: str) -> None:
@@ -218,22 +227,31 @@ def preview(db: Session, instance: PluginInstance, folder: str, name: str) -> tu
     if target.is_file() and kind_file.is_file():
         return target.read_bytes(), kind_file.read_text(encoding="utf-8")
     with _lock:
-        until = _absent.get((instance.id, url), 0.0)
-    if until > time.monotonic():
-        return None
-    fetched = _fetch_preview(db, instance, url, snapshot.headers if snapshot else {})
-    if fetched is None:
+        gate = _fetch_locks.setdefault((instance.id, url), threading.Lock())
+    with gate:
+        # 等锁的这段时间里,先到的那个可能已经取回落盘,或者问出了「没有」。
+        if target.is_file() and kind_file.is_file():
+            return target.read_bytes(), kind_file.read_text(encoding="utf-8")
         with _lock:
-            _absent[(instance.id, url)] = time.monotonic() + NO_PREVIEW_SECONDS
-        return None
-    data, kind = fetched
-    target.parent.mkdir(parents=True, exist_ok=True)
-    # 同一张图可能同时被几个请求取回:各写各的临时文件再换上去,不抢同一个半截文件。类型先落,读的人见到图就有类型。
-    for path, content in ((kind_file, kind.encode("utf-8")), (target, data)):
-        partial = path.with_name(f"{path.name}.{uuid.uuid4().hex}.part")
-        partial.write_bytes(content)
-        partial.replace(path)
-    return data, kind
+            until = _absent.get((instance.id, url), 0.0)
+        if until > time.monotonic():
+            return None
+        try:
+            fetched = _fetch_preview(db, instance, url, snapshot.headers if snapshot else {})
+        except _PreviewNotNow:
+            return None
+        if fetched is None:
+            with _lock:
+                _absent[(instance.id, url)] = time.monotonic() + NO_PREVIEW_SECONDS
+            return None
+        data, kind = fetched
+        target.parent.mkdir(parents=True, exist_ok=True)
+        # 临时文件再换上去,读的人不会读到半截。类型先落,读的人见到图就有类型。
+        for path, content in ((kind_file, kind.encode("utf-8")), (target, data)):
+            partial = path.with_name(f"{path.name}.{uuid.uuid4().hex}.part")
+            partial.write_bytes(content)
+            partial.replace(path)
+        return data, kind
 
 
 def _snapshot_for(db: Session, instance: PluginInstance) -> _Snapshot | None:
@@ -254,11 +272,16 @@ def _snapshot_for(db: Session, instance: PluginInstance) -> _Snapshot | None:
 
 
 def _fetch_preview(db: Session, instance: PluginInstance, url: str, headers: dict[str, str]) -> tuple[bytes, str] | None:
-    """按这个连接的出站决定去取(和插件交回 `url` 的产出同一条路)。不是图、太大、取不到都当没有。"""
+    """按这个连接的出站决定去取(和插件交回 `url` 的产出同一条路)。
+
+    那边明确说没有(404 这类)、不是图、太大 → None,记成没有;那边一时出错(5xx、连接断了、超时)→ 抛
+    _PreviewNotNow,这次不给、也不记成没有,下次照常去取。"""
     route = plugin_egress.resolve(db, instance, inst.manifest_for(db, instance))
     try:
         with httpx.Client(timeout=30, headers=headers, follow_redirects=True, **route.httpx_options(url)) as client:
             with client.stream("GET", url) as response:
+                if response.status_code >= 500 or response.status_code == 429:
+                    raise _PreviewNotNow(f"HTTP {response.status_code}")
                 if response.status_code != 200:
                     return None
                 kind = response.headers.get("content-type", "").split(";")[0].strip().lower()
@@ -273,8 +296,8 @@ def _fetch_preview(db: Session, instance: PluginInstance, url: str, headers: dic
                     chunks.append(chunk)
                 return b"".join(chunks), kind
     except httpx.HTTPError as exc:
-        logger.info("模型预览图没取到(连接 %s):%s", instance.id, exc)
-        return None
+        logger.info("模型预览图这次没取到(连接 %s):%s", instance.id, exc)
+        raise _PreviewNotNow(str(exc)) from exc
 
 
 def detail(db: Session, instance: PluginInstance, folder: str, name: str) -> dict[str, Any]:
