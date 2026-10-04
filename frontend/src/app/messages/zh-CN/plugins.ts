@@ -364,4 +364,11 @@ export const plugins = {
   modelDownloadDiskLocal: "开始前会查这台电脑的剩余空间,不够就不下",
   modelDownloadDiskRemote: "那台机器还剩多少空间查不到;不够时 ComfyUI-Manager 会报错",
   modelDownloadCannot: "这台服务器现在下不了模型",
+  // 插件更新后多要了权限(连接卡片最上面那条)
+  pluginPermAddedTitle: "插件更新后多要了 {n} 项权限,这个连接先停用了",
+  pluginPermAddedBody: "它提供的模型和工具暂时用不了。授予下面这几项后马上恢复;之前授予的不受影响。",
+  pluginPermPendingTitle: "还要授予 {n} 项权限,这个连接才能用",
+  pluginPermPendingBody: "插件声明要做的事都在下面。授予之后,它提供的模型和工具就能用了。",
+  pluginPermGrantAll: "授予这 {n} 项",
+  pluginPermWaiting: "待授权",
 } as const;

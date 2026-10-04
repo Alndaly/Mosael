@@ -93,8 +93,12 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Not authorized yet — fill in the app credentials, then click Authorize",
     },
     "pluginBlocked_permissionsPending": {
-        "zh": "权限未授予",
-        "en": "Permissions not granted",
+        "zh": "还没授予权限:{names}。到插件页这个连接的「权限」里授予后才能用",
+        "en": "Permissions not granted yet: {names}. Grant them under Permissions on this connection in the Plugins page to use it",
+    },
+    "pluginBlocked_permissionsAdded": {
+        "zh": "插件更新后多要了 {n} 项权限:{names}。这个连接先停用了,到插件页这个连接上授予后恢复(之前授予的不受影响)",
+        "en": "The plugin update asks for {n} more permission(s): {names}. This connection is paused until you grant them on the Plugins page (earlier grants are kept)",
     },
     "pluginErr_fillFirst": {
         "zh": "请先填写: {names}",

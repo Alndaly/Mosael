@@ -345,6 +345,38 @@ def test_能力开关可以逐个改() -> None:
     assert [t["name"] for t in client.get("/api/plugins/tools").json()] == ["noisy"]
 
 
+def test_插件升级后多要了权限_连接停用并说清楚多要了哪几项_授予后恢复() -> None:
+    """升级后清单多声明了权限:已有的连接停用(这是有意的 —— 多出来的权限要人点头),但要说清楚为什么停、
+    多要了哪几项、点哪里恢复;之前授予的那一项照旧算数,不用重授。"""
+    client = install(KEYED)
+    created = client.post("/api/plugins/dev.keyed/instances", json={"config": {"platform": "bilibili"}}).json()
+    client.patch(f"/api/plugins/instances/{created['id']}/credentials", json={"values": {"api_key": "k"}})
+    client.patch(f"/api/plugins/instances/{created['id']}/permissions", json={"grants": {"network:demo": True}})
+    client.patch(f"/api/plugins/instances/{created['id']}", json={"enabled": True})
+    assert packages(client)["dev.keyed"]["instances"][0]["blocked_reason"] == ""
+
+    upgraded = {**KEYED, "version": "1.1.0", "permissions": ["network:demo", "network:extra", "filesystem:write"]}
+    (plugins_root() / "keyed" / "mosael.plugin.json").write_text(json.dumps(upgraded), encoding="utf-8")
+    assert client.post("/api/plugins/scan").status_code == 200
+
+    instance = packages(client)["dev.keyed"]["instances"][0]
+    assert instance["pending_permissions"] == ["network:extra", "filesystem:write"], "按清单里的先后,已授予的不算"
+    assert instance["permissions_added"] is True
+    assert instance["blocked_reason"] == (
+        "插件更新后多要了 2 项权限:network:extra、filesystem:write。这个连接先停用了,"
+        "到插件页这个连接上授予后恢复(之前授予的不受影响)"
+    )
+    assert client.get("/api/plugins/tools").json() == [], "停用的连接一个工具都不出"
+    grants = {one["permission"]: one["granted"] for one in
+              client.get(f"/api/plugins/instances/{created['id']}/permissions").json()}
+    assert grants == {"network:demo": True, "network:extra": False, "filesystem:write": False}
+
+    client.patch(f"/api/plugins/instances/{created['id']}/permissions",
+                 json={"grants": {"network:extra": True, "filesystem:write": True}})
+    instance = packages(client)["dev.keyed"]["instances"][0]
+    assert (instance["blocked_reason"], instance["pending_permissions"], instance["permissions_added"]) == ("", [], False)
+
+
 # --- 四道门 -------------------------------------------------------------
 
 def test_不可用的原因一句话说清() -> None:
@@ -363,9 +395,12 @@ def test_不可用的原因一句话说清() -> None:
     client.patch(f"/api/plugins/instances/{created['id']}", json={"config": {"platform": "douyin"}})
     assert "缺少凭据: API Key" == reason()
     client.patch(f"/api/plugins/instances/{created['id']}/credentials", json={"values": {"api_key": "k"}})
-    assert "权限未授予" == reason()
+    assert "还没授予权限:network:demo。到插件页这个连接的「权限」里授予后才能用" == reason()
+    assert packages(client)["dev.keyed"]["instances"][0]["pending_permissions"] == ["network:demo"]
+    assert packages(client)["dev.keyed"]["instances"][0]["permissions_added"] is False
     client.patch(f"/api/plugins/instances/{created['id']}/permissions", json={"grants": {"network:demo": True}})
     assert "" == reason()
+    assert packages(client)["dev.keyed"]["instances"][0]["pending_permissions"] == []
     # 不可用的实例一个工具都不出:让智能体去调一个必定失败的工具,只会烧掉一轮对话。
     assert client.get("/api/plugins/tools").json() != []
 

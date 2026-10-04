@@ -359,15 +359,33 @@ def set_permissions(db: Session, instance: PluginInstance, grants: dict[str, boo
     return list_permissions(db, instance)
 
 
-def permissions_granted(db: Session, instance: PluginInstance) -> bool:
-    manifest = manifest_for(db, instance)
-    if not manifest.permissions:
-        return True
-    grants = {
+def _grants(db: Session, instance: PluginInstance) -> dict[str, bool]:
+    return {
         row.permission: row.granted
         for row in db.scalars(select(PluginPermissionGrant).where(PluginPermissionGrant.instance_id == instance.id))
     }
-    return all(grants.get(permission) is True for permission in manifest.permissions)
+
+
+def pending_permissions(db: Session, instance: PluginInstance) -> list[str]:
+    """清单声明了、这个连接还没授予的权限,按清单里的先后。"""
+    grants = _grants(db, instance)
+    return [permission for permission in manifest_for(db, instance).permissions if grants.get(permission) is not True]
+
+
+def permissions_added(db: Session, instance: PluginInstance) -> bool:
+    """还缺的权限是不是**插件更新后多要的**:这个连接授予过清单里的别的权限(用过),只是新版多声明了几项。
+
+    两种处境说的话不一样:刚接上的连接是「还没授予」;用得好好的连接升级后停了,要说清楚是插件多要了权限、
+    之前授予的不受影响 —— 不然用户只看到「用不了」,以为插件坏了。
+    """
+    grants = _grants(db, instance)
+    permissions = manifest_for(db, instance).permissions
+    granted = [one for one in permissions if grants.get(one) is True]
+    return bool(granted) and len(granted) < len(permissions)
+
+
+def permissions_granted(db: Session, instance: PluginInstance) -> bool:
+    return not pending_permissions(db, instance)
 
 
 def blocked_reason(db: Session, instance: PluginInstance) -> str:
@@ -390,8 +408,12 @@ def blocked_reason(db: Session, instance: PluginInstance) -> str:
         }:
             return tr("pluginBlocked_unauthorized")
         return tr("pluginBlocked_missingCredentials", names=tr("punct_listSep").join(absent))
-    if not permissions_granted(db, instance):
-        return tr("pluginBlocked_permissionsPending")
+    pending = pending_permissions(db, instance)
+    if pending:
+        names = tr("punct_listSep").join(pending)
+        if permissions_added(db, instance):
+            return tr("pluginBlocked_permissionsAdded", n=len(pending), names=names)
+        return tr("pluginBlocked_permissionsPending", names=names)
     return ""
 
 

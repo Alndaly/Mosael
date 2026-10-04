@@ -55,6 +55,7 @@ import { GenerationModelsRow } from "@/features/plugins/ProvidedModels";
 import { ModelLibraryRow } from "@/features/plugins/ModelLibrary";
 import { ToolEffectBadge } from "@/features/plugins/ToolEffectBadge";
 import { ConnectionAuthorization } from "@/features/plugins/ConnectionAuthorization";
+import { ConnectionPermissionNotice, waitingForPermissions } from "@/features/plugins/ConnectionPermissions";
 import { ConnectionNetwork } from "@/features/plugins/ConnectionNetwork";
 import { ConnectionPackageSources } from "@/features/plugins/ConnectionPackageSources";
 import { GroupActions } from "@/features/plugins/GroupActions";
@@ -150,6 +151,8 @@ export function PluginsView({ workspaceId }: { workspaceId: string }) {
             {list.map((item) => {
               //: 绿点说的是「在用」:启用了**而且**能用。启用着但缺凭据、没授权的,亮绿点就是在说谎。
               const live = (item.instances ?? []).filter((i) => i.enabled && !i.blocked_reason).length;
+              //: 启用着、却因为缺权限停了(插件更新后多要了几项):不亮绿点,标黄、说「待授权」,不让人以为它坏了。
+              const waiting = waitingForPermissions(item.instances ?? []);
               return (
                 <button
                   key={item.id}
@@ -158,11 +161,12 @@ export function PluginsView({ workspaceId }: { workspaceId: string }) {
                   aria-current={selected?.id === item.id ? "true" : undefined}
                   onClick={() => setSelectedId(item.id)}
                 >
-                  <span className={cn("h-[7px] w-[7px] shrink-0 rounded-full bg-border-strong", live > 0 && "bg-success")} />
+                  <span className={cn("h-[7px] w-[7px] shrink-0 rounded-full bg-border-strong", live > 0 && "bg-success", waiting && "bg-warning")} />
                   <span className={DETAIL_INDEX_TEXT}>
                     <strong>{item.name}</strong>
                     <small>
                       v{item.version} · {t("pluginConnectionCount").replace("{n}", String((item.instances ?? []).length))}
+                      {waiting && <span className="text-warning"> · {t("pluginPermWaiting")}</span>}
                     </small>
                   </span>
                 </button>
@@ -668,6 +672,8 @@ export function ConnectionCard({ pkg, instance, workspaceId }: { pkg: PluginPack
       {pkg.oauth && instance.authorization && (
         <ConnectionAuthorization instanceId={instance.id} state={instance.authorization} fields={pkg.oauth.fills ?? []} />
       )}
+      {/* 缺权限停着(插件更新后多要了几项,或刚接上还没授):最上面说清楚为什么、点哪里恢复。 */}
+      <ConnectionPermissionNotice instance={instance} />
 
       <SettingsRow label={t("pluginConnectionName")} description={t("pluginConnectionNameDesc")}>
         <Input

@@ -359,4 +359,11 @@ export const plugins = {
   modelDownloadDiskLocal: "Free space on this computer is checked first; it won't start if there isn't enough",
   modelDownloadDiskRemote: "That machine's free space can't be checked; ComfyUI-Manager reports it if there isn't enough",
   modelDownloadCannot: "This server can't download models right now",
+  // 插件更新后多要了权限(连接卡片最上面那条)
+  pluginPermAddedTitle: "The plugin update asks for {n} more permission(s); this connection is paused",
+  pluginPermAddedBody: "Its models and tools are unavailable for now. Grant the items below to resume right away; earlier grants are kept.",
+  pluginPermPendingTitle: "Grant {n} permission(s) to use this connection",
+  pluginPermPendingBody: "What the plugin declares it needs is listed below. Once granted, its models and tools are available.",
+  pluginPermGrantAll: "Grant these {n}",
+  pluginPermWaiting: "Needs permission",
 } as const;

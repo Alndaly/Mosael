@@ -11666,6 +11666,13 @@ export interface components {
              * @default
              */
             blocked_reason: string;
+            /** Pending Permissions */
+            pending_permissions?: string[];
+            /**
+             * Permissions Added
+             * @default false
+             */
+            permissions_added: boolean;
             /**
              * Authorization
              * @default

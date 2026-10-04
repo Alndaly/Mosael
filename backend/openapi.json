@@ -31822,6 +31822,18 @@
             "title": "Blocked Reason",
             "default": ""
           },
+          "pending_permissions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Pending Permissions"
+          },
+          "permissions_added": {
+            "type": "boolean",
+            "title": "Permissions Added",
+            "default": false
+          },
           "authorization": {
             "type": "string",
             "enum": [
