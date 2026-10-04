@@ -64,7 +64,8 @@ def social_metrics(db: Session, scope: RunScope, config: dict[str, Any]) -> dict
     raw = social_media.find_items(config.get("data"), kind=kind)
 
     if kind == "comments":
-        comments = [social_media.normalize_comment(one, offset_hours=offset) for one in raw]
+        escaped = str(config.get("unescape_html") or "no") == "yes"
+        comments = [social_media.normalize_comment(one, offset_hours=offset, html_escaped=escaped) for one in raw]
         comments = sorted((one for one in comments if one["text"]), key=lambda one: -(one["likes"] or 0))[:limit]
         stats = social_media.comment_stats(comments)
         return {

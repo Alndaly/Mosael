@@ -1307,6 +1307,9 @@
       },
       "utc_offset": {
         "type": "number"
+      },
+      "unescape_html": {
+        "type": "string"
       }
     },
     "outputs": [

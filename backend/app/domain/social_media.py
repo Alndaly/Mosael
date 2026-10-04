@@ -13,6 +13,7 @@
 
 from __future__ import annotations
 
+import html
 import json
 import re
 import statistics
@@ -435,7 +436,10 @@ def normalize_post(item: dict[str, Any], *, duration_unit: str = "auto", offset_
     return out
 
 
-def normalize_comment(item: dict[str, Any], *, offset_hours: float = 8.0) -> dict[str, Any]:
+def normalize_comment(item: dict[str, Any], *, offset_hours: float = 8.0, html_escaped: bool = False) -> dict[str, Any]:
+    """一条评论 → 统一的形状。`html_escaped`:这份数据的文字做过 HTML 转义(B 站评论接口交回的原文就是,
+    「'」写成 &#39;),解**一次** —— 用户自己打的「&#39;」那几个字接口交回 &amp;#39;,解一次才是他写的原样。
+    没转义的来源(抖音、小红书、页面上读到的文字)不能解:用户写的「&lt;3」就是这四个字。"""
     leaves = _leaves(item)
     _, text = _pick(leaves, COMMENT_FIELDS["text"], _is_text)
     _, likes = _pick(leaves, COMMENT_FIELDS["likes"], _is_count)
@@ -443,11 +447,12 @@ def normalize_comment(item: dict[str, Any], *, offset_hours: float = 8.0) -> dic
     _, author = _pick(leaves, COMMENT_FIELDS["author"], _is_text)
     _, published = _pick(leaves, COMMENT_FIELDS["published_at"], lambda v: parse_time(v, offset_hours) is not None)
     when = parse_time(published, offset_hours) if published is not None else None
+    original = html.unescape if html_escaped else str
     return {
-        "text": str(text or "").strip(),
+        "text": original(str(text or "")).strip(),
         "likes": int(parse_count(likes)) if likes is not None else None,
         "replies": int(parse_count(replies)) if replies is not None else None,
-        "author": str(author or "").strip(),
+        "author": original(str(author or "")).strip(),
         "published_at": when.isoformat(timespec="minutes") if when else None,
     }
 

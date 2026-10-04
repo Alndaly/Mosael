@@ -51,6 +51,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "时长的数是秒还是毫秒(抖音的接口是毫秒);自动时超过十小时的当毫秒",
         "en": "Whether lengths are seconds or milliseconds (Douyin's API uses milliseconds); auto treats anything over ten hours as milliseconds",
     },
+    "wfNode_social_metrics_unescape_html": {
+        "zh": "评论原文做过 HTML 转义时选 yes(B 站评论接口交回的就是,「'」写成 &#39;),整理时解一次;别的来源保持 no —— 用户原文里本来就写着的 &lt; 之类不该被改",
+        "en": "Pick yes when the comment text is HTML-escaped (Bilibili's comment API returns it that way, ' as &#39;) to decode it once; keep no for other sources so text a user actually typed, like &lt;, stays as written",
+    },
     "wfNode_social_metrics_utc_offset": {
         "zh": "按哪个时区数发布时段(相对 UTC 的小时数,北京时间是 8)",
         "en": "Which time zone to count posting hours in (hours from UTC; Beijing is 8)",
@@ -90,6 +94,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     "wfField_profile": {"zh": "账号资料", "en": "Account profile"},
     "wfField_duration_unit": {"zh": "时长单位", "en": "Length unit"},
     "wfField_utc_offset": {"zh": "时区", "en": "Time zone"},
+    "wfField_unescape_html": {"zh": "解开 HTML 转义", "en": "Decode HTML escapes"},
     "wfField_max_height": {"zh": "最高画质", "en": "Max resolution"},
     "wfField_error": {"zh": "失败原因", "en": "Error"},
     "wfField_id": {"zh": "编号", "en": "ID"},

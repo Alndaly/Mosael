@@ -336,6 +336,7 @@ _FIELD_LABELS = {
     "profile": "wfField_profile",
     "duration_unit": "wfField_duration_unit",
     "utc_offset": "wfField_utc_offset",
+    "unescape_html": "wfField_unescape_html",
     "max_height": "wfField_max_height",
     "error": "wfField_error",
     "id": "wfField_id",
@@ -1152,6 +1153,9 @@ NODE_TYPES: dict[str, dict[str, Any]] = {
                               "default": "auto", "active_when": {"kind": "posts"},
                               "description": "wfNode_social_metrics_duration_unit"},
             "utc_offset": {"advanced": True, "type": "number", "default": 8, "description": "wfNode_social_metrics_utc_offset"},
+            #: 评论原文做过 HTML 转义的来源(B 站评论接口)才选 yes;没转义的来源解了反而改掉用户的原文。
+            "unescape_html": {"advanced": True, "type": "string", "options": ["no", "yes"], "default": "no",
+                              "active_when": {"kind": "comments"}, "description": "wfNode_social_metrics_unescape_html"},
         },
         "outputs": ["items", "count", "account", "stats", "summary", "table"],
         "output_types": {"items": "json", "count": "number", "account": "json", "stats": "json",

@@ -541,6 +541,46 @@ class Test评论区洞察真跑:
         [note] = _notes(ws)
         assert line in _note_text(note), "笔记里也要写明"
 
+    def test_浏览器_B站走接口_评论原文里的HTML转义解一次_笔记上是原样(self, monkeypatch) -> None:
+        """用户截图:笔记里一条评论显示成「应用ControlNet &#39;NoneType&#39; object has no attribute &#39;copy&#39;」。
+        B 站接口交回的原文就是这样转义过的(实测),一路原样进了笔记。"""
+        ws, _ = _setup(with_tikhub=False)
+        raw = "应用ControlNet\n&#39;NoneType&#39; object has no attribute &#39;copy&#39; [笑哭] @某某"
+        comments = [{"author": "a", "text": raw, "likes": 3, "published_at": ""},
+                    {"author": "b", "text": "↳ 原样写的 &amp;#39; &lt;3", "likes": 1, "published_at": ""}]
+        page = {"url": BILI_VIDEO, "title": "t", "now": "2026-10-04T12:00:00+08:00", "mode": "api", "total": 2,
+                "fetched": 2, "fetched_roots": 1, "fetched_replies": 1, "logged_in": True, "gap_note": "", "expanded": -1,
+                "video": {}, "text": json.dumps({"total": 2, "comments": comments}, ensure_ascii=False)}
+        outside = Outside(monkeypatch, {"comment_insights": INSIGHT}, page_value=page)
+        context = _run(ws, comment_insights_graph(chat=CHAT), video_link=BILI_VIDEO, data_source="browser")
+        texts = [one["text"] for one in context["web_api_m"]["items"]]
+        assert texts == ["应用ControlNet\n'NoneType' object has no attribute 'copy' [笑哭] @某某", "↳ 原样写的 &#39; <3"]
+        batch = next(call for call in outside.calls["llm"] if call["name"] == "comment_insights_batch")
+        assert "&#39;NoneType" not in batch["prompt"] and "'NoneType'" in batch["prompt"]
+        [note] = _notes(ws)
+        assert "&#39;" not in _note_text(note).replace("原样写的 &#39;", "")
+        assert "'NoneType' object has no attribute 'copy' [笑哭] @某某" in _note_text(note)
+
+    def test_浏览器读页面那一路_页面上的文字本来就是原样_整理不再动它(self, monkeypatch) -> None:
+        ws, _ = _setup(with_tikhub=False)
+        answer = {"title": "某视频", "comment_total": "2",
+                  "comments": [{"text": "'NoneType' object has no attribute 'copy' 爱了 &lt;3 [笑哭] @某某", "likes": "12",
+                                "author": "甲", "published_at": ""}],
+                  "login_wall": False, "notes": ""}
+        Outside(monkeypatch, {"comments_page": answer, "comment_insights": INSIGHT})
+        context = _run(ws, comment_insights_graph(chat=CHAT), video_link=BILI_VIDEO, data_source="browser")
+        assert context["web_comments_m"]["items"][0]["text"] == answer["comments"][0]["text"]
+        [note] = _notes(ws)
+        assert answer["comments"][0]["text"] in _note_text(note)
+
+    def test_B站来源的整理节点都按转义过的原文解一次_页面那一路不解(self) -> None:
+        for graph, ids in ((comment_insights_graph(chat=CHAT), ("web_api_m", "bili_comments_m")),
+                           (viral_video_breakdown_graph(chat=CHAT), ("web_api_comments_m", "bili_comments_m"))):
+            nodes = {node["id"]: node for node in graph["nodes"]}
+            for node_id in ids:
+                assert nodes[node_id]["config"].get("unescape_html") == "yes", node_id
+            assert nodes["web_comments_m"]["config"].get("unescape_html", "no") == "no"
+
     def test_浏览器读页面那一路_说清读到几条_页面显示的总数(self, monkeypatch) -> None:
         ws, _ = _setup(with_tikhub=False)
         answer = {"title": "某视频", "comment_total": "1374",

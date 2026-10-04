@@ -174,3 +174,12 @@ def test_已登录也翻完了_平台的数还是多_说其余是平台没给() 
     assert value["fetched"] == 73 and value["total"] == 80
     assert value["gap_note"] == NOTES["platform"]
 
+
+def test_接口交回的原文照原样带回_换行不压_转义留给整理那一步解一次() -> None:
+    """接口的 content.message 是 HTML 转义过的(&#39;)。脚本只搬运:不在这里解(整理节点按来源解一次,
+    在这里再解就是两次),也不把换行压成空格(评论原文里的换行是原样的一部分)。"""
+    raw = "第一行\n&#39;NoneType&#39; [笑哭] @某某"
+    root = _reply(1)
+    root["content"]["message"] = raw
+    value, _calls = _run(_site(logged_in=True, roots=[root], top=None, subs={}, total=1))
+    assert _comments(value)[0]["text"] == raw

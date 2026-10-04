@@ -221,7 +221,8 @@ _READ_PAGE_SCRIPT = """(async () => {
           seen.add(id);
           picked.push({ isReply, comment: {
             author: c.member ? c.member.uname : "",
-            text: (isReply ? "↳ " : "") + ((c.content ? c.content.message : "") || "").replace(/\\s+/g, " ").trim(),
+            //: 原文照搬:换行是原样的一部分;接口交回的 HTML 转义(&#39;)留给整理节点解一次(unescape_html)。
+            text: (isReply ? "↳ " : "") + ((c.content ? c.content.message : "") || "").trim(),
             likes: typeof c.like === "number" ? c.like : "",
             published_at: c.ctime ? new Date(c.ctime * 1000).toISOString().slice(0, 10) : "",
           } });
@@ -584,6 +585,12 @@ def _api_coverage(b: _Builder, col: float, row: float) -> str:
     return "web_api_coverage"
 
 
+def _escaped_comments(platform: str) -> dict[str, str]:
+    """B 站评论接口交回的原文是 HTML 转义过的(实测:「'」写成 &#39;,用户截图里笔记上显示的就是这一串):
+    整理它的节点解一次。TikHub 那一路的 B 站评论是同一个接口的原样转发。别的平台的原文没转义,不能解。"""
+    return {"unescape_html": "yes"} if platform == "bilibili" else {}
+
+
 def _merge(b: _Builder, node_id: str, name: dict[str, str], col: float, row: float, template: str, sources: list[str]) -> str:
     """汇合:几支里只有一支跑过,没跑的那几支引用出来是空串。"""
     b.node(node_id, "template", name, col, row, {"template": template})
@@ -828,6 +835,7 @@ def viral_video_breakdown_graph(*, chat: Any, locale: str | None = None) -> dict
         comments_m = b.node(f"{short}_comments_m", "social_metrics", {"zh": "按赞排好评论", "en": "Rank the comments"},
                             col + 1, row + 0.45, {
                                 "data": f"{{{{{comments}.output}}}}", "kind": "comments", "limit": "{{start.comment_count}}",
+                                **_escaped_comments(platform),
                             })
         b.edge(comments, comments_m)
         return [video_m, comments_m]
@@ -846,7 +854,7 @@ def viral_video_breakdown_graph(*, chat: Any, locale: str | None = None) -> dict
     })
     b.edge("web_is_api", "web_api_video_m", "true")
     b.node("web_api_comments_m", "social_metrics", {"zh": "整理接口取回的评论", "en": "Tidy the API comments"}, 6.6, 4.0, {
-        "data": "{{web_read.value.text}}", "kind": "comments", "limit": "{{start.comment_count}}",
+        "data": "{{web_read.value.text}}", "kind": "comments", "limit": "{{start.comment_count}}", **_escaped_comments("bilibili"),
     })
     b.edge("web_is_api", "web_api_comments_m", "true")
     coverage = _api_coverage(b, 6.6, 4.3)
@@ -1039,7 +1047,7 @@ def comment_insights_graph(*, chat: Any, locale: str | None = None) -> dict[str,
         b.edge(check, comments, "true")
         ranked = b.node(f"{short}_comments_m", "social_metrics", {"zh": "按赞排好评论", "en": "Rank the comments"}, col + 1, row, {
             "data": f"{{{{{comments}.output}}}}", "kind": "comments",
-            "limit": "2000", "table_limit": "{{start.comment_count}}",
+            "limit": "2000", "table_limit": "{{start.comment_count}}", **_escaped_comments(platform),
         })
         b.edge(comments, ranked)
         return [ranked]
@@ -1057,7 +1065,7 @@ def comment_insights_graph(*, chat: Any, locale: str | None = None) -> dict[str,
     b.edge("web_read", "web_is_api")
     b.node("web_api_m", "social_metrics", {"zh": "整理接口取回的评论", "en": "Tidy the API comments"}, 6.6, 4.0, {
         "data": "{{web_read.value.text}}", "kind": "comments",
-        "limit": "2000", "table_limit": "{{start.comment_count}}",
+        "limit": "2000", "table_limit": "{{start.comment_count}}", **_escaped_comments("bilibili"),
     })
     b.edge("web_is_api", "web_api_m", "true")
     api_coverage = _api_coverage(b, 6.6, 4.3)

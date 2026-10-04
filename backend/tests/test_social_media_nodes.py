@@ -242,6 +242,33 @@ class Test整理评论:
         out = _run("social_metrics", {"data": {"comments": []}, "kind": "comments"})
         assert out["count"] == 0 and out["table"] == ""
 
+    #: B 站评论接口交回的原文就是 HTML 转义过的(实测 2026-10,BV1sdeZenErJ 那条评论的 content.message 原样是
+    #: 「应用ControlNet\n&#39;NoneType&#39; object has no attribute &#39;copy&#39;」);用户截图里笔记上显示的正是这一串。
+    #: 用户自己打的「&#39;」那几个字,接口交回 &amp;#39; —— 只解一次,才是他写的原样。
+    BILI_ESCAPED = {"data": {"replies": [
+        {"rpid": 1, "like": 9, "member": {"uname": "Tom&amp;Jerry"},
+         "content": {"message": "应用ControlNet\n&#39;NoneType&#39; object has no attribute &#39;copy&#39;"}},
+        {"rpid": 2, "like": 8, "member": {"uname": "b"},
+         "content": {"message": "在终端里点&#34;打开&#34; &amp; 输入 a &lt; b &gt; c [笑哭] 😂 @某某 原样写的 &amp;#39;"}},
+    ]}}
+
+    def test_来源做过HTML转义的_整理时解一次_表情码_at_换行原样(self) -> None:
+        items = _run("social_metrics", {"data": self.BILI_ESCAPED, "kind": "comments", "unescape_html": "yes"})["items"]
+        assert items[0]["text"] == "应用ControlNet\n'NoneType' object has no attribute 'copy'"
+        assert items[0]["author"] == "Tom&Jerry"
+        assert items[1]["text"] == '在终端里点"打开" & 输入 a < b > c [笑哭] 😂 @某某 原样写的 &#39;', "只解一次"
+
+    def test_来源本来就是原文的_一个字都不动(self) -> None:
+        # 抖音 / 小红书 / 页面上读到的文字没有转义:用户写的「&lt;3」就是这四个字
+        douyin = {"comments": [{"cid": "1", "text": "爱了 &lt;3 &#39;", "digg_count": 1}]}
+        items = _run("social_metrics", {"data": douyin, "kind": "comments"})["items"]
+        assert items[0]["text"] == "爱了 &lt;3 &#39;"
+
+    def test_附表一行一条_换行压成空格只为排版_交给分析的原文保留换行(self) -> None:
+        out = _run("social_metrics", {"data": self.BILI_ESCAPED, "kind": "comments", "unescape_html": "yes"})
+        assert "\n" in out["items"][0]["text"]
+        assert "应用ControlNet 'NoneType'" in out["table"]
+
 
 # --------------------------------------------------------------------------------------
 # 从链接下载
