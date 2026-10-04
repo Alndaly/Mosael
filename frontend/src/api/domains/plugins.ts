@@ -28,6 +28,11 @@ export type ModelFile = components["schemas"]["ModelFileOut"];
 export type MissingModel = components["schemas"]["MissingModelOut"];
 export type ModelDetail = components["schemas"]["ModelDetailOut"];
 export type ModelResolved = components["schemas"]["ModelResolveOut"];
+/** 工作流库(ADR 0035):认领 workflow_library 的连接上存着的工作流、回收目录里的。 */
+export type WorkflowLibrary = components["schemas"]["WorkflowLibraryOut"];
+export type WorkflowFile = components["schemas"]["WorkflowFileOut"];
+export type WorkflowFileGraph = components["schemas"]["WorkflowGraphOut"];
+export type WorkflowTrashed = components["schemas"]["WorkflowTrashedOut"];
 
 export const listPluginPackages = () => api<PluginPackage[]>("/api/plugins");
 export const pluginDir = () => api<{ path: string }>("/api/plugins/dir");
@@ -113,6 +118,36 @@ export const startModelDownload = (
   instanceId: string,
   body: { workspace_id: string; url: string; folder: string; filename: string },
 ) => api<Job>(`/api/plugins/instances/${instanceId}/model-library/downloads`, { method: "POST", body: JSON.stringify(body) });
+
+// --- 工作流库(ADR 0035) -------------------------------------------------------
+
+/** 现问插件:这个连接上存着的全部工作流;给了工作区就带上那个工作区里最近一次用它生成的产出、谁在用它。 */
+export const getWorkflowLibrary = (instanceId: string, workspaceId: string) =>
+  api<WorkflowLibrary>(`/api/plugins/instances/${instanceId}/workflow-library?${new URLSearchParams({ workspace_id: workspaceId })}`);
+
+/** 一张工作流的原文(导出)。 */
+export const getWorkflowContent = (instanceId: string, path: string) =>
+  api<{ path: string; content: Record<string, unknown> }>(
+    `/api/plugins/instances/${instanceId}/workflow-library/content?${new URLSearchParams({ path })}`,
+  );
+
+const workflowWrite = (instanceId: string, op: "copy" | "rename" | "trash" | "restore", body: Record<string, string>) =>
+  api<{ path: string }>(`/api/plugins/instances/${instanceId}/workflow-library/${op}`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+
+/** 在那台服务器上复制一张。撞名回 409(`detail.suggestion` 是一个建议名),不覆盖。 */
+export const copyWorkflow = (instanceId: string, path: string, newPath: string) =>
+  workflowWrite(instanceId, "copy", { path, new_path: newPath });
+/** 改名 / 挪目录。撞名同上。 */
+export const renameWorkflow = (instanceId: string, path: string, newPath: string) =>
+  workflowWrite(instanceId, "rename", { path, new_path: newPath });
+/** 「删除」:挪进那台服务器上的回收目录,能恢复。 */
+export const trashWorkflow = (instanceId: string, path: string) => workflowWrite(instanceId, "trash", { path });
+/** 从回收目录挪回去;不给新名字就回原处(被占了回 409)。 */
+export const restoreWorkflow = (instanceId: string, path: string, newPath = "") =>
+  workflowWrite(instanceId, "restore", { path, new_path: newPath });
 
 /** 预览图地址。`<img>` 带不了请求头,凭据走 `?token=`(和素材的图同一条旁路)。 */
 export function modelPreviewUrl(instanceId: string, folder: string, name: string): string {

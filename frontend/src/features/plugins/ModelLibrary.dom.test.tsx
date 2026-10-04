@@ -220,7 +220,7 @@ describe("模型库", () => {
 
   it("有预览图用宿主的地址,没有就是按目录分的占位;大卡片上写着目录和子目录", async () => {
     await openLibrary();
-    fireEvent.click(screen.getByRole("radio", { name: "modelLibraryDensityLarge" }));
+    fireEvent.click(screen.getByRole("radio", { name: "libraryDensityLarge" }));
     fireEvent.click(folderTab("loras 3"));
     const detail = cards().find((item) => item.textContent?.includes("detail.safetensors"))!;
     expect(within(detail).getByRole("img").getAttribute("src")).toBe("preview://i1/loras/detail.safetensors");
@@ -231,15 +231,15 @@ describe("模型库", () => {
 
   it("三档显示方式:默认小卡片;选了哪一档记在本机,下次打开还是它", async () => {
     await openLibrary();
-    const group = screen.getByRole("radiogroup", { name: "modelLibraryDensity" });
-    expect(within(group).getByRole("radio", { name: "modelLibraryDensitySmall" }).getAttribute("aria-checked")).toBe("true");
+    const group = screen.getByRole("radiogroup", { name: "libraryDensity" });
+    expect(within(group).getByRole("radio", { name: "libraryDensitySmall" }).getAttribute("aria-checked")).toBe("true");
     expect(screen.getByRole("list", { name: "modelLibraryTitle" }).getAttribute("data-density")).toBe("small");
-    fireEvent.click(within(group).getByRole("radio", { name: "modelLibraryDensityList" }));
+    fireEvent.click(within(group).getByRole("radio", { name: "libraryDensityList" }));
     expect(screen.queryByRole("list", { name: "modelLibraryTitle" })).toBeNull();
     cleanup();
 
     await openLibraryAs("table");
-    expect(screen.getByRole("radio", { name: "modelLibraryDensityList" }).getAttribute("aria-checked")).toBe("true");
+    expect(screen.getByRole("radio", { name: "libraryDensityList" }).getAttribute("aria-checked")).toBe("true");
   });
 
   it("列表:一行一个文件 —— 缩略图、名字、目录、底模、大小、改动时间、几张工作流在用;点名字看详情", async () => {
@@ -300,7 +300,7 @@ describe("模型库", () => {
     expect(search.placeholder).not.toMatch(/\d/);
     expect(screen.queryByRole("button", { name: /modelLibraryFamilyLabel/ })).toBeNull();
     expect(screen.queryByRole("combobox", { name: "modelLibrarySort" })).toBeNull();
-    expect(screen.queryByRole("radiogroup", { name: "modelLibraryDensity" })).toBeNull();
+    expect(screen.queryByRole("radiogroup", { name: "libraryDensity" })).toBeNull();
     expect((screen.getByRole("button", { name: /modelLibraryDownload/ }) as HTMLButtonElement).disabled).toBe(true);
   });
 

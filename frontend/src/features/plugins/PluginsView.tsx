@@ -54,6 +54,7 @@ import { formatInvocationResult } from "@/features/plugins/invocationResult";
 import { CodeConfigControl, CodeFieldEditor, isCodeField, jsonProblem } from "@/features/plugins/CodeConfigField";
 import { GenerationModelsRow } from "@/features/plugins/ProvidedModels";
 import { ModelLibraryButton } from "@/features/plugins/ModelLibrary";
+import { WorkflowLibraryButton } from "@/features/plugins/WorkflowLibrary";
 import { CatalogBadge } from "@/components/app/CatalogDialog";
 import { Hint } from "@/components/ui/tooltip";
 import { useConnectionOpen } from "@/features/plugins/connectionOpen";
@@ -705,7 +706,7 @@ export function ConnectionCard({
   return (
     <section data-connection={instance.id} className="grid min-w-0 rounded-xl border border-border bg-panel">
       {/* **标题行就是收起 / 展开的按钮**(aria-expanded):收起时一行看清这个连接是什么、此刻怎么样;常用动作
-          (刷新、模型库、启用开关、删除)收起时也在,不用先展开。要处理的事(停用了要重新授权、缺配置)标黄,
+          (刷新、模型库、工作流库、启用开关、删除)收起时也在,不用先展开。要处理的事(停用了要重新授权、缺配置)标黄,
           下面一行写着原因。 */}
       <header className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3">
         <Hint label={(open ? t("pluginConnCollapse") : t("pluginConnExpand")).replace("{name}", instance.name)}>
@@ -757,6 +758,13 @@ export function ConnectionCard({
           )}
           {(pkg.provides ?? []).includes("model_library") && (
             <ModelLibraryButton
+              instance={instance}
+              workspaceId={workspaceId}
+              onCheckSettings={settingsTarget ? checkSettings : undefined}
+            />
+          )}
+          {(pkg.provides ?? []).includes("workflow_library") && (
+            <WorkflowLibraryButton
               instance={instance}
               workspaceId={workspaceId}
               onCheckSettings={settingsTarget ? checkSettings : undefined}

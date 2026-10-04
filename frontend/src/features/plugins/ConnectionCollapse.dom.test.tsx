@@ -4,7 +4,7 @@
  * 插件页的连接能收起(用户原话:「插件页面我希望每一个连接可以收起 这样方便查看」)。所有插件通用:
  *
  * - 收起时一行看清:名字、关键地址(清单的 `summary_field`)、状态(可用 / 已停用 / 要处理的原因)、开了几个工具、
- *   常用动作(刷新、模型库、启用开关、删除);
+ *   常用动作(刷新、模型库、工作流库、启用开关、删除);
  * - 只有一个连接默认展开;多个默认收起,刚新建的那个展开;收起状态按连接记在本机,读写存储出错也不影响;
  * - 「全部收起 / 全部展开」在插件头部,连接多于一个时才有;
  * - 标题行是按钮(aria-expanded);
@@ -44,7 +44,7 @@ const pkg = {
   kind: "process",
   multiple: true,
   permissions: ["network:comfyui", "network:huggingface"],
-  provides: ["generation", "tools", "model_library"],
+  provides: ["generation", "tools", "model_library", "workflow_library"],
   summary_field: "server_url",
   config_fields: [{ key: "server_url", label: "服务器地址", type: "string", required: true, secret: false, options: [], help: "" }],
   credential_fields: [],
@@ -105,6 +105,7 @@ describe("收起的连接", () => {
     expect(toggle.textContent).toContain("pluginExposedCount");
     expect(screen.getByRole("button", { name: "pluginRefreshModels" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "modelLibraryOpen" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "workflowLibraryOpen" })).toBeTruthy();
     expect(screen.getByRole("switch")).toBeTruthy();
     expect(screen.queryByText("pluginConnectionName"), "收起时配置项不摆出来").toBeNull();
     fireEvent.click(toggle);

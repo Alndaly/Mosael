@@ -8,10 +8,7 @@ import {
   Download,
   Eye,
   EyeOff,
-  Grid2x2,
-  Grid3x3,
   LayoutGrid,
-  List,
   Library,
   RefreshCcw,
   Search,
@@ -42,11 +39,14 @@ import { errorText } from "@/api/errorMessage";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { CatalogBadge } from "@/components/app/CatalogDialog";
 import {
+  LIBRARY_DENSITIES,
+  LibraryDensitySwitch,
   LibraryDetail,
   LibraryDialog,
   LibraryFilterChips,
   LibrarySection,
   type LibraryChip,
+  type LibraryDensity,
   type LibraryNavItem,
 } from "@/components/app/LibraryBrowser";
 import { ModalShell } from "@/components/app/modals";
@@ -64,7 +64,6 @@ import { Truncate } from "@/components/ui/truncate";
 import { invalidatePluginDependents } from "@/features/plugins/pluginCaches";
 import {
   ALL_FOLDERS,
-  DENSITIES,
   DOWNLOADS_VIEW,
   MISSING_VIEW,
   SORTS,
@@ -76,7 +75,6 @@ import {
   inFolder,
   sortModels,
   type GenerationTarget,
-  type LibraryDensity,
   type LibrarySort,
 } from "@/features/plugins/modelLibraryView";
 import { ModelThumb, folderIcon, modelBaseName, modelSubFolder, normModelName } from "@/components/generation/ModelThumb";
@@ -200,7 +198,7 @@ export function ModelLibraryDialog({
   const [query, setQuery] = React.useState("");
   const [sort, setSort] = React.useState<LibrarySort>("name");
   //: 显示方式记在本机(每台电脑屏幕不一样大);默认小卡片 —— 一屏多看几张。
-  const [density, setDensity] = usePersistentTab<LibraryDensity>("model-library.density", "small", DENSITIES);
+  const [density, setDensity] = usePersistentTab<LibraryDensity>("model-library.density", "small", LIBRARY_DENSITIES);
   //: 「模糊预览图」也记在本机:这台机器的预览图里可能有不适合当众打开的,开没开是看场合的事,不跟着账号走。
   //: 默认关 —— 设置里没有现成的「敏感内容」开关可以跟,而默认糊着会让第一次打开的人以为图坏了。
   const [blurSetting, setBlurSetting] = usePersistentTab<"on" | "off">("model-library.blur", "off", BLUR_SETTINGS);
@@ -349,7 +347,7 @@ export function ModelLibraryDialog({
             label: t(one === "name" ? "modelLibrarySortName" : one === "size" ? "modelLibrarySortSize" : "modelLibrarySortModified"),
           }))}
         />
-        <DensitySwitch value={density} onChange={setDensity} />
+        <LibraryDensitySwitch value={density} onChange={setDensity} />
         <IconButton
           variant="outline"
           size="default"
@@ -855,32 +853,6 @@ function ModelTable({
         })}
       </tbody>
     </table>
-  );
-}
-
-/** 三档显示方式:一组单选的图标按钮。 */
-function DensitySwitch({ value, onChange }: { value: LibraryDensity; onChange: (value: LibraryDensity) => void }) {
-  const t = useI18n();
-  const options: { value: LibraryDensity; label: string; icon: React.ReactNode }[] = [
-    { value: "large", label: t("modelLibraryDensityLarge"), icon: <Grid2x2 /> },
-    { value: "small", label: t("modelLibraryDensitySmall"), icon: <Grid3x3 /> },
-    { value: "list", label: t("modelLibraryDensityList"), icon: <List /> },
-  ];
-  return (
-    <div role="radiogroup" aria-label={t("modelLibraryDensity")} className="flex h-10 shrink-0 items-center gap-0.5 rounded-md border border-border p-1">
-      {options.map((one) => (
-        <IconButton
-          key={one.value}
-          role="radio"
-          aria-checked={value === one.value}
-          label={one.label}
-          className={cn("text-muted-foreground", value === one.value && "bg-accent text-primary hover:bg-accent hover:text-primary")}
-          onClick={() => onChange(one.value)}
-        >
-          {one.icon}
-        </IconButton>
-      ))}
-    </div>
   );
 }
 

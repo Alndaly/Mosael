@@ -19,9 +19,6 @@ export const UNKNOWN_FAMILY = "__unknown__";
 export const SORTS = ["name", "size", "modified"] as const;
 export type LibrarySort = (typeof SORTS)[number];
 
-/** 显示方式:大卡片(看预览)、小卡片(一屏多看几张)、列表(扫文件名、大小、时间)。 */
-export const DENSITIES = ["large", "small", "list"] as const;
-export type LibraryDensity = (typeof DENSITIES)[number];
 
 /** 左栏的目录:有文件的才列,多的在前;一样多按名字。 */
 export function folderEntries(folders: readonly ModelLibraryFolder[]): ModelLibraryFolder[] {
