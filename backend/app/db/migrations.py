@@ -7364,6 +7364,17 @@ def _migrate_existing_libraries_get_the_new_reference_prices() -> None:
             prefill_profile_pricing(db, profile, base_url=profile.base_url or "", catalog=[], only_models=models)
 
 
+def _backfill_usage_costs() -> None:
+    """补算老账:费用为空、但现在按价目或服务商回报算得出来的历史用量补上费用(可信度 backfilled);
+    失败、当时按请求侧计量估了价、服务商什么都没回的那几条改成不计费的 0。保守的取舍见
+    domain/billing/backfill。排在补参考价那一步之后 —— 它要用到刚补上的价。"""
+    from app.core.unit_of_work import unit_of_work
+    from app.domain.billing.backfill import backfill_usage_costs
+
+    with unit_of_work() as db:
+        backfill_usage_costs(db)
+
+
 def _create_current_schema() -> None:
     """The single boundary between migrations for existing tables and new-table creation."""
 
@@ -7654,6 +7665,8 @@ def migration_plan() -> MigrationPlan:
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_added_track_records_list_what_moved),
             #: 老库补上这一版新增的内置参考价。要读模型行上的能力(插件连接的模型行由上面的 ComfyUI 那几步建好)。
             *_steps(MigrationPhase.AFTER_SCHEMA, _migrate_existing_libraries_get_the_new_reference_prices),
+            #: 补算老账:要用到上一步刚补上的参考价。
+            *_steps(MigrationPhase.AFTER_SCHEMA, _backfill_usage_costs),
             #: 对账:引用表按当前抽取规则建(见 db/references)。排在所有改写 JSON 的迁移之后 —— 那些是原生 SQL,
             #: 不经过 flush 时的维护;抽取规则的版本号变了才整张重建,平常是一次查询。
             *_recurring(MigrationPhase.AFTER_SCHEMA, _reindex_record_references),
