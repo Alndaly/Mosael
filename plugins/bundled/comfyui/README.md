@@ -140,7 +140,9 @@ otherwise the most frequent training tags (`ss_tag_frequency`), marked as "not n
 **Used by**: saved workflows whose node inputs name the file. **Missing for workflows**: models a workflow declares a
 download link for (node `properties.models`, or the newer top-level `models`), that a node currently uses, and that
 aren't on this server; only `https://huggingface.co/` and `https://civitai.com/` links count (the same allow-list as
-ComfyUI's own frontend).
+ComfyUI's own frontend). Civitai's other domains (`civitai.red`, `civitai.green`) are the same site: pasted links and
+links in workflows are rewritten to `civitai.com` before resolving and downloading, and the token only goes to
+`civitai.com` (1.9.1).
 
 Metadata read file by file is remembered in the plugin's data folder by server, folder, name, size and modification
 time: the first look at a few hundred files takes seconds, later ones only list the folders.

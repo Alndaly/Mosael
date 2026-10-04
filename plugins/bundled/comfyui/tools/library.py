@@ -27,6 +27,7 @@ import install
 import models
 from families import family_of
 from comfy_http import Comfy
+from sources import canonical_url
 from lines import ComfyError, say
 from model_files import SKIPPED_FOLDERS, data_file, files_in, folder_info, load_json, metadata_of, save_json
 from model_files import norm as _norm
@@ -140,7 +141,7 @@ def scan_workflow(ui_graph: dict[str, Any]) -> tuple[list[str], list[dict[str, s
             declared.append(spec)
     clean = [
         {"name": _norm(str(spec.get("name") or "")), "folder": str(spec.get("directory") or "").strip(),
-         "url": str(spec.get("url") or "").strip()}
+         "url": canonical_url(str(spec.get("url") or "").strip())}
         for spec in declared
     ]
     return sorted(used), [one for one in clean if one["name"] and one["folder"]]

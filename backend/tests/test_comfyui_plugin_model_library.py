@@ -575,6 +575,32 @@ def test_解析Civitai页面_版本接口给文件_类型定目录_底模定家�
     assert out["uses_token"] is True, "下载时会带上 Civitai 令牌(界面据此提醒经 Manager 下载时它会留在那台机器上)"
 
 
+
+@pytest.mark.parametrize("host", ["civitai.red", "www.civitai.red", "civitai.green"])
+def test_Civitai的别的域名也认_统一走civitai_com的接口(modules, comfy, monkeypatch, host) -> None:
+    """用户贴了 https://civitai.red/models/1318945/one-obsession,解析报「这个链接回了 HTTP 403」:插件只认 civitai.com,
+    别的域名被当成文件直链,拿插件的 User-Agent 去敲网页,被 Civitai 的防护挡了回来。它们是同一个站,接口一样。"""
+    _, sources = modules
+    version = {
+        "id": 222, "name": "v2.0", "modelId": 111, "baseModel": "Illustrious", "trainedWords": [],
+        "model": {"name": "Chibi Style", "type": "LORA"},
+        "files": [{"name": "chibi_v2.safetensors", "type": "Model", "primary": True, "sizeKB": 1.0,
+                   "downloadUrl": "https://civitai.com/api/download/models/222"}],
+    }
+    web = _Web({("GET", "https://civitai.com/api/v1/model-versions/222"): (200, {}, json.dumps(version).encode())})
+    monkeypatch.setattr(sources, "fetch", web)
+    monkeypatch.setenv("CIVITAI_TOKEN", "civ_secret")
+    from comfy_http import Comfy
+
+    out = sources.resolve({"url": f"https://{host}/models/111/chibi-style?modelVersionId=222"}, Comfy(comfy.url), "zh")
+    assert (out["source"], out["url"], out["filename"]) == ("civitai", "https://civitai.com/api/download/models/222", "chibi_v2.safetensors")
+    assert [call[1] for call in web.calls] == ["https://civitai.com/api/v1/model-versions/222"], "只问 civitai.com 的接口"
+    # 贴的是别的域名上的下载链接:换成 civitai.com 再下,令牌也只交给 civitai.com
+    assert sources.direct_url(f"https://{host}/api/download/models/222", "zh", set()) == "https://civitai.com/api/download/models/222"
+    assert sources.token_for(f"https://{host}/api/download/models/222") == ""
+    assert sources.token_for("https://civitai.com/api/download/models/222") == "civ_secret"
+
+
 def test_解析Civitai_要登录才看得到的模型_再带上令牌问一次(modules, comfy, monkeypatch) -> None:
     _, sources = modules
     version = {"id": 9, "name": "v1", "modelId": 8, "baseModel": "Pony", "model": {"name": "P", "type": "LORA"},

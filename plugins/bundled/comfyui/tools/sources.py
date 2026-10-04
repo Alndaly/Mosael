@@ -25,6 +25,9 @@ from model_files import folder_info, names_in, norm
 
 HF_HOSTS = frozenset({"huggingface.co", "www.huggingface.co", "hf.co"})
 CIVITAI_HOSTS = frozenset({"civitai.com", "www.civitai.com"})
+#: Civitai 的另外几个域名(同一个站、同一套接口;用户常从这些域名上复制链接)。一律换成 civitai.com 再问 ——
+#: 令牌也就只交给 civitai.com 这一个地方。
+CIVITAI_ALIASES = frozenset({"civitai.red", "www.civitai.red", "civitai.green", "www.civitai.green"})
 #: Civitai 的模型类型 → ComfyUI 的模型目录(这台服务器上没有那个目录就不建议)。
 CIVITAI_FOLDERS = {
     "checkpoint": "checkpoints",
@@ -67,6 +70,14 @@ _OPENER = request.build_opener(_NoRedirect)
 
 def _host(url: str) -> str:
     return (parse.urlsplit(url).hostname or "").lower()
+
+
+def canonical_url(url: str) -> str:
+    """Civitai 别的域名上的链接换成 civitai.com 上同一个地址;别的原样。"""
+    parts = parse.urlsplit(url)
+    if (parts.hostname or "").lower() in CIVITAI_ALIASES:
+        return parse.urlunsplit(parts._replace(netloc="civitai.com"))
+    return url
 
 
 def token_for(url: str) -> str:
@@ -291,6 +302,7 @@ def link_for(url: str, locale: str, folders: set[str]) -> Link:
     if not url.startswith(("http://", "https://")):
         raise ComfyError(say(locale, "这不是一个能下载的链接:要以 http:// 或 https:// 开头",
                              "This is not a downloadable link: it must start with http:// or https://"))
+    url = canonical_url(url)
     host = _host(url)
     if host in HF_HOSTS:
         return _huggingface(url, locale, folders)
@@ -301,6 +313,7 @@ def link_for(url: str, locale: str, folders: set[str]) -> Link:
 
 def direct_url(url: str, locale: str, folders: set[str]) -> str:
     """下载时用的直链:HuggingFace 的 `/blob/` 换成 `/resolve/`、Civitai 的模型页换成下载链接;别的原样。"""
+    url = canonical_url(url)
     host = _host(url)
     if host in HF_HOSTS:
         found = _HF_FILE.match(parse.urlsplit(url).path)
