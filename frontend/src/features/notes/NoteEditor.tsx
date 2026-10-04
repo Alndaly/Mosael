@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { useEditor, EditorContent, useEditorState } from "@tiptap/react";
 import Placeholder from "@tiptap/extension-placeholder";
 import React from "react";
-import { Bold, Italic, List, ListOrdered, Quote, Undo2, Redo2, AtSign, ImagePlus, Table2, ListTodo, Code2, Link, Minus, Strikethrough, Plus, ChevronDown, Check } from "lucide-react";
+import { Bold, Italic, List, ListOrdered, Quote, Undo2, Redo2, AtSign, ImagePlus, Table2, ListTodo, Code2, Link, Minus, Strikethrough, Plus, ChevronDown, Check, Bot } from "lucide-react";
 import { Selection } from "@tiptap/pm/state";
 import { toast } from "sonner";
 import { useNoteStrings } from "./strings";
@@ -15,7 +15,11 @@ import { listNotes, type Note } from "@/api/domains/notes";
 import { noteHref } from "@/lib/deepLink";
 import { importAsset } from "@/api/domains/assets";
 import { errorText } from "@/api/errorMessage";
-import { MENU_ITEM } from "@/components/ui/floating";
+import { FLOATING_SURFACE, MENU_ITEM } from "@/components/ui/floating";
+import { Button } from "@/components/ui/button";
+import type { Editor } from "@tiptap/react";
+import { InactiveSelection } from "./inactiveSelection";
+import { followMarkdown, readNoteSelection, type NoteSelection } from "./noteSelection";
 import { cn } from "@/lib/utils";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
@@ -27,13 +31,21 @@ export function NoteReader({ markdown }: { markdown: string }) {
   return <EditorContent editor={editor} />;
 }
 
-export function NoteEditor({ markdown, onChange, onReference, workspaceId, noteId, title, toolbarTarget, editable = true }: {
+/** 选区停下来多久才报给笔记页(给助手的上下文)。拖着选的那一路不必每一步都算一遍。 */
+const SELECTION_REPORT_MS = 150;
+
+export function NoteEditor({ markdown, onChange, onReference, workspaceId, noteId, title, toolbarTarget, editable = true, onSelectionChange, onAskAi }: {
   markdown: string; onChange: (value: string) => void; onReference: (note: Note) => void;
   workspaceId: string; noteId: string; title?: React.ReactNode; toolbarTarget?: HTMLElement | null; editable?: boolean;
+  /** 选区 / 光标在正文 Markdown 里是哪一段(见 noteSelection)。笔记页把它交给助手当上下文。 */
+  onSelectionChange?: (selection: NoteSelection | null) => void;
+  /** 选中文字后浮起来的「问 AI」。不给就不浮。 */
+  onAskAi?: (selection: NoteSelection) => void;
 }) {
   const s = useNoteStrings();
   const { locale } = usePreferences();
   const change = React.useRef(onChange); change.current = onChange;
+  const selectionChange = React.useRef(onSelectionChange); selectionChange.current = onSelectionChange;
   const reference = React.useRef(onReference); reference.current = onReference;
   const [insertOpen, setInsertOpen] = React.useState(false);
   const [blockOpen, setBlockOpen] = React.useState(false);
@@ -46,7 +58,7 @@ export function NoteEditor({ markdown, onChange, onReference, workspaceId, noteI
   const upload = React.useRef<(files: File[], at?: number) => void>(() => {});
   const markdownPaste = React.useRef<(text: string) => void>(() => {});
   const editor = useEditor({
-    extensions: [...noteExtensions(!editable, locale), Placeholder.configure({ placeholder: notePlaceholder(s.placeholder) }), RefSuggestion.configure({ suggestion: {
+    extensions: [...noteExtensions(!editable, locale), InactiveSelection, Placeholder.configure({ placeholder: notePlaceholder(s.placeholder) }), RefSuggestion.configure({ suggestion: {
       char: "@", allowedPrefixes: null,
       items: async ({ query }) => { try { return (await listNotes(workspaceId, query)).filter(n => n.id !== noteId).slice(0, 12); } catch { return []; } },
       command: ({ editor: instance, range, props }) => {
@@ -93,14 +105,31 @@ export function NoteEditor({ markdown, onChange, onReference, workspaceId, noteI
     undo: e?.can().undo(), redo: e?.can().redo(),
   }) });
   // Compare against the last emitted value: parent autosave must not rebuild the document or move the caret.
-  // 内容从外面整个换掉(切换笔记、恢复版本)时,光标放回开头。不放的话它按旧文档的位置映射到新文档
-  // **末尾** —— 新笔记以列表结尾时,一打开「无序列表」就亮着,而你根本没点进去。
+  // **换了一篇**才整份换掉、光标放回开头。不放的话它按旧文档的位置映射到新文档**末尾** —— 新笔记以列表
+  // 结尾时,一打开「无序列表」就亮着,而你根本没点进去。
+  // **同一篇**从外面来了新的一版(智能体改了一段、恢复版本、载入最新版本):按最小差异接(followMarkdown)——
+  // 只动改了的那一段、光标照常映射,而且进撤销历史:智能体改的那一段,Ctrl+Z 就退回去。
   //: 组词期间不回灌:组词中的字还没进文档,getMarkdown() 和 markdown 必然对不上(见 useExternalContent)。
+  const syncedNote = React.useRef(noteId);
   useExternalContent(editor, (instance) => {
+    const sameNote = syncedNote.current === noteId;
+    syncedNote.current = noteId;
     if (instance.getMarkdown() === markdown) return;
+    if (sameNote) { followMarkdown(instance, markdown); return; }
     instance.chain().setContent(markdown, { contentType: "markdown", emitUpdate: false })
       .command(({ tr }) => { tr.setSelection(Selection.atStart(tr.doc)); return true; }).run();
-  }, [markdown]);
+  }, [markdown, noteId]);
+  React.useEffect(() => {
+    if (!editor) return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const report = () => {
+      if (!selectionChange.current) return;
+      clearTimeout(timer);
+      timer = setTimeout(() => { if (!editor.isDestroyed) selectionChange.current?.(readNoteSelection(editor)); }, SELECTION_REPORT_MS);
+    };
+    editor.on("selectionUpdate", report); editor.on("update", report);
+    return () => { clearTimeout(timer); editor.off("selectionUpdate", report); editor.off("update", report); };
+  }, [editor]);
   React.useEffect(() => { editor?.setEditable(editable, false); }, [editor, editable]);
   markdownPaste.current = (text) => { editor?.chain().focus().insertContent(text, { contentType: "markdown" }).run(); };
   upload.current = async (files, at) => {
@@ -176,7 +205,40 @@ export function NoteEditor({ markdown, onChange, onReference, workspaceId, noteI
     <input type="file" hidden multiple ref={fileInput} accept="image/*" onChange={e => { upload.current(Array.from(e.target.files || [])); e.target.value = ""; }} />
   </div>;
   return <>{editable && (toolbarTarget ? createPortal(toolbar, toolbarTarget) : <><div ref={sentinel} className="note-format-sentinel" aria-hidden="true" />{toolbar}</>)}{title}<EditorContent editor={editor} />
+  {editable && onAskAi && <AskAiBubble editor={editor} label={s.askAi} hint={s.askAiHint} onAsk={() => { const selection = readNoteSelection(editor); if (selection?.text) onAskAi(selection); }} />}
   <menu.Portal className="fixed z-[80] w-[340px] max-w-[calc(100vw-24px)] rounded-xl p-1.5" header={<div className="px-3 py-2 text-xs text-muted-foreground">{s.addReference}</div>}>
     {(note, index) => <button type="button" key={note.id} role="option" aria-selected={menu.menu?.active === index} className={`note-list-row ${menu.menu?.active === index ? "bg-secondary" : ""}`} onMouseDown={e => e.preventDefault()} onClick={() => menu.choose(note)}><strong>{note.title || s.untitled}</strong><p>{note.markdown.slice(0,100)}</p></button>}
   </menu.Portal></>;
 }
+
+/**
+ * 选中文字后浮在选区上方的「问 AI」:带着这段打开笔记页的助手。
+ *
+ * 只在编辑器有焦点、选区非空时出现 —— 点进助手输入框之后它就该收起(选区还在,由 InactiveSelection 画着)。
+ * 按下时拦掉默认行为:不拦的话 mousedown 先让编辑器失焦,按钮在 click 到来之前就没了。
+ */
+function AskAiBubble({ editor, label, hint, onAsk }: { editor: Editor; label: string; hint: string; onAsk: () => void }) {
+  const state = useEditorState({ editor, selector: ({ editor: e }) => ({
+    empty: e.state.selection.empty, from: e.state.selection.from, to: e.state.selection.to, focused: e.isFocused,
+  }) });
+  const visible = state.focused && !state.empty;
+  const [, reposition] = React.useReducer((n: number) => n + 1, 0);
+  React.useEffect(() => {
+    if (!visible) return;
+    window.addEventListener("scroll", reposition, true); window.addEventListener("resize", reposition);
+    return () => { window.removeEventListener("scroll", reposition, true); window.removeEventListener("resize", reposition); };
+  }, [visible]);
+  if (!visible) return null;
+  let at = { top: 8, left: 8 };
+  try {
+    const start = editor.view.coordsAtPos(state.from); const end = editor.view.coordsAtPos(state.to);
+    // 放在选区上方;顶上放不下(贴着顶栏)就放到下方。
+    at = { top: start.top - ASK_AI_OFFSET < ASK_AI_MIN_TOP ? end.bottom + 8 : start.top - ASK_AI_OFFSET, left: Math.max(8, Math.min(window.innerWidth - 120, start.left)) };
+  } catch { /* 没有版面信息(测试环境):落在左上角也点得到。 */ }
+  return createPortal(<div className={cn(FLOATING_SURFACE, "fixed z-[70] p-1")} style={at} role="toolbar" aria-label={hint}>
+    <Button type="button" variant="ghost" size="xs" onMouseDown={e => e.preventDefault()} onClick={onAsk}><Bot />{label}</Button>
+  </div>, document.body);
+}
+/** 浮钮离选区顶边多高(自身 28px + 留白),以及它最高能浮到哪(窗口顶栏之下)。 */
+const ASK_AI_OFFSET = 44;
+const ASK_AI_MIN_TOP = 64;

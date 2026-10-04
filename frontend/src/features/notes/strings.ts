@@ -26,7 +26,7 @@ const zh = {
   saveAll: "全部存为笔记", saveAllTranscript: "把整份逐字稿存成一篇笔记。选中了片段就只存选中的那些。",
   saveAllSubtitles: "把整条字幕轨存成一篇笔记；有译文时原文与译文一起写入。",
   historyHint: "恢复会创建新版本，已有版本仍然保留。", localDraft: "已恢复本机未保存草稿", more: "加载更多",
-  focus: "专注写作", exitFocus: "显示列表", unavailable: "来源已删除或无法访问", loading: "正在载入…", version: "版本",
+  askAi: "问 AI", askAiHint: "带着选中的文字问助手", focus: "专注写作", exitFocus: "显示列表", unavailable: "来源已删除或无法访问", loading: "正在载入…", version: "版本",
   node: {
     imageLink: "图片链接",
     alt: "替代文字",
@@ -69,7 +69,7 @@ const en: Strings = {
   saveAll: "Save all to notes", saveAllTranscript: "Save the whole transcript as one note. With a selection, only the selected lines.",
   saveAllSubtitles: "Save the whole subtitle track as one note; translations are written alongside the original.",
   historyHint: "Restoring creates a new version and keeps previous versions.", localDraft: "Recovered a local unsaved draft", more: "Load more",
-  focus: "Focus on writing", exitFocus: "Show list", unavailable: "Source deleted or unavailable", loading: "Loading…", version: "Version",
+  askAi: "Ask AI", askAiHint: "Ask the assistant about the selected text", focus: "Focus on writing", exitFocus: "Show list", unavailable: "Source deleted or unavailable", loading: "Loading…", version: "Version",
   node: {
     imageLink: "Image address",
     alt: "Alternative text",

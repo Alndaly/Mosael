@@ -135,6 +135,8 @@
 .note-mode { height:26px; padding:0 9px; border-radius:6px; }
 .note-mode[aria-pressed=true] { background:var(--accent); color:var(--accent-foreground); }
 .note-mode:hover { color:var(--foreground); }
+/* 编辑器失焦时仍画出选区:助手会带上的就是这一段(见 inactiveSelection)。 */
+.note-prose .note-inactive-selection { background:color-mix(in srgb,var(--primary) 16%,transparent); border-radius:2px; }
 @media(max-width:1250px) { .note-document-header .note-status { font-size:0; gap:0; } .note-document-header { padding-inline:12px; } }
 .note-heading-option { display:inline-flex; align-items:center; gap:10px; }
 .note-heading-option > span { font:500 var(--text-ui-xs) var(--font-mono); color:var(--muted-foreground); }
