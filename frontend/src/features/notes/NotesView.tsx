@@ -39,6 +39,7 @@ import { plainExcerpt } from "@/lib/plainExcerpt";
 import type { AgentMessageQuote } from "@/api/domains/sessions";
 import { noteAgentContext } from "./noteAgentContext";
 import type { NoteSelection } from "./noteSelection";
+import type { NoteAiAction } from "./NoteSelectionToolbar";
 import { usePersistentTab } from "@/lib/usePersistentTab";
 import { cn } from "@/lib/utils";
 import { NoteEditor, NoteReader } from "./NoteEditor";
@@ -66,6 +67,9 @@ const NOTE_MIN_WIDTH = 480;
 const NOTE_FOLLOW_MS = 3000;
 const selectionKey = (selection: NoteSelection) => `${selection.start}:${selection.end}:${selection.text}`;
 type AgentMode = "docked" | "floating";
+type PageOutbox = { id: number; text: string; context: string };
+/** 哪些动作是「改这段」(结果用 edit_note 落回)、哪个是「接着写」(插在后面),其余只在对话里回答。 */
+const REPLACE_ACTIONS: readonly NoteAiAction[] = ["polish", "rewrite", "expand", "shorten", "translate"];
 
 /**
  * 笔记页的助手面板 —— 就是剪辑页、画板用的那一个(features/agent/CanvasAgentChat),**由页面装配层交进来**
@@ -78,6 +82,11 @@ export interface NotesAgentPanelProps {
   /** 这条消息带着的选区摘录:落进消息,对话气泡里画成可点的一行(点了回到这篇、定位到这段)。 */
   messageQuote: AgentMessageQuote | null;
   focusSignal: number;
+  /** 选区工具条上的 AI 动作投递给面板的那一条;面板接走时回调 onOutboxTaken,这里清掉。 */
+  outbox: PageOutbox | null;
+  onOutboxTaken: () => void;
+  /** 一条消息发出去了:放下钉住的那段选区。 */
+  onSent: () => void;
   emptyHint: string;
   placeholder: string;
   rectKey: string;
@@ -138,17 +147,41 @@ export function NotesView({ workspace, AgentPanel }: { workspace: Workspace; Age
   //: 编辑器里的选区 / 光标(正文原文,见 noteSelection)。点了小条上的 × 就不再带这一段,直到选区变了。
   const [selection, setSelection] = React.useState<NoteSelection | null>(null);
   const [dismissed, setDismissed] = React.useState("");
-  const quoted = selection && !(selection.text && selectionKey(selection) === dismissed) ? selection : null;
+  //: 「问 AI」「引用到对话」、AI 动作**钉住**的那一段:编辑器里的选区之后变了也还带着它,发出去(onSent)或点掉才放下。
+  //: 没钉住时跟着编辑器里的选区走。
+  const [pinned, setPinned] = React.useState<NoteSelection | null>(null);
+  const live = selection && !(selection.text && selectionKey(selection) === dismissed) ? selection : null;
+  const quoted = pinned ?? live;
+  const [outbox, setOutbox] = React.useState<PageOutbox | null>(null);
+  const outboxSeq = React.useRef(0);
   const quotedRef = React.useRef(quoted); quotedRef.current = quoted;
   const [focusSignal, setFocusSignal] = React.useState(0);
-  React.useEffect(() => { setSelection(null); setDismissed(""); }, [id]);
+  React.useEffect(() => { setSelection(null); setDismissed(""); setPinned(null); setOutbox(null); }, [id]);
   //: 发送那一刻才拼:正文取编辑器里最新的草稿(controller),不是上次存盘的那份。
   const agentContext = React.useCallback(() => noteAgentContext(t, controller.current?.read() ?? null, quotedRef.current), [t]);
   const selectionChips: ComposerChip[] = quoted?.text ? [{
     id: "note-selection", label: plainExcerpt(quoted.text), icon: <TextQuote size={11} />,
-    text: { title: t("noteAgentSelectionChip"), body: quoted.text }, onRemove: () => setDismissed(selectionKey(quoted)),
+    text: { title: t("noteAgentSelectionChip"), body: quoted.text },
+    onRemove: () => { setPinned(null); setDismissed(selectionKey(quoted)); },
   }] : [];
-  const askAi = (picked: NoteSelection) => { setSelection(picked); setDismissed(""); setAgentOpen("on"); setFocusSignal(n => n + 1); };
+  const askAi = (picked: NoteSelection) => { setPinned(picked); setAgentOpen("on"); setFocusSignal(n => n + 1); };
+  //: 引用到对话:只挂小条,不发、不抢输入框焦点。
+  const quoteInChat = (picked: NoteSelection) => { setPinned(picked); setAgentOpen("on"); };
+  //: AI 快捷动作:钉住这段、打开面板、投递一条带动作说明的消息 —— 面板接到就发(见 CanvasAgentChat 的 outbox)。
+  //: 改这段的(润色、翻译……)要求用 edit_note 落回:卡上有原文 → 新文的对照,批了才改、能撤销;总结、解释只回答。
+  const aiAction = (action: NoteAiAction, picked: NoteSelection) => {
+    const meta = s.selection.actions[action];
+    const lang = /[\u3400-\u9fff]/.test(picked.text) ? s.selection.languages.en : s.selection.languages.zh;
+    const goal = meta.hint;
+    const key = REPLACE_ACTIONS.includes(action) ? "noteAgentActionReplace" : action === "continue" ? "noteAgentActionInsert" : "noteAgentActionAnswer";
+    setPinned(picked);
+    setAgentOpen("on");
+    setOutbox({
+      id: ++outboxSeq.current,
+      text: meta.prompt.replace("{lang}", lang),
+      context: t(key).replace("{action}", meta.label).replace("{goal}", action === "translate" ? `${goal} → ${lang}` : goal),
+    });
+  };
   const selected = useQuery({ queryKey: noteKeys.detail(workspace.id, id ?? ""), queryFn: () => getNote(workspace.id, id!), enabled: !!id, staleTime: 0,
     refetchInterval: showAgent ? NOTE_FOLLOW_MS : false });
   //: 摘录最多存这么多字(后端上限 2000);定位靠它找回那一段,长了也只多占库。
@@ -217,7 +250,8 @@ export function NotesView({ workspace, AgentPanel }: { workspace: Workspace; Age
     </aside>}
     {!focus && <div {...sidebar.handleProps} className={cn(sidebar.handleProps.className, "notes-resize")} />}
     {selected.data ? <NoteDocument key={`${workspace.id}:${selected.data.id}`} note={selected.data} controller={controller} focus={focus} onFocus={() => setFocus(!focus)}
-      agentOpen={showAgent} onToggleAgent={AgentPanel && (() => setAgentOpen(agentOpen === "on" ? "off" : "on"))} onSelectionChange={setSelection} onAskAi={AgentPanel && askAi} /> : <main className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 p-8 text-center"><BookOpen size={28} className="text-muted-foreground" /><h2 className="text-lg font-medium">{selected.isError ? s.unavailable : id ? s.loading : s.empty}</h2><p className="max-w-sm text-sm leading-relaxed text-muted-foreground">{!id && s.emptyHint}</p>{(!id || selected.isError) && <Button onClick={() => void add()}><Plus size={15} />{s.new}</Button>}</main>}
+      agentOpen={showAgent} onToggleAgent={AgentPanel && (() => setAgentOpen(agentOpen === "on" ? "off" : "on"))} onSelectionChange={setSelection} onAskAi={AgentPanel && askAi}
+      onAiAction={AgentPanel && aiAction} onQuote={AgentPanel && quoteInChat} /> : <main className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 p-8 text-center"><BookOpen size={28} className="text-muted-foreground" /><h2 className="text-lg font-medium">{selected.isError ? s.unavailable : id ? s.loading : s.empty}</h2><p className="max-w-sm text-sm leading-relaxed text-muted-foreground">{!id && s.emptyHint}</p>{(!id || selected.isError) && <Button onClick={() => void add()}><Plus size={15} />{s.new}</Button>}</main>}
     {showAgent && (
       // 停靠:占一栏,正文真的让出宽度。放不下时改成盖在正文右侧;浮动时面板自己 fixed,外层 contents 不占位。
       <div data-testid="notes-agent-slot"
@@ -228,6 +262,9 @@ export function NotesView({ workspace, AgentPanel }: { workspace: Workspace; Age
           contextChips={selectionChips}
           messageQuote={messageQuote}
           focusSignal={focusSignal}
+          outbox={outbox}
+          onOutboxTaken={() => setOutbox(null)}
+          onSent={() => setPinned(null)}
           emptyHint={t("noteAgentEmpty")}
           placeholder={t("noteAgentPlaceholder")}
           rectKey="mosael.notes.agent.rect.v1"
@@ -254,11 +291,12 @@ function NoteStatusBadge({ status, label }: { status: NoteStatus; label: string 
   </span>;
 }
 
-export function NoteDocument({ note, controller, focus, onFocus, agentOpen = false, onToggleAgent, onSelectionChange, onAskAi }: {
+export function NoteDocument({ note, controller, focus, onFocus, agentOpen = false, onToggleAgent, onSelectionChange, onAskAi, onAiAction, onQuote }: {
   note: Note; controller: React.MutableRefObject<NoteController | null>; focus: boolean; onFocus: () => void;
   /** 笔记页助手的开关(顶栏右边那一组里);不给就不显示。 */
   agentOpen?: boolean; onToggleAgent?: () => void;
   onSelectionChange?: (selection: NoteSelection | null) => void; onAskAi?: (selection: NoteSelection) => void;
+  onAiAction?: (action: NoteAiAction, selection: NoteSelection) => void; onQuote?: (selection: NoteSelection) => void;
 }) {
   const s = useNoteStrings(); const qc = useQueryClient(); const t = useI18n();
   const storageKey = `mosael.note.draft.${note.workspace_id}.${note.id}`;
@@ -386,7 +424,8 @@ export function NoteDocument({ note, controller, focus, onFocus, agentOpen = fal
       {mode === "raw" ? <><DraftTextarea aria-label={s.title} className="note-title" rows={1} placeholder={s.untitled} value={draft.title} maxLength={240} disabled={draft.trashed} onValueChange={title => change({title})} /><textarea className="note-raw" rows={1} spellCheck={false} maxLength={500000} aria-label={s.content} value={draft.markdown} disabled={draft.trashed} onChange={e => change({markdown: e.target.value})} /></> : <NoteEditor key={mode} toolbarTarget={toolbarTarget} markdown={draft.markdown} onChange={markdown => change({markdown})} editable={mode === "edit" && !draft.trashed} workspaceId={note.workspace_id} noteId={note.id}
         title={<DraftTextarea aria-label={s.title} className="note-title" rows={1} placeholder={s.untitled} value={draft.title} maxLength={240} disabled={draft.trashed || mode === "read"} onValueChange={title => change({title})} />}
         onReference={n => { if (!latest.current.sources.some(source => source.kind === "note" && source.id === n.id && source.revision === n.revision)) change({sources: [...latest.current.sources, {kind: "note", id: n.id, label: n.title, quote: "", revision: n.revision}]}); }}
-        onSelectionChange={onSelectionChange} onAskAi={onAskAi} />}
+        onSelectionChange={onSelectionChange} onAskAi={onAskAi} onAiAction={onAiAction} onQuote={onQuote}
+        saveSource={{ kind: "note", id: note.id, label: draft.title || s.untitled, quote: "", revision: draft.revision }} />}
     </article></div></main>
     {properties && <aside className="note-properties"><header><strong>{s.source}</strong><button className="note-icon" aria-label={s.close} onClick={()=>setProperties(false)}><X size={15}/></button></header><label>{s.topics}</label><NoteLabels label={s.topics} placeholder={s.topicHint} values={draft.topics} disabled={draft.trashed} onChange={topics=>change({topics})}/><label>{s.tags}</label><NoteLabels label={s.tags} placeholder={s.tagHint} values={draft.tags} disabled={draft.trashed} onChange={tags=>change({tags})}/><label>{s.source}</label>{draft.sources.length ? draft.sources.map((source, i) => <div className="note-source" key={i}><SourceLink source={source} workspaceId={note.workspace_id} />{source.quote && <blockquote>{source.quote}</blockquote>}</div>) : <p className="leading-relaxed text-muted-foreground">{s.sourcesEmpty}</p>}</aside>}
     <ConfirmDialog open={confirmDelete} title={`${s.deleteForever} · ${draft.title || s.untitled}`} body={s.deleteWarning} onCancel={() => { if (!deleting) setConfirmDelete(false); }} pending={deleting} onConfirm={() => void deleteForever()} />
