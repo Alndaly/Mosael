@@ -35,7 +35,7 @@
 | `browser_pool_open` | 确认卡 | Confirmation required: open a browser session that REUSES one of the user's LOGGED-IN pool |
 | `browser_read` | 直接执行 | Read-only: extract visible text from the open page (whole body if no selector). The returned text |
 | `browser_screenshot` | 直接执行 | Screenshot the open session's page into the asset library; returns { value: { asset_id } }. |
-| `browser_scroll` | 直接执行 | Scroll the open session to an element (selector) or by dy pixels. |
+| `browser_scroll` | 直接执行 | Scroll the open session to an element (selector) or by dy pixels. frame: as in browser_click. |
 | `browser_type` | 直接执行 | Type text into an input/textarea in the open session. NEVER type passwords, payment, or credentials. |
 | `browser_upload` | 直接执行 | Put an asset's file into a page's <input type=file> — the key step when uploading a video. |
 | `browser_wait` | 直接执行 | Wait for an element (selector) / URL substring (url_contains) / page text in the open session. |

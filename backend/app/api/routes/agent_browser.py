@@ -54,7 +54,8 @@ def act(body: ActRequest, db: DbSession, user: CurrentUser) -> dict[str, Any]:
             except (TypeError, ValueError):
                 timeout_ms = 15_000
             result = browser.upload_file(
-                body.session_id, file, selector=str(body.args.get("selector") or ""), timeout_ms=timeout_ms
+                body.session_id, file, selector=str(body.args.get("selector") or ""),
+                frame=str(body.args.get("frame") or ""), timeout_ms=timeout_ms,
             )
         else:
             result = browser.run_action(body.session_id, body.action, body.args)
