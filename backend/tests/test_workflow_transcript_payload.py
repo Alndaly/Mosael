@@ -31,7 +31,9 @@ def test_compact_timed_text_gives_paragraphs_and_the_words_around_pauses_only() 
         "token_columns": ["start", "end", "text"],
         "segments": [
             {"start": 0.0, "end": 3.0, "text": "你好,嗯,欢迎", "pauses": [[0.8, 1.9]],
-             "tokens": [[0.12, 0.4, "你"], [0.52, 0.8, "好"], [1.9, 2.1, "嗯"], [2.2, 2.5, "欢"]]},
+             "tokens": [[0.12, 0.4, "你"], [0.52, 0.8, "好"], [1.9, 2.1, "嗯"], [2.2, 2.5, "欢"]],
+             #: 口头禅候选另给一份起止(不管在不在停顿附近,见 test_cleanup_gives_fillers_their_times)。
+             "fillers": [[1.9, 2.1, "嗯"]]},
             {"start": 3.0, "end": 4.0, "speaker": "S1", "text": "谢谢"},
         ],
     }

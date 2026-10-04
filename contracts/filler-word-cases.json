@@ -1,0 +1,102 @@
+{
+  "why": "口癖词表有两份实现:剪辑台逐字稿面板的「一键去口癖」(frontend/src/domain/timeline/transcriptProjection.ts 的 FILLER_CATEGORIES / fillerCategory),和口播整理模板交给模型的口头禅候选(backend/app/domain/voices/fillers.py)。两边各写一份而不对账的话,面板上认得的「就是说」,模型那边却没有时间,删不掉;或者反过来。两侧各跑这同一份语料。",
+  "rules": [
+    "类别、每一类是不是歧义词、每一类的词,两侧逐字一致(顺序也一致)。",
+    "判一个词:去掉首尾空白、转小写、去掉这几个标点「，。！？、,.;:!?…」,再查表;查不到就不是口癖。"
+  ],
+  "categories": [
+    {
+      "id": "hesitation",
+      "ambiguous": false,
+      "words": [
+        "呃",
+        "嗯",
+        "唔",
+        "um",
+        "uh",
+        "uhm",
+        "er",
+        "erm",
+        "hmm"
+      ]
+    },
+    {
+      "id": "phrase",
+      "ambiguous": false,
+      "words": [
+        "啊这",
+        "这个那个",
+        "就是说",
+        "然后就是"
+      ]
+    },
+    {
+      "id": "ambiguousZh",
+      "ambiguous": true,
+      "words": [
+        "那个"
+      ]
+    },
+    {
+      "id": "ambiguousEn",
+      "ambiguous": true,
+      "words": [
+        "like"
+      ]
+    }
+  ],
+  "cases": [
+    {
+      "text": "嗯",
+      "category": "hesitation"
+    },
+    {
+      "text": " 呃, ",
+      "category": "hesitation"
+    },
+    {
+      "text": "Um.",
+      "category": "hesitation"
+    },
+    {
+      "text": "HMM…",
+      "category": "hesitation"
+    },
+    {
+      "text": "就是说",
+      "category": "phrase"
+    },
+    {
+      "text": "然后就是,",
+      "category": "phrase"
+    },
+    {
+      "text": "那个",
+      "category": "ambiguousZh"
+    },
+    {
+      "text": "Like",
+      "category": "ambiguousEn"
+    },
+    {
+      "text": "那",
+      "category": null
+    },
+    {
+      "text": "这个",
+      "category": null
+    },
+    {
+      "text": "likely",
+      "category": null
+    },
+    {
+      "text": "you know",
+      "category": null
+    },
+    {
+      "text": "",
+      "category": null
+    }
+  ]
+}

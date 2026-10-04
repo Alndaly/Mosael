@@ -236,7 +236,8 @@ def test_transcript_cleanup_template_has_valid_refs_and_provenance() -> None:
     assert _invalid_references(graph) == []
     assert graph["meta"] == {
         "template_id": "transcript_video_cleanup",
-        "template_version": 5,
+        #: 第 6 版:口头禅候选不管在哪都带着时间交给模型(fillers),逐字稿正文带标点。
+        "template_version": 6,
         "source": "official",
     }
 

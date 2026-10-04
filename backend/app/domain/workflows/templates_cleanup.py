@@ -68,13 +68,14 @@ def transcript_video_cleanup_graph(*, chat: ModelChoice, locale: str | None = No
     def text(zh: str, en: str) -> str:
         return pick_text({"zh": zh, "en": en}, locale)
 
-    cleanup_system = """你是一名资深口播、访谈与课程剪辑师。你会收到段落级时间码逐字稿：每段有起止和正文；
-段内的长停顿在 pauses 里给出起止，停顿两边几个词的时间在 tokens 里。任务是在不改写观点、不改变事实、
+    cleanup_system = """你是一名资深口播、访谈与课程剪辑师。你会收到段落级时间码逐字稿：每段有起止和正文（带标点）；
+段内的长停顿在 pauses 里给出起止，停顿两边几个词的时间在 tokens 里；口头禅候选（呃、嗯、就是说、um、uh、那个、like
+……）不管在哪都在 fillers 里给出起止和原文。任务是在不改写观点、不改变事实、
 不打乱时间顺序的前提下，让视频更紧凑、清楚、自然。识别长停顿、无语义口头禅、重复表达、错误起句后重录、
 明显跑题和噪声词。只把高置信度且能从时间码精确定位的问题放入 remove_ranges：段与段之间的停顿按相邻两段
-的起止定位，段内停顿按 pauses 定位，口头禅只在 tokens 给出了它的时间时才切独立词；整句的重复、错误起句、
-跑题按整段的起止切。结构跳跃、可能有意的停顿、语气表达、没有时间可定位的口头禅或任何含义不确定的内容只写进
-issues 和 review_notes，不自动删除。范围必须按 src_start 升序、互不重叠、src_end 大于 src_start，并在
+的起止定位，段内停顿按 pauses 定位，独立、无语义的口头禅按 fillers 给出的起止切（「那个」「like」这类歧义词
+要看上下文，作实词用的不删）；整句的重复、错误起句、跑题按整段的起止切。结构跳跃、可能有意的停顿、语气表达
+或任何含义不确定的内容只写进 issues 和 review_notes，不自动删除。范围必须按 src_start 升序、互不重叠、src_end 大于 src_start，并在
 素材时长内。删除停顿时在相邻有效语音两侧各保留约 0.12–0.20 秒自然呼吸。若重复录制同一句，保留表达最完整
 自然的一遍。只输出符合 JSON Schema 的对象。"""
 
@@ -160,8 +161,9 @@ issues 和 review_notes，不自动删除。范围必须按 src_start 升序、�
 口头禅策略：{{start.filler_policy}}
 最多删除原时长比例：{{start.max_removal_ratio}}
 
-下面是按原视频源时间记录的紧凑逐字稿 JSON。每段含 start/end/text；有段内长停顿的段另有 pauses
-（每项是停顿的起止）和 tokens（停顿两边几个词的时间，短数组，列顺序由顶层 token_columns 声明）：
+下面是按原视频源时间记录的紧凑逐字稿 JSON。每段含 start/end/text（text 带标点）；有段内长停顿的段另有 pauses
+（每项是停顿的起止）和 tokens（停顿两边几个词的时间）；有口头禅候选的段另有 fillers（每个候选的起止和原文）。
+tokens、fillers 都是短数组，列顺序由顶层 token_columns 声明：
 {{verbatim_transcript.timed_text}}
 
 请逐项诊断并生成安全的 remove_ranges。所有自动删除范围的总时长不得超过规定比例；无法从逐字稿
@@ -249,7 +251,7 @@ issues 和 review_notes，不自动删除。范围必须按 src_start 升序、�
         {"id": "notice_output", "source": "done_notice", "target": "output"},
     ]
     graph = {
-        "meta": {"template_id": TRANSCRIPT_VIDEO_CLEANUP, "template_version": 5, "source": "official"},
+        "meta": {"template_id": TRANSCRIPT_VIDEO_CLEANUP, "template_version": 6, "source": "official"},
         "nodes": nodes,
         "edges": edges,
     }

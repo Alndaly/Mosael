@@ -94,7 +94,7 @@
       ]
     },
     "author": "Mosael",
-    "version": 5,
+    "version": 6,
     "nodes": 11,
     "download": {
       "zh": "/workflows/transcript_video_cleanup.zh.mosael-workflow.json",

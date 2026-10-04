@@ -301,6 +301,21 @@ v6 补上 `cacheWrite`:pi 上报的 `input` / `cacheRead` / `cacheWrite` 是提�
 **建立契约之前**:两侧都只核对「节点在不在」。上游改了输出名、或者手写时拼错一个键,画布全绿、后端照跑,
 工作流报成功而那一格是空的。
 
+### `filler-word-cases.json` —— 口癖词表
+
+「哪些词是口头禅,按类别;一个词怎么判。」剪辑台逐字稿面板的「一键去口癖」和口播整理模板交给模型的口头禅候选
+用的是同一张表。
+
+| 实现 | 位置 | 测试 |
+| --- | --- | --- |
+| 剪辑台去口癖(前端) | `frontend/src/domain/timeline/transcriptProjection.ts` 的 `FILLER_CATEGORIES` / `fillerCategory` | `fillerWords.parity.test.ts` |
+| 口播整理的口头禅候选(后端) | `backend/app/domain/voices/fillers.py` 的 `FILLER_CATEGORIES` / `filler_category` | `backend/tests/test_filler_word_parity.py` |
+
+后端多走一步(只在后端,不在语料里):中文的 token 一个字一个,「就是说」是三个 token,按连续几个拼起来认。
+
+**建立契约之前**:词表只在前端。口播整理给模型的逐字稿只在长停顿附近给词级时间,连续说话被切成一整段时口头禅一个
+时间都没有,模型保守地一处都不删 —— 面板上一键能去掉的「嗯」,整理模板删不掉。
+
 ### `shared-constants.json` —— 共享常量
 
 几个「两个运行时都要认、而谁也不拥有」的值。不一致时**都不会报错**,只会悄悄错开:发布账号的
