@@ -96,6 +96,26 @@ def test_muted_and_ui_only_nodes_skipped(convert) -> None:
     assert set(convert.to_api(ui, OBJECT_INFO)) == {"1"}
 
 
+def test_rgthree只在前端的虚拟节点不进图(convert) -> None:
+    """rgthree 的「Mute / Bypass Relay / Repeater」「Node Collector」「Random Unmuter」「Power Conductor」是前端的虚拟节点
+    (isVirtualNode):ComfyUI 自己的前端提交时不带它们,后端也没有这几个类。带上的话 ComfyUI 回一句「Node … not found」
+    把整张图拒掉 —— DaSiWa WAN 2.2 那张图就因为子图里的 Relay / Repeater 一次都跑不起来。"""
+    ui = {
+        "nodes": [
+            {"id": 1, "type": "CLIPTextEncode", "widgets_values": ["hi"], "inputs": [widget("text")]},
+            {"id": 2, "type": "Mute / Bypass Relay (rgthree)", "inputs": [{"name": "", "type": "*", "link": None}],
+             "outputs": [{"name": "REPEATER", "type": "_NODE_REPEATER_", "links": [1]}]},
+            {"id": 3, "type": "Mute / Bypass Repeater (rgthree)",
+             "inputs": [{"name": "Mute / Bypass Relay (rgthree)", "type": "_NODE_REPEATER_", "link": 1}]},
+            {"id": 4, "type": "Node Collector (rgthree)", "inputs": []},
+            {"id": 5, "type": "Random Unmuter (rgthree)", "inputs": []},
+            {"id": 6, "type": "Power Conductor (rgthree)", "inputs": []},
+        ],
+        "links": [[1, 2, 0, 3, 0, "_NODE_REPEATER_"]],
+    }
+    assert set(convert.to_api(ui, OBJECT_INFO)) == {"1"}
+
+
 def test_reroute_is_transparent(convert) -> None:
     ui = {
         "nodes": [

@@ -42,10 +42,14 @@ MODE_BYPASS = 4
 _REROUTES = frozenset({"Reroute", "Reroute (rgthree)"})
 _PRIMITIVE = "PrimitiveNode"
 _GET, _SET = "GetNode", "SetNode"
+#: rgthree 那几个是它前端里的虚拟节点(`isVirtualNode`:继承 RgthreeBaseVirtualNode 的,外加它自己的 Reroute)——
+#: 管别的节点开关的 Relay / Repeater、Collector 也在里面,子图里常见,漏一个整张图就被 ComfyUI 以「节点不存在」拒掉。
 _FRONTEND_ONLY = _REROUTES | {
     _PRIMITIVE, _GET, _SET, "Note", "MarkdownNote", "Label (rgthree)", "Bookmark (rgthree)",
     "Fast Groups Bypasser (rgthree)", "Fast Groups Muter (rgthree)", "Fast Bypasser (rgthree)",
-    "Fast Muter (rgthree)", "Fast Actions Button (rgthree)",
+    "Fast Muter (rgthree)", "Fast Actions Button (rgthree)", "Mute / Bypass Relay (rgthree)",
+    "Mute / Bypass Repeater (rgthree)", "Node Collector (rgthree)", "Node Combiner (rgthree)",
+    "Random Unmuter (rgthree)", "Power Conductor (rgthree)",
 }
 
 #: 前端给这些类型建 widget(src/scripts/widgets.ts 的 ComfyWidgets 加上上传、音频的扩展)。不在这里的
