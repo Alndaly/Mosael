@@ -330,6 +330,23 @@ def test_模型清单的指纹_工作流变了它就变(comfy) -> None:
     assert not [call for call in comfy.state.calls[-6:] if call[1].startswith("/api/userdata/")]
 
 
+def test_插件升了版指纹就变_宿主据此重拉目录(comfy, tmp_path: Path) -> None:
+    """宿主只在指纹变了时重拉模型和工具清单(catalog_watch)。指纹此前只看工作流和模型文件:插件升级后怎么描述一张图变了
+    (默认张数、尺寸、哪些算产出),库里缓存的清单却要等用户改了工作流或手动点「刷新模型」才跟上。"""
+    import shutil
+
+    upgraded = tmp_path / "comfyui"
+    shutil.copytree(PLUGIN, upgraded, ignore=shutil.ignore_patterns("__pycache__"))
+    manifest = upgraded / "mosael.plugin.json"
+    data = json.loads(manifest.read_text(encoding="utf-8"))
+    data["version"] = data["version"] + "-next"
+    manifest.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+    ask = {"op": "fingerprint"}
+    before = runtime.execute_tool(PLUGIN, ENTRY, "comfyui_generation", ask, {"SERVER_URL": comfy.url}, timeout=60)
+    after = runtime.execute_tool(upgraded, ENTRY, "comfyui_generation", ask, {"SERVER_URL": comfy.url}, timeout=60)
+    assert before.output["fingerprint"] != after.output["fingerprint"]
+
+
 def test_清单里的工具与实现对得上() -> None:
     """清单里声明的每个工具都有实现,流式的那几个在清单里标了 `stream`(宿主据此走流式协议)。"""
     import sys

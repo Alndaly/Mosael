@@ -14,6 +14,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+from pathlib import Path
 from typing import Any, Iterator, NamedTuple
 
 import convert
@@ -192,13 +193,26 @@ def catalog(comfy: Comfy, locale: str) -> list[dict[str, Any]]:
 _WATCHED_FOLDERS = ("checkpoints", "loras", "diffusion_models", "unet", "vae", "upscale_models", "controlnet")
 
 
+def plugin_version() -> str:
+    """这个插件自己的版本(清单里的 `version`)。指纹带上它:插件升级后怎么描述一张图可能变了。"""
+    try:
+        manifest = json.loads((Path(__file__).resolve().parent.parent / "mosael.plugin.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return ""
+    return str(manifest.get("version") or "")
+
+
 def fingerprint(comfy: Comfy) -> str:
-    """模型清单的**指纹**:保存的工作流(路径 + 大小 + 修改时间)、粘贴的模板、几个模型目录的文件名。
+    """模型清单的**指纹**:插件自己的版本、保存的工作流(路径 + 大小 + 修改时间)、粘贴的模板、几个模型目录的文件名。
+
+    带上插件版本:同一批工作流,插件升级后描述出来的东西可能变了(默认张数、尺寸、哪些算产出),宿主库里缓存的
+    模型和工具清单得跟着重拉,而不是等用户改了工作流或手动点「刷新模型」。
 
     宿主隔一会儿问一次(见 docs/PLUGIN_MANIFEST 的「目录变了就刷新」):指纹没变就不必把每张工作流
     重新拉一遍、转一遍。这里只列目录,不取任何一张图的内容 —— 一百张工作流也就一个请求。
     """
     digest = hashlib.sha256()
+    digest.update(f"plugin {plugin_version()}\n".encode("utf-8"))
     listed = [item for item in comfy.workflow_listing() if is_workflow_path(str(item.get("path") or ""))]
     for item in sorted(listed, key=lambda one: str(one.get("path"))):
         digest.update(f"{item.get('path')}|{item.get('size')}|{item.get('modified')}\n".encode("utf-8"))
