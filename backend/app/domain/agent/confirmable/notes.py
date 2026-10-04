@@ -71,7 +71,7 @@ def _execute_edit_note(db: Session, confirmation: Any, actor: str | None) -> dic
     content["markdown"] = _edited(note.markdown, payload)
     try:
         saved = save_note(db, confirmation.workspace_id, note.id, note.revision,
-                          NoteContent.model_validate(content), actor=actor)
+                          NoteContent.model_validate(content), actor=actor, origin="agent")
     except NoteDomainError as exc:
         raise ConfirmationError.relay(exc) from exc
     return {"note_id": saved.id, "revision": saved.revision}

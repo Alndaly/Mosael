@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { getNoteRevision, listNoteRevisions, type NoteRevisionSummary } from "@/api/domains/notes";
 import { errorText } from "@/api/errorMessage";
 import { noteKeys } from "@/api/queryKeys";
+import { useAuth } from "@/app/auth";
 import { useI18n, usePreferences } from "@/app/preferences";
 import {
   AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -16,6 +17,7 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/compone
 import { SEGMENTED_LIST, segmentedTriggerClass } from "@/components/ui/tabs";
 import { IconButton } from "@/components/ui/icon-button";
 import { Hint } from "@/components/ui/tooltip";
+import { Truncate } from "@/components/ui/truncate";
 import { dayGroupOf, groupByLocalDay } from "@/lib/dayGroups";
 import { diffText } from "@/lib/textDiff";
 import { cn } from "@/lib/utils";
@@ -128,6 +130,7 @@ export function NoteHistoryDialog({ open, onOpenChange, workspaceId, noteId, cur
             {item.revision === current.revision && <span className="note-history-badge">{v.current}</span>}
             <span className="note-history-number">{v.version(item.revision)}</span>
           </span>
+          <VersionHow item={item} className="note-history-how" />
         </button>
       </li>
     );
@@ -158,6 +161,7 @@ export function NoteHistoryDialog({ open, onOpenChange, workspaceId, noteId, cur
                 <div className="note-history-what">
                   <strong>{v.version(chosen)}</strong>
                   {chosenItem && <span>{versionMoment(chosenItem.created_at, locale, now, v)}</span>}
+                  {chosenItem && <VersionHow item={chosenItem} />}
                   {isCurrent && <span className="note-history-badge">{v.current}</span>}
                 </div>
                 <div className="note-history-actions">
@@ -220,6 +224,18 @@ export function NoteHistoryDialog({ open, onOpenChange, workspaceId, noteId, cur
       </AlertDialog>
     </>
   );
+}
+
+/**
+ * 这一版怎么来的(手动编辑、智能体修改、从版本 N 恢复……),别人写的带上名字 —— 自己写的不念自己。
+ * 单独一个组件:看「是不是自己」要读登录态,只在列表真的摆出来时才读。
+ */
+function VersionHow({ item, className }: { item: NoteRevisionSummary; className?: string }) {
+  const v = useNoteStrings().versions;
+  const viewer = useAuth().user?.id;
+  const origin = item.origin === "restore" && item.restored_from ? v.restoredFrom(item.restored_from) : v.origins[item.origin];
+  const by = item.created_by && item.created_by !== viewer && item.created_by_name ? item.created_by_name : "";
+  return <Truncate className={className}>{by ? `${origin} · ${by}` : origin}</Truncate>;
 }
 
 /** 没改的行露出几行上下文;再多就折起来。 */

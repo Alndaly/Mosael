@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.db.models import Note, NoteRevision, User
 from app.domain import notes
-from app.domain.note_types import NoteContent
+from app.domain.note_types import NoteContent, NoteRevisionOrigin
 from app.domain.permissions import NotVisible, ensure_workspace_access, ensure_workspace_perm, owning_workspace
 
 
@@ -43,8 +43,18 @@ def reference(db: Session, user: User, workspace_id: str, note_id: str, revision
 
 def revisions(db: Session, user: User, workspace_id: str, note_id: str) -> list[dict[str, Any]]:
     read(db, user, note_id, workspace_id)
-    rows = db.scalars(select(NoteRevision).where(NoteRevision.note_id == note_id).order_by(NoteRevision.revision.desc()).limit(100))
-    return [{"revision": r.revision, "created_at": r.created_at, "title": r.snapshot["title"]} for r in rows]
+    rows = db.execute(
+        select(NoteRevision, User.display_name, User.username)
+        .outerjoin(User, User.id == NoteRevision.created_by)
+        .where(NoteRevision.note_id == note_id)
+        .order_by(NoteRevision.revision.desc())
+        .limit(100)
+    )
+    return [
+        {"revision": r.revision, "created_at": r.created_at, "title": r.snapshot["title"], "origin": r.origin,
+         "created_by": r.created_by, "created_by_name": display_name or username or "", "restored_from": r.restored_from}
+        for r, display_name, username in rows
+    ]
 
 
 def revision(db: Session, user: User, workspace_id: str, note_id: str, number: int) -> NoteRevision:
@@ -58,21 +68,26 @@ def revision(db: Session, user: User, workspace_id: str, note_id: str, number: i
 # ---------------- 写 ----------------
 
 
-def create(db: Session, user: User, workspace_id: str, content: NoteContent) -> Note:
+def create(db: Session, user: User, workspace_id: str, content: NoteContent, *,
+           origin: NoteRevisionOrigin = "create") -> Note:
+    """`origin`:页面上新建是 create;智能体经工具建的(mcp_server.create_note)传 agent。"""
     ensure_workspace_perm(db, user, workspace_id, "edit")
-    return notes.create_note(db, workspace_id, content, actor=user.id)
+    return notes.create_note(db, workspace_id, content, actor=user.id, origin=origin)
 
 
 def save(db: Session, user: User, workspace_id: str, note_id: str, base_revision: int, content: NoteContent) -> Note:
+    """编辑器里的保存。智能体不走这里改正文 —— 它走改笔记的确认卡(agent/confirmable/notes)。"""
     ensure_workspace_perm(db, user, workspace_id, "edit")
-    return notes.save_note(db, workspace_id, note_id, base_revision, content, actor=user.id)
+    return notes.save_note(db, workspace_id, note_id, base_revision, content, actor=user.id, origin="edit")
 
 
 def append(
-    db: Session, user: User, workspace_id: str, note_id: str, markdown: str, sources: list[dict[str, Any]]
+    db: Session, user: User, workspace_id: str, note_id: str, markdown: str, sources: list[dict[str, Any]], *,
+    origin: NoteRevisionOrigin = "append",
 ) -> Note:
+    """`origin`:页面上「存到笔记」是 append;智能体经工具追加的(mcp_server.append_note)传 agent。"""
     ensure_workspace_perm(db, user, workspace_id, "edit")
-    return notes.append_note(db, workspace_id, note_id, markdown, sources, actor=user.id)
+    return notes.append_note(db, workspace_id, note_id, markdown, sources, actor=user.id, origin=origin)
 
 
 def purge(db: Session, user: User, workspace_id: str, note_id: str, base_revision: int) -> None:
@@ -88,5 +103,5 @@ def restore(db: Session, user: User, workspace_id: str, note_id: str, number: in
         raise NotVisible("routeErr_noteVersionNotFound")
     return notes.save_note(
         db, workspace_id, note_id, base_revision, NoteContent.model_validate(row.snapshot),
-        actor=user.id, restored_sources=row.snapshot["sources"],
+        actor=user.id, origin="restore", restored_from=number, restored_sources=row.snapshot["sources"],
     )

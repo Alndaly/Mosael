@@ -6,6 +6,12 @@ from pydantic_core import PydanticCustomError
 from app.core.i18n import tr
 
 
+#: 一版笔记是怎么来的 —— 版本记录里那一行写的「怎么改的」。
+#: create:页面上新建、导入;edit:编辑器里的保存;append:「存到笔记」追加到末尾;agent:智能体(改笔记确认卡、
+#: 经工具新建 / 追加);restore:从某一版恢复;board:画板文档格写出来的;workflow:工作流的知识节点建的。
+NoteRevisionOrigin = Literal["create", "edit", "append", "agent", "restore", "board", "workflow"]
+
+
 class NoteSource(BaseModel):
     model_config = ConfigDict(allow_inf_nan=False)
     kind: Literal["asset", "message", "board", "note", "url"]

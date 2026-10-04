@@ -72,7 +72,7 @@ def note_create(db: Session, scope: RunScope, config: dict) -> dict:
             raise WorkflowDomainError("wfErr_noteBodyEmpty")
         # 替这次运行写(跑的人 + 被执行那一版的担保人)。这个节点不收来源,写不进任何对话消息的引用;
         # 日后收了,闸也已经按这份授权判。
-        note = create_note(db, scope.workspace_id, content, actor=current_authority(db))
+        note = create_note(db, scope.workspace_id, content, actor=current_authority(db), origin="workflow")
         ref = read_reference(db, scope.workspace_id, note.id)
         return {"note_id": ref["note_id"], "title": ref["title"], "revision": ref["revision"], "citation_url": ref["citation_url"]}
     except (NoteDomainError, ValidationError) as exc:

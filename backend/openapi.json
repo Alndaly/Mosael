@@ -15176,7 +15176,13 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/NoteRevisionOut"
+                  },
+                  "title": "Response Revisions Api Notes  Note Id  Revisions Get"
+                }
               }
             }
           },
@@ -30879,6 +30885,74 @@
           "revision"
         ],
         "title": "NoteRestore"
+      },
+      "NoteRevisionOut": {
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "title": "Revision"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "origin": {
+            "type": "string",
+            "enum": [
+              "create",
+              "edit",
+              "append",
+              "agent",
+              "restore",
+              "board",
+              "workflow"
+            ],
+            "title": "Origin"
+          },
+          "created_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By"
+          },
+          "created_by_name": {
+            "type": "string",
+            "title": "Created By Name",
+            "default": ""
+          },
+          "restored_from": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Restored From"
+          }
+        },
+        "type": "object",
+        "required": [
+          "revision",
+          "title",
+          "created_at",
+          "origin",
+          "created_by",
+          "restored_from"
+        ],
+        "title": "NoteRevisionOut",
+        "description": "版本记录里的一版:哪一版、什么时候、怎么来的、谁写的。"
       },
       "NoteSource": {
         "properties": {

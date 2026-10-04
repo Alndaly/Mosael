@@ -7,7 +7,8 @@
  * - 「恢复此版本」先确认,说清会新建一个版本、现有版本都还在;
  * - 「复制这一版的内容」;键盘上下键切换版本;
  * - 只有一个版本时说一句合适的话,不摆恢复按钮;
- * - 右边能切「预览 / 和当前版本对比 / 和上一版对比」:对比按字(删去的划掉、新加的高亮),大段没改的折起来。
+ * - 右边能切「预览 / 和当前版本对比 / 和上一版对比」:对比按字(删去的划掉、新加的高亮),大段没改的折起来;
+ * - 每一版写清怎么来的(手动编辑 / 智能体修改 / 从版本 N 恢复……),别人写的带上名字,自己写的不念自己。
  */
 import React from "react";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
@@ -17,9 +18,14 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 
 const prefs = vi.hoisted(() => ({ locale: "zh-CN" }));
 vi.mock("@/app/preferences", () => ({ usePreferences: () => prefs, useI18n: () => (key: string) => key }));
+vi.mock("@/app/auth", () => ({ useAuth: () => ({ user: { id: "me" } }) }));
 
+type Version = {
+  revision: number; title: string; created_at: string; origin: string;
+  created_by: string | null; created_by_name: string; restored_from: number | null;
+};
 const api = vi.hoisted(() => ({
-  versions: [] as { revision: number; title: string; created_at: string }[],
+  versions: [] as Version[],
   content: {} as Record<number, { title: string; markdown: string }>,
 }));
 vi.mock("@/api/domains/notes", async (importOriginal) => ({
@@ -41,10 +47,11 @@ beforeEach(() => {
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(NOW);
   prefs.locale = "zh-CN";
+  const mine = { created_by: "me", created_by_name: "我自己", restored_from: null };
   api.versions = [
-    { revision: 3, title: "周报", created_at: utc(new Date(2026, 9, 4, 13, 3, 38)) },
-    { revision: 2, title: "周报", created_at: utc(new Date(2026, 9, 3, 11, 24, 47)) },
-    { revision: 1, title: "周报", created_at: utc(new Date(2026, 9, 2, 12, 39, 50)) },
+    { revision: 3, title: "周报", created_at: utc(new Date(2026, 9, 4, 13, 3, 38)), origin: "edit", ...mine },
+    { revision: 2, title: "周报", created_at: utc(new Date(2026, 9, 3, 11, 24, 47)), origin: "edit", ...mine },
+    { revision: 1, title: "周报", created_at: utc(new Date(2026, 9, 2, 12, 39, 50)), origin: "create", ...mine },
   ];
   api.content = {
     1: { title: "周报", markdown: "周一" },
@@ -67,7 +74,12 @@ function mount(props: Partial<React.ComponentProps<typeof NoteHistoryDialog>> = 
   return { onRestore };
 }
 const list = () => screen.getByRole("list", { name: "版本列表" });
-const row = (revision: number) => within(list()).getByRole("button", { name: new RegExp(`版本 ${revision}(\\D|$)`) });
+//: 按那一行右上角的版本号找 —— 「从版本 1 恢复」那一行的名字里也有「版本 1」。
+const row = (revision: number) => {
+  const found = within(list()).getAllByRole("button").find((one) => one.querySelector(".note-history-number")?.textContent === `版本 ${revision}`);
+  if (!found) throw new Error(`没有版本 ${revision} 这一行`);
+  return found;
+};
 
 it("时间跟界面语言走,列表按天分组:今天 / 昨天 / 具体日期", async () => {
   mount();
@@ -236,4 +248,19 @@ it("大段没改的折起来,点一下展开", async () => {
   fireEvent.click(unfold);
   expect(screen.getByText("第 5 行")).toBeInTheDocument();
   expect(added()).toEqual([",改过"]);
+});
+
+it("每一版写清怎么来的:手动编辑、智能体修改、从版本 N 恢复;别人写的带上名字", async () => {
+  api.versions[0] = { ...api.versions[0], origin: "restore", restored_from: 1 };
+  api.versions[1] = { ...api.versions[1], origin: "agent", created_by: "u2", created_by_name: "小王" };
+  mount();
+  await waitFor(() => expect(row(3)).toBeInTheDocument());
+  expect(row(3)).toHaveTextContent("从版本 1 恢复");
+  expect(row(2)).toHaveTextContent("智能体修改");
+  expect(row(2)).toHaveTextContent("小王");
+  expect(row(1)).toHaveTextContent("新建");
+  expect(row(1)).not.toHaveTextContent("我自己");
+
+  fireEvent.click(row(2));
+  await waitFor(() => expect(document.querySelector(".note-history-what")).toHaveTextContent("智能体修改 · 小王"));
 });

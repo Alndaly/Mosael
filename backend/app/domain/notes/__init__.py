@@ -14,8 +14,8 @@ from sqlalchemy.orm import Session
 from app.core.i18n import LocalizedError
 from app.domain import sharing
 from app.domain.sharing import AGENT_SESSION_KIND as SESSION_SHARE_KIND
-from app.domain.authority import Actor, ensure
-from app.domain.note_types import NoteContent
+from app.domain.authority import Actor, actor_id, ensure
+from app.domain.note_types import NoteContent, NoteRevisionOrigin
 from app.db.models import Asset, AgentMessage, AgentSession, Board, Note, NoteRevision, Project
 from app.db.model_base import now
 
@@ -113,18 +113,27 @@ def _ensure_cites_session(db: Session, session: AgentSession, actor: Actor) -> N
     ensure(actor, lambda user: sharing.may_use(db, SESSION_SHARE_KIND, session, user), denied=hidden, unvouched=hidden)
 
 
-def create_note(db: Session, workspace_id: str, content: NoteContent, *, actor: Actor) -> Note:
+def _record_revision(db: Session, note_id: str, revision: int, data: dict, *, actor: Actor,
+                     origin: NoteRevisionOrigin, restored_from: int | None = None) -> None:
+    db.add(NoteRevision(note_id=note_id, revision=revision, snapshot=data, origin=origin,
+                        created_by=actor_id(actor), restored_from=restored_from))
+
+
+def create_note(db: Session, workspace_id: str, content: NoteContent, *, actor: Actor,
+                origin: NoteRevisionOrigin) -> Note:
+    """`origin` 没有缺省:每个写笔记的地方都得说出这一版是怎么来的(版本记录里给人看)。"""
     note = Note(workspace_id=workspace_id, **validate_content(db, workspace_id, content, actor=actor))
     db.add(note)
     db.flush()
-    db.add(NoteRevision(note_id=note.id, revision=note.revision, snapshot=snapshot(note)))
+    _record_revision(db, note.id, note.revision, snapshot(note), actor=actor, origin=origin)
     db.flush()
     db.refresh(note)
     return note
 
 
 def save_note(db: Session, workspace_id: str, note_id: str, base_revision: int, content: NoteContent, *,
-              actor: Actor, restored_sources: list[dict] | None = None) -> Note:
+              actor: Actor, origin: NoteRevisionOrigin, restored_from: int | None = None,
+              restored_sources: list[dict] | None = None) -> Note:
     """写成新的一版。笔记上已有的来源(和要恢复的那一版上的)原样放行,不再按 `actor` 重判:它们落库时
     已经过了当时写的那个人的闸,同事改正文不该因为看不见别人引的那条消息而写不进;新加的来源照判。"""
     note = get_note(db, workspace_id, note_id)
@@ -143,7 +152,7 @@ def save_note(db: Session, workspace_id: str, note_id: str, base_revision: int, 
         # 让内存里这份过期,重试(append_note)时读到的是库里最新的一版。
         db.expire(note)
         raise NoteConflict("noteErr_changedElsewhere")
-    db.add(NoteRevision(note_id=note_id, revision=base_revision + 1, snapshot=data))
+    _record_revision(db, note_id, base_revision + 1, data, actor=actor, origin=origin, restored_from=restored_from)
     db.flush()
     db.refresh(note)
     return note
@@ -172,7 +181,7 @@ APPEND_RETRIES = 4
 
 
 def append_note(db: Session, workspace_id: str, note_id: str, markdown: str,
-                sources: list[dict], *, actor: Actor) -> Note:
+                sources: list[dict], *, actor: Actor, origin: NoteRevisionOrigin) -> Note:
     """把一段内容追加到笔记末尾。
 
     **不拿调用方的 base_revision 做条件更新。** 追加到末尾与文档别处的编辑可交换,而调用方
@@ -191,7 +200,7 @@ def append_note(db: Session, workspace_id: str, note_id: str, markdown: str,
         data["sources"] = note.sources + sources
         try:
             return save_note(db, workspace_id, note_id, note.revision,
-                             NoteContent.model_validate(data), actor=actor)
+                             NoteContent.model_validate(data), actor=actor, origin=origin)
         except NoteConflict:
             # 只可能是修订号对不上:读到写之间有人抢先落地了一版,重读再追加就好。
             # 「在回收站里」同样是 NoteConflict,但它在 try 之外就抛掉了 —— 那种重试

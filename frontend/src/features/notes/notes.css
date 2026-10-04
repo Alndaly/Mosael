@@ -267,12 +267,15 @@
 .note-history-item-head { display:flex; align-items:center; gap:8px; min-width:0; font-size:var(--text-ui-sm); }
 .note-history-item-head time { font-weight:550; font-variant-numeric:tabular-nums; }
 .note-history-number { margin-left:auto; font-size:var(--text-ui-2xs); color:var(--muted-foreground); font-variant-numeric:tabular-nums; white-space:nowrap; }
+.note-history-how { font-size:var(--text-ui-xs); color:var(--muted-foreground); }
+.note-history-item[aria-current=true] .note-history-how { color:inherit; opacity:.8; }
 .note-history-badge { padding:1px 7px; border-radius:999px; font-size:var(--text-ui-2xs); line-height:1.6; white-space:nowrap; background:color-mix(in srgb,var(--primary) 12%,transparent); color:var(--primary); }
 .note-history-only { margin:12px 10px 0; font-size:var(--text-ui-xs); line-height:1.7; color:var(--muted-foreground); }
 .note-history-main { display:grid; grid-template-rows:auto auto minmax(0,1fr); min-width:0; min-height:0; }
 .note-history-bar { display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:52px; padding:10px 20px; border-bottom:1px solid var(--divider); }
 .note-history-what { display:flex; align-items:center; gap:10px; min-width:0; font-size:var(--text-ui-sm); white-space:nowrap; }
-.note-history-what > span:not(.note-history-badge) { overflow:hidden; text-overflow:ellipsis; font-size:var(--text-ui-xs); color:var(--muted-foreground); }
+.note-history-what > span:not(.note-history-badge) { flex-shrink:0; font-size:var(--text-ui-xs); color:var(--muted-foreground); }
+.note-history-what > :last-child:not(.note-history-badge) { min-width:0; }
 .note-history-actions { display:flex; flex-shrink:0; align-items:center; gap:6px; }
 /* 看这一版的方式(预览 / 和当前比 / 和上一版比)和图例一行,窄了图例换到下面。 */
 .note-history-views { display:flex; flex-wrap:wrap; align-items:center; gap:8px 14px; padding:10px 20px; border-bottom:1px solid var(--divider); }

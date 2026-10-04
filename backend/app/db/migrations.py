@@ -64,6 +64,44 @@ def _migrate_tool_confirmations_name_their_tool_call() -> None:
         conn.execute(text("ALTER TABLE tool_confirmations ADD COLUMN tool_call_id VARCHAR(128)"))
 
 
+def _migrate_note_revisions_remember_where_they_came_from() -> None:
+    """笔记的每一版补三列:怎么来的 `origin`、替谁写的 `created_by`、从哪一版恢复的 `restored_from`。
+
+    加列必须在 SCHEMA 之前:之后 ORM 上的 NoteRevision 已经指望这三列在了。老版本按推得出来的回填:
+
+    - 第 1 版是新建(create_note 写的永远是第 1 版);
+    - 批准过的改笔记确认卡(tool_confirmations 里 tool = edit_note、status = executed)结果里记着笔记和修订号,
+      那一版是智能体改的,作者记批准它的人(那个人已经不在了就留空);
+    - 其余记成编辑。恢复、追加当时没留痕,推不出来;作者也留空 —— 说不出是谁。
+    """
+    with engine.begin() as conn:
+        columns = {row[1] for row in conn.execute(text("PRAGMA table_info(note_revisions)"))}
+        if not columns or "origin" in columns:
+            return
+        conn.execute(text("ALTER TABLE note_revisions ADD COLUMN origin VARCHAR(16) NOT NULL DEFAULT 'edit'"))
+        conn.execute(text(
+            "ALTER TABLE note_revisions ADD COLUMN created_by VARCHAR(64) REFERENCES users(id) ON DELETE SET NULL"
+        ))
+        conn.execute(text("ALTER TABLE note_revisions ADD COLUMN restored_from INTEGER"))
+        conn.execute(text("UPDATE note_revisions SET origin = 'create' WHERE revision = 1"))
+        cards = {row[1] for row in conn.execute(text("PRAGMA table_info(tool_confirmations)"))}
+        if not {"tool", "status", "result", "decided_by"} <= cards:
+            return
+        executed = conn.execute(text(
+            "SELECT result, decided_by FROM tool_confirmations WHERE tool = 'edit_note' AND status = 'executed'"
+        )).all()
+        for result, decided_by in executed:
+            try:
+                landed = json.loads(result) if isinstance(result, str) else result
+                note_id, revision = str(landed["note_id"]), int(landed["revision"])
+            except (TypeError, ValueError, KeyError):
+                continue
+            conn.execute(text(
+                "UPDATE note_revisions SET origin = 'agent', created_by = (SELECT id FROM users WHERE id = :by) "
+                "WHERE note_id = :note AND revision = :revision"
+            ), {"by": decided_by, "note": note_id, "revision": revision})
+
+
 def _migrate_workflow_revisions() -> None:
     """初始化旧工作流的修订历史，并保持当前投影与最新修订一致。
 
@@ -7503,6 +7541,8 @@ def migration_plan() -> MigrationPlan:
                 _migrate_assets_remember_where_they_came_from,
                 # 加列必须在 SCHEMA 之前:之后 ORM 上的 ToolConfirmation 已经指望 tool_call_id 在了。
                 _migrate_tool_confirmations_name_their_tool_call,
+                # 同上:ORM 上的 NoteRevision 指望来历、作者、恢复自哪一版这三列在。
+                _migrate_note_revisions_remember_where_they_came_from,
             ),
             #: create_all 每次启动都要跑 —— 新版本加的表靠它建出来,记账跳过就再也建不了。
             *_recurring(MigrationPhase.SCHEMA, _create_current_schema),

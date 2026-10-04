@@ -1,7 +1,7 @@
 from datetime import datetime
 from pydantic import ConfigDict, Field
 from app.api.schemas.base import ApiModel
-from app.domain.note_types import NoteContent, NoteSource
+from app.domain.note_types import NoteContent, NoteRevisionOrigin, NoteSource
 
 
 class NoteCreate(NoteContent):
@@ -32,6 +32,20 @@ class NoteOut(NoteContent):
     revision: int
     created_at: datetime
     updated_at: datetime
+
+
+class NoteRevisionOut(ApiModel):
+    """版本记录里的一版:哪一版、什么时候、怎么来的、谁写的。"""
+
+    revision: int
+    title: str
+    created_at: datetime
+    origin: NoteRevisionOrigin
+    #: 替谁写的(用户 id);老数据说不出是谁时为空。
+    created_by: str | None
+    created_by_name: str = ""
+    #: origin 是 restore 时:从第几版恢复的。
+    restored_from: int | None
 
 
 class NoteRestore(ApiModel):

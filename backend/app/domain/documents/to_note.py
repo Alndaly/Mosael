@@ -57,4 +57,4 @@ def save_as_note(db: Session, asset: Asset, *, actor_id: str) -> Note:
         markdown=body,
         project_id=asset.project_id,
         sources=[NoteSource(kind="asset", id=asset.id, label=asset.name)],
-    ), actor=actor_id)
+    ), actor=actor_id, origin="create")

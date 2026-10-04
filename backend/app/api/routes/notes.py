@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Query, Response
 
 from app.api.deps import CurrentUser, DbSession, Tx
-from app.api.schemas.notes import NoteAppend, NoteContent, NoteCreate, NoteOut, NotePageCreate, NoteRestore, NoteUpdate, NoteReferenceOut
+from app.api.schemas.notes import NoteAppend, NoteContent, NoteCreate, NoteOut, NotePageCreate, NoteRestore, NoteRevisionOut, NoteUpdate, NoteReferenceOut
 from app.domain.agent import use_cases as agent_use_cases
 from app.domain.notes import use_cases
 
@@ -81,7 +81,7 @@ def append(note_id: str, body: NoteAppend, db: Tx, user: CurrentUser):
     return use_cases.append(db, user, body.workspace_id, note_id, body.markdown, [s.model_dump() for s in body.sources])
 
 
-@router.get("/notes/{note_id}/revisions")
+@router.get("/notes/{note_id}/revisions", response_model=list[NoteRevisionOut])
 def revisions(note_id: str, workspace_id: str, db: DbSession, user: CurrentUser):
     return use_cases.revisions(db, user, workspace_id, note_id)
 

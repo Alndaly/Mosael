@@ -11171,6 +11171,35 @@ export interface components {
             /** Revision */
             revision: number;
         };
+        /**
+         * NoteRevisionOut
+         * @description 版本记录里的一版:哪一版、什么时候、怎么来的、谁写的。
+         */
+        NoteRevisionOut: {
+            /** Revision */
+            revision: number;
+            /** Title */
+            title: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Origin
+             * @enum {string}
+             */
+            origin: "create" | "edit" | "append" | "agent" | "restore" | "board" | "workflow";
+            /** Created By */
+            created_by: string | null;
+            /**
+             * Created By Name
+             * @default
+             */
+            created_by_name: string;
+            /** Restored From */
+            restored_from: number | null;
+        };
         /** NoteSource */
         NoteSource: {
             /**
@@ -25301,7 +25330,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["NoteRevisionOut"][];
                 };
             };
             /** @description Validation Error */

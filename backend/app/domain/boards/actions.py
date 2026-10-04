@@ -628,13 +628,14 @@ def _write_note(db: Session, workspace_id: str, board: Board, note_id: str, mark
     if note_id:
         note = get_note(db, workspace_id, note_id)
         note = save_note(db, workspace_id, note_id, note.revision,
-                         NoteContent.model_validate({**snapshot(note), "markdown": markdown}), actor=actor_id)
+                         NoteContent.model_validate({**snapshot(note), "markdown": markdown}), actor=actor_id,
+                         origin="board")
     else:
         note = create_note(db, workspace_id, NoteContent.model_validate({
             "title": _note_title(markdown),
             "markdown": markdown,
             "sources": [{"kind": "board", "id": board.id, "label": board.name, "quote": ""}],
-        }), actor=actor_id)
+        }), actor=actor_id, origin="board")
     return {"type": "note", "note_id": note.id, "revision": note.revision, "title": note.title}
 
 

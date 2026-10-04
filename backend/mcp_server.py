@@ -1800,7 +1800,8 @@ def create_note(title: str, markdown: str, workspace_id: str = "", sources: list
 
     request = NoteCreate(workspace_id=workspace_id or _default_workspace_id(), title=title, markdown=markdown,
                          sources=sources or [])
-    return _use_case(use_cases.create, request.workspace_id, NoteContent.model_validate(request.model_dump()), out=NoteOut)
+    return _use_case(use_cases.create, request.workspace_id, NoteContent.model_validate(request.model_dump()), out=NoteOut,
+                     origin="agent")
 
 
 @tool(effect="writes")
@@ -1816,7 +1817,7 @@ def append_note(note_id: str, base_revision: int, markdown: str, workspace_id: s
     request = NoteAppend(workspace_id=workspace_id or _default_workspace_id(), markdown=markdown, sources=sources or [])
     return _use_case(
         use_cases.append, request.workspace_id, note_id, request.markdown, [s.model_dump() for s in request.sources],
-        out=NoteOut,
+        out=NoteOut, origin="agent",
     )
 
 

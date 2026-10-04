@@ -84,4 +84,4 @@ def save_page_as_note(
     content = page_note_content(url=url, title=title, html=html, selection=selection, project_id=project_id)
     if content is None:
         raise notes.NoteDomainError("pageNoteErr_empty")
-    return notes.create_note(db, workspace_id, content, actor=user.id)
+    return notes.create_note(db, workspace_id, content, actor=user.id, origin="create")

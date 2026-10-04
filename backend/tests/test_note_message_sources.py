@@ -78,9 +78,9 @@ def test_说不出是谁_或被执行那一版没有担保人看得见_都当作
     with SessionLocal() as db:
         for actor in (None, edited_by_mate):
             with pytest.raises(NoteNotFound) as caught:
-                create_note(db, workspace, content, actor=actor)
+                create_note(db, workspace, content, actor=actor, origin="create")
             assert caught.value.key == "noteErr_sourceNotInWorkspace"
-        assert create_note(db, workspace, content, actor=owner_id).sources[0]["id"] == private
+        assert create_note(db, workspace, content, actor=owner_id, origin="create").sources[0]["id"] == private
 
 
 def test_画板上同事改写文档格_笔记上原有的来源照留() -> None:

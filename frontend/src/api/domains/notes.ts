@@ -38,8 +38,8 @@ export const appendNote = (note: Note, markdown: string, sources: NoteSource[]) 
 export const purgeNote = (workspaceId: string, noteId: string, baseRevision: number) =>
   api<void>(`/api/notes/${noteId}?${new URLSearchParams({ workspace_id: workspaceId, base_revision: String(baseRevision) })}`, { method: "DELETE" });
 
-/** 修订历史。后端回的是无类型的列表,形状以这里为准。 */
-export type NoteRevisionSummary = { revision: number; title: string; created_at: string };
+/** 版本记录里的一版:哪一版、什么时候、怎么来的(origin)、谁写的。 */
+export type NoteRevisionSummary = components["schemas"]["NoteRevisionOut"];
 export type NoteRevision = NoteContent & { revision: number };
 export const listNoteRevisions = (workspaceId: string, noteId: string) =>
   api<NoteRevisionSummary[]>(`/api/notes/${noteId}/revisions?workspace_id=${encodeURIComponent(workspaceId)}`);
