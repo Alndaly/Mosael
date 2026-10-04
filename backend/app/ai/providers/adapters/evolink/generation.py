@@ -94,12 +94,19 @@ def _parameter_urls(request: GenerationRequest, roles: tuple[str, ...]) -> list[
     return [url for role in roles for url in source_url_values(request.parameters, role, request.kind)]
 
 
+#: 图像请求里**给了才发**的几项(GPT Image 系列的文档字段):画质和分辨率档决定价钱,不发就落在服务商的默认值上。
+_IMAGE_PASSTHROUGH = ("quality", "resolution", "background", "output_format")
+
+
 def build_image_payload(request: GenerationRequest, image_urls: list[str] | None = None) -> dict[str, Any]:
     payload: dict[str, Any] = {"model": request.model, "prompt": request.prompt}
     if request.parameters.get("size"):
         payload["size"] = str(request.parameters["size"]).replace("*", "x")
     if request.parameters.get("num_images") is not None:
         payload["n"] = int(request.parameters["num_images"])
+    for key in _IMAGE_PASSTHROUGH:
+        if request.parameters.get(key):
+            payload[key] = str(request.parameters[key])
     urls = image_urls if image_urls is not None else _parameter_urls(request, (REFERENCE_IMAGE,))
     if urls:
         payload["image_urls"] = urls
@@ -414,9 +421,11 @@ class EvolinkGenerationAdapter(GenerationAdapter):
             # Suno 的每项上限(描述、歌词、时长)按型号不同,由描述符在提交前拦。
             return
         if request.kind == "image":
+            # 网关的协议天花板:GPT Image 2 / 2.5 一次最多 10 张(文档 n 1–10);每个模型自己的上限
+            # (gpt-image-1.5 和 2-beta 只出一张、其余多为 4 张)由描述符在提交前拦。
             count = int(request.parameters.get("num_images", 1))
-            if not 1 <= count <= 4:
-                raise GenerationAdapterError("providerErr_numImagesRange", max=4)
+            if not 1 <= count <= 10:
+                raise GenerationAdapterError("providerErr_numImagesRange", max=10)
         else:
             duration = int(request.parameters.get("duration_seconds", 5))
             if duration != -1 and not 3 <= duration <= 30:

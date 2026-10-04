@@ -174,6 +174,7 @@ export const publish = {
   genAsmrMode: "ASMR 细节增强",
   genModelVersion: "模型版本",
   genQuality: "质量",
+  genQualityPriceHint: "画质越高越贵:按 token 计价的生图(GPT Image)低画质约是中画质的九分之一,高画质约是中画质的 4 倍,分辨率档越高也越贵。先用低画质试,定稿再往上调",
   genBackground: "背景",
   genOutputFormat: "输出格式",
   genModeration: "内容审核",

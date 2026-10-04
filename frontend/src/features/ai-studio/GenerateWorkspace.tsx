@@ -94,7 +94,7 @@ import {
   withTriggerWords,
 } from "@/lib/generationCapabilities";
 import { ModelFilePicker } from "@/components/generation/ModelFilePicker";
-import { GENERATION_BOOLEAN_LABELS, GENERATION_PARAMETER_LABELS } from "@/lib/generationParameterLabels";
+import { GENERATION_BOOLEAN_LABELS, GENERATION_PARAMETER_HINTS, GENERATION_PARAMETER_LABELS } from "@/lib/generationParameterLabels";
 import { FrameSlotField, KeyframePairField } from "@/features/ai-studio/FrameSlotField";
 import { DurationFollowsNote, TruncationHint, durationFollowsRole } from "@/features/ai-studio/durationFollows";
 import { DigitalHumanConsent } from "@/components/generation/DigitalHumanConsent";
@@ -233,6 +233,8 @@ function generationParameters(model: GenerationOption, config: GenerationConfig)
   if (model.kind === "image") {
     const params: Record<string, string | number | boolean> = { ...shared };
     if (supportsParameter(model, "size") && config.size) params.size = config.size;
+    // 分辨率档(GPT Image 的 1K / 2K / 4K)决定像素预算、也就决定价钱:声明了就发。
+    if (supportsParameter(model, "resolution") && config.resolution) params.resolution = config.resolution;
     if (supportsParameter(model, "num_images")) params.num_images = Math.max(1, Math.min(maxImages(model), Number(config.numImages) || 1));
     return params;
   }
@@ -1008,7 +1010,7 @@ export function GenerateWorkspace({
                     />
                   </ParameterField>
                 )}
-                {!isImageModel && supportsParameter(selectedModel, "resolution") && selectedResolutions.length > 0 && (
+                {supportsParameter(selectedModel, "resolution") && selectedResolutions.length > 0 && (
                   <ParameterField label={t("genResolution")}>
                     <Select
                       value={generationConfig.resolution}
@@ -1337,8 +1339,9 @@ export function GenerateWorkspace({
                 ))}
                 {parameterChoiceEntries(selectedModel).map(([key, choices]) => {
                   const labelKey = GENERATION_PARAMETER_LABELS[key];
+                  const hintKey = GENERATION_PARAMETER_HINTS[key];
                   return (
-                    <ParameterField key={key} label={labelKey ? t(labelKey) : key}>
+                    <ParameterField key={key} label={labelKey ? t(labelKey) : key} hint={hintKey ? t(hintKey) : undefined}>
                       <Select
                         value={generationConfig.enumParameters[key] ?? capabilityString(selectedModel, `default_${key}`, choices[0] ?? "")}
                         onValueChange={(value) => setGenerationConfig((current) => ({

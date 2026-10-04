@@ -56,7 +56,7 @@ import {
   videoResolutionOptions,
   withTriggerWords,
 } from "@/lib/generationCapabilities";
-import { GENERATION_BOOLEAN_LABELS, GENERATION_PARAMETER_LABELS } from "@/lib/generationParameterLabels";
+import { GENERATION_BOOLEAN_LABELS, GENERATION_PARAMETER_HINTS, GENERATION_PARAMETER_LABELS } from "@/lib/generationParameterLabels";
 import { cn } from "@/lib/utils";
 import { toPlainText } from "@/components/markdown/inlineSyntax";
 import { BoardComposerShell } from "@/features/boards/BoardComposerShell";
@@ -1180,10 +1180,12 @@ export function NodeComposer({
                 })}
                 {enumEntries.map(([key, choices]) => {
                   const labelKey = GENERATION_PARAMETER_LABELS[key];
+                  const hintKey = GENERATION_PARAMETER_HINTS[key];
                   return (
                     <Pick
                       key={key}
                       label={labelKey ? t(labelKey) : key}
+                      hint={hintKey ? t(hintKey) : undefined}
                       value={enumParameters[key] ?? capabilityString(current, `default_${key}`, choices[0] ?? "")}
                       onChange={(next) => setEnumParameters((values) => ({ ...values, [key]: next }))}
                       options={choices.map((choice) => ({

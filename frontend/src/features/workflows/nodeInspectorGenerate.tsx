@@ -237,6 +237,9 @@ export function useGenerateNodeSection({
       if (sizes.length > 0) {
         out.push({ key: "size", label: t("wfGenSize"), options: sizes, custom: customSizeRule(genModel) ?? undefined });
       }
+      // 分辨率档(GPT Image 的 1K / 2K / 4K)决定像素预算、也就决定价钱:声明了才摆。
+      const imageResolutions = videoResolutionOptions(genModel);
+      if (imageResolutions.length > 0) out.push({ key: "resolution", label: t("wfGenResolution"), options: imageResolutions });
       // 一次出几张。此前工作流里没有这一栏 —— 而它是图像那边最常调的一个,
       // 生成面板有、节点没有,同一个模型两处能力不一样。
       const images = maxImages(genModel);

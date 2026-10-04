@@ -23,6 +23,10 @@ from app.domain.generation.descriptors.image import (
     EVOLINK_IMAGE_SIZES,  # noqa: F401
     EVOLINK_IMAGE_CAPABILITIES,
     EVOLINK_IMAGE_EDIT_CAPABILITIES,
+    EVOLINK_GPT_IMAGE_2_CAPABILITIES,
+    EVOLINK_GPT_IMAGE_2_BETA_CAPABILITIES,
+    EVOLINK_GPT_IMAGE_25_CAPABILITIES,
+    EVOLINK_GPT_IMAGE_15_CAPABILITIES,
 )
 from app.domain.generation.descriptors.avatar import (
     WAN_22_S2V_CAPABILITIES,
@@ -193,6 +197,10 @@ CAPABILITY_PROFILES: dict[str, dict[str, Any]] = {
     "evolink-seedance-25-video-extend": EVOLINK_SEEDANCE_25_VIDEO_EXTEND_CAPABILITIES,
     "evolink-image": EVOLINK_IMAGE_CAPABILITIES,
     "evolink-image-edit": EVOLINK_IMAGE_EDIT_CAPABILITIES,
+    "evolink-gpt-image-2": EVOLINK_GPT_IMAGE_2_CAPABILITIES,
+    "evolink-gpt-image-2-beta": EVOLINK_GPT_IMAGE_2_BETA_CAPABILITIES,
+    "evolink-gpt-image-25": EVOLINK_GPT_IMAGE_25_CAPABILITIES,
+    "evolink-gpt-image-15": EVOLINK_GPT_IMAGE_15_CAPABILITIES,
     "evolink-veo-31-pro": EVOLINK_VEO_31_PRO_CAPABILITIES,
     "google-veo-video": GOOGLE_VEO_VIDEO_CAPABILITIES,
     "evolink-suno": EVOLINK_SUNO_CAPABILITIES,

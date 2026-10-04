@@ -140,3 +140,79 @@ EVOLINK_IMAGE_EDIT_CAPABILITIES = {
     "parameter_keys": ["size", "num_images", "reference_image"],
     "source_limits": {"reference_image": 14},
 }
+
+# ---- Evolink 上的 GPT Image(2026-10-04 按 Evolink 文档页核对,路径见各条)----
+#
+# **画质(quality)和分辨率档(resolution)决定价钱。**gpt-image-2 / 2.5 按 token 计费:1K 1:1 低画质约 $0.0053
+# 一张,中画质约 $0.012,2K 高画质约 $0.386。不发画质就落在服务商的默认值上(gpt-image-2 / 2.5 默认 medium、
+# gpt-image-1.5 默认 high),所以这两项是表单里能选的参数,**默认最便宜的 low + 1K**,由用户往上调。
+# 分辨率档只在「按画幅比」出图时生效(size 为 auto 或显式像素时服务商忽略它)—— 默认尺寸因此是 1:1,不是 auto。
+# 蒙版(mask_url)文档里有,但这几家的描述符和 OpenAI 那份一样不开放蒙版这个角色,适配器也不传。
+
+#: 15 种画幅比(三份文档同一张表)。
+_GPT_IMAGE_RATIOS = ["1:1", "1:2", "2:1", "1:3", "3:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "9:21", "21:9"]
+
+#: gpt-image-2(evolink.ai/docs/en/api-manual/image-series/gpt-image-2/gpt-image-2-image-generation):
+#: 提示词 32000 字;参考图 1–16 张;size = auto / 15 种画幅比 / 显式 WxH(16 的倍数,每边 16–3840,像素 655,360–8,294,400);
+#: resolution 1K / 2K / 4K(默认 1K,只对画幅比生效);quality low / medium / high(默认 medium);
+#: background opaque / transparent;output_format png / jpeg / webp;n 1–10。
+EVOLINK_GPT_IMAGE_2_CAPABILITIES = {
+    "modes": ["text-to-image", "image-to-image"],
+    "max_prompt_chars": 32000,
+    "parameter_keys": [
+        "size", "resolution", "num_images", "reference_image", "quality", "background", "output_format",
+    ],
+    "parameter_choices": {
+        "quality": ["low", "medium", "high"],
+        "background": ["opaque", "transparent"],
+        "output_format": ["png", "jpeg", "webp"],
+    },
+    "default_quality": "low",
+    "default_background": "opaque",
+    "default_output_format": "png",
+    "resolutions": ["1K", "2K", "4K"],
+    "default_resolution": "1K",
+    "sizes": ["auto", *_GPT_IMAGE_RATIOS, "1024x1024", "1536x1024", "1024x1536"],
+    "default_size": "1:1",
+    "size_multiple_of": 16,
+    "source_limits": {"reference_image": 16},
+    "max_num_images": 10,
+}
+
+#: gpt-image-2.5-flare(日常出图)/ gpt-image-2.5-sunburst(精修),两个模型同一套参数
+#: (evolink.ai/docs/en/api-manual/image-series/gpt-image-2.5/gpt-image-2.5-image-generation):
+#: 和 gpt-image-2 一样,只是画质多两档 xhigh / max(默认仍是 medium)。
+EVOLINK_GPT_IMAGE_25_CAPABILITIES = {
+    **EVOLINK_GPT_IMAGE_2_CAPABILITIES,
+    "parameter_choices": {
+        **EVOLINK_GPT_IMAGE_2_CAPABILITIES["parameter_choices"],
+        "quality": ["low", "medium", "high", "xhigh", "max"],
+    },
+}
+
+#: gpt-image-2-beta(evolink.ai/docs/en/api-manual/image-series/gpt-image-2/gpt-image-2-beta-image-generation):
+#: 固定价一张、只出 1K、n 固定为 1、不开放画质;提示词 2000 字;size = auto / 15 种画幅比;参考图最多 16 张(含在价里)。
+EVOLINK_GPT_IMAGE_2_BETA_CAPABILITIES = {
+    "modes": ["text-to-image", "image-to-image"],
+    "max_prompt_chars": 2000,
+    "parameter_keys": ["size", "reference_image"],
+    "sizes": ["auto", *_GPT_IMAGE_RATIOS],
+    "default_size": "1:1",
+    "source_limits": {"reference_image": 16},
+    "max_num_images": 1,
+}
+
+#: gpt-image-1.5(evolink.ai/docs/en/api-manual/image-series/gpt-image-1.5/gpt-image-1.5-image-generation):
+#: size = 1:1 / 2:3 / 3:2 或 1024x1024 / 1024x1536 / 1536x1024;quality low / medium / high(**默认 high**);
+#: 参考图 1–16 张;n 目前只支持 1;提示词上限 2000 token(沿用此前的 2000 字)。
+EVOLINK_GPT_IMAGE_15_CAPABILITIES = {
+    "modes": ["text-to-image", "image-to-image"],
+    "max_prompt_chars": 2000,
+    "parameter_keys": ["size", "reference_image", "quality"],
+    "parameter_choices": {"quality": ["low", "medium", "high"]},
+    "default_quality": "low",
+    "sizes": ["1:1", "2:3", "3:2", "1024x1024", "1024x1536", "1536x1024"],
+    "default_size": "1:1",
+    "source_limits": {"reference_image": 16},
+    "max_num_images": 1,
+}

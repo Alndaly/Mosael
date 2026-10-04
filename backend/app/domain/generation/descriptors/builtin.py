@@ -6,6 +6,10 @@
 from __future__ import annotations
 
 from app.domain.generation.descriptors.image import (
+    EVOLINK_GPT_IMAGE_15_CAPABILITIES,
+    EVOLINK_GPT_IMAGE_25_CAPABILITIES,
+    EVOLINK_GPT_IMAGE_2_BETA_CAPABILITIES,
+    EVOLINK_GPT_IMAGE_2_CAPABILITIES,
     EVOLINK_IMAGE_CAPABILITIES,
     EVOLINK_IMAGE_EDIT_CAPABILITIES,
     OPENAI_IMAGE_CAPABILITIES,
@@ -119,7 +123,12 @@ EVOLINK_BUILTIN_MODELS = [
     ("grok-imagine-text-to-video", "video", EVOLINK_VIDEO_T2V_CAPABILITIES),
     ("grok-imagine-image-to-video", "video", EVOLINK_VIDEO_I2V_CAPABILITIES),
     ("veo3.1-pro", "video", EVOLINK_VEO_31_PRO_CAPABILITIES),
-    ("gpt-image-1.5", "image", EVOLINK_IMAGE_EDIT_CAPABILITIES),
+    # GPT Image:画质和分辨率档决定价钱,默认最便宜的那档(见 descriptors/image 里 EVOLINK_GPT_IMAGE_* 的注释)。
+    ("gpt-image-2", "image", EVOLINK_GPT_IMAGE_2_CAPABILITIES),
+    ("gpt-image-2-beta", "image", EVOLINK_GPT_IMAGE_2_BETA_CAPABILITIES),
+    ("gpt-image-2.5-flare", "image", EVOLINK_GPT_IMAGE_25_CAPABILITIES),
+    ("gpt-image-2.5-sunburst", "image", EVOLINK_GPT_IMAGE_25_CAPABILITIES),
+    ("gpt-image-1.5", "image", EVOLINK_GPT_IMAGE_15_CAPABILITIES),
     ("gemini-3.1-flash-image-preview", "image", EVOLINK_IMAGE_EDIT_CAPABILITIES),
     ("z-image-turbo", "image", EVOLINK_IMAGE_CAPABILITIES),
     ("doubao-seedream-4.5", "image", EVOLINK_IMAGE_CAPABILITIES),

@@ -173,6 +173,7 @@ export const publish = {
   genAsmrMode: "ASMR detail boost",
   genModelVersion: "Model version",
   genQuality: "Quality",
+  genQualityPriceHint: "Higher quality costs more: for token-priced image models (GPT Image) low is about 1/9 of medium and high about 4x medium, and higher resolution tiers cost more too. Try low first, raise it for the final render",
   genBackground: "Background",
   genOutputFormat: "Output format",
   genModeration: "Moderation",

@@ -30,3 +30,8 @@ export const GENERATION_PARAMETER_LABELS: Record<string, MessageKey> = {
   bgm_prompt: "genBgmPrompt",
   model_version: "genModelVersion",
 };
+
+/** 枚举参数下面的那句说明:选哪一档会差多少钱这种,用户在选的那一刻就该知道的事。 */
+export const GENERATION_PARAMETER_HINTS: Record<string, MessageKey> = {
+  quality: "genQualityPriceHint",
+};
