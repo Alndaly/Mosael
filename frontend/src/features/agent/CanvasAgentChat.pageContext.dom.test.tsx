@@ -15,6 +15,7 @@ import { agentSessionSelectionKey } from "@/features/agent/sessionSelection";
 
 const mocks = vi.hoisted(() => ({
   sendAgentMessage: vi.fn(async () => ({ id: "m1" })),
+  clearNotes: vi.fn(),
 }));
 
 vi.mock("@/api/client", () => ({
@@ -36,7 +37,7 @@ vi.mock("@/api/client", () => ({
 }));
 vi.mock("@/app/preferences", () => ({ useI18n: () => (key: string) => key }));
 vi.mock("@/features/notes/useNoteAttachments", () => ({
-  useNoteAttachments: () => ({ hasNotes: false, context: "", summary: "", chips: [], dialog: null, trigger: null, clear() {} }),
+  useNoteAttachments: () => ({ hasNotes: false, context: "", summary: "", chips: [], dialog: null, trigger: null, clear: mocks.clearNotes }),
 }));
 vi.mock("@/features/agent/composerAttachments", () => ({
   MAX_CONTEXT_CHARS: 4000,
@@ -79,6 +80,7 @@ beforeEach(() => {
   window.localStorage.clear();
   window.localStorage.setItem(agentSessionSelectionKey("w1"), "s1");
   mocks.sendAgentMessage.mockClear();
+  mocks.clearNotes.mockClear();
 });
 
 it("上下文给成函数:发送那一刻才取;页面的小条和附件一排,焦点信号交给输入框", async () => {
@@ -115,4 +117,38 @@ it("上下文给成函数:发送那一刻才取;页面的小条和附件一排,�
   expect(body.context).toBe("发送那一刻的上下文");
   //: 页面给的摘录跟着这条消息落库(payload.quote),气泡里画出可点的一行。
   expect((body as unknown as { quote: unknown }).quote).toEqual({ kind: "note", note_id: "n1", title: "周报", text: "选中的那段", start: 3 });
+});
+
+it("页面投递的一条(选区工具条上的 AI 动作):当场发出去,带上页面上下文和动作说明;不动输入框;发完告诉页面", async () => {
+  const taken = vi.fn();
+  const sent = vi.fn();
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(
+    <QueryClientProvider client={client}>
+      <CanvasAgentChat
+        contextLine={() => "这一篇笔记的上下文"}
+        messageQuote={{ kind: "note", note_id: "n1", title: "周报", text: "选中的那段", start: 3 }}
+        outbox={{ id: 7, text: "润色选中的这段", context: "这是选区工具条上的「润色」" }}
+        onOutboxTaken={taken}
+        onSent={sent}
+        emptyHint="empty"
+        placeholder="placeholder"
+        rectKey="test.canvas.agent"
+        workspaceId="w1"
+        mode="docked"
+        onModeChange={() => {}}
+        onClose={() => {}}
+      />
+    </QueryClientProvider>,
+  );
+
+  await waitFor(() => expect(mocks.sendAgentMessage).toHaveBeenCalledTimes(1));
+  expect(taken).toHaveBeenCalledTimes(1);
+  const [, body] = mocks.sendAgentMessage.mock.calls[0] as unknown as [string, { content: string; context: string; quote: unknown }];
+  expect(body.content).toBe("润色选中的这段");
+  expect(body.context).toBe("这一篇笔记的上下文\n\n这是选区工具条上的「润色」");
+  expect(body.quote).toEqual({ kind: "note", note_id: "n1", title: "周报", text: "选中的那段", start: 3 });
+  await waitFor(() => expect(sent).toHaveBeenCalled());
+  //: 输入框里挂着的笔记引用不是这一条的,不该被它带走、也不该被清掉。
+  expect(mocks.clearNotes).not.toHaveBeenCalled();
 });

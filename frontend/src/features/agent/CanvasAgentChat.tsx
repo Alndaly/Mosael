@@ -69,6 +69,11 @@ import type { AgentMessageQuote } from "@/api/domains/sessions";
 
 type AgentSession = components["schemas"]["AgentSessionOut"];
 export type CanvasAgentMode = "docked" | "floating";
+/**
+ * 页面替用户投递的一条消息(笔记页选区工具条上的「润色」「翻译」……):面板接到就发,不经输入框。
+ * `text` 是对话里显示的那句话,`context` 是这一条额外附给智能体的说明(接在页面上下文后面)。
+ */
+export type PageOutbox = { id: number; text: string; context: string };
 
 
 /**
@@ -91,6 +96,12 @@ export function CanvasAgentChat({
   focusSignal,
   /** 这条消息带着的笔记摘录(笔记页的选区):落进消息,气泡里画成可点的一行,回看时也在。 */
   messageQuote,
+  /** 页面投递的一条(见 PageOutbox):接到就发。**接走时先回调 onOutboxTaken**,页面清掉它 ——
+   *  不清的话面板关了再开(重新挂载)会把同一条再发一遍。 */
+  outbox,
+  onOutboxTaken,
+  /** 一条消息发出去了(输入框里的、页面投递的都算)。笔记页据此放下钉住的那段选区。 */
+  onSent,
   /** 空态那句话 —— 说清这个面板能干什么。 */
   emptyHint,
   placeholder,
@@ -106,6 +117,9 @@ export function CanvasAgentChat({
   contextChips?: ComposerChip[];
   focusSignal?: number;
   messageQuote?: AgentMessageQuote | null;
+  outbox?: PageOutbox | null;
+  onOutboxTaken?: () => void;
+  onSent?: () => void;
   emptyHint: string;
   placeholder: string;
   rectKey: string;
@@ -308,43 +322,66 @@ export function CanvasAgentChat({
       files,
       mediaAssets,
       quote,
+      outboxContext,
     }: {
       text: string;
       references: AgentReference[];
-      document: JSONContent;
+      document: JSONContent | null;
       files: { name: string; content: string }[];
       mediaAssets: Asset[];
       quote: AgentMessageQuote | null;
+      /** 页面投递的那一条(见 PageOutbox)带的说明。有它就说明这条不是输入框里的:输入框挂着的附件、笔记引用不跟着走。 */
+      outboxContext?: string;
     }) => {
+      const fromPage = outboxContext !== undefined;
       // 文本文件内联为围栏上下文(纯文本智能体可读);图片/视频/音频编码成附件标记,气泡里渲染成缩略图。
       const fileBlock = textAttachmentBlock(files, t("wfAgentAttached"));
       let visibleContent = text || files.map((file) => `[${t("wfAgentAttached")} ${file.name}]`).join("\n");
       for (const asset of mediaAssets) visibleContent += attachmentToken(asset);
-      if (noteAttach.hasNotes) visibleContent += `\n${noteAttach.summary}`;
+      if (noteAttach.hasNotes && !fromPage) visibleContent += `\n${noteAttach.summary}`;
       visibleContent = visibleContent.trim();
       const page = typeof contextLine === "function" ? contextLine() : contextLine;
-      const context = [page, fileBlock, noteAttach.context].filter(Boolean).join("\n\n");
+      const context = [page, outboxContext, fileBlock, fromPage ? "" : noteAttach.context].filter(Boolean).join("\n\n");
       //: 先在这里说,不等后端回一句英文的「at most 4000 characters」(见 composerAttachments 的 MAX_*_CHARS)。
       if (visibleContent.length > MAX_MESSAGE_CHARS || context.length > MAX_CONTEXT_CHARS) {
         throw new Error(t("composerMessageTooLong"));
       }
       const targetId = (await current.ensure()).id;
       const message = await sendAgentMessage(targetId, {
-        content: visibleContent, context, references, body_document: document, ...(quote ? { quote } : {}),
+        content: visibleContent, context, references, ...(document ? { body_document: document } : {}), ...(quote ? { quote } : {}),
       });
-      return { message, targetId };
+      return { message, targetId, fromPage };
     },
     onError: (error) => toast.error((error as Error).message),
-    onSuccess: ({ targetId }) => {
-      setDraft(emptyDocument);
-      noteAttach.clear();
-      attach.clear();
+    onSuccess: ({ targetId, fromPage }) => {
+      //: 页面投递的那条不经输入框:输入框里正写着的草稿、挂着的附件都不是它的,不动。
+      if (!fromPage) {
+        setDraft(emptyDocument);
+        noteAttach.clear();
+        attach.clear();
+      }
+      onSent?.();
       void qc.invalidateQueries({ queryKey: ["agent-queue", targetId] });
       void qc.invalidateQueries({ queryKey: ["agent-messages", targetId] });
       void qc.invalidateQueries({ queryKey: ["agent-sessions", workspaceId] });
       void attachStream(targetId);
     },
   });
+
+  //: 页面投递的一条:接到就发(只读的会话发不了,说一声)。依赖只看 id —— 同一条不发第二遍。
+  React.useEffect(() => {
+    if (!outbox) return;
+    onOutboxTaken?.();
+    if (readOnly) {
+      toast.message(t("chatSessionReadOnly"));
+      return;
+    }
+    send.mutate({
+      text: outbox.text, references: [], document: null, files: [], mediaAssets: [],
+      quote: messageQuote ?? null, outboxContext: outbox.context,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [outbox?.id]);
 
   const submit = () => {
     // `running` is deliberately not a guard: the backend steers a mid-turn message.
