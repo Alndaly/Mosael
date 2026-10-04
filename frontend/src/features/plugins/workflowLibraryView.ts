@@ -63,3 +63,44 @@ export function sortWorkflows(workflows: readonly WorkflowFile[], sort: Workflow
   if (sort === "nodes") return out.sort((a, b) => (b.node_count ?? 0) - (a.node_count ?? 0) || byName(a, b));
   return out.sort(byName);
 }
+
+// --- 改那台机器上的文件 -----------------------------------------------------------
+
+/** Windows 上文件名里不能有的字符(那台 ComfyUI 可能在 Windows 上);和宿主、插件那两道查的是同一份。 */
+const BAD_SEGMENT = /[<>:"|?*\\]/;
+const hasControl = (text: string) => [...text].some((char) => char.charCodeAt(0) < 32);
+
+/** 输入框里的字 → workflows/ 里的相对路径:去掉首尾空白和开头的 `workflows/`,没写 `.json` 就补上。 */
+export function workflowPathFrom(input: string): string {
+  const text = input.trim().replace(/^workflows\//, "");
+  return text && !text.toLowerCase().endsWith(".json") ? `${text}.json` : text;
+}
+
+/** 能用的路径:`/` 分段,每段不空、不是 `.` / `..`、不以点开头、首尾没有空白、没有 Windows 不收的字符。 */
+export function validWorkflowPath(path: string): boolean {
+  if (!path.toLowerCase().endsWith(".json") || path.length > 500) return false;
+  return path.split("/").every((one) => one && one !== "." && one !== ".." && !one.startsWith(".") && one === one.trim() &&
+    !BAD_SEGMENT.test(one) && !hasControl(one));
+}
+
+/** 一个不撞名的建议:`人像.json` → `人像 (1).json`、`人像 (2).json`…… */
+export function freeWorkflowPath(path: string, taken: ReadonlySet<string>): string {
+  const stem = path.replace(/\.json$/i, "");
+  for (let index = 1; index < 1000; index += 1) {
+    const candidate = `${stem} (${index}).json`;
+    if (!taken.has(candidate)) return candidate;
+  }
+  return path;
+}
+
+/** 后端撞名回的 409(`detail.suggestion` 是建议名);不是这种就是 null。 */
+export function conflictOf(error: unknown): { suggestion: string } | null {
+  const { status, body } = (error ?? {}) as { status?: unknown; body?: unknown };
+  if (status !== 409) return null;
+  try {
+    const detail = (JSON.parse(String(body ?? "")) as { detail?: { suggestion?: unknown } }).detail;
+    return { suggestion: typeof detail?.suggestion === "string" ? detail.suggestion : "" };
+  } catch {
+    return { suggestion: "" };
+  }
+}

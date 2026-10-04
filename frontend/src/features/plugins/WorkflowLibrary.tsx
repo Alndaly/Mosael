@@ -1,21 +1,39 @@
 import React from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Boxes,
   CircleAlert,
+  Copy,
+  Download,
   FolderTree,
   LayoutGrid,
+  MoreHorizontal,
+  PencilLine,
   RefreshCcw,
+  RotateCcw,
   Search,
   SearchX,
   Settings2,
   Sparkles,
+  Trash2,
   TriangleAlert,
   Unplug,
   Workflow,
 } from "lucide-react";
 
-import { assetThumbnailUrl, getWorkflowLibrary, type PluginInstance, type WorkflowFile } from "@/api/client";
+import {
+  assetThumbnailUrl,
+  copyWorkflow,
+  getWorkflowContent,
+  getWorkflowLibrary,
+  renameWorkflow,
+  restoreWorkflow,
+  trashWorkflow,
+  type PluginInstance,
+  type WorkflowFile,
+  type WorkflowTrashed,
+} from "@/api/client";
+import { errorText } from "@/api/errorMessage";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { CatalogBadge } from "@/components/app/CatalogDialog";
 import {
@@ -29,29 +47,39 @@ import {
   type LibraryDensity,
   type LibraryNavItem,
 } from "@/components/app/LibraryBrowser";
+import { ConfirmDialog, ModalShell } from "@/components/app/modals";
 import { EmptyState, PageLoadError } from "@/components/layout/EmptyState";
 import { LoadingState } from "@/components/layout/LoadingState";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
 import { Input } from "@/components/ui/input";
+import { MenuContent, MenuItem, MenuSeparator } from "@/components/ui/menu";
 import { OptionPicker } from "@/components/ui/option-picker";
+import { Popover, PopoverTrigger } from "@/components/ui/popover";
 import { Hint } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
+import { invalidatePluginDependents } from "@/features/plugins/pluginCaches";
 import { WorkflowGraphView } from "@/features/plugins/WorkflowGraph";
 import {
   ALL_WORKFLOWS,
   PROBLEMS_VIEW,
+  TRASH_VIEW,
   WORKFLOW_KINDS,
   WORKFLOW_SORTS,
+  conflictOf,
   filterWorkflows,
+  freeWorkflowPath,
   inView,
   lacksSomething,
   sortWorkflows,
+  validWorkflowPath,
   workflowFolders,
+  workflowPathFrom,
   type WorkflowKindFilter,
   type WorkflowSort,
 } from "@/features/plugins/workflowLibraryView";
 import { gotoRecord } from "@/lib/deepLink";
+import { saveJsonToDisk } from "@/lib/download";
 import { handOffToGeneration } from "@/lib/generationHandoff";
 import { usePersistentTab } from "@/lib/usePersistentTab";
 import { cn } from "@/lib/utils";
@@ -146,18 +174,36 @@ export function WorkflowLibraryDialog({
   //: 显示方式记在本机,和模型库各记各的
   const [density, setDensity] = usePersistentTab<LibraryDensity>("workflow-library.density", "small", LIBRARY_DENSITIES);
   const [detailKey, setDetailKey] = React.useState<string | null>(null);
+  //: 正在确认的那一次改动(复制、改名、恢复要一个名字;删除只要一句确认)
+  const [action, setAction] = React.useState<
+    | { kind: "copy" | "rename"; path: string; initial: string }
+    | { kind: "restore"; path: string; initial: string }
+    | { kind: "delete"; flow: WorkflowFile }
+    | null
+  >(null);
+  const [deleting, setDeleting] = React.useState(false);
+  const qc = useQueryClient();
+  //: 改完一张:工作流库重新问一遍;生成选项、工具清单里的那张也跟着变(宿主已经让这个连接的目录重拉过)
+  const changed = () => {
+    void qc.invalidateQueries({ queryKey: ["workflow-library", instance.id] });
+    invalidatePluginDependents(qc);
+  };
 
   const workflows = React.useMemo(() => library.data?.workflows ?? [], [library.data]);
+  const trash = library.data?.trash ?? [];
+  const taken = React.useMemo(() => new Set(workflows.map(keyOf)), [workflows]);
   const folders = React.useMemo(() => workflowFolders(workflows), [workflows]);
   const problems = workflows.filter(lacksSomething).length;
   const navItems: LibraryNavItem[] = [
     { value: ALL_WORKFLOWS, label: t("workflowLibraryAll"), count: workflows.length, icon: <LayoutGrid /> },
     ...folders.map((one) => ({ value: one.name, label: one.name, count: one.count, icon: <FolderTree /> })),
   ];
-  const pinned: LibraryNavItem[] =
-    problems > 0
-      ? [{ value: PROBLEMS_VIEW, label: t("workflowLibraryProblems"), count: problems, icon: <TriangleAlert />, tone: "warning" }]
-      : [];
+  const pinned: LibraryNavItem[] = [
+    ...(problems > 0
+      ? [{ value: PROBLEMS_VIEW, label: t("workflowLibraryProblems"), count: problems, icon: <TriangleAlert />, tone: "warning" as const }]
+      : []),
+    ...(trash.length > 0 ? [{ value: TRASH_VIEW, label: t("workflowLibraryTrash"), count: trash.length, icon: <Trash2 /> }] : []),
+  ];
   const current = [...navItems, ...pinned].some((one) => one.value === view) ? view : ALL_WORKFLOWS;
   const scope = inView(workflows, current);
   const shown = sortWorkflows(filterWorkflows(scope, { kind, query }), sort);
@@ -191,7 +237,15 @@ export function WorkflowLibraryDialog({
     </IconButton>
   );
 
-  const toolbar = !library.data ? (
+  const toolbar = current === TRASH_VIEW ? (
+    <>
+      <div className="grid min-w-0 flex-1 basis-[240px] gap-0.5">
+        <h3 className="m-0 text-ui-md font-semibold text-foreground">{t("workflowLibraryTrash")}</h3>
+        <p className="m-0 text-ui-xs text-muted-foreground">{t("workflowLibraryTrashDesc")}</p>
+      </div>
+      {refresh}
+    </>
+  ) : !library.data ? (
     <label className="relative min-w-[180px] flex-1 basis-[220px]">
       <Search size={14} aria-hidden className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
       <Input className="pl-9" disabled placeholder={t("workflowLibrarySearchPending")} aria-label={t("workflowLibrarySearchPending")} />
@@ -255,6 +309,9 @@ export function WorkflowLibraryDialog({
         />
       );
     }
+    if (current === TRASH_VIEW) {
+      return <TrashList items={trash} onRestore={(one) => setAction({ kind: "restore", path: one.path, initial: one.original })} />;
+    }
     if (shown.length === 0) {
       return chips.length > 0 ? (
         <EmptyState
@@ -313,7 +370,70 @@ export function WorkflowLibraryDialog({
       detailKey={detail ? detailKey : null}
       onOpenItem={setDetailKey}
       onBack={() => setDetailKey(null)}
-      detail={detail && <WorkflowDetail flow={detail} onBack={() => setDetailKey(null)} />}
+      detail={
+        detail && (
+          <WorkflowDetail
+            flow={detail}
+            onBack={() => setDetailKey(null)}
+            onCopy={() => setAction({ kind: "copy", path: detail.path, initial: freeWorkflowPath(detail.path, taken) })}
+            onRename={() => setAction({ kind: "rename", path: detail.path, initial: detail.path })}
+            onDelete={() => setAction({ kind: "delete", flow: detail })}
+            onExport={async () => {
+              const found = await getWorkflowContent(instance.id, detail.path);
+              saveJsonToDisk(`${detail.label}.json`, found.content);
+            }}
+          />
+        )
+      }
+      dialogs={
+        <>
+          {action && action.kind !== "delete" && (
+            <WorkflowPathDialog
+              title={t(action.kind === "copy" ? "workflowCopyTitle" : action.kind === "rename" ? "workflowRenameTitle" : "workflowRestoreTitle")
+                .replace("{name}", action.kind === "restore" ? action.initial : action.path)}
+              confirmLabel={t(action.kind === "copy" ? "workflowCopyConfirm" : action.kind === "rename" ? "workflowRenameConfirm"
+                : "workflowRestoreConfirm")}
+              where={t("workflowWriteWhere").replace("{server}", instance.name)}
+              initial={action.initial}
+              onClose={() => setAction(null)}
+              onSubmit={async (path) => {
+                const done =
+                  action.kind === "copy" ? await copyWorkflow(instance.id, action.path, path)
+                    : action.kind === "rename" ? await renameWorkflow(instance.id, action.path, path)
+                      : await restoreWorkflow(instance.id, action.path, path);
+                changed();
+                if (action.kind !== "restore") setDetailKey(done.path);
+              }}
+            />
+          )}
+          {action?.kind === "delete" && (
+            <ConfirmDialog
+              open
+              title={t("workflowDeleteTitle").replace("{name}", action.flow.label)}
+              body={[
+                t("workflowDeleteBody").replace("{server}", instance.name),
+                (action.flow.used_by?.length ?? 0) > 0
+                  ? `${t("workflowDeleteUsedBy")}${(action.flow.used_by ?? []).map((one) => one.name).join(t("listSeparator"))}`
+                  : "",
+              ].filter(Boolean).join(" ")}
+              confirmLabel={t("workflowDeleteConfirm")}
+              pending={deleting}
+              onCancel={() => setAction(null)}
+              onConfirm={async () => {
+                setDeleting(true);
+                try {
+                  await trashWorkflow(instance.id, action.flow.path);
+                  changed();
+                  setAction(null);
+                  setDetailKey(null);
+                } finally {
+                  setDeleting(false);
+                }
+              }}
+            />
+          )}
+        </>
+      }
     >
       {content}
     </LibraryDialog>
@@ -487,8 +607,24 @@ const mediaName = (t: Translate, media: string) =>
  * (带节点标题和分组名);右栏转不过来的原因、能填什么 / 能调什么 / 交出什么、用到的模型、缺的节点和模型、最近的产出、
  * Mosael 里谁在用它。
  */
-function WorkflowDetail({ flow, onBack }: { flow: WorkflowFile; onBack: () => void }) {
+function WorkflowDetail({
+  flow,
+  onBack,
+  onCopy,
+  onRename,
+  onDelete,
+  onExport,
+}: {
+  flow: WorkflowFile;
+  onBack: () => void;
+  onCopy: () => void;
+  onRename: () => void;
+  onDelete: () => void;
+  onExport: () => Promise<void>;
+}) {
   const t = useI18n();
+  const [menu, setMenu] = React.useState(false);
+  const [exportError, setExportError] = React.useState("");
   const { locale } = usePreferences();
   const generation = flow.generation;
   const parameters = flow.parameters ?? [];
@@ -523,6 +659,7 @@ function WorkflowDetail({ flow, onBack }: { flow: WorkflowFile; onBack: () => vo
         </>
       }
       actions={
+        <>
         <Hint label={t("workflowUseToGenerateHint")} disabledReason={generation ? undefined : t("workflowNotGeneration")}>
           <Button
             disabled={!generation}
@@ -541,9 +678,35 @@ function WorkflowDetail({ flow, onBack }: { flow: WorkflowFile; onBack: () => vo
             {t("modelUseToGenerate")}
           </Button>
         </Hint>
+        {/* 改那台机器上的文件:每一样都先弹确认(见 WorkflowPathDialog / ConfirmDialog);导出只是下载到本机 */}
+        <Popover open={menu} onOpenChange={setMenu}>
+          <PopoverTrigger asChild>
+            <IconButton variant="outline" size="default" className="px-3 text-muted-foreground" label={t("workflowMore")}>
+              <MoreHorizontal size={14} />
+            </IconButton>
+          </PopoverTrigger>
+          <MenuContent label={t("workflowMore")} align="end">
+            <MenuItem icon={<Copy />} label={t("workflowCopy")} onClick={() => { setMenu(false); onCopy(); }} />
+            <MenuItem icon={<PencilLine />} label={t("workflowRename")} onClick={() => { setMenu(false); onRename(); }} />
+            <MenuItem
+              icon={<Download />}
+              label={t("workflowExport")}
+              description={t("workflowExportDesc")}
+              onClick={() => {
+                setMenu(false);
+                setExportError("");
+                onExport().catch((error) => setExportError(errorText(error)));
+              }}
+            />
+            <MenuSeparator />
+            <MenuItem icon={<Trash2 />} label={t("workflowDelete")} destructive onClick={() => { setMenu(false); onDelete(); }} />
+          </MenuContent>
+        </Popover>
+        </>
       }
       media={media}
     >
+      {exportError && <p role="alert" className="m-0 text-ui-sm text-destructive">{exportError}</p>}
       {flow.problem && (
         <div role="alert" className="flex min-w-0 items-start gap-2 rounded-lg border border-warning/40 bg-panel p-3 text-ui-sm text-foreground">
           <TriangleAlert size={14} aria-hidden className="mt-0.5 shrink-0 text-warning" />
@@ -704,5 +867,134 @@ function WorkflowDetail({ flow, onBack }: { flow: WorkflowFile; onBack: () => vo
         )}
       </LibrarySection>
     </LibraryDetail>
+  );
+}
+
+/**
+ * 回收站:Mosael 删除的工作流(挪进那台机器的 `.mosael-trash/workflows/` 了)。能恢复;Mosael 不提供清空 ——
+ * 真要删掉,在那台机器上删那个目录(ADR 0035 §3)。
+ */
+function TrashList({ items, onRestore }: { items: WorkflowTrashed[]; onRestore: (one: WorkflowTrashed) => void }) {
+  const t = useI18n();
+  const { locale } = usePreferences();
+  return (
+    <ul aria-label={t("workflowLibraryTrash")} className="m-0 grid list-none gap-2 p-0">
+      {items.map((one) => (
+        <li key={one.path} className="flex min-w-0 items-center gap-3 rounded-xl border border-border bg-panel p-3">
+          <Trash2 size={14} aria-hidden className="shrink-0 text-muted-foreground" />
+          <span className="grid min-w-0 flex-1 gap-0.5">
+            <Truncate className="text-ui-sm font-medium text-foreground">{one.label}</Truncate>
+            <span className="flex min-w-0 items-baseline gap-2 text-ui-xs text-muted-foreground">
+              <Truncate>{one.original}</Truncate>
+              {one.deleted_at != null && (
+                <span className="shrink-0 tabular-nums">
+                  {t("workflowDeletedAt").replace("{time}", new Date(one.deleted_at * 1000).toLocaleString(locale))}
+                </span>
+              )}
+            </span>
+          </span>
+          <Button variant="outline" size="sm" aria-label={t("workflowRestore")} onClick={() => onRestore(one)}>
+            <RotateCcw size={13} />
+            {t("workflowRestore")}
+          </Button>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/**
+ * 复制、改名、恢复都要一个名字:先确认,写明改的是哪台机器上的文件。`.json` 不用自己写;不合格的当场说、点不了;
+ * 撞名(409)不覆盖 —— 说清楚,给一个建议名。
+ */
+function WorkflowPathDialog({
+  title,
+  confirmLabel,
+  where,
+  initial,
+  onSubmit,
+  onClose,
+}: {
+  title: string;
+  confirmLabel: string;
+  where: string;
+  initial: string;
+  onSubmit: (path: string) => Promise<void>;
+  onClose: () => void;
+}) {
+  const t = useI18n();
+  const [value, setValue] = React.useState(initial);
+  const [pending, setPending] = React.useState(false);
+  const [clash, setClash] = React.useState<{ path: string; suggestion: string } | null>(null);
+  const [error, setError] = React.useState("");
+  const path = workflowPathFrom(value);
+  const bad = !validWorkflowPath(path);
+  const inputId = React.useId();
+  const submit = async () => {
+    if (bad || pending) return;
+    setPending(true);
+    setClash(null);
+    setError("");
+    try {
+      await onSubmit(path);
+      onClose();
+    } catch (failure) {
+      const conflict = conflictOf(failure);
+      if (conflict) setClash({ path, suggestion: conflict.suggestion });
+      else setError(errorText(failure));
+    } finally {
+      setPending(false);
+    }
+  };
+  return (
+    <ModalShell
+      open
+      onOpenChange={(next) => !next && !pending && onClose()}
+      title={title}
+      className="w-[min(520px,calc(100vw-32px))]"
+      footer={
+        <>
+          <Button variant="ghost" disabled={pending} onClick={onClose}>{t("cancel")}</Button>
+          <Button loading={pending} disabled={bad} onClick={() => void submit()}>{confirmLabel}</Button>
+        </>
+      }
+    >
+      <div className="grid gap-3">
+        <p className="m-0 text-ui-sm leading-relaxed text-muted-foreground">{where}</p>
+        <div className="grid gap-1.5">
+          <label htmlFor={inputId} className="text-ui-xs font-medium text-muted-foreground">{t("workflowPathLabel")}</label>
+          <Input
+            id={inputId}
+            aria-label={t("workflowPathLabel")}
+            value={value}
+            onChange={(event) => {
+              setValue(event.target.value);
+              setClash(null);
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && !event.nativeEvent.isComposing) void submit();
+            }}
+          />
+          {bad && value.trim() ? (
+            <p className="m-0 text-ui-xs text-destructive">{t("workflowPathBad")}</p>
+          ) : (
+            <p className="m-0 text-ui-xs text-muted-foreground">{t("workflowPathHelp")}</p>
+          )}
+        </div>
+        {clash && (
+          <div role="alert" className="grid gap-2 rounded-lg border border-warning/40 bg-panel p-3 text-ui-sm text-foreground">
+            <span>{t("workflowExists").replace("{path}", clash.path)}</span>
+            {clash.suggestion && (
+              <span>
+                <Button variant="outline" size="sm" onClick={() => { setValue(clash.suggestion); setClash(null); }}>
+                  {t("workflowUseSuggestion").replace("{name}", clash.suggestion)}
+                </Button>
+              </span>
+            )}
+          </div>
+        )}
+        {error && <p role="alert" className="m-0 text-ui-sm text-destructive">{error}</p>}
+      </div>
+    </ModalShell>
   );
 }
