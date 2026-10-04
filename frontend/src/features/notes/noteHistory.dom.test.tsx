@@ -6,7 +6,8 @@
  * - 列表顶上那一版标「当前版本」,当前版本上没有「恢复」;
  * - 「恢复此版本」先确认,说清会新建一个版本、现有版本都还在;
  * - 「复制这一版的内容」;键盘上下键切换版本;
- * - 只有一个版本时说一句合适的话,不摆恢复按钮。
+ * - 只有一个版本时说一句合适的话,不摆恢复按钮;
+ * - 右边能切「预览 / 和当前版本对比 / 和上一版对比」:对比按字(删去的划掉、新加的高亮),大段没改的折起来。
  */
 import React from "react";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
@@ -163,4 +164,76 @@ it("只有一个版本时说一句话,不摆恢复", async () => {
   mount({ current: { revision: 1, title: "周报", markdown: "周一" } });
   expect(await screen.findByText(/目前只有这一个版本/)).toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "恢复此版本" })).toBeNull();
+});
+
+const added = () => [...document.querySelectorAll(".note-history ins")].map((one) => one.textContent);
+const removed = () => [...document.querySelectorAll(".note-history del")].map((one) => one.textContent);
+
+it("和当前版本对比、和上一版对比:按字画出删去的和新加的", async () => {
+  mount();
+  await waitFor(() => expect(row(2)).toBeInTheDocument());
+  fireEvent.click(row(2));
+  await screen.findByText("周一开会。");
+  const views = screen.getByRole("radiogroup", { name: "看这一版的方式" });
+  expect(within(views).getByRole("radio", { name: "预览" })).toHaveAttribute("aria-checked", "true");
+
+  fireEvent.click(within(views).getByRole("radio", { name: "和当前版本对比" }));
+  await waitFor(() => expect(added()).toEqual(["周二写脚本。"]));
+  expect(removed()).toEqual([]);
+  expect(screen.getByText(/后来加上的/)).toBeInTheDocument();
+
+  fireEvent.click(within(views).getByRole("radio", { name: "和上一版对比" }));
+  await waitFor(() => expect(added()).toEqual(["开会。"]));
+  expect(screen.getByText(/这一版加上的/)).toBeInTheDocument();
+
+  //: 切到别的版本,看的方式不变。
+  fireEvent.click(row(3));
+  await waitFor(() => expect(added()).toEqual(["周二写脚本。"]));
+});
+
+it("当前版本没法和当前比,第 1 版没有上一版:那两项点不了", async () => {
+  mount();
+  await waitFor(() => expect(row(3)).toBeInTheDocument());
+  const views = screen.getByRole("radiogroup", { name: "看这一版的方式" });
+  expect(within(views).getByRole("radio", { name: "和当前版本对比" })).toBeDisabled();
+  fireEvent.click(row(1));
+  await screen.findByText("周一");
+  expect(within(views).getByRole("radio", { name: "和上一版对比" })).toBeDisabled();
+  expect(within(views).getByRole("radio", { name: "和当前版本对比" })).toBeEnabled();
+});
+
+it("改了标题也画出来;一模一样时说没有区别", async () => {
+  api.content[2] = { title: "上周周报", markdown: "周一开会。周二写脚本。" };
+  mount();
+  await waitFor(() => expect(row(2)).toBeInTheDocument());
+  fireEvent.click(row(2));
+  await screen.findByText("上周周报");
+  fireEvent.click(screen.getByRole("radio", { name: "和当前版本对比" }));
+  await waitFor(() => expect(removed()).toEqual(["上周"]));
+  expect(added()).toEqual([]);
+
+  api.content[2] = { title: "周报", markdown: "周一开会。周二写脚本。" };
+  cleanup();
+  mount();
+  await waitFor(() => expect(row(2)).toBeInTheDocument());
+  fireEvent.click(row(2));
+  await screen.findAllByText("周一开会。周二写脚本。");
+  fireEvent.click(screen.getByRole("radio", { name: "和当前版本对比" }));
+  expect(await screen.findByText("和当前版本没有区别。")).toBeInTheDocument();
+});
+
+it("大段没改的折起来,点一下展开", async () => {
+  const lines = Array.from({ length: 30 }, (_, index) => `第 ${index + 1} 行`);
+  api.content[2] = { title: "周报", markdown: lines.join("\n") };
+  mount({ current: { revision: 3, title: "周报", markdown: [...lines.slice(0, 29), "第 30 行,改过"].join("\n") } });
+  await waitFor(() => expect(row(2)).toBeInTheDocument());
+  fireEvent.click(row(2));
+  await screen.findByText(/第 1 行/);
+  fireEvent.click(screen.getByRole("radio", { name: "和当前版本对比" }));
+  const unfold = await screen.findByRole("button", { name: "展开未改动的 27 行" });
+  expect(screen.queryByText("第 5 行")).toBeNull();
+  expect(screen.getByText("第 28 行")).toBeInTheDocument();
+  fireEvent.click(unfold);
+  expect(screen.getByText("第 5 行")).toBeInTheDocument();
+  expect(added()).toEqual([",改过"]);
 });

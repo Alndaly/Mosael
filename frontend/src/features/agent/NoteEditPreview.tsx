@@ -1,7 +1,8 @@
 import React from "react";
 
 import { useI18n } from "@/app/preferences";
-import { diffText, type DiffSegment } from "@/features/agent/textDiff";
+import { DiffSegments } from "@/components/app/DiffSegments";
+import { diffText, type DiffSegment } from "@/lib/textDiff";
 import { cn } from "@/lib/utils";
 
 /**
@@ -64,19 +65,7 @@ function Segments({ segments }: { segments: DiffSegment[] }) {
   return (
     <div className="min-w-0 overflow-hidden rounded-md border border-border bg-panel-inset">
       <p className="m-0 whitespace-pre-wrap p-2.5 text-ui-xs leading-[1.65] [overflow-wrap:anywhere]">
-        {shown.map((one, index) =>
-          one.kind === "del" ? (
-            <del key={index} className="rounded-sm bg-[color-mix(in_srgb,var(--destructive)_12%,transparent)] text-destructive line-through">
-              {one.text}
-            </del>
-          ) : one.kind === "ins" ? (
-            <ins key={index} className="rounded-sm bg-[color-mix(in_srgb,var(--success)_16%,transparent)] text-foreground no-underline">
-              {one.text}
-            </ins>
-          ) : (
-            <span key={index} className="text-muted-foreground">{one.text}</span>
-          ),
-        )}
+        <DiffSegments segments={shown} quietSame />
         {folded && !open ? <span className="text-muted-foreground">…</span> : null}
       </p>
       {folded ? (

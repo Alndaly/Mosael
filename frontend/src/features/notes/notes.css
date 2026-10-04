@@ -269,16 +269,25 @@
 .note-history-number { margin-left:auto; font-size:var(--text-ui-2xs); color:var(--muted-foreground); font-variant-numeric:tabular-nums; white-space:nowrap; }
 .note-history-badge { padding:1px 7px; border-radius:999px; font-size:var(--text-ui-2xs); line-height:1.6; white-space:nowrap; background:color-mix(in srgb,var(--primary) 12%,transparent); color:var(--primary); }
 .note-history-only { margin:12px 10px 0; font-size:var(--text-ui-xs); line-height:1.7; color:var(--muted-foreground); }
-.note-history-main { display:grid; grid-template-rows:auto minmax(0,1fr); min-width:0; min-height:0; }
+.note-history-main { display:grid; grid-template-rows:auto auto minmax(0,1fr); min-width:0; min-height:0; }
 .note-history-bar { display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:52px; padding:10px 20px; border-bottom:1px solid var(--divider); }
 .note-history-what { display:flex; align-items:center; gap:10px; min-width:0; font-size:var(--text-ui-sm); white-space:nowrap; }
 .note-history-what > span:not(.note-history-badge) { overflow:hidden; text-overflow:ellipsis; font-size:var(--text-ui-xs); color:var(--muted-foreground); }
 .note-history-actions { display:flex; flex-shrink:0; align-items:center; gap:6px; }
+/* 看这一版的方式(预览 / 和当前比 / 和上一版比)和图例一行,窄了图例换到下面。 */
+.note-history-views { display:flex; flex-wrap:wrap; align-items:center; gap:8px 14px; padding:10px 20px; border-bottom:1px solid var(--divider); }
+.note-history-legend { font-size:var(--text-ui-2xs); line-height:1.5; color:var(--muted-foreground); }
 .note-history-body { min-height:0; overflow-y:auto; overscroll-behavior:contain; padding:32px clamp(20px,5%,56px) 48px; }
 /* 760px:笔记页正文栏的宽(.notes-layout 的 --note-column)。弹窗挂在页面外面,取不到那个变量。 */
 .note-history-paper { max-width:760px; margin:0 auto; }
 .note-history-title { margin-bottom:24px; font-size:1.6rem; font-weight:650; line-height:1.3; overflow-wrap:anywhere; }
 .note-history-status { font-size:var(--text-ui-sm); color:var(--muted-foreground); }
+/* 对比:正文按源码一行一行排(和阅读时同一个字号、行距),改了的那几行按字画出删去 / 新加的。 */
+.note-diff { font-size:15px; line-height:1.85; overflow-wrap:anywhere; }
+.note-diff-line { min-height:1.85em; white-space:pre-wrap; color:var(--muted-foreground); }
+.note-diff-change { margin:2px -8px; padding:2px 8px; border-radius:6px; white-space:pre-wrap; background:color-mix(in srgb,var(--foreground) 3%,transparent); }
+.note-diff-fold { display:block; width:100%; margin:6px 0; padding:4px 0; border-radius:6px; font-size:var(--text-ui-xs); color:var(--primary); text-align:center; background:color-mix(in srgb,var(--foreground) 3%,transparent); }
+.note-diff-fold:hover { background:color-mix(in srgb,var(--foreground) 6%,transparent); }
 @media(max-width:640px) {
   .note-history-layout { grid-template-columns:minmax(0,1fr); grid-template-rows:minmax(0,2fr) minmax(0,3fr); }
   .note-history-list { border-right:0; border-bottom:1px solid var(--divider); }

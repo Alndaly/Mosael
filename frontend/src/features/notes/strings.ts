@@ -76,6 +76,15 @@ const zh = {
     restoreConfirm: "恢复",
     onlyOne: "这篇笔记目前只有这一个版本。之后每次编辑、智能体修改或恢复，都会在这里留下一版。",
     loadFailed: "这一版没读出来",
+    views: "看这一版的方式",
+    preview: "预览",
+    compareCurrent: "和当前版本对比",
+    comparePrevious: "和上一版对比",
+    legendCurrent: "划掉的是后来删掉的，高亮的是后来加上的。",
+    legendPrevious: "划掉的是这一版删掉的，高亮的是这一版加上的。",
+    sameAsCurrent: "和当前版本没有区别。",
+    sameAsPrevious: "和上一版没有区别。",
+    unfold: (n: number) => `展开未改动的 ${n} 行`,
   },
 };
 type Strings = typeof zh;
@@ -155,6 +164,15 @@ const en: Strings = {
     restoreConfirm: "Restore",
     onlyOne: "This note has only this one version so far. Every edit, assistant change or restore from now on leaves a version here.",
     loadFailed: "This version could not be loaded",
+    views: "How to view this version",
+    preview: "Preview",
+    compareCurrent: "Compare with current",
+    comparePrevious: "Compare with previous",
+    legendCurrent: "Struck-through text was removed later; highlighted text was added later.",
+    legendPrevious: "Struck-through text was removed in this version; highlighted text was added in it.",
+    sameAsCurrent: "No difference from the current version.",
+    sameAsPrevious: "No difference from the previous version.",
+    unfold: (n: number) => `Show ${n} unchanged lines`,
   },
 };
 export function noteStrings(locale: string) { return locale === "en-US" ? en : zh; }

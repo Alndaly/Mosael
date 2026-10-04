@@ -10,15 +10,21 @@ import { useI18n, usePreferences } from "@/app/preferences";
 import {
   AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { DiffSegments } from "@/components/app/DiffSegments";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import { SEGMENTED_LIST, segmentedTriggerClass } from "@/components/ui/tabs";
 import { Hint } from "@/components/ui/tooltip";
 import { dayGroupOf, groupByLocalDay } from "@/lib/dayGroups";
+import { diffText } from "@/lib/textDiff";
+import { cn } from "@/lib/utils";
 import { NoteReader } from "./NoteEditor";
 import { useNoteStrings } from "./strings";
+import { diffDocument, type DocumentDiffBlock } from "./versionDiff";
 import { versionClock, versionFullTime, versionMoment } from "./versionTime";
 
 type Content = { revision: number; title: string; markdown: string };
+type View = "preview" | "current" | "previous";
 
 /**
  * 笔记的版本记录。
@@ -28,7 +34,9 @@ type Content = { revision: number; title: string; markdown: string };
  *
  * - 「恢复此版本」先确认:恢复会新建一个版本,现有版本都还在 —— 当前版本上没有这颗;
  * - 「复制这一版的内容」复制的是正文的 Markdown;
- * - 列表里上下键、Home / End 切换版本,焦点跟着走(只有选中那一项在 Tab 序列里)。
+ * - 列表里上下键、Home / End 切换版本,焦点跟着走(只有选中那一项在 Tab 序列里);
+ * - 右边切「预览 / 和当前版本对比 / 和上一版对比」。对比一律从旧到新画:划掉的是后来(或这一版)删掉的,高亮的是
+ *   后来(或这一版)加上的。切到别的版本,看的方式不变;那一版用不了的方式(当前版本和当前比、第 1 版没有上一版)点不了。
  */
 export function NoteHistoryDialog({ open, onOpenChange, workspaceId, noteId, current, focusRevision, onRestore }: {
   open: boolean;
@@ -60,6 +68,18 @@ export function NoteHistoryDialog({ open, onOpenChange, workspaceId, noteId, cur
     enabled: open && !isCurrent, staleTime: Infinity,
   });
   const shown: Content | undefined = isCurrent ? current : content.data;
+  const [view, setView] = React.useState<View>("preview");
+  const previous = chosen - 1;
+  const usable: Record<View, boolean> = { preview: true, current: !isCurrent, previous: previous >= 1 };
+  const showing: View = usable[view] ? view : "preview";
+  const before = useQuery({
+    queryKey: noteKeys.revisionContent(noteId, previous), queryFn: () => getNoteRevision(workspaceId, noteId, previous),
+    enabled: open && showing === "previous", staleTime: Infinity,
+  });
+  const pair: [Content, Content] | null = !shown ? null
+    : showing === "current" ? [shown, current]
+    : showing === "previous" ? (before.data ? [before.data, shown] : null)
+    : null;
   const chosenItem = items.find((one) => one.revision === chosen);
   const only = items.length === 1;
 
@@ -148,9 +168,30 @@ export function NoteHistoryDialog({ open, onOpenChange, workspaceId, noteId, cur
                   {!isCurrent && <Button size="sm" disabled={!shown} onClick={() => setConfirming(true)}>{v.restore}</Button>}
                 </div>
               </div>
+              <div className="note-history-views">
+                <div role="radiogroup" aria-label={v.views} className={cn(SEGMENTED_LIST, "min-h-9")}>
+                  {(["preview", "current", "previous"] as const).map((one) => (
+                    <button key={one} type="button" role="radio" aria-checked={showing === one} disabled={!usable[one]}
+                      className={cn(segmentedTriggerClass(showing === one), "min-h-7 px-2.5 text-ui-xs disabled:cursor-default disabled:opacity-40")}
+                      onClick={() => setView(one)}>
+                      {{ preview: v.preview, current: v.compareCurrent, previous: v.comparePrevious }[one]}
+                    </button>
+                  ))}
+                </div>
+                {showing !== "preview" && <p className="note-history-legend">{showing === "current" ? v.legendCurrent : v.legendPrevious}</p>}
+              </div>
               <div ref={body} className="note-history-body">
                 <article className="note-history-paper">
-                  {shown ? (
+                  {showing !== "preview" ? (
+                    pair ? (
+                      <VersionDiff key={`${showing}-${chosen}`} before={pair[0]} after={pair[1]} untitled={s.untitled}
+                        empty={showing === "current" ? v.sameAsCurrent : v.sameAsPrevious} unfold={v.unfold} />
+                    ) : (content.isError || before.isError) ? (
+                      <p className="note-history-status">{v.loadFailed}</p>
+                    ) : (
+                      <p className="note-history-status">{s.loading}</p>
+                    )
+                  ) : shown ? (
                     <>
                       <h1 className="note-history-title">{shown.title || s.untitled}</h1>
                       <NoteReader markdown={shown.markdown} />
@@ -179,5 +220,42 @@ export function NoteHistoryDialog({ open, onOpenChange, workspaceId, noteId, cur
         </AlertDialogContent>
       </AlertDialog>
     </>
+  );
+}
+
+/** 没改的行露出几行上下文;再多就折起来。 */
+const CONTEXT_LINES = 2;
+/** 折起来至少藏这么多行 —— 只藏一两行的话,那颗「展开」比它藏的字还占地方。 */
+const MIN_FOLD = 3;
+
+/** 两版的对比:标题改了就画标题的差异;正文按行对齐,改了的那几行按字画,大段没改的折起来。 */
+function VersionDiff({ before, after, empty, untitled, unfold }: {
+  before: Content; after: Content; empty: string; untitled: string; unfold: (lines: number) => string;
+}) {
+  const blocks = React.useMemo(() => diffDocument(before.markdown, after.markdown), [before.markdown, after.markdown]);
+  const title = before.title === after.title ? null : diffText(before.title, after.title);
+  const [opened, setOpened] = React.useState<ReadonlySet<number>>(new Set());
+  if (!title && !blocks.some((block) => block.kind === "change")) return <p className="note-history-status">{empty}</p>;
+  const same = (block: Extract<DocumentDiffBlock, { kind: "same" }>, index: number) => {
+    const head = index === 0 ? 0 : CONTEXT_LINES;
+    const tail = index === blocks.length - 1 ? 0 : CONTEXT_LINES;
+    const hidden = block.lines.length - head - tail;
+    const line = (text: string, at: number) => <div key={at} className="note-diff-line">{text || "\u00a0"}</div>;
+    if (hidden < MIN_FOLD || opened.has(index)) return <div key={index}>{block.lines.map(line)}</div>;
+    return (
+      <div key={index}>
+        {block.lines.slice(0, head).map(line)}
+        <button type="button" className="note-diff-fold" onClick={() => setOpened(new Set([...opened, index]))}>{unfold(hidden)}</button>
+        {block.lines.slice(block.lines.length - tail).map((text, at) => line(text, block.lines.length - tail + at))}
+      </div>
+    );
+  };
+  return (
+    <div className="note-diff">
+      <h1 className="note-history-title">{title ? <DiffSegments segments={title} /> : after.title || untitled}</h1>
+      {blocks.map((block, index) => block.kind === "change"
+        ? <p key={index} className="note-diff-change"><DiffSegments segments={block.segments} /></p>
+        : same(block, index))}
+    </div>
   );
 }
