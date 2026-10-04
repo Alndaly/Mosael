@@ -4,7 +4,8 @@
 
 - 目录类能力:认领它的工具不进工具表,能力词表里叫得出名字;
 - 列出来的是插件报的那一份,宿主规整字段(路径不对的、坏条目丢掉,图摘要的连线只留指着节点的);
-- 宿主补上它在 Mosael 里的样子:是不是这个连接下的生成模型(用它生成要它)、这个工作区里最近一次用它生成的产出;
+- 宿主补上它在 Mosael 里的样子:是不是这个连接下的生成模型(用它生成要它)、这个工作区里最近一次用它生成的产出、
+  这个工作区里哪些工作流节点 / 画板格子选的是它;
 - 写操作(复制、改名、挪进 / 挪出回收目录):路径先在宿主这里过一遍(不合格的不交给插件);撞名回 409 带建议名、
   不覆盖;改成了让这个连接的目录马上重拉一遍。
 """
@@ -203,6 +204,34 @@ def test_最近一次的产出_只看这个工作区里用它生成的(library) 
     scoped = client.get(f"/api/plugins/instances/{instance_id}/workflow-library", params={"workspace_id": workspace}).json()
     assert scoped["workflows"][0]["last_output"]["asset_id"] == here
     assert body["workflows"][0]["last_output"] is None, "没说是哪个工作区就不去翻生成记录"
+
+
+def test_谁在用它_这个工作区里选了它的工作流和画板(library) -> None:
+    client, instance_id = library
+    workspace = client.post("/api/workspaces", json={"name": "工作流"}).json()["id"]
+    other = client.post("/api/workspaces", json={"name": "别的"}).json()["id"]
+    profile_id = client.get(f"/api/plugins/instances/{instance_id}/workflow-library").json()["workflows"][0]["generation"][
+        "provider_profile_id"]
+    choice = {"provider_profile_id": profile_id, "model": "portrait.json"}
+    for ws, name in ((workspace, "分镜板"), (other, "别处的板")):
+        board = client.post("/api/boards", json={"workspace_id": ws, "name": name}).json()
+        saved = client.patch(f"/api/boards/{board['id']}", json={
+            "workspace_id": ws, "base_revision": board.get("revision", 0),
+            "canvas": {"items": [{"id": "i1", "kind": "image", "x": 0, "y": 0, "width": 320, "height": 180,
+                                  "form": dict(choice)}]},
+        })
+        assert saved.status_code == 200, saved.text
+    from app.db.models import Workflow
+
+    with SessionLocal() as db:
+        db.add(Workflow(workspace_id=workspace, name="出图流程", graph={"nodes": [
+            {"id": "n1", "type": "generate", "config": {**choice, "kind": "image"}}], "edges": []}))
+        db.commit()
+    body = client.get(f"/api/plugins/instances/{instance_id}/workflow-library", params={"workspace_id": workspace}).json()
+    portrait = body["workflows"][0]
+    assert sorted((one["kind"], one["name"]) for one in portrait["used_by"]) == [("board", "分镜板"), ("workflow", "出图流程")], \
+        "只列这个工作区里的"
+    assert body["workflows"][1]["used_by"] == []
 
 
 def test_取一张的原文(library) -> None:

@@ -558,6 +558,14 @@ class WorkflowLastOutputOut(ApiModel):
     created_at: datetime
 
 
+class WorkflowUseOut(ApiModel):
+    """Mosael 里选了它的一处:工作流(节点)或画板(格子)。"""
+
+    kind: Literal["workflow", "board"]
+    id: str
+    name: str
+
+
 class WorkflowFileOut(ApiModel):
     """那台服务器上存着的一张工作流。"""
 
@@ -584,6 +592,8 @@ class WorkflowFileOut(ApiModel):
     generation: WorkflowGenerationRefOut | None = None
     #: 这个工作区里最近一次用它生成的产出
     last_output: WorkflowLastOutputOut | None = None
+    #: 这个工作区里选了它的工作流节点、画板格子
+    used_by: list[WorkflowUseOut] = Field(default_factory=list)
 
 
 class WorkflowOtherFileOut(ApiModel):

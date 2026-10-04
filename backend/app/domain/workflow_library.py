@@ -5,7 +5,7 @@
 
 - **规整**:插件报的每一条都过一遍(没有路径的丢掉、长文本截断、图摘要限量),界面拿到的形状只有一种;
 - **它在 Mosael 里的样子**:这张工作流是不是这个连接下的一个生成模型(用它生成要它)、这个工作区里最近一次用它生成的
-  产出;
+  产出、这个工作区里哪些工作流节点 / 画板格子选的是它(引用表,见 db/references 的 `generation_model`);
 - **路径先查一遍**:只认 `workflows/` 里的相对路径(`.json`,不带 `..`、反斜杠、控制字符和 Windows 不收的字符),
   回收目录里的只认插件报过的那种形状 —— 不交给插件猜;
 - **改完马上刷新**:这个连接的生成目录和工具清单重拉一遍(`host_capabilities.notify(refresh=True)`),不等一分钟的指纹。
@@ -24,7 +24,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.i18n import LocalizedError, fragment
-from app.db.models import GenerationJob, PluginInstance, ProviderProfile, User
+from app.db.models import Board, GenerationJob, PluginInstance, ProviderProfile, User, Workflow
+from app.db.references import generation_model_key
 from app.domain import capabilities
 from app.domain.permissions import ensure_workspace_access
 from app.domain.plugins import host_capabilities
@@ -32,6 +33,7 @@ from app.domain.plugins import instances as inst
 from app.domain.plugins import tools
 from app.domain.plugins.manifest import WORKFLOW_LIBRARY
 from app.domain.providers import models as provider_models
+from app.domain.references import referrers
 
 #: 列一遍最多等多久:要取每张工作流、转一遍、再列一遍模型目录。
 LIBRARY_TIMEOUT_SECONDS = 600
@@ -43,6 +45,7 @@ _MAX_LIST = 200
 _MAX_GRAPH_NODES = 400
 _MAX_GRAPH_LINKS = 1200
 _MAX_GRAPH_GROUPS = 60
+_MAX_USES = 50
 _ROLES = {"input", "model", "sampler", "text", "output", "note", "missing", "other"}
 #: Windows 上文件名里不能有的字符(那台 ComfyUI 可能在 Windows 上):路径段里一个都不收。
 _BAD_SEGMENT = re.compile(r'[\x00-\x1f<>:"|?*\\]')
@@ -225,12 +228,13 @@ def _profile(db: Session, instance: PluginInstance) -> ProviderProfile | None:
 
 
 def _in_mosael(db: Session, instance: PluginInstance, workspace_id: str, workflows: list[dict[str, Any]]) -> None:
-    """每张工作流在 Mosael 里的样子:是不是这个连接下的生成模型、这个工作区里最近一次用它生成的产出。"""
+    """每张工作流在 Mosael 里的样子:是不是这个连接下的生成模型、这个工作区里最近一次用它生成的产出、谁在用它。"""
     profile = _profile(db, instance)
     rows = {row.model_id: row for row in provider_models.list_models(db, profile.id)} if profile is not None else {}
     for flow in workflows:
         flow["generation"] = None
         flow["last_output"] = None
+        flow["used_by"] = []
         row = rows.get(flow["path"])
         if profile is None or row is None:
             continue
@@ -248,6 +252,18 @@ def _in_mosael(db: Session, instance: PluginInstance, workspace_id: str, workflo
         )
         if last is not None:
             flow["last_output"] = {"asset_id": last.result_asset_id, "created_at": last.created_at}
+        key = generation_model_key(profile.id, row.model_id)
+        uses: list[dict[str, str]] = [
+            {"kind": "workflow", "id": workflow.id, "name": workflow.name}
+            for workflow in db.scalars(select(Workflow).where(
+                Workflow.workspace_id == workspace_id, Workflow.id.in_(referrers("generation_model", key, "workflow"))))
+        ]
+        uses += [
+            {"kind": "board", "id": board.id, "name": board.name}
+            for board in db.scalars(select(Board).where(
+                Board.workspace_id == workspace_id, Board.id.in_(referrers("generation_model", key, "board"))))
+        ]
+        flow["used_by"] = uses[:_MAX_USES]
 
 
 def library(db: Session, user: User, instance: PluginInstance, *, workspace_id: str = "") -> dict[str, Any]:

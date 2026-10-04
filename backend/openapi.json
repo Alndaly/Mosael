@@ -39218,6 +39218,13 @@
                 "type": "null"
               }
             ]
+          },
+          "used_by": {
+            "items": {
+              "$ref": "#/components/schemas/WorkflowUseOut"
+            },
+            "type": "array",
+            "title": "Used By"
           }
         },
         "type": "object",
@@ -40290,6 +40297,34 @@
         },
         "type": "object",
         "title": "WorkflowUpdate"
+      },
+      "WorkflowUseOut": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "workflow",
+              "board"
+            ],
+            "title": "Kind"
+          },
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "id",
+          "name"
+        ],
+        "title": "WorkflowUseOut",
+        "description": "Mosael 里选了它的一处:工作流(节点)或画板(格子)。"
       },
       "WorkspaceCreate": {
         "properties": {

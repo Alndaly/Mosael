@@ -14,6 +14,7 @@ JSON 里点名别的记录的地方不少:画布的格子、工作流节点的�
 
 from __future__ import annotations
 
+import hashlib
 import importlib
 import json
 from collections.abc import Callable, Iterable, Iterator
@@ -28,7 +29,7 @@ from sqlalchemy.orm import Session, attributes
 from app.db.model_slices.references import RecordReference, RecordReferenceIndex
 
 #: 抽取规则的版本。**改了下面任何一条抽取规则就加一**,启动时整张表按新规则重建。
-EXTRACTOR_VERSION = 2
+EXTRACTOR_VERSION = 3
 
 Ref = tuple[str, str, str]  # (target_kind, target_id, how)
 
@@ -65,6 +66,23 @@ def _literals(value: Any) -> list[str]:
     return [one for one in (_literal(part) for part in split_ids(value)) if one]
 
 
+def generation_model_key(provider_profile_id: str, model: str) -> str:
+    """选的生成模型(连接 + 模型 id)在引用表里的目标 id。模型 id 可以很长(ComfyUI 的工作流路径),列宽只有 64:存摘要。"""
+    return "gm:" + hashlib.sha256(f"{provider_profile_id}\n{model}".encode("utf-8")).hexdigest()[:48]
+
+
+def _generation_model(holder: Any) -> str | None:
+    """一格 / 一个节点选的生成模型(`provider_profile_id` + `model` 都写死了才算;模板插值运行时才知道)。"""
+    if not isinstance(holder, dict):
+        return None
+    profile, model = holder.get("provider_profile_id"), holder.get("model")
+    if not (isinstance(profile, str) and isinstance(model, str)) or not profile.strip() or not model.strip():
+        return None
+    if "{{" in profile or "{{" in model:
+        return None
+    return generation_model_key(profile.strip(), model.strip())
+
+
 def _dicts(value: Any) -> Iterator[dict[str, Any]]:
     for one in value if isinstance(value, list) else []:
         if isinstance(one, dict):
@@ -84,7 +102,8 @@ _CANVAS_FIELDS = {
 
 
 def board_refs(canvas: Any) -> Iterator[Ref]:
-    """画布:一格就是它(`cell`),某一格的提示词里 @ 了它(`mention`),或便签上的字是从那篇笔记摘来的(`source`)。"""
+    """画布:一格就是它(`cell`),某一格的提示词里 @ 了它(`mention`),或便签上的字是从那篇笔记摘来的(`source`);
+    一格生成选的模型(`generation_model`,工作流库据此说「谁在用这张工作流」)。"""
     for item in _dicts((canvas or {}).get("items") if isinstance(canvas, dict) else None):
         for field, kind in _CANVAS_FIELDS.items():
             target = _literal(item.get(field))
@@ -97,6 +116,9 @@ def board_refs(canvas: Any) -> Iterator[Ref]:
         form = item.get("form") if isinstance(item.get("form"), dict) else {}
         for target in _literals(form.get("mentioned_entity_ids")):
             yield "entity", target, "mention"
+        chosen = _generation_model(form)
+        if chosen:
+            yield "generation_model", chosen, "cell"
 
 
 #: 工作流节点配置里指向别处的字段 → 目标种类。多值的字段(`*_ids`)按 split_ids 拆。
@@ -119,6 +141,9 @@ def workflow_refs(graph: Any) -> Iterator[Ref]:
         for field, kind in _NODE_FIELDS.items():
             for target in _literals(config.get(field)):
                 yield kind, target, "node"
+        chosen = _generation_model(config)
+        if chosen:
+            yield "generation_model", chosen, "node"
 
 
 def generation_refs(request: Any) -> Iterator[Ref]:

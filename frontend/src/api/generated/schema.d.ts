@@ -15106,6 +15106,8 @@ export interface components {
             missing_models?: components["schemas"]["WorkflowMissingModelOut"][];
             generation?: components["schemas"]["WorkflowGenerationRefOut"] | null;
             last_output?: components["schemas"]["WorkflowLastOutputOut"] | null;
+            /** Used By */
+            used_by?: components["schemas"]["WorkflowUseOut"][];
         };
         /**
          * WorkflowFromPage
@@ -15662,6 +15664,21 @@ export interface components {
             } | null;
             /** Base Graph Hash */
             base_graph_hash?: string | null;
+        };
+        /**
+         * WorkflowUseOut
+         * @description Mosael 里选了它的一处:工作流(节点)或画板(格子)。
+         */
+        WorkflowUseOut: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "workflow" | "board";
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
         };
         /** WorkspaceCreate */
         WorkspaceCreate: {

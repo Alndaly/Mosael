@@ -82,6 +82,25 @@ def test_工作流节点_多值字段按同一条规矩拆_模板插值不算引
     }
 
 
+def test_选的生成模型_画板格子和工作流节点都进表_按连接加模型认() -> None:
+    """工作流库要说「Mosael 里谁在用这张工作流」:选的生成模型是 `provider_profile_id` + `model` 一对(列宽 64,存它们的摘要)。"""
+    key = references.generation_model_key("profile1", "人像.json")
+    assert len(key) <= 64 and key == references.generation_model_key("profile1", "人像.json")
+    assert key != references.generation_model_key("profile1", "人像 (1).json")
+    assert key != references.generation_model_key("profile2", "人像.json")
+    canvas = {"items": [
+        {"id": "a", "kind": "image", "form": {"provider_profile_id": "profile1", "model": "人像.json"}},
+        {"id": "b", "kind": "image", "form": {"model": "没选连接"}},
+        {"id": "c", "kind": "image", "form": {"provider_profile_id": "profile1", "model": "{{上游}}"}},
+    ]}
+    assert set(references.board_refs(canvas)) == {("generation_model", key, "cell")}
+    graph = {"nodes": [
+        {"id": "n1", "type": "generate", "config": {"provider_profile_id": "profile1", "model": "人像.json", "kind": "image"}},
+        {"id": "n2", "config": {"provider_profile_id": "", "model": "人像.json"}},
+    ]}
+    assert set(references.workflow_refs(graph)) == {("generation_model", key, "node")}
+
+
 def test_生成请求_场景_定时任务() -> None:
     assert set(references.generation_refs({"entities": [{"id": "e1"}, {"name": "没有 id"}]})) == {("entity", "e1", "")}
     assert set(references.scene_refs({"objects": [{"model_id": "m1"}, {"kind": "camera"}]})) == {("scene_model", "m1", "")}
