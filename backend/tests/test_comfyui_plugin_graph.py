@@ -343,6 +343,22 @@ def test_种子的生成后怎样记在_meta里_没给种子时照它办(graph, 
     assert convert.to_api(primitive, OBJECT_INFO)["3"]["_meta"]["control_after_generate"] == {"seed": "randomize"}
 
 
+def test_rgthree的Seed后面那几格是按钮_不是每次随机(graph, convert) -> None:
+    """用户的 moodyKrea24KHD_v20 里四个 rgthree「Seed」:widgets_values 是 [种子, "", "", ""] —— 后面三格是它的按钮
+    (「每次随机」「新的固定种子」「用上一次的」),不是 ComfyUI 的「生成后怎样」。此前空串被当成「不是 fixed」,
+    存着的固定种子每次都被换掉;rgthree 的种子只有存成 -1 才是每次随机(那由它自己处理)。"""
+    info = {**OBJECT_INFO, "Seed (rgthree)": {"input": {"required": {"seed": ["INT", {"default": 0}]}}}}
+    ui = {"nodes": [
+        {"id": 3, "type": "KSampler", "widgets_values": [1, "fixed", 20, 7, "euler", "normal", 1],
+         "inputs": [{"name": "seed", "type": "INT", "widget": {"name": "seed"}, "link": 1}]},
+        {"id": 9, "type": "Seed (rgthree)", "widgets_values": [470193541057076, "", "", ""],
+         "outputs": [{"name": "SEED", "type": "INT", "links": [1]}]},
+    ], "links": [[1, 9, 0, 3, 0, "INT"]]}
+    api = convert.to_api(ui, info)
+    assert graph.fill(api, {}, {})["9"]["inputs"]["seed"] == 470193541057076
+    assert graph.fill(api, {"seed": 5}, {})["9"]["inputs"]["seed"] == 5, "给了种子照样写进去"
+
+
 def test_旧式组节点说清楚要转成子图(convert) -> None:
     ui = {"nodes": [{"id": 1, "type": "workflow>采样", "widgets_values": []}], "links": [],
           "extra": {"groupNodes": {"采样": {"nodes": []}}}}

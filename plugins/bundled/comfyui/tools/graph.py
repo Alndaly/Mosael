@@ -242,10 +242,14 @@ def prompt_requirement(api: dict[str, Any], slots: dict[tuple[str, str], str] | 
     return "optional"
 
 
+#: ComfyUI「生成后怎样」里会换种子的那几种。别的值(fixed,以及 rgthree「Seed」后面那几格按钮存下来的空串)都是不换。
+_CHANGING_CONTROLS = frozenset({"randomize", "increment", "decrement"})
+
+
 def _changes_each_run(node: dict[str, Any], name: str) -> bool:
     meta = node.get("_meta") if isinstance(node.get("_meta"), dict) else {}
     controls = meta.get(convert.CONTROLS) if isinstance(meta.get(convert.CONTROLS), dict) else {}
-    return controls.get(name, "fixed") != "fixed"
+    return controls.get(name) in _CHANGING_CONTROLS
 
 
 def seed_inputs(api: dict[str, Any]) -> list[tuple[str, str]]:
