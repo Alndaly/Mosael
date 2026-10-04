@@ -8,6 +8,7 @@ import type { FieldSize } from "@/components/ui/control-size"
 import { fieldTriggerClass, FIELD_TRIGGER_CHEVRON } from "@/components/ui/field-trigger"
 import { FLOATING_SURFACE, FLOATING_MOTION, MENU_SEPARATOR, FLOATING_COLLISION_PADDING, SELECT_CONTENT_WIDTH } from "./floating"
 import { Truncate } from "./truncate"
+import { HintScopeReset } from "./tooltip"
 
 import { cn } from "@/lib/utils"
 import { swallowClickThrough } from "@/lib/clickThrough"
@@ -114,7 +115,7 @@ const SelectContent = React.forwardRef<
             "h-[var(--radix-select-trigger-height)] w-full min-w-[var(--radix-select-trigger-width)]"
         )}
       >
-        {children}
+        <HintScopeReset>{children}</HintScopeReset>
       </SelectPrimitive.Viewport>
       <SelectScrollDownButton />
     </SelectPrimitive.Content>

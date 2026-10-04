@@ -98,6 +98,23 @@ type Side = "top" | "bottom" | "left" | "right"
 /** 快捷键:一个字符串是一颗键帽(`⌘Z`、`⇧⌘Z`);数组是几个键任选其一(`⇧⌘Z / ⌘Y`)。 */
 export type HintShortcut = string | readonly string[]
 
+/**
+ * Hint 的触发区里有会被截断的字(Truncate)时,**说明只出一条**:那段字被截断了,就把全文并进
+ * 这条说明里,而不是在同一处再挂一个说明 —— 两条说明叠在同一块上,同一时刻只留一条的规则会让
+ * 其中一条永远出不来(要么看不到全文,要么看不到补充说明)。
+ *
+ * Truncate 在这个范围里就不自己出说明,只登记「我现在被截断了吗、全文是什么」。浮层内容
+ * (Popover / Select / ContextMenu / Dialog 的 Content)会把范围清掉:React 的 context 会穿过
+ * portal,不清的话,一个套在 Hint 里的组件弹出来的菜单项也会把全文交给外面那条够不着它的说明。
+ */
+type OverflowText = () => React.ReactNode | null
+const HintScope = React.createContext<((get: OverflowText) => () => void) | null>(null)
+
+/** 浮层内容用它把 Hint 的范围清掉(见 HintScope)。 */
+function HintScopeReset({ children }: { children?: React.ReactNode }) {
+  return <HintScope.Provider value={null}>{children}</HintScope.Provider>
+}
+
 function Shortcut({ keys }: { keys: HintShortcut }) {
   return typeof keys === "string" ? <Kbd>{keys}</Kbd> : <KbdGroup keys={keys} />
 }
@@ -141,7 +158,16 @@ function Hint({
 }) {
   const [open, setOpen] = useExclusiveOpen()
   const hovered = React.useRef(false)
-  const speaks = Boolean(label || disabledReason)
+  const overflows = React.useRef(new Set<OverflowText>())
+  const register = React.useCallback((get: OverflowText) => {
+    overflows.current.add(get)
+    return () => {
+      overflows.current.delete(get)
+    }
+  }, [])
+  //: 打开的那一刻量一次:哪几段字真被截断了(和名字重复的不再说一遍)。
+  const [full, setFull] = React.useState<React.ReactNode[]>([])
+  const measure = () => [...overflows.current].map((get) => get()).filter((one) => one !== null && one !== undefined && one !== "" && one !== label)
   const trigger = disabledReason ? (
     <span
       data-hint-disabled=""
@@ -158,25 +184,40 @@ function Hint({
       <Tooltip
         open={open}
         onOpenChange={(next) => {
-          if (!next) setOpen(false)
-          else if (speaks && (hovered.current || keyboardInput)) setOpen(true)
+          if (!next) {
+            setOpen(false)
+            return
+          }
+          if (!hovered.current && !keyboardInput) return
+          const clipped = measure()
+          if (!label && !disabledReason && clipped.length === 0) return
+          setFull(clipped)
+          setOpen(true)
         }}
       >
-        <TooltipTrigger
-          asChild
-          onPointerEnter={() => {
-            hovered.current = true
-          }}
-          onPointerLeave={() => {
-            hovered.current = false
-            setOpen(false)
-          }}
-        >
-          {trigger}
-        </TooltipTrigger>
+        {/* Provider 套在 Trigger 外面:asChild 的 Slot 只能把属性交给一个真正的元素。 */}
+        <HintScope.Provider value={register}>
+          <TooltipTrigger
+            asChild
+            onPointerEnter={() => {
+              hovered.current = true
+            }}
+            onPointerLeave={() => {
+              hovered.current = false
+              setOpen(false)
+            }}
+          >
+            {trigger}
+          </TooltipTrigger>
+        </HintScope.Provider>
         <TooltipContent side={side} align={align} data-hint="">
+          {full.map((one, index) => (
+            <span key={index} data-truncate-full="" className="block whitespace-pre-wrap">
+              {one}
+            </span>
+          ))}
           {label ? (
-            <span className="flex items-center justify-between gap-3">
+            <span className={cn("flex items-center justify-between gap-3", full.length > 0 && "text-muted-foreground")}>
               <span>{label}</span>
               {shortcut && shortcut.length > 0 ? <Shortcut keys={shortcut} /> : null}
             </span>
@@ -189,4 +230,4 @@ function Hint({
   )
 }
 
-export { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider, Hint, EnsureProvider, useExclusiveOpen }
+export { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider, Hint, EnsureProvider, useExclusiveOpen, HintScope, HintScopeReset }

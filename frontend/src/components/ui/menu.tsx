@@ -37,8 +37,14 @@ const MenuContent = React.forwardRef<
 ))
 MenuContent.displayName = "MenuContent"
 
-/** 菜单里的方向键:只在可用条目之间走(禁用的原生 button 本来就拿不到焦点),两端循环。 */
+/**
+ * 菜单里的方向键:只在可用条目之间走(禁用的原生 button 本来就拿不到焦点),两端循环。
+ * 焦点在菜单里的输入框上时(工作区、会话列表顶上的搜索框),Home / End 是「光标到行首 / 行尾」,不抢。
+ */
 function moveMenuFocus(event: React.KeyboardEvent<HTMLElement>) {
+  const target = event.target as HTMLElement
+  const typing = target.isContentEditable || target.tagName === "INPUT" || target.tagName === "TEXTAREA"
+  if (typing && (event.key === "Home" || event.key === "End")) return
   const items = [...event.currentTarget.querySelectorAll<HTMLElement>('[role^="menuitem"]:not(:disabled)')]
   if (items.length === 0) return
   const at = items.indexOf(document.activeElement as HTMLElement)

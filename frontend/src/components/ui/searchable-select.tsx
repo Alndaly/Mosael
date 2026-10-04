@@ -7,7 +7,7 @@ import type { FieldSize } from "@/components/ui/control-size";
 import { fieldTriggerClass, FIELD_TRIGGER_CHEVRON } from "@/components/ui/field-trigger";
 import { insideDialog } from "@/components/ui/insideDialog";
 import { SEARCHABLE_CONTENT_WIDTH, SEARCHABLE_CONTENT_WIDTH_WITH_DESCRIPTIONS } from "@/components/ui/floating";
-import { Hint } from "@/components/ui/tooltip";
+import { Hint, type HintShortcut } from "@/components/ui/tooltip";
 import { Truncate } from "@/components/ui/truncate";
 import { useI18n } from "@/app/preferences";
 import { cn } from "@/lib/utils";
@@ -58,6 +58,7 @@ export function SearchableSelect({
   disabled,
   trigger,
   hint,
+  shortcut,
 }: {
   value: string;
   onValueChange: (value: string) => void;
@@ -75,6 +76,8 @@ export function SearchableSelect({
   trigger?: React.ReactNode;
   /** 触发器的悬停说明(为什么点不了、这一格选的是什么)。套在触发器外面 —— 套在自定义 trigger 里会被 PopoverTrigger 吞掉属性。 */
   hint?: string | null;
+  /** 打开它的快捷键(画板「添加」的 ⌘N),画在悬停说明的名字那一行。 */
+  shortcut?: HintShortcut | null;
 }) {
   const t = useI18n();
   const [open, setOpen] = React.useState(false);
@@ -105,7 +108,7 @@ export function SearchableSelect({
   }, [items]);
   return (
     <Popover modal={modal} open={open} onOpenChange={setOpen}>
-      <Hint label={hint}>
+      <Hint label={hint} shortcut={shortcut}>
         <PopoverTrigger asChild ref={triggerRef as React.Ref<HTMLButtonElement>}>
           {trigger ?? (
             <button

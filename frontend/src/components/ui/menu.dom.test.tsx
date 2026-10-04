@@ -89,6 +89,22 @@ describe("菜单项", () => {
     expect(document.activeElement).toBe(item("丙"));
   });
 
+  it("焦点在菜单里的输入框上时,Home / End 留给输入框挪光标", () => {
+    const menu = openMenu(
+      <>
+        <input aria-label="搜索" />
+        <MenuItem icon={<Icon />} label="甲" />
+        <MenuItem icon={<Icon />} label="乙" />
+      </>,
+    );
+    const search = within(menu).getByRole("textbox", { name: "搜索" });
+    search.focus();
+    fireEvent.keyDown(search, { key: "End" });
+    expect(document.activeElement).toBe(search);
+    fireEvent.keyDown(search, { key: "ArrowDown" });
+    expect(document.activeElement).toBe(within(menu).getByRole("menuitem", { name: "甲" }));
+  });
+
   it("点一下触发 onClick", () => {
     const onClick = vi.fn();
     const menu = openMenu(<MenuItem icon={<Icon />} label="甲" onClick={onClick} />);

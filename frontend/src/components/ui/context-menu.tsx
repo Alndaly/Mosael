@@ -7,6 +7,7 @@ import { Check, ChevronRight, Circle } from "lucide-react"
 import { FLOATING_SURFACE, FLOATING_MOTION, MENU_ITEM, MENU_SEPARATOR, MENU_WIDTH, FLOATING_COLLISION_PADDING } from "./floating"
 
 import { cn } from "@/lib/utils"
+import { HintScopeReset } from "./tooltip"
 
 const ContextMenu = ContextMenuPrimitive.Root
 
@@ -44,7 +45,7 @@ ContextMenuSubTrigger.displayName = ContextMenuPrimitive.SubTrigger.displayName
 const ContextMenuSubContent = React.forwardRef<
   React.ElementRef<typeof ContextMenuPrimitive.SubContent>,
   React.ComponentPropsWithoutRef<typeof ContextMenuPrimitive.SubContent>
->(({ className, ...props }, ref) => (
+>(({ className, children, ...props }, ref) => (
   // **必须和 Content 一样套 Portal**。不套的话子菜单渲染成父菜单的 DOM 子节点,落在同一个
   // dismissable layer 里 —— 点子项时那一层先把自己关了,`onSelect` 再也没机会跑:菜单收起来了,
   // 而什么都没发生。「移到分组点了没反应」就是这么来的,而同一个菜单里的「重命名」是好的,
@@ -59,7 +60,9 @@ const ContextMenuSubContent = React.forwardRef<
         className
       )}
       {...props}
-    />
+    >
+      <HintScopeReset>{children}</HintScopeReset>
+    </ContextMenuPrimitive.SubContent>
   </ContextMenuPrimitive.Portal>
 ))
 ContextMenuSubContent.displayName = ContextMenuPrimitive.SubContent.displayName
@@ -67,7 +70,7 @@ ContextMenuSubContent.displayName = ContextMenuPrimitive.SubContent.displayName
 const ContextMenuContent = React.forwardRef<
   React.ElementRef<typeof ContextMenuPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof ContextMenuPrimitive.Content>
->(({ className, ...props }, ref) => (
+>(({ className, children, ...props }, ref) => (
   <ContextMenuPrimitive.Portal>
     <ContextMenuPrimitive.Content
       ref={ref}
@@ -79,7 +82,9 @@ const ContextMenuContent = React.forwardRef<
         className
       )}
       {...props}
-    />
+    >
+      <HintScopeReset>{children}</HintScopeReset>
+    </ContextMenuPrimitive.Content>
   </ContextMenuPrimitive.Portal>
 ))
 ContextMenuContent.displayName = ContextMenuPrimitive.Content.displayName

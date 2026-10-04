@@ -2,7 +2,7 @@ import * as React from "react"
 
 import { cn } from "@/lib/utils"
 
-import { EnsureProvider, Tooltip, TooltipContent, TooltipTrigger, useExclusiveOpen } from "./tooltip"
+import { EnsureProvider, HintScope, Tooltip, TooltipContent, TooltipTrigger, useExclusiveOpen } from "./tooltip"
 
 const CLAMP = { 1: "truncate", 2: "line-clamp-2", 3: "line-clamp-3", 4: "line-clamp-4" } as const
 
@@ -29,6 +29,11 @@ const Truncate = React.forwardRef<
     children: React.ReactNode
     /** 说明里的全文。不给就用 children。 */
     text?: React.ReactNode
+    /**
+     * 名字之外要补一句的(完整地址、模型 id、「双击改名」):说明里全文下面一行淡色。给了它,
+     * 没被截断时也出说明(只有这一句)。别在外面再套 Hint 说这一句 —— 那就是同一处挂两条说明。
+     */
+    hint?: string | null
     /** 截成几行。默认一行(省略号);多行用于卡片描述这类本来就该折几行的字。 */
     lines?: keyof typeof CLAMP
     side?: "top" | "bottom" | "left" | "right"
@@ -37,8 +42,9 @@ const Truncate = React.forwardRef<
     /** 给 `<label>` 用。 */
     htmlFor?: string
   }
->(({ children, text, lines = 1, side = "top", as: Tag = "span", className, onPointerEnter, onPointerLeave, ...props }, forwarded) => {
+>(({ children, text, hint, lines = 1, side = "top", as: Tag = "span", className, onPointerEnter, onPointerLeave, ...props }, forwarded) => {
   const [open, setOpen] = useExclusiveOpen()
+  const [clipped, setClipped] = React.useState(false)
   const ref = React.useRef<HTMLElement | null>(null)
   const setRef = React.useCallback(
     (node: HTMLElement | null) => {
@@ -53,25 +59,41 @@ const Truncate = React.forwardRef<
     if (!node) return false
     return lines === 1 ? node.scrollWidth > node.clientWidth + 1 : node.scrollHeight > node.clientHeight + 1
   }
+  //: 在一条 Hint 的触发区里:不自己出说明,把「被截断时的全文」交给那条(见 tooltip.tsx 的 HintScope)。
+  const scope = React.useContext(HintScope)
+  const full = text ?? children
+  const latest = React.useRef<() => React.ReactNode | null>(() => null)
+  latest.current = () => (overflowing() ? full : null)
+  React.useEffect(() => scope?.(() => latest.current()), [scope])
+  const element = (
+    <Tag
+      ref={setRef as React.Ref<never>}
+      className={cn("block min-w-0", CLAMP[lines], lines > 1 && "break-words", className)}
+      onPointerEnter={onPointerEnter}
+      onPointerLeave={(event: React.PointerEvent<HTMLElement>) => {
+        onPointerLeave?.(event)
+        if (!scope) setOpen(false)
+      }}
+      {...props}
+    >
+      {children}
+    </Tag>
+  )
+  if (scope) return element
   return (
     <EnsureProvider>
-      <Tooltip open={open} onOpenChange={(next) => setOpen(next && overflowing())}>
-        <TooltipTrigger asChild>
-          <Tag
-            ref={setRef as React.Ref<never>}
-            className={cn("block min-w-0", CLAMP[lines], lines > 1 && "break-words", className)}
-            onPointerEnter={onPointerEnter}
-            onPointerLeave={(event: React.PointerEvent<HTMLElement>) => {
-              onPointerLeave?.(event)
-              setOpen(false)
-            }}
-            {...props}
-          >
-            {children}
-          </Tag>
-        </TooltipTrigger>
+      <Tooltip
+        open={open}
+        onOpenChange={(next) => {
+          const cut = next && overflowing()
+          setClipped(cut)
+          setOpen(next && (cut || Boolean(hint)))
+        }}
+      >
+        <TooltipTrigger asChild>{element}</TooltipTrigger>
         <TooltipContent side={side} data-truncate-full="" className="max-w-[min(28rem,calc(100vw-1rem))] whitespace-pre-wrap">
-          {text ?? children}
+          {clipped ? <span className="block">{full}</span> : null}
+          {hint ? <span className={cn("block", clipped && "text-muted-foreground")}>{hint}</span> : null}
         </TooltipContent>
       </Tooltip>
     </EnsureProvider>

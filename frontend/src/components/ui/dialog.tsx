@@ -8,6 +8,7 @@ import { FLOATING_MOTION, MODAL_SURFACE, MODAL_OVERLAY, MODAL_TITLE, MODAL_DESCR
 
 import { escapeUnlessComposing } from "@/lib/shortcuts"
 import { cn } from "@/lib/utils"
+import { HintScopeReset } from "./tooltip"
 import { useModalTeardownGuard } from "@/lib/modalTeardownGuard"
 
 const Dialog = DialogPrimitive.Root
@@ -58,7 +59,7 @@ const DialogContent = React.forwardRef<
       {...props}
       onEscapeKeyDown={escapeUnlessComposing(onEscapeKeyDown)}
     >
-      {children}
+      <HintScopeReset>{children}</HintScopeReset>
       {showClose && (
         <DialogPrimitive.Close className="absolute right-4 top-4 z-20 grid size-8 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none">
           <X className="h-4 w-4" />
