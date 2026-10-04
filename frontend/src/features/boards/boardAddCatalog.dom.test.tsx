@@ -66,10 +66,11 @@ describe("画板「添加」单子:只有格子,每一行都是图标、名字�
     expect(byLabel["分组"]).toBe("把几格圈在一起");
   });
 
-  it("说明截在一行里(省略号),不把行撑高", () => {
+  it("说明是静态的一句话:放不下就折行,不截成看不全的省略号(宽度规则见 floating.ts)", () => {
     for (const row of openMenu()) {
       const description = row.querySelector(":scope > span:not([aria-hidden]) > span:nth-child(2)");
-      expect(description?.className).toContain("truncate");
+      expect(description?.className).toContain("break-words");
+      expect(description?.className).not.toContain("truncate");
     }
   });
 });

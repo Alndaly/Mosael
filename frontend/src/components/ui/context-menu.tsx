@@ -4,7 +4,7 @@ import * as React from "react"
 import * as ContextMenuPrimitive from "@radix-ui/react-context-menu"
 import { Check, ChevronRight, Circle } from "lucide-react"
 
-import { FLOATING_SURFACE, FLOATING_MOTION, MENU_ITEM, MENU_SEPARATOR, FLOATING_COLLISION_PADDING } from "./floating"
+import { FLOATING_SURFACE, FLOATING_MOTION, MENU_ITEM, MENU_SEPARATOR, MENU_WIDTH, FLOATING_COLLISION_PADDING } from "./floating"
 
 import { cn } from "@/lib/utils"
 
@@ -54,8 +54,8 @@ const ContextMenuSubContent = React.forwardRef<
       ref={ref}
       collisionPadding={FLOATING_COLLISION_PADDING}
       className={cn(
-        FLOATING_SURFACE, FLOATING_MOTION,
-        "z-50 min-w-48 max-w-[min(24rem,calc(100vw-1rem))] max-h-[var(--radix-context-menu-content-available-height)] overflow-y-auto p-1.5",
+        FLOATING_SURFACE, FLOATING_MOTION, MENU_WIDTH,
+        "z-50 max-h-[var(--radix-context-menu-content-available-height)] overflow-y-auto p-1.5",
         className
       )}
       {...props}
@@ -73,8 +73,9 @@ const ContextMenuContent = React.forwardRef<
       ref={ref}
       collisionPadding={FLOATING_COLLISION_PADDING}
       className={cn(
-        FLOATING_SURFACE, FLOATING_MOTION,
-        "z-50 max-h-[var(--radix-context-menu-content-available-height)] min-w-48 max-w-[min(24rem,calc(100vw-1rem))] overflow-y-auto overflow-x-hidden p-1.5",
+        // 宽度规则和点按钮弹出的菜单同一份(MENU_WIDTH):调用方不写宽度。
+        FLOATING_SURFACE, FLOATING_MOTION, MENU_WIDTH,
+        "z-50 max-h-[var(--radix-context-menu-content-available-height)] overflow-y-auto overflow-x-hidden p-1.5",
         className
       )}
       {...props}

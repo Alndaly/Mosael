@@ -8,11 +8,11 @@ import { beforeAll, describe, expect, it, vi } from "vitest";
 import { SearchableSelect } from "./searchable-select";
 import { OptionPicker, SEARCHABLE_THRESHOLD } from "./option-picker";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./select";
+import { SEARCHABLE_CONTENT_WIDTH, SEARCHABLE_CONTENT_WIDTH_WITH_DESCRIPTIONS, SELECT_CONTENT_WIDTH } from "./floating";
 
 vi.mock("@/app/preferences", () => ({ useI18n: () => (key: string) => key }));
 
-const TRIGGER_WIDTH = "w-(--radix-popover-trigger-width)";
-const AVAILABLE_WIDTH = "max-w-(--radix-popover-content-available-width)";
+const own = (rule: string) => rule.split(" ");
 
 const options = (count: number) =>
   Array.from({ length: count }, (_, index) => ({ value: `ckpt${index}`, label: `JANKUTrainedChenkinNoobai_v${index}.safetensors` }));
@@ -43,17 +43,17 @@ describe("可搜索下拉的浮层宽度:对齐触发器,带下限,不出窗口"
     Element.prototype.scrollIntoView ??= () => {};
   });
 
-  it("默认:宽度 = 触发器宽,下限 200px,上限 = 可用宽度", () => {
+  it("默认:宽度 = max(触发器宽, 下限),上限 = 可用宽度(规则在 floating.ts)", () => {
     render(<SearchableSelect value="ckpt0" onValueChange={vi.fn()} options={options(30)} />);
-    const own = classes(openContent());
-    expect(own).toContain(TRIGGER_WIDTH);
-    expect(own).toContain(AVAILABLE_WIDTH);
-    expect(own).toContain("min-w-[min(200px,var(--radix-popover-content-available-width))]");
+    const classNames = classes(openContent());
+    for (const one of own(SEARCHABLE_CONTENT_WIDTH)) expect(classNames).toContain(one);
+    expect(SEARCHABLE_CONTENT_WIDTH).toContain("var(--radix-popover-trigger-width)");
+    expect(SEARCHABLE_CONTENT_WIDTH).toContain("max-w-(--radix-popover-content-available-width)");
     // PopoverContent 的默认 w-72 必须被盖掉,否则浮层就是 288px,不管触发器多宽。
-    expect(own).not.toContain("w-72");
+    expect(classNames).not.toContain("w-72");
   });
 
-  it("带描述的清单同一条规则,只是下限更宽 —— 不再是和触发器无关的固定 360px", () => {
+  it("带描述的清单同一条规则,只是下限更宽 —— 不再是和触发器无关的固定宽", () => {
     render(
       <SearchableSelect
         value=""
@@ -62,29 +62,16 @@ describe("可搜索下拉的浮层宽度:对齐触发器,带下限,不出窗口"
         trigger={<button type="button" role="combobox">+</button>}
       />,
     );
-    const own = classes(openContent());
-    expect(own).toContain(TRIGGER_WIDTH);
-    expect(own).toContain("min-w-[min(360px,var(--radix-popover-content-available-width))]");
-    expect(own.some((one) => /^w-\[\d+px\]$/.test(one)), "又出现了固定宽度").toBe(false);
+    const classNames = classes(openContent());
+    for (const one of own(SEARCHABLE_CONTENT_WIDTH_WITH_DESCRIPTIONS)) expect(classNames).toContain(one);
+    expect(classNames.some((one) => /^w-\[\d+px\]$/.test(one)), "又出现了固定宽度").toBe(false);
   });
 
-  it("OptionPicker 只抬高下限,宽度照样跟触发器 —— 整格触发器下面不再挂一条 320px 的窄列表", () => {
+  it("OptionPicker 的长清单走同一条规则,不再自己另抬一个下限", () => {
     render(<OptionPicker value="ckpt0" onChange={vi.fn()} options={options(SEARCHABLE_THRESHOLD + 1)} />);
-    const own = classes(openContent());
-    expect(own).toContain(TRIGGER_WIDTH);
-    expect(own).toContain("min-w-[min(320px,var(--radix-popover-content-available-width))]");
-    // 调用方的下限替换默认下限,而不是两条 min-w 叠在一起看谁在样式表里排后面。
-    expect(own).not.toContain("min-w-[min(200px,var(--radix-popover-content-available-width))]");
-  });
-
-  it("调用方给的上限仍然生效", () => {
-    render(
-      <SearchableSelect value="" onValueChange={vi.fn()} options={options(30)} contentClassName="max-w-[min(520px,calc(100vw-32px))]" />,
-    );
-    const own = classes(openContent());
-    expect(own).toContain("max-w-[min(520px,calc(100vw-32px))]");
-    expect(own).not.toContain(AVAILABLE_WIDTH);
-    expect(own).toContain(TRIGGER_WIDTH);
+    const classNames = classes(openContent());
+    for (const one of own(SEARCHABLE_CONTENT_WIDTH)) expect(classNames).toContain(one);
+    expect(classNames.filter((one) => one.startsWith("min-w-"))).toEqual([]);
   });
 
   it("键盘照旧:打开后方向键 + 回车选中,Esc 关掉", () => {
@@ -99,7 +86,7 @@ describe("可搜索下拉的浮层宽度:对齐触发器,带下限,不出窗口"
     expect(document.querySelector("[cmdk-input]"), "选中后浮层该收起").toBeNull();
   });
 
-  it("普通 Select 的上限同样是有效的变量写法", () => {
+  it("普通 Select 的宽度规则同样是有效的变量写法", () => {
     render(
       <Select value="a" defaultOpen>
         <SelectTrigger>
@@ -112,9 +99,8 @@ describe("可搜索下拉的浮层宽度:对齐触发器,带下限,不出窗口"
     );
     const content = document.querySelector<HTMLElement>("[data-radix-select-content], [role='listbox']");
     expect(content).toBeTruthy();
-    const own = classes(content!.closest<HTMLElement>("[data-state]") ?? content!);
-    expect(own).toContain("min-w-[var(--radix-select-trigger-width)]");
-    expect(own).toContain("max-w-(--radix-select-content-available-width)");
+    const classNames = classes(content!.closest<HTMLElement>("[data-state]") ?? content!);
+    for (const one of own(SELECT_CONTENT_WIDTH)) expect(classNames).toContain(one);
   });
 });
 

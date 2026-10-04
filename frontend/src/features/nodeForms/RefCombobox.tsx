@@ -116,7 +116,7 @@ export function RefCombobox({
         customValueLabel={literal ? undefined : (query) => t("wfUseReference").replace("{q}", query)}
         extraOptions={fieldPathOption}
         renderValue={() => (look && path !== null ? <RefToken path={path} look={look} /> : undefined)}
-        title={problem ? refProblemText(t, problem) : path ?? undefined}
+        hint={problem ? refProblemText(t, problem) : path ?? undefined}
         size={size}
         className={cn("w-full min-w-0", problem && "border-destructive", className)}
         onValueChange={onValueChange}

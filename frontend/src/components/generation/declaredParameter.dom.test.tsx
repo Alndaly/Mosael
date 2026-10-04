@@ -1,5 +1,5 @@
 /** @vitest-environment jsdom */
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import React from "react";
 import { describe, expect, it, vi } from "vitest";
 
@@ -67,7 +67,8 @@ describe("模型自己声明的参数", () => {
     // 没动过:触发器上就是 euler 本身(它就是会用的那个值),而不是「默认(euler)」
     const trigger = screen.getByRole("combobox");
     expect(trigger.textContent).toBe("euler");
-    expect(trigger.getAttribute("title")).toBe("euler");
+    //: 值是服务端给的,长了在触发器里截断、悬停看全文(SelectItem 的 truncate 克隆进触发器)。
+    expect(within(trigger).getByText("euler").className).toContain("truncate");
   });
 });
 

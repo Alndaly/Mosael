@@ -1,17 +1,24 @@
-import { MENU_ITEM, MENU_ITEM_DESTRUCTIVE, MENU_SEPARATOR } from "@/components/ui/floating";
-import { Fragment, type KeyboardEvent, type ReactNode } from "react";
+import { Fragment, type ReactNode } from "react";
 import { MoreHorizontal } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { ContextMenuItem, ContextMenuSeparator } from "@/components/ui/context-menu";
-import { Popover, PopoverClose, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { MENU_ITEM_DESTRUCTIVE } from "@/components/ui/floating";
+import { IconButton } from "@/components/ui/icon-button";
+import { MenuContent, MenuItem, MenuItemBody, MenuSeparator } from "@/components/ui/menu";
+import { Popover, PopoverClose, PopoverTrigger } from "@/components/ui/popover";
+import type { HintShortcut } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
 export type MenuAction = {
   label: string;
   /** 必填:同一个菜单里有的行有图标、有的没有,文字就对不齐(浏览器池卡片的「重命名」漏过一次)。 */
   icon: ReactNode;
+  /** 名字下面一行淡色的补充说明(见 MenuItemBody 的 description)。 */
+  description?: string;
+  /** 名字是动态的长值(文件名、工作流名):单行截断、悬停看全文。 */
+  truncate?: boolean;
   /** 行尾一小段弱化的附注(如「版本历史」后面的 `v29`)。不拼进 label:拼进去就和名字抢同一种字重。 */
   hint?: string;
+  shortcut?: HintShortcut;
   onSelect: () => void;
   destructive?: boolean;
   disabled?: boolean;
@@ -20,8 +27,8 @@ export type MenuAction = {
 /**
  * 卡片 / 画布工具栏右端那颗 ⋯ 的菜单。
  *
- * 条目和右键菜单、笔记页「更多」是**同一套**:MENU_ITEM 的行高、内边距、图标尺寸与悬停底色,
- * 分组线是独立的 MENU_SEPARATOR 元素。此前这里是一排 ghost Button,分组靠给「删除」那一行
+ * 条目和右键菜单、笔记页「更多」是**同一套**:MenuContent / MenuItem / MenuItemBody(宽度、行高、
+ * 内边距、图标尺寸、悬停底色、折行与截断),分组线是独立的 MenuSeparator 元素。此前这里是一排 ghost Button,分组靠给「删除」那一行
  * 补 `border-t` + `rounded-t-none` —— Button 自带一圈透明描边,悬停底色又只圆下面两个角,
  * 看上去「删除」被单独框在一个盒子里,和上面几行不是一种东西。
  *
@@ -50,53 +57,31 @@ export function ActionMenu({
     <Popover>
       <PopoverTrigger asChild>
         {trigger ?? (
-          <Button variant="ghost" size="icon-sm" aria-label={label} title={label} aria-haspopup="menu"><MoreHorizontal /></Button>
+          <IconButton variant="ghost" size="icon-sm" label={label} aria-haspopup="menu"><MoreHorizontal /></IconButton>
         )}
       </PopoverTrigger>
-      <PopoverContent
-        align={align}
-        role="menu"
-        aria-label={label}
-        className="grid w-auto min-w-48 gap-0.5 p-1.5"
-        onKeyDown={moveFocus}
-      >
+      <MenuContent align={align} label={label}>
         {actions.map((action, i) => (
           <Fragment key={action.label}>
-            {startsDestructiveGroup(actions, i) && <div className={MENU_SEPARATOR} role="separator" />}
+            {startsDestructiveGroup(actions, i) && <MenuSeparator />}
             <PopoverClose asChild>
-              <button
-                type="button"
-                role="menuitem"
-                className={cn(MENU_ITEM, "w-full text-left", action.destructive && MENU_ITEM_DESTRUCTIVE)}
+              <MenuItem
+                icon={action.icon}
+                label={action.label}
+                description={action.description}
+                truncate={action.truncate}
+                hint={action.hint}
+                shortcut={action.shortcut}
+                destructive={action.destructive}
                 disabled={action.disabled}
                 onClick={action.onSelect}
-              >
-                {action.icon}
-                <span className="min-w-0 flex-1 truncate">{action.label}</span>
-                {action.hint && <span className="shrink-0 pl-4 text-ui-xs tabular-nums text-muted-foreground">{action.hint}</span>}
-              </button>
+              />
             </PopoverClose>
           </Fragment>
         ))}
-      </PopoverContent>
+      </MenuContent>
     </Popover>
   );
-}
-
-/** 菜单里的方向键:只在可用条目之间走(禁用的原生 button 本来就拿不到焦点),两端循环。 */
-function moveFocus(event: KeyboardEvent<HTMLDivElement>) {
-  const items = [...event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="menuitem"]:not(:disabled)')];
-  if (items.length === 0) return;
-  const at = items.indexOf(document.activeElement as HTMLButtonElement);
-  const next =
-    event.key === "ArrowDown" ? (at + 1) % items.length
-    : event.key === "ArrowUp" ? (at <= 0 ? items.length - 1 : at - 1)
-    : event.key === "Home" ? 0
-    : event.key === "End" ? items.length - 1
-    : null;
-  if (next === null) return;
-  event.preventDefault();
-  items[next].focus();
 }
 
 /** 第一个破坏性条目前面(且前面还有别的)才画分组线 —— ⋯ 菜单和右键菜单同一条规则。 */
@@ -121,9 +106,14 @@ export function ActionContextMenuItems({ actions }: { actions: MenuAction[] }) {
             disabled={action.disabled}
             onSelect={action.onSelect}
           >
-            {action.icon}
-            <span className="min-w-0 flex-1 truncate">{action.label}</span>
-            {action.hint && <span className="shrink-0 pl-4 text-ui-xs tabular-nums text-muted-foreground">{action.hint}</span>}
+            <MenuItemBody
+              icon={action.icon}
+              label={action.label}
+              description={action.description}
+              truncate={action.truncate}
+              hint={action.hint}
+              shortcut={action.shortcut}
+            />
           </ContextMenuItem>
         </Fragment>
       ))}

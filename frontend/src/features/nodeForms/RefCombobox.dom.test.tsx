@@ -7,6 +7,7 @@ import { beforeAll, describe, expect, it, vi } from "vitest";
 import { messages } from "@/app/messages";
 import { RefCombobox } from "./RefCombobox";
 import { RefCatalogContext, type RefCatalog } from "./refCatalog";
+import { readHint } from "@/test/hint";
 
 const zh = messages["zh-CN"];
 vi.mock("@/app/preferences", () => ({
@@ -48,7 +49,7 @@ function renderField(value: string, extra: Partial<React.ComponentProps<typeof R
 }
 
 describe("整格一个引用", () => {
-  it("显示成「节点 · 输出 · 子路径」的引用标签,不摆双括号 —— 指向上游输出里某个字段的也一样", () => {
+  it("显示成「节点 · 输出 · 子路径」的引用标签,不摆双括号 —— 指向上游输出里某个字段的也一样", async () => {
     //: 此前只有恰好在清单里的(`{{save_note.note_id}}`)显示得干净,`{{report.json.verdict}}` 不在清单里,
     //: 退回原样显示那串模板。
     for (const [value, label] of [
@@ -63,7 +64,7 @@ describe("整格一个引用", () => {
       expect(trigger.querySelector("[data-ref-token]")).not.toBeNull();
       expect(trigger.querySelector("[data-ref-problem]")).toBeNull();
       //: 悬停看得到存下去的那条路径。
-      expect(trigger.title).toBe(value.trim().slice(2, -2));
+      expect(await readHint(trigger)).toBe(value.trim().slice(2, -2));
       unmount();
     }
   });

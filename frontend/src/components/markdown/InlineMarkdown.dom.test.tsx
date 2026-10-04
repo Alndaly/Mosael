@@ -72,13 +72,17 @@ const ALLOWED = new Set([
   // 工具行的外壳(ToolRowFrame)自己把说明交给 InlineMarkdown(展开按钮里,链接只留文字)。
   "features/plugins/PluginsView.tsx description={tool.description}",
   "features/plugins/HostTools.tsx description={tool.description}",
+  // 菜单项名字下面那行说明:调用方给的是自己文案表里的句子(t(…) / strings.ts),不是数据。
+  "components/app/ActionMenu.tsx description={action.description}",
+  "features/notes/NoteFormatToolbar.tsx description={extra.description}",
 ]);
 
 // `<AgentMarkdown>{…}</AgentMarkdown>` 是块级的那条出口(模型写的整段摘要),同样算过了关。
 const DIRECT = /(?<![=$\w]|<AgentMarkdown>)\{\s*[\w?.]+\.(?:description|help|summary)\s*\}/g;
 const INTERPOLATED = /\$\{[\w?.]+\.(?:description|help|summary)\}/g;
 // 原样交给另一个组件的 prop(`<SettingsRow description={field.help}>`),那个组件只会把它当纯文本放。
-const PASSED = /(?:description|title|aria-label)=\{[\w?.]+\.(?:description|help|summary)\}/g;
+// 悬停说明的几个口子(Hint 的 label / hint / disabledReason)同样只放纯文本。
+const PASSED = /(?:description|title|aria-label|label|hint|disabledReason)=\{[\w?.]+\.(?:description|help|summary)\}/g;
 
 it("数据里的说明文字只经 InlineMarkdown / toPlainText 上界面", () => {
   const offenders = sourceFiles(SRC).flatMap((file) => {

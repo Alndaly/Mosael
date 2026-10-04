@@ -40,6 +40,37 @@ export const MENU_ITEM_ROVING = `${MENU_ITEM_SHAPE} ${MENU_ITEM_STATES}`;
  * 那一种是同一句话;悬停 / 键盘高亮时也保持红字,不被 hover 的前景色盖回去。
  */
 export const MENU_ITEM_DESTRUCTIVE = "text-destructive hover:text-destructive focus:text-destructive data-[highlighted]:text-destructive";
+/**
+ * 菜单的宽度 —— 全应用只在这里定,调用方不写(棘轮:design/menuWidths.test.ts)。
+ *
+ * 此前每个菜单自己挑一个定宽(`w-44`、`w-48`、`w-[200px]`……):中文刚好放得下的,英文就被
+ * 截掉半句(笔记「插入▾」的「插入图片(也可粘贴或拖入)」在 192px 里只剩前半截);另一些菜单
+ * 不设上限,一个长文件名就把整张单子撑成半屏宽。
+ *
+ * 规则:**随内容定宽,夹在下限和上限之间**,上限再不超出窗口。放不下的**静态文案折行**(或把
+ * 括号里的补充挪成名字下面一行说明,见 MenuItemBody 的 description);**动态的长值**(文件名、
+ * 网址、工作流名、模型名、用户输入)单行截断、悬停看全文(MenuItemBody 的 truncate)。
+ */
+export const MENU_WIDTH = "w-max min-w-48 max-w-[min(20rem,calc(100vw-1rem))]";
+/**
+ * 选值下拉(Select)的宽度:**不窄于触发器**(对齐好看),也不窄于 8rem;上限是「触发器、24rem
+ * 里大的那个」,再不超出 Radix 算的可用宽度。长值在行里单行截断(SelectItem 的 truncate),
+ * 不靠把菜单撑宽 —— 此前它没有上限,一个 checkpoint 文件名能把菜单撑满整个窗口。
+ */
+export const SELECT_CONTENT_WIDTH =
+  "min-w-[max(8rem,var(--radix-select-trigger-width))] max-w-[min(max(24rem,var(--radix-select-trigger-width)),var(--radix-select-content-available-width))]";
+/**
+ * 带搜索的下拉(Popover + cmdk:SearchableSelect、Combobox)的宽度:**定宽**,输入过滤时列表不跟着
+ * 剩下的那几项忽宽忽窄。和触发器一样宽,但不窄于 18rem —— 触发器是小胶囊、图标钮时,对齐它
+ * 等于每行只剩几个字;带说明的清单下限 22.5rem,说明是整整一句话。上限是可用宽度。
+ *
+ * 变量必须写成 `var(--x)` / `(--x)`:Tailwind v4 里 `w-[--x]` 生成的是 `width: --x`,无效声明
+ * 被浏览器丢掉,而 tailwind-merge 已经把 PopoverContent 默认的 `w-72` 当冲突删了。
+ */
+export const SEARCHABLE_CONTENT_WIDTH =
+  "w-[max(18rem,var(--radix-popover-trigger-width))] max-w-(--radix-popover-content-available-width)";
+export const SEARCHABLE_CONTENT_WIDTH_WITH_DESCRIPTIONS =
+  "w-[max(22.5rem,var(--radix-popover-trigger-width))] max-w-(--radix-popover-content-available-width)";
 /** 菜单里分组之间那条线。颜色走 `--divider` —— 浮层自己会把它改成贴合这层表面的值(见 tokens.css 的 `.floating-surface`)。 */
 export const MENU_SEPARATOR = "mx-2 my-1.5 h-px bg-divider";
 

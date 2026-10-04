@@ -6,7 +6,8 @@ import { Check, ChevronDown, ChevronUp } from "lucide-react"
 
 import type { FieldSize } from "@/components/ui/control-size"
 import { fieldTriggerClass, FIELD_TRIGGER_CHEVRON } from "@/components/ui/field-trigger"
-import { FLOATING_SURFACE, FLOATING_MOTION, MENU_SEPARATOR, FLOATING_COLLISION_PADDING } from "./floating"
+import { FLOATING_SURFACE, FLOATING_MOTION, MENU_SEPARATOR, FLOATING_COLLISION_PADDING, SELECT_CONTENT_WIDTH } from "./floating"
+import { Truncate } from "./truncate"
 
 import { cn } from "@/lib/utils"
 import { swallowClickThrough } from "@/lib/clickThrough"
@@ -90,8 +91,8 @@ const SelectContent = React.forwardRef<
         // `max-w-[trigger-width]`,于是任何一个窄字段都会把自己的菜单压成一样窄 ——
         // 配音面板 65px 的引擎格里,「F5-TTS」「Fish Speech S2 Pro」实测显示成
         // 「F5…」「Fi…」。**读不出选项的菜单等于没有菜单**,对齐再齐也没用。
-        // 上限交给 Radix 算出来的可用宽度,这样它仍然不会顶出屏幕。
-        position === "popper" && "min-w-[var(--radix-select-trigger-width)] max-w-(--radix-select-content-available-width)",
+        // 上限也不能没有:没有上限时一个 checkpoint 文件名就把菜单撑满整个窗口。规则见 SELECT_CONTENT_WIDTH。
+        position === "popper" && SELECT_CONTENT_WIDTH,
         position === "popper" &&
           "data-[side=bottom]:translate-y-1.5 data-[side=left]:-translate-x-1.5 data-[side=right]:translate-x-1.5 data-[side=top]:-translate-y-1.5",
         className
@@ -140,32 +141,36 @@ const SelectLabel = React.forwardRef<
 SelectLabel.displayName = SelectPrimitive.Label.displayName
 
 /**
- * 选项。`description` 是解释"选它会怎样"的副标题。
+ * 选项。`description` 是解释"选它会怎样"的副标题,静态文案,放不下就折行。
  *
  * **它必须待在 ItemText 外面。** Radix 把选中项的 ItemText **原样克隆进触发器** —— 副标题
  * 写进 children 的话,那一格就变成两行字,和旁边每一格都不一样高。副标题属于清单,
  * 不属于"当前选了什么"。
+ *
+ * 名字默认是静态文案:放不下就折行。**动态的长值**(模型名、文件名、音色名、服务端给的选项)
+ * 传 `truncate`:单行截断、悬停看全文 —— 选中后克隆进触发器的也是这一份,触发器里被截断的值
+ * 同样悬停看得到全文。
  */
 const SelectItem = React.forwardRef<
   React.ElementRef<typeof SelectPrimitive.Item>,
-  React.ComponentPropsWithoutRef<typeof SelectPrimitive.Item> & { description?: React.ReactNode }
->(({ className, children, description, ...props }, ref) => (
+  React.ComponentPropsWithoutRef<typeof SelectPrimitive.Item> & { description?: React.ReactNode; truncate?: boolean }
+>(({ className, children, description, truncate, ...props }, ref) => (
   <SelectPrimitive.Item
     ref={ref}
     className={cn(
-      "relative flex min-h-9 w-full min-w-0 cursor-default select-none rounded-md py-2 pl-2.5 pr-8 text-ui-sm leading-5 outline-none focus:bg-secondary data-[disabled]:pointer-events-none data-[disabled]:opacity-40 [&>span:last-child]:block [&>span:last-child]:min-w-0 [&>span:last-child]:truncate",
+      "relative flex min-h-9 w-full min-w-0 cursor-default select-none rounded-md py-2 pl-2.5 pr-8 text-ui-sm leading-5 outline-none focus:bg-secondary data-[disabled]:pointer-events-none data-[disabled]:opacity-40",
       description ? "flex-col items-start gap-px" : "items-center",
       className
     )}
     {...props}
   >
-    <span className="absolute right-2 flex h-3.5 w-3.5 items-center justify-center">
+    <span className="absolute right-2 top-2.5 flex h-3.5 w-3.5 items-center justify-center">
       <SelectPrimitive.ItemIndicator>
         <Check className="h-4 w-4" />
       </SelectPrimitive.ItemIndicator>
     </span>
-    <SelectPrimitive.ItemText>{children}</SelectPrimitive.ItemText>
-    {description && <span className="min-w-0 truncate text-ui-xs text-muted-foreground">{description}</span>}
+    <SelectPrimitive.ItemText className="min-w-0 max-w-full break-words">{truncate ? <Truncate>{children}</Truncate> : children}</SelectPrimitive.ItemText>
+    {description && <span className="min-w-0 break-words text-ui-xs leading-4 text-muted-foreground">{description}</span>}
   </SelectPrimitive.Item>
 ))
 SelectItem.displayName = SelectPrimitive.Item.displayName

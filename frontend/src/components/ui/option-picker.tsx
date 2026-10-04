@@ -5,6 +5,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import type { FieldSize } from "@/components/ui/control-size";
 import { fieldTriggerClass, FIELD_TRIGGER_CHEVRON } from "@/components/ui/field-trigger";
+import { Hint } from "@/components/ui/tooltip";
+import { Truncate } from "@/components/ui/truncate";
 import { cn } from "@/lib/utils";
 
 export type PickerOption = {
@@ -44,6 +46,7 @@ export function OptionPicker({
   searchPlaceholder,
   emptyText,
   align = "start",
+  hint,
   ...rest
 }: {
   value: string;
@@ -70,6 +73,8 @@ export function OptionPicker({
   searchPlaceholder?: string;
   emptyText?: string;
   align?: "start" | "center" | "end";
+  /** 触发器的悬停说明(为什么点不了、清单为什么是空的)。 */
+  hint?: string | null;
   /* 表单里的 FormControl 会把这几个挂到控件上(Radix Slot 克隆时注入)。不转交的话,
      错误提示和描述文字就和控件断了线 —— 读屏念到这一格时什么都没有。 */
 } & Pick<React.ComponentProps<"button">, "id" | "aria-describedby" | "aria-invalid">) {
@@ -84,19 +89,18 @@ export function OptionPicker({
         placeholder={placeholder}
         searchPlaceholder={searchPlaceholder}
         emptyText={emptyText}
-        /* 只抬高下限,宽度仍对齐触发器(见 SearchableSelect):工具行里的小胶囊装不下模型名,
-           给 320px 兜底;设置弹层里的整格触发器比这宽,浮层就跟着它 —— 以前这里是固定
-           `w-[320px]`,整格下面挂一条窄列表。 */
-        contentClassName={cn("min-w-[min(320px,var(--radix-popover-content-available-width))]", contentClassName)}
+        hint={hint}
+        contentClassName={contentClassName}
         trigger={
           /* 结构照抄 SelectTrigger:一个 span 一个 chevron。调用方那串 `[&>svg]:hidden`、
              `[&>span]:truncate` 才会同样落到实处,而不是只对其中一个分支生效。 */
           /* role=combobox 和 Select 的触发器一致 —— 换了实现不该换掉读屏里听到的东西。 */
-          <button type="button" role="combobox" aria-label={ariaLabel} title={selected?.label} disabled={disabled} className={cn(fieldTriggerClass(size), className)} {...rest}>
+          <button type="button" role="combobox" aria-label={ariaLabel} disabled={disabled} className={cn(fieldTriggerClass(size), className)} {...rest}>
             {icon}
-            <span className={cn("min-w-0 truncate", !selected && "text-muted-foreground")} style={selected?.style}>
+            {/* 选中的值在触发器里会被截断(一个 checkpoint 文件名动辄四五十个字符):悬停看得到全名。 */}
+            <Truncate className={cn(!selected && "text-muted-foreground")} style={selected?.style}>
               {selected?.label ?? placeholder ?? ""}
-            </span>
+            </Truncate>
             <ChevronDown className={FIELD_TRIGGER_CHEVRON} />
           </button>
         }
@@ -105,18 +109,20 @@ export function OptionPicker({
   }
   return (
     <Select value={value} onValueChange={onChange} disabled={disabled}>
-      {/* 选中的值在触发器里会被截断(一个 checkpoint 文件名动辄四五十个字符):悬停看得到全名,
-          展开的列表里整行折行显示。 */}
-      <SelectTrigger aria-label={ariaLabel} title={selected?.label} size={size} className={className} {...rest}>
-        {icon}
-        <SelectValue placeholder={placeholder} />
-      </SelectTrigger>
+      {/* 选项是服务端给的动态值:列表里单行截断、悬停看全文(SelectItem 的 truncate);选中后
+          克隆进触发器的也是那一份,触发器里被截断的值同样悬停看得到全名。 */}
+      <Hint label={hint}>
+        <SelectTrigger aria-label={ariaLabel} size={size} className={className} {...rest}>
+          {icon}
+          <SelectValue placeholder={placeholder} />
+        </SelectTrigger>
+      </Hint>
       <SelectContent align={align} className={contentClassName}>
         {options.map((one) => (
           <SelectItem
             key={one.value}
             value={one.value}
-            className="[overflow-wrap:anywhere]"
+            truncate
             style={one.style}
             description={one.description}
           >

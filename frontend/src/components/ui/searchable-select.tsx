@@ -6,6 +6,9 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import type { FieldSize } from "@/components/ui/control-size";
 import { fieldTriggerClass, FIELD_TRIGGER_CHEVRON } from "@/components/ui/field-trigger";
 import { insideDialog } from "@/components/ui/insideDialog";
+import { SEARCHABLE_CONTENT_WIDTH, SEARCHABLE_CONTENT_WIDTH_WITH_DESCRIPTIONS } from "@/components/ui/floating";
+import { Hint } from "@/components/ui/tooltip";
+import { Truncate } from "@/components/ui/truncate";
 import { useI18n } from "@/app/preferences";
 import { cn } from "@/lib/utils";
 
@@ -24,23 +27,6 @@ type Option = {
   /** 只作用在这一项的行内样式。用于**用样式本身当信息**的清单:字体选择器按各自的字体渲染。 */
   style?: React.CSSProperties;
 };
-
-/**
- * 浮层宽度,和普通 Select 同一条规则:**对齐触发器,但不窄于一个读得下的下限**,上限是 Radix 算出的
- * 可用宽度(已扣掉 collisionPadding,不会顶出窗口)。
- *
- * 变量必须写成 `w-(--x)` / `w-[var(--x)]`。Tailwind v4 里 `w-[--x]` 生成的是 `width: --x` ——
- * 无效声明被浏览器丢掉,而 tailwind-merge 已经把 PopoverContent 默认的 `w-72` 当冲突删了,
- * 浮层只剩 auto 宽:整宽的表单字段下面挂一条窄窄的列表,长文件名全被截成省略号。
- *
- * 下限用 min-width 而不是固定宽:触发器是小胶囊 / 图标钮(「添加节点」、画板的「+」)时,
- * 对齐它等于每行只剩几个字,由下限兜住;触发器本身够宽(表单整格)时就跟着它。
- * 带描述的清单下限更宽 —— 描述行是整整一句话,200px 里一行读不完。
- */
-const SEARCHABLE_CONTENT_WIDTH =
-  "w-(--radix-popover-trigger-width) max-w-(--radix-popover-content-available-width)";
-const SEARCHABLE_FLOOR = "min-w-[min(200px,var(--radix-popover-content-available-width))]";
-const SEARCHABLE_FLOOR_WITH_DESCRIPTIONS = "min-w-[min(360px,var(--radix-popover-content-available-width))]";
 
 /**
  * 可搜索、限高的下拉——用于选项多到普通 Select 会溢出屏幕的场景(如 ComfyUI 的 checkpoint/采样器
@@ -71,6 +57,7 @@ export function SearchableSelect({
   contentClassName,
   disabled,
   trigger,
+  hint,
 }: {
   value: string;
   onValueChange: (value: string) => void;
@@ -81,12 +68,13 @@ export function SearchableSelect({
   className?: string;
   /** 默认触发器的档位,和 `<Input size>`、`<Button size>` 同一把尺。自定义 `trigger` 时不起作用。 */
   size?: FieldSize;
-  /** 浮层自己的类名。改宽度时给 `min-w-*`(下限)/ `max-w-*`(上限),别给固定 `w-*` ——
-   *  固定宽会让整宽的触发器下面挂一条窄列表,正是 SEARCHABLE_CONTENT_WIDTH 要消灭的样子。 */
+  /** 浮层自己的类名(不写宽度:宽度规则在 floating.ts 的 SEARCHABLE_CONTENT_WIDTH,棘轮 design/menuWidths.test.ts)。 */
   contentClassName?: string;
   disabled?: boolean;
   /** 自定义触发器(替换默认按钮),用于像「添加节点」这类带图标/胶囊样式的触发器。 */
   trigger?: React.ReactNode;
+  /** 触发器的悬停说明(为什么点不了、这一格选的是什么)。套在触发器外面 —— 套在自定义 trigger 里会被 PopoverTrigger 吞掉属性。 */
+  hint?: string | null;
 }) {
   const t = useI18n();
   const [open, setOpen] = React.useState(false);
@@ -117,34 +105,35 @@ export function SearchableSelect({
   }, [items]);
   return (
     <Popover modal={modal} open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild ref={triggerRef as React.Ref<HTMLButtonElement>}>
-        {trigger ?? (
-          <button
-            type="button"
-            disabled={disabled}
-            /* **共用 fieldTriggerClass**,不再手抄一份。抄出来的那份是 h-8 / gap-1 /
-               px-2.5,而 Select 和 Combobox 是 h-10 / gap-1.5 / px-3 —— 三种控件并排在同一行
-               表单里时(插件的「新建连接」就是下拉+输入框+按钮),下拉比旁边矮 8px、左右
-               留白也窄一截。那正是这个 token 的注释点名要消灭的情况。 */
-            className={cn(fieldTriggerClass(size), "text-foreground", className)}
-          >
-            {/* min-w-0:flex 子项默认不肯收缩,truncate 会失效(见 field-trigger.ts)。
-                未选中时走 placeholder 色:和输入框的 placeholder 同一个视觉约定 —— 用正文色
-                写「平台」,读起来像是**已经选了**一个叫「平台」的东西。 */}
-            <span className={cn("min-w-0 truncate", !selected && "text-muted-foreground")}>
-              {selected?.label ?? placeholder ?? ""}
-            </span>
-            <ChevronDown className={FIELD_TRIGGER_CHEVRON} />
-          </button>
-        )}
-      </PopoverTrigger>
+      <Hint label={hint}>
+        <PopoverTrigger asChild ref={triggerRef as React.Ref<HTMLButtonElement>}>
+          {trigger ?? (
+            <button
+              type="button"
+              disabled={disabled}
+              /* **共用 fieldTriggerClass**,不再手抄一份。抄出来的那份是 h-8 / gap-1 /
+                 px-2.5,而 Select 和 Combobox 是 h-10 / gap-1.5 / px-3 —— 三种控件并排在同一行
+                 表单里时(插件的「新建连接」就是下拉+输入框+按钮),下拉比旁边矮 8px、左右
+                 留白也窄一截。那正是这个 token 的注释点名要消灭的情况。 */
+              className={cn(fieldTriggerClass(size), "text-foreground", className)}
+            >
+              {/* min-w-0:flex 子项默认不肯收缩,truncate 会失效(见 field-trigger.ts)。
+                  未选中时走 placeholder 色:和输入框的 placeholder 同一个视觉约定 —— 用正文色
+                  写「平台」,读起来像是**已经选了**一个叫「平台」的东西。 */}
+              <Truncate className={cn(!selected && "text-muted-foreground")}>
+                {selected?.label ?? placeholder ?? ""}
+              </Truncate>
+              <ChevronDown className={FIELD_TRIGGER_CHEVRON} />
+            </button>
+          )}
+        </PopoverTrigger>
+      </Hint>
       <PopoverContent
         className={cn(
           // 浮层自己不滚(overflow-hidden 盖掉 PopoverContent 默认的 overflow-y-auto),滚的是下面
           // 那份列表 —— 否则搜索框会跟着内容一起滚走。
           "p-0 overflow-hidden",
-          SEARCHABLE_CONTENT_WIDTH,
-          hasDescriptions ? SEARCHABLE_FLOOR_WITH_DESCRIPTIONS : SEARCHABLE_FLOOR,
+          hasDescriptions ? SEARCHABLE_CONTENT_WIDTH_WITH_DESCRIPTIONS : SEARCHABLE_CONTENT_WIDTH,
           contentClassName,
         )}
         align="start"
@@ -177,10 +166,11 @@ export function SearchableSelect({
                       {item.icon}
                     </span>
                   )}
+                  {/* 名字是动态的长值(模型名、文件名):单行截断、悬停看全文。说明是静态的一句话:折行。 */}
                   <span className="grid min-w-0 flex-1 gap-px leading-[1.35]" style={item.style}>
-                    <span className="truncate">{item.label}</span>
+                    <Truncate>{item.label}</Truncate>
                     {item.description && (
-                      <span className="truncate text-ui-xs text-muted-foreground">{item.description}</span>
+                      <span className="break-words text-ui-xs text-muted-foreground">{item.description}</span>
                     )}
                   </span>
                   {item.value === value && <Check size={14} className="shrink-0 text-primary" />}
