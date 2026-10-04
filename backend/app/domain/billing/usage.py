@@ -146,6 +146,11 @@ PRICING_BILLING_UNITS = frozenset(
 
 
 
+def normalize_resolution(value: Any) -> str:
+    """分辨率的写法归一成小写:万相写 1080P、Evolink 写 1080p、海螺写 2K —— 说的是同一档。"""
+    return str(value or "").strip().lower()
+
+
 def create_pricing_rule(
     db: Session,
     *,
@@ -154,6 +159,7 @@ def create_pricing_rule(
     provider: str = "",
     capability: str,
     model: str = "",
+    resolution: str = "",
     billing_unit: str,
     unit_amount_micros: int,
     time_prices: list[dict[str, Any]] | None = None,
@@ -171,6 +177,7 @@ def create_pricing_rule(
             "provider": provider,
             "capability": capability,
             "model": model,
+            "resolution": resolution,
             "billing_unit": billing_unit,
             "unit_amount_micros": unit_amount_micros,
             "time_prices": time_prices or [],
@@ -216,6 +223,8 @@ class PriceQuote:
     notes: str
     time_prices: tuple[dict[str, Any], ...] = ()
     time_zone: str = ""
+    #: 只对这个输出分辨率生效;空 = 不限(见 ProviderPricingRule.resolution)。
+    resolution: str = ""
 
 
 def prefill_model_pricing(
@@ -255,7 +264,11 @@ def prefill_model_pricing(
                 )
             )
         )
-        if any(rule.billing_unit == quote.billing_unit for rule in existing):
+        # 「缺」按 (单位, 分辨率) 这一格算:老库里那条不限分辨率的价原样留着,只补它旁边缺的那几档。
+        if any(
+            rule.billing_unit == quote.billing_unit and rule.resolution == normalize_resolution(quote.resolution)
+            for rule in existing
+        ):
             continue
         if any(rule.currency != quote.currency for rule in existing):
             continue
@@ -265,6 +278,7 @@ def prefill_model_pricing(
             provider=provider,
             capability=quote.capability,
             model=model,
+            resolution=quote.resolution,
             billing_unit=quote.billing_unit,
             unit_amount_micros=quote.unit_amount_micros,
             time_prices=[dict(window) for window in quote.time_prices],
@@ -432,6 +446,7 @@ def price_usage(
         capability=capability,
         model=model,
         moment=moment,
+        resolution=str(units.get("resolution") or ""),
     )
     metered = [
         (rule, quantity) for rule in rules if (quantity := _quantity_for_unit(units, rule.billing_unit)) is not None
@@ -554,6 +569,8 @@ def _normalize_pricing_fields(fields: dict[str, Any], *, partial: bool = False) 
     for key in ("provider", "capability", "model", "billing_unit", "currency", "source", "notes"):
         if key in normalized and normalized[key] is not None:
             normalized[key] = str(normalized[key]).strip()
+    if "resolution" in normalized:
+        normalized["resolution"] = normalize_resolution(normalized["resolution"])
     if not partial or "capability" in normalized:
         if not normalized.get("capability"):
             raise ValueError("capability is required")
@@ -695,8 +712,14 @@ def _best_price_rules(
     capability: str,
     model: str,
     moment: datetime | None = None,
+    resolution: str = "",
 ) -> list[ProviderPricingRule]:
-    """每个计价单位挑一条规则:作用域最具体的那条(连接 > 工作区 > 供应商 > 模型),同分取生效最晚的。
+    """每个计价单位挑一条规则:作用域最具体的那条(连接 > 工作区 > 供应商 > 模型),同一作用域里
+    写了分辨率的压过不限分辨率的,再同分取生效最晚的。
+
+    **分辨率排在作用域之后。**给这条连接、这个工作区单配的价是用户的意图(谈下来的折扣常常不分档),
+    不该被一条更细分辨率的通用价悄悄压过;同一作用域里,对上这次分辨率的那一档才比「不限」更准。
+    写了分辨率、但和这次调用对不上的规则根本不进候选 —— 4k 没有价就是没有价,不拿 720p 的顶上。
 
     **时间只用来判生效期,不参与挑选。**分时段价格是挑出来那条规则**自己**的价目,由
     `price_schedule.price_at` 在算钱时取档 —— 挑规则和取单价是两件事(见 domain/billing/price_schedule)。
@@ -706,6 +729,7 @@ def _best_price_rules(
         db.scalars(
             select(ProviderPricingRule).where(
                 ProviderPricingRule.capability == capability,
+                or_(ProviderPricingRule.resolution == "", ProviderPricingRule.resolution == normalize_resolution(resolution)),
                 or_(ProviderPricingRule.workspace_id.is_(None), ProviderPricingRule.workspace_id == workspace_id),
                 or_(
                     ProviderPricingRule.provider_profile_id.is_(None),
@@ -721,13 +745,13 @@ def _best_price_rules(
     if not candidates:
         return []
 
-    def score(rule: ProviderPricingRule) -> tuple[int, datetime]:
+    def score(rule: ProviderPricingRule) -> tuple[int, int, datetime]:
         specificity = 0
         specificity += 8 if rule.provider_profile_id else 0
         specificity += 4 if rule.workspace_id else 0
         specificity += 2 if rule.provider else 0
         specificity += 1 if rule.model else 0
-        return specificity, rule.effective_from or datetime.min
+        return specificity, 1 if rule.resolution else 0, rule.effective_from or datetime.min
 
     by_unit: dict[str, ProviderPricingRule] = {}
     for rule in candidates:

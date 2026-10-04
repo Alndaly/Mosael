@@ -15,9 +15,11 @@
    一律不收(列在下面的「未收录」里)。不从同门型号外推,不用第三方汇总站当来源。
 2. **按厂商原样记。**币种照抄(人民币就是 CNY,不换算成美元);厂商按「元/万字符」报的,
    `per=10_000` 记在条目上,而不是自己先除好 —— 这样对着价目页一眼能核。
-3. **分档的价格只记基础档,并在备注里写明。**千问按输入长度分档、万相按分辨率分档、Seedance
-   分「含不含视频输入」:计价规则没有按档位匹配的能力,所以记最常用的那一档(输入最短 / 应用
-   默认的 720P / 不含视频输入),备注里把其余档位写出来,用户用的是别的档一眼就知道要改。
+3. **按输出分辨率分档的价,每档一条;别的分档只记基础档。**规则有分辨率这一格(见
+   ProviderPricingRule.resolution):基础档记成不限分辨率的那条(`resolution` 为空,没单列的分辨率
+   按它估),价目页列出的其余档各记一条(`resolution="1080p"` 这样,小写)。每一档的备注都写清自己是
+   哪一档。千问按输入长度分档、Seedance 分「含不含视频输入」—— 这些规则匹配不了,只记最常用的那一档
+   (输入最短 / 不含视频输入),备注里把其余档位写出来,用户用的是别的档一眼就知道要改。
    拿不准哪档算"基础"的,宁可不收。
 4. **分时段的价按厂商的时段原样记。**高峰 / 空闲这种按钟点变的价是**同一条规则**的价目
    (见 `domain/billing/price_schedule`):条目的 `amount` 是厂商说的「其余时段」那个价,`time_prices`
@@ -139,6 +141,8 @@ class ListPrice:
     time_prices: tuple[TimePrice, ...] = ()
     #: 上面那些钟点的时区(IANA 名)。有时段就必须有(测试盯着)。
     time_zone: str = ""
+    #: 这一档只对哪个输出分辨率(小写);空 = 基础档,不限分辨率(约定 3)。
+    resolution: str = ""
 
     @property
     def unit_amount_micros(self) -> int:
@@ -330,7 +334,7 @@ _ANTHROPIC_PRICES = [
 # 国内(北京)记人民币、国际(新加坡)记美元,各以本地价目页为准。
 # 千问按**单次请求的输入长度**分档,整单按所在档计价:记最短那档,备注写出其余档。
 # 缓存命中价页面只给「标准输入价的 20%(隐式)/ 10%(显式)」这样的比例,没有挂牌数字 —— 不填。
-# 万相按输出分辨率分档:记 720P(应用默认),备注写 480P / 1080P。
+# 万相按输出分辨率分档:720P 是基础档,480P / 1080P 各一条(万相 2.7 在应用里默认 1080P)。
 _BAILIAN_CN = "https://help.aliyun.com/zh/model-studio/model-pricing"
 _BAILIAN_INTL = "https://www.alibabacloud.com/help/en/model-studio/model-pricing"
 
@@ -343,8 +347,13 @@ def _non_thinking(zh: str, en: str) -> tuple[str, str]:
     return (f"非思考模式的输出价;{zh}", f"Non-thinking output price; {en}")
 
 
-def _wan(model: str, zh: str, en: str) -> tuple[str, str]:
-    return (f"720P 的价;{zh}{_WAN_INPUT.get(model, ('', ''))[0]}", f"720P price; {en}{_WAN_INPUT.get(model, ('', ''))[1]}")
+def _wan(model: str, tier_zh: str, tier_en: str) -> tuple[str, str]:
+    zh, en = _WAN_INPUT.get(model, ("", ""))
+    return (f"{tier_zh}{zh}", f"{tier_en}{en}")
+
+
+#: 万相按输出分辨率分档:720P 是基础档(没单列的分辨率按它估),480P / 1080P 各一条。(国内, 国际)
+_WAN_TIERS = {"": ("0.6", "0.1"), "480p": ("0.3", "0.05"), "1080p": ("1", "0.15")}
 
 
 #: 这两个模型**输入视频也按秒计费**,而计量只记输出时长 —— 按规则算出来会偏低,备注里说清。
@@ -421,11 +430,17 @@ _ALIBABA_IMAGE = [
        remark=("输出图 1K、2K 同价;带参考图时每张输入图另收 0.02 元", "Same price for 1K and 2K output; each input image adds 0.02 CNY")),
 ]
 
-# 生视频(每秒,按输出分辨率)。wan2.2-t2v-plus 没有 720P 档、wan2.6-i2v-flash 分有声/无声两价
+# 生视频(每秒,按输出分辨率分档)。wan2.2-t2v-plus 没有 720P 档、wan2.6-i2v-flash 分有声/无声两价
 # 而适配器不指定是哪种 —— 拿不准基础档,不收。
 _WAN_WITH_480P = ("wan2.5-t2v-preview", "wan2.5-i2v-preview")
+_WAN_TIER_REMARK = {
+    "": ("720P 的价(基础档,没单列的分辨率按它估)", "720P price (base tier; unlisted resolutions use it)"),
+    "480p": ("480P 的价", "480P price"),
+    "1080p": ("1080P 的价", "1080P price"),
+}
 _ALIBABA_VIDEO = [
-    entry
+    _p("alibaba", model, "video", "video_second", amount, currency, source, region=region, resolution=tier,
+       remark=_wan(model, *_WAN_TIER_REMARK[tier]))
     for model in (
         "wan2.5-t2v-preview",
         "wan2.6-t2v",
@@ -436,16 +451,9 @@ _ALIBABA_VIDEO = [
         "wan2.7-r2v",
         "wan2.7-videoedit",
     )
-    for entry in (
-        _p("alibaba", model, "video", "video_second", "0.6", "CNY", _BAILIAN_CN, region="cn",
-           remark=_wan(model,
-                       ("480P 为 0.3 元/秒," if model in _WAN_WITH_480P else "") + "1080P 为 1 元/秒",
-                       ("480P is 0.3 CNY/s, " if model in _WAN_WITH_480P else "") + "1080P is 1 CNY/s")),
-        _p("alibaba", model, "video", "video_second", "0.1", "USD", _BAILIAN_INTL, region="intl",
-           remark=_wan(model,
-                       ("480P 为 $0.05/秒," if model in _WAN_WITH_480P else "") + "1080P 为 $0.15/秒",
-                       ("480P is $0.05/s, " if model in _WAN_WITH_480P else "") + "1080P is $0.15/s")),
-    )
+    for tier, (cn, intl) in _WAN_TIERS.items()
+    if tier != "480p" or model in _WAN_WITH_480P
+    for amount, currency, source, region in ((cn, "CNY", _BAILIAN_CN, "cn"), (intl, "USD", _BAILIAN_INTL, "intl"))
 ]
 
 # 数字人(每秒,按成功生成的视频时长;ADR 0028)。价目表总页里没有这两个,单价写在各自的模型文档页上。
@@ -454,7 +462,9 @@ _BAILIAN_S2V = "https://help.aliyun.com/zh/model-studio/wan-s2v-api"
 _BAILIAN_RETALK = "https://help.aliyun.com/zh/model-studio/videoretalk/"
 _ALIBABA_DIGITAL_HUMAN = [
     _p("alibaba", "wan2.2-s2v", "video", "video_second", "0.5", "CNY", _BAILIAN_S2V, region="cn",
-       remark=("480P 的价(应用默认);720P 为 0.9 元/秒;另有 100 秒免费额度", "480P price (the app default); 720P is 0.9 CNY/s; 100 free seconds")),
+       remark=("480P 的价(应用默认,基础档);另有 100 秒免费额度", "480P price (the app default, base tier); 100 free seconds")),
+    _p("alibaba", "wan2.2-s2v", "video", "video_second", "0.9", "CNY", _BAILIAN_S2V, region="cn", resolution="720p",
+       remark=("720P 的价;另有 100 秒免费额度", "720P price; 100 free seconds")),
     _p("alibaba", "videoretalk", "video", "video_second", "0.08", "CNY", _BAILIAN_RETALK, region="cn",
        remark=("按生成视频的时长计;另有 1800 秒免费额度", "Billed by the generated video's length; 1,800 free seconds")),
 ]
@@ -484,7 +494,8 @@ _ALIBABA_TTS = [
 # 价目页按**模型族**写(doubao-seedream-4-0),带版本号的 id 取自同站模型列表。
 # Seedance 按 token 计价(元/百万 token),计费 token 数是任务回包的 usage.completion_tokens ——
 # 适配器把它记成 output_tokens(见 adapters/bytedance/ark/video.seedance_metering),所以单位是
-# million_output_token。分「输入含不含视频」两价、按输出分辨率分档:记 720P、不含视频输入那档。
+# million_output_token。分「输入含不含视频」两价(只记不含视频那档)、按输出分辨率分档:720P 是基础档,
+# 1080P 另一条;480P 价目页没单列,按基础档估。
 # 已关停的(Seedance 1.5 pro / 1.0 lite、Seedream 3.0、SeedEdit 3.0 在国内)不收;
 # Seedream 5.0 pro 按像素分两档价,拿不准基础档,不收。
 # 豆包对话模型也在这页上,但应用里的方舟连接只做生图/生视频,记了也用不上 —— 不收。
@@ -492,18 +503,25 @@ _ARK_CN = "https://docs.volcengine.com/docs/82379/1544106"
 _ARK_INTL = "https://docs.byteplus.com/en/docs/ModelArk/1544106"
 
 
-def _seedance(model: str, amount: str, currency: str, source: str, region: str, zh: str, en: str) -> ListPrice:
-    return _p("bytedance", model, "video", "million_output_token", amount, currency, source, region=region, remark=(zh, en))
+def _seedance(model: str, amount: str, currency: str, source: str, region: str, zh: str, en: str, resolution: str = "") -> ListPrice:
+    return _p("bytedance", model, "video", "million_output_token", amount, currency, source, region=region,
+              remark=(zh, en), resolution=resolution)
 
 
 _BYTEDANCE_PRICES = [
     # 生视频 · 国内
     _seedance("doubao-seedance-2-5-260628", "70", "CNY", _ARK_CN, "cn",
-              "720P、输入不含视频的价;输入含视频为 42 元,1080P 为 77 元(含视频 46 元)",
-              "720P price without video input; with video input it is 42 CNY, 1080P is 77 CNY (46 with video)"),
+              "720P、输入不含视频的价(基础档);输入含视频为 42 元",
+              "720P price without video input (base tier); with video input it is 42 CNY"),
+    _seedance("doubao-seedance-2-5-260628", "77", "CNY", _ARK_CN, "cn",
+              "1080P、输入不含视频的价;输入含视频为 46 元",
+              "1080P price without video input; with video input it is 46 CNY", resolution="1080p"),
     _seedance("doubao-seedance-2-0-260128", "46", "CNY", _ARK_CN, "cn",
-              "720P、输入不含视频的价;输入含视频为 28 元,1080P 为 51 元(含视频 31 元)",
-              "720P price without video input; with video input it is 28 CNY, 1080P is 51 CNY (31 with video)"),
+              "720P、输入不含视频的价(基础档);输入含视频为 28 元",
+              "720P price without video input (base tier); with video input it is 28 CNY"),
+    _seedance("doubao-seedance-2-0-260128", "51", "CNY", _ARK_CN, "cn",
+              "1080P、输入不含视频的价;输入含视频为 31 元",
+              "1080P price without video input; with video input it is 31 CNY", resolution="1080p"),
     _seedance("doubao-seedance-2-0-fast-260128", "37", "CNY", _ARK_CN, "cn",
               "原价,输入不含视频;输入含视频为 22 元;企业用户限时 7.5 折",
               "List price without video input; with video input it is 22 CNY; enterprise accounts get a time-limited 25% off"),
@@ -518,11 +536,17 @@ _BYTEDANCE_PRICES = [
               "Online inference price; offline is 2.1 CNY; retires 2026-11-24"),
     # 生视频 · 国际(BytePlus ModelArk,id 前缀与国内不同)
     _seedance("dreamina-seedance-2-5-260628", "10.7", "USD", _ARK_INTL, "intl",
-              "720P、输入不含视频的价;输入含视频为 $6.4,1080P 为 $11.7(含视频 $7.0)",
-              "720P price without video input; with video input it is $6.4, 1080P is $11.7 ($7.0 with video)"),
+              "720P、输入不含视频的价(基础档);输入含视频为 $6.4",
+              "720P price without video input (base tier); with video input it is $6.4"),
+    _seedance("dreamina-seedance-2-5-260628", "11.7", "USD", _ARK_INTL, "intl",
+              "1080P、输入不含视频的价;输入含视频为 $7.0",
+              "1080P price without video input; with video input it is $7.0", resolution="1080p"),
     _seedance("dreamina-seedance-2-0-260128", "7", "USD", _ARK_INTL, "intl",
-              "720P、输入不含视频的价;输入含视频为 $4.3,1080P 为 $7.7(含视频 $4.7)",
-              "720P price without video input; with video input it is $4.3, 1080P is $7.7 ($4.7 with video)"),
+              "720P、输入不含视频的价(基础档);输入含视频为 $4.3",
+              "720P price without video input (base tier); with video input it is $4.3"),
+    _seedance("dreamina-seedance-2-0-260128", "7.7", "USD", _ARK_INTL, "intl",
+              "1080P、输入不含视频的价;输入含视频为 $4.7",
+              "1080P price without video input; with video input it is $4.7", resolution="1080p"),
     _seedance("dreamina-seedance-2-0-fast-260128", "5.6", "USD", _ARK_INTL, "intl",
               "原价,输入不含视频;输入含视频为 $3.3;限时 75 折", "List price without video input; with video input it is $3.3; time-limited 25% off"),
     _seedance("dreamina-seedance-2-0-mini-260615", "3.5", "USD", _ARK_INTL, "intl",
@@ -566,6 +590,7 @@ _VOLCANO_PRICES = [
 # —— MiniMax ——(platform.minimaxi.com 的价目页已跳到 platform.minimax.cn;按量计费在 pricing-paygo 子页)
 # 国内记人民币、国际站(api.minimax.io)记美元。M1 / Text-01 已不在价目页上,不收。
 # 海螺 2.3 / 02 在「历史模型」一栏,仍在计价,照收;它们**按条**计价(768P 6 秒一档),记这一档。
+# MiniMax-H3 按 768P / 2K 分档:768P 是基础档,2K(应用默认)另一条。
 # MiniMax-H3-Max 按 480P / 768P 两档计价,拿不准基础档,不收。语音与生图的价查到了,但应用里的
 # MiniMax 连接还不做这两样(见 provider_presets),记了也用不上 —— 不收。
 _MINIMAX_CN = "https://platform.minimax.cn/docs/guides/pricing-paygo"
@@ -601,10 +626,15 @@ _MINIMAX_PRICES = [
     ],
     # 生视频
     _p("minimax", "MiniMax-H3", "video", "video_second", "0.5", "CNY", _MINIMAX_CN, region="cn",
-       remark=("768P 的价;2K 为 0.8 元/秒;参考图前 5 张免费,之后每张 0.2 元;输入视频另按秒计费",
-               "768P price; 2K is 0.8 CNY/s; the first 5 reference images are free, then 0.2 CNY each; input video is billed per second too")),
+       remark=("768P 的价(基础档);参考图前 5 张免费,之后每张 0.2 元;输入视频另按秒计费",
+               "768P price (base tier); the first 5 reference images are free, then 0.2 CNY each; input video is billed per second too")),
+    _p("minimax", "MiniMax-H3", "video", "video_second", "0.8", "CNY", _MINIMAX_CN, region="cn", resolution="2k",
+       remark=("2K 的价(应用默认);参考图前 5 张免费,之后每张 0.2 元;输入视频另按秒计费",
+               "2K price (the app default); the first 5 reference images are free, then 0.2 CNY each; input video is billed per second too")),
     _p("minimax", "MiniMax-H3", "video", "video_second", "0.08", "USD", _MINIMAX_INTL, region="intl",
-       remark=("768P 的价;2K 为 $0.13/秒;超出的参考图每张 $0.04", "768P price; 2K is $0.13/s; extra reference images are $0.04 each")),
+       remark=("768P 的价(基础档);超出的参考图每张 $0.04", "768P price (base tier); extra reference images are $0.04 each")),
+    _p("minimax", "MiniMax-H3", "video", "video_second", "0.13", "USD", _MINIMAX_INTL, region="intl", resolution="2k",
+       remark=("2K 的价(应用默认);超出的参考图每张 $0.04", "2K price (the app default); extra reference images are $0.04 each")),
     _p("minimax", "MiniMax-Hailuo-2.3", "video", "video", "2", "CNY", _MINIMAX_CN, region="cn",
        remark=_hailuo("768P 10 秒为 4 元,1080P 6 秒为 3.5 元", "768P 10 s is 4 CNY, 1080P 6 s is 3.5 CNY")),
     _p("minimax", "MiniMax-Hailuo-2.3-Fast", "video", "video", "1.35", "CNY", _MINIMAX_CN, region="cn",
@@ -688,17 +718,23 @@ _OPENAI_PRICES = [
 ]
 
 # —— Google(Veo)——(应用里的 Google 连接只做 Veo 视频;Gemini 对话/生图的价查到了,用不上,不收)
-# 只公布了「带音频(默认)」的价,按输出分辨率分档:记 720P,备注写其余档。
+# 只公布了「带音频(默认)」的价,按输出分辨率分档:720P 是基础档,其余档各一条。
 # Veo 3.0 / 2.0 已于 2026-06-30 下线,价目页不再列,不收。
 _GOOGLE = "https://ai.google.dev/gemini-api/docs/pricing"
 _VOLCANO_MUSIC = "https://www.volcengine.com/docs/84992/1404661"
+def _veo(model: str, amount: str, zh: str, en: str, resolution: str = "") -> ListPrice:
+    return _p("google", model, "video", "video_second", amount, "USD", _GOOGLE, resolution=resolution,
+              remark=(f"带音频(默认)、{zh}", f"With-audio (default) {en}"))
+
+
 _GOOGLE_PRICES = [
-    _p("google", "veo-3.1-generate-preview", "video", "video_second", "0.4", "USD", _GOOGLE,
-       remark=("带音频(默认)的价,720P 与 1080P 同价;4K 为 $0.60/秒", "With-audio (default) price, same for 720p and 1080p; 4K is $0.60/s")),
-    _p("google", "veo-3.1-fast-generate-preview", "video", "video_second", "0.1", "USD", _GOOGLE,
-       remark=("带音频(默认)、720P 的价;1080P 为 $0.12/秒,4K 为 $0.30/秒", "With-audio (default) 720p price; 1080p is $0.12/s, 4K is $0.30/s")),
-    _p("google", "veo-3.1-lite-generate-preview", "video", "video_second", "0.05", "USD", _GOOGLE,
-       remark=("带音频(默认)、720P 的价;1080P 为 $0.08/秒", "With-audio (default) 720p price; 1080p is $0.08/s")),
+    _veo("veo-3.1-generate-preview", "0.4", "720P 与 1080P 同价(基础档)", "price, same for 720p and 1080p (base tier)"),
+    _veo("veo-3.1-generate-preview", "0.6", "4K 的价", "4K price", "4k"),
+    _veo("veo-3.1-fast-generate-preview", "0.1", "720P 的价(基础档)", "720p price (base tier)"),
+    _veo("veo-3.1-fast-generate-preview", "0.12", "1080P 的价", "1080p price", "1080p"),
+    _veo("veo-3.1-fast-generate-preview", "0.3", "4K 的价", "4K price", "4k"),
+    _veo("veo-3.1-lite-generate-preview", "0.05", "720P 的价(基础档)", "720p price (base tier)"),
+    _veo("veo-3.1-lite-generate-preview", "0.08", "1080P 的价", "1080p price", "1080p"),
 ]
 
 # —— 音频生成(音乐 / BGM / 音效,ADR 0022)—— 2026-09 查证。

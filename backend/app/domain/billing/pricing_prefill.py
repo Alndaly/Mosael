@@ -156,6 +156,7 @@ def _reference_quote(entry: ListPrice, *, relay: bool) -> PriceQuote:
         notes=notes,
         time_prices=entry.time_prices_micros,
         time_zone=entry.time_zone,
+        resolution=entry.resolution,
     )
 
 

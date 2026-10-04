@@ -62,6 +62,8 @@ type PricingForm = {
   providerProfileId: string;
   capability: string;
   model: string;
+  /** 只对这个输出分辨率生效;空 = 不限(基础档)。 */
+  resolution: string;
   billingUnit: string;
   unitAmount: string;
   currency: string;
@@ -76,6 +78,7 @@ const DEFAULT_FORM: PricingForm = {
   providerProfileId: ANY_PROFILE,
   capability: "chat",
   model: "",
+  resolution: "",
   billingUnit: "token",
   unitAmount: "",
   currency: "USD",
@@ -154,11 +157,17 @@ function formatRuleAmount(rule: PricingRule, unitLabel: string): string {
   return `${microsToAmount(rule.unit_amount_micros)} ${rule.currency} / ${unitLabel}`;
 }
 
+/** 规则上的分辨率存小写(1080p、2k);显示照厂商价目页的写法大写。 */
+function resolutionLabel(resolution: string | null | undefined): string {
+  return (resolution ?? "").toUpperCase();
+}
+
 function formFromRule(rule: PricingRule): PricingForm {
   return {
     providerProfileId: rule.provider_profile_id || ANY_PROFILE,
     capability: rule.capability,
     model: rule.model || "",
+    resolution: rule.resolution || "",
     billingUnit: rule.billing_unit,
     unitAmount: microsToAmount(rule.unit_amount_micros),
     currency: rule.currency || "USD",
@@ -262,6 +271,7 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
     provider: selectedProfile?.vendor ?? "",
     capability: form.capability,
     model: form.model.trim(),
+    resolution: form.resolution.trim(),
     billing_unit: form.billingUnit,
     unit_amount_micros: amountToMicros(form.unitAmount),
     currency: form.currency.trim().toUpperCase() || "USD",
@@ -382,6 +392,8 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
     profileName: groupProfileName,
     capabilityLabel,
     unitLabel,
+    priceLabel: (rule: PricingRule) =>
+      rule.resolution ? `${unitLabel(rule.billing_unit)} · ${resolutionLabel(rule.resolution)}` : unitLabel(rule.billing_unit),
     amount: (rule: PricingRule) => `${microsToAmount(rule.unit_amount_micros)} ${rule.currency}`,
     schedule: (rule: PricingRule) => scheduleSummary(rule.time_prices ?? [], rule.time_zone ?? ""),
   };
@@ -556,14 +568,29 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
             />
           </label>
           </div>
-          <label className={DIALOG_FIELD}>
-            <span>{t("pricingModel")}</span>
-            <Input
-              value={form.model}
-              placeholder={t("pricingModelPlaceholder")}
-              onChange={(event) => setForm((current) => ({ ...current, model: event.target.value }))}
-            />
-          </label>
+          <div className="grid gap-3 @min-[480px]/pricing-form:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+            <label className={DIALOG_FIELD}>
+              <span>{t("pricingModel")}</span>
+              <Input
+                value={form.model}
+                placeholder={t("pricingModelPlaceholder")}
+                onChange={(event) => setForm((current) => ({ ...current, model: event.target.value }))}
+              />
+            </label>
+            <label className={DIALOG_FIELD}>
+              <span>{t("pricingResolution")}</span>
+              <Input
+                value={form.resolution}
+                maxLength={16}
+                placeholder={t("pricingResolutionPlaceholder")}
+                onChange={(event) => setForm((current) => ({ ...current, resolution: event.target.value }))}
+              />
+            </label>
+            {/* 分辨率分档只在生视频上常见:别的能力不摆这句说明,填了分辨率的照样摆出来。 */}
+            {(form.capability === "video" || form.resolution.trim()) && (
+              <p className="m-0 text-ui-xs leading-[1.4] text-muted-foreground @min-[480px]/pricing-form:col-span-2">{t("pricingResolutionHint")}</p>
+            )}
+          </div>
           <div className="grid gap-3 @min-[480px]/pricing-form:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_7rem]">
             <label className={DIALOG_FIELD}>
               <span>{t("pricingBillingUnit")}</span>
@@ -623,7 +650,7 @@ export function ProviderPricingSection({ workspace }: { workspace: Workspace }) 
       <ConfirmDialog
         open={deleting !== null}
         title={t("pricingRuleDeleteTitle")}
-        body={deleting ? `${capabilityLabel(deleting.capability)} · ${profileLabel(deleting.provider_profile_id, deleting.provider)} · ${deleting.model || t("pricingAnyModel")} · ${formatRuleAmount(deleting, unitLabel(deleting.billing_unit))}` : undefined}
+        body={deleting ? `${capabilityLabel(deleting.capability)} · ${profileLabel(deleting.provider_profile_id, deleting.provider)} · ${deleting.model || t("pricingAnyModel")} · ${formatRuleAmount(deleting, browserLabels.priceLabel(deleting))}` : undefined}
         confirmLabel={t("delete")}
         onCancel={() => setDeleting(null)}
         pending={remove.isPending}

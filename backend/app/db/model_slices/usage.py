@@ -30,6 +30,10 @@ class ProviderPricingRule(Base):
     provider: Mapped[str] = mapped_column(String(80), nullable=False, default="")
     capability: Mapped[str] = mapped_column(String(40), nullable=False)
     model: Mapped[str] = mapped_column(String(120), nullable=False, default="")
+    #: 这条价只对哪个**输出分辨率**生效(小写:720p、1080p、768p、2k、4k);空 = 不限分辨率。
+    #: 生视频几乎家家按分辨率报价,同一个模型每档一条;挑规则时写了分辨率的压过不限的那条,
+    #: 但压不过更具体的作用域(见 domain/billing/usage._best_price_rules)。
+    resolution: Mapped[str] = mapped_column(String(16), nullable=False, default="")
     billing_unit: Mapped[str] = mapped_column(String(40), nullable=False)
     #: 基础价:不落在任何时段里的时刻都按它计。
     unit_amount_micros: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

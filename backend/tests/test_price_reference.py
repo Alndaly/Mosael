@@ -45,7 +45,8 @@ OFFICIAL_DOMAINS = (
 
 
 def _label(entry: ListPrice) -> str:
-    return f"{entry.vendor}/{entry.model}/{entry.billing_unit}/{entry.region}"
+    tier = f"@{entry.resolution}" if entry.resolution else ""
+    return f"{entry.vendor}/{entry.model}/{entry.billing_unit}{tier}/{entry.region}"
 
 
 def test_every_entry_cites_an_official_page_and_a_check_date() -> None:
@@ -95,12 +96,28 @@ def test_remarks_come_in_both_languages() -> None:
 
 
 def test_no_cell_is_written_twice() -> None:
-    """同一格两个价,查表时谁赢是不确定的 —— 分档的价只记一档(约定 3)。"""
+    """同一格两个价,查表时谁赢是不确定的 —— 分辨率是格子的一部分,别的档位只记一档(约定 3)。"""
     seen: dict[tuple, ListPrice] = {}
     for entry in LIST_PRICES:
-        key = (entry.vendor, entry.model.lower(), entry.prefix, entry.region, entry.capability, entry.billing_unit)
+        key = (entry.vendor, entry.model.lower(), entry.prefix, entry.region, entry.capability, entry.billing_unit, entry.resolution)
         assert key not in seen, f"{_label(entry)} 写了两遍"
         seen[key] = entry
+
+
+def test_resolution_tiers_sit_next_to_a_base_tier() -> None:
+    """按分辨率分档的价(约定 3):基础档记成不限分辨率的那条,其余档各一条 —— 没单列的分辨率
+    按基础档估,而不是一下子没了价;每一档都在备注里说清自己是哪一档。分辨率写小写(规则里存的就是小写)。"""
+    from app.domain.billing.usage import normalize_resolution
+
+    base = {(e.vendor, e.model, e.region, e.capability, e.billing_unit) for e in LIST_PRICES if not e.resolution}
+    for entry in LIST_PRICES:
+        if not entry.resolution:
+            continue
+        assert entry.resolution == normalize_resolution(entry.resolution), f"{_label(entry)} 的分辨率要写小写"
+        assert (entry.vendor, entry.model, entry.region, entry.capability, entry.billing_unit) in base, (
+            f"{_label(entry)} 只有分档价、没有基础档"
+        )
+        assert all(entry.remark), f"{_label(entry)} 分档的价要在备注里说清是哪一档"
 
 
 def test_time_of_day_prices_are_well_formed() -> None:
@@ -215,7 +232,12 @@ def test_real_table_has_the_models_users_actually_run() -> None:
         "million_output_token",
         "million_cache_read_token",
     }
-    (wan,) = lookup("alibaba", "wan2.7-t2v")
-    assert (wan.capability, wan.billing_unit, wan.currency, wan.unit_amount_micros) == ("video", "video_second", "CNY", 600_000)
+    wan = {e.resolution: e for e in lookup("alibaba", "wan2.7-t2v")}
+    assert {tier: (e.capability, e.billing_unit, e.currency, e.unit_amount_micros) for tier, e in wan.items()} == {
+        "": ("video", "video_second", "CNY", 600_000),
+        "1080p": ("video", "video_second", "CNY", 1_000_000),
+    }
+    h3 = {e.resolution: e.unit_amount_micros for e in lookup("minimax", "MiniMax-H3")}
+    assert h3 == {"": 500_000, "2k": 800_000}, "海螺 H3:768P 0.5 元/秒(基础档)、2K 0.8 元/秒"
     (tts,) = lookup("alibaba", "cosyvoice-v2")
     assert (tts.capability, tts.billing_unit, tts.unit_amount_micros) == ("tts", "character", 200)

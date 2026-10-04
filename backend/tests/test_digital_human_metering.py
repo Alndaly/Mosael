@@ -75,8 +75,11 @@ def test_时长跟着音频走的生成_按产出的真实时长计量() -> None
 
 
 def test_百炼两个数字人模型的挂牌价只收查证过的() -> None:
-    [s2v] = price_reference.lookup("alibaba", "wan2.2-s2v", region="cn")
-    assert (s2v.capability, s2v.billing_unit, s2v.currency, s2v.unit_amount_micros) == ("video", "video_second", "CNY", 500_000)
+    s2v = {entry.resolution: entry for entry in price_reference.lookup("alibaba", "wan2.2-s2v", region="cn")}
+    assert {tier: (e.capability, e.billing_unit, e.currency, e.unit_amount_micros) for tier, e in s2v.items()} == {
+        "": ("video", "video_second", "CNY", 500_000),  # 480P,应用默认,基础档
+        "720p": ("video", "video_second", "CNY", 900_000),
+    }
     [retalk] = price_reference.lookup("alibaba", "videoretalk", region="cn")
     assert (retalk.billing_unit, retalk.unit_amount_micros) == ("video_second", 80_000)
     # 官方价目页取不到原文的、按积分计价的不收

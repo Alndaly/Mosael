@@ -50,7 +50,9 @@ export function groupRules(rules: PricingRule[], unitOrder: readonly string[]): 
     const index = unitOrder.indexOf(unit);
     return index < 0 ? unitOrder.length : index;
   };
-  for (const group of groups.values()) group.rules.sort((a, b) => rank(a.billing_unit) - rank(b.billing_unit));
+  // 同一单位按分辨率分档的几条挨着排,不限分辨率的(基础档)在前。
+  for (const group of groups.values())
+    group.rules.sort((a, b) => rank(a.billing_unit) - rank(b.billing_unit) || (a.resolution ?? "").localeCompare(b.resolution ?? "", undefined, { numeric: true }));
   return [...groups.values()];
 }
 
@@ -71,6 +73,8 @@ type Labels = {
   profileName: (group: RuleGroup) => string;
   capabilityLabel: (capability: string) => string;
   unitLabel: (unit: string) => string;
+  /** 一条价格叫什么:计价单位,分辨率分档的再带上是哪一档。 */
+  priceLabel: (rule: PricingRule) => string;
   amount: (rule: PricingRule) => string;
   schedule: (rule: PricingRule) => string;
 };
@@ -216,14 +220,14 @@ function PriceLines({ group, labels, onEdit, onDelete, dense }: {
     <ul className={cn("m-0 grid list-none p-0", dense ? "gap-0.5" : "gap-1")}>
       {group.rules.map((rule) => (
         <li key={rule.id} className="group/price grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-x-2 rounded-md px-1.5 py-1 hover:bg-secondary/60">
-          <Truncate className="text-ui-xs text-muted-foreground">{labels.unitLabel(rule.billing_unit)}</Truncate>
+          <Truncate className="text-ui-xs text-muted-foreground">{labels.priceLabel(rule)}</Truncate>
           <span className="whitespace-nowrap text-ui-sm font-medium tabular-nums">{labels.amount(rule)}</span>
           {/* 动作悬停 / 键盘聚焦时才出现,触屏上常驻 —— 一张卡四条价格各顶两个图标就成了一片按钮。 */}
           <span className="flex items-center opacity-0 transition-opacity group-hover/price:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100">
-            <IconButton size="icon-xs" label={`${t("pricingRuleEdit")}: ${labels.unitLabel(rule.billing_unit)}`} onClick={() => onEdit(rule)}>
+            <IconButton size="icon-xs" label={`${t("pricingRuleEdit")}: ${labels.priceLabel(rule)}`} onClick={() => onEdit(rule)}>
               <Pencil />
             </IconButton>
-            <IconButton size="icon-xs" label={`${t("delete")}: ${labels.unitLabel(rule.billing_unit)}`} onClick={() => onDelete(rule)}>
+            <IconButton size="icon-xs" label={`${t("delete")}: ${labels.priceLabel(rule)}`} onClick={() => onDelete(rule)}>
               <Trash2 />
             </IconButton>
           </span>
@@ -323,10 +327,10 @@ export function PricingRuleGroups({
                   <button
                     type="button"
                     className="inline-flex items-center gap-1.5 rounded-md border border-border bg-control px-2 py-1 text-left transition-colors hover:border-primary/40 hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    aria-label={`${t("pricingRuleEdit")}: ${labels.unitLabel(rule.billing_unit)}`}
+                    aria-label={`${t("pricingRuleEdit")}: ${labels.priceLabel(rule)}`}
                     onClick={() => onEdit(rule)}
                   >
-                    <span className="text-ui-xs text-muted-foreground">{labels.unitLabel(rule.billing_unit)}</span>
+                    <span className="text-ui-xs text-muted-foreground">{labels.priceLabel(rule)}</span>
                     <span className="text-ui-sm font-medium tabular-nums">{labels.amount(rule)}</span>
                     {rule.time_prices?.length ? <Clock size={12} className="text-primary" aria-label={labels.schedule(rule)} /> : null}
                   </button>

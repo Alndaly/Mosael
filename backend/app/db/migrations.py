@@ -5839,6 +5839,17 @@ def _migrate_pricing_time_prices() -> None:
             conn.execute(text("ALTER TABLE provider_pricing_rules ADD COLUMN time_zone VARCHAR(64) NOT NULL DEFAULT ''"))
 
 
+def _migrate_pricing_rules_by_resolution() -> None:
+    """计价规则多一格输出分辨率(见 ProviderPricingRule.resolution)。
+
+    老规则一律是「不限分辨率」—— 这正是它们一直以来的含义:此前规则只能记一档,其余档写在备注里。
+    """
+    with engine.begin() as conn:
+        columns = {row[1] for row in conn.execute(text("PRAGMA table_info(provider_pricing_rules)"))}
+        if columns and "resolution" not in columns:
+            conn.execute(text("ALTER TABLE provider_pricing_rules ADD COLUMN resolution VARCHAR(16) NOT NULL DEFAULT ''"))
+
+
 def _drop_plugin_packages_that_break_the_manifest_rules() -> None:
     """插件清单的形状收紧了(id / 声明的工具名 / 配置与凭据的键,见 domain/plugins/manifest):库里存着的包记录
     若违反新规矩,`manifest_of` 读它就抛 —— 插件页、智能体工具表、工作流节点面板对**所有人**报错。
@@ -7426,6 +7437,7 @@ def migration_plan() -> MigrationPlan:
                 _migrate_browser_profile_start_url,
                 _migrate_usage_unpriced_reason,
                 _migrate_pricing_time_prices,
+                _migrate_pricing_rules_by_resolution,
                 _migrate_shared_host_folders,
                 _migrate_outbound_allowlist,
                 # Must precede schema creation or an empty plugin_packages table hides legacy data.

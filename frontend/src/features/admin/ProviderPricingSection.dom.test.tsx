@@ -276,3 +276,34 @@ it("删一个模型的全部价格:确认后逐条删掉这一组", async () => 
     expect(deletes.map((c) => c.split("/").pop()).sort()).toEqual(["g1", "g2"]);
   });
 });
+
+// —— 按输出分辨率分档 ——
+const WAN_BASE = { ...RULE, id: "w1", model: "wan2.7-t2v", provider_profile_id: "p2", provider: "dashscope", capability: "video", billing_unit: "video_second", unit_amount_micros: 600000, currency: "CNY", source: "reference", resolution: "" };
+const WAN_1080 = { ...WAN_BASE, id: "w2", unit_amount_micros: 1000000, resolution: "1080p" };
+
+it("同一模型按分辨率分档的几条价格挨着排,每条写出是哪一档,基础档在前", async () => {
+  mount(undefined, [WAN_1080, WAN_BASE]);
+  const card = (await screen.findByText("wan2.7-t2v")).closest("article")!;
+  const lines = within(card).getAllByRole("listitem").map((li) => li.textContent);
+  expect(lines[0]).toContain("pricingUnit_video_second0.6 CNY");
+  expect(lines[1]).toContain("pricingUnit_video_second · 1080P1 CNY");
+  expect(within(card).getByRole("button", { name: "pricingRuleEdit: pricingUnit_video_second · 1080P" })).toBeTruthy();
+});
+
+it("编辑表单能填分辨率,提交时原样带上(后端归一成小写);清空就是不限", async () => {
+  mount(undefined, [WAN_1080]);
+  await screen.findByText("wan2.7-t2v");
+  fireEvent.click(screen.getByRole("button", { name: "pricingRuleEdit: pricingUnit_video_second · 1080P" }));
+  const resolution = await screen.findByDisplayValue("1080p");
+  expect(resolution.closest("label")!.querySelector("span")!.textContent).toBe("pricingResolution");
+  fireEvent.change(resolution, { target: { value: "2K" } });
+  fireEvent.click(screen.getByRole("button", { name: "save" }));
+  await waitFor(() => expect(sent).toHaveLength(1));
+  expect(sent[0].body.resolution).toBe("2K");
+
+  fireEvent.click(screen.getByRole("button", { name: "pricingRuleEdit: pricingUnit_video_second · 1080P" }));
+  fireEvent.change(await screen.findByDisplayValue("1080p"), { target: { value: "  " } });
+  fireEvent.click(screen.getByRole("button", { name: "save" }));
+  await waitFor(() => expect(sent).toHaveLength(2));
+  expect(sent[1].body.resolution).toBe("");
+});

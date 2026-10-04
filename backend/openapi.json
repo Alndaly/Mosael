@@ -33481,6 +33481,12 @@
             "title": "Model",
             "default": ""
           },
+          "resolution": {
+            "type": "string",
+            "maxLength": 16,
+            "title": "Resolution",
+            "default": ""
+          },
           "billing_unit": {
             "type": "string",
             "maxLength": 40,
@@ -33597,6 +33603,11 @@
           "model": {
             "type": "string",
             "title": "Model"
+          },
+          "resolution": {
+            "type": "string",
+            "title": "Resolution",
+            "default": ""
           },
           "billing_unit": {
             "type": "string",
@@ -33741,6 +33752,18 @@
               }
             ],
             "title": "Model"
+          },
+          "resolution": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 16
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolution"
           },
           "billing_unit": {
             "anyOf": [

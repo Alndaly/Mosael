@@ -316,6 +316,8 @@ class ProviderPricingRuleCreate(ApiModel):
     provider: str = Field(default="", max_length=80)
     capability: str = Field(min_length=1, max_length=40)
     model: str = Field(default="", max_length=120)
+    #: 这条价只对哪个输出分辨率(720p、1080p、2k……)生效;空 = 不限分辨率。存成小写。
+    resolution: str = Field(default="", max_length=16)
     billing_unit: str = Field(min_length=1, max_length=40)
     unit_amount_micros: int = Field(ge=0)
     time_prices: list[PricingTimeWindow] = Field(default_factory=list, max_length=24)
@@ -333,6 +335,7 @@ class ProviderPricingRuleUpdate(ApiModel):
     provider: str | None = Field(default=None, max_length=80)
     capability: str | None = Field(default=None, min_length=1, max_length=40)
     model: str | None = Field(default=None, max_length=120)
+    resolution: str | None = Field(default=None, max_length=16)
     billing_unit: str | None = Field(default=None, min_length=1, max_length=40)
     unit_amount_micros: int | None = Field(default=None, ge=0)
     time_prices: list[PricingTimeWindow] | None = Field(default=None, max_length=24)
@@ -351,6 +354,8 @@ class ProviderPricingRuleOut(OrmModel):
     provider: str
     capability: str
     model: str
+    #: 只对这个输出分辨率生效(小写);空 = 不限分辨率。
+    resolution: str = ""
     billing_unit: str
     #: 基础价:不落在任何时段里的时刻按它计。
     unit_amount_micros: int

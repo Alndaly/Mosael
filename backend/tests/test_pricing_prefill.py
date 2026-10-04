@@ -225,7 +225,21 @@ def _add_models(profile_id: str, *models: tuple[str, list[str]]) -> None:
 
 
 def _rules(client) -> dict[tuple[str, str, str], dict]:
-    return {(r["model"], r["capability"], r["billing_unit"]): r for r in client.get("/api/settings/provider-pricing-rules").json()}
+    """不限分辨率的那几条,按 (模型, 能力, 单位) 取。分辨率分档的另用 `_tiers`。"""
+    return {
+        (r["model"], r["capability"], r["billing_unit"]): r
+        for r in client.get("/api/settings/provider-pricing-rules").json()
+        if not r["resolution"]
+    }
+
+
+def _tiers(client, model: str) -> dict[str, int]:
+    """这个模型按分辨率分档的价:{分辨率: 单价},不限分辨率的那条记在 `""` 下。"""
+    return {
+        r["resolution"]: r["unit_amount_micros"]
+        for r in client.get("/api/settings/provider-pricing-rules").json()
+        if r["model"] == model
+    }
 
 
 def test_an_official_endpoint_without_catalog_prices_is_filled_from_the_price_list(monkeypatch, client_fixture) -> None:
@@ -340,13 +354,14 @@ def test_generation_and_speech_models_get_their_own_units(monkeypatch, client_fi
     )
 
     body = client.post(f"/api/settings/providers/{profile_id}/pricing/prefill").json()
-    assert (body["created"], body["created_from_reference"], body["models_seen"]) == (3, 3, 4)
+    assert (body["created"], body["created_from_reference"], body["models_seen"]) == (4, 4, 4)
     assert body["unpriced_models"] == ["my-finetune"]
 
     rules = _rules(client)
     video = rules[("wan2.7-t2v", "video", "video_second")]
     assert (video["unit_amount_micros"], video["currency"]) == (600_000, "CNY")
-    assert "720P" in video["notes"], "按分辨率分档的价要说清记的是哪一档"
+    assert "720P" in video["notes"], "不限分辨率的那条是基础档,备注要说清是哪一档"
+    assert _tiers(client, "wan2.7-t2v") == {"": 600_000, "1080p": 1_000_000}, "其余档按分辨率各一条"
     assert rules[("qwen-image", "image", "image")]["unit_amount_micros"] == 250_000
     assert rules[("cosyvoice-v2", "tts", "character")]["unit_amount_micros"] == 200, "2 元/万字符 = 每字符 200 micros"
 
@@ -359,11 +374,42 @@ def test_generation_and_speech_models_get_their_own_units(monkeypatch, client_fi
             provider="alibaba",
             capability="video",
             model="wan2.7-t2v",
-            units={"requests": 1, "videos": 1, "video_seconds": 5.0, "input_tokens": 30},
+            units={"requests": 1, "videos": 1, "video_seconds": 5.0, "resolution": "720P", "input_tokens": 30},
             operation="generation_job",
             idempotency_key="reference-video",
         )
+        hd = record_usage(
+            db,
+            workspace_id=ws,
+            provider_profile_id=profile_id,
+            provider="alibaba",
+            capability="video",
+            model="wan2.7-t2v",
+            units={"requests": 1, "videos": 1, "video_seconds": 5.0, "resolution": "1080P"},
+            operation="generation_job",
+            idempotency_key="reference-video-1080",
+        )
     assert (event.cost_micros, event.currency) == (3_000_000, "CNY"), "5 秒 × 0.6 元"
+    assert hd.cost_micros == 5_000_000, "1080P(万相在应用里的默认)5 秒 × 1 元"
+
+
+def test_prefill_adds_the_missing_resolution_tiers_next_to_an_existing_catch_all(monkeypatch, client_fixture) -> None:
+    """老库里那条不限分辨率的万相价(从前只能记 720P 一档)原样留着,只补上 1080P 那一档。"""
+    client = client_fixture
+    _stub_models(monkeypatch, {"data": []})
+    profile_id = _profile(client, "alibaba", {"api_key": "k"})
+    _add_models(profile_id, ("wan2.7-t2v", ["video"]))
+    mine = client.post(
+        "/api/settings/provider-pricing-rules",
+        json={"provider_profile_id": profile_id, "capability": "video", "model": "wan2.7-t2v",
+              "billing_unit": "video_second", "unit_amount_micros": 550_000, "currency": "CNY"},
+    ).json()
+
+    first = client.post(f"/api/settings/providers/{profile_id}/pricing/prefill").json()
+    again = client.post(f"/api/settings/providers/{profile_id}/pricing/prefill").json()
+    assert (first["created"], again["created"]) == (1, 0)
+    assert _tiers(client, "wan2.7-t2v") == {"": 550_000, "1080p": 1_000_000}
+    assert _rules(client)[("wan2.7-t2v", "video", "video_second")]["id"] == mine["id"], "已有规则一个字都不动"
 
 
 def test_capability_the_model_row_does_not_offer_is_skipped(monkeypatch, client_fixture) -> None:

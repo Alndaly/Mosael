@@ -12505,6 +12505,11 @@ export interface components {
              * @default
              */
             model: string;
+            /**
+             * Resolution
+             * @default
+             */
+            resolution: string;
             /** Billing Unit */
             billing_unit: string;
             /** Unit Amount Micros */
@@ -12550,6 +12555,11 @@ export interface components {
             capability: string;
             /** Model */
             model: string;
+            /**
+             * Resolution
+             * @default
+             */
+            resolution: string;
             /** Billing Unit */
             billing_unit: string;
             /** Unit Amount Micros */
@@ -12594,6 +12604,8 @@ export interface components {
             capability?: string | null;
             /** Model */
             model?: string | null;
+            /** Resolution */
+            resolution?: string | null;
             /** Billing Unit */
             billing_unit?: string | null;
             /** Unit Amount Micros */
