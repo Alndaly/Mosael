@@ -90,12 +90,21 @@ export function PageLoadError({
   icon,
   error,
   onRetry,
+  retrying,
+  title,
+  actions,
   size,
   className,
 }: {
   icon: React.ReactNode;
   error: unknown;
   onRetry?: () => void;
+  /** 重试发出去了、还没回来:按钮转圈,不让人连点。 */
+  retrying?: boolean;
+  /** 不给就是通用的「暂时无法加载」;说得出是什么没取回来就说(「模型库没读出来」)。 */
+  title?: string;
+  /** 「重试」旁边的下一步(「去检查连接设置」)—— 重试解决不了的那种失败,要告诉人去哪儿改。 */
+  actions?: React.ReactNode;
   /** 主从布局的窄索引列里用 `compact`,整页用默认。 */
   size?: "full" | "section" | "compact";
   className?: string;
@@ -105,11 +114,22 @@ export function PageLoadError({
   return (
     <EmptyState
       icon={icon}
-      title={t("pageLoadError")}
+      title={title ?? t("pageLoadError")}
       body={message}
       size={size}
       className={className}
-      action={onRetry ? <Button variant="secondary" onClick={onRetry}>{t("retry")}</Button> : undefined}
+      action={
+        onRetry || actions ? (
+          <div className="flex flex-wrap justify-center gap-2">
+            {onRetry && (
+              <Button variant="secondary" loading={retrying} onClick={onRetry}>
+                {t("retry")}
+              </Button>
+            )}
+            {actions}
+          </div>
+        ) : undefined
+      }
     />
   );
 }

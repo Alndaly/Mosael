@@ -17,7 +17,9 @@ import {
   RefreshCcw,
   Search,
   SearchX,
+  Settings2,
   TriangleAlert,
+  Unplug,
   Workflow,
   X,
 } from "lucide-react";
@@ -41,7 +43,8 @@ import { useI18n, usePreferences } from "@/app/preferences";
 import { CatalogBadge, CatalogDetail, CatalogSection } from "@/components/app/CatalogDialog";
 import { LibraryDialog, LibraryFilterChips, type LibraryChip, type LibraryNavItem } from "@/components/app/LibraryBrowser";
 import { ModalShell } from "@/components/app/modals";
-import { EmptyState } from "@/components/layout/EmptyState";
+import { EmptyState, PageLoadError } from "@/components/layout/EmptyState";
+import { LoadingState } from "@/components/layout/LoadingState";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/ui/icon-button";
 import { Input } from "@/components/ui/input";
@@ -115,7 +118,16 @@ const BLUR_SETTINGS = ["on", "off"] as const;
 /**
  * 连接标题行上的「模型库」(收起时也在,和「刷新」并排):一颗图标按钮,悬停说它是什么;连接停着时点不了,并说为什么。
  */
-export function ModelLibraryButton({ instance, workspaceId }: { instance: PluginInstance; workspaceId: string }) {
+export function ModelLibraryButton({
+  instance,
+  workspaceId,
+  onCheckSettings,
+}: {
+  instance: PluginInstance;
+  workspaceId: string;
+  /** 读不出来时「去检查连接设置」:插件页给的(展开这个连接、定位到服务器地址)。不给就不摆那颗按钮。 */
+  onCheckSettings?: () => void;
+}) {
   const t = useI18n();
   const [open, setOpen] = React.useState(false);
   return (
@@ -132,7 +144,22 @@ export function ModelLibraryButton({ instance, workspaceId }: { instance: Plugin
       >
         <Library size={13} />
       </IconButton>
-      {open && <ModelLibraryDialog open={open} onOpenChange={setOpen} instance={instance} workspaceId={workspaceId} />}
+      {open && (
+        <ModelLibraryDialog
+          open={open}
+          onOpenChange={setOpen}
+          instance={instance}
+          workspaceId={workspaceId}
+          onCheckSettings={
+            onCheckSettings
+              ? () => {
+                  setOpen(false);
+                  onCheckSettings();
+                }
+              : undefined
+          }
+        />
+      )}
     </>
   );
 }
@@ -144,11 +171,13 @@ export function ModelLibraryDialog({
   onOpenChange,
   instance,
   workspaceId,
+  onCheckSettings,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   instance: PluginInstance;
   workspaceId: string;
+  onCheckSettings?: () => void;
 }) {
   const t = useI18n();
   const qc = useQueryClient();
@@ -253,8 +282,22 @@ export function ModelLibraryDialog({
     </>
   );
 
-  const toolbar =
-    current === MISSING_VIEW || current === DOWNLOADS_VIEW ? (
+  //: 还没读出来(在读 / 读不出来):搜索框、筛选、下载不能装作「0 个文件」—— 搜索框不写数字、点不了,
+  //: 筛选和排序不摆,下载点不了并说为什么。在读时的进度、读不出来时的「重试」在内容区里。
+  const toolbar = !library.data ? (
+    <>
+      <label className="relative min-w-[180px] flex-1 basis-[220px]">
+        <Search size={14} aria-hidden className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+        <Input className="pl-9" disabled placeholder={t("modelLibrarySearchPending")} aria-label={t("modelLibrarySearchPending")} />
+      </label>
+      <Hint disabledReason={library.isError ? t("modelLibraryUnreadable") : t("modelLibraryStillReading")}>
+        <Button disabled>
+          <Download size={13} />
+          {t("modelLibraryDownload")}
+        </Button>
+      </Hint>
+    </>
+  ) : current === MISSING_VIEW || current === DOWNLOADS_VIEW ? (
       <>
         <div className="grid min-w-0 flex-1 basis-[240px] gap-0.5">
           <h3 className="m-0 text-ui-md font-semibold text-foreground">
@@ -311,12 +354,27 @@ export function ModelLibraryDialog({
     );
 
   const content = (openItem: (key: string) => void) => {
-    if (library.isLoading) return <p className="m-auto text-ui-sm text-muted-foreground">{t("modelLibraryLoading")}</p>;
+    //: 状态放在内容区(纵向弹性盒)里:加载中撑满剩下的高度、自己居中,出错 / 空用 EmptyState 的 m-auto ——
+    //: 弹窗多高都在工具条下面那一整块的正中。
+    if (library.isPending) return <LoadingState label={t("modelLibraryLoading")} className="h-auto flex-1" />;
     if (library.isError) {
       return (
-        <p className="m-auto max-w-[520px] text-center text-ui-sm text-destructive">
-          {t("modelLibraryError").replace("{error}", errorText(library.error))}
-        </p>
+        <PageLoadError
+          size="section"
+          icon={<Unplug />}
+          title={t("modelLibraryErrorTitle")}
+          error={library.error}
+          onRetry={() => void library.refetch()}
+          retrying={library.isFetching}
+          actions={
+            onCheckSettings ? (
+              <Button variant="outline" onClick={onCheckSettings}>
+                <Settings2 size={13} />
+                {t("modelLibraryCheckSettings")}
+              </Button>
+            ) : undefined
+          }
+        />
       );
     }
     if (current === MISSING_VIEW) {

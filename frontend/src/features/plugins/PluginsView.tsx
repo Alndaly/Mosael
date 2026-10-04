@@ -673,21 +673,33 @@ export function ConnectionCard({
 
   //: 点开**这一个**连接时定位到出问题的那一项(授权那一条、缺的那一格配置、凭据……):要处理的事收起时标着,
   //: 点开就该直接看到它。「全部展开」不做:几个连接各抢一次焦点,页面会跳到最后那个出问题的。
-  const focusIssueNext = React.useRef(false);
+  //: 模型库读不出来时的「去检查连接设置」也走这里:展开、定位到服务器地址那一格(清单的 summary_field)。
+  const focusNext = React.useRef<string | null>(null);
+  const [focusRequest, setFocusRequest] = React.useState(0);
+  const settingsTarget = (() => {
+    const fields = pkg.config_fields ?? [];
+    const field = fields.find((one) => one.key === pkg.summary_field) ?? fields[0];
+    return field ? `config:${field.key}` : null;
+  })();
+  const checkSettings = () => {
+    focusNext.current = settingsTarget;
+    setOpen(true);
+    setFocusRequest((n) => n + 1);
+  };
   React.useEffect(() => {
-    if (!open || !focusIssueNext.current) return;
-    focusIssueNext.current = false;
-    if (!issue.target) return;
+    const target = focusNext.current;
+    if (!open || !target) return;
+    focusNext.current = null;
     const frame = window.requestAnimationFrame(() => {
-      const section = bodyRef.current?.querySelector<HTMLElement>(`[data-connection-section="${issue.target}"]`);
+      const section = bodyRef.current?.querySelector<HTMLElement>(`[data-connection-section="${target}"]`);
       if (!section) return;
       section.scrollIntoView({ block: "center" });
       section.querySelector<HTMLElement>("button, input, textarea, [tabindex]:not([tabindex='-1'])")?.focus({ preventScroll: true });
     });
     return () => window.cancelAnimationFrame(frame);
-    // 只在展开的那一刻跑:展开着时改别的(刷新、保存)不该把焦点拽回去
+    // 只在展开的那一刻(或被要求定位时)跑:展开着时改别的(刷新、保存)不该把焦点拽回去
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  }, [open, focusRequest]);
 
   return (
     <section data-connection={instance.id} className="grid min-w-0 rounded-xl border border-border bg-panel">
@@ -701,7 +713,7 @@ export function ConnectionCard({
             aria-expanded={open}
             aria-controls={bodyId}
             onClick={() => {
-              focusIssueNext.current = !open;
+              focusNext.current = open ? null : issue.target ?? null;
               setOpen(!open);
             }}
             className="flex min-w-0 flex-1 basis-[280px] cursor-pointer items-start gap-2 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -737,7 +749,13 @@ export function ConnectionCard({
               <RefreshCcw size={13} />
             </IconButton>
           )}
-          {(pkg.provides ?? []).includes("model_library") && <ModelLibraryButton instance={instance} workspaceId={workspaceId} />}
+          {(pkg.provides ?? []).includes("model_library") && (
+            <ModelLibraryButton
+              instance={instance}
+              workspaceId={workspaceId}
+              onCheckSettings={settingsTarget ? checkSettings : undefined}
+            />
+          )}
           <label className="inline-flex h-10 cursor-pointer select-none items-center gap-2 rounded-md border border-border px-3 text-ui-sm text-muted-foreground">
             <span>{instance.enabled ? t("pluginOn") : t("pluginOff")}</span>
             <Switch checked={instance.enabled} onCheckedChange={(enabled) => patch.mutate({ enabled })} />

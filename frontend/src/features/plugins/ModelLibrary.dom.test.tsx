@@ -7,6 +7,8 @@
  * - 左边一列目录(按数量排、空的不列,缺的模型和下载记录是钉在底部的特殊项),上下方向键切换,窄窗口收成下拉;
  * - 顶上一条工具条:搜索(写着当前范围有几个)、按底模多选(只列当前目录里有的)、排序;生效的筛选一个个能去掉;
  * - 三档显示方式(大卡片 / 小卡片 / 列表),记在本机;
+ * - 还在读、读不出来、空着:状态在工具条下面的整块里上下左右居中;读不出来给「重试」和「去检查连接设置」,
+ *   工具条上的搜索、筛选、下载不装作「0 个文件」;
  * - 「模糊预览图」开关(这台机器的预览图里可能有不适合当众打开的):默认关,打开后先模糊、悬停或点开看清,记在本机;
  * - 有预览图用宿主的预览地址,没有就是按目录分的占位;
  * - 点开是详情:底模和凭的是什么、触发词(来自训练标签时说清楚)、在用的工作流、文件头里的元数据;
@@ -223,6 +225,56 @@ describe("模型库", () => {
     expect(screen.getByRole("button", { name: "modelLibraryBlur" }).getAttribute("aria-pressed")).toBe("true");
     const row = table.getAllByRole("row").find((one) => one.textContent?.includes("detail.safetensors"))!;
     expect(row.querySelector("img")!.hasAttribute("data-blurred")).toBe(true);
+  });
+
+  it("还在读:加载中在工具条下面的整块里居中(没有左栏);搜索、筛选、下载不装作「0 个文件」", async () => {
+    api.getModelLibrary.mockReturnValue(new Promise(() => {}));
+    wrap(<ModelLibraryButton instance={instance} workspaceId="w1" />);
+    fireEvent.click(screen.getByRole("button", { name: "modelLibraryOpen" }));
+    const status = await screen.findByRole("status");
+    expect(status.textContent).toContain("modelLibraryLoading");
+    expect(screen.queryByRole("tablist")).toBeNull();
+    // 内容区是纵向弹性盒,状态撑满剩下的高度、自己居中:弹窗多高都在正中
+    const content = status.closest("[data-library-content]") as HTMLElement;
+    expect(content.className).toContain("flex-col");
+    expect(status.className).toContain("flex-1");
+    const search = screen.getByRole("textbox", { name: "modelLibrarySearchPending" }) as HTMLInputElement;
+    expect(search.disabled).toBe(true);
+    expect(search.placeholder).not.toMatch(/\d/);
+    expect(screen.queryByRole("button", { name: /modelLibraryFamilyLabel/ })).toBeNull();
+    expect(screen.queryByRole("combobox", { name: "modelLibrarySort" })).toBeNull();
+    expect(screen.queryByRole("radiogroup", { name: "modelLibraryDensity" })).toBeNull();
+    expect((screen.getByRole("button", { name: /modelLibraryDownload/ }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("读不出来:居中说清楚,给「重试」和「去检查连接设置」;工具条照样不装作 0 个文件", async () => {
+    const onCheckSettings = vi.fn();
+    api.getModelLibrary.mockRejectedValueOnce(new Error("连不上这台 ComfyUI,确认它在运行、地址填对"));
+    wrap(<ModelLibraryButton instance={instance} workspaceId="w1" onCheckSettings={onCheckSettings} />);
+    fireEvent.click(screen.getByRole("button", { name: "modelLibraryOpen" }));
+    const title = await screen.findByText("modelLibraryErrorTitle");
+    const state = title.closest(".empty-state") as HTMLElement;
+    expect(state.className).toContain("m-auto");
+    expect(state.closest("[data-library-content]")).toBeTruthy();
+    expect(state.textContent).toContain("连不上这台 ComfyUI,确认它在运行、地址填对");
+    expect((screen.getByRole("textbox", { name: "modelLibrarySearchPending" }) as HTMLInputElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: /modelLibraryDownload/ }) as HTMLButtonElement).disabled).toBe(true);
+
+    fireEvent.click(within(state).getByRole("button", { name: "modelLibraryCheckSettings" }));
+    expect(onCheckSettings).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(screen.queryByText("modelLibraryErrorTitle")).toBeNull());
+  });
+
+  it("读不出来时点「重试」再问一遍,读到了就照常列出来", async () => {
+    api.getModelLibrary.mockRejectedValueOnce(new Error("连不上这台 ComfyUI,确认它在运行、地址填对"));
+    wrap(<ModelLibraryButton instance={instance} workspaceId="w1" />);
+    fireEvent.click(screen.getByRole("button", { name: "modelLibraryOpen" }));
+    await screen.findByText("modelLibraryErrorTitle");
+    // 没人接「去检查连接设置」(不在插件页上打开的)就不摆这颗按钮
+    expect(screen.queryByRole("button", { name: "modelLibraryCheckSettings" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "retry" }));
+    expect(await screen.findByRole("list", { name: "modelLibraryTitle" })).toBeTruthy();
+    expect(api.getModelLibrary).toHaveBeenCalledTimes(2);
   });
 
   it("底模只列当前目录里有的、带数量,可以勾几种(其中任一),勾的时候菜单不关", async () => {

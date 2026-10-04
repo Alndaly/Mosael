@@ -33,7 +33,7 @@ vi.mock("@/app/preferences", () => ({
   usePreferences: () => ({ locale: "zh" }),
 }));
 
-import type { PluginInstance, PluginPackage } from "@/api/client";
+import { getModelLibrary, type PluginInstance, type PluginPackage } from "@/api/client";
 import { ConnectionCard, PackageDetail } from "./PluginsView";
 import { CONNECTIONS_OPEN_KEY, readOpenConnections } from "./connectionOpen";
 
@@ -141,6 +141,19 @@ describe("收起的连接", () => {
     fireEvent.click(screen.getByRole("button", { name: /本机/ }));
     const row = document.querySelector("[data-connection-section='config:server_url']") as HTMLElement;
     await waitFor(() => expect(row.contains(document.activeElement)).toBe(true));
+  });
+
+  it("模型库读不出来时点「去检查连接设置」:关掉模型库、展开这个连接、定位到服务器地址", async () => {
+    vi.mocked(getModelLibrary).mockRejectedValueOnce(new Error("连不上这台 ComfyUI,确认它在运行、地址填对"));
+    wrap(<Toggled instance={connection({})} />);
+    const toggle = screen.getByRole("button", { name: /本机/ });
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(screen.getByRole("button", { name: "modelLibraryOpen" }));
+    fireEvent.click(await screen.findByRole("button", { name: "modelLibraryCheckSettings" }));
+    await waitFor(() => expect(screen.queryByText("modelLibraryErrorTitle")).toBeNull());
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    const row = document.querySelector("[data-connection-section='config:server_url']") as HTMLElement;
+    await waitFor(() => expect(document.activeElement).toBe(row.querySelector("input")));
   });
 
   it("停用的连接:说已停用,不当成出错", () => {
