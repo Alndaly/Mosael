@@ -22,6 +22,8 @@ Clicking the bound workflow row in the detail area opens that task's workflow, n
 
 Run a task immediately or toggle its enabled state in the detail area. Disabling prevents future automatic triggers; inspect history for work already running. Records show time, duration and result. Read failures and fix the workflow before retrying. The run history refreshes on its own: runs started outside this page — a webhook, a scheduled trigger, a teammate's **Run now** — appear too, and the **Last run** field updates with them, without reloading the page.
 
+![Task details: the daily schedule, next and last run, the bound workflow; the run list holds a real result of Run now](/media/screens/en/scheduler-runs.png)
+
 Every trigger first goes through **the same pre-run check** as **Run** in the workflow editor: required parameters, chat model, clone engine, digital-human consent, referenced nodes that no longer exist… If it can't run, nothing starts and nothing is spent; the run record states why and a notification says "Scheduled task didn't start" with the task's name — nobody is watching when a schedule fires, so a quiet failed record isn't enough.
 
 ### Who a run acts as

@@ -15,7 +15,7 @@ A process plugin runs as its own child process with a **minimal environment**: `
 
 Want to write one? See [Writing a plugin](/docs/guides/writing-plugins).
 
-![The Plugins page: installed packages on the left, this package's connections and the tools it exposes on the right](/media/screens/en/plugins.png)
+![The Plugins page: installed packages on the left, the selected package’s (ComfyUI) connections on the right; with none yet, a New button](/media/screens/en/plugins.png)
 
 ## Two kinds
 
@@ -35,13 +35,15 @@ Want to write one? See [Writing a plugin](/docs/guides/writing-plugins).
 - A **capability** is which tools that connection exposes. You tick them one by one, and
   **none are on by default**.
 
-<Loop src="/media/videos/en/plugins.mp4" poster="/media/screens/en/plugins.png" alt="Demo: switch plugins and inspect connections and exposed tools" />
+<Loop src="/media/videos/en/plugins.mp4" poster="/media/screens/en/plugins.png" alt="Demo: select the Baidu Netdisk plugin, look at its connection and open New connection" />
 
 The page lays those three out left to right: the Installed column is packages, the top right is
 this package's connections, and below that are the tools that connection exposes. **Nothing on by
 default** is deliberate — an MCP server routinely reports dozens of tools, and turning them all on
 drowns the node panel and the agent's tool list. A model picking from forty names picks wrong more
 often, not less.
+
+![The Baidu Netdisk plugin page: no tabs, one card per connection — enable switch, authorization, name, AppKey / SecretKey, and Network at the bottom](/media/screens/en/plugin-detail.png)
 
 ## Installing one
 
@@ -50,6 +52,8 @@ cards: search at the top (tool names count too), filter by **All / Installed / U
 transcription, translation, speech, document parsing… only those some plugin in the market actually provides, each with a count. A card
 opens a detail page: permissions in plain words, **What it adds to Mosael** saying where each capability shows up once installed, and
 **Tools it brings**.
+
+![The plugin market: search, All / Installed / Updates, and filter by capability on the right; built-in plugins are marked Built in](/media/screens/en/plugin-market.png)
 
 **From the market**: find the one you want and hit Install. It does not go straight in — the
 package is fetched, its manifest read, and **the permissions it declares and the tools it brings
@@ -286,4 +290,4 @@ files or start processes — a guardrail, not a sandbox. See the [Manim plugin p
 
 Select a plugin and use **New connection** in its header. Enter configuration in the dialog; configuration, permissions and selected tools belong to that connection. A plugin can have multiple connections. For the Blender workbench, see [3D scenes & animation](/docs/guides/scenes).
 
-![Blender connection configuration](/media/screens/en/plugin-connection.png)
+![New connection: create it directly, then fill in the credentials on the connection](/media/screens/en/plugin-connection.png)

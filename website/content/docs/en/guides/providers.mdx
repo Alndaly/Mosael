@@ -21,11 +21,11 @@ Settings groups AI providers into four **capability sections**, each configured 
 
 At the top of each section is the **default model**: the default provider and model for that capability. Boards, AI Studio and workflow generation nodes **preselect** it, and you can switch in place. With no default set, those pickers show "Choose a model" and wait for you to pick one — they never fall back to whichever model happens to be listed first. The dropdown lists **models** (e.g. "DeepSeek · deepseek-v4-pro"), not providers — several models under one provider each appear on their own.
 
-![Settings → AI chat: default model and provider configuration](/media/screens/en/settings-models.png)
+![Settings → AI chat: the default model, then this capability’s connections (in the demo a placeholder connection and a local Ollama)](/media/screens/en/settings-models.png)
 
 **Configure providers per capability** — Chat / Image / Video / Audio each have their own section; after "Add provider" the UI renders exactly the fields that provider declares, and keys are stored locally:
 
-<Loop src="/media/videos/en/providers.mp4" poster="/media/screens/en/settings.png" alt="Demo: provider configuration entries for AI Chat and AI Image" />
+<Loop src="/media/videos/en/providers.mp4" poster="/media/screens/en/settings.png" alt="Demo: from AI chat and AI image to Capability providers" />
 
 ## One connection is one endpoint plus one credential
 
@@ -181,6 +181,8 @@ It is **fetched on click**. None of these quota endpoints is a documented public
 **local engines and connections of matching plugins side by side**; ones that aren't set up are listed with what's missing (and stay out of
 the picker), and a row of **Used in** tags is computed from where the capability is actually used. **Find plugins** in the corner opens the
 plugin market filtered to that capability.
+
+![Settings → Capability providers: one block per capability — which one to use, what is missing for the rest, where it is used, and “Find in plugin market” at the top right](/media/screens/en/settings-capabilities.png)
 
 | Capability | Local / built in | Default |
 | --- | --- | --- |

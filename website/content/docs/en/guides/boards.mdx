@@ -20,9 +20,13 @@ A board holds nine kinds of item: note, document, image, video, audio, 3D scene,
 | **From your libraries** | Media (an image, video, audio clip or document from the library), asset (a character, location or prop from the asset library), 3D scene (reference an existing scene) |
 | **Organize** | Group |
 
+![Add on the toolbar: a searchable list, each row a name and a one-line hint](/media/screens/en/board-add-menu.png)
+
 - **Drag from Finder or Explorer**: images, videos, audio and PDF / Word / slide files go into the library first, then land as an item of their own kind where you let go.
 - **⌘V / Ctrl+V**: board items (see below), screenshots and copied media files become one item each, and plain text becomes a note in the middle of the view. While the cursor is in a note, a prompt box or any other text field, pasting goes there as usual and nothing is added to the canvas.
 - **The media picker** searches by name, filters by kind, can show only what's **On this board**, and imports directly with **Upload a file** or by dropping files onto it (**Drop to upload**) — it only takes the kind this item needs.
+
+![The image picker: search by name, Upload a file, one asset per row](/media/screens/en/board-picker.png)
 
 ## What a connection gives you
 
@@ -46,6 +50,8 @@ What flows in **never overwrites what you typed**: it only fills a box that is s
 
 **Connecting several at once.** Select two or more items and the selection frame grows a **+** with a count on its right edge. Drag from it: release on an item and every selected item connects to it (each line previews whether it can connect), or release on empty space for "Add a cell linked to the N selected", a new item that takes all of them as upstream — that's how several images become references together. While several are selected, each item's own + only shows on hover and connects just that item. Either way it's one undo step.
 
+![Three items selected: one action bar above the selection frame and the counted + exit on its right edge](/media/screens/en/board-selection.png)
+
 **Copy and paste items.** ⌘C copies the selected items and the connections between them, ⌘V pastes; connections to items you didn't copy are left out. Running state isn't copied, and a timeline item pastes as a separate copy of its timeline, marked as a copy.
 
 ## Top toolbar
@@ -66,6 +72,8 @@ Select an item: the action bar sits above it, its panel below. Every panel looks
 - **Audio** — pick a voice and the text to read (voice-over). The action bar above an empty audio item switches between ways to fill it: Voice-over, Generate (music, sound effects) once a generation model supports audio, and generators from plugins (extra ones go under "…").
 - **Group frame** — fence things off and name them; with **Move together** on, dragging the frame carries what's inside. Select a few items and press <kbd>⌘</kbd><kbd>G</kbd> to group them directly.
 
+![An empty image item’s generation panel: prompt, model (the demo’s placeholder connection, which cannot generate), Settings, and “Results per run” open at 1× – 4×](/media/screens/en/board-generate.png)
+
 **"+ Make ▾" for the next step.** On an item with content, **+ Make ▾** spells out what comes next: a note offers "Turn this text into an image / a video" and "Read this text aloud"; an image "Use this image as the first frame of a video"; a video "Make a video that references this one"; audio "Make a video to go with this audio"; a 3D scene "Generate an image from this scene's composition" and "Generate a video using a shot of this scene as reference"; and almost all of them "Let AI write from this". Pick one and an empty, connected item appears to the right, waiting for you to generate.
 
 Prompt, model, duration, source references and run status live **inside the item's own data**. Closing a panel, selecting another item or reopening the board loses nothing; failed jobs settle into a visible failed state with the reason, and failure or cancellation keeps the inputs intact for retry.
@@ -79,6 +87,8 @@ The line above each item shows its name, or its type ("Image", "Video", "Group"�
 ### Referencing media and assets with `@`
 
 Press `@` in a prompt and a menu follows the caret, listing linked items, then the asset library, then the media library, with filters for All / Linked / Assets / Image / Video / Audio. Only the media kinds the selected model takes are listed; assets (characters, locations, props) always are. What you pick becomes an **inline chip in the sentence** — "put the person from @creator.png on the street" reads as one sentence. On submit it splits in two: the name stays in the prompt and the media itself is sent as input; how an asset's description and references attach is in [Asset library](/docs/guides/assets).
+
+![Typing `@` in a prompt: the menu follows the caret and lists the characters, locations and props in the asset library](/media/screens/en/board-mention.png)
 
 ### Trimming
 
@@ -95,6 +105,10 @@ There are **no separate tool items** on a board. Turning an item into something 
 | Image | Split grid, Make it talk |
 | Note, document | Translate (English, Simplified / Traditional Chinese, Japanese, Korean, French, German, Spanish, Russian) |
 | Asset | Fill in angles (all kinds), Generate expressions (characters only), Make it talk (characters only) |
+
+![An image item selected: the action bar has preview, trim, swap, split grid, make it talk, “+ Make ▾”, rename, duplicate and delete](/media/screens/en/board-abilities.png)
+
+<Recording src="/media/videos/en/board-cells.mp4" poster="/media/screens/en/board-abilities.png" caption="Live capture: the Add menu, an item’s action bar, the multi-select exit, “Results per run” on a generation panel, the swap picker, a 3D scene item and a timeline item (no generation model is called)" />
 
 Content tools from plugins work the same way, attached to the items whose content they take. Lip sync, Make it talk, Fill in angles and Generate expressions cost money; the two digital-human abilities also need a consent check — see [Digital humans](/docs/guides/digital-humans).
 
@@ -120,6 +134,8 @@ A board holds **only content-to-content tools**. Flow control and data steps —
 
 **Add → New → Timeline** puts a small editing desk on the canvas. Behind it is an ordinary timeline, kept in a project the board creates under its own name, so you can refine it in the editor.
 
+![A timeline item: three video items connected and appended in order; rough-cut preview on top, thumbnail strip below](/media/screens/en/board-timeline.png)
+
 - **The top half is a rough-cut preview**: the main video track plays in order with the first audio track alongside, with play / pause, "current / total" and mute underneath. Transforms and captions aren't previewed here — they live in the editor.
 - **The bottom half is a thumbnail strip** (width follows duration) with a playhead: click a clip to select it, drag it sideways to reorder (what follows moves along), Delete removes the selected clip.
 - **Adding clips**: connect video / image / audio items and each is appended to the end (audio goes to the audio track; the aspect follows the first clip; disconnecting doesn't remove the clip), or use the + at the end of the strip, which lists this board's media first and can browse the whole library. Other kinds can't connect — you're told a timeline item only takes video, images and audio.
@@ -140,7 +156,11 @@ A board holds **only content-to-content tools**. Flow control and data steps —
 - **Render references**: pick a **Shot** in the bottom bar (a single shot is used automatically; with none, open the scene and add one) and **Render** (First and last frame / Camera-move video / Stills and video), then press the round button; the first frame, last frame and camera-move video **land as new items to the right**, connected to it, and rendering again adds a new column.
 - **Build a 3D scene from text**: connect a script or storyboard (document or note) into the scene item, pick a model, **Max shots** (6 by default) and the aspect ratio, and it builds **one** blockout set — figures move as the text says, several cameras cover the same action from different positions, with camera moves written. The built scene replaces the one in this item (the old one stays under 3D Scenes). **Add → New → 3D scene** places exactly such an empty scene waiting to be built.
 
+![A 3D scene item selected: the action bar switches between Render references and Build a 3D scene from text; the panel’s bottom bar picks the shot and what to render](/media/screens/en/board-scene-cell.png)
+
 **Connect a 3D scene item into an image or video item** and the generation panel gets a **3D reference** chip: pick the shot and **Use as** — **Composition**, **First & last frames** (video) or **Camera move** (video), limited to what the selected model takes. At generation time the shot is rendered from the scene **as it is then**, and the prompt notes that it's a blockout to take composition and camera position from; figures in the shot that **Play** a character from the asset library bring that character's looks and description along. More in [3D scenes & animation](/docs/guides/scenes).
+
+![A 3D scene item connected into a video item: the generation panel gains a 3D reference chip naming the scene and “Composition”](/media/screens/en/board-scene-reference.png)
 
 ## The AI assistant
 
@@ -164,9 +184,9 @@ The assistant can use an item's abilities for you. It first looks at what is ava
 
 Selecting an item opens a translucent, blurred panel above the canvas. Long model names ellipsize; parameters such as aspect ratio and duration open under Settings. The `@` menu follows the input and adjusts to available viewport space.
 
-<Recording src="/media/videos/en/boards.mp4" poster="/media/screens/en/boards.png" caption="Live capture: document dragging, marker configuration and modes" />
+<Recording src="/media/videos/en/boards.mp4" poster="/media/screens/en/boards.png" caption="Live capture: select an empty video item, extend its prompt and open the `@` menu" />
 
-The recording demonstrates document references and markers without invoking a generation model. Eligible `@` media inputs depend on the selected model.
+The recording does not invoke a generation model. Eligible `@` media inputs depend on the selected model.
 
 ## Comments and markers
 
@@ -178,4 +198,6 @@ Switching modes or undoing preserves the connections between items. Comments and
 
 ![Document references and canvas markers](/media/screens/en/annotations.png)
 
-<Recording src="/media/videos/en/annotations.mp4" poster="/media/screens/en/annotations.png" caption="Live interaction: document dragging, marker mode and visibility" />
+![Opening the Opening marker in marker mode: name, shortcut (clear it on the right) and Remove marker](/media/screens/en/marker-editor.png)
+
+<Recording src="/media/videos/en/annotations.mp4" poster="/media/screens/en/annotations.png" caption="Live capture: marker mode, opening two markers, showing / hiding markers and comment mode" />

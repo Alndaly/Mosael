@@ -30,6 +30,8 @@ From left to right the timeline toolbar has the **Select** (A) / **Blade** (B) t
 
 Placement defaults to **Overwrite**: a clip you drag, trim, duplicate or drop in from the media panel cuts away whatever it lands on, and the drag preview already shows how the clip underneath will be carved — two clips never stack on one track. Trims stop at the neighbour's edge. Switch to **Insert** and everything after the drop point moves along to make room.
 
+![Dragging “Squirrel and butterfly” left in Overwrite mode: the part it would cover is cut away live during the drag (cancelled with Esc, nothing moved)](/media/screens/en/editor-overwrite.png)
+
 - **Ripple delete** (⇧Delete, or **Ripple delete** in the context menu) removes clips and closes the gap; **Q / W** cut from the previous edit point to the playhead, or from the playhead to the next one, and close the gap; deleting words and sentences or clearing fillers in the transcript use the same "cut these ranges" mechanism.
 - **Speed changes push what follows**: speeding a clip up or slowing it down moves the clips after it instead of overlapping them.
 - Every time snaps to a frame, so long timelines don't drift later and later.
@@ -40,6 +42,8 @@ Right-click a video clip and choose **Detach audio**: the sound goes onto a free
 
 - **⌥ click** selects just that part of the linked pair (a temporary unlink): the next drag, trim, delete or split leaves its partner alone.
 - **⌥-dragging an edge** trims only that part.
+
+![Clips whose audio was detached: picture on V1, music on A1, both carrying the chain mark; selecting one selects its linked partner](/media/screens/en/editor-linked.png)
 
 ### The clip context menu
 
@@ -53,6 +57,10 @@ Right-click a video clip and choose **Detach audio**: the sound goes onto a free
 | Split into voice and background | Two stems: the voice replaces the clip, the background goes onto an audio track |
 | Delete clip, Ripple delete | Same as Delete, ⇧Delete |
 
+![Clip context menu: split at playhead, duplicate, detach audio, replace media, denoise, keep only the voice, split into voice and background, delete and ripple delete](/media/screens/en/editor-clip-menu.png)
+
+<Recording src="/media/videos/en/timeline-tools.mp4" poster="/media/screens/en/editor-linked.png" caption="Live capture: select a linked clip, the cut-away preview while dragging in Overwrite mode (cancelled with Esc), mark in / out with I and O, the clip menu and the shortcut sheet" />
+
 Denoising and separation always **produce new assets and leave the original untouched**, running as background tasks. To get the new asset without touching the timeline, right-click it in the media panel or library and choose **Reduce noise…** or **Separate voice and background** (see [Media library](/docs/guides/media)).
 
 ### Editing together (with people and agents)
@@ -64,6 +72,8 @@ Several people and several agents can change one timeline at the same time. Each
 ## Keyboard shortcuts
 
 The **Shortcuts** button on the timeline toolbar lists these. On Windows use Ctrl for ⌘ and Alt for ⌥. They don't fire while you are typing in a field.
+
+![The shortcut sheet from the timeline toolbar’s Shortcuts button: one key and what it does per row](/media/screens/en/editor-shortcuts.png)
 
 | Keys | Action |
 | --- | --- |
@@ -94,11 +104,15 @@ The **Shortcuts** button on the timeline toolbar lists these. On Windows use Ctr
 | ⌥ / ⇧ / ⌘ while dragging | ⌥ duplicates, ⇧ locks the axis (time only or track only), ⌘ skips snapping |
 | Drag a clip up / down | Switch track or layer; release above the top to add a video layer |
 
+![An in / out range on the ruler, marked with I and O](/media/screens/en/editor-in-out.png)
+
 A few more: tabbing into the timeline lands on the selected clip (or the first one), and ⌥ + arrows then walk between clips from the keyboard; double-click a title on the monitor to edit it in place — Enter commits, ⇧Enter adds a line, Esc cancels; hold ⇧ on the transform box's rotate handle to snap to 15°.
 
 ## Clip properties, appearance and titles
 
 With a clip selected, the inspector's **Properties** shows, in order: asset and timing info, the subtitle or title text, **Speed** (presets from 0.5 to 2×), **Audio** (mute, gain 0–200%, keyframable), **Picture fade** and **Audio fade** (fade-in / fade-out seconds), **Appearance**, and **Transform** (scale, rotation, opacity, position X / Y — all keyframable — plus **Clear animation** and **Reset**). You can also drag the box on the monitor to scale and rotate.
+
+![The inspector for a selected clip: asset and timing, speed, audio, picture fades](/media/screens/en/editor-inspector.png)
 
 - **Appearance** (video and image clips): **Shape mask** (None / Rounded / Circle, with a radius for rounded) and **Shadow** (off by default; color, opacity, blur, horizontal / vertical offset). The shadow is computed in frame pixels, so a scaled or rotated clip casts the same size and direction of shadow in preview and export, and a lower-resolution export scales it down.
 - **Picture-in-picture**: add a video track to lay the picture over the base, shrink it into a corner with Transform or on the monitor, then add a circle mask and a shadow. Export keeps each asset's own aspect ratio.
@@ -141,16 +155,26 @@ Tone levels (highlights / shadows / whites / blacks), sharpen and the LUT take f
 - **Regenerating replaces instead of stacking**: if the target track already has cues you are asked "Regenerate subtitles?" and confirm with **Replace and regenerate**. The workflow's Generate subtitles node breaks lines the same way.
 - **Subtitle style** (shared by the whole timeline): Text (font, upload a font, size, color, bold), Backplate (color, opacity — 0 means no backplate) and Layout (bottom / center / top, margin). Subtitles and titles are burned into the export.
 
+![The Subtitles tab: edit each cue’s text in place; the clock icon edits its start and end (the first cue is being edited)](/media/screens/en/subtitle-timing.png)
+
 ### Importing and exporting .srt / .vtt
 
 - **Import subtitle file**: choose the subtitle track to land on (a new subtitle track by default); with an existing track you can **Replace this track's existing subtitles**. Pick an `.srt` / `.vtt` file — or drop it into the media panel.
 - **Export subtitle file**: pick the track (when more than one has cues) and the format (SRT or WebVTT); for two-line bilingual cues choose **Both lines / First line only (original) / Second line only (translation)**.
+
+![Import subtitle file: choose the subtitle track to land on (a new one by default), then pick an .srt / .vtt file](/media/screens/en/subtitle-import.png)
+
+![Export subtitle file: choose the subtitle track and the format (SRT or WebVTT)](/media/screens/en/subtitle-files.png)
 
 ### Translation and bilingual subtitles
 
 **Translate** on the Subtitles tab: pick a target language (English, Simplified or Traditional Chinese, Japanese, Korean, French, German, Spanish, Russian), optionally **Selected only (N)**, and turn on **Keep original (bilingual)** for "original / translation" two-line cues. The engine list follows **Settings → Capability providers → Translation**: **Google Translate (free)** needs no setup and translates cue by cue; **Chat model** uses your own chat connection and reads the context (it costs money); translation plugins appear there too. Google is the default.
 
 **Bilingual subtitles can also live on two tracks**: the original on one subtitle track and the translation on another (for example, import a second `.srt`). When several subtitle tracks have text at the same moment they are drawn in one box at the bottom, the higher track's text on top — identical, pixel for pixel, in preview and export.
+
+![Chinese and English subtitle tracks with cues at the same moment: the monitor stacks them in one box at the bottom, the upper track’s line first](/media/screens/en/subtitle-bilingual.png)
+
+<Recording src="/media/videos/en/subtitle-panel.mp4" poster="/media/screens/en/subtitle-bilingual.png" caption="Live capture: jump to a cue by its time, edit its start and end, open subtitle import and export" />
 
 ## Voiceover
 
@@ -198,6 +222,8 @@ Japanese, Korean, Russian, Arabic and Hindi are recognised from the script itsel
 | Quality | High (larger file), Standard, Compact (smaller file) | Standard |
 | Normalize loudness (−14 LUFS) | Brings the whole mix to −14 LUFS with peaks at or below −1 dB, for places that don't even out volume; not audible in the preview | Off |
 | Label AI-generated content "AI-generated" | Shown only when the timeline has AI-generated clips (they carry an "AI" badge) | On, and on again every export |
+
+![Export settings: resolution, frame rate, quality and loudness normalization. This timeline has no AI-generated clips, so the “AI-generated” label option is absent](/media/screens/en/export-dialog.png)
 
 The first four are remembered. **Leaving loudness off won't clip**: the mix is always limited.
 

@@ -33,6 +33,12 @@ What each one needs (a chat model, an image model that takes references, a video
 The reduce-noise node uses the built-in engine by default. For speech-led material with messy noise (keyboards, dishes, chatter)
 switch it to DeepFilterNet (a deployment admin downloads it first under Admin → Engines); it removes music as well.
 
+![Workflow Community: the fourteen official templates; each card shows what is missing and how many steps, and added ones say Added](/media/screens/en/workflow-templates.png)
+
+![Template details (social account health check): summary and steps, with the run requirements and “another way works” on the right](/media/screens/en/workflow-template-check.png)
+
+![The “Topic to finished video” canvas](/media/screens/en/workflow-full-video.png)
+
 **Graphs from an older template offer "Rebuild from the new version".** When a template has been fixed in ways that would make an old
 copy fail, opening that copy shows a notice: **Rebuild from the new version (keeps this one)** builds a fresh graph, carrying over the
 start parameters and values you filled in, and keeps the old one; dismiss it and a newer version will remind you again.
@@ -71,6 +77,8 @@ start parameters and values you filled in, and keeps the old one; dismiss it and
 
 The start node's parameters are a three-column table — **Name / Default / Required** — and **Add** appends a row.
 
+![The start node’s parameter table: name / default / required, and Add](/media/screens/en/workflow-start-params.png)
+
 - **Each row has its own Required checkbox.** A required parameter without a default must be filled in at run time; until it is, the
   run won't start — placeholder examples are never taken for real input.
 - **Option parameters**: the Default cell becomes a dropdown (**Pick one**) limited to the given options. An option whose prerequisite
@@ -79,6 +87,8 @@ The start node's parameters are a three-column table — **Name / Default / Requ
 - **The start node has one output port per parameter**, so downstream nodes wire straight from the matching port.
 - References to parameters the start node doesn't declare, defaults outside the options, empty or duplicate names are all flagged by
   the readiness check.
+
+![An options parameter: the analytics template’s data_source is a dropdown with Built-in browser and “TikHub · not ready”](/media/screens/en/workflow-start-options.png)
 
 ### Loops and branches
 
@@ -118,11 +128,17 @@ After a node runs it writes results into the context, and downstream fields read
 reference reads "**Node title · output · field**"; one that points nowhere turns red and says why — the node can't be found (deleted,
 renamed or mistyped) or it has no such output — so you can pick another upstream output.
 
+![References in a text template render as “node title · output” tags instead of raw double-brace references](/media/screens/en/workflow-reference-tags.png)
+
 Data ports match properties one for one: named configuration inputs and named output variables each receive their own port. Control edges express order, while data edges state exactly which property moves.
 
 **The canvas draws each reference as a faint dotted line**: it only orders things (a node waits for whatever it references), **it never
 makes the referenced node run**, it can't be selected, and hovering it says which reference it is. When the referenced node isn't wired
 into the flow and will never run, the line turns the error colour.
+
+![References drawn as faint dotted lines on the canvas (ordering only; they don’t make the referenced node run)](/media/screens/en/workflow-references.png)
+
+<Recording src="/media/videos/en/workflow-editor.mp4" poster="/media/screens/en/workflow-references.png" caption="Live capture: reference tags, the start node’s parameter table, the readiness check and run history (a workflow of local-only nodes)" />
 
 Each field can switch between **two input modes** (the small pill at the right of the label row):
 
@@ -142,6 +158,8 @@ references to start parameters that don't exist, values outside their options, e
 nodes not wired into the flow, **references to nodes that will never run**, models / providers missing or without keys, type mismatches,
 references written into code, plugin nodes that can't run (with the real reason)…
 
+![The readiness list: “2 to resolve”, two required start parameters missing; click one to jump to its node](/media/screens/en/workflow-readiness-blocked.png)
+
 - Problem nodes get a **warning badge** on the canvas with a tooltip listing the issues; each issue is clickable and jumps to the node.
 - With blockers present the **Run** button is disabled, and ⌘Enter opens the readiness list instead.
 - **A node that will run but references one that never will is stopped before the run**, naming who references whom and suggesting you
@@ -154,6 +172,8 @@ references written into code, plugin nodes that can't run (with the real reason)
 Once a run starts, Run becomes **Stop run**, and ⌘Enter during a run doesn't start another one. The run's detail dialog in the task centre
 carries **Cancel task** as well. Cancelling is **node-grained**: it stops after the current step finishes, whatever it already produced
 (assets, timelines, 3D scenes) is kept, and derived sub-tasks are cancelled with it.
+
+![Run history: every node of one real run and its time (asset query, tagging, text template, save as note — all local)](/media/screens/en/workflow-runs.png)
 
 A few node details:
 

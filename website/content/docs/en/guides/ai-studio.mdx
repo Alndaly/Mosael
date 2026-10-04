@@ -12,7 +12,7 @@ version: 1.8.3
 
 The agent uses Mosael's MCP tools to **see your project and propose changes**: searching media, arranging the timeline, kicking off generation, even publishing.
 
-![AI Studio: initial chat state before a model is configured](/media/screens/en/ai-chat.png)
+![AI Studio chat, before any conversation: the composer at the bottom](/media/screens/en/ai-chat.png)
 
 - **Confirmation cards**: any action that would mutate project / external state pops a confirmation card and only lands after you approve (see the next section).
 - **Choice cards**: at a genuine fork — two or three routes all make sense and which one is right
@@ -41,10 +41,16 @@ breaks and syntax highlighting, the first 8 lines show with "expand all N lines"
 call ("Approved · Done", "Auto-approved · Failed", "Rejected"…) — nothing to dismiss; a failure reason is kept in full and folds when
 long. While a request is waiting, **Jump to latest** turns into **A request needs your approval** and takes you straight to the card.
 
+![A real turn (qwen3.5 on local Ollama): the confirmation card sits under the delete_assets tool call; the permanent-delete tier offers only Allow once and Reject](/media/screens/en/agent-confirm.png)
+
 The tier is on the card: **Edit**, **AI cost**, **Render cost**, **Outside this app** and **Permanent delete**. **Always allow this
 session** is **remembered per tier**: it only covers later cards from the same tool at the same tier or lower, and **the Outside this
 app and Permanent delete tiers never offer it** — the card says irreversible actions ask every time. If a card fails halfway, what it
 already did is rolled back rather than left half-done.
+
+![After rejecting, the card collapses into a “Rejected” line on the tool call, and the model reports that the asset is still there](/media/screens/en/agent-decided.png)
+
+<Recording src="/media/videos/en/agent.mp4" poster="/media/screens/en/agent-confirm.png" caption="Live capture: a local model asks to permanently delete an asset; Raw data is expanded, then the request is rejected — nothing is deleted" />
 
 ### Attachments, documents and background jobs
 
@@ -152,11 +158,11 @@ a busy one queues the message and picks it up when it is free. Messages that arr
 
 In **Generate** mode the left column is the **generation model** catalog, the middle is the results feed, and the composer takes your prompt:
 
-![AI Studio Generate: initial state before a generation model is configured](/media/screens/en/ai-generate.png)
+![AI Studio Generate: no generation jobs yet; the right column holds the selected model’s engine settings (the demo’s placeholder connection, which cannot generate)](/media/screens/en/ai-generate.png)
 
 **Switch between chat and generate in one click** — describe the shot in the bottom input, tune engine parameters on the right; results can be sent straight to the media library:
 
-<Loop src="/media/videos/en/ai-studio.mp4" poster="/media/screens/en/ai-chat.png" alt="Demo: switch between Chat, Trace and Generate" />
+<Loop src="/media/videos/en/ai-studio.mp4" poster="/media/screens/en/ai-chat.png" alt="Demo: switch between Chat, Trace, Generate and Audio" />
 
 - Pick a model → write a prompt → send; the job queues and finished results land in the media library. Your **default model** from Settings is preselected; with no default set the picker shows "Choose a model" and you pick one before sending.
 - Whether a model can run depends on **its vendor's key** being configured; with no usable model, a banner at the top links to settings.
@@ -225,6 +231,8 @@ are listed below the form so you can play them in place.
 - **Podcast**: two speakers **rewrite** some material as a dialogue, **read** it as written, or
   **research** a topic on the web and discuss it. Connect Volcano Podcast under Settings → AI audio first;
   until then this tab shows a link to set it up.
+
+![Speech on the Audio page: pick a voice engine and voice, then type the text; with no cloned voice yet it points to Dubbing & voices](/media/screens/en/ai-audio.png)
 
 Dubbing the subtitles on a timeline happens on the editor's Voice tab — see [Editing](/docs/guides/editing).
 

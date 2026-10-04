@@ -18,6 +18,10 @@ Admin has five tabs: **Overview, Members, Cost rules, Engines, Deployment**.
 Pick a range at the top: the last 7 / 30 / 90 days. Job activity and spend follow the range; accounts, workspaces and assets
 (across all workspaces) are current totals.
 
+![Admin → Overview: accounts, workspaces, assets and spend for the last 30 days, task activity, and who is spending (nothing yet)](/media/screens/en/admin.png)
+
+<Recording src="/media/videos/en/admin.mp4" poster="/media/screens/en/admin.png" caption="Live capture: Overview, Members, Engines (the top bar stays put while the long list scrolls), Deployment, then Statistics" />
+
 - **Job activity**: how many jobs ran each day and how many failed; days without jobs still get a slot.
 - **Who is spending**: AI spend per person. Currencies are listed separately, never added up or converted; if usage didn't match
   any price rule this stays empty — fill in Cost rules.
@@ -34,6 +38,8 @@ Pick a range at the top: the last 7 / 30 / 90 days. Job activity and spend follo
 
 However people join, each gets a workspace of their own; to work together, add people to the same workspace (**Settings → Team &
 members**).
+
+![Admin → Members: the account table (role, last active, workspaces, client version) and invite codes; with open registration it says none are needed](/media/screens/en/admin-members.png)
 
 ## Cost rules
 
@@ -56,6 +62,8 @@ by a deployment admin" where they would need one (the transcript, the denoise di
 - **Voice and background separation**: Demucs. A long asset takes many minutes on a CPU.
 - **Noise reduction**: the built-in method needs nothing; DeepFilterNet downloads once here (about 30 MB); RNNoise ships with the app.
 
+![Admin → Engines: download sources (pip and npm), then the local engines such as transcription models, each with its install button](/media/screens/en/admin-engines.png)
+
 "Installed" here means the engine was actually loaded once, not that a folder exists; an interrupted install reports an incomplete
 runtime, and installing again fills in what is missing.
 
@@ -75,10 +83,14 @@ runtime, and installing again fills in what is missing.
   replacing local data and restarting; the **Diagnostic bundle** exports versions, system info and the redacted tail of the logs — no
   database, media or keys — to attach when you report a problem.
 
+![Admin → Deployment: who can join, shared folders, outbound proxy](/media/screens/en/admin-deployment.png)
+
 ## Statistics
 
 **Statistics** in the sidebar is for everyone and covers the data you can see. It has three tabs; the range is the last 7 / 30 / 90 days
 (30 by default), every block that follows it says "last N days", and projects, assets, sequences and workflows are current totals.
+
+![Statistics → Overview: projects, assets, sequences, workflows, task activity and asset mix for the last 30 days](/media/screens/en/statistics.png)
 
 - **Overview**: projects, assets, sequences, workflows, running jobs, and AI spend, completed jobs and publishes over the last N days;
   charts for job activity and asset mix.
