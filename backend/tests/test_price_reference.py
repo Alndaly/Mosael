@@ -41,6 +41,8 @@ OFFICIAL_DOMAINS = (
     "ai.google.dev",
     "app.klingai.com",
     "klingai.com",
+    # 中转自己的价目页:只给这家中转自己的条目当来源(约定 5),不拿它给原厂型号作证。
+    "evolink.ai",
 )
 
 
@@ -54,6 +56,8 @@ def test_every_entry_cites_an_official_page_and_a_check_date() -> None:
         assert entry.source.startswith("https://"), f"{_label(entry)} 没有来源页"
         host = entry.source.removeprefix("https://").split("/", 1)[0]
         assert host in OFFICIAL_DOMAINS, f"{_label(entry)} 的来源 {host} 不是厂商官方域名"
+        if host == "evolink.ai":
+            assert entry.vendor == "evolink", f"{_label(entry)}:Evolink 的价目页只能给 Evolink 自己的条目作证"
         assert re.fullmatch(r"20\d\d-(0[1-9]|1[0-2])", entry.checked), f"{_label(entry)} 的查证日期写错了"
 
 

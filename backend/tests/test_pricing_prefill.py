@@ -472,6 +472,35 @@ def test_147ai_gpt_image_2_client_gets_the_gpt_image_2_reference_price(monkeypat
     assert "中转" in rules[("gpt-image-2", "image", "million_output_token")]["notes"]
 
 
+def test_evolink_seedance_gets_evolinks_own_per_second_prices_by_resolution(monkeypatch, client_fixture) -> None:
+    """Evolink 自己的价目页(evolink.ai/seedance-2-5):文生 / 图生视频 480p $0.138、720p $0.296、1080p $0.739 每秒;
+    视频编辑按视频参考那档 $0.084 / $0.180 / $0.450。运行前估算靠它;实扣以回包里服务商报的为准。"""
+    from app.core.db import SessionLocal
+    from app.domain.billing.usage import record_usage
+
+    client = client_fixture
+    _stub_models(monkeypatch, {"data": []})
+    profile_id = _profile(client, "evolink", {"api_key": "k", "default_model": "seedance-2.5-image-to-video"})
+    _add_models(profile_id, ("seedance-2.5-image-to-video", ["video"]), ("seedance-2.5-video-edit", ["video"]))
+
+    body = client.post(f"/api/settings/providers/{profile_id}/pricing/prefill").json()
+    assert body["unpriced_models"] == []
+    assert _tiers(client, "seedance-2.5-image-to-video") == {"": 296_000, "480p": 138_000, "1080p": 739_000}
+    assert _tiers(client, "seedance-2.5-video-edit") == {"": 180_000, "480p": 84_000, "1080p": 450_000}
+    note = _rules(client)[("seedance-2.5-video-edit", "video", "video_second")]["notes"]
+    assert "evolink.ai" in note and "输入" in note, "视频编辑按输入 + 输出秒数计,规则只按输出估 —— 要写明"
+    assert "原厂" not in note
+
+    ws = client.get("/api/workspaces").json()[0]["id"]
+    with SessionLocal() as db:
+        event = record_usage(
+            db, workspace_id=ws, provider_profile_id=profile_id, provider="evolink", capability="video",
+            model="seedance-2.5-image-to-video", operation="generation_job", idempotency_key="evolink-480p",
+            units={"requests": 1, "videos": 1, "video_seconds": 5.0, "resolution": "480p"},
+        )
+    assert (event.cost_micros, event.currency) == (690_000, "USD"), "5 秒 × $0.138"
+
+
 def test_an_official_vendor_pointed_at_a_relay_still_says_the_price_is_borrowed(monkeypatch, client_fixture) -> None:
     """OpenAI 连接把 Endpoint 改到了中转:价照借原厂的,备注照旧说明中转可能另价。"""
     client = client_fixture

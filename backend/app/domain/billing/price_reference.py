@@ -753,6 +753,73 @@ _GOOGLE_PRICES = [
     _veo("veo-3.1-lite-generate-preview", "0.08", "1080P 的价", "1080p price", "1080p"),
 ]
 
+# —— Evolink(中转,它自己的价目页,约定 5)—— 2026-10 查证。
+# 每秒、按输出分辨率分档,音频不另收费;720p 是基础档(适配器的默认分辨率)。各型号页面:
+#   evolink.ai/seedance-2-5      2.5:480p / 720p / 1080p,4–30 秒,没有 4K;
+#   evolink.ai/seedance-2-0      2.0:另有 4K;4–15 秒;
+#   evolink.ai/seedance-2-0-mini 2.0 mini:只有 480p / 720p,页面标的是六折后的价。
+# 视频参考(参考视频生视频)、视频编辑、视频续写按「输入 + 输出」秒数计,可计费的输入秒数取输入视频总长与
+# 输出时长中较大的那个;计量只记输出秒数,规则按它估会至少少算一半 —— 备注写明。Evolink 每个任务的回包里都有
+# 服务商报的实扣(usage.cost),记账以它为准(见 adapters/evolink/generation.reported_charge),这几条价是给
+# 运行前估算和回包没报扣费时用的。
+# 没收的:seedance-2.0-fast-*(页面只写「标准价七五折、限时到 2026-10-06」,没有数字)、seedance-2.5-draft-to-video
+# (草稿转 1080p,和成片不是一回事)。
+_EVOLINK_25 = "https://evolink.ai/seedance-2-5"
+_EVOLINK_20 = "https://evolink.ai/seedance-2-0"
+_EVOLINK_20_MINI = "https://evolink.ai/seedance-2-0-mini"
+_EVOLINK_NOTE = ("音频不另收费;实扣以回包里服务商报的为准", "audio is free; the charge reported in the task payload is what gets booked")
+
+
+def _evolink_tier(tier: str) -> tuple[str, str]:
+    return ("720p 的价(基础档)", "720p price (base tier)") if not tier else (f"{tier} 的价", f"{tier} price")
+
+
+def _evolink(models: tuple[str, ...], source: str, tiers: dict[str, str], extra: tuple[str, str] = ("", "")) -> list[ListPrice]:
+    """一族 Evolink 型号的每秒价:`tiers` 是 {分辨率: 美元/秒},空键是基础档。"""
+    return [
+        _p("evolink", model, "video", "video_second", amount, "USD", source, resolution=tier, checked="2026-10",
+           remark=(
+               ";".join(part for part in (_evolink_tier(tier)[0], extra[0], _EVOLINK_NOTE[0]) if part),
+               "; ".join(part for part in (_evolink_tier(tier)[1], extra[1], _EVOLINK_NOTE[1]) if part),
+           ))
+        for model in models
+        for tier, amount in tiers.items()
+    ]
+
+
+def _video_input_billed(rates: str, rates_en: str) -> tuple[str, str]:
+    return (
+        f"按输入 + 输出秒数计(可计费的输入秒数取输入视频总长与输出时长中较大的那个),规则只按输出秒数估、至少少算一半{rates}",
+        f"billed on input + output seconds (billable input is the longer of the input video and the output), "
+        f"while the rule only counts output seconds, so it underestimates by at least half{rates_en}",
+    )
+
+
+def _reference_tier(rates: str, rates_en: str) -> tuple[str, str]:
+    return (
+        f"参考图 / 参考音频的价;带参考视频时按视频参考档({rates})、按输入 + 输出秒数计",
+        f"image / audio reference price; with a reference video it is the video-reference tier ({rates_en}), billed on input + output seconds",
+    )
+
+
+_EVOLINK_PRICES = [
+    *_evolink(("seedance-2.5-text-to-video", "seedance-2.5-image-to-video"), _EVOLINK_25,
+              {"": "0.296", "480p": "0.138", "1080p": "0.739"}, ("最短 4 秒", "4 seconds minimum")),
+    *_evolink(("seedance-2.5-reference-to-video",), _EVOLINK_25, {"": "0.296", "480p": "0.138", "1080p": "0.739"},
+              _reference_tier("480p $0.084 / 720p $0.180 / 1080p $0.450 每秒", "480p $0.084 / 720p $0.180 / 1080p $0.450 per second")),
+    *_evolink(("seedance-2.5-video-edit", "seedance-2.5-video-extend"), _EVOLINK_25, {"": "0.180", "480p": "0.084", "1080p": "0.450"},
+              _video_input_billed("", "")),
+    *_evolink(("seedance-2.0-text-to-video", "seedance-2.0-image-to-video"), _EVOLINK_20,
+              {"": "0.199", "480p": "0.093", "1080p": "0.497", "4k": "1.013"}, ("最短 4 秒", "4 seconds minimum")),
+    *_evolink(("seedance-2.0-reference-to-video",), _EVOLINK_20, {"": "0.199", "480p": "0.093", "1080p": "0.497", "4k": "1.013"},
+              _reference_tier("480p $0.057 / 720p $0.121 / 1080p $0.302 / 4K $0.626 每秒",
+                              "480p $0.057 / 720p $0.121 / 1080p $0.302 / 4K $0.626 per second")),
+    *_evolink(("seedance-2.0-mini-text-to-video", "seedance-2.0-mini-image-to-video"), _EVOLINK_20_MINI,
+              {"": "0.040", "480p": "0.019"}, ("页面标的六折后价;最短 4 秒", "the page's 60%-off price; 4 seconds minimum")),
+    *_evolink(("seedance-2.0-mini-reference-to-video",), _EVOLINK_20_MINI, {"": "0.040", "480p": "0.019"},
+              _reference_tier("480p $0.012 / 720p $0.025 每秒,页面标的六折后价", "480p $0.012 / 720p $0.025 per second, the page's 60%-off price")),
+]
+
 # —— 音频生成(音乐 / BGM / 音效,ADR 0022)—— 2026-09 查证。
 # Lyria 按「首」报价(一次生成交回一首),记在 `audio`(按首)这个单位上。
 _AUDIO_PRICES = [
@@ -790,6 +857,7 @@ LIST_PRICES: tuple[ListPrice, ...] = (
     *_MINIMAX_PRICES,
     *_OPENAI_PRICES,
     *_GOOGLE_PRICES,
+    *_EVOLINK_PRICES,
     *_AUDIO_PRICES,
 )
 
