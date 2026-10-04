@@ -150,6 +150,8 @@ const publishBridge = {
   reorderPages: (ids) => invoke(IPC.invoke.publishReorderPages, { ids }),
   newPage: (url) => invoke(IPC.invoke.publishNewPage, { url }),
   setPagesInset: (left) => invoke(IPC.invoke.publishPagesInset, { left }),
+  snapshotPage: () => invoke(IPC.invoke.publishSnapshotPage),
+  coverPage: (covered) => invoke(IPC.invoke.publishCoverPage, { covered }),
 };
 contextBridge.exposeInMainWorld("mosaelPublish", publishBridge);
 

@@ -35,6 +35,7 @@ const contract = require("./ipc-contract.cjs") as {
   parsePageOrder: (value: unknown) => { ids: string[] };
   parseNewPage: (value: unknown) => { url: string };
   parsePagesInset: (value: unknown) => { left: number };
+  parseCoverPage: (value: unknown) => { covered: boolean };
 };
 
 const ROOT = path.resolve(__dirname);
@@ -174,6 +175,9 @@ describe("Electron IPC contract", () => {
     expect(() => contract.parseNewPage({ url: "" })).toThrow(/url/);
     expect(contract.parsePagesInset({ left: 220 })).toEqual({ left: 220 });
     expect(() => contract.parsePagesInset({ left: -1 })).toThrow(/left/);
+    expect(contract.parseCoverPage({ covered: true })).toEqual({ covered: true });
+    expect(() => contract.parseCoverPage({ covered: "yes" })).toThrow(/covered/);
+    expect(() => contract.parseCoverPage({ covered: false, left: 1 })).toThrow(/unexpected field left/);
   });
 
   it("decodes saving a finished download: an http(s) server, a token, a workspace, nothing else", () => {

@@ -82,6 +82,8 @@ export const browserTools = {
   browserPagesClose: "关闭这个页面",
   browserPagesCollapse: "收起页面列表",
   browserPagesExpand: "展开页面列表",
+  browserPagesPin: "固定展开页面列表",
+  browserPagesPinHint: "现在只是临时展开,鼠标移开就收回",
   browserPagesLimit: "最多同时开 {n} 个页面,先关掉几个再开",
   browserPagesUntitled: "新页面",
 } as const;

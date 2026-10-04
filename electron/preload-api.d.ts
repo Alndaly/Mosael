@@ -82,6 +82,13 @@ export interface LiveViewFrame {
   settled?: boolean;
 }
 
+export interface PageSnapshot {
+  /** 画面(data URL)。 */
+  frame: string;
+  /** 网页在窗口里的位置和大小(CSS 像素)。 */
+  bounds: { x: number; y: number; width: number; height: number };
+}
+
 export interface MosaelPublishBridge {
   login(accountId: string, platform: string): Promise<void>;
   openPage(accountId: string, platform: string): Promise<void>;
@@ -104,6 +111,12 @@ export interface MosaelPublishBridge {
   reorderPages(ids: string[]): Promise<boolean>;
   newPage(url: string): Promise<boolean>;
   setPagesInset(left: number): Promise<void>;
+  /**
+   * 收起的页面列表临时展开(见 BrowserPageList):先拍下前台网页此刻的画面和它在窗口里的位置,渲染层铺回
+   * 原处;再 coverPage(true) 藏起原生视图,列表就盖得住网页。收回时 coverPage(false)。没有前台网页时 null。
+   */
+  snapshotPage(): Promise<PageSnapshot | null>;
+  coverPage(covered: boolean): Promise<void>;
 }
 
 export interface MosaelBrowserBridge {

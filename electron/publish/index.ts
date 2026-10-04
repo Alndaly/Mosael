@@ -18,6 +18,8 @@ export {
   reorderViewPages,
   newViewPage,
   setPagesInset,
+  snapshotViewPage,
+  coverViewPage,
   republishViewState,
   embeddedViewVisible,
   hidePublishView,

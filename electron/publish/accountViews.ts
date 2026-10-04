@@ -112,6 +112,18 @@ const tabId = (tab: PageTab): string => String(tab.view.webContents.id);
  * 渲染层对面板几何的一次改动:要么拖标题条挪位置,要么拖某个手柄缩放。缩放给的是指针要的矩形
  * (不带约束),比例、上下限与窗口边界由 panelGeometry 定。
  */
+/**
+ * 前台视图为什么暂时藏着:框选截图(渲染层在原处铺冻结的画面让人拖框)、页面列表临时展开(列表盖在网页
+ * 那张画面上)。两件事可能同时在 —— 哪一件还要它藏着,它就藏着。
+ */
+export type ForegroundHideReason = "region" | "peek";
+
+/** 前台网页此刻的画面和它在窗口里的位置(CSS 像素):渲染层照这个把画面铺回原处。 */
+export interface ForegroundSnapshot {
+  frame: string;
+  bounds: { x: number; y: number; width: number; height: number };
+}
+
 export type PanelLayoutChange = { x: number; y: number } | ({ handle: PanelHandle } & PanelRect);
 
 /**
@@ -169,10 +181,10 @@ export class AccountViewManager {
    */
   private shellInsetRight = 0;
   /**
-   * 框选截图时前台视图暂时藏起来:渲染层在原处铺一张冻结的画面让人拖框(原生视图上画不了框)。
-   * 只藏不摘 —— 页面不重排、不暂停,框完原样亮回来。
+   * 前台视图暂时藏起来的原因(见 ForegroundHideReason):渲染层在原处铺一张冻结的画面,在上面画框、
+   * 盖列表(原生视图盖在一切 DOM 上)。只藏不摘 —— 页面不重排、不暂停,用完原样亮回来。
    */
-  private foregroundHidden = false;
+  private foregroundHiddenFor = new Set<ForegroundHideReason>();
   /** 前台视图收到过的媒体响应(「下载页面里的视频」要用,见 mediaRecorder)。 */
   readonly media = new MediaRecorder();
   private downloadRouter: DownloadRouter | null = null;
@@ -726,17 +738,31 @@ export class AccountViewManager {
     this.layout();
   }
 
-  /** 框选截图期间藏起 / 亮回前台视图(见 foregroundHidden)。 */
-  setForegroundHidden(hidden: boolean): void {
-    this.foregroundHidden = hidden;
+  /** 为某件事藏起 / 亮回前台视图;别的事还要它藏着就接着藏(见 foregroundHiddenFor)。 */
+  setForegroundHidden(reason: ForegroundHideReason, hidden: boolean): void {
+    if (hidden) this.foregroundHiddenFor.add(reason);
+    else this.foregroundHiddenFor.delete(reason);
     const view = this.visibleId ? this.views.get(this.visibleId) : null;
-    if (this.alive(view)) view.setVisible(!hidden);
+    if (this.alive(view)) view.setVisible(this.foregroundHiddenFor.size === 0);
   }
 
-  /** 换了前台视图 / 收起了:侧栏让出的宽度和框选的隐藏都不该留给下一个视图。 */
+  /**
+   * 页面列表临时展开前拍下前台网页此刻的画面:渲染层铺回原处,再请这边藏起原生视图,列表就能盖在上面
+   * (见 setForegroundHidden 的 "peek")。没有前台网页 / 拍不到时 null。
+   */
+  async snapshotForeground(): Promise<ForegroundSnapshot | null> {
+    const view = this.visibleId ? this.views.get(this.visibleId) : null;
+    if (!this.alive(view)) return null;
+    const image = await view.webContents.capturePage();
+    if (image.isEmpty()) return null;
+    // JPEG:整窗大小的画面编 PNG 要上百毫秒,鼠标停上去等它就显得迟钝;只是临时铺一下的底图。
+    return { frame: `data:image/jpeg;base64,${image.toJPEG(90).toString("base64")}`, bounds: view.getBounds() };
+  }
+
+  /** 换了前台视图 / 收起了:侧栏让出的宽度和暂时的隐藏都不该留给下一个视图。 */
   private resetShell(): void {
     this.shellInsetRight = 0;
-    if (this.foregroundHidden) this.setForegroundHidden(false);
+    for (const reason of [...this.foregroundHiddenFor]) this.setForegroundHidden(reason, false);
   }
 
   /** 工具栏导航:全部作用于当前可见视图,内部动作发生在「已聚焦的视图」里,稳。 */
@@ -1027,7 +1053,7 @@ export class AccountViewManager {
       if (shown) {
         tab.view.webContents.setZoomFactor(1);
         void tab.driver.clearMetricsOverride();
-        tab.view.setVisible(!this.foregroundHidden);
+        tab.view.setVisible(this.foregroundHiddenFor.size === 0);
       } else {
         this.applyPanelZoom(accountId);
         // addChildView 把它放到了最上面;卡片堆里排在它上面的那几张(和前台视图)要回到它上面去。

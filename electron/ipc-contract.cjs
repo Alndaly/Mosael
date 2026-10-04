@@ -41,6 +41,9 @@ const IPC = Object.freeze({
     publishReorderPages: "publish:reorderPages",
     publishNewPage: "publish:newPage",
     publishPagesInset: "publish:pagesInset",
+    // 收起的页面列表临时展开:拍下前台网页的画面、藏起 / 亮回原生视图(列表盖在那张画面上)。
+    publishSnapshotPage: "publish:snapshotPage",
+    publishCoverPage: "publish:coverPage",
     browserOpenLogin: "browser:openLogin",
     publishSignOut: "publish:signOut",
     browserClearProfile: "browser:clearProfile",
@@ -322,6 +325,15 @@ function parsePagesInset(value) {
   return { left };
 }
 
+/** 藏起 / 亮回前台网页(页面列表临时展开时盖在它的画面上)。 */
+function parseCoverPage(value) {
+  const channel = IPC.invoke.publishCoverPage;
+  const payload = record(value, channel);
+  onlyKeys(payload, ["covered"], channel);
+  if (typeof payload.covered !== "boolean") throw new TypeError(`${channel}: covered must be a boolean`);
+  return { covered: payload.covered };
+}
+
 /**
  * 把一份下好的下载存进素材库:存到哪个服务器、哪个工作区、以谁的身份 —— 这些只有渲染层知道。
  * 令牌只用在这一次请求的头里(和 parseAuthToken 同一个长度上限)。
@@ -406,6 +418,7 @@ module.exports = {
   parsePageId,
   parsePageOrder,
   parsePagesInset,
+  parseCoverPage,
   parsePanelId,
   parsePanelMuted,
   parsePanelLayout,

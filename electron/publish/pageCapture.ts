@@ -225,7 +225,7 @@ export async function beginRegionCapture(): Promise<{ frame: string; width: numb
   const image = await target.webContents.capturePage();
   if (image.isEmpty()) throw new PageToolError("capture_failed");
   pendingRegion = { viewId: target.id, image, page: pageOf(target.webContents), capturedAt: new Date().toISOString() };
-  sharedViews()?.setForegroundHidden(true);
+  sharedViews()?.setForegroundHidden("region", true);
   const { width, height } = image.getSize();
   return { frame: image.toDataURL(), width, height };
 }
@@ -234,7 +234,7 @@ export async function beginRegionCapture(): Promise<{ frame: string; width: numb
 export function finishRegionCapture(selection: SelectionFraction | null): PageCapture | null {
   const pending = pendingRegion;
   pendingRegion = null;
-  sharedViews()?.setForegroundHidden(false);
+  sharedViews()?.setForegroundHidden("region", false);
   if (!pending || !selection) return null;
   const size = pending.image.getSize();
   const rect = regionCropRect(selection, size);

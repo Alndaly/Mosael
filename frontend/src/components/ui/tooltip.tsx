@@ -111,27 +111,39 @@ type OverflowText = () => React.ReactNode | null
 const HintScope = React.createContext<((get: OverflowText) => () => void) | null>(null)
 
 /**
- * 说明浮层所在的「区域」,给**内嵌浏览器**那几块用:顶栏、侧栏。它们压在原生网页视图周围,z 是 200,比所有
- * 浮层(styles.css 统一定成 120)都高 —— 不说一声,说明就画在它们底下。
+ * 说明浮层所在的「区域」,给**内嵌浏览器**那几块用:顶栏、侧栏、左边的页面列表。它们压在原生网页视图周围,
+ * z 比所有浮层(styles.css 统一定成 120)都高 —— 不说一声,说明就画在它们底下。原生网页视图又盖在一切 DOM
+ * 上,说明伸进它那一块就被盖住。
  *
- * - `band`:只能画在这一条横带里(顶栏)。顶栏下面是原生网页视图,盖在一切 DOM 上 —— 说明往下出被它盖住,
- *   往上出又出了窗口(窗口装饰那一截的避让也会把它推下去)。带里的说明默认往左右出,竖直方向夹在带里;
- *   两行(名字 + 一句说明)放得下 56px 的顶栏。
- * - `band: null`:不限位置,只是要压在这块上面(侧栏:它旁边的网页让开了,浮层照常摆)。
+ * - `area`:说明只能画在这一块里(窗口坐标,CSS 像素;不写宽 / 高就是铺到窗口那一边)。顶栏是一条 56px 的
+ *   横带 —— 往下出被网页盖住,往上出又出了窗口,所以带里的说明往左右出(`side: "left"`),竖直方向夹在带里,
+ *   两行(名字 + 一句说明)放得下。页面列表是竖着的一列 —— 往下出,左右夹在这一列里。
+ * - `area: null`:不限位置,只是要压在这块上面(侧栏:它旁边的网页让开了,浮层照常摆)。
+ * - `side`:这块里的说明默认往哪边出;控件自己给了方向就听控件的。
  *
- * 两种都给浮层标上 `data-over-chrome`,styles.css 据此把它那层抬到顶栏、侧栏之上。
+ * 都给浮层标上 `data-over-chrome`,styles.css 据此把它那层抬到顶栏、侧栏、列表之上。
  */
-const HintRegion = React.createContext<{ band: { top: number; height: number } | null } | null>(null)
+type HintArea = { top: number; left?: number; width?: number; height?: number }
+type HintRegionValue = { area: HintArea | null; side?: Side }
+const HintRegion = React.createContext<HintRegionValue | null>(null)
 
-/** 区域里的说明怎么摆:带里默认往左出(放不下 Radix 会翻到右边),上下的避让按带的上下沿算。 */
-function regionPlacement(region: { band: { top: number; height: number } | null } | null, side: Side | undefined) {
+/** 区域里的说明怎么摆:默认方向听区域的;避让的四条边按区域的边算(放不下 Radix 会翻到对面)。 */
+function regionPlacement(region: HintRegionValue | null, side: Side | undefined) {
   if (!region) return { side: side ?? "top" }
-  const band = region.band
-  if (!band) return { side: side ?? "top", "data-over-chrome": "" }
-  const viewport = typeof window === "undefined" ? band.top + band.height : window.innerHeight
+  const placed = { side: side ?? region.side ?? "top" }
+  const area = region.area
+  if (!area) return { ...placed, "data-over-chrome": "" }
+  const viewportWidth = typeof window === "undefined" ? 0 : window.innerWidth
+  const viewportHeight = typeof window === "undefined" ? 0 : window.innerHeight
+  const left = area.left ?? 0
   return {
-    side: side ?? "left",
-    collisionPadding: { top: band.top, bottom: Math.max(0, viewport - band.top - band.height), left: 8, right: 8 },
+    ...placed,
+    collisionPadding: {
+      top: area.top,
+      bottom: area.height === undefined ? 8 : Math.max(0, viewportHeight - area.top - area.height),
+      left: left + 8,
+      right: area.width === undefined ? 8 : Math.max(0, viewportWidth - left - area.width) + 8,
+    },
     "data-over-chrome": "",
   }
 }

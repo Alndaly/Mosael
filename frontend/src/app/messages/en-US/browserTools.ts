@@ -79,6 +79,8 @@ export const browserTools = {
   browserPagesClose: "Close this page",
   browserPagesCollapse: "Collapse the page list",
   browserPagesExpand: "Expand the page list",
+  browserPagesPin: "Keep the page list expanded",
+  browserPagesPinHint: "It's only peeking out; it tucks away when the pointer leaves",
   browserPagesLimit: "At most {n} pages can be open at once; close a few first",
   browserPagesUntitled: "New page",
 } as const;

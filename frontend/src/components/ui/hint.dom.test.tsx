@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import { readHint } from "@/test/hint";
 
-import { Hint, HintRegion, TooltipProvider } from "./tooltip";
+import { Hint, HintRegion, TooltipProvider, regionPlacement } from "./tooltip";
 import { Truncate } from "./truncate";
 
 function mount() {
@@ -139,7 +139,7 @@ describe("只能画在一条窄带里的说明(内嵌浏览器的顶栏)", () =>
   it("带里的说明默认往左右出(竖直方向夹在带里),不往下掉进网页那一块", () => {
     render(
       <TooltipProvider delayDuration={0}>
-        <HintRegion.Provider value={{ band: { top: 0, height: 56 } }}>
+        <HintRegion.Provider value={{ area: { top: 0, height: 56 }, side: "left" }}>
           <Hint label="截屏" hint="可见区域、整页长图或框选一块">
             <button type="button" aria-label="截屏">S</button>
           </Hint>
@@ -160,7 +160,7 @@ describe("只能画在一条窄带里的说明(内嵌浏览器的顶栏)", () =>
         <Hint label="外面">
           <button type="button" aria-label="外面">O</button>
         </Hint>
-        <HintRegion.Provider value={{ band: null }}>
+        <HintRegion.Provider value={{ area: null }}>
           <Hint label="侧栏">
             <button type="button" aria-label="侧栏">D</button>
           </Hint>
@@ -181,7 +181,7 @@ describe("只能画在一条窄带里的说明(内嵌浏览器的顶栏)", () =>
         <Hint label="外面">
           <button type="button" aria-label="外面">O</button>
         </Hint>
-        <HintRegion.Provider value={{ band: { top: 0, height: 56 } }}>
+        <HintRegion.Provider value={{ area: { top: 0, height: 56 }, side: "left" }}>
           <Hint label="右边" side="right">
             <button type="button" aria-label="右边">R</button>
           </Hint>
@@ -195,10 +195,25 @@ describe("只能画在一条窄带里的说明(内嵌浏览器的顶栏)", () =>
     expect(content()?.getAttribute("data-side")).toBe("right");
   });
 
+  it("竖着的一列(页面列表):说明默认往下出,左右夹在这一列里;横带的上下夹在带里", () => {
+    Object.defineProperty(window, "innerWidth", { value: 1440, configurable: true });
+    Object.defineProperty(window, "innerHeight", { value: 900, configurable: true });
+    expect(regionPlacement({ area: { top: 56, left: 0, width: 220 }, side: "bottom" }, undefined)).toEqual({
+      side: "bottom",
+      collisionPadding: { top: 56, bottom: 8, left: 8, right: 1440 - 220 + 8 },
+      "data-over-chrome": "",
+    });
+    expect(regionPlacement({ area: { top: 0, height: 56 }, side: "left" }, "right")).toEqual({
+      side: "right",
+      collisionPadding: { top: 0, bottom: 900 - 56, left: 8, right: 8 },
+      "data-over-chrome": "",
+    });
+  });
+
   it("带里被截断的字(顶栏的状态那一句)看全文也往左右出", async () => {
     render(
       <TooltipProvider delayDuration={0}>
-        <HintRegion.Provider value={{ band: { top: 0, height: 56 } }}>
+        <HintRegion.Provider value={{ area: { top: 0, height: 56 }, side: "left" }}>
           <Truncate>一段很长很长的报错</Truncate>
         </HintRegion.Provider>
       </TooltipProvider>,

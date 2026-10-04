@@ -134,7 +134,7 @@ export function App() {
  *  由 contracts/shared-constants.json 钉住。 */
 export const PUBLISH_BAR_HEIGHT = 56;
 /** 这条栏就是说明浮层唯一画得出来的地方(见 HintRegion)。 */
-const PUBLISH_BAR_REGION = { band: { top: 0, height: PUBLISH_BAR_HEIGHT } };
+const PUBLISH_BAR_REGION = { area: { top: 0, height: PUBLISH_BAR_HEIGHT }, side: "left" as const };
 
 /** Electron 内嵌发布视图可见时的顶部浏览器工具栏:后退/前进/刷新 + 地址栏 + 页面工具 + 返回 Mosael。
  *  条底可拖窗(-webkit-app-region: drag),控件各自 no-drag。 */

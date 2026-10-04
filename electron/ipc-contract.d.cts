@@ -28,6 +28,8 @@ export const IPC: {
     publishReorderPages: "publish:reorderPages";
     publishNewPage: "publish:newPage";
     publishPagesInset: "publish:pagesInset";
+    publishSnapshotPage: "publish:snapshotPage";
+    publishCoverPage: "publish:coverPage";
     browserOpenLogin: "browser:openLogin";
     publishSignOut: "publish:signOut";
     browserClearProfile: "browser:clearProfile";
@@ -95,6 +97,7 @@ export function parsePageId(value: unknown, channel: string): { id: string };
 export function parsePageOrder(value: unknown): { ids: string[] };
 export function parseNewPage(value: unknown): { url: string };
 export function parsePagesInset(value: unknown): { left: number };
+export function parseCoverPage(value: unknown): { covered: boolean };
 export function parseSaveDownload(value: unknown): {
   id: string;
   server: string;

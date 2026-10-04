@@ -7,7 +7,7 @@ import { Truncate } from "@/components/ui/truncate";
 import { useI18n } from "@/app/preferences";
 import { HintRegion } from "@/components/ui/tooltip";
 
-const DRAWER_REGION = { band: null };
+const DRAWER_REGION = { area: null };
 
 /** 侧栏宽度。开着侧栏时网页右侧让出这么宽(主进程 setShellInset)。 */
 export const DRAWER_WIDTH = 360;

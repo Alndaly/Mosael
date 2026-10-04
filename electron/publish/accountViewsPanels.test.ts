@@ -87,6 +87,10 @@ const fake = vi.hoisted(() => {
     isLoading() {
       return false;
     }
+    /** 页面当前的画面(页面列表临时展开时铺在原处的那张)。 */
+    capturePage() {
+      return Promise.resolve({ isEmpty: () => false, toJPEG: () => Buffer.from("frame") });
+    }
     close() {
       this.destroyed = true;
       this.emit("destroyed");
@@ -424,11 +428,40 @@ describe("the foreground view and the toolbar's page tools", () => {
     manager.registerSession("pool-a", "persist:pool-a");
     manager.registerSession("pool-b", "persist:pool-b");
     manager.show("pool-a");
-    manager.setForegroundHidden(true);
+    manager.setForegroundHidden("region", true);
     expect(viewOf("pool-a").visible).toBe(false);
     manager.show("pool-b");
     expect(viewOf("pool-a").visible).toBe(true);
     expect(viewOf("pool-b").visible).toBe(true);
+  });
+
+  it("snapshots the page as shown and where it's shown, for the page list to lay over while it peeks out", async () => {
+    manager.registerSession("pool-a", "persist:pool-a");
+    expect(await manager.snapshotForeground()).toBeNull();
+    manager.show("pool-a");
+    manager.setPagesInset(48);
+    expect(await manager.snapshotForeground()).toEqual({
+      frame: `data:image/jpeg;base64,${Buffer.from("frame").toString("base64")}`,
+      bounds: { x: 48, y: HEADER, width: 1440 - 48, height: 900 - HEADER },
+    });
+  });
+
+  it("keeps the page hidden while the peek or a region pick still needs it, the session's next page included", () => {
+    manager.registerSession("pool-a", "persist:pool-a");
+    manager.show("pool-a");
+    manager.setForegroundHidden("peek", true);
+    manager.setForegroundHidden("region", true);
+    manager.setForegroundHidden("peek", false);
+    expect(viewOf("pool-a").visible).toBe(false);
+    manager.setForegroundHidden("region", false);
+    expect(viewOf("pool-a").visible).toBe(true);
+    // 临时展开的列表里切到了另一页:那一页也先藏着(列表还盖在画面上),收回时才亮出来。
+    manager.setForegroundHidden("peek", true);
+    openWindow(viewOf("pool-a"), "https://example.com/next");
+    expect(viewOf("pool-a").webContents.getURL()).toBe("https://example.com/next");
+    expect(viewOf("pool-a").visible).toBe(false);
+    manager.setForegroundHidden("peek", false);
+    expect(viewOf("pool-a").visible).toBe(true);
   });
 
   it("reports the page title and the partition with the toolbar state", () => {

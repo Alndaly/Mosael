@@ -19,6 +19,7 @@ import {
   createSharedViews,
   destroySharedViews,
   type AccountViewManager,
+  type ForegroundSnapshot,
   type PanelCard,
   type PanelLayoutChange,
 } from "./accountViews";
@@ -823,6 +824,13 @@ export function newViewPage(url: string): boolean {
 }
 export function setPagesInset(left: number): void {
   views?.setPagesInset(left);
+}
+/** 收起的页面列表临时展开:先拍下前台网页的画面(渲染层铺回原处),再藏起 / 亮回原生视图。 */
+export function snapshotViewPage(): Promise<ForegroundSnapshot | null> {
+  return views?.snapshotForeground() ?? Promise.resolve(null);
+}
+export function coverViewPage(covered: boolean): void {
+  views?.setForegroundHidden("peek", covered);
 }
 
 /** 收起内嵌视图,把窗口还给 React UI。 */

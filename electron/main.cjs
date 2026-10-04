@@ -41,6 +41,7 @@ const {
   parsePageId,
   parsePageOrder,
   parsePagesInset,
+  parseCoverPage,
   parsePanelId,
   parsePanelLayout,
   parsePanelMuted,
@@ -858,6 +859,10 @@ app.whenReady().then(async () => {
   ipcMain.handle(IPC.invoke.publishNewPage, (_e, payload) => requirePublish().newViewPage(parseNewPage(payload).url));
   ipcMain.handle(IPC.invoke.publishPagesInset, (_e, payload) =>
     requirePublish().setPagesInset(parsePagesInset(payload).left),
+  );
+  ipcMain.handle(IPC.invoke.publishSnapshotPage, () => requirePublish().snapshotViewPage());
+  ipcMain.handle(IPC.invoke.publishCoverPage, (_e, payload) =>
+    requirePublish().coverViewPage(parseCoverPage(payload).covered),
   );
   ipcMain.handle(IPC.invoke.publishPanelMuted, (_e, payload) => {
     const { id, muted } = parsePanelMuted(payload);
