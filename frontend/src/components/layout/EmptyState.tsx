@@ -1,9 +1,11 @@
 import React from "react";
+import { ChevronDown } from "lucide-react";
 
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
-import { errorText } from "@/api/errorMessage";
+import { errorText, splitErrorText } from "@/api/errorMessage";
 
 /**
  * 「这里还没有东西」的统一说法。
@@ -110,26 +112,53 @@ export function PageLoadError({
   className?: string;
 }) {
   const t = useI18n();
-  const message = errorText(error ?? "");
+  //: 正文只说第一行那句人话;原文(errno、地址、对方回的正文)收进「详情」,要排查时展开看、能选中复制。
+  const { summary, detail } = splitErrorText(errorText(error ?? ""));
+  const buttons =
+    onRetry || actions ? (
+      <div className="flex flex-wrap justify-center gap-2">
+        {onRetry && (
+          <Button variant="secondary" loading={retrying} onClick={onRetry}>
+            {t("retry")}
+          </Button>
+        )}
+        {actions}
+      </div>
+    ) : null;
   return (
     <EmptyState
       icon={icon}
       title={title ?? t("pageLoadError")}
-      body={message}
+      body={summary}
       size={size}
       className={className}
       action={
-        onRetry || actions ? (
-          <div className="flex flex-wrap justify-center gap-2">
-            {onRetry && (
-              <Button variant="secondary" loading={retrying} onClick={onRetry}>
-                {t("retry")}
-              </Button>
-            )}
-            {actions}
+        buttons || detail ? (
+          <div className="grid w-full justify-items-center gap-3">
+            {buttons}
+            {detail && <ErrorDetails text={detail} />}
           </div>
         ) : undefined
       }
     />
+  );
+}
+
+function ErrorDetails({ text }: { text: string }) {
+  const t = useI18n();
+  return (
+    <Collapsible className="grid w-full justify-items-center gap-2">
+      <CollapsibleTrigger asChild>
+        <Button variant="ghost" size="sm" className="group text-muted-foreground">
+          {t("errorDetails")}
+          <ChevronDown className="transition-transform duration-100 group-data-[state=open]:rotate-180" />
+        </Button>
+      </CollapsibleTrigger>
+      <CollapsibleContent className="w-full">
+        <pre className="m-0 max-h-40 w-full overflow-auto whitespace-pre-wrap break-all rounded-md bg-muted/60 p-2.5 text-left font-mono text-ui-2xs leading-[1.55] text-muted-foreground">
+          {text}
+        </pre>
+      </CollapsibleContent>
+    </Collapsible>
   );
 }

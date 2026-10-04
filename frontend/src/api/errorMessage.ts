@@ -40,3 +40,18 @@ export function humanError(status: number, statusText: string, body: string): st
 export function errorText(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
+
+/**
+ * 一句报错拆成**给人看的那句**和**原文**:第一行是人话(出了什么事、下一步怎么办),后面几行是原文
+ * (异常、errno、对方回的正文)。插件协议约定插件这样写 `error`(docs/PLUGIN_MANIFEST.md)。
+ *
+ * 「[Errno 61] Connection refused」对排查有用,但它不该是用户先读到的那句 —— 界面把第一行当正文,
+ * 原文收进「详情」或悬停说明里。
+ */
+export function splitErrorText(text: string): { summary: string; detail: string } {
+  const lines = text.trim().split(/\r?\n/);
+  return {
+    summary: (lines[0] ?? "").trim(),
+    detail: lines.slice(1).map((line) => line.trim()).filter(Boolean).join("\n"),
+  };
+}

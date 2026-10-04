@@ -265,6 +265,17 @@ describe("模型库", () => {
     await waitFor(() => expect(screen.queryByText("modelLibraryErrorTitle")).toBeNull());
   });
 
+  it("报错的原文(errno、地址)收进「详情」,正文只说第一行那句人话", async () => {
+    api.getModelLibrary.mockRejectedValueOnce(new Error("连不上这台 ComfyUI,确认它在运行、地址填对\nhttp://127.0.0.1:8188:[Errno 61] Connection refused"));
+    wrap(<ModelLibraryButton instance={instance} workspaceId="w1" />);
+    fireEvent.click(screen.getByRole("button", { name: "modelLibraryOpen" }));
+    const state = (await screen.findByText("modelLibraryErrorTitle")).closest(".empty-state") as HTMLElement;
+    expect(state.textContent).toContain("连不上这台 ComfyUI,确认它在运行、地址填对");
+    expect(state.textContent).not.toContain("Errno");
+    fireEvent.click(within(state).getByRole("button", { name: "errorDetails" }));
+    expect(await within(state).findByText(/\[Errno 61\] Connection refused/)).toBeTruthy();
+  });
+
   it("读不出来时点「重试」再问一遍,读到了就照常列出来", async () => {
     api.getModelLibrary.mockRejectedValueOnce(new Error("连不上这台 ComfyUI,确认它在运行、地址填对"));
     wrap(<ModelLibraryButton instance={instance} workspaceId="w1" />);

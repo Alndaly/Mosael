@@ -14,7 +14,11 @@ const { listPluginInstanceModels } = vi.hoisted(() => ({ listPluginInstanceModel
 vi.mock("@/api/client", () => ({ listPluginInstanceModels }));
 vi.mock("@/app/preferences", () => ({
   useI18n: () => (key: string) =>
-    ({ pluginModelTakes: "pluginModelTakes {roles}", pluginModelRequired: "{role} pluginModelRequired" })[key] ?? key,
+    ({
+      pluginModelTakes: "pluginModelTakes {roles}",
+      pluginModelRequired: "{role} pluginModelRequired",
+      pluginGenerationError: "pluginGenerationError {error}",
+    })[key] ?? key,
   usePreferences: () => ({ locale: "zh" }),
 }));
 
@@ -117,9 +121,17 @@ describe("插件提供的模型", () => {
     wrap(
       <GenerationModelsRow instance={instance} status={{ models: null, error: "连不上" }} refreshing={false} onRefresh={vi.fn()} />,
     );
-    expect(screen.getByText("pluginGenerationError").className).toContain("text-destructive");
+    expect(screen.getByText("pluginGenerationError 连不上").className).toContain("text-destructive");
     // 原因可能很长(连不上的原话):这一格有上限,不把左边的标签和说明挤成一列窄条,放不下的悬停看全文
-    expect(screen.getByText("pluginGenerationError").className).toMatch(/max-w-/);
+    expect(screen.getByText("pluginGenerationError 连不上").className).toMatch(/max-w-/);
     expect((screen.getByRole("button", { name: "pluginModelsView" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("原因的原文(errno、地址)不摆在这一格里,只说第一句人话", () => {
+    wrap(
+      <GenerationModelsRow instance={instance} status={{ models: null, error: "连不上这台 ComfyUI,确认它在运行、地址填对\nhttp://127.0.0.1:8188:[Errno 61] Connection refused" }} refreshing={false} onRefresh={vi.fn()} />,
+    );
+    expect(screen.getByText("pluginGenerationError 连不上这台 ComfyUI,确认它在运行、地址填对")).toBeTruthy();
+    expect(document.body.textContent).not.toContain("Errno");
   });
 });

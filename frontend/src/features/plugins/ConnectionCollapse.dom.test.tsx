@@ -156,6 +156,16 @@ describe("收起的连接", () => {
     await waitFor(() => expect(document.activeElement).toBe(row.querySelector("input")));
   });
 
+  it("出错的原文(errno、地址)不进标题行:那一行只说第一句人话,原文悬停看", async () => {
+    const instance = connection({
+      capability_status: { generation: { models: null, refreshed_at: null, error: "连不上这台 ComfyUI,确认它在运行、地址填对\nhttp://127.0.0.1:8188:[Errno 61] Connection refused" } },
+    });
+    wrap(<ConnectionCard pkg={pkg} instance={instance} workspaceId="w1" open={false} onOpenChange={vi.fn()} />);
+    const toggle = screen.getByRole("button", { name: /本机/ });
+    expect(toggle.textContent).toContain("连不上这台 ComfyUI,确认它在运行、地址填对");
+    expect(toggle.textContent).not.toContain("Errno");
+  });
+
   it("停用的连接:说已停用,不当成出错", () => {
     wrap(<ConnectionCard pkg={pkg} instance={connection({ enabled: false, blocked_reason: "未启用" })} workspaceId="w1"
                          open={false} onOpenChange={vi.fn()} />);

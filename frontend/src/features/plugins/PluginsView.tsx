@@ -30,6 +30,7 @@ import {
   type PluginInvocation,
   type PluginPackage,
 } from "@/api/client";
+import { splitErrorText } from "@/api/errorMessage";
 import { useI18n } from "@/app/preferences";
 import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
 import { toPlainText } from "@/components/markdown/inlineSyntax";
@@ -732,7 +733,12 @@ export function ConnectionCard({
                 <CatalogBadge tone={issue.tone}>{t(issue.label)}</CatalogBadge>
                 {summaryText && <span>{summaryText}</span>}
               </span>
-              {issue.detail && <Truncate lines={2} className="text-ui-xs leading-relaxed text-warning">{issue.detail}</Truncate>}
+              {issue.detail && (
+                /* 只说第一行那句人话;原文(errno、地址)悬停看 */
+                <Truncate lines={2} className="text-ui-xs leading-relaxed text-warning" hint={splitErrorText(issue.detail).detail || undefined}>
+                  {splitErrorText(issue.detail).summary}
+                </Truncate>
+              )}
             </span>
           </button>
         </Hint>

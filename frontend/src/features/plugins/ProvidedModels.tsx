@@ -8,6 +8,7 @@ import {
   type PluginInstance,
   type PluginProvidedModel,
 } from "@/api/client";
+import { splitErrorText } from "@/api/errorMessage";
 import type { MessageKey } from "@/app/messages";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { ModalShell } from "@/components/app/modals";
@@ -85,8 +86,10 @@ export function GenerationModelsRow({
   const { locale } = usePreferences();
   const [open, setOpen] = React.useState(false);
   const models = status?.models;
-  const summary = status?.error
-    ? t("pluginGenerationError").replace("{error}", status.error)
+  //: 原因只说第一行那句人话;原文(errno、地址)悬停看
+  const error = status?.error ? splitErrorText(status.error) : null;
+  const summary = error
+    ? t("pluginGenerationError").replace("{error}", error.summary)
     : models === null || models === undefined
       ? t("pluginGenerationNever")
       : t("pluginGenerationCount")
@@ -95,7 +98,10 @@ export function GenerationModelsRow({
   return (
     <SettingsRow label={t("pluginGenerationModels")} description={t("pluginGenerationModelsDesc")}>
       <div className="flex min-w-0 items-center gap-2">
-        <Truncate className={cn("max-w-[22rem] text-ui-sm", status?.error ? "text-destructive" : "text-muted-foreground")}>
+        <Truncate
+          className={cn("max-w-[22rem] text-ui-sm", status?.error ? "text-destructive" : "text-muted-foreground")}
+          hint={error?.detail || undefined}
+        >
           {summary}
         </Truncate>
         <Button variant="outline" disabled={!models} onClick={() => setOpen(true)}>

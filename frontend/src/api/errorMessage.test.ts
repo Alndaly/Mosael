@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { errorText, humanError } from "@/api/errorMessage";
+import { errorText, humanError, splitErrorText } from "@/api/errorMessage";
 import { ApiError } from "@/api/transport";
 
 /**
@@ -32,6 +32,19 @@ describe("接口报错", () => {
 
   it("完全没有 body 也不能是空串", () => {
     expect(humanError(503, "Service Unavailable", "")).toContain("503");
+  });
+});
+
+describe("splitErrorText", () => {
+  it("第一行是给人看的那句,后面几行是原文(异常、errno、对方回的正文)", () => {
+    expect(splitErrorText("连不上这台 ComfyUI,确认它在运行、地址填对\nhttp://127.0.0.1:8188:[Errno 61] Connection refused\n第三行")).toEqual({
+      summary: "连不上这台 ComfyUI,确认它在运行、地址填对",
+      detail: "http://127.0.0.1:8188:[Errno 61] Connection refused\n第三行",
+    });
+  });
+  it("只有一行就没有详情;首尾的空白和空行不算", () => {
+    expect(splitErrorText("连不上")).toEqual({ summary: "连不上", detail: "" });
+    expect(splitErrorText("\n  连不上 \r\n\n  原文  \n")).toEqual({ summary: "连不上", detail: "原文" });
   });
 });
 

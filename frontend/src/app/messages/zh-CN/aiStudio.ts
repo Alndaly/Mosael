@@ -349,6 +349,7 @@ export const aiStudio = {
   documentPinned: "已固定引用版本",
 
   pageLoadError: "暂时无法加载",
+  errorDetails: "详情",
   retry: "重试",
   providerNoProfiles: "还没有配置供应商。",
   providerOauthExpired: "令牌刷新失败 · 需重新授权",

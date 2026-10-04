@@ -347,6 +347,7 @@ export const aiStudio = {
   documentPinned: "Pinned source revision",
 
   pageLoadError: "Unable to load right now",
+  errorDetails: "Details",
   retry: "Retry",
   providerNoProfiles: "No providers configured yet.",
   providerOauthExpired: "Token refresh failed · re-authorize",
