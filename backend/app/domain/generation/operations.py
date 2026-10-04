@@ -264,6 +264,8 @@ def _create_generation_job(
         raise GenerationDomainError("genErr_adapterUnavailable", provider=provider, kind=kind)
 
     capabilities = resolved.capabilities if resolved.capabilities_known else None
+    #: 从这里往下(校验、请求记录、交给适配器、按参数估价)看的都是**真要发出去的**那一份参数。
+    parameters = with_declared_defaults(parameters, capabilities, kind)
     #: 素材对照只说**调用方给的**那几份:后面 3D 参考渲出来的、`@` 资产挂上的,各自在自己那段说明里交代。
     legend = source_legend(db, workspace_id, source_assets) if name_sources and prompt.strip() else ""
     #: 文档排在补充的最前面,紧跟用户写的那句 —— 画板此前在前端把它直接拼在正文后面,模型收到的顺序不变。
@@ -462,10 +464,10 @@ def check_parameters(
         )
     except (GenerationDomainError, GenerationResolutionError):
         return
-    validate_parameters(
-        resolved.provider, model, kind, parameters,
-        capabilities=resolved.capabilities if resolved.capabilities_known else None,
-    )
+    capabilities = resolved.capabilities if resolved.capabilities_known else None
+    #: 和漏斗判同一份:补上声明的默认值之后的参数(见 with_declared_defaults)。
+    validate_parameters(resolved.provider, model, kind, with_declared_defaults(parameters, capabilities, kind),
+                        capabilities=capabilities)
 
 
 def _default_model(db: Session, kind: str, user_id: str | None) -> tuple[str, str, str | None]:
@@ -706,6 +708,28 @@ def parse_source_assets(value: Any, *, kind: str) -> list[dict[str, str]]:
             raise GenerationDomainError("genErr_unknownRole", role=role)
         out.append({"asset_id": asset_id, "role": role})
     return out
+
+
+def with_declared_defaults(parameters: dict[str, Any], capabilities: dict[str, Any] | None, kind: str) -> dict[str, Any]:
+    """调用方没给的参数，模型声明了默认值(`default_<参数>`,内置目录、用户写的参数组、插件报的都一样)的，照默认值
+    写进请求。空串、None 算没给(模板里没接上的 `{{input.resolution}}` 插值出来就是空串)。
+
+    **默认值是请求的一部分，不是界面的一部分。** 此前只有 AI 工作台的表单把它预填上;工作流、画板、智能体、定时任务
+    从同一个漏斗进来时什么都不补,适配器也只在「给了才发」—— Evolink 的 gpt-image-2 于是落在服务商的 medium
+    (目录声明的是最便宜的 low),Seedance 落在服务商默认的有声，而记账按请求里的参数估价。补在漏斗里，每条路、
+    每个模型都一样。目录认不出的模型(capabilities 为 None)不猜。
+    """
+    if not capabilities:
+        return dict(parameters)
+    allowed = allowed_parameter_keys(capabilities, kind)
+    filled = dict(parameters)
+    for key, default in capabilities.items():
+        name = key.removeprefix("default_")
+        if name == key or name not in allowed or default in (None, ""):
+            continue
+        if filled.get(name) in (None, ""):
+            filled[name] = default
+    return filled
 
 
 def allowed_parameter_keys(capabilities: dict[str, Any], kind: str | None = None) -> set[str]:

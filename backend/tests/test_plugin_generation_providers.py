@@ -428,7 +428,8 @@ def test_一次生成走普通的生成执行器(plugged) -> None:
     [request] = _requests(_data_dir())
     sent = request["input"]
     assert sent["op"] == "generate" and sent["model"] == "flows/portrait.json" and sent["kind"] == "image"
-    assert sent["parameters"] == {"seed": 7, "3.steps": 30}
+    # 插件声明了默认值的参数(size 默认 1024x1024),没给也照发(见 operations.with_declared_defaults)。
+    assert sent["parameters"] == {"seed": 7, "3.steps": 30, "size": "1024x1024"}
     # 输入素材是**一份拷贝**,落在这次调用的暂存目录里,不是素材库里那一份
     [given] = sent["inputs"]
     assert given["role"] == "reference_image"
@@ -469,7 +470,8 @@ def test_每份产出用的参数和一句说明进生成记录(plugged) -> None
         assert job.result["outputs"] == [{"asset_id": first, "parameters": {"seed": 7}},
                                          {"asset_id": second, "parameters": {"seed": 9}}], "嵌套的值不收"
         assert job.result["note"] == "3 张里出了 2 张;第 2 张失败:显存不够"
-        assert db.get(GeneratedAsset, second).parameters == {"seed": 9}
+        #: 请求里真发出去的参数(连同插件声明的默认 size),叠上这一张实际用的种子。
+        assert db.get(GeneratedAsset, second).parameters == {"seed": 9, "size": "1024x1024"}
     shown = client.get(f"/api/jobs/{job_id}").json()
     assert shown["message"] == "3 张里出了 2 张;第 2 张失败:显存不够"
 
