@@ -191,14 +191,18 @@ comments, compute posting frequency and times, engagement, top posts and growth 
 
 - **The data source is a two-way choice in the start node's `data_source` dropdown**: **Built-in browser** (no setup, no cost; Xiaohongshu always
   needs a sign-in and Douyin mostly does — switch the template's "Open in the built-in browser" step to the browser pool and pick a signed-in
-  profile; Bilibili needs none; page numbers are rounded) or **TikHub** (install the TikHub plugin, create a connection and enable the tools the
+  profile; Bilibili's post pages need none, but **signed out it gives only the first 3 top-level comments (and 20 replies under each)**,
+  so use a profile signed in to Bilibili to fetch every comment; page numbers are rounded) or **TikHub** (install the TikHub plugin, create a connection and enable the tools the
   template lists on the Plugins page; billed per call, complete fields, no sign-in). If TikHub is chosen but not ready (plugin missing, no
   connection, tools not enabled, an extra connection for the same platform), **the run says what's missing before it starts** — or switch back
   to the browser.
-- **Comment insights analyses every comment there is**: on Bilibili it pages through the site's own comment API (up to 1000, and says so if
-  there are more, replies included); elsewhere it reads the comment section. All comments are taken 80 at a time, the model notes what it sees
-  in each batch, and the notes are synthesised into the report — nothing is dropped however many there are. The comment-count parameter only
-  sets how many top-liked comments go into the appendix table.
+- **Comment insights analyses every comment it fetches, and says how many it fetched and how many the platform shows**: on Bilibili it pages
+  through the site's own comment API until the platform stops returning top-level comments, then pages through the replies under each (up to
+  2000 for comment insights and 1000 for the viral breakdown, within a time budget); when it falls short the report and note say why (not
+  signed in, a limit was reached, or the platform withheld deleted or folded comments). Elsewhere it reads the comment section, which only
+  shows what the page has loaded, and the result says so too. The fetched comments are taken 80 at a time, the model notes what it sees in
+  each batch, and the notes are synthesised into the report. The comment-count parameter only sets how many top-liked comments go into the
+  appendix table.
 - A profile that isn't signed in to a platform that requires it reports "no comments fetched" rather than inventing any.
 
 ## Triggers
