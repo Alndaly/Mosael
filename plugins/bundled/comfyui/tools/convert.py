@@ -54,7 +54,7 @@ _FRONTEND_ONLY = _REROUTES | {
 
 #: 前端给这些类型建 widget(src/scripts/widgets.ts 的 ComfyWidgets 加上上传、音频的扩展)。不在这里的
 #: 类型是连线的插口(MODEL、IMAGE…);自定义扩展的 widget 类型从存下来的 `node.inputs` 里的 `widget` 标记认。
-_WIDGET_TYPES = frozenset({
+WIDGET_TYPES = frozenset({
     "INT", "FLOAT", "BOOLEAN", "STRING", "MARKDOWN", "COMBO", "IMAGEUPLOAD", "COLOR", "IMAGECOMPARE",
     "BOUNDING_BOX", "BOUNDING_BOXES", "CHART", "GALLERIA", "PAINTER", "COMPOSITOR", "TEXTAREA", "CURVE", "RANGE",
     "VIDEO_EDIT", "RESOLUTION_PREVIEW", "COLORS", "AUDIO_UI", "AUDIOUPLOAD",
@@ -319,7 +319,7 @@ class _Converter:
         if options.get("forceInput"):
             return False
         kind = options.get("widgetType") or definition[0]
-        return isinstance(kind, list) or kind in _WIDGET_TYPES
+        return isinstance(kind, list) or kind in WIDGET_TYPES
 
     def _uploads(self, definition: Any) -> bool:
         options = self._options(definition)

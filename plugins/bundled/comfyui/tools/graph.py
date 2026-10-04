@@ -422,6 +422,65 @@ def output_nodes(api: dict[str, Any], object_info: dict[str, Any] | None = None,
 _KNOWN_OUTPUT_TYPES = _VIDEO_OUTPUT_TYPES | _AUDIO_OUTPUT_TYPES | _IMAGE_OUTPUT_TYPES | _TEXT_OUTPUT_TYPES
 
 
+def _links_of(node: dict[str, Any]) -> list[str]:
+    """这个节点的输入接着哪几个上游节点。"""
+    return [str(value[0]) for value in (node.get("inputs") or {}).values() if isinstance(value, list) and len(value) == 2]
+
+
+def _upstream_closure(api: dict[str, Any], roots: set[str]) -> set[str]:
+    """`roots` 连同它们的全部上游。"""
+    found: set[str] = set()
+    queue = [one for one in roots if one in api]
+    while queue:
+        node_id = queue.pop()
+        if node_id in found:
+            continue
+        found.add(node_id)
+        queue.extend(one for one in _links_of(api[node_id]) if one in api and one not in found)
+    return found
+
+
+def _is_socket(definition: Any) -> bool:
+    """这一格输入是一个**插口**(只能接线:MODEL、LATENT、IMAGE…),不是 widget。"""
+    if not isinstance(definition, list) or not definition:
+        return False
+    options = definition[1] if len(definition) > 1 and isinstance(definition[1], dict) else {}
+    if options.get("forceInput"):
+        return True
+    kind = options.get("widgetType") or definition[0]
+    return not (isinstance(kind, list) or kind in convert.WIDGET_TYPES)
+
+
+def _missing_socket(node: dict[str, Any], object_info: dict[str, Any]) -> bool:
+    """一格必填的插口没接上(上游被静音,线随之断了):ComfyUI 校验这个节点必然失败,靠它的输出节点出不来。"""
+    required = ((object_info.get(str(node.get("class_type", ""))) or {}).get("input") or {}).get("required") or {}
+    inputs = node.get("inputs") or {}
+    return any(name not in inputs and _is_socket(definition) for name, definition in required.items())
+
+
+def live(api: dict[str, Any], object_info: dict[str, Any]) -> dict[str, Any]:
+    """ComfyUI **真会跑**的那部分图:能跑的输出节点和它们的上游,别的都不算(返回新图,不改入参)。
+
+    ComfyUI 只执行输出节点要的那些节点;一个输出节点的上游缺了必填的插口(第一遍文生图的 KSampler 被静音,
+    后面的 VAEDecode 就没了 samples),它校验不过、什么都交不出,别的输出照跑。可图上那些悬空的节点此前照样被
+    当成这张图的一部分:悬空的 EmptyLatentImage 成了「尺寸」「张数」(选 2 张,batch_size 写进一个没人用的节点),
+    下游全被旁路的 LoadImage 成了一格输入,出不来的 PreviewImage 算进「一次交回几份」。
+
+    判不了的不替 ComfyUI 拿主意,原样留着:没装的节点(object_info 里没有它,不知道它是不是输出)连同上游都留下,
+    ComfyUI 会说出缺了什么;输出节点全断了、或者一个输出都没有,整张图原样交回去让 ComfyUI 说原因。
+    """
+    if not object_info:
+        return api
+    outputs = {node["node"] for node in output_nodes(api, object_info)}
+    unknown = {node_id for node_id, node in api.items() if str(node.get("class_type", "")) not in object_info}
+    broken = {node_id for node_id, node in api.items() if _missing_socket(node, object_info)}
+    runnable = {node_id for node_id in outputs if not _upstream_closure(api, {node_id}) & broken}
+    keep = _upstream_closure(api, (runnable or outputs) | unknown)
+    if not outputs or not keep:
+        return api
+    return {node_id: node for node_id, node in api.items() if node_id in keep}
+
+
 def media_outputs(api: dict[str, Any], object_info: dict[str, Any] | None = None,
                   titles: dict[str, str] | None = None) -> list[dict[str, str]]:
     """会交出**文件**的输出节点:图、视频、音频,以及认不出种类的自定义输出节点(多半是某种保存节点)。

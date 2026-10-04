@@ -15,6 +15,8 @@ import pytest
 
 from tests.fake_comfyui import (
     HAILUO_API,
+    INPAINT_MUTED_FIRST_PASS_API,
+    INPAINT_NODE_INFO,
     KLING_I2V_API,
     MINIMAX_H3_REFERENCE_API,
     MINIMAX_I2V_API,
@@ -460,6 +462,46 @@ def test_放大这类处理一张图的工作流_图必须给(graph) -> None:
     assert model["inputs"] == [{"role": "reference_image", "max": 1, "required": True}]
     assert model["parameters"]["2.model_name"]["title"] == {"zh": "放大模型", "en": "Upscale model"}
     assert "upscale" in graph.features(UPSCALE_API)
+
+
+# --- 只看 ComfyUI 真会跑的那部分图 ----------------------------------------------------
+
+
+def test_没接到能跑的输出上的节点不算_局部重绘图没有假的尺寸张数和第二个产出(graph) -> None:
+    """用户的 inpainting.json:第一遍文生图的 KSampler 静音了,它前面的 EmptyLatentImage 什么都不影响,后面的
+    VAEDecode 缺了 samples、那个 PreviewImage 永远出不来。此前目录照它们说「尺寸 1280x1920、张数可调、一次交回 2 份」:
+    选 2 张,batch_size 写进那个悬空的 EmptyLatentImage,只拿回 1 张;画板摆两格,一格永远空着。"""
+    info = {**OBJECT_INFO, **INPAINT_NODE_INFO}
+    api = graph.live(INPAINT_MUTED_FIRST_PASS_API, info)
+    assert set(api) == {"4", "7", "13", "14", "15", "16", "21", "23", "24"}
+    model = graph.describe("inpainting.json", "inpainting", api, info, {})
+    assert "size" not in model["parameters"] and "num_images" not in model["parameters"]
+    assert model["outputs_per_run"] == 1 and "output_node" not in model["parameters"]
+    assert "6.text" not in model["parameters"], "没接上的那句提示词不是一个可调的参数"
+    assert model["inputs"] == [{"role": "reference_image", "max": 1, "required": True}, {"role": "mask", "max": 1}], (
+        "没有自己的画布:图必须给,否则拿工作流里存着的那张跑"
+    )
+    assert model["modes"] == ["image-to-image"]
+
+
+def test_没接到输出上的读图节点不是输入槽(graph) -> None:
+    """DaSiWa WAN 2.2 里「Last-Frame-Image」那个 LoadImage 的下游全被旁路了:给它的图什么都不影响,不该是一格输入。"""
+    api = {**WAN_API, "14": {"class_type": "LoadImage", "inputs": {"image": "last.png"}}}
+    model = graph.describe("wan.json", "wan", graph.live(api, OBJECT_INFO), OBJECT_INFO)
+    assert [one["role"] for one in model["inputs"]] == ["first_frame"]
+
+
+def test_能跑的输出一个都没有_或者节点没装_原样交给ComfyUI去说(graph) -> None:
+    """判不了的不替 ComfyUI 拿主意:输出全断了、或者用了这台机器没装的节点,原样提交,让 ComfyUI 说出缺什么。"""
+    broken = {"4": {"class_type": "CheckpointLoaderSimple", "inputs": {"ckpt_name": "v1-5.ckpt"}},
+              "8": {"class_type": "VAEDecode", "inputs": {"vae": ["4", 2]}},
+              "9": {"class_type": "SaveImage", "inputs": {"images": ["8", 0], "filename_prefix": "x"}}}
+    assert graph.live(broken, OBJECT_INFO) == broken
+    missing = {**UPSCALE_API, "7": {"class_type": "CR Prompt Text", "inputs": {"prompt": "田园"}}}
+    assert "7" in graph.live(missing, OBJECT_INFO)
+    no_output = {"1": {"class_type": "CLIPTextEncode", "inputs": {"text": "hi"}}}
+    assert graph.live(no_output, OBJECT_INFO) == no_output
+    assert graph.live(UPSCALE_API, {}) == UPSCALE_API, "没有节点定义时什么都判不了"
 
 
 # --- 提示词要不要写:从图里读 -------------------------------------------------------

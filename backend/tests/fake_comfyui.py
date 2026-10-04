@@ -70,6 +70,8 @@ OBJECT_INFO: dict[str, Any] = {
     "VAEEncode": {"input": {"required": {"pixels": ["IMAGE"], "vae": ["VAE"]}}},
     "PreviewImage": {"input": {"required": {"images": ["IMAGE"]}}, "output_node": True},
     "ShowText|pysssss": {"input": {"required": {"text": ["STRING", {"forceInput": True}]}}, "output_node": True},
+    #: 参考图进模型的那一类(IP-Adapter):图接进来,交出改过的模型。
+    "IPAdapter": {"input": {"required": {"model": ["MODEL"], "image": ["IMAGE"]}}, "output": ["MODEL"]},
 }
 for _name in ("SaveImage",):
     OBJECT_INFO[_name]["output_node"] = True
@@ -83,7 +85,8 @@ def conn(name: str, link: int) -> dict[str, Any]:
     return {"name": name, "link": link}
 
 
-#: 一张保存的**文生图 + 参考图**工作流(UI 格式),形状照 ComfyUI 前端保存下来的那种。
+#: 一张保存的**文生图 + 参考图**工作流(UI 格式),形状照 ComfyUI 前端保存下来的那种。参考图经 IP-Adapter 进模型
+#: —— 它得真的接到出图那一路上:一个悬空的 LoadImage 什么都不影响,不是一格输入(graph.live)。
 #: 新版 ComfyUI 前端保存工作流时写进去的 id(改名、挪目录都不变)。
 PORTRAIT_ID = "3f2b1c9e-8d7a-4b6c-9e1f-0a1b2c3d4e5f"
 
@@ -104,11 +107,13 @@ PORTRAIT_UI: dict[str, Any] = {
         {"id": 9, "type": "SaveImage", "widgets_values": ["mosael"], "inputs": [conn("images", 9), widget("filename_prefix")]},
         {"id": 10, "type": "LoadImage", "widgets_values": ["example.png", "image"], "inputs": [widget("image")]},
         {"id": 11, "type": "Note", "widgets_values": ["注释"], "inputs": []},
+        {"id": 12, "type": "IPAdapter", "inputs": [conn("model", 10), conn("image", 11)]},
     ],
     "links": [
-        [1, 4, 0, 3, 0, "MODEL"], [2, 6, 0, 3, 1, "CONDITIONING"], [3, 7, 0, 3, 2, "CONDITIONING"],
+        [1, 12, 0, 3, 0, "MODEL"], [2, 6, 0, 3, 1, "CONDITIONING"], [3, 7, 0, 3, 2, "CONDITIONING"],
         [4, 5, 0, 3, 3, "LATENT"], [5, 4, 1, 6, 0, "CLIP"], [6, 4, 1, 7, 0, "CLIP"],
         [7, 3, 0, 8, 0, "LATENT"], [8, 4, 2, 8, 1, "VAE"], [9, 8, 0, 9, 0, "IMAGE"],
+        [10, 4, 0, 12, 0, "MODEL"], [11, 10, 0, 12, 1, "IMAGE"],
     ],
 }
 
@@ -156,6 +161,33 @@ CONTROLNET_API: dict[str, Any] = {
     "21": {"class_type": "ControlNetApply", "inputs": {"conditioning": ["6", 0], "control_net": ["20", 0],
                                                        "image": ["12", 0], "strength": 1.0}},
 }
+
+#: 用户那张 **inpainting.json** 的样子(转成 API 图之后):第一遍文生图的 KSampler 被静音了(mode 2,不进图),
+#: 它前后的 EmptyLatentImage(#8)、VAEDecode(#10,samples 那根线随静音断了)、PreviewImage(#11)还在,
+#: 另有一个没接到任何地方的 CLIPTextEncode(#6)。真正出图的是:读进来的图 → VAEEncode → SetLatentNoiseMask
+#: (拿 LoadImage 的 alpha 当蒙版)→ KSampler → VAEDecode → PreviewImage(#16)。
+INPAINT_MUTED_FIRST_PASS_API: dict[str, Any] = {
+    "4": {"class_type": "CheckpointLoaderSimple", "inputs": {"ckpt_name": "sd_xl_base.safetensors"}},
+    "6": {"class_type": "CLIPTextEncode", "inputs": {"text": "a beautiful girl, detailed face", "clip": ["4", 1]}},
+    "7": {"class_type": "CLIPTextEncode", "inputs": {"text": "text", "clip": ["4", 1]}},
+    "8": {"class_type": "EmptyLatentImage", "inputs": {"width": 1280, "height": 1920, "batch_size": 1}},
+    "10": {"class_type": "VAEDecode", "inputs": {"vae": ["4", 2]}},
+    "11": {"class_type": "PreviewImage", "inputs": {"images": ["10", 0]}},
+    "13": {"class_type": "KSampler", "inputs": {"seed": 1, "steps": 20, "cfg": 7.5, "sampler_name": "euler",
+                                                 "scheduler": "normal", "denoise": 0.8, "model": ["4", 0],
+                                                 "positive": ["14", 0], "negative": ["7", 0], "latent_image": ["24", 0]}},
+    "14": {"class_type": "CLIPTextEncode", "inputs": {"text": "a red lantern", "clip": ["4", 1]}},
+    "15": {"class_type": "VAEDecode", "inputs": {"samples": ["13", 0], "vae": ["4", 2]}},
+    "16": {"class_type": "PreviewImage", "inputs": {"images": ["15", 0]}},
+    "21": {"class_type": "LoadImage", "inputs": {"image": "painted-masked.png"}},
+    "23": {"class_type": "VAEEncode", "inputs": {"pixels": ["21", 0], "vae": ["4", 2]}},
+    "24": {"class_type": "SetLatentNoiseMask", "inputs": {"samples": ["23", 0], "mask": ["21", 1]}},
+}
+#: 上面那张图要的、OBJECT_INFO 里没有的节点定义。
+INPAINT_NODE_INFO: dict[str, Any] = {
+    "SetLatentNoiseMask": {"input": {"required": {"samples": ["LATENT"], "mask": ["MASK"]}}, "output": ["LATENT"]},
+}
+
 
 def _ml() -> list[Any]:
     return ["STRING", {"multiline": True}]

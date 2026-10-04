@@ -20,7 +20,16 @@ from typing import Any
 import pytest
 
 from app.domain.plugins import runtime
-from tests.fake_comfyui import MINIMAX_T2V_API, PNG, TWO_SAVES_API, VIDEO_NODE_INFO, FakeComfyUI, minimax_h3_ui
+from tests.fake_comfyui import (
+    INPAINT_MUTED_FIRST_PASS_API,
+    INPAINT_NODE_INFO,
+    MINIMAX_T2V_API,
+    PNG,
+    TWO_SAVES_API,
+    VIDEO_NODE_INFO,
+    FakeComfyUI,
+    minimax_h3_ui,
+)
 
 PLUGIN = Path(__file__).resolve().parents[2] / "plugins" / "bundled" / "comfyui"
 ENTRY = "tools/main.py"
@@ -188,7 +197,7 @@ def test_进度来自WebSocket(comfy, tmp_path: Path) -> None:
     comfy.state.websocket = True
     _, hooks, _ = _generate(comfy.url, tmp_path, {"model": "portrait.json"})
     messages = [message for _, message in hooks.progress]
-    assert "采样 5/20 · 第 2/8 个节点" in messages, "说的是界面上的节点名字(用户起的「采样」)、第几步、第几个节点"
+    assert "采样 5/20 · 第 2/9 个节点" in messages, "说的是界面上的节点名字(用户起的「采样」)、第几步、第几个节点"
     fractions = [fraction for fraction, _ in hooks.progress]
     assert fractions == sorted(fractions), "进度只往前走"
 
@@ -236,6 +245,24 @@ def test_没有认得的采样器的视频图_提示词照样写进去(comfy, tm
                                                    "prompt": "一条金鱼"})
     assert comfy.posted("/prompt")[1]["prompt"]["105:104"]["inputs"]["prompt"] == "一条金鱼"
     assert len(output["outputs"]) == 1, "CreateVideo 合成、SaveVideo 存下来:交回一段"
+
+
+def test_没接到能跑的输出上的节点_目录里不算_提交时也不带(comfy, tmp_path: Path) -> None:
+    """局部重绘那张图静音了第一遍文生图:目录不再给它假的尺寸 / 张数、不说一次交回两份;提交的图里也没有那几个
+    悬空的节点。给的图接到真正出图那一路的 LoadImage 上。"""
+    comfy.state.object_info.update(json.loads(json.dumps(INPAINT_NODE_INFO)))
+    comfy.state.workflows["inpainting.json"] = INPAINT_MUTED_FIRST_PASS_API
+    model = next(one for one in _models(comfy.url) if one["id"] == "inpainting.json")
+    assert "size" not in model["parameters"] and "num_images" not in model["parameters"]
+    assert model["outputs_per_run"] == 1
+
+    comfy.state.outputs = {"16": {"images": [{"filename": "ComfyUI_temp_00001_.png", "subfolder": "", "type": "temp"}]}}
+    output, _, _ = _generate(comfy.url, tmp_path, {"model": "inpainting.json", "parameters": {"num_images": 2},
+                                                   "inputs": [{"role": "reference_image", "path": str(_png(tmp_path))}]})
+    submitted = comfy.posted("/prompt")[0]["prompt"]
+    assert not {"6", "8", "10", "11"} & set(submitted)
+    assert submitted["21"]["inputs"]["image"].startswith("mosael/")
+    assert len(output["outputs"]) == 1
 
 
 def test_两个保存节点_一次交回两份_结果取自选一个就只交回它的(comfy, tmp_path: Path) -> None:
