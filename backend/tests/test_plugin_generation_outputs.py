@@ -75,3 +75,40 @@ def test_选项名字按看的人的语言挑() -> None:
     assert readable["title"] == "Results from"
     assert readable["x-enum-labels"] == {"all": "All (2 save nodes)", "9": "原图", "12": "高清"}
     assert readable["x-outputs-per-run"] == {"all": 2, "9": 1, "12": 1}
+
+
+#: 尺寸只是推荐的几档、任意宽高都收(ComfyUI 的工作流按 8 的倍数取整):`examples` 是推荐值,`minimum` 每边下限,
+#: `multipleOf` 插件取整到它的倍数。
+FREE_SIZE: dict[str, Any] = {
+    "id": "girl.json",
+    "label": "girl",
+    "kind": "image",
+    "parameters": {
+        "size": {"type": "string", "examples": ["1280x1920", "512x512", "1024x1024"], "default": "1280x1920",
+                 "minimum": 16, "multipleOf": 8},
+    },
+}
+
+
+def test_尺寸是推荐值时任意宽高都收() -> None:
+    """用户拍板:ComfyUI 生成的尺寸放开成任意宽高。此前「工作流自己的尺寸 + 8 档常用尺寸」是硬限制,768x1024 被拒
+    (「size 只能是:…」)。插件改成用 `examples` 说推荐值,宿主照旧摆这几档,但手填的也收;格式不对、比下限小的照样拒。"""
+    import pytest
+
+    from app.domain.generation.operations import GenerationDomainError, validate_parameters
+    from app.domain.generation.plugin_connections import descriptor
+    from app.domain.plugins.generation import _model
+
+    caps = descriptor(_model(FREE_SIZE, _text))
+    assert caps["sizes"] == ["1280x1920", "512x512", "1024x1024"] and caps["default_size"] == "1280x1920"
+    assert caps["custom_size"] == {"minimum": 16, "multiple_of": 8}
+    for size in ("768x1024", "1280x1920", "770 x 1021"):
+        validate_parameters("plugin:x", "girl.json", "image", {"size": size}, capabilities=caps)
+    for size in ("big", "768", "8x8", "0x1024"):
+        with pytest.raises(GenerationDomainError):
+            validate_parameters("plugin:x", "girl.json", "image", {"size": size}, capabilities=caps)
+
+    strict = descriptor(_model({**FREE_SIZE, "parameters": {"size": {"type": "string", "enum": ["512x512"]}}}, _text))
+    assert "custom_size" not in strict, "只给 enum 的照旧是只能从里面挑"
+    with pytest.raises(GenerationDomainError):
+        validate_parameters("plugin:x", "girl.json", "image", {"size": "768x1024"}, capabilities=strict)

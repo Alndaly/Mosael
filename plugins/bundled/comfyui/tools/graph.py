@@ -590,10 +590,19 @@ def output_media(class_type: str) -> str:
 PLACEHOLDERS = ("prompt", "negative", "seed", "width", "height", "steps", "duration_seconds")
 _PLACEHOLDER = re.compile(r"\{\{(\w+)\}\}")
 
-#: 尺寸下拉里常备的几档。**这张图自己的尺寸**总在里面,且是默认值。
+#: 尺寸下拉里**推荐**的几档(不是限制:任意宽高都收,每边取整到 SIZE_STEP 的倍数、至少 SIZE_MINIMUM)。
+#: **这张图自己的尺寸**总在里面,且是默认值。
 COMMON_SIZES = ("512x512", "768x768", "1024x1024", "832x1216", "1216x832", "1280x720", "720x1280", "1920x1080")
 #: 一次最多出几张(宿主一次生成的上限,见 ai/providers/contracts/generation.MAX_NUM_IMAGES)。
 MAX_BATCH = 4
+#: 宽高每边至少多少、取整到几的倍数。ComfyUI 的潜空间按 8 像素一格;生成的「尺寸」和工具的宽高是同一个规矩。
+SIZE_MINIMUM = 16
+SIZE_STEP = 8
+
+
+def snap_side(value: Any) -> int:
+    """一条边的像素数:四舍五入到 SIZE_STEP 的倍数,不小于 SIZE_MINIMUM。"""
+    return max(SIZE_MINIMUM, int(float(value) / SIZE_STEP + 0.5) * SIZE_STEP)
 
 
 def _placeholders_in(graph: Any) -> set[str]:
@@ -786,14 +795,15 @@ def describe(
     if seeds or "seed" in placeholders:
         parameters["seed"] = {"type": "integer", "minimum": 0}
     if sized is not None or {"width", "height"} & placeholders:
-        size: dict[str, Any] = {"type": "string"}
+        # 推荐的几档(`examples`),不是限制:手填的任意宽高都收(宿主据此摆可以手填的下拉),每边按 8 的倍数取整
+        size: dict[str, Any] = {"type": "string", "minimum": SIZE_MINIMUM, "multipleOf": SIZE_STEP}
         own = ""
         if sized is not None:
             inputs = api[sized]["inputs"]
             if isinstance(inputs.get("width"), int) and isinstance(inputs.get("height"), int):
                 own = f"{inputs['width']}x{inputs['height']}"
         choices = ([own] if own else []) + [one for one in COMMON_SIZES if one != own]
-        size["enum"] = choices
+        size["examples"] = choices
         if own:
             size["default"] = own
         parameters["size"] = size

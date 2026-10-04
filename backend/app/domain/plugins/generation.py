@@ -160,6 +160,12 @@ def _parameters(raw: Any, text: Any) -> dict[str, dict[str, Any]]:
             values = [one for one in enum if _scalar(one)][:_MAX_ENUM]
             if values:
                 clean["enum"] = values
+        # 推荐值(不是限制):尺寸给的是几档推荐、手填的也收时用它,不用 enum(见 generation/plugin_connections.descriptor)。
+        examples = spec.get("examples")
+        if isinstance(examples, list) and "enum" not in clean:
+            suggested = [one for one in examples if _scalar(one)][:_MAX_ENUM]
+            if suggested:
+                clean["examples"] = suggested
         if _scalar(spec.get("default")):
             clean["default"] = spec["default"]
         for bound in ("minimum", "maximum", "multipleOf"):

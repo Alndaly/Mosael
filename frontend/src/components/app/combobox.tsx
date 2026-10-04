@@ -48,6 +48,7 @@ export function Combobox({
   extraOptions,
   renderValue,
   hint,
+  ariaLabel,
   disabled,
   className,
   size,
@@ -71,6 +72,8 @@ export function Combobox({
   renderValue?: (value: string) => React.ReactNode;
   /** 触发器的悬停说明(值的全称、引用出了什么问题)。 */
   hint?: string;
+  /** 触发器给读屏念的名字(旁边没有 <label> 时)。 */
+  ariaLabel?: string;
   disabled?: boolean;
   className?: string;
   /** 触发器档位,和 `<Input size>`、`<Button size>` 同一把尺。 */
@@ -104,6 +107,7 @@ export function Combobox({
         type="button"
         role="combobox"
         aria-expanded={open}
+        aria-label={ariaLabel}
         disabled={disabled}
         className={cn(fieldTriggerClass(size), "cursor-pointer text-left", className)}
       >

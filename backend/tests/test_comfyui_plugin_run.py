@@ -248,6 +248,15 @@ def test_没有认得的采样器的视频图_提示词照样写进去(comfy, tm
     assert len(output["outputs"]) == 1, "CreateVideo 合成、SaveVideo 存下来:交回一段"
 
 
+def test_尺寸不限于推荐的几档_每边按8的倍数取整(comfy, tmp_path: Path) -> None:
+    """用户拍板:768x1024 这种要能直接用;不是 8 的倍数的按 8 取整(四舍五入),和工作流工具的宽高同一个规矩。"""
+    for size in ("768x1024", "770x1021", "500 x 1001"):
+        _generate(comfy.url, tmp_path, {"model": "portrait.json", "parameters": {"size": size}})
+    sizes = [(one["prompt"]["5"]["inputs"]["width"], one["prompt"]["5"]["inputs"]["height"])
+             for one in comfy.posted("/prompt")]
+    assert sizes == [(768, 1024), (768, 1024), (504, 1000)]
+
+
 def test_没接到能跑的输出上的节点_目录里不算_提交时也不带(comfy, tmp_path: Path) -> None:
     """局部重绘那张图静音了第一遍文生图:目录不再给它假的尺寸 / 张数、不说一次交回两份;提交的图里也没有那几个
     悬空的节点。给的图接到真正出图那一路的 LoadImage 上。"""

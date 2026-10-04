@@ -381,7 +381,9 @@ def test_提示词种子尺寸对到宿主的控件上(graph, convert) -> None:
     assert parameters["negative_prompt"] == {"type": "string"}
     assert parameters["seed"]["type"] == "integer"
     # 这张图自己的尺寸是默认值,排在常备的几档前面
-    assert parameters["size"]["default"] == "832x1216" and parameters["size"]["enum"][0] == "832x1216"
+    assert parameters["size"]["default"] == "832x1216" and parameters["size"]["examples"][0] == "832x1216"
+    assert "enum" not in parameters["size"], "推荐的几档,不是限制:任意宽高都收(按 8 的倍数取整)"
+    assert (parameters["size"]["minimum"], parameters["size"]["multipleOf"]) == (16, 8)
     # 这些不再单独列:提示词、种子、宽高都由宿主的主控件填
     for gone in ("6.text", "7.text", "3.seed", "5.width", "5.height"):
         assert gone not in parameters

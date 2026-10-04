@@ -250,7 +250,9 @@ def shape_of(entry: models.Entry, object_info: dict[str, Any]) -> Shape:
     if sized is not None or {"width", "height"} & placeholders:
         own = (api[sized]["inputs"] if sized is not None else {})
         for name, zh, en in (("width", "宽度", "Width"), ("height", "高度", "Height")):
-            spec: dict[str, Any] = {"type": "integer", "minimum": 16, "x-advanced": True, "title": _pair(zh, en)}
+            spec: dict[str, Any] = {"type": "integer", "minimum": graph.SIZE_MINIMUM, "x-advanced": True,
+                                    "title": _pair(zh, en),
+                                    "description": _pair("按 8 的倍数取整", "Rounded to a multiple of 8")}
             if isinstance(own.get(name), int):
                 spec["default"] = own[name]
             shape.properties[name] = spec

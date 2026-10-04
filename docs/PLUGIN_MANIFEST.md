@@ -1143,12 +1143,14 @@ Amazon S3 / S3 兼容服务是**一个插件的五个选项**(枚举配置 `STOR
 }
 ```
 
-- `parameters` 认的键:`type`(integer / number / string / boolean)、`enum`、`default`、`minimum`、`maximum`、
+- `parameters` 认的键:`type`(integer / number / string / boolean)、`enum`、`examples`(推荐值,不是限制)、`default`、`minimum`、`maximum`、
   `multipleOf`、`title`、`description`、`x-advanced`、`x-multiline`、`x-enum-labels`、`x-outputs-per-run`(后两个见下)。认不出的类型整项丢掉。`title` / `description`
   可以按语言分(`{"zh": "步数", "en": "Steps"}`):宿主**原样存着、给人看时再挑** —— 目录是在后台刷新的,刷新那一刻
   的语言不是看的人的语言。`title` 写人话(「采样器」),原始的内部名(`KSampler · sampler_name`)放 `description`,
   界面上悬停看得到。**顺序就是界面上的顺序**:常用的在前,留空也能跑的标 `x-advanced`。
-- **宿主自己有控件的那几个键**直接用宿主的控件:`seed`、`negative_prompt`、`size`(`enum` → 尺寸下拉)、
+- **宿主自己有控件的那几个键**直接用宿主的控件:`seed`、`negative_prompt`、`size`(`enum` → 尺寸下拉,只能从里面挑;
+  只是推荐、任意「宽x高」都收时写 `examples`,`minimum` 是每边下限、`multipleOf` 是你会取整到的倍数 → 描述符的
+  `sizes` + `custom_size`,下拉里也能手填,宿主只查写法和下限)、
   `resolution` / `aspect_ratio`、`duration_seconds`(`enum` 或 `minimum` / `maximum`)、`num_images`
   (`maximum` → 张数上限,没写用 `max_outputs`)、`generate_audio`,以及音频模型的 `lyrics`(歌词编辑器)与
   `instrumental`(纯音乐开关)。**其余的键**进描述符的 `parameter_schema`,

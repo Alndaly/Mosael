@@ -62,6 +62,7 @@ import {
   ParameterField,
   ParameterSection,
 } from "@/components/generation/parameterPanel";
+import { CustomSizePicker } from "@/components/generation/CustomSizePicker";
 import { useGenerationOptions } from "@/lib/generationOptions";
 import { elapsedSecondsBetween, formatElapsedSeconds, useNow } from "@/lib/time";
 import { MessageFooter, MessageTime } from "@/features/agent/messageUsage";
@@ -79,6 +80,7 @@ import {
   durationRange,
   durationChoices,
   sizeOptions,
+  customSizeRule,
   maxImages,
   parameterChoiceEntries,
   pickGenerationOption,
@@ -402,6 +404,7 @@ export function GenerateWorkspace({
   const settingsSection = `providers:${selectedModel?.kind ?? activeSession?.kind ?? kinds[0]}`;
   const selectedAdapterAvailable = selectedModel?.adapter_available ?? false;
   const selectedSizes = sizeOptions(selectedModel);
+  const selectedCustomSize = customSizeRule(selectedModel);
   const selectedDurations = durationChoices(selectedModel, generationConfig.resolution);
   const selectedResolutions = videoResolutionOptions(selectedModel);
   const selectedAspectRatios = aspectRatioOptions(selectedModel);
@@ -962,7 +965,20 @@ export function GenerateWorkspace({
                 {/* 尺寸**不属于任何一支**:图像收 `1024x1024`,万相视频收 `832*480`,都是"出多大"。
                     此前它锁在 image 分支里,于是一个声明了 size 的视频模型连这一栏都不出现 ——
                     参数描述符说了话而界面没听。 */}
-                {supportsParameter(selectedModel, "size") && selectedSizes.length > 0 && (
+                {supportsParameter(selectedModel, "size") && selectedSizes.length > 0 && selectedCustomSize && (
+                  /* 推荐的几档、手填的也收(ComfyUI 的工作流) */
+                  <ParameterField label={t("genSize")}>
+                    <CustomSizePicker
+                      value={generationConfig.size}
+                      onChange={(value) => setConfigValue("size", value)}
+                      options={selectedSizes}
+                      minimum={selectedCustomSize.minimum}
+                      ariaLabel={t("genSize")}
+                      className={PARAMETER_CONTROL_CLASS}
+                    />
+                  </ParameterField>
+                )}
+                {supportsParameter(selectedModel, "size") && selectedSizes.length > 0 && !selectedCustomSize && (
                   <ParameterField label={t("genSize")}>
                     <Select value={generationConfig.size} onValueChange={(value) => setConfigValue("size", value)}>
                       <SelectTrigger className={PARAMETER_CONTROL_CLASS}>

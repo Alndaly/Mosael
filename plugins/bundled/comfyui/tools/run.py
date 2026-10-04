@@ -42,15 +42,15 @@ def progress(emit: Emit, fraction: float, message: str) -> None:
     emit({"event": "progress", "progress": round(max(0.0, min(0.95, fraction)), 4), "message": message})
 
 
+_SIZE_TEXT = re.compile(r"^\s*(\d+)\s*[x×*]\s*(\d+)\s*$", re.IGNORECASE)
+
+
 def _size(value: Any) -> tuple[int, int] | None:
-    text = str(value or "").lower().replace("*", "x")
-    if "x" not in text:
+    """「宽x高」(`768x1024`、`768 × 1024`、`768*1024` 都认)→ 每边取整到 8 的倍数(graph.snap_side)。"""
+    found = _SIZE_TEXT.match(str(value or ""))
+    if not found:
         return None
-    try:
-        width, height = (int(part) for part in text.split("x", 1))
-    except ValueError:
-        return None
-    return (max(16, width), max(16, height))
+    return graph.snap_side(found.group(1)), graph.snap_side(found.group(2))
 
 
 def _number(value: Any) -> bool:
@@ -80,7 +80,7 @@ def values_from(prompt: Any, negative: Any, parameters: dict[str, Any], defaults
         values["width"], values["height"] = size
     for key in ("width", "height"):
         if _number(parameters.get(key)):
-            values[key] = int(parameters[key])
+            values[key] = graph.snap_side(parameters[key])
     for key in ("steps", "duration_seconds"):
         if _number(parameters.get(key)):
             values[key] = parameters[key]

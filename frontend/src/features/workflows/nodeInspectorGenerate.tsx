@@ -5,6 +5,7 @@ import { useI18n } from "@/app/preferences";
 import { Combobox } from "@/components/app/combobox";
 import { RefCombobox } from "@/features/nodeForms/RefCombobox";
 import { declaredChoices } from "@/components/generation/parameterPanel";
+import { CustomSizePicker } from "@/components/generation/CustomSizePicker";
 import { Input } from "@/components/ui/input";
 import { OptionPicker } from "@/components/ui/option-picker";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -35,6 +36,7 @@ import {
   durationChoices,
   type DeclaredParameter,
   sizeOptions,
+  customSizeRule,
   maxImages,
   parameterChoiceEntries,
   parseGenerationParameterInput,
@@ -89,6 +91,8 @@ interface GenField {
   key: string;
   label: string;
   options: string[];
+  /** 可选值只是推荐、手填的也收(ComfyUI 工作流的尺寸):每边下限。 */
+  custom?: { minimum: number };
   range?: { min: number; max: number };
   toggle?: boolean;
   /** 模型自己声明的参数(`parameter_schema`)。控件和取值都按它的声明来,见 DeclaredGenControl。 */
@@ -228,7 +232,9 @@ export function useGenerateNodeSection({
     if (ratios.length > 0) out.push({ key: "aspect_ratio", label: t("wfGenAspectRatio"), options: ratios });
     if (genModel.kind === "image") {
       const sizes = sizeOptions(genModel);
-      if (sizes.length > 0) out.push({ key: "size", label: t("wfGenSize"), options: sizes });
+      if (sizes.length > 0) {
+        out.push({ key: "size", label: t("wfGenSize"), options: sizes, custom: customSizeRule(genModel) ?? undefined });
+      }
       // 一次出几张。此前工作流里没有这一栏 —— 而它是图像那边最常调的一个,
       // 生成面板有、节点没有,同一个模型两处能力不一样。
       const images = maxImages(genModel);
@@ -440,7 +446,7 @@ export function generateNodeSection({
       {/* 生成参数按所选模型的 capabilities 渲染 —— 目录声明支持什么就出现什么。 */}
       {genModel && genParamKeys.length > 0 && (
         <>
-          {genParamKeys.map(({ key, label, options, range, toggle, declared }) => (
+          {genParamKeys.map(({ key, label, options, range, toggle, declared, custom }) => (
             <div className={FIELD_BOX} key={key}>
               <span>{label}</span>
               {/* 区间给数字框(上下界来自描述符),枚举给下拉。写死成下拉的话,
@@ -471,6 +477,14 @@ export function generateNodeSection({
                     <SelectItem value="false">{t("wfGenToggleOff")}</SelectItem>
                   </SelectContent>
                 </Select>
+              ) : custom ? (
+                <CustomSizePicker
+                  value={String(genParams[key] ?? "")}
+                  onChange={(next) => setGenParam(key, next)}
+                  options={options}
+                  minimum={custom.minimum}
+                  ariaLabel={label}
+                />
               ) : range ? (
                 <Input
                   type="number"

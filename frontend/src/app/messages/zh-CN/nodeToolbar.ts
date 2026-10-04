@@ -45,6 +45,8 @@ export const nodeToolbar = {
   wfGenCustomHide: "收起手动指定",
   wfGenAspectRatio: "画面比例",
   wfGenSize: "图像尺寸",
+  //: 尺寸只是推荐的几档、手填的也收时(ComfyUI 的工作流),下拉里输入框的占位。
+  genSizeCustomPlaceholder: "选一档,或输入宽x高,如 768x1024",
   wfGenResolution: "分辨率",
   wfGenDuration: "时长（秒）",
   //: 目录没给可选值时那个自由输入的占位。说清"可以填,但我们不知道有哪些"。

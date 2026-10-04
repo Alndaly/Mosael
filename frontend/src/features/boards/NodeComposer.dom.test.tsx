@@ -141,3 +141,31 @@ it("目录没给取值时,用户没填就一个值都不提交", async () => {
     expect(parameters).not.toHaveProperty(key);
   }
 });
+
+it("尺寸只是推荐值时可以手填 —— 768x1024 照写的发出去", async () => {
+  // 用户拍板:ComfyUI 的工作流尺寸放开成任意宽高,推荐的几档还在下拉里,手填的也收(写法不对的不收)。
+  HTMLElement.prototype.scrollIntoView = vi.fn();
+  vi.stubGlobal("ResizeObserver", class { observe() {} unobserve() {} disconnect() {} });
+  const onSubmit = vi.fn();
+  render(<NodeComposer
+    item={{ id: "image", kind: "image", text: "一只猫" } as BoardItem}
+    models={[{
+      id: "m", provider_profile_id: "p", profile_name: "ComfyUI", label: "girl", adapter_available: true, is_default: true,
+      capabilities_known: true, provider: "plugin:dev.mosael.comfyui", model: "girl.json", kind: "image",
+      capabilities: { parameter_keys: ["size"], sizes: ["1280x1920", "512x512"], default_size: "1280x1920",
+        custom_size: { minimum: 16, multiple_of: 8 } },
+    } as GenerationOption]}
+    busy={false} workspaceId="w" onPickAsset={vi.fn()} onFormChange={vi.fn()} onSubmit={onSubmit}
+  />);
+  fireEvent.click(screen.getByRole("button", { name: "boardGenerationSettings" }));
+  fireEvent.click(await screen.findByRole("combobox", { name: "wfGenSize" }));
+  const typing = await screen.findByPlaceholderText("genSizeCustomPlaceholder");
+  fireEvent.change(typing, { target: { value: "8x8" } });
+  expect(screen.queryByRole("option", { name: "comboboxUseCustomValue" })).not.toBeInTheDocument();
+  fireEvent.change(typing, { target: { value: "768 × 1024" } });
+  fireEvent.click(await screen.findByRole("option", { name: "comboboxUseCustomValue" }));
+  fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  fireEvent.click(screen.getByRole("button", { name: "boardGenerate" }));
+  expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ parameters: expect.objectContaining({ size: "768x1024" }) }));
+});

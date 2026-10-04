@@ -24,6 +24,7 @@ import { ROLE_COPY, SOURCE_ROLES, type SourceRole } from "@/lib/sourceFrames";
 import { DigitalHumanConsent } from "@/components/generation/DigitalHumanConsent";
 import { ParameterRow, declaredChoices } from "@/components/generation/parameterPanel";
 import { IconButton } from "@/components/ui/icon-button";
+import { CustomSizePicker } from "@/components/generation/CustomSizePicker";
 import { Input } from "@/components/ui/input";
 import { MenuContent, MenuItem } from "@/components/ui/menu";
 import { OptionPicker } from "@/components/ui/option-picker";
@@ -48,6 +49,7 @@ import {
   pickGenerationOption,
   promptMode,
   sizeOptions,
+  customSizeRule,
   sourceLimit,
   supportsParameter,
   videoResolutionOptions,
@@ -493,6 +495,8 @@ export function NodeComposer({
   const [ratio, setRatio] = React.useState(() => String(savedParameters.aspect_ratio ?? capabilityString(current, "default_aspect_ratio", aspectRatioOptions(current)[0] ?? "")));
   const [resolution, setResolution] = React.useState(() => String(savedParameters.resolution ?? capabilityString(current, "default_resolution", videoResolutionOptions(current)[0] ?? "")));
   const [size, setSize] = React.useState(() => String(savedParameters.size ?? capabilityString(current, "default_size", sizeOptions(current)[0] ?? "")));
+  //: 尺寸只是推荐值(ComfyUI 的工作流):下拉里也能手填「宽x高」
+  const customSize = customSizeRule(current);
   const [duration, setDuration] = React.useState(() => Number(savedParameters.duration_seconds ?? defaultDuration(current)));
   const durations = durationChoices(current, resolution);
   const [audio, setAudio] = React.useState(() =>
@@ -1096,7 +1100,20 @@ export function NodeComposer({
                     placeholder={t("genValueUnknownPlaceholder")}
                   />
                 )}
-                {supportsParameter(current, "size") && (
+                {supportsParameter(current, "size") && (customSize ? (
+                  /* 推荐的几档、手填的也收(ComfyUI 的工作流):下拉里多一个输入框 */
+                  <ParameterRow label={t("wfGenSize")}>
+                    <CustomSizePicker
+                      value={size}
+                      onChange={setSize}
+                      options={sizeOptions(current)}
+                      minimum={customSize.minimum}
+                      ariaLabel={t("wfGenSize")}
+                      size="sm"
+                      className="w-full min-w-0 text-ui-xs"
+                    />
+                  </ParameterRow>
+                ) : (
                   <Pick
                     label={t("wfGenSize")}
                     value={size}
@@ -1105,7 +1122,7 @@ export function NodeComposer({
                     allowFreeValue
                     placeholder={t("genValueUnknownPlaceholder")}
                   />
-                )}
+                ))}
                 {supportsParameter(current, "duration_seconds") && durations.length === 0 && (
                   /* 声明了时长、却没有可选值也没有区间 —— 摆一个自由输入,而不是消失。
                      值仍然是 0(未设置),用户不填就不提交。 */

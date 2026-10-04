@@ -95,6 +95,10 @@ MESSAGES: dict[str, dict[str, str]] = {
         "zh": "{provider}/{model} 的 {name} 不能大于 {high}",
         "en": "{name} for {provider}/{model} can't be more than {high}.",
     },
+    "genErr_sizeFormat": {
+        "zh": "{provider}/{model} 的尺寸要写成「宽x高」,每边至少 {minimum}(比如 {example}),收到的是:{value}",
+        "en": "The size for {provider}/{model} must be written as width x height, at least {minimum} on each side (e.g. {example}); got: {value}",
+    },
     "genErr_choiceOnly": {
         "zh": "{provider}/{model} 的 {name} 只能是:{choices}",
         "en": "{name} for {provider}/{model} must be one of: {choices}",

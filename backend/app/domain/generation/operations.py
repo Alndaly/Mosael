@@ -801,6 +801,22 @@ def validate_against_capabilities(
     _check_conditional_duration(provider, model, capabilities, counts, parameters)
 
 
+#: 手填的尺寸:`768x1024`、`768 × 1024`、`768*1024` 都认。
+_SIZE_TEXT = re.compile(r"^\s*(\d+)\s*[x×*]\s*(\d+)\s*$", re.IGNORECASE)
+
+
+def _check_custom_size(provider: str, model: str, rule: dict[str, Any], value: Any, sizes: list[Any]) -> None:
+    """尺寸只是推荐值的模型(描述符的 `custom_size`):任意「宽x高」都收,每边不小于 `minimum`。
+    取整到 `multiple_of` 的倍数是模型那一侧的事(ComfyUI 插件自己取整),这里不拒。"""
+    found = _SIZE_TEXT.match(str(value))
+    minimum = int(rule.get("minimum") or 1)
+    if not found or min(int(found.group(1)), int(found.group(2))) < minimum:
+        raise GenerationDomainError(
+            "genErr_sizeFormat", provider=provider, model=model, value=str(value), minimum=minimum,
+            example=str(sizes[0]) if sizes else "1024x1024",
+        )
+
+
 def validate_parameters(
     provider: str, model: str, kind: str, parameters: dict[str, Any], *, capabilities: dict[str, Any] | None,
 ) -> None:
@@ -827,7 +843,12 @@ def validate_parameters(
     for name, spec in (capabilities.get("parameter_schema") or {}).items():
         if name in parameters and isinstance(spec, dict):
             _check_declared_parameter(provider, model, name, spec, parameters[name])
+    custom_size = capabilities.get("custom_size")
+    if isinstance(custom_size, dict) and parameters.get("size"):
+        _check_custom_size(provider, model, custom_size, parameters["size"], capabilities.get("sizes") or [])
     for name, choices_key in (("size", "sizes"), ("resolution", "resolutions"), ("aspect_ratio", "aspect_ratios")):
+        if name == "size" and isinstance(custom_size, dict):
+            continue  # 推荐的几档不是限制:上面按「宽x高」和每边下限查过了
         choices = capabilities.get(choices_key)
         value = parameters.get(name)
         if choices and value and str(value) not in [str(one) for one in choices]:

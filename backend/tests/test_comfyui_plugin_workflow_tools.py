@@ -182,6 +182,16 @@ def test_工具的张数默认也是1_不照工作流里存着的batch_size(comf
     assert sizes == [1, 1, 3], "没填(或空着)就是 1,填了 3 就是 3"
 
 
+def test_工具的宽高也按8的倍数取整(comfy, tmp_path: Path) -> None:
+    hooks = runtime.StreamHooks(lambda *_: None, lambda _: None, lambda: False)
+    scratch = tmp_path / "out"
+    scratch.mkdir()
+    runtime.stream_tool(PLUGIN, ENTRY, PORTRAIT_TOOL, {"width": "1001", "height": "500"}, {"SERVER_URL": comfy.url},
+                        hooks=hooks, scratch_dir=scratch, timeout=60)
+    canvas = comfy.posted("/prompt")[0]["prompt"]["5"]["inputs"]
+    assert (canvas["width"], canvas["height"]) == (1000, 504)
+
+
 def test_自定义输出节点的产出落在它声明的那个输出上(comfy, tmp_path: Path) -> None:
     """object_info 里标了 output_node 的自定义保存节点,工具声明的是 `output_12`:交回时也得记在 `output_12` 上,
     不能按文件后缀另起一个 `image_12` —— 那样下游接「那个保存节点的图」永远是空的。"""

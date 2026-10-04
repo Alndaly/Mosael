@@ -13,12 +13,14 @@ import { describe, expect, it } from "vitest";
 
 import {
   booleanParameterKeys,
+  customSizeRule,
   declaredParameters,
   declaredParameterValue,
   defaultDuration,
   durationChoices,
   durationOptions,
   hasEnoughText,
+  parseCustomSize,
   parseGenerationParameterInput,
   parameterChoiceEntries,
   promptMode,
@@ -232,5 +234,29 @@ describe("提示词要不要写(描述符的 prompt)", () => {
     expect(promptToSend(withPrompt("none"), "上一个模型的提示词")).toBe("");
     expect(promptToSend(withPrompt("optional"), "更清楚")).toBe("更清楚");
     expect(promptToSend(withPrompt(), "一只猫")).toBe("一只猫");
+  });
+});
+
+describe("尺寸只是推荐值时任意宽高都收", () => {
+  // 用户拍板:ComfyUI 生成的尺寸放开成任意宽高 —— 工作流自己的尺寸和几档常用尺寸只是推荐,768x1024 要能直接用。
+  // 描述符用 custom_size 说「手填的也收」(每边下限),界面照旧摆推荐的几档,但允许手填。
+  const comfy = {
+    kind: "image",
+    capabilities: { parameter_keys: ["size"], sizes: ["1280x1920", "512x512"], custom_size: { minimum: 16, multiple_of: 8 } },
+  } as unknown as Model;
+
+  it("说了 custom_size 的模型收手填的尺寸,只给推荐清单的不收", () => {
+    expect(customSizeRule(comfy)).toEqual({ minimum: 16 });
+    expect(customSizeRule(wan)).toBeNull();
+    expect(sizeOptions(comfy)).toEqual(["1280x1920", "512x512"]);
+  });
+
+  it("手填的宽高认几种写法,写成 宽x高;认不出或比下限小的不收", () => {
+    expect(parseCustomSize("768x1024", 16)).toBe("768x1024");
+    expect(parseCustomSize(" 768 × 1024 ", 16)).toBe("768x1024");
+    expect(parseCustomSize("768*1024", 16)).toBe("768x1024");
+    expect(parseCustomSize("8x8", 16)).toBeNull();
+    expect(parseCustomSize("big", 16)).toBeNull();
+    expect(parseCustomSize("768", 16)).toBeNull();
   });
 });

@@ -44,6 +44,7 @@ export const nodeToolbar = {
   wfGenCustomHide: "Hide manual fields",
   wfGenAspectRatio: "Aspect ratio",
   wfGenSize: "Image size",
+  genSizeCustomPlaceholder: "Pick one, or type width x height, e.g. 768x1024",
   wfGenResolution: "Resolution",
   wfGenDuration: "Duration (s)",
   genValueUnknownPlaceholder: "Values unknown · type your own",

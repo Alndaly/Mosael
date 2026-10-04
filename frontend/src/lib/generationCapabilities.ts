@@ -288,6 +288,28 @@ export function sizeOptions(model: GenerationOption | null): string[] {
   return capabilityList(model, "sizes", UNDECLARED);
 }
 
+/**
+ * 尺寸是不是**推荐的几档、手填的也收**(描述符的 `custom_size`,ComfyUI 的工作流就是:任意宽高,插件按 8 的倍数取整)。
+ * 是的话交回每边的下限;只给了推荐清单的模型(多数云端接口只收那几档)回 null。
+ */
+export function customSizeRule(model: GenerationOption | null): { minimum: number } | null {
+  if (!supportsParameter(model, "size")) return null;
+  const rule = (model?.capabilities as Record<string, unknown> | undefined)?.custom_size;
+  if (!rule || typeof rule !== "object") return null;
+  const minimum = Number((rule as Record<string, unknown>).minimum);
+  return { minimum: Number.isFinite(minimum) && minimum >= 1 ? minimum : 1 };
+}
+
+/** 手填的尺寸:`768x1024`、`768 × 1024`、`768*1024` 都认,交回 `768x1024`;认不出、或有一边比下限小,回 null。
+ *  和后端 operations._check_custom_size 同一个判据。 */
+export function parseCustomSize(text: string, minimum = 1): string | null {
+  const found = /^\s*(\d+)\s*[x×*]\s*(\d+)\s*$/i.exec(text);
+  if (!found) return null;
+  const width = Number(found[1]);
+  const height = Number(found[2]);
+  return Math.min(width, height) >= minimum ? `${width}x${height}` : null;
+}
+
 export function videoResolutionOptions(model: GenerationOption | null): string[] {
   if (!supportsParameter(model, "resolution")) return [];
   return capabilityList(model, "resolutions", UNDECLARED);

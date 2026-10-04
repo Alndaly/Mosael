@@ -74,6 +74,10 @@ _HOST_KEYS = frozenset(
 )
 
 
+def _positive_int(value: Any, fallback: int) -> int:
+    return int(value) if isinstance(value, (int, float)) and not isinstance(value, bool) and value >= 1 else fallback
+
+
 def descriptor(model: plugin_generation.PluginModel) -> dict[str, Any]:
     """一个插件模型的能力描述符,和内置目录同形。**不伪造任何值**:插件没给的格子就不出现(ADR 0015)。"""
     caps: dict[str, Any] = {"modes": list(model.modes) or list(_DEFAULT_MODES.get(model.kind, []))}
@@ -86,6 +90,13 @@ def descriptor(model: plugin_generation.PluginModel) -> dict[str, Any]:
         if key == "size":
             if enum:
                 caps["sizes"] = [str(one) for one in enum]
+            elif spec.get("examples"):
+                # 推荐的几档、任意「宽x高」都收(ComfyUI 的工作流按 8 的倍数取整):下拉照旧摆推荐值,也能手填
+                caps["sizes"] = [str(one) for one in spec["examples"]]
+                caps["custom_size"] = {
+                    "minimum": _positive_int(spec.get("minimum"), 1),
+                    "multiple_of": _positive_int(spec.get("multipleOf"), 1),
+                }
             if default not in (None, ""):
                 caps["default_size"] = str(default)
         elif key in ("resolution", "aspect_ratio"):
