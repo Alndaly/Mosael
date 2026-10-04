@@ -5,6 +5,7 @@ import { Plus } from "lucide-react";
 import { useI18n } from "@/app/preferences";
 import { type EdgeShape } from "@/components/app/canvasEdgeShape";
 import { CANVAS_DRAFT_LINE_CLASS } from "@/components/app/canvasEdges";
+import { IconButton } from "@/components/ui/icon-button";
 import { listenKeys } from "@/lib/shortcuts";
 import { cn } from "@/lib/utils";
 import { selectionDraft, type PlacedCell, type Rect, type SelectionDraft, type XY } from "@/features/boards/selectionLink";
@@ -200,11 +201,11 @@ export function BoardSelectionOutlet({
         </svg>
       )}
       {sources.length > 0 && (
-        <button
+        <IconButton
+          unstyled
           type="button"
           data-selection-outlet=""
-          aria-label={label}
-          title={label}
+          label={label}
           onPointerDown={begin}
           className={cn(
             "nodrag nopan pointer-events-auto absolute grid size-7 -translate-x-1/2 -translate-y-1/2 cursor-crosshair place-items-center rounded-full border shadow-sm transition-colors",
@@ -222,7 +223,7 @@ export function BoardSelectionOutlet({
           >
             {sources.length}
           </span>
-        </button>
+        </IconButton>
       )}
     </div>
   );

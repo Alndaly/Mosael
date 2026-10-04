@@ -4,9 +4,10 @@ import { AtSign } from "lucide-react";
 
 import { assetThumbnailUrl, entityKeys, listEntities, type EntitySummary } from "@/api/client";
 import { useI18n } from "@/app/preferences";
-import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Truncate } from "@/components/ui/truncate";
 import type { ComposerChip } from "@/lib/composerChip";
 import { cn } from "@/lib/utils";
 import { entityDisplayName, entityKindIcon, useCatalogLabels } from "@/features/entities/entityMeta";
@@ -44,7 +45,7 @@ export function EntityMentionRow({ entity, showKind = true }: { entity: EntitySu
           <Icon size={9} />
         </span>
       </span>
-      <span className="min-w-0 flex-1 truncate text-ui-xs text-foreground">{entityDisplayName(entity)}</span>
+      <Truncate className="flex-1 text-ui-xs text-foreground">{entityDisplayName(entity)}</Truncate>
       {showKind && <span className="shrink-0 text-ui-2xs text-muted-foreground">{labels.kind(entity.kind)}</span>}
     </>
   );
@@ -110,9 +111,9 @@ export function EntityMentionButton({
     <>
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
-          <Button type="button" variant="ghost" size="icon-xs" aria-label={t("entityMention")} title={t("entityMention")} data-entity-mention="">
+          <IconButton type="button" variant="ghost" size="icon-xs" label={t("entityMention")} data-entity-mention="">
             <AtSign size={14} />
-          </Button>
+          </IconButton>
         </PopoverTrigger>
         <PopoverContent align="start" className="grid w-[320px] gap-1.5 p-1.5">
           <Input

@@ -11,6 +11,7 @@ import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
 import { toPlainText } from "@/components/markdown/inlineSyntax";
 import { Input } from "@/components/ui/input";
 import { OptionPicker } from "@/components/ui/option-picker";
+import { Hint } from "@/components/ui/tooltip";
 import { NoteReferenceField } from "@/features/notes/NotePickerDialog";
 import { canTakeUpstream, fieldDataType } from "@/features/nodeForms/fieldTypes";
 import { isOneOfFallback, isTakenByOneOfPeer, isWorkflowFieldActive } from "@/features/nodeForms/fieldActivation";
@@ -378,17 +379,21 @@ export function NodeConfigForm({
               aria-label={declaredLabel || key}
               aria-required={spec?.required || undefined}
             >
-              <span title={compact && spec?.description ? toPlainText(spec.description) : undefined}>
-                {declaredLabel || key}
+              <span>
+                {/* 紧凑版不摆字段说明,悬停名字时给;说明只挂在名字上,不罩住右边的切换钮。 */}
+                <Hint label={compact && spec?.description ? toPlainText(spec.description) : undefined}>
+                  <span>{declaredLabel || key}</span>
+                </Hint>
                 {spec?.required ? <em className="font-bold not-italic text-destructive">*</em> : null}
                 {canConnect && (
+                  <Hint label={t("wfInputModeHint")}>
                   <button
                     type="button"
+                    data-input-mode=""
                     className={cn(
                       "ml-auto inline-flex cursor-pointer items-center gap-[3px] rounded-full border border-border bg-transparent px-1.5 py-px text-ui-2xs font-medium text-muted-foreground transition-[border-color,color,background] duration-100 hover:border-border-strong hover:text-foreground",
                       connected && "border-[color-mix(in_srgb,var(--primary)_45%,transparent)] bg-[color-mix(in_srgb,var(--primary)_10%,transparent)] text-primary hover:text-primary",
                     )}
-                    title={t("wfInputModeHint")}
                     aria-pressed={connected}
                     onClick={(event) => {
                       event.preventDefault();
@@ -398,6 +403,7 @@ export function NodeConfigForm({
                     {connected ? <Link2 size={11} /> : <PenLine size={11} />}
                     {connected ? t("wfInputRef") : t("wfInputManual")}
                   </button>
+                  </Hint>
                 )}
               </span>
               {connected ? (

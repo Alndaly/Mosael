@@ -24,6 +24,7 @@ vi.mock("@xyflow/react", () => ({
 import type { BoardItem, BoardProducerInfo, BoardRunRequest } from "@/api/client";
 import { withSlotProducer } from "@/api/client";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { hoverHint, readHint } from "@/test/hint";
 import { renderComposer, type ComposerHost } from "@/features/boards/boardComposers";
 import { producerOf } from "@/features/boards/boardItemState";
 import { SceneNode } from "@/features/boards/boardNodes";
@@ -122,6 +123,8 @@ function Stateful({ initial, run, saved }: { initial: BoardItem; run: (request: 
 }
 
 const sendButton = () => document.querySelector<HTMLButtonElement>('[data-board-composer="scene"] [data-board-composer-send]')!;
+//: 点不了、而且说得出为什么时,按钮外面才有那层接悬停的壳(见 Hint 的 disabledReason)—— 镜头还在查时没有。
+const sendExplains = () => waitFor(() => expect(sendButton().closest("[data-hint-disabled]")).not.toBeNull());
 const chip = (key: string) =>
   within(document.querySelector<HTMLElement>(`[data-board-composer-bar] [data-field-key="${key}"]`)!).getByRole("combobox");
 
@@ -182,7 +185,8 @@ describe("3D 场景格的面板", () => {
   it("好几个镜头却没挑:发送键是灰的,悬停说还差镜头", async () => {
     stubShots({ sc: [{ value: "shot-1", label: "开场" }, { value: "shot-2", label: "近景" }] });
     mount(<Stateful initial={scene("sc", { form: {} })} run={async () => undefined} />);
-    await waitFor(() => expect(sendButton().getAttribute("title")).toContain("boardToolMissing"));
+    await sendExplains();
+    expect(await readHint(sendButton())).toContain("boardToolMissing");
     expect(chip("shot_id").textContent).toBe("镜头");
     expect(sendButton()).toBeDisabled();
   });
@@ -190,7 +194,8 @@ describe("3D 场景格的面板", () => {
   it("存着的镜头这个场景里没有(换了场景):当没挑 —— 芯片写「镜头」,不是只剩一个箭头(用户截图)", async () => {
     stubShots({ sc: [{ value: "shot-1", label: "开场" }, { value: "shot-2", label: "近景" }] });
     mount(<Stateful initial={scene("sc", { form: { config: { shot_id: "old-shot" } } })} run={async () => undefined} />);
-    await waitFor(() => expect(sendButton().getAttribute("title")).toContain("boardToolMissing"));
+    await sendExplains();
+    expect(await readHint(sendButton())).toContain("boardToolMissing");
     expect(chip("shot_id").textContent).toBe("镜头");
     expect(sendButton()).toBeDisabled();
   });
@@ -198,12 +203,14 @@ describe("3D 场景格的面板", () => {
   it("场景一个镜头都没有:镜头芯片是灰的,悬停说为什么;发送键也是灰的", async () => {
     stubShots({});
     mount(<Stateful initial={scene("sc", { form: {} })} run={async () => undefined} />);
-    await waitFor(() =>
-      expect(chip("shot_id").closest("[data-field-key]")?.getAttribute("title")).toContain("boardSceneNoShots"),
-    );
+    await sendExplains();
     expect(chip("shot_id")).toBeDisabled();
+    //: 芯片禁用着接不到悬停,说明挂在外面那层(data-field-key)上。
+    const field = chip("shot_id").closest<HTMLElement>("[data-field-key]")!;
+    expect(await hoverHint(field)).toContain("boardSceneNoShots");
+    fireEvent.pointerLeave(field);
     expect(sendButton()).toBeDisabled();
-    expect(sendButton().getAttribute("title")).toContain("boardSceneNoShots");
+    expect(await readHint(sendButton())).toContain("boardSceneNoShots");
   });
 });
 

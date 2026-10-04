@@ -175,7 +175,10 @@ describe("操作条上的能力", () => {
     expect(document.querySelector('textarea[data-field-key="text"]')).toBeNull();
     const send = document.querySelector<HTMLButtonElement>("[data-board-composer-send]")!;
     expect(send.disabled).toBe(true);
-    expect(send.title).toContain("boardToolMissing");
+    //: 点不了的原因挂在按钮外面那层壳上(禁用的按钮接不到悬停);键盘切到壳上马上出。
+    fireEvent.keyDown(document, { key: "Tab" });
+    act(() => (send.closest("[data-hint-disabled]") as HTMLElement).focus());
+    expect(screen.getByRole("tooltip").textContent).toContain("boardToolMissing");
     //: 换到让 AI 写:下面那块换成写字的。
     act(() => abilityButton("boardAskAiWrite").click());
     expect(composer()?.dataset.boardComposer).toBe("write");

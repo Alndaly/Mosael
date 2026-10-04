@@ -8,10 +8,13 @@ import {
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
-import { FLOATING_SURFACE, MENU_ITEM } from "@/components/ui/floating";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { FLOATING_SURFACE } from "@/components/ui/floating";
+import { IconButton } from "@/components/ui/icon-button";
+import { MenuContent, MenuItem } from "@/components/ui/menu";
+import { Popover, PopoverTrigger } from "@/components/ui/popover";
+import { Hint } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import { isImeKeystroke } from "@/lib/shortcuts";
+import { formatCombo, isImeKeystroke } from "@/lib/shortcuts";
 import { readNoteSelection, type NoteSelection } from "./noteSelection";
 import { HIGHLIGHT } from "./NoteHighlight";
 import type { ReadAloud } from "./readAloud";
@@ -44,7 +47,11 @@ const FALLBACK_HEIGHT = 36;
 /** 比它窄就收成「问 AI」+「更多」。 */
 const NARROW = 640;
 
-type Item = { id: string; label: string; icon: LucideIcon; pressed?: boolean; run: () => void };
+type Item = {
+  id: string; label: string; icon: LucideIcon; pressed?: boolean; run: () => void;
+  /** 编辑器里真的绑着的快捷键(规范串见 lib/shortcuts)。 */
+  shortcut?: string;
+};
 
 export function NoteSelectionToolbar({ editor, keys, readAloud, onAskAi, onAiAction, onQuote, onSaveToNote, onAddToBoard }: {
   editor: Editor;
@@ -151,19 +158,19 @@ export function NoteSelectionToolbar({ editor, keys, readAloud, onAskAi, onAiAct
     close();
   };
   const formats: Item[] = [
-    { id: "bold", label: s.bold, icon: Bold, pressed: state.bold, run: () => editor.chain().focus().toggleBold().run() },
-    { id: "italic", label: s.italic, icon: Italic, pressed: state.italic, run: () => editor.chain().focus().toggleItalic().run() },
-    { id: "strike", label: s.strike, icon: Strikethrough, pressed: state.strike, run: () => editor.chain().focus().toggleStrike().run() },
-    { id: "code", label: ss.inlineCode, icon: Code, pressed: state.code, run: () => editor.chain().focus().toggleCode().run() },
-    { id: "highlight", label: ss.highlight, icon: Highlighter, pressed: state.highlight, run: () => editor.chain().focus().toggleMark(HIGHLIGHT).run() },
+    { id: "bold", label: s.bold, icon: Bold, pressed: state.bold, shortcut: "Mod+B", run: () => editor.chain().focus().toggleBold().run() },
+    { id: "italic", label: s.italic, icon: Italic, pressed: state.italic, shortcut: "Mod+I", run: () => editor.chain().focus().toggleItalic().run() },
+    { id: "strike", label: s.strike, icon: Strikethrough, pressed: state.strike, shortcut: "Mod+Shift+S", run: () => editor.chain().focus().toggleStrike().run() },
+    { id: "code", label: ss.inlineCode, icon: Code, pressed: state.code, shortcut: "Mod+E", run: () => editor.chain().focus().toggleCode().run() },
+    { id: "highlight", label: ss.highlight, icon: Highlighter, pressed: state.highlight, shortcut: "Mod+Shift+H", run: () => editor.chain().focus().toggleMark(HIGHLIGHT).run() },
     state.link
       ? { id: "unlink", label: ss.unlink, icon: Unlink, run: () => editor.chain().focus().extendMarkRange("link").unsetLink().run() }
       : { id: "link", label: s.link, icon: Link, run: () => { setUrl(""); setLinking(true); } },
   ];
   const common: Item[] = [
     { id: "copy", label: ss.copy, icon: Copy, run: () => { void navigator.clipboard?.writeText(plain()).then(() => toast.success(ss.copied)); } },
-    { id: "bullet", label: s.bulletList, icon: List, pressed: state.bullet, run: () => editor.chain().focus().toggleBulletList().run() },
-    { id: "task", label: s.taskList, icon: ListTodo, pressed: state.task, run: () => editor.chain().focus().toggleTaskList().run() },
+    { id: "bullet", label: s.bulletList, icon: List, pressed: state.bullet, shortcut: "Mod+Shift+8", run: () => editor.chain().focus().toggleBulletList().run() },
+    { id: "task", label: s.taskList, icon: ListTodo, pressed: state.task, shortcut: "Mod+Shift+9", run: () => editor.chain().focus().toggleTaskList().run() },
     ...(onQuote ? [{ id: "quote", label: ss.quote, icon: TextQuote, run: () => withSelection(onQuote) }] : []),
     readAloud.reading
       ? { id: "read", label: ss.stopReading, icon: Square, run: readAloud.stop }
@@ -179,34 +186,37 @@ export function NoteSelectionToolbar({ editor, keys, readAloud, onAskAi, onAiAct
   const aiItems = onAiAction ? NOTE_AI_ACTIONS.map((action) => ({ action, ...ss.actions[action] })) : [];
 
   const iconButton = (item: Item) => (
-    <Button
+    <IconButton
       key={item.id}
       type="button"
       variant="ghost"
       size="icon-xs"
-      aria-label={item.label}
-      title={item.label}
+      label={item.label}
+      shortcut={item.shortcut && formatCombo(item.shortcut)}
       aria-pressed={item.pressed}
       className={cn(item.pressed && "bg-accent text-accent-foreground")}
       onMouseDown={(event) => event.preventDefault()}
       onClick={item.run}
     >
       <item.icon />
-    </Button>
+    </IconButton>
   );
-  const menuItem = (key: string, label: string, Icon: LucideIcon, run: () => void, hint?: string) => (
-    <button key={key} type="button" role="menuitem" title={hint ?? label} className={cn(MENU_ITEM, "w-full text-left")} onClick={() => { setMenu(null); run(); }}>
-      <Icon />
-      <span className="grid min-w-0">
-        <span>{label}</span>
-        {hint ? <span className="text-ui-2xs text-muted-foreground">{hint}</span> : null}
-      </span>
-    </button>
-  );
+  const toolMenuItems = (items: Item[]) => items.map((item) => (
+    <MenuItem key={item.id} icon={<item.icon />} label={item.label} shortcut={item.shortcut && formatCombo(item.shortcut)}
+      aria-pressed={item.pressed} onClick={() => { setMenu(null); item.run(); }} />
+  ));
+  //: AI 动作的那句说明(「让表达更通顺…」)是名字下面淡色的一行,不是悬停才看得到的 title。
+  const aiMenuItems = () => aiItems.map((item) => (
+    <MenuItem key={item.action} icon={<Sparkles />} label={item.label} description={item.hint}
+      onClick={() => { setMenu(null); withSelection((selection) => onAiAction?.(item.action, selection)); }} />
+  ));
+  //: 按钮上只写「问 AI」,它会带上什么(选中的这段)悬停说一声。
   const askButton = onAskAi ? (
-    <Button type="button" variant="ghost" size="xs" onMouseDown={(event) => event.preventDefault()} onClick={() => withSelection(onAskAi)}>
-      <Bot />{s.askAi}
-    </Button>
+    <Hint label={s.askAiHint}>
+      <Button type="button" variant="ghost" size="xs" onMouseDown={(event) => event.preventDefault()} onClick={() => withSelection(onAskAi)}>
+        <Bot />{s.askAi}
+      </Button>
+    </Hint>
   ) : null;
   const separator = <span aria-hidden className="mx-0.5 w-px self-stretch bg-divider" />;
 
@@ -262,11 +272,11 @@ export function NoteSelectionToolbar({ editor, keys, readAloud, onAskAi, onAiAct
             <PopoverTrigger asChild>
               <Button type="button" variant="ghost" size="xs" onMouseDown={(event) => event.preventDefault()}><MoreHorizontal />{ss.more}</Button>
             </PopoverTrigger>
-            <PopoverContent role="menu" align="start" className="grid max-h-[var(--radix-popover-content-available-height)] w-56 gap-0.5 overflow-y-auto p-1.5">
-              {formats.map((item) => menuItem(item.id, item.label, item.icon, item.run))}
-              {aiItems.map((item) => menuItem(item.action, item.label, Sparkles, () => withSelection((selection) => onAiAction?.(item.action, selection)), item.hint))}
-              {common.map((item) => menuItem(item.id, item.label, item.icon, item.run))}
-            </PopoverContent>
+            <MenuContent label={ss.more} align="start" className="max-h-[var(--radix-popover-content-available-height)] overflow-y-auto">
+              {toolMenuItems(formats)}
+              {aiMenuItems()}
+              {toolMenuItems(common)}
+            </MenuContent>
           </Popover>
         </>
       ) : (
@@ -278,9 +288,9 @@ export function NoteSelectionToolbar({ editor, keys, readAloud, onAskAi, onAiAct
               <PopoverTrigger asChild>
                 <Button type="button" variant="ghost" size="xs" onMouseDown={(event) => event.preventDefault()}><Sparkles />{ss.ai}<ChevronDown /></Button>
               </PopoverTrigger>
-              <PopoverContent role="menu" align="start" className="grid max-h-[var(--radix-popover-content-available-height)] w-64 gap-0.5 overflow-y-auto p-1.5">
-                {aiItems.map((item) => menuItem(item.action, item.label, Sparkles, () => withSelection((selection) => onAiAction?.(item.action, selection)), item.hint))}
-              </PopoverContent>
+              <MenuContent label={ss.ai} align="start" className="max-h-[var(--radix-popover-content-available-height)] overflow-y-auto">
+                {aiMenuItems()}
+              </MenuContent>
             </Popover>
           )}
           {askButton}

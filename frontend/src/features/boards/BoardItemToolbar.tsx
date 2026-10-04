@@ -17,12 +17,14 @@ import type { MessageKey } from "@/app/messages";
 import { ActionMenu } from "@/components/app/ActionMenu";
 import { useImagePreview } from "@/components/app/image-preview";
 import { toPlainText } from "@/components/markdown/inlineSyntax";
+import { IconButton } from "@/components/ui/icon-button";
 import { Hint, TooltipProvider } from "@/components/ui/tooltip";
+import { Truncate } from "@/components/ui/truncate";
 import { SaveToNote } from "@/features/notes/SaveToNote";
 import { boardAbilities, boardToolIcon, DIRECT_ABILITIES, firstSentence, hostHasContent } from "@/features/boards/boardTools";
 import { SequenceToolbarActions } from "@/features/boards/SequenceCell";
 import { canAskWriter, canOpenOnDemand, slotProducers } from "@/features/boards/boardComposers";
-import { NOTE_COLORS, noteColorClass, isMediaKind, kindIcon, SPAWNABLE_KINDS, type MediaKind } from "@/features/boards/boardNodes";
+import { NOTE_COLORS, noteColorClass, isMediaKind, kindIcon, SPAWNABLE_KINDS, type MediaKind, type NoteColor } from "@/features/boards/boardNodes";
 import { itemIsRunning } from "@/features/boards/boardItemState";
 import { useKeepInCanvas } from "@/features/boards/BoardComposerShell";
 import { BOARD_NODE_PANEL_OFFSET } from "@/features/boards/boardLayout";
@@ -166,10 +168,12 @@ export function ItemToolbar({
         <ToolbarCluster>
           {item?.kind === "note" &&
             NOTE_COLORS.map((color) => (
-              <button
+              <IconButton
+                unstyled
                 key={color}
                 type="button"
-                aria-label={color}
+                label={t(NOTE_COLOR_LABEL[color])}
+                aria-pressed={item.color === color}
                 className={cn(
                   "h-6 w-6 cursor-pointer rounded-full border transition-transform hover:scale-110",
                   noteColorClass(color),
@@ -399,21 +403,21 @@ export function ItemToolbar({
           <ToolbarCluster data-board-sequence-actions="">
           <SequenceToolbarActions
             sequenceId={item.sequence_id}
-            button={({ label, icon, onClick, disabled, href, marker }) => (
-              <Hint key={marker} label={label}>
-                {href !== undefined ? (
+            button={({ label, icon, onClick, disabled, disabledReason, href, marker }) =>
+              href !== undefined ? (
+                <Hint key={marker} label={label}>
                   <a aria-label={label} data-board-sequence-action={marker} href={href}
                      className="grid h-7 w-7 cursor-pointer place-items-center rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground">
                     {icon}
                   </a>
-                ) : (
-                  <button type="button" aria-label={label} data-board-sequence-action={marker} disabled={disabled} onClick={onClick}
-                          className="grid h-7 w-7 cursor-pointer place-items-center rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent">
-                    {icon}
-                  </button>
-                )}
-              </Hint>
-            )}
+                </Hint>
+              ) : (
+                <IconButton key={marker} unstyled type="button" label={label} data-board-sequence-action={marker}
+                        disabled={disabled} disabledReason={disabledReason} onClick={onClick}
+                        className="grid h-7 w-7 cursor-pointer place-items-center rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent">
+                  {icon}
+                </IconButton>
+              )}
           />
           {/* 导出:打开导出面板(按需的面板,面板名就是产出者的名字)。成片落成右边一格视频。 */}
           {onPanel && canOpenOnDemand(item) && (
@@ -430,37 +434,34 @@ export function ItemToolbar({
         )}
         {/* 改名只对一格有意义 —— 多选时一起改成同一个名字,等于让它们重新分不清。 */}
         {single && item && onRename && (
-          <Hint label={t("rename")}>
-          <button
+          <IconButton
+            unstyled
             type="button"
-            aria-label={t("rename")}
+            label={t("rename")}
             className="grid h-7 w-7 cursor-pointer place-items-center rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground"
             onClick={() => onRename(item.id)}
           >
             <PencilLine size={13} />
-          </button>
-          </Hint>
+          </IconButton>
         )}
-        <Hint label={t("copy")}>
-        <button
+        <IconButton
+          unstyled
           type="button"
-          aria-label={t("copy")}
+          label={t("copy")}
           className="grid h-7 w-7 cursor-pointer place-items-center rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground"
           onClick={onCopySelected}
         >
           <Copy size={13} />
-        </button>
-        </Hint>
-        <Hint label={t("delete")}>
-        <button
+        </IconButton>
+        <IconButton
+          unstyled
           type="button"
-          aria-label={t("delete")}
+          label={t("delete")}
           className="grid h-7 w-7 cursor-pointer place-items-center rounded-full text-muted-foreground hover:text-destructive"
           onClick={onRemoveSelected}
         >
           <Trash2 size={13} />
-        </button>
-        </Hint>
+        </IconButton>
       </div>
       </TooltipProvider>
     </NodeToolbar>
@@ -502,10 +503,11 @@ function ToolbarIcon({
   onClick: () => void;
 }) {
   return (
-    <Hint label={label} hint={hint}>
-    <button
+    <IconButton
+      unstyled
       type="button"
-      aria-label={label}
+      label={label}
+      hint={hint}
       aria-pressed={pressed === undefined ? undefined : pressed}
       data-board-action={ability ? undefined : name}
       data-board-ability={ability ? name : undefined}
@@ -516,29 +518,37 @@ function ToolbarIcon({
       onClick={onClick}
     >
       <Icon size={14} />
-    </button>
-    </Hint>
+    </IconButton>
   );
 }
 
-/** 操作条上的「⋯」:和别的图标同一个尺寸、同一种悬停说明(ActionMenu 自带的那颗是 `title`)。 */
-const MoreButton = React.forwardRef<HTMLButtonElement, { label: string } & React.ButtonHTMLAttributes<HTMLButtonElement>>(
+/** 便签颜色的名字(色块本身没有字,读屏和悬停都靠它)。 */
+const NOTE_COLOR_LABEL: Record<NoteColor, MessageKey> = {
+  yellow: "boardNoteColorYellow",
+  blue: "boardNoteColorBlue",
+  green: "boardNoteColorGreen",
+  pink: "boardNoteColorPink",
+  purple: "boardNoteColorPurple",
+  gray: "boardNoteColorGray",
+};
+
+/** 操作条上的「⋯」:和别的图标同一个尺寸、同一种悬停说明(ActionMenu 自带的那颗是 Button 档位的)。 */
+const MoreButton = React.forwardRef<HTMLButtonElement, { label: string } & Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, "title" | "aria-label">>(
   ({ label, className, ...rest }, ref) => (
-    <Hint label={label}>
-      <button
-        ref={ref}
-        type="button"
-        aria-label={label}
-        aria-haspopup="menu"
-        {...rest}
-        className={cn(
-          "grid h-7 w-7 shrink-0 cursor-pointer place-items-center rounded-full text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground data-[state=open]:bg-secondary data-[state=open]:text-foreground",
-          className,
-        )}
-      >
-        <MoreHorizontal size={14} />
-      </button>
-    </Hint>
+    <IconButton
+      unstyled
+      ref={ref}
+      type="button"
+      label={label}
+      aria-haspopup="menu"
+      {...rest}
+      className={cn(
+        "grid h-7 w-7 shrink-0 cursor-pointer place-items-center rounded-full text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground data-[state=open]:bg-secondary data-[state=open]:text-foreground",
+        className,
+      )}
+    >
+      <MoreHorizontal size={14} />
+    </IconButton>
   ),
 );
 MoreButton.displayName = "MoreButton";
@@ -582,7 +592,7 @@ function SlotSwitch({
               onClick={() => onSwitch(one.id as BoardProducer)}
             >
               {Icon ? <Icon size={12} className="shrink-0" /> : null}
-              <span className="truncate">{one.label}</span>
+              <Truncate>{one.label}</Truncate>
             </button>
             </Hint>
           );

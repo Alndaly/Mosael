@@ -1,4 +1,3 @@
-import { ACTION_MENU } from "@/components/ui/floating";
 import React from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -23,12 +22,16 @@ import { HomeHero } from "@/features/home/HomeHero";
 import { poemOfToday, randomPoem, type Poem } from "@/features/home/poems";
 import { formatShortDate, formatTimecode, relativeTime } from "@/lib/time";
 import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
+import { MenuContent, MenuItem, MenuItemBody, MenuSeparator } from "@/components/ui/menu";
+import { Hint } from "@/components/ui/tooltip";
+import { Truncate } from "@/components/ui/truncate";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { ConfirmDialog, RenameDialog } from "@/components/app/modals";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { cn } from "@/lib/utils";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Popover, PopoverTrigger } from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
 import { usePersistentTab } from "@/lib/usePersistentTab";
 import { useMultiSelect } from "@/lib/useMultiSelect";
@@ -240,7 +243,7 @@ export function HomeView({
               还是他选的那一种 —— 切到「最近」时不去改写它(那等于替人把排序改了)。 */}
           <Select value={collection === "recent" ? "updated" : sortKey} onValueChange={(value) => { setSortKey(value as "updated" | "created" | "name"); setCollection("all"); }}>
             <SelectTrigger className="w-auto min-w-36" aria-label={t("sortUpdated")}><SelectValue /></SelectTrigger>
-            <SelectContent className="max-w-none">
+            <SelectContent>
               <SelectItem value="updated">{t("sortUpdated")}</SelectItem><SelectItem value="created">{t("sortCreated")}</SelectItem><SelectItem value="name">{t("sortName")}</SelectItem>
             </SelectContent>
           </Select>
@@ -356,36 +359,36 @@ function ProjectPresentation({ project, featured = false, className, onOpen, onR
         </button>
         <div className={cn("flex min-w-0 items-start gap-2", !featured && "flex-1 items-center")}>
           <div className="min-w-0 flex-1">
-            <button type="button" className={cn("block max-w-full cursor-pointer truncate rounded text-left font-semibold hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", featured ? "text-lg" : "text-ui-md")} title={project.name}>{project.name}</button>
+            <button type="button" className={cn("block max-w-full cursor-pointer rounded text-left font-semibold hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", featured ? "text-lg" : "text-ui-md")}><Truncate>{project.name}</Truncate></button>
             <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-ui-xs text-muted-foreground">
               <span className="inline-flex items-center gap-1"><Film size={12} />{t("projectStatAssets").replace("{n}", String(project.asset_count ?? 0))}</span>
               <span className="inline-flex items-center gap-1"><Layers size={12} />{t("projectStatSequences").replace("{n}", String(project.sequence_count ?? 0))}</span>
-              {project.updated_at && <span title={project.created_at ? t("projectCreatedAt").replace("{t}", formatShortDate(project.created_at)) : undefined}>{t("projectStatUpdated").replace("{t}", relativeTime(project.updated_at, locale))}</span>}
+              {project.updated_at && <Hint label={project.created_at ? t("projectCreatedAt").replace("{t}", formatShortDate(project.created_at)) : undefined}><span>{t("projectStatUpdated").replace("{t}", relativeTime(project.updated_at, locale))}</span></Hint>}
             </div>
           </div>
           {/* 菜单里的点击不能冒泡到整行 —— 否则点「…」或菜单里的「重命名」会顺带把项目打开。
               Popover 的内容虽然渲染在 portal 里,React 的事件仍按组件树冒泡。 */}
           {!selecting && <span className="contents" onClick={(event) => event.stopPropagation()}><Popover open={menuOpen} onOpenChange={setMenuOpen}>
-            <PopoverTrigger asChild><Button variant="ghost" size="icon-sm" aria-label={`${t("projectActions")}: ${project.name}`}><MoreHorizontal /></Button></PopoverTrigger>
-            <PopoverContent className={cn(ACTION_MENU, "w-48")} align="end">
-              <Button variant="ghost" className="justify-start" onClick={() => { setMenuOpen(false); open(); }}><Scissors />{t("homeOpenEditor")}</Button>
-              <Button variant="ghost" className="justify-start" onClick={() => { setMenuOpen(false); onRename(project); }}><Pencil />{t("rename")}</Button>
-              <div className="mx-2 my-1 h-px bg-divider" />
-              <Button variant="ghost" className="justify-start text-destructive hover:text-destructive" onClick={() => { setMenuOpen(false); onDelete(project); }}><Trash2 />{t("delete")}</Button>
-            </PopoverContent>
+            <PopoverTrigger asChild><IconButton label={`${t("projectActions")}: ${project.name}`} aria-haspopup="menu"><MoreHorizontal /></IconButton></PopoverTrigger>
+            <MenuContent label={`${t("projectActions")}: ${project.name}`} align="end">
+              <MenuItem icon={<Scissors />} label={t("homeOpenEditor")} onClick={() => { setMenuOpen(false); open(); }} />
+              <MenuItem icon={<Pencil />} label={t("rename")} onClick={() => { setMenuOpen(false); onRename(project); }} />
+              <MenuSeparator />
+              <MenuItem icon={<Trash2 />} label={t("delete")} destructive onClick={() => { setMenuOpen(false); onDelete(project); }} />
+            </MenuContent>
           </Popover></span>}
         </div>
       </article>
     </ContextMenuTrigger>
     <ContextMenuContent>
       {menuSelection > 1 && onDeleteSelection ? (
-        <ContextMenuItem className="text-destructive focus:text-destructive" onSelect={onDeleteSelection}><Trash2 />{t("deleteSelectedN").replace("{n}", String(menuSelection))}</ContextMenuItem>
+        <ContextMenuItem className="text-destructive focus:text-destructive" onSelect={onDeleteSelection}><MenuItemBody icon={<Trash2 />} label={t("deleteSelectedN").replace("{n}", String(menuSelection))} /></ContextMenuItem>
       ) : (
         <>
-          <ContextMenuItem onSelect={open}><Scissors />{t("homeOpenEditor")}</ContextMenuItem>
-          <ContextMenuItem onSelect={() => onRename(project)}><Pencil />{t("rename")}</ContextMenuItem>
+          <ContextMenuItem onSelect={open}><MenuItemBody icon={<Scissors />} label={t("homeOpenEditor")} /></ContextMenuItem>
+          <ContextMenuItem onSelect={() => onRename(project)}><MenuItemBody icon={<Pencil />} label={t("rename")} /></ContextMenuItem>
           <ContextMenuSeparator />
-          <ContextMenuItem className="text-destructive focus:text-destructive" onSelect={() => onDelete(project)}><Trash2 />{t("delete")}</ContextMenuItem>
+          <ContextMenuItem className="text-destructive focus:text-destructive" onSelect={() => onDelete(project)}><MenuItemBody icon={<Trash2 />} label={t("delete")} /></ContextMenuItem>
         </>
       )}
     </ContextMenuContent>

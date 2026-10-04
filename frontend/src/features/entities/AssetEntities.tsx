@@ -12,6 +12,7 @@ import {
 } from "@/api/client";
 import { errorText } from "@/api/errorMessage";
 import { useI18n } from "@/app/preferences";
+import { Truncate } from "@/components/ui/truncate";
 import { ModalShell } from "@/components/app/modals";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -48,7 +49,7 @@ export function AssetEntitiesList({ asset }: { asset: Pick<Asset, "id" | "worksp
               onClick={() => openEntity(row.id)}
             >
               <Icon size={13} className="shrink-0 text-muted-foreground" />
-              <span className="truncate">{entityDisplayName(row)}</span>
+              <Truncate>{entityDisplayName(row)}</Truncate>
               <span className="shrink-0 text-ui-xs text-muted-foreground">{labels.role(row.role)}</span>
             </button>
           </li>

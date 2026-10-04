@@ -12,6 +12,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { Editor } from "@tiptap/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { emptyNote, type Note } from "@/api/domains/notes";
+import { hoverHint } from "@/test/hint";
 
 vi.mock("@/app/preferences", () => ({ usePreferences: () => ({ locale: "zh-CN" }), useI18n: () => (key: string) => key }));
 vi.mock("@/api/domains/notes", async (importOriginal) => ({
@@ -91,11 +92,11 @@ it("左边全是编辑格式(含高亮,和选区工具条一致),右边依次是
   expect(editor.getMarkdown()).not.toContain("==");
 });
 
-it("保存状态是一块固定的位置:文字在 title 里也有一份,切换状态时不推着别的按钮动", async () => {
+it("保存状态是一块固定的位置:文字在悬停说明里也有一份(窄了只剩图标),切换状态时不推着别的按钮动", async () => {
   mount();
   const status = header().querySelector("[data-slot='save-status']") as HTMLElement;
-  expect(status.getAttribute("title")).toBe("已保存");
   expect(status.className).toContain("note-status");
+  expect(await hoverHint(status)).toBe("已保存");
 });
 
 it("宽的时候一组不收;窄了先收插入、撤销,再收列表,收进「更多格式」—— 菜单里点了照样作用在正文上", async () => {

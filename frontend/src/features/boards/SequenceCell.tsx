@@ -20,6 +20,9 @@ import { errorText } from "@/api/errorMessage";
 import { isNotFound } from "@/api/transport";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
+import { Hint } from "@/components/ui/tooltip";
+import { Truncate } from "@/components/ui/truncate";
 import { cn } from "@/lib/utils";
 import { isImeKeystroke } from "@/lib/shortcuts";
 import { noteSequenceEdit, readSequenceCursor, SequenceAddContext, updateSequenceCursor, useSequenceCursor } from "@/features/boards/sequenceCursor";
@@ -218,16 +221,16 @@ export function SequenceCell({ sequenceId }: { sequenceId: string }) {
   const pickedClip = video.find((clip) => clip.id === picked);
   const addToSequence = React.useContext(SequenceAddContext);
   const addButton = addToSequence ? (
-    <button
+    <IconButton
+      unstyled
       type="button"
       data-sequence-add=""
-      aria-label={t("boardSequenceAdd")}
-      title={t("boardSequenceAdd")}
+      label={t("boardSequenceAdd")}
       onClick={() => addToSequence(sequenceId)}
       className="nodrag nopan grid h-full w-11 shrink-0 cursor-pointer place-items-center rounded border border-dashed border-border bg-transparent text-muted-foreground hover:border-border-strong hover:bg-secondary hover:text-foreground"
     >
       <Plus size={15} />
-    </button>
+    </IconButton>
   ) : null;
 
   /** 条上的横坐标(条自己的像素,已按画布缩放折回、算上横向滚动)。画布缩放时屏幕像素和条的像素不是一回事。 */
@@ -307,9 +310,10 @@ export function SequenceCell({ sequenceId }: { sequenceId: string }) {
         )}
         {total > 0 && (
           <div className="nodrag nopan absolute inset-x-0 bottom-0 flex items-center gap-1.5 bg-gradient-to-t from-black/70 to-transparent px-2.5 pb-2 pt-8 text-white">
-            <button
+            <IconButton
+              unstyled
               type="button"
-              aria-label={playing ? t("boardSequencePause") : t("boardSequencePlay")}
+              label={playing ? t("boardSequencePause") : t("boardSequencePlay")}
               onClick={() => {
                 if (!playing && time >= total) setTime(0);
                 setPlaying((on) => !on);
@@ -317,20 +321,21 @@ export function SequenceCell({ sequenceId }: { sequenceId: string }) {
               className="grid h-7 w-7 cursor-pointer place-items-center rounded-full border-0 bg-white/15 text-white hover:bg-white/25"
             >
               {playing ? <Pause size={13} /> : <Play size={13} className="translate-x-px" />}
-            </button>
+            </IconButton>
             <span data-sequence-time="" className="text-ui-xs tabular-nums">
               {time.toFixed(1)}s <span className="text-white/60">/ {total.toFixed(1)}s</span>
             </span>
             <span className="flex-1" />
-            <span className="truncate text-ui-2xs text-white/55" title={t("boardSequenceRoughCut")}>{t("boardSequenceRoughCut")}</span>
-            <button
+            <Truncate className="text-ui-2xs text-white/55">{t("boardSequenceRoughCut")}</Truncate>
+            <IconButton
+              unstyled
               type="button"
-              aria-label={muted ? t("boardSequenceUnmute") : t("boardSequenceMute")}
+              label={muted ? t("boardSequenceUnmute") : t("boardSequenceMute")}
               onClick={() => setMuted((on) => !on)}
               className="grid h-7 w-7 shrink-0 cursor-pointer place-items-center rounded-full border-0 bg-transparent text-white hover:bg-white/15"
             >
               {muted ? <VolumeX size={14} /> : <Volume2 size={14} />}
-            </button>
+            </IconButton>
           </div>
         )}
       </div>
@@ -434,13 +439,14 @@ function SortableTile({ clip, width, zoom, picked, onPick }: {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: clip.id });
   const moved = transform ? { ...transform, x: transform.x / zoom, y: 0, scaleX: 1, scaleY: 1 } : null;
   return (
+    //: 一段多长:悬停时说(条上的宽度按时长画,但读不出秒数)。
+    <Hint label={`${span(clip).toFixed(1)}s`}>
     <div
       ref={setNodeRef}
       {...attributes}
       {...listeners}
       data-sequence-clip={clip.id}
       aria-pressed={picked}
-      title={`${span(clip).toFixed(1)}s`}
       onClick={(event) => onPick(event.clientX)}
       onKeyDown={(event) => {
         if (isImeKeystroke(event)) return;
@@ -458,6 +464,7 @@ function SortableTile({ clip, width, zoom, picked, onPick }: {
         isDragging && "z-10 cursor-grabbing opacity-80 shadow-lg ring-2 ring-primary",
       )}
     />
+    </Hint>
   );
 }
 
@@ -495,8 +502,11 @@ export function useSequenceActions(sequenceId: string) {
   });
   return {
     canCut: Boolean(cuttable) && !cut.isPending,
+    /** 播放头在某一段中间吗(在边上、在空处时没什么可切)。 */
+    hasCuttable: Boolean(cuttable),
     cut: () => cuttable && cut.mutate(cuttable),
     canRemove: Boolean(pickedClip) && !removal.isPending,
+    hasPicked: Boolean(pickedClip),
     remove: () => pickedClip && removal.mutate(pickedClip.id),
     editorHref: sequence.data ? `#/editor?p=${encodeURIComponent(sequence.data.project_id)}&s=${encodeURIComponent(sequenceId)}` : undefined,
   };
@@ -505,14 +515,20 @@ export function useSequenceActions(sequenceId: string) {
 /** 时间线格上方操作条里的那几枚:剪刀、删除、在剪辑里打开。样子和操作条上别的按钮一样,由操作条传进来。 */
 export function SequenceToolbarActions({ sequenceId, button }: {
   sequenceId: string;
-  button: (props: { label: string; icon: React.ReactNode; onClick?: () => void; disabled?: boolean; href?: string; marker: string }) => React.ReactNode;
+  button: (props: { label: string; icon: React.ReactNode; onClick?: () => void; disabled?: boolean; disabledReason?: string; href?: string; marker: string }) => React.ReactNode;
 }) {
   const t = useI18n();
   const actions = useSequenceActions(sequenceId);
   return (
     <>
-      {button({ label: t("boardSequenceCut"), icon: <Scissors size={13} />, onClick: actions.cut, disabled: !actions.canCut, marker: "cut" })}
-      {button({ label: t("boardSequenceDelete"), icon: <Trash2 size={13} />, onClick: actions.remove, disabled: !actions.canRemove, marker: "delete" })}
+      {button({
+        label: t("boardSequenceCut"), icon: <Scissors size={13} />, onClick: actions.cut, disabled: !actions.canCut,
+        disabledReason: actions.hasCuttable ? undefined : t("boardSequenceCutUnavailable"), marker: "cut",
+      })}
+      {button({
+        label: t("boardSequenceDelete"), icon: <Trash2 size={13} />, onClick: actions.remove, disabled: !actions.canRemove,
+        disabledReason: actions.hasPicked ? undefined : t("boardSequenceDeleteUnavailable"), marker: "delete",
+      })}
       {button({ label: t("boardSequenceOpen"), icon: <ExternalLink size={13} />, href: actions.editorHref, marker: "open" })}
     </>
   );

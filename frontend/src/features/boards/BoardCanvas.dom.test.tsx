@@ -603,7 +603,7 @@ describe("截挂了的那一格,选中时挂的是截取面板", () => {
     const start = document.querySelector('[aria-label="boardTrimStartLabel"]') as HTMLInputElement | null;
     expect(start?.value).toBe("1.5");
     expect(document.querySelector('[aria-label="boardTrimEndLabel"]')).toHaveProperty("value", "4");
-    expect(document.querySelector('[title="boardDropSound"]')).not.toBeNull();
+    expect(document.querySelector('[aria-label="boardDropSound"]')).not.toBeNull();
 
     //: 发送键是面板壳上那枚圆键(只有图标,名字在 aria-label 上)。
     const submit = document.querySelector<HTMLButtonElement>('[data-board-composer="trim"] button[aria-label="boardTrimSubmit"]');

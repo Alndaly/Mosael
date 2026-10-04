@@ -63,6 +63,7 @@ import { NodeComposer } from "./NodeComposer";
 import { NoteComposer } from "./NoteComposer";
 import { renderComposer, type ComposerHost } from "./boardComposers";
 import { NO_UPSTREAM } from "./boardUpstream";
+import { hoverHint } from "@/test/hint";
 
 afterEach(() => {
   cleanup();
@@ -189,7 +190,8 @@ describe("生成格上的 @资产", () => {
       return found as HTMLElement;
     });
     expect(chip.textContent).toContain("竹林小径");
-    expect(chip.getAttribute("title")).toBe("boardLinkedEntityHint");
+    //: 它在起什么作用,悬停时说。
+    expect(await hoverHint(chip)).toBe("boardLinkedEntityHint");
   });
 });
 

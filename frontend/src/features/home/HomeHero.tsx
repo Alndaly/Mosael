@@ -2,6 +2,9 @@ import React from "react";
 import { BookText, Clapperboard, RefreshCcw } from "lucide-react";
 
 import { useI18n, usePreferences } from "@/app/preferences";
+import { IconButton } from "@/components/ui/icon-button";
+import { Hint } from "@/components/ui/tooltip";
+import { Truncate } from "@/components/ui/truncate";
 import { holidayOf, seeded, HOLIDAYS, type Holiday } from "@/features/home/holiday";
 import type { Poem } from "@/features/home/poems";
 import { cn } from "@/lib/utils";
@@ -130,20 +133,23 @@ export function HomeHero({
         <figure
           className="m-0 flex h-10 min-w-0 max-w-[420px] items-center gap-2 rounded-md px-2 text-muted-foreground max-[1000px]:max-w-none max-[1000px]:flex-1"
           aria-live="polite"
-          title={poemEgg || [poem.text, poem.author, poem.source && `《${poem.source}》`].filter(Boolean).join(" · ")}
         >
           <BookText size={14} className="shrink-0" style={{ color: accent }} />
-          <blockquote className="m-0 min-w-0 truncate text-ui-xs leading-5">{poemEgg || poem.text}</blockquote>
+          {/* 悬停给出处(作者、篇名);诗句被截断时全句并进同一条说明(Truncate 在 Hint 里不另挂说明)。 */}
+          <Hint label={poemEgg ? undefined : [poem.author, poem.source && `《${poem.source}》`].filter(Boolean).join(" · ") || undefined}>
+            <Truncate as="blockquote" className="m-0 text-ui-xs leading-5">{poemEgg || poem.text}</Truncate>
+          </Hint>
           {!poemEgg && poem.author && <figcaption className="shrink-0 whitespace-nowrap text-ui-xs text-muted-foreground">{poem.author}</figcaption>}
-          <button
+          <IconButton
+            unstyled
             type="button"
             className="grid size-7 shrink-0 cursor-pointer place-items-center rounded-md border-0 bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default"
-            aria-label={t("homePoemRefresh")}
+            label={t("homePoemRefresh")}
             onClick={onRefreshPoem}
             disabled={poemLoading}
           >
             <RefreshCcw size={12} className={poemLoading ? "animate-mosael-spin" : undefined} />
-          </button>
+          </IconButton>
         </figure>
       {actions}
       </div>

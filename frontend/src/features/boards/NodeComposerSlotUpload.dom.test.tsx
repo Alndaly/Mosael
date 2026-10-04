@@ -92,7 +92,7 @@ it("面板里 ⌘V 一张截图:同样传上去挂进槽;剪贴板里没有文�
 it("首帧槽只收图片:拖进一段视频就地说一句;没传上说为什么,能停", async () => {
   const frames = model({ parameter_keys: ["first_frame", "last_frame"], source_limits: { first_frame: 1, last_frame: 1 } }, "video");
   const onFormChange = mount(frames, "video");
-  const first = screen.getAllByRole("button").find((one) => one.title === "genFirstFrame")!;
+  const first = screen.getByRole("button", { name: "genFirstFrame" });
   expect(first).toBeDefined();
   dropOn(first, [mp4()]);
   expect(uploads).toHaveLength(0);

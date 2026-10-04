@@ -2,6 +2,7 @@ import React from "react";
 
 import { assetThumbnailUrl, type EntitySummary } from "@/api/client";
 import { useI18n } from "@/app/preferences";
+import { Truncate } from "@/components/ui/truncate";
 import { cn } from "@/lib/utils";
 import { entityKindIcon } from "@/features/entities/entityMeta";
 
@@ -71,16 +72,16 @@ export function EntityCard({
       </div>
       {tile ? (
         //: 和参考图卡片下面那一行同一种字号:名字、再是张数。
-        <span className="truncate px-0.5 text-ui-xs text-muted-foreground" title={entity.name}>
+        <Truncate className="px-0.5 text-ui-xs text-muted-foreground" text={[entity.name, ...meta].join(" · ")}>
           <strong className="font-medium text-foreground">{entity.name}</strong>
           {` · ${meta.join(" · ")}`}
-        </span>
+        </Truncate>
       ) : (
         <div className="grid min-w-0 gap-1 px-0.5">
-          <strong className="truncate text-ui-md font-semibold" title={entity.name}>
+          <Truncate as="strong" className="text-ui-md font-semibold">
             {entity.name}
-          </strong>
-          <span className="truncate text-ui-xs text-muted-foreground">{meta.join(" · ")}</span>
+          </Truncate>
+          <Truncate className="text-ui-xs text-muted-foreground">{meta.join(" · ")}</Truncate>
         </div>
       )}
     </button>

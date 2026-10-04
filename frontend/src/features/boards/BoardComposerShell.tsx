@@ -5,8 +5,10 @@ import { ArrowUp, Loader2, SlidersHorizontal, type LucideIcon } from "lucide-rea
 import { useI18n } from "@/app/preferences";
 import { CANVAS_WINDOW_SURFACE_CLASS } from "@/components/app/canvasPanelLayout";
 import { MODAL_SURFACE } from "@/components/ui/floating";
+import { IconButton } from "@/components/ui/icon-button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { BOARD_NODE_PANEL_OFFSET } from "@/features/boards/boardLayout";
+import { formatCombo } from "@/lib/shortcuts";
 import { cn } from "@/lib/utils";
 
 /**
@@ -53,6 +55,8 @@ export interface ComposerSend {
   icon?: LucideIcon;
   /** 悬停时多说的一句(每跑一次结果都新建在右边 ……)。 */
   hint?: string;
+  /** 点不了的原因(还缺哪几样、时间线是空的 ……),只在 `disabled` 时说。 */
+  disabledReason?: string;
   /** 正文里按 ⌘↵ 也能发(提示词编辑器、要念的字)—— 悬停时说一声。 */
   shortcut?: boolean;
 }
@@ -263,16 +267,18 @@ function SettingsButton({ attention, children }: { attention: boolean; children:
 }
 
 /** 圆形的发送键 —— 每一块面板都是这一枚。 */
-function SendButton({ label, onSend, disabled, working, icon: Icon = ArrowUp, hint, shortcut = false }: ComposerSend) {
+function SendButton({ label, onSend, disabled, working, icon: Icon = ArrowUp, hint, disabledReason, shortcut = false }: ComposerSend) {
   const off = disabled || working;
-  const title = [hint ? `${label} · ${hint}` : label, shortcut ? "⌘↵" : ""].filter(Boolean).join("  ");
   return (
-    <button
+    <IconButton
+      unstyled
       type="button"
       data-board-composer-send=""
-      aria-label={label}
-      title={title}
+      label={label}
+      hint={hint}
+      shortcut={shortcut ? formatCombo("Mod+Enter") : null}
       disabled={off}
+      disabledReason={disabled ? disabledReason : undefined}
       onClick={onSend}
       className={cn(
         "grid h-8 w-8 shrink-0 place-items-center rounded-full transition-colors",
@@ -280,6 +286,6 @@ function SendButton({ label, onSend, disabled, working, icon: Icon = ArrowUp, hi
       )}
     >
       {working ? <Loader2 size={13} className="animate-spin" /> : <Icon size={13} />}
-    </button>
+    </IconButton>
   );
 }

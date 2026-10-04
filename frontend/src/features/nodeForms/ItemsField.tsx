@@ -4,10 +4,11 @@ import { ArrowDown, ArrowUp, X } from "lucide-react";
 import { useI18n } from "@/app/preferences";
 import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
 import { AddRow } from "@/components/ui/add-row";
-import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
 import { Input } from "@/components/ui/input";
 import { OptionPicker } from "@/components/ui/option-picker";
 import { Textarea } from "@/components/ui/textarea";
+import { Truncate } from "@/components/ui/truncate";
 import { AssetListField } from "@/features/nodeForms/AssetListField";
 import { JsonField } from "@/features/nodeForms/JsonField";
 import { ListField } from "@/features/nodeForms/ListField";
@@ -153,38 +154,39 @@ export function ItemsField({
             <span className="shrink-0 text-ui-xs font-medium text-muted-foreground">
               {t("wfItemsNumber").replace("{n}", String(index + 1))}
             </span>
-            <span className="min-w-0 flex-1 truncate text-ui-xs text-foreground">{preview(row.item, fields)}</span>
-            <Button
+            <Truncate className="flex-1 text-ui-xs text-foreground">{preview(row.item, fields)}</Truncate>
+            <IconButton
               type="button"
               variant="ghost"
               size="icon-xs"
-              aria-label={t("wfItemsMoveUp")}
+              label={t("wfItemsMoveUp")}
               disabled={index === 0}
               onClick={() => move(index, index - 1)}
             >
               <ArrowUp size={12} />
-            </Button>
-            <Button
+            </IconButton>
+            <IconButton
               type="button"
               variant="ghost"
               size="icon-xs"
-              aria-label={t("wfItemsMoveDown")}
+              label={t("wfItemsMoveDown")}
               disabled={index === rows.length - 1}
               onClick={() => move(index, index + 1)}
             >
               <ArrowDown size={12} />
-            </Button>
-            <Button
+            </IconButton>
+            <IconButton
               type="button"
               variant="ghost"
               size="icon-xs"
-              aria-label={t("delete")}
+              label={t("delete")}
               // 删到下限就不让删:「至少一步」的讲解,删光了只会在运行时报错
               disabled={rows.length <= minItems}
+              disabledReason={t("wfItemsAtLeast").replace("{n}", String(minItems))}
               onClick={() => push(rows.filter((_, i) => i !== index))}
             >
               <X size={12} />
-            </Button>
+            </IconButton>
           </header>
           <StructureFields
             fields={fields}

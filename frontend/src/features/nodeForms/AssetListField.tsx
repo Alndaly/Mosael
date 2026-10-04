@@ -3,6 +3,8 @@ import { X } from "lucide-react";
 
 import { useI18n } from "@/app/preferences";
 import { Combobox } from "@/components/app/combobox";
+import { IconButton } from "@/components/ui/icon-button";
+import { Truncate } from "@/components/ui/truncate";
 
 /**
  * 一串素材(插件工具的 `{"type": "array", "items": {"format": "asset"}}`)。
@@ -36,15 +38,16 @@ export function AssetListField({
               key={`${id}-${index}`}
               className="inline-flex min-w-0 max-w-full items-center gap-1 rounded-md border border-border bg-field py-0.5 pl-2 pr-0.5 text-ui-xs text-foreground"
             >
-              <span className="min-w-0 truncate" title={names.get(id) ?? id}>{names.get(id) ?? id}</span>
-              <button
+              <Truncate>{names.get(id) ?? id}</Truncate>
+              <IconButton
+                unstyled
                 type="button"
-                aria-label={t("wfAssetListRemove").replace("{name}", names.get(id) ?? id)}
+                label={t("wfAssetListRemove").replace("{name}", names.get(id) ?? id)}
                 className="grid size-5 shrink-0 cursor-pointer place-items-center rounded text-muted-foreground hover:bg-secondary hover:text-foreground"
                 onClick={() => onChange(picked.filter((_, at) => at !== index))}
               >
                 <X size={12} />
-              </button>
+              </IconButton>
             </li>
           ))}
         </ul>

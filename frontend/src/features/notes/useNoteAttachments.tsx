@@ -4,8 +4,9 @@ import { useQuery } from "@tanstack/react-query";
 import { listNotes, type Note } from "@/api/domains/notes";
 import { noteKeys } from "@/api/queryKeys";
 import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
-import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
 import { Input } from "@/components/ui/input";
+import { Truncate } from "@/components/ui/truncate";
 import type { ComposerChip } from "@/lib/composerChip";
 import { useNoteStrings } from "./strings";
 
@@ -27,10 +28,11 @@ export function useNoteAttachments(workspaceId: string) {
     summary: selected.map(n => `@${n.title || s.untitled}`).join(" "),
     hasNotes: selected.length > 0,
     onKeyDown: (event: React.KeyboardEvent<HTMLTextAreaElement>) => { if (event.key === "@" && !event.nativeEvent.isComposing) { event.preventDefault(); show(event.currentTarget); return true; } return false; },
-    // 用**同一个** Button(ghost / icon-xs),不是照着它的尺寸手搓一个:此前这里是手搓的
+    // 用**同一个** Button(ghost / icon-xs,经 IconButton),不是照着它的尺寸手搓一个:此前这里是手搓的
     // `text-muted-foreground`,而同排的回形针、话筒走 Button 的默认前景色 —— 三个并排的图标
     // 里这一个明显暗一截,读起来像是禁用的。尺寸本来就一样(icon-xs = size-7)。
-    trigger: <Button ref={trigger} type="button" variant="ghost" size="icon-xs" title={s.addReference} aria-label={s.addReference} onClick={() => show(trigger.current)}><BookOpen size={14} /></Button>,
+    //: 在输入框里打 @ 也是打开它,键帽画在说明里。
+    trigger: <IconButton ref={trigger} type="button" variant="ghost" size="icon-xs" label={s.addReference} shortcut="@" onClick={() => show(trigger.current)}><BookOpen size={14} /></IconButton>,
     // 小条自己不画了 —— 和附件拼在同一排里,由 ComposerChips 统一渲染(见那边的注释)。
     // 正文点开就能看:listNotes 返回的就是完整的笔记,不必为了预览再问一次服务端。
     chips: selected.map<ComposerChip>(note => ({
@@ -48,7 +50,7 @@ export function useNoteAttachments(workspaceId: string) {
         if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); setActive(i => rows.length ? (i + (e.key === "ArrowDown" ? 1 : -1) + rows.length) % rows.length : 0); }
         if (e.key === "Enter" && rows[active]) { e.preventDefault(); choose(rows[active]); }
       }} />
-      <div className="mt-1 max-h-60 overflow-auto" role="listbox">{notes.data?.map((n, index) => <button type="button" role="option" aria-selected={index === active} key={n.id} className={`block w-full truncate rounded-md px-3 py-2 text-left text-sm hover:bg-secondary ${index === active ? "bg-secondary" : ""}`} onClick={() => choose(n)}>{n.title || s.untitled}</button>)}{!notes.data?.length && <p className="p-3 text-xs text-muted-foreground">{notes.isPending ? s.loading : notes.isError ? s.unavailable : s.noResults}</p>}</div>
+      <div className="mt-1 max-h-60 overflow-auto" role="listbox">{notes.data?.map((n, index) => <button type="button" role="option" aria-selected={index === active} key={n.id} className={`block w-full rounded-md px-3 py-2 text-left text-sm hover:bg-secondary ${index === active ? "bg-secondary" : ""}`} onClick={() => choose(n)}><Truncate>{n.title || s.untitled}</Truncate></button>)}{!notes.data?.length && <p className="p-3 text-xs text-muted-foreground">{notes.isPending ? s.loading : notes.isError ? s.unavailable : s.noResults}</p>}</div>
     </PopoverContent></Popover>,
   };
 }

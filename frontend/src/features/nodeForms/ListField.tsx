@@ -3,7 +3,7 @@ import { X } from "lucide-react";
 
 import { useI18n } from "@/app/preferences";
 import { AddRow } from "@/components/ui/add-row";
-import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
 import { RefCombobox } from "@/features/nodeForms/RefCombobox";
 
 /**
@@ -90,15 +90,15 @@ export function ListField({
             className="text-ui-xs"
             onValueChange={(next: string) => push(rows.map((one, i) => (i === index ? next : one)))}
           />
-          <Button
+          <IconButton
             type="button"
             variant="ghost"
             size="icon-xs"
-            aria-label={t("delete")}
+            label={t("delete")}
             onClick={() => push(rows.filter((_, i) => i !== index))}
           >
             <X size={12} />
-          </Button>
+          </IconButton>
         </div>
       ))}
       {maxItems !== undefined && rows.length >= maxItems ? (

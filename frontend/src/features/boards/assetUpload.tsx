@@ -8,6 +8,8 @@ import { assetKeys } from "@/api/queryKeys";
 import type { MessageKey } from "@/app/messages";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
+import { Truncate } from "@/components/ui/truncate";
 import { cn } from "@/lib/utils";
 
 /**
@@ -139,13 +141,13 @@ export function AssetUploadStatus({ upload, className }: { upload: AssetUpload; 
         className,
       )}
     >
-      <span className="min-w-0 flex-1 truncate">
+      <Truncate className="flex-1">
         {state.status === "uploading"
           ? t("assetUploading").replace("{name}", state.name)
           : state.status === "failed"
             ? t("assetUploadFailed").replace("{name}", state.name).replace("{reason}", state.reason)
             : state.message}
-      </span>
+      </Truncate>
       {state.status === "uploading" && (
         <>
           <span
@@ -167,17 +169,16 @@ export function AssetUploadStatus({ upload, className }: { upload: AssetUpload; 
           {t("retry")}
         </Button>
       )}
-      <Button
+      <IconButton
         type="button"
         size="icon-xs"
         variant="ghost"
-        aria-label={state.status === "uploading" ? t("assetUploadCancel") : t("close")}
-        title={state.status === "uploading" ? t("assetUploadCancel") : t("close")}
+        label={state.status === "uploading" ? t("assetUploadCancel") : t("close")}
         onClick={upload.cancel}
         className="shrink-0 text-muted-foreground"
       >
         <X size={12} />
-      </Button>
+      </IconButton>
     </div>
   );
 }

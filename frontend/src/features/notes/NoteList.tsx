@@ -21,6 +21,10 @@ import {
   ContextMenuSeparator,
 } from "@/components/ui/context-menu";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { IconButton } from "@/components/ui/icon-button";
+import { MenuItemBody } from "@/components/ui/menu";
+import { Hint } from "@/components/ui/tooltip";
+import { Truncate } from "@/components/ui/truncate";
 import { ConfirmDialog } from "@/components/app/modals";
 import { useNoteStrings } from "./strings";
 import { isImeKeystroke } from "@/lib/shortcuts";
@@ -195,7 +199,7 @@ export function NoteList({
                 >
                   <strong>
                     {n.favorite && <Star size={12} fill="currentColor" />}
-                    <span>{n.title || s.untitled}</span>
+                    <Truncate>{n.title || s.untitled}</Truncate>
                   </strong>
                   <p>{noteSnippet(n.markdown, 100)}</p>
                   <time>
@@ -213,8 +217,7 @@ export function NoteList({
           {targets.length === 1 && (
             <>
               <ContextMenuItem onSelect={() => onOpen(targets[0].id)}>
-                <FileText />
-                {s.openNote}
+                <MenuItemBody icon={<FileText />} label={s.openNote} />
               </ContextMenuItem>
               {!targets[0].trashed && (
                 <ContextMenuItem
@@ -223,13 +226,11 @@ export function NoteList({
                     setTitle(targets[0].title);
                   }}
                 >
-                  <Pencil />
-                  {s.rename}
+                  <MenuItemBody icon={<Pencil />} label={s.rename} />
                 </ContextMenuItem>
               )}
               <ContextMenuItem onSelect={() => void run("duplicate", targets)}>
-                <Copy />
-                {s.duplicate}
+                <MenuItemBody icon={<Copy />} label={s.duplicate} />
               </ContextMenuItem>
               <ContextMenuSeparator />
             </>
@@ -240,15 +241,13 @@ export function NoteList({
               void run(allFavorite ? "unfavorite" : "favorite", targets)
             }
           >
-            <Star />
-            {allFavorite ? s.unfavorite : s.favorite}
+            <MenuItemBody icon={<Star />} label={allFavorite ? s.unfavorite : s.favorite} />
           </ContextMenuItem>
           <ContextMenuItem
             disabled={!targets.length || busy}
             onSelect={() => void run("export", targets)}
           >
-            <Download />
-            {s.export}
+            <MenuItemBody icon={<Download />} label={s.export} />
           </ContextMenuItem>
           <ContextMenuSeparator />
           <ContextMenuItem
@@ -257,8 +256,10 @@ export function NoteList({
               void run(targets[0]?.trashed ? "restore" : "trash", targets)
             }
           >
-            {targets[0]?.trashed ? <RotateCcw /> : <Trash2 />}
-            {targets[0]?.trashed ? s.restoreTrash : s.moveTrash}
+            <MenuItemBody
+              icon={targets[0]?.trashed ? <RotateCcw /> : <Trash2 />}
+              label={targets[0]?.trashed ? s.restoreTrash : s.moveTrash}
+            />
           </ContextMenuItem>
           {!!targets.length && targets.every((n) => n.trashed) && (
             <ContextMenuItem
@@ -266,8 +267,7 @@ export function NoteList({
               disabled={busy}
               onSelect={() => setRemove(targets)}
             >
-              <Trash2 />
-              {s.deleteForever}
+              <MenuItemBody icon={<Trash2 />} label={s.deleteForever} />
             </ContextMenuItem>
           )}
           <ContextMenuSeparator />
@@ -278,8 +278,7 @@ export function NoteList({
               setSelected(new Set(context));
             }}
           >
-            <CheckSquare />
-            {s.selectNotes}
+            <MenuItemBody icon={<CheckSquare />} label={s.selectNotes} />
           </ContextMenuItem>
         </ContextMenuContent>
       </ContextMenu>
@@ -298,31 +297,25 @@ export function NoteList({
               />
               <span>{s.selectedCount(chosen.length)}</span>
             </label>
-            <button
+            <IconButton
+              unstyled
               className="note-icon"
-              aria-label={s.cancelSelection}
-              title={s.cancelSelection}
+              label={s.cancelSelection}
               disabled={busy}
               onClick={clear}
             >
               <X size={15} />
-            </button>
+            </IconButton>
           </div>
           <div>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              title={
-                chosen.length && chosen.every((n) => n.favorite)
-                  ? s.unfavorite
-                  : s.favorite
-              }
-              aria-label={
+            <IconButton
+              label={
                 chosen.length && chosen.every((n) => n.favorite)
                   ? s.unfavorite
                   : s.favorite
               }
               disabled={!chosen.length || busy}
+              disabledReason={!chosen.length && s.noneSelected}
               onClick={() =>
                 void run(
                   chosen.every((n) => n.favorite) ? "unfavorite" : "favorite",
@@ -331,40 +324,37 @@ export function NoteList({
               }
             >
               <Star />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              title={s.export}
-              aria-label={s.export}
+            </IconButton>
+            <IconButton
+              label={s.export}
               disabled={!chosen.length || busy}
+              disabledReason={!chosen.length && s.noneSelected}
               onClick={() => void run("export", chosen)}
             >
               <Download />
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              disabled={!chosen.length || busy}
-              onClick={() =>
-                void run(chosen[0]?.trashed ? "restore" : "trash", chosen)
-              }
-            >
-              {chosen[0]?.trashed ? <RotateCcw /> : <Trash2 />}
-              {chosen[0]?.trashed ? s.restoreTrash : s.moveTrash}
-            </Button>
-            {!!chosen.length && chosen.every((n) => n.trashed) && (
+            </IconButton>
+            <Hint disabledReason={!chosen.length && s.noneSelected}>
               <Button
                 variant="ghost"
-                size="icon-sm"
+                size="sm"
+                disabled={!chosen.length || busy}
+                onClick={() =>
+                  void run(chosen[0]?.trashed ? "restore" : "trash", chosen)
+                }
+              >
+                {chosen[0]?.trashed ? <RotateCcw /> : <Trash2 />}
+                {chosen[0]?.trashed ? s.restoreTrash : s.moveTrash}
+              </Button>
+            </Hint>
+            {!!chosen.length && chosen.every((n) => n.trashed) && (
+              <IconButton
                 className="text-destructive"
-                title={s.deleteForever}
-                aria-label={s.deleteForever}
+                label={s.deleteForever}
                 disabled={busy}
                 onClick={() => setRemove(chosen)}
               >
                 <Trash2 />
-              </Button>
+              </IconButton>
             )}
           </div>
         </div>

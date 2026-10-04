@@ -10,7 +10,10 @@ import {
   restorePromptDocument,
   type PromptDocument,
 } from "@/features/boards/PromptEditor";
+import { IconButton } from "@/components/ui/icon-button";
 import { OptionPicker } from "@/components/ui/option-picker";
+import { Hint } from "@/components/ui/tooltip";
+import { Truncate } from "@/components/ui/truncate";
 import { useSubmitting } from "@/features/boards/useSubmitting";
 
 import { assetFileUrl, assetPreviewUrl, assetThumbnailUrl } from "@/api/client";
@@ -178,21 +181,23 @@ export function NoteComposer({
         referenced.length > 0 || shownEntities.length > 0 ? (
           <>
             {shownEntities.map((entity) => (
-              <span
-                key={entity.id}
-                data-linked-entity={entity.id}
-                title={t("boardLinkedEntityHint")}
-                className="inline-flex h-8 max-w-[14rem] shrink-0 items-center gap-1.5 rounded-md bg-primary/10 pl-1 pr-2 text-ui-xs text-primary"
-              >
-                <EntityThumb entity={entity} className="h-6 w-6 rounded-sm" />
-                <span className="min-w-0 truncate">{entityDisplayName(entity)}</span>
-              </span>
+              <Hint key={entity.id} label={t("boardLinkedEntityHint")}>
+                <span
+                  data-linked-entity={entity.id}
+                  className="inline-flex h-8 max-w-[14rem] shrink-0 items-center gap-1.5 rounded-md bg-primary/10 pl-1 pr-2 text-ui-xs text-primary"
+                >
+                  <EntityThumb entity={entity} className="h-6 w-6 rounded-sm" />
+                  <Truncate>{entityDisplayName(entity)}</Truncate>
+                </span>
+              </Hint>
             ))}
             {referenced.map((asset) => (
               <span key={asset.id} className="group/thumb relative shrink-0">
-                <button
+                {/* 缩略图按钮:名字是素材名(没起名就用种类),悬停也看得到。 */}
+                <IconButton
+                  unstyled
                   type="button"
-                  title={asset.name || asset.original_filename || ""}
+                  label={asset.name || asset.original_filename || t(asset.kind === "video" ? "boardKindVideo" : asset.kind === "audio" ? "boardKindAudio" : "boardKindImage")}
                   onClick={() =>
                     openImagePreview({
                       src: asset.kind === "image" ? assetPreviewUrl(asset.id) : assetFileUrl(asset.id),
@@ -209,19 +214,19 @@ export function NoteComposer({
                       {asset.kind === "video" ? <Film size={13} /> : <Music size={13} />}
                     </span>
                   )}
-                </button>
+                </IconButton>
                 {/* 只有正文里 @ 进来的能在这儿摘掉 —— 上游那张是**连线连过来的**,
                     要取消就该去断那条线,在这里给个叉会让两种取消方式打架。 */}
                 {mentioned.includes(asset.id) && (
-                  <button
+                  <IconButton
+                    unstyled
                     type="button"
-                    aria-label={t("boardRemove")}
-                    title={t("boardRemove")}
+                    label={t("boardRemove")}
                     onClick={() => setMentioned((all) => all.filter((one) => one !== asset.id))}
                     className="absolute -right-1 -top-1 grid h-4 w-4 cursor-pointer place-items-center rounded-full border border-border bg-panel text-muted-foreground opacity-0 shadow-sm transition-opacity hover:border-destructive hover:text-destructive group-hover/thumb:opacity-100"
                   >
                     <X size={9} />
-                  </button>
+                  </IconButton>
                 )}
               </span>
             ))}
@@ -248,7 +253,6 @@ export function NoteComposer({
             }))}
             size="sm"
             className={BAR_PICKER}
-            contentClassName="max-w-[min(360px,calc(100vw-16px))]"
           />
         )
       }

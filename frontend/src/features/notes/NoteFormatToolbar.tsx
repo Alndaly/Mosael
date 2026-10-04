@@ -1,12 +1,15 @@
 import React from "react";
 import { useEditorState, type Editor } from "@tiptap/react";
 import {
-  AtSign, Bold, Check, ChevronDown, Code2, Highlighter, ImagePlus, Italic, Link, List, ListOrdered, ListTodo, Minus,
+  AtSign, Bold, ChevronDown, Code2, Highlighter, ImagePlus, Italic, Link, List, ListOrdered, ListTodo, Minus,
   MoreVertical, Plus, Quote, Redo2, Strikethrough, Table2, Undo2, type LucideIcon,
 } from "lucide-react";
 
-import { MENU_ITEM, MENU_SEPARATOR } from "@/components/ui/floating";
+import { IconButton } from "@/components/ui/icon-button";
+import { MenuContent, MenuItem, MenuSeparator } from "@/components/ui/menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Hint } from "@/components/ui/tooltip";
+import { formatCombo } from "@/lib/shortcuts";
 import { cn } from "@/lib/utils";
 import { HIGHLIGHT } from "./NoteHighlight";
 import { useNoteStrings } from "./strings";
@@ -54,7 +57,15 @@ export function visibleFormatGroups(width: number, measured: FormatGroupWidths =
   return ORDER.filter((id) => visible.has(id));
 }
 
-type Action = { name: string; icon: LucideIcon; active?: boolean; disabled?: boolean; run: () => void };
+type Action = {
+  name: string; icon: LucideIcon; active?: boolean; disabled?: boolean; run: () => void;
+  /** 名字下面一行淡色的补充(菜单里显示)。 */
+  description?: string;
+  /** 快捷键(编辑器里真的绑着的那个,规范串见 lib/shortcuts)。 */
+  shortcut?: string;
+  /** 点不了的原因(悬停说明里显示)。 */
+  disabledReason?: string;
+};
 
 export function NoteFormatToolbar({ editor, uploading, onPickImage, stuck }: {
   editor: Editor;
@@ -97,30 +108,30 @@ export function NoteFormatToolbar({ editor, uploading, onPickImage, stuck }: {
 
   const chain = () => editor.chain().focus();
   const marks: Action[] = [
-    { name: s.bold, icon: Bold, active: state.bold, run: () => chain().toggleBold().run() },
-    { name: s.italic, icon: Italic, active: state.italic, run: () => chain().toggleItalic().run() },
-    { name: s.strike, icon: Strikethrough, active: state.strike, run: () => chain().toggleStrike().run() },
-    { name: s.selection.highlight, icon: Highlighter, active: state.highlight, run: () => chain().toggleMark(HIGHLIGHT).run() },
+    { name: s.bold, icon: Bold, active: state.bold, shortcut: "Mod+B", run: () => chain().toggleBold().run() },
+    { name: s.italic, icon: Italic, active: state.italic, shortcut: "Mod+I", run: () => chain().toggleItalic().run() },
+    { name: s.strike, icon: Strikethrough, active: state.strike, shortcut: "Mod+Shift+S", run: () => chain().toggleStrike().run() },
+    { name: s.selection.highlight, icon: Highlighter, active: state.highlight, shortcut: "Mod+Shift+H", run: () => chain().toggleMark(HIGHLIGHT).run() },
   ];
   const lists: Action[] = [
-    { name: s.bulletList, icon: List, active: state.bullet, run: () => chain().toggleBulletList().run() },
-    { name: s.numberedList, icon: ListOrdered, active: state.ordered, run: () => chain().toggleOrderedList().run() },
-    { name: s.taskList, icon: ListTodo, active: state.task, run: () => chain().toggleTaskList().run() },
+    { name: s.bulletList, icon: List, active: state.bullet, shortcut: "Mod+Shift+8", run: () => chain().toggleBulletList().run() },
+    { name: s.numberedList, icon: ListOrdered, active: state.ordered, shortcut: "Mod+Shift+7", run: () => chain().toggleOrderedList().run() },
+    { name: s.taskList, icon: ListTodo, active: state.task, shortcut: "Mod+Shift+9", run: () => chain().toggleTaskList().run() },
   ];
   const inserts: Action[] = [
     { name: s.quote, icon: Quote, active: state.quote, run: () => chain().toggleBlockquote().run() },
     { name: s.code, icon: Code2, active: state.code, run: () => chain().toggleCodeBlock().run() },
     { name: s.divider, icon: Minus, run: () => chain().setHorizontalRule().run() },
     { name: s.addReference, icon: AtSign, run: () => chain().insertContent("@").run() },
-    { name: uploading ? s.uploading : s.image, icon: ImagePlus, disabled: uploading, run: onPickImage },
+    { name: uploading ? s.uploading : s.image, description: uploading ? undefined : s.imageHint, icon: ImagePlus, disabled: uploading, run: onPickImage },
   ];
   const tableActions: [string, () => void][] = state.table
     ? [[s.addRow, () => chain().addRowAfter().run()], [s.addColumn, () => chain().addColumnAfter().run()],
       [s.deleteRow, () => chain().deleteRow().run()], [s.deleteColumn, () => chain().deleteColumn().run()], [s.deleteTable, () => chain().deleteTable().run()]]
     : [[s.insertTable, () => chain().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()]];
   const history: Action[] = [
-    { name: s.undo, icon: Undo2, disabled: !state.undo, run: () => chain().undo().run() },
-    { name: s.redo, icon: Redo2, disabled: !state.redo, run: () => chain().redo().run() },
+    { name: s.undo, icon: Undo2, disabled: !state.undo, disabledReason: s.nothingToUndo, shortcut: "Mod+Z", run: () => chain().undo().run() },
+    { name: s.redo, icon: Redo2, disabled: !state.redo, disabledReason: s.nothingToRedo, shortcut: "Mod+Shift+Z", run: () => chain().redo().run() },
   ];
   const applyLink = (event: React.FormEvent) => {
     event.preventDefault();
@@ -141,18 +152,16 @@ export function NoteFormatToolbar({ editor, uploading, onPickImage, stuck }: {
   const openLink = () => setUrl(String(editor.getAttributes("link").href || ""));
 
   const button = (action: Action) => (
-    <button key={action.name} type="button" title={action.name} aria-label={action.name} aria-pressed={action.active} disabled={action.disabled}
+    <IconButton unstyled key={action.name} type="button" label={action.name} shortcut={action.shortcut && formatCombo(action.shortcut)}
+      aria-pressed={action.active} disabled={action.disabled} disabledReason={action.disabledReason}
       onMouseDown={(event) => event.preventDefault()} onClick={action.run}>
       <action.icon size={16} strokeWidth={1.7} />
-    </button>
+    </IconButton>
   );
-  const item = (key: string, label: string, Icon: LucideIcon | null, run: () => void, extra: { active?: boolean; disabled?: boolean } = {}) => (
-    <button key={key} type="button" role="menuitem" aria-pressed={extra.active} disabled={extra.disabled} className={cn(MENU_ITEM, "w-full text-left")}
-      onClick={() => { setOpen(null); run(); }}>
-      {Icon ? <Icon size={16} /> : <span className="size-4" aria-hidden />}
-      <span className="min-w-0 flex-1 truncate">{label}</span>
-      {extra.active && <Check className="ml-auto" />}
-    </button>
+  const item = (key: string, label: string, Icon: LucideIcon | null, run: () => void, extra: Partial<Action> = {}) => (
+    <MenuItem key={key} icon={Icon ? <Icon size={16} /> : undefined} inset={!Icon} label={label} description={extra.description}
+      shortcut={extra.shortcut && formatCombo(extra.shortcut)} checked={extra.active} aria-pressed={extra.active} disabled={extra.disabled}
+      onClick={() => { setOpen(null); run(); }} />
   );
   const actionItems = (actions: Action[]) => actions.map((one) => item(one.name, one.name, one.icon, one.run, one));
 
@@ -160,20 +169,22 @@ export function NoteFormatToolbar({ editor, uploading, onPickImage, stuck }: {
     block: (
       //: 段落样式和「插入」是同一种控件:文字 + 小箭头的菜单按钮,菜单条目和右键菜单一个样。
       <Popover open={open === "block"} onOpenChange={(next) => setOpen(next ? "block" : null)}>
-        <PopoverTrigger asChild><button type="button" className="note-format-menu note-block-style" aria-label={s.heading} title={s.heading} onMouseDown={(event) => event.preventDefault()}><span>{state.heading ? s.headingLevels[state.heading - 1] : s.paragraph}</span><ChevronDown size={12} /></button></PopoverTrigger>
-        <PopoverContent align="start" className="grid w-44 gap-0.5 p-1.5" onCloseAutoFocus={(event) => event.preventDefault()}>
-          {[0, 1, 2, 3, 4, 5, 6].map((level) => {
-            const current = state.heading === level;
-            return <button key={level} type="button" role="menuitemradio" aria-checked={current} className={cn(MENU_ITEM, "w-full text-left")} onClick={() => {
-              setOpen(null);
-              if (level === 0) chain().setParagraph().run();
-              else chain().setHeading({ level: level as 1 | 2 | 3 | 4 | 5 | 6 }).run();
-            }}>
-              {level ? <span className="note-heading-option"><span>H{level}</span>{s.headingLevels[level - 1]}</span> : s.paragraph}
-              {current && <Check className="ml-auto" />}
-            </button>;
-          })}
-        </PopoverContent>
+        {/* 按钮上显示的是当前段落样式(「正文」「二级标题」),它管什么得悬停说一声。 */}
+        <Hint label={s.heading}>
+          <PopoverTrigger asChild><button type="button" className="note-format-menu note-block-style" aria-label={s.heading} onMouseDown={(event) => event.preventDefault()}><span>{state.heading ? s.headingLevels[state.heading - 1] : s.paragraph}</span><ChevronDown size={12} /></button></PopoverTrigger>
+        </Hint>
+        <MenuContent align="start" label={s.heading} onCloseAutoFocus={(event) => event.preventDefault()}>
+          {[0, 1, 2, 3, 4, 5, 6].map((level) => (
+            <MenuItem key={level} role="menuitemradio" checked={state.heading === level}
+              label={level ? <span className="note-heading-option"><span>H{level}</span>{s.headingLevels[level - 1]}</span> : s.paragraph}
+              shortcut={formatCombo(`Mod+Alt+${level}`)}
+              onClick={() => {
+                setOpen(null);
+                if (level === 0) chain().setParagraph().run();
+                else chain().setHeading({ level: level as 1 | 2 | 3 | 4 | 5 | 6 }).run();
+              }} />
+          ))}
+        </MenuContent>
       </Popover>
     ),
     marks: marks.map(button),
@@ -181,16 +192,16 @@ export function NoteFormatToolbar({ editor, uploading, onPickImage, stuck }: {
     insert: (
       <>
         <Popover open={open === "insert"} onOpenChange={(next) => setOpen(next ? "insert" : null)}>
-          <PopoverTrigger asChild><button type="button" className="note-format-menu note-format-insert" aria-label={s.insert} title={s.insert}><Plus size={16} strokeWidth={1.7} /><span>{s.insert}</span><ChevronDown size={12} /></button></PopoverTrigger>
-          <PopoverContent role="menu" aria-label={s.insert} align="start" className="grid w-48 gap-0.5 p-1.5">{actionItems(inserts)}</PopoverContent>
+          <PopoverTrigger asChild><button type="button" className="note-format-menu note-format-insert" aria-label={s.insert}><Plus size={16} strokeWidth={1.7} /><span>{s.insert}</span><ChevronDown size={12} /></button></PopoverTrigger>
+          <MenuContent label={s.insert} align="start">{actionItems(inserts)}</MenuContent>
         </Popover>
         <Popover open={open === "link"} onOpenChange={(next) => { setOpen(next ? "link" : null); if (next) openLink(); }}>
-          <PopoverTrigger asChild><button type="button" title={s.link} aria-label={s.link}><Link size={16} strokeWidth={1.7} /></button></PopoverTrigger>
+          <PopoverTrigger asChild><IconButton unstyled type="button" label={s.link}><Link size={16} strokeWidth={1.7} /></IconButton></PopoverTrigger>
           <PopoverContent className="w-80 p-3">{linkForm}</PopoverContent>
         </Popover>
         <Popover open={open === "table"} onOpenChange={(next) => setOpen(next ? "table" : null)}>
-          <PopoverTrigger asChild><button type="button" title={s.table} aria-label={s.table} aria-pressed={state.table}><Table2 size={16} strokeWidth={1.7} /></button></PopoverTrigger>
-          <PopoverContent role="menu" aria-label={s.table} align="start" className="grid w-48 gap-0.5 p-1.5">{tableActions.map(([label, run]) => item(label, label, null, run))}</PopoverContent>
+          <PopoverTrigger asChild><IconButton unstyled type="button" label={s.table} aria-pressed={state.table}><Table2 size={16} strokeWidth={1.7} /></IconButton></PopoverTrigger>
+          <MenuContent label={s.table} align="start">{tableActions.map(([label, run]) => item(label, label, null, run))}</MenuContent>
         </Popover>
       </>
     ),
@@ -203,9 +214,7 @@ export function NoteFormatToolbar({ editor, uploading, onPickImage, stuck }: {
     insert: () => (
       <>
         {actionItems(inserts)}
-        <button type="button" role="menuitem" aria-expanded={moreLink} className={cn(MENU_ITEM, "w-full text-left")} onClick={() => { openLink(); setMoreLink(!moreLink); }}>
-          <Link size={16} /><span className="min-w-0 flex-1 truncate">{s.link}</span>
-        </button>
+        <MenuItem aria-expanded={moreLink} icon={<Link size={16} />} label={s.link} onClick={() => { openLink(); setMoreLink(!moreLink); }} />
         {moreLink && <div className="px-2 pb-2">{linkForm}</div>}
         {tableActions.map(([label, run]) => item(label, label, Table2, run))}
       </>
@@ -221,15 +230,15 @@ export function NoteFormatToolbar({ editor, uploading, onPickImage, stuck }: {
       {collapsed.length > 0 && (
         <div className="note-format-group">
           <Popover open={open === "more"} onOpenChange={(next) => { setOpen(next ? "more" : null); if (!next) setMoreLink(false); }}>
-            <PopoverTrigger asChild><button type="button" title={s.moreFormats} aria-label={s.moreFormats}><MoreVertical size={16} strokeWidth={1.7} /></button></PopoverTrigger>
-            <PopoverContent role="menu" aria-label={s.moreFormats} align="end" className="flex max-h-[var(--radix-popover-content-available-height)] w-64 flex-col gap-0.5 overflow-y-auto p-1.5">
+            <PopoverTrigger asChild><IconButton unstyled type="button" label={s.moreFormats}><MoreVertical size={16} strokeWidth={1.7} /></IconButton></PopoverTrigger>
+            <MenuContent label={s.moreFormats} align="end">
               {collapsed.map((id, index) => (
                 <React.Fragment key={id}>
-                  {index > 0 && <div className={MENU_SEPARATOR} role="separator" />}
+                  {index > 0 && <MenuSeparator />}
                   {moreItems[id]()}
                 </React.Fragment>
               ))}
-            </PopoverContent>
+            </MenuContent>
           </Popover>
         </div>
       )}

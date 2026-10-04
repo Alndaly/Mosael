@@ -3,6 +3,7 @@ import { Node, NodeViewWrapper, ReactNodeViewRenderer, mergeAttributes, type JSO
 import StarterKit from "@tiptap/starter-kit";
 import type { CollaborationComment, WorkspaceMember } from "@/api/client";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Truncate } from "@/components/ui/truncate";
 
 export const CommentMembers = React.createContext<WorkspaceMember[]>([]);
 
@@ -18,7 +19,7 @@ function Mention({ userId, label }: { userId: string; label: string }) {
     <PopoverContent data-board-comment-overlay="" align="start" className="w-56 p-3" onPointerDown={event => event.stopPropagation()} onClick={event => event.stopPropagation()}>
       <div className="flex items-center gap-2.5">
         <span className="grid size-8 shrink-0 place-items-center rounded-full bg-primary/15 text-ui-xs font-semibold text-primary">{(member?.display_name || label).slice(0, 1).toUpperCase()}</span>
-        <div className="min-w-0 text-ui-xs"><p className="truncate font-medium">{member?.display_name || label}</p>{member && <p className="truncate text-muted-foreground">@{member.username}</p>}</div>
+        <div className="min-w-0 text-ui-xs"><Truncate as="p" className="font-medium">{member?.display_name || label}</Truncate>{member && <Truncate as="p" className="text-muted-foreground">@{member.username}</Truncate>}</div>
       </div>
     </PopoverContent>
   </Popover>;

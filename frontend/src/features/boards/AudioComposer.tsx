@@ -51,7 +51,6 @@ function Pick({
       icon={icon}
       size="sm"
       className={BAR_PICKER}
-      contentClassName="max-w-[min(360px,calc(100vw-16px))]"
     />
   );
 }

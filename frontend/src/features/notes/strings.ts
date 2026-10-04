@@ -1,6 +1,6 @@
 import { usePreferences } from "@/app/preferences";
 const zh = {
-  noteList: "笔记列表", selectNotes: "多选笔记", selectNote: "选择笔记", cancelSelection: "取消多选", selectVisible: "全选当前列表", selectedCount: (count:number)=>`已选 ${count} 篇`, batchActions: "批量操作",
+  noteList: "笔记列表", selectNotes: "多选笔记", selectNote: "选择笔记", cancelSelection: "取消多选", selectVisible: "全选当前列表", selectedCount: (count:number)=>`已选 ${count} 篇`, noneSelected: "还没有勾选笔记", batchActions: "批量操作",
   openNote: "打开笔记", rename: "重命名", duplicate: "创建副本", unfavorite: "取消收藏", copySuffix: "副本", partialFailure: (count:number)=>`${count} 篇笔记操作失败，请重试。`,
   referenceVersion: (version:number)=>`引用自版本 ${version}，当前显示最新正文`, viewReference: "查看引用版本",
 
@@ -8,7 +8,7 @@ const zh = {
   insert: "插入",
   chooseVersion: "选择左侧版本查看内容。",
   deleteForever: "彻底删除", deleteWarning: "笔记及所有历史版本将被永久删除，无法恢复。已有引用会保留，但无法再打开来源。", inTrash: "这篇笔记已移入回收站。恢复后可以继续编辑。",
-  bold: "粗体", italic: "斜体", strike: "删除线", heading: "段落样式", paragraph: "正文", headingLevels: ["一级标题", "二级标题", "三级标题", "四级标题", "五级标题", "六级标题"], bulletList: "无序列表", numberedList: "有序列表", taskList: "任务列表", quote: "引用块", code: "代码块", divider: "分隔线", image: "插入图片（也可粘贴或拖入）", uploading: "图片上传中…", undo: "撤销", redo: "重做", link: "网页链接", apply: "应用", table: "表格", insertTable: "插入 3 × 3 表格", addRow: "在下方插入行", addColumn: "在右侧插入列", deleteRow: "删除当前行", deleteColumn: "删除当前列", deleteTable: "删除表格",
+  bold: "粗体", italic: "斜体", strike: "删除线", heading: "段落样式", paragraph: "正文", headingLevels: ["一级标题", "二级标题", "三级标题", "四级标题", "五级标题", "六级标题"], bulletList: "无序列表", numberedList: "有序列表", taskList: "任务列表", quote: "引用块", code: "代码块", divider: "分隔线", image: "插入图片", imageHint: "也可粘贴或拖入", uploading: "图片上传中…", undo: "撤销", redo: "重做", nothingToUndo: "没有可撤销的操作", nothingToRedo: "没有可重做的操作", link: "网页链接", apply: "应用", table: "表格", insertTable: "插入 3 × 3 表格", addRow: "在下方插入行", addColumn: "在右侧插入列", deleteRow: "删除当前行", deleteColumn: "删除当前列", deleteTable: "删除表格",
   listEmpty: "还没有笔记", listEmptyHint: "写下第一个想法，慢慢积累你的创作资料。", trashEmpty: "回收站是空的", trashHint: "移入回收站的笔记可以在这里恢复。", favoriteEmpty: "还没有收藏", favoriteHint: "给常用笔记点亮星标，下次更容易找到。", searchHint: "换个关键词，或清除筛选再看看。", clearSearch: "清除筛选",
   title: "笔记", all: "全部笔记", favorite: "收藏", trash: "回收站", topics: "专题", tags: "标签",
   new: "新建笔记", search: "搜索标题、正文或标签", untitled: "未命名笔记", empty: "把值得留下的想法写在这里",
@@ -16,10 +16,10 @@ const zh = {
   saved: "已保存", saving: "保存中…", draft: "草稿待保存", error: "保存失败，草稿已留在本机", retry: "重试保存",
   conflict: "笔记已有新版本。本机草稿已保留，请先导出草稿再载入最新版本。", reload: "载入最新版本",
   source: "来源与属性", history: "版本记录", restore: "恢复此版本", restoreTrash: "移出回收站", moveTrash: "移入回收站",
-  import: "导入 Markdown", dropHint: "松开导入为笔记(.md / .markdown / .txt)", importUnsupported: "只能导入 .md、.markdown 或 .txt 文件", imported: (n:number)=>`已导入 ${n} 篇笔记`, importPartial: (n:number, failed:string[])=>`已导入 ${n} 篇,${failed.length} 个没导入(超过 500 KB 或读取失败):${failed.slice(0,3).join("、")}${failed.length>3?"…":""}`, export: "导出 Markdown", format: "格式工具", moreFormats: "更多格式", versionContent: "版本内容", raw: "Markdown", rawHint: "看 Markdown 源码(再点回到编辑)",
+  import: "导入 Markdown", dropHint: "松开导入为笔记(.md / .markdown / .txt)", importUnsupported: "只能导入 .md、.markdown 或 .txt 文件", imported: (n:number)=>`已导入 ${n} 篇笔记`, importPartial: (n:number, failed:string[])=>`已导入 ${n} 篇,${failed.length} 个没导入(超过 500 KB 或读取失败):${failed.slice(0,3).join("、")}${failed.length>3?"…":""}`, export: "导出 Markdown", format: "格式工具", moreFormats: "更多格式", versionContent: "版本内容", raw: "Markdown", rawHint: "看 Markdown 源码,再点一下回到编辑",
   content: "笔记正文", placeholder: "开始写作，或输入 @ 引用另一篇笔记…", addReference: "引用笔记",
   topicHint: "专题，用逗号分隔", tagHint: "标签，用逗号分隔", sourcesEmpty: "从素材或对话保存摘录后，可在这里回到来源。",
-  saveTo: "保存到笔记", append: "追加到已有笔记", choose: "选择笔记", excerpt: "摘录", done: "已保存到笔记",
+  saveTo: "保存到笔记", nothingToSave: "还没有可保存的内容", append: "追加到已有笔记", choose: "选择笔记", excerpt: "摘录", done: "已保存到笔记",
   shape: "正文形状", shapePlain: "正文", shapeCited: "带时间戳引用",
   saveAsNew: "存为新笔记", noteTitle: "笔记标题", create: "新建", titleHint: "留空时取正文开头作为标题。",
   willSave: (chars:number, sources:number)=>`将写入约 ${chars} 字，附 ${sources} 条来源`,
@@ -64,7 +64,7 @@ const zh = {
 };
 type Strings = typeof zh;
 const en: Strings = {
-  noteList: "Note list", selectNotes: "Select notes", selectNote: "Select note", cancelSelection: "Cancel selection", selectVisible: "Select current list", selectedCount: (count:number)=>`${count} selected`, batchActions: "Batch actions",
+  noteList: "Note list", selectNotes: "Select notes", selectNote: "Select note", cancelSelection: "Cancel selection", selectVisible: "Select current list", selectedCount: (count:number)=>`${count} selected`, noneSelected: "No notes selected yet", batchActions: "Batch actions",
   openNote: "Open note", rename: "Rename", duplicate: "Duplicate", unfavorite: "Remove favorite", copySuffix: "Copy", partialFailure: (count:number)=>`${count} notes could not be updated. Please retry.`,
   referenceVersion: (version:number)=>`Referenced version ${version} · Showing the latest note`, viewReference: "View referenced version",
 
@@ -72,7 +72,7 @@ const en: Strings = {
   insert: "Insert",
   chooseVersion: "Select a version to preview its contents.",
   deleteForever: "Delete permanently", deleteWarning: "This note and all its revisions will be permanently deleted. Existing references will remain, but their source will no longer open.", inTrash: "This note is in trash. Restore it to continue editing.",
-  bold: "Bold", italic: "Italic", strike: "Strikethrough", heading: "Paragraph style", paragraph: "Paragraph", headingLevels: ["Heading 1", "Heading 2", "Heading 3", "Heading 4", "Heading 5", "Heading 6"], bulletList: "Bullet list", numberedList: "Numbered list", taskList: "Task list", quote: "Blockquote", code: "Code block", divider: "Divider", image: "Insert image (or paste / drop)", uploading: "Uploading image…", undo: "Undo", redo: "Redo", link: "Web link", apply: "Apply", table: "Table", insertTable: "Insert 3 × 3 table", addRow: "Add row below", addColumn: "Add column right", deleteRow: "Delete row", deleteColumn: "Delete column", deleteTable: "Delete table",
+  bold: "Bold", italic: "Italic", strike: "Strikethrough", heading: "Paragraph style", paragraph: "Paragraph", headingLevels: ["Heading 1", "Heading 2", "Heading 3", "Heading 4", "Heading 5", "Heading 6"], bulletList: "Bullet list", numberedList: "Numbered list", taskList: "Task list", quote: "Blockquote", code: "Code block", divider: "Divider", image: "Insert image", imageHint: "Or paste / drop it in", uploading: "Uploading image…", undo: "Undo", redo: "Redo", nothingToUndo: "Nothing to undo", nothingToRedo: "Nothing to redo", link: "Web link", apply: "Apply", table: "Table", insertTable: "Insert 3 × 3 table", addRow: "Add row below", addColumn: "Add column right", deleteRow: "Delete row", deleteColumn: "Delete column", deleteTable: "Delete table",
   listEmpty: "No notes yet", listEmptyHint: "Start with one idea. Build a collection as you create.", trashEmpty: "Trash is empty", trashHint: "Notes moved to trash can be restored here.", favoriteEmpty: "No favorites yet", favoriteHint: "Star a note to keep it close for next time.", searchHint: "Try another keyword or clear your filters.", clearSearch: "Clear filters",
   title: "Notes", all: "All notes", favorite: "Favorites", trash: "Trash", topics: "Topics", tags: "Tags",
   new: "New note", search: "Search titles, text or tags", untitled: "Untitled note", empty: "Keep an idea worth returning to",
@@ -80,10 +80,10 @@ const en: Strings = {
   saved: "Saved", saving: "Saving…", draft: "Unsaved draft", error: "Save failed. Your draft is kept on this device.", retry: "Retry save",
   conflict: "A newer version exists. Export your local draft before loading the latest version.", reload: "Load latest",
   source: "Sources & properties", history: "Version history", restore: "Restore version", restoreTrash: "Restore from trash", moveTrash: "Move to trash",
-  import: "Import Markdown", dropHint: "Drop to import as notes (.md / .markdown / .txt)", importUnsupported: "Only .md, .markdown or .txt files can be imported", imported: (n:number)=>`Imported ${n} notes`, importPartial: (n:number, failed:string[])=>`Imported ${n}; ${failed.length} not imported (over 500 KB or unreadable): ${failed.slice(0,3).join(", ")}${failed.length>3?"…":""}`, export: "Export Markdown", format: "Formatting", moreFormats: "More formatting", versionContent: "Version content", raw: "Markdown", rawHint: "View the Markdown source (click again to edit)",
+  import: "Import Markdown", dropHint: "Drop to import as notes (.md / .markdown / .txt)", importUnsupported: "Only .md, .markdown or .txt files can be imported", imported: (n:number)=>`Imported ${n} notes`, importPartial: (n:number, failed:string[])=>`Imported ${n}; ${failed.length} not imported (over 500 KB or unreadable): ${failed.slice(0,3).join(", ")}${failed.length>3?"…":""}`, export: "Export Markdown", format: "Formatting", moreFormats: "More formatting", versionContent: "Version content", raw: "Markdown", rawHint: "View the Markdown source; click again to go back to editing",
   content: "Note content", placeholder: "Start writing, or type @ to reference a note…", addReference: "Reference a note",
   topicHint: "Topics, separated by commas", tagHint: "Tags, separated by commas", sourcesEmpty: "Excerpts saved from media or conversations link back to their sources here.",
-  saveTo: "Save to notes", append: "Append to a note", choose: "Choose a note", excerpt: "Excerpt", done: "Saved to notes",
+  saveTo: "Save to notes", nothingToSave: "Nothing to save yet", append: "Append to a note", choose: "Choose a note", excerpt: "Excerpt", done: "Saved to notes",
   shape: "Body shape", shapePlain: "Prose", shapeCited: "Quotes with timecodes",
   saveAsNew: "Save as a new note", noteTitle: "Note title", create: "Create", titleHint: "Leave blank to use the opening words as the title.",
   willSave: (chars:number, sources:number)=>`About ${chars} characters and ${sources} source references`,

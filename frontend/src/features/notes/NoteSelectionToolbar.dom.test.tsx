@@ -184,8 +184,9 @@ it("AI 动作带着这段选区交出去;问 AI、引用到对话也是", async 
   await screen.findByRole("toolbar", { name: "选区工具" });
 
   fireEvent.click(button("AI 动作"));
-  const polish = await screen.findByRole("menuitem", { name: /润色/ });
-  expect(polish.getAttribute("title")).toBeTruthy();
+  //: 名字下面那句说明是这一项的描述,不拼进名字。
+  const polish = await screen.findByRole("menuitem", { name: "润色" });
+  expect(polish).toHaveAccessibleDescription("让表达更通顺、更得体,意思不变");
   fireEvent.click(polish);
   expect(handlers.onAiAction).toHaveBeenCalledWith("polish", expect.objectContaining({ text: "剪辑组" }));
 

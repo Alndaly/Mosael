@@ -23,9 +23,13 @@ import type { MessageKey } from "@/app/messages";
 import { ROLE_COPY, SOURCE_ROLES, type SourceRole } from "@/lib/sourceFrames";
 import { DigitalHumanConsent } from "@/components/generation/DigitalHumanConsent";
 import { ParameterRow, declaredChoices } from "@/components/generation/parameterPanel";
+import { IconButton } from "@/components/ui/icon-button";
 import { Input } from "@/components/ui/input";
+import { MenuContent, MenuItem } from "@/components/ui/menu";
 import { OptionPicker } from "@/components/ui/option-picker";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Popover, PopoverTrigger } from "@/components/ui/popover";
+import { Hint } from "@/components/ui/tooltip";
+import { Truncate } from "@/components/ui/truncate";
 import {
   DURATION_UNSET,
   aspectRatioOptions,
@@ -144,7 +148,6 @@ function Pick({
           : "w-auto max-w-full border-0 bg-transparent px-2 text-muted-foreground shadow-none transition-colors hover:bg-secondary",
         className,
       )}
-      contentClassName="max-w-[min(440px,calc(100vw-16px))]"
     />
   );
   return label ? <ParameterRow label={label} title={hint}>{control}</ParameterRow> : control;
@@ -869,45 +872,39 @@ export function NodeComposer({
               <Popover open={addOpen} onOpenChange={setAddOpen}>
                 <SlotDrop onFiles={(files) => attachFiles(files, mergedSlots.map((slot) => slot.role))}>
                   <PopoverTrigger asChild>
-                    <button
+                    <IconButton
+                      unstyled
                       type="button"
-                      title={t("boardAddSource")}
-                      aria-label={t("boardAddSource")}
+                      label={t("boardAddSource")}
+                      aria-haspopup="menu"
                       className="grid h-8 w-8 shrink-0 cursor-pointer place-items-center rounded-md border border-dashed border-border-strong text-muted-foreground transition-colors hover:border-primary hover:text-foreground"
                     >
                       <Plus size={13} />
-                    </button>
+                    </IconButton>
                   </PopoverTrigger>
                 </SlotDrop>
-                <PopoverContent align="start" className="w-[248px] p-1.5">
-                  <p className="m-0 px-1.5 pb-1.5 pt-1 text-ui-xs leading-[1.5] text-muted-foreground">
+                <MenuContent label={t("boardAddSource")} align="start">
+                  <p className="m-0 px-2.5 pb-1.5 pt-1 text-ui-xs leading-[1.5] text-muted-foreground">
                     {t("boardAddSourceHint")}
                   </p>
-                  <div className="grid gap-0.5">
-                    {mergedSlots.map((slot) => {
-                      const left = slot.limit - sources.filter((one) => one.role === slot.role).length;
-                      return (
-                        <button
-                          key={slot.role}
-                          type="button"
-                          disabled={left <= 0}
-                          onClick={() => {
-                            setAddOpen(false);
-                            onPickAsset(roleAccepts(slot.role), (assetId) =>
-                              setSources((all) => [...all, { role: slot.role, assetId }]),
-                            );
-                          }}
-                          className="flex w-full min-w-0 cursor-pointer items-center justify-between gap-2 rounded-md border-0 bg-transparent px-1.5 py-1.5 text-left text-ui-sm text-foreground hover:bg-secondary disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent"
-                        >
-                          <span className="min-w-0 truncate">{roleLabel(t, slot.role)}</span>
-                          <span className="shrink-0 text-ui-xs tabular-nums text-muted-foreground">
-                            {left > 0 ? t("boardSourceRemaining").replace("{n}", String(left)) : t("boardSourceFull")}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </PopoverContent>
+                  {mergedSlots.map((slot) => {
+                    const left = slot.limit - sources.filter((one) => one.role === slot.role).length;
+                    return (
+                      <MenuItem
+                        key={slot.role}
+                        label={roleLabel(t, slot.role)}
+                        hint={left > 0 ? t("boardSourceRemaining").replace("{n}", String(left)) : t("boardSourceFull")}
+                        disabled={left <= 0}
+                        onClick={() => {
+                          setAddOpen(false);
+                          onPickAsset(roleAccepts(slot.role), (assetId) =>
+                            setSources((all) => [...all, { role: slot.role, assetId }]),
+                          );
+                        }}
+                      />
+                    );
+                  })}
+                </MenuContent>
               </Popover>
             )}
           </>
@@ -925,10 +922,10 @@ export function NodeComposer({
               {groupChanged && <span aria-hidden className="mx-1 h-5 w-px shrink-0 bg-border" />}
               {index > 0 && slot.role === "last_frame" && (
                 // 首帧和尾帧之间那个交换 —— 摆反了是最常见的手误,而重挂两次很烦。
-                <button
+                <IconButton
+                  unstyled
                   type="button"
-                  aria-label={t("boardSwapFrames")}
-                  title={t("boardSwapFrames")}
+                  label={t("boardSwapFrames")}
                   className="grid h-6 w-6 cursor-pointer place-items-center rounded-md text-muted-foreground hover:bg-secondary hover:text-foreground"
                   onClick={() =>
                     setSources((current) =>
@@ -943,7 +940,7 @@ export function NodeComposer({
                   }
                 >
                   <ArrowLeftRight size={12} />
-                </button>
+                </IconButton>
               )}
               {mine.map((one) => {
                 const label = roleLabel(t, slot.role);
@@ -965,9 +962,10 @@ export function NodeComposer({
               })}
               {mine.length < slot.limit && (
                 <SlotDrop onFiles={(files) => attachFiles(files, [slot.role])}>
-                  <button
+                  <IconButton
+                    unstyled
                     type="button"
-                    title={roleLabel(t, slot.role)}
+                    label={roleLabel(t, slot.role)}
                     onClick={() =>
                       onPickAsset(roleAccepts(slot.role), (assetId) =>
                         setSources((all) => [...all, { role: slot.role, assetId }]),
@@ -976,7 +974,7 @@ export function NodeComposer({
                     className="grid h-8 w-8 shrink-0 cursor-pointer place-items-center rounded-md border border-dashed border-border-strong text-muted-foreground transition-colors hover:border-primary hover:text-foreground"
                   >
                     <Plus size={13} />
-                  </button>
+                  </IconButton>
                 </SlotDrop>
               )}
             </React.Fragment>
@@ -984,25 +982,25 @@ export function NodeComposer({
           })
         )}
         {linkedEntities.map((entity) => (
-          <span
-            key={entity.id}
-            data-linked-entity={entity.id}
-            title={t("boardLinkedEntityHint")}
-            className="inline-flex h-8 max-w-[14rem] shrink-0 items-center gap-1.5 rounded-md bg-primary/10 pl-1 pr-2 text-ui-xs text-primary"
-          >
-            <EntityThumb entity={entity} className="h-6 w-6 rounded-sm" />
-            <span className="min-w-0 truncate">{entityDisplayName(entity)}</span>
-          </span>
+          <Hint key={entity.id} label={t("boardLinkedEntityHint")}>
+            <span
+              data-linked-entity={entity.id}
+              className="inline-flex h-8 max-w-[14rem] shrink-0 items-center gap-1.5 rounded-md bg-primary/10 pl-1 pr-2 text-ui-xs text-primary"
+            >
+              <EntityThumb entity={entity} className="h-6 w-6 rounded-sm" />
+              <Truncate>{entityDisplayName(entity)}</Truncate>
+            </span>
+          </Hint>
         ))}
         {upstreamDocuments?.map((doc) => (
-          <a
-            key={doc.note_id}
-            href={noteHref(doc.note_id)}
-            title={t("documentOpen")}
-            className="max-w-full truncate rounded-md bg-primary/10 px-2 py-1 text-ui-xs text-primary"
-          >
-            {t("boardKindDocument")} · {doc.title || t("documentUntitled")} · v{doc.revision}
-          </a>
+          <Hint key={doc.note_id} label={t("documentOpen")}>
+            <a
+              href={noteHref(doc.note_id)}
+              className="min-w-0 max-w-full rounded-md bg-primary/10 px-2 py-1 text-ui-xs text-primary"
+            >
+              <Truncate>{t("boardKindDocument")} · {doc.title || t("documentUntitled")} · v{doc.revision}</Truncate>
+            </a>
+          </Hint>
         ))}
         <AssetUploadStatus upload={upload} className="basis-full" />
       </>
@@ -1050,9 +1048,9 @@ export function NodeComposer({
                 (手填的别名、经另一条中转配的同一个模型)要说出来 —— 静默地什么都不显示,
                 用户会以为这个模型就是没参数。显隐和弹层内容共用 settingBlocks。 */}
             {settingBlocks.length === 0 && current?.capabilities_known === false && (
-              <span className="min-w-0 truncate px-1 text-ui-2xs text-muted-foreground" title={t("boardGenerationUnknownParams")}>
+              <Truncate className="px-1 text-ui-2xs text-muted-foreground">
                 {t("boardGenerationUnknownParams")}
-              </span>
+              </Truncate>
             )}
           </>
         )

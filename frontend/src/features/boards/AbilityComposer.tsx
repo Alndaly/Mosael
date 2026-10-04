@@ -15,6 +15,8 @@ import { useI18n } from "@/app/preferences";
 import { AssetInlinePreview } from "@/components/app/asset-preview";
 import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
 import { OptionPicker } from "@/components/ui/option-picker";
+import { Hint } from "@/components/ui/tooltip";
+import { Truncate } from "@/components/ui/truncate";
 import { BAR_PICKER, BoardComposerShell } from "@/features/boards/BoardComposerShell";
 import { kindIcon, sourceName } from "@/features/boards/boardNodes";
 import { boardToolIcon, defaultBindings, firstSentence, givesValue, sourceValue } from "@/features/boards/boardTools";
@@ -200,7 +202,6 @@ export function AbilityComposer({
                         type="button"
                         aria-pressed={on}
                         data-binding-source={source.id}
-                        title={sourceName(t, source)}
                         onClick={() => toggleSource(key, source)}
                         className={cn(
                           "inline-flex h-6 max-w-full cursor-pointer items-center gap-1 rounded-full border px-2 text-ui-2xs transition-colors",
@@ -210,7 +211,7 @@ export function AbilityComposer({
                         )}
                       >
                         <Icon size={11} className="shrink-0" />
-                        <span className="truncate">{sourceName(t, source)}</span>
+                        <Truncate>{sourceName(t, source)}</Truncate>
                       </button>
                     );
                   })}
@@ -231,14 +232,15 @@ export function AbilityComposer({
               //: **芯片上写的是值**(「英语」「客厅」),还没选时写字段名(「目标语言」),淡色。清单是空的
               //: (先选场景 / 还在查 / 真没有)芯片是灰的,原因在悬停里说。
               const emptyWhy = options.length === 0 ? emptyOptionsHint(t, fieldOptions.whyEmpty(key)) : "";
+              //: 芯片上写的是值,它是哪一格(和清单为什么是空的)悬停时说。说明挂在这一层而不是芯片上:清单空着时
+              //: 芯片是禁用的,接不到悬停。
               return (
+                <Hint key={key} label={fieldLabel(key, spec)} hint={emptyWhy || undefined}>
                 <span
-                  key={key}
                   data-field-key={key}
                   //: 宽度上限挂在**这一层**(相对整条底栏的 45%),芯片自己撑满这一层 —— 上限写在芯片上的话,百分比
                   //: 相对的是这层按内容定宽的包装,一来一回把字的宽度压成了 0。
                   className="flex min-w-0 max-w-[min(15rem,45%)] shrink"
-                  title={emptyWhy ? `${fieldLabel(key, spec)} · ${emptyWhy}` : fieldLabel(key, spec)}
                 >
                   <OptionPicker
                     size="sm"
@@ -249,9 +251,9 @@ export function AbilityComposer({
                     disabled={options.length === 0}
                     placeholder={fieldLabel(key, spec)}
                     className={cn(BAR_PICKER, "max-w-full", shown && "text-foreground")}
-                    contentClassName="max-w-[min(360px,calc(100vw-16px))]"
                   />
                 </span>
+                </Hint>
               );
             })
           : null
@@ -281,10 +283,9 @@ export function AbilityComposer({
         tool
           ? {
               label: ability ? tool.label : t(item.run?.status === "succeeded" ? "boardToolRerun" : "boardToolRun"),
-              hint:
-                missing.length > 0
-                  ? t("boardToolMissing").replace("{fields}", missing.join(t("listSeparator")))
-                  : t(ability ? "boardToolOutputsHint" : "boardGeneratorHint"),
+              hint: t(ability ? "boardToolOutputsHint" : "boardGeneratorHint"),
+              disabledReason:
+                missing.length > 0 ? t("boardToolMissing").replace("{fields}", missing.join(t("listSeparator"))) : undefined,
               onSend: send,
               disabled: blocked,
               working,
@@ -375,13 +376,13 @@ function AbilityHost({ item, tool }: { item: BoardItem; tool: BoardProducerInfo 
       <div className="grid min-w-0 flex-1 gap-0.5">
         <span data-ability-host-name="" className="flex min-w-0 items-center gap-1.5 text-ui-sm text-foreground">
           <Icon size={13} className="shrink-0 text-primary" />
-          <span className="truncate">{tool.label}</span>
+          <Truncate>{tool.label}</Truncate>
           <span className="shrink-0 text-muted-foreground">·</span>
-          <span className="truncate text-muted-foreground">{sourceName(t, item)}</span>
+          <Truncate className="text-muted-foreground">{sourceName(t, item)}</Truncate>
         </span>
-        <span data-ability-what="" className="line-clamp-2 text-ui-xs leading-snug text-muted-foreground">
+        <Truncate data-ability-what="" lines={2} className="text-ui-xs leading-snug text-muted-foreground">
           {what}
-        </span>
+        </Truncate>
       </div>
     </div>
   );

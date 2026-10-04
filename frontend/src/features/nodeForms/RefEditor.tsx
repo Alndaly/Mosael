@@ -14,6 +14,7 @@ import Placeholder from "@tiptap/extension-placeholder";
 
 import { useI18n } from "@/app/preferences";
 import { useSuggestionMenu } from "@/components/app/suggestionMenu";
+import { Hint } from "@/components/ui/tooltip";
 import { useExternalContent } from "@/components/app/useExternalContent";
 import { cn } from "@/lib/utils";
 
@@ -196,21 +197,21 @@ export function RefEditor({
       <EditorContent editor={editor} />
       <menu.Portal>
         {(ref, index) => (
+          // 菜单里摆的和插进去之后那枚标签同一个名字;悬停看存下去的路径。
+          <Hint key={ref} label={bareRef(ref)} side="right">
           <button
-            key={ref}
             type="button"
             className={cn(
               "block w-full cursor-pointer rounded-[5px] border-0 bg-transparent px-2 py-1 text-left text-ui-xs text-foreground",
               index === (menu.menu?.active ?? 0) ? "bg-secondary" : "hover:bg-secondary",
             )}
-            // 菜单里摆的和插进去之后那枚标签同一个名字;悬停看存下去的路径。
-            title={bareRef(ref)}
             // mousedown 会先让编辑器失焦,失焦又会收起菜单 —— 拦掉,让 click 有机会跑到。
             onMouseDown={(event) => event.preventDefault()}
             onClick={() => menu.choose(ref)}
           >
             {refLabel(catalog.look(bareRef(ref)))}
           </button>
+          </Hint>
         )}
       </menu.Portal>
     </div>

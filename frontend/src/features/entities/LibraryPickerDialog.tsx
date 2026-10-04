@@ -5,6 +5,7 @@ import { Check, Film, ImageIcon, Search } from "lucide-react";
 import { assetKeys } from "@/api/queryKeys";
 import { assetThumbnailUrl, listAssets, type Asset } from "@/api/client";
 import { useI18n } from "@/app/preferences";
+import { Truncate } from "@/components/ui/truncate";
 import { ModalShell } from "@/components/app/modals";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -184,9 +185,9 @@ function Tile({ asset, attached, order, onToggle }: { asset: Asset; attached: bo
           </span>
         )}
       </button>
-      <span className="truncate px-0.5 text-ui-xs text-muted-foreground" title={name}>
+      <Truncate className="px-0.5 text-ui-xs text-muted-foreground">
         {name}
-      </span>
+      </Truncate>
     </li>
   );
 }

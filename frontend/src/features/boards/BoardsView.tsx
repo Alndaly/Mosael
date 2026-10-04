@@ -46,7 +46,10 @@ import { boardAddCatalog, SCENE_FROM_TEXT } from "@/features/boards/boardTools";
 import { useI18n, usePreferences } from "@/app/preferences";
 import type { MessageKey } from "@/app/messages";
 import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
+import { MenuItemBody } from "@/components/ui/menu";
 import { SearchableSelect } from "@/components/ui/searchable-select";
+import { Truncate } from "@/components/ui/truncate";
 import { usePageTrail } from "@/components/layout/pageTrail";
 import { ConfirmDialog, RenameDialog } from "@/components/app/modals";
 import { EmptyState, PageLoadError } from "@/components/layout/EmptyState";
@@ -56,7 +59,7 @@ import { useGenerationOptions } from "@/lib/generationOptions";
 import { relativeTime } from "@/lib/time";
 import { usePersistentSelection, usePersistentTab } from "@/lib/usePersistentTab";
 import { cn } from "@/lib/utils";
-import { listenKeys } from "@/lib/shortcuts";
+import { formatCombo, listenKeys } from "@/lib/shortcuts";
 import { CanvasAgentChat, type CanvasAgentMode } from "@/features/agent/CanvasAgentChat";
 import {
   canvasDockedPanelEdges,
@@ -467,7 +470,7 @@ function BoardCard({
               />
               {selecting && <SelectionCheck selected={selected} />}
             </span>
-            <span className="truncate pr-8 text-ui-md font-semibold" title={board.name}>{board.name}</span>
+            <Truncate className="pr-8 text-ui-md font-semibold">{board.name}</Truncate>
             <span className="text-ui-sm text-muted-foreground">{t("boardsItemCount").replace("{n}", String(count))} · {relativeTime(board.updated_at, locale)}</span>
           </button>
           {!selecting && (
@@ -487,22 +490,22 @@ function BoardCard({
       </ContextMenuTrigger>
       <ContextMenuContent onCloseAutoFocus={(event) => event.preventDefault()}>
         <ContextMenuItem onSelect={onOpen}>
-          <ArrowUpRight /> {t("boardsOpen")}
+          <MenuItemBody icon={<ArrowUpRight />} label={t("boardsOpen")} />
         </ContextMenuItem>
         <ContextMenuItem onSelect={onRename}>
-          <Pencil /> {t("rename")}
+          <MenuItemBody icon={<Pencil />} label={t("rename")} />
         </ContextMenuItem>
         <ContextMenuItem disabled={duplicating} onSelect={onDuplicate}>
-          <Copy /> {t("boardsDuplicate")}
+          <MenuItemBody icon={<Copy />} label={t("boardsDuplicate")} />
         </ContextMenuItem>
         <ContextMenuSeparator />
         {/* 从右键直接进选择模式并勾上这一张 —— 想批量处理时,右键的往往就是第一张。 */}
         <ContextMenuItem onSelect={onToggle}>
-          <CheckSquare /> {selecting && selected ? t("boardsDeselect") : t("boardsSelect")}
+          <MenuItemBody icon={<CheckSquare />} label={selecting && selected ? t("boardsDeselect") : t("boardsSelect")} />
         </ContextMenuItem>
         <ContextMenuSeparator />
         <ContextMenuItem className="text-destructive focus:text-destructive" onSelect={onDelete}>
-          <Trash2 /> {t("delete")}
+          <MenuItemBody icon={<Trash2 />} label={t("delete")} />
         </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>
@@ -1089,17 +1092,14 @@ function BoardDetail({
           end={
             <>
               <CanvasToolbarGroup label={t("wfAgentTitle")}>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
+                <IconButton
                   className={cn(agentOpen === "on" && "bg-secondary text-foreground")}
-                  title={t("wfAgentTitle")}
-                  aria-label={t("wfAgentTitle")}
+                  label={t("wfAgentTitle")}
                   aria-pressed={agentOpen === "on"}
                   onClick={() => setAgentOpen(agentOpen === "on" ? "off" : "on")}
                 >
                   <Bot size={14} />
-                </Button>
+                </IconButton>
               </CanvasToolbarGroup>
               <CanvasToolbarGroup label={t("more")}>
                 <ActionMenu
@@ -1146,38 +1146,38 @@ function BoardDetail({
               }}
               searchPlaceholder={t("boardsAddItem")}
               options={addOptions}
+              //: 按钮上已经写着「添加」,说明里重复这两个字只是为了把快捷键挂上。
+              hint={t("boardsAddItem")}
+              shortcut={formatCombo("Mod+N")}
               trigger={
                 <button
                   type="button"
                   data-board-add-item=""
                   className="inline-flex h-8 items-center gap-2 rounded-md bg-action px-3 text-action-foreground hover:bg-action/90"
                   aria-label={t("boardsAddItem")}
-                  title={`${t("boardsAddItem")} ⌘N`}
                 >
                   <Plus size={15} /> {t("boardsAddItem")}
                 </button>
               }
             />
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              title={`${t("undo")}  ⌘Z`}
-              aria-label={t("undo")}
+            <IconButton
+              label={t("undo")}
+              shortcut={formatCombo("Mod+Z")}
               disabled={!api?.canUndo}
+              disabledReason={t("nothingToUndo")}
               onClick={() => api?.undo()}
             >
               <Undo2 size={14} />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              title={`${t("redo")}  ⌘⇧Z`}
-              aria-label={t("redo")}
+            </IconButton>
+            <IconButton
+              label={t("redo")}
+              shortcut={formatCombo("Mod+Shift+Z")}
               disabled={!api?.canRedo}
+              disabledReason={t("nothingToRedo")}
               onClick={() => api?.redo()}
             >
               <Redo2 size={14} />
-            </Button>
+            </IconButton>
           </CanvasToolbarGroup>
           <CanvasToolbarGroup label={t("boardCommentMode")}>
             <AnnotationControls
@@ -1196,15 +1196,12 @@ function BoardDetail({
                 if (commentsVisible) setCommentMode(false);
               }}
             />
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              title={t("boardDiscussionCenter")}
-              aria-label={t("boardDiscussionCenter")}
+            <IconButton
+              label={t("boardDiscussionCenter")}
               onClick={() => setCollaborationOpen(true)}
             >
               <ListChecks size={14} />
-            </Button>
+            </IconButton>
           </CanvasToolbarGroup>
           <CanvasToolbarGroup label={t("markers")}>
             <AnnotationControls
@@ -1231,26 +1228,20 @@ function BoardDetail({
             />
             <EdgeShapeToggle value={edgeShape} onChange={setEdgeShape} />
             <CanvasInputModeSwitch />
-            <Button
-              variant="ghost"
-              size="icon-sm"
+            <IconButton
               className={cn(showMinimap && "bg-secondary text-foreground")}
-              title={t("wfMinimap")}
-              aria-label={t("wfMinimap")}
+              label={t("wfMinimap")}
               aria-pressed={showMinimap}
               onClick={() => setMinimap(showMinimap ? "off" : "on")}
             >
               <MapIcon size={14} />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              title={t("boardsFitView")}
-              aria-label={t("boardsFitView")}
+            </IconButton>
+            <IconButton
+              label={t("boardsFitView")}
               onClick={() => api?.fitView()}
             >
               <Maximize2 size={14} />
-            </Button>
+            </IconButton>
           </CanvasToolbarGroup>
         </CanvasToolbar>
       </div>

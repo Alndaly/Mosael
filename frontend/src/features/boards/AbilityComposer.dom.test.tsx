@@ -28,6 +28,7 @@ vi.mock("@xyflow/react", () => ({
 import type { BoardAbilitySetting, BoardItem, BoardProducerInfo, BoardRunRequest } from "@/api/client";
 import { ImagePreviewProvider } from "@/components/app/image-preview";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { readHint } from "@/test/hint";
 import { AbilityComposer } from "@/features/boards/AbilityComposer";
 import { renderAbility, renderComposer, slotProducers, type ComposerHost } from "@/features/boards/boardComposers";
 import { defaultBindings } from "@/features/boards/boardTools";
@@ -215,7 +216,7 @@ describe("一格的能力的面板", () => {
     expect(lang.className).toContain("max-w-[min(15rem,45%)]");
     expect(within(lang).getByRole("combobox").className).not.toContain("max-w-[min(15rem,45%)]");
     expect(sendButton()).toBeDisabled();
-    expect(sendButton().getAttribute("title")).toContain("boardToolMissing");
+    expect(await readHint(sendButton())).toContain("boardToolMissing");
     //: 必填的数字进「参数」,空着 → 按钮上有个点。
     expect(screen.getByRole("button", { name: "boardGenerationSettings" }).dataset.attention).toBe("true");
 

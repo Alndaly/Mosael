@@ -4,6 +4,8 @@ import { Box, Loader2 } from "lucide-react";
 import type { BoardItem, BoardProducerInfo, BoardRunForms } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { OptionPicker } from "@/components/ui/option-picker";
+import { Hint } from "@/components/ui/tooltip";
+import { Truncate } from "@/components/ui/truncate";
 import { BAR_PICKER, BoardComposerShell } from "@/features/boards/BoardComposerShell";
 import { SceneOverview } from "@/features/boards/SceneOverview";
 import { useSubmitting } from "@/features/boards/useSubmitting";
@@ -92,14 +94,14 @@ export function SceneComposer({
 
   const rest = Object.entries(specs).filter(([key]) => key !== SHOT && key !== RENDER);
 
+  //: 芯片上写的是值,它是哪一格(和为什么还选不了)悬停时说 —— 挂在外面这层:清单空着时芯片是禁用的,接不到悬停。
   const chip = (key: string, value: string, options: { value: string; label: string }[], why: string) => (
+    <Hint key={key} label={label(key)} hint={why || undefined}>
     <span
-      key={key}
       data-field-key={key}
       //: 宽度上限挂在**这一层**,芯片撑满它 —— 上限写在芯片上的话,百分比相对的是这层按内容定宽的包装,
       //: 一来一回把字压成 0(见 AbilityComposer 的同一处)。
       className="flex min-w-0 max-w-[min(15rem,45%)] shrink"
-      title={why ? `${label(key)} · ${why}` : label(key)}
     >
       <OptionPicker
         size="sm"
@@ -110,9 +112,9 @@ export function SceneComposer({
         disabled={options.length === 0}
         placeholder={label(key)}
         className={cn(BAR_PICKER, "max-w-full", value && "text-foreground")}
-        contentClassName="max-w-[min(360px,calc(100vw-16px))]"
       />
     </span>
+    </Hint>
   );
 
   return (
@@ -150,11 +152,12 @@ export function SceneComposer({
         producer
           ? {
               label: t(item.run?.status === "succeeded" ? "boardSceneRenderAgain" : "boardSceneRender"),
-              hint: noShots
+              hint: t("boardToolOutputsHint"),
+              disabledReason: noShots
                 ? t("boardSceneNoShots")
                 : missing.length > 0
                   ? t("boardToolMissing").replace("{fields}", missing.join(t("listSeparator")))
-                  : t("boardToolOutputsHint"),
+                  : undefined,
               onSend: send,
               disabled: blocked,
               working,
@@ -171,9 +174,9 @@ export function SceneComposer({
           )}
         </div>
         {/* 「编辑场景」在格子上方的操作条上(换到「按文字搭」也在),这里不再放一份。 */}
-        <span data-scene-name="" className="min-w-0 flex-1 truncate text-ui-sm text-foreground" title={item.text}>
+        <Truncate data-scene-name="" className="flex-1 text-ui-sm text-foreground">
           {item.text || t("boardKindScene")}
-        </span>
+        </Truncate>
       </div>
       {producer === undefined ? (
         <div role="status" className="flex items-center gap-2 px-1 text-ui-xs text-muted-foreground">

@@ -13,7 +13,10 @@ import { AssetInlinePreview } from "@/components/app/asset-preview";
 import { BoardAudio, BoardVideo } from "@/features/boards/BoardPlayer";
 import { DraftTextarea } from "@/components/ui/draft-text";
 import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Hint } from "@/components/ui/tooltip";
+import { Truncate } from "@/components/ui/truncate";
 import { NoteReader } from "@/features/notes/NoteEditor";
 import "@/features/notes/notes.css";
 import { useI18n } from "@/app/preferences";
@@ -311,10 +314,10 @@ function StopButton({ item, onStop }: { item: BoardItem; onStop: (id: string) =>
   const t = useI18n();
   const hint = runCopy(item).stopHint;
   return (
+    <Hint label={hint ? t(hint) : undefined}>
     <button
       type="button"
       data-board-stop=""
-      title={hint ? t(hint) : undefined}
       className="nodrag nopan inline-flex h-6 shrink-0 cursor-pointer items-center gap-1 rounded-md border border-border bg-panel px-2 text-ui-2xs text-foreground transition-colors hover:border-destructive hover:text-destructive"
       onClick={(event) => {
         event.stopPropagation();
@@ -323,6 +326,7 @@ function StopButton({ item, onStop }: { item: BoardItem; onStop: (id: string) =>
     >
       <SquareIcon size={9} className="fill-current" /> {t("boardToolStop")}
     </button>
+    </Hint>
   );
 }
 
@@ -410,24 +414,25 @@ export function NoteNode({ data, selected }: NodeProps) {
       )}
       {item.source_note && !editing && (
         //: 从笔记摘来的:回到那篇笔记、把这段字定位出来(定位不到 —— 字在画板上改过、笔记里也改了 —— 笔记页会说一声)。
+        <Hint label={t("boardNoteSourceHint")}>
         <button
           type="button"
           data-note-source=""
-          className="nodrag absolute inset-x-2 bottom-1 z-10 flex min-w-0 cursor-pointer items-center gap-1 truncate rounded border-0 bg-transparent px-1 text-left text-ui-2xs text-muted-foreground hover:text-foreground"
-          title={t("boardNoteSourceHint")}
+          className="nodrag absolute inset-x-2 bottom-1 z-10 flex min-w-0 cursor-pointer items-center gap-1 overflow-hidden rounded border-0 bg-transparent px-1 text-left text-ui-2xs text-muted-foreground hover:text-foreground"
           onClick={(event) => {
             event.stopPropagation();
             locateNotePassage({ noteId: item.source_note!.note_id, text: item.text ?? "", start: -1 });
           }}
         >
           <FileText size={11} className="shrink-0" aria-hidden />
-          <span className="min-w-0 truncate">{t("boardNoteSourceFrom").replace("{title}", item.source_note.title || item.source_note.note_id)}</span>
+          <Truncate>{t("boardNoteSourceFrom").replace("{title}", item.source_note.title || item.source_note.note_id)}</Truncate>
         </button>
+        </Hint>
       )}
       {editing && (item.text ?? "").length >= BOARD_TEXT_MAX && (
-        <span role="status" data-note-text-limit="" className="absolute inset-x-2 bottom-1 truncate text-ui-xs text-destructive">
+        <Truncate role="status" data-note-text-limit="" className="absolute inset-x-2 bottom-1 text-ui-xs text-destructive">
           {t("boardNoteTextLimit").replace("{n}", String(BOARD_TEXT_MAX))}
-        </span>
+        </Truncate>
       )}
       {/* 让 AI 写的时候整格是占位(和图片格生成一样),停止在占位里。 */}
       {writing && <WritingCover item={item} onStop={stop} data-note-writing="" />}
@@ -439,9 +444,9 @@ export function NoteNode({ data, selected }: NodeProps) {
           className="absolute inset-x-1 bottom-1 z-10 flex min-w-0 items-center gap-2 overflow-hidden rounded-md border border-border bg-panel/95 px-2 py-1 text-ui-2xs text-destructive shadow-sm backdrop-blur"
         >
           <AlertTriangle size={11} className="shrink-0" />
-          <span className="min-w-0 flex-1 line-clamp-2 [overflow-wrap:anywhere]">
+          <Truncate lines={2} className="flex-1 [overflow-wrap:anywhere]">
             {[t(runCopy(item).failed), itemError(item)].filter(Boolean).join(" · ")}
-          </span>
+          </Truncate>
         </div>
       )}
       <AbilityRun data={nodeData} selected={selected} />
@@ -477,11 +482,11 @@ function AbilityRunStrip({ data, className }: { data: BoardNodeData; className?:
       className={cn("nodrag nopan absolute inset-x-1 bottom-1 z-10 flex min-w-0 items-center gap-2 overflow-hidden rounded-md border border-border bg-panel/95 px-2 py-1 text-ui-2xs shadow-sm backdrop-blur", className)}
     >
       {running ? <Loader2 size={11} className="shrink-0 animate-spin text-primary" /> : <AlertTriangle size={11} className="shrink-0 text-destructive" />}
-      <span className={cn("min-w-0 flex-1 truncate", running ? "text-primary" : "text-destructive")}>
+      <Truncate className={cn("flex-1", running ? "text-primary" : "text-destructive")}>
         {[said, abilityLabel, progress > 0 ? `${Math.round(progress * 100)}%` : "", !running ? itemError(item) : ""]
           .filter(Boolean)
           .join(" · ")}
-      </span>
+      </Truncate>
       {stop && <StopButton item={item} onStop={stop} />}
       {running && progress > 0 && (
         <div className="absolute inset-x-0 bottom-0 h-0.5 bg-primary/15">
@@ -522,9 +527,9 @@ function Generating({ item, text, onStop }: { item: BoardItem; text?: string; on
             {progress > 0 ? ` · ${Math.round(progress * 100)}%` : ""}
           </span>
           {text ? (
-            <span className="line-clamp-2 min-w-0 max-w-full [overflow-wrap:anywhere] text-ui-2xs leading-snug text-muted-foreground">
+            <Truncate lines={2} className="max-w-full [overflow-wrap:anywhere] text-ui-2xs leading-snug text-muted-foreground">
               {text}
-            </span>
+            </Truncate>
           ) : null}
         </div>
         {onStop && <StopButton item={item} onStop={onStop} />}
@@ -558,9 +563,9 @@ function Queued({ item, text, onStop }: { item: BoardItem; text?: string; onStop
         <Clock3 size={16} className="text-primary" />
         <span className="text-ui-2xs font-medium text-primary">{t("boardNodeQueued")}</span>
         {text ? (
-          <span className="line-clamp-3 min-w-0 max-w-full [overflow-wrap:anywhere] text-ui-2xs leading-relaxed text-muted-foreground">
+          <Truncate lines={3} className="max-w-full [overflow-wrap:anywhere] text-ui-2xs leading-relaxed text-muted-foreground">
             {text}
-          </span>
+          </Truncate>
         ) : null}
       </div>
       {onStop && (
@@ -589,9 +594,9 @@ function Failed({ item, reason }: { item: BoardItem; reason: string }) {
       <div className="grid w-full min-w-0 max-w-full justify-items-center gap-1 text-center">
         <AlertTriangle size={15} className="text-destructive" />
         <span className="text-ui-2xs font-semibold text-destructive">{t(runCopy(item).failed)}</span>
-        <span className="line-clamp-3 min-w-0 max-w-full [overflow-wrap:anywhere] text-ui-2xs leading-relaxed text-muted-foreground">
+        <Truncate lines={3} className="max-w-full [overflow-wrap:anywhere] text-ui-2xs leading-relaxed text-muted-foreground">
           {reason}
-        </span>
+        </Truncate>
       </div>
     </div>
   );
@@ -836,12 +841,9 @@ function DocumentNode({ data, selected }: NodeProps) {
       {referenced && !writing && (
       <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-3">
         {fromAsset ? <FileText size={16} className="shrink-0 text-primary" /> : <BookOpen size={16} className="shrink-0 text-primary" />}
-        <span
-          className="min-w-0 flex-1 truncate text-ui-sm font-medium"
-          title={ref?.title || item.text}
-        >
+        <Truncate className="flex-1 text-ui-sm font-medium">
           {ref?.title || item.text || t("boardKindDocument")}
-        </span>
+        </Truncate>
       </header>
       )}
       {writing ? null : !referenced ? (
@@ -891,47 +893,49 @@ function DocumentNode({ data, selected }: NodeProps) {
       {fromAsset && (
         //: 文档素材:底边写着它是一份原件,右边一个「打开」去素材详情看原版和全文。
         <footer className="flex shrink-0 items-center gap-2 border-t border-border px-3 py-2">
-          <span className="min-w-0 flex-1 truncate text-ui-2xs text-muted-foreground">{t("documentFromAsset")}</span>
-          <a
-            className={iconButton}
-            href={`#/media?asset=${encodeURIComponent(item.asset_id ?? "")}`}
-            title={t("documentOpenAsset")}
-            aria-label={t("documentOpenAsset")}
-          >
-            <ExternalLink size={14} />
-          </a>
+          <Truncate className="flex-1 text-ui-2xs text-muted-foreground">{t("documentFromAsset")}</Truncate>
+          <Hint label={t("documentOpenAsset")}>
+            <a
+              className={iconButton}
+              href={`#/media?asset=${encodeURIComponent(item.asset_id ?? "")}`}
+              aria-label={t("documentOpenAsset")}
+            >
+              <ExternalLink size={14} />
+            </a>
+          </Hint>
         </footer>
       )}
       {item.note_id && (
         <footer className="flex shrink-0 items-center gap-2 border-t border-border px-3 py-2">
-          <span
-            title={t("documentPinned")}
-            className="min-w-0 flex-1 text-ui-2xs text-muted-foreground"
-          >
-            v{item.note_revision}
+          {/* 版本号说的是「钉在第几版」:底栏只写 v3 这么短,意思在悬停里。 */}
+          <span className="min-w-0 flex-1 text-ui-2xs text-muted-foreground">
+            <Hint label={t("documentPinned")}>
+              <span>v{item.note_revision}</span>
+            </Hint>
           </span>
           {!commentMode && (
-            <button
+            <IconButton
+              unstyled
               className={iconButton}
               disabled={refreshingDocument}
-              title={t("documentRefresh")}
-              aria-label={t("documentRefresh")}
+              label={t("documentRefresh")}
               onClick={() => onRefreshDocument?.(item.id)}
             >
               <RefreshCw
                 size={14}
                 className={refreshingDocument ? "animate-mosael-spin" : ""}
               />
-            </button>
+            </IconButton>
           )}
-          <a
-            className={iconButton}
-            href={noteHref(item.note_id)}
-            title={t("documentOpen")}
-            aria-label={t("documentOpen")}
-          >
-            <ExternalLink size={14} />
-          </a>
+          <Hint label={t("documentOpen")}>
+            <a
+              className={iconButton}
+              href={noteHref(item.note_id)}
+              aria-label={t("documentOpen")}
+            >
+              <ExternalLink size={14} />
+            </a>
+          </Hint>
         </footer>
       )}
       <AbilityRun data={nodeData} selected={selected} />
@@ -975,7 +979,7 @@ export function SceneNode({ data, selected }: NodeProps) {
         </div>
         <footer className="flex shrink-0 items-center gap-2 border-t border-border px-3 py-2">
           <Box size={15} className="shrink-0 text-muted-foreground" />
-          <span className="min-w-0 flex-1 truncate text-ui-sm" title={item.text}>{item.text || t("boardKindScene")}</span>
+          <Truncate className="flex-1 text-ui-sm">{item.text || t("boardKindScene")}</Truncate>
         </footer>
         <AbilityRun data={nodeData} selected={selected} />
       </>
@@ -1045,11 +1049,11 @@ export function EntityNode({ data, selected }: NodeProps) {
       </div>
       <footer className="flex shrink-0 items-center gap-2 border-t border-border px-3 py-2">
         <KindIcon size={15} className="shrink-0 text-muted-foreground" />
-        <span className="min-w-0 flex-1 truncate text-ui-sm" title={found?.name}>{found?.name || t("boardKindEntity")}</span>
+        <Truncate className="flex-1 text-ui-sm">{found?.name || t("boardKindEntity")}</Truncate>
         {found && !commentMode && (
-          <button type="button" className="nodrag nopan inline-flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent text-muted-foreground hover:bg-secondary hover:text-foreground" aria-label={t("boardEntityOpen")} title={t("boardEntityOpen")} onClick={open}>
+          <IconButton unstyled type="button" className="nodrag nopan inline-flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent text-muted-foreground hover:bg-secondary hover:text-foreground" label={t("boardEntityOpen")} onClick={open}>
             <ExternalLink size={13} />
-          </button>
+          </IconButton>
         )}
       </footer>
       <AbilityRun data={nodeData} selected={selected} />

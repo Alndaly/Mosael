@@ -6,6 +6,7 @@ import { noteKeys } from "@/api/queryKeys";
 import { useI18n, usePreferences } from "@/app/preferences";
 import { PickListDialog } from "@/components/app/PickListDialog";
 import { Button } from "@/components/ui/button";
+import { Truncate } from "@/components/ui/truncate";
 import { noteSnippet } from "@/features/notes/noteSnippet";
 import { relativeTime } from "@/lib/time";
 
@@ -89,12 +90,12 @@ export function NoteReferenceField({
         onClick={() => setOpen(true)}
       >
         <BookOpen size={15} className="shrink-0" />
-        <span className="truncate">
+        <Truncate>
           {value
             ? note.data?.title ||
               (note.isError ? t("documentUnavailable") : value)
             : t("documentPick")}
-        </span>
+        </Truncate>
       </Button>
       <NotePickerDialog
         workspaceId={workspaceId}

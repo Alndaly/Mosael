@@ -11,6 +11,7 @@ import { TagsDialog } from "@/components/app/TagsDialog";
 import { ConfirmDialog, RenameDialog } from "@/components/app/modals";
 import { Button } from "@/components/ui/button";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
+import { MenuItemBody } from "@/components/ui/menu";
 import { useMultiSelect } from "@/lib/useMultiSelect";
 import { cn } from "@/lib/utils";
 import { EntityCard } from "@/features/entities/EntityCard";
@@ -190,28 +191,23 @@ export function EntityGrid({
           </ContextMenuTrigger>
           <ContextMenuContent>
             <ContextMenuItem onSelect={() => actions.open(entity.id)}>
-              <FolderOpen size={14} />
-              {t("entitiesOpen")}
+              <MenuItemBody icon={<FolderOpen />} label={t("entitiesOpen")} />
             </ContextMenuItem>
             <ContextMenuItem onSelect={() => actions.rename(entity)}>
-              <Pencil size={14} />
-              {t("rename")}
+              <MenuItemBody icon={<Pencil />} label={t("rename")} />
             </ContextMenuItem>
             <ContextMenuItem onSelect={() => actions.editTags(entity)}>
-              <Tag size={14} />
-              {t("editTags")}
+              <MenuItemBody icon={<Tag />} label={t("editTags")} />
             </ContextMenuItem>
             {/* 变体下面不再挂变体。 */}
             {!entity.parent_id && (
               <ContextMenuItem onSelect={() => actions.addVariant(entity)}>
-                <Layers size={14} />
-                {t("entityVariantNew")}
+                <MenuItemBody icon={<Layers />} label={t("entityVariantNew")} />
               </ContextMenuItem>
             )}
             <ContextMenuSeparator />
             <ContextMenuItem className="text-destructive focus:text-destructive" onSelect={() => actions.remove([entity])}>
-              <Trash2 size={14} />
-              {t("delete")}
+              <MenuItemBody icon={<Trash2 />} label={t("delete")} />
             </ContextMenuItem>
           </ContextMenuContent>
         </ContextMenu>

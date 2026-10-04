@@ -131,12 +131,12 @@ describe("便签里用拼音打中文", () => {
 });
 
 describe("分组框的名字里用拼音打中文", () => {
-  //: 分组框和别的节点共用一个改名框(BoardNodeLabel),名字在 title 里;回车确认才落到画布上。
+  //: 分组框和别的节点共用一个改名框(BoardNodeLabel),双击名字改名;回车确认才落到画布上。
   it("组词期间不被改写,选词的回车不算确认,上屏后再回车名字是中文", async () => {
     const view = mount([frame]);
     await settle();
     act(() => {
-      fireEvent.doubleClick(document.querySelector('[data-id="f1"] span[title]')!);
+      fireEvent.doubleClick(document.querySelector('[data-id="f1"] [data-board-node-label] span')!);
     });
     const box = document.querySelector<HTMLInputElement>('[data-id="f1"] input')!;
     expect(box).not.toBeNull();

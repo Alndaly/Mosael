@@ -8,6 +8,8 @@ import { MessageSquare } from "lucide-react";
 
 import type { CollaborationComment, WorkspaceMember } from "@/api/client";
 import { useI18n } from "@/app/preferences";
+import { IconButton } from "@/components/ui/icon-button";
+import { Hint } from "@/components/ui/tooltip";
 import { CommentCard } from "@/features/collaboration/CommentCard";
 import { CommentComposer, type CommentDraft } from "@/features/collaboration/CommentComposer";
 import {
@@ -168,6 +170,8 @@ export function BoardCommentLayer({
             onClick={(event) => event.stopPropagation()}
             onDoubleClick={(event) => event.stopPropagation()}
           >
+            {/* 圆点上只有序号,这条评论说了什么悬停时看。 */}
+            <Hint label={comment.body}>
             <button
               type="button"
               className={cn(
@@ -179,7 +183,6 @@ export function BoardCommentLayer({
               )}
               tabIndex={commentMode ? 0 : -1}
               style={{ pointerEvents: commentMode ? "auto" : "none" }}
-              title={comment.body}
               aria-label={`${t("comments")} ${index + 1}`}
               onPointerDown={(event) => {
                 event.stopPropagation();
@@ -250,6 +253,7 @@ export function BoardCommentLayer({
             >
               {index + 1}
             </button>
+            </Hint>
             {active && (
               <div className="-ml-3.5 -translate-y-3">
                 <CommentCard comment={comment} members={members} currentUserId={currentUserId}
@@ -269,11 +273,12 @@ export function BoardCommentLayer({
           onClick={(event) => event.stopPropagation()}
           onDoubleClick={(event) => event.stopPropagation()}
         >
-          <button
+          <IconButton
+            unstyled
             type="button"
             data-comment-drag-handle=""
             className="pointer-events-auto grid h-7 w-7 touch-none -translate-x-1/2 -translate-y-1/2 shrink-0 cursor-grab place-items-center rounded-full bg-action text-action-foreground shadow-[var(--shadow-panel)] active:cursor-grabbing"
-            aria-label={t("comments")}
+            label={t("comments")}
             onPointerDown={(event) => {
               if (event.button !== 0) return;
               event.preventDefault();
@@ -313,7 +318,7 @@ export function BoardCommentLayer({
             }}
           >
             <MessageSquare size={13} />
-          </button>
+          </IconButton>
           <div className="-ml-3.5 -translate-y-3">
             <CommentComposer
               members={members}

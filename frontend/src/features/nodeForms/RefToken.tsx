@@ -1,6 +1,8 @@
 import { AlertTriangle } from "lucide-react";
 
 import { useI18n } from "@/app/preferences";
+import { Hint } from "@/components/ui/tooltip";
+import { Truncate } from "@/components/ui/truncate";
 import { refLabel, type RefLook } from "@/features/nodeForms/refCatalog";
 import { refProblemText } from "@/features/nodeForms/refLook";
 import { cn } from "@/lib/utils";
@@ -14,12 +16,12 @@ export function RefToken({ path, look, chip = false, className }: { path: string
   const t = useI18n();
   const problem = look.problem;
   return (
+    <Hint label={problem ? refProblemText(t, problem) : path}>
     <span
       data-ref-token=""
       //: 编辑器里的那枚(整块选中、整块删除的原子标签)多带一个记号,测试和样式据此认它。
       data-ref-chip={chip ? "" : undefined}
       data-ref-problem={problem?.kind}
-      title={problem ? refProblemText(t, problem) : path}
       className={cn(
         "inline-flex max-w-full items-center gap-1 rounded-md px-1.5 py-px align-middle text-ui-2xs",
         problem
@@ -29,7 +31,8 @@ export function RefToken({ path, look, chip = false, className }: { path: string
       )}
     >
       {problem && <AlertTriangle size={11} className="shrink-0" />}
-      <span className="min-w-0 truncate">{refLabel(look)}</span>
+      <Truncate>{refLabel(look)}</Truncate>
     </span>
+    </Hint>
   );
 }

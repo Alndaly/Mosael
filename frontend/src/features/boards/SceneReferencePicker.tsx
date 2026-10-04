@@ -7,6 +7,8 @@ import type { MessageKey } from "@/app/messages";
 import { useI18n } from "@/app/preferences";
 import { OptionPicker } from "@/components/ui/option-picker";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Hint } from "@/components/ui/tooltip";
+import { Truncate } from "@/components/ui/truncate";
 import { supportsParameter } from "@/lib/generationCapabilities";
 import { cn } from "@/lib/utils";
 
@@ -80,22 +82,23 @@ export function SceneReferencePicker({
     : [needsShot ? t("boardSceneRefPickShot") : shots.length > 1 ? shotName : "", use ? t(USE_LABEL[use]) : ""].filter(Boolean).join(" · ");
   return (
     <Popover open={open} onOpenChange={setOpen}>
+      <Hint label={t("boardSceneRefHint")}>
       <PopoverTrigger asChild>
         <button
           type="button"
           data-scene-reference=""
           data-scene-reference-state={unsupported ? "unsupported" : needsShot ? "needs-shot" : "ready"}
-          title={t("boardSceneRefHint")}
           className={cn(
             "inline-flex h-8 max-w-[18rem] shrink-0 cursor-pointer items-center gap-1.5 rounded-md border-0 px-2 text-ui-xs",
             unsupported || needsShot ? "bg-warning/10 text-warning" : "bg-primary/10 text-primary",
           )}
         >
           <Box size={13} className="shrink-0" />
-          <span className="min-w-0 truncate">{scene?.name ?? t("boardKindScene")}</span>
-          {summary && <span className="min-w-0 shrink-0 truncate opacity-80">· {summary}</span>}
+          <Truncate>{scene?.name ?? t("boardKindScene")}</Truncate>
+          {summary && <Truncate className="shrink-0 opacity-80">· {summary}</Truncate>}
         </button>
       </PopoverTrigger>
+      </Hint>
       <PopoverContent align="start" className="grid w-[280px] gap-3 p-3">
         <div className="grid gap-0.5">
           <span className="text-ui-sm font-medium text-foreground">{t("boardSceneRefLabel").replace("{name}", scene?.name ?? "")}</span>

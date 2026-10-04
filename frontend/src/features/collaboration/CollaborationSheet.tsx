@@ -7,6 +7,7 @@ import { useI18n, usePreferences } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Truncate } from "@/components/ui/truncate";
 import { CommentContent } from "@/features/collaboration/CommentContent";
 import { relativeTime } from "@/lib/time";
 
@@ -134,9 +135,9 @@ export function CollaborationSheet({
                     <span className="grid size-7 shrink-0 place-items-center rounded-full bg-primary/12 text-ui-2xs font-semibold text-primary">
                       {actorName(comment.author, t("teamSystemActor")).slice(0, 1).toUpperCase()}
                     </span>
-                    <span className="min-w-0 flex-1 truncate text-ui-sm font-semibold">
+                    <Truncate className="flex-1 text-ui-sm font-semibold">
                       {actorName(comment.author, t("teamSystemActor"))}
-                    </span>
+                    </Truncate>
                     <span className="shrink-0 text-ui-2xs tabular-nums text-muted-foreground">
                       {relativeTime(comment.created_at, locale)}
                     </span>
@@ -150,7 +151,7 @@ export function CollaborationSheet({
                     {comment.anchor?.node_id && (
                       <span className="flex min-w-0 items-center gap-1">
                         <MapPin size={11} className="shrink-0" />
-                        <span className="truncate">{comment.anchor.node_id}</span>
+                        <Truncate>{comment.anchor.node_id}</Truncate>
                       </span>
                     )}
                     {/* 接口上它是可选的(手写那份影子类型把它写成必有,于是这里一直当它必有)。

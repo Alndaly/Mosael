@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 import React from "react";
 import type { Editor } from "@tiptap/react";
-import { act, render, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 
 import { messages } from "@/app/messages";
@@ -48,11 +48,23 @@ function renderEditor(value: string, vars: string[] = variables) {
 
 const chips = (container: HTMLElement) => [...container.querySelectorAll<HTMLElement>("[data-ref-chip]")];
 
+/** 指针停上去读悬停说明,读完移开、等它收起(这些标签拿不到键盘焦点,不能像 readHint 那样切过去)。 */
+async function hoverHint(element: HTMLElement): Promise<string> {
+  fireEvent.pointerEnter(element);
+  fireEvent.pointerMove(element);
+  const text = (await screen.findByRole("tooltip", {}, { timeout: 2000 })).textContent ?? "";
+  fireEvent.pointerLeave(element);
+  await waitFor(() => expect(screen.queryByRole("tooltip")).toBeNull());
+  return text;
+}
+
 describe("混写编辑器里的引用标签", () => {
   it("显示成「节点标题 · 输出显示名 · 子路径」,悬停看存下去的路径,不摆双括号", async () => {
     const { container } = renderEditor("> {{report.json.verdict}} 存在 {{save_note.note_id}}");
     await waitFor(() => expect(chips(container).map((chip) => chip.textContent)).toEqual(["写运营诊断 · JSON · verdict", "存成笔记 · 笔记"]));
-    expect(chips(container).map((chip) => chip.title)).toEqual(["report.json.verdict", "save_note.note_id"]);
+    const [verdict, note] = chips(container);
+    expect(await hoverHint(verdict)).toBe("report.json.verdict");
+    expect(await hoverHint(note)).toBe("save_note.note_id");
     expect(chips(container).some((chip) => chip.dataset.refProblem)).toBe(false);
     expect(container.textContent).not.toContain("{{");
   });
@@ -62,9 +74,9 @@ describe("混写编辑器里的引用标签", () => {
     await waitFor(() => expect(chips(container)).toHaveLength(2));
     const [node, output] = chips(container);
     expect(node.dataset.refProblem).toBe("node");
-    expect(node.title).toBe(zh.wfRefMissingNode.replace("{node}", "reprot"));
+    expect(await hoverHint(node)).toBe(zh.wfRefMissingNode.replace("{node}", "reprot"));
     expect(output.dataset.refProblem).toBe("output");
-    expect(output.title).toBe(zh.wfRefMissingOutput.replace("{node}", "写运营诊断").replace("{output}", "jsno"));
+    expect(await hoverHint(output)).toBe(zh.wfRefMissingOutput.replace("{node}", "写运营诊断").replace("{output}", "jsno"));
   });
 
   it("这一格的上游清单里列着的一定指得到 —— 容器自己的输出读的是体里的节点,这一层的图里没有它们", async () => {
@@ -90,6 +102,8 @@ describe("混写编辑器里的引用标签", () => {
       expect(found?.textContent).toBeTruthy();
       return found!;
     });
-    expect([...menu.querySelectorAll("button")].map((button) => [button.textContent, button.title])).toEqual([["存成笔记 · 笔记", "save_note.note_id"]]);
+    const rows = [...menu.querySelectorAll<HTMLElement>("button")];
+    expect(rows.map((button) => button.textContent)).toEqual(["存成笔记 · 笔记"]);
+    expect(await hoverHint(rows[0])).toBe("save_note.note_id");
   });
 });

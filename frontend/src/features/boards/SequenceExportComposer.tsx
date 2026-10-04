@@ -6,6 +6,7 @@ import type { BoardItem, BoardProducerInfo, BoardRunForms } from "@/api/client";
 import { getSequence } from "@/api/domains/editor";
 import { useI18n } from "@/app/preferences";
 import { OptionPicker } from "@/components/ui/option-picker";
+import { Truncate } from "@/components/ui/truncate";
 import { BAR_PICKER, BoardComposerShell } from "@/features/boards/BoardComposerShell";
 import { boardSequenceKey, sequenceSummary } from "@/features/boards/SequenceCell";
 import { useSubmitting } from "@/features/boards/useSubmitting";
@@ -71,16 +72,17 @@ export function SequenceExportComposer({
     if (!spec) return null;
     const options = (spec.options ?? []).map((one) => ({ value: String(one), label: spec.option_labels?.[String(one)] ?? String(one) }));
     return (
-      <span key={key} data-field-key={key} className="flex min-w-0 max-w-[min(15rem,45%)] shrink" title={label(key)}>
+      <span key={key} data-field-key={key} className="flex min-w-0 max-w-[min(15rem,45%)] shrink">
+        {/* 芯片上写的是值,它是哪一格悬停时说。 */}
         <OptionPicker
           size="sm"
           ariaLabel={label(key)}
+          hint={label(key)}
           value={String(config[key] ?? spec.default ?? "")}
           onChange={(next) => setConfig(key, next)}
           options={options}
           placeholder={label(key)}
           className={cn(BAR_PICKER, "max-w-full text-foreground")}
-          contentClassName="max-w-[min(360px,calc(100vw-16px))]"
         />
       </span>
     );
@@ -115,7 +117,8 @@ export function SequenceExportComposer({
         producer
           ? {
               label: t(item.run?.status === "succeeded" ? "boardSequenceExportAgain" : "boardSequenceExport"),
-              hint: empty ? t("boardSequenceExportEmpty") : t("boardSequenceExportHint"),
+              hint: t("boardSequenceExportHint"),
+              disabledReason: t("boardSequenceExportEmpty"),
               onSend: send,
               disabled: empty,
               working,
@@ -128,15 +131,15 @@ export function SequenceExportComposer({
           <Clapperboard size={16} strokeWidth={1.4} />
         </div>
         <div className="grid min-w-0 flex-1 gap-0.5">
-          <span className="truncate text-ui-sm text-foreground" title={item.text}>{item.text || t("boardKindSequence")}</span>
-          <span className="truncate text-ui-2xs tabular-nums text-muted-foreground">
+          <Truncate className="text-ui-sm text-foreground">{item.text || t("boardKindSequence")}</Truncate>
+          <Truncate className="text-ui-2xs tabular-nums text-muted-foreground">
             {empty
               ? t("boardSequenceExportEmpty")
               : t("boardSequenceExportSummary")
                   .replace("{clips}", String(summary.clips))
                   .replace("{seconds}", summary.seconds.toFixed(1))
                   .replace("{size}", summary.size)}
-          </span>
+          </Truncate>
         </div>
       </div>
     </BoardComposerShell>

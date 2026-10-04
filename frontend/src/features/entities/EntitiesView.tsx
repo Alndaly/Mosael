@@ -187,7 +187,7 @@ export function EntitiesView({ workspace }: { workspace: Workspace }) {
               <SelectTrigger className="w-auto min-w-32 border-border bg-control" aria-label={t("entitiesSort")}>
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent className="max-w-none">
+              <SelectContent>
                 {SORT_KEYS.map((one) => (
                   <SelectItem key={one} value={one}>
                     {sortLabel[one]}

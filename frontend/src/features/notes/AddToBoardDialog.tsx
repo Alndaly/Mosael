@@ -9,8 +9,8 @@ import { errorText } from "@/api/errorMessage";
 import { boardKeys } from "@/api/queryKeys";
 import { usePreferences } from "@/app/preferences";
 import { DIALOG_FIELD, ModalShell } from "@/components/app/modals";
-import { MENU_ITEM } from "@/components/ui/floating";
 import { Input } from "@/components/ui/input";
+import { MenuItem } from "@/components/ui/menu";
 import { openBoardItem } from "@/lib/deepLink";
 import { relativeTime } from "@/lib/time";
 import { cn } from "@/lib/utils";
@@ -111,20 +111,17 @@ export function AddToBoardDialog({ workspaceId, text, source, onClose }: {
             <p className="m-auto px-3 text-center text-ui-sm text-muted-foreground">{term ? sb.noMatch : sb.empty}</p>
           ) : shown.map((board) => (
             <div role="listitem" key={board.id} className="min-w-0">
-              <button type="button" data-board-row={board.id} disabled={busy} title={board.name}
-                className={cn(MENU_ITEM, "w-full text-left focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring")}
-                onClick={() => void addTo(board.id, board.name)}>
-                <LayoutGrid aria-hidden className="text-muted-foreground" />
-                <span className="min-w-0 flex-1 truncate">{board.name}</span>
-                <span className="shrink-0 text-ui-xs text-muted-foreground">{relativeTime(board.updated_at, locale)}</span>
-              </button>
+              {/* 挑选列表(role=list)里的一行,不是菜单:样子和菜单项同一套,角色仍是按钮。 */}
+              <MenuItem role="button" data-board-row={board.id} disabled={busy}
+                className="focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                onClick={() => void addTo(board.id, board.name)}
+                icon={<LayoutGrid className="text-muted-foreground" />} label={board.name} truncate
+                hint={relativeTime(board.updated_at, locale)} />
             </div>
           ))}
         </div>
-        <button type="button" disabled={busy} className={cn(MENU_ITEM, "w-full text-left text-primary")} onClick={() => void addToNew()}>
-          <Plus aria-hidden />
-          <span className="min-w-0 truncate">{q.trim() ? sb.newBoardNamed(q.trim()) : sb.newBoard}</span>
-        </button>
+        <MenuItem role="button" disabled={busy} className="text-primary" onClick={() => void addToNew()}
+          icon={<Plus />} label={q.trim() ? sb.newBoardNamed(q.trim()) : sb.newBoard} truncate />
       </div>
     </ModalShell>
   );

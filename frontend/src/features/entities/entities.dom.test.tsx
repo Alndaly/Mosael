@@ -302,7 +302,7 @@ describe("参考图墙", () => {
     expect(within(side).queryByRole("combobox")).toBeNull();
     expect(side.querySelector("figcaption")?.textContent).toBe("侧面.png");
     fireEvent.click(within(side).getByRole("button", { name: "entityRole: 侧面.png" }));
-    fireEvent.click(await screen.findByRole("button", { name: "三视图" }));
+    fireEvent.click(await screen.findByRole("menuitemradio", { name: "三视图" }));
     await waitFor(() => expect(api.setEntityReferenceRole).toHaveBeenCalledWith("e1", "a-side", "turnaround"));
   });
 
@@ -310,16 +310,16 @@ describe("参考图墙", () => {
     const wall = await openDetail({ kind: "location" });
     const side = wall.querySelector('[data-reference="a-side"]') as HTMLElement;
     fireEvent.click(within(side).getByRole("button", { name: "entityRole: 侧面.png" }));
-    expect(await screen.findByRole("button", { name: "全景" })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "三视图" })).toBeNull();
+    expect(await screen.findByRole("menuitemradio", { name: "全景" })).toBeTruthy();
+    expect(screen.queryByRole("menuitemradio", { name: "三视图" })).toBeNull();
   });
 
   it("AI 补画按种类给:场景只有补全多角度(画机位),没有生成表情", async () => {
     await openDetail({ kind: "location" });
     fireEvent.click(screen.getByRole("button", { name: "entityDraw" }));
-    expect(await screen.findByRole("button", { name: /entityDrawAngles/ })).toBeTruthy();
-    expect(screen.getByText("entityDrawAnglesHint_location")).toBeTruthy();
-    expect(screen.queryByRole("button", { name: /entityDrawExpressions/ })).toBeNull();
+    //: 每一项下面那句说明是这一项的描述,不拼进名字。
+    expect(await screen.findByRole("menuitem", { name: "entityDrawAngles" })).toHaveAccessibleDescription("entityDrawAnglesHint_location");
+    expect(screen.queryByRole("menuitem", { name: /entityDrawExpressions/ })).toBeNull();
   });
 
   it("人物:挑「生成表情」、写几种,开始画就发一个请求,按钮跟着任务忙", async () => {
@@ -327,7 +327,7 @@ describe("参考图墙", () => {
     api.api.mockResolvedValue({ id: "job-1", status: "running" });
     await openDetail();
     fireEvent.click(screen.getByRole("button", { name: "entityDraw" }));
-    fireEvent.click(await screen.findByRole("button", { name: /entityDrawExpressions/ }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "entityDrawExpressions" }));
     const dialog = await waitFor(() => document.querySelector('[data-draw-dialog="expressions"]') as HTMLElement);
     fireEvent.change(within(dialog).getByRole("textbox", { name: "entityDrawExpressionList" }), { target: { value: "开心, 哭" } });
     fireEvent.click(screen.getByRole("button", { name: "entityDrawStart" }));
@@ -373,15 +373,15 @@ describe("参考图墙", () => {
     const wall = await openDetail();
 
     fireEvent.click(within(wall).getByRole("button", { name: "studioActions: 侧面.png" }));
-    fireEvent.click(await screen.findByRole("button", { name: "entitySetCover" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "entitySetCover" }));
     await waitFor(() => expect(api.updateEntity).toHaveBeenCalledWith("e1", { cover_asset_id: "a-side" }));
 
     fireEvent.click(within(wall).getByRole("button", { name: "studioActions: 正面.png" }));
-    fireEvent.click(await screen.findByRole("button", { name: "entityMoveLater" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "entityMoveLater" }));
     await waitFor(() => expect(api.reorderEntityReferences).toHaveBeenCalledWith("e1", ["a-side", "a-front"]));
 
     fireEvent.click(within(wall).getByRole("button", { name: "studioActions: 侧面.png" }));
-    fireEvent.click(await screen.findByRole("button", { name: "entityRemoveReference" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "entityRemoveReference" }));
     await waitFor(() => expect(api.removeEntityReference).toHaveBeenCalledWith("e1", "a-side"));
   });
 

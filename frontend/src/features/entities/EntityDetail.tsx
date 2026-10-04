@@ -31,6 +31,8 @@ import { EmptyState } from "@/components/layout/EmptyState";
 import { CollectionTabs } from "@/components/layout/StudioPage";
 import { Button } from "@/components/ui/button";
 import { DraftInput, DraftTextarea } from "@/components/ui/draft-text";
+import { IconButton } from "@/components/ui/icon-button";
+import { Truncate } from "@/components/ui/truncate";
 import { fieldTriggerClass } from "@/components/ui/field-trigger";
 import { OptionPicker } from "@/components/ui/option-picker";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -169,15 +171,15 @@ export function EntityDetail({
     <div className="grid min-w-0 gap-7" data-entity-detail={data.id}>
       <header className="grid min-w-0 gap-6 sm:grid-cols-[180px_minmax(0,1fr)] sm:items-start" data-entity-hero="">
         {/* 有封面就放大看它;还没有图就带去参考图那一页传一张。 */}
-        <button
+        <IconButton
+          unstyled
           type="button"
           onClick={() =>
             cover
               ? openImagePreview({ src: assetPreviewUrl(cover), title: data.name })
               : setTab("references")
           }
-          title={t(cover ? "imagePreviewTitle" : "entityReferences")}
-          aria-label={t(cover ? "imagePreviewTitle" : "entityReferences")}
+          label={t(cover ? "imagePreviewTitle" : "entityReferences")}
           className={cn("relative grid aspect-[4/5] w-full max-w-[180px] place-items-center overflow-hidden rounded-xl border border-border bg-panel-inset p-0 text-muted-foreground transition-colors hover:border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", cover ? "cursor-zoom-in" : "cursor-pointer")}
         >
           {data.display_cover_asset_id ? (
@@ -185,7 +187,7 @@ export function EntityDetail({
           ) : (
             <KindIcon size={36} strokeWidth={1.2} />
           )}
-        </button>
+        </IconButton>
         <div className="grid min-w-0 content-start gap-2">
           <div className="flex min-w-0 items-start justify-between gap-3">
             <span className="flex min-w-0 flex-wrap items-center gap-2 px-2 text-ui-xs text-muted-foreground">
@@ -501,10 +503,10 @@ function ColorField({ label, value, onChange }: { label: string; value: string; 
       />
       <span className={cn("font-mono text-ui-sm", !value && "font-sans text-muted-foreground")}>{value || t("entityNone")}</span>
       {value && (
-        <button
+        <IconButton
+          unstyled
           type="button"
-          aria-label={t("entityClear")}
-          title={t("entityClear")}
+          label={t("entityClear")}
           onClick={(event) => {
             event.preventDefault();
             onChange("");
@@ -512,7 +514,7 @@ function ColorField({ label, value, onChange }: { label: string; value: string; 
           className="ml-auto grid size-6 cursor-pointer place-items-center rounded border-0 bg-transparent p-0 text-muted-foreground hover:bg-secondary hover:text-foreground"
         >
           <X size={14} />
-        </button>
+        </IconButton>
       )}
     </label>
   );
@@ -809,10 +811,10 @@ function UsageCard({
       >
         <span className="grid size-11 shrink-0 place-items-center overflow-hidden rounded-md bg-panel-inset text-muted-foreground">{lead}</span>
         <span className="grid min-w-0 flex-1 gap-0.5">
-          <span className="truncate text-ui-sm font-medium text-foreground" title={title}>
+          <Truncate className="text-ui-sm font-medium text-foreground">
             {title}
-          </span>
-          <span className="truncate text-ui-xs text-muted-foreground">{meta}</span>
+          </Truncate>
+          <Truncate className="text-ui-xs text-muted-foreground">{meta}</Truncate>
         </span>
       </button>
     </li>

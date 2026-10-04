@@ -3,6 +3,8 @@ import { useStore } from "@xyflow/react";
 import type { LucideIcon } from "lucide-react";
 
 import { useI18n } from "@/app/preferences";
+import { Hint } from "@/components/ui/tooltip";
+import { Truncate } from "@/components/ui/truncate";
 import { isImeKeystroke } from "@/lib/shortcuts";
 import { cn } from "@/lib/utils";
 
@@ -83,26 +85,28 @@ export function BoardNodeLabel({
           }}
         />
       ) : (
-        <span
-          className={cn("min-w-0 truncate", editable && "cursor-text")}
-          title={editable ? `${name || fallback} · ${t("boardRenameHint")}` : name || undefined}
-          onDoubleClick={
-            editable
-              ? (event) => {
-                  //: 不冒泡:便签的双击是「写正文」,画布空白处的双击是「加一张便签」。
-                  event.stopPropagation();
-                  onRenaming?.(true);
-                }
-              : undefined
-          }
-        >
-          {name || fallback}
-        </span>
+        //: 能改名的:悬停说名字和「双击改名」;不能改的只在名字被截断时给全文。
+        <Hint label={editable ? name || fallback : undefined} hint={editable ? t("boardRenameHint") : undefined}>
+          <Truncate
+            className={cn(editable && "cursor-text")}
+            onDoubleClick={
+              editable
+                ? (event) => {
+                    //: 不冒泡:便签的双击是「写正文」,画布空白处的双击是「加一张便签」。
+                    event.stopPropagation();
+                    onRenaming?.(true);
+                  }
+                : undefined
+            }
+          >
+            {name || fallback}
+          </Truncate>
+        </Hint>
       )}
       {secondary && !editing ? (
-        <span data-board-node-label-secondary="" className="min-w-0 shrink-[3] truncate opacity-70" title={secondary}>
+        <Truncate data-board-node-label-secondary="" className="shrink-[3] opacity-70" text={secondary}>
           · {secondary}
-        </span>
+        </Truncate>
       ) : null}
     </span>
   );

@@ -14,6 +14,7 @@ import Placeholder from "@tiptap/extension-placeholder";
 
 import { assetThumbnailUrl, type Asset, type EntitySummary } from "@/api/client";
 import { useI18n } from "@/app/preferences";
+import { Truncate } from "@/components/ui/truncate";
 import type { MessageKey } from "@/app/messages";
 import type { MediaKind } from "@/features/boards/boardNodes";
 import { RefSuggestion } from "@/components/app/refSuggestion";
@@ -166,7 +167,7 @@ const AssetChip = Node.create({
           alt=""
           className="h-3.5 w-3.5 shrink-0 rounded-[3px] object-cover"
         />
-        <span className="truncate">{String(node.attrs.name ?? "")}</span>
+        <Truncate>{String(node.attrs.name ?? "")}</Truncate>
       </NodeViewWrapper>
     )),
 });
@@ -198,7 +199,7 @@ const EntityChip = Node.create({
           entity={{ kind: String(node.attrs.kind || "character") as EntitySummary["kind"], cover_asset_id: String(node.attrs.cover || "") || null }}
           className="h-3.5 w-3.5 rounded-[3px]"
         />
-        <span className="truncate">{String(node.attrs.name ?? "")}</span>
+        <Truncate>{String(node.attrs.name ?? "")}</Truncate>
       </NodeViewWrapper>
     )),
 });
@@ -502,9 +503,9 @@ export function PromptEditor({
                   ) : (
                     <img src={assetThumbnailUrl(item.asset.id)} alt="" className="h-8 w-10 shrink-0 rounded bg-control object-cover" />
                   )}
-                  <span className="min-w-0 flex-1 truncate text-ui-xs text-foreground">
+                  <Truncate className="flex-1 text-ui-xs text-foreground">
                     {item.asset.name || item.asset.original_filename}
-                  </span>
+                  </Truncate>
                   {/* **只有一类可选时不标类型。** 每行都写一遍「image」是纯噪音 —— 它没有回答
                       任何问题,而列表里本来就只有这一类。 */}
                   {!onlyKind && (

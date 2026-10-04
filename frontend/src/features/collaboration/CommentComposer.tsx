@@ -14,7 +14,9 @@ import type { WorkspaceMember } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { RefSuggestion } from "@/components/app/refSuggestion";
 import { useSuggestionMenu } from "@/components/app/suggestionMenu";
-import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
+import { Truncate } from "@/components/ui/truncate";
+import { formatCombo } from "@/lib/shortcuts";
 
 export type CommentDocument = JSONContent;
 
@@ -145,12 +147,13 @@ export function CommentComposer({
       <div className="flex items-center justify-between border-t border-border px-2 py-1.5">
         <span className="text-ui-2xs text-muted-foreground">{t("commentMentionHint")}</span>
         <div className="flex items-center gap-1">
-          <Button variant="ghost" size="icon-xs" onClick={onCancel} aria-label={t("cancel")}>
+          <IconButton variant="ghost" size="icon-xs" onClick={onCancel} label={t("cancel")}>
             <X size={13} />
-          </Button>
-          <Button size="icon-xs" disabled={empty} loading={submitting} onClick={submit} aria-label={t(editing ? "save" : "send")}>
+          </IconButton>
+          <IconButton variant="default" size="icon-xs" disabled={empty} disabledReason={t("commentEmpty")} loading={submitting} onClick={submit}
+            label={t(editing ? "save" : "send")} shortcut={formatCombo("Mod+Enter")}>
             <Send size={13} />
-          </Button>
+          </IconButton>
         </div>
       </div>
       <menu.Portal>
@@ -166,8 +169,8 @@ export function CommentComposer({
               {(member.display_name || member.username).slice(0, 1).toUpperCase()}
             </span>
             <span className="min-w-0">
-              <span className="block truncate">{member.display_name || member.username}</span>
-              {member.display_name && <span className="block truncate text-ui-2xs text-muted-foreground">@{member.username}</span>}
+              <Truncate>{member.display_name || member.username}</Truncate>
+              {member.display_name && <Truncate className="text-ui-2xs text-muted-foreground">@{member.username}</Truncate>}
             </span>
           </button>
         )}

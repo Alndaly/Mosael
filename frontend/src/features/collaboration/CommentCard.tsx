@@ -7,7 +7,8 @@ import type { CollaborationComment, WorkspaceMember } from "@/api/client";
 import { editComment } from "@/api/domains/collaboration";
 import { errorText } from "@/api/errorMessage";
 import { useI18n } from "@/app/preferences";
-import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
+import { Truncate } from "@/components/ui/truncate";
 import { cn } from "@/lib/utils";
 import { CommentComposer, type CommentDraft } from "@/features/collaboration/CommentComposer";
 import { commentDocument } from "@/features/collaboration/commentDocument";
@@ -39,11 +40,11 @@ export function CommentCard({ comment, members, currentUserId, onDelete, onClose
   return <div data-board-comment-overlay="" className={cn(CANVAS_WINDOW_SURFACE_CLASS, "nodrag nopan pointer-events-auto w-72 overflow-hidden text-left")}
     onPointerDown={event => event.stopPropagation()} onMouseDown={event => event.stopPropagation()} onClick={event => event.stopPropagation()}>
     <div className="flex h-11 items-center gap-1 border-b border-border px-3">
-      <span className="min-w-0 flex-1 truncate text-ui-xs font-medium">{comment.author?.display_name || comment.author?.username || t("teamSystemActor")}</span>
-      {own && <Button variant="ghost" size="icon-xs" aria-label={t("commentEdit")} onClick={() => setEditing(true)}><Pencil size={13} /></Button>}
-      {own && onDelete && <Button variant="ghost" size="icon-xs" data-delete-comment="" aria-label={t("delete")} loading={remove.isPending}
-        className="hover:bg-destructive/10 hover:text-destructive" onClick={() => remove.mutate()}><Trash2 size={13} /></Button>}
-      {onClose && <Button variant="ghost" size="icon-xs" aria-label={t("close")} onClick={onClose}><X size={13} /></Button>}
+      <Truncate className="flex-1 text-ui-xs font-medium">{comment.author?.display_name || comment.author?.username || t("teamSystemActor")}</Truncate>
+      {own && <IconButton variant="ghost" size="icon-xs" label={t("commentEdit")} onClick={() => setEditing(true)}><Pencil size={13} /></IconButton>}
+      {own && onDelete && <IconButton variant="ghost" size="icon-xs" data-delete-comment="" label={t("delete")} loading={remove.isPending}
+        className="hover:bg-destructive/10 hover:text-destructive" onClick={() => remove.mutate()}><Trash2 size={13} /></IconButton>}
+      {onClose && <IconButton variant="ghost" size="icon-xs" label={t("close")} onClick={onClose}><X size={13} /></IconButton>}
     </div>
     {/* 这一块真的会滚,所以 nowheel 挂在它身上 —— 挂在整张卡上会让卡片变成画布上一块滚不动的死区。 */}
     <div className="nowheel max-h-64 overflow-y-auto px-3 py-3"><CommentContent comment={comment} members={members} /></div>

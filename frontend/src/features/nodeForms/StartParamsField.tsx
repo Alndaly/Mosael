@@ -7,7 +7,7 @@ import { useI18n } from "@/app/preferences";
 import { InlineMarkdown } from "@/components/markdown/InlineMarkdown";
 import { toPlainText } from "@/components/markdown/inlineSyntax";
 import { AddRow } from "@/components/ui/add-row";
-import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { OptionPicker } from "@/components/ui/option-picker";
@@ -229,15 +229,15 @@ export function StartParamsField({
                   onCheckedChange={(checked) => patchRow(index, { required: checked === true }, false)}
                 />
               </span>
-              <Button
+              <IconButton
                 type="button"
                 variant="ghost"
                 size="icon-xs"
-                aria-label={t("wfStartParamRemove").replace("{name}", name)}
+                label={t("wfStartParamRemove").replace("{name}", name)}
                 onClick={() => push(rows.filter((_, i) => i !== index), false)}
               >
                 <X size={12} />
-              </Button>
+              </IconButton>
             </div>
             {notice ? (
               <small className={noticeText(notice, row).tone} data-start-param-notice={notice}>

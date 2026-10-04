@@ -5,7 +5,9 @@ import { Camera, Scissors, Volume2, VolumeX } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 
 import { listAssets, type Asset, type BoardItem } from "@/api/client";
+import { IconButton } from "@/components/ui/icon-button";
 import { Input } from "@/components/ui/input";
+import { Hint } from "@/components/ui/tooltip";
 import { TrimTrack } from "@/features/boards/TrimTrack";
 import { useSubmitting } from "@/features/boards/useSubmitting";
 import { useI18n } from "@/app/preferences";
@@ -97,10 +99,11 @@ export function TrimComposer({
       bar={
         <>
           {controls.mute && (
-            <button
+            <IconButton
+              unstyled
               type="button"
               aria-pressed={mute}
-              title={t(mute ? "boardDropSound" : "boardKeepSound")}
+              label={t(mute ? "boardDropSound" : "boardKeepSound")}
               onClick={() => setMute((on) => !on)}
               className={cn(
                 "grid h-8 w-8 shrink-0 cursor-pointer place-items-center rounded-full transition-colors hover:bg-secondary",
@@ -108,20 +111,21 @@ export function TrimComposer({
               )}
             >
               {mute ? <VolumeX size={13} /> : <Volume2 size={13} />}
-            </button>
+            </IconButton>
           )}
           {/* 取一帧:**用起点那个把手的位置** —— 轨已经在那儿了,再给一个「取帧位置」等于
               让用户在同一条轨上记两个数。 */}
           {onGrabFrame && controls.grabFrame && (
+            <Hint label={t("boardGrabFrameTitle")}>
             <button
               type="button"
-              title={t("boardGrabFrameTitle")}
               disabled={working}
               onClick={() => run(() => onGrabFrame(from))}
               className="flex h-8 shrink-0 cursor-pointer items-center gap-1.5 rounded-md px-2 text-ui-xs text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground disabled:cursor-not-allowed"
             >
               <Camera size={13} /> {t("boardGrabFrame")}
             </button>
+            </Hint>
           )}
         </>
       }

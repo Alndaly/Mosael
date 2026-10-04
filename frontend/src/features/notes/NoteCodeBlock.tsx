@@ -5,6 +5,7 @@ import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import { Check, Copy } from "lucide-react";
 import { canonicalLanguage, codeHighlighter } from "@/components/markdown/codeHighlighter";
+import { IconButton } from "@/components/ui/icon-button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { NONE, optionalValue } from "@/components/ui/selectSentinel";
 import { nodeLabels } from "./noteNodeUI";
@@ -197,15 +198,15 @@ function CodeBlockView(labels: ReturnType<typeof nodeLabels>) {
             <span className="note-code-language-label">{label}</span>
           )}
           <span className="note-code-status" role="status">{status}</span>
-          <button
+          <IconButton
+            unstyled
             type="button"
             className="note-node-button"
-            title={labels.copy}
-            aria-label={labels.copy}
+            label={labels.copy}
             onClick={() => void copy()}
           >
             {status === labels.copied ? <Check size={15} aria-hidden="true" /> : <Copy size={15} aria-hidden="true" />}
-          </button>
+          </IconButton>
         </div>
         <pre
           spellCheck={false}

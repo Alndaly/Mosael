@@ -15,6 +15,7 @@ import { useQuery } from "@tanstack/react-query";
 import { listSceneModels } from "@/api/domains/scenes";
 import { useI18n } from "@/app/preferences";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Truncate } from "@/components/ui/truncate";
 import { formatBytes } from "@/lib/bytes";
 
 /** 逗号分隔的 id 串 ⇄ id 集合。空串就是空集(= 全部)。 */
@@ -65,7 +66,7 @@ export function ScenePropsField({
               checked={picked.has(model.id)}
               onCheckedChange={(on) => toggle(model.id, on === true)}
             />
-            <span className="min-w-0 truncate">{model.name}</span>
+            <Truncate>{model.name}</Truncate>
             <span className="ml-auto shrink-0 tabular-nums text-muted-foreground">
               {formatBytes(model.size)}
             </span>

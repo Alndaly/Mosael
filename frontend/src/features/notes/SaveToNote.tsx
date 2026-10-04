@@ -7,9 +7,10 @@ import { noteKeys } from "@/api/queryKeys";
 import { errorText } from "@/api/errorMessage";
 import { usePreferences } from "@/app/preferences";
 import { DIALOG_FIELD, ModalShell } from "@/components/app/modals";
-import { MENU_ITEM } from "@/components/ui/floating";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { MenuItem } from "@/components/ui/menu";
+import { Hint } from "@/components/ui/tooltip";
 import { SEGMENTED_LIST, segmentedTriggerClass } from "@/components/ui/tabs";
 import { relativeTime } from "@/lib/time";
 import { cn } from "@/lib/utils";
@@ -62,7 +63,7 @@ export function SaveToNote({workspaceId, content, sources = [], variants, classN
   }
 
   const triggerProps = {open: () => setOpen(true), disabled: !markdown.trim(), label: label || s.saveTo};
-  return <>{trigger ? trigger(triggerProps) : <button type="button" className={className || "inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-secondary"} title={triggerProps.label} disabled={triggerProps.disabled} onClick={triggerProps.open}><BookPlus size={13} />{triggerProps.label}</button>}
+  return <>{trigger ? trigger(triggerProps) : <Hint disabledReason={triggerProps.disabled && s.nothingToSave}><button type="button" className={className || "inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-secondary"} disabled={triggerProps.disabled} onClick={triggerProps.open}><BookPlus size={13} />{triggerProps.label}</button></Hint>}
     <ModalShell open={open} onOpenChange={value => { if (!busy) setOpen(value); }} title={label || s.saveTo} className="w-[480px]">
       <div className="grid gap-6">
         {variants && <div className={DIALOG_FIELD}>
@@ -101,15 +102,16 @@ export function SaveToNote({workspaceId, content, sources = [], variants, classN
               : notes.isError ? <p role="alert" className="m-auto px-3 text-center text-ui-sm text-muted-foreground">{errorText(notes.error)}</p>
               : !candidates.length ? <p className="m-auto px-3 text-center text-ui-sm text-muted-foreground">{q.trim() ? s.noResults : s.listEmpty}</p>
               : candidates.map((n, index) => <div role="listitem" key={n.id} className="min-w-0">
-                <button type="button" data-note-row="" disabled={busy} title={n.title || s.untitled}
-                  className={cn(MENU_ITEM, "group/row w-full text-left focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring")}
-                  onKeyDown={e => moveFocus(e, index)} onClick={() => void save(n)}>
-                  <FileText aria-hidden className="text-muted-foreground" />
-                  <span className="min-w-0 flex-1 truncate">{n.title || s.untitled}</span>
-                  {/* 静止时是更新时间;悬停 / 聚焦时换成回车符号,说明"点它就是追加到这里"。 */}
-                  <span className="shrink-0 text-ui-xs text-muted-foreground group-hover/row:hidden group-focus-visible/row:hidden">{relativeTime(n.updated_at, locale)}</span>
-                  <CornerDownLeft aria-hidden className="hidden text-muted-foreground group-hover/row:block group-focus-visible/row:block" />
-                </button>
+                {/* 挑选列表(role=list)里的一行,不是菜单:样子和菜单项同一套,角色仍是按钮。 */}
+                <MenuItem role="button" data-note-row="" disabled={busy}
+                  className="group/row focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                  onKeyDown={e => moveFocus(e, index)} onClick={() => void save(n)}
+                  icon={<FileText className="text-muted-foreground" />} label={n.title || s.untitled} truncate
+                  //: 静止时是更新时间;悬停 / 聚焦时换成回车符号,说明"点它就是追加到这里"。
+                  hint={<>
+                    <span className="group-hover/row:hidden group-focus-visible/row:hidden">{relativeTime(n.updated_at, locale)}</span>
+                    <CornerDownLeft aria-hidden className="hidden group-hover/row:block group-focus-visible/row:block" />
+                  </>} />
               </div>)}
           </div>
         </section>

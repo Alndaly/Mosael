@@ -14,7 +14,6 @@ import { CSS } from "@dnd-kit/utilities";
 import {
   ArrowLeft,
   ArrowRight,
-  Check,
   ChevronDown,
   Film,
   FolderOpen,
@@ -49,8 +48,11 @@ import {
 import { errorText } from "@/api/errorMessage";
 import { useI18n } from "@/app/preferences";
 import { Button } from "@/components/ui/button";
-import { Popover, PopoverClose, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { ACTION_MENU } from "@/components/ui/floating";
+import { IconButton } from "@/components/ui/icon-button";
+import { MenuContent, MenuItem } from "@/components/ui/menu";
+import { Popover, PopoverClose, PopoverTrigger } from "@/components/ui/popover";
+import { Hint } from "@/components/ui/tooltip";
+import { Truncate } from "@/components/ui/truncate";
 import { useFileDrop } from "@/lib/useFileDrop";
 import { importEach, importFailureText } from "@/lib/importEach";
 import { cn } from "@/lib/utils";
@@ -359,39 +361,40 @@ function ReferenceCard({
         )}
         {/* 角度就写在图上,点它就能换 —— 不再在图下面另摆一个写着同一个词的下拉。 */}
         <Popover>
+          {/* 图上写的是角度的值(「正面」),它是什么悬停时说。 */}
+          <Hint label={t("entityRole")}>
           <PopoverTrigger asChild>
             <button
               type="button"
               aria-label={`${t("entityRole")}: ${reference.asset_name}`}
-              title={t("entityRole")}
+              aria-haspopup="menu"
               className={cn(overlay, "absolute left-2 top-2 cursor-pointer px-2 py-1 hover:bg-[rgba(10,12,15,0.88)]")}
             >
               <span data-reference-role={reference.role}>{roleLabel}</span>
               <ChevronDown size={11} className="opacity-70" />
             </button>
           </PopoverTrigger>
-          <PopoverContent className={cn(ACTION_MENU, "max-h-72 w-40 overflow-y-auto")} align="start">
+          </Hint>
+          <MenuContent label={`${t("entityRole")}: ${reference.asset_name}`} align="start" className="max-h-72 overflow-y-auto">
             {roles.map((one) => (
               <PopoverClose asChild key={one.value}>
-                <Button
-                  variant="ghost"
-                  className="justify-start"
-                  aria-pressed={one.value === reference.role}
+                <MenuItem
+                  role="menuitemradio"
+                  checked={one.value === reference.role}
+                  label={one.label}
                   onClick={() => one.value !== reference.role && onRole(one.value)}
-                >
-                  <Check className={cn(one.value === reference.role ? "opacity-100" : "opacity-0")} />
-                  {one.label}
-                </Button>
+                />
               </PopoverClose>
             ))}
-          </PopoverContent>
+          </MenuContent>
         </Popover>
         <Popover open={menuOpen} onOpenChange={setMenuOpen}>
           <PopoverTrigger asChild>
-            <button
+            <IconButton
+              unstyled
               type="button"
-              aria-label={`${t("studioActions")}: ${reference.asset_name}`}
-              title={t("studioActions")}
+              label={`${t("studioActions")}: ${reference.asset_name}`}
+              aria-haspopup="menu"
               className={cn(
                 overlay,
                 "absolute right-2 top-2 grid size-7 cursor-pointer place-items-center p-0 transition-opacity hover:bg-[rgba(10,12,15,0.88)]",
@@ -400,40 +403,28 @@ function ReferenceCard({
               )}
             >
               <MoreHorizontal size={14} />
-            </button>
+            </IconButton>
           </PopoverTrigger>
-          <PopoverContent className={cn(ACTION_MENU, "w-44")} align="end">
+          <MenuContent label={`${t("studioActions")}: ${reference.asset_name}`} align="end">
             {image && !isCover && (
               <PopoverClose asChild>
-                <Button variant="ghost" className="justify-start" onClick={onCover}>
-                  <Star />
-                  {t("entitySetCover")}
-                </Button>
+                <MenuItem icon={<Star />} label={t("entitySetCover")} onClick={onCover} />
               </PopoverClose>
             )}
             {!first && (
               <PopoverClose asChild>
-                <Button variant="ghost" className="justify-start" onClick={() => onMove(-1)}>
-                  <ArrowLeft />
-                  {t("entityMoveEarlier")}
-                </Button>
+                <MenuItem icon={<ArrowLeft />} label={t("entityMoveEarlier")} onClick={() => onMove(-1)} />
               </PopoverClose>
             )}
             {!last && (
               <PopoverClose asChild>
-                <Button variant="ghost" className="justify-start" onClick={() => onMove(1)}>
-                  <ArrowRight />
-                  {t("entityMoveLater")}
-                </Button>
+                <MenuItem icon={<ArrowRight />} label={t("entityMoveLater")} onClick={() => onMove(1)} />
               </PopoverClose>
             )}
             <PopoverClose asChild>
-              <Button variant="ghost" className="justify-start text-destructive" onClick={onRemove}>
-                <Trash2 />
-                {t("entityRemoveReference")}
-              </Button>
+              <MenuItem icon={<Trash2 />} label={t("entityRemoveReference")} destructive onClick={onRemove} />
             </PopoverClose>
-          </PopoverContent>
+          </MenuContent>
         </Popover>
         {isCover && (
           <span className="absolute bottom-2 left-2 inline-flex items-center gap-1 rounded-md bg-primary px-2 py-0.5 text-ui-2xs font-medium text-primary-foreground">
@@ -442,9 +433,9 @@ function ReferenceCard({
           </span>
         )}
       </div>
-      <figcaption className="truncate px-0.5 text-ui-xs text-muted-foreground" title={reference.asset_name}>
+      <Truncate as="figcaption" className="px-0.5 text-ui-xs text-muted-foreground">
         {reference.asset_name}
-      </figcaption>
+      </Truncate>
     </figure>
   );
 }

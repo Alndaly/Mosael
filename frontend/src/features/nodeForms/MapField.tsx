@@ -3,7 +3,7 @@ import { X } from "lucide-react";
 
 import { useI18n } from "@/app/preferences";
 import { AddRow } from "@/components/ui/add-row";
-import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/ui/icon-button";
 import { Input } from "@/components/ui/input";
 import { RefCombobox } from "@/features/nodeForms/RefCombobox";
 import { bareRef, wholeRef } from "@/features/nodeForms/refDoc";
@@ -142,15 +142,15 @@ export function MapField({
               )
             }
           />
-          <Button
+          <IconButton
             type="button"
             variant="ghost"
             size="icon-xs"
-            aria-label={t("delete")}
+            label={t("delete")}
             onClick={() => push(rows.filter((_, i) => i !== index))}
           >
             <X size={12} />
-          </Button>
+          </IconButton>
         </div>
       ))}
       {/* 撑满的虚线空位 —— 和参数组表单里的「加一行」同一个东西,共用一份实现。

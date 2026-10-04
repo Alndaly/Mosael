@@ -4,6 +4,7 @@ import { AudioLines, X } from "lucide-react";
 import { assetFileUrl, assetPreviewUrl, assetThumbnailUrl } from "@/api/client";
 import { useI18n } from "@/app/preferences";
 import { useImagePreview } from "@/components/app/image-preview";
+import { IconButton } from "@/components/ui/icon-button";
 import { AssetPreviewModalById } from "@/features/media/AssetPreviewModalById";
 
 /**
@@ -30,20 +31,20 @@ export function SourceAssetSlotPreview({
   const previewLabel = t("boardPreviewSource").replace("{name}", label);
 
   const preview = kind === "audio" ? (
-    <button
+    <IconButton
+      unstyled
       type="button"
-      aria-label={previewLabel}
-      title={previewLabel}
+      label={previewLabel}
       onClick={() => setPreviewing(assetId)}
       className="grid h-8 w-8 place-items-center rounded-md border border-border bg-[color-mix(in_srgb,var(--foreground)_6%,transparent)] text-muted-foreground transition-colors hover:border-border-strong hover:text-foreground"
     >
       <AudioLines size={14} />
-    </button>
+    </IconButton>
   ) : (
-    <button
+    <IconButton
+      unstyled
       type="button"
-      aria-label={previewLabel}
-      title={previewLabel}
+      label={previewLabel}
       onClick={() =>
         openImagePreview({
           src: kind === "video" ? assetFileUrl(assetId) : assetPreviewUrl(assetId),
@@ -54,22 +55,22 @@ export function SourceAssetSlotPreview({
       className="block h-8 w-8 cursor-zoom-in overflow-hidden rounded-md border border-border transition-colors hover:border-border-strong"
     >
       <img src={assetThumbnailUrl(assetId)} alt="" className="h-full w-full object-cover" />
-    </button>
+    </IconButton>
   );
 
   return (
     <>
       <span className="group/thumb relative shrink-0">
         {preview}
-        <button
+        <IconButton
+          unstyled
           type="button"
-          aria-label={`${t("boardRemove")}${label}`}
-          title={t("boardRemove")}
+          label={`${t("boardRemove")}${label}`}
           onClick={onRemove}
           className="absolute -right-1 -top-1 grid h-4 w-4 cursor-pointer place-items-center rounded-full border border-border bg-panel text-muted-foreground opacity-0 shadow-sm transition-opacity hover:border-destructive hover:text-destructive group-hover/thumb:opacity-100"
         >
           <X size={9} />
-        </button>
+        </IconButton>
       </span>
       {kind === "audio" && (
         <AssetPreviewModalById id={previewing} onClose={() => setPreviewing(null)} />

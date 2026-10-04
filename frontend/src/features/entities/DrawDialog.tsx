@@ -11,7 +11,9 @@ import { ModalShell } from "@/components/app/modals";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { OptionPicker } from "@/components/ui/option-picker";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { MenuContent, MenuItem } from "@/components/ui/menu";
+import { Popover, PopoverTrigger } from "@/components/ui/popover";
+import { Hint } from "@/components/ui/tooltip";
 import { gotoSettings } from "@/lib/deepLink";
 import { useWatchedJob } from "@/lib/useWatchedJob";
 
@@ -55,34 +57,31 @@ export function DrawMenu({ entity, workspaceId, disabled }: { entity: Entity; wo
   return (
     <>
       <Popover open={menuOpen} onOpenChange={setMenuOpen}>
+        <Hint disabledReason={disabled && !job.running && t("entityDrawNeedsImage")}>
         <PopoverTrigger asChild>
-          <Button variant="outline" disabled={disabled} loading={job.running} data-draw-menu="">
+          <Button variant="outline" disabled={disabled} loading={job.running} data-draw-menu="" aria-haspopup="menu">
             {!job.running && <Sparkles />}
             {t(job.running ? "entityDrawRunning" : "entityDraw")}
           </Button>
         </PopoverTrigger>
-        <PopoverContent align="end" className="w-[280px] p-1.5">
-          <div className="grid gap-0.5">
-            {abilities.map((one) => {
-              const Icon = ABILITY_ICONS[one];
-              return (
-                <button
-                  key={one}
-                  type="button"
-                  onClick={() => {
-                    setMenuOpen(false);
-                    setAbility(one);
-                  }}
-                  className="grid w-full cursor-pointer grid-cols-[auto_minmax(0,1fr)] items-start gap-x-2.5 gap-y-0.5 rounded-md border-0 bg-transparent px-2 py-2 text-left hover:bg-secondary"
-                >
-                  <Icon size={15} className="row-span-2 mt-0.5 text-muted-foreground" />
-                  <span className="text-ui-sm font-medium text-foreground">{t(ABILITY_LABELS[one])}</span>
-                  <span className="text-ui-xs leading-relaxed text-muted-foreground">{t(ABILITY_HINTS[`${one}_${entity.kind}`])}</span>
-                </button>
-              );
-            })}
-          </div>
-        </PopoverContent>
+        </Hint>
+        <MenuContent label={t("entityDraw")} align="end">
+          {abilities.map((one) => {
+            const Icon = ABILITY_ICONS[one];
+            return (
+              <MenuItem
+                key={one}
+                icon={<Icon />}
+                label={t(ABILITY_LABELS[one])}
+                description={t(ABILITY_HINTS[`${one}_${entity.kind}`])}
+                onClick={() => {
+                  setMenuOpen(false);
+                  setAbility(one);
+                }}
+              />
+            );
+          })}
+        </MenuContent>
       </Popover>
       {ability && (
         <DrawDialog
