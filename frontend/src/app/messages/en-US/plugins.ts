@@ -523,6 +523,7 @@ export const plugins = {
   modelDownloadCancelLabel: "Cancel downloading {name}",
   modelDownloadDone: "Downloaded",
   modelDownloadFailedLabel: "Failed",
+  modelDownloadWanted: "The workflow needs “{name}” in {folder} but doesn't say where to download it: find a download link for that file (HuggingFace, Civitai, ModelScope) and paste it above; it will be saved under this name.",
   modelDownloadTitle: "Download a model to {name}",
   modelDownloadLink: "Link",
   modelDownloadLinkPlaceholder: "A HuggingFace file, a Civitai model page or download link, a ModelScope model page or file, or another direct link",

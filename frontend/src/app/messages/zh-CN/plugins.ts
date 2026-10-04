@@ -528,6 +528,7 @@ export const plugins = {
   modelDownloadCancelLabel: "取消下载 {name}",
   modelDownloadDone: "已下好",
   modelDownloadFailedLabel: "没下成",
+  modelDownloadWanted: "工作流要的是 {folder} 里的「{name}」,它没写下载地址:找到这个文件的下载链接贴在上面(HuggingFace、Civitai、ModelScope),下好会用这个文件名。",
   modelDownloadTitle: "下载模型到 {name}",
   modelDownloadLink: "链接",
   modelDownloadLinkPlaceholder: "HuggingFace 文件、Civitai 模型页或下载链接、ModelScope(魔搭)的模型页或文件,或别的直链",

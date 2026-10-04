@@ -1389,6 +1389,12 @@ function ModelDownloadDialog({
             </Button>
           </div>
         </label>
+        {seed.name && !seed.url && !resolved && (
+          // 工作流缺的模型、又没写下载地址(从工作流库跳过来的):说清楚要找的是哪个文件
+          <p className="m-0 text-ui-xs leading-relaxed text-muted-foreground">
+            {t("modelDownloadWanted").replace("{name}", seed.name).replace("{folder}", seed.folder ?? "")}
+          </p>
+        )}
         {resolve.isError && <p className="m-0 break-words text-ui-sm text-destructive">{errorText(resolve.error)}</p>}
         {resolved && (
           <>

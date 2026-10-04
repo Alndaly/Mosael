@@ -612,6 +612,14 @@ describe("模型库", () => {
     expect(await screen.findByRole("button", { name: /modelDownloadConfirm/ })).toBeTruthy();
   });
 
+  it("从工作流库跳过来下载一个没写地址的缺模型:下载框说清楚要找的是哪个文件", async () => {
+    wrap(<ModelLibraryDialog open onOpenChange={() => undefined} instance={instance} workspaceId="w1"
+                             focus={{ download: { folder: "checkpoints", name: "JANKUV5.safetensors" }, at: 1 }} />);
+    const dialog = await screen.findByRole("dialog", { name: "modelDownloadTitle" });
+    expect(dialog.textContent).toContain("modelDownloadWanted");
+    expect(api.resolveModelLink).not.toHaveBeenCalled();
+  });
+
   it("下好了让模型库重新列一遍", async () => {
     api.getModelLibrary.mockResolvedValueOnce(library({ downloads: [job({})] }));
     api.getJob.mockResolvedValue(job({ status: "succeeded", progress: 1, message: "ae.safetensors 已下到 vae" }));
