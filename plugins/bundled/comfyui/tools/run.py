@@ -125,6 +125,12 @@ def submit(comfy: Comfy, prompt: dict[str, Any], client_id: str, locale: str) ->
     prompt_id = str((answer or {}).get("prompt_id") or "")
     if not prompt_id:
         raise ComfyError(say(locale, "ComfyUI 没有交回任务号", "ComfyUI did not return a prompt id"))
+    if (answer or {}).get("node_errors"):
+        # 一部分输出节点校验不过时 ComfyUI 照样排上,只跑过了的那几个:缺了 checkpoint 的出图那一路不跑,一个只预览
+        # 参考图的节点照跑 —— 交回来的就成了那张预览。这张图没有按它本来的样子跑:说出原因,把排上的撤掉。
+        stop(comfy, prompt_id)
+        detail = graph.validation_errors({"node_errors": answer["node_errors"]})
+        raise ComfyError(say(locale, f"ComfyUI 拒绝了这张工作流:{detail}", f"ComfyUI rejected the workflow: {detail}"))
     return prompt_id
 
 

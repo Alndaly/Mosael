@@ -489,6 +489,9 @@ class State:
     error_node: str = "KSampler"
     error_message: str = "CUDA out of memory"
     reject: dict[str, Any] | None = None
+    #: 一部分输出节点校验不过、另一部分过了:ComfyUI 照样排上(回 200 和任务号),只跑过了的那几个,
+    #: 校验不过的写在回包的 node_errors 里。任务先进排队。
+    node_errors: dict[str, Any] | None = None
     running: list[str] = field(default_factory=list)
     pending: list[str] = field(default_factory=list)
     uploads: list[tuple[str, bytes]] = field(default_factory=list)
@@ -617,6 +620,11 @@ class _Handler(BaseHTTPRequestHandler):
                 return
             state.next_id += 1
             prompt_id = f"p{state.next_id}"
+            if state.node_errors is not None:
+                state.pending.append(prompt_id)
+                state.submitted.set()
+                self._json({"prompt_id": prompt_id, "number": state.next_id, "node_errors": state.node_errors})
+                return
             if state.outputs is not None:
                 state.history[prompt_id] = {
                     "prompt": [state.next_id, prompt_id, body.get("prompt") or {}, {}, []],

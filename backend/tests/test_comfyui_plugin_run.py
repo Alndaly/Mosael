@@ -363,6 +363,18 @@ def test_校验错误很长时照样逐条说出是哪个节点(comfy, tmp_path:
     assert len(str(caught.value)) < 1200, "给人看的那句不带几 KB 的可选值列表"
 
 
+def test_一部分输出校验不过_ComfyUI照样排上_说出原因并把它撤掉(comfy, tmp_path: Path) -> None:
+    """实测用户的「beautiful girl」:checkpoint 不在那台机器上,依赖它的三个输出校验不过;另一个只预览参考图骨架的
+    PreviewImage 不依赖它,校验过了。ComfyUI 回 200、照样排上,只跑那一个预览 —— 此前插件不看回包里的 node_errors,
+    这次生成「成功」,交回来的是一张姿态骨架图。现在说出哪个节点什么不对,把排上的那个任务撤掉。"""
+    comfy.state.node_errors = {"4": {"class_type": "CheckpointLoaderSimple", "dependent_outputs": ["9"], "errors": [{
+        "type": "value_not_in_list", "message": "Value not in list",
+        "details": "ckpt_name: 'gone.safetensors' not in ['sd_xl_base.safetensors']"}]}}
+    with pytest.raises(runtime.PluginRuntimeError, match="#4 Value not in list: ckpt_name: 'gone.safetensors'"):
+        _generate(comfy.url, tmp_path, {"model": "portrait.json"})
+    assert comfy.posted("/queue") == [{"delete": ["p1"]}], "排上的那个任务撤掉,不让它在 ComfyUI 上跑一个没人要的结果"
+
+
 def test_执行失败带出ComfyUI自己的原因(comfy, tmp_path: Path) -> None:
     comfy.state.outcome = "error"
     with pytest.raises(runtime.PluginRuntimeError, match="CUDA out of memory"):
