@@ -72,6 +72,18 @@ def _validate_references(
             # 领域到领域的翻译:引用的文档有问题,对调用方来说是"这块画板存不下"。
             raise BoardDomainError(str(exc)) from exc
 
+    # 便签的来源:同一条「只查新引入的」—— 来源笔记后来删了,那张卡照样能挪、能删、能复制。
+    known_sources = {(item["source_note"]["note_id"], item["source_note"]["revision"])
+                     for item in (existing or {}).get("items", []) if item.get("source_note")}
+    for item in canvas["items"]:
+        source = item.get("source_note")
+        if not source or (source["note_id"], source["revision"]) in known_sources:
+            continue
+        try:
+            read_reference(db, workspace_id, source["note_id"], source["revision"])
+        except NoteDomainError as exc:
+            raise BoardDomainError(str(exc)) from exc
+
     if assets:
         _validate_asset_references(db, workspace_id, canvas, existing)
 

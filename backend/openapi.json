@@ -14225,6 +14225,59 @@
         }
       }
     },
+    "/api/boards/{board_id}/notes": {
+      "post": {
+        "tags": [
+          "boards"
+        ],
+        "summary": "Append Note",
+        "description": "往画板上追加一张便签,摆在空位上(笔记选区工具条的「加到画板」)。见 boards.use_cases.append_note。",
+        "operationId": "append_note_api_boards__board_id__notes_post",
+        "parameters": [
+          {
+            "name": "board_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Board Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BoardNoteAppend"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BoardNoteAppendOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/boards/{board_id}/duplicate": {
       "post": {
         "tags": [
@@ -24015,6 +24068,59 @@
         ],
         "title": "BoardDuplicate"
       },
+      "BoardNoteAppend": {
+        "properties": {
+          "workspace_id": {
+            "type": "string",
+            "title": "Workspace Id"
+          },
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Text"
+          },
+          "source_note": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BoardSourceNote"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "workspace_id",
+          "text"
+        ],
+        "title": "BoardNoteAppend",
+        "description": "往画板上追加一张便签(笔记选区工具条的「加到画板」)。落在当前画布上,不要 base_revision。"
+      },
+      "BoardNoteAppendOut": {
+        "properties": {
+          "board_id": {
+            "type": "string",
+            "title": "Board Id"
+          },
+          "item_id": {
+            "type": "string",
+            "title": "Item Id"
+          },
+          "revision": {
+            "type": "integer",
+            "title": "Revision"
+          }
+        },
+        "type": "object",
+        "required": [
+          "board_id",
+          "item_id",
+          "revision"
+        ],
+        "title": "BoardNoteAppendOut"
+      },
       "BoardOut": {
         "properties": {
           "id": {
@@ -24447,6 +24553,34 @@
           "name"
         ],
         "title": "BoardSequenceOut"
+      },
+      "BoardSourceNote": {
+        "properties": {
+          "note_id": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Note Id"
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Revision"
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 240,
+            "title": "Title",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "note_id",
+          "revision"
+        ],
+        "title": "BoardSourceNote",
+        "description": "便签上的字从哪篇笔记的哪一版摘来(见 domain/boards/shape._normalize_source_note)。"
       },
       "BoardSummaryOut": {
         "properties": {

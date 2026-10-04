@@ -74,6 +74,28 @@ class BoardSequenceOut(ApiModel):
     name: str
 
 
+class BoardSourceNote(ApiModel):
+    """便签上的字从哪篇笔记的哪一版摘来(见 domain/boards/shape._normalize_source_note)。"""
+
+    note_id: str = Field(min_length=1, max_length=64)
+    revision: int = Field(ge=1)
+    title: str = Field(default="", max_length=240)
+
+
+class BoardNoteAppend(ApiModel):
+    """往画板上追加一张便签(笔记选区工具条的「加到画板」)。落在当前画布上,不要 base_revision。"""
+
+    workspace_id: str
+    text: str = Field(min_length=1)
+    source_note: BoardSourceNote | None = None
+
+
+class BoardNoteAppendOut(ApiModel):
+    board_id: str
+    item_id: str
+    revision: int
+
+
 class BoardDuplicate(ApiModel):
     workspace_id: str
     #: 副本叫什么。「× 副本」是界面语言里的一句话,由前端按当前语言拼好;留空就沿用原名。

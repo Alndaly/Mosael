@@ -4621,6 +4621,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/boards/{board_id}/notes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Append Note
+         * @description 往画板上追加一张便签,摆在空位上(笔记选区工具条的「加到画板」)。见 boards.use_cases.append_note。
+         */
+        post: operations["append_note_api_boards__board_id__notes_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/boards/{board_id}/duplicate": {
         parameters: {
             query?: never;
@@ -8178,6 +8198,26 @@ export interface components {
              */
             name: string;
         };
+        /**
+         * BoardNoteAppend
+         * @description 往画板上追加一张便签(笔记选区工具条的「加到画板」)。落在当前画布上,不要 base_revision。
+         */
+        BoardNoteAppend: {
+            /** Workspace Id */
+            workspace_id: string;
+            /** Text */
+            text: string;
+            source_note?: components["schemas"]["BoardSourceNote"] | null;
+        };
+        /** BoardNoteAppendOut */
+        BoardNoteAppendOut: {
+            /** Board Id */
+            board_id: string;
+            /** Item Id */
+            item_id: string;
+            /** Revision */
+            revision: number;
+        };
         /** BoardOut */
         BoardOut: {
             /** Id */
@@ -8395,6 +8435,21 @@ export interface components {
             sequence_id: string;
             /** Name */
             name: string;
+        };
+        /**
+         * BoardSourceNote
+         * @description 便签上的字从哪篇笔记的哪一版摘来(见 domain/boards/shape._normalize_source_note)。
+         */
+        BoardSourceNote: {
+            /** Note Id */
+            note_id: string;
+            /** Revision */
+            revision: number;
+            /**
+             * Title
+             * @default
+             */
+            title: string;
         };
         /**
          * BoardSummaryOut
@@ -24082,6 +24137,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BoardSequenceOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    append_note_api_boards__board_id__notes_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                board_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BoardNoteAppend"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BoardNoteAppendOut"];
                 };
             };
             /** @description Validation Error */

@@ -8,7 +8,7 @@ from fastapi.responses import JSONResponse
 
 from app.api.deps import CurrentUser, DbSession, Tx
 from app.core.i18n import get_current_locale
-from app.api.schemas import BoardCreate, BoardDuplicate, BoardOut, BoardProducerOut, BoardRun, BoardSequenceCreate, BoardSequenceOut, BoardSummaryOut, BoardUpdate
+from app.api.schemas import BoardCreate, BoardDuplicate, BoardNoteAppend, BoardNoteAppendOut, BoardOut, BoardProducerOut, BoardRun, BoardSequenceCreate, BoardSequenceOut, BoardSummaryOut, BoardUpdate
 from app.db.models import Board
 from app.domain.boards import BoardDomainError, BoardNotFound, BoardRevisionConflict, producers
 from app.domain.boards import use_cases as boards
@@ -75,6 +75,19 @@ def create_sequence(board_id: str, body: BoardSequenceCreate, db: Tx, user: Curr
     except BoardDomainError as exc:
         raise _board_http_error(exc) from exc
     return {"sequence_id": sequence.id, "name": sequence.name}
+
+
+@router.post("/boards/{board_id}/notes", response_model=BoardNoteAppendOut)
+def append_note(board_id: str, body: BoardNoteAppend, db: Tx, user: CurrentUser) -> dict:
+    """往画板上追加一张便签,摆在空位上(笔记选区工具条的「加到画板」)。见 boards.use_cases.append_note。"""
+    try:
+        board, item_id = boards.append_note(
+            db, user, body.workspace_id, board_id, text=body.text,
+            source_note=body.source_note.model_dump() if body.source_note else None,
+        )
+    except BoardDomainError as exc:
+        raise _board_http_error(exc) from exc
+    return {"board_id": board.id, "item_id": item_id, "revision": board.revision}
 
 
 @router.post("/boards/{board_id}/duplicate", response_model=BoardOut)

@@ -251,6 +251,20 @@ def _normalize_title(value: Any, item_id: str) -> str:
     return title
 
 
+def _normalize_source_note(value: Any, item_id: str) -> dict[str, Any]:
+    """便签的来源:`{note_id, revision, title}`。标题是摘下来那一刻的快照(卡上显示用,不必为一行字去查笔记)。"""
+    if not isinstance(value, dict):
+        raise BoardDomainError("boardErr_sourceNoteInvalid", item_id=item_id)
+    note_id, revision, title = value.get("note_id"), value.get("revision"), value.get("title", "")
+    if not isinstance(note_id, str) or not note_id.strip() or len(note_id) > 64:
+        raise BoardDomainError("boardErr_sourceNoteInvalid", item_id=item_id)
+    if isinstance(revision, bool) or not isinstance(revision, int) or revision < 1:
+        raise BoardDomainError("boardErr_sourceNoteInvalid", item_id=item_id)
+    if not isinstance(title, str) or len(title) > 240:
+        raise BoardDomainError("boardErr_sourceNoteInvalid", item_id=item_id)
+    return {"note_id": note_id.strip(), "revision": revision, "title": title.strip()}
+
+
 def _normalize_source(value: dict[str, Any]) -> dict[str, str] | None:
     """槽位里挂的一份素材。`from`:它是**顺着哪一格连过来的线**挂上的(手动挂的没有)——
     见 _drop_detached_bindings。缺素材或角色的是空位,不算。"""
@@ -470,6 +484,14 @@ def normalize_canvas(raw: Any) -> dict[str, Any]:
             if color not in NOTE_COLORS:
                 raise BoardDomainError("boardErr_unknownColor", color=color, colors=", ".join(NOTE_COLORS))
             item["color"] = color
+
+        #: 便签上的字是从哪篇笔记的哪一版摘来的(笔记选区工具条的「加到画板」)。卡上据此给一条回到那篇笔记的路。
+        #: 只挂在便签上:别的格子指向别处各有各的字段(素材、文档、场景)。
+        source_note = entry.get("source_note")
+        if source_note is not None:
+            if kind != "note":
+                raise BoardDomainError("boardErr_sourceNoteNoteOnly", kind=kind)
+            item["source_note"] = _normalize_source_note(source_note, item_id)
 
         if kind == "document":
             note_id, revision = entry.get("note_id"), entry.get("note_revision")

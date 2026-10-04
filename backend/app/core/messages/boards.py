@@ -90,6 +90,8 @@ MESSAGES: dict[str, dict[str, str]] = {
     "boardErr_unknownColor": {"zh": "未知的颜色:{color};可用的是 {colors}", "en": "Unknown color: {color}. Use one of: {colors}."},
     "boardErr_documentNoteOrAsset": {"zh": "画板项 {item_id}:文档格引用一篇笔记或一份文档素材,不能两样都有", "en": "Board item {item_id}: a document item references a note or a document asset, not both."},
     "boardErr_documentNeedsNote": {"zh": "文档节点需要有效的笔记 ID", "en": "A document item needs a valid note ID."},
+    "boardErr_sourceNoteInvalid": {"zh": "便签 {item_id} 的来源要写明笔记 ID 和版本号", "en": "The source of note item {item_id} needs a note ID and a revision."},
+    "boardErr_sourceNoteNoteOnly": {"zh": "只有便签能记来源笔记,{kind} 不能", "en": "Only note items can record a source note; a {kind} item can't."},
     "boardErr_documentNeedsRevision": {"zh": "文档节点需要有效的引用版本", "en": "A document item needs a valid note revision to reference."},
     "boardErr_sceneNeedsId": {"zh": "3D 场景节点需要 scene_id", "en": "A 3D scene item needs a scene_id."},
     "boardErr_sequenceNeedsId": {"zh": "时间线格要带着它那条时间线的 sequence_id", "en": "A timeline item needs its sequence_id."},

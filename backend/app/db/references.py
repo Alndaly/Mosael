@@ -28,7 +28,7 @@ from sqlalchemy.orm import Session, attributes
 from app.db.model_slices.references import RecordReference, RecordReferenceIndex
 
 #: 抽取规则的版本。**改了下面任何一条抽取规则就加一**,启动时整张表按新规则重建。
-EXTRACTOR_VERSION = 1
+EXTRACTOR_VERSION = 2
 
 Ref = tuple[str, str, str]  # (target_kind, target_id, how)
 
@@ -84,12 +84,16 @@ _CANVAS_FIELDS = {
 
 
 def board_refs(canvas: Any) -> Iterator[Ref]:
-    """画布:一格就是它(`cell`),或某一格的提示词里 @ 了它(`mention`)。"""
+    """画布:一格就是它(`cell`),某一格的提示词里 @ 了它(`mention`),或便签上的字是从那篇笔记摘来的(`source`)。"""
     for item in _dicts((canvas or {}).get("items") if isinstance(canvas, dict) else None):
         for field, kind in _CANVAS_FIELDS.items():
             target = _literal(item.get(field))
             if target:
                 yield kind, target, "cell"
+        source = item.get("source_note") if isinstance(item.get("source_note"), dict) else {}
+        target = _literal(source.get("note_id"))
+        if target:
+            yield "note", target, "source"
         form = item.get("form") if isinstance(item.get("form"), dict) else {}
         for target in _literals(form.get("mentioned_entity_ids")):
             yield "entity", target, "mention"

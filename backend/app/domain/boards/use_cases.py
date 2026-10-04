@@ -11,7 +11,9 @@ from sqlalchemy.orm import Session
 
 from app.db.models import Board, Sequence, User
 from app.domain.boards import producers
-from app.domain.boards.canvas import create_board, delete_board, duplicate_board, get_board, list_boards, update_board
+from app.domain.boards.canvas import (
+    BoardRevisionConflict, create_board, delete_board, duplicate_board, get_board, list_boards, update_board,
+)
 from app.domain.boards.persistence import board_summary
 from app.domain.boards.receipts import revived_runs, settle_revived_runs
 from app.domain.boards.timelines import create_board_sequence
@@ -43,6 +45,41 @@ def producers_for(db: Session, user: User, workspace_id: str, locale: str) -> li
 def create(db: Session, user: User, workspace_id: str, *, name: str, canvas: dict[str, Any] | None) -> Board:
     ensure_workspace_perm(db, user, workspace_id, "edit")
     return create_board(db, workspace_id=workspace_id, name=name, canvas=canvas, actor_id=user.id)
+
+
+#: 追加撞上并发写入时重读当前画布再落几次。追加一格和别处的编辑可交换,重读就能解决;给上限只是不在病态争用下打转。
+APPEND_RETRIES = 4
+
+
+def append_note(
+    db: Session, user: User, workspace_id: str, board_id: str, *, text: str, source_note: dict[str, Any] | None,
+) -> tuple[Board, str]:
+    """往画板上追加一张便签(笔记选区工具条的「加到画板」),返回 (画板, 新那一格的 id)。
+
+    **落在当前画布上**,不拿调用方手里的一份快照:笔记页根本没打开这张板,它手里的版本号只会把一次可以并存的
+    追加判成冲突。位置照 add_item 的缺省 —— 摆在所有格子的右边,不压住任何一格。写入本身仍是带版本号的条件写
+    (update_board),撞上真正的并发写就重读再追加。
+    """
+    from app.domain.boards.ops import apply_board_ops
+
+    ensure_workspace_perm(db, user, workspace_id, "edit")
+    for attempt in range(APPEND_RETRIES):
+        board = get_board(db, workspace_id, board_id)
+        before = board.canvas or {}
+        canvas = apply_board_ops(before, [{"kind": "add_item", "type": "note", "text": text}])
+        added = canvas["items"][-1]
+        if source_note is not None:
+            added["source_note"] = source_note
+        try:
+            board = update_board(db, workspace_id=workspace_id, board_id=board_id, canvas=canvas,
+                                 base_revision=board.revision, actor_id=user.id)
+        except BoardRevisionConflict:
+            if attempt == APPEND_RETRIES - 1:
+                raise
+            db.expire_all()
+            continue
+        return board, str(added["id"])
+    raise AssertionError("unreachable")  # pragma: no cover
 
 
 def create_timeline(db: Session, user: User, workspace_id: str, board_id: str, *, copy_of: str | None = None) -> Sequence:

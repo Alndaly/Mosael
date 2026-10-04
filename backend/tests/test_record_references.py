@@ -60,9 +60,11 @@ def test_画布_格子是_cell_提示词里_at_的是_mention() -> None:
         {"id": "c", "kind": "text", "form": {"mentioned_entity_ids": ["ent2", "ent2"]}},
         {"id": "d", "kind": "scene", "scene_id": "scene1"},
         {"id": "e", "kind": "sequence", "sequence_id": "{{上游}}"},
+        {"id": "f", "kind": "note", "source_note": {"note_id": "note1", "revision": 2, "title": "周报"}},
     ]}
     assert set(references.board_refs(canvas)) == {
         ("asset", "asset1", "cell"), ("entity", "ent1", "cell"), ("entity", "ent2", "mention"), ("scene", "scene1", "cell"),
+        ("note", "note1", "source"),
     }
     assert set(references.board_refs(None)) == set()
     assert set(references.board_refs({"items": "坏的"})) == set()

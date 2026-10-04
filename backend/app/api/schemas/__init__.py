@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from app.api.schemas.base import ApiModel, CostAmountOut, OrmModel  # noqa: F401
 from app.api.schemas.agent import AgentCompactOut, AgentContextOut, AgentContextPart, AgentManifestOut, AgentMemoryCreate, AgentMemoryOut, AgentMemoryUpdate, AgentMessageCreate, AgentMessageOut, AgentMessageQuoteIn, AgentPendingView, AgentPlanUpdate, AgentQuestionAnswer, AgentQuestionCreate, AgentQuestionItem, AgentQuestionOption, AgentQuestionOut, AgentReferenceIn, AgentSessionCreate, AgentSessionOut, AgentSessionUpdate, AgentSkillOut, AgentStreamEvent, ConfirmationCreate, ConfirmationOut, SessionAllowance, SessionGroupCreate, SessionGroupOut, SessionGroupUpdate  # noqa: F401
-from app.api.schemas.boards import BoardCreate, BoardDuplicate, BoardOut, BoardPreview, BoardPreviewEdge, BoardPreviewItem, BoardProducerOut, BoardRun, BoardSequenceCreate, BoardSequenceOut, BoardSummaryOut, BoardUpdate  # noqa: F401
+from app.api.schemas.boards import BoardCreate, BoardDuplicate, BoardNoteAppend, BoardNoteAppendOut, BoardOut, BoardSourceNote, BoardPreview, BoardPreviewEdge, BoardPreviewItem, BoardProducerOut, BoardRun, BoardSequenceCreate, BoardSequenceOut, BoardSummaryOut, BoardUpdate  # noqa: F401
 from app.api.schemas.browser import (  # noqa: F401
     BrowserProfileCreate,
     BrowserProfileOpened,
