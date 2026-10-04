@@ -20,8 +20,8 @@
  * 拦的是「同时写了 `size` 和 `h-N`/`w-N`/`size-N`」这一种形状 —— 光写 className 不写 size 的
  * 那是别的东西(原生 `<button>`、纯布局盒子),不归这条管。
  *
- * 存量冻结在 GRANDFATHERED,全是 20/24px 的真·一次性尺寸(浮在缩略图角上的删除钮、
- * 挤在一行里的复制按钮)—— 它们比最小的那一档还小,给它们发 token 等于把 token 变成
+ * 存量冻结在 GRANDFATHERED,几乎全是 20/24px 的真·一次性尺寸(浮在缩略图角上的删除钮、
+ * 挤在一行里的复制按钮;另有一处 40px,见清单里的注释)—— 它们比最小的那一档还小,给它们发 token 等于把 token 变成
  * 「所有出现过的尺寸」。要放行就写进来,清单只减不增。
  */
 
@@ -49,6 +49,9 @@ const GRANDFATHERED = new Set<string>([
   "features/agent/trace/TraceView.tsx: h-6 w-6",
   "features/editor/Inspector.tsx: h-6",
   "features/plugins/PluginsView.tsx: h-6",
+  // 分时段价格表单里和 40px 输入框、时间选择并排的删除钮。方形档最大只到 36(icon),为这一处
+  // 加一档 40 的方形不值;此前它是没写 size 的 Button 加 size-10,换成 IconButton 后才被这条看见。
+  "features/admin/PricingTimePrices.tsx: size-10",
 ]);
 
 function sourceFiles(dir: string): string[] {
@@ -64,10 +67,13 @@ function strip(source: string): string {
   return source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
 }
 
-/** 粗略切出 `<Button ...>` 开标签:跳过 `=>` 里的 `>`,按花括号深度配对。 */
+/**
+ * 粗略切出 `<Button ...>` / `<IconButton ...>` 开标签:跳过 `=>` 里的 `>`,按花括号深度配对。
+ * IconButton 就是 Button(默认 `size="icon-sm"`),同一条规矩;`unstyled` 的是原生按钮,不归这条管。
+ */
 function openTags(text: string): string[] {
   const out: string[] = [];
-  const re = /<Button\b/g;
+  const re = /<(?:Icon)?Button\b/g;
   let match: RegExpExecArray | null;
   while ((match = re.exec(text)) !== null) {
     let i = re.lastIndex;
@@ -106,7 +112,9 @@ function findHits(): Hit[] {
     const file = relative(SRC, path);
     for (const tag of openTags(strip(readFileSync(path, "utf8")))) {
       // 没传 size 的不归这条管:那是「完全自己画一个按钮」,不是「拿了一档再改它」。
-      if (!/\bsize=/.test(tag)) continue;
+      // IconButton 不写 size 也拿了一档(icon-sm);unstyled 的才是自己画的。
+      const sized = tag.startsWith("<IconButton") ? !/\bunstyled\b/.test(tag) : /\bsize=/.test(tag);
+      if (!sized) continue;
       const classes = [...new Set([...tag.matchAll(SCALE)].map((m) => m[1]))].sort();
       if (classes.length > 0) hits.push({ file, classes });
     }

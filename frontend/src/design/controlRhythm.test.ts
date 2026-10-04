@@ -229,6 +229,12 @@ const TOLERANCE = 3;
 /** `utility`:其中由组件自带工具类定高的那些(见 SIZED_BY_UTILITY)—— 行被分层 CSS「钉住」时它们照样要比。 */
 type Frame = { tag: string; cls: string; row: ReturnType<typeof rowOf>; kids: number[]; utility: number[]; self: number | null; pad: number };
 
+function iconButtonAs(tag: string, attrs: string): [string, string] {
+  if (tag !== "IconButton") return [tag, attrs];
+  if (/\bunstyled\b/.test(attrs)) return ["button", attrs];
+  return ["Button", /\bsize=/.test(attrs) ? attrs : `${attrs} size="icon-sm"`];
+}
+
 function scan(file: string) {
   const src = readFileSync(file, "utf8");
   const found: { heights: number[] }[] = [];
@@ -248,7 +254,9 @@ function scan(file: string) {
   let m: RegExpExecArray | null;
   TAG.lastIndex = 0;
   while ((m = TAG.exec(src))) {
-    const [, closing, tag, attrs, self] = m;
+    const [, closing, rawTag, rawAttrs, self] = m;
+    // IconButton 就是 Button(不写 size 是 icon-sm);unstyled 的是原生 <button>,高度由它自己的类定。
+    const [tag, attrs] = iconButtonAs(rawTag, rawAttrs);
     if (closing) {
       const frame = stack.pop();
       if (!frame) continue;

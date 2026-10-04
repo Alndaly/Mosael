@@ -82,6 +82,4 @@ export const MENU_SEPARATOR = "mx-2 my-1.5 h-px bg-divider";
  * 一个独立的 1px 块不受圆角影响,左右还能自己收进来一点,读起来才是分组线而不是描边。
  */
 export const LIST_HAIRLINE = "mx-2 h-px shrink-0 bg-divider";
-/** For small button-driven action popovers; forms and inspectors keep their own layout. */
-export const ACTION_MENU = "grid gap-0.5 p-1.5 [&>button]:h-9 [&>button]:justify-start [&>button]:rounded-md [&>button]:px-2.5 [&>button]:text-ui-sm [&>button]:font-normal [&>button]:shadow-none [&>button:hover]:bg-secondary";
 export const MODAL_FOOTER = "flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-end [&_button]:h-10 [&_button]:rounded-md [&_button]:px-4 [&_button]:text-ui-sm";
