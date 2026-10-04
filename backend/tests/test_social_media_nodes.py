@@ -80,6 +80,24 @@ class Test认链接:
         assert (out["platform"], out["kind"], out["id"]) == expected
         assert out["url"].startswith("https://")
 
+    @pytest.mark.parametrize("link", [
+        "https://space.bilibili.com/1280231019",
+        "https://space.bilibili.com/1280231019/dynamic?spm_id_from=333.1007",
+        "space.bilibili.com/1280231019/",
+        "https://space.bilibili.com/1280231019/upload/video",
+    ])
+    def test_B站主页认成投稿列表页_那里才是按时间排的最近作品(self, link: str) -> None:
+        """B 站的个人主页是「代表作 + 一排合集」,不是最近的作品:实测(2026-10,真实执行器)账号诊断从主页读到的是
+        2022–2024 年的合集视频,17 小时前刚发的那条根本不在页面上 —— 频率、趋势全按它算就错了。
+        投稿列表页(/upload/video)是按发布时间排的最近 30 条,未登录也看得到。"""
+        out = _run("social_link", {"link": link, "expect": "account"})
+        assert (out["platform"], out["kind"], out["id"]) == ("bilibili", "account", "1280231019")
+        assert out["url"] == "https://space.bilibili.com/1280231019/upload/video"
+
+    def test_B站只给编号_也认成投稿列表页(self) -> None:
+        out = _run("social_link", {"link": "1280231019", "platform": "B站", "expect": "account"})
+        assert out["url"] == "https://space.bilibili.com/1280231019/upload/video"
+
     def test_说了平台就以说的为准(self) -> None:
         """用户在开始节点写了「小红书」,链接却是别的样子 —— 平台按他说的(TikHub 按它挑连接)。"""
         out = _run("social_link", {"link": "https://www.xiaohongshu.com/explore/64f0a1b2c3d4e5f6a7b8c9d0", "platform": "XHS"})

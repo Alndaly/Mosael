@@ -153,6 +153,12 @@ def _ids_in(url: str) -> tuple[str, str, str]:
     return "", "", ""
 
 
+def _bilibili_posts_url(mid: str) -> str:
+    """B 站账号认成**投稿列表页**:按发布时间排的最近作品在这一页(未登录也看得到)。个人主页是「代表作 + 一排合集」,
+    实测从主页读到的是几年前的合集视频、最新的那条根本不在页面上 —— 账号诊断的频率和趋势全按它算就错了。"""
+    return f"https://space.bilibili.com/{mid}/upload/video"
+
+
 def _from_bare_id(text: str, platform: str, expect: str) -> SocialLink | None:
     """只给了一个编号(没有链接):按平台和期望的种类拼出主页 / 作品链接。"""
     value = text.strip().lstrip("@")
@@ -163,7 +169,7 @@ def _from_bare_id(text: str, platform: str, expect: str) -> SocialLink | None:
     if platform == "bilibili" and re.fullmatch(r"BV[0-9A-Za-z]{10}", value):
         return SocialLink("bilibili", VIDEO, value, f"https://www.bilibili.com/video/{value}")
     if platform == "bilibili" and value.isdigit():
-        return SocialLink("bilibili", ACCOUNT, value, f"https://space.bilibili.com/{value}")
+        return SocialLink("bilibili", ACCOUNT, value, _bilibili_posts_url(value))
     if platform == "xiaohongshu" and re.fullmatch(r"[0-9a-f]{24}", value):
         if expect == VIDEO:
             return SocialLink("xiaohongshu", VIDEO, value, f"https://www.xiaohongshu.com/explore/{value}")
@@ -188,7 +194,10 @@ def parse_link(
     if _is_short_link(url):
         url = (resolve or resolve_short_link)(url)
     found_platform, kind, found_id = _ids_in(url)
-    return SocialLink(hinted or found_platform or _host_platform(url), kind, found_id, url)
+    platform = hinted or found_platform or _host_platform(url)
+    if platform == "bilibili" and kind == ACCOUNT and found_id:
+        url = _bilibili_posts_url(found_id)
+    return SocialLink(platform, kind, found_id, url)
 
 
 # --------------------------------------------------------------------------------------
