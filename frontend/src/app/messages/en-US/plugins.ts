@@ -341,6 +341,7 @@ export const plugins = {
   modelDownloadLink: "Link",
   modelDownloadLinkPlaceholder: "A HuggingFace file, a Civitai model page or download link, or another direct link",
   modelDownloadResolve: "Look up",
+  modelDownloadModelName: "Model",
   modelDownloadSource: "Source",
   modelDownloadSourceHuggingface: "HuggingFace",
   modelDownloadSourceCivitai: "Civitai",

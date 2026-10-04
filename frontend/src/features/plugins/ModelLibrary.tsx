@@ -658,7 +658,7 @@ function ModelDownloadDialog({
               <Fact label={t("modelDownloadSize")}>
                 {resolved.size != null ? formatBytes(resolved.size) : t("modelDownloadSizeUnknown")}
               </Fact>
-              {resolved.title && <Fact label={t("modelFileName")}>{resolved.title}</Fact>}
+              {resolved.title && <Fact label={t("modelDownloadModelName")}>{resolved.title}</Fact>}
               {resolved.family && <Fact label={t("modelFamily")}>{resolved.family}</Fact>}
               {(resolved.triggers ?? []).length > 0 && (
                 <div className="col-span-2">

@@ -346,6 +346,7 @@ export const plugins = {
   modelDownloadLink: "链接",
   modelDownloadLinkPlaceholder: "HuggingFace 文件、Civitai 模型页或下载链接,或别的直链",
   modelDownloadResolve: "解析",
+  modelDownloadModelName: "模型",
   modelDownloadSource: "来源",
   modelDownloadSourceHuggingface: "HuggingFace",
   modelDownloadSourceCivitai: "Civitai",

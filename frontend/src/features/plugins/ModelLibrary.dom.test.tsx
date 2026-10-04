@@ -172,6 +172,8 @@ describe("模型库", () => {
     fireEvent.click(screen.getByRole("button", { name: "modelDownloadResolve" }));
     const alert = await screen.findByRole("alert");
     expect(alert.textContent).toContain("modelDownloadExists");
+    // Civitai 给的是「模型名 · 版本名」,不是文件名:标成「模型」,文件名在下面那一格
+    expect(screen.getByText("D · v1").closest("div")?.textContent).toContain("modelDownloadModelName");
     const confirm = screen.getByRole("button", { name: /modelDownloadConfirm/ }) as HTMLButtonElement;
     expect(confirm.disabled).toBe(true);
     fireEvent.click(within(alert).getByRole("button"));
