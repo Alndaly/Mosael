@@ -59,7 +59,7 @@ page gives it a code editor and validates it before saving).
 **One tool per workflow** (`wf_<id>`, "Workflow · name", see `tools/tooling.py`): the plugin reports them to the host in
 `op: tools` (host capability `tools`, claimed by the same `comfyui_generation` as `generation`), and derives inputs and
 outputs from that graph: the prompts, every node that loads an asset (`image_10`, `mask_11`, `video_1`…), every tunable
-parameter (`steps_3`…, the same names as the generation parameters), and seed / size / image count (advanced). Outputs
+parameter (`steps_3`…, the same names as the generation parameters), and seed / size / image count (advanced; the image count defaults to 1, as in generation, 1.7.0). Outputs
 follow the output nodes (`image_9`, `text_40`…), plus `asset_id` / `asset_ids` / `texts` / `summary` / `prompt_id` for
 wiring workflows (declared as `wiring_outputs`: on a board only each output node's own result lands, `board_outputs`).
 The name comes from the id ComfyUI writes into the workflow file (stable across renames and moves between folders),

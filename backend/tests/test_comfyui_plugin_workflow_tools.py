@@ -15,13 +15,14 @@
 from __future__ import annotations
 
 import hashlib
+import json
 from pathlib import Path
 from typing import Any
 
 import pytest
 
 from app.domain.plugins import runtime
-from tests.fake_comfyui import PNG, PORTRAIT_ID, UPSCALE_API, FakeComfyUI
+from tests.fake_comfyui import PNG, PORTRAIT_ID, PORTRAIT_UI, UPSCALE_API, FakeComfyUI
 
 PLUGIN = Path(__file__).resolve().parents[2] / "plugins" / "bundled" / "comfyui"
 ENTRY = "tools/main.py"
@@ -160,6 +161,25 @@ def test_跑一张工作流的工具_字符串转回类型_素材接上_具名�
     first, second = result["artifacts"]
     assert first["output"] == "image_9" and "output" not in second, "每个输出节点的第一份是那个具名输出"
     assert result["text_40"] == "一只猫"
+
+
+def test_工具的张数默认也是1_不照工作流里存着的batch_size(comfy, tmp_path: Path) -> None:
+    """用户拍板:张数默认统一成 1。此前工具节点的「张数」缺省是画布上存着的 batch_size(古风女孩存的是 4,工作流节点
+    不填就一次出 4 张),而生成那一路缺省是 1 —— 同一张图两个入口两个答案。显式填了的照填的出。"""
+    stored = json.loads(json.dumps(PORTRAIT_UI))
+    canvas = next(one for one in stored["nodes"] if one["type"] == "EmptyLatentImage")
+    canvas["widgets_values"] = [832, 1216, 4]
+    comfy.state.workflows["portrait.json"] = stored
+    tool = _tools(comfy.url, tmp_path)[PORTRAIT_TOOL]
+    assert tool["input_schema"]["properties"]["num_images"]["default"] == 1
+    hooks = runtime.StreamHooks(lambda *_: None, lambda _: None, lambda: False)
+    for payload in ({}, {"num_images": ""}, {"num_images": "3"}):
+        scratch = tmp_path / f"out-{len(comfy.posted('/prompt'))}"
+        scratch.mkdir()
+        runtime.stream_tool(PLUGIN, ENTRY, PORTRAIT_TOOL, payload, {"SERVER_URL": comfy.url}, hooks=hooks,
+                            scratch_dir=scratch, timeout=60)
+    sizes = [one["prompt"]["5"]["inputs"]["batch_size"] for one in comfy.posted("/prompt")]
+    assert sizes == [1, 1, 3], "没填(或空着)就是 1,填了 3 就是 3"
 
 
 def test_自定义输出节点的产出落在它声明的那个输出上(comfy, tmp_path: Path) -> None:

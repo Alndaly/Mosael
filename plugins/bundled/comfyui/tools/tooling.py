@@ -260,9 +260,9 @@ def shape_of(entry: models.Entry, object_info: dict[str, Any]) -> Shape:
                 alias(sized, name, name)
     batched = graph.batch_input(api)
     if batched is not None and kind == "image":
+        # 缺省 1,和生成那一路同一个答案:不照画布上存着的 batch_size(古风女孩存的是 4,不填就一次出 4 张)
         shape.properties["num_images"] = {
-            "type": "integer", "minimum": 1, "maximum": graph.MAX_BATCH, "x-advanced": True,
-            "default": max(1, min(int(api[batched]["inputs"]["batch_size"]), graph.MAX_BATCH)),
+            "type": "integer", "minimum": 1, "maximum": graph.MAX_BATCH, "x-advanced": True, "default": 1,
             "title": _pair("张数", "Images"),
         }
         shape.bindings["num_images"] = ("value", "num_images", "integer")
@@ -512,6 +512,7 @@ def run_tool(name: str, payload: dict[str, Any], comfy: Comfy, locale: str, emit
 
     # 跑一张存好的工作流:种子没给就用它存着的;内置图和模板的种子是占位符,照旧每次随机
     values = run.values_from(texts.get("prompt"), texts.get("negative"), parameters, defaults, keep_seed=not defaults)
+    values.setdefault("batch", 1)  # 没填张数就一次一张(入参的缺省),不照画布上存着的
     prompt = graph.fill(api, values, overrides, object_info)
     run.preflight(prompt, object_info, locale)
 
